@@ -44,6 +44,7 @@ namespace clang {
     virtual void anchor();
     DiagnosticsEngine &Diags;
     BackendAction Action;
+    const HeaderSearchOptions &HeaderSearchOpts;
     const CodeGenOptions &CodeGenOpts;
     const TargetOptions &TargetOpts;
     const LangOptions &LangOpts;
@@ -52,6 +53,11 @@ namespace clang {
 
     Timer LLVMIRGeneration;
     unsigned LLVMIRGenerationRefCount;
+
+    /// True if we've finished generating IR. This prevents us from generating
+    /// additional LLVM IR after emitting output in HandleTranslationUnit. This
+    /// can happen when Clang plugins trigger additional AST deserialization.
+    bool IRGenFinished = false;
 
     std::unique_ptr<CodeGenerator> Gen;
 
@@ -72,8 +78,8 @@ namespace clang {
         const SmallVectorImpl<std::pair<unsigned, llvm::Module *>> &LinkModules,
         std::unique_ptr<raw_pwrite_stream> OS, LLVMContext &C,
         CoverageSourceInfo *CoverageInfo = nullptr)
-        : Diags(Diags), Action(Action), CodeGenOpts(CodeGenOpts),
-          TargetOpts(TargetOpts), LangOpts(LangOpts),
+        : Diags(Diags), Action(Action), HeaderSearchOpts(HeaderSearchOpts),
+          CodeGenOpts(CodeGenOpts), TargetOpts(TargetOpts), LangOpts(LangOpts),
           AsmOutStream(std::move(OS)), Context(nullptr),
           LLVMIRGeneration("irgen", "LLVM IR Generation Time"),
           LLVMIRGenerationRefCount(0),
@@ -147,6 +153,12 @@ namespace clang {
         LLVMIRGeneration.stopTimer();
     }
 
+    void HandleInterestingDecl(DeclGroupRef D) override {
+      // Ignore interesting decls from the AST reader after IRGen is finished.
+      if (!IRGenFinished)
+        HandleTopLevelDecl(D);
+    }
+
     void HandleTranslationUnit(ASTContext &C) override {
       {
         PrettyStackTraceString CrashInfo("Per-file LLVM IR generation");
@@ -163,6 +175,8 @@ namespace clang {
           if (LLVMIRGenerationRefCount == 0)
             LLVMIRGeneration.stopTimer();
         }
+
+	IRGenFinished = true;
       }
 
       // Silently ignore if we weren't initialized for some reason.
@@ -212,8 +226,8 @@ namespace clang {
 
       EmbedBitcode(getModule(), CodeGenOpts, llvm::MemoryBufferRef());
 
-      EmitBackendOutput(Diags, CodeGenOpts, TargetOpts, LangOpts,
-                        C.getTargetInfo().getDataLayout(),
+      EmitBackendOutput(Diags, HeaderSearchOpts, CodeGenOpts, TargetOpts,
+                        LangOpts, C.getTargetInfo().getDataLayout(),
                         getModule(), Action, std::move(AsmOutStream));
 
       Ctx.setInlineAsmDiagnosticHandler(OldHandler, OldContext);
@@ -824,6 +838,41 @@ static void BitcodeInlineAsmDiagHandler(const llvm::SMDiagnostic &SM,
   Diags->Report(DiagID).AddString("cannot compile inline asm");
 }
 
+std::unique_ptr<llvm::Module> CodeGenAction::loadModule(MemoryBufferRef MBRef) {
+  CompilerInstance &CI = getCompilerInstance();
+  SourceManager &SM = CI.getSourceManager();
+
+  // For ThinLTO backend invocations, ensure that the context
+  // merges types based on ODR identifiers.
+  if (!CI.getCodeGenOpts().ThinLTOIndexFile.empty())
+    VMContext->enableDebugTypeODRUniquing();
+
+  llvm::SMDiagnostic Err;
+  if (std::unique_ptr<llvm::Module> M = parseIR(MBRef, Err, *VMContext))
+    return M;
+
+  // Translate from the diagnostic info to the SourceManager location if
+  // available.
+  // TODO: Unify this with ConvertBackendLocation()
+  SourceLocation Loc;
+  if (Err.getLineNo() > 0) {
+    assert(Err.getColumnNo() >= 0);
+    Loc = SM.translateFileLineCol(SM.getFileEntryForID(SM.getMainFileID()),
+                                  Err.getLineNo(), Err.getColumnNo() + 1);
+  }
+
+  // Strip off a leading diagnostic code if there is one.
+  StringRef Msg = Err.getMessage();
+  if (Msg.startswith("error: "))
+    Msg = Msg.substr(7);
+
+  unsigned DiagID =
+      CI.getDiagnostics().getCustomDiagID(DiagnosticsEngine::Error, "%0");
+
+  CI.getDiagnostics().Report(Loc, DiagID) << Msg;
+  return {};
+}
+
 void CodeGenAction::ExecuteAction() {
   // If this is an IR file, we have to treat it specially.
   if (getCurrentFileKind() == IK_LLVM_IR) {
@@ -841,35 +890,10 @@ void CodeGenAction::ExecuteAction() {
     if (Invalid)
       return;
 
-    // For ThinLTO backend invocations, ensure that the context
-    // merges types based on ODR identifiers.
-    if (!CI.getCodeGenOpts().ThinLTOIndexFile.empty())
-      VMContext->enableDebugTypeODRUniquing();
-
-    llvm::SMDiagnostic Err;
-    TheModule = parseIR(MainFile->getMemBufferRef(), Err, *VMContext);
-    if (!TheModule) {
-      // Translate from the diagnostic info to the SourceManager location if
-      // available.
-      // TODO: Unify this with ConvertBackendLocation()
-      SourceLocation Loc;
-      if (Err.getLineNo() > 0) {
-        assert(Err.getColumnNo() >= 0);
-        Loc = SM.translateFileLineCol(SM.getFileEntryForID(FID),
-                                      Err.getLineNo(), Err.getColumnNo() + 1);
-      }
-
-      // Strip off a leading diagnostic code if there is one.
-      StringRef Msg = Err.getMessage();
-      if (Msg.startswith("error: "))
-        Msg = Msg.substr(7);
-
-      unsigned DiagID =
-          CI.getDiagnostics().getCustomDiagID(DiagnosticsEngine::Error, "%0");
-
-      CI.getDiagnostics().Report(Loc, DiagID) << Msg;
+    TheModule = loadModule(*MainFile);
+    if (!TheModule)
       return;
-    }
+
     const TargetOptions &TargetOpts = CI.getTargetOpts();
     if (TheModule->getTargetTriple() != TargetOpts.Triple) {
       CI.getDiagnostics().Report(SourceLocation(),
@@ -885,9 +909,10 @@ void CodeGenAction::ExecuteAction() {
     Ctx.setInlineAsmDiagnosticHandler(BitcodeInlineAsmDiagHandler,
                                       &CI.getDiagnostics());
 
-    EmitBackendOutput(CI.getDiagnostics(), CI.getCodeGenOpts(), TargetOpts,
-                      CI.getLangOpts(), CI.getTarget().getDataLayout(),
-                      TheModule.get(), BA, std::move(OS));
+    EmitBackendOutput(CI.getDiagnostics(), CI.getHeaderSearchOpts(),
+                      CI.getCodeGenOpts(), TargetOpts, CI.getLangOpts(),
+                      CI.getTarget().getDataLayout(), TheModule.get(), BA,
+                      std::move(OS));
     return;
   }
 

@@ -20,8 +20,8 @@
 ; VI-DAG: s_mov_b32 s15, 0xe80000
 
 ; s11 is offset system SGPR
-; GCN: buffer_store_dword {{v[0-9]+}}, off, s[12:15], s11 offset:{{[0-9]+}} ; 16-byte Folded Spill
-; GCN: buffer_load_dword v{{[0-9]+}}, off, s[12:15], s11 offset:{{[0-9]+}} ; 16-byte Folded Reload
+; GCN: buffer_store_dword {{v[0-9]+}}, off, s[12:15], s11 offset:{{[0-9]+}} ; 4-byte Folded Spill
+; GCN: buffer_load_dword v{{[0-9]+}}, off, s[12:15], s11 offset:{{[0-9]+}} ; 4-byte Folded Reload
 
 ; GCN: NumVgprs: 256
 ; GCN: ScratchSize: 1024
@@ -497,4 +497,5 @@ attributes #0 = { nounwind }
 attributes #1 = { nounwind readnone }
 
 !0 = !{!1, !1, i64 0, i32 1}
-!1 = !{!"const", null}
+!1 = !{!"const", !2}
+!2 = !{!"tbaa root"}

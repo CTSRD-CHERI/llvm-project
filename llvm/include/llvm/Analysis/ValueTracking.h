@@ -167,10 +167,26 @@ template <typename T> class ArrayRef;
   bool CannotBeNegativeZero(const Value *V, const TargetLibraryInfo *TLI,
                             unsigned Depth = 0);
 
-  /// Return true if we can prove that the specified FP value is either a NaN or
-  /// never less than 0.0.
-  bool CannotBeOrderedLessThanZero(const Value *V, const TargetLibraryInfo *TLI,
-                                   unsigned Depth = 0);
+  /// Return true if we can prove that the specified FP value is either NaN or
+  /// never less than -0.0.
+  ///
+  ///      NaN --> true
+  ///       +0 --> true
+  ///       -0 --> true
+  ///   x > +0 --> true
+  ///   x < -0 --> false
+  ///
+  bool CannotBeOrderedLessThanZero(const Value *V, const TargetLibraryInfo *TLI);
+
+  /// Return true if we can prove that the specified FP value's sign bit is 0.
+  ///
+  ///      NaN --> true/false (depending on the NaN's sign bit)
+  ///       +0 --> true
+  ///       -0 --> false
+  ///   x > +0 --> true
+  ///   x < -0 --> false
+  ///
+  bool SignBitMustBeZero(const Value *V, const TargetLibraryInfo *TLI);
 
   /// If the specified value can be set by repeating the same byte in memory,
   /// return the i8 value that it is represented with. This is true for all i8
@@ -308,12 +324,12 @@ template <typename T> class ArrayRef;
   bool isKnownNonNull(const Value *V);
 
   /// Return true if this pointer couldn't possibly be null. If the context
-  /// instruction is specified, perform context-sensitive analysis and return
-  /// true if the pointer couldn't possibly be null at the specified
-  /// instruction.
+  /// instruction and dominator tree are specified, perform context-sensitive
+  /// analysis and return true if the pointer couldn't possibly be null at the
+  /// specified instruction.
   bool isKnownNonNullAt(const Value *V,
                         const Instruction *CtxI = nullptr,
-                        const DominatorTree *DT  = nullptr);
+                        const DominatorTree *DT = nullptr);
 
   /// Return true if it is valid to use the assumptions provided by an
   /// assume intrinsic, I, at the point in the control-flow identified by the

@@ -512,7 +512,7 @@ protected:
     Builder.defineMacro("__unix__");
     Builder.defineMacro("__ELF__");
     if (Opts.POSIXThreads)
-      Builder.defineMacro("_POSIX_THREADS");
+      Builder.defineMacro("_REENTRANT");
 
     switch (Triple.getArch()) {
     default:
@@ -809,7 +809,7 @@ public:
     this->PtrDiffType = TargetInfo::SignedInt;
     this->IntPtrType = TargetInfo::SignedInt;
     // RegParmMax is inherited from the underlying architecture.
-    this->LongDoubleFormat = &llvm::APFloat::IEEEdouble;
+    this->LongDoubleFormat = &llvm::APFloat::IEEEdouble();
     if (Triple.getArch() == llvm::Triple::arm) {
       // Handled in ARM's setABI().
     } else if (Triple.getArch() == llvm::Triple::x86) {
@@ -906,7 +906,7 @@ public:
       HasBPERMD(false), HasExtDiv(false), HasP9Vector(false) {
     SimdDefaultAlign = 128;
     LongDoubleWidth = LongDoubleAlign = 128;
-    LongDoubleFormat = &llvm::APFloat::PPCDoubleDouble;
+    LongDoubleFormat = &llvm::APFloat::PPCDoubleDouble();
   }
 
   /// \brief Flags for architecture specific defines.
@@ -1146,7 +1146,7 @@ public:
 
   bool useFloat128ManglingForLongDouble() const override {
     return LongDoubleWidth == 128 &&
-           LongDoubleFormat == &llvm::APFloat::PPCDoubleDouble &&
+           LongDoubleFormat == &llvm::APFloat::PPCDoubleDouble() &&
            getTriple().isOSBinFormatELF();
   }
 };
@@ -1650,7 +1650,7 @@ public:
 
     if (getTriple().getOS() == llvm::Triple::FreeBSD) {
       LongDoubleWidth = LongDoubleAlign = 64;
-      LongDoubleFormat = &llvm::APFloat::IEEEdouble;
+      LongDoubleFormat = &llvm::APFloat::IEEEdouble();
     }
 
     // PPC32 supports atomics up to 4 bytes.
@@ -1684,7 +1684,7 @@ public:
     switch (getTriple().getOS()) {
     case llvm::Triple::FreeBSD:
       LongDoubleWidth = LongDoubleAlign = 64;
-      LongDoubleFormat = &llvm::APFloat::IEEEdouble;
+      LongDoubleFormat = &llvm::APFloat::IEEEdouble();
       break;
     case llvm::Triple::NetBSD:
       IntMaxType = SignedLongLong;
@@ -1751,30 +1751,57 @@ class NVPTXTargetInfo : public TargetInfo {
   static const char *const GCCRegNames[];
   static const Builtin::Info BuiltinInfo[];
   CudaArch GPU;
+  std::unique_ptr<TargetInfo> HostTarget;
 
 public:
-  NVPTXTargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
+  NVPTXTargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts,
+                  unsigned TargetPointerWidth)
       : TargetInfo(Triple) {
+    assert((TargetPointerWidth == 32 || TargetPointerWidth == 64) &&
+           "NVPTX only supports 32- and 64-bit modes.");
+
     TLSSupported = false;
-    LongWidth = LongAlign = 64;
     AddrSpaceMap = &NVPTXAddrSpaceMap;
     UseAddrSpaceMapMangling = true;
+
     // Define available target features
     // These must be defined in sorted order!
     NoAsmVariants = true;
     GPU = CudaArch::SM_20;
 
+    if (TargetPointerWidth == 32)
+      resetDataLayout("e-p:32:32-i64:64-v16:16-v32:32-n16:32:64");
+    else
+      resetDataLayout("e-i64:64-v16:16-v32:32-n16:32:64");
+
     // If possible, get a TargetInfo for our host triple, so we can match its
     // types.
     llvm::Triple HostTriple(Opts.HostTriple);
-    if (HostTriple.isNVPTX())
-      return;
-    std::unique_ptr<TargetInfo> HostTarget(
-        AllocateTarget(llvm::Triple(Opts.HostTriple), Opts));
+    if (!HostTriple.isNVPTX())
+      HostTarget.reset(AllocateTarget(llvm::Triple(Opts.HostTriple), Opts));
+
+    // If no host target, make some guesses about the data layout and return.
     if (!HostTarget) {
+      LongWidth = LongAlign = TargetPointerWidth;
+      PointerWidth = PointerAlign = TargetPointerWidth;
+      switch (TargetPointerWidth) {
+      case 32:
+        SizeType = TargetInfo::UnsignedInt;
+        PtrDiffType = TargetInfo::SignedInt;
+        IntPtrType = TargetInfo::SignedInt;
+        break;
+      case 64:
+        SizeType = TargetInfo::UnsignedLong;
+        PtrDiffType = TargetInfo::SignedLong;
+        IntPtrType = TargetInfo::SignedLong;
+        break;
+      default:
+        llvm_unreachable("TargetPointerWidth must be 32 or 64");
+      }
       return;
     }
 
+    // Copy properties from host target.
     PointerWidth = HostTarget->getPointerWidth(/* AddrSpace = */ 0);
     PointerAlign = HostTarget->getPointerAlign(/* AddrSpace = */ 0);
     BoolWidth = HostTarget->getBoolWidth();
@@ -1924,16 +1951,26 @@ public:
   }
   void setSupportedOpenCLOpts() override {
     auto &Opts = getSupportedOpenCLOpts();
-    Opts.cl_clang_storage_class_specifiers = 1;
-    Opts.cl_khr_gl_sharing = 1;
-    Opts.cl_khr_icd = 1;
+    Opts.support("cl_clang_storage_class_specifiers");
+    Opts.support("cl_khr_gl_sharing");
+    Opts.support("cl_khr_icd");
 
-    Opts.cl_khr_fp64 = 1;
-    Opts.cl_khr_byte_addressable_store = 1;
-    Opts.cl_khr_global_int32_base_atomics = 1;
-    Opts.cl_khr_global_int32_extended_atomics = 1;
-    Opts.cl_khr_local_int32_base_atomics = 1;
-    Opts.cl_khr_local_int32_extended_atomics = 1;
+    Opts.support("cl_khr_fp64");
+    Opts.support("cl_khr_byte_addressable_store");
+    Opts.support("cl_khr_global_int32_base_atomics");
+    Opts.support("cl_khr_global_int32_extended_atomics");
+    Opts.support("cl_khr_local_int32_base_atomics");
+    Opts.support("cl_khr_local_int32_extended_atomics");
+  }
+
+  CallingConvCheckResult checkCallingConvention(CallingConv CC) const override {
+    // CUDA compilations support all of the host's calling conventions.
+    //
+    // TODO: We should warn if you apply a non-default CC to anything other than
+    // a host function.
+    if (HostTarget)
+      return HostTarget->checkCallingConvention(CC);
+    return CCCR_Warning;
   }
 };
 
@@ -1952,31 +1989,6 @@ const char *const NVPTXTargetInfo::GCCRegNames[] = {"r0"};
 ArrayRef<const char *> NVPTXTargetInfo::getGCCRegNames() const {
   return llvm::makeArrayRef(GCCRegNames);
 }
-
-class NVPTX32TargetInfo : public NVPTXTargetInfo {
-public:
-  NVPTX32TargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
-      : NVPTXTargetInfo(Triple, Opts) {
-    LongWidth = LongAlign = 32;
-    PointerWidth = PointerAlign = 32;
-    SizeType = TargetInfo::UnsignedInt;
-    PtrDiffType = TargetInfo::SignedInt;
-    IntPtrType = TargetInfo::SignedInt;
-    resetDataLayout("e-p:32:32-i64:64-v16:16-v32:32-n16:32:64");
-  }
-};
-
-class NVPTX64TargetInfo : public NVPTXTargetInfo {
-public:
-  NVPTX64TargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
-      : NVPTXTargetInfo(Triple, Opts) {
-    PointerWidth = PointerAlign = 64;
-    SizeType = TargetInfo::UnsignedLong;
-    PtrDiffType = TargetInfo::SignedLong;
-    IntPtrType = TargetInfo::SignedLong;
-    resetDataLayout("e-i64:64-v16:16-v32:32-n16:32:64");
-  }
-};
 
 static const unsigned AMDGPUAddrSpaceMap[] = {
   1,    // opencl_global
@@ -2101,15 +2113,15 @@ public:
     for (auto &I : TargetOpts.FeaturesAsWritten) {
       if (I == "+fp32-denormals" || I == "-fp32-denormals")
         hasFP32Denormals = true;
-      if (I == "+fp64-denormals" || I == "-fp64-denormals")
+      if (I == "+fp64-fp16-denormals" || I == "-fp64-fp16-denormals")
         hasFP64Denormals = true;
     }
     if (!hasFP32Denormals)
       TargetOpts.Features.push_back((Twine(hasFullSpeedFP32Denorms &&
           !CGOpts.FlushDenorm ? '+' : '-') + Twine("fp32-denormals")).str());
-    // Always do not flush fp64 denorms.
+    // Always do not flush fp64 or fp16 denorms.
     if (!hasFP64Denormals && hasFP64)
-      TargetOpts.Features.push_back("+fp64-denormals");
+      TargetOpts.Features.push_back("+fp64-fp16-denormals");
   }
 
   ArrayRef<Builtin::Info> getTargetBuiltins() const override {
@@ -2208,27 +2220,27 @@ public:
 
   void setSupportedOpenCLOpts() override {
     auto &Opts = getSupportedOpenCLOpts();
-    Opts.cl_clang_storage_class_specifiers = 1;
-    Opts.cl_khr_icd = 1;
+    Opts.support("cl_clang_storage_class_specifiers");
+    Opts.support("cl_khr_icd");
 
     if (hasFP64)
-      Opts.cl_khr_fp64 = 1;
+      Opts.support("cl_khr_fp64");
     if (GPU >= GK_EVERGREEN) {
-      Opts.cl_khr_byte_addressable_store = 1;
-      Opts.cl_khr_global_int32_base_atomics = 1;
-      Opts.cl_khr_global_int32_extended_atomics = 1;
-      Opts.cl_khr_local_int32_base_atomics = 1;
-      Opts.cl_khr_local_int32_extended_atomics = 1;
+      Opts.support("cl_khr_byte_addressable_store");
+      Opts.support("cl_khr_global_int32_base_atomics");
+      Opts.support("cl_khr_global_int32_extended_atomics");
+      Opts.support("cl_khr_local_int32_base_atomics");
+      Opts.support("cl_khr_local_int32_extended_atomics");
     }
     if (GPU >= GK_GFX6) {
-      Opts.cl_khr_fp16 = 1;
-      Opts.cl_khr_int64_base_atomics = 1;
-      Opts.cl_khr_int64_extended_atomics = 1;
-      Opts.cl_khr_mipmap_image = 1;
-      Opts.cl_khr_subgroups = 1;
-      Opts.cl_khr_3d_image_writes = 1;
-      Opts.cl_amd_media_ops = 1;
-      Opts.cl_amd_media_ops2 = 1;
+      Opts.support("cl_khr_fp16");
+      Opts.support("cl_khr_int64_base_atomics");
+      Opts.support("cl_khr_int64_extended_atomics");
+      Opts.support("cl_khr_mipmap_image");
+      Opts.support("cl_khr_subgroups");
+      Opts.support("cl_khr_3d_image_writes");
+      Opts.support("cl_amd_media_ops");
+      Opts.support("cl_amd_media_ops2");
     }
   }
 
@@ -2244,6 +2256,13 @@ public:
       case CC_OpenCLKernel:
         return CCCR_OK;
     }
+  }
+
+  // In amdgcn target the null pointer in global, constant, and generic
+  // address space has value 0 but in private and local address space has
+  // value ~0.
+  uint64_t getNullPointerValue(unsigned AS) const override {
+    return AS != LangAS::opencl_local && AS != 0 ? 0 : ~0;
   }
 };
 
@@ -2644,6 +2663,12 @@ class X86TargetInfo : public TargetInfo {
     CK_BDVER4,
     //@}
 
+    /// \name zen
+    /// Zen architecture processors.
+    //@{
+    CK_ZNVER1,
+    //@}
+
     /// This specification is deprecated and will be removed in the future.
     /// Users should prefer \see CK_K8.
     // FIXME: Warn on this when the CPU is set to it.
@@ -2725,6 +2750,7 @@ class X86TargetInfo : public TargetInfo {
         .Case("bdver2", CK_BDVER2)
         .Case("bdver3", CK_BDVER3)
         .Case("bdver4", CK_BDVER4)
+        .Case("znver1", CK_ZNVER1)
         .Case("x86-64", CK_x86_64)
         .Case("geode", CK_Geode)
         .Default(CK_Generic);
@@ -2739,7 +2765,7 @@ class X86TargetInfo : public TargetInfo {
 public:
   X86TargetInfo(const llvm::Triple &Triple, const TargetOptions &)
       : TargetInfo(Triple) {
-    LongDoubleFormat = &llvm::APFloat::x87DoubleExtended;
+    LongDoubleFormat = &llvm::APFloat::x87DoubleExtended();
   }
   unsigned getFloatEvalMethod() const override {
     // X87 evaluates with 80 bits "long double" precision.
@@ -2782,6 +2808,40 @@ public:
   const char *getClobbers() const override {
     return "~{dirflag},~{fpsr},~{flags}";
   }
+
+  StringRef getConstraintRegister(const StringRef &Constraint,
+                                  const StringRef &Expression) const override {
+    StringRef::iterator I, E;
+    for (I = Constraint.begin(), E = Constraint.end(); I != E; ++I) {
+      if (isalpha(*I))
+        break;
+    }
+    if (I == E)
+      return "";
+    switch (*I) {
+    // For the register constraints, return the matching register name
+    case 'a':
+      return "ax";
+    case 'b':
+      return "bx";
+    case 'c':
+      return "cx";
+    case 'd':
+      return "dx";
+    case 'S':
+      return "si";
+    case 'D':
+      return "di";
+    // In case the constraint is 'r' we need to return Expression
+    case 'r':
+      return Expression;
+    default:
+      // Default value if there is no constraint for the register
+      return "";
+    }
+    return "";
+  }
+
   void getTargetDefines(const LangOptions &Opts,
                         MacroBuilder &Builder) const override;
   static void setSSELevel(llvm::StringMap<bool> &Features, X86SSEEnum Level,
@@ -2890,6 +2950,7 @@ public:
     case CK_BDVER2:
     case CK_BDVER3:
     case CK_BDVER4:
+    case CK_ZNVER1:
     case CK_x86_64:
       return true;
     }
@@ -2925,7 +2986,7 @@ public:
   }
 
   void setSupportedOpenCLOpts() override {
-    getSupportedOpenCLOpts().setAll();
+    getSupportedOpenCLOpts().supportAll();
   }
 };
 
@@ -3136,6 +3197,33 @@ bool X86TargetInfo::initFeatureMap(
     setFeatureEnabledImpl(Features, "prfchw", true);
     setFeatureEnabledImpl(Features, "cx16", true);
     setFeatureEnabledImpl(Features, "fxsr", true);
+    break;
+  case CK_ZNVER1:
+    setFeatureEnabledImpl(Features, "adx", true);
+    setFeatureEnabledImpl(Features, "aes", true);
+    setFeatureEnabledImpl(Features, "avx2", true);
+    setFeatureEnabledImpl(Features, "bmi", true);
+    setFeatureEnabledImpl(Features, "bmi2", true);
+    setFeatureEnabledImpl(Features, "clflushopt", true);
+    setFeatureEnabledImpl(Features, "cx16", true);
+    setFeatureEnabledImpl(Features, "f16c", true);
+    setFeatureEnabledImpl(Features, "fma", true);
+    setFeatureEnabledImpl(Features, "fsgsbase", true);
+    setFeatureEnabledImpl(Features, "fxsr", true);
+    setFeatureEnabledImpl(Features, "lzcnt", true);
+    setFeatureEnabledImpl(Features, "mwaitx", true);
+    setFeatureEnabledImpl(Features, "movbe", true);
+    setFeatureEnabledImpl(Features, "pclmul", true);
+    setFeatureEnabledImpl(Features, "popcnt", true);
+    setFeatureEnabledImpl(Features, "prfchw", true);
+    setFeatureEnabledImpl(Features, "rdrnd", true);
+    setFeatureEnabledImpl(Features, "rdseed", true);
+    setFeatureEnabledImpl(Features, "sha", true);
+    setFeatureEnabledImpl(Features, "sse4a", true);
+    setFeatureEnabledImpl(Features, "xsave", true);
+    setFeatureEnabledImpl(Features, "xsavec", true);
+    setFeatureEnabledImpl(Features, "xsaveopt", true);
+    setFeatureEnabledImpl(Features, "xsaves", true);
     break;
   case CK_BDVER4:
     setFeatureEnabledImpl(Features, "avx2", true);
@@ -3687,6 +3775,9 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
     break;
   case CK_BDVER4:
     defineCPUMacros(Builder, "bdver4");
+    break;
+  case CK_ZNVER1:
+    defineCPUMacros(Builder, "znver1");
     break;
   case CK_Geode:
     defineCPUMacros(Builder, "geode");
@@ -4290,7 +4381,7 @@ public:
                             const TargetOptions &Opts)
       : WindowsX86_32TargetInfo(Triple, Opts) {
     LongDoubleWidth = LongDoubleAlign = 64;
-    LongDoubleFormat = &llvm::APFloat::IEEEdouble;
+    LongDoubleFormat = &llvm::APFloat::IEEEdouble();
   }
   void getTargetDefines(const LangOptions &Opts,
                         MacroBuilder &Builder) const override {
@@ -4389,7 +4480,7 @@ public:
   MCUX86_32TargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
       : X86_32TargetInfo(Triple, Opts) {
     LongDoubleWidth = 64;
-    LongDoubleFormat = &llvm::APFloat::IEEEdouble;
+    LongDoubleFormat = &llvm::APFloat::IEEEdouble();
     resetDataLayout("e-m:e-p:32:32-i64:32-f64:32-f128:32-n8:16:32-a:0:32-S32");
     WIntType = UnsignedInt;
   }
@@ -4609,7 +4700,7 @@ public:
                             const TargetOptions &Opts)
       : WindowsX86_64TargetInfo(Triple, Opts) {
     LongDoubleWidth = LongDoubleAlign = 64;
-    LongDoubleFormat = &llvm::APFloat::IEEEdouble;
+    LongDoubleFormat = &llvm::APFloat::IEEEdouble();
   }
   void getTargetDefines(const LangOptions &Opts,
                         MacroBuilder &Builder) const override {
@@ -4628,7 +4719,7 @@ public:
     // Mingw64 rounds long double size and alignment up to 16 bytes, but sticks
     // with x86 FP ops. Weird.
     LongDoubleWidth = LongDoubleAlign = 128;
-    LongDoubleFormat = &llvm::APFloat::x87DoubleExtended;
+    LongDoubleFormat = &llvm::APFloat::x87DoubleExtended();
   }
 
   void getTargetDefines(const LangOptions &Opts,
@@ -5384,6 +5475,8 @@ public:
         Builder.defineMacro("__ARM_VFPV3__");
       if (FPU & VFP4FPU)
         Builder.defineMacro("__ARM_VFPV4__");
+      if (FPU & FPARMV8)
+        Builder.defineMacro("__ARM_FPV5__");
     }
 
     // This only gets set when Neon instructions are actually available, unlike
@@ -5851,7 +5944,7 @@ public:
     MaxAtomicPromoteWidth = 128;
 
     LongDoubleWidth = LongDoubleAlign = SuitableAlign = 128;
-    LongDoubleFormat = &llvm::APFloat::IEEEquad;
+    LongDoubleFormat = &llvm::APFloat::IEEEquad();
 
     // {} in inline assembly are neon specifiers, not assembly variant
     // specifiers.
@@ -6210,7 +6303,7 @@ public:
     UseSignedCharForObjCBool = false;
 
     LongDoubleWidth = LongDoubleAlign = SuitableAlign = 64;
-    LongDoubleFormat = &llvm::APFloat::IEEEdouble;
+    LongDoubleFormat = &llvm::APFloat::IEEEdouble();
 
     TheCXXABI.set(TargetCXXABI::iOS64);
   }
@@ -6888,7 +6981,7 @@ public:
     // aligned. The SPARCv9 SCD 2.4.1 says 16-byte aligned.
     LongDoubleWidth = 128;
     LongDoubleAlign = 128;
-    LongDoubleFormat = &llvm::APFloat::IEEEquad;
+    LongDoubleFormat = &llvm::APFloat::IEEEquad();
     MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 64;
   }
 
@@ -6931,7 +7024,7 @@ public:
     PointerWidth = PointerAlign = 64;
     LongDoubleWidth = 128;
     LongDoubleAlign = 64;
-    LongDoubleFormat = &llvm::APFloat::IEEEquad;
+    LongDoubleFormat = &llvm::APFloat::IEEEquad();
     DefaultAlignForAttributeAligned = 64;
     MinGlobalAlign = 16;
     resetDataLayout("E-m:e-i1:8:16-i8:8:16-i64:64-f128:64-a:8:16-n32:64");
@@ -7207,9 +7300,9 @@ public:
     DoubleAlign = 32;
     LongDoubleWidth = 32;
     LongDoubleAlign = 32;
-    FloatFormat = &llvm::APFloat::IEEEsingle;
-    DoubleFormat = &llvm::APFloat::IEEEsingle;
-    LongDoubleFormat = &llvm::APFloat::IEEEsingle;
+    FloatFormat = &llvm::APFloat::IEEEsingle();
+    DoubleFormat = &llvm::APFloat::IEEEsingle();
+    LongDoubleFormat = &llvm::APFloat::IEEEsingle();
     resetDataLayout("E-p:32:32:32-i1:8:8-i8:8:32-"
                     "i16:16:32-i32:32:32-i64:32:32-"
                     "f32:32:32-f64:32:32-v64:32:32-"
@@ -7419,7 +7512,7 @@ public:
   void setO32ABITypes() {
     Int64Type = SignedLongLong;
     IntMaxType = Int64Type;
-    LongDoubleFormat = &llvm::APFloat::IEEEdouble;
+    LongDoubleFormat = &llvm::APFloat::IEEEdouble();
     LongDoubleWidth = LongDoubleAlign = 64;
     LongWidth = LongAlign = 32;
     MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 32;
@@ -7431,10 +7524,10 @@ public:
 
   void setN32N64ABITypes() {
     LongDoubleWidth = LongDoubleAlign = 128;
-    LongDoubleFormat = &llvm::APFloat::IEEEquad;
+    LongDoubleFormat = &llvm::APFloat::IEEEquad();
     if (getTriple().getOS() == llvm::Triple::FreeBSD) {
       LongDoubleWidth = LongDoubleAlign = 64;
-      LongDoubleFormat = &llvm::APFloat::IEEEdouble;
+      LongDoubleFormat = &llvm::APFloat::IEEEdouble();
     }
     MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 64;
     SuitableAlign = 128;
@@ -7980,7 +8073,7 @@ public:
     SimdDefaultAlign = 128;
     SigAtomicType = SignedLong;
     LongDoubleWidth = LongDoubleAlign = 128;
-    LongDoubleFormat = &llvm::APFloat::IEEEquad;
+    LongDoubleFormat = &llvm::APFloat::IEEEquad();
     SizeType = UnsignedInt;
     PtrDiffType = SignedInt;
     IntPtrType = SignedInt;
@@ -8181,7 +8274,7 @@ public:
   void setSupportedOpenCLOpts() override {
     // Assume all OpenCL extensions and optional core features are supported
     // for SPIR since it is a generic target.
-    getSupportedOpenCLOpts().setAll();
+    getSupportedOpenCLOpts().supportAll();
   }
 };
 
@@ -8287,7 +8380,7 @@ public:
       : LinuxTargetInfo<X86_32TargetInfo>(Triple, Opts) {
     SuitableAlign = 32;
     LongDoubleWidth = 64;
-    LongDoubleFormat = &llvm::APFloat::IEEEdouble;
+    LongDoubleFormat = &llvm::APFloat::IEEEdouble();
   }
 };
 
@@ -8296,7 +8389,7 @@ class AndroidX86_64TargetInfo : public LinuxTargetInfo<X86_64TargetInfo> {
 public:
   AndroidX86_64TargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
       : LinuxTargetInfo<X86_64TargetInfo>(Triple, Opts) {
-    LongDoubleFormat = &llvm::APFloat::IEEEquad;
+    LongDoubleFormat = &llvm::APFloat::IEEEquad();
   }
 
   bool useFloat128ManglingForLongDouble() const override {
@@ -8339,6 +8432,107 @@ public:
                         MacroBuilder &Builder) const override {
     Builder.defineMacro("__RENDERSCRIPT__");
     AArch64leTargetInfo::getTargetDefines(Opts, Builder);
+  }
+};
+
+
+// AVR Target
+class AVRTargetInfo : public TargetInfo {
+public:
+  AVRTargetInfo(const llvm::Triple &Triple, const TargetOptions &)
+      : TargetInfo(Triple) {
+    TLSSupported = false;
+    PointerWidth = 16;
+    PointerAlign = 8;
+    IntWidth = 16;
+    IntAlign = 8;
+    LongWidth = 32;
+    LongAlign = 8;
+    LongLongWidth = 64;
+    LongLongAlign = 8;
+    SuitableAlign = 8;
+    DefaultAlignForAttributeAligned = 8;
+    HalfWidth = 16;
+    HalfAlign = 8;
+    FloatWidth = 32;
+    FloatAlign = 8;
+    DoubleWidth = 32;
+    DoubleAlign = 8;
+    DoubleFormat = &llvm::APFloat::IEEEsingle();
+    LongDoubleWidth = 32;
+    LongDoubleAlign = 8;
+    LongDoubleFormat = &llvm::APFloat::IEEEsingle();
+    SizeType = UnsignedInt;
+    PtrDiffType = SignedInt;
+    IntPtrType = SignedInt;
+    Char16Type = UnsignedInt;
+    WCharType = SignedInt;
+    WIntType = SignedInt;
+    Char32Type = UnsignedLong;
+    SigAtomicType = SignedChar;
+    resetDataLayout("e-p:16:16:16-i8:8:8-i16:16:16-i32:32:32-i64:64:64"
+		    "-f32:32:32-f64:64:64-n8");
+  }
+
+  void getTargetDefines(const LangOptions &Opts,
+                        MacroBuilder &Builder) const override {
+    Builder.defineMacro("__AVR__");
+  }
+
+  ArrayRef<Builtin::Info> getTargetBuiltins() const override {
+    return None;
+  }
+
+  BuiltinVaListKind getBuiltinVaListKind() const override {
+    return TargetInfo::VoidPtrBuiltinVaList;
+  }
+
+  const char *getClobbers() const override {
+    return "";
+  }
+
+  ArrayRef<const char *> getGCCRegNames() const override {
+    static const char * const GCCRegNames[] = {
+      "r0",   "r1",   "r2",   "r3",   "r4",   "r5",   "r6",   "r7",
+      "r8",   "r9",   "r10",  "r11",  "r12",  "r13",  "r14",  "r15",
+      "r16",  "r17",  "r18",  "r19",  "r20",  "r21",  "r22",  "r23",
+      "r24",  "r25",  "X",    "Y",    "Z",    "SP"
+    };
+    return llvm::makeArrayRef(GCCRegNames);
+  }
+
+  ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override {
+    return None;
+  }
+
+  ArrayRef<TargetInfo::AddlRegName> getGCCAddlRegNames() const override {
+    static const TargetInfo::AddlRegName AddlRegNames[] = {
+      { { "r26", "r27"}, 26 },
+      { { "r28", "r29"}, 27 },
+      { { "r30", "r31"}, 28 },
+      { { "SPL", "SPH"}, 29 },
+    };
+    return llvm::makeArrayRef(AddlRegNames);
+  }
+
+  bool validateAsmConstraint(const char *&Name,
+                             TargetInfo::ConstraintInfo &Info) const override {
+    return false;
+  }
+
+  IntType getIntTypeByWidth(unsigned BitWidth,
+                            bool IsSigned) const final {
+    // AVR prefers int for 16-bit integers.
+    return BitWidth == 16 ? (IsSigned ? SignedInt : UnsignedInt)
+                          : TargetInfo::getIntTypeByWidth(BitWidth, IsSigned);
+  }
+
+  IntType getLeastIntTypeByWidth(unsigned BitWidth,
+                                 bool IsSigned) const final {
+    // AVR uses int for int_least16_t and int_fast16_t.
+    return BitWidth == 16
+               ? (IsSigned ? SignedInt : UnsignedInt)
+               : TargetInfo::getLeastIntTypeByWidth(BitWidth, IsSigned);
   }
 };
 
@@ -8410,8 +8604,6 @@ static TargetInfo *AllocateTarget(const llvm::Triple &Triple,
       return new LinuxTargetInfo<ARMleTargetInfo>(Triple, Opts);
     case llvm::Triple::FreeBSD:
       return new FreeBSDTargetInfo<ARMleTargetInfo>(Triple, Opts);
-    case llvm::Triple::Fuchsia:
-      return new FuchsiaTargetInfo<ARMleTargetInfo>(Triple, Opts);
     case llvm::Triple::NetBSD:
       return new NetBSDTargetInfo<ARMleTargetInfo>(Triple, Opts);
     case llvm::Triple::OpenBSD:
@@ -8448,8 +8640,6 @@ static TargetInfo *AllocateTarget(const llvm::Triple &Triple,
       return new LinuxTargetInfo<ARMbeTargetInfo>(Triple, Opts);
     case llvm::Triple::FreeBSD:
       return new FreeBSDTargetInfo<ARMbeTargetInfo>(Triple, Opts);
-    case llvm::Triple::Fuchsia:
-      return new FuchsiaTargetInfo<ARMbeTargetInfo>(Triple, Opts);
     case llvm::Triple::NetBSD:
       return new NetBSDTargetInfo<ARMbeTargetInfo>(Triple, Opts);
     case llvm::Triple::OpenBSD:
@@ -8464,6 +8654,8 @@ static TargetInfo *AllocateTarget(const llvm::Triple &Triple,
       return new ARMbeTargetInfo(Triple, Opts);
     }
 
+  case llvm::Triple::avr:
+    return new AVRTargetInfo(Triple, Opts);
   case llvm::Triple::bpfeb:
   case llvm::Triple::bpfel:
     return new BPFTargetInfo(Triple, Opts);
@@ -8589,9 +8781,9 @@ static TargetInfo *AllocateTarget(const llvm::Triple &Triple,
     }
 
   case llvm::Triple::nvptx:
-    return new NVPTX32TargetInfo(Triple, Opts);
+    return new NVPTXTargetInfo(Triple, Opts, /*TargetPointerWidth=*/32);
   case llvm::Triple::nvptx64:
-    return new NVPTX64TargetInfo(Triple, Opts);
+    return new NVPTXTargetInfo(Triple, Opts, /*TargetPointerWidth=*/64);
 
   case llvm::Triple::amdgcn:
   case llvm::Triple::r600:
@@ -8683,8 +8875,6 @@ static TargetInfo *AllocateTarget(const llvm::Triple &Triple,
       return new BitrigI386TargetInfo(Triple, Opts);
     case llvm::Triple::FreeBSD:
       return new FreeBSDTargetInfo<X86_32TargetInfo>(Triple, Opts);
-    case llvm::Triple::Fuchsia:
-      return new FuchsiaTargetInfo<X86_32TargetInfo>(Triple, Opts);
     case llvm::Triple::KFreeBSD:
       return new KFreeBSDTargetInfo<X86_32TargetInfo>(Triple, Opts);
     case llvm::Triple::Minix:
@@ -8780,11 +8970,19 @@ static TargetInfo *AllocateTarget(const llvm::Triple &Triple,
     return new SPIR64TargetInfo(Triple, Opts);
   }
   case llvm::Triple::wasm32:
-    if (!(Triple == llvm::Triple("wasm32-unknown-unknown")))
+    if (Triple.getSubArch() != llvm::Triple::NoSubArch ||
+        Triple.getVendor() != llvm::Triple::UnknownVendor ||
+        Triple.getOS() != llvm::Triple::UnknownOS ||
+        Triple.getEnvironment() != llvm::Triple::UnknownEnvironment ||
+        !(Triple.isOSBinFormatELF() || Triple.isOSBinFormatWasm()))
       return nullptr;
     return new WebAssemblyOSTargetInfo<WebAssembly32TargetInfo>(Triple, Opts);
   case llvm::Triple::wasm64:
-    if (!(Triple == llvm::Triple("wasm64-unknown-unknown")))
+    if (Triple.getSubArch() != llvm::Triple::NoSubArch ||
+        Triple.getVendor() != llvm::Triple::UnknownVendor ||
+        Triple.getOS() != llvm::Triple::UnknownOS ||
+        Triple.getEnvironment() != llvm::Triple::UnknownEnvironment ||
+        !(Triple.isOSBinFormatELF() || Triple.isOSBinFormatWasm()))
       return nullptr;
     return new WebAssemblyOSTargetInfo<WebAssembly64TargetInfo>(Triple, Opts);
 

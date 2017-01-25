@@ -28,6 +28,7 @@ class Pass;
 class Function;
 class BasicBlock;
 class GlobalValue;
+class raw_ostream;
 
 //===----------------------------------------------------------------------===//
 //
@@ -49,12 +50,12 @@ ModulePass *createStripNonLineTableDebugInfoPass();
 
 //===----------------------------------------------------------------------===//
 //
-// These pass removes llvm.dbg.declare intrinsics.
+// This pass removes llvm.dbg.declare intrinsics.
 ModulePass *createStripDebugDeclarePass();
 
 //===----------------------------------------------------------------------===//
 //
-// These pass removes unused symbols' debug info.
+// This pass removes unused symbols' debug info.
 ModulePass *createStripDeadDebugInfoPass();
 
 //===----------------------------------------------------------------------===//
@@ -94,7 +95,7 @@ ModulePass *createGVExtractionPass(std::vector<GlobalValue*>& GVs, bool
 
 //===----------------------------------------------------------------------===//
 /// This pass performs iterative function importing from other modules.
-Pass *createFunctionImportPass(const ModuleSummaryIndex *Index = nullptr);
+Pass *createFunctionImportPass();
 
 //===----------------------------------------------------------------------===//
 /// createFunctionInliningPass - Return a new pass object that uses a heuristic
@@ -214,9 +215,20 @@ ModulePass *createMetaRenamerPass();
 /// manager.
 ModulePass *createBarrierNoopPass();
 
+/// What to do with the summary when running the LowerTypeTests pass.
+enum class LowerTypeTestsSummaryAction {
+  None,   ///< Do nothing.
+  Import, ///< Import typeid resolutions from summary and globals.
+  Export, ///< Export typeid resolutions to summary and globals.
+};
+
 /// \brief This pass lowers type metadata and the llvm.type.test intrinsic to
 /// bitsets.
-ModulePass *createLowerTypeTestsPass();
+/// \param Action What to do with the summary passed as Index.
+/// \param Index The summary to use for importing or exporting, this can be null
+///              when Action is None.
+ModulePass *createLowerTypeTestsPass(LowerTypeTestsSummaryAction Action,
+                                     ModuleSummaryIndex *Index);
 
 /// \brief This pass export CFI checks for use by external modules.
 ModulePass *createCrossDSOCFIPass();
@@ -234,6 +246,9 @@ ModulePass *createGlobalSplitPass();
 // IR metadata to reflect the profile.
 ModulePass *createSampleProfileLoaderPass();
 ModulePass *createSampleProfileLoaderPass(StringRef Name);
+
+/// Write ThinLTO-ready bitcode to Str.
+ModulePass *createWriteThinLTOBitcodePass(raw_ostream &Str);
 
 } // End llvm namespace
 

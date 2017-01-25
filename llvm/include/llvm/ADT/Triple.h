@@ -207,6 +207,7 @@ public:
     COFF,
     ELF,
     MachO,
+    Wasm,
   };
 
 private:
@@ -575,6 +576,11 @@ public:
   /// Tests whether the environment is MachO.
   bool isOSBinFormatMachO() const {
     return getObjectFormat() == Triple::MachO;
+  }
+
+  /// Tests whether the OS uses the Wasm binary format.
+  bool isOSBinFormatWasm() const {
+    return getObjectFormat() == Triple::Wasm;
   }
 
   /// Tests whether the target is the PS4 CPU

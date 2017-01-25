@@ -377,9 +377,9 @@ void Liveness::computePhiInfo() {
         NodeAddr<UseNode*> A = DFG.addr<UseNode*>(UN);
         uint16_t F = A.Addr->getFlags();
         if ((F & (NodeAttrs::Undef | NodeAttrs::PhiRef)) == 0) {
-	  RegisterRef R = DFG.normalizeRef(getRestrictedRegRef(A));
+          RegisterRef R = DFG.normalizeRef(getRestrictedRegRef(A));
           RealUses[R.Reg].insert({A.Id,R.Mask});
-	}
+        }
         UN = A.Addr->getSibling();
       }
       // Visit all reached defs, and add them to the queue. These defs may
@@ -424,7 +424,7 @@ void Liveness::computePhiInfo() {
         auto UA = DFG.addr<UseNode*>(I->first);
         // Undef flag is checked above.
         assert((UA.Addr->getFlags() & NodeAttrs::Undef) == 0);
-	RegisterRef R(UI->first, I->second);
+        RegisterRef R(UI->first, I->second);
         NodeList RDs = getAllReachingDefs(R, UA);
         if (any_of(RDs, InPhiDefs))
           ++I;
@@ -659,7 +659,7 @@ void Liveness::computeLiveIns() {
         RegisterRef UR = DFG.normalizeRef(getRestrictedRegRef(PUA));
         for (const std::pair<RegisterId,NodeRefSet> &T : RUs) {
           // Check if T.first aliases UR?
-          LaneBitmask M = 0;
+          LaneBitmask M;
           for (std::pair<NodeId,LaneBitmask> P : T.second)
             M |= P.second;
 
@@ -710,7 +710,7 @@ void Liveness::computeLiveIns() {
         }
         do {
           LaneBitmask M = TRI.getSubRegIndexLaneMask(S.getSubRegIndex());
-          if (M & P.second)
+          if ((M & P.second).any())
             LV.push_back(RegisterRef(S.getSubReg()));
           ++S;
         } while (S.isValid());
@@ -759,7 +759,7 @@ void Liveness::resetKills(MachineBasicBlock *B) {
       }
       do {
         LaneBitmask M = TRI.getSubRegIndexLaneMask(S.getSubRegIndex());
-        if (M & I.LaneMask)
+        if ((M & I.LaneMask).any())
           LV.set(S.getSubReg());
         ++S;
       } while (S.isValid());
@@ -803,9 +803,8 @@ void Liveness::resetKills(MachineBasicBlock *B) {
         IsLive = true;
         break;
       }
-      if (IsLive)
-        continue;
-      Op.setIsKill(true);
+      if (!IsLive)
+        Op.setIsKill(true);
       for (MCSubRegIterator SR(R, &TRI, true); SR.isValid(); ++SR)
         Live.set(*SR);
     }
@@ -1001,7 +1000,7 @@ void Liveness::traverse(MachineBasicBlock *B, RefMap &LiveIn) {
   RegisterAggr &Local = LiveMap[B];
   RefMap &LON = PhiLON[B];
   for (auto &R : LON) {
-    LaneBitmask M = 0;
+    LaneBitmask M;
     for (auto P : R.second)
       M |= P.second;
     Local.insert(RegisterRef(R.first,M));

@@ -46,7 +46,7 @@ static void saveBuffer(StringRef Buffer, const Twine &Path) {
   std::error_code EC;
   raw_fd_ostream OS(Path.str(), EC, sys::fs::OpenFlags::F_None);
   if (EC)
-    error(EC, "cannot create " + Path);
+    error("cannot create " + Path + ": " + EC.message());
   OS << Buffer;
 }
 
@@ -75,37 +75,34 @@ static std::unique_ptr<lto::LTO> createLTO() {
   Conf.RelocModel = Config->Pic ? Reloc::PIC_ : Reloc::Static;
   Conf.DisableVerify = Config->DisableVerify;
   Conf.DiagHandler = diagnosticHandler;
-  Conf.OptLevel = Config->LtoO;
+  Conf.OptLevel = Config->LTOO;
 
   // Set up a custom pipeline if we've been asked to.
-  Conf.OptPipeline = Config->LtoNewPmPasses;
-  Conf.AAPipeline = Config->LtoAAPipeline;
+  Conf.OptPipeline = Config->LTONewPmPasses;
+  Conf.AAPipeline = Config->LTOAAPipeline;
 
   if (Config->SaveTemps)
     checkError(Conf.addSaveTemps(std::string(Config->OutputFile) + ".",
                                  /*UseInputModulePath*/ true));
 
   lto::ThinBackend Backend;
-  if (Config->ThinLtoJobs != -1u)
-    Backend = lto::createInProcessThinBackend(Config->ThinLtoJobs);
+  if (Config->ThinLTOJobs != -1u)
+    Backend = lto::createInProcessThinBackend(Config->ThinLTOJobs);
   return llvm::make_unique<lto::LTO>(std::move(Conf), Backend,
-                                     Config->LtoPartitions);
+                                     Config->LTOPartitions);
 }
 
-BitcodeCompiler::BitcodeCompiler() : LtoObj(createLTO()) {}
+BitcodeCompiler::BitcodeCompiler() : LTOObj(createLTO()) {}
 
 BitcodeCompiler::~BitcodeCompiler() = default;
 
-static void undefine(Symbol *S) {
-  replaceBody<Undefined>(S, S->body()->getName(), STV_DEFAULT, S->body()->Type,
-                         nullptr);
+template <class ELFT> static void undefine(Symbol *S) {
+  replaceBody<Undefined<ELFT>>(S, S->body()->getName(), /*IsLocal=*/false,
+                               STV_DEFAULT, S->body()->Type, nullptr);
 }
 
-void BitcodeCompiler::add(BitcodeFile &F) {
+template <class ELFT> void BitcodeCompiler::add(BitcodeFile &F) {
   lto::InputFile &Obj = *F.Obj;
-  if (Obj.getDataLayoutStr().empty())
-    fatal("invalid bitcode file: " + F.getName() + " has no datalayout");
-
   unsigned SymNum = 0;
   std::vector<Symbol *> Syms = F.getSymbols();
   std::vector<lto::SymbolResolution> Resols(Syms.size());
@@ -129,19 +126,19 @@ void BitcodeCompiler::add(BitcodeFile &F) {
     R.VisibleToRegularObj =
         Sym->IsUsedInRegularObj || (R.Prevailing && Sym->includeInDynsym());
     if (R.Prevailing)
-      undefine(Sym);
+      undefine<ELFT>(Sym);
   }
-  checkError(LtoObj->add(std::move(F.Obj), Resols));
+  checkError(LTOObj->add(std::move(F.Obj), Resols));
 }
 
 // Merge all the bitcode files we have seen, codegen the result
 // and return the resulting ObjectFile(s).
 std::vector<InputFile *> BitcodeCompiler::compile() {
   std::vector<InputFile *> Ret;
-  unsigned MaxTasks = LtoObj->getMaxTasks();
+  unsigned MaxTasks = LTOObj->getMaxTasks();
   Buff.resize(MaxTasks);
 
-  checkError(LtoObj->run([&](size_t Task) {
+  checkError(LTOObj->run([&](size_t Task) {
     return llvm::make_unique<lto::NativeObjectStream>(
         llvm::make_unique<raw_svector_ostream>(Buff[Task]));
   }));
@@ -160,3 +157,8 @@ std::vector<InputFile *> BitcodeCompiler::compile() {
   }
   return Ret;
 }
+
+template void BitcodeCompiler::template add<ELF32LE>(BitcodeFile &);
+template void BitcodeCompiler::template add<ELF32BE>(BitcodeFile &);
+template void BitcodeCompiler::template add<ELF64LE>(BitcodeFile &);
+template void BitcodeCompiler::template add<ELF64BE>(BitcodeFile &);

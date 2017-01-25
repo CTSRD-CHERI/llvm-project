@@ -18,10 +18,11 @@ Clang-Tidy Checks
    cert-err61-cpp (redirects to misc-throw-by-value-catch-by-reference) <cert-err61-cpp>
    cert-fio38-c (redirects to misc-non-copyable-objects) <cert-fio38-c>
    cert-flp30-c
-   cert-msc30-c (redirects to cert-limited-randomness) <cert-msc30-c>
+   cert-msc30-c (redirects to cert-msc50-cpp) <cert-msc30-c>
    cert-msc50-cpp
    cert-oop11-cpp (redirects to misc-move-constructor-init) <cert-oop11-cpp>
    cppcoreguidelines-interfaces-global-init
+   cppcoreguidelines-no-malloc
    cppcoreguidelines-pro-bounds-array-to-pointer-decay
    cppcoreguidelines-pro-bounds-constant-array-index
    cppcoreguidelines-pro-bounds-pointer-arithmetic
@@ -80,9 +81,11 @@ Clang-Tidy Checks
    misc-sizeof-container
    misc-sizeof-expression
    misc-static-assert
+   misc-string-compare
    misc-string-constructor
    misc-string-integer-assignment
    misc-string-literal-with-embedded-nul
+   misc-suspicious-enum-usage
    misc-suspicious-missing-comma
    misc-suspicious-semicolon
    misc-suspicious-string-compare
@@ -109,8 +112,9 @@ Clang-Tidy Checks
    modernize-shrink-to-fit
    modernize-use-auto
    modernize-use-bool-literals
-   modernize-use-default
+   modernize-use-default-member-init
    modernize-use-emplace
+   modernize-use-equals-default
    modernize-use-equals-delete
    modernize-use-nullptr
    modernize-use-override
@@ -122,11 +126,13 @@ Clang-Tidy Checks
    performance-for-range-copy
    performance-implicit-cast-in-loop
    performance-inefficient-string-concatenation
+   performance-type-promotion-in-math-fn
    performance-unnecessary-copy-initialization
    performance-unnecessary-value-param
    readability-avoid-const-params-in-decls
    readability-braces-around-statements
    readability-container-size-empty
+   readability-delete-null-pointer
    readability-deleted-default
    readability-else-after-return
    readability-function-size
@@ -138,6 +144,7 @@ Clang-Tidy Checks
    readability-non-const-parameter
    readability-redundant-control-flow
    readability-redundant-declaration
+   readability-redundant-function-ptr-dereference
    readability-redundant-member-init
    readability-redundant-smartptr-get
    readability-redundant-string-cstr

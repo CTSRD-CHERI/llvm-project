@@ -412,7 +412,7 @@ void SplitEditor::addDeadDef(LiveInterval &LI, VNInfo *VNI, bool Original) {
     // register, we need to check which subranges need to be updated.
     const MachineInstr *DefMI = LIS.getInstructionFromIndex(Def);
     assert(DefMI != nullptr);
-    LaneBitmask LM = 0;
+    LaneBitmask LM;
     for (const MachineOperand &DefOp : DefMI->defs()) {
       unsigned R = DefOp.getReg();
       if (R != LI.reg)
@@ -425,7 +425,7 @@ void SplitEditor::addDeadDef(LiveInterval &LI, VNInfo *VNI, bool Original) {
       }
     }
     for (LiveInterval::SubRange &S : LI.subranges())
-      if (S.LaneMask & LM)
+      if ((S.LaneMask & LM).any())
         S.createDeadDef(Def, LIS.getVNInfoAllocator());
   }
 }
@@ -1092,13 +1092,19 @@ static bool removeDeadSegment(SlotIndex Def, LiveRange &LR) {
 }
 
 void SplitEditor::extendPHIRange(MachineBasicBlock &B, LiveRangeCalc &LRC,
-                                 LiveRange &LR, ArrayRef<SlotIndex> Undefs) {
+                                 LiveRange &LR, LaneBitmask LM,
+                                 ArrayRef<SlotIndex> Undefs) {
   for (MachineBasicBlock *P : B.predecessors()) {
     SlotIndex End = LIS.getMBBEndIdx(P);
     SlotIndex LastUse = End.getPrevSlot();
     // The predecessor may not have a live-out value. That is OK, like an
     // undef PHI operand.
-    if (Edit->getParent().liveAt(LastUse))
+    LiveInterval &PLI = Edit->getParent();
+    // Need the cast because the inputs to ?: would otherwise be deemed
+    // "incompatible": SubRange vs LiveInterval.
+    LiveRange &PSR = !LM.all() ? getSubRangeForMask(LM, PLI)
+                               : static_cast<LiveRange&>(PLI);
+    if (PSR.liveAt(LastUse))
       LRC.extend(LR, End, /*PhysReg=*/0, Undefs);
   }
 }
@@ -1120,7 +1126,7 @@ void SplitEditor::extendPHIKillRanges() {
     LiveRangeCalc &LRC = getLRCalc(RegIdx);
     MachineBasicBlock &B = *LIS.getMBBFromIndex(V->def);
     if (!removeDeadSegment(V->def, LI))
-      extendPHIRange(B, LRC, LI, /*Undefs=*/{});
+      extendPHIRange(B, LRC, LI, LaneBitmask::getAll(), /*Undefs=*/{});
   }
 
   SmallVector<SlotIndex, 4> Undefs;
@@ -1141,7 +1147,7 @@ void SplitEditor::extendPHIKillRanges() {
                    &LIS.getVNInfoAllocator());
       Undefs.clear();
       LI.computeSubRangeUndefs(Undefs, PS.LaneMask, MRI, *LIS.getSlotIndexes());
-      extendPHIRange(B, SubLRC, S, Undefs);
+      extendPHIRange(B, SubLRC, S, PS.LaneMask, Undefs);
     }
   }
 }
@@ -1223,7 +1229,7 @@ void SplitEditor::rewriteAssigned(bool ExtendRanges) {
     LaneBitmask LM = Sub != 0 ? TRI.getSubRegIndexLaneMask(Sub)
                               : MRI.getMaxLaneMaskForVReg(Reg);
     for (LiveInterval::SubRange &S : LI.subranges()) {
-      if (!(S.LaneMask & LM))
+      if ((S.LaneMask & LM).none())
         continue;
       // The problem here can be that the new register may have been created
       // for a partially defined original register. For example:

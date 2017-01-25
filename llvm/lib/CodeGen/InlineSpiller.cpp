@@ -749,9 +749,12 @@ foldMemoryOperand(ArrayRef<std::pair<MachineInstr*, unsigned> > Ops,
   bool WasCopy = MI->isCopy();
   unsigned ImpReg = 0;
 
-  bool SpillSubRegs = (MI->getOpcode() == TargetOpcode::STATEPOINT ||
-                       MI->getOpcode() == TargetOpcode::PATCHPOINT ||
-                       MI->getOpcode() == TargetOpcode::STACKMAP);
+  // Spill subregs if the target allows it.
+  // We always want to spill subregs for stackmap/patchpoint pseudos.
+  bool SpillSubRegs = TII.isSubregFoldable() ||
+                      MI->getOpcode() == TargetOpcode::STATEPOINT ||
+                      MI->getOpcode() == TargetOpcode::PATCHPOINT ||
+                      MI->getOpcode() == TargetOpcode::STACKMAP;
 
   // TargetInstrInfo::foldMemoryOperand only expects explicit, non-tied
   // operands.
@@ -764,7 +767,7 @@ foldMemoryOperand(ArrayRef<std::pair<MachineInstr*, unsigned> > Ops,
       ImpReg = MO.getReg();
       continue;
     }
-    // FIXME: Teach targets to deal with subregs.
+
     if (!SpillSubRegs && MO.getSubReg())
       return false;
     // We cannot fold a load instruction into a def.
@@ -774,6 +777,11 @@ foldMemoryOperand(ArrayRef<std::pair<MachineInstr*, unsigned> > Ops,
     if (!MI->isRegTiedToDefOperand(Idx))
       FoldOps.push_back(Idx);
   }
+
+  // If we only have implicit uses, we won't be able to fold that.
+  // Moreover, TargetInstrInfo::foldMemoryOperand will assert if we try!
+  if (FoldOps.empty())
+    return false;
 
   MachineInstrSpan MIS(MI);
 
@@ -1126,7 +1134,7 @@ void HoistSpillHelper::rmRedundantSpills(
   // earlier spill with smaller SlotIndex.
   for (const auto CurrentSpill : Spills) {
     MachineBasicBlock *Block = CurrentSpill->getParent();
-    MachineDomTreeNode *Node = MDT.DT->getNode(Block);
+    MachineDomTreeNode *Node = MDT.getBase().getNode(Block);
     MachineInstr *PrevSpill = SpillBBToSpill[Node];
     if (PrevSpill) {
       SlotIndex PIdx = LIS.getInstructionIndex(*PrevSpill);
@@ -1134,9 +1142,9 @@ void HoistSpillHelper::rmRedundantSpills(
       MachineInstr *SpillToRm = (CIdx > PIdx) ? CurrentSpill : PrevSpill;
       MachineInstr *SpillToKeep = (CIdx > PIdx) ? PrevSpill : CurrentSpill;
       SpillsToRm.push_back(SpillToRm);
-      SpillBBToSpill[MDT.DT->getNode(Block)] = SpillToKeep;
+      SpillBBToSpill[MDT.getBase().getNode(Block)] = SpillToKeep;
     } else {
-      SpillBBToSpill[MDT.DT->getNode(Block)] = CurrentSpill;
+      SpillBBToSpill[MDT.getBase().getNode(Block)] = CurrentSpill;
     }
   }
   for (const auto SpillToRm : SpillsToRm)
@@ -1211,7 +1219,7 @@ void HoistSpillHelper::getVisitOrders(
   // Sort the nodes in WorkSet in top-down order and save the nodes
   // in Orders. Orders will be used for hoisting in runHoistSpills.
   unsigned idx = 0;
-  Orders.push_back(MDT.DT->getNode(Root));
+  Orders.push_back(MDT.getBase().getNode(Root));
   do {
     MachineDomTreeNode *Node = Orders[idx++];
     const std::vector<MachineDomTreeNode *> &Children = Node->getChildren();

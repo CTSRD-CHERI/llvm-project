@@ -117,6 +117,8 @@ void DAGTypeLegalizer::PerformExpensiveChecks() {
         Mapped |= 64;
       if (WidenedVectors.find(Res) != WidenedVectors.end())
         Mapped |= 128;
+      if (PromotedFloats.find(Res) != PromotedFloats.end())
+        Mapped |= 256;
 
       if (Node.getNodeId() != Processed) {
         // Since we allow ReplacedValues to map deleted nodes, it may map nodes
@@ -159,6 +161,8 @@ void DAGTypeLegalizer::PerformExpensiveChecks() {
           dbgs() << " SplitVectors";
         if (Mapped & 128)
           dbgs() << " WidenedVectors";
+        if (Mapped & 256)
+          dbgs() << " PromotedFloats";
         dbgs() << "\n";
         llvm_unreachable(nullptr);
       }
@@ -484,7 +488,7 @@ SDNode *DAGTypeLegalizer::AnalyzeNewNode(SDNode *N) {
   // updated after all operands have been analyzed.  Since this is rare,
   // the code tries to minimize overhead in the non-morphing case.
 
-  SmallVector<SDValue, 8> NewOps;
+  std::vector<SDValue> NewOps;
   unsigned NumProcessed = 0;
   for (unsigned i = 0, e = N->getNumOperands(); i != e; ++i) {
     SDValue OrigOp = N->getOperand(i);
@@ -500,7 +504,7 @@ SDNode *DAGTypeLegalizer::AnalyzeNewNode(SDNode *N) {
       NewOps.push_back(Op);
     } else if (Op != OrigOp) {
       // This is the first operand to change - add all operands so far.
-      NewOps.append(N->op_begin(), N->op_begin() + i);
+      NewOps.insert(NewOps.end(), N->op_begin(), N->op_begin() + i);
       NewOps.push_back(Op);
     }
   }
@@ -1015,22 +1019,6 @@ void DAGTypeLegalizer::GetPairElements(SDValue Pair,
                    DAG.getIntPtrConstant(0, dl));
   Hi = DAG.getNode(ISD::EXTRACT_ELEMENT, dl, NVT, Pair,
                    DAG.getIntPtrConstant(1, dl));
-}
-
-SDValue DAGTypeLegalizer::GetVectorElementPointer(SDValue VecPtr, EVT EltVT,
-                                                  SDValue Index) {
-  SDLoc dl(Index);
-  // Make sure the index type is big enough to compute in.
-  Index = DAG.getZExtOrTrunc(Index, dl, TLI.getPointerTy(DAG.getDataLayout()));
-
-  // Calculate the element offset and add it to the pointer.
-  unsigned EltSize = EltVT.getSizeInBits() / 8; // FIXME: should be ABI size.
-  assert(EltSize * 8 == EltVT.getSizeInBits() &&
-         "Converting bits to bytes lost precision");
-
-  Index = DAG.getNode(ISD::MUL, dl, Index.getValueType(), Index,
-                      DAG.getConstant(EltSize, dl, Index.getValueType()));
-  return DAG.getNode(ISD::ADD, dl, Index.getValueType(), Index, VecPtr);
 }
 
 /// Build an integer with low bits Lo and high bits Hi.

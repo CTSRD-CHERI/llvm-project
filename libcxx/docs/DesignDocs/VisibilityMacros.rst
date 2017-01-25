@@ -22,6 +22,12 @@ Visibility Macros
   Mark a symbol as being exported by the libc++ library. This attribute must
   be applied to the declaration of all functions exported by the libc++ dylib.
 
+**_LIBCPP_EXTERN_VIS**
+  Mark a symbol as being exported by the libc++ library. This attribute may
+  only be applied to objects defined in the libc++ library. On Windows this
+  macro applies `dllimport`/`dllexport` to the symbol. On all other platforms
+  this macro has no effect.
+
 **_LIBCPP_OVERRIDABLE_FUNC_VIS**
   Mark a symbol as being exported by the libc++ library, but allow it to be
   overridden locally. On non-Windows, this is equivalent to `_LIBCPP_FUNC_VIS`.
@@ -49,13 +55,13 @@ Visibility Macros
   attribute. With GCC the `visibility(...)` attribute is used and member
   functions are affected.
 
-**_LIBCPP_TYPE_VIS_ONLY**
-  The same as `_LIBCPP_TYPE_VIS` except that it may be applied to templates.
+**_LIBCPP_TEMPLATE_VIS**
+  The same as `_LIBCPP_TYPE_VIS` except that it may be applied to class
+  templates.
 
   **Windows Behavior**: DLLs do not support dllimport/export on class templates.
   The macro has an empty definition on this platform.
 
-  Note: This macro should be renamed `_LIBCPP_TEMPLATE_TYPE_VIS`.
 
 **_LIBCPP_ENUM_VIS**
   Mark the typeinfo of an enum as having default visibility. This attribute
@@ -74,14 +80,15 @@ Visibility Macros
   a `_LIBCPP_EXTERN_TEMPLATE` declaration as being exported by the libc++ library.
   This attribute must be specified on all extern class template declarations.
 
-  This macro is used to override the `_LIBCPP_TYPE_VIS_ONLY` attribute
+  This macro is used to override the `_LIBCPP_TEMPLATE_VIS` attribute
   specified on the primary template and to export the member functions produced
   by the explicit instantiation in the dylib.
 
   **GCC Behavior**: GCC ignores visibility attributes applied the type in
   extern template declarations and applying an attribute results in a warning.
-  However since `_LIBCPP_TYPE_VIS_ONLY` is the same as `_LIBCPP_TYPE_VIS` the
-  visibility is already correct. The macro has an empty definition with GCC.
+  However since `_LIBCPP_TEMPLATE_VIS` is the same as
+  `__attribute__((visibility("default"))` the visibility is already correct.
+  The macro has an empty definition with GCC.
 
   **Windows Behavior**: `extern template` and `dllexport` are fundamentally
   incompatible *on a template class* on Windows; the former suppresses

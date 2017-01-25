@@ -161,6 +161,8 @@ def ext_old_implicitly_unsigned_long_cxx : ExtWarn<
   InGroup<CXX11Compat>;
 def ext_clang_enable_if : Extension<"'enable_if' is a clang extension">,
                           InGroup<GccCompat>;
+def ext_clang_diagnose_if : Extension<"'diagnose_if' is a clang extension">,
+                            InGroup<GccCompat>;
 
 // SEH
 def err_seh_expected_handler : Error<
@@ -190,6 +192,8 @@ def err_target_unsupported_fpmath : Error<
     "the '%0' unit is not supported with this instruction set">;
 def err_target_unsupported_unaligned : Error<
   "the %0 sub-architecture does not support unaligned accesses">;
+def err_target_unsupported_execute_only : Error<
+  "execute only is not supported for the %0 sub-architecture">;
 def err_opt_not_valid_with_opt : Error<
   "option '%0' cannot be specified with '%1'">;
 

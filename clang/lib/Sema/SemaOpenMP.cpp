@@ -326,8 +326,8 @@ public:
   Scope *getCurScope() { return Stack.back().CurScope; }
   SourceLocation getConstructLoc() { return Stack.back().ConstructLoc; }
 
-  // Do the check specified in \a Check to all component lists and return true
-  // if any issue is found.
+  /// Do the check specified in \a Check to all component lists and return true
+  /// if any issue is found.
   bool checkMappableExprComponentListsForDecl(
       ValueDecl *VD, bool CurrentRegionOnly,
       const llvm::function_ref<
@@ -355,8 +355,8 @@ public:
     return false;
   }
 
-  // Create a new mappable expression component list associated with a given
-  // declaration and initialize it with the provided list of components.
+  /// Create a new mappable expression component list associated with a given
+  /// declaration and initialize it with the provided list of components.
   void addMappableExpressionComponents(
       ValueDecl *VD,
       OMPClauseMappableExprCommon::MappableExprComponentListRef Components,
@@ -919,7 +919,7 @@ bool Sema::IsOpenMPCapturedByRef(ValueDecl *D, unsigned Level) {
             OpenMPClauseKind WhereFoundClauseKind) {
           // Only the map clause information influences how a variable is
           // captured. E.g. is_device_ptr does not require changing the default
-          // behaviour.
+          // behavior.
           if (WhereFoundClauseKind != OMPC_map)
             return false;
 
@@ -1089,7 +1089,7 @@ void Sema::EndOpenMPDSABlock(Stmt *CurDirective) {
             auto *VDPrivate = buildVarDecl(
                 *this, DE->getExprLoc(), Type.getUnqualifiedType(),
                 VD->getName(), VD->hasAttrs() ? &VD->getAttrs() : nullptr);
-            ActOnUninitializedDecl(VDPrivate, /*TypeMayContainAuto=*/false);
+            ActOnUninitializedDecl(VDPrivate);
             if (VDPrivate->isInvalidDecl())
               continue;
             PrivateCopies.push_back(buildDeclRefExpr(
@@ -1556,7 +1556,8 @@ public:
             !Stack->isLoopControlVariable(FD).first)
           ImplicitFirstprivate.push_back(E);
       }
-    }
+    } else
+      Visit(E->getBase());
   }
   void VisitOMPExecutableDirective(OMPExecutableDirective *S) {
     for (auto *C : S->clauses()) {
@@ -1606,6 +1607,28 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
                              Params);
     break;
   }
+  case OMPD_target_teams:
+  case OMPD_target_parallel: {
+    Sema::CapturedParamNameType ParamsTarget[] = {
+        std::make_pair(StringRef(), QualType()) // __context with shared vars
+    };
+    // Start a captured region for 'target' with no implicit parameters.
+    ActOnCapturedRegionStart(DSAStack->getConstructLoc(), CurScope, CR_OpenMP,
+                             ParamsTarget);
+    QualType KmpInt32Ty = Context.getIntTypeForBitwidth(32, 1);
+    QualType KmpInt32PtrTy =
+        Context.getPointerType(KmpInt32Ty).withConst().withRestrict();
+    Sema::CapturedParamNameType ParamsTeamsOrParallel[] = {
+        std::make_pair(".global_tid.", KmpInt32PtrTy),
+        std::make_pair(".bound_tid.", KmpInt32PtrTy),
+        std::make_pair(StringRef(), QualType()) // __context with shared vars
+    };
+    // Start a captured region for 'teams' or 'parallel'.  Both regions have
+    // the same implicit parameters.
+    ActOnCapturedRegionStart(DSAStack->getConstructLoc(), CurScope, CR_OpenMP,
+                             ParamsTeamsOrParallel);
+    break;
+  }
   case OMPD_simd:
   case OMPD_for:
   case OMPD_for_simd:
@@ -1620,7 +1643,6 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
   case OMPD_atomic:
   case OMPD_target_data:
   case OMPD_target:
-  case OMPD_target_parallel:
   case OMPD_target_parallel_for:
   case OMPD_target_parallel_for_simd:
   case OMPD_target_simd: {
@@ -1694,7 +1716,13 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
   case OMPD_distribute_simd:
   case OMPD_distribute_parallel_for:
   case OMPD_teams_distribute:
-  case OMPD_teams_distribute_simd: {
+  case OMPD_teams_distribute_simd:
+  case OMPD_teams_distribute_parallel_for_simd:
+  case OMPD_teams_distribute_parallel_for:
+  case OMPD_target_teams_distribute:
+  case OMPD_target_teams_distribute_parallel_for:
+  case OMPD_target_teams_distribute_parallel_for_simd:
+  case OMPD_target_teams_distribute_simd: {
     QualType KmpInt32Ty = Context.getIntTypeForBitwidth(32, 1);
     QualType KmpInt32PtrTy =
         Context.getPointerType(KmpInt32Ty).withConst().withRestrict();
@@ -1729,6 +1757,12 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
   }
 }
 
+int Sema::getOpenMPCaptureLevels(OpenMPDirectiveKind DKind) {
+  SmallVector<OpenMPDirectiveKind, 4> CaptureRegions;
+  getOpenMPCaptureRegions(CaptureRegions, DKind);
+  return CaptureRegions.size();
+}
+
 static OMPCapturedExprDecl *buildCaptureDecl(Sema &S, IdentifierInfo *Id,
                                              Expr *CaptureExpr, bool WithInit,
                                              bool AsExpression) {
@@ -1749,12 +1783,12 @@ static OMPCapturedExprDecl *buildCaptureDecl(Sema &S, IdentifierInfo *Id,
     }
     WithInit = true;
   }
-  auto *CED = OMPCapturedExprDecl::Create(C, S.CurContext, Id, Ty);
+  auto *CED = OMPCapturedExprDecl::Create(C, S.CurContext, Id, Ty,
+                                          CaptureExpr->getLocStart());
   if (!WithInit)
     CED->addAttr(OMPCaptureNoInitAttr::CreateImplicit(C, SourceRange()));
   S.CurContext->addHiddenDecl(CED);
-  S.AddInitializerToDecl(CED, Init, /*DirectInit=*/false,
-                         /*TypeMayContainAuto=*/true);
+  S.AddInitializerToDecl(CED, Init, /*DirectInit=*/false);
   return CED;
 }
 
@@ -1788,16 +1822,49 @@ static ExprResult buildCapture(Sema &S, Expr *CaptureExpr, DeclRefExpr *&Ref) {
   return CaptureExpr->isGLValue() ? Res : S.DefaultLvalueConversion(Res.get());
 }
 
+namespace {
+// OpenMP directives parsed in this section are represented as a
+// CapturedStatement with an associated statement.  If a syntax error
+// is detected during the parsing of the associated statement, the
+// compiler must abort processing and close the CapturedStatement.
+//
+// Combined directives such as 'target parallel' have more than one
+// nested CapturedStatements.  This RAII ensures that we unwind out
+// of all the nested CapturedStatements when an error is found.
+class CaptureRegionUnwinderRAII {
+private:
+  Sema &S;
+  bool &ErrorFound;
+  OpenMPDirectiveKind DKind;
+
+public:
+  CaptureRegionUnwinderRAII(Sema &S, bool &ErrorFound,
+                            OpenMPDirectiveKind DKind)
+      : S(S), ErrorFound(ErrorFound), DKind(DKind) {}
+  ~CaptureRegionUnwinderRAII() {
+    if (ErrorFound) {
+      int ThisCaptureLevel = S.getOpenMPCaptureLevels(DKind);
+      while (--ThisCaptureLevel >= 0)
+        S.ActOnCapturedRegionError();
+    }
+  }
+};
+} // namespace
+
 StmtResult Sema::ActOnOpenMPRegionEnd(StmtResult S,
                                       ArrayRef<OMPClause *> Clauses) {
+  bool ErrorFound = false;
+  CaptureRegionUnwinderRAII CaptureRegionUnwinder(
+      *this, ErrorFound, DSAStack->getCurrentDirective());
   if (!S.isUsable()) {
-    ActOnCapturedRegionError();
+    ErrorFound = true;
     return StmtError();
   }
 
   OMPOrderedClause *OC = nullptr;
   OMPScheduleClause *SC = nullptr;
   SmallVector<OMPLinearClause *, 4> LCs;
+  SmallVector<OMPClauseWithPreInit *, 8> PICs;
   // This is required for proper codegen.
   for (auto *Clause : Clauses) {
     if (isOpenMPPrivate(Clause->getClauseKind()) ||
@@ -1814,15 +1881,8 @@ StmtResult Sema::ActOnOpenMPRegionEnd(StmtResult S,
       }
       DSAStack->setForceVarCapturing(/*V=*/false);
     } else if (isParallelOrTaskRegion(DSAStack->getCurrentDirective())) {
-      // Mark all variables in private list clauses as used in inner region.
-      // Required for proper codegen of combined directives.
-      // TODO: add processing for other clauses.
-      if (auto *C = OMPClauseWithPreInit::get(Clause)) {
-        if (auto *DS = cast_or_null<DeclStmt>(C->getPreInitStmt())) {
-          for (auto *D : DS->decls())
-            MarkVariableReferenced(D->getLocation(), cast<VarDecl>(D));
-        }
-      }
+      if (auto *C = OMPClauseWithPreInit::get(Clause))
+        PICs.push_back(C);
       if (auto *C = OMPClauseWithPostUpdate::get(Clause)) {
         if (auto *E = C->getPostUpdateExpr())
           MarkDeclarationsReferencedInExpr(E);
@@ -1835,7 +1895,6 @@ StmtResult Sema::ActOnOpenMPRegionEnd(StmtResult S,
     else if (Clause->getClauseKind() == OMPC_linear)
       LCs.push_back(cast<OMPLinearClause>(Clause));
   }
-  bool ErrorFound = false;
   // OpenMP, 2.7.1 Loop Construct, Restrictions
   // The nonmonotonic modifier cannot be specified if an ordered clause is
   // specified.
@@ -1866,10 +1925,35 @@ StmtResult Sema::ActOnOpenMPRegionEnd(StmtResult S,
     ErrorFound = true;
   }
   if (ErrorFound) {
-    ActOnCapturedRegionError();
     return StmtError();
   }
-  return ActOnCapturedRegionEnd(S.get());
+  StmtResult SR = S;
+  SmallVector<OpenMPDirectiveKind, 4> CaptureRegions;
+  getOpenMPCaptureRegions(CaptureRegions, DSAStack->getCurrentDirective());
+  for (auto ThisCaptureRegion : llvm::reverse(CaptureRegions)) {
+    // Mark all variables in private list clauses as used in inner region.
+    // Required for proper codegen of combined directives.
+    // TODO: add processing for other clauses.
+    if (isParallelOrTaskRegion(DSAStack->getCurrentDirective())) {
+      for (auto *C : PICs) {
+        OpenMPDirectiveKind CaptureRegion = C->getCaptureRegion();
+        // Find the particular capture region for the clause if the
+        // directive is a combined one with multiple capture regions.
+        // If the directive is not a combined one, the capture region
+        // associated with the clause is OMPD_unknown and is generated
+        // only once.
+        if (CaptureRegion == ThisCaptureRegion ||
+            CaptureRegion == OMPD_unknown) {
+          if (auto *DS = cast_or_null<DeclStmt>(C->getPreInitStmt())) {
+            for (auto *D : DS->decls())
+              MarkVariableReferenced(D->getLocation(), cast<VarDecl>(D));
+          }
+        }
+      }
+    }
+    SR = ActOnCapturedRegionEnd(SR.get());
+  }
+  return SR;
 }
 
 static bool CheckNestingOfRegions(Sema &SemaRef, DSAStackTy *Stack,
@@ -1877,1515 +1961,6 @@ static bool CheckNestingOfRegions(Sema &SemaRef, DSAStackTy *Stack,
                                   const DeclarationNameInfo &CurrentName,
                                   OpenMPDirectiveKind CancelRegion,
                                   SourceLocation StartLoc) {
-  // Allowed nesting of constructs
-  // +------------------+-----------------+------------------------------------+
-  // | Parent directive | Child directive | Closely (!), No-Closely(+), Both(*)|
-  // +------------------+-----------------+------------------------------------+
-  // | parallel         | parallel        | *                                  |
-  // | parallel         | for             | *                                  |
-  // | parallel         | for simd        | *                                  |
-  // | parallel         | master          | *                                  |
-  // | parallel         | critical        | *                                  |
-  // | parallel         | simd            | *                                  |
-  // | parallel         | sections        | *                                  |
-  // | parallel         | section         | +                                  |
-  // | parallel         | single          | *                                  |
-  // | parallel         | parallel for    | *                                  |
-  // | parallel         |parallel for simd| *                                  |
-  // | parallel         |parallel sections| *                                  |
-  // | parallel         | task            | *                                  |
-  // | parallel         | taskyield       | *                                  |
-  // | parallel         | barrier         | *                                  |
-  // | parallel         | taskwait        | *                                  |
-  // | parallel         | taskgroup       | *                                  |
-  // | parallel         | flush           | *                                  |
-  // | parallel         | ordered         | +                                  |
-  // | parallel         | atomic          | *                                  |
-  // | parallel         | target          | *                                  |
-  // | parallel         | target parallel | *                                  |
-  // | parallel         | target parallel | *                                  |
-  // |                  | for             |                                    |
-  // | parallel         | target enter    | *                                  |
-  // |                  | data            |                                    |
-  // | parallel         | target exit     | *                                  |
-  // |                  | data            |                                    |
-  // | parallel         | teams           | +                                  |
-  // | parallel         | cancellation    |                                    |
-  // |                  | point           | !                                  |
-  // | parallel         | cancel          | !                                  |
-  // | parallel         | taskloop        | *                                  |
-  // | parallel         | taskloop simd   | *                                  |
-  // | parallel         | distribute      | +                                  |
-  // | parallel         | distribute      | +                                  |
-  // |                  | parallel for    |                                    |
-  // | parallel         | distribute      | +                                  |
-  // |                  |parallel for simd|                                    |
-  // | parallel         | distribute simd | +                                  |
-  // | parallel         | target simd     | *                                  |
-  // | parallel         | teams distribute| +                                  |
-  // | parallel         | teams distribute|                                    |
-  // |                  | simd            | +                                  |
-  // +------------------+-----------------+------------------------------------+
-  // | for              | parallel        | *                                  |
-  // | for              | for             | +                                  |
-  // | for              | for simd        | +                                  |
-  // | for              | master          | +                                  |
-  // | for              | critical        | *                                  |
-  // | for              | simd            | *                                  |
-  // | for              | sections        | +                                  |
-  // | for              | section         | +                                  |
-  // | for              | single          | +                                  |
-  // | for              | parallel for    | *                                  |
-  // | for              |parallel for simd| *                                  |
-  // | for              |parallel sections| *                                  |
-  // | for              | task            | *                                  |
-  // | for              | taskyield       | *                                  |
-  // | for              | barrier         | +                                  |
-  // | for              | taskwait        | *                                  |
-  // | for              | taskgroup       | *                                  |
-  // | for              | flush           | *                                  |
-  // | for              | ordered         | * (if construct is ordered)        |
-  // | for              | atomic          | *                                  |
-  // | for              | target          | *                                  |
-  // | for              | target parallel | *                                  |
-  // | for              | target parallel | *                                  |
-  // |                  | for             |                                    |
-  // | for              | target enter    | *                                  |
-  // |                  | data            |                                    |
-  // | for              | target exit     | *                                  |
-  // |                  | data            |                                    |
-  // | for              | teams           | +                                  |
-  // | for              | cancellation    |                                    |
-  // |                  | point           | !                                  |
-  // | for              | cancel          | !                                  |
-  // | for              | taskloop        | *                                  |
-  // | for              | taskloop simd   | *                                  |
-  // | for              | distribute      | +                                  |
-  // | for              | distribute      | +                                  |
-  // |                  | parallel for    |                                    |
-  // | for              | distribute      | +                                  |
-  // |                  |parallel for simd|                                    |
-  // | for              | distribute simd | +                                  |
-  // | for              | target parallel | +                                  |
-  // |                  | for simd        |                                    |
-  // | for              | target simd     | *                                  |
-  // | for              | teams distribute| +                                  |
-  // | for              | teams distribute|                                    |
-  // |                  | simd            | +                                  |
-  // +------------------+-----------------+------------------------------------+
-  // | master           | parallel        | *                                  |
-  // | master           | for             | +                                  |
-  // | master           | for simd        | +                                  |
-  // | master           | master          | *                                  |
-  // | master           | critical        | *                                  |
-  // | master           | simd            | *                                  |
-  // | master           | sections        | +                                  |
-  // | master           | section         | +                                  |
-  // | master           | single          | +                                  |
-  // | master           | parallel for    | *                                  |
-  // | master           |parallel for simd| *                                  |
-  // | master           |parallel sections| *                                  |
-  // | master           | task            | *                                  |
-  // | master           | taskyield       | *                                  |
-  // | master           | barrier         | +                                  |
-  // | master           | taskwait        | *                                  |
-  // | master           | taskgroup       | *                                  |
-  // | master           | flush           | *                                  |
-  // | master           | ordered         | +                                  |
-  // | master           | atomic          | *                                  |
-  // | master           | target          | *                                  |
-  // | master           | target parallel | *                                  |
-  // | master           | target parallel | *                                  |
-  // |                  | for             |                                    |
-  // | master           | target enter    | *                                  |
-  // |                  | data            |                                    |
-  // | master           | target exit     | *                                  |
-  // |                  | data            |                                    |
-  // | master           | teams           | +                                  |
-  // | master           | cancellation    |                                    |
-  // |                  | point           |                                    |
-  // | master           | cancel          |                                    |
-  // | master           | taskloop        | *                                  |
-  // | master           | taskloop simd   | *                                  |
-  // | master           | distribute      | +                                  |
-  // | master           | distribute      | +                                  |
-  // |                  | parallel for    |                                    |
-  // | master           | distribute      | +                                  |
-  // |                  |parallel for simd|                                    |
-  // | master           | distribute simd | +                                  |
-  // | master           | target parallel | +                                  |
-  // |                  | for simd        |                                    |
-  // | master           | target simd     | *                                  |
-  // | master           | teams distribute| +                                  |
-  // | master           | teams distribute|                                    |
-  // |                  | simd            | +                                  |
-  // +------------------+-----------------+------------------------------------+
-  // | critical         | parallel        | *                                  |
-  // | critical         | for             | +                                  |
-  // | critical         | for simd        | +                                  |
-  // | critical         | master          | *                                  |
-  // | critical         | critical        | * (should have different names)    |
-  // | critical         | simd            | *                                  |
-  // | critical         | sections        | +                                  |
-  // | critical         | section         | +                                  |
-  // | critical         | single          | +                                  |
-  // | critical         | parallel for    | *                                  |
-  // | critical         |parallel for simd| *                                  |
-  // | critical         |parallel sections| *                                  |
-  // | critical         | task            | *                                  |
-  // | critical         | taskyield       | *                                  |
-  // | critical         | barrier         | +                                  |
-  // | critical         | taskwait        | *                                  |
-  // | critical         | taskgroup       | *                                  |
-  // | critical         | ordered         | +                                  |
-  // | critical         | atomic          | *                                  |
-  // | critical         | target          | *                                  |
-  // | critical         | target parallel | *                                  |
-  // | critical         | target parallel | *                                  |
-  // |                  | for             |                                    |
-  // | critical         | target enter    | *                                  |
-  // |                  | data            |                                    |
-  // | critical         | target exit     | *                                  |
-  // |                  | data            |                                    |
-  // | critical         | teams           | +                                  |
-  // | critical         | cancellation    |                                    |
-  // |                  | point           |                                    |
-  // | critical         | cancel          |                                    |
-  // | critical         | taskloop        | *                                  |
-  // | critical         | taskloop simd   | *                                  |
-  // | critical         | distribute      | +                                  |
-  // | critical         | distribute      | +                                  |
-  // |                  | parallel for    |                                    |
-  // | critical         | distribute      | +                                  |
-  // |                  |parallel for simd|                                    |
-  // | critical         | distribute simd | +                                  |
-  // | critical         | target parallel | +                                  |
-  // |                  | for simd        |                                    |
-  // | critical         | target simd     | *                                  |
-  // | critical         | teams distribute| +                                  |
-  // | critical         | teams distribute|                                    |
-  // |                  | simd            | +                                  |
-  // +------------------+-----------------+------------------------------------+
-  // | simd             | parallel        |                                    |
-  // | simd             | for             |                                    |
-  // | simd             | for simd        |                                    |
-  // | simd             | master          |                                    |
-  // | simd             | critical        |                                    |
-  // | simd             | simd            | *                                  |
-  // | simd             | sections        |                                    |
-  // | simd             | section         |                                    |
-  // | simd             | single          |                                    |
-  // | simd             | parallel for    |                                    |
-  // | simd             |parallel for simd|                                    |
-  // | simd             |parallel sections|                                    |
-  // | simd             | task            |                                    |
-  // | simd             | taskyield       |                                    |
-  // | simd             | barrier         |                                    |
-  // | simd             | taskwait        |                                    |
-  // | simd             | taskgroup       |                                    |
-  // | simd             | flush           |                                    |
-  // | simd             | ordered         | + (with simd clause)               |
-  // | simd             | atomic          |                                    |
-  // | simd             | target          |                                    |
-  // | simd             | target parallel |                                    |
-  // | simd             | target parallel |                                    |
-  // |                  | for             |                                    |
-  // | simd             | target enter    |                                    |
-  // |                  | data            |                                    |
-  // | simd             | target exit     |                                    |
-  // |                  | data            |                                    |
-  // | simd             | teams           |                                    |
-  // | simd             | cancellation    |                                    |
-  // |                  | point           |                                    |
-  // | simd             | cancel          |                                    |
-  // | simd             | taskloop        |                                    |
-  // | simd             | taskloop simd   |                                    |
-  // | simd             | distribute      |                                    |
-  // | simd             | distribute      |                                    |
-  // |                  | parallel for    |                                    |
-  // | simd             | distribute      |                                    |
-  // |                  |parallel for simd|                                    |
-  // | simd             | distribute simd |                                    |
-  // | simd             | target parallel |                                    |
-  // |                  | for simd        |                                    |
-  // | simd             | target simd     |                                    |
-  // | simd             | teams distribute|                                    |
-  // | simd             | teams distribute|                                    |
-  // |                  | simd            |                                    |
-  // +------------------+-----------------+------------------------------------+
-  // | for simd         | parallel        |                                    |
-  // | for simd         | for             |                                    |
-  // | for simd         | for simd        |                                    |
-  // | for simd         | master          |                                    |
-  // | for simd         | critical        |                                    |
-  // | for simd         | simd            | *                                  |
-  // | for simd         | sections        |                                    |
-  // | for simd         | section         |                                    |
-  // | for simd         | single          |                                    |
-  // | for simd         | parallel for    |                                    |
-  // | for simd         |parallel for simd|                                    |
-  // | for simd         |parallel sections|                                    |
-  // | for simd         | task            |                                    |
-  // | for simd         | taskyield       |                                    |
-  // | for simd         | barrier         |                                    |
-  // | for simd         | taskwait        |                                    |
-  // | for simd         | taskgroup       |                                    |
-  // | for simd         | flush           |                                    |
-  // | for simd         | ordered         | + (with simd clause)               |
-  // | for simd         | atomic          |                                    |
-  // | for simd         | target          |                                    |
-  // | for simd         | target parallel |                                    |
-  // | for simd         | target parallel |                                    |
-  // |                  | for             |                                    |
-  // | for simd         | target enter    |                                    |
-  // |                  | data            |                                    |
-  // | for simd         | target exit     |                                    |
-  // |                  | data            |                                    |
-  // | for simd         | teams           |                                    |
-  // | for simd         | cancellation    |                                    |
-  // |                  | point           |                                    |
-  // | for simd         | cancel          |                                    |
-  // | for simd         | taskloop        |                                    |
-  // | for simd         | taskloop simd   |                                    |
-  // | for simd         | distribute      |                                    |
-  // | for simd         | distribute      |                                    |
-  // |                  | parallel for    |                                    |
-  // | for simd         | distribute      |                                    |
-  // |                  |parallel for simd|                                    |
-  // | for simd         | distribute simd |                                    |
-  // | for simd         | target parallel |                                    |
-  // |                  | for simd        |                                    |
-  // | for simd         | target simd     |                                    |
-  // | for simd         | teams distribute|                                    |
-  // | for simd         | teams distribute|                                    |
-  // |                  | simd            |                                    |
-  // +------------------+-----------------+------------------------------------+
-  // | parallel for simd| parallel        |                                    |
-  // | parallel for simd| for             |                                    |
-  // | parallel for simd| for simd        |                                    |
-  // | parallel for simd| master          |                                    |
-  // | parallel for simd| critical        |                                    |
-  // | parallel for simd| simd            | *                                  |
-  // | parallel for simd| sections        |                                    |
-  // | parallel for simd| section         |                                    |
-  // | parallel for simd| single          |                                    |
-  // | parallel for simd| parallel for    |                                    |
-  // | parallel for simd|parallel for simd|                                    |
-  // | parallel for simd|parallel sections|                                    |
-  // | parallel for simd| task            |                                    |
-  // | parallel for simd| taskyield       |                                    |
-  // | parallel for simd| barrier         |                                    |
-  // | parallel for simd| taskwait        |                                    |
-  // | parallel for simd| taskgroup       |                                    |
-  // | parallel for simd| flush           |                                    |
-  // | parallel for simd| ordered         | + (with simd clause)               |
-  // | parallel for simd| atomic          |                                    |
-  // | parallel for simd| target          |                                    |
-  // | parallel for simd| target parallel |                                    |
-  // | parallel for simd| target parallel |                                    |
-  // |                  | for             |                                    |
-  // | parallel for simd| target enter    |                                    |
-  // |                  | data            |                                    |
-  // | parallel for simd| target exit     |                                    |
-  // |                  | data            |                                    |
-  // | parallel for simd| teams           |                                    |
-  // | parallel for simd| cancellation    |                                    |
-  // |                  | point           |                                    |
-  // | parallel for simd| cancel          |                                    |
-  // | parallel for simd| taskloop        |                                    |
-  // | parallel for simd| taskloop simd   |                                    |
-  // | parallel for simd| distribute      |                                    |
-  // | parallel for simd| distribute      |                                    |
-  // |                  | parallel for    |                                    |
-  // | parallel for simd| distribute      |                                    |
-  // |                  |parallel for simd|                                    |
-  // | parallel for simd| distribute simd |                                    |
-  // |                  | for simd        |                                    |
-  // | parallel for simd| target simd     |                                    |
-  // | parallel for simd| teams distribute|                                    |
-  // | parallel for simd| teams distribute|                                    |
-  // |                  | simd            |                                    |
-  // +------------------+-----------------+------------------------------------+
-  // | sections         | parallel        | *                                  |
-  // | sections         | for             | +                                  |
-  // | sections         | for simd        | +                                  |
-  // | sections         | master          | +                                  |
-  // | sections         | critical        | *                                  |
-  // | sections         | simd            | *                                  |
-  // | sections         | sections        | +                                  |
-  // | sections         | section         | *                                  |
-  // | sections         | single          | +                                  |
-  // | sections         | parallel for    | *                                  |
-  // | sections         |parallel for simd| *                                  |
-  // | sections         |parallel sections| *                                  |
-  // | sections         | task            | *                                  |
-  // | sections         | taskyield       | *                                  |
-  // | sections         | barrier         | +                                  |
-  // | sections         | taskwait        | *                                  |
-  // | sections         | taskgroup       | *                                  |
-  // | sections         | flush           | *                                  |
-  // | sections         | ordered         | +                                  |
-  // | sections         | atomic          | *                                  |
-  // | sections         | target          | *                                  |
-  // | sections         | target parallel | *                                  |
-  // | sections         | target parallel | *                                  |
-  // |                  | for             |                                    |
-  // | sections         | target enter    | *                                  |
-  // |                  | data            |                                    |
-  // | sections         | target exit     | *                                  |
-  // |                  | data            |                                    |
-  // | sections         | teams           | +                                  |
-  // | sections         | cancellation    |                                    |
-  // |                  | point           | !                                  |
-  // | sections         | cancel          | !                                  |
-  // | sections         | taskloop        | *                                  |
-  // | sections         | taskloop simd   | *                                  |
-  // | sections         | distribute      | +                                  |
-  // | sections         | distribute      | +                                  |
-  // |                  | parallel for    |                                    |
-  // | sections         | distribute      | +                                  |
-  // |                  |parallel for simd|                                    |
-  // | sections         | distribute simd | +                                  |
-  // | sections         | target parallel | +                                  |
-  // |                  | for simd        |                                    |
-  // | sections         | target simd     | *                                  |
-  // | sections         | teams distribute|                                    |
-  // |                  | simd            |                                    |
-  // +------------------+-----------------+------------------------------------+
-  // | section          | parallel        | *                                  |
-  // | section          | for             | +                                  |
-  // | section          | for simd        | +                                  |
-  // | section          | master          | +                                  |
-  // | section          | critical        | *                                  |
-  // | section          | simd            | *                                  |
-  // | section          | sections        | +                                  |
-  // | section          | section         | +                                  |
-  // | section          | single          | +                                  |
-  // | section          | parallel for    | *                                  |
-  // | section          |parallel for simd| *                                  |
-  // | section          |parallel sections| *                                  |
-  // | section          | task            | *                                  |
-  // | section          | taskyield       | *                                  |
-  // | section          | barrier         | +                                  |
-  // | section          | taskwait        | *                                  |
-  // | section          | taskgroup       | *                                  |
-  // | section          | flush           | *                                  |
-  // | section          | ordered         | +                                  |
-  // | section          | atomic          | *                                  |
-  // | section          | target          | *                                  |
-  // | section          | target parallel | *                                  |
-  // | section          | target parallel | *                                  |
-  // |                  | for             |                                    |
-  // | section          | target enter    | *                                  |
-  // |                  | data            |                                    |
-  // | section          | target exit     | *                                  |
-  // |                  | data            |                                    |
-  // | section          | teams           | +                                  |
-  // | section          | cancellation    |                                    |
-  // |                  | point           | !                                  |
-  // | section          | cancel          | !                                  |
-  // | section          | taskloop        | *                                  |
-  // | section          | taskloop simd   | *                                  |
-  // | section          | distribute      | +                                  |
-  // | section          | distribute      | +                                  |
-  // |                  | parallel for    |                                    |
-  // | section          | distribute      | +                                  |
-  // |                  |parallel for simd|                                    |
-  // | section          | distribute simd | +                                  |
-  // | section          | target parallel | +                                  |
-  // |                  | for simd        |                                    |
-  // | section          | target simd     | *                                  |
-  // | section          | teams distrubte | +                                  |
-  // | section          | teams distribute|                                    |
-  // |                  | simd            | +                                  |
-  // +------------------+-----------------+------------------------------------+
-  // | single           | parallel        | *                                  |
-  // | single           | for             | +                                  |
-  // | single           | for simd        | +                                  |
-  // | single           | master          | +                                  |
-  // | single           | critical        | *                                  |
-  // | single           | simd            | *                                  |
-  // | single           | sections        | +                                  |
-  // | single           | section         | +                                  |
-  // | single           | single          | +                                  |
-  // | single           | parallel for    | *                                  |
-  // | single           |parallel for simd| *                                  |
-  // | single           |parallel sections| *                                  |
-  // | single           | task            | *                                  |
-  // | single           | taskyield       | *                                  |
-  // | single           | barrier         | +                                  |
-  // | single           | taskwait        | *                                  |
-  // | single           | taskgroup       | *                                  |
-  // | single           | flush           | *                                  |
-  // | single           | ordered         | +                                  |
-  // | single           | atomic          | *                                  |
-  // | single           | target          | *                                  |
-  // | single           | target parallel | *                                  |
-  // | single           | target parallel | *                                  |
-  // |                  | for             |                                    |
-  // | single           | target enter    | *                                  |
-  // |                  | data            |                                    |
-  // | single           | target exit     | *                                  |
-  // |                  | data            |                                    |
-  // | single           | teams           | +                                  |
-  // | single           | cancellation    |                                    |
-  // |                  | point           |                                    |
-  // | single           | cancel          |                                    |
-  // | single           | taskloop        | *                                  |
-  // | single           | taskloop simd   | *                                  |
-  // | single           | distribute      | +                                  |
-  // | single           | distribute      | +                                  |
-  // |                  | parallel for    |                                    |
-  // | single           | distribute      | +                                  |
-  // |                  |parallel for simd|                                    |
-  // | single           | distribute simd | +                                  |
-  // | single           | target parallel | +                                  |
-  // |                  | for simd        |                                    |
-  // | single           | target simd     | *                                  |
-  // | single           | teams distrubte | +                                  |
-  // | single           | teams distribute|                                    |
-  // |                  | simd            | +                                  |
-  // +------------------+-----------------+------------------------------------+
-  // | parallel for     | parallel        | *                                  |
-  // | parallel for     | for             | +                                  |
-  // | parallel for     | for simd        | +                                  |
-  // | parallel for     | master          | +                                  |
-  // | parallel for     | critical        | *                                  |
-  // | parallel for     | simd            | *                                  |
-  // | parallel for     | sections        | +                                  |
-  // | parallel for     | section         | +                                  |
-  // | parallel for     | single          | +                                  |
-  // | parallel for     | parallel for    | *                                  |
-  // | parallel for     |parallel for simd| *                                  |
-  // | parallel for     |parallel sections| *                                  |
-  // | parallel for     | task            | *                                  |
-  // | parallel for     | taskyield       | *                                  |
-  // | parallel for     | barrier         | +                                  |
-  // | parallel for     | taskwait        | *                                  |
-  // | parallel for     | taskgroup       | *                                  |
-  // | parallel for     | flush           | *                                  |
-  // | parallel for     | ordered         | * (if construct is ordered)        |
-  // | parallel for     | atomic          | *                                  |
-  // | parallel for     | target          | *                                  |
-  // | parallel for     | target parallel | *                                  |
-  // | parallel for     | target parallel | *                                  |
-  // |                  | for             |                                    |
-  // | parallel for     | target enter    | *                                  |
-  // |                  | data            |                                    |
-  // | parallel for     | target exit     | *                                  |
-  // |                  | data            |                                    |
-  // | parallel for     | teams           | +                                  |
-  // | parallel for     | cancellation    |                                    |
-  // |                  | point           | !                                  |
-  // | parallel for     | cancel          | !                                  |
-  // | parallel for     | taskloop        | *                                  |
-  // | parallel for     | taskloop simd   | *                                  |
-  // | parallel for     | distribute      | +                                  |
-  // | parallel for     | distribute      | +                                  |
-  // |                  | parallel for    |                                    |
-  // | parallel for     | distribute      | +                                  |
-  // |                  |parallel for simd|                                    |
-  // | parallel for     | distribute simd | +                                  |
-  // | parallel for     | target parallel | +                                  |
-  // |                  | for simd        |                                    |
-  // | parallel for     | target simd     | *                                  |
-  // | parallel for     | teams distribute| +                                  |
-  // | parallel for     | teams distribute|                                    |
-  // |                  | simd            | +                                  |
-  // +------------------+-----------------+------------------------------------+
-  // | parallel sections| parallel        | *                                  |
-  // | parallel sections| for             | +                                  |
-  // | parallel sections| for simd        | +                                  |
-  // | parallel sections| master          | +                                  |
-  // | parallel sections| critical        | +                                  |
-  // | parallel sections| simd            | *                                  |
-  // | parallel sections| sections        | +                                  |
-  // | parallel sections| section         | *                                  |
-  // | parallel sections| single          | +                                  |
-  // | parallel sections| parallel for    | *                                  |
-  // | parallel sections|parallel for simd| *                                  |
-  // | parallel sections|parallel sections| *                                  |
-  // | parallel sections| task            | *                                  |
-  // | parallel sections| taskyield       | *                                  |
-  // | parallel sections| barrier         | +                                  |
-  // | parallel sections| taskwait        | *                                  |
-  // | parallel sections| taskgroup       | *                                  |
-  // | parallel sections| flush           | *                                  |
-  // | parallel sections| ordered         | +                                  |
-  // | parallel sections| atomic          | *                                  |
-  // | parallel sections| target          | *                                  |
-  // | parallel sections| target parallel | *                                  |
-  // | parallel sections| target parallel | *                                  |
-  // |                  | for             |                                    |
-  // | parallel sections| target enter    | *                                  |
-  // |                  | data            |                                    |
-  // | parallel sections| target exit     | *                                  |
-  // |                  | data            |                                    |
-  // | parallel sections| teams           | +                                  |
-  // | parallel sections| cancellation    |                                    |
-  // |                  | point           | !                                  |
-  // | parallel sections| cancel          | !                                  |
-  // | parallel sections| taskloop        | *                                  |
-  // | parallel sections| taskloop simd   | *                                  |
-  // | parallel sections| distribute      | +                                  |
-  // | parallel sections| distribute      | +                                  |
-  // |                  | parallel for    |                                    |
-  // | parallel sections| distribute      | +                                  |
-  // |                  |parallel for simd|                                    |
-  // | parallel sections| distribute simd | +                                  |
-  // | parallel sections| target parallel | +                                  |
-  // |                  | for simd        |                                    |
-  // | parallel sections| target simd     | *                                  |
-  // | parallel sections| teams distribute| +                                  |
-  // | parallel sections| teams distribute|                                    |
-  // |                  | simd            | +                                  |
-  // +------------------+-----------------+------------------------------------+
-  // | task             | parallel        | *                                  |
-  // | task             | for             | +                                  |
-  // | task             | for simd        | +                                  |
-  // | task             | master          | +                                  |
-  // | task             | critical        | *                                  |
-  // | task             | simd            | *                                  |
-  // | task             | sections        | +                                  |
-  // | task             | section         | +                                  |
-  // | task             | single          | +                                  |
-  // | task             | parallel for    | *                                  |
-  // | task             |parallel for simd| *                                  |
-  // | task             |parallel sections| *                                  |
-  // | task             | task            | *                                  |
-  // | task             | taskyield       | *                                  |
-  // | task             | barrier         | +                                  |
-  // | task             | taskwait        | *                                  |
-  // | task             | taskgroup       | *                                  |
-  // | task             | flush           | *                                  |
-  // | task             | ordered         | +                                  |
-  // | task             | atomic          | *                                  |
-  // | task             | target          | *                                  |
-  // | task             | target parallel | *                                  |
-  // | task             | target parallel | *                                  |
-  // |                  | for             |                                    |
-  // | task             | target enter    | *                                  |
-  // |                  | data            |                                    |
-  // | task             | target exit     | *                                  |
-  // |                  | data            |                                    |
-  // | task             | teams           | +                                  |
-  // | task             | cancellation    |                                    |
-  // |                  | point           | !                                  |
-  // | task             | cancel          | !                                  |
-  // | task             | taskloop        | *                                  |
-  // | task             | taskloop simd   | *                                  |
-  // | task             | distribute      | +                                  |
-  // | task             | distribute      | +                                  |
-  // |                  | parallel for    |                                    |
-  // | task             | distribute      | +                                  |
-  // |                  |parallel for simd|                                    |
-  // | task             | distribute simd | +                                  |
-  // | task             | target parallel | +                                  |
-  // |                  | for simd        |                                    |
-  // | task             | target simd     | *                                  |
-  // | task             | teams distribute| +                                  |
-  // | task             | teams distribute|                                    |
-  // |                  | simd            | +                                  |
-  // +------------------+-----------------+------------------------------------+
-  // | ordered          | parallel        | *                                  |
-  // | ordered          | for             | +                                  |
-  // | ordered          | for simd        | +                                  |
-  // | ordered          | master          | *                                  |
-  // | ordered          | critical        | *                                  |
-  // | ordered          | simd            | *                                  |
-  // | ordered          | sections        | +                                  |
-  // | ordered          | section         | +                                  |
-  // | ordered          | single          | +                                  |
-  // | ordered          | parallel for    | *                                  |
-  // | ordered          |parallel for simd| *                                  |
-  // | ordered          |parallel sections| *                                  |
-  // | ordered          | task            | *                                  |
-  // | ordered          | taskyield       | *                                  |
-  // | ordered          | barrier         | +                                  |
-  // | ordered          | taskwait        | *                                  |
-  // | ordered          | taskgroup       | *                                  |
-  // | ordered          | flush           | *                                  |
-  // | ordered          | ordered         | +                                  |
-  // | ordered          | atomic          | *                                  |
-  // | ordered          | target          | *                                  |
-  // | ordered          | target parallel | *                                  |
-  // | ordered          | target parallel | *                                  |
-  // |                  | for             |                                    |
-  // | ordered          | target enter    | *                                  |
-  // |                  | data            |                                    |
-  // | ordered          | target exit     | *                                  |
-  // |                  | data            |                                    |
-  // | ordered          | teams           | +                                  |
-  // | ordered          | cancellation    |                                    |
-  // |                  | point           |                                    |
-  // | ordered          | cancel          |                                    |
-  // | ordered          | taskloop        | *                                  |
-  // | ordered          | taskloop simd   | *                                  |
-  // | ordered          | distribute      | +                                  |
-  // | ordered          | distribute      | +                                  |
-  // |                  | parallel for    |                                    |
-  // | ordered          | distribute      | +                                  |
-  // |                  |parallel for simd|                                    |
-  // | ordered          | distribute simd | +                                  |
-  // | ordered          | target parallel | +                                  |
-  // |                  | for simd        |                                    |
-  // | ordered          | target simd     | *                                  |
-  // | ordered          | teams distribute| +                                  |
-  // | ordered          | teams distribute|                                    |
-  // |                  | simd            | +                                  |
-  // +------------------+-----------------+------------------------------------+
-  // | atomic           | parallel        |                                    |
-  // | atomic           | for             |                                    |
-  // | atomic           | for simd        |                                    |
-  // | atomic           | master          |                                    |
-  // | atomic           | critical        |                                    |
-  // | atomic           | simd            |                                    |
-  // | atomic           | sections        |                                    |
-  // | atomic           | section         |                                    |
-  // | atomic           | single          |                                    |
-  // | atomic           | parallel for    |                                    |
-  // | atomic           |parallel for simd|                                    |
-  // | atomic           |parallel sections|                                    |
-  // | atomic           | task            |                                    |
-  // | atomic           | taskyield       |                                    |
-  // | atomic           | barrier         |                                    |
-  // | atomic           | taskwait        |                                    |
-  // | atomic           | taskgroup       |                                    |
-  // | atomic           | flush           |                                    |
-  // | atomic           | ordered         |                                    |
-  // | atomic           | atomic          |                                    |
-  // | atomic           | target          |                                    |
-  // | atomic           | target parallel |                                    |
-  // | atomic           | target parallel |                                    |
-  // |                  | for             |                                    |
-  // | atomic           | target enter    |                                    |
-  // |                  | data            |                                    |
-  // | atomic           | target exit     |                                    |
-  // |                  | data            |                                    |
-  // | atomic           | teams           |                                    |
-  // | atomic           | cancellation    |                                    |
-  // |                  | point           |                                    |
-  // | atomic           | cancel          |                                    |
-  // | atomic           | taskloop        |                                    |
-  // | atomic           | taskloop simd   |                                    |
-  // | atomic           | distribute      |                                    |
-  // | atomic           | distribute      |                                    |
-  // |                  | parallel for    |                                    |
-  // | atomic           | distribute      |                                    |
-  // |                  |parallel for simd|                                    |
-  // | atomic           | distribute simd |                                    |
-  // | atomic           | target parallel |                                    |
-  // |                  | for simd        |                                    |
-  // | atomic           | target simd     |                                    |
-  // | atomic           | teams distribute|                                    |
-  // | atomic           | teams distribute|                                    |
-  // |                  | simd            |                                    |
-  // +------------------+-----------------+------------------------------------+
-  // | target           | parallel        | *                                  |
-  // | target           | for             | *                                  |
-  // | target           | for simd        | *                                  |
-  // | target           | master          | *                                  |
-  // | target           | critical        | *                                  |
-  // | target           | simd            | *                                  |
-  // | target           | sections        | *                                  |
-  // | target           | section         | *                                  |
-  // | target           | single          | *                                  |
-  // | target           | parallel for    | *                                  |
-  // | target           |parallel for simd| *                                  |
-  // | target           |parallel sections| *                                  |
-  // | target           | task            | *                                  |
-  // | target           | taskyield       | *                                  |
-  // | target           | barrier         | *                                  |
-  // | target           | taskwait        | *                                  |
-  // | target           | taskgroup       | *                                  |
-  // | target           | flush           | *                                  |
-  // | target           | ordered         | *                                  |
-  // | target           | atomic          | *                                  |
-  // | target           | target          |                                    |
-  // | target           | target parallel |                                    |
-  // | target           | target parallel |                                    |
-  // |                  | for             |                                    |
-  // | target           | target enter    |                                    |
-  // |                  | data            |                                    |
-  // | target           | target exit     |                                    |
-  // |                  | data            |                                    |
-  // | target           | teams           | *                                  |
-  // | target           | cancellation    |                                    |
-  // |                  | point           |                                    |
-  // | target           | cancel          |                                    |
-  // | target           | taskloop        | *                                  |
-  // | target           | taskloop simd   | *                                  |
-  // | target           | distribute      | +                                  |
-  // | target           | distribute      | +                                  |
-  // |                  | parallel for    |                                    |
-  // | target           | distribute      | +                                  |
-  // |                  |parallel for simd|                                    |
-  // | target           | distribute simd | +                                  |
-  // | target           | target parallel |                                    |
-  // |                  | for simd        |                                    |
-  // | target           | target simd     |                                    |
-  // | target           | teams distribute|                                    |
-  // | target           | teams distribute|                                    |
-  // |                  | simd            |                                    |
-  // +------------------+-----------------+------------------------------------+
-  // | target parallel  | parallel        | *                                  |
-  // | target parallel  | for             | *                                  |
-  // | target parallel  | for simd        | *                                  |
-  // | target parallel  | master          | *                                  |
-  // | target parallel  | critical        | *                                  |
-  // | target parallel  | simd            | *                                  |
-  // | target parallel  | sections        | *                                  |
-  // | target parallel  | section         | *                                  |
-  // | target parallel  | single          | *                                  |
-  // | target parallel  | parallel for    | *                                  |
-  // | target parallel  |parallel for simd| *                                  |
-  // | target parallel  |parallel sections| *                                  |
-  // | target parallel  | task            | *                                  |
-  // | target parallel  | taskyield       | *                                  |
-  // | target parallel  | barrier         | *                                  |
-  // | target parallel  | taskwait        | *                                  |
-  // | target parallel  | taskgroup       | *                                  |
-  // | target parallel  | flush           | *                                  |
-  // | target parallel  | ordered         | *                                  |
-  // | target parallel  | atomic          | *                                  |
-  // | target parallel  | target          |                                    |
-  // | target parallel  | target parallel |                                    |
-  // | target parallel  | target parallel |                                    |
-  // |                  | for             |                                    |
-  // | target parallel  | target enter    |                                    |
-  // |                  | data            |                                    |
-  // | target parallel  | target exit     |                                    |
-  // |                  | data            |                                    |
-  // | target parallel  | teams           |                                    |
-  // | target parallel  | cancellation    |                                    |
-  // |                  | point           | !                                  |
-  // | target parallel  | cancel          | !                                  |
-  // | target parallel  | taskloop        | *                                  |
-  // | target parallel  | taskloop simd   | *                                  |
-  // | target parallel  | distribute      |                                    |
-  // | target parallel  | distribute      |                                    |
-  // |                  | parallel for    |                                    |
-  // | target parallel  | distribute      |                                    |
-  // |                  |parallel for simd|                                    |
-  // | target parallel  | distribute simd |                                    |
-  // | target parallel  | target parallel |                                    |
-  // |                  | for simd        |                                    |
-  // | target parallel  | target simd     |                                    |
-  // | target parallel  | teams distribute| +                                  |
-  // | target parallel  | teams distribute| +                                  |
-  // |                  | simd            |                                    |
-  // +------------------+-----------------+------------------------------------+
-  // | target parallel  | parallel        | *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | for             | *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | for simd        | *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | master          | *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | critical        | *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | simd            | *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | sections        | *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | section         | *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | single          | *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | parallel for    | *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  |parallel for simd| *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  |parallel sections| *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | task            | *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | taskyield       | *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | barrier         | *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | taskwait        | *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | taskgroup       | *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | flush           | *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | ordered         | *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | atomic          | *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | target          |                                    |
-  // | for              |                 |                                    |
-  // | target parallel  | target parallel |                                    |
-  // | for              |                 |                                    |
-  // | target parallel  | target parallel |                                    |
-  // | for              | for             |                                    |
-  // | target parallel  | target enter    |                                    |
-  // | for              | data            |                                    |
-  // | target parallel  | target exit     |                                    |
-  // | for              | data            |                                    |
-  // | target parallel  | teams           |                                    |
-  // | for              |                 |                                    |
-  // | target parallel  | cancellation    |                                    |
-  // | for              | point           | !                                  |
-  // | target parallel  | cancel          | !                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | taskloop        | *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | taskloop simd   | *                                  |
-  // | for              |                 |                                    |
-  // | target parallel  | distribute      |                                    |
-  // | for              |                 |                                    |
-  // | target parallel  | distribute      |                                    |
-  // | for              | parallel for    |                                    |
-  // | target parallel  | distribute      |                                    |
-  // | for              |parallel for simd|                                    |
-  // | target parallel  | distribute simd |                                    |
-  // | for              |                 |                                    |
-  // | target parallel  | target parallel |                                    |
-  // | for              | for simd        |                                    |
-  // | target parallel  | target simd     |                                    |
-  // | for              |                 |                                    |
-  // | target parallel  | teams distribute|                                    |
-  // | for              |                 |                                    |
-  // | target parallel  | teams distribute|                                    |
-  // | for              | simd            |                                    |
-  // +------------------+-----------------+------------------------------------+
-  // | teams            | parallel        | *                                  |
-  // | teams            | for             | +                                  |
-  // | teams            | for simd        | +                                  |
-  // | teams            | master          | +                                  |
-  // | teams            | critical        | +                                  |
-  // | teams            | simd            | +                                  |
-  // | teams            | sections        | +                                  |
-  // | teams            | section         | +                                  |
-  // | teams            | single          | +                                  |
-  // | teams            | parallel for    | *                                  |
-  // | teams            |parallel for simd| *                                  |
-  // | teams            |parallel sections| *                                  |
-  // | teams            | task            | +                                  |
-  // | teams            | taskyield       | +                                  |
-  // | teams            | barrier         | +                                  |
-  // | teams            | taskwait        | +                                  |
-  // | teams            | taskgroup       | +                                  |
-  // | teams            | flush           | +                                  |
-  // | teams            | ordered         | +                                  |
-  // | teams            | atomic          | +                                  |
-  // | teams            | target          | +                                  |
-  // | teams            | target parallel | +                                  |
-  // | teams            | target parallel | +                                  |
-  // |                  | for             |                                    |
-  // | teams            | target enter    | +                                  |
-  // |                  | data            |                                    |
-  // | teams            | target exit     | +                                  |
-  // |                  | data            |                                    |
-  // | teams            | teams           | +                                  |
-  // | teams            | cancellation    |                                    |
-  // |                  | point           |                                    |
-  // | teams            | cancel          |                                    |
-  // | teams            | taskloop        | +                                  |
-  // | teams            | taskloop simd   | +                                  |
-  // | teams            | distribute      | !                                  |
-  // | teams            | distribute      | !                                  |
-  // |                  | parallel for    |                                    |
-  // | teams            | distribute      | !                                  |
-  // |                  |parallel for simd|                                    |
-  // | teams            | distribute simd | !                                  |
-  // | teams            | target parallel | +                                  |
-  // |                  | for simd        |                                    |
-  // | teams            | target simd     | +                                  |
-  // | teams            | teams distribute| +                                  |
-  // | teams            | teams distribute| +                                  |
-  // |                  | simd            |                                    |
-  // +------------------+-----------------+------------------------------------+
-  // | taskloop         | parallel        | *                                  |
-  // | taskloop         | for             | +                                  |
-  // | taskloop         | for simd        | +                                  |
-  // | taskloop         | master          | +                                  |
-  // | taskloop         | critical        | *                                  |
-  // | taskloop         | simd            | *                                  |
-  // | taskloop         | sections        | +                                  |
-  // | taskloop         | section         | +                                  |
-  // | taskloop         | single          | +                                  |
-  // | taskloop         | parallel for    | *                                  |
-  // | taskloop         |parallel for simd| *                                  |
-  // | taskloop         |parallel sections| *                                  |
-  // | taskloop         | task            | *                                  |
-  // | taskloop         | taskyield       | *                                  |
-  // | taskloop         | barrier         | +                                  |
-  // | taskloop         | taskwait        | *                                  |
-  // | taskloop         | taskgroup       | *                                  |
-  // | taskloop         | flush           | *                                  |
-  // | taskloop         | ordered         | +                                  |
-  // | taskloop         | atomic          | *                                  |
-  // | taskloop         | target          | *                                  |
-  // | taskloop         | target parallel | *                                  |
-  // | taskloop         | target parallel | *                                  |
-  // |                  | for             |                                    |
-  // | taskloop         | target enter    | *                                  |
-  // |                  | data            |                                    |
-  // | taskloop         | target exit     | *                                  |
-  // |                  | data            |                                    |
-  // | taskloop         | teams           | +                                  |
-  // | taskloop         | cancellation    |                                    |
-  // |                  | point           |                                    |
-  // | taskloop         | cancel          |                                    |
-  // | taskloop         | taskloop        | *                                  |
-  // | taskloop         | distribute      | +                                  |
-  // | taskloop         | distribute      | +                                  |
-  // |                  | parallel for    |                                    |
-  // | taskloop         | distribute      | +                                  |
-  // |                  |parallel for simd|                                    |
-  // | taskloop         | distribute simd | +                                  |
-  // | taskloop         | target parallel | *                                  |
-  // |                  | for simd        |                                    |
-  // | taskloop         | target simd     | *                                  |
-  // | taskloop         | teams distribute| +                                  |
-  // | taskloop         | teams distribute| +                                  |
-  // |                  | simd            |                                    |
-  // +------------------+-----------------+------------------------------------+
-  // | taskloop simd    | parallel        |                                    |
-  // | taskloop simd    | for             |                                    |
-  // | taskloop simd    | for simd        |                                    |
-  // | taskloop simd    | master          |                                    |
-  // | taskloop simd    | critical        |                                    |
-  // | taskloop simd    | simd            | *                                  |
-  // | taskloop simd    | sections        |                                    |
-  // | taskloop simd    | section         |                                    |
-  // | taskloop simd    | single          |                                    |
-  // | taskloop simd    | parallel for    |                                    |
-  // | taskloop simd    |parallel for simd|                                    |
-  // | taskloop simd    |parallel sections|                                    |
-  // | taskloop simd    | task            |                                    |
-  // | taskloop simd    | taskyield       |                                    |
-  // | taskloop simd    | barrier         |                                    |
-  // | taskloop simd    | taskwait        |                                    |
-  // | taskloop simd    | taskgroup       |                                    |
-  // | taskloop simd    | flush           |                                    |
-  // | taskloop simd    | ordered         | + (with simd clause)               |
-  // | taskloop simd    | atomic          |                                    |
-  // | taskloop simd    | target          |                                    |
-  // | taskloop simd    | target parallel |                                    |
-  // | taskloop simd    | target parallel |                                    |
-  // |                  | for             |                                    |
-  // | taskloop simd    | target enter    |                                    |
-  // |                  | data            |                                    |
-  // | taskloop simd    | target exit     |                                    |
-  // |                  | data            |                                    |
-  // | taskloop simd    | teams           |                                    |
-  // | taskloop simd    | cancellation    |                                    |
-  // |                  | point           |                                    |
-  // | taskloop simd    | cancel          |                                    |
-  // | taskloop simd    | taskloop        |                                    |
-  // | taskloop simd    | taskloop simd   |                                    |
-  // | taskloop simd    | distribute      |                                    |
-  // | taskloop simd    | distribute      |                                    |
-  // |                  | parallel for    |                                    |
-  // | taskloop simd    | distribute      |                                    |
-  // |                  |parallel for simd|                                    |
-  // | taskloop simd    | distribute simd |                                    |
-  // | taskloop simd    | target parallel |                                    |
-  // |                  | for simd        |                                    |
-  // | taskloop simd    | target simd     |                                    |
-  // | taskloop simd    | teams distribute|                                    |
-  // | taskloop simd    | teams distribute|                                    |
-  // |                  | simd            |                                    |
-  // +------------------+-----------------+------------------------------------+
-  // | distribute       | parallel        | *                                  |
-  // | distribute       | for             | *                                  |
-  // | distribute       | for simd        | *                                  |
-  // | distribute       | master          | *                                  |
-  // | distribute       | critical        | *                                  |
-  // | distribute       | simd            | *                                  |
-  // | distribute       | sections        | *                                  |
-  // | distribute       | section         | *                                  |
-  // | distribute       | single          | *                                  |
-  // | distribute       | parallel for    | *                                  |
-  // | distribute       |parallel for simd| *                                  |
-  // | distribute       |parallel sections| *                                  |
-  // | distribute       | task            | *                                  |
-  // | distribute       | taskyield       | *                                  |
-  // | distribute       | barrier         | *                                  |
-  // | distribute       | taskwait        | *                                  |
-  // | distribute       | taskgroup       | *                                  |
-  // | distribute       | flush           | *                                  |
-  // | distribute       | ordered         | +                                  |
-  // | distribute       | atomic          | *                                  |
-  // | distribute       | target          |                                    |
-  // | distribute       | target parallel |                                    |
-  // | distribute       | target parallel |                                    |
-  // |                  | for             |                                    |
-  // | distribute       | target enter    |                                    |
-  // |                  | data            |                                    |
-  // | distribute       | target exit     |                                    |
-  // |                  | data            |                                    |
-  // | distribute       | teams           |                                    |
-  // | distribute       | cancellation    | +                                  |
-  // |                  | point           |                                    |
-  // | distribute       | cancel          | +                                  |
-  // | distribute       | taskloop        | *                                  |
-  // | distribute       | taskloop simd   | *                                  |
-  // | distribute       | distribute      |                                    |
-  // | distribute       | distribute      |                                    |
-  // |                  | parallel for    |                                    |
-  // | distribute       | distribute      |                                    |
-  // |                  |parallel for simd|                                    |
-  // | distribute       | distribute simd |                                    |
-  // | distribute       | target parallel |                                    |
-  // |                  | for simd        |                                    |
-  // | distribute       | target simd     |                                    |
-  // | distribute       | teams distribute|                                    |
-  // | distribute       | teams distribute|                                    |
-  // |                  | simd            |                                    |
-  // +------------------+-----------------+------------------------------------+
-  // | distribute       | parallel        | *                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       | for             | *                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       | for simd        | *                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       | master          | *                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       | critical        | *                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       | simd            | *                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       | sections        | *                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       | section         | *                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       | single          | *                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       | parallel for    | *                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       |parallel for simd| *                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       |parallel sections| *                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       | task            | *                                  |
-  // | parallel for     |                 |                                    |
-  // | parallel for     |                 |                                    |
-  // | distribute       | taskyield       | *                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       | barrier         | *                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       | taskwait        | *                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       | taskgroup       | *                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       | flush           | *                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       | ordered         | +                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       | atomic          | *                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       | target          |                                    |
-  // | parallel for     |                 |                                    |
-  // | distribute       | target parallel |                                    |
-  // | parallel for     |                 |                                    |
-  // | distribute       | target parallel |                                    |
-  // | parallel for     | for             |                                    |
-  // | distribute       | target enter    |                                    |
-  // | parallel for     | data            |                                    |
-  // | distribute       | target exit     |                                    |
-  // | parallel for     | data            |                                    |
-  // | distribute       | teams           |                                    |
-  // | parallel for     |                 |                                    |
-  // | distribute       | cancellation    | +                                  |
-  // | parallel for     | point           |                                    |
-  // | distribute       | cancel          | +                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       | taskloop        | *                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       | taskloop simd   | *                                  |
-  // | parallel for     |                 |                                    |
-  // | distribute       | distribute      |                                    |
-  // | parallel for     |                 |                                    |
-  // | distribute       | distribute      |                                    |
-  // | parallel for     | parallel for    |                                    |
-  // | distribute       | distribute      |                                    |
-  // | parallel for     |parallel for simd|                                    |
-  // | distribute       | distribute simd |                                    |
-  // | parallel for     |                 |                                    |
-  // | distribute       | target parallel |                                    |
-  // | parallel for     | for simd        |                                    |
-  // | distribute       | target simd     |                                    |
-  // | parallel for     |                 |                                    |
-  // | distribute       | teams distribute|                                    |
-  // | parallel for     |                 |                                    |
-  // | distribute       | teams distribute|                                    |
-  // | parallel for     | simd            |                                    |
-  // +------------------+-----------------+------------------------------------+
-  // | distribute       | parallel        | *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | for             | *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | for simd        | *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | master          | *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | critical        | *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | simd            | *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | sections        | *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | section         | *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | single          | *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | parallel for    | *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       |parallel for simd| *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       |parallel sections| *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | task            | *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | taskyield       | *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | barrier         | *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | taskwait        | *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | taskgroup       | *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | flush           | *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | ordered         | +                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | atomic          | *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | target          |                                    |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | target parallel |                                    |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | target parallel |                                    |
-  // | parallel for simd| for             |                                    |
-  // | distribute       | target enter    |                                    |
-  // | parallel for simd| data            |                                    |
-  // | distribute       | target exit     |                                    |
-  // | parallel for simd| data            |                                    |
-  // | distribute       | teams           |                                    |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | cancellation    | +                                  |
-  // | parallel for simd| point           |                                    |
-  // | distribute       | cancel          | +                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | taskloop        | *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | taskloop simd   | *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | distribute      |                                    |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | distribute      | *                                  |
-  // | parallel for simd| parallel for    |                                    |
-  // | distribute       | distribute      | *                                  |
-  // | parallel for simd|parallel for simd|                                    |
-  // | distribute       | distribute simd | *                                  |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | target parallel |                                    |
-  // | parallel for simd| for simd        |                                    |
-  // | distribute       | target simd     |                                    |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | teams distribute|                                    |
-  // | parallel for simd|                 |                                    |
-  // | distribute       | teams distribute|                                    |
-  // | parallel for simd| simd            |                                    |
-  // +------------------+-----------------+------------------------------------+
-  // | distribute simd  | parallel        | *                                  |
-  // | distribute simd  | for             | *                                  |
-  // | distribute simd  | for simd        | *                                  |
-  // | distribute simd  | master          | *                                  |
-  // | distribute simd  | critical        | *                                  |
-  // | distribute simd  | simd            | *                                  |
-  // | distribute simd  | sections        | *                                  |
-  // | distribute simd  | section         | *                                  |
-  // | distribute simd  | single          | *                                  |
-  // | distribute simd  | parallel for    | *                                  |
-  // | distribute simd  |parallel for simd| *                                  |
-  // | distribute simd  |parallel sections| *                                  |
-  // | distribute simd  | task            | *                                  |
-  // | distribute simd  | taskyield       | *                                  |
-  // | distribute simd  | barrier         | *                                  |
-  // | distribute simd  | taskwait        | *                                  |
-  // | distribute simd  | taskgroup       | *                                  |
-  // | distribute simd  | flush           | *                                  |
-  // | distribute simd  | ordered         | +                                  |
-  // | distribute simd  | atomic          | *                                  |
-  // | distribute simd  | target          | *                                  |
-  // | distribute simd  | target parallel | *                                  |
-  // | distribute simd  | target parallel | *                                  |
-  // |                  | for             |                                    |
-  // | distribute simd  | target enter    | *                                  |
-  // |                  | data            |                                    |
-  // | distribute simd  | target exit     | *                                  |
-  // |                  | data            |                                    |
-  // | distribute simd  | teams           | *                                  |
-  // | distribute simd  | cancellation    | +                                  |
-  // |                  | point           |                                    |
-  // | distribute simd  | cancel          | +                                  |
-  // | distribute simd  | taskloop        | *                                  |
-  // | distribute simd  | taskloop simd   | *                                  |
-  // | distribute simd  | distribute      |                                    |
-  // | distribute simd  | distribute      | *                                  |
-  // |                  | parallel for    |                                    |
-  // | distribute simd  | distribute      | *                                  |
-  // |                  |parallel for simd|                                    |
-  // | distribute simd  | distribute simd | *                                  |
-  // | distribute simd  | target parallel | *                                  |
-  // |                  | for simd        |                                    |
-  // | distribute simd  | target simd     | *                                  |
-  // | distribute simd  | teams distribute| *                                  |
-  // | distribute simd  | teams distribute|                                    |
-  // |                  | simd            |                                    |
-  // +------------------+-----------------+------------------------------------+
-  // | target parallel  | parallel        | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | for             | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | for simd        | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | master          | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | critical        | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | simd            | !                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | sections        | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | section         | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | single          | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | parallel for    | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  |parallel for simd| *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  |parallel sections| *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | task            | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | taskyield       | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | barrier         | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | taskwait        | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | taskgroup       | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | flush           | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | ordered         | + (with simd clause)               |
-  // | for simd         |                 |                                    |
-  // | target parallel  | atomic          | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | target          | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | target parallel | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | target parallel | *                                  |
-  // | for simd         | for             |                                    |
-  // | target parallel  | target enter    | *                                  |
-  // | for simd         | data            |                                    |
-  // | target parallel  | target exit     | *                                  |
-  // | for simd         | data            |                                    |
-  // | target parallel  | teams           | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | cancellation    | *                                  |
-  // | for simd         | point           |                                    |
-  // | target parallel  | cancel          | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | taskloop        | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | taskloop simd   | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | distribute      | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | distribute      | *                                  |
-  // | for simd         | parallel for    |                                    |
-  // | target parallel  | distribute      | *                                  |
-  // | for simd         |parallel for simd|                                    |
-  // | target parallel  | distribute simd | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | target parallel | *                                  |
-  // | for simd         | for simd        |                                    |
-  // | target parallel  | target simd     | *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | teams distribute| *                                  |
-  // | for simd         |                 |                                    |
-  // | target parallel  | teams distribute|                                    |
-  // | for simd         | simd            |                                    |
-  // +------------------+-----------------+------------------------------------+
-  // | target simd      | parallel        |                                    |
-  // | target simd      | for             |                                    |
-  // | target simd      | for simd        |                                    |
-  // | target simd      | master          |                                    |
-  // | target simd      | critical        |                                    |
-  // | target simd      | simd            |                                    |
-  // | target simd      | sections        |                                    |
-  // | target simd      | section         |                                    |
-  // | target simd      | single          |                                    |
-  // | target simd      | parallel for    |                                    |
-  // | target simd      |parallel for simd|                                    |
-  // | target simd      |parallel sections|                                    |
-  // | target simd      | task            |                                    |
-  // | target simd      | taskyield       |                                    |
-  // | target simd      | barrier         |                                    |
-  // | target simd      | taskwait        |                                    |
-  // | target simd      | taskgroup       |                                    |
-  // | target simd      | flush           |                                    |
-  // | target simd      | ordered         | + (with simd clause)               |
-  // | target simd      | atomic          |                                    |
-  // | target simd      | target          |                                    |
-  // | target simd      | target parallel |                                    |
-  // | target simd      | target parallel |                                    |
-  // |                  | for             |                                    |
-  // | target simd      | target enter    |                                    |
-  // |                  | data            |                                    |
-  // | target simd      | target exit     |                                    |
-  // |                  | data            |                                    |
-  // | target simd      | teams           |                                    |
-  // | target simd      | cancellation    |                                    |
-  // |                  | point           |                                    |
-  // | target simd      | cancel          |                                    |
-  // | target simd      | taskloop        |                                    |
-  // | target simd      | taskloop simd   |                                    |
-  // | target simd      | distribute      |                                    |
-  // | target simd      | distribute      |                                    |
-  // |                  | parallel for    |                                    |
-  // | target simd      | distribute      |                                    |
-  // |                  |parallel for simd|                                    |
-  // | target simd      | distribute simd |                                    |
-  // | target simd      | target parallel |                                    |
-  // |                  | for simd        |                                    |
-  // | target simd      | target simd     |                                    |
-  // | target simd      | teams distribute|                                    |
-  // | target simd      | teams distribute|                                    |
-  // |                  | simd            |                                    |
-  // +------------------+-----------------+------------------------------------+
-  // | teams distribute | parallel        |                                    |
-  // | teams distribute | for             |                                    |
-  // | teams distribute | for simd        |                                    |
-  // | teams distribute | master          |                                    |
-  // | teams distribute | critical        |                                    |
-  // | teams distribute | simd            |                                    |
-  // | teams distribute | sections        |                                    |
-  // | teams distribute | section         |                                    |
-  // | teams distribute | single          |                                    |
-  // | teams distribute | parallel for    |                                    |
-  // | teams distribute |parallel for simd|                                    |
-  // | teams distribute |parallel sections|                                    |
-  // | teams distribute | task            |                                    |
-  // | teams distribute | taskyield       |                                    |
-  // | teams distribute | barrier         |                                    |
-  // | teams distribute | taskwait        |                                    |
-  // | teams distribute | taskgroup       |                                    |
-  // | teams distribute | flush           |                                    |
-  // | teams distribute | ordered         | + (with simd clause)               |
-  // | teams distribute | atomic          |                                    |
-  // | teams distribute | target          |                                    |
-  // | teams distribute | target parallel |                                    |
-  // | teams distribute | target parallel |                                    |
-  // |                  | for             |                                    |
-  // | teams distribute | target enter    |                                    |
-  // |                  | data            |                                    |
-  // | teams distribute | target exit     |                                    |
-  // |                  | data            |                                    |
-  // | teams distribute | teams           |                                    |
-  // | teams distribute | cancellation    |                                    |
-  // |                  | point           |                                    |
-  // | teams distribute | cancel          |                                    |
-  // | teams distribute | taskloop        |                                    |
-  // | teams distribute | taskloop simd   |                                    |
-  // | teams distribute | distribute      |                                    |
-  // | teams distribute | distribute      |                                    |
-  // |                  | parallel for    |                                    |
-  // | teams distribute | distribute      |                                    |
-  // |                  |parallel for simd|                                    |
-  // | teams distribute | distribute simd |                                    |
-  // | teams distribute | target parallel |                                    |
-  // |                  | for simd        |                                    |
-  // | teams distribute | teams distribute|                                    |
-  // | teams distribute | teams distribute|                                    |
-  // |                  | simd            |                                    |
-  // +------------------+-----------------+------------------------------------+
-  // | teams distribute | parallel        |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | for             |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | for simd        |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | master          |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | critical        |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | simd            |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | sections        |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | section         |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | single          |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | parallel for    |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute |parallel for simd|                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute |parallel sections|                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | task            |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | taskyield       |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | barrier         |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | taskwait        |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | taskgroup       |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | flush           |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | ordered         | + (with simd clause)               |
-  // | simd             |                 |                                    |
-  // | teams distribute | atomic          |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | target          |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | target parallel |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | target parallel |                                    |
-  // | simd             | for             |                                    |
-  // | teams distribute | target enter    |                                    |
-  // | simd             | data            |                                    |
-  // | teams distribute | target exit     |                                    |
-  // | simd             | data            |                                    |
-  // | teams distribute | teams           |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | cancellation    |                                    |
-  // | simd             | point           |                                    |
-  // | teams distribute | cancel          |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | taskloop        |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | taskloop simd   |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | distribute      |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | distribute      |                                    |
-  // | simd             | parallel for    |                                    |
-  // | teams distribute | distribute      |                                    |
-  // | simd             |parallel for simd|                                    |
-  // | teams distribute | distribute simd |                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | target parallel |                                    |
-  // | simd             | for simd        |                                    |
-  // | teams distribute | teams distribute|                                    |
-  // | simd             |                 |                                    |
-  // | teams distribute | teams distribute|                                    |
-  // | simd             | simd            |                                    |
-  // +------------------+-----------------+------------------------------------+
   if (Stack->getCurScope()) {
     auto ParentRegion = Stack->getParentDirective();
     auto OffendingRegion = ParentRegion;
@@ -3436,7 +2011,8 @@ static bool CheckNestingOfRegions(Sema &SemaRef, DSAStackTy *Stack,
     // Allow some constructs (except teams) to be orphaned (they could be
     // used in functions, called from OpenMP regions with the required
     // preconditions).
-    if (ParentRegion == OMPD_unknown && !isOpenMPTeamsDirective(CurrentRegion))
+    if (ParentRegion == OMPD_unknown &&
+        !isOpenMPNestingTeamsDirective(CurrentRegion))
       return false;
     if (CurrentRegion == OMPD_cancellation_point ||
         CurrentRegion == OMPD_cancel) {
@@ -3504,7 +2080,8 @@ static bool CheckNestingOfRegions(Sema &SemaRef, DSAStackTy *Stack,
                           ParentRegion == OMPD_critical ||
                           ParentRegion == OMPD_ordered;
     } else if (isOpenMPWorksharingDirective(CurrentRegion) &&
-               !isOpenMPParallelDirective(CurrentRegion)) {
+               !isOpenMPParallelDirective(CurrentRegion) &&
+               !isOpenMPTeamsDirective(CurrentRegion)) {
       // OpenMP [2.16, Nesting of Regions]
       // A worksharing region may not be closely nested inside a worksharing,
       // explicit task, critical, ordered, atomic, or master region.
@@ -3528,7 +2105,7 @@ static bool CheckNestingOfRegions(Sema &SemaRef, DSAStackTy *Stack,
                           !(isOpenMPSimdDirective(ParentRegion) ||
                             Stack->isParentOrderedRegion());
       Recommend = ShouldBeInOrderedRegion;
-    } else if (isOpenMPTeamsDirective(CurrentRegion)) {
+    } else if (isOpenMPNestingTeamsDirective(CurrentRegion)) {
       // OpenMP [2.16, Nesting of Regions]
       // If specified, a teams construct must be contained within a target
       // construct.
@@ -3537,7 +2114,10 @@ static bool CheckNestingOfRegions(Sema &SemaRef, DSAStackTy *Stack,
       Recommend = ShouldBeInTargetRegion;
       Stack->setParentTeamsRegionLoc(Stack->getConstructLoc());
     }
-    if (!NestingProhibited && ParentRegion == OMPD_teams) {
+    if (!NestingProhibited &&
+        !isOpenMPTargetExecutionDirective(CurrentRegion) &&
+        !isOpenMPTargetDataManagementDirective(CurrentRegion) &&
+        (ParentRegion == OMPD_teams || ParentRegion == OMPD_target_teams)) {
       // OpenMP [2.16, Nesting of Regions]
       // distribute, parallel, parallel sections, parallel workshare, and the
       // parallel loop and parallel loop SIMD constructs are the only OpenMP
@@ -3551,7 +2131,8 @@ static bool CheckNestingOfRegions(Sema &SemaRef, DSAStackTy *Stack,
       // OpenMP 4.5 [2.17 Nesting of Regions]
       // The region associated with the distribute construct must be strictly
       // nested inside a teams region
-      NestingProhibited = ParentRegion != OMPD_teams;
+      NestingProhibited =
+          (ParentRegion != OMPD_teams && ParentRegion != OMPD_target_teams);
       Recommend = ShouldBeInTeamsRegion;
     }
     if (!NestingProhibited &&
@@ -3688,7 +2269,11 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
 
     // Check default data sharing attributes for referenced variables.
     DSAAttrChecker DSAChecker(DSAStack, *this, cast<CapturedStmt>(AStmt));
-    DSAChecker.Visit(cast<CapturedStmt>(AStmt)->getCapturedStmt());
+    int ThisCaptureLevel = getOpenMPCaptureLevels(Kind);
+    Stmt *S = AStmt;
+    while (--ThisCaptureLevel >= 0)
+      S = cast<CapturedStmt>(S)->getCapturedStmt();
+    DSAChecker.Visit(S);
     if (DSAChecker.isErrorFound())
       return StmtError();
     // Generate list of implicitly defined firstprivate variables.
@@ -3908,6 +2493,43 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
   case OMPD_teams_distribute_simd:
     Res = ActOnOpenMPTeamsDistributeSimdDirective(
         ClausesWithImplicit, AStmt, StartLoc, EndLoc, VarsWithInheritedDSA);
+    break;
+  case OMPD_teams_distribute_parallel_for_simd:
+    Res = ActOnOpenMPTeamsDistributeParallelForSimdDirective(
+        ClausesWithImplicit, AStmt, StartLoc, EndLoc, VarsWithInheritedDSA);
+    AllowedNameModifiers.push_back(OMPD_parallel);
+    break;
+  case OMPD_teams_distribute_parallel_for:
+    Res = ActOnOpenMPTeamsDistributeParallelForDirective(
+        ClausesWithImplicit, AStmt, StartLoc, EndLoc, VarsWithInheritedDSA);
+    AllowedNameModifiers.push_back(OMPD_parallel);
+    break;
+  case OMPD_target_teams:
+    Res = ActOnOpenMPTargetTeamsDirective(ClausesWithImplicit, AStmt, StartLoc,
+                                          EndLoc);
+    AllowedNameModifiers.push_back(OMPD_target);
+    break;
+  case OMPD_target_teams_distribute:
+    Res = ActOnOpenMPTargetTeamsDistributeDirective(
+        ClausesWithImplicit, AStmt, StartLoc, EndLoc, VarsWithInheritedDSA);
+    AllowedNameModifiers.push_back(OMPD_target);
+    break;
+  case OMPD_target_teams_distribute_parallel_for:
+    Res = ActOnOpenMPTargetTeamsDistributeParallelForDirective(
+        ClausesWithImplicit, AStmt, StartLoc, EndLoc, VarsWithInheritedDSA);
+    AllowedNameModifiers.push_back(OMPD_target);
+    AllowedNameModifiers.push_back(OMPD_parallel);
+    break;
+  case OMPD_target_teams_distribute_parallel_for_simd:
+    Res = ActOnOpenMPTargetTeamsDistributeParallelForSimdDirective(
+        ClausesWithImplicit, AStmt, StartLoc, EndLoc, VarsWithInheritedDSA);
+    AllowedNameModifiers.push_back(OMPD_target);
+    AllowedNameModifiers.push_back(OMPD_parallel);
+    break;
+  case OMPD_target_teams_distribute_simd:
+    Res = ActOnOpenMPTargetTeamsDistributeSimdDirective(
+        ClausesWithImplicit, AStmt, StartLoc, EndLoc, VarsWithInheritedDSA);
+    AllowedNameModifiers.push_back(OMPD_target);
     break;
   case OMPD_declare_target:
   case OMPD_end_declare_target:
@@ -4854,7 +3476,7 @@ Expr *OpenMPIterationSpaceChecker::BuildPrivateCounterVar() const {
   return nullptr;
 }
 
-/// \brief Build instillation of the counter be used for codegen.
+/// \brief Build initialization of the counter to be used for codegen.
 Expr *OpenMPIterationSpaceChecker::BuildCounterInit() const { return LB; }
 
 /// \brief Build step of the counter be used for codegen.
@@ -5346,14 +3968,16 @@ CheckOpenMPLoop(OpenMPDirectiveKind DKind, Expr *CollapseLoopCountExpr,
   Scope *CurScope = DSA.getCurScope();
   for (unsigned Cnt = 1; Cnt < NestedLoopCount; ++Cnt) {
     if (PreCond.isUsable()) {
-      PreCond = SemaRef.BuildBinOp(CurScope, SourceLocation(), BO_LAnd,
-                                   PreCond.get(), IterSpaces[Cnt].PreCond);
+      PreCond =
+          SemaRef.BuildBinOp(CurScope, PreCond.get()->getExprLoc(), BO_LAnd,
+                             PreCond.get(), IterSpaces[Cnt].PreCond);
     }
     auto N = IterSpaces[Cnt].NumIterations;
+    SourceLocation Loc = N->getExprLoc();
     AllCountsNeedLessThan32Bits &= C.getTypeSize(N->getType()) < 32;
     if (LastIteration32.isUsable())
       LastIteration32 = SemaRef.BuildBinOp(
-          CurScope, SourceLocation(), BO_Mul, LastIteration32.get(),
+          CurScope, Loc, BO_Mul, LastIteration32.get(),
           SemaRef
               .PerformImplicitConversion(N->IgnoreImpCasts(), N->getType(),
                                          Sema::AA_Converting,
@@ -5361,7 +3985,7 @@ CheckOpenMPLoop(OpenMPDirectiveKind DKind, Expr *CollapseLoopCountExpr,
               .get());
     if (LastIteration64.isUsable())
       LastIteration64 = SemaRef.BuildBinOp(
-          CurScope, SourceLocation(), BO_Mul, LastIteration64.get(),
+          CurScope, Loc, BO_Mul, LastIteration64.get(),
           SemaRef
               .PerformImplicitConversion(N->IgnoreImpCasts(), N->getType(),
                                          Sema::AA_Converting,
@@ -5396,7 +4020,8 @@ CheckOpenMPLoop(OpenMPDirectiveKind DKind, Expr *CollapseLoopCountExpr,
   ExprResult NumIterations = LastIteration;
   {
     LastIteration = SemaRef.BuildBinOp(
-        CurScope, SourceLocation(), BO_Sub, LastIteration.get(),
+        CurScope, LastIteration.get()->getExprLoc(), BO_Sub,
+        LastIteration.get(),
         SemaRef.ActOnIntegerConstant(SourceLocation(), 1).get());
     if (!LastIteration.isUsable())
       return 0;
@@ -5415,7 +4040,7 @@ CheckOpenMPLoop(OpenMPDirectiveKind DKind, Expr *CollapseLoopCountExpr,
 
     // Prepare SaveRef + 1.
     NumIterations = SemaRef.BuildBinOp(
-        CurScope, SourceLocation(), BO_Add, SaveRef.get(),
+        CurScope, SaveRef.get()->getExprLoc(), BO_Add, SaveRef.get(),
         SemaRef.ActOnIntegerConstant(SourceLocation(), 1).get());
     if (!NumIterations.isUsable())
       return 0;
@@ -5430,33 +4055,32 @@ CheckOpenMPLoop(OpenMPDirectiveKind DKind, Expr *CollapseLoopCountExpr,
     // Lower bound variable, initialized with zero.
     VarDecl *LBDecl = buildVarDecl(SemaRef, InitLoc, VType, ".omp.lb");
     LB = buildDeclRefExpr(SemaRef, LBDecl, VType, InitLoc);
-    SemaRef.AddInitializerToDecl(
-        LBDecl, SemaRef.ActOnIntegerConstant(InitLoc, 0).get(),
-        /*DirectInit*/ false, /*TypeMayContainAuto*/ false);
+    SemaRef.AddInitializerToDecl(LBDecl,
+                                 SemaRef.ActOnIntegerConstant(InitLoc, 0).get(),
+                                 /*DirectInit*/ false);
 
     // Upper bound variable, initialized with last iteration number.
     VarDecl *UBDecl = buildVarDecl(SemaRef, InitLoc, VType, ".omp.ub");
     UB = buildDeclRefExpr(SemaRef, UBDecl, VType, InitLoc);
     SemaRef.AddInitializerToDecl(UBDecl, LastIteration.get(),
-                                 /*DirectInit*/ false,
-                                 /*TypeMayContainAuto*/ false);
+                                 /*DirectInit*/ false);
 
     // A 32-bit variable-flag where runtime returns 1 for the last iteration.
     // This will be used to implement clause 'lastprivate'.
     QualType Int32Ty = SemaRef.Context.getIntTypeForBitwidth(32, true);
     VarDecl *ILDecl = buildVarDecl(SemaRef, InitLoc, Int32Ty, ".omp.is_last");
     IL = buildDeclRefExpr(SemaRef, ILDecl, Int32Ty, InitLoc);
-    SemaRef.AddInitializerToDecl(
-        ILDecl, SemaRef.ActOnIntegerConstant(InitLoc, 0).get(),
-        /*DirectInit*/ false, /*TypeMayContainAuto*/ false);
+    SemaRef.AddInitializerToDecl(ILDecl,
+                                 SemaRef.ActOnIntegerConstant(InitLoc, 0).get(),
+                                 /*DirectInit*/ false);
 
     // Stride variable returned by runtime (we initialize it to 1 by default).
     VarDecl *STDecl =
         buildVarDecl(SemaRef, InitLoc, StrideVType, ".omp.stride");
     ST = buildDeclRefExpr(SemaRef, STDecl, StrideVType, InitLoc);
-    SemaRef.AddInitializerToDecl(
-        STDecl, SemaRef.ActOnIntegerConstant(InitLoc, 1).get(),
-        /*DirectInit*/ false, /*TypeMayContainAuto*/ false);
+    SemaRef.AddInitializerToDecl(STDecl,
+                                 SemaRef.ActOnIntegerConstant(InitLoc, 1).get(),
+                                 /*DirectInit*/ false);
 
     // Build expression: UB = min(UB, LastIteration)
     // It is necessary for CodeGen of directives with static scheduling.
@@ -7619,11 +6243,10 @@ StmtResult Sema::ActOnOpenMPTeamsDistributeSimdDirective(
   OMPLoopDirective::HelperExprs B;
   // In presence of clause 'collapse' with number of loops, it will
   // define the nested loops number.
-  unsigned NestedLoopCount =
-      CheckOpenMPLoop(OMPD_teams_distribute_simd,
-                      getCollapseNumberExpr(Clauses),
-                      nullptr /*ordered not a clause on distribute*/, AStmt,
-                      *this, *DSAStack, VarsWithImplicitDSA, B);
+  unsigned NestedLoopCount = CheckOpenMPLoop(
+      OMPD_teams_distribute_simd, getCollapseNumberExpr(Clauses),
+      nullptr /*ordered not a clause on distribute*/, AStmt, *this, *DSAStack,
+      VarsWithImplicitDSA, B);
 
   if (NestedLoopCount == 0)
     return StmtError();
@@ -7647,6 +6270,278 @@ StmtResult Sema::ActOnOpenMPTeamsDistributeSimdDirective(
 
   getCurFunction()->setHasBranchProtectedScope();
   return OMPTeamsDistributeSimdDirective::Create(
+      Context, StartLoc, EndLoc, NestedLoopCount, Clauses, AStmt, B);
+}
+
+StmtResult Sema::ActOnOpenMPTeamsDistributeParallelForSimdDirective(
+    ArrayRef<OMPClause *> Clauses, Stmt *AStmt, SourceLocation StartLoc,
+    SourceLocation EndLoc,
+    llvm::DenseMap<ValueDecl *, Expr *> &VarsWithImplicitDSA) {
+  if (!AStmt)
+    return StmtError();
+
+  CapturedStmt *CS = cast<CapturedStmt>(AStmt);
+  // 1.2.2 OpenMP Language Terminology
+  // Structured block - An executable statement with a single entry at the
+  // top and a single exit at the bottom.
+  // The point of exit cannot be a branch out of the structured block.
+  // longjmp() and throw() must not violate the entry/exit criteria.
+  CS->getCapturedDecl()->setNothrow();
+
+  OMPLoopDirective::HelperExprs B;
+  // In presence of clause 'collapse' with number of loops, it will
+  // define the nested loops number.
+  auto NestedLoopCount = CheckOpenMPLoop(
+      OMPD_teams_distribute_parallel_for_simd, getCollapseNumberExpr(Clauses),
+      nullptr /*ordered not a clause on distribute*/, AStmt, *this, *DSAStack,
+      VarsWithImplicitDSA, B);
+
+  if (NestedLoopCount == 0)
+    return StmtError();
+
+  assert((CurContext->isDependentContext() || B.builtAll()) &&
+         "omp for loop exprs were not built");
+
+  if (!CurContext->isDependentContext()) {
+    // Finalize the clauses that need pre-built expressions for CodeGen.
+    for (auto C : Clauses) {
+      if (auto *LC = dyn_cast<OMPLinearClause>(C))
+        if (FinishOpenMPLinearClause(*LC, cast<DeclRefExpr>(B.IterationVarRef),
+                                     B.NumIterations, *this, CurScope,
+                                     DSAStack))
+          return StmtError();
+    }
+  }
+
+  if (checkSimdlenSafelenSpecified(*this, Clauses))
+    return StmtError();
+
+  getCurFunction()->setHasBranchProtectedScope();
+  return OMPTeamsDistributeParallelForSimdDirective::Create(
+      Context, StartLoc, EndLoc, NestedLoopCount, Clauses, AStmt, B);
+}
+
+StmtResult Sema::ActOnOpenMPTeamsDistributeParallelForDirective(
+    ArrayRef<OMPClause *> Clauses, Stmt *AStmt, SourceLocation StartLoc,
+    SourceLocation EndLoc,
+    llvm::DenseMap<ValueDecl *, Expr *> &VarsWithImplicitDSA) {
+  if (!AStmt)
+    return StmtError();
+
+  CapturedStmt *CS = cast<CapturedStmt>(AStmt);
+  // 1.2.2 OpenMP Language Terminology
+  // Structured block - An executable statement with a single entry at the
+  // top and a single exit at the bottom.
+  // The point of exit cannot be a branch out of the structured block.
+  // longjmp() and throw() must not violate the entry/exit criteria.
+  CS->getCapturedDecl()->setNothrow();
+
+  OMPLoopDirective::HelperExprs B;
+  // In presence of clause 'collapse' with number of loops, it will
+  // define the nested loops number.
+  unsigned NestedLoopCount = CheckOpenMPLoop(
+      OMPD_teams_distribute_parallel_for, getCollapseNumberExpr(Clauses),
+      nullptr /*ordered not a clause on distribute*/, AStmt, *this, *DSAStack,
+      VarsWithImplicitDSA, B);
+
+  if (NestedLoopCount == 0)
+    return StmtError();
+
+  assert((CurContext->isDependentContext() || B.builtAll()) &&
+         "omp for loop exprs were not built");
+
+  if (!CurContext->isDependentContext()) {
+    // Finalize the clauses that need pre-built expressions for CodeGen.
+    for (auto C : Clauses) {
+      if (auto *LC = dyn_cast<OMPLinearClause>(C))
+        if (FinishOpenMPLinearClause(*LC, cast<DeclRefExpr>(B.IterationVarRef),
+                                     B.NumIterations, *this, CurScope,
+                                     DSAStack))
+          return StmtError();
+    }
+  }
+
+  getCurFunction()->setHasBranchProtectedScope();
+  return OMPTeamsDistributeParallelForDirective::Create(
+      Context, StartLoc, EndLoc, NestedLoopCount, Clauses, AStmt, B);
+}
+
+StmtResult Sema::ActOnOpenMPTargetTeamsDirective(ArrayRef<OMPClause *> Clauses,
+                                                 Stmt *AStmt,
+                                                 SourceLocation StartLoc,
+                                                 SourceLocation EndLoc) {
+  if (!AStmt)
+    return StmtError();
+
+  CapturedStmt *CS = cast<CapturedStmt>(AStmt);
+  // 1.2.2 OpenMP Language Terminology
+  // Structured block - An executable statement with a single entry at the
+  // top and a single exit at the bottom.
+  // The point of exit cannot be a branch out of the structured block.
+  // longjmp() and throw() must not violate the entry/exit criteria.
+  CS->getCapturedDecl()->setNothrow();
+
+  getCurFunction()->setHasBranchProtectedScope();
+
+  return OMPTargetTeamsDirective::Create(Context, StartLoc, EndLoc, Clauses,
+                                         AStmt);
+}
+
+StmtResult Sema::ActOnOpenMPTargetTeamsDistributeDirective(
+    ArrayRef<OMPClause *> Clauses, Stmt *AStmt, SourceLocation StartLoc,
+    SourceLocation EndLoc,
+    llvm::DenseMap<ValueDecl *, Expr *> &VarsWithImplicitDSA) {
+  if (!AStmt)
+    return StmtError();
+
+  CapturedStmt *CS = cast<CapturedStmt>(AStmt);
+  // 1.2.2 OpenMP Language Terminology
+  // Structured block - An executable statement with a single entry at the
+  // top and a single exit at the bottom.
+  // The point of exit cannot be a branch out of the structured block.
+  // longjmp() and throw() must not violate the entry/exit criteria.
+  CS->getCapturedDecl()->setNothrow();
+
+  OMPLoopDirective::HelperExprs B;
+  // In presence of clause 'collapse' with number of loops, it will
+  // define the nested loops number.
+  auto NestedLoopCount = CheckOpenMPLoop(
+      OMPD_target_teams_distribute,
+      getCollapseNumberExpr(Clauses),
+      nullptr /*ordered not a clause on distribute*/, AStmt, *this, *DSAStack,
+      VarsWithImplicitDSA, B);
+  if (NestedLoopCount == 0)
+    return StmtError();
+
+  assert((CurContext->isDependentContext() || B.builtAll()) &&
+         "omp target teams distribute loop exprs were not built");
+
+  getCurFunction()->setHasBranchProtectedScope();
+  return OMPTargetTeamsDistributeDirective::Create(
+      Context, StartLoc, EndLoc, NestedLoopCount, Clauses, AStmt, B);
+}
+
+StmtResult Sema::ActOnOpenMPTargetTeamsDistributeParallelForDirective(
+    ArrayRef<OMPClause *> Clauses, Stmt *AStmt, SourceLocation StartLoc,
+    SourceLocation EndLoc,
+    llvm::DenseMap<ValueDecl *, Expr *> &VarsWithImplicitDSA) {
+  if (!AStmt)
+    return StmtError();
+
+  CapturedStmt *CS = cast<CapturedStmt>(AStmt);
+  // 1.2.2 OpenMP Language Terminology
+  // Structured block - An executable statement with a single entry at the
+  // top and a single exit at the bottom.
+  // The point of exit cannot be a branch out of the structured block.
+  // longjmp() and throw() must not violate the entry/exit criteria.
+  CS->getCapturedDecl()->setNothrow();
+
+  OMPLoopDirective::HelperExprs B;
+  // In presence of clause 'collapse' with number of loops, it will
+  // define the nested loops number.
+  auto NestedLoopCount = CheckOpenMPLoop(
+      OMPD_target_teams_distribute_parallel_for,
+      getCollapseNumberExpr(Clauses),
+      nullptr /*ordered not a clause on distribute*/, AStmt, *this, *DSAStack,
+      VarsWithImplicitDSA, B);
+  if (NestedLoopCount == 0)
+    return StmtError();
+
+  assert((CurContext->isDependentContext() || B.builtAll()) &&
+         "omp target teams distribute parallel for loop exprs were not built");
+
+  if (!CurContext->isDependentContext()) {
+    // Finalize the clauses that need pre-built expressions for CodeGen.
+    for (auto C : Clauses) {
+      if (auto *LC = dyn_cast<OMPLinearClause>(C))
+        if (FinishOpenMPLinearClause(*LC, cast<DeclRefExpr>(B.IterationVarRef),
+                                     B.NumIterations, *this, CurScope,
+                                     DSAStack))
+          return StmtError();
+    }
+  }
+
+  getCurFunction()->setHasBranchProtectedScope();
+  return OMPTargetTeamsDistributeParallelForDirective::Create(
+      Context, StartLoc, EndLoc, NestedLoopCount, Clauses, AStmt, B);
+}
+
+StmtResult Sema::ActOnOpenMPTargetTeamsDistributeParallelForSimdDirective(
+    ArrayRef<OMPClause *> Clauses, Stmt *AStmt, SourceLocation StartLoc,
+    SourceLocation EndLoc,
+    llvm::DenseMap<ValueDecl *, Expr *> &VarsWithImplicitDSA) {
+  if (!AStmt)
+    return StmtError();
+
+  CapturedStmt *CS = cast<CapturedStmt>(AStmt);
+  // 1.2.2 OpenMP Language Terminology
+  // Structured block - An executable statement with a single entry at the
+  // top and a single exit at the bottom.
+  // The point of exit cannot be a branch out of the structured block.
+  // longjmp() and throw() must not violate the entry/exit criteria.
+  CS->getCapturedDecl()->setNothrow();
+
+  OMPLoopDirective::HelperExprs B;
+  // In presence of clause 'collapse' with number of loops, it will
+  // define the nested loops number.
+  auto NestedLoopCount = CheckOpenMPLoop(
+      OMPD_target_teams_distribute_parallel_for_simd,
+      getCollapseNumberExpr(Clauses),
+      nullptr /*ordered not a clause on distribute*/, AStmt, *this, *DSAStack,
+      VarsWithImplicitDSA, B);
+  if (NestedLoopCount == 0)
+    return StmtError();
+
+  assert((CurContext->isDependentContext() || B.builtAll()) &&
+         "omp target teams distribute parallel for simd loop exprs were not "
+         "built");
+
+  if (!CurContext->isDependentContext()) {
+    // Finalize the clauses that need pre-built expressions for CodeGen.
+    for (auto C : Clauses) {
+      if (auto *LC = dyn_cast<OMPLinearClause>(C))
+        if (FinishOpenMPLinearClause(*LC, cast<DeclRefExpr>(B.IterationVarRef),
+                                     B.NumIterations, *this, CurScope,
+                                     DSAStack))
+          return StmtError();
+    }
+  }
+
+  getCurFunction()->setHasBranchProtectedScope();
+  return OMPTargetTeamsDistributeParallelForSimdDirective::Create(
+      Context, StartLoc, EndLoc, NestedLoopCount, Clauses, AStmt, B);
+}
+
+StmtResult Sema::ActOnOpenMPTargetTeamsDistributeSimdDirective(
+    ArrayRef<OMPClause *> Clauses, Stmt *AStmt, SourceLocation StartLoc,
+    SourceLocation EndLoc,
+    llvm::DenseMap<ValueDecl *, Expr *> &VarsWithImplicitDSA) {
+  if (!AStmt)
+    return StmtError();
+
+  auto *CS = cast<CapturedStmt>(AStmt);
+  // 1.2.2 OpenMP Language Terminology
+  // Structured block - An executable statement with a single entry at the
+  // top and a single exit at the bottom.
+  // The point of exit cannot be a branch out of the structured block.
+  // longjmp() and throw() must not violate the entry/exit criteria.
+  CS->getCapturedDecl()->setNothrow();
+
+  OMPLoopDirective::HelperExprs B;
+  // In presence of clause 'collapse' with number of loops, it will
+  // define the nested loops number.
+  auto NestedLoopCount = CheckOpenMPLoop(
+      OMPD_target_teams_distribute_simd, getCollapseNumberExpr(Clauses),
+      nullptr /*ordered not a clause on distribute*/, AStmt, *this, *DSAStack,
+      VarsWithImplicitDSA, B);
+  if (NestedLoopCount == 0)
+    return StmtError();
+
+  assert((CurContext->isDependentContext() || B.builtAll()) &&
+         "omp target teams distribute simd loop exprs were not built");
+
+  getCurFunction()->setHasBranchProtectedScope();
+  return OMPTargetTeamsDistributeSimdDirective::Create(
       Context, StartLoc, EndLoc, NestedLoopCount, Clauses, AStmt, B);
 }
 
@@ -7736,6 +6631,322 @@ OMPClause *Sema::ActOnOpenMPSingleExprClause(OpenMPClauseKind Kind, Expr *Expr,
   return Res;
 }
 
+// An OpenMP directive such as 'target parallel' has two captured regions:
+// for the 'target' and 'parallel' respectively.  This function returns
+// the region in which to capture expressions associated with a clause.
+// A return value of OMPD_unknown signifies that the expression should not
+// be captured.
+static OpenMPDirectiveKind getOpenMPCaptureRegionForClause(
+    OpenMPDirectiveKind DKind, OpenMPClauseKind CKind,
+    OpenMPDirectiveKind NameModifier = OMPD_unknown) {
+  OpenMPDirectiveKind CaptureRegion = OMPD_unknown;
+
+  switch (CKind) {
+  case OMPC_if:
+    switch (DKind) {
+    case OMPD_target_parallel:
+      // If this clause applies to the nested 'parallel' region, capture within
+      // the 'target' region, otherwise do not capture.
+      if (NameModifier == OMPD_unknown || NameModifier == OMPD_parallel)
+        CaptureRegion = OMPD_target;
+      break;
+    case OMPD_cancel:
+    case OMPD_parallel:
+    case OMPD_parallel_sections:
+    case OMPD_parallel_for:
+    case OMPD_parallel_for_simd:
+    case OMPD_target:
+    case OMPD_target_simd:
+    case OMPD_target_parallel_for:
+    case OMPD_target_parallel_for_simd:
+    case OMPD_target_teams:
+    case OMPD_target_teams_distribute:
+    case OMPD_target_teams_distribute_simd:
+    case OMPD_target_teams_distribute_parallel_for:
+    case OMPD_target_teams_distribute_parallel_for_simd:
+    case OMPD_teams_distribute_parallel_for:
+    case OMPD_teams_distribute_parallel_for_simd:
+    case OMPD_distribute_parallel_for:
+    case OMPD_distribute_parallel_for_simd:
+    case OMPD_task:
+    case OMPD_taskloop:
+    case OMPD_taskloop_simd:
+    case OMPD_target_data:
+    case OMPD_target_enter_data:
+    case OMPD_target_exit_data:
+    case OMPD_target_update:
+      // Do not capture if-clause expressions.
+      break;
+    case OMPD_threadprivate:
+    case OMPD_taskyield:
+    case OMPD_barrier:
+    case OMPD_taskwait:
+    case OMPD_cancellation_point:
+    case OMPD_flush:
+    case OMPD_declare_reduction:
+    case OMPD_declare_simd:
+    case OMPD_declare_target:
+    case OMPD_end_declare_target:
+    case OMPD_teams:
+    case OMPD_simd:
+    case OMPD_for:
+    case OMPD_for_simd:
+    case OMPD_sections:
+    case OMPD_section:
+    case OMPD_single:
+    case OMPD_master:
+    case OMPD_critical:
+    case OMPD_taskgroup:
+    case OMPD_distribute:
+    case OMPD_ordered:
+    case OMPD_atomic:
+    case OMPD_distribute_simd:
+    case OMPD_teams_distribute:
+    case OMPD_teams_distribute_simd:
+      llvm_unreachable("Unexpected OpenMP directive with if-clause");
+    case OMPD_unknown:
+      llvm_unreachable("Unknown OpenMP directive");
+    }
+    break;
+  case OMPC_num_threads:
+    switch (DKind) {
+    case OMPD_target_parallel:
+      CaptureRegion = OMPD_target;
+      break;
+    case OMPD_cancel:
+    case OMPD_parallel:
+    case OMPD_parallel_sections:
+    case OMPD_parallel_for:
+    case OMPD_parallel_for_simd:
+    case OMPD_target:
+    case OMPD_target_simd:
+    case OMPD_target_parallel_for:
+    case OMPD_target_parallel_for_simd:
+    case OMPD_target_teams:
+    case OMPD_target_teams_distribute:
+    case OMPD_target_teams_distribute_simd:
+    case OMPD_target_teams_distribute_parallel_for:
+    case OMPD_target_teams_distribute_parallel_for_simd:
+    case OMPD_teams_distribute_parallel_for:
+    case OMPD_teams_distribute_parallel_for_simd:
+    case OMPD_distribute_parallel_for:
+    case OMPD_distribute_parallel_for_simd:
+    case OMPD_task:
+    case OMPD_taskloop:
+    case OMPD_taskloop_simd:
+    case OMPD_target_data:
+    case OMPD_target_enter_data:
+    case OMPD_target_exit_data:
+    case OMPD_target_update:
+      // Do not capture num_threads-clause expressions.
+      break;
+    case OMPD_threadprivate:
+    case OMPD_taskyield:
+    case OMPD_barrier:
+    case OMPD_taskwait:
+    case OMPD_cancellation_point:
+    case OMPD_flush:
+    case OMPD_declare_reduction:
+    case OMPD_declare_simd:
+    case OMPD_declare_target:
+    case OMPD_end_declare_target:
+    case OMPD_teams:
+    case OMPD_simd:
+    case OMPD_for:
+    case OMPD_for_simd:
+    case OMPD_sections:
+    case OMPD_section:
+    case OMPD_single:
+    case OMPD_master:
+    case OMPD_critical:
+    case OMPD_taskgroup:
+    case OMPD_distribute:
+    case OMPD_ordered:
+    case OMPD_atomic:
+    case OMPD_distribute_simd:
+    case OMPD_teams_distribute:
+    case OMPD_teams_distribute_simd:
+      llvm_unreachable("Unexpected OpenMP directive with num_threads-clause");
+    case OMPD_unknown:
+      llvm_unreachable("Unknown OpenMP directive");
+    }
+    break;
+  case OMPC_num_teams:
+    switch (DKind) {
+    case OMPD_target_teams:
+      CaptureRegion = OMPD_target;
+      break;
+    case OMPD_cancel:
+    case OMPD_parallel:
+    case OMPD_parallel_sections:
+    case OMPD_parallel_for:
+    case OMPD_parallel_for_simd:
+    case OMPD_target:
+    case OMPD_target_simd:
+    case OMPD_target_parallel:
+    case OMPD_target_parallel_for:
+    case OMPD_target_parallel_for_simd:
+    case OMPD_target_teams_distribute:
+    case OMPD_target_teams_distribute_simd:
+    case OMPD_target_teams_distribute_parallel_for:
+    case OMPD_target_teams_distribute_parallel_for_simd:
+    case OMPD_teams_distribute_parallel_for:
+    case OMPD_teams_distribute_parallel_for_simd:
+    case OMPD_distribute_parallel_for:
+    case OMPD_distribute_parallel_for_simd:
+    case OMPD_task:
+    case OMPD_taskloop:
+    case OMPD_taskloop_simd:
+    case OMPD_target_data:
+    case OMPD_target_enter_data:
+    case OMPD_target_exit_data:
+    case OMPD_target_update:
+    case OMPD_teams:
+    case OMPD_teams_distribute:
+    case OMPD_teams_distribute_simd:
+      // Do not capture num_teams-clause expressions.
+      break;
+    case OMPD_threadprivate:
+    case OMPD_taskyield:
+    case OMPD_barrier:
+    case OMPD_taskwait:
+    case OMPD_cancellation_point:
+    case OMPD_flush:
+    case OMPD_declare_reduction:
+    case OMPD_declare_simd:
+    case OMPD_declare_target:
+    case OMPD_end_declare_target:
+    case OMPD_simd:
+    case OMPD_for:
+    case OMPD_for_simd:
+    case OMPD_sections:
+    case OMPD_section:
+    case OMPD_single:
+    case OMPD_master:
+    case OMPD_critical:
+    case OMPD_taskgroup:
+    case OMPD_distribute:
+    case OMPD_ordered:
+    case OMPD_atomic:
+    case OMPD_distribute_simd:
+      llvm_unreachable("Unexpected OpenMP directive with num_teams-clause");
+    case OMPD_unknown:
+      llvm_unreachable("Unknown OpenMP directive");
+    }
+    break;
+  case OMPC_thread_limit:
+    switch (DKind) {
+    case OMPD_target_teams:
+      CaptureRegion = OMPD_target;
+      break;
+    case OMPD_cancel:
+    case OMPD_parallel:
+    case OMPD_parallel_sections:
+    case OMPD_parallel_for:
+    case OMPD_parallel_for_simd:
+    case OMPD_target:
+    case OMPD_target_simd:
+    case OMPD_target_parallel:
+    case OMPD_target_parallel_for:
+    case OMPD_target_parallel_for_simd:
+    case OMPD_target_teams_distribute:
+    case OMPD_target_teams_distribute_simd:
+    case OMPD_target_teams_distribute_parallel_for:
+    case OMPD_target_teams_distribute_parallel_for_simd:
+    case OMPD_teams_distribute_parallel_for:
+    case OMPD_teams_distribute_parallel_for_simd:
+    case OMPD_distribute_parallel_for:
+    case OMPD_distribute_parallel_for_simd:
+    case OMPD_task:
+    case OMPD_taskloop:
+    case OMPD_taskloop_simd:
+    case OMPD_target_data:
+    case OMPD_target_enter_data:
+    case OMPD_target_exit_data:
+    case OMPD_target_update:
+    case OMPD_teams:
+    case OMPD_teams_distribute:
+    case OMPD_teams_distribute_simd:
+      // Do not capture thread_limit-clause expressions.
+      break;
+    case OMPD_threadprivate:
+    case OMPD_taskyield:
+    case OMPD_barrier:
+    case OMPD_taskwait:
+    case OMPD_cancellation_point:
+    case OMPD_flush:
+    case OMPD_declare_reduction:
+    case OMPD_declare_simd:
+    case OMPD_declare_target:
+    case OMPD_end_declare_target:
+    case OMPD_simd:
+    case OMPD_for:
+    case OMPD_for_simd:
+    case OMPD_sections:
+    case OMPD_section:
+    case OMPD_single:
+    case OMPD_master:
+    case OMPD_critical:
+    case OMPD_taskgroup:
+    case OMPD_distribute:
+    case OMPD_ordered:
+    case OMPD_atomic:
+    case OMPD_distribute_simd:
+      llvm_unreachable("Unexpected OpenMP directive with thread_limit-clause");
+    case OMPD_unknown:
+      llvm_unreachable("Unknown OpenMP directive");
+    }
+    break;
+  case OMPC_schedule:
+  case OMPC_dist_schedule:
+  case OMPC_firstprivate:
+  case OMPC_lastprivate:
+  case OMPC_reduction:
+  case OMPC_linear:
+  case OMPC_default:
+  case OMPC_proc_bind:
+  case OMPC_final:
+  case OMPC_safelen:
+  case OMPC_simdlen:
+  case OMPC_collapse:
+  case OMPC_private:
+  case OMPC_shared:
+  case OMPC_aligned:
+  case OMPC_copyin:
+  case OMPC_copyprivate:
+  case OMPC_ordered:
+  case OMPC_nowait:
+  case OMPC_untied:
+  case OMPC_mergeable:
+  case OMPC_threadprivate:
+  case OMPC_flush:
+  case OMPC_read:
+  case OMPC_write:
+  case OMPC_update:
+  case OMPC_capture:
+  case OMPC_seq_cst:
+  case OMPC_depend:
+  case OMPC_device:
+  case OMPC_threads:
+  case OMPC_simd:
+  case OMPC_map:
+  case OMPC_priority:
+  case OMPC_grainsize:
+  case OMPC_nogroup:
+  case OMPC_num_tasks:
+  case OMPC_hint:
+  case OMPC_defaultmap:
+  case OMPC_unknown:
+  case OMPC_uniform:
+  case OMPC_to:
+  case OMPC_from:
+  case OMPC_use_device_ptr:
+  case OMPC_is_device_ptr:
+    llvm_unreachable("Unexpected OpenMP clause.");
+  }
+  return CaptureRegion;
+}
+
 OMPClause *Sema::ActOnOpenMPIfClause(OpenMPDirectiveKind NameModifier,
                                      Expr *Condition, SourceLocation StartLoc,
                                      SourceLocation LParenLoc,
@@ -7743,6 +6954,8 @@ OMPClause *Sema::ActOnOpenMPIfClause(OpenMPDirectiveKind NameModifier,
                                      SourceLocation ColonLoc,
                                      SourceLocation EndLoc) {
   Expr *ValExpr = Condition;
+  Stmt *HelperValStmt = nullptr;
+  OpenMPDirectiveKind CaptureRegion = OMPD_unknown;
   if (!Condition->isValueDependent() && !Condition->isTypeDependent() &&
       !Condition->isInstantiationDependent() &&
       !Condition->containsUnexpandedParameterPack()) {
@@ -7751,10 +6964,20 @@ OMPClause *Sema::ActOnOpenMPIfClause(OpenMPDirectiveKind NameModifier,
       return nullptr;
 
     ValExpr = MakeFullExpr(Val.get()).get();
+
+    OpenMPDirectiveKind DKind = DSAStack->getCurrentDirective();
+    CaptureRegion =
+        getOpenMPCaptureRegionForClause(DKind, OMPC_if, NameModifier);
+    if (CaptureRegion != OMPD_unknown) {
+      llvm::MapVector<Expr *, DeclRefExpr *> Captures;
+      ValExpr = tryBuildCapture(*this, ValExpr, Captures).get();
+      HelperValStmt = buildPreInits(Context, Captures);
+    }
   }
 
-  return new (Context) OMPIfClause(NameModifier, ValExpr, StartLoc, LParenLoc,
-                                   NameModifierLoc, ColonLoc, EndLoc);
+  return new (Context)
+      OMPIfClause(NameModifier, ValExpr, HelperValStmt, CaptureRegion, StartLoc,
+                  LParenLoc, NameModifierLoc, ColonLoc, EndLoc);
 }
 
 OMPClause *Sema::ActOnOpenMPFinalClause(Expr *Condition,
@@ -7850,6 +7073,8 @@ OMPClause *Sema::ActOnOpenMPNumThreadsClause(Expr *NumThreads,
                                              SourceLocation LParenLoc,
                                              SourceLocation EndLoc) {
   Expr *ValExpr = NumThreads;
+  Stmt *HelperValStmt = nullptr;
+  OpenMPDirectiveKind CaptureRegion = OMPD_unknown;
 
   // OpenMP [2.5, Restrictions]
   //  The num_threads expression must evaluate to a positive integer value.
@@ -7857,8 +7082,16 @@ OMPClause *Sema::ActOnOpenMPNumThreadsClause(Expr *NumThreads,
                                  /*StrictlyPositive=*/true))
     return nullptr;
 
-  return new (Context)
-      OMPNumThreadsClause(ValExpr, StartLoc, LParenLoc, EndLoc);
+  OpenMPDirectiveKind DKind = DSAStack->getCurrentDirective();
+  CaptureRegion = getOpenMPCaptureRegionForClause(DKind, OMPC_num_threads);
+  if (CaptureRegion != OMPD_unknown) {
+    llvm::MapVector<Expr *, DeclRefExpr *> Captures;
+    ValExpr = tryBuildCapture(*this, ValExpr, Captures).get();
+    HelperValStmt = buildPreInits(Context, Captures);
+  }
+
+  return new (Context) OMPNumThreadsClause(
+      ValExpr, HelperValStmt, CaptureRegion, StartLoc, LParenLoc, EndLoc);
 }
 
 ExprResult Sema::VerifyPositiveIntegerConstantInClause(Expr *E,
@@ -8650,12 +7883,13 @@ OMPClause *Sema::ActOnOpenMPPrivateClause(ArrayRef<Expr *> VarList,
       continue;
     }
 
+    auto CurrDir = DSAStack->getCurrentDirective();
     // Variably modified types are not supported for tasks.
     if (!Type->isAnyPointerType() && Type->isVariablyModifiedType() &&
-        isOpenMPTaskingDirective(DSAStack->getCurrentDirective())) {
+        isOpenMPTaskingDirective(CurrDir)) {
       Diag(ELoc, diag::err_omp_variably_modified_type_not_supported)
           << getOpenMPClauseName(OMPC_private) << Type
-          << getOpenMPDirectiveName(DSAStack->getCurrentDirective());
+          << getOpenMPDirectiveName(CurrDir);
       bool IsDecl =
           !VD ||
           VD->isThisDeclarationADefinition(Context) == VarDecl::DeclarationOnly;
@@ -8668,7 +7902,14 @@ OMPClause *Sema::ActOnOpenMPPrivateClause(ArrayRef<Expr *> VarList,
     // OpenMP 4.5 [2.15.5.1, Restrictions, p.3]
     // A list item cannot appear in both a map clause and a data-sharing
     // attribute clause on the same construct
-    if (DSAStack->getCurrentDirective() == OMPD_target) {
+    if (CurrDir == OMPD_target || CurrDir == OMPD_target_parallel ||
+        CurrDir == OMPD_target_teams || 
+        CurrDir == OMPD_target_teams_distribute ||
+        CurrDir == OMPD_target_teams_distribute_parallel_for ||
+        CurrDir == OMPD_target_teams_distribute_parallel_for_simd ||
+        CurrDir == OMPD_target_teams_distribute_simd ||
+        CurrDir == OMPD_target_parallel_for_simd ||
+        CurrDir == OMPD_target_parallel_for) {
       OpenMPClauseKind ConflictKind;
       if (DSAStack->checkMappableExprComponentListsForDecl(
               VD, /*CurrentRegionOnly=*/true,
@@ -8680,7 +7921,7 @@ OMPClause *Sema::ActOnOpenMPPrivateClause(ArrayRef<Expr *> VarList,
         Diag(ELoc, diag::err_omp_variable_in_given_clause_and_dsa)
             << getOpenMPClauseName(OMPC_private)
             << getOpenMPClauseName(ConflictKind)
-            << getOpenMPDirectiveName(DSAStack->getCurrentDirective());
+            << getOpenMPDirectiveName(CurrDir);
         ReportOriginalDSA(*this, DSAStack, D, DVar);
         continue;
       }
@@ -8698,7 +7939,7 @@ OMPClause *Sema::ActOnOpenMPPrivateClause(ArrayRef<Expr *> VarList,
     Type = Type.getUnqualifiedType();
     auto VDPrivate = buildVarDecl(*this, ELoc, Type, D->getName(),
                                   D->hasAttrs() ? &D->getAttrs() : nullptr);
-    ActOnUninitializedDecl(VDPrivate, /*TypeMayContainAuto=*/false);
+    ActOnUninitializedDecl(VDPrivate);
     if (VDPrivate->isInvalidDecl())
       continue;
     auto VDPrivateRefExpr = buildDeclRefExpr(
@@ -8836,7 +8077,8 @@ OMPClause *Sema::ActOnOpenMPFirstprivateClause(ArrayRef<Expr *> VarList,
       //  worksharing regions arising from the worksharing construct ever bind
       //  to any of the parallel regions arising from the parallel construct.
       if (isOpenMPWorksharingDirective(CurrDir) &&
-          !isOpenMPParallelDirective(CurrDir)) {
+          !isOpenMPParallelDirective(CurrDir) &&
+          !isOpenMPTeamsDirective(CurrDir)) {
         DVar = DSAStack->getImplicitDSA(D, true);
         if (DVar.CKind != OMPC_shared &&
             (isOpenMPParallelDirective(DVar.DKind) ||
@@ -8924,7 +8166,14 @@ OMPClause *Sema::ActOnOpenMPFirstprivateClause(ArrayRef<Expr *> VarList,
       // OpenMP 4.5 [2.15.5.1, Restrictions, p.3]
       // A list item cannot appear in both a map clause and a data-sharing
       // attribute clause on the same construct
-      if (CurrDir == OMPD_target) {
+      if (CurrDir == OMPD_target || CurrDir == OMPD_target_parallel ||
+          CurrDir == OMPD_target_teams || 
+          CurrDir == OMPD_target_teams_distribute ||
+          CurrDir == OMPD_target_teams_distribute_parallel_for ||
+          CurrDir == OMPD_target_teams_distribute_parallel_for_simd ||
+          CurrDir == OMPD_target_teams_distribute_simd ||
+          CurrDir == OMPD_target_parallel_for_simd ||
+          CurrDir == OMPD_target_parallel_for) {
         OpenMPClauseKind ConflictKind;
         if (DSAStack->checkMappableExprComponentListsForDecl(
                 VD, /*CurrentRegionOnly=*/true,
@@ -8996,7 +8245,7 @@ OMPClause *Sema::ActOnOpenMPFirstprivateClause(ArrayRef<Expr *> VarList,
                                        RefExpr->getExprLoc());
       AddInitializerToDecl(VDPrivate,
                            DefaultLvalueConversion(VDInitRefExpr).get(),
-                           /*DirectInit=*/false, /*TypeMayContainAuto=*/false);
+                           /*DirectInit=*/false);
     }
     if (VDPrivate->isInvalidDecl()) {
       if (IsImplicitClause) {
@@ -9098,7 +8347,8 @@ OMPClause *Sema::ActOnOpenMPLastprivateClause(ArrayRef<Expr *> VarList,
     // regions.
     DSAStackTy::DSAVarData TopDVar = DVar;
     if (isOpenMPWorksharingDirective(CurrDir) &&
-        !isOpenMPParallelDirective(CurrDir)) {
+        !isOpenMPParallelDirective(CurrDir) &&
+        !isOpenMPTeamsDirective(CurrDir)) {
       DVar = DSAStack->getImplicitDSA(D, true);
       if (DVar.CKind != OMPC_shared) {
         Diag(ELoc, diag::err_omp_required_access)
@@ -9628,7 +8878,8 @@ OMPClause *Sema::ActOnOpenMPReductionClause(
     //  worksharing regions arising from the worksharing construct bind.
     OpenMPDirectiveKind CurrDir = DSAStack->getCurrentDirective();
     if (isOpenMPWorksharingDirective(CurrDir) &&
-        !isOpenMPParallelDirective(CurrDir)) {
+        !isOpenMPParallelDirective(CurrDir) &&
+        !isOpenMPTeamsDirective(CurrDir)) {
       DVar = DSAStack->getImplicitDSA(D, true);
       if (DVar.CKind != OMPC_shared) {
         Diag(ELoc, diag::err_omp_required_access)
@@ -9844,10 +9095,9 @@ OMPClause *Sema::ActOnOpenMPReductionClause(
       }
     }
     if (Init && DeclareReductionRef.isUnset()) {
-      AddInitializerToDecl(RHSVD, Init, /*DirectInit=*/false,
-                           /*TypeMayContainAuto=*/false);
+      AddInitializerToDecl(RHSVD, Init, /*DirectInit=*/false);
     } else if (!Init)
-      ActOnUninitializedDecl(RHSVD, /*TypeMayContainAuto=*/false);
+      ActOnUninitializedDecl(RHSVD);
     if (RHSVD->isInvalidDecl())
       continue;
     if (!RHSVD->hasInit() && DeclareReductionRef.isUnset()) {
@@ -10096,7 +9346,7 @@ OMPClause *Sema::ActOnOpenMPLinearClause(
     else
       InitExpr = VD ? SimpleRefExpr : Ref;
     AddInitializerToDecl(Init, DefaultLvalueConversion(InitExpr).get(),
-                         /*DirectInit=*/false, /*TypeMayContainAuto=*/false);
+                         /*DirectInit=*/false);
     auto InitRef = buildDeclRefExpr(*this, Init, Type, ELoc);
 
     DSAStack->addDSA(D, RefExpr->IgnoreParens(), OMPC_linear, Ref);
@@ -11438,7 +10688,11 @@ checkMappableExpressionList(Sema &SemaRef, DSAStackTy *DSAS,
       // OpenMP 4.5 [2.15.5.1, Restrictions, p.3]
       // A list item cannot appear in both a map clause and a data-sharing
       // attribute clause on the same construct
-      if (DKind == OMPD_target && VD) {
+      if ((DKind == OMPD_target || DKind == OMPD_target_teams ||
+           DKind == OMPD_target_teams_distribute ||
+           DKind == OMPD_target_teams_distribute_parallel_for ||
+           DKind == OMPD_target_teams_distribute_parallel_for_simd ||
+           DKind == OMPD_target_teams_distribute_simd) && VD) {
         auto DVar = DSAS->getTopDSA(VD, false);
         if (isOpenMPPrivate(DVar.CKind)) {
           SemaRef.Diag(ELoc, diag::err_omp_variable_in_given_clause_and_dsa)
@@ -11730,6 +10984,8 @@ OMPClause *Sema::ActOnOpenMPNumTeamsClause(Expr *NumTeams,
                                            SourceLocation LParenLoc,
                                            SourceLocation EndLoc) {
   Expr *ValExpr = NumTeams;
+  Stmt *HelperValStmt = nullptr;
+  OpenMPDirectiveKind CaptureRegion = OMPD_unknown;
 
   // OpenMP [teams Constrcut, Restrictions]
   // The num_teams expression must evaluate to a positive integer value.
@@ -11737,7 +10993,16 @@ OMPClause *Sema::ActOnOpenMPNumTeamsClause(Expr *NumTeams,
                                  /*StrictlyPositive=*/true))
     return nullptr;
 
-  return new (Context) OMPNumTeamsClause(ValExpr, StartLoc, LParenLoc, EndLoc);
+  OpenMPDirectiveKind DKind = DSAStack->getCurrentDirective();
+  CaptureRegion = getOpenMPCaptureRegionForClause(DKind, OMPC_num_teams);
+  if (CaptureRegion != OMPD_unknown) {
+    llvm::MapVector<Expr *, DeclRefExpr *> Captures;
+    ValExpr = tryBuildCapture(*this, ValExpr, Captures).get();
+    HelperValStmt = buildPreInits(Context, Captures);
+  }
+
+  return new (Context) OMPNumTeamsClause(ValExpr, HelperValStmt, CaptureRegion,
+                                         StartLoc, LParenLoc, EndLoc);
 }
 
 OMPClause *Sema::ActOnOpenMPThreadLimitClause(Expr *ThreadLimit,
@@ -11745,6 +11010,8 @@ OMPClause *Sema::ActOnOpenMPThreadLimitClause(Expr *ThreadLimit,
                                               SourceLocation LParenLoc,
                                               SourceLocation EndLoc) {
   Expr *ValExpr = ThreadLimit;
+  Stmt *HelperValStmt = nullptr;
+  OpenMPDirectiveKind CaptureRegion = OMPD_unknown;
 
   // OpenMP [teams Constrcut, Restrictions]
   // The thread_limit expression must evaluate to a positive integer value.
@@ -11752,8 +11019,16 @@ OMPClause *Sema::ActOnOpenMPThreadLimitClause(Expr *ThreadLimit,
                                  /*StrictlyPositive=*/true))
     return nullptr;
 
-  return new (Context)
-      OMPThreadLimitClause(ValExpr, StartLoc, LParenLoc, EndLoc);
+  OpenMPDirectiveKind DKind = DSAStack->getCurrentDirective();
+  CaptureRegion = getOpenMPCaptureRegionForClause(DKind, OMPC_thread_limit);
+  if (CaptureRegion != OMPD_unknown) {
+    llvm::MapVector<Expr *, DeclRefExpr *> Captures;
+    ValExpr = tryBuildCapture(*this, ValExpr, Captures).get();
+    HelperValStmt = buildPreInits(Context, Captures);
+  }
+
+  return new (Context) OMPThreadLimitClause(
+      ValExpr, HelperValStmt, CaptureRegion, StartLoc, LParenLoc, EndLoc);
 }
 
 OMPClause *Sema::ActOnOpenMPPriorityClause(Expr *Priority,
@@ -12170,7 +11445,7 @@ OMPClause *Sema::ActOnOpenMPUseDevicePtrClause(ArrayRef<Expr *> VarList,
                                            RefExpr->getExprLoc());
     AddInitializerToDecl(VDPrivate,
                          DefaultLvalueConversion(VDInitRefExpr).get(),
-                         /*DirectInit=*/false, /*TypeMayContainAuto=*/false);
+                         /*DirectInit=*/false);
 
     // If required, build a capture to implement the privatization initialized
     // with the current list item value.
@@ -12208,7 +11483,7 @@ OMPClause *Sema::ActOnOpenMPIsDevicePtrClause(ArrayRef<Expr *> VarList,
                                               SourceLocation EndLoc) {
   MappableVarListInfo MVLI(VarList);
   for (auto &RefExpr : VarList) {
-    assert(RefExpr && "NULL expr in OpenMP use_device_ptr clause.");
+    assert(RefExpr && "NULL expr in OpenMP is_device_ptr clause.");
     SourceLocation ELoc;
     SourceRange ERange;
     Expr *SimpleRefExpr = RefExpr;

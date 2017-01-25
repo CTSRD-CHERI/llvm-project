@@ -179,6 +179,8 @@ class ScopedInErrorReport {
     if (common_flags()->print_cmdline)
       PrintCmdline();
 
+    if (common_flags()->print_module_map == 2) PrintModuleMap();
+
     // Copy the message buffer so that we could start logging without holding a
     // lock that gets aquired during printing.
     InternalScopedBuffer<char> buffer_copy(kErrorMessageBufferSize);
@@ -427,7 +429,7 @@ void __asan_describe_address(uptr addr) {
 }
 
 int __asan_report_present() {
-  return ScopedInErrorReport::CurrentError().kind == kErrorKindGeneric;
+  return ScopedInErrorReport::CurrentError().kind != kErrorKindInvalid;
 }
 
 uptr __asan_get_report_pc() {
@@ -449,9 +451,11 @@ uptr __asan_get_report_sp() {
 }
 
 uptr __asan_get_report_address() {
-  if (ScopedInErrorReport::CurrentError().kind == kErrorKindGeneric)
-    return ScopedInErrorReport::CurrentError()
-        .Generic.addr_description.Address();
+  ErrorDescription &err = ScopedInErrorReport::CurrentError();
+  if (err.kind == kErrorKindGeneric)
+    return err.Generic.addr_description.Address();
+  else if (err.kind == kErrorKindDoubleFree)
+    return err.DoubleFree.addr_description.addr;
   return 0;
 }
 
@@ -470,7 +474,7 @@ uptr __asan_get_report_access_size() {
 const char *__asan_get_report_description() {
   if (ScopedInErrorReport::CurrentError().kind == kErrorKindGeneric)
     return ScopedInErrorReport::CurrentError().Generic.bug_descr;
-  return nullptr;
+  return ScopedInErrorReport::CurrentError().Base.scariness.GetDescription();
 }
 
 extern "C" {

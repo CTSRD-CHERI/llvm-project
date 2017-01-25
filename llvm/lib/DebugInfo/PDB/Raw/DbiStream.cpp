@@ -7,20 +7,24 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/DebugInfo/PDB/Raw/DbiStream.h"
-
+#include "llvm/ADT/StringRef.h"
+#include "llvm/DebugInfo/MSF/MappedBlockStream.h"
 #include "llvm/DebugInfo/MSF/StreamArray.h"
 #include "llvm/DebugInfo/MSF/StreamReader.h"
-#include "llvm/DebugInfo/MSF/StreamWriter.h"
+#include "llvm/DebugInfo/PDB/PDBTypes.h"
+#include "llvm/DebugInfo/PDB/Raw/DbiStream.h"
 #include "llvm/DebugInfo/PDB/Raw/ISectionContribVisitor.h"
 #include "llvm/DebugInfo/PDB/Raw/InfoStream.h"
 #include "llvm/DebugInfo/PDB/Raw/ModInfo.h"
-#include "llvm/DebugInfo/PDB/Raw/NameHashTable.h"
 #include "llvm/DebugInfo/PDB/Raw/PDBFile.h"
 #include "llvm/DebugInfo/PDB/Raw/RawConstants.h"
 #include "llvm/DebugInfo/PDB/Raw/RawError.h"
 #include "llvm/DebugInfo/PDB/Raw/RawTypes.h"
 #include "llvm/Object/COFF.h"
+#include "llvm/Support/Error.h"
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
 
 using namespace llvm;
 using namespace llvm::codeview;
@@ -46,7 +50,7 @@ DbiStream::DbiStream(PDBFile &File, std::unique_ptr<MappedBlockStream> Stream)
     : Pdb(File), Stream(std::move(Stream)), Header(nullptr) {
 }
 
-DbiStream::~DbiStream() {}
+DbiStream::~DbiStream() = default;
 
 Error DbiStream::reload() {
   StreamReader Reader(*Stream);
@@ -217,7 +221,7 @@ msf::FixedStreamArray<SecMapEntry> DbiStream::getSectionMap() const {
   return SectionMap;
 }
 
-void llvm::pdb::DbiStream::visitSectionContributions(
+void DbiStream::visitSectionContributions(
     ISectionContribVisitor &Visitor) const {
   if (SectionContribVersion == DbiSecContribVer60) {
     for (auto &SC : SectionContribs)

@@ -20,6 +20,7 @@
 namespace lld {
 namespace elf {
 
+struct PhdrEntry;
 class SymbolBody;
 struct EhSectionPiece;
 template <class ELFT> class EhInputSection;
@@ -42,12 +43,8 @@ public:
   enum Kind {
     Base,
     EHFrame,
-    EHFrameHdr,
     Merge,
     Regular,
-    VersDef,
-    VersNeed,
-    VersTable
   };
 
   OutputSectionBase(StringRef Name, uint32_t Type, uint64_t Flags);
@@ -84,6 +81,7 @@ public:
   OutputSectionBase *FirstInPtLoad = nullptr;
 
   virtual void finalize() {}
+  virtual void forEachInputSection(std::function<void(InputSectionData *)> F) {}
   virtual void assignOffsets() {}
   virtual void writeTo(uint8_t *Buf) {}
   virtual ~OutputSectionBase() = default;
@@ -104,83 +102,6 @@ public:
   uint32_t Link = 0;
 };
 
-// For more information about .gnu.version and .gnu.version_r see:
-// https://www.akkadia.org/drepper/symbol-versioning
-
-// The .gnu.version_d section which has a section type of SHT_GNU_verdef shall
-// contain symbol version definitions. The number of entries in this section
-// shall be contained in the DT_VERDEFNUM entry of the .dynamic section.
-// The section shall contain an array of Elf_Verdef structures, optionally
-// followed by an array of Elf_Verdaux structures.
-template <class ELFT>
-class VersionDefinitionSection final : public OutputSectionBase {
-  typedef typename ELFT::Verdef Elf_Verdef;
-  typedef typename ELFT::Verdaux Elf_Verdaux;
-
-public:
-  VersionDefinitionSection();
-  void finalize() override;
-  void writeTo(uint8_t *Buf) override;
-  Kind getKind() const override { return VersDef; }
-  static bool classof(const OutputSectionBase *B) {
-    return B->getKind() == VersDef;
-  }
-
-private:
-  void writeOne(uint8_t *Buf, uint32_t Index, StringRef Name, size_t NameOff);
-
-  unsigned FileDefNameOff;
-};
-
-// The .gnu.version section specifies the required version of each symbol in the
-// dynamic symbol table. It contains one Elf_Versym for each dynamic symbol
-// table entry. An Elf_Versym is just a 16-bit integer that refers to a version
-// identifier defined in the either .gnu.version_r or .gnu.version_d section.
-// The values 0 and 1 are reserved. All other values are used for versions in
-// the own object or in any of the dependencies.
-template <class ELFT>
-class VersionTableSection final : public OutputSectionBase {
-  typedef typename ELFT::Versym Elf_Versym;
-
-public:
-  VersionTableSection();
-  void finalize() override;
-  void writeTo(uint8_t *Buf) override;
-  Kind getKind() const override { return VersTable; }
-  static bool classof(const OutputSectionBase *B) {
-    return B->getKind() == VersTable;
-  }
-};
-
-// The .gnu.version_r section defines the version identifiers used by
-// .gnu.version. It contains a linked list of Elf_Verneed data structures. Each
-// Elf_Verneed specifies the version requirements for a single DSO, and contains
-// a reference to a linked list of Elf_Vernaux data structures which define the
-// mapping from version identifiers to version names.
-template <class ELFT>
-class VersionNeedSection final : public OutputSectionBase {
-  typedef typename ELFT::Verneed Elf_Verneed;
-  typedef typename ELFT::Vernaux Elf_Vernaux;
-
-  // A vector of shared files that need Elf_Verneed data structures and the
-  // string table offsets of their sonames.
-  std::vector<std::pair<SharedFile<ELFT> *, size_t>> Needed;
-
-  // The next available version identifier.
-  unsigned NextIndex;
-
-public:
-  VersionNeedSection();
-  void addSymbol(SharedSymbol<ELFT> *SS);
-  void finalize() override;
-  void writeTo(uint8_t *Buf) override;
-  size_t getNeedNum() const { return Needed.size(); }
-  Kind getKind() const override { return VersNeed; }
-  static bool classof(const OutputSectionBase *B) {
-    return B->getKind() == VersNeed;
-  }
-};
-
 template <class ELFT> class OutputSection final : public OutputSectionBase {
 
 public:
@@ -191,17 +112,21 @@ public:
   typedef typename ELFT::uint uintX_t;
   OutputSection(StringRef Name, uint32_t Type, uintX_t Flags);
   void addSection(InputSectionData *C) override;
-  void sort(std::function<unsigned(InputSection<ELFT> *S)> Order);
+  void sort(std::function<int(InputSection<ELFT> *S)> Order);
   void sortInitFini();
   void sortCtorsDtors();
   void writeTo(uint8_t *Buf) override;
   void finalize() override;
+  void forEachInputSection(std::function<void(InputSectionData *)> F) override;
   void assignOffsets() override;
   Kind getKind() const override { return Regular; }
   static bool classof(const OutputSectionBase *B) {
     return B->getKind() == Regular;
   }
   std::vector<InputSection<ELFT> *> Sections;
+
+  // Location in the output buffer.
+  uint8_t *Loc = nullptr;
 };
 
 template <class ELFT>
@@ -221,6 +146,9 @@ public:
   }
 
 private:
+  void finalizeTailMerge();
+  void finalizeNoTailMerge();
+
   llvm::StringTableBuilder Builder;
   std::vector<MergeInputSection<ELFT> *> Sections;
 };
@@ -242,6 +170,7 @@ public:
   void writeTo(uint8_t *Buf) override;
   void finalize() override;
   bool empty() const { return Sections.empty(); }
+  void forEachInputSection(std::function<void(InputSectionData *)> F) override;
 
   void addSection(InputSectionData *S) override;
   Kind getKind() const override { return EHFrame; }
@@ -256,12 +185,10 @@ private:
   void addSectionAux(EhInputSection<ELFT> *S, llvm::ArrayRef<RelTy> Rels);
 
   template <class RelTy>
-  CieRecord *addCie(EhSectionPiece &Piece, EhInputSection<ELFT> *Sec,
-                    ArrayRef<RelTy> Rels);
+  CieRecord *addCie(EhSectionPiece &Piece, ArrayRef<RelTy> Rels);
 
   template <class RelTy>
-  bool isFdeLive(EhSectionPiece &Piece, EhInputSection<ELFT> *Sec,
-                 ArrayRef<RelTy> Rels);
+  bool isFdeLive(EhSectionPiece &Piece, ArrayRef<RelTy> Rels);
 
   uintX_t getFdePc(uint8_t *Buf, size_t Off, uint8_t Enc);
 
@@ -272,37 +199,6 @@ private:
   llvm::DenseMap<std::pair<ArrayRef<uint8_t>, SymbolBody *>, CieRecord> CieMap;
 };
 
-// --eh-frame-hdr option tells linker to construct a header for all the
-// .eh_frame sections. This header is placed to a section named .eh_frame_hdr
-// and also to a PT_GNU_EH_FRAME segment.
-// At runtime the unwinder then can find all the PT_GNU_EH_FRAME segments by
-// calling dl_iterate_phdr.
-// This section contains a lookup table for quick binary search of FDEs.
-// Detailed info about internals can be found in Ian Lance Taylor's blog:
-// http://www.airs.com/blog/archives/460 (".eh_frame")
-// http://www.airs.com/blog/archives/462 (".eh_frame_hdr")
-template <class ELFT> class EhFrameHeader final : public OutputSectionBase {
-  typedef typename ELFT::uint uintX_t;
-
-public:
-  EhFrameHeader();
-  void finalize() override;
-  void writeTo(uint8_t *Buf) override;
-  void addFde(uint32_t Pc, uint32_t FdeVA);
-  Kind getKind() const override { return EHFrameHdr; }
-  static bool classof(const OutputSectionBase *B) {
-    return B->getKind() == EHFrameHdr;
-  }
-
-private:
-  struct FdeData {
-    uint32_t Pc;
-    uint32_t FdeVA;
-  };
-
-  std::vector<FdeData> Fdes;
-};
-
 // All output sections that are hadnled by the linker specially are
 // globally accessible. Writer initializes them, so don't use them
 // until Writer is initialized.
@@ -311,16 +207,12 @@ template <class ELFT> struct Out {
   typedef typename ELFT::Phdr Elf_Phdr;
 
   static uint8_t First;
-  static EhFrameHeader<ELFT> *EhFrameHdr;
   static EhOutputSection<ELFT> *EhFrame;
   static OutputSection<ELFT> *Bss;
-  static OutputSection<ELFT> *MipsRldMap;
+  static OutputSection<ELFT> *BssRelRo;
   static OutputSectionBase *Opd;
   static uint8_t *OpdBuf;
-  static VersionDefinitionSection<ELFT> *VerDef;
-  static VersionTableSection<ELFT> *VerSym;
-  static VersionNeedSection<ELFT> *VerNeed;
-  static Elf_Phdr *TlsPhdr;
+  static PhdrEntry *TlsPhdr;
   static OutputSectionBase *DebugInfo;
   static OutputSectionBase *ElfHeader;
   static OutputSectionBase *ProgramHeaders;
@@ -329,12 +221,10 @@ template <class ELFT> struct Out {
   static OutputSectionBase *FiniArray;
 };
 
-template <bool Is64Bits> struct SectionKey {
-  typedef typename std::conditional<Is64Bits, uint64_t, uint32_t>::type uintX_t;
+struct SectionKey {
   StringRef Name;
-  uint32_t Type;
-  uintX_t Flags;
-  uintX_t Alignment;
+  uint64_t Flags;
+  uint64_t Alignment;
 };
 
 // This class knows how to create an output section for a given
@@ -344,16 +234,17 @@ template <bool Is64Bits> struct SectionKey {
 template <class ELFT> class OutputSectionFactory {
   typedef typename ELFT::Shdr Elf_Shdr;
   typedef typename ELFT::uint uintX_t;
-  typedef typename elf::SectionKey<ELFT::Is64Bits> Key;
 
 public:
+  OutputSectionFactory();
+  ~OutputSectionFactory();
   std::pair<OutputSectionBase *, bool> create(InputSectionBase<ELFT> *C,
                                               StringRef OutsecName);
-  std::pair<OutputSectionBase *, bool>
-  create(const SectionKey<ELFT::Is64Bits> &Key, InputSectionBase<ELFT> *C);
+  std::pair<OutputSectionBase *, bool> create(const SectionKey &Key,
+                                              InputSectionBase<ELFT> *C);
 
 private:
-  llvm::SmallDenseMap<Key, OutputSectionBase *> Map;
+  llvm::SmallDenseMap<SectionKey, OutputSectionBase *> Map;
 };
 
 template <class ELFT> uint64_t getHeaderSize() {
@@ -363,16 +254,12 @@ template <class ELFT> uint64_t getHeaderSize() {
 }
 
 template <class ELFT> uint8_t Out<ELFT>::First;
-template <class ELFT> EhFrameHeader<ELFT> *Out<ELFT>::EhFrameHdr;
 template <class ELFT> EhOutputSection<ELFT> *Out<ELFT>::EhFrame;
 template <class ELFT> OutputSection<ELFT> *Out<ELFT>::Bss;
-template <class ELFT> OutputSection<ELFT> *Out<ELFT>::MipsRldMap;
+template <class ELFT> OutputSection<ELFT> *Out<ELFT>::BssRelRo;
 template <class ELFT> OutputSectionBase *Out<ELFT>::Opd;
 template <class ELFT> uint8_t *Out<ELFT>::OpdBuf;
-template <class ELFT> VersionDefinitionSection<ELFT> *Out<ELFT>::VerDef;
-template <class ELFT> VersionTableSection<ELFT> *Out<ELFT>::VerSym;
-template <class ELFT> VersionNeedSection<ELFT> *Out<ELFT>::VerNeed;
-template <class ELFT> typename ELFT::Phdr *Out<ELFT>::TlsPhdr;
+template <class ELFT> PhdrEntry *Out<ELFT>::TlsPhdr;
 template <class ELFT> OutputSectionBase *Out<ELFT>::DebugInfo;
 template <class ELFT> OutputSectionBase *Out<ELFT>::ElfHeader;
 template <class ELFT> OutputSectionBase *Out<ELFT>::ProgramHeaders;
@@ -382,15 +269,5 @@ template <class ELFT> OutputSectionBase *Out<ELFT>::FiniArray;
 } // namespace elf
 } // namespace lld
 
-namespace llvm {
-template <bool Is64Bits> struct DenseMapInfo<lld::elf::SectionKey<Is64Bits>> {
-  typedef typename lld::elf::SectionKey<Is64Bits> Key;
-
-  static Key getEmptyKey();
-  static Key getTombstoneKey();
-  static unsigned getHashValue(const Key &Val);
-  static bool isEqual(const Key &LHS, const Key &RHS);
-};
-}
 
 #endif

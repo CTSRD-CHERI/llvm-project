@@ -32,6 +32,8 @@ extern "C" {
 // before any instrumented code is executed and before any call to malloc.
 SANITIZER_INTERFACE_ATTRIBUTE void __tsan_init();
 
+SANITIZER_INTERFACE_ATTRIBUTE void __tsan_flush_memory();
+
 SANITIZER_INTERFACE_ATTRIBUTE void __tsan_read1(void *addr);
 SANITIZER_INTERFACE_ATTRIBUTE void __tsan_read2(void *addr);
 SANITIZER_INTERFACE_ATTRIBUTE void __tsan_read4(void *addr);
@@ -135,6 +137,17 @@ int __tsan_get_report_thread(void *report, uptr idx, int *tid, uptr *os_id,
 // Returns information about unique thread IDs included in the report.
 SANITIZER_INTERFACE_ATTRIBUTE
 int __tsan_get_report_unique_tid(void *report, uptr idx, int *tid);
+
+// Returns the type of the pointer (heap, stack, global, ...) and if possible
+// also the starting address (e.g. of a heap allocation) and size.
+SANITIZER_INTERFACE_ATTRIBUTE
+const char *__tsan_locate_address(uptr addr, char *name, uptr name_size,
+                                  uptr *region_address, uptr *region_size);
+
+// Returns the allocation stack for a heap pointer.
+SANITIZER_INTERFACE_ATTRIBUTE
+int __tsan_get_alloc_stack(uptr addr, uptr *trace, uptr size, int *thread_id,
+                           uptr *os_id);
 
 #endif  // SANITIZER_GO
 

@@ -254,7 +254,7 @@ void initializeModuleDebugInfoPrinterPass(PassRegistry&);
 void initializeModuleSummaryIndexWrapperPassPass(PassRegistry &);
 void initializeNameAnonGlobalLegacyPassPass(PassRegistry &);
 void initializeNaryReassociateLegacyPassPass(PassRegistry &);
-void initializeNoAAPass(PassRegistry&);
+void initializeNewGVNPass(PassRegistry&);
 void initializeObjCARCAAWrapperPassPass(PassRegistry&);
 void initializeObjCARCAPElimPass(PassRegistry&);
 void initializeObjCARCContractPass(PassRegistry&);
@@ -357,6 +357,7 @@ void initializeVirtRegRewriterPass(PassRegistry&);
 void initializeWholeProgramDevirtPass(PassRegistry &);
 void initializeWinEHPreparePass(PassRegistry&);
 void initializeWriteBitcodePassPass(PassRegistry &);
+void initializeWriteThinLTOBitcodePass(PassRegistry &);
 void initializeXRayInstrumentationPass(PassRegistry &);
 }
 

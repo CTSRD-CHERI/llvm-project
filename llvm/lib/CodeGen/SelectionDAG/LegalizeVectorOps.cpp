@@ -333,6 +333,8 @@ SDValue VectorLegalizer::LegalizeOp(SDValue Op) {
   case ISD::SMAX:
   case ISD::UMIN:
   case ISD::UMAX:
+  case ISD::SMUL_LOHI:
+  case ISD::UMUL_LOHI:
     QueryType = Node->getValueType(0);
     break;
   case ISD::FP_ROUND_INREG:
@@ -982,21 +984,20 @@ SDValue VectorLegalizer::ExpandUINT_TO_FLOAT(SDValue Op) {
       TLI.getOperationAction(ISD::SRL,        VT) == TargetLowering::Expand)
     return DAG.UnrollVectorOp(Op.getNode());
 
- EVT SVT = VT.getScalarType();
-  assert((SVT.getSizeInBits() == 64 || SVT.getSizeInBits() == 32) &&
-      "Elements in vector-UINT_TO_FP must be 32 or 64 bits wide");
+  unsigned BW = VT.getScalarSizeInBits();
+  assert((BW == 64 || BW == 32) &&
+         "Elements in vector-UINT_TO_FP must be 32 or 64 bits wide");
 
-  unsigned BW = SVT.getSizeInBits();
-  SDValue HalfWord = DAG.getConstant(BW/2, DL, VT);
+  SDValue HalfWord = DAG.getConstant(BW / 2, DL, VT);
 
   // Constants to clear the upper part of the word.
   // Notice that we can also use SHL+SHR, but using a constant is slightly
   // faster on x86.
-  uint64_t HWMask = (SVT.getSizeInBits()==64)?0x00000000FFFFFFFF:0x0000FFFF;
+  uint64_t HWMask = (BW == 64) ? 0x00000000FFFFFFFF : 0x0000FFFF;
   SDValue HalfWordMask = DAG.getConstant(HWMask, DL, VT);
 
   // Two to the power of half-word-size.
-  SDValue TWOHW = DAG.getConstantFP(1 << (BW/2), DL, Op.getValueType());
+  SDValue TWOHW = DAG.getConstantFP(1 << (BW / 2), DL, Op.getValueType());
 
   // Clear upper part of LO, lower HI
   SDValue HI = DAG.getNode(ISD::SRL, DL, VT, Op.getOperand(0), HalfWord);
@@ -1012,7 +1013,6 @@ SDValue VectorLegalizer::ExpandUINT_TO_FLOAT(SDValue Op) {
   // Add the two halves
   return DAG.getNode(ISD::FADD, DL, Op.getValueType(), fHI, fLO);
 }
-
 
 SDValue VectorLegalizer::ExpandFNEG(SDValue Op) {
   if (TLI.isOperationLegalOrCustom(ISD::FSUB, Op.getValueType())) {

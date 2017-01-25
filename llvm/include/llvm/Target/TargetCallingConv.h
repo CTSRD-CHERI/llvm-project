@@ -14,14 +14,16 @@
 #ifndef LLVM_TARGET_TARGETCALLINGCONV_H
 #define LLVM_TARGET_TARGETCALLINGCONV_H
 
+#include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/ValueTypes.h"
-#include "llvm/Support/DataTypes.h"
 #include "llvm/Support/MathExtras.h"
+#include <cassert>
 #include <climits>
+#include <cstdint>
 
 namespace llvm {
-
 namespace ISD {
+
   struct ArgFlagsTy {
   private:
     static const uint64_t NoFlagSet      = 0ULL;
@@ -51,6 +53,15 @@ namespace ISD {
     static const uint64_t SwiftSelfOffs  = 14;
     static const uint64_t SwiftError     = 1ULL<<15; ///< Swift error parameter
     static const uint64_t SwiftErrorOffs = 15;
+    static const uint64_t Hva            = 1ULL << 16; ///< HVA field for
+                                                       ///< vectorcall
+    static const uint64_t HvaOffs        = 16;
+    static const uint64_t HvaStart       = 1ULL << 17; ///< HVA structure start
+                                                       ///< for vectorcall
+    static const uint64_t HvaStartOffs   = 17;
+    static const uint64_t SecArgPass     = 1ULL << 18; ///< Second argument
+                                                       ///< pass for vectorcall
+    static const uint64_t SecArgPassOffs = 18;
     static const uint64_t OrigAlign      = 0x1FULL<<27;
     static const uint64_t OrigAlignOffs  = 27;
     static const uint64_t ByValSize      = 0x3fffffffULL<<32; ///< Struct size
@@ -62,10 +73,10 @@ namespace ISD {
 
     static const uint64_t One            = 1ULL; ///< 1 of this type, for shifts
 
-    uint64_t Flags;
+    uint64_t Flags = 0;
 
   public:
-    ArgFlagsTy() : Flags(0) { }
+    ArgFlagsTy() = default;
 
     bool isZExt()      const { return Flags & ZExt; }
     void setZExt()     { Flags |= One << ZExtOffs; }
@@ -90,6 +101,15 @@ namespace ISD {
 
     bool isSwiftError() const { return Flags & SwiftError; }
     void setSwiftError() { Flags |= One << SwiftErrorOffs; }
+
+    bool isHva() const { return Flags & Hva; }
+    void setHva() { Flags |= One << HvaOffs; }
+
+    bool isHvaStart() const { return Flags & HvaStart; }
+    void setHvaStart() { Flags |= One << HvaStartOffs; }
+
+    bool isSecArgPass() const { return Flags & SecArgPass; }
+    void setSecArgPass() { Flags |= One << SecArgPassOffs; }
 
     bool isNest()      const { return Flags & Nest; }
     void setNest()     { Flags |= One << NestOffs; }
@@ -144,9 +164,9 @@ namespace ISD {
   ///
   struct InputArg {
     ArgFlagsTy Flags;
-    MVT VT;
+    MVT VT = MVT::Other;
     EVT ArgVT;
-    bool Used;
+    bool Used = false;
 
     /// Index original Function's argument.
     unsigned OrigArgIndex;
@@ -158,7 +178,7 @@ namespace ISD {
     /// registers, we got 4 InputArgs with PartOffsets 0, 4, 8 and 12.
     unsigned PartOffset;
 
-    InputArg() : VT(MVT::Other), Used(false) {}
+    InputArg() = default;
     InputArg(ArgFlagsTy flags, EVT vt, EVT argvt, bool used,
              unsigned origIdx, unsigned partOffs)
       : Flags(flags), Used(used), OrigArgIndex(origIdx), PartOffset(partOffs) {
@@ -186,7 +206,7 @@ namespace ISD {
     EVT ArgVT;
 
     /// IsFixed - Is this a "fixed" value, ie not passed through a vararg "...".
-    bool IsFixed;
+    bool IsFixed = false;
 
     /// Index original Function's argument.
     unsigned OrigArgIndex;
@@ -196,7 +216,7 @@ namespace ISD {
     /// registers, we got 4 OutputArgs with PartOffsets 0, 4, 8 and 12.
     unsigned PartOffset;
 
-    OutputArg() : IsFixed(false) {}
+    OutputArg() = default;
     OutputArg(ArgFlagsTy flags, EVT vt, EVT argvt, bool isfixed,
               unsigned origIdx, unsigned partOffs)
       : Flags(flags), IsFixed(isfixed), OrigArgIndex(origIdx),
@@ -205,8 +225,8 @@ namespace ISD {
       ArgVT = argvt;
     }
   };
-} // end namespace ISD
 
-} // end llvm namespace
+} // end namespace ISD
+} // end namespace llvm
 
 #endif // LLVM_TARGET_TARGETCALLINGCONV_H

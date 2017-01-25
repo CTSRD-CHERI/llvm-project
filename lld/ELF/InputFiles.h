@@ -29,6 +29,7 @@
 
 namespace llvm {
 class DWARFDebugLine;
+class TarWriter;
 namespace lto {
 class InputFile;
 }
@@ -36,12 +37,25 @@ class InputFile;
 
 namespace lld {
 namespace elf {
+class InputFile;
+}
+
+// Returns "(internal)", "foo.a(bar.o)" or "baz.o".
+std::string toString(const elf::InputFile *F);
+
+namespace elf {
 
 using llvm::object::Archive;
 
-class InputFile;
 class Lazy;
 class SymbolBody;
+
+// If -reproduce option is given, all input files are written
+// to this tar archive.
+extern llvm::TarWriter *Tar;
+
+// Opens a given file.
+llvm::Optional<MemoryBufferRef> readFile(StringRef Path);
 
 // The root class of input files.
 class InputFile {
@@ -83,9 +97,6 @@ protected:
 private:
   const Kind FileKind;
 };
-
-// Returns "(internal)", "foo.a(bar.o)" or "baz.o".
-std::string getFilename(const InputFile *F);
 
 template <typename ELFT> class ELFFileBase : public InputFile {
 public:
@@ -150,7 +161,7 @@ public:
 
   SymbolBody &getSymbolBody(uint32_t SymbolIndex) const {
     if (SymbolIndex >= SymbolBodies.size())
-      fatal(getFilename(this) + ": invalid symbol index");
+      fatal(toString(this) + ": invalid symbol index");
     return *SymbolBodies[SymbolIndex];
   }
 
@@ -168,10 +179,6 @@ public:
   // used to create the relocatable object and required to support
   // R_MIPS_GPREL16 / R_MIPS_GPREL32 relocations.
   uint32_t MipsGp0 = 0;
-
-  // The number is the offset in the string table. It will be used as the
-  // st_name of the symbol.
-  std::vector<std::pair<const DefinedRegular<ELFT> *, unsigned>> KeptLocalSyms;
 
   // Name of source file obtained from STT_FILE symbol value,
   // or empty string if there is no such symbol in object file
@@ -263,12 +270,14 @@ private:
 // .so file.
 template <class ELFT> class SharedFile : public ELFFileBase<ELFT> {
   typedef ELFFileBase<ELFT> Base;
+  typedef typename ELFT::Dyn Elf_Dyn;
   typedef typename ELFT::Shdr Elf_Shdr;
   typedef typename ELFT::Sym Elf_Sym;
-  typedef typename ELFT::Word Elf_Word;
   typedef typename ELFT::SymRange Elf_Sym_Range;
-  typedef typename ELFT::Versym Elf_Versym;
   typedef typename ELFT::Verdef Elf_Verdef;
+  typedef typename ELFT::Versym Elf_Versym;
+  typedef typename ELFT::Word Elf_Word;
+  typedef typename ELFT::uint uintX_t;
 
   std::vector<StringRef> Undefs;
   StringRef SoName;

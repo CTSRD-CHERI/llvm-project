@@ -103,7 +103,9 @@ uptr FindAvailableMemoryRange(uptr size, uptr alignment, uptr left_padding);
 
 // Used to check if we can map shadow memory to a fixed location.
 bool MemoryRangeIsAvailable(uptr range_start, uptr range_end);
-void ReleaseMemoryToOS(uptr addr, uptr size);
+// Releases memory pages entirely within the [beg, end] address range. Noop if
+// the provided range does not contain at least one entire page.
+void ReleaseMemoryPagesToOS(uptr beg, uptr end);
 void IncreaseTotalMmap(uptr size);
 void DecreaseTotalMmap(uptr size);
 uptr GetRSS();
@@ -281,6 +283,7 @@ void UpdateProcessName();
 void CacheBinaryName();
 void DisableCoreDumperIfNecessary();
 void DumpProcessMap();
+void PrintModuleMap();
 bool FileExists(const char *filename);
 const char *GetEnv(const char *name);
 bool SetEnv(const char *name, const char *value);
@@ -374,12 +377,6 @@ void SetCheckFailedCallback(CheckFailedCallbackType callback);
 // (exceeded==false).
 // The callback should be registered once at the tool init time.
 void SetSoftRssLimitExceededCallback(void (*Callback)(bool exceeded));
-
-// Callback to be called when we want to try releasing unused allocator memory
-// back to the OS.
-typedef void (*AllocatorReleaseToOSCallback)();
-// The callback should be registered once at the tool init time.
-void SetAllocatorReleaseToOSCallback(AllocatorReleaseToOSCallback Callback);
 
 // Functions related to signal handling.
 typedef void (*SignalHandlerType)(int, void *, void *);
@@ -551,6 +548,13 @@ class InternalMmapVectorNoCtor {
   uptr capacity() const {
     return capacity_;
   }
+  void resize(uptr new_size) {
+    Resize(new_size);
+    if (new_size > size_) {
+      internal_memset(&data_[size_], 0, sizeof(T) * (new_size - size_));
+    }
+    size_ = new_size;
+  }
 
   void clear() { size_ = 0; }
   bool empty() const { return size() == 0; }
@@ -650,18 +654,73 @@ uptr InternalLowerBound(const Container &v, uptr first, uptr last,
   return first;
 }
 
+enum ModuleArch {
+  kModuleArchUnknown,
+  kModuleArchI386,
+  kModuleArchX86_64,
+  kModuleArchX86_64H,
+  kModuleArchARMV6,
+  kModuleArchARMV7,
+  kModuleArchARMV7S,
+  kModuleArchARMV7K,
+  kModuleArchARM64
+};
+
+// When adding a new architecture, don't forget to also update
+// script/asan_symbolize.py and sanitizer_symbolizer_libcdep.cc.
+inline const char *ModuleArchToString(ModuleArch arch) {
+  switch (arch) {
+    case kModuleArchUnknown:
+      return "";
+    case kModuleArchI386:
+      return "i386";
+    case kModuleArchX86_64:
+      return "x86_64";
+    case kModuleArchX86_64H:
+      return "x86_64h";
+    case kModuleArchARMV6:
+      return "armv6";
+    case kModuleArchARMV7:
+      return "armv7";
+    case kModuleArchARMV7S:
+      return "armv7s";
+    case kModuleArchARMV7K:
+      return "armv7k";
+    case kModuleArchARM64:
+      return "arm64";
+  }
+  CHECK(0 && "Invalid module arch");
+  return "";
+}
+
+const uptr kModuleUUIDSize = 16;
+
 // Represents a binary loaded into virtual memory (e.g. this can be an
 // executable or a shared object).
 class LoadedModule {
  public:
-  LoadedModule() : full_name_(nullptr), base_address_(0) { ranges_.clear(); }
+  LoadedModule()
+      : full_name_(nullptr),
+        base_address_(0),
+        max_executable_address_(0),
+        arch_(kModuleArchUnknown),
+        instrumented_(false) {
+    internal_memset(uuid_, 0, kModuleUUIDSize);
+    ranges_.clear();
+  }
   void set(const char *module_name, uptr base_address);
+  void set(const char *module_name, uptr base_address, ModuleArch arch,
+           u8 uuid[kModuleUUIDSize], bool instrumented);
   void clear();
   void addAddressRange(uptr beg, uptr end, bool executable);
   bool containsAddress(uptr address) const;
 
   const char *full_name() const { return full_name_; }
   uptr base_address() const { return base_address_; }
+  uptr max_executable_address() const { return max_executable_address_; }
+  ModuleArch arch() const { return arch_; }
+  const u8 *uuid() const { return uuid_; }
+  bool instrumented() const { return instrumented_; }
 
   struct AddressRange {
     AddressRange *next;
@@ -678,6 +737,10 @@ class LoadedModule {
  private:
   char *full_name_;  // Owned.
   uptr base_address_;
+  uptr max_executable_address_;
+  ModuleArch arch_;
+  u8 uuid_[kModuleUUIDSize];
+  bool instrumented_;
   IntrusiveList<AddressRange> ranges_;
 };
 
@@ -798,6 +861,8 @@ struct SignalContext {
         is_memory_access(is_memory_access),
         write_flag(write_flag) {}
 
+  static void DumpAllRegisters(void *context);
+
   // Creates signal context in a platform-specific manner.
   static SignalContext Create(void *siginfo, void *context);
 
@@ -840,6 +905,10 @@ struct StackDepotStats {
   uptr n_uniq_ids;
   uptr allocated;
 };
+
+// The default value for allocator_release_to_os_interval_ms common flag to
+// indicate that sanitizer allocator should not attempt to release memory to OS.
+const s32 kReleaseToOSIntervalNever = -1;
 
 }  // namespace __sanitizer
 

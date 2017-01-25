@@ -1463,12 +1463,18 @@ void MemorySSA::OptimizeUses::optimizeUses() {
 }
 
 void MemorySSA::placePHINodes(
-    const SmallPtrSetImpl<BasicBlock *> &DefiningBlocks) {
+    const SmallPtrSetImpl<BasicBlock *> &DefiningBlocks,
+    const DenseMap<const BasicBlock *, unsigned int> &BBNumbers) {
   // Determine where our MemoryPhi's should go
   ForwardIDFCalculator IDFs(*DT);
   IDFs.setDefiningBlocks(DefiningBlocks);
   SmallVector<BasicBlock *, 32> IDFBlocks;
   IDFs.calculate(IDFBlocks);
+
+  std::sort(IDFBlocks.begin(), IDFBlocks.end(),
+            [&BBNumbers](const BasicBlock *A, const BasicBlock *B) {
+              return BBNumbers.lookup(A) < BBNumbers.lookup(B);
+            });
 
   // Now place MemoryPhi nodes.
   for (auto &BB : IDFBlocks) {
@@ -1491,6 +1497,8 @@ void MemorySSA::buildMemorySSA() {
   BasicBlock &StartingPoint = F.getEntryBlock();
   LiveOnEntryDef = make_unique<MemoryDef>(F.getContext(), nullptr, nullptr,
                                           &StartingPoint, NextID++);
+  DenseMap<const BasicBlock *, unsigned int> BBNumbers;
+  unsigned NextBBNum = 0;
 
   // We maintain lists of memory accesses per-block, trading memory for time. We
   // could just look up the memory access for every possible instruction in the
@@ -1500,6 +1508,7 @@ void MemorySSA::buildMemorySSA() {
   // Go through each block, figure out where defs occur, and chain together all
   // the accesses.
   for (BasicBlock &B : F) {
+    BBNumbers[&B] = NextBBNum++;
     bool InsertIntoDef = false;
     AccessList *Accesses = nullptr;
     for (Instruction &I : B) {
@@ -1517,7 +1526,7 @@ void MemorySSA::buildMemorySSA() {
     if (Accesses)
       DefUseBlocks.insert(&B);
   }
-  placePHINodes(DefiningBlocks);
+  placePHINodes(DefiningBlocks, BBNumbers);
 
   // Now do regular SSA renaming on the MemoryDef/MemoryUse. Visited will get
   // filled in with all blocks.
@@ -1612,6 +1621,29 @@ MemoryUseOrDef *MemorySSA::createMemoryAccessAfter(Instruction *I,
   Accesses->insertAfter(AccessList::iterator(InsertPt), NewAccess);
   BlockNumberingValid.erase(InsertPt->getBlock());
   return NewAccess;
+}
+
+void MemorySSA::spliceMemoryAccessAbove(MemoryDef *Where,
+                                        MemoryUseOrDef *What) {
+  assert(What != getLiveOnEntryDef() &&
+         Where != getLiveOnEntryDef() && "Can't splice (above) LOE.");
+  assert(dominates(Where, What) && "Only upwards splices are permitted.");
+
+  if (Where == What)
+    return;
+  if (isa<MemoryDef>(What)) {
+    // TODO: possibly use removeMemoryAccess' more efficient RAUW
+    What->replaceAllUsesWith(What->getDefiningAccess());
+    What->setDefiningAccess(Where->getDefiningAccess());
+    Where->setDefiningAccess(What);
+  }
+  AccessList *Src = getWritableBlockAccesses(What->getBlock());
+  AccessList *Dest = getWritableBlockAccesses(Where->getBlock());
+  Dest->splice(AccessList::iterator(Where), *Src, What);
+
+  BlockNumberingValid.erase(What->getBlock());
+  if (What->getBlock() != Where->getBlock())
+    BlockNumberingValid.erase(Where->getBlock());
 }
 
 /// \brief Helper function to create new memory accesses
@@ -2058,7 +2090,7 @@ bool MemorySSAPrinterLegacyPass::runOnFunction(Function &F) {
   return false;
 }
 
-char MemorySSAAnalysis::PassID;
+AnalysisKey MemorySSAAnalysis::Key;
 
 MemorySSAAnalysis::Result MemorySSAAnalysis::run(Function &F,
                                                  FunctionAnalysisManager &AM) {

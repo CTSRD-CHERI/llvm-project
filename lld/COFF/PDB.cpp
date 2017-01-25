@@ -9,9 +9,18 @@
 
 #include "PDB.h"
 #include "Chunks.h"
+#include "Config.h"
 #include "Error.h"
 #include "SymbolTable.h"
 #include "Symbols.h"
+#include "llvm/DebugInfo/CodeView/CVDebugRecord.h"
+#include "llvm/DebugInfo/CodeView/CVTypeDumper.h"
+#include "llvm/DebugInfo/CodeView/SymbolDumper.h"
+#include "llvm/DebugInfo/CodeView/TypeDatabase.h"
+#include "llvm/DebugInfo/CodeView/TypeDumpVisitor.h"
+#include "llvm/DebugInfo/CodeView/TypeStreamMerger.h"
+#include "llvm/DebugInfo/CodeView/TypeTableBuilder.h"
+#include "llvm/DebugInfo/MSF/ByteStream.h"
 #include "llvm/DebugInfo/MSF/MSFBuilder.h"
 #include "llvm/DebugInfo/MSF/MSFCommon.h"
 #include "llvm/DebugInfo/PDB/Raw/DbiStream.h"
@@ -20,16 +29,19 @@
 #include "llvm/DebugInfo/PDB/Raw/InfoStreamBuilder.h"
 #include "llvm/DebugInfo/PDB/Raw/PDBFile.h"
 #include "llvm/DebugInfo/PDB/Raw/PDBFileBuilder.h"
+#include "llvm/DebugInfo/PDB/Raw/StringTableBuilder.h"
 #include "llvm/DebugInfo/PDB/Raw/TpiStream.h"
 #include "llvm/DebugInfo/PDB/Raw/TpiStreamBuilder.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/FileOutputBuffer.h"
+#include "llvm/Support/ScopedPrinter.h"
 #include <memory>
 
 using namespace lld;
 using namespace lld::coff;
 using namespace llvm;
+using namespace llvm::codeview;
 using namespace llvm::support;
 using namespace llvm::support::endian;
 
@@ -46,9 +58,115 @@ static std::vector<coff_section> getInputSections(SymbolTable *Symtab) {
   return V;
 }
 
+static SectionChunk *findByName(std::vector<SectionChunk *> &Sections,
+                                StringRef Name) {
+  for (SectionChunk *C : Sections)
+    if (C->getSectionName() == Name)
+      return C;
+  return nullptr;
+}
+
+static ArrayRef<uint8_t> getDebugSection(ObjectFile *File, StringRef SecName) {
+  SectionChunk *Sec = findByName(File->getDebugChunks(), SecName);
+  if (!Sec)
+    return {};
+
+  // First 4 bytes are section magic.
+  ArrayRef<uint8_t> Data = Sec->getContents();
+  if (Data.size() < 4)
+    fatal(SecName + " too short");
+  if (read32le(Data.data()) != COFF::DEBUG_SECTION_MAGIC)
+    fatal(SecName + " has an invalid magic");
+  return Data.slice(4);
+}
+
+// Merge .debug$T sections and returns it.
+static std::vector<uint8_t> mergeDebugT(SymbolTable *Symtab) {
+  ScopedPrinter W(outs());
+
+  // Visit all .debug$T sections to add them to Builder.
+  codeview::TypeTableBuilder Builder(BAlloc);
+  for (ObjectFile *File : Symtab->ObjectFiles) {
+    ArrayRef<uint8_t> Data = getDebugSection(File, ".debug$T");
+    if (Data.empty())
+      continue;
+
+    msf::ByteStream Stream(Data);
+    codeview::CVTypeArray Types;
+    msf::StreamReader Reader(Stream);
+    if (auto EC = Reader.readArray(Types, Reader.getLength()))
+      fatal(EC, "Reader::readArray failed");
+    if (!codeview::mergeTypeStreams(Builder, Types))
+      fatal("codeview::mergeTypeStreams failed");
+  }
+
+  // Construct section contents.
+  std::vector<uint8_t> V;
+  Builder.ForEachRecord([&](TypeIndex TI, ArrayRef<uint8_t> Rec) {
+    V.insert(V.end(), Rec.begin(), Rec.end());
+  });
+  return V;
+}
+
+static void dumpDebugT(ScopedPrinter &W, ObjectFile *File) {
+  ListScope LS(W, "DebugT");
+  ArrayRef<uint8_t> Data = getDebugSection(File, ".debug$T");
+  if (Data.empty())
+    return;
+
+  TypeDatabase TDB;
+  TypeDumpVisitor TDV(TDB, &W, false);
+  CVTypeDumper TypeDumper(TDB);
+  if (auto EC = TypeDumper.dump(Data, TDV))
+    fatal(EC, "CVTypeDumper::dump failed");
+}
+
+static void dumpDebugS(ScopedPrinter &W, ObjectFile *File) {
+  ListScope LS(W, "DebugS");
+  ArrayRef<uint8_t> Data = getDebugSection(File, ".debug$S");
+  if (Data.empty())
+    return;
+
+  msf::ByteStream Stream(Data);
+  CVSymbolArray Symbols;
+  msf::StreamReader Reader(Stream);
+  if (auto EC = Reader.readArray(Symbols, Reader.getLength()))
+    fatal(EC, "StreamReader.readArray<CVSymbolArray> failed");
+
+  TypeDatabase TDB;
+  CVSymbolDumper SymbolDumper(W, TDB, nullptr, false);
+  if (auto EC = SymbolDumper.dump(Symbols))
+    fatal(EC, "CVSymbolDumper::dump failed");
+}
+
+// Dump CodeView debug info. This is for debugging.
+static void dumpCodeView(SymbolTable *Symtab) {
+  ScopedPrinter W(outs());
+
+  for (ObjectFile *File : Symtab->ObjectFiles) {
+    dumpDebugT(W, File);
+    dumpDebugS(W, File);
+  }
+}
+
+static void addTypeInfo(pdb::TpiStreamBuilder &TpiBuilder,
+                        ArrayRef<uint8_t> Data) {
+  msf::ByteStream Stream(Data);
+  codeview::CVTypeArray Records;
+  msf::StreamReader Reader(Stream);
+  if (auto EC = Reader.readArray(Records, Reader.getLength()))
+    fatal(EC, "Reader.readArray failed");
+  for (const codeview::CVType &Rec : Records)
+    TpiBuilder.addTypeRecord(Rec);
+}
+
 // Creates a PDB file.
 void coff::createPDB(StringRef Path, SymbolTable *Symtab,
-                     ArrayRef<uint8_t> SectionTable) {
+                     ArrayRef<uint8_t> SectionTable,
+                     const llvm::codeview::DebugInfo *DI) {
+  if (Config->DumpPdb)
+    dumpCodeView(Symtab);
+
   BumpPtrAllocator Alloc;
   pdb::PDBFileBuilder Builder(Alloc);
   ExitOnErr(Builder.initialize(4096)); // 4096 is blocksize
@@ -60,11 +178,9 @@ void coff::createPDB(StringRef Path, SymbolTable *Symtab,
 
   // Add an Info stream.
   auto &InfoBuilder = Builder.getInfoBuilder();
-  InfoBuilder.setAge(1);
-
-  // Should be a random number, 0 for now.
-  InfoBuilder.setGuid({});
-
+  InfoBuilder.setAge(DI->PDB70.Age);
+  InfoBuilder.setGuid(
+      *reinterpret_cast<const pdb::PDB_UniqueId *>(&DI->PDB70.Signature));
   // Should be the current time, but set 0 for reproducibilty.
   InfoBuilder.setSignature(0);
   InfoBuilder.setVersion(pdb::PdbRaw_ImplVer::PdbImplVC70);
@@ -76,6 +192,11 @@ void coff::createPDB(StringRef Path, SymbolTable *Symtab,
   // Add an empty TPI stream.
   auto &TpiBuilder = Builder.getTpiBuilder();
   TpiBuilder.setVersionHeader(pdb::PdbTpiV80);
+  std::vector<uint8_t> TpiData;
+  if (Config->DebugPdb) {
+    TpiData = mergeDebugT(Symtab);
+    addTypeInfo(TpiBuilder, TpiData);
+  }
 
   // Add an empty IPI stream.
   auto &IpiBuilder = Builder.getIpiBuilder();

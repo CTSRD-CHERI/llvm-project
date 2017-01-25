@@ -30,9 +30,9 @@ inline Dest bit_cast(const Source& source) {
 
 void NORETURN dieWithMessage(const char *Format, ...);
 
-enum  CPUFeature {
-  SSE4_2 = 0,
-  ENUM_CPUFEATURE_MAX
+enum CPUFeature {
+  CRC32CPUFeature = 0,
+  MaxCPUFeature,
 };
 bool testCPUFeature(CPUFeature feature);
 
@@ -42,18 +42,24 @@ struct Xorshift128Plus {
  public:
   Xorshift128Plus();
   u64 Next() {
-    u64 x = State_0_;
-    const u64 y = State_1_;
-    State_0_ = y;
+    u64 x = State[0];
+    const u64 y = State[1];
+    State[0] = y;
     x ^= x << 23;
-    State_1_ = x ^ y ^ (x >> 17) ^ (y >> 26);
-    return State_1_ + y;
+    State[1] = x ^ y ^ (x >> 17) ^ (y >> 26);
+    return State[1] + y;
   }
  private:
-  u64 State_0_;
-  u64 State_1_;
+  u64 State[2];
 };
 
-} // namespace __scudo
+enum : u8 {
+  CRC32Software = 0,
+  CRC32Hardware = 1,
+};
+
+u32 computeSoftwareCRC32(u32 Crc, uptr Data);
+
+}  // namespace __scudo
 
 #endif  // SCUDO_UTILS_H_

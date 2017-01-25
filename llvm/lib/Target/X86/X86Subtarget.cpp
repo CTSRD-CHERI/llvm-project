@@ -92,6 +92,10 @@ unsigned char X86Subtarget::classifyGlobalReference(const GlobalValue *GV,
   if (TM.getCodeModel() == CodeModel::Large)
     return X86II::MO_NO_FLAG;
 
+  // Absolute symbols can be referenced directly.
+  if (GV && GV->isAbsoluteSymbolRef())
+    return X86II::MO_NO_FLAG;
+
   if (TM.shouldAssumeDSOLocal(M, GV))
     return classifyLocalReference(GV);
 
@@ -275,6 +279,7 @@ void X86Subtarget::initializeEnvironment() {
   HasMWAITX = false;
   HasMPX = false;
   IsBTMemSlow = false;
+  IsPMULLDSlow = false;
   IsSHLDSlow = false;
   IsUAMem16Slow = false;
   IsUAMem32Slow = false;

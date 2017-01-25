@@ -1,4 +1,4 @@
-; RUN: llc -O0 -stop-after=irtranslator -global-isel -verify-machineinstrs %s -o - 2>&1 | FileCheck %s
+; RUN: llc -O0 -aarch64-enable-atomic-cfg-tidy=0 -stop-after=irtranslator -global-isel -verify-machineinstrs %s -o - 2>&1 | FileCheck %s
 
 ; This file checks that the translation from llvm IR to generic MachineInstr
 ; is correct.
@@ -7,7 +7,7 @@ target triple = "aarch64--"
 
 ; Tests for add.
 ; CHECK-LABEL: name: addi64
-; CHECK: [[ARG1:%[0-9]+]](s64) = COPY %x0
+; CHECK:      [[ARG1:%[0-9]+]](s64) = COPY %x0
 ; CHECK-NEXT: [[ARG2:%[0-9]+]](s64) = COPY %x1
 ; CHECK-NEXT: [[RES:%[0-9]+]](s64) = G_ADD [[ARG1]], [[ARG2]]
 ; CHECK-NEXT: %x0 = COPY [[RES]]
@@ -51,11 +51,11 @@ define void @allocai64() {
 ; CHECK-LABEL: name: uncondbr
 ; CHECK: body:
 ;
-; Entry basic block.
-; CHECK: {{[0-9a-zA-Z._-]+}}:
+; ABI/constant lowering and IR-level entry basic block.
+; CHECK: {{bb.[0-9]+}} (%ir-block.{{[0-9]+}}):
 ;
 ; Make sure we have one successor and only one.
-; CHECK-NEXT: successors: %[[END:[0-9a-zA-Z._-]+]]({{0x[a-f0-9]+ / 0x[a-f0-9]+}} = 100.00%)
+; CHECK-NEXT: successors: %[[END:bb.[0-9]+.end]](0x80000000)
 ;
 ; Check that we emit the correct branch.
 ; CHECK: G_BR %[[END]]
@@ -73,15 +73,15 @@ end:
 ; CHECK-LABEL: name: condbr
 ; CHECK: body:
 ;
-; Entry basic block.
-; CHECK: {{[0-9a-zA-Z._-]+}}:
-;
+; ABI/constant lowering and IR-level entry basic block.
+; CHECK: {{bb.[0-9]+}} (%ir-block.{{[0-9]+}}):
 ; Make sure we have two successors
-; CHECK-NEXT: successors: %[[TRUE:[0-9a-zA-Z._-]+]]({{0x[a-f0-9]+ / 0x[a-f0-9]+}} = 50.00%),
-; CHECK:                  %[[FALSE:[0-9a-zA-Z._-]+]]({{0x[a-f0-9]+ / 0x[a-f0-9]+}} = 50.00%)
+; CHECK-NEXT: successors: %[[TRUE:bb.[0-9]+.true]](0x40000000),
+; CHECK:                  %[[FALSE:bb.[0-9]+.false]](0x40000000)
+;
+; CHECK: [[ADDR:%.*]](p0) = COPY %x0
 ;
 ; Check that we emit the correct branch.
-; CHECK: [[ADDR:%.*]](p0) = COPY %x0
 ; CHECK: [[TST:%.*]](s1) = G_LOAD [[ADDR]](p0)
 ; CHECK: G_BRCOND [[TST]](s1), %[[TRUE]]
 ; CHECK: G_BR %[[FALSE]]
@@ -98,6 +98,123 @@ true:
   ret void
 false:
   ret void
+}
+
+; Tests for switch.
+; This gets lowered to a very straightforward sequence of comparisons for now.
+; CHECK-LABEL: name: switch
+; CHECK: body:
+;
+; CHECK: {{bb.[0-9]+.entry}}:
+; CHECK-NEXT: successors: %[[BB_CASE100:bb.[0-9]+.case100]](0x40000000), %[[BB_NOTCASE100_CHECKNEXT:bb.[0-9]+.entry]](0x40000000)
+; CHECK: %0(s32) = COPY %w0
+; CHECK: %[[reg100:[0-9]+]](s32) = G_CONSTANT i32 100
+; CHECK: %[[reg200:[0-9]+]](s32) = G_CONSTANT i32 200
+; CHECK: %[[reg0:[0-9]+]](s32) = G_CONSTANT i32 0
+; CHECK: %[[reg1:[0-9]+]](s32) = G_CONSTANT i32 1
+; CHECK: %[[reg2:[0-9]+]](s32) = G_CONSTANT i32 2
+; CHECK: %[[regicmp100:[0-9]+]](s1) = G_ICMP intpred(eq), %[[reg100]](s32), %0
+; CHECK: G_BRCOND %[[regicmp100]](s1), %[[BB_CASE100]]
+; CHECK: G_BR %[[BB_NOTCASE100_CHECKNEXT]]
+;
+; CHECK: [[BB_CASE100]]:
+; CHECK-NEXT: successors: %[[BB_RET:bb.[0-9]+.return]](0x80000000)
+; CHECK: %[[regretc100:[0-9]+]](s32) = G_ADD %0, %[[reg1]]
+; CHECK: G_BR %[[BB_RET]]
+; CHECK: [[BB_NOTCASE100_CHECKNEXT]]:
+; CHECK-NEXT: successors: %[[BB_CASE200:bb.[0-9]+.case200]](0x40000000), %[[BB_NOTCASE200_CHECKNEXT:bb.[0-9]+.entry]](0x40000000)
+; CHECK: %[[regicmp200:[0-9]+]](s1) = G_ICMP intpred(eq), %[[reg200]](s32), %0
+; CHECK: G_BRCOND %[[regicmp200]](s1), %[[BB_CASE200]]
+; CHECK: G_BR %[[BB_NOTCASE200_CHECKNEXT]]
+;
+; CHECK: [[BB_CASE200]]:
+; CHECK-NEXT: successors: %[[BB_RET:bb.[0-9]+.return]](0x80000000)
+; CHECK: %[[regretc200:[0-9]+]](s32) = G_ADD %0, %[[reg2]]
+; CHECK: G_BR %[[BB_RET]]
+; CHECK: [[BB_NOTCASE200_CHECKNEXT]]:
+; CHECK-NEXT: successors: %[[BB_DEFAULT:bb.[0-9]+.default]](0x80000000)
+; CHECK: G_BR %[[BB_DEFAULT]]
+;
+; CHECK: [[BB_DEFAULT]]:
+; CHECK-NEXT: successors: %[[BB_RET]](0x80000000)
+; CHECK: %[[regretdefault:[0-9]+]](s32) = G_ADD %0, %[[reg0]]
+; CHECK: G_BR %[[BB_RET]]
+;
+; CHECK: [[BB_RET]]:
+; CHECK-NEXT: %[[regret:[0-9]+]](s32) = PHI %[[regretdefault]](s32), %[[BB_DEFAULT]], %[[regretc100]](s32), %[[BB_CASE100]]
+; CHECK:  %w0 = COPY %[[regret]](s32)
+; CHECK:  RET_ReallyLR implicit %w0
+define i32 @switch(i32 %argc) {
+entry:
+  switch i32 %argc, label %default [
+    i32 100, label %case100
+    i32 200, label %case200
+  ]
+
+default:
+  %tmp0 = add i32 %argc, 0
+  br label %return
+
+case100:
+  %tmp1 = add i32 %argc, 1
+  br label %return
+
+case200:
+  %tmp2 = add i32 %argc, 2
+  br label %return
+
+return:
+  %res = phi i32 [ %tmp0, %default ], [ %tmp1, %case100 ], [ %tmp2, %case200 ]
+  ret i32 %res
+}
+
+  ; The switch lowering code changes the CFG, which means that the original
+  ; %entry block is no longer a predecessor for the phi instruction. We need to
+  ; use the correct lowered MachineBasicBlock instead.
+; CHECK-LABEL: name: test_cfg_remap
+
+; CHECK: bb.5.entry:
+; CHECK-NEXT: successors: %[[PHI_BLOCK:bb.[0-9]+.phi.block]]
+; CHECK: G_BR %[[PHI_BLOCK]]
+
+; CHECK: [[PHI_BLOCK]]:
+; CHECK-NEXT: PHI %{{.*}}(s32), %bb.5.entry
+define i32 @test_cfg_remap(i32 %in) {
+entry:
+  switch i32 %in, label %phi.block [i32 1, label %next
+                                    i32 57, label %other]
+
+next:
+  br label %phi.block
+
+other:
+  ret i32 undef
+
+phi.block:
+  %res = phi i32 [1, %entry], [42, %next]
+  ret i32 %res
+}
+
+; CHECK-LABEL: name: test_cfg_remap_multiple_preds
+; CHECK: PHI [[ENTRY:%.*]](s32), %bb.{{[0-9]+}}.entry, [[ENTRY]](s32), %bb.{{[0-9]+}}.entry
+define i32 @test_cfg_remap_multiple_preds(i32 %in) {
+entry:
+  switch i32 %in, label %odd [i32 1, label %next
+                              i32 57, label %other
+                              i32 128, label %phi.block
+                              i32 256, label %phi.block]
+odd:
+  unreachable
+
+next:
+  br label %phi.block
+
+other:
+  ret i32 undef
+
+phi.block:
+  %res = phi i32 [1, %entry], [1, %entry], [42, %next]
+  ret i32 12
 }
 
 ; Tests for or.
@@ -223,11 +340,11 @@ define i64* @trivial_bitcast(i8* %a) {
 
 ; CHECK-LABEL: name: trivial_bitcast_with_copy
 ; CHECK:     [[A:%[0-9]+]](p0) = COPY %x0
-; CHECK:     G_BR %[[CAST:bb\.[0-9]+]]
+; CHECK:     G_BR %[[CAST:bb\.[0-9]+.cast]]
 
 ; CHECK: [[CAST]]:
 ; CHECK:     {{%[0-9]+}}(p0) = COPY [[A]]
-; CHECK:     G_BR %[[END:bb\.[0-9]+]]
+; CHECK:     G_BR %[[END:bb\.[0-9]+.end]]
 
 ; CHECK: [[END]]:
 define i64* @trivial_bitcast_with_copy(i8* %a) {
@@ -324,8 +441,8 @@ define void @intrinsics(i32 %cur, i32 %bits) {
 }
 
 ; CHECK-LABEL: name: test_phi
-; CHECK:     G_BRCOND {{%.*}}, %[[TRUE:bb\.[0-9]+]]
-; CHECK:     G_BR %[[FALSE:bb\.[0-9]+]]
+; CHECK:     G_BRCOND {{%.*}}, %[[TRUE:bb\.[0-9]+.true]]
+; CHECK:     G_BR %[[FALSE:bb\.[0-9]+.false]]
 
 ; CHECK: [[TRUE]]:
 ; CHECK:     [[RES1:%[0-9]+]](s32) = G_LOAD
@@ -364,7 +481,7 @@ define void @unreachable(i32 %a) {
   ; rest of the entry block.
 ; CHECK-LABEL: name: constant_int
 ; CHECK: [[IN:%[0-9]+]](s32) = COPY %w0
-; CHECK: [[ONE:%[0-9]+]](s32) = G_CONSTANT 1
+; CHECK: [[ONE:%[0-9]+]](s32) = G_CONSTANT i32 1
 ; CHECK: G_BR
 
 ; CHECK: [[SUM1:%[0-9]+]](s32) = G_ADD [[IN]], [[ONE]]
@@ -383,8 +500,8 @@ next:
 }
 
 ; CHECK-LABEL: name: constant_int_start
-; CHECK: [[TWO:%[0-9]+]](s32) = G_CONSTANT 2
-; CHECK: [[ANSWER:%[0-9]+]](s32) = G_CONSTANT 42
+; CHECK: [[TWO:%[0-9]+]](s32) = G_CONSTANT i32 2
+; CHECK: [[ANSWER:%[0-9]+]](s32) = G_CONSTANT i32 42
 ; CHECK: [[RES:%[0-9]+]](s32) = G_ADD [[TWO]], [[ANSWER]]
 define i32 @constant_int_start() {
   %res = add i32 2, 42
@@ -399,7 +516,7 @@ define i32 @test_undef() {
 }
 
 ; CHECK-LABEL: name: test_constant_inttoptr
-; CHECK: [[ONE:%[0-9]+]](s64) = G_CONSTANT 1
+; CHECK: [[ONE:%[0-9]+]](s64) = G_CONSTANT i64 1
 ; CHECK: [[PTR:%[0-9]+]](p0) = G_INTTOPTR [[ONE]]
 ; CHECK: %x0 = COPY [[PTR]]
 define i8* @test_constant_inttoptr() {
@@ -409,7 +526,7 @@ define i8* @test_constant_inttoptr() {
   ; This failed purely because the Constant -> VReg map was kept across
   ; functions, so reuse the "i64 1" from above.
 ; CHECK-LABEL: name: test_reused_constant
-; CHECK: [[ONE:%[0-9]+]](s64) = G_CONSTANT 1
+; CHECK: [[ONE:%[0-9]+]](s64) = G_CONSTANT i64 1
 ; CHECK: %x0 = COPY [[ONE]]
 define i64 @test_reused_constant() {
   ret i64 1
@@ -512,7 +629,7 @@ define i32 @test_urem(i32 %arg1, i32 %arg2) {
 }
 
 ; CHECK-LABEL: name: test_constant_null
-; CHECK: [[NULL:%[0-9]+]](p0) = G_CONSTANT 0
+; CHECK: [[NULL:%[0-9]+]](p0) = G_CONSTANT i64 0
 ; CHECK: %x0 = COPY [[NULL]]
 define i8* @test_constant_null() {
   ret i8* null
@@ -635,7 +752,7 @@ define void @test_sadd_overflow(i32 %lhs, i32 %rhs, { i32, i1 }* %addr) {
 ; CHECK: [[LHS:%[0-9]+]](s32) = COPY %w0
 ; CHECK: [[RHS:%[0-9]+]](s32) = COPY %w1
 ; CHECK: [[ADDR:%[0-9]+]](p0) = COPY %x2
-; CHECK: [[ZERO:%[0-9]+]](s1) = G_CONSTANT 0
+; CHECK: [[ZERO:%[0-9]+]](s1) = G_CONSTANT i1 false
 ; CHECK: [[VAL:%[0-9]+]](s32), [[OVERFLOW:%[0-9]+]](s1) = G_UADDE [[LHS]], [[RHS]], [[ZERO]]
 ; CHECK: [[RES:%[0-9]+]](s64) = G_SEQUENCE [[VAL]](s32), 0, [[OVERFLOW]](s1), 32
 ; CHECK: G_STORE [[RES]](s64), [[ADDR]](p0)
@@ -664,7 +781,7 @@ define void @test_ssub_overflow(i32 %lhs, i32 %rhs, { i32, i1 }* %subr) {
 ; CHECK: [[LHS:%[0-9]+]](s32) = COPY %w0
 ; CHECK: [[RHS:%[0-9]+]](s32) = COPY %w1
 ; CHECK: [[ADDR:%[0-9]+]](p0) = COPY %x2
-; CHECK: [[ZERO:%[0-9]+]](s1) = G_CONSTANT 0
+; CHECK: [[ZERO:%[0-9]+]](s1) = G_CONSTANT i1 false
 ; CHECK: [[VAL:%[0-9]+]](s32), [[OVERFLOW:%[0-9]+]](s1) = G_USUBE [[LHS]], [[RHS]], [[ZERO]]
 ; CHECK: [[RES:%[0-9]+]](s64) = G_SEQUENCE [[VAL]](s32), 0, [[OVERFLOW]](s1), 32
 ; CHECK: G_STORE [[RES]](s64), [[ADDR]](p0)
@@ -759,6 +876,17 @@ define void @test_insertvalue_agg(%struct.nested* %addr, {i8, i32}* %addr2) {
 define i32 @test_select(i1 %tst, i32 %lhs, i32 %rhs) {
   %res = select i1 %tst, i32 %lhs, i32 %rhs
   ret i32 %res
+}
+
+; CHECK-LABEL: name: test_select_ptr
+; CHECK: [[TST:%[0-9]+]](s1) = COPY %w0
+; CHECK: [[LHS:%[0-9]+]](p0) = COPY %x1
+; CHECK: [[RHS:%[0-9]+]](p0) = COPY %x2
+; CHECK: [[RES:%[0-9]+]](p0) = G_SELECT [[TST]](s1), [[LHS]], [[RHS]]
+; CHECK: %x0 = COPY [[RES]]
+define i8* @test_select_ptr(i1 %tst, i8* %lhs, i8* %rhs) {
+  %res = select i1 %tst, i8* %lhs, i8* %rhs
+  ret i8* %res
 }
 
 ; CHECK-LABEL: name: test_fptosi
@@ -896,13 +1024,38 @@ define void @test_objectsize(i8* %addr0, i8* %addr1) {
 ; CHECK-LABEL: name: test_objectsize
 ; CHECK: [[ADDR0:%[0-9]+]](p0) = COPY %x0
 ; CHECK: [[ADDR1:%[0-9]+]](p0) = COPY %x1
-; CHECK: {{%[0-9]+}}(s64) = G_CONSTANT -1
-; CHECK: {{%[0-9]+}}(s64) = G_CONSTANT 0
-; CHECK: {{%[0-9]+}}(s32) = G_CONSTANT -1
-; CHECK: {{%[0-9]+}}(s32) = G_CONSTANT 0
+; CHECK: {{%[0-9]+}}(s64) = G_CONSTANT i64 -1
+; CHECK: {{%[0-9]+}}(s64) = G_CONSTANT i64 0
+; CHECK: {{%[0-9]+}}(s32) = G_CONSTANT i32 -1
+; CHECK: {{%[0-9]+}}(s32) = G_CONSTANT i32 0
   %size64.0 = call i64 @llvm.objectsize.i64(i8* %addr0, i1 0)
   %size64.intmin = call i64 @llvm.objectsize.i64(i8* %addr0, i1 1)
   %size32.0 = call i32 @llvm.objectsize.i32(i8* %addr0, i1 0)
   %size32.intmin = call i32 @llvm.objectsize.i32(i8* %addr0, i1 1)
   ret void
+}
+
+define void @test_large_const(i128* %addr) {
+; CHECK-LABEL: name: test_large_const
+; CHECK: [[ADDR:%[0-9]+]](p0) = COPY %x0
+; CHECK: [[VAL:%[0-9]+]](s128) = G_CONSTANT i128 42
+; CHECK: G_STORE [[VAL]](s128), [[ADDR]](p0)
+  store i128 42, i128* %addr
+  ret void
+}
+
+; When there was no formal argument handling (so the first BB was empty) we used
+; to insert the constants at the end of the block, even if they were encountered
+; after the block's terminators had been emitted. Also make sure the order is
+; correct.
+define i8* @test_const_placement() {
+; CHECK-LABEL: name: test_const_placement
+; CHECK: bb.{{[0-9]+}} (%ir-block.{{[0-9]+}}):
+; CHECK:   [[VAL_INT:%[0-9]+]](s32) = G_CONSTANT i32 42
+; CHECK:   [[VAL:%[0-9]+]](p0) = G_INTTOPTR [[VAL_INT]](s32)
+; CHECK:   G_BR
+  br label %next
+
+next:
+  ret i8* inttoptr(i32 42 to i8*)
 }

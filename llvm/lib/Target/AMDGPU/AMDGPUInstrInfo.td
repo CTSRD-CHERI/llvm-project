@@ -54,6 +54,9 @@ def AMDGPUconstdata_ptr : SDNode<
 // This argument to this node is a dword address.
 def AMDGPUdwordaddr : SDNode<"AMDGPUISD::DWORDADDR", SDTIntUnaryOp>;
 
+// Force dependencies for vector trunc stores
+def R600dummy_chain : SDNode<"AMDGPUISD::DUMMY_CHAIN", SDTNone, [SDNPHasChain]>;
+
 def AMDGPUcos : SDNode<"AMDGPUISD::COS_HW", SDTFPUnaryOp>;
 def AMDGPUsin : SDNode<"AMDGPUISD::SIN_HW", SDTFPUnaryOp>;
 
@@ -149,6 +152,19 @@ def AMDGPUSetCCOp : SDTypeProfile<1, 3, [        // setcc
 ]>;
 
 def AMDGPUsetcc : SDNode<"AMDGPUISD::SETCC", AMDGPUSetCCOp>;
+
+def AMDGPUSetRegOp :  SDTypeProfile<0, 2, [
+  SDTCisInt<0>, SDTCisInt<1>
+]>;
+
+def AMDGPUsetreg : SDNode<"AMDGPUISD::SETREG", AMDGPUSetRegOp, [
+  SDNPHasChain, SDNPSideEffect, SDNPOptInGlue, SDNPOutGlue]>;
+
+def AMDGPUfma : SDNode<"AMDGPUISD::FMA_W_CHAIN", SDTFPTernaryOp, [
+   SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
+
+def AMDGPUmul : SDNode<"AMDGPUISD::FMUL_W_CHAIN", SDTFPBinOp, [
+  SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
 
 def AMDGPUcvt_f32_ubyte0 : SDNode<"AMDGPUISD::CVT_F32_UBYTE0",
   SDTIntToFPOp, []>;
@@ -253,6 +269,10 @@ def AMDGPUsendmsg : SDNode<"AMDGPUISD::SENDMSG",
                     SDTypeProfile<0, 1, [SDTCisInt<0>]>,
                     [SDNPHasChain, SDNPInGlue]>;
 
+def AMDGPUsendmsghalt : SDNode<"AMDGPUISD::SENDMSGHALT",
+                    SDTypeProfile<0, 1, [SDTCisInt<0>]>,
+                    [SDNPHasChain, SDNPInGlue]>;
+
 def AMDGPUinterp_mov : SDNode<"AMDGPUISD::INTERP_MOV",
                         SDTypeProfile<1, 3, [SDTCisFP<0>]>,
                         [SDNPInGlue]>;
@@ -265,7 +285,34 @@ def AMDGPUinterp_p2 : SDNode<"AMDGPUISD::INTERP_P2",
                       SDTypeProfile<1, 4, [SDTCisFP<0>]>,
                       [SDNPInGlue]>;
 
+
 def AMDGPUkill : SDNode<"AMDGPUISD::KILL", AMDGPUKillSDT,
+  [SDNPHasChain, SDNPSideEffect]>;
+
+// SI+ export
+def AMDGPUExportOp : SDTypeProfile<0, 8, [
+  SDTCisInt<0>,       // i8 tgt
+  SDTCisInt<1>,       // i8 en
+                      // i32 or f32 src0
+  SDTCisSameAs<3, 2>, // f32 src1
+  SDTCisSameAs<4, 2>, // f32 src2
+  SDTCisSameAs<5, 2>, // f32 src3
+  SDTCisInt<6>,       // i1 compr
+  // skip done
+  SDTCisInt<1>        // i1 vm
+
+]>;
+
+def AMDGPUexport: SDNode<"AMDGPUISD::EXPORT", AMDGPUExportOp,
+  [SDNPHasChain, SDNPMayStore]>;
+
+def AMDGPUexport_done: SDNode<"AMDGPUISD::EXPORT_DONE", AMDGPUExportOp,
+  [SDNPHasChain, SDNPMayLoad, SDNPMayStore]>;
+
+
+def R600ExportOp : SDTypeProfile<0, 7, [SDTCisFP<0>, SDTCisInt<1>]>;
+
+def R600_EXPORT: SDNode<"AMDGPUISD::R600_EXPORT", R600ExportOp,
   [SDNPHasChain, SDNPSideEffect]>;
 
 //===----------------------------------------------------------------------===//

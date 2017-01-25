@@ -132,6 +132,10 @@ static cl::opt<unsigned>
                     cl::desc("Maximum depth of recursive compare complexity"),
                     cl::init(32));
 
+static cl::opt<unsigned> MaxConstantEvolvingDepth(
+    "scalar-evolution-max-constant-evolving-depth", cl::Hidden,
+    cl::desc("Maximum depth of recursive constant evolving"), cl::init(32));
+
 //===----------------------------------------------------------------------===//
 //                           SCEV class definitions
 //===----------------------------------------------------------------------===//
@@ -2884,7 +2888,7 @@ const SCEV *ScalarEvolution::getUDivExactExpr(const SCEV *LHS,
   // end of this file for inspiration.
 
   const SCEVMulExpr *Mul = dyn_cast<SCEVMulExpr>(LHS);
-  if (!Mul)
+  if (!Mul || !Mul->hasNoUnsignedWrap())
     return getUDivExpr(LHS, RHS);
 
   if (const SCEVConstant *RHSCst = dyn_cast<SCEVConstant>(RHS)) {
@@ -3057,9 +3061,9 @@ ScalarEvolution::getGEPExpr(GEPOperator *GEP,
                                              : SCEV::FlagAnyWrap;
 
   const SCEV *TotalOffset = getZero(IntPtrTy);
-  // The address space is unimportant. The first thing we do on CurTy is getting
+  // The array size is unimportant. The first thing we do on CurTy is getting
   // its element type.
-  Type *CurTy = PointerType::getUnqual(GEP->getSourceElementType());
+  Type *CurTy = ArrayType::get(GEP->getSourceElementType(), 0);
   for (const SCEV *IndexExpr : IndexExprs) {
     // Compute the (potentially symbolic) offset in bytes for this index.
     if (StructType *STy = dyn_cast<StructType>(CurTy)) {
@@ -4687,19 +4691,18 @@ ConstantRange ScalarEvolution::getRangeForAffineAR(const SCEV *Start,
 
   MaxBECount = getNoopOrZeroExtend(MaxBECount, Start->getType());
   ConstantRange MaxBECountRange = getUnsignedRange(MaxBECount);
-  ConstantRange ZExtMaxBECountRange =
-      MaxBECountRange.zextOrTrunc(BitWidth * 2 + 1);
+  ConstantRange ZExtMaxBECountRange = MaxBECountRange.zextOrTrunc(BitWidth * 2);
 
   ConstantRange StepSRange = getSignedRange(Step);
-  ConstantRange SExtStepSRange = StepSRange.sextOrTrunc(BitWidth * 2 + 1);
+  ConstantRange SExtStepSRange = StepSRange.sextOrTrunc(BitWidth * 2);
 
   ConstantRange StartURange = getUnsignedRange(Start);
   ConstantRange EndURange =
       StartURange.add(MaxBECountRange.multiply(StepSRange));
 
   // Check for unsigned overflow.
-  ConstantRange ZExtStartURange = StartURange.zextOrTrunc(BitWidth * 2 + 1);
-  ConstantRange ZExtEndURange = EndURange.zextOrTrunc(BitWidth * 2 + 1);
+  ConstantRange ZExtStartURange = StartURange.zextOrTrunc(BitWidth * 2);
+  ConstantRange ZExtEndURange = EndURange.zextOrTrunc(BitWidth * 2);
   if (ZExtStartURange.add(ZExtMaxBECountRange.multiply(SExtStepSRange)) ==
       ZExtEndURange) {
     APInt Min = APIntOps::umin(StartURange.getUnsignedMin(),
@@ -4719,8 +4722,8 @@ ConstantRange ScalarEvolution::getRangeForAffineAR(const SCEV *Start,
   // Check for signed overflow. This must be done with ConstantRange
   // arithmetic because we could be called from within the ScalarEvolution
   // overflow checking code.
-  ConstantRange SExtStartSRange = StartSRange.sextOrTrunc(BitWidth * 2 + 1);
-  ConstantRange SExtEndSRange = EndSRange.sextOrTrunc(BitWidth * 2 + 1);
+  ConstantRange SExtStartSRange = StartSRange.sextOrTrunc(BitWidth * 2);
+  ConstantRange SExtEndSRange = EndSRange.sextOrTrunc(BitWidth * 2);
   if (SExtStartSRange.add(ZExtMaxBECountRange.multiply(SExtStepSRange)) ==
       SExtEndSRange) {
     APInt Min =
@@ -5152,12 +5155,27 @@ const SCEV *ScalarEvolution::createSCEV(Value *V) {
         APInt EffectiveMask =
             APInt::getLowBitsSet(BitWidth, BitWidth - LZ - TZ).shl(TZ);
         if ((LZ != 0 || TZ != 0) && !((~A & ~KnownZero) & EffectiveMask)) {
-          const SCEV *MulCount = getConstant(ConstantInt::get(
-              getContext(), APInt::getOneBitSet(BitWidth, TZ)));
+          const SCEV *MulCount = getConstant(APInt::getOneBitSet(BitWidth, TZ));
+          const SCEV *LHS = getSCEV(BO->LHS);
+          const SCEV *ShiftedLHS = nullptr;
+          if (auto *LHSMul = dyn_cast<SCEVMulExpr>(LHS)) {
+            if (auto *OpC = dyn_cast<SCEVConstant>(LHSMul->getOperand(0))) {
+              // For an expression like (x * 8) & 8, simplify the multiply.
+              unsigned MulZeros = OpC->getAPInt().countTrailingZeros();
+              unsigned GCD = std::min(MulZeros, TZ);
+              APInt DivAmt = APInt::getOneBitSet(BitWidth, TZ - GCD);
+              SmallVector<const SCEV*, 4> MulOps;
+              MulOps.push_back(getConstant(OpC->getAPInt().lshr(GCD)));
+              MulOps.append(LHSMul->op_begin() + 1, LHSMul->op_end());
+              auto *NewMul = getMulExpr(MulOps, LHSMul->getNoWrapFlags());
+              ShiftedLHS = getUDivExpr(NewMul, getConstant(DivAmt));
+            }
+          }
+          if (!ShiftedLHS)
+            ShiftedLHS = getUDivExpr(LHS, MulCount);
           return getMulExpr(
               getZeroExtendExpr(
-                  getTruncateExpr(
-                      getUDivExactExpr(getSCEV(BO->LHS), MulCount),
+                  getTruncateExpr(ShiftedLHS,
                       IntegerType::get(getContext(), BitWidth - LZ - TZ)),
                   BO->LHS->getType()),
               MulCount);
@@ -6412,7 +6430,10 @@ static bool canConstantEvolve(Instruction *I, const Loop *L) {
 /// recursing through each instruction operand until reaching a loop header phi.
 static PHINode *
 getConstantEvolvingPHIOperands(Instruction *UseInst, const Loop *L,
-                               DenseMap<Instruction *, PHINode *> &PHIMap) {
+                               DenseMap<Instruction *, PHINode *> &PHIMap,
+                               unsigned Depth) {
+  if (Depth > MaxConstantEvolvingDepth)
+    return nullptr;
 
   // Otherwise, we can evaluate this instruction if all of its operands are
   // constant or derived from a PHI node themselves.
@@ -6432,7 +6453,7 @@ getConstantEvolvingPHIOperands(Instruction *UseInst, const Loop *L,
     if (!P) {
       // Recurse and memoize the results, whether a phi is found or not.
       // This recursive call invalidates pointers into PHIMap.
-      P = getConstantEvolvingPHIOperands(OpInst, L, PHIMap);
+      P = getConstantEvolvingPHIOperands(OpInst, L, PHIMap, Depth + 1);
       PHIMap[OpInst] = P;
     }
     if (!P)
@@ -6459,7 +6480,7 @@ static PHINode *getConstantEvolvingPHI(Value *V, const Loop *L) {
 
   // Record non-constant instructions contained by the loop.
   DenseMap<Instruction *, PHINode *> PHIMap;
-  return getConstantEvolvingPHIOperands(I, L, PHIMap);
+  return getConstantEvolvingPHIOperands(I, L, PHIMap, 0);
 }
 
 /// EvaluateExpression - Given an expression that passes the
@@ -7041,20 +7062,21 @@ static const SCEV *SolveLinEquationWithOverflow(const APInt &A, const APInt &B,
   // 3. Compute I: the multiplicative inverse of (A / D) in arithmetic
   // modulo (N / D).
   //
-  // (N / D) may need BW+1 bits in its representation.  Hence, we'll use this
-  // bit width during computations.
+  // If D == 1, (N / D) == N == 2^BW, so we need one extra bit to represent
+  // (N / D) in general. The inverse itself always fits into BW bits, though,
+  // so we immediately truncate it.
   APInt AD = A.lshr(Mult2).zext(BW + 1);  // AD = A / D
   APInt Mod(BW + 1, 0);
   Mod.setBit(BW - Mult2);  // Mod = N / D
-  APInt I = AD.multiplicativeInverse(Mod);
+  APInt I = AD.multiplicativeInverse(Mod).trunc(BW);
 
   // 4. Compute the minimum unsigned root of the equation:
   // I * (B / D) mod (N / D)
-  APInt Result = (I * B.lshr(Mult2).zext(BW + 1)).urem(Mod);
+  // To simplify the computation, we factor out the divide by D:
+  // (I * B mod N) / D
+  APInt Result = (I * B).lshr(Mult2);
 
-  // The result is guaranteed to be less than 2^BW so we may truncate it to BW
-  // bits.
-  return SE.getConstant(Result.trunc(BW));
+  return SE.getConstant(Result);
 }
 
 /// Find the roots of the quadratic equation for the given quadratic chrec
@@ -7215,17 +7237,25 @@ ScalarEvolution::howFarToZero(const SCEV *V, const Loop *L, bool ControlsExit,
   // 1*N = -Start; -1*N = Start (mod 2^BW), so:
   //   N = Distance (as unsigned)
   if (StepC->getValue()->equalsInt(1) || StepC->getValue()->isAllOnesValue()) {
-    ConstantRange CR = getUnsignedRange(Start);
-    const SCEV *MaxBECount;
-    if (!CountDown && CR.getUnsignedMin().isMinValue())
-      // When counting up, the worst starting value is 1, not 0.
-      MaxBECount = CR.getUnsignedMax().isMinValue()
-        ? getConstant(APInt::getMinValue(CR.getBitWidth()))
-        : getConstant(APInt::getMaxValue(CR.getBitWidth()));
-    else
-      MaxBECount = getConstant(CountDown ? CR.getUnsignedMax()
-                                         : -CR.getUnsignedMin());
-    return ExitLimit(Distance, MaxBECount, false, Predicates);
+    APInt MaxBECount = getUnsignedRange(Distance).getUnsignedMax();
+
+    // When a loop like "for (int i = 0; i != n; ++i) { /* body */ }" is rotated,
+    // we end up with a loop whose backedge-taken count is n - 1.  Detect this
+    // case, and see if we can improve the bound.
+    //
+    // Explicitly handling this here is necessary because getUnsignedRange
+    // isn't context-sensitive; it doesn't know that we only care about the
+    // range inside the loop.
+    const SCEV *Zero = getZero(Distance->getType());
+    const SCEV *One = getOne(Distance->getType());
+    const SCEV *DistancePlusOne = getAddExpr(Distance, One);
+    if (isLoopEntryGuardedByCond(L, ICmpInst::ICMP_NE, DistancePlusOne, Zero)) {
+      // If Distance + 1 doesn't overflow, we can compute the maximum distance
+      // as "unsigned_max(Distance + 1) - 1".
+      ConstantRange CR = getUnsignedRange(DistancePlusOne);
+      MaxBECount = APIntOps::umin(MaxBECount, CR.getUnsignedMax() - 1);
+    }
+    return ExitLimit(Distance, getConstant(MaxBECount), false, Predicates);
   }
 
   // As a special case, handle the instance where Step is a positive power of
@@ -7269,17 +7299,7 @@ ScalarEvolution::howFarToZero(const SCEV *V, const Loop *L, bool ControlsExit,
       // E.g. if Val is i8 -127 then the smallest value of X that satisfies (3)
       // is i8 1, not i8 -127
 
-      const auto *ModuloResult = getUDivExactExpr(Distance, Step);
-
-      // Since SCEV does not have a URem node, we construct one using a truncate
-      // and a zero extend.
-
-      unsigned NarrowWidth = StepV.getBitWidth() - StepV.countTrailingZeros();
-      auto *NarrowTy = IntegerType::get(getContext(), NarrowWidth);
-      auto *WideTy = Distance->getType();
-
-      const SCEV *Limit =
-          getZeroExtendExpr(getTruncateExpr(ModuloResult, NarrowTy), WideTy);
+      const auto *Limit = getUDivExactExpr(Distance, Step);
       return ExitLimit(Limit, Limit, false, Predicates);
     }
   }
@@ -10021,7 +10041,19 @@ void ScalarEvolution::verify() const {
   // TODO: Verify more things.
 }
 
-char ScalarEvolutionAnalysis::PassID;
+bool ScalarEvolution::invalidate(
+    Function &F, const PreservedAnalyses &PA,
+    FunctionAnalysisManager::Invalidator &Inv) {
+  // Invalidate the ScalarEvolution object whenever it isn't preserved or one
+  // of its dependencies is invalidated.
+  auto PAC = PA.getChecker<ScalarEvolutionAnalysis>();
+  return !(PAC.preserved() || PAC.preservedSet<AllAnalysesOn<Function>>()) ||
+         Inv.invalidate<AssumptionAnalysis>(F, PA) ||
+         Inv.invalidate<DominatorTreeAnalysis>(F, PA) ||
+         Inv.invalidate<LoopAnalysis>(F, PA);
+}
+
+AnalysisKey ScalarEvolutionAnalysis::Key;
 
 ScalarEvolution ScalarEvolutionAnalysis::run(Function &F,
                                              FunctionAnalysisManager &AM) {

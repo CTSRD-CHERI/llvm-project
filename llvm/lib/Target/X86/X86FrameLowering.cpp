@@ -83,14 +83,12 @@ X86FrameLowering::needsFrameIndexResolution(const MachineFunction &MF) const {
 /// or if frame pointer elimination is disabled.
 bool X86FrameLowering::hasFP(const MachineFunction &MF) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
-  const MachineModuleInfo &MMI = MF.getMMI();
-
   return (MF.getTarget().Options.DisableFramePointerElim(MF) ||
           TRI->needsStackRealignment(MF) ||
           MFI.hasVarSizedObjects() ||
           MFI.isFrameAddressTaken() || MFI.hasOpaqueSPAdjustment() ||
           MF.getInfo<X86MachineFunctionInfo>()->getForceFramePointer() ||
-          MMI.callsUnwindInit() || MMI.hasEHFunclets() || MMI.callsEHReturn() ||
+          MF.callsUnwindInit() || MF.hasEHFunclets() || MF.callsEHReturn() ||
           MFI.hasStackMap() || MFI.hasPatchPoint() ||
           MFI.hasCopyImplyingStackAdjustment());
 }
@@ -151,7 +149,7 @@ static unsigned findDeadCallerSavedReg(MachineBasicBlock &MBB,
                                        bool Is64Bit) {
   const MachineFunction *MF = MBB.getParent();
   const Function *F = MF->getFunction();
-  if (!F || MF->getMMI().callsEHReturn())
+  if (!F || MF->callsEHReturn())
     return 0;
 
   const TargetRegisterClass &AvailableRegs = *TRI->getGPRsForTailCall(*MF);
@@ -375,6 +373,10 @@ int X86FrameLowering::mergeSPUpdates(MachineBasicBlock &MBB,
   MachineBasicBlock::iterator PI = doMergeWithPrevious ? std::prev(MBBI) : MBBI;
   MachineBasicBlock::iterator NI = doMergeWithPrevious ? nullptr
                                                        : std::next(MBBI);
+  PI = skipDebugInstructionsBackward(PI, MBB.begin());
+  if (NI != nullptr)
+    NI = skipDebugInstructionsForward(NI, MBB.end());
+
   unsigned Opc = PI->getOpcode();
   int Offset = 0;
 
@@ -418,7 +420,7 @@ void X86FrameLowering::BuildCFI(MachineBasicBlock &MBB,
                                 const DebugLoc &DL,
                                 const MCCFIInstruction &CFIInst) const {
   MachineFunction &MF = *MBB.getParent();
-  unsigned CFIIndex = MF.getMMI().addFrameInst(CFIInst);
+  unsigned CFIIndex = MF.addFrameInst(CFIInst);
   BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
       .addCFIIndex(CFIIndex);
 }
@@ -919,7 +921,7 @@ void X86FrameLowering::emitPrologue(MachineFunction &MF,
   if (Fn->hasPersonalityFn())
     Personality = classifyEHPersonality(Fn->getPersonalityFn());
   bool FnHasClrFunclet =
-      MMI.hasEHFunclets() && Personality == EHPersonality::CoreCLR;
+      MF.hasEHFunclets() && Personality == EHPersonality::CoreCLR;
   bool IsClrFunclet = IsFunclet && FnHasClrFunclet;
   bool HasFP = hasFP(MF);
   bool IsWin64CC = STI.isCallingConvWin64(Fn->getCallingConv());
@@ -1552,19 +1554,22 @@ void X86FrameLowering::emitEpilogue(MachineFunction &MF,
   }
   uint64_t SEHStackAllocAmt = NumBytes;
 
+  MachineBasicBlock::iterator FirstCSPop = MBBI;
   // Skip the callee-saved pop instructions.
   while (MBBI != MBB.begin()) {
     MachineBasicBlock::iterator PI = std::prev(MBBI);
     unsigned Opc = PI->getOpcode();
 
-    if ((Opc != X86::POP32r || !PI->getFlag(MachineInstr::FrameDestroy)) &&
-        (Opc != X86::POP64r || !PI->getFlag(MachineInstr::FrameDestroy)) &&
-        Opc != X86::DBG_VALUE && !PI->isTerminator())
-      break;
+    if (Opc != X86::DBG_VALUE && !PI->isTerminator()) {
+      if ((Opc != X86::POP32r || !PI->getFlag(MachineInstr::FrameDestroy)) &&
+          (Opc != X86::POP64r || !PI->getFlag(MachineInstr::FrameDestroy)))
+        break;
+      FirstCSPop = PI;
+    }
 
     --MBBI;
   }
-  MachineBasicBlock::iterator FirstCSPop = MBBI;
+  MBBI = FirstCSPop;
 
   if (TargetMBB) {
     // Fill EAX/RAX with the address of the target block.
@@ -2040,7 +2045,7 @@ void X86FrameLowering::determineCalleeSaves(MachineFunction &MF,
     SavedRegs.set(TRI->getBaseRegister());
 
     // Allocate a spill slot for EBP if we have a base pointer and EH funclets.
-    if (MF.getMMI().hasEHFunclets()) {
+    if (MF.hasEHFunclets()) {
       int FI = MFI.CreateSpillStackObject(SlotSize, SlotSize);
       X86FI->setHasSEHFramePtrSave(true);
       X86FI->setSEHFramePtrSaveIndex(FI);
@@ -2585,6 +2590,7 @@ eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
   uint64_t Amount = !reserveCallFrame ? I->getOperand(0).getImm() : 0;
   uint64_t InternalAmt = (isDestroy || Amount) ? I->getOperand(1).getImm() : 0;
   I = MBB.erase(I);
+  auto InsertPos = skipDebugInstructionsForward(I, MBB.end());
 
   if (!reserveCallFrame) {
     // If the stack pointer can be changed after prologue, turn the
@@ -2610,12 +2616,11 @@ eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
     // GNU_ARGS_SIZE.
     // TODO: We don't need to reset this between subsequent functions,
     // if it didn't change.
-    bool HasDwarfEHHandlers = !WindowsCFI &&
-                              !MF.getMMI().getLandingPads().empty();
+    bool HasDwarfEHHandlers = !WindowsCFI && !MF.getLandingPads().empty();
 
     if (HasDwarfEHHandlers && !isDestroy &&
         MF.getInfo<X86MachineFunctionInfo>()->getHasPushSequences())
-      BuildCFI(MBB, I, DL,
+      BuildCFI(MBB, InsertPos, DL,
                MCCFIInstruction::createGnuArgsSize(nullptr, Amount));
 
     if (Amount == 0)
@@ -2629,7 +2634,7 @@ eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
     // If this is a callee-pop calling convention, emit a CFA adjust for
     // the amount the callee popped.
     if (isDestroy && InternalAmt && DwarfCFI && !hasFP(MF))
-      BuildCFI(MBB, I, DL, 
+      BuildCFI(MBB, InsertPos, DL,
                MCCFIInstruction::createAdjustCfaOffset(nullptr, -InternalAmt));
 
     // Add Amount to SP to destroy a frame, or subtract to setup.
@@ -2640,13 +2645,13 @@ eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
       // Merge with any previous or following adjustment instruction. Note: the
       // instructions merged with here do not have CFI, so their stack
       // adjustments do not feed into CfaAdjustment.
-      StackAdjustment += mergeSPUpdates(MBB, I, true);
-      StackAdjustment += mergeSPUpdates(MBB, I, false);
+      StackAdjustment += mergeSPUpdates(MBB, InsertPos, true);
+      StackAdjustment += mergeSPUpdates(MBB, InsertPos, false);
 
       if (StackAdjustment) {
         if (!(Fn->optForMinSize() &&
-              adjustStackWithPops(MBB, I, DL, StackAdjustment)))
-          BuildStackAdjustment(MBB, I, DL, StackAdjustment,
+              adjustStackWithPops(MBB, InsertPos, DL, StackAdjustment)))
+          BuildStackAdjustment(MBB, InsertPos, DL, StackAdjustment,
                                /*InEpilogue=*/false);
       }
     }
@@ -2662,8 +2667,9 @@ eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
       // TODO: When not using precise CFA, we also need to adjust for the
       // InternalAmt here.
       if (CfaAdjustment) {
-        BuildCFI(MBB, I, DL, MCCFIInstruction::createAdjustCfaOffset(
-                                 nullptr, CfaAdjustment));
+        BuildCFI(MBB, InsertPos, DL,
+                 MCCFIInstruction::createAdjustCfaOffset(nullptr,
+                                                         CfaAdjustment));
       }
     }
 
@@ -2949,7 +2955,7 @@ void X86FrameLowering::processFunctionBeforeFrameFinalized(
   // If this function isn't doing Win64-style C++ EH, we don't need to do
   // anything.
   const Function *Fn = MF.getFunction();
-  if (!STI.is64Bit() || !MF.getMMI().hasEHFunclets() ||
+  if (!STI.is64Bit() || !MF.hasEHFunclets() ||
       classifyEHPersonality(Fn->getPersonalityFn()) != EHPersonality::MSVC_CXX)
     return;
 

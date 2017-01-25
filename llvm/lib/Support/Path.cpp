@@ -571,6 +571,16 @@ void native(SmallVectorImpl<char> &Path) {
 #endif
 }
 
+std::string convert_to_slash(StringRef path) {
+#ifdef LLVM_ON_WIN32
+  std::string s = path.str();
+  std::replace(s.begin(), s.end(), '\\', '/');
+  return s;
+#else
+  return path;
+#endif
+}
+
 StringRef filename(StringRef path) {
   return *rbegin(path);
 }
@@ -1010,6 +1020,8 @@ file_magic identify_magic(StringRef Magic) {
       // 0x0000 = COFF unknown machine type
       if (Magic[1] == 0)
         return file_magic::coff_object;
+      if (startswith(Magic, "\0asm"))
+        return file_magic::wasm_object;
       break;
     }
     case 0xDE:  // 0x0B17C0DE = BC wraper

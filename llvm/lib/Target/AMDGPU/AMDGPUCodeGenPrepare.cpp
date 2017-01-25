@@ -17,13 +17,29 @@
 #include "AMDGPUIntrinsicInfo.h"
 #include "AMDGPUSubtarget.h"
 #include "AMDGPUTargetMachine.h"
-
+#include "llvm/ADT/StringRef.h"
 #include "llvm/Analysis/DivergenceAnalysis.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/IR/Attributes.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/InstVisitor.h"
+#include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/IRBuilder.h"
-#include "llvm/Support/Debug.h"
-#include "llvm/Support/raw_ostream.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Operator.h"
+#include "llvm/IR/Type.h"
+#include "llvm/IR/Value.h"
+#include "llvm/Pass.h"
+#include "llvm/Support/Casting.h"
+#include <cassert>
+#include <iterator>
 
 #define DEBUG_TYPE "amdgpu-codegenprepare"
 
@@ -34,10 +50,10 @@ namespace {
 class AMDGPUCodeGenPrepare : public FunctionPass,
                              public InstVisitor<AMDGPUCodeGenPrepare, bool> {
   const GCNTargetMachine *TM;
-  const SISubtarget *ST;
-  DivergenceAnalysis *DA;
-  Module *Mod;
-  bool HasUnsafeFPMath;
+  const SISubtarget *ST = nullptr;
+  DivergenceAnalysis *DA = nullptr;
+  Module *Mod = nullptr;
+  bool HasUnsafeFPMath = false;
 
   /// \brief Copies exact/nsw/nuw flags (if any) from binary operation \p I to
   /// binary operation \p V.
@@ -113,13 +129,9 @@ class AMDGPUCodeGenPrepare : public FunctionPass,
 
 public:
   static char ID;
+
   AMDGPUCodeGenPrepare(const TargetMachine *TM = nullptr) :
-    FunctionPass(ID),
-    TM(static_cast<const GCNTargetMachine *>(TM)),
-    ST(nullptr),
-    DA(nullptr),
-    Mod(nullptr),
-    HasUnsafeFPMath(false) { }
+    FunctionPass(ID), TM(static_cast<const GCNTargetMachine *>(TM)) {}
 
   bool visitFDiv(BinaryOperator &I);
 
@@ -142,13 +154,14 @@ public:
  }
 };
 
-} // End anonymous namespace
+} // end anonymous namespace
 
 Value *AMDGPUCodeGenPrepare::copyFlags(
     const BinaryOperator &I, Value *V) const {
-  assert(isa<BinaryOperator>(V) && "V must be binary operation");
+  BinaryOperator *BinOp = dyn_cast<BinaryOperator>(V);
+  if (!BinOp) // Possibly constant expression.
+    return V;
 
-  BinaryOperator *BinOp = cast<BinaryOperator>(V);
   if (isa<OverflowingBinaryOperator>(BinOp)) {
     BinOp->setHasNoSignedWrap(I.hasNoSignedWrap());
     BinOp->setHasNoUnsignedWrap(I.hasNoUnsignedWrap());
@@ -323,7 +336,6 @@ static bool shouldKeepFDivF32(Value *Num, bool UnsafeDiv) {
 bool AMDGPUCodeGenPrepare::visitFDiv(BinaryOperator &FDiv) {
   Type *Ty = FDiv.getType();
 
-  // TODO: Handle half
   if (!Ty->getScalarType()->isFloatTy())
     return false;
 

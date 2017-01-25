@@ -353,15 +353,13 @@ GDBRemoteCommunicationServerPlatform::Handle_qProcessInfo(
 GDBRemoteCommunication::PacketResult
 GDBRemoteCommunicationServerPlatform::Handle_qGetWorkingDir(
     StringExtractorGDBRemote &packet) {
-  // If this packet is sent to a platform, then change the current working
-  // directory
 
-  char cwd[PATH_MAX];
-  if (getcwd(cwd, sizeof(cwd)) == NULL)
-    return SendErrorResponse(errno);
+  llvm::SmallString<64> cwd;
+  if (std::error_code ec = llvm::sys::fs::current_path(cwd))
+    return SendErrorResponse(ec.value());
 
   StreamString response;
-  response.PutBytesAsRawHex8(cwd, strlen(cwd));
+  response.PutBytesAsRawHex8(cwd.data(), cwd.size());
   return SendPacketNoLock(response.GetString());
 }
 
@@ -372,10 +370,8 @@ GDBRemoteCommunicationServerPlatform::Handle_QSetWorkingDir(
   std::string path;
   packet.GetHexByteString(path);
 
-  // If this packet is sent to a platform, then change the current working
-  // directory
-  if (::chdir(path.c_str()) != 0)
-    return SendErrorResponse(errno);
+  if (std::error_code ec = llvm::sys::fs::set_current_path(path))
+    return SendErrorResponse(ec.value());
   return SendOKResponse();
 }
 

@@ -1601,11 +1601,6 @@ private:
   /// no formals.
   ParmVarDecl **ParamInfo;
 
-  /// DeclsInPrototypeScope - Array of pointers to NamedDecls for
-  /// decls defined in the function prototype that are not parameters. E.g.
-  /// 'enum Y' in 'void f(enum Y {AA} x) {}'.
-  ArrayRef<NamedDecl *> DeclsInPrototypeScope;
-
   LazyDeclStmtPtr Body;
 
   // FIXME: This can be packed into the bitfields in DeclContext.
@@ -2050,11 +2045,6 @@ public:
     setParams(getASTContext(), NewParamInfo);
   }
 
-  ArrayRef<NamedDecl *> getDeclsInPrototypeScope() const {
-    return DeclsInPrototypeScope;
-  }
-  void setDeclsInPrototypeScope(ArrayRef<NamedDecl *> NewDecls);
-
   /// getMinRequiredArguments - Returns the minimum number of arguments
   /// needed to call this function. This may be fewer than the number of
   /// function parameters, if some of the parameters have default
@@ -2070,6 +2060,10 @@ public:
   /// function return type. This may omit qualifiers and other information with
   /// limited representation in the AST.
   SourceRange getReturnTypeSourceRange() const;
+
+  /// \brief Attempt to compute an informative source range covering the
+  /// function exception specification, if any.
+  SourceRange getExceptionSpecSourceRange() const;
 
   /// \brief Determine the type of an expression that calls this function.
   QualType getCallResultType() const {

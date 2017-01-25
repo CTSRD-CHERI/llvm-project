@@ -24,6 +24,7 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Attr.h"
 #include "clang/AST/DeclObjC.h"
+#include "clang/AST/NSAPI.h"
 #include "clang/Frontend/CodeGenOptions.h"
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/StringExtras.h"
@@ -35,6 +36,8 @@
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Transforms/Utils/SanitizerStats.h"
+
+#include <string>
 
 using namespace clang;
 using namespace CodeGen;
@@ -601,13 +604,14 @@ void CodeGenFunction::EmitTypeCheck(TypeCheckKind TCK, SourceLocation Loc,
   }
 
   if (Checks.size() > 0) {
+    // Make sure we're not losing information. Alignment needs to be a power of
+    // 2
+    assert(!AlignVal || (uint64_t)1 << llvm::Log2_64(AlignVal) == AlignVal);
     llvm::Constant *StaticData[] = {
-     EmitCheckSourceLocation(Loc),
-      EmitCheckTypeDescriptor(Ty),
-      llvm::ConstantInt::get(SizeTy, AlignVal),
-      llvm::ConstantInt::get(Int8Ty, TCK)
-    };
-    EmitCheck(Checks, "type_mismatch", StaticData, Ptr);
+        EmitCheckSourceLocation(Loc), EmitCheckTypeDescriptor(Ty),
+        llvm::ConstantInt::get(Int8Ty, AlignVal ? llvm::Log2_64(AlignVal) : 1),
+        llvm::ConstantInt::get(Int8Ty, TCK)};
+    EmitCheck(Checks, SanitizerHandler::TypeMismatch, StaticData, Ptr);
   }
 
   // If possible, check that the vptr indicates that there is a subobject of
@@ -675,7 +679,8 @@ void CodeGenFunction::EmitTypeCheck(TypeCheckKind TCK, SourceLocation Loc,
       };
       llvm::Value *DynamicData[] = { Ptr, Hash };
       EmitCheck(std::make_pair(EqualHash, SanitizerKind::Vptr),
-                "dynamic_type_cache_miss", StaticData, DynamicData);
+                SanitizerHandler::DynamicTypeCacheMiss, StaticData,
+                DynamicData);
     }
   }
 
@@ -765,8 +770,8 @@ void CodeGenFunction::EmitBoundsCheck(const Expr *E, const Expr *Base,
   };
   llvm::Value *Check = Accessed ? Builder.CreateICmpULT(IndexVal, BoundVal)
                                 : Builder.CreateICmpULE(IndexVal, BoundVal);
-  EmitCheck(std::make_pair(Check, SanitizerKind::ArrayBounds), "out_of_bounds",
-            StaticData, Index);
+  EmitCheck(std::make_pair(Check, SanitizerKind::ArrayBounds),
+            SanitizerHandler::OutOfBounds, StaticData, Index);
 }
 
 
@@ -1219,11 +1224,10 @@ static bool hasBooleanRepresentation(QualType Ty) {
 
 static bool getRangeForType(CodeGenFunction &CGF, QualType Ty,
                             llvm::APInt &Min, llvm::APInt &End,
-                            bool StrictEnums) {
+                            bool StrictEnums, bool IsBool) {
   const EnumType *ET = Ty->getAs<EnumType>();
   bool IsRegularCPlusPlusEnum = CGF.getLangOpts().CPlusPlus && StrictEnums &&
                                 ET && !ET->getDecl()->isFixed();
-  bool IsBool = hasBooleanRepresentation(Ty);
   if (!IsBool && !IsRegularCPlusPlusEnum)
     return false;
 
@@ -1253,8 +1257,8 @@ static bool getRangeForType(CodeGenFunction &CGF, QualType Ty,
 
 llvm::MDNode *CodeGenFunction::getRangeForLoadFromType(QualType Ty) {
   llvm::APInt Min, End;
-  if (!getRangeForType(*this, Ty, Min, End,
-                       CGM.getCodeGenOpts().StrictEnums))
+  if (!getRangeForType(*this, Ty, Min, End, CGM.getCodeGenOpts().StrictEnums,
+                       hasBooleanRepresentation(Ty)))
     return nullptr;
 
   llvm::MDBuilder MDHelper(getLLVMContext());
@@ -1313,14 +1317,15 @@ llvm::Value *CodeGenFunction::EmitLoadOfScalar(Address Addr, bool Volatile,
                                       false /*ConvertTypeToTag*/);
   }
 
-  bool NeedsBoolCheck =
-      SanOpts.has(SanitizerKind::Bool) && hasBooleanRepresentation(Ty);
+  bool IsBool = hasBooleanRepresentation(Ty) ||
+                NSAPI(CGM.getContext()).isObjCBOOLType(Ty);
+  bool NeedsBoolCheck = SanOpts.has(SanitizerKind::Bool) && IsBool;
   bool NeedsEnumCheck =
       SanOpts.has(SanitizerKind::Enum) && Ty->getAs<EnumType>();
   if (NeedsBoolCheck || NeedsEnumCheck) {
     SanitizerScope SanScope(this);
     llvm::APInt Min, End;
-    if (getRangeForType(*this, Ty, Min, End, true)) {
+    if (getRangeForType(*this, Ty, Min, End, /*StrictEnums=*/true, IsBool)) {
       --End;
       llvm::Value *Check;
       if (!Min)
@@ -1338,8 +1343,8 @@ llvm::Value *CodeGenFunction::EmitLoadOfScalar(Address Addr, bool Volatile,
         EmitCheckTypeDescriptor(Ty)
       };
       SanitizerMask Kind = NeedsEnumCheck ? SanitizerKind::Enum : SanitizerKind::Bool;
-      EmitCheck(std::make_pair(Check, Kind), "load_invalid_value", StaticArgs,
-                EmitCheckValue(Load));
+      EmitCheck(std::make_pair(Check, Kind), SanitizerHandler::LoadInvalidValue,
+                StaticArgs, EmitCheckValue(Load));
     }
   } else if (CGM.getCodeGenOpts().OptimizationLevel > 0)
     if (llvm::MDNode *RangeInfo = getRangeForLoadFromType(Ty))
@@ -2499,17 +2504,35 @@ static CheckRecoverableKind getRecoverableKind(SanitizerMask Kind) {
   }
 }
 
+namespace {
+struct SanitizerHandlerInfo {
+  char const *const Name;
+  unsigned Version;
+};
+}
+
+const SanitizerHandlerInfo SanitizerHandlers[] = {
+#define SANITIZER_CHECK(Enum, Name, Version) {#Name, Version},
+    LIST_SANITIZER_CHECKS
+#undef SANITIZER_CHECK
+};
+
 static void emitCheckHandlerCall(CodeGenFunction &CGF,
                                  llvm::FunctionType *FnType,
                                  ArrayRef<llvm::Value *> FnArgs,
-                                 StringRef CheckName,
+                                 SanitizerHandler CheckHandler,
                                  CheckRecoverableKind RecoverKind, bool IsFatal,
                                  llvm::BasicBlock *ContBB) {
   assert(IsFatal || RecoverKind != CheckRecoverableKind::Unrecoverable);
   bool NeedsAbortSuffix =
       IsFatal && RecoverKind != CheckRecoverableKind::Unrecoverable;
-  std::string FnName = ("__ubsan_handle_" + CheckName +
-                        (NeedsAbortSuffix ? "_abort" : "")).str();
+  const SanitizerHandlerInfo &CheckInfo = SanitizerHandlers[CheckHandler];
+  const StringRef CheckName = CheckInfo.Name;
+  std::string FnName =
+      ("__ubsan_handle_" + CheckName +
+       (CheckInfo.Version ? "_v" + llvm::utostr(CheckInfo.Version) : "") +
+       (NeedsAbortSuffix ? "_abort" : ""))
+          .str();
   bool MayReturn =
       !IsFatal || RecoverKind == CheckRecoverableKind::AlwaysRecoverable;
 
@@ -2523,7 +2546,8 @@ static void emitCheckHandlerCall(CodeGenFunction &CGF,
   llvm::Value *Fn = CGF.CGM.CreateRuntimeFunction(
       FnType, FnName,
       llvm::AttributeSet::get(CGF.getLLVMContext(),
-                              llvm::AttributeSet::FunctionIndex, B));
+                              llvm::AttributeSet::FunctionIndex, B),
+      /*Local=*/true);
   llvm::CallInst *HandlerCall = CGF.EmitNounwindRuntimeCall(Fn, FnArgs);
   if (!MayReturn) {
     HandlerCall->setDoesNotReturn();
@@ -2535,10 +2559,13 @@ static void emitCheckHandlerCall(CodeGenFunction &CGF,
 
 void CodeGenFunction::EmitCheck(
     ArrayRef<std::pair<llvm::Value *, SanitizerMask>> Checked,
-    StringRef CheckName, ArrayRef<llvm::Constant *> StaticArgs,
+    SanitizerHandler CheckHandler, ArrayRef<llvm::Constant *> StaticArgs,
     ArrayRef<llvm::Value *> DynamicArgs) {
   assert(IsSanitizerScope);
   assert(Checked.size() > 0);
+  assert(CheckHandler >= 0 &&
+         CheckHandler < sizeof(SanitizerHandlers) / sizeof(*SanitizerHandlers));
+  const StringRef CheckName = SanitizerHandlers[CheckHandler].Name;
 
   llvm::Value *FatalCond = nullptr;
   llvm::Value *RecoverableCond = nullptr;
@@ -2618,7 +2645,7 @@ void CodeGenFunction::EmitCheck(
   if (!FatalCond || !RecoverableCond) {
     // Simple case: we need to generate a single handler call, either
     // fatal, or non-fatal.
-    emitCheckHandlerCall(*this, FnType, Args, CheckName, RecoverKind,
+    emitCheckHandlerCall(*this, FnType, Args, CheckHandler, RecoverKind,
                          (FatalCond != nullptr), Cont);
   } else {
     // Emit two handler calls: first one for set of unrecoverable checks,
@@ -2628,10 +2655,10 @@ void CodeGenFunction::EmitCheck(
     llvm::BasicBlock *FatalHandlerBB = createBasicBlock("fatal." + CheckName);
     Builder.CreateCondBr(FatalCond, NonFatalHandlerBB, FatalHandlerBB);
     EmitBlock(FatalHandlerBB);
-    emitCheckHandlerCall(*this, FnType, Args, CheckName, RecoverKind, true,
+    emitCheckHandlerCall(*this, FnType, Args, CheckHandler, RecoverKind, true,
                          NonFatalHandlerBB);
     EmitBlock(NonFatalHandlerBB);
-    emitCheckHandlerCall(*this, FnType, Args, CheckName, RecoverKind, false,
+    emitCheckHandlerCall(*this, FnType, Args, CheckHandler, RecoverKind, false,
                          Cont);
   }
 
@@ -2756,7 +2783,7 @@ void CodeGenFunction::EmitCfiCheckFail() {
     llvm::Value *Cond =
         Builder.CreateICmpNE(CheckKind, llvm::ConstantInt::get(Int8Ty, Kind));
     if (CGM.getLangOpts().Sanitize.has(Mask))
-      EmitCheck(std::make_pair(Cond, Mask), "cfi_check_fail", {},
+      EmitCheck(std::make_pair(Cond, Mask), SanitizerHandler::CFICheckFail, {},
                 {Data, Addr, ValidVtable});
     else
       EmitTrapCheck(Cond);
@@ -3522,7 +3549,7 @@ LValue CodeGenFunction::EmitInitListLValue(const InitListExpr *E) {
     return EmitAggExprToLValue(E);
 
   // An lvalue initializer list must be initializing a reference.
-  assert(E->getNumInits() == 1 && "reference init with multiple values");
+  assert(E->isTransparent() && "non-transparent glvalue init list");
   return EmitLValue(E->getInit(0));
 }
 
@@ -3755,6 +3782,8 @@ LValue CodeGenFunction::EmitCastLValue(const CastExpr *E) {
                                              ConvertType(E->getType()));
     return MakeAddrLValue(V, E->getType(), LV.getAlignmentSource());
   }
+  case CK_ZeroToOCLQueue:
+    llvm_unreachable("NULL to OpenCL queue lvalue cast is not valid");
   case CK_ZeroToOCLEvent:
     llvm_unreachable("NULL to OpenCL event lvalue cast is not valid");
   }
@@ -4126,7 +4155,7 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
         EmitCheckTypeDescriptor(CalleeType)
       };
       EmitCheck(std::make_pair(CalleeRTTIMatch, SanitizerKind::Function),
-                "function_type_mismatch", StaticData, CalleePtr);
+                SanitizerHandler::FunctionTypeMismatch, StaticData, CalleePtr);
 
       Builder.CreateBr(Cont);
       EmitBlock(Cont);
@@ -4159,7 +4188,7 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
                            CastedCallee, StaticData);
     } else {
       EmitCheck(std::make_pair(TypeTest, SanitizerKind::CFIICall),
-                "cfi_check_fail", StaticData,
+                SanitizerHandler::CFICheckFail, StaticData,
                 {CastedCallee, llvm::UndefValue::get(IntPtrTy)});
     }
   }

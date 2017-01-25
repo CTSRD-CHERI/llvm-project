@@ -62,6 +62,8 @@
 using namespace lldb;
 using namespace lldb_private;
 
+constexpr std::chrono::milliseconds EvaluateExpressionOptions::default_timeout;
+
 ConstString &Target::GetStaticBroadcasterClass() {
   static ConstString class_name("lldb.target");
   return class_name;
@@ -1552,11 +1554,9 @@ size_t Target::ReadMemory(const Address &addr, bool prefer_file_cache,
     if (load_addr == LLDB_INVALID_ADDRESS) {
       ModuleSP addr_module_sp(resolved_addr.GetModule());
       if (addr_module_sp && addr_module_sp->GetFileSpec())
-        error.SetErrorStringWithFormat(
-            "%s[0x%" PRIx64 "] can't be resolved, %s in not currently loaded",
-            addr_module_sp->GetFileSpec().GetFilename().AsCString("<Unknown>"),
-            resolved_addr.GetFileAddress(),
-            addr_module_sp->GetFileSpec().GetFilename().AsCString("<Unknonw>"));
+        error.SetErrorStringWithFormatv(
+            "{0:F}[{1:x+}] can't be resolved, {0:F} is not currently loaded",
+            addr_module_sp->GetFileSpec(), resolved_addr.GetFileAddress());
       else
         error.SetErrorStringWithFormat("0x%" PRIx64 " can't be resolved",
                                        resolved_addr.GetFileAddress());
@@ -2907,8 +2907,7 @@ Error Target::Launch(ProcessLaunchInfo &launch_info, Stream *stream) {
       }
 
       StateType state = m_process_sp->WaitForProcessToStop(
-          std::chrono::microseconds(0), nullptr, false, hijack_listener_sp,
-          nullptr);
+          llvm::None, nullptr, false, hijack_listener_sp, nullptr);
 
       if (state == eStateStopped) {
         if (!launch_info.GetFlags().Test(eLaunchFlagStopAtEntry)) {
@@ -2916,8 +2915,7 @@ Error Target::Launch(ProcessLaunchInfo &launch_info, Stream *stream) {
             error = m_process_sp->PrivateResume();
             if (error.Success()) {
               state = m_process_sp->WaitForProcessToStop(
-                  std::chrono::microseconds(0), nullptr, true,
-                  hijack_listener_sp, stream);
+                  llvm::None, nullptr, true, hijack_listener_sp, stream);
               const bool must_be_alive =
                   false; // eStateExited is ok, so this must be false
               if (!StateIsStoppedState(state, must_be_alive)) {
@@ -3041,8 +3039,7 @@ Error Target::Attach(ProcessAttachInfo &attach_info, Stream *stream) {
       process_sp->RestoreProcessEvents();
     } else {
       state = process_sp->WaitForProcessToStop(
-          std::chrono::microseconds(0), nullptr, false,
-          attach_info.GetHijackListener(), stream);
+          llvm::None, nullptr, false, attach_info.GetHijackListener(), stream);
       process_sp->RestoreProcessEvents();
 
       if (state != eStateStopped) {

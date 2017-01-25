@@ -1,4 +1,12 @@
+// define the module for __config outside of the top level 'std' module
+// since __config may be included from C headers which may create an
+// include cycle.
+module std_config [system] [extern_c] {
+    header "__config"
+}
+
 module std [system] {
+  export std_config
   // FIXME: The standard does not require that each of these submodules
   // re-exports its imported modules. We should provide an alternative form of
   // export that issues a warning if a name from the submodule is used, and
@@ -48,11 +56,15 @@ module std [system] {
     module stdint_h {
       header "stdint.h"
       export *
+      // FIXME: This module only exists on OS X and for some reason the
+      // wildcard above doesn't export it.
+      export Darwin.C.stdint
     }
     module stdio_h {
       // <stdio.h>'s __need_* macros require textual inclusion.
       textual header "stdio.h"
       export *
+      export Darwin.C.stdio
     }
     module stdlib_h {
       // <stdlib.h>'s __need_* macros require textual inclusion.
@@ -189,6 +201,7 @@ module std [system] {
     // FIXME: <cuchar> is missing.
     module cwchar {
       header "cwchar"
+      export depr.stdio_h
       export *
     }
     module cwctype {
@@ -202,6 +215,10 @@ module std [system] {
     export initializer_list
     export *
   }
+  module any {
+    header "any"
+    export *
+  }
   module array {
     header "array"
     export initializer_list
@@ -210,7 +227,6 @@ module std [system] {
   module atomic {
     header "atomic"
     export *
-    requires cplusplus11
   }
   module bitset {
     header "bitset"
@@ -329,6 +345,10 @@ module std [system] {
     header "numeric"
     export *
   }
+  module optional {
+    header "optional"
+    export *
+  }
   module ostream {
     header "ostream"
     // FIXME: should re-export ios, streambuf?
@@ -383,11 +403,19 @@ module std [system] {
   module string {
     header "string"
     export initializer_list
+    export string_view
+    export __string
+    export *
+  }
+  module string_view {
+    header "string_view"
+    export initializer_list
+    export __string
     export *
   }
   module strstream {
     header "strstream"
-    requires !cplusplus11
+    export *
   }
   module system_error {
     header "system_error"
@@ -433,16 +461,15 @@ module std [system] {
     export initializer_list
     export *
   }
+  module variant {
+    header "variant"
+    export *
+  }
   module vector {
     header "vector"
     export initializer_list
     export *
   }
-
-  // FIXME: We don't have modules for the <foo.h> headers, because they might
-  // be included from the C library's headers, and that would create a #include
-  // cycle. For the same reason, we don't have a module for __config.
-  //module __config { header "__config" export * }
 
   // FIXME: These should be private.
   module __bit_reference { header "__bit_reference" export * }
@@ -454,8 +481,126 @@ module std [system] {
   module __split_buffer { header "__split_buffer" export * }
   module __sso_allocator { header "__sso_allocator" export * }
   module __std_stream { header "__std_stream" export * }
+  module __string { header "__string" export * }
   module __tree { header "__tree" export * }
   module __tuple { header "__tuple" export * }
   module __undef_min_max { header "__undef_min_max" export * }
-  module __undef___deallocate { header "__undef___deallocate" export * }
+
+  module experimental {
+    requires cplusplus11
+
+    module algorithm {
+      header "experimental/algorithm"
+      export *
+    }
+    module any {
+      header "experimental/any"
+      export *
+    }
+    module chrono {
+      header "experimental/chrono"
+      export *
+    }
+    module deque {
+      header "experimental/deque"
+      export *
+    }
+    module dynarray {
+      header "experimental/dynarray"
+      export *
+    }
+    module filesystem {
+      header "experimental/filesystem"
+      export *
+    }
+    module forward_list {
+      header "experimental/forward_list"
+      export *
+    }
+    module functional {
+      header "experimental/functional"
+      export *
+    }
+    module iterator {
+      header "experimental/iterator"
+      export *
+    }
+    module list {
+      header "experimental/list"
+      export *
+    }
+    module map {
+      header "experimental/map"
+      export *
+    }
+    module memory_resource {
+      header "experimental/memory_resource"
+      export *
+    }
+    module numeric {
+      header "experimental/numeric"
+      export *
+    }
+    module optional {
+      header "experimental/optional"
+      export *
+    }
+    module propagate_const {
+      header "experimental/propagate_const"
+      export *
+    }
+    module ratio {
+      header "experimental/ratio"
+      export *
+    }
+    module regex {
+      header "experimental/regex"
+      export *
+    }
+    module set {
+      header "experimental/set"
+      export *
+    }
+    module string {
+      header "experimental/string"
+      export *
+    }
+    module string_view {
+      header "experimental/string_view"
+      export *
+    }
+    module system_error {
+      header "experimental/system_error"
+      export *
+    }
+    module tuple {
+      header "experimental/tuple"
+      export *
+    }
+    module type_traits {
+      header "experimental/type_traits"
+      export *
+    }
+    module unordered_map {
+      header "experimental/unordered_map"
+      export *
+    }
+    module unordered_set {
+      header "experimental/unordered_set"
+      export *
+    }
+    module utility {
+      header "experimental/utility"
+      export *
+    }
+    module vector {
+      header "experimental/vector"
+      export *
+    }
+    // FIXME these should be private
+    module __memory {
+      header "experimental/__memory"
+      export *
+    }
+  } // end experimental
 }

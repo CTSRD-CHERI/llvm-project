@@ -143,7 +143,44 @@ static inline CXTranslationUnit GetTU(CXType CT) {
   return static_cast<CXTranslationUnit>(CT.data[1]);
 }
 
-extern "C" {
+static Optional<ArrayRef<TemplateArgument>>
+GetTemplateArguments(QualType Type) {
+  assert(!Type.isNull());
+  if (const auto *Specialization = Type->getAs<TemplateSpecializationType>())
+    return Specialization->template_arguments();
+
+  if (const auto *RecordDecl = Type->getAsCXXRecordDecl()) {
+    const auto *TemplateDecl =
+      dyn_cast<ClassTemplateSpecializationDecl>(RecordDecl);
+    if (TemplateDecl)
+      return TemplateDecl->getTemplateArgs().asArray();
+  }
+
+  return None;
+}
+
+static Optional<QualType> TemplateArgumentToQualType(const TemplateArgument &A) {
+  if (A.getKind() == TemplateArgument::Type)
+    return A.getAsType();
+  return None;
+}
+
+static Optional<QualType>
+FindTemplateArgumentTypeAt(ArrayRef<TemplateArgument> TA, unsigned index) {
+  unsigned current = 0;
+  for (const auto &A : TA) {
+    if (A.getKind() == TemplateArgument::Pack) {
+      if (index < current + A.pack_size())
+        return TemplateArgumentToQualType(A.getPackAsArray()[index - current]);
+      current += A.pack_size();
+      continue;
+    }
+    if (current == index)
+      return TemplateArgumentToQualType(A);
+    current++;
+  }
+  return None;
+}
 
 CXType clang_getCursorType(CXCursor C) {
   using namespace cxcursor;
@@ -902,12 +939,11 @@ CXString clang_getDeclObjCTypeEncoding(CXCursor C) {
   std::string encoding;
 
   if (const ObjCMethodDecl *OMD = dyn_cast<ObjCMethodDecl>(D))  {
-    if (Ctx.getObjCEncodingForMethodDecl(OMD, encoding))
-      return cxstring::createRef("?");
+    encoding = Ctx.getObjCEncodingForMethodDecl(OMD);
   } else if (const ObjCPropertyDecl *OPD = dyn_cast<ObjCPropertyDecl>(D))
-    Ctx.getObjCEncodingForPropertyDecl(OPD, nullptr, encoding);
+    encoding = Ctx.getObjCEncodingForPropertyDecl(OPD, nullptr);
   else if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D))
-    Ctx.getObjCEncodingForFunctionDecl(FD, encoding);
+    encoding = Ctx.getObjCEncodingForFunctionDecl(FD);
   else {
     QualType Ty;
     if (const TypeDecl *TD = dyn_cast<TypeDecl>(D))
@@ -921,33 +957,37 @@ CXString clang_getDeclObjCTypeEncoding(CXCursor C) {
   return cxstring::createDup(encoding);
 }
 
+static unsigned GetTemplateArgumentArraySize(ArrayRef<TemplateArgument> TA) {
+  unsigned size = TA.size();
+  for (const auto &Arg : TA)
+    if (Arg.getKind() == TemplateArgument::Pack)
+      size += Arg.pack_size() - 1;
+  return size;
+}
+
 int clang_Type_getNumTemplateArguments(CXType CT) {
   QualType T = GetQualType(CT);
   if (T.isNull())
     return -1;
-  const TemplateSpecializationType *Specialization =
-    T->getAs<TemplateSpecializationType>();
-  if (!Specialization)
+
+  auto TA = GetTemplateArguments(T);
+  if (!TA)
     return -1;
-  return Specialization->template_arguments().size();
+
+  return GetTemplateArgumentArraySize(TA.getValue());
 }
 
-CXType clang_Type_getTemplateArgumentAsType(CXType CT, unsigned i) {
+CXType clang_Type_getTemplateArgumentAsType(CXType CT, unsigned index) {
   QualType T = GetQualType(CT);
   if (T.isNull())
     return MakeCXType(QualType(), GetTU(CT));
 
-  const TemplateSpecializationType *Specialization =
-    T->getAs<TemplateSpecializationType>();
-  if (!Specialization)
+  auto TA = GetTemplateArguments(T);
+  if (!TA)
     return MakeCXType(QualType(), GetTU(CT));
-  auto TA = Specialization->template_arguments();
-  if (TA.size() <= i)
-    return MakeCXType(QualType(), GetTU(CT));
-  const TemplateArgument &A = TA[i];
-  if (A.getKind() != TemplateArgument::Type)
-    return MakeCXType(QualType(), GetTU(CT));
-  return MakeCXType(A.getAsType(), GetTU(CT));
+
+  Optional<QualType> QT = FindTemplateArgumentTypeAt(TA.getValue(), index);
+  return MakeCXType(QT.getValueOr(QualType()), GetTU(CT));
 }
 
 unsigned clang_Type_visitFields(CXType PT,
@@ -996,5 +1036,3 @@ CXType clang_Type_getNamedType(CXType CT){
 
   return MakeCXType(QualType(), GetTU(CT));
 }
-
-} // end: extern "C"

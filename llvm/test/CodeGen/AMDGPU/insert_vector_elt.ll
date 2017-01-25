@@ -1,5 +1,5 @@
 ; RUN: llc -verify-machineinstrs -march=amdgcn -mattr=+max-private-element-size-16 < %s | FileCheck -check-prefix=GCN -check-prefix=SI %s
-; RUN: llc -verify-machineinstrs -march=amdgcn -mcpu=tonga -mattr=+max-private-element-size-16 < %s | FileCheck -check-prefix=GCN -check-prefix=SI %s
+; RUN: llc -verify-machineinstrs -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -mattr=+max-private-element-size-16 < %s | FileCheck -check-prefix=GCN -check-prefix=SI %s
 
 ; FIXME: Broken on evergreen
 ; FIXME: For some reason the 8 and 16 vectors are being stored as
@@ -207,13 +207,15 @@ define void @dynamic_insertelement_v3i16(<3 x i16> addrspace(1)* %out, <3 x i16>
 ; GCN: buffer_load_ushort v{{[0-9]+}}, off
 ; GCN: buffer_load_ushort v{{[0-9]+}}, off
 
-; GCN: v_mov_b32_e32 [[BASE_FI:v[0-9]+]], 0{{$}}
+; GCN-DAG: v_mov_b32_e32 [[BASE_FI:v[0-9]+]], 0{{$}}
+; GCN-DAG: s_and_b32 [[MASK_IDX:s[0-9]+]], s{{[0-9]+}}, 3{{$}}
+; GCN-DAG: v_or_b32_e32 [[IDX:v[0-9]+]], [[MASK_IDX]], [[BASE_FI]]{{$}}
 
 ; GCN-DAG: buffer_store_short v{{[0-9]+}}, off, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}} offset:6
 ; GCN-DAG: buffer_store_short v{{[0-9]+}}, off, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}} offset:4
 ; GCN-DAG: buffer_store_short v{{[0-9]+}}, off, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}} offset:2
-; GCN-DAG: buffer_store_short v{{[0-9]+}}, [[BASE_FI]], s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}} offen{{$}}
-; GCN: buffer_store_short v{{[0-9]+}}, v{{[0-9]+}}, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}} offen{{$}}
+; GCN-DAG: buffer_store_short v{{[0-9]+}}, off, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+$}}
+; GCN: buffer_store_short v{{[0-9]+}}, [[IDX]], s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}} offen{{$}}
 
 ; GCN: s_waitcnt
 
@@ -234,7 +236,7 @@ define void @dynamic_insertelement_v4i16(<4 x i16> addrspace(1)* %out, <4 x i16>
 ; GCN: buffer_load_ubyte v{{[0-9]+}}, off
 
 ; GCN-DAG: buffer_store_byte v{{[0-9]+}}, off, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}} offset:1
-; GCN-DAG: buffer_store_byte v{{[0-9]+}}, v{{[0-9]+}}, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}} offen{{$}}
+; GCN-DAG: buffer_store_byte v{{[0-9]+}}, off, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}}{{$}}
 
 ; GCN: buffer_store_byte v{{[0-9]+}}, v{{[0-9]+}}, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}} offen{{$}}
 
@@ -253,9 +255,9 @@ define void @dynamic_insertelement_v2i8(<2 x i8> addrspace(1)* %out, <2 x i8> %a
 ; GCN: buffer_load_ubyte v{{[0-9]+}}, off
 ; GCN: buffer_load_ubyte v{{[0-9]+}}, off
 
-; GCN-DAG: buffer_store_byte v{{[0-9]+}}, v{{[0-9]+}}, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}} offen offset:2
+; GCN-DAG: buffer_store_byte v{{[0-9]+}}, off, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}} offset:2
 ; GCN-DAG: buffer_store_byte v{{[0-9]+}}, off, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}} offset:1
-; GCN-DAG: buffer_store_byte v{{[0-9]+}}, v{{[0-9]+}}, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}} offen{{$}}
+; GCN-DAG: buffer_store_byte v{{[0-9]+}}, off, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}}{{$}}
 
 ; GCN: buffer_store_byte v{{[0-9]+}}, v{{[0-9]+}}, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}} offen{{$}}
 
@@ -280,7 +282,7 @@ define void @dynamic_insertelement_v3i8(<3 x i8> addrspace(1)* %out, <3 x i8> %a
 ; GCN-DAG: buffer_store_byte v{{[0-9]+}}, off, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}} offset:3
 ; GCN-DAG: buffer_store_byte v{{[0-9]+}}, off, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}} offset:2
 ; GCN-DAG: buffer_store_byte v{{[0-9]+}}, off, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}} offset:1
-; GCN-DAG: buffer_store_byte v{{[0-9]+}}, v{{[0-9]+}}, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}} offen{{$}}
+; GCN-DAG: buffer_store_byte v{{[0-9]+}}, off, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}}{{$}}
 
 ; GCN: buffer_store_byte v{{[0-9]+}}, v{{[0-9]+}}, s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}} offen{{$}}
 
@@ -394,15 +396,15 @@ define void @dynamic_insertelement_v3i64(<3 x i64> addrspace(1)* %out, <3 x i64>
 
 ; Stack store
 
-; GCN-DAG: buffer_store_dwordx4 v{{\[[0-9]+:[0-9]+\]}}, v{{[0-9]+}}, s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}}
+; GCN-DAG: buffer_store_dwordx4 v{{\[[0-9]+:[0-9]+\]}}, off, s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}}{{$}}
 ; GCN-DAG: buffer_store_dwordx4 v{{\[[0-9]+:[0-9]+\]}}, off, s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}} offset:16{{$}}
 
 ; Write element
 ; GCN: buffer_store_dwordx2 v{{\[[0-9]+:[0-9]+\]}}, v{{[0-9]+}}, s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}} offen{{$}}
 
 ; Stack reload
-; GCN-DAG: buffer_load_dwordx4 v{{\[[0-9]+:[0-9]+\]}}, v{{[0-9]+}}, s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}} offen offset:16{{$}}
-; GCN-DAG: buffer_load_dwordx4 v{{\[[0-9]+:[0-9]+\]}}, v{{[0-9]+}}, s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}} offen{{$}}
+; GCN-DAG: buffer_load_dwordx4 v{{\[[0-9]+:[0-9]+\]}}, off, s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}} offset:16{{$}}
+; GCN-DAG: buffer_load_dwordx4 v{{\[[0-9]+:[0-9]+\]}}, off, s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}}{{$}}
 
 ; Store result
 ; GCN: buffer_store_dwordx4
@@ -419,21 +421,17 @@ define void @dynamic_insertelement_v4f64(<4 x double> addrspace(1)* %out, <4 x d
 ; GCN-LABEL: {{^}}dynamic_insertelement_v8f64:
 ; GCN-DAG: SCRATCH_RSRC_DWORD
 
-; FIXME: Should be able to eliminate this?
-
 ; GCN-DAG: buffer_store_dwordx4 v{{\[[0-9]+:[0-9]+\]}}, off, s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}} offset:16{{$}}
 ; GCN-DAG: buffer_store_dwordx4 v{{\[[0-9]+:[0-9]+\]}}, off, s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}} offset:32{{$}}
 ; GCN-DAG: buffer_store_dwordx4 v{{\[[0-9]+:[0-9]+\]}}, off, s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}} offset:48{{$}}
-
-; GCN-DAG: v_mov_b32_e32 [[BASE_FI0:v[0-9]+]], 0{{$}}
-; GCN: buffer_store_dwordx4 v{{\[[0-9]+:[0-9]+\]}}, [[BASE_FI0]], s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}} offen{{$}}
+; GCN: buffer_store_dwordx4 v{{\[[0-9]+:[0-9]+\]}}, off, s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}}{{$}}
 
 ; GCN: buffer_store_dwordx2 v{{\[[0-9]+:[0-9]+\]}}, v{{[0-9]+}}, s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}} offen{{$}}
 
-; GCN-DAG: buffer_load_dwordx4 v{{\[[0-9]+:[0-9]+\]}}, [[BASE_FI0]], s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}} offen offset:16{{$}}
-; GCN-DAG: buffer_load_dwordx4 v{{\[[0-9]+:[0-9]+\]}}, [[BASE_FI0]], s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}} offen{{$}}
-; GCN-DAG: buffer_load_dwordx4 v{{\[[0-9]+:[0-9]+\]}}, [[BASE_FI0]], s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}} offen offset:16{{$}}
-; GCN-DAG: buffer_load_dwordx4 v{{\[[0-9]+:[0-9]+\]}}, [[BASE_FI0]], s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}} offen{{$}}
+; GCN-DAG: buffer_load_dwordx4 v{{\[[0-9]+:[0-9]+\]}}, off, s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}} offset:48{{$}}
+; GCN-DAG: buffer_load_dwordx4 v{{\[[0-9]+:[0-9]+\]}}, off, s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}} offset:32{{$}}
+; GCN-DAG: buffer_load_dwordx4 v{{\[[0-9]+:[0-9]+\]}}, off, s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}} offset:16{{$}}
+; GCN-DAG: buffer_load_dwordx4 v{{\[[0-9]+:[0-9]+\]}}, off, s{{\[[0-9]+:[0-9]+\]}}, {{s[0-9]+}}{{$}}
 
 ; GCN: buffer_store_dwordx4
 ; GCN: buffer_store_dwordx4

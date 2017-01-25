@@ -9,11 +9,11 @@
 # REQUIRES: mips
 
 # CHECK:      Contents of section .eh_frame_hdr:
-# CHECK-NEXT:  10178 011b033b ffffffcc 00000001 0000fe88
-#                                               ^-- 0x20000 - 0x10178
+# CHECK-NEXT:  10128 011b033b 00000010 00000001 0000fed8
+#                                               ^-- 0x20000 - 0x10138
 #                                                   .text   - .eh_frame_hdr
-# CHECK-NEXT:  10188 ffffffe8
-# CHECK-NEXT: Contents of section .text:
+# CHECK-NEXT:  10138 0000002c
+# CHECK:      Contents of section .text:
 # CHECK-NEXT:  20000 00000000
 
 # CHECK: Augmentation:          "zLR"

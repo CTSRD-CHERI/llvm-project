@@ -30,6 +30,22 @@
 #include "sanitizer_procmaps.h"
 #include "sanitizer_stacktrace.h"
 #include "sanitizer_symbolizer.h"
+#include "sanitizer_win_defs.h"
+
+// A macro to tell the compiler that this part of the code cannot be reached,
+// if the compiler supports this feature. Since we're using this in
+// code that is called when terminating the process, the expansion of the
+// macro should not terminate the process to avoid infinite recursion.
+#if defined(__clang__)
+# define BUILTIN_UNREACHABLE() __builtin_unreachable()
+#elif defined(__GNUC__) && \
+    (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 5))
+# define BUILTIN_UNREACHABLE() __builtin_unreachable()
+#elif defined(_MSC_VER)
+# define BUILTIN_UNREACHABLE() __assume(0)
+#else
+# define BUILTIN_UNREACHABLE()
+#endif
 
 namespace __sanitizer {
 
@@ -234,8 +250,7 @@ bool MprotectNoAccess(uptr addr, uptr size) {
   return VirtualProtect((LPVOID)addr, size, PAGE_NOACCESS, &old_protection);
 }
 
-
-void ReleaseMemoryToOS(uptr addr, uptr size) {
+void ReleaseMemoryPagesToOS(uptr beg, uptr end) {
   // This is almost useless on 32-bits.
   // FIXME: add madvise-analog when we move to 64-bits.
 }
@@ -373,6 +388,8 @@ void DumpProcessMap() {
   }
 }
 #endif
+
+void PrintModuleMap() { }
 
 void DisableCoreDumperIfNecessary() {
   // Do nothing.
@@ -660,6 +677,7 @@ void internal__exit(int exitcode) {
   if (::IsDebuggerPresent())
     __debugbreak();
   TerminateProcess(GetCurrentProcess(), exitcode);
+  BUILTIN_UNREACHABLE();
 }
 
 uptr internal_ftruncate(fd_t fd, uptr size) {
@@ -872,6 +890,10 @@ SignalContext SignalContext::Create(void *siginfo, void *context) {
                        write_flag);
 }
 
+void SignalContext::DumpAllRegisters(void *context) {
+  // FIXME: Implement this.
+}
+
 uptr ReadBinaryName(/*out*/char *buf, uptr buf_len) {
   // FIXME: Actually implement this function.
   CHECK_GT(buf_len, 0);
@@ -925,11 +947,8 @@ void GetMemoryProfile(fill_profile_f cb, uptr *stats, uptr stats_size) { }
 // of null.
 extern "C" void __sanitizer_print_memory_profile(int top_percent) {}
 
-#ifdef _WIN64
-#pragma comment(linker, "/alternatename:__sanitizer_print_memory_profile=__sanitizer_default_print_memory_profile") // NOLINT
-#else
-#pragma comment(linker, "/alternatename:___sanitizer_print_memory_profile=___sanitizer_default_print_memory_profile") // NOLINT
-#endif
+WIN_WEAK_ALIAS(__sanitizer_print_memory_profile,
+               __sanitizer_default_print_memory_profile)
 #endif
 
 #endif  // _WIN32

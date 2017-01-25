@@ -14,7 +14,7 @@
 #include "llvm/Support/Error.h"
 
 #include "llvm/DebugInfo/PDB/PDBTypes.h"
-#include "llvm/DebugInfo/PDB/Raw/NameMapBuilder.h"
+#include "llvm/DebugInfo/PDB/Raw/NamedStreamMap.h"
 #include "llvm/DebugInfo/PDB/Raw/PDBFile.h"
 #include "llvm/DebugInfo/PDB/Raw/RawConstants.h"
 
@@ -25,10 +25,11 @@ class StreamWriter;
 }
 namespace pdb {
 class PDBFile;
+class NamedStreamMap;
 
 class InfoStreamBuilder {
 public:
-  InfoStreamBuilder(msf::MSFBuilder &Msf);
+  InfoStreamBuilder(msf::MSFBuilder &Msf, NamedStreamMap &NamedStreams);
   InfoStreamBuilder(const InfoStreamBuilder &) = delete;
   InfoStreamBuilder &operator=(const InfoStreamBuilder &) = delete;
 
@@ -37,13 +38,9 @@ public:
   void setAge(uint32_t A);
   void setGuid(PDB_UniqueId G);
 
-  NameMapBuilder &getNamedStreamsBuilder();
-
-  uint32_t calculateSerializedLength() const;
+  uint32_t finalize();
 
   Error finalizeMsfLayout();
-
-  Expected<std::unique_ptr<InfoStream>> build(PDBFile &File);
 
   Error commit(const msf::MSFLayout &Layout,
                const msf::WritableStream &Buffer) const;
@@ -56,7 +53,7 @@ private:
   uint32_t Age;
   PDB_UniqueId Guid;
 
-  NameMapBuilder NamedStreams;
+  NamedStreamMap &NamedStreams;
 };
 }
 }

@@ -933,8 +933,8 @@ bool Sema::ActOnCXXNestedNameSpecifier(Scope *S,
 
   // We were able to resolve the template name to an actual template. 
   // Build an appropriate nested-name-specifier.
-  QualType T = CheckTemplateIdType(Template.get(), TemplateNameLoc, 
-                                   TemplateArgs);
+  QualType T =
+      CheckTemplateIdType(Template.get(), TemplateNameLoc, TemplateArgs);
   if (T.isNull())
     return true;
 
@@ -1000,6 +1000,11 @@ void Sema::RestoreNestedNameSpecifierAnnotation(void *AnnotationPtr,
 
 bool Sema::ShouldEnterDeclaratorScope(Scope *S, const CXXScopeSpec &SS) {
   assert(SS.isSet() && "Parser passed invalid CXXScopeSpec.");
+
+  // Don't enter a declarator context when the current context is an Objective-C
+  // declaration.
+  if (isa<ObjCContainerDecl>(CurContext) || isa<ObjCMethodDecl>(CurContext))
+    return false;
 
   NestedNameSpecifier *Qualifier = SS.getScopeRep();
 

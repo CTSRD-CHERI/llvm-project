@@ -445,7 +445,7 @@ bool MipsFastISel::computeAddress(const Value *Obj, Address &Addr) {
     for (User::const_op_iterator i = U->op_begin() + 1, e = U->op_end(); i != e;
          ++i, ++GTI) {
       const Value *Op = *i;
-      if (StructType *STy = dyn_cast<StructType>(*GTI)) {
+      if (StructType *STy = GTI.getStructTypeOrNull()) {
         const StructLayout *SL = DL.getStructLayout(STy);
         unsigned Idx = cast<ConstantInt>(Op)->getZExtValue();
         TmpOffset += SL->getElementOffset(Idx);
@@ -698,8 +698,8 @@ bool MipsFastISel::emitCmp(unsigned ResultReg, const CmpInst *CI) {
     unsigned RegWithOne = createResultReg(&Mips::GPR32RegClass);
     emitInst(Mips::ADDiu, RegWithZero).addReg(Mips::ZERO).addImm(0);
     emitInst(Mips::ADDiu, RegWithOne).addReg(Mips::ZERO).addImm(1);
-    emitInst(Opc).addReg(LeftReg).addReg(RightReg).addReg(
-        Mips::FCC0, RegState::ImplicitDefine);
+    emitInst(Opc).addReg(Mips::FCC0, RegState::Define).addReg(LeftReg)
+                 .addReg(RightReg);
     emitInst(CondMovOpc, ResultReg)
         .addReg(RegWithOne)
         .addReg(Mips::FCC0)

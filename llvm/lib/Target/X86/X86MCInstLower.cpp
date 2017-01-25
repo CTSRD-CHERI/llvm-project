@@ -16,6 +16,7 @@
 #include "X86RegisterInfo.h"
 #include "X86ShuffleDecodeConstantPool.h"
 #include "InstPrinter/X86ATTInstPrinter.h"
+#include "InstPrinter/X86InstComments.h"
 #include "MCTargetDesc/X86BaseInfo.h"
 #include "Utils/X86ShuffleDecode.h"
 #include "llvm/ADT/Optional.h"
@@ -41,6 +42,7 @@
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCSymbolELF.h"
 #include "llvm/MC/MCSectionELF.h"
+#include "llvm/MC/MCSectionMachO.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/ELF.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
@@ -1113,49 +1115,6 @@ void X86AsmPrinter::LowerPATCHABLE_TAIL_CALL(const MachineInstr &MI, X86MCInstLo
   OutStreamer->EmitInstruction(TC, getSubtargetInfo());
 }
 
-void X86AsmPrinter::EmitXRayTable() {
-  if (Sleds.empty())
-    return;
-  if (Subtarget->isTargetELF()) {
-    auto PrevSection = OutStreamer->getCurrentSectionOnly();
-    auto Fn = MF->getFunction();
-    MCSection *Section = nullptr;
-    if (Fn->hasComdat()) {
-      Section = OutContext.getELFSection("xray_instr_map", ELF::SHT_PROGBITS,
-                                         ELF::SHF_ALLOC | ELF::SHF_GROUP, 0,
-                                         Fn->getComdat()->getName());
-    } else {
-      Section = OutContext.getELFSection("xray_instr_map", ELF::SHT_PROGBITS,
-                                         ELF::SHF_ALLOC);
-    }
-
-    // Before we switch over, we force a reference to a label inside the
-    // xray_instr_map section. Since EmitXRayTable() is always called just
-    // before the function's end, we assume that this is happening after the
-    // last return instruction.
-    //
-    // We then align the reference to 16 byte boundaries, which we determined
-    // experimentally to be beneficial to avoid causing decoder stalls.
-    MCSymbol *Tmp = OutContext.createTempSymbol("xray_synthetic_", true);
-    OutStreamer->EmitCodeAlignment(16);
-    OutStreamer->EmitSymbolValue(Tmp, 8, false);
-    OutStreamer->SwitchSection(Section);
-    OutStreamer->EmitLabel(Tmp);
-    for (const auto &Sled : Sleds) {
-      OutStreamer->EmitSymbolValue(Sled.Sled, 8);
-      OutStreamer->EmitSymbolValue(CurrentFnSym, 8);
-      auto Kind = static_cast<uint8_t>(Sled.Kind);
-      OutStreamer->EmitBytes(
-          StringRef(reinterpret_cast<const char *>(&Kind), 1));
-      OutStreamer->EmitBytes(
-          StringRef(reinterpret_cast<const char *>(&Sled.AlwaysInstrument), 1));
-      OutStreamer->EmitZeros(14);
-    }
-    OutStreamer->SwitchSection(PrevSection);
-  }
-  Sleds.clear();
-}
-
 // Returns instruction preceding MBBI in MachineFunction.
 // If MBBI is the first instruction of the first basic block, returns null.
 static MachineBasicBlock::const_iterator
@@ -1281,6 +1240,13 @@ static std::string getShuffleComment(const MachineInstr *MI,
 void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   X86MCInstLower MCInstLowering(*MF, *this);
   const X86RegisterInfo *RI = MF->getSubtarget<X86Subtarget>().getRegisterInfo();
+
+  // Add a comment about EVEX-2-VEX compression for AVX-512 instrs that
+  // are compressed from EVEX encoding to VEX encoding.
+  if (TM.Options.MCOptions.ShowMCEncoding) {
+    if (MI->getAsmPrinterFlags() & AC_EVEX_2_VEX)
+      OutStreamer->AddComment("EVEX TO VEX Compression ", false);
+  }
 
   switch (MI->getOpcode()) {
   case TargetOpcode::DBG_VALUE:
@@ -1539,7 +1505,7 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
 
     const MachineOperand &MaskOp = MI->getOperand(MaskIdx);
     if (auto *C = getConstantFromPool(*MI, MaskOp)) {
-      SmallVector<int, 16> Mask;
+      SmallVector<int, 64> Mask;
       DecodePSHUFBMask(C, Mask);
       if (!Mask.empty())
         OutStreamer->AddComment(getShuffleComment(MI, SrcIdx, SrcIdx, Mask));
@@ -1697,7 +1663,8 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   CASE_ALL_MOV_RM()
     if (!OutStreamer->isVerboseAsm())
       break;
-    if (MI->getNumOperands() > 4)
+    if (MI->getNumOperands() <= 4)
+      break;
     if (auto *C = getConstantFromPool(*MI, MI->getOperand(4))) {
       std::string Comment;
       raw_string_ostream CS(Comment);

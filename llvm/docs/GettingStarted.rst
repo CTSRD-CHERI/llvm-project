@@ -52,6 +52,12 @@ Here's the short story for getting up and running quickly with LLVM:
    * ``cd llvm/tools``
    * ``svn co http://llvm.org/svn/llvm-project/cfe/trunk clang``
 
+#. Checkout LLD linker **[Optional]**:
+
+   * ``cd where-you-want-llvm-to-live``
+   * ``cd llvm/tools``
+   * ``svn co http://llvm.org/svn/llvm-project/lld/trunk lld``
+
 #. Checkout Compiler-RT (required to build the sanitizers) **[Optional]**:
 
    * ``cd where-you-want-llvm-to-live``
@@ -262,7 +268,7 @@ our build systems:
 
 * Clang 3.1
 * GCC 4.8
-* Visual Studio 2015
+* Visual Studio 2015 (Update 3)
 
 Anything older than these toolchains *may* work, but will require forcing the
 build system with a special option and is not really a supported host platform.
@@ -719,7 +725,7 @@ Or a combination of multiple projects:
 
   % cd $TOP_LEVEL_DIR
   % mkdir clang-build && cd clang-build
-  % cmake -GNinja ../llvm-project/llvm -DLLVM_ENABLE_PROJECTS="clang;libcxx;compiler-rt"
+  % cmake -GNinja ../llvm-project/llvm -DLLVM_ENABLE_PROJECTS="clang;libcxx;libcxxabi"
 
 A helper script is provided in `llvm/utils/git-svn/git-llvm`. After you add it
 to your path, you can push committed changes upstream with `git llvm push`.
@@ -732,9 +738,20 @@ to your path, you can push committed changes upstream with `git llvm push`.
 While this is using SVN under the hood, it does not require any interaction from
 you with git-svn.
 After a few minutes, `git pull` should get back the changes as they were
-commited. Note that a current limitation is that `git` does not directly record
+committed. Note that a current limitation is that `git` does not directly record
 file rename, and thus it is propagated to SVN as a combination of delete-add
 instead of a file rename.
+
+If you are using `arc` to interact with Phabricator, you need to manually put it
+at the root of the checkout:
+
+.. code-block:: console
+
+  % cd $TOP_LEVEL_DIR
+  % cp llvm/.arcconfig ./
+  % mkdir -p .git/info/
+  % echo .arcconfig >> .git/info/exclude
+
 
 Local LLVM Configuration
 ------------------------

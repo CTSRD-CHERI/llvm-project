@@ -45,6 +45,18 @@ OptimizationRemarkEmitter::OptimizationRemarkEmitter(Function *F)
   BFI = OwnedBFI.get();
 }
 
+bool OptimizationRemarkEmitter::invalidate(
+    Function &F, const PreservedAnalyses &PA,
+    FunctionAnalysisManager::Invalidator &Inv) {
+  // This analysis has no state and so can be trivially preserved but it needs
+  // a fresh view of BFI if it was constructed with one.
+  if (BFI && Inv.invalidate<BlockFrequencyAnalysis>(F, PA))
+    return true;
+
+  // Otherwise this analysis result remains valid.
+  return false;
+}
+
 Optional<uint64_t> OptimizationRemarkEmitter::computeHotness(const Value *V) {
   if (!BFI)
     return None;
@@ -237,7 +249,7 @@ void OptimizationRemarkEmitterWrapperPass::getAnalysisUsage(
   AU.setPreservesAll();
 }
 
-char OptimizationRemarkEmitterAnalysis::PassID;
+AnalysisKey OptimizationRemarkEmitterAnalysis::Key;
 
 OptimizationRemarkEmitter
 OptimizationRemarkEmitterAnalysis::run(Function &F,

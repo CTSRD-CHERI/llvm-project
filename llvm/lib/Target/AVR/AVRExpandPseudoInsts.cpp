@@ -21,9 +21,12 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/Target/TargetRegisterInfo.h"
 
 using namespace llvm;
+
+#define AVR_EXPAND_PSEUDO_NAME "AVR pseudo instruction expansion pass"
 
 namespace {
 
@@ -33,13 +36,13 @@ class AVRExpandPseudo : public MachineFunctionPass {
 public:
   static char ID;
 
-  AVRExpandPseudo() : MachineFunctionPass(ID) {}
+  AVRExpandPseudo() : MachineFunctionPass(ID) {
+    initializeAVRExpandPseudoPass(*PassRegistry::getPassRegistry());
+  }
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
-  StringRef getPassName() const override {
-    return "AVR pseudo instruction expansion pass";
-  }
+  StringRef getPassName() const override { return AVR_EXPAND_PSEUDO_NAME; }
 
 private:
   typedef MachineBasicBlock Block;
@@ -71,6 +74,7 @@ private:
   bool expandArith(unsigned OpLo, unsigned OpHi, Block &MBB, BlockIt MBBI);
   bool expandLogic(unsigned Op, Block &MBB, BlockIt MBBI);
   bool expandLogicImm(unsigned Op, Block &MBB, BlockIt MBBI);
+  bool isLogicImmOpRedundant(unsigned Op, unsigned ImmVal) const;
 
   template<typename Func>
   bool expandAtomic(Block &MBB, BlockIt MBBI, Func f);
@@ -107,6 +111,9 @@ bool AVRExpandPseudo::runOnMachineFunction(MachineFunction &MF) {
   const AVRSubtarget &STI = MF.getSubtarget<AVRSubtarget>();
   TRI = STI.getRegisterInfo();
   TII = STI.getInstrInfo();
+
+  // We need to track liveness in order to use register scavenging.
+  MF.getProperties().set(MachineFunctionProperties::Property::TracksLiveness);
 
   for (Block &MBB : MF) {
     bool ContinueExpanding = true;
@@ -194,6 +201,20 @@ expandLogic(unsigned Op, Block &MBB, BlockIt MBBI) {
 }
 
 bool AVRExpandPseudo::
+  isLogicImmOpRedundant(unsigned Op, unsigned ImmVal) const {
+
+  // ANDI Rd, 0xff is redundant.
+  if (Op == AVR::ANDIRdK && ImmVal == 0xff)
+    return true;
+
+  // ORI Rd, 0x0 is redundant.
+  if (Op == AVR::ORIRdK && ImmVal == 0x0)
+    return true;
+
+  return false;
+}
+
+bool AVRExpandPseudo::
 expandLogicImm(unsigned Op, Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
   unsigned DstLoReg, DstHiReg;
@@ -206,21 +227,25 @@ expandLogicImm(unsigned Op, Block &MBB, BlockIt MBBI) {
   unsigned Hi8 = (Imm >> 8) & 0xff;
   TRI->splitReg(DstReg, DstLoReg, DstHiReg);
 
-  auto MIBLO = buildMI(MBB, MBBI, Op)
-    .addReg(DstLoReg, RegState::Define | getDeadRegState(DstIsDead))
-    .addReg(DstLoReg, getKillRegState(SrcIsKill))
-    .addImm(Lo8);
+  if (!isLogicImmOpRedundant(Op, Lo8)) {
+    auto MIBLO = buildMI(MBB, MBBI, Op)
+      .addReg(DstLoReg, RegState::Define | getDeadRegState(DstIsDead))
+      .addReg(DstLoReg, getKillRegState(SrcIsKill))
+      .addImm(Lo8);
 
-  // SREG is always implicitly dead
-  MIBLO->getOperand(3).setIsDead();
+    // SREG is always implicitly dead
+    MIBLO->getOperand(3).setIsDead();
+  }
 
-  auto MIBHI = buildMI(MBB, MBBI, Op)
-    .addReg(DstHiReg, RegState::Define | getDeadRegState(DstIsDead))
-    .addReg(DstHiReg, getKillRegState(SrcIsKill))
-    .addImm(Hi8);
+  if (!isLogicImmOpRedundant(Op, Hi8)) {
+    auto MIBHI = buildMI(MBB, MBBI, Op)
+      .addReg(DstHiReg, RegState::Define | getDeadRegState(DstIsDead))
+      .addReg(DstHiReg, getKillRegState(SrcIsKill))
+      .addImm(Hi8);
 
-  if (ImpIsDead)
-    MIBHI->getOperand(3).setIsDead();
+    if (ImpIsDead)
+      MIBHI->getOperand(3).setIsDead();
+  }
 
   MI.eraseFromParent();
   return true;
@@ -484,8 +509,8 @@ bool AVRExpandPseudo::expand<AVR::LDIWRdK>(Block &MBB, BlockIt MBBI) {
     const BlockAddress *BA = MI.getOperand(1).getBlockAddress();
     unsigned TF = MI.getOperand(1).getTargetFlags();
 
-    MIBLO.addOperand(MachineOperand::CreateBA(BA, TF | AVRII::MO_LO));
-    MIBHI.addOperand(MachineOperand::CreateBA(BA, TF | AVRII::MO_HI));
+    MIBLO.add(MachineOperand::CreateBA(BA, TF | AVRII::MO_LO));
+    MIBHI.add(MachineOperand::CreateBA(BA, TF | AVRII::MO_HI));
     break;
   }
   case MachineOperand::MO_Immediate: {
@@ -652,24 +677,79 @@ bool AVRExpandPseudo::expand<AVR::LDDWRdPtrQ>(Block &MBB, BlockIt MBBI) {
   OpHi = AVR::LDDRdPtrQ;
   TRI->splitReg(DstReg, DstLoReg, DstHiReg);
 
-  assert(Imm < 63 && "Offset is out of range");
-  assert(DstReg != SrcReg && "SrcReg and DstReg cannot be the same");
+  assert(Imm <= 63 && "Offset is out of range");
 
-  auto MIBLO = buildMI(MBB, MBBI, OpLo)
-    .addReg(DstLoReg, RegState::Define | getDeadRegState(DstIsDead))
-    .addReg(SrcReg)
-    .addImm(Imm);
+  MachineInstr *MIBLO, *MIBHI;
 
-  auto MIBHI = buildMI(MBB, MBBI, OpHi)
-    .addReg(DstHiReg, RegState::Define | getDeadRegState(DstIsDead))
-    .addReg(SrcReg, getKillRegState(SrcIsKill))
-    .addImm(Imm + 1);
+  // HACK: We shouldn't have instances of this instruction
+  // where src==dest because the instruction itself is
+  // marked earlyclobber. We do however get this instruction when
+  // loading from stack slots where the earlyclobber isn't useful.
+  //
+  // In this case, just use a temporary register.
+  if (DstReg == SrcReg) {
+    RegScavenger RS;
+
+    RS.enterBasicBlock(MBB);
+    RS.forward(MBBI);
+
+    BitVector Candidates =
+        TRI->getAllocatableSet
+        (*MBB.getParent(), &AVR::GPR8RegClass);
+
+    // Exclude all the registers being used by the instruction.
+    for (MachineOperand &MO : MI.operands()) {
+      if (MO.isReg() && MO.getReg() != 0 && !MO.isDef() &&
+          !TargetRegisterInfo::isVirtualRegister(MO.getReg()))
+        Candidates.reset(MO.getReg());
+    }
+
+    BitVector Available = RS.getRegsAvailable(&AVR::GPR8RegClass);
+    Available &= Candidates;
+
+    signed TmpReg = Available.find_first();
+    assert(TmpReg != -1 && "ran out of registers");
+
+    MIBLO = buildMI(MBB, MBBI, OpLo)
+      .addReg(TmpReg, RegState::Define)
+      .addReg(SrcReg)
+      .addImm(Imm);
+
+    buildMI(MBB, MBBI, AVR::MOVRdRr).addReg(DstLoReg).addReg(TmpReg);
+
+    MIBHI = buildMI(MBB, MBBI, OpHi)
+      .addReg(TmpReg, RegState::Define)
+      .addReg(SrcReg, getKillRegState(SrcIsKill))
+      .addImm(Imm + 1);
+
+    buildMI(MBB, MBBI, AVR::MOVRdRr).addReg(DstHiReg).addReg(TmpReg);
+  } else {
+    MIBLO = buildMI(MBB, MBBI, OpLo)
+      .addReg(DstLoReg, RegState::Define | getDeadRegState(DstIsDead))
+      .addReg(SrcReg)
+      .addImm(Imm);
+
+    MIBHI = buildMI(MBB, MBBI, OpHi)
+      .addReg(DstHiReg, RegState::Define | getDeadRegState(DstIsDead))
+      .addReg(SrcReg, getKillRegState(SrcIsKill))
+      .addImm(Imm + 1);
+  }
 
   MIBLO->setMemRefs(MI.memoperands_begin(), MI.memoperands_end());
   MIBHI->setMemRefs(MI.memoperands_begin(), MI.memoperands_end());
 
   MI.eraseFromParent();
   return true;
+}
+
+template <>
+bool AVRExpandPseudo::expand<AVR::LPMWRdZ>(Block &MBB, BlockIt MBBI) {
+  llvm_unreachable("wide LPM is unimplemented");
+}
+
+template <>
+bool AVRExpandPseudo::expand<AVR::LPMWRdZPi>(Block &MBB, BlockIt MBBI) {
+  llvm_unreachable("wide LPMPi is unimplemented");
 }
 
 template<typename Func>
@@ -705,9 +785,8 @@ bool AVRExpandPseudo::expandAtomicBinaryOp(unsigned Opcode,
       auto Op1 = MI.getOperand(0);
       auto Op2 = MI.getOperand(1);
 
-      MachineInstr &NewInst = *buildMI(MBB, MBBI, Opcode)
-        .addOperand(Op1).addOperand(Op2)
-        .getInstr();
+      MachineInstr &NewInst =
+          *buildMI(MBB, MBBI, Opcode).add(Op1).add(Op2).getInstr();
       f(NewInst);
   });
 }
@@ -730,15 +809,13 @@ bool AVRExpandPseudo::expandAtomicArithmeticOp(unsigned Width,
       unsigned StoreOpcode = (Width == 8) ? AVR::STPtrRr : AVR::STWPtrRr;
 
       // Create the load
-      buildMI(MBB, MBBI, LoadOpcode).addOperand(Op1).addOperand(Op2);
+      buildMI(MBB, MBBI, LoadOpcode).add(Op1).add(Op2);
 
       // Create the arithmetic op
-      buildMI(MBB, MBBI, ArithOpcode)
-        .addOperand(Op1).addOperand(Op1)
-        .addOperand(Op2);
+      buildMI(MBB, MBBI, ArithOpcode).add(Op1).add(Op1).add(Op2);
 
       // Create the store
-      buildMI(MBB, MBBI, StoreOpcode).addOperand(Op2).addOperand(Op1);
+      buildMI(MBB, MBBI, StoreOpcode).add(Op2).add(Op1);
   });
 }
 
@@ -975,7 +1052,7 @@ bool AVRExpandPseudo::expand<AVR::STDWPtrQRr>(Block &MBB, BlockIt MBBI) {
   OpHi = AVR::STDPtrQRr;
   TRI->splitReg(SrcReg, SrcLoReg, SrcHiReg);
 
-  assert(Imm < 63 && "Offset is out of range");
+  assert(Imm <= 63 && "Offset is out of range");
 
   auto MIBLO = buildMI(MBB, MBBI, OpLo)
     .addReg(DstReg)
@@ -1005,7 +1082,7 @@ bool AVRExpandPseudo::expand<AVR::INWRdA>(Block &MBB, BlockIt MBBI) {
   OpHi = AVR::INRdA;
   TRI->splitReg(DstReg, DstLoReg, DstHiReg);
 
-  assert(Imm < 63 && "Address is out of range");
+  assert(Imm <= 63 && "Address is out of range");
 
   auto MIBLO = buildMI(MBB, MBBI, OpLo)
     .addReg(DstLoReg, RegState::Define | getDeadRegState(DstIsDead))
@@ -1033,7 +1110,7 @@ bool AVRExpandPseudo::expand<AVR::OUTWARr>(Block &MBB, BlockIt MBBI) {
   OpHi = AVR::OUTARr;
   TRI->splitReg(SrcReg, SrcLoReg, SrcHiReg);
 
-  assert(Imm < 63 && "Address is out of range");
+  assert(Imm <= 63 && "Address is out of range");
 
   // 16 bit I/O writes need the high byte first
   auto MIBHI = buildMI(MBB, MBBI, OpHi)
@@ -1384,6 +1461,8 @@ bool AVRExpandPseudo::expandMI(Block &MBB, BlockIt MBBI) {
     EXPAND(AVR::LDWRdPtrPd);
   case AVR::LDDWRdYQ: //:FIXME: remove this once PR13375 gets fixed
     EXPAND(AVR::LDDWRdPtrQ);
+    EXPAND(AVR::LPMWRdZ);
+    EXPAND(AVR::LPMWRdZPi);
     EXPAND(AVR::AtomicLoad8);
     EXPAND(AVR::AtomicLoad16);
     EXPAND(AVR::AtomicStore8);
@@ -1424,6 +1503,8 @@ bool AVRExpandPseudo::expandMI(Block &MBB, BlockIt MBBI) {
 
 } // end of anonymous namespace
 
+INITIALIZE_PASS(AVRExpandPseudo, "avr-expand-pseudo",
+                AVR_EXPAND_PSEUDO_NAME, false, false)
 namespace llvm {
 
 FunctionPass *createAVRExpandPseudoPass() { return new AVRExpandPseudo(); }

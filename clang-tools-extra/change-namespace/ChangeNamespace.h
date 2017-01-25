@@ -13,6 +13,7 @@
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/Format/Format.h"
 #include "clang/Tooling/Core/Replacement.h"
+#include "llvm/Support/Regex.h"
 #include <string>
 
 namespace clang {
@@ -23,6 +24,9 @@ namespace change_namespace {
 // namespaces while references to symbols (e.g. types, functions) which are not
 // defined in the changed namespace will be correctly qualified by prepending
 // namespace specifiers before them.
+// This will try to add shortest namespace specifiers possible. When a symbol
+// reference needs to be fully-qualified, this adds a "::" prefix to the
+// namespace specifiers unless the new namespace is the global namespace.
 // For classes, only classes that are declared/defined in the given namespace in
 // speficifed files will be moved: forward declarations will remain in the old
 // namespace.
@@ -37,7 +41,7 @@ namespace change_namespace {
 //   class FWD;
 //   }  // a
 //   namespace x {
-//   class A { a::FWD *fwd; }
+//   class A { ::a::FWD *fwd; }
 //   }  // x
 // FIXME: support moving typedef, enums across namespaces.
 class ChangeNamespaceTool : public ast_matchers::MatchFinder::MatchCallback {
@@ -63,7 +67,7 @@ private:
 
   void moveClassForwardDeclaration(
       const ast_matchers::MatchFinder::MatchResult &Result,
-      const CXXRecordDecl *FwdDecl);
+      const NamedDecl *FwdDecl);
 
   void replaceQualifiedSymbolInDeclContext(
       const ast_matchers::MatchFinder::MatchResult &Result,
@@ -75,6 +79,10 @@ private:
 
   void fixUsingShadowDecl(const ast_matchers::MatchFinder::MatchResult &Result,
                           const UsingDecl *UsingDeclaration);
+
+  void fixDeclRefExpr(const ast_matchers::MatchFinder::MatchResult &Result,
+                      const DeclContext *UseContext, const NamedDecl *From,
+                      const DeclRefExpr *Ref);
 
   // Information about moving an old namespace.
   struct MoveNamespace {
@@ -127,6 +135,7 @@ private:
   std::string DiffNewNamespace;
   // A regex pattern that matches files to be processed.
   std::string FilePattern;
+  llvm::Regex FilePatternRE;
   // Information about moved namespaces grouped by file.
   // Since we are modifying code in old namespaces (e.g. add namespace
   // spedifiers) as well as moving them, we store information about namespaces
@@ -145,9 +154,16 @@ private:
   // Records all using namespace declarations, which can be used to shorten
   // namespace specifiers.
   llvm::SmallPtrSet<const UsingDirectiveDecl *, 8> UsingNamespaceDecls;
+  // Records all namespace alias declarations, which can be used to shorten
+  // namespace specifiers.
+  llvm::SmallPtrSet<const NamespaceAliasDecl *, 8> NamespaceAliasDecls;
   // TypeLocs of CXXCtorInitializer. Types of CXXCtorInitializers do not need to
   // be fixed.
   llvm::SmallVector<TypeLoc, 8> BaseCtorInitializerTypeLocs;
+  // Since a DeclRefExpr for a function call can be matched twice (one as
+  // CallExpr and one as DeclRefExpr), we record all DeclRefExpr's that have
+  // been processed so that we don't handle them twice.
+  llvm::SmallPtrSet<const clang::DeclRefExpr*, 16> ProcessedFuncRefs;
 };
 
 } // namespace change_namespace

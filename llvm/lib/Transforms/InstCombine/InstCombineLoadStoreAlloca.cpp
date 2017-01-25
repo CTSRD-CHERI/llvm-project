@@ -308,6 +308,11 @@ Instruction *InstCombiner::visitAllocaInst(AllocaInst &AI) {
   return visitAllocSite(AI);
 }
 
+// Are we allowed to form a atomic load or store of this type?
+static bool isSupportedAtomicType(Type *Ty) {
+  return Ty->isIntegerTy() || Ty->isPointerTy() || Ty->isFloatingPointTy();
+}
+
 /// \brief Helper to combine a load to a new type.
 ///
 /// This just does the work of combining a load to a new type. It handles
@@ -319,6 +324,9 @@ Instruction *InstCombiner::visitAllocaInst(AllocaInst &AI) {
 /// point the \c InstCombiner currently is using.
 static LoadInst *combineLoadToNewType(InstCombiner &IC, LoadInst &LI, Type *NewTy,
                                       const Twine &Suffix = "") {
+  assert((!LI.isAtomic() || isSupportedAtomicType(NewTy)) &&
+         "can't fold an atomic load to requested type");
+  
   Value *Ptr = LI.getPointerOperand();
   unsigned AS = LI.getPointerAddressSpace();
   SmallVector<std::pair<unsigned, MDNode *>, 8> MD;
@@ -400,6 +408,9 @@ static LoadInst *combineLoadToNewType(InstCombiner &IC, LoadInst &LI, Type *NewT
 ///
 /// Returns the newly created store instruction.
 static StoreInst *combineStoreToNewValue(InstCombiner &IC, StoreInst &SI, Value *V) {
+  assert((!SI.isAtomic() || isSupportedAtomicType(V->getType())) &&
+         "can't fold an atomic store of requested type");
+  
   Value *Ptr = SI.getPointerOperand();
   unsigned AS = SI.getPointerAddressSpace();
   SmallVector<std::pair<unsigned, MDNode *>, 8> MD;
@@ -514,14 +525,14 @@ static Instruction *combineLoadToOperationType(InstCombiner &IC, LoadInst &LI) {
   // as long as those are noops (i.e., the source or dest type have the same
   // bitwidth as the target's pointers).
   if (LI.hasOneUse())
-    if (auto* CI = dyn_cast<CastInst>(LI.user_back())) {
-      if (CI->isNoopCast(DL)) {
-        LoadInst *NewLoad = combineLoadToNewType(IC, LI, CI->getDestTy());
-        CI->replaceAllUsesWith(NewLoad);
-        IC.eraseInstFromFunction(*CI);
-        return &LI;
-      }
-    }
+    if (auto* CI = dyn_cast<CastInst>(LI.user_back()))
+      if (CI->isNoopCast(DL))
+        if (!LI.isAtomic() || isSupportedAtomicType(CI->getDestTy())) {
+          LoadInst *NewLoad = combineLoadToNewType(IC, LI, CI->getDestTy());
+          CI->replaceAllUsesWith(NewLoad);
+          IC.eraseInstFromFunction(*CI);
+          return &LI;
+        }
 
   // FIXME: We should also canonicalize loads of vectors when their elements are
   // cast to other types.
@@ -839,20 +850,10 @@ Instruction *InstCombiner::visitLoadInst(LoadInst &LI) {
   // separated by a few arithmetic operations.
   BasicBlock::iterator BBI(LI);
   bool IsLoadCSE = false;
-  if (Value *AvailableVal =
-      FindAvailableLoadedValue(&LI, LI.getParent(), BBI,
-                               DefMaxInstsToScan, AA, &IsLoadCSE)) {
-    if (IsLoadCSE) {
-      LoadInst *NLI = cast<LoadInst>(AvailableVal);
-      unsigned KnownIDs[] = {
-          LLVMContext::MD_tbaa,            LLVMContext::MD_alias_scope,
-          LLVMContext::MD_noalias,         LLVMContext::MD_range,
-          LLVMContext::MD_invariant_load,  LLVMContext::MD_nonnull,
-          LLVMContext::MD_invariant_group, LLVMContext::MD_align,
-          LLVMContext::MD_dereferenceable,
-          LLVMContext::MD_dereferenceable_or_null};
-      combineMetadata(NLI, &LI, KnownIDs);
-    };
+  if (Value *AvailableVal = FindAvailableLoadedValue(
+          &LI, LI.getParent(), BBI, DefMaxInstsToScan, AA, &IsLoadCSE)) {
+    if (IsLoadCSE)
+      combineMetadataForCSE(cast<LoadInst>(AvailableVal), &LI);
 
     return replaceInstUsesWith(
         LI, Builder->CreateBitOrPointerCast(AvailableVal, LI.getType(),
@@ -1026,14 +1027,17 @@ static bool combineStoreToValueType(InstCombiner &IC, StoreInst &SI) {
   // Fold away bit casts of the stored value by storing the original type.
   if (auto *BC = dyn_cast<BitCastInst>(V)) {
     V = BC->getOperand(0);
-    combineStoreToNewValue(IC, SI, V);
-    return true;
+    if (!SI.isAtomic() || isSupportedAtomicType(V->getType())) {
+      combineStoreToNewValue(IC, SI, V);
+      return true;
+    }
   }
 
-  if (Value *U = likeBitCastFromVector(IC, V)) {
-    combineStoreToNewValue(IC, SI, U);
-    return true;
-  }
+  if (Value *U = likeBitCastFromVector(IC, V))
+    if (!SI.isAtomic() || isSupportedAtomicType(U->getType())) {
+      combineStoreToNewValue(IC, SI, U);
+      return true;
+    }
 
   // FIXME: We should also canonicalize stores of vectors when their elements
   // are cast to other types.
@@ -1263,8 +1267,8 @@ Instruction *InstCombiner::visitStoreInst(StoreInst &SI) {
       break;
     }
 
-    // Don't skip over loads or things that can modify memory.
-    if (BBI->mayWriteToMemory() || BBI->mayReadFromMemory())
+    // Don't skip over loads, throws or things that can modify memory.
+    if (BBI->mayWriteToMemory() || BBI->mayReadFromMemory() || BBI->mayThrow())
       break;
   }
 
@@ -1387,8 +1391,8 @@ bool InstCombiner::SimplifyStoreAtEndOfBlock(StoreInst &SI) {
       }
       // If we find something that may be using or overwriting the stored
       // value, or if we run out of instructions, we can't do the xform.
-      if (BBI->mayReadFromMemory() || BBI->mayWriteToMemory() ||
-          BBI == OtherBB->begin())
+      if (BBI->mayReadFromMemory() || BBI->mayThrow() ||
+          BBI->mayWriteToMemory() || BBI == OtherBB->begin())
         return false;
     }
 
@@ -1397,7 +1401,7 @@ bool InstCombiner::SimplifyStoreAtEndOfBlock(StoreInst &SI) {
     // StoreBB.
     for (BasicBlock::iterator I = StoreBB->begin(); &*I != &SI; ++I) {
       // FIXME: This should really be AA driven.
-      if (I->mayReadFromMemory() || I->mayWriteToMemory())
+      if (I->mayReadFromMemory() || I->mayThrow() || I->mayWriteToMemory())
         return false;
     }
   }

@@ -12,6 +12,8 @@
 #include "DLL.h"
 #include "Error.h"
 #include "InputFiles.h"
+#include "MapFile.h"
+#include "Memory.h"
 #include "PDB.h"
 #include "SymbolTable.h"
 #include "Symbols.h"
@@ -38,7 +40,6 @@ using namespace llvm::support::endian;
 using namespace lld;
 using namespace lld::coff;
 
-static const int PageSize = 4096;
 static const int SectorSize = 512;
 static const int DOSStubSize = 64;
 static const int NumberfOfDataDirectory = 16;
@@ -134,9 +135,7 @@ private:
   std::map<StringRef, std::vector<DefinedImportData *>> binImports();
 
   SymbolTable *Symtab;
-  std::unique_ptr<llvm::FileOutputBuffer> Buffer;
-  llvm::SpecificBumpPtrAllocator<OutputSection> CAlloc;
-  llvm::SpecificBumpPtrAllocator<BaserelChunk> BAlloc;
+  std::unique_ptr<FileOutputBuffer> Buffer;
   std::vector<OutputSection *> OutputSections;
   std::vector<char> Strtab;
   std::vector<llvm::object::coff_symbol16> OutputSymtab;
@@ -163,51 +162,6 @@ namespace lld {
 namespace coff {
 
 void writeResult(SymbolTable *T) { Writer(T).run(); }
-
-// OutputSection represents a section in an output file. It's a
-// container of chunks. OutputSection and Chunk are 1:N relationship.
-// Chunks cannot belong to more than one OutputSections. The writer
-// creates multiple OutputSections and assign them unique,
-// non-overlapping file offsets and RVAs.
-class OutputSection {
-public:
-  OutputSection(StringRef N) : Name(N), Header({}) {}
-  void setRVA(uint64_t);
-  void setFileOffset(uint64_t);
-  void addChunk(Chunk *C);
-  StringRef getName() { return Name; }
-  std::vector<Chunk *> &getChunks() { return Chunks; }
-  void addPermissions(uint32_t C);
-  void setPermissions(uint32_t C);
-  uint32_t getPermissions() { return Header.Characteristics & PermMask; }
-  uint32_t getCharacteristics() { return Header.Characteristics; }
-  uint64_t getRVA() { return Header.VirtualAddress; }
-  uint64_t getFileOff() { return Header.PointerToRawData; }
-  void writeHeaderTo(uint8_t *Buf);
-
-  // Returns the size of this section in an executable memory image.
-  // This may be smaller than the raw size (the raw size is multiple
-  // of disk sector size, so there may be padding at end), or may be
-  // larger (if that's the case, the loader reserves spaces after end
-  // of raw data).
-  uint64_t getVirtualSize() { return Header.VirtualSize; }
-
-  // Returns the size of the section in the output file.
-  uint64_t getRawSize() { return Header.SizeOfRawData; }
-
-  // Set offset into the string table storing this section name.
-  // Used only when the name is longer than 8 bytes.
-  void setStringTableOff(uint32_t V) { StringTableOff = V; }
-
-  // N.B. The section index is one based.
-  uint32_t SectionIndex = 0;
-
-private:
-  StringRef Name;
-  coff_section Header;
-  uint32_t StringTableOff = 0;
-  std::vector<Chunk *> Chunks;
-};
 
 void OutputSection::setRVA(uint64_t RVA) {
   Header.VirtualAddress = RVA;
@@ -305,7 +259,9 @@ void Writer::run() {
   writeBuildId();
 
   if (!Config->PDBPath.empty())
-    createPDB(Config->PDBPath, Symtab, SectionTable);
+    createPDB(Config->PDBPath, Symtab, SectionTable, BuildId->DI);
+
+  writeMapFile(OutputSections);
 
   if (auto EC = Buffer->commit())
     fatal(EC, "failed to write the output file");
@@ -342,7 +298,7 @@ void Writer::createSections() {
     StringRef Name = getOutputSection(Pair.first);
     OutputSection *&Sec = Sections[Name];
     if (!Sec) {
-      Sec = new (CAlloc.Allocate()) OutputSection(Name);
+      Sec = make<OutputSection>(Name);
       OutputSections.push_back(Sec);
     }
     std::vector<Chunk *> &Chunks = Pair.second;
@@ -389,7 +345,7 @@ void Writer::createMiscChunks() {
     if (!File->SEHCompat)
       return;
     for (SymbolBody *B : File->SEHandlers)
-      Handlers.insert(cast<Defined>(B->repl()));
+      Handlers.insert(cast<Defined>(B));
   }
 
   SEHTable.reset(new SEHTableChunk(Handlers));
@@ -429,7 +385,7 @@ void Writer::createImportTables() {
       Sec->addChunk(C);
   }
   if (!DelayIdata.empty()) {
-    Defined *Helper = cast<Defined>(Config->DelayLoadHelper->repl());
+    Defined *Helper = cast<Defined>(Config->DelayLoadHelper);
     DelayIdata.create(Helper);
     OutputSection *Sec = createSection(".didat");
     for (Chunk *C : DelayIdata.getChunks())
@@ -472,6 +428,10 @@ size_t Writer::addEntryToStringTable(StringRef Str) {
 }
 
 Optional<coff_symbol16> Writer::createSymbol(Defined *Def) {
+  // Relative symbols are unrepresentable in a COFF symbol table.
+  if (isa<DefinedRelative>(Def))
+    return None;
+
   if (auto *D = dyn_cast<DefinedRegular>(Def))
     if (!D->getChunk()->isLive())
       return None;
@@ -498,7 +458,6 @@ Optional<coff_symbol16> Writer::createSymbol(Defined *Def) {
 
   switch (Def->kind()) {
   case SymbolBody::DefinedAbsoluteKind:
-  case SymbolBody::DefinedRelativeKind:
     Sym.Value = Def->getRVA();
     Sym.SectionNumber = IMAGE_SYM_ABSOLUTE;
     break;
@@ -534,13 +493,11 @@ void Writer::createSymbolAndStringTable() {
   for (lld::coff::ObjectFile *File : Symtab->ObjectFiles)
     for (SymbolBody *B : File->getSymbols())
       if (auto *D = dyn_cast<Defined>(B))
-        if (Optional<coff_symbol16> Sym = createSymbol(D))
-          OutputSymtab.push_back(*Sym);
-
-  for (ImportFile *File : Symtab->ImportFiles)
-    for (SymbolBody *B : File->getSymbols())
-      if (Optional<coff_symbol16> Sym = createSymbol(cast<Defined>(B)))
-        OutputSymtab.push_back(*Sym);
+        if (!D->WrittenToSymtab) {
+          D->WrittenToSymtab = true;
+          if (Optional<coff_symbol16> Sym = createSymbol(D))
+            OutputSymtab.push_back(*Sym);
+        }
 
   OutputSection *LastSection = OutputSections.back();
   // We position the symbol table to be adjacent to the end of the last section.
@@ -631,7 +588,7 @@ template <typename PEHeaderTy> void Writer::writeHeader() {
   PE->SizeOfImage = SizeOfImage;
   PE->SizeOfHeaders = SizeOfHeaders;
   if (!Config->NoEntry) {
-    Defined *Entry = cast<Defined>(Config->Entry->repl());
+    Defined *Entry = cast<Defined>(Config->Entry);
     PE->AddressOfEntryPoint = Entry->getRVA();
     // Pointer to thumb code must have the LSB set, so adjust it.
     if (Config->Machine == ARMNT)
@@ -686,7 +643,7 @@ template <typename PEHeaderTy> void Writer::writeHeader() {
     Dir[BASE_RELOCATION_TABLE].Size = Sec->getVirtualSize();
   }
   if (Symbol *Sym = Symtab->findUnderscore("_tls_used")) {
-    if (Defined *B = dyn_cast<Defined>(Sym->Body)) {
+    if (Defined *B = dyn_cast<Defined>(Sym->body())) {
       Dir[TLS_TABLE].RelativeVirtualAddress = B->getRVA();
       Dir[TLS_TABLE].Size = Config->is64()
                                 ? sizeof(object::coff_tls_directory64)
@@ -698,7 +655,7 @@ template <typename PEHeaderTy> void Writer::writeHeader() {
     Dir[DEBUG_DIRECTORY].Size = DebugDirectory->getSize();
   }
   if (Symbol *Sym = Symtab->findUnderscore("_load_config_used")) {
-    if (auto *B = dyn_cast<DefinedRegular>(Sym->Body)) {
+    if (auto *B = dyn_cast<DefinedRegular>(Sym->body())) {
       SectionChunk *SC = B->getChunk();
       assert(B->getRVA() >= SC->getRVA());
       uint64_t OffsetInChunk = B->getRVA() - SC->getRVA();
@@ -755,8 +712,10 @@ void Writer::openFile(StringRef Path) {
 void Writer::fixSafeSEHSymbols() {
   if (!SEHTable)
     return;
-  Config->SEHTable->setRVA(SEHTable->getRVA());
-  Config->SEHCount->setVA(SEHTable->getSize() / 4);
+  if (auto *T = dyn_cast<DefinedRelative>(Config->SEHTable->body()))
+    T->setRVA(SEHTable->getRVA());
+  if (auto *C = dyn_cast<DefinedAbsolute>(Config->SEHCount->body()))
+    C->setVA(SEHTable->getSize() / 4);
 }
 
 // Handles /section options to allow users to overwrite
@@ -826,7 +785,10 @@ void Writer::writeBuildId() {
 
   assert(BuildId->DI->Signature.CVSignature == OMF::Signature::PDB70 &&
          "only PDB 7.0 is supported");
-  memcpy(BuildId->DI->PDB70.Signature, Res, 16);
+  assert(sizeof(Res) == sizeof(BuildId->DI->PDB70.Signature) &&
+         "signature size mismatch");
+  memcpy(BuildId->DI->PDB70.Signature, Res,
+         sizeof(codeview::PDB70DebugInfo::Signature));
   // TODO(compnerd) track the Age
   BuildId->DI->PDB70.Age = 1;
 }
@@ -866,7 +828,7 @@ OutputSection *Writer::createSection(StringRef Name) {
                        .Default(0);
   if (!Perms)
     llvm_unreachable("unknown section name");
-  auto Sec = new (CAlloc.Allocate()) OutputSection(Name);
+  auto Sec = make<OutputSection>(Name);
   Sec->addPermissions(Perms);
   OutputSections.push_back(Sec);
   return Sec;
@@ -897,13 +859,11 @@ void Writer::addBaserelBlocks(OutputSection *Dest, std::vector<Baserel> &V) {
     uint32_t P = V[J].RVA & Mask;
     if (P == Page)
       continue;
-    BaserelChunk *Buf = BAlloc.Allocate();
-    Dest->addChunk(new (Buf) BaserelChunk(Page, &V[I], &V[0] + J));
+    Dest->addChunk(make<BaserelChunk>(Page, &V[I], &V[0] + J));
     I = J;
     Page = P;
   }
   if (I == J)
     return;
-  BaserelChunk *Buf = BAlloc.Allocate();
-  Dest->addChunk(new (Buf) BaserelChunk(Page, &V[I], &V[0] + J));
+  Dest->addChunk(make<BaserelChunk>(Page, &V[I], &V[0] + J));
 }

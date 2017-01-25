@@ -31,6 +31,7 @@
 #include "llvm/ADT/iterator.h"
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/Support/Compiler.h"
+#include "llvm/Support/ErrorHandling.h"
 
 namespace llvm {
 
@@ -347,8 +348,8 @@ make_filter_range(RangeT &&Range, PredicateT Pred) {
 }
 
 // forward declarations required by zip_shortest/zip_first
-template <typename R, class UnaryPredicate>
-bool all_of(R &&range, UnaryPredicate &&P);
+template <typename R, typename UnaryPredicate>
+bool all_of(R &&range, UnaryPredicate P);
 
 template <size_t... I> struct index_sequence;
 
@@ -433,6 +434,151 @@ detail::zippy<detail::zip_first, T, U, Args...> zip_first(T &&t, U &&u,
                                                           Args &&... args) {
   return detail::zippy<detail::zip_first, T, U, Args...>(
       std::forward<T>(t), std::forward<U>(u), std::forward<Args>(args)...);
+}
+
+/// Iterator wrapper that concatenates sequences together.
+///
+/// This can concatenate different iterators, even with different types, into
+/// a single iterator provided the value types of all the concatenated
+/// iterators expose `reference` and `pointer` types that can be converted to
+/// `ValueT &` and `ValueT *` respectively. It doesn't support more
+/// interesting/customized pointer or reference types.
+///
+/// Currently this only supports forward or higher iterator categories as
+/// inputs and always exposes a forward iterator interface.
+template <typename ValueT, typename... IterTs>
+class concat_iterator
+    : public iterator_facade_base<concat_iterator<ValueT, IterTs...>,
+                                  std::forward_iterator_tag, ValueT> {
+  typedef typename concat_iterator::iterator_facade_base BaseT;
+
+  /// We store both the current and end iterators for each concatenated
+  /// sequence in a tuple of pairs.
+  ///
+  /// Note that something like iterator_range seems nice at first here, but the
+  /// range properties are of little benefit and end up getting in the way
+  /// because we need to do mutation on the current iterators.
+  std::tuple<std::pair<IterTs, IterTs>...> IterPairs;
+
+  /// Attempts to increment a specific iterator.
+  ///
+  /// Returns true if it was able to increment the iterator. Returns false if
+  /// the iterator is already at the end iterator.
+  template <size_t Index> bool incrementHelper() {
+    auto &IterPair = std::get<Index>(IterPairs);
+    if (IterPair.first == IterPair.second)
+      return false;
+
+    ++IterPair.first;
+    return true;
+  }
+
+  /// Increments the first non-end iterator.
+  ///
+  /// It is an error to call this with all iterators at the end.
+  template <size_t... Ns> void increment(index_sequence<Ns...>) {
+    // Build a sequence of functions to increment each iterator if possible.
+    bool (concat_iterator::*IncrementHelperFns[])() = {
+        &concat_iterator::incrementHelper<Ns>...};
+
+    // Loop over them, and stop as soon as we succeed at incrementing one.
+    for (auto &IncrementHelperFn : IncrementHelperFns)
+      if ((this->*IncrementHelperFn)())
+        return;
+
+    llvm_unreachable("Attempted to increment an end concat iterator!");
+  }
+
+  /// Returns null if the specified iterator is at the end. Otherwise,
+  /// dereferences the iterator and returns the address of the resulting
+  /// reference.
+  template <size_t Index> ValueT *getHelper() const {
+    auto &IterPair = std::get<Index>(IterPairs);
+    if (IterPair.first == IterPair.second)
+      return nullptr;
+
+    return &*IterPair.first;
+  }
+
+  /// Finds the first non-end iterator, dereferences, and returns the resulting
+  /// reference.
+  ///
+  /// It is an error to call this with all iterators at the end.
+  template <size_t... Ns> ValueT &get(index_sequence<Ns...>) const {
+    // Build a sequence of functions to get from iterator if possible.
+    ValueT *(concat_iterator::*GetHelperFns[])() const = {
+        &concat_iterator::getHelper<Ns>...};
+
+    // Loop over them, and return the first result we find.
+    for (auto &GetHelperFn : GetHelperFns)
+      if (ValueT *P = (this->*GetHelperFn)())
+        return *P;
+
+    llvm_unreachable("Attempted to get a pointer from an end concat iterator!");
+  }
+
+public:
+  /// Constructs an iterator from a squence of ranges.
+  ///
+  /// We need the full range to know how to switch between each of the
+  /// iterators.
+  template <typename... RangeTs>
+  explicit concat_iterator(RangeTs &&... Ranges)
+      : IterPairs({std::begin(Ranges), std::end(Ranges)}...) {}
+
+  using BaseT::operator++;
+  concat_iterator &operator++() {
+    increment(index_sequence_for<IterTs...>());
+    return *this;
+  }
+
+  ValueT &operator*() const { return get(index_sequence_for<IterTs...>()); }
+
+  bool operator==(const concat_iterator &RHS) const {
+    return IterPairs == RHS.IterPairs;
+  }
+};
+
+namespace detail {
+/// Helper to store a sequence of ranges being concatenated and access them.
+///
+/// This is designed to facilitate providing actual storage when temporaries
+/// are passed into the constructor such that we can use it as part of range
+/// based for loops.
+template <typename ValueT, typename... RangeTs> class concat_range {
+public:
+  typedef concat_iterator<ValueT,
+                          decltype(std::begin(std::declval<RangeTs &>()))...>
+      iterator;
+
+private:
+  std::tuple<RangeTs...> Ranges;
+
+  template <size_t... Ns> iterator begin_impl(index_sequence<Ns...>) {
+    return iterator(std::get<Ns>(Ranges)...);
+  }
+  template <size_t... Ns> iterator end_impl(index_sequence<Ns...>) {
+    return iterator(make_range(std::end(std::get<Ns>(Ranges)),
+                               std::end(std::get<Ns>(Ranges)))...);
+  }
+
+public:
+  iterator begin() { return begin_impl(index_sequence_for<RangeTs...>{}); }
+  iterator end() { return end_impl(index_sequence_for<RangeTs...>{}); }
+  concat_range(RangeTs &&... Ranges)
+      : Ranges(std::forward<RangeTs>(Ranges)...) {}
+};
+}
+
+/// Concatenated range across two or more ranges.
+///
+/// The desired value type must be explicitly specified.
+template <typename ValueT, typename... RangeTs>
+detail::concat_range<ValueT, RangeTs...> concat(RangeTs &&... Ranges) {
+  static_assert(sizeof...(RangeTs) > 1,
+                "Need more than one range to concatenate!");
+  return detail::concat_range<ValueT, RangeTs...>(
+      std::forward<RangeTs>(Ranges)...);
 }
 
 //===----------------------------------------------------------------------===//
@@ -570,8 +716,8 @@ inline void array_pod_sort(
 /// container.
 template<typename Container>
 void DeleteContainerPointers(Container &C) {
-  for (typename Container::iterator I = C.begin(), E = C.end(); I != E; ++I)
-    delete *I;
+  for (auto V : C)
+    delete V;
   C.clear();
 }
 
@@ -579,77 +725,106 @@ void DeleteContainerPointers(Container &C) {
 /// deletes the second elements and then clears the container.
 template<typename Container>
 void DeleteContainerSeconds(Container &C) {
-  for (typename Container::iterator I = C.begin(), E = C.end(); I != E; ++I)
-    delete I->second;
+  for (auto &V : C)
+    delete V.second;
   C.clear();
 }
 
 /// Provide wrappers to std::all_of which take ranges instead of having to pass
 /// begin/end explicitly.
-template<typename R, class UnaryPredicate>
-bool all_of(R &&Range, UnaryPredicate &&P) {
-  return std::all_of(Range.begin(), Range.end(),
-                     std::forward<UnaryPredicate>(P));
+template <typename R, typename UnaryPredicate>
+bool all_of(R &&Range, UnaryPredicate P) {
+  return std::all_of(std::begin(Range), std::end(Range), P);
 }
 
 /// Provide wrappers to std::any_of which take ranges instead of having to pass
 /// begin/end explicitly.
-template <typename R, class UnaryPredicate>
-bool any_of(R &&Range, UnaryPredicate &&P) {
-  return std::any_of(Range.begin(), Range.end(),
-                     std::forward<UnaryPredicate>(P));
+template <typename R, typename UnaryPredicate>
+bool any_of(R &&Range, UnaryPredicate P) {
+  return std::any_of(std::begin(Range), std::end(Range), P);
 }
 
 /// Provide wrappers to std::none_of which take ranges instead of having to pass
 /// begin/end explicitly.
-template <typename R, class UnaryPredicate>
-bool none_of(R &&Range, UnaryPredicate &&P) {
-  return std::none_of(Range.begin(), Range.end(),
-                      std::forward<UnaryPredicate>(P));
+template <typename R, typename UnaryPredicate>
+bool none_of(R &&Range, UnaryPredicate P) {
+  return std::none_of(std::begin(Range), std::end(Range), P);
 }
 
 /// Provide wrappers to std::find which take ranges instead of having to pass
 /// begin/end explicitly.
-template<typename R, class T>
-auto find(R &&Range, const T &val) -> decltype(Range.begin()) {
-  return std::find(Range.begin(), Range.end(), val);
+template <typename R, typename T>
+auto find(R &&Range, const T &Val) -> decltype(std::begin(Range)) {
+  return std::find(std::begin(Range), std::end(Range), Val);
 }
 
 /// Provide wrappers to std::find_if which take ranges instead of having to pass
 /// begin/end explicitly.
-template <typename R, class T>
-auto find_if(R &&Range, const T &Pred) -> decltype(Range.begin()) {
-  return std::find_if(Range.begin(), Range.end(), Pred);
+template <typename R, typename UnaryPredicate>
+auto find_if(R &&Range, UnaryPredicate P) -> decltype(std::begin(Range)) {
+  return std::find_if(std::begin(Range), std::end(Range), P);
+}
+
+template <typename R, typename UnaryPredicate>
+auto find_if_not(R &&Range, UnaryPredicate P) -> decltype(std::begin(Range)) {
+  return std::find_if_not(std::begin(Range), std::end(Range), P);
 }
 
 /// Provide wrappers to std::remove_if which take ranges instead of having to
 /// pass begin/end explicitly.
-template<typename R, class UnaryPredicate>
-auto remove_if(R &&Range, UnaryPredicate &&P) -> decltype(Range.begin()) {
-  return std::remove_if(Range.begin(), Range.end(), P);
+template <typename R, typename UnaryPredicate>
+auto remove_if(R &&Range, UnaryPredicate P) -> decltype(std::begin(Range)) {
+  return std::remove_if(std::begin(Range), std::end(Range), P);
 }
 
 /// Wrapper function around std::find to detect if an element exists
 /// in a container.
 template <typename R, typename E>
 bool is_contained(R &&Range, const E &Element) {
-  return std::find(Range.begin(), Range.end(), Element) != Range.end();
+  return std::find(std::begin(Range), std::end(Range), Element) !=
+         std::end(Range);
+}
+
+/// Wrapper function around std::count to count the number of times an element
+/// \p Element occurs in the given range \p Range.
+template <typename R, typename E>
+auto count(R &&Range, const E &Element) -> typename std::iterator_traits<
+    decltype(std::begin(Range))>::difference_type {
+  return std::count(std::begin(Range), std::end(Range), Element);
 }
 
 /// Wrapper function around std::count_if to count the number of times an
 /// element satisfying a given predicate occurs in a range.
 template <typename R, typename UnaryPredicate>
-auto count_if(R &&Range, UnaryPredicate &&P)
-    -> typename std::iterator_traits<decltype(Range.begin())>::difference_type {
-  return std::count_if(Range.begin(), Range.end(), P);
+auto count_if(R &&Range, UnaryPredicate P) -> typename std::iterator_traits<
+    decltype(std::begin(Range))>::difference_type {
+  return std::count_if(std::begin(Range), std::end(Range), P);
 }
 
 /// Wrapper function around std::transform to apply a function to a range and
 /// store the result elsewhere.
-template <typename R, class OutputIt, typename UnaryPredicate>
-OutputIt transform(R &&Range, OutputIt d_first, UnaryPredicate &&P) {
-  return std::transform(Range.begin(), Range.end(), d_first,
-                        std::forward<UnaryPredicate>(P));
+template <typename R, typename OutputIt, typename UnaryPredicate>
+OutputIt transform(R &&Range, OutputIt d_first, UnaryPredicate P) {
+  return std::transform(std::begin(Range), std::end(Range), d_first, P);
+}
+
+/// Provide wrappers to std::partition which take ranges instead of having to
+/// pass begin/end explicitly.
+template <typename R, typename UnaryPredicate>
+auto partition(R &&Range, UnaryPredicate P) -> decltype(std::begin(Range)) {
+  return std::partition(std::begin(Range), std::end(Range), P);
+}
+
+/// Provide a container algorithm similar to C++ Library Fundamentals v2's
+/// `erase_if` which is equivalent to:
+///
+///   C.erase(remove_if(C, pred), C.end());
+///
+/// This version works for any container with an erase method call accepting
+/// two iterators.
+template <typename Container, typename UnaryPredicate>
+void erase_if(Container &C, UnaryPredicate P) {
+  C.erase(remove_if(C, P), C.end());
 }
 
 //===----------------------------------------------------------------------===//

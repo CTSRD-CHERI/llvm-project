@@ -62,12 +62,10 @@ namespace lld {
 namespace elf {
 
 static bool refersToGotEntry(RelExpr Expr) {
-  return Expr == R_GOT || Expr == R_GOT_OFF || Expr == R_MIPS_GOT_LOCAL_PAGE ||
-         Expr == R_MIPS_GOT_OFF || Expr == R_MIPS_GOT_OFF32 ||
-         Expr == R_MIPS_TLSGD || Expr == R_MIPS_TLSLD ||
-         Expr == R_GOT_PAGE_PC || Expr == R_GOT_PC || Expr == R_GOT_FROM_END ||
-         Expr == R_TLSGD || Expr == R_TLSGD_PC || Expr == R_TLSDESC ||
-         Expr == R_TLSDESC_PAGE;
+  return isRelExprOneOf<R_GOT, R_GOT_OFF, R_MIPS_GOT_LOCAL_PAGE, R_MIPS_GOT_OFF,
+                        R_MIPS_GOT_OFF32, R_MIPS_TLSGD, R_MIPS_TLSLD,
+                        R_GOT_PAGE_PC, R_GOT_PC, R_GOT_FROM_END, R_TLSGD,
+                        R_TLSGD_PC, R_TLSDESC, R_TLSDESC_PAGE>(Expr);
 }
 
 static bool isPreemptible(const SymbolBody &Body, uint32_t Type) {
@@ -90,28 +88,36 @@ static bool isPreemptible(const SymbolBody &Body, uint32_t Type) {
 // support any relaxations for TLS relocations so by factoring out ARM and MIPS
 // handling in to the separate function we can simplify the code and do not
 // pollute `handleTlsRelocation` by ARM and MIPS `ifs` statements.
-// FIXME: The ARM implementation always adds the module index dynamic
-// relocation even for non-preemptible symbols in applications. For static
-// linking support we must either resolve the module index relocation at static
-// link time, or hard code the module index (1) for the application in the GOT.
 template <class ELFT, class GOT>
 static unsigned handleNoRelaxTlsRelocation(
     GOT *Got, uint32_t Type, SymbolBody &Body, InputSectionBase<ELFT> &C,
     typename ELFT::uint Offset, typename ELFT::uint Addend, RelExpr Expr) {
+  typedef typename ELFT::uint uintX_t;
+  auto addModuleReloc = [](SymbolBody &Body, GOT *Got, uintX_t Off, bool LD) {
+    // The Dynamic TLS Module Index Relocation can be statically resolved to 1
+    // if we know that we are linking an executable. For ARM we resolve the
+    // relocation when writing the Got. MIPS has a custom Got implementation
+    // that writes the Module index in directly.
+    if (!Body.isPreemptible() && !Config->Pic && Config->EMachine == EM_ARM)
+      Got->Relocations.push_back(
+          {R_ABS, Target->TlsModuleIndexRel, Off, 0, &Body});
+    else {
+      SymbolBody *Dest = LD ? nullptr : &Body;
+      In<ELFT>::RelaDyn->addReloc(
+          {Target->TlsModuleIndexRel, Got, Off, false, Dest, 0});
+    }
+  };
   if (Expr == R_MIPS_TLSLD || Expr == R_TLSLD_PC) {
     if (Got->addTlsIndex() && (Config->Pic || Config->EMachine == EM_ARM))
-      In<ELFT>::RelaDyn->addReloc({Target->TlsModuleIndexRel, Got,
-                                   Got->getTlsIndexOff(), false, nullptr, 0});
+      addModuleReloc(Body, Got, Got->getTlsIndexOff(), true);
     C.Relocations.push_back({Expr, Type, Offset, Addend, &Body});
     return 1;
   }
-  typedef typename ELFT::uint uintX_t;
   if (Target->isTlsGlobalDynamicRel(Type)) {
     if (Got->addDynTlsEntry(Body) &&
         (Body.isPreemptible() || Config->EMachine == EM_ARM)) {
       uintX_t Off = Got->getGlobalDynOffset(Body);
-      In<ELFT>::RelaDyn->addReloc(
-          {Target->TlsModuleIndexRel, Got, Off, false, &Body, 0});
+      addModuleReloc(Body, Got, Off, false);
       if (Body.isPreemptible())
         In<ELFT>::RelaDyn->addReloc({Target->TlsOffsetRel, Got,
                                      Off + (uintX_t)sizeof(uintX_t), false,
@@ -144,12 +150,13 @@ static unsigned handleTlsRelocation(uint32_t Type, SymbolBody &Body,
     return handleNoRelaxTlsRelocation<ELFT>(In<ELFT>::MipsGot, Type, Body, C,
                                             Offset, Addend, Expr);
 
+  bool IsPreemptible = isPreemptible(Body, Type);
   if ((Expr == R_TLSDESC || Expr == R_TLSDESC_PAGE || Expr == R_TLSDESC_CALL) &&
       Config->Shared) {
     if (In<ELFT>::Got->addDynTlsEntry(Body)) {
       uintX_t Off = In<ELFT>::Got->getGlobalDynOffset(Body);
-      In<ELFT>::RelaDyn->addReloc(
-          {Target->TlsDescRel, In<ELFT>::Got, Off, false, &Body, 0});
+      In<ELFT>::RelaDyn->addReloc({Target->TlsDescRel, In<ELFT>::Got, Off,
+                                   !IsPreemptible, &Body, 0});
     }
     if (Expr != R_TLSDESC_CALL)
       C.Relocations.push_back({Expr, Type, Offset, Addend, &Body});
@@ -188,10 +195,13 @@ static unsigned handleTlsRelocation(uint32_t Type, SymbolBody &Body,
 
         // If the symbol is preemptible we need the dynamic linker to write
         // the offset too.
-        if (isPreemptible(Body, Type))
+        uintX_t OffsetOff = Off + (uintX_t)sizeof(uintX_t);
+        if (IsPreemptible)
           In<ELFT>::RelaDyn->addReloc({Target->TlsOffsetRel, In<ELFT>::Got,
-                                       Off + (uintX_t)sizeof(uintX_t), false,
-                                       &Body, 0});
+                                       OffsetOff, false, &Body, 0});
+        else
+          In<ELFT>::Got->Relocations.push_back(
+              {R_ABS, Target->TlsOffsetRel, OffsetOff, 0, &Body});
       }
       C.Relocations.push_back({Expr, Type, Offset, Addend, &Body});
       return 1;
@@ -199,7 +209,7 @@ static unsigned handleTlsRelocation(uint32_t Type, SymbolBody &Body,
 
     // Global-Dynamic relocs can be relaxed to Initial-Exec or Local-Exec
     // depending on the symbol being locally defined or not.
-    if (isPreemptible(Body, Type)) {
+    if (IsPreemptible) {
       C.Relocations.push_back(
           {Target->adjustRelaxExpr(Type, nullptr, R_RELAX_TLS_GD_TO_IE), Type,
            Offset, Addend, &Body});
@@ -219,8 +229,7 @@ static unsigned handleTlsRelocation(uint32_t Type, SymbolBody &Body,
 
   // Initial-Exec relocs can be relaxed to Local-Exec if the symbol is locally
   // defined.
-  if (Target->isTlsInitialExecRel(Type) && !Config->Shared &&
-      !isPreemptible(Body, Type)) {
+  if (Target->isTlsInitialExecRel(Type) && !Config->Shared && !IsPreemptible) {
     C.Relocations.push_back(
         {R_RELAX_TLS_IE_TO_LE, Type, Offset, Addend, &Body});
     return 1;
@@ -271,8 +280,8 @@ static int32_t findMipsPairedAddend(const uint8_t *Buf, const uint8_t *BufLoc,
     return ((read32<E>(BufLoc) & 0xffff) << 16) +
            readSignedLo16<E>(Buf + RI->r_offset);
   }
-  warn("can't find matching " + getRelName(Type) + " relocation for " +
-       getRelName(Rel->getType(Config->Mips64EL)));
+  warn("can't find matching " + toString(Type) + " relocation for " +
+       toString(Rel->getType(Config->Mips64EL)));
   return 0;
 }
 
@@ -291,16 +300,16 @@ template <class ELFT> static bool isAbsoluteValue(const SymbolBody &Body) {
 }
 
 static bool needsPlt(RelExpr Expr) {
-  return Expr == R_PLT_PC || Expr == R_PPC_PLT_OPD || Expr == R_PLT ||
-         Expr == R_PLT_PAGE_PC || Expr == R_THUNK_PLT_PC;
+  return isRelExprOneOf<R_PLT_PC, R_PPC_PLT_OPD, R_PLT, R_PLT_PAGE_PC,
+                        R_THUNK_PLT_PC>(Expr);
 }
 
 // True if this expression is of the form Sym - X, where X is a position in the
 // file (PC, or GOT for example).
 static bool isRelExpr(RelExpr Expr) {
-  return Expr == R_PC || Expr == R_GOTREL || Expr == R_GOTREL_FROM_END ||
-         Expr == R_MIPS_GOTREL || Expr == R_PAGE_PC || Expr == R_RELAX_GOT_PC ||
-         Expr == R_THUNK_PC || Expr == R_THUNK_PLT_PC;
+  return isRelExprOneOf<R_PC, R_GOTREL, R_GOTREL_FROM_END, R_MIPS_GOTREL,
+                        R_PAGE_PC, R_RELAX_GOT_PC, R_THUNK_PC, R_THUNK_PLT_PC>(
+      Expr);
 }
 
 template <class ELFT>
@@ -309,12 +318,11 @@ static bool isStaticLinkTimeConstant(RelExpr E, uint32_t Type,
                                      InputSectionBase<ELFT> &S,
                                      typename ELFT::uint RelOff) {
   // These expressions always compute a constant
-  if (E == R_SIZE || E == R_GOT_FROM_END || E == R_GOT_OFF ||
-      E == R_MIPS_GOT_LOCAL_PAGE || E == R_MIPS_GOT_OFF ||
-      E == R_MIPS_GOT_OFF32 || E == R_MIPS_TLSGD || E == R_GOT_PAGE_PC ||
-      E == R_GOT_PC || E == R_PLT_PC || E == R_TLSGD_PC || E == R_TLSGD ||
-      E == R_PPC_PLT_OPD || E == R_TLSDESC_CALL || E == R_TLSDESC_PAGE ||
-      E == R_HINT || E == R_THUNK_PC || E == R_THUNK_PLT_PC)
+  if (isRelExprOneOf<R_SIZE, R_GOT_FROM_END, R_GOT_OFF, R_MIPS_GOT_LOCAL_PAGE,
+                     R_MIPS_GOT_OFF, R_MIPS_GOT_OFF32, R_MIPS_TLSGD,
+                     R_GOT_PAGE_PC, R_GOT_PC, R_PLT_PC, R_TLSGD_PC, R_TLSGD,
+                     R_PPC_PLT_OPD, R_TLSDESC_CALL, R_TLSDESC_PAGE, R_HINT,
+                     R_THUNK_PC, R_THUNK_PLT_PC>(E))
     return true;
 
   // These never do, except if the entire file is position dependent or if
@@ -340,12 +348,17 @@ static bool isStaticLinkTimeConstant(RelExpr E, uint32_t Type,
   // resolve to the image base. This is a little strange, but it allows us to
   // link function calls to such symbols. Normally such a call will be guarded
   // with a comparison, which will load a zero from the GOT.
+  // Another special case is MIPS _gp_disp symbol which represents offset
+  // between start of a function and '_gp' value and defined as absolute just
+  // to simplify the code.
   if (AbsVal && RelE) {
     if (Body.isUndefined() && !Body.isLocal() && Body.symbol()->isWeak())
       return true;
-    error(getLocation(S, RelOff) + ": relocation " + getRelName(Type) +
-          " cannot refer to absolute symbol '" + Body.getName() +
-          "' defined in " + getFilename(Body.File));
+    if (&Body == ElfSym<ELFT>::MipsGpDisp)
+      return true;
+    error(S.getLocation(RelOff) + ": relocation " + toString(Type) +
+          " cannot refer to absolute symbol '" + toString(Body) +
+          "' defined in " + toString(Body.File));
     return true;
   }
 
@@ -386,7 +399,21 @@ template <class ELFT> static uint32_t getAlignment(SharedSymbol<ELFT> *SS) {
   return 1 << TrailingZeros;
 }
 
-// Reserve space in .bss for copy relocation.
+template <class ELFT> static bool isReadOnly(SharedSymbol<ELFT> *SS) {
+  typedef typename ELFT::uint uintX_t;
+  typedef typename ELFT::Phdr Elf_Phdr;
+
+  // Determine if the symbol is read-only by scanning the DSO's program headers.
+  uintX_t Value = SS->Sym.st_value;
+  for (const Elf_Phdr &Phdr : check(SS->file()->getObj().program_headers()))
+    if ((Phdr.p_type == ELF::PT_LOAD || Phdr.p_type == ELF::PT_GNU_RELRO) &&
+        !(Phdr.p_flags & ELF::PF_W) && Value >= Phdr.p_vaddr &&
+        Value < Phdr.p_vaddr + Phdr.p_memsz)
+      return true;
+  return false;
+}
+
+// Reserve space in .bss or .bss.rel.ro for copy relocation.
 template <class ELFT> static void addCopyRelSymbol(SharedSymbol<ELFT> *SS) {
   typedef typename ELFT::uint uintX_t;
   typedef typename ELFT::Sym Elf_Sym;
@@ -394,12 +421,18 @@ template <class ELFT> static void addCopyRelSymbol(SharedSymbol<ELFT> *SS) {
   // Copy relocation against zero-sized symbol doesn't make sense.
   uintX_t SymSize = SS->template getSize<ELFT>();
   if (SymSize == 0)
-    fatal("cannot create a copy relocation for symbol " + SS->getName());
+    fatal("cannot create a copy relocation for symbol " + toString(*SS));
+
+  // See if this symbol is in a read-only segment. If so, preserve the symbol's
+  // memory protection by reserving space in the .bss.rel.ro section.
+  bool IsReadOnly = isReadOnly(SS);
+  OutputSection<ELFT> *CopySec =
+      IsReadOnly ? Out<ELFT>::BssRelRo : Out<ELFT>::Bss;
 
   uintX_t Alignment = getAlignment(SS);
-  uintX_t Off = alignTo(Out<ELFT>::Bss->Size, Alignment);
-  Out<ELFT>::Bss->Size = Off + SymSize;
-  Out<ELFT>::Bss->updateAlignment(Alignment);
+  uintX_t Off = alignTo(CopySec->Size, Alignment);
+  CopySec->Size = Off + SymSize;
+  CopySec->updateAlignment(Alignment);
   uintX_t Shndx = SS->Sym.st_shndx;
   uintX_t Value = SS->Sym.st_value;
   // Look through the DSO's dynamic symbol table for aliases and create a
@@ -412,12 +445,12 @@ template <class ELFT> static void addCopyRelSymbol(SharedSymbol<ELFT> *SS) {
         Symtab<ELFT>::X->find(check(S.getName(SS->file()->getStringTable()))));
     if (!Alias)
       continue;
-    Alias->OffsetInBss = Off;
+    Alias->CopyIsInBssRelRo = IsReadOnly;
+    Alias->CopyOffset = Off;
     Alias->NeedsCopyOrPltAddr = true;
     Alias->symbol()->IsUsedInRegularObj = true;
   }
-  In<ELFT>::RelaDyn->addReloc(
-      {Target->CopyRel, Out<ELFT>::Bss, SS->OffsetInBss, false, SS, 0});
+  In<ELFT>::RelaDyn->addReloc({Target->CopyRel, CopySec, Off, false, SS, 0});
 }
 
 template <class ELFT>
@@ -434,7 +467,7 @@ static RelExpr adjustExpr(const elf::ObjectFile<ELFT> &File, SymbolBody &Body,
     if (Expr == R_GOT_PC && !isAbsoluteValue<ELFT>(Body))
       Expr = Target->adjustRelaxExpr(Type, Data, Expr);
   }
-  Expr = Target->getThunkExpr(Expr, Type, File, Body);
+  Expr = Target->getThunkExpr(Expr, Type, &File, Body);
 
   if (IsWrite || isStaticLinkTimeConstant<ELFT>(Expr, Type, Body, S, RelOff))
     return Expr;
@@ -443,17 +476,16 @@ static RelExpr adjustExpr(const elf::ObjectFile<ELFT> &File, SymbolBody &Body,
   // only memory. We can hack around it if we are producing an executable and
   // the refered symbol can be preemepted to refer to the executable.
   if (Config->Shared || (Config->Pic && !isRelExpr(Expr))) {
-    StringRef Name = getSymbolName(File.getStringTable(), Body);
-    error(getLocation(S, RelOff) + ": can't create dynamic relocation " +
-          getRelName(Type) + " against " +
-          ((Name.empty() ? "local symbol in readonly segment"
-                         : "symbol '" + Name + "'")) +
-          " defined in " + getFilename(Body.File));
+    error(S.getLocation(RelOff) + ": can't create dynamic relocation " +
+          toString(Type) + " against " +
+          (Body.getName().empty() ? "local symbol in readonly segment"
+                                  : "symbol '" + toString(Body) + "'") +
+          " defined in " + toString(Body.File));
     return Expr;
   }
   if (Body.getVisibility() != STV_DEFAULT) {
-    error(getLocation(S, RelOff) + ": cannot preempt symbol '" +
-          Body.getName() + "' defined in " + getFilename(Body.File));
+    error(S.getLocation(RelOff) + ": cannot preempt symbol '" + toString(Body) +
+          "' defined in " + toString(Body.File));
     return Expr;
   }
   if (Body.isObject()) {
@@ -487,7 +519,7 @@ static RelExpr adjustExpr(const elf::ObjectFile<ELFT> &File, SymbolBody &Body,
     Body.NeedsCopyOrPltAddr = true;
     return toPlt(Expr);
   }
-  error("symbol '" + Body.getName() + "' defined in " + getFilename(Body.File) +
+  error("symbol '" + toString(Body) + "' defined in " + toString(Body.File) +
         " is missing type");
 
   return Expr;
@@ -522,46 +554,6 @@ static typename ELFT::uint computeAddend(const elf::ObjectFile<ELFT> &File,
   return Addend;
 }
 
-// Find symbol that encloses given offset. Used for error reporting.
-template <class ELFT>
-static DefinedRegular<ELFT> *getSymbolAt(InputSectionBase<ELFT> *S,
-                                         typename ELFT::uint Offset) {
-  for (SymbolBody *B : S->getFile()->getSymbols())
-    if (auto *D = dyn_cast<DefinedRegular<ELFT>>(B))
-      if (D->Value <= Offset && D->Value + D->Size > Offset && D->Section == S)
-        return D;
-
-  return nullptr;
-}
-
-template <class ELFT>
-std::string getLocation(InputSectionBase<ELFT> &S, typename ELFT::uint Offset) {
-  ObjectFile<ELFT> *File = S.getFile();
-
-  // First check if we can get desired values from debugging information.
-  std::string LineInfo = File->getLineInfo(&S, Offset);
-  if (!LineInfo.empty())
-    return LineInfo;
-
-  // File->SourceFile contains STT_FILE symbol contents which is a
-  // filename. Compilers usually create STT_FILE symbols. If it's
-  // missing, we use an actual filename.
-  std::string SrcFile = File->SourceFile;
-  if (SrcFile.empty())
-    SrcFile = getFilename(File);
-
-  // Find a symbol at a given location.
-  DefinedRegular<ELFT> *Encl = getSymbolAt(&S, Offset);
-  if (Encl && Encl->Type == STT_FUNC) {
-    StringRef Func = getSymbolName(File->getStringTable(), *Encl);
-    return SrcFile + " (function " + maybeDemangle(Func) + ")";
-  }
-
-  // If there's no symbol, print out the offset instead of a symbol name.
-  return (SrcFile + " (" + S.Name + "+0x" + Twine::utohexstr(Offset) + ")")
-      .str();
-}
-
 template <class ELFT>
 static void reportUndefined(SymbolBody &Sym, InputSectionBase<ELFT> &S,
                             typename ELFT::uint Offset) {
@@ -572,8 +564,8 @@ static void reportUndefined(SymbolBody &Sym, InputSectionBase<ELFT> &S,
       Config->UnresolvedSymbols != UnresolvedPolicy::NoUndef)
     return;
 
-  std::string Msg = getLocation(S, Offset) + ": undefined symbol '" +
-                    maybeDemangle(Sym.getName()) + "'";
+  std::string Msg =
+      S.getLocation(Offset) + ": undefined symbol '" + toString(Sym) + "'";
 
   if (Config->UnresolvedSymbols == UnresolvedPolicy::Warn)
     warn(Msg);
@@ -652,7 +644,7 @@ static void scanRelocs(InputSectionBase<ELFT> &C, ArrayRef<RelTy> Rels) {
     bool Preemptible = isPreemptible(Body, Type);
     Expr = adjustExpr(*File, Body, IsWrite, Expr, Type, Buf + RI.r_offset, C,
                       RI.r_offset);
-    if (HasError)
+    if (ErrorCount)
       continue;
 
     // Skip a relocation that points to a dead piece
@@ -689,12 +681,12 @@ static void scanRelocs(InputSectionBase<ELFT> &C, ArrayRef<RelTy> Rels) {
 
     // Ignore "hint" and TLS Descriptor call relocation because they are
     // only markers for relaxation.
-    if (Expr == R_HINT || Expr == R_TLSDESC_CALL)
+    if (isRelExprOneOf<R_HINT, R_TLSDESC_CALL>(Expr))
       continue;
 
-    if (needsPlt(Expr) || Expr == R_THUNK_ABS || Expr == R_THUNK_PC ||
-        Expr == R_THUNK_PLT_PC || refersToGotEntry(Expr) ||
-        !isPreemptible(Body, Type)) {
+    if (needsPlt(Expr) ||
+        isRelExprOneOf<R_THUNK_ABS, R_THUNK_PC, R_THUNK_PLT_PC>(Expr) ||
+        refersToGotEntry(Expr) || !isPreemptible(Body, Type)) {
       // If the relocation points to something in the file, we can process it.
       bool Constant =
           isStaticLinkTimeConstant<ELFT>(Expr, Type, Body, C, RI.r_offset);
@@ -715,7 +707,11 @@ static void scanRelocs(InputSectionBase<ELFT> &C, ArrayRef<RelTy> Rels) {
     } else {
       // We don't know anything about the finaly symbol. Just ask the dynamic
       // linker to handle the relocation for us.
+      if (!Target->isPicRel(Type))
+        error(C.getLocation(Offset) + ": relocation " + toString(Type) +
+              " cannot be used against shared object; recompile with -fPIC.");
       AddDyn({Target->getDynRel(Type), &C, Offset, false, &Body, Addend});
+
       // MIPS ABI turns using of GOT and dynamic relocations inside out.
       // While regular ABI uses dynamic relocations to fill up GOT entries
       // MIPS ABI requires dynamic linker to fills up GOT entries using
@@ -743,18 +739,20 @@ static void scanRelocs(InputSectionBase<ELFT> &C, ArrayRef<RelTy> Rels) {
     if (needsPlt(Expr)) {
       if (Body.isInPlt())
         continue;
-      In<ELFT>::Plt->addEntry(Body);
 
-      uint32_t Rel;
-      if (Body.isGnuIFunc() && !Preemptible)
-        Rel = Target->IRelativeRel;
-      else
-        Rel = Target->PltRel;
-
-      In<ELFT>::GotPlt->addEntry(Body);
-      In<ELFT>::RelaPlt->addReloc({Rel, In<ELFT>::GotPlt,
-                                   Body.getGotPltOffset<ELFT>(), !Preemptible,
-                                   &Body, 0});
+      if (Body.isGnuIFunc() && !Preemptible) {
+        In<ELFT>::Iplt->addEntry(Body);
+        In<ELFT>::IgotPlt->addEntry(Body);
+        In<ELFT>::RelaIplt->addReloc({Target->IRelativeRel, In<ELFT>::IgotPlt,
+                                      Body.getGotPltOffset<ELFT>(),
+                                      !Preemptible, &Body, 0});
+      } else {
+        In<ELFT>::Plt->addEntry(Body);
+        In<ELFT>::GotPlt->addEntry(Body);
+        In<ELFT>::RelaPlt->addReloc({Target->PltRel, In<ELFT>::GotPlt,
+                                     Body.getGotPltOffset<ELFT>(), !Preemptible,
+                                     &Body, 0});
+      }
       continue;
     }
 
@@ -778,17 +776,23 @@ static void scanRelocs(InputSectionBase<ELFT> &C, ArrayRef<RelTy> Rels) {
         continue;
 
       In<ELFT>::Got->addEntry(Body);
-      if (Preemptible || (Config->Pic && !isAbsolute<ELFT>(Body))) {
-        uint32_t DynType;
-        if (Body.isTls())
-          DynType = Target->TlsGotRel;
-        else if (Preemptible)
-          DynType = Target->GotRel;
-        else
-          DynType = Target->RelativeRel;
-        AddDyn({DynType, In<ELFT>::Got, Body.getGotOffset<ELFT>(), !Preemptible,
-                &Body, 0});
-      }
+      uintX_t Off = Body.getGotOffset<ELFT>();
+      uint32_t DynType;
+      RelExpr GotRE = R_ABS;
+      if (Body.isTls()) {
+        DynType = Target->TlsGotRel;
+        GotRE = R_TLS;
+      } else if (!Preemptible && Config->Pic && !isAbsolute<ELFT>(Body))
+        DynType = Target->RelativeRel;
+      else
+        DynType = Target->GotRel;
+
+      // FIXME: this logic is almost duplicated above.
+      bool Constant = !Preemptible && !(Config->Pic && !isAbsolute<ELFT>(Body));
+      if (!Constant)
+        AddDyn({DynType, In<ELFT>::Got, Off, !Preemptible, &Body, 0});
+      if (Constant || (!RelTy::IsRela && !Preemptible))
+        In<ELFT>::Got->Relocations.push_back({GotRE, DynType, Off, 0, &Body});
       continue;
     }
   }
@@ -801,31 +805,33 @@ template <class ELFT> void scanRelocations(InputSectionBase<ELFT> &S) {
     scanRelocs(S, S.rels());
 }
 
-template <class ELFT, class RelTy>
-static void createThunks(InputSectionBase<ELFT> &C, ArrayRef<RelTy> Rels) {
-  const elf::ObjectFile<ELFT> *File = C.getFile();
-  for (const RelTy &Rel : Rels) {
-    SymbolBody &Body = File->getRelocTargetSym(Rel);
-    uint32_t Type = Rel.getType(Config->Mips64EL);
-    RelExpr Expr = Target->getRelExpr(Type, Body);
-    if (!isPreemptible(Body, Type) && needsPlt(Expr))
-      Expr = fromPlt(Expr);
-    Expr = Target->getThunkExpr(Expr, Type, *File, Body);
-    // Some targets might require creation of thunks for relocations.
-    // Now we support only MIPS which requires LA25 thunk to call PIC
-    // code from non-PIC one, and ARM which requires interworking.
-    if (Expr == R_THUNK_ABS || Expr == R_THUNK_PC || Expr == R_THUNK_PLT_PC) {
-      auto *Sec = cast<InputSection<ELFT>>(&C);
-      addThunk<ELFT>(Type, Body, *Sec);
+template <class ELFT>
+void createThunks(ArrayRef<OutputSectionBase *> OutputSections) {
+  for (OutputSectionBase *Base : OutputSections) {
+    auto *OS = dyn_cast<OutputSection<ELFT>>(Base);
+    if (OS == nullptr)
+      continue;
+    for (InputSection<ELFT> *IS : OS->Sections) {
+      for (const Relocation &Rel : IS->Relocations) {
+        if (Rel.Sym == nullptr)
+          continue;
+        RelExpr Expr = Rel.Expr;
+        // Some targets might require creation of thunks for relocations.
+        // Now we support only MIPS which requires LA25 thunk to call PIC
+        // code from non-PIC one, and ARM which requires interworking.
+        if (Expr == R_THUNK_ABS || Expr == R_THUNK_PC ||
+            Expr == R_THUNK_PLT_PC)
+          addThunk<ELFT>(Rel.Type, *Rel.Sym, *IS);
+      }
     }
   }
-}
-
-template <class ELFT> void createThunks(InputSectionBase<ELFT> &S) {
-  if (S.AreRelocsRela)
-    createThunks(S, S.relas());
-  else
-    createThunks(S, S.rels());
+  // Added thunks may affect the output section offset
+  for (OutputSectionBase *Base : OutputSections)
+    if (auto *OS = dyn_cast<OutputSection<ELFT>>(Base))
+      if (OS->Type == SHT_PROGBITS) {
+        OS->Size = 0;
+        OS->assignOffsets();
+      }
 }
 
 template void scanRelocations<ELF32LE>(InputSectionBase<ELF32LE> &);
@@ -833,18 +839,9 @@ template void scanRelocations<ELF32BE>(InputSectionBase<ELF32BE> &);
 template void scanRelocations<ELF64LE>(InputSectionBase<ELF64LE> &);
 template void scanRelocations<ELF64BE>(InputSectionBase<ELF64BE> &);
 
-template void createThunks<ELF32LE>(InputSectionBase<ELF32LE> &);
-template void createThunks<ELF32BE>(InputSectionBase<ELF32BE> &);
-template void createThunks<ELF64LE>(InputSectionBase<ELF64LE> &);
-template void createThunks<ELF64BE>(InputSectionBase<ELF64BE> &);
-
-template std::string getLocation<ELF32LE>(InputSectionBase<ELF32LE> &S,
-                                          uint32_t Offset);
-template std::string getLocation<ELF32BE>(InputSectionBase<ELF32BE> &S,
-                                          uint32_t Offset);
-template std::string getLocation<ELF64LE>(InputSectionBase<ELF64LE> &S,
-                                          uint64_t Offset);
-template std::string getLocation<ELF64BE>(InputSectionBase<ELF64BE> &S,
-                                          uint64_t Offset);
+template void createThunks<ELF32LE>(ArrayRef<OutputSectionBase *>);
+template void createThunks<ELF32BE>(ArrayRef<OutputSectionBase *>);
+template void createThunks<ELF64LE>(ArrayRef<OutputSectionBase *>);
+template void createThunks<ELF64BE>(ArrayRef<OutputSectionBase *>);
 }
 }

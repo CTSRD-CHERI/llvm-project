@@ -459,12 +459,14 @@ struct FormatStyle {
   enum LanguageKind {
     /// Do not use.
     LK_None,
-    /// Should be used for C, C++, ObjectiveC, ObjectiveC++.
+    /// Should be used for C, C++.
     LK_Cpp,
     /// Should be used for Java.
     LK_Java,
     /// Should be used for JavaScript.
     LK_JavaScript,
+    /// Should be used for ObjectiveC, ObjectiveC++.
+    LK_ObjC,
     /// Should be used for Protocol Buffers
     /// (https://developers.google.com/protocol-buffers/).
     LK_Proto,
@@ -786,7 +788,14 @@ formatReplacements(StringRef Code, const tooling::Replacements &Replaces,
 /// This also supports inserting/deleting C++ #include directives:
 /// - If a replacement has offset UINT_MAX, length 0, and a replacement text
 ///   that is an #include directive, this will insert the #include into the
-///   correct block in the \p Code.
+///   correct block in the \p Code. When searching for points to insert new
+///   header, this ignores #include's after the #include block(s) in the
+///   beginning of a file to avoid inserting headers into code sections where
+///   new #include's should not be added by default. These code sections
+///   include:
+///     - raw string literals (containing #include).
+///     - #if blocks.
+///     - Special #include's among declarations (e.g. functions).
 /// - If a replacement has offset UINT_MAX, length 1, and a replacement text
 ///   that is the name of the header to be removed, the header will be removed
 ///   from \p Code if it exists.
@@ -844,14 +853,19 @@ extern const char *StyleOptionHelpDescription;
 /// \param[in] FileName Path to start search for .clang-format if ``StyleName``
 /// == "file".
 /// \param[in] FallbackStyle The name of a predefined style used to fallback to
-/// in case the style can't be determined from \p StyleName.
+/// in case \p StyleName is "file" and no file can be found.
+/// \param[in] Code The actual code to be formatted. Used to determine the
+/// language if the filename isn't sufficient.
 /// \param[in] FS The underlying file system, in which the file resides. By
 /// default, the file system is the real file system.
 ///
-/// \returns FormatStyle as specified by ``StyleName``. If no style could be
-/// determined, the default is LLVM Style (see ``getLLVMStyle()``).
-FormatStyle getStyle(StringRef StyleName, StringRef FileName,
-                     StringRef FallbackStyle, vfs::FileSystem *FS = nullptr);
+/// \returns FormatStyle as specified by ``StyleName``. If ``StyleName`` is
+/// "file" and no file is found, returns ``FallbackStyle``. If no style could be
+/// determined, returns an Error.
+llvm::Expected<FormatStyle> getStyle(StringRef StyleName, StringRef FileName,
+                                     StringRef FallbackStyle,
+                                     StringRef Code = "",
+                                     vfs::FileSystem *FS = nullptr);
 
 // \brief Returns a string representation of ``Language``.
 inline StringRef getLanguageName(FormatStyle::LanguageKind Language) {

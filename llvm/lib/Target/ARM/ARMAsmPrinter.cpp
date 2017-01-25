@@ -165,7 +165,7 @@ bool ARMAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
   EmitFunctionBody();
 
   // Emit the XRay table for this function.
-  EmitXRayTable();
+  emitXRayTable();
 
   // If we need V4T thumb mode Register Indirect Jump pads, emit them.
   // These are created per function, rather than per TU, since it's
@@ -232,6 +232,8 @@ void ARMAsmPrinter::printOperand(const MachineInstr *MI, int OpNum,
     break;
   }
   case MachineOperand::MO_ConstantPoolIndex:
+    if (Subtarget->genExecuteOnly())
+      llvm_unreachable("execute-only should not generate constant pools");
     GetCPISymbol(MO.getIndex())->print(O, MAI);
     break;
   }
@@ -842,7 +844,7 @@ void ARMAsmPrinter::emitAttributes() {
                       ARMBuildAttrs::Allowed);
   else
     ATS.emitAttribute(ARMBuildAttrs::ABI_FP_number_model,
-                      ARMBuildAttrs::AllowIEE754);
+                      ARMBuildAttrs::AllowIEEE754);
 
   if (STI.allowsUnalignedMem())
     ATS.emitAttribute(ARMBuildAttrs::CPU_unaligned_access,

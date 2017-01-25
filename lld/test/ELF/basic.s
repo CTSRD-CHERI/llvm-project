@@ -4,6 +4,7 @@
 # RUN: ld.lld %t -o %t2
 # RUN: llvm-readobj -file-headers -sections -program-headers -symbols %t2 \
 # RUN:   | FileCheck %s
+# RUN: ld.lld %t -o /dev/null
 
 # exits with return code 42 on linux
 .globl _start
@@ -60,7 +61,7 @@ _start:
 # CHECK-NEXT:       SHF_ALLOC (0x2)
 # CHECK-NEXT:       SHF_EXECINSTR (0x4)
 # CHECK-NEXT:     ]
-# CHECK-NEXT:     Address: 0x11000
+# CHECK-NEXT:     Address: 0x201000
 # CHECK-NEXT:     Offset: 0x1000
 # CHECK-NEXT:     Size: 16
 # CHECK-NEXT:     Link: 0
@@ -151,8 +152,8 @@ _start:
 # CHECK-NEXT:   ProgramHeader {
 # CHECK-NEXT:     Type: PT_PHDR (0x6)
 # CHECK-NEXT:     Offset: 0x40
-# CHECK-NEXT:     VirtualAddress: 0x10040
-# CHECK-NEXT:     PhysicalAddress: 0x10040
+# CHECK-NEXT:     VirtualAddress: 0x200040
+# CHECK-NEXT:     PhysicalAddress: 0x200040
 # CHECK-NEXT:     FileSize: 224
 # CHECK-NEXT:     MemSize: 224
 # CHECK-NEXT:     Flags [ (0x4)
@@ -163,8 +164,8 @@ _start:
 # CHECK-NEXT:   ProgramHeader {
 # CHECK-NEXT:     Type: PT_LOAD (0x1)
 # CHECK-NEXT:     Offset: 0x0
-# CHECK-NEXT:     VirtualAddress: 0x10000
-# CHECK-NEXT:     PhysicalAddress: 0x10000
+# CHECK-NEXT:     VirtualAddress: 0x200000
+# CHECK-NEXT:     PhysicalAddress: 0x200000
 # CHECK-NEXT:     FileSize: 288
 # CHECK-NEXT:     MemSize: 288
 # CHECK-NEXT:     Flags [
@@ -175,8 +176,8 @@ _start:
 # CHECK-NEXT:   ProgramHeader {
 # CHECK-NEXT:     Type: PT_LOAD (0x1)
 # CHECK-NEXT:     Offset: 0x1000
-# CHECK-NEXT:     VirtualAddress: 0x11000
-# CHECK-NEXT:     PhysicalAddress: 0x11000
+# CHECK-NEXT:     VirtualAddress: 0x201000
+# CHECK-NEXT:     PhysicalAddress: 0x201000
 # CHECK-NEXT:     FileSize: 16
 # CHECK-NEXT:     MemSize: 16
 # CHECK-NEXT:     Flags [ (0x5)
@@ -237,8 +238,8 @@ _start:
 
 # RUN: llvm-mc -filetype=obj -triple=x86_64-unknown-linux %s -o %t
 # RUN: not ld.lld %t %t -o %t2 2>&1 | FileCheck --check-prefix=DUP %s
-# DUP: {{.*}} (.text+0x0): duplicate symbol '_start'
-# DUP: {{.*}} (.text+0x0): previous definition was here
+# DUP: {{.*}}:(.text+0x0): duplicate symbol '_start'
+# DUP: {{.*}}:(.text+0x0): previous definition was here
 
 # RUN: not ld.lld %t -o %t -m wrong_emul_fbsd 2>&1 | FileCheck --check-prefix=UNKNOWN_EMUL %s
 # UNKNOWN_EMUL: unknown emulation: wrong_emul_fbsd

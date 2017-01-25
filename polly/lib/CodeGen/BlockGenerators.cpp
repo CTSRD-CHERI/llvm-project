@@ -264,7 +264,7 @@ void BlockGenerator::generateArrayStore(ScopStmt &Stmt, StoreInst *Store,
 bool BlockGenerator::canSyntheziseInStmt(ScopStmt &Stmt, Instruction *Inst) {
   Loop *L = getLoopForStmt(Stmt);
   return (Stmt.isBlockStmt() || !Stmt.getRegion()->contains(L)) &&
-         canSynthesize(Inst, *Stmt.getParent(), &LI, &SE, L);
+         canSynthesize(Inst, *Stmt.getParent(), &SE, L);
 }
 
 void BlockGenerator::copyInstruction(ScopStmt &Stmt, Instruction *Inst,
@@ -476,9 +476,9 @@ void BlockGenerator::generateScalarStores(
     __isl_keep isl_id_to_ast_expr *NewAccesses) {
   Loop *L = LI.getLoopFor(Stmt.getBasicBlock());
 
-  assert(Stmt.isBlockStmt() && "Region statements need to use the "
-                               "generateScalarStores() function in the "
-                               "RegionGenerator");
+  assert(Stmt.isBlockStmt() &&
+         "Region statements need to use the generateScalarStores() function in "
+         "the RegionGenerator");
 
   for (MemoryAccess *MA : Stmt) {
     if (MA->isOriginalArrayKind() || MA->isRead())
@@ -1060,8 +1060,9 @@ void VectorBlockGenerator::verifyNoScalarStores(ScopStmt &Stmt) {
 
 void VectorBlockGenerator::copyStmt(
     ScopStmt &Stmt, __isl_keep isl_id_to_ast_expr *NewAccesses) {
-  assert(Stmt.isBlockStmt() && "TODO: Only block statements can be copied by "
-                               "the vector block generator");
+  assert(Stmt.isBlockStmt() &&
+         "TODO: Only block statements can be copied by the vector block "
+         "generator");
 
   BasicBlock *BB = Stmt.getBasicBlock();
   BasicBlock *CopyBB = SplitBlock(Builder.GetInsertBlock(),
@@ -1237,8 +1238,9 @@ void RegionGenerator::copyStmt(ScopStmt &Stmt, LoopToScevMapT &LTS,
   BlockMap[R->getExit()] = ExitBBCopy;
 
   BasicBlock *ExitDomBBCopy = BlockMap.lookup(findExitDominator(DT, R));
-  assert(ExitDomBBCopy && "Common exit dominator must be within region; at "
-                          "least the entry node must match");
+  assert(ExitDomBBCopy &&
+         "Common exit dominator must be within region; at least the entry node "
+         "must match");
   DT.changeImmediateDominator(ExitBBCopy, ExitDomBBCopy);
 
   // As the block generator doesn't handle control flow we need to add the
@@ -1366,8 +1368,8 @@ Value *RegionGenerator::getExitScalar(MemoryAccess *MA, LoopToScevMapT &LTS,
     return buildExitPHI(MA, LTS, BBMap, L);
   }
 
-  // MK_Value accesses leaving the subregion must dominate the exit block; just
-  // pass the copied value
+  // MemoryKind::Value accesses leaving the subregion must dominate the exit
+  // block; just pass the copied value.
   Value *OldVal = MA->getAccessValue();
   return getNewValue(*Stmt, OldVal, BBMap, LTS, L);
 }
@@ -1398,7 +1400,7 @@ void RegionGenerator::generateScalarStores(
   }
 }
 
-void RegionGenerator::addOperandToPHI(ScopStmt &Stmt, const PHINode *PHI,
+void RegionGenerator::addOperandToPHI(ScopStmt &Stmt, PHINode *PHI,
                                       PHINode *PHICopy, BasicBlock *IncomingBB,
                                       LoopToScevMapT &LTS) {
   Region *StmtR = Stmt.getRegion();
@@ -1413,12 +1415,12 @@ void RegionGenerator::addOperandToPHI(ScopStmt &Stmt, const PHINode *PHI,
     return;
   }
 
-  Value *OpCopy = nullptr;
-  if (StmtR->contains(IncomingBB)) {
-    assert(RegionMaps.count(BBCopy) &&
-           "Incoming PHI block did not have a BBMap");
-    ValueMapT &BBCopyMap = RegionMaps[BBCopy];
+  assert(RegionMaps.count(BBCopy) && "Incoming PHI block did not have a BBMap");
+  ValueMapT &BBCopyMap = RegionMaps[BBCopy];
 
+  Value *OpCopy = nullptr;
+
+  if (StmtR->contains(IncomingBB)) {
     Value *Op = PHI->getIncomingValueForBlock(IncomingBB);
 
     // If the current insert block is different from the PHIs incoming block
@@ -1430,13 +1432,15 @@ void RegionGenerator::addOperandToPHI(ScopStmt &Stmt, const PHINode *PHI,
     if (IP->getParent() != BBCopy)
       Builder.SetInsertPoint(&*IP);
   } else {
-
+    // All edges from outside the non-affine region become a single edge
+    // in the new copy of the non-affine region. Make sure to only add the
+    // corresponding edge the first time we encounter a basic block from
+    // outside the non-affine region.
     if (PHICopy->getBasicBlockIndex(BBCopy) >= 0)
       return;
 
-    Value *PHIOpAddr = getOrCreatePHIAlloca(const_cast<PHINode *>(PHI));
-    OpCopy = new LoadInst(PHIOpAddr, PHIOpAddr->getName() + ".reload",
-                          BlockMap[IncomingBB]->getTerminator());
+    // Get the reloaded value.
+    OpCopy = getNewValue(Stmt, PHI, BBCopyMap, LTS, getLoopForStmt(Stmt));
   }
 
   assert(OpCopy && "Incoming PHI value was not copied properly");
@@ -1453,6 +1457,6 @@ void RegionGenerator::copyPHIInstruction(ScopStmt &Stmt, PHINode *PHI,
   PHICopy->moveBefore(PHICopy->getParent()->getFirstNonPHI());
   BBMap[PHI] = PHICopy;
 
-  for (unsigned u = 0; u < NumIncoming; u++)
-    addOperandToPHI(Stmt, PHI, PHICopy, PHI->getIncomingBlock(u), LTS);
+  for (BasicBlock *IncomingBB : PHI->blocks())
+    addOperandToPHI(Stmt, PHI, PHICopy, IncomingBB, LTS);
 }

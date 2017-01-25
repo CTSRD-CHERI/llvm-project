@@ -156,8 +156,7 @@ IntrinsicIDToOverflowCheckFlavor(unsigned ID) {
 /// \brief The core instruction combiner logic.
 ///
 /// This class provides both the logic to recursively visit instructions and
-/// combine them, as well as the pass infrastructure for running this as part
-/// of the LLVM pass pipeline.
+/// combine them.
 class LLVM_LIBRARY_VISIBILITY InstCombiner
     : public InstVisitor<InstCombiner, Instruction *> {
   // FIXME: These members shouldn't be public.
@@ -321,7 +320,6 @@ private:
   Value *dyn_castFNegVal(Value *V, bool NoSignedZero = false) const;
   Type *FindElementAtOffset(PointerType *PtrTy, int64_t Offset,
                             SmallVectorImpl<Value *> &NewIndices);
-  Instruction *FoldOpIntoSelect(Instruction &Op, SelectInst *SI);
 
   /// Classify whether a cast is worth optimizing.
   ///
@@ -380,6 +378,7 @@ private:
   Instruction *scalarizePHI(ExtractElementInst &EI, PHINode *PN);
   Value *EvaluateInDifferentElementOrder(Value *V, ArrayRef<int> Mask);
   Instruction *foldCastedBitwiseLogic(BinaryOperator &I);
+  Instruction *shrinkBitwiseLogic(TruncInst &Trunc);
   Instruction *optimizeBitCastFromPhi(CastInst &CI, PHINode *PN);
 
   /// Determine if a pair of casts can be replaced by a single cast.
@@ -537,12 +536,20 @@ private:
   Value *SimplifyVectorOp(BinaryOperator &Inst);
   Value *SimplifyBSwap(BinaryOperator &Inst);
 
-  // FoldOpIntoPhi - Given a binary operator, cast instruction, or select
-  // which has a PHI node as operand #0, see if we can fold the instruction
-  // into the PHI (which is only possible if all operands to the PHI are
-  // constants).
-  //
+
+  /// Given a binary operator, cast instruction, or select which has a PHI node
+  /// as operand #0, see if we can fold the instruction into the PHI (which is
+  /// only possible if all operands to the PHI are constants).
   Instruction *FoldOpIntoPhi(Instruction &I);
+
+  /// Given an instruction with a select as one operand and a constant as the
+  /// other operand, try to fold the binary operator into the select arguments.
+  /// This also works for Cast instructions, which obviously do not have a
+  /// second operand.
+  Instruction *FoldOpIntoSelect(Instruction &Op, SelectInst *SI);
+
+  /// This is a convenience wrapper function for the above two functions.
+  Instruction *foldOpWithConstantIntoOperand(Instruction &I);
 
   /// \brief Try to rotate an operation below a PHI node, using PHI nodes for
   /// its operands.
@@ -551,6 +558,10 @@ private:
   Instruction *FoldPHIArgGEPIntoPHI(PHINode &PN);
   Instruction *FoldPHIArgLoadIntoPHI(PHINode &PN);
   Instruction *FoldPHIArgZextsIntoPHI(PHINode &PN);
+
+  /// Helper function for FoldPHIArgXIntoPHI() to get debug location for the
+  /// folded operation.
+  DebugLoc PHIArgMergedDebugLoc(PHINode &PN);
 
   Instruction *foldGEPICmp(GEPOperator *GEPLHS, Value *RHS,
                            ICmpInst::Predicate Cond, Instruction &I);

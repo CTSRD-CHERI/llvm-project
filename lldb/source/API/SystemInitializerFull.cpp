@@ -107,8 +107,8 @@
 #include "Plugins/Process/FreeBSD/ProcessFreeBSD.h"
 #endif
 
-#if defined(_MSC_VER)
-#include "Plugins/Process/Windows/Live/ProcessWindowsLive.h"
+#if defined(_WIN32)
+#include "Plugins/Process/Windows/Common/ProcessWindows.h"
 #include "lldb/Host/windows/windows.h"
 #endif
 
@@ -332,8 +332,8 @@ void SystemInitializerFull::Initialize() {
   ObjCPlusPlusLanguage::Initialize();
   OCamlLanguage::Initialize();
 
-#if defined(_MSC_VER)
-  ProcessWindowsLive::Initialize();
+#if defined(_WIN32)
+  ProcessWindows::Initialize();
 #endif
 #if defined(__FreeBSD__)
   ProcessFreeBSD::Initialize();

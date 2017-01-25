@@ -3,7 +3,7 @@ macro(add_pdb_impl_folder group)
   source_group(${group} FILES ${ARGN})
 endmacro()
 
-if(HAVE_DIA_SDK)
+if(LLVM_ENABLE_DIA_SDK)
   include_directories(${MSVC_DIA_SDK_DIR}/include)
   set(LIBPDB_LINK_FOLDERS "${MSVC_DIA_SDK_DIR}\\lib")
   if (CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -34,18 +34,19 @@ add_pdb_impl_folder(Raw
   Raw/GlobalsStream.cpp
   Raw/GSI.cpp
   Raw/Hash.cpp
+  Raw/HashTable.cpp
   Raw/InfoStream.cpp
   Raw/InfoStreamBuilder.cpp
   Raw/ModInfo.cpp
   Raw/ModStream.cpp
-  Raw/NameHashTable.cpp
-  Raw/NameMap.cpp
-  Raw/NameMapBuilder.cpp
+  Raw/NamedStreamMap.cpp
   Raw/PDBFile.cpp
   Raw/PDBFileBuilder.cpp
   Raw/PublicsStream.cpp
   Raw/RawError.cpp
   Raw/RawSession.cpp
+  Raw/StringTable.cpp
+  Raw/StringTableBuilder.cpp
   Raw/SymbolStream.cpp
   Raw/TpiHashing.cpp
   Raw/TpiStream.cpp

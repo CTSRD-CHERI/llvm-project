@@ -9,10 +9,18 @@
 
 #include "LLVMOutputStyle.h"
 
+#include "CompactTypeDumpVisitor.h"
 #include "llvm-pdbdump.h"
+
+#include "llvm/DebugInfo/CodeView/CVTypeDumper.h"
+#include "llvm/DebugInfo/CodeView/CVTypeVisitor.h"
 #include "llvm/DebugInfo/CodeView/EnumTables.h"
 #include "llvm/DebugInfo/CodeView/ModuleSubstreamVisitor.h"
 #include "llvm/DebugInfo/CodeView/SymbolDumper.h"
+#include "llvm/DebugInfo/CodeView/TypeDatabaseVisitor.h"
+#include "llvm/DebugInfo/CodeView/TypeDeserializer.h"
+#include "llvm/DebugInfo/CodeView/TypeDumpVisitor.h"
+#include "llvm/DebugInfo/CodeView/TypeVisitorCallbackPipeline.h"
 #include "llvm/DebugInfo/MSF/MappedBlockStream.h"
 #include "llvm/DebugInfo/MSF/StreamReader.h"
 #include "llvm/DebugInfo/PDB/PDBExtras.h"
@@ -28,6 +36,7 @@
 #include "llvm/DebugInfo/PDB/Raw/RawError.h"
 #include "llvm/DebugInfo/PDB/Raw/TpiStream.h"
 #include "llvm/Object/COFF.h"
+#include "llvm/Support/FormatVariadic.h"
 
 #include <unordered_map>
 
@@ -83,8 +92,7 @@ static void printSectionOffset(llvm::raw_ostream &OS,
   OS << Off.Off << ", " << Off.Isect;
 }
 
-LLVMOutputStyle::LLVMOutputStyle(PDBFile &File)
-    : File(File), P(outs()), Dumper(&P, false) {}
+LLVMOutputStyle::LLVMOutputStyle(PDBFile &File) : File(File), P(outs()) {}
 
 Error LLVMOutputStyle::dump() {
   if (auto EC = dumpFileHeaders())
@@ -103,6 +111,9 @@ Error LLVMOutputStyle::dump() {
     return EC;
 
   if (auto EC = dumpStreamBytes())
+    return EC;
+
+  if (auto EC = dumpStringTable())
     return EC;
 
   if (auto EC = dumpInfoStream())
@@ -350,11 +361,15 @@ void LLVMOutputStyle::dumpBitVector(StringRef Name, const BitVector &V) {
 Error LLVMOutputStyle::dumpGlobalsStream() {
   if (!opts::raw::DumpGlobals)
     return Error::success();
+  if (!File.hasPDBGlobalsStream()) {
+    P.printString("Globals Stream not present");
+    return Error::success();
+  }
 
-  DictScope D(P, "Globals Stream");
   auto Globals = File.getPDBGlobalsStream();
   if (!Globals)
     return Globals.takeError();
+  DictScope D(P, "Globals Stream");
 
   auto Dbi = File.getPDBDbiStream();
   if (!Dbi)
@@ -444,9 +459,35 @@ Error LLVMOutputStyle::dumpStreamBytes() {
   return Error::success();
 }
 
+Error LLVMOutputStyle::dumpStringTable() {
+  if (!opts::raw::DumpStringTable)
+    return Error::success();
+
+  auto IS = File.getStringTable();
+  if (!IS)
+    return IS.takeError();
+
+  DictScope D(P, "String Table");
+  for (uint32_t I : IS->name_ids()) {
+    StringRef S = IS->getStringForID(I);
+    if (!S.empty()) {
+      llvm::SmallString<32> Str;
+      Str.append("'");
+      Str.append(S);
+      Str.append("'");
+      P.printString(Str);
+    }
+  }
+  return Error::success();
+}
+
 Error LLVMOutputStyle::dumpInfoStream() {
   if (!opts::raw::DumpHeaders)
     return Error::success();
+  if (!File.hasPDBInfoStream()) {
+    P.printString("PDB Stream not present");
+    return Error::success();
+  }
   auto IS = File.getPDBInfoStream();
   if (!IS)
     return IS.takeError();
@@ -456,6 +497,11 @@ Error LLVMOutputStyle::dumpInfoStream() {
   P.printHex("Signature", IS->getSignature());
   P.printNumber("Age", IS->getAge());
   P.printObject("Guid", IS->getGuid());
+  {
+    DictScope DD(P, "Named Streams");
+    for (const auto &S : IS->getNamedStreams().entries())
+      P.printObject(S.getKey(), S.getValue());
+  }
   return Error::success();
 }
 
@@ -485,11 +531,19 @@ Error LLVMOutputStyle::dumpTpiStream(uint32_t StreamIdx) {
   StringRef Label;
   StringRef VerLabel;
   if (StreamIdx == StreamTPI) {
+    if (!File.hasPDBTpiStream()) {
+      P.printString("Type Info Stream (TPI) not present");
+      return Error::success();
+    }
     DumpRecordBytes = opts::raw::DumpTpiRecordBytes;
     DumpRecords = opts::raw::DumpTpiRecords;
     Label = "Type Info Stream (TPI)";
     VerLabel = "TPI Version";
   } else if (StreamIdx == StreamIPI) {
+    if (!File.hasPDBIpiStream()) {
+      P.printString("Type Info Stream (IPI) not present");
+      return Error::success();
+    }
     DumpRecordBytes = opts::raw::DumpIpiRecordBytes;
     DumpRecords = opts::raw::DumpIpiRecords;
     Label = "Type Info Stream (IPI)";
@@ -503,20 +557,40 @@ Error LLVMOutputStyle::dumpTpiStream(uint32_t StreamIdx) {
   if (!Tpi)
     return Tpi.takeError();
 
+  // Even if the user doesn't want to dump type records, we still need to
+  // iterate them in order to build the type database. So when they want to
+  // dump symbols but not types, don't stick a dumper on the end, just build
+  // the type database.
+  TypeDatabaseVisitor DBV(TypeDB);
+  CompactTypeDumpVisitor CTDV(TypeDB, &P);
+  TypeDumpVisitor TDV(TypeDB, &P, false);
+  TypeDeserializer Deserializer;
+  TypeVisitorCallbackPipeline Pipeline;
+  Pipeline.addCallbackToPipeline(Deserializer);
+  Pipeline.addCallbackToPipeline(DBV);
+
+  CVTypeVisitor Visitor(Pipeline);
+
   if (DumpRecords || DumpRecordBytes) {
     DictScope D(P, Label);
 
     P.printNumber(VerLabel, Tpi->getTpiVersion());
     P.printNumber("Record count", Tpi->NumTypeRecords());
-
     ListScope L(P, "Records");
 
     bool HadError = false;
-    for (auto &Type : Tpi->types(&HadError)) {
-      DictScope DD(P, "");
+    if (opts::raw::CompactRecords)
+      Pipeline.addCallbackToPipeline(CTDV);
+    else
+      Pipeline.addCallbackToPipeline(TDV);
+
+    for (auto Type : Tpi->types(&HadError)) {
+      std::unique_ptr<DictScope> Scope;
+      if (!opts::raw::CompactRecords)
+        Scope.reset(new DictScope(P, ""));
 
       if (DumpRecords) {
-        if (auto EC = Dumper.dump(Type))
+        if (auto EC = Visitor.visitTypeRecord(Type))
           return EC;
       }
 
@@ -527,21 +601,23 @@ Error LLVMOutputStyle::dumpTpiStream(uint32_t StreamIdx) {
     if (HadError)
       return make_error<RawError>(raw_error_code::corrupt_file,
                                   "TPI stream contained corrupt record");
+    {
+      ListScope L(P, "TypeIndexOffsets");
+      for (const auto &IO : Tpi->getTypeIndexOffsets()) {
+        P.printString(formatv("Index: {0:x}, Offset: {1:N}", IO.Type.getIndex(),
+                              (uint32_t)IO.Offset)
+                          .str());
+      }
+    }
+
   } else if (opts::raw::DumpModuleSyms) {
-    // Even if the user doesn't want to dump type records, we still need to
-    // iterate them in order to build the list of types so that we can print
-    // them when dumping module symbols. So when they want to dump symbols
-    // but not types, use a null output stream.
-    ScopedPrinter *OldP = Dumper.getPrinter();
-    Dumper.setPrinter(nullptr);
 
     bool HadError = false;
-    for (auto &Type : Tpi->types(&HadError)) {
-      if (auto EC = Dumper.dump(Type))
+    for (auto Type : Tpi->types(&HadError)) {
+      if (auto EC = Visitor.visitTypeRecord(Type))
         return EC;
     }
 
-    Dumper.setPrinter(OldP);
     dumpTpiHash(P, *Tpi);
     if (HadError)
       return make_error<RawError>(raw_error_code::corrupt_file,
@@ -556,6 +632,10 @@ Error LLVMOutputStyle::dumpDbiStream() {
                      opts::raw::DumpModuleFiles || opts::raw::DumpLineInfo;
   if (!opts::raw::DumpHeaders && !DumpModules)
     return Error::success();
+  if (!File.hasPDBDbiStream()) {
+    P.printString("DBI Stream not present");
+    return Error::success();
+  }
 
   auto DS = File.getPDBDbiStream();
   if (!DS)
@@ -620,7 +700,7 @@ Error LLVMOutputStyle::dumpDbiStream() {
 
         if (ShouldDumpSymbols) {
           ListScope SS(P, "Symbols");
-          codeview::CVSymbolDumper SD(P, Dumper, nullptr, false);
+          codeview::CVSymbolDumper SD(P, TypeDB, nullptr, false);
           bool HadError = false;
           for (auto S : ModS.symbols(&HadError)) {
             DictScope LL(P, "");
@@ -742,6 +822,10 @@ Error LLVMOutputStyle::dumpDbiStream() {
 Error LLVMOutputStyle::dumpSectionContribs() {
   if (!opts::raw::DumpSectionContribs)
     return Error::success();
+  if (!File.hasPDBDbiStream()) {
+    P.printString("DBI Stream not present");
+    return Error::success();
+  }
 
   auto Dbi = File.getPDBDbiStream();
   if (!Dbi)
@@ -789,6 +873,10 @@ Error LLVMOutputStyle::dumpSectionContribs() {
 Error LLVMOutputStyle::dumpSectionMap() {
   if (!opts::raw::DumpSectionMap)
     return Error::success();
+  if (!File.hasPDBDbiStream()) {
+    P.printString("DBI Stream not present");
+    return Error::success();
+  }
 
   auto Dbi = File.getPDBDbiStream();
   if (!Dbi)
@@ -813,11 +901,15 @@ Error LLVMOutputStyle::dumpSectionMap() {
 Error LLVMOutputStyle::dumpPublicsStream() {
   if (!opts::raw::DumpPublics)
     return Error::success();
+  if (!File.hasPDBPublicsStream()) {
+    P.printString("Publics Stream not present");
+    return Error::success();
+  }
 
-  DictScope D(P, "Publics Stream");
   auto Publics = File.getPDBPublicsStream();
   if (!Publics)
     return Publics.takeError();
+  DictScope D(P, "Publics Stream");
 
   auto Dbi = File.getPDBDbiStream();
   if (!Dbi)
@@ -833,7 +925,7 @@ Error LLVMOutputStyle::dumpPublicsStream() {
   P.printList("Section Offsets", Publics->getSectionOffsets(),
               printSectionOffset);
   ListScope L(P, "Symbols");
-  codeview::CVSymbolDumper SD(P, Dumper, nullptr, false);
+  codeview::CVSymbolDumper SD(P, TypeDB, nullptr, false);
   bool HadError = false;
   for (auto S : Publics->getSymbols(&HadError)) {
     DictScope DD(P, "");
@@ -856,6 +948,10 @@ Error LLVMOutputStyle::dumpPublicsStream() {
 Error LLVMOutputStyle::dumpSectionHeaders() {
   if (!opts::raw::DumpSectionHeaders)
     return Error::success();
+  if (!File.hasPDBDbiStream()) {
+    P.printString("DBI Stream not present");
+    return Error::success();
+  }
 
   auto Dbi = File.getPDBDbiStream();
   if (!Dbi)
@@ -885,6 +981,10 @@ Error LLVMOutputStyle::dumpSectionHeaders() {
 Error LLVMOutputStyle::dumpFpoStream() {
   if (!opts::raw::DumpFpo)
     return Error::success();
+  if (!File.hasPDBDbiStream()) {
+    P.printString("DBI Stream not present");
+    return Error::success();
+  }
 
   auto Dbi = File.getPDBDbiStream();
   if (!Dbi)

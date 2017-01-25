@@ -35,11 +35,12 @@ test()
 
     for (int i = 0; i <= 5; ++i)
     {
-        T t(i);
-        if (sizeof(T) <= sizeof(std::size_t))
+        T t(static_cast<T>(i));
+        const bool small = std::integral_constant<bool, sizeof(T) <= sizeof(std::size_t)>::value; // avoid compiler warnings
+        if (small)
         {
             const std::size_t result = h(t);
-            LIBCPP_ASSERT(result == t);
+            LIBCPP_ASSERT(result == static_cast<size_t>(t));
             ((void)result); // Prevent unused warning
         }
     }

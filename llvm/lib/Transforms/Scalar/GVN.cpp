@@ -33,6 +33,7 @@
 #include "llvm/Analysis/Loads.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/MemoryDependenceAnalysis.h"
+#include "llvm/Analysis/OptimizationDiagnosticInfo.h"
 #include "llvm/Analysis/PHITransAddr.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
@@ -586,7 +587,9 @@ PreservedAnalyses GVN::run(Function &F, FunctionAnalysisManager &AM) {
   auto &TLI = AM.getResult<TargetLibraryAnalysis>(F);
   auto &AA = AM.getResult<AAManager>(F);
   auto &MemDep = AM.getResult<MemoryDependenceAnalysis>(F);
-  bool Changed = runImpl(F, AC, DT, TLI, AA, &MemDep);
+  auto *LI = AM.getCachedResult<LoopAnalysis>(F);
+  auto &ORE = AM.getResult<OptimizationRemarkEmitterAnalysis>(F);
+  bool Changed = runImpl(F, AC, DT, TLI, AA, &MemDep, LI, &ORE);
   if (!Changed)
     return PreservedAnalyses::all();
   PreservedAnalyses PA;
@@ -1253,6 +1256,38 @@ static bool isLifetimeStart(const Instruction *Inst) {
   return false;
 }
 
+/// \brief Try to locate the three instruction involved in a missed
+/// load-elimination case that is due to an intervening store.
+static void reportMayClobberedLoad(LoadInst *LI, MemDepResult DepInfo,
+                                   DominatorTree *DT,
+                                   OptimizationRemarkEmitter *ORE) {
+  using namespace ore;
+  User *OtherAccess = nullptr;
+
+  OptimizationRemarkMissed R(DEBUG_TYPE, "LoadClobbered", LI);
+  R << "load of type " << NV("Type", LI->getType()) << " not eliminated"
+    << setExtraArgs();
+
+  for (auto *U : LI->getPointerOperand()->users())
+    if (U != LI && (isa<LoadInst>(U) || isa<StoreInst>(U)) &&
+        DT->dominates(cast<Instruction>(U), LI)) {
+      // FIXME: for now give up if there are multiple memory accesses that
+      // dominate the load.  We need further analysis to decide which one is
+      // that we're forwarding from.
+      if (OtherAccess)
+        OtherAccess = nullptr;
+      else
+        OtherAccess = U;
+    }
+
+  if (OtherAccess)
+    R << " in favor of " << NV("OtherAccess", OtherAccess);
+
+  R << " because it is clobbered by " << NV("ClobberedBy", DepInfo.getInst());
+
+  ORE->emit(R);
+}
+
 bool GVN::AnalyzeLoadAvailability(LoadInst *LI, MemDepResult DepInfo,
                                   Value *Address, AvailableValue &Res) {
 
@@ -1317,6 +1352,10 @@ bool GVN::AnalyzeLoadAvailability(LoadInst *LI, MemDepResult DepInfo,
       Instruction *I = DepInfo.getInst();
       dbgs() << " is clobbered by " << *I << '\n';
     );
+
+    if (ORE->allowExtraAnalysis())
+      reportMayClobberedLoad(LI, DepInfo, DT, ORE);
+
     return false;
   }
   assert(DepInfo.isDef() && "follows from above");
@@ -1580,6 +1619,13 @@ bool GVN::PerformLoadPRE(LoadInst *LI, AvailValInBlkVect &ValuesPerBlock,
 
   // Assign value numbers to the new instructions.
   for (Instruction *I : NewInsts) {
+    // Instructions that have been inserted in predecessor(s) to materialize
+    // the load address do not retain their original debug locations. Doing
+    // so could lead to confusing (but correct) source attributions.
+    // FIXME: How do we retain source locations without causing poor debugging
+    // behavior?
+    I->setDebugLoc(DebugLoc());
+
     // FIXME: We really _ought_ to insert these value numbers into their
     // parent's availability map.  However, in doing so, we risk getting into
     // ordering issues.  If a block hasn't been processed yet, we would be
@@ -1609,8 +1655,11 @@ bool GVN::PerformLoadPRE(LoadInst *LI, AvailValInBlkVect &ValuesPerBlock,
     if (auto *RangeMD = LI->getMetadata(LLVMContext::MD_range))
       NewLoad->setMetadata(LLVMContext::MD_range, RangeMD);
 
-    // Transfer DebugLoc.
-    NewLoad->setDebugLoc(LI->getDebugLoc());
+    // We do not propagate the old load's debug location, because the new
+    // load now lives in a different BB, and we want to avoid a jumpy line
+    // table.
+    // FIXME: How do we retain source locations without causing poor debugging
+    // behavior?
 
     // Add the newly created load.
     ValuesPerBlock.push_back(AvailableValueInBlock::get(UnavailablePred,
@@ -1631,8 +1680,19 @@ bool GVN::PerformLoadPRE(LoadInst *LI, AvailValInBlkVect &ValuesPerBlock,
   if (V->getType()->getScalarType()->isPointerTy())
     MD->invalidateCachedPointerInfo(V);
   markInstructionForDeletion(LI);
+  ORE->emit(OptimizationRemark(DEBUG_TYPE, "LoadPRE", LI)
+            << "load eliminated by PRE");
   ++NumPRELoad;
   return true;
+}
+
+static void reportLoadElim(LoadInst *LI, Value *AvailableValue,
+                           OptimizationRemarkEmitter *ORE) {
+  using namespace ore;
+  ORE->emit(OptimizationRemark(DEBUG_TYPE, "LoadElim", LI)
+            << "load of type " << NV("Type", LI->getType()) << " eliminated"
+            << setExtraArgs() << " in favor of "
+            << NV("InfavorOfValue", AvailableValue));
 }
 
 /// Attempt to eliminate a load whose dependencies are
@@ -1701,12 +1761,16 @@ bool GVN::processNonLocalLoad(LoadInst *LI) {
     if (isa<PHINode>(V))
       V->takeName(LI);
     if (Instruction *I = dyn_cast<Instruction>(V))
-      if (LI->getDebugLoc())
+      // If instruction I has debug info, then we should not update it.
+      // Also, if I has a null DebugLoc, then it is still potentially incorrect
+      // to propagate LI's DebugLoc because LI may not post-dominate I.
+      if (LI->getDebugLoc() && ValuesPerBlock.size() != 1)
         I->setDebugLoc(LI->getDebugLoc());
     if (V->getType()->getScalarType()->isPointerTy())
       MD->invalidateCachedPointerInfo(V);
     markInstructionForDeletion(LI);
     ++NumGVNLoad;
+    reportLoadElim(LI, V, ORE);
     return true;
   }
 
@@ -1782,7 +1846,12 @@ static void patchReplacementInstruction(Instruction *I, Value *Repl) {
 
   // Patch the replacement so that it is not more restrictive than the value
   // being replaced.
-  ReplInst->andIRFlags(I);
+  // Note that if 'I' is a load being replaced by some operation, 
+  // for example, by an arithmetic operation, then andIRFlags()
+  // would just erase all math flags from the original arithmetic
+  // operation, which is clearly not wanted and not needed.
+  if (!isa<LoadInst>(I))
+    ReplInst->andIRFlags(I);
 
   // FIXME: If both the original and replacement value are part of the
   // same control-flow region (meaning that the execution of one
@@ -1848,6 +1917,7 @@ bool GVN::processLoad(LoadInst *L) {
     patchAndReplaceAllUsesWith(L, AvailableValue);
     markInstructionForDeletion(L);
     ++NumGVNLoad;
+    reportLoadElim(L, AvailableValue, ORE);
     // Tell MDA to rexamine the reused pointer since we might have more
     // information after forwarding it.
     if (MD && AvailableValue->getType()->getScalarType()->isPointerTy())
@@ -2225,7 +2295,8 @@ bool GVN::processInstruction(Instruction *I) {
 /// runOnFunction - This is the main transformation entry point for a function.
 bool GVN::runImpl(Function &F, AssumptionCache &RunAC, DominatorTree &RunDT,
                   const TargetLibraryInfo &RunTLI, AAResults &RunAA,
-                  MemoryDependenceResults *RunMD) {
+                  MemoryDependenceResults *RunMD, LoopInfo *LI,
+                  OptimizationRemarkEmitter *RunORE) {
   AC = &RunAC;
   DT = &RunDT;
   VN.setDomTree(DT);
@@ -2233,6 +2304,7 @@ bool GVN::runImpl(Function &F, AssumptionCache &RunAC, DominatorTree &RunDT,
   VN.setAliasAnalysis(&RunAA);
   MD = RunMD;
   VN.setMemDep(MD);
+  ORE = RunORE;
 
   bool Changed = false;
   bool ShouldContinue = true;
@@ -2242,9 +2314,9 @@ bool GVN::runImpl(Function &F, AssumptionCache &RunAC, DominatorTree &RunDT,
   for (Function::iterator FI = F.begin(), FE = F.end(); FI != FE; ) {
     BasicBlock *BB = &*FI++;
 
-    bool removedBlock =
-        MergeBlockIntoPredecessor(BB, DT, /* LoopInfo */ nullptr, MD);
-    if (removedBlock) ++NumGVNBlocks;
+    bool removedBlock = MergeBlockIntoPredecessor(BB, DT, LI, MD);
+    if (removedBlock)
+      ++NumGVNBlocks;
 
     Changed |= removedBlock;
   }
@@ -2739,13 +2811,17 @@ public:
     if (skipFunction(F))
       return false;
 
+    auto *LIWP = getAnalysisIfAvailable<LoopInfoWrapperPass>();
+
     return Impl.runImpl(
         F, getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F),
         getAnalysis<DominatorTreeWrapperPass>().getDomTree(),
         getAnalysis<TargetLibraryInfoWrapperPass>().getTLI(),
         getAnalysis<AAResultsWrapperPass>().getAAResults(),
         NoLoads ? nullptr
-                : &getAnalysis<MemoryDependenceWrapperPass>().getMemDep());
+                : &getAnalysis<MemoryDependenceWrapperPass>().getMemDep(),
+        LIWP ? &LIWP->getLoopInfo() : nullptr,
+        &getAnalysis<OptimizationRemarkEmitterWrapperPass>().getORE());
   }
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
@@ -2758,6 +2834,7 @@ public:
 
     AU.addPreserved<DominatorTreeWrapperPass>();
     AU.addPreserved<GlobalsAAWrapperPass>();
+    AU.addRequired<OptimizationRemarkEmitterWrapperPass>();
   }
 
 private:
@@ -2779,4 +2856,5 @@ INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(AAResultsWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(GlobalsAAWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(OptimizationRemarkEmitterWrapperPass)
 INITIALIZE_PASS_END(GVNLegacyPass, "gvn", "Global Value Numbering", false, false)

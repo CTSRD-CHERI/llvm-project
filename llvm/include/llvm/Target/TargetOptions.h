@@ -108,7 +108,7 @@ namespace llvm {
           DisableIntegratedAS(false), CompressDebugSections(false),
           RelaxELFRelocations(false), FunctionSections(false),
           DataSections(false), UniqueSectionNames(true), TrapUnreachable(false),
-          EmulatedTLS(false), EnableIPRA(false),
+          EmulatedTLS(false), EnableIPRA(false), DebugInfoForProfiling(false),
           FloatABIType(FloatABI::Default),
           AllowFPOpFusion(FPOpFusion::Standard),
           ThreadModel(ThreadModel::POSIX),
@@ -153,10 +153,16 @@ namespace llvm {
     /// assume the FP arithmetic arguments and results are never NaNs.
     unsigned NoNaNsFPMath : 1;
 
-    /// NoTrappingFPMath - This flag is enabled when the 
-    /// -enable-no-trapping-fp-math is specified on the command line. This 
+    /// NoTrappingFPMath - This flag is enabled when the
+    /// -enable-no-trapping-fp-math is specified on the command line. This
     /// specifies that there are no trap handlers to handle exceptions.
     unsigned NoTrappingFPMath : 1;
+
+    /// NoSignedZerosFPMath - This flag is enabled when the
+    /// -enable-no-signed-zeros-fp-math is specified on the command line. This
+    /// specifies that optimizations are allowed to treat the sign of a zero
+    /// argument or result as insignificant.
+    unsigned NoSignedZerosFPMath : 1;
 
     /// HonorSignDependentRoundingFPMath - This returns true when the
     /// -enable-sign-dependent-rounding-fp-math is specified.  If this returns
@@ -224,6 +230,9 @@ namespace llvm {
 
     /// This flag enables InterProcedural Register Allocation (IPRA).
     unsigned EnableIPRA : 1;
+
+    /// This flag enables emitting extra debug info for sample profiling.
+    unsigned DebugInfoForProfiling : 1;
 
     /// FloatABIType - This setting is set by -float-abi=xxx option is specfied
     /// on the command line. This setting may either be Default, Soft, or Hard.
@@ -299,7 +308,8 @@ inline bool operator==(const TargetOptions &LHS,
     ARE_EQUAL(FPDenormalMode) &&
     ARE_EQUAL(ExceptionModel) &&
     ARE_EQUAL(MCOptions) &&
-    ARE_EQUAL(EnableIPRA);
+    ARE_EQUAL(EnableIPRA) &&
+    ARE_EQUAL(DebugInfoForProfiling);
 #undef ARE_EQUAL
 }
 

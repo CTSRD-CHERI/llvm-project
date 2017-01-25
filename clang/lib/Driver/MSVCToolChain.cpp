@@ -16,6 +16,7 @@
 #include "clang/Driver/DriverDiagnostic.h"
 #include "clang/Driver/Options.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/StringSwitch.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
@@ -46,9 +47,9 @@ using namespace clang::driver::toolchains;
 using namespace clang;
 using namespace llvm::opt;
 
-MSVCToolChain::MSVCToolChain(const Driver &D, const llvm::Triple& Triple,
+MSVCToolChain::MSVCToolChain(const Driver &D, const llvm::Triple &Triple,
                              const ArgList &Args)
-  : ToolChain(D, Triple, Args) {
+    : ToolChain(D, Triple, Args), CudaInstallation(D, Triple, Args) {
   getProgramPaths().push_back(getDriver().getInstalledDir());
   if (getDriver().getInstalledDir() != getDriver().Dir)
     getProgramPaths().push_back(getDriver().Dir);
@@ -91,6 +92,15 @@ bool MSVCToolChain::isPIEDefault() const {
 
 bool MSVCToolChain::isPICDefaultForced() const {
   return getArch() == llvm::Triple::x86_64;
+}
+
+void MSVCToolChain::AddCudaIncludeArgs(const ArgList &DriverArgs,
+                                       ArgStringList &CC1Args) const {
+  CudaInstallation.AddCudaIncludeArgs(DriverArgs, CC1Args);
+}
+
+void MSVCToolChain::printVerboseInfo(raw_ostream &OS) const {
+  CudaInstallation.print(OS);
 }
 
 #ifdef USE_WIN32
@@ -472,6 +482,14 @@ bool MSVCToolChain::getVisualStudioBinariesFolder(const char *clangProgramPath,
   return true;
 }
 
+VersionTuple MSVCToolChain::getMSVCVersionFromTriple() const {
+  unsigned Major, Minor, Micro;
+  getTriple().getEnvironmentVersion(Major, Minor, Micro);
+  if (Major || Minor || Micro)
+    return VersionTuple(Major, Minor, Micro);
+  return VersionTuple();
+}
+
 VersionTuple MSVCToolChain::getMSVCVersionFromExe() const {
   VersionTuple Version;
 #ifdef USE_WIN32
@@ -668,21 +686,34 @@ void MSVCToolChain::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
   // FIXME: There should probably be logic here to find libc++ on Windows.
 }
 
+VersionTuple MSVCToolChain::computeMSVCVersion(const Driver *D,
+                                               const ArgList &Args) const {
+  bool IsWindowsMSVC = getTriple().isWindowsMSVCEnvironment();
+  VersionTuple MSVT = ToolChain::computeMSVCVersion(D, Args);
+  if (MSVT.empty()) MSVT = getMSVCVersionFromTriple();
+  if (MSVT.empty() && IsWindowsMSVC) MSVT = getMSVCVersionFromExe();
+  if (MSVT.empty() &&
+      Args.hasFlag(options::OPT_fms_extensions, options::OPT_fno_ms_extensions,
+                   IsWindowsMSVC)) {
+    // -fms-compatibility-version=18.00 is default.
+    // FIXME: Consider bumping this to 19 (MSVC2015) soon.
+    MSVT = VersionTuple(18);
+  }
+  return MSVT;
+}
+
 std::string
 MSVCToolChain::ComputeEffectiveClangTriple(const ArgList &Args,
                                            types::ID InputType) const {
-  std::string TripleStr =
-      ToolChain::ComputeEffectiveClangTriple(Args, InputType);
-  llvm::Triple Triple(TripleStr);
-  VersionTuple MSVT =
-      tools::visualstudio::getMSVCVersion(/*D=*/nullptr, *this, Triple, Args,
-                                          /*IsWindowsMSVC=*/true);
-  if (MSVT.empty())
-    return TripleStr;
-
+  // The MSVC version doesn't care about the architecture, even though it
+  // may look at the triple internally.
+  VersionTuple MSVT = computeMSVCVersion(/*D=*/nullptr, Args);
   MSVT = VersionTuple(MSVT.getMajor(), MSVT.getMinor().getValueOr(0),
                       MSVT.getSubminor().getValueOr(0));
 
+  // For the rest of the triple, however, a computed architecture name may
+  // be needed.
+  llvm::Triple Triple(ToolChain::ComputeEffectiveClangTriple(Args, InputType));
   if (Triple.getEnvironment() == llvm::Triple::MSVC) {
     StringRef ObjFmt = Triple.getEnvironmentName().split('-').second;
     if (ObjFmt.empty())

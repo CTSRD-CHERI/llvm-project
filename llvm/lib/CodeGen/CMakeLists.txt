@@ -46,6 +46,7 @@ add_llvm_library(LLVMCodeGen
   LiveRangeCalc.cpp
   LiveRangeEdit.cpp
   LiveRegMatrix.cpp
+  LiveRegUnits.cpp
   LiveStackAnalysis.cpp
   LiveVariables.cpp
   LLVMTargetMachine.cpp
@@ -136,6 +137,7 @@ add_llvm_library(LLVMCodeGen
   TargetPassConfig.cpp
   TargetRegisterInfo.cpp
   TargetSchedule.cpp
+  TargetSubtargetInfo.cpp
   TwoAddressInstructionPass.cpp
   UnreachableBlockElim.cpp
   VirtRegMap.cpp

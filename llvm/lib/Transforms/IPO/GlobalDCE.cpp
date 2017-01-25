@@ -50,7 +50,14 @@ namespace {
       if (skipModule(M))
         return false;
 
+      // We need a minimally functional dummy module analysis manager. It needs
+      // to at least know about the possibility of proxying a function analysis
+      // manager.
+      FunctionAnalysisManager DummyFAM;
       ModuleAnalysisManager DummyMAM;
+      DummyMAM.registerPass(
+          [&] { return FunctionAnalysisManagerModuleProxy(DummyFAM); });
+
       auto PA = Impl.run(M, DummyMAM);
       return !PA.areAllPreserved();
     }
@@ -78,7 +85,7 @@ static bool isEmptyFunction(Function *F) {
   return RI.getReturnValue() == nullptr;
 }
 
-PreservedAnalyses GlobalDCEPass::run(Module &M, ModuleAnalysisManager &) {
+PreservedAnalyses GlobalDCEPass::run(Module &M, ModuleAnalysisManager &MAM) {
   bool Changed = false;
 
   // Remove empty functions from the global ctors list.

@@ -253,6 +253,9 @@ __isl_give isl_basic_set *isl_basic_set_add_ineq(__isl_take isl_basic_set *bset,
 __isl_give isl_basic_map *isl_basic_map_add_ineq(__isl_take isl_basic_map *bmap,
 	isl_int *ineq);
 
+__isl_give isl_basic_set *isl_basic_set_tighten_outward(
+	__isl_take isl_basic_set *bset, __isl_keep isl_vec *vec);
+
 int isl_inequality_negate(struct isl_basic_map *bmap, unsigned pos);
 
 struct isl_basic_set *isl_basic_set_cow(struct isl_basic_set *bset);
@@ -261,6 +264,9 @@ struct isl_set *isl_set_cow(struct isl_set *set);
 struct isl_map *isl_map_cow(struct isl_map *map);
 
 uint32_t isl_basic_map_get_hash(__isl_keep isl_basic_map *bmap);
+
+__isl_give isl_set *isl_basic_set_list_union(
+	__isl_take isl_basic_set_list *list);
 
 struct isl_basic_map *isl_basic_map_set_to_empty(struct isl_basic_map *bmap);
 struct isl_basic_set *isl_basic_set_set_to_empty(struct isl_basic_set *bset);
@@ -521,5 +527,14 @@ __isl_give isl_map *isl_map_fixed_power(__isl_take isl_map *map, isl_int exp);
 int isl_basic_set_count_upto(__isl_keep isl_basic_set *bset,
 	isl_int max, isl_int *count);
 int isl_set_count_upto(__isl_keep isl_set *set, isl_int max, isl_int *count);
+
+isl_bool isl_basic_map_equal_div_expr_part(__isl_keep isl_basic_map *bmap1,
+	int pos1, __isl_keep isl_basic_map *bmap2, int pos2,
+	unsigned first, unsigned n);
+isl_bool isl_basic_map_equal_div_expr_except_constant(
+	__isl_keep isl_basic_map *bmap1, int pos1,
+	__isl_keep isl_basic_map *bmap2, int pos2);
+__isl_give isl_basic_map *isl_basic_map_set_div_expr_constant_num_si_inplace(
+	__isl_take isl_basic_map *bmap, int div, int value);
 
 #endif

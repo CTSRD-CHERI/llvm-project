@@ -167,27 +167,29 @@ getReservedRegs(const MachineFunction &MF) const {
 
   // FIXME: avoid re-calculating this every time.
   BitVector Reserved(getNumRegs());
-  Reserved.set(ARM::SP);
-  Reserved.set(ARM::PC);
-  Reserved.set(ARM::FPSCR);
-  Reserved.set(ARM::APSR_NZCV);
+  markSuperRegs(Reserved, ARM::SP);
+  markSuperRegs(Reserved, ARM::PC);
+  markSuperRegs(Reserved, ARM::FPSCR);
+  markSuperRegs(Reserved, ARM::APSR_NZCV);
   if (TFI->hasFP(MF))
-    Reserved.set(getFramePointerReg(STI));
+    markSuperRegs(Reserved, getFramePointerReg(STI));
   if (hasBasePointer(MF))
-    Reserved.set(BasePtr);
+    markSuperRegs(Reserved, BasePtr);
   // Some targets reserve R9.
   if (STI.isR9Reserved())
-    Reserved.set(ARM::R9);
+    markSuperRegs(Reserved, ARM::R9);
   // Reserve D16-D31 if the subtarget doesn't support them.
   if (!STI.hasVFP3() || STI.hasD16()) {
     static_assert(ARM::D31 == ARM::D16 + 15, "Register list not consecutive!");
-    Reserved.set(ARM::D16, ARM::D31 + 1);
+    for (unsigned R = 0; R < 16; ++R)
+      markSuperRegs(Reserved, ARM::D16 + R);
   }
   const TargetRegisterClass *RC  = &ARM::GPRPairRegClass;
   for(TargetRegisterClass::iterator I = RC->begin(), E = RC->end(); I!=E; ++I)
     for (MCSubRegIterator SI(*I, this); SI.isValid(); ++SI)
-      if (Reserved.test(*SI)) Reserved.set(*I);
+      if (Reserved.test(*SI)) markSuperRegs(Reserved, *I);
 
+  assert(checkAllSuperRegsMarked(Reserved));
   return Reserved;
 }
 
@@ -423,10 +425,11 @@ void ARMBaseRegisterInfo::emitLoadConstPool(
   unsigned Idx = ConstantPool->getConstantPoolIndex(C, 4);
 
   BuildMI(MBB, MBBI, dl, TII.get(ARM::LDRcp))
-    .addReg(DestReg, getDefRegState(true), SubIdx)
-    .addConstantPoolIndex(Idx)
-    .addImm(0).addImm(Pred).addReg(PredReg)
-    .setMIFlags(MIFlags);
+      .addReg(DestReg, getDefRegState(true), SubIdx)
+      .addConstantPoolIndex(Idx)
+      .addImm(0)
+      .add(predOps(Pred, PredReg))
+      .setMIFlags(MIFlags);
 }
 
 bool ARMBaseRegisterInfo::
@@ -607,7 +610,7 @@ materializeFrameBaseRegister(MachineBasicBlock *MBB,
     .addFrameIndex(FrameIdx).addImm(Offset);
 
   if (!AFI->isThumb1OnlyFunction())
-    AddDefaultCC(AddDefaultPred(MIB));
+    MIB.add(predOps(ARMCC::AL)).add(condCodeOp());
 }
 
 void ARMBaseRegisterInfo::resolveFrameIndex(MachineInstr &MI, unsigned BaseReg,

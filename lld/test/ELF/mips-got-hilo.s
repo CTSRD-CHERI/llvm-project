@@ -20,22 +20,22 @@
 # GOT-NEXT: ]
 
 # GOT:      Primary GOT {
-# GOT-NEXT:   Canonical gp value: 0x27FF0
+# GOT-NEXT:   Canonical gp value:
 # GOT:        Local entries [
 # GOT-NEXT:     Entry {
-# GOT-NEXT:       Address: 0x20008
+# GOT-NEXT:       Address:
 # GOT-NEXT:       Access: -32744
-# GOT-NEXT:       Initial: 0x30000
+# GOT-NEXT:       Initial: 0x20000
 # GOT-NEXT:     }
 # GOT-NEXT:     Entry {
-# GOT-NEXT:       Address: 0x2000C
+# GOT-NEXT:       Address:
 # GOT-NEXT:       Access: -32740
-# GOT-NEXT:       Initial: 0x30004
+# GOT-NEXT:       Initial: 0x20004
 # GOT-NEXT:     }
 # GOT-NEXT:   ]
 # GOT-NEXT:   Global entries [
 # GOT-NEXT:     Entry {
-# GOT-NEXT:       Address: 0x20010
+# GOT-NEXT:       Address:
 # GOT-NEXT:       Access: -32736
 # GOT-NEXT:       Initial: 0x0
 # GOT-NEXT:       Value: 0x0

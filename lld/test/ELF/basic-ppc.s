@@ -26,7 +26,7 @@
 // CHECK-NEXT:   Type: SharedObject (0x3)
 // CHECK-NEXT:   Machine: EM_PPC (0x14)
 // CHECK-NEXT:   Version: 1
-// CHECK-NEXT:   Entry: 0x0
+// CHECK-NEXT:   Entry: 0x1000
 // CHECK-NEXT:   ProgramHeaderOffset: 0x34
 // CHECK-NEXT:   SectionHeaderOffset: 0x20AC
 // CHECK-NEXT:   Flags [ (0x0)
@@ -178,7 +178,7 @@
 // CHECK-NEXT:     Offset: 0x2038
 // CHECK-NEXT:     Size: 32
 // CHECK-NEXT:     Link: 9
-// CHECK-NEXT:     Info: 1
+// CHECK-NEXT:     Info: 2
 // CHECK-NEXT:     AddressAlignment: 4
 // CHECK-NEXT:     EntrySize: 16
 // CHECK-NEXT:     SectionData (
@@ -295,7 +295,7 @@
 // CHECK-NEXT:     VirtualAddress: 0x2000
 // CHECK-NEXT:     PhysicalAddress: 0x2000
 // CHECK-NEXT:     FileSize: 48
-// CHECK-NEXT:     MemSize: 48
+// CHECK-NEXT:     MemSize: 4096
 // CHECK-NEXT:     Flags [ (0x4)
 // CHECK-NEXT:       PF_R (0x4)
 // CHECK-NEXT:     ]

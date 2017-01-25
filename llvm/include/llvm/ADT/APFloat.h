@@ -27,6 +27,7 @@ struct fltSemantics;
 class APSInt;
 class StringRef;
 class APFloat;
+class raw_ostream;
 
 template <typename T> class SmallVectorImpl;
 
@@ -135,16 +136,16 @@ struct APFloatBase {
   /// \name Floating Point Semantics.
   /// @{
 
-  static const fltSemantics IEEEhalf;
-  static const fltSemantics IEEEsingle;
-  static const fltSemantics IEEEdouble;
-  static const fltSemantics IEEEquad;
-  static const fltSemantics PPCDoubleDouble;
-  static const fltSemantics x87DoubleExtended;
+  static const fltSemantics &IEEEhalf();
+  static const fltSemantics &IEEEsingle();
+  static const fltSemantics &IEEEdouble();
+  static const fltSemantics &IEEEquad();
+  static const fltSemantics &PPCDoubleDouble();
+  static const fltSemantics &x87DoubleExtended();
 
   /// A Pseudo fltsemantic used to construct APFloats that cannot conflict with
   /// anything real.
-  static const fltSemantics Bogus;
+  static const fltSemantics &Bogus();
 
   /// @}
 
@@ -234,10 +235,6 @@ public:
 
   /// @}
 
-  /// Used to insert APFloat objects, or objects that contain APFloat objects,
-  /// into FoldingSets.
-  void Profile(FoldingSetNodeID &NID) const;
-
   /// \name Arithmetic
   /// @{
 
@@ -254,53 +251,12 @@ public:
   /// IEEE-754R 5.3.1: nextUp/nextDown.
   opStatus next(bool nextDown);
 
-  /// \brief Operator+ overload which provides the default
-  /// \c nmNearestTiesToEven rounding mode and *no* error checking.
-  IEEEFloat operator+(const IEEEFloat &RHS) const {
-    IEEEFloat Result = *this;
-    Result.add(RHS, rmNearestTiesToEven);
-    return Result;
-  }
-
-  /// \brief Operator- overload which provides the default
-  /// \c nmNearestTiesToEven rounding mode and *no* error checking.
-  IEEEFloat operator-(const IEEEFloat &RHS) const {
-    IEEEFloat Result = *this;
-    Result.subtract(RHS, rmNearestTiesToEven);
-    return Result;
-  }
-
-  /// \brief Operator* overload which provides the default
-  /// \c nmNearestTiesToEven rounding mode and *no* error checking.
-  IEEEFloat operator*(const IEEEFloat &RHS) const {
-    IEEEFloat Result = *this;
-    Result.multiply(RHS, rmNearestTiesToEven);
-    return Result;
-  }
-
-  /// \brief Operator/ overload which provides the default
-  /// \c nmNearestTiesToEven rounding mode and *no* error checking.
-  IEEEFloat operator/(const IEEEFloat &RHS) const {
-    IEEEFloat Result = *this;
-    Result.divide(RHS, rmNearestTiesToEven);
-    return Result;
-  }
-
   /// @}
 
   /// \name Sign operations.
   /// @{
 
   void changeSign();
-  void clearSign();
-  void copySign(const IEEEFloat &);
-
-  /// \brief A static helper to produce a copy of an APFloat value with its sign
-  /// copied from some other APFloat.
-  static IEEEFloat copySign(IEEEFloat Value, const IEEEFloat &Sign) {
-    Value.copySign(Sign);
-    return Value;
-  }
 
   /// @}
 
@@ -310,7 +266,6 @@ public:
   opStatus convert(const fltSemantics &, roundingMode, bool *);
   opStatus convertToInteger(integerPart *, unsigned int, bool, roundingMode,
                             bool *) const;
-  opStatus convertToInteger(APSInt &, roundingMode, bool *) const;
   opStatus convertFromAPInt(const APInt &, bool, roundingMode);
   opStatus convertFromSignExtendedInteger(const integerPart *, unsigned int,
                                           bool, roundingMode);
@@ -442,7 +397,7 @@ public:
 
   /// If this value has an exact multiplicative inverse, store it in inv and
   /// return true.
-  bool getExactInverse(IEEEFloat *inv) const;
+  bool getExactInverse(APFloat *inv) const;
 
   /// \brief Returns the exponent of the internal representation of the APFloat.
   ///
@@ -478,6 +433,8 @@ public:
   void makeSmallestNormalized(bool Negative = false);
 
   /// @}
+
+  cmpResult compareAbsoluteValue(const IEEEFloat &) const;
 
 private:
   /// \name Simple Queries
@@ -527,7 +484,6 @@ private:
   bool convertFromStringSpecials(StringRef str);
   opStatus normalize(roundingMode, lostFraction);
   opStatus addOrSubtract(const IEEEFloat &, roundingMode, bool subtract);
-  cmpResult compareAbsoluteValue(const IEEEFloat &) const;
   opStatus handleOverflow(roundingMode);
   bool roundAwayFromZero(roundingMode, lostFraction, unsigned int) const;
   opStatus convertToSignExtendedInteger(integerPart *, unsigned int, bool,
@@ -600,6 +556,12 @@ class DoubleAPFloat final : public APFloatBase {
   const fltSemantics *Semantics;
   std::unique_ptr<APFloat[]> Floats;
 
+  opStatus addImpl(const APFloat &a, const APFloat &aa, const APFloat &c,
+                   const APFloat &cc, roundingMode RM);
+
+  opStatus addWithSpecial(const DoubleAPFloat &LHS, const DoubleAPFloat &RHS,
+                          DoubleAPFloat &Out, roundingMode RM);
+
 public:
   DoubleAPFloat(const fltSemantics &S);
   DoubleAPFloat(const fltSemantics &S, uninitializedTag);
@@ -623,7 +585,67 @@ public:
 
   APFloat &getFirst() { return Floats[0]; }
   const APFloat &getFirst() const { return Floats[0]; }
+  APFloat &getSecond() { return Floats[1]; }
+  const APFloat &getSecond() const { return Floats[1]; }
+
+  opStatus add(const DoubleAPFloat &RHS, roundingMode RM);
+  opStatus subtract(const DoubleAPFloat &RHS, roundingMode RM);
+  opStatus multiply(const DoubleAPFloat &RHS, roundingMode RM);
+  opStatus divide(const DoubleAPFloat &RHS, roundingMode RM);
+  opStatus remainder(const DoubleAPFloat &RHS);
+  opStatus mod(const DoubleAPFloat &RHS);
+  opStatus fusedMultiplyAdd(const DoubleAPFloat &Multiplicand,
+                            const DoubleAPFloat &Addend, roundingMode RM);
+  opStatus roundToIntegral(roundingMode RM);
+  void changeSign();
+  cmpResult compareAbsoluteValue(const DoubleAPFloat &RHS) const;
+
+  fltCategory getCategory() const;
+  bool isNegative() const;
+
+  void makeInf(bool Neg);
+  void makeZero(bool Neg);
+  void makeLargest(bool Neg);
+  void makeSmallest(bool Neg);
+  void makeSmallestNormalized(bool Neg);
+  void makeNaN(bool SNaN, bool Neg, const APInt *fill);
+
+  cmpResult compare(const DoubleAPFloat &RHS) const;
+  bool bitwiseIsEqual(const DoubleAPFloat &RHS) const;
+  APInt bitcastToAPInt() const;
+  opStatus convertFromString(StringRef, roundingMode);
+  opStatus next(bool nextDown);
+
+  opStatus convertToInteger(integerPart *Input, unsigned int Width,
+                            bool IsSigned, roundingMode RM,
+                            bool *IsExact) const;
+  opStatus convertFromAPInt(const APInt &Input, bool IsSigned, roundingMode RM);
+  opStatus convertFromSignExtendedInteger(const integerPart *Input,
+                                          unsigned int InputSize, bool IsSigned,
+                                          roundingMode RM);
+  opStatus convertFromZeroExtendedInteger(const integerPart *Input,
+                                          unsigned int InputSize, bool IsSigned,
+                                          roundingMode RM);
+  unsigned int convertToHexString(char *DST, unsigned int HexDigits,
+                                  bool UpperCase, roundingMode RM) const;
+
+  bool isDenormal() const;
+  bool isSmallest() const;
+  bool isLargest() const;
+  bool isInteger() const;
+
+  void toString(SmallVectorImpl<char> &Str, unsigned FormatPrecision,
+                unsigned FormatMaxPadding) const;
+
+  bool getExactInverse(APFloat *inv) const;
+
+  friend int ilogb(const DoubleAPFloat &Arg);
+  friend DoubleAPFloat scalbn(DoubleAPFloat X, int Exp, roundingMode);
+  friend DoubleAPFloat frexp(const DoubleAPFloat &X, int &Exp, roundingMode);
+  friend hash_code hash_value(const DoubleAPFloat &Arg);
 };
+
+hash_code hash_value(const DoubleAPFloat &Arg);
 
 } // End detail namespace
 
@@ -643,48 +665,56 @@ class APFloat : public APFloatBase {
     explicit Storage(IEEEFloat F, const fltSemantics &S);
     explicit Storage(DoubleAPFloat F, const fltSemantics &S)
         : Double(std::move(F)) {
-      assert(&S == &PPCDoubleDouble);
+      assert(&S == &PPCDoubleDouble());
     }
 
     template <typename... ArgTypes>
     Storage(const fltSemantics &Semantics, ArgTypes &&... Args) {
       if (usesLayout<IEEEFloat>(Semantics)) {
         new (&IEEE) IEEEFloat(Semantics, std::forward<ArgTypes>(Args)...);
-      } else if (usesLayout<DoubleAPFloat>(Semantics)) {
-        new (&Double) DoubleAPFloat(Semantics, std::forward<ArgTypes>(Args)...);
-      } else {
-        llvm_unreachable("Unexpected semantics");
+        return;
       }
+      if (usesLayout<DoubleAPFloat>(Semantics)) {
+        new (&Double) DoubleAPFloat(Semantics, std::forward<ArgTypes>(Args)...);
+        return;
+      }
+      llvm_unreachable("Unexpected semantics");
     }
 
     ~Storage() {
       if (usesLayout<IEEEFloat>(*semantics)) {
         IEEE.~IEEEFloat();
-      } else if (usesLayout<DoubleAPFloat>(*semantics)) {
-        Double.~DoubleAPFloat();
-      } else {
-        llvm_unreachable("Unexpected semantics");
+        return;
       }
+      if (usesLayout<DoubleAPFloat>(*semantics)) {
+        Double.~DoubleAPFloat();
+        return;
+      }
+      llvm_unreachable("Unexpected semantics");
     }
 
     Storage(const Storage &RHS) {
       if (usesLayout<IEEEFloat>(*RHS.semantics)) {
         new (this) IEEEFloat(RHS.IEEE);
-      } else if (usesLayout<DoubleAPFloat>(*RHS.semantics)) {
-        new (this) DoubleAPFloat(RHS.Double);
-      } else {
-        llvm_unreachable("Unexpected semantics");
+        return;
       }
+      if (usesLayout<DoubleAPFloat>(*RHS.semantics)) {
+        new (this) DoubleAPFloat(RHS.Double);
+        return;
+      }
+      llvm_unreachable("Unexpected semantics");
     }
 
     Storage(Storage &&RHS) {
       if (usesLayout<IEEEFloat>(*RHS.semantics)) {
         new (this) IEEEFloat(std::move(RHS.IEEE));
-      } else if (usesLayout<DoubleAPFloat>(*RHS.semantics)) {
-        new (this) DoubleAPFloat(std::move(RHS.Double));
-      } else {
-        llvm_unreachable("Unexpected semantics");
+        return;
       }
+      if (usesLayout<DoubleAPFloat>(*RHS.semantics)) {
+        new (this) DoubleAPFloat(std::move(RHS.Double));
+        return;
+      }
+      llvm_unreachable("Unexpected semantics");
     }
 
     Storage &operator=(const Storage &RHS) {
@@ -720,57 +750,119 @@ class APFloat : public APFloatBase {
     static_assert(std::is_same<T, IEEEFloat>::value ||
                   std::is_same<T, DoubleAPFloat>::value, "");
     if (std::is_same<T, DoubleAPFloat>::value) {
-      return &Semantics == &PPCDoubleDouble;
+      return &Semantics == &PPCDoubleDouble();
     }
-    return &Semantics != &PPCDoubleDouble;
+    return &Semantics != &PPCDoubleDouble();
   }
 
   IEEEFloat &getIEEE() {
-    if (usesLayout<IEEEFloat>(*U.semantics)) {
+    if (usesLayout<IEEEFloat>(*U.semantics))
       return U.IEEE;
-    } else if (usesLayout<DoubleAPFloat>(*U.semantics)) {
+    if (usesLayout<DoubleAPFloat>(*U.semantics))
       return U.Double.getFirst().U.IEEE;
-    } else {
-      llvm_unreachable("Unexpected semantics");
-    }
+    llvm_unreachable("Unexpected semantics");
   }
 
   const IEEEFloat &getIEEE() const {
-    if (usesLayout<IEEEFloat>(*U.semantics)) {
+    if (usesLayout<IEEEFloat>(*U.semantics))
       return U.IEEE;
-    } else if (usesLayout<DoubleAPFloat>(*U.semantics)) {
+    if (usesLayout<DoubleAPFloat>(*U.semantics))
       return U.Double.getFirst().U.IEEE;
-    } else {
-      llvm_unreachable("Unexpected semantics");
-    }
+    llvm_unreachable("Unexpected semantics");
   }
 
-  void makeZero(bool Neg) { getIEEE().makeZero(Neg); }
+  void makeZero(bool Neg) {
+    if (usesLayout<IEEEFloat>(getSemantics())) {
+      U.IEEE.makeZero(Neg);
+      return;
+    }
+    if (usesLayout<DoubleAPFloat>(getSemantics())) {
+      U.Double.makeZero(Neg);
+      return;
+    }
+    llvm_unreachable("Unexpected semantics");
+  }
 
-  void makeInf(bool Neg) { getIEEE().makeInf(Neg); }
+  void makeInf(bool Neg) {
+    if (usesLayout<IEEEFloat>(*U.semantics)) {
+      U.IEEE.makeInf(Neg);
+      return;
+    }
+    if (usesLayout<DoubleAPFloat>(*U.semantics)) {
+      U.Double.makeInf(Neg);
+      return;
+    }
+    llvm_unreachable("Unexpected semantics");
+  }
 
   void makeNaN(bool SNaN, bool Neg, const APInt *fill) {
-    getIEEE().makeNaN(SNaN, Neg, fill);
+    if (usesLayout<IEEEFloat>(getSemantics())) {
+      U.IEEE.makeNaN(SNaN, Neg, fill);
+      return;
+    }
+    if (usesLayout<DoubleAPFloat>(getSemantics())) {
+      return U.Double.makeNaN(SNaN, Neg, fill);
+      return;
+    }
+    llvm_unreachable("Unexpected semantics");
   }
 
-  void makeLargest(bool Neg) { getIEEE().makeLargest(Neg); }
+  void makeLargest(bool Neg) {
+    if (usesLayout<IEEEFloat>(getSemantics())) {
+      U.IEEE.makeLargest(Neg);
+      return;
+    }
+    if (usesLayout<DoubleAPFloat>(getSemantics())) {
+      U.Double.makeLargest(Neg);
+      return;
+    }
+    llvm_unreachable("Unexpected semantics");
+  }
 
-  void makeSmallest(bool Neg) { getIEEE().makeSmallest(Neg); }
+  void makeSmallest(bool Neg) {
+    if (usesLayout<IEEEFloat>(getSemantics())) {
+      U.IEEE.makeSmallest(Neg);
+      return;
+    }
+    if (usesLayout<DoubleAPFloat>(getSemantics())) {
+      U.Double.makeSmallest(Neg);
+      return;
+    }
+    llvm_unreachable("Unexpected semantics");
+  }
 
   void makeSmallestNormalized(bool Neg) {
-    getIEEE().makeSmallestNormalized(Neg);
+    if (usesLayout<IEEEFloat>(getSemantics())) {
+      U.IEEE.makeSmallestNormalized(Neg);
+      return;
+    }
+    if (usesLayout<DoubleAPFloat>(getSemantics())) {
+      U.Double.makeSmallestNormalized(Neg);
+      return;
+    }
+    llvm_unreachable("Unexpected semantics");
   }
 
   // FIXME: This is due to clang 3.3 (or older version) always checks for the
   // default constructor in an array aggregate initialization, even if no
   // elements in the array is default initialized.
-  APFloat() : U(IEEEdouble) {
+  APFloat() : U(IEEEdouble()) {
     llvm_unreachable("This is a workaround for old clang.");
   }
 
   explicit APFloat(IEEEFloat F, const fltSemantics &S) : U(std::move(F), S) {}
   explicit APFloat(DoubleAPFloat F, const fltSemantics &S)
       : U(std::move(F), S) {}
+
+  cmpResult compareAbsoluteValue(const APFloat &RHS) const {
+    assert(&getSemantics() == &RHS.getSemantics() &&
+           "Should only compare APFloats with the same semantics");
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.compareAbsoluteValue(RHS.U.IEEE);
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.compareAbsoluteValue(RHS.U.Double);
+    llvm_unreachable("Unexpected semantics");
+  }
 
 public:
   APFloat(const fltSemantics &Semantics) : U(Semantics) {}
@@ -780,21 +872,19 @@ public:
   APFloat(const fltSemantics &Semantics, uninitializedTag)
       : U(Semantics, uninitialized) {}
   APFloat(const fltSemantics &Semantics, const APInt &I) : U(Semantics, I) {}
-  explicit APFloat(double d) : U(IEEEFloat(d), IEEEdouble) {}
-  explicit APFloat(float f) : U(IEEEFloat(f), IEEEsingle) {}
+  explicit APFloat(double d) : U(IEEEFloat(d), IEEEdouble()) {}
+  explicit APFloat(float f) : U(IEEEFloat(f), IEEEsingle()) {}
   APFloat(const APFloat &RHS) = default;
   APFloat(APFloat &&RHS) = default;
 
   ~APFloat() = default;
 
   bool needsCleanup() const {
-    if (usesLayout<IEEEFloat>(getSemantics())) {
+    if (usesLayout<IEEEFloat>(getSemantics()))
       return U.IEEE.needsCleanup();
-    } else if (usesLayout<DoubleAPFloat>(getSemantics())) {
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
       return U.Double.needsCleanup();
-    } else {
-      llvm_unreachable("Unexpected semantics");
-    }
+    llvm_unreachable("Unexpected semantics");
   }
 
   /// Factory for Positive and Negative Zero.
@@ -882,57 +972,150 @@ public:
   /// \param isIEEE   - If 128 bit number, select between PPC and IEEE
   static APFloat getAllOnesValue(unsigned BitWidth, bool isIEEE = false);
 
-  void Profile(FoldingSetNodeID &NID) const { getIEEE().Profile(NID); }
+  /// Used to insert APFloat objects, or objects that contain APFloat objects,
+  /// into FoldingSets.
+  void Profile(FoldingSetNodeID &NID) const;
 
   opStatus add(const APFloat &RHS, roundingMode RM) {
-    return getIEEE().add(RHS.getIEEE(), RM);
+    assert(&getSemantics() == &RHS.getSemantics() &&
+           "Should only call on two APFloats with the same semantics");
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.add(RHS.U.IEEE, RM);
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.add(RHS.U.Double, RM);
+    llvm_unreachable("Unexpected semantics");
   }
   opStatus subtract(const APFloat &RHS, roundingMode RM) {
-    return getIEEE().subtract(RHS.getIEEE(), RM);
+    assert(&getSemantics() == &RHS.getSemantics() &&
+           "Should only call on two APFloats with the same semantics");
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.subtract(RHS.U.IEEE, RM);
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.subtract(RHS.U.Double, RM);
+    llvm_unreachable("Unexpected semantics");
   }
   opStatus multiply(const APFloat &RHS, roundingMode RM) {
-    return getIEEE().multiply(RHS.getIEEE(), RM);
+    assert(&getSemantics() == &RHS.getSemantics() &&
+           "Should only call on two APFloats with the same semantics");
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.multiply(RHS.U.IEEE, RM);
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.multiply(RHS.U.Double, RM);
+    llvm_unreachable("Unexpected semantics");
   }
   opStatus divide(const APFloat &RHS, roundingMode RM) {
-    return getIEEE().divide(RHS.getIEEE(), RM);
+    assert(&getSemantics() == &RHS.getSemantics() &&
+           "Should only call on two APFloats with the same semantics");
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.divide(RHS.U.IEEE, RM);
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.divide(RHS.U.Double, RM);
+    llvm_unreachable("Unexpected semantics");
   }
   opStatus remainder(const APFloat &RHS) {
-    return getIEEE().remainder(RHS.getIEEE());
+    assert(&getSemantics() == &RHS.getSemantics() &&
+           "Should only call on two APFloats with the same semantics");
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.remainder(RHS.U.IEEE);
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.remainder(RHS.U.Double);
+    llvm_unreachable("Unexpected semantics");
   }
-  opStatus mod(const APFloat &RHS) { return getIEEE().mod(RHS.getIEEE()); }
+  opStatus mod(const APFloat &RHS) {
+    assert(&getSemantics() == &RHS.getSemantics() &&
+           "Should only call on two APFloats with the same semantics");
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.mod(RHS.U.IEEE);
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.mod(RHS.U.Double);
+    llvm_unreachable("Unexpected semantics");
+  }
   opStatus fusedMultiplyAdd(const APFloat &Multiplicand, const APFloat &Addend,
                             roundingMode RM) {
-    return getIEEE().fusedMultiplyAdd(Multiplicand.getIEEE(), Addend.getIEEE(),
-                                      RM);
+    assert(&getSemantics() == &Multiplicand.getSemantics() &&
+           "Should only call on APFloats with the same semantics");
+    assert(&getSemantics() == &Addend.getSemantics() &&
+           "Should only call on APFloats with the same semantics");
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.fusedMultiplyAdd(Multiplicand.U.IEEE, Addend.U.IEEE, RM);
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.fusedMultiplyAdd(Multiplicand.U.Double, Addend.U.Double,
+                                       RM);
+    llvm_unreachable("Unexpected semantics");
   }
   opStatus roundToIntegral(roundingMode RM) {
-    return getIEEE().roundToIntegral(RM);
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.roundToIntegral(RM);
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.roundToIntegral(RM);
+    llvm_unreachable("Unexpected semantics");
   }
-  opStatus next(bool nextDown) { return getIEEE().next(nextDown); }
 
+  opStatus next(bool nextDown) {
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.next(nextDown);
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.next(nextDown);
+    llvm_unreachable("Unexpected semantics");
+  }
+
+  /// \brief Operator+ overload which provides the default
+  /// \c rmNearestTiesToEven rounding mode and *no* error checking.
   APFloat operator+(const APFloat &RHS) const {
-    return APFloat(getIEEE() + RHS.getIEEE(), getSemantics());
+    APFloat Result(*this);
+    (void)Result.add(RHS, rmNearestTiesToEven);
+    return Result;
   }
 
+  /// \brief Operator- overload which provides the default
+  /// \c rmNearestTiesToEven rounding mode and *no* error checking.
   APFloat operator-(const APFloat &RHS) const {
-    return APFloat(getIEEE() - RHS.getIEEE(), getSemantics());
+    APFloat Result(*this);
+    (void)Result.subtract(RHS, rmNearestTiesToEven);
+    return Result;
   }
 
+  /// \brief Operator* overload which provides the default
+  /// \c rmNearestTiesToEven rounding mode and *no* error checking.
   APFloat operator*(const APFloat &RHS) const {
-    return APFloat(getIEEE() * RHS.getIEEE(), getSemantics());
+    APFloat Result(*this);
+    (void)Result.multiply(RHS, rmNearestTiesToEven);
+    return Result;
   }
 
+  /// \brief Operator/ overload which provides the default
+  /// \c rmNearestTiesToEven rounding mode and *no* error checking.
   APFloat operator/(const APFloat &RHS) const {
-    return APFloat(getIEEE() / RHS.getIEEE(), getSemantics());
+    APFloat Result(*this);
+    (void)Result.divide(RHS, rmNearestTiesToEven);
+    return Result;
   }
 
-  void changeSign() { getIEEE().changeSign(); }
-  void clearSign() { getIEEE().clearSign(); }
-  void copySign(const APFloat &RHS) { getIEEE().copySign(RHS.getIEEE()); }
+  void changeSign() {
+    if (usesLayout<IEEEFloat>(getSemantics())) {
+      U.IEEE.changeSign();
+      return;
+    }
+    if (usesLayout<DoubleAPFloat>(getSemantics())) {
+      U.Double.changeSign();
+      return;
+    }
+    llvm_unreachable("Unexpected semantics");
+  }
+  void clearSign() {
+    if (isNegative())
+      changeSign();
+  }
+  void copySign(const APFloat &RHS) {
+    if (isNegative() != RHS.isNegative())
+      changeSign();
+  }
 
+  /// \brief A static helper to produce a copy of an APFloat value with its sign
+  /// copied from some other APFloat.
   static APFloat copySign(APFloat Value, const APFloat &Sign) {
-    return APFloat(IEEEFloat::copySign(Value.getIEEE(), Sign.getIEEE()),
-                   Value.getSemantics());
+    Value.copySign(Sign);
+    return Value;
   }
 
   opStatus convert(const fltSemantics &ToSemantics, roundingMode RM,
@@ -940,46 +1123,84 @@ public:
   opStatus convertToInteger(integerPart *Input, unsigned int Width,
                             bool IsSigned, roundingMode RM,
                             bool *IsExact) const {
-    return getIEEE().convertToInteger(Input, Width, IsSigned, RM, IsExact);
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.convertToInteger(Input, Width, IsSigned, RM, IsExact);
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.convertToInteger(Input, Width, IsSigned, RM, IsExact);
+    llvm_unreachable("Unexpected semantics");
   }
   opStatus convertToInteger(APSInt &Result, roundingMode RM,
-                            bool *IsExact) const {
-    return getIEEE().convertToInteger(Result, RM, IsExact);
-  }
+                            bool *IsExact) const;
   opStatus convertFromAPInt(const APInt &Input, bool IsSigned,
                             roundingMode RM) {
-    return getIEEE().convertFromAPInt(Input, IsSigned, RM);
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.convertFromAPInt(Input, IsSigned, RM);
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.convertFromAPInt(Input, IsSigned, RM);
+    llvm_unreachable("Unexpected semantics");
   }
   opStatus convertFromSignExtendedInteger(const integerPart *Input,
                                           unsigned int InputSize, bool IsSigned,
                                           roundingMode RM) {
-    return getIEEE().convertFromSignExtendedInteger(Input, InputSize, IsSigned,
-                                                    RM);
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.convertFromSignExtendedInteger(Input, InputSize, IsSigned,
+                                                   RM);
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.convertFromSignExtendedInteger(Input, InputSize, IsSigned,
+                                                     RM);
+    llvm_unreachable("Unexpected semantics");
   }
   opStatus convertFromZeroExtendedInteger(const integerPart *Input,
                                           unsigned int InputSize, bool IsSigned,
                                           roundingMode RM) {
-    return getIEEE().convertFromZeroExtendedInteger(Input, InputSize, IsSigned,
-                                                    RM);
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.convertFromZeroExtendedInteger(Input, InputSize, IsSigned,
+                                                   RM);
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.convertFromZeroExtendedInteger(Input, InputSize, IsSigned,
+                                                     RM);
+    llvm_unreachable("Unexpected semantics");
   }
   opStatus convertFromString(StringRef, roundingMode);
-  APInt bitcastToAPInt() const { return getIEEE().bitcastToAPInt(); }
+  APInt bitcastToAPInt() const {
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.bitcastToAPInt();
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.bitcastToAPInt();
+    llvm_unreachable("Unexpected semantics");
+  }
   double convertToDouble() const { return getIEEE().convertToDouble(); }
   float convertToFloat() const { return getIEEE().convertToFloat(); }
 
   bool operator==(const APFloat &) const = delete;
 
   cmpResult compare(const APFloat &RHS) const {
-    return getIEEE().compare(RHS.getIEEE());
+    assert(&getSemantics() == &RHS.getSemantics() &&
+           "Should only compare APFloats with the same semantics");
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.compare(RHS.U.IEEE);
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.compare(RHS.U.Double);
+    llvm_unreachable("Unexpected semantics");
   }
 
   bool bitwiseIsEqual(const APFloat &RHS) const {
-    return getIEEE().bitwiseIsEqual(RHS.getIEEE());
+    if (&getSemantics() != &RHS.getSemantics())
+      return false;
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.bitwiseIsEqual(RHS.U.IEEE);
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.bitwiseIsEqual(RHS.U.Double);
+    llvm_unreachable("Unexpected semantics");
   }
 
   unsigned int convertToHexString(char *DST, unsigned int HexDigits,
                                   bool UpperCase, roundingMode RM) const {
-    return getIEEE().convertToHexString(DST, HexDigits, UpperCase, RM);
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.convertToHexString(DST, HexDigits, UpperCase, RM);
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.convertToHexString(DST, HexDigits, UpperCase, RM);
+    llvm_unreachable("Unexpected semantics");
   }
 
   bool isZero() const { return getCategory() == fcZero; }
@@ -987,7 +1208,13 @@ public:
   bool isNaN() const { return getCategory() == fcNaN; }
 
   bool isNegative() const { return getIEEE().isNegative(); }
-  bool isDenormal() const { return getIEEE().isDenormal(); }
+  bool isDenormal() const {
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.isDenormal();
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.isDenormal();
+    llvm_unreachable("Unexpected semantics");
+  }
   bool isSignaling() const { return getIEEE().isSignaling(); }
 
   bool isNormal() const { return !isDenormal() && isFiniteNonZero(); }
@@ -999,26 +1226,60 @@ public:
   bool isFiniteNonZero() const { return isFinite() && !isZero(); }
   bool isPosZero() const { return isZero() && !isNegative(); }
   bool isNegZero() const { return isZero() && isNegative(); }
-  bool isSmallest() const { return getIEEE().isSmallest(); }
-  bool isLargest() const { return getIEEE().isLargest(); }
-  bool isInteger() const { return getIEEE().isInteger(); }
+  bool isSmallest() const {
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.isSmallest();
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.isSmallest();
+    llvm_unreachable("Unexpected semantics");
+  }
+  bool isLargest() const {
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.isLargest();
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.isLargest();
+    llvm_unreachable("Unexpected semantics");
+  }
+  bool isInteger() const {
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.isInteger();
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.isInteger();
+    llvm_unreachable("Unexpected semantics");
+  }
 
   APFloat &operator=(const APFloat &RHS) = default;
   APFloat &operator=(APFloat &&RHS) = default;
 
   void toString(SmallVectorImpl<char> &Str, unsigned FormatPrecision = 0,
                 unsigned FormatMaxPadding = 3) const {
-    return getIEEE().toString(Str, FormatPrecision, FormatMaxPadding);
+    if (usesLayout<IEEEFloat>(getSemantics())) {
+      U.IEEE.toString(Str, FormatPrecision, FormatMaxPadding);
+      return;
+    }
+    if (usesLayout<DoubleAPFloat>(getSemantics())) {
+      U.Double.toString(Str, FormatPrecision, FormatMaxPadding);
+      return;
+    }
+    llvm_unreachable("Unexpected semantics");
   }
 
+  void print(raw_ostream &) const;
+  void dump() const;
+
   bool getExactInverse(APFloat *inv) const {
-    return getIEEE().getExactInverse(inv ? &inv->getIEEE() : nullptr);
+    if (usesLayout<IEEEFloat>(getSemantics()))
+      return U.IEEE.getExactInverse(inv);
+    if (usesLayout<DoubleAPFloat>(getSemantics()))
+      return U.Double.getExactInverse(inv);
+    llvm_unreachable("Unexpected semantics");
   }
 
   friend hash_code hash_value(const APFloat &Arg);
   friend int ilogb(const APFloat &Arg) { return ilogb(Arg.getIEEE()); }
   friend APFloat scalbn(APFloat X, int Exp, roundingMode RM);
   friend APFloat frexp(const APFloat &X, int &Exp, roundingMode RM);
+  friend IEEEFloat;
   friend DoubleAPFloat;
 };
 
@@ -1028,7 +1289,11 @@ public:
 /// xlC compiler.
 hash_code hash_value(const APFloat &Arg);
 inline APFloat scalbn(APFloat X, int Exp, APFloat::roundingMode RM) {
-  return APFloat(scalbn(X.getIEEE(), Exp, RM), X.getSemantics());
+  if (APFloat::usesLayout<detail::IEEEFloat>(X.getSemantics()))
+    return APFloat(scalbn(X.U.IEEE, Exp, RM), X.getSemantics());
+  if (APFloat::usesLayout<detail::DoubleAPFloat>(X.getSemantics()))
+    return APFloat(scalbn(X.U.Double, Exp, RM), X.getSemantics());
+  llvm_unreachable("Unexpected semantics");
 }
 
 /// \brief Equivalent of C standard library function.
@@ -1036,11 +1301,21 @@ inline APFloat scalbn(APFloat X, int Exp, APFloat::roundingMode RM) {
 /// While the C standard says Exp is an unspecified value for infinity and nan,
 /// this returns INT_MAX for infinities, and INT_MIN for NaNs.
 inline APFloat frexp(const APFloat &X, int &Exp, APFloat::roundingMode RM) {
-  return APFloat(frexp(X.getIEEE(), Exp, RM), X.getSemantics());
+  if (APFloat::usesLayout<detail::IEEEFloat>(X.getSemantics()))
+    return APFloat(frexp(X.U.IEEE, Exp, RM), X.getSemantics());
+  if (APFloat::usesLayout<detail::DoubleAPFloat>(X.getSemantics()))
+    return APFloat(frexp(X.U.Double, Exp, RM), X.getSemantics());
+  llvm_unreachable("Unexpected semantics");
 }
 /// \brief Returns the absolute value of the argument.
 inline APFloat abs(APFloat X) {
   X.clearSign();
+  return X;
+}
+
+/// \brief Returns the negated value of the argument.
+inline APFloat neg(APFloat X) {
+  X.changeSign();
   return X;
 }
 

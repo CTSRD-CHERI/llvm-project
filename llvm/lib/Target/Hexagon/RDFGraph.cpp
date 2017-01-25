@@ -10,16 +10,31 @@
 // Target-independent, SSA-based data flow graph for register data flow (RDF).
 //
 #include "RDFGraph.h"
-
 #include "llvm/ADT/SetVector.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineDominanceFrontier.h"
 #include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/MachineInstr.h"
+#include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/IR/Function.h"
+#include "llvm/MC/LaneBitmask.h"
+#include "llvm/MC/MCInstrDesc.h"
+#include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetInstrInfo.h"
 #include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetRegisterInfo.h"
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
+#include <cstring>
+#include <iterator>
+#include <utility>
+#include <vector>
 
 using namespace llvm;
 using namespace rdf;
@@ -30,7 +45,7 @@ namespace llvm {
 namespace rdf {
 
 raw_ostream &operator<< (raw_ostream &OS, const PrintLaneMaskOpt &P) {
-  if (P.Mask != ~LaneBitmask(0))
+  if (!P.Mask.all())
     OS << ':' << PrintLaneMask(P.Mask);
   return OS;
 }
@@ -88,14 +103,12 @@ raw_ostream &operator<< (raw_ostream &OS, const Print<NodeId> &P) {
   return OS;
 }
 
-namespace {
-  void printRefHeader(raw_ostream &OS, const NodeAddr<RefNode*> RA,
-        const DataFlowGraph &G) {
-    OS << Print<NodeId>(RA.Id, G) << '<'
-       << Print<RegisterRef>(RA.Addr->getRegRef(G), G) << '>';
-    if (RA.Addr->getFlags() & NodeAttrs::Fixed)
-      OS << '!';
-  }
+static void printRefHeader(raw_ostream &OS, const NodeAddr<RefNode*> RA,
+                const DataFlowGraph &G) {
+  OS << Print<NodeId>(RA.Id, G) << '<'
+     << Print<RegisterRef>(RA.Addr->getRegRef(G), G) << '>';
+  if (RA.Addr->getFlags() & NodeAttrs::Fixed)
+    OS << '!';
 }
 
 template<>
@@ -183,9 +196,11 @@ raw_ostream &operator<< (raw_ostream &OS, const Print<NodeSet> &P) {
 }
 
 namespace {
+
   template <typename T>
   struct PrintListV {
     PrintListV(const NodeList &L, const DataFlowGraph &G) : List(L), G(G) {}
+
     typedef T Type;
     const NodeList &List;
     const DataFlowGraph &G;
@@ -201,7 +216,8 @@ namespace {
     }
     return OS;
   }
-}
+
+} // end anonymous namespace
 
 template<>
 raw_ostream &operator<< (raw_ostream &OS, const Print<NodeAddr<PhiNode*>> &P) {
@@ -219,10 +235,10 @@ raw_ostream &operator<< (raw_ostream &OS,
   // Print the target for calls and branches (for readability).
   if (MI.isCall() || MI.isBranch()) {
     MachineInstr::const_mop_iterator T =
-          find_if(MI.operands(),
-                  [] (const MachineOperand &Op) -> bool {
-                    return Op.isMBB() || Op.isGlobal() || Op.isSymbol();
-                  });
+          llvm::find_if(MI.operands(),
+                        [] (const MachineOperand &Op) -> bool {
+                          return Op.isMBB() || Op.isGlobal() || Op.isSymbol();
+                        });
     if (T != MI.operands_end()) {
       OS << ' ';
       if (T->isMBB())
@@ -260,7 +276,7 @@ raw_ostream &operator<< (raw_ostream &OS,
   MachineBasicBlock *BB = P.Obj.Addr->getCode();
   unsigned NP = BB->pred_size();
   std::vector<int> Ns;
-  auto PrintBBs = [&OS,&P] (std::vector<int> Ns) -> void {
+  auto PrintBBs = [&OS] (std::vector<int> Ns) -> void {
     unsigned N = Ns.size();
     for (int I : Ns) {
       OS << "BB#" << I;
@@ -327,8 +343,8 @@ raw_ostream &operator<< (raw_ostream &OS,
   return OS;
 }
 
-} // namespace rdf
-} // namespace llvm
+} // end namespace rdf
+} // end namespace llvm
 
 // Node allocation functions.
 //
@@ -390,7 +406,6 @@ void NodeAllocator::clear() {
   ActiveEnd = nullptr;
 }
 
-
 // Insert node NA after "this" in the circular chain.
 void NodeBase::append(NodeAddr<NodeBase*> NA) {
   NodeId Nx = Next;
@@ -400,7 +415,6 @@ void NodeBase::append(NodeAddr<NodeBase*> NA) {
     NA.Addr->Next = Nx;
   }
 }
-
 
 // Fundamental node manipulator functions.
 
@@ -590,7 +604,6 @@ NodeAddr<BlockNode*> FuncNode::getEntryBlock(const DataFlowGraph &G) {
   return findBlock(EntryB, G);
 }
 
-
 // Target operand information.
 //
 
@@ -641,7 +654,6 @@ bool TargetOperandInfo::isFixedReg(const MachineInstr &In, unsigned OpNum)
   return false;
 }
 
-
 RegisterRef RegisterAggr::normalize(RegisterRef RR) const {
   RegisterId SuperReg = RR.Reg;
   while (true) {
@@ -651,10 +663,10 @@ RegisterRef RegisterAggr::normalize(RegisterRef RR) const {
     SuperReg = *SR;
   }
 
-  uint32_t Sub = TRI.getSubRegIndex(SuperReg, RR.Reg);
   const TargetRegisterClass &RC = *TRI.getMinimalPhysRegClass(RR.Reg);
-  LaneBitmask SuperMask = RR.Mask &
-                          TRI.composeSubRegIndexLaneMask(Sub, RC.LaneMask);
+  LaneBitmask Common = RR.Mask & RC.LaneMask;
+  uint32_t Sub = TRI.getSubRegIndex(SuperReg, RR.Reg);
+  LaneBitmask SuperMask = TRI.composeSubRegIndexLaneMask(Sub, Common);
   return RegisterRef(SuperReg, SuperMask);
 }
 
@@ -662,7 +674,7 @@ bool RegisterAggr::hasAliasOf(RegisterRef RR) const {
   RegisterRef NR = normalize(RR);
   auto F = Masks.find(NR.Reg);
   if (F != Masks.end()) {
-    if (F->second & NR.Mask)
+    if ((F->second & NR.Mask).any())
       return true;
   }
   if (CheckUnits) {
@@ -676,7 +688,7 @@ bool RegisterAggr::hasAliasOf(RegisterRef RR) const {
 bool RegisterAggr::hasCoverOf(RegisterRef RR) const {
   // Always have a cover for empty lane mask.
   RegisterRef NR = normalize(RR);
-  if (!NR.Mask)
+  if (NR.Mask.none())
     return true;
   auto F = Masks.find(NR.Reg);
   if (F == Masks.end())
@@ -717,7 +729,7 @@ RegisterAggr &RegisterAggr::clear(RegisterRef RR) {
   if (F == Masks.end())
     return *this;
   LaneBitmask NewM = F->second & ~NR.Mask;
-  if (NewM == LaneBitmask(0))
+  if (NewM.none())
     Masks.erase(F);
   else
     F->second = NewM;
@@ -745,7 +757,6 @@ void RegisterAggr::print(raw_ostream &OS) const {
   OS << " }";
 }
 
-
 //
 // The data flow graph construction.
 //
@@ -753,9 +764,8 @@ void RegisterAggr::print(raw_ostream &OS) const {
 DataFlowGraph::DataFlowGraph(MachineFunction &mf, const TargetInstrInfo &tii,
       const TargetRegisterInfo &tri, const MachineDominatorTree &mdt,
       const MachineDominanceFrontier &mdf, const TargetOperandInfo &toi)
-    : LMI(), MF(mf), TII(tii), TRI(tri), MDT(mdt), MDF(mdf), TOI(toi) {
+    : MF(mf), TII(tii), TRI(tri), MDT(mdt), MDF(mdf), TOI(toi) {
 }
-
 
 // The implementation of the definition stack.
 // Each register reference has its own definition stack. In particular,
@@ -845,7 +855,6 @@ unsigned DataFlowGraph::DefStack::nextDown(unsigned P) const {
   return P;
 }
 
-
 // Register information.
 
 // Get the list of references aliased to RR. Lane masks are ignored.
@@ -914,7 +923,6 @@ NodeAddr<NodeBase*> DataFlowGraph::cloneNode(const NodeAddr<NodeBase*> B) {
   }
   return NA;
 }
-
 
 // Allocation routines for specific node types/kinds.
 
@@ -1089,7 +1097,7 @@ RegisterRef DataFlowGraph::normalizeRef(RegisterRef RR) const {
 RegisterRef DataFlowGraph::restrictRef(RegisterRef AR, RegisterRef BR) const {
   if (AR.Reg == BR.Reg) {
     LaneBitmask M = AR.Mask & BR.Mask;
-    return M ? RegisterRef(AR.Reg, M) : RegisterRef();
+    return M.any() ? RegisterRef(AR.Reg, M) : RegisterRef();
   }
 #ifndef NDEBUG
   RegisterRef NAR = normalizeRef(AR);
@@ -1206,12 +1214,36 @@ bool DataFlowGraph::alias(RegisterRef RA, RegisterRef RB) const {
   while (UMA.isValid() && UMB.isValid()) {
     std::pair<uint32_t,LaneBitmask> PA = *UMA;
     std::pair<uint32_t,LaneBitmask> PB = *UMB;
-    // If the returned lane mask is 0, it should be treated as ~0
-    // (or the lane mask from the given register ref should be ignored).
-    // This can happen when a register has only one unit.
     if (PA.first == PB.first) {
-      if (!PA.second || !PB.second || (PA.second & PB.second))
+      // Lane mask of 0 (given by the iterator) should be treated as "full".
+      // This can happen when the register has only one unit, or when the
+      // unit corresponds to explicit aliasing. In such cases, the lane mask
+      // from RegisterRef should be ignored.
+      if (PA.second.none() || PB.second.none())
         return true;
+
+      // At this point the common unit corresponds to a subregister. The lane
+      // masks correspond to the lane mask of that unit within the original
+      // register, for example assuming register quadruple q0 = r3:0, and
+      // a register pair d1 = r3:2, the lane mask of r2 in q0 may be 0b0100,
+      // while the lane mask of r2 in d1 may be 0b0001.
+      LaneBitmask LA = PA.second & RA.Mask;
+      LaneBitmask LB = PB.second & RB.Mask;
+      if (LA.any() && LB.any()) {
+        unsigned Root = *MCRegUnitRootIterator(PA.first, &TRI);
+        // If register units were guaranteed to only have 1 bit in any lane
+        // mask, the code below would not be necessary. This is because LA
+        // and LB would have at most 1 bit set each, and that bit would be
+        // guaranteed to correspond to the given register unit.
+        uint32_t SubA = TRI.getSubRegIndex(RA.Reg, Root);
+        uint32_t SubB = TRI.getSubRegIndex(RB.Reg, Root);
+        const TargetRegisterClass &RC = *TRI.getMinimalPhysRegClass(Root);
+        LaneBitmask MaskA = TRI.reverseComposeSubRegIndexLaneMask(SubA, LA);
+        LaneBitmask MaskB = TRI.reverseComposeSubRegIndexLaneMask(SubB, LB);
+        if ((MaskA & MaskB & RC.LaneMask).any())
+          return true;
+      }
+
       ++UMA;
       ++UMB;
       continue;
@@ -1224,14 +1256,12 @@ bool DataFlowGraph::alias(RegisterRef RA, RegisterRef RB) const {
   return false;
 }
 
-
 // Clear all information in the graph.
 void DataFlowGraph::reset() {
   Memory.clear();
   BlockNodes.clear();
   Func = NodeAddr<FuncNode*>();
 }
-
 
 // Return the next reference node in the instruction node IA that is related
 // to RA. Conceptually, two reference nodes are related if they refer to the

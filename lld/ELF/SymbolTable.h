@@ -22,8 +22,6 @@ class Lazy;
 class OutputSectionBase;
 struct Symbol;
 
-typedef llvm::CachedHashStringRef SymName;
-
 // SymbolTable is a bucket of all known symbols, including defined,
 // undefined, or lazy symbols (the last one is symbols in archive
 // files whose archive members are not yet loaded).
@@ -42,7 +40,7 @@ template <class ELFT> class SymbolTable {
 
 public:
   void addFile(InputFile *File);
-  void addCombinedLtoObject();
+  void addCombinedLTOObject();
 
   ArrayRef<Symbol *> getSymbols() const { return SymVector; }
   ArrayRef<ObjectFile<ELFT> *> getObjectFiles() const { return ObjectFiles; }
@@ -50,18 +48,18 @@ public:
   ArrayRef<SharedFile<ELFT> *> getSharedFiles() const { return SharedFiles; }
 
   DefinedRegular<ELFT> *addAbsolute(StringRef Name,
-                                    uint8_t Visibility = llvm::ELF::STV_HIDDEN);
+                                    uint8_t Visibility = llvm::ELF::STV_HIDDEN,
+                                    uint8_t Binding = llvm::ELF::STB_GLOBAL);
   DefinedRegular<ELFT> *addIgnored(StringRef Name,
                                    uint8_t Visibility = llvm::ELF::STV_HIDDEN);
 
   Symbol *addUndefined(StringRef Name);
-  Symbol *addUndefined(StringRef Name, uint8_t Binding, uint8_t StOther,
-                       uint8_t Type, bool CanOmitFromDynSym, InputFile *File);
+  Symbol *addUndefined(StringRef Name, bool IsLocal, uint8_t Binding,
+                       uint8_t StOther, uint8_t Type, bool CanOmitFromDynSym,
+                       InputFile *File);
 
   Symbol *addRegular(StringRef Name, uint8_t StOther, uint8_t Type,
                      uintX_t Value, uintX_t Size, uint8_t Binding,
-                     InputSectionBase<ELFT> *Section, InputFile *File);
-  Symbol *addRegular(StringRef Name, const Elf_Sym &Sym,
                      InputSectionBase<ELFT> *Section, InputFile *File);
 
   Symbol *addSynthetic(StringRef N, const OutputSectionBase *Section,
@@ -81,10 +79,10 @@ public:
 
   void scanUndefinedFlags();
   void scanShlibUndefined();
-  void scanDynamicList();
   void scanVersionScript();
 
   SymbolBody *find(StringRef Name);
+  SymbolBody *findInCurrentDSO(StringRef Name);
 
   void trace(StringRef Name);
   void wrap(StringRef Name);
@@ -92,16 +90,15 @@ public:
   std::vector<InputSectionBase<ELFT> *> Sections;
 
 private:
-  std::vector<SymbolBody *> findAll(StringRef GlobPat);
-  std::pair<Symbol *, bool> insert(StringRef &Name);
-  std::pair<Symbol *, bool> insert(StringRef &Name, uint8_t Type,
+  std::pair<Symbol *, bool> insert(StringRef Name);
+  std::pair<Symbol *, bool> insert(StringRef Name, uint8_t Type,
                                    uint8_t Visibility, bool CanOmitFromDynSym,
                                    InputFile *File);
 
-  ArrayRef<SymbolBody *> findDemangled(StringRef Name);
-  std::vector<SymbolBody *> findAllDemangled(StringRef GlobPat);
+  std::vector<SymbolBody *> findByVersion(SymbolVersion Ver);
+  std::vector<SymbolBody *> findAllByVersion(SymbolVersion Ver);
 
-  void initDemangledSyms();
+  llvm::StringMap<std::vector<SymbolBody *>> &getDemangledSyms();
   void handleAnonymousVersion();
   void assignExactVersion(SymbolVersion Ver, uint16_t VersionId,
                           StringRef VersionName);
@@ -120,7 +117,7 @@ private:
   // but a bit inefficient.
   // FIXME: Experiment with passing in a custom hashing or sorting the symbols
   // once symbol resolution is finished.
-  llvm::DenseMap<SymName, SymIndex> Symtab;
+  llvm::DenseMap<llvm::CachedHashStringRef, SymIndex> Symtab;
   std::vector<Symbol *> SymVector;
 
   // Comdat groups define "link once" sections. If two comdat groups have the
@@ -143,7 +140,7 @@ private:
   llvm::Optional<llvm::StringMap<std::vector<SymbolBody *>>> DemangledSyms;
 
   // For LTO.
-  std::unique_ptr<BitcodeCompiler> Lto;
+  std::unique_ptr<BitcodeCompiler> LTO;
 };
 
 template <class ELFT> struct Symtab { static SymbolTable<ELFT> *X; };

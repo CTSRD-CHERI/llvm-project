@@ -423,7 +423,7 @@ bool ARMConstantIslands::runOnMachineFunction(MachineFunction &mf) {
     MadeChange |= optimizeThumb2Branches();
 
   // Optimize jump tables using TBB / TBH.
-  if (GenerateTBB)
+  if (GenerateTBB && !STI->genExecuteOnly())
     MadeChange |= optimizeThumb2JumpTables();
 
   // After a while, this might be made debug-only, but it is not expensive.
@@ -897,8 +897,9 @@ MachineBasicBlock *ARMConstantIslands::splitBlockBeforeInstr(MachineInstr *MI) {
   if (!isThumb)
     BuildMI(OrigBB, DebugLoc(), TII->get(Opc)).addMBB(NewBB);
   else
-    BuildMI(OrigBB, DebugLoc(), TII->get(Opc)).addMBB(NewBB)
-            .addImm(ARMCC::AL).addReg(0);
+    BuildMI(OrigBB, DebugLoc(), TII->get(Opc))
+        .addMBB(NewBB)
+        .add(predOps(ARMCC::AL));
   ++NumSplit;
 
   // Update the CFG.  All succs of OrigBB are now succs of NewBB.
@@ -1296,8 +1297,9 @@ void ARMConstantIslands::createNewWater(unsigned CPUserIndex,
       if (!isThumb)
         BuildMI(UserMBB, DebugLoc(), TII->get(UncondBr)).addMBB(NewMBB);
       else
-        BuildMI(UserMBB, DebugLoc(), TII->get(UncondBr)).addMBB(NewMBB)
-          .addImm(ARMCC::AL).addReg(0);
+        BuildMI(UserMBB, DebugLoc(), TII->get(UncondBr))
+            .addMBB(NewMBB)
+            .add(predOps(ARMCC::AL));
       unsigned MaxDisp = getUnconditionalBrDisp(UncondBr);
       ImmBranches.push_back(ImmBranch(&UserMBB->back(),
                                       MaxDisp, false, UncondBr));
@@ -1477,7 +1479,9 @@ bool ARMConstantIslands::handleConstantPoolUser(unsigned CPUserIndex,
   // add it to the island.
   U.HighWaterMark = NewIsland;
   U.CPEMI = BuildMI(NewIsland, DebugLoc(), CPEMI->getDesc())
-                .addImm(ID).addOperand(CPEMI->getOperand(1)).addImm(Size);
+                .addImm(ID)
+                .add(CPEMI->getOperand(1))
+                .addImm(Size);
   CPEntries[CPI].push_back(CPEntry(U.CPEMI, ID, 1));
   ++NumCPEs;
 
@@ -1681,8 +1685,9 @@ ARMConstantIslands::fixupConditionalBr(ImmBranch &Br) {
   Br.MI = &MBB->back();
   BBInfo[MBB->getNumber()].Size += TII->getInstSizeInBytes(MBB->back());
   if (isThumb)
-    BuildMI(MBB, DebugLoc(), TII->get(Br.UncondBr)).addMBB(DestBB)
-            .addImm(ARMCC::AL).addReg(0);
+    BuildMI(MBB, DebugLoc(), TII->get(Br.UncondBr))
+        .addMBB(DestBB)
+        .add(predOps(ARMCC::AL));
   else
     BuildMI(MBB, DebugLoc(), TII->get(Br.UncondBr)).addMBB(DestBB);
   BBInfo[MBB->getNumber()].Size += TII->getInstSizeInBytes(MBB->back());
@@ -1709,8 +1714,8 @@ bool ARMConstantIslands::undoLRSpillRestore() {
         MI->getNumExplicitOperands() == 3) {
       // Create the new insn and copy the predicate from the old.
       BuildMI(MI->getParent(), MI->getDebugLoc(), TII->get(ARM::tBX_RET))
-        .addOperand(MI->getOperand(0))
-        .addOperand(MI->getOperand(1));
+          .add(MI->getOperand(0))
+          .add(MI->getOperand(1));
       MI->eraseFromParent();
       MadeChange = true;
     }
@@ -2238,13 +2243,11 @@ adjustJTTargetBlockForward(MachineBasicBlock *BB, MachineBasicBlock *JTBB) {
   if (isThumb2)
     BuildMI(NewBB, DebugLoc(), TII->get(ARM::t2B))
         .addMBB(BB)
-        .addImm(ARMCC::AL)
-        .addReg(0);
+        .add(predOps(ARMCC::AL));
   else
     BuildMI(NewBB, DebugLoc(), TII->get(ARM::tB))
         .addMBB(BB)
-        .addImm(ARMCC::AL)
-        .addReg(0);
+        .add(predOps(ARMCC::AL));
 
   // Update internal data structures to account for the newly inserted MBB.
   MF->RenumberBlocks(NewBB);
