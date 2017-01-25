@@ -252,7 +252,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
       BuildMI(*InsertBlock, InsertPoint, I.first->getDebugLoc(),
           InstrInfo->get(MipsOpForCHERIOp(I.first->getOpcode())))
         .addReg(FirstReg, getDefRegState(FirstOperand.isDef()))
-        .addReg(BaseReg).addOperand(Offset);
+        .addReg(BaseReg).add(Offset);
       I.first->eraseFromBundle();
       if (AddInst) {
         // If we've folded the base of the add into the load's immediate, then

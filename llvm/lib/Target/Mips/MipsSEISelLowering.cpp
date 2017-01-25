@@ -3948,11 +3948,11 @@ emitCapFloatLoad(const MipsSubtarget &Subtarget,
   unsigned IntReg = RegInfo.createVirtualRegister(&RC);
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
   BuildMI(*BB, &MI, DL, TII->get(CAPLOAD), IntReg)
-      .addOperand(MI.getOperand(1))
-      .addOperand(MI.getOperand(2))
-      .addOperand(MI.getOperand(3));
+      .add(MI.getOperand(1))
+      .add(MI.getOperand(2))
+      .add(MI.getOperand(3));
   BuildMI(*BB, MI, DL, TII->get(MTC1))
-      .addOperand(MI.getOperand(0))
+      .add(MI.getOperand(0))
       .addReg(IntReg);
   MI.eraseFromParent();
   return BB;
@@ -4033,12 +4033,12 @@ emitCapFloatStore(const MipsSubtarget &Subtarget,
   unsigned IntReg = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
   BuildMI(*BB, MI, DL, TII->get(MFC1), IntReg)
-      .addOperand(MI.getOperand(0));
+      .add(MI.getOperand(0));
   BuildMI(*BB, MI, DL, TII->get(CAPSTORE))
       .addReg(IntReg, RegState::Kill)
-      .addOperand(MI.getOperand(1))
-      .addOperand(MI.getOperand(2))
-      .addOperand(MI.getOperand(3));
+      .add(MI.getOperand(1))
+      .add(MI.getOperand(2))
+      .add(MI.getOperand(3));
   MI.eraseFromParent();
   return BB;
 }
