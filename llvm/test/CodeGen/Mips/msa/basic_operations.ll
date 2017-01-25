@@ -16,7 +16,7 @@
 ; RUN: llc -march=mips64el -mattr=+msa,+fp64 -relocation-model=pic \
 ; RUN:   -verify-machineinstrs < %s | \
 ; RUN:   FileCheck -check-prefixes=ALL,N64,MIPS64,ALL-LE %s
-; XFAIL:
+; XFAIL: *
 
 @v4i8 = global <4 x i8> <i8 0, i8 0, i8 0, i8 0>
 @v16i8 = global <16 x i8> <i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0>
