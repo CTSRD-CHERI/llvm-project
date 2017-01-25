@@ -1,6 +1,10 @@
 ; RUN: llc -march=mips -mattr=+msa,+fp64 -relocation-model=pic < %s | FileCheck %s -check-prefixes=CHECK,MSA32
 ; RUN: llc -march=mips64 -mattr=+msa,+fp64 -relocation-model=pic -target-abi n32 < %s \
 ; RUN:      | FileCheck %s -check-prefixes=CHECK,MSA64,MSA64N32
+
+; FIXME: this crashes clang:
+; llvm::DAGTypeLegalizer::ExpandChainLibCall (this=0x7fffffffbb10, LC=llvm::RTLIB::UNKNOWN_LIBCALL, Node=0x7242c8, isSigned=false) at llvm/lib/CodeGen/SelectionDAG/LegalizeTypes.cpp:1071: SDValue InChain = Node->getOperand(0);
+
 ; RUN: llc -march=mips64 -mattr=+msa,+fp64 -relocation-model=pic -target-abi n64 < %s \
 ; RUN:      | FileCheck %s -check-prefixes=CHECK,MSA64,MSA64N64
 
