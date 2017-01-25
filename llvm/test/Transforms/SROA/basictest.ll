@@ -1672,9 +1672,9 @@ declare void @llvm.memcpy.p0i8.p0i8.i64(i8* nocapture, i8* nocapture, i64, i32, 
 
 define void @PR27999() unnamed_addr {
 ; CHECK-LABEL: @PR27999(
-; CHECK: alloca [2 x i64], align 8
-; CHECK: call void @llvm.lifetime.start.p0i8(i64 16,
-; CHECK: call void @llvm.lifetime.end.p0i8(i64 8,
+; CHECK-NOT: alloca [2 x i64], align 8
+; CHECK-NOT: call void @llvm.lifetime.start.p0i8(i64 16,
+; CHECK-NOT: call void @llvm.lifetime.end.p0i8(i64 8,
 ; CHECK: entry-block:
 ; CHECK-NEXT: ret void
 entry-block:
@@ -1695,6 +1695,6 @@ bb1:
   %e.7.sroa.6.i = alloca i32, align 1
   %e.7.sroa.6.0.load81.i = load i32, i32* %e.7.sroa.6.i, align 1
   %0 = bitcast i32* %e.7.sroa.6.i to i8*
-  call void @llvm.lifetime.end(i64 2, i8* %0)
+  call void @llvm.lifetime.end.p0i8(i64 2, i8* %0)
   ret void
 }
