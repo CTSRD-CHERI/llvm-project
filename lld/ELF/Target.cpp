@@ -266,6 +266,8 @@ TargetInfo *createTarget() {
   case EM_ARM:
     return make<ARMTargetInfo>();
   case EM_MIPS:
+    if (Config->MipsCheriAbi)
+      return make<MipsTargetInfo<ELF64BE>>(); // TODO: custom target info?
     switch (Config->EKind) {
     case ELF32LEKind:
       return make<MipsTargetInfo<ELF32LE>>();
@@ -278,8 +280,6 @@ TargetInfo *createTarget() {
     default:
       fatal("unsupported MIPS target");
     }
-  case EM_MIPS_CHERI:
-      return new MipsTargetInfo<ELF64BE>(); // XXXAR: add new target info?
   case EM_PPC:
     return make<PPCTargetInfo>();
   case EM_PPC64:

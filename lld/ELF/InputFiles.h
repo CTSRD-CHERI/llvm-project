@@ -89,6 +89,7 @@ public:
   // have ELF type (i.e. ELF{32,64}{LE,BE}) and target machine type.
   ELFKind EKind = ELFNoneKind;
   uint16_t EMachine = llvm::ELF::EM_NONE;
+  uint64_t EFlags = 0;
   uint8_t OSABI = 0;
 
 protected:

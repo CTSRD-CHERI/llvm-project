@@ -135,6 +135,7 @@ ELFFileBase<ELFT>::ELFFileBase(Kind K, MemoryBufferRef MB) : InputFile(K, MB) {
   EKind = getELFKind<ELFT>();
   EMachine = getObj().getHeader()->e_machine;
   OSABI = getObj().getHeader()->e_ident[llvm::ELF::EI_OSABI];
+  EFlags = getObj().getHeader()->e_flags;
 }
 
 template <class ELFT>

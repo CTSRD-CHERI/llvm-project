@@ -734,7 +734,12 @@ void LinkerDriver::inferMachineType() {
     Config->EKind = F->EKind;
     Config->EMachine = F->EMachine;
     Config->OSABI = F->OSABI;
-    Config->MipsN32Abi = Config->isMIPS() && isMipsN32Abi(F);
+    if (F->EMachine == EM_MIPS) {
+      Config->MipsN32Abi = isMipsN32Abi(F);
+      uint64_t Mach = F->EFlags & EF_MIPS_MACH;
+      Config->MipsCheriAbi = (Mach == EF_MIPS_MACH_CHERI128
+        || Mach == EF_MIPS_MACH_CHERI256);
+    }
     return;
   }
   error("target emulation unknown: -m or at least one .o file required");
