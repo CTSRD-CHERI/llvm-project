@@ -53,7 +53,8 @@ static StringRef getAbiName(uint32_t Flags) {
     return "eabi32";
   case EF_MIPS_ABI_EABI64:
     return "eabi64";
-  // XXXAR: TODO: EF_MIPS_ABI_CHERIABI?
+  case EF_MIPS_ABI_CHERIABI:
+    return "sandbox";
   default:
     return "unknown";
   }
@@ -148,6 +149,9 @@ static ArchTreeEdge ArchTree[] = {
     {EF_MIPS_ARCH_3 | EF_MIPS_MACH_5900, EF_MIPS_ARCH_3},
     {EF_MIPS_ARCH_3 | EF_MIPS_MACH_LS2E, EF_MIPS_ARCH_3},
     {EF_MIPS_ARCH_3 | EF_MIPS_MACH_LS2F, EF_MIPS_ARCH_3},
+    // XXXAR: is this correct?
+    {EF_MIPS_ARCH_3 | EF_MIPS_MACH_CHERI128, EF_MIPS_ARCH_3},
+    {EF_MIPS_ARCH_3 | EF_MIPS_MACH_CHERI256, EF_MIPS_ARCH_3},
     {EF_MIPS_ARCH_4, EF_MIPS_ARCH_3},
     // MIPS32 extensions.
     {EF_MIPS_ARCH_32R2, EF_MIPS_ARCH_32},
@@ -216,6 +220,10 @@ static StringRef getMachName(uint32_t Flags) {
     return "sb1";
   case EF_MIPS_MACH_XLR:
     return "xlr";
+  case EF_MIPS_MACH_CHERI128:
+    return "cheri128";
+  case EF_MIPS_MACH_CHERI256:
+    return "cheri256";
   default:
     return "unknown machine";
   }

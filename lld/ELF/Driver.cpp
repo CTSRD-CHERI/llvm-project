@@ -100,7 +100,6 @@ static std::tuple<ELFKind, uint16_t, uint8_t> parseEmulation(StringRef Emul) {
           .Case("elf32ltsmipn32", {ELF32LEKind, EM_MIPS})
           .Case("elf32ppc", {ELF32BEKind, EM_PPC})
           .Case("elf64btsmip", {ELF64BEKind, EM_MIPS})
-          .Case("elf64btsmip_cheri", {ELF64BEKind, EM_MIPS})
           .Case("elf64ltsmip", {ELF64LEKind, EM_MIPS})
           .Case("elf64ppc", {ELF64BEKind, EM_PPC64})
           .Cases("elf_amd64", "elf_x86_64", {ELF64LEKind, EM_X86_64})
@@ -808,7 +807,7 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   for (InputFile *F : Files)
     Symtab.addFile(F);
 
-  if (Config->EMachine == EM_MIPS_CHERI) {
+  if (Config->MipsCheriAbi) {
     if (Config->DynamicLinker.empty())
       Config->DynamicLinker = "/libexec/ld-cheri-elf.so.1";
     if (Config->SearchPaths.empty()) {
