@@ -161,10 +161,10 @@ def FeatureMips64r6    : SubtargetFeature<"mips64r6", "MipsArchVersion",
                                  FeatureNaN2008]>;
 def FeatureMipsCheri   : SubtargetFeature<"cheri", "IsCheri", "true",
                                 "Supports the CHERI capability coprocessor",
-                                [FeatureGP64Bit]>;
+                                [FeatureMips4]>;
 def FeatureMipsCheri128 : SubtargetFeature<"cheri128", "IsCheri128", "true",
                                 "Capabilities are 128 bits",
-                                []>;
+                                [FeatureMipsCheri]>;
 def FeatureSym32       : SubtargetFeature<"sym32", "HasSym32", "true",
                                           "Symbols are 32 bit on Mips64">;
 
