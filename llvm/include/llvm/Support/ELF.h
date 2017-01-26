@@ -473,6 +473,7 @@ enum : unsigned {
   EF_MIPS_ABI_O64 = 0x00002000, // O32 ABI extended for 64-bit architecture.
   EF_MIPS_ABI_EABI32 = 0x00003000, // EABI in 32 bit mode.
   EF_MIPS_ABI_EABI64 = 0x00004000, // EABI in 64 bit mode.
+  EF_MIPS_ABI_CHERIABI = 0x0000c000, // CHERIABI
   EF_MIPS_ABI = 0x0000f000,        // Mask for selecting EF_MIPS_ABI_ variant.
 
   // MIPS machine variant
@@ -495,6 +496,8 @@ enum : unsigned {
   EF_MIPS_MACH_LS2E = 0x00a00000,    // ST Microelectronics Loongson 2E
   EF_MIPS_MACH_LS2F = 0x00a10000,    // ST Microelectronics Loongson 2F
   EF_MIPS_MACH_LS3A = 0x00a20000,    // Loongson 3A
+  EF_MIPS_MACH_CHERI128 = 0x00c10000, // CHERI 128-bit
+  EF_MIPS_MACH_CHERI256 = 0x00c20000, // CHERI 256-bit
   EF_MIPS_MACH = 0x00ff0000,         // EF_MIPS_MACH_xxx selection mask
 
   // ARCH_ASE
