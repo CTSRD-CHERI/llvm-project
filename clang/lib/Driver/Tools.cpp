@@ -9535,19 +9535,6 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     InputInfoList In= {InputInfo(types::TY_Object, Output.getFilename(), Output.getBaseInput())};
     C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, SizeFixArgs, In));
   }
-  if (IsSandboxABI) {
-    Exec = Args.MakeArgString(getToolChain().GetProgramPath("brandelf"));
-    ArgStringList BrandElfArgs;
-    BrandElfArgs.push_back("-c");
-#ifdef CHERI_IS_128
-    BrandElfArgs.push_back("128");
-#else
-    BrandElfArgs.push_back("256");
-#endif
-    BrandElfArgs.push_back(Output.getFilename());
-    InputInfoList In = {InputInfo(types::TY_Object, Output.getFilename(), Output.getBaseInput())};
-    C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, BrandElfArgs, In));
-  }
 }
 
 void netbsd::Assembler::ConstructJob(Compilation &C, const JobAction &JA,
