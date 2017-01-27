@@ -1131,6 +1131,8 @@ template <class ELFT>
 size_t SymbolTableSection<ELFT>::getSymbolIndex(SymbolBody *Body) {
   auto I = llvm::find_if(
       Symbols, [&](const SymbolTableEntry &E) { return E.Symbol == Body; });
+  if (I == Symbols.end())
+    return 0;
   return I - Symbols.begin() + 1;
 }
 
@@ -1911,6 +1913,27 @@ void ARMExidxSentinelSection<ELFT>::writeTo(uint8_t *Buf) {
   write32le(Buf + 4, 0x1);
 }
 
+template <class ELFT>
+ThunkSection<ELFT>::ThunkSection(OutputSectionBase *OS, uint64_t Off)
+    : SyntheticSection<ELFT>(SHF_ALLOC, SHT_PROGBITS,
+                             sizeof(typename ELFT::uint), ".text.thunk") {
+  this->OutSec = OS;
+  this->OutSecOff = Off;
+}
+
+template <class ELFT> void ThunkSection<ELFT>::addThunk(Thunk<ELFT> *T) {
+  uint64_t Off = alignTo(Size, T->alignment);
+  T->Offset = Off;
+  Thunks.push_back(T);
+  T->addSymbols(*this);
+  Size = Off + T->size();
+}
+
+template <class ELFT> void ThunkSection<ELFT>::writeTo(uint8_t *Buf) {
+  for (const Thunk<ELFT> *T : Thunks)
+    T->writeTo(Buf + T->Offset, *this);
+}
+
 template InputSection<ELF32LE> *elf::createCommonSection();
 template InputSection<ELF32BE> *elf::createCommonSection();
 template InputSection<ELF64LE> *elf::createCommonSection();
@@ -2053,3 +2076,8 @@ template class elf::ARMExidxSentinelSection<ELF32LE>;
 template class elf::ARMExidxSentinelSection<ELF32BE>;
 template class elf::ARMExidxSentinelSection<ELF64LE>;
 template class elf::ARMExidxSentinelSection<ELF64BE>;
+
+template class elf::ThunkSection<ELF32LE>;
+template class elf::ThunkSection<ELF32BE>;
+template class elf::ThunkSection<ELF64LE>;
+template class elf::ThunkSection<ELF64BE>;

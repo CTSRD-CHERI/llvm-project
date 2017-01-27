@@ -840,7 +840,7 @@ void Writer<ELFT>::addInputSec(InputSectionBase<ELFT> *IS) {
   OutputSectionBase *Sec;
   bool IsNew;
   StringRef OutsecName = getOutputSectionName(IS->Name);
-  std::tie(Sec, IsNew) = Factory.create(IS, OutsecName);
+  std::tie(Sec, IsNew) = Factory.create(IS, OutsecName, false);
   if (IsNew)
     OutputSections.push_back(Sec);
   Sec->addSection(IS);
@@ -1028,6 +1028,12 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   if (In<ELFT>::Iplt && !In<ELFT>::Iplt->empty())
     In<ELFT>::Iplt->addSymbols();
 
+  // Some architectures use small displacements for jump instructions.
+  // It is linker's responsibility to create thunks containing long
+  // jump instructions if jump targets are too far. Create thunks.
+  if (Target->NeedsThunks)
+    createThunks<ELFT>(OutputSections);
+
   // Now that we have defined all possible symbols including linker-
   // synthesized ones. Visit all symbols to give the finishing touches.
   for (Symbol *S : Symtab<ELFT>::X->getSymbols()) {
@@ -1072,12 +1078,6 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     addPtArmExid(Phdrs);
     fixHeaders();
   }
-
-  // Some architectures use small displacements for jump instructions.
-  // It is linker's responsibility to create thunks containing long
-  // jump instructions if jump targets are too far. Create thunks.
-  if (Target->NeedsThunks)
-    createThunks<ELFT>(OutputSections);
 
   // Fill other section headers. The dynamic table is finalized
   // at the end because some tags like RELSZ depend on result
