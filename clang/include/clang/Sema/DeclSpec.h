@@ -1717,6 +1717,7 @@ public:
     ObjCParameterContext,// An ObjC method parameter type.
     KNRTypeListContext,  // K&R type definition list for formals.
     TypeNameContext,     // Abstract declarator for types.
+    FunctionalCastContext, // Type in a C++ functional cast expression.
     MemberContext,       // Struct/Union field.
     BlockContext,        // Declaration within a block in a function.
     ForContext,          // Declaration within first part of a for loop.
@@ -1919,6 +1920,7 @@ public:
       return false;
 
     case TypeNameContext:
+    case FunctionalCastContext:
     case AliasDeclContext:
     case AliasTemplateContext:
     case PrototypeContext:
@@ -1959,6 +1961,7 @@ public:
       return true;
 
     case TypeNameContext:
+    case FunctionalCastContext:
     case CXXNewContext:
     case AliasDeclContext:
     case AliasTemplateContext:
@@ -1991,6 +1994,7 @@ public:
     case CXXCatchContext:
     case ObjCCatchContext:
     case TypeNameContext:
+    case FunctionalCastContext:
     case ConversionIdContext:
     case ObjCParameterContext:
     case ObjCResultContext:
@@ -2029,6 +2033,7 @@ public:
     // These contexts don't allow any kind of non-abstract declarator.
     case KNRTypeListContext:
     case TypeNameContext:
+    case FunctionalCastContext:
     case AliasDeclContext:
     case AliasTemplateContext:
     case LambdaExprParameterContext:
@@ -2086,6 +2091,7 @@ public:
     case CXXCatchContext:
     case ObjCCatchContext:
     case TypeNameContext:
+    case FunctionalCastContext: // FIXME
     case CXXNewContext:
     case AliasDeclContext:
     case AliasTemplateContext:
@@ -2287,6 +2293,7 @@ public:
     case ConditionContext:
     case KNRTypeListContext:
     case TypeNameContext:
+    case FunctionalCastContext:
     case AliasDeclContext:
     case AliasTemplateContext:
     case PrototypeContext:
