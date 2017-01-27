@@ -165,6 +165,9 @@ def FeatureMipsCheri   : SubtargetFeature<"cheri", "IsCheri", "true",
 def FeatureMipsCheri128 : SubtargetFeature<"cheri128", "IsCheri128", "true",
                                 "Capabilities are 128 bits",
                                 []>;
+def FeatureSym32       : SubtargetFeature<"sym32", "HasSym32", "true",
+                                          "Symbols are 32 bit on Mips64">;
+
 def FeatureMips16  : SubtargetFeature<"mips16", "InMips16Mode", "true",
                                       "Mips16 mode">;
 

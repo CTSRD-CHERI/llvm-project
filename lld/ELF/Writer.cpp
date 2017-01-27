@@ -425,12 +425,6 @@ template <class ELFT> static bool includeInSymtab(const SymbolBody &B) {
   if (!B.isLocal() && !B.symbol()->IsUsedInRegularObj)
     return false;
 
-  // If --retain-symbols-file is given, we'll keep only symbols listed in that
-  // file.
-  if (Config->Discard == DiscardPolicy::RetainFile &&
-      !Config->RetainSymbolsFile.count(B.getName()))
-    return false;
-
   if (auto *D = dyn_cast<DefinedRegular<ELFT>>(&B)) {
     // Always include absolute symbols.
     if (!D->Section)
@@ -846,7 +840,7 @@ void Writer<ELFT>::addInputSec(InputSectionBase<ELFT> *IS) {
   OutputSectionBase *Sec;
   bool IsNew;
   StringRef OutsecName = getOutputSectionName(IS->Name);
-  std::tie(Sec, IsNew) = Factory.create(IS, OutsecName);
+  std::tie(Sec, IsNew) = Factory.create(IS, OutsecName, false);
   if (IsNew)
     OutputSections.push_back(Sec);
   Sec->addSection(IS);

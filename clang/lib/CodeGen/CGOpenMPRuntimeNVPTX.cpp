@@ -198,6 +198,7 @@ getExecutionModeForDirective(CodeGenModule &CGM,
   OpenMPDirectiveKind DirectiveKind = D.getDirectiveKind();
   switch (DirectiveKind) {
   case OMPD_target:
+  case OMPD_target_teams:
     return CGOpenMPRuntimeNVPTX::ExecutionMode::Generic;
   case OMPD_target_parallel:
     return CGOpenMPRuntimeNVPTX::ExecutionMode::Spmd;
@@ -640,6 +641,17 @@ CGOpenMPRuntimeNVPTX::CGOpenMPRuntimeNVPTX(CodeGenModule &CGM)
     : CGOpenMPRuntime(CGM), CurrentExecutionMode(ExecutionMode::Unknown) {
   if (!CGM.getLangOpts().OpenMPIsDevice)
     llvm_unreachable("OpenMP NVPTX can only handle device code.");
+}
+
+void CGOpenMPRuntimeNVPTX::emitProcBindClause(CodeGenFunction &CGF,
+                                              OpenMPProcBindClauseKind ProcBind,
+                                              SourceLocation Loc) {
+  // Do nothing in case of Spmd mode and L0 parallel.
+  // TODO: If in Spmd mode and L1 parallel emit the clause.
+  if (isInSpmdExecutionMode())
+    return;
+
+  CGOpenMPRuntime::emitProcBindClause(CGF, ProcBind, Loc);
 }
 
 void CGOpenMPRuntimeNVPTX::emitNumThreadsClause(CodeGenFunction &CGF,
