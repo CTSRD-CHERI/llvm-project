@@ -1,4 +1,4 @@
-; RUN: llc -cheri128-test-mode -mcpu=cheri -O2 -o - -mattr=+cheri128 %s | FileCheck %s
+; RUN: llc -cheri128-test-mode -mcpu=cheri -O2 -o - -mattr=+cheri128 -relocation-model=pic %s | FileCheck %s
 ; ModuleID = 'cheri128.c'
 target datalayout = "E-m:m-pf200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128"
 target triple = "cheri-unknown-freebsd"

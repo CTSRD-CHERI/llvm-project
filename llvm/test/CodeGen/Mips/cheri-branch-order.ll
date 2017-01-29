@@ -1,4 +1,4 @@
-; RUN: llc  -mtriple cheri-unknown-freebsd %s -o - -O0 | FileCheck %s
+; RUN: llc  -mtriple cheri-unknown-freebsd -relocation-model=pic %s -o - -O0 | FileCheck %s
 ; ModuleID = 'brazdil.c'
 target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128"
 target triple = "cheri-unknown-freebsd"
