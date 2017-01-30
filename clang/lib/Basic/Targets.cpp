@@ -7572,6 +7572,7 @@ public:
   void setSandboxABITypes() {
     setN64ABITypes();
     PointerWidth = PointerAlign = CapSize;
+    IntPtrType = TargetInfo::SignedIntCap;
   }
 
   void setN32ABITypes() {
