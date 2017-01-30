@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 %s "-target-abi" "sandbox" -emit-llvm -triple cheri-unknown-freebsd -o - 
+// RUN: %clang_cc1 %s "-target-abi" "sandbox" -emit-llvm -cheri-linker -triple cheri-unknown-freebsd -o - 
 typedef void (*foo)(void);
 void fn(void);
 
