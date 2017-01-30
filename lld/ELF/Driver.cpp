@@ -780,7 +780,9 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   ScriptBase = Script<ELFT>::X = make<LinkerScript<ELFT>>();
 
   Config->Rela =
-      ELFT::Is64Bits || Config->EMachine == EM_X86_64 || Config->MipsN32Abi;
+      (ELFT::Is64Bits || Config->EMachine == EM_X86_64 || Config->MipsN32Abi);
+  if (Config->isMIPS() && Config->OSABI == ELFOSABI_FREEBSD)
+    Config->Rela = false; // FreeBSD MIPS rtld does not support RELA relocations
   Config->Mips64EL = (Config->isMIPS() && Config->EKind == ELF64LEKind);
   Config->MaxPageSize = getMaxPageSize(Args);
   Config->ImageBase = getImageBase(Args);
