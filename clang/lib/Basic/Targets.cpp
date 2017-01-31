@@ -7528,7 +7528,7 @@ public:
     }
     if (Name == "sandbox") {
       setSandboxABITypes();
-      SandboxABI = true;
+      SandboxABI = CapabilityABI = true;
       ABI = "n64";
       return true;
     }
@@ -7939,8 +7939,6 @@ public:
         IsNan2008 = true;
       else if (Feature == "+cheri") {
         IsCheri = true;
-      } else if (Feature == "+sandbox") {
-        CapabilityABI = true;
       }
       else if (Feature == "-nan2008")
         IsNan2008 = false;
