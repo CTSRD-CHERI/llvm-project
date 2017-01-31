@@ -3868,13 +3868,38 @@ RValue CodeGenFunction::EmitSimpleCallExpr(const CallExpr *E,
   return EmitCall(E->getCallee()->getType(), Callee, E, ReturnValue);
 }
 
+static llvm::Value *FunctionAddressToCapability(CodeGenFunction &CGF, llvm::Value
+    *Addr) {
+  llvm::Value *V = CGF.Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
+  llvm::Value *PCC = CGF.Builder.CreateCall(
+          CGF.CGM.getIntrinsic(llvm::Intrinsic::memcap_pcc_get), {});
+  if (auto *F = dyn_cast<llvm::Function>(Addr->stripPointerCasts()))
+    if (F->hasWeakLinkage() || F->hasExternalWeakLinkage())
+      return CGF.Builder.CreateCall(
+        CGF.CGM.getIntrinsic(llvm::Intrinsic::memcap_cap_from_pointer),
+        {PCC, V});
+  return CGF.setPointerOffset(PCC, V);
+}
+
 static CGCallee EmitDirectCallee(CodeGenFunction &CGF, const FunctionDecl *FD) {
   if (auto builtinID = FD->getBuiltinID()) {
     return CGCallee::forBuiltin(builtinID, FD);
   }
 
-  llvm::Constant *calleePtr = EmitFunctionDeclPointer(CGF.CGM, FD);
-  return CGCallee::forDirect(calleePtr, FD);
+  llvm::Value *calleePtr = EmitFunctionDeclPointer(CGF.CGM, FD);
+  llvm::Type *calleePtrTy = calleePtr->getType();
+  auto &TI = CGF.getContext().getTargetInfo();
+  if (TI.areAllPointersCapabilities()) {
+    unsigned CapAS = TI.AddressSpaceForCapabilities();
+    if (calleePtrTy->getPointerAddressSpace() != CapAS) {
+      llvm::Type *CapTy = cast<llvm::PointerType>(calleePtrTy)
+        ->getElementType()->getPointerTo(CapAS);
+      calleePtr = FunctionAddressToCapability(CGF, calleePtr);
+      calleePtr = CGF.Builder.CreateBitCast(calleePtr, CapTy);
+    }
+  }
+
+  return CGCallee(FD, calleePtr);
 }
 
 CGCallee CodeGenFunction::EmitCallee(const Expr *E) {
