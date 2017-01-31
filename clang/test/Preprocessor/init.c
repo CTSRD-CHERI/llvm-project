@@ -4380,7 +4380,6 @@
 // CHERI256: #define __GNUC_STDC_INLINE__ 1
 // CHERI256: #define __GNUC__ 4
 // CHERI256: #define __GXX_ABI_VERSION 1002
-// CHERI256: #define __GXX_RTTI 1
 // CHERI256: #define __INT16_C_SUFFIX__ 
 // CHERI256: #define __INT16_FMTd__ "hd"
 // CHERI256: #define __INT16_FMTi__ "hi"
@@ -4596,7 +4595,7 @@
 // CHERI256: #define __UINT_LEAST8_FMTx__ "hhx"
 // CHERI256: #define __UINT_LEAST8_MAX__ 255
 // CHERI256: #define __UINT_LEAST8_TYPE__ unsigned char
-// CHERI256: #define __USER_LABEL_PREFIX__ _
+// CHERI256: #define __USER_LABEL_PREFIX__
 // CHERI256: #define __WCHAR_MAX__ 2147483647
 // CHERI256: #define __WCHAR_TYPE__ int
 // CHERI256: #define __WCHAR_WIDTH__ 32
@@ -4706,7 +4705,6 @@
 // CHERI128: #define __GNUC_STDC_INLINE__ 1
 // CHERI128: #define __GNUC__ 4
 // CHERI128: #define __GXX_ABI_VERSION 1002
-// CHERI128: #define __GXX_RTTI 1
 // CHERI128: #define __INT16_C_SUFFIX__ 
 // CHERI128: #define __INT16_FMTd__ "hd"
 // CHERI128: #define __INT16_FMTi__ "hi"
@@ -4922,7 +4920,7 @@
 // CHERI128: #define __UINT_LEAST8_FMTx__ "hhx"
 // CHERI128: #define __UINT_LEAST8_MAX__ 255
 // CHERI128: #define __UINT_LEAST8_TYPE__ unsigned char
-// CHERI128: #define __USER_LABEL_PREFIX__ _
+// CHERI128: #define __USER_LABEL_PREFIX__
 // CHERI128: #define __WCHAR_MAX__ 2147483647
 // CHERI128: #define __WCHAR_TYPE__ int
 // CHERI128: #define __WCHAR_WIDTH__ 32
@@ -4941,10 +4939,8 @@
 // CHERI128: #define _mips 1
 // CHERI128: #define mips 1
 
-// FIXME Should _MIPS_FPSET and __mips_fpr really be different for sandbox ABI?
-
 // RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -mllvm -cheri128 -target-abi sandbox < /dev/null | FileCheck -check-prefix CHERI128-SANDBOX %s
-// CHERI128-SANDBOX: #define _MIPS_FPSET 16
+// CHERI128-SANDBOX: #define _MIPS_FPSET 32
 // CHERI128-SANDBOX: #define __CHERI_PURE_CAPABILITY__ 1
 // CHERI128-SANDBOX: #define __CHERI_SANDBOX__ 3
 // CHERI128-SANDBOX: #define __INTPTR_FMTd__ "Pd"
@@ -4959,17 +4955,17 @@
 // CHERI128-SANDBOX: #define __UINTPTR_MAX__ 340282366920938463463374607431768211455
 // CHERI128-SANDBOX: #define __UINTPTR_TYPE__ __uintcap_t
 // CHERI128-SANDBOX: #define __UINTPTR_WIDTH__ 128
-// CHERI128-SANDBOX: #define __mips_fpr 32
+// CHERI128-SANDBOX: #define __mips_fpr 64
 
 // RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -mllvm -cheri128 -target-feature +soft-float -msoft-float -mfloat-abi soft -target-abi sandbox < /dev/null | FileCheck -check-prefix CHERI128-SANDBOX-SOFT %s
-// CHERI128-SANDBOX-SOFT: #define _MIPS_FPSET 16
-// CHERI128-SANDBOX-SOFT: #define __mips_fpr 32
+// CHERI128-SANDBOX-SOFT: #define _MIPS_FPSET 32
+// CHERI128-SANDBOX-SOFT: #define __mips_fpr 64
 // CHERI128-SANDBOX-SOFT-NOT: #define __mips_hard_float 1
 // CHERI128-SANDBOX-SOFT: #define __mips_soft_float 1
 
 
 // RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -target-abi sandbox < /dev/null | FileCheck -check-prefix CHERI256-SANDBOX %s
-// CHERI256-SANDBOX: #define _MIPS_FPSET 16
+// CHERI256-SANDBOX: #define _MIPS_FPSET 32
 // CHERI256-SANDBOX: #define __CHERI_PURE_CAPABILITY__ 1
 // CHERI256-SANDBOX: #define __CHERI_SANDBOX__ 3
 // CHERI256-SANDBOX: #define __INTPTR_FMTd__ "Pd"
@@ -4984,11 +4980,11 @@
 // CHERI256-SANDBOX: #define __UINTPTR_MAX__ 115792089237316195423570985008687907853269984665640564039457584007913129639935
 // CHERI256-SANDBOX: #define __UINTPTR_TYPE__ __uintcap_t
 // CHERI256-SANDBOX: #define __UINTPTR_WIDTH__ 256
-// CHERI256-SANDBOX: #define __mips_fpr 32
+// CHERI256-SANDBOX: #define __mips_fpr 64
 
 // RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -target-feature +soft-float -msoft-float -mfloat-abi soft -target-abi sandbox < /dev/null | FileCheck -check-prefix CHERI256-SANDBOX-SOFT %s
-// CHERI256-SANDBOX-SOFT: #define _MIPS_FPSET 16
-// CHERI256-SANDBOX-SOFT: #define __mips_fpr 32
+// CHERI256-SANDBOX-SOFT: #define _MIPS_FPSET 32
+// CHERI256-SANDBOX-SOFT: #define __mips_fpr 64
 // CHERI256-SANDBOX-SOFT-NOT: #define __mips_hard_float 1
 // CHERI256-SANDBOX-SOFT: #define __mips_soft_float 1
 

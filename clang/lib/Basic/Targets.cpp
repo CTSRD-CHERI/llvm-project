@@ -7475,8 +7475,10 @@ public:
                : "n64");
 
     CPU = ABI == "o32" ? "mips32r2" : "mips64r2";
-    if (IsCheri)
+    if (IsCheri) {
       CPU = Cheri128 ? "cheri128" : "cheri";
+      SuitableAlign = CapSize;
+    }
   }
 
   bool isNaN2008Default() const {
@@ -7937,9 +7939,8 @@ public:
         HasFP64 = false;
       else if (Feature == "+nan2008")
         IsNan2008 = true;
-      else if (Feature == "+cheri") {
+      else if (Feature == "+cheri" || Feature == "+cheri128")
         IsCheri = true;
-      }
       else if (Feature == "-nan2008")
         IsNan2008 = false;
     }
