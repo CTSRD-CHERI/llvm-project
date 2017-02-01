@@ -319,7 +319,7 @@ namespace test5 {
   // CHECK5v11-NEXT: call   void @_ZN5test51AD1Ev([[A]]* [[ELT]])
   // CHECK5:      [[T0:%.*]] = icmp eq [[A]]* [[ELT]], [[BEGIN]]
   // CHECK5-NEXT: br i1 [[T0]],
-  // CHECK5:      call void @llvm.lifetime.end
+  // CHECK5:      call void @llvm.lifetime.end.p0i8
   // CHECK5-NEXT: ret void
   // lpad
   // CHECK5v03:      [[EMPTY:%.*]] = icmp eq [[A]]* [[BEGIN]], [[ELT]]
@@ -473,7 +473,7 @@ namespace test10 {
 #if __cplusplus >= 201103L
 namespace test11 {
 
-// Check that lifetime.end is emitted in the landing pad.
+// Check that lifetime.end.p0i8 is emitted in the landing pad.
 
 // CHECK6-LABEL: define void @_ZN6test1115testLifetimeEndEi(
 // CHECK6: entry:
@@ -484,29 +484,29 @@ namespace test11 {
 // CHECK6: {{^}}invoke.cont
 // CHECK6: call void @_ZN6test112S1D1Ev(%"struct.test11::S1"* [[T1]])
 // CHECK6: [[BC1:%[a-z0-9]+]] = bitcast %"struct.test11::S1"* [[T1]] to i8*
-// CHECK6: call void @llvm.lifetime.end(i64 32, i8* [[BC1]])
+// CHECK6: call void @llvm.lifetime.end.p0i8(i64 32, i8* [[BC1]])
 // CHECK6: {{^}}lpad
 // CHECK6: call void @_ZN6test112S1D1Ev(%"struct.test11::S1"* [[T1]])
 // CHECK6: [[BC2:%[a-z0-9]+]] = bitcast %"struct.test11::S1"* [[T1]] to i8*
-// CHECK6: call void @llvm.lifetime.end(i64 32, i8* [[BC2]])
+// CHECK6: call void @llvm.lifetime.end.p0i8(i64 32, i8* [[BC2]])
 
 // CHECK6: {{^}}invoke.cont
 // CHECK6: call void @_ZN6test112S1D1Ev(%"struct.test11::S1"* [[T2]])
 // CHECK6: [[BC3:%[a-z0-9]+]] = bitcast %"struct.test11::S1"* [[T2]] to i8*
-// CHECK6: call void @llvm.lifetime.end(i64 32, i8* [[BC3]])
+// CHECK6: call void @llvm.lifetime.end.p0i8(i64 32, i8* [[BC3]])
 // CHECK6: {{^}}lpad
 // CHECK6: call void @_ZN6test112S1D1Ev(%"struct.test11::S1"* [[T2]])
 // CHECK6: [[BC4:%[a-z0-9]+]] = bitcast %"struct.test11::S1"* [[T2]] to i8*
-// CHECK6: call void @llvm.lifetime.end(i64 32, i8* [[BC4]])
+// CHECK6: call void @llvm.lifetime.end.p0i8(i64 32, i8* [[BC4]])
 
 // CHECK6: {{^}}invoke.cont
 // CHECK6: call void @_ZN6test112S1D1Ev(%"struct.test11::S1"* [[T3]])
 // CHECK6: [[BC5:%[a-z0-9]+]] = bitcast %"struct.test11::S1"* [[T3]] to i8*
-// CHECK6: call void @llvm.lifetime.end(i64 32, i8* [[BC5]])
+// CHECK6: call void @llvm.lifetime.end.p0i8(i64 32, i8* [[BC5]])
 // CHECK6: {{^}}lpad
 // CHECK6: call void @_ZN6test112S1D1Ev(%"struct.test11::S1"* [[T3]])
 // CHECK6: [[BC6:%[a-z0-9]+]] = bitcast %"struct.test11::S1"* [[T3]] to i8*
-// CHECK6: call void @llvm.lifetime.end(i64 32, i8* [[BC6]])
+// CHECK6: call void @llvm.lifetime.end.p0i8(i64 32, i8* [[BC6]])
 
   struct S1 {
     ~S1();
