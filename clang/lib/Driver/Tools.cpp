@@ -7208,6 +7208,7 @@ void ClangAs::ConstructJob(Compilation &C, const JobAction &JA,
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
+  case llvm::Triple::cheri:
     AddMIPSTargetArgs(Args, CmdArgs);
     break;
 
