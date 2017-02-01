@@ -2560,9 +2560,10 @@ llvm::Function *CGObjCGNU::ModuleInitFunction() {
 
   // The symbol table is contained in a module which has some version-checking
   // constants
+  llvm::PointerType *symtabTy = cast<llvm::PointerType>(symtab->getType());
   llvm::Constant *module = [&] {
     llvm::Type *moduleEltTys[] = {
-      LongTy, LongTy, PtrToInt8Ty, llvm::PointerType::get(symtab->getType(), AS), IntTy
+      LongTy, LongTy, PtrToInt8Ty, llvm::PointerType::get(symtabTy->getElementType(), AS), IntTy
     };
     llvm::StructType *moduleTy =
       llvm::StructType::get(CGM.getLLVMContext(),
@@ -2614,8 +2615,9 @@ llvm::Function *CGObjCGNU::ModuleInitFunction() {
   CGBuilderTy Builder(CGM, VMContext);
   Builder.SetInsertPoint(EntryBB);
 
+  llvm::PointerType *moduleTy = cast<llvm::PointerType>(module->getType());
   llvm::FunctionType *FT =
-    llvm::FunctionType::get(Builder.getVoidTy(), llvm::PointerType::get(module->getType(), AS), true);
+    llvm::FunctionType::get(Builder.getVoidTy(), llvm::PointerType::get(moduleTy->getElementType(), AS), true);
   llvm::Value *Register = CGM.CreateRuntimeFunction(FT, "__objc_exec_class");
   Builder.CreateCall(Register, module);
 
