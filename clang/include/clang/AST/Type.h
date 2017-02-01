@@ -530,13 +530,13 @@ public:
 private:
 
   // bits:     |0 1 2|3|4|5|6 .. 7|8  .. 10|11  ...   31|
-  //           |C R V|O|I|U|GCAttr|Lifetime|AddressSpace|
+  //           |C R V|U|O|I|GCAttr|Lifetime|AddressSpace|
   uint32_t Mask;
 
-  static const uint32_t OMask = 0x8;
-  static const uint32_t IMask = 0x10;
-  static const uint32_t UMask = 0x20;
-  static const uint32_t UShift = 5;
+  static const uint32_t UMask = 0x8;
+  static const uint32_t UShift = 3;
+  static const uint32_t OMask = 0x10;
+  static const uint32_t IMask = 0x20;
   static const uint32_t GCAttrMask = 0x60;
   static const uint32_t GCAttrShift = 6;
   static const uint32_t LifetimeMask = 0x700;
