@@ -537,7 +537,7 @@ private:
   static const uint32_t UShift = 3;
   static const uint32_t OMask = 0x10;
   static const uint32_t IMask = 0x20;
-  static const uint32_t GCAttrMask = 0x60;
+  static const uint32_t GCAttrMask = 0xC0;
   static const uint32_t GCAttrShift = 6;
   static const uint32_t LifetimeMask = 0x700;
   static const uint32_t LifetimeShift = 8;
