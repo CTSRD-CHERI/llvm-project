@@ -130,9 +130,9 @@ __uintcap_t xor(__uintcap_t f)
 
 int capdiff(__capability int *a, __capability int *b)
 {
-  // CHECK: @capdiff(i32 addrspace(200)* %a, i32 addrspace(200)* %b) #0 {
+  // CHECK: @capdiff(i32 addrspace(200)*{{.*}}, i32 addrspace(200)*{{.*}}) #0 {
   // CHECK: call i64 @llvm.memcap.cap.diff(i8 addrspace(200)*
-  // CHECK: %conv = trunc i64 %sub.ptr.div to i32
+  // CHECK: %{{.*}} = trunc i64 %{{.*}} to i32
   return a-b;
 }
 

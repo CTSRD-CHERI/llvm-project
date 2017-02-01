@@ -8,6 +8,6 @@ char takes_string_ptr(const char *a) {
 
 // CHECK-LABEL: main
 int main(void) {
-	// CHECK: call signext i8 %2(i8 addrspace(200)*
-    return takes_string_ptr("hi");
+  // CHECK: call signext i8 %{{.*}}(i8 addrspace(200)*
+  return takes_string_ptr("hi");
 }

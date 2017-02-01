@@ -5,7 +5,7 @@
 int x(__intcap_t y)
 {
 	// CHECK: llvm.memcap.cap.offset.get
-	// CHECK: switch i64 %1
+	// CHECK: switch i64 %{{.*}}
 	switch (y)
 	{
 		// CHECK: i64 1, label

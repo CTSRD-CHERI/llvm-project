@@ -22,10 +22,10 @@ void *baz(void*, void*);
 
 void *bar(void *a, void *b)
 {
-	// CHECK: call chericcallcc i8* @cheri_invoke(i8 addrspace(200)* inreg %6, i8 addrspace(200)* inreg %8, i64 zeroext %2, i8* %0, i8* %1)
+	// CHECK: call chericcallcc i8* @cheri_invoke(i8 addrspace(200)* inreg %{{.*}}, i8 addrspace(200)* inreg %{{.*}}, i64 zeroext %{{.*}}, i8* %{{.*}}, i8* %{{.*}})
 	baz(a, b);
-	// CHECK: call chericcallcc i8 addrspace(200)* bitcast (i8* (i8 addrspace(200)*, i8 addrspace(200)*, i64, i8*, i8*)* @cheri_invoke to i8 addrspace(200)* (i8 addrspace(200)*, i8 addrspace(200)*, i64, i8 addrspace(200)*, i8 addrspace(200)*)*)(i8 addrspace(200)* inreg %17, i8 addrspace(200)* inreg %19, i64 zeroext %13, i8 addrspace(200)* %10, i8 addrspace(200)* %12)
-	// CHECK:  %20 = addrspacecast i8 addrspace(200)* %call2 to i8*
+	// CHECK: call chericcallcc i8 addrspace(200)* bitcast (i8* (i8 addrspace(200)*, i8 addrspace(200)*, i64, i8*, i8*)* @cheri_invoke to i8 addrspace(200)* (i8 addrspace(200)*, i8 addrspace(200)*, i64, i8 addrspace(200)*, i8 addrspace(200)*)*)(i8 addrspace(200)* inreg %{{.*}}, i8 addrspace(200)* inreg %{{.*}}, i64 zeroext %{{.*}}, i8 addrspace(200)* %{{.*}}, i8 addrspace(200)* %{{.*}})
+	// CHECK:  %{{.*}} = addrspacecast i8 addrspace(200)* %call2 to i8*
 	return (void*)foo((__capability void*)a, (__capability void*)b);
 }
 
