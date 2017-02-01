@@ -5979,6 +5979,19 @@ NamedDecl *Sema::ActOnVariableDeclarator(
       return nullptr;
     }
 
+    // OpenCL v1.2 s6.9.r:
+    // The event type cannot be used to declare a program scope variable.
+    // OpenCL v2.0 s6.9.q:
+    // The clk_event_t and reserve_id_t types cannot be declared in program scope.
+    if (NULL == S->getParent()) {
+      if (R->isReserveIDT() || R->isClkEventT() || R->isEventT()) {
+        Diag(D.getIdentifierLoc(),
+             diag::err_invalid_type_for_program_scope_var) << R;
+        D.setInvalidType();
+        return nullptr;
+      }
+    }
+
     // OpenCL v1.0 s6.8.a.3: Pointers to functions are not allowed.
     QualType NR = R;
     while (NR->isPointerType()) {
