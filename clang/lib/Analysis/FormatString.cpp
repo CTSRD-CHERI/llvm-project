@@ -208,7 +208,14 @@ clang::analyze_format_string::ParseLengthModifier(FormatSpecifier &FS,
       }
       break;
     case 'j': lmKind = LengthModifier::AsIntMax;     ++I; break;
-    case 'P': lmKind = LengthModifier::AsIntPtr;     ++I; break;
+    case 'P': 
+      if ((I+1) == E)
+        return false;
+      else {
+        ++I;
+        lmKind = LengthModifier::AsIntPtr;
+      }
+      break;
     case 'z': lmKind = LengthModifier::AsSizeT;      ++I; break;
     case 't': lmKind = LengthModifier::AsPtrDiff;    ++I; break;
     case 'L': lmKind = LengthModifier::AsLongDouble; ++I; break;
