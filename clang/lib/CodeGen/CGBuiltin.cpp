@@ -310,9 +310,8 @@ static Value *EmitSignBit(CodeGenFunction &CGF, Value *V) {
 }
 
 static RValue emitLibraryCall(CodeGenFunction &CGF, const FunctionDecl *FD,
-                              const CallExpr *E, llvm::Constant *calleeValue) {
-  CGCallee callee = CGCallee::forDirect(calleeValue, FD);
-  return CGF.EmitCall(E->getCallee()->getType(), callee, E, ReturnValueSlot());
+                              const CallExpr *E, llvm::Value *calleeValue) {
+  return CGF.EmitCall(E->getCallee()->getType(), CGCallee(FD, calleeValue), E, ReturnValueSlot());
 }
 
 /// \brief Emit a call to llvm.{sadd,uadd,ssub,usub,smul,umul}.with.overflow.*
@@ -2746,8 +2745,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
   // If this is a predefined lib function (e.g. malloc), emit the call
   // using exactly the normal call path.
   if (getContext().BuiltinInfo.isPredefinedLibFunction(BuiltinID))
-    return emitLibraryCall(*this, FD, E,
-                      cast<llvm::Constant>(EmitScalarExpr(E->getCallee())));
+    return emitLibraryCall(*this, FD, E, EmitScalarExpr(E->getCallee()));
 
   // Check that a call to a target specific builtin has the correct target
   // features.
