@@ -740,7 +740,7 @@ Value *llvm::emitStrChr(Value *Ptr, char C, IRBuilder<> &B,
 
   Module *M = B.GetInsertBlock()->getModule();
   Ptr = castToCStr(Ptr, B);
-  Type *I8Ptr = B.getInt8PtrTy();
+  Type *I8Ptr = Ptr->getType();
   Type *I32Ty = B.getInt32Ty();
   Constant *StrChr =
       M->getOrInsertFunction("strchr", I8Ptr, I8Ptr, I32Ty, nullptr);
