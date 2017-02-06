@@ -531,7 +531,10 @@ let AdditionalPredicates = [NotInMicroMips] in
 defm : MipsHiLoRelocs<LUi64, DADDiu, ZERO_64, GPR64Opnd>, SYM_32;
 
 def : MipsPat<(MipsGotHi tglobaladdr:$in), (LUi64 tglobaladdr:$in)>;
+def : MipsPat<(MipsGotHi tjumptable:$in), (LUi64 tjumptable:$in)>;
 def : MipsPat<(MipsGotHi texternalsym:$in), (LUi64 texternalsym:$in)>;
+
+def : MipsPat<(MipsLo tjumptable:$in), (DADDiu ZERO_64, tjumptable:$in)>;
 
 multiclass MipsHighestHigherHiLoRelocs<Instruction Lui, Instruction Daddiu> {
   def : MipsPat<(MipsJmpLink (i64 texternalsym:$dst)),
