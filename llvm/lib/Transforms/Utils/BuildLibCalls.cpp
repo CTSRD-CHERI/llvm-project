@@ -841,7 +841,7 @@ Value *llvm::emitMemChr(Value *Ptr, Value *Val, Value *Len, IRBuilder<> &B,
   LLVMContext &Context = B.GetInsertBlock()->getContext();
   Ptr = castToCStr(Ptr, B);
   Type *I8Ptr = Ptr->getType();
-  Value *MemChr = M->getOrInsertFunction("memchr", B.getInt8PtrTy(),
+  Value *MemChr = M->getOrInsertFunction("memchr", I8Ptr,
                                          I8Ptr, B.getInt32Ty(),
                                          DL.getIntPtrType(Context), nullptr);
   inferLibFuncAttributes(*M->getFunction("memchr"), *TLI);
