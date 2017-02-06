@@ -1805,6 +1805,11 @@ const MCExpr *AsmPrinter::lowerConstant(const Constant *CV) {
                      !MF ? nullptr : MF->getFunction()->getParent());
       report_fatal_error(OS.str());
     }
+
+  case Instruction::AddrSpaceCast: {
+    return lowerConstant(CE->getOperand(0));
+  }
+
   case Instruction::GetElementPtr: {
     // Generate a symbolic expression for the byte address
     APInt OffsetAI(getDataLayout().getPointerBaseSizeInBits(CE->getType()), 0);
