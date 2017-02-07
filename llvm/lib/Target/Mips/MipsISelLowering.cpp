@@ -1898,6 +1898,11 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
   GlobalAddressSDNode *N = cast<GlobalAddressSDNode>(Op);
   const GlobalValue *GV = N->getGlobal();
 
+  EVT AddrTy = Ty;
+  if (GV->getType()->getAddressSpace() == 200)
+    Ty = MVT::i64;
+  SDValue Global;
+
   if (!isPositionIndependent()) {
     const MipsTargetObjectFile *TLOF =
         static_cast<const MipsTargetObjectFile *>(
@@ -1905,43 +1910,40 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
     const GlobalObject *GO = GV->getBaseObject();
     if (GO && TLOF->IsGlobalInSmallSection(GO, getTargetMachine()))
       // %gp_rel relocation
-      return getAddrGPRel(N, SDLoc(N), Ty, DAG);
+      Global = getAddrGPRel(N, SDLoc(N), Ty, DAG);
 
                                  // %hi/%lo relocation
-    return Subtarget.hasSym32() ? getAddrNonPIC(N, SDLoc(N), Ty, DAG)
+    Global = Subtarget.hasSym32() ? getAddrNonPIC(N, SDLoc(N), Ty, DAG)
                                  // %highest/%higher/%hi/%lo relocation
                                  : getAddrNonPICSym64(N, SDLoc(N), Ty, DAG);
-  }
+  } else {
 
-  EVT AddrTy = Ty;
-  if (GV->getType()->getAddressSpace() == 200)
-    Ty = MVT::i64;
-  SDValue Global;
-  // Every other architecture would use shouldAssumeDSOLocal in here, but
-  // mips is special.
-  // * In PIC code mips requires got loads even for local statics!
-  // * To save on got entries, for local statics the got entry contains the
-  //   page and an additional add instruction takes care of the low bits.
-  // * It is legal to access a hidden symbol with a non hidden undefined,
-  //   so one cannot guarantee that all access to a hidden symbol will know
-  //   it is hidden.
-  // * Mips linkers don't support creating a page and a full got entry for
-  //   the same symbol.
-  // * Given all that, we have to use a full got entry for hidden symbols :-(
-  if (GV->hasLocalLinkage())
-    Global = getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64());
-  else if (LargeGOT)
-    Global = getAddrGlobalLargeGOT(
-        N, SDLoc(N), Ty, DAG, MipsII::MO_GOT_HI16, MipsII::MO_GOT_LO16,
-        DAG.getEntryNode(),
-        MachinePointerInfo::getGOT(DAG.getMachineFunction()));
-  else if (GV->hasInternalLinkage() || (GV->hasLocalLinkage() && !isa<Function>(GV)))
-    Global = getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64());
-  else 
-    Global = getAddrGlobal(
-        N, SDLoc(N), Ty, DAG,
-        (ABI.IsN32() || ABI.IsN64()) ? MipsII::MO_GOT_DISP : MipsII::MO_GOT,
-        DAG.getEntryNode(), MachinePointerInfo::getGOT(DAG.getMachineFunction()));
+    // Every other architecture would use shouldAssumeDSOLocal in here, but
+    // mips is special.
+    // * In PIC code mips requires got loads even for local statics!
+    // * To save on got entries, for local statics the got entry contains the
+    //   page and an additional add instruction takes care of the low bits.
+    // * It is legal to access a hidden symbol with a non hidden undefined,
+    //   so one cannot guarantee that all access to a hidden symbol will know
+    //   it is hidden.
+    // * Mips linkers don't support creating a page and a full got entry for
+    //   the same symbol.
+    // * Given all that, we have to use a full got entry for hidden symbols :-(
+    if (GV->hasLocalLinkage())
+      Global = getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64());
+    else if (LargeGOT)
+      Global = getAddrGlobalLargeGOT(
+          N, SDLoc(N), Ty, DAG, MipsII::MO_GOT_HI16, MipsII::MO_GOT_LO16,
+          DAG.getEntryNode(),
+          MachinePointerInfo::getGOT(DAG.getMachineFunction()));
+    else if (GV->hasInternalLinkage() || (GV->hasLocalLinkage() && !isa<Function>(GV)))
+      Global = getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64());
+    else 
+      Global = getAddrGlobal(
+          N, SDLoc(N), Ty, DAG,
+          (ABI.IsN32() || ABI.IsN64()) ? MipsII::MO_GOT_DISP : MipsII::MO_GOT,
+          DAG.getEntryNode(), MachinePointerInfo::getGOT(DAG.getMachineFunction()));
+  }
 
   if (GV->getType()->getAddressSpace() == 200) {
     Global = DAG.getNode(ISD::INTTOPTR, SDLoc(N), AddrTy, Global);
