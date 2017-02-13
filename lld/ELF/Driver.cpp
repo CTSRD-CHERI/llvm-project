@@ -499,6 +499,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
     std::tie(Config->EKind, Config->EMachine, Config->OSABI) =
         parseEmulation(S);
     Config->MipsCheriAbi = (S == "elf64btsmip_cheri_fbsd");
+    // TODO: add CHERI128 or CHERI256 flags (command line option?)
     Config->MipsN32Abi = (S == "elf32btsmipn32" || S == "elf32ltsmipn32");
     Config->Emulation = S;
   }
@@ -737,9 +738,7 @@ void LinkerDriver::inferMachineType() {
     Config->OSABI = F->OSABI;
     if (F->EMachine == EM_MIPS) {
       Config->MipsN32Abi = isMipsN32Abi(F);
-      uint64_t Mach = F->EFlags & EF_MIPS_MACH;
-      Config->MipsCheriAbi = (Mach == EF_MIPS_MACH_CHERI128
-        || Mach == EF_MIPS_MACH_CHERI256);
+      Config->MipsCheriAbi = (F->EFlags & EF_MIPS_ABI) == EF_MIPS_ABI_CHERIABI;
     }
     return;
   }
