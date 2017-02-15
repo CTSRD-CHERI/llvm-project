@@ -71,5 +71,10 @@
 // CHERI128-SANDBOX-HEADERS:    EF_MIPS_MACH_CHERI128
 
 
+
+// RUN: %clang -target mips64-unknown-freebsd -mabi=sandbox -### -c %s 2>&1 \
+// RUN:   | FileCheck -check-prefix=SANDBOX-WITHOUT-CHERI %s
+// SANDBOX-WITHOUT-CHERI: error: invalid argument '-mabi=sandbox' not allowed with 'mips64-unknown-freebsd'
+
 __start:
   nop

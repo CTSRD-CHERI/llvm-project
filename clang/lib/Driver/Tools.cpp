@@ -1556,6 +1556,9 @@ static void getMIPSTargetFeatures(const Driver &D, const llvm::Triple &Triple,
   StringRef ABIName;
   mips::getMipsCPUAndABI(Args, Triple, CPUName, ABIName);
   ABIName = getGnuCompatibleMipsABIName(ABIName);
+  if (ABIName == "sandbox" && Triple.getArch() != llvm::Triple::cheri)
+    D.Diag(diag::err_drv_argument_not_allowed_with) << "-mabi=sandbox"
+      << Triple.str();
 
   // Historically, PIC code for MIPS was associated with -mabicalls, a.k.a
   // SVR4 abicalls. Static code does not use SVR4 calling sequences. An ABI
