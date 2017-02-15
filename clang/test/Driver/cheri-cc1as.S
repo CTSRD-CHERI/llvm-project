@@ -38,18 +38,36 @@
 // RUN: %clang -target cheri-unknown-freebsd -### -c %s -mabi=n64 -mllvm -cheri128 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI128-ABI-N64 %s
 // CHERI128-ABI-N64: "-target-cpu" "cheri128" "-target-abi" "n64"
+// CHERI128-ABI-N64: "-mllvm" "-cheri128"
 // RUN: %clang -target cheri-unknown-freebsd -### -c %s -mabi=sandbox -mllvm -cheri128 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI128-ABI-SANDBOX %s
 // CHERI128-ABI-SANDBOX: "-target-cpu" "cheri128" "-target-abi" "sandbox"
+// CHERI128-ABI-SANDBOX: "-mllvm" "-cheri128"
 // RUN: %clang -target cheri-unknown-freebsd -### -c %s -mllvm -cheri128 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI128-ABI-NONE %s
 // CHERI128-ABI-NONE: "-target-cpu" "cheri128" "-target-abi" "n64"
+// CHERI128-ABI-NONE: "-mllvm" "-cheri128"
 
 // RUN: %clang -target cheri-unknown-freebsd -c %s -o - -mllvm -cheri128 | llvm-readobj -h - \
 // RUN:   | FileCheck -check-prefix=CHERI128-HEADERS %s
 // RUN: %clang -target cheri-unknown-freebsd -mabi=n64 -c %s -o - -mllvm -cheri128 \
 // RUN:   | llvm-readobj -h - | FileCheck -check-prefix=CHERI128-N64-HEADERS %s
 // RUN: %clang -target cheri-unknown-freebsd -mabi=sandbox -c %s -o - -mllvm -cheri128 \
+// RUN:   | llvm-readobj -h - | FileCheck -check-prefix=CHERI128-SANDBOX-HEADERS %s
+
+// -mcpu=cheri128 should have the same effect (and imply -mllvm -cheri128)
+// RUN: %clang -target cheri-unknown-freebsd -### -c %s -mabi=n64 -mcpu=cheri128 2>&1 \
+// RUN:   | FileCheck -check-prefix=CHERI128-ABI-N64 %s
+// RUN: %clang -target cheri-unknown-freebsd -### -c %s -mabi=sandbox -mcpu=cheri128 2>&1 \
+// RUN:   | FileCheck -check-prefix=CHERI128-ABI-SANDBOX %s
+// RUN: %clang -target cheri-unknown-freebsd -### -c %s -mcpu=cheri128 2>&1 \
+// RUN:   | FileCheck -check-prefix=CHERI128-ABI-NONE %s
+
+// RUN: %clang -target cheri-unknown-freebsd -c %s -o - -mcpu=cheri128 | llvm-readobj -h - \
+// RUN:   | FileCheck -check-prefix=CHERI128-HEADERS %s
+// RUN: %clang -target cheri-unknown-freebsd -mabi=n64 -c %s -o - -mcpu=cheri128 \
+// RUN:   | llvm-readobj -h - | FileCheck -check-prefix=CHERI128-N64-HEADERS %s
+// RUN: %clang -target cheri-unknown-freebsd -mabi=sandbox -c %s -o - -mcpu=cheri128 \
 // RUN:   | llvm-readobj -h - | FileCheck -check-prefix=CHERI128-SANDBOX-HEADERS %s
 
 // CHERI128-HEADERS:     Arch: mips64

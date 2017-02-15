@@ -1741,6 +1741,18 @@ void Clang::AddMIPSTargetArgs(const ArgList &Args,
     } else
       D.Diag(diag::warn_target_unsupported_compact_branches) << CPUName;
   }
+  if (CPUName == "cheri128" && getToolChain().getArch() == llvm::Triple::cheri) {
+    // Add -mllvm -cheri128 if -mcpu=cheri128 is passed and ensure that it is
+    // only passed once because otherwise the compilation will fail
+    bool HaveCheri128Flag = false;
+    for (const Arg *A : Args.filtered(options::OPT_mllvm))
+      if (StringRef(A->getValue(0)) == "-cheri128")
+        HaveCheri128Flag = true;
+    if (!HaveCheri128Flag) {
+      CmdArgs.push_back("-mllvm");
+      CmdArgs.push_back("-cheri128");
+    }
+  }
 }
 
 /// getPPCTargetCPU - Get the (LLVM) name of the PowerPC cpu we are targeting.
