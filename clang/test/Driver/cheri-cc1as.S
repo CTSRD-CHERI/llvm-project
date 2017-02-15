@@ -1,14 +1,13 @@
 // Check that the ABI is forwarded to the assembler
 // RUN: %clang -target cheri-unknown-freebsd -### -c %s -mabi=n64 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI-ABI-N64 %s
-// FIXME: should "-target-cpu" "cheri" also be passed?
-// CHERI-ABI-N64: "-target-abi" "n64"
+// CHERI-ABI-N64: "-target-cpu" "cheri" "-target-abi" "n64"
 // RUN: %clang -target cheri-unknown-freebsd -### -c %s -mabi=sandbox 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI-ABI-SANDBOX %s
-// CHERI-ABI-SANDBOX: "-target-abi" "sandbox"
+// CHERI-ABI-SANDBOX: "-target-cpu" "cheri" "-target-abi" "sandbox"
 // RUN: %clang -target cheri-unknown-freebsd -### -c %s 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI-ABI-NONE %s
-// CHERI-ABI-NONE: "-target-abi" "n64"
+// CHERI-ABI-NONE: "-target-cpu" "cheri" "-target-abi" "n64"
 
 // RUN: %clang -target cheri-unknown-freebsd -c %s -o - | llvm-readobj -h - \
 // RUN:   | FileCheck -check-prefix=NONE-HEADERS %s
@@ -38,14 +37,13 @@
 // Check that the ABI is forwarded to the assembler
 // RUN: %clang -target cheri-unknown-freebsd -### -c %s -mabi=n64 -mllvm -cheri128 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI128-ABI-N64 %s
-// FIXME: should "-target-cpu" "cheri" also be passed?
-// CHERI128-ABI-N64: "-target-abi" "n64"
+// CHERI128-ABI-N64: "-target-cpu" "cheri128" "-target-abi" "n64"
 // RUN: %clang -target cheri-unknown-freebsd -### -c %s -mabi=sandbox -mllvm -cheri128 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI128-ABI-SANDBOX %s
-// CHERI128-ABI-SANDBOX: "-target-abi" "sandbox"
+// CHERI128-ABI-SANDBOX: "-target-cpu" "cheri128" "-target-abi" "sandbox"
 // RUN: %clang -target cheri-unknown-freebsd -### -c %s -mllvm -cheri128 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI128-ABI-NONE %s
-// CHERI128-ABI-NONE: "-target-abi" "n64"
+// CHERI128-ABI-NONE: "-target-cpu" "cheri128" "-target-abi" "n64"
 
 // RUN: %clang -target cheri-unknown-freebsd -c %s -o - -mllvm -cheri128 | llvm-readobj -h - \
 // RUN:   | FileCheck -check-prefix=CHERI128-HEADERS %s
