@@ -8007,12 +8007,11 @@ public:
     return 64;
   }
 
-  bool SupportsCapabilities() const override { return true; }
+  bool SupportsCapabilities() const override { return IsCheri; }
 
-  int AddressSpaceForCapabilities() const override { return 200; }
+  int AddressSpaceForCapabilities() const override { return IsCheri ? 200 : -1; }
 
-
-  int AddressSpaceForObjC() const override { return 200; }
+  int AddressSpaceForObjC() const override { return IsCheri ? 200 : 0; }
 
   int AddressSpaceForStack() const override { return SandboxABI ? 200 : 0; }
 
