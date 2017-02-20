@@ -613,6 +613,11 @@ static void scanRelocs(InputSectionBase<ELFT> &C, ArrayRef<RelTy> Rels) {
 
   bool IsWrite = C.Flags & SHF_WRITE;
 
+  // HACK: for some reason clang generates absolute relocations in .eh_frame
+  if (Config->isMIPS() && C.Name == ".eh_frame") {
+    IsWrite = true;
+  }
+
   auto AddDyn = [=](const DynamicReloc<ELFT> &Reloc) {
     In<ELFT>::RelaDyn->addReloc(Reloc);
   };
