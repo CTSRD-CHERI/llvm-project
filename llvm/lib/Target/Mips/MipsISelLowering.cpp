@@ -1908,14 +1908,15 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
         static_cast<const MipsTargetObjectFile *>(
             getTargetMachine().getObjFileLowering());
     const GlobalObject *GO = GV->getBaseObject();
-    if (GO && TLOF->IsGlobalInSmallSection(GO, getTargetMachine()))
+    if (GO && TLOF->IsGlobalInSmallSection(GO, getTargetMachine())) {
       // %gp_rel relocation
       Global = getAddrGPRel(N, SDLoc(N), Ty, DAG);
-
-                                 // %hi/%lo relocation
-    Global = Subtarget.hasSym32() ? getAddrNonPIC(N, SDLoc(N), Ty, DAG)
-                                 // %highest/%higher/%hi/%lo relocation
-                                 : getAddrNonPICSym64(N, SDLoc(N), Ty, DAG);
+    } else {
+                                   // %hi/%lo relocation
+      Global = Subtarget.hasSym32() ? getAddrNonPIC(N, SDLoc(N), Ty, DAG)
+                                   // %highest/%higher/%hi/%lo relocation
+                                   : getAddrNonPICSym64(N, SDLoc(N), Ty, DAG);
+    }
   } else {
 
     // Every other architecture would use shouldAssumeDSOLocal in here, but
