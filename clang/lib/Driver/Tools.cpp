@@ -3158,6 +3158,7 @@ static void CollectArgsForIntegratedAssembler(Compilation &C,
       case llvm::Triple::mipsel:
       case llvm::Triple::mips64:
       case llvm::Triple::mips64el:
+      case llvm::Triple::cheri:
         if (Value == "--trap") {
           CmdArgs.push_back("-target-feature");
           CmdArgs.push_back("+use-tcc-in-div");
