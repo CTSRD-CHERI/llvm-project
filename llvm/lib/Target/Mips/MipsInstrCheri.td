@@ -533,6 +533,25 @@ let usesCustomInserter = 1 in {
   def CAP_ATOMIC_CMP_SWAP_I64  : CapAtomicCmpSwap<atomic_cmp_swap_64, GPR64>;
 
 }
+
+// Atomic load patterns.  These (and the store patterns) expand to simple loads
+// because an IR pass adds the required barriers.
+def : MipsPat<(atomic_load_8 CheriRegs:$a), (CAPLOAD832 ZERO_64, (i64 0), CheriOpnd:$a)>;
+def : MipsPat<(atomic_load_16 CheriRegs:$a), (CAPLOAD1632 ZERO_64, (i64 0), CheriOpnd:$a)>;
+def : MipsPat<(atomic_load_32 CheriRegs:$a), (CAPLOAD32 ZERO_64, (i64 0), CheriOpnd:$a)>;
+def : MipsPat<(atomic_load_64 CheriRegs:$a), (CAPLOAD64 ZERO_64, (i64 0), CheriOpnd:$a)>;
+
+// Atomic store patterns.
+def : MipsPat<(atomic_store_8 CheriRegs:$a, GPR64:$v),
+              (CAPSTORE8 GPR64Opnd:$v, ZERO_64, (i64 0), CheriOpnd:$a)>;
+def : MipsPat<(atomic_store_16 CheriRegs:$a, GPR64:$v),
+              (CAPSTORE16 GPR64Opnd:$v, ZERO_64, (i64 0), CheriOpnd:$a)>;
+def : MipsPat<(atomic_store_32 CheriRegs:$a, GPR64:$v),
+              (CAPSTORE32 GPR64Opnd:$v, ZERO_64, (i64 0), CheriOpnd:$a)>;
+def : MipsPat<(atomic_store_64 CheriRegs:$a, GPR64:$v),
+              (CAPSTORE64 GPR64Opnd:$v, ZERO_64, (i64 0), CheriOpnd:$a)>;
+
+
 }
 ////////////////////////////////////////////////////////////////////////////////
 // Helpers for capability-using calls and returns
