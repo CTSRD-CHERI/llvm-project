@@ -8,7 +8,7 @@
 #if __has_feature(capabilities)
 #pragma message("__has_feature(capabilities)")
 // CHECK-CHERI: warning: __has_feature(capabilities)
-__capability void* x = 0;
+void* __capability x = 0;
 #else
 #pragma message("no capabilities")
 // CHECK-MIPS: warning: no capabilities
@@ -17,7 +17,7 @@ __capability void* x = 0;
 #if defined(__CHERI__)
 #pragma message("__CHERI__ defined")
 // CHECK-CHERI: warning: __CHERI__ defined
-__capability void* y = 0;
+void* __capability y = 0;
 #else
 #pragma message("__CHERI__ not defined")
 // CHECK-MIPS: warning: __CHERI__ not defined
