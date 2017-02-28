@@ -51,6 +51,10 @@ LargeGOT("mxgot", cl::Hidden,
          cl::desc("MIPS: Enable GOT larger than 64k."), cl::init(false));
 
 static cl::opt<bool>
+HugeGOT("mxmxgot", cl::Hidden,
+         cl::desc("MIPS: Use large GOT relocations even for local symbols."), cl::init(false));
+
+static cl::opt<bool>
 NoZeroDivCheck("mno-check-zero-division", cl::Hidden,
                cl::desc("MIPS: Don't trap on integer division by zero."),
                cl::init(false));
@@ -1930,9 +1934,9 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
     // * Mips linkers don't support creating a page and a full got entry for
     //   the same symbol.
     // * Given all that, we have to use a full got entry for hidden symbols :-(
-    if (GV->hasLocalLinkage())
+    if (GV->hasLocalLinkage() && !HugeGOT)
       Global = getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64());
-    else if (LargeGOT)
+    else if (LargeGOT || HugeGOT)
       Global = getAddrGlobalLargeGOT(
           N, SDLoc(N), Ty, DAG, MipsII::MO_GOT_HI16, MipsII::MO_GOT_LO16,
           DAG.getEntryNode(),
