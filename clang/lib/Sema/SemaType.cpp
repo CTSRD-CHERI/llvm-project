@@ -24,6 +24,7 @@
 #include "clang/Basic/PartialDiagnostic.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Lex/Preprocessor.h"
+#include "clang/Parse/ParseDiagnostic.h"
 #include "clang/Sema/DeclSpec.h"
 #include "clang/Sema/DelayedDiagnostic.h"
 #include "clang/Sema/Lookup.h"
@@ -6844,8 +6845,11 @@ static void HandleMemoryCapabilityAttr(QualType &CurType, TypeProcessingState &s
         case DeclaratorChunk::Array:
         case DeclaratorChunk::Function:
         case DeclaratorChunk::Reference:
-        case DeclaratorChunk::MemberPointer:
+        case DeclaratorChunk::Pipe:
           continue;
+        case DeclaratorChunk::MemberPointer:
+          llvm_unreachable("Should this be handled?"); continue;
+
       }
     }
   } else {
