@@ -547,7 +547,7 @@ def : MipsPat<(atomic_store_8 CheriRegs:$a, GPR64:$v),
 def : MipsPat<(atomic_store_16 CheriRegs:$a, GPR64:$v),
               (CAPSTORE16 GPR64Opnd:$v, ZERO_64, (i64 0), CheriOpnd:$a)>;
 def : MipsPat<(atomic_store_32 CheriRegs:$a, GPR64:$v),
-              (CAPSTORE32 GPR64Opnd:$v, ZERO_64, (i64 0), CheriOpnd:$a)>;
+              (CAPSTORE3264 GPR64Opnd:$v, ZERO_64, (i64 0), CheriOpnd:$a)>;
 def : MipsPat<(atomic_store_64 CheriRegs:$a, GPR64:$v),
               (CAPSTORE64 GPR64Opnd:$v, ZERO_64, (i64 0), CheriOpnd:$a)>;
 
