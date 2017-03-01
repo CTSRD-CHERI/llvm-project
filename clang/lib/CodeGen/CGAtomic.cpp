@@ -1012,8 +1012,10 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
     if (RValTy->isVoidType())
       return RValue::get(nullptr);
 
+    unsigned AS = Dest.getType()->getPointerAddressSpace();
     return convertTempToRValue(
-        Builder.CreateBitCast(Dest, ConvertTypeForMem(RValTy)->getPointerTo()),
+        Builder.CreateBitCast(Dest,
+            ConvertTypeForMem(RValTy)->getPointerTo(AS)),
         RValTy, E->getExprLoc());
   }
 
@@ -1061,8 +1063,10 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
     if (RValTy->isVoidType())
       return RValue::get(nullptr);
 
+    unsigned AS = Dest.getType()->getPointerAddressSpace();
     return convertTempToRValue(
-        Builder.CreateBitCast(Dest, ConvertTypeForMem(RValTy)->getPointerTo()),
+        Builder.CreateBitCast(Dest,
+                              ConvertTypeForMem(RValTy)->getPointerTo(AS)),
         RValTy, E->getExprLoc());
   }
 
@@ -1133,8 +1137,9 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
     return RValue::get(nullptr);
 
   assert(Atomics.getValueSizeInBits() <= Atomics.getAtomicSizeInBits());
+  unsigned AS = Dest.getType()->getPointerAddressSpace();
   return convertTempToRValue(
-      Builder.CreateBitCast(Dest, ConvertTypeForMem(RValTy)->getPointerTo()),
+      Builder.CreateBitCast(Dest, ConvertTypeForMem(RValTy)->getPointerTo(AS)),
       RValTy, E->getExprLoc());
 }
 
