@@ -134,7 +134,10 @@ int main(int argc, char *argv[]) {
       if (!Start)
         continue;
       uint64_t offset = *Start - SizesSection.getAddress();
-      std::string Name = sym.getName()->str();
+      Expected<StringRef> SymName = sym.getName();
+      if (!SymName)
+        continue;
+      std::string Name = SymName->str();
       Name = Name.substr(SizePrefix.size(), Name.length() - SizePrefix.size());
       auto SizeIt = SizeForName.find(Name);
       uint64_t Size;
