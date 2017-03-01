@@ -15,6 +15,13 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
   auto OF = ObjectFile::createObjectFile(argv[1]);
+  // OF is an Expected<T> which requires mandatory checking for errors. This is
+  // done by invoking the bool conversion operator.
+  if (!OF) {
+    fprintf(stderr, "Cannot open %s\n", argv[1]);
+    return EXIT_FAILURE;
+  }
+
   std::unordered_map<uint64_t, std::pair<uint64_t,bool>> SymbolSizes;
   std::vector<std::tuple<uint64_t, uint64_t, bool>> Sections;
   // ObjectFile doesn't allow in-place modification, so we open the file again
@@ -59,8 +66,11 @@ int main(int argc, char *argv[]) {
     Expected<uint64_t> Start = sym.getAddress();
     if (!Start)
       continue;
-    SymbolRef::Type type = sym.getType().get();
-    SymbolSizes.insert({Start.get(), {Size, (type == SymbolRef::ST_Function)}});
+    Expected<SymbolRef::Type> SymbolType = sym.getType();
+    if (SymbolType) {
+      SymbolRef::Type type = SymbolType.get();
+      SymbolSizes.insert({Start.get(), {Size, (type == SymbolRef::ST_Function)}});
+    }
   }
   const size_t entry_size = 40;
   MemoryBufferRef MB = OF->getBinary()->getMemoryBufferRef();
