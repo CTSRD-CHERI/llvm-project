@@ -1893,7 +1893,7 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
 
   if (!GEP.isInBounds()) {
     unsigned PtrWidth =
-        DL.getPointerSizeInBits(PtrOp->getType()->getPointerAddressSpace());
+        DL.getPointerBaseSizeInBits(PtrOp->getType()->getPointerAddressSpace());
     APInt BasePtrOffset(PtrWidth, 0);
     Value *UnderlyingPtrOp =
             PtrOp->stripAndAccumulateInBoundsConstantOffsets(DL,
