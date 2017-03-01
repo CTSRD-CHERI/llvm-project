@@ -416,6 +416,8 @@ defm CAPSTORE8      : StoreViaCap<0, 0, "csb", GPR64Opnd, truncstorei8>;
 defm CAPSTORE16     : StoreViaCapScaled<1, 0, "csh", GPR64Opnd, truncstorei16, simm8s1, simm8s1Pattern>;
 defm CAPSTORE32     : StoreViaCapScaled<2, 0, "csw", GPR32Opnd, store, simm8s2, simm8s2Pattern>;
 let isCodeGenOnly=1 in {
+  defm CAPSTORE832      : StoreViaCap<0, 0, "csb", GPR32Opnd, truncstorei8>;
+  defm CAPSTORE1632     : StoreViaCapScaled<1, 0, "csh", GPR32Opnd, truncstorei16, simm8s1, simm8s1Pattern>;
   defm CAPSTORE3264     : StoreViaCapScaled<2, 0, "csw", GPR64Opnd, truncstorei32, simm8s2, simm8s2Pattern>;
 }
 defm CAPSTORE64     : StoreViaCapScaled<3, 0, "csd", GPR64Opnd, store, simm8s3, simm8s3Pattern>;
@@ -543,13 +545,19 @@ def : MipsPat<(atomic_load_64 CheriRegs:$a), (CAPLOAD64 ZERO_64, (i64 0), CheriO
 
 // Atomic store patterns.
 def : MipsPat<(atomic_store_8 CheriRegs:$a, GPR64:$v),
-              (CAPSTORE8 GPR64Opnd:$v, ZERO_64, (i64 0), CheriOpnd:$a)>;
+              (CAPSTORE8 $v, ZERO_64, (i64 0), $a)>;
+def : MipsPat<(atomic_store_8 CheriRegs:$a, GPR32:$v),
+              (CAPSTORE832 $v, ZERO_64, (i64 0), $a)>;
 def : MipsPat<(atomic_store_16 CheriRegs:$a, GPR64:$v),
-              (CAPSTORE16 GPR64Opnd:$v, ZERO_64, (i64 0), CheriOpnd:$a)>;
+              (CAPSTORE16 $v, ZERO_64, (i64 0), $a)>;
+def : MipsPat<(atomic_store_16 CheriRegs:$a, GPR32:$v),
+              (CAPSTORE1632 $v, ZERO_64, (i64 0), $a)>;
 def : MipsPat<(atomic_store_32 CheriRegs:$a, GPR64:$v),
-              (CAPSTORE3264 GPR64Opnd:$v, ZERO_64, (i64 0), CheriOpnd:$a)>;
+              (CAPSTORE3264 $v, ZERO_64, (i64 0), $a)>;
+def : MipsPat<(atomic_store_32 CheriRegs:$a, GPR32:$v),
+              (CAPSTORE32 $v, ZERO_64, (i64 0), $a)>;
 def : MipsPat<(atomic_store_64 CheriRegs:$a, GPR64:$v),
-              (CAPSTORE64 GPR64Opnd:$v, ZERO_64, (i64 0), CheriOpnd:$a)>;
+              (CAPSTORE64 $v, ZERO_64, (i64 0), $a)>;
 
 
 }
