@@ -448,7 +448,9 @@ void InputSectionBase<ELFT>::relocate(uint8_t *Buf, uint8_t *BufEnd) {
   // vector only for SHF_ALLOC'ed sections. For other sections,
   // we handle relocations directly here.
   auto *IS = dyn_cast<InputSection<ELFT>>(this);
-  if (IS && !(IS->Flags & SHF_ALLOC)) {
+  // XXXAR: HACK: can we just discard the .mdebug.abi64 section? Seems to need special procesising:
+  // error: /exports/users/alr48/sources/cheribsd-postmerge/lib/libc/gmon/mcount.c:(.mdebug.abi64+0x1C): has non-ABS reloc
+  if (IS && !(IS->Flags & SHF_ALLOC) && !IS->Name.startswith(".mdebug.abi")) {
     if (IS->AreRelocsRela)
       IS->relocateNonAlloc(Buf, IS->relas());
     else
