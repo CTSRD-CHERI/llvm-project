@@ -2,8 +2,9 @@
 
 // Check that vtable func pointers have the correct addrspace casts
 
-// CHECK: @_ZTV1B = linkonce_odr unnamed_addr addrspace(200) constant { [5 x i8 addrspace(200)*] } { [5 x i8 addrspace(200)*] [i8 addrspace(200)* null, i8 addrspace(200)* null, i8 addrspace(200)* addrspacecast (i8* bitcast (void (%class.A addrspace(200)*)* @_ZN1A1fEv to i8*) to i8 addrspace(200)*), i8 addrspace(200)* addrspacecast (i8* bitcast (void (%class.B addrspace(200)*)* @_ZN1B1gEv to i8*) to i8 addrspace(200)*), i8 addrspace(200)* addrspacecast (i8* bitcast (void ()* @__cxa_deleted_virtual to i8*) to i8 addrspace(200)*)] }, comdat, align 8
-// CHECK: @_ZTV1A = linkonce_odr unnamed_addr addrspace(200) constant { [5 x i8 addrspace(200)*] } { [5 x i8 addrspace(200)*] [i8 addrspace(200)* null, i8 addrspace(200)* null, i8 addrspace(200)* addrspacecast (i8* bitcast (void (%class.A addrspace(200)*)* @_ZN1A1fEv to i8*) to i8 addrspace(200)*), i8 addrspace(200)* addrspacecast (i8* bitcast (void ()* @__cxa_pure_virtual to i8*) to i8 addrspace(200)*), i8 addrspace(200)* addrspacecast (i8* bitcast (void ()* @__cxa_deleted_virtual to i8*) to i8 addrspace(200)*)] }
+// CHECK: @_ZTV1B = linkonce_odr unnamed_addr addrspace(200) constant { [5 x i8 addrspace(200)*] } { [5 x i8 addrspace(200)*] [i8 addrspace(200)* null, i8 addrspace(200)* null, i8 addrspace(200)* addrspacecast (i8* bitcast (void (%class.A addrspace(200)*)* @_ZN1A1fEv to i8*) to i8 addrspace(200)*), i8 addrspace(200)* addrspacecast (i8* bitcast (void (%class.B addrspace(200)*)* @_ZN1B1gEv to i8*) to i8 addrspace(200)*), i8 addrspace(200)* addrspacecast (i8* bitcast (void ()* @__cxa_deleted_virtual to i8*) to i8 addrspace(200)*)] }, comdat, align 32
+// CHECK: @_ZTV1A = linkonce_odr unnamed_addr addrspace(200) constant { [5 x i8 addrspace(200)*] } { [5 x i8 addrspace(200)*] [i8 addrspace(200)* null, i8 addrspace(200)* null, i8 addrspace(200)* addrspacecast (i8* bitcast (void (%class.A addrspace(200)*)* @_ZN1A1fEv to i8*) to i8 addrspace(200)*), i8 addrspace(200)* addrspacecast (i8* bitcast (void ()* @__cxa_pure_virtual to i8*) to i8 addrspace(200)*), i8 addrspace(200)* addrspacecast (i8* bitcast (void ()* @__cxa_deleted_virtual to i8*) to i8 addrspace(200)*)] }, comdat, align 32
+
 class A {
   public:
     virtual void f() {}
