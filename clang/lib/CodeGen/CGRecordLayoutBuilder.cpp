@@ -461,10 +461,11 @@ void CGRecordLowering::accumulateBases() {
 }
 
 void CGRecordLowering::accumulateVPtrs() {
+  unsigned AS = Types.getCGM().getTargetCodeGenInfo().getDefaultAS();
   if (Layout.hasOwnVFPtr())
     Members.push_back(MemberInfo(CharUnits::Zero(), MemberInfo::VFPtr,
         llvm::FunctionType::get(getIntNType(32), /*isVarArg=*/true)->
-            getPointerTo()->getPointerTo()));
+            getPointerTo(AS)->getPointerTo(AS)));
   if (Layout.hasOwnVBPtr())
     Members.push_back(MemberInfo(Layout.getVBPtrOffset(), MemberInfo::VBPtr,
         llvm::Type::getInt32PtrTy(Types.getLLVMContext())));
