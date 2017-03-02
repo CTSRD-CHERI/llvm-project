@@ -1,5 +1,26 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -fno-rtti -std=c++14 -target-abi sandbox -emit-llvm -o - %s | FileCheck %s
-// CHECK-NOT: Assertion `RD->hasFlexibleArrayMember() && "Must have flexible array member if struct is bigger than type!"' failed.
+// RUN: %clang_cc1 -triple cheri-unknown-freebsd -fno-rtti -std=c++14 -target-abi sandbox -fsyntax-only -fdump-record-layouts %s -emit-llvm -o /dev/null | FileCheck %s
+// CHECK:      *** Dumping AST Record Layout
+// CHECK-NEXT:         0 | class error_category
+// CHECK-NEXT:         0 |   (error_category vtable pointer)
+// CHECK-NEXT:           | [sizeof=32, dsize=32, align=32,
+// CHECK-NEXT:           |  nvsize=32, nvalign=32]
+
+// CHECK:      *** Dumping AST Record Layout
+// CHECK-NEXT:          0 | class __do_message
+// CHECK-NEXT:          0 |   class error_category (primary base)
+// CHECK-NEXT:          0 |     (error_category vtable pointer)
+// CHECK-NEXT:            | [sizeof=32, dsize=32, align=32,
+// CHECK-NEXT:            |  nvsize=32, nvalign=32]
+
+
+// CHECK:      *** Dumping AST Record Layout
+// CHECK-NEXT:          0 | class __future_error_category
+// CHECK-NEXT:          0 |   class __do_message (primary base)
+// CHECK-NEXT:          0 |     class error_category (primary base)
+// CHECK-NEXT:          0 |       (error_category vtable pointer)
+// CHECK-NEXT:            | [sizeof=32, dsize=32, align=32,
+// CHECK-NEXT:            |  nvsize=32, nvalign=32]
+
 
 #define _LIBCPP_ALWAYS_INLINE     __attribute__ ((__always_inline__))
 #define _LIBCPP_HIDDEN            __attribute__ ((__visibility__("hidden")))
@@ -76,4 +97,11 @@ future_category() _NOEXCEPT
 {
     static __future_error_category __f;
     return __f;
+}
+
+int main() {
+  // FIXME this crashes clang?
+  // return &future_category() != (void*)0x12345667;
+  (void)future_category();
+  return 1;
 }

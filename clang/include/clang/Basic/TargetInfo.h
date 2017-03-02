@@ -295,16 +295,33 @@ public:
   /// \brief Return the width of pointers on this target, for the
   /// specified address space.
   uint64_t getPointerWidth(unsigned AddrSpace) const {
-    return AddrSpace == 0 ? PointerWidth : getPointerWidthV(AddrSpace);
+    if (AddrSpace == 0) {
+      if (areAllPointersCapabilities()) {
+        assert(getMemoryCapabilityWidth() == 128 || getMemoryCapabilityWidth() == 256);
+        return getMemoryCapabilityWidth();
+      }
+      return PointerWidth;
+    }
+    return getPointerWidthV(AddrSpace);
   }
   /// \brief Returns the integer range for the pointer.  For architectures
   /// where pointers are integers, this will be the same as the size.
   uint64_t getPointerRange(unsigned AddrSpace) const {
+    if (AddrSpace == 0 && areAllPointersCapabilities()) {
+      return getPointerRangeForMemoryCapability();
+    }
     // Eventually we may want to special case AS0.
     return getPointerRangeV(AddrSpace);
   }
   uint64_t getPointerAlign(unsigned AddrSpace) const {
-    return AddrSpace == 0 ? PointerAlign : getPointerAlignV(AddrSpace);
+    if (AddrSpace == 0) {
+      if (areAllPointersCapabilities()) {
+        assert(getMemoryCapabilityAlign() == 128 || getMemoryCapabilityAlign() == 256);
+        return getMemoryCapabilityAlign();
+      }
+      return PointerAlign;
+    }
+    return getPointerAlignV(AddrSpace);
   }
 
   /// \brief Return the maximum width of pointers on this target.
