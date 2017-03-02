@@ -1010,13 +1010,25 @@ unsigned ELFObjectFile<ELFT>::getArch() const {
     return Triple::hexagon;
   case ELF::EM_LANAI:
     return Triple::lanai;
+  case ELF::EM_CHERI256: // CheriABI created with old compiler
+    if (EF.getHeader()->e_ident[ELF::EI_CLASS] != ELF::ELFCLASS64)
+      report_fatal_error("Invalid ELFCLASS!");
+    if (IsLittleEndian)
+      report_fatal_error("CHERI must be big endian!");
+    return Triple::cheri;
   case ELF::EM_MIPS:
-  case ELF::EM_CHERI256:
     switch (EF.getHeader()->e_ident[ELF::EI_CLASS]) {
     case ELF::ELFCLASS32:
       return IsLittleEndian ? Triple::mipsel : Triple::mips;
-    case ELF::ELFCLASS64:
+    case ELF::ELFCLASS64: {
+      unsigned Arch = EF.getHeader()->e_flags & ELF::EF_MIPS_MACH;
+      if (Arch == ELF::EF_MIPS_MACH_CHERI256 || Arch == ELF::EF_MIPS_MACH_CHERI128) {
+        if (IsLittleEndian)
+          report_fatal_error("CHERI must be big endian!");
+        return Triple::cheri;
+      }
       return IsLittleEndian ? Triple::mips64el : Triple::mips64;
+    }
     default:
       report_fatal_error("Invalid ELFCLASS!");
     }
