@@ -6,6 +6,6 @@ void f() {
   A a1;
   // CHECK: %a1 = alloca %class.A, align 1
   A& a2 = a1;
-  // CHECK: %a2 = alloca %class.A addrspace(200)*, align 8
-  // CHECK: store %class.A addrspace(200)* %a1, %class.A addrspace(200)* addrspace(200)* %a2, align 8
+  // CHECK: %a2 = alloca %class.A addrspace(200)*, align 32
+  // CHECK: store %class.A addrspace(200)* %a1, %class.A addrspace(200)* addrspace(200)* %a2, align 32
 }
