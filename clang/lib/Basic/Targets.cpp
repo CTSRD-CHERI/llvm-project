@@ -8058,7 +8058,7 @@ public:
 
   uint64_t getPointerRangeForMemoryCapability() const override { return 64; }
 
-  bool SupportsCapabilities() const override { return true; }
+  bool SupportsCapabilities() const override { return IsCheri; }
 
   bool validateTarget(DiagnosticsEngine &Diags) const override {
     // FIXME: It's valid to use O32 on a 64-bit CPU but the backend can't handle
