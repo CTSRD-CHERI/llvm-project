@@ -343,9 +343,12 @@ bool Evaluator::EvaluateBlock(BasicBlock::iterator CurInst,
         return false;  // Cannot handle array allocs.
       }
       Type *Ty = AI->getAllocatedType();
+      unsigned AddressSpace = AI->getType()->getAddressSpace();
       AllocaTmps.push_back(
           make_unique<GlobalVariable>(Ty, false, GlobalValue::InternalLinkage,
-                                      UndefValue::get(Ty), AI->getName()));
+                                      UndefValue::get(Ty), AI->getName(),
+                                      GlobalValue::NotThreadLocal,
+                                      AddressSpace));
       InstResult = AllocaTmps.back().get();
       DEBUG(dbgs() << "Found an alloca. Result: " << *InstResult << "\n");
     } else if (isa<CallInst>(CurInst) || isa<InvokeInst>(CurInst)) {
