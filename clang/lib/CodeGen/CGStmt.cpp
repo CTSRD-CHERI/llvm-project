@@ -1164,7 +1164,11 @@ void CodeGenFunction::EmitCaseStmtRange(const CaseStmt &S) {
   assert(S.getRHS() && "Expected RHS value in CaseStmt");
 
   llvm::APSInt LHS = S.getLHS()->EvaluateKnownConstInt(getContext());
+  if (S.getLHS()->getType()->isMemoryCapabilityType(getContext()))
+    LHS = LHS.trunc(64);  // XXXAR: will this always be correct???
   llvm::APSInt RHS = S.getRHS()->EvaluateKnownConstInt(getContext());
+  if (S.getRHS()->getType()->isMemoryCapabilityType(getContext()))
+    RHS = RHS.trunc(64);  // XXXAR: will this always be correct???
 
   // Emit the code for this case. We do this first to make sure it is
   // properly chained from our predecessor before generating the
@@ -1254,9 +1258,11 @@ void CodeGenFunction::EmitCaseStmt(const CaseStmt &S) {
     EmitCaseStmtRange(S);
     return;
   }
-
-  llvm::ConstantInt *CaseVal =
-    Builder.getInt(S.getLHS()->EvaluateKnownConstInt(getContext()));
+  // SwitchInsn.getCondition()
+  llvm::APSInt CaseIntVal = S.getLHS()->EvaluateKnownConstInt(getContext());
+  if (S.getLHS()->getType()->isMemoryCapabilityType(getContext()))
+    CaseIntVal = CaseIntVal.trunc(64);  // XXXAR: will this always be correct???
+  llvm::ConstantInt *CaseVal = Builder.getInt(CaseIntVal);
 
   // If the body of the case is just a 'break', try to not emit an empty block.
   // If we're profiling or we're not optimizing, leave the block in for better
