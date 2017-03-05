@@ -3884,8 +3884,8 @@ MipsSETargetLowering::emitCapMove(MachineInstr &MI,
                                   MachineBasicBlock *BB) const {
   auto MoveInst = Mips::CIncOffset;
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
-  BuildMI(*BB, MI, MI.getDebugLoc(), TII->get(MoveInst))
-      .addReg(MI.getOperand(0).getReg())
+  BuildMI(*BB, MI, MI.getDebugLoc(), TII->get(MoveInst),
+          MI.getOperand(0).getReg())
       .addReg(MI.getOperand(1).getReg())
       .addReg(Mips::ZERO_64);
   MI.eraseFromParent();
