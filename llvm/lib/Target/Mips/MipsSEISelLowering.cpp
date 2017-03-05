@@ -3886,7 +3886,7 @@ MipsSETargetLowering::emitCapMove(MachineInstr &MI,
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
   BuildMI(*BB, MI, MI.getDebugLoc(), TII->get(MoveInst))
       .addReg(MI.getOperand(0).getReg())
-      .addImm(MI.getOperand(1).getImm())
+      .addReg(MI.getOperand(1).getReg())
       .addReg(Mips::ZERO_64);
   MI.eraseFromParent();
   return BB;
