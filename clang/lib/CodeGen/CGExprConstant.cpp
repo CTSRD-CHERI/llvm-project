@@ -1041,7 +1041,7 @@ public:
                                      llvm::GlobalValue::InternalLinkage,
                                      C, ".compoundliteral", nullptr,
                                      llvm::GlobalVariable::NotThreadLocal,
-                          CGM.getContext().getTargetAddressSpace(E->getType()));
+                                     CGM.getAddressSpaceForType(E->getType()));
       GV->setAlignment(Align.getQuantity());
       CGM.setAddrOfConstantCompoundLiteral(CLE, GV);
       return ConstantAddress(GV, Align);

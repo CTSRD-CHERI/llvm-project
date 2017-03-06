@@ -264,6 +264,10 @@ public:
   virtual llvm::Value *performAddrSpaceCast(CodeGen::CodeGenFunction &CGF,
       llvm::Value *V, QualType SrcTy, QualType DestTy) const;
 
+  virtual unsigned getAddressSpaceForType(QualType DestTy,
+                                          ASTContext& Context) const;
+  virtual bool canMarkAsNonNull(QualType DestTy, ASTContext& Context) const;
+
 };
 
 } // namespace CodeGen

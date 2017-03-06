@@ -2328,10 +2328,12 @@ public:
   QualType getFloatingTypeOfSizeWithinDomain(QualType typeSize,
                                              QualType typeDomain) const;
 
+private:
   unsigned getTargetAddressSpace(QualType T) const {
     return getTargetAddressSpace(T.getQualifiers());
   }
 
+public:
   unsigned getTargetAddressSpace(Qualifiers Q) const {
     return getTargetAddressSpace(Q.getAddressSpace());
   }

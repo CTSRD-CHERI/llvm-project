@@ -282,6 +282,10 @@ static const llvm::GlobalObject *getAliasedGlobal(
   }
 }
 
+unsigned CodeGenModule::getAddressSpaceForType(QualType T) {
+    return getTargetCodeGenInfo().getAddressSpaceForType(T, getContext());
+}
+
 void CodeGenModule::checkAliases() {
   // Check if the constructed aliases are well formed. It is really unfortunate
   // that we have to do this in CodeGen, but we only construct mangled names
@@ -1554,7 +1558,7 @@ ConstantAddress CodeGenModule::GetWeakRefReference(const ValueDecl *VD) {
   // See if there is already something with the target's name in the module.
   llvm::GlobalValue *Entry = GetGlobalValue(AA->getAliasee());
   if (Entry) {
-    unsigned AS = getContext().getTargetAddressSpace(VD->getType());
+    unsigned AS = getAddressSpaceForType(VD->getType());
     auto Ptr = llvm::ConstantExpr::getBitCast(Entry, DeclTy->getPointerTo(AS));
     return ConstantAddress(Ptr, Alignment);
   }
@@ -2410,9 +2414,10 @@ llvm::Constant *CodeGenModule::GetAddrOfGlobalVar(const VarDecl *D,
     Ty = getTypes().ConvertTypeForMem(ASTTy);
 
   ASTContext &C = getContext();
+   // XXXAR: add another parameter to avoid all these ternary expressions
   unsigned AS = C.getTargetInfo().areAllPointersCapabilities() 
                 ? getTargetCodeGenInfo().getMemoryCapabilityAS()
-                : C.getTargetAddressSpace(ASTTy);
+                : getAddressSpaceForType(ASTTy);
   llvm::PointerType *PTy = llvm::PointerType::get(Ty, AS);
 
   StringRef MangledName = getMangledName(D);
@@ -2647,7 +2652,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
   if (!GV ||
       GV->getType()->getElementType() != InitType ||
       GV->getType()->getAddressSpace() !=
-       GetGlobalVarAddressSpace(D, getContext().getTargetAddressSpace(ASTTy))) {
+       GetGlobalVarAddressSpace(D, getAddressSpaceForType(ASTTy))) {
 
     // Move the old entry aside so that we'll create a new one.
     Entry->setName(StringRef());
@@ -3671,7 +3676,7 @@ ConstantAddress CodeGenModule::GetAddrOfGlobalTemporary(
     }
   }
   unsigned AddrSpace = GetGlobalVarAddressSpace(
-      VD, getContext().getTargetAddressSpace(MaterializedType));
+      VD, getAddressSpaceForType(MaterializedType));
   auto *GV = new llvm::GlobalVariable(
       getModule(), Type, Constant, Linkage, InitialValue, Name.c_str(),
       /*InsertBefore=*/nullptr, llvm::GlobalVariable::NotThreadLocal,

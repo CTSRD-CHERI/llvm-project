@@ -428,6 +428,24 @@ llvm::Value *TargetCodeGenInfo::performAddrSpaceCast(
              CGF.ConvertType(DestTy));
 }
 
+unsigned TargetCodeGenInfo::getAddressSpaceForType(QualType DestTy,
+                                                   ASTContext& Context) const {
+  if (DestTy->isMemoryCapabilityType(Context)) {
+    return getMemoryCapabilityAS();
+  }
+  unsigned AS = Context.getTargetAddressSpace(DestTy.getQualifiers());
+  if (AS == 0)
+    AS = getDefaultAS();
+  return AS;
+}
+
+bool TargetCodeGenInfo::canMarkAsNonNull(QualType DestTy, ASTContext& Context) const {
+  unsigned AS = Context.getTargetAddressSpace(DestTy.getQualifiers());
+  if (AS == 0)
+    return true;
+  return false;
+}
+
 static bool isEmptyRecord(ASTContext &Context, QualType T, bool AllowArrays);
 
 /// isEmptyField - Return true iff a the field is "empty", that is it

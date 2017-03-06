@@ -818,7 +818,7 @@ llvm::DIType *CGDebugInfo::CreatePointerLikeType(llvm::dwarf::Tag Tag,
   // Bit size, align and offset of the type.
   // Size is always the size of a pointer. We can't use getTypeSize here
   // because that does not return the correct value for references.
-  unsigned AS = CGM.getContext().getTargetAddressSpace(PointeeTy);
+  unsigned AS = CGM.getAddressSpaceForType(PointeeTy);
   uint64_t Size = CGM.getTarget().getPointerWidth(AS);
   auto Align = getTypeAlignIfRequired(Ty, CGM.getContext());
 
@@ -1257,7 +1257,7 @@ llvm::DISubroutineType *CGDebugInfo::getOrCreateInstanceMethodType(
     // Create pointer type directly in this case.
     const PointerType *ThisPtrTy = cast<PointerType>(ThisPtr);
     QualType PointeeTy = ThisPtrTy->getPointeeType();
-    unsigned AS = CGM.getContext().getTargetAddressSpace(PointeeTy);
+    unsigned AS = CGM.getAddressSpaceForType(PointeeTy);
     uint64_t Size = CGM.getTarget().getPointerWidth(AS);
     auto Align = getTypeAlignIfRequired(ThisPtrTy, CGM.getContext());
     llvm::DIType *PointeeType = getOrCreateType(PointeeTy, Unit);

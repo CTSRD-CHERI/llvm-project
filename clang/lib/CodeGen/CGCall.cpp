@@ -1545,9 +1545,7 @@ CodeGenTypes::GetFunctionType(const CGFunctionInfo &FI) {
       // sret things on win32 aren't void, they return the sret pointer.
       QualType ret = FI.getReturnType();
       llvm::Type *ty = ConvertType(ret);
-      unsigned addressSpace = Context.getTargetAddressSpace(ret);
-      if (addressSpace == 0)
-        addressSpace = CGM.getTargetCodeGenInfo().getDefaultAS();
+      unsigned addressSpace = CGM.getAddressSpaceForType(ret);
       resultType = llvm::PointerType::get(ty, addressSpace);
     } else {
       resultType = llvm::Type::getVoidTy(getLLVMContext());
@@ -1571,9 +1569,7 @@ CodeGenTypes::GetFunctionType(const CGFunctionInfo &FI) {
   if (IRFunctionArgs.hasSRetArg()) {
     QualType Ret = FI.getReturnType();
     llvm::Type *Ty = ConvertType(Ret);
-    unsigned AddressSpace = Context.getTargetAddressSpace(Ret);
-    if (AddressSpace == 0)
-      AddressSpace = CGM.getTargetCodeGenInfo().getDefaultAS();
+    unsigned AddressSpace = CGM.getAddressSpaceForType(Ret);
     ArgTypes[IRFunctionArgs.getSRetArgNo()] =
         llvm::PointerType::get(Ty, AddressSpace);
   }
@@ -1949,7 +1945,7 @@ void CodeGenModule::ConstructAttributeList(
     if (!PTy->isIncompleteType() && PTy->isConstantSizeType())
       RetAttrs.addDereferenceableAttr(getContext().getTypeSizeInChars(PTy)
                                         .getQuantity());
-    else if (getContext().getTargetAddressSpace(PTy) == 0)
+    else if (getTargetCodeGenInfo().canMarkAsNonNull(PTy, Context))
       RetAttrs.addAttribute(llvm::Attribute::NonNull);
   }
 
@@ -2065,7 +2061,7 @@ void CodeGenModule::ConstructAttributeList(
       if (!PTy->isIncompleteType() && PTy->isConstantSizeType())
         Attrs.addDereferenceableAttr(getContext().getTypeSizeInChars(PTy)
                                        .getQuantity());
-      else if (getContext().getTargetAddressSpace(PTy) == 0)
+      else if (getTargetCodeGenInfo().canMarkAsNonNull(PTy, Context))
         Attrs.addAttribute(llvm::Attribute::NonNull);
     }
 
@@ -2342,7 +2338,7 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
                   getContext().getTypeSizeInChars(ETy).getQuantity()*ArrSize);
                 AI->addAttr(llvm::AttributeSet::get(getLLVMContext(),
                                                     AI->getArgNo() + 1, Attrs));
-              } else if (getContext().getTargetAddressSpace(ETy) == 0) {
+              } else if (CGM.getTargetCodeGenInfo().canMarkAsNonNull(ETy, getContext())) {
                 AI->addAttr(llvm::AttributeSet::get(getLLVMContext(),
                                                     AI->getArgNo() + 1,
                                                     llvm::Attribute::NonNull));
@@ -2354,7 +2350,8 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
             // we can't use the dereferenceable attribute, but in addrspace(0)
             // we know that it must be nonnull.
             if (ArrTy->getSizeModifier() == VariableArrayType::Static &&
-                !getContext().getTargetAddressSpace(ArrTy->getElementType()))
+                !CGM.getTargetCodeGenInfo().canMarkAsNonNull(ArrTy->getElementType(),
+                                                             getContext()))
               AI->addAttr(llvm::AttributeSet::get(getLLVMContext(),
                                                   AI->getArgNo() + 1,
                                                   llvm::Attribute::NonNull));

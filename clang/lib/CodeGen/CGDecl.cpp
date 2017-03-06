@@ -219,7 +219,7 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
 
   llvm::Type *LTy = getTypes().ConvertTypeForMem(Ty);
   unsigned AddrSpace =
-      GetGlobalVarAddressSpace(&D, getContext().getTargetAddressSpace(Ty));
+      GetGlobalVarAddressSpace(&D, getAddressSpaceForType(Ty));
 
   // Local address space cannot have an initializer.
   llvm::Constant *Init = nullptr;
@@ -251,9 +251,8 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
   }
 
   // Make sure the result is of the correct type.
-  unsigned ExpectedAddrSpace = getTarget().areAllPointersCapabilities()
-                               ? getTargetCodeGenInfo().getMemoryCapabilityAS()
-                               : getContext().getTargetAddressSpace(Ty);
+  // XXXAR: should be able to remove this ternary expression?
+  unsigned ExpectedAddrSpace = getAddressSpaceForType(Ty);
   llvm::Constant *Addr = GV;
   if (AddrSpace != ExpectedAddrSpace) {
     llvm::PointerType *PTy = llvm::PointerType::get(LTy, ExpectedAddrSpace);
@@ -348,7 +347,7 @@ CodeGenFunction::AddInitializerToStaticVarDecl(const VarDecl &D,
                                   OldGV->getLinkage(), Init, "",
                                   /*InsertBefore*/ OldGV,
                                   OldGV->getThreadLocalMode(),
-                           CGM.getContext().getTargetAddressSpace(D.getType()));
+                                  CGM.getAddressSpaceForType(D.getType()));
     GV->setVisibility(OldGV->getVisibility());
     GV->setComdat(OldGV->getComdat());
 
@@ -1265,7 +1264,7 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
     }
   } else {
     unsigned AddrSpace = CGM.GetGlobalVarAddressSpace(&D,
-        CGM.getContext().getTargetAddressSpace(type));
+        CGM.getAddressSpaceForType(type));
     // Otherwise, create a temporary global with the initializer then
     // memcpy from the global to the alloca.
     std::string Name = getStaticDeclName(CGM, D);

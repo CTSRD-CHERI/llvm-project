@@ -511,7 +511,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     llvm::Type *PointeeType = ConvertTypeForMem(ETy);
     unsigned AS = Context.getTargetInfo().areAllPointersCapabilities()
                   ? CGM.getTargetCodeGenInfo().getMemoryCapabilityAS()
-                  : Context.getTargetAddressSpace(ETy);
+                  : CGM.getAddressSpaceForType(ETy);
     ResultType = llvm::PointerType::get(PointeeType, AS);
     break;
   }
@@ -534,7 +534,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
       PointeeType = llvm::Type::getInt8Ty(getLLVMContext());
     unsigned AS = PTy->isMemoryCapability() ? 
                   CGM.getTargetCodeGenInfo().getMemoryCapabilityAS() :
-                  Context.getTargetAddressSpace(ETy);
+                  CGM.getAddressSpaceForType(ETy);
     ResultType = llvm::PointerType::get(PointeeType, AS);
     break;
   }
@@ -626,7 +626,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
   case Type::BlockPointer: {
     const QualType FTy = cast<BlockPointerType>(Ty)->getPointeeType();
     llvm::Type *PointeeType = ConvertTypeForMem(FTy);
-    unsigned AS = Context.getTargetAddressSpace(FTy);
+    unsigned AS = CGM.getAddressSpaceForType(FTy);
     ResultType = llvm::PointerType::get(PointeeType, AS);
     break;
   }
