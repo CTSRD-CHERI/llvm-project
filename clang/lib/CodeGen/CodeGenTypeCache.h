@@ -74,7 +74,7 @@ struct CodeGenTypeCache {
   }
 
   /// The width of a pointer into the generic address space.
-  unsigned char PointerWidthInBits;
+  unsigned short PointerWidthInBits; // This was uchar -> broken for cheri256!
 
   /// The size and alignment of a pointer into the generic address space.
   union {
