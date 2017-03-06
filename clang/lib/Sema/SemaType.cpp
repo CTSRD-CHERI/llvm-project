@@ -1886,7 +1886,8 @@ static bool checkQualifiedFunction(Sema &S, QualType T, SourceLocation Loc,
 /// \returns A suitable pointer type, if there are no
 /// errors. Otherwise, returns a NULL type.
 QualType Sema::BuildPointerType(QualType T,
-                                SourceLocation Loc, DeclarationName Entity) {
+                                SourceLocation Loc, DeclarationName Entity,
+                                bool* ValidPointer) {
   if (T->isReferenceType()) {
     // C++ 8.3.2p4: There shall be no ... pointers to references ...
     Diag(Loc, diag::err_illegal_decl_pointer_to_reference)
@@ -1911,6 +1912,16 @@ QualType Sema::BuildPointerType(QualType T,
         IsMemCap = true;
         break;
       case PIK_Integer:
+        // TODO: will returning a plain integer in pure cap abi cause any errors??
+        if (Context.getTargetInfo().areAllPointersCapabilities()) {
+          // This is not a real pointer type in the sandbox ABI
+          // ptrdiff_t will be the same size as a plain mips pointer
+          // FIXME: this ValidPointer approach is a HACK,
+          // need to do something better
+          if (ValidPointer)
+            *ValidPointer = false;
+          return Context.getPointerDiffType();
+        }
         IsMemCap = false;
         break;
       case PIK_Default:
@@ -1922,6 +1933,8 @@ QualType Sema::BuildPointerType(QualType T,
     //T = Context.getAddrSpaceQualType(T, AS);
   //}
   // Build the pointer type.
+  if (ValidPointer)
+    *ValidPointer = true;
   return Context.getPointerType(T, IsMemCap);
 }
 
@@ -3657,6 +3670,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
   Sema &S = state.getSema();
   ASTContext &Context = S.Context;
   const LangOptions &LangOpts = S.getLangOpts();
+  bool IsIntegerPointerInPureCapABI = false;
 
   // The name we're declaring, if any.
   DeclarationName Name;
@@ -4053,7 +4067,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
         T = S.BuildQualifiedType(T, DeclType.Loc, DeclType.Cls.TypeQuals);
       }
       break;
-    case DeclaratorChunk::Pointer:
+    case DeclaratorChunk::Pointer: {
       // Verify that we're not building a pointer to pointer to function with
       // exception specification.
       if (LangOpts.CPlusPlus && S.CheckDistantExceptionSpec(T)) {
@@ -4083,11 +4097,14 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
           D.setInvalidType(true);
         }
       }
-
-      T = S.BuildPointerType(T, DeclType.Loc, Name);
-      if (DeclType.Ptr.TypeQuals)
+      bool ValidPointer = false;
+      T = S.BuildPointerType(T, DeclType.Loc, Name, &ValidPointer);
+      if (!ValidPointer) {
+        IsIntegerPointerInPureCapABI = true;  // FIXME: is this correct?
+      } else if (DeclType.Ptr.TypeQuals)
         T = S.BuildQualifiedType(T, DeclType.Loc, DeclType.Ptr.TypeQuals);
       break;
+    }
     case DeclaratorChunk::Reference: {
       // Verify that we're not building a reference to pointer to function with
       // exception specification.
@@ -4826,7 +4843,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
   }
 
   assert(!T.isNull() && "T must not be null at the end of this function");
-  if (D.isInvalidType())
+  if (D.isInvalidType() || IsIntegerPointerInPureCapABI)
     return Context.getTrivialTypeSourceInfo(T);
 
   return S.GetTypeSourceInfoForDeclarator(D, T, TInfo);

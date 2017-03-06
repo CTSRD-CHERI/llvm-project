@@ -1271,8 +1271,8 @@ public:
                               const DeclSpec *DS = nullptr);
   QualType BuildQualifiedType(QualType T, SourceLocation Loc, unsigned CVRA,
                               const DeclSpec *DS = nullptr);
-  QualType BuildPointerType(QualType T,
-                            SourceLocation Loc, DeclarationName Entity);
+  QualType BuildPointerType(QualType T, SourceLocation Loc,
+                            DeclarationName Entity, bool* ValidPointer);
   QualType BuildReferenceType(QualType T, bool LValueRef,
                               SourceLocation Loc, DeclarationName Entity);
   QualType BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM,

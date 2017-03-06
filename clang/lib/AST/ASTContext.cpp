@@ -1833,13 +1833,8 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
     }
     break;
   case Type::ObjCObjectPointer: {
-    if (Target->areAllPointersCapabilities()) {
-      Width = Target->getMemoryCapabilityWidth();
-      Align = Target->getMemoryCapabilityAlign();
-    } else {
-      Width = Target->getPointerWidth(0);
-      Align = Target->getPointerAlign(0);
-    }
+    Width = Target->getPointerWidth(0);
+    Align = Target->getPointerAlign(0);
     break;
    }
   case Type::BlockPointer: {
@@ -1858,10 +1853,15 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
   case Type::RValueReference: {
     // alignof and sizeof should never enter this code path here, so we go
     // the pointer route.
-    unsigned AS = getTargetAddressSpace(
-        cast<ReferenceType>(T)->getPointeeType());
-    Width = Target->getPointerWidth(AS);
-    Align = Target->getPointerAlign(AS);
+    if (Target->areAllPointersCapabilities()) {
+      Width = Target->getMemoryCapabilityWidth();
+      Align = Target->getMemoryCapabilityAlign();
+    } else {
+      unsigned AS = getTargetAddressSpace(
+          cast<ReferenceType>(T)->getPointeeType());
+      Width = Target->getPointerWidth(AS);
+      Align = Target->getPointerAlign(AS);
+    }
     break;
   }
   case Type::Pointer: {
@@ -1875,7 +1875,7 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
       }
     }
 
-    if (T->isMemoryCapabilityType(*this)) {
+    if (T->isMemoryCapabilityType(*this) || Target->areAllPointersCapabilities()) {
       Width = Target->getMemoryCapabilityWidth();
       Align = Target->getMemoryCapabilityAlign();
     } else {

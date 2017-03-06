@@ -1,6 +1,8 @@
 // RUN: %clang_cc1 "-target-abi" "sandbox" -fsyntax-only -triple cheri-unknown-freebsd %s -verify
 // expected-no-diagnostics
 
+// TODO: add an AST dump test to check that we are creating longs instead of pointers
+
 _Pragma("pointer_interpretation push")
 _Pragma("pointer_interpretation integer")
 struct foo {
