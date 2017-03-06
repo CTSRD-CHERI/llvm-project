@@ -102,13 +102,13 @@ CodeGenModule::CodeGenModule(ASTContext &C, const HeaderSearchOptions &HSO,
   const TargetInfo &Target = C.getTargetInfo();
   PointerWidthInBits = Target.getPointerWidth(0);
   PointerAlignInBytes =
-    C.toCharUnitsFromBits(Target.areAllPointersCapabilities()
-                          ? Target.getMemoryCapabilityAlign()
-                          : Target.getPointerAlign(0)).getQuantity();
-  SizeAlignInBytes =
     C.toCharUnitsFromBits(Target.getPointerAlign(0)).getQuantity();
+  // XXXAR: these are a union why even bother assigning both??
+  // XXXAR: just use the pointer range as the width/align of size_t
+  SizeAlignInBytes =
+    C.toCharUnitsFromBits(Target.getTypeAlign(Target.getSizeType())).getQuantity();
   SizeSizeInBytes =
-    C.toCharUnitsFromBits(Target.getMaxPointerWidth()).getQuantity();
+    C.toCharUnitsFromBits(Target.getTypeWidth(Target.getSizeType())).getQuantity();
   IntAlignInBytes =
     C.toCharUnitsFromBits(Target.getIntAlign()).getQuantity();
   IntTy = llvm::IntegerType::get(LLVMContext, Target.getIntWidth());
