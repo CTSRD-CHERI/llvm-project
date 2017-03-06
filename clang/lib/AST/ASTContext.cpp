@@ -6667,8 +6667,7 @@ RecordDecl *ASTContext::getCHERIClassDecl() const {
     RD = buildImplicitRecord("cheri_object");
     RD->startDefinition();
 
-    // FIXME: Target AS for caps
-    QualType CapTy = getPointerType(getAddrSpaceQualType(VoidTy, 200));
+    QualType CapTy = getPointerType(VoidTy, true);
 
     QualType FieldTypes[] = { CapTy, CapTy };
     static const char *const FieldNames[] = { "co_codecap", "co_datacap" };
