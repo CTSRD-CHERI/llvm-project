@@ -5631,7 +5631,9 @@ bool PointerExprEvaluator::VisitCastExpr(const CastExpr* E) {
       break;
 
     if (Value.isInt()) {
-      unsigned Size = Info.Ctx.getIntRange(E->getType());
+      unsigned Size = E->getType()->isMemoryCapabilityType(Info.Ctx) ?
+        Info.Ctx.getTargetInfo().getPointerRangeForMemoryCapability() :
+        Info.Ctx.getIntRange(E->getType());
       uint64_t N = Value.getInt().extOrTrunc(Size).getZExtValue();
       Result.Base = (Expr*)nullptr;
       Result.InvalidBase = false;
