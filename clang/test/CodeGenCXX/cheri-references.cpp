@@ -8,6 +8,7 @@ void f() {
   A& a2 = a1;
   // CHECK-NEXT: %a2 = alloca %class.A addrspace(200)*, align 32
   // CHECK-NEXT: %b = alloca i8, align 1
+  // CHECK-NEXT: %b2 = alloca i8, align 1
   // CHECK-NEXT: store %class.A addrspace(200)* %a1, %class.A addrspace(200)* addrspace(200)* %a2, align 32
   bool b = &a2 == (A*)0x1234567;
   // CHECK-NEXT: %0 = load %class.A addrspace(200)*, %class.A addrspace(200)* addrspace(200)* %a2, align 32
@@ -16,10 +17,6 @@ void f() {
   // CHECK-NEXT: %cmp = icmp eq %class.A addrspace(200)* %0, %2
   // CHECK-NEXT: %frombool = zext i1 %cmp to i8
   // CHECK-NEXT: store i8 %frombool, i8 addrspace(200)* %b, align 1
-
-  // FIXME: the comparison with void* crashes clang:
-  //   wrong cast for pointers in different address spaces(must be an address space cast)!
-  //   UNREACHABLE executed at /sources/ctsrd/llvm/tools/clang/lib/CodeGen/CGExprScalar.cpp:1534!
   bool b2 = &a2 == (void*)0x1234567;
 
   // AST for the two:
