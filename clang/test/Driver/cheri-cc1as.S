@@ -16,18 +16,18 @@
 // RUN: %clang -target cheri-unknown-freebsd -mabi=sandbox -c %s -o - \
 // RUN:   | llvm-readobj -h - | FileCheck -check-prefix=SANDBOX-HEADERS %s
 
-// NONE-HEADERS:     Arch: mips64
+// NONE-HEADERS:     Arch: cheri
 // NONE-HEADERS:     Flags [ (0x30C20006)
 // NONE-HEADERS-NOT:   EF_MIPS_ABI_CHERIABI
 // NONE-HEADERS:       EF_MIPS_MACH_CHERI256
 
-// N64-HEADERS:     Arch: mips64
+// N64-HEADERS:     Arch: cheri
 // N64-HEADERS:     Flags [ (0x30C20006)
 // N64-HEADERS-NOT:   EF_MIPS_ABI_CHERIABI
 // N64-HEADERS:       EF_MIPS_MACH_CHERI256
 
 
-// SANDBOX-HEADERS: Arch: mips64
+// SANDBOX-HEADERS: Arch: cheri
 // SANDBOX-HEADERS: Flags [ (0x30C2C006)
 // SANDBOX-HEADERS:    EF_MIPS_ABI_CHERIABI
 // SANDBOX-HEADERS:    EF_MIPS_MACH_CHERI256
@@ -70,18 +70,18 @@
 // RUN: %clang -target cheri-unknown-freebsd -mabi=sandbox -c %s -o - -mcpu=cheri128 \
 // RUN:   | llvm-readobj -h - | FileCheck -check-prefix=CHERI128-SANDBOX-HEADERS %s
 
-// CHERI128-HEADERS:     Arch: mips64
+// CHERI128-HEADERS:     Arch: cheri
 // CHERI128-HEADERS:     Flags [ (0x30C10006)
 // CHERI128-HEADERS-NOT:   EF_MIPS_ABI_CHERIABI
 // CHERI128-HEADERS:       EF_MIPS_MACH_CHERI128
 
-// CHERI128-N64-HEADERS:     Arch: mips64
+// CHERI128-N64-HEADERS:     Arch: cheri
 // CHERI128-N64-HEADERS:     Flags [ (0x30C10006)
 // CHERI128-N64-HEADERS-NOT:   EF_MIPS_ABI_CHERIABI
 // CHERI128-N64-HEADERS:       EF_MIPS_MACH_CHERI128
 
 
-// CHERI128-SANDBOX-HEADERS: Arch: mips64
+// CHERI128-SANDBOX-HEADERS: Arch: cheri
 // CHERI128-SANDBOX-HEADERS: Flags [ (0x30C1C006)
 // CHERI128-SANDBOX-HEADERS:    EF_MIPS_ABI_CHERIABI
 // CHERI128-SANDBOX-HEADERS:    EF_MIPS_MACH_CHERI128
