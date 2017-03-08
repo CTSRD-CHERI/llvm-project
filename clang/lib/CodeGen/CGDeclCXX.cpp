@@ -168,7 +168,7 @@ void CodeGenFunction::EmitCXXGlobalVarDeclInit(const VarDecl &D,
   ASTContext &Context = getContext();
   unsigned ExpectedAddrSpace = Context.getTargetInfo().areAllPointersCapabilities()
                                ? CGM.getTargetCodeGenInfo().getMemoryCapabilityAS()
-                               : CGM.getAddressSpaceForType(Context.getPointerType(T));
+                               : Context.getTargetAddressSpace(T.getQualifiers());
   unsigned ActualAddrSpace = DeclPtr->getType()->getPointerAddressSpace();
   if (ActualAddrSpace != ExpectedAddrSpace) {
     llvm::Type *LTy = CGM.getTypes().ConvertTypeForMem(T);

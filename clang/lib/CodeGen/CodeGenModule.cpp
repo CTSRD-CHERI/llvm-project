@@ -2417,7 +2417,7 @@ llvm::Constant *CodeGenModule::GetAddrOfGlobalVar(const VarDecl *D,
    // XXXAR: add another parameter to avoid all these ternary expressions
   unsigned AS = C.getTargetInfo().areAllPointersCapabilities() 
                 ? getTargetCodeGenInfo().getMemoryCapabilityAS()
-                : getAddressSpaceForType(C.getPointerType(ASTTy));
+                : C.getTargetAddressSpace(ASTTy.getQualifiers());
   llvm::PointerType *PTy = llvm::PointerType::get(Ty, AS);
 
   StringRef MangledName = getMangledName(D);
