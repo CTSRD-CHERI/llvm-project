@@ -1399,8 +1399,7 @@ void ItaniumCXXABI::addImplicitStructorParams(CodeGenFunction &CGF,
     ASTContext &Context = getContext();
 
     // FIXME: avoid the fake decl
-    QualType T = Context.getPointerType(Context.VoidPtrTy,
-                              CGM.getTargetCodeGenInfo().getDefaultAS());
+    QualType T = Context.getPointerType(Context.VoidPtrTy);
     ImplicitParamDecl *VTTDecl
       = ImplicitParamDecl::Create(Context, nullptr, MD->getLocation(),
                                   &Context.Idents.get("vtt"), T);

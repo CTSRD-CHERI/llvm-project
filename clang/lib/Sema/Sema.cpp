@@ -425,8 +425,7 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
 #endif
   if (Kind == CK_FunctionToPointerDecay) {
     QualType FnTy = Ty->getPointeeType();
-    Ty = Context.getPointerType(FnTy, 
-                        Context.getTargetInfo().areAllPointersCapabilities());
+    Ty = Context.getPointerType(FnTy);
   }
 
   diagnoseNullableToNonnullConversion(Ty, E->getType(), E->getLocStart());

@@ -2256,12 +2256,12 @@ void PragmaPointerInterpretation::HandlePragma(Preprocessor &PP,
   else if (Interpretation->getName() == "pop")
     Actions.ActOnPragmaPointerInterpretationPop();
   else {
-    Sema::PointerInterpretationKind Mode =
-      llvm::StringSwitch<Sema::PointerInterpretationKind> (Interpretation->getName())
-        .Case("capability", Sema::PointerInterpretationKind::PIK_Capability)
-        .Case("integer", Sema::PointerInterpretationKind::PIK_Integer)
-        .Case("default", Sema::PointerInterpretationKind::PIK_Default)
-        .Default(Sema::PointerInterpretationKind::PIK_Invalid);
+    ASTContext::PointerInterpretationKind Mode =
+      llvm::StringSwitch<ASTContext::PointerInterpretationKind>(Interpretation->getName())
+        .Case("capability", ASTContext::PointerInterpretationKind::PIK_Capability)
+        .Case("integer", ASTContext::PointerInterpretationKind::PIK_Integer)
+        .Case("default", ASTContext::PointerInterpretationKind::PIK_Default)
+        .Default(ASTContext::PointerInterpretationKind::PIK_Invalid);
     // FIXME: Error handling!
     Actions.ActOnPragmaPointerInterpretation(Mode);
   }

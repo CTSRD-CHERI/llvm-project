@@ -8006,19 +8006,14 @@ public:
   void ActOnPragmaOptionsAlign(PragmaOptionsAlignKind Kind,
                                SourceLocation PragmaLoc);
 
-  enum PointerInterpretationKind {
-    PIK_Capability,
-    PIK_Integer,
-    PIK_Default,
-    PIK_Invalid
-  } PointerInterpretation = PIK_Default;
-  llvm::SmallVector<PointerInterpretationKind, 4> PointerInterpretationStack;
+  ASTContext::PointerInterpretationKind PointerInterpretation = ASTContext::PIK_Default;
+  llvm::SmallVector<ASTContext::PointerInterpretationKind, 4> PointerInterpretationStack;
 
   /// ActOnPragmaPack - Called on well formed \#pragma pack(...).
   void ActOnPragmaPack(SourceLocation PragmaLoc, PragmaMsStackAction Action,
                        StringRef SlotLabel, Expr *Alignment);
 
-  void ActOnPragmaPointerInterpretation(PointerInterpretationKind K);
+  void ActOnPragmaPointerInterpretation(ASTContext::PointerInterpretationKind K);
   void ActOnPragmaPointerInterpretationPush() {
     PointerInterpretationStack.push_back(PointerInterpretation);
   }

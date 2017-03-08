@@ -1758,8 +1758,7 @@ Sema::BuildCXXNew(SourceRange Range, bool UseGlobal,
                                     AllocType->getObjCARCImplicitLifetime());
   }
 
-  QualType ResultType = Context.getPointerType(AllocType,
-      Context.getTargetInfo().areAllPointersCapabilities());
+  QualType ResultType = Context.getPointerType(AllocType);
   if (ArraySize && ArraySize->getType()->isNonOverloadPlaceholderType()) {
     ExprResult result = CheckPlaceholderExpr(ArraySize);
     if (result.isInvalid()) return ExprError();
@@ -2558,8 +2557,7 @@ void Sema::DeclareGlobalNewDelete() {
 
   GlobalNewDeleteDeclared = true;
 
-  QualType VoidPtr = Context.getPointerType(Context.VoidTy,
-                         Context.getTargetInfo().areAllPointersCapabilities());
+  QualType VoidPtr = Context.getPointerType(Context.VoidTy);
   QualType SizeT = Context.getSizeType();
 
   auto DeclareGlobalAllocationFunctions = [&](OverloadedOperatorKind Kind,

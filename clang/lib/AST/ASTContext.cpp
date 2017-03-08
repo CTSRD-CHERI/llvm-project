@@ -1215,7 +1215,7 @@ void ASTContext::InitBuiltinTypes(const TargetInfo &Target,
   ObjCSuperType = QualType();
 
   // void * type
-  VoidPtrTy = getPointerType(VoidTy, Target.areAllPointersCapabilities());
+  VoidPtrTy = getPointerType(VoidTy);
 
   // nullptr type (C++0x 2.14.7)
   InitBuiltinType(NullPtrTy,           BuiltinType::NullPtr);
@@ -2519,9 +2519,25 @@ QualType ASTContext::getComplexType(QualType T) const {
   return QualType(New, 0);
 }
 
+bool ASTContext::shouldUseMemcap(PointerInterpretationKind PIK) const {
+  switch (PIK) {
+    case PIK_Capability:
+      return true;
+    case PIK_Integer:
+      assert(!getTargetInfo().areAllPointersCapabilities() &&
+              "Can't use PointerType with integer representation in pure ABI");
+      return false;
+    case PIK_Default:
+      return getTargetInfo().areAllPointersCapabilities();
+    case PIK_Invalid:
+      llvm_unreachable("Invalid pointer interpretation!");
+  }
+}
+
 /// getPointerType - Return the uniqued reference to the type for a pointer to
 /// the specified type.
-QualType ASTContext::getPointerType(QualType T, bool isMemCap) const {
+QualType ASTContext::getPointerType(QualType T, PointerInterpretationKind PIK) const {
+  bool isMemCap = shouldUseMemcap(PIK);
   // Unique pointers, to guarantee there is only one pointer of a particular
   // structure.
   llvm::FoldingSetNodeID ID;
@@ -2535,7 +2551,7 @@ QualType ASTContext::getPointerType(QualType T, bool isMemCap) const {
   // so fill in the canonical type field.
   QualType Canonical;
   if (!T.isCanonical()) {
-    Canonical = getPointerType(getCanonicalType(T), isMemCap);
+    Canonical = getPointerType(getCanonicalType(T), PIK);
 
     // Get the new insert position for the node we care about.
     PointerType *NewIP = PointerTypes.FindNodeOrInsertPos(ID, InsertPos);
@@ -2586,7 +2602,7 @@ QualType ASTContext::getDecayedType(QualType T) const {
   //   shall be adjusted to "pointer to function returning type", as
   //   in 6.3.2.1.
   if (T->isFunctionType())
-    Decayed = getPointerType(T, getTargetInfo().areAllPointersCapabilities());
+    Decayed = getPointerType(T);
 
   llvm::FoldingSetNodeID ID;
   AdjustedType::Profile(ID, T, Decayed);
@@ -3532,7 +3548,7 @@ ASTContext::getTypedefType(const TypedefNameDecl *Decl,
       // Create a copy of the typedef whose name is prefixed by "__memcap_" and
       // whose underlying type is the memory_capability qualified version of
       // the pointer type
-      Canonical = getPointerType(PT->getPointeeType(), true);
+      Canonical = getPointerType(PT->getPointeeType(), ASTContext::PIK_Capability);
       TypeSourceInfo *TInfo = getTrivialTypeSourceInfo(Canonical, Decl->getLocStart());
       std::string typedefName = "__memcap_" + Decl->getNameAsString();
       TypedefDecl *NewDecl = TypedefDecl::Create(
@@ -5082,8 +5098,7 @@ QualType ASTContext::getArrayDecayedType(QualType Ty) const {
   const ArrayType *PrettyArrayType = getAsArrayType(Ty);
   assert(PrettyArrayType && "Not an array type!");
 
-  QualType PtrTy = getPointerType(PrettyArrayType->getElementType(),
-                                  getTargetInfo().areAllPointersCapabilities());
+  QualType PtrTy = getPointerType(PrettyArrayType->getElementType());
 
   // int x[restrict 4] ->  int *restrict
   QualType Result = getQualifiedType(PtrTy,
@@ -6645,8 +6660,7 @@ TypedefDecl *ASTContext::getObjCIdDecl() const {
 
 TypedefDecl *ASTContext::getObjCSelDecl() const {
   if (!ObjCSelDecl) {
-    QualType T = getPointerType(ObjCBuiltinSelTy,
-                                getTargetInfo().areAllPointersCapabilities());
+    QualType T = getPointerType(ObjCBuiltinSelTy);
     ObjCSelDecl = buildImplicitTypedef(T, "SEL");
   }
   return ObjCSelDecl;
@@ -6667,7 +6681,7 @@ RecordDecl *ASTContext::getCHERIClassDecl() const {
     RD = buildImplicitRecord("cheri_object");
     RD->startDefinition();
 
-    QualType CapTy = getPointerType(VoidTy, true);
+    QualType CapTy = getPointerType(VoidTy, ASTContext::PIK_Capability);
 
     QualType FieldTypes[] = { CapTy, CapTy };
     static const char *const FieldNames[] = { "co_codecap", "co_datacap" };
@@ -6709,8 +6723,7 @@ ObjCInterfaceDecl *ASTContext::getObjCProtocolDecl() const {
 static TypedefDecl *CreateCharPtrNamedVaListDecl(const ASTContext *Context,
                                                  StringRef Name) {
   // typedef char* __builtin[_ms]_va_list;
-  QualType T = Context->getPointerType(Context->CharTy,
-                      Context->getTargetInfo().areAllPointersCapabilities());
+  QualType T = Context->getPointerType(Context->CharTy);
   return Context->buildImplicitTypedef(T, Name);
 }
 
@@ -6724,8 +6737,7 @@ static TypedefDecl *CreateCharPtrBuiltinVaListDecl(const ASTContext *Context) {
 
 static TypedefDecl *CreateVoidPtrBuiltinVaListDecl(const ASTContext *Context) {
   // typedef void* __builtin_va_list;
-  QualType T = Context->getPointerType(Context->VoidTy,
-                              Context->getTargetInfo().areAllPointersCapabilities());
+  QualType T = Context->getPointerType(Context->VoidTy);
   return Context->buildImplicitTypedef(T, "__builtin_va_list");
 }
 
@@ -8871,12 +8883,12 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
         Str = End;
       }
       if (c == '*') {
-        bool IsMemCap = Context.getTargetInfo().areAllPointersCapabilities();
+        ASTContext::PointerInterpretationKind PIK = ASTContext::PIK_Default;
         if (*Str == 'm') {
-          IsMemCap = true;
+          PIK = ASTContext::PIK_Capability;
           Str++;
         }
-        Type = Context.getPointerType(Type, IsMemCap);
+        Type = Context.getPointerType(Type, PIK);
       }
       else
         Type = Context.getLValueReferenceType(Type);

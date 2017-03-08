@@ -8485,13 +8485,15 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     llvm::SmallVector<QualType, 8> NewParams;
     for (QualType T : OldParams) {
       if (const PointerType *PT = T->getAs<PointerType>())
-        NewParams.push_back(Context.getPointerType(PT->getPointeeType(), true));
+        NewParams.push_back(Context.getPointerType(PT->getPointeeType(),
+                                                   ASTContext::PIK_Capability));
       else
         NewParams.push_back(T);
     }
     QualType RetTy = FPT->getReturnType();
     if (const PointerType *PT = RetTy->getAs<PointerType>())
-      RetTy = Context.getPointerType(PT->getPointeeType(), true);
+      RetTy = Context.getPointerType(PT->getPointeeType(),
+                                     ASTContext::PIK_Capability);
     NewFD->setType(Context.getFunctionType(RetTy, NewParams,
           FPT->getExtProtoInfo()));
   }

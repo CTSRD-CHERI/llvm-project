@@ -1904,38 +1904,22 @@ QualType Sema::BuildPointerType(QualType T,
   if (getLangOpts().ObjCAutoRefCount)
     T = inferARCLifetimeForPointee(*this, T, Loc, /*reference*/ false);
 
-  bool IsMemCap = false;
-  //if (T.getAddressSpace() == 0) {
-  //  int AS;
-    switch (PointerInterpretation) {
-      case PIK_Capability:
-        IsMemCap = true;
-        break;
-      case PIK_Integer:
-        // TODO: will returning a plain integer in pure cap abi cause any errors??
-        if (Context.getTargetInfo().areAllPointersCapabilities()) {
-          // This is not a real pointer type in the sandbox ABI
-          // ptrdiff_t will be the same size as a plain mips pointer
-          // FIXME: this ValidPointer approach is a HACK,
-          // need to do something better
-          if (ValidPointer)
-            *ValidPointer = false;
-          return Context.getPointerDiffType();
-        }
-        IsMemCap = false;
-        break;
-      case PIK_Default:
-        IsMemCap = Context.getTargetInfo().areAllPointersCapabilities();
-        break;
-      case PIK_Invalid:
-        llvm_unreachable("Invalid pointer interpretation!");
-    }
-    //T = Context.getAddrSpaceQualType(T, AS);
-  //}
+  // If we are in sandbox ABI turn pointers marked integer representations into
+  // a plain pointer range sized integer
+  if (PointerInterpretation == ASTContext::PIK_Integer
+      && Context.getTargetInfo().areAllPointersCapabilities()) {
+    // This is not a real pointer type in the sandbox ABI
+    // ptrdiff_t will be the same size as a plain mips pointer
+    // FIXME: this ValidPointer approach is a HACK to ensure that we return
+    // getTrivialTypeSourceInfo(T) later, need to do something better
+    if (ValidPointer)
+      *ValidPointer = false;
+    return Context.getPointerDiffType();
+  }
   // Build the pointer type.
   if (ValidPointer)
     *ValidPointer = true;
-  return Context.getPointerType(T, IsMemCap);
+  return Context.getPointerType(T, PointerInterpretation);
 }
 
 /// \brief Build a reference type.
@@ -6917,12 +6901,12 @@ static void HandleMemoryCapabilityAttr(QualType &CurType, TypeProcessingState &s
         isDeprecatedUse = false;
       }
       if (const PointerType *PT = CurType->getAs<PointerType>()) {
-        CurType = S.Context.getPointerType(PT->getPointeeType(), true);
+        CurType = S.Context.getPointerType(PT->getPointeeType(), ASTContext::PIK_Capability);
         return;
       }
     }
   }
-  
+
   S.Diag(attr.getLoc(), diag::err_memory_capability_attribute_pointers_only) << CurType;
 }
 

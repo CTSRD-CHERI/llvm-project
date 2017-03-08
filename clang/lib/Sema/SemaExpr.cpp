@@ -6421,8 +6421,9 @@ static QualType checkConditionalPointerCompatibility(Sema &S, ExprResult &LHS,
   }
 
   // The pointer types are compatible.
-  bool MergedIsMemCap = LHSTy->isMemoryCapabilityType(S.Context) ||
-                        RHSTy->isMemoryCapabilityType(S.Context);
+  ASTContext::PointerInterpretationKind PIK = ASTContext::PIK_Default;
+  if (LHSTy->isMemoryCapabilityType(S.Context) || RHSTy->isMemoryCapabilityType(S.Context))
+    PIK = ASTContext::PIK_Capability;
   QualType ResultTy = CompositeTy.withCVRQualifiers(MergedCVRQual);
   auto LHSCastKind = CK_BitCast, RHSCastKind = CK_BitCast;
   if (IsBlockPointer)
@@ -6436,7 +6437,7 @@ static QualType checkConditionalPointerCompatibility(Sema &S, ExprResult &LHS,
     RHSCastKind = rhQual.getAddressSpace() == ResultAddrSpace
                       ? CK_BitCast /* 1a */
                       : CK_AddressSpaceConversion /* 1b */;
-    ResultTy = S.Context.getPointerType(ResultTy, MergedIsMemCap);
+    ResultTy = S.Context.getPointerType(ResultTy, PIK);
   }
 
   // For case 1a of OpenCL, S.ImpCastExprToType will not insert bitcast
@@ -6494,7 +6495,7 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
     QualType destPointee
       = S.Context.getQualifiedType(lhptee, rhptee.getQualifiers());
     QualType destType = S.Context.getPointerType(destPointee, 
-                                      RHSTy->isMemoryCapabilityType(S.Context));
+      RHSTy->isMemoryCapabilityType(S.Context) ? ASTContext::PIK_Capability : ASTContext::PIK_Default);
     // Add qualifiers if necessary.
     LHS = S.ImpCastExprToType(LHS.get(), destType, NopCastKind);
     // Promote to void*.
@@ -6505,7 +6506,7 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
     QualType destPointee
       = S.Context.getQualifiedType(rhptee, lhptee.getQualifiers());
     QualType destType = S.Context.getPointerType(destPointee,
-                                      LHSTy->isMemoryCapabilityType(S.Context));
+      LHSTy->isMemoryCapabilityType(S.Context) ? ASTContext::PIK_Capability : ASTContext::PIK_Default);
     // Add qualifiers if necessary.
     RHS = S.ImpCastExprToType(RHS.get(), destType, CK_NoOp);
     // Promote to void*.
@@ -10883,7 +10884,7 @@ QualType Sema::CheckAddressOfOperand(ExprResult &OrigOp, SourceLocation OpLoc) {
   CheckAddressOfPackedMember(op);
 
   QualType Ty = op->getType();
-  return Context.getPointerType(Ty, Context.getTargetInfo().areAllPointersCapabilities());
+  return Context.getPointerType(Ty);
 }
 
 static void RecordModifiableNonNullParam(Sema &S, const Expr *Exp) {

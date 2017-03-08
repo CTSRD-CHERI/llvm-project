@@ -176,8 +176,10 @@ break; \
   // If we have a pointer-like type, desugar the pointee as well.
   // FIXME: Handle other pointer-like types.
   if (const PointerType *Ty = QT->getAs<PointerType>()) {
+    ASTContext::PointerInterpretationKind PIK = Ty->isMemoryCapability() ?
+        ASTContext::PIK_Capability : ASTContext::PIK_Integer;
     QT = Context.getPointerType(Desugar(Context, Ty->getPointeeType(),
-                                        ShouldAKA), Ty->isMemoryCapability());
+                                        ShouldAKA), PIK);
   } else if (const auto *Ty = QT->getAs<ObjCObjectPointerType>()) {
     QT = Context.getObjCObjectPointerType(Desugar(Context, Ty->getPointeeType(),
                                                   ShouldAKA));

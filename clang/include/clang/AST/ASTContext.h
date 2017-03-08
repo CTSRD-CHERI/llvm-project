@@ -1151,12 +1151,24 @@ public:
     return CanQualType::CreateUnsafe(getComplexType((QualType) T));
   }
 
+  enum PointerInterpretationKind {
+    PIK_Capability,
+    PIK_Integer,
+    PIK_Default,
+    PIK_Invalid
+  };
+
   /// \brief Return the uniqued reference to the type for a pointer to
   /// the specified type.
-  QualType getPointerType(QualType T, bool isMemCap = false) const;
-  CanQualType getPointerType(CanQualType T, bool isMemCap = false) const {
-    return CanQualType::CreateUnsafe(getPointerType((QualType) T, isMemCap));
+  QualType getPointerType(QualType T,
+                          PointerInterpretationKind PIK = PIK_Default) const;
+  CanQualType getPointerType(CanQualType T,
+                             PointerInterpretationKind PIK = PIK_Default) const {
+    return CanQualType::CreateUnsafe(getPointerType((QualType) T, PIK));
   }
+private:
+  bool shouldUseMemcap(PointerInterpretationKind PIK) const;
+public:
 
   /// \brief Return the uniqued reference to a type adjusted from the original
   /// type to a new type.

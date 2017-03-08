@@ -112,12 +112,11 @@ static bool SemaBuiltinMemcapCreate(Sema &S, CallExpr *TheCall) {
   }
   // FIXME: Typecheck args 0 and 1
   ASTContext &C = S.Context;
-  bool allPtrsAreMemCaps = C.getTargetInfo().areAllPointersCapabilities();
   // FIXME: Error on null
   auto BaseFnTy = cast<FunctionProtoType>(FnAttrType->getModifiedType());
   auto ReturnFnTy = C.adjustFunctionType(BaseFnTy,
       BaseFnTy->getExtInfo().withCallingConv(CC_CheriCCallback));
-  auto ReturnTy = C.getPointerType(QualType(ReturnFnTy, 0), allPtrsAreMemCaps);
+  auto ReturnTy = C.getPointerType(QualType(ReturnFnTy, 0), ASTContext::PIK_Default);
 
   TheCall->setType(ReturnTy);
   return false;
@@ -2925,8 +2924,7 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
             AS = PtrTy->getPointeeType().getAddressSpace();
           }
           Ty = Context.getPointerType(
-              Context.getAddrSpaceQualType(ValType.getUnqualifiedType(), AS),
-              Context.getTargetInfo().areAllPointersCapabilities());
+              Context.getAddrSpaceQualType(ValType.getUnqualifiedType(), AS));
         }
         break;
       case 2:
