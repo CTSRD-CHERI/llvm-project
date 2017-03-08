@@ -2348,8 +2348,8 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
             // we can't use the dereferenceable attribute, but in addrspace(0)
             // we know that it must be nonnull.
             if (ArrTy->getSizeModifier() == VariableArrayType::Static &&
-                !CGM.getTargetCodeGenInfo().canMarkAsNonNull(ArrTy->getElementType(),
-                                                             getContext()))
+                CGM.getTargetCodeGenInfo().canMarkAsNonNull(ArrTy->getElementType(),
+                                                            getContext()))
               AI->addAttr(llvm::AttributeSet::get(getLLVMContext(),
                                                   AI->getArgNo() + 1,
                                                   llvm::Attribute::NonNull));
