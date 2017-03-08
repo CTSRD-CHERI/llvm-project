@@ -114,7 +114,7 @@ CodeGenModule::CodeGenModule(ASTContext &C, const HeaderSearchOptions &HSO,
   IntTy = llvm::IntegerType::get(LLVMContext, Target.getIntWidth());
   // XXXAR it seems like the codegen uses this type as an integer which can fit
   // the pointer range and not as an integer with the same width as a pointer
-  IntPtrTy = llvm::IntegerType::get(LLVMContext, Target.getPointerRange(0));
+  IntPtrTy = llvm::IntegerType::get(LLVMContext, Target.getMaxPointerWidth());
   Int8PtrTy = Int8Ty->getPointerTo(getTargetCodeGenInfo().getDefaultAS());
   Int8PtrPtrTy = Int8PtrTy->getPointerTo(getTargetCodeGenInfo().getDefaultAS());
 
