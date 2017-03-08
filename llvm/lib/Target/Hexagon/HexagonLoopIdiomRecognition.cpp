@@ -1080,10 +1080,8 @@ int HexagonLoopIdiomRecognize::getSCEVStride(const SCEVAddRecExpr *S) {
 
 
 bool HexagonLoopIdiomRecognize::isLegalStore(Loop *CurLoop, StoreInst *SI) {
-  bool IsVolatile = false;
-  if (SI->isVolatile() && HexagonVolatileMemcpy)
-    IsVolatile = true;
-  else if (!SI->isSimple())
+  // Allow volatile stores if HexagonVolatileMemcpy is enabled.
+  if (!(SI->isVolatile() && HexagonVolatileMemcpy) && !SI->isSimple())
     return false;
 
   Value *StoredVal = SI->getValueOperand();
@@ -1177,9 +1175,9 @@ void HexagonLoopIdiomRecognize::collectStores(Loop *CurLoop, BasicBlock *BB,
 
 bool HexagonLoopIdiomRecognize::processCopyingStore(Loop *CurLoop,
       StoreInst *SI, const SCEV *BECount) {
-  assert(SI->isSimple() || (SI->isVolatile() && HexagonVolatileMemcpy) &&
-             "Expected only non-volatile stores, or Hexagon-specific memcpy"
-             "to volatile destination.");
+  assert((SI->isSimple() || (SI->isVolatile() && HexagonVolatileMemcpy)) &&
+         "Expected only non-volatile stores, or Hexagon-specific memcpy"
+         "to volatile destination.");
 
   Value *StorePtr = SI->getPointerOperand();
   auto *StoreEv = cast<SCEVAddRecExpr>(SE->getSCEV(StorePtr));

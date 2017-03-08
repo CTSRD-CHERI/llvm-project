@@ -493,6 +493,8 @@ void Parser::Initialize() {
   Ident_strict = nullptr;
   Ident_replacement = nullptr;
 
+  Ident_language = Ident_defined_in = Ident_generated_declaration = nullptr;
+
   Ident__except = nullptr;
 
   Ident__exception_code = Ident__exception_info = nullptr;
@@ -1966,8 +1968,10 @@ bool Parser::ParseMicrosoftIfExistsCondition(IfExistsCondition& Result) {
 
   // Parse the unqualified-id.
   SourceLocation TemplateKWLoc; // FIXME: parsed, but unused.
-  if (ParseUnqualifiedId(Result.SS, false, true, true, nullptr, TemplateKWLoc,
-                         Result.Name)) {
+  if (ParseUnqualifiedId(
+          Result.SS, /*EnteringContext*/false, /*AllowDestructorName*/true,
+          /*AllowConstructorName*/true, /*AllowDeductionGuide*/false, nullptr,
+          TemplateKWLoc, Result.Name)) {
     T.skipToEnd();
     return true;
   }

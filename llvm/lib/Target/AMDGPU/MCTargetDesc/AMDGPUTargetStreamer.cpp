@@ -93,16 +93,24 @@ void AMDGPUTargetAsmStreamer::EmitAMDGPUHsaProgramScopeGlobal(
   OS << "\t.amdgpu_hsa_program_global " << GlobalName << '\n';
 }
 
-void AMDGPUTargetAsmStreamer::EmitRuntimeMetadata(Module &M) {
+void AMDGPUTargetAsmStreamer::EmitRuntimeMetadata(const FeatureBitset &Features,
+                                                  const Module &M) {
   OS << "\t.amdgpu_runtime_metadata\n";
-  OS << getRuntimeMDYAMLString(M);
+  OS << getRuntimeMDYAMLString(Features, M);
   OS << "\n\t.end_amdgpu_runtime_metadata\n";
 }
 
-void AMDGPUTargetAsmStreamer::EmitRuntimeMetadata(StringRef Metadata) {
+bool AMDGPUTargetAsmStreamer::EmitRuntimeMetadata(const FeatureBitset &Features,
+                                                  StringRef Metadata) {
+  auto VerifiedMetadata = getRuntimeMDYAMLString(Features, Metadata);
+  if (!VerifiedMetadata)
+    return true;
+
   OS << "\t.amdgpu_runtime_metadata";
-  OS << Metadata;
+  OS << VerifiedMetadata.get();
   OS << "\t.end_amdgpu_runtime_metadata\n";
+
+  return false;
 }
 
 //===----------------------------------------------------------------------===//
@@ -159,7 +167,7 @@ AMDGPUTargetELFStreamer::EmitDirectiveHSACodeObjectISA(uint32_t Major,
                                                        StringRef ArchName) {
   uint16_t VendorNameSize = VendorName.size() + 1;
   uint16_t ArchNameSize = ArchName.size() + 1;
-  
+
   unsigned DescSZ = sizeof(VendorNameSize) + sizeof(ArchNameSize) +
     sizeof(Major) + sizeof(Minor) + sizeof(Stepping) +
     VendorNameSize + ArchNameSize;
@@ -215,7 +223,12 @@ void AMDGPUTargetELFStreamer::EmitAMDGPUHsaProgramScopeGlobal(
   Symbol->setBinding(ELF::STB_GLOBAL);
 }
 
-void AMDGPUTargetELFStreamer::EmitRuntimeMetadata(StringRef Metadata) {
+bool AMDGPUTargetELFStreamer::EmitRuntimeMetadata(const FeatureBitset &Features,
+                                                  StringRef Metadata) {
+  auto VerifiedMetadata = getRuntimeMDYAMLString(Features, Metadata);
+  if (!VerifiedMetadata)
+    return true;
+
   // Create two labels to mark the beginning and end of the desc field
   // and a MCExpr to calculate the size of the desc field.
   auto &Context = getContext();
@@ -230,12 +243,15 @@ void AMDGPUTargetELFStreamer::EmitRuntimeMetadata(StringRef Metadata) {
     PT_NOTE::NT_AMDGPU_HSA_RUNTIME_METADATA,
     [&](MCELFStreamer &OS) {
       OS.EmitLabel(DescBegin);
-      OS.EmitBytes(Metadata);
+      OS.EmitBytes(VerifiedMetadata.get());
       OS.EmitLabel(DescEnd);
     }
   );
+
+  return false;
 }
 
-void AMDGPUTargetELFStreamer::EmitRuntimeMetadata(Module &M) {
-  EmitRuntimeMetadata(getRuntimeMDYAMLString(M));
+void AMDGPUTargetELFStreamer::EmitRuntimeMetadata(const FeatureBitset &Features,
+                                                  const Module &M) {
+  EmitRuntimeMetadata(Features, getRuntimeMDYAMLString(Features, M));
 }

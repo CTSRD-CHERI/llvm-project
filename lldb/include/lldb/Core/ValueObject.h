@@ -22,18 +22,19 @@
 #include "llvm/ADT/SmallVector.h"
 
 // Project includes
-#include "lldb/Core/ConstString.h"
-#include "lldb/Core/DataExtractor.h"
-#include "lldb/Core/Error.h"
-#include "lldb/Core/Flags.h"
-#include "lldb/Core/UserID.h"
+#include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/Flags.h"
+
 #include "lldb/Core/Value.h"
 #include "lldb/Symbol/CompilerType.h"
 #include "lldb/Target/ExecutionContext.h"
 #include "lldb/Target/ExecutionContextScope.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/StackID.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/Error.h"
 #include "lldb/Utility/SharedCluster.h"
+#include "lldb/Utility/UserID.h"
 #include "lldb/lldb-private.h"
 
 namespace lldb_private {

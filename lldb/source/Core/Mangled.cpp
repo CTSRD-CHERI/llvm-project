@@ -18,8 +18,8 @@
 #ifdef LLDB_USE_BUILTIN_DEMANGLER
 // Provide a fast-path demangler implemented in FastDemangle.cpp until it can
 // replace the existing C++ demangler with a complete implementation
+#include "lldb/Utility/FastDemangle.h"
 #include "llvm/Demangle/Demangle.h"
-#include "lldb/Core/FastDemangle.h"
 #else
 #include <cxxabi.h>
 #endif
@@ -28,18 +28,37 @@
 
 #include "Plugins/Language/CPlusPlus/CPlusPlusLanguage.h"
 #include "Plugins/Language/ObjC/ObjCLanguage.h"
-#include "lldb/Core/ConstString.h"
-#include "lldb/Core/Log.h"
-#include "lldb/Core/Logging.h"
 #include "lldb/Core/Mangled.h"
-#include "lldb/Core/RegularExpression.h"
-#include "lldb/Core/Stream.h"
 #include "lldb/Core/Timer.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/Logging.h"
+#include "lldb/Utility/RegularExpression.h"
+#include "lldb/Utility/Stream.h"
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
 using namespace lldb_private;
+
+#if defined(_MSC_VER)
+static DWORD safeUndecorateName(const char *Mangled, char *Demangled,
+                                DWORD DemangledLength) {
+  static std::mutex M;
+  std::lock_guard<std::mutex> Lock(M);
+  return ::UnDecorateSymbolName(
+      Mangled, Demangled, DemangledLength,
+      UNDNAME_NO_ACCESS_SPECIFIERS |       // Strip public, private, protected
+                                           // keywords
+          UNDNAME_NO_ALLOCATION_LANGUAGE | // Strip __thiscall, __stdcall,
+                                           // etc keywords
+          UNDNAME_NO_THROW_SIGNATURES |    // Strip throw() specifications
+          UNDNAME_NO_MEMBER_TYPE |         // Strip virtual, static, etc
+                                           // specifiers
+          UNDNAME_NO_MS_KEYWORDS           // Strip all MS extension keywords
+      );
+}
+#endif
 
 static inline Mangled::ManglingScheme cstring_mangling_scheme(const char *s) {
   if (s) {
@@ -253,17 +272,8 @@ Mangled::GetDemangledName(lldb::LanguageType language) const {
         const size_t demangled_length = 2048;
         demangled_name = static_cast<char *>(::malloc(demangled_length));
         ::ZeroMemory(demangled_name, demangled_length);
-        DWORD result = ::UnDecorateSymbolName(
-            mangled_name, demangled_name, demangled_length,
-            UNDNAME_NO_ACCESS_SPECIFIERS | // Strip public, private, protected
-                                           // keywords
-                UNDNAME_NO_ALLOCATION_LANGUAGE | // Strip __thiscall, __stdcall,
-                                                 // etc keywords
-                UNDNAME_NO_THROW_SIGNATURES |    // Strip throw() specifications
-                UNDNAME_NO_MEMBER_TYPE |         // Strip virtual, static, etc
-                                                 // specifiers
-                UNDNAME_NO_MS_KEYWORDS // Strip all MS extension keywords
-            );
+        DWORD result =
+            safeUndecorateName(mangled_name, demangled_name, demangled_length);
         if (log) {
           if (demangled_name && demangled_name[0])
             log->Printf("demangled msvc: %s -> \"%s\"", mangled_name,

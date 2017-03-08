@@ -54,7 +54,6 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/LoopInfo.h"
-#include "llvm/Analysis/PostDominators.h"
 #include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
@@ -221,6 +220,9 @@ STATISTIC(NumProfScopsDepthFive,
 STATISTIC(NumProfScopsDepthLarger,
           "Number of scops with maximal loop depth 6 and larger "
           "(profitable scops only)");
+STATISTIC(MaxNumLoopsInScop, "Maximal number of loops in scops");
+STATISTIC(MaxNumLoopsInProfScop,
+          "Maximal number of loops in scops (profitable scops only)");
 
 class DiagnosticScopFound : public DiagnosticInfo {
 private:
@@ -345,9 +347,15 @@ bool ScopDetection::onlyValidRequiredInvariantLoads(
   if (!PollyInvariantLoadHoisting && !RequiredILS.empty())
     return false;
 
-  for (LoadInst *Load : RequiredILS)
+  for (LoadInst *Load : RequiredILS) {
     if (!isHoistableLoad(Load, CurRegion, *LI, *SE, *DT))
       return false;
+
+    for (auto NonAffineRegion : Context.NonAffineSubRegionSet)
+      if (NonAffineRegion->contains(Load) &&
+          Load->getParent() != NonAffineRegion->getEntry())
+        return false;
+  }
 
   Context.RequiredILS.insert(RequiredILS.begin(), RequiredILS.end());
 
@@ -630,35 +638,28 @@ bool ScopDetection::isValidIntrinsicInst(IntrinsicInst &II,
   return false;
 }
 
-bool ScopDetection::isInvariant(const Value &Val, const Region &Reg) const {
+bool ScopDetection::isInvariant(Value &Val, const Region &Reg,
+                                DetectionContext &Ctx) const {
   // A reference to function argument or constant value is invariant.
   if (isa<Argument>(Val) || isa<Constant>(Val))
     return true;
 
-  const Instruction *I = dyn_cast<Instruction>(&Val);
+  Instruction *I = dyn_cast<Instruction>(&Val);
   if (!I)
     return false;
 
   if (!Reg.contains(I))
     return true;
 
-  if (I->mayHaveSideEffects())
-    return false;
+  // Loads within the SCoP may read arbitrary values, need to hoist them. If it
+  // is not hoistable, it will be rejected later, but here we assume it is and
+  // that makes the value invariant.
+  if (auto LI = dyn_cast<LoadInst>(I)) {
+    Ctx.RequiredILS.insert(LI);
+    return true;
+  }
 
-  if (isa<SelectInst>(I))
-    return false;
-
-  // When Val is a Phi node, it is likely not invariant. We do not check whether
-  // Phi nodes are actually invariant, we assume that Phi nodes are usually not
-  // invariant.
-  if (isa<PHINode>(*I))
-    return false;
-
-  for (const Use &Operand : I->operands())
-    if (!isInvariant(*Operand, Reg))
-      return false;
-
-  return true;
+  return false;
 }
 
 /// Remove smax of smax(0, size) expressions from a SCEV expression and
@@ -903,7 +904,7 @@ bool ScopDetection::isValidAccess(Instruction *Inst, const SCEV *AF,
 
   // Check that the base address of the access is invariant in the current
   // region.
-  if (!isInvariant(*BV, Context.CurRegion))
+  if (!isInvariant(*BV, Context.CurRegion, Context))
     return invalid<ReportVariantBasePtr>(Context, /*Assert=*/true, BV, Inst);
 
   AF = SE->getMinusSCEV(AF, BP);
@@ -1129,7 +1130,7 @@ bool ScopDetection::isValidLoop(Loop *L, DetectionContext &Context) const {
 ///        count that is not known to be less than @MinProfitableTrips.
 ScopDetection::LoopStats
 ScopDetection::countBeneficialSubLoops(Loop *L, ScalarEvolution &SE,
-                                       unsigned MinProfitableTrips) const {
+                                       unsigned MinProfitableTrips) {
   auto *TripCount = SE.getBackedgeTakenCount(L);
 
   int NumLoops = 1;
@@ -1142,29 +1143,29 @@ ScopDetection::countBeneficialSubLoops(Loop *L, ScalarEvolution &SE,
   for (auto &SubLoop : *L) {
     LoopStats Stats = countBeneficialSubLoops(SubLoop, SE, MinProfitableTrips);
     NumLoops += Stats.NumLoops;
-    MaxLoopDepth += std::max(MaxLoopDepth, Stats.MaxDepth + 1);
+    MaxLoopDepth = std::max(MaxLoopDepth, Stats.MaxDepth + 1);
   }
 
   return {NumLoops, MaxLoopDepth};
 }
 
 ScopDetection::LoopStats
-ScopDetection::countBeneficialLoops(Region *R,
-                                    unsigned MinProfitableTrips) const {
+ScopDetection::countBeneficialLoops(Region *R, ScalarEvolution &SE,
+                                    LoopInfo &LI, unsigned MinProfitableTrips) {
   int LoopNum = 0;
   int MaxLoopDepth = 0;
 
-  auto L = LI->getLoopFor(R->getEntry());
+  auto L = LI.getLoopFor(R->getEntry());
   L = L ? R->outermostLoopInRegion(L) : nullptr;
   L = L ? L->getParentLoop() : nullptr;
 
   auto SubLoops =
-      L ? L->getSubLoopsVector() : std::vector<Loop *>(LI->begin(), LI->end());
+      L ? L->getSubLoopsVector() : std::vector<Loop *>(LI.begin(), LI.end());
 
   for (auto &SubLoop : SubLoops)
     if (R->contains(SubLoop)) {
       LoopStats Stats =
-          countBeneficialSubLoops(SubLoop, *SE, MinProfitableTrips);
+          countBeneficialSubLoops(SubLoop, SE, MinProfitableTrips);
       LoopNum += Stats.NumLoops;
       MaxLoopDepth = std::max(MaxLoopDepth, Stats.MaxDepth);
     }
@@ -1385,7 +1386,8 @@ bool ScopDetection::isProfitableRegion(DetectionContext &Context) const {
   if (!Context.hasStores || !Context.hasLoads)
     return invalid<ReportUnprofitable>(Context, /*Assert=*/true, &CurRegion);
 
-  int NumLoops = countBeneficialLoops(&CurRegion, MIN_LOOP_TRIP_COUNT).NumLoops;
+  int NumLoops =
+      countBeneficialLoops(&CurRegion, *SE, *LI, MIN_LOOP_TRIP_COUNT).NumLoops;
   int NumAffineLoops = NumLoops - Context.BoxedLoopsSet.size();
 
   // Scops with at least two loops may allow either loop fusion or tiling and
@@ -1419,6 +1421,13 @@ bool ScopDetection::isValidRegion(DetectionContext &Context) const {
     return false;
   }
 
+  DebugLoc DbgLoc;
+  if (isa<UnreachableInst>(CurRegion.getExit()->getTerminator())) {
+    DEBUG(dbgs() << "Unreachable in exit\n");
+    return invalid<ReportUnreachableInExit>(Context, /*Assert=*/true,
+                                            CurRegion.getExit(), DbgLoc);
+  }
+
   if (!CurRegion.getEntry()->getName().count(OnlyRegion)) {
     DEBUG({
       dbgs() << "Region entry does not match -polly-region-only";
@@ -1436,7 +1445,6 @@ bool ScopDetection::isValidRegion(DetectionContext &Context) const {
   if (!allBlocksValid(Context))
     return false;
 
-  DebugLoc DbgLoc;
   if (!isReducibleRegion(CurRegion, DbgLoc))
     return invalid<ReportIrreducibleRegion>(Context, /*Assert=*/true,
                                             &CurRegion, DbgLoc);
@@ -1550,6 +1558,8 @@ void updateLoopCountStatistic(ScopDetection::LoopStats Stats,
                               bool OnlyProfitable) {
   if (!OnlyProfitable) {
     NumLoopsInScop += Stats.NumLoops;
+    MaxNumLoopsInScop =
+        std::max(MaxNumLoopsInScop.getValue(), (unsigned)Stats.NumLoops);
     if (Stats.MaxDepth == 1)
       NumScopsDepthOne++;
     else if (Stats.MaxDepth == 2)
@@ -1564,6 +1574,8 @@ void updateLoopCountStatistic(ScopDetection::LoopStats Stats,
       NumScopsDepthLarger++;
   } else {
     NumLoopsInProfScop += Stats.NumLoops;
+    MaxNumLoopsInProfScop =
+        std::max(MaxNumLoopsInProfScop.getValue(), (unsigned)Stats.NumLoops);
     if (Stats.MaxDepth == 1)
       NumProfScopsDepthOne++;
     else if (Stats.MaxDepth == 2)
@@ -1609,7 +1621,7 @@ bool ScopDetection::runOnFunction(llvm::Function &F) {
       continue;
     if (!ValidRegions.count(&DC.CurRegion))
       continue;
-    LoopStats Stats = countBeneficialLoops(&DC.CurRegion, 0);
+    LoopStats Stats = countBeneficialLoops(&DC.CurRegion, *SE, *LI, 0);
     updateLoopCountStatistic(Stats, false /* OnlyProfitable */);
     if (isProfitableRegion(DC)) {
       updateLoopCountStatistic(Stats, true /* OnlyProfitable */);
@@ -1620,7 +1632,7 @@ bool ScopDetection::runOnFunction(llvm::Function &F) {
   }
 
   NumProfScopRegions += ValidRegions.size();
-  NumLoopsOverall += countBeneficialLoops(TopRegion, 0).NumLoops;
+  NumLoopsOverall += countBeneficialLoops(TopRegion, *SE, *LI, 0).NumLoops;
 
   // Only makes sense when we tracked errors.
   if (PollyTrackFailures)

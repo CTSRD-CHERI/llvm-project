@@ -269,8 +269,8 @@ static bool instructionClobbersQuery(MemoryDef *MD, const MemoryUseOrDef *MU,
 }
 
 // Return true when MD may alias MU, return false otherwise.
-bool defClobbersUseOrDef(MemoryDef *MD, const MemoryUseOrDef *MU,
-                         AliasAnalysis &AA) {
+bool MemorySSAUtil::defClobbersUseOrDef(MemoryDef *MD, const MemoryUseOrDef *MU,
+                                        AliasAnalysis &AA) {
   return instructionClobbersQuery(MD, MU, MemoryLocOrCall(MU), AA);
 }
 }
@@ -1116,27 +1116,8 @@ public:
   }
 };
 
-/// \brief Rename a single basic block into MemorySSA form.
-/// Uses the standard SSA renaming algorithm.
-/// \returns The new incoming value.
-MemoryAccess *MemorySSA::renameBlock(BasicBlock *BB,
-                                     MemoryAccess *IncomingVal) {
-  auto It = PerBlockAccesses.find(BB);
-  // Skip most processing if the list is empty.
-  if (It != PerBlockAccesses.end()) {
-    AccessList *Accesses = It->second.get();
-    for (MemoryAccess &L : *Accesses) {
-      if (MemoryUseOrDef *MUD = dyn_cast<MemoryUseOrDef>(&L)) {
-        if (MUD->getDefiningAccess() == nullptr)
-          MUD->setDefiningAccess(IncomingVal);
-        if (isa<MemoryDef>(&L))
-          IncomingVal = &L;
-      } else {
-        IncomingVal = &L;
-      }
-    }
-  }
-
+void MemorySSA::renameSuccessorPhis(BasicBlock *BB, MemoryAccess *IncomingVal,
+                                    bool RenameAllUses) {
   // Pass through values to our successors
   for (const BasicBlock *S : successors(BB)) {
     auto It = PerBlockAccesses.find(S);
@@ -1145,9 +1126,35 @@ MemoryAccess *MemorySSA::renameBlock(BasicBlock *BB,
       continue;
     AccessList *Accesses = It->second.get();
     auto *Phi = cast<MemoryPhi>(&Accesses->front());
-    Phi->addIncoming(IncomingVal, BB);
+    if (RenameAllUses) {
+      int PhiIndex = Phi->getBasicBlockIndex(BB);
+      assert(PhiIndex != -1 && "Incomplete phi during partial rename");
+      Phi->setIncomingValue(PhiIndex, IncomingVal);
+    } else
+      Phi->addIncoming(IncomingVal, BB);
   }
+}
 
+/// \brief Rename a single basic block into MemorySSA form.
+/// Uses the standard SSA renaming algorithm.
+/// \returns The new incoming value.
+MemoryAccess *MemorySSA::renameBlock(BasicBlock *BB, MemoryAccess *IncomingVal,
+                                     bool RenameAllUses) {
+  auto It = PerBlockAccesses.find(BB);
+  // Skip most processing if the list is empty.
+  if (It != PerBlockAccesses.end()) {
+    AccessList *Accesses = It->second.get();
+    for (MemoryAccess &L : *Accesses) {
+      if (MemoryUseOrDef *MUD = dyn_cast<MemoryUseOrDef>(&L)) {
+        if (MUD->getDefiningAccess() == nullptr || RenameAllUses)
+          MUD->setDefiningAccess(IncomingVal);
+        if (isa<MemoryDef>(&L))
+          IncomingVal = &L;
+      } else {
+        IncomingVal = &L;
+      }
+    }
+  }
   return IncomingVal;
 }
 
@@ -1156,11 +1163,19 @@ MemoryAccess *MemorySSA::renameBlock(BasicBlock *BB,
 /// We walk the dominator tree in preorder, renaming accesses, and then filling
 /// in phi nodes in our successors.
 void MemorySSA::renamePass(DomTreeNode *Root, MemoryAccess *IncomingVal,
-                           SmallPtrSet<BasicBlock *, 16> &Visited) {
+                           SmallPtrSetImpl<BasicBlock *> &Visited,
+                           bool SkipVisited, bool RenameAllUses) {
   SmallVector<RenamePassData, 32> WorkStack;
-  IncomingVal = renameBlock(Root->getBlock(), IncomingVal);
+  // Skip everything if we already renamed this block and we are skipping.
+  // Note: You can't sink this into the if, because we need it to occur
+  // regardless of whether we skip blocks or not.
+  bool AlreadyVisited = !Visited.insert(Root->getBlock()).second;
+  if (SkipVisited && AlreadyVisited)
+    return;
+
+  IncomingVal = renameBlock(Root->getBlock(), IncomingVal, RenameAllUses);
+  renameSuccessorPhis(Root->getBlock(), IncomingVal, RenameAllUses);
   WorkStack.push_back({Root, Root->begin(), IncomingVal});
-  Visited.insert(Root->getBlock());
 
   while (!WorkStack.empty()) {
     DomTreeNode *Node = WorkStack.back().DTN;
@@ -1173,8 +1188,20 @@ void MemorySSA::renamePass(DomTreeNode *Root, MemoryAccess *IncomingVal,
       DomTreeNode *Child = *ChildIt;
       ++WorkStack.back().ChildIt;
       BasicBlock *BB = Child->getBlock();
-      Visited.insert(BB);
-      IncomingVal = renameBlock(BB, IncomingVal);
+      // Note: You can't sink this into the if, because we need it to occur
+      // regardless of whether we skip blocks or not.
+      AlreadyVisited = !Visited.insert(BB).second;
+      if (SkipVisited && AlreadyVisited) {
+        // We already visited this during our renaming, which can happen when
+        // being asked to rename multiple blocks. Figure out the incoming val,
+        // which is the last def.
+        // Incoming value can only change if there is a block def, and in that
+        // case, it's the last block def in the list.
+        if (auto *BlockDefs = getWritableBlockDefs(BB))
+          IncomingVal = &*BlockDefs->rbegin();
+      } else
+        IncomingVal = renameBlock(BB, IncomingVal, RenameAllUses);
+      renameSuccessorPhis(BB, IncomingVal, RenameAllUses);
       WorkStack.push_back({Child, Child->begin(), IncomingVal});
     }
   }
@@ -1322,7 +1349,10 @@ void MemorySSA::OptimizeUses::optimizeUsesInBlock(
 
   // Pop everything that doesn't dominate the current block off the stack,
   // increment the PopEpoch to account for this.
-  while (!VersionStack.empty()) {
+  while (true) {
+    assert(
+        !VersionStack.empty() &&
+        "Version stack should have liveOnEntry sentinel dominating everything");
     BasicBlock *BackBlock = VersionStack.back()->getBlock();
     if (DT->dominates(BackBlock, BB))
       break;
@@ -1330,6 +1360,7 @@ void MemorySSA::OptimizeUses::optimizeUsesInBlock(
       VersionStack.pop_back();
     ++PopEpoch;
   }
+
   for (MemoryAccess &MA : *Accesses) {
     auto *MU = dyn_cast<MemoryUse>(&MA);
     if (!MU) {
@@ -1450,20 +1481,13 @@ void MemorySSA::OptimizeUses::optimizeUsesInBlock(
 
 /// Optimize uses to point to their actual clobbering definitions.
 void MemorySSA::OptimizeUses::optimizeUses() {
-
-  // We perform a non-recursive top-down dominator tree walk
-  struct StackInfo {
-    const DomTreeNode *Node;
-    DomTreeNode::const_iterator Iter;
-  };
-
   SmallVector<MemoryAccess *, 16> VersionStack;
-  SmallVector<StackInfo, 16> DomTreeWorklist;
   DenseMap<MemoryLocOrCall, MemlocStackInfo> LocStackInfo;
   VersionStack.push_back(MSSA->getLiveOnEntryDef());
 
   unsigned long StackEpoch = 1;
   unsigned long PopEpoch = 1;
+  // We perform a non-recursive top-down dominator tree walk.
   for (const auto *DomNode : depth_first(DT->getRootNode()))
     optimizeUsesInBlock(DomNode->getBlock(), StackEpoch, PopEpoch, VersionStack,
                         LocStackInfo);
@@ -1597,6 +1621,7 @@ void MemorySSA::insertIntoListsForBlock(MemoryAccess *NewAccess,
       Defs->push_back(*NewAccess);
     }
   }
+  BlockNumberingValid.erase(BB);
 }
 
 void MemorySSA::insertIntoListsBefore(MemoryAccess *What, const BasicBlock *BB,
@@ -1624,15 +1649,34 @@ void MemorySSA::insertIntoListsBefore(MemoryAccess *What, const BasicBlock *BB,
         Defs->insert(InsertPt->getDefsIterator(), *What);
     }
   }
+  BlockNumberingValid.erase(BB);
+}
+
+// Move What before Where in the IR.  The end result is taht What will belong to
+// the right lists and have the right Block set, but will not otherwise be
+// correct. It will not have the right defining access, and if it is a def,
+// things below it will not properly be updated.
+void MemorySSA::moveTo(MemoryUseOrDef *What, BasicBlock *BB,
+                       AccessList::iterator Where) {
+  // Keep it in the lookup tables, remove from the lists
+  removeFromLists(What, false);
+  What->setBlock(BB);
+  insertIntoListsBefore(What, BB, Where);
+}
+
+void MemorySSA::moveTo(MemoryUseOrDef *What, BasicBlock *BB,
+                       InsertionPlace Point) {
+  removeFromLists(What, false);
+  What->setBlock(BB);
+  insertIntoListsForBlock(What, BB, Point);
 }
 
 MemoryPhi *MemorySSA::createMemoryPhi(BasicBlock *BB) {
   assert(!getMemoryAccess(BB) && "MemoryPhi already exists for this BB");
   MemoryPhi *Phi = new MemoryPhi(BB->getContext(), BB, NextID++);
+  // Phi's always are placed at the front of the block.
   insertIntoListsForBlock(Phi, BB, Beginning);
   ValueToMemoryAccess[BB] = Phi;
-  // Phi's always are placed at the front of the block.
-  BlockNumberingValid.erase(BB);
   return Phi;
 }
 
@@ -1645,63 +1689,6 @@ MemoryUseOrDef *MemorySSA::createDefinedAccess(Instruction *I,
       "Tried to create a memory access for a non-memory touching instruction");
   NewAccess->setDefiningAccess(Definition);
   return NewAccess;
-}
-
-MemoryAccess *MemorySSA::createMemoryAccessInBB(Instruction *I,
-                                                MemoryAccess *Definition,
-                                                const BasicBlock *BB,
-                                                InsertionPlace Point) {
-  MemoryUseOrDef *NewAccess = createDefinedAccess(I, Definition);
-  insertIntoListsForBlock(NewAccess, BB, Point);
-  BlockNumberingValid.erase(BB);
-  return NewAccess;
-}
-
-MemoryUseOrDef *MemorySSA::createMemoryAccessBefore(Instruction *I,
-                                                    MemoryAccess *Definition,
-                                                    MemoryUseOrDef *InsertPt) {
-  assert(I->getParent() == InsertPt->getBlock() &&
-         "New and old access must be in the same block");
-  MemoryUseOrDef *NewAccess = createDefinedAccess(I, Definition);
-  BlockNumberingValid.erase(InsertPt->getBlock());
-  insertIntoListsBefore(NewAccess, InsertPt->getBlock(),
-                        InsertPt->getIterator());
-  return NewAccess;
-}
-
-MemoryUseOrDef *MemorySSA::createMemoryAccessAfter(Instruction *I,
-                                                   MemoryAccess *Definition,
-                                                   MemoryAccess *InsertPt) {
-  assert(I->getParent() == InsertPt->getBlock() &&
-         "New and old access must be in the same block");
-  MemoryUseOrDef *NewAccess = createDefinedAccess(I, Definition);
-  BlockNumberingValid.erase(InsertPt->getBlock());
-  insertIntoListsBefore(NewAccess, InsertPt->getBlock(),
-                        ++(InsertPt->getIterator()));
-  return NewAccess;
-}
-
-void MemorySSA::spliceMemoryAccessAbove(MemoryDef *Where,
-                                        MemoryUseOrDef *What) {
-  assert(What != getLiveOnEntryDef() && Where != getLiveOnEntryDef() &&
-         "Can't splice (above) LOE.");
-  assert(dominates(Where, What) && "Only upwards splices are permitted.");
-
-  if (Where == What)
-    return;
-  if (isa<MemoryDef>(What)) {
-    // TODO: possibly use removeMemoryAccess' more efficient RAUW
-    What->replaceAllUsesWith(What->getDefiningAccess());
-    What->setDefiningAccess(Where->getDefiningAccess());
-    Where->setDefiningAccess(What);
-  }
-  AccessList *Src = getWritableBlockAccesses(What->getBlock());
-  AccessList *Dest = getWritableBlockAccesses(Where->getBlock());
-  Dest->splice(AccessList::iterator(Where), *Src, What);
-
-  BlockNumberingValid.erase(What->getBlock());
-  if (What->getBlock() != Where->getBlock())
-    BlockNumberingValid.erase(Where->getBlock());
 }
 
 /// \brief Helper function to create new memory accesses
@@ -1736,33 +1723,6 @@ MemoryUseOrDef *MemorySSA::createNewAccess(Instruction *I) {
   return MUD;
 }
 
-MemoryAccess *MemorySSA::findDominatingDef(BasicBlock *UseBlock,
-                                           enum InsertionPlace Where) {
-  // Handle the initial case
-  if (Where == Beginning)
-    // The only thing that could define us at the beginning is a phi node
-    if (MemoryPhi *Phi = getMemoryAccess(UseBlock))
-      return Phi;
-
-  DomTreeNode *CurrNode = DT->getNode(UseBlock);
-  // Need to be defined by our dominator
-  if (Where == Beginning)
-    CurrNode = CurrNode->getIDom();
-  Where = End;
-  while (CurrNode) {
-    auto It = PerBlockAccesses.find(CurrNode->getBlock());
-    if (It != PerBlockAccesses.end()) {
-      auto &Accesses = It->second;
-      for (MemoryAccess &RA : reverse(*Accesses)) {
-        if (isa<MemoryDef>(RA) || isa<MemoryPhi>(RA))
-          return &RA;
-      }
-    }
-    CurrNode = CurrNode->getIDom();
-  }
-  return LiveOnEntryDef.get();
-}
-
 /// \brief Returns true if \p Replacer dominates \p Replacee .
 bool MemorySSA::dominatesUse(const MemoryAccess *Replacer,
                              const MemoryAccess *Replacee) const {
@@ -1780,24 +1740,7 @@ bool MemorySSA::dominatesUse(const MemoryAccess *Replacer,
   return true;
 }
 
-/// \brief If all arguments of a MemoryPHI are defined by the same incoming
-/// argument, return that argument.
-static MemoryAccess *onlySingleValue(MemoryPhi *MP) {
-  MemoryAccess *MA = nullptr;
-
-  for (auto &Arg : MP->operands()) {
-    if (!MA)
-      MA = cast<MemoryAccess>(Arg);
-    else if (MA != Arg)
-      return nullptr;
-  }
-  return MA;
-}
-
 /// \brief Properly remove \p MA from all of MemorySSA's lookup tables.
-///
-/// Because of the way the intrusive list and use lists work, it is important to
-/// do removal in the right order.
 void MemorySSA::removeFromLookups(MemoryAccess *MA) {
   assert(MA->use_empty() &&
          "Trying to remove memory access that still has uses");
@@ -1818,7 +1761,15 @@ void MemorySSA::removeFromLookups(MemoryAccess *MA) {
   auto VMA = ValueToMemoryAccess.find(MemoryInst);
   if (VMA->second == MA)
     ValueToMemoryAccess.erase(VMA);
+}
 
+/// \brief Properly remove \p MA from all of MemorySSA's lists.
+///
+/// Because of the way the intrusive list and use lists work, it is important to
+/// do removal in the right order.
+/// ShouldDelete defaults to true, and will cause the memory access to also be
+/// deleted, not just removed.
+void MemorySSA::removeFromLists(MemoryAccess *MA, bool ShouldDelete) {
   // The access list owns the reference, so we erase it from the non-owning list
   // first.
   if (!isa<MemoryUse>(MA)) {
@@ -1829,57 +1780,17 @@ void MemorySSA::removeFromLookups(MemoryAccess *MA) {
       PerBlockDefs.erase(DefsIt);
   }
 
+  // The erase call here will delete it. If we don't want it deleted, we call
+  // remove instead.
   auto AccessIt = PerBlockAccesses.find(MA->getBlock());
   std::unique_ptr<AccessList> &Accesses = AccessIt->second;
-  Accesses->erase(MA);
+  if (ShouldDelete)
+    Accesses->erase(MA);
+  else
+    Accesses->remove(MA);
+
   if (Accesses->empty())
     PerBlockAccesses.erase(AccessIt);
-}
-
-void MemorySSA::removeMemoryAccess(MemoryAccess *MA) {
-  assert(!isLiveOnEntryDef(MA) && "Trying to remove the live on entry def");
-  // We can only delete phi nodes if they have no uses, or we can replace all
-  // uses with a single definition.
-  MemoryAccess *NewDefTarget = nullptr;
-  if (MemoryPhi *MP = dyn_cast<MemoryPhi>(MA)) {
-    // Note that it is sufficient to know that all edges of the phi node have
-    // the same argument.  If they do, by the definition of dominance frontiers
-    // (which we used to place this phi), that argument must dominate this phi,
-    // and thus, must dominate the phi's uses, and so we will not hit the assert
-    // below.
-    NewDefTarget = onlySingleValue(MP);
-    assert((NewDefTarget || MP->use_empty()) &&
-           "We can't delete this memory phi");
-  } else {
-    NewDefTarget = cast<MemoryUseOrDef>(MA)->getDefiningAccess();
-  }
-
-  // Re-point the uses at our defining access
-  if (!MA->use_empty()) {
-    // Reset optimized on users of this store, and reset the uses.
-    // A few notes:
-    // 1. This is a slightly modified version of RAUW to avoid walking the
-    // uses twice here.
-    // 2. If we wanted to be complete, we would have to reset the optimized
-    // flags on users of phi nodes if doing the below makes a phi node have all
-    // the same arguments. Instead, we prefer users to removeMemoryAccess those
-    // phi nodes, because doing it here would be N^3.
-    if (MA->hasValueHandle())
-      ValueHandleBase::ValueIsRAUWd(MA, NewDefTarget);
-    // Note: We assume MemorySSA is not used in metadata since it's not really
-    // part of the IR.
-
-    while (!MA->use_empty()) {
-      Use &U = *MA->use_begin();
-      if (MemoryUse *MU = dyn_cast<MemoryUse>(U.getUser()))
-        MU->resetOptimized();
-      U.set(NewDefTarget);
-    }
-  }
-
-  // The call below to erase will destroy MA, so we can't change the order we
-  // are doing things here
-  removeFromLookups(MA);
 }
 
 void MemorySSA::print(raw_ostream &OS) const {
@@ -1887,10 +1798,9 @@ void MemorySSA::print(raw_ostream &OS) const {
   F.print(OS, &Writer);
 }
 
-void MemorySSA::dump() const {
-  MemorySSAAnnotatedWriter Writer(this);
-  F.print(dbgs(), &Writer);
-}
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+LLVM_DUMP_METHOD void MemorySSA::dump() const { print(dbgs()); }
+#endif
 
 void MemorySSA::verifyMemorySSA() const {
   verifyDefUses(F);
@@ -1936,9 +1846,8 @@ void MemorySSA::verifyOrdering(Function &F) const {
     assert(AL->size() == ActualAccesses.size() &&
            "We don't have the same number of accesses in the block as on the "
            "access list");
-    assert(DL ||
-           ActualDefs.size() == 0 &&
-               "Either we should have a defs list, or we should have no defs");
+    assert((DL || ActualDefs.size() == 0) &&
+           "Either we should have a defs list, or we should have no defs");
     assert((!DL || DL->size() == ActualDefs.size()) &&
            "We don't have the same number of defs in the block as on the "
            "def list");
@@ -2160,8 +2069,11 @@ void MemoryUse::print(raw_ostream &OS) const {
 }
 
 void MemoryAccess::dump() const {
+// Cannot completely remove virtual function even in release mode.
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
   print(dbgs());
   dbgs() << "\n";
+#endif
 }
 
 char MemorySSAPrinterLegacyPass::ID = 0;

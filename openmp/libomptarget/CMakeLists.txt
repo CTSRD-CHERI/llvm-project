@@ -51,6 +51,7 @@ include(LibomptargetUtils)
 include(LibomptargetGetDependencies)
 
 # This is a list of all the targets that are supported/tested right now.
+set (LIBOMPTARGET_ALL_TARGETS "${LIBOMPTARGET_ALL_TARGETS} aarch64-unknown-linux-gnu")
 set (LIBOMPTARGET_ALL_TARGETS "${LIBOMPTARGET_ALL_TARGETS} powerpc64le-ibm-linux-gnu")
 set (LIBOMPTARGET_ALL_TARGETS "${LIBOMPTARGET_ALL_TARGETS} powerpc64-ibm-linux-gnu")
 set (LIBOMPTARGET_ALL_TARGETS "${LIBOMPTARGET_ALL_TARGETS} x86_64-pc-linux-gnu")
@@ -107,6 +108,9 @@ if(LIBOMPTARGET_HAVE_STD_CPP11_FLAG)
     set(LIBOMPTARGET_LIBRARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
   endif()
 
+  # Build offloading plugins and device RTLs if they are available.
+  add_subdirectory(plugins)
+  
   # Add tests.
   add_subdirectory(test)
   

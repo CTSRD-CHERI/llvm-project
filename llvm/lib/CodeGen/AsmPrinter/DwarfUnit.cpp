@@ -98,25 +98,35 @@ int64_t DwarfUnit::getDefaultLowerBound() const {
   default:
     break;
 
-  case dwarf::DW_LANG_C89:
-  case dwarf::DW_LANG_C99:
+  // The languages below have valid values in all DWARF versions.
   case dwarf::DW_LANG_C:
+  case dwarf::DW_LANG_C89:
   case dwarf::DW_LANG_C_plus_plus:
-  case dwarf::DW_LANG_ObjC:
-  case dwarf::DW_LANG_ObjC_plus_plus:
     return 0;
 
   case dwarf::DW_LANG_Fortran77:
   case dwarf::DW_LANG_Fortran90:
-  case dwarf::DW_LANG_Fortran95:
     return 1;
 
-  // The languages below have valid values only if the DWARF version >= 4.
+  // The languages below have valid values only if the DWARF version >= 3.
+  case dwarf::DW_LANG_C99:
+  case dwarf::DW_LANG_ObjC:
+  case dwarf::DW_LANG_ObjC_plus_plus:
+    if (DD->getDwarfVersion() >= 3)
+      return 0;
+    break;
+
+  case dwarf::DW_LANG_Fortran95:
+    if (DD->getDwarfVersion() >= 3)
+      return 1;
+    break;
+
+  // Starting with DWARF v4, all defined languages have valid values.
+  case dwarf::DW_LANG_D:
   case dwarf::DW_LANG_Java:
   case dwarf::DW_LANG_Python:
   case dwarf::DW_LANG_UPC:
-  case dwarf::DW_LANG_D:
-    if (dwarf::DWARF_VERSION >= 4)
+    if (DD->getDwarfVersion() >= 4)
       return 0;
     break;
 
@@ -127,31 +137,33 @@ int64_t DwarfUnit::getDefaultLowerBound() const {
   case dwarf::DW_LANG_Modula2:
   case dwarf::DW_LANG_Pascal83:
   case dwarf::DW_LANG_PLI:
-    if (dwarf::DWARF_VERSION >= 4)
+    if (DD->getDwarfVersion() >= 4)
       return 1;
     break;
 
-  // The languages below have valid values only if the DWARF version >= 5.
-  case dwarf::DW_LANG_OpenCL:
-  case dwarf::DW_LANG_Go:
-  case dwarf::DW_LANG_Haskell:
+  // The languages below are new in DWARF v5.
+  case dwarf::DW_LANG_BLISS:
+  case dwarf::DW_LANG_C11:
   case dwarf::DW_LANG_C_plus_plus_03:
   case dwarf::DW_LANG_C_plus_plus_11:
-  case dwarf::DW_LANG_OCaml:
-  case dwarf::DW_LANG_Rust:
-  case dwarf::DW_LANG_C11:
-  case dwarf::DW_LANG_Swift:
-  case dwarf::DW_LANG_Dylan:
   case dwarf::DW_LANG_C_plus_plus_14:
-    if (dwarf::DWARF_VERSION >= 5)
+  case dwarf::DW_LANG_Dylan:
+  case dwarf::DW_LANG_Go:
+  case dwarf::DW_LANG_Haskell:
+  case dwarf::DW_LANG_OCaml:
+  case dwarf::DW_LANG_OpenCL:
+  case dwarf::DW_LANG_RenderScript:
+  case dwarf::DW_LANG_Rust:
+  case dwarf::DW_LANG_Swift:
+    if (DD->getDwarfVersion() >= 5)
       return 0;
     break;
 
-  case dwarf::DW_LANG_Modula3:
-  case dwarf::DW_LANG_Julia:
   case dwarf::DW_LANG_Fortran03:
   case dwarf::DW_LANG_Fortran08:
-    if (dwarf::DWARF_VERSION >= 5)
+  case dwarf::DW_LANG_Julia:
+  case dwarf::DW_LANG_Modula3:
+    if (DD->getDwarfVersion() >= 5)
       return 1;
     break;
   }
@@ -672,7 +684,7 @@ DIE *DwarfUnit::getOrCreateContextDIE(const DIScope *Context) {
   return getDIE(Context);
 }
 
-DIE *DwarfUnit::createTypeDIE(const DICompositeType *Ty) {
+DIE *DwarfTypeUnit::createTypeDIE(const DICompositeType *Ty) {
   auto *Context = resolve(Ty->getScope());
   DIE *ContextDIE = getOrCreateContextDIE(Context);
 
@@ -1184,7 +1196,7 @@ void DwarfUnit::applySubprogramAttributes(const DISubprogram *SP, DIE &SPDie,
   // If -fdebug-info-for-profiling is enabled, need to emit the subprogram
   // and its source location.
   bool SkipSPSourceLocation = SkipSPAttributes &&
-                              !Asm->TM.Options.DebugInfoForProfiling;
+                              !CUNode->getDebugInfoForProfiling();
   if (!SkipSPSourceLocation)
     if (applySubprogramDefinitionAttributes(SP, SPDie))
       return;
@@ -1531,18 +1543,27 @@ DIE *DwarfUnit::getOrCreateStaticMemberDIE(const DIDerivedType *DT) {
   return &StaticMemberDIE;
 }
 
-void DwarfUnit::emitHeader(bool UseOffsets) {
+void DwarfUnit::emitCommonHeader(bool UseOffsets, dwarf::UnitType UT) {
   // Emit size of content not including length itself
   Asm->OutStreamer->AddComment("Length of Unit");
   Asm->EmitInt32(getHeaderSize() + getUnitDie().getSize());
 
   Asm->OutStreamer->AddComment("DWARF version number");
-  Asm->EmitInt16(DD->getDwarfVersion());
-  Asm->OutStreamer->AddComment("Offset Into Abbrev. Section");
+  unsigned Version = DD->getDwarfVersion();
+  Asm->EmitInt16(Version);
+
+  // DWARF v5 reorders the address size and adds a unit type.
+  if (Version >= 5) {
+    Asm->OutStreamer->AddComment("DWARF Unit Type");
+    Asm->EmitInt8(UT);
+    Asm->OutStreamer->AddComment("Address Size (in bytes)");
+    Asm->EmitInt8(Asm->getDataLayout().getPointerSize());
+  }
 
   // We share one abbreviations table across all units so it's always at the
   // start of the section. Use a relocatable offset where needed to ensure
   // linking doesn't invalidate that offset.
+  Asm->OutStreamer->AddComment("Offset Into Abbrev. Section");
   const TargetLoweringObjectFile &TLOF = Asm->getObjFileLowering();
   if (UseOffsets)
     Asm->EmitInt32(0);
@@ -1550,12 +1571,16 @@ void DwarfUnit::emitHeader(bool UseOffsets) {
     Asm->emitDwarfSymbolReference(
         TLOF.getDwarfAbbrevSection()->getBeginSymbol(), false);
 
-  Asm->OutStreamer->AddComment("Address Size (in bytes)");
-  Asm->EmitInt8(Asm->getDataLayout().getPointerSize());
+  if (Version <= 4) {
+    Asm->OutStreamer->AddComment("Address Size (in bytes)");
+    Asm->EmitInt8(Asm->getDataLayout().getPointerSize());
+  }
 }
 
 void DwarfTypeUnit::emitHeader(bool UseOffsets) {
-  DwarfUnit::emitHeader(UseOffsets);
+  DwarfUnit::emitCommonHeader(UseOffsets, 
+                              DD->useSplitDwarf() ? dwarf::DW_UT_split_type
+                                                  : dwarf::DW_UT_type);
   Asm->OutStreamer->AddComment("Type Signature");
   Asm->OutStreamer->EmitIntValue(TypeSignature, sizeof(TypeSignature));
   Asm->OutStreamer->AddComment("Type DIE Offset");
@@ -1568,4 +1593,14 @@ bool DwarfTypeUnit::isDwoUnit() const {
   // Since there are no skeleton type units, all type units are dwo type units
   // when split DWARF is being used.
   return DD->useSplitDwarf();
+}
+
+void DwarfTypeUnit::addGlobalName(StringRef Name, const DIE &Die,
+                                  const DIScope *Context) {
+  getCU().addGlobalNameForTypeUnit(Name, Context);
+}
+
+void DwarfTypeUnit::addGlobalType(const DIType *Ty, const DIE &Die,
+                                  const DIScope *Context) {
+  getCU().addGlobalTypeUnitType(Ty, Context);
 }

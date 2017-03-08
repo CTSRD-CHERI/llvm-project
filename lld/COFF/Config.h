@@ -105,6 +105,8 @@ struct Configuration {
   std::map<std::string, int> DLLOrder;
   SymbolBody *DelayLoadHelper = nullptr;
 
+  bool SaveTemps = false;
+
   // Used for SafeSEH.
   Symbol *SEHTable = nullptr;
   Symbol *SEHCount = nullptr;
@@ -114,6 +116,8 @@ struct Configuration {
 
   // Used for /opt:lldltojobs=N
   unsigned LTOJobs = 1;
+  // Used for /opt:lldltopartitions=N
+  unsigned LTOPartitions = 1;
 
   // Used for /merge:from=to (e.g. /merge:.rdata=.text)
   std::map<StringRef, StringRef> Merge;

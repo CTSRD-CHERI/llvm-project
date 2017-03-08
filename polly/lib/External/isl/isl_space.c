@@ -830,25 +830,25 @@ int isl_space_tuple_match(__isl_keep isl_space *space1, enum isl_dim_type type1,
 	return isl_space_tuple_is_equal(space1, type1, space2, type2);
 }
 
-static int match(__isl_keep isl_space *space1, enum isl_dim_type type1,
+static isl_bool match(__isl_keep isl_space *space1, enum isl_dim_type type1,
 	__isl_keep isl_space *space2, enum isl_dim_type type2)
 {
 	int i;
 
 	if (space1 == space2 && type1 == type2)
-		return 1;
+		return isl_bool_true;
 
 	if (!isl_space_tuple_is_equal(space1, type1, space2, type2))
-		return 0;
+		return isl_bool_false;
 
 	if (!space1->ids && !space2->ids)
-		return 1;
+		return isl_bool_true;
 
 	for (i = 0; i < n(space1, type1); ++i) {
 		if (get_id(space1, type1, i) != get_id(space2, type2, i))
-			return 0;
+			return isl_bool_false;
 	}
-	return 1;
+	return isl_bool_true;
 }
 
 isl_bool isl_space_match(__isl_keep isl_space *space1, enum isl_dim_type type1,
@@ -1779,20 +1779,6 @@ error:
 	return NULL;
 }
 
-__isl_give isl_space *isl_space_as_set_space(__isl_take isl_space *dim)
-{
-	dim = isl_space_cow(dim);
-	if (!dim)
-		return NULL;
-
-	dim->n_out += dim->n_in;
-	dim->n_in = 0;
-	dim = isl_space_reset(dim, isl_dim_in);
-	dim = isl_space_reset(dim, isl_dim_out);
-
-	return dim;
-}
-
 __isl_give isl_space *isl_space_underlying(__isl_take isl_space *dim,
 	unsigned n_div)
 {
@@ -1889,19 +1875,6 @@ isl_bool isl_space_is_range(__isl_keep isl_space *space1,
 	if (!isl_space_is_map(space2))
 		return isl_bool_false;
 	return isl_space_is_range_internal(space1, space2);
-}
-
-int isl_space_compatible_internal(__isl_keep isl_space *dim1,
-	__isl_keep isl_space *dim2)
-{
-	return dim1->nparam == dim2->nparam &&
-	       dim1->n_in + dim1->n_out == dim2->n_in + dim2->n_out;
-}
-
-int isl_space_compatible(__isl_keep isl_space *space1,
-	__isl_keep isl_space *space2)
-{
-	return isl_space_compatible_internal(space1, space2);
 }
 
 /* Update "hash" by hashing in "space".
@@ -2078,30 +2051,34 @@ error:
 	return NULL;
 }
 
-int isl_space_is_named_or_nested(__isl_keep isl_space *dim, enum isl_dim_type type)
+isl_bool isl_space_is_named_or_nested(__isl_keep isl_space *space,
+	enum isl_dim_type type)
 {
 	if (type != isl_dim_in && type != isl_dim_out)
-		return 0;
-	if (!dim)
-		return -1;
-	if (dim->tuple_id[type - isl_dim_in])
-		return 1;
-	if (dim->nested[type - isl_dim_in])
-		return 1;
-	return 0;
+		return isl_bool_false;
+	if (!space)
+		return isl_bool_error;
+	if (space->tuple_id[type - isl_dim_in])
+		return isl_bool_true;
+	if (space->nested[type - isl_dim_in])
+		return isl_bool_true;
+	return isl_bool_false;
 }
 
-int isl_space_may_be_set(__isl_keep isl_space *dim)
+isl_bool isl_space_may_be_set(__isl_keep isl_space *space)
 {
-	if (!dim)
-		return -1;
-	if (isl_space_is_set(dim))
-		return 1;
-	if (isl_space_dim(dim, isl_dim_in) != 0)
-		return 0;
-	if (isl_space_is_named_or_nested(dim, isl_dim_in))
-		return 0;
-	return 1;
+	isl_bool nested;
+
+	if (!space)
+		return isl_bool_error;
+	if (isl_space_is_set(space))
+		return isl_bool_true;
+	if (isl_space_dim(space, isl_dim_in) != 0)
+		return isl_bool_false;
+	nested = isl_space_is_named_or_nested(space, isl_dim_in);
+	if (nested < 0 || nested)
+		return isl_bool_not(nested);
+	return isl_bool_true;
 }
 
 __isl_give isl_space *isl_space_reset(__isl_take isl_space *dim,
@@ -2364,22 +2341,22 @@ __isl_give isl_space *isl_space_uncurry(__isl_take isl_space *space)
 			    isl_space_from_range(ran_ran));
 }
 
-int isl_space_has_named_params(__isl_keep isl_space *dim)
+isl_bool isl_space_has_named_params(__isl_keep isl_space *space)
 {
 	int i;
 	unsigned off;
 
-	if (!dim)
-		return -1;
-	if (dim->nparam == 0)
-		return 1;
-	off = isl_space_offset(dim, isl_dim_param);
-	if (off + dim->nparam > dim->n_id)
-		return 0;
-	for (i = 0; i < dim->nparam; ++i)
-		if (!dim->ids[off + i])
-			return 0;
-	return 1;
+	if (!space)
+		return isl_bool_error;
+	if (space->nparam == 0)
+		return isl_bool_true;
+	off = isl_space_offset(space, isl_dim_param);
+	if (off + space->nparam > space->n_id)
+		return isl_bool_false;
+	for (i = 0; i < space->nparam; ++i)
+		if (!space->ids[off + i])
+			return isl_bool_false;
+	return isl_bool_true;
 }
 
 /* Align the initial parameters of dim1 to match the order in dim2.

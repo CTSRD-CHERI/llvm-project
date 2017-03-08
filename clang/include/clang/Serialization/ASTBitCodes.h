@@ -591,6 +591,8 @@ namespace clang {
 
       /// \brief Record code for declarations associated with OpenCL extensions.
       OPENCL_EXTENSION_DECLS = 59,
+
+      MODULAR_CODEGEN_DECLS = 60,
     };
 
     /// \brief Record types used within a source manager block.
@@ -801,14 +803,12 @@ namespace clang {
       PREDEF_TYPE_SAMPLER_ID    = 39,
       /// \brief OpenCL queue type.
       PREDEF_TYPE_QUEUE_ID      = 40,
-      /// \brief OpenCL ndrange type.
-      PREDEF_TYPE_NDRANGE_ID    = 41,
       /// \brief OpenCL reserve_id type.
-      PREDEF_TYPE_RESERVE_ID_ID = 42,
+      PREDEF_TYPE_RESERVE_ID_ID = 41,
       /// \brief The placeholder type for OpenMP array section.
-      PREDEF_TYPE_OMP_ARRAY_SECTION = 43,
+      PREDEF_TYPE_OMP_ARRAY_SECTION = 42,
       /// \brief The '__float128' type
-      PREDEF_TYPE_FLOAT128_ID = 44,
+      PREDEF_TYPE_FLOAT128_ID = 43,
       /// \brief OpenCL image types with auto numeration
 #define IMAGE_TYPE(ImgType, Id, SingletonId, Access, Suffix) \
       PREDEF_TYPE_##Id##_ID,
@@ -1123,6 +1123,8 @@ namespace clang {
       DECL_EXPORT,
       /// \brief A CXXRecordDecl record.
       DECL_CXX_RECORD,
+      /// \brief A CXXDeductionGuideDecl record.
+      DECL_CXX_DEDUCTION_GUIDE,
       /// \brief A CXXMethodDecl record.
       DECL_CXX_METHOD,
       /// \brief A CXXConstructorDecl record.
@@ -1626,7 +1628,8 @@ namespace clang {
 
       IdentifierInfo *getIdentifier() const {
         assert(Kind == DeclarationName::Identifier ||
-               Kind == DeclarationName::CXXLiteralOperatorName);
+               Kind == DeclarationName::CXXLiteralOperatorName ||
+               Kind == DeclarationName::CXXDeductionGuideName);
         return (IdentifierInfo *)Data;
       }
       Selector getSelector() const {

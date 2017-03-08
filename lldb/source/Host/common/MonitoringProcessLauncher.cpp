@@ -8,14 +8,14 @@
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Host/MonitoringProcessLauncher.h"
-#include "lldb/Core/Error.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Host/HostProcess.h"
 #include "lldb/Target/Platform.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/ProcessLaunchInfo.h"
+#include "lldb/Utility/Error.h"
+#include "lldb/Utility/Log.h"
 
 using namespace lldb;
 using namespace lldb_private;

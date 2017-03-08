@@ -60,8 +60,8 @@
 #include "llvm/Analysis/IndirectCallSiteVisitor.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/CallSite.h"
-#include "llvm/IR/Dominators.h"
 #include "llvm/IR/DiagnosticInfo.h"
+#include "llvm/IR/Dominators.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstIterator.h"
@@ -73,7 +73,9 @@
 #include "llvm/ProfileData/InstrProfReader.h"
 #include "llvm/ProfileData/ProfileCommon.h"
 #include "llvm/Support/BranchProbability.h"
+#include "llvm/Support/DOTGraphTraits.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/GraphWriter.h"
 #include "llvm/Support/JamCRC.h"
 #include "llvm/Transforms/Instrumentation.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
@@ -127,34 +129,52 @@ static cl::opt<bool> DoComdatRenaming(
 
 // Command line option to enable/disable the warning about missing profile
 // information.
-static cl::opt<bool> PGOWarnMissing("pgo-warn-missing-function",
-                                     cl::init(false),
-                                     cl::Hidden);
+static cl::opt<bool>
+    PGOWarnMissing("pgo-warn-missing-function", cl::init(false), cl::Hidden,
+                   cl::desc("Use this option to turn on/off "
+                            "warnings about missing profile data for "
+                            "functions."));
 
 // Command line option to enable/disable the warning about a hash mismatch in
 // the profile data.
-static cl::opt<bool> NoPGOWarnMismatch("no-pgo-warn-mismatch", cl::init(false),
-                                       cl::Hidden);
+static cl::opt<bool>
+    NoPGOWarnMismatch("no-pgo-warn-mismatch", cl::init(false), cl::Hidden,
+                      cl::desc("Use this option to turn off/on "
+                               "warnings about profile cfg mismatch."));
 
 // Command line option to enable/disable the warning about a hash mismatch in
 // the profile data for Comdat functions, which often turns out to be false
 // positive due to the pre-instrumentation inline.
-static cl::opt<bool> NoPGOWarnMismatchComdat("no-pgo-warn-mismatch-comdat",
-                                             cl::init(true), cl::Hidden);
+static cl::opt<bool>
+    NoPGOWarnMismatchComdat("no-pgo-warn-mismatch-comdat", cl::init(true),
+                            cl::Hidden,
+                            cl::desc("The option is used to turn on/off "
+                                     "warnings about hash mismatch for comdat "
+                                     "functions."));
 
 // Command line option to enable/disable select instruction instrumentation.
-static cl::opt<bool> PGOInstrSelect("pgo-instr-select", cl::init(true),
-                                    cl::Hidden);
+static cl::opt<bool>
+    PGOInstrSelect("pgo-instr-select", cl::init(true), cl::Hidden,
+                   cl::desc("Use this option to turn on/off SELECT "
+                            "instruction instrumentation. "));
 
-// Command line option to specify the name of the function for CFG dump
-static cl::opt<std::string>
-    PGOViewFunction("pgo-view-function", cl::Hidden,
-                    cl::desc("The option to specify "
-                             "the name of the function "
-                             "whose CFG will be displayed."));
+// Command line option to turn on CFG dot dump of raw profile counts
+static cl::opt<bool>
+    PGOViewRawCounts("pgo-view-raw-counts", cl::init(false), cl::Hidden,
+                     cl::desc("A boolean option to show CFG dag "
+                              "with raw profile counts from "
+                              "profile data. See also option "
+                              "-pgo-view-counts. To limit graph "
+                              "display to only one function, use "
+                              "filtering option -view-bfi-func-name."));
 
 // Command line option to turn on CFG dot dump after profile annotation.
+// Defined in Analysis/BlockFrequencyInfo.cpp:  -pgo-view-counts
 extern cl::opt<bool> PGOViewCounts;
+
+// Command line option to specify the name of the function for CFG dump
+// Defined in Analysis/BlockFrequencyInfo.cpp:  -view-bfi-func-name=
+extern cl::opt<std::string> ViewBlockFreqFuncName;
 
 namespace {
 
@@ -690,6 +710,8 @@ public:
     return FuncInfo.findBBInfo(BB);
   }
 
+  Function &getFunc() const { return F; }
+
 private:
   Function &F;
   Module *M;
@@ -1215,9 +1237,8 @@ static bool annotateAllFunctions(
       ColdFunctions.push_back(&F);
     else if (FreqAttr == PGOUseFunc::FFA_Hot)
       HotFunctions.push_back(&F);
-#ifndef NDEBUG
-    if (PGOViewCounts &&
-        (PGOViewFunction.empty() || F.getName().equals(PGOViewFunction))) {
+    if (PGOViewCounts && (ViewBlockFreqFuncName.empty() ||
+                          F.getName().equals(ViewBlockFreqFuncName))) {
       LoopInfo LI{DominatorTree(F)};
       std::unique_ptr<BranchProbabilityInfo> NewBPI =
           llvm::make_unique<BranchProbabilityInfo>(F, LI);
@@ -1226,7 +1247,13 @@ static bool annotateAllFunctions(
 
       NewBFI->view();
     }
-#endif
+    if (PGOViewRawCounts && (ViewBlockFreqFuncName.empty() ||
+                             F.getName().equals(ViewBlockFreqFuncName))) {
+      if (ViewBlockFreqFuncName.empty())
+        WriteGraph(&Func, Twine("PGORawCounts_") + Func.getFunc().getName());
+      else
+        ViewGraph(&Func, Twine("PGORawCounts_") + Func.getFunc().getName());
+    }
   }
   M.setProfileSummary(PGOReader->getSummary().getMD(M.getContext()));
   // Set function hotness attribute from the profile.
@@ -1281,4 +1308,76 @@ bool PGOInstrumentationUseLegacyPass::runOnModule(Module &M) {
   };
 
   return annotateAllFunctions(M, ProfileFileName, LookupBPI, LookupBFI);
+}
+
+namespace llvm {
+template <> struct GraphTraits<PGOUseFunc *> {
+  typedef const BasicBlock *NodeRef;
+  typedef succ_const_iterator ChildIteratorType;
+  typedef pointer_iterator<Function::const_iterator> nodes_iterator;
+
+  static NodeRef getEntryNode(const PGOUseFunc *G) {
+    return &G->getFunc().front();
+  }
+  static ChildIteratorType child_begin(const NodeRef N) {
+    return succ_begin(N);
+  }
+  static ChildIteratorType child_end(const NodeRef N) { return succ_end(N); }
+  static nodes_iterator nodes_begin(const PGOUseFunc *G) {
+    return nodes_iterator(G->getFunc().begin());
+  }
+  static nodes_iterator nodes_end(const PGOUseFunc *G) {
+    return nodes_iterator(G->getFunc().end());
+  }
+};
+
+static std::string getSimpleNodeName(const BasicBlock *Node) {
+  if (!Node->getName().empty())
+    return Node->getName();
+
+  std::string SimpleNodeName;
+  raw_string_ostream OS(SimpleNodeName);
+  Node->printAsOperand(OS, false);
+  return OS.str();
+}
+
+template <> struct DOTGraphTraits<PGOUseFunc *> : DefaultDOTGraphTraits {
+  explicit DOTGraphTraits(bool isSimple = false)
+      : DefaultDOTGraphTraits(isSimple) {}
+
+  static std::string getGraphName(const PGOUseFunc *G) {
+    return G->getFunc().getName();
+  }
+
+  std::string getNodeLabel(const BasicBlock *Node, const PGOUseFunc *Graph) {
+    std::string Result;
+    raw_string_ostream OS(Result);
+
+    OS << getSimpleNodeName(Node) << ":\\l";
+    UseBBInfo *BI = Graph->findBBInfo(Node);
+    OS << "Count : ";
+    if (BI && BI->CountValid)
+      OS << BI->CountValue << "\\l";
+    else
+      OS << "Unknown\\l";
+
+    if (!PGOInstrSelect)
+      return Result;
+
+    for (auto BI = Node->begin(); BI != Node->end(); ++BI) {
+      auto *I = &*BI;
+      if (!isa<SelectInst>(I))
+        continue;
+      // Display scaled counts for SELECT instruction:
+      OS << "SELECT : { T = ";
+      uint64_t TC, FC;
+      bool HasProf = I->extractProfMetadata(TC, FC);
+      if (!HasProf)
+        OS << "Unknown, F = Unknown }\\l";
+      else
+        OS << TC << ", F = " << FC << " }\\l";
+    }
+    return Result;
+  }
+};
 }

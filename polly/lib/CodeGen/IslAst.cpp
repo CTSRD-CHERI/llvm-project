@@ -124,7 +124,7 @@ static const std::string getBrokenReductionsStr(__isl_keep isl_ast_node *Node) {
   for (MemoryAccess *MA : *BrokenReductions)
     if (MA->isWrite())
       Clauses[MA->getReductionType()] +=
-          ", " + MA->getBaseAddr()->getName().str();
+          ", " + MA->getScopArrayInfo()->getName();
 
   // Now print the reductions sorted by type. Each type will cause a clause
   // like:  reduction (+ : sum0, sum1, sum2)
@@ -399,6 +399,14 @@ IslAst::IslAst(Scop *Scop)
 void IslAst::init(const Dependences &D) {
   bool PerformParallelTest = PollyParallel || DetectParallel ||
                              PollyVectorizerChoice != VECTORIZER_NONE;
+
+  // We can not perform the dependence analysis and, consequently,
+  // the parallel code generation in case the schedule tree contains
+  // extension nodes.
+  auto *ScheduleTree = S->getScheduleTree();
+  PerformParallelTest =
+      PerformParallelTest && !S->containsExtensionNode(ScheduleTree);
+  isl_schedule_free(ScheduleTree);
 
   // Skip AST and code generation if there was no benefit achieved.
   if (!benefitsFromPolly(S, PerformParallelTest))

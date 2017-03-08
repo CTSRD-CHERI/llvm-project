@@ -35,15 +35,6 @@ static cl::opt<bool> PollyAllowErrorBlocks(
     cl::desc("Allow to speculate on the execution of 'error blocks'."),
     cl::Hidden, cl::init(true), cl::ZeroOrMore, cl::cat(PollyCategory));
 
-bool polly::hasInvokeEdge(const PHINode *PN) {
-  for (unsigned i = 0, e = PN->getNumIncomingValues(); i < e; ++i)
-    if (InvokeInst *II = dyn_cast<InvokeInst>(PN->getIncomingValue(i)))
-      if (II->getParent() == PN->getIncomingBlock(i))
-        return true;
-
-  return false;
-}
-
 // Ensures that there is just one predecessor to the entry node from outside the
 // region.
 // The identity of the region entry node is preserved.
@@ -296,9 +287,8 @@ private:
     else
       IP = RTCBB->getParent()->getEntryBlock().getTerminator();
 
-    if (!Inst ||
-        (Inst->getOpcode() != Instruction::SRem &&
-         Inst->getOpcode() != Instruction::SDiv))
+    if (!Inst || (Inst->getOpcode() != Instruction::SRem &&
+                  Inst->getOpcode() != Instruction::SDiv))
       return visitGenericInst(E, Inst, IP);
 
     const SCEV *LHSScev = SE.getSCEV(Inst->getOperand(0));

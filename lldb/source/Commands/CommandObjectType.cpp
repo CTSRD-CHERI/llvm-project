@@ -16,10 +16,8 @@
 #include <functional>
 
 // Project includes
-#include "lldb/Core/ConstString.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/IOHandler.h"
-#include "lldb/Core/RegularExpression.h"
 #include "lldb/Core/State.h"
 #include "lldb/Core/StringList.h"
 #include "lldb/DataFormatters/DataVisualization.h"
@@ -38,6 +36,8 @@
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
 #include "lldb/Target/ThreadList.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/RegularExpression.h"
 
 // Other libraries and framework includes
 #include "llvm/ADT/STLExtras.h"
@@ -1188,8 +1188,7 @@ protected:
         category_closure(category_sp);
     } else {
       DataVisualization::Categories::ForEach(
-          [this, &command, &result, &category_regex, &formatter_regex,
-           &category_closure](
+          [&category_regex, &category_closure](
               const lldb::TypeCategoryImplSP &category) -> bool {
             if (category_regex) {
               bool escape = true;

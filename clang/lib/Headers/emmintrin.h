@@ -2391,7 +2391,7 @@ _mm_mul_epu32(__m128i __a, __m128i __b)
 
 /// \brief Computes the absolute differences of corresponding 8-bit integer
 ///    values in two 128-bit vectors. Sums the first 8 absolute differences, and
-///    separately sums the second 8 absolute differences. Packss these two
+///    separately sums the second 8 absolute differences. Packs these two
 ///    unsigned 16-bit integer sums into the upper and lower elements of a
 ///    [2 x i64] vector.
 ///
@@ -4809,5 +4809,13 @@ void _mm_pause(void);
 #undef __DEFAULT_FN_ATTRS
 
 #define _MM_SHUFFLE2(x, y) (((x) << 1) | (y))
+
+#define _MM_DENORMALS_ZERO_ON   (0x0040)
+#define _MM_DENORMALS_ZERO_OFF  (0x0000)
+
+#define _MM_DENORMALS_ZERO_MASK (0x0040)
+
+#define _MM_GET_DENORMALS_ZERO_MODE() (_mm_getcsr() & _MM_DENORMALS_ZERO_MASK)
+#define _MM_SET_DENORMALS_ZERO_MODE(x) (_mm_setcsr((_mm_getcsr() & ~_MM_DENORMALS_ZERO_MASK) | (x)))
 
 #endif /* __EMMINTRIN_H */

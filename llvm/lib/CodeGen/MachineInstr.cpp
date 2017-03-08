@@ -1692,14 +1692,14 @@ void MachineInstr::copyImplicitOps(MachineFunction &MF,
   }
 }
 
-LLVM_DUMP_METHOD void MachineInstr::dump(const TargetInstrInfo *TII) const {
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+LLVM_DUMP_METHOD void MachineInstr::dump() const {
   dbgs() << "  ";
-  print(dbgs(), false /* SkipOpers */, TII);
-#endif
+  print(dbgs());
 }
+#endif
 
-void MachineInstr::print(raw_ostream &OS, bool SkipOpers,
+void MachineInstr::print(raw_ostream &OS, bool SkipOpers, bool SkipDebugLoc,
                          const TargetInstrInfo *TII) const {
   const Module *M = nullptr;
   if (const MachineBasicBlock *MBB = getParent())
@@ -1707,11 +1707,12 @@ void MachineInstr::print(raw_ostream &OS, bool SkipOpers,
       M = MF->getFunction()->getParent();
 
   ModuleSlotTracker MST(M);
-  print(OS, MST, SkipOpers, TII);
+  print(OS, MST, SkipOpers, SkipDebugLoc, TII);
 }
 
 void MachineInstr::print(raw_ostream &OS, ModuleSlotTracker &MST,
-                         bool SkipOpers, const TargetInstrInfo *TII) const {
+                         bool SkipOpers, bool SkipDebugLoc,
+                         const TargetInstrInfo *TII) const {
   // We can be a bit tidier if we know the MachineFunction.
   const MachineFunction *MF = nullptr;
   const TargetRegisterInfo *TRI = nullptr;
@@ -1987,6 +1988,8 @@ void MachineInstr::print(raw_ostream &OS, ModuleSlotTracker &MST,
     }
     if (isIndirectDebugValue())
       OS << " indirect";
+  } else if (SkipDebugLoc) {
+    return;
   } else if (debugLoc && MF) {
     if (!HaveSemi)
       OS << ";";

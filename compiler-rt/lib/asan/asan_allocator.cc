@@ -554,7 +554,17 @@ struct Allocator {
     uptr chunk_beg = p - kChunkHeaderSize;
     AsanChunk *m = reinterpret_cast<AsanChunk *>(chunk_beg);
 
+    // On Windows, uninstrumented DLLs may allocate memory before ASan hooks
+    // malloc. Don't report an invalid free in this case.
+    if (SANITIZER_WINDOWS &&
+        !get_allocator().PointerIsMine(ptr)) {
+      if (!IsSystemHeapAddress(p))
+        ReportFreeNotMalloced(p, stack);
+      return;
+    }
+
     ASAN_FREE_HOOK(ptr);
+
     // Must mark the chunk as quarantined before any changes to its metadata.
     // Do not quarantine given chunk if we failed to set CHUNK_QUARANTINE flag.
     if (!AtomicallySetQuarantineFlagIfAllocated(m, ptr, stack)) return;
@@ -958,15 +968,13 @@ uptr __sanitizer_get_allocated_size(const void *p) {
 
 #if !SANITIZER_SUPPORTS_WEAK_HOOKS
 // Provide default (no-op) implementation of malloc hooks.
-extern "C" {
-SANITIZER_INTERFACE_ATTRIBUTE SANITIZER_WEAK_ATTRIBUTE
-void __sanitizer_malloc_hook(void *ptr, uptr size) {
+SANITIZER_INTERFACE_WEAK_DEF(void, __sanitizer_malloc_hook,
+                             void *ptr, uptr size) {
   (void)ptr;
   (void)size;
 }
-SANITIZER_INTERFACE_ATTRIBUTE SANITIZER_WEAK_ATTRIBUTE
-void __sanitizer_free_hook(void *ptr) {
+
+SANITIZER_INTERFACE_WEAK_DEF(void, __sanitizer_free_hook, void *ptr) {
   (void)ptr;
 }
-} // extern "C"
 #endif

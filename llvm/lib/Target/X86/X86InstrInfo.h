@@ -443,9 +443,6 @@ public:
                                int64_t Offset1, int64_t Offset2,
                                unsigned NumLoads) const override;
 
-  bool shouldScheduleAdjacent(const MachineInstr &First,
-                              const MachineInstr &Second) const override;
-
   void getNoopForMachoTarget(MCInst &NopInst) const override;
 
   bool
@@ -547,6 +544,25 @@ public:
   getSerializableDirectMachineOperandTargetFlags() const override;
 
   bool isTailCall(const MachineInstr &Inst) const override;
+
+  unsigned getOutliningBenefit(size_t SequenceSize,
+                               size_t Occurrences) const override;
+
+  bool isFunctionSafeToOutlineFrom(MachineFunction &MF) const override;
+
+  llvm::X86GenInstrInfo::MachineOutlinerInstrType
+  getOutliningType(MachineInstr &MI) const override;
+
+  void insertOutlinerEpilogue(MachineBasicBlock &MBB,
+                              MachineFunction &MF) const override;
+
+  void insertOutlinerPrologue(MachineBasicBlock &MBB,
+                              MachineFunction &MF) const override;
+
+  MachineBasicBlock::iterator
+  insertOutlinedCall(Module &M, MachineBasicBlock &MBB,
+                     MachineBasicBlock::iterator &It,
+                     MachineFunction &MF) const override;
 
 protected:
   /// Commutes the operands in the given instruction by changing the operands

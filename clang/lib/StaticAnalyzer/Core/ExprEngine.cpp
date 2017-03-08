@@ -615,7 +615,15 @@ void ExprEngine::ProcessAutomaticObjDtor(const CFGAutomaticObjDtor Dtor,
   const MemRegion *Region = dest.castAs<loc::MemRegionVal>().getRegion();
 
   if (varType->isReferenceType()) {
-    Region = state->getSVal(Region).getAsRegion()->getBaseRegion();
+    const MemRegion *ValueRegion = state->getSVal(Region).getAsRegion();
+    if (!ValueRegion) {
+      // FIXME: This should not happen. The language guarantees a presence
+      // of a valid initializer here, so the reference shall not be undefined.
+      // It seems that we're calling destructors over variables that
+      // were not initialized yet.
+      return;
+    }
+    Region = ValueRegion->getBaseRegion();
     varType = cast<TypedValueRegion>(Region)->getValueType();
   }
 
@@ -769,7 +777,7 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
   assert(!isa<Expr>(S) || S == cast<Expr>(S)->IgnoreParens());
 
   switch (S->getStmtClass()) {
-    // C++ and ARC stuff we don't support yet.
+    // C++, OpenMP and ARC stuff we don't support yet.
     case Expr::ObjCIndirectCopyRestoreExprClass:
     case Stmt::CXXDependentScopeMemberExprClass:
     case Stmt::CXXInheritedCtorInitExprClass:
@@ -792,41 +800,13 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::FunctionParmPackExprClass:
     case Stmt::CoroutineBodyStmtClass:
     case Stmt::CoawaitExprClass:
+    case Stmt::DependentCoawaitExprClass:
     case Stmt::CoreturnStmtClass:
     case Stmt::CoyieldExprClass:
     case Stmt::SEHTryStmtClass:
     case Stmt::SEHExceptStmtClass:
     case Stmt::SEHLeaveStmtClass:
-    case Stmt::SEHFinallyStmtClass: {
-      const ExplodedNode *node = Bldr.generateSink(S, Pred, Pred->getState());
-      Engine.addAbortedBlock(node, currBldrCtx->getBlock());
-      break;
-    }
-
-    case Stmt::ParenExprClass:
-      llvm_unreachable("ParenExprs already handled.");
-    case Stmt::GenericSelectionExprClass:
-      llvm_unreachable("GenericSelectionExprs already handled.");
-    // Cases that should never be evaluated simply because they shouldn't
-    // appear in the CFG.
-    case Stmt::BreakStmtClass:
-    case Stmt::CaseStmtClass:
-    case Stmt::CompoundStmtClass:
-    case Stmt::ContinueStmtClass:
-    case Stmt::CXXForRangeStmtClass:
-    case Stmt::DefaultStmtClass:
-    case Stmt::DoStmtClass:
-    case Stmt::ForStmtClass:
-    case Stmt::GotoStmtClass:
-    case Stmt::IfStmtClass:
-    case Stmt::IndirectGotoStmtClass:
-    case Stmt::LabelStmtClass:
-    case Stmt::NoStmtClass:
-    case Stmt::NullStmtClass:
-    case Stmt::SwitchStmtClass:
-    case Stmt::WhileStmtClass:
-    case Expr::MSDependentExistsStmtClass:
-    case Stmt::CapturedStmtClass:
+    case Stmt::SEHFinallyStmtClass:
     case Stmt::OMPParallelDirectiveClass:
     case Stmt::OMPSimdDirectiveClass:
     case Stmt::OMPForDirectiveClass:
@@ -874,6 +854,36 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::OMPTargetTeamsDistributeParallelForDirectiveClass:
     case Stmt::OMPTargetTeamsDistributeParallelForSimdDirectiveClass:
     case Stmt::OMPTargetTeamsDistributeSimdDirectiveClass:
+    case Stmt::CapturedStmtClass:
+    {
+      const ExplodedNode *node = Bldr.generateSink(S, Pred, Pred->getState());
+      Engine.addAbortedBlock(node, currBldrCtx->getBlock());
+      break;
+    }
+
+    case Stmt::ParenExprClass:
+      llvm_unreachable("ParenExprs already handled.");
+    case Stmt::GenericSelectionExprClass:
+      llvm_unreachable("GenericSelectionExprs already handled.");
+    // Cases that should never be evaluated simply because they shouldn't
+    // appear in the CFG.
+    case Stmt::BreakStmtClass:
+    case Stmt::CaseStmtClass:
+    case Stmt::CompoundStmtClass:
+    case Stmt::ContinueStmtClass:
+    case Stmt::CXXForRangeStmtClass:
+    case Stmt::DefaultStmtClass:
+    case Stmt::DoStmtClass:
+    case Stmt::ForStmtClass:
+    case Stmt::GotoStmtClass:
+    case Stmt::IfStmtClass:
+    case Stmt::IndirectGotoStmtClass:
+    case Stmt::LabelStmtClass:
+    case Stmt::NoStmtClass:
+    case Stmt::NullStmtClass:
+    case Stmt::SwitchStmtClass:
+    case Stmt::WhileStmtClass:
+    case Expr::MSDependentExistsStmtClass:
       llvm_unreachable("Stmt should not be in analyzer evaluation loop");
 
     case Stmt::ObjCSubscriptRefExprClass:

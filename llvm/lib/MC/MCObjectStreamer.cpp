@@ -153,8 +153,8 @@ void MCObjectStreamer::EmitCFIEndProcImpl(MCDwarfFrameInfo &Frame) {
   EmitLabel(Frame.End);
 }
 
-void MCObjectStreamer::EmitLabel(MCSymbol *Symbol) {
-  MCStreamer::EmitLabel(Symbol);
+void MCObjectStreamer::EmitLabel(MCSymbol *Symbol, SMLoc Loc) {
+  MCStreamer::EmitLabel(Symbol, Loc);
 
   getAssembler().registerSymbol(*Symbol);
 
@@ -570,6 +570,10 @@ void MCObjectStreamer::emitFill(const MCExpr &NumValues, int64_t Size,
   }
 
   MCStreamer::emitFill(IntNumValues, Size, Expr);
+}
+
+void MCObjectStreamer::EmitFileDirective(StringRef Filename) {
+  getAssembler().addFileName(Filename);
 }
 
 void MCObjectStreamer::FinishImpl() {

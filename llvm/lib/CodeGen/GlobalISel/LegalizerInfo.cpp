@@ -41,6 +41,7 @@ LegalizerInfo::LegalizerInfo() : TablesInitialized(false) {
   DefaultActions[TargetOpcode::G_STORE] = NarrowScalar;
 
   DefaultActions[TargetOpcode::G_BRCOND] = WidenScalar;
+  DefaultActions[TargetOpcode::G_INSERT] = NarrowScalar;
 }
 
 void LegalizerInfo::computeTables() {
@@ -79,7 +80,9 @@ LegalizerInfo::getAction(const InstrAspect &Aspect) const {
   // FIXME: the long-term plan calls for expansion in terms of load/store (if
   // they're not legal).
   if (Aspect.Opcode == TargetOpcode::G_SEQUENCE ||
-      Aspect.Opcode == TargetOpcode::G_EXTRACT)
+      Aspect.Opcode == TargetOpcode::G_EXTRACT ||
+      Aspect.Opcode == TargetOpcode::G_MERGE_VALUES ||
+      Aspect.Opcode == TargetOpcode::G_UNMERGE_VALUES)
     return std::make_pair(Legal, Aspect.Type);
 
   LegalizeAction Action = findInActions(Aspect);
@@ -160,6 +163,7 @@ LLT LegalizerInfo::findLegalType(const InstrAspect &Aspect,
   case Legal:
   case Lower:
   case Libcall:
+  case Custom:
     return Aspect.Type;
   case NarrowScalar: {
     return findLegalType(Aspect,
@@ -179,4 +183,10 @@ LLT LegalizerInfo::findLegalType(const InstrAspect &Aspect,
                          [&](LLT Ty) -> LLT { return Ty.doubleElements(); });
   }
   }
+}
+
+bool LegalizerInfo::legalizeCustom(MachineInstr &MI,
+                                   MachineRegisterInfo &MRI,
+                                   MachineIRBuilder &MIRBuilder) const {
+  return false;
 }

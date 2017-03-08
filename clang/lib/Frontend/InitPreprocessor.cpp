@@ -286,12 +286,12 @@ static void DefineFastIntType(unsigned TypeWidth, bool IsSigned,
 
 /// Get the value the ATOMIC_*_LOCK_FREE macro should have for a type with
 /// the specified properties.
-static const char *getLockFreeValue(unsigned TypeWidth, unsigned InlineWidth) {
+static const char *getLockFreeValue(unsigned TypeWidth, unsigned TypeAlign,
+                                    unsigned InlineWidth) {
   // Fully-aligned, power-of-2 sizes no larger than the inline
   // width will be inlined as lock-free operations.
-  // Note: we do not need to check alignment since _Atomic(T) is always
-  // appropriately-aligned in clang.
-  if ((TypeWidth & (TypeWidth - 1)) == 0 && TypeWidth <= InlineWidth)
+  if (TypeWidth == TypeAlign && (TypeWidth & (TypeWidth - 1)) == 0 &&
+      TypeWidth <= InlineWidth)
     return "2"; // "always lock free"
   // We cannot be certain what operations the lib calls might be
   // able to implement as lock-free on future processors.
@@ -475,6 +475,7 @@ static void InitializeCPlusPlusFeatureTestMacros(const LangOptions &LangOpts,
     Builder.defineMacro("__cpp_user_defined_literals", "200809");
     Builder.defineMacro("__cpp_lambdas", "200907");
     Builder.defineMacro("__cpp_constexpr",
+                        LangOpts.CPlusPlus1z ? "201603" : 
                         LangOpts.CPlusPlus14 ? "201304" : "200704");
     Builder.defineMacro("__cpp_range_based_for",
                         LangOpts.CPlusPlus1z ? "201603" : "200907");
@@ -522,6 +523,8 @@ static void InitializeCPlusPlusFeatureTestMacros(const LangOptions &LangOpts,
     Builder.defineMacro("__cpp_structured_bindings", "201606");
     Builder.defineMacro("__cpp_nontype_template_args", "201411");
     Builder.defineMacro("__cpp_fold_expressions", "201603");
+    // FIXME: This is not yet listed in SD-6.
+    Builder.defineMacro("__cpp_deduction_guides", "201611");
   }
   if (LangOpts.AlignedAllocation)
     Builder.defineMacro("__cpp_aligned_new", "201606");
@@ -883,6 +886,7 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
 #define DEFINE_LOCK_FREE_MACRO(TYPE, Type) \
     Builder.defineMacro("__GCC_ATOMIC_" #TYPE "_LOCK_FREE", \
                         getLockFreeValue(TI.get##Type##Width(), \
+                                         TI.get##Type##Align(), \
                                          InlineWidthBits));
     DEFINE_LOCK_FREE_MACRO(BOOL, Bool);
     DEFINE_LOCK_FREE_MACRO(CHAR, Char);
@@ -895,6 +899,7 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
     DEFINE_LOCK_FREE_MACRO(LLONG, LongLong);
     Builder.defineMacro("__GCC_ATOMIC_POINTER_LOCK_FREE",
                         getLockFreeValue(TI.getPointerWidth(0),
+                                         TI.getPointerAlign(0),
                                          InlineWidthBits));
 #undef DEFINE_LOCK_FREE_MACRO
   }

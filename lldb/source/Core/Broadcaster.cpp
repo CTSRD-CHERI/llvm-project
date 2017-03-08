@@ -15,8 +15,8 @@
 // Project includes
 #include "lldb/Core/Event.h"
 #include "lldb/Core/Listener.h"
-#include "lldb/Core/Log.h"
-#include "lldb/Core/StreamString.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/StreamString.h"
 
 using namespace lldb;
 using namespace lldb_private;

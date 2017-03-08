@@ -16,7 +16,9 @@
 #include "llvm/MC/MCSectionCOFF.h"
 #include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSectionMachO.h"
+#include "llvm/MC/MCSectionWasm.h"
 #include "llvm/Support/COFF.h"
+#include "llvm/Support/ELF.h"
 
 using namespace llvm;
 
@@ -506,10 +508,9 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T) {
   COFFDebugTypesSection = nullptr;
 
   // Debug Info Sections.
-  DwarfAbbrevSection = Ctx->getELFSection(".debug_abbrev", ELF::SHT_PROGBITS, 0,
-                                          "section_abbrev");
-  DwarfInfoSection =
-      Ctx->getELFSection(".debug_info", ELF::SHT_PROGBITS, 0, "section_info");
+  DwarfAbbrevSection =
+      Ctx->getELFSection(".debug_abbrev", ELF::SHT_PROGBITS, 0);
+  DwarfInfoSection = Ctx->getELFSection(".debug_info", ELF::SHT_PROGBITS, 0);
   DwarfLineSection = Ctx->getELFSection(".debug_line", ELF::SHT_PROGBITS, 0);
   DwarfFrameSection = Ctx->getELFSection(".debug_frame", ELF::SHT_PROGBITS, 0);
   DwarfPubNamesSection =
@@ -527,21 +528,21 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T) {
   DwarfARangesSection =
       Ctx->getELFSection(".debug_aranges", ELF::SHT_PROGBITS, 0);
   DwarfRangesSection =
-      Ctx->getELFSection(".debug_ranges", ELF::SHT_PROGBITS, 0, "debug_range");
-  DwarfMacinfoSection = Ctx->getELFSection(".debug_macinfo", ELF::SHT_PROGBITS,
-                                           0, "debug_macinfo");
+      Ctx->getELFSection(".debug_ranges", ELF::SHT_PROGBITS, 0);
+  DwarfMacinfoSection =
+      Ctx->getELFSection(".debug_macinfo", ELF::SHT_PROGBITS, 0);
 
   // DWARF5 Experimental Debug Info
 
   // Accelerator Tables
   DwarfAccelNamesSection =
-      Ctx->getELFSection(".apple_names", ELF::SHT_PROGBITS, 0, "names_begin");
+      Ctx->getELFSection(".apple_names", ELF::SHT_PROGBITS, 0);
   DwarfAccelObjCSection =
-      Ctx->getELFSection(".apple_objc", ELF::SHT_PROGBITS, 0, "objc_begin");
-  DwarfAccelNamespaceSection = Ctx->getELFSection(
-      ".apple_namespaces", ELF::SHT_PROGBITS, 0, "namespac_begin");
+      Ctx->getELFSection(".apple_objc", ELF::SHT_PROGBITS, 0);
+  DwarfAccelNamespaceSection =
+      Ctx->getELFSection(".apple_namespaces", ELF::SHT_PROGBITS, 0);
   DwarfAccelTypesSection =
-      Ctx->getELFSection(".apple_types", ELF::SHT_PROGBITS, 0, "types_begin");
+      Ctx->getELFSection(".apple_types", ELF::SHT_PROGBITS, 0);
 
   // Fission Sections
   DwarfInfoDWOSection =
@@ -556,11 +557,10 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T) {
   DwarfLineDWOSection =
       Ctx->getELFSection(".debug_line.dwo", ELF::SHT_PROGBITS, 0);
   DwarfLocDWOSection =
-      Ctx->getELFSection(".debug_loc.dwo", ELF::SHT_PROGBITS, 0, "skel_loc");
+      Ctx->getELFSection(".debug_loc.dwo", ELF::SHT_PROGBITS, 0);
   DwarfStrOffDWOSection =
       Ctx->getELFSection(".debug_str_offsets.dwo", ELF::SHT_PROGBITS, 0);
-  DwarfAddrSection =
-      Ctx->getELFSection(".debug_addr", ELF::SHT_PROGBITS, 0, "addr_sec");
+  DwarfAddrSection = Ctx->getELFSection(".debug_addr", ELF::SHT_PROGBITS, 0);
 
   // DWP Sections
   DwarfCUIndexSection =
@@ -799,6 +799,30 @@ void MCObjectFileInfo::initCOFFMCObjectFileInfo(const Triple &T) {
                                         SectionKind::getReadOnly());
 }
 
+void MCObjectFileInfo::initWasmMCObjectFileInfo(const Triple &T) {
+  // TODO: Set the section types and flags.
+  TextSection = Ctx->getWasmSection(".text", 0, 0);
+  DataSection = Ctx->getWasmSection(".data", 0, 0);
+
+  // TODO: Set the section types and flags.
+  DwarfLineSection = Ctx->getWasmSection(".debug_line", 0, 0);
+  DwarfStrSection = Ctx->getWasmSection(".debug_str", 0, 0);
+  DwarfLocSection = Ctx->getWasmSection(".debug_loc", 0, 0);
+  DwarfAbbrevSection = Ctx->getWasmSection(".debug_abbrev", 0, 0, "section_abbrev");
+  DwarfARangesSection = Ctx->getWasmSection(".debug_aranges", 0, 0);
+  DwarfRangesSection = Ctx->getWasmSection(".debug_ranges", 0, 0, "debug_range");
+  DwarfMacinfoSection = Ctx->getWasmSection(".debug_macinfo", 0, 0, "debug_macinfo");
+  DwarfAddrSection = Ctx->getWasmSection(".debug_addr", 0, 0);
+  DwarfCUIndexSection = Ctx->getWasmSection(".debug_cu_index", 0, 0);
+  DwarfTUIndexSection = Ctx->getWasmSection(".debug_tu_index", 0, 0);
+  DwarfInfoSection = Ctx->getWasmSection(".debug_info", 0, 0, "section_info");
+  DwarfFrameSection = Ctx->getWasmSection(".debug_frame", 0, 0);
+  DwarfPubNamesSection = Ctx->getWasmSection(".debug_pubnames", 0, 0);
+  DwarfPubTypesSection = Ctx->getWasmSection(".debug_pubtypes", 0, 0);
+
+  // TODO: Define more sections.
+}
+
 void MCObjectFileInfo::InitMCObjectFileInfo(const Triple &TheTriple, bool PIC,
                                             CodeModel::Model cm,
                                             MCContext &ctx) {
@@ -844,7 +868,8 @@ void MCObjectFileInfo::InitMCObjectFileInfo(const Triple &TheTriple, bool PIC,
     initELFMCObjectFileInfo(TT);
     break;
   case Triple::Wasm:
-    report_fatal_error("Cannot initialize MC for wasm object file format yet.");
+    Env = IsWasm;
+    initWasmMCObjectFileInfo(TT);
     break;
   case Triple::UnknownObjectFormat:
     report_fatal_error("Cannot initialize MC for unknown object file format.");

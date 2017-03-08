@@ -31,8 +31,10 @@
 # RUN: not ld.lld %t-cheri128-main.o %t-cheri256-lib.o -o %t.exe 2>&1 | FileCheck -check-prefix=CHERI128-vs-CHERI256 %s
 # RUN: not ld.lld %t-cheri256-main.o %t-cheri256-hybrid-lib.o -o %t.exe 2>&1 | FileCheck -check-prefix=CHERI256-vs-CHERI256-HYBRID %s
 # RUN: not ld.lld %t-cheri128-main.o %t-cheri128-hybrid-lib.o -o %t.exe 2>&1 | FileCheck -check-prefix=CHERI128-vs-CHERI128-HYBRID %s
-# RUN: not ld.lld %t-cheri256-hybrid-main.o %t-mips64.o -o %t.exe 2>&1 | FileCheck -check-prefix=CHERI256-HYBRID-vs-MIPS %s
-# RUN: not ld.lld %t-cheri128-hybrid-main.o %t-mips64.o -o %t.exe 2>&1 | FileCheck -check-prefix=CHERI128-HYBRID-vs-MIPS %s
+
+# linking plain mips with hybrid results in a hybrid binary:
+# RUN: ld.lld %t-cheri256-hybrid-main.o %t-mips64.o -o - | llvm-readobj -h - | FileCheck -check-prefix=CHERI256-HYBRID-FLAGS %s
+# RUN: ld.lld %t-cheri128-hybrid-main.o %t-mips64.o -o - | llvm-readobj -h - | FileCheck -check-prefix=CHERI128-HYBRID-FLAGS %s
 
 # REQUIRES: mips
 
@@ -44,14 +46,14 @@ __start:
 
 # CHERI256-FLAGS:      Machine: EM_MIPS (0x8)
 # CHERI256-FLAGS:      Flags [
-# CHERI256-FLAGS-NEXT:    EF_MIPS_ABI_CHERIABI (0x5000)
+# CHERI256-FLAGS-NEXT:    EF_MIPS_ABI_CHERIABI (0xC000)
 # CHERI256-FLAGS-NEXT:    EF_MIPS_ARCH_4 (0x30000000)
 # CHERI256-FLAGS-NEXT:    EF_MIPS_CPIC (0x4)
 # CHERI256-FLAGS-NEXT:    EF_MIPS_MACH_CHERI256 (0xC20000)
 # CHERI256-FLAGS-NEXT:  ]
 # CHERI128-FLAGS:      Machine: EM_MIPS (0x8)
 # CHERI128-FLAGS:      Flags [
-# CHERI128-FLAGS-NEXT:    EF_MIPS_ABI_CHERIABI (0x5000)
+# CHERI128-FLAGS-NEXT:    EF_MIPS_ABI_CHERIABI (0xC000)
 # CHERI128-FLAGS-NEXT:    EF_MIPS_ARCH_4 (0x30000000)
 # CHERI128-FLAGS-NEXT:    EF_MIPS_CPIC (0x4)
 # CHERI128-FLAGS-NEXT:    EF_MIPS_MACH_CHERI128 (0xC10000)

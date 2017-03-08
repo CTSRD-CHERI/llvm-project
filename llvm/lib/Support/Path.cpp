@@ -556,8 +556,16 @@ void native(const Twine &path, SmallVectorImpl<char> &result) {
 }
 
 void native(SmallVectorImpl<char> &Path) {
+  if (Path.empty())
+    return;
 #ifdef LLVM_ON_WIN32
   std::replace(Path.begin(), Path.end(), '/', '\\');
+  if (Path[0] == '~' && (Path.size() == 1 || is_separator(Path[1]))) {
+    SmallString<128> PathHome;
+    home_directory(PathHome);
+    PathHome.append(Path.begin() + 1, Path.end());
+    Path = PathHome;
+  }
 #else
   for (auto PI = Path.begin(), PE = Path.end(); PI < PE; ++PI) {
     if (*PI == '\\') {
@@ -943,6 +951,13 @@ bool exists(file_status status) {
 
 bool status_known(file_status s) {
   return s.type() != file_type::status_error;
+}
+
+file_type get_file_type(const Twine &Path, bool Follow) {
+  file_status st;
+  if (status(Path, st, Follow))
+    return file_type::status_error;
+  return st.type();
 }
 
 bool is_directory(file_status status) {

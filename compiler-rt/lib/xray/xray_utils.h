@@ -21,7 +21,7 @@
 namespace __xray {
 
 // Default implementation of the reporting interface for sanitizer errors.
-void PrintToStdErr(const char *Buffer);
+void printToStdErr(const char *Buffer);
 
 // EINTR-safe write routine, provided a file descriptor and a character range.
 void retryingWriteAll(int Fd, char *Begin, char *End);
@@ -35,9 +35,6 @@ std::pair<ssize_t, bool> retryingReadSome(int Fd, char *Begin, char *End);
 // EINTR-safe open routine, uses flag-provided values for initialising a log
 // file.
 int getLogFD();
-
-// EINTR-safe read of CPU frquency for the current CPU.
-long long getCPUFrequency();
 
 } // namespace __xray
 

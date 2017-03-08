@@ -383,8 +383,8 @@ DICompileUnit *DICompileUnit::getImpl(
     unsigned RuntimeVersion, MDString *SplitDebugFilename,
     unsigned EmissionKind, Metadata *EnumTypes, Metadata *RetainedTypes,
     Metadata *GlobalVariables, Metadata *ImportedEntities, Metadata *Macros,
-    uint64_t DWOId, bool SplitDebugInlining, StorageType Storage,
-    bool ShouldCreate) {
+    uint64_t DWOId, bool SplitDebugInlining, bool DebugInfoForProfiling,
+    StorageType Storage, bool ShouldCreate) {
   assert(Storage != Uniqued && "Cannot unique DICompileUnit");
   assert(isCanonical(Producer) && "Expected canonical MDString");
   assert(isCanonical(Flags) && "Expected canonical MDString");
@@ -397,7 +397,8 @@ DICompileUnit *DICompileUnit::getImpl(
   return storeImpl(new (array_lengthof(Ops))
                        DICompileUnit(Context, Storage, SourceLanguage,
                                      IsOptimized, RuntimeVersion, EmissionKind,
-                                     DWOId, SplitDebugInlining, Ops),
+                                     DWOId, SplitDebugInlining,
+                                     DebugInfoForProfiling, Ops),
                    Storage);
 }
 
@@ -611,10 +612,23 @@ bool DIExpression::isValid() const {
         return false;
       break;
     }
+    case dwarf::DW_OP_swap: {
+      // Must be more than one implicit element on the stack.
+
+      // FIXME: A better way to implement this would be to add a local variable
+      // that keeps track of the stack depth and introduce something like a
+      // DW_LLVM_OP_implicit_location as a placeholder for the location this
+      // DIExpression is attached to, or else pass the number of implicit stack
+      // elements into isValid.
+      if (getNumElements() == 1)
+        return false;
+      break;
+    }
     case dwarf::DW_OP_constu:
     case dwarf::DW_OP_plus:
     case dwarf::DW_OP_minus:
     case dwarf::DW_OP_deref:
+    case dwarf::DW_OP_xderef:
       break;
     }
   }
