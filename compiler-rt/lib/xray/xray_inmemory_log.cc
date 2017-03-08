@@ -24,19 +24,12 @@
 #include <thread>
 #include <unistd.h>
 
-#if defined(__x86_64__)
-#include "xray_x86_64.h"
-#elif defined(__arm__) || defined(__aarch64__)
-#include "xray_emulate_tsc.h"
-#else
-#error "Unsupported CPU Architecture"
-#endif /* Architecture-specific inline intrinsics */
-
 #include "sanitizer_common/sanitizer_libc.h"
 #include "xray/xray_records.h"
 #include "xray_defs.h"
 #include "xray_flags.h"
 #include "xray_interface_internal.h"
+#include "xray_tsc.h"
 #include "xray_utils.h"
 
 // __xray_InMemoryRawLog will use a thread-local aligned buffer capped to a
@@ -84,7 +77,7 @@ using namespace __xray;
 
 static int __xray_OpenLogFile() XRAY_NEVER_INSTRUMENT {
   int F = getLogFD();
-  auto CPUFrequency = getCPUFrequency();
+  auto TSCFrequency = getTSCFrequency();
   if (F == -1)
     return -1;
   // Since we're here, we get to write the header. We set it up so that the
@@ -93,8 +86,7 @@ static int __xray_OpenLogFile() XRAY_NEVER_INSTRUMENT {
   XRayFileHeader Header;
   Header.Version = 1;
   Header.Type = FileTypes::NAIVE_LOG;
-  Header.CycleFrequency =
-      CPUFrequency == -1 ? 0 : static_cast<uint64_t>(CPUFrequency);
+  Header.CycleFrequency = TSCFrequency;
 
   // FIXME: Actually check whether we have 'constant_tsc' and 'nonstop_tsc'
   // before setting the values in the header.
@@ -137,7 +129,12 @@ void __xray_InMemoryRawLog(int32_t FuncId,
   }
 }
 
-static auto Unused = [] {
+static auto UNUSED Unused = [] {
+  if (!probeRequiredCPUFeatures()) {
+    Report("Required CPU features missing for XRay instrumentation, not "
+           "installing instrumentation hooks.\n");
+    return false;
+  }
   if (flags()->xray_naive_log)
     __xray_set_handler(__xray_InMemoryRawLog);
   return true;

@@ -25,17 +25,13 @@
 #include <pwd.h>
 #endif
 
-#include "lldb/Core/ArchSpec.h"
-#include "lldb/Core/DataBufferHeap.h"
-#include "lldb/Core/DataBufferMemoryMap.h"
-#include "lldb/Core/RegularExpression.h"
-#include "lldb/Core/Stream.h"
-#include "lldb/Core/StreamString.h"
-#include "lldb/Host/File.h"
+#include "lldb/Core/StringList.h"
 #include "lldb/Host/FileSpec.h"
 #include "lldb/Host/FileSystem.h"
-#include "lldb/Host/Host.h"
 #include "lldb/Utility/CleanUp.h"
+#include "lldb/Utility/RegularExpression.h"
+#include "lldb/Utility/Stream.h"
+#include "lldb/Utility/StreamString.h"
 
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
@@ -288,10 +284,10 @@ FileSpec::FileSpec(llvm::StringRef path, bool resolve_path, PathSyntax syntax)
   SetFile(path, resolve_path, syntax);
 }
 
-FileSpec::FileSpec(llvm::StringRef path, bool resolve_path, ArchSpec arch)
-    : FileSpec{path, resolve_path, arch.GetTriple().isOSWindows()
-                                       ? ePathSyntaxWindows
-                                       : ePathSyntaxPosix} {}
+FileSpec::FileSpec(llvm::StringRef path, bool resolve_path,
+                   const llvm::Triple &Triple)
+    : FileSpec{path, resolve_path,
+               Triple.isOSWindows() ? ePathSyntaxWindows : ePathSyntaxPosix} {}
 
 //------------------------------------------------------------------
 // Copy constructor
@@ -378,10 +374,10 @@ void FileSpec::SetFile(llvm::StringRef pathname, bool resolve,
                            : resolve_path_ref.substr(filename_begin));
 }
 
-void FileSpec::SetFile(llvm::StringRef path, bool resolve, ArchSpec arch) {
-  return SetFile(path, resolve, arch.GetTriple().isOSWindows()
-                                    ? ePathSyntaxWindows
-                                    : ePathSyntaxPosix);
+void FileSpec::SetFile(llvm::StringRef path, bool resolve,
+                       const llvm::Triple &Triple) {
+  return SetFile(path, resolve,
+                 Triple.isOSWindows() ? ePathSyntaxWindows : ePathSyntaxPosix);
 }
 
 //----------------------------------------------------------------------
@@ -826,133 +822,12 @@ ConstString FileSpec::GetFileNameStrippingExtension() const {
 }
 
 //------------------------------------------------------------------
-// Returns a shared pointer to a data buffer that contains all or
-// part of the contents of a file. The data is memory mapped and
-// will lazily page in data from the file as memory is accessed.
-// The data that is mapped will start "file_offset" bytes into the
-// file, and "file_size" bytes will be mapped. If "file_size" is
-// greater than the number of bytes available in the file starting
-// at "file_offset", the number of bytes will be appropriately
-// truncated. The final number of bytes that get mapped can be
-// verified using the DataBuffer::GetByteSize() function.
-//------------------------------------------------------------------
-DataBufferSP FileSpec::MemoryMapFileContents(off_t file_offset,
-                                             size_t file_size) const {
-  DataBufferSP data_sp;
-  std::unique_ptr<DataBufferMemoryMap> mmap_data(new DataBufferMemoryMap());
-  if (mmap_data.get()) {
-    const size_t mapped_length =
-        mmap_data->MemoryMapFromFileSpec(this, file_offset, file_size);
-    if (((file_size == SIZE_MAX) && (mapped_length > 0)) ||
-        (mapped_length >= file_size))
-      data_sp.reset(mmap_data.release());
-  }
-  return data_sp;
-}
-
-DataBufferSP FileSpec::MemoryMapFileContentsIfLocal(off_t file_offset,
-                                                    size_t file_size) const {
-  if (FileSystem::IsLocal(*this))
-    return MemoryMapFileContents(file_offset, file_size);
-  else
-    return ReadFileContents(file_offset, file_size, NULL);
-}
-
-//------------------------------------------------------------------
 // Return the size in bytes that this object takes in memory. This
 // returns the size in bytes of this object, not any shared string
 // values it may refer to.
 //------------------------------------------------------------------
 size_t FileSpec::MemorySize() const {
   return m_filename.MemorySize() + m_directory.MemorySize();
-}
-
-size_t FileSpec::ReadFileContents(off_t file_offset, void *dst, size_t dst_len,
-                                  Error *error_ptr) const {
-  Error error;
-  size_t bytes_read = 0;
-  char resolved_path[PATH_MAX];
-  if (GetPath(resolved_path, sizeof(resolved_path))) {
-    File file;
-    error = file.Open(resolved_path, File::eOpenOptionRead);
-    if (error.Success()) {
-      off_t file_offset_after_seek = file_offset;
-      bytes_read = dst_len;
-      error = file.Read(dst, bytes_read, file_offset_after_seek);
-    }
-  } else {
-    error.SetErrorString("invalid file specification");
-  }
-  if (error_ptr)
-    *error_ptr = error;
-  return bytes_read;
-}
-
-//------------------------------------------------------------------
-// Returns a shared pointer to a data buffer that contains all or
-// part of the contents of a file. The data copies into a heap based
-// buffer that lives in the DataBuffer shared pointer object returned.
-// The data that is cached will start "file_offset" bytes into the
-// file, and "file_size" bytes will be mapped. If "file_size" is
-// greater than the number of bytes available in the file starting
-// at "file_offset", the number of bytes will be appropriately
-// truncated. The final number of bytes that get mapped can be
-// verified using the DataBuffer::GetByteSize() function.
-//------------------------------------------------------------------
-DataBufferSP FileSpec::ReadFileContents(off_t file_offset, size_t file_size,
-                                        Error *error_ptr) const {
-  Error error;
-  DataBufferSP data_sp;
-  char resolved_path[PATH_MAX];
-  if (GetPath(resolved_path, sizeof(resolved_path))) {
-    File file;
-    error = file.Open(resolved_path, File::eOpenOptionRead);
-    if (error.Success()) {
-      const bool null_terminate = false;
-      error = file.Read(file_size, file_offset, null_terminate, data_sp);
-    }
-  } else {
-    error.SetErrorString("invalid file specification");
-  }
-  if (error_ptr)
-    *error_ptr = error;
-  return data_sp;
-}
-
-DataBufferSP FileSpec::ReadFileContentsAsCString(Error *error_ptr) {
-  Error error;
-  DataBufferSP data_sp;
-  char resolved_path[PATH_MAX];
-  if (GetPath(resolved_path, sizeof(resolved_path))) {
-    File file;
-    error = file.Open(resolved_path, File::eOpenOptionRead);
-    if (error.Success()) {
-      off_t offset = 0;
-      size_t length = SIZE_MAX;
-      const bool null_terminate = true;
-      error = file.Read(length, offset, null_terminate, data_sp);
-    }
-  } else {
-    error.SetErrorString("invalid file specification");
-  }
-  if (error_ptr)
-    *error_ptr = error;
-  return data_sp;
-}
-
-size_t FileSpec::ReadFileLines(STLStringArray &lines) {
-  lines.clear();
-  char path[PATH_MAX];
-  if (GetPath(path, sizeof(path))) {
-    std::ifstream file_stream(path);
-
-    if (file_stream) {
-      std::string line;
-      while (getline(file_stream, line))
-        lines.push_back(line);
-    }
-  }
-  return lines.size();
 }
 
 FileSpec::EnumerateDirectoryResult
@@ -1107,46 +982,46 @@ FileSpec::ForEachItemInDirectory(llvm::StringRef dir_path,
         else
           child_path = llvm::join_items('/', dir_path, dp->d_name);
 
-          // Don't resolve the file type or path
-          FileSpec child_path_spec(child_path, false);
+        // Don't resolve the file type or path
+        FileSpec child_path_spec(child_path, false);
 
-          EnumerateDirectoryResult result =
-              callback(file_type, child_path_spec);
+        EnumerateDirectoryResult result =
+            callback(file_type, child_path_spec);
 
-          switch (result) {
-          case eEnumerateDirectoryResultNext:
-            // Enumerate next entry in the current directory. We just
-            // exit this switch and will continue enumerating the
-            // current directory as we currently are...
-            break;
+        switch (result) {
+        case eEnumerateDirectoryResultNext:
+          // Enumerate next entry in the current directory. We just
+          // exit this switch and will continue enumerating the
+          // current directory as we currently are...
+          break;
 
-          case eEnumerateDirectoryResultEnter: // Recurse into the current entry
-                                               // if it is a directory or
-                                               // symlink, or next if not
-            if (FileSpec::ForEachItemInDirectory(child_path, callback) ==
-                eEnumerateDirectoryResultQuit) {
-              // The subdirectory returned Quit, which means to
-              // stop all directory enumerations at all levels.
-              if (buf)
-                free(buf);
-              return eEnumerateDirectoryResultQuit;
-            }
-            break;
-
-          case eEnumerateDirectoryResultExit: // Exit from the current directory
-                                              // at the current level.
-            // Exit from this directory level and tell parent to
-            // keep enumerating.
-            if (buf)
-              free(buf);
-            return eEnumerateDirectoryResultNext;
-
-          case eEnumerateDirectoryResultQuit: // Stop directory enumerations at
-                                              // any level
+        case eEnumerateDirectoryResultEnter: // Recurse into the current entry
+                                             // if it is a directory or
+                                             // symlink, or next if not
+          if (FileSpec::ForEachItemInDirectory(child_path, callback) ==
+              eEnumerateDirectoryResultQuit) {
+            // The subdirectory returned Quit, which means to
+            // stop all directory enumerations at all levels.
             if (buf)
               free(buf);
             return eEnumerateDirectoryResultQuit;
           }
+          break;
+
+        case eEnumerateDirectoryResultExit: // Exit from the current directory
+                                            // at the current level.
+          // Exit from this directory level and tell parent to
+          // keep enumerating.
+          if (buf)
+            free(buf);
+          return eEnumerateDirectoryResultNext;
+
+        case eEnumerateDirectoryResultQuit: // Stop directory enumerations at
+                                            // any level
+          if (buf)
+            free(buf);
+          return eEnumerateDirectoryResultQuit;
+        }
       }
       if (buf) {
         free(buf);

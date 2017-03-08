@@ -101,39 +101,64 @@ CodeGenTypes::arrangeFreeFunctionType(CanQual<FunctionNoProtoType> FTNP) {
                                  FTNP->getExtInfo(), {}, RequiredArgs(0));
 }
 
+static void addExtParameterInfosForCall(
+         llvm::SmallVectorImpl<FunctionProtoType::ExtParameterInfo> &paramInfos,
+                                        const FunctionProtoType *proto,
+                                        unsigned prefixArgs,
+                                        unsigned totalArgs) {
+  assert(proto->hasExtParameterInfos());
+  assert(paramInfos.size() <= prefixArgs);
+  assert(proto->getNumParams() + prefixArgs <= totalArgs);
+
+  paramInfos.reserve(totalArgs);
+
+  // Add default infos for any prefix args that don't already have infos.
+  paramInfos.resize(prefixArgs);
+
+  // Add infos for the prototype.
+  for (const auto &ParamInfo : proto->getExtParameterInfos()) {
+    paramInfos.push_back(ParamInfo);
+    // pass_object_size params have no parameter info.
+    if (ParamInfo.hasPassObjectSize())
+      paramInfos.emplace_back();
+  }
+
+  assert(paramInfos.size() <= totalArgs &&
+         "Did we forget to insert pass_object_size args?");
+  // Add default infos for the variadic and/or suffix arguments.
+  paramInfos.resize(totalArgs);
+}
+
 /// Adds the formal paramaters in FPT to the given prefix. If any parameter in
 /// FPT has pass_object_size attrs, then we'll add parameters for those, too.
 static void appendParameterTypes(const CodeGenTypes &CGT,
                                  SmallVectorImpl<CanQualType> &prefix,
               SmallVectorImpl<FunctionProtoType::ExtParameterInfo> &paramInfos,
-                                 CanQual<FunctionProtoType> FPT,
-                                 const FunctionDecl *FD) {
-  // Fill out paramInfos.
-  if (FPT->hasExtParameterInfos() || !paramInfos.empty()) {
-    assert(paramInfos.size() <= prefix.size());
-    auto protoParamInfos = FPT->getExtParameterInfos();
-    paramInfos.reserve(prefix.size() + protoParamInfos.size());
-    paramInfos.resize(prefix.size());
-    paramInfos.append(protoParamInfos.begin(), protoParamInfos.end());
-  }
-
-  // Fast path: unknown target.
-  if (FD == nullptr) {
+                                 CanQual<FunctionProtoType> FPT) {
+  // Fast path: don't touch param info if we don't need to.
+  if (!FPT->hasExtParameterInfos()) {
+    assert(paramInfos.empty() &&
+           "We have paramInfos, but the prototype doesn't?");
     prefix.append(FPT->param_type_begin(), FPT->param_type_end());
     return;
   }
 
-  // In the vast majority cases, we'll have precisely FPT->getNumParams()
+  unsigned PrefixSize = prefix.size();
+  // In the vast majority of cases, we'll have precisely FPT->getNumParams()
   // parameters; the only thing that can change this is the presence of
   // pass_object_size. So, we preallocate for the common case.
   prefix.reserve(prefix.size() + FPT->getNumParams());
 
-  assert(FD->getNumParams() == FPT->getNumParams());
+  auto ExtInfos = FPT->getExtParameterInfos();
+  assert(ExtInfos.size() == FPT->getNumParams());
   for (unsigned I = 0, E = FPT->getNumParams(); I != E; ++I) {
     prefix.push_back(FPT->getParamType(I));
-    if (FD->getParamDecl(I)->hasAttr<PassObjectSizeAttr>())
+    if (ExtInfos[I].hasPassObjectSize())
       prefix.push_back(CGT.getContext().getSizeType());
   }
+
+  addExtParameterInfosForCall(paramInfos, FPT.getTypePtr(), PrefixSize,
+                              prefix.size());
 }
 
 /// Arrange the LLVM function layout for a value of the given function
@@ -147,7 +172,7 @@ arrangeLLVMFunctionInfo(CodeGenTypes &CGT, bool instanceMethod,
   RequiredArgs Required =
       RequiredArgs::forPrototypePlus(FTP, prefix.size(), FD);
   // FIXME: Kill copy.
-  appendParameterTypes(CGT, prefix, paramInfos, FTP, FD);
+  appendParameterTypes(CGT, prefix, paramInfos, FTP);
   CanQualType resultType = FTP->getReturnType().getUnqualifiedType();
 
   return CGT.arrangeLLVMFunctionInfo(resultType, instanceMethod,
@@ -286,9 +311,19 @@ CodeGenTypes::arrangeCXXStructorDeclaration(const CXXMethodDecl *MD,
 
   // Add the formal parameters.
   if (PassParams)
-    appendParameterTypes(*this, argTypes, paramInfos, FTP, MD);
+    appendParameterTypes(*this, argTypes, paramInfos, FTP);
 
-  TheCXXABI.buildStructorSignature(MD, Type, argTypes);
+  CGCXXABI::AddedStructorArgs AddedArgs =
+      TheCXXABI.buildStructorSignature(MD, Type, argTypes);
+  if (!paramInfos.empty()) {
+    // Note: prefix implies after the first param.
+    if (AddedArgs.Prefix)
+      paramInfos.insert(paramInfos.begin() + 1, AddedArgs.Prefix,
+                        FunctionProtoType::ExtParameterInfo{});
+    if (AddedArgs.Suffix)
+      paramInfos.append(AddedArgs.Suffix,
+                        FunctionProtoType::ExtParameterInfo{});
+  }
 
   RequiredArgs required =
       (PassParams && MD->isVariadic() ? RequiredArgs(argTypes.size())
@@ -321,26 +356,6 @@ getArgTypesForDeclaration(ASTContext &ctx, const FunctionArgList &args) {
   return argTypes;
 }
 
-static void addExtParameterInfosForCall(
-         llvm::SmallVectorImpl<FunctionProtoType::ExtParameterInfo> &paramInfos,
-                                        const FunctionProtoType *proto,
-                                        unsigned prefixArgs,
-                                        unsigned totalArgs) {
-  assert(proto->hasExtParameterInfos());
-  assert(paramInfos.size() <= prefixArgs);
-  assert(proto->getNumParams() + prefixArgs <= totalArgs);
-
-  // Add default infos for any prefix args that don't already have infos.
-  paramInfos.resize(prefixArgs);
-
-  // Add infos for the prototype.
-  auto protoInfos = proto->getExtParameterInfos();
-  paramInfos.append(protoInfos.begin(), protoInfos.end());
-
-  // Add default infos for the variadic arguments.
-  paramInfos.resize(totalArgs);
-}
-
 static llvm::SmallVector<FunctionProtoType::ExtParameterInfo, 16>
 getExtParameterInfosForCall(const FunctionProtoType *proto,
                             unsigned prefixArgs, unsigned totalArgs) {
@@ -352,18 +367,31 @@ getExtParameterInfosForCall(const FunctionProtoType *proto,
 }
 
 /// Arrange a call to a C++ method, passing the given arguments.
+///
+/// ExtraPrefixArgs is the number of ABI-specific args passed after the `this`
+/// parameter.
+/// ExtraSuffixArgs is the number of ABI-specific args passed at the end of
+/// args.
+/// PassProtoArgs indicates whether `args` has args for the parameters in the
+/// given CXXConstructorDecl.
 const CGFunctionInfo &
 CodeGenTypes::arrangeCXXConstructorCall(const CallArgList &args,
                                         const CXXConstructorDecl *D,
                                         CXXCtorType CtorKind,
-                                        unsigned ExtraArgs) {
+                                        unsigned ExtraPrefixArgs,
+                                        unsigned ExtraSuffixArgs,
+                                        bool PassProtoArgs) {
   // FIXME: Kill copy.
   SmallVector<CanQualType, 16> ArgTypes;
   for (const auto &Arg : args)
     ArgTypes.push_back(Context.getCanonicalParamType(Arg.Ty));
 
+  // +1 for implicit this, which should always be args[0].
+  unsigned TotalPrefixArgs = 1 + ExtraPrefixArgs;
+
   CanQual<FunctionProtoType> FPT = GetFormalType(D);
-  RequiredArgs Required = RequiredArgs::forPrototypePlus(FPT, 1 + ExtraArgs, D);
+  RequiredArgs Required =
+      RequiredArgs::forPrototypePlus(FPT, TotalPrefixArgs + ExtraSuffixArgs, D);
   GlobalDecl GD(D, CtorKind);
   CanQualType ResultType = TheCXXABI.HasThisReturn(GD)
                                ? ArgTypes.front()
@@ -372,8 +400,14 @@ CodeGenTypes::arrangeCXXConstructorCall(const CallArgList &args,
                                      : Context.VoidTy;
 
   FunctionType::ExtInfo Info = FPT->getExtInfo();
-  auto ParamInfos = getExtParameterInfosForCall(FPT.getTypePtr(), 1 + ExtraArgs,
-                                                ArgTypes.size());
+  llvm::SmallVector<FunctionProtoType::ExtParameterInfo, 16> ParamInfos;
+  // If the prototype args are elided, we should only have ABI-specific args,
+  // which never have param info.
+  if (PassProtoArgs && FPT->hasExtParameterInfos()) {
+    // ABI-specific suffix arguments are treated the same as variadic arguments.
+    addExtParameterInfosForCall(ParamInfos, FPT.getTypePtr(), TotalPrefixArgs,
+                                ArgTypes.size());
+  }
   return arrangeLLVMFunctionInfo(ResultType, /*instanceMethod=*/true,
                                  /*chainCall=*/false, ArgTypes, Info,
                                  ParamInfos, Required);
@@ -617,15 +651,20 @@ CodeGenTypes::arrangeBuiltinFunctionDeclaration(CanQualType resultType,
 }
 
 /// Arrange a call to a C++ method, passing the given arguments.
+///
+/// numPrefixArgs is the number of ABI-specific prefix arguments we have. It
+/// does not count `this`.
 const CGFunctionInfo &
 CodeGenTypes::arrangeCXXMethodCall(const CallArgList &args,
                                    const FunctionProtoType *proto,
-                                   RequiredArgs required) {
-  unsigned numRequiredArgs =
-    (proto->isVariadic() ? required.getNumRequiredArgs() : args.size());
-  unsigned numPrefixArgs = numRequiredArgs - proto->getNumParams();
+                                   RequiredArgs required,
+                                   unsigned numPrefixArgs) {
+  assert(numPrefixArgs + 1 <= args.size() &&
+         "Emitting a call with less args than the required prefix?");
+  // Add one to account for `this`. It's a bit awkward here, but we don't count
+  // `this` in similar places elsewhere.
   auto paramInfos =
-    getExtParameterInfosForCall(proto, numPrefixArgs, args.size());
+    getExtParameterInfosForCall(proto, numPrefixArgs + 1, args.size());
 
   // FIXME: Kill copy.
   auto argTypes = getArgTypesForCall(Context, args);
@@ -3203,13 +3242,13 @@ void CallArgList::freeArgumentMemory(CodeGenFunction &CGF) const {
 
 void CodeGenFunction::EmitNonNullArgCheck(RValue RV, QualType ArgType,
                                           SourceLocation ArgLoc,
-                                          const FunctionDecl *FD,
+                                          AbstractCallee AC,
                                           unsigned ParmNum) {
-  if (!SanOpts.has(SanitizerKind::NonnullAttribute) || !FD)
+  if (!SanOpts.has(SanitizerKind::NonnullAttribute) || !AC.getDecl())
     return;
-  auto PVD = ParmNum < FD->getNumParams() ? FD->getParamDecl(ParmNum) : nullptr;
+  auto PVD = ParmNum < AC.getNumParams() ? AC.getParamDecl(ParmNum) : nullptr;
   unsigned ArgNo = PVD ? PVD->getFunctionScopeIndex() : ParmNum;
-  auto NNAttr = getNonNullAttr(FD, PVD, ArgType, ArgNo);
+  auto NNAttr = getNonNullAttr(AC.getDecl(), PVD, ArgType, ArgNo);
   if (!NNAttr)
     return;
   SanitizerScope SanScope(this);
@@ -3229,23 +3268,8 @@ void CodeGenFunction::EmitNonNullArgCheck(RValue RV, QualType ArgType,
 void CodeGenFunction::EmitCallArgs(
     CallArgList &Args, ArrayRef<QualType> ArgTypes,
     llvm::iterator_range<CallExpr::const_arg_iterator> ArgRange,
-    const FunctionDecl *CalleeDecl, unsigned ParamsToSkip,
-    EvaluationOrder Order) {
+    AbstractCallee AC, unsigned ParamsToSkip, EvaluationOrder Order) {
   assert((int)ArgTypes.size() == (ArgRange.end() - ArgRange.begin()));
-
-  auto MaybeEmitImplicitObjectSize = [&](unsigned I, const Expr *Arg) {
-    if (CalleeDecl == nullptr || I >= CalleeDecl->getNumParams())
-      return;
-    auto *PS = CalleeDecl->getParamDecl(I)->getAttr<PassObjectSizeAttr>();
-    if (PS == nullptr)
-      return;
-
-    const auto &Context = getContext();
-    auto SizeTy = Context.getSizeType();
-    auto T = Builder.getIntNTy(Context.getTypeSize(SizeTy));
-    llvm::Value *V = evaluateOrEmitBuiltinObjectSize(Arg, PS->getType(), T);
-    Args.add(RValue::get(V), SizeTy);
-  };
 
   // We *have* to evaluate arguments from right to left in the MS C++ ABI,
   // because arguments are destroyed left to right in the callee. As a special
@@ -3256,6 +3280,27 @@ void CodeGenFunction::EmitCallArgs(
       CGM.getTarget().getCXXABI().areArgsDestroyedLeftToRightInCallee()
           ? Order == EvaluationOrder::ForceLeftToRight
           : Order != EvaluationOrder::ForceRightToLeft;
+
+  auto MaybeEmitImplicitObjectSize = [&](unsigned I, const Expr *Arg,
+                                         RValue EmittedArg) {
+    if (!AC.hasFunctionDecl() || I >= AC.getNumParams())
+      return;
+    auto *PS = AC.getParamDecl(I)->getAttr<PassObjectSizeAttr>();
+    if (PS == nullptr)
+      return;
+
+    const auto &Context = getContext();
+    auto SizeTy = Context.getSizeType();
+    auto T = Builder.getIntNTy(Context.getTypeSize(SizeTy));
+    assert(EmittedArg.getScalarVal() && "We emitted nothing for the arg?");
+    llvm::Value *V = evaluateOrEmitBuiltinObjectSize(Arg, PS->getType(), T,
+                                                     EmittedArg.getScalarVal());
+    Args.add(RValue::get(V), SizeTy);
+    // If we're emitting args in reverse, be sure to do so with
+    // pass_object_size, as well.
+    if (!LeftToRight)
+      std::swap(Args.back(), *(&Args.back() - 1));
+  };
 
   // Insert a stack save if we're going to need any inalloca args.
   bool HasInAllocaArgs = false;
@@ -3274,11 +3319,20 @@ void CodeGenFunction::EmitCallArgs(
   for (unsigned I = 0, E = ArgTypes.size(); I != E; ++I) {
     unsigned Idx = LeftToRight ? I : E - I - 1;
     CallExpr::const_arg_iterator Arg = ArgRange.begin() + Idx;
-    if (!LeftToRight) MaybeEmitImplicitObjectSize(Idx, *Arg);
+    unsigned InitialArgSize = Args.size();
     EmitCallArg(Args, *Arg, ArgTypes[Idx]);
-    EmitNonNullArgCheck(Args.back().RV, ArgTypes[Idx], (*Arg)->getExprLoc(),
-                        CalleeDecl, ParamsToSkip + Idx);
-    if (LeftToRight) MaybeEmitImplicitObjectSize(Idx, *Arg);
+    // In particular, we depend on it being the last arg in Args, and the
+    // objectsize bits depend on there only being one arg if !LeftToRight.
+    assert(InitialArgSize + 1 == Args.size() &&
+           "The code below depends on only adding one arg per EmitCallArg");
+    (void)InitialArgSize;
+    RValue RVArg = Args.back().RV;
+    EmitNonNullArgCheck(RVArg, ArgTypes[Idx], (*Arg)->getExprLoc(), AC,
+                        ParamsToSkip + Idx);
+    // @llvm.objectsize should never have side-effects and shouldn't need
+    // destruction/cleanups, so we can safely "emit" it after its arg,
+    // regardless of right-to-leftness
+    MaybeEmitImplicitObjectSize(Idx, *Arg, RVArg);
   }
 
   if (!LeftToRight) {

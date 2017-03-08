@@ -14,25 +14,26 @@
 #include <unordered_map>
 
 #include "lldb/Core/ArchSpec.h"
-#include "lldb/Core/DataBuffer.h"
-#include "lldb/Core/Error.h"
 #include "lldb/Core/FileSpecList.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/Section.h"
-#include "lldb/Core/Stream.h"
 #include "lldb/Core/Timer.h"
 #include "lldb/Symbol/DWARFCallFrameInfo.h"
 #include "lldb/Symbol/SymbolContext.h"
 #include "lldb/Target/SectionLoadList.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/DataBufferLLVM.h"
+#include "lldb/Utility/Error.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/Stream.h"
 
 #include "llvm/ADT/PointerUnion.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/ARMBuildAttributes.h"
 #include "llvm/Support/MathExtras.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/MipsABIFlags.h"
 
 #define CASE_AND_STREAM(s, def, width)                                         \
@@ -386,31 +387,42 @@ ObjectFile *ObjectFileELF::CreateInstance(const lldb::ModuleSP &module_sp,
                                           lldb::offset_t file_offset,
                                           lldb::offset_t length) {
   if (!data_sp) {
-    data_sp = file->MemoryMapFileContentsIfLocal(file_offset, length);
+    data_sp =
+        DataBufferLLVM::CreateSliceFromPath(file->GetPath(), length, file_offset);
+    if (!data_sp)
+      return nullptr;
     data_offset = 0;
   }
 
-  if (data_sp &&
-      data_sp->GetByteSize() > (llvm::ELF::EI_NIDENT + data_offset)) {
-    const uint8_t *magic = data_sp->GetBytes() + data_offset;
-    if (ELFHeader::MagicBytesMatch(magic)) {
-      // Update the data to contain the entire file if it doesn't already
-      if (data_sp->GetByteSize() < length) {
-        data_sp = file->MemoryMapFileContentsIfLocal(file_offset, length);
-        data_offset = 0;
-        magic = data_sp->GetBytes();
-      }
-      unsigned address_size = ELFHeader::AddressSizeInBytes(magic);
-      if (address_size == 4 || address_size == 8) {
-        std::unique_ptr<ObjectFileELF> objfile_ap(new ObjectFileELF(
-            module_sp, data_sp, data_offset, file, file_offset, length));
-        ArchSpec spec;
-        if (objfile_ap->GetArchitecture(spec) &&
-            objfile_ap->SetModulesArchitecture(spec))
-          return objfile_ap.release();
-      }
-    }
+  assert(data_sp);
+
+  if (data_sp->GetByteSize() <= (llvm::ELF::EI_NIDENT + data_offset))
+    return nullptr;
+
+  const uint8_t *magic = data_sp->GetBytes() + data_offset;
+  if (!ELFHeader::MagicBytesMatch(magic))
+    return nullptr;
+
+  // Update the data to contain the entire file if it doesn't already
+  if (data_sp->GetByteSize() < length) {
+    data_sp =
+        DataBufferLLVM::CreateSliceFromPath(file->GetPath(), length, file_offset);
+    if (!data_sp)
+      return nullptr;
+    data_offset = 0;
+    magic = data_sp->GetBytes();
   }
+
+  unsigned address_size = ELFHeader::AddressSizeInBytes(magic);
+  if (address_size == 4 || address_size == 8) {
+    std::unique_ptr<ObjectFileELF> objfile_ap(new ObjectFileELF(
+        module_sp, data_sp, data_offset, file, file_offset, length));
+    ArchSpec spec;
+    if (objfile_ap->GetArchitecture(spec) &&
+        objfile_ap->SetModulesArchitecture(spec))
+      return objfile_ap.release();
+  }
+
   return NULL;
 }
 
@@ -610,7 +622,8 @@ size_t ObjectFileELF::GetModuleSpecifications(
     DataExtractor data;
     data.SetData(data_sp);
     elf::ELFHeader header;
-    if (header.Parse(data, &data_offset)) {
+    lldb::offset_t header_offset = data_offset;
+    if (header.Parse(data, &header_offset)) {
       if (data_sp) {
         ModuleSpec spec(file);
 
@@ -645,15 +658,31 @@ size_t ObjectFileELF::GetModuleSpecifications(
                           __FUNCTION__, file.GetPath().c_str());
           }
 
+          // In case there is header extension in the section #0, the header
+          // we parsed above could have sentinel values for e_phnum, e_shnum,
+          // and e_shstrndx.  In this case we need to reparse the header
+          // with a bigger data source to get the actual values.
+          size_t section_header_end = header.e_shoff + header.e_shentsize;
+          if (header.HasHeaderExtension() &&
+            section_header_end > data_sp->GetByteSize()) {
+            data_sp = DataBufferLLVM::CreateSliceFromPath(
+                file.GetPath(), section_header_end, file_offset);
+            if (data_sp) {
+              data.SetData(data_sp);
+              lldb::offset_t header_offset = data_offset;
+              header.Parse(data, &header_offset);
+            }
+          }
+
           // Try to get the UUID from the section list. Usually that's at the
-          // end, so
-          // map the file in if we don't have it already.
-          size_t section_header_end =
+          // end, so map the file in if we don't have it already.
+          section_header_end =
               header.e_shoff + header.e_shnum * header.e_shentsize;
           if (section_header_end > data_sp->GetByteSize()) {
-            data_sp = file.MemoryMapFileContentsIfLocal(file_offset,
-                                                        section_header_end);
-            data.SetData(data_sp);
+            data_sp = DataBufferLLVM::CreateSliceFromPath(
+                file.GetPath(), section_header_end, file_offset);
+            if (data_sp)
+              data.SetData(data_sp);
           }
 
           uint32_t gnu_debuglink_crc = 0;
@@ -688,17 +717,17 @@ size_t ObjectFileELF::GetModuleSpecifications(
                   (file.GetByteSize() - file_offset) / 1024);
 
               // For core files - which usually don't happen to have a
-              // gnu_debuglink,
-              // and are pretty bulky - calculating whole contents crc32 would
-              // be too much of luxury.
-              // Thus we will need to fallback to something simpler.
+              // gnu_debuglink, and are pretty bulky - calculating whole
+              // contents crc32 would be too much of luxury.  Thus we will need
+              // to fallback to something simpler.
               if (header.e_type == llvm::ELF::ET_CORE) {
                 size_t program_headers_end =
                     header.e_phoff + header.e_phnum * header.e_phentsize;
                 if (program_headers_end > data_sp->GetByteSize()) {
-                  data_sp = file.MemoryMapFileContentsIfLocal(
-                      file_offset, program_headers_end);
-                  data.SetData(data_sp);
+                  data_sp = DataBufferLLVM::CreateSliceFromPath(
+                      file.GetPath(), program_headers_end, file_offset);
+                  if (data_sp)
+                    data.SetData(data_sp);
                 }
                 ProgramHeaderColl program_headers;
                 GetProgramHeaderInfo(program_headers, set_data, header);
@@ -711,20 +740,23 @@ size_t ObjectFileELF::GetModuleSpecifications(
                 }
 
                 if (segment_data_end > data_sp->GetByteSize()) {
-                  data_sp = file.MemoryMapFileContentsIfLocal(file_offset,
-                                                              segment_data_end);
-                  data.SetData(data_sp);
+                  data_sp = DataBufferLLVM::CreateSliceFromPath(
+                      file.GetPath(), segment_data_end, file_offset);
+                  if (data_sp)
+                    data.SetData(data_sp);
                 }
 
                 core_notes_crc =
                     CalculateELFNotesSegmentsCRC32(program_headers, data);
               } else {
                 // Need to map entire file into memory to calculate the crc.
-                data_sp =
-                    file.MemoryMapFileContentsIfLocal(file_offset, SIZE_MAX);
-                data.SetData(data_sp);
-                gnu_debuglink_crc = calc_gnu_debuglink_crc32(
-                    data.GetDataStart(), data.GetByteSize());
+                data_sp = DataBufferLLVM::CreateSliceFromPath(file.GetPath(), -1,
+                                                         file_offset);
+                if (data_sp) {
+                  data.SetData(data_sp);
+                  gnu_debuglink_crc = calc_gnu_debuglink_crc32(
+                      data.GetDataStart(), data.GetByteSize());
+                }
               }
             }
             if (gnu_debuglink_crc) {
@@ -3067,10 +3099,10 @@ void ObjectFileELF::DumpELFHeader(Stream *s, const ELFHeader &header) {
   s->Printf("e_flags     = 0x%8.8x\n", header.e_flags);
   s->Printf("e_ehsize    = 0x%4.4x\n", header.e_ehsize);
   s->Printf("e_phentsize = 0x%4.4x\n", header.e_phentsize);
-  s->Printf("e_phnum     = 0x%4.4x\n", header.e_phnum);
+  s->Printf("e_phnum     = 0x%8.8x\n", header.e_phnum);
   s->Printf("e_shentsize = 0x%4.4x\n", header.e_shentsize);
-  s->Printf("e_shnum     = 0x%4.4x\n", header.e_shnum);
-  s->Printf("e_shstrndx  = 0x%4.4x\n", header.e_shstrndx);
+  s->Printf("e_shnum     = 0x%8.8x\n", header.e_shnum);
+  s->Printf("e_shstrndx  = 0x%8.8x\n", header.e_shstrndx);
 }
 
 //----------------------------------------------------------------------

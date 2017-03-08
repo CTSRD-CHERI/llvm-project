@@ -31,6 +31,10 @@ def AMDGPUFPClassOp : SDTypeProfile<1, 2,
   [SDTCisInt<0>, SDTCisFP<1>, SDTCisInt<2>]
 >;
 
+def AMDGPUFPPackOp : SDTypeProfile<1, 2,
+  [SDTCisFP<1>, SDTCisSameAs<1, 2>]
+>;
+
 def AMDGPUDivScaleOp : SDTypeProfile<2, 3,
   [SDTCisFP<0>, SDTCisInt<1>, SDTCisSameAs<0, 2>, SDTCisSameAs<0, 3>, SDTCisSameAs<0, 4>]
 >;
@@ -78,6 +82,8 @@ def AMDGPUrsq_clamp : SDNode<"AMDGPUISD::RSQ_CLAMP", SDTFPUnaryOp>;
 
 def AMDGPUldexp : SDNode<"AMDGPUISD::LDEXP", AMDGPULdExpOp>;
 
+def AMDGPUpkrtz_f16_f32 : SDNode<"AMDGPUISD::CVT_PKRTZ_F16_F32", AMDGPUFPPackOp>;
+
 def AMDGPUfp_class : SDNode<"AMDGPUISD::FP_CLASS", AMDGPUFPClassOp>;
 
 // out = max(a, b) a and b are floats, where a nan comparison fails.
@@ -92,17 +98,7 @@ def AMDGPUfmul_legacy : SDNode<"AMDGPUISD::FMUL_LEGACY", SDTFPBinOp,
   [SDNPCommutative, SDNPAssociative]
 >;
 
-def AMDGPUclamp : SDNode<"AMDGPUISD::CLAMP", SDTFPTernaryOp, []>;
-
-// out = max(a, b) a and b are signed ints
-def AMDGPUsmax : SDNode<"AMDGPUISD::SMAX", SDTIntBinOp,
-  [SDNPCommutative, SDNPAssociative]
->;
-
-// out = max(a, b) a and b are unsigned ints
-def AMDGPUumax : SDNode<"AMDGPUISD::UMAX", SDTIntBinOp,
-  [SDNPCommutative, SDNPAssociative]
->;
+def AMDGPUclamp : SDNode<"AMDGPUISD::CLAMP", SDTFPUnaryOp>;
 
 // out = min(a, b) a and b are floats, where a nan comparison fails.
 def AMDGPUfmin_legacy : SDNode<"AMDGPUISD::FMIN_LEGACY", SDTFPBinOp,
@@ -193,6 +189,8 @@ def AMDGPUdiv_fmas : SDNode<"AMDGPUISD::DIV_FMAS", AMDGPUFmasOp>;
 // Special case divide fixup and flags(src0 = Quotient, src1 =
 // Denominator, src2 = Numerator).
 def AMDGPUdiv_fixup : SDNode<"AMDGPUISD::DIV_FIXUP", SDTFPTernaryOp>;
+
+def AMDGPUfmad_ftz : SDNode<"AMDGPUISD::FMAD_FTZ", SDTFPTernaryOp>;
 
 // Look Up 2.0 / pi src0 with segment select src1[4:0]
 def AMDGPUtrig_preop : SDNode<"AMDGPUISD::TRIG_PREOP", AMDGPUTrigPreOp>;

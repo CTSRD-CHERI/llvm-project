@@ -45,7 +45,9 @@ char const __kmp_version_alt_comp[] = KMP_VERSION_PREFIX "alternative compiler s
 #endif /* defined(KMP_GOMP_COMPAT) */
 
 char const __kmp_version_omp_api[] = KMP_VERSION_PREFIX "API version: "
-#if OMP_45_ENABLED
+#if OMP_50_ENABLED
+    "5.0 (201611)";
+#elif OMP_45_ENABLED
     "4.5 (201511)";
 #elif OMP_40_ENABLED
     "4.0 (201307)";
@@ -4004,6 +4006,12 @@ __kmp_initialize_info( kmp_info_t *this_thr, kmp_team_t *team, int tid, int gtid
 
     this_thr->th.th_info.ds.ds_tid  = tid;
     this_thr->th.th_set_nproc       = 0;
+    if (__kmp_tasking_mode != tskm_immediate_exec)
+        // When tasking is possible, threads are not safe to reap until they are
+        // done tasking; this will be set when tasking code is exited in wait
+        this_thr->th.th_reap_state = KMP_NOT_SAFE_TO_REAP;
+    else  // no tasking --> always safe to reap
+        this_thr->th.th_reap_state = KMP_SAFE_TO_REAP;
 #if OMP_40_ENABLED
     this_thr->th.th_set_proc_bind   = proc_bind_default;
 # if KMP_AFFINITY_SUPPORTED
@@ -5255,7 +5263,25 @@ __kmp_free_team( kmp_root_t *root, kmp_team_t *team  USE_NESTED_HOT_ARG(kmp_info
 
     /* if we are non-hot team, release our threads */
     if( ! use_hot_team ) {
-        if ( __kmp_tasking_mode != tskm_immediate_exec ) {
+        if (__kmp_tasking_mode != tskm_immediate_exec) {
+            // Wait for threads to reach reapable state
+            for (f = 1; f < team->t.t_nproc; ++f) {
+                KMP_DEBUG_ASSERT(team->t.t_threads[f]);
+                volatile kmp_uint32 *state = &team->t.t_threads[f]->th.th_reap_state;
+                while (*state != KMP_SAFE_TO_REAP) {
+#if KMP_OS_WINDOWS
+                    // On Windows a thread can be killed at any time, check this
+                    DWORD ecode;
+                    if (__kmp_is_thread_alive(team->t.t_threads[f], &ecode))
+                        KMP_CPU_PAUSE();
+                    else
+                        *state = KMP_SAFE_TO_REAP; // reset the flag for dead thread
+#else
+                    KMP_CPU_PAUSE();
+#endif
+                }
+            }
+
             // Delete task teams
             int tt_idx;
             for (tt_idx=0; tt_idx<2; ++tt_idx) {
@@ -5841,6 +5867,7 @@ __kmp_internal_end(void)
             kmp_info_t * thread = (kmp_info_t *) __kmp_thread_pool;
             __kmp_thread_pool = thread->th.th_next_pool;
             // Reap it.
+            KMP_DEBUG_ASSERT(thread->th.th_reap_state == KMP_SAFE_TO_REAP);
             thread->th.th_next_pool = NULL;
             thread->th.th_in_pool = FALSE;
             __kmp_reap_thread( thread, 0 );

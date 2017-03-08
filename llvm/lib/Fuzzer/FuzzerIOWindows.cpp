@@ -149,6 +149,10 @@ void DiscardOutput(int Fd) {
   fclose(Temp);
 }
 
+intptr_t GetHandleFromFd(int fd) {
+  return _get_osfhandle(fd);
+}
+
 static bool IsSeparator(char C) {
   return C == '\\' || C == '/';
 }
@@ -287,7 +291,17 @@ std::string DirName(const std::string &FileName) {
   return FileName.substr(0, LocationLen + DirLen);
 }
 
-std::string TmpDir() { return "TODO: implement TmpDir"; }
+std::string TmpDir() {
+  std::string Tmp;
+  Tmp.resize(MAX_PATH + 1);
+  DWORD Size = GetTempPathA(Tmp.size(), &Tmp[0]);
+  if (Size == 0) {
+    Printf("Couldn't get Tmp path.\n");
+    exit(1);
+  }
+  Tmp.resize(Size);
+  return Tmp;
+}
 
 bool IsInterestingCoverageFile(const std::string &FileName) {
   if (FileName.find("Program Files") != std::string::npos)

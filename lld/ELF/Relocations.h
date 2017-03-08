@@ -15,10 +15,9 @@
 namespace lld {
 namespace elf {
 class SymbolBody;
-class InputSectionData;
-template <class ELFT> class InputSection;
-template <class ELFT> class InputSectionBase;
-class OutputSectionBase;
+class InputSection;
+class InputSectionBase;
+class OutputSection;
 
 // List of target-independent relocation types. Relocations read
 // from files are converted to these types so that the main code
@@ -42,6 +41,7 @@ enum RelExpr {
   R_MIPS_TLSGD,
   R_MIPS_TLSLD,
   R_NEG_TLS,
+  R_NONE,
   R_PAGE_PC,
   R_PC,
   R_PLT,
@@ -61,9 +61,6 @@ enum RelExpr {
   R_RELAX_TLS_IE_TO_LE,
   R_RELAX_TLS_LD_TO_LE,
   R_SIZE,
-  R_THUNK_ABS,
-  R_THUNK_PC,
-  R_THUNK_PLT_PC,
   R_TLS,
   R_TLSDESC,
   R_TLSDESC_PAGE,
@@ -108,22 +105,23 @@ struct Relocation {
   RelExpr Expr;
   uint32_t Type;
   uint64_t Offset;
-  uint64_t Addend;
+  int64_t Addend;
   SymbolBody *Sym;
 };
 
-template <class ELFT> void scanRelocations(InputSectionBase<ELFT> &);
+template <class ELFT> void scanRelocations(InputSectionBase &);
 
 template <class ELFT>
-void createThunks(ArrayRef<OutputSectionBase *> OutputSections);
+void createThunks(ArrayRef<OutputSection *> OutputSections);
 
+// Return a int64_t to make sure we get the sign extension out of the way as
+// early as possible.
 template <class ELFT>
-static inline typename ELFT::uint getAddend(const typename ELFT::Rel &Rel) {
+static inline int64_t getAddend(const typename ELFT::Rel &Rel) {
   return 0;
 }
-
 template <class ELFT>
-static inline typename ELFT::uint getAddend(const typename ELFT::Rela &Rel) {
+static inline int64_t getAddend(const typename ELFT::Rela &Rel) {
   return Rel.r_addend;
 }
 }

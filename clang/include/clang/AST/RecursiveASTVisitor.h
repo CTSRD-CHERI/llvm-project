@@ -774,6 +774,11 @@ bool RecursiveASTVisitor<Derived>::TraverseDeclarationNameInfo(
       TRY_TO(TraverseTypeLoc(TSInfo->getTypeLoc()));
     break;
 
+  case DeclarationName::CXXDeductionGuideName:
+    TRY_TO(TraverseTemplateName(
+        TemplateName(NameInfo.getName().getCXXDeductionGuideTemplate())));
+    break;
+
   case DeclarationName::Identifier:
   case DeclarationName::ObjCZeroArgSelector:
   case DeclarationName::ObjCOneArgSelector:
@@ -1941,6 +1946,13 @@ DEF_TRAVERSE_DECL(FunctionDecl, {
   ReturnValue = TraverseFunctionHelper(D);
 })
 
+DEF_TRAVERSE_DECL(CXXDeductionGuideDecl, {
+  // We skip decls_begin/decls_end, which are already covered by
+  // TraverseFunctionHelper().
+  ShouldVisitChildren = false;
+  ReturnValue = TraverseFunctionHelper(D);
+})
+
 DEF_TRAVERSE_DECL(CXXMethodDecl, {
   // We skip decls_begin/decls_end, which are already covered by
   // TraverseFunctionHelper().
@@ -2499,6 +2511,12 @@ DEF_TRAVERSE_STMT(CoreturnStmt, {
   }
 })
 DEF_TRAVERSE_STMT(CoawaitExpr, {
+  if (!getDerived().shouldVisitImplicitCode()) {
+    TRY_TO_TRAVERSE_OR_ENQUEUE_STMT(S->getOperand());
+    ShouldVisitChildren = false;
+  }
+})
+DEF_TRAVERSE_STMT(DependentCoawaitExpr, {
   if (!getDerived().shouldVisitImplicitCode()) {
     TRY_TO_TRAVERSE_OR_ENQUEUE_STMT(S->getOperand());
     ShouldVisitChildren = false;

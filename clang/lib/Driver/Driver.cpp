@@ -9,7 +9,36 @@
 
 #include "clang/Driver/Driver.h"
 #include "InputInfo.h"
-#include "ToolChains.h"
+#include "ToolChains/AMDGPU.h"
+#include "ToolChains/AVR.h"
+#include "ToolChains/Bitrig.h"
+#include "ToolChains/Clang.h"
+#include "ToolChains/CloudABI.h"
+#include "ToolChains/Contiki.h"
+#include "ToolChains/CrossWindows.h"
+#include "ToolChains/Cuda.h"
+#include "ToolChains/Darwin.h"
+#include "ToolChains/DragonFly.h"
+#include "ToolChains/FreeBSD.h"
+#include "ToolChains/Fuchsia.h"
+#include "ToolChains/Gnu.h"
+#include "ToolChains/Haiku.h"
+#include "ToolChains/Hexagon.h"
+#include "ToolChains/Lanai.h"
+#include "ToolChains/Linux.h"
+#include "ToolChains/MinGW.h"
+#include "ToolChains/Minix.h"
+#include "ToolChains/Mips.h"
+#include "ToolChains/MSVC.h"
+#include "ToolChains/Myriad.h"
+#include "ToolChains/NaCl.h"
+#include "ToolChains/NetBSD.h"
+#include "ToolChains/OpenBSD.h"
+#include "ToolChains/PS4CPU.h"
+#include "ToolChains/Solaris.h"
+#include "ToolChains/TCE.h"
+#include "ToolChains/WebAssembly.h"
+#include "ToolChains/XCore.h"
 #include "clang/Basic/Version.h"
 #include "clang/Basic/VirtualFileSystem.h"
 #include "clang/Config/config.h"
@@ -79,7 +108,8 @@ Driver::Driver(StringRef ClangExecutable, StringRef DefaultTargetTriple,
     llvm::sys::path::append(P, ClangResourceDir);
   } else {
     StringRef ClangLibdirSuffix(CLANG_LIBDIR_SUFFIX);
-    llvm::sys::path::append(P, "..", Twine("lib") + ClangLibdirSuffix, "clang",
+    P = llvm::sys::path::parent_path(Dir);
+    llvm::sys::path::append(P, Twine("lib") + ClangLibdirSuffix, "clang",
                             CLANG_VERSION_STRING);
   }
   ResourceDir = P.str();
@@ -1456,16 +1486,15 @@ void Driver::BuildInputs(const ToolChain &TC, DerivedArgList &Args,
                     ? types::TY_C
                     : types::TY_CXX;
 
-    arg_iterator it =
-        Args.filtered_begin(options::OPT__SLASH_TC, options::OPT__SLASH_TP);
-    const arg_iterator ie = Args.filtered_end();
-    Arg *Previous = *it++;
+    Arg *Previous = nullptr;
     bool ShowNote = false;
-    while (it != ie) {
-      Diag(clang::diag::warn_drv_overriding_flag_option)
-          << Previous->getSpelling() << (*it)->getSpelling();
-      Previous = *it++;
-      ShowNote = true;
+    for (Arg *A : Args.filtered(options::OPT__SLASH_TC, options::OPT__SLASH_TP)) {
+      if (Previous) {
+        Diag(clang::diag::warn_drv_overriding_flag_option)
+          << Previous->getSpelling() << A->getSpelling();
+        ShowNote = true;
+      }
+      Previous = A;
     }
     if (ShowNote)
       Diag(clang::diag::note_drv_t_option_is_global);
@@ -1582,6 +1611,14 @@ void Driver::BuildInputs(const ToolChain &TC, DerivedArgList &Args,
       if (!InputType) {
         Diag(clang::diag::err_drv_unknown_language) << A->getValue();
         InputType = types::TY_Object;
+      }
+    } else if (A->getOption().getID() == options::OPT__SLASH_U) {
+      assert(A->getNumValues() == 1 && "The /U option has one value.");
+      StringRef Val = A->getValue(0);
+      if (Val.find_first_of("/\\") != StringRef::npos) {
+        // Warn about e.g. "/Users/me/myfile.c".
+        Diag(diag::warn_slash_u_filename) << Val;
+        Diag(diag::note_use_dashdash);
       }
     }
   }
@@ -2345,8 +2382,12 @@ void Driver::BuildActions(Compilation &C, DerivedArgList &Args,
   Arg *FinalPhaseArg;
   phases::ID FinalPhase = getFinalPhase(Args, &FinalPhaseArg);
 
-  if (FinalPhase == phases::Link && Args.hasArg(options::OPT_emit_llvm)) {
-    Diag(clang::diag::err_drv_emit_llvm_link);
+  if (FinalPhase == phases::Link) {
+    if (Args.hasArg(options::OPT_emit_llvm))
+      Diag(clang::diag::err_drv_emit_llvm_link);
+    if (IsCLMode() && LTOMode != LTOK_None &&
+        !Args.getLastArgValue(options::OPT_fuse_ld_EQ).equals_lower("lld"))
+      Diag(clang::diag::err_drv_lto_without_lld);
   }
 
   // Reject -Z* at the top level, these options should never have been exposed

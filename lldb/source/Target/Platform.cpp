@@ -18,13 +18,9 @@
 #include "llvm/Support/Path.h"
 
 // Project includes
-#include "Utility/ModuleCache.h"
 #include "lldb/Breakpoint/BreakpointIDList.h"
 #include "lldb/Breakpoint/BreakpointLocation.h"
-#include "lldb/Core/DataBufferHeap.h"
 #include "lldb/Core/Debugger.h"
-#include "lldb/Core/Error.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
@@ -37,11 +33,14 @@
 #include "lldb/Interpreter/OptionValueProperties.h"
 #include "lldb/Interpreter/Property.h"
 #include "lldb/Symbol/ObjectFile.h"
+#include "lldb/Target/ModuleCache.h"
 #include "lldb/Target/Platform.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/UnixSignals.h"
-#include "lldb/Utility/Utils.h"
+#include "lldb/Utility/DataBufferHeap.h"
+#include "lldb/Utility/Error.h"
+#include "lldb/Utility/Log.h"
 
 // Define these constants from POSIX mman.h rather than include the file
 // so that they will be correct even when compiled on Linux.

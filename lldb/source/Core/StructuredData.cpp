@@ -13,13 +13,13 @@
 #include <inttypes.h>
 #include <stdlib.h>
 
-#include "lldb/Core/DataBuffer.h"
-#include "lldb/Core/Error.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Host/File.h"
 #include "lldb/Host/FileSpec.h"
 #include "lldb/Host/StringConvert.h"
+#include "lldb/Utility/DataBuffer.h"
+#include "lldb/Utility/Error.h"
 #include "lldb/Utility/JSON.h"
+#include "lldb/Utility/StreamString.h"
 
 using namespace lldb_private;
 

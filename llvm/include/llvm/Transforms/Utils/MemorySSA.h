@@ -73,7 +73,6 @@
 #define LLVM_TRANSFORMS_UTILS_MEMORYSSA_H
 
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/GraphTraits.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
@@ -110,7 +109,6 @@ class MemoryAccess;
 class LLVMContext;
 class raw_ostream;
 namespace MSSAHelpers {
-
 struct AllAccessTag {};
 struct DefsOnlyTag {};
 }
@@ -140,7 +138,6 @@ public:
 
   // Methods for support type inquiry through isa, cast, and
   // dyn_cast
-  static inline bool classof(const MemoryAccess *) { return true; }
   static inline bool classof(const Value *V) {
     unsigned ID = V->getValueID();
     return ID == MemoryUseVal || ID == MemoryPhiVal || ID == MemoryDefVal;
@@ -204,6 +201,10 @@ protected:
   friend class MemoryDef;
   friend class MemoryPhi;
 
+  /// \brief Used by MemorySSA to change the block of a MemoryAccess when it is
+  /// moved.
+  void setBlock(BasicBlock *BB) { Block = BB; }
+
   /// \brief Used for debugging and tracking things about MemoryAccesses.
   /// Guaranteed unique among MemoryAccesses, no guarantees otherwise.
   virtual unsigned getID() const = 0;
@@ -241,14 +242,13 @@ public:
   /// \brief Get the access that produces the memory state used by this Use.
   MemoryAccess *getDefiningAccess() const { return getOperand(0); }
 
-  static inline bool classof(const MemoryUseOrDef *) { return true; }
   static inline bool classof(const Value *MA) {
     return MA->getValueID() == MemoryUseVal || MA->getValueID() == MemoryDefVal;
   }
 
 protected:
   friend class MemorySSA;
-
+  friend class MemorySSAUpdater;
   MemoryUseOrDef(LLVMContext &C, MemoryAccess *DMA, unsigned Vty,
                  Instruction *MI, BasicBlock *BB)
       : MemoryAccess(C, Vty, BB, 1), MemoryInst(MI) {
@@ -282,7 +282,6 @@ public:
   void *operator new(size_t s) { return User::operator new(s, 1); }
   void *operator new(size_t, unsigned) = delete;
 
-  static inline bool classof(const MemoryUse *) { return true; }
   static inline bool classof(const Value *MA) {
     return MA->getValueID() == MemoryUseVal;
   }
@@ -340,7 +339,6 @@ public:
   void *operator new(size_t s) { return User::operator new(s, 1); }
   void *operator new(size_t, unsigned) = delete;
 
-  static inline bool classof(const MemoryDef *) { return true; }
   static inline bool classof(const Value *MA) {
     return MA->getValueID() == MemoryDefVal;
   }
@@ -499,7 +497,6 @@ public:
     return getIncomingValue(Idx);
   }
 
-  static inline bool classof(const MemoryPhi *) { return true; }
   static inline bool classof(const Value *V) {
     return V->getValueID() == MemoryPhiVal;
   }
@@ -596,64 +593,6 @@ public:
     return getWritableBlockDefs(BB);
   }
 
-  /// \brief Create an empty MemoryPhi in MemorySSA for a given basic block.
-  /// Only one MemoryPhi for a block exists at a time, so this function will
-  /// assert if you try to create one where it already exists.
-  MemoryPhi *createMemoryPhi(BasicBlock *BB);
-
-  enum InsertionPlace { Beginning, End };
-
-  /// \brief Create a MemoryAccess in MemorySSA at a specified point in a block,
-  /// with a specified clobbering definition.
-  ///
-  /// Returns the new MemoryAccess.
-  /// This should be called when a memory instruction is created that is being
-  /// used to replace an existing memory instruction. It will *not* create PHI
-  /// nodes, or verify the clobbering definition. The insertion place is used
-  /// solely to determine where in the memoryssa access lists the instruction
-  /// will be placed. The caller is expected to keep ordering the same as
-  /// instructions.
-  /// It will return the new MemoryAccess.
-  /// Note: If a MemoryAccess already exists for I, this function will make it
-  /// inaccessible and it *must* have removeMemoryAccess called on it.
-  MemoryAccess *createMemoryAccessInBB(Instruction *I, MemoryAccess *Definition,
-                                       const BasicBlock *BB,
-                                       InsertionPlace Point);
-
-  /// \brief Create a MemoryAccess in MemorySSA before or after an existing
-  /// MemoryAccess.
-  ///
-  /// Returns the new MemoryAccess.
-  /// This should be called when a memory instruction is created that is being
-  /// used to replace an existing memory instruction. It will *not* create PHI
-  /// nodes, or verify the clobbering definition.  The clobbering definition
-  /// must be non-null.
-  /// Note: If a MemoryAccess already exists for I, this function will make it
-  /// inaccessible and it *must* have removeMemoryAccess called on it.
-  MemoryUseOrDef *createMemoryAccessBefore(Instruction *I,
-                                           MemoryAccess *Definition,
-                                           MemoryUseOrDef *InsertPt);
-  MemoryUseOrDef *createMemoryAccessAfter(Instruction *I,
-                                          MemoryAccess *Definition,
-                                          MemoryAccess *InsertPt);
-
-  // \brief Splice \p What to just before \p Where.
-  //
-  // In order to be efficient, the following conditions must be met:
-  //   - \p Where  dominates \p What,
-  //   - All memory accesses in [\p Where, \p What) are no-alias with \p What.
-  //
-  // TODO: relax the MemoryDef requirement on Where.
-  void spliceMemoryAccessAbove(MemoryDef *Where, MemoryUseOrDef *What);
-
-  /// \brief Remove a MemoryAccess from MemorySSA, including updating all
-  /// definitions and uses.
-  /// This should be called when a memory instruction that has a MemoryAccess
-  /// associated with it is erased from the program.  For example, if a store or
-  /// load is simply erased (not replaced), removeMemoryAccess should be called
-  /// on the MemoryAccess for that store/load.
-  void removeMemoryAccess(MemoryAccess *);
-
   /// \brief Given two memory accesses in the same basic block, determine
   /// whether MemoryAccess \p A dominates MemoryAccess \p B.
   bool locallyDominates(const MemoryAccess *A, const MemoryAccess *B) const;
@@ -670,10 +609,15 @@ public:
   /// all uses, uses appear in the right places).  This is used by unit tests.
   void verifyMemorySSA() const;
 
+  /// Used in various insertion functions to specify whether we are talking
+  /// about the beginning or end of a block.
+  enum InsertionPlace { Beginning, End };
+
 protected:
   // Used by Memory SSA annotater, dumpers, and wrapper pass
   friend class MemorySSAAnnotatedWriter;
   friend class MemorySSAPrinterLegacyPass;
+  friend class MemorySSAUpdater;
 
   void verifyDefUses(Function &F) const;
   void verifyDomination(Function &F) const;
@@ -690,6 +634,25 @@ protected:
     auto It = PerBlockDefs.find(BB);
     return It == PerBlockDefs.end() ? nullptr : It->second.get();
   }
+
+  // These is used by the updater to perform various internal MemorySSA
+  // machinsations.  They do not always leave the IR in a correct state, and
+  // relies on the updater to fixup what it breaks, so it is not public.
+
+  void moveTo(MemoryUseOrDef *What, BasicBlock *BB, AccessList::iterator Where);
+  void moveTo(MemoryUseOrDef *What, BasicBlock *BB, InsertionPlace Point);
+  // Rename the dominator tree branch rooted at BB.
+  void renamePass(BasicBlock *BB, MemoryAccess *IncomingVal,
+                  SmallPtrSetImpl<BasicBlock *> &Visited) {
+    renamePass(DT->getNode(BB), IncomingVal, Visited, true, true);
+  }
+  void removeFromLookups(MemoryAccess *);
+  void removeFromLists(MemoryAccess *, bool ShouldDelete = true);
+  void insertIntoListsForBlock(MemoryAccess *, const BasicBlock *,
+                               InsertionPlace);
+  void insertIntoListsBefore(MemoryAccess *, const BasicBlock *,
+                             AccessList::iterator);
+  MemoryUseOrDef *createDefinedAccess(Instruction *, MemoryAccess *);
 
 private:
   class CachingWalker;
@@ -708,23 +671,19 @@ private:
   void computeDomLevels(DenseMap<DomTreeNode *, unsigned> &DomLevels);
   void markUnreachableAsLiveOnEntry(BasicBlock *BB);
   bool dominatesUse(const MemoryAccess *, const MemoryAccess *) const;
+  MemoryPhi *createMemoryPhi(BasicBlock *BB);
   MemoryUseOrDef *createNewAccess(Instruction *);
-  MemoryUseOrDef *createDefinedAccess(Instruction *, MemoryAccess *);
   MemoryAccess *findDominatingDef(BasicBlock *, enum InsertionPlace);
-  void removeFromLookups(MemoryAccess *);
-
   void placePHINodes(const SmallPtrSetImpl<BasicBlock *> &,
                      const DenseMap<const BasicBlock *, unsigned int> &);
-  MemoryAccess *renameBlock(BasicBlock *, MemoryAccess *);
+  MemoryAccess *renameBlock(BasicBlock *, MemoryAccess *, bool);
+  void renameSuccessorPhis(BasicBlock *, MemoryAccess *, bool);
   void renamePass(DomTreeNode *, MemoryAccess *IncomingVal,
-                  SmallPtrSet<BasicBlock *, 16> &Visited);
+                  SmallPtrSetImpl<BasicBlock *> &Visited,
+                  bool SkipVisited = false, bool RenameAllUses = false);
   AccessList *getOrCreateAccessList(const BasicBlock *);
   DefsList *getOrCreateDefsList(const BasicBlock *);
   void renumberBlock(const BasicBlock *) const;
-  void insertIntoListsForBlock(MemoryAccess *, const BasicBlock *,
-                               InsertionPlace);
-  void insertIntoListsBefore(MemoryAccess *, const BasicBlock *,
-                             AccessList::iterator);
   AliasAnalysis *AA;
   DominatorTree *DT;
   Function &F;
@@ -750,6 +709,18 @@ private:
   // Memory SSA building info
   std::unique_ptr<CachingWalker> Walker;
   unsigned NextID;
+};
+
+
+// Internal MemorySSA utils, for use by MemorySSA classes and walkers
+class MemorySSAUtil
+{
+protected:
+  friend class MemorySSAWalker;
+  friend class GVNHoist;
+  // This function should not be used by new passes.
+  static bool defClobbersUseOrDef(MemoryDef *MD, const MemoryUseOrDef *MU,
+                                  AliasAnalysis &AA);
 };
 
 // This pass does eager building and then printing of MemorySSA. It is used by
@@ -1085,10 +1056,6 @@ inline upward_defs_iterator upward_defs_begin(const MemoryAccessPair &Pair) {
 }
 
 inline upward_defs_iterator upward_defs_end() { return upward_defs_iterator(); }
-
-// Return true when MD may alias MU, return false otherwise.
-bool defClobbersUseOrDef(MemoryDef *MD, const MemoryUseOrDef *MU,
-                         AliasAnalysis &AA);
 
 } // end namespace llvm
 

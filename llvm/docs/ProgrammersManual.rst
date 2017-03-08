@@ -482,7 +482,7 @@ that inherits from the ErrorInfo utility, E.g.:
     }
   };
 
-  char FileExists::ID; // This should be declared in the C++ file.
+  char BadFileFormat::ID; // This should be declared in the C++ file.
 
   Error printFormattedFile(StringRef Path) {
     if (<check for valid format>)
@@ -564,18 +564,18 @@ the boolean conversion operator):
 
 .. code-block:: c++
 
-  if (auto Err = canFail(...))
+  if (auto Err = mayFail(...))
     return Err; // Failure value - move error to caller.
 
   // Safe to continue: Err was checked.
 
-In contrast, the following code will always cause an abort, even if ``canFail``
+In contrast, the following code will always cause an abort, even if ``mayFail``
 returns a success value:
 
 .. code-block:: c++
 
-    canFail();
-    // Program will always abort here, even if canFail() returns Success, since
+    mayFail();
+    // Program will always abort here, even if mayFail() returns Success, since
     // the value is not checked.
 
 Failure values are considered checked once a handler for the error type has
@@ -632,6 +632,12 @@ For tool code, where errors can be handled by printing an error message then
 exiting with an error code, the :ref:`ExitOnError <err_exitonerr>` utility
 may be a better choice than handleErrors, as it simplifies control flow when
 calling fallible functions.
+
+In situations where it is known that a particular call to a fallible function
+will always succeed (for example, a call to a function that can only fail on a
+subset of inputs with an input that is known to be safe) the
+:ref:`cantFail <err_cantfail>` functions can be used to remove the error type,
+simplifying control flow.
 
 StringError
 """""""""""
@@ -764,6 +770,43 @@ mapping can also be supplied from ``Error`` values to exit codes using the
 
 Use ``ExitOnError`` in your tool code where possible as it can greatly improve
 readability.
+
+.. _err_cantfail:
+
+Using cantFail to simplify safe callsites
+"""""""""""""""""""""""""""""""""""""""""
+
+Some functions may only fail for a subset of their inputs. For such functions
+call-sites using known-safe inputs can assume that the result will be a success
+value.
+
+The cantFail functions encapsulate this by wrapping an assertion that their
+argument is a success value and, in the case of Expected<T>, unwrapping the
+T value from the Expected<T> argument:
+
+.. code-block:: c++
+
+  Error mayFail(int X);
+  Expected<int> mayFail2(int X);
+
+  void foo() {
+    cantFail(mayFail(KnownSafeValue));
+    int Y = cantFail(mayFail2(KnownSafeValue));
+    ...
+  }
+
+Like the ExitOnError utility, cantFail simplifies control flow. Their treatment
+of error cases is very different however: Where ExitOnError is guaranteed to
+terminate the program on an error input, cantFile simply asserts that the result
+is success. In debug builds this will result in an assertion failure if an error
+is encountered. In release builds the behavior of cantFail for failure values is
+undefined. As such, care must be taken in the use of cantFail: clients must be
+certain that a cantFail wrapped call really can not fail under any
+circumstances.
+
+Use of the cantFail functions should be rare in library code, but they are
+likely to be of more use in tool and unit-test code where inputs and/or
+mocked-up classes or functions may be known to be safe.
 
 Fallible constructors
 """""""""""""""""""""
@@ -2257,18 +2300,12 @@ of a ``BasicBlock`` and the number of ``Instruction``\ s it contains:
 
 .. code-block:: c++
 
-  // func is a pointer to a Function instance
-  for (Function::iterator i = func->begin(), e = func->end(); i != e; ++i)
+  Function &Func = ...
+  for (BasicBlock &BB : Func)
     // Print out the name of the basic block if it has one, and then the
     // number of instructions that it contains
-    errs() << "Basic block (name=" << i->getName() << ") has "
-               << i->size() << " instructions.\n";
-
-Note that i can be used as if it were a pointer for the purposes of invoking
-member functions of the ``Instruction`` class.  This is because the indirection
-operator is overloaded for the iterator classes.  In the above code, the
-expression ``i->size()`` is exactly equivalent to ``(*i).size()`` just like
-you'd expect.
+    errs() << "Basic block (name=" << BB.getName() << ") has "
+               << BB.size() << " instructions.\n";
 
 .. _iterate_basicblock:
 
@@ -2281,17 +2318,17 @@ a code snippet that prints out each instruction in a ``BasicBlock``:
 
 .. code-block:: c++
 
-  // blk is a pointer to a BasicBlock instance
-  for (BasicBlock::iterator i = blk->begin(), e = blk->end(); i != e; ++i)
+  BasicBlock& BB = ...
+  for (Instruction &I : BB)
      // The next statement works since operator<<(ostream&,...)
      // is overloaded for Instruction&
-     errs() << *i << "\n";
+     errs() << I << "\n";
 
 
 However, this isn't really the best way to print out the contents of a
 ``BasicBlock``!  Since the ostream operators are overloaded for virtually
 anything you'll care about, you could have just invoked the print routine on the
-basic block itself: ``errs() << *blk << "\n";``.
+basic block itself: ``errs() << BB << "\n";``.
 
 .. _iterate_insiter:
 
@@ -2425,13 +2462,13 @@ method):
       OurFunctionPass(): callCounter(0) { }
 
       virtual runOnFunction(Function& F) {
-        for (Function::iterator b = F.begin(), be = F.end(); b != be; ++b) {
-          for (BasicBlock::iterator i = b->begin(), ie = b->end(); i != ie; ++i) {
-            if (CallInst* callInst = dyn_cast<CallInst>(&*i)) {
+        for (BasicBlock &B : F) {
+          for (Instruction &I: B) {
+            if (auto *CallInst = dyn_cast<CallInst>(&I)) {
               // We know we've encountered a call instruction, so we
               // need to determine if it's a call to the
               // function pointed to by m_func or not.
-              if (callInst->getCalledFunction() == targetFunc)
+              if (CallInst->getCalledFunction() == targetFunc)
                 ++callCounter;
             }
           }
@@ -2524,12 +2561,11 @@ iterate over all predecessors of BB:
   #include "llvm/IR/CFG.h"
   BasicBlock *BB = ...;
 
-  for (pred_iterator PI = pred_begin(BB), E = pred_end(BB); PI != E; ++PI) {
-    BasicBlock *Pred = *PI;
+  for (BasicBlock *Pred : predecessors(BB)) {
     // ...
   }
 
-Similarly, to iterate over successors use ``succ_iterator/succ_begin/succ_end``.
+Similarly, to iterate over successors use ``successors``.
 
 .. _simplechanges:
 
@@ -2554,7 +2590,7 @@ For example, an ``AllocaInst`` only *requires* a (const-ptr-to) ``Type``.  Thus:
 
 .. code-block:: c++
 
-  AllocaInst* ai = new AllocaInst(Type::Int32Ty);
+  auto *ai = new AllocaInst(Type::Int32Ty);
 
 will create an ``AllocaInst`` instance that represents the allocation of one
 integer in the current stack frame, at run time.  Each ``Instruction`` subclass
@@ -2579,7 +2615,7 @@ intending to use it within the same ``Function``.  I might do:
 
 .. code-block:: c++
 
-  AllocaInst* pa = new AllocaInst(Type::Int32Ty, 0, "indexLoc");
+  auto *pa = new AllocaInst(Type::Int32Ty, 0, "indexLoc");
 
 where ``indexLoc`` is now the logical name of the instruction's execution value,
 which is a pointer to an integer on the run time stack.
@@ -2599,7 +2635,7 @@ sequence of instructions that form a ``BasicBlock``:
 
       BasicBlock *pb = ...;
       Instruction *pi = ...;
-      Instruction *newInst = new Instruction(...);
+      auto *newInst = new Instruction(...);
 
       pb->getInstList().insert(pi, newInst); // Inserts newInst before pi in pb
 
@@ -2611,7 +2647,7 @@ sequence of instructions that form a ``BasicBlock``:
   .. code-block:: c++
 
     BasicBlock *pb = ...;
-    Instruction *newInst = new Instruction(...);
+    auto *newInst = new Instruction(...);
 
     pb->getInstList().push_back(newInst); // Appends newInst to pb
 
@@ -2620,7 +2656,7 @@ sequence of instructions that form a ``BasicBlock``:
   .. code-block:: c++
 
     BasicBlock *pb = ...;
-    Instruction *newInst = new Instruction(..., pb);
+    auto *newInst = new Instruction(..., pb);
 
   which is much cleaner, especially if you are creating long instruction
   streams.
@@ -2635,7 +2671,7 @@ sequence of instructions that form a ``BasicBlock``:
   .. code-block:: c++
 
     Instruction *pi = ...;
-    Instruction *newInst = new Instruction(...);
+    auto *newInst = new Instruction(...);
 
     pi->getParent()->getInstList().insert(pi, newInst);
 
@@ -2651,7 +2687,7 @@ sequence of instructions that form a ``BasicBlock``:
   .. code-block:: c++
 
     Instruction* pi = ...;
-    Instruction* newInst = new Instruction(..., pi);
+    auto *newInst = new Instruction(..., pi);
 
   which is much cleaner, especially if you're creating a lot of instructions and
   adding them to ``BasicBlock``\ s.
@@ -2903,7 +2939,7 @@ Another way is to only call ``getPointerToFunction()`` from the
 
 When the JIT is configured to compile lazily (using
 ``ExecutionEngine::DisableLazyCompilation(false)``), there is currently a `race
-condition <http://llvm.org/bugs/show_bug.cgi?id=5184>`_ in updating call sites
+condition <https://bugs.llvm.org/show_bug.cgi?id=5184>`_ in updating call sites
 after a function is lazily-jitted.  It's still possible to use the lazy JIT in a
 threaded program if you ensure that only one thread at a time can call any
 particular lazy stub and that the JIT lock guards any IR access, but we suggest

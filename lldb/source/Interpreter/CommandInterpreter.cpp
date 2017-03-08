@@ -42,12 +42,12 @@
 #include "../Commands/CommandObjectWatchpoint.h"
 
 #include "lldb/Core/Debugger.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/State.h"
-#include "lldb/Core/Stream.h"
 #include "lldb/Core/StreamFile.h"
 #include "lldb/Core/Timer.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/Stream.h"
 
 #ifndef LLDB_DISABLE_LIBEDIT
 #include "lldb/Host/Editline.h"
