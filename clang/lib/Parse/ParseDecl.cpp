@@ -356,6 +356,10 @@ void Parser::ParseGNUAttributeArgs(IdentifierInfo *AttrName,
     ParseAvailabilityAttribute(*AttrName, AttrNameLoc, Attrs, EndLoc, ScopeName,
                                ScopeLoc, Syntax);
     return;
+  } else if (AttrKind == AttributeList::AT_ExternalSourceSymbol) {
+    ParseExternalSourceSymbolAttribute(*AttrName, AttrNameLoc, Attrs, EndLoc,
+                                       ScopeName, ScopeLoc, Syntax);
+    return;
   } else if (AttrKind == AttributeList::AT_ObjCBridgeRelated) {
     ParseObjCBridgeRelatedAttribute(*AttrName, AttrNameLoc, Attrs, EndLoc,
                                     ScopeName, ScopeLoc, Syntax);
@@ -387,6 +391,25 @@ void Parser::ParseGNUAttributeArgs(IdentifierInfo *AttrName,
 
   ParseAttributeArgsCommon(AttrName, AttrNameLoc, Attrs, EndLoc, ScopeName,
                            ScopeLoc, Syntax);
+}
+
+unsigned Parser::ParseClangAttributeArgs(
+    IdentifierInfo *AttrName, SourceLocation AttrNameLoc,
+    ParsedAttributes &Attrs, SourceLocation *EndLoc, IdentifierInfo *ScopeName,
+    SourceLocation ScopeLoc, AttributeList::Syntax Syntax) {
+  assert(Tok.is(tok::l_paren) && "Attribute arg list not starting with '('");
+
+  AttributeList::Kind AttrKind =
+      AttributeList::getKind(AttrName, ScopeName, Syntax);
+
+  if (AttrKind == AttributeList::AT_ExternalSourceSymbol) {
+    ParseExternalSourceSymbolAttribute(*AttrName, AttrNameLoc, Attrs, EndLoc,
+                                       ScopeName, ScopeLoc, Syntax);
+    return Attrs.getList() ? Attrs.getList()->getNumArgs() : 0;
+  }
+
+  return ParseAttributeArgsCommon(AttrName, AttrNameLoc, Attrs, EndLoc,
+                                  ScopeName, ScopeLoc, Syntax);
 }
 
 bool Parser::ParseMicrosoftDeclSpecArgs(IdentifierInfo *AttrName,
@@ -1062,6 +1085,119 @@ void Parser::ParseAvailabilityAttribute(IdentifierInfo &Availability,
                Changes[Obsoleted],
                UnavailableLoc, MessageExpr.get(),
                Syntax, StrictLoc, ReplacementExpr.get());
+}
+
+/// \brief Parse the contents of the "external_source_symbol" attribute.
+///
+/// external-source-symbol-attribute:
+///   'external_source_symbol' '(' keyword-arg-list ')'
+///
+/// keyword-arg-list:
+///   keyword-arg
+///   keyword-arg ',' keyword-arg-list
+///
+/// keyword-arg:
+///   'language' '=' <string>
+///   'defined_in' '=' <string>
+///   'generated_declaration'
+void Parser::ParseExternalSourceSymbolAttribute(
+    IdentifierInfo &ExternalSourceSymbol, SourceLocation Loc,
+    ParsedAttributes &Attrs, SourceLocation *EndLoc, IdentifierInfo *ScopeName,
+    SourceLocation ScopeLoc, AttributeList::Syntax Syntax) {
+  // Opening '('.
+  BalancedDelimiterTracker T(*this, tok::l_paren);
+  if (T.expectAndConsume())
+    return;
+
+  // Initialize the pointers for the keyword identifiers when required.
+  if (!Ident_language) {
+    Ident_language = PP.getIdentifierInfo("language");
+    Ident_defined_in = PP.getIdentifierInfo("defined_in");
+    Ident_generated_declaration = PP.getIdentifierInfo("generated_declaration");
+  }
+
+  ExprResult Language;
+  bool HasLanguage = false;
+  ExprResult DefinedInExpr;
+  bool HasDefinedIn = false;
+  IdentifierLoc *GeneratedDeclaration = nullptr;
+
+  // Parse the language/defined_in/generated_declaration keywords
+  do {
+    if (Tok.isNot(tok::identifier)) {
+      Diag(Tok, diag::err_external_source_symbol_expected_keyword);
+      SkipUntil(tok::r_paren, StopAtSemi);
+      return;
+    }
+
+    SourceLocation KeywordLoc = Tok.getLocation();
+    IdentifierInfo *Keyword = Tok.getIdentifierInfo();
+    if (Keyword == Ident_generated_declaration) {
+      if (GeneratedDeclaration) {
+        Diag(Tok, diag::err_external_source_symbol_duplicate_clause) << Keyword;
+        SkipUntil(tok::r_paren, StopAtSemi);
+        return;
+      }
+      GeneratedDeclaration = ParseIdentifierLoc();
+      continue;
+    }
+
+    if (Keyword != Ident_language && Keyword != Ident_defined_in) {
+      Diag(Tok, diag::err_external_source_symbol_expected_keyword);
+      SkipUntil(tok::r_paren, StopAtSemi);
+      return;
+    }
+
+    ConsumeToken();
+    if (ExpectAndConsume(tok::equal, diag::err_expected_after,
+                         Keyword->getName())) {
+      SkipUntil(tok::r_paren, StopAtSemi);
+      return;
+    }
+
+    bool HadLanguage = HasLanguage, HadDefinedIn = HasDefinedIn;
+    if (Keyword == Ident_language)
+      HasLanguage = true;
+    else
+      HasDefinedIn = true;
+
+    if (Tok.isNot(tok::string_literal)) {
+      Diag(Tok, diag::err_expected_string_literal)
+          << /*Source='external_source_symbol attribute'*/ 3
+          << /*language | source container*/ (Keyword != Ident_language);
+      SkipUntil(tok::comma, tok::r_paren, StopAtSemi | StopBeforeMatch);
+      continue;
+    }
+    if (Keyword == Ident_language) {
+      if (HadLanguage) {
+        Diag(KeywordLoc, diag::err_external_source_symbol_duplicate_clause)
+            << Keyword;
+        ParseStringLiteralExpression();
+        continue;
+      }
+      Language = ParseStringLiteralExpression();
+    } else {
+      assert(Keyword == Ident_defined_in && "Invalid clause keyword!");
+      if (HadDefinedIn) {
+        Diag(KeywordLoc, diag::err_external_source_symbol_duplicate_clause)
+            << Keyword;
+        ParseStringLiteralExpression();
+        continue;
+      }
+      DefinedInExpr = ParseStringLiteralExpression();
+    }
+  } while (TryConsumeToken(tok::comma));
+
+  // Closing ')'.
+  if (T.consumeClose())
+    return;
+  if (EndLoc)
+    *EndLoc = T.getCloseLocation();
+
+  ArgsUnion Args[] = {Language.get(), DefinedInExpr.get(),
+                      GeneratedDeclaration};
+  Attrs.addNew(&ExternalSourceSymbol, SourceRange(Loc, T.getCloseLocation()),
+               ScopeName, ScopeLoc, Args, llvm::array_lengthof(Args), Syntax);
 }
 
 /// \brief Parse the contents of the "objc_bridge_related" attribute.
@@ -2966,6 +3102,31 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       if (DS.hasTypeSpecifier())
         goto DoneWithDeclSpec;
 
+      // If the token is an identifier named "__declspec" and Microsoft
+      // extensions are not enabled, it is likely that there will be cascading
+      // parse errors if this really is a __declspec attribute. Attempt to
+      // recognize that scenario and recover gracefully.
+      if (!getLangOpts().DeclSpecKeyword && Tok.is(tok::identifier) &&
+          Tok.getIdentifierInfo()->getName().equals("__declspec")) {
+        Diag(Loc, diag::err_ms_attributes_not_enabled);
+
+        // The next token should be an open paren. If it is, eat the entire
+        // attribute declaration and continue.
+        if (NextToken().is(tok::l_paren)) {
+          // Consume the __declspec identifier.
+          ConsumeToken();
+
+          // Eat the parens and everything between them.
+          BalancedDelimiterTracker T(*this, tok::l_paren);
+          if (T.consumeOpen()) {
+            assert(false && "Not a left paren?");
+            return;
+          }
+          T.skipToEnd();
+          continue;
+        }
+      }
+
       // In C++, check to see if this is a scope specifier like foo::bar::, if
       // so handle it as such.  This is important for ctor parsing.
       if (getLangOpts().CPlusPlus) {
@@ -3023,6 +3184,16 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       if (getLangOpts().CPlusPlus && DSContext == DSC_class &&
           Actions.isCurrentClassName(*Tok.getIdentifierInfo(), getCurScope()) &&
           isConstructorDeclarator(/*Unqualified*/true))
+        goto DoneWithDeclSpec;
+
+      // Likewise, if this is a context where the identifier could be a template
+      // name, check whether this is a deduction guide declaration.
+      if (getLangOpts().CPlusPlus1z &&
+          (DSContext == DSC_class || DSContext == DSC_top_level) &&
+          Actions.isDeductionGuideName(getCurScope(), *Tok.getIdentifierInfo(),
+                                       Tok.getLocation()) &&
+          isConstructorDeclarator(/*Unqualified*/ true,
+                                  /*DeductionGuide*/ true))
         goto DoneWithDeclSpec;
 
       isInvalid = DS.SetTypeSpecType(DeclSpec::TST_typename, Loc, PrevSpec,
@@ -4652,7 +4823,7 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
   }
 }
 
-bool Parser::isConstructorDeclarator(bool IsUnqualified) {
+bool Parser::isConstructorDeclarator(bool IsUnqualified, bool DeductionGuide) {
   TentativeParsingAction TPA(*this);
 
   // Parse the C++ scope specifier.
@@ -4672,6 +4843,10 @@ bool Parser::isConstructorDeclarator(bool IsUnqualified) {
     TPA.Revert();
     return false;
   }
+
+  // There may be attributes here, appertaining to the constructor name or type
+  // we just stepped past.
+  SkipCXX11Attributes();
 
   // Current class name must be followed by a left parenthesis.
   if (Tok.isNot(tok::l_paren)) {
@@ -4740,13 +4915,24 @@ bool Parser::isConstructorDeclarator(bool IsUnqualified) {
 
     case tok::r_paren:
       // C(X   )
-      if (NextToken().is(tok::colon) || NextToken().is(tok::kw_try)) {
+
+      // Skip past the right-paren and any following attributes to get to
+      // the function body or trailing-return-type.
+      ConsumeParen();
+      SkipCXX11Attributes();
+
+      if (DeductionGuide) {
+        // C(X) -> ... is a deduction guide.
+        IsConstructor = Tok.is(tok::arrow);
+        break;
+      }
+      if (Tok.is(tok::colon) || Tok.is(tok::kw_try)) {
         // Assume these were meant to be constructors:
         //   C(X)   :    (the name of a bit-field cannot be parenthesized).
         //   C(X)   try  (this is otherwise ill-formed).
         IsConstructor = true;
       }
-      if (NextToken().is(tok::semi) || NextToken().is(tok::l_brace)) {
+      if (Tok.is(tok::semi) || Tok.is(tok::l_brace)) {
         // If we have a constructor name within the class definition,
         // assume these were meant to be constructors:
         //   C(X)   {
@@ -4757,7 +4943,7 @@ bool Parser::isConstructorDeclarator(bool IsUnqualified) {
         //
         // FIXME: We can actually do this whether or not the name is qualified,
         // because if it is qualified in this context it must be being used as
-        // a constructor name. However, we do not implement that rule correctly
+        // a constructor name.
         // currently, so we're somewhat conservative here.
         IsConstructor = IsUnqualified;
       }
@@ -4785,9 +4971,10 @@ bool Parser::isConstructorDeclarator(bool IsUnqualified) {
 ///              [ only if AttReqs & AR_CXX11AttributesParsed ]
 /// Note: vendor can be GNU, MS, etc and can be explicitly controlled via
 /// AttrRequirements bitmask values.
-void Parser::ParseTypeQualifierListOpt(DeclSpec &DS, unsigned AttrReqs,
-                                       bool AtomicAllowed,
-                                       bool IdentifierRequired) {
+void Parser::ParseTypeQualifierListOpt(
+    DeclSpec &DS, unsigned AttrReqs, bool AtomicAllowed,
+    bool IdentifierRequired,
+    Optional<llvm::function_ref<void()>> CodeCompletionHandler) {
   if (getLangOpts().CPlusPlus11 && (AttrReqs & AR_CXX11AttributesParsed) &&
       isCXX11AttributeSpecifier()) {
     ParsedAttributesWithRange attrs(AttrFactory);
@@ -4805,7 +4992,10 @@ void Parser::ParseTypeQualifierListOpt(DeclSpec &DS, unsigned AttrReqs,
 
     switch (Tok.getKind()) {
     case tok::code_completion:
-      Actions.CodeCompleteTypeQualifiers(DS);
+      if (CodeCompletionHandler)
+        (*CodeCompletionHandler)();
+      else
+        Actions.CodeCompleteTypeQualifiers(DS);
       return cutOffParsing();
 
     case tok::kw_const:
@@ -5294,21 +5484,29 @@ void Parser::ParseDirectDeclarator(Declarator &D) {
       // We found something that indicates the start of an unqualified-id.
       // Parse that unqualified-id.
       bool AllowConstructorName;
-      if (D.getDeclSpec().hasTypeSpecifier())
+      bool AllowDeductionGuide;
+      if (D.getDeclSpec().hasTypeSpecifier()) {
         AllowConstructorName = false;
-      else if (D.getCXXScopeSpec().isSet())
+        AllowDeductionGuide = false;
+      } else if (D.getCXXScopeSpec().isSet()) {
         AllowConstructorName =
           (D.getContext() == Declarator::FileContext ||
            D.getContext() == Declarator::MemberContext);
-      else
+        AllowDeductionGuide = false;
+      } else {
         AllowConstructorName = (D.getContext() == Declarator::MemberContext);
+        AllowDeductionGuide = 
+          (D.getContext() == Declarator::FileContext ||
+           D.getContext() == Declarator::MemberContext);
+      }
 
       SourceLocation TemplateKWLoc;
       bool HadScope = D.getCXXScopeSpec().isValid();
       if (ParseUnqualifiedId(D.getCXXScopeSpec(),
                              /*EnteringContext=*/true,
                              /*AllowDestructorName=*/true, AllowConstructorName,
-                             nullptr, TemplateKWLoc, D.getName()) ||
+                             AllowDeductionGuide, nullptr, TemplateKWLoc,
+                             D.getName()) ||
           // Once we're past the identifier, if the scope was bad, mark the
           // whole declarator bad.
           D.getCXXScopeSpec().isInvalid()) {
@@ -5729,7 +5927,11 @@ void Parser::ParseFunctionDeclarator(Declarator &D,
 
       // Parse cv-qualifier-seq[opt].
       ParseTypeQualifierListOpt(DS, AR_NoAttributesParsed,
-                                /*AtomicAllowed*/ false);
+                                /*AtomicAllowed*/ false,
+                                /*IdentifierRequired=*/false,
+                                llvm::function_ref<void()>([&]() {
+                                  Actions.CodeCompleteFunctionQualifiers(DS, D);
+                                }));
       if (!DS.getSourceRange().getEnd().isInvalid()) {
         EndLoc = DS.getSourceRange().getEnd();
         ConstQualifierLoc = DS.getConstSpecLoc();

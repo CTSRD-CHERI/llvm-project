@@ -619,6 +619,10 @@ void StoredDiagnosticConsumer::HandleDiagnostic(DiagnosticsEngine::Level Level,
     StoredDiags.emplace_back(Level, Info);
 }
 
+IntrusiveRefCntPtr<ASTReader> ASTUnit::getASTReader() const {
+  return Reader;
+}
+
 ASTMutationListener *ASTUnit::getASTMutationListener() {
   if (WriterData)
     return &WriterData->Writer;
@@ -1887,6 +1891,8 @@ bool ASTUnit::LoadFromCompilerInvocation(
     PreambleRebuildCounter = PrecompilePreambleAfterNParses;
     OverrideMainBuffer =
         getMainBufferWithPrecompiledPreamble(PCHContainerOps, *Invocation);
+    getDiagnostics().Reset();
+    ProcessWarningOptions(getDiagnostics(), Invocation->getDiagnosticOpts());
   }
   
   SimpleTimer ParsingTimer(WantTiming);
@@ -2535,6 +2541,8 @@ void ASTUnit::TranslateStoredDiagnostics(
 
   SmallVector<StoredDiagnostic, 4> Result;
   Result.reserve(Diags.size());
+  const FileEntry *PreviousFE = nullptr;
+  FileID FID;
   for (const StandaloneDiagnostic &SD : Diags) {
     // Rebuild the StoredDiagnostic.
     if (SD.Filename.empty())
@@ -2542,7 +2550,10 @@ void ASTUnit::TranslateStoredDiagnostics(
     const FileEntry *FE = FileMgr.getFile(SD.Filename);
     if (!FE)
       continue;
-    FileID FID = SrcMgr.translateFile(FE);
+    if (FE != PreviousFE) {
+      FID = SrcMgr.translateFile(FE);
+      PreviousFE = FE;
+    }
     SourceLocation FileLoc = SrcMgr.getLocForStartOfFile(FID);
     if (FileLoc.isInvalid())
       continue;

@@ -25,7 +25,6 @@
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/BasicAliasAnalysis.h"
 #include "llvm/Analysis/GlobalsModRef.h"
-#include "llvm/Analysis/PostDominators.h"
 #include "llvm/Analysis/ScalarEvolutionAliasAnalysis.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
@@ -603,9 +602,8 @@ void GPUNodeBuilder::createCallLaunchKernel(Value *GPUKernel, Value *GridDimX,
     F = Function::Create(Ty, Linkage, Name, M);
   }
 
-  Builder.CreateCall(F,
-                     {GPUKernel, GridDimX, GridDimY, BlockDimX, BlockDimY,
-                      BlockDimZ, Parameters});
+  Builder.CreateCall(F, {GPUKernel, GridDimX, GridDimY, BlockDimX, BlockDimY,
+                         BlockDimZ, Parameters});
 }
 
 void GPUNodeBuilder::createCallFreeKernel(Value *GPUKernel) {
@@ -836,9 +834,8 @@ void GPUNodeBuilder::createDataTransfer(__isl_take isl_ast_node *TransferStmt,
 
   if (Offset) {
     Size = Builder.CreateSub(
-        Size,
-        Builder.CreateMul(Offset,
-                          Builder.getInt64(ScopArray->getElemSizeInBytes())));
+        Size, Builder.CreateMul(
+                  Offset, Builder.getInt64(ScopArray->getElemSizeInBytes())));
   }
 
   if (Direction == HOST_TO_DEVICE)
@@ -1206,10 +1203,8 @@ void GPUNodeBuilder::createKernel(__isl_take isl_ast_node *KernelStmt) {
   Instruction &HostInsertPoint = *Builder.GetInsertPoint();
   IslExprBuilder::IDToValueTy HostIDs = IDToValue;
   ValueMapT HostValueMap = ValueMap;
-  BlockGenerator::ScalarAllocaMapTy HostScalarMap = ScalarMap;
-  BlockGenerator::ScalarAllocaMapTy HostPHIOpMap = PHIOpMap;
+  BlockGenerator::AllocaMapTy HostScalarMap = ScalarMap;
   ScalarMap.clear();
-  PHIOpMap.clear();
 
   SetVector<const Loop *> Loops;
 
@@ -1240,7 +1235,6 @@ void GPUNodeBuilder::createKernel(__isl_take isl_ast_node *KernelStmt) {
 
   ValueMap = std::move(HostValueMap);
   ScalarMap = std::move(HostScalarMap);
-  PHIOpMap = std::move(HostPHIOpMap);
   EscapeMap.clear();
   IDToSAI.clear();
   Annotator.resetAlternativeAliasBases();
@@ -2486,7 +2480,6 @@ public:
     AU.addPreserved<LoopInfoWrapperPass>();
     AU.addPreserved<DominatorTreeWrapperPass>();
     AU.addPreserved<GlobalsAAWrapperPass>();
-    AU.addPreserved<PostDominatorTreeWrapperPass>();
     AU.addPreserved<ScopDetection>();
     AU.addPreserved<ScalarEvolutionWrapperPass>();
     AU.addPreserved<SCEVAAWrapperPass>();
@@ -2497,7 +2490,7 @@ public:
     AU.addPreserved<ScopInfoRegionPass>();
   }
 };
-}
+} // namespace
 
 char PPCGCodeGeneration::ID = 1;
 

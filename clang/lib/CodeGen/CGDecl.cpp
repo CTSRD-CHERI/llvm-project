@@ -51,6 +51,7 @@ void CodeGenFunction::EmitDecl(const Decl &D) {
   case Decl::TemplateTypeParm:
   case Decl::UnresolvedUsingValue:
   case Decl::NonTypeTemplateParm:
+  case Decl::CXXDeductionGuide:
   case Decl::CXXMethod:
   case Decl::CXXConstructor:
   case Decl::CXXDestructor:

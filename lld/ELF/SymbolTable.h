@@ -19,7 +19,6 @@
 namespace lld {
 namespace elf {
 class Lazy;
-class OutputSectionBase;
 struct Symbol;
 
 // SymbolTable is a bucket of all known symbols, including defined,
@@ -36,7 +35,6 @@ struct Symbol;
 // is one add* function per symbol type.
 template <class ELFT> class SymbolTable {
   typedef typename ELFT::Sym Elf_Sym;
-  typedef typename ELFT::uint uintX_t;
 
 public:
   void addFile(InputFile *File);
@@ -47,11 +45,11 @@ public:
   ArrayRef<BinaryFile *> getBinaryFiles() const { return BinaryFiles; }
   ArrayRef<SharedFile<ELFT> *> getSharedFiles() const { return SharedFiles; }
 
-  DefinedRegular<ELFT> *addAbsolute(StringRef Name,
-                                    uint8_t Visibility = llvm::ELF::STV_HIDDEN,
-                                    uint8_t Binding = llvm::ELF::STB_GLOBAL);
-  DefinedRegular<ELFT> *addIgnored(StringRef Name,
-                                   uint8_t Visibility = llvm::ELF::STV_HIDDEN);
+  DefinedRegular *addAbsolute(StringRef Name,
+                              uint8_t Visibility = llvm::ELF::STV_HIDDEN,
+                              uint8_t Binding = llvm::ELF::STB_GLOBAL);
+  DefinedRegular *addIgnored(StringRef Name,
+                             uint8_t Visibility = llvm::ELF::STV_HIDDEN);
 
   Symbol *addUndefined(StringRef Name);
   Symbol *addUndefined(StringRef Name, bool IsLocal, uint8_t Binding,
@@ -59,11 +57,11 @@ public:
                        InputFile *File);
 
   Symbol *addRegular(StringRef Name, uint8_t StOther, uint8_t Type,
-                     uintX_t Value, uintX_t Size, uint8_t Binding,
-                     InputSectionBase<ELFT> *Section, InputFile *File);
+                     uint64_t Value, uint64_t Size, uint8_t Binding,
+                     InputSectionBase *Section, InputFile *File);
 
-  Symbol *addSynthetic(StringRef N, const OutputSectionBase *Section,
-                       uintX_t Value, uint8_t StOther);
+  Symbol *addSynthetic(StringRef N, const OutputSection *Section,
+                       uint64_t Value, uint8_t StOther);
 
   void addShared(SharedFile<ELFT> *F, StringRef Name, const Elf_Sym &Sym,
                  const typename ELFT::Verdef *Verdef);
@@ -77,6 +75,11 @@ public:
                     uint8_t Binding, uint8_t StOther, uint8_t Type,
                     InputFile *File);
 
+  std::pair<Symbol *, bool> insert(StringRef Name);
+  std::pair<Symbol *, bool> insert(StringRef Name, uint8_t Type,
+                                   uint8_t Visibility, bool CanOmitFromDynSym,
+                                   InputFile *File);
+
   void scanUndefinedFlags();
   void scanShlibUndefined();
   void scanVersionScript();
@@ -87,14 +90,7 @@ public:
   void trace(StringRef Name);
   void wrap(StringRef Name);
 
-  std::vector<InputSectionBase<ELFT> *> Sections;
-
 private:
-  std::pair<Symbol *, bool> insert(StringRef Name);
-  std::pair<Symbol *, bool> insert(StringRef Name, uint8_t Type,
-                                   uint8_t Visibility, bool CanOmitFromDynSym,
-                                   InputFile *File);
-
   std::vector<SymbolBody *> findByVersion(SymbolVersion Ver);
   std::vector<SymbolBody *> findAllByVersion(SymbolVersion Ver);
 

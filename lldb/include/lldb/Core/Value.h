@@ -16,10 +16,10 @@
 
 // Other libraries and framework includes
 // Project includes
-#include "lldb/Core/DataBufferHeap.h"
-#include "lldb/Core/Error.h"
 #include "lldb/Core/Scalar.h"
 #include "lldb/Symbol/CompilerType.h"
+#include "lldb/Utility/DataBufferHeap.h"
+#include "lldb/Utility/Error.h"
 #include "lldb/lldb-private.h"
 
 namespace lldb_private {

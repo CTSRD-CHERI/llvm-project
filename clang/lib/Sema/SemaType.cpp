@@ -745,7 +745,7 @@ static void diagnoseAndRemoveTypeQualifiers(Sema &S, const DeclSpec &DS,
     if (!(RemoveTQs & Qual.first))
       continue;
 
-    if (S.ActiveTemplateInstantiations.empty()) {
+    if (!S.inTemplateInstantiation()) {
       if (TypeQuals & Qual.first)
         S.Diag(Qual.second, DiagID)
           << DeclSpec::getSpecifierName(Qual.first) << TypeSoFar
@@ -1505,40 +1505,7 @@ static QualType ConvertDeclSpecToType(TypeProcessingState &state) {
     break;
 
   case DeclSpec::TST_auto:
-    // TypeQuals handled by caller.
-    // If auto is mentioned in a lambda parameter context, convert it to a 
-    // template parameter type immediately, with the appropriate depth and 
-    // index, and update sema's state (LambdaScopeInfo) for the current lambda 
-    // being analyzed (which tracks the invented type template parameter).
-    if (declarator.getContext() == Declarator::LambdaExprParameterContext) {
-      sema::LambdaScopeInfo *LSI = S.getCurLambda();
-      assert(LSI && "No LambdaScopeInfo on the stack!");
-      const unsigned TemplateParameterDepth = LSI->AutoTemplateParameterDepth;
-      const unsigned AutoParameterPosition = LSI->AutoTemplateParams.size();
-      const bool IsParameterPack = declarator.hasEllipsis();
-
-      // Turns out we must create the TemplateTypeParmDecl here to 
-      // retrieve the corresponding template parameter type. 
-      TemplateTypeParmDecl *CorrespondingTemplateParam =
-        TemplateTypeParmDecl::Create(Context, 
-        // Temporarily add to the TranslationUnit DeclContext.  When the 
-        // associated TemplateParameterList is attached to a template
-        // declaration (such as FunctionTemplateDecl), the DeclContext 
-        // for each template parameter gets updated appropriately via
-        // a call to AdoptTemplateParameterList. 
-        Context.getTranslationUnitDecl(), 
-        /*KeyLoc*/ SourceLocation(), 
-        /*NameLoc*/ declarator.getLocStart(),  
-        TemplateParameterDepth, 
-        AutoParameterPosition,  // our template param index 
-        /* Identifier*/ nullptr, false, IsParameterPack);
-      LSI->AutoTemplateParams.push_back(CorrespondingTemplateParam);
-      // Replace the 'auto' in the function parameter with this invented 
-      // template type parameter.
-      Result = QualType(CorrespondingTemplateParam->getTypeForDecl(), 0);
-    } else {
-      Result = Context.getAutoType(QualType(), AutoTypeKeyword::Auto, false);
-    }
+    Result = Context.getAutoType(QualType(), AutoTypeKeyword::Auto, false);
     break;
 
   case DeclSpec::TST_auto_type:
@@ -2796,6 +2763,12 @@ static QualType GetDeclSpecTypeForDeclarator(TypeProcessingState &state,
                      D.getDeclSpec().getAttributes().getList());
     break;
 
+  case UnqualifiedId::IK_DeductionGuideName:
+    // Deduction guides have a trailing return type and no type in their
+    // decl-specifier sequence. Use a placeholder return type for now.
+    T = SemaRef.Context.DependentTy;
+    break;
+
   case UnqualifiedId::IK_ConversionFunctionId:
     // The result type of a conversion function is the type that it
     // converts to.
@@ -2832,6 +2805,32 @@ static QualType GetDeclSpecTypeForDeclarator(TypeProcessingState &state,
       if (!SemaRef.getLangOpts().CPlusPlus14 ||
           !Auto || Auto->getKeyword() != AutoTypeKeyword::Auto)
         Error = 16;
+      else {
+        // If auto is mentioned in a lambda parameter context, convert it to a 
+        // template parameter type.
+        sema::LambdaScopeInfo *LSI = SemaRef.getCurLambda();
+        assert(LSI && "No LambdaScopeInfo on the stack!");
+        const unsigned TemplateParameterDepth = LSI->AutoTemplateParameterDepth;
+        const unsigned AutoParameterPosition = LSI->AutoTemplateParams.size();
+        const bool IsParameterPack = D.hasEllipsis();
+
+        // Create the TemplateTypeParmDecl here to retrieve the corresponding
+        // template parameter type. Template parameters are temporarily added
+        // to the TU until the associated TemplateDecl is created.
+        TemplateTypeParmDecl *CorrespondingTemplateParam =
+            TemplateTypeParmDecl::Create(
+                SemaRef.Context, SemaRef.Context.getTranslationUnitDecl(),
+                /*KeyLoc*/SourceLocation(), /*NameLoc*/D.getLocStart(),
+                TemplateParameterDepth, AutoParameterPosition,
+                /*Identifier*/nullptr, false, IsParameterPack);
+        LSI->AutoTemplateParams.push_back(CorrespondingTemplateParam);
+        // Replace the 'auto' in the function parameter with this invented 
+        // template type parameter.
+        // FIXME: Retain some type sugar to indicate that this was written
+        // as 'auto'.
+        T = SemaRef.ReplaceAutoType(
+            T, QualType(CorrespondingTemplateParam->getTypeForDecl(), 0));
+      }
       break;
     case Declarator::MemberContext: {
       if (D.getDeclSpec().getStorageClassSpec() == DeclSpec::SCS_static ||
@@ -2921,20 +2920,10 @@ static QualType GetDeclSpecTypeForDeclarator(TypeProcessingState &state,
     // better diagnostics.
     // We don't support '__auto_type' with trailing return types.
     // FIXME: Should we only do this for 'auto' and not 'decltype(auto)'?
-    if (SemaRef.getLangOpts().CPlusPlus11 && IsCXXAutoType) {
-      for (unsigned i = 0, e = D.getNumTypeObjects(); i != e; ++i) {
-        unsigned chunkIndex = e - i - 1;
-        state.setCurrentChunkIndex(chunkIndex);
-        DeclaratorChunk &DeclType = D.getTypeObject(chunkIndex);
-        if (DeclType.Kind == DeclaratorChunk::Function) {
-          const DeclaratorChunk::FunctionTypeInfo &FTI = DeclType.Fun;
-          if (FTI.hasTrailingReturnType()) {
-            HaveTrailing = true;
-            Error = -1;
-            break;
-          }
-        }
-      }
+    if (SemaRef.getLangOpts().CPlusPlus11 && IsCXXAutoType &&
+        D.hasTrailingReturnType()) {
+      HaveTrailing = true;
+      Error = -1;
     }
 
     SourceRange AutoRange = D.getDeclSpec().getTypeSpecTypeLoc();
@@ -3216,7 +3205,7 @@ getCCForDeclaratorChunk(Sema &S, Declarator &D,
       if (Attr->getKind() == AttributeList::AT_OpenCLKernel) {
         llvm::Triple::ArchType arch = S.Context.getTargetInfo().getTriple().getArch();
         if (arch == llvm::Triple::spir || arch == llvm::Triple::spir64 ||
-            arch == llvm::Triple::amdgcn) {
+            arch == llvm::Triple::amdgcn || arch == llvm::Triple::r600) {
           CC = CC_OpenCLKernel;
         }
         break;
@@ -4000,7 +3989,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
 
   // If the type itself could have nullability but does not, infer pointer
   // nullability and perform consistency checking.
-  if (S.ActiveTemplateInstantiations.empty()) {
+  if (S.CodeSynthesisContexts.empty()) {
     if (T->canHaveNullability() && !T->getNullability(S.Context)) {
       if (isVaList(T)) {
         // Record that we've seen a pointer, but do nothing else.
@@ -4205,7 +4194,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
       if (!D.isInvalidType()) {
         // trailing-return-type is only required if we're declaring a function,
         // and not, for instance, a pointer to a function.
-        if (D.getDeclSpec().containsPlaceholderType() &&
+        if (D.getDeclSpec().hasAutoTypeSpec() &&
             !FTI.hasTrailingReturnType() && chunkIndex == 0 &&
             !S.getLangOpts().CPlusPlus14) {
           S.Diag(D.getDeclSpec().getTypeSpecTypeLoc(),
@@ -4217,16 +4206,25 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
         } else if (FTI.hasTrailingReturnType()) {
           // T must be exactly 'auto' at this point. See CWG issue 681.
           if (isa<ParenType>(T)) {
-            S.Diag(D.getDeclSpec().getTypeSpecTypeLoc(),
+            S.Diag(D.getLocStart(),
                  diag::err_trailing_return_in_parens)
-              << T << D.getDeclSpec().getSourceRange();
+              << T << D.getSourceRange();
             D.setInvalidType(true);
+          } else if (D.getName().getKind() ==
+                         UnqualifiedId::IK_DeductionGuideName) {
+            if (T != Context.DependentTy) {
+              S.Diag(D.getDeclSpec().getLocStart(),
+                     diag::err_deduction_guide_with_complex_decl)
+                  << D.getSourceRange();
+              D.setInvalidType(true);
+            }
           } else if (D.getContext() != Declarator::LambdaExprContext &&
                      (T.hasQualifiers() || !isa<AutoType>(T) ||
-                      cast<AutoType>(T)->getKeyword() != AutoTypeKeyword::Auto)) {
+                      cast<AutoType>(T)->getKeyword() !=
+                          AutoTypeKeyword::Auto)) {
             S.Diag(D.getDeclSpec().getTypeSpecTypeLoc(),
-                 diag::err_trailing_return_without_auto)
-              << T << D.getDeclSpec().getSourceRange();
+                   diag::err_trailing_return_without_auto)
+                << T << D.getDeclSpec().getSourceRange();
             D.setInvalidType(true);
           }
           T = S.GetTypeFromParser(FTI.getTrailingReturnType(), &TInfo);
@@ -4240,7 +4238,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
 
       // C99 6.7.5.3p1: The return type may not be a function or array type.
       // For conversion functions, we'll diagnose this particular error later.
-      if ((T->isArrayType() || T->isFunctionType()) &&
+      if (!D.isInvalidType() && (T->isArrayType() || T->isFunctionType()) &&
           (D.getName().getKind() != UnqualifiedId::IK_ConversionFunctionId)) {
         unsigned diagID = diag::err_func_returning_array_function;
         // Last processing chunk in block context means this function chunk
@@ -4524,6 +4522,11 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
             HasAnyInterestingExtParameterInfos = true;
           }
 
+          if (Param->hasAttr<PassObjectSizeAttr>()) {
+            ExtParameterInfos[i] = ExtParameterInfos[i].withHasPassObjectSize();
+            HasAnyInterestingExtParameterInfos = true;
+          }
+
           ParamTys.push_back(ParamTy);
         }
 
@@ -4656,14 +4659,18 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
     //
     // Core issue 547 also allows cv-qualifiers on function types that are
     // top-level template type arguments.
-    bool FreeFunction;
-    if (!D.getCXXScopeSpec().isSet()) {
-      FreeFunction = ((D.getContext() != Declarator::MemberContext &&
-                       D.getContext() != Declarator::LambdaExprContext) ||
-                      D.getDeclSpec().isFriendSpecified());
+    enum { NonMember, Member, DeductionGuide } Kind = NonMember;
+    if (D.getName().getKind() == UnqualifiedId::IK_DeductionGuideName)
+      Kind = DeductionGuide;
+    else if (!D.getCXXScopeSpec().isSet()) {
+      if ((D.getContext() == Declarator::MemberContext ||
+           D.getContext() == Declarator::LambdaExprContext) &&
+          !D.getDeclSpec().isFriendSpecified())
+        Kind = Member;
     } else {
       DeclContext *DC = S.computeDeclContext(D.getCXXScopeSpec());
-      FreeFunction = (DC && !DC->isRecord());
+      if (!DC || DC->isRecord())
+        Kind = Member;
     }
 
     // C++11 [dcl.fct]p6 (w/DR1417):
@@ -4683,7 +4690,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
     //
     // ... for instance.
     if (IsQualifiedFunction &&
-        !(!FreeFunction &&
+        !(Kind == Member &&
           D.getDeclSpec().getStorageClassSpec() != DeclSpec::SCS_static) &&
         !IsTypedefName &&
         D.getContext() != Declarator::TemplateTypeArgContext) {
@@ -4711,7 +4718,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
       }
 
       S.Diag(Loc, diag::err_invalid_qualified_function_type)
-        << FreeFunction << D.isFunctionDeclarator() << T
+        << Kind << D.isFunctionDeclarator() << T
         << getFunctionQualifiersAsString(FnTy)
         << FixItHint::CreateRemoval(RemovalRange);
 
@@ -6991,8 +6998,10 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
       (TAL == TAL_DeclSpec || TAL == TAL_DeclChunk)) {
     Declarator &D = state.getDeclarator();
     if (state.getCurrentChunkIndex() > 0 &&
-        D.getTypeObject(state.getCurrentChunkIndex() - 1).Kind ==
-            DeclaratorChunk::Pointer) {
+        (D.getTypeObject(state.getCurrentChunkIndex() - 1).Kind ==
+             DeclaratorChunk::Pointer ||
+         D.getTypeObject(state.getCurrentChunkIndex() - 1).Kind ==
+             DeclaratorChunk::BlockPointer)) {
       type = state.getSema().Context.getAddrSpaceQualType(
           type, LangAS::opencl_generic);
     } else if (state.getCurrentChunkIndex() == 0 &&
@@ -7608,7 +7617,7 @@ QualType Sema::BuildDecltypeType(Expr *E, SourceLocation Loc,
   if (ER.isInvalid()) return QualType();
   E = ER.get();
 
-  if (AsUnevaluated && ActiveTemplateInstantiations.empty() &&
+  if (AsUnevaluated && CodeSynthesisContexts.empty() &&
       E->HasSideEffects(Context, false)) {
     // The expression operand for decltype is in an unevaluated expression
     // context, so side effects could result in unintended consequences.

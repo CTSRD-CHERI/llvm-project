@@ -18,16 +18,19 @@ import os.path
 import json
 import argparse
 import logging
-import subprocess
+import tempfile
 import multiprocessing
-from libscanbuild import initialize_logging, tempdir, command_entry_point
+import contextlib
+import datetime
+from libscanbuild import command_entry_point, compiler_wrapper, \
+    wrapper_environment, reconfigure_logging, run_build, tempdir
 from libscanbuild.runner import run
 from libscanbuild.intercept import capture
-from libscanbuild.report import report_directory, document
+from libscanbuild.report import document
 from libscanbuild.clang import get_checkers
 from libscanbuild.compilation import split_command
 
-__all__ = ['analyze_build_main', 'analyze_build_wrapper']
+__all__ = ['analyze_build_main', 'analyze_compiler_wrapper']
 
 COMPILER_WRAPPER_CC = 'analyze-cc'
 COMPILER_WRAPPER_CXX = 'analyze-c++'
@@ -42,8 +45,8 @@ def analyze_build_main(bin_dir, from_build_command):
     validate(parser, args, from_build_command)
 
     # setup logging
-    initialize_logging(args.verbose)
-    logging.debug('Parsed arguments: %s', args)
+    reconfigure_logging(args.verbose)
+    logging.debug('Raw arguments %s', sys.argv)
 
     with report_directory(args.output, args.keep_empty) as target_dir:
         if not from_build_command:
@@ -70,9 +73,7 @@ def analyze_build_main(bin_dir, from_build_command):
             # run the build command with compiler wrappers which
             # execute the analyzer too. (interposition)
             environment = setup_environment(args, target_dir, bin_dir)
-            logging.debug('run build in environment: %s', environment)
-            exit_code = subprocess.call(args.build, env=environment)
-            logging.debug('build finished with exit code: %d', exit_code)
+            exit_code = run_build(args.build, env=environment)
             # cover report generation and bug counting
             number_of_bugs = document(args, target_dir, False)
             # set exit status as it was requested
@@ -128,13 +129,11 @@ def setup_environment(args, destination, bin_dir):
     """ Set up environment for build command to interpose compiler wrapper. """
 
     environment = dict(os.environ)
+    environment.update(wrapper_environment(args))
     environment.update({
         'CC': os.path.join(bin_dir, COMPILER_WRAPPER_CC),
         'CXX': os.path.join(bin_dir, COMPILER_WRAPPER_CXX),
-        'ANALYZE_BUILD_CC': args.cc,
-        'ANALYZE_BUILD_CXX': args.cxx,
         'ANALYZE_BUILD_CLANG': args.clang if need_analyzer(args.build) else '',
-        'ANALYZE_BUILD_VERBOSE': 'DEBUG' if args.verbose > 2 else 'WARNING',
         'ANALYZE_BUILD_REPORT_DIR': destination,
         'ANALYZE_BUILD_REPORT_FORMAT': args.output_format,
         'ANALYZE_BUILD_REPORT_FAILURES': 'yes' if args.output_failures else '',
@@ -144,51 +143,78 @@ def setup_environment(args, destination, bin_dir):
     return environment
 
 
-def analyze_build_wrapper(cplusplus):
+@command_entry_point
+def analyze_compiler_wrapper():
     """ Entry point for `analyze-cc` and `analyze-c++` compiler wrappers. """
 
-    # initialize wrapper logging
-    logging.basicConfig(format='analyze: %(levelname)s: %(message)s',
-                        level=os.getenv('ANALYZE_BUILD_VERBOSE', 'INFO'))
-    # execute with real compiler
-    compiler = os.getenv('ANALYZE_BUILD_CXX', 'c++') if cplusplus \
-        else os.getenv('ANALYZE_BUILD_CC', 'cc')
-    compilation = [compiler] + sys.argv[1:]
-    logging.info('execute compiler: %s', compilation)
-    result = subprocess.call(compilation)
-    # exit when it fails, ...
+    return compiler_wrapper(analyze_compiler_wrapper_impl)
+
+
+def analyze_compiler_wrapper_impl(result, execution):
+    """ Implements analyzer compiler wrapper functionality. """
+
+    # don't run analyzer when compilation fails. or when it's not requested.
     if result or not os.getenv('ANALYZE_BUILD_CLANG'):
-        return result
-    # ... and run the analyzer if all went well.
+        return
+
+    # check is it a compilation?
+    compilation = split_command(execution.cmd)
+    if compilation is None:
+        return
+    # collect the needed parameters from environment, crash when missing
+    parameters = {
+        'clang': os.getenv('ANALYZE_BUILD_CLANG'),
+        'output_dir': os.getenv('ANALYZE_BUILD_REPORT_DIR'),
+        'output_format': os.getenv('ANALYZE_BUILD_REPORT_FORMAT'),
+        'output_failures': os.getenv('ANALYZE_BUILD_REPORT_FAILURES'),
+        'direct_args': os.getenv('ANALYZE_BUILD_PARAMETERS',
+                                 '').split(' '),
+        'force_debug': os.getenv('ANALYZE_BUILD_FORCE_DEBUG'),
+        'directory': execution.cwd,
+        'command': [execution.cmd[0], '-c'] + compilation.flags
+    }
+    # call static analyzer against the compilation
+    for source in compilation.files:
+        parameters.update({'file': source})
+        logging.debug('analyzer parameters %s', parameters)
+        current = run(parameters)
+        # display error message from the static analyzer
+        if current is not None:
+            for line in current['error_output']:
+                logging.info(line.rstrip())
+
+
+@contextlib.contextmanager
+def report_directory(hint, keep):
+    """ Responsible for the report directory.
+
+    hint -- could specify the parent directory of the output directory.
+    keep -- a boolean value to keep or delete the empty report directory. """
+
+    stamp_format = 'scan-build-%Y-%m-%d-%H-%M-%S-%f-'
+    stamp = datetime.datetime.now().strftime(stamp_format)
+    parent_dir = os.path.abspath(hint)
+    if not os.path.exists(parent_dir):
+        os.makedirs(parent_dir)
+    name = tempfile.mkdtemp(prefix=stamp, dir=parent_dir)
+
+    logging.info('Report directory created: %s', name)
+
     try:
-        # check is it a compilation
-        compilation = split_command(sys.argv)
-        if compilation is None:
-            return result
-        # collect the needed parameters from environment, crash when missing
-        parameters = {
-            'clang': os.getenv('ANALYZE_BUILD_CLANG'),
-            'output_dir': os.getenv('ANALYZE_BUILD_REPORT_DIR'),
-            'output_format': os.getenv('ANALYZE_BUILD_REPORT_FORMAT'),
-            'output_failures': os.getenv('ANALYZE_BUILD_REPORT_FAILURES'),
-            'direct_args': os.getenv('ANALYZE_BUILD_PARAMETERS',
-                                     '').split(' '),
-            'force_debug': os.getenv('ANALYZE_BUILD_FORCE_DEBUG'),
-            'directory': os.getcwd(),
-            'command': [sys.argv[0], '-c'] + compilation.flags
-        }
-        # call static analyzer against the compilation
-        for source in compilation.files:
-            parameters.update({'file': source})
-            logging.debug('analyzer parameters %s', parameters)
-            current = run(parameters)
-            # display error message from the static analyzer
-            if current is not None:
-                for line in current['error_output']:
-                    logging.info(line.rstrip())
-    except Exception:
-        logging.exception("run analyzer inside compiler wrapper failed.")
-    return result
+        yield name
+    finally:
+        if os.listdir(name):
+            msg = "Run 'scan-view %s' to examine bug reports."
+            keep = True
+        else:
+            if keep:
+                msg = "Report directory '%s' contains no report, but kept."
+            else:
+                msg = "Removing directory '%s' because it contains no report."
+        logging.warning(msg, name)
+
+        if not keep:
+            os.rmdir(name)
 
 
 def analyzer_params(args):

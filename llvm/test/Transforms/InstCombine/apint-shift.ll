@@ -63,6 +63,8 @@ define i55 @test6(i55 %A) {
   ret i55 %C
 }
 
+; (X * C2) << C1 --> X * (C2 << C1)
+
 define i55 @test6a(i55 %A) {
 ; CHECK-LABEL: @test6a(
 ; CHECK-NEXT:    [[C:%.*]] = mul i55 %A, 6
@@ -71,6 +73,18 @@ define i55 @test6a(i55 %A) {
   %B = mul i55 %A, 3
   %C = shl i55 %B, 1
   ret i55 %C
+}
+
+; (X * C2) << C1 --> X * (C2 << C1)
+
+define <2 x i55> @test6a_vec(<2 x i55> %A) {
+; CHECK-LABEL: @test6a_vec(
+; CHECK-NEXT:    [[C:%.*]] = mul <2 x i55> %A, <i55 6, i55 48>
+; CHECK-NEXT:    ret <2 x i55> [[C]]
+;
+  %B = mul <2 x i55> %A, <i55 3, i55 12>
+  %C = shl <2 x i55> %B, <i55 1, i55 2>
+  ret <2 x i55> %C
 }
 
 define i29 @test7(i8 %X) {
@@ -126,6 +140,32 @@ define <2 x i19> @lshr_lshr_splat_vec(<2 x i19> %X) {
   ret <2 x i19> %sh2
 }
 
+define i9 @multiuse_lshr_lshr(i9 %x) {
+; CHECK-LABEL: @multiuse_lshr_lshr(
+; CHECK-NEXT:    [[SH1:%.*]] = lshr i9 %x, 2
+; CHECK-NEXT:    [[SH2:%.*]] = lshr i9 %x, 5
+; CHECK-NEXT:    [[MUL:%.*]] = mul i9 [[SH1]], [[SH2]]
+; CHECK-NEXT:    ret i9 [[MUL]]
+;
+  %sh1 = lshr i9 %x, 2
+  %sh2 = lshr i9 %sh1, 3
+  %mul = mul i9 %sh1, %sh2
+  ret i9 %mul
+}
+
+define <2 x i9> @multiuse_lshr_lshr_splat(<2 x i9> %x) {
+; CHECK-LABEL: @multiuse_lshr_lshr_splat(
+; CHECK-NEXT:    [[SH1:%.*]] = lshr <2 x i9> %x, <i9 2, i9 2>
+; CHECK-NEXT:    [[SH2:%.*]] = lshr <2 x i9> %x, <i9 5, i9 5>
+; CHECK-NEXT:    [[MUL:%.*]] = mul <2 x i9> [[SH1]], [[SH2]]
+; CHECK-NEXT:    ret <2 x i9> [[MUL]]
+;
+  %sh1 = lshr <2 x i9> %x, <i9 2, i9 2>
+  %sh2 = lshr <2 x i9> %sh1, <i9 3, i9 3>
+  %mul = mul <2 x i9> %sh1, %sh2
+  ret <2 x i9> %mul
+}
+
 ; Two left shifts in the same direction:
 ; shl (shl X, C1), C2 -->  shl X, C1 + C2
 
@@ -137,6 +177,32 @@ define <2 x i19> @shl_shl_splat_vec(<2 x i19> %X) {
   %sh1 = shl <2 x i19> %X, <i19 3, i19 3>
   %sh2 = shl <2 x i19> %sh1, <i19 2, i19 2>
   ret <2 x i19> %sh2
+}
+
+define i42 @multiuse_shl_shl(i42 %x) {
+; CHECK-LABEL: @multiuse_shl_shl(
+; CHECK-NEXT:    [[SH1:%.*]] = shl i42 %x, 8
+; CHECK-NEXT:    [[SH2:%.*]] = shl i42 %x, 17
+; CHECK-NEXT:    [[MUL:%.*]] = mul i42 [[SH1]], [[SH2]]
+; CHECK-NEXT:    ret i42 [[MUL]]
+;
+  %sh1 = shl i42 %x, 8
+  %sh2 = shl i42 %sh1, 9
+  %mul = mul i42 %sh1, %sh2
+  ret i42 %mul
+}
+
+define <2 x i42> @multiuse_shl_shl_splat(<2 x i42> %x) {
+; CHECK-LABEL: @multiuse_shl_shl_splat(
+; CHECK-NEXT:    [[SH1:%.*]] = shl <2 x i42> %x, <i42 8, i42 8>
+; CHECK-NEXT:    [[SH2:%.*]] = shl <2 x i42> %x, <i42 17, i42 17>
+; CHECK-NEXT:    [[MUL:%.*]] = mul <2 x i42> [[SH1]], [[SH2]]
+; CHECK-NEXT:    ret <2 x i42> [[MUL]]
+;
+  %sh1 = shl <2 x i42> %x, <i42 8, i42 8>
+  %sh2 = shl <2 x i42> %sh1, <i42 9, i42 9>
+  %mul = mul <2 x i42> %sh1, %sh2
+  ret <2 x i42> %mul
 }
 
 ; Equal shift amounts in opposite directions become bitwise 'and':

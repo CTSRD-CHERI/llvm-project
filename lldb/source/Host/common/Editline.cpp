@@ -11,16 +11,18 @@
 #include <iostream>
 #include <limits.h>
 
-#include "lldb/Core/Error.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Core/StringList.h"
 #include "lldb/Host/ConnectionFileDescriptor.h"
 #include "lldb/Host/Editline.h"
 #include "lldb/Host/FileSpec.h"
 #include "lldb/Host/FileSystem.h"
 #include "lldb/Host/Host.h"
+#include "lldb/Utility/Error.h"
 #include "lldb/Utility/LLDBAssert.h"
 #include "lldb/Utility/SelectHelper.h"
+#include "lldb/Utility/StreamString.h"
+
+#include "llvm/Support/Threading.h"
 
 using namespace lldb_private;
 using namespace lldb_private::line_editor;
@@ -1151,8 +1153,8 @@ Editline::Editline(const char *editline_name, FILE *input_file,
     if (term_fd != -1) {
       static std::mutex *g_init_terminal_fds_mutex_ptr = nullptr;
       static std::set<int> *g_init_terminal_fds_ptr = nullptr;
-      static std::once_flag g_once_flag;
-      std::call_once(g_once_flag, [&]() {
+      static llvm::once_flag g_once_flag;
+      llvm::call_once(g_once_flag, [&]() {
         g_init_terminal_fds_mutex_ptr =
             new std::mutex(); // NOTE: Leak to avoid C++ destructor chain issues
         g_init_terminal_fds_ptr = new std::set<int>(); // NOTE: Leak to avoid

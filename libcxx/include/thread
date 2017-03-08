@@ -298,9 +298,12 @@ public:
                    !is_same<typename decay<_Fp>::type, thread>::value
               >::type
              >
+        _LIBCPP_METHOD_TEMPLATE_IMPLICIT_INSTANTIATION_VIS
         explicit thread(_Fp&& __f, _Args&&... __args);
 #else  // _LIBCPP_HAS_NO_VARIADICS
-    template <class _Fp> explicit thread(_Fp __f);
+    template <class _Fp>
+    _LIBCPP_METHOD_TEMPLATE_IMPLICIT_INSTANTIATION_VIS
+    explicit thread(_Fp __f);
 #endif
     ~thread();
 
@@ -424,7 +427,7 @@ void swap(thread& __x, thread& __y) _NOEXCEPT {__x.swap(__y);}
 namespace this_thread
 {
 
-_LIBCPP_FUNC_VIS void sleep_for(const chrono::nanoseconds& ns);
+_LIBCPP_FUNC_VIS void sleep_for(const chrono::nanoseconds& __ns);
 
 template <class _Rep, class _Period>
 void

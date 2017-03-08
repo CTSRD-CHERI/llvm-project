@@ -832,8 +832,6 @@ TARGET_BUILTIN(__builtin_ia32_vphaddudq, "V2LLiV4i", "", "xop")
 TARGET_BUILTIN(__builtin_ia32_vphsubbw, "V8sV16c", "", "xop")
 TARGET_BUILTIN(__builtin_ia32_vphsubwd, "V4iV8s", "", "xop")
 TARGET_BUILTIN(__builtin_ia32_vphsubdq, "V2LLiV4i", "", "xop")
-TARGET_BUILTIN(__builtin_ia32_vpcmov, "V2LLiV2LLiV2LLiV2LLi", "", "xop")
-TARGET_BUILTIN(__builtin_ia32_vpcmov_256, "V4LLiV4LLiV4LLiV4LLi", "", "xop")
 TARGET_BUILTIN(__builtin_ia32_vpperm, "V16cV16cV16cV16c", "", "xop")
 TARGET_BUILTIN(__builtin_ia32_vprotb, "V16cV16cV16c", "", "xop")
 TARGET_BUILTIN(__builtin_ia32_vprotw, "V8sV8sV8s", "", "xop")
@@ -1068,10 +1066,10 @@ TARGET_BUILTIN(__builtin_ia32_ucmpw512_mask, "UiV32sV32sIiUi", "", "avx512bw")
 
 TARGET_BUILTIN(__builtin_ia32_pabsb512_mask, "V64cV64cV64cULLi", "", "avx512bw")
 TARGET_BUILTIN(__builtin_ia32_pabsw512_mask, "V32sV32sV32sUi", "", "avx512bw")
-TARGET_BUILTIN(__builtin_ia32_packssdw512_mask, "V32sV16iV16iV32sUi", "", "avx512bw")
-TARGET_BUILTIN(__builtin_ia32_packsswb512_mask, "V64cV32sV32sV64cULLi", "", "avx512bw")
-TARGET_BUILTIN(__builtin_ia32_packusdw512_mask, "V32sV16iV16iV32sUi", "", "avx512bw")
-TARGET_BUILTIN(__builtin_ia32_packuswb512_mask, "V64cV32sV32sV64cULLi", "", "avx512bw")
+TARGET_BUILTIN(__builtin_ia32_packssdw512, "V32sV16iV16i", "", "avx512bw")
+TARGET_BUILTIN(__builtin_ia32_packsswb512, "V64cV32sV32s", "", "avx512bw")
+TARGET_BUILTIN(__builtin_ia32_packusdw512, "V32sV16iV16i", "", "avx512bw")
+TARGET_BUILTIN(__builtin_ia32_packuswb512, "V64cV32sV32s", "", "avx512bw")
 TARGET_BUILTIN(__builtin_ia32_paddsb512_mask, "V64cV64cV64cV64cULLi", "", "avx512bw")
 TARGET_BUILTIN(__builtin_ia32_paddsw512_mask, "V32sV32sV32sV32sUi", "", "avx512bw")
 TARGET_BUILTIN(__builtin_ia32_paddusb512_mask, "V64cV64cV64cV64cULLi", "", "avx512bw")
@@ -1814,6 +1812,9 @@ TARGET_BUILTIN(__builtin_ia32_selectpd_512, "V8dUcV8dV8d", "", "")
 TARGET_BUILTIN(__builtin_ia32_monitorx, "vv*UiUi", "", "mwaitx")
 TARGET_BUILTIN(__builtin_ia32_mwaitx, "vUiUiUi", "", "mwaitx")
 
+// CLZERO
+TARGET_BUILTIN(__builtin_ia32_clzero, "vv*", "", "clzero")
+
 // MSVC
 TARGET_HEADER_BUILTIN(_BitScanForward, "UcULi*ULi", "nh", "intrin.h", ALL_MS_LANGUAGES, "")
 TARGET_HEADER_BUILTIN(_BitScanReverse, "UcULi*ULi", "nh", "intrin.h", ALL_MS_LANGUAGES, "")
@@ -1828,6 +1829,8 @@ TARGET_HEADER_BUILTIN(__emulu, "ULLiUiUi", "nh", "intrin.h", ALL_MS_LANGUAGES, "
 TARGET_HEADER_BUILTIN(_AddressOfReturnAddress, "v*", "nh", "intrin.h", ALL_MS_LANGUAGES, "")
 
 TARGET_HEADER_BUILTIN(__stosb, "vUc*Ucz", "nh", "intrin.h", ALL_MS_LANGUAGES, "")
+TARGET_HEADER_BUILTIN(__int2c, "v",       "nr", "intrin.h", ALL_MS_LANGUAGES, "")
+TARGET_HEADER_BUILTIN(__ud2,   "v",       "nr", "intrin.h", ALL_MS_LANGUAGES, "")
 
 #undef BUILTIN
 #undef TARGET_BUILTIN

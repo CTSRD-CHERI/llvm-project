@@ -43,6 +43,9 @@ void FunctionScopeInfo::Clear() {
   SwitchStack.clear();
   Returns.clear();
   CoroutinePromise = nullptr;
+  NeedsCoroutineSuspends = true;
+  CoroutineSuspends.first = nullptr;
+  CoroutineSuspends.second = nullptr;
   CoroutineStmts.clear();
   ErrorTrap.reset();
   PossiblyUnreachableDiags.clear();
@@ -184,7 +187,7 @@ void FunctionScopeInfo::markSafeWeakUse(const Expr *E) {
   }
 
   // Has this weak object been seen before?
-  FunctionScopeInfo::WeakObjectUseMap::iterator Uses;
+  FunctionScopeInfo::WeakObjectUseMap::iterator Uses = WeakObjectUses.end();
   if (const ObjCPropertyRefExpr *RefExpr = dyn_cast<ObjCPropertyRefExpr>(E)) {
     if (!RefExpr->isObjectReceiver())
       return;
@@ -197,10 +200,10 @@ void FunctionScopeInfo::markSafeWeakUse(const Expr *E) {
   }
   else if (const ObjCIvarRefExpr *IvarE = dyn_cast<ObjCIvarRefExpr>(E))
     Uses = WeakObjectUses.find(WeakObjectProfileTy(IvarE));
-  else if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(E))
-    Uses = WeakObjectUses.find(WeakObjectProfileTy(DRE));
-  else if (const ObjCMessageExpr *MsgE = dyn_cast<ObjCMessageExpr>(E)) {
-    Uses = WeakObjectUses.end();
+  else if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(E)) {
+    if (isa<VarDecl>(DRE->getDecl()))
+      Uses = WeakObjectUses.find(WeakObjectProfileTy(DRE));
+  } else if (const ObjCMessageExpr *MsgE = dyn_cast<ObjCMessageExpr>(E)) {
     if (const ObjCMethodDecl *MD = MsgE->getMethodDecl()) {
       if (const ObjCPropertyDecl *Prop = MD->findPropertyDecl()) {
         Uses =

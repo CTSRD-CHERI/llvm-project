@@ -261,8 +261,8 @@ static bool InlineCallIfPossible(
 /// Return true if inlining of CS can block the caller from being
 /// inlined which is proved to be more beneficial. \p IC is the
 /// estimated inline cost associated with callsite \p CS.
-/// \p TotalAltCost will be set to the estimated cost of inlining the caller
-/// if \p CS is suppressed for inlining.
+/// \p TotalSecondaryCost will be set to the estimated cost of inlining the
+/// caller if \p CS is suppressed for inlining.
 static bool
 shouldBeDeferred(Function *Caller, CallSite CS, InlineCost IC,
                  int &TotalSecondaryCost,
@@ -326,7 +326,7 @@ shouldBeDeferred(Function *Caller, CallSite CS, InlineCost IC,
   // one is set very low by getInlineCost, in anticipation that Caller will
   // be removed entirely.  We did not account for this above unless there
   // is only one caller of Caller.
-  if (callerWillBeRemoved && !Caller->use_empty())
+  if (callerWillBeRemoved && !Caller->hasOneUse())
     TotalSecondaryCost -= InlineConstants::LastCallToStaticBonus;
 
   if (inliningPreventsSomeOuterInline && TotalSecondaryCost < IC.getCost())
@@ -343,6 +343,7 @@ static bool shouldInline(CallSite CS,
   InlineCost IC = GetInlineCost(CS);
   Instruction *Call = CS.getInstruction();
   Function *Callee = CS.getCalledFunction();
+  Function *Caller = CS.getCaller();
 
   if (IC.isAlways()) {
     DEBUG(dbgs() << "    Inlining: cost=always"
@@ -356,19 +357,20 @@ static bool shouldInline(CallSite CS,
   if (IC.isNever()) {
     DEBUG(dbgs() << "    NOT Inlining: cost=never"
                  << ", Call: " << *CS.getInstruction() << "\n");
-    ORE.emit(OptimizationRemarkAnalysis(DEBUG_TYPE, "NeverInline", Call)
-             << NV("Callee", Callee)
-             << " should never be inlined (cost=never)");
+    ORE.emit(OptimizationRemarkMissed(DEBUG_TYPE, "NeverInline", Call)
+             << NV("Callee", Callee) << " not inlined into "
+             << NV("Caller", Caller)
+             << " because it should never be inlined (cost=never)");
     return false;
   }
 
-  Function *Caller = CS.getCaller();
   if (!IC) {
     DEBUG(dbgs() << "    NOT Inlining: cost=" << IC.getCost()
                  << ", thres=" << (IC.getCostDelta() + IC.getCost())
                  << ", Call: " << *CS.getInstruction() << "\n");
-    ORE.emit(OptimizationRemarkAnalysis(DEBUG_TYPE, "TooCostly", Call)
-             << NV("Callee", Callee) << " too costly to inline (cost="
+    ORE.emit(OptimizationRemarkMissed(DEBUG_TYPE, "TooCostly", Call)
+             << NV("Callee", Callee) << " not inlined into "
+             << NV("Caller", Caller) << " because too costly to inline (cost="
              << NV("Cost", IC.getCost()) << ", threshold="
              << NV("Threshold", IC.getCostDelta() + IC.getCost()) << ")");
     return false;
@@ -379,8 +381,8 @@ static bool shouldInline(CallSite CS,
     DEBUG(dbgs() << "    NOT Inlining: " << *CS.getInstruction()
                  << " Cost = " << IC.getCost()
                  << ", outer Cost = " << TotalSecondaryCost << '\n');
-    ORE.emit(OptimizationRemarkAnalysis(DEBUG_TYPE,
-                                        "IncreaseCostInOtherContexts", Call)
+    ORE.emit(OptimizationRemarkMissed(DEBUG_TYPE, "IncreaseCostInOtherContexts",
+                                      Call)
              << "Not inlining. Cost of inlining " << NV("Callee", Callee)
              << " increases the cost of inlining " << NV("Caller", Caller)
              << " in other contexts");
@@ -553,16 +555,11 @@ inlineCallsImpl(CallGraphSCC &SCC, CallGraph &CG,
 
         // If the policy determines that we should inline this function,
         // try to do so.
-        using namespace ore;
-        if (!shouldInline(CS, GetInlineCost, ORE)) {
-          ORE.emit(
-              OptimizationRemarkMissed(DEBUG_TYPE, "NotInlined", DLoc, Block)
-              << NV("Callee", Callee) << " will not be inlined into "
-              << NV("Caller", Caller));
+        if (!shouldInline(CS, GetInlineCost, ORE))
           continue;
-        }
 
         // Attempt to inline the function.
+        using namespace ore;
         if (!InlineCallIfPossible(CS, InlineInfo, InlinedArrayAllocas,
                                   InlineHistoryID, InsertLifetime, AARGetter,
                                   ImportedFunctionsStats)) {
@@ -639,22 +636,12 @@ bool LegacyInlinerBase::inlineCalls(CallGraphSCC &SCC) {
   ACT = &getAnalysis<AssumptionCacheTracker>();
   PSI = getAnalysis<ProfileSummaryInfoWrapperPass>().getPSI();
   auto &TLI = getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
-  // We compute dedicated AA results for each function in the SCC as needed. We
-  // use a lambda referencing external objects so that they live long enough to
-  // be queried, but we re-use them each time.
-  Optional<BasicAAResult> BAR;
-  Optional<AAResults> AAR;
-  auto AARGetter = [&](Function &F) -> AAResults & {
-    BAR.emplace(createLegacyPMBasicAAResult(*this, F));
-    AAR.emplace(createLegacyPMAAResults(*this, F, *BAR));
-    return *AAR;
-  };
   auto GetAssumptionCache = [&](Function &F) -> AssumptionCache & {
     return ACT->getAssumptionCache(F);
   };
   return inlineCallsImpl(SCC, CG, GetAssumptionCache, PSI, TLI, InsertLifetime,
                          [this](CallSite CS) { return getInlineCost(CS); },
-                         AARGetter, ImportedFunctionsStats);
+                         LegacyAARGetter(*this), ImportedFunctionsStats);
 }
 
 /// Remove now-dead linkonce functions at the end of
@@ -913,8 +900,8 @@ PreservedAnalyses InlinerPass::run(LazyCallGraph::SCC &InitialC,
     // below.
     for (Function *InlinedCallee : InlinedCallees) {
       LazyCallGraph::Node &CalleeN = *CG.lookup(*InlinedCallee);
-      for (LazyCallGraph::Edge &E : CalleeN)
-        RC->insertTrivialRefEdge(N, *E.getNode());
+      for (LazyCallGraph::Edge &E : *CalleeN)
+        RC->insertTrivialRefEdge(N, E.getNode());
     }
     InlinedCallees.clear();
 

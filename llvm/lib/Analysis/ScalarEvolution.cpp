@@ -132,9 +132,19 @@ static cl::opt<unsigned> AddOpsInlineThreshold(
     cl::desc("Threshold for inlining multiplication operands into a SCEV"),
     cl::init(500));
 
+static cl::opt<unsigned> MaxSCEVCompareDepth(
+    "scalar-evolution-max-scev-compare-depth", cl::Hidden,
+    cl::desc("Maximum depth of recursive SCEV complexity comparisons"),
+    cl::init(32));
+
+static cl::opt<unsigned> MaxValueCompareDepth(
+    "scalar-evolution-max-value-compare-depth", cl::Hidden,
+    cl::desc("Maximum depth of recursive value complexity comparisons"),
+    cl::init(2));
+
 static cl::opt<unsigned>
-    MaxCompareDepth("scalar-evolution-max-compare-depth", cl::Hidden,
-                    cl::desc("Maximum depth of recursive compare complexity"),
+    MaxAddExprDepth("scalar-evolution-max-addexpr-depth", cl::Hidden,
+                    cl::desc("Maximum depth of recursive AddExpr"),
                     cl::init(32));
 
 static cl::opt<unsigned> MaxConstantEvolvingDepth(
@@ -149,11 +159,12 @@ static cl::opt<unsigned> MaxConstantEvolvingDepth(
 // Implementation of the SCEV class.
 //
 
-LLVM_DUMP_METHOD
-void SCEV::dump() const {
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+LLVM_DUMP_METHOD void SCEV::dump() const {
   print(dbgs());
   dbgs() << '\n';
 }
+#endif
 
 void SCEV::print(raw_ostream &OS) const {
   switch (static_cast<SCEVTypes>(getSCEVType())) {
@@ -490,7 +501,7 @@ static int
 CompareValueComplexity(SmallSet<std::pair<Value *, Value *>, 8> &EqCache,
                        const LoopInfo *const LI, Value *LV, Value *RV,
                        unsigned Depth) {
-  if (Depth > MaxCompareDepth || EqCache.count({LV, RV}))
+  if (Depth > MaxValueCompareDepth || EqCache.count({LV, RV}))
     return 0;
 
   // Order pointer values after integer values. This helps SCEVExpander form
@@ -577,7 +588,7 @@ static int CompareSCEVComplexity(
   if (LType != RType)
     return (int)LType - (int)RType;
 
-  if (Depth > MaxCompareDepth || EqCacheSCEV.count({LHS, RHS}))
+  if (Depth > MaxSCEVCompareDepth || EqCacheSCEV.count({LHS, RHS}))
     return 0;
   // Aside from the getSCEVType() ordering, the particular ordering
   // isn't very important except that it's beneficial to be consistent,
@@ -2099,7 +2110,8 @@ StrengthenNoWrapFlags(ScalarEvolution *SE, SCEVTypes Type,
 
 /// Get a canonical add expression, or something simpler if possible.
 const SCEV *ScalarEvolution::getAddExpr(SmallVectorImpl<const SCEV *> &Ops,
-                                        SCEV::NoWrapFlags Flags) {
+                                        SCEV::NoWrapFlags Flags,
+                                        unsigned Depth) {
   assert(!(Flags & ~(SCEV::FlagNUW | SCEV::FlagNSW)) &&
          "only nuw or nsw allowed");
   assert(!Ops.empty() && "Cannot get empty add!");
@@ -2137,6 +2149,10 @@ const SCEV *ScalarEvolution::getAddExpr(SmallVectorImpl<const SCEV *> &Ops,
 
     if (Ops.size() == 1) return Ops[0];
   }
+
+  // Limit recursion calls depth
+  if (Depth > MaxAddExprDepth)
+    return getOrCreateAddExpr(Ops, Flags);
 
   // Okay, check to see if the same value occurs in the operand list more than
   // once.  If so, merge them together into an multiply expression.  Since we
@@ -2209,7 +2225,7 @@ const SCEV *ScalarEvolution::getAddExpr(SmallVectorImpl<const SCEV *> &Ops,
     }
     if (Ok) {
       // Evaluate the expression in the larger type.
-      const SCEV *Fold = getAddExpr(LargeOps, Flags);
+      const SCEV *Fold = getAddExpr(LargeOps, Flags, Depth + 1);
       // If it folds to something simple, use it. Otherwise, don't.
       if (isa<SCEVConstant>(Fold) || isa<SCEVUnknown>(Fold))
         return getTruncateExpr(Fold, DstType);
@@ -2238,7 +2254,7 @@ const SCEV *ScalarEvolution::getAddExpr(SmallVectorImpl<const SCEV *> &Ops,
     // and they are not necessarily sorted.  Recurse to resort and resimplify
     // any operands we just acquired.
     if (DeletedAdd)
-      return getAddExpr(Ops);
+      return getAddExpr(Ops, SCEV::FlagAnyWrap, Depth + 1);
   }
 
   // Skip over the add expression until we get to a multiply.
@@ -2273,13 +2289,14 @@ const SCEV *ScalarEvolution::getAddExpr(SmallVectorImpl<const SCEV *> &Ops,
         Ops.push_back(getConstant(AccumulatedConstant));
       for (auto &MulOp : MulOpLists)
         if (MulOp.first != 0)
-          Ops.push_back(getMulExpr(getConstant(MulOp.first),
-                                   getAddExpr(MulOp.second)));
+          Ops.push_back(getMulExpr(
+              getConstant(MulOp.first),
+              getAddExpr(MulOp.second, SCEV::FlagAnyWrap, Depth + 1)));
       if (Ops.empty())
         return getZero(Ty);
       if (Ops.size() == 1)
         return Ops[0];
-      return getAddExpr(Ops);
+      return getAddExpr(Ops, SCEV::FlagAnyWrap, Depth + 1);
     }
   }
 
@@ -2304,8 +2321,8 @@ const SCEV *ScalarEvolution::getAddExpr(SmallVectorImpl<const SCEV *> &Ops,
             MulOps.append(Mul->op_begin()+MulOp+1, Mul->op_end());
             InnerMul = getMulExpr(MulOps);
           }
-          const SCEV *One = getOne(Ty);
-          const SCEV *AddOne = getAddExpr(One, InnerMul);
+          SmallVector<const SCEV *, 2> TwoOps = {getOne(Ty), InnerMul};
+          const SCEV *AddOne = getAddExpr(TwoOps, SCEV::FlagAnyWrap, Depth + 1);
           const SCEV *OuterMul = getMulExpr(AddOne, MulOpSCEV);
           if (Ops.size() == 2) return OuterMul;
           if (AddOp < Idx) {
@@ -2316,7 +2333,7 @@ const SCEV *ScalarEvolution::getAddExpr(SmallVectorImpl<const SCEV *> &Ops,
             Ops.erase(Ops.begin()+AddOp-1);
           }
           Ops.push_back(OuterMul);
-          return getAddExpr(Ops);
+          return getAddExpr(Ops, SCEV::FlagAnyWrap, Depth + 1);
         }
 
       // Check this multiply against other multiplies being added together.
@@ -2344,13 +2361,15 @@ const SCEV *ScalarEvolution::getAddExpr(SmallVectorImpl<const SCEV *> &Ops,
               MulOps.append(OtherMul->op_begin()+OMulOp+1, OtherMul->op_end());
               InnerMul2 = getMulExpr(MulOps);
             }
-            const SCEV *InnerMulSum = getAddExpr(InnerMul1,InnerMul2);
+            SmallVector<const SCEV *, 2> TwoOps = {InnerMul1, InnerMul2};
+            const SCEV *InnerMulSum =
+                getAddExpr(TwoOps, SCEV::FlagAnyWrap, Depth + 1);
             const SCEV *OuterMul = getMulExpr(MulOpSCEV, InnerMulSum);
             if (Ops.size() == 2) return OuterMul;
             Ops.erase(Ops.begin()+Idx);
             Ops.erase(Ops.begin()+OtherMulIdx-1);
             Ops.push_back(OuterMul);
-            return getAddExpr(Ops);
+            return getAddExpr(Ops, SCEV::FlagAnyWrap, Depth + 1);
           }
       }
     }
@@ -2386,7 +2405,7 @@ const SCEV *ScalarEvolution::getAddExpr(SmallVectorImpl<const SCEV *> &Ops,
       // This follows from the fact that the no-wrap flags on the outer add
       // expression are applicable on the 0th iteration, when the add recurrence
       // will be equal to its start value.
-      AddRecOps[0] = getAddExpr(LIOps, Flags);
+      AddRecOps[0] = getAddExpr(LIOps, Flags, Depth + 1);
 
       // Build the new addrec. Propagate the NUW and NSW flags if both the
       // outer add and the inner addrec are guaranteed to have no overflow.
@@ -2403,7 +2422,7 @@ const SCEV *ScalarEvolution::getAddExpr(SmallVectorImpl<const SCEV *> &Ops,
           Ops[i] = NewRec;
           break;
         }
-      return getAddExpr(Ops);
+      return getAddExpr(Ops, SCEV::FlagAnyWrap, Depth + 1);
     }
 
     // Okay, if there weren't any loop invariants to be folded, check to see if
@@ -2427,14 +2446,15 @@ const SCEV *ScalarEvolution::getAddExpr(SmallVectorImpl<const SCEV *> &Ops,
                                    OtherAddRec->op_end());
                   break;
                 }
-                AddRecOps[i] = getAddExpr(AddRecOps[i],
-                                          OtherAddRec->getOperand(i));
+                SmallVector<const SCEV *, 2> TwoOps = {
+                    AddRecOps[i], OtherAddRec->getOperand(i)};
+                AddRecOps[i] = getAddExpr(TwoOps, SCEV::FlagAnyWrap, Depth + 1);
               }
               Ops.erase(Ops.begin() + OtherIdx); --OtherIdx;
             }
         // Step size has changed, so we cannot guarantee no self-wraparound.
         Ops[Idx] = getAddRecExpr(AddRecOps, AddRecLoop, SCEV::FlagAnyWrap);
-        return getAddExpr(Ops);
+        return getAddExpr(Ops, SCEV::FlagAnyWrap, Depth + 1);
       }
 
     // Otherwise couldn't fold anything into this recurrence.  Move onto the
@@ -2443,18 +2463,24 @@ const SCEV *ScalarEvolution::getAddExpr(SmallVectorImpl<const SCEV *> &Ops,
 
   // Okay, it looks like we really DO need an add expr.  Check to see if we
   // already have one, otherwise create a new one.
+  return getOrCreateAddExpr(Ops, Flags);
+}
+
+const SCEV *
+ScalarEvolution::getOrCreateAddExpr(SmallVectorImpl<const SCEV *> &Ops,
+                                    SCEV::NoWrapFlags Flags) {
   FoldingSetNodeID ID;
   ID.AddInteger(scAddExpr);
   for (unsigned i = 0, e = Ops.size(); i != e; ++i)
     ID.AddPointer(Ops[i]);
   void *IP = nullptr;
   SCEVAddExpr *S =
-    static_cast<SCEVAddExpr *>(UniqueSCEVs.FindNodeOrInsertPos(ID, IP));
+      static_cast<SCEVAddExpr *>(UniqueSCEVs.FindNodeOrInsertPos(ID, IP));
   if (!S) {
     const SCEV **O = SCEVAllocator.Allocate<const SCEV *>(Ops.size());
     std::uninitialized_copy(Ops.begin(), Ops.end(), O);
-    S = new (SCEVAllocator) SCEVAddExpr(ID.Intern(SCEVAllocator),
-                                        O, Ops.size());
+    S = new (SCEVAllocator)
+        SCEVAddExpr(ID.Intern(SCEVAllocator), O, Ops.size());
     UniqueSCEVs.InsertNode(S, IP);
   }
   S->setNoWrapFlags(Flags);
@@ -4416,8 +4442,7 @@ const SCEV *ScalarEvolution::createNodeForGEP(GEPOperator *GEP) {
   return getGEPExpr(GEP, IndexExprs);
 }
 
-uint32_t
-ScalarEvolution::GetMinTrailingZeros(const SCEV *S) {
+uint32_t ScalarEvolution::GetMinTrailingZerosImpl(const SCEV *S) {
   if (const SCEVConstant *C = dyn_cast<SCEVConstant>(S))
     return C->getAPInt().countTrailingZeros();
 
@@ -4427,14 +4452,16 @@ ScalarEvolution::GetMinTrailingZeros(const SCEV *S) {
 
   if (const SCEVZeroExtendExpr *E = dyn_cast<SCEVZeroExtendExpr>(S)) {
     uint32_t OpRes = GetMinTrailingZeros(E->getOperand());
-    return OpRes == getTypeSizeInBits(E->getOperand()->getType()) ?
-             getTypeSizeInBits(E->getType()) : OpRes;
+    return OpRes == getTypeSizeInBits(E->getOperand()->getType())
+               ? getTypeSizeInBits(E->getType())
+               : OpRes;
   }
 
   if (const SCEVSignExtendExpr *E = dyn_cast<SCEVSignExtendExpr>(S)) {
     uint32_t OpRes = GetMinTrailingZeros(E->getOperand());
-    return OpRes == getTypeSizeInBits(E->getOperand()->getType()) ?
-             getTypeSizeInBits(E->getType()) : OpRes;
+    return OpRes == getTypeSizeInBits(E->getOperand()->getType())
+               ? getTypeSizeInBits(E->getType())
+               : OpRes;
   }
 
   if (const SCEVAddExpr *A = dyn_cast<SCEVAddExpr>(S)) {
@@ -4451,8 +4478,8 @@ ScalarEvolution::GetMinTrailingZeros(const SCEV *S) {
     uint32_t BitWidth = getTypeSizeInBits(M->getType());
     for (unsigned i = 1, e = M->getNumOperands();
          SumOpRes != BitWidth && i != e; ++i)
-      SumOpRes = std::min(SumOpRes + GetMinTrailingZeros(M->getOperand(i)),
-                          BitWidth);
+      SumOpRes =
+          std::min(SumOpRes + GetMinTrailingZeros(M->getOperand(i)), BitWidth);
     return SumOpRes;
   }
 
@@ -4491,6 +4518,17 @@ ScalarEvolution::GetMinTrailingZeros(const SCEV *S) {
 
   // SCEVUDivExpr
   return 0;
+}
+
+uint32_t ScalarEvolution::GetMinTrailingZeros(const SCEV *S) {
+  auto I = MinTrailingZerosCache.find(S);
+  if (I != MinTrailingZerosCache.end())
+    return I->second;
+
+  uint32_t Result = GetMinTrailingZerosImpl(S);
+  auto InsertPair = MinTrailingZerosCache.insert({S, Result});
+  assert(InsertPair.second && "Should insert a new key");
+  return InsertPair.first->second;
 }
 
 /// Helper method to assign a range to V from metadata present in the IR.
@@ -7039,10 +7077,10 @@ const SCEV *ScalarEvolution::getSCEVAtScope(Value *V, const Loop *L) {
 /// A and B isn't important.
 ///
 /// If the equation does not have a solution, SCEVCouldNotCompute is returned.
-static const SCEV *SolveLinEquationWithOverflow(const APInt &A, const APInt &B,
+static const SCEV *SolveLinEquationWithOverflow(const APInt &A, const SCEV *B,
                                                ScalarEvolution &SE) {
   uint32_t BW = A.getBitWidth();
-  assert(BW == B.getBitWidth() && "Bit widths must be the same.");
+  assert(BW == SE.getTypeSizeInBits(B->getType()));
   assert(A != 0 && "A must be non-zero.");
 
   // 1. D = gcd(A, N)
@@ -7056,7 +7094,7 @@ static const SCEV *SolveLinEquationWithOverflow(const APInt &A, const APInt &B,
   //
   // B is divisible by D if and only if the multiplicity of prime factor 2 for B
   // is not less than multiplicity of this prime factor for D.
-  if (B.countTrailingZeros() < Mult2)
+  if (SE.GetMinTrailingZeros(B) < Mult2)
     return SE.getCouldNotCompute();
 
   // 3. Compute I: the multiplicative inverse of (A / D) in arithmetic
@@ -7074,9 +7112,8 @@ static const SCEV *SolveLinEquationWithOverflow(const APInt &A, const APInt &B,
   // I * (B / D) mod (N / D)
   // To simplify the computation, we factor out the divide by D:
   // (I * B mod N) / D
-  APInt Result = (I * B).lshr(Mult2);
-
-  return SE.getConstant(Result);
+  const SCEV *D = SE.getConstant(APInt::getOneBitSet(BW, Mult2));
+  return SE.getUDivExactExpr(SE.getMulExpr(B, SE.getConstant(I)), D);
 }
 
 /// Find the roots of the quadratic equation for the given quadratic chrec
@@ -7258,52 +7295,6 @@ ScalarEvolution::howFarToZero(const SCEV *V, const Loop *L, bool ControlsExit,
     return ExitLimit(Distance, getConstant(MaxBECount), false, Predicates);
   }
 
-  // As a special case, handle the instance where Step is a positive power of
-  // two. In this case, determining whether Step divides Distance evenly can be
-  // done by counting and comparing the number of trailing zeros of Step and
-  // Distance.
-  if (!CountDown) {
-    const APInt &StepV = StepC->getAPInt();
-    // StepV.isPowerOf2() returns true if StepV is an positive power of two.  It
-    // also returns true if StepV is maximally negative (eg, INT_MIN), but that
-    // case is not handled as this code is guarded by !CountDown.
-    if (StepV.isPowerOf2() &&
-        GetMinTrailingZeros(Distance) >= StepV.countTrailingZeros()) {
-      // Here we've constrained the equation to be of the form
-      //
-      //   2^(N + k) * Distance' = (StepV == 2^N) * X (mod 2^W)  ... (0)
-      //
-      // where we're operating on a W bit wide integer domain and k is
-      // non-negative.  The smallest unsigned solution for X is the trip count.
-      //
-      // (0) is equivalent to:
-      //
-      //      2^(N + k) * Distance' - 2^N * X = L * 2^W
-      // <=>  2^N(2^k * Distance' - X) = L * 2^(W - N) * 2^N
-      // <=>  2^k * Distance' - X = L * 2^(W - N)
-      // <=>  2^k * Distance'     = L * 2^(W - N) + X    ... (1)
-      //
-      // The smallest X satisfying (1) is unsigned remainder of dividing the LHS
-      // by 2^(W - N).
-      //
-      // <=>  X = 2^k * Distance' URem 2^(W - N)   ... (2)
-      //
-      // E.g. say we're solving
-      //
-      //   2 * Val = 2 * X  (in i8)   ... (3)
-      //
-      // then from (2), we get X = Val URem i8 128 (k = 0 in this case).
-      //
-      // Note: It is tempting to solve (3) by setting X = Val, but Val is not
-      // necessarily the smallest unsigned value of X that satisfies (3).
-      // E.g. if Val is i8 -127 then the smallest value of X that satisfies (3)
-      // is i8 1, not i8 -127
-
-      const auto *Limit = getUDivExactExpr(Distance, Step);
-      return ExitLimit(Limit, Limit, false, Predicates);
-    }
-  }
-
   // If the condition controls loop exit (the loop exits only if the expression
   // is true) and the addition is no-wrap we can use unsigned divide to
   // compute the backedge count.  In this case, the step may not divide the
@@ -7316,13 +7307,10 @@ ScalarEvolution::howFarToZero(const SCEV *V, const Loop *L, bool ControlsExit,
     return ExitLimit(Exact, Exact, false, Predicates);
   }
 
-  // Then, try to solve the above equation provided that Start is constant.
-  if (const SCEVConstant *StartC = dyn_cast<SCEVConstant>(Start)) {
-    const SCEV *E = SolveLinEquationWithOverflow(
-        StepC->getValue()->getValue(), -StartC->getValue()->getValue(), *this);
-    return ExitLimit(E, E, false, Predicates);
-  }
-  return getCouldNotCompute();
+  // Solve the general equation.
+  const SCEV *E = SolveLinEquationWithOverflow(
+      StepC->getAPInt(), getNegativeSCEV(Start), *this);
+  return ExitLimit(E, E, false, Predicates);
 }
 
 ScalarEvolution::ExitLimit
@@ -9539,6 +9527,7 @@ ScalarEvolution::ScalarEvolution(ScalarEvolution &&Arg)
       ValueExprMap(std::move(Arg.ValueExprMap)),
       PendingLoopPredicates(std::move(Arg.PendingLoopPredicates)),
       WalkingBEDominatingConds(false), ProvingSplitPredicate(false),
+      MinTrailingZerosCache(std::move(Arg.MinTrailingZerosCache)),
       BackedgeTakenCounts(std::move(Arg.BackedgeTakenCounts)),
       PredicatedBackedgeTakenCounts(
           std::move(Arg.PredicatedBackedgeTakenCounts)),
@@ -9944,6 +9933,7 @@ void ScalarEvolution::forgetMemoizedResults(const SCEV *S) {
   SignedRanges.erase(S);
   ExprValueMap.erase(S);
   HasRecMap.erase(S);
+  MinTrailingZerosCache.erase(S);
 
   auto RemoveSCEVFromBackedgeMap =
       [S, this](DenseMap<const Loop *, BackedgeTakenInfo> &Map) {

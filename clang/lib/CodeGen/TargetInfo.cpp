@@ -4847,7 +4847,7 @@ public:
       : TargetCodeGenInfo(new AArch64ABIInfo(CGT, Kind)) {}
 
   StringRef getARCRetainAutoreleasedReturnValueMarker() const override {
-    return "mov\tfp, fp\t\t; marker for objc_retainAutoreleaseReturnValue";
+    return "mov\tfp, fp\t\t# marker for objc_retainAutoreleaseReturnValue";
   }
 
   int getDwarfEHStackPointer(CodeGen::CodeGenModule &M) const override {
@@ -7046,6 +7046,31 @@ MIPSTargetCodeGenInfo::initDwarfEHRegSizeTable(CodeGen::CodeGenFunction &CGF,
 }
 
 //===----------------------------------------------------------------------===//
+// AVR ABI Implementation.
+//===----------------------------------------------------------------------===//
+
+namespace {
+class AVRTargetCodeGenInfo : public TargetCodeGenInfo {
+public:
+  AVRTargetCodeGenInfo(CodeGenTypes &CGT)
+    : TargetCodeGenInfo(new DefaultABIInfo(CGT)) { }
+
+  void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
+                           CodeGen::CodeGenModule &CGM) const override {
+    const auto *FD = dyn_cast_or_null<FunctionDecl>(D);
+    if (!FD) return;
+    auto *Fn = cast<llvm::Function>(GV);
+
+    if (FD->getAttr<AVRInterruptAttr>())
+      Fn->addFnAttr("interrupt");
+
+    if (FD->getAttr<AVRSignalAttr>())
+      Fn->addFnAttr("signal");
+  }
+};
+}
+
+//===----------------------------------------------------------------------===//
 // TCE ABI Implementation (see http://tce.cs.tut.fi). Uses mostly the defaults.
 // Currently subclassed only to implement custom OpenCL C function attribute
 // handling.
@@ -8548,6 +8573,9 @@ const TargetCodeGenInfo &CodeGenModule::getTargetCodeGenInfo() {
   case llvm::Triple::mips64el:
   case llvm::Triple::cheri:
     return SetCGInfo(new MIPSTargetCodeGenInfo(Types, false));
+
+  case llvm::Triple::avr:
+    return SetCGInfo(new AVRTargetCodeGenInfo(Types));
 
   case llvm::Triple::aarch64:
   case llvm::Triple::aarch64_be: {

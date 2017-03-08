@@ -14,6 +14,7 @@
 
 #include "AArch64InstructionSelector.h"
 #include "AArch64InstrInfo.h"
+#include "AArch64MachineFunctionInfo.h"
 #include "AArch64RegisterBankInfo.h"
 #include "AArch64RegisterInfo.h"
 #include "AArch64Subtarget.h"
@@ -440,6 +441,38 @@ static void changeFCMPPredToAArch64CC(CmpInst::Predicate P,
   }
 }
 
+bool AArch64InstructionSelector::selectVaStartAAPCS(
+    MachineInstr &I, MachineFunction &MF, MachineRegisterInfo &MRI) const {
+  return false;
+}
+
+bool AArch64InstructionSelector::selectVaStartDarwin(
+    MachineInstr &I, MachineFunction &MF, MachineRegisterInfo &MRI) const {
+  AArch64FunctionInfo *FuncInfo = MF.getInfo<AArch64FunctionInfo>();
+  unsigned ListReg = I.getOperand(0).getReg();
+
+  unsigned ArgsAddrReg = MRI.createVirtualRegister(&AArch64::GPR64RegClass);
+
+  auto MIB =
+      BuildMI(*I.getParent(), I, I.getDebugLoc(), TII.get(AArch64::ADDXri))
+          .addDef(ArgsAddrReg)
+          .addFrameIndex(FuncInfo->getVarArgsStackIndex())
+          .addImm(0)
+          .addImm(0);
+
+  constrainSelectedInstRegOperands(*MIB, TII, TRI, RBI);
+
+  MIB = BuildMI(*I.getParent(), I, I.getDebugLoc(), TII.get(AArch64::STRXui))
+            .addUse(ArgsAddrReg)
+            .addUse(ListReg)
+            .addImm(0)
+            .addMemOperand(*I.memoperands_begin());
+
+  constrainSelectedInstRegOperands(*MIB, TII, TRI, RBI);
+  I.eraseFromParent();
+  return true;
+}
+
 bool AArch64InstructionSelector::select(MachineInstr &I) const {
   assert(I.getParent() && "Instruction should be in a basic block!");
   assert(I.getParent()->getParent() && "Instruction should be in a function!");
@@ -525,6 +558,11 @@ bool AArch64InstructionSelector::select(MachineInstr &I) const {
     return constrainSelectedInstRegOperands(*MIB.getInstr(), TII, TRI, RBI);
   }
 
+  case TargetOpcode::G_BRINDIRECT: {
+    I.setDesc(TII.get(AArch64::BR));
+    return constrainSelectedInstRegOperands(I, TII, TRI, RBI);
+  }
+
   case TargetOpcode::G_FCONSTANT:
   case TargetOpcode::G_CONSTANT: {
     const bool isFP = Opcode == TargetOpcode::G_FCONSTANT;
@@ -596,8 +634,11 @@ bool AArch64InstructionSelector::select(MachineInstr &I) const {
       // FIXME: Is going through int64_t always correct?
       ImmOp.ChangeToImmediate(
           ImmOp.getFPImm()->getValueAPF().bitcastToAPInt().getZExtValue());
-    } else {
+    } else if (I.getOperand(1).isCImm()) {
       uint64_t Val = I.getOperand(1).getCImm()->getZExtValue();
+      I.getOperand(1).ChangeToImmediate(Val);
+    } else if (I.getOperand(1).isImm()) {
+      uint64_t Val = I.getOperand(1).getImm();
       I.getOperand(1).ChangeToImmediate(Val);
     }
 
@@ -653,6 +694,12 @@ bool AArch64InstructionSelector::select(MachineInstr &I) const {
       return false;
     }
 
+    auto &MemOp = **I.memoperands_begin();
+    if (MemOp.getOrdering() != AtomicOrdering::NotAtomic) {
+      DEBUG(dbgs() << "Atomic load/store not supported yet\n");
+      return false;
+    }
+
 #ifndef NDEBUG
     // Sanity-check the pointer register.
     const unsigned PtrReg = I.getOperand(1).getReg();
@@ -677,6 +724,34 @@ bool AArch64InstructionSelector::select(MachineInstr &I) const {
     return constrainSelectedInstRegOperands(I, TII, TRI, RBI);
   }
 
+  case TargetOpcode::G_SMULH:
+  case TargetOpcode::G_UMULH: {
+    // Reject the various things we don't support yet.
+    if (unsupportedBinOp(I, RBI, MRI, TRI))
+      return false;
+
+    const unsigned DefReg = I.getOperand(0).getReg();
+    const RegisterBank &RB = *RBI.getRegBank(DefReg, MRI, TRI);
+
+    if (RB.getID() != AArch64::GPRRegBankID) {
+      DEBUG(dbgs() << "G_[SU]MULH on bank: " << RB << ", expected: GPR\n");
+      return false;
+    }
+
+    if (Ty != LLT::scalar(64)) {
+      DEBUG(dbgs() << "G_[SU]MULH has type: " << Ty
+                   << ", expected: " << LLT::scalar(64) << '\n');
+      return false;
+    }
+
+    unsigned NewOpc = I.getOpcode() == TargetOpcode::G_SMULH ? AArch64::SMULHrr
+                                                             : AArch64::UMULHrr;
+    I.setDesc(TII.get(NewOpc));
+
+    // Now that we selected an opcode, we need to constrain the register
+    // operands to use appropriate classes.
+    return constrainSelectedInstRegOperands(I, TII, TRI, RBI);
+  }
   case TargetOpcode::G_MUL: {
     // Reject the various things we don't support yet.
     if (unsupportedBinOp(I, RBI, MRI, TRI))
@@ -744,6 +819,17 @@ bool AArch64InstructionSelector::select(MachineInstr &I) const {
     return constrainSelectedInstRegOperands(I, TII, TRI, RBI);
   }
 
+  case TargetOpcode::G_PTR_MASK: {
+    uint64_t Align = I.getOperand(2).getImm();
+    if (Align >= 64 || Align == 0)
+      return false;
+
+    uint64_t Mask = ~((1ULL << Align) - 1);
+    I.setDesc(TII.get(AArch64::ANDXri));
+    I.getOperand(2).setImm(AArch64_AM::encodeLogicalImmediate(Mask, 64));
+
+    return constrainSelectedInstRegOperands(I, TII, TRI, RBI);
+  }
   case TargetOpcode::G_PTRTOINT:
   case TargetOpcode::G_TRUNC: {
     const LLT DstTy = MRI.getType(I.getOperand(0).getReg());
@@ -1120,6 +1206,9 @@ bool AArch64InstructionSelector::select(MachineInstr &I) const {
     I.eraseFromParent();
     return true;
   }
+  case TargetOpcode::G_VASTART:
+    return STI.isTargetDarwin() ? selectVaStartDarwin(I, MF, MRI)
+                                : selectVaStartAAPCS(I, MF, MRI);
   }
 
   return false;

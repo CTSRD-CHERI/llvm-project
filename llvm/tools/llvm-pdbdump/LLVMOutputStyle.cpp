@@ -22,7 +22,6 @@
 #include "llvm/DebugInfo/CodeView/TypeDumpVisitor.h"
 #include "llvm/DebugInfo/CodeView/TypeVisitorCallbackPipeline.h"
 #include "llvm/DebugInfo/MSF/MappedBlockStream.h"
-#include "llvm/DebugInfo/MSF/StreamReader.h"
 #include "llvm/DebugInfo/PDB/Native/DbiStream.h"
 #include "llvm/DebugInfo/PDB/Native/EnumTables.h"
 #include "llvm/DebugInfo/PDB/Native/GlobalsStream.h"
@@ -36,6 +35,7 @@
 #include "llvm/DebugInfo/PDB/Native/TpiStream.h"
 #include "llvm/DebugInfo/PDB/PDBExtras.h"
 #include "llvm/Object/COFF.h"
+#include "llvm/Support/BinaryStreamReader.h"
 #include "llvm/Support/FormatVariadic.h"
 
 #include <unordered_map>
@@ -450,7 +450,7 @@ Error LLVMOutputStyle::dumpStreamBytes() {
     auto Blocks = File.getMsfLayout().StreamMap[SI];
     P.printList("Blocks", Blocks);
 
-    StreamReader R(*S);
+    BinaryStreamReader R(*S);
     ArrayRef<uint8_t> StreamData;
     if (auto EC = R.readBytes(StreamData, S->getLength()))
       return EC;
@@ -745,10 +745,10 @@ Error LLVMOutputStyle::dumpDbiStream() {
           public:
             RecordVisitor(ScopedPrinter &P, PDBFile &F) : P(P), F(F) {}
             Error visitUnknown(ModuleSubstreamKind Kind,
-                               ReadableStreamRef Stream) override {
+                               BinaryStreamRef Stream) override {
               DictScope DD(P, "Unknown");
               ArrayRef<uint8_t> Data;
-              StreamReader R(Stream);
+              BinaryStreamReader R(Stream);
               if (auto EC = R.readBytes(Data, R.bytesRemaining())) {
                 return make_error<RawError>(
                     raw_error_code::corrupt_file,
@@ -758,7 +758,7 @@ Error LLVMOutputStyle::dumpDbiStream() {
               return Error::success();
             }
             Error
-            visitFileChecksums(ReadableStreamRef Data,
+            visitFileChecksums(BinaryStreamRef Data,
                                const FileChecksumArray &Checksums) override {
               DictScope DD(P, "FileChecksums");
               for (const auto &C : Checksums) {
@@ -774,7 +774,7 @@ Error LLVMOutputStyle::dumpDbiStream() {
               return Error::success();
             }
 
-            Error visitLines(ReadableStreamRef Data,
+            Error visitLines(BinaryStreamRef Data,
                              const LineSubstreamHeader *Header,
                              const LineInfoArray &Lines) override {
               DictScope DD(P, "Lines");

@@ -21,18 +21,19 @@
 
 // Other libraries and framework includes
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/Threading.h"
 
 // Project includes
-#include "lldb/Core/ConstString.h"
-#include "lldb/Core/FastDemangle.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/RegularExpression.h"
 #include "lldb/Core/UniqueCStringMap.h"
 #include "lldb/DataFormatters/CXXFunctionPointer.h"
 #include "lldb/DataFormatters/DataVisualization.h"
 #include "lldb/DataFormatters/FormattersHelpers.h"
 #include "lldb/DataFormatters/VectorType.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/FastDemangle.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/RegularExpression.h"
 
 #include "BlockPointer.h"
 #include "CxxStringTypes.h"
@@ -623,14 +624,14 @@ static void LoadLibCxxFormatters(lldb::TypeCategoryImplSP cpp_category_sp) {
       lldb_private::formatters::LibcxxVectorBoolSyntheticFrontEndCreator,
       "libc++ std::vector<bool> synthetic children",
       ConstString("std::__(ndk)?1::vector<std::__(ndk)?1::allocator<bool> >"),
-      stl_synth_flags);
+      stl_synth_flags, true);
   AddCXXSynthetic(
       cpp_category_sp,
       lldb_private::formatters::LibcxxVectorBoolSyntheticFrontEndCreator,
       "libc++ std::vector<bool> synthetic children",
       ConstString(
           "std::__(ndk)?1::vector<bool, std::__(ndk)?1::allocator<bool> >"),
-      stl_synth_flags);
+      stl_synth_flags, true);
   AddCXXSynthetic(
       cpp_category_sp,
       lldb_private::formatters::LibcxxStdMapSyntheticFrontEndCreator,
@@ -764,7 +765,7 @@ static void LoadLibCxxFormatters(lldb::TypeCategoryImplSP cpp_category_sp) {
       "libc++ std::vector<bool> summary provider",
       ConstString(
           "std::__(ndk)?1::vector<bool, std::__(ndk)?1::allocator<bool> >"),
-      stl_summary_flags);
+      stl_summary_flags, true);
   AddCXXSynthetic(
       cpp_category_sp,
       lldb_private::formatters::LibCxxMapIteratorSyntheticFrontEndCreator,
@@ -1036,10 +1037,10 @@ std::unique_ptr<Language::TypeScavenger> CPlusPlusLanguage::GetTypeScavenger() {
 }
 
 lldb::TypeCategoryImplSP CPlusPlusLanguage::GetFormatters() {
-  static std::once_flag g_initialize;
+  static llvm::once_flag g_initialize;
   static TypeCategoryImplSP g_category;
 
-  std::call_once(g_initialize, [this]() -> void {
+  llvm::call_once(g_initialize, [this]() -> void {
     DataVisualization::Categories::GetCategory(GetPluginName(), g_category);
     if (g_category) {
       LoadLibCxxFormatters(g_category);
@@ -1052,11 +1053,11 @@ lldb::TypeCategoryImplSP CPlusPlusLanguage::GetFormatters() {
 
 HardcodedFormatters::HardcodedSummaryFinder
 CPlusPlusLanguage::GetHardcodedSummaries() {
-  static std::once_flag g_initialize;
+  static llvm::once_flag g_initialize;
   static ConstString g_vectortypes("VectorTypes");
   static HardcodedFormatters::HardcodedSummaryFinder g_formatters;
 
-  std::call_once(g_initialize, []() -> void {
+  llvm::call_once(g_initialize, []() -> void {
     g_formatters.push_back(
         [](lldb_private::ValueObject &valobj, lldb::DynamicValueType,
            FormatManager &) -> TypeSummaryImpl::SharedPointer {
@@ -1116,11 +1117,11 @@ CPlusPlusLanguage::GetHardcodedSummaries() {
 
 HardcodedFormatters::HardcodedSyntheticFinder
 CPlusPlusLanguage::GetHardcodedSynthetics() {
-  static std::once_flag g_initialize;
+  static llvm::once_flag g_initialize;
   static ConstString g_vectortypes("VectorTypes");
   static HardcodedFormatters::HardcodedSyntheticFinder g_formatters;
 
-  std::call_once(g_initialize, []() -> void {
+  llvm::call_once(g_initialize, []() -> void {
     g_formatters.push_back([](lldb_private::ValueObject &valobj,
                               lldb::DynamicValueType,
                               FormatManager &

@@ -271,7 +271,7 @@ static bool SemaBuiltinSEHScopeCheck(Sema &SemaRef, CallExpr *TheCall,
   // Scopes aren't available during instantiation. Fortunately, builtin
   // functions cannot be template args so they cannot be formed through template
   // instantiation. Therefore checking once during the parse is sufficient.
-  if (!SemaRef.ActiveTemplateInstantiations.empty())
+  if (SemaRef.inTemplateInstantiation())
     return false;
 
   Scope *S = SemaRef.getCurScope();
@@ -435,10 +435,10 @@ static bool SemaOpenCLBuiltinEnqueueKernel(Sema &S, CallExpr *TheCall) {
   }
 
   // Third argument is always an ndrange_t type.
-  if (!Arg2->getType()->isNDRangeT()) {
+  if (Arg2->getType().getAsString() != "ndrange_t") {
     S.Diag(TheCall->getArg(2)->getLocStart(),
            diag::err_opencl_enqueue_kernel_expected_type)
-        << S.Context.OCLNDRangeTy;
+        << "'ndrange_t'";
     return true;
   }
 
@@ -2460,11 +2460,12 @@ static void CheckNonNullArguments(Sema &S,
 }
 
 /// Handles the checks for format strings, non-POD arguments to vararg
-/// functions, and NULL arguments passed to non-NULL parameters.
+/// functions, NULL arguments passed to non-NULL parameters, and diagnose_if
+/// attributes.
 void Sema::checkCall(NamedDecl *FDecl, const FunctionProtoType *Proto,
-                     ArrayRef<const Expr *> Args, bool IsMemberFunction,
-                     SourceLocation Loc, SourceRange Range,
-                     VariadicCallType CallType) {
+                     const Expr *ThisArg, ArrayRef<const Expr *> Args,
+                     bool IsMemberFunction, SourceLocation Loc,
+                     SourceRange Range, VariadicCallType CallType) {
   // FIXME: We should check as much as we can in the template definition.
   if (CurContext->isDependentContext())
     return;
@@ -2511,6 +2512,9 @@ void Sema::checkCall(NamedDecl *FDecl, const FunctionProtoType *Proto,
         CheckArgumentWithTypeTag(I, Args.data());
     }
   }
+
+  if (FD)
+    diagnoseArgDependentDiagnoseIfAttrs(FD, ThisArg, Args, Loc);
 }
 
 /// CheckConstructorCall - Check a constructor call for correctness and safety
@@ -2521,8 +2525,8 @@ void Sema::CheckConstructorCall(FunctionDecl *FDecl,
                                 SourceLocation Loc) {
   VariadicCallType CallType =
     Proto->isVariadic() ? VariadicConstructor : VariadicDoesNotApply;
-  checkCall(FDecl, Proto, Args, /*IsMemberFunction=*/true, Loc, SourceRange(), 
-            CallType);
+  checkCall(FDecl, Proto, /*ThisArg=*/nullptr, Args, /*IsMemberFunction=*/true,
+            Loc, SourceRange(), CallType);
 }
 
 /// CheckFunctionCall - Check a direct function call for various correctness
@@ -2537,14 +2541,20 @@ bool Sema::CheckFunctionCall(FunctionDecl *FDecl, CallExpr *TheCall,
                                                   TheCall->getCallee());
   Expr** Args = TheCall->getArgs();
   unsigned NumArgs = TheCall->getNumArgs();
+
+  Expr *ImplicitThis = nullptr;
   if (IsMemberOperatorCall) {
     // If this is a call to a member operator, hide the first argument
     // from checkCall.
     // FIXME: Our choice of AST representation here is less than ideal.
+    ImplicitThis = Args[0];
     ++Args;
     --NumArgs;
-  }
-  checkCall(FDecl, Proto, llvm::makeArrayRef(Args, NumArgs), 
+  } else if (IsMemberFunction)
+    ImplicitThis =
+        cast<CXXMemberCallExpr>(TheCall)->getImplicitObjectArgument();
+
+  checkCall(FDecl, Proto, ImplicitThis, llvm::makeArrayRef(Args, NumArgs),
             IsMemberFunction, TheCall->getRParenLoc(),
             TheCall->getCallee()->getSourceRange(), CallType);
 
@@ -2580,8 +2590,8 @@ bool Sema::CheckObjCMethodCall(ObjCMethodDecl *Method, SourceLocation lbrac,
   VariadicCallType CallType =
       Method->isVariadic() ? VariadicMethod : VariadicDoesNotApply;
 
-  checkCall(Method, nullptr, Args,
-            /*IsMemberFunction=*/false, lbrac, Method->getSourceRange(), 
+  checkCall(Method, nullptr, /*ThisArg=*/nullptr, Args,
+            /*IsMemberFunction=*/false, lbrac, Method->getSourceRange(),
             CallType);
 
   return false;
@@ -2610,7 +2620,7 @@ bool Sema::CheckPointerCall(NamedDecl *NDecl, CallExpr *TheCall,
     CallType = VariadicFunction;
   }
 
-  checkCall(NDecl, Proto,
+  checkCall(NDecl, Proto, /*ThisArg=*/nullptr,
             llvm::makeArrayRef(TheCall->getArgs(), TheCall->getNumArgs()),
             /*IsMemberFunction=*/false, TheCall->getRParenLoc(),
             TheCall->getCallee()->getSourceRange(), CallType);
@@ -2623,7 +2633,7 @@ bool Sema::CheckPointerCall(NamedDecl *NDecl, CallExpr *TheCall,
 bool Sema::CheckOtherCall(CallExpr *TheCall, const FunctionProtoType *Proto) {
   VariadicCallType CallType = getVariadicCallType(/*FDecl=*/nullptr, Proto,
                                                   TheCall->getCallee());
-  checkCall(/*FDecl=*/nullptr, Proto,
+  checkCall(/*FDecl=*/nullptr, Proto, /*ThisArg=*/nullptr,
             llvm::makeArrayRef(TheCall->getArgs(), TheCall->getNumArgs()),
             /*IsMemberFunction=*/false, TheCall->getRParenLoc(),
             TheCall->getCallee()->getSourceRange(), CallType);
@@ -6806,7 +6816,7 @@ void Sema::CheckMaxUnsignedZero(const CallExpr *Call,
   if (!Call || !FDecl) return;
 
   // Ignore template specializations and macros.
-  if (!ActiveTemplateInstantiations.empty()) return;
+  if (inTemplateInstantiation()) return;
   if (Call->getExprLoc().isMacroID()) return;
 
   // Only care about the one template argument, two function parameter std::max
@@ -8272,7 +8282,7 @@ bool HasEnumType(Expr *E) {
 
 void CheckTrivialUnsignedComparison(Sema &S, BinaryOperator *E) {
   // Disable warning in template instantiations.
-  if (!S.ActiveTemplateInstantiations.empty())
+  if (S.inTemplateInstantiation())
     return;
 
   BinaryOperatorKind op = E->getOpcode();
@@ -8302,7 +8312,7 @@ void DiagnoseOutOfRangeComparison(Sema &S, BinaryOperator *E, Expr *Constant,
                                   Expr *Other, const llvm::APSInt &Value,
                                   bool RhsConstant) {
   // Disable warning in template instantiations.
-  if (!S.ActiveTemplateInstantiations.empty())
+  if (S.inTemplateInstantiation())
     return;
 
   // TODO: Investigate using GetExprRange() to get tighter bounds
@@ -8740,7 +8750,7 @@ void DiagnoseFloatingImpCast(Sema &S, Expr *E, QualType T,
 
                              SourceLocation CContext) {
   const bool IsBool = T->isSpecificBuiltinType(BuiltinType::Bool);
-  const bool PruneWarnings = !S.ActiveTemplateInstantiations.empty();
+  const bool PruneWarnings = S.inTemplateInstantiation();
 
   Expr *InnerE = E->IgnoreParenImpCasts();
   // We also want to warn on, e.g., "int i = -1.234"
@@ -10646,6 +10656,12 @@ void Sema::CheckArrayAccess(const Expr *expr) {
           CheckArrayAccess(rhs);
         return;
       }
+      case Stmt::CXXOperatorCallExprClass: {
+        const auto *OCE = cast<CXXOperatorCallExpr>(expr);
+        for (const auto *Arg : OCE->arguments())
+          CheckArrayAccess(Arg);
+        return;
+      }
       default:
         return;
     }
@@ -11351,7 +11367,7 @@ void Sema::DiagnoseSelfMove(const Expr *LHSExpr, const Expr *RHSExpr,
   if (Diags.isIgnored(diag::warn_sizeof_pointer_expr_memaccess, OpLoc))
     return;
 
-  if (!ActiveTemplateInstantiations.empty())
+  if (inTemplateInstantiation())
     return;
 
   // Strip parens and casts away.

@@ -17,8 +17,8 @@
 // Project includes
 #include "lldb/Core/Broadcaster.h"
 #include "lldb/Core/Event.h"
-#include "lldb/Core/Log.h"
-#include "lldb/Core/StreamString.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/StreamString.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -352,11 +352,7 @@ bool Listener::GetEventInternal(
     uint32_t num_broadcaster_names, uint32_t event_type_mask,
     EventSP &event_sp) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_EVENTS));
-  if (log != nullptr)
-    log->Printf("%p Listener::GetEventInternal (timeout = %llu us) for %s",
-                static_cast<void *>(this), static_cast<unsigned long long>(
-                                               timeout ? timeout->count() : -1),
-                m_name.c_str());
+  LLDB_LOG(log, "this = {0}, timeout = {1} for {2}", this, timeout, m_name);
 
   std::unique_lock<std::mutex> lock(m_events_mutex);
 

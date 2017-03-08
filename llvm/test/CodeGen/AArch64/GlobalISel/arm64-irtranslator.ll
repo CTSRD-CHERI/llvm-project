@@ -217,6 +217,42 @@ phi.block:
   ret i32 12
 }
 
+; Tests for indirect br.
+; CHECK-LABEL: name: indirectbr
+; CHECK: body:
+;
+; ABI/constant lowering and IR-level entry basic block.
+; CHECK: {{bb.[0-9]+.entry}}:
+; Make sure we have one successor
+; CHECK-NEXT: successors: %[[BB_L1:bb.[0-9]+.L1]](0x80000000)
+; CHECK: G_BR %[[BB_L1]]
+;
+; Check basic block L1 has 2 successors: BBL1 and BBL2
+; CHECK: [[BB_L1]] (address-taken):
+; CHECK-NEXT: successors: %[[BB_L1]](0x40000000),
+; CHECK:                  %[[BB_L2:bb.[0-9]+.L2]](0x40000000)
+; CHECK: G_BRINDIRECT %{{[0-9]+}}(p0)
+;
+; Check basic block L2 is the return basic block
+; CHECK: [[BB_L2]] (address-taken):
+; CHECK-NEXT: RET_ReallyLR
+
+@indirectbr.L = internal unnamed_addr constant [3 x i8*] [i8* blockaddress(@indirectbr, %L1), i8* blockaddress(@indirectbr, %L2), i8* null], align 8
+
+define void @indirectbr() {
+entry:
+  br label %L1
+L1:                                               ; preds = %entry, %L1
+  %i = phi i32 [ 0, %entry ], [ %inc, %L1 ]
+  %inc = add i32 %i, 1
+  %idxprom = zext i32 %i to i64
+  %arrayidx = getelementptr inbounds [3 x i8*], [3 x i8*]* @indirectbr.L, i64 0, i64 %idxprom
+  %brtarget = load i8*, i8** %arrayidx, align 8
+  indirectbr i8* %brtarget, [label %L1, label %L2]
+L2:                                               ; preds = %L1
+  ret void
+}
+
 ; Tests for or.
 ; CHECK-LABEL: name: ori64
 ; CHECK: [[ARG1:%[0-9]+]](s64) = COPY %x0
@@ -845,7 +881,7 @@ define void @test_extractvalue_agg(%struct.nested* %addr, {i8, i32}* %addr2) {
 ; CHECK-LABEL: name: test_insertvalue
 ; CHECK: [[VAL:%[0-9]+]](s32) = COPY %w1
 ; CHECK: [[STRUCT:%[0-9]+]](s128) = G_LOAD
-; CHECK: [[NEWSTRUCT:%[0-9]+]](s128) = G_INSERT [[STRUCT]](s128), [[VAL]](s32), 64
+; CHECK: [[NEWSTRUCT:%[0-9]+]](s128) = G_INSERT [[STRUCT]], [[VAL]](s32), 64
 ; CHECK: G_STORE [[NEWSTRUCT]](s128),
 define void @test_insertvalue(%struct.nested* %addr, i32 %val) {
   %struct = load %struct.nested, %struct.nested* %addr
@@ -854,10 +890,30 @@ define void @test_insertvalue(%struct.nested* %addr, i32 %val) {
   ret void
 }
 
+define [1 x i64] @test_trivial_insert([1 x i64] %s, i64 %val) {
+; CHECK-LABEL: name: test_trivial_insert
+; CHECK: [[STRUCT:%[0-9]+]](s64) = COPY %x0
+; CHECK: [[VAL:%[0-9]+]](s64) = COPY %x1
+; CHECK: [[RES:%[0-9]+]](s64) = COPY [[VAL]](s64)
+; CHECK: %x0 = COPY [[RES]]
+  %res = insertvalue [1 x i64] %s, i64 %val, 0
+  ret [1 x i64] %res
+}
+
+define [1 x i8*] @test_trivial_insert_ptr([1 x i8*] %s, i8* %val) {
+; CHECK-LABEL: name: test_trivial_insert_ptr
+; CHECK: [[STRUCT:%[0-9]+]](s64) = COPY %x0
+; CHECK: [[VAL:%[0-9]+]](p0) = COPY %x1
+; CHECK: [[RES:%[0-9]+]](s64) = G_PTRTOINT [[VAL]](p0)
+; CHECK: %x0 = COPY [[RES]]
+  %res = insertvalue [1 x i8*] %s, i8* %val, 0
+  ret [1 x i8*] %res
+}
+
 ; CHECK-LABEL: name: test_insertvalue_agg
 ; CHECK: [[SMALLSTRUCT:%[0-9]+]](s64) = G_LOAD
 ; CHECK: [[STRUCT:%[0-9]+]](s128) = G_LOAD
-; CHECK: [[RES:%[0-9]+]](s128) = G_INSERT [[STRUCT]](s128), [[SMALLSTRUCT]](s64), 32
+; CHECK: [[RES:%[0-9]+]](s128) = G_INSERT [[STRUCT]], [[SMALLSTRUCT]](s64), 32
 ; CHECK: G_STORE [[RES]](s128)
 define void @test_insertvalue_agg(%struct.nested* %addr, {i8, i32}* %addr2) {
   %smallstruct = load {i8, i32}, {i8, i32}* %addr2
@@ -887,6 +943,30 @@ define i32 @test_select(i1 %tst, i32 %lhs, i32 %rhs) {
 define i8* @test_select_ptr(i1 %tst, i8* %lhs, i8* %rhs) {
   %res = select i1 %tst, i8* %lhs, i8* %rhs
   ret i8* %res
+}
+
+; CHECK-LABEL: name: test_select_vec
+; CHECK: [[TST:%[0-9]+]](s1) = COPY %w0
+; CHECK: [[LHS:%[0-9]+]](<4 x s32>) = COPY %q0
+; CHECK: [[RHS:%[0-9]+]](<4 x s32>) = COPY %q1
+; CHECK: [[RES:%[0-9]+]](<4 x s32>) = G_SELECT [[TST]](s1), [[LHS]], [[RHS]]
+; CHECK: %q0 = COPY [[RES]]
+define <4 x i32> @test_select_vec(i1 %tst, <4 x i32> %lhs, <4 x i32> %rhs) {
+  %res = select i1 %tst, <4 x i32> %lhs, <4 x i32> %rhs
+  ret <4 x i32> %res
+}
+
+; CHECK-LABEL: name: test_vselect_vec
+; CHECK: [[TST32:%[0-9]+]](<4 x s32>) = COPY %q0
+; CHECK: [[LHS:%[0-9]+]](<4 x s32>) = COPY %q1
+; CHECK: [[RHS:%[0-9]+]](<4 x s32>) = COPY %q2
+; CHECK: [[TST:%[0-9]+]](<4 x s1>) = G_TRUNC [[TST32]](<4 x s32>)
+; CHECK: [[RES:%[0-9]+]](<4 x s32>) = G_SELECT [[TST]](<4 x s1>), [[LHS]], [[RHS]]
+; CHECK: %q0 = COPY [[RES]]
+define <4 x i32> @test_vselect_vec(<4 x i32> %tst32, <4 x i32> %lhs, <4 x i32> %rhs) {
+  %tst = trunc <4 x i32> %tst32 to <4 x i1>
+  %res = select <4 x i1> %tst, <4 x i32> %lhs, <4 x i32> %rhs
+  ret <4 x i32> %res
 }
 
 ; CHECK-LABEL: name: test_fptosi
@@ -1018,6 +1098,34 @@ define void @test_memcpy(i8* %dst, i8* %src, i64 %size) {
   ret void
 }
 
+declare void @llvm.memmove.p0i8.p0i8.i64(i8*, i8*, i64, i32 %align, i1 %volatile)
+define void @test_memmove(i8* %dst, i8* %src, i64 %size) {
+; CHECK-LABEL: name: test_memmove
+; CHECK: [[DST:%[0-9]+]](p0) = COPY %x0
+; CHECK: [[SRC:%[0-9]+]](p0) = COPY %x1
+; CHECK: [[SIZE:%[0-9]+]](s64) = COPY %x2
+; CHECK: %x0 = COPY [[DST]]
+; CHECK: %x1 = COPY [[SRC]]
+; CHECK: %x2 = COPY [[SIZE]]
+; CHECK: BL $memmove, csr_aarch64_aapcs, implicit-def %lr, implicit %sp, implicit %x0, implicit %x1, implicit %x2
+  call void @llvm.memmove.p0i8.p0i8.i64(i8* %dst, i8* %src, i64 %size, i32 1, i1 0)
+  ret void
+}
+
+declare void @llvm.memset.p0i8.i64(i8*, i8, i64, i32 %align, i1 %volatile)
+define void @test_memset(i8* %dst, i8 %val, i64 %size) {
+; CHECK-LABEL: name: test_memset
+; CHECK: [[DST:%[0-9]+]](p0) = COPY %x0
+; CHECK: [[SRC:%[0-9]+]](s8) = COPY %w1
+; CHECK: [[SIZE:%[0-9]+]](s64) = COPY %x2
+; CHECK: %x0 = COPY [[DST]]
+; CHECK: %w1 = COPY [[SRC]]
+; CHECK: %x2 = COPY [[SIZE]]
+; CHECK: BL $memset, csr_aarch64_aapcs, implicit-def %lr, implicit %sp, implicit %x0, implicit %w1, implicit %x2
+  call void @llvm.memset.p0i8.i64(i8* %dst, i8 %val, i64 %size, i32 1, i1 0)
+  ret void
+}
+
 declare i64 @llvm.objectsize.i64(i8*, i1)
 declare i32 @llvm.objectsize.i32(i8*, i1)
 define void @test_objectsize(i8* %addr0, i8* %addr1) {
@@ -1058,4 +1166,88 @@ define i8* @test_const_placement() {
 
 next:
   ret i8* inttoptr(i32 42 to i8*)
+}
+
+declare void @llvm.va_end(i8*)
+define void @test_va_end(i8* %list) {
+; CHECK-LABEL: name: test_va_end
+; CHECK-NOT: va_end
+; CHECK-NOT: INTRINSIC
+; CHECK: RET_ReallyLR
+  call void @llvm.va_end(i8* %list)
+  ret void
+}
+
+define void @test_va_arg(i8* %list) {
+; CHECK-LABEL: test_va_arg
+; CHECK: [[LIST:%[0-9]+]](p0) = COPY %x0
+; CHECK: G_VAARG [[LIST]](p0), 8
+; CHECK: G_VAARG [[LIST]](p0), 1
+; CHECK: G_VAARG [[LIST]](p0), 16
+
+  %v0 = va_arg i8* %list, i64
+  %v1 = va_arg i8* %list, i8
+  %v2 = va_arg i8* %list, i128
+  ret void
+}
+
+declare float @llvm.pow.f32(float, float)
+define float @test_pow_intrin(float %l, float %r) {
+; CHECK-LABEL: name: test_pow_intrin
+; CHECK: [[LHS:%[0-9]+]](s32) = COPY %s0
+; CHECK: [[RHS:%[0-9]+]](s32) = COPY %s1
+; CHECK: [[RES:%[0-9]+]](s32) = G_FPOW [[LHS]], [[RHS]]
+; CHECK: %s0 = COPY [[RES]]
+  %res = call float @llvm.pow.f32(float %l, float %r)
+  ret float %res
+}
+
+declare void @llvm.lifetime.start(i64, i8*)
+declare void @llvm.lifetime.end(i64, i8*)
+define void @test_lifetime_intrin() {
+; CHECK-LABEL: name: test_lifetime_intrin
+; CHECK: RET_ReallyLR
+  %slot = alloca i8, i32 4
+  call void @llvm.lifetime.start(i64 0, i8* %slot)
+  call void @llvm.lifetime.end(i64 0, i8* %slot)
+  ret void
+}
+
+define void @test_load_store_atomics(i8* %addr) {
+; CHECK-LABEL: name: test_load_store_atomics
+; CHECK: [[ADDR:%[0-9]+]](p0) = COPY %x0
+; CHECK: [[V0:%[0-9]+]](s8) = G_LOAD [[ADDR]](p0) :: (load unordered 1 from %ir.addr)
+; CHECK: G_STORE [[V0]](s8), [[ADDR]](p0) :: (store monotonic 1 into %ir.addr)
+; CHECK: [[V1:%[0-9]+]](s8) = G_LOAD [[ADDR]](p0) :: (load acquire 1 from %ir.addr)
+; CHECK: G_STORE [[V1]](s8), [[ADDR]](p0) :: (store release 1 into %ir.addr)
+; CHECK: [[V2:%[0-9]+]](s8) = G_LOAD [[ADDR]](p0) :: (load singlethread seq_cst 1 from %ir.addr)
+; CHECK: G_STORE [[V2]](s8), [[ADDR]](p0) :: (store singlethread monotonic 1 into %ir.addr)
+  %v0 = load atomic i8, i8* %addr unordered, align 1
+  store atomic i8 %v0, i8* %addr monotonic, align 1
+
+  %v1 = load atomic i8, i8* %addr acquire, align 1
+  store atomic i8 %v1, i8* %addr release, align 1
+
+  %v2 = load atomic i8, i8* %addr singlethread seq_cst, align 1
+  store atomic i8 %v2, i8* %addr singlethread monotonic, align 1
+
+  ret void
+}
+
+define float @test_fneg_f32(float %x) {
+; CHECK-LABEL: name: test_fneg_f32
+; CHECK: [[ARG:%[0-9]+]](s32) = COPY %s0
+; CHECK: [[RES:%[0-9]+]](s32) = G_FNEG [[ARG]]
+; CHECK: %s0 = COPY [[RES]](s32)
+  %neg = fsub float -0.000000e+00, %x
+  ret float %neg
+}
+
+define double @test_fneg_f64(double %x) {
+; CHECK-LABEL: name: test_fneg_f64
+; CHECK: [[ARG:%[0-9]+]](s64) = COPY %d0
+; CHECK: [[RES:%[0-9]+]](s64) = G_FNEG [[ARG]]
+; CHECK: %d0 = COPY [[RES]](s64)
+  %neg = fsub double -0.000000e+00, %x
+  ret double %neg
 }

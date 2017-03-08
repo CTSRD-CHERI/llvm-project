@@ -381,6 +381,11 @@ void ASTStmtReader::VisitCoawaitExpr(CoawaitExpr *S) {
   llvm_unreachable("unimplemented");
 }
 
+void ASTStmtReader::VisitDependentCoawaitExpr(DependentCoawaitExpr *S) {
+  // FIXME: Implement coroutine serialization.
+  llvm_unreachable("unimplemented");
+}
+
 void ASTStmtReader::VisitCoyieldExpr(CoyieldExpr *S) {
   // FIXME: Implement coroutine serialization.
   llvm_unreachable("unimplemented");
@@ -2571,6 +2576,8 @@ void ASTStmtReader::VisitOMPLoopDirective(OMPLoopDirective *D) {
   if (isOpenMPLoopBoundSharingDirective(D->getDirectiveKind())) {
     D->setPrevLowerBoundVariable(Record.readSubExpr());
     D->setPrevUpperBoundVariable(Record.readSubExpr());
+    D->setDistInc(Record.readSubExpr());
+    D->setPrevEnsureUpperBound(Record.readSubExpr());
   }
   SmallVector<Expr *, 4> Sub;
   unsigned CollapsedNum = D->getCollapsedNumber();
@@ -2914,7 +2921,7 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
   llvm::BitstreamCursor &Cursor = F.DeclsCursor;
 
   // Map of offset to previously deserialized stmt. The offset points
-  /// just after the stmt record.
+  // just after the stmt record.
   llvm::DenseMap<uint64_t, Stmt *> StmtEntries;
 
 #ifndef NDEBUG

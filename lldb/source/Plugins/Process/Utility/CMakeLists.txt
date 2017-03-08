@@ -1,6 +1,6 @@
 include_directories(../../../Utility/)
 
-add_lldb_library(lldbPluginProcessUtility
+add_lldb_library(lldbPluginProcessUtility PLUGIN
   DynamicRegisterInfo.cpp
   FreeBSDSignals.cpp
   GDBRemoteSignals.cpp
@@ -15,13 +15,11 @@ add_lldb_library(lldbPluginProcessUtility
   RegisterContextDarwin_i386.cpp
   RegisterContextDarwin_x86_64.cpp
   RegisterContextDummy.cpp
-  RegisterContextFreeBSD_arm.cpp
   RegisterContextFreeBSD_i386.cpp
   RegisterContextFreeBSD_mips64.cpp
   RegisterContextFreeBSD_powerpc.cpp
   RegisterContextFreeBSD_x86_64.cpp
   RegisterContextHistory.cpp
-  RegisterContextLinux_arm.cpp
   RegisterContextLinux_i386.cpp
   RegisterContextLinux_x86_64.cpp
   RegisterContextLinux_mips64.cpp
@@ -41,9 +39,23 @@ add_lldb_library(lldbPluginProcessUtility
   RegisterContextPOSIX_s390x.cpp
   RegisterContextPOSIX_x86.cpp
   RegisterContextThreadMemory.cpp
+  RegisterInfoPOSIX_arm.cpp
   RegisterInfoPOSIX_arm64.cpp
   StopInfoMachException.cpp
   ThreadMemory.cpp
   UnwindLLDB.cpp
   UnwindMacOSXFrameBackchain.cpp
+
+  LINK_LIBS
+    lldbBreakpoint
+    lldbCore
+    lldbDataFormatters
+    lldbExpression
+    lldbHost
+    lldbSymbol
+    lldbTarget
+    lldbUtility
+    lldbPluginProcessElfCore
+  LINK_COMPONENTS
+    Support
   )

@@ -12,7 +12,9 @@
 #define _LIBCPP_CONFIG
 
 #if defined(_MSC_VER) && !defined(__clang__)
+#if !defined(_LIBCPP_HAS_NO_PRAGMA_SYSTEM_HEADER)
 #define _LIBCPP_HAS_NO_PRAGMA_SYSTEM_HEADER
+#endif
 #endif
 
 #ifndef _LIBCPP_HAS_NO_PRAGMA_SYSTEM_HEADER
@@ -480,14 +482,13 @@ namespace std {
 
 #endif  // __GXX_EXPERIMENTAL_CXX0X__
 
-#define _LIBCPP_BEGIN_NAMESPACE_STD namespace std { namespace _LIBCPP_NAMESPACE {
+#define _LIBCPP_BEGIN_NAMESPACE_STD namespace std { inline namespace _LIBCPP_NAMESPACE {
 #define _LIBCPP_END_NAMESPACE_STD  } }
 #define _VSTD std::_LIBCPP_NAMESPACE
 
 namespace std {
-namespace _LIBCPP_NAMESPACE {
-}
-using namespace _LIBCPP_NAMESPACE __attribute__((__strong__));
+  inline namespace _LIBCPP_NAMESPACE {
+  }
 }
 
 #if !defined(_LIBCPP_HAS_NO_ASAN) && !defined(__SANITIZE_ADDRESS__)
@@ -590,6 +591,7 @@ namespace std {
 #define _LIBCPP_EXTERN_VIS          _LIBCPP_DLL_VIS
 #define _LIBCPP_EXCEPTION_ABI       _LIBCPP_DLL_VIS
 #define _LIBCPP_HIDDEN
+#define _LIBCPP_METHOD_TEMPLATE_IMPLICIT_INSTANTIATION_VIS
 #define _LIBCPP_TEMPLATE_VIS
 #define _LIBCPP_FUNC_VIS_ONLY
 #define _LIBCPP_ENUM_VIS
@@ -613,6 +615,9 @@ namespace std {
 #endif
 #endif
 
+// The inline should be removed once PR32114 is resolved
+#define _LIBCPP_METHOD_TEMPLATE_IMPLICIT_INSTANTIATION_VIS inline _LIBCPP_HIDDEN
+
 #ifndef _LIBCPP_FUNC_VIS
 #if !defined(_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS)
 #define _LIBCPP_FUNC_VIS __attribute__ ((__visibility__("default")))
@@ -623,18 +628,22 @@ namespace std {
 
 #ifndef _LIBCPP_TYPE_VIS
 #  if !defined(_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS)
-#    if __has_attribute(__type_visibility__)
-#      define _LIBCPP_TYPE_VIS __attribute__ ((__type_visibility__("default")))
-#    else
-#      define _LIBCPP_TYPE_VIS __attribute__ ((__visibility__("default")))
-#    endif
+#    define _LIBCPP_TYPE_VIS __attribute__ ((__visibility__("default")))
 #  else
 #    define _LIBCPP_TYPE_VIS
 #  endif
 #endif
 
 #ifndef _LIBCPP_TEMPLATE_VIS
-# define _LIBCPP_TEMPLATE_VIS _LIBCPP_TYPE_VIS
+#  if !defined(_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS)
+#    if __has_attribute(__type_visibility__)
+#      define _LIBCPP_TEMPLATE_VIS __attribute__ ((__type_visibility__("default")))
+#    else
+#      define _LIBCPP_TEMPLATE_VIS __attribute__ ((__visibility__("default")))
+#    endif
+#  else
+#    define _LIBCPP_TEMPLATE_VIS
+#  endif
 #endif
 
 #ifndef _LIBCPP_FUNC_VIS_ONLY
@@ -667,7 +676,7 @@ namespace std {
 
 #ifndef _LIBCPP_EXTERN_TEMPLATE_TYPE_VIS
 #  if !defined(_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS) && __has_attribute(__type_visibility__)
-#    define _LIBCPP_EXTERN_TEMPLATE_TYPE_VIS __attribute__ ((__type_visibility__("default")))
+#    define _LIBCPP_EXTERN_TEMPLATE_TYPE_VIS __attribute__ ((__visibility__("default")))
 #  else
 #    define _LIBCPP_EXTERN_TEMPLATE_TYPE_VIS
 #  endif
@@ -815,7 +824,9 @@ template <unsigned> struct __static_assert_check {};
 #   else
 #       error Supported values for _LIBCPP_DEBUG are 0 and 1
 #   endif
+# if !defined(_LIBCPP_BUILDING_LIBRARY)
 #   define _LIBCPP_EXTERN_TEMPLATE(...)
+# endif
 #endif
 
 #ifndef _LIBCPP_EXTERN_TEMPLATE
@@ -925,7 +936,7 @@ _LIBCPP_FUNC_VIS extern "C" void __sanitizer_annotate_contiguous_container(
 #  if defined(__GNUC__) && ((__GNUC__ >= 5) || (__GNUC__ == 4 && \
    (__GNUC_MINOR__ >= 3 || __GNUC_PATCHLEVEL__ >= 2))) && !defined(__GXX_RTTI)
 #    define _LIBCPP_NO_RTTI
-#  elif (defined(_MSC_VER) && !defined(__clang__)) && !defined(_CPPRTTI)
+#  elif defined(_LIBCPP_MSVC) && !defined(_CPPRTTI)
 #    define _LIBCPP_NO_RTTI
 #  endif
 #endif
@@ -936,7 +947,8 @@ _LIBCPP_FUNC_VIS extern "C" void __sanitizer_annotate_contiguous_container(
 
 // Thread API
 #if !defined(_LIBCPP_HAS_NO_THREADS) && \
-    !defined(_LIBCPP_HAS_THREAD_API_PTHREAD)
+    !defined(_LIBCPP_HAS_THREAD_API_PTHREAD) && \
+    !defined(_LIBCPP_HAS_THREAD_API_EXTERNAL)
 # if defined(__FreeBSD__) || \
     defined(__Fuchsia__) || \
     defined(__NetBSD__) || \
@@ -958,7 +970,7 @@ _LIBCPP_FUNC_VIS extern "C" void __sanitizer_annotate_contiguous_container(
 #endif
 
 #if defined(_LIBCPP_HAS_NO_THREADS) && defined(_LIBCPP_HAS_THREAD_API_EXTERNAL)
-#  error _LIBCPP_HAS_EXTERNAL_THREAD_API may not be defined when \
+#  error _LIBCPP_HAS_THREAD_API_EXTERNAL may not be defined when \
          _LIBCPP_HAS_NO_THREADS is defined.
 #endif
 
@@ -1008,9 +1020,15 @@ _LIBCPP_FUNC_VIS extern "C" void __sanitizer_annotate_contiguous_container(
 #define _LIBCPP_DISABLE_UBSAN_UNSIGNED_INTEGER_CHECK
 #endif
 
-#if (defined(_LIBCPP_ENABLE_THREAD_SAFETY_ANNOTATIONS) && defined(__clang__) \
-      && __has_attribute(acquire_capability))
+#if defined(_LIBCPP_ENABLE_THREAD_SAFETY_ANNOTATIONS)
+#if defined(__clang__) && __has_attribute(acquire_capability)
+// Work around the attribute handling in clang.  When both __declspec and
+// __attribute__ are present, the processing goes awry preventing the definition
+// of the types.
+#if !defined(_LIBCPP_OBJECT_FORMAT_COFF)
 #define _LIBCPP_HAS_THREAD_SAFETY_ANNOTATIONS
+#endif
+#endif
 #endif
 
 #if __has_attribute(require_constant_initialization)
@@ -1045,6 +1063,11 @@ _LIBCPP_FUNC_VIS extern "C" void __sanitizer_annotate_contiguous_container(
 #else
 # define _LIBCPP_DECLSPEC_EMPTY_BASES
 #endif
+
+#if defined(_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES)
+# define _LIBCPP_ENABLE_CXX17_REMOVED_AUTO_PTR
+# define _LIBCPP_ENABLE_CXX17_REMOVED_UNEXPECTED_FUNCTIONS
+#endif // _LIBCPP_ENABLE_CXX17_REMOVED_FEATURES
 
 #endif // __cplusplus
 

@@ -176,6 +176,9 @@ def warn_gcc_attribute_location : Warning<
 def warn_attribute_no_decl : Warning<
   "attribute %0 ignored, because it is not attached to a declaration">, 
   InGroup<IgnoredAttributes>;
+def err_ms_attributes_not_enabled : Error<
+  "'__declspec' attributes are not enabled; use '-fdeclspec' or "
+  "'-fms-extensions' to enable support for __declspec attributes">;
 def err_expected_method_body : Error<"expected method body">;
 def err_declspec_after_virtspec : Error<
   "'%0' qualifier may not appear after the virtual specifier '%1'">;
@@ -855,6 +858,12 @@ def err_availability_query_repeated_platform: Error<
   "version for '%0' already specified">;
 def err_availability_query_repeated_star : Error<
   "'*' query has already been specified">;
+
+// External source symbol attribute
+def err_external_source_symbol_expected_keyword : Error<
+  "expected 'language', 'defined_in', or 'generated_declaration'">;
+def err_external_source_symbol_duplicate_clause : Error<
+  "duplicate %0 clause in an 'external_source_symbol' attribute">;
 
 // Type safety attributes
 def err_type_safety_unknown_flag : Error<
