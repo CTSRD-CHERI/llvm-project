@@ -1505,6 +1505,8 @@ MachineBasicBlock *MipsTargetLowering::emitAtomicBinaryPartword(
 
 MachineBasicBlock *MipsTargetLowering::emitAtomicCmpSwapPartword(
     MachineInstr &MI, MachineBasicBlock *BB, unsigned Size) const {
+  assert((Size == 1 || Size == 2) &&
+      "Unsupported size for EmitAtomicCmpSwapPartial.");
 
   MachineFunction *MF = BB->getParent();
   MachineRegisterInfo &RegInfo = MF->getRegInfo();
@@ -1519,13 +1521,8 @@ MachineBasicBlock *MipsTargetLowering::emitAtomicCmpSwapPartword(
   unsigned Ptr = MI.getOperand(1).getReg();
   unsigned CmpVal = MI.getOperand(2).getReg();
   unsigned NewVal = MI.getOperand(3).getReg();
-
-  if (Subtarget.isCheri() &&
-      RegInfo.getRegClass(Ptr) == &Mips::CheriRegsRegClass)
-    return emitAtomicCmpSwap(MI, BB, Size);
-
-  assert((Size == 1 || Size == 2) &&
-      "Unsupported size for EmitAtomicCmpSwapPartial.");
+  // XXXAR: we should not end up here any more for cheri??
+  assert(!(Subtarget.isCheri() && RegInfo.getRegClass(Ptr) == &Mips::CheriRegsRegClass));
 
   unsigned AlignedAddr = RegInfo.createVirtualRegister(RCp);
   unsigned ShiftAmt = RegInfo.createVirtualRegister(RC);

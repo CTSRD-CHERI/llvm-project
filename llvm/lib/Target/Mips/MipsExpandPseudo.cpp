@@ -20,6 +20,8 @@
 #include "llvm/CodeGen/LivePhysRegs.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/MachineRegisterInfo.h"
+
 
 using namespace llvm;
 
@@ -241,6 +243,36 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
   unsigned Ptr = I->getOperand(1).getReg();
   unsigned OldVal = I->getOperand(2).getReg();
   unsigned NewVal = I->getOperand(3).getReg();
+  bool isCapOp = false;
+
+  unsigned Success = NewVal; // CHERI needs to use a separate register
+  if (STI->isCheri() && MF->getRegInfo().getRegClass(Ptr) == &Mips::CheriRegsRegClass) {
+    switch (Size) {
+      case 8:
+        LL = Mips::CLLD;
+        SC = Mips::CSCD;
+        break;
+      case 4:
+        LL = Mips::CLLW;
+        SC = Mips::CSCW;
+        break;
+      case 2:
+        LL = Mips::CLLH;
+        SC = Mips::CSCH;
+        break;
+      case 1:
+        LL = Mips::CLLB;
+        SC = Mips::CSCB;
+        break;
+    }
+    isCapOp = true;
+    unsigned RegSize = std::max(Size, 4U);
+    const TargetRegisterClass *RC = STI->getTargetLowering()->
+        getRegClassFor(MVT::getIntegerVT(RegSize * 8));
+    Success = MF->getRegInfo().createVirtualRegister(RC);
+  }
+  assert(isCapOp || (Size == 4 || Size == 8) &&
+         "Unsupported size for EmitAtomicCmpSwap.");
 
   // insert new blocks after the current block
   const BasicBlock *LLVM_BB = BB.getBasicBlock();
@@ -278,10 +310,13 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
   // loop2MBB:
   //   sc success, newval, 0(ptr)
   //   beq success, $0, loop1MBB
-  BuildMI(loop2MBB, DL, TII->get(SC), NewVal)
-    .addReg(NewVal).addReg(Ptr).addImm(0);
+  if (isCapOp)
+    BuildMI(loop2MBB, DL, TII->get(SC), Success).addReg(NewVal).addReg(Ptr);
+  else
+    BuildMI(loop2MBB, DL, TII->get(SC), Success)
+      .addReg(NewVal).addReg(Ptr).addImm(0);
   BuildMI(loop2MBB, DL, TII->get(BEQ))
-    .addReg(NewVal, RegState::Kill).addReg(ZERO).addMBB(loop1MBB);
+    .addReg(Success, RegState::Kill).addReg(ZERO).addMBB(loop1MBB);
   loop2MBB->addLiveIn(Ptr);
   loop2MBB->addLiveIn(NewVal);
 
@@ -298,6 +333,10 @@ bool MipsExpandPseudo::expandMI(MachineBasicBlock &MBB,
 
   bool Modified = false;
   switch (MBBI->getOpcode()) {
+    case Mips::CAP_ATOMIC_CMP_SWAP_I8:
+    case Mips::CAP_ATOMIC_CMP_SWAP_I16:
+    case Mips::CAP_ATOMIC_CMP_SWAP_I32:
+    case Mips::CAP_ATOMIC_CMP_SWAP_I64:
     case Mips::ATOMIC_CMP_SWAP_I32:
     case Mips::ATOMIC_CMP_SWAP_I64:
       return expandAtomicCmpSwap(MBB, MBBI, NMBB);
