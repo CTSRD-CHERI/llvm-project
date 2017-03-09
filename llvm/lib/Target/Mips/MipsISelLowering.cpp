@@ -1228,8 +1228,7 @@ MachineBasicBlock *MipsTargetLowering::emitAtomicBinary(MachineInstr &MI,
 
   // If this is a capability-relative atomic operation, then we should emit
   // capability operations.
-  if (Subtarget.isCheri() &&
-      RegInfo.getRegClass(Ptr) == &Mips::CheriRegsRegClass) {
+  if (Subtarget.isCheri() && Mips::CheriRegsRegClass.contains(Ptr)) {
     switch (Size) {
       case 8:
         LL = Mips::CLLD;
@@ -1353,8 +1352,7 @@ MachineBasicBlock *MipsTargetLowering::emitAtomicBinaryPartword(
   unsigned Ptr = MI.getOperand(1).getReg();
   unsigned Incr = MI.getOperand(2).getReg();
 
-  if (Subtarget.isCheri() &&
-      RegInfo.getRegClass(Ptr) == &Mips::CheriRegsRegClass)
+  if (Subtarget.isCheri() && Mips::CheriRegsRegClass.contains(Ptr))
     return emitAtomicBinary(MI, BB, Size, BinOpcode, Nand);
 
   unsigned AlignedAddr = RegInfo.createVirtualRegister(RCp);
@@ -1522,7 +1520,7 @@ MachineBasicBlock *MipsTargetLowering::emitAtomicCmpSwapPartword(
   unsigned CmpVal = MI.getOperand(2).getReg();
   unsigned NewVal = MI.getOperand(3).getReg();
   // XXXAR: we should not end up here any more for cheri??
-  assert(!(Subtarget.isCheri() && RegInfo.getRegClass(Ptr) == &Mips::CheriRegsRegClass));
+  assert(!(Subtarget.isCheri() && Mips::CheriRegsRegClass.contains(Ptr)));
 
   unsigned AlignedAddr = RegInfo.createVirtualRegister(RCp);
   unsigned ShiftAmt = RegInfo.createVirtualRegister(RC);

@@ -245,31 +245,29 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
   unsigned NewVal = I->getOperand(3).getReg();
   bool isCapOp = false;
 
-  unsigned Success = NewVal; // CHERI needs to use a separate register
-  if (STI->isCheri() && MF->getRegInfo().getRegClass(Ptr) == &Mips::CheriRegsRegClass) {
-    switch (Size) {
-      case 8:
+  unsigned Success = NewVal; // CHERI needs to use a different register
+  if (STI->isCheri() && Mips::CheriRegsRegClass.contains(Ptr)) {
+    switch (I->getOpcode()) {
+      case Mips::CAP_ATOMIC_CMP_SWAP_I64:
         LL = Mips::CLLD;
         SC = Mips::CSCD;
         break;
-      case 4:
+      case Mips::CAP_ATOMIC_CMP_SWAP_I32:
         LL = Mips::CLLW;
         SC = Mips::CSCW;
         break;
-      case 2:
+      case Mips::CAP_ATOMIC_CMP_SWAP_I16:
         LL = Mips::CLLH;
         SC = Mips::CSCH;
         break;
-      case 1:
+      case Mips::CAP_ATOMIC_CMP_SWAP_I8:
         LL = Mips::CLLB;
         SC = Mips::CSCB;
         break;
     }
     isCapOp = true;
-    unsigned RegSize = std::max(Size, 4U);
-    const TargetRegisterClass *RC = STI->getTargetLowering()->
-        getRegClassFor(MVT::getIntegerVT(RegSize * 8));
-    Success = MF->getRegInfo().createVirtualRegister(RC);
+    assert(ZERO == Mips::ZERO_64 && BNE == Mips::BNE64 && BEQ == Mips::BEQ64);
+    Success = Dest; // we can reuse the dest register for CHERI
   }
   assert(isCapOp || (Size == 4 || Size == 8) &&
          "Unsupported size for EmitAtomicCmpSwap.");
@@ -301,7 +299,10 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
   // loop1MBB:
   //   ll dest, 0(ptr)
   //   bne dest, oldval, exitMBB
-  BuildMI(loop1MBB, DL, TII->get(LL), Dest).addReg(Ptr).addImm(0);
+  if (isCapOp)
+    BuildMI(loop1MBB, DL, TII->get(LL), Dest).addReg(Ptr);
+  else
+    BuildMI(loop1MBB, DL, TII->get(LL), Dest).addReg(Ptr).addImm(0);
   BuildMI(loop1MBB, DL, TII->get(BNE))
     .addReg(Dest).addReg(OldVal).addMBB(exitMBB);
   loop1MBB->addLiveIn(Ptr);
