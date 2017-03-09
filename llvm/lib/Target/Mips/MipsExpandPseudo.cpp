@@ -243,29 +243,30 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
   unsigned Ptr = I->getOperand(1).getReg();
   unsigned OldVal = I->getOperand(2).getReg();
   unsigned NewVal = I->getOperand(3).getReg();
-  bool isCapOp = false;
 
   unsigned Success = NewVal; // CHERI needs to use a different register
-  if (STI->isCheri() && Mips::CheriRegsRegClass.contains(Ptr)) {
-    switch (I->getOpcode()) {
-      case Mips::CAP_ATOMIC_CMP_SWAP_I64:
-        LL = Mips::CLLD;
-        SC = Mips::CSCD;
-        break;
-      case Mips::CAP_ATOMIC_CMP_SWAP_I32:
-        LL = Mips::CLLW;
-        SC = Mips::CSCW;
-        break;
-      case Mips::CAP_ATOMIC_CMP_SWAP_I16:
-        LL = Mips::CLLH;
-        SC = Mips::CSCH;
-        break;
-      case Mips::CAP_ATOMIC_CMP_SWAP_I8:
-        LL = Mips::CLLB;
-        SC = Mips::CSCB;
-        break;
-    }
-    isCapOp = true;
+  bool isCapOp = true;
+  switch (I->getOpcode()) {
+    case Mips::CAP_ATOMIC_CMP_SWAP_I64:
+      LL = Mips::CLLD;
+      SC = Mips::CSCD;
+      break;
+    case Mips::CAP_ATOMIC_CMP_SWAP_I32:
+      LL = Mips::CLLW;
+      SC = Mips::CSCW;
+      break;
+    case Mips::CAP_ATOMIC_CMP_SWAP_I16:
+      LL = Mips::CLLH;
+      SC = Mips::CSCH;
+      break;
+    case Mips::CAP_ATOMIC_CMP_SWAP_I8:
+      LL = Mips::CLLB;
+      SC = Mips::CSCB;
+      break;
+    default:
+      isCapOp = false;
+  }
+  if (isCapOp) {
     assert(ZERO == Mips::ZERO_64 && BNE == Mips::BNE64 && BEQ == Mips::BEQ64);
     Success = Dest; // we can reuse the dest register for CHERI
   }
