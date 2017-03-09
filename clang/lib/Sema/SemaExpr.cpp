@@ -12676,7 +12676,9 @@ ExprResult Sema::ActOnGNUNullExpr(SourceLocation TokenLoc) {
   // pointers on the target.
   QualType Ty;
   unsigned pw = Context.getTargetInfo().getPointerWidth(0);
-  if (pw == Context.getTargetInfo().getIntWidth())
+  if (pw == Context.getTargetInfo().getIntCapWidth())
+    Ty = Context.IntCapTy;
+  else if (pw == Context.getTargetInfo().getIntWidth())
     Ty = Context.IntTy;
   else if (pw == Context.getTargetInfo().getLongWidth())
     Ty = Context.LongTy;
