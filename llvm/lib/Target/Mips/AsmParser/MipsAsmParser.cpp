@@ -325,8 +325,6 @@ class MipsAsmParser : public MCTargetAsmParser {
 
   bool parseSetAtDirective();
   bool parseSetNoAtDirective();
-  bool parseSetBoptDirective();
-  bool parseSetNoBoptDirective();
   bool parseSetMacroDirective();
   bool parseSetNoMacroDirective();
   bool parseSetMsaDirective();
@@ -5950,37 +5948,6 @@ bool MipsAsmParser::parseSetAtDirective() {
   return false;
 }
 
-bool MipsAsmParser::parseSetBoptDirective() {
-  MCAsmParser &Parser = getParser();
-  // Line should look like: ".set bopt".
-  // Bopt is not supported, ignore it but warn.
-  Warning(getLexer().getLoc(), "branch optimisation is not supported");
-  // eat bopt
-  Parser.Lex();
-  // If this is not the end of the statement, report an error.
-  if (getLexer().isNot(AsmToken::EndOfStatement)) {
-    reportParseError("unexpected token in statement");
-    return false;
-  }
-  Parser.Lex(); // Consume the EndOfStatement.
-  return false;
-}
-
-bool MipsAsmParser::parseSetNoBoptDirective() {
-  MCAsmParser &Parser = getParser();
-  // Line should look like: ".set nobopt".
-  // Bopt is not supported, ignore it.
-  // eat nobopt
-  Parser.Lex();
-  // If this is not the end of the statement, report an error.
-  if (getLexer().isNot(AsmToken::EndOfStatement)) {
-    reportParseError("unexpected token in statement");
-    return false;
-  }
-  Parser.Lex(); // Consume the EndOfStatement.
-  return false;
-}
-
 bool MipsAsmParser::parseSetReorderDirective() {
   MCAsmParser &Parser = getParser();
   Parser.Lex();
@@ -6669,10 +6636,6 @@ bool MipsAsmParser::parseDirectiveSet() {
     return parseSetMsaDirective();
   } else if (Tok.getString() == "nomsa") {
     return parseSetNoMsaDirective();
-  } else if (Tok.getString() == "bopt") {
-    return parseSetBoptDirective();
-  } else if (Tok.getString() == "nobopt") {
-    return parseSetNoBoptDirective();
   } else if (Tok.getString() == "softfloat") {
     return parseSetSoftFloatDirective();
   } else if (Tok.getString() == "hardfloat") {
