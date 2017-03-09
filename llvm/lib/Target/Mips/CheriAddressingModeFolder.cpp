@@ -240,11 +240,14 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
           // If all paths to this block go through the preheader then hoist.
           // Note: It might be worth doing this recursively and pushing out of
           // nested loops.
-          if (MDT.dominates(Preheader, InsertBlock))
-            if (MDT.dominates(&*Preheader->getFirstTerminator(), I.first)) {
-              InsertBlock = Preheader;
-              InsertPoint = &*InsertBlock->getFirstTerminator();
-            }
+          if (Preheader->terminators().begin() != Preheader->terminators().end()) {
+            MachineInstr *End = &*Preheader->getFirstTerminator();
+            if (MDT.dominates(Preheader, InsertBlock))
+              if (MDT.dominates(End, I.first)) {
+                InsertBlock = Preheader;
+                InsertPoint = End;
+              }
+          }
         }
       }
       auto FirstOperand = I.first->getOperand(0);
