@@ -13,8 +13,10 @@
 #if (!defined(_LIBCPP_ABI_MICROSOFT) && !defined(LIBCXX_BUILDING_LIBCXXABI) && \
     !defined(LIBCXXRT) && !defined(__GLIBCXX__) && \
     !defined(__APPLE__)) || \
-    defined(_LIBCPP_BUILDING_HAS_NO_ABI_LIBRARY) // FIXME: remove this configuration.
+    defined(_LIBCPP_BUILDING_HAS_NO_ABI_LIBRARY) //FIXME: remove this configuration.
+#ifndef _LIBCPP_NO_RTTI
 std::type_info::~type_info()
 {
 }
+#endif
 #endif
