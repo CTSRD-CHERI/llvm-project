@@ -161,7 +161,15 @@ public:
 
     _LIBCPP_INLINE_VISIBILITY
     size_t hash_code() const _NOEXCEPT
-    { return reinterpret_cast<size_t>(__type_name); }
+    {
+#ifdef __CHERI_PURE_CAPABILITY__
+      // error: cast from pointer to smaller type 'size_t' (aka 'unsigned long') loses information
+      // or use a c style cast?
+      return __builtin_memcap_base_get(__type_name) + __builtin_memcap_offset_get(__type_name);
+#else
+      return reinterpret_cast<size_t>(__type_name);
+#endif
+    }
 
     _LIBCPP_INLINE_VISIBILITY
     bool operator==(const type_info& __arg) const _NOEXCEPT
