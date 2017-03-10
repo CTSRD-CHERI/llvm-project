@@ -3414,7 +3414,7 @@ _LIBCPP_EXTERN_TEMPLATE2(class _LIBCPP_EXTERN_TEMPLATE_TYPE_VIS money_put<wchar_
 class _LIBCPP_TYPE_VIS messages_base
 {
 public:
-    typedef ptrdiff_t catalog;
+    typedef intptr_t catalog;
 
     _LIBCPP_ALWAYS_INLINE messages_base() {}
 };
