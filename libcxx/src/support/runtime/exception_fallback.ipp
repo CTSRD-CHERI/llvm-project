@@ -12,21 +12,21 @@
 
 namespace std {
 
-_LIBCPP_SAFE_STATIC static std::terminate_handler  __terminate_handler;
-_LIBCPP_SAFE_STATIC static std::unexpected_handler __unexpected_handler;
+_LIBCPP_SAFE_STATIC static _Atomic(std::terminate_handler)  __terminate_handler;
+_LIBCPP_SAFE_STATIC static _Atomic(std::unexpected_handler) __unexpected_handler;
 
 
 // libcxxrt provides implementations of these functions itself.
 unexpected_handler
 set_unexpected(unexpected_handler func) _NOEXCEPT
 {
-  return __atomic_exchange_n(&__unexpected_handler, func, __ATOMIC_SEQ_CST);
+  return __c11_atomic_exchange(&__unexpected_handler, func, __ATOMIC_SEQ_CST);
 }
 
 unexpected_handler
 get_unexpected() _NOEXCEPT
 {
-  return __atomic_load_n(&__unexpected_handler, __ATOMIC_SEQ_CST);
+  return __c11_atomic_load(&__unexpected_handler, __ATOMIC_SEQ_CST);
 }
 
 _LIBCPP_NORETURN
@@ -40,13 +40,13 @@ void unexpected()
 terminate_handler
 set_terminate(terminate_handler func) _NOEXCEPT
 {
-  return __atomic_exchange_n(&__terminate_handler, func, __ATOMIC_SEQ_CST);
+  return __c11_atomic_exchange(&__terminate_handler, func, __ATOMIC_SEQ_CST);
 }
 
 terminate_handler
 get_terminate() _NOEXCEPT
 {
-  return __atomic_load_n(&__unexpected_handler, __ATOMIC_SEQ_CST);
+  return __c11_atomic_load(&__unexpected_handler, __ATOMIC_SEQ_CST);
 }
 
 #ifndef __EMSCRIPTEN__ // We provide this in JS
