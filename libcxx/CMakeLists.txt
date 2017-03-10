@@ -500,6 +500,11 @@ if (NOT LIBCXX_ENABLE_RTTI)
   add_compile_flags_if_supported(-fno-rtti)
 endif()
 
+# Static flag =================================================================
+if (LIBCXX_ENABLE_STATIC)
+  add_definitions(-D_LIBCPP_BUILD_STATIC)
+endif()
+
 # Threading flags =============================================================
 if (LIBCXX_BUILD_EXTERNAL_THREAD_LIBRARY AND LIBCXX_ENABLE_SHARED)
   # Need to allow unresolved symbols if this is to work with shared library builds
