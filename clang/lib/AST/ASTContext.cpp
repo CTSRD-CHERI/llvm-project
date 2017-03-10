@@ -2776,7 +2776,7 @@ QualType ASTContext::getConstantArrayType(QualType EltTy,
   // the target.
   llvm::APInt ArySize(ArySizeIn);
   ArySize =
-    ArySize.zextOrTrunc(Target->getPointerWidth(getTargetAddressSpace(EltTy)));
+    ArySize.zextOrTrunc(Target->getPointerRange(getTargetAddressSpace(EltTy)));
 
   llvm::FoldingSetNodeID ID;
   ConstantArrayType::Profile(ID, EltTy, ArySize, ASM, IndexTypeQuals);
