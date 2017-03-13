@@ -2109,7 +2109,7 @@ static llvm::Constant *EmitFunctionDeclPointer(CodeGenModule &CGM,
       QualType NoProtoType =
           CGM.getContext().getFunctionNoProtoType(Proto->getReturnType());
       NoProtoType = CGM.getContext().getPointerType(NoProtoType);
-      V = llvm::ConstantExpr::getBitCast(V,
+      V = llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(V,
                                       CGM.getTypes().ConvertType(NoProtoType));
     }
   }
