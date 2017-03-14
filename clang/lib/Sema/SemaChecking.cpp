@@ -3076,6 +3076,14 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
       << FirstArg->getType() << FirstArg->getSourceRange();
     return ExprError();
   }
+  // XXXAR: disallow __sync builtins with capabilities for now
+  // It would result in incorrect code generation because we would end up
+  // using the _16 versions and generating i256 in the IR
+  if (pointerType->getPointeeType()->isMemoryCapabilityType(Context)) {
+    Diag(DRE->getLocStart(), diag::err_sync_atomic_builtin_with_capability)
+      << pointerType->getPointeeType() << FirstArg->getSourceRange();
+    return ExprError();
+  }
 
   QualType ValType = pointerType->getPointeeType();
   if (!ValType->isIntegerType() && !ValType->isAnyPointerType() &&
@@ -3144,7 +3152,6 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   case 4: SizeIndex = 2; break;
   case 8: SizeIndex = 3; break;
   case 16: SizeIndex = 4; break;
-  case 32: SizeIndex = 4; break; // FIXME-cheri-c++: add 32 byte versions of builtins?
   default:
     Diag(DRE->getLocStart(), diag::err_atomic_builtin_pointer_size)
       << FirstArg->getType() << FirstArg->getSourceRange();

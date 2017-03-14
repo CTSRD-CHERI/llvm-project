@@ -6897,6 +6897,9 @@ def err_atomic_builtin_must_be_pointer_intfltptr : Error<
 def err_atomic_builtin_pointer_size : Error<
   "address argument to atomic builtin must be a pointer to 1,2,4,8 or 16 byte "
   "type (%0 invalid)">;
+def err_sync_atomic_builtin_with_capability : Error<
+  "the __sync_* atomic builtins only work with integers and not capability "
+  "type %0. Use the __c11_atomic_ builtins instead.">;
 def err_atomic_exclusive_builtin_pointer_size : Error<
   "address argument to load or store exclusive builtin must be a pointer to"
   " 1,2,4 or 8 byte type (%0 invalid)">;
