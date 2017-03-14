@@ -820,6 +820,11 @@ static uint64_t getImageBase(opt::InputArgList &Args) {
 // is called. We use that class without calling commit() to predict
 // if the given file is writable.
 static bool isWritable(StringRef Path) {
+  // XXXAR: we need this extra check until we merge llvm bb60730437f512d4465581b88ccda2375b3f4f3e
+  if (llvm::sys::fs::is_directory(Path)) {
+    error("cannot open output file " + Path + ": is a directory");
+    return false;
+  }
   if (auto EC = FileOutputBuffer::create(Path, 1).getError()) {
     error("cannot open output file " + Path + ": " + EC.message());
     return false;
