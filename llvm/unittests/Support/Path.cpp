@@ -499,6 +499,41 @@ TEST_F(FileSystemTest, Unique) {
   ASSERT_NO_ERROR(fs::remove(TempPath));
 }
 
+TEST_F(FileSystemTest, RealPath) {
+  ASSERT_NO_ERROR(
+      fs::create_directories(Twine(TestDirectory) + "/test1/test2/test3"));
+  ASSERT_TRUE(fs::exists(Twine(TestDirectory) + "/test1/test2/test3"));
+
+  SmallString<64> RealBase;
+  SmallString<64> Expected;
+  SmallString<64> Actual;
+
+  // TestDirectory itself might be under a symlink or have been specified with
+  // a different case than the existing temp directory.  In such cases real_path
+  // on the concatenated path will differ in the TestDirectory portion from
+  // how we specified it.  Make sure to compare against the real_path of the
+  // TestDirectory, and not just the value of TestDirectory.
+  ASSERT_NO_ERROR(fs::real_path(TestDirectory, RealBase));
+  path::native(Twine(RealBase) + "/test1/test2", Expected);
+
+  ASSERT_NO_ERROR(fs::real_path(
+      Twine(TestDirectory) + "/././test1/../test1/test2/./test3/..", Actual));
+
+  EXPECT_EQ(Expected, Actual);
+
+  SmallString<64> HomeDir;
+  bool Result = llvm::sys::path::home_directory(HomeDir);
+  if (Result) {
+    ASSERT_NO_ERROR(fs::real_path(HomeDir, Expected));
+    ASSERT_NO_ERROR(fs::real_path("~", Actual, true));
+    EXPECT_EQ(Expected, Actual);
+    ASSERT_NO_ERROR(fs::real_path("~/", Actual, true));
+    EXPECT_EQ(Expected, Actual);
+  }
+
+  ASSERT_NO_ERROR(fs::remove_directories(Twine(TestDirectory) + "/test1"));
+}
+
 TEST_F(FileSystemTest, TempFiles) {
   // Create a temp file.
   int FileDescriptor;
@@ -741,6 +776,117 @@ TEST_F(FileSystemTest, DirectoryIteration) {
   ASSERT_NO_ERROR(fs::remove(Twine(TestDirectory) + "/reclevel/a/b"));
   ASSERT_NO_ERROR(fs::remove(Twine(TestDirectory) + "/reclevel/a"));
   ASSERT_NO_ERROR(fs::remove(Twine(TestDirectory) + "/reclevel"));
+}
+
+#ifdef LLVM_ON_UNIX
+TEST_F(FileSystemTest, BrokenSymlinkDirectoryIteration) {
+  // Create a known hierarchy to recurse over.
+  ASSERT_NO_ERROR(fs::create_directories(Twine(TestDirectory) + "/symlink"));
+  ASSERT_NO_ERROR(
+      fs::create_link("no_such_file", Twine(TestDirectory) + "/symlink/a"));
+  ASSERT_NO_ERROR(
+      fs::create_directories(Twine(TestDirectory) + "/symlink/b/bb"));
+  ASSERT_NO_ERROR(
+      fs::create_link("no_such_file", Twine(TestDirectory) + "/symlink/b/ba"));
+  ASSERT_NO_ERROR(
+      fs::create_link("no_such_file", Twine(TestDirectory) + "/symlink/b/bc"));
+  ASSERT_NO_ERROR(
+      fs::create_link("no_such_file", Twine(TestDirectory) + "/symlink/c"));
+  ASSERT_NO_ERROR(
+      fs::create_directories(Twine(TestDirectory) + "/symlink/d/dd/ddd"));
+  ASSERT_NO_ERROR(fs::create_link(Twine(TestDirectory) + "/symlink/d/dd",
+                                  Twine(TestDirectory) + "/symlink/d/da"));
+  ASSERT_NO_ERROR(
+      fs::create_link("no_such_file", Twine(TestDirectory) + "/symlink/e"));
+
+  typedef std::vector<std::string> v_t;
+  v_t visited;
+
+  // The directory iterator doesn't stat the file, so we should be able to
+  // iterate over the whole directory.
+  std::error_code ec;
+  for (fs::directory_iterator i(Twine(TestDirectory) + "/symlink", ec), e;
+       i != e; i.increment(ec)) {
+    ASSERT_NO_ERROR(ec);
+    visited.push_back(path::filename(i->path()));
+  }
+  std::sort(visited.begin(), visited.end());
+  v_t expected = {"a", "b", "c", "d", "e"};
+  ASSERT_TRUE(visited.size() == expected.size());
+  ASSERT_TRUE(std::equal(visited.begin(), visited.end(), expected.begin()));
+  visited.clear();
+
+  // The recursive directory iterator has to stat the file, so we need to skip
+  // the broken symlinks.
+  for (fs::recursive_directory_iterator
+           i(Twine(TestDirectory) + "/symlink", ec),
+       e;
+       i != e; i.increment(ec)) {
+    ASSERT_NO_ERROR(ec);
+
+    fs::file_status status;
+    if (i->status(status) == std::errc::no_such_file_or_directory) {
+      i.no_push();
+      continue;
+    }
+
+    visited.push_back(path::filename(i->path()));
+  }
+  std::sort(visited.begin(), visited.end());
+  expected = {"b", "bb", "d", "da", "dd", "ddd", "ddd"};
+  ASSERT_TRUE(visited.size() == expected.size());
+  ASSERT_TRUE(std::equal(visited.begin(), visited.end(), expected.begin()));
+  visited.clear();
+
+  // This recursive directory iterator doesn't follow symlinks, so we don't need
+  // to skip them.
+  for (fs::recursive_directory_iterator
+           i(Twine(TestDirectory) + "/symlink", ec, /*follow_symlinks=*/false),
+       e;
+       i != e; i.increment(ec)) {
+    ASSERT_NO_ERROR(ec);
+    visited.push_back(path::filename(i->path()));
+  }
+  std::sort(visited.begin(), visited.end());
+  expected = {"a", "b", "ba", "bb", "bc", "c", "d", "da", "dd", "ddd", "e"};
+  ASSERT_TRUE(visited.size() == expected.size());
+  ASSERT_TRUE(std::equal(visited.begin(), visited.end(), expected.begin()));
+
+  ASSERT_NO_ERROR(fs::remove_directories(Twine(TestDirectory) + "/symlink"));
+}
+#endif
+
+TEST_F(FileSystemTest, Remove) {
+  SmallString<64> BaseDir;
+  SmallString<64> Paths[4];
+  int fds[4];
+  ASSERT_NO_ERROR(fs::createUniqueDirectory("fs_remove", BaseDir));
+
+  ASSERT_NO_ERROR(fs::create_directories(Twine(BaseDir) + "/foo/bar/baz"));
+  ASSERT_NO_ERROR(fs::create_directories(Twine(BaseDir) + "/foo/bar/buzz"));
+  ASSERT_NO_ERROR(fs::createUniqueFile(
+      Twine(BaseDir) + "/foo/bar/baz/%%%%%%.tmp", fds[0], Paths[0]));
+  ASSERT_NO_ERROR(fs::createUniqueFile(
+      Twine(BaseDir) + "/foo/bar/baz/%%%%%%.tmp", fds[1], Paths[1]));
+  ASSERT_NO_ERROR(fs::createUniqueFile(
+      Twine(BaseDir) + "/foo/bar/buzz/%%%%%%.tmp", fds[2], Paths[2]));
+  ASSERT_NO_ERROR(fs::createUniqueFile(
+      Twine(BaseDir) + "/foo/bar/buzz/%%%%%%.tmp", fds[3], Paths[3]));
+
+  for (int fd : fds)
+    ::close(fd);
+
+  EXPECT_TRUE(fs::exists(Twine(BaseDir) + "/foo/bar/baz"));
+  EXPECT_TRUE(fs::exists(Twine(BaseDir) + "/foo/bar/buzz"));
+  EXPECT_TRUE(fs::exists(Paths[0]));
+  EXPECT_TRUE(fs::exists(Paths[1]));
+  EXPECT_TRUE(fs::exists(Paths[2]));
+  EXPECT_TRUE(fs::exists(Paths[3]));
+
+  ASSERT_NO_ERROR(fs::remove_directories("D:/footest"));
+
+  ASSERT_NO_ERROR(fs::remove_directories(BaseDir));
+  ASSERT_FALSE(fs::exists(BaseDir));
 }
 
 const char archive[] = "!<arch>\x0A";

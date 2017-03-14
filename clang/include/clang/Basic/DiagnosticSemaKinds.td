@@ -8005,6 +8005,8 @@ def err_x86_builtin_32_bit_tgt : Error<
   "this builtin is only available on x86-64 targets">;
 def err_x86_builtin_invalid_rounding : Error<
   "invalid rounding argument">;
+def err_x86_builtin_invalid_scale : Error<
+  "scale argument must be 1, 2, 4, or 8">;
 
 def err_builtin_longjmp_unsupported : Error<
   "__builtin_longjmp is not supported for the current target">;
@@ -8828,8 +8830,13 @@ def err_coroutine_invalid_func_context : Error<
   "|a copy assignment operator|a move assignment operator|the 'main' function"
   "|a constexpr function|a function with a deduced return type"
   "|a varargs function}0">;
-def err_implied_std_coroutine_traits_not_found : Error<
-  "you need to include <experimental/coroutine> before defining a coroutine">;
+def err_implied_coroutine_type_not_found : Error<
+  "%0 type was not found; include <experimental/coroutine> before defining "
+  "a coroutine">;
+def err_malformed_std_coroutine_handle : Error<
+  "std::experimental::coroutine_handle must be a class template">;
+def err_coroutine_handle_missing_member : Error<
+  "std::experimental::coroutine_handle missing a member named '%0'">;
 def err_malformed_std_coroutine_traits : Error<
   "'std::experimental::coroutine_traits' must be a class template">;
 def err_implied_std_coroutine_traits_promise_type_not_found : Error<
@@ -8838,7 +8845,7 @@ def err_implied_std_coroutine_traits_promise_type_not_class : Error<
   "this function cannot be a coroutine: %0 is not a class">;
 def err_coroutine_promise_type_incomplete : Error<
   "this function cannot be a coroutine: %0 is an incomplete type">;
-def err_coroutine_traits_missing_specialization : Error<
+def err_coroutine_type_missing_specialization : Error<
   "this function cannot be a coroutine: missing definition of "
   "specialization %q0">;
 def err_implied_std_current_exception_not_found : Error<

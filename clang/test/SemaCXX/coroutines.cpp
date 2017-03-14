@@ -16,40 +16,38 @@ void no_coroutine_traits_bad_arg_return() {
   // expected-error@-1 {{use of undeclared identifier 'a'}}
 }
 
-
-struct awaitable {
-  bool await_ready();
-  void await_suspend(); // FIXME: coroutine_handle
-  void await_resume();
-} a;
-
-struct suspend_always {
-  bool await_ready() { return false; }
-  void await_suspend() {}
-  void await_resume() {}
-};
-
-struct suspend_never {
-  bool await_ready() { return true; }
-  void await_suspend() {}
-  void await_resume() {}
-};
-
 void no_coroutine_traits() {
-  co_await a; // expected-error {{need to include <experimental/coroutine>}}
+  co_await 4; // expected-error {{std::experimental::coroutine_traits type was not found; include <experimental/coroutine>}}
 }
 
 namespace std {
 namespace experimental {
 template <typename... T>
 struct coroutine_traits; // expected-note {{declared here}}
-}
-}
+}}  // namespace std::experimental
 
 template<typename Promise> struct coro {};
 template <typename Promise, typename... Ps>
 struct std::experimental::coroutine_traits<coro<Promise>, Ps...> {
   using promise_type = Promise;
+};
+
+struct awaitable {
+  bool await_ready();
+  template <typename F> void await_suspend(F);
+  void await_resume();
+} a;
+
+struct suspend_always {
+  bool await_ready() { return false; }
+  template <typename F> void await_suspend(F);
+  void await_resume() {}
+};
+
+struct suspend_never {
+  bool await_ready() { return true; }
+  template <typename F> void await_suspend(F);
+  void await_resume() {}
 };
 
 void no_specialization() {
@@ -86,13 +84,6 @@ template <typename... T>
 struct std::experimental::coroutine_traits<void, void_tag, T...>
 { using promise_type = promise_void; };
 
-namespace std {
-namespace experimental {
-template <typename Promise = void>
-struct coroutine_handle;
-}
-}
-
 // FIXME: This diagnostic is terrible.
 void undefined_promise() { // expected-error {{this function cannot be a coroutine: 'experimental::coroutine_traits<void>::promise_type' (aka 'promise') is an incomplete type}}
   co_await a;
@@ -119,6 +110,25 @@ struct promise_void {
   void return_void();
 };
 
+void no_coroutine_handle() { // expected-error {{std::experimental::coroutine_handle type was not found; include <experimental/coroutine> before defining a coroutine}}
+  //expected-note@-1 {{call to 'initial_suspend' implicitly required by the initial suspend point}}
+  co_return 5; //expected-note {{function is a coroutine due to use of 'co_return' here}}
+}
+
+namespace std {
+namespace experimental {
+template <class PromiseType = void>
+struct coroutine_handle {
+  static coroutine_handle from_address(void *);
+};
+template <>
+struct coroutine_handle<void> {
+  template <class PromiseType>
+  coroutine_handle(coroutine_handle<PromiseType>);
+  static coroutine_handle from_address(void *);
+};
+}} // namespace std::experimental
+
 void yield() {
   co_yield 0;
   co_yield {"foo", 1, 2};
@@ -141,15 +151,69 @@ void coreturn(int n) {
   co_return 42;
 }
 
+template <class T>
+void co_await_non_dependent_arg(T) {
+  co_await a;
+}
+template void co_await_non_dependent_arg(int);
+
 void mixed_yield() {
   co_yield 0; // expected-note {{use of 'co_yield'}}
   return; // expected-error {{not allowed in coroutine}}
+}
+
+void mixed_yield_invalid() {
+  co_yield blah; // expected-error {{use of undeclared identifier}}
+  // expected-note@-1 {{function is a coroutine due to use of 'co_yield'}}
+  return; // expected-error {{return statement not allowed in coroutine}}
+}
+
+template <class T>
+void mixed_yield_template(T) {
+  co_yield blah; // expected-error {{use of undeclared identifier}}
+  // expected-note@-1 {{function is a coroutine due to use of 'co_yield'}}
+  return; // expected-error {{return statement not allowed in coroutine}}
+}
+
+template <class T>
+void mixed_yield_template2(T) {
+  co_yield 42;
+  // expected-note@-1 {{function is a coroutine due to use of 'co_yield'}}
+  return; // expected-error {{return statement not allowed in coroutine}}
+}
+
+template <class T>
+void mixed_yield_template3(T v) {
+  co_yield blah(v);
+  // expected-note@-1 {{function is a coroutine due to use of 'co_yield'}}
+  return; // expected-error {{return statement not allowed in coroutine}}
 }
 
 void mixed_await() {
   co_await a; // expected-note {{use of 'co_await'}}
   return; // expected-error {{not allowed in coroutine}}
 }
+
+void mixed_await_invalid() {
+  co_await 42; // expected-error {{'int' is not a structure or union}}
+  // expected-note@-1 {{function is a coroutine due to use of 'co_await'}}
+  return; // expected-error {{not allowed in coroutine}}
+}
+
+template <class T>
+void mixed_await_template(T) {
+  co_await 42;
+  // expected-note@-1 {{function is a coroutine due to use of 'co_await'}}
+  return; // expected-error {{not allowed in coroutine}}
+}
+
+template <class T>
+void mixed_await_template2(T v) {
+  co_await v; // expected-error {{'long' is not a structure or union}}
+  // expected-note@-1 {{function is a coroutine due to use of 'co_await'}}
+  return; // expected-error {{not allowed in coroutine}}
+}
+template void mixed_await_template2(long); // expected-note {{requested here}}
 
 void only_coreturn(void_tag) {
   co_return; // OK
@@ -158,6 +222,33 @@ void only_coreturn(void_tag) {
 void mixed_coreturn(void_tag, bool b) {
   if (b)
     co_return; // expected-note {{use of 'co_return'}}
+  else
+    return; // expected-error {{not allowed in coroutine}}
+}
+
+void mixed_coreturn_invalid(bool b) {
+  if (b)
+    co_return; // expected-note {{use of 'co_return'}}
+    // expected-error@-1 {{no member named 'return_void' in 'promise'}}
+  else
+    return; // expected-error {{not allowed in coroutine}}
+}
+
+template <class T>
+void mixed_coreturn_template(void_tag, bool b, T v) {
+  if (b)
+    co_return v; // expected-note {{use of 'co_return'}}
+    // expected-error@-1 {{no member named 'return_value' in 'promise_void'}}
+  else
+    return; // expected-error {{not allowed in coroutine}}
+}
+template void mixed_coreturn_template(void_tag, bool, int); // expected-note {{requested here}}
+
+template <class T>
+void mixed_coreturn_template2(bool b, T) {
+  if (b)
+    co_return v; // expected-note {{use of 'co_return'}}
+    // expected-error@-1 {{use of undeclared identifier 'v'}}
   else
     return; // expected-error {{not allowed in coroutine}}
 }
@@ -519,4 +610,20 @@ template<> struct std::experimental::coroutine_traits<int, int, const char**>
 
 int main(int, const char**) {
   co_await a; // expected-error {{'co_await' cannot be used in the 'main' function}}
+}
+
+struct good_promise_2 {
+  float get_return_object();
+  suspend_always initial_suspend();
+  suspend_always final_suspend();
+  void return_void();
+};
+template<> struct std::experimental::coroutine_handle<good_promise_2> {};
+
+template<> struct std::experimental::coroutine_traits<float>
+{ using promise_type = good_promise_2; };
+
+float badly_specialized_coro_handle() { // expected-error {{std::experimental::coroutine_handle missing a member named 'from_address'}}
+  //expected-note@-1 {{call to 'initial_suspend' implicitly required by the initial suspend point}}
+  co_return; //expected-note {{function is a coroutine due to use of 'co_return' here}}
 }

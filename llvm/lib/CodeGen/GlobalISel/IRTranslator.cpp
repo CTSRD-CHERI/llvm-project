@@ -193,9 +193,12 @@ bool IRTranslator::translateCompare(const User &U,
   CmpInst::Predicate Pred =
       CI ? CI->getPredicate() : static_cast<CmpInst::Predicate>(
                                     cast<ConstantExpr>(U).getPredicate());
-
   if (CmpInst::isIntPredicate(Pred))
     MIRBuilder.buildICmp(Pred, Res, Op0, Op1);
+  else if (Pred == CmpInst::FCMP_FALSE)
+    MIRBuilder.buildConstant(Res, 0);
+  else if  (Pred == CmpInst::FCMP_TRUE)
+    MIRBuilder.buildConstant(Res, 1);
   else
     MIRBuilder.buildFCmp(Pred, Res, Op0, Op1);
 
@@ -595,18 +598,18 @@ bool IRTranslator::translateKnownIntrinsic(const CallInst &CI, Intrinsic::ID ID,
       return true;
     }
 
-    unsigned Reg = getOrCreateVReg(*Address);
-    auto RegDef = MRI->def_instr_begin(Reg);
     assert(DI.getVariable()->isValidLocationForIntrinsic(
                MIRBuilder.getDebugLoc()) &&
            "Expected inlined-at fields to agree");
-
-    if (RegDef != MRI->def_instr_end() &&
-        RegDef->getOpcode() == TargetOpcode::G_FRAME_INDEX) {
-      MIRBuilder.buildFIDbgValue(RegDef->getOperand(1).getIndex(),
-                                 DI.getVariable(), DI.getExpression());
+    auto AI = dyn_cast<AllocaInst>(Address);
+    if (AI && AI->isStaticAlloca()) {
+      // Static allocas are tracked at the MF level, no need for DBG_VALUE
+      // instructions (in fact, they get ignored if they *do* exist).
+      MF->setVariableDbgInfo(DI.getVariable(), DI.getExpression(),
+                             getOrCreateFrameIndex(*AI), DI.getDebugLoc());
     } else
-      MIRBuilder.buildDirectDbgValue(Reg, DI.getVariable(), DI.getExpression());
+      MIRBuilder.buildDirectDbgValue(getOrCreateVReg(*Address),
+                                     DI.getVariable(), DI.getExpression());
     return true;
   }
   case Intrinsic::vaend:
@@ -712,13 +715,32 @@ bool IRTranslator::translateKnownIntrinsic(const CallInst &CI, Intrinsic::ID ID,
   return false;
 }
 
+bool IRTranslator::translateInlineAsm(const CallInst &CI,
+                                      MachineIRBuilder &MIRBuilder) {
+  const InlineAsm &IA = cast<InlineAsm>(*CI.getCalledValue());
+  if (!IA.getConstraintString().empty())
+    return false;
+
+  unsigned ExtraInfo = 0;
+  if (IA.hasSideEffects())
+    ExtraInfo |= InlineAsm::Extra_HasSideEffects;
+  if (IA.getDialect() == InlineAsm::AD_Intel)
+    ExtraInfo |= InlineAsm::Extra_AsmDialect;
+
+  MIRBuilder.buildInstr(TargetOpcode::INLINEASM)
+    .addExternalSymbol(IA.getAsmString().c_str())
+    .addImm(ExtraInfo);
+
+  return true;
+}
+
 bool IRTranslator::translateCall(const User &U, MachineIRBuilder &MIRBuilder) {
   const CallInst &CI = cast<CallInst>(U);
   auto TII = MF->getTarget().getIntrinsicInfo();
   const Function *F = CI.getCalledFunction();
 
   if (CI.isInlineAsm())
-    return false;
+    return translateInlineAsm(CI, MIRBuilder);
 
   if (!F || !F->isIntrinsic()) {
     unsigned Res = CI.getType()->isVoidTy() ? 0 : getOrCreateVReg(CI);
@@ -726,7 +748,8 @@ bool IRTranslator::translateCall(const User &U, MachineIRBuilder &MIRBuilder) {
     for (auto &Arg: CI.arg_operands())
       Args.push_back(getOrCreateVReg(*Arg));
 
-    return CLI->lowerCall(MIRBuilder, CI, Res, Args, [&]() {
+    MF->getFrameInfo().setHasCalls(true);
+    return CLI->lowerCall(MIRBuilder, &CI, Res, Args, [&]() {
       return getOrCreateVReg(*CI.getCalledValue());
     });
   }
@@ -764,7 +787,7 @@ bool IRTranslator::translateInvoke(const User &U,
   const BasicBlock *ReturnBB = I.getSuccessor(0);
   const BasicBlock *EHPadBB = I.getSuccessor(1);
 
-  const Value *Callee(I.getCalledValue());
+  const Value *Callee = I.getCalledValue();
   const Function *Fn = dyn_cast<Function>(Callee);
   if (isa<InlineAsm>(Callee))
     return false;
@@ -792,8 +815,9 @@ bool IRTranslator::translateInvoke(const User &U,
   for (auto &Arg: I.arg_operands())
     Args.push_back(getOrCreateVReg(*Arg));
 
- CLI->lowerCall(MIRBuilder, I, Res, Args,
-                 [&]() { return getOrCreateVReg(*I.getCalledValue()); });
+  if (!CLI->lowerCall(MIRBuilder, &I, Res, Args,
+                      [&]() { return getOrCreateVReg(*I.getCalledValue()); }))
+    return false;
 
   MCSymbol *EndSymbol = Context.createTempSymbol();
   MIRBuilder.buildInstr(TargetOpcode::EH_LABEL).addSym(EndSymbol);
@@ -952,6 +976,36 @@ bool IRTranslator::translateVAArg(const User &U, MachineIRBuilder &MIRBuilder) {
   return true;
 }
 
+bool IRTranslator::translateInsertElement(const User &U,
+                                          MachineIRBuilder &MIRBuilder) {
+  // If it is a <1 x Ty> vector, use the scalar as it is
+  // not a legal vector type in LLT.
+  if (U.getType()->getVectorNumElements() == 1) {
+    unsigned Elt = getOrCreateVReg(*U.getOperand(1));
+    ValToVReg[&U] = Elt;
+    return true;
+  }
+  MIRBuilder.buildInsertVectorElement(
+      getOrCreateVReg(U), getOrCreateVReg(*U.getOperand(0)),
+      getOrCreateVReg(*U.getOperand(1)), getOrCreateVReg(*U.getOperand(2)));
+  return true;
+}
+
+bool IRTranslator::translateExtractElement(const User &U,
+                                           MachineIRBuilder &MIRBuilder) {
+  // If it is a <1 x Ty> vector, use the scalar as it is
+  // not a legal vector type in LLT.
+  if (U.getOperand(0)->getType()->getVectorNumElements() == 1) {
+    unsigned Elt = getOrCreateVReg(*U.getOperand(0));
+    ValToVReg[&U] = Elt;
+    return true;
+  }
+  MIRBuilder.buildExtractVectorElement(getOrCreateVReg(U),
+                                       getOrCreateVReg(*U.getOperand(0)),
+                                       getOrCreateVReg(*U.getOperand(1)));
+  return true;
+}
+
 bool IRTranslator::translatePHI(const User &U, MachineIRBuilder &MIRBuilder) {
   const PHINode &PI = cast<PHINode>(U);
   auto MIB = MIRBuilder.buildInstr(TargetOpcode::PHI);
@@ -996,9 +1050,7 @@ bool IRTranslator::translate(const Instruction &Inst) {
     case Instruction::OPCODE: return translate##OPCODE(Inst, CurBuilder);
 #include "llvm/IR/Instruction.def"
   default:
-    if (!TPC->isGlobalISelAbortEnabled())
-      return false;
-    llvm_unreachable("unknown opcode");
+    return false;
   }
 }
 
@@ -1013,20 +1065,32 @@ bool IRTranslator::translate(const Constant &C, unsigned Reg) {
     EntryBuilder.buildConstant(Reg, 0);
   else if (auto GV = dyn_cast<GlobalValue>(&C))
     EntryBuilder.buildGlobalValue(Reg, GV);
-  else if (auto CE = dyn_cast<ConstantExpr>(&C)) {
+  else if (auto CAZ = dyn_cast<ConstantAggregateZero>(&C)) {
+    if (!CAZ->getType()->isVectorTy())
+      return false;
+    std::vector<unsigned> Ops;
+    for (unsigned i = 0; i < CAZ->getNumElements(); ++i) {
+      Constant &Elt = *CAZ->getElementValue(i);
+      Ops.push_back(getOrCreateVReg(Elt));
+    }
+    EntryBuilder.buildMerge(Reg, Ops);
+  } else if (auto CV = dyn_cast<ConstantDataVector>(&C)) {
+    std::vector<unsigned> Ops;
+    for (unsigned i = 0; i < CV->getNumElements(); ++i) {
+      Constant &Elt = *CV->getElementAsConstant(i);
+      Ops.push_back(getOrCreateVReg(Elt));
+    }
+    EntryBuilder.buildMerge(Reg, Ops);
+  } else if (auto CE = dyn_cast<ConstantExpr>(&C)) {
     switch(CE->getOpcode()) {
 #define HANDLE_INST(NUM, OPCODE, CLASS)                         \
       case Instruction::OPCODE: return translate##OPCODE(*CE, EntryBuilder);
 #include "llvm/IR/Instruction.def"
     default:
-      if (!TPC->isGlobalISelAbortEnabled())
-        return false;
-      llvm_unreachable("unknown opcode");
+      return false;
     }
-  } else if (!TPC->isGlobalISelAbortEnabled())
+  } else
     return false;
-  else
-    llvm_unreachable("unhandled constant kind");
 
   return true;
 }

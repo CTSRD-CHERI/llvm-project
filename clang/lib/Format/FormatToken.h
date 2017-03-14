@@ -48,11 +48,13 @@ namespace format {
   TYPE(FunctionTypeLParen) \
   TYPE(ImplicitStringLiteral) \
   TYPE(InheritanceColon) \
+  TYPE(InheritanceComma) \
   TYPE(InlineASMBrace) \
   TYPE(InlineASMColon) \
   TYPE(JavaAnnotation) \
   TYPE(JsComputedPropertyName) \
   TYPE(JsFatArrow) \
+  TYPE(JsNonNullAssertion) \
   TYPE(JsTypeColon) \
   TYPE(JsTypeOperator) \
   TYPE(JsTypeOptionalQuestion) \

@@ -27,18 +27,14 @@ def MMX_X86movw2d : SDNode<"X86ISD::MMX_MOVW2D", SDTypeProfile<1, 1,
 //===----------------------------------------------------------------------===//
 
 def load_mmx : PatFrag<(ops node:$ptr), (x86mmx (load node:$ptr))>;
-def load_mvmmx : PatFrag<(ops node:$ptr),
-                         (x86mmx (MMX_X86movw2d (load node:$ptr)))>;
 
 //===----------------------------------------------------------------------===//
 // SSE specific DAG Nodes.
 //===----------------------------------------------------------------------===//
 
-def SDTX86VFCMP : SDTypeProfile<1, 3, [SDTCisFP<0>, SDTCisSameAs<1, 2>,
-                                       SDTCisFP<1>, SDTCisVT<3, i8>,
-                                       SDTCisVec<1>]>;
-def SDTX86CmpTestSae : SDTypeProfile<1, 3, [SDTCisVT<0, i32>, 
-                                     SDTCisSameAs<1, 2>, SDTCisInt<3>]>;
+def SDTX86VFCMP : SDTypeProfile<1, 3, [SDTCisFP<0>, SDTCisVec<0>,
+                                       SDTCisSameAs<0, 1>, SDTCisSameAs<1, 2>,
+                                       SDTCisVT<3, i8>]>;
 
 def X86fmin    : SDNode<"X86ISD::FMIN",      SDTFPBinOp>;
 def X86fmax    : SDNode<"X86ISD::FMAX",      SDTFPBinOp>;
