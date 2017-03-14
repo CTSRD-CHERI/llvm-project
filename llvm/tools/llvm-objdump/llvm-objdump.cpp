@@ -1708,7 +1708,7 @@ void llvm::PrintCapRelocations(const ObjectFile *Obj) {
            << format("0x%016" PRIx64, Base)
            << ")\tOffset: " << format("%016" PRIu64, Offset)
            << "\tLength: " << format("%016" PRIu64, Length)
-           << "\tPermissions: " << format("%08" PRIu64, Length)
+           << "\tPermissions: " << format("%08" PRIu64, Perms)
            << (isFunction ? " (Function)\n" : "\n");
   }
   outs() << "\n";
