@@ -33,8 +33,10 @@
 # RUN: not ld.lld %t-cheri128-main.o %t-cheri128-hybrid-lib.o -o %t.exe 2>&1 | FileCheck -check-prefix=CHERI128-vs-CHERI128-HYBRID %s
 
 # linking plain mips with hybrid results in a hybrid binary:
-# RUN: ld.lld %t-cheri256-hybrid-main.o %t-mips64.o -o - | llvm-readobj -h - | FileCheck -check-prefix=CHERI256-HYBRID-FLAGS %s
-# RUN: ld.lld %t-cheri128-hybrid-main.o %t-mips64.o -o - | llvm-readobj -h - | FileCheck -check-prefix=CHERI128-HYBRID-FLAGS %s
+# RUN: ld.lld %t-cheri256-hybrid-main.o %t-mips64.o -o %t.exe
+# RUN: llvm-readobj -h %t.exe | FileCheck -check-prefix=CHERI256-HYBRID-FLAGS %s
+# RUN: ld.lld %t-cheri128-hybrid-main.o %t-mips64.o -o %t.exe
+# RUN: llvm-readobj -h %t.exe | FileCheck -check-prefix=CHERI128-HYBRID-FLAGS %s
 
 # REQUIRES: mips
 
