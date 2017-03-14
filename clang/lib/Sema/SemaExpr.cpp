@@ -9484,6 +9484,13 @@ QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
     }
   } else if (LHSType->isPointerType() &&
              RHSType->isPointerType()) { // C99 6.5.8p2
+
+    // We only implicitly cast the NULL constant to a memory capability
+    if (LHSIsNull && RHSType->isMemoryCapabilityType(Context))
+        LHS = ImpCastExprToType(LHS.get(), RHSType, CK_PointerToMemoryCapability);
+    else if (LHSType->isMemoryCapabilityType(Context) && RHSIsNull)
+        RHS = ImpCastExprToType(RHS.get(), LHSType, CK_PointerToMemoryCapability);
+
     // All of the following pointer-related warnings are GCC extensions, except
     // when handling null pointer constants.
     QualType LCanPointeeTy =
@@ -9531,6 +9538,7 @@ QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
       else
         RHS = ImpCastExprToType(RHS.get(), LHSType, Kind);
     }
+
     return ResultTy;
   }
 
