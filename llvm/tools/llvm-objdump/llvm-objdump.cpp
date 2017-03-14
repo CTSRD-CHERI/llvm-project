@@ -1672,6 +1672,9 @@ void llvm::PrintCapRelocations(const ObjectFile *Obj) {
     if (!Start)
       continue;
     Expected<StringRef> Name = Sym.getName();
+    if (!Name) {
+      continue;
+    }
     SymbolNames.insert({Start.get(), Name.get().str()});
   }
   StringRef Data;
