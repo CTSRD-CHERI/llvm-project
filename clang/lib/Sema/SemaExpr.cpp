@@ -9486,9 +9486,11 @@ QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
              RHSType->isPointerType()) { // C99 6.5.8p2
 
     // We only implicitly cast the NULL constant to a memory capability
-    if (LHSIsNull && RHSType->isMemoryCapabilityType(Context))
+    if (LHSIsNull && !LHSType->isMemoryCapabilityType(Context)
+                  && RHSType->isMemoryCapabilityType(Context))
         LHS = ImpCastExprToType(LHS.get(), RHSType, CK_PointerToMemoryCapability);
-    else if (LHSType->isMemoryCapabilityType(Context) && RHSIsNull)
+    else if (RHSIsNull && !RHSType->isMemoryCapabilityType(Context)
+                       && LHSType->isMemoryCapabilityType(Context))
         RHS = ImpCastExprToType(RHS.get(), LHSType, CK_PointerToMemoryCapability);
 
     // All of the following pointer-related warnings are GCC extensions, except
