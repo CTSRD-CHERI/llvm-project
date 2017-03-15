@@ -12706,14 +12706,15 @@ ExprResult Sema::ActOnGNUNullExpr(SourceLocation TokenLoc) {
   // The type of __null will be int or long, depending on the size of
   // pointers on the target.
   QualType Ty;
-  unsigned pw = Context.getTargetInfo().getPointerWidth(0);
-  if (pw == Context.getTargetInfo().getIntCapWidth())
+  const auto& TI = Context.getTargetInfo();
+  unsigned pw = TI.getPointerWidth(0);
+  if (TI.areAllPointersCapabilities() && pw == TI.getIntCapWidth())
     Ty = Context.IntCapTy;
-  else if (pw == Context.getTargetInfo().getIntWidth())
+  else if (pw == TI.getIntWidth())
     Ty = Context.IntTy;
-  else if (pw == Context.getTargetInfo().getLongWidth())
+  else if (pw == TI.getLongWidth())
     Ty = Context.LongTy;
-  else if (pw == Context.getTargetInfo().getLongLongWidth())
+  else if (pw == TI.getLongLongWidth())
     Ty = Context.LongLongTy;
   else {
     llvm_unreachable("I don't know size of pointer!");
