@@ -74,13 +74,13 @@ entry:
   tail call void @llvm.dbg.declare(metadata %struct.A* %p1, metadata !56, metadata !37), !dbg !57
   %0 = getelementptr inbounds %struct.A, %struct.A* %p1, i64 0, i32 0, !dbg !58
   %1 = getelementptr inbounds %struct.A, %struct.A* %agg.tmp.i, i64 0, i32 0, !dbg !59
-  call void @llvm.lifetime.start(i64 24, i8* %1), !dbg !59
+  call void @llvm.lifetime.start.p0i8(i64 24, i8* %1), !dbg !59
   %2 = load i64, i64* @a, align 8, !dbg !61, !tbaa !40
   %call.i = tail call noalias i8* @_Znwm(i64 %2) #4, !dbg !62
   store i8* %call.i, i8** bitcast (i32** @b to i8**), align 8, !dbg !63, !tbaa !46
   call void @llvm.memcpy.p0i8.p0i8.i64(i8* %1, i8* %0, i64 24, i32 8, i1 false), !dbg !64
   call void @_Z2f91A(%struct.A* %agg.tmp.i), !dbg !65
-  call void @llvm.lifetime.end(i64 24, i8* %1), !dbg !66
+  call void @llvm.lifetime.end.p0i8(i64 24, i8* %1), !dbg !66
   ret void, !dbg !67
 }
 
@@ -102,7 +102,7 @@ entry:
   call void @llvm.dbg.value(metadata i8 1, i64 0, metadata !56, metadata !82), !dbg !75
   call void @llvm.dbg.declare(metadata %struct.A* undef, metadata !56, metadata !37), !dbg !75
   %1 = getelementptr inbounds %struct.A, %struct.A* %agg.tmp.i.i, i64 0, i32 0, !dbg !83
-  call void @llvm.lifetime.start(i64 24, i8* %1), !dbg !83
+  call void @llvm.lifetime.start.p0i8(i64 24, i8* %1), !dbg !83
   %2 = load i64, i64* @a, align 8, !dbg !85, !tbaa !40
   %call.i.i5 = invoke noalias i8* @_Znwm(i64 %2) #4
           to label %call.i.i.noexc unwind label %lpad, !dbg !86
@@ -122,7 +122,7 @@ call.i.i.noexc:                                   ; preds = %entry
           to label %invoke.cont unwind label %lpad, !dbg !90
 
 invoke.cont:                                      ; preds = %call.i.i.noexc
-  call void @llvm.lifetime.end(i64 24, i8* %1), !dbg !91
+  call void @llvm.lifetime.end.p0i8(i64 24, i8* %1), !dbg !91
   call void @llvm.dbg.value(metadata %struct.B* %d, i64 0, metadata !73, metadata !37), !dbg !80
   %call1 = call %struct.B* @_ZN1BD1Ev(%struct.B* %d) #3, !dbg !92
   ret void, !dbg !92
@@ -146,10 +146,10 @@ declare %struct.B* @_ZN1BD1Ev(%struct.B*) #3
 declare void @llvm.dbg.value(metadata, i64, metadata, metadata) #0
 
 ; Function Attrs: argmemonly nounwind
-declare void @llvm.lifetime.start(i64, i8* nocapture) #2
+declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) #2
 
 ; Function Attrs: argmemonly nounwind
-declare void @llvm.lifetime.end(i64, i8* nocapture) #2
+declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) #2
 
 attributes #0 = { nounwind readnone }
 attributes #1 = { nobuiltin }
