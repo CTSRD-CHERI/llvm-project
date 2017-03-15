@@ -511,7 +511,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     llvm::Type *PointeeType = ConvertTypeForMem(ETy);
     unsigned AS = Context.getTargetInfo().areAllPointersCapabilities()
                   ? CGM.getTargetCodeGenInfo().getMemoryCapabilityAS()
-                  : CGM.getAddressSpaceForType(ETy);
+                  : Context.getTargetAddressSpace(ETy.getQualifiers());
     ResultType = llvm::PointerType::get(PointeeType, AS);
     break;
   }

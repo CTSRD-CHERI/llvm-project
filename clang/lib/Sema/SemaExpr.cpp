@@ -7675,8 +7675,11 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
 
     // int -> T*
     if (RHSType->isIntegerType()) {
-      // Implicit casts from int -> memory capabilities are not allowed
-      if (LHSPointer->isMemoryCapability()) 
+      // Implicit casts from int -> memory capabilities are not allowed (except for null)
+      const Expr::NullPointerConstantKind RHSNullKind =
+          RHS.get()->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNull);
+      bool RHSIsNull = RHSNullKind != Expr::NPCK_NotNull;
+      if (LHSPointer->isMemoryCapability() && !RHSIsNull)
         return Incompatible;
       Kind = CK_IntegralToPointer; // FIXME: null?
       return IntToPointer;
@@ -7817,8 +7820,11 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
 
     // T* -> int
     if (LHSType->isIntegerType()) {
-      // Implicit casts from memory capabilities -> int are not allowed
-      if (RHSPointer->isMemoryCapability())
+      // Implicit casts from memory capabilities -> int are not allowed (except for null)
+      const Expr::NullPointerConstantKind RHSNullKind =
+          RHS.get()->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNull);
+      bool RHSIsNull = RHSNullKind != Expr::NPCK_NotNull;
+      if (RHSPointer->isMemoryCapability() && !RHSIsNull)
         return Incompatible;
       Kind = CK_PointerToIntegral;
       return PointerToInt;
@@ -9509,9 +9515,11 @@ QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
              RHSType->isPointerType()) { // C99 6.5.8p2
 
     // We only implicitly cast the NULL constant to a memory capability
-    if (LHSIsNull && RHSType->isMemoryCapabilityType(Context))
+    if (LHSIsNull && !LHSType->isMemoryCapabilityType(Context)
+                  && RHSType->isMemoryCapabilityType(Context))
         LHS = ImpCastExprToType(LHS.get(), RHSType, CK_PointerToMemoryCapability);
-    else if (LHSType->isMemoryCapabilityType(Context) && RHSIsNull)
+    else if (RHSIsNull && !RHSType->isMemoryCapabilityType(Context)
+                       && LHSType->isMemoryCapabilityType(Context))
         RHS = ImpCastExprToType(RHS.get(), LHSType, CK_PointerToMemoryCapability);
 
     // All of the following pointer-related warnings are GCC extensions, except
