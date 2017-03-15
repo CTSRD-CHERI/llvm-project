@@ -610,14 +610,14 @@ define void @test_psrlq_by_volatile_shift_amount(x86_mmx* %t) nounwind {
 entry:
   %0 = alloca i32, align 4
   %1 = bitcast i32* %0 to i8*
-  call void @llvm.lifetime.start(i64 4, i8* nonnull %1)
+  call void @llvm.lifetime.start.p0i8(i64 4, i8* nonnull %1)
   store volatile i32 1, i32* %0, align 4
   %2 = load volatile i32, i32* %0, align 4
   %3 = tail call x86_mmx @llvm.x86.mmx.psrli.q(x86_mmx bitcast (<1 x i64> <i64 255> to x86_mmx), i32 %2)
   store x86_mmx %3, x86_mmx* %t, align 8
-  call void @llvm.lifetime.end(i64 4, i8* nonnull %1)
+  call void @llvm.lifetime.end.p0i8(i64 4, i8* nonnull %1)
   ret void
 }
 
-declare void @llvm.lifetime.start(i64, i8* nocapture)
-declare void @llvm.lifetime.end(i64, i8* nocapture)
+declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture)
+declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture)
