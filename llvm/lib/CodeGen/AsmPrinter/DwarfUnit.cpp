@@ -297,13 +297,6 @@ void DwarfUnit::addDIETypeSignature(DIE &Die, uint64_t Signature) {
                dwarf::DW_FORM_ref_sig8, DIEInteger(Signature));
 }
 
-void DwarfUnit::addDIETypeSignature(DIE &Die, dwarf::Attribute Attribute,
-                                    StringRef Identifier) {
-  uint64_t Signature = DD->makeTypeSignature(Identifier);
-  Die.addValue(DIEValueAllocator, Attribute, dwarf::DW_FORM_ref_sig8,
-               DIEInteger(Signature));
-}
-
 void DwarfUnit::addDIEEntry(DIE &Die, dwarf::Attribute Attribute,
                             DIEEntry Entry) {
   const DIEUnit *CU = Die.getUnit();
@@ -696,8 +689,7 @@ DIE *DwarfTypeUnit::createTypeDIE(const DICompositeType *Ty) {
 
   constructTypeDIE(TyDIE, cast<DICompositeType>(Ty));
 
-  if (!Ty->isExternalTypeRef())
-    updateAcceleratorTables(Context, Ty, TyDIE);
+  updateAcceleratorTables(Context, Ty, TyDIE);
   return &TyDIE;
 }
 
@@ -853,6 +845,13 @@ void DwarfUnit::constructTypeDIE(DIE &Buffer, const DIDerivedType *DTy) {
   // Add source line info if available and TyDesc is not a forward declaration.
   if (!DTy->isForwardDecl())
     addSourceLine(Buffer, DTy);
+
+  // If DWARF address space value is other than None, add it for pointer and
+  // reference types as DW_AT_address_class.
+  if (DTy->getDWARFAddressSpace() && (Tag == dwarf::DW_TAG_pointer_type ||
+                                      Tag == dwarf::DW_TAG_reference_type))
+    addUInt(Buffer, dwarf::DW_AT_address_class, dwarf::DW_FORM_data4,
+            DTy->getDWARFAddressSpace().getValue());
 }
 
 void DwarfUnit::constructSubprogramArguments(DIE &Buffer, DITypeRefArray Args) {
@@ -904,13 +903,6 @@ void DwarfUnit::constructTypeDIE(DIE &Buffer, const DISubroutineType *CTy) {
 }
 
 void DwarfUnit::constructTypeDIE(DIE &Buffer, const DICompositeType *CTy) {
-  if (CTy->isExternalTypeRef()) {
-    StringRef Identifier = CTy->getIdentifier();
-    assert(!Identifier.empty() && "external type ref without identifier");
-    addFlag(Buffer, dwarf::DW_AT_declaration);
-    return addDIETypeSignature(Buffer, dwarf::DW_AT_signature, Identifier);
-  }
-
   // Add name if not anonymous or intermediate type.
   StringRef Name = CTy->getName();
 

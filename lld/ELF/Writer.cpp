@@ -176,7 +176,7 @@ template <class ELFT> static void combineMergableSections() {
 
     StringRef OutsecName = getOutputSectionName(MS->Name);
     uintX_t Flags = getOutFlags<ELFT>(MS);
-    uintX_t Alignment = std::max<uintX_t>(MS->Alignment, MS->Entsize);
+    uint32_t Alignment = std::max<uintX_t>(MS->Alignment, MS->Entsize);
 
     auto I =
         llvm::find_if(MergeSections, [=](MergeSyntheticSection *Sec) {
@@ -199,12 +199,32 @@ template <class ELFT> static void combineMergableSections() {
   V.erase(std::remove(V.begin(), V.end(), nullptr), V.end());
 }
 
+template <class ELFT> static void combineEhFrameSections() {
+  for (InputSectionBase *&S : InputSections) {
+    EhInputSection *ES = dyn_cast<EhInputSection>(S);
+    if (!ES)
+      continue;
+
+    if (!ES->Live)
+      continue;
+
+    In<ELFT>::EhFrame->addSection(ES);
+    S = nullptr;
+  }
+
+  std::vector<InputSectionBase *> &V = InputSections;
+  V.erase(std::remove(V.begin(), V.end(), nullptr), V.end());
+}
+
 // The main function of the writer.
 template <class ELFT> void Writer<ELFT>::run() {
   // Create linker-synthesized sections such as .got or .plt.
   // Such sections are of type input section.
   createSyntheticSections();
   combineMergableSections<ELFT>();
+
+  if (!Config->Relocatable)
+    combineEhFrameSections<ELFT>();
 
   // We need to create some reserved symbols such as _end. Create them.
   if (!Config->Relocatable)
@@ -435,12 +455,11 @@ template <class ELFT> void Writer<ELFT>::createSyntheticSections() {
   In<ELFT>::Iplt = make<PltSection<ELFT>>(0);
   Add(In<ELFT>::Iplt);
 
-  if (Config->EhFrameHdr) {
-    In<ELFT>::EhFrameHdr = make<EhFrameHeader<ELFT>>();
-    Add(In<ELFT>::EhFrameHdr);
-  }
-
   if (!Config->Relocatable) {
+    if (Config->EhFrameHdr) {
+      In<ELFT>::EhFrameHdr = make<EhFrameHeader<ELFT>>();
+      Add(In<ELFT>::EhFrameHdr);
+    }
     In<ELFT>::EhFrame = make<EhFrameSection<ELFT>>();
     Add(In<ELFT>::EhFrame);
   }
@@ -453,7 +472,7 @@ template <class ELFT> void Writer<ELFT>::createSyntheticSections() {
 }
 
 template <class ELFT>
-static bool shouldKeepInSymtab(InputSectionBase *Sec, StringRef SymName,
+static bool shouldKeepInSymtab(SectionBase *Sec, StringRef SymName,
                                const SymbolBody &B) {
   if (B.isFile() || B.isSection())
     return false;
@@ -485,12 +504,17 @@ template <class ELFT> static bool includeInSymtab(const SymbolBody &B) {
 
   if (auto *D = dyn_cast<DefinedRegular>(&B)) {
     // Always include absolute symbols.
-    if (!D->Section)
+    SectionBase *Sec = D->Section;
+    if (!Sec)
       return true;
-    // Exclude symbols pointing to garbage-collected sections.
-    if (!D->Section->Live)
-      return false;
-    if (auto *S = dyn_cast<MergeInputSection>(D->Section))
+    if (auto *IS = dyn_cast<InputSectionBase>(Sec)) {
+      Sec = IS->Repl;
+      IS = cast<InputSectionBase>(Sec);
+      // Exclude symbols pointing to garbage-collected sections.
+      if (!IS->Live)
+        return false;
+    }
+    if (auto *S = dyn_cast<MergeInputSection>(Sec))
       if (!S->getSectionPiece(D->Value)->Live)
         return false;
   }
@@ -515,7 +539,7 @@ template <class ELFT> void Writer<ELFT>::copyLocalSymbols() {
       if (!includeInSymtab<ELFT>(*B))
         continue;
 
-      InputSectionBase *Sec = DR->Section;
+      SectionBase *Sec = DR->Section;
       if (!shouldKeepInSymtab<ELFT>(Sec, B->getName(), *B))
         continue;
       In<ELFT>::SymTab->addSymbol(B);
@@ -733,35 +757,27 @@ void PhdrEntry::add(OutputSection *Sec) {
 }
 
 template <class ELFT>
-static DefinedSynthetic *addOptionalSynthetic(StringRef Name,
-                                              OutputSection *Sec, uint64_t Val,
-                                              uint8_t StOther = STV_HIDDEN) {
-  if (SymbolBody *S = Symtab<ELFT>::X->find(Name))
-    if (!S->isInCurrentDSO())
-      return cast<DefinedSynthetic>(
-          Symtab<ELFT>::X->addSynthetic(Name, Sec, Val, StOther)->body());
-  return nullptr;
-}
-
-template <class ELFT>
-static Symbol *addRegular(StringRef Name, InputSectionBase *Sec,
-                          uint64_t Value) {
+static Symbol *addRegular(StringRef Name, SectionBase *Sec, uint64_t Value,
+                          uint8_t StOther = STV_HIDDEN,
+                          uint8_t Binding = STB_WEAK) {
   // The linker generated symbols are added as STB_WEAK to allow user defined
   // ones to override them.
-  return Symtab<ELFT>::X->addRegular(Name, STV_HIDDEN, STT_NOTYPE, Value,
-                                     /*Size=*/0, STB_WEAK, Sec,
+  return Symtab<ELFT>::X->addRegular(Name, StOther, STT_NOTYPE, Value,
+                                     /*Size=*/0, Binding, Sec,
                                      /*File=*/nullptr);
 }
 
 template <class ELFT>
-static Symbol *addOptionalRegular(StringRef Name, InputSectionBase *IS,
-                                  uint64_t Value) {
+static DefinedRegular *
+addOptionalRegular(StringRef Name, SectionBase *Sec, uint64_t Val,
+                   uint8_t StOther = STV_HIDDEN, uint8_t Binding = STB_GLOBAL) {
   SymbolBody *S = Symtab<ELFT>::X->find(Name);
   if (!S)
     return nullptr;
   if (S->isInCurrentDSO())
-    return S->symbol();
-  return addRegular<ELFT>(Name, IS, Value);
+    return nullptr;
+  return cast<DefinedRegular>(
+      addRegular<ELFT>(Name, Sec, Val, StOther, Binding)->body());
 }
 
 // The beginning and the ending of .rel[a].plt section are marked
@@ -774,10 +790,10 @@ template <class ELFT> void Writer<ELFT>::addRelIpltSymbols() {
   if (In<ELFT>::DynSymTab)
     return;
   StringRef S = Config->isRela() ? "__rela_iplt_start" : "__rel_iplt_start";
-  addOptionalRegular<ELFT>(S, In<ELFT>::RelaIplt, 0);
+  addOptionalRegular<ELFT>(S, In<ELFT>::RelaIplt, 0, STV_HIDDEN, STB_WEAK);
 
   S = Config->isRela() ? "__rela_iplt_end" : "__rel_iplt_end";
-  addOptionalRegular<ELFT>(S, In<ELFT>::RelaIplt, -1);
+  addOptionalRegular<ELFT>(S, In<ELFT>::RelaIplt, -1, STV_HIDDEN, STB_WEAK);
 }
 
 // The linker is expected to define some symbols depending on
@@ -837,14 +853,13 @@ template <class ELFT> void Writer<ELFT>::addReservedSymbols() {
     return;
 
   // __ehdr_start is the location of ELF file headers.
-  addOptionalSynthetic<ELFT>("__ehdr_start", Out::ElfHeader, 0);
+  addOptionalRegular<ELFT>("__ehdr_start", Out::ElfHeader, 0, STV_HIDDEN);
 
-  auto Define = [](StringRef S, DefinedSynthetic *&Sym1,
-                   DefinedSynthetic *&Sym2) {
-    Sym1 = addOptionalSynthetic<ELFT>(S, nullptr, 0, STV_DEFAULT);
+  auto Define = [](StringRef S, DefinedRegular *&Sym1, DefinedRegular *&Sym2) {
+    Sym1 = addOptionalRegular<ELFT>(S, Out::ElfHeader, 0, STV_DEFAULT);
     assert(S.startswith("_"));
     S = S.substr(1);
-    Sym2 = addOptionalSynthetic<ELFT>(S, nullptr, 0, STV_DEFAULT);
+    Sym2 = addOptionalRegular<ELFT>(S, Out::ElfHeader, 0, STV_DEFAULT);
   };
 
   Define("_end", ElfSym::End, ElfSym::End2);
@@ -880,7 +895,7 @@ static void sortBySymbolsOrder(ArrayRef<OutputSection *> OutputSections) {
     SymbolOrder.insert({S, Priority++});
 
   // Build a map from sections to their priorities.
-  DenseMap<InputSectionBase *, int> SectionOrder;
+  DenseMap<SectionBase *, int> SectionOrder;
   for (elf::ObjectFile<ELFT> *File : Symtab<ELFT>::X->getObjectFiles()) {
     for (SymbolBody *Body : File->getSymbols()) {
       auto *D = dyn_cast<DefinedRegular>(Body);
@@ -912,12 +927,17 @@ void Writer<ELFT>::forEachRelSec(std::function<void(InputSectionBase &)> Fn) {
     if (isa<InputSection>(IS) || isa<EhInputSection>(IS))
       Fn(*IS);
   }
+
+  if (!Config->Relocatable) {
+    for (EhInputSection *ES : In<ELFT>::EhFrame->Sections)
+      Fn(*ES);
+  }
 }
 
 template <class ELFT> void Writer<ELFT>::createSections() {
   for (InputSectionBase *IS : InputSections)
     if (IS)
-      Factory.addInputSec<ELFT>(IS, getOutputSectionName(IS->Name));
+      Factory.addInputSec(IS, getOutputSectionName(IS->Name));
 
   sortBySymbolsOrder<ELFT>(OutputSections);
   sortInitFini<ELFT>(findSection(".init_array"));
@@ -1208,8 +1228,15 @@ template <class ELFT> void Writer<ELFT>::addStartEndSymbols() {
   auto Define = [&](StringRef Start, StringRef End, OutputSection *OS) {
     // These symbols resolve to the image base if the section does not exist.
     // A special value -1 indicates end of the section.
-    addOptionalSynthetic<ELFT>(Start, OS, 0);
-    addOptionalSynthetic<ELFT>(End, OS, OS ? -1 : 0);
+    if (OS) {
+      addOptionalRegular<ELFT>(Start, OS, 0);
+      addOptionalRegular<ELFT>(End, OS, -1);
+    } else {
+      if (Config->pic())
+        OS = Out::ElfHeader;
+      addOptionalRegular<ELFT>(Start, OS, 0);
+      addOptionalRegular<ELFT>(End, OS, 0);
+    }
   };
 
   Define("__preinit_array_start", "__preinit_array_end", Out::PreinitArray);
@@ -1230,8 +1257,8 @@ void Writer<ELFT>::addStartStopSymbols(OutputSection *Sec) {
   StringRef S = Sec->Name;
   if (!isValidCIdentifier(S))
     return;
-  addOptionalSynthetic<ELFT>(Saver.save("__start_" + S), Sec, 0, STV_DEFAULT);
-  addOptionalSynthetic<ELFT>(Saver.save("__stop_" + S), Sec, -1, STV_DEFAULT);
+  addOptionalRegular<ELFT>(Saver.save("__start_" + S), Sec, 0, STV_DEFAULT);
+  addOptionalRegular<ELFT>(Saver.save("__stop_" + S), Sec, -1, STV_DEFAULT);
 }
 
 template <class ELFT> OutputSection *Writer<ELFT>::findSection(StringRef Name) {
@@ -1328,7 +1355,8 @@ template <class ELFT> std::vector<PhdrEntry> Writer<ELFT>::createPhdrs() {
     Ret.push_back(std::move(RelRo));
 
   // PT_GNU_EH_FRAME is a special section pointing on .eh_frame_hdr.
-  if (!In<ELFT>::EhFrame->empty() && In<ELFT>::EhFrameHdr)
+  if (!In<ELFT>::EhFrame->empty() && In<ELFT>::EhFrameHdr &&
+      In<ELFT>::EhFrame->OutSec && In<ELFT>::EhFrameHdr->OutSec)
     AddHdr(PT_GNU_EH_FRAME, In<ELFT>::EhFrameHdr->OutSec->getPhdrFlags())
         ->add(In<ELFT>::EhFrameHdr->OutSec);
 
@@ -1411,7 +1439,6 @@ template <class ELFT> void Writer<ELFT>::fixSectionAlignments() {
   }
 }
 
-template <class ELFT>
 bool elf::allocateHeaders(std::vector<PhdrEntry> &Phdrs,
                           ArrayRef<OutputSection *> OutputSections,
                           uint64_t Min) {
@@ -1421,7 +1448,7 @@ bool elf::allocateHeaders(std::vector<PhdrEntry> &Phdrs,
   if (FirstPTLoad == Phdrs.end())
     return false;
 
-  uint64_t HeaderSize = getHeaderSize<ELFT>();
+  uint64_t HeaderSize = getHeaderSize();
   if (HeaderSize > Min) {
     auto PhdrI =
         std::find_if(Phdrs.begin(), Phdrs.end(),
@@ -1438,7 +1465,7 @@ bool elf::allocateHeaders(std::vector<PhdrEntry> &Phdrs,
   Out::ElfHeader->Addr = Min;
   Out::ProgramHeaders->Addr = Min + Out::ElfHeader->Size;
 
-  if (Script<ELFT>::X->hasPhdrsCommands())
+  if (ScriptBase->hasPhdrsCommands())
     return true;
 
   if (FirstPTLoad->First)
@@ -1467,17 +1494,17 @@ template <class ELFT> void Writer<ELFT>::fixHeaders() {
     for (const auto &P : Config->SectionStartMap)
       Min = std::min(Min, P.second);
 
-  AllocateHeader = allocateHeaders<ELFT>(Phdrs, OutputSections, Min);
+  AllocateHeader = allocateHeaders(Phdrs, OutputSections, Min);
 }
 
 // Assign VAs (addresses at run-time) to output sections.
 template <class ELFT> void Writer<ELFT>::assignAddresses() {
   uintX_t VA = Config->ImageBase;
   if (AllocateHeader)
-    VA += getHeaderSize<ELFT>();
+    VA += getHeaderSize();
   uintX_t ThreadBssOffset = 0;
   for (OutputSection *Sec : OutputSections) {
-    uintX_t Alignment = Sec->Alignment;
+    uint32_t Alignment = Sec->Alignment;
     if (Sec->PageAlign)
       Alignment = std::max<uintX_t>(Alignment, Config->MaxPageSize);
 
@@ -1638,7 +1665,7 @@ static uint16_t getELFType() {
 // to each section. This function fixes some predefined
 // symbol values that depend on section address and size.
 template <class ELFT> void Writer<ELFT>::fixPredefinedSymbols() {
-  auto Set = [](DefinedSynthetic *S1, DefinedSynthetic *S2, OutputSection *Sec,
+  auto Set = [](DefinedRegular *S1, DefinedRegular *S2, OutputSection *Sec,
                 uint64_t Value) {
     if (S1) {
       S1->Section = Sec;
@@ -1848,19 +1875,6 @@ template void elf::writeResult<ELF32LE>();
 template void elf::writeResult<ELF32BE>();
 template void elf::writeResult<ELF64LE>();
 template void elf::writeResult<ELF64BE>();
-
-template bool elf::allocateHeaders<ELF32LE>(std::vector<PhdrEntry> &,
-                                            ArrayRef<OutputSection *>,
-                                            uint64_t);
-template bool elf::allocateHeaders<ELF32BE>(std::vector<PhdrEntry> &,
-                                            ArrayRef<OutputSection *>,
-                                            uint64_t);
-template bool elf::allocateHeaders<ELF64LE>(std::vector<PhdrEntry> &,
-                                            ArrayRef<OutputSection *>,
-                                            uint64_t);
-template bool elf::allocateHeaders<ELF64BE>(std::vector<PhdrEntry> &,
-                                            ArrayRef<OutputSection *>,
-                                            uint64_t);
 
 template bool elf::isRelroSection<ELF32LE>(const OutputSection *);
 template bool elf::isRelroSection<ELF32BE>(const OutputSection *);

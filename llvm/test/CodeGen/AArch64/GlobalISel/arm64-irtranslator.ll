@@ -1056,6 +1056,17 @@ define void @float_comparison(float* %a.addr, float* %b.addr, i1* %bool.addr) {
   ret void
 }
 
+; CHECK-LABEL: name: trivial_float_comparison
+; CHECK: [[R1:%[0-9]+]](s1) = G_CONSTANT i1 false
+; CHECK: [[R2:%[0-9]+]](s1) = G_CONSTANT i1 true
+; CHECK: G_ADD [[R1]], [[R2]]
+define i1 @trivial_float_comparison(double %a, double %b) {
+  %r1 = fcmp false double %a, %b
+  %r2 = fcmp true double %a, %b
+  %sum = add i1 %r1, %r2
+  ret i1 %sum
+}
+
 @var = global i32 0
 
 define i32* @test_global() {
@@ -1250,4 +1261,134 @@ define double @test_fneg_f64(double %x) {
 ; CHECK: %d0 = COPY [[RES]](s64)
   %neg = fsub double -0.000000e+00, %x
   ret double %neg
+}
+
+define void @test_trivial_inlineasm() {
+; CHECK-LABEL: name: test_trivial_inlineasm
+; CHECK: INLINEASM $wibble, 1
+; CHECK: INLINEASM $wibble, 0
+  call void asm sideeffect "wibble", ""()
+  call void asm "wibble", ""()
+  ret void
+}
+
+define <2 x i32> @test_insertelement(<2 x i32> %vec, i32 %elt, i32 %idx){
+; CHECK-LABEL: name: test_insertelement
+; CHECK: [[VEC:%[0-9]+]](<2 x s32>) = COPY %d0
+; CHECK: [[ELT:%[0-9]+]](s32) = COPY %w0
+; CHECK: [[IDX:%[0-9]+]](s32) = COPY %w1
+; CHECK: [[RES:%[0-9]+]](<2 x s32>) = G_INSERT_VECTOR_ELT [[VEC]], [[ELT]](s32), [[IDX]](s32)
+; CHECK: %d0 = COPY [[RES]](<2 x s32>)
+  %res = insertelement <2 x i32> %vec, i32 %elt, i32 %idx
+  ret <2 x i32> %res
+}
+
+define i32 @test_extractelement(<2 x i32> %vec, i32 %idx) {
+; CHECK-LABEL: name: test_extractelement
+; CHECK: [[VEC:%[0-9]+]](<2 x s32>) = COPY %d0
+; CHECK: [[IDX:%[0-9]+]](s32) = COPY %w0
+; CHECK: [[RES:%[0-9]+]](s32) = G_EXTRACT_VECTOR_ELT [[VEC]](<2 x s32>), [[IDX]](s32)
+; CHECK: %w0 = COPY [[RES]](s32)
+  %res = extractelement <2 x i32> %vec, i32 %idx
+  ret i32 %res
+}
+
+define i32 @test_singleelementvector(i32 %elt){
+; CHECK-LABEL: name: test_singleelementvector
+; CHECK: [[ELT:%[0-9]+]](s32) = COPY %w0
+; CHECK-NOT: G_INSERT_VECTOR_ELT
+; CHECK-NOT: G_EXTRACT_VECTOR_ELT
+; CHECK: %w0 = COPY [[ELT]](s32)
+  %vec = insertelement <1 x i32> undef, i32 %elt, i32 0
+  %res = extractelement <1 x i32> %vec, i32 0
+  ret i32 %res
+}
+
+define <2 x i32> @test_constantaggzerovector_v2i32() {
+; CHECK-LABEL: name: test_constantaggzerovector_v2i32
+; CHECK: [[ZERO:%[0-9]+]](s32) = G_CONSTANT i32 0
+; CHECK: [[VEC:%[0-9]+]](<2 x s32>) = G_MERGE_VALUES [[ZERO]](s32), [[ZERO]](s32)
+; CHECK: %d0 = COPY [[VEC]](<2 x s32>)
+  ret <2 x i32> zeroinitializer
+}
+
+define <2 x float> @test_constantaggzerovector_v2f32() {
+; CHECK-LABEL: name: test_constantaggzerovector_v2f32
+; CHECK: [[ZERO:%[0-9]+]](s32) = G_FCONSTANT float 0.000000e+00
+; CHECK: [[VEC:%[0-9]+]](<2 x s32>) = G_MERGE_VALUES [[ZERO]](s32), [[ZERO]](s32)
+; CHECK: %d0 = COPY [[VEC]](<2 x s32>)
+  ret <2 x float> zeroinitializer
+}
+
+define i32 @test_constantaggzerovector_v3i32() {
+; CHECK-LABEL: name: test_constantaggzerovector_v3i32
+; CHECK: [[ZERO:%[0-9]+]](s32) = G_CONSTANT i32 0
+; CHECK: [[VEC:%[0-9]+]](<3 x s32>) = G_MERGE_VALUES [[ZERO]](s32), [[ZERO]](s32), [[ZERO]](s32)
+; CHECK: G_EXTRACT_VECTOR_ELT [[VEC]](<3 x s32>)
+  %elt = extractelement <3 x i32> zeroinitializer, i32 1
+  ret i32 %elt
+}
+
+define <2 x i32> @test_constantdatavector_v2i32() {
+; CHECK-LABEL: name: test_constantdatavector_v2i32
+; CHECK: [[C1:%[0-9]+]](s32) = G_CONSTANT i32 1
+; CHECK: [[C2:%[0-9]+]](s32) = G_CONSTANT i32 2
+; CHECK: [[VEC:%[0-9]+]](<2 x s32>) = G_MERGE_VALUES [[C1]](s32), [[C2]](s32)
+; CHECK: %d0 = COPY [[VEC]](<2 x s32>)
+  ret <2 x i32> <i32 1, i32 2>
+}
+
+define i32 @test_constantdatavector_v3i32() {
+; CHECK-LABEL: name: test_constantdatavector_v3i32
+; CHECK: [[C1:%[0-9]+]](s32) = G_CONSTANT i32 1
+; CHECK: [[C2:%[0-9]+]](s32) = G_CONSTANT i32 2
+; CHECK: [[C3:%[0-9]+]](s32) = G_CONSTANT i32 3
+; CHECK: [[VEC:%[0-9]+]](<3 x s32>) = G_MERGE_VALUES [[C1]](s32), [[C2]](s32), [[C3]](s32)
+; CHECK: G_EXTRACT_VECTOR_ELT [[VEC]](<3 x s32>)
+  %elt = extractelement <3 x i32> <i32 1, i32 2, i32 3>, i32 1
+  ret i32 %elt
+}
+
+define <4 x i32> @test_constantdatavector_v4i32() {
+; CHECK-LABEL: name: test_constantdatavector_v4i32
+; CHECK: [[C1:%[0-9]+]](s32) = G_CONSTANT i32 1
+; CHECK: [[C2:%[0-9]+]](s32) = G_CONSTANT i32 2
+; CHECK: [[C3:%[0-9]+]](s32) = G_CONSTANT i32 3
+; CHECK: [[C4:%[0-9]+]](s32) = G_CONSTANT i32 4
+; CHECK: [[VEC:%[0-9]+]](<4 x s32>) = G_MERGE_VALUES [[C1]](s32), [[C2]](s32), [[C3]](s32), [[C4]](s32)
+; CHECK: %q0 = COPY [[VEC]](<4 x s32>)
+  ret <4 x i32> <i32 1, i32 2, i32 3, i32 4>
+}
+
+define <2 x double> @test_constantdatavector_v2f64() {
+; CHECK-LABEL: name: test_constantdatavector_v2f64
+; CHECK: [[FC1:%[0-9]+]](s64) = G_FCONSTANT double 1.000000e+00
+; CHECK: [[FC2:%[0-9]+]](s64) = G_FCONSTANT double 2.000000e+00
+; CHECK: [[VEC:%[0-9]+]](<2 x s64>) = G_MERGE_VALUES [[FC1]](s64), [[FC2]](s64)
+; CHECK: %q0 = COPY [[VEC]](<2 x s64>)
+  ret <2 x double> <double 1.0, double 2.0>
+}
+
+define i32 @test_constantaggzerovector_v1s32(i32 %arg){
+; CHECK-LABEL: name: test_constantaggzerovector_v1s32
+; CHECK: [[ARG:%[0-9]+]](s32) = COPY %w0
+; CHECK: [[C0:%[0-9]+]](s32) = G_CONSTANT i32 0
+; CHECK-NOT: G_MERGE_VALUES
+; CHECK: G_ADD [[ARG]], [[C0]]
+  %vec = insertelement <1 x i32> undef, i32 %arg, i32 0
+  %add = add <1 x i32> %vec, zeroinitializer
+  %res = extractelement <1 x i32> %add, i32 0
+  ret i32 %res
+}
+
+define i32 @test_constantdatavector_v1s32(i32 %arg){
+; CHECK-LABEL: name: test_constantdatavector_v1s32
+; CHECK: [[ARG:%[0-9]+]](s32) = COPY %w0
+; CHECK: [[C1:%[0-9]+]](s32) = G_CONSTANT i32 1
+; CHECK-NOT: G_MERGE_VALUES
+; CHECK: G_ADD [[ARG]], [[C1]]
+  %vec = insertelement <1 x i32> undef, i32 %arg, i32 0
+  %add = add <1 x i32> %vec, <i32 1>
+  %res = extractelement <1 x i32> %add, i32 0
+  ret i32 %res
 }

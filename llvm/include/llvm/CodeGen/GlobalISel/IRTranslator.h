@@ -143,6 +143,8 @@ private:
   bool translateKnownIntrinsic(const CallInst &CI, Intrinsic::ID ID,
                                MachineIRBuilder &MIRBuilder);
 
+  bool translateInlineAsm(const CallInst &CI, MachineIRBuilder &MIRBuilder);
+
   /// Translate call instruction.
   /// \pre \p U is a call instruction.
   bool translateCall(const User &U, MachineIRBuilder &MIRBuilder);
@@ -302,6 +304,10 @@ private:
 
   bool translateVAArg(const User &U, MachineIRBuilder &MIRBuilder);
 
+  bool translateInsertElement(const User &U, MachineIRBuilder &MIRBuilder);
+
+  bool translateExtractElement(const User &U, MachineIRBuilder &MIRBuilder);
+
   // Stubs to keep the compiler happy while we implement the rest of the
   // translation.
   bool translateResume(const User &U, MachineIRBuilder &MIRBuilder) {
@@ -338,12 +344,6 @@ private:
     return false;
   }
   bool translateUserOp2(const User &U, MachineIRBuilder &MIRBuilder) {
-    return false;
-  }
-  bool translateExtractElement(const User &U, MachineIRBuilder &MIRBuilder) {
-    return false;
-  }
-  bool translateInsertElement(const User &U, MachineIRBuilder &MIRBuilder) {
     return false;
   }
   bool translateShuffleVector(const User &U, MachineIRBuilder &MIRBuilder) {

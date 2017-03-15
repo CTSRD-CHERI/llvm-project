@@ -676,6 +676,8 @@ private:
     case tok::comma:
       if (Contexts.back().InCtorInitializer)
         Tok->Type = TT_CtorInitializerComma;
+      else if (Contexts.back().InInheritanceList)
+        Tok->Type = TT_InheritanceComma;
       else if (Contexts.back().FirstStartOfName &&
                (Contexts.size() == 1 || Line.startsWith(tok::kw_for))) {
         Contexts.back().FirstStartOfName->PartOfMultiVariableDeclStmt = true;
@@ -945,6 +947,7 @@ private:
     bool CanBeExpression = true;
     bool InTemplateArgument = false;
     bool InCtorInitializer = false;
+    bool InInheritanceList = false;
     bool CaretFound = false;
     bool IsForEachMacro = false;
   };
@@ -1004,6 +1007,9 @@ private:
                Current.Previous->is(TT_CtorInitializerColon)) {
       Contexts.back().IsExpression = true;
       Contexts.back().InCtorInitializer = true;
+    } else if (Current.Previous &&
+               Current.Previous->is(TT_InheritanceColon)) {
+      Contexts.back().InInheritanceList = true;
     } else if (Current.isOneOf(tok::r_paren, tok::greater, tok::comma)) {
       for (FormatToken *Previous = Current.Previous;
            Previous && Previous->isOneOf(tok::star, tok::amp);
@@ -1023,6 +1029,23 @@ private:
     if (!Current.is(TT_Unknown))
       // The token type is already known.
       return;
+
+    if (Style.Language == FormatStyle::LK_JavaScript) {
+      if (Current.is(tok::exclaim)) {
+        if (Current.Previous &&
+            (Current.Previous->isOneOf(tok::identifier, tok::r_paren,
+                                       tok::r_square, tok::r_brace) ||
+             Current.Previous->Tok.isLiteral())) {
+          Current.Type = TT_JsNonNullAssertion;
+          return;
+        }
+        if (Current.Next &&
+            Current.Next->isOneOf(TT_BinaryOperator, Keywords.kw_as)) {
+          Current.Type = TT_JsNonNullAssertion;
+          return;
+        }
+      }
+    }
 
     // Line.MightBeFunctionDecl can only be true after the parentheses of a
     // function declaration have been found. In this case, 'Current' is a
@@ -1953,7 +1976,7 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
   if (Right.is(TT_LambdaArrow))
     return 110;
   if (Left.is(tok::equal) && Right.is(tok::l_brace))
-    return 150;
+    return 160;
   if (Left.is(TT_CastRParen))
     return 100;
   if (Left.is(tok::coloncolon) ||
@@ -2278,12 +2301,9 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
       // locations that should have whitespace following are identified by the
       // above set of follower tokens.
       return false;
-    // Postfix non-null assertion operator, as in `foo!.bar()`.
-    if (Right.is(tok::exclaim) && (Left.isOneOf(tok::identifier, tok::r_paren,
-                                                tok::r_square, tok::r_brace) ||
-                                   Left.Tok.isLiteral()))
+    if (Right.is(TT_JsNonNullAssertion))
       return false;
-    if (Left.is(tok::exclaim) && Right.is(Keywords.kw_as))
+    if (Left.is(TT_JsNonNullAssertion) && Right.is(Keywords.kw_as))
       return true; // "x! as string"
   } else if (Style.Language == FormatStyle::LK_Java) {
     if (Left.is(tok::r_square) && Right.is(tok::l_brace))
@@ -2474,6 +2494,10 @@ bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
       Style.BreakConstructorInitializersBeforeComma &&
       !Style.ConstructorInitializerAllOnOneLineOrOnePerLine)
     return true;
+  // Break only if we have multiple inheritance.
+  if (Style.BreakBeforeInheritanceComma &&
+      Right.is(TT_InheritanceComma))
+   return true;
   if (Right.is(tok::string_literal) && Right.TokenText.startswith("R\""))
     // Raw string literals are special wrt. line breaks. The author has made a
     // deliberate choice and might have aligned the contents of the string
@@ -2516,11 +2540,10 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
       return true;
   } else if (Style.Language == FormatStyle::LK_JavaScript) {
     const FormatToken *NonComment = Right.getPreviousNonComment();
-    if (Left.isOneOf(tok::kw_return, tok::kw_continue, tok::kw_break,
-                     tok::kw_throw) ||
-        (NonComment &&
-         NonComment->isOneOf(tok::kw_return, tok::kw_continue, tok::kw_break,
-                             tok::kw_throw)))
+    if (NonComment &&
+        NonComment->isOneOf(tok::kw_return, tok::kw_continue, tok::kw_break,
+                            tok::kw_throw, Keywords.kw_interface,
+                            Keywords.kw_type))
       return false; // Otherwise a semicolon is inserted.
     if (Left.is(TT_JsFatArrow) && Right.is(tok::l_brace))
       return false;
@@ -2535,6 +2558,8 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
     if (Right.is(Keywords.kw_as))
       return false; // must not break before as in 'x as type' casts
     if (Left.is(Keywords.kw_as))
+      return true;
+    if (Left.is(TT_JsNonNullAssertion))
       return true;
     if (Left.is(Keywords.kw_declare) &&
         Right.isOneOf(Keywords.kw_module, tok::kw_namespace,
@@ -2652,6 +2677,10 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
     return false;
   if (Right.is(TT_CtorInitializerComma) &&
       Style.BreakConstructorInitializersBeforeComma)
+    return true;
+  if (Left.is(TT_InheritanceComma) && Style.BreakBeforeInheritanceComma)
+    return false;
+  if (Right.is(TT_InheritanceComma) && Style.BreakBeforeInheritanceComma)
     return true;
   if ((Left.is(tok::greater) && Right.is(tok::greater)) ||
       (Left.is(tok::less) && Right.is(tok::less)))

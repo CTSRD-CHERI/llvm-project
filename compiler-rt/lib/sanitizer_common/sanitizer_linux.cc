@@ -1292,7 +1292,9 @@ bool IsHandledDeadlySignal(int signum) {
     return true;
   if (common_flags()->handle_sigfpe && signum == SIGFPE)
     return true;
-  return (signum == SIGSEGV || signum == SIGBUS) && common_flags()->handle_segv;
+  if (common_flags()->handle_segv && signum == SIGSEGV)
+    return true;
+  return common_flags()->handle_sigbus && signum == SIGBUS;
 }
 
 #if !SANITIZER_GO
@@ -1459,6 +1461,21 @@ void MaybeReexec() {
 }
 
 void PrintModuleMap() { }
+
+void CheckNoDeepBind(const char *filename, int flag) {
+#ifdef RTLD_DEEPBIND
+  if (flag & RTLD_DEEPBIND) {
+    Report(
+        "You are trying to dlopen a %s shared library with RTLD_DEEPBIND flag"
+        " which is incompatibe with sanitizer runtime "
+        "(see https://github.com/google/sanitizers/issues/611 for details"
+        "). If you want to run %s library under sanitizers please remove "
+        "RTLD_DEEPBIND from dlopen flags.\n",
+        filename, filename);
+    Die();
+  }
+#endif
+}
 
 uptr FindAvailableMemoryRange(uptr size, uptr alignment, uptr left_padding) {
   UNREACHABLE("FindAvailableMemoryRange is not available");

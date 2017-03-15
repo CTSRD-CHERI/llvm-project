@@ -22,6 +22,7 @@
 #include "lldb/lldb-private.h"
 
 #include "llvm/ADT/Triple.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/FormatVariadic.h"
 
 namespace lldb_private {
@@ -46,17 +47,6 @@ namespace lldb_private {
 //----------------------------------------------------------------------
 class FileSpec {
 public:
-  typedef enum FileType {
-    eFileTypeInvalid = -1,
-    eFileTypeUnknown = 0,
-    eFileTypeDirectory,
-    eFileTypePipe,
-    eFileTypeRegular,
-    eFileTypeSocket,
-    eFileTypeSymbolicLink,
-    eFileTypeOther
-  } FileType;
-
   enum PathSyntax {
     ePathSyntaxPosix,
     ePathSyntaxWindows,
@@ -455,8 +445,6 @@ public:
   //------------------------------------------------------------------
   ConstString GetFileNameStrippingExtension() const;
 
-  FileType GetFileType() const;
-
   //------------------------------------------------------------------
   /// Return the current permissions of the path.
   ///
@@ -470,20 +458,6 @@ public:
   ///     bits from the File::Permissions enumeration.
   //------------------------------------------------------------------
   uint32_t GetPermissions() const;
-
-  bool IsDirectory() const {
-    return GetFileType() == FileSpec::eFileTypeDirectory;
-  }
-
-  bool IsPipe() const { return GetFileType() == FileSpec::eFileTypePipe; }
-
-  bool IsRegularFile() const {
-    return GetFileType() == FileSpec::eFileTypeRegular;
-  }
-
-  bool IsSocket() const { return GetFileType() == FileSpec::eFileTypeSocket; }
-
-  bool IsSymbolicLink() const;
 
   //------------------------------------------------------------------
   /// Get the memory cost of this object.
@@ -590,27 +564,21 @@ public:
                                     // directory
     eEnumerateDirectoryResultEnter, // Recurse into the current entry if it is a
                                     // directory or symlink, or next if not
-    eEnumerateDirectoryResultExit,  // Exit from the current directory at the
-                                    // current level.
     eEnumerateDirectoryResultQuit   // Stop directory enumerations at any level
   };
 
   typedef EnumerateDirectoryResult (*EnumerateDirectoryCallbackType)(
-      void *baton, FileType file_type, const FileSpec &spec);
+      void *baton, llvm::sys::fs::file_type file_type, const FileSpec &spec);
 
-  static EnumerateDirectoryResult
-  EnumerateDirectory(llvm::StringRef dir_path, bool find_directories,
-                     bool find_files, bool find_other,
-                     EnumerateDirectoryCallbackType callback,
-                     void *callback_baton);
+  static void EnumerateDirectory(llvm::StringRef dir_path,
+                                 bool find_directories, bool find_files,
+                                 bool find_other,
+                                 EnumerateDirectoryCallbackType callback,
+                                 void *callback_baton);
 
-  typedef std::function<EnumerateDirectoryResult(FileType file_type,
-                                                 const FileSpec &spec)>
+  typedef std::function<EnumerateDirectoryResult(
+      llvm::sys::fs::file_type file_type, const FileSpec &spec)>
       DirectoryCallback;
-
-  static EnumerateDirectoryResult
-  ForEachItemInDirectory(llvm::StringRef dir_path,
-                         DirectoryCallback const &callback);
 
 protected:
   //------------------------------------------------------------------
