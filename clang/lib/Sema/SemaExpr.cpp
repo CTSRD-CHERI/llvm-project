@@ -7652,8 +7652,11 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
 
     // int -> T*
     if (RHSType->isIntegerType()) {
-      // Implicit casts from int -> memory capabilities are not allowed
-      if (LHSPointer->isMemoryCapability()) 
+      // Implicit casts from int -> memory capabilities are not allowed (except for null)
+      const Expr::NullPointerConstantKind RHSNullKind =
+          RHS.get()->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNull);
+      bool RHSIsNull = RHSNullKind != Expr::NPCK_NotNull;
+      if (LHSPointer->isMemoryCapability() && !RHSIsNull)
         return Incompatible;
       Kind = CK_IntegralToPointer; // FIXME: null?
       return IntToPointer;
@@ -7794,8 +7797,11 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
 
     // T* -> int
     if (LHSType->isIntegerType()) {
-      // Implicit casts from memory capabilities -> int are not allowed
-      if (RHSPointer->isMemoryCapability())
+      // Implicit casts from memory capabilities -> int are not allowed (except for null)
+      const Expr::NullPointerConstantKind RHSNullKind =
+          RHS.get()->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNull);
+      bool RHSIsNull = RHSNullKind != Expr::NPCK_NotNull;
+      if (RHSPointer->isMemoryCapability() && !RHSIsNull)
         return Incompatible;
       Kind = CK_PointerToIntegral;
       return PointerToInt;
