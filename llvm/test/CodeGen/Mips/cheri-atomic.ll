@@ -98,10 +98,11 @@ entry:
 ; CHECK: cld $[[OLDVAL:[0-9]+]], $zero, 0($c{{.*}})
 ; CHECK: csetbounds $[[CR:c[0-9]+]], $[[CR:c[0-9]+]], ${{.*}}
 ; CHECK: [[BB0:(\$|\.L)[A-Z_0-9]+]]:
-; CHECK: clld    $[[DST:[0-9]+]], $[[CR]]
-; CHECK: bne     $[[DST]], $[[OLDVAL]], [[BB1:(\$|\.L)[A-Z_0-9]+]]
-; CHECK: cscd    $[[DST]], $4, $[[CR]]
-; CHECK: beqz    $[[DST]], [[BB0]]
+; CHECK:      clld    $[[DST:[0-9]+]], $[[CR]]
+; CHECK-NEXT: bne     $[[DST]], $[[OLDVAL]], [[BB1:(\$|\.L)[A-Z_0-9]+]]
+; CHECK-NEXT: nop
+; CHECK:      cscd    $1, $4, $[[CR]]
+; CHECK:      beqz    $1, [[BB0]]
 
   %0 = load i64, i64 addrspace(200)* %e, align 8
   %1 = cmpxchg i64 addrspace(200)* @d, i64 %0, i64 %n seq_cst seq_cst
@@ -127,8 +128,8 @@ entry:
 ; CHECK: [[BB0:(\$|\.L)[A-Z_0-9]+]]:
 ; CHECK: cllw    $[[DST:[0-9]+]], $[[CR]]
 ; CHECK: bne     $[[DST]], $[[OLDVAL]], [[BB1:(\$|\.L)[A-Z_0-9]+]]
-; CHECK: cscw    $[[DST]], $4, $[[CR]]
-; CHECK: beqz    $[[DST]], [[BB0]]
+; CHECK: cscw    $1, $4, $[[CR]]
+; CHECK: beqz    $1, [[BB0]]
   %0 = load i32, i32 addrspace(200)* %e, align 4
   %1 = cmpxchg i32 addrspace(200)* @w, i32 %0, i32 %n seq_cst seq_cst
   %2 = extractvalue { i32, i1 } %1, 1
@@ -152,8 +153,8 @@ define i32 @swaph(i16 addrspace(200)* nocapture %e, i16 signext %n) #0 {
 ; CHECK: [[BB0:(\$|\.L)[A-Z_0-9]+]]:
 ; CHECK: cllh    $[[DST:[0-9]+]], $[[CR]]
 ; CHECK: bne     $[[DST]], $[[OLDVAL]], [[BB1:(\$|\.L)[A-Z_0-9]+]]
-; CHECK: csch    $[[DST]], $4, $[[CR]]
-; CHECK: beqz    $[[DST]], [[BB0]]
+; CHECK: csch    $1, $4, $[[CR]]
+; CHECK: beqz    $1, [[BB0]]
 entry:
   %0 = load i16, i16 addrspace(200)* %e, align 2
   %1 = cmpxchg i16 addrspace(200)* @h, i16 %0, i16 %n seq_cst seq_cst
@@ -179,8 +180,8 @@ entry:
 ; CHECK: [[BB0:(\$|\.L)[A-Z_0-9]+]]:
 ; CHECK: cllb    $[[DST:[0-9]+]], $[[CR]]
 ; CHECK: bne     $[[DST]], $[[OLDVAL]], [[BB1:(\$|\.L)[A-Z_0-9]+]]
-; CHECK: cscb    $[[DST]], $4, $[[CR]]
-; CHECK: beqz    $[[DST]], [[BB0]]
+; CHECK: cscb    $1, $4, $[[CR]]
+; CHECK: beqz    $1, [[BB0]]
   %0 = load i8, i8 addrspace(200)* %e, align 1
   %1 = cmpxchg i8 addrspace(200)* @b, i8 %0, i8 %n seq_cst seq_cst
   %2 = extractvalue { i8, i1 } %1, 1
