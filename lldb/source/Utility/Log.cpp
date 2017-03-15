@@ -9,16 +9,13 @@
 
 // Project includes
 #include "lldb/Utility/Log.h"
-
-#include "lldb/Utility/NameMatches.h"
-#include "lldb/Utility/StreamString.h"
 #include "lldb/Utility/VASPrintf.h"
+#include "lldb/lldb-types.h"
 
 // Other libraries and framework includes
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/Chrono.h"
-#include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/Threading.h"
@@ -33,30 +30,20 @@
 #include <mutex>
 #include <string>
 
-using namespace lldb;
 using namespace lldb_private;
 
-namespace {
-  struct ChannelAndLog {
-    Log log;
-    Log::Channel &channel;
+llvm::ManagedStatic<Log::ChannelMap> Log::g_channel_map;
 
-    ChannelAndLog(Log::Channel &channel) : channel(channel) {}
-  };
-  typedef llvm::StringMap<ChannelAndLog> ChannelMap;
+void Log::ListCategories(llvm::raw_ostream &stream, const ChannelMap::value_type &entry) {
+  stream << llvm::formatv("Logging categories for '{0}':\n", entry.first());
+  stream << "  all - all available logging categories\n";
+  stream << "  default - default set of logging categories\n";
+  for (const auto &category : entry.second.m_channel.categories)
+    stream << llvm::formatv("  {0} - {1}\n", category.name,
+                            category.description);
 }
 
-static llvm::ManagedStatic<ChannelMap> g_channel_map;
-
-static void ListCategories(Stream &stream, const ChannelMap::value_type &entry) {
-  stream.Format("Logging categories for '{0}':\n", entry.first());
-  stream.Format("  all - all available logging categories\n");
-  stream.Format("  default - default set of logging categories\n");
-  for (const auto &category : entry.second.channel.categories)
-    stream.Format("  {0} - {1}\n", category.name, category.description);
-}
-
-static uint32_t GetFlags(Stream &stream, const ChannelMap::value_type &entry,
+uint32_t Log::GetFlags(llvm::raw_ostream &stream, const ChannelMap::value_type &entry,
                          llvm::ArrayRef<const char *> categories) {
   bool list_categories = false;
   uint32_t flags = 0;
@@ -66,17 +53,18 @@ static uint32_t GetFlags(Stream &stream, const ChannelMap::value_type &entry,
       continue;
     }
     if (llvm::StringRef("default").equals_lower(category)) {
-      flags |= entry.second.channel.default_flags;
+      flags |= entry.second.m_channel.default_flags;
       continue;
     }
     auto cat = llvm::find_if(
-        entry.second.channel.categories,
+        entry.second.m_channel.categories,
         [&](const Log::Category &c) { return c.name.equals_lower(category); });
-    if (cat != entry.second.channel.categories.end()) {
+    if (cat != entry.second.m_channel.categories.end()) {
       flags |= cat->flag;
       continue;
     }
-    stream.Format("error: unrecognized log category '{0}'\n", category);
+    stream << llvm::formatv("error: unrecognized log category '{0}'\n",
+                            category);
     list_categories = true;
   }
   if (list_categories)
@@ -84,42 +72,35 @@ static uint32_t GetFlags(Stream &stream, const ChannelMap::value_type &entry,
   return flags;
 }
 
-void Log::Channel::Enable(Log &log,
-                          const std::shared_ptr<llvm::raw_ostream> &stream_sp,
-                          uint32_t options, uint32_t flags) {
-  log.GetMask().Set(flags);
-  if (log.GetMask().Get()) {
-    log.GetOptions().Reset(options);
-    log.SetStream(stream_sp);
-    log_ptr.store(&log, std::memory_order_release);
+void Log::Enable(const std::shared_ptr<llvm::raw_ostream> &stream_sp,
+                 uint32_t options, uint32_t flags) {
+  llvm::sys::ScopedWriter lock(m_mutex);
+
+  uint32_t mask = m_mask.fetch_or(flags, std::memory_order_relaxed);
+  if (mask | flags) {
+    m_options.store(options, std::memory_order_relaxed);
+    m_stream_sp = stream_sp;
+    m_channel.log_ptr.store(this, std::memory_order_relaxed);
   }
 }
 
-void Log::Channel::Disable(uint32_t flags) {
-  Log *log = log_ptr.load(std::memory_order_acquire);
-  if (!log)
-    return;
-  log->GetMask().Clear(flags);
-  if (!log->GetMask().Get()) {
-    log->SetStream(nullptr);
-    log_ptr.store(nullptr, std::memory_order_release);
+void Log::Disable(uint32_t flags) {
+  llvm::sys::ScopedWriter lock(m_mutex);
+
+  uint32_t mask = m_mask.fetch_and(~flags, std::memory_order_relaxed);
+  if (!(mask & ~flags)) {
+    m_stream_sp.reset();
+    m_channel.log_ptr.store(nullptr, std::memory_order_relaxed);
   }
 }
 
-Log::Log() : m_stream_sp(), m_options(0), m_mask_bits(0) {}
+const Flags Log::GetOptions() const {
+  return m_options.load(std::memory_order_relaxed);
+}
 
-Log::Log(const std::shared_ptr<llvm::raw_ostream> &stream_sp)
-    : m_stream_sp(stream_sp), m_options(0), m_mask_bits(0) {}
-
-Log::~Log() = default;
-
-Flags &Log::GetOptions() { return m_options; }
-
-const Flags &Log::GetOptions() const { return m_options; }
-
-Flags &Log::GetMask() { return m_mask_bits; }
-
-const Flags &Log::GetMask() const { return m_mask_bits; }
+const Flags Log::GetMask() const {
+  return m_mask.load(std::memory_order_relaxed);
+}
 
 void Log::PutCString(const char *cstr) { Printf("%s", cstr); }
 void Log::PutString(llvm::StringRef str) { PutCString(str.str().c_str()); }
@@ -153,19 +134,6 @@ void Log::VAPrintf(const char *format, va_list args) {
 }
 
 //----------------------------------------------------------------------
-// Log only if all of the bits are set
-//----------------------------------------------------------------------
-void Log::LogIf(uint32_t bits, const char *format, ...) {
-  if (!m_options.AllSet(bits))
-    return;
-
-  va_list args;
-  va_start(args, format);
-  VAPrintf(format, args);
-  va_end(args);
-}
-
-//----------------------------------------------------------------------
 // Printing of errors that are not fatal.
 //----------------------------------------------------------------------
 void Log::Error(const char *format, ...) {
@@ -187,7 +155,7 @@ void Log::VAError(const char *format, va_list args) {
 // enabled.
 //----------------------------------------------------------------------
 void Log::Verbose(const char *format, ...) {
-  if (!m_options.Test(LLDB_LOG_OPTION_VERBOSE))
+  if (!GetVerbose())
     return;
 
   va_list args;
@@ -218,99 +186,103 @@ void Log::Register(llvm::StringRef name, Channel &channel) {
 void Log::Unregister(llvm::StringRef name) {
   auto iter = g_channel_map->find(name);
   assert(iter != g_channel_map->end());
-  iter->second.channel.Disable(UINT32_MAX);
+  iter->second.Disable(UINT32_MAX);
   g_channel_map->erase(iter);
 }
 
 bool Log::EnableLogChannel(
     const std::shared_ptr<llvm::raw_ostream> &log_stream_sp,
     uint32_t log_options, llvm::StringRef channel,
-    llvm::ArrayRef<const char *> categories, Stream &error_stream) {
+    llvm::ArrayRef<const char *> categories, llvm::raw_ostream &error_stream) {
   auto iter = g_channel_map->find(channel);
   if (iter == g_channel_map->end()) {
-    error_stream.Format("Invalid log channel '{0}'.\n", channel);
+    error_stream << llvm::formatv("Invalid log channel '{0}'.\n", channel);
     return false;
   }
   uint32_t flags = categories.empty()
-                       ? iter->second.channel.default_flags
+                       ? iter->second.m_channel.default_flags
                        : GetFlags(error_stream, *iter, categories);
-  iter->second.channel.Enable(iter->second.log, log_stream_sp, log_options,
-                              flags);
+  iter->second.Enable(log_stream_sp, log_options, flags);
   return true;
 }
 
 bool Log::DisableLogChannel(llvm::StringRef channel,
                             llvm::ArrayRef<const char *> categories,
-                            Stream &error_stream) {
+                            llvm::raw_ostream &error_stream) {
   auto iter = g_channel_map->find(channel);
   if (iter == g_channel_map->end()) {
-    error_stream.Format("Invalid log channel '{0}'.\n", channel);
+    error_stream << llvm::formatv("Invalid log channel '{0}'.\n", channel);
     return false;
   }
   uint32_t flags = categories.empty()
                        ? UINT32_MAX
                        : GetFlags(error_stream, *iter, categories);
-  iter->second.channel.Disable(flags);
+  iter->second.Disable(flags);
   return true;
 }
 
-bool Log::ListChannelCategories(llvm::StringRef channel, Stream &stream) {
+bool Log::ListChannelCategories(llvm::StringRef channel,
+                                llvm::raw_ostream &stream) {
   auto ch = g_channel_map->find(channel);
   if (ch == g_channel_map->end()) {
-    stream.Format("Invalid log channel '{0}'.\n", channel);
+    stream << llvm::formatv("Invalid log channel '{0}'.\n", channel);
     return false;
   }
   ListCategories(stream, *ch);
   return true;
 }
 
-void Log::DisableAllLogChannels(Stream *feedback_strm) {
+void Log::DisableAllLogChannels() {
   for (auto &entry : *g_channel_map)
-    entry.second.channel.Disable(UINT32_MAX);
+    entry.second.Disable(UINT32_MAX);
 }
 
-void Log::ListAllLogChannels(Stream *strm) {
+void Log::ListAllLogChannels(llvm::raw_ostream &stream) {
   if (g_channel_map->empty()) {
-    strm->PutCString("No logging channels are currently registered.\n");
+    stream << "No logging channels are currently registered.\n";
     return;
   }
 
   for (const auto &channel : *g_channel_map)
-    ListCategories(*strm, channel);
+    ListCategories(stream, channel);
 }
-bool Log::GetVerbose() const { return m_options.Test(LLDB_LOG_OPTION_VERBOSE); }
+
+bool Log::GetVerbose() const {
+  return m_options.load(std::memory_order_relaxed) & LLDB_LOG_OPTION_VERBOSE;
+}
 
 void Log::WriteHeader(llvm::raw_ostream &OS, llvm::StringRef file,
                       llvm::StringRef function) {
+  Flags options = GetOptions();
   static uint32_t g_sequence_id = 0;
   // Add a sequence ID if requested
-  if (m_options.Test(LLDB_LOG_OPTION_PREPEND_SEQUENCE))
+  if (options.Test(LLDB_LOG_OPTION_PREPEND_SEQUENCE))
     OS << ++g_sequence_id << " ";
 
   // Timestamp if requested
-  if (m_options.Test(LLDB_LOG_OPTION_PREPEND_TIMESTAMP)) {
+  if (options.Test(LLDB_LOG_OPTION_PREPEND_TIMESTAMP)) {
     auto now = std::chrono::duration<double>(
         std::chrono::system_clock::now().time_since_epoch());
     OS << llvm::formatv("{0:f9} ", now.count());
   }
 
   // Add the process and thread if requested
-  if (m_options.Test(LLDB_LOG_OPTION_PREPEND_PROC_AND_THREAD))
+  if (options.Test(LLDB_LOG_OPTION_PREPEND_PROC_AND_THREAD))
     OS << llvm::formatv("[{0,0+4}/{1,0+4}] ", getpid(),
                         llvm::get_threadid());
 
   // Add the thread name if requested
-  if (m_options.Test(LLDB_LOG_OPTION_PREPEND_THREAD_NAME)) {
+  if (options.Test(LLDB_LOG_OPTION_PREPEND_THREAD_NAME)) {
     llvm::SmallString<32> thread_name;
     llvm::get_thread_name(thread_name);
     if (!thread_name.empty())
       OS << thread_name;
   }
 
-  if (m_options.Test(LLDB_LOG_OPTION_BACKTRACE))
+  if (options.Test(LLDB_LOG_OPTION_BACKTRACE))
     llvm::sys::PrintStackTrace(OS);
 
-  if (m_options.Test(LLDB_LOG_OPTION_PREPEND_FILE_FUNCTION) &&
+  if (options.Test(LLDB_LOG_OPTION_PREPEND_FILE_FUNCTION) &&
       (!file.empty() || !function.empty())) {
     file = llvm::sys::path::filename(file).take_front(40);
     function = function.take_front(40);
@@ -325,7 +297,8 @@ void Log::WriteMessage(const std::string &message) {
   if (!stream_sp)
     return;
 
-  if (m_options.Test(LLDB_LOG_OPTION_THREADSAFE)) {
+  Flags options = GetOptions();
+  if (options.Test(LLDB_LOG_OPTION_THREADSAFE)) {
     static std::recursive_mutex g_LogThreadedMutex;
     std::lock_guard<std::recursive_mutex> guard(g_LogThreadedMutex);
     *stream_sp << message;

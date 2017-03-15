@@ -926,7 +926,7 @@ entry:
 define void @bclri_d(<2 x i64> * %ptr) {
 entry:
 ; CHECK-LABEL: bclri_d:
-; CHECK: and.v
+; CHECK: bclri.d
   %a = load <2 x i64>, <2 x i64> * %ptr, align 16
   %r = call <2 x i64> @llvm.mips.bclri.d(<2 x i64> %a, i32 16)
   store <2 x i64> %r, <2 x i64> * %ptr, align 16
@@ -936,7 +936,7 @@ entry:
 define void @binsli_d(<2 x i64> * %ptr, <2 x i64> * %ptr2) {
 entry:
 ; CHECK-LABEL: binsli_d:
-; CHECK: bsel.v
+; CHECK: binsli.d
   %a = load <2 x i64>, <2 x i64> * %ptr, align 16
   %b = load <2 x i64>, <2 x i64> * %ptr2, align 16
   %r = call <2 x i64> @llvm.mips.binsli.d(<2 x i64> %a, <2 x i64> %b, i32 4)
@@ -958,7 +958,7 @@ entry:
 define void @bnegi_d(<2 x i64> * %ptr) {
 entry:
 ; CHECK-LABEL: bnegi_d:
-; CHECK: xor.v
+; CHECK: bnegi.d
   %a = load <2 x i64>, <2 x i64> * %ptr, align 16
   %r = call <2 x i64> @llvm.mips.bnegi.d(<2 x i64> %a, i32 9)
   store <2 x i64> %r, <2 x i64> * %ptr, align 16
@@ -968,7 +968,7 @@ entry:
 define void @bseti_d(<2 x i64> * %ptr) {
 entry:
 ; CHECK-LABEL: bseti_d:
-; CHECK: or.v
+; CHECK: bseti.d
   %a = load <2 x i64>, <2 x i64> * %ptr, align 16
   %r = call <2 x i64> @llvm.mips.bseti.d(<2 x i64> %a, i32 25)
   store <2 x i64> %r, <2 x i64> * %ptr, align 16

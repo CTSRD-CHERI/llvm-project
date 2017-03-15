@@ -203,14 +203,15 @@ template <> struct DenseMapInfo<const Expression *> {
 } // end namespace llvm
 
 namespace {
-class NewGVN : public FunctionPass {
+class NewGVN {
+  Function &F;
   DominatorTree *DT;
-  const DataLayout *DL;
-  const TargetLibraryInfo *TLI;
   AssumptionCache *AC;
+  const TargetLibraryInfo *TLI;
   AliasAnalysis *AA;
   MemorySSA *MSSA;
   MemorySSAWalker *MSSAWalker;
+  const DataLayout &DL;
   std::unique_ptr<PredicateInfo> PredInfo;
   BumpPtrAllocator ExpressionAllocator;
   ArrayRecycler<Value *> ArgRecycler;
@@ -222,9 +223,9 @@ class NewGVN : public FunctionPass {
 
   // This class is called INITIAL in the paper. It is the class everything
   // startsout in, and represents any value. Being an optimistic analysis,
-  // anything in the INITIAL class has the value TOP, which is indeterminate and
+  // anything in the TOP class has the value TOP, which is indeterminate and
   // equivalent to everything.
-  CongruenceClass *InitialClass;
+  CongruenceClass *TOPClass;
   std::vector<CongruenceClass *> CongruenceClasses;
   unsigned NextCongruenceNum;
 
@@ -290,26 +291,14 @@ class NewGVN : public FunctionPass {
   SmallPtrSet<Instruction *, 8> InstructionsToErase;
 
 public:
-  static char ID; // Pass identification, replacement for typeid.
-  NewGVN() : FunctionPass(ID) {
-    initializeNewGVNPass(*PassRegistry::getPassRegistry());
-  }
-
-  bool runOnFunction(Function &F) override;
-  bool runGVN(Function &F, DominatorTree *DT, AssumptionCache *AC,
-              TargetLibraryInfo *TLI, AliasAnalysis *AA, MemorySSA *MSSA);
+  NewGVN(Function &F, DominatorTree *DT, AssumptionCache *AC,
+         TargetLibraryInfo *TLI, AliasAnalysis *AA, MemorySSA *MSSA,
+         const DataLayout &DL)
+      : F(F), DT(DT), AC(AC), TLI(TLI), AA(AA), MSSA(MSSA), DL(DL),
+        PredInfo(make_unique<PredicateInfo>(F, *DT, *AC)) {}
+  bool runGVN();
 
 private:
-  void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<AssumptionCacheTracker>();
-    AU.addRequired<DominatorTreeWrapperPass>();
-    AU.addRequired<TargetLibraryInfoWrapperPass>();
-    AU.addRequired<MemorySSAWrapperPass>();
-    AU.addRequired<AAResultsWrapperPass>();
-    AU.addPreserved<DominatorTreeWrapperPass>();
-    AU.addPreserved<GlobalsAAWrapperPass>();
-  }
-
   // Expression handling.
   const Expression *createExpression(Instruction *);
   const Expression *createBinaryExpression(unsigned, Type *, Value *, Value *);
@@ -376,9 +365,11 @@ private:
 
   // Elimination.
   struct ValueDFS;
-  void convertDenseToDFSOrdered(const CongruenceClass::MemberSet &,
-                                SmallVectorImpl<ValueDFS> &);
-  void convertDenseToLoadsAndStores(const CongruenceClass::MemberSet &,
+  void convertClassToDFSOrdered(const CongruenceClass::MemberSet &,
+                                SmallVectorImpl<ValueDFS> &,
+                                DenseMap<const Value *, unsigned int> &,
+                                SmallPtrSetImpl<Instruction *> &);
+  void convertClassToLoadsAndStores(const CongruenceClass::MemberSet &,
                                     SmallVectorImpl<ValueDFS> &);
 
   bool eliminateInstructions(Function &);
@@ -405,11 +396,6 @@ private:
   bool singleReachablePHIPath(const MemoryAccess *, const MemoryAccess *) const;
 };
 } // end anonymous namespace
-
-char NewGVN::ID = 0;
-
-// createGVNPass - The public interface to this file.
-FunctionPass *llvm::createNewGVNPass() { return new NewGVN(); }
 
 template <typename T>
 static bool equalsLoadStoreHelper(const T &LHS, const Expression &RHS) {
@@ -445,15 +431,6 @@ static std::string getBlockName(const BasicBlock *B) {
   return DOTGraphTraits<const Function *>::getSimpleNodeLabel(B, nullptr);
 }
 #endif
-
-INITIALIZE_PASS_BEGIN(NewGVN, "newgvn", "Global Value Numbering", false, false)
-INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker)
-INITIALIZE_PASS_DEPENDENCY(MemorySSAWrapperPass)
-INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
-INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
-INITIALIZE_PASS_DEPENDENCY(AAResultsWrapperPass)
-INITIALIZE_PASS_DEPENDENCY(GlobalsAAWrapperPass)
-INITIALIZE_PASS_END(NewGVN, "newgvn", "Global Value Numbering", false, false)
 
 PHIExpression *NewGVN::createPHIExpression(Instruction *I) {
   BasicBlock *PHIBlock = I->getParent();
@@ -520,7 +497,7 @@ const Expression *NewGVN::createBinaryExpression(unsigned Opcode, Type *T,
   E->op_push_back(lookupOperandLeader(Arg1));
   E->op_push_back(lookupOperandLeader(Arg2));
 
-  Value *V = SimplifyBinOp(Opcode, E->getOperand(0), E->getOperand(1), *DL, TLI,
+  Value *V = SimplifyBinOp(Opcode, E->getOperand(0), E->getOperand(1), DL, TLI,
                            DT, AC);
   if (const Expression *SimplifiedE = checkSimplificationResults(E, nullptr, V))
     return SimplifiedE;
@@ -609,7 +586,7 @@ const Expression *NewGVN::createExpression(Instruction *I) {
     assert((E->getOperand(0)->getType() == I->getOperand(0)->getType() &&
             E->getOperand(1)->getType() == I->getOperand(1)->getType()));
     Value *V = SimplifyCmpInst(Predicate, E->getOperand(0), E->getOperand(1),
-                               *DL, TLI, DT, AC);
+                               DL, TLI, DT, AC);
     if (const Expression *SimplifiedE = checkSimplificationResults(E, I, V))
       return SimplifiedE;
   } else if (isa<SelectInst>(I)) {
@@ -618,23 +595,23 @@ const Expression *NewGVN::createExpression(Instruction *I) {
       assert(E->getOperand(1)->getType() == I->getOperand(1)->getType() &&
              E->getOperand(2)->getType() == I->getOperand(2)->getType());
       Value *V = SimplifySelectInst(E->getOperand(0), E->getOperand(1),
-                                    E->getOperand(2), *DL, TLI, DT, AC);
+                                    E->getOperand(2), DL, TLI, DT, AC);
       if (const Expression *SimplifiedE = checkSimplificationResults(E, I, V))
         return SimplifiedE;
     }
   } else if (I->isBinaryOp()) {
     Value *V = SimplifyBinOp(E->getOpcode(), E->getOperand(0), E->getOperand(1),
-                             *DL, TLI, DT, AC);
+                             DL, TLI, DT, AC);
     if (const Expression *SimplifiedE = checkSimplificationResults(E, I, V))
       return SimplifiedE;
   } else if (auto *BI = dyn_cast<BitCastInst>(I)) {
-    Value *V = SimplifyInstruction(BI, *DL, TLI, DT, AC);
+    Value *V = SimplifyInstruction(BI, DL, TLI, DT, AC);
     if (const Expression *SimplifiedE = checkSimplificationResults(E, I, V))
       return SimplifiedE;
   } else if (isa<GetElementPtrInst>(I)) {
     Value *V = SimplifyGEPInst(E->getType(),
                                ArrayRef<Value *>(E->op_begin(), E->op_end()),
-                               *DL, TLI, DT, AC);
+                               DL, TLI, DT, AC);
     if (const Expression *SimplifiedE = checkSimplificationResults(E, I, V))
       return SimplifiedE;
   } else if (AllConstant) {
@@ -649,7 +626,7 @@ const Expression *NewGVN::createExpression(Instruction *I) {
     for (Value *Arg : E->operands())
       C.emplace_back(cast<Constant>(Arg));
 
-    if (Value *V = ConstantFoldInstOperands(I, C, *DL, TLI))
+    if (Value *V = ConstantFoldInstOperands(I, C, DL, TLI))
       if (const Expression *SimplifiedE = checkSimplificationResults(E, I, V))
         return SimplifiedE;
   }
@@ -714,10 +691,10 @@ const CallExpression *NewGVN::createCallExpression(CallInst *CI,
 Value *NewGVN::lookupOperandLeader(Value *V) const {
   CongruenceClass *CC = ValueToClass.lookup(V);
   if (CC) {
-    // Everything in INITIAL is represneted by undef, as it can be any value.
+    // Everything in TOP is represneted by undef, as it can be any value.
     // We do have to make sure we get the type right though, so we can't set the
     // RepLeader to undef.
-    if (CC == InitialClass)
+    if (CC == TOPClass)
       return UndefValue::get(V->getType());
     return CC->RepStoredValue ? CC->RepStoredValue : CC->RepLeader;
   }
@@ -741,7 +718,7 @@ MemoryAccess *NewGVN::lookupMemoryAccessEquiv(MemoryAccess *MA) const {
 // equivalent to the lattice value "TOP" in most lattices.  This is the initial
 // state of all memory accesses.
 bool NewGVN::isMemoryAccessTop(const MemoryAccess *MA) const {
-  return MemoryAccessToClass.lookup(MA) == InitialClass;
+  return MemoryAccessToClass.lookup(MA) == TOPClass;
 }
 
 LoadExpression *NewGVN::createLoadExpression(Type *LoadType, Value *PointerOp,
@@ -1380,7 +1357,7 @@ void NewGVN::moveValueToNewCongruenceClass(Instruction *I,
 
   ValueToClass[I] = NewClass;
   // See if we destroyed the class or need to swap leaders.
-  if (OldClass->Members.empty() && OldClass != InitialClass) {
+  if (OldClass->Members.empty() && OldClass != TOPClass) {
     if (OldClass->DefiningExpr) {
       OldClass->Dead = true;
       DEBUG(dbgs() << "Erasing expression " << OldClass->DefiningExpr
@@ -1425,9 +1402,9 @@ void NewGVN::moveValueToNewCongruenceClass(Instruction *I,
     }
 
     // We don't need to sort members if there is only 1, and we don't care about
-    // sorting the INITIAL class because everything either gets out of it or is
+    // sorting the TOP class because everything either gets out of it or is
     // unreachable.
-    if (OldClass->Members.size() == 1 || OldClass == InitialClass) {
+    if (OldClass->Members.size() == 1 || OldClass == TOPClass) {
       OldClass->RepLeader = *(OldClass->Members.begin());
     } else if (OldClass->NextLeader.first) {
       ++NumGVNAvoidedSortedLeaderChanges;
@@ -1644,27 +1621,27 @@ void NewGVN::processOutgoingEdges(TerminatorInst *TI, BasicBlock *B) {
   }
 }
 
-// The algorithm initially places the values of the routine in the INITIAL
-// congruence class. The leader of INITIAL is the undetermined value `TOP`.
-// When the algorithm has finished, values still in INITIAL are unreachable.
+// The algorithm initially places the values of the routine in the TOP
+// congruence class. The leader of TOP is the undetermined value `undef`.
+// When the algorithm has finished, values still in TOP are unreachable.
 void NewGVN::initializeCongruenceClasses(Function &F) {
   // FIXME now i can't remember why this is 2
   NextCongruenceNum = 2;
-  // Initialize all other instructions to be in INITIAL class.
+  // Initialize all other instructions to be in TOP class.
   CongruenceClass::MemberSet InitialValues;
-  InitialClass = createCongruenceClass(nullptr, nullptr);
-  InitialClass->RepMemoryAccess = MSSA->getLiveOnEntryDef();
+  TOPClass = createCongruenceClass(nullptr, nullptr);
+  TOPClass->RepMemoryAccess = MSSA->getLiveOnEntryDef();
   for (auto &B : F) {
     if (auto *MP = MSSA->getMemoryAccess(&B))
-      MemoryAccessToClass[MP] = InitialClass;
+      MemoryAccessToClass[MP] = TOPClass;
 
     for (auto &I : B) {
       // Don't insert void terminators into the class. We don't value number
-      // them, and they just end up sitting in INITIAL.
+      // them, and they just end up sitting in TOP.
       if (isa<TerminatorInst>(I) && I.getType()->isVoidTy())
         continue;
       InitialValues.insert(&I);
-      ValueToClass[&I] = InitialClass;
+      ValueToClass[&I] = TOPClass;
 
       // All memory accesses are equivalent to live on entry to start. They must
       // be initialized to something so that initial changes are noticed. For
@@ -1674,13 +1651,13 @@ void NewGVN::initializeCongruenceClasses(Function &F) {
       // other expression can generate a memory equivalence.  If we start
       // handling memcpy/etc, we can expand this.
       if (isa<StoreInst>(&I)) {
-        MemoryAccessToClass[MSSA->getMemoryAccess(&I)] = InitialClass;
-        ++InitialClass->StoreCount;
-        assert(InitialClass->StoreCount > 0);
+        MemoryAccessToClass[MSSA->getMemoryAccess(&I)] = TOPClass;
+        ++TOPClass->StoreCount;
+        assert(TOPClass->StoreCount > 0);
       }
     }
   }
-  InitialClass->Members.swap(InitialValues);
+  TOPClass->Members.swap(InitialValues);
 
   // Initialize arguments to be in their own unique congruence classes
   for (auto &FA : F.args())
@@ -1772,7 +1749,7 @@ void NewGVN::valueNumberMemoryPhi(MemoryPhi *MP) {
   // InitialClass.  Note: The only case this should happen is if we have at
   // least one self-argument.
   if (Filtered.begin() == Filtered.end()) {
-    if (setMemoryAccessEquivTo(MP, InitialClass))
+    if (setMemoryAccessEquivTo(MP, TOPClass))
       markMemoryUsersTouched(MP);
     return;
   }
@@ -1944,18 +1921,9 @@ void NewGVN::verifyComparisons(Function &F) {
 }
 
 // This is the main transformation entry point.
-bool NewGVN::runGVN(Function &F, DominatorTree *_DT, AssumptionCache *_AC,
-                    TargetLibraryInfo *_TLI, AliasAnalysis *_AA,
-                    MemorySSA *_MSSA) {
+bool NewGVN::runGVN() {
   bool Changed = false;
   NumFuncArgs = F.arg_size();
-  DT = _DT;
-  AC = _AC;
-  TLI = _TLI;
-  AA = _AA;
-  MSSA = _MSSA;
-  PredInfo = make_unique<PredicateInfo>(F, *DT, *AC);
-  DL = &F.getParent()->getDataLayout();
   MSSAWalker = MSSA->getWalker();
 
   // Count number of instructions for sizing of hash tables, and come
@@ -2115,36 +2083,6 @@ bool NewGVN::runGVN(Function &F, DominatorTree *_DT, AssumptionCache *_AC,
   return Changed;
 }
 
-bool NewGVN::runOnFunction(Function &F) {
-  if (skipFunction(F))
-    return false;
-  return runGVN(F, &getAnalysis<DominatorTreeWrapperPass>().getDomTree(),
-                &getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F),
-                &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI(),
-                &getAnalysis<AAResultsWrapperPass>().getAAResults(),
-                &getAnalysis<MemorySSAWrapperPass>().getMSSA());
-}
-
-PreservedAnalyses NewGVNPass::run(Function &F, AnalysisManager<Function> &AM) {
-  NewGVN Impl;
-
-  // Apparently the order in which we get these results matter for
-  // the old GVN (see Chandler's comment in GVN.cpp). I'll keep
-  // the same order here, just in case.
-  auto &AC = AM.getResult<AssumptionAnalysis>(F);
-  auto &DT = AM.getResult<DominatorTreeAnalysis>(F);
-  auto &TLI = AM.getResult<TargetLibraryAnalysis>(F);
-  auto &AA = AM.getResult<AAManager>(F);
-  auto &MSSA = AM.getResult<MemorySSAAnalysis>(F).getMSSA();
-  bool Changed = Impl.runGVN(F, &DT, &AC, &TLI, &AA, &MSSA);
-  if (!Changed)
-    return PreservedAnalyses::all();
-  PreservedAnalyses PA;
-  PA.preserve<DominatorTreeAnalysis>();
-  PA.preserve<GlobalsAA>();
-  return PA;
-}
-
 // Return true if V is a value that will always be available (IE can
 // be placed anywhere) in the function.  We don't do globals here
 // because they are often worse to put in place.
@@ -2164,10 +2102,9 @@ struct NewGVN::ValueDFS {
   int DFSIn = 0;
   int DFSOut = 0;
   int LocalNum = 0;
-  // Only one of these will be set.
-  Value *Val = nullptr;
+  // Only one of Def and U will be set.
+  Value *Def = nullptr;
   Use *U = nullptr;
-
   bool operator<(const ValueDFS &Other) const {
     // It's not enough that any given field be less than - we have sets
     // of fields that need to be evaluated together to give a proper ordering.
@@ -2207,56 +2144,62 @@ struct NewGVN::ValueDFS {
     // but .val  and .u.
     // It does not matter what order we replace these operands in.
     // You will always end up with the same IR, and this is guaranteed.
-    return std::tie(DFSIn, DFSOut, LocalNum, Val, U) <
-           std::tie(Other.DFSIn, Other.DFSOut, Other.LocalNum, Other.Val,
+    return std::tie(DFSIn, DFSOut, LocalNum, Def, U) <
+           std::tie(Other.DFSIn, Other.DFSOut, Other.LocalNum, Other.Def,
                     Other.U);
   }
 };
 
 // This function converts the set of members for a congruence class from values,
-// to sets of defs and uses with associated DFS info.
-void NewGVN::convertDenseToDFSOrdered(
+// to sets of defs and uses with associated DFS info.  The total number of
+// reachable uses for each value is stored in UseCount, and instructions that
+// seem
+// dead (have no non-dead uses) are stored in ProbablyDead.
+void NewGVN::convertClassToDFSOrdered(
     const CongruenceClass::MemberSet &Dense,
-    SmallVectorImpl<ValueDFS> &DFSOrderedSet) {
+    SmallVectorImpl<ValueDFS> &DFSOrderedSet,
+    DenseMap<const Value *, unsigned int> &UseCounts,
+    SmallPtrSetImpl<Instruction *> &ProbablyDead) {
   for (auto D : Dense) {
     // First add the value.
     BasicBlock *BB = getBlockForValue(D);
     // Constants are handled prior to ever calling this function, so
     // we should only be left with instructions as members.
     assert(BB && "Should have figured out a basic block for value");
-    ValueDFS VD;
+    ValueDFS VDDef;
     DomTreeNode *DomNode = DT->getNode(BB);
-    VD.DFSIn = DomNode->getDFSNumIn();
-    VD.DFSOut = DomNode->getDFSNumOut();
+    VDDef.DFSIn = DomNode->getDFSNumIn();
+    VDDef.DFSOut = DomNode->getDFSNumOut();
     // If it's a store, use the leader of the value operand.
     if (auto *SI = dyn_cast<StoreInst>(D)) {
       auto Leader = lookupOperandLeader(SI->getValueOperand());
-      VD.Val = alwaysAvailable(Leader) ? Leader : SI->getValueOperand();
+      VDDef.Def = alwaysAvailable(Leader) ? Leader : SI->getValueOperand();
     } else {
-      VD.Val = D;
+      VDDef.Def = D;
     }
-
-    if (auto *I = dyn_cast<Instruction>(D))
-      VD.LocalNum = InstrDFS.lookup(I);
-    else
-      llvm_unreachable("Should have been an instruction");
-
-    DFSOrderedSet.emplace_back(VD);
-
+    assert(isa<Instruction>(D) &&
+           "The dense set member should always be an instruction");
+    VDDef.LocalNum = InstrDFS.lookup(D);
+    DFSOrderedSet.emplace_back(VDDef);
+    Instruction *Def = cast<Instruction>(D);
+    unsigned int UseCount = 0;
     // Now add the uses.
-    for (auto &U : D->uses()) {
+    for (auto &U : Def->uses()) {
       if (auto *I = dyn_cast<Instruction>(U.getUser())) {
-        ValueDFS VD;
+        // Don't try to replace into dead uses
+        if (InstructionsToErase.count(I))
+          continue;
+        ValueDFS VDUse;
         // Put the phi node uses in the incoming block.
         BasicBlock *IBlock;
         if (auto *P = dyn_cast<PHINode>(I)) {
           IBlock = P->getIncomingBlock(U);
           // Make phi node users appear last in the incoming block
           // they are from.
-          VD.LocalNum = InstrDFS.size() + 1;
+          VDUse.LocalNum = InstrDFS.size() + 1;
         } else {
           IBlock = I->getParent();
-          VD.LocalNum = InstrDFS.lookup(I);
+          VDUse.LocalNum = InstrDFS.lookup(I);
         }
 
         // Skip uses in unreachable blocks, as we're going
@@ -2265,18 +2208,27 @@ void NewGVN::convertDenseToDFSOrdered(
           continue;
 
         DomTreeNode *DomNode = DT->getNode(IBlock);
-        VD.DFSIn = DomNode->getDFSNumIn();
-        VD.DFSOut = DomNode->getDFSNumOut();
-        VD.U = &U;
-        DFSOrderedSet.emplace_back(VD);
+        VDUse.DFSIn = DomNode->getDFSNumIn();
+        VDUse.DFSOut = DomNode->getDFSNumOut();
+        VDUse.U = &U;
+        ++UseCount;
+        DFSOrderedSet.emplace_back(VDUse);
       }
     }
+
+    // If there are no uses, it's probably dead (but it may have side-effects,
+    // so not definitely dead. Otherwise, store the number of uses so we can
+    // track if it becomes dead later).
+    if (UseCount == 0)
+      ProbablyDead.insert(Def);
+    else
+      UseCounts[Def] = UseCount;
   }
 }
 
 // This function converts the set of members for a congruence class from values,
 // to the set of defs for loads and stores, with associated DFS info.
-void NewGVN::convertDenseToLoadsAndStores(
+void NewGVN::convertClassToLoadsAndStores(
     const CongruenceClass::MemberSet &Dense,
     SmallVectorImpl<ValueDFS> &LoadsAndStores) {
   for (auto D : Dense) {
@@ -2288,7 +2240,7 @@ void NewGVN::convertDenseToLoadsAndStores(
     DomTreeNode *DomNode = DT->getNode(BB);
     VD.DFSIn = DomNode->getDFSNumIn();
     VD.DFSOut = DomNode->getDFSNumOut();
-    VD.Val = D;
+    VD.Def = D;
 
     // If it's an instruction, use the real local dfs number.
     if (auto *I = dyn_cast<Instruction>(D))
@@ -2462,20 +2414,22 @@ bool NewGVN::eliminateInstructions(Function &F) {
     }
   }
 
+  // Map to store the use counts
+  DenseMap<const Value *, unsigned int> UseCounts;
   for (CongruenceClass *CC : reverse(CongruenceClasses)) {
     // Track the equivalent store info so we can decide whether to try
     // dead store elimination.
     SmallVector<ValueDFS, 8> PossibleDeadStores;
-
+    SmallPtrSet<Instruction *, 8> ProbablyDead;
     if (CC->Dead)
       continue;
-    // Everything still in the INITIAL class is unreachable or dead.
-    if (CC == InitialClass) {
+    // Everything still in the TOP class is unreachable or dead.
+    if (CC == TOPClass) {
 #ifndef NDEBUG
       for (auto M : CC->Members)
         assert((!ReachableBlocks.count(cast<Instruction>(M)->getParent()) ||
                 InstructionsToErase.count(cast<Instruction>(M))) &&
-               "Everything in INITIAL should be unreachable or dead at this "
+               "Everything in TOP should be unreachable or dead at this "
                "point");
 #endif
       continue;
@@ -2493,7 +2447,7 @@ bool NewGVN::eliminateInstructions(Function &F) {
       for (auto M : CC->Members) {
         Value *Member = M;
         // Void things have no uses we can replace.
-        if (Member == CC->RepLeader || Member->getType()->isVoidTy()) {
+        if (Member == Leader || Member->getType()->isVoidTy()) {
           MembersLeft.insert(Member);
           continue;
         }
@@ -2506,7 +2460,6 @@ bool NewGVN::eliminateInstructions(Function &F) {
           assert(Leader != I && "About to accidentally remove our leader");
           replaceInstruction(I, Leader);
           AnythingReplaced = true;
-
           continue;
         } else {
           MembersLeft.insert(I);
@@ -2526,18 +2479,18 @@ bool NewGVN::eliminateInstructions(Function &F) {
 
         // Convert the members to DFS ordered sets and then merge them.
         SmallVector<ValueDFS, 8> DFSOrderedSet;
-        convertDenseToDFSOrdered(CC->Members, DFSOrderedSet);
+        convertClassToDFSOrdered(CC->Members, DFSOrderedSet, UseCounts,
+                                 ProbablyDead);
 
         // Sort the whole thing.
         std::sort(DFSOrderedSet.begin(), DFSOrderedSet.end());
         for (auto &VD : DFSOrderedSet) {
           int MemberDFSIn = VD.DFSIn;
           int MemberDFSOut = VD.DFSOut;
-          Value *Member = VD.Val;
-          Use *MemberUse = VD.U;
-
+          Value *Def = VD.Def;
+          Use *U = VD.U;
           // We ignore void things because we can't get a value from them.
-          if (Member && Member->getType()->isVoidTy())
+          if (Def && Def->getType()->isVoidTy())
             continue;
 
           if (EliminationStack.empty()) {
@@ -2563,53 +2516,94 @@ bool NewGVN::eliminateInstructions(Function &F) {
           // start using, we also push.
           // Otherwise, we walk along, processing members who are
           // dominated by this scope, and eliminate them.
-          bool ShouldPush = Member && EliminationStack.empty();
+          bool ShouldPush = Def && EliminationStack.empty();
           bool OutOfScope =
               !EliminationStack.isInScope(MemberDFSIn, MemberDFSOut);
 
           if (OutOfScope || ShouldPush) {
             // Sync to our current scope.
             EliminationStack.popUntilDFSScope(MemberDFSIn, MemberDFSOut);
-            bool ShouldPush = Member && EliminationStack.empty();
+            bool ShouldPush = Def && EliminationStack.empty();
             if (ShouldPush) {
-              EliminationStack.push_back(Member, MemberDFSIn, MemberDFSOut);
+              EliminationStack.push_back(Def, MemberDFSIn, MemberDFSOut);
+            }
+          }
+
+          // Skip the Def's, we only want to eliminate on their uses.  But mark
+          // dominated defs as dead.
+          if (Def) {
+            // For anything in this case, what and how we value number
+            // guarantees that any side-effets that would have occurred (ie
+            // throwing, etc) can be proven to either still occur (because it's
+            // dominated by something that has the same side-effects), or never
+            // occur.  Otherwise, we would not have been able to prove it value
+            // equivalent to something else. For these things, we can just mark
+            // it all dead.  Note that this is different from the "ProbablyDead"
+            // set, which may not be dominated by anything, and thus, are only
+            // easy to prove dead if they are also side-effect free.
+            if (!EliminationStack.empty() && Def != EliminationStack.back() &&
+                isa<Instruction>(Def))
+              markInstructionForDeletion(cast<Instruction>(Def));
+            continue;
+          }
+          // At this point, we know it is a Use we are trying to possibly
+          // replace.
+
+          assert(isa<Instruction>(U->get()) &&
+                 "Current def should have been an instruction");
+          assert(isa<Instruction>(U->getUser()) &&
+                 "Current user should have been an instruction");
+
+          // If the thing we are replacing into is already marked to be dead,
+          // this use is dead.  Note that this is true regardless of whether
+          // we have anything dominating the use or not.  We do this here
+          // because we are already walking all the uses anyway.
+          Instruction *InstUse = cast<Instruction>(U->getUser());
+          if (InstructionsToErase.count(InstUse)) {
+            auto &UseCount = UseCounts[U->get()];
+            if (--UseCount == 0) {
+              ProbablyDead.insert(cast<Instruction>(U->get()));
             }
           }
 
           // If we get to this point, and the stack is empty we must have a use
-          // with nothing we can use to eliminate it, just skip it.
+          // with nothing we can use to eliminate this use, so just skip it.
           if (EliminationStack.empty())
             continue;
 
-          // Skip the Value's, we only want to eliminate on their uses.
-          if (Member)
-            continue;
-          Value *Result = EliminationStack.back();
+          Value *DominatingLeader = EliminationStack.back();
 
           // Don't replace our existing users with ourselves.
-          if (MemberUse->get() == Result)
+          if (U->get() == DominatingLeader)
             continue;
-
-          DEBUG(dbgs() << "Found replacement " << *Result << " for "
-                       << *MemberUse->get() << " in " << *(MemberUse->getUser())
-                       << "\n");
+          DEBUG(dbgs() << "Found replacement " << *DominatingLeader << " for "
+                       << *U->get() << " in " << *(U->getUser()) << "\n");
 
           // If we replaced something in an instruction, handle the patching of
-          // metadata.
-          if (auto *ReplacedInst = dyn_cast<Instruction>(MemberUse->get())) {
-            // Skip this if we are replacing predicateinfo with its original
-            // operand, as we already know we can just drop it.
-            auto *PI = PredInfo->getPredicateInfoFor(ReplacedInst);
-            if (!PI || Result != PI->OriginalOp)
-              patchReplacementInstruction(ReplacedInst, Result);
-          }
-
-          assert(isa<Instruction>(MemberUse->getUser()));
-          MemberUse->set(Result);
+          // metadata.  Skip this if we are replacing predicateinfo with its
+          // original operand, as we already know we can just drop it.
+          auto *ReplacedInst = cast<Instruction>(U->get());
+          auto *PI = PredInfo->getPredicateInfoFor(ReplacedInst);
+          if (!PI || DominatingLeader != PI->OriginalOp)
+            patchReplacementInstruction(ReplacedInst, DominatingLeader);
+          U->set(DominatingLeader);
+          // This is now a use of the dominating leader, which means if the
+          // dominating leader was dead, it's now live!
+          auto &LeaderUseCount = UseCounts[DominatingLeader];
+          // It's about to be alive again.
+          if (LeaderUseCount == 0 && isa<Instruction>(DominatingLeader))
+            ProbablyDead.erase(cast<Instruction>(DominatingLeader));
+          ++LeaderUseCount;
           AnythingReplaced = true;
         }
       }
     }
+
+    // At this point, anything still in the ProbablyDead set is actually dead if
+    // would be trivially dead.
+    for (auto *I : ProbablyDead)
+      if (wouldInstructionBeTriviallyDead(I))
+        markInstructionForDeletion(I);
 
     // Cleanup the congruence class.
     SmallPtrSet<Value *, 4> MembersLeft;
@@ -2619,26 +2613,19 @@ bool NewGVN::eliminateInstructions(Function &F) {
         continue;
       }
 
-      if (auto *MemberInst = dyn_cast<Instruction>(Member)) {
-        if (isInstructionTriviallyDead(MemberInst)) {
-          // TODO: Don't mark loads of undefs.
-          markInstructionForDeletion(MemberInst);
-          continue;
-        }
-      }
       MembersLeft.insert(Member);
     }
     CC->Members.swap(MembersLeft);
 
     // If we have possible dead stores to look at, try to eliminate them.
     if (CC->StoreCount > 0) {
-      convertDenseToLoadsAndStores(CC->Members, PossibleDeadStores);
+      convertClassToLoadsAndStores(CC->Members, PossibleDeadStores);
       std::sort(PossibleDeadStores.begin(), PossibleDeadStores.end());
       ValueDFSStack EliminationStack;
       for (auto &VD : PossibleDeadStores) {
         int MemberDFSIn = VD.DFSIn;
         int MemberDFSOut = VD.DFSOut;
-        Instruction *Member = cast<Instruction>(VD.Val);
+        Instruction *Member = cast<Instruction>(VD.Def);
         if (EliminationStack.empty() ||
             !EliminationStack.isInScope(MemberDFSIn, MemberDFSOut)) {
           // Sync to our current scope.
@@ -2698,4 +2685,72 @@ bool NewGVN::shouldSwapOperands(const Value *A, const Value *B) const {
   // in this order, we order by rank, which will give a strict weak ordering to
   // everything but constants, and then we order by pointer address.
   return std::make_pair(getRank(A), A) > std::make_pair(getRank(B), B);
+}
+
+class NewGVNLegacyPass : public FunctionPass {
+public:
+  static char ID; // Pass identification, replacement for typeid.
+  NewGVNLegacyPass() : FunctionPass(ID) {
+    initializeNewGVNLegacyPassPass(*PassRegistry::getPassRegistry());
+  }
+  bool runOnFunction(Function &F) override;
+
+private:
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
+    AU.addRequired<AssumptionCacheTracker>();
+    AU.addRequired<DominatorTreeWrapperPass>();
+    AU.addRequired<TargetLibraryInfoWrapperPass>();
+    AU.addRequired<MemorySSAWrapperPass>();
+    AU.addRequired<AAResultsWrapperPass>();
+    AU.addPreserved<DominatorTreeWrapperPass>();
+    AU.addPreserved<GlobalsAAWrapperPass>();
+  }
+};
+
+bool NewGVNLegacyPass::runOnFunction(Function &F) {
+  if (skipFunction(F))
+    return false;
+  return NewGVN(F, &getAnalysis<DominatorTreeWrapperPass>().getDomTree(),
+                &getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F),
+                &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI(),
+                &getAnalysis<AAResultsWrapperPass>().getAAResults(),
+                &getAnalysis<MemorySSAWrapperPass>().getMSSA(),
+                F.getParent()->getDataLayout())
+      .runGVN();
+}
+
+INITIALIZE_PASS_BEGIN(NewGVNLegacyPass, "newgvn", "Global Value Numbering",
+                      false, false)
+INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker)
+INITIALIZE_PASS_DEPENDENCY(MemorySSAWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(AAResultsWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(GlobalsAAWrapperPass)
+INITIALIZE_PASS_END(NewGVNLegacyPass, "newgvn", "Global Value Numbering", false,
+                    false)
+
+char NewGVNLegacyPass::ID = 0;
+
+// createGVNPass - The public interface to this file.
+FunctionPass *llvm::createNewGVNPass() { return new NewGVNLegacyPass(); }
+
+PreservedAnalyses NewGVNPass::run(Function &F, AnalysisManager<Function> &AM) {
+  // Apparently the order in which we get these results matter for
+  // the old GVN (see Chandler's comment in GVN.cpp). I'll keep
+  // the same order here, just in case.
+  auto &AC = AM.getResult<AssumptionAnalysis>(F);
+  auto &DT = AM.getResult<DominatorTreeAnalysis>(F);
+  auto &TLI = AM.getResult<TargetLibraryAnalysis>(F);
+  auto &AA = AM.getResult<AAManager>(F);
+  auto &MSSA = AM.getResult<MemorySSAAnalysis>(F).getMSSA();
+  bool Changed =
+      NewGVN(F, &DT, &AC, &TLI, &AA, &MSSA, F.getParent()->getDataLayout())
+          .runGVN();
+  if (!Changed)
+    return PreservedAnalyses::all();
+  PreservedAnalyses PA;
+  PA.preserve<DominatorTreeAnalysis>();
+  PA.preserve<GlobalsAA>();
+  return PA;
 }

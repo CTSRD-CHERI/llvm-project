@@ -36,24 +36,25 @@ class InputSection;
 class OutputSection;
 class OutputSectionFactory;
 class InputSectionBase;
+class SectionBase;
 
 // This represents an expression in the linker script.
 // ScriptParser::readExpr reads an expression and returns an Expr.
 // Later, we evaluate the expression by calling the function
 // with the value of special context variable ".".
 struct Expr {
-  std::function<uint64_t(uint64_t)> Val;
+  std::function<uint64_t()> Val;
   std::function<bool()> IsAbsolute;
 
   // If expression is section-relative the function below is used
   // to get the output section pointer.
-  std::function<const OutputSection *()> Section;
+  std::function<SectionBase *()> Section;
 
-  uint64_t operator()(uint64_t Dot) const { return Val(Dot); }
+  uint64_t operator()() const { return Val(); }
   operator bool() const { return (bool)Val; }
 
-  Expr(std::function<uint64_t(uint64_t)> Val, std::function<bool()> IsAbsolute,
-       std::function<const OutputSection *()> Section)
+  Expr(std::function<uint64_t()> Val, std::function<bool()> IsAbsolute,
+       std::function<SectionBase *()> Section)
       : Val(Val), IsAbsolute(IsAbsolute), Section(Section) {}
   template <typename T>
   Expr(T V) : Expr(V, [] { return true; }, [] { return nullptr; }) {}
@@ -204,20 +205,6 @@ struct MemoryRegion {
   uint32_t NegFlags;
 };
 
-class LinkerScriptBase {
-protected:
-  ~LinkerScriptBase() = default;
-
-public:
-  virtual uint64_t getHeaderSize() = 0;
-  virtual uint64_t getSymbolValue(const Twine &Loc, StringRef S) = 0;
-  virtual bool isDefined(StringRef S) = 0;
-  virtual bool isAbsolute(StringRef S) = 0;
-  virtual const OutputSection *getSymbolSection(StringRef S) = 0;
-  virtual const OutputSection *getOutputSection(const Twine &Loc,
-                                                StringRef S) = 0;
-  virtual uint64_t getOutputSectionSize(StringRef S) = 0;
-};
 
 // ScriptConfiguration holds linker script parse results.
 struct ScriptConfiguration {
@@ -239,15 +226,54 @@ struct ScriptConfiguration {
 
 extern ScriptConfiguration *ScriptConfig;
 
-// This is a runner of the linker script.
-template <class ELFT> class LinkerScript final : public LinkerScriptBase {
-  typedef typename ELFT::uint uintX_t;
+class LinkerScriptBase {
+protected:
+  ~LinkerScriptBase() = default;
+
+  void assignSymbol(SymbolAssignment *Cmd, bool InSec = false);
+  void computeInputSections(InputSectionDescription *);
+  void setDot(Expr E, const Twine &Loc, bool InSec = false);
+
+  std::vector<InputSectionBase *>
+  createInputSectionList(OutputSectionCommand &Cmd);
+
+  std::vector<size_t> getPhdrIndices(StringRef SectionName);
+  size_t getPhdrIndex(const Twine &Loc, StringRef PhdrName);
+
+  MemoryRegion *findMemoryRegion(OutputSectionCommand *Cmd, OutputSection *Sec);
+
+  void switchTo(OutputSection *Sec);
+  void flush();
+  void output(InputSection *Sec);
+  void process(BaseCommand &Base);
+
+  OutputSection *Aether;
+
+  // "ScriptConfig" is a bit too long, so define a short name for it.
+  ScriptConfiguration &Opt = *ScriptConfig;
+
+  uint64_t Dot;
+  uint64_t ThreadBssOffset = 0;
+
+  std::function<uint64_t()> LMAOffset;
+  OutputSection *CurOutSec = nullptr;
+  MemoryRegion *CurMemRegion = nullptr;
+
+  llvm::DenseSet<OutputSection *> AlreadyOutputOS;
+  llvm::DenseSet<InputSectionBase *> AlreadyOutputIS;
 
 public:
-  LinkerScript();
-  ~LinkerScript();
+  bool hasPhdrsCommands() { return !Opt.PhdrsCommands.empty(); }
+  uint64_t getDot() { return Dot; }
+  OutputSection *getOutputSection(const Twine &Loc, StringRef S);
+  uint64_t getOutputSectionSize(StringRef S);
 
-  void processCommands(OutputSectionFactory &Factory);
+  virtual uint64_t getSymbolValue(const Twine &Loc, StringRef S) = 0;
+  virtual bool isDefined(StringRef S) = 0;
+  virtual bool isAbsolute(StringRef S) = 0;
+  virtual OutputSection *getSymbolSection(StringRef S) = 0;
+
+  std::vector<OutputSection *> *OutputSections;
   void addOrphanSections(OutputSectionFactory &Factory);
   void removeEmptyCommands();
   void adjustSectionsBeforeSorting();
@@ -257,55 +283,30 @@ public:
   bool ignoreInterpSection();
 
   uint32_t getFiller(StringRef Name);
-  void writeDataBytes(StringRef Name, uint8_t *Buf);
   bool hasLMA(StringRef Name);
   bool shouldKeep(InputSectionBase *S);
   void assignOffsets(OutputSectionCommand *Cmd);
   void placeOrphanSections();
+  void processNonSectionCommands();
   void assignAddresses(std::vector<PhdrEntry> &Phdrs);
-  bool hasPhdrsCommands();
-  uint64_t getHeaderSize() override;
+  int getSectionIndex(StringRef Name);
+};
+
+// This is a runner of the linker script.
+template <class ELFT> class LinkerScript final : public LinkerScriptBase {
+public:
+  LinkerScript();
+  ~LinkerScript();
+
+  void writeDataBytes(StringRef Name, uint8_t *Buf);
+  void addSymbol(SymbolAssignment *Cmd);
+  void discard(ArrayRef<InputSectionBase *> V);
+  void processCommands(OutputSectionFactory &Factory);
+
   uint64_t getSymbolValue(const Twine &Loc, StringRef S) override;
   bool isDefined(StringRef S) override;
   bool isAbsolute(StringRef S) override;
-  const OutputSection *getSymbolSection(StringRef S) override;
-  const OutputSection *getOutputSection(const Twine &Loc, StringRef S) override;
-  uint64_t getOutputSectionSize(StringRef S) override;
-
-  std::vector<OutputSection *> *OutputSections;
-
-  int getSectionIndex(StringRef Name);
-
-private:
-  void assignSymbol(SymbolAssignment *Cmd, bool InSec = false);
-  void addSymbol(SymbolAssignment *Cmd);
-  void computeInputSections(InputSectionDescription *);
-  void setDot(Expr E, const Twine &Loc, bool InSec = false);
-
-  void discard(ArrayRef<InputSectionBase *> V);
-
-  std::vector<InputSectionBase *>
-  createInputSectionList(OutputSectionCommand &Cmd);
-
-  // "ScriptConfig" is a bit too long, so define a short name for it.
-  ScriptConfiguration &Opt = *ScriptConfig;
-
-  std::vector<size_t> getPhdrIndices(StringRef SectionName);
-  size_t getPhdrIndex(const Twine &Loc, StringRef PhdrName);
-
-  MemoryRegion *findMemoryRegion(OutputSectionCommand *Cmd, OutputSection *Sec);
-
-  uintX_t Dot;
-  std::function<uint64_t()> LMAOffset;
-  OutputSection *CurOutSec = nullptr;
-  MemoryRegion *CurMemRegion = nullptr;
-  uintX_t ThreadBssOffset = 0;
-  void switchTo(OutputSection *Sec);
-  void flush();
-  void output(InputSection *Sec);
-  void process(BaseCommand &Base);
-  llvm::DenseSet<OutputSection *> AlreadyOutputOS;
-  llvm::DenseSet<InputSectionBase *> AlreadyOutputIS;
+  OutputSection *getSymbolSection(StringRef S) override;
 };
 
 // Variable template is a C++14 feature, so we can't template

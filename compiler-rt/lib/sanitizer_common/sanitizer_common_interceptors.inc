@@ -142,7 +142,8 @@ bool PlatformHasDifferentMemcpyAndMemmove();
     COMMON_INTERCEPTOR_READ_STRING_OF_LEN((ctx), (s), REAL(strlen)(s), (n))
 
 #ifndef COMMON_INTERCEPTOR_ON_DLOPEN
-#define COMMON_INTERCEPTOR_ON_DLOPEN(filename, flag) {}
+#define COMMON_INTERCEPTOR_ON_DLOPEN(filename, flag) \
+  CheckNoDeepBind(filename, flag);
 #endif
 
 #ifndef COMMON_INTERCEPTOR_GET_TLS_RANGE
@@ -3245,6 +3246,30 @@ INTERCEPTOR(char *, strerror, int errnum) {
 #endif
 
 #if SANITIZER_INTERCEPT_STRERROR_R
+// There are 2 versions of strerror_r:
+//  * POSIX version returns 0 on success, negative error code on failure,
+//    writes message to buf.
+//  * GNU version returns message pointer, which points to either buf or some
+//    static storage.
+#if ((_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && !_GNU_SOURCE) || \
+    SANITIZER_MAC
+// POSIX version. Spec is not clear on whether buf is NULL-terminated.
+// At least on OSX, buf contents are valid even when the call fails.
+INTERCEPTOR(int, strerror_r, int errnum, char *buf, SIZE_T buflen) {
+  void *ctx;
+  COMMON_INTERCEPTOR_ENTER(ctx, strerror_r, errnum, buf, buflen);
+  // FIXME: under ASan the call below may write to freed memory and corrupt
+  // its metadata. See
+  // https://github.com/google/sanitizers/issues/321.
+  int res = REAL(strerror_r)(errnum, buf, buflen);
+
+  SIZE_T sz = internal_strnlen(buf, buflen);
+  if (sz < buflen) ++sz;
+  COMMON_INTERCEPTOR_WRITE_RANGE(ctx, buf, sz);
+  return res;
+}
+#else
+// GNU version.
 INTERCEPTOR(char *, strerror_r, int errnum, char *buf, SIZE_T buflen) {
   void *ctx;
   COMMON_INTERCEPTOR_ENTER(ctx, strerror_r, errnum, buf, buflen);
@@ -3252,24 +3277,11 @@ INTERCEPTOR(char *, strerror_r, int errnum, char *buf, SIZE_T buflen) {
   // its metadata. See
   // https://github.com/google/sanitizers/issues/321.
   char *res = REAL(strerror_r)(errnum, buf, buflen);
-  // There are 2 versions of strerror_r:
-  //  * POSIX version returns 0 on success, negative error code on failure,
-  //    writes message to buf.
-  //  * GNU version returns message pointer, which points to either buf or some
-  //    static storage.
-  SIZE_T posix_res = (SIZE_T)res;
-  if (posix_res < 1024 || posix_res > (SIZE_T) - 1024) {
-    // POSIX version. Spec is not clear on whether buf is NULL-terminated.
-    // At least on OSX, buf contents are valid even when the call fails.
-    SIZE_T sz = internal_strnlen(buf, buflen);
-    if (sz < buflen) ++sz;
-    COMMON_INTERCEPTOR_WRITE_RANGE(ctx, buf, sz);
-  } else {
-    // GNU version.
-    COMMON_INTERCEPTOR_WRITE_RANGE(ctx, res, REAL(strlen)(res) + 1);
-  }
+  COMMON_INTERCEPTOR_WRITE_RANGE(ctx, res, REAL(strlen)(res) + 1);
   return res;
 }
+#endif //(_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && !_GNU_SOURCE ||
+       //SANITIZER_MAC
 #define INIT_STRERROR_R COMMON_INTERCEPT_FUNCTION(strerror_r);
 #else
 #define INIT_STRERROR_R

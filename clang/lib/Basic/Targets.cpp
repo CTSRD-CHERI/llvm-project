@@ -2258,6 +2258,32 @@ public:
     return LangAS::opencl_constant;
   }
 
+  /// \returns Target specific vtbl ptr address space.
+  unsigned getVtblPtrAddressSpace() const override {
+    // \todo: We currently have address spaces defined in AMDGPU Backend. It
+    // would be nice if we could use it here instead of using bare numbers (same
+    // applies to getDWARFAddressSpace).
+    return 2; // constant.
+  }
+
+  /// \returns If a target requires an address within a target specific address
+  /// space \p AddressSpace to be converted in order to be used, then return the
+  /// corresponding target specific DWARF address space.
+  ///
+  /// \returns Otherwise return None and no conversion will be emitted in the
+  /// DWARF.
+  Optional<unsigned> getDWARFAddressSpace(
+      unsigned AddressSpace) const override {
+    switch (AddressSpace) {
+    case 0: // LLVM Private.
+      return 1; // DWARF Private.
+    case 3: // LLVM Local.
+      return 2; // DWARF Local.
+    default:
+      return None;
+    }
+  }
+
   CallingConvCheckResult checkCallingConvention(CallingConv CC) const override {
     switch (CC) {
       default:
@@ -2272,7 +2298,7 @@ public:
   // address space has value 0 but in private and local address space has
   // value ~0.
   uint64_t getNullPointerValue(unsigned AS) const override {
-    return AS != LangAS::opencl_local && AS != 0 ? 0 : ~0;
+    return AS == LangAS::opencl_local ? ~0 : 0;
   }
 };
 
@@ -2361,6 +2387,7 @@ bool AMDGPUTargetInfo::initFeatureMap(
     case GK_GFX8:
       Features["s-memrealtime"] = true;
       Features["16-bit-insts"] = true;
+      Features["dpp"] = true;
       break;
 
     case GK_NONE:
@@ -6434,6 +6461,7 @@ public:
       .Case("hexagonv5", "5")
       .Case("hexagonv55", "55")
       .Case("hexagonv60", "60")
+      .Case("hexagonv62", "62")
       .Default(nullptr);
   }
 
@@ -6478,6 +6506,9 @@ void HexagonTargetInfo::getTargetDefines(const LangOptions &Opts,
     Builder.defineMacro("__HEXAGON_ARCH__", "60");
     Builder.defineMacro("__QDSP6_V60__");
     Builder.defineMacro("__QDSP6_ARCH__", "60");
+  } else if (CPU == "hexagonv62") {
+    Builder.defineMacro("__HEXAGON_V62__");
+    Builder.defineMacro("__HEXAGON_ARCH__", "62");
   }
 
   if (hasFeature("hvx")) {

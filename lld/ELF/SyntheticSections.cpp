@@ -376,11 +376,14 @@ void BuildIdSection<ELFT>::computeHash(
   HashFn(HashBuf, Hashes);
 }
 
-template <class ELFT>
-CopyRelSection<ELFT>::CopyRelSection(bool ReadOnly, uintX_t AddrAlign, size_t S)
-    : SyntheticSection(SHF_ALLOC, SHT_NOBITS, AddrAlign,
-                       ReadOnly ? ".bss.rel.ro" : ".bss"),
-      Size(S) {}
+BssSection::BssSection(StringRef Name)
+    : SyntheticSection(SHF_ALLOC | SHF_WRITE, SHT_NOBITS, 0, Name) {}
+
+size_t BssSection::reserveSpace(uint32_t Alignment, size_t Size) {
+  OutSec->updateAlignment(Alignment);
+  this->Size = alignTo(this->Size, Alignment) + Size;
+  return this->Size - Size;
+}
 
 template <class ELFT>
 void BuildIdSection<ELFT>::writeBuildId(ArrayRef<uint8_t> Buf) {
@@ -460,7 +463,8 @@ bool EhFrameSection<ELFT>::isFdeLive(EhSectionPiece &Piece,
   auto *D = dyn_cast<DefinedRegular>(&B);
   if (!D || !D->Section)
     return false;
-  InputSectionBase *Target = D->Section->Repl;
+  auto *Target =
+      cast<InputSectionBase>(cast<InputSectionBase>(D->Section)->Repl);
   return Target && Target->Live;
 }
 
@@ -505,6 +509,8 @@ void EhFrameSection<ELFT>::addSection(InputSectionBase *C) {
   Sec->EHSec = this;
   updateAlignment(Sec->Alignment);
   Sections.push_back(Sec);
+  for (auto *DS : Sec->DependentSections)
+    DependentSections.push_back(DS);
 
   // .eh_frame is a sequence of CIE or FDE records. This function
   // splits it into pieces so that we can call
@@ -934,58 +940,55 @@ template <class ELFT> void MipsGotSection<ELFT>::writeTo(uint8_t *Buf) {
   }
 }
 
-template <class ELFT>
-GotPltSection<ELFT>::GotPltSection()
+GotPltSection::GotPltSection()
     : SyntheticSection(SHF_ALLOC | SHF_WRITE, SHT_PROGBITS,
                        Target->GotPltEntrySize, ".got.plt") {}
 
-template <class ELFT> void GotPltSection<ELFT>::addEntry(SymbolBody &Sym) {
+void GotPltSection::addEntry(SymbolBody &Sym) {
   Sym.GotPltIndex = Target->GotPltHeaderEntriesNum + Entries.size();
   Entries.push_back(&Sym);
 }
 
-template <class ELFT> size_t GotPltSection<ELFT>::getSize() const {
+size_t GotPltSection::getSize() const {
   return (Target->GotPltHeaderEntriesNum + Entries.size()) *
          Target->GotPltEntrySize;
 }
 
-template <class ELFT> void GotPltSection<ELFT>::writeTo(uint8_t *Buf) {
+void GotPltSection::writeTo(uint8_t *Buf) {
   Target->writeGotPltHeader(Buf);
   Buf += Target->GotPltHeaderEntriesNum * Target->GotPltEntrySize;
   for (const SymbolBody *B : Entries) {
     Target->writeGotPlt(Buf, *B);
-    Buf += sizeof(uintX_t);
+    Buf += Config->is64Bit() ? 8 : 4;
   }
 }
 
 // On ARM the IgotPltSection is part of the GotSection, on other Targets it is
 // part of the .got.plt
-template <class ELFT>
-IgotPltSection<ELFT>::IgotPltSection()
+IgotPltSection::IgotPltSection()
     : SyntheticSection(SHF_ALLOC | SHF_WRITE, SHT_PROGBITS,
                        Target->GotPltEntrySize,
                        Config->EMachine == EM_ARM ? ".got" : ".got.plt") {}
 
-template <class ELFT> void IgotPltSection<ELFT>::addEntry(SymbolBody &Sym) {
+void IgotPltSection::addEntry(SymbolBody &Sym) {
   Sym.IsInIgot = true;
   Sym.GotPltIndex = Entries.size();
   Entries.push_back(&Sym);
 }
 
-template <class ELFT> size_t IgotPltSection<ELFT>::getSize() const {
+size_t IgotPltSection::getSize() const {
   return Entries.size() * Target->GotPltEntrySize;
 }
 
-template <class ELFT> void IgotPltSection<ELFT>::writeTo(uint8_t *Buf) {
+void IgotPltSection::writeTo(uint8_t *Buf) {
   for (const SymbolBody *B : Entries) {
     Target->writeIgotPlt(Buf, *B);
-    Buf += sizeof(uintX_t);
+    Buf += Config->is64Bit() ? 8 : 4;
   }
 }
 
-template <class ELFT>
-StringTableSection<ELFT>::StringTableSection(StringRef Name, bool Dynamic)
-    : SyntheticSection(Dynamic ? (uintX_t)SHF_ALLOC : 0, SHT_STRTAB, 1, Name),
+StringTableSection::StringTableSection(StringRef Name, bool Dynamic)
+    : SyntheticSection(Dynamic ? (uint64_t)SHF_ALLOC : 0, SHT_STRTAB, 1, Name),
       Dynamic(Dynamic) {
   // ELF string tables start with a NUL byte.
   addString("");
@@ -995,8 +998,7 @@ StringTableSection<ELFT>::StringTableSection(StringRef Name, bool Dynamic)
 // duplicates. It is optional because the name of global symbols are already
 // uniqued and hashing them again has a big cost for a small value: uniquing
 // them with some other string that happens to be the same.
-template <class ELFT>
-unsigned StringTableSection<ELFT>::addString(StringRef S, bool HashIt) {
+unsigned StringTableSection::addString(StringRef S, bool HashIt) {
   if (HashIt) {
     auto R = StringMap.insert(std::make_pair(S, this->Size));
     if (!R.second)
@@ -1008,7 +1010,7 @@ unsigned StringTableSection<ELFT>::addString(StringRef S, bool HashIt) {
   return Ret;
 }
 
-template <class ELFT> void StringTableSection<ELFT>::writeTo(uint8_t *Buf) {
+void StringTableSection::writeTo(uint8_t *Buf) {
   for (StringRef S : Strings) {
     memcpy(Buf, S.data(), S.size());
     Buf += S.size() + 1;
@@ -1110,6 +1112,8 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
   add({DT_SYMENT, sizeof(Elf_Sym)});
   add({DT_STRTAB, In<ELFT>::DynStrTab});
   add({DT_STRSZ, In<ELFT>::DynStrTab->getSize()});
+  if (!Config->ZText)
+    add({DT_TEXTREL, (uint64_t)0});
   if (In<ELFT>::GnuHashTab)
     add({DT_GNU_HASH, In<ELFT>::GnuHashTab});
   if (In<ELFT>::HashTab)
@@ -1275,8 +1279,7 @@ template <class ELFT> void RelocationSection<ELFT>::finalizeContents() {
 }
 
 template <class ELFT>
-SymbolTableSection<ELFT>::SymbolTableSection(
-    StringTableSection<ELFT> &StrTabSec)
+SymbolTableSection<ELFT>::SymbolTableSection(StringTableSection &StrTabSec)
     : SyntheticSection(StrTabSec.isDynamic() ? (uintX_t)SHF_ALLOC : 0,
                        StrTabSec.isDynamic() ? SHT_DYNSYM : SHT_SYMTAB,
                        sizeof(uintX_t),
@@ -1357,8 +1360,8 @@ size_t SymbolTableSection<ELFT>::getSymbolIndex(SymbolBody *Body) {
     // This is used for -r, so we have to handle multiple section
     // symbols being combined.
     if (Body->Type == STT_SECTION && E.Symbol->Type == STT_SECTION)
-      return cast<DefinedRegular>(Body)->Section->OutSec ==
-             cast<DefinedRegular>(E.Symbol)->Section->OutSec;
+      return cast<DefinedRegular>(Body)->Section->getOutputSection() ==
+             cast<DefinedRegular>(E.Symbol)->Section->getOutputSection();
     return false;
   });
   if (I == Symbols.end())
@@ -2136,7 +2139,7 @@ template <class ELFT> bool VersionNeedSection<ELFT>::empty() const {
 }
 
 MergeSyntheticSection::MergeSyntheticSection(StringRef Name, uint32_t Type,
-                                             uint64_t Flags, uint64_t Alignment)
+                                             uint64_t Flags, uint32_t Alignment)
     : SyntheticSection(Flags, Type, Alignment, Name),
       Builder(StringTableBuilder::RAW, Alignment) {}
 
@@ -2304,11 +2307,6 @@ template class elf::BuildIdSection<ELF32BE>;
 template class elf::BuildIdSection<ELF64LE>;
 template class elf::BuildIdSection<ELF64BE>;
 
-template class elf::CopyRelSection<ELF32LE>;
-template class elf::CopyRelSection<ELF32BE>;
-template class elf::CopyRelSection<ELF64LE>;
-template class elf::CopyRelSection<ELF64BE>;
-
 template class elf::GotSection<ELF32LE>;
 template class elf::GotSection<ELF32BE>;
 template class elf::GotSection<ELF64LE>;
@@ -2318,21 +2316,6 @@ template class elf::MipsGotSection<ELF32LE>;
 template class elf::MipsGotSection<ELF32BE>;
 template class elf::MipsGotSection<ELF64LE>;
 template class elf::MipsGotSection<ELF64BE>;
-
-template class elf::GotPltSection<ELF32LE>;
-template class elf::GotPltSection<ELF32BE>;
-template class elf::GotPltSection<ELF64LE>;
-template class elf::GotPltSection<ELF64BE>;
-
-template class elf::IgotPltSection<ELF32LE>;
-template class elf::IgotPltSection<ELF32BE>;
-template class elf::IgotPltSection<ELF64LE>;
-template class elf::IgotPltSection<ELF64BE>;
-
-template class elf::StringTableSection<ELF32LE>;
-template class elf::StringTableSection<ELF32BE>;
-template class elf::StringTableSection<ELF64LE>;
-template class elf::StringTableSection<ELF64BE>;
 
 template class elf::DynamicSection<ELF32LE>;
 template class elf::DynamicSection<ELF32BE>;

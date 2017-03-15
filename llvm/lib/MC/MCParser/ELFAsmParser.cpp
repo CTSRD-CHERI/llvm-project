@@ -157,7 +157,7 @@ private:
   bool maybeParseSectionType(StringRef &TypeName);
   bool parseMergeSize(int64_t &Size);
   bool parseGroup(StringRef &GroupName);
-  bool parseMetadataSym(MCSectionELF *&Associated);
+  bool parseMetadataSym(MCSymbolELF *&Associated);
   bool maybeParseUniqueID(int64_t &UniqueID);
 };
 
@@ -395,7 +395,10 @@ bool ELFAsmParser::maybeParseSectionType(StringRef &TypeName) {
     return TokError("expected '@<type>', '%<type>' or \"<type>\"");
   if (!L.is(AsmToken::String))
     Lex();
-  if (getParser().parseIdentifier(TypeName))
+  if (L.is(AsmToken::Integer)) {
+    TypeName = getTok().getString();
+    Lex();
+  } else if (getParser().parseIdentifier(TypeName))
     return TokError("expected identifier in directive");
   return false;
 }
@@ -429,7 +432,7 @@ bool ELFAsmParser::parseGroup(StringRef &GroupName) {
   return false;
 }
 
-bool ELFAsmParser::parseMetadataSym(MCSectionELF *&Associated) {
+bool ELFAsmParser::parseMetadataSym(MCSymbolELF *&Associated) {
   MCAsmLexer &L = getLexer();
   if (L.isNot(AsmToken::Comma))
     return TokError("expected metadata symbol");
@@ -437,10 +440,9 @@ bool ELFAsmParser::parseMetadataSym(MCSectionELF *&Associated) {
   StringRef Name;
   if (getParser().parseIdentifier(Name))
     return true;
-  MCSymbol *Sym = getContext().lookupSymbol(Name);
-  if (!Sym || !Sym->isInSection())
+  Associated = dyn_cast_or_null<MCSymbolELF>(getContext().lookupSymbol(Name));
+  if (!Associated || !Associated->isInSection())
     return TokError("symbol is not in a section: " + Name);
-  Associated = cast<MCSectionELF>(&Sym->getSection());
   return false;
 }
 
@@ -479,7 +481,7 @@ bool ELFAsmParser::ParseSectionArguments(bool IsPush, SMLoc loc) {
   const MCExpr *Subsection = nullptr;
   bool UseLastGroup = false;
   StringRef UniqueStr;
-  MCSectionELF *Associated = nullptr;
+  MCSymbolELF *Associated = nullptr;
   int64_t UniqueID = ~0;
 
   // Set the defaults first.
@@ -580,7 +582,7 @@ EndStmt:
       Type = ELF::SHT_NOTE;
     else if (TypeName == "unwind")
       Type = ELF::SHT_X86_64_UNWIND;
-    else
+    else if (TypeName.getAsInteger(0, Type))
       return TokError("unknown section type");
   }
 
@@ -594,8 +596,9 @@ EndStmt:
       }
   }
 
-  MCSection *ELFSection = getContext().getELFSection(
-      SectionName, Type, Flags, Size, GroupName, UniqueID, Associated);
+  MCSection *ELFSection =
+      getContext().getELFSection(SectionName, Type, Flags, Size, GroupName,
+                                 UniqueID, Associated);
   getStreamer().SwitchSection(ELFSection, Subsection);
 
   if (getContext().getGenDwarfForAssembly()) {
@@ -743,6 +746,7 @@ bool ELFAsmParser::ParseDirectiveSymver(StringRef, SMLoc) {
   const MCExpr *Value = MCSymbolRefExpr::create(Sym, getContext());
 
   getStreamer().EmitAssignment(Alias, Value);
+  getStreamer().emitELFSymverDirective(Alias, Sym);
   return false;
 }
 

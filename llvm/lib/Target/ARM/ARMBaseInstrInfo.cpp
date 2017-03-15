@@ -1789,25 +1789,17 @@ isProfitableToIfCvt(MachineBasicBlock &MBB,
       }
     }
   }
-
-  // Attempt to estimate the relative costs of predication versus branching.
-  // Here we scale up each component of UnpredCost to avoid precision issue when
-  // scaling NumCycles by Probability.
-  const unsigned ScalingUpFactor = 1024;
-  unsigned UnpredCost = Probability.scale(NumCycles * ScalingUpFactor);
-  UnpredCost += ScalingUpFactor; // The branch itself
-  UnpredCost += Subtarget.getMispredictionPenalty() * ScalingUpFactor / 10;
-
-  return (NumCycles + ExtraPredCycles) * ScalingUpFactor <= UnpredCost;
+  return isProfitableToIfCvt(MBB, NumCycles, ExtraPredCycles,
+                             MBB, 0, 0, Probability);
 }
 
 bool ARMBaseInstrInfo::
-isProfitableToIfCvt(MachineBasicBlock &TMBB,
+isProfitableToIfCvt(MachineBasicBlock &,
                     unsigned TCycles, unsigned TExtra,
-                    MachineBasicBlock &FMBB,
+                    MachineBasicBlock &,
                     unsigned FCycles, unsigned FExtra,
                     BranchProbability Probability) const {
-  if (!TCycles || !FCycles)
+  if (!TCycles)
     return false;
 
   // Attempt to estimate the relative costs of predication versus branching.
@@ -2035,6 +2027,16 @@ static const AddSubFlagsOpcodePair AddSubFlagsOpcodeMap[] = {
   {ARM::RSBSri, ARM::RSBri},
   {ARM::RSBSrsi, ARM::RSBrsi},
   {ARM::RSBSrsr, ARM::RSBrsr},
+
+  {ARM::tADDSi3, ARM::tADDi3},
+  {ARM::tADDSi8, ARM::tADDi8},
+  {ARM::tADDSrr, ARM::tADDrr},
+  {ARM::tADCS, ARM::tADC},
+
+  {ARM::tSUBSi3, ARM::tSUBi3},
+  {ARM::tSUBSi8, ARM::tSUBi8},
+  {ARM::tSUBSrr, ARM::tSUBrr},
+  {ARM::tSBCS, ARM::tSBC},
 
   {ARM::t2ADDSri, ARM::t2ADDri},
   {ARM::t2ADDSrr, ARM::t2ADDrr},

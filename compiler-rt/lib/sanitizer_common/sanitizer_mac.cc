@@ -404,7 +404,9 @@ bool IsHandledDeadlySignal(int signum) {
     return true;
   if (common_flags()->handle_sigfpe && signum == SIGFPE)
     return true;
-  return (signum == SIGSEGV || signum == SIGBUS) && common_flags()->handle_segv;
+  if (common_flags()->handle_segv && signum == SIGSEGV)
+    return true;
+  return common_flags()->handle_sigbus && signum == SIGBUS;
 }
 
 MacosVersion cached_macos_version = MACOS_VERSION_UNINITIALIZED;
@@ -884,6 +886,10 @@ void PrintModuleMap() {
            ModuleArchToString(modules[i].arch()), uuid_str);
   }
   Printf("End of module map.\n");
+}
+
+void CheckNoDeepBind(const char *filename, int flag) {
+  // Do nothing.
 }
 
 }  // namespace __sanitizer
