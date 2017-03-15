@@ -101,7 +101,8 @@
 ; CHECK-NEXT: .quad 0
 ; CHECK-NEXT: .long -1
 ; CHECK-NEXT: .zero 4
-; CHECK-NEXT: .quad 0
+; XXXAR: For some reason we emit .zero 8 here instead of .quad 0
+; CHECK-NEXT: .{{(quad 0)|(zero 8)}}
 ; CHECK-NEXT: .long -1
 ; CHECK-NEXT: .zero 4
 @structWithPointers = addrspace(1) global %struct.S {
