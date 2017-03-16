@@ -2000,8 +2000,9 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.SjLjExceptions = Args.hasArg(OPT_fsjlj_exceptions);
   Opts.ExternCNoUnwind = Args.hasArg(OPT_fexternc_nounwind);
   Opts.TraditionalCPP = Args.hasArg(OPT_traditional_cpp);
-
-  Opts.RTTI = Opts.CPlusPlus && !Args.hasArg(OPT_fno_rtti);
+  bool IsCheriSandbox = T.getArch() == llvm::Triple::cheri && TargetOpts.ABI == "sandbox";
+  Opts.RTTI = Opts.CPlusPlus && !Args.hasArg(OPT_fno_rtti) &&
+    (!IsCheriSandbox || Opts.Exceptions);
   Opts.RTTIData = Opts.RTTI && !Args.hasArg(OPT_fno_rtti_data);
   Opts.Blocks = Args.hasArg(OPT_fblocks) || (Opts.OpenCL
     && Opts.OpenCLVersion >= 200);

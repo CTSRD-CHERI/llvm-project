@@ -441,13 +441,24 @@ static void addExceptionArgs(const ArgList &Args, types::ID InputType,
     Arg *ExceptionArg = Args.getLastArg(
         options::OPT_fcxx_exceptions, options::OPT_fno_cxx_exceptions,
         options::OPT_fexceptions, options::OPT_fno_exceptions);
+
+    bool IsCheriSandboxABI = false;
+    if (Triple.getArch() == llvm::Triple::cheri) {
+      StringRef CPUName;
+      StringRef ABIName;
+      mips::getMipsCPUAndABI(Args, Triple, CPUName, ABIName);
+      if (ABIName == "sandbox") {
+        IsCheriSandboxABI = true;
+        CXXExceptionsEnabled = false;
+      }
+    }
     if (ExceptionArg)
       CXXExceptionsEnabled =
           ExceptionArg->getOption().matches(options::OPT_fcxx_exceptions) ||
           ExceptionArg->getOption().matches(options::OPT_fexceptions);
 
     if (CXXExceptionsEnabled) {
-      if (Triple.isPS4CPU()) {
+      if (Triple.isPS4CPU() || IsCheriSandboxABI) {
         ToolChain::RTTIMode RTTIMode = TC.getRTTIMode();
         assert(ExceptionArg &&
                "On the PS4 exceptions should only be enabled if passing "

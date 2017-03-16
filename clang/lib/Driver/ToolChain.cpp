@@ -10,6 +10,7 @@
 #include "clang/Driver/ToolChain.h"
 #include "ToolChains/CommonArgs.h"
 #include "ToolChains/Arch/ARM.h"
+#include "ToolChains/Arch/Mips.h"
 #include "ToolChains/Clang.h"
 #include "clang/Basic/ObjCRuntime.h"
 #include "clang/Basic/VirtualFileSystem.h"
@@ -51,11 +52,21 @@ static ToolChain::RTTIMode CalculateRTTIMode(const ArgList &Args,
       return ToolChain::RM_DisabledExplicitly;
   }
 
-  // -frtti is default, except for the PS4 CPU.
-  if (!Triple.isPS4CPU())
+  bool IsCheriSandbox = false;
+  if (Triple.getArch() == Triple::cheri) {
+    StringRef CPUName;
+    StringRef ABIName;
+    mips::getMipsCPUAndABI(Args, Triple, CPUName, ABIName);
+    if (ABIName == "sandbox") {
+      IsCheriSandbox = true;
+    }
+  }
+  // -frtti is default, except for the PS4 CPU and CHERI with pure ABI.
+  if (!Triple.isPS4CPU() && !IsCheriSandbox) {
     return ToolChain::RM_EnabledImplicitly;
+  }
 
-  // On the PS4, turning on c++ exceptions turns on rtti.
+  // On the PS4 (and CHERI with pure ABI), turning on c++ exceptions turns on rtti.
   // We're assuming that, if we see -fexceptions, rtti gets turned on.
   Arg *Exceptions = Args.getLastArgNoClaim(
       options::OPT_fcxx_exceptions, options::OPT_fno_cxx_exceptions,
