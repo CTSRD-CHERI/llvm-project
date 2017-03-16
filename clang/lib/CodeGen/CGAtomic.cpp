@@ -652,9 +652,14 @@ AddDirectArgument(CodeGenFunction &CGF, CallArgList &Args,
     // Coerce the value into an appropriately sized integer type.
     Args.add(RValue::get(Val), ValTy);
   } else {
-    // Non-optimized functions always take a reference.
-    Args.add(RValue::get(CGF.EmitCastToVoidPtr(Val)),
-                         CGF.getContext().VoidPtrTy);
+    if (false && ValTy->isMemoryCapabilityType(CGF.getContext())) {
+      // capabilities can be passed directly without casting to i8*
+      Args.add(RValue::get(Val), ValTy);
+    } else {
+      // Non-optimized functions always take a reference.
+      Args.add(RValue::get(CGF.EmitCastToVoidPtr(Val)),
+                           CGF.getContext().VoidPtrTy);
+    }
   }
 }
 
@@ -1144,11 +1149,24 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
 }
 
 Address AtomicInfo::emitCastToAtomicIntPointer(Address addr) const {
-  unsigned addrspace =
-    cast<llvm::PointerType>(addr.getPointer()->getType())->getAddressSpace();
-  llvm::IntegerType *ty =
-    llvm::IntegerType::get(CGF.getLLVMContext(), AtomicSizeInBits);
-  return CGF.Builder.CreateBitCast(addr, ty->getPointerTo(addrspace));
+  Address Result = Address::invalid();
+  // llvm::errs() << "  atomiccap: " << AtomicTy->isMemoryCapabilityType(CGF.getContext()) << " valcap: " << ValueTy->isMemoryCapabilityType(CGF.getContext()) << "\n";
+  unsigned addrspace;
+  auto addrTy = cast<llvm::PointerType>(addr.getPointer()->getType());
+  llvm::Type *ty;
+  // XXXAR: ValueTy seems to always work, but AtomicTy doesn't?
+  if (ValueTy->isMemoryCapabilityType(CGF.getContext())) {
+    addrspace = CGF.CGM.getTargetCodeGenInfo().getMemoryCapabilityAS();
+    if (addrTy->getAddressSpace() == addrspace) {
+      return addr;
+    }
+    ty = CGF.Int8Ty;
+  } else {
+    ty = llvm::IntegerType::get(CGF.getLLVMContext(), AtomicSizeInBits);
+    addrspace = addrTy->getAddressSpace();
+  }
+  Result = CGF.Builder.CreateBitCast(addr, ty->getPointerTo(addrspace));
+  return Result;
 }
 
 Address AtomicInfo::convertToAtomicIntPointer(Address Addr) const {

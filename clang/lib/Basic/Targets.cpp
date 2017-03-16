@@ -8091,6 +8091,18 @@ public:
 
   bool SupportsCapabilities() const override { return IsCheri; }
 
+  bool hasBuiltinAtomic(uint64_t AtomicSizeInBits,
+                        uint64_t AlignmentInBits) const override {
+#ifdef NOTYET
+    if (SupportsCapabilities() &&
+        AtomicSizeInBits == getMemoryCapabilityWidth() &&
+        AlignmentInBits == getMemoryCapabilityAlign()) {
+      return true;
+    }
+#endif
+    return TargetInfo::hasBuiltinAtomic(AtomicSizeInBits, AlignmentInBits);
+  }
+
   bool validateTarget(DiagnosticsEngine &Diags) const override {
     // FIXME: It's valid to use O32 on a 64-bit CPU but the backend can't handle
     //        this yet. It's better to fail here than on the backend assertion.
