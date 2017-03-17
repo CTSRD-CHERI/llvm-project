@@ -17,6 +17,8 @@
 // Other libraries and framework includes
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/DynamicLibrary.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Threading.h"
 
 // Project includes
 #include "lldb/Core/FormatEntity.h"
@@ -26,9 +28,7 @@
 #include "lldb/Core/RegisterValue.h"
 #include "lldb/Core/State.h"
 #include "lldb/Core/StreamAsynchronousIO.h"
-#include "lldb/Core/StreamCallback.h"
 #include "lldb/Core/StreamFile.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Core/StructuredData.h"
 #include "lldb/Core/Timer.h"
 #include "lldb/Core/ValueObject.h"
@@ -59,6 +59,8 @@
 #include "lldb/Target/TargetList.h"
 #include "lldb/Target/Thread.h"
 #include "lldb/Utility/AnsiTerminal.h"
+#include "lldb/Utility/StreamCallback.h"
+#include "lldb/Utility/StreamString.h"
 #include "lldb/lldb-private.h"
 
 using namespace lldb;
@@ -125,7 +127,7 @@ OptionEnumValueElement g_language_enumerators[] = {
   "\\n"
 
 #define DEFAULT_FRAME_FORMAT                                                   \
-  "frame #${frame.index}:{ ${frame.no-debug}${frame.pc}}" MODULE_WITH_FUNC FILE_AND_LINE          \
+  "frame #${frame.index}: ${frame.pc}" MODULE_WITH_FUNC FILE_AND_LINE          \
       IS_OPTIMIZED "\\n"
 
 // Three parts to this disassembly format specification:
@@ -555,7 +557,7 @@ bool Debugger::LoadPlugin(const FileSpec &spec, Error &error) {
 }
 
 static FileSpec::EnumerateDirectoryResult
-LoadPluginCallback(void *baton, FileSpec::FileType file_type,
+LoadPluginCallback(void *baton, llvm::sys::fs::file_type ft,
                    const FileSpec &file_spec) {
   Error error;
 
@@ -567,13 +569,13 @@ LoadPluginCallback(void *baton, FileSpec::FileType file_type,
 
   Debugger *debugger = (Debugger *)baton;
 
+  namespace fs = llvm::sys::fs;
   // If we have a regular file, a symbolic link or unknown file type, try
   // and process the file. We must handle unknown as sometimes the directory
   // enumeration might be enumerating a file system that doesn't have correct
   // file type information.
-  if (file_type == FileSpec::eFileTypeRegular ||
-      file_type == FileSpec::eFileTypeSymbolicLink ||
-      file_type == FileSpec::eFileTypeUnknown) {
+  if (ft == fs::file_type::regular_file || ft == fs::file_type::symlink_file ||
+      ft == fs::file_type::type_unknown) {
     FileSpec plugin_file_spec(file_spec);
     plugin_file_spec.ResolvePath();
 
@@ -586,9 +588,9 @@ LoadPluginCallback(void *baton, FileSpec::FileType file_type,
     debugger->LoadPlugin(plugin_file_spec, plugin_load_error);
 
     return FileSpec::eEnumerateDirectoryResultNext;
-  } else if (file_type == FileSpec::eFileTypeUnknown ||
-             file_type == FileSpec::eFileTypeDirectory ||
-             file_type == FileSpec::eFileTypeSymbolicLink) {
+  } else if (ft == fs::file_type::directory_file ||
+             ft == fs::file_type::symlink_file ||
+             ft == fs::file_type::type_unknown) {
     // Try and recurse into anything that a directory or symbolic link.
     // We must also do this for unknown as sometimes the directory enumeration
     // might be enumerating a file system that doesn't have correct file type
@@ -762,7 +764,7 @@ void Debugger::Clear() {
   //     static void Debugger::Destroy(lldb::DebuggerSP &debugger_sp);
   //     static void Debugger::Terminate();
   //----------------------------------------------------------------------
-  std::call_once(m_clear_once, [this]() {
+  llvm::call_once(m_clear_once, [this]() {
     ClearIOHandlers();
     StopIOHandlerThread();
     StopEventHandlerThread();
@@ -1237,28 +1239,38 @@ void Debugger::SetLoggingCallback(lldb::LogOutputCallback log_callback,
   m_log_callback_stream_sp.reset(new StreamCallback(log_callback, baton));
 }
 
-bool Debugger::EnableLog(const char *channel, const char **categories,
-                         const char *log_file, uint32_t log_options,
-                         Stream &error_stream) {
-  StreamSP log_stream_sp;
+bool Debugger::EnableLog(llvm::StringRef channel,
+                         llvm::ArrayRef<const char *> categories,
+                         llvm::StringRef log_file, uint32_t log_options,
+                         llvm::raw_ostream &error_stream) {
+  const bool should_close = true;
+  const bool unbuffered = true;
+
+  std::shared_ptr<llvm::raw_ostream> log_stream_sp;
   if (m_log_callback_stream_sp) {
     log_stream_sp = m_log_callback_stream_sp;
     // For now when using the callback mode you always get thread & timestamp.
     log_options |=
         LLDB_LOG_OPTION_PREPEND_TIMESTAMP | LLDB_LOG_OPTION_PREPEND_THREAD_NAME;
-  } else if (log_file == nullptr || *log_file == '\0') {
-    log_stream_sp = GetOutputFile();
+  } else if (log_file.empty()) {
+    log_stream_sp = std::make_shared<llvm::raw_fd_ostream>(
+        GetOutputFile()->GetFile().GetDescriptor(), !should_close, unbuffered);
   } else {
-    LogStreamMap::iterator pos = m_log_streams.find(log_file);
+    auto pos = m_log_streams.find(log_file);
     if (pos != m_log_streams.end())
       log_stream_sp = pos->second.lock();
     if (!log_stream_sp) {
-      uint32_t options = File::eOpenOptionWrite | File::eOpenOptionCanCreate |
-                         File::eOpenOptionCloseOnExec | File::eOpenOptionAppend;
-      if (!(log_options & LLDB_LOG_OPTION_APPEND))
-        options |= File::eOpenOptionTruncate;
-
-      log_stream_sp.reset(new StreamFile(log_file, options));
+      llvm::sys::fs::OpenFlags flags = llvm::sys::fs::F_Text;
+      if (log_options & LLDB_LOG_OPTION_APPEND)
+        flags |= llvm::sys::fs::F_Append;
+      int FD;
+      if (std::error_code ec =
+              llvm::sys::fs::openFileForWrite(log_file, FD, flags)) {
+        error_stream << "Unable to open log file: " << ec.message();
+        return false;
+      }
+      log_stream_sp.reset(
+          new llvm::raw_fd_ostream(FD, should_close, unbuffered));
       m_log_streams[log_file] = log_stream_sp;
     }
   }

@@ -9,9 +9,9 @@
 
 #include "lldb/Core/StringList.h"
 
-#include "lldb/Core/Log.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Host/FileSpec.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/StreamString.h"
 
 #include <string>
 
@@ -63,10 +63,6 @@ void StringList::AppendList(StringList strings) {
 
   for (size_t i = 0; i < len; ++i)
     m_strings.push_back(strings.GetStringAtIndex(i));
-}
-
-bool StringList::ReadFileLines(FileSpec &input_file) {
-  return input_file.ReadFileLines(m_strings);
 }
 
 size_t StringList::GetSize() const { return m_strings.size(); }
@@ -267,5 +263,5 @@ void StringList::LogDump(Log *log, const char *name) {
   if (name)
     strm.Printf("End %s.\n", name);
 
-  log->Debug("%s", strm.GetData());
+  LLDB_LOGV(log, "{0}", strm.GetData());
 }

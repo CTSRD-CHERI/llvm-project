@@ -10,9 +10,9 @@ Written by the `LLVM Team <http://llvm.org/>`_
 
 .. warning::
 
-   These are in-progress notes for the upcoming Clang 5 release. You may
-   prefer the `Clang 4 Release Notes
-   <http://llvm.org/releases/4.0.0/tools/clang/docs/ReleaseNotes.html>`_.
+   These are in-progress notes for the upcoming Clang 5 release.
+   Release notes for previous releases can be found on
+   `the Download Page <http://releases.llvm.org/download.html>`_.
 
 Introduction
 ============
@@ -127,6 +127,43 @@ AST Matchers
 ------------
 
 ...
+
+
+clang-format
+------------
+
+* Option **BreakBeforeInheritanceComma** added to break before ``:`` and ``,``  in case of
+  multiple inheritance in a class declaration. Enabled by default in the Mozilla coding style.
+
+  .. code-block:: c++
+
+     true:                                  false:
+     class MyClass                  vs.     class MyClass : public X, public Y {
+         : public X                         };
+         , public Y {
+     };
+
+* Align block comment decorations.
+
+  .. code-block:: c++
+
+     /* line 1                          /* line 1
+       * line 2               becomes:   * line 2
+      */                                 */
+
+* The :doc:`ClangFormatStyleOptions` documentation provides detailed examples for most options.
+
+* Namespace end comments are now added or updated automatically.
+
+  .. code-block:: c++
+
+     namespace A {                      namespace A {
+     int i;                             int i;
+     int j;                   becomes:  int j;
+     }                                  } // namespace A
+
+* Comment reflow support added. Overly long comment lines will now be reflown with the rest of
+  the paragraph instead of just broken. Option **ReflowComments** added and enabled by default.
 
 libclang
 --------

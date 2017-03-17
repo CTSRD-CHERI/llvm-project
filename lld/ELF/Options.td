@@ -70,6 +70,8 @@ def dynamic_list: S<"dynamic-list">,
 def eh_frame_hdr: F<"eh-frame-hdr">,
   HelpText<"Request creation of .eh_frame_hdr section and PT_GNU_EH_FRAME segment header">;
 
+def emit_relocs: F<"emit-relocs">, HelpText<"Generate relocations in output">;
+
 def enable_new_dtags: F<"enable-new-dtags">,
   HelpText<"Enable new dynamic tags">;
 
@@ -146,6 +148,9 @@ def no_define_common: F<"no-define-common">,
 def no_demangle: F<"no-demangle">,
   HelpText<"Do not demangle symbol names">;
 
+def no_dynamic_linker: F<"no-dynamic-linker">,
+  HelpText<"Inhibit output of .interp section">;
+
 def no_export_dynamic: F<"no-export-dynamic">;
 def no_fatal_warnings: F<"no-fatal-warnings">;
 
@@ -180,7 +185,7 @@ def o: JoinedOrSeparate<["-"], "o">, MetaVarName<"<path>">,
 def oformat: Separate<["--"], "oformat">, MetaVarName<"<format>">,
   HelpText<"Specify the binary format for the output object file">;
 
-def omagic: F<"omagic">, MetaVarName<"<magic>">,
+def omagic: Flag<["--"], "omagic">, MetaVarName<"<magic>">,
   HelpText<"Set the text and data sections to be readable and writable">;
 
 def pie: F<"pie">, HelpText<"Create a position independent executable">;
@@ -234,7 +239,7 @@ def threads: F<"threads">, HelpText<"Run the linker multi-threaded">;
 
 def trace: F<"trace">, HelpText<"Print the names of the input files">;
 
-def trace_symbol : J<"trace-symbol=">, HelpText<"Trace references to symbols">;
+def trace_symbol : S<"trace-symbol">, HelpText<"Trace references to symbols">;
 
 def undefined: S<"undefined">,
   HelpText<"Force undefined symbol during linking">;
@@ -283,6 +288,7 @@ def alias_define_common_dp: F<"dp">, Alias<define_common>;
 def alias_discard_all_x: Flag<["-"], "x">, Alias<discard_all>;
 def alias_discard_locals_X: Flag<["-"], "X">, Alias<discard_locals>;
 def alias_dynamic_list: J<"dynamic-list=">, Alias<dynamic_list>;
+def alias_emit_relocs: Flag<["-"], "q">, Alias<emit_relocs>;
 def alias_entry_e: JoinedOrSeparate<["-"], "e">, Alias<entry>;
 def alias_entry_entry: J<"entry=">, Alias<entry>;
 def alias_error_limit: J<"error-limit=">, Alias<error_limit>;
@@ -315,6 +321,7 @@ def alias_strip_debug_S: Flag<["-"], "S">, Alias<strip_debug>;
 def alias_Tbss: J<"Tbss=">, Alias<Tbss>;
 def alias_Tdata: J<"Tdata=">, Alias<Tdata>;
 def alias_trace: Flag<["-"], "t">, Alias<trace>;
+def trace_trace_symbol_eq : J<"trace-symbol=">, Alias<trace_symbol>;
 def alias_trace_symbol_y : JoinedOrSeparate<["-"], "y">, Alias<trace_symbol>;
 def alias_Ttext: J<"Ttext=">, Alias<Ttext>;
 def alias_Ttext_segment: S<"Ttext-segment">, Alias<Ttext>;
@@ -353,7 +360,6 @@ def no_add_needed: F<"no-add-needed">;
 def no_allow_shlib_undefined: F<"no-allow-shlib-undefined">;
 def no_copy_dt_needed_entries: F<"no-copy-dt-needed-entries">,
   Alias<no_add_needed>;
-def no_dynamic_linker: F<"no-dynamic-linker">;
 def no_mmap_output_file: F<"no-mmap-output-file">;
 def no_warn_common: F<"no-warn-common">;
 def no_warn_mismatch: F<"no-warn-mismatch">;
@@ -381,5 +387,11 @@ def lto_partitions: J<"lto-partitions=">,
   HelpText<"Number of LTO codegen partitions">;
 def disable_verify: F<"disable-verify">;
 def mllvm: S<"mllvm">;
+def opt_remarks_filename: Separate<["--"], "opt-remarks-filename">,
+  HelpText<"YAML output file for optimization remarks">;
+def opt_remarks_with_hotness: Flag<["--"], "opt-remarks-with-hotness">,
+  HelpText<"Include hotness informations in the optimization remarks file">;
 def save_temps: F<"save-temps">;
+def thinlto_cache_dir: J<"thinlto-cache-dir=">,
+  HelpText<"Path to ThinLTO cached object file directory">;
 def thinlto_jobs: J<"thinlto-jobs=">, HelpText<"Number of ThinLTO jobs">;

@@ -24,22 +24,24 @@
 
 // Other libraries and framework includes
 #include "lldb/Core/EmulateInstruction.h"
-#include "lldb/Core/Error.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/RegisterValue.h"
 #include "lldb/Core/State.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/HostProcess.h"
+#include "lldb/Host/PseudoTerminal.h"
 #include "lldb/Host/ThreadLauncher.h"
 #include "lldb/Host/common/NativeBreakpoint.h"
 #include "lldb/Host/common/NativeRegisterContext.h"
-#include "lldb/Host/linux/ProcessLauncherLinux.h"
+#include "lldb/Host/linux/Ptrace.h"
+#include "lldb/Host/linux/Uio.h"
+#include "lldb/Host/posix/ProcessLauncherPosixFork.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/ProcessLaunchInfo.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/Error.h"
 #include "lldb/Utility/LLDBAssert.h"
-#include "lldb/Utility/PseudoTerminal.h"
 #include "lldb/Utility/StringExtractor.h"
 
 #include "NativeThreadLinux.h"
@@ -47,19 +49,15 @@
 #include "ProcFileReader.h"
 #include "Procfs.h"
 
-// System includes - They have to be included after framework includes because
-// they define some
-// macros which collide with variable names in other modules
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Threading.h"
+
 #include <linux/unistd.h>
 #include <sys/socket.h>
-
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/user.h>
 #include <sys/wait.h>
-
-#include "lldb/Host/linux/Ptrace.h"
-#include "lldb/Host/linux/Uio.h"
 
 // Support hardware breakpoints in case it has not been defined
 #ifndef TRAP_HWBKPT
@@ -75,9 +73,9 @@ using namespace llvm;
 
 static bool ProcessVmReadvSupported() {
   static bool is_supported;
-  static std::once_flag flag;
+  static llvm::once_flag flag;
 
-  std::call_once(flag, [] {
+  llvm::call_once(flag, [] {
     Log *log(ProcessPOSIXLog::GetLogIfAllCategoriesSet(POSIX_LOG_PROCESS));
 
     uint32_t source = 0x47424742;
@@ -143,8 +141,7 @@ void DisplayBytes(StreamString &s, void *bytes, uint32_t count) {
 }
 
 void PtraceDisplayBytes(int &req, void *data, size_t data_size) {
-  Log *log(ProcessPOSIXLog::GetLogIfAllCategoriesSet(POSIX_LOG_PTRACE |
-                                                     POSIX_LOG_VERBOSE));
+  Log *log(ProcessPOSIXLog::GetLogIfAllCategoriesSet(POSIX_LOG_PTRACE));
   if (!log)
     return;
   StreamString buf;
@@ -152,38 +149,38 @@ void PtraceDisplayBytes(int &req, void *data, size_t data_size) {
   switch (req) {
   case PTRACE_POKETEXT: {
     DisplayBytes(buf, &data, 8);
-    LLDB_LOG(log, "PTRACE_POKETEXT {0}", buf.GetData());
+    LLDB_LOGV(log, "PTRACE_POKETEXT {0}", buf.GetData());
     break;
   }
   case PTRACE_POKEDATA: {
     DisplayBytes(buf, &data, 8);
-    LLDB_LOG(log, "PTRACE_POKEDATA {0}", buf.GetData());
+    LLDB_LOGV(log, "PTRACE_POKEDATA {0}", buf.GetData());
     break;
   }
   case PTRACE_POKEUSER: {
     DisplayBytes(buf, &data, 8);
-    LLDB_LOG(log, "PTRACE_POKEUSER {0}", buf.GetData());
+    LLDB_LOGV(log, "PTRACE_POKEUSER {0}", buf.GetData());
     break;
   }
   case PTRACE_SETREGS: {
     DisplayBytes(buf, data, data_size);
-    LLDB_LOG(log, "PTRACE_SETREGS {0}", buf.GetData());
+    LLDB_LOGV(log, "PTRACE_SETREGS {0}", buf.GetData());
     break;
   }
   case PTRACE_SETFPREGS: {
     DisplayBytes(buf, data, data_size);
-    LLDB_LOG(log, "PTRACE_SETFPREGS {0}", buf.GetData());
+    LLDB_LOGV(log, "PTRACE_SETFPREGS {0}", buf.GetData());
     break;
   }
   case PTRACE_SETSIGINFO: {
     DisplayBytes(buf, data, sizeof(siginfo_t));
-    LLDB_LOG(log, "PTRACE_SETSIGINFO {0}", buf.GetData());
+    LLDB_LOGV(log, "PTRACE_SETSIGINFO {0}", buf.GetData());
     break;
   }
   case PTRACE_SETREGSET: {
     // Extract iov_base from data, which is a pointer to the struct IOVEC
     DisplayBytes(buf, *(void **)data, data_size);
-    LLDB_LOG(log, "PTRACE_SETREGSET {0}", buf.GetData());
+    LLDB_LOGV(log, "PTRACE_SETREGSET {0}", buf.GetData());
     break;
   }
   default: {}
@@ -228,9 +225,8 @@ Error NativeProcessProtocol::Launch(
 
   // Verify the working directory is valid if one was specified.
   FileSpec working_dir{launch_info.GetWorkingDirectory()};
-  if (working_dir &&
-      (!working_dir.ResolvePath() ||
-       working_dir.GetFileType() != FileSpec::eFileTypeDirectory)) {
+  if (working_dir && (!working_dir.ResolvePath() ||
+                      !llvm::sys::fs::is_directory(working_dir.GetPath()))) {
     error.SetErrorStringWithFormat("No such file or directory: %s",
                                    working_dir.GetCString());
     return error;
@@ -332,7 +328,7 @@ Error NativeProcessLinux::LaunchInferior(MainLoop &mainloop,
   MaybeLogLaunchInfo(launch_info);
 
   ::pid_t pid =
-      ProcessLauncherLinux().LaunchProcess(launch_info, error).GetProcessId();
+      ProcessLauncherPosixFork().LaunchProcess(launch_info, error).GetProcessId();
   if (error.Fail())
     return error;
 
@@ -874,6 +870,19 @@ void NativeProcessLinux::MonitorSIGTRAP(const siginfo_t &info,
       break;
     }
 
+    // If a breakpoint was hit, report it
+    uint32_t bp_index;
+    error = thread.GetRegisterContext()->GetHardwareBreakHitIndex(
+        bp_index, (uintptr_t)info.si_addr);
+    if (error.Fail())
+      LLDB_LOG(log, "received error while checking for hardware "
+                    "breakpoint hits, pid = {0}, error = {1}",
+               thread.GetID(), error);
+    if (bp_index != LLDB_INVALID_INDEX32) {
+      MonitorBreakpoint(thread);
+      break;
+    }
+
     // Otherwise, report step over
     MonitorTrace(thread);
     break;
@@ -1039,6 +1048,13 @@ void NativeProcessLinux::MonitorSignal(const siginfo_t &info,
 
     // Done handling.
     return;
+  }
+
+  // Check if debugger should stop at this signal or just ignore it
+  // and resume the inferior.
+  if (m_signals_to_ignore.find(signo) != m_signals_to_ignore.end()) {
+     ResumeThread(thread, thread.GetState(), signo);
+     return;
   }
 
   // This thread is stopped.
@@ -1723,9 +1739,16 @@ Error NativeProcessLinux::GetSoftwareBreakpointPCOffset(
 Error NativeProcessLinux::SetBreakpoint(lldb::addr_t addr, uint32_t size,
                                         bool hardware) {
   if (hardware)
-    return Error("NativeProcessLinux does not support hardware breakpoints");
+    return SetHardwareBreakpoint(addr, size);
   else
     return SetSoftwareBreakpoint(addr, size);
+}
+
+Error NativeProcessLinux::RemoveBreakpoint(lldb::addr_t addr, bool hardware) {
+  if (hardware)
+    return RemoveHardwareBreakpoint(addr);
+  else
+    return NativeProcessProtocol::RemoveBreakpoint(addr);
 }
 
 Error NativeProcessLinux::GetSoftwareBreakpointTrapOpcode(
@@ -2416,8 +2439,8 @@ Error NativeProcessLinux::PtraceWrapper(int req, lldb::pid_t pid, void *addr,
   if (result)
     *result = ret;
 
-  LLDB_LOG(log, "ptrace({0}, {1}, {2}, {3}, {4}, {5})={6:x}", req, pid, addr,
-           data, data_size, ret);
+  LLDB_LOG(log, "ptrace({0}, {1}, {2}, {3}, {4})={5:x}", req, pid, addr, data,
+           data_size, ret);
 
   PtraceDisplayBytes(req, data, data_size);
 

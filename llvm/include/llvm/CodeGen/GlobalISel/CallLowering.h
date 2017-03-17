@@ -70,6 +70,17 @@ public:
                                       uint64_t Size, MachinePointerInfo &MPO,
                                       CCValAssign &VA) = 0;
 
+    /// Handle custom values, which may be passed into one or more of \p VAs.
+    /// \return The number of \p VAs that have been assigned after the first
+    ///         one, and which should therefore be skipped from further
+    ///         processing.
+    virtual unsigned assignCustomValue(const ArgInfo &Arg,
+                                       ArrayRef<CCValAssign> VAs) {
+      // This is not a pure virtual method because not all targets need to worry
+      // about custom values.
+      llvm_unreachable("Custom values not supported");
+    }
+
     unsigned extendRegister(unsigned ValReg, CCValAssign &VA);
 
     virtual bool assignArg(unsigned ValNo, MVT ValVT, MVT LocVT,
@@ -166,8 +177,10 @@ public:
     return false;
   }
 
-  /// This hook must be implemented to lower the given call instruction,
-  /// including argument and return value marshalling.
+  /// Lower the given call instruction, including argument and return value
+  /// marshalling.
+  ///
+  /// \p CI is the call/invoke instruction.
   ///
   /// \p ResReg is a register where the call's return value should be stored (or
   /// 0 if there is no return value).
@@ -181,9 +194,9 @@ public:
   /// range of an immediate jump.
   ///
   /// \return true if the lowering succeeded, false otherwise.
-  virtual bool lowerCall(MachineIRBuilder &MIRBuilder, const CallInst &CI,
-                         unsigned ResReg, ArrayRef<unsigned> ArgRegs,
-                         std::function<unsigned()> GetCalleeReg) const;
+  bool lowerCall(MachineIRBuilder &MIRBuilder, ImmutableCallSite CS,
+                 unsigned ResReg, ArrayRef<unsigned> ArgRegs,
+                 std::function<unsigned()> GetCalleeReg) const;
 };
 } // End namespace llvm.
 

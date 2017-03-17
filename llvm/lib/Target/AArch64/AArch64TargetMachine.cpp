@@ -14,6 +14,7 @@
 #include "AArch64CallLowering.h"
 #include "AArch64InstructionSelector.h"
 #include "AArch64LegalizerInfo.h"
+#include "AArch64MacroFusion.h"
 #ifdef LLVM_BUILD_GLOBAL_ISEL
 #include "AArch64RegisterBankInfo.h"
 #endif
@@ -137,6 +138,11 @@ static cl::opt<bool>
     EnableLoopDataPrefetch("aarch64-enable-loop-data-prefetch", cl::Hidden,
                            cl::desc("Enable the loop data prefetch pass"),
                            cl::init(true));
+
+static cl::opt<int> EnableGlobalISelAtO(
+    "aarch64-enable-global-isel-at-O", cl::Hidden,
+    cl::desc("Enable GlobalISel at or below an opt level (-1 to disable)"),
+    cl::init(-1));
 
 extern "C" void LLVMInitializeAArch64Target() {
   // Register the target.
@@ -325,8 +331,22 @@ public:
     ScheduleDAGMILive *DAG = createGenericSchedLive(C);
     DAG->addMutation(createLoadClusterDAGMutation(DAG->TII, DAG->TRI));
     DAG->addMutation(createStoreClusterDAGMutation(DAG->TII, DAG->TRI));
-    DAG->addMutation(createMacroFusionDAGMutation(DAG->TII));
+    DAG->addMutation(createAArch64MacroFusionDAGMutation());
     return DAG;
+  }
+
+  ScheduleDAGInstrs *
+  createPostMachineScheduler(MachineSchedContext *C) const override {
+    const AArch64Subtarget &ST = C->MF->getSubtarget<AArch64Subtarget>();
+    if (ST.hasFuseLiterals()) {
+      // Run the Macro Fusion after RA again since literals are expanded from
+      // pseudos then (v. addPreSched2()).
+      ScheduleDAGMI *DAG = createGenericSchedPostRA(C);
+      DAG->addMutation(createAArch64MacroFusionDAGMutation());
+      return DAG;
+    }
+
+    return nullptr;
   }
 
   void addIRPasses()  override;
@@ -343,6 +363,8 @@ public:
   void addPostRegAlloc() override;
   void addPreSched2() override;
   void addPreEmitPass() override;
+
+  bool isGlobalISelEnabled() const override;
 };
 
 } // end anonymous namespace
@@ -451,6 +473,10 @@ bool AArch64PassConfig::addGlobalInstructionSelect() {
   return false;
 }
 #endif
+
+bool AArch64PassConfig::isGlobalISelEnabled() const {
+  return TM->getOptLevel() <= EnableGlobalISelAtO;
+}
 
 bool AArch64PassConfig::addILPOpts() {
   if (EnableCondOpt)

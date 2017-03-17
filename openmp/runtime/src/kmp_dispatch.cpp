@@ -49,34 +49,6 @@
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
 
-// template for type limits
-template< typename T >
-struct i_maxmin {
-    static const T mx;
-    static const T mn;
-};
-template<>
-struct i_maxmin< int > {
-    static const int mx = 0x7fffffff;
-    static const int mn = 0x80000000;
-};
-template<>
-struct i_maxmin< unsigned int > {
-    static const unsigned int mx = 0xffffffff;
-    static const unsigned int mn = 0x00000000;
-};
-template<>
-struct i_maxmin< long long > {
-    static const long long mx = 0x7fffffffffffffffLL;
-    static const long long mn = 0x8000000000000000LL;
-};
-template<>
-struct i_maxmin< unsigned long long > {
-    static const unsigned long long mx = 0xffffffffffffffffLL;
-    static const unsigned long long mn = 0x0000000000000000LL;
-};
-//-------------------------------------------------------------------------
-
 #if KMP_STATIC_STEAL_ENABLED
 
     // replaces dispatch_private_info{32,64} structures and dispatch_private_info{32,64}_t types
@@ -612,7 +584,6 @@ __kmp_dispatch_init(
     typedef typename traits_t< T >::unsigned_t  UT;
     typedef typename traits_t< T >::signed_t    ST;
     typedef typename traits_t< T >::floating_t  DBL;
-    static const int ___kmp_size_type = sizeof( UT );
 
     int                                            active;
     T                                              tc;
@@ -688,7 +659,7 @@ __kmp_dispatch_init(
     } else {
         pr->nomerge = FALSE;
     }
-    pr->type_size = ___kmp_size_type; // remember the size of variables
+    pr->type_size = traits_t<T>::type_size; // remember the size of variables
     if ( kmp_ord_lower & schedule ) {
         pr->ordered = TRUE;
         schedule = (enum sched_type)(((int)schedule) - (kmp_ord_lower - kmp_sch_lower));
@@ -855,6 +826,7 @@ __kmp_dispatch_init(
 
             ntc = (tc % chunk ? 1 : 0) + tc / chunk;
             if ( nproc > 1 && ntc >= nproc ) {
+                KMP_COUNT_BLOCK(OMP_FOR_static_steal);
                 T id = __kmp_tid_from_gtid(gtid);
                 T small_chunk, extras;
 
@@ -869,7 +841,7 @@ __kmp_dispatch_init(
                 //pr->pfields.parm3 = 0; // it's not used in static_steal
                 pr->u.p.parm4 = (id + 1) % nproc; // remember neighbour tid
                 pr->u.p.st = st;
-                if ( ___kmp_size_type > 4 ) {
+                if ( traits_t<T>::type_size > 4 ) {
                     // AC: TODO: check if 16-byte CAS available and use it to
                     // improve performance (probably wait for explicit request
                     // before spending time on this).
@@ -1438,9 +1410,6 @@ __kmp_dispatch_next(
     typedef typename traits_t< T >::unsigned_t  UT;
     typedef typename traits_t< T >::signed_t    ST;
     typedef typename traits_t< T >::floating_t  DBL;
-#if ( KMP_STATIC_STEAL_ENABLED )
-    static const int ___kmp_size_type = sizeof( UT );
-#endif
 
     // This is potentially slightly misleading, schedule(runtime) will appear here even if the actual runtme schedule
     // is static. (Which points out a disadavantage of schedule(runtime): even when static scheduling is used it costs
@@ -1607,7 +1576,7 @@ __kmp_dispatch_next(
 
                     trip = pr->u.p.tc - 1;
 
-                    if ( ___kmp_size_type > 4 ) {
+                    if ( traits_t<T>::type_size > 4 ) {
                         // use lock for 8-byte and CAS for 4-byte induction
                         // variable. TODO (optional): check and use 16-byte CAS
                         kmp_lock_t * lck = th->th.th_dispatch->th_steal_lock;
@@ -1669,8 +1638,10 @@ __kmp_dispatch_next(
                                 }
                                 // stealing succeded, reduce victim's ub by 1/4 of undone chunks or by 1
                                 if( remaining > 3 ) {
+                                    KMP_COUNT_VALUE(FOR_static_steal_stolen, remaining>>2);
                                     init = ( victim->u.p.ub -= (remaining>>2) ); // steal 1/4 of remaining
                                 } else {
+                                    KMP_COUNT_VALUE(FOR_static_steal_stolen, 1);
                                     init = ( victim->u.p.ub -= 1 ); // steal 1 chunk of 2 or 3 remaining
                                 }
                                 __kmp_release_lock(lck, gtid);
@@ -1771,6 +1742,7 @@ __kmp_dispatch_next(
                                             *VOLATILE_CAST(kmp_int64 *)&vold.b,
                                             *VOLATILE_CAST(kmp_int64 *)&vnew.b ) ) {
                                         // stealing succedded
+                                        KMP_COUNT_VALUE(FOR_static_steal_stolen, vold.p.ub-vnew.p.ub);
                                         status = 1;
                                         while_index = 0;
                                         // now update own count and ub
@@ -1797,6 +1769,7 @@ __kmp_dispatch_next(
                         init *= chunk;
                         limit = chunk + init - 1;
                         incr  = pr->u.p.st;
+                        KMP_COUNT_VALUE(FOR_static_steal_chunks, 1);
 
                         KMP_DEBUG_ASSERT(init <= trip);
                         if ( (last = (limit >= trip)) != 0 )
@@ -2224,7 +2197,7 @@ __kmp_dispatch_next(
 
             if ( (ST)num_done == th->th.th_team_nproc - 1 ) {
                 #if ( KMP_STATIC_STEAL_ENABLED )
-                if( pr->schedule == kmp_sch_static_steal && ___kmp_size_type > 4 ) {
+                if( pr->schedule == kmp_sch_static_steal && traits_t<T>::type_size > 4 ) {
                     int i;
                     kmp_info_t **other_threads = team->t.t_threads;
                     // loop complete, safe to destroy locks used for stealing
@@ -2400,14 +2373,14 @@ __kmp_dist_get_bounds(
             // Check/correct bounds if needed
             if( incr > 0 ) {
                 if( *pupper < *plower )
-                    *pupper = i_maxmin< T >::mx;
+                    *pupper = traits_t<T>::max_value;
                 if( plastiter != NULL )
                     *plastiter = *plower <= upper && *pupper > upper - incr;
                 if( *pupper > upper )
                     *pupper = upper; // tracker C73258
             } else {
                 if( *pupper > *plower )
-                    *pupper = i_maxmin< T >::mn;
+                    *pupper = traits_t<T>::min_value;
                 if( plastiter != NULL )
                     *plastiter = *plower >= upper && *pupper < upper - incr;
                 if( *pupper < upper )

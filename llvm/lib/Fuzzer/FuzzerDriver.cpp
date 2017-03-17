@@ -482,8 +482,8 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
 
   if (auto Name = Flags.run_equivalence_server) {
     SMR.Destroy(Name);
-    if (!SMR.Create(Name, 1 << 12)) {
-      Printf("ERROR: can't create shared memory region\n");
+    if (!SMR.Create(Name)) {
+       Printf("ERROR: can't create shared memory region\n");
       return 1;
     }
     Printf("INFO: EQUIVALENCE SERVER UP\n");
@@ -530,14 +530,10 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
   if (Flags.merge) {
     if (Options.MaxLen == 0)
       F->SetMaxInputLen(kMaxSaneLen);
-    if (TPC.UsingTracePcGuard()) {
-      if (Flags.merge_control_file)
-        F->CrashResistantMergeInternalStep(Flags.merge_control_file);
-      else
-        F->CrashResistantMerge(Args, *Inputs);
-    } else {
-      F->Merge(*Inputs);
-    }
+    if (Flags.merge_control_file)
+      F->CrashResistantMergeInternalStep(Flags.merge_control_file);
+    else
+      F->CrashResistantMerge(Args, *Inputs);
     exit(0);
   }
 
@@ -567,7 +563,7 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
   F->Loop();
 
   if (Flags.verbosity)
-    Printf("Done %d runs in %zd second(s)\n", F->getTotalNumberOfRuns(),
+    Printf("Done %zd runs in %zd second(s)\n", F->getTotalNumberOfRuns(),
            F->secondsSinceProcessStartUp());
   F->PrintFinalStats();
 

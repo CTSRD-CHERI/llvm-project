@@ -1402,7 +1402,8 @@ static const char *parse_function_type(const char *first, const char *last,
         int ref_qual = 0;
         while (true) {
           if (t == last) {
-            db.names.pop_back();
+            if (!db.names.empty())
+              db.names.pop_back();
             return first;
           }
           if (*t == 'E') {
@@ -3835,6 +3836,8 @@ static const char *parse_call_offset(const char *first, const char *last) {
 //                ::= GV <object name> # Guard variable for one-time
 //                initialization
 //                                     # No <type>
+//                ::= TW <object name> # Thread-local wrapper
+//                ::= TH <object name> # Thread-local initialization
 //      extension ::= TC <first type> <number> _ <second type> # construction
 //      vtable for second-in-first
 //      extension ::= GR <object name> # reference temporary for object
@@ -3926,6 +3929,27 @@ static const char *parse_special_name(const char *first, const char *last,
               first = t1;
             }
           }
+        }
+        break;
+      case 'W':
+        // TW <object name> # Thread-local wrapper
+        t = parse_name(first + 2, last, db);
+        if (t != first + 2) {
+          if (db.names.empty())
+            return first;
+          db.names.back().first.insert(0, "thread-local wrapper routine for ");
+          first = t;
+        }
+        break;
+      case 'H':
+        // TH <object name> # Thread-local initialization
+        t = parse_name(first + 2, last, db);
+        if (t != first + 2) {
+          if (db.names.empty())
+            return first;
+          db.names.back().first.insert(
+              0, "thread-local initialization routine for ");
+          first = t;
         }
         break;
       default:

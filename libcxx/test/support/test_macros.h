@@ -182,6 +182,20 @@ struct is_same<T, T> { enum {value = 1}; };
 #endif
 #endif
 
+#if defined(__GNUC__) || defined(__clang__)
+template <class Tp>
+inline void DoNotOptimize(Tp const& value) {
+  asm volatile("" : : "g"(value) : "memory");
+}
+#else
+#include <intrin.h>
+template <class Tp>
+inline void DoNotOptimize(Tp const& value) {
+  const volatile void* volatile = __builtin_addressof(value);
+  _ReadWriteBarrier();
+}
+#endif
+
 #if defined(__GNUC__)
 #pragma GCC diagnostic pop
 #endif

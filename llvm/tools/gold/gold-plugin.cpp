@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/ADT/Statistic.h"
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/CodeGen/CommandFlags.h"
@@ -105,7 +106,6 @@ static std::list<claimed_file> Modules;
 static DenseMap<int, void *> FDToLeaderHandle;
 static StringMap<ResolutionInfo> ResInfo;
 static std::vector<std::string> Cleanup;
-static llvm::TargetOptions TargetOpts;
 
 namespace options {
   enum OutputType {
@@ -835,7 +835,7 @@ static ld_plugin_status allSymbolsReadHook() {
 
   NativeObjectCache Cache;
   if (!options::cache_dir.empty())
-    Cache = localCache(options::cache_dir, AddFile);
+    Cache = check(localCache(options::cache_dir, AddFile));
 
   check(Lto->run(AddStream, Cache));
 
@@ -844,6 +844,8 @@ static ld_plugin_status allSymbolsReadHook() {
     return LDPS_OK;
 
   if (options::thinlto_index_only) {
+    if (llvm::AreStatisticsEnabled())
+      llvm::PrintStatistics();
     cleanup_hook();
     exit(0);
   }

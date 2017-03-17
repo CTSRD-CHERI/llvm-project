@@ -10,8 +10,8 @@
 #ifndef liblldb_Host_FileSystem_h
 #define liblldb_Host_FileSystem_h
 
-#include "lldb/Core/Error.h"
 #include "lldb/Host/FileSpec.h"
+#include "lldb/Utility/Error.h"
 #include "llvm/Support/Chrono.h"
 
 #include "lldb/lldb-types.h"
@@ -29,7 +29,6 @@ public:
   static FileSpec::PathSyntax GetNativePathSyntax();
 
   static Error MakeDirectory(const FileSpec &file_spec, uint32_t mode);
-  static Error DeleteDirectory(const FileSpec &file_spec, bool recurse);
 
   static Error GetFilePermissions(const FileSpec &file_spec,
                                   uint32_t &file_permissions);

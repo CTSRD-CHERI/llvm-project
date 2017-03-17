@@ -18,20 +18,15 @@
 #include "Plugins/Process/Utility/RegisterContextDarwin_i386.h"
 #include "Plugins/Process/Utility/RegisterContextDarwin_x86_64.h"
 #include "lldb/Core/ArchSpec.h"
-#include "lldb/Core/DataBuffer.h"
 #include "lldb/Core/Debugger.h"
-#include "lldb/Core/Error.h"
 #include "lldb/Core/FileSpecList.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/RangeMap.h"
 #include "lldb/Core/Section.h"
 #include "lldb/Core/StreamFile.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Core/Timer.h"
-#include "lldb/Core/UUID.h"
 #include "lldb/Host/FileSpec.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Symbol/DWARFCallFrameInfo.h"
@@ -44,8 +39,15 @@
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
 #include "lldb/Target/ThreadList.h"
+#include "lldb/Utility/DataBufferLLVM.h"
+#include "lldb/Utility/Error.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/StreamString.h"
+#include "lldb/Utility/UUID.h"
 
 #include "lldb/Utility/SafeMachO.h"
+
+#include "llvm/Support/MemoryBuffer.h"
 
 #include "ObjectFileMachO.h"
 
@@ -857,22 +859,30 @@ ObjectFile *ObjectFileMachO::CreateInstance(const lldb::ModuleSP &module_sp,
                                             lldb::offset_t file_offset,
                                             lldb::offset_t length) {
   if (!data_sp) {
-    data_sp = file->MemoryMapFileContentsIfLocal(file_offset, length);
+    data_sp =
+        DataBufferLLVM::CreateSliceFromPath(file->GetPath(), length, file_offset);
+    if (!data_sp)
+      return nullptr;
     data_offset = 0;
   }
 
-  if (ObjectFileMachO::MagicBytesMatch(data_sp, data_offset, length)) {
-    // Update the data to contain the entire file if it doesn't already
-    if (data_sp->GetByteSize() < length) {
-      data_sp = file->MemoryMapFileContentsIfLocal(file_offset, length);
-      data_offset = 0;
-    }
-    std::unique_ptr<ObjectFile> objfile_ap(new ObjectFileMachO(
-        module_sp, data_sp, data_offset, file, file_offset, length));
-    if (objfile_ap.get() && objfile_ap->ParseHeader())
-      return objfile_ap.release();
+  if (!ObjectFileMachO::MagicBytesMatch(data_sp, data_offset, length))
+    return nullptr;
+
+  // Update the data to contain the entire file if it doesn't already
+  if (data_sp->GetByteSize() < length) {
+    data_sp =
+        DataBufferLLVM::CreateSliceFromPath(file->GetPath(), length, file_offset);
+    if (!data_sp)
+      return nullptr;
+    data_offset = 0;
   }
-  return NULL;
+  auto objfile_ap = llvm::make_unique<ObjectFileMachO>(
+      module_sp, data_sp, data_offset, file, file_offset, length);
+  if (!objfile_ap || !objfile_ap->ParseHeader())
+    return nullptr;
+
+  return objfile_ap.release();
 }
 
 ObjectFile *ObjectFileMachO::CreateMemoryInstance(
@@ -901,7 +911,8 @@ size_t ObjectFileMachO::GetModuleSpecifications(
       size_t header_and_load_cmds =
           header.sizeofcmds + MachHeaderSizeFromMagic(header.magic);
       if (header_and_load_cmds >= data_sp->GetByteSize()) {
-        data_sp = file.ReadFileContents(file_offset, header_and_load_cmds);
+        data_sp = DataBufferLLVM::CreateSliceFromPath(
+            file.GetPath(), header_and_load_cmds, file_offset);
         data.SetData(data_sp);
         data_offset = MachHeaderSizeFromMagic(header.magic);
       }
@@ -1113,8 +1124,8 @@ bool ObjectFileMachO::ParseHeader() {
                   ReadMemory(process_sp, m_memory_addr, header_and_lc_size);
             } else {
               // Read in all only the load command data from the file on disk
-              data_sp =
-                  m_file.ReadFileContents(m_file_offset, header_and_lc_size);
+              data_sp = DataBufferLLVM::CreateSliceFromPath(
+                  m_file.GetPath(), header_and_lc_size, m_file_offset);
               if (data_sp->GetByteSize() != header_and_lc_size)
                 return false;
             }
@@ -2085,22 +2096,23 @@ UUID ObjectFileMachO::GetSharedCacheUUID(FileSpec dyld_shared_cache,
                                          const ByteOrder byte_order,
                                          const uint32_t addr_byte_size) {
   UUID dsc_uuid;
-  DataBufferSP dsc_data_sp = dyld_shared_cache.MemoryMapFileContentsIfLocal(
-      0, sizeof(struct lldb_copy_dyld_cache_header_v1));
-  if (dsc_data_sp) {
-    DataExtractor dsc_header_data(dsc_data_sp, byte_order, addr_byte_size);
+  DataBufferSP DscData = DataBufferLLVM::CreateSliceFromPath(
+      dyld_shared_cache.GetPath(),
+      sizeof(struct lldb_copy_dyld_cache_header_v1), 0);
+  if (!DscData)
+    return dsc_uuid;
+  DataExtractor dsc_header_data(DscData, byte_order, addr_byte_size);
 
-    char version_str[7];
-    lldb::offset_t offset = 0;
-    memcpy(version_str, dsc_header_data.GetData(&offset, 6), 6);
-    version_str[6] = '\0';
-    if (strcmp(version_str, "dyld_v") == 0) {
-      offset = offsetof(struct lldb_copy_dyld_cache_header_v1, uuid);
-      uint8_t uuid_bytes[sizeof(uuid_t)];
-      memcpy(uuid_bytes, dsc_header_data.GetData(&offset, sizeof(uuid_t)),
-             sizeof(uuid_t));
-      dsc_uuid.SetBytes(uuid_bytes);
-    }
+  char version_str[7];
+  lldb::offset_t offset = 0;
+  memcpy(version_str, dsc_header_data.GetData(&offset, 6), 6);
+  version_str[6] = '\0';
+  if (strcmp(version_str, "dyld_v") == 0) {
+    offset = offsetof(struct lldb_copy_dyld_cache_header_v1, uuid);
+    uint8_t uuid_bytes[sizeof(uuid_t)];
+    memcpy(uuid_bytes, dsc_header_data.GetData(&offset, sizeof(uuid_t)),
+           sizeof(uuid_t));
+    dsc_uuid.SetBytes(uuid_bytes);
   }
   return dsc_uuid;
 }
@@ -2692,8 +2704,9 @@ size_t ObjectFileMachO::ParseSymtab() {
 
       // Process the dyld shared cache header to find the unmapped symbols
 
-      DataBufferSP dsc_data_sp = dsc_filespec.MemoryMapFileContentsIfLocal(
-          0, sizeof(struct lldb_copy_dyld_cache_header_v1));
+      DataBufferSP dsc_data_sp = DataBufferLLVM::CreateSliceFromPath(
+          dsc_filespec.GetPath(), sizeof(struct lldb_copy_dyld_cache_header_v1),
+          0);
       if (!dsc_uuid.IsValid()) {
         dsc_uuid = GetSharedCacheUUID(dsc_filespec, byte_order, addr_byte_size);
       }
@@ -2726,9 +2739,11 @@ size_t ObjectFileMachO::ParseSymtab() {
             mappingOffset >= sizeof(struct lldb_copy_dyld_cache_header_v1)) {
 
           DataBufferSP dsc_mapping_info_data_sp =
-              dsc_filespec.MemoryMapFileContentsIfLocal(
-                  mappingOffset,
-                  sizeof(struct lldb_copy_dyld_cache_mapping_info));
+              DataBufferLLVM::CreateSliceFromPath(
+                  dsc_filespec.GetPath(),
+                  sizeof(struct lldb_copy_dyld_cache_mapping_info),
+                  mappingOffset);
+
           DataExtractor dsc_mapping_info_data(dsc_mapping_info_data_sp,
                                               byte_order, addr_byte_size);
           offset = 0;
@@ -2750,9 +2765,12 @@ size_t ObjectFileMachO::ParseSymtab() {
 
           if (localSymbolsOffset && localSymbolsSize) {
             // Map the local symbols
-            if (DataBufferSP dsc_local_symbols_data_sp =
-                    dsc_filespec.MemoryMapFileContentsIfLocal(
-                        localSymbolsOffset, localSymbolsSize)) {
+            DataBufferSP dsc_local_symbols_data_sp =
+                DataBufferLLVM::CreateSliceFromPath(dsc_filespec.GetPath(),
+                                               localSymbolsSize,
+                                               localSymbolsOffset);
+
+            if (dsc_local_symbols_data_sp) {
               DataExtractor dsc_local_symbols_data(dsc_local_symbols_data_sp,
                                                    byte_order, addr_byte_size);
 

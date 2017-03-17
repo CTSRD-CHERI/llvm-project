@@ -32,6 +32,10 @@ endif()
 add_link_flags_if(LIBCXX_CXX_ABI_LIBRARY_PATH
                   "${CMAKE_LIBRARY_PATH_FLAG}${LIBCXX_CXX_ABI_LIBRARY_PATH}")
 
+
+if (LIBCXX_GENERATE_COVERAGE AND NOT LIBCXX_COVERAGE_LIBRARY)
+  find_compiler_rt_library(profile LIBCXX_COVERAGE_LIBRARY)
+endif()
 add_library_flags_if(LIBCXX_COVERAGE_LIBRARY "${LIBCXX_COVERAGE_LIBRARY}")
 
 if (APPLE AND (LIBCXX_CXX_ABI_LIBNAME STREQUAL "libcxxabi" OR
@@ -62,12 +66,7 @@ if (APPLE AND LLVM_USE_SANITIZER)
     message(WARNING "LLVM_USE_SANITIZER=${LLVM_USE_SANITIZER} is not supported on OS X")
   endif()
   if (LIBFILE)
-    execute_process(COMMAND ${CMAKE_CXX_COMPILER} -print-file-name=lib OUTPUT_VARIABLE LIBDIR RESULT_VARIABLE Result)
-    if (NOT ${Result} EQUAL "0")
-      message(FATAL "Failed to find library resource directory")
-    endif()
-    string(STRIP "${LIBDIR}" LIBDIR)
-    set(LIBDIR "${LIBDIR}/darwin/")
+    find_compiler_rt_dir(LIBDIR)
     if (NOT IS_DIRECTORY "${LIBDIR}")
       message(FATAL_ERROR "Cannot find compiler-rt directory on OS X required for LLVM_USE_SANITIZER")
     endif()
@@ -89,9 +88,9 @@ add_library_flags_if(LIBCXX_HAVE_CXX_ATOMICS_WITH_LIB atomic)
 
 # Add the unwinder library.
 if (LIBCXXABI_USE_LLVM_UNWINDER)
-  if (TARGET unwind_shared)
+  if (NOT LIBCXXABI_ENABLE_STATIC_UNWINDER AND (TARGET unwind_shared OR HAVE_LIBUNWIND))
     add_interface_library(unwind_shared)
-  elseif (TARGET unwind_static)
+  elseif (LIBCXXABI_ENABLE_STATIC_UNWINDER AND (TARGET unwind_static OR HAVE_LIBUNWIND))
     add_interface_library(unwind_static)
   else()
     add_interface_library(unwind)
@@ -332,7 +331,7 @@ if (LIBCXX_ENABLE_SHARED AND LIBCXX_ENABLE_ABI_LINKER_SCRIPT)
   # after cxx builds.
   add_custom_command(TARGET cxx_shared POST_BUILD
     COMMAND
-      ${PYTHON_EXECUTABLE} ${LIBCXX_SOURCE_DIR}/utils/gen_link_script/gen_link_script.py
+      ${PYTHON_EXECUTABLE} ${LIBCXX_SOURCE_DIR}/utils/gen_link_script.py
     ARGS
       "$<TARGET_LINKER_FILE:cxx_shared>"
       ${LIBCXX_INTERFACE_LIBRARY_NAMES}

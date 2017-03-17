@@ -1025,108 +1025,140 @@ MipsTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   default:
     llvm_unreachable("Unexpected instr type to insert");
   case Mips::ATOMIC_LOAD_ADD_I8:
-  case Mips::CAP_ATOMIC_LOAD_ADD_I8:
     return emitAtomicBinaryPartword(MI, BB, 1, Mips::ADDu);
   case Mips::ATOMIC_LOAD_ADD_I16:
-  case Mips::CAP_ATOMIC_LOAD_ADD_I16:
     return emitAtomicBinaryPartword(MI, BB, 2, Mips::ADDu);
   case Mips::ATOMIC_LOAD_ADD_I32:
-  case Mips::CAP_ATOMIC_LOAD_ADD_I32:
-    return emitAtomicBinary(MI, BB, 4, Mips::ADDu);
+    return emitAtomicBinary(false, MI, BB, 4, Mips::ADDu);
   case Mips::ATOMIC_LOAD_ADD_I64:
+    return emitAtomicBinary(false, MI, BB, 8, Mips::DADDu);
+  case Mips::CAP_ATOMIC_LOAD_ADD_I8:
+    return emitAtomicBinary(true, MI, BB, 1, Mips::ADDu);
+  case Mips::CAP_ATOMIC_LOAD_ADD_I16:
+    return emitAtomicBinary(true, MI, BB, 2, Mips::ADDu);
+  case Mips::CAP_ATOMIC_LOAD_ADD_I32:
+    return emitAtomicBinary(true, MI, BB, 4, Mips::ADDu);
   case Mips::CAP_ATOMIC_LOAD_ADD_I64:
-    return emitAtomicBinary(MI, BB, 8, Mips::DADDu);
+    return emitAtomicBinary(true, MI, BB, 8, Mips::DADDu);
 
   case Mips::ATOMIC_LOAD_AND_I8:
-  case Mips::CAP_ATOMIC_LOAD_AND_I8:
     return emitAtomicBinaryPartword(MI, BB, 1, Mips::AND);
   case Mips::ATOMIC_LOAD_AND_I16:
-  case Mips::CAP_ATOMIC_LOAD_AND_I16:
     return emitAtomicBinaryPartword(MI, BB, 2, Mips::AND);
   case Mips::ATOMIC_LOAD_AND_I32:
-  case Mips::CAP_ATOMIC_LOAD_AND_I32:
-    return emitAtomicBinary(MI, BB, 4, Mips::AND);
+    return emitAtomicBinary(false, MI, BB, 4, Mips::AND);
   case Mips::ATOMIC_LOAD_AND_I64:
+    return emitAtomicBinary(false, MI, BB, 8, Mips::AND64);
+  case Mips::CAP_ATOMIC_LOAD_AND_I8:
+    return emitAtomicBinary(true, MI, BB, 1, Mips::AND);
+  case Mips::CAP_ATOMIC_LOAD_AND_I16:
+    return emitAtomicBinary(true, MI, BB, 2, Mips::AND);
+  case Mips::CAP_ATOMIC_LOAD_AND_I32:
+    return emitAtomicBinary(true, MI, BB, 4, Mips::AND);
   case Mips::CAP_ATOMIC_LOAD_AND_I64:
-    return emitAtomicBinary(MI, BB, 8, Mips::AND64);
+    return emitAtomicBinary(true, MI, BB, 8, Mips::AND64);
 
   case Mips::ATOMIC_LOAD_OR_I8:
-  case Mips::CAP_ATOMIC_LOAD_OR_I8:
     return emitAtomicBinaryPartword(MI, BB, 1, Mips::OR);
   case Mips::ATOMIC_LOAD_OR_I16:
-  case Mips::CAP_ATOMIC_LOAD_OR_I16:
     return emitAtomicBinaryPartword(MI, BB, 2, Mips::OR);
   case Mips::ATOMIC_LOAD_OR_I32:
-  case Mips::CAP_ATOMIC_LOAD_OR_I32:
-    return emitAtomicBinary(MI, BB, 4, Mips::OR);
+    return emitAtomicBinary(false, MI, BB, 4, Mips::OR);
   case Mips::ATOMIC_LOAD_OR_I64:
+    return emitAtomicBinary(false, MI, BB, 8, Mips::OR64);
+  case Mips::CAP_ATOMIC_LOAD_OR_I8:
+    return emitAtomicBinary(true, MI, BB, 1, Mips::OR);
+  case Mips::CAP_ATOMIC_LOAD_OR_I16:
+    return emitAtomicBinary(true, MI, BB, 2, Mips::OR);
+  case Mips::CAP_ATOMIC_LOAD_OR_I32:
+    return emitAtomicBinary(true, MI, BB, 4, Mips::OR);
   case Mips::CAP_ATOMIC_LOAD_OR_I64:
-    return emitAtomicBinary(MI, BB, 8, Mips::OR64);
+    return emitAtomicBinary(true, MI, BB, 8, Mips::OR64);
 
   case Mips::ATOMIC_LOAD_XOR_I8:
-  case Mips::CAP_ATOMIC_LOAD_XOR_I8:
     return emitAtomicBinaryPartword(MI, BB, 1, Mips::XOR);
   case Mips::ATOMIC_LOAD_XOR_I16:
-  case Mips::CAP_ATOMIC_LOAD_XOR_I16:
-    return emitAtomicBinaryPartword(MI, BB, 2, Mips::XOR);
+    return emitAtomicBinaryPartword(MI, BB, 4, Mips::XOR);
   case Mips::ATOMIC_LOAD_XOR_I32:
-  case Mips::CAP_ATOMIC_LOAD_XOR_I32:
-    return emitAtomicBinary(MI, BB, 4, Mips::XOR);
+    return emitAtomicBinary(false, MI, BB, 4, Mips::XOR);
   case Mips::ATOMIC_LOAD_XOR_I64:
+    return emitAtomicBinary(false, MI, BB, 8, Mips::XOR64);
+  case Mips::CAP_ATOMIC_LOAD_XOR_I8:
+    return emitAtomicBinary(true, MI, BB, 1, Mips::XOR);
+  case Mips::CAP_ATOMIC_LOAD_XOR_I16:
+    return emitAtomicBinary(true, MI, BB, 2, Mips::XOR);
+  case Mips::CAP_ATOMIC_LOAD_XOR_I32:
+    return emitAtomicBinary(true, MI, BB, 4, Mips::XOR);
   case Mips::CAP_ATOMIC_LOAD_XOR_I64:
-    return emitAtomicBinary(MI, BB, 8, Mips::XOR64);
+    return emitAtomicBinary(true, MI, BB, 8, Mips::XOR64);
 
   case Mips::ATOMIC_LOAD_NAND_I8:
-  case Mips::CAP_ATOMIC_LOAD_NAND_I8:
     return emitAtomicBinaryPartword(MI, BB, 1, 0, true);
   case Mips::ATOMIC_LOAD_NAND_I16:
-  case Mips::CAP_ATOMIC_LOAD_NAND_I16:
     return emitAtomicBinaryPartword(MI, BB, 2, 0, true);
   case Mips::ATOMIC_LOAD_NAND_I32:
-  case Mips::CAP_ATOMIC_LOAD_NAND_I32:
-    return emitAtomicBinary(MI, BB, 4, 0, true);
+    return emitAtomicBinary(false, MI, BB, 4, 0, true);
   case Mips::ATOMIC_LOAD_NAND_I64:
+    return emitAtomicBinary(false, MI, BB, 8, 0, true);
+  case Mips::CAP_ATOMIC_LOAD_NAND_I8:
+    return emitAtomicBinary(true, MI, BB, 1, 0, true);
+  case Mips::CAP_ATOMIC_LOAD_NAND_I16:
+    return emitAtomicBinary(true, MI, BB, 2, 0, true);
+  case Mips::CAP_ATOMIC_LOAD_NAND_I32:
+    return emitAtomicBinary(true, MI, BB, 4, 0, true);
   case Mips::CAP_ATOMIC_LOAD_NAND_I64:
-    return emitAtomicBinary(MI, BB, 8, 0, true);
+    return emitAtomicBinary(true, MI, BB, 8, 0, true);
 
   case Mips::ATOMIC_LOAD_SUB_I8:
-  case Mips::CAP_ATOMIC_LOAD_SUB_I8:
     return emitAtomicBinaryPartword(MI, BB, 1, Mips::SUBu);
   case Mips::ATOMIC_LOAD_SUB_I16:
-  case Mips::CAP_ATOMIC_LOAD_SUB_I16:
     return emitAtomicBinaryPartword(MI, BB, 2, Mips::SUBu);
   case Mips::ATOMIC_LOAD_SUB_I32:
-  case Mips::CAP_ATOMIC_LOAD_SUB_I32:
-    return emitAtomicBinary(MI, BB, 4, Mips::SUBu);
+    return emitAtomicBinary(false, MI, BB, 4, Mips::SUBu);
   case Mips::ATOMIC_LOAD_SUB_I64:
+    return emitAtomicBinary(false, MI, BB, 8, Mips::DSUBu);
+  case Mips::CAP_ATOMIC_LOAD_SUB_I8:
+    return emitAtomicBinary(true, MI, BB, 1, Mips::SUBu);
+  case Mips::CAP_ATOMIC_LOAD_SUB_I16:
+    return emitAtomicBinary(true, MI, BB, 2, Mips::SUBu);
+  case Mips::CAP_ATOMIC_LOAD_SUB_I32:
+    return emitAtomicBinary(true, MI, BB, 4, Mips::SUBu);
   case Mips::CAP_ATOMIC_LOAD_SUB_I64:
-    return emitAtomicBinary(MI, BB, 8, Mips::DSUBu);
+    return emitAtomicBinary(true, MI, BB, 8, Mips::DSUBu);
 
   case Mips::ATOMIC_SWAP_I8:
-  case Mips::CAP_ATOMIC_SWAP_I8:
     return emitAtomicBinaryPartword(MI, BB, 1, 0);
   case Mips::ATOMIC_SWAP_I16:
-  case Mips::CAP_ATOMIC_SWAP_I16:
     return emitAtomicBinaryPartword(MI, BB, 2, 0);
   case Mips::ATOMIC_SWAP_I32:
-  case Mips::CAP_ATOMIC_SWAP_I32:
-    return emitAtomicBinary(MI, BB, 4, 0);
+    return emitAtomicBinary(false, MI, BB, 4, 0);
   case Mips::ATOMIC_SWAP_I64:
+    return emitAtomicBinary(false, MI, BB, 8, 0);
+  case Mips::CAP_ATOMIC_SWAP_I8:
+    return emitAtomicBinary(true, MI, BB, 1, 0);
+  case Mips::CAP_ATOMIC_SWAP_I16:
+    return emitAtomicBinary(true, MI, BB, 2, 0);
+  case Mips::CAP_ATOMIC_SWAP_I32:
+    return emitAtomicBinary(true, MI, BB, 4, 0);
   case Mips::CAP_ATOMIC_SWAP_I64:
-    return emitAtomicBinary(MI, BB, 8, 0);
+    return emitAtomicBinary(true, MI, BB, 8, 0);
 
   case Mips::ATOMIC_CMP_SWAP_I8:
-  case Mips::CAP_ATOMIC_CMP_SWAP_I8:
     return emitAtomicCmpSwapPartword(MI, BB, 1);
   case Mips::ATOMIC_CMP_SWAP_I16:
-  case Mips::CAP_ATOMIC_CMP_SWAP_I16:
     return emitAtomicCmpSwapPartword(MI, BB, 2);
+
+  case Mips::CAP_ATOMIC_CMP_SWAP_I8:
+    return emitAtomicCmpSwap(MI, BB, 1);
+  case Mips::CAP_ATOMIC_CMP_SWAP_I16:
+    return emitAtomicCmpSwap(MI, BB, 2);
   case Mips::ATOMIC_CMP_SWAP_I32:
   case Mips::CAP_ATOMIC_CMP_SWAP_I32:
     return emitAtomicCmpSwap(MI, BB, 4);
   case Mips::ATOMIC_CMP_SWAP_I64:
   case Mips::CAP_ATOMIC_CMP_SWAP_I64:
     return emitAtomicCmpSwap(MI, BB, 8);
+
   case Mips::PseudoSDIV:
   case Mips::PseudoUDIV:
   case Mips::DIV:
@@ -1183,7 +1215,8 @@ MipsTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
 
 // This function also handles Mips::ATOMIC_SWAP_I32 (when BinOpcode == 0), and
 // Mips::ATOMIC_LOAD_NAND_I32 (when Nand == true)
-MachineBasicBlock *MipsTargetLowering::emitAtomicBinary(MachineInstr &MI,
+MachineBasicBlock *MipsTargetLowering::emitAtomicBinary(bool isCapOp,
+                                                        MachineInstr &MI,
                                                         MachineBasicBlock *BB,
                                                         unsigned Size,
                                                         unsigned BinOpcode,
@@ -1227,16 +1260,13 @@ MachineBasicBlock *MipsTargetLowering::emitAtomicBinary(MachineInstr &MI,
   unsigned OldVal = MI.getOperand(0).getReg();
   unsigned Ptr = MI.getOperand(1).getReg();
   unsigned Incr = MI.getOperand(2).getReg();
-  bool isCapOp = false;
 
   unsigned StoreVal = RegInfo.createVirtualRegister(RC);
   unsigned AndRes = RegInfo.createVirtualRegister(RC);
   unsigned Success = RegInfo.createVirtualRegister(RC);
-
   // If this is a capability-relative atomic operation, then we should emit
   // capability operations.
-  if (Subtarget.isCheri() &&
-      RegInfo.getRegClass(Ptr) == &Mips::CheriRegsRegClass) {
+  if (isCapOp) {
     switch (Size) {
       case 8:
         LL = Mips::CLLD;
@@ -1256,6 +1286,10 @@ MachineBasicBlock *MipsTargetLowering::emitAtomicBinary(MachineInstr &MI,
         break;
     }
     isCapOp = true;
+    AND = Mips::AND64;
+    NOR = Mips::NOR64;
+    ZERO = Mips::ZERO_64;
+    BEQ = Mips::BEQ64;
   }
   assert(isCapOp || (Size == 4 || Size == 8) &&
          "Unsupported size for EmitAtomicBinary.");
@@ -1359,10 +1393,6 @@ MachineBasicBlock *MipsTargetLowering::emitAtomicBinaryPartword(
   unsigned Dest = MI.getOperand(0).getReg();
   unsigned Ptr = MI.getOperand(1).getReg();
   unsigned Incr = MI.getOperand(2).getReg();
-
-  if (Subtarget.isCheri() &&
-      RegInfo.getRegClass(Ptr) == &Mips::CheriRegsRegClass)
-    return emitAtomicBinary(MI, BB, Size, BinOpcode, Nand);
 
   unsigned AlignedAddr = RegInfo.createVirtualRegister(RCp);
   unsigned ShiftAmt = RegInfo.createVirtualRegister(RC);
@@ -1551,32 +1581,30 @@ MachineBasicBlock *MipsTargetLowering::emitAtomicCmpSwap(MachineInstr &MI,
   unsigned Ptr = MI.getOperand(1).getReg();
   unsigned OldVal = MI.getOperand(2).getReg();
   unsigned NewVal = MI.getOperand(3).getReg();
-  bool isCapOp = false;
 
-  if (Subtarget.isCheri() &&
-      RegInfo.getRegClass(Ptr) == &Mips::CheriRegsRegClass) {
-    switch (Size) {
-      case 8:
-        LL = Mips::CLLD;
-        SC = Mips::CSCD;
-        break;
-      case 4:
-        LL = Mips::CLLW;
-        SC = Mips::CSCW;
-        break;
-      case 2:
-        LL = Mips::CLLH;
-        SC = Mips::CSCH;
-        break;
-      case 1:
-        LL = Mips::CLLB;
-        SC = Mips::CSCB;
-        break;
-    }
-    isCapOp = true;
+  bool isCapOp = true;
+  switch (MI.getOpcode()) {
+    case Mips::CAP_ATOMIC_CMP_SWAP_I64:
+      LL = Mips::CLLD;
+      SC = Mips::CSCD;
+      break;
+    case Mips::CAP_ATOMIC_CMP_SWAP_I32:
+      LL = Mips::CLLW;
+      SC = Mips::CSCW;
+      break;
+    case Mips::CAP_ATOMIC_CMP_SWAP_I16:
+      LL = Mips::CLLH;
+      SC = Mips::CSCH;
+      break;
+    case Mips::CAP_ATOMIC_CMP_SWAP_I8:
+      LL = Mips::CLLB;
+      SC = Mips::CSCB;
+      break;
+    default:
+      isCapOp = false;
   }
-  assert(isCapOp || (Size == 4 || Size == 8) &&
-         "Unsupported size for EmitAtomicCmpSwap.");
+   assert(isCapOp || (Size == 4 || Size == 8) &&
+          "Unsupported size for EmitAtomicCmpSwap.");
 
   unsigned Success = RegInfo.createVirtualRegister(RC);
 
@@ -1634,6 +1662,8 @@ MachineBasicBlock *MipsTargetLowering::emitAtomicCmpSwap(MachineInstr &MI,
 
 MachineBasicBlock *MipsTargetLowering::emitAtomicCmpSwapPartword(
     MachineInstr &MI, MachineBasicBlock *BB, unsigned Size) const {
+  assert((Size == 1 || Size == 2) &&
+      "Unsupported size for EmitAtomicCmpSwapPartial.");
 
   MachineFunction *MF = BB->getParent();
   MachineRegisterInfo &RegInfo = MF->getRegInfo();
@@ -1648,13 +1678,6 @@ MachineBasicBlock *MipsTargetLowering::emitAtomicCmpSwapPartword(
   unsigned Ptr = MI.getOperand(1).getReg();
   unsigned CmpVal = MI.getOperand(2).getReg();
   unsigned NewVal = MI.getOperand(3).getReg();
-
-  if (Subtarget.isCheri() &&
-      RegInfo.getRegClass(Ptr) == &Mips::CheriRegsRegClass)
-    return emitAtomicCmpSwap(MI, BB, Size);
-
-  assert((Size == 1 || Size == 2) &&
-      "Unsupported size for EmitAtomicCmpSwapPartial.");
 
   unsigned AlignedAddr = RegInfo.createVirtualRegister(RCp);
   unsigned ShiftAmt = RegInfo.createVirtualRegister(RC);

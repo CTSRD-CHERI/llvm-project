@@ -149,6 +149,8 @@ CharUnits CodeGenFunction::getNaturalTypeAlignment(QualType T,
       Alignment = CGM.getClassPointerAlignment(RD);
     } else {
       Alignment = getContext().getTypeAlignInChars(T);
+      if (T.getQualifiers().hasUnaligned())
+        Alignment = CharUnits::One();
     }
 
     // Cap to the global maximum type alignment unless the alignment
@@ -779,6 +781,10 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
         Fn->addFnAttr("function-instrument", "xray-always");
       if (XRayAttr->neverXRayInstrument())
         Fn->addFnAttr("function-instrument", "xray-never");
+      if (const auto *LogArgs = D->getAttr<XRayLogArgsAttr>()) {
+        Fn->addFnAttr("xray-log-args",
+                      llvm::utostr(LogArgs->getArgumentCount()));
+      }
     } else {
       Fn->addFnAttr(
           "xray-instruction-threshold",
@@ -813,6 +819,18 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
             llvm::ConstantStruct::getAnon(PrologueStructElems, /*Packed=*/true);
         Fn->setPrologueData(PrologueStructConst);
       }
+    }
+  }
+
+  // If we're checking nullability, we need to know whether we can check the
+  // return value. Initialize the flag to 'true' and refine it in EmitParmDecl.
+  if (SanOpts.has(SanitizerKind::NullabilityReturn)) {
+    auto Nullability = FnRetTy->getNullability(getContext());
+    if (Nullability && *Nullability == NullabilityKind::NonNull) {
+      if (!(SanOpts.has(SanitizerKind::ReturnsNonnullAttribute) &&
+            CurCodeDecl && CurCodeDecl->getAttr<ReturnsNonNullAttr>()))
+        RetValNullabilityPrecondition =
+            llvm::ConstantInt::getTrue(getLLVMContext());
     }
   }
 
@@ -860,8 +878,12 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
   // inlining, we just add an attribute to insert a mcount call in backend.
   // The attribute "counting-function" is set to mcount function name which is
   // architecture dependent.
-  if (CGM.getCodeGenOpts().InstrumentForProfiling)
-    Fn->addFnAttr("counting-function", getTarget().getMCountName());
+  if (CGM.getCodeGenOpts().InstrumentForProfiling) {
+    if (CGM.getCodeGenOpts().CallFEntry)
+      Fn->addFnAttr("fentry-call", "true");
+    else
+      Fn->addFnAttr("counting-function", getTarget().getMCountName());
+  }
 
   if (RetTy->isVoidType()) {
     // Void type; nothing to return.
@@ -943,6 +965,15 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
       // FIXME: Should we generate a new load for each use of 'this'?  The
       // fast register allocator would be happier...
       CXXThisValue = CXXABIThisValue;
+    }
+
+    // Null-check the 'this' pointer once per function, if it's available.
+    if (CXXThisValue) {
+      SanitizerSet SkippedChecks;
+      SkippedChecks.set(SanitizerKind::Alignment, true);
+      SkippedChecks.set(SanitizerKind::ObjectSize, true);
+      EmitTypeCheck(TCK_Load, Loc, CXXThisValue, MD->getThisType(getContext()),
+                    /*Alignment=*/CharUnits::Zero(), SkippedChecks);
     }
   }
 
@@ -1085,8 +1116,13 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
   if (FD->hasAttr<NoDebugAttr>())
     DebugInfo = nullptr; // disable debug info indefinitely for this function
 
+  // The function might not have a body if we're generating thunks for a
+  // function declaration.
   SourceRange BodyRange;
-  if (Stmt *Body = FD->getBody()) BodyRange = Body->getSourceRange();
+  if (Stmt *Body = FD->getBody())
+    BodyRange = Body->getSourceRange();
+  else
+    BodyRange = FD->getLocation();
   CurEHLocation = BodyRange.getEnd();
 
   // Use the location of the start of the function to determine where

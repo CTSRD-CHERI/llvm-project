@@ -56,6 +56,8 @@ using namespace llvm;
 
 #define DEBUG_TYPE "arm-cp-islands"
 
+#define ARM_CP_ISLANDS_OPT_NAME \
+  "ARM constant island placement and branch shortening pass"
 STATISTIC(NumCPEs,       "Number of constpool entries");
 STATISTIC(NumSplit,      "Number of uncond branches inserted");
 STATISTIC(NumCBrFixed,   "Number of cond branches fixed");
@@ -230,7 +232,7 @@ namespace {
     }
 
     StringRef getPassName() const override {
-      return "ARM constant island placement and branch shortening pass";
+      return ARM_CP_ISLANDS_OPT_NAME;
     }
 
   private:
@@ -320,8 +322,9 @@ void ARMConstantIslands::verify() {
 #endif
 }
 
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
 /// print block size and offset information - debugging
-void ARMConstantIslands::dumpBBs() {
+LLVM_DUMP_METHOD void ARMConstantIslands::dumpBBs() {
   DEBUG({
     for (unsigned J = 0, E = BBInfo.size(); J !=E; ++J) {
       const BasicBlockInfo &BBI = BBInfo[J];
@@ -333,6 +336,7 @@ void ARMConstantIslands::dumpBBs() {
     }
   });
 }
+#endif
 
 bool ARMConstantIslands::runOnMachineFunction(MachineFunction &mf) {
   MF = &mf;
@@ -801,6 +805,7 @@ initializeFunctionInfo(const std::vector<MachineInstr*> &CPEMIs) {
           case ARM::LDRcp:
           case ARM::t2LDRpci:
           case ARM::t2LDRHpci:
+          case ARM::t2LDRBpci:
             Bits = 12;  // +-offset_12
             NegOk = true;
             break;
@@ -1737,6 +1742,13 @@ bool ARMConstantIslands::undoLRSpillRestore() {
       MI->eraseFromParent();
       MadeChange = true;
     }
+    if (MI->getOpcode() == ARM::tPUSH &&
+        MI->getOperand(2).getReg() == ARM::LR &&
+        MI->getNumExplicitOperands() == 3) {
+      // Just remove the push.
+      MI->eraseFromParent();
+      MadeChange = true;
+    }
   }
   return MadeChange;
 }
@@ -2005,6 +2017,16 @@ static bool jumpTableFollowsTB(MachineInstr *JTMI, MachineInstr *CPEMI) {
          &*MBB->begin() == CPEMI;
 }
 
+static bool registerDefinedBetween(unsigned Reg,
+                                   MachineBasicBlock::iterator From,
+                                   MachineBasicBlock::iterator To,
+                                   const TargetRegisterInfo *TRI) {
+  for (auto I = From; I != To; ++I)
+    if (I->modifiesRegister(Reg, TRI))
+      return true;
+  return false;
+}
+
 /// optimizeThumb2JumpTables - Use tbb / tbh instructions to generate smaller
 /// jumptables when it's possible.
 bool ARMConstantIslands::optimizeThumb2JumpTables() {
@@ -2091,6 +2113,7 @@ bool ARMConstantIslands::optimizeThumb2JumpTables() {
         continue;
 
       // If we're in PIC mode, there should be another ADD following.
+      auto *TRI = STI->getRegisterInfo();
       if (isPositionIndependentOrROPI) {
         MachineInstr *Add = Load->getNextNode();
         if (Add->getOpcode() != ARM::tADDrr ||
@@ -2100,11 +2123,16 @@ bool ARMConstantIslands::optimizeThumb2JumpTables() {
           continue;
         if (Add->getOperand(0).getReg() != MI->getOperand(0).getReg())
           continue;
-
+        if (registerDefinedBetween(IdxReg, Add->getNextNode(), MI, TRI))
+          // IdxReg gets redefined in the middle of the sequence.
+          continue;
         Add->eraseFromParent();
         DeadSize += 2;
       } else {
         if (Load->getOperand(0).getReg() != MI->getOperand(0).getReg())
+          continue;
+        if (registerDefinedBetween(IdxReg, Load->getNextNode(), MI, TRI))
+          // IdxReg gets redefined in the middle of the sequence.
           continue;
       }
       
@@ -2281,3 +2309,6 @@ adjustJTTargetBlockForward(MachineBasicBlock *BB, MachineBasicBlock *JTBB) {
 FunctionPass *llvm::createARMConstantIslandPass() {
   return new ARMConstantIslands();
 }
+
+INITIALIZE_PASS(ARMConstantIslands, "arm-cp-islands", ARM_CP_ISLANDS_OPT_NAME,
+                false, false)

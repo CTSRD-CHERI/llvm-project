@@ -83,6 +83,7 @@ CODEGENOPT(XRayInstrumentFunctions , 1, 0) ///< Set when -fxray-instrument is
 VALUE_CODEGENOPT(XRayInstructionThreshold , 32, 200)
 
 CODEGENOPT(InstrumentForProfiling , 1, 0) ///< Set when -pg is enabled.
+CODEGENOPT(CallFEntry , 1, 0) ///< Set when -mfentry is enabled.
 CODEGENOPT(LessPreciseFPMAD  , 1, 0) ///< Enable less precise MAD instructions to
                                      ///< be generated.
 CODEGENOPT(PrepareForLTO     , 1, 0) ///< Set when -flto is enabled on the
@@ -222,6 +223,9 @@ VALUE_CODEGENOPT(SSPBufferSize, 32, 0)
 
 /// The kind of generated debug info.
 ENUM_CODEGENOPT(DebugInfo, codegenoptions::DebugInfoKind, 3, codegenoptions::NoDebugInfo)
+
+/// Whether to generate macro debug info.
+CODEGENOPT(MacroDebugInfo, 1, 0)
 
 /// Tune the debug info for this debugger.
 ENUM_CODEGENOPT(DebuggerTuning, llvm::DebuggerKind, 2,

@@ -307,6 +307,17 @@ public:
   ///
   QualType TransformType(TypeLocBuilder &TLB, TypeLoc TL);
 
+  /// \brief Transform a type that is permitted to produce a
+  /// DeducedTemplateSpecializationType.
+  ///
+  /// This is used in the (relatively rare) contexts where it is acceptable
+  /// for transformation to produce a class template type with deduced
+  /// template arguments.
+  /// @{
+  QualType TransformTypeWithDeducedTST(QualType T);
+  TypeSourceInfo *TransformTypeWithDeducedTST(TypeSourceInfo *DI);
+  /// @}
+
   /// \brief Transform the given statement.
   ///
   /// By default, this routine transforms a statement by delegating to the
@@ -672,6 +683,16 @@ public:
   OMPClause *Transform ## Class(Class *S);
 #include "clang/Basic/OpenMPKinds.def"
 
+  /// \brief Build a new qualified type given its unqualified type and type
+  /// qualifiers.
+  ///
+  /// By default, this routine adds type qualifiers only to types that can
+  /// have qualifiers, and silently suppresses those qualifiers that are not
+  /// permitted. Subclasses may override this routine to provide different
+  /// behavior.
+  QualType RebuildQualifiedType(QualType T, SourceLocation Loc,
+                                Qualifiers Quals);
+
   /// \brief Build a new pointer type given its pointee type.
   ///
   /// By default, performs semantic analysis when building the pointer type.
@@ -898,7 +919,7 @@ public:
   /// By default, builds a new ParenType type from the inner type.
   /// Subclasses may override this routine to provide different behavior.
   QualType RebuildParenType(QualType InnerType) {
-    return SemaRef.Context.getParenType(InnerType);
+    return SemaRef.BuildParenType(InnerType);
   }
 
   /// \brief Build a new qualified name type.
@@ -968,7 +989,8 @@ public:
                                     SourceLocation KeywordLoc,
                                     NestedNameSpecifierLoc QualifierLoc,
                                     const IdentifierInfo *Id,
-                                    SourceLocation IdLoc) {
+                                    SourceLocation IdLoc,
+                                    bool DeducedTSTContext) {
     CXXScopeSpec SS;
     SS.Adopt(QualifierLoc);
 
@@ -980,9 +1002,25 @@ public:
                                                     Id);
     }
 
-    if (Keyword == ETK_None || Keyword == ETK_Typename)
-      return SemaRef.CheckTypenameType(Keyword, KeywordLoc, QualifierLoc,
-                                       *Id, IdLoc);
+    if (Keyword == ETK_None || Keyword == ETK_Typename) {
+      QualType T = SemaRef.CheckTypenameType(Keyword, KeywordLoc, QualifierLoc,
+                                             *Id, IdLoc);
+      // If a dependent name resolves to a deduced template specialization type,
+      // check that we're in one of the syntactic contexts permitting it.
+      if (!DeducedTSTContext) {
+        if (auto *Deduced = dyn_cast_or_null<DeducedTemplateSpecializationType>(
+                T.isNull() ? nullptr : T->getContainedDeducedType())) {
+          SemaRef.Diag(IdLoc, diag::err_dependent_deduced_tst)
+            << (int)SemaRef.getTemplateNameKindForDiagnostics(
+                   Deduced->getTemplateName())
+            << QualType(QualifierLoc.getNestedNameSpecifier()->getAsType(), 0);
+          if (auto *TD = Deduced->getTemplateName().getAsTemplateDecl())
+            SemaRef.Diag(TD->getLocation(), diag::note_template_decl_here);
+          return QualType();
+        }
+      }
+      return T;
+    }
 
     TagTypeKind Kind = TypeWithKeyword::getTagTypeKindForKeyword(Keyword);
 
@@ -1324,16 +1362,28 @@ public:
   ///
   /// By default, performs semantic analysis to build the new statement.
   /// Subclasses may override this routine to provide different behavior.
-  StmtResult RebuildCoreturnStmt(SourceLocation CoreturnLoc, Expr *Result) {
-    return getSema().BuildCoreturnStmt(CoreturnLoc, Result);
+  StmtResult RebuildCoreturnStmt(SourceLocation CoreturnLoc, Expr *Result,
+                                 bool IsImplicit) {
+    return getSema().BuildCoreturnStmt(CoreturnLoc, Result, IsImplicit);
   }
 
   /// \brief Build a new co_await expression.
   ///
   /// By default, performs semantic analysis to build the new expression.
   /// Subclasses may override this routine to provide different behavior.
-  ExprResult RebuildCoawaitExpr(SourceLocation CoawaitLoc, Expr *Result) {
-    return getSema().BuildCoawaitExpr(CoawaitLoc, Result);
+  ExprResult RebuildCoawaitExpr(SourceLocation CoawaitLoc, Expr *Result,
+                                bool IsImplicit) {
+    return getSema().BuildResolvedCoawaitExpr(CoawaitLoc, Result, IsImplicit);
+  }
+
+  /// \brief Build a new co_await expression.
+  ///
+  /// By default, performs semantic analysis to build the new expression.
+  /// Subclasses may override this routine to provide different behavior.
+  ExprResult RebuildDependentCoawaitExpr(SourceLocation CoawaitLoc,
+                                         Expr *Result,
+                                         UnresolvedLookupExpr *Lookup) {
+    return getSema().BuildUnresolvedCoawaitExpr(CoawaitLoc, Result, Lookup);
   }
 
   /// \brief Build a new co_yield expression.
@@ -1342,6 +1392,10 @@ public:
   /// Subclasses may override this routine to provide different behavior.
   ExprResult RebuildCoyieldExpr(SourceLocation CoyieldLoc, Expr *Result) {
     return getSema().BuildCoyieldExpr(CoyieldLoc, Result);
+  }
+
+  StmtResult RebuildCoroutineBodyStmt(CoroutineBodyStmt::CtorArgs Args) {
+    return getSema().BuildCoroutineBodyStmt(Args);
   }
 
   /// \brief Build a new Objective-C \@try statement.
@@ -2944,16 +2998,17 @@ public:
   ExprResult RebuildObjCIvarRefExpr(Expr *BaseArg, ObjCIvarDecl *Ivar,
                                           SourceLocation IvarLoc,
                                           bool IsArrow, bool IsFreeIvar) {
-    // FIXME: We lose track of the IsFreeIvar bit.
     CXXScopeSpec SS;
     DeclarationNameInfo NameInfo(Ivar->getDeclName(), IvarLoc);
-    return getSema().BuildMemberReferenceExpr(BaseArg, BaseArg->getType(),
-                                              /*FIXME:*/IvarLoc, IsArrow,
-                                              SS, SourceLocation(),
-                                              /*FirstQualifierInScope=*/nullptr,
-                                              NameInfo,
-                                              /*TemplateArgs=*/nullptr,
-                                              /*S=*/nullptr);
+    ExprResult Result = getSema().BuildMemberReferenceExpr(
+        BaseArg, BaseArg->getType(),
+        /*FIXME:*/ IvarLoc, IsArrow, SS, SourceLocation(),
+        /*FirstQualifierInScope=*/nullptr, NameInfo,
+        /*TemplateArgs=*/nullptr,
+        /*S=*/nullptr);
+    if (IsFreeIvar && Result.isUsable())
+      cast<ObjCIvarRefExpr>(Result.get())->setIsFreeIvar(IsFreeIvar);
+    return Result;
   }
 
   /// \brief Build a new Objective-C property reference expression.
@@ -3157,6 +3212,10 @@ private:
   TypeSourceInfo *TransformTSIInObjectScope(TypeLoc TL, QualType ObjectType,
                                             NamedDecl *FirstQualifierInScope,
                                             CXXScopeSpec &SS);
+
+  QualType TransformDependentNameType(TypeLocBuilder &TLB,
+                                      DependentNameTypeLoc TL,
+                                      bool DeducibleTSTContext);
 };
 
 template<typename Derived>
@@ -3573,6 +3632,19 @@ TreeTransform<Derived>
   case DeclarationName::CXXLiteralOperatorName:
   case DeclarationName::CXXUsingDirective:
     return NameInfo;
+
+  case DeclarationName::CXXDeductionGuideName: {
+    TemplateDecl *OldTemplate = Name.getCXXDeductionGuideTemplate();
+    TemplateDecl *NewTemplate = cast_or_null<TemplateDecl>(
+        getDerived().TransformDecl(NameInfo.getLoc(), OldTemplate));
+    if (!NewTemplate)
+      return DeclarationNameInfo();
+
+    DeclarationNameInfo NewNameInfo(NameInfo);
+    NewNameInfo.setName(
+        SemaRef.Context.DeclarationNames.getCXXDeductionGuideName(NewTemplate));
+    return NewNameInfo;
+  }
 
   case DeclarationName::CXXConstructorName:
   case DeclarationName::CXXDestructorName:
@@ -4048,11 +4120,57 @@ TreeTransform<Derived>::TransformType(TypeLocBuilder &TLB, TypeLoc T) {
   llvm_unreachable("unhandled type loc!");
 }
 
-/// FIXME: By default, this routine adds type qualifiers only to types
-/// that can have qualifiers, and silently suppresses those qualifiers
-/// that are not permitted (e.g., qualifiers on reference or function
-/// types). This is the right thing for template instantiation, but
-/// probably not for other clients.
+template<typename Derived>
+QualType TreeTransform<Derived>::TransformTypeWithDeducedTST(QualType T) {
+  if (!isa<DependentNameType>(T))
+    return TransformType(T);
+
+  if (getDerived().AlreadyTransformed(T))
+    return T;
+  TypeSourceInfo *DI = getSema().Context.getTrivialTypeSourceInfo(T,
+                                                getDerived().getBaseLocation());
+  TypeSourceInfo *NewDI = getDerived().TransformTypeWithDeducedTST(DI);
+  return NewDI ? NewDI->getType() : QualType();
+}
+
+template<typename Derived>
+TypeSourceInfo *
+TreeTransform<Derived>::TransformTypeWithDeducedTST(TypeSourceInfo *DI) {
+  if (!isa<DependentNameType>(DI->getType()))
+    return TransformType(DI);
+
+  // Refine the base location to the type's location.
+  TemporaryBase Rebase(*this, DI->getTypeLoc().getBeginLoc(),
+                       getDerived().getBaseEntity());
+  if (getDerived().AlreadyTransformed(DI->getType()))
+    return DI;
+
+  TypeLocBuilder TLB;
+
+  TypeLoc TL = DI->getTypeLoc();
+  TLB.reserve(TL.getFullDataSize());
+
+  Qualifiers Quals;
+  auto QTL = TL.getAs<QualifiedTypeLoc>();
+  if (QTL)
+    TL = QTL.getUnqualifiedLoc();
+
+  auto DNTL = TL.castAs<DependentNameTypeLoc>();
+
+  QualType Result = getDerived().TransformDependentNameType(
+      TLB, DNTL, /*DeducedTSTContext*/true);
+  if (Result.isNull())
+    return nullptr;
+
+  if (QTL) {
+    Result = getDerived().RebuildQualifiedType(
+        Result, QTL.getBeginLoc(), QTL.getType().getLocalQualifiers());
+    TLB.TypeWasModifiedSafely(Result);
+  }
+
+  return TLB.getTypeSourceInfo(SemaRef.Context, Result);
+}
+
 template<typename Derived>
 QualType
 TreeTransform<Derived>::TransformQualifiedType(TypeLocBuilder &TLB,
@@ -4063,64 +4181,71 @@ TreeTransform<Derived>::TransformQualifiedType(TypeLocBuilder &TLB,
   if (Result.isNull())
     return QualType();
 
-  // Silently suppress qualifiers if the result type can't be qualified.
-  // FIXME: this is the right thing for template instantiation, but
-  // probably not for other clients.
-  if (Result->isFunctionType() || Result->isReferenceType())
-    return Result;
+  Result = getDerived().RebuildQualifiedType(Result, T.getBeginLoc(), Quals);
+
+  // RebuildQualifiedType might have updated the type, but not in a way
+  // that invalidates the TypeLoc. (There's no location information for
+  // qualifiers.)
+  TLB.TypeWasModifiedSafely(Result);
+
+  return Result;
+}
+
+template<typename Derived>
+QualType TreeTransform<Derived>::RebuildQualifiedType(QualType T,
+                                                      SourceLocation Loc,
+                                                      Qualifiers Quals) {
+  // C++ [dcl.fct]p7:
+  //   [When] adding cv-qualifications on top of the function type [...] the
+  //   cv-qualifiers are ignored.
+  // C++ [dcl.ref]p1:
+  //   when the cv-qualifiers are introduced through the use of a typedef-name
+  //   or decltype-specifier [...] the cv-qualifiers are ignored.
+  // Note that [dcl.ref]p1 lists all cases in which cv-qualifiers can be
+  // applied to a reference type.
+  // FIXME: This removes all qualifiers, not just cv-qualifiers!
+  if (T->isFunctionType() || T->isReferenceType())
+    return T;
 
   // Suppress Objective-C lifetime qualifiers if they don't make sense for the
   // resulting type.
   if (Quals.hasObjCLifetime()) {
-    if (!Result->isObjCLifetimeType() && !Result->isDependentType())
+    if (!T->isObjCLifetimeType() && !T->isDependentType())
       Quals.removeObjCLifetime();
-    else if (Result.getObjCLifetime()) {
+    else if (T.getObjCLifetime()) {
       // Objective-C ARC:
       //   A lifetime qualifier applied to a substituted template parameter
       //   overrides the lifetime qualifier from the template argument.
       const AutoType *AutoTy;
       if (const SubstTemplateTypeParmType *SubstTypeParam
-                                = dyn_cast<SubstTemplateTypeParmType>(Result)) {
+                                = dyn_cast<SubstTemplateTypeParmType>(T)) {
         QualType Replacement = SubstTypeParam->getReplacementType();
         Qualifiers Qs = Replacement.getQualifiers();
         Qs.removeObjCLifetime();
-        Replacement
-          = SemaRef.Context.getQualifiedType(Replacement.getUnqualifiedType(),
-                                             Qs);
-        Result = SemaRef.Context.getSubstTemplateTypeParmType(
-                                        SubstTypeParam->getReplacedParameter(),
-                                                              Replacement);
-        TLB.TypeWasModifiedSafely(Result);
-      } else if ((AutoTy = dyn_cast<AutoType>(Result)) && AutoTy->isDeduced()) {
+        Replacement = SemaRef.Context.getQualifiedType(
+            Replacement.getUnqualifiedType(), Qs);
+        T = SemaRef.Context.getSubstTemplateTypeParmType(
+            SubstTypeParam->getReplacedParameter(), Replacement);
+      } else if ((AutoTy = dyn_cast<AutoType>(T)) && AutoTy->isDeduced()) {
         // 'auto' types behave the same way as template parameters.
         QualType Deduced = AutoTy->getDeducedType();
         Qualifiers Qs = Deduced.getQualifiers();
         Qs.removeObjCLifetime();
-        Deduced = SemaRef.Context.getQualifiedType(Deduced.getUnqualifiedType(),
-                                                   Qs);
-        Result = SemaRef.Context.getAutoType(Deduced, AutoTy->getKeyword(),
-                                AutoTy->isDependentType());
-        TLB.TypeWasModifiedSafely(Result);
+        Deduced =
+            SemaRef.Context.getQualifiedType(Deduced.getUnqualifiedType(), Qs);
+        T = SemaRef.Context.getAutoType(Deduced, AutoTy->getKeyword(),
+                                        AutoTy->isDependentType());
       } else {
         // Otherwise, complain about the addition of a qualifier to an
         // already-qualified type.
-        SourceRange R = T.getUnqualifiedLoc().getSourceRange();
-        SemaRef.Diag(R.getBegin(), diag::err_attr_objc_ownership_redundant)
-          << Result << R;
-
+        // FIXME: Why is this check not in Sema::BuildQualifiedType?
+        SemaRef.Diag(Loc, diag::err_attr_objc_ownership_redundant) << T;
         Quals.removeObjCLifetime();
       }
     }
   }
-  if (!Quals.empty()) {
-    Result = SemaRef.BuildQualifiedType(Result, T.getBeginLoc(), Quals);
-    // BuildQualifiedType might not add qualifiers if they are invalid.
-    if (Result.hasLocalQualifiers())
-      TLB.push<QualifiedTypeLoc>(Result);
-    // No location information to preserve.
-  }
 
-  return Result;
+  return SemaRef.BuildQualifiedType(T, Loc, Quals);
 }
 
 template<typename Derived>
@@ -4494,8 +4619,15 @@ TreeTransform<Derived>::TransformVariableArrayType(TypeLocBuilder &TLB,
   if (ElementType.isNull())
     return QualType();
 
-  ExprResult SizeResult
-    = getDerived().TransformExpr(T->getSizeExpr());
+  ExprResult SizeResult;
+  {
+    EnterExpressionEvaluationContext Context(SemaRef,
+                                             Sema::PotentiallyEvaluated);
+    SizeResult = getDerived().TransformExpr(T->getSizeExpr());
+  }
+  if (SizeResult.isInvalid())
+    return QualType();
+  SizeResult = SemaRef.ActOnFinishFullExpr(SizeResult.get());
   if (SizeResult.isInvalid())
     return QualType();
 
@@ -5854,8 +5986,14 @@ TreeTransform<Derived>::TransformParenType(TypeLocBuilder &TLB,
 }
 
 template<typename Derived>
-QualType TreeTransform<Derived>::TransformDependentNameType(TypeLocBuilder &TLB,
-                                                      DependentNameTypeLoc TL) {
+QualType TreeTransform<Derived>::TransformDependentNameType(
+    TypeLocBuilder &TLB, DependentNameTypeLoc TL) {
+  return TransformDependentNameType(TLB, TL, false);
+}
+
+template<typename Derived>
+QualType TreeTransform<Derived>::TransformDependentNameType(
+    TypeLocBuilder &TLB, DependentNameTypeLoc TL, bool DeducedTSTContext) {
   const DependentNameType *T = TL.getTypePtr();
 
   NestedNameSpecifierLoc QualifierLoc
@@ -5868,7 +6006,8 @@ QualType TreeTransform<Derived>::TransformDependentNameType(TypeLocBuilder &TLB,
                                             TL.getElaboratedKeywordLoc(),
                                             QualifierLoc,
                                             T->getIdentifier(),
-                                            TL.getNameLoc());
+                                            TL.getNameLoc(),
+                                            DeducedTSTContext);
   if (Result.isNull())
     return QualType();
 
@@ -6710,7 +6849,91 @@ StmtResult
 TreeTransform<Derived>::TransformCoroutineBodyStmt(CoroutineBodyStmt *S) {
   // The coroutine body should be re-formed by the caller if necessary.
   // FIXME: The coroutine body is always rebuilt by ActOnFinishFunctionBody
-  return getDerived().TransformStmt(S->getBody());
+  CoroutineBodyStmt::CtorArgs BodyArgs;
+
+  auto *ScopeInfo = SemaRef.getCurFunction();
+  auto *FD = cast<FunctionDecl>(SemaRef.CurContext);
+  assert(ScopeInfo && !ScopeInfo->CoroutinePromise &&
+         ScopeInfo->NeedsCoroutineSuspends &&
+         ScopeInfo->CoroutineSuspends.first == nullptr &&
+         ScopeInfo->CoroutineSuspends.second == nullptr &&
+         "expected clean scope info");
+
+  // Set that we have (possibly-invalid) suspend points before we do anything
+  // that may fail.
+  ScopeInfo->setNeedsCoroutineSuspends(false);
+
+  // The new CoroutinePromise object needs to be built and put into the current
+  // FunctionScopeInfo before any transformations or rebuilding occurs.
+  auto *Promise = S->getPromiseDecl();
+  auto *NewPromise = SemaRef.buildCoroutinePromise(FD->getLocation());
+  if (!NewPromise)
+    return StmtError();
+  getDerived().transformedLocalDecl(Promise, NewPromise);
+  ScopeInfo->CoroutinePromise = NewPromise;
+  StmtResult PromiseStmt = SemaRef.ActOnDeclStmt(
+          SemaRef.ConvertDeclToDeclGroup(NewPromise),
+          FD->getLocation(), FD->getLocation());
+  assert(!PromiseStmt.isInvalid());
+  BodyArgs.Promise = PromiseStmt.get();
+
+  // Transform the implicit coroutine statements we built during the initial
+  // parse.
+  StmtResult InitSuspend = getDerived().TransformStmt(S->getInitSuspendStmt());
+  if (InitSuspend.isInvalid())
+    return StmtError();
+  StmtResult FinalSuspend =
+      getDerived().TransformStmt(S->getFinalSuspendStmt());
+  if (FinalSuspend.isInvalid())
+    return StmtError();
+  ScopeInfo->setCoroutineSuspends(InitSuspend.get(), FinalSuspend.get());
+  assert(isa<Expr>(InitSuspend.get()) && isa<Expr>(FinalSuspend.get()));
+  BodyArgs.InitialSuspend = cast<Expr>(InitSuspend.get());
+  BodyArgs.FinalSuspend = cast<Expr>(FinalSuspend.get());
+
+  StmtResult BodyRes = getDerived().TransformStmt(S->getBody());
+  if (BodyRes.isInvalid())
+    return StmtError();
+  BodyArgs.Body = BodyRes.get();
+
+  if (S->getFallthroughHandler()) {
+    StmtResult Res = getDerived().TransformStmt(S->getFallthroughHandler());
+    if (Res.isInvalid())
+      return StmtError();
+    BodyArgs.OnFallthrough = Res.get();
+  }
+
+  if (S->getExceptionHandler()) {
+    StmtResult Res = getDerived().TransformStmt(S->getExceptionHandler());
+    if (Res.isInvalid())
+      return StmtError();
+    BodyArgs.OnException = Res.get();
+  }
+
+  // Transform any additional statements we may have already built
+  if (S->getAllocate() && S->getDeallocate()) {
+    ExprResult AllocRes = getDerived().TransformExpr(S->getAllocate());
+    if (AllocRes.isInvalid())
+      return StmtError();
+    BodyArgs.Allocate = AllocRes.get();
+
+    ExprResult DeallocRes = getDerived().TransformExpr(S->getDeallocate());
+    if (DeallocRes.isInvalid())
+      return StmtError();
+    BodyArgs.Deallocate = DeallocRes.get();
+  }
+
+  Expr *ReturnObject = S->getReturnValueInit();
+  if (ReturnObject) {
+    ExprResult Res = getDerived().TransformInitializer(ReturnObject,
+            /*NoCopyInit*/false);
+    if (Res.isInvalid())
+      return StmtError();
+    BodyArgs.ReturnValue = Res.get();
+  }
+
+  // Do a partial rebuild of the coroutine body and stash it in the ScopeInfo
+  return getDerived().RebuildCoroutineBodyStmt(BodyArgs);
 }
 
 template<typename Derived>
@@ -6723,7 +6946,8 @@ TreeTransform<Derived>::TransformCoreturnStmt(CoreturnStmt *S) {
 
   // Always rebuild; we don't know if this needs to be injected into a new
   // context or if the promise type has changed.
-  return getDerived().RebuildCoreturnStmt(S->getKeywordLoc(), Result.get());
+  return getDerived().RebuildCoreturnStmt(S->getKeywordLoc(), Result.get(),
+                                          S->isImplicit());
 }
 
 template<typename Derived>
@@ -6736,7 +6960,29 @@ TreeTransform<Derived>::TransformCoawaitExpr(CoawaitExpr *E) {
 
   // Always rebuild; we don't know if this needs to be injected into a new
   // context or if the promise type has changed.
-  return getDerived().RebuildCoawaitExpr(E->getKeywordLoc(), Result.get());
+  return getDerived().RebuildCoawaitExpr(E->getKeywordLoc(), Result.get(),
+                                         E->isImplicit());
+}
+
+template <typename Derived>
+ExprResult
+TreeTransform<Derived>::TransformDependentCoawaitExpr(DependentCoawaitExpr *E) {
+  ExprResult OperandResult = getDerived().TransformInitializer(E->getOperand(),
+                                                        /*NotCopyInit*/ false);
+  if (OperandResult.isInvalid())
+    return ExprError();
+
+  ExprResult LookupResult = getDerived().TransformUnresolvedLookupExpr(
+          E->getOperatorCoawaitLookup());
+
+  if (LookupResult.isInvalid())
+    return ExprError();
+
+  // Always rebuild; we don't know if this needs to be injected into a new
+  // context or if the promise type has changed.
+  return getDerived().RebuildDependentCoawaitExpr(
+      E->getKeywordLoc(), OperandResult.get(),
+      cast<UnresolvedLookupExpr>(LookupResult.get()));
 }
 
 template<typename Derived>
@@ -8864,12 +9110,18 @@ TreeTransform<Derived>::TransformMemberExpr(MemberExpr *E) {
   // base (and therefore couldn't do the check) and a
   // nested-name-qualifier (and therefore could do the lookup).
   NamedDecl *FirstQualifierInScope = nullptr;
+  DeclarationNameInfo MemberNameInfo = E->getMemberNameInfo();
+  if (MemberNameInfo.getName()) {
+    MemberNameInfo = getDerived().TransformDeclarationNameInfo(MemberNameInfo);
+    if (!MemberNameInfo.getName())
+      return ExprError();
+  }
 
   return getDerived().RebuildMemberExpr(Base.get(), FakeOperatorLoc,
                                         E->isArrow(),
                                         QualifierLoc,
                                         TemplateKWLoc,
-                                        E->getMemberNameInfo(),
+                                        MemberNameInfo,
                                         Member,
                                         FoundDecl,
                                         (E->hasExplicitTemplateArgs()
@@ -9474,7 +9726,8 @@ template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformCXXFunctionalCastExpr(
                                                      CXXFunctionalCastExpr *E) {
-  TypeSourceInfo *Type = getDerived().TransformType(E->getTypeInfoAsWritten());
+  TypeSourceInfo *Type =
+      getDerived().TransformTypeWithDeducedTST(E->getTypeInfoAsWritten());
   if (!Type)
     return ExprError();
 
@@ -9663,8 +9916,8 @@ template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformCXXNewExpr(CXXNewExpr *E) {
   // Transform the type that we're allocating
-  TypeSourceInfo *AllocTypeInfo
-    = getDerived().TransformType(E->getAllocatedTypeSourceInfo());
+  TypeSourceInfo *AllocTypeInfo =
+      getDerived().TransformTypeWithDeducedTST(E->getAllocatedTypeSourceInfo());
   if (!AllocTypeInfo)
     return ExprError();
 
@@ -10375,7 +10628,8 @@ template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformCXXTemporaryObjectExpr(
                                                     CXXTemporaryObjectExpr *E) {
-  TypeSourceInfo *T = getDerived().TransformType(E->getTypeSourceInfo());
+  TypeSourceInfo *T =
+      getDerived().TransformTypeWithDeducedTST(E->getTypeSourceInfo());
   if (!T)
     return ExprError();
 
@@ -10672,7 +10926,8 @@ template<typename Derived>
 ExprResult
 TreeTransform<Derived>::TransformCXXUnresolvedConstructExpr(
                                                   CXXUnresolvedConstructExpr *E) {
-  TypeSourceInfo *T = getDerived().TransformType(E->getTypeSourceInfo());
+  TypeSourceInfo *T =
+      getDerived().TransformTypeWithDeducedTST(E->getTypeSourceInfo());
   if (!T)
     return ExprError();
 

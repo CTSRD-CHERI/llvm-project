@@ -906,6 +906,9 @@ void MIPrinter::print(const MachineOperand &Op, const TargetRegisterInfo *TRI,
        << CmpInst::getPredicateName(Pred) << ')';
     break;
   }
+  case MachineOperand::MO_Placeholder:
+    OS << "<placeholder>";
+    break;
   }
 }
 
@@ -926,6 +929,15 @@ void MIPrinter::print(const MachineMemOperand &Op) {
     assert(Op.isStore() && "Non load machine operand must be a store");
     OS << "store ";
   }
+
+  if (Op.getSynchScope() == SynchronizationScope::SingleThread)
+    OS << "singlethread ";
+
+  if (Op.getOrdering() != AtomicOrdering::NotAtomic)
+    OS << toIRString(Op.getOrdering()) << ' ';
+  if (Op.getFailureOrdering() != AtomicOrdering::NotAtomic)
+    OS << toIRString(Op.getFailureOrdering()) << ' ';
+
   OS << Op.getSize();
   if (const Value *Val = Op.getValue()) {
     OS << (Op.isLoad() ? " from " : " into ");

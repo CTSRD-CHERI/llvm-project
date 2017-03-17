@@ -39,6 +39,7 @@ AST_MATCHER(Type, sugaredNullptrType) {
 StatementMatcher makeCastSequenceMatcher() {
   StatementMatcher ImplicitCastToNull = implicitCastExpr(
       anyOf(hasCastKind(CK_NullToPointer), hasCastKind(CK_NullToMemberPointer)),
+      unless(hasImplicitDestinationType(qualType(substTemplateTypeParmType()))),
       unless(hasSourceExpression(hasType(sugaredNullptrType()))));
 
   return castExpr(anyOf(ImplicitCastToNull,
@@ -190,8 +191,10 @@ public:
   bool VisitStmt(Stmt *S) {
     auto *C = dyn_cast<CastExpr>(S);
     // Catch the castExpr inside cxxDefaultArgExpr.
-    if (auto *E = dyn_cast<CXXDefaultArgExpr>(S))
+    if (auto *E = dyn_cast<CXXDefaultArgExpr>(S)) {
       C = dyn_cast<CastExpr>(E->getExpr());
+      FirstSubExpr = nullptr;
+    }
     if (!C) {
       FirstSubExpr = nullptr;
       return true;

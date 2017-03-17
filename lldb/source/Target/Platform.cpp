@@ -18,13 +18,9 @@
 #include "llvm/Support/Path.h"
 
 // Project includes
-#include "Utility/ModuleCache.h"
 #include "lldb/Breakpoint/BreakpointIDList.h"
 #include "lldb/Breakpoint/BreakpointLocation.h"
-#include "lldb/Core/DataBufferHeap.h"
 #include "lldb/Core/Debugger.h"
-#include "lldb/Core/Error.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
@@ -37,11 +33,16 @@
 #include "lldb/Interpreter/OptionValueProperties.h"
 #include "lldb/Interpreter/Property.h"
 #include "lldb/Symbol/ObjectFile.h"
+#include "lldb/Target/ModuleCache.h"
 #include "lldb/Target/Platform.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/UnixSignals.h"
-#include "lldb/Utility/Utils.h"
+#include "lldb/Utility/DataBufferHeap.h"
+#include "lldb/Utility/Error.h"
+#include "lldb/Utility/Log.h"
+
+#include "llvm/Support/FileSystem.h"
 
 // Define these constants from POSIX mman.h rather than include the file
 // so that they will be correct even when compiled on Linux.
@@ -542,17 +543,18 @@ struct RecurseCopyBaton {
 };
 
 static FileSpec::EnumerateDirectoryResult
-RecurseCopy_Callback(void *baton, FileSpec::FileType file_type,
+RecurseCopy_Callback(void *baton, llvm::sys::fs::file_type ft,
                      const FileSpec &src) {
   RecurseCopyBaton *rc_baton = (RecurseCopyBaton *)baton;
-  switch (file_type) {
-  case FileSpec::eFileTypePipe:
-  case FileSpec::eFileTypeSocket:
+  namespace fs = llvm::sys::fs;
+  switch (ft) {
+  case fs::file_type::fifo_file:
+  case fs::file_type::socket_file:
     // we have no way to copy pipes and sockets - ignore them and continue
     return FileSpec::eEnumerateDirectoryResultNext;
     break;
 
-  case FileSpec::eFileTypeDirectory: {
+  case fs::file_type::directory_file: {
     // make the new directory and get in there
     FileSpec dst_dir = rc_baton->dst;
     if (!dst_dir.GetFilename())
@@ -582,7 +584,7 @@ RecurseCopy_Callback(void *baton, FileSpec::FileType file_type,
     return FileSpec::eEnumerateDirectoryResultNext;
   } break;
 
-  case FileSpec::eFileTypeSymbolicLink: {
+  case fs::file_type::symlink_file: {
     // copy the file and keep going
     FileSpec dst_file = rc_baton->dst;
     if (!dst_file.GetFilename())
@@ -604,7 +606,7 @@ RecurseCopy_Callback(void *baton, FileSpec::FileType file_type,
     return FileSpec::eEnumerateDirectoryResultNext;
   } break;
 
-  case FileSpec::eFileTypeRegular: {
+  case fs::file_type::regular_file: {
     // copy the file and keep going
     FileSpec dst_file = rc_baton->dst;
     if (!dst_file.GetFilename())
@@ -617,15 +619,13 @@ RecurseCopy_Callback(void *baton, FileSpec::FileType file_type,
     return FileSpec::eEnumerateDirectoryResultNext;
   } break;
 
-  case FileSpec::eFileTypeInvalid:
-  case FileSpec::eFileTypeOther:
-  case FileSpec::eFileTypeUnknown:
+  default:
     rc_baton->error.SetErrorStringWithFormat(
         "invalid file detected during copy: %s", src.GetPath().c_str());
     return FileSpec::eEnumerateDirectoryResultQuit; // got an error, bail out
     break;
   }
-  llvm_unreachable("Unhandled FileSpec::FileType!");
+  llvm_unreachable("Unhandled file_type!");
 }
 
 Error Platform::Install(const FileSpec &src, const FileSpec &dst) {
@@ -693,8 +693,9 @@ Error Platform::Install(const FileSpec &src, const FileSpec &dst) {
   if (GetSupportsRSync()) {
     error = PutFile(src, dst);
   } else {
-    switch (src.GetFileType()) {
-    case FileSpec::eFileTypeDirectory: {
+    namespace fs = llvm::sys::fs;
+    switch (fs::get_file_type(src.GetPath(), false)) {
+    case fs::file_type::directory_file: {
       if (GetFileExists(fixed_dst))
         Unlink(fixed_dst);
       uint32_t permissions = src.GetPermissions();
@@ -714,13 +715,13 @@ Error Platform::Install(const FileSpec &src, const FileSpec &dst) {
       }
     } break;
 
-    case FileSpec::eFileTypeRegular:
+    case fs::file_type::regular_file:
       if (GetFileExists(fixed_dst))
         Unlink(fixed_dst);
       error = PutFile(src, fixed_dst);
       break;
 
-    case FileSpec::eFileTypeSymbolicLink: {
+    case fs::file_type::symlink_file: {
       if (GetFileExists(fixed_dst))
         Unlink(fixed_dst);
       FileSpec src_resolved;
@@ -728,15 +729,13 @@ Error Platform::Install(const FileSpec &src, const FileSpec &dst) {
       if (error.Success())
         error = CreateSymlink(dst, src_resolved);
     } break;
-    case FileSpec::eFileTypePipe:
+    case fs::file_type::fifo_file:
       error.SetErrorString("platform install doesn't handle pipes");
       break;
-    case FileSpec::eFileTypeSocket:
+    case fs::file_type::socket_file:
       error.SetErrorString("platform install doesn't handle sockets");
       break;
-    case FileSpec::eFileTypeInvalid:
-    case FileSpec::eFileTypeUnknown:
-    case FileSpec::eFileTypeOther:
+    default:
       error.SetErrorString(
           "platform install doesn't handle non file or directory items");
       break;
@@ -1237,7 +1236,8 @@ Error Platform::PutFile(const FileSpec &source, const FileSpec &destination,
 
   uint32_t source_open_options =
       File::eOpenOptionRead | File::eOpenOptionCloseOnExec;
-  if (source.GetFileType() == FileSpec::eFileTypeSymbolicLink)
+  namespace fs = llvm::sys::fs;
+  if (fs::is_symlink_file(source.GetPath()))
     source_open_options |= File::eOpenOptionDontFollowSymlinks;
 
   File source_file(source, source_open_options, lldb::eFilePermissionsUserRW);

@@ -10,6 +10,7 @@
 #include "clang/CodeGen/CodeGenAction.h"
 #include "CodeGenModule.h"
 #include "CoverageMappingGen.h"
+#include "MacroPPCallbacks.h"
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/DeclCXX.h"
@@ -27,6 +28,7 @@
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/DiagnosticPrinter.h"
+#include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IRReader/IRReader.h"
@@ -37,6 +39,8 @@
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Support/YAMLTraits.h"
+#include "llvm/Transforms/IPO/Internalize.h"
+
 #include <memory>
 using namespace clang;
 using namespace llvm;
@@ -96,6 +100,8 @@ namespace clang {
     std::unique_ptr<llvm::Module> takeModule() {
       return std::unique_ptr<llvm::Module>(Gen->ReleaseModule());
     }
+
+    CodeGenerator *getCodeGenerator() { return Gen.get(); }
 
     void HandleCXXStaticMemberVarInstantiation(VarDecl *VD) override {
       Gen->HandleCXXStaticMemberVarInstantiation(VD);
@@ -165,8 +171,22 @@ namespace clang {
             Gen->CGM().AddDefaultFnAttrs(F);
 
         CurLinkModule = LM.Module.get();
-        if (Linker::linkModules(*getModule(), std::move(LM.Module),
-                                LM.LinkFlags))
+
+        bool Err;
+        if (LM.Internalize) {
+          Err = Linker::linkModules(
+              *getModule(), std::move(LM.Module), LM.LinkFlags,
+              [](llvm::Module &M, const llvm::StringSet<> &GVS) {
+                internalizeModule(M, [&GVS](const llvm::GlobalValue &GV) {
+                  return !GV.hasName() || (GVS.count(GV.getName()) == 0);
+                });
+              });
+        } else {
+          Err = Linker::linkModules(*getModule(), std::move(LM.Module),
+                                    LM.LinkFlags);
+        }
+
+        if (Err)
           return true;
       }
       return false; // success
@@ -284,7 +304,7 @@ namespace clang {
     /// Get the best possible source location to represent a diagnostic that
     /// may have associated debug info.
     const FullSourceLoc
-    getBestLocationFromDebugLoc(const llvm::DiagnosticInfoWithDebugLocBase &D,
+    getBestLocationFromDebugLoc(const llvm::DiagnosticInfoWithLocationBase &D,
                                 bool &BadDebugInfo, StringRef &Filename,
                                 unsigned &Line, unsigned &Column) const;
 
@@ -316,7 +336,7 @@ namespace clang {
     void OptimizationFailureHandler(
         const llvm::DiagnosticInfoOptimizationFailure &D);
   };
-  
+
   void BackendConsumer::anchor() {}
 }
 
@@ -385,7 +405,7 @@ void BackendConsumer::InlineAsmDiagHandler2(const llvm::SMDiagnostic &D,
   // code.
   if (LocCookie.isValid()) {
     Diags.Report(LocCookie, DiagID).AddString(Message);
-    
+
     if (D.getLoc().isValid()) {
       DiagnosticBuilder B = Diags.Report(Loc, diag::note_fe_inline_asm_here);
       // Convert the SMDiagnostic ranges into SourceRange and attach them
@@ -398,7 +418,7 @@ void BackendConsumer::InlineAsmDiagHandler2(const llvm::SMDiagnostic &D,
     }
     return;
   }
-  
+
   // Otherwise, report the backend issue as occurring in the generated .s file.
   // If Loc is invalid, we still need to report the issue, it just gets no
   // location info.
@@ -485,8 +505,8 @@ BackendConsumer::StackSizeDiagHandler(const llvm::DiagnosticInfoStackSize &D) {
 }
 
 const FullSourceLoc BackendConsumer::getBestLocationFromDebugLoc(
-    const llvm::DiagnosticInfoWithDebugLocBase &D, bool &BadDebugInfo, StringRef &Filename,
-                                unsigned &Line, unsigned &Column) const {
+    const llvm::DiagnosticInfoWithLocationBase &D, bool &BadDebugInfo,
+    StringRef &Filename, unsigned &Line, unsigned &Column) const {
   SourceManager &SourceMgr = Context->getSourceManager();
   FileManager &FileMgr = SourceMgr.getFileManager();
   SourceLocation DILoc;
@@ -812,8 +832,8 @@ CodeGenAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
         LinkModules.clear();
         return nullptr;
       }
-      LinkModules.push_back(
-          {std::move(ModuleOrErr.get()), F.PropagateAttrs, F.LinkFlags});
+      LinkModules.push_back({std::move(ModuleOrErr.get()), F.PropagateAttrs,
+                             F.Internalize, F.LinkFlags});
     }
 
   CoverageSourceInfo *CoverageInfo = nullptr;
@@ -830,6 +850,17 @@ CodeGenAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
       CI.getLangOpts(), CI.getFrontendOpts().ShowTimers, InFile,
       std::move(LinkModules), std::move(OS), *VMContext, CoverageInfo));
   BEConsumer = Result.get();
+
+  // Enable generating macro debug info only when debug info is not disabled and
+  // also macro debug info is enabled.
+  if (CI.getCodeGenOpts().getDebugInfo() != codegenoptions::NoDebugInfo &&
+      CI.getCodeGenOpts().MacroDebugInfo) {
+    std::unique_ptr<PPCallbacks> Callbacks =
+        llvm::make_unique<MacroPPCallbacks>(BEConsumer->getCodeGenerator(),
+                                            CI.getPreprocessor());
+    CI.getPreprocessor().addPPCallbacks(std::move(Callbacks));
+  }
+
   return std::move(Result);
 }
 

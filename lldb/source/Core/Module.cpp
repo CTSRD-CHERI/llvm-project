@@ -12,6 +12,7 @@
 // C Includes
 // C++ Includes
 // Other libraries and framework includes
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/raw_os_ostream.h"
 
@@ -19,16 +20,10 @@
 #include "Plugins/Language/CPlusPlus/CPlusPlusLanguage.h"
 #include "Plugins/Language/ObjC/ObjCLanguage.h"
 #include "lldb/Core/AddressResolverFileLine.h"
-#include "lldb/Core/DataBuffer.h"
-#include "lldb/Core/DataBufferHeap.h"
-#include "lldb/Core/Error.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/ModuleList.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/RegularExpression.h"
 #include "lldb/Core/Section.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Core/Timer.h"
 #include "lldb/Host/FileSystem.h"
 #include "lldb/Host/Host.h"
@@ -46,6 +41,12 @@
 #include "lldb/Target/Process.h"
 #include "lldb/Target/SectionLoadList.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/DataBuffer.h"
+#include "lldb/Utility/DataBufferHeap.h"
+#include "lldb/Utility/Error.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/RegularExpression.h"
+#include "lldb/Utility/StreamString.h"
 
 #include "Plugins/ObjectFile/JIT/ObjectFileJIT.h"
 
@@ -719,10 +720,10 @@ Module::LookupInfo::LookupInfo(const ConstString &name, uint32_t name_type_mask,
     }
 
     // Still try and get a basename in case someone specifies a name type mask
-    // of
-    // eFunctionNameTypeFull and a name like "A::func"
+    // of eFunctionNameTypeFull and a name like "A::func"
     if (basename.empty()) {
-      if (name_type_mask & eFunctionNameTypeFull) {
+      if (name_type_mask & eFunctionNameTypeFull &&
+          !CPlusPlusLanguage::IsCPPMangledName(name_cstr)) {
         CPlusPlusLanguage::MethodName cpp_method(name);
         basename = cpp_method.GetBasename();
         if (basename.empty())
@@ -770,30 +771,39 @@ void Module::LookupInfo::Prune(SymbolContextList &sc_list,
   }
 
   // If we have only full name matches we might have tried to set breakpoint on
-  // "func"
-  // and specified eFunctionNameTypeFull, but we might have found "a::func()",
-  // "a::b::func()", "c::func()", "func()" and "func". Only "func()" and "func"
-  // should
-  // end up matching.
+  // "func" and specified eFunctionNameTypeFull, but we might have found
+  // "a::func()", "a::b::func()", "c::func()", "func()" and "func". Only
+  // "func()" and "func" should end up matching.
   if (m_name_type_mask == eFunctionNameTypeFull) {
     SymbolContext sc;
     size_t i = start_idx;
     while (i < sc_list.GetSize()) {
       if (!sc_list.GetContextAtIndex(i, sc))
         break;
+      // Make sure the mangled and demangled names don't match before we try
+      // to pull anything out
+      ConstString mangled_name(sc.GetFunctionName(Mangled::ePreferMangled));
       ConstString full_name(sc.GetFunctionName());
-      CPlusPlusLanguage::MethodName cpp_method(full_name);
-      if (cpp_method.IsValid()) {
-        if (cpp_method.GetContext().empty()) {
-          if (cpp_method.GetBasename().compare(m_name.GetStringRef()) != 0) {
-            sc_list.RemoveContextAtIndex(i);
-            continue;
-          }
-        } else {
-          std::string qualified_name = cpp_method.GetScopeQualifiedName();
-          if (qualified_name.compare(m_name.GetCString()) != 0) {
-            sc_list.RemoveContextAtIndex(i);
-            continue;
+      if (mangled_name != m_name && full_name != m_name)
+      {
+        CPlusPlusLanguage::MethodName cpp_method(full_name);
+        if (cpp_method.IsValid()) {
+          if (cpp_method.GetContext().empty()) {
+            if (cpp_method.GetBasename().compare(m_name.GetStringRef()) != 0) {
+              sc_list.RemoveContextAtIndex(i);
+              continue;
+            }
+          } else {
+            std::string qualified_name;
+            llvm::StringRef anon_prefix("(anonymous namespace)");
+            if (cpp_method.GetContext() == anon_prefix)
+              qualified_name = cpp_method.GetBasename().str();
+            else
+              qualified_name = cpp_method.GetScopeQualifiedName();
+            if (qualified_name.compare(m_name.GetCString()) != 0) {
+              sc_list.RemoveContextAtIndex(i);
+              continue;
+            }
           }
         }
       }
@@ -1430,7 +1440,7 @@ void Module::SetSymbolFileFileSpec(const FileSpec &file) {
         // ("/tmp/a.out.dSYM/Contents/Resources/DWARF/a.out"). So we need to
         // check this
 
-        if (file.IsDirectory()) {
+        if (llvm::sys::fs::is_directory(file.GetPath())) {
           std::string new_path(file.GetPath());
           std::string old_path(obj_file->GetFileSpec().GetPath());
           if (old_path.find(new_path) == 0) {

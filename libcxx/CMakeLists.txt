@@ -19,7 +19,6 @@ set(CMAKE_MODULE_PATH
   ${CMAKE_MODULE_PATH}
   )
 
-
 if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   project(libcxx CXX C)
 
@@ -58,9 +57,10 @@ endif()
 # Setup CMake Options
 #===============================================================================
 include(CMakeDependentOption)
+include(HandleCompilerRT)
 
 # Basic options ---------------------------------------------------------------
-option(LIBCXX_ENABLE_ASSERTIONS "Enable assertions independent of build mode." ON)
+option(LIBCXX_ENABLE_ASSERTIONS "Enable assertions independent of build mode." OFF)
 option(LIBCXX_ENABLE_SHARED "Build libc++ as a shared library." ON)
 option(LIBCXX_ENABLE_STATIC "Build libc++ as a static library." ON)
 option(LIBCXX_ENABLE_EXPERIMENTAL_LIBRARY "Build libc++experimental.a" ON)
@@ -107,15 +107,6 @@ set(LIBCXX_CXX_ABI "default" CACHE STRING
 set(CXXABIS none default libcxxabi libcxxrt libstdc++ libsupc++ vcruntime)
 set_property(CACHE LIBCXX_CXX_ABI PROPERTY STRINGS ;${CXXABIS})
 
-# FIXME: This is a temporary hack to force LLVM buildbots to store
-# the fixed cache entry instead of the previous cache entry. This is needed
-# because some LLVM buildbots don't clear their cache. It will be removed
-# once all LLVM bots have been run.
-if (LIBCXX_CXX_ABI STREQUAL "")
-  set(LIBCXX_CXX_ABI "default" CACHE STRING
-      "Specify the C++ ABI library to use." FORCE)
-endif()
-
 # Setup the default options if LIBCXX_CXX_ABI is not specified.
 if (LIBCXX_CXX_ABI STREQUAL "default")
   find_path(
@@ -134,6 +125,9 @@ if (LIBCXX_CXX_ABI STREQUAL "default")
     if (LIBCXX_TARGETING_MSVC)
       # FIXME: Figure out how to configure the ABI library on Windows.
       set(LIBCXX_CXX_ABI_LIBNAME "vcruntime")
+    elseif(APPLE)
+      set(LIBCXX_CXX_ABI_LIBNAME "libcxxabi")
+      set(LIBCXX_CXX_ABI_SYSTEM 1)
     else()
       set(LIBCXX_CXX_ABI_LIBNAME "default")
     endif()
@@ -164,9 +158,25 @@ option(LIBCXX_ENABLE_ABI_LINKER_SCRIPT
       "Use and install a linker script for the given ABI library"
       ${ENABLE_LINKER_SCRIPT_DEFAULT_VALUE})
 
+set(ENABLE_NEW_DELETE_DEFAULT ON)
+if (LIBCXXABI_ENABLE_NEW_DELETE_DEFINITIONS)
+# FIXME: This option should default to off. Unfortunatly GCC 4.9 fails to link
+# programs to due undefined references to new/delete in libc++abi so to work
+# around this libc++abi currently defaults LIBCXXABI_ENABLE_NEW_DELETE_DEFINITIONS
+# to ON. Once the GCC bug has been worked around this option should be changed
+# back to OFF.
+  set(ENABLE_NEW_DELETE_DEFAULT ON)
+endif()
+
+option(LIBCXX_ENABLE_NEW_DELETE_DEFINITIONS
+    "Build libc++ with definitions for operator new/delete. This option can
+    be used to disable the definitions when libc++abi is expected to provide
+    them" ${ENABLE_NEW_DELETE_DEFAULT})
+
 # Build libc++abi with libunwind. We need this option to determine whether to
 # link with libunwind or libgcc_s while running the test cases.
 option(LIBCXXABI_USE_LLVM_UNWINDER "Build and use the LLVM unwinder." OFF)
+option(LIBCXXABI_ENABLE_STATIC_UNWINDER "Statically link the LLVM unwinder." OFF)
 
 # Target options --------------------------------------------------------------
 option(LIBCXX_BUILD_32_BITS "Build 32 bit libc++." ${LLVM_BUILD_32_BITS})
@@ -439,6 +449,10 @@ add_compile_flags_if_supported(-fvisibility-inlines-hidden)
 # library.
 add_definitions(-D_LIBCPP_BUILDING_LIBRARY)
 
+if (NOT LIBCXX_ENABLE_NEW_DELETE_DEFINITIONS)
+  add_definitions(-D_LIBCPP_DISABLE_NEW_DELETE_DEFINITIONS)
+endif()
+
 # Warning flags ===============================================================
 add_definitions(-D_LIBCPP_HAS_NO_PRAGMA_SYSTEM_HEADER)
 add_compile_flags_if_supported(
@@ -501,6 +515,7 @@ endif()
 # Assertion flags =============================================================
 define_if(LIBCXX_ENABLE_ASSERTIONS -UNDEBUG)
 define_if_not(LIBCXX_ENABLE_ASSERTIONS -DNDEBUG)
+define_if(LIBCXX_ENABLE_ASSERTIONS -D_LIBCPP_DEBUG=0)
 define_if(LIBCXX_DEBUG_BUILD -D_DEBUG)
 if (LIBCXX_ENABLE_ASSERTIONS AND NOT LIBCXX_DEBUG_BUILD)
   # MSVC doesn't like _DEBUG on release builds. See PR 4379.
@@ -604,10 +619,15 @@ add_subdirectory(lib)
 if (LIBCXX_INCLUDE_BENCHMARKS)
   add_subdirectory(benchmarks)
 endif()
+
+# Create the lit.site.cfg file even when LIBCXX_INCLUDE_TESTS is OFF or
+# LLVM_FOUND is OFF. This allows users to run the tests manually using
+# LIT without requiring a full LLVM checkout.
+add_subdirectory(test)
 if (LIBCXX_INCLUDE_TESTS)
-  add_subdirectory(test)
   add_subdirectory(lib/abi)
 endif()
+
 if (LIBCXX_INCLUDE_DOCS)
   add_subdirectory(docs)
 endif()

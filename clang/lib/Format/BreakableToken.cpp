@@ -181,10 +181,10 @@ unsigned BreakableSingleLineToken::getLineLengthAfterSplit(
 }
 
 BreakableSingleLineToken::BreakableSingleLineToken(
-    const FormatToken &Tok, unsigned IndentLevel, unsigned StartColumn,
-    StringRef Prefix, StringRef Postfix, bool InPPDirective,
-    encoding::Encoding Encoding, const FormatStyle &Style)
-    : BreakableToken(Tok, IndentLevel, InPPDirective, Encoding, Style),
+    const FormatToken &Tok, unsigned StartColumn, StringRef Prefix,
+    StringRef Postfix, bool InPPDirective, encoding::Encoding Encoding,
+    const FormatStyle &Style)
+    : BreakableToken(Tok, InPPDirective, Encoding, Style),
       StartColumn(StartColumn), Prefix(Prefix), Postfix(Postfix) {
   assert(Tok.TokenText.endswith(Postfix));
   Line = Tok.TokenText.substr(
@@ -192,15 +192,16 @@ BreakableSingleLineToken::BreakableSingleLineToken(
 }
 
 BreakableStringLiteral::BreakableStringLiteral(
-    const FormatToken &Tok, unsigned IndentLevel, unsigned StartColumn,
-    StringRef Prefix, StringRef Postfix, bool InPPDirective,
-    encoding::Encoding Encoding, const FormatStyle &Style)
-    : BreakableSingleLineToken(Tok, IndentLevel, StartColumn, Prefix, Postfix,
-                               InPPDirective, Encoding, Style) {}
+    const FormatToken &Tok, unsigned StartColumn, StringRef Prefix,
+    StringRef Postfix, bool InPPDirective, encoding::Encoding Encoding,
+    const FormatStyle &Style)
+    : BreakableSingleLineToken(Tok, StartColumn, Prefix, Postfix, InPPDirective,
+                               Encoding, Style) {}
 
 BreakableToken::Split
 BreakableStringLiteral::getSplit(unsigned LineIndex, unsigned TailOffset,
-                                 unsigned ColumnLimit) const {
+                                 unsigned ColumnLimit,
+                                 llvm::Regex &CommentPragmasRegex) const {
   return getStringSplit(Line.substr(TailOffset),
                         StartColumn + Prefix.size() + Postfix.size(),
                         ColumnLimit, Style.TabWidth, Encoding);
@@ -218,24 +219,26 @@ void BreakableStringLiteral::insertBreak(unsigned LineIndex,
     --LeadingSpaces;
   Whitespaces.replaceWhitespaceInToken(
       Tok, Prefix.size() + TailOffset + Split.first, Split.second, Postfix,
-      Prefix, InPPDirective, 1, IndentLevel, LeadingSpaces);
+      Prefix, InPPDirective, 1, LeadingSpaces);
 }
 
 BreakableComment::BreakableComment(const FormatToken &Token,
-                                   unsigned IndentLevel, unsigned StartColumn,
-                                   unsigned OriginalStartColumn,
-                                   bool FirstInLine, bool InPPDirective,
+                                   unsigned StartColumn,
+                                   bool InPPDirective,
                                    encoding::Encoding Encoding,
                                    const FormatStyle &Style)
-    : BreakableToken(Token, IndentLevel, InPPDirective, Encoding, Style),
-      StartColumn(StartColumn), OriginalStartColumn(OriginalStartColumn),
-      FirstInLine(FirstInLine) {}
+    : BreakableToken(Token, InPPDirective, Encoding, Style),
+      StartColumn(StartColumn) {}
 
 unsigned BreakableComment::getLineCount() const { return Lines.size(); }
 
-BreakableToken::Split BreakableComment::getSplit(unsigned LineIndex,
-                                                 unsigned TailOffset,
-                                                 unsigned ColumnLimit) const {
+BreakableToken::Split
+BreakableComment::getSplit(unsigned LineIndex, unsigned TailOffset,
+                           unsigned ColumnLimit,
+                           llvm::Regex &CommentPragmasRegex) const {
+  // Don't break lines matching the comment pragmas regex.
+  if (CommentPragmasRegex.match(Content[LineIndex]))
+    return Split(StringRef::npos, 0);
   return getCommentSplit(Content[LineIndex].substr(TailOffset),
                          getContentStartColumn(LineIndex, TailOffset),
                          ColumnLimit, Style.TabWidth, Encoding);
@@ -254,8 +257,7 @@ void BreakableComment::compressWhitespace(unsigned LineIndex,
   unsigned CharsToRemove = Split.second;
   Whitespaces.replaceWhitespaceInToken(
       tokenAt(LineIndex), BreakOffsetInToken, CharsToRemove, "", "",
-      /*InPPDirective=*/false,
-      /*Newlines=*/0, /*IndentLevel=*/0, /*Spaces=*/1);
+      /*InPPDirective=*/false, /*Newlines=*/0, /*Spaces=*/1);
 }
 
 BreakableToken::Split
@@ -302,28 +304,31 @@ const FormatToken &BreakableComment::tokenAt(unsigned LineIndex) const {
 
 static bool mayReflowContent(StringRef Content) {
   Content = Content.trim(Blanks);
+  // Lines starting with '@' commonly have special meaning.
+  static const SmallVector<StringRef, 4> kSpecialMeaningPrefixes = {
+      "@", "TODO", "FIXME", "XXX"};
+  bool hasSpecialMeaningPrefix = false;
+  for (StringRef Prefix : kSpecialMeaningPrefixes) {
+    if (Content.startswith(Prefix)) {
+      hasSpecialMeaningPrefix = true;
+      break;
+    }
+  }
   // Simple heuristic for what to reflow: content should contain at least two
   // characters and either the first or second character must be
   // non-punctuation.
-  return Content.size() >= 2 && !Content.endswith("\\") &&
+  return Content.size() >= 2 && !hasSpecialMeaningPrefix &&
+         !Content.endswith("\\") &&
          // Note that this is UTF-8 safe, since if isPunctuation(Content[0]) is
          // true, then the first code point must be 1 byte long.
          (!isPunctuation(Content[0]) || !isPunctuation(Content[1]));
 }
 
-bool BreakableComment::mayReflow(unsigned LineIndex) const {
-  return LineIndex > 0 && mayReflowContent(Content[LineIndex]) &&
-         !Tok.Finalized && !switchesFormatting(tokenAt(LineIndex)) &&
-         (!Tok.is(TT_LineComment) ||
-          OriginalPrefix[LineIndex] == OriginalPrefix[LineIndex - 1]);
-}
-
 BreakableBlockComment::BreakableBlockComment(
-    const FormatToken &Token, unsigned IndentLevel, unsigned StartColumn,
+    const FormatToken &Token, unsigned StartColumn,
     unsigned OriginalStartColumn, bool FirstInLine, bool InPPDirective,
     encoding::Encoding Encoding, const FormatStyle &Style)
-    : BreakableComment(Token, IndentLevel, StartColumn, OriginalStartColumn,
-                       FirstInLine, InPPDirective, Encoding, Style) {
+    : BreakableComment(Token, StartColumn, InPPDirective, Encoding, Style) {
   assert(Tok.is(TT_BlockComment) &&
          "block comment section must start with a block comment");
 
@@ -340,6 +345,20 @@ BreakableBlockComment::BreakableBlockComment(
   Tokens.resize(Lines.size());
   for (size_t i = 1; i < Lines.size(); ++i)
     adjustWhitespace(i, IndentDelta);
+
+  // Align decorations with the column of the star on the first line,
+  // that is one column after the start "/*".
+  DecorationColumn = StartColumn + 1;
+
+  // Account for comment decoration patterns like this:
+  //
+  // /*
+  // ** blah blah blah
+  // */
+  if (Lines.size() >= 2 && Content[1].startswith("**") &&
+      static_cast<unsigned>(ContentColumn[1]) == StartColumn) {
+    DecorationColumn = StartColumn;
+  }
 
   Decoration = "* ";
   if (Lines.size() == 1 && !FirstInLine) {
@@ -370,6 +389,10 @@ BreakableBlockComment::BreakableBlockComment(
         // trailing */. We also need to preserve whitespace, so that */ is
         // correctly indented.
         LastLineNeedsDecoration = false;
+        // Align the star in the last '*/' with the stars on the previous lines.
+        if (e >= 2 && !Decoration.empty()) {
+          ContentColumn[i] = DecorationColumn;
+        }
       } else if (Decoration.empty()) {
         // For all other lines, set the start column to 0 if they're empty, so
         // we do not insert trailing whitespace anywhere.
@@ -379,12 +402,15 @@ BreakableBlockComment::BreakableBlockComment(
     }
 
     // The first line already excludes the star.
+    // The last line excludes the star if LastLineNeedsDecoration is false.
     // For all other lines, adjust the line to exclude the star and
     // (optionally) the first whitespace.
     unsigned DecorationSize = Decoration.startswith(Content[i])
                                   ? Content[i].size()
                                   : Decoration.size();
-    ContentColumn[i] += DecorationSize;
+    if (DecorationSize) {
+      ContentColumn[i] = DecorationColumn + DecorationSize;
+    }
     Content[i] = Content[i].substr(DecorationSize);
     if (!Decoration.startswith(Content[i]))
       IndentAtLineBreak =
@@ -397,7 +423,8 @@ BreakableBlockComment::BreakableBlockComment(
     llvm::dbgs() << "IndentAtLineBreak " << IndentAtLineBreak << "\n";
     for (size_t i = 0; i < Lines.size(); ++i) {
       llvm::dbgs() << i << " |" << Content[i] << "| "
-                   << (Content[i].data() - Lines[i].data()) << "\n";
+                   << "CC=" << ContentColumn[i] << "| "
+                   << "IN=" << (Content[i].data() - Lines[i].data()) << "\n";
     }
   });
 }
@@ -484,15 +511,16 @@ void BreakableBlockComment::insertBreak(unsigned LineIndex, unsigned TailOffset,
   assert(LocalIndentAtLineBreak >= Prefix.size());
   Whitespaces.replaceWhitespaceInToken(
       tokenAt(LineIndex), BreakOffsetInToken, CharsToRemove, "", Prefix,
-      InPPDirective, /*Newlines=*/1, IndentLevel,
+      InPPDirective, /*Newlines=*/1,
       /*Spaces=*/LocalIndentAtLineBreak - Prefix.size());
 }
 
 BreakableToken::Split BreakableBlockComment::getSplitBefore(
     unsigned LineIndex,
     unsigned PreviousEndColumn,
-    unsigned ColumnLimit) const {
-  if (!mayReflow(LineIndex))
+    unsigned ColumnLimit,
+    llvm::Regex &CommentPragmasRegex) const {
+  if (!mayReflow(LineIndex, CommentPragmasRegex))
     return Split(StringRef::npos, 0);
   StringRef TrimmedContent = Content[LineIndex].ltrim(Blanks);
   return getReflowSplit(TrimmedContent, ReflowPrefix, PreviousEndColumn,
@@ -520,10 +548,15 @@ unsigned BreakableBlockComment::getLineLengthAfterSplitBefore(
     unsigned PreviousEndColumn,
     unsigned ColumnLimit,
     Split SplitBefore) const {
-    if (SplitBefore.first == StringRef::npos ||
-        SplitBefore.first + SplitBefore.second < Content[LineIndex].size()) {
-      // A piece of line, not the whole, gets reflown.
-      return getLineLengthAfterSplit(LineIndex, TailOffset, StringRef::npos);
+  if (SplitBefore.first == StringRef::npos ||
+      // Block comment line contents contain the trailing whitespace after the
+      // decoration, so the need of left trim. Note that this behavior is
+      // consistent with the breaking of block comments where the indentation of
+      // a broken line is uniform across all the lines of the block comment.
+      SplitBefore.first + SplitBefore.second <
+          Content[LineIndex].ltrim().size()) {
+    // A piece of line, not the whole, gets reflown.
+    return getLineLengthAfterSplit(LineIndex, TailOffset, StringRef::npos);
   } else {
     // The whole line gets reflown, need to check if we need to insert a break
     // for the postfix or not.
@@ -555,10 +588,9 @@ void BreakableBlockComment::replaceWhitespaceBefore(
         WhitespaceOffsetInToken;
     Whitespaces.replaceWhitespaceInToken(
         tokenAt(LineIndex), WhitespaceOffsetInToken,
-        /*ReplaceChars=*/WhitespaceLength,
-        /*PreviousPostfix=*/"",
-        /*CurrentPrefix=*/ReflowPrefix, InPPDirective,
-        /*Newlines=*/0, IndentLevel, /*Spaces=*/0);
+        /*ReplaceChars=*/WhitespaceLength, /*PreviousPostfix=*/"",
+        /*CurrentPrefix=*/ReflowPrefix, InPPDirective, /*Newlines=*/0,
+        /*Spaces=*/0);
     // Check if we need to also insert a break at the whitespace range.
     // For this we first adapt the reflow split relative to the beginning of the
     // content.
@@ -604,9 +636,21 @@ void BreakableBlockComment::replaceWhitespaceBefore(
                               tokenAt(LineIndex).TokenText.data() -
                               WhitespaceOffsetInToken;
   Whitespaces.replaceWhitespaceInToken(
-      tokenAt(LineIndex), WhitespaceOffsetInToken, WhitespaceLength, "",
-      Prefix, InPPDirective, /*Newlines=*/1, IndentLevel,
-      ContentColumn[LineIndex] - Prefix.size());
+      tokenAt(LineIndex), WhitespaceOffsetInToken, WhitespaceLength, "", Prefix,
+      InPPDirective, /*Newlines=*/1, ContentColumn[LineIndex] - Prefix.size());
+}
+
+bool BreakableBlockComment::mayReflow(unsigned LineIndex,
+                                      llvm::Regex &CommentPragmasRegex) const {
+  // Content[LineIndex] may exclude the indent after the '*' decoration. In that
+  // case, we compute the start of the comment pragma manually.
+  StringRef IndentContent = Content[LineIndex];
+  if (Lines[LineIndex].ltrim(Blanks).startswith("*")) {
+    IndentContent = Lines[LineIndex].ltrim(Blanks).substr(1);
+  }
+  return LineIndex > 0 && !CommentPragmasRegex.match(IndentContent) &&
+         mayReflowContent(Content[LineIndex]) && !Tok.Finalized &&
+         !switchesFormatting(tokenAt(LineIndex));
 }
 
 unsigned
@@ -619,11 +663,10 @@ BreakableBlockComment::getContentStartColumn(unsigned LineIndex,
 }
 
 BreakableLineCommentSection::BreakableLineCommentSection(
-    const FormatToken &Token, unsigned IndentLevel, unsigned StartColumn,
+    const FormatToken &Token, unsigned StartColumn,
     unsigned OriginalStartColumn, bool FirstInLine, bool InPPDirective,
     encoding::Encoding Encoding, const FormatStyle &Style)
-    : BreakableComment(Token, IndentLevel, StartColumn, OriginalStartColumn,
-                       FirstInLine, InPPDirective, Encoding, Style) {
+    : BreakableComment(Token, StartColumn, InPPDirective, Encoding, Style) {
   assert(Tok.is(TT_LineComment) &&
          "line comment section must start with a line comment");
   FormatToken *LineTok = nullptr;
@@ -642,7 +685,11 @@ BreakableLineCommentSection::BreakableLineCommentSection(
     Prefix.resize(Lines.size());
     OriginalPrefix.resize(Lines.size());
     for (size_t i = FirstLineIndex, e = Lines.size(); i < e; ++i) {
-      StringRef IndentPrefix = getLineCommentIndentPrefix(Lines[i]);
+      // We need to trim the blanks in case this is not the first line in a
+      // multiline comment. Then the indent is included in Lines[i].
+      StringRef IndentPrefix =
+          getLineCommentIndentPrefix(Lines[i].ltrim(Blanks));
+      assert(IndentPrefix.startswith("//"));
       OriginalPrefix[i] = Prefix[i] = IndentPrefix;
       if (Lines[i].size() > Prefix[i].size() &&
           isAlphanumeric(Lines[i][Prefix[i].size()])) {
@@ -678,6 +725,23 @@ BreakableLineCommentSection::BreakableLineCommentSection(
       Content[i] = Content[i].substr(0, EndOfLine);
     }
     LineTok = CurrentTok->Next;
+    if (CurrentTok->Next && !CurrentTok->Next->ContinuesLineCommentSection) {
+      // A line comment section needs to broken by a line comment that is
+      // preceded by at least two newlines. Note that we put this break here
+      // instead of breaking at a previous stage during parsing, since that
+      // would split the contents of the enum into two unwrapped lines in this
+      // example, which is undesirable:
+      // enum A {
+      //   a, // comment about a
+      //
+      //   // comment about b
+      //   b
+      // };
+      //
+      // FIXME: Consider putting separate line comment sections as children to
+      // the unwrapped line instead.
+      break;
+    }
   }
 }
 
@@ -709,15 +773,15 @@ void BreakableLineCommentSection::insertBreak(unsigned LineIndex,
   assert(IndentAtLineBreak >= Prefix[LineIndex].size());
   Whitespaces.replaceWhitespaceInToken(
       tokenAt(LineIndex), BreakOffsetInToken, CharsToRemove, "",
-      Prefix[LineIndex], InPPDirective, /*Newlines=*/1, IndentLevel,
+      Prefix[LineIndex], InPPDirective, /*Newlines=*/1,
       /*Spaces=*/IndentAtLineBreak - Prefix[LineIndex].size());
 }
 
 BreakableComment::Split BreakableLineCommentSection::getSplitBefore(
-    unsigned LineIndex,
-    unsigned PreviousEndColumn,
-    unsigned ColumnLimit) const {
-  if (!mayReflow(LineIndex)) return Split(StringRef::npos, 0);
+    unsigned LineIndex, unsigned PreviousEndColumn, unsigned ColumnLimit,
+    llvm::Regex &CommentPragmasRegex) const {
+  if (!mayReflow(LineIndex, CommentPragmasRegex))
+    return Split(StringRef::npos, 0);
   return getReflowSplit(Content[LineIndex], ReflowPrefix, PreviousEndColumn,
                         ColumnLimit);
 }
@@ -754,12 +818,9 @@ void BreakableLineCommentSection::replaceWhitespaceBefore(
     if (SplitBefore.first != StringRef::npos) {
       // Reflow happens between tokens. Replace the whitespace between the
       // tokens by the empty string.
-      Whitespaces.replaceWhitespace(*Tokens[LineIndex],
-                                    /*Newlines=*/0,
-                                    /*IndentLevel=*/IndentLevel,
-                                    /*Spaces=*/0,
-                                    /*StartOfTokenColumn=*/StartColumn,
-                                    /*InPPDirective=*/false);
+      Whitespaces.replaceWhitespace(
+          *Tokens[LineIndex], /*Newlines=*/0, /*Spaces=*/0,
+          /*StartOfTokenColumn=*/StartColumn, /*InPPDirective=*/false);
       // Replace the indent and prefix of the token with the reflow prefix.
       unsigned WhitespaceLength =
           Content[LineIndex].data() - tokenAt(LineIndex).TokenText.data();
@@ -770,41 +831,39 @@ void BreakableLineCommentSection::replaceWhitespaceBefore(
                                            /*CurrentPrefix=*/ReflowPrefix,
                                            /*InPPDirective=*/false,
                                            /*Newlines=*/0,
-                                           /*IndentLevel=*/IndentLevel,
                                            /*Spaces=*/0);
     } else {
       // This is the first line for the current token, but no reflow with the
       // previous token is necessary. However, we still may need to adjust the
-      // start column.
+      // start column. Note that ContentColumn[LineIndex] is the expected
+      // content column after a possible update to the prefix, hence the prefix
+      // length change is included.
       unsigned LineColumn =
           ContentColumn[LineIndex] -
-          (Content[LineIndex].data() - Lines[LineIndex].data());
-      if (tokenAt(LineIndex).OriginalColumn != LineColumn) {
-        Whitespaces.replaceWhitespace(*Tokens[LineIndex],
-                                      /*Newlines=*/1,
-                                      /*IndentLevel=*/IndentLevel,
-                                      /*Spaces=*/LineColumn,
-                                      /*StartOfTokenColumn=*/LineColumn,
-                                      /*InPPDirective=*/false);
-      } else {
-        // The whitespace preceding the first line of this token does not need
-        // to be touched.
-        Whitespaces.addUntouchableToken(tokenAt(LineIndex),
-                                        /*InPPDirective=*/false);
-      }
+          (Content[LineIndex].data() - Lines[LineIndex].data()) +
+          (OriginalPrefix[LineIndex].size() - Prefix[LineIndex].size());
+
+      // We always want to create a replacement instead of adding an untouchable
+      // token, even if LineColumn is the same as the original column of the
+      // token. This is because WhitespaceManager doesn't align trailing
+      // comments if they are untouchable.
+      Whitespaces.replaceWhitespace(*Tokens[LineIndex],
+                                    /*Newlines=*/1,
+                                    /*Spaces=*/LineColumn,
+                                    /*StartOfTokenColumn=*/LineColumn,
+                                    /*InPPDirective=*/false);
     }
-  } else if (OriginalPrefix[LineIndex] != Prefix[LineIndex]) {
-    // This is not the first line of the token. Adjust the prefix if necessary.
+  }
+  if (OriginalPrefix[LineIndex] != Prefix[LineIndex]) {
+    // Adjust the prefix if necessary.
 
     // Take care of the space possibly introduced after a decoration.
     assert(Prefix[LineIndex] == (OriginalPrefix[LineIndex] + " ").str() &&
-           "Expecting a block comment decoration to differ from original by "
-           "at most a space");
+           "Expecting a line comment prefix to differ from original by at most "
+           "a space");
     Whitespaces.replaceWhitespaceInToken(
         tokenAt(LineIndex), OriginalPrefix[LineIndex].size(), 0, "", "",
-        /*InPPDirective=*/false,
-        /*Newlines=*/0, /*IndentLevel=*/0,
-        /*Spaces=*/1);
+        /*InPPDirective=*/false, /*Newlines=*/0, /*Spaces=*/1);
   }
   // Add a break after a reflow split has been introduced, if necessary.
   // Note that this break doesn't need to be penalized, since it doesn't change
@@ -819,6 +878,20 @@ void BreakableLineCommentSection::updateNextToken(LineState& State) const {
   if (LastLineTok) {
     State.NextToken = LastLineTok->Next;
   }
+}
+
+bool BreakableLineCommentSection::mayReflow(
+    unsigned LineIndex, llvm::Regex &CommentPragmasRegex) const {
+  // Line comments have the indent as part of the prefix, so we need to
+  // recompute the start of the line.
+  StringRef IndentContent = Content[LineIndex];
+  if (Lines[LineIndex].startswith("//")) {
+    IndentContent = Lines[LineIndex].substr(2);
+  }
+  return LineIndex > 0 && !CommentPragmasRegex.match(IndentContent) &&
+         mayReflowContent(Content[LineIndex]) && !Tok.Finalized &&
+         !switchesFormatting(tokenAt(LineIndex)) &&
+         OriginalPrefix[LineIndex] == OriginalPrefix[LineIndex - 1];
 }
 
 unsigned

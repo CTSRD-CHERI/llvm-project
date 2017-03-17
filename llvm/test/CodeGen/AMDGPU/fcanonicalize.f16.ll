@@ -1,5 +1,7 @@
-; RUN: llc -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs < %s | FileCheck -check-prefix=GCN %s
+; RUN: llc -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs < %s | FileCheck -check-prefix=GCN -check-prefix=VI %s
+; RUN: llc -march=amdgcn -mcpu=gfx901 -mattr=-flat-for-global -verify-machineinstrs < %s | FileCheck -check-prefix=GCN -check-prefix=GFX9 %s
 
+declare half @llvm.fabs.f16(half) #0
 declare half @llvm.canonicalize.f16(half) #0
 declare <2 x half> @llvm.fabs.v2f16(<2 x half>) #0
 declare <2 x half> @llvm.canonicalize.v2f16(<2 x half>) #0
@@ -20,6 +22,40 @@ define void @v_test_canonicalize_var_f16(half addrspace(1)* %out) #1 {
 define void @s_test_canonicalize_var_f16(half addrspace(1)* %out, i16 zeroext %val.arg) #1 {
   %val = bitcast i16 %val.arg to half
   %canonicalized = call half @llvm.canonicalize.f16(half %val)
+  store half %canonicalized, half addrspace(1)* %out
+  ret void
+}
+
+; GCN-LABEL: {{^}}v_test_canonicalize_fabs_var_f16:
+; GCN: v_mul_f16_e64 [[REG:v[0-9]+]], 1.0, |{{v[0-9]+}}|
+; GCN: buffer_store_short [[REG]]
+define void @v_test_canonicalize_fabs_var_f16(half addrspace(1)* %out) #1 {
+  %val = load half, half addrspace(1)* %out
+  %val.fabs = call half @llvm.fabs.f16(half %val)
+  %canonicalized = call half @llvm.canonicalize.f16(half %val.fabs)
+  store half %canonicalized, half addrspace(1)* %out
+  ret void
+}
+
+; GCN-LABEL: {{^}}v_test_canonicalize_fneg_fabs_var_f16:
+; GCN: v_mul_f16_e64 [[REG:v[0-9]+]], 1.0, -|{{v[0-9]+}}|
+; GCN: buffer_store_short [[REG]]
+define void @v_test_canonicalize_fneg_fabs_var_f16(half addrspace(1)* %out) #1 {
+  %val = load half, half addrspace(1)* %out
+  %val.fabs = call half @llvm.fabs.f16(half %val)
+  %val.fabs.fneg = fsub half -0.0, %val.fabs
+  %canonicalized = call half @llvm.canonicalize.f16(half %val.fabs.fneg)
+  store half %canonicalized, half addrspace(1)* %out
+  ret void
+}
+
+; GCN-LABEL: {{^}}v_test_canonicalize_fneg_var_f16:
+; GCN: v_mul_f16_e64 [[REG:v[0-9]+]], 1.0, -{{v[0-9]+}}
+; GCN: buffer_store_short [[REG]]
+define void @v_test_canonicalize_fneg_var_f16(half addrspace(1)* %out) #1 {
+  %val = load half, half addrspace(1)* %out
+  %val.fneg = fsub half -0.0, %val
+  %canonicalized = call half @llvm.canonicalize.f16(half %val.fneg)
   store half %canonicalized, half addrspace(1)* %out
   ret void
 }
@@ -169,9 +205,12 @@ define void @test_fold_canonicalize_snan3_value_f16(half addrspace(1)* %out) #1 
 }
 
 ; GCN-LABEL: {{^}}v_test_canonicalize_var_v2f16:
-; GCN: v_mul_f16_e32 [[REG0:v[0-9]+]], 1.0, {{v[0-9]+}}
-; GCN: v_mul_f16_e32 [[REG1:v[0-9]+]], 1.0, {{v[0-9]+}}
-; GCN: v_lshlrev_b32_e32 v{{[0-9]+}}, 16,
+; VI: v_mul_f16_e32 [[REG0:v[0-9]+]], 1.0, {{v[0-9]+}}
+; VI: v_mul_f16_e32 [[REG1:v[0-9]+]], 1.0, {{v[0-9]+}}
+; VI: v_lshlrev_b32_e32 v{{[0-9]+}}, 16,
+
+; GFX9: v_pk_mul_f16 [[REG:v[0-9]+]], 1.0, {{v[0-9]+$}}
+; GFX9: buffer_store_dword [[REG]]
 define void @v_test_canonicalize_var_v2f16(<2 x half> addrspace(1)* %out) #1 {
   %val = load <2 x half>, <2 x half> addrspace(1)* %out
   %canonicalized = call <2 x half> @llvm.canonicalize.v2f16(<2 x half> %val)
@@ -181,11 +220,14 @@ define void @v_test_canonicalize_var_v2f16(<2 x half> addrspace(1)* %out) #1 {
 
 ; FIXME: Fold modifier
 ; GCN-LABEL: {{^}}v_test_canonicalize_fabs_var_v2f16:
-; GCN: v_bfe_u32
-; GCN: v_and_b32_e32 v{{[0-9]+}}, 0x7fff7fff, v{{[0-9]+}}
-; GCN: v_mul_f16_e32 [[REG0:v[0-9]+]], 1.0, v{{[0-9]+}}
-; GCN: v_mul_f16_e32 [[REG1:v[0-9]+]], 1.0, v{{[0-9]+}}
-; GCN: v_or_b32
+; VI: v_bfe_u32
+; VI: v_and_b32_e32 v{{[0-9]+}}, 0x7fff7fff, v{{[0-9]+}}
+; VI: v_mul_f16_e32 [[REG0:v[0-9]+]], 1.0, v{{[0-9]+}}
+; VI: v_mul_f16_e32 [[REG1:v[0-9]+]], 1.0, v{{[0-9]+}}
+; VI: v_or_b32
+
+; GFX9: v_and_b32_e32 [[ABS:v[0-9]+]], 0x7fff7fff, v{{[0-9]+}}
+; GFX9: v_pk_mul_f16 [[REG:v[0-9]+]], 1.0, [[ABS]]{{$}}
 ; GCN: buffer_store_dword
 define void @v_test_canonicalize_fabs_var_v2f16(<2 x half> addrspace(1)* %out) #1 {
   %val = load <2 x half>, <2 x half> addrspace(1)* %out
@@ -196,10 +238,13 @@ define void @v_test_canonicalize_fabs_var_v2f16(<2 x half> addrspace(1)* %out) #
 }
 
 ; GCN-LABEL: {{^}}v_test_canonicalize_fneg_fabs_var_v2f16:
-; GCN: v_or_b32_e32 v{{[0-9]+}}, 0x80008000, v{{[0-9]+}}
-; GCN: v_mul_f16_e32 [[REG0:v[0-9]+]], 1.0, v{{[0-9]+}}
-; GCN: v_mul_f16_e32 [[REG1:v[0-9]+]], 1.0, v{{[0-9]+}}
-; GCN: v_or_b32
+; VI: v_or_b32_e32 v{{[0-9]+}}, 0x80008000, v{{[0-9]+}}
+; VI: v_mul_f16_e32 [[REG0:v[0-9]+]], 1.0, v{{[0-9]+}}
+; VI: v_mul_f16_e32 [[REG1:v[0-9]+]], 1.0, v{{[0-9]+}}
+; VI: v_or_b32
+
+; GFX9: v_and_b32_e32 [[ABS:v[0-9]+]], 0x7fff7fff, v{{[0-9]+}}
+; GFX9: v_pk_mul_f16 [[REG:v[0-9]+]], 1.0, [[ABS]] neg_lo:[0,1] neg_hi:[0,1]{{$}}
 ; GCN: buffer_store_dword
 define void @v_test_canonicalize_fneg_fabs_var_v2f16(<2 x half> addrspace(1)* %out) #1 {
   %val = load <2 x half>, <2 x half> addrspace(1)* %out
@@ -212,11 +257,14 @@ define void @v_test_canonicalize_fneg_fabs_var_v2f16(<2 x half> addrspace(1)* %o
 
 ; FIXME: Fold modifier
 ; GCN-LABEL: {{^}}v_test_canonicalize_fneg_var_v2f16:
-; GCN: v_xor_b32_e32 [[FNEG:v[0-9]+]], 0x80008000, v{{[0-9]+}}
-; GCN: v_lshrrev_b32_e32 [[FNEG_HI:v[0-9]+]], 16, [[FNEG]]
-; GCN: v_mul_f16_e32 [[REG0:v[0-9]+]], 1.0, [[FNEG]]
-; GCN: v_mul_f16_e32 [[REG1:v[0-9]+]], 1.0, [[FNEG_HI]]
-; GCN: v_lshlrev_b32_e32 v{{[0-9]+}}, 16,
+; VI: v_xor_b32_e32 [[FNEG:v[0-9]+]], 0x80008000, v{{[0-9]+}}
+; VI: v_lshrrev_b32_e32 [[FNEG_HI:v[0-9]+]], 16, [[FNEG]]
+; VI: v_mul_f16_e32 [[REG0:v[0-9]+]], 1.0, [[FNEG]]
+; VI: v_mul_f16_e32 [[REG1:v[0-9]+]], 1.0, [[FNEG_HI]]
+; VI: v_lshlrev_b32_e32 v{{[0-9]+}}, 16,
+
+; GFX9: v_pk_mul_f16 [[REG:v[0-9]+]], 1.0, {{v[0-9]+}} neg_lo:[0,1] neg_hi:[0,1]{{$}}
+; GFX9: buffer_store_dword [[REG]]
 define void @v_test_canonicalize_fneg_var_v2f16(<2 x half> addrspace(1)* %out) #1 {
   %val = load <2 x half>, <2 x half> addrspace(1)* %out
   %fneg.val = fsub <2 x half> <half -0.0, half -0.0>, %val
@@ -226,9 +274,12 @@ define void @v_test_canonicalize_fneg_var_v2f16(<2 x half> addrspace(1)* %out) #
 }
 
 ; GCN-LABEL: {{^}}s_test_canonicalize_var_v2f16:
-; GCN: v_mul_f16_e64 [[REG0:v[0-9]+]], 1.0, {{s[0-9]+}}
-; GCN: v_mul_f16_e64 [[REG1:v[0-9]+]], 1.0, {{s[0-9]+}}
-; GCN: v_lshlrev_b32_e32 v{{[0-9]+}}, 16,
+; VI: v_mul_f16_e64 [[REG0:v[0-9]+]], 1.0, {{s[0-9]+}}
+; VI: v_mul_f16_e64 [[REG1:v[0-9]+]], 1.0, {{s[0-9]+}}
+; VI: v_lshlrev_b32_e32 v{{[0-9]+}}, 16,
+
+; GFX9: v_pk_mul_f16 [[REG:v[0-9]+]], 1.0, {{s[0-9]+$}}
+; GFX9: buffer_store_dword [[REG]]
 define void @s_test_canonicalize_var_v2f16(<2 x half> addrspace(1)* %out, i32 zeroext %val.arg) #1 {
   %val = bitcast i32 %val.arg to <2 x half>
   %canonicalized = call <2 x half> @llvm.canonicalize.v2f16(<2 x half> %val)

@@ -519,7 +519,7 @@ public:
   SourceRange getTypeofParensRange() const { return TypeofParensRange; }
   void setTypeofParensRange(SourceRange range) { TypeofParensRange = range; }
 
-  bool containsPlaceholderType() const {
+  bool hasAutoTypeSpec() const {
     return (TypeSpecType == TST_auto || TypeSpecType == TST_auto_type ||
             TypeSpecType == TST_decltype_auto);
   }
@@ -819,7 +819,9 @@ public:
     : objcDeclQualifier(DQ_None), PropertyAttributes(DQ_PR_noattr),
       Nullability(0), GetterName(nullptr), SetterName(nullptr) { }
 
-  ObjCDeclQualifier getObjCDeclQualifier() const { return objcDeclQualifier; }
+  ObjCDeclQualifier getObjCDeclQualifier() const {
+    return (ObjCDeclQualifier)objcDeclQualifier;
+  }
   void setObjCDeclQualifier(ObjCDeclQualifier DQVal) {
     objcDeclQualifier = (ObjCDeclQualifier) (objcDeclQualifier | DQVal);
   }
@@ -869,7 +871,7 @@ private:
   // FIXME: These two are unrelated and mutually exclusive. So perhaps
   // we can put them in a union to reflect their mutual exclusivity
   // (space saving is negligible).
-  ObjCDeclQualifier objcDeclQualifier : 7;
+  unsigned objcDeclQualifier : 7;
 
   // NOTE: VC++ treats enums as signed, avoid using ObjCPropertyAttributeKind
   unsigned PropertyAttributes : 15;
@@ -908,7 +910,9 @@ public:
     /// \brief A template-id, e.g., f<int>.
     IK_TemplateId,
     /// \brief An implicit 'self' parameter
-    IK_ImplicitSelfParam
+    IK_ImplicitSelfParam,
+    /// \brief A deduction-guide name (a template-name)
+    IK_DeductionGuideName
   } Kind;
 
   struct OFI {
@@ -928,8 +932,8 @@ public:
   /// \brief Anonymous union that holds extra data associated with the
   /// parsed unqualified-id.
   union {
-    /// \brief When Kind == IK_Identifier, the parsed identifier, or when Kind
-    /// == IK_UserLiteralId, the identifier suffix.
+    /// \brief When Kind == IK_Identifier, the parsed identifier, or when
+    /// Kind == IK_UserLiteralId, the identifier suffix.
     IdentifierInfo *Identifier;
     
     /// \brief When Kind == IK_OperatorFunctionId, the overloaded operator
@@ -947,6 +951,9 @@ public:
     /// \brief When Kind == IK_DestructorName, the type referred to by the
     /// class-name.
     UnionParsedType DestructorName;
+
+    /// \brief When Kind == IK_DeductionGuideName, the parsed template-name.
+    UnionParsedTemplateTy TemplateName;
     
     /// \brief When Kind == IK_TemplateId or IK_ConstructorTemplateId,
     /// the template-id annotation that contains the template name and
@@ -1085,6 +1092,18 @@ public:
   /// \p TemplateId and will free it on destruction.
   void setTemplateId(TemplateIdAnnotation *TemplateId);
 
+  /// \brief Specify that this unqualified-id was parsed as a template-name for
+  /// a deduction-guide.
+  ///
+  /// \param Template The parsed template-name.
+  /// \param TemplateLoc The location of the parsed template-name.
+  void setDeductionGuideName(ParsedTemplateTy Template,
+                             SourceLocation TemplateLoc) {
+    Kind = IK_DeductionGuideName;
+    TemplateName = Template;
+    StartLocation = EndLocation = TemplateLoc;
+  }
+  
   /// \brief Return the source range that covers this unqualified-id.
   SourceRange getSourceRange() const LLVM_READONLY { 
     return SourceRange(StartLocation, EndLocation); 
@@ -2317,6 +2336,16 @@ public:
         return false;
 
     return true;
+  }
+
+  /// \brief Determine whether a trailing return type was written (at any
+  /// level) within this declarator.
+  bool hasTrailingReturnType() const {
+    for (const auto &Chunk : type_objects())
+      if (Chunk.Kind == DeclaratorChunk::Function &&
+          Chunk.Fun.hasTrailingReturnType())
+        return true;
+    return false;
   }
 
   /// takeAttributes - Takes attributes from the given parsed-attributes

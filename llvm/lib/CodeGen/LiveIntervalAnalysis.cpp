@@ -162,7 +162,7 @@ void LiveIntervals::printInstrs(raw_ostream &OS) const {
 }
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
-void LiveIntervals::dumpInstrs() const {
+LLVM_DUMP_METHOD void LiveIntervals::dumpInstrs() const {
   printInstrs(dbgs());
 }
 #endif
@@ -1232,10 +1232,12 @@ private:
           LiveRange::iterator NewIdxIn = NewIdxOut;
           assert(NewIdxIn == LR.find(NewIdx.getBaseIndex()));
           const SlotIndex SplitPos = NewIdxDef;
+          OldIdxVNI = OldIdxIn->valno;
 
           // Merge the OldIdxIn and OldIdxOut segments into OldIdxOut.
+          OldIdxOut->valno->def = OldIdxIn->start;
           *OldIdxOut = LiveRange::Segment(OldIdxIn->start, OldIdxOut->end,
-                                          OldIdxIn->valno);
+                                          OldIdxOut->valno);
           // OldIdxIn and OldIdxVNI are now undef and can be overridden.
           // We Slide [NewIdxIn, OldIdxIn) down one position.
           //    |- X0/NewIdxIn -| ... |- Xn-1 -||- Xn/OldIdxIn -||- OldIdxOut -|

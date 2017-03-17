@@ -9,17 +9,17 @@
 
 #include "lldb/Host/Symbols.h"
 #include "lldb/Core/ArchSpec.h"
-#include "lldb/Core/DataBuffer.h"
-#include "lldb/Core/DataExtractor.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Core/Timer.h"
-#include "lldb/Core/UUID.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/DataBuffer.h"
+#include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/Log.h"
 #include "lldb/Utility/SafeMachO.h"
+#include "lldb/Utility/StreamString.h"
+#include "lldb/Utility/UUID.h"
 
 #include "llvm/Support/FileSystem.h"
 
@@ -54,7 +54,8 @@ static bool FileAtPathContainsArchAndUUID(const FileSpec &file_fspec,
   if (ObjectFile::GetModuleSpecifications(file_fspec, 0, 0, module_specs)) {
     ModuleSpec spec;
     for (size_t i = 0; i < module_specs.GetSize(); ++i) {
-      assert(module_specs.GetModuleSpecAtIndex(i, spec));
+      bool got_spec = module_specs.GetModuleSpecAtIndex(i, spec);
+      assert(got_spec);
       if ((uuid == NULL || (spec.GetUUIDPtr() && spec.GetUUID() == *uuid)) &&
           (arch == NULL || (spec.GetArchitecturePtr() &&
                             spec.GetArchitecture().IsCompatibleMatch(*arch)))) {
@@ -228,7 +229,7 @@ FileSpec Symbols::LocateExecutableSymbolFile(const ModuleSpec &module_spec) {
     for (size_t idx = 0; idx < num_directories; ++idx) {
       FileSpec dirspec = debug_file_search_paths.GetFileSpecAtIndex(idx);
       dirspec.ResolvePath();
-      if (!dirspec.Exists() || !dirspec.IsDirectory())
+      if (!llvm::sys::fs::is_directory(dirspec.GetPath()))
         continue;
 
       std::vector<std::string> files;

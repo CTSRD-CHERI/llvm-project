@@ -15,7 +15,7 @@ entry:
   %text.i = alloca %class.A, align 1
   %v = alloca %class.B, align 1
   %0 = getelementptr inbounds %class.B, %class.B* %v, i64 0, i32 0, !dbg !40
-  call void @llvm.lifetime.start(i64 1, i8* %0) #4, !dbg !40
+  call void @llvm.lifetime.start.p0i8(i64 1, i8* %0) #4, !dbg !40
   %1 = getelementptr inbounds %class.A, %class.A* %text.i, i64 0, i32 0, !dbg !41
   %2 = getelementptr inbounds %class.A, %class.A* %agg.tmp.i.i, i64 0, i32 0, !dbg !59
   br label %for.cond, !dbg !65
@@ -26,27 +26,27 @@ for.cond:                                         ; preds = %for.cond, %entry
   call void @llvm.dbg.value(metadata double %call, i64 0, metadata !49, metadata !69), !dbg !70
   call void @llvm.dbg.value(metadata i32* null, i64 0, metadata !52, metadata !69), !dbg !71
   call void @llvm.dbg.value(metadata %class.A* undef, i64 0, metadata !54, metadata !69), !dbg !72
-  call void @llvm.lifetime.start(i64 1, i8* %1) #4, !dbg !41
+  call void @llvm.lifetime.start.p0i8(i64 1, i8* %1) #4, !dbg !41
   %tobool.i = fcmp une double %call, 0.000000e+00, !dbg !73
   %cond.i = select i1 %tobool.i, i8* getelementptr inbounds ([1 x i8], [1 x i8]* @.str, i64 0, i64 0), i8* getelementptr inbounds ([6 x i8], [6 x i8]* @.str.1, i64 0, i64 0), !dbg !73
   call void @llvm.dbg.value(metadata %class.A* %text.i, i64 0, metadata !55, metadata !66), !dbg !74
-  call void @llvm.lifetime.start(i64 1, i8* %2), !dbg !59
+  call void @llvm.lifetime.start.p0i8(i64 1, i8* %2), !dbg !59
   call void @llvm.dbg.value(metadata %class.A* %text.i, i64 0, metadata !62, metadata !69), !dbg !59
   call void @llvm.dbg.value(metadata i8* %cond.i, i64 0, metadata !63, metadata !69), !dbg !75
   call void @_ZN1AC1EPKc(%class.A* nonnull %agg.tmp.i.i, i8* %cond.i), !dbg !76
   call void @_ZN1A5m_fn1ES_(%class.A* nonnull %text.i), !dbg !77
-  call void @llvm.lifetime.end(i64 1, i8* %2), !dbg !79
-  call void @llvm.lifetime.end(i64 1, i8* %1) #4, !dbg !80
+  call void @llvm.lifetime.end.p0i8(i64 1, i8* %2), !dbg !79
+  call void @llvm.lifetime.end.p0i8(i64 1, i8* %1) #4, !dbg !80
   br label %for.cond, !dbg !81, !llvm.loop !82
 }
 
 ; Function Attrs: argmemonly nounwind
-declare void @llvm.lifetime.start(i64, i8* nocapture) #1
+declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) #1
 
 declare double @_ZN1BixEj(%class.B*, i32) local_unnamed_addr #2
 
 ; Function Attrs: argmemonly nounwind
-declare void @llvm.lifetime.end(i64, i8* nocapture) #1
+declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) #1
 
 declare void @_ZN1A5m_fn1ES_(%class.A*) local_unnamed_addr #2
 

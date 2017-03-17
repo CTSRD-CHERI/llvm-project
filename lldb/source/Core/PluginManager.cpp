@@ -22,11 +22,11 @@
 
 // Project includes
 #include "lldb/Core/Debugger.h"
-#include "lldb/Core/Error.h"
 #include "lldb/Host/FileSpec.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Interpreter/OptionValueProperties.h"
+#include "lldb/Utility/Error.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -79,18 +79,18 @@ template <typename FPtrTy> static FPtrTy CastToFPtr(void *VPtr) {
 }
 
 static FileSpec::EnumerateDirectoryResult
-LoadPluginCallback(void *baton, FileSpec::FileType file_type,
+LoadPluginCallback(void *baton, llvm::sys::fs::file_type ft,
                    const FileSpec &file_spec) {
   //    PluginManager *plugin_manager = (PluginManager *)baton;
   Error error;
 
+  namespace fs = llvm::sys::fs;
   // If we have a regular file, a symbolic link or unknown file type, try
   // and process the file. We must handle unknown as sometimes the directory
   // enumeration might be enumerating a file system that doesn't have correct
   // file type information.
-  if (file_type == FileSpec::eFileTypeRegular ||
-      file_type == FileSpec::eFileTypeSymbolicLink ||
-      file_type == FileSpec::eFileTypeUnknown) {
+  if (ft == fs::file_type::regular_file || ft == fs::file_type::symlink_file ||
+      ft == fs::file_type::type_unknown) {
     FileSpec plugin_file_spec(file_spec);
     plugin_file_spec.ResolvePath();
 
@@ -135,9 +135,8 @@ LoadPluginCallback(void *baton, FileSpec::FileType file_type,
     }
   }
 
-  if (file_type == FileSpec::eFileTypeUnknown ||
-      file_type == FileSpec::eFileTypeDirectory ||
-      file_type == FileSpec::eFileTypeSymbolicLink) {
+  if (ft == fs::file_type::directory_file ||
+      ft == fs::file_type::symlink_file || ft == fs::file_type::type_unknown) {
     // Try and recurse into anything that a directory or symbolic link.
     // We must also do this for unknown as sometimes the directory enumeration
     // might be enumerating a file system that doesn't have correct file type
@@ -1164,93 +1163,6 @@ PluginManager::GetObjectContainerGetModuleSpecificationsCallbackAtIndex(
   ObjectContainerInstances &instances = GetObjectContainerInstances();
   if (idx < instances.size())
     return instances[idx].get_module_specifications;
-  return nullptr;
-}
-
-#pragma mark LogChannel
-
-struct LogInstance {
-  LogInstance() : name(), description(), create_callback(nullptr) {}
-
-  ConstString name;
-  std::string description;
-  LogChannelCreateInstance create_callback;
-};
-
-typedef std::vector<LogInstance> LogInstances;
-
-static std::recursive_mutex &GetLogMutex() {
-  static std::recursive_mutex g_instances_mutex;
-  return g_instances_mutex;
-}
-
-static LogInstances &GetLogInstances() {
-  static LogInstances g_instances;
-  return g_instances;
-}
-
-bool PluginManager::RegisterPlugin(const ConstString &name,
-                                   const char *description,
-                                   LogChannelCreateInstance create_callback) {
-  if (create_callback) {
-    LogInstance instance;
-    assert((bool)name);
-    instance.name = name;
-    if (description && description[0])
-      instance.description = description;
-    instance.create_callback = create_callback;
-    std::lock_guard<std::recursive_mutex> gard(GetLogMutex());
-    GetLogInstances().push_back(instance);
-  }
-  return false;
-}
-
-bool PluginManager::UnregisterPlugin(LogChannelCreateInstance create_callback) {
-  if (create_callback) {
-    std::lock_guard<std::recursive_mutex> gard(GetLogMutex());
-    LogInstances &instances = GetLogInstances();
-
-    LogInstances::iterator pos, end = instances.end();
-    for (pos = instances.begin(); pos != end; ++pos) {
-      if (pos->create_callback == create_callback) {
-        instances.erase(pos);
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-const char *PluginManager::GetLogChannelCreateNameAtIndex(uint32_t idx) {
-  std::lock_guard<std::recursive_mutex> gard(GetLogMutex());
-  LogInstances &instances = GetLogInstances();
-  if (idx < instances.size())
-    return instances[idx].name.GetCString();
-  return nullptr;
-}
-
-LogChannelCreateInstance
-PluginManager::GetLogChannelCreateCallbackAtIndex(uint32_t idx) {
-  std::lock_guard<std::recursive_mutex> gard(GetLogMutex());
-  LogInstances &instances = GetLogInstances();
-  if (idx < instances.size())
-    return instances[idx].create_callback;
-  return nullptr;
-}
-
-LogChannelCreateInstance
-PluginManager::GetLogChannelCreateCallbackForPluginName(
-    const ConstString &name) {
-  if (name) {
-    std::lock_guard<std::recursive_mutex> gard(GetLogMutex());
-    LogInstances &instances = GetLogInstances();
-
-    LogInstances::iterator pos, end = instances.end();
-    for (pos = instances.begin(); pos != end; ++pos) {
-      if (name == pos->name)
-        return pos->create_callback;
-    }
-  }
   return nullptr;
 }
 

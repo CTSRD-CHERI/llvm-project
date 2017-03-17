@@ -30,18 +30,20 @@ static bool ShrinkDemandedConstant(Instruction *I, unsigned OpNo,
   assert(I && "No instruction?");
   assert(OpNo < I->getNumOperands() && "Operand index too large");
 
-  // If the operand is not a constant integer, nothing to do.
-  ConstantInt *OpC = dyn_cast<ConstantInt>(I->getOperand(OpNo));
-  if (!OpC) return false;
+  // The operand must be a constant integer or splat integer.
+  Value *Op = I->getOperand(OpNo);
+  const APInt *C;
+  if (!match(Op, m_APInt(C)))
+    return false;
 
   // If there are no bits set that aren't demanded, nothing to do.
-  Demanded = Demanded.zextOrTrunc(OpC->getValue().getBitWidth());
-  if ((~Demanded & OpC->getValue()) == 0)
+  Demanded = Demanded.zextOrTrunc(C->getBitWidth());
+  if ((~Demanded & *C) == 0)
     return false;
 
   // This instruction is producing bits that are not demanded. Shrink the RHS.
-  Demanded &= OpC->getValue();
-  I->setOperand(OpNo, ConstantInt::get(OpC->getType(), Demanded));
+  Demanded &= *C;
+  I->setOperand(OpNo, ConstantInt::get(Op->getType(), Demanded));
 
   return true;
 }
@@ -114,9 +116,10 @@ Value *InstCombiner::SimplifyDemandedUseBits(Value *V, APInt DemandedMask,
       KnownOne.getBitWidth() == BitWidth &&
       "Value *V, DemandedMask, KnownZero and KnownOne "
       "must have same BitWidth");
-  if (ConstantInt *CI = dyn_cast<ConstantInt>(V)) {
-    // We know all of the bits for a constant!
-    KnownOne = CI->getValue() & DemandedMask;
+  const APInt *C;
+  if (match(V, m_APInt(C))) {
+    // We know all of the bits for a scalar constant or a splat vector constant!
+    KnownOne = *C & DemandedMask;
     KnownZero = ~KnownOne & DemandedMask;
     return nullptr;
   }
@@ -849,7 +852,7 @@ Value *InstCombiner::SimplifyShrShlDemandedBits(Instruction *Shr,
   unsigned ShrAmt = ShrOp1.getZExtValue();
 
   KnownOne.clearAllBits();
-  KnownZero = APInt::getBitsSet(KnownZero.getBitWidth(), 0, ShlAmt-1);
+  KnownZero = APInt::getLowBitsSet(KnownZero.getBitWidth(), ShlAmt - 1);
   KnownZero &= DemandedMask;
 
   APInt BitMask1(APInt::getAllOnesValue(BitWidth));
@@ -1479,8 +1482,11 @@ Value *InstCombiner::SimplifyDemandedVectorElts(Value *V, APInt DemandedElts,
     case Intrinsic::x86_avx2_packssdw:
     case Intrinsic::x86_avx2_packsswb:
     case Intrinsic::x86_avx2_packusdw:
-    case Intrinsic::x86_avx2_packuswb: {
-      // TODO Add support for Intrinsic::x86_avx512_mask_pack*
+    case Intrinsic::x86_avx2_packuswb:
+    case Intrinsic::x86_avx512_packssdw_512:
+    case Intrinsic::x86_avx512_packsswb_512:
+    case Intrinsic::x86_avx512_packusdw_512:
+    case Intrinsic::x86_avx512_packuswb_512: {
       auto *Ty0 = II->getArgOperand(0)->getType();
       unsigned InnerVWidth = Ty0->getVectorNumElements();
       assert(VWidth == (InnerVWidth * 2) && "Unexpected input size");
@@ -1555,6 +1561,50 @@ Value *InstCombiner::SimplifyDemandedVectorElts(Value *V, APInt DemandedElts,
     case Intrinsic::x86_sse4a_insertqi:
       UndefElts |= APInt::getHighBitsSet(VWidth, VWidth / 2);
       break;
+    case Intrinsic::amdgcn_buffer_load:
+    case Intrinsic::amdgcn_buffer_load_format: {
+      if (VWidth == 1 || !APIntOps::isMask(DemandedElts))
+        return nullptr;
+
+      // TODO: Handle 3 vectors when supported in code gen.
+      unsigned NewNumElts = PowerOf2Ceil(DemandedElts.countTrailingOnes());
+      if (NewNumElts == VWidth)
+        return nullptr;
+
+      Module *M = II->getParent()->getParent()->getParent();
+      Type *EltTy = V->getType()->getVectorElementType();
+
+      Type *NewTy = (NewNumElts == 1) ? EltTy :
+        VectorType::get(EltTy, NewNumElts);
+
+      Function *NewIntrin = Intrinsic::getDeclaration(M, II->getIntrinsicID(),
+                                                      NewTy);
+
+      SmallVector<Value *, 5> Args;
+      for (unsigned I = 0, E = II->getNumArgOperands(); I != E; ++I)
+        Args.push_back(II->getArgOperand(I));
+
+      IRBuilderBase::InsertPointGuard Guard(*Builder);
+      Builder->SetInsertPoint(II);
+
+      CallInst *NewCall = Builder->CreateCall(NewIntrin, Args);
+      NewCall->takeName(II);
+      NewCall->copyMetadata(*II);
+      if (NewNumElts == 1) {
+        return Builder->CreateInsertElement(UndefValue::get(V->getType()),
+                                            NewCall, static_cast<uint64_t>(0));
+      }
+
+      SmallVector<uint32_t, 8> EltMask;
+      for (unsigned I = 0; I < VWidth; ++I)
+        EltMask.push_back(I);
+
+      Value *Shuffle = Builder->CreateShuffleVector(
+        NewCall, UndefValue::get(NewTy), EltMask);
+
+      MadeChange = true;
+      return Shuffle;
+    }
     }
     break;
   }

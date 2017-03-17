@@ -1,3 +1,16 @@
+//===-- llvm/CodeGen/DwarfCompileUnit.cpp - Dwarf Compile Units -----------===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is distributed under the University of Illinois Open Source
+// License. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------------===//
+//
+// This file contains support for constructing a dwarf compile unit.
+//
+//===----------------------------------------------------------------------===//
+
 #include "DwarfCompileUnit.h"
 #include "DwarfExpression.h"
 #include "llvm/CodeGen/MachineFunction.h"
@@ -522,22 +535,19 @@ DIE *DwarfCompileUnit::constructVariableDIEImpl(const DbgVariable &DV,
   }
 
   // .. else use frame index.
-  if (DV.getFrameIndex().empty())
+  if (!DV.hasFrameIndexExprs())
     return VariableDie;
 
-  auto Expr = DV.getExpression().begin();
   DIELoc *Loc = new (DIEValueAllocator) DIELoc;
   DIEDwarfExpression DwarfExpr(*Asm, *this, *Loc);
-  for (auto FI : DV.getFrameIndex()) {
+  for (auto &Fragment : DV.getFrameIndexExprs()) {
     unsigned FrameReg = 0;
     const TargetFrameLowering *TFI = Asm->MF->getSubtarget().getFrameLowering();
-    int Offset = TFI->getFrameIndexReference(*Asm->MF, FI, FrameReg);
-    assert(Expr != DV.getExpression().end() && "Wrong number of expressions");
-    DwarfExpr.addFragmentOffset(*Expr);
+    int Offset = TFI->getFrameIndexReference(*Asm->MF, Fragment.FI, FrameReg);
+    DwarfExpr.addFragmentOffset(Fragment.Expr);
     DwarfExpr.AddMachineRegIndirect(*Asm->MF->getSubtarget().getRegisterInfo(),
                                     FrameReg, Offset);
-    DwarfExpr.AddExpression(*Expr);
-    ++Expr;
+    DwarfExpr.AddExpression(Fragment.Expr);
   }
   addBlock(*VariableDie, dwarf::DW_AT_location, DwarfExpr.finalize());
 
@@ -693,16 +703,31 @@ void DwarfCompileUnit::emitHeader(bool UseOffsets) {
     Asm->OutStreamer->EmitLabel(LabelBegin);
   }
 
-  DwarfUnit::emitHeader(UseOffsets);
+  dwarf::UnitType UT = Skeleton ? dwarf::DW_UT_split_compile
+                                : DD->useSplitDwarf() ? dwarf::DW_UT_skeleton
+                                                      : dwarf::DW_UT_compile;
+  DwarfUnit::emitCommonHeader(UseOffsets, UT);
 }
 
 /// addGlobalName - Add a new global name to the compile unit.
-void DwarfCompileUnit::addGlobalName(StringRef Name, DIE &Die,
+void DwarfCompileUnit::addGlobalName(StringRef Name, const DIE &Die,
                                      const DIScope *Context) {
   if (includeMinimalInlineScopes())
     return;
   std::string FullName = getParentContextString(Context) + Name.str();
   GlobalNames[FullName] = &Die;
+}
+
+void DwarfCompileUnit::addGlobalNameForTypeUnit(StringRef Name,
+                                                const DIScope *Context) {
+  if (includeMinimalInlineScopes())
+    return;
+  std::string FullName = getParentContextString(Context) + Name.str();
+  // Insert, allowing the entry to remain as-is if it's already present
+  // This way the CU-level type DIE is preferred over the "can't describe this
+  // type as a unit offset because it's not really in the CU at all, it's only
+  // in a type unit"
+  GlobalNames.insert(std::make_pair(std::move(FullName), &getUnitDie()));
 }
 
 /// Add a new global type to the unit.
@@ -712,6 +737,18 @@ void DwarfCompileUnit::addGlobalType(const DIType *Ty, const DIE &Die,
     return;
   std::string FullName = getParentContextString(Context) + Ty->getName().str();
   GlobalTypes[FullName] = &Die;
+}
+
+void DwarfCompileUnit::addGlobalTypeUnitType(const DIType *Ty,
+                                             const DIScope *Context) {
+  if (includeMinimalInlineScopes())
+    return;
+  std::string FullName = getParentContextString(Context) + Ty->getName().str();
+  // Insert, allowing the entry to remain as-is if it's already present
+  // This way the CU-level type DIE is preferred over the "can't describe this
+  // type as a unit offset because it's not really in the CU at all, it's only
+  // in a type unit"
+  GlobalTypes.insert(std::make_pair(std::move(FullName), &getUnitDie()));
 }
 
 /// addVariableAddress - Add DW_AT_location attribute for a

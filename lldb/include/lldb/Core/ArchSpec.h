@@ -12,7 +12,7 @@
 
 #if defined(__cplusplus)
 
-#include "lldb/Core/ConstString.h"
+#include "lldb/Utility/ConstString.h"
 #include "lldb/lldb-forward.h"
 #include "llvm/ADT/Triple.h"
 
@@ -307,7 +307,7 @@ public:
   /// @return A string representing target CPU for the current
   ///         architecture.
   //------------------------------------------------------------------
-  std::string GetClangTargetCPU();
+  std::string GetClangTargetCPU() const;
 
   //------------------------------------------------------------------
   /// Return a string representing target application ABI.

@@ -75,7 +75,7 @@ template <class ELFT> void SymbolTable<ELFT>::addFile(InputFile *File) {
   }
 
   if (Config->Trace)
-    outs() << toString(File) << "\n";
+    message(toString(File));
 
   // .so file
   if (auto *F = dyn_cast<SharedFile<ELFT>>(File)) {
@@ -115,7 +115,7 @@ template <class ELFT> void SymbolTable<ELFT>::addCombinedLTOObject() {
   // Compile bitcode files and replace bitcode symbols.
   LTO.reset(new BitcodeCompiler);
   for (BitcodeFile *F : BitcodeFiles)
-    LTO->add<ELFT>(*F);
+    LTO->add(*F);
 
   for (InputFile *File : LTO->compile()) {
     ObjectFile<ELFT> *Obj = cast<ObjectFile<ELFT>>(File);
@@ -126,19 +126,19 @@ template <class ELFT> void SymbolTable<ELFT>::addCombinedLTOObject() {
 }
 
 template <class ELFT>
-DefinedRegular<ELFT> *SymbolTable<ELFT>::addAbsolute(StringRef Name,
-                                                     uint8_t Visibility,
-                                                     uint8_t Binding) {
+DefinedRegular *SymbolTable<ELFT>::addAbsolute(StringRef Name,
+                                               uint8_t Visibility,
+                                               uint8_t Binding) {
   Symbol *Sym =
       addRegular(Name, Visibility, STT_NOTYPE, 0, 0, Binding, nullptr, nullptr);
-  return cast<DefinedRegular<ELFT>>(Sym->body());
+  return cast<DefinedRegular>(Sym->body());
 }
 
 // Add Name as an "ignored" symbol. An ignored symbol is a regular
 // linker-synthesized defined symbol, but is only defined if needed.
 template <class ELFT>
-DefinedRegular<ELFT> *SymbolTable<ELFT>::addIgnored(StringRef Name,
-                                                    uint8_t Visibility) {
+DefinedRegular *SymbolTable<ELFT>::addIgnored(StringRef Name,
+                                              uint8_t Visibility) {
   SymbolBody *S = find(Name);
   if (!S || S->isInCurrentDSO())
     return nullptr;
@@ -191,7 +191,7 @@ std::pair<Symbol *, bool> SymbolTable<ELFT>::insert(StringRef Name) {
 
   Symbol *Sym;
   if (IsNew) {
-    Sym = new (BAlloc) Symbol;
+    Sym = make<Symbol>();
     Sym->InVersionScript = false;
     Sym->Binding = STB_WEAK;
     Sym->Visibility = STV_DEFAULT;
@@ -256,14 +256,14 @@ Symbol *SymbolTable<ELFT>::addUndefined(StringRef Name, bool IsLocal,
       insert(Name, Type, getVisibility(StOther), CanOmitFromDynSym, File);
   if (WasInserted) {
     S->Binding = Binding;
-    replaceBody<Undefined<ELFT>>(S, Name, IsLocal, StOther, Type, File);
+    replaceBody<Undefined>(S, Name, IsLocal, StOther, Type, File);
     return S;
   }
   if (Binding != STB_WEAK) {
     if (S->body()->isShared() || S->body()->isLazy())
       S->Binding = Binding;
-    if (auto *SS = dyn_cast<SharedSymbol<ELFT>>(S->body()))
-      SS->file()->IsUsed = true;
+    if (auto *SS = dyn_cast<SharedSymbol>(S->body()))
+      cast<SharedFile<ELFT>>(SS->File)->IsUsed = true;
   }
   if (auto *L = dyn_cast<Lazy>(S->body())) {
     // An undefined weak will not fetch archive members, but we have to remember
@@ -309,7 +309,7 @@ static int compareDefinedNonCommon(Symbol *S, bool WasInserted, uint8_t Binding,
     if (Config->WarnCommon)
       warn("common " + S->body()->getName() + " is overridden");
     return 1;
-  } else if (auto *R = dyn_cast<DefinedRegular<ELFT>>(B)) {
+  } else if (auto *R = dyn_cast<DefinedRegular>(B)) {
     if (R->Section == nullptr && Binding == STB_GLOBAL && IsAbsolute &&
         R->Value == Value)
       return -1;
@@ -319,7 +319,7 @@ static int compareDefinedNonCommon(Symbol *S, bool WasInserted, uint8_t Binding,
 
 template <class ELFT>
 Symbol *SymbolTable<ELFT>::addCommon(StringRef N, uint64_t Size,
-                                     uint64_t Alignment, uint8_t Binding,
+                                     uint32_t Alignment, uint8_t Binding,
                                      uint8_t StOther, uint8_t Type,
                                      InputFile *File) {
   Symbol *S;
@@ -361,17 +361,17 @@ static void reportDuplicate(SymbolBody *Existing, InputFile *NewFile) {
 }
 
 template <class ELFT>
-static void reportDuplicate(SymbolBody *Existing,
-                            InputSectionBase<ELFT> *ErrSec,
+static void reportDuplicate(SymbolBody *Existing, InputSectionBase *ErrSec,
                             typename ELFT::uint ErrOffset) {
-  DefinedRegular<ELFT> *D = dyn_cast<DefinedRegular<ELFT>>(Existing);
+  DefinedRegular *D = dyn_cast<DefinedRegular>(Existing);
   if (!D || !D->Section || !ErrSec) {
-    reportDuplicate(Existing, ErrSec ? ErrSec->getFile() : nullptr);
+    reportDuplicate(Existing, ErrSec ? ErrSec->getFile<ELFT>() : nullptr);
     return;
   }
 
-  std::string OldLoc = D->Section->getLocation(D->Value);
-  std::string NewLoc = ErrSec->getLocation(ErrOffset);
+  std::string OldLoc =
+      cast<InputSectionBase>(D->Section)->template getLocation<ELFT>(D->Value);
+  std::string NewLoc = ErrSec->getLocation<ELFT>(ErrOffset);
 
   print(NewLoc + ": duplicate symbol '" + toString(*Existing) + "'");
   print(OldLoc + ": previous definition was here");
@@ -379,10 +379,9 @@ static void reportDuplicate(SymbolBody *Existing,
 
 template <typename ELFT>
 Symbol *SymbolTable<ELFT>::addRegular(StringRef Name, uint8_t StOther,
-                                      uint8_t Type, uintX_t Value, uintX_t Size,
-                                      uint8_t Binding,
-                                      InputSectionBase<ELFT> *Section,
-                                      InputFile *File) {
+                                      uint8_t Type, uint64_t Value,
+                                      uint64_t Size, uint8_t Binding,
+                                      SectionBase *Section, InputFile *File) {
   Symbol *S;
   bool WasInserted;
   std::tie(S, WasInserted) = insert(Name, Type, getVisibility(StOther),
@@ -390,32 +389,16 @@ Symbol *SymbolTable<ELFT>::addRegular(StringRef Name, uint8_t StOther,
   int Cmp = compareDefinedNonCommon<ELFT>(S, WasInserted, Binding,
                                           Section == nullptr, Value);
   if (Cmp > 0)
-    replaceBody<DefinedRegular<ELFT>>(S, Name, /*IsLocal=*/false, StOther, Type,
-                                      Value, Size, Section, File);
+    replaceBody<DefinedRegular>(S, Name, /*IsLocal=*/false, StOther, Type,
+                                Value, Size, Section, File);
   else if (Cmp == 0)
-    reportDuplicate(S->body(), Section, Value);
+    reportDuplicate<ELFT>(S->body(),
+                          dyn_cast_or_null<InputSectionBase>(Section), Value);
   return S;
 }
 
 template <typename ELFT>
-Symbol *SymbolTable<ELFT>::addSynthetic(StringRef N,
-                                        const OutputSectionBase *Section,
-                                        uintX_t Value, uint8_t StOther) {
-  Symbol *S;
-  bool WasInserted;
-  std::tie(S, WasInserted) = insert(N, STT_NOTYPE, getVisibility(StOther),
-                                    /*CanOmitFromDynSym*/ false, nullptr);
-  int Cmp = compareDefinedNonCommon<ELFT>(S, WasInserted, STB_GLOBAL,
-                                          /*IsAbsolute*/ false, /*Value*/ 0);
-  if (Cmp > 0)
-    replaceBody<DefinedSynthetic>(S, N, Value, Section);
-  else if (Cmp == 0)
-    reportDuplicate(S->body(), nullptr);
-  return S;
-}
-
-template <typename ELFT>
-void SymbolTable<ELFT>::addShared(SharedFile<ELFT> *F, StringRef Name,
+void SymbolTable<ELFT>::addShared(SharedFile<ELFT> *File, StringRef Name,
                                   const Elf_Sym &Sym,
                                   const typename ELFT::Verdef *Verdef) {
   // DSO symbols do not affect visibility in the output, so we pass STV_DEFAULT
@@ -423,15 +406,17 @@ void SymbolTable<ELFT>::addShared(SharedFile<ELFT> *F, StringRef Name,
   // unchanged.
   Symbol *S;
   bool WasInserted;
-  std::tie(S, WasInserted) =
-      insert(Name, Sym.getType(), STV_DEFAULT, /*CanOmitFromDynSym*/ true, F);
+  std::tie(S, WasInserted) = insert(Name, Sym.getType(), STV_DEFAULT,
+                                    /*CanOmitFromDynSym*/ true, File);
   // Make sure we preempt DSO symbols with default visibility.
   if (Sym.getVisibility() == STV_DEFAULT)
     S->ExportDynamic = true;
-  if (WasInserted || isa<Undefined<ELFT>>(S->body())) {
-    replaceBody<SharedSymbol<ELFT>>(S, F, Name, Sym, Verdef);
+
+  if (WasInserted || isa<Undefined>(S->body())) {
+    replaceBody<SharedSymbol>(S, File, Name, Sym.st_other, Sym.getType(), &Sym,
+                              Verdef);
     if (!S->isWeak())
-      F->IsUsed = true;
+      File->IsUsed = true;
   }
 }
 
@@ -446,8 +431,8 @@ Symbol *SymbolTable<ELFT>::addBitcode(StringRef Name, uint8_t Binding,
   int Cmp = compareDefinedNonCommon<ELFT>(S, WasInserted, Binding,
                                           /*IsAbs*/ false, /*Value*/ 0);
   if (Cmp > 0)
-    replaceBody<DefinedRegular<ELFT>>(S, Name, /*IsLocal=*/false, StOther, Type,
-                                      0, 0, nullptr, F);
+    replaceBody<DefinedRegular>(S, Name, /*IsLocal=*/false, StOther, Type, 0, 0,
+                                nullptr, F);
   else if (Cmp == 0)
     reportDuplicate(S->body(), F);
   return S;

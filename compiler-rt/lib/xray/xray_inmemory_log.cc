@@ -24,19 +24,12 @@
 #include <thread>
 #include <unistd.h>
 
-#if defined(__x86_64__)
-#include "xray_x86_64.h"
-#elif defined(__arm__) || defined(__aarch64__)
-#include "xray_emulate_tsc.h"
-#else
-#error "Unsupported CPU Architecture"
-#endif /* Architecture-specific inline intrinsics */
-
 #include "sanitizer_common/sanitizer_libc.h"
 #include "xray/xray_records.h"
 #include "xray_defs.h"
 #include "xray_flags.h"
 #include "xray_interface_internal.h"
+#include "xray_tsc.h"
 #include "xray_utils.h"
 
 // __xray_InMemoryRawLog will use a thread-local aligned buffer capped to a
@@ -84,7 +77,6 @@ using namespace __xray;
 
 static int __xray_OpenLogFile() XRAY_NEVER_INSTRUMENT {
   int F = getLogFD();
-  auto CPUFrequency = getCPUFrequency();
   if (F == -1)
     return -1;
   // Since we're here, we get to write the header. We set it up so that the
@@ -93,8 +85,9 @@ static int __xray_OpenLogFile() XRAY_NEVER_INSTRUMENT {
   XRayFileHeader Header;
   Header.Version = 1;
   Header.Type = FileTypes::NAIVE_LOG;
-  Header.CycleFrequency =
-      CPUFrequency == -1 ? 0 : static_cast<uint64_t>(CPUFrequency);
+  Header.CycleFrequency = probeRequiredCPUFeatures()
+                              ? getTSCFrequency()
+                              : __xray::NanosecondsPerSecond;
 
   // FIXME: Actually check whether we have 'constant_tsc' and 'nonstop_tsc'
   // before setting the values in the header.
@@ -105,8 +98,9 @@ static int __xray_OpenLogFile() XRAY_NEVER_INSTRUMENT {
   return F;
 }
 
-void __xray_InMemoryRawLog(int32_t FuncId,
-                           XRayEntryType Type) XRAY_NEVER_INSTRUMENT {
+template <class RDTSC>
+void __xray_InMemoryRawLog(int32_t FuncId, XRayEntryType Type,
+                           RDTSC ReadTSC) XRAY_NEVER_INSTRUMENT {
   using Buffer =
       std::aligned_storage<sizeof(XRayRecord), alignof(XRayRecord)>::type;
   static constexpr size_t BuffLen = 1024;
@@ -123,7 +117,7 @@ void __xray_InMemoryRawLog(int32_t FuncId,
   // through a pointer offset.
   auto &R = reinterpret_cast<__xray::XRayRecord *>(InMemoryBuffer)[Offset];
   R.RecordType = RecordTypes::NORMAL;
-  R.TSC = __xray::readTSC(R.CPU);
+  R.TSC = ReadTSC(R.CPU);
   R.TId = TId;
   R.Type = Type;
   R.FuncId = FuncId;
@@ -137,8 +131,32 @@ void __xray_InMemoryRawLog(int32_t FuncId,
   }
 }
 
-static auto Unused = [] {
+void __xray_InMemoryRawLogRealTSC(int32_t FuncId,
+                                  XRayEntryType Type) XRAY_NEVER_INSTRUMENT {
+  __xray_InMemoryRawLog(FuncId, Type, __xray::readTSC);
+}
+
+void __xray_InMemoryEmulateTSC(int32_t FuncId,
+                               XRayEntryType Type) XRAY_NEVER_INSTRUMENT {
+  __xray_InMemoryRawLog(FuncId, Type, [](uint8_t &CPU) XRAY_NEVER_INSTRUMENT {
+    timespec TS;
+    int result = clock_gettime(CLOCK_REALTIME, &TS);
+    if (result != 0) {
+      Report("clock_gettimg(2) return %d, errno=%d.", result, int(errno));
+      TS = {0, 0};
+    }
+    CPU = 0;
+    return TS.tv_sec * __xray::NanosecondsPerSecond + TS.tv_nsec;
+  });
+}
+
+static auto UNUSED Unused = [] {
+  auto UseRealTSC = probeRequiredCPUFeatures();
+  if (!UseRealTSC)
+    Report("WARNING: Required CPU features missing for XRay instrumentation, "
+           "using emulation instead.\n");
   if (flags()->xray_naive_log)
-    __xray_set_handler(__xray_InMemoryRawLog);
+    __xray_set_handler(UseRealTSC ? __xray_InMemoryRawLogRealTSC
+                                  : __xray_InMemoryEmulateTSC);
   return true;
 }();

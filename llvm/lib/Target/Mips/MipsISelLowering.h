@@ -638,7 +638,8 @@ namespace llvm {
                                                 unsigned Size, unsigned DstReg,
                                                 unsigned SrcRec) const;
 
-    MachineBasicBlock *emitAtomicBinary(MachineInstr &MI, MachineBasicBlock *BB,
+    MachineBasicBlock *emitAtomicBinary(bool isCapOp, MachineInstr &MI,
+                                        MachineBasicBlock *BB,
                                         unsigned Size, unsigned BinOpcode,
                                         bool Nand = false) const;
     MachineBasicBlock *emitAtomicBinaryPartword(MachineInstr &MI,

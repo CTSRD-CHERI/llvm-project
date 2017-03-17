@@ -22,6 +22,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Analysis/EHPersonalities.h"
 #include "llvm/Analysis/InstructionSimplify.h"
@@ -1280,7 +1281,7 @@ static bool HoistThenElseCodeToIf(BranchInst *BI,
     if (!isa<CallInst>(I1))
       I1->setDebugLoc(
           DILocation::getMergedLocation(I1->getDebugLoc(), I2->getDebugLoc()));
- 
+
     I2->eraseFromParent();
     Changed = true;
 
@@ -1546,7 +1547,7 @@ static bool sinkLastInstruction(ArrayRef<BasicBlock*> Blocks) {
         }))
       return false;
   }
-  
+
   // We don't need to do any more checking here; canSinkLastInstruction should
   // have done it all for us.
   SmallVector<Value*, 4> NewOperands;
@@ -1653,7 +1654,7 @@ namespace {
     bool isValid() const {
       return !Fail;
     }
-    
+
     void operator -- () {
       if (Fail)
         return;
@@ -1737,7 +1738,7 @@ static bool SinkThenElseCodeToEnd(BranchInst *BI1) {
   }
   if (UnconditionalPreds.size() < 2)
     return false;
-  
+
   bool Changed = false;
   // We take a two-step approach to tail sinking. First we scan from the end of
   // each block upwards in lockstep. If the n'th instruction from the end of each
@@ -1767,7 +1768,7 @@ static bool SinkThenElseCodeToEnd(BranchInst *BI1) {
     unsigned NumPHIInsts = NumPHIdValues / UnconditionalPreds.size();
     if ((NumPHIdValues % UnconditionalPreds.size()) != 0)
         NumPHIInsts++;
-    
+
     return NumPHIInsts <= 1;
   };
 
@@ -1790,7 +1791,7 @@ static bool SinkThenElseCodeToEnd(BranchInst *BI1) {
     }
     if (!Profitable)
       return false;
-    
+
     DEBUG(dbgs() << "SINK: Splitting edge\n");
     // We have a conditional edge and we're going to sink some instructions.
     // Insert a new block postdominating all blocks we're going to sink from.
@@ -1800,7 +1801,7 @@ static bool SinkThenElseCodeToEnd(BranchInst *BI1) {
       return false;
     Changed = true;
   }
-  
+
   // Now that we've analyzed all potential sinking candidates, perform the
   // actual sink. We iteratively sink the last non-terminator of the source
   // blocks into their common successor unless doing so would require too
@@ -1826,7 +1827,7 @@ static bool SinkThenElseCodeToEnd(BranchInst *BI1) {
       DEBUG(dbgs() << "SINK: stopping here, too many PHIs would be created!\n");
       break;
     }
-    
+
     if (!sinkLastInstruction(UnconditionalPreds))
       return Changed;
     NumSinkCommons++;
@@ -2078,6 +2079,9 @@ static bool SpeculativelyExecuteBB(BranchInst *BI, BasicBlock *ThenBB,
     Value *S = Builder.CreateSelect(
         BrCond, TrueV, FalseV, TrueV->getName() + "." + FalseV->getName(), BI);
     SpeculatedStore->setOperand(0, S);
+    SpeculatedStore->setDebugLoc(
+        DILocation::getMergedLocation(
+          BI->getDebugLoc(), SpeculatedStore->getDebugLoc()));
   }
 
   // Metadata can be dependent on the condition we are hoisting above.
@@ -2147,7 +2151,8 @@ static bool BlockIsSimpleEnoughToThreadThrough(BasicBlock *BB) {
 /// If we have a conditional branch on a PHI node value that is defined in the
 /// same block as the branch and if any PHI entries are constants, thread edges
 /// corresponding to that entry to be branches to their ultimate destination.
-static bool FoldCondBranchOnPHI(BranchInst *BI, const DataLayout &DL) {
+static bool FoldCondBranchOnPHI(BranchInst *BI, const DataLayout &DL,
+                                AssumptionCache *AC) {
   BasicBlock *BB = BI->getParent();
   PHINode *PN = dyn_cast<PHINode>(BI->getCondition());
   // NOTE: we currently cannot transform this case if the PHI node is used
@@ -2239,6 +2244,11 @@ static bool FoldCondBranchOnPHI(BranchInst *BI, const DataLayout &DL) {
       // Insert the new instruction into its new home.
       if (N)
         EdgeBB->getInstList().insert(InsertPt, N);
+
+      // Register the new instruction with the assumption cache if necessary.
+      if (auto *II = dyn_cast_or_null<IntrinsicInst>(N))
+        if (II->getIntrinsicID() == Intrinsic::assume)
+          AC->registerAssumption(II);
     }
 
     // Loop over all of the edges from PredBB to BB, changing them to branch
@@ -2251,7 +2261,7 @@ static bool FoldCondBranchOnPHI(BranchInst *BI, const DataLayout &DL) {
       }
 
     // Recurse, simplifying any other constants.
-    return FoldCondBranchOnPHI(BI, DL) | true;
+    return FoldCondBranchOnPHI(BI, DL, AC) | true;
   }
 
   return false;
@@ -4375,7 +4385,7 @@ static bool EliminateDeadSwitchCases(SwitchInst *SI, AssumptionCache *AC,
   bool HasDefault =
       !isa<UnreachableInst>(SI->getDefaultDest()->getFirstNonPHIOrDbg());
   const unsigned NumUnknownBits =
-      Bits - (KnownZero.Or(KnownOne)).countPopulation();
+      Bits - (KnownZero | KnownOne).countPopulation();
   assert(NumUnknownBits <= Bits);
   if (HasDefault && DeadCases.empty() &&
       NumUnknownBits < 64 /* avoid overflow */ &&
@@ -5840,7 +5850,7 @@ bool SimplifyCFGOpt::SimplifyCondBranch(BranchInst *BI, IRBuilder<> &Builder) {
   // through this block if any PHI node entries are constants.
   if (PHINode *PN = dyn_cast<PHINode>(BI->getCondition()))
     if (PN->getParent() == BI->getParent())
-      if (FoldCondBranchOnPHI(BI, DL))
+      if (FoldCondBranchOnPHI(BI, DL, AC))
         return SimplifyCFG(BB, TTI, BonusInstThreshold, AC) | true;
 
   // Scan predecessor blocks for conditional branches.

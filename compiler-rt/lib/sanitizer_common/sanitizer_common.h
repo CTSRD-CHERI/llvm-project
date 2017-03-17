@@ -382,6 +382,7 @@ void SetSoftRssLimitExceededCallback(void (*Callback)(bool exceeded));
 typedef void (*SignalHandlerType)(int, void *, void *);
 bool IsHandledDeadlySignal(int signum);
 void InstallDeadlySignalHandlers(SignalHandlerType handler);
+const char *DescribeSignalOrException(int signo);
 // Alternative signal stack (POSIX-only).
 void SetAlternateSignalStack();
 void UnsetAlternateSignalStack();
@@ -909,6 +910,8 @@ struct StackDepotStats {
 // The default value for allocator_release_to_os_interval_ms common flag to
 // indicate that sanitizer allocator should not attempt to release memory to OS.
 const s32 kReleaseToOSIntervalNever = -1;
+
+void CheckNoDeepBind(const char *filename, int flag);
 
 }  // namespace __sanitizer
 

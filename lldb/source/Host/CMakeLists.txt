@@ -27,6 +27,7 @@ add_host_subdirectory(common
   common/OptionParser.cpp
   common/PipeBase.cpp
   common/ProcessRunLock.cpp
+  common/PseudoTerminal.cpp
   common/Socket.cpp
   common/SocketAddress.cpp
   common/SoftwareBreakpoint.cpp
@@ -34,7 +35,6 @@ add_host_subdirectory(common
   common/Symbols.cpp
   common/TCPSocket.cpp
   common/Terminal.cpp
-  common/ThisThread.cpp
   common/ThreadLauncher.cpp
   common/XML.cpp
   common/UDPSocket.cpp
@@ -55,6 +55,10 @@ add_host_subdirectory(posix
   posix/ConnectionFileDescriptorPosix.cpp
   )
 
+if(NOT LLDB_DISABLE_PYTHON)
+  list(APPEND LLDB_PLUGINS lldbPluginScriptInterpreterPython)
+endif()
+
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
   add_host_subdirectory(windows
     windows/ConnectionGenericFileWindows.cpp
@@ -68,7 +72,6 @@ if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     windows/PipeWindows.cpp
     windows/ProcessLauncherWindows.cpp
     windows/ProcessRunLock.cpp
-    windows/ThisThread.cpp
     windows/Windows.cpp
     )
 else()
@@ -86,6 +89,7 @@ else()
     posix/LockFilePosix.cpp
     posix/MainLoopPosix.cpp
     posix/PipePosix.cpp
+    posix/ProcessLauncherPosixFork.cpp
     )
 
   if (NOT (CMAKE_SYSTEM_NAME MATCHES "Android"))
@@ -101,7 +105,6 @@ else()
       macosx/HostInfoMacOSX.mm
       macosx/HostThreadMacOSX.mm
       macosx/Symbols.cpp
-      macosx/ThisThread.cpp
       macosx/cfcpp/CFCBundle.cpp
       macosx/cfcpp/CFCData.cpp
       macosx/cfcpp/CFCMutableArray.cpp
@@ -110,6 +113,7 @@ else()
       macosx/cfcpp/CFCString.cpp
       )
 
+
   elseif (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
     add_host_subdirectory(linux
       linux/AbstractSocket.cpp
@@ -117,9 +121,8 @@ else()
       linux/HostInfoLinux.cpp
       linux/HostThreadLinux.cpp
       linux/LibcGlue.cpp
-      linux/ProcessLauncherLinux.cpp
-      linux/ThisThread.cpp
       )
+    list(APPEND LLDB_PLUGINS lldbPluginProcessLinux)
     if (CMAKE_SYSTEM_NAME MATCHES "Android")
       add_host_subdirectory(android
         android/HostInfoAndroid.cpp
@@ -131,7 +134,6 @@ else()
       freebsd/Host.cpp
       freebsd/HostInfoFreeBSD.cpp
       freebsd/HostThreadFreeBSD.cpp
-      freebsd/ThisThread.cpp
       )
 
   elseif (CMAKE_SYSTEM_NAME MATCHES "NetBSD")
@@ -139,7 +141,6 @@ else()
       netbsd/Host.cpp
       netbsd/HostInfoNetBSD.cpp
       netbsd/HostThreadNetBSD.cpp
-      netbsd/ThisThread.cpp
       )
   endif()
 endif()
@@ -157,8 +158,22 @@ if (${get_python_libdir})
   endif()
 endif()
 
-add_lldb_library(lldbHost ${HOST_SOURCES})
-
 if (CMAKE_SYSTEM_NAME MATCHES "NetBSD")
-target_link_libraries(lldbHost kvm)
+ set(EXTRA_LIBS kvm)
 endif ()
+
+add_lldb_library(lldbHost
+  ${HOST_SOURCES}
+  
+  LINK_LIBS
+    lldbCore
+    lldbInterpreter
+    lldbSymbol
+    lldbTarget
+    lldbUtility
+    ${LLDB_PLUGINS}
+    ${EXTRA_LIBS}
+  
+  LINK_COMPONENTS
+    Support
+  )

@@ -226,6 +226,24 @@ public:
   /// starting with the sources of divergence.
   bool isSourceOfDivergence(const Value *V) const;
 
+  /// Returns the address space ID for a target's 'flat' address space. Note
+  /// this is not necessarily the same as addrspace(0), which LLVM sometimes
+  /// refers to as the generic address space. The flat address space is a
+  /// generic address space that can be used access multiple segments of memory
+  /// with different address spaces. Access of a memory location through a
+  /// pointer with this address space is expected to be legal but slower
+  /// compared to the same memory location accessed through a pointer with a
+  /// different address space.
+  //
+  /// This is for for targets with different pointer representations which can
+  /// be converted with the addrspacecast instruction. If a pointer is converted
+  /// to this address space, optimizations should attempt to replace the access
+  /// with the source address space.
+  ///
+  /// \returns ~0u if the target does not have such a flat address space to
+  /// optimize away.
+  unsigned getFlatAddressSpace() const;
+
   /// \brief Test whether calls to a function lower to actual program function
   /// calls.
   ///
@@ -610,13 +628,19 @@ public:
   ///  ((v0+v2), (v1+v3), undef, undef)
   int getReductionCost(unsigned Opcode, Type *Ty, bool IsPairwiseForm) const;
 
-  /// \returns The cost of Intrinsic instructions. Types analysis only.
-  int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
-                            ArrayRef<Type *> Tys, FastMathFlags FMF) const;
-
   /// \returns The cost of Intrinsic instructions. Analyses the real arguments.
+  /// Three cases are handled: 1. scalar instruction 2. vector instruction
+  /// 3. scalar instruction which is to be vectorized with VF.
   int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
-                            ArrayRef<Value *> Args, FastMathFlags FMF) const;
+                            ArrayRef<Value *> Args, FastMathFlags FMF,
+                            unsigned VF = 1) const;
+
+  /// \returns The cost of Intrinsic instructions. Types analysis only.
+  /// If ScalarizationCostPassed is UINT_MAX, the cost of scalarizing the
+  /// arguments and the return value will be computed based on types.
+  int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
+                            ArrayRef<Type *> Tys, FastMathFlags FMF,
+                            unsigned ScalarizationCostPassed = UINT_MAX) const;
 
   /// \returns The cost of Call instructions.
   int getCallInstrCost(Function *F, Type *RetTy, ArrayRef<Type *> Tys) const;
@@ -725,6 +749,7 @@ public:
   virtual int getUserCost(const User *U) = 0;
   virtual bool hasBranchDivergence() = 0;
   virtual bool isSourceOfDivergence(const Value *V) = 0;
+  virtual unsigned getFlatAddressSpace() = 0;
   virtual bool isLoweredToCall(const Function *F) = 0;
   virtual void getUnrollingPreferences(Loop *L, UnrollingPreferences &UP) = 0;
   virtual bool isLegalAddImmediate(int64_t Imm) = 0;
@@ -809,11 +834,10 @@ public:
   virtual int getReductionCost(unsigned Opcode, Type *Ty,
                                bool IsPairwiseForm) = 0;
   virtual int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
-                                    ArrayRef<Type *> Tys,
-                                    FastMathFlags FMF) = 0;
+                      ArrayRef<Type *> Tys, FastMathFlags FMF,
+                      unsigned ScalarizationCostPassed) = 0;
   virtual int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
-                                    ArrayRef<Value *> Args,
-                                    FastMathFlags FMF) = 0;
+         ArrayRef<Value *> Args, FastMathFlags FMF, unsigned VF) = 0;
   virtual int getCallInstrCost(Function *F, Type *RetTy,
                                ArrayRef<Type *> Tys) = 0;
   virtual unsigned getNumberOfParts(Type *Tp) = 0;
@@ -888,6 +912,11 @@ public:
   bool isSourceOfDivergence(const Value *V) override {
     return Impl.isSourceOfDivergence(V);
   }
+
+  unsigned getFlatAddressSpace() override {
+    return Impl.getFlatAddressSpace();
+  }
+
   bool isLoweredToCall(const Function *F) override {
     return Impl.isLoweredToCall(F);
   }
@@ -1062,13 +1091,13 @@ public:
     return Impl.getReductionCost(Opcode, Ty, IsPairwiseForm);
   }
   int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy, ArrayRef<Type *> Tys,
-                            FastMathFlags FMF) override {
-    return Impl.getIntrinsicInstrCost(ID, RetTy, Tys, FMF);
+               FastMathFlags FMF, unsigned ScalarizationCostPassed) override {
+    return Impl.getIntrinsicInstrCost(ID, RetTy, Tys, FMF,
+                                      ScalarizationCostPassed);
   }
   int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
-                            ArrayRef<Value *> Args,
-                            FastMathFlags FMF) override {
-    return Impl.getIntrinsicInstrCost(ID, RetTy, Args, FMF);
+       ArrayRef<Value *> Args, FastMathFlags FMF, unsigned VF) override {
+    return Impl.getIntrinsicInstrCost(ID, RetTy, Args, FMF, VF);
   }
   int getCallInstrCost(Function *F, Type *RetTy,
                        ArrayRef<Type *> Tys) override {

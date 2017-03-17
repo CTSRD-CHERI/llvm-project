@@ -161,7 +161,7 @@ define void @f4() {
 entry:
   %i = alloca i32, align 4
   %tmp = bitcast i32* %i to i8*
-  call void @llvm.lifetime.start(i64 4, i8* %tmp)
+  call void @llvm.lifetime.start.p0i8(i64 4, i8* %tmp)
   br label %for.cond
 
 for.cond:
@@ -174,5 +174,5 @@ for.end:
   ret void
 }
 
-declare void @llvm.lifetime.start(i64, i8* nocapture)
+declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture)
 

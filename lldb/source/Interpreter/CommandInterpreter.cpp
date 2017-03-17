@@ -42,12 +42,12 @@
 #include "../Commands/CommandObjectWatchpoint.h"
 
 #include "lldb/Core/Debugger.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/State.h"
-#include "lldb/Core/Stream.h"
 #include "lldb/Core/StreamFile.h"
 #include "lldb/Core/Timer.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/Stream.h"
 
 #ifndef LLDB_DISABLE_LIBEDIT
 #include "lldb/Host/Editline.h"
@@ -2018,8 +2018,8 @@ void CommandInterpreter::BuildAliasCommandArgs(CommandObject *alias_cmd_obj,
     }
 
     for (auto entry : llvm::enumerate(cmd_args.entries())) {
-      if (!used[entry.Index] && !wants_raw_input)
-        new_args.AppendArgument(entry.Value.ref);
+      if (!used[entry.index()] && !wants_raw_input)
+        new_args.AppendArgument(entry.value().ref);
     }
 
     cmd_args.Clear();
