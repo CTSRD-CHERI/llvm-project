@@ -820,6 +820,10 @@ static uint64_t getImageBase(opt::InputArgList &Args) {
 // is called. We use that class without calling commit() to predict
 // if the given file is writable.
 static bool isWritable(StringRef Path) {
+  if (Path == "-") {
+    error("Using stdout as the output file is not supported");
+    return false;
+  }
   if (auto EC = FileOutputBuffer::create(Path, 1).getError()) {
     error("cannot open output file " + Path + ": " + EC.message());
     return false;

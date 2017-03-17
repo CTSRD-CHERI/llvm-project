@@ -23,6 +23,10 @@
 # RUN: not ld.lld %t.o -o / 2>&1 | FileCheck %s -check-prefixes=ROOT
 # ROOT: error: cannot open output file /
 
+# We don't handle "-" as stdout and creating files named "-" is confusing
+# RUN: not ld.lld %t.o -o - 2>&1 | FileCheck %s -check-prefixes=STDOUT
+# STDOUT: error: cannot open output file /
+
   .globl _start
 _start:
   call undefined_symbol
