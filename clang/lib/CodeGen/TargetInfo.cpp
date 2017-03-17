@@ -6679,7 +6679,7 @@ public:
     return 200;
   }
   unsigned getStackAS() const override {
-    return getMemoryCapabilityAS();
+    return getDefaultAS();
   }
 };
 }
