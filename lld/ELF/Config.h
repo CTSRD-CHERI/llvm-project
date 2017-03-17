@@ -13,7 +13,6 @@
 #include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSet.h"
-#include "llvm/Support/CachePruning.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/ELF.h"
 
@@ -79,7 +78,6 @@ struct VersionDefinition {
 struct Configuration {
   InputFile *FirstElf = nullptr;
   uint8_t OSABI = 0;
-  llvm::CachePruningPolicy ThinLTOCachePolicy;
   llvm::StringMap<uint64_t> SectionStartMap;
   llvm::StringRef DynamicLinker;
   llvm::StringRef Entry;
