@@ -288,6 +288,15 @@ void TypePrinter::printBefore(const Type *T,Qualifiers Quals, raw_ostream &OS) {
 #include "clang/AST/TypeNodes.def"
   }
 
+  // Print __capability
+  if (const PointerType *PTy = dyn_cast<PointerType>(T)) {
+    if (PTy->isMemoryCapability()) {
+      OS << " __capability";
+      if (hasAfterQuals || !PrevPHIsEmpty.get())
+        OS << " ";
+    }
+  }
+
   if (hasAfterQuals) {
     if (NeedARCStrongQualifier) {
       IncludeStrongLifetimeRAII Strong(Policy);
@@ -338,13 +347,11 @@ void TypePrinter::printPointerBefore(const PointerType *T, raw_ostream &OS) {
   // FIXME: this should include vectors, but vectors use attributes I guess.
   if (isa<ArrayType>(PointeeTy))
     OS << '(';
-  if (const PointerType *PointeePtr = PointeeTy->getAs<PointerType>()) {
-    if (PointeePtr->isMemoryCapability())
-      OS << " ";
-  }
+  //if (const PointerType *PointeePtr = PointeeTy->getAs<PointerType>()) {
+  //  if (PointeePtr->isMemoryCapability())
+  //    OS << " ";
+  //}
   OS << '*';
-  if (T->isMemoryCapability())
-    OS << " __capability";
 }
 void TypePrinter::printPointerAfter(const PointerType *T, raw_ostream &OS) {
   IncludeStrongLifetimeRAII Strong(Policy);
@@ -1678,16 +1685,9 @@ void Qualifiers::print(raw_ostream &OS, const PrintingPolicy& Policy,
         OS << "__generic";
         break;
       default:
-        // FIXME: This shouldn't be 200.  We probably should reserve the
-        // capability AS in LangAS, as the clang address space doesn't have to
-        // be the same as the LLVM address space.
-        if (addrspace == 200) 
-          OS << "__capability";
-        else {
-          OS << "__attribute__((address_space(";
-          OS << addrspace;
-          OS << ")))";
-        }
+        OS << "__attribute__((address_space(";
+        OS << addrspace;
+        OS << ")))";
     }
   }
   if (Qualifiers::GC gc = getObjCGCAttr()) {
