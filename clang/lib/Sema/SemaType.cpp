@@ -6904,7 +6904,8 @@ static void HandleMemoryCapabilityAttr(QualType &CurType, TypeProcessingState &s
         // preserve existing qualifiers on CurType
         Qualifiers Qs = CurType.getQualifiers();
         CurType = S.Context.getPointerType(PT->getPointeeType(), ASTContext::PIK_Capability);
-        CurType = S.Context.getQualifiedType(CurType, Qs);
+        if (Qs.hasQualifiers())
+          CurType = S.Context.getQualifiedType(CurType, Qs);
         return;
       }
     }
