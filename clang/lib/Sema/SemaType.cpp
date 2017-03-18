@@ -6901,7 +6901,10 @@ static void HandleMemoryCapabilityAttr(QualType &CurType, TypeProcessingState &s
         isDeprecatedUse = false;
       }
       if (const PointerType *PT = CurType->getAs<PointerType>()) {
+        // preserve existing qualifiers on CurType
+        Qualifiers Qs = CurType.getQualifiers();
         CurType = S.Context.getPointerType(PT->getPointeeType(), ASTContext::PIK_Capability);
+        CurType = S.Context.getQualifiedType(CurType, Qs);
         return;
       }
     }
