@@ -347,10 +347,6 @@ void TypePrinter::printPointerBefore(const PointerType *T, raw_ostream &OS) {
   // FIXME: this should include vectors, but vectors use attributes I guess.
   if (isa<ArrayType>(PointeeTy))
     OS << '(';
-  //if (const PointerType *PointeePtr = PointeeTy->getAs<PointerType>()) {
-  //  if (PointeePtr->isMemoryCapability())
-  //    OS << " ";
-  //}
   OS << '*';
 }
 void TypePrinter::printPointerAfter(const PointerType *T, raw_ostream &OS) {
