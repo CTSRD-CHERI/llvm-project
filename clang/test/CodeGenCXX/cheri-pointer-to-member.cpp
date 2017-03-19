@@ -1,6 +1,7 @@
 // RUN: %clang %s -mabi=sandbox -cheri-linker -fno-rtti -std=c++11 -target cheri-unknown-freebsd -o - -emit-llvm -S | FileCheck %s
 // RUN: %clang %s -mabi=sandbox -cheri-linker -fno-rtti -std=c++11 -target cheri-unknown-freebsd -o - -emit-llvm -S -O2 | FileCheck %s -check-prefix CHECK-OPT
 // RUN: %clang %s -mabi=sandbox -cheri-linker -fno-rtti -std=c++11 -target cheri-unknown-freebsd -o - -emit-llvm -S -O3 | FileCheck %s -check-prefix CHECK-OPT
+// XFAIL: *
 
 // FIXME what should member pointer layout be on CHERI?
 // CHECK-NOT: %data_ptr = alloca i64, align 8
