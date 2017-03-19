@@ -6,7 +6,7 @@ const char * collatenames[] = { "A" };
 
 template <size_t _Np>
 const char** begin(const char * (&__array)[_Np]) {
-  // CHECK: FunctionDecl {{.*}} {{.*}} {{.*}} used begin 'const char * __capability * __capability(const char * __capability(&)[1])'
+  // CHECK: FunctionDecl {{.*}} {{.*}} {{.*}} used begin 'const char * __capability * __capability (const char * __capability (&)[1])'
   return __array;
 }
 
