@@ -130,6 +130,22 @@ class FreeBSDLocalTI(DefaultTargetInfo):
         flags += ['-lc', '-lm', '-lpthread', '-lgcc_s', '-lcxxrt']
 
 
+class CheriBSDRemoteTI(DefaultTargetInfo):
+    def __init__(self, full_config):
+        super(CheriBSDRemoteTI, self).__init__(full_config)
+
+    def add_cxx_link_flags(self, flags):
+        flags += ['-lc', '-lm', '-lpthread', '-lcompiler_rt', "-fuse-ld=lld", "-Wl,-melf64btsmip_cheri_fbsd",
+                  "-B" + self.full_config.get_lit_conf('sysroot') + "/../bin"]
+
+    def add_cxx_compile_flags(self, flags):
+        flags += ["-mabi=sandbox", "-mxgot", "-G0", "-msoft-float"]
+
+    # def configure_env(self, env): pass
+    # def allow_cxxabi_link(self): return True
+    # def add_sanitizer_features(self, sanitizer_type, features): pass
+    # def use_lit_shell_default(self): return False
+
 class LinuxLocalTI(DefaultTargetInfo):
     def __init__(self, full_config):
         super(LinuxLocalTI, self).__init__(full_config)
