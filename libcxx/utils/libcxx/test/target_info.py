@@ -135,11 +135,14 @@ class CheriBSDRemoteTI(DefaultTargetInfo):
         super(CheriBSDRemoteTI, self).__init__(full_config)
 
     def add_cxx_link_flags(self, flags):
-        flags += ['-lc', '-lm', '-lpthread', '-lcompiler_rt', "-fuse-ld=lld", "-Wl,-melf64btsmip_cheri_fbsd",
+        flags += ['-lc', '-lm', '-lpthread', '-lcompiler_rt', "-fuse-ld=lld",
+                  "-Wl,-melf64btsmip_cheri_fbsd", "-mabi=sandbox", "-static",
                   "-B" + self.full_config.get_lit_conf('sysroot') + "/../bin"]
 
     def add_cxx_compile_flags(self, flags):
-        flags += ["-mabi=sandbox", "-mxgot", "-G0", "-msoft-float"]
+        # we currently only support static linking so we need to add _LIBCPP_BUILD_STATIC
+        flags += ["-mabi=sandbox", "-mxgot", "-G0", "-msoft-float",
+                  "-D_LIBCPP_BUILD_STATIC"]
 
     # def configure_env(self, env): pass
     # def allow_cxxabi_link(self): return True
