@@ -174,13 +174,14 @@ class RemoteExecutor(Executor):
 
 
 class SSHExecutor(RemoteExecutor):
-    def __init__(self, host, username=None):
+    def __init__(self, host, username=None, port=None):
         super(SSHExecutor, self).__init__()
 
         self.user_prefix = username + '@' if username else ''
         self.host = host
-        self.scp_command = 'scp'
-        self.ssh_command = 'ssh'
+        self.port = port
+        self.scp_command = ['scp'] if port is None else ['scp', '-P', str(port)]
+        self.ssh_command = ['ssh'] if port is None else ['ssh', '-p', str(port)]
 
         # TODO(jroelofs): switch this on some -super-verbose-debug config flag
         if False:
@@ -196,22 +197,22 @@ class SSHExecutor(RemoteExecutor):
         # Not sure how to do suffix on osx yet
         dir_arg = '-d' if is_dir else ''
         cmd = 'mktemp -q {} /tmp/libcxx.XXXXXXXXXX'.format(dir_arg)
-        temp_path, err, exitCode = self._execute_command_remote([cmd])
+        full_cmd, temp_path, err, exitCode = self._execute_command_remote([cmd])
         temp_path = temp_path.strip()
         if exitCode != 0:
             raise RuntimeError(err)
         return temp_path
 
     def _copy_in_file(self, src, dst):
-        scp = self.scp_command
         remote = self.host
         remote = self.user_prefix + remote
-        cmd = [scp, '-p', src, remote + ':' + dst]
+        cmd = self.scp_command + ['-p', src, remote + ':' + dst]
         self.local_run(cmd)
 
     def _execute_command_remote(self, cmd, remote_work_dir='.', env=None):
         remote = self.user_prefix + self.host
-        ssh_cmd = [self.ssh_command, '-oBatchMode=yes', remote]
+        ssh_cmd = self.ssh_command + ['-oBatchMode=yes', remote]
+        # FIXME: doesn't handle spaces... and Py2.7 doesn't have shlex.quote()
         if env:
             env_cmd = ['env'] + ['%s=%s' % (k, v) for k, v in env.items()]
         else:
@@ -219,4 +220,5 @@ class SSHExecutor(RemoteExecutor):
         remote_cmd = ' '.join(env_cmd + cmd)
         if remote_work_dir != '.':
             remote_cmd = 'cd ' + remote_work_dir + ' && ' + remote_cmd
-        return self.local_run(ssh_cmd + [remote_cmd])
+        out, err, rc = self.local_run(ssh_cmd + [remote_cmd])
+        return (remote_cmd, out, err, rc)
