@@ -137,7 +137,7 @@ endif()
 
 # Use a static copy of the ABI library when linking libc++. This option
 # cannot be used with LIBCXX_ENABLE_ABI_LINKER_SCRIPT.
-option(LIBCXX_ENABLE_STATIC_ABI_LIBRARY "Statically link the ABI library" OFF)
+option(LIBCXX_ENABLE_STATIC_ABI_LIBRARY "Statically link the ABI library" ON)
 
 # Generate and install a linker script inplace of libc++.so. The linker script
 # will link libc++ to the correct ABI library. This option is on by default
