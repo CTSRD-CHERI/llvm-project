@@ -15,7 +15,7 @@ IntptrStruct set_int() {
   p.intptr = 0;
   return p;
   // CHECK: define inreg { i8 addrspace(200)* } @set_int() local_unnamed_addr #0 {
-  // CHECK: %0 = tail call i8 addrspace(200)* @llvm.memcap.cap.offset.set(i8 addrspace(200)* null, i64 0)
+  // CHECK: %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 0)
   // CHECK: %.fca.0.insert = insertvalue { i8 addrspace(200)* } undef, i8 addrspace(200)* %0, 0
   // CHECK: ret { i8 addrspace(200)* } %.fca.0.insert
   // ASM-LABEL: set_int
