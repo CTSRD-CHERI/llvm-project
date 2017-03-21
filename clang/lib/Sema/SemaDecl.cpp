@@ -14951,6 +14951,14 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
 
   if (Attr)
     ProcessDeclAttributeList(S, Record, Attr);
+
+  if (Record->hasAttr<PackedAttr>())
+    for (const auto *F : Record->fields()) {
+      auto FTy = F->getType();
+      if (FTy->isMemoryCapabilityType(getASTContext()))
+        if (getASTContext().getFieldOffset(F) % getASTContext().getTypeAlign(FTy))
+          Diag(F->getLocation(), diag::warn_packed_capability);
+    }
 }
 
 /// \brief Determine whether the given integral value is representable within
