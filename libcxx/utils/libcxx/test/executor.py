@@ -9,6 +9,7 @@
 
 import platform
 import os
+import errno
 
 from libcxx.test import tracing
 from libcxx.util import executeCommand
@@ -68,6 +69,45 @@ class LocalExecutor(Executor):
             else:
                 new_env[key] = value
         return new_env
+
+class CollectBinariesExecutor(Executor):
+    """Prefix an executor with some other command wrapper.
+
+    Most useful for setting ulimits on commands, or running an emulator like
+    qemu and valgrind.
+    """
+    def __init__(self, target_dir, config):
+        super(CollectBinariesExecutor, self).__init__()
+        self.config = config
+        self.target_dir = target_dir
+
+    def run(self, exe_path, cmd=None, work_dir='.', file_deps=None, env=None):
+        # import pprint
+        # pprint.pprint(vars(self))
+        # pprint.pprint(vars(self.config))
+        # pprint.pprint(vars(self.config.lit_config))
+        # pprint.pprint(vars(self.config.config))
+        # print "exe_path=", exe_path, "cmd=", cmd, "cwd=", work_dir, "file_deps=", file_deps, "env=", env
+        if env is not None:
+            return cmd, str(env), 'Cannot handle env yet', 7
+        if file_deps:
+            return cmd, str(file_deps), 'Cannot handle file_deps yet', 7
+        if cmd is not None and cmd != [exe_path]:
+            return cmd, cmd, 'Cannot handle extra cmd args yet', 7
+        assert exe_path.startswith(self.config.config.test_exec_root)
+        suffix = os.path.relpath(exe_path, self.config.config.test_exec_root)
+        target = os.path.join(self.target_dir, suffix)
+        if not os.path.isdir(os.path.dirname(target)):
+            try:
+                os.makedirs(os.path.dirname(target))
+            except OSError as e:
+                if e.errno == errno.EEXIST:
+                    pass  # concurrent TOCTOU
+                else:
+                    raise
+        cp_cmd = ["cp", "-f", exe_path, target]
+        out, err, rc = executeCommand(cp_cmd)
+        return cp_cmd, out, err, rc
 
 class PrefixExecutor(Executor):
     """Prefix an executor with some other command wrapper.
