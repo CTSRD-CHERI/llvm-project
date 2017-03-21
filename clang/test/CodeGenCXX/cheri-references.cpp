@@ -12,7 +12,7 @@ void f() {
   // CHECK-NEXT: store %class.A addrspace(200)* %a1, %class.A addrspace(200)* addrspace(200)* %a2, align 32
   bool b = &a2 == (A*)0x1234567;
   // CHECK-NEXT: %0 = load %class.A addrspace(200)*, %class.A addrspace(200)* addrspace(200)* %a2, align 32
-  // CHECK-NEXT: %1 = call i8 addrspace(200)* @llvm.memcap.cap.offset.set(i8 addrspace(200)* null, i64 19088743)
+  // CHECK-NEXT: %1 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 19088743)
   // CHECK-NEXT: %2 = bitcast i8 addrspace(200)* %1 to %class.A addrspace(200)*
   // CHECK-NEXT: %cmp = icmp eq %class.A addrspace(200)* %0, %2
   // CHECK-NEXT: %frombool = zext i1 %cmp to i8

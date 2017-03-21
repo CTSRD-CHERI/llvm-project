@@ -2103,11 +2103,11 @@ static llvm::Value *FunctionAddressToCapability(CodeGenFunction &CGF, llvm::Valu
     *Addr) {
   llvm::Value *V = CGF.Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
   llvm::Value *PCC = CGF.Builder.CreateCall(
-          CGF.CGM.getIntrinsic(llvm::Intrinsic::memcap_pcc_get), {});
+          CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_pcc_get), {});
   if (auto *F = dyn_cast<llvm::Function>(Addr->stripPointerCasts()))
     if (F->hasWeakLinkage() || F->hasExternalWeakLinkage())
       return CGF.Builder.CreateCall(
-        CGF.CGM.getIntrinsic(llvm::Intrinsic::memcap_cap_from_pointer),
+        CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_from_pointer),
         {PCC, V});
   return CGF.setPointerOffset(PCC, V);
 }

@@ -1059,7 +1059,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     TheCall->setType(Context.VoidPtrTy);
     break;
   // Memory capability functions
-  case Builtin::BI__builtin_memcap_callback_create:
+  case Builtin::BI__builtin_cheri_callback_create:
     return SemaBuiltinMemcapCreate(*this, TheCall);
   // OpenCL v2.0, s6.13.16 - Pipe functions
   case Builtin::BIread_pipe:

@@ -46,9 +46,9 @@ int c5(__capability void* x, __capability void* y)
 // CHECK: ca1
 int ca1(__capability void* x, __capability void* y)
 {
-  // CHECK: @llvm.memcap.cap.offset.get(i8 addrspace(200)*
+  // CHECK: @llvm.cheri.cap.offset.get(i8 addrspace(200)*
   __intcap_t a = (__intcap_t)x;
-  // CHECK: @llvm.memcap.cap.offset.get(i8 addrspace(200)*
+  // CHECK: @llvm.cheri.cap.offset.get(i8 addrspace(200)*
   __intcap_t b = (__intcap_t)y;
   // CHECK: sub
   return a - b;
@@ -57,9 +57,9 @@ int ca1(__capability void* x, __capability void* y)
 // CHECK: ca2
 int ca2(__capability void* x, __capability void* y)
 {
-  // CHECK: @llvm.memcap.cap.offset.get(i8 addrspace(200)*
+  // CHECK: @llvm.cheri.cap.offset.get(i8 addrspace(200)*
   __intcap_t a = (__intcap_t)x;
-  // CHECK: @llvm.memcap.cap.offset.get(i8 addrspace(200)*
+  // CHECK: @llvm.cheri.cap.offset.get(i8 addrspace(200)*
   __intcap_t b = (__intcap_t)y;
   // CHECK: add
   return a + b;
@@ -68,9 +68,9 @@ int ca2(__capability void* x, __capability void* y)
 // CHECK: ca3
 int ca3(__capability void* x, __capability void* y)
 {
-  // CHECK: @llvm.memcap.cap.offset.get(i8 addrspace(200)*
+  // CHECK: @llvm.cheri.cap.offset.get(i8 addrspace(200)*
   __intcap_t a = (__intcap_t)x;
-  // CHECK: @llvm.memcap.cap.offset.get(i8 addrspace(200)*
+  // CHECK: @llvm.cheri.cap.offset.get(i8 addrspace(200)*
   __intcap_t b = (__intcap_t)y;
   // CHECK: mul
   return a * b;
@@ -79,9 +79,9 @@ int ca3(__capability void* x, __capability void* y)
 // CHECK: ca4
 int ca4(__capability void* x, __capability void* y)
 {
-  // CHECK: @llvm.memcap.cap.offset.get(i8 addrspace(200)*
+  // CHECK: @llvm.cheri.cap.offset.get(i8 addrspace(200)*
   __intcap_t a = (__intcap_t)x;
-  // CHECK: @llvm.memcap.cap.offset.get(i8 addrspace(200)*
+  // CHECK: @llvm.cheri.cap.offset.get(i8 addrspace(200)*
   __intcap_t b = (__intcap_t)y;
   // CHECK: sdiv
   return a / b;
@@ -131,7 +131,7 @@ __uintcap_t xor(__uintcap_t f)
 int capdiff(__capability int *a, __capability int *b)
 {
   // CHECK: @capdiff(i32 addrspace(200)*{{.*}}, i32 addrspace(200)*{{.*}}) #0 {
-  // CHECK: call i64 @llvm.memcap.cap.diff(i8 addrspace(200)*
+  // CHECK: call i64 @llvm.cheri.cap.diff(i8 addrspace(200)*
   // CHECK: %{{.*}} = trunc i64 %{{.*}} to i32
   return a-b;
 }
@@ -139,13 +139,13 @@ int capdiff(__capability int *a, __capability int *b)
 // CHECK: negativeint
 void negativeint()
 {
-  // CHECK: @llvm.memcap.cap.offset.set(i8 addrspace(200)* null, i64 -5)
+  // CHECK: @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 -5)
   __intcap_t minus = -5;
 }
 
 // CHECK: largeint
 void largeint()
 {
-  // CHECK: @llvm.memcap.cap.offset.set(i8 addrspace(200)* null, i64 4294967295)
+  // CHECK: @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 4294967295)
   __uintcap_t large = 4294967295; // 2^32 - 1
 }

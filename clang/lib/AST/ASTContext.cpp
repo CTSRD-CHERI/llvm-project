@@ -3545,12 +3545,12 @@ ASTContext::getTypedefType(const TypedefNameDecl *Decl,
     Canonical = getCanonicalType(Decl->getUnderlyingType());
   if (IsMemCap) {
     if (const PointerType *PT = Canonical->getAs<PointerType>()) {
-      // Create a copy of the typedef whose name is prefixed by "__memcap_" and
+      // Create a copy of the typedef whose name is prefixed by "__cheri_" and
       // whose underlying type is the memory_capability qualified version of
       // the pointer type
       Canonical = getPointerType(PT->getPointeeType(), ASTContext::PIK_Capability);
       TypeSourceInfo *TInfo = getTrivialTypeSourceInfo(Canonical, Decl->getLocStart());
-      std::string typedefName = "__memcap_" + Decl->getNameAsString();
+      std::string typedefName = "__cheri_" + Decl->getNameAsString();
       TypedefDecl *NewDecl = TypedefDecl::Create(
           const_cast<ASTContext &>(*this),
           const_cast<DeclContext *>(Decl->getDeclContext()),

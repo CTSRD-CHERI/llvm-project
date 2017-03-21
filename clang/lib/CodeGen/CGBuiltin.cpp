@@ -2324,7 +2324,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
       return RValue::get(llvm::ConstantExpr::getBitCast(GV, CGM.Int8PtrTy));
     break;
   }
-  case Builtin::BI__builtin_memcap_callback_create: {
+  case Builtin::BI__builtin_cheri_callback_create: {
     StringRef ClassName = cast<StringLiteral>(E->getArg(0))->getString();
     auto Fn = cast<DeclRefExpr>(E->getArg(2));
     StringRef FunctionName = cast<NamedDecl>(Fn->getDecl())->getName().str();
@@ -8044,7 +8044,7 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
 
 Value *CodeGenFunction::EmitMIPSBuiltinExpr(unsigned BuiltinID,
                                             const CallExpr *E) {
-  if (BuiltinID == Builtin::BI__builtin_memcap_callback_create) {
+  if (BuiltinID == Builtin::BI__builtin_cheri_callback_create) {
     StringRef ClassName = cast<StringLiteral>(E->getArg(0))->getString();
     auto Fn = cast<DeclRefExpr>(E->getArg(2));
     StringRef FunctionName = cast<NamedDecl>(Fn->getDecl())->getName().str();

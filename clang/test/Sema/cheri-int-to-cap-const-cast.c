@@ -8,5 +8,5 @@ void * __capability y =  (void * __capability)-1;
 // This is in Sema, but let's also test the codegen here:
 // CHECK:  store i8 addrspace(200)* null, i8 addrspace(200)* addrspace(200)* @x, align 32
 
-// CHECK:      %0 = call i8 addrspace(200)* @llvm.memcap.cap.offset.set(i8 addrspace(200)* null, i64 -1)
+// CHECK:      %0 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 -1)
 // CHECK-NEXT: store i8 addrspace(200)* %0, i8 addrspace(200)* addrspace(200)* @y, align 32

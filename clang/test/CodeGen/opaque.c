@@ -22,9 +22,9 @@ foo_c newFoo(void)
 {
 	foo_c foo = (foo_c)calloc(1,sizeof(struct foo));
 	// Check that the result is sealed
-	// CHECK: llvm.memcap.bounds.set
-	// CHECK: llvm.memcap.seal
-	return __builtin_memcap_bounds_set(foo, sizeof(struct foo));
+	// CHECK: llvm.cheri.bounds.set
+	// CHECK: llvm.cheri.seal
+	return __builtin_cheri_bounds_set(foo, sizeof(struct foo));
 }
 // CHECK: newFoo_c
 foo_t newFoo_c(void)
@@ -42,14 +42,14 @@ int getA(foo_t foo)
 // CHECK: getA_c
 int getA_c(foo_c foo)
 {
-	// CHECK: llvm.memcap.unseal
+	// CHECK: llvm.cheri.unseal
 	return foo->a;
 }
 
 // CHECK: internal_call
 int internal_call(void)
 {
-	// CHECK: llvm.memcap.unseal
+	// CHECK: llvm.cheri.unseal
 	return newFoo()->a;
 }
 // CHECK: internal_call2
