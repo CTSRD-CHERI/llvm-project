@@ -6964,8 +6964,18 @@ ABIArgInfo MipsABIInfo::classifyReturnType(QualType RetTy) const {
         ArgInfo.setInReg(true);
         return ArgInfo;
       }
+    } else if (getTarget().SupportsCapabilities() &&
+               Size <= getTarget().getMemoryCapabilityWidth()) {
+      // On CHERI, we can return unions containing capabilities or
+      // structs containing only one capability directly
+      const RecordType *RT = RetTy->getAs<RecordType>();
+      if (RT && containsCapabilities(getContext(), RT->getDecl())) {
+        ABIArgInfo ArgInfo =
+            ABIArgInfo::getDirect(returnAggregateInRegs(RetTy, Size));
+        ArgInfo.setInReg(true);
+        return ArgInfo;
+      }
     }
-
     return getNaturalAlignIndirect(RetTy);
   }
 
