@@ -2099,14 +2099,39 @@ static LValue EmitGlobalVarDeclLValue(CodeGenFunction &CGF,
   return LV;
 }
 
-static llvm::Constant *EmitFunctionDeclPointer(CodeGenModule &CGM,
+static llvm::Value *FunctionAddressToCapability(CodeGenFunction &CGF, llvm::Value
+    *Addr) {
+  llvm::Value *V = CGF.Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
+  llvm::Value *PCC = CGF.Builder.CreateCall(
+          CGF.CGM.getIntrinsic(llvm::Intrinsic::memcap_pcc_get), {});
+  if (auto *F = dyn_cast<llvm::Function>(Addr->stripPointerCasts()))
+    if (F->hasWeakLinkage() || F->hasExternalWeakLinkage())
+      return CGF.Builder.CreateCall(
+        CGF.CGM.getIntrinsic(llvm::Intrinsic::memcap_cap_from_pointer),
+        {PCC, V});
+  return CGF.setPointerOffset(PCC, V);
+}
+
+static llvm::Value *EmitFunctionDeclPointer(CodeGenFunction &CGF,
                                                const FunctionDecl *FD) {
+  CodeGenModule &CGM = CGF.CGM;
   if (FD->hasAttr<WeakRefAttr>()) {
     ConstantAddress aliasee = CGM.GetWeakRefReference(FD);
     return aliasee.getPointer();
   }
 
-  llvm::Constant *V = CGM.GetAddrOfFunction(FD);
+  llvm::Value *V = CGM.GetAddrOfFunction(FD);
+  auto &TI = CGF.getContext().getTargetInfo();
+  if (TI.areAllPointersCapabilities()) {
+    unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getMemoryCapabilityAS();
+    llvm::Type *VTy = V->getType();
+    if (VTy->getPointerAddressSpace() != CapAS) {
+      llvm::Type *CapTy = cast<llvm::PointerType>(VTy)
+        ->getElementType()->getPointerTo(CapAS);
+      V = FunctionAddressToCapability(CGF, V);
+      V = CGF.Builder.CreateBitCast(V, CapTy);
+    }
+  }
   if (!FD->hasPrototype()) {
     if (const FunctionProtoType *Proto =
             FD->getType()->getAs<FunctionProtoType>()) {
@@ -2116,7 +2141,7 @@ static llvm::Constant *EmitFunctionDeclPointer(CodeGenModule &CGM,
       QualType NoProtoType =
           CGM.getContext().getFunctionNoProtoType(Proto->getReturnType());
       NoProtoType = CGM.getContext().getPointerType(NoProtoType);
-      V = llvm::ConstantExpr::getBitCast(V,
+      V = CGF.Builder.CreateBitCast(V, 
                                       CGM.getTypes().ConvertType(NoProtoType));
     }
   }
@@ -2125,7 +2150,7 @@ static llvm::Constant *EmitFunctionDeclPointer(CodeGenModule &CGM,
 
 static LValue EmitFunctionDeclLValue(CodeGenFunction &CGF,
                                      const Expr *E, const FunctionDecl *FD) {
-  llvm::Value *V = EmitFunctionDeclPointer(CGF.CGM, FD);
+  llvm::Value *V = EmitFunctionDeclPointer(CGF, FD);
   CharUnits Alignment = CGF.getContext().getDeclAlign(FD);
   return CGF.MakeAddrLValue(V, E->getType(), Alignment, AlignmentSource::Decl);
 }
@@ -3955,37 +3980,12 @@ RValue CodeGenFunction::EmitSimpleCallExpr(const CallExpr *E,
   return EmitCall(E->getCallee()->getType(), Callee, E, ReturnValue);
 }
 
-static llvm::Value *FunctionAddressToCapability(CodeGenFunction &CGF, llvm::Value
-    *Addr) {
-  llvm::Value *V = CGF.Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
-  llvm::Value *PCC = CGF.Builder.CreateCall(
-          CGF.CGM.getIntrinsic(llvm::Intrinsic::memcap_pcc_get), {});
-  if (auto *F = dyn_cast<llvm::Function>(Addr->stripPointerCasts()))
-    if (F->hasWeakLinkage() || F->hasExternalWeakLinkage())
-      return CGF.Builder.CreateCall(
-        CGF.CGM.getIntrinsic(llvm::Intrinsic::memcap_cap_from_pointer),
-        {PCC, V});
-  return CGF.setPointerOffset(PCC, V);
-}
-
 static CGCallee EmitDirectCallee(CodeGenFunction &CGF, const FunctionDecl *FD) {
   if (auto builtinID = FD->getBuiltinID()) {
     return CGCallee::forBuiltin(builtinID, FD);
   }
 
-  llvm::Value *calleePtr = EmitFunctionDeclPointer(CGF.CGM, FD);
-  llvm::Type *calleePtrTy = calleePtr->getType();
-  auto &TI = CGF.getContext().getTargetInfo();
-  if (TI.areAllPointersCapabilities()) {
-    unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getMemoryCapabilityAS();
-    if (calleePtrTy->getPointerAddressSpace() != CapAS) {
-      llvm::Type *CapTy = cast<llvm::PointerType>(calleePtrTy)
-        ->getElementType()->getPointerTo(CapAS);
-      calleePtr = FunctionAddressToCapability(CGF, calleePtr);
-      calleePtr = CGF.Builder.CreateBitCast(calleePtr, CapTy);
-    }
-  }
-
+  llvm::Value *calleePtr = EmitFunctionDeclPointer(CGF, FD);
   return CGCallee(FD, calleePtr);
 }
 
