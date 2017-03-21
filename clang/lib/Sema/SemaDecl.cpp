@@ -14952,13 +14952,34 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
   if (Attr)
     ProcessDeclAttributeList(S, Record, Attr);
 
-  if (Record->hasAttr<PackedAttr>())
+
+  if (Record->hasAttr<PackedAttr>()) {
+    std::function<bool(const RecordDecl *R)> contains_capabilities =
+      [&](const RecordDecl *R) {
+        for (const auto *F : R->fields()) {
+          auto FTy = F->getType();
+          if (FTy->isMemoryCapabilityType(getASTContext()))
+            return true;
+          if (FTy->isRecordType() &&
+              contains_capabilities(FTy->getAs<RecordType>()->getDecl()))
+            return true;
+        }
+        return false;
+      };
     for (const auto *F : Record->fields()) {
       auto FTy = F->getType();
-      if (FTy->isMemoryCapabilityType(getASTContext()))
-        if (getASTContext().getFieldOffset(F) % getASTContext().getTypeAlign(FTy))
+      if (FTy->isMemoryCapabilityType(getASTContext())) {
+        if (getASTContext().getFieldOffset(F) %
+            getASTContext().getTypeAlign(FTy))
           Diag(F->getLocation(), diag::warn_packed_capability);
+      } else if (FTy->isRecordType() &&
+                 contains_capabilities(FTy->getAs<RecordType>()->getDecl())) 
+        if (getASTContext().getFieldOffset(F) %
+            getASTContext().getTypeAlign(FTy))
+          Diag(F->getLocation(), diag::warn_packed_struct_capability);
     }
+  }
+
 }
 
 /// \brief Determine whether the given integral value is representable within

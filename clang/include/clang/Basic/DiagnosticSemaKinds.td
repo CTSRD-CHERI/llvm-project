@@ -5819,7 +5819,11 @@ def warn_mixed_capability_binop : Warning<
   "Provenance will be inherited from left-hand side">,
   InGroup<CHERICaps>;
 def warn_packed_capability : Warning<
-  "Capability field in packed structure will trap if accessed">,
+  "Under aligned capability field in packed structure will trap if accessed">,
+  InGroup<CHERICaps>;
+def warn_packed_struct_capability : Warning<
+  "Under aligned structure field in packed structure containing capabilities "
+  "will trap if capability field is accessed">,
   InGroup<CHERICaps>;
 def warn_capability_no_provenance : Warning<
   "cast from provenance-free integer type to pointer type will give pointer"
