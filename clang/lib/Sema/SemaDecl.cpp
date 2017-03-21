@@ -14966,17 +14966,30 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
         }
         return false;
       };
+    unsigned RecordAlign =
+        getASTContext().getTypeAlign(Record->getTypeForDecl());
+    auto diagnoseUnderalignedRecord = [&](const FieldDecl* F, unsigned Align) {
+      Diag(F->getLocation(), diag::warn_packed_capability_in_array);
+      Diag(Record->getSourceRange().getEnd(),
+           diag::note_insert_attribute_aligned) << Align / 8
+          << FixItHint::CreateInsertion(Record->getSourceRange().getEnd(),
+          ("__attribute__((aligned(" + Twine(Align / 8) + ")))").str());
+    };
     for (const auto *F : Record->fields()) {
       auto FTy = F->getType();
+      unsigned CapAlign = getASTContext().getTypeAlign(FTy);
       if (FTy->isMemoryCapabilityType(getASTContext())) {
-        if (getASTContext().getFieldOffset(F) %
-            getASTContext().getTypeAlign(FTy))
+        if (getASTContext().getFieldOffset(F) % CapAlign)
           Diag(F->getLocation(), diag::warn_packed_capability);
+        else if (RecordAlign % CapAlign)
+          diagnoseUnderalignedRecord(F, CapAlign);
       } else if (FTy->isRecordType() &&
-                 contains_capabilities(FTy->getAs<RecordType>()->getDecl())) 
-        if (getASTContext().getFieldOffset(F) %
-            getASTContext().getTypeAlign(FTy))
+                 contains_capabilities(FTy->getAs<RecordType>()->getDecl())) {
+        if (getASTContext().getFieldOffset(F) % CapAlign)
           Diag(F->getLocation(), diag::warn_packed_struct_capability);
+        else if (RecordAlign % CapAlign)
+          diagnoseUnderalignedRecord(F, CapAlign);
+      }
     }
   }
 

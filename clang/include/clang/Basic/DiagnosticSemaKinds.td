@@ -5825,6 +5825,12 @@ def warn_packed_struct_capability : Warning<
   "Under aligned structure field in packed structure containing capabilities "
   "will trap if capability field is accessed">,
   InGroup<CHERICaps>;
+def warn_packed_capability_in_array : Warning<
+  "Under aligned capability field in packed structure will trap if struct is "
+  "used in an array">,
+  InGroup<CHERICaps>;
+def note_insert_attribute_aligned : Note<
+  "Add __attribute__((aligned(%0))) to ensure sufficient alignment">;
 def warn_capability_no_provenance : Warning<
   "cast from provenance-free integer type to pointer type will give pointer"
   " that can not be dereferenced.  ">,
