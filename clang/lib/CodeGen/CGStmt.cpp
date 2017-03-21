@@ -1261,7 +1261,8 @@ void CodeGenFunction::EmitCaseStmt(const CaseStmt &S) {
   // SwitchInsn.getCondition()
   llvm::APSInt CaseIntVal = S.getLHS()->EvaluateKnownConstInt(getContext());
   if (S.getLHS()->getType()->isMemoryCapabilityType(getContext()))
-    CaseIntVal = CaseIntVal.trunc(64);  // XXXAR: will this always be correct???
+    if (CaseIntVal.getBitWidth() > 64)
+      CaseIntVal = CaseIntVal.trunc(64);  // XXXAR: will this always be correct???
   llvm::ConstantInt *CaseVal = Builder.getInt(CaseIntVal);
 
   // If the body of the case is just a 'break', try to not emit an empty block.
