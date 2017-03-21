@@ -7,6 +7,7 @@ char * buf;
 
 void asctime()
 {
-  // CHECK: call void addrspacecast (void (i8 addrspace(200)*)* @asctime_r to void (i8 addrspace(200)*) addrspace(200)*)(i8 addrspace(200)* null)
+  // CHECK: [[TMP:%[0-9]]] = call i8 addrspace(200)* @llvm.memcap.pcc.get()
+  // CHECK-NEXT: call i8 addrspace(200)* @llvm.memcap.cap.offset.set(i8 addrspace(200)* [[TMP]], i64 ptrtoint (void (i8 addrspace(200)*)* @asctime_r to i64))
   asctime_r(0);
 }
