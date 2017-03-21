@@ -45,7 +45,7 @@ public:
     auto *SetOffset = dyn_cast<IntrinsicInst>(Callee);
     if (!SetOffset)
       return;
-    if (SetOffset->getIntrinsicID() != llvm::Intrinsic::memcap_cap_offset_set)
+    if (SetOffset->getIntrinsicID() != llvm::Intrinsic::cheri_cap_offset_set)
       return;
     auto *PtrToInt = dyn_cast<PtrToIntOperator>(SetOffset->getOperand(1));
     if (!PtrToInt)
@@ -70,7 +70,7 @@ public:
 }
 
 char MemCapDirectCalls::ID = 0;
-INITIALIZE_PASS(MemCapDirectCalls, "memcap-direct-calls",
+INITIALIZE_PASS(MemCapDirectCalls, "cheri-direct-calls",
                 "Eliminate PCC-relative calls", false, false)
 
 Pass *llvm::createMemCapDirectCallsPass() { return new MemCapDirectCalls(); }

@@ -22,8 +22,8 @@ entry:
 ; Function Attrs: nounwind
 define i32 @main() local_unnamed_addr #0 {
 entry:
-%0 = tail call i8 addrspace(200)* @llvm.memcap.cap.offset.set(i8 addrspace(200)* null, i64 4835182878)
-%1 = tail call i8 addrspace(200)* @llvm.memcap.cap.offset.set(i8 addrspace(200)* null, i64 -1)
+%0 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 4835182878)
+%1 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 -1)
 %cmp = icmp ult i8 addrspace(200)* %0, %1
 br i1 %cmp, label %if.then, label %if.end
 
@@ -51,7 +51,7 @@ ret i32 %retval.0
 }
 
 ; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.memcap.cap.offset.set(i8 addrspace(200)*, i64) #1
+declare i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*, i64) #1
 
 ; Function Attrs: nounwind
 declare i32 @puts(i8 addrspace(200)* nocapture readonly) #2
