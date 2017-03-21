@@ -1996,7 +1996,8 @@ void ItaniumCXXABI::EmitGuardedInit(CodeGenFunction &CGF,
                              CGM.getDataLayout().getABITypeAlignment(guardTy));
     }
   }
-  llvm::PointerType *guardPtrTy = guardTy->getPointerTo();
+  llvm::PointerType *guardPtrTy = guardTy->getPointerTo(
+                                    CGM.getTargetCodeGenInfo().getDefaultAS());
 
   // Create the guard variable if we don't already have it (as we
   // might if we're double-emitting this function body).
@@ -2014,7 +2015,9 @@ void ItaniumCXXABI::EmitGuardedInit(CodeGenFunction &CGF,
     guard = new llvm::GlobalVariable(CGM.getModule(), guardTy,
                                      false, var->getLinkage(),
                                      llvm::ConstantInt::get(guardTy, 0),
-                                     guardName.str());
+                                     guardName.str(), nullptr,
+                                     llvm::GlobalVariable::NotThreadLocal,
+                                     CGM.getTargetCodeGenInfo().getDefaultAS());
     guard->setVisibility(var->getVisibility());
     // If the variable is thread-local, so is its guard variable.
     guard->setThreadLocalMode(var->getThreadLocalMode());
