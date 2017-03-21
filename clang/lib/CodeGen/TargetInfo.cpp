@@ -6914,7 +6914,7 @@ MipsABIInfo::returnAggregateInRegs(QualType RetTy, uint64_t Size) const {
     //
     // Any other composite results are returned in integer registers.
     //
-    if (FieldCnt && (FieldCnt <= 2) && !Layout.getFieldOffset(0)) {
+    if (FieldCnt && (FieldCnt <= 2) && Layout.getFieldOffset(0) == 0) {
       RecordDecl::field_iterator b = RD->field_begin(), e = RD->field_end();
       for (; b != e; ++b) {
         const BuiltinType *BT = b->getType()->getAs<BuiltinType>();
@@ -6932,9 +6932,11 @@ MipsABIInfo::returnAggregateInRegs(QualType RetTy, uint64_t Size) const {
       RTList.clear();
     }
   }
-
-  CoerceToIntArgs(Size, RTList);
-  return llvm::StructType::get(getVMContext(), RTList);
+  // TODO: if containscapabilities
+  // XXXAR: keeping old upstream code here in case I broke something
+  // CoerceToIntArgs(Size, RTList);
+  // return llvm::StructType::get(getVMContext(), RTList);
+  return HandleAggregates(RetTy, Size);
 }
 
 ABIArgInfo MipsABIInfo::classifyReturnType(QualType RetTy) const {
