@@ -2537,7 +2537,7 @@ bool ASTContext::shouldUseMemcap(PointerInterpretationKind PIK) const {
 /// getPointerType - Return the uniqued reference to the type for a pointer to
 /// the specified type.
 QualType ASTContext::getPointerType(QualType T, PointerInterpretationKind PIK) const {
-  bool isMemCap = shouldUseMemcap(PIK);
+  bool isMemCap = !isFunctionType() && shouldUseMemcap(PIK);
   // Unique pointers, to guarantee there is only one pointer of a particular
   // structure.
   llvm::FoldingSetNodeID ID;
