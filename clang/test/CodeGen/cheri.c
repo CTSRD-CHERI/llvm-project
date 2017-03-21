@@ -4,7 +4,7 @@
 // Remove the static from all of the function prototypes so that this really exists.
 #define static
 #define inline 
-#include <memcap.h>
+#include <cheri.h>
 
 // PTRS: define i32 @cheri_length_get(i8* nocapture readnone
 // PTRS: ret i32 -1
