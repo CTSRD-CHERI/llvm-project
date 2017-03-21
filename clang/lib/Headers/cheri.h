@@ -1,4 +1,4 @@
-/*===---- memcap.h - Header for memory capabilities -----------------------===*\
+/*===---- cheri.h - Header for CHERI capabilities -----------------------===*\
  *
  * Copyright (c) 2014 David Chisnall
  *
