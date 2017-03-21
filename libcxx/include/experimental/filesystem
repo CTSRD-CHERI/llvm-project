@@ -240,6 +240,12 @@
 
 _LIBCPP_BEGIN_NAMESPACE_EXPERIMENTAL_FILESYSTEM
 
+#ifdef __CHERI_PURE_CAPABILITY__
+// HACK: std::experimental::filesystem should really be using a 64 bit integer in CheriABI
+using intmax_t = ::int64_t;
+using uintmax_t = ::uint64_t;
+#endif
+
 typedef chrono::time_point<std::chrono::system_clock>  file_time_type;
 
 struct _LIBCPP_TYPE_VIS space_info
