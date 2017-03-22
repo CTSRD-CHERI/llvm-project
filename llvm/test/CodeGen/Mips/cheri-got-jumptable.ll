@@ -1,4 +1,4 @@
-; RUN: llc -mtriple cheri-unknown-freebsd -mxgot -target-abi sandbox -relocation-model pic -o - %s | FileCheck %s
+; RUN: llc -mtriple cheri-unknown-freebsd -mxgot -target-abi purecap -relocation-model pic -o - %s | FileCheck %s
 ; ModuleID = 'cheri-got-jumptable.c'
 source_filename = "cheri-got-jumptable.c"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"

@@ -1,4 +1,4 @@
-; RUN: llc -mtriple=cheri-unknown-freebsd  -target-abi sandbox -mcpu=cheri %s -o -
+; RUN: llc -mtriple=cheri-unknown-freebsd  -target-abi purecap -mcpu=cheri %s -o -
 ; ModuleID = 'bit.c'
 ; Test that we can correctly legalise i128 and generate pointer arithmetic that
 ; doesn't crash the compiler.
