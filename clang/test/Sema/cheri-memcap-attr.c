@@ -45,8 +45,8 @@ __capability int var1; // expected-error{{only applies to pointers}}
 #ifdef TYPEDEF
 // expected-no-diagnostics
 typedef int* intptr;
-__capability intptr x; // CHECK-TYPEDEF: x '__cheri_intptr':'int * __capability'
-__capability intptr *y; // CHECK-TYPEDEF: y '__cheri_intptr *'
+__capability intptr x; // CHECK-TYPEDEF: x '__memcap_intptr':'int * __capability'
+__capability intptr *y; // CHECK-TYPEDEF: y '__memcap_intptr *'
 #endif
 
 #ifdef LIST
