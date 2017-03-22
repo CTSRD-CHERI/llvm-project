@@ -14953,7 +14953,7 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
     ProcessDeclAttributeList(S, Record, Attr);
 
 
-  if (Record->hasAttr<PackedAttr>()) {
+  if (Record && Record->hasAttr<PackedAttr>()) {
     std::function<bool(const RecordDecl *R)> contains_capabilities =
       [&](const RecordDecl *R) {
         for (const auto *F : R->fields()) {
