@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -fno-rtti -std=c++11 -target-abi sandbox -emit-llvm -o - %s | FileCheck %s
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -fno-rtti -std=c++11 -target-abi sandbox -emit-llvm -o /dev/null \
+// RUN: %clang_cc1 -triple cheri-unknown-freebsd -fno-rtti -std=c++11 -target-abi purecap -emit-llvm -o - %s | FileCheck %s
+// RUN: %clang_cc1 -triple cheri-unknown-freebsd -fno-rtti -std=c++11 -target-abi purecap -emit-llvm -o /dev/null \
 // RUN:   -fdump-vtable-layouts -fdump-record-layouts %s 2>&1 | FileCheck -check-prefix=CHECK-VTABLE-LAYOUT %s
 
 

@@ -283,4 +283,9 @@ def warn_drv_ps4_sdk_dir : Warning<
 def err_drv_unsupported_linker : Error<"unsupported value '%0' for -linker option">;
 def err_drv_defsym_invalid_format : Error<"defsym must be of the form: sym=value: %0">;
 def err_drv_defsym_invalid_symval : Error<"Value is not an integer: %0">;
+
+def warn_cheri_sandbox_abi_is_purecap : Warning<
+  "CHERI ABI 'sandbox' is deprecated; use 'purecap' instead">,
+  InGroup<Deprecated>;
+
 }

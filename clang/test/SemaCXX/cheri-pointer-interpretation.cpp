@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 "-target-abi" "sandbox" -fsyntax-only -triple cheri-unknown-freebsd %s -std=c++11 -verify
+// RUN: %clang_cc1 "-target-abi" "purecap" -fsyntax-only -triple cheri-unknown-freebsd %s -std=c++11 -verify
 // expected-no-diagnostics
 
 struct foo_cap {
@@ -28,7 +28,7 @@ _Static_assert(sizeof(foo_cap) == 48, "Pointer size incorrect");
 _Static_assert(sizeof(int&) == 4, "Reference size incorrect");
 _Static_assert(sizeof(int&&) == 4, "Reference size incorrect");
 
-// RUN: %clang_cc1 "-target-abi" "sandbox" -fsyntax-only -triple cheri-unknown-freebsd %s -std=c++11 -ast-dump | FileCheck %s
+// RUN: %clang_cc1 "-target-abi" "purecap" -fsyntax-only -triple cheri-unknown-freebsd %s -std=c++11 -ast-dump | FileCheck %s
 
 // CHECK:     |-CXXRecordDecl {{.*}} <{{.*}}/cheri-pointer-interpretation.cpp:4:1, line:8:1> line:4:8 referenced struct foo_cap definition
 // CHECK-NEXT:| |-PackedAttr {{.*}} <line:8:18>

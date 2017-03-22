@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 %s -fsyntax-only -verify -triple cheri-unknown-freebsd -target-abi sandbox
+// RUN: %clang_cc1 %s -fsyntax-only -verify -triple cheri-unknown-freebsd -target-abi purecap
 // expected-no-diagnostics
 #define NULL (void*)0
 

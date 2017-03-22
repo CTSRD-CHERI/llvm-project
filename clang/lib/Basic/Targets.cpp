@@ -7501,9 +7501,9 @@ class MipsTargetInfo : public TargetInfo {
       llvm_unreachable("Invalid ABI");
 
     if (BigEndian)
-      resetDataLayout(("E-" + Layout + (SandboxABI ? "-A200" : "")).str());
+      resetDataLayout(("E-" + Layout + (CapabilityABI ? "-A200" : "")).str());
     else
-      resetDataLayout(("e-" + Layout + (SandboxABI ? "-A200" : "")).str());
+      resetDataLayout(("e-" + Layout + (CapabilityABI ? "-A200" : "")).str());
   }
 
 
@@ -7527,7 +7527,6 @@ protected:
   bool HasFP64;
   std::string ABI;
   bool IsCheri;
-  bool SandboxABI;
   int CapSize;
 
 public:
@@ -7536,7 +7535,7 @@ public:
         IsNan2008(false), IsSingleFloat(false), IsNoABICalls(false),
         CanUseBSDABICalls(false), FloatABI(HardFloat),
         DspRev(NoDSP), HasMSA(false), HasFP64(false),
-        IsCheri(getTriple().getArch() == llvm::Triple::cheri), SandboxABI(false),
+        IsCheri(getTriple().getArch() == llvm::Triple::cheri),
         CapSize(Cheri128 ? 128 : 256) {
     TheCXXABI.set(TargetCXXABI::GenericMIPS);
 
@@ -7602,9 +7601,9 @@ public:
       ABI = Name;
       return true;
     }
-    if (Name == "sandbox") {
-      setSandboxABITypes();
-      SandboxABI = CapabilityABI = true;
+    if (Name == "purecap") {
+      setCapabilityABITypes();
+      CapabilityABI = true;
       ABI = "n64";
       return true;
     }
@@ -7649,7 +7648,7 @@ public:
     SizeType = UnsignedLong;
   }
 
-  void setSandboxABITypes() {
+  void setCapabilityABITypes() {
     setN64ABITypes();
     IntPtrType = TargetInfo::SignedIntCap;
   }

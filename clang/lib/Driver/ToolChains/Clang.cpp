@@ -442,13 +442,13 @@ static void addExceptionArgs(const ArgList &Args, types::ID InputType,
         options::OPT_fcxx_exceptions, options::OPT_fno_cxx_exceptions,
         options::OPT_fexceptions, options::OPT_fno_exceptions);
 
-    bool IsCheriSandboxABI = false;
+    bool IsCheriPureCapABI = false;
     if (Triple.getArch() == llvm::Triple::cheri) {
       StringRef CPUName;
       StringRef ABIName;
       mips::getMipsCPUAndABI(Args, Triple, CPUName, ABIName);
-      if (ABIName == "sandbox") {
-        IsCheriSandboxABI = true;
+      if (ABIName == "purecap") {
+        IsCheriPureCapABI = true;
         CXXExceptionsEnabled = false;
       }
     }
@@ -458,7 +458,7 @@ static void addExceptionArgs(const ArgList &Args, types::ID InputType,
           ExceptionArg->getOption().matches(options::OPT_fexceptions);
 
     if (CXXExceptionsEnabled) {
-      if (Triple.isPS4CPU() || IsCheriSandboxABI) {
+      if (Triple.isPS4CPU() || IsCheriPureCapABI) {
         ToolChain::RTTIMode RTTIMode = TC.getRTTIMode();
         assert(ExceptionArg &&
                "On the PS4 exceptions should only be enabled if passing "

@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 %s "-target-abi" "sandbox" -emit-llvm -triple cheri-unknown-freebsd -o - -cheri-linker | FileCheck --check-prefix=CHECK-PURECAP %s
+// RUN: %clang_cc1 %s "-target-abi" "purecap" -emit-llvm -triple cheri-unknown-freebsd -o - -cheri-linker | FileCheck --check-prefix=CHECK-PURECAP %s
 // RUN: %clang_cc1 %s -emit-llvm -triple cheri-unknown-freebsd -o - -cheri-linker | FileCheck --check-prefix=CHECK-HYBRID %s
 
 

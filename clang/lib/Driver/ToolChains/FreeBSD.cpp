@@ -133,11 +133,11 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       (Args.hasArg(options::OPT_pie) || ToolChain.isPIEDefault());
   ArgStringList CmdArgs;
 
-  bool IsSandboxABI = false;
+  bool IsCheriPureCapABI = false;
   if (ToolChain.getArch() == llvm::Triple::cheri)
     if (Args.hasArg(options::OPT_mabi_EQ)) {
       auto A = Args.getLastArg(options::OPT_mabi_EQ);
-      IsSandboxABI = (StringRef(A->getValue()).lower() == "sandbox");
+      IsCheriPureCapABI = StringRef(A->getValue()).lower() == "purecap";
     }
 
   // Silence warning for "clang -g foo.o -o foo"
@@ -164,7 +164,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-Bshareable");
     } else {
       CmdArgs.push_back("-dynamic-linker");
-      if (IsSandboxABI)
+      if (IsCheriPureCapABI)
         CmdArgs.push_back("/libexec/ld-cheri-elf.so.1");
       else
         CmdArgs.push_back("/libexec/ld-elf.so.1");
@@ -204,7 +204,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   // The FreeBSD/MIPS version of GNU ld is horribly buggy and errors out
   // complaining about linking 32-bit and 64-bit code when linking CHERI code.
-  if (IsSandboxABI)
+  if (IsCheriPureCapABI)
     CmdArgs.push_back(Args.MakeArgString("--no-warn-mismatch"));
 
   if (Output.isFilename()) {
@@ -229,7 +229,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
     // Don't support .init and .fini sections for CheriABI.
     if (Arch != llvm::Triple::cheri ||
-        !tools::mips::hasMipsAbiArg(Args, "sandbox"))
+        !tools::mips::hasMipsAbiArg(Args, "purecap"))
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crti.o")));
 
     const char *crtbegin = nullptr;
@@ -322,7 +322,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
     // Don't support .init and .fini sections for CheriABI.
     if (Arch != llvm::Triple::cheri ||
-        !tools::mips::hasMipsAbiArg(Args, "sandbox"))
+        !tools::mips::hasMipsAbiArg(Args, "purecap"))
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtn.o")));
   }
 
@@ -354,7 +354,7 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple &Triple,
       D.getVFS().exists(getDriver().SysRoot + "/usr/lib32/crt1.o"))
     getFilePaths().push_back(getDriver().SysRoot + "/usr/lib32");
   else if (Triple.getArch() == llvm::Triple::cheri &&
-      tools::mips::hasMipsAbiArg(Args, "sandbox"))
+      tools::mips::hasMipsAbiArg(Args, "purecap"))
     getFilePaths().push_back(getDriver().SysRoot + "/usr/libcheri");
   else
     getFilePaths().push_back(getDriver().SysRoot + "/usr/lib");

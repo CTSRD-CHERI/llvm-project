@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -fno-rtti -std=c++14 -target-abi sandbox -fsyntax-only -fdump-record-layouts %s -emit-llvm -o /dev/null | FileCheck %s
+// RUN: %clang_cc1 -triple cheri-unknown-freebsd -fno-rtti -std=c++14 -target-abi purecap -fsyntax-only -fdump-record-layouts %s -emit-llvm -o /dev/null | FileCheck %s
 // CHECK:      *** Dumping AST Record Layout
 // CHECK-NEXT:         0 | class error_category
 // CHECK-NEXT:         0 |   (error_category vtable pointer)

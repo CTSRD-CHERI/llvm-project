@@ -155,9 +155,9 @@
 // RUN: %clang -target cheri-unknown-freebsd -### -c %s -mabi=n64 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI-ABI-N64 %s
 // CHERI-ABI-N64: "-target-abi" "n64"
-// RUN: %clang -target cheri-unknown-freebsd -### -c %s -mabi=sandbox 2>&1 \
+// RUN: %clang -target cheri-unknown-freebsd -### -c %s -mabi=purecap 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI-ABI-SANDBOX %s
-// CHERI-ABI-SANDBOX: "-target-abi" "sandbox"
+// CHERI-ABI-SANDBOX: "-target-abi" "purecap"
 // RUN: %clang -target cheri-unknown-freebsd -### -c %s 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI-ABI-NONE %s
 // CHERI-ABI-NONE: "-target-abi" "n64"

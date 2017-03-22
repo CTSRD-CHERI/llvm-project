@@ -1,7 +1,7 @@
-// RUN: %clang -target cheri-unknown-freebsd -mabi=sandbox -std=c11 -O2 -emit-llvm -S -o - %s | FileCheck %s
-// RUN: %clang -target cheri-unknown-freebsd -mabi=sandbox -std=c11 -O2 -emit-llvm -S -mcpu=cheri128 -mllvm -cheri128-test-mode -o - %s | FileCheck %s
-// RUN: %clang -target cheri-unknown-freebsd -mabi=sandbox -std=c11 -O2 -S -fomit-frame-pointer -o - %s | FileCheck -check-prefix=ASM %s
-// RUN: %clang -target cheri-unknown-freebsd -mabi=sandbox -std=c11 -O2 -S -fomit-frame-pointer -mcpu=cheri128 -mllvm -cheri128-test-mode -o - %s | FileCheck -check-prefix=ASM %s
+// RUN: %clang -target cheri-unknown-freebsd -mabi=purecap -std=c11 -O2 -emit-llvm -S -o - %s | FileCheck %s
+// RUN: %clang -target cheri-unknown-freebsd -mabi=purecap -std=c11 -O2 -emit-llvm -S -mcpu=cheri128 -mllvm -cheri128-test-mode -o - %s | FileCheck %s
+// RUN: %clang -target cheri-unknown-freebsd -mabi=purecap -std=c11 -O2 -S -fomit-frame-pointer -o - %s | FileCheck -check-prefix=ASM %s
+// RUN: %clang -target cheri-unknown-freebsd -mabi=purecap -std=c11 -O2 -S -fomit-frame-pointer -mcpu=cheri128 -mllvm -cheri128-test-mode -o - %s | FileCheck -check-prefix=ASM %s
 
 int global;
 

@@ -52,17 +52,15 @@ static ToolChain::RTTIMode CalculateRTTIMode(const ArgList &Args,
       return ToolChain::RM_DisabledExplicitly;
   }
 
-  bool IsCheriSandbox = false;
+  bool IsCheriPureCapABI = false;
   if (Triple.getArch() == Triple::cheri) {
     StringRef CPUName;
     StringRef ABIName;
     mips::getMipsCPUAndABI(Args, Triple, CPUName, ABIName);
-    if (ABIName == "sandbox") {
-      IsCheriSandbox = true;
-    }
+    IsCheriPureCapABI = ABIName == "purecap";
   }
   // -frtti is default, except for the PS4 CPU and CHERI with pure ABI.
-  if (!Triple.isPS4CPU() && !IsCheriSandbox) {
+  if (!Triple.isPS4CPU() && !IsCheriPureCapABI) {
     return ToolChain::RM_EnabledImplicitly;
   }
 

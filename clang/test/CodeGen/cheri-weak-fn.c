@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 %s "-target-abi" "sandbox" -emit-llvm -triple cheri-unknown-freebsd -o - 
+// RUN: %clang_cc1 %s "-target-abi" "purecap" -emit-llvm -triple cheri-unknown-freebsd -o - 
 __attribute__((weak))
 void fn();
 

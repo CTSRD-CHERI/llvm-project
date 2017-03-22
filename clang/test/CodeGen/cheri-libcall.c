@@ -1,4 +1,4 @@
-// RUN: %clang -target cheri-unknown-freebsd -mabi=sandbox -emit-llvm -S -o - %s | FileCheck %s
+// RUN: %clang -target cheri-unknown-freebsd -mabi=purecap -emit-llvm -S -o - %s | FileCheck %s
 
 int	 fprintf(char* __restrict, const char * __restrict, ...);
 

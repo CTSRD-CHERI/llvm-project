@@ -1,4 +1,4 @@
-// RUN: %clang -target cheri-unknown-freebsd -mabi=sandbox  %s -O2 -msoft-float -S -emit-llvm -o - | FileCheck %s
+// RUN: %clang -target cheri-unknown-freebsd -mabi=purecap  %s -O2 -msoft-float -S -emit-llvm -o - | FileCheck %s
 union u1 {
 	int x;
 	int *field;

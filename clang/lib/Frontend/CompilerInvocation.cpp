@@ -2000,9 +2000,9 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.SjLjExceptions = Args.hasArg(OPT_fsjlj_exceptions);
   Opts.ExternCNoUnwind = Args.hasArg(OPT_fexternc_nounwind);
   Opts.TraditionalCPP = Args.hasArg(OPT_traditional_cpp);
-  bool IsCheriSandbox = T.getArch() == llvm::Triple::cheri && TargetOpts.ABI == "sandbox";
+  bool IsCheriPureCapABI = T.getArch() == llvm::Triple::cheri && TargetOpts.ABI == "purecap";
   Opts.RTTI = Opts.CPlusPlus && !Args.hasArg(OPT_fno_rtti) &&
-    (!IsCheriSandbox || Opts.Exceptions || Args.hasArg(OPT_frtti));
+    (!IsCheriPureCapABI || Opts.Exceptions || Args.hasArg(OPT_frtti));
   Opts.RTTIData = Opts.RTTI && !Args.hasArg(OPT_fno_rtti_data);
   Opts.Blocks = Args.hasArg(OPT_fblocks) || (Opts.OpenCL
     && Opts.OpenCLVersion >= 200);
@@ -2466,6 +2466,13 @@ static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
   if (Opts.Triple.empty())
     Opts.Triple = llvm::sys::getDefaultTargetTriple();
   Opts.OpenCLExtensionsAsWritten = Args.getAllArgValues(OPT_cl_ext_EQ);
+
+  llvm::Triple T(Opts.Triple);
+  if (T.getArch() == llvm::Triple::cheri && Opts.ABI == "sandbox") {
+    // rename sandbox ABI to purecap ABI and output a deprecated warning
+    Opts.ABI = "purecap";
+    Diags.Report(diag::warn_cheri_sandbox_abi_is_purecap);
+  }
 }
 
 bool CompilerInvocation::CreateFromArgs(CompilerInvocation &Res,

@@ -1,8 +1,8 @@
-// RUN: %clang_cc1 -DNO_ARGS=1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s -target-abi sandbox
-// RUN: %clang_cc1 -DPTR_PTR=1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s -target-abi sandbox
-// RUN: %clang_cc1 -DCONST_PTR_PTR=1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s -target-abi sandbox
-// RUN: %clang_cc1 -DARR_PTR=1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s -target-abi sandbox
-// RUN: %clang_cc1 -DCONST_ARR_PTR=1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s -target-abi sandbox
+// RUN: %clang_cc1 -DNO_ARGS=1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s -target-abi purecap
+// RUN: %clang_cc1 -DPTR_PTR=1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s -target-abi purecap
+// RUN: %clang_cc1 -DCONST_PTR_PTR=1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s -target-abi purecap
+// RUN: %clang_cc1 -DARR_PTR=1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s -target-abi purecap
+// RUN: %clang_cc1 -DCONST_ARR_PTR=1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s -target-abi purecap
 
 // expected-no-diagnostics
 

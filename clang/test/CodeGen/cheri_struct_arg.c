@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 "-cc1" "-triple" "cheri-unknown-freebsd" "-emit-llvm" "-target-abi" "sandbox" "-o" "-" %s -O2 | FileCheck %s
+// RUN: %clang_cc1 "-cc1" "-triple" "cheri-unknown-freebsd" "-emit-llvm" "-target-abi" "purecap" "-o" "-" %s -O2 | FileCheck %s
 struct thingy {
 	unsigned long a;
 	unsigned int b[5];

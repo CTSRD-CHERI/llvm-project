@@ -1,4 +1,4 @@
-// RUN: %clang %s -mabi=sandbox -cheri-linker -target cheri-unknown-freebsd -o - -emit-llvm -S | FileCheck %s
+// RUN: %clang %s -mabi=purecap -cheri-linker -target cheri-unknown-freebsd -o - -emit-llvm -S | FileCheck %s
 struct foo
 {
 	void *a;

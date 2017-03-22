@@ -1,6 +1,6 @@
 // RUN: %clang_cc1 -fsyntax-only -verify %s -triple i386-pc-unknown
 // RUN: %clang_cc1 -fsyntax-only -verify %s -triple x86_64-apple-darwin9
-// RUN: %clang_cc1 -fsyntax-only -verify %s -triple cheri-unknown-freebsd -target-abi sandbox
+// RUN: %clang_cc1 -fsyntax-only -verify %s -triple cheri-unknown-freebsd -target-abi purecap
 // RUN: %clang_cc1 -fsyntax-only -fms-compatibility -DMS -verify %s -triple x86_64-pc-win32
 
 void f1(int a)

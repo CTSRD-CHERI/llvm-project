@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 "-target-abi" "sandbox" -fsyntax-only -triple cheri-unknown-freebsd %s -verify
+// RUN: %clang_cc1 "-target-abi" "purecap" -fsyntax-only -triple cheri-unknown-freebsd %s -verify
 // RUN: %clang_cc1 "-target-abi" "n64" -fsyntax-only -triple cheri-unknown-freebsd %s -verify
 
 // check that we reject usage of the __sync atomic builtins with capabilites
@@ -58,7 +58,7 @@ int uintptr() {
   __UINTPTR_TYPE__ result = 0;
   __UINTPTR_TYPE__ newval = (__UINTPTR_TYPE__)1;
 
-  // should be acceptable in hybrid ABI but cause errors in sandbox ABI
+  // should be acceptable in hybrid ABI but cause errors in pure capability ABI
   do_atomic_ops(&foo_uintptr, result, newval);
 #ifdef __CHERI_PURE_CAPABILITY__
   // expected-error@-2 16 {{the __sync_* atomic builtins only work with integers and not capability type '__uintcap_t'.}}

@@ -1,6 +1,6 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi sandbox -emit-llvm \
+// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm \
 // RUN:  -fdump-record-layouts -verify %s -o /dev/null
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi sandbox -emit-llvm \
+// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm \
 // RUN:  -fdump-record-layouts %s -o /dev/null 2>&1 | FileCheck %s
 // expected-no-diagnostics
 

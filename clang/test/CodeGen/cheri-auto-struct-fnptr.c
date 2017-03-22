@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 "-cc1" -cheri-linker "-triple" "cheri-unknown-freebsd" "-emit-llvm" "-target-abi" "sandbox" "-o" "-" %s | FileCheck %s
+// RUN: %clang_cc1 "-cc1" -cheri-linker "-triple" "cheri-unknown-freebsd" "-emit-llvm" "-target-abi" "purecap" "-o" "-" %s | FileCheck %s
 int nis_setgrent(void);
 typedef int (*nss_method)(void);
 typedef struct _ns_dtab {

@@ -127,7 +127,7 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
     CPUName = llvm::StringSwitch<const char *>(ABIName)
                   .Case("o32", DefMips32CPU)
                   .Cases("n32", "n64", DefMips64CPU)
-                  .Case("sandbox", CheriCPU)
+                  .Case("purecap", CheriCPU)
                   .Default("");
   }
 
@@ -200,8 +200,8 @@ void mips::getMIPSTargetFeatures(const Driver &D, const llvm::Triple &Triple,
   StringRef ABIName;
   getMipsCPUAndABI(Args, Triple, CPUName, ABIName);
   ABIName = getGnuCompatibleMipsABIName(ABIName);
-  if (ABIName == "sandbox" && Triple.getArch() != llvm::Triple::cheri)
-    D.Diag(diag::err_drv_argument_not_allowed_with) << "-mabi=sandbox"
+  if (ABIName == "purecap" && Triple.getArch() != llvm::Triple::cheri)
+    D.Diag(diag::err_drv_argument_not_allowed_with) << "-mabi=purecap"
       << Triple.str();
 
   // Historically, PIC code for MIPS was associated with -mabicalls, a.k.a
