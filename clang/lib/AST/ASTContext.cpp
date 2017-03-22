@@ -3550,7 +3550,7 @@ ASTContext::getTypedefType(const TypedefNameDecl *Decl,
       // the pointer type
       Canonical = getPointerType(PT->getPointeeType(), ASTContext::PIK_Capability);
       TypeSourceInfo *TInfo = getTrivialTypeSourceInfo(Canonical, Decl->getLocStart());
-      std::string typedefName = "__cheri_" + Decl->getNameAsString();
+      std::string typedefName = "__memcap_" + Decl->getNameAsString();
       TypedefDecl *NewDecl = TypedefDecl::Create(
           const_cast<ASTContext &>(*this),
           const_cast<DeclContext *>(Decl->getDeclContext()),
