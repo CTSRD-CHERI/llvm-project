@@ -1,4 +1,5 @@
-// RUN: %clang_cc1 -emit-llvm -std=c++11 -o - %s -triple x86_64-pc-linux-gnu | FileCheck %s
+// RUN: %clang_cc1 -emit-llvm -std=c++11 -o - %s -triple x86_64-pc-linux-gnu | FileCheck %s -check-prefixes=X86,BOTH
+// RUN: %clang_cc1 -emit-llvm -std=c++11 -o - %s -triple cheri-unknown-freebsd -target-abi purecap | FileCheck %s -check-prefixes=CHERI,BOTH
 
 struct A {
   A &operator=(A&&);
@@ -18,9 +19,13 @@ void test1() {
   b1 = static_cast<B&&>(b2);
 }
 
-// CHECK-LABEL: define {{.*}} @_ZN1BaSEOS_
-// CHECK: call {{.*}} @_ZN1AaSEOS_
-// CHECK-NOT: store
-// CHECK: call {{.*}}memcpy{{.*}}, i64 24
-// CHECK-NOT: store
-// CHECK: ret
+// X86-LABEL: define {{.*}} @_ZN1BaSEOS_
+// CHERI: define linkonce_odr dereferenceable(32) %struct.B addrspace(200)* @_ZN1BaSEOS_(%struct.B addrspace(200)* %this, %struct.B addrspace(200)* dereferenceable(32))
+// X86:   call dereferenceable(1) %struct.A* @_ZN1AaSEOS_(%struct.A* %a, %struct.A* dereferenceable(1) %a2)
+// CHERI: call dereferenceable(1) %struct.A addrspace(200)* @_ZN1AaSEOS_(%struct.A addrspace(200)* %a, %struct.A addrspace(200)* dereferenceable(1) %a2)
+// BOTH-NOT: store
+// X86:   call void @llvm.memcpy.p0i8.p0i8.i64(i8* %3, i8* %4, i64 24, i32 4, i1 false)
+// CHERI: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* %3, i8 addrspace(200)* %4, i64 24, i32 4, i1 false)
+// BOTH-NOT: store
+// X86:   ret %struct.B* %this1
+// CHERI: ret %struct.B addrspace(200)* %this1
