@@ -137,7 +137,8 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   if (ToolChain.getArch() == llvm::Triple::cheri)
     if (Args.hasArg(options::OPT_mabi_EQ)) {
       auto A = Args.getLastArg(options::OPT_mabi_EQ);
-      IsCheriPureCapABI = StringRef(A->getValue()).lower() == "purecap";
+      std::string Alower = StringRef(A->getValue()).lower();
+      IsCheriPureCapABI = Alower == "sandbox" || Alower == "purecap";
     }
 
   // Silence warning for "clang -g foo.o -o foo"
@@ -228,8 +229,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath(crt1)));
 
     // Don't support .init and .fini sections for CheriABI.
-    if (Arch != llvm::Triple::cheri ||
-        !tools::mips::hasMipsAbiArg(Args, "purecap"))
+    if (Arch != llvm::Triple::cheri || !IsCheriPureCapABI)
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crti.o")));
 
     const char *crtbegin = nullptr;
@@ -321,8 +321,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtend.o")));
 
     // Don't support .init and .fini sections for CheriABI.
-    if (Arch != llvm::Triple::cheri ||
-        !tools::mips::hasMipsAbiArg(Args, "purecap"))
+    if (Arch != llvm::Triple::cheri || !IsCheriPureCapABI)
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtn.o")));
   }
 
@@ -354,7 +353,8 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple &Triple,
       D.getVFS().exists(getDriver().SysRoot + "/usr/lib32/crt1.o"))
     getFilePaths().push_back(getDriver().SysRoot + "/usr/lib32");
   else if (Triple.getArch() == llvm::Triple::cheri &&
-      tools::mips::hasMipsAbiArg(Args, "purecap"))
+      (tools::mips::hasMipsAbiArg(Args, "purecap") ||
+       tools::mips::hasMipsAbiArg(Args, "sandbox")))
     getFilePaths().push_back(getDriver().SysRoot + "/usr/libcheri");
   else
     getFilePaths().push_back(getDriver().SysRoot + "/usr/lib");
