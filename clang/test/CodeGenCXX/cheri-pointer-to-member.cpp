@@ -90,15 +90,6 @@ bool data_ptr_is_null(int A::* ptr) {
   return !ptr;
 }
 
-bool data_ptr_compare(int A::* ptr1, int A::* ptr2) {
-  return ptr1 == ptr2;
-  // CHECK: define zeroext i1 @_Z16data_ptr_compareM1AiS0_(i64 %ptr1, i64 %ptr2)
-  // CHECK: %0 = load i64, i64 addrspace(200)* %ptr1.addr, align 8
-  // CHECK: %1 = load i64, i64 addrspace(200)* %ptr2.addr, align 8
-  // CHECK: %2 = icmp eq i64 %0, %1
-  // CHECK: ret i1 %2
-}
-
 // TODO: this could be simplified to test the tag bit of the address instead
 // of checking the low bit of the adjustment
 
@@ -130,6 +121,67 @@ bool func_ptr_is_null() {
   // CHECK: %lnot = xor i1 %memptr.isnonnull, true
   // CHECK: ret i1 %lnot
 }
+
+bool data_ptr_equal(int A::* ptr1, int A::* ptr2) {
+  return ptr1 == ptr2;
+  // CHECK: define zeroext i1 @_Z14data_ptr_equalM1AiS0_(i64 %ptr1, i64 %ptr2)
+  // CHECK: %0 = load i64, i64 addrspace(200)* %ptr1.addr, align 8
+  // CHECK: %1 = load i64, i64 addrspace(200)* %ptr2.addr, align 8
+  // CHECK: %2 = icmp eq i64 %0, %1
+  // CHECK: ret i1 %2
+}
+
+bool data_ptr_not_equal(int A::* ptr1, int A::* ptr2) {
+  return ptr1 != ptr2;
+  // CHECK: define zeroext i1 @_Z18data_ptr_not_equalM1AiS0_(i64 %ptr1, i64 %ptr2)
+  // CHECK: %0 = load i64, i64 addrspace(200)* %ptr1.addr, align 8
+  // CHECK: %1 = load i64, i64 addrspace(200)* %ptr2.addr, align 8
+  // CHECK: %2 = icmp ne i64 %0, %1
+  // CHECK: ret i1 %2
+}
+
+bool func_ptr_equal() {
+  // FIXME: member pointers are not being passed correctly as arguments (probably because ismemcaptype returns false?)
+  AMemberFuncPtr ptr1 = &A::foo_virtual;
+  AMemberFuncPtr ptr2 = &A::bar;
+  return ptr1 == ptr2;
+  // CHECK: define zeroext i1 @_Z14func_ptr_equalv() #0 {
+  // CHECK: %lhs.memptr.ptr = extractvalue { i8 addrspace(200)*, i64 } %0, 0
+  // CHECK: %rhs.memptr.ptr = extractvalue { i8 addrspace(200)*, i64 } %1, 0
+  // CHECK: %cmp.ptr = icmp eq i8 addrspace(200)* %lhs.memptr.ptr, %rhs.memptr.ptr
+  // CHECK: %cmp.ptr.null = icmp eq i8 addrspace(200)* %lhs.memptr.ptr, null
+  // CHECK: %lhs.memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %0, 1
+  // CHECK: %rhs.memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %1, 1
+  // CHECK: %cmp.adj = icmp eq i64 %lhs.memptr.adj, %rhs.memptr.adj
+  // CHECK: %or.adj = or i64 %lhs.memptr.adj, %rhs.memptr.adj
+  // CHECK: %2 = and i64 %or.adj, 1
+  // CHECK: %cmp.or.adj = icmp eq i64 %2, 0
+  // CHECK: %3 = and i1 %cmp.ptr.null, %cmp.or.adj
+  // CHECK: %4 = or i1 %3, %cmp.adj
+  // CHECK: %memptr.eq = and i1 %cmp.ptr, %4
+  // CHECK: ret i1 %memptr.eq
+}
+
+bool func_ptr_not_equal() {
+  // FIXME: member pointers are not being passed correctly as arguments (probably because ismemcaptype returns false?)
+  AMemberFuncPtr ptr1 = &A::foo_virtual;
+  AMemberFuncPtr ptr2 = &A::bar;
+  return ptr1 != ptr2;
+  // CHECK: define zeroext i1 @_Z18func_ptr_not_equalv()
+  // CHECK: %cmp.ptr = icmp ne i8 addrspace(200)* %lhs.memptr.ptr, %rhs.memptr.ptr
+  // CHECK: %cmp.ptr.null = icmp ne i8 addrspace(200)* %lhs.memptr.ptr, null
+  // CHECK: %lhs.memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %0, 1
+  // CHECK: %rhs.memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %1, 1
+  // CHECK: %cmp.adj = icmp ne i64 %lhs.memptr.adj, %rhs.memptr.adj
+  // CHECK: %or.adj = or i64 %lhs.memptr.adj, %rhs.memptr.adj
+  // CHECK: %2 = and i64 %or.adj, 1
+  // CHECK: %cmp.or.adj = icmp ne i64 %2, 0
+  // CHECK: %3 = or i1 %cmp.ptr.null, %cmp.or.adj
+  // CHECK: %4 = and i1 %3, %cmp.adj
+  // CHECK: %memptr.ne = or i1 %cmp.ptr, %4
+  // CHECK: ret i1 %memptr.ne
+}
+
 
 
 // taken from temporaries.cpp

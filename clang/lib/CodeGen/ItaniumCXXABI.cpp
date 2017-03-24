@@ -904,7 +904,6 @@ ItaniumCXXABI::EmitMemberPointerComparison(CodeGenFunction &CGF,
                                            bool Inequality) {
   CGBuilderTy &Builder = CGF.Builder;
 
-  // FIXME: this needs to be implemented for CHERI
   llvm::ICmpInst::Predicate Eq;
   llvm::Instruction::BinaryOps And, Or;
   if (Inequality) {
@@ -942,8 +941,8 @@ ItaniumCXXABI::EmitMemberPointerComparison(CodeGenFunction &CGF,
   // This condition, together with the assumption that L.ptr == R.ptr,
   // tests whether the pointers are both null.  ARM imposes an extra
   // condition.
-  llvm::Value *Zero = llvm::Constant::getNullValue(LPtr->getType());
-  llvm::Value *EqZero = Builder.CreateICmp(Eq, LPtr, Zero, "cmp.ptr.null");
+  llvm::Value *Null = llvm::Constant::getNullValue(LPtr->getType());
+  llvm::Value *EqZero = Builder.CreateICmp(Eq, LPtr, Null, "cmp.ptr.null");
 
   // This condition tests whether L.adj == R.adj.  If this isn't
   // true, the pointers are unequal unless they're both null.
@@ -951,10 +950,13 @@ ItaniumCXXABI::EmitMemberPointerComparison(CodeGenFunction &CGF,
   llvm::Value *RAdj = Builder.CreateExtractValue(R, 1, "rhs.memptr.adj");
   llvm::Value *AdjEq = Builder.CreateICmp(Eq, LAdj, RAdj, "cmp.adj");
 
+  // XXXAR: we should just use the tag bit instead of checking low bit in adj
+
   // Null member function pointers on ARM clear the low bit of Adj,
   // so the zero condition has to check that neither low bit is set.
   if (UseARMMethodPtrABI) {
-    llvm::Value *One = llvm::ConstantInt::get(LPtr->getType(), 1);
+    llvm::Value *Zero = llvm::ConstantInt::get(CGM.PtrDiffTy, 0);
+    llvm::Value *One = llvm::ConstantInt::get(CGM.PtrDiffTy, 1);
 
     // Compute (l.adj | r.adj) & 1 and test it against zero.
     llvm::Value *OrAdj = Builder.CreateOr(LAdj, RAdj, "or.adj");
