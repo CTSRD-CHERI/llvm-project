@@ -634,7 +634,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
       return RValue::get(llvm::ConstantFP::get(getLLVMContext(),
                                                Result.Val.getFloat()));
   }
-
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   switch (BuiltinID) {
   default: break;  // Handle intrinsics and libm functions below.
   case Builtin::BI__builtin___CFStringMakeConstantString:
@@ -1606,7 +1606,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     CharUnits StoreSize = getContext().getTypeSizeInChars(ElTy);
     llvm::Type *ITy = llvm::IntegerType::get(getLLVMContext(),
                                              StoreSize.getQuantity() * 8);
-    Ptr = Builder.CreateBitCast(Ptr, ITy->getPointerTo());
+    Ptr = Builder.CreateBitCast(Ptr, ITy->getPointerTo(DefaultAS));
     llvm::StoreInst *Store =
       Builder.CreateAlignedStore(llvm::Constant::getNullValue(ITy), Ptr,
                                  StoreSize);
@@ -2179,7 +2179,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     llvm::IntegerType *IntType =
       IntegerType::get(getLLVMContext(),
                        getContext().getTypeSize(E->getType()));
-    llvm::Type *IntPtrType = IntType->getPointerTo();
+    llvm::Type *IntPtrType = IntType->getPointerTo(DefaultAS);
 
     llvm::Value *Destination =
       Builder.CreateBitCast(EmitScalarExpr(E->getArg(0)), IntPtrType);
@@ -4380,6 +4380,7 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
                                            const CallExpr *E) {
   if (auto Hint = GetValueForARMHint(BuiltinID))
     return Hint;
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
 
   if (BuiltinID == ARM::BI__emit) {
     bool IsThumb = getTarget().getTriple().getArch() == llvm::Triple::thumb;
@@ -4545,7 +4546,7 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
     QualType Ty = E->getType();
     llvm::Type *RealResTy = ConvertType(Ty);
     llvm::Type *PtrTy = llvm::IntegerType::get(
-        getLLVMContext(), getContext().getTypeSize(Ty))->getPointerTo();
+        getLLVMContext(), getContext().getTypeSize(Ty))->getPointerTo(DefaultAS);
     LoadAddr = Builder.CreateBitCast(LoadAddr, PtrTy);
 
     Function *F = CGM.getIntrinsic(BuiltinID == ARM::BI__builtin_arm_ldaex
@@ -4594,7 +4595,7 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
     QualType Ty = E->getArg(0)->getType();
     llvm::Type *StoreTy = llvm::IntegerType::get(getLLVMContext(),
                                                  getContext().getTypeSize(Ty));
-    StoreAddr = Builder.CreateBitCast(StoreAddr, StoreTy->getPointerTo());
+    StoreAddr = Builder.CreateBitCast(StoreAddr, StoreTy->getPointerTo(DefaultAS));
 
     if (StoreVal->getType()->isPointerTy())
       StoreVal = Builder.CreatePtrToInt(StoreVal, Int32Ty);
@@ -4623,7 +4624,7 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
     CharUnits LoadSize = getContext().getTypeSizeInChars(ElTy);
     llvm::Type *ITy = llvm::IntegerType::get(getLLVMContext(),
                                              LoadSize.getQuantity() * 8);
-    Ptr = Builder.CreateBitCast(Ptr, ITy->getPointerTo());
+    Ptr = Builder.CreateBitCast(Ptr, ITy->getPointerTo(DefaultAS));
     llvm::LoadInst *Load =
       Builder.CreateAlignedLoad(Ptr, LoadSize);
     Load->setVolatile(true);
@@ -4639,7 +4640,7 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
     CharUnits StoreSize = getContext().getTypeSizeInChars(ElTy);
     llvm::Type *ITy = llvm::IntegerType::get(getLLVMContext(),
                                              StoreSize.getQuantity() * 8);
-    Ptr = Builder.CreateBitCast(Ptr, ITy->getPointerTo());
+    Ptr = Builder.CreateBitCast(Ptr, ITy->getPointerTo(DefaultAS));
     llvm::StoreInst *Store =
       Builder.CreateAlignedStore(Value, Ptr,
                                  StoreSize);
@@ -5272,6 +5273,7 @@ Value *CodeGenFunction::vectorWrapScalar16(Value *Op) {
 Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
                                                const CallExpr *E) {
   unsigned HintID = static_cast<unsigned>(-1);
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   switch (BuiltinID) {
   default: break;
   case AArch64::BI__builtin_arm_nop:
@@ -5377,7 +5379,7 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     QualType Ty = E->getType();
     llvm::Type *RealResTy = ConvertType(Ty);
     llvm::Type *PtrTy = llvm::IntegerType::get(
-        getLLVMContext(), getContext().getTypeSize(Ty))->getPointerTo();
+        getLLVMContext(), getContext().getTypeSize(Ty))->getPointerTo(DefaultAS);
     LoadAddr = Builder.CreateBitCast(LoadAddr, PtrTy);
 
     Function *F = CGM.getIntrinsic(BuiltinID == AArch64::BI__builtin_arm_ldaex
@@ -5424,7 +5426,7 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     QualType Ty = E->getArg(0)->getType();
     llvm::Type *StoreTy = llvm::IntegerType::get(getLLVMContext(),
                                                  getContext().getTypeSize(Ty));
-    StoreAddr = Builder.CreateBitCast(StoreAddr, StoreTy->getPointerTo());
+    StoreAddr = Builder.CreateBitCast(StoreAddr, StoreTy->getPointerTo(DefaultAS));
 
     if (StoreVal->getType()->isPointerTy())
       StoreVal = Builder.CreatePtrToInt(StoreVal, Int64Ty);

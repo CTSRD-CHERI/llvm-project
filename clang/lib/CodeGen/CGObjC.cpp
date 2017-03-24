@@ -901,7 +901,9 @@ CodeGenFunction::generateObjCGetterBody(const ObjCImplementationDecl *classImpl,
     // types, so there's no point in trying to pick a prettier type.
     uint64_t ivarSize = getContext().toBits(strategy.getIvarSize());
     llvm::Type *bitcastType = llvm::Type::getIntNTy(getLLVMContext(), ivarSize);
-    bitcastType = bitcastType->getPointerTo(); // addrspace 0 okay
+    // XXXAR: is that addrspace 0 okay for CHERI????
+    bitcastType = bitcastType->getPointerTo(
+        CGM.getTargetCodeGenInfo().getDefaultAS()); // addrspace 0 okay
 
     // Perform an atomic load.  This does not impose ordering constraints.
     Address ivarAddr = LV.getAddress();
@@ -918,7 +920,8 @@ CodeGenFunction::generateObjCGetterBody(const ObjCImplementationDecl *classImpl,
     if (ivarSize > retTySize) {
       llvm::Type *newTy = llvm::Type::getIntNTy(getLLVMContext(), retTySize);
       ivarVal = Builder.CreateTrunc(load, newTy);
-      bitcastType = newTy->getPointerTo();
+      bitcastType = newTy->getPointerTo(
+        CGM.getTargetCodeGenInfo().getDefaultAS());
     }
     Builder.CreateStore(ivarVal,
                         Builder.CreateBitCast(ReturnValue, bitcastType));

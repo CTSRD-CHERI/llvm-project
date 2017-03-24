@@ -1076,6 +1076,7 @@ llvm::Type *CGOpenMPRuntime::getKmpc_MicroPointerTy() {
 llvm::Constant *
 CGOpenMPRuntime::createRuntimeFunction(unsigned Function) {
   llvm::Constant *RTLFn = nullptr;
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   switch (static_cast<OpenMPRTLFunction>(Function)) {
   case OMPRTL__kmpc_fork_call: {
     // Build void __kmpc_fork_call(ident_t *loc, kmp_int32 argc, kmpc_micro
@@ -1100,7 +1101,7 @@ CGOpenMPRuntime::createRuntimeFunction(unsigned Function) {
     // kmp_int32 global_tid, void *data, size_t size, void ***cache);
     llvm::Type *TypeParams[] = {getIdentTyPointerTy(), CGM.Int32Ty,
                                 CGM.VoidPtrTy, CGM.SizeTy,
-                                CGM.VoidPtrTy->getPointerTo()->getPointerTo()};
+                                CGM.VoidPtrTy->getPointerTo(DefaultAS)->getPointerTo(DefaultAS)};
     llvm::FunctionType *FnTy =
         llvm::FunctionType::get(CGM.VoidPtrTy, TypeParams, /*isVarArg*/ false);
     RTLFn = CGM.CreateRuntimeFunction(FnTy, "__kmpc_threadprivate_cached");
@@ -1134,16 +1135,16 @@ CGOpenMPRuntime::createRuntimeFunction(unsigned Function) {
     // typedef void *(*kmpc_ctor)(void *);
     auto KmpcCtorTy =
         llvm::FunctionType::get(CGM.VoidPtrTy, CGM.VoidPtrTy,
-                                /*isVarArg*/ false)->getPointerTo();
+                                /*isVarArg*/ false)->getPointerTo(DefaultAS);
     // typedef void *(*kmpc_cctor)(void *, void *);
     llvm::Type *KmpcCopyCtorTyArgs[] = {CGM.VoidPtrTy, CGM.VoidPtrTy};
     auto KmpcCopyCtorTy =
         llvm::FunctionType::get(CGM.VoidPtrTy, KmpcCopyCtorTyArgs,
-                                /*isVarArg*/ false)->getPointerTo();
+                                /*isVarArg*/ false)->getPointerTo(DefaultAS);
     // typedef void (*kmpc_dtor)(void *);
     auto KmpcDtorTy =
         llvm::FunctionType::get(CGM.VoidTy, CGM.VoidPtrTy, /*isVarArg*/ false)
-            ->getPointerTo();
+            ->getPointerTo(DefaultAS);
     llvm::Type *FnTyArgs[] = {getIdentTyPointerTy(), CGM.VoidPtrTy, KmpcCtorTy,
                               KmpcCopyCtorTy, KmpcDtorTy};
     auto FnTy = llvm::FunctionType::get(CGM.VoidTy, FnTyArgs,
@@ -1296,7 +1297,7 @@ CGOpenMPRuntime::createRuntimeFunction(unsigned Function) {
     auto *CpyFnTy =
         llvm::FunctionType::get(CGM.VoidTy, CpyTypeParams, /*isVarArg=*/false);
     llvm::Type *TypeParams[] = {getIdentTyPointerTy(), CGM.Int32Ty, CGM.SizeTy,
-                                CGM.VoidPtrTy, CpyFnTy->getPointerTo(),
+                                CGM.VoidPtrTy, CpyFnTy->getPointerTo(DefaultAS),
                                 CGM.Int32Ty};
     llvm::FunctionType *FnTy =
         llvm::FunctionType::get(CGM.VoidTy, TypeParams, /*isVarArg=*/false);
@@ -1312,7 +1313,7 @@ CGOpenMPRuntime::createRuntimeFunction(unsigned Function) {
                                                /*isVarArg=*/false);
     llvm::Type *TypeParams[] = {
         getIdentTyPointerTy(), CGM.Int32Ty, CGM.Int32Ty, CGM.SizeTy,
-        CGM.VoidPtrTy, ReduceFnTy->getPointerTo(),
+        CGM.VoidPtrTy, ReduceFnTy->getPointerTo(DefaultAS),
         llvm::PointerType::getUnqual(KmpCriticalNameTy)};
     llvm::FunctionType *FnTy =
         llvm::FunctionType::get(CGM.Int32Ty, TypeParams, /*isVarArg=*/false);
@@ -1329,7 +1330,7 @@ CGOpenMPRuntime::createRuntimeFunction(unsigned Function) {
                                                /*isVarArg=*/false);
     llvm::Type *TypeParams[] = {
         getIdentTyPointerTy(), CGM.Int32Ty, CGM.Int32Ty, CGM.SizeTy,
-        CGM.VoidPtrTy, ReduceFnTy->getPointerTo(),
+        CGM.VoidPtrTy, ReduceFnTy->getPointerTo(DefaultAS),
         llvm::PointerType::getUnqual(KmpCriticalNameTy)};
     llvm::FunctionType *FnTy =
         llvm::FunctionType::get(CGM.Int32Ty, TypeParams, /*isVarArg=*/false);
@@ -1501,8 +1502,8 @@ CGOpenMPRuntime::createRuntimeFunction(unsigned Function) {
                                 CGM.IntTy,
                                 CGM.VoidPtrTy,
                                 CGM.IntTy,
-                                CGM.Int64Ty->getPointerTo(),
-                                CGM.Int64Ty->getPointerTo(),
+                                CGM.Int64Ty->getPointerTo(DefaultAS),
+                                CGM.Int64Ty->getPointerTo(DefaultAS),
                                 CGM.Int64Ty,
                                 CGM.IntTy,
                                 CGM.IntTy,
@@ -1537,7 +1538,7 @@ CGOpenMPRuntime::createRuntimeFunction(unsigned Function) {
     // Build void __kmpc_doacross_post(ident_t *loc, kmp_int32 gtid, kmp_int64
     // *vec);
     llvm::Type *TypeParams[] = {getIdentTyPointerTy(), CGM.Int32Ty,
-                                CGM.Int64Ty->getPointerTo()};
+                                CGM.Int64Ty->getPointerTo(DefaultAS)};
     llvm::FunctionType *FnTy =
         llvm::FunctionType::get(CGM.VoidTy, TypeParams, /*isVarArg=*/false);
     RTLFn = CGM.CreateRuntimeFunction(FnTy, /*Name=*/"__kmpc_doacross_post");
@@ -1547,7 +1548,7 @@ CGOpenMPRuntime::createRuntimeFunction(unsigned Function) {
     // Build void __kmpc_doacross_wait(ident_t *loc, kmp_int32 gtid, kmp_int64
     // *vec);
     llvm::Type *TypeParams[] = {getIdentTyPointerTy(), CGM.Int32Ty,
-                                CGM.Int64Ty->getPointerTo()};
+                                CGM.Int64Ty->getPointerTo(DefaultAS)};
     llvm::FunctionType *FnTy =
         llvm::FunctionType::get(CGM.VoidTy, TypeParams, /*isVarArg=*/false);
     RTLFn = CGM.CreateRuntimeFunction(FnTy, /*Name=*/"__kmpc_doacross_wait");
@@ -1562,8 +1563,8 @@ CGOpenMPRuntime::createRuntimeFunction(unsigned Function) {
                                 CGM.Int32Ty,
                                 CGM.VoidPtrPtrTy,
                                 CGM.VoidPtrPtrTy,
-                                CGM.SizeTy->getPointerTo(),
-                                CGM.Int32Ty->getPointerTo()};
+                                CGM.SizeTy->getPointerTo(DefaultAS),
+                                CGM.Int32Ty->getPointerTo(DefaultAS)};
     llvm::FunctionType *FnTy =
         llvm::FunctionType::get(CGM.Int32Ty, TypeParams, /*isVarArg*/ false);
     RTLFn = CGM.CreateRuntimeFunction(FnTy, "__tgt_target");
@@ -1578,8 +1579,8 @@ CGOpenMPRuntime::createRuntimeFunction(unsigned Function) {
                                 CGM.Int32Ty,
                                 CGM.VoidPtrPtrTy,
                                 CGM.VoidPtrPtrTy,
-                                CGM.SizeTy->getPointerTo(),
-                                CGM.Int32Ty->getPointerTo(),
+                                CGM.SizeTy->getPointerTo(DefaultAS),
+                                CGM.Int32Ty->getPointerTo(DefaultAS),
                                 CGM.Int32Ty,
                                 CGM.Int32Ty};
     llvm::FunctionType *FnTy =
@@ -1614,8 +1615,8 @@ CGOpenMPRuntime::createRuntimeFunction(unsigned Function) {
                                 CGM.Int32Ty,
                                 CGM.VoidPtrPtrTy,
                                 CGM.VoidPtrPtrTy,
-                                CGM.SizeTy->getPointerTo(),
-                                CGM.Int32Ty->getPointerTo()};
+                                CGM.SizeTy->getPointerTo(DefaultAS),
+                                CGM.Int32Ty->getPointerTo(DefaultAS)};
     llvm::FunctionType *FnTy =
         llvm::FunctionType::get(CGM.VoidTy, TypeParams, /*isVarArg*/ false);
     RTLFn = CGM.CreateRuntimeFunction(FnTy, "__tgt_target_data_begin");
@@ -1628,8 +1629,8 @@ CGOpenMPRuntime::createRuntimeFunction(unsigned Function) {
                                 CGM.Int32Ty,
                                 CGM.VoidPtrPtrTy,
                                 CGM.VoidPtrPtrTy,
-                                CGM.SizeTy->getPointerTo(),
-                                CGM.Int32Ty->getPointerTo()};
+                                CGM.SizeTy->getPointerTo(DefaultAS),
+                                CGM.Int32Ty->getPointerTo(DefaultAS)};
     llvm::FunctionType *FnTy =
         llvm::FunctionType::get(CGM.VoidTy, TypeParams, /*isVarArg*/ false);
     RTLFn = CGM.CreateRuntimeFunction(FnTy, "__tgt_target_data_end");
@@ -1642,8 +1643,8 @@ CGOpenMPRuntime::createRuntimeFunction(unsigned Function) {
                                 CGM.Int32Ty,
                                 CGM.VoidPtrPtrTy,
                                 CGM.VoidPtrPtrTy,
-                                CGM.SizeTy->getPointerTo(),
-                                CGM.Int32Ty->getPointerTo()};
+                                CGM.SizeTy->getPointerTo(DefaultAS),
+                                CGM.Int32Ty->getPointerTo(DefaultAS)};
     llvm::FunctionType *FnTy =
         llvm::FunctionType::get(CGM.VoidTy, TypeParams, /*isVarArg*/ false);
     RTLFn = CGM.CreateRuntimeFunction(FnTy, "__tgt_target_data_update");
@@ -1866,21 +1867,22 @@ llvm::Function *CGOpenMPRuntime::emitThreadPrivateVarDefinition(
       return nullptr;
 
     llvm::Type *CopyCtorTyArgs[] = {CGM.VoidPtrTy, CGM.VoidPtrTy};
+    unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
     auto CopyCtorTy =
         llvm::FunctionType::get(CGM.VoidPtrTy, CopyCtorTyArgs,
-                                /*isVarArg=*/false)->getPointerTo();
+                                /*isVarArg=*/false)->getPointerTo(DefaultAS);
     // Copying constructor for the threadprivate variable.
     // Must be NULL - reserved by runtime, but currently it requires that this
     // parameter is always NULL. Otherwise it fires assertion.
     CopyCtor = llvm::Constant::getNullValue(CopyCtorTy);
     if (Ctor == nullptr) {
       auto CtorTy = llvm::FunctionType::get(CGM.VoidPtrTy, CGM.VoidPtrTy,
-                                            /*isVarArg=*/false)->getPointerTo();
+                                            /*isVarArg=*/false)->getPointerTo(DefaultAS);
       Ctor = llvm::Constant::getNullValue(CtorTy);
     }
     if (Dtor == nullptr) {
       auto DtorTy = llvm::FunctionType::get(CGM.VoidTy, CGM.VoidPtrTy,
-                                            /*isVarArg=*/false)->getPointerTo();
+                                            /*isVarArg=*/false)->getPointerTo(DefaultAS);
       Dtor = llvm::Constant::getNullValue(DtorTy);
     }
     if (!CGF) {
@@ -2291,8 +2293,9 @@ void CGOpenMPRuntime::emitSingleRegion(CodeGenFunction &CGF,
     }
     // Build function that copies private values from single region to all other
     // threads in the corresponding parallel region.
+    unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
     auto *CpyFn = emitCopyprivateCopyFunction(
-        CGM, CGF.ConvertTypeForMem(CopyprivateArrayTy)->getPointerTo(),
+        CGM, CGF.ConvertTypeForMem(CopyprivateArrayTy)->getPointerTo(DefaultAS),
         CopyprivateVars, SrcExprs, DstExprs, AssignmentOps);
     auto *BufSize = CGF.getTypeSize(CopyprivateArrayTy);
     Address CL =
@@ -3773,7 +3776,8 @@ CGOpenMPRuntime::emitTaskInit(CodeGenFunction &CGF, SourceLocation Loc,
   QualType KmpTaskTWithPrivatesPtrQTy =
       C.getPointerType(KmpTaskTWithPrivatesQTy);
   auto *KmpTaskTWithPrivatesTy = CGF.ConvertType(KmpTaskTWithPrivatesQTy);
-  auto *KmpTaskTWithPrivatesPtrTy = KmpTaskTWithPrivatesTy->getPointerTo();
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  auto *KmpTaskTWithPrivatesPtrTy = KmpTaskTWithPrivatesTy->getPointerTo(DefaultAS);
   auto *KmpTaskTWithPrivatesTySize = CGF.getTypeSize(KmpTaskTWithPrivatesQTy);
   QualType SharedsPtrTy = C.getPointerType(SharedsTy);
 
@@ -4465,8 +4469,9 @@ void CGOpenMPRuntime::emitReduction(CodeGenFunction &CGF, SourceLocation Loc,
   }
 
   // 2. Emit reduce_func().
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   auto *ReductionFn = emitReductionFunction(
-      CGM, CGF.ConvertTypeForMem(ReductionArrayTy)->getPointerTo(), Privates,
+      CGM, CGF.ConvertTypeForMem(ReductionArrayTy)->getPointerTo(DefaultAS), Privates,
       LHSExprs, RHSExprs, ReductionOps);
 
   // 3. Create static kmp_critical_name lock = { 0 };
@@ -5984,9 +5989,10 @@ static void emitOffloadingArraysArgument(
   } else {
     BasePointersArrayArg = llvm::ConstantPointerNull::get(CGM.VoidPtrPtrTy);
     PointersArrayArg = llvm::ConstantPointerNull::get(CGM.VoidPtrPtrTy);
-    SizesArrayArg = llvm::ConstantPointerNull::get(CGM.SizeTy->getPointerTo());
+    unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+    SizesArrayArg = llvm::ConstantPointerNull::get(CGM.SizeTy->getPointerTo(DefaultAS));
     MapTypesArrayArg =
-        llvm::ConstantPointerNull::get(CGM.Int32Ty->getPointerTo());
+        llvm::ConstantPointerNull::get(CGM.Int32Ty->getPointerTo(DefaultAS));
   }
 }
 

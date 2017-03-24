@@ -369,7 +369,8 @@ void CodeGenFunction::EmitAnyExprToExn(const Expr *e, Address addr) {
 
   // __cxa_allocate_exception returns a void*;  we need to cast this
   // to the appropriate type for the object.
-  llvm::Type *ty = ConvertTypeForMem(e->getType())->getPointerTo();
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  llvm::Type *ty = ConvertTypeForMem(e->getType())->getPointerTo(DefaultAS);
   Address typedAddr = Builder.CreateBitCast(addr, ty);
 
   // FIXME: this isn't quite right!  If there's a final unelided call
@@ -1737,7 +1738,8 @@ void CodeGenFunction::EmitSEHExceptionCodeSave(CodeGenFunction &ParentCGF,
     // pointer is stored in the second field. So, GEP 20 bytes backwards and
     // load the pointer.
     SEHInfo = Builder.CreateConstInBoundsGEP1_32(Int8Ty, EntryFP, -20);
-    SEHInfo = Builder.CreateBitCast(SEHInfo, Int8PtrTy->getPointerTo());
+    unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+    SEHInfo = Builder.CreateBitCast(SEHInfo, Int8PtrTy->getPointerTo(DefaultAS));
     SEHInfo = Builder.CreateAlignedLoad(Int8PtrTy, SEHInfo, getPointerAlign());
     SEHCodeSlotStack.push_back(recoverAddrOfEscapedLocal(
         ParentCGF, ParentCGF.SEHCodeSlotStack.back(), ParentFP));
@@ -1750,9 +1752,11 @@ void CodeGenFunction::EmitSEHExceptionCodeSave(CodeGenFunction &ParentCGF,
   //   CONTEXT *ContextRecord;
   // };
   // int exceptioncode = exception_pointers->ExceptionRecord->ExceptionCode;
-  llvm::Type *RecordTy = CGM.Int32Ty->getPointerTo();
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  llvm::Type *RecordTy = CGM.Int32Ty->getPointerTo(DefaultAS);
   llvm::Type *PtrsTy = llvm::StructType::get(RecordTy, CGM.VoidPtrTy, nullptr);
-  llvm::Value *Ptrs = Builder.CreateBitCast(SEHInfo, PtrsTy->getPointerTo());
+  llvm::Value *Ptrs = Builder.CreateBitCast(SEHInfo,
+                                            PtrsTy->getPointerTo(DefaultAS));
   llvm::Value *Rec = Builder.CreateStructGEP(PtrsTy, Ptrs, 0);
   Rec = Builder.CreateAlignedLoad(Rec, getPointerAlign());
   llvm::Value *Code = Builder.CreateAlignedLoad(Rec, getIntAlign());

@@ -979,10 +979,11 @@ static LValue loadToBegin(CodeGenFunction &CGF, QualType BaseTy, QualType ElTy,
     }
     BaseTy = BaseTy->getPointeeType();
   }
+  unsigned DefaultAS = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
   return CGF.MakeAddrLValue(
       Address(
           CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(
-              BaseLV.getPointer(), CGF.ConvertTypeForMem(ElTy)->getPointerTo()),
+              BaseLV.getPointer(), CGF.ConvertTypeForMem(ElTy)->getPointerTo(DefaultAS)),
           BaseLV.getAlignment()),
       BaseLV.getType(), BaseLV.getAlignmentSource());
 }

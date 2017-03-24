@@ -1576,7 +1576,9 @@ CodeGenTypes::GetFunctionType(const CGFunctionInfo &FI) {
   if (IRFunctionArgs.hasInallocaArg()) {
     auto ArgStruct = FI.getArgStruct();
     assert(ArgStruct);
-    ArgTypes[IRFunctionArgs.getInallocaArgNo()] = ArgStruct->getPointerTo();
+    // XXXAR: is this correct?
+    unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
+    ArgTypes[IRFunctionArgs.getInallocaArgNo()] = ArgStruct->getPointerTo(AS);
   }
 
   // Add in all of the required arguments.
@@ -2216,7 +2218,7 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
     ArgStruct = Address(FnArgs[IRFunctionArgs.getInallocaArgNo()],
                         FI.getArgStructAlignment());
 
-    assert(ArgStruct.getType() == FI.getArgStruct()->getPointerTo());
+    assert(ArgStruct.getType() == FI.getArgStruct()->getPointerTo(CGM.getTargetCodeGenInfo().getDefaultAS()));
   }
 
   // Name the struct return parameter.
@@ -3008,8 +3010,9 @@ static AggValueSlot createPlaceholderSlot(CodeGenFunction &CGF,
   // FIXME: Generate IR in one pass, rather than going back and fixing up these
   // placeholders.
   llvm::Type *IRTy = CGF.ConvertTypeForMem(Ty);
-  llvm::Type *IRPtrTy = IRTy->getPointerTo();
-  llvm::Value *Placeholder = llvm::UndefValue::get(IRPtrTy->getPointerTo());
+  unsigned DefaultAS = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
+  llvm::Type *IRPtrTy = IRTy->getPointerTo(DefaultAS);
+  llvm::Value *Placeholder = llvm::UndefValue::get(IRPtrTy->getPointerTo(DefaultAS));
 
   // FIXME: When we generate this IR in one pass, we shouldn't need
   // this win32-specific alignment hack.
