@@ -30,6 +30,7 @@
 #include "clang/AST/Type.h"
 #include "clang/AST/StmtCXX.h"
 #include "llvm/IR/CallSite.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Intrinsics.h"
@@ -499,6 +500,9 @@ llvm::Type *
 ItaniumCXXABI::ConvertMemberPointerType(const MemberPointerType *MPT) {
   if (MPT->isMemberDataPointer())
     return CGM.PtrDiffTy;
+  if (getContext().getTargetInfo().areAllPointersCapabilities()) {
+    return llvm::StructType::get(CGM.VoidPtrTy, CGM.PtrDiffTy, nullptr);
+  }
   return llvm::StructType::get(CGM.PtrDiffTy, CGM.PtrDiffTy, nullptr);
 }
 
@@ -779,7 +783,10 @@ ItaniumCXXABI::EmitNullMemberPointer(const MemberPointerType *MPT) {
     return llvm::ConstantInt::get(CGM.PtrDiffTy, -1ULL, /*isSigned=*/true);
 
   llvm::Constant *Zero = llvm::ConstantInt::get(CGM.PtrDiffTy, 0);
-  llvm::Constant *Values[2] = { Zero, Zero };
+  llvm::Constant *Null =
+      CGM.getContext().getTargetInfo().areAllPointersCapabilities() ?
+      llvm::ConstantPointerNull::get(CGM.VoidPtrTy) : Zero;
+  llvm::Constant *Values[2] = { Null, Zero };
   return llvm::ConstantStruct::getAnon(Values);
 }
 
@@ -803,6 +810,7 @@ llvm::Constant *ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
   MD = MD->getCanonicalDecl();
 
   CodeGenTypes &Types = CGM.getTypes();
+  const TargetInfo& TI = CGM.getContext().getTargetInfo();
 
   // Get the function pointer (or index if this is a virtual function).
   llvm::Constant *MemPtr[2];
@@ -814,6 +822,13 @@ llvm::Constant *ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
       Context.toCharUnitsFromBits(Context.getTargetInfo().getPointerWidth(0));
     uint64_t VTableOffset = (Index * PointerWidth.getQuantity());
 
+    auto getVtableOffsetAsPointer = [&](uint64_t Offset) {
+      llvm::Constant *Value = llvm::ConstantInt::get(CGM.PtrDiffTy, Offset);
+      if (TI.areAllPointersCapabilities()) {
+        return llvm::ConstantExpr::getIntToPtr(Value, CGM.VoidPtrTy);
+      }
+      return Value;
+    };
     if (UseARMMethodPtrABI) {
       // ARM C++ ABI 3.2.1:
       //   This ABI specifies that adj contains twice the this
@@ -821,7 +836,7 @@ llvm::Constant *ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
       //   least significant bit of adj then makes exactly the same
       //   discrimination as the least significant bit of ptr does for
       //   Itanium.
-      MemPtr[0] = llvm::ConstantInt::get(CGM.PtrDiffTy, VTableOffset);
+      MemPtr[0] = getVtableOffsetAsPointer(VTableOffset);
       MemPtr[1] = llvm::ConstantInt::get(CGM.PtrDiffTy,
                                          2 * ThisAdjustment.getQuantity() + 1);
     } else {
@@ -829,7 +844,7 @@ llvm::Constant *ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
       //   For a virtual function, [the pointer field] is 1 plus the
       //   virtual table offset (in bytes) of the function,
       //   represented as a ptrdiff_t.
-      MemPtr[0] = llvm::ConstantInt::get(CGM.PtrDiffTy, VTableOffset + 1);
+      MemPtr[0] = getVtableOffsetAsPointer(VTableOffset + 1);
       MemPtr[1] = llvm::ConstantInt::get(CGM.PtrDiffTy,
                                          ThisAdjustment.getQuantity());
     }
@@ -847,7 +862,11 @@ llvm::Constant *ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
     }
     llvm::Constant *addr = CGM.GetAddrOfFunction(MD, Ty);
 
-    MemPtr[0] = llvm::ConstantExpr::getPtrToInt(addr, CGM.PtrDiffTy);
+    if (TI.areAllPointersCapabilities()) {
+      MemPtr[0] = llvm::ConstantExpr::getAddrSpaceCast(addr, CGM.VoidPtrTy);
+    } else {
+      MemPtr[0] = llvm::ConstantExpr::getPtrToInt(addr, CGM.PtrDiffTy);
+    }
     MemPtr[1] = llvm::ConstantInt::get(CGM.PtrDiffTy,
                                        (UseARMMethodPtrABI ? 2 : 1) *
                                        ThisAdjustment.getQuantity());
@@ -885,6 +904,7 @@ ItaniumCXXABI::EmitMemberPointerComparison(CodeGenFunction &CGF,
                                            bool Inequality) {
   CGBuilderTy &Builder = CGF.Builder;
 
+  // FIXME: this needs to be implemented for CHERI
   llvm::ICmpInst::Predicate Eq;
   llvm::Instruction::BinaryOps And, Or;
   if (Inequality) {
@@ -957,6 +977,8 @@ ItaniumCXXABI::EmitMemberPointerIsNotNull(CodeGenFunction &CGF,
                                           const MemberPointerType *MPT) {
   CGBuilderTy &Builder = CGF.Builder;
 
+  // FIXME: this needs to be implemented for CHERI
+
   /// For member data pointers, this is just a check against -1.
   if (MPT->isMemberDataPointer()) {
     assert(MemPtr->getType() == CGM.PtrDiffTy);
@@ -1020,7 +1042,7 @@ void ItaniumCXXABI::emitVirtualObjectDelete(CodeGenFunction &CGF,
     // to pass to the deallocation function.
 
     // Grab the vtable pointer as an intptr_t*.
-    // XXXAR: is this correct?
+    // XXXAR: is this correct or is it ptrdiff_t?
     unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
     auto *ClassDecl =
         cast<CXXRecordDecl>(ElementType->getAs<RecordType>()->getDecl());
