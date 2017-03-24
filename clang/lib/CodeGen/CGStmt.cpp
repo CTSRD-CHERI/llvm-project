@@ -1310,8 +1310,11 @@ void CodeGenFunction::EmitCaseStmt(const CaseStmt &S) {
   // Otherwise, iteratively add consecutive cases to this switch stmt.
   while (NextCase && NextCase->getRHS() == nullptr) {
     CurCase = NextCase;
-    llvm::ConstantInt *CaseVal =
-      Builder.getInt(CurCase->getLHS()->EvaluateKnownConstInt(getContext()));
+    CaseIntVal = CurCase->getLHS()->EvaluateKnownConstInt(getContext());
+    if (S.getLHS()->getType()->isMemoryCapabilityType(getContext()))
+      if (CaseIntVal.getBitWidth() > 64)
+        CaseIntVal = CaseIntVal.trunc(64);
+    llvm::ConstantInt *CaseVal = Builder.getInt(CaseIntVal);
 
     if (SwitchWeights)
       SwitchWeights->push_back(getProfileCount(NextCase));
