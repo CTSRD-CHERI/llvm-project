@@ -952,6 +952,11 @@ def err_cheri_method_class_must_have_correct_type: Error<
   "the argument to attribute '%0' must be a CHERI class">;
 def err_cheri_invalid_callback_cast: Error<
   "CHERI callback function pointers may only be cast to other CHERI callback types">;
+def warn_mips_cheri_call_no_func_proto: Warning<
+  "call to function '%0' with no prototype may lead to runtime stack corruption on CHERI">,
+  InGroup<MIPSCHERIPrototypes>, DefaultIgnore;
+def note_mips_cheri_func_decl_add_types : Note<
+  "candidate function declaration needs parameter types">;
 def err_memory_capability_attribute_ambiguous : Error<
   "use of __capability is ambiguous">;
 def err_memory_capability_attribute_pointers_only : Error<

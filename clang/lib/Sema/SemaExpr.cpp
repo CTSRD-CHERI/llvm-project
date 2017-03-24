@@ -5169,6 +5169,20 @@ static FunctionDecl *rewriteBuiltinFunctionDecl(Sema *Sema, ASTContext &Context,
 static void checkDirectCallValidity(Sema &S, const Expr *Fn,
                                     FunctionDecl *Callee,
                                     MultiExprArg ArgExprs) {
+  
+  // For MIPS CHERI, output a warning if the callee doesn't have a prototype
+  // and we are passing arguments. This would normally lead to using the
+  // variadic calling convention. In the case of MIPS CHERI, this could lead to
+  // runtime stack corruption if the callee function is not actually variadic.
+  if (S.Context.getTargetInfo().getTriple().getArch() == llvm::Triple::cheri) {
+    if (!Callee->hasPrototype() && ArgExprs.size() > 0) {
+      S.Diag(Fn->getLocStart(), diag::warn_mips_cheri_call_no_func_proto) 
+          << Callee->getName() << Fn->getSourceRange();
+      S.Diag(Callee->getLocation(), diag::note_mips_cheri_func_decl_add_types);
+      return;
+    }
+  }
+
   // `Callee` (when called with ArgExprs) may be ill-formed. enable_if (and
   // similar attributes) really don't like it when functions are called with an
   // invalid number of args.
