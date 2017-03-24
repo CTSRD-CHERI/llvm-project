@@ -137,8 +137,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   if (ToolChain.getArch() == llvm::Triple::cheri)
     if (Args.hasArg(options::OPT_mabi_EQ)) {
       auto A = Args.getLastArg(options::OPT_mabi_EQ);
-      std::string Alower = StringRef(A->getValue()).lower();
-      IsCheriPureCapABI = Alower == "sandbox" || Alower == "purecap";
+      IsCheriPureCapABI = StringRef(A->getValue()).lower() == "purecap";
     }
 
   // Silence warning for "clang -g foo.o -o foo"
@@ -353,8 +352,7 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple &Triple,
       D.getVFS().exists(getDriver().SysRoot + "/usr/lib32/crt1.o"))
     getFilePaths().push_back(getDriver().SysRoot + "/usr/lib32");
   else if (Triple.getArch() == llvm::Triple::cheri &&
-      (tools::mips::hasMipsAbiArg(Args, "purecap") ||
-       tools::mips::hasMipsAbiArg(Args, "sandbox")))
+        tools::mips::hasMipsAbiArg(Args, "purecap"))
     getFilePaths().push_back(getDriver().SysRoot + "/usr/libcheri");
   else
     getFilePaths().push_back(getDriver().SysRoot + "/usr/lib");

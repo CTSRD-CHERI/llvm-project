@@ -179,6 +179,18 @@ InputArgList Driver::ParseArgStrings(ArrayRef<const char *> ArgStrings) {
     if (A->getOption().matches(options::OPT_mcpu_EQ) && A->containsValue("")) {
       Diag(clang::diag::warn_drv_empty_joined_argument) << A->getAsString(Args);
     }
+
+    if (A->getOption().matches(options::OPT_mabi_EQ)) {
+      StringRef Value = A->getValue();
+      if (Value == "sandbox") {
+        // output a warning that -mabi=sandbox is deprecated and replace with
+        // -mabi=purecap
+        Diag(diag::warn_cheri_sandbox_abi_is_purecap);
+        Args.append(
+            new Arg(Opts->getOption(options::OPT_mabi_EQ), "-mabi=purecap",
+                    A->getIndex(), "purecap"));
+      }
+    }
   }
 
   for (const Arg *A : Args.filtered(options::OPT_UNKNOWN))
