@@ -15,6 +15,7 @@
 
 #include "clang/CodeGen/ConstantInitBuilder.h"
 #include "CodeGenModule.h"
+#include "TargetInfo.h"
 
 using namespace clang;
 using namespace CodeGen;
@@ -71,6 +72,8 @@ ConstantInitBuilderBase::createGlobal(llvm::Constant *initializer,
                                       bool constant,
                                       llvm::GlobalValue::LinkageTypes linkage,
                                       unsigned addressSpace) {
+  if (addressSpace == static_cast<unsigned>(-1))
+    addressSpace = CGM.getTargetCodeGenInfo().getDefaultAS();
   auto GV = new llvm::GlobalVariable(CGM.getModule(),
                                      initializer->getType(),
                                      constant,

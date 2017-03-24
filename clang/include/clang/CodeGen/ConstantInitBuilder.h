@@ -81,7 +81,7 @@ private:
                                      bool constant = false,
                                      llvm::GlobalValue::LinkageTypes linkage
                                        = llvm::GlobalValue::InternalLinkage,
-                                     unsigned addressSpace = 0);
+                                     unsigned addressSpace = -1);
 
   ConstantInitFuture createFuture(llvm::Constant *initializer);
 

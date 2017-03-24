@@ -2434,7 +2434,7 @@ llvm::Function *CGObjCGNU::ModuleInitFunction() {
   if (!selStructTy) {
     selStructTy = llvm::StructType::get(CGM.getLLVMContext(),
                                         { PtrToInt8Ty, PtrToInt8Ty });
-    selStructPtrTy = llvm::PointerType::getUnqual(selStructTy);
+    selStructPtrTy = llvm::PointerType::get(selStructTy, AS);
   }
 
   // Generate statics list:
