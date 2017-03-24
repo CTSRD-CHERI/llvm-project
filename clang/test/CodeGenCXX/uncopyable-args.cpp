@@ -1,5 +1,9 @@
 // RUN: %clang_cc1 -std=c++11 -triple x86_64-unknown-unknown -emit-llvm -o - %s | FileCheck %s
 // RUN: %clang_cc1 -std=c++11 -triple x86_64-windows-msvc -emit-llvm -o - %s | FileCheck %s -check-prefix=WIN64
+// RUN: %clang_cc1 -std=c++11 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -o - %s | FileCheck %s -check-prefix=CHERI
+
+// Check that there are no pointers without addresspace(200)*
+// CHERI-NOT: {{[^)]\*}}
 
 namespace trivial {
 // Trivial structs should be passed directly.

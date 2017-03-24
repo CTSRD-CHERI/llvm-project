@@ -1,4 +1,7 @@
 // RUN: %clang_cc1 -emit-llvm %s -o - -triple=x86_64-apple-darwin9 -std=c++11 | FileCheck %s
+// RUN: %clang_cc1 -emit-llvm %s -o - -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 | FileCheck %s -check-prefix=CHERI
+// Check that there are no pointers without addresspace(200)*
+// CHERI-NOT: {{[^)]\*}}
 
 namespace PR16263 {
   const unsigned int n = 1234;
@@ -35,8 +38,10 @@ namespace PR20227 {
   A &&a = dynamic_cast<A&&>(A{});
   // CHECK: @_ZGRN7PR202271aE_ = internal global
 
+#ifndef __CHERI_PURE_CAPABILITY__
   B &&b = dynamic_cast<C&&>(dynamic_cast<B&&>(C{}));
   // CHECK: @_ZGRN7PR202271bE_ = internal global
+#endif
 
   B &&c = static_cast<C&&>(static_cast<B&&>(C{}));
   // CHECK: @_ZGRN7PR202271cE_ = internal global
