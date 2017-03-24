@@ -977,8 +977,6 @@ ItaniumCXXABI::EmitMemberPointerIsNotNull(CodeGenFunction &CGF,
                                           const MemberPointerType *MPT) {
   CGBuilderTy &Builder = CGF.Builder;
 
-  // FIXME: this needs to be implemented for CHERI
-
   /// For member data pointers, this is just a check against -1.
   if (MPT->isMemberDataPointer()) {
     assert(MemPtr->getType() == CGM.PtrDiffTy);
@@ -986,22 +984,24 @@ ItaniumCXXABI::EmitMemberPointerIsNotNull(CodeGenFunction &CGF,
       llvm::Constant::getAllOnesValue(MemPtr->getType());
     return Builder.CreateICmpNE(MemPtr, NegativeOne, "memptr.tobool");
   }
-  
+
   // In Itanium, a member function pointer is not null if 'ptr' is not null.
   llvm::Value *Ptr = Builder.CreateExtractValue(MemPtr, 0, "memptr.ptr");
+  llvm::Value *Result = Builder.CreateIsNotNull(Ptr, "memptr.tobool");
 
-  llvm::Constant *Zero = llvm::ConstantInt::get(Ptr->getType(), 0);
-  llvm::Value *Result = Builder.CreateICmpNE(Ptr, Zero, "memptr.tobool");
+  // XXXAR: we should just use the tag bit instead of checking adj
 
   // On ARM, a member function pointer is also non-null if the low bit of 'adj'
   // (the virtual bit) is set.
   if (UseARMMethodPtrABI) {
-    llvm::Constant *One = llvm::ConstantInt::get(Ptr->getType(), 1);
     llvm::Value *Adj = Builder.CreateExtractValue(MemPtr, 1, "memptr.adj");
+    assert(Adj->getType() == CGM.PtrDiffTy);
+    llvm::Constant *Zero = llvm::ConstantInt::get(CGM.PtrDiffTy, 0);
+    llvm::Constant *One = llvm::ConstantInt::get(CGM.PtrDiffTy, 1);
     llvm::Value *VirtualBit = Builder.CreateAnd(Adj, One, "memptr.virtualbit");
     llvm::Value *IsVirtual = Builder.CreateICmpNE(VirtualBit, Zero,
                                                   "memptr.isvirtual");
-    Result = Builder.CreateOr(Result, IsVirtual);
+    Result = Builder.CreateOr(Result, IsVirtual, "memptr.isnonnull");
   }
 
   return Result;

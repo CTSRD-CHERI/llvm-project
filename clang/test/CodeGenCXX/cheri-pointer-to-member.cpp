@@ -61,14 +61,7 @@ int main() {
    AMemberFuncPtr virtual_func_ptr_2 = &A::bar_virtual;
   // CHECK: store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 32 to i8 addrspace(200)*), i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)* %virtual_func_ptr_2, align 8
 
-  bool dataptr_is_null = data_ptr == nullptr;
-  // CHECK: %0 = load i64, i64 addrspace(200)* %data_ptr, align 8
-  // CHECK-NEXT: %1 = icmp eq i64 %0, -1
-
 #if 0
-  bool funcptr_is_null = !func_ptr;
-  bool virtual_func_ptr_is_null = !virtual_func_ptr;
-
   bool datacmp = data_ptr == data_ptr_2;
   bool funccmp = func_ptr == func_ptr_2;
   bool vfunccmp = virtual_func_ptr == virtual_func_ptr_2;
@@ -78,6 +71,64 @@ int main() {
   // return a.*data_ptr + (a.*func_ptr)() + (a.*virtual_func_ptr)();
   // return null_func_ptr == nullptr;
   return a.*data_ptr;
+}
+
+bool data_ptr_is_nonnull(int A::* ptr) {
+  return static_cast<bool>(ptr);
+  // CHECK: define zeroext i1 @_Z19data_ptr_is_nonnullM1Ai(i64 %ptr)
+  // CHECK: %0 = load i64, i64 addrspace(200)* %ptr.addr, align 8
+  // CHECK: %memptr.tobool = icmp ne i64 %0, -1
+  // CHECK: ret i1 %memptr.tobool
+}
+
+bool data_ptr_is_null(int A::* ptr) {
+  // CHECK: define zeroext i1 @_Z16data_ptr_is_nullM1Ai(i64 %ptr)
+  // CHECK: %0 = load i64, i64 addrspace(200)* %ptr.addr, align 8
+  // CHECK: %memptr.tobool = icmp ne i64 %0, -1
+  // CHECK: %lnot = xor i1 %memptr.tobool, true
+  // CHECK: ret i1 %lnot
+  return !ptr;
+}
+
+bool data_ptr_compare(int A::* ptr1, int A::* ptr2) {
+  return ptr1 == ptr2;
+  // CHECK: define zeroext i1 @_Z16data_ptr_compareM1AiS0_(i64 %ptr1, i64 %ptr2)
+  // CHECK: %0 = load i64, i64 addrspace(200)* %ptr1.addr, align 8
+  // CHECK: %1 = load i64, i64 addrspace(200)* %ptr2.addr, align 8
+  // CHECK: %2 = icmp eq i64 %0, %1
+  // CHECK: ret i1 %2
+}
+
+// TODO: this could be simplified to test the tag bit of the address instead
+// of checking the low bit of the adjustment
+
+bool func_ptr_is_nonnull() {
+  // FIXME: member pointers are not being passed correctly as arguments (probably because ismemcaptype returns false?)
+  AMemberFuncPtr ptr = &A::bar;
+  return static_cast<bool>(ptr);
+  // CHECK: define zeroext i1 @_Z19func_ptr_is_nonnullv() #0 {
+  // CHECK: %memptr.ptr = extractvalue { i8 addrspace(200)*, i64 } %0, 0
+  // CHECK: %memptr.tobool = icmp ne i8 addrspace(200)* %memptr.ptr, null
+  // CHECK: %memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %0, 1
+  // CHECK: %memptr.virtualbit = and i64 %memptr.adj, 1
+  // CHECK: %memptr.isvirtual = icmp ne i64 %memptr.virtualbit, 0
+  // CHECK: %memptr.isnonnull = or i1 %memptr.tobool, %memptr.isvirtual
+  // CHECK: ret i1 %memptr.isnonnull
+}
+
+bool func_ptr_is_null() {
+  // FIXME: member pointers are not being passed correctly as arguments (probably because ismemcaptype returns false?)
+  AMemberFuncPtr ptr = &A::foo_virtual;
+  return !ptr;
+  // CHECK: define zeroext i1 @_Z16func_ptr_is_nullv() #0 {
+  // CHECK: %memptr.ptr = extractvalue { i8 addrspace(200)*, i64 } %0, 0
+  // CHECK: %memptr.tobool = icmp ne i8 addrspace(200)* %memptr.ptr, null
+  // CHECK: %memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %0, 1
+  // CHECK: %memptr.virtualbit = and i64 %memptr.adj, 1
+  // CHECK: %memptr.isvirtual = icmp ne i64 %memptr.virtualbit, 0
+  // CHECK: %memptr.isnonnull = or i1 %memptr.tobool, %memptr.isvirtual
+  // CHECK: %lnot = xor i1 %memptr.isnonnull, true
+  // CHECK: ret i1 %lnot
 }
 
 
