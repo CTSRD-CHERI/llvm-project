@@ -5175,7 +5175,8 @@ static void checkDirectCallValidity(Sema &S, const Expr *Fn,
   // variadic calling convention. In the case of MIPS CHERI, this could lead to
   // runtime stack corruption if the callee function is not actually variadic.
   if (S.Context.getTargetInfo().getTriple().getArch() == llvm::Triple::cheri) {
-    if (!Callee->hasPrototype() && ArgExprs.size() > 0) {
+    bool NoProto = !Callee->getBuiltinID() && Callee->getType()->isFunctionNoProtoType();
+    if (NoProto && ArgExprs.size() > 0) {
       S.Diag(Fn->getLocStart(), diag::warn_mips_cheri_call_no_func_proto) 
           << Callee->getName() << Fn->getSourceRange();
       S.Diag(Callee->getLocation(), diag::note_mips_cheri_func_decl_add_types);
