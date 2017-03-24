@@ -182,12 +182,13 @@ InputArgList Driver::ParseArgStrings(ArrayRef<const char *> ArgStrings) {
 
     if (A->getOption().matches(options::OPT_mabi_EQ)) {
       StringRef Value = A->getValue();
+      A->claim();
       if (Value == "sandbox") {
         // output a warning that -mabi=sandbox is deprecated and replace with
         // -mabi=purecap
         Diag(diag::warn_cheri_sandbox_abi_is_purecap);
         Args.append(
-            new Arg(Opts->getOption(options::OPT_mabi_EQ), "-mabi=purecap",
+            new Arg(Opts->getOption(options::OPT_mabi_EQ), "-mabi=",
                     A->getIndex(), "purecap"));
       }
     }
