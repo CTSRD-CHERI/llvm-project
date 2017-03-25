@@ -24,6 +24,9 @@ elseif( CMAKE_HOST_UNIX )
   if( UNIX AND NOT (BEOS OR HAIKU) )
     set(system_libs ${system_libs} m)
   endif()
+  if (HAVE_BACKTRACE AND CMAKE_SYSTEM MATCHES "FreeBSD")
+    set(system_libs ${system_libs} execinfo)
+  endif()
 endif( MSVC OR MINGW )
 
 add_llvm_library(LLVMSupport

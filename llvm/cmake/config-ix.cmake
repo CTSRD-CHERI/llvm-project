@@ -165,6 +165,9 @@ endif()
 
 # function checks
 check_symbol_exists(arc4random "stdlib.h" HAVE_DECL_ARC4RANDOM)
+if(CMAKE_SYSTEM MATCHES "FreeBSD")
+  list(APPEND CMAKE_REQUIRED_LIBRARIES "execinfo")
+endif()
 check_symbol_exists(backtrace "execinfo.h" HAVE_BACKTRACE)
 check_symbol_exists(_Unwind_Backtrace "unwind.h" HAVE__UNWIND_BACKTRACE)
 check_symbol_exists(getpagesize unistd.h HAVE_GETPAGESIZE)
