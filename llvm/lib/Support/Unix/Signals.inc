@@ -461,6 +461,38 @@ void llvm::sys::PrintStackTrace(raw_ostream &OS) {
 #endif
 }
 
+#ifdef __FreeBSD__
+// On FreeBSD backtraces are not particularly useful as they don't include
+// stack frames before the signal delivery. E.g. they will look like this:
+//
+// #0 0x000000080577695c llvm::sys::PrintStackTrace(llvm::raw_ostream&)
+// #1 0x0000000805776d99 PrintStackTraceSignalHandler(void*)
+// #2 0x0000000805773d37 llvm::sys::RunSignalHandlers(void)
+// #3 0x00000008057770ca SignalHandler(int)
+// #4 0x0000000805c5b78f (/lib/libthr.so.3+0xe78f)
+// #5 0x0000000805c5ad6f (/lib/libthr.so.3+0xdd6f)
+//
+// To work around this we can override __assert() to print a stack trace before
+// raising SIGABRT
+// TODO: avoid duplicate stack trace
+extern "C" void
+__assert(const char *func, const char *file, int line, const char *failedexpr)
+{
+  if (func == NULL)
+    (void)fprintf(stderr,
+          "Assertion failed: (%s), file %s, line %d.\n", failedexpr,
+          file, line);
+  else
+    (void)fprintf(stderr,
+          "Assertion failed: (%s), function %s, file %s, line %d.\n",
+          failedexpr, func, file, line);
+  PrintStackTrace(llvm::errs());
+  abort();
+  /* NOTREACHED */
+}
+#endif
+
+
 static void PrintStackTraceSignalHandler(void *) {
   PrintStackTrace(llvm::errs());
 }
