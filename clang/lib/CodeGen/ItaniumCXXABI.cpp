@@ -521,6 +521,8 @@ ItaniumCXXABI::ConvertMemberPointerType(const MemberPointerType *MPT) {
 /// ARM uses 'adj' for the virtual flag because Thumb functions
 /// may be only single-byte aligned.
 ///
+/// XXXAR: TODO: add a CHERI ABI similar to ARM but using tag bit
+///
 /// If the member is virtual, the adjusted 'this' pointer points
 /// to a vtable pointer from which the virtual offset is applied.
 ///
@@ -554,25 +556,28 @@ CGCallee ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
   if (UseARMMethodPtrABI)
     Adj = Builder.CreateAShr(Adj, ptrdiff_1, "memptr.adj.shifted");
 
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   // Apply the adjustment and cast back to the original struct type
   // for consistency.
   llvm::Value *This = ThisAddr.getPointer();
-  llvm::Value *Ptr = Builder.CreateBitCast(This, 
-           Builder.getInt8PtrTy(CGF.CGM.getTargetCodeGenInfo().getDefaultAS()));
+  llvm::Value *Ptr = Builder.CreateBitCast(This, Builder.getInt8PtrTy(DefaultAS));
   Ptr = Builder.CreateInBoundsGEP(Ptr, Adj);
   This = Builder.CreateBitCast(Ptr, This->getType(), "this.adjusted");
   ThisPtrForCall = This;
   
   // Load the function pointer.
-  llvm::Value *FnAsInt = Builder.CreateExtractValue(MemFnPtr, 0, "memptr.ptr");
+  llvm::Value *FnPtr = Builder.CreateExtractValue(MemFnPtr, 0, "memptr.ptr");
   
   // If the LSB in the function pointer is 1, the function pointer points to
   // a virtual function.
+  // TODO: use new CHERI CXX ABI
+  bool IsCheriABI = getContext().getTargetInfo().areAllPointersCapabilities();
   llvm::Value *IsVirtual;
-  if (UseARMMethodPtrABI)
+  if (UseARMMethodPtrABI || IsCheriABI) // XXXAR: TODO: use tag bit instead
     IsVirtual = Builder.CreateAnd(RawAdj, ptrdiff_1);
-  else
-    IsVirtual = Builder.CreateAnd(FnAsInt, ptrdiff_1);
+  else {
+    IsVirtual = Builder.CreateAnd(FnPtr, ptrdiff_1);
+  }
   IsVirtual = Builder.CreateIsNotNull(IsVirtual, "memptr.isvirtual");
   Builder.CreateCondBr(IsVirtual, FnVirtual, FnNonVirtual);
 
@@ -582,7 +587,6 @@ CGCallee ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
   CGF.EmitBlock(FnVirtual);
 
   // Cast the adjusted this to a pointer to vtable pointer and load.
-  const unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   llvm::Type *VTableTy = Builder.getInt8PtrTy(DefaultAS);
   CharUnits VTablePtrAlign =
     CGF.CGM.getDynamicOffsetAlignment(ThisAddr.getAlignment(), RD,
@@ -593,7 +597,8 @@ CGCallee ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
   // Apply the offset.
   // On ARM64, to reserve extra space in virtual member function pointers,
   // we only pay attention to the low 32 bits of the offset.
-  llvm::Value *VTableOffset = FnAsInt;
+  llvm::Value *VTableOffset =
+      Builder.CreatePtrToInt(FnPtr, CGM.PtrDiffTy, "memptr.vtable-offset");
   if (!UseARMMethodPtrABI)
     VTableOffset = Builder.CreateSub(VTableOffset, ptrdiff_1);
   if (Use32BitVTableOffsetABI) {
@@ -612,9 +617,15 @@ CGCallee ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
   // In the non-virtual path, the function pointer is actually a
   // function pointer.
   CGF.EmitBlock(FnNonVirtual);
-  llvm::Value *NonVirtualFn =
-    Builder.CreateIntToPtr(FnAsInt, FTy->getPointerTo(DefaultAS), "memptr.nonvirtualfn");
-  
+  llvm::Value *NonVirtualFn;
+  if (IsCheriABI) {
+    NonVirtualFn = Builder.CreatePointerCast(FnPtr, FTy->getPointerTo(DefaultAS),
+                                             "memptr.nonvirtualfn");
+  } else {
+    NonVirtualFn = Builder.CreateIntToPtr(FnPtr, FTy->getPointerTo(DefaultAS),
+                                          "memptr.nonvirtualfn");
+  }
+
   // We're done.
   CGF.EmitBlock(FnEnd);
   llvm::PHINode *CalleePtr = Builder.CreatePHI(FTy->getPointerTo(DefaultAS), 2);
@@ -679,6 +690,8 @@ ItaniumCXXABI::EmitMemberPointerConversion(CodeGenFunction &CGF,
          E->getCastKind() == CK_BaseToDerivedMemberPointer ||
          E->getCastKind() == CK_ReinterpretMemberPointer);
 
+  // XXXAR: FIXME: CHERI
+
   // Under Itanium, reinterprets don't require any additional processing.
   if (E->getCastKind() == CK_ReinterpretMemberPointer) return src;
 
@@ -733,6 +746,8 @@ ItaniumCXXABI::EmitMemberPointerConversion(const CastExpr *E,
   assert(E->getCastKind() == CK_DerivedToBaseMemberPointer ||
          E->getCastKind() == CK_BaseToDerivedMemberPointer ||
          E->getCastKind() == CK_ReinterpretMemberPointer);
+
+  // XXXAR: FIXME: CHERI
 
   // Under Itanium, reinterprets don't require any additional processing.
   if (E->getCastKind() == CK_ReinterpretMemberPointer) return src;

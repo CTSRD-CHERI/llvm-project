@@ -140,6 +140,18 @@ bool data_ptr_not_equal(int A::* ptr1, int A::* ptr2) {
   // CHECK: ret i1 %2
 }
 
+int data_ptr_dereferece(A* a, int A::* ptr) {
+  return a->*ptr;
+  // CHECK: define i32 @_Z19data_ptr_derefereceP1AMS_i(%class.A addrspace(200)* %a, i64 %ptr)
+  // CHECK: %0 = load %class.A addrspace(200)*, %class.A addrspace(200)* addrspace(200)* %a.addr, align 32
+  // CHECK: %1 = load i64, i64 addrspace(200)* %ptr.addr, align 8
+  // CHECK: %2 = bitcast %class.A addrspace(200)* %0 to i8 addrspace(200)*
+  // CHECK: %memptr.offset = getelementptr inbounds i8, i8 addrspace(200)* %2, i64 %1
+  // CHECK: %3 = bitcast i8 addrspace(200)* %memptr.offset to i32 addrspace(200)*
+  // CHECK: %4 = load i32, i32 addrspace(200)* %3, align 4
+  // CHECK: ret i32 %4
+}
+
 bool func_ptr_equal() {
   // FIXME: member pointers are not being passed correctly as arguments (probably because ismemcaptype returns false?)
   AMemberFuncPtr ptr1 = &A::foo_virtual;
@@ -182,6 +194,41 @@ bool func_ptr_not_equal() {
   // CHECK: ret i1 %memptr.ne
 }
 
+int func_ptr_dereference(A* a) {
+  // FIXME: member pointers are not being passed correctly as arguments (probably because ismemcaptype returns false?)
+  AMemberFuncPtr ptr = &A::foo_virtual;
+  return (a->*ptr)();
+  // CHECK: define i32 @_Z20func_ptr_dereferenceP1A(%class.A addrspace(200)* %a)
+  // CHECK: %0 = load %class.A addrspace(200)*, %class.A addrspace(200)* addrspace(200)* %a.addr, align 32
+  // CHECK: %1 = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %ptr, align 8
+  // CHECK: %memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %1, 1
+  // CHECK: %memptr.adj.shifted = ashr i64 %memptr.adj, 1
+  // CHECK: %2 = bitcast %class.A addrspace(200)* %0 to i8 addrspace(200)*
+  // CHECK: %3 = getelementptr inbounds i8, i8 addrspace(200)* %2, i64 %memptr.adj.shifted
+  // CHECK: %this.adjusted = bitcast i8 addrspace(200)* %3 to %class.A addrspace(200)*
+  // CHECK: %memptr.ptr = extractvalue { i8 addrspace(200)*, i64 } %1, 0
+  // CHECK: %4 = and i64 %memptr.adj, 1
+  // CHECK: %memptr.isvirtual = icmp ne i64 %4, 0
+  // CHECK: br i1 %memptr.isvirtual, label %memptr.virtual, label %memptr.nonvirtual
+
+  // CHECK: memptr.virtual:                                   ; preds = %entry
+  // CHECK: %5 = bitcast %class.A addrspace(200)* %this.adjusted to i8 addrspace(200)* addrspace(200)*
+  // CHECK: %vtable = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %5, align 32
+  // CHECK: %memptr.vtable-offset = ptrtoint i8 addrspace(200)* %memptr.ptr to i64
+  // CHECK: %6 = getelementptr i8, i8 addrspace(200)* %vtable, i64 %memptr.vtable-offset
+  // CHECK: %7 = bitcast i8 addrspace(200)* %6 to i32 (%class.A addrspace(200)*) addrspace(200)* addrspace(200)*
+  // CHECK: %memptr.virtualfn = load i32 (%class.A addrspace(200)*) addrspace(200)*, i32 (%class.A addrspace(200)*) addrspace(200)* addrspace(200)* %7, align 32
+  // CHECK: br label %memptr.end
+
+  // CHECK: memptr.nonvirtual:                                ; preds = %entry
+  // CHECK: %memptr.nonvirtualfn = bitcast i8 addrspace(200)* %memptr.ptr to i32 (%class.A addrspace(200)*) addrspace(200)*
+  // CHECK: br label %memptr.end
+
+  // CHECK: memptr.end:                                       ; preds = %memptr.nonvirtual, %memptr.virtual
+  // CHECK: %8 = phi i32 (%class.A addrspace(200)*) addrspace(200)* [ %memptr.virtualfn, %memptr.virtual ], [ %memptr.nonvirtualfn, %memptr.nonvirtual ]
+  // CHECK: %call = call i32 %8(%class.A addrspace(200)* %this.adjusted)
+  // CHECK: ret i32 %call
+}
 
 
 // taken from temporaries.cpp
