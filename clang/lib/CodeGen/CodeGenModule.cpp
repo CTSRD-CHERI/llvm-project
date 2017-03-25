@@ -1963,8 +1963,8 @@ CodeGenModule::GetOrCreateLLVMFunction(StringRef MangledName,
     // (If function is requested for a definition, we always need to create a new
     // function, not just return a bitcast.)
     if (!IsForDefinition) {
-      unsigned DefaultAS = getTargetCodeGenInfo().getDefaultAS();
-      return llvm::ConstantExpr::getBitCast(Entry, Ty->getPointerTo(DefaultAS)); // XXXAR: is this needed?
+      // AS0 OKAY: LLVM functions are always in AS0
+      return llvm::ConstantExpr::getBitCast(Entry, Ty->getPointerTo(0));
     }
   }
 
@@ -2005,9 +2005,9 @@ CodeGenModule::GetOrCreateLLVMFunction(StringRef MangledName,
       Entry->removeDeadConstantUsers();
     }
 
-    unsigned DefaultAS = getTargetCodeGenInfo().getDefaultAS(); // XXXAR: is this needed?
+    // AS0 OKAY: LLVM functions are always in AS0
     llvm::Constant *BC = llvm::ConstantExpr::getBitCast(
-        F, Entry->getType()->getElementType()->getPointerTo(DefaultAS));
+        F, Entry->getType()->getElementType()->getPointerTo(0));
 
     addGlobalValReplacement(Entry, BC);
   }
