@@ -16,11 +16,10 @@ namespace PR20227 {
 #ifdef CHECK_ERROR
   // RTTI should be off by default with CHERI
   B &&b = dynamic_cast<C&&>(dynamic_cast<B&&>(C{}));  // expected-error {{cannot use dynamic_cast with -fno-rtti}}
-  // CHECK: @_ZGRN7PR202271bE_ = internal global
 #endif
 
   B &&c = static_cast<C&&>(static_cast<B&&>(C{}));
-  // CHECK: @_ZN7PR202271cE = local_unnamed_addr addrspace(200) global %"struct.PR20227::B" addrspace(200)* null, align 32
+  // CHECK: @_ZN7PR202271cE = addrspace(200) global %"struct.PR20227::B" addrspace(200)* null, align 32
   // CHECK: @_ZGRN7PR202271cE_ = internal addrspace(200) global %"struct.PR20227::C" zeroinitializer, align 32
 
 }
