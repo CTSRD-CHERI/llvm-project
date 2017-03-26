@@ -1,8 +1,8 @@
 // RUN: %clang_cc1 "-target-abi" "purecap" -fsyntax-only -triple cheri-unknown-freebsd %s -std=c++11 -verify
-// expected-no-diagnostics
 
-struct foo_cap {
-	void *a;
+
+struct foo_cap { // expected-note {{Add __attribute__((aligned(32))) to ensure sufficient alignment}}
+	void *a; // expected-warning {{Under aligned capability field in packed structure will trap if struct is used in an array}}
 	long d;
 	long e;
 } __attribute__((packed));  // make it 48 instead of 64
