@@ -1962,8 +1962,10 @@ CodeGenModule::GetOrCreateLLVMFunction(StringRef MangledName,
     // Make sure the result is of the correct type.
     // (If function is requested for a definition, we always need to create a new
     // function, not just return a bitcast.)
-    if (!IsForDefinition)
-      return llvm::ConstantExpr::getBitCast(Entry, Ty->getPointerTo());
+    if (!IsForDefinition) {
+      // AS0 OKAY: LLVM functions are always in AS0
+      return llvm::ConstantExpr::getBitCast(Entry, Ty->getPointerTo(0));
+    }
   }
 
   // This function doesn't have a complete type (for example, the return
@@ -2003,8 +2005,10 @@ CodeGenModule::GetOrCreateLLVMFunction(StringRef MangledName,
       Entry->removeDeadConstantUsers();
     }
 
+    // AS0 OKAY: LLVM functions are always in AS0
     llvm::Constant *BC = llvm::ConstantExpr::getBitCast(
-        F, Entry->getType()->getElementType()->getPointerTo());
+        F, Entry->getType()->getElementType()->getPointerTo(0));
+
     addGlobalValReplacement(Entry, BC);
   }
 

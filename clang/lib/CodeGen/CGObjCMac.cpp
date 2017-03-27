@@ -363,10 +363,12 @@ public:
     return CGM.CreateRuntimeFunction(FTy, "objc_lookUpClass");
   }
 
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+
   /// GcReadWeakFn -- LLVM objc_read_weak (id *src) function.
   llvm::Constant *getGcReadWeakFn() {
     // id objc_read_weak (id *)
-    llvm::Type *args[] = { ObjectPtrTy->getPointerTo() };
+    llvm::Type *args[] = { ObjectPtrTy->getPointerTo(DefaultAS) };
     llvm::FunctionType *FTy =
       llvm::FunctionType::get(ObjectPtrTy, args, false);
     return CGM.CreateRuntimeFunction(FTy, "objc_read_weak");
@@ -375,7 +377,7 @@ public:
   /// GcAssignWeakFn -- LLVM objc_assign_weak function.
   llvm::Constant *getGcAssignWeakFn() {
     // id objc_assign_weak (id, id *)
-    llvm::Type *args[] = { ObjectPtrTy, ObjectPtrTy->getPointerTo() };
+    llvm::Type *args[] = { ObjectPtrTy, ObjectPtrTy->getPointerTo(DefaultAS) };
     llvm::FunctionType *FTy =
       llvm::FunctionType::get(ObjectPtrTy, args, false);
     return CGM.CreateRuntimeFunction(FTy, "objc_assign_weak");
@@ -384,7 +386,7 @@ public:
   /// GcAssignGlobalFn -- LLVM objc_assign_global function.
   llvm::Constant *getGcAssignGlobalFn() {
     // id objc_assign_global(id, id *)
-    llvm::Type *args[] = { ObjectPtrTy, ObjectPtrTy->getPointerTo() };
+    llvm::Type *args[] = { ObjectPtrTy, ObjectPtrTy->getPointerTo(DefaultAS) };
     llvm::FunctionType *FTy =
       llvm::FunctionType::get(ObjectPtrTy, args, false);
     return CGM.CreateRuntimeFunction(FTy, "objc_assign_global");
@@ -393,7 +395,7 @@ public:
   /// GcAssignThreadLocalFn -- LLVM objc_assign_threadlocal function.
   llvm::Constant *getGcAssignThreadLocalFn() {
     // id objc_assign_threadlocal(id src, id * dest)
-    llvm::Type *args[] = { ObjectPtrTy, ObjectPtrTy->getPointerTo() };
+    llvm::Type *args[] = { ObjectPtrTy, ObjectPtrTy->getPointerTo(DefaultAS) };
     llvm::FunctionType *FTy =
       llvm::FunctionType::get(ObjectPtrTy, args, false);
     return CGM.CreateRuntimeFunction(FTy, "objc_assign_threadlocal");
@@ -402,7 +404,7 @@ public:
   /// GcAssignIvarFn -- LLVM objc_assign_ivar function.
   llvm::Constant *getGcAssignIvarFn() {
     // id objc_assign_ivar(id, id *, ptrdiff_t)
-    llvm::Type *args[] = { ObjectPtrTy, ObjectPtrTy->getPointerTo(),
+    llvm::Type *args[] = { ObjectPtrTy, ObjectPtrTy->getPointerTo(DefaultAS),
                            CGM.PtrDiffTy };
     llvm::FunctionType *FTy =
       llvm::FunctionType::get(ObjectPtrTy, args, false);
@@ -420,7 +422,7 @@ public:
   /// GcAssignStrongCastFn -- LLVM objc_assign_strongCast function.
   llvm::Constant *getGcAssignStrongCastFn() {
     // id objc_assign_strongCast(id, id *)
-    llvm::Type *args[] = { ObjectPtrTy, ObjectPtrTy->getPointerTo() };
+    llvm::Type *args[] = { ObjectPtrTy, ObjectPtrTy->getPointerTo(DefaultAS) };
     llvm::FunctionType *FTy =
       llvm::FunctionType::get(ObjectPtrTy, args, false);
     return CGM.CreateRuntimeFunction(FTy, "objc_assign_strongCast");
@@ -555,7 +557,8 @@ public:
   
   /// ExceptionTryEnterFn - LLVM objc_exception_try_enter function.
   llvm::Constant *getExceptionTryEnterFn() {
-    llvm::Type *params[] = { ExceptionDataTy->getPointerTo() };
+    unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+    llvm::Type *params[] = { ExceptionDataTy->getPointerTo(DefaultAS) };
     return CGM.CreateRuntimeFunction(
       llvm::FunctionType::get(CGM.VoidTy, params, false),
       "objc_exception_try_enter");
@@ -563,7 +566,8 @@ public:
 
   /// ExceptionTryExitFn - LLVM objc_exception_try_exit function.
   llvm::Constant *getExceptionTryExitFn() {
-    llvm::Type *params[] = { ExceptionDataTy->getPointerTo() };
+    unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+    llvm::Type *params[] = { ExceptionDataTy->getPointerTo(DefaultAS) };
     return CGM.CreateRuntimeFunction(
       llvm::FunctionType::get(CGM.VoidTy, params, false),
       "objc_exception_try_exit");
@@ -571,7 +575,8 @@ public:
 
   /// ExceptionExtractFn - LLVM objc_exception_extract function.
   llvm::Constant *getExceptionExtractFn() {
-    llvm::Type *params[] = { ExceptionDataTy->getPointerTo() };
+    unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+    llvm::Type *params[] = { ExceptionDataTy->getPointerTo(DefaultAS) };
     return CGM.CreateRuntimeFunction(llvm::FunctionType::get(ObjectPtrTy,
                                                              params, false),
                                      "objc_exception_extract");
@@ -588,7 +593,8 @@ public:
   /// SetJmpFn - LLVM _setjmp function.
   llvm::Constant *getSetJmpFn() {
     // This is specifically the prototype for x86.
-    llvm::Type *params[] = { CGM.Int32Ty->getPointerTo() };
+    unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+    llvm::Type *params[] = { CGM.Int32Ty->getPointerTo(DefaultAS) };
     return
       CGM.CreateRuntimeFunction(llvm::FunctionType::get(CGM.Int32Ty,
                                                         params, false),
@@ -1886,7 +1892,8 @@ llvm::Constant *CGObjCMac::getNSConstantStringClassRef() {
 
   llvm::Type *PTy = llvm::ArrayType::get(CGM.IntTy, 0);
   auto GV = CGM.CreateRuntimeVariable(PTy, str);
-  auto V = llvm::ConstantExpr::getBitCast(GV, CGM.IntTy->getPointerTo());
+  auto V = llvm::ConstantExpr::getBitCast(GV, CGM.IntTy->getPointerTo(
+      CGM.getTargetCodeGenInfo().getDefaultAS()));
   ConstantStringClassRef = V;
   return V;
 }
@@ -1902,7 +1909,8 @@ llvm::Constant *CGObjCNonFragileABIMac::getNSConstantStringClassRef() {
   auto GV = GetClassGlobal(str, NotForDefinition);
 
   // Make sure the result is of the correct type.
-  auto V = llvm::ConstantExpr::getBitCast(GV, CGM.IntTy->getPointerTo());
+  auto V = llvm::ConstantExpr::getBitCast(GV, CGM.IntTy->getPointerTo(
+      CGM.getTargetCodeGenInfo().getDefaultAS()));
 
   ConstantStringClassRef = V;
   return V;
@@ -1924,7 +1932,7 @@ CGObjCCommonMac::GenerateConstantNSString(const StringLiteral *Literal) {
   if (!NSConstantStringType) {
     NSConstantStringType =
       llvm::StructType::create({
-        CGM.Int32Ty->getPointerTo(),
+        CGM.Int32Ty->getPointerTo(CGM.getTargetCodeGenInfo().getDefaultAS()),
         CGM.Int8PtrTy,
         CGM.IntTy
       }, "struct.__builtin_NSString");
@@ -5827,7 +5835,7 @@ ObjCNonFragileABITypesHelper::ObjCNonFragileABITypesHelper(CodeGen::CodeGenModul
   // ImpnfABITy - LLVM for id (*)(id, SEL, ...)
   llvm::Type *params[] = { ObjectPtrTy, SelectorPtrTy };
   ImpnfABITy = llvm::FunctionType::get(ObjectPtrTy, params, false)
-                 ->getPointerTo();
+                 ->getPointerTo(CGM.getTargetCodeGenInfo().getDefaultAS());
 
   // struct _class_t {
   //   struct _class_t *isa;
@@ -6260,7 +6268,8 @@ void CGObjCNonFragileABIMac::GenerateClass(const ObjCImplementationDecl *ID) {
                                    "_objc_empty_vtable");
     else
       ObjCEmptyVtableVar =
-        llvm::ConstantPointerNull::get(ObjCTypes.ImpnfABITy->getPointerTo());
+        llvm::ConstantPointerNull::get(ObjCTypes.ImpnfABITy->getPointerTo(
+          CGM.getTargetCodeGenInfo().getDefaultAS()));
   }
 
   // FIXME: Is this correct (that meta class size is never computed)?

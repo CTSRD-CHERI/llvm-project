@@ -1155,7 +1155,7 @@ void X86_32TargetCodeGenInfo::addReturnRegisterOutputs(
 
   // Coerce the integer by bitcasting the return slot pointer.
   ReturnSlot.setAddress(CGF.Builder.CreateBitCast(ReturnSlot.getAddress(),
-                                                  CoerceTy->getPointerTo()));
+                                                  CoerceTy->getPointerTo(getDefaultAS())));
   ResultRegDests.push_back(ReturnSlot);
 
   rewriteInputConstraintReferences(NumOutputs, 1, AsmString);

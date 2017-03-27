@@ -1092,6 +1092,7 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
 
     if (!DidCallStackSave) {
       // Save the stack.
+      // XXXAR: Should this really be address space 0?
       Address Stack = CreateTempAlloca(Int8Ty->getPointerTo(0),
           getPointerAlign(), "saved_stack");
 

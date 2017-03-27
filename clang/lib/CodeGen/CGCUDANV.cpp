@@ -103,7 +103,8 @@ CGNVCUDARuntime::CGNVCUDARuntime(CodeGenModule &CGM)
 
   CharPtrTy = llvm::PointerType::getUnqual(Types.ConvertType(Ctx.CharTy));
   VoidPtrTy = cast<llvm::PointerType>(Types.ConvertType(Ctx.VoidPtrTy));
-  VoidPtrPtrTy = VoidPtrTy->getPointerTo();
+  VoidPtrPtrTy = VoidPtrTy->getPointerTo(
+      CGM.getTargetCodeGenInfo().getDefaultAS());
 }
 
 llvm::Constant *CGNVCUDARuntime::getSetupArgumentFn() const {
@@ -188,11 +189,12 @@ llvm::Function *CGNVCUDARuntime::makeRegisterGlobalsFn() {
   CGBuilderTy Builder(CGM, Context);
   Builder.SetInsertPoint(EntryBB);
 
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   // void __cudaRegisterFunction(void **, const char *, char *, const char *,
   //                             int, uint3*, uint3*, dim3*, dim3*, int*)
   llvm::Type *RegisterFuncParams[] = {
       VoidPtrPtrTy, CharPtrTy, CharPtrTy, CharPtrTy, IntTy,
-      VoidPtrTy,    VoidPtrTy, VoidPtrTy, VoidPtrTy, IntTy->getPointerTo()};
+      VoidPtrTy,    VoidPtrTy, VoidPtrTy, VoidPtrTy, IntTy->getPointerTo(DefaultAS)};
   llvm::Constant *RegisterFunc = CGM.CreateRuntimeFunction(
       llvm::FunctionType::get(IntTy, RegisterFuncParams, false),
       "__cudaRegisterFunction");
@@ -208,7 +210,7 @@ llvm::Function *CGNVCUDARuntime::makeRegisterGlobalsFn() {
         &GpuBinaryHandlePtr, Builder.CreateBitCast(Kernel, VoidPtrTy),
         KernelName, KernelName, llvm::ConstantInt::get(IntTy, -1), NullPtr,
         NullPtr, NullPtr, NullPtr,
-        llvm::ConstantPointerNull::get(IntTy->getPointerTo())};
+        llvm::ConstantPointerNull::get(IntTy->getPointerTo(DefaultAS))};
     Builder.CreateCall(RegisterFunc, Args);
   }
 

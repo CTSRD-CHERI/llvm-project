@@ -86,7 +86,8 @@ CGCallee CGCXXABI::EmitLoadOfMemberFunctionPointer(
     cast<CXXRecordDecl>(MPT->getClass()->getAs<RecordType>()->getDecl());
   llvm::FunctionType *FTy = CGM.getTypes().GetFunctionType(
       CGM.getTypes().arrangeCXXMethodType(RD, FPT, /*FD=*/nullptr));
-  llvm::Constant *FnPtr = llvm::Constant::getNullValue(FTy->getPointerTo());
+  unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  llvm::Constant *FnPtr = llvm::Constant::getNullValue(FTy->getPointerTo(AS));
   return CGCallee::forDirect(FnPtr, FPT);
 }
 

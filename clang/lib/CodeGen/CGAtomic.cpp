@@ -87,7 +87,8 @@ namespace {
             VoidPtrAddr, OffsetInChars.getQuantity());
         auto Addr = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(
             VoidPtrAddr,
-            CGF.Builder.getIntNTy(AtomicSizeInBits)->getPointerTo(),
+            CGF.Builder.getIntNTy(AtomicSizeInBits)->getPointerTo(
+              CGF.CGM.getTargetCodeGenInfo().getDefaultAS()),
             "atomic_bitfield_base");
         BFI = OrigBFI;
         BFI.Offset = Offset;
@@ -643,8 +644,9 @@ AddDirectArgument(CodeGenFunction &CGF, CallArgList &Args,
     int64_t SizeInBits = CGF.getContext().toBits(SizeInChars);
     ValTy =
         CGF.getContext().getIntTypeForBitwidth(SizeInBits, /*Signed=*/false);
-    llvm::Type *IPtrTy = llvm::IntegerType::get(CGF.getLLVMContext(),
-                                                SizeInBits)->getPointerTo();
+    llvm::Type *IPtrTy =
+        llvm::IntegerType::get(CGF.getLLVMContext(), SizeInBits)->getPointerTo(
+          CGF.CGM.getTargetCodeGenInfo().getDefaultAS());
     Address Ptr = Address(CGF.Builder.CreateBitCast(Val, IPtrTy), Align);
     Val = CGF.EmitLoadOfScalar(Ptr, false,
                                CGF.getContext().getPointerType(ValTy),
@@ -1011,7 +1013,8 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
 
       Builder.CreateStore(
           ResVal,
-          Builder.CreateBitCast(Dest, ResVal->getType()->getPointerTo()));
+          Builder.CreateBitCast(Dest, ResVal->getType()->getPointerTo(
+            CGM.getTargetCodeGenInfo().getDefaultAS())));
     }
 
     if (RValTy->isVoidType())

@@ -598,7 +598,8 @@ CGCallee ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
   VTable = Builder.CreateGEP(VTable, VTableOffset);
 
   // Load the virtual function to call.
-  VTable = Builder.CreateBitCast(VTable, FTy->getPointerTo()->getPointerTo());
+  const unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  VTable = Builder.CreateBitCast(VTable, FTy->getPointerTo(DefaultAS)->getPointerTo(DefaultAS));
   llvm::Value *VirtualFn =
     Builder.CreateAlignedLoad(VTable, CGF.getPointerAlign(),
                               "memptr.virtualfn");
@@ -608,11 +609,11 @@ CGCallee ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
   // function pointer.
   CGF.EmitBlock(FnNonVirtual);
   llvm::Value *NonVirtualFn =
-    Builder.CreateIntToPtr(FnAsInt, FTy->getPointerTo(), "memptr.nonvirtualfn");
+    Builder.CreateIntToPtr(FnAsInt, FTy->getPointerTo(DefaultAS), "memptr.nonvirtualfn");
   
   // We're done.
   CGF.EmitBlock(FnEnd);
-  llvm::PHINode *CalleePtr = Builder.CreatePHI(FTy->getPointerTo(), 2);
+  llvm::PHINode *CalleePtr = Builder.CreatePHI(FTy->getPointerTo(DefaultAS), 2);
   CalleePtr->addIncoming(VirtualFn, FnVirtual);
   CalleePtr->addIncoming(NonVirtualFn, FnNonVirtual);
 
@@ -1019,10 +1020,12 @@ void ItaniumCXXABI::emitVirtualObjectDelete(CodeGenFunction &CGF,
     // to pass to the deallocation function.
 
     // Grab the vtable pointer as an intptr_t*.
+    // XXXAR: is this correct?
+    unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
     auto *ClassDecl =
         cast<CXXRecordDecl>(ElementType->getAs<RecordType>()->getDecl());
     llvm::Value *VTable =
-        CGF.GetVTablePtr(Ptr, CGF.IntPtrTy->getPointerTo(), ClassDecl);
+        CGF.GetVTablePtr(Ptr, CGF.IntPtrTy->getPointerTo(DefaultAS), ClassDecl);
 
     // Track back to entry -2 and pull out the offset there.
     llvm::Value *OffsetPtr = CGF.Builder.CreateConstInBoundsGEP1_64(
@@ -1223,8 +1226,10 @@ llvm::Value *ItaniumCXXABI::EmitTypeid(CodeGenFunction &CGF,
                                        llvm::Type *StdTypeInfoPtrTy) {
   auto *ClassDecl =
       cast<CXXRecordDecl>(SrcRecordTy->getAs<RecordType>()->getDecl());
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   llvm::Value *Value =
-      CGF.GetVTablePtr(ThisPtr, StdTypeInfoPtrTy->getPointerTo(), ClassDecl);
+      CGF.GetVTablePtr(ThisPtr, StdTypeInfoPtrTy->getPointerTo(DefaultAS),
+                       ClassDecl);
 
   // Load the type info.
   Value = CGF.Builder.CreateConstInBoundsGEP1_64(Value, -1ULL);
@@ -1290,7 +1295,9 @@ llvm::Value *ItaniumCXXABI::EmitDynamicCastToVoid(CodeGenFunction &CGF,
   auto *ClassDecl =
       cast<CXXRecordDecl>(SrcRecordTy->getAs<RecordType>()->getDecl());
   // Get the vtable pointer.
-  llvm::Value *VTable = CGF.GetVTablePtr(ThisAddr, PtrDiffLTy->getPointerTo(),
+  // XXXAR: this looks wrong, shouldn't it be intptr_t?
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  llvm::Value *VTable = CGF.GetVTablePtr(ThisAddr, PtrDiffLTy->getPointerTo(DefaultAS),
       ClassDecl);
 
   // Get the offset-to-top from the vtable.
@@ -1621,7 +1628,8 @@ CGCallee ItaniumCXXABI::getVirtualFunctionPointer(CodeGenFunction &CGF,
                                                   llvm::Type *Ty,
                                                   SourceLocation Loc) {
   GD = GD.getCanonicalDecl();
-  Ty = Ty->getPointerTo()->getPointerTo();
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  Ty = Ty->getPointerTo(DefaultAS)->getPointerTo(DefaultAS);
   auto *MethodDecl = cast<CXXMethodDecl>(GD.getDecl());
   llvm::Value *VTable = CGF.GetVTablePtr(This, Ty, MethodDecl->getParent());
 
