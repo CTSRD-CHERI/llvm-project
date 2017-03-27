@@ -1027,7 +1027,7 @@ void CoverageMappingModuleGen::addFunctionMappingRecord(
       FunctionRecordTy, makeArrayRef(FunctionRecordVals)));
   if (!IsUsed)
     FunctionNames.push_back(
-        llvm::ConstantExpr::getBitCast(NamePtr, llvm::Type::getInt8PtrTy(Ctx)));
+        llvm::ConstantExpr::getBitCast(NamePtr, CGM.Int8PtrTy));
   CoverageMappings.push_back(CoverageMapping);
 
   if (CGM.getCodeGenOpts().DumpCoverageMapping) {
@@ -1128,8 +1128,7 @@ void CoverageMappingModuleGen::emit() {
   CGM.addUsedGlobal(CovData);
   // Create the deferred function records array
   if (!FunctionNames.empty()) {
-    auto NamesArrTy = llvm::ArrayType::get(llvm::Type::getInt8PtrTy(Ctx),
-                                           FunctionNames.size());
+    auto NamesArrTy = llvm::ArrayType::get(CGM.Int8PtrTy, FunctionNames.size());
     auto NamesArrVal = llvm::ConstantArray::get(NamesArrTy, FunctionNames);
     // This variable will *NOT* be emitted to the object file. It is used
     // to pass the list of names referenced to codegen.

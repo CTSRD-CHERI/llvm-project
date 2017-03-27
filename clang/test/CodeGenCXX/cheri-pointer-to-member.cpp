@@ -249,17 +249,21 @@ namespace PR7556 {
   struct A { ~A(); };
   struct B { int i; ~B(); };
   struct C { int C::*pm; ~C(); };
-  // xCHECK-LABEL: define void @_ZN6PR75563fooEv()
+  // CHECK-LABEL: define void @_ZN6PR75563fooEv()
   void foo() {
-    // xCHECK: call void @_ZN6PR75561AD1Ev
+    // CHECK: call void @_ZN6PR75561AD1Ev(%"struct.PR7556::A" addrspace(200)* %agg.tmp.ensured)
     A();
-    // xCHECK: call void @llvm.memset.p200i8.i64
-    // xCHECK: call void @_ZN6PR75561BD1Ev
+
+    // B() is initialized using memset:
+    // CHECK: %0 = bitcast %"struct.PR7556::B" addrspace(200)* %agg.tmp.ensured1 to i8 addrspace(200)*
+    // CHECK: call void @llvm.memset.p200i8.i64(i8 addrspace(200)* %0, i8 0, i64 4, i32 4, i1 false)
+    // CHECK: call void @_ZN6PR75561BD1Ev(%"struct.PR7556::B" addrspace(200)* %agg.tmp.ensured1)
     B();
-    // xCHECK-NOT: llvm.memcpy.p200i8.p0i8.i64
-    // xCHECK: call void @llvm.memcpy.p200i8.p200i8.i64
-    // xCHECK: call void @_ZN6PR75561CD1Ev
+    // C can't be zero-initialized due to pointer to data member:
+    // CHECK: %1 = bitcast %"struct.PR7556::C" addrspace(200)* %agg.tmp.ensured2 to i8 addrspace(200)*
+    // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* %1, i8 addrspace(200)* addrspacecast (i8* bitcast (%"struct.PR7556::C"* @0 to i8*) to i8 addrspace(200)*), i64 8, i32 8, i1 false)
+    // CHECK: call void @_ZN6PR75561CD1Ev(%"struct.PR7556::C" addrspace(200)* %agg.tmp.ensured2)
     C();
-    // xCHECK-NEXT: ret void
+    // CHECK: ret void
   }
 }

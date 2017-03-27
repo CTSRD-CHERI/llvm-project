@@ -73,7 +73,7 @@ void CodeGenFunction::EmitCoreturnStmt(CoreturnStmt const &S) {
 }
 
 void CodeGenFunction::EmitCoroutineBody(const CoroutineBodyStmt &S) {
-  auto *NullPtr = llvm::ConstantPointerNull::get(Builder.getInt8PtrTy());
+  auto *NullPtr = llvm::ConstantPointerNull::get(CGM.Int8PtrTy);
   auto &TI = CGM.getContext().getTargetInfo();
   unsigned NewAlign = TI.getNewAlign() / TI.getCharWidth();
 

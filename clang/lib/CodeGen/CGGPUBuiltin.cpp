@@ -21,9 +21,10 @@
 using namespace clang;
 using namespace CodeGen;
 
-static llvm::Function *GetVprintfDeclaration(llvm::Module &M) {
-  llvm::Type *ArgTypes[] = {llvm::Type::getInt8PtrTy(M.getContext()),
-                            llvm::Type::getInt8PtrTy(M.getContext())};
+static llvm::Function *GetVprintfDeclaration(CodeGenModule& CGM) {
+  llvm::Module &M = CGM.getModule();
+  // XXXAR: is this the correct signature?
+  llvm::Type *ArgTypes[] = {CGM.Int8PtrTy, CGM.Int8PtrTy};
   llvm::FunctionType *VprintfFuncType = llvm::FunctionType::get(
       llvm::Type::getInt32Ty(M.getContext()), ArgTypes, false);
 
@@ -74,7 +75,6 @@ CodeGenFunction::EmitNVPTXDevicePrintfCallExpr(const CallExpr *E,
   assert(E->getNumArgs() >= 1); // printf always has at least one arg.
 
   const llvm::DataLayout &DL = CGM.getDataLayout();
-  llvm::LLVMContext &Ctx = CGM.getLLVMContext();
 
   CallArgList Args;
   EmitCallArgs(Args,
@@ -93,7 +93,7 @@ CodeGenFunction::EmitNVPTXDevicePrintfCallExpr(const CallExpr *E,
   llvm::Value *BufferPtr;
   if (Args.size() <= 1) {
     // If there are no args, pass a null pointer to vprintf.
-    BufferPtr = llvm::ConstantPointerNull::get(llvm::Type::getInt8PtrTy(Ctx));
+    BufferPtr = llvm::ConstantPointerNull::get(CGM.Int8PtrTy);
   } else {
     llvm::SmallVector<llvm::Type *, 8> ArgTypes;
     for (unsigned I = 1, NumArgs = Args.size(); I < NumArgs; ++I)
@@ -112,11 +112,11 @@ CodeGenFunction::EmitNVPTXDevicePrintfCallExpr(const CallExpr *E,
       llvm::Value *Arg = Args[I].RV.getScalarVal();
       Builder.CreateAlignedStore(Arg, P, DL.getPrefTypeAlignment(Arg->getType()));
     }
-    BufferPtr = Builder.CreatePointerCast(Alloca, llvm::Type::getInt8PtrTy(Ctx));
+    BufferPtr = Builder.CreatePointerCast(Alloca, CGM.Int8PtrTy);
   }
 
   // Invoke vprintf and return.
-  llvm::Function* VprintfFunc = GetVprintfDeclaration(CGM.getModule());
+  llvm::Function* VprintfFunc = GetVprintfDeclaration(CGM);
   return RValue::get(
       Builder.CreateCall(VprintfFunc, {Args[0].RV.getScalarVal(), BufferPtr}));
 }

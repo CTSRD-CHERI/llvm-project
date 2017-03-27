@@ -143,7 +143,8 @@ protected:
   llvm::IntegerType *LongTy;
   /// LLVM type for C size_t.  Used in various runtime data structures.
   llvm::IntegerType *SizeTy;
-  /// LLVM type for C intptr_t.  
+  /// LLVM type for C intptr_t.
+  /// XXXAR: I think this is actually used for pointer range and not pointer size
   llvm::IntegerType *IntPtrTy;
   /// LLVM type for C ptrdiff_t.  Mainly used in property accessor functions.
   llvm::IntegerType *PtrDiffTy;
@@ -941,8 +942,14 @@ CGObjCGNU::CGObjCGNU(CodeGenModule &cgm, unsigned runtimeABIVersion,
   Int32Ty = llvm::Type::getInt32Ty(VMContext);
   Int64Ty = llvm::Type::getInt64Ty(VMContext);
 
+  // XXXAR: I think this code want's an integer which has the same range as a
+  // pointer and not the same width:
+  // TODO: rename?
   IntPtrTy = llvm::IntegerType::get(VMContext,
-      CGM.getDataLayout().getPointerSizeInBits());
+     CGM.getTarget().getPointerRange(CGM.getTargetCodeGenInfo().getDefaultAS()));
+
+  // IntPtrTy = llvm::IntegerType::get(VMContext,
+  //   CGM.getDataLayout().getPointerSizeInBits());
 
 
   // Object type
@@ -2018,7 +2025,8 @@ void CGObjCGNU::GenerateProtocolHolderCategory() {
 /// bitfield / with the 63rd bit set will be 1<<64.
 llvm::Constant *CGObjCGNU::MakeBitField(ArrayRef<bool> bits) {
   int bitCount = bits.size();
-  int ptrBits = CGM.getDataLayout().getPointerSizeInBits();
+  int ptrBits = CGM.getTarget().getPointerRange(
+      CGM.getTargetCodeGenInfo().getDefaultAS());
   if (bitCount < ptrBits) {
     uint64_t val = 1;
     for (int i=0 ; i<bitCount ; ++i) {
@@ -2866,7 +2874,7 @@ llvm::GlobalVariable *CGObjCGNU::ObjCIvarOffsetVariable(
             AS);
     } else {
       IvarOffsetPointer = new llvm::GlobalVariable(TheModule,
-              llvm::Type::getInt32PtrTy(VMContext), false,
+              llvm::Type::getInt32PtrTy(VMContext, AS), false,
               llvm::GlobalValue::ExternalLinkage, nullptr, Name, nullptr,
               llvm::GlobalVariable::NotThreadLocal, AS);
     }
