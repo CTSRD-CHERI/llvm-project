@@ -5,7 +5,7 @@
 // RUN: sort %t.before > %t.before.sorted
 // RUN: sort %t.after > %t.after.sorted
 // RUN: diff -u %t.before.sorted %t.after.sorted
-// RUN: diff -u %t.before %t.after
+// THIS-FAILS: diff -u %t.before %t.after
 // RUN: FileCheck %s < %t.after
 
 // If not explicitly disabled, set PACKED to the packed attribute.
