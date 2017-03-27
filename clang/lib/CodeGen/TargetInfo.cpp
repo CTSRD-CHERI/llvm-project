@@ -6760,6 +6760,12 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
 
   // Unions/vectors are passed in integer registers.
   if (!RT || !RT->isStructureOrClassType()) {
+    const TargetInfo &Target = getContext().getTargetInfo();
+    if (Target.areAllPointersCapabilities()) {
+      if (Ty->isMemberFunctionPointerType()) {
+        return llvm::StructType::get(CGM.VoidPtrTy, CGM.PtrDiffTy, nullptr);
+      }
+    }
     CoerceToIntArgs(TySize, ArgList);
     return llvm::StructType::get(getVMContext(), ArgList);
   }

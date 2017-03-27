@@ -61,13 +61,6 @@ int main() {
    AMemberFuncPtr virtual_func_ptr_2 = &A::bar_virtual;
   // CHECK: store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 32 to i8 addrspace(200)*), i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)* %virtual_func_ptr_2, align 8
 
-#if 0
-  bool datacmp = data_ptr == data_ptr_2;
-  bool funccmp = func_ptr == func_ptr_2;
-  bool vfunccmp = virtual_func_ptr == virtual_func_ptr_2;
-  bool vfunc_func_cmp = virtual_func_ptr == func_ptr;
-#endif
-
   // return a.*data_ptr + (a.*func_ptr)() + (a.*virtual_func_ptr)();
   // return null_func_ptr == nullptr;
   return a.*data_ptr;
@@ -88,6 +81,36 @@ bool data_ptr_is_null(int A::* ptr) {
   // CHECK: %lnot = xor i1 %memptr.tobool, true
   // CHECK: ret i1 %lnot
   return !ptr;
+}
+
+bool data_ptr_equal(int A::* ptr1, int A::* ptr2) {
+  return ptr1 == ptr2;
+  // CHECK: define zeroext i1 @_Z14data_ptr_equalM1AiS0_(i64 %ptr1, i64 %ptr2)
+  // CHECK: %0 = load i64, i64 addrspace(200)* %ptr1.addr, align 8
+  // CHECK: %1 = load i64, i64 addrspace(200)* %ptr2.addr, align 8
+  // CHECK: %2 = icmp eq i64 %0, %1
+  // CHECK: ret i1 %2
+}
+
+bool data_ptr_not_equal(int A::* ptr1, int A::* ptr2) {
+  return ptr1 != ptr2;
+  // CHECK: define zeroext i1 @_Z18data_ptr_not_equalM1AiS0_(i64 %ptr1, i64 %ptr2)
+  // CHECK: %0 = load i64, i64 addrspace(200)* %ptr1.addr, align 8
+  // CHECK: %1 = load i64, i64 addrspace(200)* %ptr2.addr, align 8
+  // CHECK: %2 = icmp ne i64 %0, %1
+  // CHECK: ret i1 %2
+}
+
+int data_ptr_dereferece(A* a, int A::* ptr) {
+  return a->*ptr;
+  // CHECK: define i32 @_Z19data_ptr_derefereceP1AMS_i(%class.A addrspace(200)* %a, i64 %ptr)
+  // CHECK: %0 = load %class.A addrspace(200)*, %class.A addrspace(200)* addrspace(200)* %a.addr, align 32
+  // CHECK: %1 = load i64, i64 addrspace(200)* %ptr.addr, align 8
+  // CHECK: %2 = bitcast %class.A addrspace(200)* %0 to i8 addrspace(200)*
+  // CHECK: %memptr.offset = getelementptr inbounds i8, i8 addrspace(200)* %2, i64 %1
+  // CHECK: %3 = bitcast i8 addrspace(200)* %memptr.offset to i32 addrspace(200)*
+  // CHECK: %4 = load i32, i32 addrspace(200)* %3, align 4
+  // CHECK: ret i32 %4
 }
 
 // TODO: this could be simplified to test the tag bit of the address instead
@@ -120,36 +143,6 @@ bool func_ptr_is_null() {
   // CHECK: %memptr.isnonnull = or i1 %memptr.tobool, %memptr.isvirtual
   // CHECK: %lnot = xor i1 %memptr.isnonnull, true
   // CHECK: ret i1 %lnot
-}
-
-bool data_ptr_equal(int A::* ptr1, int A::* ptr2) {
-  return ptr1 == ptr2;
-  // CHECK: define zeroext i1 @_Z14data_ptr_equalM1AiS0_(i64 %ptr1, i64 %ptr2)
-  // CHECK: %0 = load i64, i64 addrspace(200)* %ptr1.addr, align 8
-  // CHECK: %1 = load i64, i64 addrspace(200)* %ptr2.addr, align 8
-  // CHECK: %2 = icmp eq i64 %0, %1
-  // CHECK: ret i1 %2
-}
-
-bool data_ptr_not_equal(int A::* ptr1, int A::* ptr2) {
-  return ptr1 != ptr2;
-  // CHECK: define zeroext i1 @_Z18data_ptr_not_equalM1AiS0_(i64 %ptr1, i64 %ptr2)
-  // CHECK: %0 = load i64, i64 addrspace(200)* %ptr1.addr, align 8
-  // CHECK: %1 = load i64, i64 addrspace(200)* %ptr2.addr, align 8
-  // CHECK: %2 = icmp ne i64 %0, %1
-  // CHECK: ret i1 %2
-}
-
-int data_ptr_dereferece(A* a, int A::* ptr) {
-  return a->*ptr;
-  // CHECK: define i32 @_Z19data_ptr_derefereceP1AMS_i(%class.A addrspace(200)* %a, i64 %ptr)
-  // CHECK: %0 = load %class.A addrspace(200)*, %class.A addrspace(200)* addrspace(200)* %a.addr, align 32
-  // CHECK: %1 = load i64, i64 addrspace(200)* %ptr.addr, align 8
-  // CHECK: %2 = bitcast %class.A addrspace(200)* %0 to i8 addrspace(200)*
-  // CHECK: %memptr.offset = getelementptr inbounds i8, i8 addrspace(200)* %2, i64 %1
-  // CHECK: %3 = bitcast i8 addrspace(200)* %memptr.offset to i32 addrspace(200)*
-  // CHECK: %4 = load i32, i32 addrspace(200)* %3, align 4
-  // CHECK: ret i32 %4
 }
 
 bool func_ptr_equal() {
@@ -230,6 +223,36 @@ int func_ptr_dereference(A* a) {
   // CHECK: ret i32 %call
 }
 
+// Check using Member pointers as return values an parameters
+AMemberFuncPtr return_func_ptr() {
+  // CHECK: define void @_Z15return_func_ptrv({ i8 addrspace(200)*, i64 } addrspace(200)* noalias sret %agg.result)
+  // CHECK: store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 32 to i8 addrspace(200)*), i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)* %retval, align 32
+  // CHECK: %0 = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %retval, align 32
+  // CHECK: store { i8 addrspace(200)*, i64 } %0, { i8 addrspace(200)*, i64 } addrspace(200)* %agg.result, align 32
+  // CHECK: ret void
+  return &A::bar_virtual;
+}
+
+void take_func_ptr(AMemberFuncPtr ptr) {
+  // CHECK: define void @_Z13take_func_ptrM1AFivE(i8 addrspace(200)* inreg %ptr.coerce0, i64 inreg %ptr.coerce1)
+  // CHECK: ret void
+}
+
+AMemberFuncPtr passthrough_func_ptr(AMemberFuncPtr ptr) {
+  // CHECK: define void @_Z20passthrough_func_ptrM1AFivE({ i8 addrspace(200)*, i64 } addrspace(200)* noalias sret %agg.result, i64, i8 addrspace(200)* inreg %ptr.coerce0, i64 inreg %ptr.coerce1)
+  // CHECK: %1 = getelementptr inbounds { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %ptr, i32 0, i32 0
+  // CHECK: store i8 addrspace(200)* %ptr.coerce0, i8 addrspace(200)* addrspace(200)* %1, align 8
+  // CHECK: %2 = getelementptr inbounds { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %ptr, i32 0, i32 1
+  // CHECK: store i64 %ptr.coerce1, i64 addrspace(200)* %2, align 8
+  // CHECK: %ptr1 = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %ptr, align 8
+  // CHECK: store { i8 addrspace(200)*, i64 } %ptr1, { i8 addrspace(200)*, i64 } addrspace(200)* %ptr.addr, align 8
+  // CHECK: %3 = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %ptr.addr, align 8
+  // CHECK: store { i8 addrspace(200)*, i64 } %3, { i8 addrspace(200)*, i64 } addrspace(200)* %retval, align 32
+  // CHECK: %4 = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %retval, align 32
+  // CHECK: store { i8 addrspace(200)*, i64 } %4, { i8 addrspace(200)*, i64 } addrspace(200)* %agg.result, align 32
+  // CHECK: ret void
+  return ptr;
+}
 
 // taken from temporaries.cpp
 namespace PR7556 {
