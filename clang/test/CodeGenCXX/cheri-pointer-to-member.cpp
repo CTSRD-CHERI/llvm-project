@@ -116,28 +116,24 @@ int data_ptr_dereferece(A* a, int A::* ptr) {
 // TODO: this could be simplified to test the tag bit of the address instead
 // of checking the low bit of the adjustment
 
-bool func_ptr_is_nonnull() {
-  // FIXME: member pointers are not being passed correctly as arguments (probably because ismemcaptype returns false?)
-  AMemberFuncPtr ptr = &A::bar;
+bool func_ptr_is_nonnull(AMemberFuncPtr ptr) {
   return static_cast<bool>(ptr);
-  // CHECK: define zeroext i1 @_Z19func_ptr_is_nonnullv() #0 {
-  // CHECK: %memptr.ptr = extractvalue { i8 addrspace(200)*, i64 } %0, 0
+  // CHECK: zeroext i1 @_Z19func_ptr_is_nonnullM1AFivE(i8 addrspace(200)* inreg %ptr.coerce0, i64 inreg %ptr.coerce1)
+  // CHECK: %memptr.ptr = extractvalue { i8 addrspace(200)*, i64 } %2, 0
   // CHECK: %memptr.tobool = icmp ne i8 addrspace(200)* %memptr.ptr, null
-  // CHECK: %memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %0, 1
+  // CHECK: %memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %2, 1
   // CHECK: %memptr.virtualbit = and i64 %memptr.adj, 1
   // CHECK: %memptr.isvirtual = icmp ne i64 %memptr.virtualbit, 0
   // CHECK: %memptr.isnonnull = or i1 %memptr.tobool, %memptr.isvirtual
   // CHECK: ret i1 %memptr.isnonnull
 }
 
-bool func_ptr_is_null() {
-  // FIXME: member pointers are not being passed correctly as arguments (probably because ismemcaptype returns false?)
-  AMemberFuncPtr ptr = &A::foo_virtual;
+bool func_ptr_is_null(AMemberFuncPtr ptr) {
   return !ptr;
-  // CHECK: define zeroext i1 @_Z16func_ptr_is_nullv() #0 {
-  // CHECK: %memptr.ptr = extractvalue { i8 addrspace(200)*, i64 } %0, 0
+  // CHECK: define zeroext i1 @_Z16func_ptr_is_nullM1AFivE(i8 addrspace(200)* inreg %ptr.coerce0, i64 inreg %ptr.coerce1)
+  // CHECK: %memptr.ptr = extractvalue { i8 addrspace(200)*, i64 } %2, 0
   // CHECK: %memptr.tobool = icmp ne i8 addrspace(200)* %memptr.ptr, null
-  // CHECK: %memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %0, 1
+  // CHECK: %memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %2, 1
   // CHECK: %memptr.virtualbit = and i64 %memptr.adj, 1
   // CHECK: %memptr.isvirtual = icmp ne i64 %memptr.virtualbit, 0
   // CHECK: %memptr.isnonnull = or i1 %memptr.tobool, %memptr.isvirtual
@@ -145,72 +141,66 @@ bool func_ptr_is_null() {
   // CHECK: ret i1 %lnot
 }
 
-bool func_ptr_equal() {
-  // FIXME: member pointers are not being passed correctly as arguments (probably because ismemcaptype returns false?)
-  AMemberFuncPtr ptr1 = &A::foo_virtual;
-  AMemberFuncPtr ptr2 = &A::bar;
+bool func_ptr_equal(AMemberFuncPtr ptr1, AMemberFuncPtr ptr2) {
   return ptr1 == ptr2;
-  // CHECK: define zeroext i1 @_Z14func_ptr_equalv() #0 {
-  // CHECK: %lhs.memptr.ptr = extractvalue { i8 addrspace(200)*, i64 } %0, 0
-  // CHECK: %rhs.memptr.ptr = extractvalue { i8 addrspace(200)*, i64 } %1, 0
+  // CHECK: define zeroext i1 @_Z14func_ptr_equalM1AFivES1_(i8 addrspace(200)* inreg %ptr1.coerce0, i64 inreg %ptr1.coerce1, i8 addrspace(200)* inreg %ptr2.coerce0, i64 inreg %ptr2.coerce1)
+  // CHECK: %lhs.memptr.ptr = extractvalue { i8 addrspace(200)*, i64 } %4, 0
+  // CHECK: %rhs.memptr.ptr = extractvalue { i8 addrspace(200)*, i64 } %5, 0
   // CHECK: %cmp.ptr = icmp eq i8 addrspace(200)* %lhs.memptr.ptr, %rhs.memptr.ptr
   // CHECK: %cmp.ptr.null = icmp eq i8 addrspace(200)* %lhs.memptr.ptr, null
-  // CHECK: %lhs.memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %0, 1
-  // CHECK: %rhs.memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %1, 1
+  // CHECK: %lhs.memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %4, 1
+  // CHECK: %rhs.memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %5, 1
   // CHECK: %cmp.adj = icmp eq i64 %lhs.memptr.adj, %rhs.memptr.adj
   // CHECK: %or.adj = or i64 %lhs.memptr.adj, %rhs.memptr.adj
-  // CHECK: %2 = and i64 %or.adj, 1
-  // CHECK: %cmp.or.adj = icmp eq i64 %2, 0
-  // CHECK: %3 = and i1 %cmp.ptr.null, %cmp.or.adj
-  // CHECK: %4 = or i1 %3, %cmp.adj
-  // CHECK: %memptr.eq = and i1 %cmp.ptr, %4
+  // CHECK: %6 = and i64 %or.adj, 1
+  // CHECK: %cmp.or.adj = icmp eq i64 %6, 0
+  // CHECK: %7 = and i1 %cmp.ptr.null, %cmp.or.adj
+  // CHECK: %8 = or i1 %7, %cmp.adj
+  // CHECK: %memptr.eq = and i1 %cmp.ptr, %8
   // CHECK: ret i1 %memptr.eq
 }
 
-bool func_ptr_not_equal() {
-  // FIXME: member pointers are not being passed correctly as arguments (probably because ismemcaptype returns false?)
-  AMemberFuncPtr ptr1 = &A::foo_virtual;
-  AMemberFuncPtr ptr2 = &A::bar;
+bool func_ptr_not_equal(AMemberFuncPtr ptr1, AMemberFuncPtr ptr2) {
   return ptr1 != ptr2;
-  // CHECK: define zeroext i1 @_Z18func_ptr_not_equalv()
+  // CHECK: zeroext i1 @_Z18func_ptr_not_equalM1AFivES1_(i8 addrspace(200)* inreg %ptr1.coerce0, i64 inreg %ptr1.coerce1, i8 addrspace(200)* inreg %ptr2.coerce0, i64 inreg %ptr2.coerce1)
+  // CHECK: %lhs.memptr.ptr = extractvalue { i8 addrspace(200)*, i64 } %4, 0
+  // CHECK: %rhs.memptr.ptr = extractvalue { i8 addrspace(200)*, i64 } %5, 0
   // CHECK: %cmp.ptr = icmp ne i8 addrspace(200)* %lhs.memptr.ptr, %rhs.memptr.ptr
   // CHECK: %cmp.ptr.null = icmp ne i8 addrspace(200)* %lhs.memptr.ptr, null
-  // CHECK: %lhs.memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %0, 1
-  // CHECK: %rhs.memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %1, 1
+  // CHECK: %lhs.memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %4, 1
+  // CHECK: %rhs.memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %5, 1
   // CHECK: %cmp.adj = icmp ne i64 %lhs.memptr.adj, %rhs.memptr.adj
   // CHECK: %or.adj = or i64 %lhs.memptr.adj, %rhs.memptr.adj
-  // CHECK: %2 = and i64 %or.adj, 1
-  // CHECK: %cmp.or.adj = icmp ne i64 %2, 0
-  // CHECK: %3 = or i1 %cmp.ptr.null, %cmp.or.adj
-  // CHECK: %4 = and i1 %3, %cmp.adj
-  // CHECK: %memptr.ne = or i1 %cmp.ptr, %4
+  // CHECK: %6 = and i64 %or.adj, 1
+  // CHECK: %cmp.or.adj = icmp ne i64 %6, 0
+  // CHECK: %7 = or i1 %cmp.ptr.null, %cmp.or.adj
+  // CHECK: %8 = and i1 %7, %cmp.adj
+  // CHECK: %memptr.ne = or i1 %cmp.ptr, %8
   // CHECK: ret i1 %memptr.ne
 }
 
-int func_ptr_dereference(A* a) {
-  // FIXME: member pointers are not being passed correctly as arguments (probably because ismemcaptype returns false?)
-  AMemberFuncPtr ptr = &A::foo_virtual;
+int func_ptr_dereference(A* a, AMemberFuncPtr ptr) {
   return (a->*ptr)();
-  // CHECK: define i32 @_Z20func_ptr_dereferenceP1A(%class.A addrspace(200)* %a)
-  // CHECK: %0 = load %class.A addrspace(200)*, %class.A addrspace(200)* addrspace(200)* %a.addr, align 32
-  // CHECK: %1 = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %ptr, align 8
-  // CHECK: %memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %1, 1
+  // CHECK: define i32 @_Z20func_ptr_dereferenceP1AMS_FivE(%class.A addrspace(200)* %a, i8 addrspace(200)* inreg %ptr.coerce0, i64 inreg %ptr.coerce1)
+  // CHECK: %2 = load %class.A addrspace(200)*, %class.A addrspace(200)* addrspace(200)* %a.addr, align 32
+  // CHECK: %3 = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %ptr.addr, align 8
+  // CHECK: %memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %3, 1
   // CHECK: %memptr.adj.shifted = ashr i64 %memptr.adj, 1
-  // CHECK: %2 = bitcast %class.A addrspace(200)* %0 to i8 addrspace(200)*
-  // CHECK: %3 = getelementptr inbounds i8, i8 addrspace(200)* %2, i64 %memptr.adj.shifted
-  // CHECK: %this.adjusted = bitcast i8 addrspace(200)* %3 to %class.A addrspace(200)*
-  // CHECK: %memptr.ptr = extractvalue { i8 addrspace(200)*, i64 } %1, 0
-  // CHECK: %4 = and i64 %memptr.adj, 1
-  // CHECK: %memptr.isvirtual = icmp ne i64 %4, 0
+  // CHECK: %4 = bitcast %class.A addrspace(200)* %2 to i8 addrspace(200)*
+  // CHECK: %5 = getelementptr inbounds i8, i8 addrspace(200)* %4, i64 %memptr.adj.shifted
+  // CHECK: %this.adjusted = bitcast i8 addrspace(200)* %5 to %class.A addrspace(200)*
+  // CHECK: %memptr.ptr = extractvalue { i8 addrspace(200)*, i64 } %3, 0
+  // CHECK: %6 = and i64 %memptr.adj, 1
+  // CHECK: %memptr.isvirtual = icmp ne i64 %6, 0
   // CHECK: br i1 %memptr.isvirtual, label %memptr.virtual, label %memptr.nonvirtual
 
   // CHECK: memptr.virtual:                                   ; preds = %entry
-  // CHECK: %5 = bitcast %class.A addrspace(200)* %this.adjusted to i8 addrspace(200)* addrspace(200)*
-  // CHECK: %vtable = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %5, align 32
+  // CHECK: %7 = bitcast %class.A addrspace(200)* %this.adjusted to i8 addrspace(200)* addrspace(200)*
+  // CHECK: %vtable = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %7, align 32
   // CHECK: %memptr.vtable-offset = ptrtoint i8 addrspace(200)* %memptr.ptr to i64
-  // CHECK: %6 = getelementptr i8, i8 addrspace(200)* %vtable, i64 %memptr.vtable-offset
-  // CHECK: %7 = bitcast i8 addrspace(200)* %6 to i32 (%class.A addrspace(200)*) addrspace(200)* addrspace(200)*
-  // CHECK: %memptr.virtualfn = load i32 (%class.A addrspace(200)*) addrspace(200)*, i32 (%class.A addrspace(200)*) addrspace(200)* addrspace(200)* %7, align 32
+  // CHECK: %8 = getelementptr i8, i8 addrspace(200)* %vtable, i64 %memptr.vtable-offset
+  // CHECK: %9 = bitcast i8 addrspace(200)* %8 to i32 (%class.A addrspace(200)*) addrspace(200)* addrspace(200)*
+  // CHECK: %memptr.virtualfn = load i32 (%class.A addrspace(200)*) addrspace(200)*, i32 (%class.A addrspace(200)*) addrspace(200)* addrspace(200)* %9, align 32
   // CHECK: br label %memptr.end
 
   // CHECK: memptr.nonvirtual:                                ; preds = %entry
@@ -218,8 +208,8 @@ int func_ptr_dereference(A* a) {
   // CHECK: br label %memptr.end
 
   // CHECK: memptr.end:                                       ; preds = %memptr.nonvirtual, %memptr.virtual
-  // CHECK: %8 = phi i32 (%class.A addrspace(200)*) addrspace(200)* [ %memptr.virtualfn, %memptr.virtual ], [ %memptr.nonvirtualfn, %memptr.nonvirtual ]
-  // CHECK: %call = call i32 %8(%class.A addrspace(200)* %this.adjusted)
+  // CHECK: %10 = phi i32 (%class.A addrspace(200)*) addrspace(200)* [ %memptr.virtualfn, %memptr.virtual ], [ %memptr.nonvirtualfn, %memptr.nonvirtual ]
+  // CHECK: %call = call i32 %10(%class.A addrspace(200)* %this.adjusted)
   // CHECK: ret i32 %call
 }
 
