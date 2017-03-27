@@ -14966,16 +14966,7 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
         }
         return false;
       };
-    unsigned RecordAlign = Record->isDependentType()
-        ? Context.getDeclAlign(Record).getQuantity() * 8
-        : Context.getTypeAlign(Record->getTypeForDecl());
-    auto diagnoseUnderalignedRecord = [&](const FieldDecl* F, unsigned Align) {
-      Diag(F->getLocation(), diag::warn_packed_capability_in_array);
-      Diag(Record->getSourceRange().getEnd(),
-           diag::note_insert_attribute_aligned) << Align / 8
-          << FixItHint::CreateInsertion(Record->getSourceRange().getEnd(),
-          ("__attribute__((aligned(" + Twine(Align / 8) + ")))").str());
-    };
+    const FieldDecl *CheckForUseInArray = nullptr;
     for (const auto *F : Record->fields()) {
       auto FTy = F->getType();
       // TODO: add C++ test case
@@ -14983,16 +14974,36 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
           ? Context.getDeclAlign(Record).getQuantity() * 8
           : Context.getTypeAlign(FTy);
       if (FTy->isMemoryCapabilityType(Context)) {
-        if (Context.getFieldOffset(F) % CapAlign)
+        if (Context.getFieldOffset(F) % CapAlign) {
           Diag(F->getLocation(), diag::warn_packed_capability);
-        else if (RecordAlign % CapAlign)
-          diagnoseUnderalignedRecord(F, CapAlign);
+          // only check use in array if we haven't diagnosed anything yet
+          CheckForUseInArray = nullptr;
+        } else {
+          CheckForUseInArray = F;
+        }
       } else if (FTy->isRecordType() &&
                  contains_capabilities(FTy->getAs<RecordType>()->getDecl())) {
-        if (Context.getFieldOffset(F) % CapAlign)
+        if (Context.getFieldOffset(F) % CapAlign) {
           Diag(F->getLocation(), diag::warn_packed_struct_capability);
-        else if (RecordAlign % CapAlign)
-          diagnoseUnderalignedRecord(F, CapAlign);
+          // only check use in array if we haven't diagnosed anything yet
+          CheckForUseInArray = nullptr;
+        } else {
+          CheckForUseInArray = F;
+        }
+      }
+    }
+    if (CheckForUseInArray) {
+      unsigned RecordAlign = Record->isDependentType()
+        ? Context.getDeclAlign(Record).getQuantity() * 8
+        : Context.getTypeAlign(Record->getTypeForDecl());
+      unsigned CapAlign = Context.getTargetInfo().getMemoryCapabilityAlign();
+      if (RecordAlign % CapAlign) {
+        Diag(CheckForUseInArray->getLocation(),
+             diag::warn_packed_capability_in_array);
+        Diag(Record->getSourceRange().getEnd(),
+            diag::note_insert_attribute_aligned) << CapAlign / 8
+            << FixItHint::CreateInsertion(Record->getSourceRange().getEnd(),
+            ("__attribute__((aligned(" + Twine(CapAlign / 8) + ")))").str());
       }
     }
   }
