@@ -14953,7 +14953,7 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
     ProcessDeclAttributeList(S, Record, Attr);
 
 
-  if (Record && Record->hasAttr<PackedAttr>()) {
+  if (Record && Record->hasAttr<PackedAttr>() && !Record->isDependentType()) {
     std::function<bool(const RecordDecl *R)> contains_capabilities =
       [&](const RecordDecl *R) {
         for (const auto *F : R->fields()) {
@@ -14982,7 +14982,6 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
       auto checkCapabilityFieldAlignment = [&](unsigned DiagID) {
         // Calling getTypeAlign on dependent types will fail, so we need to fall
         // back to an estimate from GetDeclAlign
-        // TODO: add C++ test case
         unsigned CapAlign = FTy->isDependentType() ?
             Context.toBits(Context.getDeclAlign(F)) : Context.getTypeAlign(FTy);
         unsigned FieldOffset = Context.getFieldOffset(F);
