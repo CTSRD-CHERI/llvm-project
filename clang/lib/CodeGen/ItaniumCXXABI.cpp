@@ -1064,7 +1064,7 @@ void ItaniumCXXABI::emitVirtualObjectDelete(CodeGenFunction &CGF,
     auto *ClassDecl =
         cast<CXXRecordDecl>(ElementType->getAs<RecordType>()->getDecl());
     llvm::Value *VTable =
-        CGF.GetVTablePtr(Ptr, CGF.IntPtrTy->getPointerTo(DefaultAS), ClassDecl);
+        CGF.GetVTablePtr(Ptr, CGF.PtrDiffTy->getPointerTo(DefaultAS), ClassDecl);
 
     // Track back to entry -2 and pull out the offset there.
     llvm::Value *OffsetPtr = CGF.Builder.CreateConstInBoundsGEP1_64(
@@ -1334,7 +1334,6 @@ llvm::Value *ItaniumCXXABI::EmitDynamicCastToVoid(CodeGenFunction &CGF,
   auto *ClassDecl =
       cast<CXXRecordDecl>(SrcRecordTy->getAs<RecordType>()->getDecl());
   // Get the vtable pointer.
-  // XXXAR: this looks wrong, shouldn't it be intptr_t?
   unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   llvm::Value *VTable = CGF.GetVTablePtr(ThisAddr, PtrDiffLTy->getPointerTo(DefaultAS),
       ClassDecl);
