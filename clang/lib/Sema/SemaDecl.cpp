@@ -14985,8 +14985,10 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
         // TODO: add C++ test case
         unsigned CapAlign = FTy->isDependentType() ?
             Context.toBits(Context.getDeclAlign(F)) : Context.getTypeAlign(FTy);
-        if (Context.getFieldOffset(F) % CapAlign) {
-          Diag(F->getLocation(), DiagID);
+        unsigned FieldOffset = Context.getFieldOffset(F);
+        if (FieldOffset % CapAlign) {
+          Diag(F->getLocation(), DiagID)
+              << (unsigned)Context.toCharUnitsFromBits(FieldOffset).getQuantity();
           // only check use in array if we haven't diagnosed anything yet
           CheckForUseInArray = nullptr;
         } else {
@@ -15007,8 +15009,10 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
       unsigned CapAlign = Context.getTargetInfo().getMemoryCapabilityAlign();
       if (RecordAlign % CapAlign) {
         unsigned AlignBytes = Context.toCharUnitsFromBits(CapAlign).getQuantity();
+        unsigned FieldOffset = Context.toCharUnitsFromBits(
+            Context.getFieldOffset(CheckForUseInArray)).getQuantity();
         Diag(CheckForUseInArray->getLocation(),
-             diag::warn_packed_capability_in_array);
+             diag::warn_packed_capability_in_array) << FieldOffset;
         Diag(Record->getSourceRange().getEnd(),
             diag::note_insert_attribute_aligned) << AlignBytes
             << FixItHint::CreateInsertion(Record->getSourceRange().getEnd(),

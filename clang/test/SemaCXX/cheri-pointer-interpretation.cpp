@@ -2,7 +2,7 @@
 
 
 struct foo_cap { // expected-note {{Add __attribute__((aligned(32))) to ensure sufficient alignment}}
-	void *a; // expected-warning {{Under aligned capability field in packed structure will trap if struct is used in an array}}
+	void *a; // expected-warning {{Capability field at offset 0 in packed structure will trap if structure is used in an array}}
 	long d;
 	long e;
 } __attribute__((packed));  // make it 48 instead of 64

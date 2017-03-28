@@ -5824,15 +5824,16 @@ def warn_mixed_capability_binop : Warning<
   "Provenance will be inherited from left-hand side">,
   InGroup<CHERICaps>;
 def warn_packed_capability : Warning<
-  "Under aligned capability field in packed structure will trap if accessed">,
+  "Under aligned capability field at offset %0 in packed structure will "
+  "trap if accessed">,
   InGroup<CHERICaps>;
 def warn_packed_struct_capability : Warning<
-  "Under aligned structure field in packed structure containing capabilities "
-  "will trap if capability field is accessed">,
+  "Under aligned structure field at offset %0 in packed structure containing "
+  "capabilities will trap if capability field is accessed">,
   InGroup<CHERICaps>;
 def warn_packed_capability_in_array : Warning<
-  "Under aligned capability field in packed structure will trap if struct is "
-  "used in an array">,
+  "Capability field at offset %0 in packed structure will trap "
+  "if structure is used in an array">,
   InGroup<CHERICaps>;
 def note_insert_attribute_aligned : Note<
   "Add __attribute__((aligned(%0))) to ensure sufficient alignment">;
