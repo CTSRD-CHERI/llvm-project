@@ -416,7 +416,7 @@ EmitMaterializeTemporaryExpr(const MaterializeTemporaryExpr *M) {
   Address Object = createReferenceTemporary(*this, M, E);
   if (auto *Var = dyn_cast<llvm::GlobalVariable>(Object.getPointer())) {
     unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
-    Object = Address(llvm::ConstantExpr::getBitCast(
+    Object = Address(llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(
         Var, ConvertTypeForMem(E->getType())->getPointerTo(AS)),
                      Object.getAlignment());
     // If the temporary is a global and has a constant initializer or is a
