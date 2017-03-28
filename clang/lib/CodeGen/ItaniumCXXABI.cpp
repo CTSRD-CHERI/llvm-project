@@ -560,9 +560,10 @@ CGCallee ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
   // Apply the adjustment and cast back to the original struct type
   // for consistency.
   llvm::Value *This = ThisAddr.getPointer();
-  llvm::Value *Ptr = Builder.CreateBitCast(This, Builder.getInt8PtrTy(DefaultAS));
-  Ptr = Builder.CreateInBoundsGEP(Ptr, Adj);
-  This = Builder.CreateBitCast(Ptr, This->getType(), "this.adjusted");
+  llvm::Value *VTableAddr = Builder.CreateBitCast(This, CGM.Int8PtrTy,
+                                                  "this.not.adjusted");
+  VTableAddr = Builder.CreateInBoundsGEP(VTableAddr, Adj, "memptr.vtable.addr");
+  This = Builder.CreateBitCast(VTableAddr, This->getType(), "this.adjusted");
   ThisPtrForCall = This;
   
   // Load the function pointer.
@@ -592,13 +593,13 @@ CGCallee ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
     CGF.CGM.getDynamicOffsetAlignment(ThisAddr.getAlignment(), RD,
                                       CGF.getPointerAlign());
   llvm::Value *VTable =
-    CGF.GetVTablePtr(Address(This, VTablePtrAlign), VTableTy, RD);
+    CGF.GetVTablePtr(Address(VTableAddr, VTablePtrAlign), VTableTy, RD);
 
   // Apply the offset.
   // On ARM64, to reserve extra space in virtual member function pointers,
   // we only pay attention to the low 32 bits of the offset.
   llvm::Value *VTableOffset =
-      Builder.CreatePtrToInt(FnPtr, CGM.PtrDiffTy, "memptr.vtable-offset");
+      Builder.CreatePtrToInt(FnPtr, CGM.PtrDiffTy, "memptr.vtable.offset");
   if (!UseARMMethodPtrABI)
     VTableOffset = Builder.CreateSub(VTableOffset, ptrdiff_1);
   if (Use32BitVTableOffsetABI) {

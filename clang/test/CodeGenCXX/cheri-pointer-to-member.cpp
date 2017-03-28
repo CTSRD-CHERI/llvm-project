@@ -186,21 +186,21 @@ int func_ptr_dereference(A* a, AMemberFuncPtr ptr) {
   // CHECK: %3 = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %ptr.addr, align 8
   // CHECK: %memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %3, 1
   // CHECK: %memptr.adj.shifted = ashr i64 %memptr.adj, 1
-  // CHECK: %4 = bitcast %class.A addrspace(200)* %2 to i8 addrspace(200)*
-  // CHECK: %5 = getelementptr inbounds i8, i8 addrspace(200)* %4, i64 %memptr.adj.shifted
-  // CHECK: %this.adjusted = bitcast i8 addrspace(200)* %5 to %class.A addrspace(200)*
+  // CHECK: %this.not.adjusted = bitcast %class.A addrspace(200)* %2 to i8 addrspace(200)*
+  // CHECK: %memptr.vtable.addr = getelementptr inbounds i8, i8 addrspace(200)* %this.not.adjusted, i64 %memptr.adj.shifted
+  // CHECK: %this.adjusted = bitcast i8 addrspace(200)* %memptr.vtable.addr to %class.A addrspace(200)*
   // CHECK: %memptr.ptr = extractvalue { i8 addrspace(200)*, i64 } %3, 0
-  // CHECK: %6 = and i64 %memptr.adj, 1
-  // CHECK: %memptr.isvirtual = icmp ne i64 %6, 0
+  // CHECK: %4 = and i64 %memptr.adj, 1
+  // CHECK: %memptr.isvirtual = icmp ne i64 %4, 0
   // CHECK: br i1 %memptr.isvirtual, label %memptr.virtual, label %memptr.nonvirtual
 
   // CHECK: memptr.virtual:                                   ; preds = %entry
-  // CHECK: %7 = bitcast %class.A addrspace(200)* %this.adjusted to i8 addrspace(200)* addrspace(200)*
-  // CHECK: %vtable = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %7, align 32
-  // CHECK: %memptr.vtable-offset = ptrtoint i8 addrspace(200)* %memptr.ptr to i64
-  // CHECK: %8 = getelementptr i8, i8 addrspace(200)* %vtable, i64 %memptr.vtable-offset
-  // CHECK: %9 = bitcast i8 addrspace(200)* %8 to i32 (%class.A addrspace(200)*) addrspace(200)* addrspace(200)*
-  // CHECK: %memptr.virtualfn = load i32 (%class.A addrspace(200)*) addrspace(200)*, i32 (%class.A addrspace(200)*) addrspace(200)* addrspace(200)* %9, align 32
+  // CHECK: %5 = bitcast i8 addrspace(200)* %memptr.vtable.addr to i8 addrspace(200)* addrspace(200)*
+  // CHECK: %vtable = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %5, align 32
+  // CHECK: %memptr.vtable.offset = ptrtoint i8 addrspace(200)* %memptr.ptr to i64
+  // CHECK: %6 = getelementptr i8, i8 addrspace(200)* %vtable, i64 %memptr.vtable.offset
+  // CHECK: %7 = bitcast i8 addrspace(200)* %6 to i32 (%class.A addrspace(200)*) addrspace(200)* addrspace(200)*
+  // CHECK: %memptr.virtualfn = load i32 (%class.A addrspace(200)*) addrspace(200)*, i32 (%class.A addrspace(200)*) addrspace(200)* addrspace(200)* %7, align 32
   // CHECK: br label %memptr.end
 
   // CHECK: memptr.nonvirtual:                                ; preds = %entry
@@ -208,8 +208,8 @@ int func_ptr_dereference(A* a, AMemberFuncPtr ptr) {
   // CHECK: br label %memptr.end
 
   // CHECK: memptr.end:                                       ; preds = %memptr.nonvirtual, %memptr.virtual
-  // CHECK: %10 = phi i32 (%class.A addrspace(200)*) addrspace(200)* [ %memptr.virtualfn, %memptr.virtual ], [ %memptr.nonvirtualfn, %memptr.nonvirtual ]
-  // CHECK: %call = call i32 %10(%class.A addrspace(200)* %this.adjusted)
+  // CHECK: %8 = phi i32 (%class.A addrspace(200)*) addrspace(200)* [ %memptr.virtualfn, %memptr.virtual ], [ %memptr.nonvirtualfn, %memptr.nonvirtual ]
+  // CHECK: %call = call i32 %8(%class.A addrspace(200)* %this.adjusted)
   // CHECK: ret i32 %call
 }
 
