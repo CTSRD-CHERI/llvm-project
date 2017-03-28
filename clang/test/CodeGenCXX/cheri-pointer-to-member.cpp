@@ -1,4 +1,6 @@
 // RUN: %clang %s -mabi=purecap -fno-rtti -std=c++11 -target cheri-unknown-freebsd -o - -emit-llvm -S | FileCheck %s
+// RUN: %clang %s -mabi=n64 -fno-rtti -std=c++11 -target cheri-unknown-freebsd -o - -emit-llvm -S -O2 | FileCheck %s -check-prefix N64
+// RUN: %clang %s -mabi=n64 -fno-rtti -std=c++11 -target cheri-unknown-freebsd -o - -S -O2 | FileCheck %s -check-prefix N64-ASM
 
 class A {
 public:
@@ -211,6 +213,48 @@ int func_ptr_dereference(A* a, AMemberFuncPtr ptr) {
   // CHECK: %8 = phi i32 (%class.A addrspace(200)*) addrspace(200)* [ %memptr.virtualfn, %memptr.virtual ], [ %memptr.nonvirtualfn, %memptr.nonvirtual ]
   // CHECK: %call = call i32 %8(%class.A addrspace(200)* %this.adjusted)
   // CHECK: ret i32 %call
+  // N64: %memptr.adj.shifted = ashr i64 %ptr.coerce1, 1
+  // N64: %this.not.adjusted = bitcast %class.A* %a to i8*
+  // N64: %memptr.vtable.addr = getelementptr inbounds i8, i8* %this.not.adjusted, i64 %memptr.adj.shifted
+  // N64: %this.adjusted = bitcast i8* %memptr.vtable.addr to %class.A*
+  // N64: %0 = and i64 %ptr.coerce1, 1
+  // N64: %memptr.isvirtual = icmp eq i64 %0, 0
+  // N64: br i1 %memptr.isvirtual, label %memptr.nonvirtual, label %memptr.virtual
+
+  // N64: memptr.virtual:
+  // N64: %1 = bitcast i8* %memptr.vtable.addr to i8**
+  // N64: %vtable = load i8*, i8** %1, align 8, !tbaa !6
+  // N64: %2 = getelementptr i8, i8* %vtable, i64 %ptr.coerce0
+  // N64: %3 = bitcast i8* %2 to i32 (%class.A*)**
+  // N64: %memptr.virtualfn = load i32 (%class.A*)*, i32 (%class.A*)** %3, align 8
+  // N64: br label %memptr.end
+
+  // N64: memptr.nonvirtual:
+  // N64: %memptr.nonvirtualfn = inttoptr i64 %ptr.coerce0 to i32 (%class.A*)*
+  // N64: br label %memptr.end
+
+  // N64: memptr.end:
+  // N64: %4 = phi i32 (%class.A*)* [ %memptr.virtualfn, %memptr.virtual ], [ %memptr.nonvirtualfn, %memptr.nonvirtual ]
+  // N64: %call = tail call i32 %4(%class.A* %this.adjusted)
+  // N64: ret i32 %call
+
+  // N64 ASM on entry: $4 = A* a, $5 = memptr.ptr, $6 = memptr.adj
+  // shift right by 1 to load adj from memptr.adj into $1
+  // N64-ASM: dsra    [[ADJ:\$1]], $6, 1
+  // $2 = isvirtual
+  // N64-ASM: andi    $2, $6, 1
+  // N64-ASM: beqz    $2, .LBB12_2
+  // branch delay: add adj to $4 to get this.adjusted
+  // N64-ASM: daddu   [[THIS_ADJUSTED:\$4]], $4, [[ADJ]]
+  // load vtable into $1:
+  // N64-ASM: ld      [[VTABLE:\$1]], 0([[THIS_ADJUSTED]])
+  // add memptr.ptr (cast to int) to the vtable to get the index:
+  // N64-ASM: daddu   [[VTABLE]], [[VTABLE]], $5
+  // load the function pointer into $5 (which would already contain it in the non-virtual case)
+  // N64-ASM: ld      $5, 0([[VTABLE]])
+  // N64-ASM: move    $25, $5
+  // N64-ASM: jalr    $25
+
 }
 
 // Check using Member pointers as return values an parameters
