@@ -578,7 +578,8 @@ CGCallee ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
   CGF.EmitBlock(FnVirtual);
 
   // Cast the adjusted this to a pointer to vtable pointer and load.
-  llvm::Type *VTableTy = Builder.getInt8PtrTy();
+  const unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  llvm::Type *VTableTy = Builder.getInt8PtrTy(DefaultAS);
   CharUnits VTablePtrAlign =
     CGF.CGM.getDynamicOffsetAlignment(ThisAddr.getAlignment(), RD,
                                       CGF.getPointerAlign());
@@ -598,7 +599,6 @@ CGCallee ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
   VTable = Builder.CreateGEP(VTable, VTableOffset);
 
   // Load the virtual function to call.
-  const unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   VTable = Builder.CreateBitCast(VTable, FTy->getPointerTo(DefaultAS)->getPointerTo(DefaultAS));
   llvm::Value *VirtualFn =
     Builder.CreateAlignedLoad(VTable, CGF.getPointerAlign(),
