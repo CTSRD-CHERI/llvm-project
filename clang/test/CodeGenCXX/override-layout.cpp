@@ -1,11 +1,7 @@
 // RUN: %clang_cc1 -w -fdump-record-layouts-simple %s > %t.layouts
 // RUN: %clang_cc1 -w -fdump-record-layouts-simple %s > %t.before
 // RUN: %clang_cc1 -w -DPACKED= -DALIGNED16= -fdump-record-layouts-simple -foverride-record-layout=%t.layouts %s > %t.after
-// XXXAR: for some reason the order of the record dump is not the same , let's check that they contain the same lines
-// RUN: sort %t.before > %t.before.sorted
-// RUN: sort %t.after > %t.after.sorted
-// RUN: diff -u %t.before.sorted %t.after.sorted
-// THIS-FAILS: diff -u %t.before %t.after
+// RUN: diff -u %t.before %t.after
 // RUN: FileCheck %s < %t.after
 
 // If not explicitly disabled, set PACKED to the packed attribute.

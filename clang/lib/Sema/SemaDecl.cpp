@@ -14969,41 +14969,51 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
     const FieldDecl *CheckForUseInArray = nullptr;
     for (const auto *F : Record->fields()) {
       auto FTy = F->getType();
-      // TODO: add C++ test case
-      unsigned CapAlign = FTy->isDependentType()
-          ? Context.getDeclAlign(Record).getQuantity() * 8
-          : Context.getTypeAlign(FTy);
-      if (FTy->isMemoryCapabilityType(Context)) {
+      // We shouldn't be calling Context.getTypeAlign() as this alters the
+      // order in which some Record layouts get initialized and therefore
+      // breaks CodeGen/override-layout.c and CodeGenCXX/override-layout.cpp
+      // Context.getDeclAlign() appears to be the correct function to call
+      // but it will always return 1 byte alignment for fields in a struct
+      // that has a packed attribute and is only an estimate otherwise (and
+      // appears to be wrong quite frequently).
+      // To avoid breaking any existing test cases that depend on the order, we
+      // make sure to only call getTypeAlign() if the field is actually a
+      // capability type
+      auto checkCapabilityFieldAlignment = [&](unsigned DiagID) {
+        // Calling getTypeAlign on dependent types will fail, so we need to fall
+        // back to an estimate from GetDeclAlign
+        // TODO: add C++ test case
+        unsigned CapAlign = FTy->isDependentType() ?
+            Context.toBits(Context.getDeclAlign(F)) : Context.getTypeAlign(FTy);
+        llvm::errs() << "Align=" << CapAlign << " for "; F->dump();
         if (Context.getFieldOffset(F) % CapAlign) {
-          Diag(F->getLocation(), diag::warn_packed_capability);
+          Diag(F->getLocation(), DiagID);
           // only check use in array if we haven't diagnosed anything yet
           CheckForUseInArray = nullptr;
         } else {
           CheckForUseInArray = F;
         }
+      };
+      if (FTy->isMemoryCapabilityType(Context)) {
+        checkCapabilityFieldAlignment(diag::warn_packed_capability);
       } else if (FTy->isRecordType() &&
                  contains_capabilities(FTy->getAs<RecordType>()->getDecl())) {
-        if (Context.getFieldOffset(F) % CapAlign) {
-          Diag(F->getLocation(), diag::warn_packed_struct_capability);
-          // only check use in array if we haven't diagnosed anything yet
-          CheckForUseInArray = nullptr;
-        } else {
-          CheckForUseInArray = F;
-        }
+        checkCapabilityFieldAlignment(diag::warn_packed_struct_capability);
       }
     }
     if (CheckForUseInArray) {
       unsigned RecordAlign = Record->isDependentType()
-        ? Context.getDeclAlign(Record).getQuantity() * 8
+        ? Context.toBits(Context.getDeclAlign(Record))
         : Context.getTypeAlign(Record->getTypeForDecl());
       unsigned CapAlign = Context.getTargetInfo().getMemoryCapabilityAlign();
       if (RecordAlign % CapAlign) {
+        unsigned AlignBytes = Context.toCharUnitsFromBits(CapAlign).getQuantity();
         Diag(CheckForUseInArray->getLocation(),
              diag::warn_packed_capability_in_array);
         Diag(Record->getSourceRange().getEnd(),
-            diag::note_insert_attribute_aligned) << CapAlign / 8
+            diag::note_insert_attribute_aligned) << AlignBytes
             << FixItHint::CreateInsertion(Record->getSourceRange().getEnd(),
-            ("__attribute__((aligned(" + Twine(CapAlign / 8) + ")))").str());
+            ("__attribute__((aligned(" + Twine(AlignBytes) + ")))").str());
       }
     }
   }
