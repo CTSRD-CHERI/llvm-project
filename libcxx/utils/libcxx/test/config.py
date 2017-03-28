@@ -955,7 +955,7 @@ class Configuration(object):
         # Get or infer the target triple.
         self.config.target_triple = self.get_lit_conf('target_triple')
         self.use_target = self.get_lit_bool('use_target', False)
-        if self.use_target and self.config.target_triple:
+        if self.use_target and not self.config.target_triple:
             self.lit_config.warning('use_target is true but no triple is specified')
         # If no target triple was given, try to infer it from the compiler
         # under test.
