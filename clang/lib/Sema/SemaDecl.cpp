@@ -14985,7 +14985,6 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
         // TODO: add C++ test case
         unsigned CapAlign = FTy->isDependentType() ?
             Context.toBits(Context.getDeclAlign(F)) : Context.getTypeAlign(FTy);
-        llvm::errs() << "Align=" << CapAlign << " for "; F->dump();
         if (Context.getFieldOffset(F) % CapAlign) {
           Diag(F->getLocation(), DiagID);
           // only check use in array if we haven't diagnosed anything yet
