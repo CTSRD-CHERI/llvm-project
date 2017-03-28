@@ -46,6 +46,12 @@ struct correctly_aligned_but_size_not_multiple {
   __UINTPTR_TYPE__ cap;
   char after[1];
 };
+
+struct correct_when_used_in_array_but_bad_alignof {
+  char before[sizeof(void*)];
+  __UINTPTR_TYPE__ cap;
+} __attribute__((packed));
+
 struct bad_uintptr_array_1 { // expected-note{{Add __attribute__((aligned(32))) to ensure sufficient alignment}}
   char before[sizeof(void*)];
   __UINTPTR_TYPE__ cap; // expected-warning {{Capability field at offset 32 in packed structure will trap if structure is used in an array}}
@@ -83,6 +89,21 @@ struct good_cap_struct_array {
   char after[1];
 } __attribute__((packed)) __attribute__((aligned(32)));
 
+#ifdef NOTYET
+// We don't look at the offset the the capability inside the contained struct yet
+// Check that we get a warning also with capabilities at odd offsets in structs
+struct good_packed_cap_struct_array {
+  // 28 bytes alignment to ensure the packed struct is aligned correctly
+  int pad[7];
+  struct packed_cap_struct cap;
+} __attribute__((packed)) ;
+struct bad_packed_cap_struct_array {
+  // 28 bytes alignment to ensure the packed struct is aligned correctly
+  int pad[7];
+  struct packed_cap_struct cap;  // expected-warning {{Capability field at offset 32 in packed structure will trap if structure is used in an array}}
+  int bad;
+} __attribute__((packed));
+#endif
 
 int main() {
   struct padded_cap a;

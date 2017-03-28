@@ -15003,11 +15003,16 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
       }
     }
     if (CheckForUseInArray) {
-      unsigned RecordAlign = Record->isDependentType()
-        ? Context.toBits(Context.getDeclAlign(Record))
-        : Context.getTypeAlign(Record->getTypeForDecl());
+      assert(!Record->isDependentType());
+      unsigned RecordAlign = Context.getTypeAlign(Record->getTypeForDecl());
+      unsigned RecordSize = Context.getTypeSize(Record->getTypeForDecl());
       unsigned CapAlign = Context.getTargetInfo().getMemoryCapabilityAlign();
-      if (RecordAlign % CapAlign) {
+      // Warn if alignment is not a multiple of CapAlign unless size is a
+      // multiple of CapAlign
+      // I.e. struct { char pad[sizeof(void*)]; void* cap; char bad; } __packed
+      // will cause a warning but
+      // struct { char pad[sizeof(void*)]; void* cap; } __packed is okay
+      if ((RecordAlign % CapAlign) && (RecordSize % CapAlign)) {
         unsigned AlignBytes = Context.toCharUnitsFromBits(CapAlign).getQuantity();
         unsigned FieldOffset = Context.toCharUnitsFromBits(
             Context.getFieldOffset(CheckForUseInArray)).getQuantity();
