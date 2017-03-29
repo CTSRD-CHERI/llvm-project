@@ -439,9 +439,9 @@ public:
 
 
   Value *VisitUnaryAddrOf(const UnaryOperator *E) {
-    if (isa<MemberPointerType>(E->getType())) // never sugared
-      return CGF.CGM.getMemberPointerConstant(E);
-
+    if (isa<MemberPointerType>(E->getType())) {// never sugared
+      return CGF.EmitCXXMemberPointerAddressOf(E);
+    }
     llvm::Value *Addr = EmitLValue(E->getSubExpr()).getPointer();
     llvm::Type *AddrTy = Addr->getType();
     auto &TI = CGF.getContext().getTargetInfo();

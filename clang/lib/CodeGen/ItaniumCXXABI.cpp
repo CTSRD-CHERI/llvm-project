@@ -138,12 +138,17 @@ public:
 
   llvm::Constant *EmitNullMemberPointer(const MemberPointerType *MPT) override;
 
-  llvm::Constant *EmitMemberFunctionPointer(const CXXMethodDecl *MD) override;
+  llvm::Constant *EmitMemberFunctionPointerGlobal(const CXXMethodDecl *MD) override;
   llvm::Constant *EmitMemberDataPointer(const MemberPointerType *MPT,
                                         CharUnits offset) override;
-  llvm::Constant *EmitMemberPointer(const APValue &MP, QualType MPT) override;
-  llvm::Constant *BuildMemberPointer(const CXXMethodDecl *MD,
-                                     CharUnits ThisAdjustment);
+  llvm::Constant *EmitMemberPointer(const APValue &MP, QualType MPT,
+                                          CodeGenFunction* CGF) override;
+  llvm::Value *
+  EmitNonGlobalMemberFunctionPointer(CodeGenFunction& CGF,
+                                     const CXXMethodDecl *MD) override;
+  llvm::Value *BuildMemberPointer(const CXXMethodDecl *MD,
+                                  CharUnits ThisAdjustment,
+                                  CodeGenFunction* CGF);
 
   llvm::Value *EmitMemberPointerComparison(CodeGenFunction &CGF,
                                            llvm::Value *L, llvm::Value *R,
@@ -816,12 +821,21 @@ ItaniumCXXABI::EmitMemberDataPointer(const MemberPointerType *MPT,
 }
 
 llvm::Constant *
-ItaniumCXXABI::EmitMemberFunctionPointer(const CXXMethodDecl *MD) {
-  return BuildMemberPointer(MD, CharUnits::Zero());
+ItaniumCXXABI::EmitMemberFunctionPointerGlobal(const CXXMethodDecl *MD) {
+  return cast<llvm::Constant>(BuildMemberPointer(MD, CharUnits::Zero(),
+                                                  nullptr));
 }
 
-llvm::Constant *ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
-                                                  CharUnits ThisAdjustment) {
+llvm::Value *
+ItaniumCXXABI::EmitNonGlobalMemberFunctionPointer(CodeGenFunction& CGF,
+                                                  const CXXMethodDecl *MD) {
+  return BuildMemberPointer(MD, CharUnits::Zero(), &CGF);
+}
+
+llvm::Value *
+ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
+                                  CharUnits ThisAdjustment,
+                                  CodeGenFunction* CGF) {
   assert(MD->isInstance() && "Member function must not be static!");
   MD = MD->getCanonicalDecl();
 
@@ -830,6 +844,7 @@ llvm::Constant *ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
 
   // Get the function pointer (or index if this is a virtual function).
   llvm::Constant *MemPtr[2];
+  llvm::Value* NonConstAddr = nullptr;
   if (MD->isVirtual()) {
     uint64_t Index = CGM.getItaniumVTableContext().getMethodVTableIndex(MD);
 
@@ -879,7 +894,20 @@ llvm::Constant *ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
     llvm::Constant *addr = CGM.GetAddrOfFunction(MD, Ty);
 
     if (TI.areAllPointersCapabilities()) {
-      MemPtr[0] = llvm::ConstantExpr::getAddrSpaceCast(addr, CGM.VoidPtrTy);
+      addr = llvm::ConstantExpr::getAddrSpaceCast(addr, CGM.VoidPtrTy);
+      if (CGF) {
+        llvm::errs() << "emitting local member pointer to " << MD->getQualifiedNameAsString() << "\n";
+        unsigned CapAS = CGM.getTargetCodeGenInfo().getMemoryCapabilityAS();
+        auto AddrTy = addr->getType();
+        llvm::Type *CapTy = cast<llvm::PointerType>(AddrTy)
+            ->getElementType()->getPointerTo(CapAS);
+        NonConstAddr = CodeGenFunction::FunctionAddressToCapability(*CGF, addr);
+        NonConstAddr = CGF->Builder.CreateBitCast(addr, CapTy);
+      }
+      else {
+        llvm::errs() << "emitting global member pointer to " << MD->getQualifiedNameAsString() << "\n";
+      }
+      MemPtr[0] = addr;
     } else {
       MemPtr[0] = llvm::ConstantExpr::getPtrToInt(addr, CGM.PtrDiffTy);
     }
@@ -887,12 +915,25 @@ llvm::Constant *ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
                                        (UseARMMethodPtrABI ? 2 : 1) *
                                        ThisAdjustment.getQuantity());
   }
-  
-  return llvm::ConstantStruct::getAnon(MemPtr);
+  if (NonConstAddr) {
+    auto MemPtrTy = llvm::StructType::get(CGM.VoidPtrTy, CGM.PtrDiffTy, nullptr);
+    auto Align = CGM.getContext().toCharUnitsFromBits(TI.getMemoryCapabilityAlign());
+    auto alloca = CGF->CreateTempAlloca(MemPtrTy, Align);
+    CGF->Builder.CreateStore(NonConstAddr, CGF->Builder.CreateStructGEP(alloca, 0, CharUnits::Zero()));
+    CGF->Builder.CreateStore(MemPtr[1], CGF->Builder.CreateStructGEP(alloca, 1, CharUnits::Zero()));
+    return CGF->Builder.CreateLoad(alloca);
+  } else {
+    auto Result = llvm::ConstantStruct::getAnon(MemPtr, false);
+    // TODO: how to set the required alignment?
+    return Result;
+  }
 }
 
+
+
 llvm::Constant *ItaniumCXXABI::EmitMemberPointer(const APValue &MP,
-                                                 QualType MPType) {
+                                                 QualType MPType,
+                                                 CodeGenFunction* CGF) {
   const MemberPointerType *MPT = MPType->castAs<MemberPointerType>();
   const ValueDecl *MPD = MP.getMemberPointerDecl();
   if (!MPD)
@@ -901,7 +942,7 @@ llvm::Constant *ItaniumCXXABI::EmitMemberPointer(const APValue &MP,
   CharUnits ThisAdjustment = getMemberPointerPathAdjustment(MP);
 
   if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(MPD))
-    return BuildMemberPointer(MD, ThisAdjustment);
+    return cast<llvm::Constant>(BuildMemberPointer(MD, ThisAdjustment, CGF));
 
   CharUnits FieldOffset =
     getContext().toCharUnitsFromBits(getContext().getFieldOffset(MPD));

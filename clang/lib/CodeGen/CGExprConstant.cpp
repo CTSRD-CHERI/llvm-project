@@ -1479,7 +1479,7 @@ llvm::Constant *CodeGenModule::EmitConstantValue(const APValue &Value,
     return llvm::ConstantArray::get(AType, Elts);
   }
   case APValue::MemberPointer:
-    return getCXXABI().EmitMemberPointer(Value, DestType);
+    return getCXXABI().EmitMemberPointer(Value, DestType, CGF);
   }
   llvm_unreachable("Unknown APValue kind");
 }
@@ -1515,14 +1515,15 @@ CodeGenModule::GetAddrOfConstantCompoundLiteral(const CompoundLiteralExpr *E) {
 }
 
 llvm::Constant *
-CodeGenModule::getMemberPointerConstant(const UnaryOperator *uo) {
+CodeGenModule::getMemberPointerConstant(const UnaryOperator *uo,
+                                        CodeGenFunction *CGF) {
   // Member pointer constants always have a very particular form.
   const MemberPointerType *type = cast<MemberPointerType>(uo->getType());
   const ValueDecl *decl = cast<DeclRefExpr>(uo->getSubExpr())->getDecl();
 
   // A member function pointer.
   if (const CXXMethodDecl *method = dyn_cast<CXXMethodDecl>(decl))
-    return getCXXABI().EmitMemberFunctionPointer(method);
+    return getCXXABI().EmitMemberFunctionPointerGlobal(method);
 
   // Otherwise, a member data pointer.
   uint64_t fieldOffset = getContext().getFieldOffset(decl);
