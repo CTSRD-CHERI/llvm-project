@@ -3172,6 +3172,7 @@ public:
                                           llvm::Value *memberPtr,
                                           const MemberPointerType *memberPtrType,
                                           AlignmentSource *AlignSource = nullptr);
+  llvm::Value* EmitCXXMemberPointerAddressOf(const UnaryOperator *uo);
   RValue EmitCXXMemberPointerCallExpr(const CXXMemberCallExpr *E,
                                       ReturnValueSlot ReturnValue);
 

@@ -107,8 +107,14 @@ public:
     TargetInfo::IntType PtrDiff = Target.getPtrDiffType(0);
     uint64_t Width = Target.getTypeWidth(PtrDiff);
     unsigned Align = Target.getTypeAlign(PtrDiff);
-    if (MPT->isMemberFunctionPointer())
-      Width = 2 * Width;
+    if (MPT->isMemberFunctionPointer()) {
+      if (Context.getTargetInfo().areAllPointersCapabilities()) {
+        Width = 2 * Context.getTargetInfo().getMemoryCapabilityWidth();
+        Align = Context.getTargetInfo().getMemoryCapabilityAlign();
+      } else {
+        Width = 2 * Width;
+      }
+    }
     return std::make_pair(Width, Align);
   }
 

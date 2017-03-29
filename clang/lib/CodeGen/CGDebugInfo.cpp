@@ -1535,7 +1535,7 @@ CGDebugInfo::CollectTemplateParams(const TemplateParameterList *TPList,
       // Member function pointers have special support for building them, though
       // this is currently unsupported in LLVM CodeGen.
       else if ((MD = dyn_cast<CXXMethodDecl>(D)) && MD->isInstance())
-        V = CGM.getCXXABI().EmitMemberFunctionPointer(MD);
+        V = CGM.getCXXABI().EmitMemberFunctionPointerGlobal(MD);
       else if (const auto *FD = dyn_cast<FunctionDecl>(D))
         V = CGM.GetAddrOfFunction(FD);
       // Member data pointers have special handling too to compute the fixed

@@ -631,8 +631,13 @@ public:
 
   llvm::Constant *EmitMemberDataPointer(const MemberPointerType *MPT,
                                         CharUnits offset) override;
-  llvm::Constant *EmitMemberFunctionPointer(const CXXMethodDecl *MD) override;
-  llvm::Constant *EmitMemberPointer(const APValue &MP, QualType MPT) override;
+  llvm::Constant *
+  EmitMemberFunctionPointerGlobal(const CXXMethodDecl *MD) override;
+  llvm::Constant *EmitMemberPointer(const APValue &MP, QualType MPT,
+                                    CodeGenFunction * CGF) override;
+  llvm::Value *
+  EmitNonGlobalMemberFunctionPointer(CodeGenFunction& CGF,
+                                     const CXXMethodDecl *MD) override;
 
   llvm::Value *EmitMemberPointerComparison(CodeGenFunction &CGF,
                                            llvm::Value *L,
@@ -2668,7 +2673,8 @@ MicrosoftCXXABI::EmitMemberDataPointer(const MemberPointerType *MPT,
 }
 
 llvm::Constant *MicrosoftCXXABI::EmitMemberPointer(const APValue &MP,
-                                                   QualType MPType) {
+                                                   QualType MPType,
+                                                   CodeGenFunction* CGF) {
   const MemberPointerType *DstTy = MPType->castAs<MemberPointerType>();
   const ValueDecl *MPD = MP.getMemberPointerDecl();
   if (!MPD)
@@ -2679,7 +2685,7 @@ llvm::Constant *MicrosoftCXXABI::EmitMemberPointer(const APValue &MP,
 
   llvm::Constant *C;
   if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(MPD)) {
-    C = EmitMemberFunctionPointer(MD);
+    C = EmitMemberFunctionPointerGlobal(MD);
   } else {
     CharUnits FieldOffset = Ctx.toCharUnitsFromBits(Ctx.getFieldOffset(MPD));
     C = EmitMemberDataPointer(DstTy, FieldOffset);
@@ -2721,8 +2727,15 @@ llvm::Constant *MicrosoftCXXABI::EmitMemberPointer(const APValue &MP,
   return C;
 }
 
+llvm::Value *
+MicrosoftCXXABI::EmitNonGlobalMemberFunctionPointer(CodeGenFunction& CGF,
+                                                    const CXXMethodDecl *MD) {
+  // Only needs to be different from EmitMemberFunctionPointerGlobal for target CHERI
+  return EmitMemberFunctionPointerGlobal(MD);
+}
+
 llvm::Constant *
-MicrosoftCXXABI::EmitMemberFunctionPointer(const CXXMethodDecl *MD) {
+MicrosoftCXXABI::EmitMemberFunctionPointerGlobal(const CXXMethodDecl *MD) {
   assert(MD->isInstance() && "Member function must not be static!");
 
   MD = MD->getCanonicalDecl();

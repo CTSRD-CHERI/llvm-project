@@ -394,6 +394,10 @@ bool Type::isMemoryCapabilityType(const ASTContext &Context) const {
       return true;
     if (Kind == BuiltinType::ObjCId)
       return Context.getTargetInfo().areAllPointersCapabilities();
+  } else if  (const MemberPointerType *MPT = getAs<MemberPointerType>()) {
+    // XXXAR: Currently member function pointers contain capabities, but
+    // pointers to member data don't
+    return Context.getTargetInfo().areAllPointersCapabilities() && MPT->isMemberFunctionPointer();
   }
   return false;
 }

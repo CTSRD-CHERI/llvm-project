@@ -1664,7 +1664,7 @@ CodeGenFunction::EmitNullInitialization(Address DestPtr, QualType Ty) {
                                NullConstant, Twine());
     CharUnits NullAlign = DestPtr.getAlignment();
     NullVariable->setAlignment(NullAlign.getQuantity());
-    Address SrcPtr(Builder.CreateBitCast(NullVariable, Builder.getInt8PtrTy()),
+    Address SrcPtr(Builder.CreatePointerBitCastOrAddrSpaceCast(NullVariable, CGM.Int8PtrTy),
                    NullAlign);
 
     if (vla) return emitNonZeroVLAInit(*this, Ty, DestPtr, SrcPtr, SizeVal);

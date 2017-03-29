@@ -941,7 +941,8 @@ public:
   // Make sure that this type is translated.
   void UpdateCompletedType(const TagDecl *TD);
 
-  llvm::Constant *getMemberPointerConstant(const UnaryOperator *e);
+  llvm::Constant *getMemberPointerConstant(const UnaryOperator *e,
+                                           CodeGenFunction *CGF);
 
   /// Try to emit the initializer for the given declaration as a constant;
   /// returns 0 if the expression cannot be emitted as a constant.

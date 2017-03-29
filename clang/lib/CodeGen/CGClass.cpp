@@ -751,7 +751,8 @@ void CodeGenFunction::EmitAsanPrologueOrEpilogue(bool Prologue) {
     uint64_t Offset;
   };
 
-  unsigned PtrSize = CGM.getDataLayout().getPointerSizeInBits();
+  unsigned PtrSize = CGM.getDataLayout().getPointerSizeInBits(
+      CGM.getTargetCodeGenInfo().getDefaultAS());
   const ASTRecordLayout &Info = Context.getASTRecordLayout(ClassDecl);
 
   // Populate sizes and offsets of fields.
