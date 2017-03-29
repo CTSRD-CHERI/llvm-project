@@ -2516,12 +2516,18 @@ Value *LLParser::PerFunctionState::GetVal(const std::string &Name, Type *Ty,
 
   // If we have the value in the symbol table or fwd-ref table, return it.
   if (Val) {
-    if (Val->getType() == Ty) return Val;
+    Type* ValTy = Val->getType();
+    Type* FallbackTy = nullptr;
+    // XXXAR: Hack to allow IR generated for CHERI to be parsed by llc
+    if (ValTy->isPointerTy() && ValTy->getPointerAddressSpace() == 200)
+      FallbackTy = cast<PointerType>(ValTy)->getElementType()->getPointerTo(0);
+    if (ValTy == Ty || FallbackTy == Ty) return Val;
     if (Ty->isLabelTy())
       P.Error(Loc, "'%" + Name + "' is not a basic block");
     else
       P.Error(Loc, "'%" + Name + "' defined with type '" +
-              getTypeString(Val->getType()) + "'");
+              getTypeString(ValTy) + "' but expected '" +
+              getTypeString(Ty) + "'");
     return nullptr;
   }
 
@@ -2557,12 +2563,18 @@ Value *LLParser::PerFunctionState::GetVal(unsigned ID, Type *Ty, LocTy Loc) {
 
   // If we have the value in the symbol table or fwd-ref table, return it.
   if (Val) {
-    if (Val->getType() == Ty) return Val;
+    Type* ValTy = Val->getType();
+    Type* FallbackTy = nullptr;
+    // XXXAR: Hack to allow IR generated for CHERI to be parsed by llc
+    if (ValTy->isPointerTy() && ValTy->getPointerAddressSpace() == 200)
+      FallbackTy = cast<PointerType>(ValTy)->getElementType()->getPointerTo(0);
+    if (ValTy == Ty || FallbackTy == Ty) return Val;
     if (Ty->isLabelTy())
       P.Error(Loc, "'%" + Twine(ID) + "' is not a basic block");
     else
       P.Error(Loc, "'%" + Twine(ID) + "' defined with type '" +
-              getTypeString(Val->getType()) + "'");
+              getTypeString(ValTy) + "' but expected '" +
+              getTypeString(Ty) + "'");
     return nullptr;
   }
 
