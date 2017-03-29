@@ -1,0 +1,3 @@
+# Disable the experimental tests if they haven't been enabled
+if not config.enable_experimental:
+  config.unsupported = True
