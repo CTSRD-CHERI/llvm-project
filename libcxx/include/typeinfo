@@ -81,9 +81,9 @@ namespace std  // purposefully not using versioning namespace
 {
 
 #if !defined(_LIBCPP_ABI_MICROSOFT)
-#ifndef _LIBCPP_NO_RTTI
 class _LIBCPP_EXCEPTION_ABI type_info
 {
+#ifndef _LIBCPP_NO_RTTI
     type_info& operator=(const type_info&);
     type_info(const type_info&);
 
@@ -179,8 +179,8 @@ public:
     _LIBCPP_INLINE_VISIBILITY
     bool operator!=(const type_info& __arg) const _NOEXCEPT
     { return !operator==(__arg); }
-};
 #endif // _LIBCPP_NO_RTTI
+};
 
 class _LIBCPP_EXCEPTION_ABI bad_cast
     : public exception
