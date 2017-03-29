@@ -60,19 +60,6 @@ static bool MustVisitNullValue(const Expr *E) {
   return E->getType()->isNullPtrType();
 }
 
-llvm::Value *FunctionAddressToCapability(CodeGenFunction &CGF, llvm::Value
-    *Addr) {
-  llvm::Value *V = CGF.Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
-  llvm::Value *PCC = CGF.Builder.CreateCall(
-          CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_pcc_get), {});
-  if (auto *F = dyn_cast<llvm::Function>(Addr->stripPointerCasts()))
-    if (F->hasWeakLinkage() || F->hasExternalWeakLinkage())
-      return CGF.Builder.CreateCall(
-        CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_from_pointer),
-        {PCC, V});
-  return CGF.setPointerOffset(PCC, V);
-}
-
 /// If \p E is a widened promoted integer, get its base (unpromoted) type.
 static llvm::Optional<QualType> getUnwidenedIntegerType(const ASTContext &Ctx,
                                                         const Expr *E) {
@@ -464,7 +451,7 @@ public:
         llvm::Type *CapTy = cast<llvm::PointerType>(AddrTy)
             ->getElementType()->getPointerTo(CapAS);
 
-        Addr = FunctionAddressToCapability(CGF, Addr);
+        Addr = CodeGenFunction::FunctionAddressToCapability(CGF, Addr);
         Addr = Builder.CreateBitCast(Addr, CapTy);
       }
     }
@@ -1646,7 +1633,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
         // FIXME: Should we handle casts in the other direction by doing a
         // pcc-relative cfromptr?
         if (Kind == CK_PointerToMemoryCapability)
-          Src = FunctionAddressToCapability(CGF, Src);
+          Src = CodeGenFunction::FunctionAddressToCapability(CGF, Src);
       }
     }
     return CGF.CGM.getTargetCodeGenInfo().performAddrSpaceCast(CGF, Src,
@@ -1708,7 +1695,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
       if (AddrTy->getPointerAddressSpace() != CapAS) {
         llvm::Type *CapTy = cast<llvm::PointerType>(AddrTy)
             ->getElementType()->getPointerTo(CapAS);
-        Addr = FunctionAddressToCapability(CGF, Addr);
+        Addr = CodeGenFunction::FunctionAddressToCapability(CGF, Addr);
         Addr = Builder.CreateBitCast(Addr, CapTy);
       }
     }

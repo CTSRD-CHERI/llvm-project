@@ -2165,9 +2165,9 @@ static void emitGlobalDtorWithCXAAtExit(CodeGenFunction &CGF,
   // We're assuming that the destructor function is something we can
   // reasonably call with the default CC.  Go ahead and cast it to the
   // right prototype.
+  unsigned AS = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
   llvm::Type *dtorTy =
-    llvm::FunctionType::get(CGF.VoidTy, CGF.Int8PtrTy, false)->getPointerTo(
-                                CGF.CGM.getTargetCodeGenInfo().getDefaultAS());
+    llvm::FunctionType::get(CGF.VoidTy, CGF.Int8PtrTy, false)->getPointerTo(AS);
 
   // extern "C" int __cxa_atexit(void (*f)(void *), void *p, void *d);
   llvm::Type *paramTys[] = { dtorTy, CGF.Int8PtrTy, CGF.Int8PtrTy };
@@ -2180,14 +2180,24 @@ static void emitGlobalDtorWithCXAAtExit(CodeGenFunction &CGF,
     fn->setDoesNotThrow();
 
   // Create a variable that binds the atexit to this shared object.
-  unsigned AS = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
   llvm::Constant *handle =
       CGF.CGM.CreateRuntimeVariable(CGF.Int8Ty, "__dso_handle", AS);
   auto *GV = cast<llvm::GlobalValue>(handle->stripPointerCasts());
   GV->setVisibility(llvm::GlobalValue::HiddenVisibility);
 
+  // Convert the destructor pointer to a capability before passing it
+  llvm::Value *dtorV = dtor;
+  auto &TI = CGF.getContext().getTargetInfo();
+  if (TI.areAllPointersCapabilities()) {
+    if (dtorV->getType()->getPointerAddressSpace() != AS) {
+      // dtorTy defined above will be the right capability type
+      dtorV = CodeGenFunction::FunctionAddressToCapability(CGF, dtorV);
+    }
+  }
+  dtorV = CGF.Builder.CreateBitCast(dtorV, dtorTy);
+
   llvm::Value *args[] = {
-    llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(dtor, dtorTy),
+    dtorV,
     llvm::ConstantExpr::getBitCast(addr, CGF.Int8PtrTy),
     handle // FIXME-cheri-c++: should this be a capability in the pure ABI?
   };

@@ -2100,7 +2100,7 @@ static LValue EmitGlobalVarDeclLValue(CodeGenFunction &CGF,
   return LV;
 }
 
-static llvm::Value *FunctionAddressToCapability(CodeGenFunction &CGF, llvm::Value
+llvm::Value *CodeGenFunction::FunctionAddressToCapability(CodeGenFunction &CGF, llvm::Value
     *Addr) {
   llvm::Value *V = CGF.Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
   llvm::Value *PCC = CGF.Builder.CreateCall(
@@ -2129,7 +2129,7 @@ static llvm::Value *EmitFunctionDeclPointer(CodeGenFunction &CGF,
     if (VTy->getPointerAddressSpace() != CapAS) {
       llvm::Type *CapTy = cast<llvm::PointerType>(VTy)
         ->getElementType()->getPointerTo(CapAS);
-      V = FunctionAddressToCapability(CGF, V);
+      V = CodeGenFunction::FunctionAddressToCapability(CGF, V);
       V = CGF.Builder.CreateBitCast(V, CapTy);
     }
   }
