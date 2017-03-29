@@ -83,7 +83,6 @@ namespace std  // purposefully not using versioning namespace
 #if !defined(_LIBCPP_ABI_MICROSOFT)
 class _LIBCPP_EXCEPTION_ABI type_info
 {
-#ifndef _LIBCPP_NO_RTTI
     type_info& operator=(const type_info&);
     type_info(const type_info&);
 
@@ -165,7 +164,7 @@ public:
 #ifdef __CHERI_PURE_CAPABILITY__
       // error: cast from pointer to smaller type 'size_t' (aka 'unsigned long') loses information
       // or use a c style cast?
-      return __builtin_memcap_base_get(__type_name) + __builtin_memcap_offset_get(__type_name);
+      return __builtin_cheri_base_get(__type_name) + __builtin_cheri_offset_get(__type_name);
 #else
       return reinterpret_cast<size_t>(__type_name);
 #endif
@@ -179,7 +178,6 @@ public:
     _LIBCPP_INLINE_VISIBILITY
     bool operator!=(const type_info& __arg) const _NOEXCEPT
     { return !operator==(__arg); }
-#endif // _LIBCPP_NO_RTTI
 };
 
 class _LIBCPP_EXCEPTION_ABI bad_cast
