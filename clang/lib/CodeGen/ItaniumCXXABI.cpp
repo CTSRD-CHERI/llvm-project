@@ -894,18 +894,14 @@ ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
     llvm::Constant *addr = CGM.GetAddrOfFunction(MD, Ty);
 
     if (TI.areAllPointersCapabilities()) {
-      addr = llvm::ConstantExpr::getAddrSpaceCast(addr, CGM.VoidPtrTy);
       if (CGF) {
-        llvm::errs() << "emitting local member pointer to " << MD->getQualifiedNameAsString() << "\n";
-        unsigned CapAS = CGM.getTargetCodeGenInfo().getMemoryCapabilityAS();
-        auto AddrTy = addr->getType();
-        llvm::Type *CapTy = cast<llvm::PointerType>(AddrTy)
-            ->getElementType()->getPointerTo(CapAS);
+        // llvm::errs() << "emitting local member pointer to " << MD->getQualifiedNameAsString() << "\n";
         NonConstAddr = CodeGenFunction::FunctionAddressToCapability(*CGF, addr);
-        NonConstAddr = CGF->Builder.CreateBitCast(addr, CapTy);
+        NonConstAddr = CGF->Builder.CreateBitCast(NonConstAddr, CGM.VoidPtrTy);
       }
       else {
-        llvm::errs() << "emitting global member pointer to " << MD->getQualifiedNameAsString() << "\n";
+        // llvm::errs() << "emitting global member pointer to " << MD->getQualifiedNameAsString() << "\n";
+        addr = llvm::ConstantExpr::getAddrSpaceCast(addr, CGM.VoidPtrTy);
       }
       MemPtr[0] = addr;
     } else {
@@ -918,7 +914,7 @@ ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
   if (NonConstAddr) {
     auto MemPtrTy = llvm::StructType::get(CGM.VoidPtrTy, CGM.PtrDiffTy, nullptr);
     auto Align = CGM.getContext().toCharUnitsFromBits(TI.getMemoryCapabilityAlign());
-    auto alloca = CGF->CreateTempAlloca(MemPtrTy, Align);
+    auto alloca = CGF->CreateTempAlloca(MemPtrTy, Align, "memptr_tmp");
     CGF->Builder.CreateStore(NonConstAddr, CGF->Builder.CreateStructGEP(alloca, 0, CharUnits::Zero()));
     CGF->Builder.CreateStore(MemPtr[1], CGF->Builder.CreateStructGEP(alloca, 1, CharUnits::Zero()));
     return CGF->Builder.CreateLoad(alloca);
