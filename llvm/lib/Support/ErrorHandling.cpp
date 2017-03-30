@@ -115,6 +115,11 @@ void llvm::llvm_unreachable_internal(const char *msg, const char *file,
   if (file)
     dbgs() << " at " << file << ":" << line;
   dbgs() << "!\n";
+#ifdef __FreeBSD__
+  // Backtraces on crash only print the signal handler stack on FreeBSD.
+  // To work around this we print the stack trace before calling abort()
+  sys::PrintStackTrace(errs());
+#endif
   abort();
 #ifdef LLVM_BUILTIN_UNREACHABLE
   // Windows systems and possibly others don't declare abort() to be noreturn,
