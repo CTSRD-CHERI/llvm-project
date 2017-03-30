@@ -8,13 +8,13 @@
 # RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi n64 \
 # RUN:          -mcpu=cheri128 %s -o %t-cheri128-hybrid-main.o
 # RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi sandbox \
-# RUN:          -mcpu=cheri %S/Inputs/mips-dynamic.s -o %t-cheri256-lib.o
+# RUN:          -mcpu=cheri %S/../Inputs/mips-dynamic.s -o %t-cheri256-lib.o
 # RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi sandbox \
-# RUN:          -mcpu=cheri128 %S/Inputs/mips-dynamic.s -o %t-cheri128-lib.o
+# RUN:          -mcpu=cheri128 %S/../Inputs/mips-dynamic.s -o %t-cheri128-lib.o
 # RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi n64 \
-# RUN:          -mcpu=cheri %S/Inputs/mips-dynamic.s -o %t-cheri256-hybrid-lib.o
+# RUN:          -mcpu=cheri %S/../Inputs/mips-dynamic.s -o %t-cheri256-hybrid-lib.o
 # RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi n64 \
-# RUN:          -mcpu=cheri128 %S/Inputs/mips-dynamic.s -o %t-cheri128-hybrid-lib.o
+# RUN:          -mcpu=cheri128 %S/../Inputs/mips-dynamic.s -o %t-cheri128-hybrid-lib.o
 # RUN: llvm-readobj -h %t-cheri128-main.o | FileCheck -check-prefix=CHERI128-FLAGS %s
 # RUN: llvm-readobj -h %t-cheri256-main.o | FileCheck -check-prefix=CHERI256-FLAGS %s
 # RUN: llvm-readobj -h %t-cheri128-hybrid-main.o | FileCheck -check-prefix=CHERI128-HYBRID-FLAGS %s
@@ -24,7 +24,7 @@
 # Now check that lld does not allow to link incompatible CHERI files
 
 # RUN: llvm-mc -filetype=obj -triple=mips64-unknown-freebsd \
-# RUN:         %S/Inputs/mips-dynamic.s -o %t-mips64.o
+# RUN:         %S/../Inputs/mips-dynamic.s -o %t-mips64.o
 # RUN: not ld.lld %t-cheri256-main.o %t-mips64.o -o %t.exe 2>&1 | FileCheck -check-prefix=CHERI256-vs-MIPS %s
 # RUN: not ld.lld %t-cheri128-main.o %t-mips64.o -o %t.exe 2>&1 | FileCheck -check-prefix=CHERI128-vs-MIPS %s
 # RUN: not ld.lld %t-cheri256-main.o %t-cheri128-lib.o -o %t.exe 2>&1 | FileCheck -check-prefix=CHERI256-vs-CHERI128 %s
