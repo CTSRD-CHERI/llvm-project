@@ -8092,7 +8092,7 @@ public:
 
   bool hasBuiltinAtomic(uint64_t AtomicSizeInBits,
                         uint64_t AlignmentInBits) const override {
-#ifdef NOTYET
+#if 0
     if (SupportsCapabilities() &&
         AtomicSizeInBits == getMemoryCapabilityWidth() &&
         AlignmentInBits == getMemoryCapabilityAlign()) {

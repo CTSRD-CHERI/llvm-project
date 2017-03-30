@@ -811,7 +811,8 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
     case AtomicExpr::AO__atomic_sub_fetch:
     case AtomicExpr::AO__atomic_xor_fetch:
       // For these, only library calls for certain sizes exist.
-      UseOptimizedLibcall = true;
+      if (Size == 1 || Size == 2 || Size == 4 || Size == 8)
+        UseOptimizedLibcall = true;
       break;
 
     case AtomicExpr::AO__c11_atomic_load:
@@ -1153,12 +1154,10 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
 
 Address AtomicInfo::emitCastToAtomicIntPointer(Address addr) const {
   Address Result = Address::invalid();
-  // llvm::errs() << "  atomiccap: " << AtomicTy->isMemoryCapabilityType(CGF.getContext()) << " valcap: " << ValueTy->isMemoryCapabilityType(CGF.getContext()) << "\n";
   unsigned addrspace;
   auto addrTy = cast<llvm::PointerType>(addr.getPointer()->getType());
   llvm::Type *ty;
-  // XXXAR: ValueTy seems to always work, but AtomicTy doesn't?
-  if (ValueTy->isMemoryCapabilityType(CGF.getContext())) {
+  if (AtomicTy->isMemoryCapabilityType(CGF.getContext())) {
     addrspace = CGF.CGM.getTargetCodeGenInfo().getMemoryCapabilityAS();
     if (addrTy->getAddressSpace() == addrspace) {
       return addr;
