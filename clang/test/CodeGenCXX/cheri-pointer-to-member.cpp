@@ -32,11 +32,10 @@ AMemberFuncPtr global_null_func_ptr = nullptr;
 int A::* global_data_ptr = &A::y;
 AMemberFuncPtr global_nonvirt_func_ptr = &A::bar;
 AMemberFuncPtr global_virt_func_ptr = &A::bar_virtual;
-// FIXME: align should be 32...
-// CHECK: @global_null_func_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } zeroinitializer, align
+// CHECK: @global_null_func_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } zeroinitializer, align 32
 // CHECK: @global_data_ptr = addrspace(200) global i64 36, align 8
-// CHECK: @global_nonvirt_func_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* addrspacecast (i8* bitcast (i32 (%class.A addrspace(200)*)* @_ZN1A3barEv to i8*) to i8 addrspace(200)*), i64 0 }, align
-// CHECK: @global_virt_func_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 32 to i8 addrspace(200)*), i64 1 }, align
+// CHECK: @global_nonvirt_func_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* addrspacecast (i8* bitcast (i32 (%class.A addrspace(200)*)* @_ZN1A3barEv to i8*) to i8 addrspace(200)*), i64 0 }, align 32
+// CHECK: @global_virt_func_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 32 to i8 addrspace(200)*), i64 1 }, align 32
 
 
 int main() {
@@ -53,7 +52,7 @@ int main() {
   // CHECK: store i64 36, i64 addrspace(200)* %data_ptr_2, align 8
 
   AMemberFuncPtr null_func_ptr = nullptr;
-  // CHECK:   store { i8 addrspace(200)*, i64 } zeroinitializer, { i8 addrspace(200)*, i64 } addrspace(200)* %null_func_ptr, align 8
+  // CHECK:   store { i8 addrspace(200)*, i64 } zeroinitializer, { i8 addrspace(200)*, i64 } addrspace(200)* %null_func_ptr, align 32
 
   AMemberFuncPtr func_ptr = &A::foo;
   // This IR is pretty horrible, maybe we can create something nicer
@@ -64,7 +63,7 @@ int main() {
   // CHECK: [[TMP:%.*]] = getelementptr inbounds { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %memptr_tmp, i32 0, i32 1
   // CHECK: store i64 0, i64 addrspace(200)* [[TMP]], align 32
   // CHECK: [[TMP:%.*]] = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %memptr_tmp, align 32
-  // CHECK: store { i8 addrspace(200)*, i64 } [[TMP]], { i8 addrspace(200)*, i64 } addrspace(200)* %func_ptr, align 8
+  // CHECK: store { i8 addrspace(200)*, i64 } [[TMP]], { i8 addrspace(200)*, i64 } addrspace(200)* %func_ptr, align 32
 
   AMemberFuncPtr func_ptr_2 = &A::bar;
   // CHECK: [[PCC:%.*]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
@@ -74,13 +73,13 @@ int main() {
   // CHECK: [[TMP:%.*]] = getelementptr inbounds { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %memptr_tmp1, i32 0, i32 1
   // CHECK: store i64 0, i64 addrspace(200)* [[TMP]], align 32
   // CHECK: [[TMP:%.*]] = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %memptr_tmp1, align 32
-  // CHECK: store { i8 addrspace(200)*, i64 } [[TMP]], { i8 addrspace(200)*, i64 } addrspace(200)* %func_ptr_2, align 8
+  // CHECK: store { i8 addrspace(200)*, i64 } [[TMP]], { i8 addrspace(200)*, i64 } addrspace(200)* %func_ptr_2, align 32
   
 
 AMemberFuncPtr virtual_func_ptr = &A::foo_virtual;
-  // CHECK: store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* null, i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)* %virtual_func_ptr, align 8
+  // CHECK: store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* null, i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)* %virtual_func_ptr, align 32
    AMemberFuncPtr virtual_func_ptr_2 = &A::bar_virtual;
-  // CHECK: store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 32 to i8 addrspace(200)*), i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)* %virtual_func_ptr_2, align 8
+  // CHECK: store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 32 to i8 addrspace(200)*), i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)* %virtual_func_ptr_2, align 32
 
   // return a.*data_ptr + (a.*func_ptr)() + (a.*virtual_func_ptr)();
   // return null_func_ptr == nullptr;
@@ -204,7 +203,7 @@ int func_ptr_dereference(A* a, AMemberFuncPtr ptr) {
   return (a->*ptr)();
   // CHECK: define i32 @_Z20func_ptr_dereferenceP1AMS_FivE(%class.A addrspace(200)* %a, i8 addrspace(200)* inreg %ptr.coerce0, i64 inreg %ptr.coerce1)
   // CHECK: %2 = load %class.A addrspace(200)*, %class.A addrspace(200)* addrspace(200)* %a.addr, align 32
-  // CHECK: %3 = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %ptr.addr, align 8
+  // CHECK: %3 = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %ptr.addr, align 32
   // CHECK: %memptr.adj = extractvalue { i8 addrspace(200)*, i64 } %3, 1
   // CHECK: %memptr.adj.shifted = ashr i64 %memptr.adj, 1
   // CHECK: %this.not.adjusted = bitcast %class.A addrspace(200)* %2 to i8 addrspace(200)*
@@ -294,12 +293,12 @@ void take_func_ptr(AMemberFuncPtr ptr) {
 AMemberFuncPtr passthrough_func_ptr(AMemberFuncPtr ptr) {
   // CHECK: define void @_Z20passthrough_func_ptrM1AFivE({ i8 addrspace(200)*, i64 } addrspace(200)* noalias sret %agg.result, i64, i8 addrspace(200)* inreg %ptr.coerce0, i64 inreg %ptr.coerce1)
   // CHECK: %1 = getelementptr inbounds { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %ptr, i32 0, i32 0
-  // CHECK: store i8 addrspace(200)* %ptr.coerce0, i8 addrspace(200)* addrspace(200)* %1, align 8
+  // CHECK: store i8 addrspace(200)* %ptr.coerce0, i8 addrspace(200)* addrspace(200)* %1, align 32
   // CHECK: %2 = getelementptr inbounds { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %ptr, i32 0, i32 1
-  // CHECK: store i64 %ptr.coerce1, i64 addrspace(200)* %2, align 8
-  // CHECK: %ptr1 = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %ptr, align 8
-  // CHECK: store { i8 addrspace(200)*, i64 } %ptr1, { i8 addrspace(200)*, i64 } addrspace(200)* %ptr.addr, align 8
-  // CHECK: %3 = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %ptr.addr, align 8
+  // CHECK: store i64 %ptr.coerce1, i64 addrspace(200)* %2, align 32
+  // CHECK: %ptr1 = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %ptr, align 32
+  // CHECK: store { i8 addrspace(200)*, i64 } %ptr1, { i8 addrspace(200)*, i64 } addrspace(200)* %ptr.addr, align 32
+  // CHECK: %3 = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %ptr.addr, align 32
   // CHECK: store { i8 addrspace(200)*, i64 } %3, { i8 addrspace(200)*, i64 } addrspace(200)* %retval, align 32
   // CHECK: %4 = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %retval, align 32
   // CHECK: store { i8 addrspace(200)*, i64 } %4, { i8 addrspace(200)*, i64 } addrspace(200)* %agg.result, align 32

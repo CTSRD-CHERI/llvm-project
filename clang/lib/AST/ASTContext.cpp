@@ -2063,9 +2063,13 @@ unsigned ASTContext::getPreferredTypeAlign(const Type *T) const {
 
   T = T->getBaseElementTypeUnsafe();
 
-  // The preferred alignment of member pointers is that of a pointer.
-  if (T->isMemberPointerType())
-    return getPreferredTypeAlign(getPointerDiffType().getTypePtr());
+  // The preferred alignment of member pointers is that of a pointer (unless we
+  // are targeting CHERI capability ABI, where data pointers are less aligned)
+  //
+  // XXXAR: do we want member data pointers to also be capability aligned
+  // although they are only a ptrdiff_t?
+  if (T->isMemberPointerType() && !getTargetInfo().areAllPointersCapabilities())
+    return getPreferredTypeAlign(VoidPtrTy.getTypePtr());
 
   if (!Target->allowsLargerPreferedTypeAlignment())
     return ABIAlign;
