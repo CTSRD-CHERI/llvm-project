@@ -1706,9 +1706,9 @@ void llvm::PrintCapRelocations(const ObjectFile *Obj) {
       Symbol = SymbolNames[Base];
     outs() << format("0x%016" PRIx64, Target) << "\tBase: " << Symbol << " ("
            << format("0x%016" PRIx64, Base)
-           << ")\tOffset: " << format("%016" PRIu64, Offset)
-           << "\tLength: " << format("%016" PRIu64, Length)
-           << "\tPermissions: " << format("%08" PRIu64, Perms)
+           << ")\tOffset: " << format("0x%016" PRIx64, Offset)
+           << "\tLength: " << format("0x%016" PRIx64, Length)
+           << "\tPermissions: " << format("0x%08" PRIx64, Perms)
            << (isFunction ? " (Function)\n" : "\n");
   }
   outs() << "\n";
