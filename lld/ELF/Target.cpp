@@ -46,6 +46,17 @@ using namespace llvm::ELF;
 
 std::string lld::toString(uint32_t Type) {
   auto Machine = elf::Config->EMachine == EM_MIPS_CHERI ? EM_MIPS : elf::Config->EMachine;
+  if (Machine == EM_MIPS && Type > 0xff) {
+    uint32_t Type1 = Type & 0xff;
+    llvm::Twine Result = getELFRelocationTypeName(Machine, Type1);
+    uint32_t Type2 = (Type >> 8) & 0xff;
+    uint32_t Type3 = (Type >> 16) & 0xff;
+    if (Type2 || Type3) {
+      return (Result + "/" + getELFRelocationTypeName(Machine, Type2) + "/" +
+              getELFRelocationTypeName(Machine, Type3)).str();
+    }
+    return Result.str();
+  }
   StringRef S = getELFRelocationTypeName(Machine, Type);
   if (S == "Unknown")
     return ("Unknown (" + Twine(Type) + ")").str();
