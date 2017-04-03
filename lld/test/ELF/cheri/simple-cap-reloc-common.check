@@ -46,24 +46,23 @@
 // STATIC: -static.exe:       file format ELF64-mips
 
 // Check that static & dynamic binaries and shared libraries have a valid __cap_relocs section:
-// DUMP-EXE-DAG: SYMBOL TABLE:
+// DUMP-EXE-LABEL: CAPABILITY RELOCATION RECORDS:
+// DUMP-EXE-NEXT: 0x[[XPTR_ADDR:[0-9a-f]+]]    Base: x (0x[[X_ADDR:[0-9a-f]+]])             Offset: 0x0000000000000000        Length: 0x0000000000000004        Permissions: 0x00000000
+// DUMP-EXE-NEXT: 0x[[BUFPTR_ADDR:[0-9a-f]+]]  Base: buffer (0x[[BUFFER_ADDR:[0-9a-f]+]])   Offset: 0x0000000000000000        Length: 0x000000000000002a        Permissions: 0x00000000
+// For some reason llvm-objdump doesn't find the name of __start here:
+// DUMP-EXE-NEXT: 0x[[FN_PTR_ADDR:[0-9a-f]+]]  Base: (0x[[__START_ADDR:[0-9a-f]+]]) Offset: 0x0000000000000000        Length: 0x000000000000006c        Permissions: 0x8000000000000000 (Function)
+
+// DUMP-EXE-LABEL: SYMBOL TABLE:
 // STATIC-NOT:   {{.*}} l    d  .interp                 00000000 .interp
 // DYNAMIC:      {{.*}} l    d  .interp                 00000000 .interp
 // DUMP-EXE-DAG: [[DATA_ADDR:[0-9a-f]+]]     l    d  .data           00000000 .data{{$}}
 // DUMP-EXE-DAG: [[BSS_ADDR:[0-9a-f]+]]      l    d  .bss            00000000 .bss{{$}}
-// DUMP-EXE-DAG: [[__START_ADDR:[0-9a-f]+]]  g    F  .text           0000006c __start{{$}}
-// DUMP-EXE-DAG: [[FN_PTR_ADDR:[0-9a-f]+]]   g       .data           00000020 fn_ptr{{$}}
-// DUMP-EXE-DAG: [[X_ADDR:[0-9a-f]+]]        g       .data           00000004 x{{$}}
-// DUMP-EXE-DAG: [[XPTR_ADDR:[0-9a-f]+]]     g       .data           00000020 xptr{{$}}
-// DUMP-EXE-DAG: [[BUFFER_ADDR:[0-9a-f]+]]   g       .bss            0000002a buffer{{$}}
-// DUMP-EXE-DAG: [[BUFPTR_ADDR:[0-9a-f]+]]   g       .data.rel.ro    00000020 bufptr{{$}}
-
-
-// DUMP-EXE-LABEL: CAPABILITY RELOCATION RECORDS:
-// DUMP-EXE-NEXT: 0x[[XPTR_ADDR]]    Base: x (0x[[X_ADDR]])             Offset: 0x0000000000000000        Length: 0x0000000000000004        Permissions: 0x00000000
-// DUMP-EXE-NEXT: 0x[[BUFPTR_ADDR]]  Base: buffer (0x[[BUFFER_ADDR]])   Offset: 0x0000000000000000        Length: 0x000000000000002a        Permissions: 0x00000000
-// For some reason llvm-objdump doesn't find the name of __start here:
-// DUMP-EXE-NEXT: 0x[[FN_PTR_ADDR]]  Base: (0x[[__START_ADDR]]) Offset: 0x0000000000000000        Length: 0x000000000000006c        Permissions: 0x8000000000000000 (Function)
+// DUMP-EXE-DAG: [[__START_ADDR]]  g    F  .text           0000006c __start{{$}}
+// DUMP-EXE-DAG: [[FN_PTR_ADDR]]   g       .data           00000020 fn_ptr{{$}}
+// DUMP-EXE-DAG: [[X_ADDR]]        g       .data           00000004 x{{$}}
+// DUMP-EXE-DAG: [[XPTR_ADDR]]     g       .data           00000020 xptr{{$}}
+// DUMP-EXE-DAG: [[BUFFER_ADDR]]   g       .bss            0000002a buffer{{$}}
+// DUMP-EXE-DAG: [[BUFPTR_ADDR]]   g       .data.rel.ro    00000020 bufptr{{$}}
 
 
 // DUMP-OBJ:      RELOCATION RECORDS FOR [.rela__cap_relocs]:
@@ -76,3 +75,33 @@
 // DUMP-OBJ-SAME:{{[[:space:]]$}}
 // DUMP-OBJ: CAPABILITY RELOCATION RECORDS:
 // DUMP-OBJ-NEXT: 0x0000000000000000      Base:  (0x0000000000000000)     Offset: 0x0000000000000000        Length: 0x0000000000000000        Permissions: 0x00000000
+
+
+// SHLIB-LABEL:  Section {
+// SHLIB:         Name: __cap_relocs
+// SHLIB-NEXT:    Type: SHT_PROGBITS (0x1)
+// SHLIB-NEXT:    Flags [ (0x3)
+// SHLIB-NEXT:      SHF_ALLOC (0x2)
+// SHLIB-NEXT:      SHF_WRITE (0x1)
+// SHLIB-NEXT:    ]
+// SHLIB-NEXT:    Address: [[CAP_RELOCS_ADDR:(0x30020)|(0x718)]]
+// SHLIB-NEXT:    Offset: [[CAP_RELOCS_ADDR]]
+// SHLIB-NEXT:    Size: 120
+// SHLIB-NEXT:    Link: 0
+// SHLIB-NEXT:    Info: 0
+// SHLIB-NEXT:    AddressAlignment: 8
+// SHLIB-NEXT:    EntrySize: 0
+// SHLIB-NEXT:  }
+
+// SHLIB-LABEL: Relocations [
+// SHLIB-NEXT:  Section ({{.*}}) .rel.dyn {
+// BFD has a useless NULL relocation herefirst
+// SHLIB-DAG:    {{(0x0 R_MIPS_NONE/R_MIPS_NONE/R_MIPS_NONE - 0x0$)?}}
+// SHLIB-DAG:    [[CAP_RELOCS_ADDR]] R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0
+// SHLIB-DAG:    0x[[@EXPR hex(CAP_RELOCS_ADDR + 0x28)]] R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0
+// SHLIB-DAG:    0x[[@EXPR hex(CAP_RELOCS_ADDR + 0x50)]] R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0
+// SHLIB-DAG:    0x[[@EXPR hex(CAP_RELOCS_ADDR + 0x30)]] R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE buffer 0x0
+// SHLIB-DAG:    0x[[@EXPR hex(CAP_RELOCS_ADDR + 0x08)]] R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE x 0x0
+// SHLIB-DAG:    0x[[@EXPR hex(CAP_RELOCS_ADDR + 0x58)]] R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE __start 0x0
+// SHLIB-NEXT:  }
+// SHLIB-NEXT: ]

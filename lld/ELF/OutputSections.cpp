@@ -355,6 +355,13 @@ void OutputSectionFactory::addInputSec(InputSectionBase *IS,
     }
     Sec->Flags |= Flags;
   } else {
+    // XXXAR: HACK: for now we have to mark __cap_relocs as writable and not
+    // RELRO because otherwise rtld will crash
+    if (Key.Name == "__cap_relocs") {
+      Flags |= SHF_WRITE;
+    }
+    DEBUG_WITH_TYPE("LLD", dbgs() << "Creating output section " << Key.Name
+                                  << " flags=" << Flags << "\n");
     Sec = make<OutputSection>(Key.Name, IS->Type, Flags);
     OutputSections.push_back(Sec);
   }
