@@ -1,0 +1,78 @@
+// common checks for both bfd and lld linked executables
+
+
+// The object file should not contain any useful values in the __cap_relocs section, it gets set by the linker
+// READOBJ:      Section {
+// READOBJ:         Index: [[CAP_RELOCS_INDEX:14]]
+// READOBJ:         Name: __cap_relocs
+// READOBJ-NEXT:    Type: SHT_PROGBITS (0x1)
+// READOBJ-NEXT:    Flags [ (0x2)
+// READOBJ-NEXT:      SHF_ALLOC (0x2)
+// READOBJ-NEXT:    ]
+// READOBJ-NEXT:    Address: 0x0
+// READOBJ-NEXT:    Offset:
+// READOBJ-NEXT:    Size: 120
+// READOBJ-NEXT:    Link: 0
+// READOBJ-NEXT:    Info: 0
+// READOBJ-NEXT:    AddressAlignment: 8
+// FIXME: should EntrySize really be 0?
+// READOBJ-NEXT:    EntrySize: 0
+// READOBJ-NEXT:  }
+// READOBJ-NEXT:  Section {
+// READOBJ-NEXT:    Index: [[RELA_CAP_RELOCS_IDX:[0-9]+]]
+// READOBJ-NEXT:    Name: .rela__cap_relocs
+// READOBJ-NEXT:    Type: SHT_RELA (0x4)
+// READOBJ-NEXT:    Flags [ (0x0)
+// READOBJ-NEXT:    ]
+// READOBJ-NEXT:    Address: 0x0
+// READOBJ-NEXT:    Offset:
+// READOBJ-NEXT:    Size: 144
+// READOBJ-NEXT:    Link:
+// READOBJ-NEXT:    Info: [[CAP_RELOCS_INDEX]]
+// READOBJ-NEXT:    AddressAlignment: 8
+// READOBJ-NEXT:    EntrySize: 24
+// READOBJ-NEXT:  }
+
+// READOBJ:       Section ([[RELA_CAP_RELOCS_IDX]]) .rela__cap_relocs {
+// READOBJ-NEXT:    0x0 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE .data 0x20
+// READOBJ-NEXT:    0x8 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE x 0x0
+// READOBJ-NEXT:    0x28 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE .data.rel.ro 0x0
+// READOBJ-NEXT:    0x30 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE buffer 0x0
+// READOBJ-NEXT:    0x50 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE .data 0x40
+// READOBJ-NEXT:    0x58 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE __start 0x0
+// READOBJ-NEXT:  }
+
+// DYNAMIC: -dynamic.exe:       file format ELF64-mips
+// STATIC: -static.exe:       file format ELF64-mips
+
+// Check that static & dynamic binaries and shared libraries have a valid __cap_relocs section:
+// DUMP-EXE-DAG: SYMBOL TABLE:
+// STATIC-NOT:   {{.*}} l    d  .interp                 00000000 .interp
+// DYNAMIC:      {{.*}} l    d  .interp                 00000000 .interp
+// DUMP-EXE-DAG: [[DATA_ADDR:[0-9a-f]+]]     l    d  .data           00000000 .data{{$}}
+// DUMP-EXE-DAG: [[BSS_ADDR:[0-9a-f]+]]      l    d  .bss            00000000 .bss{{$}}
+// DUMP-EXE-DAG: [[__START_ADDR:[0-9a-f]+]]  g    F  .text           0000006c __start{{$}}
+// DUMP-EXE-DAG: [[FN_PTR_ADDR:[0-9a-f]+]]   g       .data           00000020 fn_ptr{{$}}
+// DUMP-EXE-DAG: [[X_ADDR:[0-9a-f]+]]        g       .data           00000004 x{{$}}
+// DUMP-EXE-DAG: [[XPTR_ADDR:[0-9a-f]+]]     g       .data           00000020 xptr{{$}}
+// DUMP-EXE-DAG: [[BUFFER_ADDR:[0-9a-f]+]]   g       .bss            0000002a buffer{{$}}
+// DUMP-EXE-DAG: [[BUFPTR_ADDR:[0-9a-f]+]]   g       .data.rel.ro    00000020 bufptr{{$}}
+
+
+// DUMP-EXE-LABEL: CAPABILITY RELOCATION RECORDS:
+// DUMP-EXE-NEXT: 0x[[XPTR_ADDR]]    Base: x (0x[[X_ADDR]])             Offset: 0x0000000000000000        Length: 0x0000000000000004        Permissions: 0x00000000
+// DUMP-EXE-NEXT: 0x[[BUFPTR_ADDR]]  Base: buffer (0x[[BUFFER_ADDR]])   Offset: 0x0000000000000000        Length: 0x000000000000002a        Permissions: 0x00000000
+// For some reason llvm-objdump doesn't find the name of __start here:
+// DUMP-EXE-NEXT: 0x[[FN_PTR_ADDR]]  Base: (0x[[__START_ADDR]]) Offset: 0x0000000000000000        Length: 0x000000000000006c        Permissions: 0x8000000000000000 (Function)
+
+
+// DUMP-OBJ:      RELOCATION RECORDS FOR [.rela__cap_relocs]:
+// DUMP-OBJ-NEXT: 0000000000000000 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE .data
+// DUMP-OBJ-NEXT: 0000000000000008 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE x
+// DUMP-OBJ-NEXT: 0000000000000028 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE .data.rel.ro
+// DUMP-OBJ-NEXT: 0000000000000030 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE buffer
+// DUMP-OBJ-NEXT: 0000000000000050 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE .data{{$}}
+// DUMP-OBJ-NEXT: 0000000000000058 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE __start{{$}}
+// DUMP-OBJ-SAME:{{[[:space:]]$}}
+// DUMP-OBJ: CAPABILITY RELOCATION RECORDS:
+// DUMP-OBJ-NEXT: 0x0000000000000000      Base:  (0x0000000000000000)     Offset: 0x0000000000000000        Length: 0x0000000000000000        Permissions: 0x00000000
