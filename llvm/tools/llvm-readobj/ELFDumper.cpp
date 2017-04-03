@@ -1378,12 +1378,14 @@ void ELFDumper<ELFT>::parseDynamicTable(
     const Elf_Phdr *const *I = std::upper_bound(
         LoadSegments.begin(), LoadSegments.end(), VAddr, compareAddr<ELFT>);
     if (I == LoadSegments.begin())
-      report_fatal_error("Virtual address is not in any segment");
+      report_fatal_error(("Virtual address " + Twine(VAddr) +
+                          " is not in any segment"));
     --I;
     const Elf_Phdr &Phdr = **I;
     uint64_t Delta = VAddr - Phdr.p_vaddr;
     if (Delta >= Phdr.p_filesz)
-      report_fatal_error("Virtual address is not in any segment");
+      report_fatal_error(("Virtual address " + Twine(VAddr) +
+                          " is not in any segment"));
     return Obj->base() + Phdr.p_offset + Delta;
   };
 

@@ -42,7 +42,7 @@ RUN: not llvm-readobj -dynamic-table \
 RUN:   %p/Inputs/corrupt-invalid-virtual-addr.elf.x86-64 2>&1 | \
 RUN:   FileCheck --check-prefix=VIRTADDR %s
 
-VIRTADDR: Virtual address is not in any segment
+VIRTADDR: Virtual address 65535 is not in any segment
 
 
 RUN: not llvm-readobj -dyn-relocations \
