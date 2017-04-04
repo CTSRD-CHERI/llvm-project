@@ -10,6 +10,9 @@
 import platform
 import os
 import errno
+import tempfile
+import pprint
+import shutil
 
 from libcxx.test import tracing
 from libcxx.util import executeCommand
@@ -155,6 +158,7 @@ class TimeoutExecutor(PrefixExecutor):
 class RemoteExecutor(Executor):
     def __init__(self):
         self.local_run = executeCommand
+        self.keep_test = False
 
     def remote_temp_dir(self):
         return self._remote_temp(True)
@@ -186,7 +190,7 @@ class RemoteExecutor(Executor):
         target_cwd = None
         try:
             target_cwd = self.remote_temp_dir()
-            target_exe_path = os.path.join(target_cwd, 'libcxx_test.exe')
+            target_exe_path = os.path.join(target_cwd, os.path.basename(exe_path))
             if cmd:
                 # Replace exe_path with target_exe_path.
                 cmd = [c if c != exe_path else target_exe_path for c in cmd]
@@ -204,9 +208,11 @@ class RemoteExecutor(Executor):
             # TODO(jroelofs): capture the copy_in and delete_remote commands,
             # and conjugate them with '&&'s around the first tuple element
             # returned here:
-            return self._execute_command_remote(cmd, target_cwd, env)
+            (remote_cmd, out, err, rc) = self._execute_command_remote(cmd, target_cwd, env)
+            self.keep_test = rc != 0
+            return remote_cmd, out, err, rc
         finally:
-            if target_cwd:
+            if target_cwd and not self.keep_test:
                 self.delete_remote(target_cwd)
 
     def _execute_command_remote(self, cmd, remote_work_dir='.', env=None):
@@ -214,17 +220,18 @@ class RemoteExecutor(Executor):
 
 
 class SSHExecutor(RemoteExecutor):
-    def __init__(self, host, username=None, port=None):
+    def __init__(self, host, username=None, port=None, config=None):
         super(SSHExecutor, self).__init__()
 
         self.user_prefix = username + '@' if username else ''
         self.host = host
         self.port = port
+        self.config = config
         self.scp_command = ['scp'] if port is None else ['scp', '-P', str(port)]
         self.ssh_command = ['ssh'] if port is None else ['ssh', '-p', str(port)]
 
         # TODO(jroelofs): switch this on some -super-verbose-debug config flag
-        if False:
+        if self.config and self.config.lit_config.debug:
             self.local_run = tracing.trace_function(
                 self.local_run, log_calls=True, log_results=True,
                 label='ssh_local')
@@ -254,11 +261,68 @@ class SSHExecutor(RemoteExecutor):
         ssh_cmd = self.ssh_command + ['-oBatchMode=yes', remote]
         # FIXME: doesn't handle spaces... and Py2.7 doesn't have shlex.quote()
         if env:
-            env_cmd = ['env'] + ['%s=%s' % (k, v) for k, v in env.items()]
+            env_cmd = ['env'] + ['\'%s=%s\'' % (k, v) for k, v in env.items()]
         else:
             env_cmd = []
         remote_cmd = ' '.join(env_cmd + cmd)
         if remote_work_dir != '.':
-            remote_cmd = 'cd ' + remote_work_dir + ' && ' + remote_cmd
+            remote_cmd = 'cd \'' + remote_work_dir + '\' && ' + remote_cmd
         out, err, rc = self.local_run(ssh_cmd + [remote_cmd])
         return (remote_cmd, out, err, rc)
+
+
+class SSHExecutorWithNFSMount(SSHExecutor):
+    def __init__(self, host, nfs_dir, path_in_target, config, username=None, port=None):
+        super(SSHExecutorWithNFSMount, self).__init__(
+            host, config=config, username=username, port=port)
+        self.nfs_dir = nfs_dir
+        if not self.nfs_dir.endswith('/'):
+            self.nfs_dir = self.nfs_dir + '/'
+        self.path_in_target = path_in_target
+        if not self.path_in_target.endswith('/'):
+            self.path_in_target = self.path_in_target + '/'
+        if self.config and self.config.lit_config.debug:
+            self._remote_temp = tracing.trace_function(
+                self._remote_temp, log_calls=True, log_results=True,
+                label='ssh-exec')
+            self._copy_in_file = tracing.trace_function(
+                self._copy_in_file, log_calls=True, log_results=True,
+                label='ssh-exec')
+            self.delete_remote = tracing.trace_function(
+                self.delete_remote, log_calls=True, log_results=True,
+                label='ssh-exec')
+            self.run = tracing.trace_function(
+                self.run, log_calls=True, log_results=True, label='ssh-exec')
+
+    def _copy_in_file(self, src, dst):
+        if not dst.startswith(self.nfs_dir):
+            raise NotImplementedError('Cannot copy file %s to directory that is not below %s: %s'
+                                      % (src, self.nfs_dir, dst))
+        shutil.copy(src, dst)
+
+    def delete_remote(self, remote):
+        # TODO: add an option to keep failing tests
+        if not remote.startswith(self.nfs_dir):
+            raise NotImplementedError('Cannot delete file that is not below %s: %s'
+                                      % (self.nfs_dir, remote))
+        else:
+            shutil.rmtree(remote)
+
+    def _remote_temp(self, is_dir):
+        if is_dir:
+            return tempfile.mkdtemp(prefix="libcxx-", dir=self.nfs_dir)
+        else:
+            return tempfile.mkstemp(prefix="libcxx-", dir=self.nfs_dir)
+
+    def _execute_command_remote(self, cmd, remote_work_dir='.', env=None):
+        if remote_work_dir != ".":
+            if not remote_work_dir.startswith(self.nfs_dir):
+                return cmd, None, "Custom remote_work_dir not implemented: %r" % remote_work_dir, 42
+            remote_work_dir = remote_work_dir.replace(self.nfs_dir, self.path_in_target)
+        if env:
+            env.update((k, v.replace(self.nfs_dir, self.path_in_target)) for k, v in env.items())
+            # return cmd, None, "Custom env not implemented: %r" % env, 42
+        if all(self.nfs_dir not in s for s in cmd):
+            raise NotImplementedError("Cannot run non-test binaries: Command was: %s" % cmd)
+        cmd = [s.replace(self.nfs_dir, self.path_in_target) for s in cmd]
+        return super(SSHExecutorWithNFSMount, self)._execute_command_remote(cmd, remote_work_dir=remote_work_dir)
