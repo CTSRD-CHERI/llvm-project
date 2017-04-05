@@ -16,11 +16,14 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/ADT/APInt.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/Error.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/Regex.h"
@@ -34,6 +37,8 @@
 #include <system_error>
 #include <vector>
 using namespace llvm;
+#define DEBUG_TYPE "FileCheck"
+
 
 static cl::opt<std::string>
     CheckFilename(cl::Positional, cl::desc("<check-file>"), cl::Required);
@@ -140,7 +145,7 @@ public:
 
   bool ParsePattern(StringRef PatternStr, StringRef Prefix, SourceMgr &SM,
                     unsigned LineNumber);
-  size_t Match(StringRef Buffer, size_t &MatchLen,
+  size_t Match(StringRef Buffer, size_t &MatchLen, const SourceMgr &SM,
                StringMap<StringRef> &VariableTable) const;
   void PrintFailureInfo(const SourceMgr &SM, StringRef Buffer,
                         const StringMap<StringRef> &VariableTable) const;
@@ -157,7 +162,9 @@ private:
   unsigned
   ComputeMatchDistance(StringRef Buffer,
                        const StringMap<StringRef> &VariableTable) const;
-  bool EvaluateExpression(StringRef Expr, std::string &Value) const;
+  bool EvaluateExpression(StringRef Expr, std::string &Value,
+                          const SourceMgr &SM,
+                          const StringMap<StringRef> &VariableTable) const;
   size_t FindRegexVarEnd(StringRef Str, SourceMgr &SM);
 };
 
@@ -280,13 +287,14 @@ bool Pattern::ParsePattern(StringRef PatternStr, StringRef Prefix,
               return true;
             }
             IsExpression = true;
-            continue;
+            break;
           }
         }
         if (Name[i] != '_' && !isalnum(Name[i]) &&
             (!IsExpression || (Name[i] != '+' && Name[i] != '-'))) {
           SM.PrintMessage(SMLoc::getFromPointer(Name.data() + i),
-                          SourceMgr::DK_Error, "invalid name in named regex");
+                          SourceMgr::DK_Error, "invalid name in named regex: " +
+                          Name);
           return true;
         }
       }
@@ -294,7 +302,7 @@ bool Pattern::ParsePattern(StringRef PatternStr, StringRef Prefix,
       // Name can't start with a digit.
       if (isdigit(static_cast<unsigned char>(Name[0]))) {
         SM.PrintMessage(SMLoc::getFromPointer(Name.data()), SourceMgr::DK_Error,
-                        "invalid name in named regex");
+                        "invalid name in named regex: " + Name);
         return true;
       }
 
@@ -365,11 +373,457 @@ void Pattern::AddBackrefToRegEx(unsigned BackrefNum) {
   RegExStr += Backref;
 }
 
+
+// Adapted from tools/lld/ELF/ScriptLexer.cpp and
+// ExecutionEngine/RuntimeDyldChecker.cpp
+class FileCheckExprLexer {
+public:
+  FileCheckExprLexer(StringRef Expr, const SourceMgr &SM)
+      : FullExpr(Expr), SM(SM) {
+    Tokens = tokenize(FullExpr);
+    DEBUG(dbgs() << "Tokenized '" << FullExpr << "' is ["
+                  << join(Tokens.begin(), Tokens.end(), ", ") << "]\n");
+  }
+
+  static SMRange getSourceRange(StringRef S) {
+    return SMRange(SMLoc::getFromPointer(S.begin()),
+                    SMLoc::getFromPointer(S.end()));
+  }
+  std::vector<StringRef> tokenize(StringRef S) {
+    std::vector<StringRef> Vec;
+    for (;;) {
+      S = S.ltrim();
+      if (S.empty())
+        break;
+      // Quoted tokens are interpreted as strings
+      if (S.startswith("\"")) {
+        size_t E = S.find("\"", 1);
+        if (E == StringRef::npos) {
+          error("Unclosed quote", getSourceRange(S));
+          return {};
+        }
+        Vec.push_back(S.take_front(E + 1));
+        S = S.substr(E + 1);
+        continue;
+      }
+      // Variables with special characters can be referenced using ${} syntax
+      if (S.startswith("${")) {
+        size_t E = S.find("}", 2);
+        if (E == StringRef::npos) {
+          error("Unclosed variable", getSourceRange(S));
+          return {};
+        }
+        Vec.push_back(S.take_front(E + 1));
+        S = S.substr(E + 1);
+        continue;
+      }
+      size_t Pos = S.find_first_not_of(
+          "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+          "0123456789_.$");
+
+      // A character that cannot start an identifier is a single token.
+      // The exception is '<<' and '>>' which are interpreted as one token
+      if (S.startswith(">>") || S.startswith("<<"))
+        Pos = 2;
+      if (Pos == 0)
+        Pos = 1;
+      Vec.push_back(S.substr(0, Pos));
+      S = S.substr(Pos);
+    }
+    return Vec;
+  }
+  void error(const Twine& Msg, SMRange Range = SMRange(),
+                    SMLoc Location = SMLoc()) {
+    if (!Range.isValid()) {
+      Range = currentRange();
+    }
+    if (!Location.isValid()) {
+      Location = Range.Start;
+    }
+    SM.PrintMessage(Location, SourceMgr::DK_Error, Msg, { Range });
+    Error = true;
+    LastErrorMsg = Msg.str();
+  }
+  StringRef next() {
+    if (hasError())
+      return StringRef();
+    if (atEnd()) {
+      error("Unexpected end of expression");
+      return StringRef();
+    }
+    Current++;
+    return currentTok();
+  }
+  StringRef peek() const {
+    if (hasError() || atEnd())
+      return StringRef();
+    return Tokens[Current + 1];
+  }
+  StringRef currentTok() const {
+    assert(Current >= 0);
+    return Tokens[Current];
+  }
+  SMRange currentRange() const {
+    if (atEnd())
+      return SMRange(SMLoc::getFromPointer(FullExpr.end()),
+                     SMLoc::getFromPointer(FullExpr.end()));
+    return SMRange(SMLoc::getFromPointer(currentTok().begin()),
+                    SMLoc::getFromPointer(currentTok().end()));
+  }
+  bool expect(StringRef Expected) {
+    StringRef Next = atEnd() ? "<EOF>" : next();
+    if (Next != Expected) {
+      error("Expected '" + Expected + "' but got '" + Next + "' instead");
+      return false;
+    }
+    return true;
+  }
+  bool hasError() const { return Error; }
+  const std::string& getLastError() const { return LastErrorMsg; }
+  bool atEnd() const {
+    return (size_t)(Current + 1) >= Tokens.size();
+  }
+
+  const StringRef FullExpr;
+private:
+  const SourceMgr &SM;
+  std::vector<StringRef> Tokens;
+  ssize_t Current = -1;
+  bool Error = false;
+  std::string LastErrorMsg;
+};
+
+class ExprResult {
+  enum ResultKind { IntResult, StrResult, ErrorResult };
+public:
+  ExprResult(llvm::NoneType) : Kind(ErrorResult) {}
+  ExprResult(APInt Value, SMLoc Location, SMRange Range)
+      : Kind(IntResult),  IntValue(Value), Location(Location), Range(Range) {
+        printEvaluationDebug();
+      }
+  ExprResult(const Twine& Value, SMLoc Location, SMRange Range)
+      : Kind(StrResult), StringValue(Value.str()), Location(Location), Range(Range) {
+        printEvaluationDebug();
+      }
+  static ExprResult error(Twine Message, SMLoc Location,
+                          const SMRange& Range) {
+      ExprResult R = None;
+      R.StringValue = Message.str();
+      R.Location = Location;
+      R.Range = Range;
+      return R;
+  }
+
+  APInt getInt() const {
+    assert(Kind == IntResult);
+    return IntValue;
+  }
+  std::string getString() const {
+    assert(Kind == StrResult);
+    return StringValue;
+  }
+  bool isError() const { return Kind == ErrorResult; }
+  bool isInt() const { return Kind == IntResult; }
+  bool isStr() const { return Kind == StrResult; }
+  std::string getErrorMsg() const {
+    assert(Kind == ErrorResult);
+    return StringValue;
+  }
+  std::string convertToString() const {
+    assert(Kind != ErrorResult);
+    return isInt() ? IntValue.toString(10, true) : StringValue;
+  }
+
+  std::string debugString() const {
+    switch (Kind) {
+      case IntResult:
+        return "Int<" + IntValue.toString(10, true) + ">";
+      case StrResult:
+        return "Str<" + StringValue + ">";
+      case ErrorResult:
+        return "ERROR<" + StringValue + ">";
+    }
+    llvm_unreachable("Invalid type");
+  }
+private:
+  void printEvaluationDebug() const {
+    DEBUG(dbgs() << "  ExprResult: " << debugString() << "\n");
+  }
+  ResultKind Kind;
+  APInt IntValue;
+  std::string StringValue;
+public:
+  SMLoc Location;
+  SMRange Range;
+};
+
+class FileCheckExprEvaluator : private FileCheckExprLexer {
+public:
+  FileCheckExprEvaluator(StringRef Expr, const SourceMgr& SM,
+            const StringMap<StringRef> &Variables)
+    : FileCheckExprLexer(Expr, SM), Variables(Variables) {}
+
+  Optional<std::string> evaluate() {
+    DEBUG(dbgs() << "Evaluating '" << FullExpr << "'\n");
+    if (hasError()) {
+      return None;
+    }
+    ExprResult Result = nextExpression();
+    if (hasError() || Result.isError())
+      return None;
+    if (!atEnd()) {
+      SMRange Range(SMLoc::getFromPointer(next().begin()),
+                    SMLoc::getFromPointer(FullExpr.end()));
+      error("Excess characters at end of expression", Range.Start, Range);
+      return None;
+    }
+    std::string Ret = Result.convertToString();
+    DEBUG(dbgs() << "--> Result is '" << Ret << "'\n");
+    return Ret;
+  }
+
+private:
+  const StringMap<StringRef> &Variables;
+  unsigned OpenParens = 0;
+
+  ExprResult error(const Twine& Msg, SMLoc Loc = SMLoc(),
+                   SMRange Range = SMRange()) {
+    if (!Range.isValid())
+      Range = currentRange();
+    if (!Loc.isValid())
+      Loc = Range.Start;
+    FileCheckExprLexer::error(Msg);
+    return ExprResult::error(Msg, Loc, Range);
+  }
+  bool expect(StringRef S, ExprResult* R) {
+    if (!FileCheckExprLexer::expect(S)) {
+      *R = ExprResult::error(getLastError(), currentRange().Start,
+                             currentRange());
+      return false;
+    }
+    return true;
+  }
+
+  ExprResult convertToInt(const ExprResult &Value) {
+    if (Value.isInt() || Value.isError())
+      return Value;
+    else if (Value.isStr()) {
+      // XXXAR: for some reason if I use `APInt Value;` here the result ends up being negative
+      APInt Converted (64, 0u, false);
+      if (!StringRef(Value.getString()).getAsInteger(0, Converted)) {
+        return ExprResult(Converted, Value.Location, Value.Range);
+      }
+    }
+    return error("Expected integer value but got " + Value.debugString(),
+                 Value.Location, Value.Range);
+  }
+
+  ExprResult computeBinOpResult(StringRef Op, const ExprResult &LHSResult,
+                                const ExprResult &RHSResult) {
+    auto LHSAsInt = convertToInt(LHSResult);
+    if (LHSAsInt.isError())
+      return LHSAsInt;
+    auto RHSAsInt = convertToInt(RHSResult);
+    if (RHSAsInt.isError())
+      return RHSAsInt;
+    APInt LHS = LHSAsInt.getInt();
+    APInt RHS = RHSAsInt.getInt();
+    if (LHS.getBitWidth() < RHS.getBitWidth())
+      LHS = LHS.sextOrSelf(RHS.getBitWidth());
+    if (RHS.getBitWidth() < LHS.getBitWidth())
+      RHS = RHS.sextOrSelf(LHS.getBitWidth());
+
+    SMLoc Loc = SMLoc::getFromPointer(Op.begin());
+    SMRange Range(LHSAsInt.Range.Start, RHSAsInt.Range.End);
+    if (Op == "+") {
+      return ExprResult(LHS + RHS, Loc, Range);
+    } else if (Op == "-") {
+      return ExprResult(LHS - RHS, Loc, Range);
+    } else if (Op == "*") {
+      return ExprResult(LHS * RHS, Loc, Range);
+    } else if (Op == "/") {
+      return ExprResult(LHS.sdiv(RHS), Loc, Range);
+    } else if (Op == "&") {
+      return ExprResult(LHS & RHS, Loc, Range);
+    } else if (Op == "|") {
+      return ExprResult(LHS | RHS, Loc, Range);
+    } else if (Op == "<<") {
+      return ExprResult(LHS << RHS, Loc, Range);
+    } else if (Op == ">>") {
+      return ExprResult(LHS.lshr(RHS), Loc, Range);
+    } else {
+      SMRange Range = getSourceRange(Op);
+      return error("Invalid operator: '" + Op + "'", Loc, Range);
+    }
+  }
+
+  ExprResult expectParenExpr() {
+    ExprResult Result = None;
+    if (!expect("(", &Result))
+      return Result;
+    return evalParensExpr();
+  }
+
+  ExprResult evalToBase(unsigned Base) {
+    SMLoc StartLoc = currentRange().Start;
+    ExprResult Result = convertToInt(expectParenExpr());
+    if (!Result.isError()) {
+      Result = ExprResult(Result.getInt().toString(Base, true),
+                          StartLoc, SMRange(StartLoc, Result.Range.End));
+    }
+    return Result;
+  }
+
+  // Evaluate an identifier expr, which may be a symbol, or a call to
+  // one of the builtin functions.
+  ExprResult evalIdentifierExpr(StringRef Symbol) {
+    DEBUG(dbgs() << "  Indentifier: " << Symbol << "\n");
+    if (Symbol == "hex") {
+      return evalToBase(16);
+    } else if (Symbol == "dec") {
+      return evalToBase(10);
+    } else if (Symbol == "oct") {
+      return evalToBase(8);
+    } else if (Symbol == "bin") {
+      return evalToBase(2);
+    } else if (Symbol == "tolower") {
+      ExprResult Result = expectParenExpr();
+      if (!Result.isError())
+        Result = ExprResult(StringRef(Result.convertToString()).lower(),
+                            Result.Location, Result.Range);
+      return Result;
+    } else if (Symbol == "toupper") {
+      ExprResult Result = expectParenExpr();
+      if (!Result.isError())
+        Result = ExprResult(StringRef(Result.convertToString()).upper(),
+                            Result.Location, Result.Range);
+      return Result;
+    } else if (Symbol == "format") {
+      return error("Not implemented yet");
+    } else { // variable reference
+      // allow ${variable} to handle variables called hex, bin, oct, etc..
+      if (Symbol.startswith("$")) {
+        Symbol = Symbol.substr(1);
+        Symbol = Symbol.ltrim('{');
+        Symbol = Symbol.rtrim('}');
+      }
+      DEBUG(dbgs() << "Looking up variable " << Symbol << "\n");
+      auto it = Variables.find(Symbol);
+      if (it == Variables.end()) {
+        // If the variable is undefined, return an error.
+        return error("Undefined variable " + Symbol);
+      } else {
+        return ExprResult(it->second, currentRange().Start, currentRange());
+      }
+    }
+    llvm_unreachable("logic error");
+  }
+
+  // Evaluate a constant numeric expression (hexadecimal or decimal) and
+  // return a pair containing the result, and the expression remaining to be
+  // evaluated.
+  ExprResult evalNumberExpr(StringRef Expr) {
+    if (Expr.empty())
+      return error("Expected number!");
+    assert(isdigit(Expr[0]));
+    // XXXAR: for some reason if I do APInt Value; here the result ends up being negative
+    APInt Value(64, 0u, false);
+    assert(Value.isNonNegative());
+    if (!Expr.getAsInteger(0, Value)) {
+      assert(Value.isNonNegative());
+      return ExprResult(Value, currentRange().Start, currentRange());
+    }
+    return error("Expected valid number but got '" + Expr + "'");
+  }
+
+  // Evaluate an expression of the form "(<expr>)"
+  ExprResult evalParensExpr() {
+    assert(currentTok() == "(" && "Not a parenthesized expression");
+    OpenParens++;
+    DEBUG(dbgs() << "  Paren " << OpenParens << " opened\n");
+
+    ExprResult SubExprResult = nextExpression();
+    if (SubExprResult.isError())
+      return SubExprResult;
+    expect(")", &SubExprResult);
+    DEBUG(dbgs() << "  Paren " << OpenParens << " closed\n");
+    OpenParens--;
+    return SubExprResult;
+  }
+
+  // Evaluate a "simple" expression. This is any expression that _isn't_ an
+  // un-parenthesized binary expression.
+  ExprResult evalSimpleExpr(StringRef Expr) {
+    ExprResult Result = None;
+    if (hasError()) {
+      return ExprResult::error(getLastError(), currentRange().Start,
+                               currentRange());
+    }
+    if (Expr == "(")
+      return evalParensExpr();
+    else if (isalpha(Expr[0]) || Expr[0] == '$')
+      return evalIdentifierExpr(Expr);
+    else if (isdigit(Expr[0]))
+      return evalNumberExpr(Expr);
+    else
+      return error("Expected '(', identifier, or number, but got '" + Expr + "'");
+  }
+
+  // Evaluate a "complex" expression.
+  // Takes an already evaluated subexpression and checks for the presence of a
+  // binary operator, computing the result of the binary operation if one is
+  // found. Used to make arithmetic expressions left-associative.
+  ExprResult evalComplexExpr(const ExprResult& LHSResult) {
+    // If there was an error, or there's nothing left to evaluate, return the
+    // result.
+    if (LHSResult.isError() || atEnd())
+      return LHSResult;
+    if (OpenParens > 0 && peek() == ")")
+      return LHSResult;
+
+    // Otherwise check if this is a binary expressioan.
+    StringRef Cur = peek();
+    DEBUG(dbgs() << "  ComplexExpr: Op = " << Cur << "\n");
+    ArrayRef<StringRef> BinOps = {"+", "-", "/", "*", "&", "|", "<<", ">>"};
+    if (!any_of(BinOps, [&](StringRef S) { return S == Cur; })) {
+      // not a binary operation so just return
+      return LHSResult;
+    }
+    Cur = next(); // consume the token
+    // This is a recognized bin-op. Evaluate the RHS, then evaluate the binop.
+    ExprResult RHSResult = evalSimpleExpr(next());
+    // If there was an error evaluating the RHS, return it.
+    if (RHSResult.isError())
+      return RHSResult;
+    // This is a binary expression - evaluate and try to continue as a
+    // complex expr.
+    ExprResult ThisResult(computeBinOpResult(Cur, LHSResult, RHSResult));
+    return evalComplexExpr(ThisResult);
+  }
+
+  ExprResult nextExpression() {
+    return evalComplexExpr(evalSimpleExpr(next()));
+  }
+};
+
 /// Evaluates expression and stores the result to \p Value.
 ///
 /// Returns true on success and false when the expression has invalid syntax.
-bool Pattern::EvaluateExpression(StringRef Expr, std::string &Value) const {
-  // The only supported expression is @LINE([\+-]\d+)?
+bool Pattern::EvaluateExpression(StringRef Expr, std::string &Value,
+                                 const SourceMgr &SM,
+                                 const StringMap<StringRef> &VariableTable) const {
+  if (Expr.startswith("@EXPR")) {
+    FileCheckExprEvaluator Evaluator(Expr.substr(StringRef("@EXPR").size()),
+                                     SM, VariableTable);
+    auto Result = Evaluator.evaluate();
+    if (Result) {
+      Value = *Result;
+      return true;
+    }
+    return false;
+  }
+
+  // The only other supported expression is @LINE([\+-]\d+)?
   if (!Expr.startswith("@LINE"))
     return false;
   Expr = Expr.substr(StringRef("@LINE").size());
@@ -394,7 +848,7 @@ bool Pattern::EvaluateExpression(StringRef Expr, std::string &Value) const {
 ///
 /// The \p VariableTable StringMap provides the current values of filecheck
 /// variables and is updated if this match defines new values.
-size_t Pattern::Match(StringRef Buffer, size_t &MatchLen,
+size_t Pattern::Match(StringRef Buffer, size_t &MatchLen, const SourceMgr &SM,
                       StringMap<StringRef> &VariableTable) const {
   // If this is the EOF pattern, match it immediately.
   if (CheckTy == Check::CheckEOF) {
@@ -422,7 +876,7 @@ size_t Pattern::Match(StringRef Buffer, size_t &MatchLen,
       std::string Value;
 
       if (VariableUse.first[0] == '@') {
-        if (!EvaluateExpression(VariableUse.first, Value))
+        if (!EvaluateExpression(VariableUse.first, Value, SM, VariableTable))
           return StringRef::npos;
       } else {
         StringMap<StringRef>::iterator it =
@@ -500,7 +954,7 @@ void Pattern::PrintFailureInfo(
       StringRef Var = VariableUse.first;
       if (Var[0] == '@') {
         std::string Value;
-        if (EvaluateExpression(Var, Value)) {
+        if (EvaluateExpression(Var, Value, SM, VariableTable)) {
           OS << "with expression \"";
           OS.write_escaped(Var) << "\" equal to \"";
           OS.write_escaped(Value) << "\"";
@@ -1019,7 +1473,7 @@ size_t CheckString::Check(const SourceMgr &SM, StringRef Buffer,
 
   // Match itself from the last position after matching CHECK-DAG.
   StringRef MatchBuffer = Buffer.substr(LastPos);
-  size_t MatchPos = Pat.Match(MatchBuffer, MatchLen, VariableTable);
+  size_t MatchPos = Pat.Match(MatchBuffer, MatchLen, SM, VariableTable);
   if (MatchPos == StringRef::npos) {
     PrintCheckFailed(SM, *this, MatchBuffer, VariableTable);
     return StringRef::npos;
@@ -1127,7 +1581,7 @@ bool CheckString::CheckNot(const SourceMgr &SM, StringRef Buffer,
     assert((Pat->getCheckTy() == Check::CheckNot) && "Expect CHECK-NOT!");
 
     size_t MatchLen = 0;
-    size_t Pos = Pat->Match(Buffer, MatchLen, VariableTable);
+    size_t Pos = Pat->Match(Buffer, MatchLen, SM, VariableTable);
 
     if (Pos == StringRef::npos)
       continue;
@@ -1168,7 +1622,7 @@ size_t CheckString::CheckDag(const SourceMgr &SM, StringRef Buffer,
 
     // CHECK-DAG always matches from the start.
     StringRef MatchBuffer = Buffer.substr(StartPos);
-    MatchPos = Pat.Match(MatchBuffer, MatchLen, VariableTable);
+    MatchPos = Pat.Match(MatchBuffer, MatchLen, SM, VariableTable);
     // With a group of CHECK-DAGs, a single mismatching means the match on
     // that group of CHECK-DAGs fails immediately.
     if (MatchPos == StringRef::npos) {
