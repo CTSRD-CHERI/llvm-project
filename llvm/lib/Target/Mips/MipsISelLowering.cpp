@@ -52,7 +52,8 @@ LargeGOT("mxgot", cl::Hidden,
 
 static cl::opt<bool>
 HugeGOT("mxmxgot", cl::Hidden,
-         cl::desc("MIPS: Use large GOT relocations even for local symbols."), cl::init(false));
+         cl::desc("MIPS: Use large GOT relocations even for local symbols."), cl::init(false),
+         cl::ZeroOrMore);
 
 static cl::opt<bool>
 NoZeroDivCheck("mno-check-zero-division", cl::Hidden,
