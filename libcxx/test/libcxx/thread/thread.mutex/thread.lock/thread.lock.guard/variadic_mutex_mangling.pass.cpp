@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// UNSUPPORTED: libcpp-has-no-threads
+// UNSUPPORTED: libcpp-has-no-threads libcpp-no-rtti
 
 // TODO(EricWF) Investigate why typeid(...).name() returns a different string
 // on GCC 4.9 but not newer GCCs.
