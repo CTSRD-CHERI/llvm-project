@@ -778,10 +778,18 @@ RuntimeDyldCheckerImpl::findSectionAddrInfo(StringRef FileName,
   }
 
   auto SectionInfoItr = SectionMapItr->second.find(SectionName);
-  if (SectionInfoItr == SectionMapItr->second.end())
-    return std::make_pair(nullptr,
-                          ("Section '" + SectionName + "' not found in file '" +
-                           FileName + "'\n").str());
+  if (SectionInfoItr == SectionMapItr->second.end()) {
+    std::string ErrorMsg = ("Section '" + SectionName +
+                           "' not found in file '" + FileName + "'\n").str();
+    ErrorMsg += "Available sections are:";
+    for (const auto& Section : SectionMapItr->second) {
+      ErrorMsg += " '";
+      ErrorMsg += Section.first;
+      ErrorMsg += "'";
+    }
+    ErrorMsg += "\n";
+    return std::make_pair(nullptr, ErrorMsg);
+  }
 
   return std::make_pair(&SectionInfoItr->second, std::string(""));
 }
