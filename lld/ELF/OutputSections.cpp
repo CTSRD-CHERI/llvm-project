@@ -350,7 +350,7 @@ void OutputSectionFactory::addInputSec(InputSectionBase *IS,
     if (getIncompatibleFlags(Sec->Flags) != getIncompatibleFlags(IS->Flags))
       error("Section has flags incompatible with others with the same name " +
             toString(IS) + ": " +  Twine(getIncompatibleFlags(Sec->Flags)) +
-            " vs " + Twine(getIncompatibleFlags(IS->Flags))));
+            " vs " + Twine(getIncompatibleFlags(IS->Flags)));
     if (Sec->Type != IS->Type) {
       if (canMergeToProgbits(Sec->Type) && canMergeToProgbits(IS->Type))
         Sec->Type = SHT_PROGBITS;
