@@ -350,6 +350,8 @@ bool Pattern::ParsePattern(StringRef PatternStr, StringRef Prefix,
     RegExStr += '$';
   }
 
+  // DEBUG(dbgs() << "Line match regex: '" << RegExStr << "'\n");
+
   return false;
 }
 
@@ -900,8 +902,10 @@ size_t Pattern::Match(StringRef Buffer, size_t &MatchLen, const SourceMgr &SM,
   }
 
   SmallVector<StringRef, 4> MatchInfo;
-  if (!Regex(RegExToMatch, Regex::Newline).match(Buffer, &MatchInfo))
+  if (!Regex(RegExToMatch, Regex::Newline).match(Buffer, &MatchInfo)) {
+    DEBUG(dbgs() << "Failed regex match: '" << RegExToMatch << "'\n");
     return StringRef::npos;
+  }
 
   // Successful regex match.
   assert(!MatchInfo.empty() && "Didn't get any match");
