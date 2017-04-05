@@ -345,13 +345,15 @@ void OutputSectionFactory::addInputSec(InputSectionBase *IS,
   if (Sec) {
     if (getIncompatibleFlags(Sec->Flags) != getIncompatibleFlags(IS->Flags))
       error("Section has flags incompatible with others with the same name " +
-            toString(IS));
+            toString(IS) + ": " +  Twine(getIncompatibleFlags(Sec->Flags)) +
+            " vs " + Twine(getIncompatibleFlags(IS->Flags))));
     if (Sec->Type != IS->Type) {
       if (canMergeToProgbits(Sec->Type) && canMergeToProgbits(IS->Type))
         Sec->Type = SHT_PROGBITS;
       else
         error("Section has different type from others with the same name " +
-              toString(IS));
+              toString(IS) + ": " +  Twine(Sec->Type) + " vs " +
+              Twine(IS->Type));
     }
     Sec->Flags |= Flags;
   } else {
