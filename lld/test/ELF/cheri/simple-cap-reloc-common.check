@@ -50,13 +50,16 @@
 // DUMP-EXE-NEXT: 0x[[XPTR_ADDR:[0-9a-f]+]]    Base: x (0x[[X_ADDR:[0-9a-f]+]])             Offset: 0x0000000000000000        Length: 0x0000000000000004        Permissions: 0x00000000
 // DUMP-EXE-NEXT: 0x[[BUFPTR_ADDR:[0-9a-f]+]]  Base: buffer (0x[[BUFFER_ADDR:[0-9a-f]+]])   Offset: 0x0000000000000000        Length: 0x000000000000002a        Permissions: 0x00000000
 // For some reason llvm-objdump doesn't find the name of __start here:
-// DUMP-EXE-NEXT: 0x[[FN_PTR_ADDR:[0-9a-f]+]]  Base: (0x[[__START_ADDR:[0-9a-f]+]]) Offset: 0x0000000000000000        Length: 0x000000000000006c        Permissions: 0x8000000000000000 (Function)
+// DUMP-EXE-NEXT: 0x[[FN_PTR_ADDR:[0-9a-f]+]]  Base: {{(__start *)?}}(0x[[__START_ADDR:[0-9a-f]+]]) Offset: 0x0000000000000000        Length: 0x000000000000006c        Permissions: 0x8000000000000000 (Function)
+
+// DUMP-EXE-LABEL: Sections:
+// STATIC-NOT:   {{.*}}.interp
+// DYNAMIC:      1 .interp       0000001b {{.*}} DATA
 
 // DUMP-EXE-LABEL: SYMBOL TABLE:
-// STATIC-NOT:   {{.*}} l    d  .interp                 00000000 .interp
-// DYNAMIC:      {{.*}} l    d  .interp                 00000000 .interp
-// DUMP-EXE-DAG: [[DATA_ADDR:[0-9a-f]+]]     l    d  .data           00000000 .data{{$}}
-// DUMP-EXE-DAG: [[BSS_ADDR:[0-9a-f]+]]      l    d  .bss            00000000 .bss{{$}}
+// STATIC-NOT:   _DYNAMIC
+// DYNAMIC:      {{.*}} .dynamic 00000000 .hidden _DYNAMIC
+
 // DUMP-EXE-DAG: [[__START_ADDR]]  g    F  .text           0000006c __start{{$}}
 // DUMP-EXE-DAG: [[FN_PTR_ADDR]]   g       .data           00000020 fn_ptr{{$}}
 // DUMP-EXE-DAG: [[X_ADDR]]        g       .data           00000004 x{{$}}

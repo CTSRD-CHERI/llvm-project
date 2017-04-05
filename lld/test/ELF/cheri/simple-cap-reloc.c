@@ -11,12 +11,15 @@
 // same a gain for statically dynamically linked exe:
 // Create a dummy shared library otherwise bfd won't create a dynamic executable
 // RUN: %clang_cheri_purecap %S/Inputs/dummy_shlib.c -c -o %T/dummy_shlib.o
-// RUN: %clang_link_purecap_bfd  %T/dummy_shlib.o -shared -o %T/libdummy_shlib.so
-// RUN: %clang_link_purecap_bfd -L%T -ldummy_shlib %t.o -o %t-dynamic.exe
+// RUN: %clang_link_purecap  %T/dummy_shlib.o -shared -o %T/libdummy_shlib.so
+// RUN: %clang_link_purecap -v -L%T -ldummy_shlib %t.o -o %t-dynamic.exe
 // RUN: llvm-objdump -h -r -t -C %t-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %S/simple-cap-reloc-common.check
 
 // RUN: %clang_link_purecap %t.o -shared -o %t.so
 // RUN: llvm-readobj -r -s %t.so | FileCheck -check-prefix SHLIB %S/simple-cap-reloc-common.check
+
+
+// now try linking with the new --process-cap-relocs flag and compare the output
 
 int a = 0;
 int b = 1;
