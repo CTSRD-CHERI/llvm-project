@@ -1,12 +1,26 @@
 // RUN: llvm-mc -filetype=obj -triple=i686-unknown-cloudabi %s -o %t.o
 // RUN: ld.lld --export-dynamic %t.o -o %t
-// RUN: llvm-readobj -dyn-symbols %t | FileCheck %s
+// BFD does not add a dynamic section when --export-dynamic is passed together
+// with -Bstatic so check that we do the same
+// RUN: ld.lld -Bstatic --export-dynamic %t.o -o %t-static
+// RUN: llvm-readobj -dyn-symbols -t -s %t | FileCheck %s
+// RUN: llvm-readobj -dyn-symbols -t -s %t-static | FileCheck %s -check-prefix STATIC
 // REQUIRES: x86
 
+
+// Ensure that the generated binary is still a static binary and doesn't have
+// the _DYNAMIC symbol or a .dynamic section
+// STATIC-LABEL: Sections [
+// STATIC-NOT:     Name: .dynamic
+// STATIC-NOT:     Name: .interp
+// STATIC:       ]
+// STATIC-LABEL: Symbols [
+// STATIC-NOT:     Name: _DYNAMIC
+// STATIC:       ]
 // Ensure that a dynamic symbol table is present when --export-dynamic
 // is passed in, even when creating statically linked executables.
 //
-// CHECK:      DynamicSymbols [
+// CHECK-LABEL: DynamicSymbols [
 // CHECK-NEXT:   Symbol {
 // CHECK-NEXT:     Name:
 // CHECK-NEXT:     Value: 0x0
