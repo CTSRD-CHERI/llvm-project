@@ -11,7 +11,7 @@ import platform
 import os
 import errno
 import tempfile
-import pprint
+import datetime
 import shutil
 
 from libcxx.test import tracing
@@ -267,8 +267,12 @@ class SSHExecutor(RemoteExecutor):
         remote_cmd = ' '.join(env_cmd + cmd)
         if remote_work_dir != '.':
             remote_cmd = 'cd \'' + remote_work_dir + '\' && ' + remote_cmd
+        if self.config.lit_config.debug:
+            print('{}: About to run {}'.format(datetime.datetime.now(), remote_cmd))
         out, err, rc = self.local_run(ssh_cmd + [remote_cmd])
-        return (remote_cmd, out, err, rc)
+        if self.config.lit_config.debug:
+            print('{}: Remote command completed'.format(datetime.datetime.now()))
+        return remote_cmd, out, err, rc
 
 
 class SSHExecutorWithNFSMount(SSHExecutor):
@@ -283,13 +287,13 @@ class SSHExecutorWithNFSMount(SSHExecutor):
             self.path_in_target = self.path_in_target + '/'
         if self.config and self.config.lit_config.debug:
             self._remote_temp = tracing.trace_function(
-                self._remote_temp, log_calls=True, log_results=True,
+                self._remote_temp, log_calls=False, log_results=True,
                 label='ssh-exec')
             self._copy_in_file = tracing.trace_function(
-                self._copy_in_file, log_calls=True, log_results=True,
+                self._copy_in_file, log_calls=True, log_results=False,
                 label='ssh-exec')
             self.delete_remote = tracing.trace_function(
-                self.delete_remote, log_calls=True, log_results=True,
+                self.delete_remote, log_calls=True, log_results=False,
                 label='ssh-exec')
             self.run = tracing.trace_function(
                 self.run, log_calls=True, log_results=True, label='ssh-exec')
