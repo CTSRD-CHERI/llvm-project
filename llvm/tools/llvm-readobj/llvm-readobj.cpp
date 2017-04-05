@@ -330,6 +330,7 @@ static bool isMipsArch(unsigned Arch) {
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
+  case llvm::Triple::cheri:
     return true;
   default:
     return false;
