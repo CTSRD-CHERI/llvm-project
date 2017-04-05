@@ -437,6 +437,17 @@ protected:
     static _LIBCPP_CONSTEXPR const float_round_style round_style = round_to_nearest;
 };
 
+#ifdef __CHERI__
+template<>
+class __libcpp_numeric_limits<__intcap_t, true>
+  : public __libcpp_numeric_limits<long, true> { };
+
+template<>
+class __libcpp_numeric_limits<__uintcap_t, true>
+  : public __libcpp_numeric_limits<unsigned long, true> { };
+#endif
+
+
 template <class _Tp>
 class _LIBCPP_TEMPLATE_VIS numeric_limits
     : private __libcpp_numeric_limits<typename remove_cv<_Tp>::type>

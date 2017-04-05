@@ -701,6 +701,11 @@ template <>          struct __libcpp_is_integral<unsigned long long> : public tr
 template <>          struct __libcpp_is_integral<__int128_t>         : public true_type {};
 template <>          struct __libcpp_is_integral<__uint128_t>        : public true_type {};
 #endif
+#ifdef __CHERI__
+template <>          struct __libcpp_is_integral<__intcap_t>         : public true_type {};
+template <>          struct __libcpp_is_integral<__uintcap_t>        : public true_type {};
+#endif
+
 
 template <class _Tp> struct _LIBCPP_TEMPLATE_VIS is_integral
     : public __libcpp_is_integral<typename remove_cv<_Tp>::type> {};
@@ -743,6 +748,9 @@ template <class _Tp> _LIBCPP_CONSTEXPR bool is_array_v
 
 template <class _Tp> struct __libcpp_is_pointer       : public false_type {};
 template <class _Tp> struct __libcpp_is_pointer<_Tp*> : public true_type {};
+// XXXKG: Should is_pointer<_Tp*> work for capabilities as well? We should
+// probably have a is_capability trait as well
+//template <class _Tp> struct __libcpp_is_pointer<_Tp*__capability> : public true_type {};
 
 template <class _Tp> struct _LIBCPP_TEMPLATE_VIS is_pointer
     : public __libcpp_is_pointer<typename remove_cv<_Tp>::type> {};
@@ -1795,8 +1803,14 @@ typedef
 #ifndef _LIBCPP_HAS_NO_INT128
     __type_list<__int128_t,
 #endif
+#ifdef __CHERI__
+    __type_list<__intcap_t,
+#endif
     __nat
 #ifndef _LIBCPP_HAS_NO_INT128
+    >
+#endif
+#ifdef __CHERI__
     >
 #endif
     > > > > > __signed_types;
@@ -1810,8 +1824,14 @@ typedef
 #ifndef _LIBCPP_HAS_NO_INT128
     __type_list<__uint128_t,
 #endif
+#ifdef __CHERI__
+    __type_list<__uintcap_t,
+#endif
     __nat
 #ifndef _LIBCPP_HAS_NO_INT128
+    >
+#endif
+#ifdef __CHERI__
     >
 #endif
     > > > > > __unsigned_types;
@@ -1901,6 +1921,10 @@ template <> struct __make_signed<unsigned long long, true> {typedef long long ty
 template <> struct __make_signed<__int128_t,         true> {typedef __int128_t type;};
 template <> struct __make_signed<__uint128_t,        true> {typedef __int128_t type;};
 #endif
+#ifdef __CHERI__
+template <> struct __make_signed<__intcap_t,         true> {typedef __intcap_t type;};
+template <> struct __make_signed<__uintcap_t,        true> {typedef __intcap_t type;};
+#endif
 
 template <class _Tp>
 struct _LIBCPP_TEMPLATE_VIS make_signed
@@ -1933,6 +1957,10 @@ template <> struct __make_unsigned<unsigned long long, true> {typedef unsigned l
 #ifndef _LIBCPP_HAS_NO_INT128
 template <> struct __make_unsigned<__int128_t,         true> {typedef __uint128_t        type;};
 template <> struct __make_unsigned<__uint128_t,        true> {typedef __uint128_t        type;};
+#endif
+#ifdef __CHERI__
+template <> struct __make_unsigned<__intcap_t,         true> {typedef __uintcap_t type;};
+template <> struct __make_unsigned<__uintcap_t,        true> {typedef __uintcap_t type;};
 #endif
 
 template <class _Tp>
