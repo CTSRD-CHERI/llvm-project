@@ -28,7 +28,7 @@ def CheriJmpLink : SDNode<"MipsISD::CheriJmpLink",SDT_CheriJmpLink,
 class SImmScaled<int Width, int Scale> : AsmOperandClass {
   let Name = "SImm" # Width # "s" # Scale;
   let RenderMethod = "addImmOperands";
-  let PredicateMethod = "isScaledUImm<" # Width # ", " # Scale # ">";
+  let PredicateMethod = "isScaledImmediate<" # Width # ", " # Scale # ">";
 }
 
 multiclass ShiftImmPattern<int Width, int Shift> {
