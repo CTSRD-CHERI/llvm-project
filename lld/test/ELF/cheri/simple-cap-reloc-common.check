@@ -3,8 +3,7 @@
 
 // The object file should not contain any useful values in the __cap_relocs section, it gets set by the linker
 // READOBJ:      Section {
-// READOBJ:         Index: [[CAP_RELOCS_INDEX:13|14]]
-// READOBJ:         Name: __cap_relocs
+// READOBJ:         Index: [[CAP_RELOCS_INDEX:13|14]]{{[[:space:]]*}}Name: __cap_relocs
 // READOBJ-NEXT:    Type: SHT_PROGBITS (0x1)
 // READOBJ-NEXT:    Flags [ (0x2)
 // READOBJ-NEXT:      SHF_ALLOC (0x2)
@@ -109,3 +108,17 @@
 // SHLIB-DAG:    0x[[@EXPR hex(CAP_RELOCS_ADDR + 0x58)]] [[CAP_RELOCATION_TYPE]] __start 0x0
 // SHLIB-NEXT:  }
 // SHLIB-NEXT: ]
+
+// Check that shared libaries have a partially relocated __cap_relocs section:
+// For some reason size is always -1, I guess that is because the processing runs too late
+// also permissions are not set because the symbol is not found
+// DUMP-SHLIB-LABEL: CAPABILITY RELOCATION RECORDS:
+// DUMP-SHLIB-NEXT: 0x[[XPTR_ADDR:[0-9a-f]+]]    Base: ([[ZERO:0x0+]]) Offset: [[ZERO]] Length: [[UINT64_MAX:0xffffffffffffffff]]        Permissions: [[NO_PERMS:0x00000000]]
+// DUMP-SHLIB-NEXT: 0x[[BUFPTR_ADDR:[0-9a-f]+]]  Base: ([[ZERO]])   Offset: [[ZERO]] Length: [[UINT64_MAX]] Permissions: [[NO_PERMS]]
+// DUMP-SHLIB-NEXT: 0x[[FN_PTR_ADDR:[0-9a-f]+]]  Base: ([[ZERO]]) Offset: [[ZERO]] Length: [[UINT64_MAX]]        Permissions: [[NO_PERMS]]
+
+// DUMP-SHLIB-LABEL: SYMBOL TABLE:
+// DUMP-SHLIB-DAG: [[FN_PTR_ADDR]]   g       .data           00000020 fn_ptr{{$}}
+// DUMP-SHLIB-DAG: [[XPTR_ADDR]]     g       .data           00000020 xptr{{$}}
+// DUMP-SHLIB-DAG: [[BUFPTR_ADDR]]   g       {{\.rodata|\.data\.rel\.ro}}    00000020 bufptr{{$}}
+

@@ -769,7 +769,10 @@ static void scanRelocs(InputSectionBase &C, ArrayRef<RelTy> Rels) {
       // If the produced value is a constant, we just remember to write it
       // when outputting this section. We also have to do it if the format
       // uses Elf_Rel, since in that case the written value is the addend.
-      if (Constant || !RelTy::IsRela)
+      // XXXAR: The final Config->isRela() is there to handle the CHERI case
+      // where the input relocation is RELA but the output format uses REL
+      // TODO: Use RELA for CHERI once I've submitted the RTLD changes
+      if (Constant || !RelTy::IsRela || !Config->isRela())
         C.Relocations.push_back({Expr, Type, Offset, Addend, &Body});
     } else {
       // We don't know anything about the finaly symbol. Just ask the dynamic
