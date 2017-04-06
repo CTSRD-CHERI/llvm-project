@@ -3189,6 +3189,18 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
       << FirstArg->getType() << FirstArg->getSourceRange();
     return ExprError();
   }
+  // At O0 we generate spills to the stack which can make the LL/SC fail!
+  switch (Context.getTargetInfo().getTriple().getArch()) {
+    case llvm::Triple::mips:
+    case llvm::Triple::mips64:
+    case llvm::Triple::mipsel:
+    case llvm::Triple::mips64el:
+    case llvm::Triple::cheri:
+      Diag(DRE->getLocStart(), diag::warn_atomic_builtins_broken_mips)
+        << pointerType->getPointeeType() << FirstArg->getSourceRange();
+    default:
+      break;
+  }
   // XXXAR: disallow __sync builtins with capabilities for now
   // It would result in incorrect code generation because we would end up
   // using the _16 versions and generating i256 in the IR
