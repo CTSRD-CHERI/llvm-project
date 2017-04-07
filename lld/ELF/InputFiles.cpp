@@ -821,7 +821,8 @@ static Symbol *createBitcodeSymbol(const std::vector<bool> &KeptComdats,
                                    const lto::InputFile::Symbol &ObjSym,
                                    BitcodeFile *F) {
   StringRef NameRef = Saver.save(ObjSym.getName());
-  uint32_t Binding = ObjSym.isWeak() ? STB_WEAK : STB_GLOBAL;
+  uint32_t Flags = ObjSym.getFlags();
+  uint32_t Binding = (Flags & BasicSymbolRef::SF_Weak) ? STB_WEAK : STB_GLOBAL;
 
   uint8_t Type = ObjSym.isTLS() ? STT_TLS : STT_NOTYPE;
   uint8_t Visibility = mapVisibility(ObjSym.getVisibility());
@@ -833,12 +834,12 @@ static Symbol *createBitcodeSymbol(const std::vector<bool> &KeptComdats,
                                          Visibility, Type, CanOmitFromDynSym,
                                          F);
 
-  if (ObjSym.isUndefined())
+  if (Flags & BasicSymbolRef::SF_Undefined)
     return Symtab<ELFT>::X->addUndefined(NameRef, /*IsLocal=*/false, Binding,
                                          Visibility, Type, CanOmitFromDynSym,
                                          F);
 
-  if (ObjSym.isCommon())
+  if (Flags & BasicSymbolRef::SF_Common)
     return Symtab<ELFT>::X->addCommon(NameRef, ObjSym.getCommonSize(),
                                       ObjSym.getCommonAlignment(), Binding,
                                       Visibility, STT_OBJECT, F);
@@ -987,7 +988,7 @@ std::vector<StringRef> LazyObjectFile::getBitcodeSymbols() {
       check(lto::InputFile::create(this->MB), toString(this));
   std::vector<StringRef> V;
   for (const lto::InputFile::Symbol &Sym : Obj->symbols())
-    if (!Sym.isUndefined())
+    if (!(Sym.getFlags() & BasicSymbolRef::SF_Undefined))
       V.push_back(Saver.save(Sym.getName()));
   return V;
 }

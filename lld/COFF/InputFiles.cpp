@@ -343,12 +343,14 @@ void BitcodeFile::parse() {
       MB.getBuffer(), Saver.save(ParentName + MB.getBufferIdentifier()))));
   for (const lto::InputFile::Symbol &ObjSym : Obj->symbols()) {
     StringRef SymName = Saver.save(ObjSym.getName());
+    auto Flags = ObjSym.getFlags();
     Symbol *Sym;
-    if (ObjSym.isUndefined()) {
+    if (Flags & object::BasicSymbolRef::SF_Undefined) {
       Sym = Symtab->addUndefined(SymName, this, false);
-    } else if (ObjSym.isCommon()) {
+    } else if (Flags & object::BasicSymbolRef::SF_Common) {
       Sym = Symtab->addCommon(this, SymName, ObjSym.getCommonSize());
-    } else if (ObjSym.isWeak() && ObjSym.isIndirect()) {
+    } else if ((Flags & object::BasicSymbolRef::SF_Weak) &&
+               (Flags & object::BasicSymbolRef::SF_Indirect)) {
       // Weak external.
       Sym = Symtab->addUndefined(SymName, this, true);
       std::string Fallback = ObjSym.getCOFFWeakExternalFallback();
