@@ -2,6 +2,8 @@
 // RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux %s -o %t.o
 // RUN: ld.lld %t.o %S/Inputs/segment-start.script -shared -o %t.so
 // RUN: llvm-readobj --dyn-symbols %t.so | FileCheck %s
+// XXXAR: this needs upstream llvm changes
+// UNSUPPORTED: old_llvm
 
 // CHECK:      Name: foobar1
 // CHECK-NEXT: Value: 0x8001

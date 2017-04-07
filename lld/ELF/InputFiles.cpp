@@ -828,8 +828,14 @@ static Symbol *createBitcodeSymbol(const std::vector<bool> &KeptComdats,
   uint8_t Visibility = mapVisibility(ObjSym.getVisibility());
   bool CanOmitFromDynSym = ObjSym.canBeOmittedFromSymbolTable();
 
+  // XXXAR: needs merge:
+#ifdef NEXT_MERGE_COMPLETED
   int C = ObjSym.getComdatIndex();
   if (C != -1 && !KeptComdats[C])
+#else
+  Expected<int> C = ObjSym.getComdatIndex();
+  if (C && C.get() != -1 && !KeptComdats[C.get()])
+#endif
     return Symtab<ELFT>::X->addUndefined(NameRef, /*IsLocal=*/false, Binding,
                                          Visibility, Type, CanOmitFromDynSym,
                                          F);

@@ -103,7 +103,11 @@ int main(int Argc, const char **Argv) {
   case Gnu:
     return !elf::link(Args, true);
   case WinLink:
+#ifdef NEXT_UPSTREAM_LLVM_MERGE_COMPLETED
     return !coff::link(Args);
+#else
+    die("COFF not supported!");
+#endif
   case Darwin:
     return !mach_o::link(Args);
   default:

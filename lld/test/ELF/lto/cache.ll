@@ -1,4 +1,6 @@
 ; REQUIRES: x86
+; XXXAR: this needs upstream llvm changes
+; UNSUPPORTED: old_llvm
 
 ; RUN: opt -module-hash -module-summary %s -o %t.o
 ; RUN: opt -module-hash -module-summary %p/Inputs/cache.ll -o %t2.o
