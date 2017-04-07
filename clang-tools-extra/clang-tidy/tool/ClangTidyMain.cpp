@@ -35,12 +35,13 @@ Configuration files:
   option, command-line option takes precedence. The effective
   configuration can be inspected using -dump-config:
 
-    $ clang-tidy -dump-config - --
+    $ clang-tidy -dump-config
     ---
     Checks:          '-*,some-check'
     WarningsAsErrors: ''
     HeaderFilterRegex: ''
     AnalyzeTemporaryDtors: false
+    FormatStyle:     none
     User:            user
     CheckOptions:
       - key:             some-check.SomeOption
@@ -131,6 +132,8 @@ Style for formatting code around applied fixes:
   - 'llvm', 'google', 'webkit', 'mozilla'
 See clang-format documentation for the up-to-date
 information about formatting styles and options.
+This option overrides the 'FormatStyle` option in
+.clang-tidy file, if any.
 )"),
                                    cl::init("none"),
                                    cl::cat(ClangTidyCategory));
@@ -289,6 +292,7 @@ static std::unique_ptr<ClangTidyOptionsProvider> createOptionsProvider() {
   DefaultOptions.HeaderFilterRegex = HeaderFilter;
   DefaultOptions.SystemHeaders = SystemHeaders;
   DefaultOptions.AnalyzeTemporaryDtors = AnalyzeTemporaryDtors;
+  DefaultOptions.FormatStyle = FormatStyle;
   DefaultOptions.User = llvm::sys::Process::GetEnv("USER");
   // USERNAME is used on Windows.
   if (!DefaultOptions.User)
@@ -305,6 +309,8 @@ static std::unique_ptr<ClangTidyOptionsProvider> createOptionsProvider() {
     OverrideOptions.SystemHeaders = SystemHeaders;
   if (AnalyzeTemporaryDtors.getNumOccurrences() > 0)
     OverrideOptions.AnalyzeTemporaryDtors = AnalyzeTemporaryDtors;
+  if (FormatStyle.getNumOccurrences() > 0)
+    OverrideOptions.FormatStyle = FormatStyle;
 
   if (!Config.empty()) {
     if (llvm::ErrorOr<ClangTidyOptions> ParsedConfig =
@@ -327,7 +333,8 @@ static int clangTidyMain(int argc, const char **argv) {
   CommonOptionsParser OptionsParser(argc, argv, ClangTidyCategory,
                                     cl::ZeroOrMore);
 
-  auto OptionsProvider = createOptionsProvider();
+  auto OwningOptionsProvider = createOptionsProvider();
+  auto *OptionsProvider = OwningOptionsProvider.get();
   if (!OptionsProvider)
     return 1;
 
@@ -396,10 +403,10 @@ static int clangTidyMain(int argc, const char **argv) {
 
   ProfileData Profile;
 
-  std::vector<ClangTidyError> Errors;
-  ClangTidyStats Stats =
-      runClangTidy(std::move(OptionsProvider), OptionsParser.getCompilations(),
-                   PathList, &Errors, EnableCheckProfile ? &Profile : nullptr);
+  ClangTidyContext Context(std::move(OwningOptionsProvider));
+  runClangTidy(Context, OptionsParser.getCompilations(), PathList,
+               EnableCheckProfile ? &Profile : nullptr);
+  ArrayRef<ClangTidyError> Errors = Context.getErrors();
   bool FoundErrors =
       std::find_if(Errors.begin(), Errors.end(), [](const ClangTidyError &E) {
         return E.DiagLevel == ClangTidyError::Error;
@@ -410,8 +417,7 @@ static int clangTidyMain(int argc, const char **argv) {
   unsigned WErrorCount = 0;
 
   // -fix-errors implies -fix.
-  handleErrors(Errors, (FixErrors || Fix) && !DisableFixes, FormatStyle,
-               WErrorCount);
+  handleErrors(Context, (FixErrors || Fix) && !DisableFixes, WErrorCount);
 
   if (!ExportFixes.empty() && !Errors.empty()) {
     std::error_code EC;
@@ -424,7 +430,7 @@ static int clangTidyMain(int argc, const char **argv) {
   }
 
   if (!Quiet) {
-    printStats(Stats);
+    printStats(Context.getStats());
     if (DisableFixes)
       llvm::errs()
           << "Found compiler errors, but -fix-errors was not specified.\n"
@@ -496,10 +502,10 @@ extern volatile int ReadabilityModuleAnchorSource;
 static int LLVM_ATTRIBUTE_UNUSED ReadabilityModuleAnchorDestination =
     ReadabilityModuleAnchorSource;
 
-// This anchor is used to force the linker to link the SafetyModule.
-extern volatile int SafetyModuleAnchorSource;
-static int LLVM_ATTRIBUTE_UNUSED SafetyModuleAnchorDestination =
-    SafetyModuleAnchorSource;
+// This anchor is used to force the linker to link the HICPPModule.
+extern volatile int HICPPModuleAnchorSource;
+static int LLVM_ATTRIBUTE_UNUSED HICPPModuleAnchorDestination =
+    HICPPModuleAnchorSource;
 
 } // namespace tidy
 } // namespace clang

@@ -112,8 +112,17 @@ cl::opt<bool> Globals("globals", cl::desc("Dump global symbols"),
                       cl::cat(TypeCategory), cl::sub(PrettySubcommand));
 cl::opt<bool> Externals("externals", cl::desc("Dump external symbols"),
                         cl::cat(TypeCategory), cl::sub(PrettySubcommand));
-cl::opt<bool> Types("types", cl::desc("Display types"), cl::cat(TypeCategory),
-                    cl::sub(PrettySubcommand));
+cl::opt<bool>
+    Types("types",
+          cl::desc("Display all types (implies -classes, -enums, -typedefs)"),
+          cl::cat(TypeCategory), cl::sub(PrettySubcommand));
+cl::opt<bool> Classes("classes", cl::desc("Display class types"),
+                      cl::cat(TypeCategory), cl::sub(PrettySubcommand));
+cl::opt<bool> Enums("enums", cl::desc("Display enum types"),
+                    cl::cat(TypeCategory), cl::sub(PrettySubcommand));
+cl::opt<bool> Typedefs("typedefs", cl::desc("Display typedef types"),
+                       cl::cat(TypeCategory), cl::sub(PrettySubcommand));
+
 cl::opt<bool> Lines("lines", cl::desc("Line tables"), cl::cat(TypeCategory),
                     cl::sub(PrettySubcommand));
 cl::opt<bool>
@@ -125,8 +134,11 @@ cl::opt<uint64_t> LoadAddress(
     cl::desc("Assume the module is loaded at the specified address"),
     cl::cat(OtherOptions), cl::sub(PrettySubcommand));
 cl::opt<bool> Native("native", cl::desc("Use native PDB reader instead of DIA"),
-  cl::cat(OtherOptions), cl::sub(PrettySubcommand));
-
+                     cl::cat(OtherOptions), cl::sub(PrettySubcommand));
+cl::opt<cl::boolOrDefault>
+    ColorOutput("color-output",
+                cl::desc("Override use of color (default = isatty)"),
+                cl::cat(OtherOptions), cl::sub(PrettySubcommand));
 cl::list<std::string> ExcludeTypes(
     "exclude-types", cl::desc("Exclude types by regular expression"),
     cl::ZeroOrMore, cl::cat(FilterCategory), cl::sub(PrettySubcommand));
@@ -158,9 +170,17 @@ cl::opt<bool>
     ExcludeSystemLibraries("no-system-libs",
                            cl::desc("Don't show symbols from system libraries"),
                            cl::cat(FilterCategory), cl::sub(PrettySubcommand));
-cl::opt<bool> NoClassDefs("no-class-definitions",
-                          cl::desc("Don't display full class definitions"),
-                          cl::cat(FilterCategory), cl::sub(PrettySubcommand));
+cl::opt<ClassDefinitionFormat> ClassFormat(
+    "class-definitions", cl::desc("Class definition format"),
+    cl::init(ClassDefinitionFormat::Full),
+    cl::values(clEnumValN(ClassDefinitionFormat::Full, "full",
+                          "Display complete class definition"),
+               clEnumValN(ClassDefinitionFormat::LayoutOnly, "layout",
+                          "Display only members which affect record layout"),
+               clEnumValN(ClassDefinitionFormat::None, "none",
+                          "Don't display class definitions")),
+    cl::cat(FilterCategory), cl::sub(PrettySubcommand));
+
 cl::opt<bool> NoEnumDefs("no-enum-definitions",
                          cl::desc("Don't display full enum definitions"),
                          cl::cat(FilterCategory), cl::sub(PrettySubcommand));
@@ -433,13 +453,13 @@ static void yamlToPdb(StringRef Path) {
   const auto &Tpi = YamlObj.TpiStream.getValueOr(DefaultTpiStream);
   TpiBuilder.setVersionHeader(Tpi.Version);
   for (const auto &R : Tpi.Records)
-    TpiBuilder.addTypeRecord(R.Record);
+    TpiBuilder.addTypeRecord(R.Record.data(), R.Record.Hash);
 
   const auto &Ipi = YamlObj.IpiStream.getValueOr(DefaultTpiStream);
   auto &IpiBuilder = Builder.getIpiBuilder();
   IpiBuilder.setVersionHeader(Ipi.Version);
   for (const auto &R : Ipi.Records)
-    IpiBuilder.addTypeRecord(R.Record);
+    TpiBuilder.addTypeRecord(R.Record.data(), R.Record.Hash);
 
   ExitOnErr(Builder.commit(opts::yaml2pdb::YamlPdbOutputFile));
 }
@@ -500,7 +520,11 @@ static void dumpPretty(StringRef Path) {
   if (opts::pretty::LoadAddress)
     Session->setLoadAddress(opts::pretty::LoadAddress);
 
-  LinePrinter Printer(2, outs());
+  auto &Stream = outs();
+  const bool UseColor = opts::pretty::ColorOutput == cl::BOU_UNSET
+                            ? Stream.has_colors()
+                            : opts::pretty::ColorOutput == cl::BOU_TRUE;
+  LinePrinter Printer(2, UseColor, Stream);
 
   auto GlobalScope(Session->getGlobalScope());
   std::string FileName(GlobalScope->getSymbolsFileName());
@@ -550,7 +574,7 @@ static void dumpPretty(StringRef Path) {
     Printer.Unindent();
   }
 
-  if (opts::pretty::Types) {
+  if (opts::pretty::Classes || opts::pretty::Enums || opts::pretty::Typedefs) {
     Printer.NewLine();
     WithColor(Printer, PDB_ColorItem::SectionHeader).get() << "---TYPES---";
     Printer.Indent();
@@ -690,6 +714,12 @@ int main(int argc_, const char *argv_[]) {
       opts::pretty::Types = true;
       opts::pretty::Externals = true;
       opts::pretty::Lines = true;
+    }
+
+    if (opts::pretty::Types) {
+      opts::pretty::Classes = true;
+      opts::pretty::Typedefs = true;
+      opts::pretty::Enums = true;
     }
 
     // When adding filters for excluded compilands and types, we need to

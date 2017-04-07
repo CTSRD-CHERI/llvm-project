@@ -55,6 +55,7 @@ static bool FileAtPathContainsArchAndUUID(const FileSpec &file_fspec,
     ModuleSpec spec;
     for (size_t i = 0; i < module_specs.GetSize(); ++i) {
       bool got_spec = module_specs.GetModuleSpecAtIndex(i, spec);
+      UNUSED_IF_ASSERT_DISABLED(got_spec);
       assert(got_spec);
       if ((uuid == NULL || (spec.GetUUIDPtr() && spec.GetUUID() == *uuid)) &&
           (arch == NULL || (spec.GetArchitecturePtr() &&
@@ -211,8 +212,13 @@ FileSpec Symbols::LocateExecutableSymbolFile(const ModuleSpec &module_spec) {
     debug_file_search_paths.AppendIfUnique(FileSpec(".", true));
 
 #ifndef LLVM_ON_WIN32
+#if defined(__NetBSD__)
+    // Add /usr/libdata/debug directory.
+    debug_file_search_paths.AppendIfUnique(FileSpec("/usr/libdata/debug", true));
+#else
     // Add /usr/lib/debug directory.
     debug_file_search_paths.AppendIfUnique(FileSpec("/usr/lib/debug", true));
+#endif
 #endif // LLVM_ON_WIN32
 
     std::string uuid_str;

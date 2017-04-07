@@ -240,7 +240,7 @@ public:
 
   // CopyRelSec and CopyRelSecOff are significant only when NeedsCopy is true.
   InputSection *CopyRelSec;
-  size_t CopyRelSecOff;
+  uint64_t CopyRelSecOff;
 
 private:
   template <class ELFT> const typename ELFT::Sym &getSym() const {
@@ -302,6 +302,9 @@ public:
 // Some linker-generated symbols need to be created as
 // DefinedRegular symbols.
 struct ElfSym {
+  // The content for __bss_start symbol.
+  static DefinedRegular *Bss;
+
   // The content for _etext and etext symbols.
   static DefinedRegular *Etext;
   static DefinedRegular *Etext2;

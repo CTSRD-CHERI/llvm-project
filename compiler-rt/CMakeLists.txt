@@ -14,16 +14,6 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR COMPILER_RT_STANDALONE
 endif()
 
 cmake_minimum_required(VERSION 3.4.3)
-# FIXME:
-# The OLD behavior (pre 3.2) for this policy is to not set the value of the 
-# CMAKE_EXE_LINKER_FLAGS variable in the generated test project. The NEW behavior
-# for this policy is to set the value of the CMAKE_EXE_LINKER_FLAGS variable 
-# in the test project to the same as it is in the calling project. The new 
-# behavior cause the compiler_rt test to fail during try_compile: see
-# projects/compiler-rt/cmake/Modules/CompilerRTUtils.cmake:121 such that
-# CAN_TARGET_${arch} is not set properly. This results in COMPILER_RT_SUPPORTED_ARCH
-# not being updated properly leading to poblems.
-cmake_policy(SET CMP0056 OLD)
 
 # Add path for custom compiler-rt modules.
 list(INSERT CMAKE_MODULE_PATH 0
@@ -134,7 +124,7 @@ if(NOT WIN32)
 endif()
 append_list_if(COMPILER_RT_HAS_FNO_BUILTIN_FLAG -fno-builtin SANITIZER_COMMON_CFLAGS)
 append_list_if(COMPILER_RT_HAS_FNO_EXCEPTIONS_FLAG -fno-exceptions SANITIZER_COMMON_CFLAGS)
-if(NOT COMPILER_RT_DEBUG)
+if(NOT COMPILER_RT_DEBUG AND NOT APPLE)
   append_list_if(COMPILER_RT_HAS_FOMIT_FRAME_POINTER_FLAG -fomit-frame-pointer SANITIZER_COMMON_CFLAGS)
 endif()
 append_list_if(COMPILER_RT_HAS_FUNWIND_TABLES_FLAG -funwind-tables SANITIZER_COMMON_CFLAGS)
@@ -253,12 +243,12 @@ else()
 endif()
 
 set(COMPILER_RT_LLD_PATH ${LLVM_MAIN_SRC_DIR}/tools/lld)
-if(EXISTS ${COMPILER_RT_LLD_PATH}/)
-  set(COMPILER_RT_HAS_LLD_SOURCES TRUE)
+if(EXISTS ${COMPILER_RT_LLD_PATH}/ AND LLVM_TOOL_LLD_BUILD)
+  set(COMPILER_RT_HAS_LLD TRUE)
 else()
-  set(COMPILER_RT_HAS_LLD_SOURCES FALSE)
+  set(COMPILER_RT_HAS_LLD FALSE)
 endif()
-pythonize_bool(COMPILER_RT_HAS_LLD_SOURCES)
+pythonize_bool(COMPILER_RT_HAS_LLD)
 
 add_subdirectory(lib)
 

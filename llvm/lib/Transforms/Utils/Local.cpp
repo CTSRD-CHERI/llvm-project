@@ -130,8 +130,7 @@ bool llvm::ConstantFoldTerminator(BasicBlock *BB, bool DeleteDeadConditions,
     }
 
     // Figure out which case it goes to.
-    for (SwitchInst::CaseIt i = SI->case_begin(), e = SI->case_end();
-         i != e; ++i) {
+    for (auto i = SI->case_begin(), e = SI->case_end(); i != e;) {
       // Found case matching a constant operand?
       if (i.getCaseValue() == CI) {
         TheOnlyDest = i.getCaseSuccessor();
@@ -165,8 +164,8 @@ bool llvm::ConstantFoldTerminator(BasicBlock *BB, bool DeleteDeadConditions,
         }
         // Remove this entry.
         DefaultDest->removePredecessor(SI->getParent());
-        SI->removeCase(i);
-        --i; --e;
+        i = SI->removeCase(i);
+        e = SI->case_end();
         continue;
       }
 
@@ -174,6 +173,9 @@ bool llvm::ConstantFoldTerminator(BasicBlock *BB, bool DeleteDeadConditions,
       // We do this by reseting "TheOnlyDest" to null when we find two non-equal
       // destinations.
       if (i.getCaseSuccessor() != TheOnlyDest) TheOnlyDest = nullptr;
+
+      // Increment this iterator as we haven't removed the case.
+      ++i;
     }
 
     if (CI && !TheOnlyDest) {
@@ -1361,8 +1363,8 @@ void llvm::salvageDebugInfo(Instruction &I) {
     return MetadataAsValue::get(I.getContext(), ValueAsMetadata::get(V));
   };
 
-  if (auto *BitCast = dyn_cast<BitCastInst>(&I)) {
-    findDbgValues(DbgValues, BitCast);
+  if (isa<BitCastInst>(&I)) {
+    findDbgValues(DbgValues, &I);
     for (auto *DVI : DbgValues) {
       // Bitcasts are entirely irrelevant for debug info. Rewrite the dbg.value
       // to use the cast's source.
@@ -1370,7 +1372,7 @@ void llvm::salvageDebugInfo(Instruction &I) {
       DEBUG(dbgs() << "SALVAGE: " << *DVI << '\n');
     }
   } else if (auto *GEP = dyn_cast<GetElementPtrInst>(&I)) {
-    findDbgValues(DbgValues, GEP);
+    findDbgValues(DbgValues, &I);
     for (auto *DVI : DbgValues) {
       unsigned BitWidth =
           M.getDataLayout().getPointerSizeInBits(GEP->getPointerAddressSpace());
@@ -1386,8 +1388,8 @@ void llvm::salvageDebugInfo(Instruction &I) {
         DEBUG(dbgs() << "SALVAGE: " << *DVI << '\n');
       }
     }
-  } else if (auto *Load = dyn_cast<LoadInst>(&I)) {
-    findDbgValues(DbgValues, Load);
+  } else if (isa<LoadInst>(&I)) {
+    findDbgValues(DbgValues, &I);
     for (auto *DVI : DbgValues) {
       // Rewrite the load into DW_OP_deref.
       auto *DIExpr = DVI->getExpression();
@@ -2123,5 +2125,5 @@ void llvm::maybeMarkSanitizerLibraryCallNoBuiltin(
   if (F && !F->hasLocalLinkage() && F->hasName() &&
       TLI->getLibFunc(F->getName(), Func) && TLI->hasOptimizedCodeGen(Func) &&
       !F->doesNotAccessMemory())
-    CI->addAttribute(AttributeSet::FunctionIndex, Attribute::NoBuiltin);
+    CI->addAttribute(AttributeList::FunctionIndex, Attribute::NoBuiltin);
 }

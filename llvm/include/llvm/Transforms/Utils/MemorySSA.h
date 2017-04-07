@@ -12,10 +12,10 @@
 /// walk memory instructions using a use/def graph.
 ///
 /// Memory SSA class builds an SSA form that links together memory access
-/// instructions such as loads, stores, atomics, and calls. Additionally, it does
-/// a trivial form of "heap versioning" Every time the memory state changes in
-/// the program, we generate a new heap version. It generates MemoryDef/Uses/Phis
-/// that are overlayed on top of the existing instructions.
+/// instructions such as loads, stores, atomics, and calls. Additionally, it
+/// does a trivial form of "heap versioning" Every time the memory state changes
+/// in the program, we generate a new heap version. It generates
+/// MemoryDef/Uses/Phis that are overlayed on top of the existing instructions.
 ///
 /// As a trivial example,
 /// define i32 @main() #0 {
@@ -54,15 +54,15 @@
 /// }
 ///
 /// Given this form, all the stores that could ever effect the load at %8 can be
-/// gotten by using the MemoryUse associated with it, and walking from use to def
-/// until you hit the top of the function.
+/// gotten by using the MemoryUse associated with it, and walking from use to
+/// def until you hit the top of the function.
 ///
 /// Each def also has a list of users associated with it, so you can walk from
 /// both def to users, and users to defs. Note that we disambiguate MemoryUses,
 /// but not the RHS of MemoryDefs. You can see this above at %7, which would
 /// otherwise be a MemoryUse(4). Being disambiguated means that for a given
-/// store, all the MemoryUses on its use lists are may-aliases of that store (but
-/// the MemoryDefs on its use list may not be).
+/// store, all the MemoryUses on its use lists are may-aliases of that store
+/// (but the MemoryDefs on its use list may not be).
 ///
 /// MemoryDefs are not disambiguated because it would require multiple reaching
 /// definitions, which would require multiple phis, and multiple memoryaccesses
@@ -246,6 +246,17 @@ public:
     return MA->getValueID() == MemoryUseVal || MA->getValueID() == MemoryDefVal;
   }
 
+  // Sadly, these have to be public because they are needed in some of the
+  // iterators.
+  virtual bool isOptimized() const = 0;
+  virtual MemoryAccess *getOptimized() const = 0;
+  virtual void setOptimized(MemoryAccess *) = 0;
+
+  /// \brief Reset the ID of what this MemoryUse was optimized to, causing it to
+  /// be rewalked by the walker if necessary.
+  /// This really should only be called by tests.
+  virtual void resetOptimized() = 0;
+
 protected:
   friend class MemorySSA;
   friend class MemorySSAUpdater;
@@ -254,8 +265,13 @@ protected:
       : MemoryAccess(C, Vty, BB, 1), MemoryInst(MI) {
     setDefiningAccess(DMA);
   }
-
-  void setDefiningAccess(MemoryAccess *DMA) { setOperand(0, DMA); }
+  void setDefiningAccess(MemoryAccess *DMA, bool Optimized = false) {
+    if (!Optimized) {
+      setOperand(0, DMA);
+      return;
+    }
+    setOptimized(DMA);
+  }
 
 private:
   Instruction *MemoryInst;
@@ -288,20 +304,21 @@ public:
 
   void print(raw_ostream &OS) const override;
 
-  void setDefiningAccess(MemoryAccess *DMA, bool Optimized = false) {
-    if (Optimized)
-      OptimizedID = DMA->getID();
-    MemoryUseOrDef::setDefiningAccess(DMA);
+  virtual void setOptimized(MemoryAccess *DMA) override {
+    OptimizedID = DMA->getID();
+    setOperand(0, DMA);
   }
 
-  bool isOptimized() const {
+  virtual bool isOptimized() const override {
     return getDefiningAccess() && OptimizedID == getDefiningAccess()->getID();
   }
 
-  /// \brief Reset the ID of what this MemoryUse was optimized to, causing it to
-  /// be rewalked by the walker if necessary.
-  /// This really should only be called by tests.
-  void resetOptimized() { OptimizedID = INVALID_MEMORYACCESS_ID; }
+  virtual MemoryAccess *getOptimized() const override {
+    return getDefiningAccess();
+  }
+  virtual void resetOptimized() override {
+    OptimizedID = INVALID_MEMORYACCESS_ID;
+  }
 
 protected:
   friend class MemorySSA;
@@ -333,7 +350,8 @@ public:
 
   MemoryDef(LLVMContext &C, MemoryAccess *DMA, Instruction *MI, BasicBlock *BB,
             unsigned Ver)
-      : MemoryUseOrDef(C, DMA, MemoryDefVal, MI, BB), ID(Ver) {}
+      : MemoryUseOrDef(C, DMA, MemoryDefVal, MI, BB), ID(Ver),
+        Optimized(nullptr), OptimizedID(INVALID_MEMORYACCESS_ID) {}
 
   // allocate space for exactly one operand
   void *operator new(size_t s) { return User::operator new(s, 1); }
@@ -341,6 +359,19 @@ public:
 
   static inline bool classof(const Value *MA) {
     return MA->getValueID() == MemoryDefVal;
+  }
+
+  virtual void setOptimized(MemoryAccess *MA) override {
+    Optimized = MA;
+    OptimizedID = getDefiningAccess()->getID();
+  }
+  virtual MemoryAccess *getOptimized() const override { return Optimized; }
+  virtual bool isOptimized() const override {
+    return getOptimized() && getDefiningAccess() &&
+           OptimizedID == getDefiningAccess()->getID();
+  }
+  virtual void resetOptimized() override {
+    OptimizedID = INVALID_MEMORYACCESS_ID;
   }
 
   void print(raw_ostream &OS) const override;
@@ -352,6 +383,8 @@ protected:
 
 private:
   const unsigned ID;
+  MemoryAccess *Optimized;
+  unsigned int OptimizedID;
 };
 
 template <>
@@ -711,10 +744,8 @@ private:
   unsigned NextID;
 };
 
-
 // Internal MemorySSA utils, for use by MemorySSA classes and walkers
-class MemorySSAUtil
-{
+class MemorySSAUtil {
 protected:
   friend class MemorySSAWalker;
   friend class GVNHoist;
@@ -1056,6 +1087,69 @@ inline upward_defs_iterator upward_defs_begin(const MemoryAccessPair &Pair) {
 }
 
 inline upward_defs_iterator upward_defs_end() { return upward_defs_iterator(); }
+
+inline iterator_range<upward_defs_iterator>
+upward_defs(const MemoryAccessPair &Pair) {
+  return make_range(upward_defs_begin(Pair), upward_defs_end());
+}
+
+/// Walks the defining accesses of MemoryDefs. Stops after we hit something that
+/// has no defining use (e.g. a MemoryPhi or liveOnEntry). Note that, when
+/// comparing against a null def_chain_iterator, this will compare equal only
+/// after walking said Phi/liveOnEntry.
+///
+/// The UseOptimizedChain flag specifies whether to walk the clobbering
+/// access chain, or all the accesses.
+///
+/// Normally, MemoryDef are all just def/use linked together, so a def_chain on
+/// a MemoryDef will walk all MemoryDefs above it in the program until it hits
+/// a phi node.  The optimized chain walks the clobbering access of a store.
+/// So if you are just trying to find, given a store, what the next
+/// thing that would clobber the same memory is, you want the optimized chain.
+template <class T, bool UseOptimizedChain = false>
+struct def_chain_iterator
+    : public iterator_facade_base<def_chain_iterator<T, UseOptimizedChain>,
+                                  std::forward_iterator_tag, MemoryAccess *> {
+  def_chain_iterator() : MA(nullptr) {}
+  def_chain_iterator(T MA) : MA(MA) {}
+
+  T operator*() const { return MA; }
+
+  def_chain_iterator &operator++() {
+    // N.B. liveOnEntry has a null defining access.
+    if (auto *MUD = dyn_cast<MemoryUseOrDef>(MA)) {
+      if (UseOptimizedChain && MUD->isOptimized())
+        MA = MUD->getOptimized();
+      else
+        MA = MUD->getDefiningAccess();
+    } else {
+      MA = nullptr;
+    }
+
+    return *this;
+  }
+
+  bool operator==(const def_chain_iterator &O) const { return MA == O.MA; }
+
+private:
+  T MA;
+};
+
+template <class T>
+inline iterator_range<def_chain_iterator<T>>
+def_chain(T MA, MemoryAccess *UpTo = nullptr) {
+#ifdef EXPENSIVE_CHECKS
+  assert((!UpTo || find(def_chain(MA), UpTo) != def_chain_iterator<T>()) &&
+         "UpTo isn't in the def chain!");
+#endif
+  return make_range(def_chain_iterator<T>(MA), def_chain_iterator<T>(UpTo));
+}
+
+template <class T>
+inline iterator_range<def_chain_iterator<T, true>> optimized_def_chain(T MA) {
+  return make_range(def_chain_iterator<T, true>(MA),
+                    def_chain_iterator<T, true>(nullptr));
+}
 
 } // end namespace llvm
 

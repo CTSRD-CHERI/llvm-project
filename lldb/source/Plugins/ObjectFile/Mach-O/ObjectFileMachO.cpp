@@ -24,10 +24,10 @@
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/RangeMap.h"
+#include "lldb/Core/RegisterValue.h"
 #include "lldb/Core/Section.h"
 #include "lldb/Core/StreamFile.h"
 #include "lldb/Core/Timer.h"
-#include "lldb/Host/FileSpec.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Symbol/DWARFCallFrameInfo.h"
 #include "lldb/Symbol/ObjectFile.h"
@@ -41,6 +41,7 @@
 #include "lldb/Target/ThreadList.h"
 #include "lldb/Utility/DataBufferLLVM.h"
 #include "lldb/Utility/Error.h"
+#include "lldb/Utility/FileSpec.h"
 #include "lldb/Utility/Log.h"
 #include "lldb/Utility/StreamString.h"
 #include "lldb/Utility/UUID.h"
@@ -5052,6 +5053,7 @@ uint32_t ObjectFileMachO::GetDependentModules(FileSpecList &files) {
     lldb::offset_t offset = MachHeaderSizeFromMagic(m_header.magic);
     std::vector<std::string> rpath_paths;
     std::vector<std::string> rpath_relative_paths;
+    std::vector<std::string> at_exec_relative_paths;
     const bool resolve_path = false; // Don't resolve the dependent file paths
                                      // since they may not reside on this system
     uint32_t i;
@@ -5077,6 +5079,10 @@ uint32_t ObjectFileMachO::GetDependentModules(FileSpecList &files) {
             if (path[0] == '@') {
               if (strncmp(path, "@rpath", strlen("@rpath")) == 0)
                 rpath_relative_paths.push_back(path + strlen("@rpath"));
+              else if (strncmp(path, "@executable_path", 
+                       strlen("@executable_path")) == 0)
+                at_exec_relative_paths.push_back(path 
+                                                 + strlen("@executable_path"));
             } else {
               FileSpec file_spec(path, resolve_path);
               if (files.AppendIfUnique(file_spec))
@@ -5092,10 +5098,11 @@ uint32_t ObjectFileMachO::GetDependentModules(FileSpecList &files) {
       offset = cmd_offset + load_cmd.cmdsize;
     }
 
+    FileSpec this_file_spec(m_file);
+    this_file_spec.ResolvePath();
+    
     if (!rpath_paths.empty()) {
       // Fixup all LC_RPATH values to be absolute paths
-      FileSpec this_file_spec(m_file);
-      this_file_spec.ResolvePath();
       std::string loader_path("@loader_path");
       std::string executable_path("@executable_path");
       for (auto &rpath : rpath_paths) {
@@ -5122,6 +5129,23 @@ uint32_t ObjectFileMachO::GetDependentModules(FileSpecList &files) {
             count++;
             break;
           }
+        }
+      }
+    }
+
+    // We may have @executable_paths but no RPATHS.  Figure those out here.
+    // Only do this if this object file is the executable.  We have no way to
+    // get back to the actual executable otherwise, so we won't get the right
+    // path.
+    if (!at_exec_relative_paths.empty() && CalculateType() == eTypeExecutable) {
+      FileSpec exec_dir = this_file_spec.CopyByRemovingLastPathComponent();
+      for (const auto &at_exec_relative_path : at_exec_relative_paths) {
+        FileSpec file_spec = 
+            exec_dir.CopyByAppendingPathComponent(at_exec_relative_path);
+        file_spec = file_spec.GetNormalizedPath();
+        if (file_spec.Exists() && files.AppendIfUnique(file_spec)) {
+          count++;
+          break;
         }
       }
     }
@@ -5328,6 +5352,37 @@ uint32_t ObjectFileMachO::GetNumThreadContexts() {
     }
   }
   return m_thread_context_offsets.GetSize();
+}
+
+// The LC_IDENT load command has been obsoleted for a very
+// long time and it should not occur in Mach-O files.  But
+// if it is there, it may contain a hint about where to find
+// the main binary in a core file, so we'll use it.
+std::string ObjectFileMachO::GetIdentifierString() {
+  std::string result;
+  ModuleSP module_sp(GetModule());
+  if (module_sp) {
+    std::lock_guard<std::recursive_mutex> guard(module_sp->GetMutex());
+    lldb::offset_t offset = MachHeaderSizeFromMagic(m_header.magic);
+    for (uint32_t i = 0; i < m_header.ncmds; ++i) {
+      const uint32_t cmd_offset = offset;
+      struct ident_command ident_command;
+      if (m_data.GetU32(&offset, &ident_command, 2) == NULL)
+        break;
+      if (ident_command.cmd == LC_IDENT && ident_command.cmdsize != 0) {
+        char *buf = (char *)malloc (ident_command.cmdsize);
+        if (buf != nullptr 
+            && m_data.CopyData (offset, ident_command.cmdsize, buf) == ident_command.cmdsize) {
+          buf[ident_command.cmdsize - 1] = '\0';
+          result = buf;
+        }
+        if (buf)
+          free (buf);
+      }
+      offset = cmd_offset + ident_command.cmdsize;
+    }
+  }
+  return result;
 }
 
 lldb::RegisterContextSP

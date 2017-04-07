@@ -19,7 +19,6 @@
 #include "lldb/Host/IOObject.h"
 #include "lldb/Host/Socket.h"
 #include "lldb/Host/SocketAddress.h"
-#include "lldb/Host/StringConvert.h"
 #include "lldb/Utility/SelectHelper.h"
 
 // C Includes
@@ -47,7 +46,6 @@
 #include "lldb/Host/Host.h"
 #include "lldb/Host/Socket.h"
 #include "lldb/Host/common/TCPSocket.h"
-#include "lldb/Interpreter/Args.h"
 #include "lldb/Utility/Log.h"
 #include "lldb/Utility/StreamString.h"
 
@@ -750,14 +748,12 @@ ConnectionStatus ConnectionFileDescriptor::ConnectTCP(llvm::StringRef s,
 
 ConnectionStatus ConnectionFileDescriptor::ConnectUDP(llvm::StringRef s,
                                                       Error *error_ptr) {
-  Socket *send_socket = nullptr;
-  Socket *recv_socket = nullptr;
-  Error error = Socket::UdpConnect(s, m_child_processes_inherit, send_socket,
-                                   recv_socket);
+  Socket *socket = nullptr;
+  Error error = Socket::UdpConnect(s, m_child_processes_inherit, socket);
   if (error_ptr)
     *error_ptr = error;
-  m_write_sp.reset(send_socket);
-  m_read_sp.reset(recv_socket);
+  m_write_sp.reset(socket);
+  m_read_sp = m_write_sp;
   if (error.Fail()) {
     return eConnectionStatusError;
   }

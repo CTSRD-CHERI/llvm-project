@@ -76,6 +76,7 @@ set(Tests
   AbsNegAndConstantTest
   AbsNegAndConstant64Test
   AccumulateAllocationsTest
+  BadStrcmpTest
   BogusInitializeTest
   BufferOverflowOnInput
   CallerCalleeTest
@@ -123,6 +124,7 @@ set(Tests
   SwapCmpTest
   SwitchTest
   Switch2Test
+  TableLookupTest
   ThreadedLeakTest
   ThreadedTest
   TimeoutTest
@@ -200,6 +202,7 @@ include_directories(..)
 
 # add_subdirectory(uninstrumented)
 add_subdirectory(no-coverage)
+add_subdirectory(trace-pc)
 add_subdirectory(ubsan)
 
 add_library(LLVMFuzzer-DSO1 SHARED DSO1.cpp)

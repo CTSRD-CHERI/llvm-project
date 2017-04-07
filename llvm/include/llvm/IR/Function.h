@@ -48,23 +48,23 @@ class DISubprogram;
 
 class Function : public GlobalObject, public ilist_node<Function> {
 public:
-  typedef SymbolTableList<Argument> ArgumentListType;
   typedef SymbolTableList<BasicBlock> BasicBlockListType;
 
   // BasicBlock iterators...
   typedef BasicBlockListType::iterator iterator;
   typedef BasicBlockListType::const_iterator const_iterator;
 
-  typedef ArgumentListType::iterator arg_iterator;
-  typedef ArgumentListType::const_iterator const_arg_iterator;
+  typedef Argument *arg_iterator;
+  typedef const Argument *const_arg_iterator;
 
 private:
   // Important things that make up a function!
   BasicBlockListType  BasicBlocks;        ///< The basic blocks
-  mutable ArgumentListType ArgumentList;  ///< The formal arguments
+  mutable Argument *Arguments;            ///< The formal arguments
+  size_t NumArgs;
   std::unique_ptr<ValueSymbolTable>
       SymTab;                             ///< Symbol table of args/instructions
-  AttributeSet AttributeSets;             ///< Parameter attributes
+  AttributeList AttributeSets;            ///< Parameter attributes
 
   /*
    * Value::SubclassData
@@ -102,6 +102,8 @@ private:
   }
 
   void BuildLazyArguments() const;
+
+  void clearArguments();
 
   /// Function ctor - If the (optional) Module argument is specified, the
   /// function is automatically inserted into the end of the function list for
@@ -182,35 +184,35 @@ public:
   }
 
   /// @brief Return the attribute list for this Function.
-  AttributeSet getAttributes() const { return AttributeSets; }
+  AttributeList getAttributes() const { return AttributeSets; }
 
   /// @brief Set the attribute list for this Function.
-  void setAttributes(AttributeSet Attrs) { AttributeSets = Attrs; }
+  void setAttributes(AttributeList Attrs) { AttributeSets = Attrs; }
 
   /// @brief Add function attributes to this function.
   void addFnAttr(Attribute::AttrKind Kind) {
-    addAttribute(AttributeSet::FunctionIndex, Kind);
+    addAttribute(AttributeList::FunctionIndex, Kind);
   }
 
   /// @brief Add function attributes to this function.
   void addFnAttr(StringRef Kind, StringRef Val = StringRef()) {
-    addAttribute(AttributeSet::FunctionIndex,
+    addAttribute(AttributeList::FunctionIndex,
                  Attribute::get(getContext(), Kind, Val));
   }
 
   void addFnAttr(Attribute Attr) {
-    addAttribute(AttributeSet::FunctionIndex, Attr);
+    addAttribute(AttributeList::FunctionIndex, Attr);
   }
 
   /// @brief Remove function attributes from this function.
   void removeFnAttr(Attribute::AttrKind Kind) {
-    removeAttribute(AttributeSet::FunctionIndex, Kind);
+    removeAttribute(AttributeList::FunctionIndex, Kind);
   }
 
   /// @brief Remove function attribute from this function.
   void removeFnAttr(StringRef Kind) {
     setAttributes(AttributeSets.removeAttribute(
-        getContext(), AttributeSet::FunctionIndex, Kind));
+        getContext(), AttributeList::FunctionIndex, Kind));
   }
 
   /// \brief Set the entry count for this function.
@@ -248,17 +250,17 @@ public:
 
   /// @brief Return the attribute for the given attribute kind.
   Attribute getFnAttribute(Attribute::AttrKind Kind) const {
-    return getAttribute(AttributeSet::FunctionIndex, Kind);
+    return getAttribute(AttributeList::FunctionIndex, Kind);
   }
   Attribute getFnAttribute(StringRef Kind) const {
-    return getAttribute(AttributeSet::FunctionIndex, Kind);
+    return getAttribute(AttributeList::FunctionIndex, Kind);
   }
 
   /// \brief Return the stack alignment for the function.
   unsigned getFnStackAlignment() const {
     if (!hasFnAttribute(Attribute::StackAlignment))
       return 0;
-    return AttributeSets.getStackAlignment(AttributeSet::FunctionIndex);
+    return AttributeSets.getStackAlignment(AttributeList::FunctionIndex);
   }
 
   /// hasGC/getGC/setGC/clearGC - The name of the garbage collection algorithm
@@ -277,7 +279,7 @@ public:
   void addAttribute(unsigned i, Attribute Attr);
 
   /// @brief adds the attributes to the list of attributes.
-  void addAttributes(unsigned i, AttributeSet Attrs);
+  void addAttributes(unsigned i, AttributeList Attrs);
 
   /// @brief removes the attribute from the list of attributes.
   void removeAttribute(unsigned i, Attribute::AttrKind Kind);
@@ -286,7 +288,7 @@ public:
   void removeAttribute(unsigned i, StringRef Kind);
 
   /// @brief removes the attributes from the list of attributes.
-  void removeAttributes(unsigned i, AttributeSet Attrs);
+  void removeAttributes(unsigned i, AttributeList Attrs);
 
   /// @brief check if an attributes is in the list of attributes.
   bool hasAttribute(unsigned i, Attribute::AttrKind Kind) const {
@@ -509,10 +511,6 @@ public:
   /// Requires that this has no function body.
   void stealArgumentListFrom(Function &Src);
 
-  static ArgumentListType Function::*getSublistAccess(Argument*) {
-    return &Function::ArgumentList;
-  }
-
   /// Get the underlying elements of the Function... the basic block list is
   /// empty for external functions.
   ///
@@ -556,20 +554,20 @@ public:
 
   arg_iterator arg_begin() {
     CheckLazyArguments();
-    return ArgumentList.begin();
+    return Arguments;
   }
   const_arg_iterator arg_begin() const {
     CheckLazyArguments();
-    return ArgumentList.begin();
+    return Arguments;
   }
 
   arg_iterator arg_end() {
     CheckLazyArguments();
-    return ArgumentList.end();
+    return Arguments + NumArgs;
   }
   const_arg_iterator arg_end() const {
     CheckLazyArguments();
-    return ArgumentList.end();
+    return Arguments + NumArgs;
   }
 
   iterator_range<arg_iterator> args() {
@@ -581,7 +579,7 @@ public:
 
 /// @}
 
-  size_t arg_size() const { return getFunctionType()->getNumParams(); }
+  size_t arg_size() const { return NumArgs; }
   bool arg_empty() const { return arg_size() == 0; }
 
   /// \brief Check whether this function has a personality function.
