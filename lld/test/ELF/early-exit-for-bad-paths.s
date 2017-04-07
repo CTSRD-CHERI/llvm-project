@@ -30,10 +30,6 @@
 # RUN: not ld.lld %t.o -o / 2>&1 | FileCheck %s -check-prefixes=ROOT,CHECK
 # ROOT: error: cannot open output file /
 
-# We don't handle "-" as stdout and creating files named "-" is confusing
-# RUN: not ld.lld %t.o -o - 2>&1 | FileCheck %s -check-prefixes=STDOUT
-# STDOUT: error: Using stdout as the output file is not supported
-
   .globl _start
 _start:
   call undefined_symbol
