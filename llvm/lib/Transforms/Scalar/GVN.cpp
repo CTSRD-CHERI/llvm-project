@@ -750,7 +750,7 @@ Value *AvailableValue::MaterializeAdjustedValue(LoadInst *LI,
     if (Load->getType() == LoadTy && Offset == 0) {
       Res = Load;
     } else {
-      Res = getLoadValueForLoad(Load, Offset, LoadTy, InsertPt, gvn);
+      Res = getLoadValueForLoad(Load, Offset, LoadTy, InsertPt, DL, gvn);
       // We would like to use gvn.markInstructionForDeletion here, but we can't
       // because the load is already memoized into the leader map table that GVN
       // tracks.  It is potentially possible to remove the load from the table,
@@ -832,7 +832,7 @@ bool GVN::AnalyzeLoadAvailability(LoadInst *LI, MemDepResult DepInfo,
       // Can't forward from non-atomic to atomic without violating memory model.
       if (Address && LI->isAtomic() <= DepSI->isAtomic()) {
         int Offset =
-          analyzeLoadFromClobberingStore(LI->getType(), Address, DepSI, DL, *this);
+          analyzeLoadFromClobberingStore(LI->getType(), Address, DepSI, DL, TLI);
         if (Offset != -1) {
           Res = AvailableValue::get(DepSI->getValueOperand(), Offset);
           return true;
@@ -850,7 +850,7 @@ bool GVN::AnalyzeLoadAvailability(LoadInst *LI, MemDepResult DepInfo,
       // Can't forward from non-atomic to atomic without violating memory model.
       if (DepLI != LI && Address && LI->isAtomic() <= DepLI->isAtomic()) {
         int Offset =
-          analyzeLoadFromClobberingLoad(LI->getType(), Address, DepLI, DL, *this);
+          analyzeLoadFromClobberingLoad(LI->getType(), Address, DepLI, DL, TLI);
 
         if (Offset != -1) {
           Res = AvailableValue::getLoad(DepLI, Offset);
@@ -864,7 +864,7 @@ bool GVN::AnalyzeLoadAvailability(LoadInst *LI, MemDepResult DepInfo,
     if (MemIntrinsic *DepMI = dyn_cast<MemIntrinsic>(DepInfo.getInst())) {
       if (Address && !LI->isAtomic()) {
         int Offset = analyzeLoadFromClobberingMemInst(LI->getType(), Address,
-                                                      DepMI, DL, *this);
+                                                      DepMI, DL, TLI);
         if (Offset != -1) {
           Res = AvailableValue::getMI(DepMI, Offset);
           return true;
@@ -2159,21 +2159,12 @@ bool GVN::iterateOnFunction(Function &F) {
 
   // Top-down walk of the dominator tree
   bool Changed = false;
-  // Save the blocks this function have before transformation begins. GVN may
-  // split critical edge, and hence may invalidate the RPO/DT iterator.
-  //
-  std::vector<BasicBlock *> BBVect;
-  BBVect.reserve(256);
   // Needed for value numbering with phi construction to work.
+  // RPOT walks the graph in its constructor and will not be invalidated during
+  // processBlock.
   ReversePostOrderTraversal<Function *> RPOT(&F);
-  for (ReversePostOrderTraversal<Function *>::rpo_iterator RI = RPOT.begin(),
-                                                           RE = RPOT.end();
-       RI != RE; ++RI)
-    BBVect.push_back(*RI);
-
-  for (std::vector<BasicBlock *>::iterator I = BBVect.begin(), E = BBVect.end();
-       I != E; I++)
-    Changed |= processBlock(*I);
+  for (BasicBlock *BB : RPOT)
+    Changed |= processBlock(BB);
 
   return Changed;
 }

@@ -244,7 +244,7 @@ void Fuzzer::RssLimitCallback() {
       GetPid(), GetPeakRSSMb(), Options.RssLimitMb);
   Printf("   To change the out-of-memory limit use -rss_limit_mb=<N>\n\n");
   if (EF->__sanitizer_print_memory_profile)
-    EF->__sanitizer_print_memory_profile(95);
+    EF->__sanitizer_print_memory_profile(95, 8);
   DumpCurrentUnit("oom-");
   Printf("SUMMARY: libFuzzer: out-of-memory\n");
   PrintFinalStats();
@@ -407,11 +407,11 @@ size_t Fuzzer::RunOne(const uint8_t *Data, size_t Size) {
 
   ExecuteCallback(Data, Size);
 
-  size_t Res = 0;
-  if (size_t NumFeatures = TPC.CollectFeatures([&](size_t Feature) -> bool {
-        return Corpus.AddFeature(Feature, Size, Options.Shrink);
-      }))
-    Res = NumFeatures;
+  size_t NumUpdatesBefore = Corpus.NumFeatureUpdates();
+  TPC.CollectFeatures([&](size_t Feature) {
+    Corpus.AddFeature(Feature, Size, Options.Shrink);
+  });
+  size_t NumUpdatesAfter = Corpus.NumFeatureUpdates();
 
   auto TimeOfUnit =
       duration_cast<seconds>(UnitStopTime - UnitStartTime).count();
@@ -424,7 +424,7 @@ size_t Fuzzer::RunOne(const uint8_t *Data, size_t Size) {
     Printf("Slowest unit: %zd s:\n", TimeOfLongestUnitInSeconds);
     WriteUnitToFileWithPrefix({Data, Data + Size}, "slow-unit-");
   }
-  return Res;
+  return NumUpdatesAfter - NumUpdatesBefore;
 }
 
 size_t Fuzzer::GetCurrentUnitInFuzzingThead(const uint8_t **Data) const {

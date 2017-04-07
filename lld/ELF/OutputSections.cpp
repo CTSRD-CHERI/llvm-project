@@ -69,14 +69,13 @@ OutputSection::OutputSection(StringRef Name, uint32_t Type, uint64_t Flags)
                   /*Info*/ 0,
                   /*Link*/ 0) {}
 
-template <typename ELFT>
 static bool compareByFilePosition(InputSection *A, InputSection *B) {
   // Synthetic doesn't have link order dependecy, stable_sort will keep it last
   if (A->kind() == InputSectionBase::Synthetic ||
       B->kind() == InputSectionBase::Synthetic)
     return false;
-  auto *LA = cast<InputSection>(A->template getLinkOrderDep<ELFT>());
-  auto *LB = cast<InputSection>(B->template getLinkOrderDep<ELFT>());
+  auto *LA = cast<InputSection>(A->getLinkOrderDep());
+  auto *LB = cast<InputSection>(B->getLinkOrderDep());
   OutputSection *AOut = LA->OutSec;
   OutputSection *BOut = LB->OutSec;
   if (AOut != BOut)
@@ -86,19 +85,19 @@ static bool compareByFilePosition(InputSection *A, InputSection *B) {
 
 template <class ELFT> void OutputSection::finalize() {
   if ((this->Flags & SHF_LINK_ORDER) && !this->Sections.empty()) {
-    std::sort(Sections.begin(), Sections.end(), compareByFilePosition<ELFT>);
-    assignOffsets<ELFT>();
+    std::sort(Sections.begin(), Sections.end(), compareByFilePosition);
+    assignOffsets();
 
     // We must preserve the link order dependency of sections with the
     // SHF_LINK_ORDER flag. The dependency is indicated by the sh_link field. We
     // need to translate the InputSection sh_link to the OutputSection sh_link,
     // all InputSections in the OutputSection have the same dependency.
-    if (auto *D = this->Sections.front()->template getLinkOrderDep<ELFT>())
+    if (auto *D = this->Sections.front()->getLinkOrderDep())
       this->Link = D->OutSec->SectionIndex;
   }
 
   uint32_t Type = this->Type;
-  if (!Config->copyRelocs() || (Type != SHT_RELA && Type != SHT_REL))
+  if (!Config->CopyRelocs || (Type != SHT_RELA && Type != SHT_REL))
     return;
 
   InputSection *First = Sections[0];
@@ -108,13 +107,12 @@ template <class ELFT> void OutputSection::finalize() {
   this->Link = In<ELFT>::SymTab->OutSec->SectionIndex;
   // sh_info for SHT_REL[A] sections should contain the section header index of
   // the section to which the relocation applies.
-  InputSectionBase *S = First->getRelocatedSection<ELFT>();
+  InputSectionBase *S = First->getRelocatedSection();
   this->Info = S->OutSec->SectionIndex;
 }
 
-void OutputSection::addSection(InputSectionBase *C) {
-  assert(C->Live);
-  auto *S = cast<InputSection>(C);
+void OutputSection::addSection(InputSection *S) {
+  assert(S->Live);
   Sections.push_back(S);
   S->OutSec = this;
   this->updateAlignment(S->Alignment);
@@ -131,7 +129,7 @@ void OutputSection::addSection(InputSectionBase *C) {
 
 // This function is called after we sort input sections
 // and scan relocations to setup sections' offsets.
-template <class ELFT> void OutputSection::assignOffsets() {
+void OutputSection::assignOffsets() {
   uint64_t Off = 0;
   for (InputSection *S : Sections) {
     Off = alignTo(Off, S->Alignment);
@@ -225,7 +223,10 @@ void OutputSection::sortCtorsDtors() {
 
 // Fill [Buf, Buf + Size) with Filler. Filler is written in big
 // endian order. This is used for linker script "=fillexp" command.
-void fill(uint8_t *Buf, size_t Size, uint32_t Filler) {
+static void fill(uint8_t *Buf, size_t Size, uint32_t Filler) {
+  if (Filler == 0)
+    return;
+
   uint8_t V[4];
   write32be(V, Filler);
   size_t I = 0;
@@ -234,17 +235,44 @@ void fill(uint8_t *Buf, size_t Size, uint32_t Filler) {
   memcpy(Buf + I, V, Size - I);
 }
 
+uint32_t OutputSection::getFill() {
+  // Determine what to fill gaps between InputSections with, as specified by the
+  // linker script. If nothing is specified and this is an executable section,
+  // fall back to trap instructions to prevent bad diassembly and detect invalid
+  // jumps to padding.
+  if (Optional<uint32_t> Filler = Script->getFiller(Name))
+    return *Filler;
+  if (Flags & SHF_EXECINSTR)
+    return Target->TrapInstr;
+  return 0;
+}
+
 template <class ELFT> void OutputSection::writeTo(uint8_t *Buf) {
   Loc = Buf;
-  if (uint32_t Filler = Script<ELFT>::X->getFiller(this->Name))
-    fill(Buf, this->Size, Filler);
 
-  auto Fn = [=](InputSection *IS) { IS->writeTo<ELFT>(Buf); };
-  forEach(Sections.begin(), Sections.end(), Fn);
+  uint32_t Filler = getFill();
+
+  // Write leading padding.
+  size_t FillSize = Sections.empty() ? Size : Sections[0]->OutSecOff;
+  fill(Buf, FillSize, Filler);
+
+  parallelFor(0, Sections.size(), [=](size_t I) {
+    InputSection *Sec = Sections[I];
+    Sec->writeTo<ELFT>(Buf);
+
+    // Fill gaps between sections with the specified fill value.
+    uint8_t *Start = Buf + Sec->OutSecOff + Sec->getSize();
+    uint8_t *End;
+    if (I + 1 == Sections.size())
+      End = Buf + Size;
+    else
+      End = Buf + Sections[I + 1]->OutSecOff;
+    fill(Start, End - Start, Filler);
+  });
 
   // Linker scripts may have BYTE()-family commands with which you
   // can write arbitrary bytes to the output. Process them if any.
-  Script<ELFT>::X->writeDataBytes(this->Name, Buf);
+  Script->writeDataBytes(Name, Buf);
 }
 
 static uint64_t getOutFlags(InputSectionBase *S) {
@@ -359,7 +387,7 @@ void OutputSectionFactory::addInputSec(InputSectionBase *IS,
     OutputSections.push_back(Sec);
   }
 
-  Sec->addSection(IS);
+  Sec->addSection(cast<InputSection>(IS));
 }
 
 OutputSectionFactory::~OutputSectionFactory() {}
@@ -395,11 +423,6 @@ template void OutputSection::writeHeaderTo<ELF32LE>(ELF32LE::Shdr *Shdr);
 template void OutputSection::writeHeaderTo<ELF32BE>(ELF32BE::Shdr *Shdr);
 template void OutputSection::writeHeaderTo<ELF64LE>(ELF64LE::Shdr *Shdr);
 template void OutputSection::writeHeaderTo<ELF64BE>(ELF64BE::Shdr *Shdr);
-
-template void OutputSection::assignOffsets<ELF32LE>();
-template void OutputSection::assignOffsets<ELF32BE>();
-template void OutputSection::assignOffsets<ELF64LE>();
-template void OutputSection::assignOffsets<ELF64BE>();
 
 template void OutputSection::finalize<ELF32LE>();
 template void OutputSection::finalize<ELF32BE>();

@@ -96,9 +96,9 @@ static bool setDoesNotAlias(Function &F, unsigned n) {
 }
 
 static bool setNonNull(Function &F, unsigned n) {
-  assert((n != AttributeSet::ReturnIndex ||
-          F.getReturnType()->isPointerTy()) &&
-         "nonnull applies only to pointers");
+  assert(
+      (n != AttributeList::ReturnIndex || F.getReturnType()->isPointerTy()) &&
+      "nonnull applies only to pointers");
   if (F.getAttributes().hasAttribute(n, Attribute::NonNull))
     return false;
   F.addAttribute(n, Attribute::NonNull);
@@ -683,8 +683,8 @@ bool llvm::inferLibFuncAttributes(Function &F, const TargetLibraryInfo &TLI) {
   case LibFunc_msvc_new_array_int: // new[](unsigned int)
   case LibFunc_msvc_new_array_longlong: // new[](unsigned long long)
     // Operator new always returns a nonnull noalias pointer
-    Changed |= setNonNull(F, AttributeSet::ReturnIndex);
-    Changed |= setDoesNotAlias(F, AttributeSet::ReturnIndex);
+    Changed |= setNonNull(F, AttributeList::ReturnIndex);
+    Changed |= setDoesNotAlias(F, AttributeList::ReturnIndex);
     return Changed;
   //TODO: add LibFunc entries for:
   //case LibFunc_memset_pattern4:
@@ -816,15 +816,15 @@ Value *llvm::emitMemCpyChk(Value *Dst, Value *Src, Value *Len, Value *ObjSize,
     return nullptr;
 
   Module *M = B.GetInsertBlock()->getModule();
-  AttributeSet AS;
-  AS = AttributeSet::get(M->getContext(), AttributeSet::FunctionIndex,
-                         Attribute::NoUnwind);
+  AttributeList AS;
+  AS = AttributeList::get(M->getContext(), AttributeList::FunctionIndex,
+                          Attribute::NoUnwind);
   LLVMContext &Context = B.GetInsertBlock()->getContext();
   Dst = castToCStr(Dst, B);
   Src = castToCStr(Src, B);
   Type *I8Ptr = Dst->getType();
   Value *MemCpy = M->getOrInsertFunction(
-      "__memcpy_chk", AttributeSet::get(M->getContext(), AS), I8Ptr, I8Ptr,
+      "__memcpy_chk", AttributeList::get(M->getContext(), AS), I8Ptr, I8Ptr,
       I8Ptr, DL.getIntPtrType(Context), DL.getIntPtrType(Context), nullptr);
   CallInst *CI = B.CreateCall(MemCpy, {Dst, Src, Len, ObjSize});
   if (const Function *F = dyn_cast<Function>(MemCpy->stripPointerCasts()))
@@ -891,7 +891,7 @@ static void appendTypeSuffix(Value *Op, StringRef &Name,
 }
 
 Value *llvm::emitUnaryFloatFnCall(Value *Op, StringRef Name, IRBuilder<> &B,
-                                  const AttributeSet &Attrs) {
+                                  const AttributeList &Attrs) {
   SmallString<20> NameBuffer;
   appendTypeSuffix(Op, Name, NameBuffer);
 
@@ -907,7 +907,7 @@ Value *llvm::emitUnaryFloatFnCall(Value *Op, StringRef Name, IRBuilder<> &B,
 }
 
 Value *llvm::emitBinaryFloatFnCall(Value *Op1, Value *Op2, StringRef Name,
-                                  IRBuilder<> &B, const AttributeSet &Attrs) {
+                                   IRBuilder<> &B, const AttributeList &Attrs) {
   SmallString<20> NameBuffer;
   appendTypeSuffix(Op1, Name, NameBuffer);
 
@@ -930,6 +930,7 @@ Value *llvm::emitPutChar(Value *Char, IRBuilder<> &B,
   Module *M = B.GetInsertBlock()->getModule();
   Value *PutChar = M->getOrInsertFunction("putchar", B.getInt32Ty(),
                                           B.getInt32Ty(), nullptr);
+  inferLibFuncAttributes(*M->getFunction("putchar"), *TLI);
   CallInst *CI = B.CreateCall(PutChar,
                               B.CreateIntCast(Char,
                               B.getInt32Ty(),

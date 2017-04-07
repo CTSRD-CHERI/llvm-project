@@ -25,13 +25,14 @@
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/CodeGen/DAGCombine.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/RuntimeLibcalls.h"
+#include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/Attributes.h"
@@ -163,6 +164,35 @@ public:
                        // or custom.
   };
 
+  class ArgListEntry {
+  public:
+    Value *Val = nullptr;
+    SDValue Node = SDValue();
+    Type *Ty = nullptr;
+    bool IsSExt : 1;
+    bool IsZExt : 1;
+    bool IsInReg : 1;
+    bool IsSRet : 1;
+    bool IsNest : 1;
+    bool IsByVal : 1;
+    bool IsInAlloca : 1;
+    bool IsReturned : 1;
+    bool IsSwiftSelf : 1;
+    bool IsSwiftError : 1;
+    uint16_t Alignment = 0;
+
+    ArgListEntry()
+        : IsSExt(false), IsZExt(false), IsInReg(false), IsSRet(false),
+          IsNest(false), IsByVal(false), IsInAlloca(false), IsReturned(false),
+          IsSwiftSelf(false), IsSwiftError(false) {}
+
+    void setAttributes(ImmutableCallSite *CS, unsigned AttrIdx);
+  };
+  typedef std::vector<ArgListEntry> ArgListTy;
+
+  virtual void markLibCallAttributes(MachineFunction *MF, unsigned CC,
+                                     ArgListTy &Args) const {};
+
   static ISD::NodeType getExtendForContent(BooleanContent Content) {
     switch (Content) {
     case UndefinedBooleanContent:
@@ -258,9 +288,7 @@ public:
   /// several shifts, adds, and multiplies for this target.
   /// The definition of "cheaper" may depend on whether we're optimizing
   /// for speed or for size.
-  virtual bool isIntDivCheap(EVT VT, AttributeSet Attr) const {
-    return false;
-  }
+  virtual bool isIntDivCheap(EVT VT, AttributeList Attr) const { return false; }
 
   /// Return true if the target can handle a standalone remainder operation.
   virtual bool hasStandaloneRem(EVT VT) const {
@@ -411,6 +439,24 @@ public:
   /// \endcode
   virtual bool isMaskAndCmp0FoldingBeneficial(const Instruction &AndI) const {
     return false;
+  }
+
+  /// Use bitwise logic to make pairs of compares more efficient. For example:
+  /// and (seteq A, B), (seteq C, D) --> seteq (or (xor A, B), (xor C, D)), 0
+  /// This should be true when it takes more than one instruction to lower
+  /// setcc (cmp+set on x86 scalar), when bitwise ops are faster than logic on
+  /// condition bits (crand on PowerPC), and/or when reducing cmp+br is a win.
+  virtual bool convertSetCCLogicToBitwiseLogic(EVT VT) const {
+    return false;
+  }
+
+  /// Return the preferred operand type if the target has a quick way to compare
+  /// integer values of the given size. Assume that any legal integer type can
+  /// be compared efficiently. Targets may override this to allow illegal wide
+  /// types to return a vector type if there is support to compare that type.
+  virtual MVT hasFastEqualityCompare(unsigned NumBits) const {
+    MVT VT = MVT::getIntegerVT(NumBits);
+    return isTypeLegal(VT) ? VT : MVT::INVALID_SIMPLE_VALUE_TYPE;
   }
 
   /// Return true if the target should transform:
@@ -619,6 +665,16 @@ public:
                                   EVT &IntermediateVT,
                                   unsigned &NumIntermediates,
                                   MVT &RegisterVT) const;
+
+  /// Certain targets such as MIPS require that some types such as vectors are
+  /// always broken down into scalars in some contexts. This occurs even if the
+  /// vector type is legal.
+  virtual unsigned getVectorTypeBreakdownForCallingConv(
+      LLVMContext &Context, EVT VT, EVT &IntermediateVT,
+      unsigned &NumIntermediates, MVT &RegisterVT) const {
+    return getVectorTypeBreakdown(Context, VT, IntermediateVT, NumIntermediates,
+                                  RegisterVT);
+  }
 
   struct IntrinsicInfo {
     unsigned     opc = 0;          // target opcode
@@ -958,6 +1014,33 @@ public:
       return (BitWidth + RegWidth - 1) / RegWidth;
     }
     llvm_unreachable("Unsupported extended type!");
+  }
+
+  /// Certain combinations of ABIs, Targets and features require that types
+  /// are legal for some operations and not for other operations.
+  /// For MIPS all vector types must be passed through the integer register set.
+  virtual MVT getRegisterTypeForCallingConv(MVT VT) const {
+    return getRegisterType(VT);
+  }
+
+  virtual MVT getRegisterTypeForCallingConv(LLVMContext &Context,
+                                            EVT VT) const {
+    return getRegisterType(Context, VT);
+  }
+
+  /// Certain targets require unusual breakdowns of certain types. For MIPS,
+  /// this occurs when a vector type is used, as vector are passed through the
+  /// integer register set.
+  virtual unsigned getNumRegistersForCallingConv(LLVMContext &Context,
+                                                 EVT VT) const {
+    return getNumRegisters(Context, VT);
+  }
+
+  /// Certain targets have context senstive alignment requirements, where one
+  /// type has the alignment requirement of another type.
+  virtual unsigned getABIAlignmentForCallingConv(Type *ArgTy,
+                                                 DataLayout DL) const {
+    return DL.getABITypeAlignment(ArgTy);
   }
 
   /// If true, then instruction selection should seek to shrink the FP constant
@@ -2388,16 +2471,22 @@ public:
                             DAGCombinerInfo &DCI) const;
 
   /// Determine which of the bits specified in Mask are known to be either zero
-  /// or one and return them in the KnownZero/KnownOne bitsets.
+  /// or one and return them in the KnownZero/KnownOne bitsets. The DemandedElts
+  /// argument allows us to only collect the known bits that are shared by the
+  /// requested vector elements.
   virtual void computeKnownBitsForTargetNode(const SDValue Op,
                                              APInt &KnownZero,
                                              APInt &KnownOne,
+                                             const APInt &DemandedElts,
                                              const SelectionDAG &DAG,
                                              unsigned Depth = 0) const;
 
   /// This method can be implemented by targets that want to expose additional
-  /// information about sign bits to the DAG Combiner.
+  /// information about sign bits to the DAG Combiner. The DemandedElts
+  /// argument allows us to only collect the minimum sign bits that are shared
+  /// by the requested vector elements.
   virtual unsigned ComputeNumSignBitsForTargetNode(SDValue Op,
+                                                   const APInt &DemandedElts,
                                                    const SelectionDAG &DAG,
                                                    unsigned Depth = 0) const;
 
@@ -2554,30 +2643,6 @@ public:
     llvm_unreachable("Not Implemented");
   }
 
-  struct ArgListEntry {
-    SDValue Node;
-    Type* Ty;
-    bool isSExt     : 1;
-    bool isZExt     : 1;
-    bool isInReg    : 1;
-    bool isSRet     : 1;
-    bool isNest     : 1;
-    bool isByVal    : 1;
-    bool isInAlloca : 1;
-    bool isReturned : 1;
-    bool isSwiftSelf : 1;
-    bool isSwiftError : 1;
-    uint16_t Alignment;
-
-    ArgListEntry() : isSExt(false), isZExt(false), isInReg(false),
-      isSRet(false), isNest(false), isByVal(false), isInAlloca(false),
-      isReturned(false), isSwiftSelf(false), isSwiftError(false),
-      Alignment(0) {}
-
-    void setAttributes(ImmutableCallSite *CS, unsigned AttrIdx);
-  };
-  typedef std::vector<ArgListEntry> ArgListTy;
-
   /// This structure contains all information that is necessary for lowering
   /// calls. It is passed to TLI::LowerCallTo when the SelectionDAG builder
   /// needs to lower a call, and targets will see this struct in their LowerCall
@@ -2624,6 +2689,20 @@ public:
 
     CallLoweringInfo &setChain(SDValue InChain) {
       Chain = InChain;
+      return *this;
+    }
+
+    // setCallee with target/module-specific attributes
+    CallLoweringInfo &setLibCallee(CallingConv::ID CC, Type *ResultType,
+                                   SDValue Target, ArgListTy &&ArgsList) {
+      RetTy = ResultType;
+      Callee = Target;
+      CallConv = CC;
+      NumFixedArgs = Args.size();
+      Args = std::move(ArgsList);
+
+      DAG.getTargetLoweringInfo().markLibCallAttributes(
+          &(DAG.getMachineFunction()), CC, Args);
       return *this;
     }
 
@@ -3201,7 +3280,7 @@ private:
 /// Given an LLVM IR type and return type attributes, compute the return value
 /// EVTs and flags, and optionally also the offsets, if the return value is
 /// being lowered to memory.
-void GetReturnInfo(Type *ReturnType, AttributeSet attr,
+void GetReturnInfo(Type *ReturnType, AttributeList attr,
                    SmallVectorImpl<ISD::OutputArg> &Outs,
                    const TargetLowering &TLI, const DataLayout &DL);
 

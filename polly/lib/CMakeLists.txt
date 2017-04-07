@@ -35,6 +35,7 @@ add_polly_library(Polly
   Analysis/ScopBuilder.cpp
   Analysis/ScopGraphPrinter.cpp
   Analysis/ScopPass.cpp
+  Analysis/PruneUnprofitable.cpp
   CodeGen/BlockGenerators.cpp
   ${ISL_CODEGEN_FILES}
   CodeGen/LoopGenerators.cpp
@@ -42,6 +43,7 @@ add_polly_library(Polly
   CodeGen/Utils.cpp
   CodeGen/RuntimeDebugBuilder.cpp
   CodeGen/CodegenCleanup.cpp
+  CodeGen/PerfMonitor.cpp
   ${GPGPU_CODEGEN_FILES}
   Exchange/JSONExporter.cpp
   Support/GICHelper.cpp

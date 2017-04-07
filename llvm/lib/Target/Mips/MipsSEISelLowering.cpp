@@ -1149,7 +1149,8 @@ MipsSETargetLowering::PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const {
   case ISD::MUL:
     return performMULCombine(N, DAG, DCI, this);
   case ISD::SHL:
-    return performSHLCombine(N, DAG, DCI, Subtarget);
+    Val = performSHLCombine(N, DAG, DCI, Subtarget);
+    break;
   case ISD::SRA:
     return performSRACombine(N, DAG, DCI, Subtarget);
   case ISD::SRL:
@@ -1679,7 +1680,7 @@ SDValue MipsSETargetLowering::lowerINTRINSIC_WO_CHAIN(SDValue Op,
     if (Op->getConstantOperandVal(3) >= EltTy.getSizeInBits())
       report_fatal_error("Immediate out of range");
     APInt Mask = APInt::getHighBitsSet(EltTy.getSizeInBits(),
-                                       Op->getConstantOperandVal(3));
+                                       Op->getConstantOperandVal(3) + 1);
     return DAG.getNode(ISD::VSELECT, DL, VecTy,
                        DAG.getConstant(Mask, DL, VecTy, true),
                        Op->getOperand(2), Op->getOperand(1));
@@ -1694,7 +1695,7 @@ SDValue MipsSETargetLowering::lowerINTRINSIC_WO_CHAIN(SDValue Op,
     if (Op->getConstantOperandVal(3) >= EltTy.getSizeInBits())
       report_fatal_error("Immediate out of range");
     APInt Mask = APInt::getLowBitsSet(EltTy.getSizeInBits(),
-                                      Op->getConstantOperandVal(3));
+                                      Op->getConstantOperandVal(3) + 1);
     return DAG.getNode(ISD::VSELECT, DL, VecTy,
                        DAG.getConstant(Mask, DL, VecTy, true),
                        Op->getOperand(2), Op->getOperand(1));

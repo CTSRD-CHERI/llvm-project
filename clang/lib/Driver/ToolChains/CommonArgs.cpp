@@ -407,7 +407,7 @@ void tools::AddGoldPlugin(const ToolChain &ToolChain, const ArgList &Args,
     CmdArgs.push_back("-plugin-opt=-data-sections");
   }
 
-  if (Arg *A = Args.getLastArg(options::OPT_fprofile_sample_use_EQ)) {
+  if (Arg *A = getLastProfileSampleUseArg(Args)) {
     StringRef FName = A->getValue();
     if (!llvm::sys::fs::exists(FName))
       D.Diag(diag::err_drv_no_such_file) << FName;
@@ -673,6 +673,22 @@ Arg *tools::getLastProfileUseArg(const ArgList &Args) {
   return ProfileUseArg;
 }
 
+Arg *tools::getLastProfileSampleUseArg(const ArgList &Args) {
+  auto *ProfileSampleUseArg = Args.getLastArg(
+      options::OPT_fprofile_sample_use, options::OPT_fprofile_sample_use_EQ,
+      options::OPT_fauto_profile, options::OPT_fauto_profile_EQ,
+      options::OPT_fno_profile_sample_use, options::OPT_fno_auto_profile);
+
+  if (ProfileSampleUseArg &&
+      (ProfileSampleUseArg->getOption().matches(
+           options::OPT_fno_profile_sample_use) ||
+       ProfileSampleUseArg->getOption().matches(options::OPT_fno_auto_profile)))
+    return nullptr;
+
+  return Args.getLastArg(options::OPT_fprofile_sample_use_EQ,
+                         options::OPT_fauto_profile_EQ);
+}
+
 /// Parses the various -fpic/-fPIC/-fpie/-fPIE arguments.  Then,
 /// smooshes them together with platform defaults, to decide whether
 /// this compile should be using PIC mode or not. Returns a tuple of
@@ -721,9 +737,10 @@ tools::ParsePICArgs(const ToolChain &ToolChain, const ArgList &Args) {
   // OpenBSD-specific defaults for PIE
   if (Triple.getOS() == llvm::Triple::OpenBSD) {
     switch (ToolChain.getArch()) {
+    case llvm::Triple::arm:
+    case llvm::Triple::aarch64:
     case llvm::Triple::mips64:
     case llvm::Triple::mips64el:
-    case llvm::Triple::sparcel:
     case llvm::Triple::x86:
     case llvm::Triple::x86_64:
       IsPICLevelTwo = false; // "-fpie"
@@ -731,6 +748,7 @@ tools::ParsePICArgs(const ToolChain &ToolChain, const ArgList &Args) {
 
     case llvm::Triple::ppc:
     case llvm::Triple::sparc:
+    case llvm::Triple::sparcel:
     case llvm::Triple::sparcv9:
       IsPICLevelTwo = true; // "-fPIE"
       break;

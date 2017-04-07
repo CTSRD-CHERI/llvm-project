@@ -6309,8 +6309,6 @@ static unsigned CopyToFromAsymmetricReg(unsigned &DestReg, unsigned &SrcReg,
 
   // SrcReg(MaskReg) -> DestReg(GR64)
   // SrcReg(MaskReg) -> DestReg(GR32)
-  // SrcReg(MaskReg) -> DestReg(GR16)
-  // SrcReg(MaskReg) -> DestReg(GR8)
 
   // All KMASK RegClasses hold the same k registers, can be tested against anyone.
   if (X86::VK16RegClass.contains(SrcReg)) {
@@ -6320,21 +6318,10 @@ static unsigned CopyToFromAsymmetricReg(unsigned &DestReg, unsigned &SrcReg,
     }
     if (X86::GR32RegClass.contains(DestReg))
       return Subtarget.hasBWI() ? X86::KMOVDrk : X86::KMOVWrk;
-    if (X86::GR16RegClass.contains(DestReg)) {
-      DestReg = getX86SubSuperRegister(DestReg, 32);
-      return X86::KMOVWrk;
-    }
-    if (X86::GR8RegClass.contains(DestReg)) {
-      assert(!isHReg(DestReg) && "Cannot move between mask and h-reg");
-      DestReg = getX86SubSuperRegister(DestReg, 32);
-      return Subtarget.hasDQI() ? X86::KMOVBrk : X86::KMOVWrk;
-    }
   }
 
   // SrcReg(GR64) -> DestReg(MaskReg)
   // SrcReg(GR32) -> DestReg(MaskReg)
-  // SrcReg(GR16) -> DestReg(MaskReg)
-  // SrcReg(GR8)  -> DestReg(MaskReg)
 
   // All KMASK RegClasses hold the same k registers, can be tested against anyone.
   if (X86::VK16RegClass.contains(DestReg)) {
@@ -6344,15 +6331,6 @@ static unsigned CopyToFromAsymmetricReg(unsigned &DestReg, unsigned &SrcReg,
     }
     if (X86::GR32RegClass.contains(SrcReg))
       return Subtarget.hasBWI() ? X86::KMOVDkr : X86::KMOVWkr;
-    if (X86::GR16RegClass.contains(SrcReg)) {
-      SrcReg = getX86SubSuperRegister(SrcReg, 32);
-      return X86::KMOVWkr;
-    }
-    if (X86::GR8RegClass.contains(SrcReg)) {
-      assert(!isHReg(SrcReg) && "Cannot move between mask and h-reg");
-      SrcReg = getX86SubSuperRegister(SrcReg, 32);
-      return Subtarget.hasDQI() ? X86::KMOVBkr : X86::KMOVWkr;
-    }
   }
 
 
@@ -8045,7 +8023,7 @@ static bool hasPartialRegUpdate(unsigned Opcode) {
   return false;
 }
 
-/// Inform the ExeDepsFix pass how many idle
+/// Inform the ExecutionDepsFix pass how many idle
 /// instructions we would like before a partial register update.
 unsigned X86InstrInfo::getPartialRegUpdateClearance(
     const MachineInstr &MI, unsigned OpNum,
@@ -8198,8 +8176,8 @@ static bool hasUndefRegUpdate(unsigned Opcode) {
   return false;
 }
 
-/// Inform the ExeDepsFix pass how many idle instructions we would like before
-/// certain undef register reads.
+/// Inform the ExecutionDepsFix pass how many idle instructions we would like
+/// before certain undef register reads.
 ///
 /// This catches the VCVTSI2SD family of instructions:
 ///
@@ -10175,28 +10153,6 @@ X86InstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
       {MO_TLVP_PIC_BASE, "x86-tlvp-pic-base"},
       {MO_SECREL, "x86-secrel"}};
   return makeArrayRef(TargetFlags);
-}
-
-bool X86InstrInfo::isTailCall(const MachineInstr &Inst) const {
-  switch (Inst.getOpcode()) {
-    case X86::TCRETURNdi:
-    case X86::TCRETURNmi:
-    case X86::TCRETURNri:
-    case X86::TCRETURNdi64:
-    case X86::TCRETURNmi64:
-    case X86::TCRETURNri64:
-    case X86::TAILJMPd:
-    case X86::TAILJMPm:
-    case X86::TAILJMPr:
-    case X86::TAILJMPd64:
-    case X86::TAILJMPm64:
-    case X86::TAILJMPr64:
-    case X86::TAILJMPm64_REX:
-    case X86::TAILJMPr64_REX:
-      return true;
-    default:
-      return false;
-  }
 }
 
 namespace {

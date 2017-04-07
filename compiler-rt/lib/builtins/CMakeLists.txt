@@ -71,6 +71,7 @@ set(GENERIC_SOURCES
   extendsfdf2.c
   extendhfsf2.c
   ffsdi2.c
+  ffssi2.c
   ffsti2.c
   fixdfdi.c
   fixdfsi.c
@@ -499,7 +500,7 @@ else ()
       # Needed for clear_cache on debug mode, due to r7's usage in inline asm.
       # Release mode already sets it via -O2/3, Debug mode doesn't.
       if (${arch} STREQUAL "armhf")
-        list(APPEND BUILTIN_CFLAGS -fomit-frame-pointer)
+        list(APPEND BUILTIN_CFLAGS -fomit-frame-pointer -DCOMPILER_RT_ARMHF_TARGET)
       endif()
 
       add_compiler_rt_runtime(clang_rt.builtins

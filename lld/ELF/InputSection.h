@@ -157,12 +157,14 @@ public:
     return getFile<ELFT>()->getObj();
   }
 
-  template <class ELFT> InputSectionBase *getLinkOrderDep() const;
+  InputSectionBase *getLinkOrderDep() const;
 
-  template <class ELFT> void uncompress();
+  void uncompress();
 
   // Returns a source location string. Used to construct an error message.
   template <class ELFT> std::string getLocation(uint64_t Offset);
+  template <class ELFT> std::string getSrcMsg(uint64_t Offset);
+  template <class ELFT> std::string getObjMsg(uint64_t Offset);
 
   template <class ELFT> void relocate(uint8_t *Buf, uint8_t *BufEnd);
 
@@ -300,7 +302,7 @@ public:
 
   static bool classof(const SectionBase *S);
 
-  template <class ELFT> InputSectionBase *getRelocatedSection();
+  InputSectionBase *getRelocatedSection();
 
   template <class ELFT, class RelTy>
   void relocateNonAlloc(uint8_t *Buf, llvm::ArrayRef<RelTy> Rels);

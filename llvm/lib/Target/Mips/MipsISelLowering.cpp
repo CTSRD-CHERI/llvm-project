@@ -87,6 +87,48 @@ static bool isShiftedMask(uint64_t I, uint64_t &Pos, uint64_t &Size) {
   return true;
 }
 
+// The MIPS MSA ABI passes vector arguments in the integer register set.
+// The number of integer registers used is dependant on the ABI used.
+MVT MipsTargetLowering::getRegisterTypeForCallingConv(MVT VT) const {
+  if (VT.isVector() && Subtarget.hasMSA())
+    return Subtarget.isABI_O32() ? MVT::i32 : MVT::i64;
+  return MipsTargetLowering::getRegisterType(VT);
+}
+
+MVT MipsTargetLowering::getRegisterTypeForCallingConv(LLVMContext &Context,
+                                                      EVT VT) const {
+  if (VT.isVector()) {
+      if (Subtarget.isABI_O32()) {
+        return MVT::i32;
+      } else {
+        return (VT.getSizeInBits() == 32) ? MVT::i32 : MVT::i64;
+      }
+  }
+  return MipsTargetLowering::getRegisterType(Context, VT);
+}
+
+unsigned MipsTargetLowering::getNumRegistersForCallingConv(LLVMContext &Context,
+                                                           EVT VT) const {
+  if (VT.isVector())
+    return std::max((VT.getSizeInBits() / (Subtarget.isABI_O32() ? 32 : 64)),
+                    1U);
+  return MipsTargetLowering::getNumRegisters(Context, VT);
+}
+
+unsigned MipsTargetLowering::getVectorTypeBreakdownForCallingConv(
+    LLVMContext &Context, EVT VT, EVT &IntermediateVT,
+    unsigned &NumIntermediates, MVT &RegisterVT) const {
+
+  // Break down vector types to either 2 i64s or 4 i32s.
+  RegisterVT = getRegisterTypeForCallingConv(Context, VT) ;
+  IntermediateVT = RegisterVT;
+  NumIntermediates = VT.getSizeInBits() < RegisterVT.getSizeInBits()
+                         ? VT.getVectorNumElements()
+                         : VT.getSizeInBits() / RegisterVT.getSizeInBits();
+
+  return NumIntermediates;
+}
+
 SDValue MipsTargetLowering::getGlobalReg(SelectionDAG &DAG, EVT Ty) const {
   MipsFunctionInfo *FI = DAG.getMachineFunction().getInfo<MipsFunctionInfo>();
   return DAG.getRegister(FI->getGlobalBaseReg(), Ty);
@@ -163,6 +205,7 @@ const char *MipsTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case MipsISD::Sync:              return "MipsISD::Sync";
   case MipsISD::Ext:               return "MipsISD::Ext";
   case MipsISD::Ins:               return "MipsISD::Ins";
+  case MipsISD::CIns:              return "MipsISD::CIns";
   case MipsISD::LWL:               return "MipsISD::LWL";
   case MipsISD::LWR:               return "MipsISD::LWR";
   case MipsISD::SWL:               return "MipsISD::SWL";
@@ -461,6 +504,7 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
   setTargetDAGCombine(ISD::OR);
   setTargetDAGCombine(ISD::ADD);
   setTargetDAGCombine(ISD::AssertZext);
+  setTargetDAGCombine(ISD::SHL);
 
   if (ABI.IsO32()) {
     // These libcalls are not available in 32-bit.
@@ -735,41 +779,81 @@ static SDValue performCMovFPCombine(SDNode *N, SelectionDAG &DAG,
 static SDValue performANDCombine(SDNode *N, SelectionDAG &DAG,
                                  TargetLowering::DAGCombinerInfo &DCI,
                                  const MipsSubtarget &Subtarget) {
-  // Pattern match EXT.
-  //  $dst = and ((sra or srl) $src , pos), (2**size - 1)
-  //  => ext $dst, $src, size, pos
   if (DCI.isBeforeLegalizeOps() || !Subtarget.hasExtractInsert())
     return SDValue();
 
-  SDValue ShiftRight = N->getOperand(0), Mask = N->getOperand(1);
-  unsigned ShiftRightOpc = ShiftRight.getOpcode();
+  SDValue FirstOperand = N->getOperand(0);
+  unsigned FirstOperandOpc = FirstOperand.getOpcode();
+  SDValue Mask = N->getOperand(1);
+  EVT ValTy = N->getValueType(0);
+  SDLoc DL(N);
 
-  // Op's first operand must be a shift right.
-  if (ShiftRightOpc != ISD::SRA && ShiftRightOpc != ISD::SRL)
-    return SDValue();
-
-  // The second operand of the shift must be an immediate.
+  uint64_t Pos = 0, SMPos, SMSize;
   ConstantSDNode *CN;
-  if (!(CN = dyn_cast<ConstantSDNode>(ShiftRight.getOperand(1))))
-    return SDValue();
-
-  uint64_t Pos = CN->getZExtValue();
-  uint64_t SMPos, SMSize;
+  SDValue NewOperand;
+  unsigned Opc;
 
   // Op's second operand must be a shifted mask.
   if (!(CN = dyn_cast<ConstantSDNode>(Mask)) ||
       !isShiftedMask(CN->getZExtValue(), SMPos, SMSize))
     return SDValue();
 
-  // Return if the shifted mask does not start at bit 0 or the sum of its size
-  // and Pos exceeds the word's size.
-  EVT ValTy = N->getValueType(0);
-  if (SMPos != 0 || Pos + SMSize > ValTy.getSizeInBits())
-    return SDValue();
+  if (FirstOperandOpc == ISD::SRA || FirstOperandOpc == ISD::SRL) {
+    // Pattern match EXT.
+    //  $dst = and ((sra or srl) $src , pos), (2**size - 1)
+    //  => ext $dst, $src, pos, size
 
-  SDLoc DL(N);
-  return DAG.getNode(MipsISD::Ext, DL, ValTy,
-                     ShiftRight.getOperand(0),
+    // The second operand of the shift must be an immediate.
+    if (!(CN = dyn_cast<ConstantSDNode>(FirstOperand.getOperand(1))))
+      return SDValue();
+
+    Pos = CN->getZExtValue();
+
+    // Return if the shifted mask does not start at bit 0 or the sum of its size
+    // and Pos exceeds the word's size.
+    if (SMPos != 0 || Pos + SMSize > ValTy.getSizeInBits())
+      return SDValue();
+
+    Opc = MipsISD::Ext;
+    NewOperand = FirstOperand.getOperand(0);
+  } else if (FirstOperandOpc == ISD::SHL && Subtarget.hasCnMips()) {
+    // Pattern match CINS.
+    //  $dst = and (shl $src , pos), mask
+    //  => cins $dst, $src, pos, size
+    // mask is a shifted mask with consecutive 1's, pos = shift amount,
+    // size = population count.
+
+    // The second operand of the shift must be an immediate.
+    if (!(CN = dyn_cast<ConstantSDNode>(FirstOperand.getOperand(1))))
+      return SDValue();
+
+    Pos = CN->getZExtValue();
+
+    if (SMPos != Pos || Pos >= ValTy.getSizeInBits() || SMSize >= 32 ||
+        Pos + SMSize > ValTy.getSizeInBits())
+      return SDValue();
+
+    NewOperand = FirstOperand.getOperand(0);
+    // SMSize is 'location' (position) in this case, not size.
+    SMSize--;
+    Opc = MipsISD::CIns;
+  } else {
+    // Pattern match EXT.
+    //  $dst = and $src, (2**size - 1) , if size > 16
+    //  => ext $dst, $src, pos, size , pos = 0
+
+    // If the mask is <= 0xffff, andi can be used instead.
+    if (CN->getZExtValue() <= 0xffff)
+      return SDValue();
+
+    // Return if the mask doesn't start at position 0.
+    if (SMPos)
+      return SDValue();
+
+    Opc = MipsISD::Ext;
+    NewOperand = FirstOperand;
+  }
+  return DAG.getNode(Opc, DL, ValTy, NewOperand,
                      DAG.getConstant(Pos, DL, MVT::i32),
                      DAG.getConstant(SMSize, DL, MVT::i32));
 }
@@ -888,6 +972,58 @@ static SDValue performAssertZextCombine(SDNode *N, SelectionDAG &DAG,
   return SDValue();
 }
 
+
+static SDValue performSHLCombine(SDNode *N, SelectionDAG &DAG,
+                                 TargetLowering::DAGCombinerInfo &DCI,
+                                 const MipsSubtarget &Subtarget) {
+  // Pattern match CINS.
+  //  $dst = shl (and $src , imm), pos
+  //  => cins $dst, $src, pos, size
+
+  if (DCI.isBeforeLegalizeOps() || !Subtarget.hasCnMips())
+    return SDValue();
+
+  SDValue FirstOperand = N->getOperand(0);
+  unsigned FirstOperandOpc = FirstOperand.getOpcode();
+  SDValue SecondOperand = N->getOperand(1);
+  EVT ValTy = N->getValueType(0);
+  SDLoc DL(N);
+
+  uint64_t Pos = 0, SMPos, SMSize;
+  ConstantSDNode *CN;
+  SDValue NewOperand;
+
+  // The second operand of the shift must be an immediate.
+  if (!(CN = dyn_cast<ConstantSDNode>(SecondOperand)))
+    return SDValue();
+
+  Pos = CN->getZExtValue();
+
+  if (Pos >= ValTy.getSizeInBits())
+    return SDValue();
+
+  if (FirstOperandOpc != ISD::AND)
+    return SDValue();
+
+  // AND's second operand must be a shifted mask.
+  if (!(CN = dyn_cast<ConstantSDNode>(FirstOperand.getOperand(1))) ||
+      !isShiftedMask(CN->getZExtValue(), SMPos, SMSize))
+    return SDValue();
+
+  // Return if the shifted mask does not start at bit 0 or the sum of its size
+  // and Pos exceeds the word's size.
+  if (SMPos != 0 || SMSize > 32 || Pos + SMSize > ValTy.getSizeInBits())
+    return SDValue();
+
+  NewOperand = FirstOperand.getOperand(0);
+  // SMSize is 'location' (position) in this case, not size.
+  SMSize--;
+
+  return DAG.getNode(MipsISD::CIns, DL, ValTy, NewOperand,
+                     DAG.getConstant(Pos, DL, MVT::i32),
+                     DAG.getConstant(SMSize, DL, MVT::i32));
+}
+
 SDValue  MipsTargetLowering::PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI)
   const {
   SelectionDAG &DAG = DCI.DAG;
@@ -911,6 +1047,8 @@ SDValue  MipsTargetLowering::PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI)
     return performADDCombine(N, DAG, DCI, Subtarget);
   case ISD::AssertZext:
     return performAssertZextCombine(N, DAG, DCI, Subtarget);
+  case ISD::SHL:
+    return performSHLCombine(N, DAG, DCI, Subtarget);
   }
 
   return SDValue();
@@ -2064,8 +2202,9 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
     Args.push_back(Entry);
 
     TargetLowering::CallLoweringInfo CLI(DAG);
-    CLI.setDebugLoc(DL).setChain(DAG.getEntryNode())
-      .setCallee(CallingConv::C, PtrTy, TlsGetAddr, std::move(Args));
+    CLI.setDebugLoc(DL)
+        .setChain(DAG.getEntryNode())
+        .setLibCallee(CallingConv::C, PtrTy, TlsGetAddr, std::move(Args));
     std::pair<SDValue, SDValue> CallResult = LowerCallTo(CLI);
 
     SDValue Ret = CallResult.first;
@@ -2736,6 +2875,11 @@ SDValue MipsTargetLowering::lowerFP_TO_SINT(SDValue Op,
 //       yet to hold an argument. Otherwise, use A2, A3 and stack. If A1 is
 //       not used, it must be shadowed. If only A3 is available, shadow it and
 //       go to stack.
+// vXiX - Received as scalarized i32s, passed in A0 - A3 and the stack.
+// vXf32 - Passed in either a pair of registers {A0, A1}, {A2, A3} or {A0 - A3}
+//         with the remainder spilled to the stack.
+// vXf64 - Passed in either {A0, A1, A2, A3} or {A2, A3} and in both cases
+//         spilling the remainder to the stack.
 //
 //  For vararg functions, all arguments are passed in A0, A1, A2, A3 and stack.
 //===----------------------------------------------------------------------===//
@@ -2747,7 +2891,12 @@ static bool CC_MipsO32(unsigned ValNo, MVT ValVT, MVT LocVT,
       State.getMachineFunction().getSubtarget());
 
   static const MCPhysReg IntRegs[] = { Mips::A0, Mips::A1, Mips::A2, Mips::A3 };
+
+  const MipsCCState * MipsState = static_cast<MipsCCState *>(&State);
+
   static const MCPhysReg F32Regs[] = { Mips::F12, Mips::F14 };
+
+  static const MCPhysReg FloatVectorIntRegs[] = { Mips::A0, Mips::A2 };
 
   // Do not process byval args here.
   if (ArgFlags.isByVal())
@@ -2786,8 +2935,26 @@ static bool CC_MipsO32(unsigned ValNo, MVT ValVT, MVT LocVT,
                                 State.getFirstUnallocated(F32Regs) != ValNo;
   unsigned OrigAlign = ArgFlags.getOrigAlign();
   bool isI64 = (ValVT == MVT::i32 && OrigAlign == 8);
+  bool isVectorFloat = MipsState->WasOriginalArgVectorFloat(ValNo);
 
-  if (ValVT == MVT::i32 || (ValVT == MVT::f32 && AllocateFloatsInIntReg)) {
+  // The MIPS vector ABI for floats passes them in a pair of registers
+  if (ValVT == MVT::i32 && isVectorFloat) {
+    // This is the start of an vector that was scalarized into an unknown number
+    // of components. It doesn't matter how many there are. Allocate one of the
+    // notional 8 byte aligned registers which map onto the argument stack, and
+    // shadow the register lost to alignment requirements.
+    if (ArgFlags.isSplit()) {
+      Reg = State.AllocateReg(FloatVectorIntRegs);
+      if (Reg == Mips::A2)
+        State.AllocateReg(Mips::A1);
+      else if (Reg == 0)
+        State.AllocateReg(Mips::A3);
+    } else {
+      // If we're an intermediate component of the split, we can just attempt to
+      // allocate a register directly.
+      Reg = State.AllocateReg(IntRegs);
+    }
+  } else if (ValVT == MVT::i32 || (ValVT == MVT::f32 && AllocateFloatsInIntReg)) {
     Reg = State.AllocateReg(IntRegs);
     // If this is the first part of an i64 arg,
     // the allocated register must be either A0 or A2.

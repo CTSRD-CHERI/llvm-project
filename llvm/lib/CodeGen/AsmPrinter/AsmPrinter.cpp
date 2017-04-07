@@ -28,6 +28,7 @@
 #include "llvm/ADT/Triple.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Analysis/ConstantFolding.h"
+#include "llvm/Analysis/ObjectUtils.h"
 #include "llvm/CodeGen/Analysis.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/GCMetadata.h"
@@ -267,7 +268,7 @@ bool AsmPrinter::doInitialization(Module &M) {
   // don't, this at least helps the user find where a global came from.
   if (MAI->hasSingleParameterDotFile()) {
     // .file "foo.c"
-    OutStreamer->EmitFileDirective(M.getModuleIdentifier());
+    OutStreamer->EmitFileDirective(M.getSourceFileName());
   }
 
   GCModuleInfo *MI = getAnalysisIfAvailable<GCModuleInfo>();

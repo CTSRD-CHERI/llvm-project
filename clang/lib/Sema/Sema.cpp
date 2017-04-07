@@ -122,8 +122,9 @@ Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
   // Tell diagnostics how to render things from the AST library.
   Diags.SetArgToStringFn(&FormatASTNodeDiagnosticArgument, &Context);
 
-  ExprEvalContexts.emplace_back(PotentiallyEvaluated, 0, CleanupInfo{}, nullptr,
-                                false);
+  ExprEvalContexts.emplace_back(
+      ExpressionEvaluationContext::PotentiallyEvaluated, 0, CleanupInfo{},
+      nullptr, false);
 
   FunctionScopes.push_back(new FunctionScopeInfo(Diags));
 
@@ -744,7 +745,9 @@ void Sema::ActOnEndOfTranslationUnit() {
   UnusedFileScopedDecls.erase(
       std::remove_if(UnusedFileScopedDecls.begin(nullptr, true),
                      UnusedFileScopedDecls.end(),
-                     std::bind1st(std::ptr_fun(ShouldRemoveFromUnused), this)),
+                     [this](const DeclaratorDecl *DD) {
+                       return ShouldRemoveFromUnused(this, DD);
+                     }),
       UnusedFileScopedDecls.end());
 
   if (TUKind == TU_Prefix) {

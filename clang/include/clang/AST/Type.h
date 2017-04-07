@@ -1020,6 +1020,9 @@ public:
     return getQualifiers().hasStrongOrWeakObjCLifetime();
   }
 
+  // true when Type is objc's weak and weak is enabled but ARC isn't.
+  bool isNonWeakInMRRWithObjCWeak(const ASTContext &Context) const;
+
   enum DestructionKind {
     DK_none,
     DK_cxx_destructor,
@@ -2076,7 +2079,7 @@ public:
     : Type(Builtin, QualType(), /*Dependent=*/(K == Dependent),
            /*InstantiationDependent=*/(K == Dependent),
            /*VariablyModified=*/false,
-           /*Unexpanded paramter pack=*/false) {
+           /*Unexpanded parameter pack=*/false) {
     BuiltinTypeBits.Kind = K;
   }
 

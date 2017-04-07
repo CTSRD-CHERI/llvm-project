@@ -185,7 +185,7 @@ bool ARMCallLowering::lowerReturnVal(MachineIRBuilder &MIRBuilder,
 
   SmallVector<ArgInfo, 4> SplitVTs;
   ArgInfo RetInfo(VReg, Val->getType());
-  setArgFlags(RetInfo, AttributeSet::ReturnIndex, DL, F);
+  setArgFlags(RetInfo, AttributeList::ReturnIndex, DL, F);
   splitToValueTypes(RetInfo, SplitVTs, DL, MF.getRegInfo());
 
   CCAssignFn *AssignFn =
@@ -333,12 +333,7 @@ bool ARMCallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
   if (Subtarget->isThumb())
     return false;
 
-  // FIXME: Support soft float (when we're ready to generate libcalls)
-  if (Subtarget->useSoftFloat() || !Subtarget->hasVFP2())
-    return false;
-
-  auto &Args = F.getArgumentList();
-  for (auto &Arg : Args)
+  for (auto &Arg : F.args())
     if (!isSupportedType(DL, TLI, Arg.getType()))
       return false;
 
@@ -347,7 +342,7 @@ bool ARMCallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
 
   SmallVector<ArgInfo, 8> ArgInfos;
   unsigned Idx = 0;
-  for (auto &Arg : Args) {
+  for (auto &Arg : F.args()) {
     ArgInfo AInfo(VRegs[Idx], Arg.getType());
     setArgFlags(AInfo, Idx + 1, DL, F);
     splitToValueTypes(AInfo, ArgInfos, DL, MF.getRegInfo());
@@ -374,6 +369,7 @@ struct CallReturnHandler : public IncomingValueHandler {
 } // End anonymous namespace.
 
 bool ARMCallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
+                                CallingConv::ID CallConv,
                                 const MachineOperand &Callee,
                                 const ArgInfo &OrigRet,
                                 ArrayRef<ArgInfo> OrigArgs) const {
@@ -387,10 +383,6 @@ bool ARMCallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
     return false;
 
   auto CallSeqStart = MIRBuilder.buildInstr(ARM::ADJCALLSTACKDOWN);
-
-  // FIXME: This is the calling convention of the caller - we should use the
-  // calling convention of the callee instead.
-  auto CallConv = MF.getFunction()->getCallingConv();
 
   // Create the call instruction so we can add the implicit uses of arg
   // registers, but don't insert it yet.

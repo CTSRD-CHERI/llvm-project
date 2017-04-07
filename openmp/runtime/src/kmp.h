@@ -38,7 +38,8 @@
 #ifdef BUILD_TIED_TASK_STACK
 #define TASK_STACK_EMPTY         0  // entries when the stack is empty
 
-#define TASK_STACK_BLOCK_BITS    5  // Used to define TASK_STACK_SIZE and TASK_STACK_MASK
+// Used to define TASK_STACK_SIZE and TASK_STACK_MASK
+#define TASK_STACK_BLOCK_BITS    5
 #define TASK_STACK_BLOCK_SIZE    ( 1 << TASK_STACK_BLOCK_BITS ) // Number of entries in each task stack array
 #define TASK_STACK_INDEX_MASK    ( TASK_STACK_BLOCK_SIZE - 1 )  // Mask for determining index into stack block
 #endif // BUILD_TIED_TASK_STACK
@@ -894,10 +895,14 @@ extern int __kmp_place_num_threads_per_core;
 #else
 # if KMP_OS_UNIX && (KMP_ARCH_X86 || KMP_ARCH_X86_64)
    // HW TSC is used to reduce overhead (clock tick instead of nanosecond).
-   extern double __kmp_ticks_per_nsec;
-#  define KMP_NOW() __kmp_hardware_timestamp()
-#  define KMP_NOW_MSEC() ((kmp_uint64)(KMP_NOW()/__kmp_ticks_per_nsec)/KMP_USEC_PER_SEC)
-#  define KMP_BLOCKTIME_INTERVAL() (__kmp_dflt_blocktime * KMP_USEC_PER_SEC * __kmp_ticks_per_nsec)
+   extern kmp_uint64 __kmp_ticks_per_msec;
+#  if KMP_COMPILER_ICC
+#   define KMP_NOW() _rdtsc()
+#  else
+#   define KMP_NOW() __kmp_hardware_timestamp()
+#  endif
+#  define KMP_NOW_MSEC() (KMP_NOW()/__kmp_ticks_per_msec)
+#  define KMP_BLOCKTIME_INTERVAL() (__kmp_dflt_blocktime * __kmp_ticks_per_msec)
 #  define KMP_BLOCKING(goal, count) ((goal) > KMP_NOW())
 # else
    // System time is retrieved sporadically while blocking.

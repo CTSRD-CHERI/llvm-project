@@ -35,6 +35,7 @@
 #include "clang/Basic/FileSystemOptions.h"
 #include "clang/Basic/LLVM.h"
 #include "clang/Basic/LangOptions.h"
+#include "clang/Basic/MemoryBufferCache.h"
 #include "clang/Basic/Module.h"
 #include "clang/Basic/ObjCRuntime.h"
 #include "clang/Basic/SourceManager.h"
@@ -425,8 +426,10 @@ ASTTypeWriter::VisitDependentSizedArrayType(const DependentSizedArrayType *T) {
 void
 ASTTypeWriter::VisitDependentSizedExtVectorType(
                                         const DependentSizedExtVectorType *T) {
-  // FIXME: Serialize this type (C++ only)
-  llvm_unreachable("Cannot serialize dependent sized extended vector types");
+  Record.AddTypeRef(T->getElementType());
+  Record.AddStmt(T->getSizeExpr());
+  Record.AddSourceLocation(T->getAttributeLoc());
+  Code = TYPE_DEPENDENT_SIZED_EXT_VECTOR;
 }
 
 void
@@ -4012,7 +4015,7 @@ void ASTWriter::WriteDeclContextVisibleUpdate(const DeclContext *DC) {
 
 /// \brief Write an FP_PRAGMA_OPTIONS block for the given FPOptions.
 void ASTWriter::WriteFPPragmaOptions(const FPOptions &Opts) {
-  RecordData::value_type Record[] = {Opts.fp_contract};
+  RecordData::value_type Record[] = {Opts.getInt()};
   Stream.EmitRecord(FP_PRAGMA_OPTIONS, Record);
 }
 
@@ -4167,6 +4170,20 @@ void ASTWriter::WriteMSPointersToMembersPragmaOptions(Sema &SemaRef) {
   Stream.EmitRecord(POINTERS_TO_MEMBERS_PRAGMA_OPTIONS, Record);
 }
 
+/// \brief Write the state of 'pragma pack' at the end of the module.
+void ASTWriter::WritePackPragmaOptions(Sema &SemaRef) {
+  RecordData Record;
+  Record.push_back(SemaRef.PackStack.CurrentValue);
+  AddSourceLocation(SemaRef.PackStack.CurrentPragmaLocation, Record);
+  Record.push_back(SemaRef.PackStack.Stack.size());
+  for (const auto &StackEntry : SemaRef.PackStack.Stack) {
+    Record.push_back(StackEntry.Value);
+    AddSourceLocation(StackEntry.PragmaLocation, Record);
+    AddString(StackEntry.StackSlotLabel, Record);
+  }
+  Stream.EmitRecord(PACK_PRAGMA_OPTIONS, Record);
+}
+
 void ASTWriter::WriteModuleFileExtension(Sema &SemaRef,
                                          ModuleFileExtensionWriter &Writer) {
   // Enter the extension block.
@@ -4304,10 +4321,11 @@ void ASTWriter::SetSelectorOffset(Selector Sel, uint32_t Offset) {
 }
 
 ASTWriter::ASTWriter(llvm::BitstreamWriter &Stream,
-                     SmallVectorImpl<char> &Buffer,
+                     SmallVectorImpl<char> &Buffer, MemoryBufferCache &PCMCache,
                      ArrayRef<std::shared_ptr<ModuleFileExtension>> Extensions,
                      bool IncludeTimestamps)
-    : Stream(Stream), Buffer(Buffer), IncludeTimestamps(IncludeTimestamps) {
+    : Stream(Stream), Buffer(Buffer), PCMCache(PCMCache),
+      IncludeTimestamps(IncludeTimestamps) {
   for (const auto &Ext : Extensions) {
     if (auto Writer = Ext->createExtensionWriter(*this))
       ModuleFileExtensionWriters.push_back(std::move(Writer));
@@ -4354,6 +4372,12 @@ ASTFileSignature ASTWriter::WriteAST(Sema &SemaRef,
   this->BaseDirectory.clear();
 
   WritingAST = false;
+  if (SemaRef.Context.getLangOpts().ImplicitModules && WritingModule) {
+    // Construct MemoryBuffer and update buffer manager.
+    PCMCache.addBuffer(OutputFile,
+                       llvm::MemoryBuffer::getMemBufferCopy(
+                           StringRef(Buffer.begin(), Buffer.size())));
+  }
   return Signature;
 }
 
@@ -4850,6 +4874,7 @@ ASTFileSignature ASTWriter::WriteASTCore(Sema &SemaRef, StringRef isysroot,
     WriteMSStructPragmaOptions(SemaRef);
     WriteMSPointersToMembersPragmaOptions(SemaRef);
   }
+  WritePackPragmaOptions(SemaRef);
 
   // Some simple statistics
   RecordData::value_type Record[] = {

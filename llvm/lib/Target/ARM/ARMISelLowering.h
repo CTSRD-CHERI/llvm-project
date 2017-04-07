@@ -352,6 +352,7 @@ class InstrItineraryData;
 
     void computeKnownBitsForTargetNode(const SDValue Op, APInt &KnownZero,
                                        APInt &KnownOne,
+                                       const APInt &DemandedElts,
                                        const SelectionDAG &DAG,
                                        unsigned Depth) const override;
 
@@ -513,6 +514,10 @@ class InstrItineraryData;
 
     bool isCheapToSpeculateCttz() const override;
     bool isCheapToSpeculateCtlz() const override;
+
+    bool convertSetCCLogicToBitwiseLogic(EVT VT) const override {
+      return VT.isScalarInteger();
+    }
 
     bool supportSwiftError() const override {
       return true;

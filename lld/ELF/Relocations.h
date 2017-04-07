@@ -11,6 +11,9 @@
 #define LLD_ELF_RELOCATIONS_H
 
 #include "lld/Core/LLVM.h"
+#include "llvm/ADT/DenseMap.h"
+#include <map>
+#include <vector>
 
 namespace lld {
 namespace elf {
@@ -34,10 +37,12 @@ enum RelExpr {
   R_GOT_PAGE_PC,
   R_GOT_PC,
   R_HINT,
+  R_MIPS_GOTREL,
+  R_MIPS_GOT_GP,
+  R_MIPS_GOT_GP_PC,
   R_MIPS_GOT_LOCAL_PAGE,
   R_MIPS_GOT_OFF,
   R_MIPS_GOT_OFF32,
-  R_MIPS_GOTREL,
   R_MIPS_TLSGD,
   R_MIPS_TLSLD,
   R_NEG_TLS,
@@ -45,16 +50,16 @@ enum RelExpr {
   R_PAGE_PC,
   R_PC,
   R_PLT,
-  R_PLT_PC,
   R_PLT_PAGE_PC,
+  R_PLT_PC,
   R_PPC_OPD,
   R_PPC_PLT_OPD,
   R_PPC_TOC,
   R_RELAX_GOT_PC,
   R_RELAX_GOT_PC_NOPIC,
   R_RELAX_TLS_GD_TO_IE,
-  R_RELAX_TLS_GD_TO_IE_END,
   R_RELAX_TLS_GD_TO_IE_ABS,
+  R_RELAX_TLS_GD_TO_IE_END,
   R_RELAX_TLS_GD_TO_IE_PAGE_PC,
   R_RELAX_TLS_GD_TO_LE,
   R_RELAX_TLS_GD_TO_LE_NEG,
@@ -63,8 +68,8 @@ enum RelExpr {
   R_SIZE,
   R_TLS,
   R_TLSDESC,
-  R_TLSDESC_PAGE,
   R_TLSDESC_CALL,
+  R_TLSDESC_PAGE,
   R_TLSGD,
   R_TLSGD_PC,
   R_TLSLD,
@@ -111,8 +116,29 @@ struct Relocation {
 
 template <class ELFT> void scanRelocations(InputSectionBase &);
 
-template <class ELFT>
-bool createThunks(ArrayRef<OutputSection *> OutputSections);
+class ThunkSection;
+class Thunk;
+
+template <class ELFT> class ThunkCreator {
+public:
+  // Return true if Thunks have been added to OutputSections
+  bool createThunks(ArrayRef<OutputSection *> OutputSections);
+
+private:
+  void mergeThunks(OutputSection *OS, std::vector<ThunkSection *> &Thunks);
+  ThunkSection *getOSThunkSec(ThunkSection *&TS, OutputSection *OS);
+  ThunkSection *getISThunkSec(InputSection *IS, OutputSection *OS);
+  std::pair<Thunk *, bool> getThunk(SymbolBody &Body, uint32_t Type);
+
+  // Track Symbols that already have a Thunk
+  llvm::DenseMap<SymbolBody *, Thunk *> ThunkedSymbols;
+
+  // Track InputSections that have a ThunkSection placed in front
+  llvm::DenseMap<InputSection *, ThunkSection *> ThunkedSections;
+
+  // Track the ThunksSections that need to be inserted into an OutputSection
+  std::map<OutputSection *, std::vector<ThunkSection *>> ThunkSections;
+};
 
 // Return a int64_t to make sure we get the sign extension out of the way as
 // early as possible.

@@ -170,6 +170,8 @@ class SimplifyCFGOpt {
   unsigned BonusInstThreshold;
   AssumptionCache *AC;
   SmallPtrSetImpl<BasicBlock *> *LoopHeaders;
+  // See comments in SimplifyCFGOpt::SimplifySwitch.
+  bool LateSimplifyCFG;
   Value *isValueEqualityComparison(TerminatorInst *TI);
   BasicBlock *GetValueEqualityComparisonCases(
       TerminatorInst *TI, std::vector<ValueEqualityComparisonCase> &Cases);
@@ -193,9 +195,10 @@ class SimplifyCFGOpt {
 public:
   SimplifyCFGOpt(const TargetTransformInfo &TTI, const DataLayout &DL,
                  unsigned BonusInstThreshold, AssumptionCache *AC,
-                 SmallPtrSetImpl<BasicBlock *> *LoopHeaders)
+                 SmallPtrSetImpl<BasicBlock *> *LoopHeaders,
+                 bool LateSimplifyCFG)
       : TTI(TTI), DL(DL), BonusInstThreshold(BonusInstThreshold), AC(AC),
-        LoopHeaders(LoopHeaders) {}
+        LoopHeaders(LoopHeaders), LateSimplifyCFG(LateSimplifyCFG) {}
 
   bool run(BasicBlock *BB);
 };
@@ -997,8 +1000,7 @@ bool SimplifyCFGOpt::FoldValueComparisonIntoPredecessors(TerminatorInst *TI,
       SmallSetVector<BasicBlock*, 4> FailBlocks;
       if (!SafeToMergeTerminators(TI, PTI, &FailBlocks)) {
         for (auto *Succ : FailBlocks) {
-          std::vector<BasicBlock*> Blocks = { TI->getParent() };
-          if (!SplitBlockPredecessors(Succ, Blocks, ".fold.split"))
+          if (!SplitBlockPredecessors(Succ, TI->getParent(), ".fold.split"))
             return false;
         }
       }
@@ -1473,27 +1475,26 @@ static bool canSinkInstructions(
       return false;
   }
 
+  // Because SROA can't handle speculating stores of selects, try not
+  // to sink loads or stores of allocas when we'd have to create a PHI for
+  // the address operand. Also, because it is likely that loads or stores
+  // of allocas will disappear when Mem2Reg/SROA is run, don't sink them.
+  // This can cause code churn which can have unintended consequences down
+  // the line - see https://llvm.org/bugs/show_bug.cgi?id=30244.
+  // FIXME: This is a workaround for a deficiency in SROA - see
+  // https://llvm.org/bugs/show_bug.cgi?id=30188
+  if (isa<StoreInst>(I0) && any_of(Insts, [](const Instruction *I) {
+        return isa<AllocaInst>(I->getOperand(1));
+      }))
+    return false;
+  if (isa<LoadInst>(I0) && any_of(Insts, [](const Instruction *I) {
+        return isa<AllocaInst>(I->getOperand(0));
+      }))
+    return false;
+
   for (unsigned OI = 0, OE = I0->getNumOperands(); OI != OE; ++OI) {
     if (I0->getOperand(OI)->getType()->isTokenTy())
       // Don't touch any operand of token type.
-      return false;
-
-    // Because SROA can't handle speculating stores of selects, try not
-    // to sink loads or stores of allocas when we'd have to create a PHI for
-    // the address operand. Also, because it is likely that loads or stores
-    // of allocas will disappear when Mem2Reg/SROA is run, don't sink them.
-    // This can cause code churn which can have unintended consequences down
-    // the line - see https://llvm.org/bugs/show_bug.cgi?id=30244.
-    // FIXME: This is a workaround for a deficiency in SROA - see
-    // https://llvm.org/bugs/show_bug.cgi?id=30188
-    if (OI == 1 && isa<StoreInst>(I0) &&
-        any_of(Insts, [](const Instruction *I) {
-          return isa<AllocaInst>(I->getOperand(1));
-        }))
-      return false;
-    if (OI == 0 && isa<LoadInst>(I0) && any_of(Insts, [](const Instruction *I) {
-          return isa<AllocaInst>(I->getOperand(0));
-        }))
       return false;
 
     auto SameAsI0 = [&I0, OI](const Instruction *I) {
@@ -4158,15 +4159,16 @@ bool SimplifyCFGOpt::SimplifyUnreachable(UnreachableInst *UI) {
         }
       }
     } else if (auto *SI = dyn_cast<SwitchInst>(TI)) {
-      for (SwitchInst::CaseIt i = SI->case_begin(), e = SI->case_end(); i != e;
-           ++i)
-        if (i.getCaseSuccessor() == BB) {
-          BB->removePredecessor(SI->getParent());
-          SI->removeCase(i);
-          --i;
-          --e;
-          Changed = true;
+      for (auto i = SI->case_begin(), e = SI->case_end(); i != e;) {
+        if (i.getCaseSuccessor() != BB) {
+          ++i;
+          continue;
         }
+        BB->removePredecessor(SI->getParent());
+        i = SI->removeCase(i);
+        e = SI->case_end();
+        Changed = true;
+      }
     } else if (auto *II = dyn_cast<InvokeInst>(TI)) {
       if (II->getUnwindDest() == BB) {
         removeUnwindEdge(TI->getParent());
@@ -5570,7 +5572,12 @@ bool SimplifyCFGOpt::SimplifySwitch(SwitchInst *SI, IRBuilder<> &Builder) {
   if (ForwardSwitchConditionToPHI(SI))
     return SimplifyCFG(BB, TTI, BonusInstThreshold, AC) | true;
 
-  if (SwitchToLookupTable(SI, Builder, DL, TTI))
+  // The conversion from switch to lookup tables results in difficult
+  // to analyze code and makes pruning branches much harder.
+  // This is a problem of the switch expression itself can still be
+  // restricted as a result of inlining or CVP. There only apply this
+  // transformation during late steps of the optimisation chain.
+  if (LateSimplifyCFG && SwitchToLookupTable(SI, Builder, DL, TTI))
     return SimplifyCFG(BB, TTI, BonusInstThreshold, AC) | true;
 
   if (ReduceSwitchRange(SI, Builder, DL, TTI))
@@ -6029,8 +6036,9 @@ bool SimplifyCFGOpt::run(BasicBlock *BB) {
 ///
 bool llvm::SimplifyCFG(BasicBlock *BB, const TargetTransformInfo &TTI,
                        unsigned BonusInstThreshold, AssumptionCache *AC,
-                       SmallPtrSetImpl<BasicBlock *> *LoopHeaders) {
+                       SmallPtrSetImpl<BasicBlock *> *LoopHeaders,
+                       bool LateSimplifyCFG) {
   return SimplifyCFGOpt(TTI, BB->getModule()->getDataLayout(),
-                        BonusInstThreshold, AC, LoopHeaders)
+                        BonusInstThreshold, AC, LoopHeaders, LateSimplifyCFG)
       .run(BB);
 }

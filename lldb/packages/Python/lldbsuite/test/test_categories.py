@@ -25,6 +25,7 @@ all_categories = {
     'dsym': 'Tests that can be run with DSYM debug information',
     'gmodules': 'Tests that can be run with -gmodules debug information',
     'expression': 'Tests related to the expression parser',
+    'libc++': 'Test for libc++ data formatters',
     'objc': 'Tests related to the Objective-C programming language support',
     'pyapi': 'Tests related to the Python API',
     'basic_process': 'Basic process execution sniff tests.',
@@ -32,7 +33,8 @@ all_categories = {
     'dyntype': 'Tests related to dynamic type support',
     'stresstest': 'Tests related to stressing lldb limits',
     'flakey': 'Flakey test cases, i.e. tests that do not reliably pass at each execution',
-    'lldb-mi': 'lldb-mi tests'}
+    'lldb-mi': 'lldb-mi tests',
+    'darwin-log': 'Darwin log tests'}
 
 
 def unique_string_match(yourentry, list):

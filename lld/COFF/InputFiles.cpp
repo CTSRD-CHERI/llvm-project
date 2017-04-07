@@ -339,31 +339,28 @@ void ImportFile::parse() {
 }
 
 void BitcodeFile::parse() {
-  Obj = check(lto::InputFile::create(
-      MemoryBufferRef(MB.getBuffer(), Saver.save(MB.getBufferIdentifier()))));
+  Obj = check(lto::InputFile::create(MemoryBufferRef(
+      MB.getBuffer(), Saver.save(ParentName + MB.getBufferIdentifier()))));
   for (const lto::InputFile::Symbol &ObjSym : Obj->symbols()) {
     StringRef SymName = Saver.save(ObjSym.getName());
-    auto Flags = ObjSym.getFlags();
     Symbol *Sym;
-    if (Flags & object::BasicSymbolRef::SF_Undefined) {
+    if (ObjSym.isUndefined()) {
       Sym = Symtab->addUndefined(SymName, this, false);
-    } else if (Flags & object::BasicSymbolRef::SF_Common) {
+    } else if (ObjSym.isCommon()) {
       Sym = Symtab->addCommon(this, SymName, ObjSym.getCommonSize());
-    } else if ((Flags & object::BasicSymbolRef::SF_Weak) &&
-               (Flags & object::BasicSymbolRef::SF_Indirect)) {
+    } else if (ObjSym.isWeak() && ObjSym.isIndirect()) {
       // Weak external.
       Sym = Symtab->addUndefined(SymName, this, true);
       std::string Fallback = ObjSym.getCOFFWeakExternalFallback();
       SymbolBody *Alias = Symtab->addUndefined(Saver.save(Fallback));
       checkAndSetWeakAlias(Symtab, this, Sym->body(), Alias);
     } else {
-      Expected<int> ComdatIndex = ObjSym.getComdatIndex();
-      bool IsCOMDAT = ComdatIndex && *ComdatIndex != -1;
+      bool IsCOMDAT = ObjSym.getComdatIndex() != -1;
       Sym = Symtab->addRegular(this, SymName, IsCOMDAT);
     }
     SymbolBodies.push_back(Sym->body());
   }
-  Directives = check(Obj->getLinkerOpts());
+  Directives = Obj->getCOFFLinkerOpts();
 }
 
 MachineTypes BitcodeFile::getMachineType() {

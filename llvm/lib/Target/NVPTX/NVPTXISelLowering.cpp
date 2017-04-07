@@ -1556,7 +1556,7 @@ SDValue NVPTXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
         }
         ++OIdx;
       }
-      assert(StoreOperands.empty() && "Unfinished paramter store.");
+      assert(StoreOperands.empty() && "Unfinished parameter store.");
       if (VTs.size() > 0)
         --OIdx;
       ++paramCount;
@@ -2315,7 +2315,7 @@ SDValue NVPTXTargetLowering::LowerFormalArguments(
   auto PtrVT = getPointerTy(DAG.getDataLayout());
 
   const Function *F = MF.getFunction();
-  const AttributeSet &PAL = F->getAttributes();
+  const AttributeList &PAL = F->getAttributes();
   const TargetLowering *TLI = STI.getTargetLowering();
 
   SDValue Root = DAG.getRoot();

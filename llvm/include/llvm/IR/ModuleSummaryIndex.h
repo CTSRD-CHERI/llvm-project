@@ -233,12 +233,13 @@ public:
   void setAliasee(GlobalValueSummary *Aliasee) { AliaseeSummary = Aliasee; }
 
   const GlobalValueSummary &getAliasee() const {
-    return const_cast<AliasSummary *>(this)->getAliasee();
+    assert(AliaseeSummary && "Unexpected missing aliasee summary");
+    return *AliaseeSummary;
   }
 
   GlobalValueSummary &getAliasee() {
-    assert(AliaseeSummary && "Unexpected missing aliasee summary");
-    return *AliaseeSummary;
+    return const_cast<GlobalValueSummary &>(
+                         static_cast<const AliasSummary *>(this)->getAliasee());
   }
 };
 
@@ -691,8 +692,19 @@ public:
     return TypeIdMap;
   }
 
-  TypeIdSummary &getTypeIdSummary(StringRef TypeId) {
+  /// This accessor should only be used when exporting because it can mutate the
+  /// map.
+  TypeIdSummary &getOrInsertTypeIdSummary(StringRef TypeId) {
     return TypeIdMap[TypeId];
+  }
+
+  /// This returns either a pointer to the type id summary (if present in the
+  /// summary map) or null (if not present). This may be used when importing.
+  const TypeIdSummary *getTypeIdSummary(StringRef TypeId) const {
+    auto I = TypeIdMap.find(TypeId);
+    if (I == TypeIdMap.end())
+      return nullptr;
+    return &I->second;
   }
 
   /// Remove entries in the GlobalValueMap that have empty summaries due to the

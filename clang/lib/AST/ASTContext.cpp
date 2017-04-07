@@ -748,6 +748,8 @@ ASTContext::ASTContext(LangOptions &LOpts, SourceManager &SM,
       ExternCContext(nullptr), MakeIntegerSeqDecl(nullptr),
       TypePackElementDecl(nullptr), SourceMgr(SM), LangOpts(LOpts),
       SanitizerBL(new SanitizerBlacklist(LangOpts.SanitizerBlacklistFiles, SM)),
+      XRayFilter(new XRayFunctionFilter(LangOpts.XRayAlwaysInstrumentFiles,
+                                        LangOpts.XRayNeverInstrumentFiles, SM)),
       AddrSpaceMap(nullptr), Target(nullptr), AuxTarget(nullptr),
       PrintingPolicy(LOpts), Idents(idents), Selectors(sels),
       BuiltinInfo(builtins), DeclarationNames(*this), ExternalSource(nullptr),
@@ -2692,8 +2694,7 @@ QualType ASTContext::getConstantArrayType(QualType EltTy,
   // Convert the array size into a canonical width matching the pointer size for
   // the target.
   llvm::APInt ArySize(ArySizeIn);
-  ArySize =
-    ArySize.zextOrTrunc(Target->getPointerWidth(getTargetAddressSpace(EltTy)));
+  ArySize = ArySize.zextOrTrunc(Target->getMaxPointerWidth());
 
   llvm::FoldingSetNodeID ID;
   ConstantArrayType::Profile(ID, EltTy, ArySize, ASM, IndexTypeQuals);

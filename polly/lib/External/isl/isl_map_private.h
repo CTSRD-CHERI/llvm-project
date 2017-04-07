@@ -272,6 +272,7 @@ __isl_give isl_map *isl_map_align_divs_to_basic_map_list(
 	__isl_take isl_map *map, __isl_keep isl_basic_map_list *list);
 __isl_give isl_basic_map_list *isl_basic_map_list_align_divs_to_basic_map(
 	__isl_take isl_basic_map_list *list, __isl_keep isl_basic_map *bmap);
+__isl_give isl_map *isl_map_align_divs_internal(__isl_take isl_map *map);
 __isl_give isl_basic_set *isl_basic_set_sort_divs(
 	__isl_take isl_basic_set *bset);
 __isl_give isl_basic_map *isl_basic_map_sort_divs(
@@ -359,6 +360,8 @@ struct isl_basic_map *isl_basic_map_drop_redundant_divs(
 struct isl_basic_set *isl_basic_set_recession_cone(struct isl_basic_set *bset);
 struct isl_basic_set *isl_basic_set_lineality_space(struct isl_basic_set *bset);
 
+__isl_give isl_basic_set *isl_basic_set_set_integral(
+	__isl_take isl_basic_set *bset);
 struct isl_basic_set *isl_basic_set_set_rational(struct isl_basic_set *bset);
 __isl_give isl_set *isl_set_set_rational(__isl_take isl_set *set);
 __isl_give isl_basic_map *isl_basic_map_set_rational(
@@ -400,6 +403,8 @@ isl_stat isl_basic_set_vars_get_sign(__isl_keep isl_basic_set *bset,
 isl_stat isl_set_foreach_orthant(__isl_keep isl_set *set,
 	isl_stat (*fn)(__isl_take isl_set *orthant, int *signs, void *user),
 	void *user);
+
+isl_bool isl_basic_set_eq_is_stride(__isl_keep isl_basic_set *bset, int i);
 
 int isl_basic_map_add_div_constraints_var(__isl_keep isl_basic_map *bmap,
 	unsigned pos, isl_int *div);

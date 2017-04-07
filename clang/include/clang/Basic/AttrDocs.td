@@ -244,6 +244,36 @@ An example of how to use ``alloc_size``
   }];
 }
 
+def AllocAlignDocs : Documentation {
+  let Category = DocCatFunction;
+  let Content = [{
+Use ``__attribute__((alloc_align(<alignment>))`` on a function
+declaration to specify that the return value of the function (which must be a
+pointer type) is at least as aligned as the value of the indicated parameter. The 
+parameter is given by its index in the list of formal parameters; the first
+parameter has index 1 unless the function is a C++ non-static member function,
+in which case the first parameter has index 2 to account for the implicit ``this``
+parameter.
+
+.. code-block:: c++
+
+  // The returned pointer has the alignment specified by the first parameter.
+  void *a(size_t align) __attribute__((alloc_align(1)));
+
+  // The returned pointer has the alignment specified by the second parameter.
+  void *b(void *v, size_t align) __attribute__((alloc_align(2)));
+
+  // The returned pointer has the alignment specified by the second visible
+  // parameter, however it must be adjusted for the implicit 'this' parameter.
+  void *Foo::b(void *v, size_t align) __attribute__((alloc_align(3)));
+
+Note that this attribute merely informs the compiler that a function always
+returns a sufficiently aligned pointer. It does not cause the compiler to 
+emit code to enforce that alignment.  The behavior is undefined if the returned
+poitner is not sufficiently aligned.
+  }];
+}
+
 def EnableIfDocs : Documentation {
   let Category = DocCatFunction;
   let Content = [{
@@ -1963,6 +1993,55 @@ manipulating bits of the enumerator when issuing warnings.
   }];
 }
 
+def EnumExtensibilityDocs : Documentation {
+  let Category = DocCatType;
+  let Content = [{
+Attribute ``enum_extensibility`` is used to distinguish between enum definitions
+that are extensible and those that are not. The attribute can take either
+``closed`` or ``open`` as an argument. ``closed`` indicates a variable of the
+enum type takes a value that corresponds to one of the enumerators listed in the
+enum definition or, when the enum is annotated with ``flag_enum``, a value that
+can be constructed using values corresponding to the enumerators. ``open``
+indicates a variable of the enum type can take any values allowed by the
+standard and instructs clang to be more lenient when issuing warnings.
+
+.. code-block:: c
+
+  enum __attribute__((enum_extensibility(closed))) ClosedEnum {
+    A0, A1
+  };
+
+  enum __attribute__((enum_extensibility(open))) OpenEnum {
+    B0, B1
+  };
+
+  enum __attribute__((enum_extensibility(closed),flag_enum)) ClosedFlagEnum {
+    C0 = 1 << 0, C1 = 1 << 1
+  };
+
+  enum __attribute__((enum_extensibility(open),flag_enum)) OpenFlagEnum {
+    D0 = 1 << 0, D1 = 1 << 1
+  };
+
+  void foo1() {
+    enum ClosedEnum ce;
+    enum OpenEnum oe;
+    enum ClosedFlagEnum cfe;
+    enum OpenFlagEnum ofe;
+
+    ce = A1;           // no warnings
+    ce = 100;          // warning issued
+    oe = B1;           // no warnings
+    oe = 100;          // no warnings
+    cfe = C0 | C1;     // no warnings
+    cfe = C0 | C1 | 4; // warning issued
+    ofe = D0 | D1;     // no warnings
+    ofe = D0 | D1 | 4; // no warnings
+  }
+
+  }];
+}
+
 def EmptyBasesDocs : Documentation {
   let Category = DocCatType;
   let Content = [{
@@ -2719,6 +2798,32 @@ value of type ``T``.
 Making indirect results explicit in the signature allows C functions to
 directly construct objects into them without relying on language
 optimizations like C++'s named return value optimization (NRVO).
+  }];
+}
+
+def SuppressDocs : Documentation {
+  let Category = DocCatStmt;
+  let Content = [{
+The ``[[gsl::suppress]]`` attribute suppresses specific
+clang-tidy diagnostics for rules of the `C++ Core Guidelines`_ in a portable
+way. The attribute can be attached to declarations, statements, and at
+namespace scope.
+
+.. code-block:: c++
+
+  [[gsl::suppress("Rh-public")]]
+  void f_() {
+    int *p;
+    [[gsl::suppress("type")]] {
+      p = reinterpret_cast<int*>(7);
+    }
+  }
+  namespace N {
+    [[clang::suppress("type", "bounds")]];
+    ...
+  }
+
+.. _`C++ Core Guidelines`: https://github.com/isocpp/CppCoreGuidelines/blob/master/CppCoreGuidelines.md#inforce-enforcement
   }];
 }
 

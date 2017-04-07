@@ -908,7 +908,11 @@ Instruction *InstCombiner::FoldOpIntoPhi(Instruction &I) {
       // Beware of ConstantExpr:  it may eventually evaluate to getNullValue,
       // even if currently isNullValue gives false.
       Constant *InC = dyn_cast<Constant>(PN->getIncomingValue(i));
-      if (InC && !isa<ConstantExpr>(InC))
+      // For vector constants, we cannot use isNullValue to fold into
+      // FalseVInPred versus TrueVInPred. When we have individual nonzero
+      // elements in the vector, we will incorrectly fold InC to
+      // `TrueVInPred`.
+      if (InC && !isa<ConstantExpr>(InC) && isa<ConstantInt>(InC))
         InV = InC->isNullValue() ? FalseVInPred : TrueVInPred;
       else
         InV = Builder->CreateSelect(PN->getIncomingValue(i),
@@ -963,7 +967,7 @@ Instruction *InstCombiner::FoldOpIntoPhi(Instruction &I) {
   return replaceInstUsesWith(I, NewPN);
 }
 
-Instruction *InstCombiner::foldOpWithConstantIntoOperand(Instruction &I) {
+Instruction *InstCombiner::foldOpWithConstantIntoOperand(BinaryOperator &I) {
   assert(isa<Constant>(I.getOperand(1)) && "Unexpected operand type");
 
   if (auto *Sel = dyn_cast<SelectInst>(I.getOperand(0))) {
@@ -1651,13 +1655,13 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
     }
   }
 
+  // We do not handle pointer-vector geps here.
+  if (GEP.getType()->isVectorTy())
+    return nullptr;
+
   // Handle gep(bitcast x) and gep(gep x, 0, 0, 0).
   Value *StrippedPtr = PtrOp->stripPointerCasts();
-  PointerType *StrippedPtrTy = dyn_cast<PointerType>(StrippedPtr->getType());
-
-  // We do not handle pointer-vector geps here.
-  if (!StrippedPtrTy)
-    return nullptr;
+  PointerType *StrippedPtrTy = cast<PointerType>(StrippedPtr->getType());
 
   if (StrippedPtr != PtrOp) {
     bool HasZeroPointerIndex = false;
@@ -2929,8 +2933,8 @@ bool InstCombiner::run() {
         Result->takeName(I);
 
         // Push the new instruction and any users onto the worklist.
-        Worklist.Add(Result);
         Worklist.AddUsersToWorkList(*Result);
+        Worklist.Add(Result);
 
         // Insert the new instruction into the basic block...
         BasicBlock *InstParent = I->getParent();
@@ -2953,8 +2957,8 @@ bool InstCombiner::run() {
         if (isInstructionTriviallyDead(I, &TLI)) {
           eraseInstFromFunction(*I);
         } else {
-          Worklist.Add(I);
           Worklist.AddUsersToWorkList(*I);
+          Worklist.Add(I);
         }
       }
       MadeIRChange = true;
@@ -3017,12 +3021,11 @@ static bool AddReachableCodeToWorklist(BasicBlock *BB, const DataLayout &DL,
         }
 
       // See if we can constant fold its operands.
-      for (User::op_iterator i = Inst->op_begin(), e = Inst->op_end(); i != e;
-           ++i) {
-        if (!isa<ConstantVector>(i) && !isa<ConstantExpr>(i))
+      for (Use &U : Inst->operands()) {
+        if (!isa<ConstantVector>(U) && !isa<ConstantExpr>(U))
           continue;
 
-        auto *C = cast<Constant>(i);
+        auto *C = cast<Constant>(U);
         Constant *&FoldRes = FoldedConstants[C];
         if (!FoldRes)
           FoldRes = ConstantFoldConstant(C, DL, TLI);
@@ -3030,7 +3033,10 @@ static bool AddReachableCodeToWorklist(BasicBlock *BB, const DataLayout &DL,
           FoldRes = C;
 
         if (FoldRes != C) {
-          *i = FoldRes;
+          DEBUG(dbgs() << "IC: ConstFold operand of: " << *Inst
+                       << "\n    Old = " << *C
+                       << "\n    New = " << *FoldRes << '\n');
+          U = FoldRes;
           MadeIRChange = true;
         }
       }

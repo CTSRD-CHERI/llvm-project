@@ -23,7 +23,7 @@
 #include "lldb/Core/Section.h"
 #include "lldb/Core/ValueObjectMemory.h"
 #include "lldb/DataFormatters/ValueObjectPrinter.h"
-#include "lldb/Host/StringConvert.h"
+#include "lldb/Host/OptionParser.h"
 #include "lldb/Interpreter/Args.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Interpreter/CommandReturnObject.h"
@@ -1443,8 +1443,16 @@ protected:
       case eFormatHex:
       case eFormatHexUppercase:
       case eFormatPointer:
+      {
         // Decode hex bytes
-        if (entry.ref.getAsInteger(16, uval64)) {
+        // Be careful, getAsInteger with a radix of 16 rejects "0xab" so we
+        // have to special case that:
+        bool success = false;
+        if (entry.ref.startswith("0x"))
+          success = !entry.ref.getAsInteger(0, uval64);
+        if (!success)
+          success = !entry.ref.getAsInteger(16, uval64);
+        if (!success) {
           result.AppendErrorWithFormat(
               "'%s' is not a valid hex string value.\n", entry.c_str());
           result.SetStatus(eReturnStatusFailed);
@@ -1459,7 +1467,7 @@ protected:
         }
         buffer.PutMaxHex64(uval64, item_byte_size);
         break;
-
+      }
       case eFormatBoolean:
         uval64 = Args::StringToBoolean(entry.ref, false, &success);
         if (!success) {

@@ -792,7 +792,7 @@ EVT AArch64TargetLowering::getSetCCResultType(const DataLayout &, LLVMContext &,
 /// KnownZero/KnownOne bitsets.
 void AArch64TargetLowering::computeKnownBitsForTargetNode(
     const SDValue Op, APInt &KnownZero, APInt &KnownOne,
-    const SelectionDAG &DAG, unsigned Depth) const {
+    const APInt &DemandedElts, const SelectionDAG &DAG, unsigned Depth) const {
   switch (Op.getOpcode()) {
   default:
     break;
@@ -2112,8 +2112,8 @@ SDValue AArch64TargetLowering::LowerFSINCOS(SDValue Op,
 
   Entry.Node = Arg;
   Entry.Ty = ArgTy;
-  Entry.isSExt = false;
-  Entry.isZExt = false;
+  Entry.IsSExt = false;
+  Entry.IsZExt = false;
   Args.push_back(Entry);
 
   const char *LibcallName =
@@ -2123,8 +2123,9 @@ SDValue AArch64TargetLowering::LowerFSINCOS(SDValue Op,
 
   StructType *RetTy = StructType::get(ArgTy, ArgTy, nullptr);
   TargetLowering::CallLoweringInfo CLI(DAG);
-  CLI.setDebugLoc(dl).setChain(DAG.getEntryNode())
-    .setCallee(CallingConv::Fast, RetTy, Callee, std::move(Args));
+  CLI.setDebugLoc(dl)
+      .setChain(DAG.getEntryNode())
+      .setLibCallee(CallingConv::Fast, RetTy, Callee, std::move(Args));
 
   std::pair<SDValue, SDValue> CallResult = LowerCallTo(CLI);
   return CallResult.first;
@@ -2230,19 +2231,13 @@ static SDValue skipExtensionForVectorMULL(SDNode *N, SelectionDAG &DAG) {
 }
 
 static bool isSignExtended(SDNode *N, SelectionDAG &DAG) {
-  if (N->getOpcode() == ISD::SIGN_EXTEND)
-    return true;
-  if (isExtendedBUILD_VECTOR(N, DAG, true))
-    return true;
-  return false;
+  return N->getOpcode() == ISD::SIGN_EXTEND ||
+         isExtendedBUILD_VECTOR(N, DAG, true);
 }
 
 static bool isZeroExtended(SDNode *N, SelectionDAG &DAG) {
-  if (N->getOpcode() == ISD::ZERO_EXTEND)
-    return true;
-  if (isExtendedBUILD_VECTOR(N, DAG, false))
-    return true;
-  return false;
+  return N->getOpcode() == ISD::ZERO_EXTEND ||
+         isExtendedBUILD_VECTOR(N, DAG, false);
 }
 
 static bool isAddSubSExt(SDNode *N, SelectionDAG &DAG) {
@@ -3577,7 +3572,7 @@ SDValue
 AArch64TargetLowering::LowerELFGlobalTLSAddress(SDValue Op,
                                                 SelectionDAG &DAG) const {
   assert(Subtarget->isTargetELF() && "This function expects an ELF target");
-  assert(getTargetMachine().getCodeModel() == CodeModel::Small &&
+  assert(Subtarget->useSmallAddressing() &&
          "ELF TLS only supported in small memory model");
   // Different choices can be made for the maximum size of the TLS area for a
   // module. For the small address model, the default TLS size is 16MiB and the
@@ -3678,7 +3673,7 @@ SDValue AArch64TargetLowering::LowerGlobalTLSAddress(SDValue Op,
                                                      SelectionDAG &DAG) const {
   if (Subtarget->isTargetDarwin())
     return LowerDarwinGlobalTLSAddress(Op, DAG);
-  else if (Subtarget->isTargetELF())
+  if (Subtarget->isTargetELF())
     return LowerELFGlobalTLSAddress(Op, DAG);
 
   llvm_unreachable("Unexpected platform trying to use TLS");
@@ -6592,19 +6587,13 @@ FailedModImm:
     SDValue Op0 = Op.getOperand(0);
     unsigned ElemSize = VT.getScalarSizeInBits();
     unsigned i = 0;
-    // For 32 and 64 bit types, use INSERT_SUBREG for lane zero to
+    // For 32 and 64 bit types, use SCALAR_TO_VECTOR for lane zero to
     // a) Avoid a RMW dependency on the full vector register, and
     // b) Allow the register coalescer to fold away the copy if the
-    //    value is already in an S or D register.
-    // Do not do this for UNDEF/LOAD nodes because we have better patterns
-    // for those avoiding the SCALAR_TO_VECTOR/BUILD_VECTOR.
-    if (!Op0.isUndef() && Op0.getOpcode() != ISD::LOAD &&
-        (ElemSize == 32 || ElemSize == 64)) {
-      unsigned SubIdx = ElemSize == 32 ? AArch64::ssub : AArch64::dsub;
-      MachineSDNode *N =
-          DAG.getMachineNode(TargetOpcode::INSERT_SUBREG, dl, VT, Vec, Op0,
-                             DAG.getTargetConstant(SubIdx, dl, MVT::i32));
-      Vec = SDValue(N, 0);
+    //    value is already in an S or D register, and we're forced to emit an
+    //    INSERT_SUBREG that we can't fold anywhere.
+    if (!Op0.isUndef() && (ElemSize == 32 || ElemSize == 64)) {
+      Vec = DAG.getNode(ISD::SCALAR_TO_VECTOR, dl, VT, Op0);
       ++i;
     }
     for (; i < NumElts; ++i) {
@@ -7761,7 +7750,7 @@ SDValue
 AArch64TargetLowering::BuildSDIVPow2(SDNode *N, const APInt &Divisor,
                                      SelectionDAG &DAG,
                                      std::vector<SDNode *> *Created) const {
-  AttributeSet Attr = DAG.getMachineFunction().getFunction()->getAttributes();
+  AttributeList Attr = DAG.getMachineFunction().getFunction()->getAttributes();
   if (isIntDivCheap(N->getValueType(0), Attr))
     return SDValue(N,0); // Lower SDIV as SDIV
 
@@ -10793,7 +10782,7 @@ void AArch64TargetLowering::insertCopiesSplitCSR(
   }
 }
 
-bool AArch64TargetLowering::isIntDivCheap(EVT VT, AttributeSet Attr) const {
+bool AArch64TargetLowering::isIntDivCheap(EVT VT, AttributeList Attr) const {
   // Integer division on AArch64 is expensive. However, when aggressively
   // optimizing for code size, we prefer to use a div instruction, as it is
   // usually smaller than the alternative sequence.
@@ -10802,7 +10791,7 @@ bool AArch64TargetLowering::isIntDivCheap(EVT VT, AttributeSet Attr) const {
   // size, because it will have to be scalarized, while the alternative code
   // sequence can be performed in vector form.
   bool OptSize =
-      Attr.hasAttribute(AttributeSet::FunctionIndex, Attribute::MinSize);
+      Attr.hasAttribute(AttributeList::FunctionIndex, Attribute::MinSize);
   return OptSize && !VT.isVector();
 }
 
