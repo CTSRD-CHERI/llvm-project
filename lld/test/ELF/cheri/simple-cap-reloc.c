@@ -20,6 +20,22 @@
 // RUN: llvm-objdump -C -t %t.so | FileCheck -check-prefix DUMP-SHLIB %S/simple-cap-reloc-common.check
 
 
+
+// now invoke lld directly and check whether it matches:
+// RUN: %cheri_lld_static %t.o -o %t-direct-static.exe
+// RUN: %capsizefix %t-direct-static.exe
+// RUN: llvm-objdump -h -r -t -C %t-direct-static.exe | FileCheck -check-prefixes DUMP-EXE,STATIC %S/simple-cap-reloc-common.check
+
+// RUN: %cheri_lld_dynamic %t.o -L%T -ldummy_shlib -o %t-direct-dynamic.exe
+// RUN: %capsizefix %t-direct-dynamic.exe
+// RUN: llvm-objdump -h -r -t -C %t-direct-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %S/simple-cap-reloc-common.check
+
+// RUN: %cheri_lld_shlib %t.o -o %t.so2
+// RUN: %capsizefix %t.so2
+// RUN: llvm-readobj -r -s %t.so2 | FileCheck -check-prefix SHLIB %S/simple-cap-reloc-common.check
+// RUN: llvm-objdump -C -t %t.so2 | FileCheck -check-prefix DUMP-SHLIB %S/simple-cap-reloc-common.check
+
+
 // now try linking with the new --process-cap-relocs flag and compare the output
 
 int a = 0;
