@@ -89,7 +89,8 @@ static cl::opt<Dependences::AnalysisLevel> OptAnalysisLevel(
 static __isl_give isl_map *tag(__isl_take isl_map *Relation,
                                __isl_take isl_id *TagId) {
   isl_space *Space = isl_map_get_space(Relation);
-  Space = isl_space_drop_dims(Space, isl_dim_out, 0, isl_map_n_out(Relation));
+  Space = isl_space_drop_dims(Space, isl_dim_out, 0,
+                              isl_map_dim(Relation, isl_dim_out));
   Space = isl_space_set_tuple_id(Space, isl_dim_out, TagId);
   isl_multi_aff *Tag = isl_multi_aff_domain_map(Space);
   Relation = isl_map_preimage_domain_multi_aff(Relation, Tag);
@@ -111,14 +112,14 @@ static __isl_give isl_map *tag(__isl_take isl_map *Relation, MemoryAccess *MA,
 }
 
 /// Collect information about the SCoP @p S.
-static void collectInfo(Scop &S, isl_union_map *&Read, isl_union_map *&Write,
-                        isl_union_map *&MayWrite,
+static void collectInfo(Scop &S, isl_union_map *&Read,
+                        isl_union_map *&MustWrite, isl_union_map *&MayWrite,
                         isl_union_map *&ReductionTagMap,
                         isl_union_set *&TaggedStmtDomain,
                         Dependences::AnalysisLevel Level) {
   isl_space *Space = S.getParamSpace();
   Read = isl_union_map_empty(isl_space_copy(Space));
-  Write = isl_union_map_empty(isl_space_copy(Space));
+  MustWrite = isl_union_map_empty(isl_space_copy(Space));
   MayWrite = isl_union_map_empty(isl_space_copy(Space));
   ReductionTagMap = isl_union_map_empty(isl_space_copy(Space));
   isl_union_map *StmtSchedule = isl_union_map_empty(Space);
@@ -166,8 +167,10 @@ static void collectInfo(Scop &S, isl_union_map *&Read, isl_union_map *&Write,
 
       if (MA->isRead())
         Read = isl_union_map_add_map(Read, accdom);
+      else if (MA->isMayWrite())
+        MayWrite = isl_union_map_add_map(MayWrite, accdom);
       else
-        Write = isl_union_map_add_map(Write, accdom);
+        MustWrite = isl_union_map_add_map(MustWrite, accdom);
     }
 
     if (!ReductionArrays.empty() && Level == Dependences::AL_Statement)
@@ -180,7 +183,7 @@ static void collectInfo(Scop &S, isl_union_map *&Read, isl_union_map *&Write,
 
   ReductionTagMap = isl_union_map_coalesce(ReductionTagMap);
   Read = isl_union_map_coalesce(Read);
-  Write = isl_union_map_coalesce(Write);
+  MustWrite = isl_union_map_coalesce(MustWrite);
   MayWrite = isl_union_map_coalesce(MayWrite);
 }
 
@@ -286,7 +289,8 @@ static __isl_give isl_union_flow *buildFlow(__isl_keep isl_union_map *Snk,
   isl_union_access_info *AI;
 
   AI = isl_union_access_info_from_sink(isl_union_map_copy(Snk));
-  AI = isl_union_access_info_set_may_source(AI, isl_union_map_copy(MaySrc));
+  if (MaySrc)
+    AI = isl_union_access_info_set_may_source(AI, isl_union_map_copy(MaySrc));
   if (Src)
     AI = isl_union_access_info_set_must_source(AI, isl_union_map_copy(Src));
   AI = isl_union_access_info_set_schedule(AI, isl_schedule_copy(Schedule));
@@ -298,19 +302,19 @@ static __isl_give isl_union_flow *buildFlow(__isl_keep isl_union_map *Snk,
 }
 
 void Dependences::calculateDependences(Scop &S) {
-  isl_union_map *Read, *Write, *MayWrite, *ReductionTagMap;
+  isl_union_map *Read, *MustWrite, *MayWrite, *ReductionTagMap;
   isl_schedule *Schedule;
   isl_union_set *TaggedStmtDomain;
 
   DEBUG(dbgs() << "Scop: \n" << S << "\n");
 
-  collectInfo(S, Read, Write, MayWrite, ReductionTagMap, TaggedStmtDomain,
+  collectInfo(S, Read, MustWrite, MayWrite, ReductionTagMap, TaggedStmtDomain,
               Level);
 
   bool HasReductions = !isl_union_map_is_empty(ReductionTagMap);
 
   DEBUG(dbgs() << "Read: " << Read << '\n';
-        dbgs() << "Write: " << Write << '\n';
+        dbgs() << "MustWrite: " << MustWrite << '\n';
         dbgs() << "MayWrite: " << MayWrite << '\n';
         dbgs() << "ReductionTagMap: " << ReductionTagMap << '\n';
         dbgs() << "TaggedStmtDomain: " << TaggedStmtDomain << '\n';);
@@ -351,61 +355,140 @@ void Dependences::calculateDependences(Scop &S) {
   }
 
   DEBUG(dbgs() << "Read: " << Read << "\n";
-        dbgs() << "Write: " << Write << "\n";
+        dbgs() << "MustWrite: " << MustWrite << "\n";
         dbgs() << "MayWrite: " << MayWrite << "\n";
         dbgs() << "Schedule: " << Schedule << "\n");
 
+  isl_union_map *StrictWAW = nullptr;
   {
     IslMaxOperationsGuard MaxOpGuard(IslCtx.get(), OptComputeOut);
 
     RAW = WAW = WAR = RED = nullptr;
+    isl_union_map *Write = isl_union_map_union(isl_union_map_copy(MustWrite),
+                                               isl_union_map_copy(MayWrite));
+
+    // We are interested in detecting reductions that do not have intermediate
+    // computations that are captured by other statements.
+    //
+    // Example:
+    // void f(int *A, int *B) {
+    //     for(int i = 0; i <= 100; i++) {
+    //
+    //            *-WAR (S0[i] -> S0[i + 1] 0 <= i <= 100)------------*
+    //            |                                                   |
+    //            *-WAW (S0[i] -> S0[i + 1] 0 <= i <= 100)------------*
+    //            |                                                   |
+    //            v                                                   |
+    //     S0:    *A += i; >------------------*-----------------------*
+    //                                        |
+    //         if (i >= 98) {          WAR (S0[i] -> S1[i]) 98 <= i <= 100
+    //                                        |
+    //     S1:        *B = *A; <--------------*
+    //         }
+    //     }
+    // }
+    //
+    // S0[0 <= i <= 100] has a reduction. However, the values in
+    // S0[98 <= i <= 100] is captured in S1[98 <= i <= 100].
+    // Since we allow free reordering on our reduction dependences, we need to
+    // remove all instances of a reduction statement that have data dependences
+    // orignating from them.
+    // In the case of the example, we need to remove S0[98 <= i <= 100] from
+    // our reduction dependences.
+    //
+    // When we build up the WAW dependences that are used to detect reductions,
+    // we consider only **Writes that have no intermediate Reads**.
+    //
+    // `isl_union_flow_get_must_dependence` gives us dependences of the form:
+    // (sink <- must_source).
+    //
+    // It *will not give* dependences of the form:
+    // 1. (sink <- ... <- may_source <- ... <- must_source)
+    // 2. (sink <- ... <- must_source <- ... <- must_source)
+    //
+    // For a detailed reference on ISL's flow analysis, see:
+    // "Presburger Formulas and Polyhedral Compilation" - Approximate Dataflow
+    //  Analysis.
+    //
+    // Since we set "Write" as a must-source, "Read" as a may-source, and ask
+    // for must dependences, we get all Writes to Writes that **do not flow
+    // through a Read**.
+    //
+    // ScopInfo::checkForReductions makes sure that if something captures
+    // the reduction variable in the same basic block, then it is rejected
+    // before it is even handed here. This makes sure that there is exactly
+    // one read and one write to a reduction variable in a Statement.
+    // Example:
+    //     void f(int *sum, int A[N], int B[N]) {
+    //       for (int i = 0; i < N; i++) {
+    //         *sum += A[i]; < the store and the load is not tagged as a
+    //         B[i] = *sum;  < reductionLike acccess due to the overlap.
+    //       }
+    //     }
+
+    isl_union_flow *Flow = buildFlow(Write, Write, Read, Schedule);
+    StrictWAW = isl_union_flow_get_must_dependence(Flow);
+    isl_union_flow_free(Flow);
 
     if (OptAnalysisType == VALUE_BASED_ANALYSIS) {
-      isl_union_flow *Flow;
-
-      Flow = buildFlow(Read, Write, MayWrite, Schedule);
-
-      RAW = isl_union_flow_get_must_dependence(Flow);
+      Flow = buildFlow(Read, MustWrite, MayWrite, Schedule);
+      RAW = isl_union_flow_get_may_dependence(Flow);
       isl_union_flow_free(Flow);
 
-      Flow = buildFlow(Write, Write, Read, Schedule);
-
-      WAW = isl_union_flow_get_must_dependence(Flow);
-      WAR = isl_union_flow_get_may_dependence(Flow);
-
-      // This subtraction is needed to obtain the same results as were given by
-      // isl_union_map_compute_flow. For large sets this may add some
-      // compile-time cost. As there does not seem to be a need to distinguish
-      // between WAW and WAR, refactoring Polly to only track general non-flow
-      // dependences may improve performance.
-      WAR = isl_union_map_subtract(WAR, isl_union_map_copy(WAW));
-
+      Flow = buildFlow(Write, MustWrite, MayWrite, Schedule);
+      WAW = isl_union_flow_get_may_dependence(Flow);
       isl_union_flow_free(Flow);
+
+      // We need exact WAR dependences. That is, if there are
+      // dependences of the form:
+      // must-W2 (sink) <- must-W1 (sink) <- R (source)
+      // We wish to generate *ONLY*:
+      // { R -> W1 },
+      // NOT:
+      // { R -> W2, R -> W1 }
+      //
+      // However, in the case of may-writes, we do *not* wish to allow
+      // may-writes to block must-writes. This makes sense, since perhaps the
+      // may-write will not happen. In that case, the exact dependence will
+      // be the (read -> must-write).
+      // Example:
+      // must-W2 (sink) <- may-W1 (sink) <- R (source)
+      // We wish to generate:
+      // { R-> W1, R -> W2 }
+      //
+      //
+      // To achieve this, we use the fact that *must* dependences are not
+      // allowed to flow through the may-source.
+      // Since we set the may-source to MustWrite, we are guarenteed that
+      // only the exact ("shortest") (must-write -> read) is captured.
+      // Any number of intermediate may-writes are allowed.
+      Flow = buildFlow(Write, Read, MustWrite, Schedule);
+      WAR = isl_union_flow_get_must_dependence(Flow);
+      isl_union_flow_free(Flow);
+
+      isl_union_map_free(Write);
       isl_schedule_free(Schedule);
     } else {
       isl_union_flow *Flow;
 
-      Write = isl_union_map_union(Write, isl_union_map_copy(MayWrite));
-
       Flow = buildFlow(Read, nullptr, Write, Schedule);
-
       RAW = isl_union_flow_get_may_dependence(Flow);
       isl_union_flow_free(Flow);
 
       Flow = buildFlow(Write, nullptr, Read, Schedule);
-
       WAR = isl_union_flow_get_may_dependence(Flow);
       isl_union_flow_free(Flow);
 
       Flow = buildFlow(Write, nullptr, Write, Schedule);
-
       WAW = isl_union_flow_get_may_dependence(Flow);
       isl_union_flow_free(Flow);
+
+      isl_union_map_free(Write);
       isl_schedule_free(Schedule);
     }
 
+    isl_union_map_free(MustWrite);
     isl_union_map_free(MayWrite);
-    isl_union_map_free(Write);
     isl_union_map_free(Read);
 
     RAW = isl_union_map_coalesce(RAW);
@@ -419,7 +502,8 @@ void Dependences::calculateDependences(Scop &S) {
     isl_union_map_free(RAW);
     isl_union_map_free(WAW);
     isl_union_map_free(WAR);
-    RAW = WAW = WAR = nullptr;
+    isl_union_map_free(StrictWAW);
+    RAW = WAW = WAR = StrictWAW = nullptr;
     isl_ctx_reset_error(IslCtx.get());
   }
 
@@ -427,8 +511,10 @@ void Dependences::calculateDependences(Scop &S) {
   // reduction dependences or dependences that are finer than statement
   // level dependences.
   if (!HasReductions && Level == AL_Statement) {
+    RED = isl_union_map_empty(isl_union_map_get_space(RAW));
     TC_RED = isl_union_map_empty(isl_union_set_get_space(TaggedStmtDomain));
     isl_union_set_free(TaggedStmtDomain);
+    isl_union_map_free(StrictWAW);
     return;
   }
 
@@ -451,9 +537,9 @@ void Dependences::calculateDependences(Scop &S) {
   // 2) Intersect them with the actual RAW & WAW dependences to the get the
   //    actual reduction dependences. This will ensure the load/store memory
   //    addresses were __identical__ in the two iterations of the statement.
-  // 3) Relax the original RAW and WAW dependences by subtracting the actual
-  //    reduction dependences. Binary reductions (sum += A[i]) cause both, and
-  //    the same, RAW and WAW dependences.
+  // 3) Relax the original RAW, WAW and WAR dependences by subtracting the
+  //    actual reduction dependences. Binary reductions (sum += A[i]) cause
+  //    the same, RAW, WAW and WAR dependences.
   // 4) Add the privatization dependences which are widened versions of
   //    already present dependences. They model the effect of manual
   //    privatization at the outermost possible place (namely after the last
@@ -474,13 +560,14 @@ void Dependences::calculateDependences(Scop &S) {
 
   // Step 2)
   RED = isl_union_map_intersect(RED, isl_union_map_copy(RAW));
-  RED = isl_union_map_intersect(RED, isl_union_map_copy(WAW));
+  RED = isl_union_map_intersect(RED, StrictWAW);
 
   if (!isl_union_map_is_empty(RED)) {
 
     // Step 3)
     RAW = isl_union_map_subtract(RAW, isl_union_map_copy(RED));
     WAW = isl_union_map_subtract(WAW, isl_union_map_copy(RED));
+    WAR = isl_union_map_subtract(WAR, isl_union_map_copy(RED));
 
     // Step 4)
     addPrivatizationDependences();

@@ -152,6 +152,8 @@ def WAVE_BARRIER : SPseudoInstSI<(outs), (ins),
   let mayStore = 1;
   let isBarrier = 1;
   let isConvergent = 1;
+  let FixedSize = 1;
+  let Size = 0;
 }
 
 // SI pseudo instructions. These are used by the CFG structurizer pass
@@ -159,48 +161,44 @@ def WAVE_BARRIER : SPseudoInstSI<(outs), (ins),
 
 // Dummy terminator instruction to use after control flow instructions
 // replaced with exec mask operations.
-def SI_MASK_BRANCH : PseudoInstSI <
+def SI_MASK_BRANCH : VPseudoInstSI <
   (outs), (ins brtarget:$target)> {
   let isBranch = 0;
   let isTerminator = 1;
   let isBarrier = 0;
-  let Uses = [EXEC];
   let SchedRW = [];
   let hasNoSchedulingInfo = 1;
+  let FixedSize = 1;
+  let Size = 0;
 }
 
 let isTerminator = 1 in {
 
 def SI_IF: CFPseudoInstSI <
   (outs SReg_64:$dst), (ins SReg_64:$vcc, brtarget:$target),
-  [(set i64:$dst, (int_amdgcn_if i1:$vcc, bb:$target))], 1, 1> {
+  [(set i64:$dst, (AMDGPUif i1:$vcc, bb:$target))], 1, 1> {
   let Constraints = "";
   let Size = 12;
-  let mayLoad = 1;
-  let mayStore = 1;
   let hasSideEffects = 1;
 }
 
 def SI_ELSE : CFPseudoInstSI <
-  (outs SReg_64:$dst), (ins SReg_64:$src, brtarget:$target, i1imm:$execfix), [], 1, 1> {
+  (outs SReg_64:$dst),
+  (ins SReg_64:$src, brtarget:$target, i1imm:$execfix), [], 1, 1> {
   let Constraints = "$src = $dst";
   let Size = 12;
-  let mayStore = 1;
-  let mayLoad = 1;
   let hasSideEffects = 1;
 }
 
 def SI_LOOP : CFPseudoInstSI <
   (outs), (ins SReg_64:$saved, brtarget:$target),
-  [(int_amdgcn_loop i64:$saved, bb:$target)], 1, 1> {
+  [(AMDGPUloop i64:$saved, bb:$target)], 1, 1> {
   let Size = 8;
-  let isBranch = 1;
+  let isBranch = 0;
   let hasSideEffects = 1;
-  let mayLoad = 1;
-  let mayStore = 1;
 }
 
-} // End isBranch = 1, isTerminator = 1
+} // End isTerminator = 1
 
 def SI_END_CF : CFPseudoInstSI <
   (outs), (ins SReg_64:$saved),
@@ -208,9 +206,9 @@ def SI_END_CF : CFPseudoInstSI <
   let Size = 4;
   let isAsCheapAsAMove = 1;
   let isReMaterializable = 1;
-  let mayLoad = 1;
-  let mayStore = 1;
   let hasSideEffects = 1;
+  let mayLoad = 1; // FIXME: Should not need memory flags
+  let mayStore = 1;
 }
 
 def SI_BREAK : CFPseudoInstSI <
@@ -250,6 +248,10 @@ def SI_KILL_TERMINATOR : SPseudoInstSI <
   let isTerminator = 1;
 }
 
+def SI_ILLEGAL_COPY : SPseudoInstSI <
+  (outs unknown:$dst), (ins unknown:$src),
+  [], " ; illegal copy $src to $dst">;
+
 } // End Uses = [EXEC], Defs = [EXEC,VCC]
 
 // Branch on undef scc. Used to avoid intermediate copy from
@@ -265,6 +267,14 @@ def SI_PS_LIVE : PseudoInstSI <
   let SALU = 1;
 }
 
+def SI_MASKED_UNREACHABLE : SPseudoInstSI <(outs), (ins),
+  [(int_amdgcn_unreachable)],
+  "; divergent unreachable"> {
+  let Size = 0;
+  let hasNoSchedulingInfo = 1;
+  let FixedSize = 1;
+}
+
 // Used as an isel pseudo to directly emit initialization with an
 // s_mov_b32 rather than a copy of another initialized
 // register. MachineCSE skips copies, and we don't want to have to
@@ -276,12 +286,12 @@ def SI_INIT_M0 : SPseudoInstSI <(outs), (ins SSrc_b32:$src)> {
   let isReMaterializable = 1;
 }
 
-def SI_RETURN : SPseudoInstSI <
-  (outs), (ins variable_ops), [(AMDGPUreturn)]> {
+// Return for returning shaders to a shader variant epilog.
+def SI_RETURN_TO_EPILOG : SPseudoInstSI <
+  (outs), (ins variable_ops), [(AMDGPUreturn_to_epilog)]> {
   let isTerminator = 1;
   let isBarrier = 1;
   let isReturn = 1;
-  let hasSideEffects = 1;
   let hasNoSchedulingInfo = 1;
   let DisableWQM = 1;
 }
@@ -400,7 +410,7 @@ def : Pat<
 >;
 
 def : Pat<
-  (int_amdgcn_else i64:$src, bb:$target),
+  (AMDGPUelse i64:$src, bb:$target),
   (SI_ELSE $src, $target, 0)
 >;
 
@@ -467,7 +477,7 @@ def : Pat <
 
 // fp_to_fp16 patterns
 def : Pat <
-  (i32 (fp_to_f16 (f32 (VOP3Mods0 f32:$src0, i32:$src0_modifiers, i1:$clamp, i32:$omod)))),
+  (i32 (AMDGPUfp_to_f16 (f32 (VOP3Mods0 f32:$src0, i32:$src0_modifiers, i1:$clamp, i32:$omod)))),
   (V_CVT_F16_F32_e64 $src0_modifiers, f32:$src0, $clamp, $omod)
 >;
 
@@ -1070,6 +1080,11 @@ def : Pat <
 //===----------------------------------------------------------------------===//
 // Miscellaneous Patterns
 //===----------------------------------------------------------------------===//
+def : Pat <
+  (i32 (AMDGPUfp16_zext f16:$src)),
+  (COPY $src)
+>;
+
 
 def : Pat <
   (i32 (trunc i64:$a)),

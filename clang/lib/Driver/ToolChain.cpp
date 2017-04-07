@@ -20,6 +20,7 @@
 #include "clang/Driver/DriverDiagnostic.h"
 #include "clang/Driver/Options.h"
 #include "clang/Driver/SanitizerArgs.h"
+#include "clang/Driver/XRayArgs.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
@@ -107,6 +108,12 @@ const SanitizerArgs& ToolChain::getSanitizerArgs() const {
   if (!SanitizerArguments.get())
     SanitizerArguments.reset(new SanitizerArgs(*this, Args));
   return *SanitizerArguments.get();
+}
+
+const XRayArgs& ToolChain::getXRayArgs() const {
+  if (!XRayArguments.get())
+    XRayArguments.reset(new XRayArgs(*this, Args));
+  return *XRayArguments.get();
 }
 
 namespace {

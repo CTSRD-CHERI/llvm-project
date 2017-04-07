@@ -9,9 +9,15 @@
 
 #include "lldb/Utility/TildeExpressionResolver.h"
 
-#include "llvm/ADT/SmallString.h"
+#include <assert.h>     // for assert
+#include <system_error> // for error_code
+
+#include "llvm/ADT/STLExtras.h"      // for any_of
+#include "llvm/ADT/SmallVector.h"    // for SmallVectorImpl
+#include "llvm/Config/llvm-config.h" // for LLVM_ON_WIN32
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Support/raw_ostream.h" // for fs
 
 #if !defined(LLVM_ON_WIN32)
 #include <pwd.h>
@@ -28,9 +34,8 @@ TildeExpressionResolver::~TildeExpressionResolver() {}
 bool StandardTildeExpressionResolver::ResolveExact(
     StringRef Expr, SmallVectorImpl<char> &Output) {
   // We expect the tilde expression to be ONLY the expression itself, and
-  // contain
-  // no separators.
-  assert(!llvm::any_of(Expr, path::is_separator));
+  // contain no separators.
+  assert(!llvm::any_of(Expr, [](char c) { return path::is_separator(c); }));
   assert(Expr.empty() || Expr[0] == '~');
 
   return !fs::real_path(Expr, Output, true);
@@ -40,7 +45,7 @@ bool StandardTildeExpressionResolver::ResolvePartial(StringRef Expr,
                                                      StringSet<> &Output) {
   // We expect the tilde expression to be ONLY the expression itself, and
   // contain no separators.
-  assert(!llvm::any_of(Expr, path::is_separator));
+  assert(!llvm::any_of(Expr, [](char c) { return path::is_separator(c); }));
   assert(Expr.empty() || Expr[0] == '~');
 
   Output.clear();
@@ -68,4 +73,23 @@ bool StandardTildeExpressionResolver::ResolvePartial(StringRef Expr,
 
   return true;
 #endif
+}
+
+bool TildeExpressionResolver::ResolveFullPath(
+    StringRef Expr, llvm::SmallVectorImpl<char> &Output) {
+  Output.clear();
+  if (!Expr.startswith("~")) {
+    Output.append(Expr.begin(), Expr.end());
+    return false;
+  }
+
+  namespace path = llvm::sys::path;
+  StringRef Left =
+      Expr.take_until([](char c) { return path::is_separator(c); });
+
+  if (!ResolveExact(Left, Output))
+    return false;
+
+  Output.append(Expr.begin() + Left.size(), Expr.end());
+  return true;
 }

@@ -44,23 +44,26 @@ class Value;
 
 /// \brief Information about a load/store intrinsic defined by the target.
 struct MemIntrinsicInfo {
-  MemIntrinsicInfo()
-      : ReadMem(false), WriteMem(false), IsSimple(false), MatchingId(0),
-        NumMemRefs(0), PtrVal(nullptr) {}
-  bool ReadMem;
-  bool WriteMem;
-  /// True only if this memory operation is non-volatile, non-atomic, and
-  /// unordered.  (See LoadInst/StoreInst for details on each)
-  bool IsSimple;
-  // Same Id is set by the target for corresponding load/store intrinsics.
-  unsigned short MatchingId;
-  int NumMemRefs;
-
   /// This is the pointer that the intrinsic is loading from or storing to.
   /// If this is non-null, then analysis/optimization passes can assume that
   /// this intrinsic is functionally equivalent to a load/store from this
   /// pointer.
-  Value *PtrVal;
+  Value *PtrVal = nullptr;
+
+  // Ordering for atomic operations.
+  AtomicOrdering Ordering = AtomicOrdering::NotAtomic;
+
+  // Same Id is set by the target for corresponding load/store intrinsics.
+  unsigned short MatchingId = 0;
+
+  bool ReadMem = false;
+  bool WriteMem = false;
+  bool IsVolatile = false;
+
+  bool isUnordered() const {
+    return (Ordering == AtomicOrdering::NotAtomic ||
+            Ordering == AtomicOrdering::Unordered) && !IsVolatile;
+  }
 };
 
 /// \brief This pass provides access to the codegen interfaces that are needed
@@ -523,6 +526,12 @@ public:
   /// \return The width of the largest scalar or vector register type.
   unsigned getRegisterBitWidth(bool Vector) const;
 
+  /// \return True if it should be considered for address type promotion.
+  /// \p AllowPromotionWithoutCommonHeader Set true if promoting \p I is
+  /// profitable without finding other extensions fed by the same input.
+  bool shouldConsiderAddressTypePromotion(
+      const Instruction &I, bool &AllowPromotionWithoutCommonHeader) const;
+
   /// \return The size of a cache line in bytes.
   unsigned getCacheLineSize() const;
 
@@ -797,6 +806,8 @@ public:
                             Type *Ty) = 0;
   virtual unsigned getNumberOfRegisters(bool Vector) = 0;
   virtual unsigned getRegisterBitWidth(bool Vector) = 0;
+  virtual bool shouldConsiderAddressTypePromotion(
+      const Instruction &I, bool &AllowPromotionWithoutCommonHeader) = 0;
   virtual unsigned getCacheLineSize() = 0;
   virtual unsigned getPrefetchDistance() = 0;
   virtual unsigned getMinPrefetchStride() = 0;
@@ -1023,7 +1034,11 @@ public:
   unsigned getRegisterBitWidth(bool Vector) override {
     return Impl.getRegisterBitWidth(Vector);
   }
-
+  bool shouldConsiderAddressTypePromotion(
+      const Instruction &I, bool &AllowPromotionWithoutCommonHeader) override {
+    return Impl.shouldConsiderAddressTypePromotion(
+        I, AllowPromotionWithoutCommonHeader);
+  }
   unsigned getCacheLineSize() override {
     return Impl.getCacheLineSize();
   }

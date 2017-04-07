@@ -103,6 +103,16 @@ void MCELFStreamer::EmitLabel(MCSymbol *S, SMLoc Loc) {
     Symbol->setType(ELF::STT_TLS);
 }
 
+void MCELFStreamer::EmitLabel(MCSymbol *S, SMLoc Loc, MCFragment *F) {
+  auto *Symbol = cast<MCSymbolELF>(S);
+  MCObjectStreamer::EmitLabel(Symbol, Loc, F);
+
+  const MCSectionELF &Section =
+      static_cast<const MCSectionELF &>(*getCurrentSectionOnly());
+  if (Section.getFlags() & ELF::SHF_TLS)
+    Symbol->setType(ELF::STT_TLS);
+}
+
 void MCELFStreamer::EmitAssemblerFlag(MCAssemblerFlag Flag) {
   // Let the target do whatever target specific stuff it needs to do.
   getAssembler().getBackend().handleAssemblerFlag(Flag);
@@ -143,7 +153,7 @@ void MCELFStreamer::ChangeSection(MCSection *Section,
   if (Grp)
     Asm.registerSymbol(*Grp);
 
-  this->MCObjectStreamer::ChangeSection(Section, Subsection);
+  changeSectionImpl(Section, Subsection);
   Asm.registerSymbol(*Section->getBeginSymbol());
 }
 

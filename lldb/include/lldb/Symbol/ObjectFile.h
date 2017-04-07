@@ -13,11 +13,11 @@
 #include "lldb/Core/FileSpecList.h"
 #include "lldb/Core/ModuleChild.h"
 #include "lldb/Core/PluginInterface.h"
-#include "lldb/Host/FileSpec.h"
 #include "lldb/Symbol/Symtab.h"
 #include "lldb/Symbol/UnwindTable.h"
 #include "lldb/Utility/DataExtractor.h"
 #include "lldb/Utility/Endian.h"
+#include "lldb/Utility/FileSpec.h"
 #include "lldb/lldb-private.h"
 
 namespace lldb_private {
@@ -562,6 +562,19 @@ public:
   }
 
   virtual uint32_t GetNumThreadContexts() { return 0; }
+
+  //------------------------------------------------------------------
+  /// Some object files may have an identifier string embedded in them,
+  /// e.g. in a Mach-O core file using the LC_IDENT load command (which 
+  /// is obsolete, but can still be found in some old files)
+  ///
+  /// @return
+  ///     Returns the identifier string if one exists, else an empty
+  ///     string.
+  //------------------------------------------------------------------
+  virtual std::string GetIdentifierString () { 
+      return std::string(); 
+  }
 
   virtual lldb::RegisterContextSP
   GetThreadContextAtIndex(uint32_t idx, lldb_private::Thread &thread) {

@@ -64,13 +64,11 @@ private:
     // Add the non-lazy-bind attribute, since objc_msgSend is likely to
     // be called a lot.
     llvm::Type *params[] = { ObjectPtrTy, SelectorPtrTy };
-    return
-      CGM.CreateRuntimeFunction(llvm::FunctionType::get(ObjectPtrTy,
-                                                        params, true),
-                                "objc_msgSend",
-                                llvm::AttributeSet::get(CGM.getLLVMContext(),
-                                              llvm::AttributeSet::FunctionIndex,
-                                                 llvm::Attribute::NonLazyBind));
+    return CGM.CreateRuntimeFunction(
+        llvm::FunctionType::get(ObjectPtrTy, params, true), "objc_msgSend",
+        llvm::AttributeList::get(CGM.getLLVMContext(),
+                                 llvm::AttributeList::FunctionIndex,
+                                 llvm::Attribute::NonLazyBind));
   }
 
   /// void objc_msgSend_stret (id, SEL, ...)
@@ -595,13 +593,11 @@ public:
     // This is specifically the prototype for x86.
     unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
     llvm::Type *params[] = { CGM.Int32Ty->getPointerTo(DefaultAS) };
-    return
-      CGM.CreateRuntimeFunction(llvm::FunctionType::get(CGM.Int32Ty,
-                                                        params, false),
-                                "_setjmp",
-                                llvm::AttributeSet::get(CGM.getLLVMContext(),
-                                              llvm::AttributeSet::FunctionIndex,
-                                                 llvm::Attribute::NonLazyBind));
+    return CGM.CreateRuntimeFunction(
+        llvm::FunctionType::get(CGM.Int32Ty, params, false), "_setjmp",
+        llvm::AttributeList::get(CGM.getLLVMContext(),
+                                 llvm::AttributeList::FunctionIndex,
+                                 llvm::Attribute::NonLazyBind));
   }
 
 public:

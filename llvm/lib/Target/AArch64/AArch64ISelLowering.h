@@ -251,7 +251,8 @@ public:
   /// Determine which of the bits specified in Mask are known to be either zero
   /// or one and return them in the KnownZero/KnownOne bitsets.
   void computeKnownBitsForTargetNode(const SDValue Op, APInt &KnownZero,
-                                     APInt &KnownOne, const SelectionDAG &DAG,
+                                     APInt &KnownOne, const APInt &DemandedElts,
+                                     const SelectionDAG &DAG,
                                      unsigned Depth = 0) const override;
 
   MVT getScalarShiftAmountTy(const DataLayout &DL, EVT) const override;
@@ -402,7 +403,7 @@ public:
     return AArch64::X1;
   }
 
-  bool isIntDivCheap(EVT VT, AttributeSet Attr) const override;
+  bool isIntDivCheap(EVT VT, AttributeList Attr) const override;
 
   bool isCheapToSpeculateCttz() const override {
     return true;

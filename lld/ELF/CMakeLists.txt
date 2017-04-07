@@ -11,6 +11,7 @@ add_lld_library(lldELF
   DriverUtils.cpp
   EhFrame.cpp
   Error.cpp
+  Filesystem.cpp
   GdbIndex.cpp
   ICF.cpp
   InputFiles.cpp
@@ -23,6 +24,7 @@ add_lld_library(lldELF
   OutputSections.cpp
   Relocations.cpp
   ScriptLexer.cpp
+  ScriptParser.cpp
   Strings.cpp
   SymbolTable.cpp
   Symbols.cpp
