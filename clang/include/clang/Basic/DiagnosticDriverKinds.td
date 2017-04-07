@@ -287,5 +287,7 @@ def err_drv_defsym_invalid_symval : Error<"Value is not an integer: %0">;
 def warn_cheri_sandbox_abi_is_purecap : Warning<
   "CHERI ABI 'sandbox' is deprecated; use 'purecap' instead">,
   InGroup<Deprecated>;
-
+def warn_cheri_purecap_nopic_broken : Warning<
+  "Using -fno-pic with the purecap ABI will generate completely broken code. ">,
+  InGroup<MIPSCHERIBugs>, DefaultError;
 }

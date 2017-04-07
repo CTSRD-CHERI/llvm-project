@@ -1393,12 +1393,16 @@ void Clang::AddAArch64TargetArgs(const ArgList &Args,
 }
 
 void Clang::AddMIPSTargetArgs(const ArgList &Args,
-                              ArgStringList &CmdArgs) const {
+                              ArgStringList &CmdArgs,
+                              bool IsNonPic, const JobAction &JA) const {
   const Driver &D = getToolChain().getDriver();
   StringRef CPUName;
   StringRef ABIName;
   const llvm::Triple &Triple = getToolChain().getTriple();
   mips::getMipsCPUAndABI(Args, Triple, CPUName, ABIName);
+  if (IsNonPic && ABIName == "purecap" && !isa<PreprocessJobAction>(JA)) {
+    D.Diag(diag::warn_cheri_purecap_nopic_broken);
+  }
 
   CmdArgs.push_back("-target-abi");
   CmdArgs.push_back(ABIName.data());
@@ -2591,7 +2595,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
-    AddMIPSTargetArgs(Args, CmdArgs);
+    AddMIPSTargetArgs(Args, CmdArgs, RelocationModel == llvm::Reloc::Static, JA);
     break;
 
   case llvm::Triple::ppc:
