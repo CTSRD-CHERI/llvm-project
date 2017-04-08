@@ -482,7 +482,7 @@ __assert(const char *func, const char *file, int line, const char *failedexpr)
     (void)fprintf(stderr,
           "Assertion failed: (%s), function %s, file %s, line %d.\n",
           failedexpr, func, file, line);
-  PrintStackTrace(llvm::errs());
+  sys::PrintStackTrace(llvm::errs());
   abort();
   /* NOTREACHED */
 }
