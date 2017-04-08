@@ -1,7 +1,5 @@
 # LINK_ORDER cnamed sections are not kept alive by the __start_* reference.
 # REQUIRES: x86
-# XXXAR: this needs upstream llvm changes
-# XFAIL: *
 
 # RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux %s -o %t.o
 # RUN: ld.lld --gc-sections %t.o -o %t

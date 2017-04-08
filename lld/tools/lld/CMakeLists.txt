@@ -8,8 +8,7 @@ add_lld_tool(lld
 
 target_link_libraries(lld
   lldDriver
-  # needs upstream merge
-  # lldCOFF
+  lldCOFF
   lldELF
   )
 

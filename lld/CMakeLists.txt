@@ -219,6 +219,5 @@ if (LLVM_INCLUDE_TESTS)
 endif()
 
 add_subdirectory(docs)
-# This depends on LLVM changes
-# add_subdirectory(COFF)
+add_subdirectory(COFF)
 add_subdirectory(ELF)

@@ -5,8 +5,6 @@
 // RUN: ld.lld -shared %tso -o %tshared
 // RUN: not ld.lld -static %t %tshared -o %tout 2>&1 | FileCheck %s
 // REQUIRES: x86
-// XXXAR: this needs upstream llvm changes
-// UNSUPPORTED: old_llvm
 
 .global _start
 _start:
