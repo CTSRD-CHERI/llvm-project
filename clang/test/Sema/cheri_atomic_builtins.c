@@ -65,6 +65,7 @@ int uintptr() {
   do_suffixed_atomic_ops(&foo_uintptr, result, newval); // expected-error 5 {{the __sync_* atomic builtins only work with integers and not capability type '__uintcap_t'.}}
 #else
   // expected-warning@-5 2 {{the semantics of this intrinsic changed with GCC version 4.4 - the newer semantics are provided here}}
+  // expected-warning@-6 16 {{the __atomic_* and __sync_* builtins will currently generate code that spins forever at -O0}}
 #endif
 }
 
@@ -76,8 +77,8 @@ int hybrid_ptr(void) {
   void* result = 0;
   void* newval = 0;
   do_atomic_ops(&foo_nocap, result, newval); // expected-warning 2 {{the semantics of this intrinsic changed with GCC version 4.4 - the newer semantics are provided here}}
-  do_suffixed_atomic_ops(&foo_nocap, result, newval);
-
+  do_suffixed_atomic_ops(&foo_nocap, result, newval); // expected-warning 5 {{the __atomic_* and __sync_* builtins will currently generate code that spins forever at -O0}}
+  // expected-warning@-2 16 {{the __atomic_* and __sync_* builtins will currently generate code that spins forever at -O0}}
 }
 #endif
 
