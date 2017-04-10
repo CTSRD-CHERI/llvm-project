@@ -1,4 +1,5 @@
 // RUN: clang -cc1 -triple cheri-unknown-bsd -cheri-linker -target-abi purecap -O2 -S -o - %s | FileCheck %s
+// REQUIRES: clang
 // ModuleID = 'ocsp_cl.i'
 // GVN was seen to unconditionally get the size of the underlying type for a
 // pointer when it was unsized.
