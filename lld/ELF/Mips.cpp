@@ -54,7 +54,7 @@ static StringRef getAbiName(uint32_t Flags) {
   case EF_MIPS_ABI_EABI64:
     return "eabi64";
   case EF_MIPS_ABI_CHERIABI:
-    return "sandbox";
+    return "purecap";
   default:
     return "unknown";
   }

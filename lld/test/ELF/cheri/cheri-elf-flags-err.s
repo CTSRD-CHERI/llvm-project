@@ -1,15 +1,15 @@
 
-# RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi sandbox \
+# RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi purecap \
 # RUN:          -mcpu=cheri %s -o %t-cheri256-main.o
-# RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi sandbox \
+# RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi purecap \
 # RUN:          -mcpu=cheri128 %s -o %t-cheri128-main.o
 # RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi n64 \
 # RUN:          -mcpu=cheri %s -o %t-cheri256-hybrid-main.o
 # RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi n64 \
 # RUN:          -mcpu=cheri128 %s -o %t-cheri128-hybrid-main.o
-# RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi sandbox \
+# RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi purecap \
 # RUN:          -mcpu=cheri %S/../Inputs/mips-dynamic.s -o %t-cheri256-lib.o
-# RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi sandbox \
+# RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi purecap \
 # RUN:          -mcpu=cheri128 %S/../Inputs/mips-dynamic.s -o %t-cheri128-lib.o
 # RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi n64 \
 # RUN:          -mcpu=cheri %S/../Inputs/mips-dynamic.s -o %t-cheri256-hybrid-lib.o
@@ -74,12 +74,12 @@ __start:
 # CHERI128-HYBRID-FLAGS-NEXT:    EF_MIPS_MACH_CHERI128 (0xC10000)
 # CHERI128-HYBRID-FLAGS-NEXT:  ]
 
-# CHERI256-vs-MIPS: target ABI 'sandbox' is incompatible with 'n64': {{.*}}/cheri-elf-flags-err.s.tmp-mips64.o
-# CHERI128-vs-MIPS: target ABI 'sandbox' is incompatible with 'n64': {{.*}}/cheri-elf-flags-err.s.tmp-mips64.o
+# CHERI256-vs-MIPS: target ABI 'purecap' is incompatible with 'n64': {{.*}}/cheri-elf-flags-err.s.tmp-mips64.o
+# CHERI128-vs-MIPS: target ABI 'purecap' is incompatible with 'n64': {{.*}}/cheri-elf-flags-err.s.tmp-mips64.o
 # CHERI256-vs-CHERI128: target ISA 'cheri256' is incompatible with 'cheri128': {{.*}}/cheri-elf-flags-err.s.tmp-cheri128-lib.o
 # CHERI128-vs-CHERI256: target ISA 'cheri128' is incompatible with 'cheri256': {{.*}}/cheri-elf-flags-err.s.tmp-cheri256-lib.o
-# CHERI256-vs-CHERI256-HYBRID: target ABI 'sandbox' is incompatible with 'n64': {{.*}}/cheri-elf-flags-err.s.tmp-cheri256-hybrid-lib.o
-# CHERI128-vs-CHERI128-HYBRID: target ABI 'sandbox' is incompatible with 'n64': {{.*}}/cheri-elf-flags-err.s.tmp-cheri128-hybrid-lib.o
+# CHERI256-vs-CHERI256-HYBRID: target ABI 'purecap' is incompatible with 'n64': {{.*}}/cheri-elf-flags-err.s.tmp-cheri256-hybrid-lib.o
+# CHERI128-vs-CHERI128-HYBRID: target ABI 'purecap' is incompatible with 'n64': {{.*}}/cheri-elf-flags-err.s.tmp-cheri128-hybrid-lib.o
 
 # TODO: should those files actually link?
 # CHERI256-HYBRID-vs-MIPS: target ISA 'cheri256' is incompatible with 'mips64': {{.*}}/cheri-elf-flags-err.s.tmp-mips64.o
