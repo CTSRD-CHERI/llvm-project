@@ -611,7 +611,7 @@ private:
       return Value;
     else if (Value.isStr()) {
       // XXXAR: for some reason if I use `APInt Value;` here the result ends up being negative
-      APInt Converted (64, 0u, false);
+      APInt Converted(64u, (uint64_t)0u);
       if (!StringRef(Value.getString()).getAsInteger(0, Converted)) {
         return ExprResult(Converted, Value.Location, Value.Range);
       }
@@ -729,7 +729,7 @@ private:
       return error("Expected number!");
     assert(isdigit(Expr[0]));
     // XXXAR: for some reason if I do APInt Value; here the result ends up being negative
-    APInt Value(64, 0u, false);
+    APInt Value(64u, (uint64_t)0u);
     assert(Value.isNonNegative());
     if (!Expr.getAsInteger(0, Value)) {
       assert(Value.isNonNegative());
