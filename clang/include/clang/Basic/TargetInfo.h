@@ -325,7 +325,7 @@ public:
   }
 
   /// \brief Return the maximum width of pointers on this target.
-  virtual uint64_t getMaxPointerWidth() const {
+  virtual uint64_t getMaxPointerRange() const {
     return PointerWidth;
   }
 

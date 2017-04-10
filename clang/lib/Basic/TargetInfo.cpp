@@ -327,7 +327,7 @@ void TargetInfo::adjust(LangOptions &Opts) {
     }
     LongDoubleWidth = LongDoubleAlign = 128;
 
-    unsigned MaxPointerWidth = getMaxPointerWidth();
+    unsigned MaxPointerWidth = getMaxPointerRange();
     assert(MaxPointerWidth == 32 || MaxPointerWidth == 64);
     bool Is32BitArch = MaxPointerWidth == 32;
     SizeType = Is32BitArch ? UnsignedInt : UnsignedLong;
