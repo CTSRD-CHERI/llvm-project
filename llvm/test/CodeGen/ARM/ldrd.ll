@@ -80,7 +80,7 @@ return:                                           ; preds = %bb, %entry
 
 ; CHECK-LABEL: Func1:
 define void @Func1() nounwind ssp "no-frame-pointer-elim"="true" {
-entry: 
+entry:
 ; A8: movw [[BASE:r[0-9]+]], :lower16:{{.*}}TestVar{{.*}}
 ; A8: movt [[BASE]], :upper16:{{.*}}TestVar{{.*}}
 ; A8: ldrd [[FIELD1:r[0-9]+]], [[FIELD2:r[0-9]+]], {{\[}}[[BASE]], #4]

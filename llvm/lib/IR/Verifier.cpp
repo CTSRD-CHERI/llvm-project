@@ -3182,8 +3182,8 @@ void Verifier::visitAllocaInst(AllocaInst &AI) {
   SmallPtrSet<Type*, 4> Visited;
 #ifndef NDEBUG
   PointerType *PTy = AI.getType();
-  Assert((PTy->getAddressSpace() ==
-          AI.getModule()->getDataLayout().getAllocaAS()),
+  // TODO: Relax this restriction?
+  Assert(PTy->getAddressSpace() == DL.getAllocaAddrSpace(),
          "Allocation instruction pointer not in the stack address space!",
          &AI);
 #endif

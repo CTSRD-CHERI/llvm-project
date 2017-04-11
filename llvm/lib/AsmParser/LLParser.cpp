@@ -19,6 +19,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/AsmParser/SlotMapping.h"
 #include "llvm/IR/Argument.h"
+#include "llvm/IR/AttributeSetNode.h"
 #include "llvm/IR/AutoUpgrade.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CallingConv.h"
@@ -131,9 +132,8 @@ bool LLParser::ValidateEndOfModule() {
 
     if (Function *Fn = dyn_cast<Function>(V)) {
       AttributeList AS = Fn->getAttributes();
-      AttrBuilder FnAttrs(AS.getFnAttributes(), AttributeList::FunctionIndex);
-      AS = AS.removeAttributes(Context, AttributeList::FunctionIndex,
-                               AS.getFnAttributes());
+      AttrBuilder FnAttrs(AS.getFnAttributes());
+      AS = AS.removeAttributes(Context, AttributeList::FunctionIndex);
 
       FnAttrs.merge(B);
 
@@ -150,9 +150,8 @@ bool LLParser::ValidateEndOfModule() {
       Fn->setAttributes(AS);
     } else if (CallInst *CI = dyn_cast<CallInst>(V)) {
       AttributeList AS = CI->getAttributes();
-      AttrBuilder FnAttrs(AS.getFnAttributes(), AttributeList::FunctionIndex);
-      AS = AS.removeAttributes(Context, AttributeList::FunctionIndex,
-                               AS.getFnAttributes());
+      AttrBuilder FnAttrs(AS.getFnAttributes());
+      AS = AS.removeAttributes(Context, AttributeList::FunctionIndex);
       FnAttrs.merge(B);
       AS = AS.addAttributes(
           Context, AttributeList::FunctionIndex,
@@ -160,9 +159,8 @@ bool LLParser::ValidateEndOfModule() {
       CI->setAttributes(AS);
     } else if (InvokeInst *II = dyn_cast<InvokeInst>(V)) {
       AttributeList AS = II->getAttributes();
-      AttrBuilder FnAttrs(AS.getFnAttributes(), AttributeList::FunctionIndex);
-      AS = AS.removeAttributes(Context, AttributeList::FunctionIndex,
-                               AS.getFnAttributes());
+      AttrBuilder FnAttrs(AS.getFnAttributes());
+      AS = AS.removeAttributes(Context, AttributeList::FunctionIndex);
       FnAttrs.merge(B);
       AS = AS.addAttributes(
           Context, AttributeList::FunctionIndex,
@@ -1854,6 +1852,34 @@ bool LLParser::ParseOptionalCommaAlign(unsigned &Alignment,
   return false;
 }
 
+/// ParseOptionalCommaAddrSpace
+///   ::=
+///   ::= ',' addrspace(1)
+///
+/// This returns with AteExtraComma set to true if it ate an excess comma at the
+/// end.
+bool LLParser::ParseOptionalCommaAddrSpace(unsigned &AddrSpace,
+                                           LocTy &Loc,
+                                           bool &AteExtraComma) {
+  AteExtraComma = false;
+  while (EatIfPresent(lltok::comma)) {
+    // Metadata at the end is an early exit.
+    if (Lex.getKind() == lltok::MetadataVar) {
+      AteExtraComma = true;
+      return false;
+    }
+
+    Loc = Lex.getLoc();
+    if (Lex.getKind() != lltok::kw_addrspace)
+      return Error(Lex.getLoc(), "expected metadata or 'addrspace'");
+
+    if (ParseOptionalAddrSpace(AddrSpace))
+      return true;
+  }
+
+  return false;
+}
+
 bool LLParser::parseAllocSizeArguments(unsigned &BaseSizeArg,
                                        Optional<unsigned> &HowManyArg) {
   Lex.Lex();
@@ -2097,7 +2123,6 @@ bool LLParser::ParseParameterList(SmallVectorImpl<ParamInfo> &ArgList,
   if (ParseToken(lltok::lparen, "expected '(' in call"))
     return true;
 
-  unsigned AttrIndex = 1;
   while (Lex.getKind() != lltok::rparen) {
     // If this isn't the first argument, we need a comma.
     if (!ArgList.empty() &&
@@ -2132,7 +2157,7 @@ bool LLParser::ParseParameterList(SmallVectorImpl<ParamInfo> &ArgList,
         return true;
     }
     ArgList.push_back(ParamInfo(
-        ArgLoc, V, AttributeList::get(V->getContext(), AttrIndex++, ArgAttrs)));
+        ArgLoc, V, AttributeSetNode::get(V->getContext(), ArgAttrs)));
   }
 
   if (IsMustTailCall && InVarArgsFunc)
@@ -2237,9 +2262,8 @@ bool LLParser::ParseArgumentList(SmallVectorImpl<ArgInfo> &ArgList,
     if (!FunctionType::isValidArgumentType(ArgTy))
       return Error(TypeLoc, "invalid type for function argument");
 
-    unsigned AttrIndex = 1;
-    ArgList.emplace_back(TypeLoc, ArgTy, AttributeList::get(ArgTy->getContext(),
-                                                            AttrIndex++, Attrs),
+    ArgList.emplace_back(TypeLoc, ArgTy,
+                         AttributeSetNode::get(ArgTy->getContext(), Attrs),
                          std::move(Name));
 
     while (EatIfPresent(lltok::comma)) {
@@ -2266,10 +2290,9 @@ bool LLParser::ParseArgumentList(SmallVectorImpl<ArgInfo> &ArgList,
       if (!ArgTy->isFirstClassType())
         return Error(TypeLoc, "invalid type for function argument");
 
-      ArgList.emplace_back(
-          TypeLoc, ArgTy,
-          AttributeList::get(ArgTy->getContext(), AttrIndex++, Attrs),
-          std::move(Name));
+      ArgList.emplace_back(TypeLoc, ArgTy,
+                           AttributeSetNode::get(ArgTy->getContext(), Attrs),
+                           std::move(Name));
     }
   }
 
@@ -2293,7 +2316,7 @@ bool LLParser::ParseFunctionType(Type *&Result) {
   for (unsigned i = 0, e = ArgList.size(); i != e; ++i) {
     if (!ArgList[i].Name.empty())
       return Error(ArgList[i].Loc, "argument name invalid in function type");
-    if (ArgList[i].Attrs.hasAttributes(i + 1))
+    if (ArgList[i].Attrs)
       return Error(ArgList[i].Loc,
                    "argument attributes invalid in function type");
   }
@@ -4754,23 +4777,16 @@ bool LLParser::ParseFunctionHeader(Function *&Fn, bool isDefine) {
   // Okay, if we got here, the function is syntactically valid.  Convert types
   // and do semantic checks.
   std::vector<Type*> ParamTypeList;
-  SmallVector<AttributeList, 8> Attrs;
+  SmallVector<AttributeSetNode *, 8> Attrs;
 
-  if (RetAttrs.hasAttributes())
-    Attrs.push_back(AttributeList::get(RetType->getContext(),
-                                       AttributeList::ReturnIndex, RetAttrs));
+  Attrs.push_back(AttributeSetNode::get(Context, RetAttrs));
 
   for (unsigned i = 0, e = ArgList.size(); i != e; ++i) {
     ParamTypeList.push_back(ArgList[i].Ty);
-    if (ArgList[i].Attrs.hasAttributes(i + 1)) {
-      AttrBuilder B(ArgList[i].Attrs, i + 1);
-      Attrs.push_back(AttributeList::get(RetType->getContext(), i + 1, B));
-    }
+    Attrs.push_back(ArgList[i].Attrs);
   }
 
-  if (FuncAttrs.hasAttributes())
-    Attrs.push_back(AttributeList::get(
-        RetType->getContext(), AttributeList::FunctionIndex, FuncAttrs));
+  Attrs.push_back(AttributeSetNode::get(Context, FuncAttrs));
 
   AttributeList PAL = AttributeList::get(Context, Attrs);
 
@@ -5382,10 +5398,8 @@ bool LLParser::ParseInvoke(Instruction *&Inst, PerFunctionState &PFS) {
     return true;
 
   // Set up the Attribute for the function.
-  SmallVector<AttributeList, 8> Attrs;
-  if (RetAttrs.hasAttributes())
-    Attrs.push_back(AttributeList::get(RetType->getContext(),
-                                       AttributeList::ReturnIndex, RetAttrs));
+  SmallVector<AttributeSetNode *, 8> Attrs;
+  Attrs.push_back(AttributeSetNode::get(Context, RetAttrs));
 
   SmallVector<Value*, 8> Args;
 
@@ -5405,22 +5419,16 @@ bool LLParser::ParseInvoke(Instruction *&Inst, PerFunctionState &PFS) {
       return Error(ArgList[i].Loc, "argument is not of expected type '" +
                    getTypeString(ExpectedTy) + "'");
     Args.push_back(ArgList[i].V);
-    if (ArgList[i].Attrs.hasAttributes(i + 1)) {
-      AttrBuilder B(ArgList[i].Attrs, i + 1);
-      Attrs.push_back(AttributeList::get(RetType->getContext(), i + 1, B));
-    }
+    Attrs.push_back(ArgList[i].Attrs);
   }
 
   if (I != E)
     return Error(CallLoc, "not enough parameters specified for call");
 
-  if (FnAttrs.hasAttributes()) {
-    if (FnAttrs.hasAlignmentAttr())
-      return Error(CallLoc, "invoke instructions may not have an alignment");
+  if (FnAttrs.hasAlignmentAttr())
+    return Error(CallLoc, "invoke instructions may not have an alignment");
 
-    Attrs.push_back(AttributeList::get(RetType->getContext(),
-                                       AttributeList::FunctionIndex, FnAttrs));
-  }
+  Attrs.push_back(AttributeSetNode::get(Context, FnAttrs));
 
   // Finish off the Attribute and check them
   AttributeList PAL = AttributeList::get(Context, Attrs);
@@ -5984,10 +5992,8 @@ bool LLParser::ParseCall(Instruction *&Inst, PerFunctionState &PFS,
     return true;
 
   // Set up the Attribute for the function.
-  SmallVector<AttributeList, 8> Attrs;
-  if (RetAttrs.hasAttributes())
-    Attrs.push_back(AttributeList::get(RetType->getContext(),
-                                       AttributeList::ReturnIndex, RetAttrs));
+  SmallVector<AttributeSetNode *, 8> Attrs;
+  Attrs.push_back(AttributeSetNode::get(Context, RetAttrs));
 
   SmallVector<Value*, 8> Args;
 
@@ -6007,22 +6013,16 @@ bool LLParser::ParseCall(Instruction *&Inst, PerFunctionState &PFS,
       return Error(ArgList[i].Loc, "argument is not of expected type '" +
                    getTypeString(ExpectedTy) + "'");
     Args.push_back(ArgList[i].V);
-    if (ArgList[i].Attrs.hasAttributes(i + 1)) {
-      AttrBuilder B(ArgList[i].Attrs, i + 1);
-      Attrs.push_back(AttributeList::get(RetType->getContext(), i + 1, B));
-    }
+    Attrs.push_back(ArgList[i].Attrs);
   }
 
   if (I != E)
     return Error(CallLoc, "not enough parameters specified for call");
 
-  if (FnAttrs.hasAttributes()) {
-    if (FnAttrs.hasAlignmentAttr())
-      return Error(CallLoc, "call instructions may not have an alignment");
+  if (FnAttrs.hasAlignmentAttr())
+    return Error(CallLoc, "call instructions may not have an alignment");
 
-    Attrs.push_back(AttributeList::get(RetType->getContext(),
-                                       AttributeList::FunctionIndex, FnAttrs));
-  }
+  Attrs.push_back(AttributeSetNode::get(Context, FnAttrs));
 
   // Finish off the Attribute and check them
   AttributeList PAL = AttributeList::get(Context, Attrs);
@@ -6047,8 +6047,9 @@ bool LLParser::ParseCall(Instruction *&Inst, PerFunctionState &PFS,
 ///       (',' 'align' i32)?
 int LLParser::ParseAlloc(Instruction *&Inst, PerFunctionState &PFS) {
   Value *Size = nullptr;
-  LocTy SizeLoc, TyLoc;
+  LocTy SizeLoc, TyLoc, ASLoc;
   unsigned Alignment = 0;
+  unsigned AddrSpace = 0;
   Type *Ty = nullptr;
 
   bool IsInAlloca = EatIfPresent(lltok::kw_inalloca);
@@ -6062,12 +6063,21 @@ int LLParser::ParseAlloc(Instruction *&Inst, PerFunctionState &PFS) {
   bool AteExtraComma = false;
   if (EatIfPresent(lltok::comma)) {
     if (Lex.getKind() == lltok::kw_align) {
-      if (ParseOptionalAlignment(Alignment)) return true;
+      if (ParseOptionalAlignment(Alignment))
+        return true;
+      if (ParseOptionalCommaAddrSpace(AddrSpace, ASLoc, AteExtraComma))
+        return true;
+    } else if (Lex.getKind() == lltok::kw_addrspace) {
+      ASLoc = Lex.getLoc();
+      if (ParseOptionalAddrSpace(AddrSpace))
+        return true;
     } else if (Lex.getKind() == lltok::MetadataVar) {
       AteExtraComma = true;
     } else {
       if (ParseTypeAndValue(Size, SizeLoc, PFS) ||
-          ParseOptionalCommaAlign(Alignment, AteExtraComma))
+          ParseOptionalCommaAlign(Alignment, AteExtraComma) ||
+          (!AteExtraComma &&
+           ParseOptionalCommaAddrSpace(AddrSpace, ASLoc, AteExtraComma)))
         return true;
     }
   }
@@ -6075,9 +6085,14 @@ int LLParser::ParseAlloc(Instruction *&Inst, PerFunctionState &PFS) {
   if (Size && !Size->getType()->isIntegerTy())
     return Error(SizeLoc, "element count must have integer type");
 
-  unsigned AS = M->getDataLayout().getAllocaAS();
-  AllocaInst *AI = new AllocaInst(Ty, AS, Size);
-  AI->setAlignment(Alignment);
+  const DataLayout &DL = M->getDataLayout();
+  unsigned AS = DL.getAllocaAddrSpace();
+  if (AS != AddrSpace) {
+    // TODO: In the future it should be possible to specify addrspace per-alloca.
+    return Error(ASLoc, "address space must match datalayout");
+  }
+
+  AllocaInst *AI = new AllocaInst(Ty, AS, Size, Alignment);
   AI->setUsedWithInAlloca(IsInAlloca);
   AI->setSwiftError(IsSwiftError);
   Inst = AI;

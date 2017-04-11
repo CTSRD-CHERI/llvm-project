@@ -106,8 +106,8 @@ private:
   /// Defaults to false.
   bool BigEndian;
 
+  unsigned AllocaAddrSpace;
   unsigned StackNaturalAlign;
-  unsigned      AllocaAS;              ///< Address space for allocas
 
   enum ManglingModeT {
     MM_None,
@@ -190,7 +190,7 @@ public:
     clear();
     StringRepresentation = DL.StringRepresentation;
     BigEndian = DL.isBigEndian();
-    AllocaAS = DL.AllocaAS;
+    AllocaAddrSpace = DL.AllocaAddrSpace;
     StackNaturalAlign = DL.StackNaturalAlign;
     ManglingMode = DL.ManglingMode;
     LegalIntWidths = DL.LegalIntWidths;
@@ -246,6 +246,7 @@ public:
   }
 
   unsigned getStackAlignment() const { return StackNaturalAlign; }
+  unsigned getAllocaAddrSpace() const { return AllocaAddrSpace; }
 
   bool hasMicrosoftFastStdCallMangling() const {
     return ManglingMode == MM_WinCOFFX86;
@@ -381,10 +382,12 @@ public:
     return getTypeSizeInBits(Ty);
   }
 
+  // XXXAR: TODO: remove these and use upstream ones
+  // This is just a hack to get stuff to compile
   /// Returns the address space used for alloca instructions.
-  unsigned getAllocaAS() const { return AllocaAS; }
+  unsigned getAllocaAS() const { return AllocaAddrSpace; }
   /// Sets the address space used for allocas
-  void setAllocaAS(unsigned AS) { AllocaAS = AS; }
+  void setAllocaAS(unsigned AS) { AllocaAddrSpace = AS; }
 
   /// Size examples:
   ///

@@ -466,7 +466,7 @@ static Instruction *createMalloc(Instruction *InsertBefore,
   Value *MallocFunc = MallocF;
   if (!MallocFunc)
     // prototype malloc as "void *malloc(size_t)"
-    MallocFunc = M->getOrInsertFunction("malloc", BPTy, IntPtrTy, nullptr);
+    MallocFunc = M->getOrInsertFunction("malloc", BPTy, IntPtrTy);
   PointerType *AllocPtrType = PointerType::getUnqual(AllocTy);
   CallInst *MCall = nullptr;
   Instruction *Result = nullptr;
@@ -560,7 +560,7 @@ static Instruction *createFree(Value *Source,
   Type *VoidTy = Type::getVoidTy(M->getContext());
   Type *IntPtrTy = Type::getInt8PtrTy(M->getContext());
   // prototype free as "void free(void*)"
-  Value *FreeFunc = M->getOrInsertFunction("free", VoidTy, IntPtrTy, nullptr);
+  Value *FreeFunc = M->getOrInsertFunction("free", VoidTy, IntPtrTy);
   CallInst *Result = nullptr;
   Value *PtrCast = Source;
   if (InsertBefore) {
@@ -1199,50 +1199,36 @@ static Value *getAISize(LLVMContext &Context, Value *Amt) {
   return Amt;
 }
 
-static unsigned getAS(BasicBlock *BB) {
-  if (BB == 0)
-    return 0;
-  return BB->getModule()->getDataLayout().getAllocaAS();
-}
+AllocaInst::AllocaInst(Type *Ty, unsigned AddrSpace, const Twine &Name,
+                       Instruction *InsertBefore)
+  : AllocaInst(Ty, AddrSpace, /*ArraySize=*/nullptr, Name, InsertBefore) {}
 
-static unsigned getAS(Instruction *I) {
-  return getAS(I->getParent());
-}
+AllocaInst::AllocaInst(Type *Ty, unsigned AddrSpace, const Twine &Name,
+                       BasicBlock *InsertAtEnd)
+  : AllocaInst(Ty, AddrSpace, /*ArraySize=*/nullptr, Name, InsertAtEnd) {}
 
-AllocaInst::AllocaInst(Type *Ty, unsigned AS, Value *ArraySize,
+AllocaInst::AllocaInst(Type *Ty, unsigned AddrSpace, Value *ArraySize,
                        const Twine &Name, Instruction *InsertBefore)
-  : UnaryInstruction(PointerType::get(Ty, AS), Alloca,
+  : AllocaInst(Ty, AddrSpace, ArraySize, /*Align=*/0, Name, InsertBefore) {}
+
+AllocaInst::AllocaInst(Type *Ty, unsigned AddrSpace, Value *ArraySize,
+                       const Twine &Name, BasicBlock *InsertAtEnd)
+  : AllocaInst(Ty, AddrSpace, ArraySize, /*Align=*/0, Name, InsertAtEnd) {}
+
+AllocaInst::AllocaInst(Type *Ty, unsigned AddrSpace, Value *ArraySize,
+                       unsigned Align, const Twine &Name,
+                       Instruction *InsertBefore)
+  : UnaryInstruction(PointerType::get(Ty, AddrSpace), Alloca,
                      getAISize(Ty->getContext(), ArraySize), InsertBefore),
     AllocatedType(Ty) {
-  setAlignment(0);
-  assert(!Ty->isVoidTy() && "Cannot allocate void!");
-  setName(Name);
-}
-
-AllocaInst::AllocaInst(Type *Ty, const Twine &Name, Instruction *InsertBefore)
-    : AllocaInst(Ty, /*ArraySize=*/nullptr, Name, InsertBefore) {}
-
-AllocaInst::AllocaInst(Type *Ty, const Twine &Name, BasicBlock *InsertAtEnd)
-    : AllocaInst(Ty, /*ArraySize=*/nullptr, Name, InsertAtEnd) {}
-
-AllocaInst::AllocaInst(Type *Ty, Value *ArraySize, const Twine &Name,
-                       Instruction *InsertBefore)
-    : AllocaInst(Ty, ArraySize, /*Align=*/0, Name, InsertBefore) {}
-
-AllocaInst::AllocaInst(Type *Ty, Value *ArraySize, const Twine &Name,
-                       BasicBlock *InsertAtEnd)
-    : AllocaInst(Ty, ArraySize, /*Align=*/0, Name, InsertAtEnd) {}
-
-AllocaInst::AllocaInst(Type *Ty, Value *ArraySize, unsigned Align,
-                       const Twine &Name, Instruction *InsertBefore)
-    :  AllocaInst(Ty, getAS(InsertBefore), ArraySize, Name, InsertBefore) {
   setAlignment(Align);
 }
 
-AllocaInst::AllocaInst(Type *Ty, Value *ArraySize, unsigned Align,
-                       const Twine &Name, BasicBlock *InsertAtEnd)
-    : UnaryInstruction(PointerType::get(Ty, getAS(InsertAtEnd)), Alloca,
-                       getAISize(Ty->getContext(), ArraySize), InsertAtEnd),
+AllocaInst::AllocaInst(Type *Ty, unsigned AddrSpace, Value *ArraySize,
+                       unsigned Align, const Twine &Name,
+                       BasicBlock *InsertAtEnd)
+  : UnaryInstruction(PointerType::get(Ty, AddrSpace), Alloca,
+                     getAISize(Ty->getContext(), ArraySize), InsertAtEnd),
       AllocatedType(Ty) {
   setAlignment(Align);
   assert(!Ty->isVoidTy() && "Cannot allocate void!");
@@ -3852,8 +3838,8 @@ InsertValueInst *InsertValueInst::cloneImpl() const {
 AllocaInst *AllocaInst::cloneImpl() const {
   AllocaInst *Result = new AllocaInst(getAllocatedType(),
                                       getType()->getPointerAddressSpace(),
-                                      (Value *)getOperand(0));
-  Result->setAlignment(getAlignment());
+  // XXXAR: UPSTREAM uses getAddressSpace here: getType()->getAddressSpace(),
+                                      (Value *)getOperand(0), getAlignment());
   Result->setUsedWithInAlloca(isUsedWithInAlloca());
   Result->setSwiftError(isSwiftError());
   return Result;
