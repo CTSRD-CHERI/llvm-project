@@ -1616,10 +1616,8 @@ void llvm::GetReturnInfo(Type *ReturnType, AttributeList attr,
         VT = MinVT;
     }
 
-    unsigned NumParts =
-        TLI.getNumRegistersForCallingConv(ReturnType->getContext(), VT);
-    MVT PartVT =
-        TLI.getRegisterTypeForCallingConv(ReturnType->getContext(), VT);
+    unsigned NumParts = TLI.getNumRegisters(ReturnType->getContext(), VT);
+    MVT PartVT = TLI.getRegisterType(ReturnType->getContext(), VT);
 
     // 'inreg' on function refers to return value
     ISD::ArgFlagsTy Flags = ISD::ArgFlagsTy();
@@ -1820,7 +1818,7 @@ Value *TargetLoweringBase::getSafeStackPointerLocation(IRBuilder<> &IRB) const {
   Module *M = IRB.GetInsertBlock()->getParent()->getParent();
   Type *StackPtrTy = Type::getInt8PtrTy(M->getContext());
   Value *Fn = M->getOrInsertFunction("__safestack_pointer_address",
-                                     StackPtrTy->getPointerTo(0), nullptr);
+                                     StackPtrTy->getPointerTo(0));
   return IRB.CreateCall(Fn);
 }
 
