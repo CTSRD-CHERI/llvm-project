@@ -39,8 +39,7 @@ LLVMContextImpl::LLVMContextImpl(LLVMContext &C)
     Int16Ty(C, 16),
     Int32Ty(C, 32),
     Int64Ty(C, 64),
-    Int128Ty(C, 128),
-    AllocaAS(0) {
+    Int128Ty(C, 128) {
   InlineAsmDiagHandler = nullptr;
   InlineAsmDiagContext = nullptr;
   DiagnosticHandler = nullptr;

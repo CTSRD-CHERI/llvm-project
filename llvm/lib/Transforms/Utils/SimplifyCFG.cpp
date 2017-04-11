@@ -5201,7 +5201,10 @@ static bool SwitchToLookupTable(SwitchInst *SI, IRBuilder<> &Builder,
   // can't construct jump tables if we're using the pure-cap ABI because we
   // don't have a way of statically generating all of the constant GEPs to jump
   // table entries.
-  if (DL.getAllocaAS() != 0)
+  // XXXAR: this check does not seem to be working as we are still generating
+  // jump tables for the purecap ABI? Possibly caused by DL->setAllocaAS(0); in
+  // CheriSandboxABI.cpp?
+  if (DL.getAllocaAddrSpace() != 0)
     return false;
 
   // FIXME: If the switch is too sparse for a lookup table, perhaps we could

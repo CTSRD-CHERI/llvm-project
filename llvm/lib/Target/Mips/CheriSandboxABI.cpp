@@ -43,7 +43,7 @@ public:
     M = &Mod;
     DL = new DataLayout(M);
     // Early abort if we aren't using capabilities on the stack
-    if (DL->getAllocaAS() != 200)
+    if (DL->getAllocaAddrSpace() != 200)
       return false;
     // We're going to replace all allocas (in address space 200) with ones in
     // AS 0, followed by an intrinsic that expands to a

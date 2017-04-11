@@ -247,6 +247,8 @@ public:
 
   unsigned getStackAlignment() const { return StackNaturalAlign; }
   unsigned getAllocaAddrSpace() const { return AllocaAddrSpace; }
+  /// Sets the address space used for allocas
+  void setAllocaAS(unsigned AS) { AllocaAddrSpace = AS; }
 
   bool hasMicrosoftFastStdCallMangling() const {
     return ManglingMode == MM_WinCOFFX86;
@@ -381,13 +383,6 @@ public:
       return getPointerBaseSizeInBits(Ty->getPointerAddressSpace());
     return getTypeSizeInBits(Ty);
   }
-
-  // XXXAR: TODO: remove these and use upstream ones
-  // This is just a hack to get stuff to compile
-  /// Returns the address space used for alloca instructions.
-  unsigned getAllocaAS() const { return AllocaAddrSpace; }
-  /// Sets the address space used for allocas
-  void setAllocaAS(unsigned AS) { AllocaAddrSpace = AS; }
 
   /// Size examples:
   ///

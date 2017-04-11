@@ -1222,8 +1222,6 @@ public:
 
   int getOrAddScopeRecordIdxEntry(MDNode *N, int ExistingIdx);
   int getOrAddScopeInlinedAtIdxEntry(MDNode *Scope, MDNode *IA,int ExistingIdx);
-
-  int AllocaAS;
   
   /// \brief A set of interned tags for operand bundles.  The StringMap maps
   /// bundle tags to their IDs.
