@@ -654,7 +654,6 @@ private:
     } else if (Op == ">>") {
       return ExprResult(LHS.lshr(RHS), Loc, Range);
     } else {
-      SMRange Range = getSourceRange(Op);
       return error("Invalid operator: '" + Op + "'", Loc, Range);
     }
   }
