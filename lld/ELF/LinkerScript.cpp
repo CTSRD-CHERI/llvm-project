@@ -69,7 +69,7 @@ template <class ELFT> static SymbolBody *addRegular(SymbolAssignment *Cmd) {
   ExprValue Value = Cmd->Expression();
   SectionBase *Sec = Value.isAbsolute() ? nullptr : Value.Sec;
   replaceBody<DefinedRegular>(Sym, Cmd->Name, /*IsLocal=*/false, Visibility,
-                              STT_NOTYPE, 0, 0, Sec, nullptr);
+                              STT_NOTYPE, Value.getValue(), 0, Sec, nullptr);
   return Sym->body();
 }
 
