@@ -344,6 +344,12 @@ static T *getStoreValueForLoadHelper(T *SrcVal, unsigned Offset, Type *LoadTy,
 
   uint64_t StoreSize = (DL.getTypeSizeInBits(SrcVal->getType()) + 7) / 8;
   uint64_t LoadSize = (DL.getTypeSizeInBits(LoadTy) + 7) / 8;
+
+  if ((LoadSize == StoreSize) && Offset == 0 &&
+       SrcVal->getType()->isPointerTy() && LoadTy->isPointerTy())
+    return coerceAvailableValueToLoadTypeHelper(
+        Helper.CreateBitCast(SrcVal, LoadTy), LoadTy, Helper, DL);
+
   // Compute which bits of the stored value are being used by the load.  Convert
   // to an integer type to start with.
   if (SrcVal->getType()->getScalarType()->isPointerTy())
