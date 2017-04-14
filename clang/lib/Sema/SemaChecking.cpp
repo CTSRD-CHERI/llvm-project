@@ -3196,8 +3196,9 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
     case llvm::Triple::mipsel:
     case llvm::Triple::mips64el:
     case llvm::Triple::cheri:
-      Diag(DRE->getLocStart(), diag::warn_atomic_builtins_broken_mips)
-        << pointerType->getPointeeType() << FirstArg->getSourceRange();
+      if (!getLangOpts().Optimize && !getLangOpts().OptimizeSize)
+        Diag(DRE->getLocStart(), diag::warn_atomic_builtins_broken_mips)
+          << pointerType->getPointeeType() << FirstArg->getSourceRange();
     default:
       break;
   }
