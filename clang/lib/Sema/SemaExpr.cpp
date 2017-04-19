@@ -1777,7 +1777,10 @@ Sema::BuildDeclRefExpr(ValueDecl *D, QualType Ty, ExprValueKind VK,
       !Diags.isIgnored(diag::warn_arc_repeated_use_of_weak, E->getLocStart()))
       recordUseOfEvaluatedWeak(E);
 
-  if (FieldDecl *FD = dyn_cast<FieldDecl>(D)) {
+  FieldDecl *FD = dyn_cast<FieldDecl>(D);
+  if (IndirectFieldDecl *IFD = dyn_cast<IndirectFieldDecl>(D))
+    FD = IFD->getAnonField();
+  if (FD) {
     UnusedPrivateFields.remove(FD);
     // Just in case we're building an illegal pointer-to-member.
     if (FD->isBitField())
@@ -2130,6 +2133,12 @@ Sema::ActOnIdExpression(Scope *S, CXXScopeSpec &SS,
   DeclarationName Name = NameInfo.getName();
   IdentifierInfo *II = Name.getAsIdentifierInfo();
   SourceLocation NameLoc = NameInfo.getLoc();
+
+  if (II && II->isEditorPlaceholder()) {
+    // FIXME: When typed placeholders are supported we can create a typed
+    // placeholder expression node.
+    return ExprError();
+  }
 
   // C++ [temp.dep.expr]p3:
   //   An id-expression is type-dependent if it contains:

@@ -117,6 +117,8 @@ CodeGenModule::CodeGenModule(ASTContext &C, const HeaderSearchOptions &HSO,
   IntPtrTy = llvm::IntegerType::get(LLVMContext, Target.getMaxPointerRange());
   Int8PtrTy = Int8Ty->getPointerTo(getTargetCodeGenInfo().getDefaultAS());
   Int8PtrPtrTy = Int8PtrTy->getPointerTo(getTargetCodeGenInfo().getDefaultAS());
+  AllocaInt8PtrTy = Int8Ty->getPointerTo(
+      M.getDataLayout().getAllocaAddrSpace());
 
   RuntimeCC = getTargetCodeGenInfo().getABIInfo().getRuntimeCC();
   BuiltinCC = getTargetCodeGenInfo().getABIInfo().getBuiltinCC();
@@ -849,10 +851,9 @@ void CodeGenModule::SetLLVMFunctionAttributes(const Decl *D,
                                               const CGFunctionInfo &Info,
                                               llvm::Function *F) {
   unsigned CallingConv;
-  AttributeListType AttributeList;
-  ConstructAttributeList(F->getName(), Info, D, AttributeList, CallingConv,
-                         false);
-  F->setAttributes(llvm::AttributeList::get(getLLVMContext(), AttributeList));
+  llvm::AttributeList PAL;
+  ConstructAttributeList(F->getName(), Info, D, PAL, CallingConv, false);
+  F->setAttributes(PAL);
   F->setCallingConv(static_cast<llvm::CallingConv::ID>(CallingConv));
 }
 
@@ -2981,11 +2982,8 @@ static void replaceUsesOfNonProtoConstant(llvm::Constant *old,
       continue;
 
     // Get the call site's attribute list.
-    SmallVector<llvm::AttributeSetNode *, 8> newAttrs;
+    SmallVector<llvm::AttributeSet, 8> newArgAttrs;
     llvm::AttributeList oldAttrs = callSite.getAttributes();
-
-    // Collect any return attributes from the call.
-    newAttrs.push_back(oldAttrs.getRetAttributes());
 
     // If the function was passed too few arguments, don't transform.
     unsigned newNumArgs = newFn->arg_size();
@@ -2995,20 +2993,18 @@ static void replaceUsesOfNonProtoConstant(llvm::Constant *old,
     // If any of the types mismatch, we don't transform.
     unsigned argNo = 0;
     bool dontTransform = false;
-    for (llvm::Function::arg_iterator ai = newFn->arg_begin(),
-           ae = newFn->arg_end(); ai != ae; ++ai, ++argNo) {
-      if (callSite.getArgument(argNo)->getType() != ai->getType()) {
+    for (llvm::Argument &A : newFn->args()) {
+      if (callSite.getArgument(argNo)->getType() != A.getType()) {
         dontTransform = true;
         break;
       }
 
       // Add any parameter attributes.
-      newAttrs.push_back(oldAttrs.getParamAttributes(argNo + 1));
+      newArgAttrs.push_back(oldAttrs.getParamAttributes(argNo));
+      argNo++;
     }
     if (dontTransform)
       continue;
-
-    newAttrs.push_back(oldAttrs.getFnAttributes());
 
     // Okay, we can transform this.  Create the new call instruction and copy
     // over the required information.
@@ -3033,8 +3029,9 @@ static void replaceUsesOfNonProtoConstant(llvm::Constant *old,
 
     if (!newCall->getType()->isVoidTy())
       newCall->takeName(callSite.getInstruction());
-    newCall.setAttributes(
-        llvm::AttributeList::get(newFn->getContext(), newAttrs));
+    newCall.setAttributes(llvm::AttributeList::get(
+        newFn->getContext(), oldAttrs.getFnAttributes(),
+        oldAttrs.getRetAttributes(), newArgAttrs));
     newCall.setCallingConv(callSite.getCallingConv());
 
     // Finally, remove the old call, replacing any uses with the new one.
@@ -3875,6 +3872,11 @@ void CodeGenModule::EmitTopLevelDecl(Decl *D) {
     EmitDeclContext(cast<NamespaceDecl>(D));
     break;
   case Decl::CXXRecord:
+    if (DebugInfo) {
+      if (auto *ES = D->getASTContext().getExternalSource())
+        if (ES->hasExternalDefinitions(D) == ExternalASTSource::EK_Never)
+          DebugInfo->completeUnusedClass(cast<CXXRecordDecl>(*D));
+    }
     // Emit any static data members, they may be definitions.
     for (auto *I : cast<CXXRecordDecl>(D)->decls())
       if (isa<VarDecl>(I) || isa<CXXRecordDecl>(I))

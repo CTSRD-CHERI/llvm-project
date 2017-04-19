@@ -17,6 +17,7 @@
 #include "xray_fdr_logging.h"
 #include <algorithm>
 #include <bitset>
+#include <cerrno>
 #include <cstring>
 #include <sys/syscall.h>
 #include <sys/time.h>
@@ -117,10 +118,15 @@ XRayLogFlushStatus fdrLoggingFlush() XRAY_NEVER_INSTRUMENT {
     return Result;
   }
 
+  // Test for required CPU features and cache the cycle frequency
+  static bool TSCSupported = probeRequiredCPUFeatures();
+  static uint64_t CycleFrequency = TSCSupported ? getTSCFrequency()
+                                   : __xray::NanosecondsPerSecond;
+
   XRayFileHeader Header;
   Header.Version = 1;
   Header.Type = FileTypes::FDR_LOG;
-  Header.CycleFrequency = getTSCFrequency();
+  Header.CycleFrequency = CycleFrequency;
   // FIXME: Actually check whether we have 'constant_tsc' and 'nonstop_tsc'
   // before setting the values in the header.
   Header.ConstantTSC = 1;
@@ -194,7 +200,10 @@ void fdrLoggingHandleArg0(int32_t FuncId,
   unsigned char CPU;
   uint64_t TSC;
 
-  if(probeRequiredCPUFeatures()) {
+  // Test once for required CPU features
+  static bool TSCSupported = probeRequiredCPUFeatures();
+
+  if(TSCSupported) {
     TSC = __xray::readTSC(CPU);
   } else {
     // FIXME: This code needs refactoring as it appears in multiple locations

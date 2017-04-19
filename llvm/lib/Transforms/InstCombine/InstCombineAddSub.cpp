@@ -902,7 +902,7 @@ bool InstCombiner::WillNotOverflowSignedAdd(Value *LHS, Value *RHS,
   APInt RHSKnownOne(BitWidth, 0);
   computeKnownBits(RHS, RHSKnownZero, RHSKnownOne, 0, &CxtI);
 
-  // Addition of two 2's compliment numbers having opposite signs will never
+  // Addition of two 2's complement numbers having opposite signs will never
   // overflow.
   if ((LHSKnownOne[BitWidth - 1] && RHSKnownZero[BitWidth - 1]) ||
       (LHSKnownZero[BitWidth - 1] && RHSKnownOne[BitWidth - 1]))
@@ -939,7 +939,7 @@ bool InstCombiner::WillNotOverflowSignedSub(Value *LHS, Value *RHS,
   APInt RHSKnownOne(BitWidth, 0);
   computeKnownBits(RHS, RHSKnownZero, RHSKnownOne, 0, &CxtI);
 
-  // Subtraction of two 2's compliment numbers having identical signs will
+  // Subtraction of two 2's complement numbers having identical signs will
   // never overflow.
   if ((LHSKnownOne[BitWidth - 1] && RHSKnownOne[BitWidth - 1]) ||
       (LHSKnownZero[BitWidth - 1] && RHSKnownZero[BitWidth - 1]))
@@ -1570,6 +1570,11 @@ Instruction *InstCombiner::visitSub(BinaryOperator &I) {
     // Try to fold constant sub into select arguments.
     if (SelectInst *SI = dyn_cast<SelectInst>(Op1))
       if (Instruction *R = FoldOpIntoSelect(I, SI))
+        return R;
+
+    // Try to fold constant sub into PHI values.
+    if (PHINode *PN = dyn_cast<PHINode>(Op1))
+      if (Instruction *R = foldOpIntoPhi(I, PN))
         return R;
 
     // C-(X+C2) --> (C-C2)-X

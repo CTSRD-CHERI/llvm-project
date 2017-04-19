@@ -84,9 +84,6 @@ class EmitAssemblyHelper {
     return TargetIRAnalysis();
   }
 
-  /// Set LLVM command line options passed through -backend-option.
-  void setCommandLineOpts();
-
   void CreatePasses(legacy::PassManager &MPM, legacy::FunctionPassManager &FPM);
 
   /// Generates the TargetMachine.
@@ -623,7 +620,7 @@ void EmitAssemblyHelper::CreatePasses(legacy::PassManager &MPM,
   PMBuilder.populateModulePassManager(MPM);
 }
 
-void EmitAssemblyHelper::setCommandLineOpts() {
+static void setCommandLineOpts(const CodeGenOptions &CodeGenOpts) {
   SmallVector<const char *, 16> BackendArgs;
   BackendArgs.push_back("clang"); // Fake program name.
   if (!CodeGenOpts.DebugPass.empty()) {
@@ -696,7 +693,7 @@ void EmitAssemblyHelper::EmitAssembly(BackendAction Action,
                                       std::unique_ptr<raw_pwrite_stream> OS) {
   TimeRegion Region(llvm::TimePassesIsEnabled ? &CodeGenerationTime : nullptr);
 
-  setCommandLineOpts();
+  setCommandLineOpts(CodeGenOpts);
 
   bool UsesCodeGen = (Action != Backend_EmitNothing &&
                       Action != Backend_EmitBC &&
@@ -825,7 +822,7 @@ static PassBuilder::OptimizationLevel mapToLevel(const CodeGenOptions &Opts) {
 void EmitAssemblyHelper::EmitAssemblyWithNewPassManager(
     BackendAction Action, std::unique_ptr<raw_pwrite_stream> OS) {
   TimeRegion Region(llvm::TimePassesIsEnabled ? &CodeGenerationTime : nullptr);
-  setCommandLineOpts();
+  setCommandLineOpts(CodeGenOpts);
 
   // The new pass manager always makes a target machine available to passes
   // during construction.
@@ -962,6 +959,8 @@ static void runThinLTOBackend(ModuleSummaryIndex *CombinedIndex, Module *M,
   StringMap<std::map<GlobalValue::GUID, GlobalValueSummary *>>
       ModuleToDefinedGVSummaries;
   CombinedIndex->collectDefinedGVSummariesPerModule(ModuleToDefinedGVSummaries);
+
+  setCommandLineOpts(CGOpts);
 
   // We can simply import the values mentioned in the combined index, since
   // we should only invoke this using the individual indexes written out

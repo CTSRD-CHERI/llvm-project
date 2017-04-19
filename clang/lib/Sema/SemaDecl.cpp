@@ -628,6 +628,9 @@ void Sema::DiagnoseUnknownTypeName(IdentifierInfo *&II,
                                    CXXScopeSpec *SS,
                                    ParsedType &SuggestedType,
                                    bool AllowClassTemplates) {
+  // Don't report typename errors for editor placeholders.
+  if (II->isEditorPlaceholder())
+    return;
   // We don't have anything to suggest (yet).
   SuggestedType = nullptr;
 
@@ -13753,6 +13756,7 @@ CreateNewDecl:
 
   if (Attr)
     ProcessDeclAttributeList(S, New, Attr);
+  AddPragmaAttributes(S, New);
 
   // If this has an identifier, add it to the scope stack.
   if (TUK == TUK_Friend) {
@@ -13876,10 +13880,8 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
       RD->completeDefinition();
   }
 
-  if (auto *RD = dyn_cast<CXXRecordDecl>(Tag)) {
+  if (isa<CXXRecordDecl>(Tag)) {
     FieldCollector->FinishClass();
-    if (Context.getLangOpts().Modules)
-      RD->computeODRHash();
   }
 
   // Exit this scope of this tag's definition.
@@ -15340,6 +15342,7 @@ Decl *Sema::ActOnEnumConstant(Scope *S, Decl *theEnumDecl, Decl *lastEnumConst,
 
   // Process attributes.
   if (Attr) ProcessDeclAttributeList(S, New, Attr);
+  AddPragmaAttributes(S, New);
 
   // Register this decl in the current scope stack.
   New->setAccess(TheEnumDecl->getAccess());

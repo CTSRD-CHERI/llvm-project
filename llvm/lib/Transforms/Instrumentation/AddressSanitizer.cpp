@@ -1625,11 +1625,12 @@ void AddressSanitizerModule::SetComdatForGlobalMetadata(
 GlobalVariable *
 AddressSanitizerModule::CreateMetadataGlobal(Module &M, Constant *Initializer,
                                              StringRef OriginalName) {
-  GlobalVariable *Metadata =
-      new GlobalVariable(M, Initializer->getType(), false,
-                         GlobalVariable::InternalLinkage, Initializer,
-                         Twine("__asan_global_") +
-                             GlobalValue::getRealLinkageName(OriginalName));
+  auto Linkage = TargetTriple.isOSBinFormatMachO()
+                     ? GlobalVariable::InternalLinkage
+                     : GlobalVariable::PrivateLinkage;
+  GlobalVariable *Metadata = new GlobalVariable(
+      M, Initializer->getType(), false, Linkage, Initializer,
+      Twine("__asan_global_") + GlobalValue::getRealLinkageName(OriginalName));
   Metadata->setSection(getGlobalMetadataSection());
   return Metadata;
 }
@@ -2585,7 +2586,7 @@ void FunctionStackPoisoner::processStaticAllocas() {
     Value *NewAllocaPtr = IRB.CreateIntToPtr(
         IRB.CreateAdd(LocalStackBase, ConstantInt::get(IntptrTy, Desc.Offset)),
         AI->getType());
-    replaceDbgDeclareForAlloca(AI, NewAllocaPtr, DIB, /*Deref=*/true);
+    replaceDbgDeclareForAlloca(AI, NewAllocaPtr, DIB, /*Deref=*/false);
     AI->replaceAllUsesWith(NewAllocaPtr);
   }
 

@@ -3239,30 +3239,26 @@ AArch64TargetLowering::LowerCall(CallLoweringInfo &CLI,
   // If the callee is a GlobalAddress/ExternalSymbol node (quite common, every
   // direct call is) turn it into a TargetGlobalAddress/TargetExternalSymbol
   // node so that legalize doesn't hack it.
-  if (getTargetMachine().getCodeModel() == CodeModel::Large &&
-      Subtarget->isTargetMachO()) {
-    if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
+  if (auto *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
+    auto GV = G->getGlobal();
+    if (Subtarget->classifyGlobalFunctionReference(GV, getTargetMachine()) ==
+        AArch64II::MO_GOT) {
+      Callee = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0, AArch64II::MO_GOT);
+      Callee = DAG.getNode(AArch64ISD::LOADgot, DL, PtrVT, Callee);
+    } else {
       const GlobalValue *GV = G->getGlobal();
-      bool InternalLinkage = GV->hasInternalLinkage();
-      if (InternalLinkage)
-        Callee = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0, 0);
-      else {
-        Callee =
-            DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0, AArch64II::MO_GOT);
-        Callee = DAG.getNode(AArch64ISD::LOADgot, DL, PtrVT, Callee);
-      }
-    } else if (ExternalSymbolSDNode *S =
-                   dyn_cast<ExternalSymbolSDNode>(Callee)) {
+      Callee = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0, 0);
+    }
+  } else if (auto *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
+    if (getTargetMachine().getCodeModel() == CodeModel::Large &&
+        Subtarget->isTargetMachO()) {
       const char *Sym = S->getSymbol();
       Callee = DAG.getTargetExternalSymbol(Sym, PtrVT, AArch64II::MO_GOT);
       Callee = DAG.getNode(AArch64ISD::LOADgot, DL, PtrVT, Callee);
+    } else {
+      const char *Sym = S->getSymbol();
+      Callee = DAG.getTargetExternalSymbol(Sym, PtrVT, 0);
     }
-  } else if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
-    const GlobalValue *GV = G->getGlobal();
-    Callee = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0, 0);
-  } else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    const char *Sym = S->getSymbol();
-    Callee = DAG.getTargetExternalSymbol(Sym, PtrVT, 0);
   }
 
   // We don't usually want to end the call-sequence here because we would tidy
@@ -6590,14 +6586,19 @@ FailedModImm:
   if (!isConstant && !usesOnlyOneValue) {
     SDValue Vec = DAG.getUNDEF(VT);
     SDValue Op0 = Op.getOperand(0);
-    unsigned ElemSize = VT.getScalarSizeInBits();
     unsigned i = 0;
-    // For 32 and 64 bit types, use SCALAR_TO_VECTOR for lane zero to
+
+    // Use SCALAR_TO_VECTOR for lane zero to
     // a) Avoid a RMW dependency on the full vector register, and
     // b) Allow the register coalescer to fold away the copy if the
     //    value is already in an S or D register, and we're forced to emit an
     //    INSERT_SUBREG that we can't fold anywhere.
-    if (!Op0.isUndef() && (ElemSize == 32 || ElemSize == 64)) {
+    //
+    // We also allow types like i8 and i16 which are illegal scalar but legal
+    // vector element types. After type-legalization the inserted value is
+    // extended (i32) and it is safe to cast them to the vector type by ignoring
+    // the upper bits of the lowest lane (e.g. v8i8, v4i16).
+    if (!Op0.isUndef()) {
       Vec = DAG.getNode(ISD::SCALAR_TO_VECTOR, dl, VT, Op0);
       ++i;
     }
@@ -7125,7 +7126,7 @@ bool AArch64TargetLowering::isProfitableToHoist(Instruction *I) const {
   if (I->getOpcode() != Instruction::FMul)
     return true;
 
-  if (I->getNumUses() != 1)
+  if (!I->hasOneUse())
     return true;
 
   Instruction *User = I->user_back();
@@ -10390,7 +10391,7 @@ bool AArch64TargetLowering::isUsedByReturnOnly(SDNode *N,
 // call. This will cause the optimizers to attempt to move, or duplicate,
 // return instructions to help enable tail call optimizations for this
 // instruction.
-bool AArch64TargetLowering::mayBeEmittedAsTailCall(CallInst *CI) const {
+bool AArch64TargetLowering::mayBeEmittedAsTailCall(const CallInst *CI) const {
   return CI->isTailCall();
 }
 

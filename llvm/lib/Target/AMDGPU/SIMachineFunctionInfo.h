@@ -113,6 +113,8 @@ class SIMachineFunctionInfo final : public AMDGPUMachineFunction {
 
   // Graphics info.
   unsigned PSInputAddr;
+  unsigned PSInputEnable;
+
   bool ReturnsVoid;
 
   // A pair of default/requested minimum/maximum flat work group sizes.
@@ -131,17 +133,12 @@ class SIMachineFunctionInfo final : public AMDGPUMachineFunction {
   AMDGPUBufferPseudoSourceValue BufferPSV;
   AMDGPUImagePseudoSourceValue ImagePSV;
 
-public:
-  // FIXME: Make private
+private:
   unsigned LDSWaveSpillSize;
-  unsigned PSInputEna;
-
-
   unsigned ScratchOffsetReg;
   unsigned NumUserSGPRs;
   unsigned NumSystemSGPRs;
 
-private:
   bool HasSpilledSGPRs;
   bool HasSpilledVGPRs;
   bool HasNonSpillStackObjects;
@@ -424,12 +421,20 @@ public:
     return PSInputAddr;
   }
 
+  unsigned getPSInputEnable() const {
+    return PSInputEnable;
+  }
+
   bool isPSInputAllocated(unsigned Index) const {
     return PSInputAddr & (1 << Index);
   }
 
   void markPSInputAllocated(unsigned Index) {
     PSInputAddr |= 1 << Index;
+  }
+
+  void markPSInputEnabled(unsigned Index) {
+    PSInputEnable |= 1 << Index;
   }
 
   bool returnsVoid() const {
@@ -526,6 +531,10 @@ public:
       return AMDGPU::VGPR2;
     }
     llvm_unreachable("unexpected dimension");
+  }
+
+  unsigned getLDSWaveSpillSize() const {
+    return LDSWaveSpillSize;
   }
 
   const AMDGPUBufferPseudoSourceValue *getBufferPSV() const {
