@@ -24,7 +24,7 @@ MipsMCAsmInfo::MipsMCAsmInfo(const Triple &TheTriple) {
   if ((TheTriple.getArch() == Triple::mips64el) ||
       (TheTriple.getArch() == Triple::mips64) ||
       (TheTriple.getArch() == Triple::cheri)) {
-    PointerSize = CalleeSaveStackSlotSize = 8;
+    CodePointerSize = CalleeSaveStackSlotSize = 8;
   }
 
   // FIXME: This condition isn't quite right but it's the best we can do until

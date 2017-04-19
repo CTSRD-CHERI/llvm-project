@@ -79,8 +79,6 @@ public:
   };
 
 private:
-  unsigned BitWidth; ///< The number of bits in this APInt.
-
   /// This union is used to store the integer value. When the
   /// integer bit-width <= 64, it uses VAL, otherwise it uses pVal.
   union {
@@ -88,13 +86,15 @@ private:
     uint64_t *pVal; ///< Used to store the >64 bits integer value.
   };
 
+  unsigned BitWidth; ///< The number of bits in this APInt.
+
   friend struct DenseMapAPIntKeyInfo;
 
   /// \brief Fast internal constructor
   ///
   /// This constructor is used only internally for speed of construction of
   /// temporaries. It is unsafe for general use so it is not public.
-  APInt(uint64_t *val, unsigned bits) : BitWidth(bits), pVal(val) {}
+  APInt(uint64_t *val, unsigned bits) : pVal(val), BitWidth(bits) {}
 
   /// \brief Determine if this APInt just has one word to store value.
   ///
@@ -189,10 +189,13 @@ private:
   void initSlowCase(const APInt &that);
 
   /// out-of-line slow case for shl
-  APInt shlSlowCase(unsigned shiftAmt) const;
+  void shlSlowCase(unsigned ShiftAmt);
+
+  /// out-of-line slow case for lshr.
+  void lshrSlowCase(unsigned ShiftAmt);
 
   /// out-of-line slow case for operator=
-  APInt &AssignSlowCase(const APInt &RHS);
+  void AssignSlowCase(const APInt &RHS);
 
   /// out-of-line slow case for operator==
   bool EqualSlowCase(const APInt &RHS) const LLVM_READONLY;
@@ -216,13 +219,13 @@ private:
   void flipAllBitsSlowCase();
 
   /// out-of-line slow case for operator&=.
-  APInt& AndAssignSlowCase(const APInt& RHS);
+  void AndAssignSlowCase(const APInt& RHS);
 
   /// out-of-line slow case for operator|=.
-  APInt& OrAssignSlowCase(const APInt& RHS);
+  void OrAssignSlowCase(const APInt& RHS);
 
   /// out-of-line slow case for operator^=.
-  APInt& XorAssignSlowCase(const APInt& RHS);
+  void XorAssignSlowCase(const APInt& RHS);
 
 public:
   /// \name Constructors
@@ -290,7 +293,7 @@ public:
   }
 
   /// \brief Move Constructor.
-  APInt(APInt &&that) : BitWidth(that.BitWidth), VAL(that.VAL) {
+  APInt(APInt &&that) : VAL(that.VAL), BitWidth(that.BitWidth) {
     that.BitWidth = 0;
   }
 
@@ -305,7 +308,7 @@ public:
   ///
   /// This is useful for object deserialization (pair this with the static
   ///  method Read).
-  explicit APInt() : BitWidth(1), VAL(0) {}
+  explicit APInt() : VAL(0), BitWidth(1) {}
 
   /// \brief Returns whether this instance allocated memory.
   bool needsCleanup() const { return !isSingleWord(); }
@@ -329,6 +332,20 @@ public:
   ///
   /// This tests the high bit of the APInt to determine if it is unset.
   bool isNonNegative() const { return !isNegative(); }
+
+  /// \brief Determine if sign bit of this APInt is set.
+  ///
+  /// This tests the high bit of this APInt to determine if it is set.
+  ///
+  /// \returns true if this APInt has its sign bit set, false otherwise.
+  bool isSignBitSet() const { return (*this)[BitWidth-1]; }
+
+  /// \brief Determine if sign bit of this APInt is clear.
+  ///
+  /// This tests the high bit of this APInt to determine if it is clear.
+  ///
+  /// \returns true if this APInt has its sign bit clear, false otherwise.
+  bool isSignBitClear() const { return !isSignBitSet(); }
 
   /// \brief Determine if this APInt Value is positive.
   ///
@@ -620,7 +637,9 @@ public:
 
   /// \brief Postfix increment operator.
   ///
-  /// \returns a new APInt value representing *this incremented by one
+  /// Increments *this by 1.
+  ///
+  /// \returns a new APInt value representing the original value of *this.
   const APInt operator++(int) {
     APInt API(*this);
     ++(*this);
@@ -634,7 +653,9 @@ public:
 
   /// \brief Postfix decrement operator.
   ///
-  /// \returns a new APInt representing *this decremented by one.
+  /// Decrements *this by 1.
+  ///
+  /// \returns a new APInt value representing the original value of *this.
   const APInt operator--(int) {
     APInt API(*this);
     --(*this);
@@ -670,29 +691,22 @@ public:
       return clearUnusedBits();
     }
 
-    return AssignSlowCase(RHS);
+    AssignSlowCase(RHS);
+    return *this;
   }
 
   /// @brief Move assignment operator.
   APInt &operator=(APInt &&that) {
-    if (!isSingleWord()) {
-      // The MSVC STL shipped in 2013 requires that self move assignment be a
-      // no-op.  Otherwise algorithms like stable_sort will produce answers
-      // where half of the output is left in a moved-from state.
-      if (this == &that)
-        return *this;
+    assert(this != &that && "Self-move not supported");
+    if (!isSingleWord())
       delete[] pVal;
-    }
 
     // Use memcpy so that type based alias analysis sees both VAL and pVal
     // as modified.
     memcpy(&VAL, &that.VAL, sizeof(uint64_t));
 
-    // If 'this == &that', avoid zeroing our own bitwidth by storing to 'that'
-    // first.
-    unsigned ThatBitWidth = that.BitWidth;
+    BitWidth = that.BitWidth;
     that.BitWidth = 0;
-    BitWidth = ThatBitWidth;
 
     return *this;
   }
@@ -723,11 +737,11 @@ public:
   /// \returns *this after ANDing with RHS.
   APInt &operator&=(const APInt &RHS) {
     assert(BitWidth == RHS.BitWidth && "Bit widths must be the same");
-    if (isSingleWord()) {
+    if (isSingleWord())
       VAL &= RHS.VAL;
-      return *this;
-    }
-    return AndAssignSlowCase(RHS);
+    else
+      AndAssignSlowCase(RHS);
+    return *this;
   }
 
   /// \brief Bitwise AND assignment operator.
@@ -753,11 +767,11 @@ public:
   /// \returns *this after ORing with RHS.
   APInt &operator|=(const APInt &RHS) {
     assert(BitWidth == RHS.BitWidth && "Bit widths must be the same");
-    if (isSingleWord()) {
+    if (isSingleWord())
       VAL |= RHS.VAL;
-      return *this;
-    }
-    return OrAssignSlowCase(RHS);
+    else
+      OrAssignSlowCase(RHS);
+    return *this;
   }
 
   /// \brief Bitwise OR assignment operator.
@@ -783,11 +797,11 @@ public:
   /// \returns *this after XORing with RHS.
   APInt &operator^=(const APInt &RHS) {
     assert(BitWidth == RHS.BitWidth && "Bit widths must be the same");
-    if (isSingleWord()) {
+    if (isSingleWord())
       VAL ^= RHS.VAL;
-      return *this;
-    }
-    return XorAssignSlowCase(RHS);
+    else
+      XorAssignSlowCase(RHS);
+    return *this;
   }
 
   /// \brief Bitwise XOR assignment operator.
@@ -832,9 +846,16 @@ public:
   ///
   /// Shifts *this left by shiftAmt and assigns the result to *this.
   ///
-  /// \returns *this after shifting left by shiftAmt
-  APInt &operator<<=(unsigned shiftAmt) {
-    *this = shl(shiftAmt);
+  /// \returns *this after shifting left by ShiftAmt
+  APInt &operator<<=(unsigned ShiftAmt) {
+    if (isSingleWord()) {
+      if (ShiftAmt >= BitWidth)
+        VAL = 0;
+      else
+        VAL <<= ShiftAmt;
+      return clearUnusedBits();
+    }
+    shlSlowCase(ShiftAmt);
     return *this;
   }
 
@@ -865,19 +886,31 @@ public:
   /// \brief Logical right-shift function.
   ///
   /// Logical right-shift this APInt by shiftAmt.
-  APInt lshr(unsigned shiftAmt) const;
+  APInt lshr(unsigned shiftAmt) const {
+    APInt R(*this);
+    R.lshrInPlace(shiftAmt);
+    return R;
+  }
+
+  /// Logical right-shift this APInt by ShiftAmt in place.
+  void lshrInPlace(unsigned ShiftAmt) {
+    if (isSingleWord()) {
+      if (ShiftAmt >= BitWidth)
+        VAL = 0;
+      else
+        VAL >>= ShiftAmt;
+      return;
+    }
+    lshrSlowCase(ShiftAmt);
+  }
 
   /// \brief Left-shift function.
   ///
   /// Left-shift this APInt by shiftAmt.
   APInt shl(unsigned shiftAmt) const {
-    assert(shiftAmt <= BitWidth && "Invalid shift amount");
-    if (isSingleWord()) {
-      if (shiftAmt >= BitWidth)
-        return APInt(BitWidth, 0); // avoid undefined shift results
-      return APInt(BitWidth, VAL << shiftAmt);
-    }
-    return shlSlowCase(shiftAmt);
+    APInt R(*this);
+    R <<= shiftAmt;
+    return R;
   }
 
   /// \brief Rotate left by rotateAmt.
@@ -894,7 +927,14 @@ public:
   /// \brief Logical right-shift function.
   ///
   /// Logical right-shift this APInt by shiftAmt.
-  APInt lshr(const APInt &shiftAmt) const;
+  APInt lshr(const APInt &ShiftAmt) const {
+    APInt R(*this);
+    R.lshrInPlace(ShiftAmt);
+    return R;
+  }
+
+  /// Logical right-shift this APInt by ShiftAmt in place.
+  void lshrInPlace(const APInt &ShiftAmt);
 
   /// \brief Left-shift function.
   ///
@@ -1698,10 +1738,14 @@ public:
   /// DST += RHS + CARRY where CARRY is zero or one.  Returns the carry flag.
   static WordType tcAdd(WordType *, const WordType *,
                         WordType carry, unsigned);
+  /// DST += RHS.  Returns the carry flag.
+  static WordType tcAddPart(WordType *, WordType, unsigned);
 
   /// DST -= RHS + CARRY where CARRY is zero or one. Returns the carry flag.
   static WordType tcSubtract(WordType *, const WordType *,
                              WordType carry, unsigned);
+  /// DST -= RHS.  Returns the carry flag.
+  static WordType tcSubtractPart(WordType *, WordType, unsigned);
 
   /// DST += SRC * MULTIPLIER + PART   if add is true
   /// DST  = SRC * MULTIPLIER + PART   if add is false
@@ -1744,13 +1788,13 @@ public:
                       WordType *remainder, WordType *scratch,
                       unsigned parts);
 
-  /// Shift a bignum left COUNT bits.  Shifted in bits are zero.  There are no
-  /// restrictions on COUNT.
-  static void tcShiftLeft(WordType *, unsigned parts, unsigned count);
+  /// Shift a bignum left Count bits. Shifted in bits are zero. There are no
+  /// restrictions on Count.
+  static void tcShiftLeft(WordType *, unsigned Words, unsigned Count);
 
-  /// Shift a bignum right COUNT bits.  Shifted in bits are zero.  There are no
-  /// restrictions on COUNT.
-  static void tcShiftRight(WordType *, unsigned parts, unsigned count);
+  /// Shift a bignum right Count bits.  Shifted in bits are zero.  There are no
+  /// restrictions on Count.
+  static void tcShiftRight(WordType *, unsigned Words, unsigned Count);
 
   /// The obvious AND, OR and XOR and complement operations.
   static void tcAnd(WordType *, const WordType *, unsigned);
@@ -1762,10 +1806,14 @@ public:
   static int tcCompare(const WordType *, const WordType *, unsigned);
 
   /// Increment a bignum in-place.  Return the carry flag.
-  static WordType tcIncrement(WordType *, unsigned);
+  static WordType tcIncrement(WordType *dst, unsigned parts) {
+    return tcAddPart(dst, 1, parts);
+  }
 
   /// Decrement a bignum in-place.  Return the borrow flag.
-  static WordType tcDecrement(WordType *, unsigned);
+  static WordType tcDecrement(WordType *dst, unsigned parts) {
+    return tcSubtractPart(dst, 1, parts);
+  }
 
   /// Set the least significant BITS and clear the rest.
   static void tcSetLeastSignificantBits(WordType *, unsigned, unsigned bits);
@@ -1937,10 +1985,10 @@ inline const APInt &umax(const APInt &A, const APInt &B) {
   return A.ugt(B) ? A : B;
 }
 
-/// \brief Compute GCD of two APInt values.
+/// \brief Compute GCD of two unsigned APInt values.
 ///
 /// This function returns the greatest common divisor of the two APInt values
-/// using Euclid's algorithm.
+/// using Stein's algorithm.
 ///
 /// \returns the greatest common divisor of A and B.
 APInt GreatestCommonDivisor(APInt A, APInt B);

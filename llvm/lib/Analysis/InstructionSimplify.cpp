@@ -75,20 +75,16 @@ static Value *SimplifyXorInst(Value *, Value *, const Query &, unsigned);
 static Value *SimplifyCastInst(unsigned, Value *, Type *,
                                const Query &, unsigned);
 
-/// For a boolean type, or a vector of boolean type, return false, or
-/// a vector with every element false, as appropriate for the type.
+/// For a boolean type or a vector of boolean type, return false or a vector
+/// with every element false.
 static Constant *getFalse(Type *Ty) {
-  assert(Ty->getScalarType()->isIntegerTy(1) &&
-         "Expected i1 type or a vector of i1!");
-  return Constant::getNullValue(Ty);
+  return ConstantInt::getFalse(Ty);
 }
 
-/// For a boolean type, or a vector of boolean type, return true, or
-/// a vector with every element true, as appropriate for the type.
+/// For a boolean type or a vector of boolean type, return true or a vector
+/// with every element true.
 static Constant *getTrue(Type *Ty) {
-  assert(Ty->getScalarType()->isIntegerTy(1) &&
-         "Expected i1 type or a vector of i1!");
-  return Constant::getAllOnesValue(Ty);
+  return ConstantInt::getTrue(Ty);
 }
 
 /// isSameCompare - Is V equivalent to the comparison "LHS Pred RHS"?
@@ -3800,6 +3796,8 @@ static Value *SimplifyGEPInst(Type *SrcTy, ArrayRef<Value *> Ops,
   Type *GEPTy = PointerType::get(LastType, AS);
   if (VectorType *VT = dyn_cast<VectorType>(Ops[0]->getType()))
     GEPTy = VectorType::get(GEPTy, VT->getNumElements());
+  else if (VectorType *VT = dyn_cast<VectorType>(Ops[1]->getType()))
+    GEPTy = VectorType::get(GEPTy, VT->getNumElements());
 
   if (isa<UndefValue>(Ops[0]))
     return UndefValue::get(GEPTy);
@@ -4082,11 +4080,66 @@ Value *llvm::SimplifyCastInst(unsigned CastOpc, Value *Op, Type *Ty,
                             RecursionLimit);
 }
 
+/// For the given destination element of a shuffle, peek through shuffles to
+/// match a root vector source operand that contains that element in the same
+/// vector lane (ie, the same mask index), so we can eliminate the shuffle(s).
+static Value *foldIdentityShuffles(int DestElt, Value *Op0, Value *Op1,
+                                   Constant *Mask, Value *RootVec, int RootElt,
+                                   unsigned MaxRecurse) {
+  if (!MaxRecurse--)
+    return nullptr;
+
+  // Bail out if any mask value is undefined. That kind of shuffle may be
+  // simplified further based on demanded bits or other folds.
+  int MaskVal = ShuffleVectorInst::getMaskValue(Mask, RootElt);
+  if (MaskVal == -1)
+    return nullptr;
+
+  // The mask value chooses which source operand we need to look at next.
+  Value *SourceOp;
+  int InVecNumElts = Op0->getType()->getVectorNumElements();
+  if (MaskVal < InVecNumElts) {
+    RootElt = MaskVal;
+    SourceOp = Op0;
+  } else {
+    RootElt = MaskVal - InVecNumElts;
+    SourceOp = Op1;
+  }
+
+  // If the source operand is a shuffle itself, look through it to find the
+  // matching root vector.
+  if (auto *SourceShuf = dyn_cast<ShuffleVectorInst>(SourceOp)) {
+    return foldIdentityShuffles(
+        DestElt, SourceShuf->getOperand(0), SourceShuf->getOperand(1),
+        SourceShuf->getMask(), RootVec, RootElt, MaxRecurse);
+  }
+
+  // TODO: Look through bitcasts? What if the bitcast changes the vector element
+  // size?
+
+  // The source operand is not a shuffle. Initialize the root vector value for
+  // this shuffle if that has not been done yet.
+  if (!RootVec)
+    RootVec = SourceOp;
+
+  // Give up as soon as a source operand does not match the existing root value.
+  if (RootVec != SourceOp)
+    return nullptr;
+
+  // The element must be coming from the same lane in the source vector
+  // (although it may have crossed lanes in intermediate shuffles).
+  if (RootElt != DestElt)
+    return nullptr;
+
+  return RootVec;
+}
+
 static Value *SimplifyShuffleVectorInst(Value *Op0, Value *Op1, Constant *Mask,
                                         Type *RetTy, const Query &Q,
                                         unsigned MaxRecurse) {
+  Type *InVecTy = Op0->getType();
   unsigned MaskNumElts = Mask->getType()->getVectorNumElements();
-  unsigned InVecNumElts = Op0->getType()->getVectorNumElements();
+  unsigned InVecNumElts = InVecTy->getVectorNumElements();
 
   auto *Op0Const = dyn_cast<Constant>(Op0);
   auto *Op1Const = dyn_cast<Constant>(Op1);
@@ -4108,13 +4161,45 @@ static Value *SimplifyShuffleVectorInst(Value *Op0, Value *Op1, Constant *Mask,
       MaskSelects1 = true;
   }
   if (!MaskSelects0 && Op1Const)
-    return ConstantFoldShuffleVectorInstruction(UndefValue::get(Op0->getType()),
+    return ConstantFoldShuffleVectorInstruction(UndefValue::get(InVecTy),
                                                 Op1Const, Mask);
   if (!MaskSelects1 && Op0Const)
-    return ConstantFoldShuffleVectorInstruction(
-        Op0Const, UndefValue::get(Op0->getType()), Mask);
+    return ConstantFoldShuffleVectorInstruction(Op0Const,
+                                                UndefValue::get(InVecTy), Mask);
 
-  return nullptr;
+  // A shuffle of a splat is always the splat itself. Legal if the shuffle's
+  // value type is same as the input vectors' type.
+  if (auto *OpShuf = dyn_cast<ShuffleVectorInst>(Op0))
+    if (!MaskSelects1 && RetTy == InVecTy &&
+        OpShuf->getMask()->getSplatValue())
+      return Op0;
+  if (auto *OpShuf = dyn_cast<ShuffleVectorInst>(Op1))
+    if (!MaskSelects0 && RetTy == InVecTy &&
+        OpShuf->getMask()->getSplatValue())
+      return Op1;
+
+  // Don't fold a shuffle with undef mask elements. This may get folded in a
+  // better way using demanded bits or other analysis.
+  // TODO: Should we allow this?
+  for (unsigned i = 0; i != MaskNumElts; ++i)
+    if (ShuffleVectorInst::getMaskValue(Mask, i) == -1)
+      return nullptr;
+
+  // Check if every element of this shuffle can be mapped back to the
+  // corresponding element of a single root vector. If so, we don't need this
+  // shuffle. This handles simple identity shuffles as well as chains of
+  // shuffles that may widen/narrow and/or move elements across lanes and back.
+  Value *RootVec = nullptr;
+  for (unsigned i = 0; i != MaskNumElts; ++i) {
+    // Note that recursion is limited for each vector element, so if any element
+    // exceeds the limit, this will fail to simplify.
+    RootVec = foldIdentityShuffles(i, Op0, Op1, Mask, RootVec, i, MaxRecurse);
+
+    // We can't replace a widening/narrowing shuffle with one of its operands.
+    if (!RootVec || RootVec->getType() != RetTy)
+      return nullptr;
+  }
+  return RootVec;
 }
 
 /// Given operands for a ShuffleVectorInst, fold the result or return null.
@@ -4614,6 +4699,10 @@ Value *llvm::SimplifyInstruction(Instruction *I, const DataLayout &DL,
 #undef HANDLE_CAST_INST
     Result = SimplifyCastInst(I->getOpcode(), I->getOperand(0), I->getType(),
                               DL, TLI, DT, AC, I);
+    break;
+  case Instruction::Alloca:
+    // No simplifications for Alloca and it can't be constant folded.
+    Result = nullptr;
     break;
   }
 

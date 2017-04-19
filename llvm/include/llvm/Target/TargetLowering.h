@@ -186,7 +186,7 @@ public:
           IsNest(false), IsByVal(false), IsInAlloca(false), IsReturned(false),
           IsSwiftSelf(false), IsSwiftError(false) {}
 
-    void setAttributes(ImmutableCallSite *CS, unsigned AttrIdx);
+    void setAttributes(ImmutableCallSite *CS, unsigned ArgIdx);
   };
   typedef std::vector<ArgListEntry> ArgListTy;
 
@@ -2684,15 +2684,15 @@ public:
                                 ImmutableCallSite &Call) {
       RetTy = ResultType;
 
-      IsInReg = Call.paramHasAttr(0, Attribute::InReg);
+      IsInReg = Call.hasRetAttr(Attribute::InReg);
       DoesNotReturn =
           Call.doesNotReturn() ||
           (!Call.isInvoke() &&
            isa<UnreachableInst>(Call.getInstruction()->getNextNode()));
       IsVarArg = FTy->isVarArg();
       IsReturnValueUsed = !Call.getInstruction()->use_empty();
-      RetSExt = Call.paramHasAttr(0, Attribute::SExt);
-      RetZExt = Call.paramHasAttr(0, Attribute::ZExt);
+      RetSExt = Call.hasRetAttr(Attribute::SExt);
+      RetZExt = Call.hasRetAttr(Attribute::ZExt);
 
       Callee = Target;
 
@@ -2811,7 +2811,7 @@ public:
   /// Return true if the target may be able emit the call instruction as a tail
   /// call. This is used by optimization passes to determine if it's profitable
   /// to duplicate return instructions to enable tailcall optimization.
-  virtual bool mayBeEmittedAsTailCall(CallInst *) const {
+  virtual bool mayBeEmittedAsTailCall(const CallInst *) const {
     return false;
   }
 

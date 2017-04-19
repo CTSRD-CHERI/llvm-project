@@ -98,18 +98,19 @@ bool TargetLowering::parametersInCSRMatch(const MachineRegisterInfo &MRI,
 /// \brief Set CallLoweringInfo attribute flags based on a call instruction
 /// and called function attributes.
 void TargetLoweringBase::ArgListEntry::setAttributes(ImmutableCallSite *CS,
-                                                     unsigned AttrIdx) {
-  IsSExt = CS->paramHasAttr(AttrIdx, Attribute::SExt);
-  IsZExt = CS->paramHasAttr(AttrIdx, Attribute::ZExt);
-  IsInReg = CS->paramHasAttr(AttrIdx, Attribute::InReg);
-  IsSRet = CS->paramHasAttr(AttrIdx, Attribute::StructRet);
-  IsNest = CS->paramHasAttr(AttrIdx, Attribute::Nest);
-  IsByVal = CS->paramHasAttr(AttrIdx, Attribute::ByVal);
-  IsInAlloca = CS->paramHasAttr(AttrIdx, Attribute::InAlloca);
-  IsReturned = CS->paramHasAttr(AttrIdx, Attribute::Returned);
-  IsSwiftSelf = CS->paramHasAttr(AttrIdx, Attribute::SwiftSelf);
-  IsSwiftError = CS->paramHasAttr(AttrIdx, Attribute::SwiftError);
-  Alignment  = CS->getParamAlignment(AttrIdx);
+                                                     unsigned ArgIdx) {
+  IsSExt = CS->paramHasAttr(ArgIdx, Attribute::SExt);
+  IsZExt = CS->paramHasAttr(ArgIdx, Attribute::ZExt);
+  IsInReg = CS->paramHasAttr(ArgIdx, Attribute::InReg);
+  IsSRet = CS->paramHasAttr(ArgIdx, Attribute::StructRet);
+  IsNest = CS->paramHasAttr(ArgIdx, Attribute::Nest);
+  IsByVal = CS->paramHasAttr(ArgIdx, Attribute::ByVal);
+  IsInAlloca = CS->paramHasAttr(ArgIdx, Attribute::InAlloca);
+  IsReturned = CS->paramHasAttr(ArgIdx, Attribute::Returned);
+  IsSwiftSelf = CS->paramHasAttr(ArgIdx, Attribute::SwiftSelf);
+  IsSwiftError = CS->paramHasAttr(ArgIdx, Attribute::SwiftError);
+  // FIXME: getParamAlignment is off by one from argument index.
+  Alignment  = CS->getParamAlignment(ArgIdx + 1);
 }
 
 /// Generate a libcall taking the given operands as arguments and returning a
@@ -573,7 +574,7 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
     // using the bits from the RHS.  Below, we use knowledge about the RHS to
     // simplify the LHS, here we're using information from the LHS to simplify
     // the RHS.
-    if (ConstantSDNode *RHSC = dyn_cast<ConstantSDNode>(Op.getOperand(1))) {
+    if (ConstantSDNode *RHSC = isConstOrConstSplat(Op.getOperand(1))) {
       SDValue Op0 = Op.getOperand(0);
       APInt LHSZero, LHSOne;
       // Do not increment Depth here; that can cause an infinite loop.
@@ -731,8 +732,8 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
       }
     }
 
-    KnownZero = KnownZeroOut;
-    KnownOne  = KnownOneOut;
+    KnownZero = std::move(KnownZeroOut);
+    KnownOne  = std::move(KnownOneOut);
     break;
   case ISD::SELECT:
     if (SimplifyDemandedBits(Op.getOperand(2), NewMask, KnownZero,
@@ -928,8 +929,8 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
                                KnownZero, KnownOne, TLO, Depth+1))
         return true;
       assert((KnownZero & KnownOne) == 0 && "Bits known to be one AND zero?");
-      KnownZero = KnownZero.lshr(ShAmt);
-      KnownOne  = KnownOne.lshr(ShAmt);
+      KnownZero.lshrInPlace(ShAmt);
+      KnownOne.lshrInPlace(ShAmt);
 
       KnownZero.setHighBits(ShAmt);  // High bits known zero.
     }
@@ -969,8 +970,8 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
                                KnownZero, KnownOne, TLO, Depth+1))
         return true;
       assert((KnownZero & KnownOne) == 0 && "Bits known to be one AND zero?");
-      KnownZero = KnownZero.lshr(ShAmt);
-      KnownOne  = KnownOne.lshr(ShAmt);
+      KnownZero.lshrInPlace(ShAmt);
+      KnownOne.lshrInPlace(ShAmt);
 
       // Handle the sign bit, adjusted to where it is now in the mask.
       APInt SignBit = APInt::getSignBit(BitWidth).lshr(ShAmt);
@@ -1206,7 +1207,8 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
 
         APInt HighBits = APInt::getHighBitsSet(OperandBitWidth,
                                                OperandBitWidth - BitWidth);
-        HighBits = HighBits.lshr(ShAmt->getZExtValue()).trunc(BitWidth);
+        HighBits.lshrInPlace(ShAmt->getZExtValue());
+        HighBits = HighBits.trunc(BitWidth);
 
         if (ShAmt->getZExtValue() < BitWidth && !(HighBits & NewMask)) {
           // None of the shifted in bits are needed.  Add a truncate of the
@@ -2052,7 +2054,7 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
         } else {
           ShiftBits = C1.countTrailingZeros();
         }
-        NewC = NewC.lshr(ShiftBits);
+        NewC.lshrInPlace(ShiftBits);
         if (ShiftBits && NewC.getMinSignedBits() <= 64 &&
           isLegalICmpImmediate(NewC.getSExtValue())) {
           auto &DL = DAG.getDataLayout();

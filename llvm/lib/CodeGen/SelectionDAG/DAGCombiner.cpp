@@ -3701,7 +3701,7 @@ SDValue DAGCombiner::visitAND(SDNode *N) {
 
   // fold (and (sign_extend_inreg x, i16 to i32), 1) -> (and x, 1)
   // fold (and (sra)) -> (and (srl)) when possible.
-  if (!VT.isVector() && SimplifyDemandedBits(SDValue(N, 0)))
+  if (SimplifyDemandedBits(SDValue(N, 0)))
     return SDValue(N, 0);
 
   // fold (zext_inreg (extload x)) -> (zextload x)
@@ -5346,7 +5346,7 @@ SDValue DAGCombiner::visitSHL(SDNode *N) {
           Shift = DAG.getNode(ISD::SHL, DL, VT, N0.getOperand(0),
                               DAG.getConstant(c2 - c1, DL, N1.getValueType()));
         } else {
-          Mask = Mask.lshr(c1 - c2);
+          Mask.lshrInPlace(c1 - c2);
           SDLoc DL(N);
           Shift = DAG.getNode(ISD::SRL, DL, VT, N0.getOperand(0),
                               DAG.getConstant(c1 - c2, DL, N1.getValueType()));
@@ -5656,7 +5656,7 @@ SDValue DAGCombiner::visitSRL(SDNode *N) {
                           DAG.getConstant(ShiftAmt, DL0,
                                           getShiftAmountTy(SmallVT)));
       AddToWorklist(SmallShift.getNode());
-      APInt Mask = APInt::getAllOnesValue(OpSizeInBits).lshr(ShiftAmt);
+      APInt Mask = APInt::getLowBitsSet(OpSizeInBits, OpSizeInBits - ShiftAmt);
       SDLoc DL(N);
       return DAG.getNode(ISD::AND, DL, VT,
                          DAG.getNode(ISD::ANY_EXTEND, DL, VT, SmallShift),
@@ -8686,7 +8686,7 @@ ConstantFoldBITCASTofBUILD_VECTOR(SDNode *BV, EVT DstEltVT) {
     for (unsigned j = 0; j != NumOutputsPerInput; ++j) {
       APInt ThisVal = OpVal.trunc(DstBitSize);
       Ops.push_back(DAG.getConstant(ThisVal, DL, DstEltVT));
-      OpVal = OpVal.lshr(DstBitSize);
+      OpVal.lshrInPlace(DstBitSize);
     }
 
     // For big endian targets, swap the order of the pieces of each element.
@@ -12242,18 +12242,19 @@ void DAGCombiner::getStoreMergeCandidates(
       if (!(MemVT.isInteger() && MemVT.bitsEq(Other->getMemoryVT()) &&
             isa<ConstantFPSDNode>(Other->getValue())))
         return false;
-    Ptr = BaseIndexOffset::match(Other->getBasePtr(), DAG);
-    if (!Ptr.equalBaseIndex(BasePtr))
-      return false;
     if (IsLoadSrc)
-      return isa<LoadSDNode>(Other->getValue());
+      if (!isa<LoadSDNode>(Other->getValue()))
+        return false;
     if (IsConstantSrc)
-      return (isa<ConstantSDNode>(Other->getValue()) ||
-              isa<ConstantFPSDNode>(Other->getValue()));
+      if (!(isa<ConstantSDNode>(Other->getValue()) ||
+            isa<ConstantFPSDNode>(Other->getValue())))
+        return false;
     if (IsExtractVecSrc)
-      return (Other->getValue().getOpcode() == ISD::EXTRACT_VECTOR_ELT ||
-              Other->getValue().getOpcode() == ISD::EXTRACT_SUBVECTOR);
-    return false;
+      if (!(Other->getValue().getOpcode() == ISD::EXTRACT_VECTOR_ELT ||
+            Other->getValue().getOpcode() == ISD::EXTRACT_SUBVECTOR))
+        return false;
+    Ptr = BaseIndexOffset::match(Other->getBasePtr(), DAG);
+    return (Ptr.equalBaseIndex(BasePtr));
   };
   // We looking for a root node which is an ancestor to all mergable
   // stores. We search up through a load, to our root and then down
@@ -12273,20 +12274,19 @@ void DAGCombiner::getStoreMergeCandidates(
 
   SDNode *RootNode = (St->getChain()).getNode();
 
-  // Set of Parents of Candidates
-  std::set<SDNode *> CandidateParents;
-
   if (LoadSDNode *Ldn = dyn_cast<LoadSDNode>(RootNode)) {
     RootNode = Ldn->getChain().getNode();
     for (auto I = RootNode->use_begin(), E = RootNode->use_end(); I != E; ++I)
       if (I.getOperandNo() == 0 && isa<LoadSDNode>(*I)) // walk down chain
-        CandidateParents.insert(*I);
+        for (auto I2 = (*I)->use_begin(), E2 = (*I)->use_end(); I2 != E2; ++I2)
+          if (I2.getOperandNo() == 0)
+            if (StoreSDNode *OtherST = dyn_cast<StoreSDNode>(*I2)) {
+              BaseIndexOffset Ptr;
+              if (CandidateMatch(OtherST, Ptr))
+                StoreNodes.push_back(MemOpLink(OtherST, Ptr.Offset));
+            }
   } else
-    CandidateParents.insert(RootNode);
-
-  // check all parents of mergable children
-  for (auto P = CandidateParents.begin(); P != CandidateParents.end(); ++P)
-    for (auto I = (*P)->use_begin(), E = (*P)->use_end(); I != E; ++I)
+    for (auto I = RootNode->use_begin(), E = RootNode->use_end(); I != E; ++I)
       if (I.getOperandNo() == 0)
         if (StoreSDNode *OtherST = dyn_cast<StoreSDNode>(*I)) {
           BaseIndexOffset Ptr;
@@ -12371,6 +12371,27 @@ bool DAGCombiner::MergeConsecutiveStores(StoreSDNode *St) {
             [](MemOpLink LHS, MemOpLink RHS) {
               return LHS.OffsetFromBase < RHS.OffsetFromBase;
             });
+
+  // Store Merge attempts to merge the lowest stores. This generally
+  // works out as if successful, as the remaining stores are checked
+  // after the first collection of stores is merged. However, in the
+  // case that a non-mergeable store is found first, e.g., {p[-2],
+  // p[0], p[1], p[2], p[3]}, we would fail and miss the subsequent
+  // mergeable cases. To prevent this, we prune such stores from the
+  // front of StoreNodes here.
+
+  unsigned StartIdx = 0;
+  while ((StartIdx + 1 < StoreNodes.size()) &&
+         StoreNodes[StartIdx].OffsetFromBase + ElementSizeBytes !=
+             StoreNodes[StartIdx + 1].OffsetFromBase)
+    ++StartIdx;
+
+  // Bail if we don't have enough candidates to merge.
+  if (StartIdx + 1 >= StoreNodes.size())
+    return false;
+
+  if (StartIdx)
+    StoreNodes.erase(StoreNodes.begin(), StoreNodes.begin() + StartIdx);
 
   // Scan the memory operations on the chain and find the first non-consecutive
   // store memory address.
@@ -12482,39 +12503,52 @@ bool DAGCombiner::MergeConsecutiveStores(StoreSDNode *St) {
   // When extracting multiple vector elements, try to store them
   // in one vector store rather than a sequence of scalar stores.
   if (IsExtractVecSrc) {
-    LSBaseSDNode *FirstInChain = StoreNodes[0].MemNode;
-    unsigned FirstStoreAS = FirstInChain->getAddressSpace();
-    unsigned FirstStoreAlign = FirstInChain->getAlignment();
-    unsigned NumStoresToMerge = 0;
-    bool IsVec = MemVT.isVector();
-    for (unsigned i = 0; i < NumConsecutiveStores; ++i) {
-      StoreSDNode *St  = cast<StoreSDNode>(StoreNodes[i].MemNode);
-      unsigned StoreValOpcode = St->getValue().getOpcode();
-      // This restriction could be loosened.
-      // Bail out if any stored values are not elements extracted from a vector.
-      // It should be possible to handle mixed sources, but load sources need
-      // more careful handling (see the block of code below that handles
-      // consecutive loads).
-      if (StoreValOpcode != ISD::EXTRACT_VECTOR_ELT &&
-          StoreValOpcode != ISD::EXTRACT_SUBVECTOR)
-        return false;
+    bool RV = false;
+    while (StoreNodes.size() >= 2) {
+      LSBaseSDNode *FirstInChain = StoreNodes[0].MemNode;
+      unsigned FirstStoreAS = FirstInChain->getAddressSpace();
+      unsigned FirstStoreAlign = FirstInChain->getAlignment();
+      unsigned NumStoresToMerge = 0;
+      bool IsVec = MemVT.isVector();
+      for (unsigned i = 0; i < NumConsecutiveStores; ++i) {
+        StoreSDNode *St = cast<StoreSDNode>(StoreNodes[i].MemNode);
+        unsigned StoreValOpcode = St->getValue().getOpcode();
+        // This restriction could be loosened.
+        // Bail out if any stored values are not elements extracted from a
+        // vector. It should be possible to handle mixed sources, but load
+        // sources need more careful handling (see the block of code below that
+        // handles consecutive loads).
+        if (StoreValOpcode != ISD::EXTRACT_VECTOR_ELT &&
+            StoreValOpcode != ISD::EXTRACT_SUBVECTOR)
+          return false;
 
-      // Find a legal type for the vector store.
-      unsigned Elts = i + 1;
-      if (IsVec) {
-        // When merging vector stores, get the total number of elements.
-        Elts *= MemVT.getVectorNumElements();
+        // Find a legal type for the vector store.
+        unsigned Elts = i + 1;
+        if (IsVec) {
+          // When merging vector stores, get the total number of elements.
+          Elts *= MemVT.getVectorNumElements();
+        }
+        EVT Ty =
+            EVT::getVectorVT(*DAG.getContext(), MemVT.getScalarType(), Elts);
+        bool IsFast;
+        if (TLI.isTypeLegal(Ty) &&
+            TLI.allowsMemoryAccess(Context, DL, Ty, FirstStoreAS,
+                                   FirstStoreAlign, &IsFast) &&
+            IsFast)
+          NumStoresToMerge = i + 1;
       }
-      EVT Ty = EVT::getVectorVT(*DAG.getContext(), MemVT.getScalarType(), Elts);
-      bool IsFast;
-      if (TLI.isTypeLegal(Ty) &&
-          TLI.allowsMemoryAccess(Context, DL, Ty, FirstStoreAS,
-                                 FirstStoreAlign, &IsFast) && IsFast)
-        NumStoresToMerge = i + 1;
-    }
 
-    return MergeStoresOfConstantsOrVecElts(StoreNodes, MemVT, NumStoresToMerge,
-                                           false, true);
+      bool Merged = MergeStoresOfConstantsOrVecElts(
+          StoreNodes, MemVT, NumStoresToMerge, false, true);
+      if (!Merged)
+        break;
+      // Remove merged stores for next iteration.
+      StoreNodes.erase(StoreNodes.begin(),
+                       StoreNodes.begin() + NumStoresToMerge);
+      RV = true;
+      NumConsecutiveStores -= NumStoresToMerge;
+    }
+    return RV;
   }
 
   // Below we handle the case of multiple consecutive stores that
@@ -15119,9 +15153,9 @@ SDValue DAGCombiner::XformToShuffleWithZero(SDNode *N) {
 
       // Extract the sub element from the constant bit mask.
       if (DAG.getDataLayout().isBigEndian()) {
-        Bits = Bits.lshr((Split - SubIdx - 1) * NumSubBits);
+        Bits.lshrInPlace((Split - SubIdx - 1) * NumSubBits);
       } else {
-        Bits = Bits.lshr(SubIdx * NumSubBits);
+        Bits.lshrInPlace(SubIdx * NumSubBits);
       }
 
       if (Split > 1)

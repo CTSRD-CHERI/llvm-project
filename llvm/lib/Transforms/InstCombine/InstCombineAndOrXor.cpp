@@ -724,6 +724,61 @@ Value *InstCombiner::simplifyRangeCheck(ICmpInst *Cmp0, ICmpInst *Cmp1,
   return Builder->CreateICmp(NewPred, Input, RangeEnd);
 }
 
+static Value *
+foldAndOrOfEqualityCmpsWithConstants(ICmpInst *LHS, ICmpInst *RHS,
+                                     bool JoinedByAnd,
+                                     InstCombiner::BuilderTy *Builder) {
+  Value *X = LHS->getOperand(0);
+  if (X != RHS->getOperand(0))
+    return nullptr;
+
+  const APInt *C1, *C2;
+  if (!match(LHS->getOperand(1), m_APInt(C1)) ||
+      !match(RHS->getOperand(1), m_APInt(C2)))
+    return nullptr;
+
+  // We only handle (X != C1 && X != C2) and (X == C1 || X == C2).
+  ICmpInst::Predicate Pred = LHS->getPredicate();
+  if (Pred !=  RHS->getPredicate())
+    return nullptr;
+  if (JoinedByAnd && Pred != ICmpInst::ICMP_NE)
+    return nullptr;
+  if (!JoinedByAnd && Pred != ICmpInst::ICMP_EQ)
+    return nullptr;
+
+  // The larger unsigned constant goes on the right.
+  if (C1->ugt(*C2))
+    std::swap(C1, C2);
+
+  APInt Xor = *C1 ^ *C2;
+  if (Xor.isPowerOf2()) {
+    // If LHSC and RHSC differ by only one bit, then set that bit in X and
+    // compare against the larger constant:
+    // (X == C1 || X == C2) --> (X | (C1 ^ C2)) == C2
+    // (X != C1 && X != C2) --> (X | (C1 ^ C2)) != C2
+    // We choose an 'or' with a Pow2 constant rather than the inverse mask with
+    // 'and' because that may lead to smaller codegen from a smaller constant.
+    Value *Or = Builder->CreateOr(X, ConstantInt::get(X->getType(), Xor));
+    return Builder->CreateICmp(Pred, Or, ConstantInt::get(X->getType(), *C2));
+  }
+
+  // Special case: get the ordering right when the values wrap around zero.
+  // Ie, we assumed the constants were unsigned when swapping earlier.
+  if (*C1 == 0 && C2->isAllOnesValue())
+    std::swap(C1, C2);
+
+  if (*C1 == *C2 - 1) {
+    // (X == 13 || X == 14) --> X - 13 <=u 1
+    // (X != 13 && X != 14) --> X - 13  >u 1
+    // An 'add' is the canonical IR form, so favor that over a 'sub'.
+    Value *Add = Builder->CreateAdd(X, ConstantInt::get(X->getType(), -(*C1)));
+    auto NewPred = JoinedByAnd ? ICmpInst::ICMP_UGT : ICmpInst::ICMP_ULE;
+    return Builder->CreateICmp(NewPred, Add, ConstantInt::get(X->getType(), 1));
+  }
+
+  return nullptr;
+}
+
 /// Fold (icmp)&(icmp) if possible.
 Value *InstCombiner::FoldAndOfICmps(ICmpInst *LHS, ICmpInst *RHS) {
   ICmpInst::Predicate PredL = LHS->getPredicate(), PredR = RHS->getPredicate();
@@ -752,6 +807,9 @@ Value *InstCombiner::FoldAndOfICmps(ICmpInst *LHS, ICmpInst *RHS) {
 
   // E.g. (icmp slt x, n) & (icmp sge x, 0) --> icmp ult x, n
   if (Value *V = simplifyRangeCheck(RHS, LHS, /*Inverted=*/false))
+    return V;
+
+  if (Value *V = foldAndOrOfEqualityCmpsWithConstants(LHS, RHS, true, Builder))
     return V;
 
   // This only handles icmp of constants: (icmp1 A, C1) & (icmp2 B, C2).
@@ -877,17 +935,8 @@ Value *InstCombiner::FoldAndOfICmps(ICmpInst *LHS, ICmpInst *RHS) {
     case ICmpInst::ICMP_SGT: // (X != 13 & X s> 15) -> X s> 15
       return RHS;
     case ICmpInst::ICMP_NE:
-      // Special case to get the ordering right when the values wrap around
-      // zero.
-      if (LHSC->getValue() == 0 && RHSC->getValue().isAllOnesValue())
-        std::swap(LHSC, RHSC);
-      if (LHSC == SubOne(RHSC)) { // (X != 13 & X != 14) -> X-13 >u 1
-        Constant *AddC = ConstantExpr::getNeg(LHSC);
-        Value *Add = Builder->CreateAdd(LHS0, AddC, LHS0->getName() + ".off");
-        return Builder->CreateICmpUGT(Add, ConstantInt::get(Add->getType(), 1),
-                                      LHS0->getName() + ".cmp");
-      }
-      break; // (X != 13 & X != 15) -> no change
+      // Potential folds for this case should already be handled.
+      break;
     }
     break;
   case ICmpInst::ICMP_ULT:
@@ -1272,8 +1321,7 @@ Instruction *InstCombiner::visitAnd(BinaryOperator &I) {
       case Instruction::Sub:
         Value *X;
         ConstantInt *C1;
-        if (match(Op0I, m_BinOp(m_ZExt(m_Value(X)), m_ConstantInt(C1))) ||
-            match(Op0I, m_BinOp(m_ConstantInt(C1), m_ZExt(m_Value(X))))) {
+        if (match(Op0I, m_c_BinOp(m_ZExt(m_Value(X)), m_ConstantInt(C1)))) {
           if (AndRHSMask.isIntN(X->getType()->getScalarSizeInBits())) {
             auto *TruncC1 = ConstantExpr::getTrunc(C1, X->getType());
             Value *BinOp;
@@ -1706,6 +1754,9 @@ Value *InstCombiner::FoldOrOfICmps(ICmpInst *LHS, ICmpInst *RHS,
   if (Value *V = simplifyRangeCheck(RHS, LHS, /*Inverted=*/true))
     return V;
 
+  if (Value *V = foldAndOrOfEqualityCmpsWithConstants(LHS, RHS, false, Builder))
+    return V;
+
   // This only handles icmp of constants: (icmp1 A, C1) | (icmp2 B, C2).
   if (!LHSC || !RHSC)
     return nullptr;
@@ -1773,28 +1824,8 @@ Value *InstCombiner::FoldOrOfICmps(ICmpInst *LHS, ICmpInst *RHS,
     default:
       llvm_unreachable("Unknown integer condition code!");
     case ICmpInst::ICMP_EQ:
-      if (LHS->getOperand(0) == RHS->getOperand(0)) {
-        // if LHSC and RHSC differ only by one bit:
-        // (A == C1 || A == C2) -> (A | (C1 ^ C2)) == C2
-        assert(LHSC->getValue().ule(LHSC->getValue()));
-
-        APInt Xor = LHSC->getValue() ^ RHSC->getValue();
-        if (Xor.isPowerOf2()) {
-          Value *C = Builder->getInt(Xor);
-          Value *Or = Builder->CreateOr(LHS->getOperand(0), C);
-          return Builder->CreateICmp(ICmpInst::ICMP_EQ, Or, RHSC);
-        }
-      }
-
-      if (LHSC == SubOne(RHSC)) {
-        // (X == 13 | X == 14) -> X-13 <u 2
-        Constant *AddC = ConstantExpr::getNeg(LHSC);
-        Value *Add = Builder->CreateAdd(LHS0, AddC, LHS0->getName() + ".off");
-        AddC = ConstantExpr::getSub(AddOne(RHSC), LHSC);
-        return Builder->CreateICmpULT(Add, AddC);
-      }
-
-      break;                 // (X == 13 | X == 15) -> no change
+      // Potential folds for this case should already be handled.
+      break;
     case ICmpInst::ICMP_UGT: // (X == 13 | X u> 14) -> no change
     case ICmpInst::ICMP_SGT: // (X == 13 | X s> 14) -> no change
       break;
@@ -2047,7 +2078,7 @@ Instruction *InstCombiner::visitOr(BinaryOperator &I) {
       Value *NOr = Builder->CreateOr(A, Op1);
       NOr->takeName(Op0);
       return BinaryOperator::CreateXor(NOr,
-                                       cast<Instruction>(Op0)->getOperand(1));
+                                       ConstantInt::get(NOr->getType(), *C));
     }
 
     // Y|(X^C) -> (X|Y)^C iff Y&C == 0
@@ -2056,7 +2087,7 @@ Instruction *InstCombiner::visitOr(BinaryOperator &I) {
       Value *NOr = Builder->CreateOr(A, Op0);
       NOr->takeName(Op0);
       return BinaryOperator::CreateXor(NOr,
-                                       cast<Instruction>(Op1)->getOperand(1));
+                                       ConstantInt::get(NOr->getType(), *C));
     }
   }
 
@@ -2409,13 +2440,12 @@ Instruction *InstCombiner::visitXor(BinaryOperator &I) {
     }
   }
 
-  if (Constant *RHS = dyn_cast<Constant>(Op1)) {
-    if (RHS->isAllOnesValue() && Op0->hasOneUse())
-      // xor (cmp A, B), true = not (cmp A, B) = !cmp A, B
-      if (CmpInst *CI = dyn_cast<CmpInst>(Op0))
-        return CmpInst::Create(CI->getOpcode(),
-                               CI->getInversePredicate(),
-                               CI->getOperand(0), CI->getOperand(1));
+  // xor (cmp A, B), true = not (cmp A, B) = !cmp A, B
+  ICmpInst::Predicate Pred;
+  if (match(Op0, m_OneUse(m_Cmp(Pred, m_Value(), m_Value()))) &&
+      match(Op1, m_AllOnes())) {
+    cast<CmpInst>(Op0)->setPredicate(CmpInst::getInversePredicate(Pred));
+    return replaceInstUsesWith(I, Op0);
   }
 
   if (ConstantInt *RHSC = dyn_cast<ConstantInt>(Op1)) {

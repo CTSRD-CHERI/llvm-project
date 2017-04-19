@@ -22,6 +22,8 @@
 
 #include <pthread.h>
 
+#include <mach/mach.h>
+
 namespace __lsan {
 
 typedef struct {
@@ -33,7 +35,17 @@ typedef struct {
 static pthread_key_t key;
 static pthread_once_t key_once = PTHREAD_ONCE_INIT;
 
-static void make_tls_key() { CHECK_EQ(pthread_key_create(&key, NULL), 0); }
+// The main thread destructor requires the current thread id,
+// so we can't destroy it until it's been used and reset to invalid tid
+void restore_tid_data(void *ptr) {
+  thread_local_data_t *data = (thread_local_data_t *)ptr;
+  if (data->current_thread_id != kInvalidTid)
+    pthread_setspecific(key, data);
+}
+
+static void make_tls_key() {
+  CHECK_EQ(pthread_key_create(&key, restore_tid_data), 0);
+}
 
 static thread_local_data_t *get_tls_val(bool alloc) {
   pthread_once(&key_once, make_tls_key);
@@ -65,23 +77,72 @@ void EnableInThisThread() {
   --*disable_counter;
 }
 
-u32 GetCurrentThread() { return get_tls_val(true)->current_thread_id; }
+u32 GetCurrentThread() {
+  thread_local_data_t *data = get_tls_val(false);
+  CHECK(data);
+  return data->current_thread_id;
+}
 
 void SetCurrentThread(u32 tid) { get_tls_val(true)->current_thread_id = tid; }
 
 AllocatorCache *GetAllocatorCache() { return &get_tls_val(true)->cache; }
 
+LoadedModule *GetLinker() { return nullptr; }
+
 // Required on Linux for initialization of TLS behavior, but should not be
 // required on Darwin.
-void InitializePlatformSpecificModules() {}
+void InitializePlatformSpecificModules() {
+  if (flags()->use_tls) {
+    Report("use_tls=1 is not supported on Darwin.\n");
+    Die();
+  }
+}
 
 // Scans global variables for heap pointers.
 void ProcessGlobalRegions(Frontier *frontier) {
-  CHECK(0 && "unimplemented");
+  MemoryMappingLayout memory_mapping(false);
+  InternalMmapVector<LoadedModule> modules(/*initial_capacity*/ 128);
+  memory_mapping.DumpListOfModules(&modules);
+  for (uptr i = 0; i < modules.size(); ++i) {
+    // Even when global scanning is disabled, we still need to scan
+    // system libraries for stashed pointers
+    if (!flags()->use_globals && modules[i].instrumented()) continue;
+
+    for (const __sanitizer::LoadedModule::AddressRange &range :
+         modules[i].ranges()) {
+      if (range.executable || !range.readable) continue;
+
+      ScanGlobalRange(range.beg, range.end, frontier);
+    }
+  }
 }
 
+// libxpc stashes some pointers in the Kernel Alloc Once page,
+// make sure not to report those as leaks.
 void ProcessPlatformSpecificAllocations(Frontier *frontier) {
-  CHECK(0 && "unimplemented");
+  mach_port_name_t port;
+  if (task_for_pid(mach_task_self(), internal_getpid(), &port)
+      != KERN_SUCCESS) {
+    return;
+  }
+
+  unsigned depth = 1;
+  vm_size_t size = 0;
+  vm_address_t address = 0;
+  kern_return_t err = KERN_SUCCESS;
+  mach_msg_type_number_t count = VM_REGION_SUBMAP_INFO_COUNT_64;
+
+  while (err == KERN_SUCCESS) {
+    struct vm_region_submap_info_64 info;
+    err = vm_region_recurse_64(port, &address, &size, &depth,
+                               (vm_region_info_t)&info, &count);
+    if (info.user_tag == VM_MEMORY_OS_ALLOC_ONCE) {
+      ScanRangeForPointers(address, address + size, frontier,
+                           "GLOBAL", kReachable);
+      return;
+    }
+    address += size;
+  }
 }
 
 void DoStopTheWorld(StopTheWorldCallback callback, void *argument) {

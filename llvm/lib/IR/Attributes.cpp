@@ -23,7 +23,6 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
-#include "llvm/IR/AttributeSetNode.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/LLVMContext.h"
@@ -492,13 +491,76 @@ bool AttributeImpl::operator<(const AttributeImpl &AI) const {
 }
 
 //===----------------------------------------------------------------------===//
+// AttributeSet Definition
+//===----------------------------------------------------------------------===//
+
+AttributeSet AttributeSet::get(LLVMContext &C, const AttrBuilder &B) {
+  return AttributeSet(AttributeSetNode::get(C, B));
+}
+
+AttributeSet AttributeSet::get(LLVMContext &C, ArrayRef<Attribute> Attrs) {
+  return AttributeSet(AttributeSetNode::get(C, Attrs));
+}
+
+unsigned AttributeSet::getNumAttributes() const {
+  return SetNode ? SetNode->getNumAttributes() : 0;
+}
+
+bool AttributeSet::hasAttribute(Attribute::AttrKind Kind) const {
+  return SetNode ? SetNode->hasAttribute(Kind) : 0;
+}
+
+bool AttributeSet::hasAttribute(StringRef Kind) const {
+  return SetNode ? SetNode->hasAttribute(Kind) : 0;
+}
+
+Attribute AttributeSet::getAttribute(Attribute::AttrKind Kind) const {
+  return SetNode ? SetNode->getAttribute(Kind) : Attribute();
+}
+
+Attribute AttributeSet::getAttribute(StringRef Kind) const {
+  return SetNode ? SetNode->getAttribute(Kind) : Attribute();
+}
+
+unsigned AttributeSet::getAlignment() const {
+  return SetNode ? SetNode->getAlignment() : 0;
+}
+
+unsigned AttributeSet::getStackAlignment() const {
+  return SetNode ? SetNode->getStackAlignment() : 0;
+}
+
+uint64_t AttributeSet::getDereferenceableBytes() const {
+  return SetNode ? SetNode->getDereferenceableBytes() : 0;
+}
+
+uint64_t AttributeSet::getDereferenceableOrNullBytes() const {
+  return SetNode ? SetNode->getDereferenceableOrNullBytes() : 0;
+}
+
+std::pair<unsigned, Optional<unsigned>> AttributeSet::getAllocSizeArgs() const {
+  return SetNode ? SetNode->getAllocSizeArgs()
+                 : std::pair<unsigned, Optional<unsigned>>(0, 0);
+}
+
+std::string AttributeSet::getAsString(bool InAttrGrp) const {
+  return SetNode ? SetNode->getAsString(InAttrGrp) : "";
+}
+
+AttributeSet::iterator AttributeSet::begin() const {
+  return SetNode ? SetNode->begin() : nullptr;
+}
+
+AttributeSet::iterator AttributeSet::end() const {
+  return SetNode ? SetNode->end() : nullptr;
+}
+
+//===----------------------------------------------------------------------===//
 // AttributeSetNode Definition
 //===----------------------------------------------------------------------===//
 
 AttributeSetNode::AttributeSetNode(ArrayRef<Attribute> Attrs)
-    : NumAttrs(Attrs.size()), AvailableAttrs(0) {
-  static_assert(Attribute::EndAttrKinds <= sizeof(AvailableAttrs) * CHAR_BIT,
-                "Too many attributes for AvailableAttrs");
+    : AvailableAttrs(0), NumAttrs(Attrs.size()) {
   // There's memory after the node where we can store the entries in.
   std::copy(Attrs.begin(), Attrs.end(), getTrailingObjects<Attribute>());
 
@@ -657,9 +719,10 @@ std::string AttributeSetNode::getAsString(bool InAttrGrp) const {
 //===----------------------------------------------------------------------===//
 
 AttributeListImpl::AttributeListImpl(
-    LLVMContext &C, ArrayRef<std::pair<unsigned, AttributeSetNode *>> Slots)
+    LLVMContext &C, ArrayRef<std::pair<unsigned, AttributeSet>> Slots)
     : Context(C), NumSlots(Slots.size()), AvailableFunctionAttrs(0) {
 #ifndef NDEBUG
+  assert(!Slots.empty() && "pointless AttributeListImpl");
   if (Slots.size() >= 2) {
     auto &PrevPair = Slots.front();
     for (auto &CurPair : Slots.drop_front()) {
@@ -672,33 +735,30 @@ AttributeListImpl::AttributeListImpl(
   std::copy(Slots.begin(), Slots.end(), getTrailingObjects<IndexAttrPair>());
 
   // Initialize AvailableFunctionAttrs summary bitset.
-  if (NumSlots > 0) {
-    static_assert(Attribute::EndAttrKinds <=
-                      sizeof(AvailableFunctionAttrs) * CHAR_BIT,
-                  "Too many attributes");
-    static_assert(AttributeList::FunctionIndex == ~0u,
-                  "FunctionIndex should be biggest possible index");
-    const std::pair<unsigned, AttributeSetNode *> &Last = Slots.back();
-    if (Last.first == AttributeList::FunctionIndex) {
-      const AttributeSetNode *Node = Last.second;
-      for (Attribute I : *Node) {
-        if (!I.isStringAttribute())
-          AvailableFunctionAttrs |= ((uint64_t)1) << I.getKindAsEnum();
-      }
+  static_assert(Attribute::EndAttrKinds <=
+                    sizeof(AvailableFunctionAttrs) * CHAR_BIT,
+                "Too many attributes");
+  static_assert(AttributeList::FunctionIndex == ~0u,
+                "FunctionIndex should be biggest possible index");
+  const auto &Last = Slots.back();
+  if (Last.first == AttributeList::FunctionIndex) {
+    AttributeSet Node = Last.second;
+    for (Attribute I : Node) {
+      if (!I.isStringAttribute())
+        AvailableFunctionAttrs |= ((uint64_t)1) << I.getKindAsEnum();
     }
   }
 }
 
 void AttributeListImpl::Profile(FoldingSetNodeID &ID) const {
-  Profile(ID, makeArrayRef(getNode(0), getNumSlots()));
+  Profile(ID, makeArrayRef(getSlotPair(0), getNumSlots()));
 }
 
 void AttributeListImpl::Profile(
-    FoldingSetNodeID &ID,
-    ArrayRef<std::pair<unsigned, AttributeSetNode *>> Nodes) {
+    FoldingSetNodeID &ID, ArrayRef<std::pair<unsigned, AttributeSet>> Nodes) {
   for (const auto &Node : Nodes) {
     ID.AddInteger(Node.first);
-    ID.AddPointer(Node.second);
+    ID.AddPointer(Node.second.SetNode);
   }
 }
 
@@ -713,15 +773,15 @@ LLVM_DUMP_METHOD void AttributeListImpl::dump() const {
 //===----------------------------------------------------------------------===//
 
 AttributeList AttributeList::getImpl(
-    LLVMContext &C, ArrayRef<std::pair<unsigned, AttributeSetNode *>> Attrs) {
+    LLVMContext &C, ArrayRef<std::pair<unsigned, AttributeSet>> Attrs) {
   assert(!Attrs.empty() && "creating pointless AttributeList");
 #ifndef NDEBUG
   unsigned LastIndex = 0;
   bool IsFirst = true;
-  for (const auto &AttrPair : Attrs) {
+  for (auto &&AttrPair : Attrs) {
     assert((IsFirst || LastIndex < AttrPair.first) &&
            "unsorted or duplicate AttributeList indices");
-    assert(AttrPair.second && "pointless AttributeList slot");
+    assert(AttrPair.second.hasAttributes() && "pointless AttributeList slot");
     LastIndex = AttrPair.first;
     IsFirst = false;
   }
@@ -769,7 +829,7 @@ AttributeList::get(LLVMContext &C,
 
   // Create a vector if (unsigned, AttributeSetNode*) pairs from the attributes
   // list.
-  SmallVector<std::pair<unsigned, AttributeSetNode*>, 8> AttrPairVec;
+  SmallVector<std::pair<unsigned, AttributeSet>, 8> AttrPairVec;
   for (ArrayRef<std::pair<unsigned, Attribute>>::iterator I = Attrs.begin(),
          E = Attrs.end(); I != E; ) {
     unsigned Index = I->first;
@@ -779,7 +839,7 @@ AttributeList::get(LLVMContext &C,
       ++I;
     }
 
-    AttrPairVec.emplace_back(Index, AttributeSetNode::get(C, AttrVec));
+    AttrPairVec.emplace_back(Index, AttributeSet::get(C, AttrVec));
   }
 
   return getImpl(C, AttrPairVec);
@@ -787,7 +847,7 @@ AttributeList::get(LLVMContext &C,
 
 AttributeList
 AttributeList::get(LLVMContext &C,
-                   ArrayRef<std::pair<unsigned, AttributeSetNode *>> Attrs) {
+                   ArrayRef<std::pair<unsigned, AttributeSet>> Attrs) {
   // If there are no attributes then return a null AttributesList pointer.
   if (Attrs.empty())
     return AttributeList();
@@ -795,20 +855,20 @@ AttributeList::get(LLVMContext &C,
   return getImpl(C, Attrs);
 }
 
-AttributeList AttributeList::get(LLVMContext &C, ArrayRef<AttributeSetNode*> Attrs) {
-  assert(Attrs.size() >= 2 &&
-         "should always have function and return attr slots");
-  SmallVector<std::pair<unsigned, AttributeSetNode *>, 8> AttrPairs;
-  size_t Index = 0;
-  for (AttributeSetNode *AS : Attrs) {
-    if (AS) {
-      // If this is the last AttributeSetNode, it's for the function.
-      if (Index == Attrs.size() - 1)
-        Index = AttributeList::FunctionIndex;
+AttributeList AttributeList::get(LLVMContext &C, AttributeSet FnAttrs,
+                                 AttributeSet RetAttrs,
+                                 ArrayRef<AttributeSet> ArgAttrs) {
+  SmallVector<std::pair<unsigned, AttributeSet>, 8> AttrPairs;
+  if (RetAttrs.hasAttributes())
+    AttrPairs.emplace_back(ReturnIndex, RetAttrs);
+  size_t Index = 1;
+  for (AttributeSet AS : ArgAttrs) {
+    if (AS.hasAttributes())
       AttrPairs.emplace_back(Index, AS);
-    }
     ++Index;
   }
+  if (FnAttrs.hasAttributes())
+    AttrPairs.emplace_back(FunctionIndex, FnAttrs);
   if (AttrPairs.empty())
     return AttributeList();
   return getImpl(C, AttrPairs);
@@ -818,8 +878,8 @@ AttributeList AttributeList::get(LLVMContext &C, unsigned Index,
                                  const AttrBuilder &B) {
   if (!B.hasAttributes())
     return AttributeList();
-  AttributeSetNode *ASN = AttributeSetNode::get(C, B);
-  std::pair<unsigned, AttributeSetNode *> Arr[1] = {{Index, ASN}};
+  AttributeSet AS = AttributeSet::get(C, B);
+  std::pair<unsigned, AttributeSet> Arr[1] = {{Index, AS}};
   return getImpl(C, Arr);
 }
 
@@ -845,21 +905,21 @@ AttributeList AttributeList::get(LLVMContext &C,
     return AttributeList();
   if (Attrs.size() == 1) return Attrs[0];
 
-  SmallVector<std::pair<unsigned, AttributeSetNode*>, 8> AttrNodeVec;
+  SmallVector<std::pair<unsigned, AttributeSet>, 8> AttrNodeVec;
   AttributeListImpl *A0 = Attrs[0].pImpl;
   if (A0)
-    AttrNodeVec.append(A0->getNode(0), A0->getNode(A0->getNumSlots()));
+    AttrNodeVec.append(A0->getSlotPair(0), A0->getSlotPair(A0->getNumSlots()));
   // Copy all attributes from Attrs into AttrNodeVec while keeping AttrNodeVec
   // ordered by index.  Because we know that each list in Attrs is ordered by
   // index we only need to merge each successive list in rather than doing a
   // full sort.
   for (unsigned I = 1, E = Attrs.size(); I != E; ++I) {
-    AttributeListImpl *AS = Attrs[I].pImpl;
-    if (!AS) continue;
-    SmallVector<std::pair<unsigned, AttributeSetNode *>, 8>::iterator
+    AttributeListImpl *ALI = Attrs[I].pImpl;
+    if (!ALI) continue;
+    SmallVector<std::pair<unsigned, AttributeSet>, 8>::iterator
       ANVI = AttrNodeVec.begin(), ANVE;
-    for (const IndexAttrPair *AI = AS->getNode(0),
-                             *AE = AS->getNode(AS->getNumSlots());
+    for (const IndexAttrPair *AI = ALI->getSlotPair(0),
+                             *AE = ALI->getSlotPair(ALI->getNumSlots());
          AI != AE; ++AI) {
       ANVE = AttrNodeVec.end();
       while (ANVI != ANVE && ANVI->first <= AI->first)
@@ -905,7 +965,7 @@ AttributeList AttributeList::addAttribute(LLVMContext &C,
       ++I;
     }
     B.addAttribute(A);
-    AttrVec.emplace_back(Index, AttributeSetNode::get(C, B));
+    AttrVec.emplace_back(Index, AttributeSet::get(C, B));
   }
 
   // Add remaining attributes.
@@ -924,20 +984,23 @@ AttributeList AttributeList::addAttributes(LLVMContext &C, unsigned Index,
 }
 
 AttributeList AttributeList::addAttributes(LLVMContext &C, unsigned Index,
-                                           AttributeSetNode *AS) const {
-  if (!AS)
+                                           const AttrBuilder &B) const {
+  if (!B.hasAttributes())
     return *this;
+
+  if (!pImpl)
+    return AttributeList::get(C, {{Index, AttributeSet::get(C, B)}});
 
 #ifndef NDEBUG
   // FIXME it is not obvious how this should work for alignment. For now, say
   // we can't change a known alignment.
   unsigned OldAlign = getParamAlignment(Index);
-  unsigned NewAlign = AS->getAlignment();
+  unsigned NewAlign = B.getAlignment();
   assert((!OldAlign || !NewAlign || OldAlign == NewAlign) &&
          "Attempt to change alignment!");
 #endif
 
-  SmallVector<std::pair<unsigned, AttributeSetNode *>, 4> AttrSet;
+  SmallVector<IndexAttrPair, 4> AttrVec;
   uint64_t NumAttrs = pImpl->getNumSlots();
   unsigned I;
 
@@ -945,31 +1008,25 @@ AttributeList AttributeList::addAttributes(LLVMContext &C, unsigned Index,
   for (I = 0; I < NumAttrs; ++I) {
     if (getSlotIndex(I) >= Index)
       break;
-    AttrSet.emplace_back(getSlotIndex(I), pImpl->getSlotNode(I));
+    AttrVec.emplace_back(getSlotIndex(I), pImpl->getSlotNode(I));
   }
 
+  AttrBuilder NewAttrs;
   if (I < NumAttrs && getSlotIndex(I) == Index) {
-    // We need to merge two AttributeSetNodes.
-    AttributeSetNode *Merged = AttributeSetNode::get(
-        C, AttrBuilder(pImpl->getSlotNode(I)).merge(AttrBuilder(AS)));
-    AttrSet.emplace_back(Index, Merged);
+    // We need to merge the attribute sets.
+    NewAttrs.merge(pImpl->getSlotNode(I));
     ++I;
-  } else {
-    // Otherwise, there were no attributes at this position in the original
-    // list. Add the set as is.
-    AttrSet.emplace_back(Index, AS);
   }
+  NewAttrs.merge(B);
+
+  // Add the new or merged attribute set at this index.
+  AttrVec.emplace_back(Index, AttributeSet::get(C, NewAttrs));
 
   // Add the remaining entries.
   for (; I < NumAttrs; ++I)
-    AttrSet.emplace_back(getSlotIndex(I), pImpl->getSlotNode(I));
+    AttrVec.emplace_back(getSlotIndex(I), pImpl->getSlotNode(I));
 
-  return get(C, AttrSet);
-}
-
-AttributeList AttributeList::addAttributes(LLVMContext &C, unsigned Index,
-                                           const AttrBuilder &B) const {
-  return get(C, Index, AttributeSetNode::get(C, B));
+  return get(C, AttrVec);
 }
 
 AttributeList AttributeList::removeAttribute(LLVMContext &C, unsigned Index,
@@ -998,11 +1055,11 @@ AttributeList AttributeList::removeAttributes(LLVMContext &C, unsigned Index,
   // Add the attribute slots before the one we're trying to add.
   SmallVector<AttributeList, 4> AttrSet;
   uint64_t NumAttrs = pImpl->getNumSlots();
-  AttributeList AS;
+  AttributeList AL;
   uint64_t LastIndex = 0;
   for (unsigned I = 0, E = NumAttrs; I != E; ++I) {
     if (getSlotIndex(I) >= Index) {
-      if (getSlotIndex(I) == Index) AS = getSlotAttributes(LastIndex++);
+      if (getSlotIndex(I) == Index) AL = getSlotAttributes(LastIndex++);
       break;
     }
     LastIndex = I + 1;
@@ -1011,7 +1068,7 @@ AttributeList AttributeList::removeAttributes(LLVMContext &C, unsigned Index,
 
   // Now remove the attribute from the correct slot. There may already be an
   // AttributeList there.
-  AttrBuilder B(AS, Index);
+  AttrBuilder B(AL, Index);
 
   for (unsigned I = 0, E = Attrs.pImpl->getNumSlots(); I != E; ++I)
     if (Attrs.getSlotIndex(I) == Index) {
@@ -1040,11 +1097,11 @@ AttributeList AttributeList::removeAttributes(LLVMContext &C, unsigned Index,
   // Add the attribute slots before the one we're trying to add.
   SmallVector<AttributeList, 4> AttrSet;
   uint64_t NumAttrs = pImpl->getNumSlots();
-  AttributeList AS;
+  AttributeList AL;
   uint64_t LastIndex = 0;
   for (unsigned I = 0, E = NumAttrs; I != E; ++I) {
     if (getSlotIndex(I) >= Index) {
-      if (getSlotIndex(I) == Index) AS = getSlotAttributes(LastIndex++);
+      if (getSlotIndex(I) == Index) AL = getSlotAttributes(LastIndex++);
       break;
     }
     LastIndex = I + 1;
@@ -1053,7 +1110,7 @@ AttributeList AttributeList::removeAttributes(LLVMContext &C, unsigned Index,
 
   // Now remove the attribute from the correct slot. There may already be an
   // AttributeList there.
-  AttrBuilder B(AS, Index);
+  AttrBuilder B(AL, Index);
   B.remove(Attrs);
 
   AttrSet.push_back(AttributeList::get(C, Index, B));
@@ -1070,7 +1127,7 @@ AttributeList AttributeList::removeAttributes(LLVMContext &C,
   if (!pImpl)
     return AttributeList();
 
-  SmallVector<std::pair<unsigned, AttributeSetNode *>, 4> AttrSet;
+  SmallVector<std::pair<unsigned, AttributeSet>, 4> AttrSet;
   for (unsigned I = 0, E = pImpl->getNumSlots(); I != E; ++I) {
     unsigned Index = getSlotIndex(I);
     if (Index != WithoutIndex)
@@ -1110,32 +1167,29 @@ AttributeList::addAllocSizeAttr(LLVMContext &C, unsigned Index,
 
 LLVMContext &AttributeList::getContext() const { return pImpl->getContext(); }
 
-AttributeSetNode *AttributeList::getParamAttributes(unsigned Index) const {
-  return getAttributes(Index);
+AttributeSet AttributeList::getParamAttributes(unsigned ArgNo) const {
+  return getAttributes(ArgNo + 1);
 }
 
-AttributeSetNode *AttributeList::getRetAttributes() const {
+AttributeSet AttributeList::getRetAttributes() const {
   return getAttributes(ReturnIndex);
 }
 
-AttributeSetNode *AttributeList::getFnAttributes() const {
+AttributeSet AttributeList::getFnAttributes() const {
   return getAttributes(FunctionIndex);
 }
 
 bool AttributeList::hasAttribute(unsigned Index,
                                  Attribute::AttrKind Kind) const {
-  AttributeSetNode *ASN = getAttributes(Index);
-  return ASN && ASN->hasAttribute(Kind);
+  return getAttributes(Index).hasAttribute(Kind);
 }
 
 bool AttributeList::hasAttribute(unsigned Index, StringRef Kind) const {
-  AttributeSetNode *ASN = getAttributes(Index);
-  return ASN && ASN->hasAttribute(Kind);
+  return getAttributes(Index).hasAttribute(Kind);
 }
 
 bool AttributeList::hasAttributes(unsigned Index) const {
-  AttributeSetNode *ASN = getAttributes(Index);
-  return ASN && ASN->hasAttributes();
+  return getAttributes(Index).hasAttributes();
 }
 
 bool AttributeList::hasFnAttribute(Attribute::AttrKind Kind) const {
@@ -1144,6 +1198,11 @@ bool AttributeList::hasFnAttribute(Attribute::AttrKind Kind) const {
 
 bool AttributeList::hasFnAttribute(StringRef Kind) const {
   return hasAttribute(AttributeList::FunctionIndex, Kind);
+}
+
+bool AttributeList::hasParamAttribute(unsigned ArgNo,
+                                      Attribute::AttrKind Kind) const {
+  return hasAttribute(ArgNo + 1, Kind);
 }
 
 bool AttributeList::hasAttrSomewhere(Attribute::AttrKind Attr,
@@ -1163,55 +1222,47 @@ bool AttributeList::hasAttrSomewhere(Attribute::AttrKind Attr,
 
 Attribute AttributeList::getAttribute(unsigned Index,
                                       Attribute::AttrKind Kind) const {
-  AttributeSetNode *ASN = getAttributes(Index);
-  return ASN ? ASN->getAttribute(Kind) : Attribute();
+  return getAttributes(Index).getAttribute(Kind);
 }
 
 Attribute AttributeList::getAttribute(unsigned Index, StringRef Kind) const {
-  AttributeSetNode *ASN = getAttributes(Index);
-  return ASN ? ASN->getAttribute(Kind) : Attribute();
+  return getAttributes(Index).getAttribute(Kind);
 }
 
 unsigned AttributeList::getParamAlignment(unsigned Index) const {
-  AttributeSetNode *ASN = getAttributes(Index);
-  return ASN ? ASN->getAlignment() : 0;
+  return getAttributes(Index).getAlignment();
 }
 
 unsigned AttributeList::getStackAlignment(unsigned Index) const {
-  AttributeSetNode *ASN = getAttributes(Index);
-  return ASN ? ASN->getStackAlignment() : 0;
+  return getAttributes(Index).getStackAlignment();
 }
 
 uint64_t AttributeList::getDereferenceableBytes(unsigned Index) const {
-  AttributeSetNode *ASN = getAttributes(Index);
-  return ASN ? ASN->getDereferenceableBytes() : 0;
+  return getAttributes(Index).getDereferenceableBytes();
 }
 
 uint64_t AttributeList::getDereferenceableOrNullBytes(unsigned Index) const {
-  AttributeSetNode *ASN = getAttributes(Index);
-  return ASN ? ASN->getDereferenceableOrNullBytes() : 0;
+  return getAttributes(Index).getDereferenceableOrNullBytes();
 }
 
 std::pair<unsigned, Optional<unsigned>>
 AttributeList::getAllocSizeArgs(unsigned Index) const {
-  AttributeSetNode *ASN = getAttributes(Index);
-  return ASN ? ASN->getAllocSizeArgs() : std::make_pair(0u, Optional<unsigned>(0u));
+  return getAttributes(Index).getAllocSizeArgs();
 }
 
 std::string AttributeList::getAsString(unsigned Index, bool InAttrGrp) const {
-  AttributeSetNode *ASN = getAttributes(Index);
-  return ASN ? ASN->getAsString(InAttrGrp) : std::string("");
+  return getAttributes(Index).getAsString(InAttrGrp);
 }
 
-AttributeSetNode *AttributeList::getAttributes(unsigned Index) const {
-  if (!pImpl) return nullptr;
+AttributeSet AttributeList::getAttributes(unsigned Index) const {
+  if (!pImpl) return AttributeSet();
 
   // Loop through to find the attribute node we want.
   for (unsigned I = 0, E = pImpl->getNumSlots(); I != E; ++I)
     if (pImpl->getSlotIndex(I) == Index)
       return pImpl->getSlotNode(I);
 
-  return nullptr;
+  return AttributeSet();
 }
 
 AttributeList::iterator AttributeList::begin(unsigned Slot) const {
@@ -1268,8 +1319,8 @@ LLVM_DUMP_METHOD void AttributeList::dump() const {
 // AttrBuilder Method Implementations
 //===----------------------------------------------------------------------===//
 
-AttrBuilder::AttrBuilder(AttributeList AS, unsigned Index) {
-  AttributeListImpl *pImpl = AS.pImpl;
+AttrBuilder::AttrBuilder(AttributeList AL, unsigned Index) {
+  AttributeListImpl *pImpl = AL.pImpl;
   if (!pImpl) return;
 
   for (unsigned I = 0, E = pImpl->getNumSlots(); I != E; ++I) {
@@ -1283,9 +1334,9 @@ AttrBuilder::AttrBuilder(AttributeList AS, unsigned Index) {
   }
 }
 
-AttrBuilder::AttrBuilder(AttributeSetNode *AS) {
-  if (AS) {
-    for (const Attribute &A : *AS)
+AttrBuilder::AttrBuilder(AttributeSet AS) {
+  if (AS.hasAttributes()) {
+    for (const Attribute &A : AS)
       addAttribute(A);
   }
 }
