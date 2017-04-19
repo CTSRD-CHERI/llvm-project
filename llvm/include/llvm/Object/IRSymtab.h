@@ -41,9 +41,9 @@ typedef support::ulittle32_t Word;
 
 /// A reference to a string in the string table.
 struct Str {
-  Word Offset;
+  Word Offset, Size;
   StringRef get(StringRef Strtab) const {
-    return Strtab.data() + Offset;
+    return {Strtab.data() + Offset, Size};
   }
 };
 
@@ -59,6 +59,9 @@ template <typename T> struct Range {
 /// table.
 struct Module {
   Word Begin, End;
+
+  /// The index of the first Uncommon for this Module.
+  Word UncBegin;
 };
 
 /// This is equivalent to an IR comdat.
@@ -82,7 +85,8 @@ struct Symbol {
   Word Flags;
   enum FlagBits {
     FB_visibility, // 2 bits
-    FB_undefined = FB_visibility + 2,
+    FB_has_uncommon = FB_visibility + 2,
+    FB_undefined,
     FB_weak,
     FB_common,
     FB_indirect,
@@ -92,11 +96,8 @@ struct Symbol {
     FB_global,
     FB_format_specific,
     FB_unnamed_addr,
+    FB_executable,
   };
-
-  /// The index into the Uncommon table, or -1 if this symbol does not have an
-  /// Uncommon.
-  Word UncommonIndex;
 };
 
 /// This data structure contains rarely used symbol fields and is optionally
@@ -115,7 +116,7 @@ struct Header {
   Range<Symbol> Symbols;
   Range<Uncommon> Uncommons;
 
-  Str SourceFileName;
+  Str TargetTriple, SourceFileName;
 
   /// COFF-specific: linker directives.
   Str COFFLinkerOpts;
@@ -166,6 +167,7 @@ struct Symbol {
   bool isGlobal() const { return (Flags >> S::FB_global) & 1; }
   bool isFormatSpecific() const { return (Flags >> S::FB_format_specific) & 1; }
   bool isUnnamedAddr() const { return (Flags >> S::FB_unnamed_addr) & 1; }
+  bool isExecutable() const { return (Flags >> S::FB_executable) & 1; }
 
   uint64_t getCommonSize() const {
     assert(isCommon());
@@ -225,6 +227,8 @@ public:
   /// copied into an irsymtab::Symbol object.
   symbol_range module_symbols(unsigned I) const;
 
+  StringRef getTargetTriple() const { return str(header().TargetTriple); }
+
   /// Returns the source file path specified at compile time.
   StringRef getSourceFileName() const { return str(header().SourceFileName); }
 
@@ -245,14 +249,8 @@ public:
 /// Reader::module_symbols().
 class Reader::SymbolRef : public Symbol {
   const storage::Symbol *SymI, *SymE;
+  const storage::Uncommon *UncI;
   const Reader *R;
-
-public:
-  SymbolRef(const storage::Symbol *SymI, const storage::Symbol *SymE,
-            const Reader *R)
-      : SymI(SymI), SymE(SymE), R(R) {
-    read();
-  }
 
   void read() {
     if (SymI == SymE)
@@ -263,16 +261,24 @@ public:
     ComdatIndex = SymI->ComdatIndex;
     Flags = SymI->Flags;
 
-    uint32_t UncI = SymI->UncommonIndex;
-    if (UncI != -1u) {
-      const storage::Uncommon &Unc = R->Uncommons[UncI];
-      CommonSize = Unc.CommonSize;
-      CommonAlign = Unc.CommonAlign;
-      COFFWeakExternFallbackName = R->str(Unc.COFFWeakExternFallbackName);
+    if (Flags & (1 << storage::Symbol::FB_has_uncommon)) {
+      CommonSize = UncI->CommonSize;
+      CommonAlign = UncI->CommonAlign;
+      COFFWeakExternFallbackName = R->str(UncI->COFFWeakExternFallbackName);
     }
   }
+
+public:
+  SymbolRef(const storage::Symbol *SymI, const storage::Symbol *SymE,
+            const storage::Uncommon *UncI, const Reader *R)
+      : SymI(SymI), SymE(SymE), UncI(UncI), R(R) {
+    read();
+  }
+
   void moveNext() {
     ++SymI;
+    if (Flags & (1 << storage::Symbol::FB_has_uncommon))
+      ++UncI;
     read();
   }
 
@@ -280,15 +286,16 @@ public:
 };
 
 inline Reader::symbol_range Reader::symbols() const {
-  return {SymbolRef(Symbols.begin(), Symbols.end(), this),
-          SymbolRef(Symbols.end(), Symbols.end(), this)};
+  return {SymbolRef(Symbols.begin(), Symbols.end(), Uncommons.begin(), this),
+          SymbolRef(Symbols.end(), Symbols.end(), nullptr, this)};
 }
 
 inline Reader::symbol_range Reader::module_symbols(unsigned I) const {
   const storage::Module &M = Modules[I];
   const storage::Symbol *MBegin = Symbols.begin() + M.Begin,
                         *MEnd = Symbols.begin() + M.End;
-  return {SymbolRef(MBegin, MEnd, this), SymbolRef(MEnd, MEnd, this)};
+  return {SymbolRef(MBegin, MEnd, Uncommons.begin() + M.UncBegin, this),
+          SymbolRef(MEnd, MEnd, nullptr, this)};
 }
 
 }

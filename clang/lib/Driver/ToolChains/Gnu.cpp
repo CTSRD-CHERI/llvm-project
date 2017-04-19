@@ -770,6 +770,12 @@ void tools::gnutools::Assembler::ConstructJob(Compilation &C,
     Args.AddLastArg(CmdArgs, options::OPT_mfpu_EQ);
     break;
   }
+  case llvm::Triple::aarch64:
+  case llvm::Triple::aarch64_be: {
+    Args.AddLastArg(CmdArgs, options::OPT_march_EQ);
+    Args.AddLastArg(CmdArgs, options::OPT_mcpu_EQ);
+    break;
+  }
   case llvm::Triple::mips:
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
@@ -2173,6 +2179,7 @@ bool Generic_GCC::GCCInstallationDetector::ScanGentooGccConfig(
     SmallVector<StringRef, 2> Lines;
     File.get()->getBuffer().split(Lines, "\n");
     for (StringRef Line : Lines) {
+      Line = Line.trim();
       // CURRENT=triple-version
       if (Line.consume_front("CURRENT=")) {
         const std::pair<StringRef, StringRef> ActiveVersion =

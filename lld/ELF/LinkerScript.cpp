@@ -68,8 +68,13 @@ template <class ELFT> static SymbolBody *addRegular(SymbolAssignment *Cmd) {
   Sym->Binding = STB_GLOBAL;
   ExprValue Value = Cmd->Expression();
   SectionBase *Sec = Value.isAbsolute() ? nullptr : Value.Sec;
+
+  // We want to set symbol values early if we can. This allows us to use symbols
+  // as variables in linker scripts. Doing so allows us to write expressions
+  // like this: `alignment = 16; . = ALIGN(., alignment)`
+  uint64_t SymValue = Value.isAbsolute() ? Value.getValue() : 0;
   replaceBody<DefinedRegular>(Sym, Cmd->Name, /*IsLocal=*/false, Visibility,
-                              STT_NOTYPE, 0, 0, Sec, nullptr);
+                              STT_NOTYPE, SymValue, 0, Sec, nullptr);
   return Sym->body();
 }
 
@@ -332,8 +337,7 @@ LinkerScript::createInputSectionList(OutputSectionCommand &OutCmd) {
       continue;
 
     Cmd->Sections = computeInputSections(Cmd);
-    for (InputSectionBase *S : Cmd->Sections)
-      Ret.push_back(S);
+    Ret.insert(Ret.end(), Cmd->Sections.begin(), Cmd->Sections.end());
   }
 
   return Ret;
@@ -407,6 +411,56 @@ void LinkerScript::processCommands(OutputSectionFactory &Factory) {
     }
   }
   CurOutSec = nullptr;
+}
+
+void LinkerScript::fabricateDefaultCommands(bool AllocateHeader) {
+  std::vector<BaseCommand *> Commands;
+
+  // Define start address
+  uint64_t StartAddr = Config->ImageBase;
+  if (AllocateHeader)
+    StartAddr += elf::getHeaderSize();
+
+  // The Sections with -T<section> are sorted in order of ascending address
+  // we must use this if it is lower than StartAddr as calls to setDot() must
+  // be monotonically increasing
+  if (!Config->SectionStartMap.empty()) {
+    uint64_t LowestSecStart = Config->SectionStartMap.begin()->second;
+    StartAddr = std::min(StartAddr, LowestSecStart);
+  }
+  Commands.push_back(
+      make<SymbolAssignment>(".", [=] { return StartAddr; }, ""));
+
+  // For each OutputSection that needs a VA fabricate an OutputSectionCommand
+  // with an InputSectionDescription describing the InputSections
+  for (OutputSection *Sec : *OutputSections) {
+    if (!(Sec->Flags & SHF_ALLOC))
+      continue;
+
+    auto I = Config->SectionStartMap.find(Sec->Name);
+    if (I != Config->SectionStartMap.end())
+      Commands.push_back(
+          make<SymbolAssignment>(".", [=] { return I->second; }, ""));
+
+    auto *OSCmd = make<OutputSectionCommand>(Sec->Name);
+    OSCmd->Sec = Sec;
+    if (Sec->PageAlign)
+      OSCmd->AddrExpr = [=] {
+        return alignTo(Script->getDot(), Config->MaxPageSize);
+      };
+    Commands.push_back(OSCmd);
+    if (Sec->Sections.size()) {
+      auto *ISD = make<InputSectionDescription>("");
+      OSCmd->Commands.push_back(ISD);
+      for (InputSection *ISec : Sec->Sections) {
+        ISD->Sections.push_back(ISec);
+        ISec->Assigned = true;
+      }
+    }
+  }
+  // SECTIONS commands run before other non SECTIONS commands
+  Commands.insert(Commands.end(), Opt.Commands.begin(), Opt.Commands.end());
+  Opt.Commands = std::move(Commands);
 }
 
 // Add sections that didn't match any sections command.
@@ -628,7 +682,7 @@ void LinkerScript::adjustSectionsBeforeSorting() {
   // '.' is assigned to, but creating these section should not have any bad
   // consequeces and gives us a section to put the symbol in.
   uint64_t Flags = SHF_ALLOC;
-  uint32_t Type = SHT_NOBITS;
+  uint32_t Type = SHT_PROGBITS;
   for (BaseCommand *Base : Opt.Commands) {
     auto *Cmd = dyn_cast<OutputSectionCommand>(Base);
     if (!Cmd)
@@ -871,12 +925,12 @@ bool LinkerScript::ignoreInterpSection() {
   return true;
 }
 
-uint32_t LinkerScript::getFiller(StringRef Name) {
+Optional<uint32_t> LinkerScript::getFiller(StringRef Name) {
   for (BaseCommand *Base : Opt.Commands)
     if (auto *Cmd = dyn_cast<OutputSectionCommand>(Base))
       if (Cmd->Name == Name)
         return Cmd->Filler;
-  return 0;
+  return None;
 }
 
 static void writeInt(uint8_t *Buf, uint64_t Data, uint64_t Size) {

@@ -96,7 +96,7 @@ cl::SubCommand
                       "Analyze various aspects of a PDB's structure");
 
 cl::OptionCategory TypeCategory("Symbol Type Options");
-cl::OptionCategory FilterCategory("Filtering Options");
+cl::OptionCategory FilterCategory("Filtering and Sorting Options");
 cl::OptionCategory OtherOptions("Other Options");
 
 namespace pretty {
@@ -122,6 +122,30 @@ cl::opt<bool> Enums("enums", cl::desc("Display enum types"),
                     cl::cat(TypeCategory), cl::sub(PrettySubcommand));
 cl::opt<bool> Typedefs("typedefs", cl::desc("Display typedef types"),
                        cl::cat(TypeCategory), cl::sub(PrettySubcommand));
+cl::opt<ClassSortMode> ClassOrder(
+    "class-order", cl::desc("Class sort order"), cl::init(ClassSortMode::None),
+    cl::values(clEnumValN(ClassSortMode::None, "none",
+                          "Undefined / no particular sort order"),
+               clEnumValN(ClassSortMode::Name, "name", "Sort classes by name"),
+               clEnumValN(ClassSortMode::Size, "size", "Sort classes by size"),
+               clEnumValN(ClassSortMode::Padding, "padding",
+                          "Sort classes by amount of padding")),
+    cl::cat(TypeCategory), cl::sub(PrettySubcommand));
+
+cl::opt<ClassDefinitionFormat> ClassFormat(
+    "class-definitions", cl::desc("Class definition format"),
+    cl::init(ClassDefinitionFormat::Standard),
+    cl::values(
+        clEnumValN(ClassDefinitionFormat::Standard, "all-members",
+                   "Display all class members including data, constants, "
+                   "typedefs, functions, etc"),
+        clEnumValN(ClassDefinitionFormat::Layout, "layout-members",
+                   "Only display members that contribute to class size."),
+        clEnumValN(ClassDefinitionFormat::Graphical, "graphical",
+                   "Display graphical representation of each class's layout."),
+        clEnumValN(ClassDefinitionFormat::None, "none",
+                   "Don't display class definitions")),
+    cl::cat(TypeCategory), cl::sub(PrettySubcommand));
 
 cl::opt<bool> Lines("lines", cl::desc("Line tables"), cl::cat(TypeCategory),
                     cl::sub(PrettySubcommand));
@@ -161,6 +185,14 @@ cl::list<std::string> IncludeCompilands(
     "include-compilands",
     cl::desc("Include only compilands those which match a regular expression"),
     cl::ZeroOrMore, cl::cat(FilterCategory), cl::sub(PrettySubcommand));
+cl::opt<uint32_t> SizeThreshold(
+    "min-type-size", cl::desc("Displays only those types which are greater "
+                              "than or equal to the specified size."),
+    cl::init(0), cl::cat(FilterCategory), cl::sub(PrettySubcommand));
+cl::opt<uint32_t> PaddingThreshold(
+    "min-class-padding", cl::desc("Displays only those classes which have at "
+                                  "least the specified amount of padding."),
+    cl::init(0), cl::cat(FilterCategory), cl::sub(PrettySubcommand));
 
 cl::opt<bool> ExcludeCompilerGenerated(
     "no-compiler-generated",
@@ -170,16 +202,6 @@ cl::opt<bool>
     ExcludeSystemLibraries("no-system-libs",
                            cl::desc("Don't show symbols from system libraries"),
                            cl::cat(FilterCategory), cl::sub(PrettySubcommand));
-cl::opt<ClassDefinitionFormat> ClassFormat(
-    "class-definitions", cl::desc("Class definition format"),
-    cl::init(ClassDefinitionFormat::Full),
-    cl::values(clEnumValN(ClassDefinitionFormat::Full, "full",
-                          "Display complete class definition"),
-               clEnumValN(ClassDefinitionFormat::LayoutOnly, "layout",
-                          "Display only members which affect record layout"),
-               clEnumValN(ClassDefinitionFormat::None, "none",
-                          "Don't display class definitions")),
-    cl::cat(FilterCategory), cl::sub(PrettySubcommand));
 
 cl::opt<bool> NoEnumDefs("no-enum-definitions",
                          cl::desc("Don't display full enum definitions"),

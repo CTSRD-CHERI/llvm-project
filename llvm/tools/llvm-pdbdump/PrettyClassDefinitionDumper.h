@@ -10,6 +10,8 @@
 #ifndef LLVM_TOOLS_LLVMPDBDUMP_PRETTYCLASSDEFINITIONDUMPER_H
 #define LLVM_TOOLS_LLVMPDBDUMP_PRETTYCLASSDEFINITIONDUMPER_H
 
+#include "llvm/ADT/BitVector.h"
+
 #include "llvm/DebugInfo/PDB/PDBSymDumper.h"
 #include "llvm/DebugInfo/PDB/PDBSymbolData.h"
 #include "llvm/DebugInfo/PDB/PDBSymbolFunc.h"
@@ -19,25 +21,25 @@
 #include <unordered_map>
 
 namespace llvm {
+class BitVector;
+
 namespace pdb {
 
+class ClassLayout;
 class LinePrinter;
 
 class ClassDefinitionDumper : public PDBSymDumper {
 public:
   ClassDefinitionDumper(LinePrinter &P);
 
-  void start(const PDBSymbolTypeUDT &Exe);
-
-  void dump(const PDBSymbolTypeBaseClass &Symbol) override;
-  void dump(const PDBSymbolData &Symbol) override;
-  void dump(const PDBSymbolTypeEnum &Symbol) override;
-  void dump(const PDBSymbolFunc &Symbol) override;
-  void dump(const PDBSymbolTypeTypedef &Symbol) override;
-  void dump(const PDBSymbolTypeUDT &Symbol) override;
-  void dump(const PDBSymbolTypeVTable &Symbol) override;
+  void start(const PDBSymbolTypeUDT &Class);
+  void start(const ClassLayout &Class);
 
 private:
+  void prettyPrintClassIntro(const ClassLayout &Class);
+  void prettyPrintClassOutro(const ClassLayout &Class);
+
+  bool DumpedAnything = false;
   LinePrinter &Printer;
 };
 }

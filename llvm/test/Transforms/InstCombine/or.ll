@@ -207,19 +207,6 @@ define <2 x i1> @test18vec(<2 x i32> %A) {
   ret <2 x i1> %D
 }
 
-define i1 @test19(i32 %A) {
-; CHECK-LABEL: @test19(
-; CHECK-NEXT:    [[TMP1:%.*]] = or i32 %A, 1
-; CHECK-NEXT:    [[TMP2:%.*]] = icmp eq i32 [[TMP1]], 51
-; CHECK-NEXT:    ret i1 [[TMP2]]
-;
-  %B = icmp eq i32 %A, 50
-  %C = icmp eq i32 %A, 51
-  ;; (A&-2) == 50
-  %D = or i1 %B, %C
-  ret i1 %D
-}
-
 define i32 @test20(i32 %x) {
 ; CHECK-LABEL: @test20(
 ; CHECK-NEXT:    ret i32 %x

@@ -175,6 +175,23 @@ void ScanRangeForPointers(uptr begin, uptr end,
   }
 }
 
+// Scans a global range for pointers
+void ScanGlobalRange(uptr begin, uptr end, Frontier *frontier) {
+  uptr allocator_begin = 0, allocator_end = 0;
+  GetAllocatorGlobalRange(&allocator_begin, &allocator_end);
+  if (begin <= allocator_begin && allocator_begin < end) {
+    CHECK_LE(allocator_begin, allocator_end);
+    CHECK_LE(allocator_end, end);
+    if (begin < allocator_begin)
+      ScanRangeForPointers(begin, allocator_begin, frontier, "GLOBAL",
+                           kReachable);
+    if (allocator_end < end)
+      ScanRangeForPointers(allocator_end, end, frontier, "GLOBAL", kReachable);
+  } else {
+    ScanRangeForPointers(begin, end, frontier, "GLOBAL", kReachable);
+  }
+}
+
 void ForEachExtraStackRangeCb(uptr begin, uptr end, void* arg) {
   Frontier *frontier = reinterpret_cast<Frontier *>(arg);
   ScanRangeForPointers(begin, end, frontier, "FAKE STACK", kReachable);
@@ -183,11 +200,11 @@ void ForEachExtraStackRangeCb(uptr begin, uptr end, void* arg) {
 // Scans thread data (stacks and TLS) for heap pointers.
 static void ProcessThreads(SuspendedThreadsList const &suspended_threads,
                            Frontier *frontier) {
-  InternalScopedBuffer<uptr> registers(SuspendedThreadsList::RegisterCount());
+  InternalScopedBuffer<uptr> registers(suspended_threads.RegisterCount());
   uptr registers_begin = reinterpret_cast<uptr>(registers.data());
   uptr registers_end = registers_begin + registers.size();
-  for (uptr i = 0; i < suspended_threads.thread_count(); i++) {
-    uptr os_id = static_cast<uptr>(suspended_threads.GetThreadID(i));
+  for (uptr i = 0; i < suspended_threads.ThreadCount(); i++) {
+    tid_t os_id = static_cast<tid_t>(suspended_threads.GetThreadID(i));
     LOG_THREADS("Processing thread %d.\n", os_id);
     uptr stack_begin, stack_end, tls_begin, tls_end, cache_begin, cache_end;
     DTLS *dtls;

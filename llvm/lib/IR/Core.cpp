@@ -16,7 +16,6 @@
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/IR/Attributes.h"
-#include "AttributeSetNode.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
@@ -862,6 +861,19 @@ LLVMValueRef LLVMMDNodeInContext(LLVMContextRef C, LLVMValueRef *Vals,
 
 LLVMValueRef LLVMMDNode(LLVMValueRef *Vals, unsigned Count) {
   return LLVMMDNodeInContext(LLVMGetGlobalContext(), Vals, Count);
+}
+
+LLVMValueRef LLVMMetadataAsValue(LLVMContextRef C, LLVMMetadataRef MD) {
+  return wrap(MetadataAsValue::get(*unwrap(C), unwrap(MD)));
+}
+
+LLVMMetadataRef LLVMValueAsMetadata(LLVMValueRef Val) {
+  auto *V = unwrap(Val);
+  if (auto *C = dyn_cast<Constant>(V))
+    return wrap(ConstantAsMetadata::get(C));
+  if (auto *MAV = dyn_cast<MetadataAsValue>(V))
+    return wrap(MAV->getMetadata());
+  return wrap(ValueAsMetadata::get(V));
 }
 
 const char *LLVMGetMDString(LLVMValueRef V, unsigned *Length) {
@@ -1847,18 +1859,14 @@ void LLVMAddAttributeAtIndex(LLVMValueRef F, LLVMAttributeIndex Idx,
 }
 
 unsigned LLVMGetAttributeCountAtIndex(LLVMValueRef F, LLVMAttributeIndex Idx) {
-  auto *ASN = AttributeSetNode::get(unwrap<Function>(F)->getAttributes(), Idx);
-  if (!ASN)
-    return 0;
-  return ASN->getNumAttributes();
+  auto AS = unwrap<Function>(F)->getAttributes().getAttributes(Idx);
+  return AS.getNumAttributes();
 }
 
 void LLVMGetAttributesAtIndex(LLVMValueRef F, LLVMAttributeIndex Idx,
                               LLVMAttributeRef *Attrs) {
-  auto *ASN = AttributeSetNode::get(unwrap<Function>(F)->getAttributes(), Idx);
-  if (!ASN)
-    return;
-  for (auto A: make_range(ASN->begin(), ASN->end()))
+  auto AS = unwrap<Function>(F)->getAttributes().getAttributes(Idx);
+  for (auto A : AS)
     *Attrs++ = wrap(A);
 }
 
@@ -2178,19 +2186,15 @@ void LLVMAddCallSiteAttribute(LLVMValueRef C, LLVMAttributeIndex Idx,
 unsigned LLVMGetCallSiteAttributeCount(LLVMValueRef C,
                                        LLVMAttributeIndex Idx) {
   auto CS = CallSite(unwrap<Instruction>(C));
-  auto *ASN = AttributeSetNode::get(CS.getAttributes(), Idx);
-  if (!ASN)
-    return 0;
-  return ASN->getNumAttributes();
+  auto AS = CS.getAttributes().getAttributes(Idx);
+  return AS.getNumAttributes();
 }
 
 void LLVMGetCallSiteAttributes(LLVMValueRef C, LLVMAttributeIndex Idx,
                                LLVMAttributeRef *Attrs) {
   auto CS = CallSite(unwrap<Instruction>(C));
-  auto *ASN = AttributeSetNode::get(CS.getAttributes(), Idx);
-  if (!ASN)
-    return;
-  for (auto A: make_range(ASN->begin(), ASN->end()))
+  auto AS = CS.getAttributes().getAttributes(Idx);
+  for (auto A : AS)
     *Attrs++ = wrap(A);
 }
 
