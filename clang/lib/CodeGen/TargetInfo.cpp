@@ -379,6 +379,10 @@ static Address emitMergePHI(CodeGenFunction &CGF,
 
 TargetCodeGenInfo::~TargetCodeGenInfo() { delete Info; }
 
+unsigned TargetCodeGenInfo::getStackAS() const {
+  return Info->getDataLayout().getAllocaAddrSpace();
+}
+
 // If someone can figure out a general rule for this, that would be great.
 // It's probably just doomed to be platform-dependent, though.
 unsigned TargetCodeGenInfo::getSizeOfUnwindException() const {
