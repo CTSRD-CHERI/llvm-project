@@ -1,5 +1,7 @@
 ; RUN: opt -march=cheri -mcpu=mips64r2 -target-abi=n64 -relocation-model=pic -o - -filetype=asm -O3 -S < %s | FileCheck %s
 ; RUN: opt -march=mips64 -mcpu=cheri -target-abi=n64 -relocation-model=pic -o - -filetype=asm -O3 -S < %s | FileCheck %s
+; verify that mips64 little endian still works
+; RUN: opt -march=mips64 -mcpu=cheri -data-layout=e-m:e-i8:8:32-i16:16:32-i64:64-n32:64-S128 -target-abi=n64 -relocation-model=pic -o - -filetype=asm -O3 -S < %s | FileCheck %s
 ; XFAIL: *
 ; ModuleID = '/local/scratch/alr48/cheri/llvm/tools/clang/test/CodeGen/mips-big-endian-aggregate-return.c'
 source_filename = "/local/scratch/alr48/cheri/llvm/tools/clang/test/CodeGen/mips-big-endian-aggregate-return.c"
