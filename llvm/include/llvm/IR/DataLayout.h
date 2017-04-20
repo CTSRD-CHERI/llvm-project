@@ -309,12 +309,12 @@ public:
   /// Layout pointer alignment
   /// FIXME: The defaults need to be removed once all of
   /// the backends/clients are updated.
-  unsigned getPointerABIAlignment(unsigned AS = 0) const;
+  unsigned getPointerABIAlignment(LLVM_DEFAULT_AS_PARAM(AS)) const;
 
   /// Return target's alignment for stack-based pointers
   /// FIXME: The defaults need to be removed once all of
   /// the backends/clients are updated.
-  unsigned getPointerPrefAlignment(unsigned AS = 0) const;
+  unsigned getPointerPrefAlignment(LLVM_DEFAULT_AS_PARAM(AS)) const;
 
   /// Get the size of the base address component of a pointer.
   /// For pointers that are simple integer representations this returns the
@@ -341,7 +341,7 @@ public:
   /// Layout pointer size
   /// FIXME: The defaults need to be removed once all of
   /// the backends/clients are updated.
-  unsigned getPointerSize(unsigned AS = 0) const;
+  unsigned getPointerSize(LLVM_DEFAULT_AS_PARAM(AS)) const;
 
   /// Return the address spaces containing non-integral pointers.  Pointers in
   /// this address space don't have a well-defined bitwise representation.
@@ -363,7 +363,7 @@ public:
   /// Layout pointer size, in bits
   /// FIXME: The defaults need to be removed once all of
   /// the backends/clients are updated.
-  unsigned getPointerSizeInBits(unsigned AS = 0) const {
+  unsigned getPointerSizeInBits(LLVM_DEFAULT_AS_PARAM(AS)) const {
     return getPointerSize(AS) * 8;
   }
 
@@ -461,7 +461,8 @@ public:
 
   /// \brief Returns an integer type with size at least as big as that of a
   /// pointer in the given address space.
-  IntegerType *getIntPtrType(LLVMContext &C, unsigned AddressSpace = 0) const;
+  IntegerType *getIntPtrType(LLVMContext &C,
+                             LLVM_DEFAULT_AS_PARAM(AddressSpace)) const;
 
   /// \brief Returns an integer (vector of integer) type with size at least as
   /// big as that of a pointer of the given pointer (vector of pointer) type.

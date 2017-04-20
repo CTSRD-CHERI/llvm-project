@@ -136,7 +136,7 @@ public:
   /// Get the pointer size for this target.
   ///
   /// This is the only time the DataLayout in the TargetMachine is used.
-  unsigned getPointerSize() const { return DL.getPointerSize(); }
+  unsigned getPointerSize() const { return DL.getPointerSize(0); }
 
   /// \brief Reset the target options based on the function's attributes.
   // FIXME: Remove TargetOptions that affect per-function code generation
