@@ -392,6 +392,10 @@ if(CLANG_ENABLE_STATIC_ANALYZER)
   add_definitions(-DCLANG_ENABLE_STATIC_ANALYZER)
 endif()
 
+# Make sure we don't accidentaly generate AS0 pointers for CHERI pure ABI
+add_definitions(-DLLVM_NO_DEFAULT_ADDRESS_SPACE)
+# TODO: add_definitions(-DLLVM_NO_DEFAULT_ADDRESS_SPACE_FOR_GLOBAL_VARS)
+
 # Clang version information
 set(CLANG_EXECUTABLE_VERSION
      "${CLANG_VERSION_MAJOR}.${CLANG_VERSION_MINOR}" CACHE STRING
