@@ -1371,8 +1371,10 @@ void llvm::salvageDebugInfo(Instruction &I) {
   } else if (auto *GEP = dyn_cast<GetElementPtrInst>(&I)) {
     findDbgValues(DbgValues, &I);
     for (auto *DVI : DbgValues) {
+      // XXXAR: Is it correct to use getPointerBaseSizeInBits here?
+      // It started crashing after https://reviews.llvm.org/D30919 (297994)
       unsigned BitWidth =
-          M.getDataLayout().getPointerSizeInBits(GEP->getPointerAddressSpace());
+          M.getDataLayout().getPointerBaseSizeInBits(GEP->getPointerAddressSpace());
       APInt Offset(BitWidth, 0);
       // Rewrite a constant GEP into a DIExpression.
       if (GEP->accumulateConstantOffset(M.getDataLayout(), Offset)) {
