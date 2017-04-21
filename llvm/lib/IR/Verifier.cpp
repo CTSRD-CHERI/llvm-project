@@ -3148,9 +3148,10 @@ void Verifier::visitAllocaInst(AllocaInst &AI) {
 #ifndef NDEBUG
   PointerType *PTy = AI.getType();
   // TODO: Relax this restriction?
-  Assert(PTy->getAddressSpace() == DL.getAllocaAddrSpace(),
-         "Allocation instruction pointer not in the stack address space!",
-         &AI);
+  // XXXAR: This assertion does not hold for cheri because we replace the allocaAS
+  // Assert(PTy->getAddressSpace() == DL.getAllocaAddrSpace(),
+  //       "Allocation instruction pointer not in the stack address space!",
+  //       &AI);
 #endif
   Assert(AI.getAllocatedType()->isSized(&Visited),
          "Cannot allocate unsized type", &AI);
