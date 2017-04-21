@@ -5,7 +5,7 @@
 // RUN: llvm-objdump -C -r %t.o | FileCheck -check-prefix DUMP-OBJ %S/simple-cap-reloc-common.check
 
 // We need the symbol table before the capabiilty relocation record -> dump it to a temporary file first
-// RUN: %clang_link_purecap_bfd %t.o -static -o %t-static.exe
+// RUN: %clang_link_purecap %t.o -static -o %t-static.exe
 // RUN: llvm-objdump -h -r -t -C %t-static.exe | FileCheck -check-prefixes DUMP-EXE,STATIC %S/simple-cap-reloc-common.check
 
 // same a gain for statically dynamically linked exe:
