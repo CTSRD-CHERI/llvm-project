@@ -403,3 +403,7 @@ def thinlto_cache_dir: J<"thinlto-cache-dir=">,
 def thinlto_cache_policy: S<"thinlto-cache-policy">,
   HelpText<"Pruning policy for the ThinLTO cache">;
 def thinlto_jobs: J<"thinlto-jobs=">, HelpText<"Number of ThinLTO jobs">;
+
+// Hidden option used for testing MIPS multi-GOT implementation.
+def mips_got_size: S<"mips-got-size">, Flags<[HelpHidden]>,
+  HelpText<"Max size of a single MIPS GOT. 0x10000 by default.">;

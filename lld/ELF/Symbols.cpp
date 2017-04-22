@@ -125,8 +125,8 @@ static uint64_t getSymVA(const SymbolBody &Body, int64_t &Addend) {
 SymbolBody::SymbolBody(Kind K, StringRefZ Name, bool IsLocal, uint8_t StOther,
                        uint8_t Type)
     : SymbolKind(K), NeedsCopy(false), NeedsPltAddr(false), IsLocal(IsLocal),
-      IsInGlobalMipsGot(false), Is32BitMipsGot(false), IsInIplt(false),
-      IsInIgot(false), Type(Type), StOther(StOther), Name(Name) {}
+      IsInIplt(false), IsInIgot(false), Type(Type), StOther(StOther),
+      Name(Name) {}
 
 // Returns true if a symbol can be replaced at load-time by a symbol
 // with the same name defined in other ELF executable or DSO.

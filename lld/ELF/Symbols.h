@@ -112,12 +112,6 @@ public:
   // True if this is a local symbol.
   unsigned IsLocal : 1;
 
-  // True if this symbol has an entry in the global part of MIPS GOT.
-  unsigned IsInGlobalMipsGot : 1;
-
-  // True if this symbol is referenced by 32-bit GOT relocations.
-  unsigned Is32BitMipsGot : 1;
-
   // True if this symbol is in the Iplt sub-section of the Plt.
   unsigned IsInIplt : 1;
 

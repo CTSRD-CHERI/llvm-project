@@ -27,6 +27,7 @@
 #include "Threads.h"
 #include "Writer.h"
 #include "lld/Config/Version.h"
+#include "llvm/ADT/SetOperations.h"
 #include "llvm/DebugInfo/DWARF/DWARFDebugPubTable.h"
 #include "llvm/Object/ELFObjectFile.h"
 #include "llvm/Support/Dwarf.h"
@@ -673,93 +674,35 @@ MipsGotSection::MipsGotSection()
     : SyntheticSection(SHF_ALLOC | SHF_WRITE | SHF_MIPS_GPREL, SHT_PROGBITS, 16,
                        ".got") {}
 
-void MipsGotSection::addEntry(SymbolBody &Sym, int64_t Addend, RelExpr Expr) {
-  // For "true" local symbols which can be referenced from the same module
-  // only compiler creates two instructions for address loading:
-  //
-  // lw   $8, 0($gp) # R_MIPS_GOT16
-  // addi $8, $8, 0  # R_MIPS_LO16
-  //
-  // The first instruction loads high 16 bits of the symbol address while
-  // the second adds an offset. That allows to reduce number of required
-  // GOT entries because only one global offset table entry is necessary
-  // for every 64 KBytes of local data. So for local symbols we need to
-  // allocate number of GOT entries to hold all required "page" addresses.
-  //
-  // All global symbols (hidden and regular) considered by compiler uniformly.
-  // It always generates a single `lw` instruction and R_MIPS_GOT16 relocation
-  // to load address of the symbol. So for each such symbol we need to
-  // allocate dedicated GOT entry to store its address.
-  //
-  // If a symbol is preemptible we need help of dynamic linker to get its
-  // final address. The corresponding GOT entries are allocated in the
-  // "global" part of GOT. Entries for non preemptible global symbol allocated
-  // in the "local" part of GOT.
-  //
-  // See "Global Offset Table" in Chapter 5:
-  // ftp://www.linux-mips.org/pub/linux/mips/doc/ABI/mipsabi.pdf
+void MipsGotSection::addEntry(InputFile &File, SymbolBody &Sym, int64_t Addend,
+                              RelExpr Expr) {
+  FileGot &G = getGot(File);
   if (Expr == R_MIPS_GOT_LOCAL_PAGE) {
-    // At this point we do not know final symbol value so to reduce number
-    // of allocated GOT entries do the following trick. Save all output
-    // sections referenced by GOT relocations. Then later in the `finalize`
-    // method calculate number of "pages" required to cover all saved output
-    // section and allocate appropriate number of GOT entries.
     auto *DefSym = cast<DefinedRegular>(&Sym);
-    PageIndexMap.insert({DefSym->Section->getOutputSection(), 0});
-    return;
-  }
-  if (Sym.isTls()) {
-    // GOT entries created for MIPS TLS relocations behave like
-    // almost GOT entries from other ABIs. They go to the end
-    // of the global offset table.
-    Sym.GotIndex = TlsEntries.size();
-    TlsEntries.push_back(&Sym);
-    return;
-  }
-  auto AddEntry = [&](SymbolBody &S, uint64_t A, GotEntries &Items) {
-    if (S.isInGot() && !A)
-      return;
-    size_t NewIndex = Items.size();
-    if (!EntryIndexMap.insert({{&S, A}, NewIndex}).second)
-      return;
-    Items.emplace_back(&S, A);
-    if (!A)
-      S.GotIndex = NewIndex;
-  };
-  if (Sym.isPreemptible()) {
-    // Ignore addends for preemptible symbols. They got single GOT entry anyway.
-    AddEntry(Sym, 0, GlobalEntries);
-    Sym.IsInGlobalMipsGot = true;
-  } else if (Expr == R_MIPS_GOT_OFF32) {
-    AddEntry(Sym, Addend, LocalEntries32);
-    Sym.Is32BitMipsGot = true;
-  } else {
-    // Hold local GOT entries accessed via a 16-bit index separately.
-    // That allows to write them in the beginning of the GOT and keep
-    // their indexes as less as possible to escape relocation's overflow.
-    AddEntry(Sym, Addend, LocalEntries);
-  }
+    G.PageIndexMap.insert({DefSym->Section->getOutputSection(), 0});
+  } else if (Sym.isTls())
+    G.Tls.insert({&Sym, 0});
+  else if (Sym.isPreemptible() && Expr == R_ABS)
+    G.Relocs.insert({&Sym, 0});
+  else if (Sym.isPreemptible())
+    G.Global.insert({&Sym, 0});
+  else if (Expr == R_MIPS_GOT_OFF32)
+    G.Local32.insert({{&Sym, Addend}, 0});
+  else
+    G.Local16.insert({{&Sym, Addend}, 0});
 }
 
-bool MipsGotSection::addDynTlsEntry(SymbolBody &Sym) {
-  if (Sym.GlobalDynIndex != -1U)
-    return false;
-  Sym.GlobalDynIndex = TlsEntries.size();
-  // Global Dynamic TLS entries take two GOT slots.
-  TlsEntries.push_back(nullptr);
-  TlsEntries.push_back(&Sym);
-  return true;
+void MipsGotSection::addDynTlsEntry(InputFile &File, SymbolBody &Sym) {
+  getGot(File).DynTlsSymbols.insert({&Sym, 0});
 }
 
-// Reserves TLS entries for a TLS module ID and a TLS block offset.
-// In total it takes two GOT slots.
-bool MipsGotSection::addTlsIndex() {
-  if (TlsIndexOff != uint32_t(-1))
-    return false;
-  TlsIndexOff = TlsEntries.size() * Config->Wordsize;
-  TlsEntries.push_back(nullptr);
-  TlsEntries.push_back(nullptr);
-  return true;
+void MipsGotSection::addTlsIndex(InputFile &File) {
+  getGot(File).DynTlsSymbols.insert({nullptr, 0});
+}
+
+size_t MipsGotSection::FileGot::getEntriesNum() const {
+  return getPageEntriesNum() + Local16.size() + Global.size() + Relocs.size() +
+         Tls.size() + DynTlsSymbols.size() * 2;
 }
 
 static uint64_t getMipsPageAddr(uint64_t Addr) {
@@ -770,73 +713,272 @@ static uint64_t getMipsPageCount(uint64_t Size) {
   return (Size + 0xfffe) / 0xffff + 1;
 }
 
-uint64_t MipsGotSection::getPageEntryOffset(const SymbolBody &B,
+size_t MipsGotSection::FileGot::getPageEntriesNum() const {
+  size_t Num = 0;
+  for (const std::pair<const OutputSection *, size_t> &P : PageIndexMap)
+    Num += getMipsPageCount(P.first->Size);
+  return Num;
+}
+
+size_t MipsGotSection::FileGot::getIndexEntriesNum() const {
+  size_t Count = getPageEntriesNum() + Local16.size() + Global.size();
+  // If there are relocation-only entries in the GOT, TLS entries
+  // are allocated after them. TLS entries should be addressable
+  // by 16-bit index so count both reloc-only and TLS entries.
+  if (!Tls.empty() || !DynTlsSymbols.empty())
+    Count += Relocs.size() + Tls.size() + DynTlsSymbols.size() * 2;
+  return Count;
+}
+
+MipsGotSection::FileGot &MipsGotSection::getGot(InputFile &F) {
+  if (F.MipsGotIndex == size_t(-1)) {
+    Gots.emplace_back();
+    Gots.back().File = &F;
+    F.MipsGotIndex = Gots.size() - 1;
+  }
+  return Gots[F.MipsGotIndex];
+}
+
+uint64_t MipsGotSection::getPageEntryOffset(const InputFile &F,
+                                            const SymbolBody &B,
                                             int64_t Addend) const {
+  const FileGot &G = Gots[F.MipsGotIndex];
   const OutputSection *OutSec =
       cast<DefinedRegular>(&B)->Section->getOutputSection();
   uint64_t SecAddr = getMipsPageAddr(OutSec->Addr);
   uint64_t SymAddr = getMipsPageAddr(B.getVA(Addend));
-  uint64_t Index = PageIndexMap.lookup(OutSec) + (SymAddr - SecAddr) / 0xffff;
-  assert(Index < PageEntriesNum);
-  return (HeaderEntriesNum + Index) * Config->Wordsize;
-}
-
-uint64_t MipsGotSection::getBodyEntryOffset(const SymbolBody &B,
-                                            int64_t Addend) const {
-  // Calculate offset of the GOT entries block: TLS, global, local.
-  uint64_t Index = HeaderEntriesNum + PageEntriesNum;
-  if (B.isTls())
-    Index += LocalEntries.size() + LocalEntries32.size() + GlobalEntries.size();
-  else if (B.IsInGlobalMipsGot)
-    Index += LocalEntries.size() + LocalEntries32.size();
-  else if (B.Is32BitMipsGot)
-    Index += LocalEntries.size();
-  // Calculate offset of the GOT entry in the block.
-  if (B.isInGot())
-    Index += B.GotIndex;
-  else {
-    auto It = EntryIndexMap.find({&B, Addend});
-    assert(It != EntryIndexMap.end());
-    Index += It->second;
-  }
+  uint64_t Index = G.PageIndexMap.lookup(OutSec) + (SymAddr - SecAddr) / 0xffff;
   return Index * Config->Wordsize;
 }
 
-uint64_t MipsGotSection::getTlsOffset() const {
-  return (getLocalEntriesNum() + GlobalEntries.size()) * Config->Wordsize;
+uint64_t MipsGotSection::getBodyEntryOffset(const InputFile &F,
+                                            const SymbolBody &B,
+                                            int64_t Addend) const {
+  const FileGot &G = Gots[F.MipsGotIndex];
+  SymbolBody *Body = const_cast<SymbolBody *>(&B);
+  if (B.isTls()) {
+    auto E = G.Tls.find(Body);
+    assert(E != G.Tls.end());
+    return E->second * Config->Wordsize;
+  }
+  if (B.isPreemptible()) {
+    auto E = G.Global.find(Body);
+    assert(E != G.Global.end());
+    return E->second * Config->Wordsize;
+  }
+  auto E = G.Local16.find({Body, Addend});
+  assert(E != G.Local16.end());
+  return E->second * Config->Wordsize;
 }
 
-uint64_t MipsGotSection::getGlobalDynOffset(const SymbolBody &B) const {
-  return B.GlobalDynIndex * Config->Wordsize;
+uint64_t MipsGotSection::getTlsIndexOffset(const InputFile &F) const {
+  const FileGot &G = Gots[F.MipsGotIndex];
+  auto E = G.DynTlsSymbols.find(nullptr);
+  assert(E != G.DynTlsSymbols.end());
+  return E->second * Config->Wordsize;
+}
+
+uint64_t MipsGotSection::getGlobalDynOffset(const InputFile &F,
+                                            const SymbolBody &B) const {
+  const FileGot &G = Gots[F.MipsGotIndex];
+  auto E = G.DynTlsSymbols.find(const_cast<SymbolBody *>(&B));
+  assert(E != G.DynTlsSymbols.end());
+  return E->second * Config->Wordsize;
 }
 
 const SymbolBody *MipsGotSection::getFirstGlobalEntry() const {
-  return GlobalEntries.empty() ? nullptr : GlobalEntries.front().first;
+  if (!Gots.empty()) {
+    const FileGot &PrimGot = Gots.front();
+    if (!PrimGot.Global.empty())
+      return PrimGot.Global.front().first;
+    if (!PrimGot.Relocs.empty())
+      return PrimGot.Relocs.front().first;
+  }
+  return nullptr;
 }
 
 unsigned MipsGotSection::getLocalEntriesNum() const {
-  return HeaderEntriesNum + PageEntriesNum + LocalEntries.size() +
-         LocalEntries32.size();
+  if (Gots.empty())
+    return HeaderEntriesNum;
+  return HeaderEntriesNum + Gots.front().getPageEntriesNum() +
+         Gots.front().Local16.size();
 }
 
-void MipsGotSection::finalizeContents() {
-  updateAllocSize();
+bool MipsGotSection::tryMergeGots(FileGot &Dst, FileGot &Src, bool IsPrimary) {
+  FileGot Tmp = Dst;
+  set_union(Tmp.PageIndexMap, Src.PageIndexMap);
+  set_union(Tmp.Local16, Src.Local16);
+  set_union(Tmp.Global, Src.Global);
+  set_union(Tmp.Relocs, Src.Relocs);
+  set_union(Tmp.Tls, Src.Tls);
+  set_union(Tmp.DynTlsSymbols, Src.DynTlsSymbols);
+
+  size_t Count = (IsPrimary ? HeaderEntriesNum : 0) + Tmp.getIndexEntriesNum();
+  if (Count * Config->Wordsize > Config->MipsGotSize)
+    return false;
+
+  std::swap(Tmp, Dst);
+  return true;
 }
+
+void MipsGotSection::finalizeContents() { updateAllocSize(); }
 
 void MipsGotSection::updateAllocSize() {
-  PageEntriesNum = 0;
-  for (std::pair<const OutputSection *, size_t> &P : PageIndexMap) {
-    // For each output section referenced by GOT page relocations calculate
-    // and save into PageIndexMap an upper bound of MIPS GOT entries required
-    // to store page addresses of local symbols. We assume the worst case -
-    // each 64kb page of the output section has at least one GOT relocation
-    // against it. And take in account the case when the section intersects
-    // page boundaries.
-    P.second = PageEntriesNum;
-    PageEntriesNum += getMipsPageCount(P.first->Size);
+  Size = HeaderEntriesNum * Config->Wordsize;
+  for (const FileGot &G : Gots)
+    Size += G.getEntriesNum() * Config->Wordsize;
+}
+
+template <class ELFT> void MipsGotSection::build() {
+  if (Gots.empty())
+    return;
+
+  std::vector<FileGot> MergedGots(1);
+
+  // For each GOT move non-preemptible symbols from the `Global`
+  // to `Local16` list. Preemptible symbol might become non-preemptible
+  // one if, for example, it gets a related copy relocation.
+  for (FileGot &Got : Gots) {
+    for (auto &P: Got.Global)
+      if (!P.first->isPreemptible())
+        Got.Local16.insert({{P.first, 0}, 0});
+    Got.Global.remove_if([&](const std::pair<SymbolBody *, size_t> &P) {
+      return !P.first->isPreemptible();
+    });
   }
-  Size = (getLocalEntriesNum() + GlobalEntries.size() + TlsEntries.size()) *
-         Config->Wordsize;
+
+  // For each GOT remove "reloc-only" entry if there is "global"
+  // entry for the same symbol. And add local entries which indexed
+  // using 32-bit value at the end of 16-bit entries.
+  for (FileGot &Got : Gots) {
+    Got.Relocs.remove_if([&](const std::pair<SymbolBody *, size_t> &P) {
+      return Got.Global.count(P.first);
+    });
+    set_union(Got.Local16, Got.Local32);
+    Got.Local32.clear();
+  }
+
+  // Evaluate number of "reloc-only" entries in the resulting GOT.
+  // To do that put all unique "reloc-only" and "global" entries
+  // from all GOTs to the future primary GOT.
+  FileGot *PrimGot = &MergedGots.front();
+  for (FileGot &Got : Gots) {
+    set_union(PrimGot->Relocs, Got.Global);
+    set_union(PrimGot->Relocs, Got.Relocs);
+    Got.Relocs.clear();
+  }
+
+  // Merge GOTs. Try to join as much as possible GOTs but do not
+  // exceed maximum GOT size. In case of overflow create new GOT
+  // and continue merging.
+  for (FileGot &SrcGot : Gots) {
+    FileGot &DstGot = MergedGots.back();
+    InputFile *File = SrcGot.File;
+    if (!tryMergeGots(DstGot, SrcGot, &DstGot == PrimGot)) {
+      MergedGots.emplace_back();
+      std::swap(MergedGots.back(), SrcGot);
+    }
+    File->MipsGotIndex = MergedGots.size() - 1;
+  }
+  std::swap(Gots, MergedGots);
+
+  // Reduce number of "reloc-only" entries in the primary GOT
+  // by substracting "global" entries exist in the primary GOT.
+  PrimGot = &Gots.front();
+  PrimGot->Relocs.remove_if([&](const std::pair<SymbolBody *, size_t> &P) {
+    return PrimGot->Global.count(P.first);
+  });
+
+  // Calculate indexes for each GOT entry.
+  size_t Index = HeaderEntriesNum;
+  for (FileGot &Got : Gots) {
+    Got.StartIndex = &Got == PrimGot ? 0 : Index;
+    for (std::pair<const OutputSection *, size_t> &P : Got.PageIndexMap) {
+      // For each output section referenced by GOT page relocations calculate
+      // and save into PageIndexMap an upper bound of MIPS GOT entries required
+      // to store page addresses of local symbols. We assume the worst case -
+      // each 64kb page of the output section has at least one GOT relocation
+      // against it. And take in account the case when the section intersects
+      // page boundaries.
+      P.second = Index;
+      Index += getMipsPageCount(P.first->Size);
+    }
+    for (auto &P: Got.Local16)
+      P.second = Index++;
+    for (auto &P: Got.Global)
+      P.second = Index++;
+    for (auto &P: Got.Relocs)
+      P.second = Index++;
+    for (auto &P: Got.Tls)
+      P.second = Index++;
+    for (auto &P: Got.DynTlsSymbols) {
+      P.second = Index;
+      Index += 2;
+    }
+  }
+
+  // Update SymbolBody::GotIndex field to use this
+  // value later in the `sortMipsSymbols` function.
+  for (auto &P : PrimGot->Global)
+    P.first->GotIndex = P.second;
+  for (auto &P : PrimGot->Relocs)
+    P.first->GotIndex = P.second;
+
+  // Create dynamic relocations.
+  for (FileGot &Got : Gots) {
+    // Create dynamic relocations for TLS entries.
+    for (std::pair<SymbolBody *, size_t> &P : Got.Tls) {
+      uint64_t Offset = P.second * Config->Wordsize;
+      if (P.first->isPreemptible())
+        In<ELFT>::RelaDyn->addReloc(
+            {Target->TlsGotRel, this, Offset, false, P.first, 0});
+    }
+    for (std::pair<SymbolBody *, size_t> &P : Got.DynTlsSymbols) {
+      uint64_t Offset = P.second * Config->Wordsize;
+      if (P.first == nullptr) {
+        if (!Config->Pic)
+          continue;
+        In<ELFT>::RelaDyn->addReloc(
+            {Target->TlsModuleIndexRel, this, Offset, false, nullptr, 0});
+      } else {
+        if (!P.first->isPreemptible())
+          continue;
+        In<ELFT>::RelaDyn->addReloc(
+            {Target->TlsModuleIndexRel, this, Offset, false, P.first, 0});
+        Offset += Config->Wordsize;
+        In<ELFT>::RelaDyn->addReloc(
+            {Target->TlsOffsetRel, this, Offset, false, P.first, 0});
+      }
+    }
+
+    // Do not create dynamic relocations for non-TLS
+    // entries in the primary GOT.
+    if (&Got == PrimGot)
+      continue;
+
+    // Dynamic relocations for "global" entries.
+    for (const std::pair<SymbolBody *, size_t> &P : Got.Global) {
+      uint64_t Offset = P.second * Config->Wordsize;
+      In<ELFT>::RelaDyn->addReloc(
+          {Target->RelativeRel, this, Offset, false, P.first, 0});
+    }
+    if (!Config->Pic)
+      continue;
+    // Dynamic relocations for "local" entries in case of PIC.
+    for (const std::pair<const OutputSection *, size_t> &L : Got.PageIndexMap) {
+      size_t PageCount = getMipsPageCount(L.first->Size);
+      for (size_t PI = 0; PI < PageCount; ++PI) {
+        uint64_t Offset = (L.second + PI) * Config->Wordsize;
+        In<ELFT>::RelaDyn->addReloc({Target->RelativeRel, this, Offset, L.first,
+                                     int64_t(PI * 0x10000)});
+      }
+    }
+    for (const std::pair<GotEntry, size_t> &P : Got.Local16) {
+      uint64_t Offset = P.second * Config->Wordsize;
+      In<ELFT>::RelaDyn->addReloc({Target->RelativeRel, this, Offset, true,
+                                   P.first.first, P.first.second});
+    }
+  }
 }
 
 bool MipsGotSection::empty() const {
@@ -845,8 +987,11 @@ bool MipsGotSection::empty() const {
   return Config->Relocatable;
 }
 
-uint64_t MipsGotSection::getGp() const {
-  return ElfSym::MipsGp->getVA(0);
+uint64_t MipsGotSection::getGp(const InputFile *F) const {
+  if (!F || F->MipsGotIndex == 0 || F->MipsGotIndex == size_t(-1))
+    return ElfSym::MipsGp->getVA(0);
+  return this->getVA() + Gots[F->MipsGotIndex].StartIndex * Config->Wordsize +
+         0x7ff0;
 }
 
 static uint64_t readUint(uint8_t *Buf) {
@@ -878,47 +1023,53 @@ void MipsGotSection::writeTo(uint8_t *Buf) {
   // keep doing this for now. We really need to revisit this to see
   // if we had to do this.
   writeUint(Buf + Config->Wordsize, (uint64_t)1 << (Config->Wordsize * 8 - 1));
-  Buf += HeaderEntriesNum * Config->Wordsize;
-  // Write 'page address' entries to the local part of the GOT.
-  for (std::pair<const OutputSection *, size_t> &L : PageIndexMap) {
-    size_t PageCount = getMipsPageCount(L.first->Size);
-    uint64_t FirstPageAddr = getMipsPageAddr(L.first->Addr);
-    for (size_t PI = 0; PI < PageCount; ++PI) {
-      uint8_t *Entry = Buf + (L.second + PI) * Config->Wordsize;
-      writeUint(Entry, FirstPageAddr + PI * 0x10000);
+  for (const FileGot &G : Gots) {
+    // Write 'page address' entries to the local part of the GOT.
+    for (const std::pair<const OutputSection *, size_t> &L : G.PageIndexMap) {
+      size_t PageCount = getMipsPageCount(L.first->Size);
+      uint64_t FirstPageAddr = getMipsPageAddr(L.first->Addr);
+      for (size_t PI = 0; PI < PageCount; ++PI) {
+        uint8_t *Addr = Buf + (L.second + PI) * Config->Wordsize;
+        writeUint(Addr, FirstPageAddr + PI * 0x10000);
+      }
     }
-  }
-  Buf += PageEntriesNum * Config->Wordsize;
-  auto AddEntry = [&](const GotEntry &SA) {
-    uint8_t *Entry = Buf;
-    Buf += Config->Wordsize;
-    const SymbolBody *Body = SA.first;
-    uint64_t VA = Body->getVA(SA.second);
-    writeUint(Entry, VA);
-  };
-  std::for_each(std::begin(LocalEntries), std::end(LocalEntries), AddEntry);
-  std::for_each(std::begin(LocalEntries32), std::end(LocalEntries32), AddEntry);
-  std::for_each(std::begin(GlobalEntries), std::end(GlobalEntries), AddEntry);
-  // Initialize TLS-related GOT entries. If the entry has a corresponding
-  // dynamic relocations, leave it initialized by zero. Write down adjusted
-  // TLS symbol's values otherwise. To calculate the adjustments use offsets
-  // for thread-local storage.
-  // https://www.linux-mips.org/wiki/NPTL
-  if (TlsIndexOff != -1U && !Config->Pic)
-    writeUint(Buf + TlsIndexOff, 1);
-  for (const SymbolBody *B : TlsEntries) {
-    if (!B || B->isPreemptible())
-      continue;
-    uint64_t VA = B->getVA();
-    if (B->GotIndex != -1U) {
-      uint8_t *Entry = Buf + B->GotIndex * Config->Wordsize;
-      writeUint(Entry, VA - 0x7000);
+    // Local, global, TLS, reloc-only  entries.
+    // If TLS entry has a corresponding dynamic relocations, leave it
+    // initialized by zero. Write down adjusted TLS symbol's values otherwise.
+    // To calculate the adjustments use offsets for thread-local storage.
+    // https://www.linux-mips.org/wiki/NPTL
+    for (const std::pair<GotEntry, size_t> &P : G.Local16) {
+      uint8_t *Addr = Buf + P.second * Config->Wordsize;
+      writeUint(Addr, P.first.first->getVA(P.first.second));
     }
-    if (B->GlobalDynIndex != -1U) {
-      uint8_t *Entry = Buf + B->GlobalDynIndex * Config->Wordsize;
-      writeUint(Entry, 1);
-      Entry += Config->Wordsize;
-      writeUint(Entry, VA - 0x8000);
+    // Write VA to the primary GOT only. For secondary GOTs that
+    // will be done by REL32 dynamic relocations.
+    if (&G == &Gots.front()) {
+      for (const std::pair<const SymbolBody *, size_t> &P : G.Global) {
+        uint8_t *Addr = Buf + P.second * Config->Wordsize;
+        writeUint(Addr, P.first->getVA(0));
+      }
+    }
+    for (const std::pair<SymbolBody *, size_t> &P : G.Relocs) {
+      uint8_t *Addr = Buf + P.second * Config->Wordsize;
+      writeUint(Addr, P.first->getVA(0));
+    }
+    for (const std::pair<SymbolBody *, size_t> &P : G.Tls) {
+      uint8_t *Addr = Buf + P.second * Config->Wordsize;
+      uint64_t VA = P.first->getVA();
+      writeUint(Addr, P.first->isPreemptible() ? VA : VA - 0x7000);
+    }
+    for (const std::pair<SymbolBody *, size_t> &P : G.DynTlsSymbols) {
+      if (P.first == nullptr) {
+        if (!Config->Pic)
+          writeUint(Buf + P.second * Config->Wordsize, 1);
+      } else {
+        if (!P.first->isPreemptible()) {
+          uint8_t *Addr = Buf + P.second * Config->Wordsize;
+          writeUint(Addr, 1);
+          writeUint(Addr + Config->Wordsize, P.first->getVA() - 0x8000);
+        }
+      }
     }
   }
 }
@@ -1191,7 +1342,9 @@ uint64_t DynamicReloc::getOffset() const {
 int64_t DynamicReloc::getAddend() const {
   if (UseSymVA)
     return Sym->getVA(Addend);
-  return Addend;
+  if (!OutputSec)
+    return Addend;
+  return getMipsPageAddr(OutputSec->Addr) + Addend;
 }
 
 uint32_t DynamicReloc::getSymIndex() const {
@@ -1234,11 +1387,6 @@ template <class ELFT> void RelocationSection<ELFT>::writeTo(uint8_t *Buf) {
     if (Config->IsRela)
       P->r_addend = Rel.getAddend();
     P->r_offset = Rel.getOffset();
-    if (Config->isMIPS() && Rel.getInputSec() == In<ELFT>::MipsGot)
-      // Dynamic relocation against MIPS GOT section make deal TLS entries
-      // allocated in the end of the GOT. We need to adjust the offset to take
-      // in account 'local' and 'global' GOT entries.
-      P->r_offset += In<ELFT>::MipsGot->getTlsOffset();
     P->setSymbolAndType(Rel.getSymIndex(), Rel.Type, Config->IsMips64EL);
   }
 
@@ -1284,10 +1432,8 @@ static bool sortMipsSymbols(const SymbolTableEntry &L,
                             const SymbolTableEntry &R) {
   // Sort entries related to non-local preemptible symbols by GOT indexes.
   // All other entries go to the first part of GOT in arbitrary order.
-  bool LIsInLocalGot = !L.Symbol->IsInGlobalMipsGot;
-  bool RIsInLocalGot = !R.Symbol->IsInGlobalMipsGot;
-  if (LIsInLocalGot || RIsInLocalGot)
-    return !RIsInLocalGot;
+  if (!L.Symbol->isInGot() || !R.Symbol->isInGot())
+    return !L.Symbol->isInGot();
   return L.Symbol->GotIndex < R.Symbol->GotIndex;
 }
 
@@ -2255,6 +2401,11 @@ PltSection *InX::Plt;
 PltSection *InX::Iplt;
 StringTableSection *InX::ShStrTab;
 StringTableSection *InX::StrTab;
+
+template void MipsGotSection::build<ELF32LE>();
+template void MipsGotSection::build<ELF32BE>();
+template void MipsGotSection::build<ELF64LE>();
+template void MipsGotSection::build<ELF64BE>();
 
 template void PltSection::addEntry<ELF32LE>(SymbolBody &Sym);
 template void PltSection::addEntry<ELF32BE>(SymbolBody &Sym);
