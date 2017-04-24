@@ -159,7 +159,7 @@ void MipsSEInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
    BuildMI(MBB, I, DL, get(MoveInst))
    .addReg(DestReg, RegState::Define)
    .addReg(SrcReg, getKillRegState(KillSrc))
-   .addReg(Mips::ZERO);
+   .addReg(Mips::ZERO_64);
    return;
   }
   else if (Mips::MSA128BRegClass.contains(DestReg)) { // Copy to MSA reg
