@@ -4045,8 +4045,20 @@ MipsSETargetLowering::emitCapSelect(MachineInstr &MI,
   BB->addSuccessor(falseMBB);
   BB->addSuccessor(sinkMBB);
 
-  BuildMI(BB, dl, TII->get(Mips::BNE64))
-    .addReg(MI.getOperand(1).getReg()).addReg(Mips::ZERO_64).addMBB(sinkMBB);
+  auto RC = MI.getRegClassConstraint(1, TII, Subtarget.getRegisterInfo());
+  unsigned ZeroReg = -1;
+  unsigned BranchInst = -1;
+  if (RC->hasType(llvm::MVT::i32)) {
+    ZeroReg = Mips::ZERO;
+    BranchInst = Mips::BNE;
+  } else if (RC->hasType(llvm::MVT::i64)) {
+    ZeroReg = Mips::ZERO_64;
+    BranchInst = Mips::BNE64;
+  } else {
+    llvm_unreachable("Invalid register class for CAP_SELECT");
+  }
+  BuildMI(BB, dl, TII->get(BranchInst))
+    .addReg(MI.getOperand(1).getReg()).addReg(ZeroReg).addMBB(sinkMBB);
   falseMBB->addSuccessor(sinkMBB);
 
   BuildMI(*sinkMBB, sinkMBB->begin(), dl,
