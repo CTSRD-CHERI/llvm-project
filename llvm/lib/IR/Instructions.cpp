@@ -1246,6 +1246,8 @@ AllocaInst::AllocaInst(Type *Ty, unsigned AddrSpace, Value *ArraySize,
                      getAISize(Ty->getContext(), ArraySize), InsertBefore),
     AllocatedType(Ty) {
   setAlignment(Align);
+  assert(!Ty->isVoidTy() && "Cannot allocate void!");
+  setName(Name);
 }
 
 AllocaInst::AllocaInst(Type *Ty, unsigned AddrSpace, Value *ArraySize,
