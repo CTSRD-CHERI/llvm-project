@@ -434,7 +434,7 @@ class MVT {
         llvm_unreachable("Value type is non-standard value, Other.");
       case iPTR:
         llvm_unreachable("Value type size is target-dependent. Ask TLI.");
-#ifdef CHERI_IS_128
+#if CHERI_IS_128
       case iFATPTR: return 128;
 #else
       case iFATPTR: return 256;
