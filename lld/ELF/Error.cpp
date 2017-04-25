@@ -76,8 +76,8 @@ void elf::warn(const Twine &Msg) {
   }
   static uint64_t WarningCount = 0;
   std::lock_guard<std::mutex> Lock(Mu);
+  newline(Msg);
   if (Config->WarningLimit == 0 || WarningCount < Config->WarningLimit) {
-    newline(Msg);
     print("warning: ", raw_ostream::MAGENTA);
     *ErrorOS << Msg << "\n";
   } else if (WarningCount == Config->WarningLimit) {
