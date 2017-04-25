@@ -76,7 +76,7 @@ static std::string computeDataLayout(const Triple &TT, StringRef CPU,
     Ret += "-m:e";
 
   if (FS.find("+cheri128") != StringRef::npos) {
-#ifndef CHERI_IS_128
+#if !CHERI_IS_128
    if (!UnsafeUsage) {
      for (int i=0 ; i<10 ; i++) {
        errs() << "Trying to compile CHERI128 code with a CHERI256 compiler!\n";
@@ -86,7 +86,7 @@ static std::string computeDataLayout(const Triple &TT, StringRef CPU,
 #endif
     Ret += "-pf200:128:128";
   } else if (Triple(TT).getArch() == Triple::cheri) {
-#ifdef CHERI_IS_128
+#if CHERI_IS_128
      for (int i=0 ; i<10 ; i++) {
        errs() << "Trying to compile CHERI256 code with a CHERI128 compiler!\n";
      }
