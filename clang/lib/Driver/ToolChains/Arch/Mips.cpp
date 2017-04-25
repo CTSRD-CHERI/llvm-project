@@ -87,7 +87,7 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
       CPUName = DefMips64CPU;
       break;
     case llvm::Triple::cheri:
-      CPUName = "cheri";
+      CPUName = CheriCPU;
       ABIName = "n64";
       break;
     }
