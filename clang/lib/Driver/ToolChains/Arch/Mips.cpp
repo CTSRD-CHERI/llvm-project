@@ -13,6 +13,7 @@
 #include "clang/Driver/DriverDiagnostic.h"
 #include "clang/Driver/Options.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/Config/config.h"
 #include "llvm/Option/ArgList.h"
 
 using namespace clang::driver;
@@ -31,7 +32,11 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
                             StringRef &CPUName, StringRef &ABIName) {
   const char *DefMips32CPU = "mips32r2";
   const char *DefMips64CPU = "mips64r2";
+#if CHERI_IS_128
+  const char *CheriCPU = "cheri128";
+#else
   const char *CheriCPU = "cheri";
+#endif
 
   // MIPS32r6 is the default for mips(el)?-img-linux-gnu and MIPS64r6 is the
   // default for mips64(el)?-img-linux-gnu.
@@ -83,7 +88,7 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
       CPUName = DefMips64CPU;
       break;
     case llvm::Triple::cheri:
-      CPUName = "cheri";
+      CPUName = CheriCPU;
       ABIName = "n64";
       break;
     }
