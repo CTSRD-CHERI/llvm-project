@@ -900,10 +900,6 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   // Default output filename is "a.out" by the Unix tradition.
   if (Config->OutputFile.empty())
     Config->OutputFile = "a.out";
-  // XXXAR: don't create files named -
-  // Is /dev/stdout supported everywhere we want to run LLD?
-  if (Config->OutputFile == "-")
-    Config->OutputFile = "/dev/stdout";
 
   // Fail early if the output file or map file is not writable. If a user has a
   // long link, e.g. due to a large LTO link, they do not wish to run it and

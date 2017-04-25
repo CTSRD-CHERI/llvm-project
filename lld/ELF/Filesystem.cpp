@@ -40,7 +40,7 @@ using namespace lld::elf;
 // The calling thread returns almost immediately.
 void elf::unlinkAsync(StringRef Path) {
   if (!Config->Threads || !sys::fs::exists(Config->OutputFile) ||
-      Path.startswith("/dev"))
+      Config->OutputFile == "-")
     return;
 
   // First, rename Path to avoid race condition. We cannot remove
@@ -72,6 +72,8 @@ void elf::unlinkAsync(StringRef Path) {
 // is called. We use that class without calling commit() to predict
 // if the given file is writable.
 bool elf::isFileWritable(StringRef Path, StringRef Desc) {
+  if (Path == "-")
+    return true;
   if (auto EC = FileOutputBuffer::create(Path, 1).getError()) {
     error("cannot open " + Desc + " " + Path + ": " + EC.message());
     return false;

@@ -1756,6 +1756,10 @@ template <class ELFT> void Writer<ELFT>::openFile() {
   }
 
   unlinkAsync(Config->OutputFile);
+  // FIXME: hacky workaround to not create files named "-"
+  // Is /dev/stdout supported everywhere we want to run LLD?
+  if (Config->OutputFile == "-")
+    Config->OutputFile = "/dev/stdout";
   ErrorOr<std::unique_ptr<FileOutputBuffer>> BufferOrErr =
       FileOutputBuffer::create(Config->OutputFile, FileSize,
                                FileOutputBuffer::F_executable);
