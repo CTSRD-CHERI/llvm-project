@@ -31,7 +31,11 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
                             StringRef &CPUName, StringRef &ABIName) {
   const char *DefMips32CPU = "mips32r2";
   const char *DefMips64CPU = "mips64r2";
+#ifdef CHERI_IS_128
+  const char *CheriCPU = "cheri128";
+#else
   const char *CheriCPU = "cheri";
+#endif
 
   // MIPS32r6 is the default for mips(el)?-img-linux-gnu and MIPS64r6 is the
   // default for mips64(el)?-img-linux-gnu.
