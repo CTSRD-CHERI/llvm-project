@@ -374,8 +374,9 @@ void ObjCARCContract::tryToContractReleaseIntoStoreStrong(Instruction *Release,
                    << "            Load:    " << *Load << "\n");
 
   LLVMContext &C = Release->getContext();
-  Type *I8X = PointerType::getUnqual(Type::getInt8Ty(C));
-  Type *I8XX = PointerType::getUnqual(I8X);
+  unsigned AS = Release->getOperand(0)->getType()->getPointerAddressSpace();
+  Type *I8X = PointerType::get(Type::getInt8Ty(C), AS);
+  Type *I8XX = PointerType::get(I8X, AS);
 
   Value *Args[] = { Load->getPointerOperand(), New };
   if (Args[0]->getType() != I8XX)

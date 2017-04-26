@@ -125,8 +125,9 @@ private:
     if (Decl)
       return Decl;
 
+    unsigned AS = TheModule->getDataLayout().getAllocaAS();
     LLVMContext &C = TheModule->getContext();
-    Type *Params[] = { PointerType::getUnqual(Type::getInt8Ty(C)) };
+    Type *Params[] = { PointerType::get(Type::getInt8Ty(C), AS) };
     AttributeSet Attr =
       AttributeSet().addAttribute(C, AttributeSet::FunctionIndex,
                                   Attribute::NoUnwind);
@@ -141,7 +142,8 @@ private:
       return Decl;
 
     LLVMContext &C = TheModule->getContext();
-    Type *I8X = PointerType::getUnqual(Type::getInt8Ty(C));
+    unsigned AS = TheModule->getDataLayout().getAllocaAS();
+    Type *I8X = PointerType::get(Type::getInt8Ty(C), AS);
     Type *Params[] = { I8X };
     FunctionType *Fty = FunctionType::get(I8X, Params, /*isVarArg=*/false);
     AttributeSet Attr = AttributeSet();
@@ -158,8 +160,9 @@ private:
       return Decl;
 
     LLVMContext &C = TheModule->getContext();
-    Type *I8X = PointerType::getUnqual(Type::getInt8Ty(C));
-    Type *I8XX = PointerType::getUnqual(I8X);
+    unsigned AS = TheModule->getDataLayout().getAllocaAS();
+    Type *I8X = PointerType::get(Type::getInt8Ty(C), AS);
+    Type *I8XX = PointerType::get(I8X, AS);
     Type *Params[] = { I8XX, I8X };
 
     AttributeSet Attr =
