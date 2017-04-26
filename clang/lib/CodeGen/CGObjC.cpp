@@ -897,17 +897,16 @@ CodeGenFunction::generateObjCGetterBody(const ObjCImplementationDecl *classImpl,
 
     LValue LV = EmitLValueForIvar(TypeOfSelfObject(), LoadObjCSelf(), ivar, 0);
 
-    // Currently, all atomic accesses have to be through integer
-    // types, so there's no point in trying to pick a prettier type.
-    uint64_t ivarSize = getContext().toBits(strategy.getIvarSize());
-    llvm::Type *bitcastType = llvm::Type::getIntNTy(getLLVMContext(), ivarSize);
-    // XXXAR: is that addrspace 0 okay for CHERI????
-    bitcastType = bitcastType->getPointerTo(
-        CGM.getTargetCodeGenInfo().getDefaultAS()); // addrspace 0 okay
-
     // Perform an atomic load.  This does not impose ordering constraints.
     Address ivarAddr = LV.getAddress();
-    ivarAddr = Builder.CreateBitCast(ivarAddr, bitcastType);
+    uint64_t ivarSize = getContext().toBits(strategy.getIvarSize());
+    if (!ivarAddr.getElementType()->isSingleValueType()) {
+      llvm::Type *bitcastType =
+        llvm::Type::getIntNTy(getLLVMContext(), ivarSize);
+      bitcastType = bitcastType->getPointerTo(ivarAddr.getAddressSpace());
+      ivarAddr = Builder.CreateBitCast(ivarAddr, bitcastType);
+    }
+
     llvm::LoadInst *load = Builder.CreateLoad(ivarAddr, "load");
     load->setAtomic(llvm::AtomicOrdering::Unordered);
 
@@ -917,14 +916,12 @@ CodeGenFunction::generateObjCGetterBody(const ObjCImplementationDecl *classImpl,
     llvm::Type *retTy = ConvertType(getterMethod->getReturnType());
     uint64_t retTySize = CGM.getDataLayout().getTypeSizeInBits(retTy);
     llvm::Value *ivarVal = load;
-    if (ivarSize > retTySize) {
-      llvm::Type *newTy = llvm::Type::getIntNTy(getLLVMContext(), retTySize);
-      ivarVal = Builder.CreateTrunc(load, newTy);
-      bitcastType = newTy->getPointerTo(
-        CGM.getTargetCodeGenInfo().getDefaultAS());
-    }
+    if (ivarSize > retTySize)
+      ivarVal = Builder.CreateTrunc(load, retTy);
+    llvm::Type *bitcastType =
+      ivarVal->getType()->getPointerTo(ReturnValue.getAddressSpace());
     Builder.CreateStore(ivarVal,
-                        Builder.CreateBitCast(ReturnValue, bitcastType));
+        Builder.CreateBitCast(ReturnValue, bitcastType));
 
     // Make sure we don't do an autorelease.
     AutoreleaseResult = false;

@@ -1573,7 +1573,9 @@ GenerateMethodList(StringRef ClassName,
     auto Method = Methods.beginStruct(ObjCMethodTy);
     Method.add(MakeConstantString(MethodSels[i].getAsString()));
     Method.add(MethodTypes[i]);
-    Method.addBitCast(FnPtr, IMPTy);
+    // LLVM requires functions to be in AS 0, but CHERI requires the IMP to be
+    // in AS 200.
+    Method.addPointerdBitCastOrAddrSpaceCast(FnPtr, IMPTy);
     Method.finishAndAddTo(Methods);
   }
   Methods.finishAndAddTo(MethodList);
