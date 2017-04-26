@@ -5,7 +5,7 @@
 #ifdef NO_WARNING
 // expected-no-diagnostics
 #else
-// expected-warning@16 {{call to function 'do_append' with no prototype may lead to runtime stack corruption on CHERI}}
+// expected-warning@16 {{call to function 'do_append' with no prototype may lead to run-time stack corruption on CHERI}}
 // expected-note@12 {{candidate function declaration needs parameter types}}
 #endif
 
