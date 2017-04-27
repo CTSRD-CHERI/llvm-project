@@ -60,6 +60,12 @@ static llvm::Constant *buildDisposeHelper(CodeGenModule &CGM,
   return CodeGenFunction(CGM).GenerateDestroyHelperFunction(blockInfo);
 }
 
+static llvm::Value *getFunctionPointer(CodeGenFunction &CGF, llvm::Value *V) {
+  if (CGF.getContext().getTargetInfo().areAllPointersCapabilities())
+    return CodeGenFunction::FunctionAddressToCapability(CGF, V);
+  return V;
+}
+
 /// buildBlockDescriptor - Build the block descriptor meta-data for a block.
 /// buildBlockDescriptor is accessed from 5th field of the Block_literal
 /// meta-data and contains stationary information about the block literal.
@@ -103,10 +109,10 @@ static llvm::Constant *buildBlockDescriptor(CodeGenModule &CGM,
   // Optional copy/dispose helpers.
   if (blockInfo.NeedsCopyDispose) {
     // copy_func_helper_decl
-    elements.add(buildCopyHelper(CGM, blockInfo));
+    elements.add(llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(buildCopyHelper(CGM, blockInfo), CGM.Int8PtrTy));
 
     // destroy_func_decl
-    elements.add(buildDisposeHelper(CGM, blockInfo));
+    elements.add(llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(buildDisposeHelper(CGM, blockInfo), CGM.Int8PtrTy));
   }
 
   // Signature.  Mandatory ObjC-style method descriptor @encode sequence.
@@ -725,16 +731,7 @@ llvm::Value *CodeGenFunction::EmitBlockLiteral(const CGBlockInfo &blockInfo) {
   if (blockInfo.CanBeGlobal)
     return buildGlobalBlock(CGM, blockInfo, globalBlockFn);
 
-  llvm::Value *blockFn;
-  // FIXME: Hide this logic in the target somewhere
-  if (getContext().getTargetInfo().areAllPointersCapabilities()) {
-    llvm::Value *PCC = Builder.CreateCall(
-      CGM.getIntrinsic(llvm::Intrinsic::cheri_pcc_get), {});
-    blockFn = Builder.CreatePtrToInt(blockFnConstant, Int64Ty);
-    blockFn = setPointerOffset(PCC, blockFn);
-    blockFn = Builder.CreateBitCast(blockFn, VoidPtrTy);
-  } else
-    blockFn = globalBlockFn;
+  llvm::Value *blockFn = getFunctionPointer(*this, globalBlockFn);
 
   // Otherwise, we have to emit this as a local block.
 
@@ -1986,7 +1983,7 @@ generateByrefCopyHelper(CodeGenFunction &CGF, const BlockByrefInfo &byrefInfo,
 
   CGF.FinishFunction();
 
-  return llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(Fn, CGF.Int8PtrTy);
+  return Fn;
 }
 
 /// Build the copy helper for a __block variable.
@@ -2049,7 +2046,7 @@ generateByrefDisposeHelper(CodeGenFunction &CGF,
 
   CGF.FinishFunction();
 
-  return llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(Fn, CGF.Int8PtrTy);
+  return Fn;
 }
 
 /// Build the dispose helper for a __block variable.
@@ -2385,10 +2382,10 @@ void CodeGenFunction::emitByrefStructureInit(const AutoVarEmission &emission) {
   storeHeaderField(V, getIntSize(), "byref.size");
 
   if (helpers) {
-    storeHeaderField(helpers->CopyHelper, getPointerSize(),
-                     "byref.copyHelper");
-    storeHeaderField(helpers->DisposeHelper, getPointerSize(),
-                     "byref.disposeHelper");
+    storeHeaderField(getFunctionPointer(*this, helpers->CopyHelper),
+                     getPointerSize(), "byref.copyHelper");
+    storeHeaderField(getFunctionPointer(*this, helpers->DisposeHelper),
+                     getPointerSize(), "byref.disposeHelper");
   }
 
   if (ByRefHasLifetime && HasByrefExtendedLayout) {
