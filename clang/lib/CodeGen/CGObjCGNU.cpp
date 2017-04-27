@@ -1464,7 +1464,6 @@ CGObjCGNU::GenerateMessageSend(CodeGenFunction &CGF,
 
   // Get the IMP to call
   llvm::Value *imp;
-  unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
 
   // If we have non-legacy dispatch specified, we try using the objc_msgSend()
   // functions.  These are not supported on all platforms (or all runtimes on a
@@ -1487,16 +1486,17 @@ CGObjCGNU::GenerateMessageSend(CodeGenFunction &CGF,
         imp = CGM.CreateRuntimeFunction(llvm::FunctionType::get(IdTy, IdTy, true),
                                   "objc_msgSend");
       }
+      // On CHERI, we must make sure that this call is not to an AS200 version
+      // of the pointer, or we will end up deriving a DDC-relative capability,
+      // which won't have the execute permission.
+      MSI.MessengerType =
+        llvm::PointerType::get(MSI.MessengerType->getElementType(), 0);
   }
 
   // Reset the receiver in case the lookup modified it
   ActualArgs[0] = CallArg(RValue::get(Receiver), ASTIdTy, false);
 
-  if (AS != 0)
-    MSI.MessengerType =
-      llvm::PointerType::get(MSI.MessengerType->getElementType(), AS);
-  imp = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(imp,
-      MSI.MessengerType);
+  imp = CGF.Builder.CreateBitCast(imp, MSI.MessengerType);
 
   llvm::Instruction *call;
   CGCallee callee(CGCalleeInfo(), imp);
