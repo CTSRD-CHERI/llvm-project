@@ -210,6 +210,10 @@ public:
     add(llvm::ConstantExpr::getBitCast(value, type));
   }
 
+  void addPointerdBitCastOrAddrSpaceCast(llvm::Constant *value, llvm::Type *type) {
+    add(llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(value, type));
+  }
+
   /// Add a bunch of new values to this initializer.
   void addAll(llvm::ArrayRef<llvm::Constant *> values) {
     assert(!Finished && "cannot add more values after finishing builder");

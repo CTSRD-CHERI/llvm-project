@@ -1,9 +1,11 @@
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -std=c++11 -DINVALID_ATOMIC_CALL -fsyntax-only -verify %s
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -std=c++11 -o - %s | FileCheck %s
+// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -std=c++11 -o - %s | FileCheck %s -implicit-check-not i256
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -S -o - %s | FileCheck -check-prefix=ASM %s
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -ast-dump %s | FileCheck -check-prefix=AST %s
 // reduced testcase for libcxx exception_fallback.ipp/new_handler_fallback.ipp
 
+// Module ID might contain i256 so we explicitly capture this line
+// CHECK: ; ModuleID = '{{.+}}/cheri-std-unexpected-atomicrmw.cpp'
 
 typedef void (*handler)();
 __attribute__((__require_constant_initialization__)) static handler __handler;
@@ -27,11 +29,11 @@ handler set_handler_atomic(handler func) noexcept {
   // CHECK: %.atomictmp = alloca void () addrspace(200)*, align 32
   // CHECK: %atomic-temp = alloca void () addrspace(200)*, align 32
   // CHECK: store void () addrspace(200)* %func, void () addrspace(200)* addrspace(200)* %func.addr, align 32
-  // CHECK: %0 = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* %func.addr, align 32
-  // CHECK: store void () addrspace(200)* %0, void () addrspace(200)* addrspace(200)* %.atomictmp, align 32
-  // CHECK: %1 = bitcast void () addrspace(200)* addrspace(200)* %.atomictmp to i8 addrspace(200)*
-  // CHECK: %2 = bitcast void () addrspace(200)* addrspace(200)* %atomic-temp to i8 addrspace(200)*
-  // CHECK: call void @__atomic_exchange(i64 zeroext 32, i8 addrspace(200)* bitcast (void () addrspace(200)* addrspace(200)* @_ZL9__handler to i8 addrspace(200)*), i8 addrspace(200)* %1, i8 addrspace(200)* %2, i32 signext 5)
+  // CHECK: [[VAR_0:%.+]] = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* %func.addr, align 32
+  // CHECK: store void () addrspace(200)* [[VAR_0]], void () addrspace(200)* addrspace(200)* %.atomictmp, align 32
+  // CHECK: [[VAR_1:%.+]] = bitcast void () addrspace(200)* addrspace(200)* %.atomictmp to i8 addrspace(200)*
+  // CHECK: [[VAR_2:%.+]] = bitcast void () addrspace(200)* addrspace(200)* %atomic-temp to i8 addrspace(200)*
+  // CHECK: call void @__atomic_exchange(i64 zeroext 32, i8 addrspace(200)* bitcast (void () addrspace(200)* addrspace(200)* @_ZL9__handler to i8 addrspace(200)*), i8 addrspace(200)* [[VAR_1]], i8 addrspace(200)* [[VAR_2]], i32 signext 5)
   return __atomic_exchange_n(&__handler, func, __ATOMIC_SEQ_CST);
 
   // ASM: ld      $3, %got_page(_ZL9__handler)($1)
@@ -54,10 +56,10 @@ handler set_handler_atomic(handler func) noexcept {
 
 handler get_handler_atomic() noexcept {
   // CHECK: %atomic-temp = alloca void () addrspace(200)*, align 32
-  // CHECK: %0 = bitcast void () addrspace(200)* addrspace(200)* %atomic-temp to i8 addrspace(200)*
-  // CHECK: call void @__atomic_load(i64 zeroext 32, i8 addrspace(200)* bitcast (void () addrspace(200)* addrspace(200)* @_ZL9__handler to i8 addrspace(200)*), i8 addrspace(200)* %0, i32 signext 5)
-  // CHECK: %1 = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* %atomic-temp, align 32
-  // CHECK: ret void () addrspace(200)* %1
+  // CHECK: [[VAR_0:%.+]] = bitcast void () addrspace(200)* addrspace(200)* %atomic-temp to i8 addrspace(200)*
+  // CHECK: call void @__atomic_load(i64 zeroext 32, i8 addrspace(200)* bitcast (void () addrspace(200)* addrspace(200)* @_ZL9__handler to i8 addrspace(200)*), i8 addrspace(200)* [[VAR_0]], i32 signext 5)
+  // CHECK: [[VAR_1:%.+]] = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* %atomic-temp, align 32
+  // CHECK: ret void () addrspace(200)* [[VAR_1]]
   return __atomic_load_n(&__handler, __ATOMIC_SEQ_CST);
 
   // ASM: ld      $2, %got_page(_ZL9__handler)($1)
@@ -83,11 +85,11 @@ handler set_handler_c11_atomic(handler func) noexcept {
   // CHECK: %.atomictmp = alloca void () addrspace(200)*, align 32
   // CHECK: %atomic-temp = alloca void () addrspace(200)*, align 32
   // CHECK: store void () addrspace(200)* %func, void () addrspace(200)* addrspace(200)* %func.addr, align 32
-  // CHECK: %0 = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* %func.addr, align 32
-  // CHECK: store void () addrspace(200)* %0, void () addrspace(200)* addrspace(200)* %.atomictmp, align 32
-  // CHECK: %1 = bitcast void () addrspace(200)* addrspace(200)* %.atomictmp to i8 addrspace(200)*
-  // CHECK: %2 = bitcast void () addrspace(200)* addrspace(200)* %atomic-temp to i8 addrspace(200)*
-  // CHECK: call void @__atomic_exchange(i64 zeroext 32, i8 addrspace(200)* bitcast (void () addrspace(200)* addrspace(200)* @_ZL16__atomic_handler to i8 addrspace(200)*), i8 addrspace(200)* %1, i8 addrspace(200)* %2, i32 signext 5)
+  // CHECK: [[VAR_0:%.+]] = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* %func.addr, align 32
+  // CHECK: store void () addrspace(200)* [[VAR_0]], void () addrspace(200)* addrspace(200)* %.atomictmp, align 32
+  // CHECK: [[VAR_1:%.+]] = bitcast void () addrspace(200)* addrspace(200)* %.atomictmp to i8 addrspace(200)*
+  // CHECK: [[VAR_2:%.+]] = bitcast void () addrspace(200)* addrspace(200)* %atomic-temp to i8 addrspace(200)*
+  // CHECK: call void @__atomic_exchange(i64 zeroext 32, i8 addrspace(200)* bitcast (void () addrspace(200)* addrspace(200)* @_ZL16__atomic_handler to i8 addrspace(200)*), i8 addrspace(200)* [[VAR_1]], i8 addrspace(200)* [[VAR_2]], i32 signext 5)
   return __c11_atomic_exchange(&__atomic_handler, func, __ATOMIC_SEQ_CST);
   // ASM: ld      $3, %got_page(_ZL16__atomic_handler)($1)
   // ASM: daddiu  $3, $3, %got_ofst(_ZL16__atomic_handler)
@@ -110,10 +112,10 @@ handler set_handler_c11_atomic(handler func) noexcept {
 
 handler get_handler_c11_atomic() noexcept {
   // CHECK: %atomic-temp = alloca void () addrspace(200)*, align 32
-  // CHECK: %0 = bitcast void () addrspace(200)* addrspace(200)* %atomic-temp to i8 addrspace(200)*
-  // CHECK: call void @__atomic_load(i64 zeroext 32, i8 addrspace(200)* bitcast (void () addrspace(200)* addrspace(200)* @_ZL16__atomic_handler to i8 addrspace(200)*), i8 addrspace(200)* %0, i32 signext 5)
-  // CHECK: %1 = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* %atomic-temp, align 32
-  // CHECK: ret void () addrspace(200)* %1
+  // CHECK: [[VAR_0:%.+]] = bitcast void () addrspace(200)* addrspace(200)* %atomic-temp to i8 addrspace(200)*
+  // CHECK: call void @__atomic_load(i64 zeroext 32, i8 addrspace(200)* bitcast (void () addrspace(200)* addrspace(200)* @_ZL16__atomic_handler to i8 addrspace(200)*), i8 addrspace(200)* [[VAR_0]], i32 signext 5)
+  // CHECK: [[VAR_1:%.+]] = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* %atomic-temp, align 32
+  // CHECK: ret void () addrspace(200)* [[VAR_1]]
   return __c11_atomic_load(&__atomic_handler, __ATOMIC_SEQ_CST);
 
   // ASM: ld      $2, %got_page(_ZL16__atomic_handler)($1)
