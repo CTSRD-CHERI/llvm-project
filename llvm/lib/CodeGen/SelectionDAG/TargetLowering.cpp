@@ -262,8 +262,10 @@ void TargetLowering::softenSetCCOperands(SelectionDAG &DAG, EVT VT,
   NewRHS = DAG.getConstant(0, dl, RetVT);
 
   CCCode = getCmpLibcallCC(LC1);
+  // XXXAR: FIXME: why use isInteger=true here?
   if (ShouldInvertCC)
-    CCCode = getSetCCInverse(CCCode, /*isInteger=*/true);
+    // CCCode = getSetCCInverse(CCCode, /*isInteger=*/true);
+    CCCode = getSetCCInverse(CCCode, MVT::i32);
 
   if (LC2 != RTLIB::UNKNOWN_LIBCALL) {
     SDValue Tmp = DAG.getNode(
@@ -1473,7 +1475,8 @@ SDValue TargetLowering::simplifySetCCWithAnd(EVT VT, SDValue N0, SDValue N1,
     // Note that where Y is variable and is known to have at most one bit set
     // (for example, if it is Z & 1) we cannot do this; the expressions are not
     // equivalent when Y == 0.
-    Cond = ISD::getSetCCInverse(Cond, /*isInteger=*/true);
+    assert(VT.isInteger());
+    Cond = ISD::getSetCCInverse(Cond, VT);
     if (DCI.isBeforeLegalizeOps() ||
         isCondCodeLegal(Cond, N0.getSimpleValueType()))
       return DAG.getSetCC(DL, VT, N0, Zero, Cond);
@@ -1663,7 +1666,7 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
 
           ISD::CondCode InvCond = ISD::getSetCCInverse(
               cast<CondCodeSDNode>(TopSetCC.getOperand(2))->get(),
-              TopSetCC.getOperand(0).getValueType().isInteger());
+              TopSetCC.getOperand(0).getValueType());
           return DAG.getSetCC(dl, VT, TopSetCC.getOperand(0),
                                       TopSetCC.getOperand(1),
                                       InvCond);
@@ -1822,8 +1825,7 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
           return DAG.getNode(ISD::TRUNCATE, dl, VT, N0);
         // Invert the condition.
         ISD::CondCode CC = cast<CondCodeSDNode>(N0.getOperand(2))->get();
-        CC = ISD::getSetCCInverse(CC,
-                                  N0.getOperand(0).getValueType().isInteger());
+        CC = ISD::getSetCCInverse(CC, N0.getOperand(0).getValueType());
         if (DCI.isBeforeLegalizeOps() ||
             isCondCodeLegal(CC, N0.getOperand(0).getSimpleValueType()))
           return DAG.getSetCC(dl, VT, N0.getOperand(0), N0.getOperand(1), CC);

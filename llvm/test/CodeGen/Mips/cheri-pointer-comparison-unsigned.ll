@@ -19,6 +19,25 @@ entry:
 ; CHECK: cltu	$2, $c3, $c4
 }
 
+
+; SOURCE CODE:
+; int
+; main(void)
+; {
+;         void *a, *b;
+;
+;         a = (void *)0x12033091e;
+;         b = (void *)0xffffffffffffffff;
+;
+;         if (a < b) {
+;                 printf("ok\n");
+;                 return (0);
+;         }
+;
+;         printf("surprising result\n");
+;         return (1);
+; }
+
 ; Function Attrs: nounwind
 define i32 @main() local_unnamed_addr #0 {
 entry:
@@ -28,14 +47,23 @@ entry:
 br i1 %cmp, label %if.then, label %if.end
 
 ; CHECK: cfromptr        $c1, $c0, $zero
-; CHECK: lui     $1, 1
-; CHECK: daddiu  $1, $1, 8243
-; CHECK: dsll    $1, $1, 16
-; CHECK: daddiu  $1, $1, 2334
-; CHECK: csetoffset      $c2, $c1, $1
-; CHECK: daddiu  $1, $zero, -1
-; CHECK: csetoffset      $c1, $c1, $1
-; CHECK: cltu    $1, $c1, $c2
+; CHECK-NEXT: lui     $1, 1
+; CHECK-NEXT: daddiu  $1, $1, 8243
+; CHECK-NEXT: dsll    $1, $1, 16
+; CHECK-NEXT: daddiu  $1, $1, 2334
+; CHECK-NEXT: csetoffset      [[RANDOM_POINTER_VALUE_CAP:\$c.+]], $c1, $1
+; CHECK-NEXT: daddiu  $1, $zero, -1
+; CHECK-NEXT: csetoffset      [[UINT64_MAX_CAP:\$c.+]], $c1, $1
+; If block should be entered if random_value < UINT64_MAX, i.e. skip if UINT64_MAX <= random_value
+; CHECK-NEXT: cleu    $1, [[UINT64_MAX_CAP]], [[RANDOM_POINTER_VALUE_CAP]]
+; CHECK-NEXT: bnez    $1, .LBB1_2
+
+; CHECK: # BB#1:  # %if.then
+; CHECK: jal     puts
+; CHECK: j       .LBB1_3
+; CHECK: .LBB1_2:  # %if.end
+
+
 
 if.then: ; preds = %entry
 %puts5 = tail call i32 @puts(i8 addrspace(200)* addrspacecast (i8* getelementptr inbounds ([3 x i8], [3 x i8]* @str.2, i64 0, i64 0) to i8 addrspace(200)*))

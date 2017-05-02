@@ -3705,7 +3705,7 @@ bool SelectionDAGLegalize::ExpandNode(SDNode *Node) {
     // might support an ordered version of a condition, but not the unordered
     // version (or vice versa).
     ISD::CondCode InvCC = ISD::getSetCCInverse(CCOp,
-                                               Tmp1.getValueType().isInteger());
+                                               Tmp1.getValueType());
     if (TLI.isCondCodeLegal(InvCC, Tmp1.getSimpleValueType())) {
       // Use the new condition code and swap true and false
       Legalized = true;

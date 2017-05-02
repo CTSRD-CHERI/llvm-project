@@ -2933,7 +2933,7 @@ SDValue AMDGPUTargetLowering::performSelectCombine(SDNode *N,
 
       SDLoc SL(N);
       ISD::CondCode NewCC = getSetCCInverse(cast<CondCodeSDNode>(CC)->get(),
-                                            LHS.getValueType().isInteger());
+                                            LHS.getValueType());
 
       SDValue NewCond = DAG.getSetCC(SL, Cond.getValueType(), LHS, RHS, NewCC);
       return DAG.getNode(ISD::SELECT, SL, VT, NewCond, False, True);

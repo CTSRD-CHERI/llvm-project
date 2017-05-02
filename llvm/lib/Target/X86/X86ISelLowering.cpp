@@ -17415,7 +17415,8 @@ SDValue X86TargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
   }
   if (Op0.getValueType() == MVT::i1 && (CC == ISD::SETEQ || CC == ISD::SETNE)) {
     if (isOneConstant(Op1)) {
-      ISD::CondCode NewCC = ISD::getSetCCInverse(CC, true);
+      assert(Op0.getValueType().isInteger());
+      ISD::CondCode NewCC = ISD::getSetCCInverse(CC, Op0.getValueType());
       return DAG.getSetCC(dl, VT, Op0, DAG.getConstant(0, dl, MVT::i1), NewCC);
     }
     if (!isNullConstant(Op1)) {
@@ -29639,7 +29640,7 @@ combineVSelectWithAllOnesOrZeros(SDNode *N, SelectionDAG &DAG,
       SDValue CC = Cond.getOperand(2);
       ISD::CondCode NewCC =
           ISD::getSetCCInverse(cast<CondCodeSDNode>(CC)->get(),
-                               Cond.getOperand(0).getValueType().isInteger());
+                               Cond.getOperand(0).getValueType());
       Cond = DAG.getSetCC(DL, CondVT, Cond.getOperand(0), Cond.getOperand(1),
                           NewCC);
       std::swap(LHS, RHS);
@@ -30114,7 +30115,8 @@ static SDValue combineSelect(SDNode *N, SelectionDAG &DAG,
     SDValue Other;
     if (ISD::isBuildVectorAllZeros(LHS.getNode())) {
       Other = RHS;
-      CC = ISD::getSetCCInverse(CC, true);
+      assert(VT.isInteger());
+      CC = ISD::getSetCCInverse(CC, VT);
     } else if (ISD::isBuildVectorAllZeros(RHS.getNode())) {
       Other = LHS;
     }

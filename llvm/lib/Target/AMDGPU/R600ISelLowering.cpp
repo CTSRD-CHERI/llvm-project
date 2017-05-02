@@ -942,8 +942,10 @@ SDValue R600TargetLowering::LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const 
 
   // Move hardware True/False values to the correct operand.
   ISD::CondCode CCOpcode = cast<CondCodeSDNode>(CC)->get();
+  // XXXAR: this was the previous code: ISD::getSetCCInverse(CCOpcode, CompareVT == MVT::i32);
+  // Why only with i32 types? and not .isInteger()
   ISD::CondCode InverseCC =
-     ISD::getSetCCInverse(CCOpcode, CompareVT == MVT::i32);
+     ISD::getSetCCInverse(CCOpcode, CompareVT);
   if (isHWTrueValue(False) && isHWFalseValue(True)) {
     if (isCondCodeLegal(InverseCC, CompareVT.getSimpleVT())) {
       std::swap(False, True);
@@ -984,7 +986,7 @@ SDValue R600TargetLowering::LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const 
       CC = DAG.getCondCode(CCSwapped);
     } else {
       // Try inverting the conditon and then swapping the operands
-      ISD::CondCode CCInv = ISD::getSetCCInverse(CCOpcode, CompareVT.isInteger());
+      ISD::CondCode CCInv = ISD::getSetCCInverse(CCOpcode, CompareVT);
       CCSwapped = ISD::getSetCCSwappedOperands(CCInv);
       if (isCondCodeLegal(CCSwapped, CompareVT.getSimpleVT())) {
         std::swap(True, False);
@@ -1010,7 +1012,8 @@ SDValue R600TargetLowering::LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const 
     case ISD::SETONE:
     case ISD::SETUNE:
     case ISD::SETNE:
-      CCOpcode = ISD::getSetCCInverse(CCOpcode, CompareVT == MVT::i32);
+      // XXXAR: same as above: CCOpcode = ISD::getSetCCInverse(CCOpcode, CompareVT == MVT::i32);
+      CCOpcode = ISD::getSetCCInverse(CCOpcode, CompareVT);
       Temp = True;
       True = False;
       False = Temp;
@@ -1900,7 +1903,7 @@ SDValue R600TargetLowering::PerformDAGCombine(SDNode *N,
     case ISD::SETEQ: {
       ISD::CondCode LHSCC = cast<CondCodeSDNode>(LHS.getOperand(4))->get();
       LHSCC = ISD::getSetCCInverse(LHSCC,
-                                  LHS.getOperand(0).getValueType().isInteger());
+                                  LHS.getOperand(0).getValueType());
       if (DCI.isBeforeLegalizeOps() ||
           isCondCodeLegal(LHSCC, LHS.getOperand(0).getSimpleValueType()))
         return DAG.getSelectCC(DL,

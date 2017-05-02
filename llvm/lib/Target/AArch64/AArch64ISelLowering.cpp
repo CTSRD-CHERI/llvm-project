@@ -1251,7 +1251,7 @@ static void changeVectorFPCCToAArch64CC(ISD::CondCode CC,
     // All of the compare-mask comparisons are ordered, but we can switch
     // between the two by a double inversion. E.g. ULE == !OGT.
     Invert = true;
-    changeFPCCToAArch64CC(getSetCCInverse(CC, false), CondCode, CondCode2);
+    changeFPCCToAArch64CC(getSetCCInverse(CC, MVT::f32), CondCode, CondCode2);
     break;
   }
 }
@@ -1457,7 +1457,7 @@ static SDValue emitConjunctionDisjunctionTreeRec(SelectionDAG &DAG, SDValue Val,
     ISD::CondCode CC = cast<CondCodeSDNode>(Val->getOperand(2))->get();
     bool isInteger = LHS.getValueType().isInteger();
     if (Negate)
-      CC = getSetCCInverse(CC, isInteger);
+      CC = getSetCCInverse(CC, LHS.getValueType());
     SDLoc DL(Val);
     // Determine OutCC and handle FP special case.
     if (isInteger) {
@@ -1832,7 +1832,7 @@ static SDValue LowerXOR(SDValue Op, SelectionDAG &DAG) {
   if (CTVal->isAllOnesValue() && CFVal->isNullValue()) {
     std::swap(TVal, FVal);
     std::swap(CTVal, CFVal);
-    CC = ISD::getSetCCInverse(CC, true);
+    CC = ISD::getSetCCInverse(CC, LHS.getValueType());
   }
 
   // If the constants line up, perform the transform!
@@ -3946,7 +3946,8 @@ SDValue AArch64TargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
   if (LHS.getValueType().isInteger()) {
     SDValue CCVal;
     SDValue Cmp =
-        getAArch64Cmp(LHS, RHS, ISD::getSetCCInverse(CC, true), CCVal, DAG, dl);
+        getAArch64Cmp(LHS, RHS, ISD::getSetCCInverse(CC, LHS.getValueType()),
+                      CCVal, DAG, dl);
 
     // Note that we inverted the condition above, so we reverse the order of
     // the true and false operands here.  This will allow the setcc to be
@@ -3964,7 +3965,8 @@ SDValue AArch64TargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
   AArch64CC::CondCode CC1, CC2;
   changeFPCCToAArch64CC(CC, CC1, CC2);
   if (CC2 == AArch64CC::AL) {
-    changeFPCCToAArch64CC(ISD::getSetCCInverse(CC, false), CC1, CC2);
+    changeFPCCToAArch64CC(ISD::getSetCCInverse(CC, LHS.getValueType()), CC1,
+                          CC2);
     SDValue CC1Val = DAG.getConstant(CC1, dl, MVT::i32);
 
     // Note that we inverted the condition above, so we reverse the order of
@@ -4016,6 +4018,7 @@ SDValue AArch64TargetLowering::LowerSELECT_CC(ISD::CondCode CC, SDValue LHS,
            (LHS.getValueType() == MVT::i32 || LHS.getValueType() == MVT::i64));
 
     unsigned Opcode = AArch64ISD::CSEL;
+    EVT LHSVT = LHS.getValueType();
 
     // If both the TVal and the FVal are constants, see if we can swap them in
     // order to for a CSINV or CSINC out of them.
@@ -4025,18 +4028,18 @@ SDValue AArch64TargetLowering::LowerSELECT_CC(ISD::CondCode CC, SDValue LHS,
     if (CTVal && CFVal && CTVal->isAllOnesValue() && CFVal->isNullValue()) {
       std::swap(TVal, FVal);
       std::swap(CTVal, CFVal);
-      CC = ISD::getSetCCInverse(CC, true);
+      CC = ISD::getSetCCInverse(CC, LHSVT);
     } else if (CTVal && CFVal && CTVal->isOne() && CFVal->isNullValue()) {
       std::swap(TVal, FVal);
       std::swap(CTVal, CFVal);
-      CC = ISD::getSetCCInverse(CC, true);
+      CC = ISD::getSetCCInverse(CC, LHSVT);
     } else if (TVal.getOpcode() == ISD::XOR) {
       // If TVal is a NOT we want to swap TVal and FVal so that we can match
       // with a CSINV rather than a CSEL.
       if (isAllOnesConstant(TVal.getOperand(1))) {
         std::swap(TVal, FVal);
         std::swap(CTVal, CFVal);
-        CC = ISD::getSetCCInverse(CC, true);
+        CC = ISD::getSetCCInverse(CC, LHSVT);
       }
     } else if (TVal.getOpcode() == ISD::SUB) {
       // If TVal is a negation (SUB from 0) we want to swap TVal and FVal so
@@ -4044,7 +4047,7 @@ SDValue AArch64TargetLowering::LowerSELECT_CC(ISD::CondCode CC, SDValue LHS,
       if (isNullConstant(TVal.getOperand(0))) {
         std::swap(TVal, FVal);
         std::swap(CTVal, CFVal);
-        CC = ISD::getSetCCInverse(CC, true);
+        CC = ISD::getSetCCInverse(CC, LHSVT);
       }
     } else if (CTVal && CFVal) {
       const int64_t TrueVal = CTVal->getSExtValue();
@@ -4087,7 +4090,7 @@ SDValue AArch64TargetLowering::LowerSELECT_CC(ISD::CondCode CC, SDValue LHS,
       if (Swap) {
         std::swap(TVal, FVal);
         std::swap(CTVal, CFVal);
-        CC = ISD::getSetCCInverse(CC, true);
+        CC = ISD::getSetCCInverse(CC, LHSVT);
       }
 
       if (Opcode != AArch64ISD::CSEL) {
@@ -8671,7 +8674,7 @@ static SDValue performSetccAddFolding(SDNode *Op, SelectionDAG &DAG) {
   } else
     Cmp = getAArch64Cmp(*InfoAndKind.Info.Generic.Opnd0,
                       *InfoAndKind.Info.Generic.Opnd1,
-                      ISD::getSetCCInverse(InfoAndKind.Info.Generic.CC, true),
+                      ISD::getSetCCInverse(InfoAndKind.Info.Generic.CC, CmpVT),
                       CCVal, DAG, dl);
 
   EVT VT = Op->getValueType(0);
