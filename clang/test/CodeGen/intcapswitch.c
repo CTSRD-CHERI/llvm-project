@@ -14,15 +14,21 @@ int x(__intcap_t y)
   // CHECK: switch i64 %{{.*}}
   switch (y)
   {
-    // CHECK-NEXT: i64 1, label [[BB0:%.+]]
+    // CHECK-NEXT: i64 1, label %[[BB0:.+]]
     case A: return 4;
-    // CHECK-NEXT: i64 2, label [[BB1:%.+]]
+    // CHECK-NEXT: i64 2, label %[[BB1:.+]]
     case B: return 5;
-    // CHECK-NEXT: i64 3, label [[BB2:%.+]]
-    // CHECK-NEXT: i64 4, label [[BB2]]
-    // CHECK-NEXT: i64 5, label [[BB2]]
+    // CHECK-NEXT: i64 3, label %[[BB2:.+]]
+    // CHECK-NEXT: i64 4, label %[[BB2]]
+    // CHECK-NEXT: i64 5, label %[[BB2]]
     case C...D: return 6;
   }
+  // CHECK: [[BB0]]:
+  // CHECK-NEXT: store i32 4
+  // CHECK: [[BB1]]:
+  // CHECK-NEXT: store i32 5
+  // CHECK: [[BB2]]:
+  // CHECK-NEXT: store i32 6
   return 0;
 }
 
@@ -31,19 +37,23 @@ int y(void) {
   // CHECK: switch i64 {{%.+}}, label {{%.+}} [
   switch (foo)
   {
-    // CHECK-NEXT: i64 1, label [[BB0:%.+]]
+    // CHECK: i64 1, label %[[BB0:.+]]
     case A: return 4;
-    // CHECK-NEXT: i64 2, label [[BB1:%.+]]
+    // CHECK-NEXT: i64 2, label %[[BB1:.+]]
     case B: return 5;
-    // CHECK-NEXT: i64 3, label [[BB2:%.+]]
-    // CHECK-NEXT: i64 4, label [[BB2]]
-    // CHECK-NEXT: i64 5, label [[BB2]]
+    // CHECK-NEXT: i64 3, label %[[BB2:.+]]
+    // CHECK-NEXT: i64 4, label %[[BB2]]
+    // CHECK-NEXT: i64 5, label %[[BB2]]
     case C...D: return 6;
   }
+  // CHECK: [[BB0]]:
+  // CHECK-NEXT: store i32 4
+  // CHECK: [[BB1]]:
+  // CHECK-NEXT: store i32 5
+  // CHECK: [[BB2]]:
+  // CHECK-NEXT: store i32 6
   // with optimization this switch gets constant folded:
   // CHECK-OPT:      define i32 @y() local_unnamed_addr #2 {
-  // CHECK-OPT-SAME: {{$(entry:)?}}
-  // CHECK-OPT-NEXT:   ret i32 6
-  // CHECK-OPT-NEXT: }
+  // CHECK-OPT:   ret i32 6
   return 0;
 }
