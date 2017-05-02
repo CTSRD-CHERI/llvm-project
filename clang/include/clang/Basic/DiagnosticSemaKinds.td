@@ -1204,6 +1204,10 @@ def err_objc_kindof_nonobject : Error<
 def err_objc_kindof_wrong_position : Error<
   "'__kindof' type specifier must precede the declarator">;
 
+def err_objc_method_unsupported_param_ret_type : Error<
+  "%0 %select{parameter|return}1 type is unsupported; "
+  "support for vector types for this target is introduced in %2">;
+
 // C++ declarations
 def err_static_assert_expression_is_not_constant : Error<
   "static_assert expression is not an integral constant expression">;
@@ -2843,6 +2847,9 @@ def err_regparm_mismatch : Error<"function declared with regparm(%0) "
 def err_returns_retained_mismatch : Error<
   "function declared with the ns_returns_retained attribute "
   "was previously declared without the ns_returns_retained attribute">;
+def err_function_attribute_mismatch : Error<
+  "function declared with %0 attribute "
+  "was previously declared without the %0 attribute">;
 def err_objc_precise_lifetime_bad_type : Error<
   "objc_precise_lifetime only applies to retainable types; type here is %0">;
 def warn_objc_precise_lifetime_meaningless : Error<
@@ -8857,9 +8864,11 @@ def err_invalid_type_for_program_scope_var : Error<
 }
 
 let CategoryName = "Modules Issue" in {
+def err_module_decl_in_module_map_module : Error<
+  "'module' declaration found while building module from module map">;
 def err_module_interface_implementation_mismatch : Error<
-  "%select{'module'|'module partition'|'module implementation'}0 declaration "
-  "found while %select{not |not |}0building module interface">;
+  "missing 'export' specifier in module declaration while "
+  "building module interface">;
 def err_current_module_name_mismatch : Error<
   "module name '%0' specified on command line does not match name of module">;
 def err_module_redefinition : Error<
@@ -8902,8 +8911,13 @@ def err_module_self_import : Error<
   "import of module '%0' appears within same top-level module '%1'">;
 def err_module_import_in_implementation : Error<
   "@import of module '%0' in implementation of '%1'; use #import">;
+
+// C++ Modules TS
 def err_export_within_export : Error<
   "export declaration appears within another export declaration">;
+def err_export_not_in_module_interface : Error<
+  "export declaration can only be used within a module interface unit after "
+  "the module declaration">;
 
 def ext_equivalent_internal_linkage_decl_in_modules : ExtWarn<
   "ambiguous use of internal linkage declaration %0 defined in multiple modules">,
@@ -8980,8 +8994,13 @@ def warn_not_a_doxygen_trailing_member_comment : Warning<
 let CategoryName = "Instrumentation Issue" in {
 def warn_profile_data_out_of_date : Warning<
   "profile data may be out of date: of %0 function%s0, %1 %plural{1:has|:have}1"
-  " no data and %2 %plural{1:has|:have}2 mismatched data that will be ignored">,
+  " mismatched data that will be ignored">,
   InGroup<ProfileInstrOutOfDate>;
+def warn_profile_data_missing : Warning<
+  "profile data may be incomplete: of %0 function%s0, %1 %plural{1:has|:have}1"
+  " no data">,
+  InGroup<ProfileInstrMissing>,
+  DefaultIgnore;
 def warn_profile_data_unprofiled : Warning<
   "no profile data available for file \"%0\"">,
   InGroup<ProfileInstrUnprofiled>;

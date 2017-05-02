@@ -379,9 +379,13 @@ void InstrProfStats::reportDiagnostics(DiagnosticsEngine &Diags,
     if (MainFile.empty())
       MainFile = "<stdin>";
     Diags.Report(diag::warn_profile_data_unprofiled) << MainFile;
-  } else
-    Diags.Report(diag::warn_profile_data_out_of_date) << Visited << Missing
-                                                      << Mismatched;
+  } else {
+    if (Mismatched > 0)
+      Diags.Report(diag::warn_profile_data_out_of_date) << Visited << Mismatched;
+
+    if (Missing > 0)
+      Diags.Report(diag::warn_profile_data_missing) << Visited << Missing;
+  }
 }
 
 void CodeGenModule::Release() {
@@ -575,12 +579,8 @@ void CodeGenModule::DecorateInstructionWithTBAA(llvm::Instruction *Inst,
 
 void CodeGenModule::DecorateInstructionWithInvariantGroup(
     llvm::Instruction *I, const CXXRecordDecl *RD) {
-  llvm::Metadata *MD = CreateMetadataIdentifierForType(QualType(RD->getTypeForDecl(), 0));
-  auto *MetaDataNode = dyn_cast<llvm::MDNode>(MD);
-  // Check if we have to wrap MDString in MDNode.
-  if (!MetaDataNode)
-    MetaDataNode = llvm::MDNode::get(getLLVMContext(), MD);
-  I->setMetadata(llvm::LLVMContext::MD_invariant_group, MetaDataNode);
+  I->setMetadata(llvm::LLVMContext::MD_invariant_group,
+                 llvm::MDNode::get(getLLVMContext(), {}));
 }
 
 void CodeGenModule::Error(SourceLocation loc, StringRef message) {
@@ -1164,7 +1164,7 @@ void CodeGenModule::addCompilerUsedGlobal(llvm::GlobalValue *GV) {
 }
 
 static void emitUsed(CodeGenModule &CGM, StringRef Name,
-                     std::vector<llvm::WeakVH> &List) {
+                     std::vector<llvm::WeakTrackingVH> &List) {
   llvm::PointerType *UsedPtrTy = CGM.Int8Ty->getPointerTo(0);
   // Don't create llvm.used if there is no need.
   if (List.empty())
@@ -1339,13 +1339,10 @@ void CodeGenModule::EmitDeferred() {
 
   // Grab the list of decls to emit. If EmitGlobalDefinition schedules more
   // work, it will not interfere with this.
-  std::vector<DeferredGlobal> CurDeclsToEmit;
+  std::vector<GlobalDecl> CurDeclsToEmit;
   CurDeclsToEmit.swap(DeferredDeclsToEmit);
 
-  for (DeferredGlobal &G : CurDeclsToEmit) {
-    GlobalDecl D = G.GD;
-    G.GV = nullptr;
-
+  for (GlobalDecl &D : CurDeclsToEmit) {
     // We should call GetAddrOfGlobal with IsForDefinition set to true in order
     // to get GlobalValue with exactly the type we need, not something that
     // might had been created for another decl with the same mangled name but
@@ -1722,13 +1719,13 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
   }
 
   StringRef MangledName = getMangledName(GD);
-  if (llvm::GlobalValue *GV = GetGlobalValue(MangledName)) {
+  if (GetGlobalValue(MangledName) != nullptr) {
     // The value has already been used and should therefore be emitted.
-    addDeferredDeclToEmit(GV, GD);
+    addDeferredDeclToEmit(GD);
   } else if (MustBeEmitted(Global)) {
     // The value must be emitted, but cannot be emitted eagerly.
     assert(!MayBeEmittedEagerly(Global));
-    addDeferredDeclToEmit(/*GV=*/nullptr, GD);
+    addDeferredDeclToEmit(GD);
   } else {
     // Otherwise, remember that we saw a deferred decl with this name.  The
     // first use of the mangled name will cause it to move into
@@ -2059,7 +2056,7 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
     if (D && isa<CXXDestructorDecl>(D) &&
         getCXXABI().useThunkForDtorVariant(cast<CXXDestructorDecl>(D),
                                            GD.getDtorType()))
-      addDeferredDeclToEmit(F, GD);
+      addDeferredDeclToEmit(GD);
 
     // This is the first use or definition of a mangled name.  If there is a
     // deferred decl with this name, remember that we need to emit it at the end
@@ -2069,7 +2066,7 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
       // Move the potentially referenced deferred decl to the
       // DeferredDeclsToEmit list, and remove it from DeferredDecls (since we
       // don't need it anymore).
-      addDeferredDeclToEmit(F, DDI->second);
+      addDeferredDeclToEmit(DDI->second);
       DeferredDecls.erase(DDI);
 
       // Otherwise, there are cases we have to worry about where we're
@@ -2089,7 +2086,7 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
            FD = FD->getPreviousDecl()) {
         if (isa<CXXRecordDecl>(FD->getLexicalDeclContext())) {
           if (FD->doesThisDeclarationHaveABody()) {
-            addDeferredDeclToEmit(F, GD.getWithDecl(FD));
+            addDeferredDeclToEmit(GD.getWithDecl(FD));
             break;
           }
         }
@@ -2317,7 +2314,7 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
   if (DDI != DeferredDecls.end()) {
     // Move the potentially referenced deferred decl to the DeferredDeclsToEmit
     // list, and remove it from DeferredDecls (since we don't need it anymore).
-    addDeferredDeclToEmit(GV, DDI->second);
+    addDeferredDeclToEmit(DDI->second);
     DeferredDecls.erase(DDI);
   }
 
@@ -3847,6 +3844,10 @@ void CodeGenModule::EmitTopLevelDecl(Decl *D) {
     // Always provide some coverage mapping
     // even for the functions that aren't emitted.
     AddDeferredUnusedCoverageMapping(D);
+    break;
+
+  case Decl::CXXDeductionGuide:
+    // Function-like, but does not result in code emission.
     break;
 
   case Decl::Var:
