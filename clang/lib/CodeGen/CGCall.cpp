@@ -788,6 +788,7 @@ CGFunctionInfo *CGFunctionInfo::create(unsigned llvmCC,
   FI->ChainCall = chainCall;
   FI->NoReturn = info.getNoReturn();
   FI->ReturnsRetained = info.getProducesResult();
+  FI->NoCallerSavedRegs = info.getNoCallerSavedRegs();
   FI->Required = required;
   FI->HasRegParm = info.getHasRegParm();
   FI->RegParm = info.getRegParm();
@@ -1816,6 +1817,8 @@ void CodeGenModule::ConstructAttributeList(
       RetAttrs.addAttribute(llvm::Attribute::NoAlias);
     if (TargetDecl->hasAttr<ReturnsNonNullAttr>())
       RetAttrs.addAttribute(llvm::Attribute::NonNull);
+    if (TargetDecl->hasAttr<AnyX86NoCallerSavedRegistersAttr>())
+      FuncAttrs.addAttribute("no_caller_saved_registers");
 
     HasOptnone = TargetDecl->hasAttr<OptimizeNoneAttr>();
     if (auto *AllocSize = TargetDecl->getAttr<AllocSizeAttr>()) {
@@ -2310,8 +2313,7 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
                 llvm::AttrBuilder Attrs;
                 Attrs.addDereferenceableAttr(
                   getContext().getTypeSizeInChars(ETy).getQuantity()*ArrSize);
-                AI->addAttr(llvm::AttributeList::get(
-                    getLLVMContext(), AI->getArgNo() + 1, Attrs));
+                AI->addAttrs(Attrs);
               } else if (getContext().getTargetAddressSpace(ETy) == 0) {
                 AI->addAttr(llvm::Attribute::NonNull);
               }
@@ -2330,19 +2332,14 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
           if (!AVAttr)
             if (const auto *TOTy = dyn_cast<TypedefType>(OTy))
               AVAttr = TOTy->getDecl()->getAttr<AlignValueAttr>();
-          if (AVAttr) {         
+          if (AVAttr) {
             llvm::Value *AlignmentValue =
               EmitScalarExpr(AVAttr->getAlignment());
             llvm::ConstantInt *AlignmentCI =
               cast<llvm::ConstantInt>(AlignmentValue);
-            unsigned Alignment =
-              std::min((unsigned) AlignmentCI->getZExtValue(),
-                       +llvm::Value::MaximumAlignment);
-
-            llvm::AttrBuilder Attrs;
-            Attrs.addAlignmentAttr(Alignment);
-            AI->addAttr(llvm::AttributeList::get(getLLVMContext(),
-                                                 AI->getArgNo() + 1, Attrs));
+            unsigned Alignment = std::min((unsigned)AlignmentCI->getZExtValue(),
+                                          +llvm::Value::MaximumAlignment);
+            AI->addAttrs(llvm::AttrBuilder().addAlignmentAttr(Alignment));
           }
         }
 

@@ -84,14 +84,11 @@ void IntrinsicEmitter::run(raw_ostream &OS) {
   // Emit the intrinsic parameter attributes.
   EmitAttributes(Ints, OS);
 
-  // Individual targets don't need GCC builtin name mappings.
-  if (!TargetOnly) {
-    // Emit code to translate GCC builtins into LLVM intrinsics.
-    EmitIntrinsicToBuiltinMap(Ints, true, OS);
+  // Emit code to translate GCC builtins into LLVM intrinsics.
+  EmitIntrinsicToBuiltinMap(Ints, true, OS);
 
-    // Emit code to translate MS builtins into LLVM intrinsics.
-    EmitIntrinsicToBuiltinMap(Ints, false, OS);
-  }
+  // Emit code to translate MS builtins into LLVM intrinsics.
+  EmitIntrinsicToBuiltinMap(Ints, false, OS);
 
   EmitSuffix(OS);
 }
@@ -479,6 +476,12 @@ struct AttributeComparator {
     if (L->isConvergent != R->isConvergent)
       return R->isConvergent;
 
+    if (L->isSpeculatable != R->isSpeculatable)
+      return R->isSpeculatable;
+
+    if (L->hasSideEffects != R->hasSideEffects)
+      return R->hasSideEffects;
+
     // Try to order by readonly/readnone attribute.
     CodeGenIntrinsic::ModRefBehavior LK = L->ModRef;
     CodeGenIntrinsic::ModRefBehavior RK = R->ModRef;
@@ -603,7 +606,7 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
     if (!intrinsic.canThrow ||
         intrinsic.ModRef != CodeGenIntrinsic::ReadWriteMem ||
         intrinsic.isNoReturn || intrinsic.isNoDuplicate ||
-        intrinsic.isConvergent) {
+        intrinsic.isConvergent || intrinsic.isSpeculatable) {
       OS << "      const Attribute::AttrKind Atts[] = {";
       bool addComma = false;
       if (!intrinsic.canThrow) {
@@ -626,6 +629,12 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
         if (addComma)
           OS << ",";
         OS << "Attribute::Convergent";
+        addComma = true;
+      }
+      if (intrinsic.isSpeculatable) {
+        if (addComma)
+          OS << ",";
+        OS << "Attribute::Speculatable";
         addComma = true;
       }
 
@@ -756,6 +765,17 @@ void IntrinsicEmitter::EmitIntrinsicToBuiltinMap(
        << "Builtin(const char "
        << "*TargetPrefixStr, StringRef BuiltinNameStr) {\n";
   }
+
+  if (Table.Empty()) {
+    OS << "  return ";
+    if (!TargetPrefix.empty())
+      OS << "(" << TargetPrefix << "Intrinsic::ID)";
+    OS << "Intrinsic::not_intrinsic;\n";
+    OS << "}\n";
+    OS << "#endif\n\n";
+    return;
+  }
+
   OS << "  static const char BuiltinNames[] = {\n";
   Table.EmitCharArray(OS);
   OS << "  };\n\n";

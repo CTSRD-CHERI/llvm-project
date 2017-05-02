@@ -171,9 +171,14 @@ DiagnoseAvailabilityOfDecl(Sema &S, NamedDecl *D, SourceLocation Loc,
   if (AvailabilityResult Result =
           S.ShouldDiagnoseAvailabilityOfDecl(D, &Message)) {
 
-    if (Result == AR_NotYetIntroduced && S.getCurFunctionOrMethodDecl()) {
-      S.getEnclosingFunction()->HasPotentialAvailabilityViolations = true;
-      return;
+    if (Result == AR_NotYetIntroduced) {
+      if (S.getCurFunctionOrMethodDecl()) {
+        S.getEnclosingFunction()->HasPotentialAvailabilityViolations = true;
+        return;
+      } else if (S.getCurBlock() || S.getCurLambda()) {
+        S.getCurFunction()->HasPotentialAvailabilityViolations = true;
+        return;
+      }
     }
 
     const ObjCPropertyDecl *ObjCPDecl = nullptr;
@@ -5270,8 +5275,7 @@ ExprResult Sema::ActOnCallExpr(Scope *Scope, Expr *Fn, SourceLocation LParenLoc,
   if (Fn->getType() == Context.OverloadTy) {
     OverloadExpr::FindResult find = OverloadExpr::find(Fn);
 
-    // We aren't supposed to apply this logic for if there'Scope an '&'
-    // involved.
+    // We aren't supposed to apply this logic if there's an '&' involved.
     if (!find.HasFormOfMemberPointer) {
       OverloadExpr *ovl = find.Expression;
       if (UnresolvedLookupExpr *ULE = dyn_cast<UnresolvedLookupExpr>(ovl))
@@ -6427,14 +6431,13 @@ static QualType checkConditionalPointerCompatibility(Sema &S, ExprResult &LHS,
       return S.Context
           .getQualifiedType(CompositeTy.getUnqualifiedType(), CompositeQuals)
           .withCVRQualifiers(MergedCVRQual);
-    } else
-      return CompositeTy.withCVRQualifiers(MergedCVRQual);
+    }
+    return CompositeTy.withCVRQualifiers(MergedCVRQual);
   }();
   if (IsBlockPointer)
     ResultTy = S.Context.getBlockPointerType(ResultTy);
-  else {
+  else
     ResultTy = S.Context.getPointerType(ResultTy);
-  }
 
   LHS = S.ImpCastExprToType(LHS.get(), ResultTy, LHSCastKind);
   RHS = S.ImpCastExprToType(RHS.get(), ResultTy, RHSCastKind);
@@ -12497,6 +12500,9 @@ ExprResult Sema::ActOnBlockStmtExpr(SourceLocation CaretLoc,
     DiagnoseInvalidJumps(cast<CompoundStmt>(Body));
 
   BSI->TheDecl->setBody(cast<CompoundStmt>(Body));
+
+  if (Body && getCurFunction()->HasPotentialAvailabilityViolations)
+    DiagnoseUnguardedAvailabilityViolations(BSI->TheDecl);
 
   // Try to apply the named return value optimization. We have to check again
   // if we can do this, though, because blocks keep return statements around

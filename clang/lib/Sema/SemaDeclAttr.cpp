@@ -1941,22 +1941,47 @@ static void handleNakedAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 static void handleNoReturnAttr(Sema &S, Decl *D, const AttributeList &attr) {
   if (hasDeclarator(D)) return;
 
-  if (S.CheckNoReturnAttr(attr)) return;
+  if (S.CheckNoReturnAttr(attr))
+    return;
 
   if (!isa<ObjCMethodDecl>(D)) {
     S.Diag(attr.getLoc(), diag::warn_attribute_wrong_decl_type)
-      << attr.getName() << ExpectedFunctionOrMethod;
+        << attr.getName() << ExpectedFunctionOrMethod;
     return;
   }
 
-  D->addAttr(::new (S.Context)
-             NoReturnAttr(attr.getRange(), S.Context,
-                          attr.getAttributeSpellingListIndex()));
+  D->addAttr(::new (S.Context) NoReturnAttr(
+      attr.getRange(), S.Context, attr.getAttributeSpellingListIndex()));
+}
+
+static void handleNoCallerSavedRegsAttr(Sema &S, Decl *D,
+                                        const AttributeList &Attr) {
+  if (S.CheckNoCallerSavedRegsAttr(Attr))
+    return;
+
+  D->addAttr(::new (S.Context) AnyX86NoCallerSavedRegistersAttr(
+      Attr.getRange(), S.Context, Attr.getAttributeSpellingListIndex()));
 }
 
 bool Sema::CheckNoReturnAttr(const AttributeList &attr) {
   if (!checkAttributeNumArgs(*this, attr, 0)) {
     attr.setInvalid();
+    return true;
+  }
+
+  return false;
+}
+
+bool Sema::CheckNoCallerSavedRegsAttr(const AttributeList &Attr) {
+  // Check whether the attribute is valid on the current target.
+  if (!Attr.existsInTarget(Context.getTargetInfo())) {
+    Diag(Attr.getLoc(), diag::warn_unknown_attribute_ignored) << Attr.getName();
+    Attr.setInvalid();
+    return true;
+  }
+
+  if (!checkAttributeNumArgs(*this, Attr, 0)) {
+    Attr.setInvalid();
     return true;
   }
 
@@ -2398,10 +2423,8 @@ static void handleAvailabilityAttr(Sema &S, Decl *D,
       << Platform->Ident;
 
   NamedDecl *ND = dyn_cast<NamedDecl>(D);
-  if (!ND) {
-    S.Diag(Attr.getLoc(), diag::warn_attribute_ignored) << Attr.getName();
+  if (!ND) // We warned about this already, so just return.
     return;
-  }
 
   AvailabilityChange Introduced = Attr.getAvailabilityIntroduced();
   AvailabilityChange Deprecated = Attr.getAvailabilityDeprecated();
@@ -2510,12 +2533,6 @@ static void handleExternalSourceSymbolAttr(Sema &S, Decl *D,
     return;
   assert(checkAttributeAtMostNumArgs(S, Attr, 3) &&
          "Invalid number of arguments in an external_source_symbol attribute");
-
-  if (!isa<NamedDecl>(D)) {
-    S.Diag(Attr.getLoc(), diag::warn_attribute_wrong_decl_type)
-        << Attr.getName() << ExpectedNamedDecl;
-    return;
-  }
 
   StringRef Language;
   if (const auto *SE = dyn_cast_or_null<StringLiteral>(Attr.getArgAsExpr(0)))
@@ -5765,18 +5782,21 @@ static void handleOpenCLNoSVMAttr(Sema &S, Decl *D, const AttributeList &Attr) {
 static bool handleCommonAttributeFeatures(Sema &S, Scope *scope, Decl *D,
                                           const AttributeList &Attr) {
   // Several attributes carry different semantics than the parsing requires, so
-  // those are opted out of the common handling.
+  // those are opted out of the common argument checks.
   //
   // We also bail on unknown and ignored attributes because those are handled
   // as part of the target-specific handling logic.
-  if (Attr.hasCustomParsing() ||
-      Attr.getKind() == AttributeList::UnknownAttribute)
+  if (Attr.getKind() == AttributeList::UnknownAttribute)
     return false;
-
   // Check whether the attribute requires specific language extensions to be
   // enabled.
   if (!Attr.diagnoseLangOpts(S))
     return true;
+  // Check whether the attribute appertains to the given subject.
+  if (!Attr.diagnoseAppertainsTo(S, D))
+    return true;
+  if (Attr.hasCustomParsing())
+    return false;
 
   if (Attr.getMinArgs() == Attr.getMaxArgs()) {
     // If there are no optional arguments, then checking for the argument count
@@ -5792,10 +5812,6 @@ static bool handleCommonAttributeFeatures(Sema &S, Scope *scope, Decl *D,
              !checkAttributeAtMostNumArgs(S, Attr, Attr.getMaxArgs()))
       return true;
   }
-
-  // Check whether the attribute appertains to the given subject.
-  if (!Attr.diagnoseAppertainsTo(S, D))
-    return true;
 
   return false;
 }
@@ -6436,6 +6452,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     break;
   case AttributeList::AT_TypeTagForDatatype:
     handleTypeTagForDatatypeAttr(S, D, Attr);
+    break;
+  case AttributeList::AT_AnyX86NoCallerSavedRegisters:
+    handleNoCallerSavedRegsAttr(S, D, Attr);
     break;
   case AttributeList::AT_RenderScriptKernel:
     handleSimpleAttribute<RenderScriptKernelAttr>(S, D, Attr);
@@ -7229,6 +7248,8 @@ void Sema::DiagnoseUnguardedAvailabilityViolations(Decl *D) {
     Body = FD->getBody();
   } else if (auto *MD = dyn_cast<ObjCMethodDecl>(D))
     Body = MD->getBody();
+  else if (auto *BD = dyn_cast<BlockDecl>(D))
+    Body = BD->getBody();
 
   assert(Body && "Need a body here!");
 

@@ -58,6 +58,8 @@ public:
   // Returns the CPU type this file was compiled to.
   virtual MachineTypes getMachineType() { return IMAGE_FILE_MACHINE_UNKNOWN; }
 
+  MemoryBufferRef MB;
+
   // An archive file name if this file is created from an archive.
   StringRef ParentName;
 
@@ -67,7 +69,6 @@ public:
 protected:
   InputFile(Kind K, MemoryBufferRef M) : MB(M), FileKind(K) {}
 
-  MemoryBufferRef MB;
   std::string Directives;
 
 private:
@@ -166,6 +167,7 @@ public:
   static bool classof(const InputFile *F) { return F->kind() == ImportKind; }
 
   DefinedImportData *ImpSym = nullptr;
+  DefinedImportData *ConstSym = nullptr;
   DefinedImportThunk *ThunkSym = nullptr;
   std::string DLLName;
 

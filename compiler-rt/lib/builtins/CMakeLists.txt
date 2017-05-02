@@ -164,7 +164,8 @@ set(GENERIC_SOURCES
   udivti3.c
   umoddi3.c
   umodsi3.c
-  umodti3.c)
+  umodti3.c
+  emutls.c)
 
 option(COMPILER_RT_EXCLUDE_ATOMIC_BUILTIN
   "Skip the atomic builtin (this may be needed if system headers are unavailable)"
@@ -185,12 +186,6 @@ if(APPLE)
     atomic_flag_test_and_set_explicit.c
     atomic_signal_fence.c
     atomic_thread_fence.c)
-endif()
-
-if(NOT WIN32 OR MINGW)
-  set(GENERIC_SOURCES
-      ${GENERIC_SOURCES}
-      emutls.c)
 endif()
 
 if (HAVE_UNWIND_H)
@@ -444,6 +439,20 @@ set(mips_SOURCES ${GENERIC_SOURCES})
 set(mipsel_SOURCES ${mips_SOURCES})
 set(mips64_SOURCES ${mips_SOURCES})
 set(mips64el_SOURCES ${mips_SOURCES})
+
+set(powerpc64_SOURCES
+  ppc/divtc3.c
+  ppc/fixtfdi.c
+  ppc/fixunstfdi.c
+  ppc/floatditf.c
+  ppc/floatunditf.c
+  ppc/gcc_qadd.c
+  ppc/gcc_qdiv.c
+  ppc/gcc_qmul.c
+  ppc/gcc_qsub.c
+  ppc/multc3.c
+  ${GENERIC_SOURCES})
+set(powerpc64le_SOURCES ${powerpc64_SOURCES})
 
 set(wasm32_SOURCES ${GENERIC_SOURCES})
 set(wasm64_SOURCES ${GENERIC_SOURCES})

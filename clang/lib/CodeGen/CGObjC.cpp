@@ -1850,12 +1850,8 @@ static llvm::Constant *createARCRuntimeFunction(CodeGenModule &CGM,
       F->addFnAttr(llvm::Attribute::NonLazyBind);
     }
 
-    if (IsForwarding(Name)) {
-      llvm::AttrBuilder B;
-      B.addAttribute(llvm::Attribute::Returned);
-
-      F->arg_begin()->addAttr(llvm::AttributeList::get(F->getContext(), 1, B));
-    }
+    if (IsForwarding(Name))
+      F->arg_begin()->addAttr(llvm::Attribute::Returned);
   }
 
   return RTF;
@@ -2417,6 +2413,12 @@ void CodeGenFunction::destroyARCWeak(CodeGenFunction &CGF,
                                      Address addr,
                                      QualType type) {
   CGF.EmitARCDestroyWeak(addr);
+}
+
+void CodeGenFunction::emitARCIntrinsicUse(CodeGenFunction &CGF, Address addr,
+                                          QualType type) {
+  llvm::Value *value = CGF.Builder.CreateLoad(addr);
+  CGF.EmitARCIntrinsicUse(value);
 }
 
 namespace {

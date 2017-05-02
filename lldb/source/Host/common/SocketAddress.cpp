@@ -6,6 +6,12 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+//
+// Note: This file is used on Darwin by debugserver, so it needs to remain as
+//       self contained as possible, and devoid of references to LLVM unless 
+//       there is compelling reason.
+//
+//===----------------------------------------------------------------------===//
 
 #if defined(_MSC_VER)
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
@@ -227,6 +233,19 @@ bool SocketAddress::getaddrinfo(const char *host, const char *service,
                                 int ai_flags) {
   Clear();
 
+  auto addresses = GetAddressInfo(host, service, ai_family, ai_socktype,
+                                  ai_protocol, ai_flags);
+  if (!addresses.empty())
+    *this = addresses[0];
+  return IsValid();
+}
+
+std::vector<SocketAddress>
+SocketAddress::GetAddressInfo(const char *hostname, const char *servname,
+                              int ai_family, int ai_socktype, int ai_protocol,
+                              int ai_flags) {
+  std::vector<SocketAddress> addr_list;
+
   struct addrinfo hints;
   memset(&hints, 0, sizeof(hints));
   hints.ai_family = ai_family;
@@ -234,26 +253,8 @@ bool SocketAddress::getaddrinfo(const char *host, const char *service,
   hints.ai_protocol = ai_protocol;
   hints.ai_flags = ai_flags;
 
-  bool result = false;
   struct addrinfo *service_info_list = NULL;
-  int err = ::getaddrinfo(host, service, &hints, &service_info_list);
-  if (err == 0 && service_info_list) {
-    *this = service_info_list;
-    result = IsValid();
-  }
-
-  if (service_info_list)
-    ::freeaddrinfo(service_info_list);
-
-  return result;
-}
-
-std::vector<SocketAddress> SocketAddress::GetAddressInfo(const char *hostname,
-                                                       const char *servname) {
-  std::vector<SocketAddress> addr_list;
-
-  struct addrinfo *service_info_list = NULL;
-  int err = ::getaddrinfo(hostname, servname, NULL, &service_info_list);
+  int err = ::getaddrinfo(hostname, servname, &hints, &service_info_list);
   if (err == 0 && service_info_list) {
     for (struct addrinfo *service_ptr = service_info_list; service_ptr != NULL;
          service_ptr = service_ptr->ai_next) {

@@ -160,7 +160,6 @@ private:
   std::vector<ValueInfo> RefEdgeList;
 
 protected:
-  /// GlobalValueSummary constructor.
   GlobalValueSummary(SummaryKind K, GVFlags Flags, std::vector<ValueInfo> Refs)
       : Kind(K), Flags(Flags), OriginalName(0), RefEdgeList(std::move(Refs)) {}
 
@@ -221,7 +220,6 @@ class AliasSummary : public GlobalValueSummary {
   GlobalValueSummary *AliaseeSummary;
 
 public:
-  /// Summary constructors.
   AliasSummary(GVFlags Flags, std::vector<ValueInfo> Refs)
       : GlobalValueSummary(AliasKind, Flags, std::move(Refs)) {}
 
@@ -297,7 +295,6 @@ private:
   std::unique_ptr<TypeIdInfo> TIdInfo;
 
 public:
-  /// Summary constructors.
   FunctionSummary(GVFlags Flags, unsigned NumInsts, std::vector<ValueInfo> Refs,
                   std::vector<EdgeTy> CGEdges,
                   std::vector<GlobalValue::GUID> TypeTests,
@@ -418,7 +415,6 @@ template <> struct DenseMapInfo<FunctionSummary::ConstVCall> {
 class GlobalVarSummary : public GlobalValueSummary {
 
 public:
-  /// Summary constructors.
   GlobalVarSummary(GVFlags Flags, std::vector<ValueInfo> Refs)
       : GlobalValueSummary(GlobalVarKind, Flags, std::move(Refs)) {}
 
@@ -648,13 +644,6 @@ public:
     return It->second.second;
   }
 
-  /// Add the given per-module index into this module index/summary,
-  /// assigning it the given module ID. Each module merged in should have
-  /// a unique ID, necessary for consistent renaming of promoted
-  /// static (local) variables.
-  void mergeFrom(std::unique_ptr<ModuleSummaryIndex> Other,
-                 uint64_t NextModuleId);
-
   /// Convenience method for creating a promoted global name
   /// for the given value name of a local, and its original module's ID.
   static std::string getGlobalNameForLocal(StringRef Name, ModuleHash ModHash) {
@@ -706,13 +695,6 @@ public:
       return nullptr;
     return &I->second;
   }
-
-  /// Remove entries in the GlobalValueMap that have empty summaries due to the
-  /// eager nature of map entry creation during VST parsing. These would
-  /// also be suppressed during combined index generation in mergeFrom(),
-  /// but if there was only one module or this was the first module we might
-  /// not invoke mergeFrom.
-  void removeEmptySummaryEntries();
 
   /// Collect for the given module the list of function it defines
   /// (GUID -> Summary).

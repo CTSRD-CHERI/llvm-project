@@ -58,31 +58,15 @@ bool InstructionSelector::constrainSelectedInstRegOperands(
     MO.setReg(constrainOperandRegClass(MF, TRI, MRI, TII, RBI, I, I.getDesc(),
                                        Reg, OpI));
 
-    // Tie uses to defs as indicated in MCInstrDesc.
+    // Tie uses to defs as indicated in MCInstrDesc if this hasn't already been
+    // done.
     if (MO.isUse()) {
       int DefIdx = I.getDesc().getOperandConstraint(OpI, MCOI::TIED_TO);
-      if (DefIdx != -1)
+      if (DefIdx != -1 && !I.isRegTiedToUseOperand(DefIdx))
         I.tieOperands(DefIdx, OpI);
     }
   }
   return true;
-}
-
-Optional<int64_t>
-InstructionSelector::getConstantVRegVal(unsigned VReg,
-                                        const MachineRegisterInfo &MRI) const {
-  MachineInstr *MI = MRI.getVRegDef(VReg);
-  if (MI->getOpcode() != TargetOpcode::G_CONSTANT)
-    return None;
-
-  if (MI->getOperand(1).isImm())
-    return MI->getOperand(1).getImm();
-
-  if (MI->getOperand(1).isCImm() &&
-      MI->getOperand(1).getCImm()->getBitWidth() <= 64)
-    return MI->getOperand(1).getCImm()->getSExtValue();
-
-  return None;
 }
 
 bool InstructionSelector::isOperandImmEqual(

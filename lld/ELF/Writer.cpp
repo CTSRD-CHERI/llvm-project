@@ -101,7 +101,7 @@ StringRef elf::getOutputSectionName(StringRef Name) {
     for (StringRef V : {".rel.", ".rela."}) {
       if (Name.startswith(V)) {
         StringRef Inner = getOutputSectionName(Name.substr(V.size() - 1));
-        return Saver.save(Twine(V.drop_back()) + Inner);
+        return Saver.save(V.drop_back() + Inner);
       }
     }
   }
@@ -123,7 +123,7 @@ StringRef elf::getOutputSectionName(StringRef Name) {
   // ".zdebug_" is a prefix for ZLIB-compressed sections.
   // Because we decompressed input sections, we want to remove 'z'.
   if (Name.startswith(".zdebug_"))
-    return Saver.save(Twine(".") + Name.substr(2));
+    return Saver.save("." + Name.substr(2));
   return Name;
 }
 
@@ -254,6 +254,7 @@ template <class ELFT> void Writer<ELFT>::run() {
       fixSectionAlignments();
       Script->fabricateDefaultCommands(Config->MaxPageSize);
     }
+    Script->synchronize();
     Script->assignAddresses(Phdrs);
 
     // Remove empty PT_LOAD to avoid causing the dynamic linker to try to mmap a
@@ -860,11 +861,8 @@ template <class ELFT> void Writer<ELFT>::addReservedSymbols() {
   // __tls_get_addr is defined by the dynamic linker for dynamic ELFs. For
   // static linking the linker is required to optimize away any references to
   // __tls_get_addr, so it's not defined anywhere. Create a hidden definition
-  // to avoid the undefined symbol error. As usual special cases are ARM and
-  // MIPS - the libc for these targets defines __tls_get_addr itself because
-  // there are no TLS optimizations for these targets.
-  if (!In<ELFT>::DynSymTab &&
-      (!Config->isMIPS() && Config->EMachine != EM_ARM))
+  // to avoid the undefined symbol error.
+  if (!In<ELFT>::DynSymTab)
     Symtab<ELFT>::X->addIgnored("__tls_get_addr");
 
   // If linker script do layout we do not need to create any standart symbols.
@@ -1086,6 +1084,7 @@ static void removeUnusedSyntheticSections(std::vector<OutputSection *> &V) {
 
     SS->OutSec->Sections.erase(std::find(SS->OutSec->Sections.begin(),
                                          SS->OutSec->Sections.end(), SS));
+    SS->Live = false;
     // If there are no other sections in the output section, remove it from the
     // output.
     if (SS->OutSec->Sections.empty())

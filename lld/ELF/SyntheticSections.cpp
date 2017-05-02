@@ -98,7 +98,7 @@ static ArrayRef<uint8_t> getVersion() {
 
 // Creates a .comment section containing LLD version info.
 // With this feature, you can identify LLD-generated binaries easily
-// by "objdump -s -j .comment <file>".
+// by "readelf --string-dump .comment <file>".
 // The returned object is a mergeable string section.
 template <class ELFT> MergeInputSection *elf::createCommentSection() {
   typename ELFT::Shdr Hdr = {};
@@ -1178,12 +1178,12 @@ template <class ELFT> void DynamicSection<ELFT>::addEntries() {
   // fixed early.
   for (StringRef S : Config->AuxiliaryList)
     add({DT_AUXILIARY, In<ELFT>::DynStrTab->addString(S)});
-  if (!Config->RPath.empty())
+  if (!Config->Rpath.empty())
     add({Config->EnableNewDtags ? DT_RUNPATH : DT_RPATH,
-         In<ELFT>::DynStrTab->addString(Config->RPath)});
+         In<ELFT>::DynStrTab->addString(Config->Rpath)});
   for (SharedFile<ELFT> *F : Symtab<ELFT>::X->getSharedFiles())
     if (F->isNeeded())
-      add({DT_NEEDED, In<ELFT>::DynStrTab->addString(F->getSoName())});
+      add({DT_NEEDED, In<ELFT>::DynStrTab->addString(F->SoName)});
   if (!Config->SoName.empty())
     add({DT_SONAME, In<ELFT>::DynStrTab->addString(Config->SoName)});
 
@@ -2196,7 +2196,7 @@ void VersionNeedSection<ELFT>::addSymbol(SharedSymbol *SS) {
   // to create one by adding it to our needed list and creating a dynstr entry
   // for the soname.
   if (File->VerdefMap.empty())
-    Needed.push_back({File, In<ELFT>::DynStrTab->addString(File->getSoName())});
+    Needed.push_back({File, In<ELFT>::DynStrTab->addString(File->SoName)});
   typename SharedFile<ELFT>::NeededVer &NV = File->VerdefMap[Ver];
   // If we don't already know that we need an Elf_Vernaux for this Elf_Verdef,
   // prepare to create one by allocating a version identifier and creating a

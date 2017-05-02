@@ -368,6 +368,16 @@ def SubjectMatcherForBlock : AttrSubjectMatcherRule<"block", [Block]> {
   let LangOpts = [BlocksSupported];
 }
 
+// Aggregate attribute subject match rules are abstract match rules that can't
+// be used directly in #pragma clang attribute. Instead, users have to use
+// subject match rules that correspond to attribute subjects that derive from
+// the specified subject.
+class AttrSubjectMatcherAggregateRule<AttrSubject subject> {
+  AttrSubject Subject = subject;
+}
+
+def SubjectMatcherForNamed : AttrSubjectMatcherAggregateRule<Named>;
+
 class Attr {
   // The various ways in which an attribute can be spelled in source
   list<Spelling> Spellings;
@@ -645,7 +655,7 @@ def Availability : InheritableAttr {
 } }];
   let HasCustomParsing = 1;
   let DuplicatesAllowedWhileMerging = 1;
-//  let Subjects = SubjectList<[Named]>;
+  let Subjects = SubjectList<[Named]>;
   let Documentation = [AvailabilityDocs];
 }
 
@@ -656,7 +666,7 @@ def ExternalSourceSymbol : InheritableAttr {
               StringArgument<"definedIn", 1>,
               BoolArgument<"generatedDeclaration", 1>];
   let HasCustomParsing = 1;
-//  let Subjects = SubjectList<[Named]>;
+  let Subjects = SubjectList<[Named]>;
   let Documentation = [ExternalSourceSymbolDocs];
 }
 
@@ -1919,6 +1929,12 @@ def AnyX86Interrupt : InheritableAttr, TargetSpecificAttr<TargetAnyX86> {
   let ParseKind = "Interrupt";
   let HasCustomParsing = 1;
   let Documentation = [AnyX86InterruptDocs];
+}
+
+def AnyX86NoCallerSavedRegisters : InheritableAttr,
+                                   TargetSpecificAttr<TargetAnyX86> {
+  let Spellings = [GCC<"no_caller_saved_registers">];
+  let Documentation = [AnyX86NoCallerSavedRegistersDocs];
 }
 
 def X86ForceAlignArgPointer : InheritableAttr, TargetSpecificAttr<TargetX86> {

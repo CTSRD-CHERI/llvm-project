@@ -399,19 +399,26 @@ static void reportDiscarded(InputSectionBase *IS) {
 
 void OutputSectionFactory::addInputSec(InputSectionBase *IS,
                                        StringRef OutsecName) {
+  SectionKey Key = createKey(IS, OutsecName);
+  OutputSection *&Sec = Map[Key];
+  return addInputSec(IS, OutsecName, Sec);
+}
+
+void OutputSectionFactory::addInputSec(InputSectionBase *IS,
+                                       StringRef OutsecName,
+                                       OutputSection *&Sec) {
   if (!IS->Live) {
     reportDiscarded(IS);
     return;
   }
 
-  SectionKey Key = createKey(IS, OutsecName);
   uint64_t Flags = getOutFlags(IS);
-  OutputSection *&Sec = Map[Key];
   if (Sec) {
     if (getIncompatibleFlags(Sec->Flags) != getIncompatibleFlags(IS->Flags))
-      error("Section has flags incompatible with others with the same name " +
-            toString(IS) + ": " +  Twine(getIncompatibleFlags(Sec->Flags)) +
-            " vs " + Twine(getIncompatibleFlags(IS->Flags)));
+      error("incompatible section flags for " + Sec->Name +
+            "\n>>> " + toString(IS) + ": 0x" + utohexstr(IS->Flags) +
+            "\n>>> output section " + Sec->Name + ": 0x" +
+            utohexstr(Sec->Flags));
     if (Sec->Type != IS->Type) {
       if (canMergeToProgbits(Sec->Type) && canMergeToProgbits(IS->Type))
         Sec->Type = SHT_PROGBITS;
@@ -424,12 +431,12 @@ void OutputSectionFactory::addInputSec(InputSectionBase *IS,
   } else {
     // XXXAR: HACK: for now we have to mark __cap_relocs as writable and not
     // RELRO because otherwise rtld will crash
-    if (Key.Name == "__cap_relocs") {
+    if (OutsecName == "__cap_relocs") {
       Flags |= SHF_WRITE;
     }
-    DEBUG_WITH_TYPE("LLD", dbgs() << "Creating output section " << Key.Name
+    DEBUG_WITH_TYPE("LLD", dbgs() << "Creating output section " << OutsecName
                                   << " flags=" << Flags << "\n");
-    Sec = make<OutputSection>(Key.Name, IS->Type, Flags);
+    Sec = make<OutputSection>(OutsecName, IS->Type, Flags);
     OutputSections.push_back(Sec);
   }
 
