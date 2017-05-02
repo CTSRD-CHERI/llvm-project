@@ -2301,7 +2301,9 @@ void CodeGenFunction::emitByrefStructureInit(const AutoVarEmission &emission) {
                               const Twine &name) {
     auto fieldAddr = Builder.CreateStructGEP(addr, nextHeaderIndex,
                                              nextHeaderOffset, name);
-    Builder.CreateStore(value, fieldAddr);
+    Builder.CreateStore(Builder.CreateBitCast(value,
+                            fieldAddr.getType()->getElementType()),
+                        fieldAddr);
 
     nextHeaderIndex++;
     nextHeaderOffset += fieldSize;
