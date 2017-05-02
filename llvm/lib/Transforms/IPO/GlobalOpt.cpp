@@ -239,7 +239,7 @@ static bool CleanupConstantGlobalUsers(Value *V, Constant *Init,
   // we delete a constant array, we may also be holding pointer to one of its
   // elements (or an element of one of its elements if we're dealing with an
   // array of arrays) in the worklist.
-  SmallVector<WeakVH, 8> WorkList(V->user_begin(), V->user_end());
+  SmallVector<WeakTrackingVH, 8> WorkList(V->user_begin(), V->user_end());
   while (!WorkList.empty()) {
     Value *UV = WorkList.pop_back_val();
     if (!UV)
@@ -1800,7 +1800,9 @@ static void makeAllConstantUsesInstructions(Constant *C) {
       NewU->insertBefore(UI);
       UI->replaceUsesOfWith(U, NewU);
     }
-    U->dropAllReferences();
+    // We've replaced all the uses, so destroy the constant. (destroyConstant
+    // will update value handles and metadata.)
+    U->destroyConstant();
   }
 }
 
@@ -1987,16 +1989,11 @@ static void ChangeCalleesToFastCall(Function *F) {
   }
 }
 
-static AttributeList StripNest(LLVMContext &C, const AttributeList &Attrs) {
-  for (unsigned i = 0, e = Attrs.getNumSlots(); i != e; ++i) {
-    unsigned Index = Attrs.getSlotIndex(i);
-    if (!Attrs.getSlotAttributes(i).hasAttribute(Index, Attribute::Nest))
-      continue;
-
-    // There can be only one.
-    return Attrs.removeAttribute(C, Index, Attribute::Nest);
-  }
-
+static AttributeList StripNest(LLVMContext &C, AttributeList Attrs) {
+  // There can be at most one attribute set with a nest attribute.
+  unsigned NestIndex;
+  if (Attrs.hasAttrSomewhere(Attribute::Nest, &NestIndex))
+    return Attrs.removeAttribute(C, NestIndex, Attribute::Nest);
   return Attrs;
 }
 

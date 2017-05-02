@@ -54,6 +54,7 @@ add_llvm_target(MipsCodeGen
   CheriStackInvalidatePass.cpp
   CheriRangeChecker.cpp
   CheriSandboxABI.cpp
+  MicroMipsSizeReduction.cpp
   )
 
 add_subdirectory(InstPrinter)

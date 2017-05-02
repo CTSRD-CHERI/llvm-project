@@ -331,6 +331,7 @@ void initializeSeparateConstOffsetFromGEPPass(PassRegistry&);
 void initializeShadowStackGCLoweringPass(PassRegistry&);
 void initializeShrinkWrapPass(PassRegistry&);
 void initializeSimpleInlinerPass(PassRegistry&);
+void initializeSimpleLoopUnswitchLegacyPassPass(PassRegistry&);
 void initializeSingleLoopExtractorPass(PassRegistry&);
 void initializeSinkingLegacyPassPass(PassRegistry&);
 void initializeSjLjEHPreparePass(PassRegistry&);
