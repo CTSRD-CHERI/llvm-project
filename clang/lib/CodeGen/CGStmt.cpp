@@ -1830,7 +1830,7 @@ CodeGenFunction::EmitAsmInputLValue(const TargetInfo::ConstraintInfo &Info,
       uint64_t Size = CGM.getDataLayout().getTypeSizeInBits(Ty);
       if (Size <= 64 && llvm::isPowerOf2_64(Size)) {
         Ty = llvm::IntegerType::get(getLLVMContext(), Size);
-        Ty = llvm::PointerType::getUnqual(Ty);
+        Ty = CGM.getPointerInDefaultAS(Ty);
 
         Arg = Builder.CreateLoad(Builder.CreateBitCast(InputValue.getAddress(),
                                                        Ty));

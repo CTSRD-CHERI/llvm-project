@@ -757,11 +757,13 @@ void CodeGenModule::EmitCtorList(CtorList &Fns, const char *GlobalName) {
 
   // Ctor function type is void()*.
   llvm::FunctionType* CtorFTy = llvm::FunctionType::get(VoidTy, false);
-  llvm::Type *CtorPFTy = llvm::PointerType::getUnqual(CtorFTy);
+    // AS0 OKAY: ctor pointers are always in AS0
+  unsigned CtorPtrAS = 0;
+  llvm::Type *CtorPFTy = llvm::PointerType::get(CtorFTy, CtorPtrAS);
 
   // Get the type of a ctor entry, { i32, void ()*, i8* }.
   llvm::StructType *CtorStructTy = llvm::StructType::get(
-      Int32Ty, llvm::PointerType::getUnqual(CtorFTy), VoidPtrTy, nullptr);
+      Int32Ty, llvm::PointerType::get(CtorFTy, CtorPtrAS), VoidPtrTy, nullptr);
 
   // Construct the constructor and destructor arrays.
   ConstantInitBuilder builder(*this);
@@ -1587,8 +1589,8 @@ ConstantAddress CodeGenModule::GetWeakRefReference(const ValueDecl *VD) {
 
   // See if there is already something with the target's name in the module.
   llvm::GlobalValue *Entry = GetGlobalValue(AA->getAliasee());
+  unsigned AS = getAddressSpaceForType(VD->getType());
   if (Entry) {
-    unsigned AS = getAddressSpaceForType(VD->getType());
     auto Ptr = llvm::ConstantExpr::getBitCast(Entry, DeclTy->getPointerTo(AS));
     return ConstantAddress(Ptr, Alignment);
   }
@@ -1600,7 +1602,7 @@ ConstantAddress CodeGenModule::GetWeakRefReference(const ValueDecl *VD) {
                                       /*ForVTable=*/false);
   else
     Aliasee = GetOrCreateLLVMGlobal(AA->getAliasee(),
-                                    llvm::PointerType::getUnqual(DeclTy),
+                                    llvm::PointerType::get(DeclTy, AS),
                                     nullptr);
 
   auto *F = cast<llvm::GlobalValue>(Aliasee);
@@ -2099,8 +2101,8 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
     assert(F->getType()->getElementType() == Ty);
     return F;
   }
-
-  llvm::Type *PTy = llvm::PointerType::getUnqual(Ty);
+  // AS0 OKAY: LLVM functions are always in AS0
+  llvm::Type *PTy = llvm::PointerType::get(Ty, 0);
   return llvm::ConstantExpr::getBitCast(F, PTy);
 }
 
@@ -4562,6 +4564,10 @@ void CodeGenModule::getFunctionFeatureMap(llvm::StringMap<bool> &FeatureMap,
     Target.initFeatureMap(FeatureMap, getDiags(), TargetCPU,
                           Target.getTargetOpts().Features);
   }
+}
+
+llvm::PointerType* CodeGenModule::getPointerInDefaultAS(llvm::Type* T) {
+  return llvm::PointerType::get(T, getTargetCodeGenInfo().getDefaultAS());
 }
 
 llvm::SanitizerStatReport &CodeGenModule::getSanStats() {

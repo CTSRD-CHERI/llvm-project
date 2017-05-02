@@ -101,10 +101,10 @@ CGNVCUDARuntime::CGNVCUDARuntime(CodeGenModule &CGM)
   SizeTy = CGM.SizeTy;
   VoidTy = CGM.VoidTy;
 
-  CharPtrTy = llvm::PointerType::getUnqual(Types.ConvertType(Ctx.CharTy));
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  CharPtrTy = llvm::PointerType::get(Types.ConvertType(Ctx.CharTy), DefaultAS);
   VoidPtrTy = cast<llvm::PointerType>(Types.ConvertType(Ctx.VoidPtrTy));
-  VoidPtrPtrTy = VoidPtrTy->getPointerTo(
-      CGM.getTargetCodeGenInfo().getDefaultAS());
+  VoidPtrPtrTy = VoidPtrTy->getPointerTo(DefaultAS);
 }
 
 llvm::Constant *CGNVCUDARuntime::getSetupArgumentFn() const {

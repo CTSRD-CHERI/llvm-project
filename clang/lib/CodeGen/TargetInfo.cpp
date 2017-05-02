@@ -607,7 +607,7 @@ Address EmitVAArgInstr(CodeGenFunction &CGF, Address VAListAddr, QualType Ty,
     CharUnits TyAlignForABI = TyInfo.second;
 
     llvm::Type *BaseTy =
-        llvm::PointerType::getUnqual(CGF.ConvertTypeForMem(Ty));
+        CGF.CGM.getPointerInDefaultAS(CGF.ConvertTypeForMem(Ty));
     llvm::Value *Addr =
         CGF.Builder.CreateVAArg(VAListAddr.getPointer(), BaseTy);
     return Address(Addr, TyAlignForABI);
@@ -3601,7 +3601,7 @@ static Address EmitX86_64VAArgFromMemory(CodeGenFunction &CGF,
   llvm::Type *LTy = CGF.ConvertTypeForMem(Ty);
   llvm::Value *Res =
     CGF.Builder.CreateBitCast(overflow_arg_area,
-                              llvm::PointerType::getUnqual(LTy));
+                              CGF.CGM.getPointerInDefaultAS(LTy));
 
   // AMD64-ABI 3.5.7p5: Step 9. Set l->overflow_arg_area to:
   // l->overflow_arg_area + sizeof(type).
@@ -3709,8 +3709,8 @@ Address X86_64ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
     llvm::Type *TyHi = ST->getElementType(1);
     assert((TyLo->isFPOrFPVectorTy() ^ TyHi->isFPOrFPVectorTy()) &&
            "Unexpected ABI info for mixed regs");
-    llvm::Type *PTyLo = llvm::PointerType::getUnqual(TyLo);
-    llvm::Type *PTyHi = llvm::PointerType::getUnqual(TyHi);
+    llvm::Type *PTyLo = CGF.CGM.getPointerInDefaultAS(TyLo);
+    llvm::Type *PTyHi = CGF.CGM.getPointerInDefaultAS(TyHi);
     llvm::Value *GPAddr = CGF.Builder.CreateGEP(RegSaveArea, gp_offset);
     llvm::Value *FPAddr = CGF.Builder.CreateGEP(RegSaveArea, fp_offset);
     llvm::Value *RegLoAddr = TyLo->isFPOrFPVectorTy() ? FPAddr : GPAddr;
@@ -5059,7 +5059,7 @@ Address AArch64ABIInfo::EmitAAPCSVAArg(Address VAListAddr,
 
   llvm::Type *BaseTy = CGF.ConvertType(Ty);
   if (IsIndirect)
-    BaseTy = llvm::PointerType::getUnqual(BaseTy);
+    BaseTy = CGF.CGM.getPointerInDefaultAS(BaseTy);
   else if (AI.getCoerceToType())
     BaseTy = AI.getCoerceToType();
 
@@ -5183,7 +5183,7 @@ Address AArch64ABIInfo::EmitAAPCSVAArg(Address VAListAddr,
   if (IsIndirect) {
     // If it's been passed indirectly (actually a struct), whatever we find from
     // stored registers or on the stack will actually be a struct **.
-    MemTy = llvm::PointerType::getUnqual(MemTy);
+    MemTy = CGF.CGM.getPointerInDefaultAS(MemTy);
   }
 
   const Type *Base = nullptr;
@@ -6313,7 +6313,7 @@ Address SystemZABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
   CharUnits UnpaddedSize;
   CharUnits DirectAlign;
   if (IsIndirect) {
-    DirectTy = llvm::PointerType::getUnqual(DirectTy);
+    DirectTy = CGF.CGM.getPointerInDefaultAS(DirectTy);
     UnpaddedSize = DirectAlign = CharUnits::fromQuantity(8);
   } else {
     if (AI.getCoerceToType())
@@ -7821,7 +7821,7 @@ Address SparcV9ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
 
   CGBuilderTy &Builder = CGF.Builder;
   Address Addr(Builder.CreateLoad(VAListAddr, "ap.cur"), SlotSize);
-  llvm::Type *ArgPtrTy = llvm::PointerType::getUnqual(ArgTy);
+  llvm::Type *ArgPtrTy = CGF.CGM.getPointerInDefaultAS(ArgTy);
 
   auto TypeInfo = getContext().getTypeInfoInChars(Ty);
 
@@ -8054,7 +8054,7 @@ Address XCoreABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
   llvm::Type *ArgTy = CGT.ConvertType(Ty);
   if (AI.canHaveCoerceToType() && !AI.getCoerceToType())
     AI.setCoerceToType(ArgTy);
-  llvm::Type *ArgPtrTy = llvm::PointerType::getUnqual(ArgTy);
+  llvm::Type *ArgPtrTy = CGF.CGM.getPointerInDefaultAS(ArgTy);
 
   Address Val = Address::invalid();
   CharUnits ArgSize = CharUnits::Zero();

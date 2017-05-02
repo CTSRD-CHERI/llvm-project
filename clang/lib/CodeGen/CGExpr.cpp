@@ -964,7 +964,7 @@ RValue CodeGenFunction::EmitUnsupportedRValue(const Expr *E,
 LValue CodeGenFunction::EmitUnsupportedLValue(const Expr *E,
                                               const char *Name) {
   ErrorUnsupported(E, Name);
-  llvm::Type *Ty = llvm::PointerType::getUnqual(ConvertType(E->getType()));
+  llvm::Type *Ty = CGM.getPointerInDefaultAS(ConvertType(E->getType()));
   return MakeAddrLValue(Address(llvm::UndefValue::get(Ty), CharUnits::One()),
                         E->getType());
 }
@@ -4299,7 +4299,7 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
       llvm::Value *CalleePtr = Callee.getFunctionPointer();
 
       llvm::Value *CalleePrefixStruct = Builder.CreateBitCast(
-          CalleePtr, llvm::PointerType::getUnqual(PrefixStructTy));
+          CalleePtr, CGM.getPointerInDefaultAS(PrefixStructTy));
       llvm::Value *CalleeSigPtr =
           Builder.CreateConstGEP2_32(PrefixStructTy, CalleePrefixStruct, 0, 0);
       llvm::Value *CalleeSig =

@@ -198,7 +198,7 @@ public:
       CodeGen::CodeGenTypes &Types = CGM.getTypes();
       ASTContext &Ctx = CGM.getContext();
       llvm::Type *T = Types.ConvertType(Ctx.getObjCProtoType());
-      ExternalProtocolPtrTy = llvm::PointerType::getUnqual(T);
+      ExternalProtocolPtrTy = llvm::PointerType::get(T, DefaultAS);
     }
     
     return ExternalProtocolPtrTy;
@@ -5476,7 +5476,7 @@ ObjCCommonTypesHelper::ObjCCommonTypesHelper(CodeGen::CodeGenModule &cgm)
   ObjectPtrTy =
     cast<llvm::PointerType>(Types.ConvertType(Ctx.getObjCIdType()));
   PtrObjectPtrTy =
-    llvm::PointerType::getUnqual(ObjectPtrTy);
+    llvm::PointerType::get(ObjectPtrTy, DefaultAS);
   SelectorPtrTy =
     cast<llvm::PointerType>(Types.ConvertType(Ctx.getObjCSelType()));
 
@@ -5508,7 +5508,7 @@ ObjCCommonTypesHelper::ObjCCommonTypesHelper(CodeGen::CodeGenModule &cgm)
   SuperPtrCTy = Ctx.getPointerType(SuperCTy);
 
   SuperTy = cast<llvm::StructType>(Types.ConvertType(SuperCTy));
-  SuperPtrTy = llvm::PointerType::getUnqual(SuperTy);
+  SuperPtrTy = llvm::PointerType::get(SuperTy, DefaultAS);
 
   // struct _prop_t {
   //   char *name;
@@ -5526,7 +5526,7 @@ ObjCCommonTypesHelper::ObjCCommonTypesHelper(CodeGen::CodeGenModule &cgm)
     llvm::StructType::create("struct._prop_list_t", IntTy, IntTy,
                              llvm::ArrayType::get(PropertyTy, 0), nullptr);
   // struct _prop_list_t *
-  PropertyListPtrTy = llvm::PointerType::getUnqual(PropertyListTy);
+  PropertyListPtrTy = llvm::PointerType::get(PropertyListTy, DefaultAS);
 
   // struct _objc_method {
   //   SEL _cmd;
@@ -5539,7 +5539,7 @@ ObjCCommonTypesHelper::ObjCCommonTypesHelper(CodeGen::CodeGenModule &cgm)
 
   // struct _objc_cache *
   CacheTy = llvm::StructType::create(VMContext, "struct._objc_cache");
-  CachePtrTy = llvm::PointerType::getUnqual(CacheTy);
+  CachePtrTy = llvm::PointerType::get(CacheTy, DefaultAS);
 }
 
 ObjCTypesHelper::ObjCTypesHelper(CodeGen::CodeGenModule &cgm)
@@ -5562,7 +5562,7 @@ ObjCTypesHelper::ObjCTypesHelper(CodeGen::CodeGenModule &cgm)
 
   // struct _objc_method_description_list *
   MethodDescriptionListPtrTy =
-    llvm::PointerType::getUnqual(MethodDescriptionListTy);
+    llvm::PointerType::get(MethodDescriptionListTy, DefaultAS);
 
   // Protocol description structures
 
@@ -5581,7 +5581,7 @@ ObjCTypesHelper::ObjCTypesHelper(CodeGen::CodeGenModule &cgm)
                              Int8PtrPtrTy, PropertyListPtrTy, nullptr);
 
   // struct _objc_protocol_extension *
-  ProtocolExtensionPtrTy = llvm::PointerType::getUnqual(ProtocolExtensionTy);
+  ProtocolExtensionPtrTy = llvm::PointerType::get(ProtocolExtensionTy, DefaultAS);
 
   // Handle recursive construction of Protocol and ProtocolList types
 
@@ -5590,7 +5590,7 @@ ObjCTypesHelper::ObjCTypesHelper(CodeGen::CodeGenModule &cgm)
 
   ProtocolListTy =
     llvm::StructType::create(VMContext, "struct._objc_protocol_list");
-  ProtocolListTy->setBody(llvm::PointerType::getUnqual(ProtocolListTy),
+  ProtocolListTy->setBody(llvm::PointerType::get(ProtocolListTy, DefaultAS),
                           LongTy,
                           llvm::ArrayType::get(ProtocolTy, 0),
                           nullptr);
@@ -5603,15 +5603,15 @@ ObjCTypesHelper::ObjCTypesHelper(CodeGen::CodeGenModule &cgm)
   //   struct _objc_method_description_list *class_methods;
   // }
   ProtocolTy->setBody(ProtocolExtensionPtrTy, Int8PtrTy,
-                      llvm::PointerType::getUnqual(ProtocolListTy),
+                      llvm::PointerType::get(ProtocolListTy, DefaultAS),
                       MethodDescriptionListPtrTy,
                       MethodDescriptionListPtrTy,
                       nullptr);
 
   // struct _objc_protocol_list *
-  ProtocolListPtrTy = llvm::PointerType::getUnqual(ProtocolListTy);
+  ProtocolListPtrTy = llvm::PointerType::get(ProtocolListTy, DefaultAS);
 
-  ProtocolPtrTy = llvm::PointerType::getUnqual(ProtocolTy);
+  ProtocolPtrTy = llvm::PointerType::get(ProtocolTy, DefaultAS);
 
   // Class description structures
 
@@ -5626,18 +5626,18 @@ ObjCTypesHelper::ObjCTypesHelper(CodeGen::CodeGenModule &cgm)
   // struct _objc_ivar_list *
   IvarListTy =
     llvm::StructType::create(VMContext, "struct._objc_ivar_list");
-  IvarListPtrTy = llvm::PointerType::getUnqual(IvarListTy);
+  IvarListPtrTy = llvm::PointerType::get(IvarListTy, DefaultAS);
 
   // struct _objc_method_list *
   MethodListTy =
     llvm::StructType::create(VMContext, "struct._objc_method_list");
-  MethodListPtrTy = llvm::PointerType::getUnqual(MethodListTy);
+  MethodListPtrTy = llvm::PointerType::get(MethodListTy, DefaultAS);
 
   // struct _objc_class_extension *
   ClassExtensionTy =
     llvm::StructType::create("struct._objc_class_extension",
                              IntTy, Int8PtrTy, PropertyListPtrTy, nullptr);
-  ClassExtensionPtrTy = llvm::PointerType::getUnqual(ClassExtensionTy);
+  ClassExtensionPtrTy = llvm::PointerType::get(ClassExtensionTy, DefaultAS);
 
   ClassTy = llvm::StructType::create(VMContext, "struct._objc_class");
 
@@ -5655,8 +5655,8 @@ ObjCTypesHelper::ObjCTypesHelper(CodeGen::CodeGenModule &cgm)
   //   char *ivar_layout;
   //   struct _objc_class_ext *ext;
   // };
-  ClassTy->setBody(llvm::PointerType::getUnqual(ClassTy),
-                   llvm::PointerType::getUnqual(ClassTy),
+  ClassTy->setBody(llvm::PointerType::get(ClassTy, DefaultAS),
+                   llvm::PointerType::get(ClassTy, DefaultAS),
                    Int8PtrTy,
                    LongTy,
                    LongTy,
@@ -5669,7 +5669,7 @@ ObjCTypesHelper::ObjCTypesHelper(CodeGen::CodeGenModule &cgm)
                    ClassExtensionPtrTy,
                    nullptr);
 
-  ClassPtrTy = llvm::PointerType::getUnqual(ClassTy);
+  ClassPtrTy = llvm::PointerType::get(ClassTy, DefaultAS);
 
   // struct _objc_category {
   //   char *category_name;
@@ -5701,7 +5701,7 @@ ObjCTypesHelper::ObjCTypesHelper(CodeGen::CodeGenModule &cgm)
     llvm::StructType::create("struct._objc_symtab",
                              LongTy, SelectorPtrTy, ShortTy, ShortTy,
                              llvm::ArrayType::get(Int8PtrTy, 0), nullptr);
-  SymtabPtrTy = llvm::PointerType::getUnqual(SymtabTy);
+  SymtabPtrTy = llvm::PointerType::get(SymtabTy, DefaultAS);
 
   // struct _objc_module {
   //   long version;
@@ -5738,7 +5738,7 @@ ObjCNonFragileABITypesHelper::ObjCNonFragileABITypesHelper(CodeGen::CodeGenModul
     llvm::StructType::create("struct.__method_list_t", IntTy, IntTy,
                              llvm::ArrayType::get(MethodTy, 0), nullptr);
   // struct method_list_t *
-  MethodListnfABIPtrTy = llvm::PointerType::getUnqual(MethodListnfABITy);
+  MethodListnfABIPtrTy = llvm::PointerType::get(MethodListnfABITy, DefaultAS);
 
   // struct _protocol_t {
   //   id isa;  // NULL
@@ -5762,7 +5762,7 @@ ObjCNonFragileABITypesHelper::ObjCNonFragileABITypesHelper(CodeGen::CodeGenModul
 
   ProtocolnfABITy =
     llvm::StructType::create("struct._protocol_t", ObjectPtrTy, Int8PtrTy,
-                             llvm::PointerType::getUnqual(ProtocolListnfABITy),
+                             llvm::PointerType::get(ProtocolListnfABITy, DefaultAS),
                              MethodListnfABIPtrTy, MethodListnfABIPtrTy,
                              MethodListnfABIPtrTy, MethodListnfABIPtrTy,
                              PropertyListPtrTy, IntTy, IntTy, Int8PtrPtrTy,
@@ -5770,7 +5770,7 @@ ObjCNonFragileABITypesHelper::ObjCNonFragileABITypesHelper(CodeGen::CodeGenModul
                              nullptr);
 
   // struct _protocol_t*
-  ProtocolnfABIPtrTy = llvm::PointerType::getUnqual(ProtocolnfABITy);
+  ProtocolnfABIPtrTy = llvm::PointerType::get(ProtocolnfABITy, DefaultAS);
 
   // struct _protocol_list_t {
   //   long protocol_count;   // Note, this is 32/64 bit
@@ -5781,7 +5781,7 @@ ObjCNonFragileABITypesHelper::ObjCNonFragileABITypesHelper(CodeGen::CodeGenModul
                                nullptr);
 
   // struct _objc_protocol_list*
-  ProtocolListnfABIPtrTy = llvm::PointerType::getUnqual(ProtocolListnfABITy);
+  ProtocolListnfABIPtrTy = llvm::PointerType::get(ProtocolListnfABITy, DefaultAS);
 
   // struct _ivar_t {
   //   unsigned [long] int *offset;  // pointer to ivar offset location
@@ -5791,7 +5791,7 @@ ObjCNonFragileABITypesHelper::ObjCNonFragileABITypesHelper(CodeGen::CodeGenModul
   //   uint32_t size;
   // }
   IvarnfABITy = llvm::StructType::create(
-      "struct._ivar_t", llvm::PointerType::getUnqual(IvarOffsetVarTy),
+      "struct._ivar_t", llvm::PointerType::get(IvarOffsetVarTy, DefaultAS),
       Int8PtrTy, Int8PtrTy, IntTy, IntTy, nullptr);
 
   // struct _ivar_list_t {
@@ -5803,7 +5803,7 @@ ObjCNonFragileABITypesHelper::ObjCNonFragileABITypesHelper(CodeGen::CodeGenModul
     llvm::StructType::create("struct._ivar_list_t", IntTy, IntTy,
                              llvm::ArrayType::get(IvarnfABITy, 0), nullptr);
 
-  IvarListnfABIPtrTy = llvm::PointerType::getUnqual(IvarListnfABITy);
+  IvarListnfABIPtrTy = llvm::PointerType::get(IvarListnfABITy, DefaultAS);
 
   // struct _class_ro_t {
   //   uint32_t const flags;
@@ -5842,15 +5842,15 @@ ObjCNonFragileABITypesHelper::ObjCNonFragileABITypesHelper(CodeGen::CodeGenModul
   // }
 
   ClassnfABITy = llvm::StructType::create(VMContext, "struct._class_t");
-  ClassnfABITy->setBody(llvm::PointerType::getUnqual(ClassnfABITy),
-                        llvm::PointerType::getUnqual(ClassnfABITy),
+  ClassnfABITy->setBody(llvm::PointerType::get(ClassnfABITy, DefaultAS),
+                        llvm::PointerType::get(ClassnfABITy, DefaultAS),
                         CachePtrTy,
-                        llvm::PointerType::getUnqual(ImpnfABITy),
-                        llvm::PointerType::getUnqual(ClassRonfABITy),
+                        llvm::PointerType::get(ImpnfABITy, DefaultAS),
+                        llvm::PointerType::get(ClassRonfABITy, DefaultAS),
                         nullptr);
 
   // LLVM for struct _class_t *
-  ClassnfABIPtrTy = llvm::PointerType::getUnqual(ClassnfABITy);
+  ClassnfABIPtrTy = llvm::PointerType::get(ClassnfABITy, DefaultAS);
 
   // struct _category_t {
   //   const char * const name;
@@ -5900,7 +5900,7 @@ ObjCNonFragileABITypesHelper::ObjCNonFragileABITypesHelper(CodeGen::CodeGenModul
   MessageRefTy = cast<llvm::StructType>(Types.ConvertType(MessageRefCTy));
 
   // MessageRefPtrTy - LLVM for struct _message_ref_t*
-  MessageRefPtrTy = llvm::PointerType::getUnqual(MessageRefTy);
+  MessageRefPtrTy = llvm::PointerType::get(MessageRefTy, DefaultAS);
 
   // SuperMessageRefTy - LLVM for:
   // struct _super_message_ref_t {
@@ -5912,7 +5912,7 @@ ObjCNonFragileABITypesHelper::ObjCNonFragileABITypesHelper(CodeGen::CodeGenModul
                              ImpnfABITy, SelectorPtrTy, nullptr);
 
   // SuperMessageRefPtrTy - LLVM for struct _super_message_ref_t*
-  SuperMessageRefPtrTy = llvm::PointerType::getUnqual(SuperMessageRefTy);
+  SuperMessageRefPtrTy = llvm::PointerType::get(SuperMessageRefTy, DefaultAS);
     
 
   // struct objc_typeinfo {
@@ -5922,9 +5922,9 @@ ObjCNonFragileABITypesHelper::ObjCNonFragileABITypesHelper(CodeGen::CodeGenModul
   // };
   EHTypeTy =
     llvm::StructType::create("struct._objc_typeinfo",
-                             llvm::PointerType::getUnqual(Int8PtrTy),
+                             llvm::PointerType::get(Int8PtrTy, DefaultAS),
                              Int8PtrTy, ClassnfABIPtrTy, nullptr);
-  EHTypePtrTy = llvm::PointerType::getUnqual(EHTypeTy);
+  EHTypePtrTy = llvm::PointerType::get(EHTypeTy, DefaultAS);
 }
 
 llvm::Function *CGObjCNonFragileABIMac::ModuleInitFunction() {

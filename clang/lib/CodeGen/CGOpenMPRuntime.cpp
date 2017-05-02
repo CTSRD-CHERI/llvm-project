@@ -11,6 +11,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+// XXXAR: TODO fix this file as well
+#undef LLVM_NO_DEFAULT_ADDRESS_SPACE
+
 #include "CGCXXABI.h"
 #include "CGCleanup.h"
 #include "CGOpenMPRuntime.h"
