@@ -1392,7 +1392,7 @@ MachineBasicBlock *MipsTargetLowering::emitAtomicBinary(bool isCapOp,
     ZERO = Mips::ZERO_64;
     BEQ = Mips::BEQ64;
   }
-  assert(isCapOp || (Size == 4 || Size == 8) &&
+  assert((isCapOp || (Size == 4 || Size == 8)) &&
          "Unsupported size for EmitAtomicBinary.");
 
   // insert new blocks after the current block
@@ -1704,7 +1704,7 @@ MachineBasicBlock *MipsTargetLowering::emitAtomicCmpSwap(MachineInstr &MI,
     default:
       isCapOp = false;
   }
-   assert(isCapOp || (Size == 4 || Size == 8) &&
+   assert((isCapOp || (Size == 4 || Size == 8)) &&
           "Unsupported size for EmitAtomicCmpSwap.");
 
   unsigned Success = RegInfo.createVirtualRegister(RC);
