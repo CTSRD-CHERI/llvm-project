@@ -139,10 +139,25 @@ void MCStreamer::EmitValue(const MCExpr *Value, unsigned Size, SMLoc Loc) {
     }
     MCSymbol *Here = Context.createTempSymbol();
     EmitLabel(Here);
-    FatRelocs.push_back(std::make_pair(Here, Value));
+    const MCSectionELF *Section =
+        dyn_cast<const MCSectionELF>(SectionStack.back().first.first);
+    const MCSymbolELF *Group = nullptr;
+    if (Section && Section->getGroup())
+      Group = Section->getGroup();
+
+    if (Group) {
+      Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS,
+                            ELF::SHF_ALLOC | ELF::SHF_GROUP,
+                            0, Group->getName());
+      FatRelocs.push_back(std::make_tuple(Here, Value, Group->getName()));
+    }
+    else {
+      Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
+      FatRelocs.push_back(std::make_tuple(Here, Value, StringRef()));
+    }
+
     EmitZeros(Size);
     // We do this here to ensure that the section exists.
-    Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
   } else
     EmitValueImpl(Value, Size, Loc);
 }
@@ -749,17 +764,33 @@ void MCStreamer::Finish() {
   if (!DwarfFrameInfos.empty() && !DwarfFrameInfos.back().End)
     report_fatal_error("Unfinished frame!");
   if (!FatRelocs.empty()) {
-    MCSection *RelocSection = Context.getELFSection("__cap_relocs",
+    MCSection *DefaultRelocSection = Context.getELFSection("__cap_relocs",
         ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
-    RelocSection->setAlignment(8);
-    SwitchSection(RelocSection);
+    DefaultRelocSection->setAlignment(8);
     for (auto &R : FatRelocs) {
-      EmitValue(MCSymbolRefExpr::create(R.first, Context), 8);
-      if (const MCSymbolRefExpr *Sym = dyn_cast<MCSymbolRefExpr>(R.second)) {
+      MCSymbol *Sym;
+      const MCExpr *Value;
+      MCSection *RelocSection;
+      StringRef GroupName;
+
+      std::tie(Sym, Value, GroupName) = R;
+      if (GroupName != StringRef()) {
+        RelocSection =
+          Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS,
+                                ELF::SHF_ALLOC | ELF::SHF_GROUP, 0, GroupName);
+        RelocSection->setAlignment(8);
+      } else {
+        RelocSection = DefaultRelocSection;
+      }
+
+      SwitchSection(RelocSection);
+
+      EmitValue(MCSymbolRefExpr::create(Sym, Context), 8);
+      if (const MCSymbolRefExpr *Sym = dyn_cast<MCSymbolRefExpr>(Value)) {
         EmitValue(Sym, 8);
         EmitZeros(8);
       } else {
-        const MCBinaryExpr *Bin = cast<MCBinaryExpr>(R.second);
+        const MCBinaryExpr *Bin = cast<MCBinaryExpr>(Value);
         EmitValue(cast<MCSymbolRefExpr>(Bin->getLHS()), 8);
         EmitValue(Bin->getRHS(), 8);
       }

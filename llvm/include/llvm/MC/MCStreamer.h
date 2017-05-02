@@ -189,7 +189,7 @@ class MCStreamer {
 
   /// Array of locations that contain fat pointers and the expressions used to
   /// initialise them.
-  SmallVector<std::pair<const MCSymbol*, const MCExpr*>, 32> FatRelocs;
+  SmallVector<std::tuple<MCSymbol*, const MCExpr*, StringRef>, 32> FatRelocs;
 
   /// The next unique ID to use when creating a WinCFI-related section (.pdata
   /// or .xdata). This ID ensures that we have a one-to-one mapping from
