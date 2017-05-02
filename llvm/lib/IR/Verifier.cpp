@@ -3164,7 +3164,7 @@ void Verifier::verifySwiftErrorValue(const Value *SwiftErrorVal) {
 void Verifier::visitAllocaInst(AllocaInst &AI) {
   SmallPtrSet<Type*, 4> Visited;
 #ifndef NDEBUG
-  PointerType *PTy = AI.getType();
+  // PointerType *PTy = AI.getType();
   // TODO: Relax this restriction?
   // XXXAR: This assertion does not hold for cheri because we replace the allocaAS
   // Assert(PTy->getAddressSpace() == DL.getAllocaAddrSpace(),
