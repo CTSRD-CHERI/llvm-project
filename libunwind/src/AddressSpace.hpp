@@ -116,35 +116,35 @@ public:
   typedef uint32_t pint_t;
   typedef int32_t  sint_t;
 #endif
-  uint8_t         get8(pint_t addr) {
-    uint8_t val;
+  template<typename T>
+  inline T get(pint_t addr) {
+    T val;
+#ifdef __CHERI_PURE_CAPABILITY__
+    void *ptr = __builtin_cheri_ddc_get();
+    ptr = __builtin_cheri_offset_set(addr);
+    memcpy(&val, (void *)ptr, sizeof(val));
+#else
     memcpy(&val, (void *)addr, sizeof(val));
+#endif
     return val;
+  }
+  uint8_t         get8(pint_t addr) {
+    return get<uint8_t>(addr);
   }
   uint16_t         get16(pint_t addr) {
-    uint16_t val;
-    memcpy(&val, (void *)addr, sizeof(val));
-    return val;
+    return get<uint16_t>(addr);
   }
   uint32_t         get32(pint_t addr) {
-    uint32_t val;
-    memcpy(&val, (void *)addr, sizeof(val));
-    return val;
+    return get<uint32_t>(addr);
   }
   uint64_t         get64(pint_t addr) {
-    uint64_t val;
-    memcpy(&val, (void *)addr, sizeof(val));
-    return val;
+    return get<uint64_t>(addr);
   }
   double           getDouble(pint_t addr) {
-    double val;
-    memcpy(&val, (void *)addr, sizeof(val));
-    return val;
+    return get<double>(addr);
   }
   v128             getVector(pint_t addr) {
-    v128 val;
-    memcpy(&val, (void *)addr, sizeof(val));
-    return val;
+    return get<v128>(addr);
   }
   uintptr_t       getP(pint_t addr);
   static uint64_t getULEB128(pint_t &addr, pint_t end);
@@ -161,11 +161,7 @@ public:
 };
 
 inline uintptr_t LocalAddressSpace::getP(pint_t addr) {
-#ifdef __LP64__
-  return get64(addr);
-#else
-  return get32(addr);
-#endif
+  return get<uintptr_t>(addr);
 }
 
 /// Read a ULEB128 into a 64-bit word.
