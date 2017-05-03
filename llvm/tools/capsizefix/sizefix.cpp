@@ -10,15 +10,22 @@ using namespace llvm::object;
 static const std::string SizePrefix = ".size.";
 
 int main(int argc, char *argv[]) {
-  if (argc != 2) {
-    fprintf(stderr, "Usage: %s {statically linked object}\n", argv[0]);
+  const char* InFile = nullptr;
+  bool Verbose = false;
+  if (argc == 2) {
+    InFile = argv[1];
+  } else if (argc == 3 && StringRef("--verbose") == argv[1]) {
+    Verbose = true;
+    InFile = argv[2];
+  } else {
+    fprintf(stderr, "Usage: %s [--verbose] {statically linked object}\n", argv[0]);
     return EXIT_FAILURE;
   }
-  auto OF = ObjectFile::createObjectFile(argv[1]);
+  auto OF = ObjectFile::createObjectFile(InFile);
   // OF is an Expected<T> which requires mandatory checking for errors. This is
   // done by invoking the bool conversion operator.
   if (!OF) {
-    fprintf(stderr, "Cannot open %s\n", argv[1]);
+    fprintf(stderr, "Cannot open %s\n", InFile);
     return EXIT_FAILURE;
   }
 
@@ -26,9 +33,9 @@ int main(int argc, char *argv[]) {
   std::vector<std::tuple<uint64_t, uint64_t, bool>> Sections;
   // ObjectFile doesn't allow in-place modification, so we open the file again
   // and write it out.
-  FILE *F = fopen(argv[1], "r+");
+  FILE *F = fopen(InFile, "r+");
   if (!F) {
-    fprintf(stderr, "Cannot open %s\n", argv[1]);
+    fprintf(stderr, "Cannot open %s\n", InFile);
     return EXIT_FAILURE;
   }
   StringMap<uint64_t> SizeForName;
@@ -93,8 +100,8 @@ int main(int argc, char *argv[]) {
             (std::get<0>(Sec) + std::get<1>(Sec)) > base) {
           Size = std::get<1>(Sec);
           isFunction = std::get<2>(Sec);
-#ifdef DEBUG_VERBOSE
-          if (!isFunction)
+#ifndef NDEBUG
+          if (!isFunction && Verbose)
             fprintf(stderr, "Unable to find size of symbol at 0%llx for pointer at 0x%llx\n"
                     "Using section size (%llu bytes) instead\n",
                     (unsigned long long)base,
@@ -149,7 +156,9 @@ int main(int argc, char *argv[]) {
       } else
         Size = SizeIt->second;
 #ifndef NDEBUG
-      fprintf(stderr, "Writing size %llu for symbol %s\n", (unsigned long long)Size, Name.c_str());
+      if (Verbose) {
+        fprintf(stderr, "Writing size %llu for symbol %s\n", (unsigned long long)Size, Name.c_str());
+      }
 #endif
       fseek(F, SectionOffset + offset, SEEK_SET);
       uint64_t BigSize =
