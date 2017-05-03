@@ -113,10 +113,11 @@ int main(int argc, char *argv[]) {
         }
       }
       if (Size == 0) {
-        fprintf(stderr, "Unable to find size of symbol at 0%llx for pointer at 0x%llx\n",
-                (unsigned long long)base,
-                static_cast<unsigned long long>(
-                    support::endian::read<uint64_t, support::big, 1>(entry)));
+        if (Verbose)
+          fprintf(stderr, "Unable to find size of symbol at 0%llx for pointer at 0x%llx\n",
+                 (unsigned long long)base,
+                  static_cast<unsigned long long>(
+                      support::endian::read<uint64_t, support::big, 1>(entry)));
         continue;
       }
     } else {
