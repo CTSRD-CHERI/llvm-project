@@ -333,6 +333,8 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
                    ToolChain.getArch() == llvm::Triple::cheri)) {
     Exec = Args.MakeArgString(getToolChain().GetProgramPath("capsizefix"));
     ArgStringList SizeFixArgs;
+    if (Args.hasArg(options::OPT_verbose_capsizefix))
+      SizeFixArgs.push_back("--verbose");
     SizeFixArgs.push_back(Output.getFilename());
     InputInfoList In= {InputInfo(types::TY_Object, Output.getFilename(), Output.getBaseInput())};
     C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, SizeFixArgs, In));

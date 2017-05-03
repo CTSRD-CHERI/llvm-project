@@ -234,6 +234,9 @@ def cheri_linker : Flag<["-"], "cheri-linker">, Flags<[CC1Option]>,
 def no_cheri_linker : Flag<["-"], "no-cheri-linker">, Flags<[HelpHidden]>,
   HelpText<"Do not assume the existence of a CHERI-aware linker">;
 
+def verbose_capsizefix: Flag<["-"], "verbose-capsizefix">, Flags<[CC1Option]>,
+  HelpText<"Run capsizefix tool in verbose mode if required">;
+
 class InternalDriverOpt : Group<internal_driver_Group>,
   Flags<[DriverOption, HelpHidden]>;
 def driver_mode : Joined<["--"], "driver-mode=">, Group<internal_driver_Group>,
