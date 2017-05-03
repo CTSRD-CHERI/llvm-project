@@ -547,6 +547,13 @@ private:
   }
 #endif
 
+#if defined(_LIBUNWIND_TARGET_MIPS_N64)
+  bool compactSaysUseDwarf(Registers_mips_n64 &, uint32_t *) const {
+    return true;
+  }
+#endif
+
+
 #if defined(_LIBUNWIND_TARGET_AARCH64)
   bool compactSaysUseDwarf(Registers_arm64 &, uint32_t *offset) const {
     if ((_info.format & UNWIND_ARM64_MODE_MASK) == UNWIND_ARM64_MODE_DWARF) {
@@ -577,6 +584,12 @@ private:
   }
 #endif
 
+#if defined(_LIBUNWIND_TARGET_MIPS_N64)
+  compact_unwind_encoding_t dwarfEncoding(Registers_mips_n64 &) const {
+    return 0;
+  }
+#endif
+
 #if defined(_LIBUNWIND_TARGET_PPC)
   compact_unwind_encoding_t dwarfEncoding(Registers_ppc &) const {
     return 0;
@@ -603,7 +616,6 @@ private:
   bool             _unwindInfoMissing;
   bool             _isSignalFrame;
 };
-
 
 template <typename A, typename R>
 UnwindCursor<A, R>::UnwindCursor(unw_context_t *context, A &as)

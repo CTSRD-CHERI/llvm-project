@@ -92,6 +92,53 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind16Registers_x86_646jumptoEv)
   pop    %rdi      # rdi was saved here earlier
   ret            # rip was saved here
 
+#elif defined(__mips_n64)
+
+.set noreorder
+
+DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind18Registers_mips_n646jumptoEv)
+#
+# void libunwind::Registers_mips_n64::jumpto()
+#
+# On entry:
+#  thread_state pointer is in $4
+#
+#define RESTORE_GPR(x) ld $x, (x*8)($4)
+  RESTORE_GPR(1)
+  RESTORE_GPR(2)
+  RESTORE_GPR(3)
+  // Skip $4 for now
+  RESTORE_GPR(5)
+  RESTORE_GPR(6)
+  RESTORE_GPR(7)
+  RESTORE_GPR(8)
+  RESTORE_GPR(9)
+  RESTORE_GPR(10)
+  RESTORE_GPR(11)
+  RESTORE_GPR(12)
+  RESTORE_GPR(13)
+  RESTORE_GPR(14)
+  RESTORE_GPR(15)
+  RESTORE_GPR(16)
+  RESTORE_GPR(17)
+  RESTORE_GPR(18)
+  RESTORE_GPR(19)
+  RESTORE_GPR(20)
+  RESTORE_GPR(21)
+  RESTORE_GPR(22)
+  RESTORE_GPR(23)
+  RESTORE_GPR(24)
+  RESTORE_GPR(25)
+  RESTORE_GPR(26)
+  RESTORE_GPR(27)
+  RESTORE_GPR(28)
+  RESTORE_GPR(29)
+  RESTORE_GPR(30)
+  // Load the new PC into $ra
+  ld $31, ($4)
+  // Jump to $ra, load $r3 in the delay slot
+  jr $31
+  RESTORE_GPR(3)
 
 #elif defined(__ppc__)
 

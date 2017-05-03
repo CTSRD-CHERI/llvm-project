@@ -87,6 +87,34 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
   xorl  %eax, %eax    # return UNW_ESUCCESS
   ret
 
+#elif defined(__mips_n64)
+
+.set noreorder
+#
+# extern int unw_getcontext(unw_context_t* thread_state)
+#
+# On entry:
+#  thread_state pointer is in $4
+#
+# This is always called from n64 C code, so we only need to initialise the
+# registers that are preserved across calls
+
+DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
+#define SAVE_GPR(x) sd $x, (8*x)($4)
+  SAVE_GPR(16) # $s0
+  SAVE_GPR(17) # $s1
+  SAVE_GPR(18) # $s2
+  SAVE_GPR(19) # $s3
+  SAVE_GPR(20) # $s4
+  SAVE_GPR(21) # $s5
+  SAVE_GPR(22) # $s6
+  SAVE_GPR(23) # $s7
+  SAVE_GPR(28) # $gp
+  SAVE_GPR(29) # $sp
+  # Store the return address where we expect the current PC
+  sd $31, ($4)
+  jr $31
+  SAVE_GPR(30) # $sp
 # elif defined(__mips__)
 
 #
@@ -470,6 +498,7 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
   l.sw     120(r3), r30
   l.sw     124(r3), r31
 #endif
+
 
 NO_EXEC_STACK_DIRECTIVE
 
