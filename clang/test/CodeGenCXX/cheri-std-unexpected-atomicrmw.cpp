@@ -4,8 +4,9 @@
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -ast-dump %s | FileCheck -check-prefix=AST %s
 // reduced testcase for libcxx exception_fallback.ipp/new_handler_fallback.ipp
 
-// Module ID might contain i256 so we explicitly capture this line
+// Module ID and source_filename might contain i256 so we explicitly capture this line
 // CHECK: ; ModuleID = '{{.+}}/cheri-std-unexpected-atomicrmw.cpp'
+// CHECK: source_filename = "{{.+}}"
 
 typedef void (*handler)();
 __attribute__((__require_constant_initialization__)) static handler __handler;
