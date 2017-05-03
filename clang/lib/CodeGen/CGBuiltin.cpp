@@ -1003,6 +1003,10 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
       llvm::ConstantInt::get(Int32Ty, 3);
     Value *Data = llvm::ConstantInt::get(Int32Ty, 1);
     Value *F = CGM.getIntrinsic(Intrinsic::prefetch);
+    // ASO OKAY: llvm.prefetch() needs an addr space 0 i8* even on CHERI
+    // XXXAR: we might want to change that some time
+    llvm::Type* AddressType = Builder.getInt8PtrTy(0);
+    Address = Builder.CreatePointerBitCastOrAddrSpaceCast(Address, AddressType);
     return RValue::get(Builder.CreateCall(F, {Address, RW, Locality, Data}));
   }
   case Builtin::BI__builtin_readcyclecounter: {
