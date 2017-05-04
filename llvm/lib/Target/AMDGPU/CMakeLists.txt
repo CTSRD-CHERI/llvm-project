@@ -36,6 +36,7 @@ endif()
 
 add_llvm_target(AMDGPUCodeGen
   AMDILCFGStructurizer.cpp
+  AMDGPUAliasAnalysis.cpp
   AMDGPUAlwaysInlinePass.cpp
   AMDGPUAnnotateKernelFeatures.cpp
   AMDGPUAnnotateUniformValues.cpp
@@ -57,6 +58,7 @@ add_llvm_target(AMDGPUCodeGen
   AMDGPUInstrInfo.cpp
   AMDGPUPromoteAlloca.cpp
   AMDGPURegisterInfo.cpp
+  AMDGPUUnifyDivergentExitNodes.cpp
   GCNHazardRecognizer.cpp
   GCNSchedStrategy.cpp
   R600ClauseMergePass.cpp
@@ -80,6 +82,7 @@ add_llvm_target(AMDGPUCodeGen
   SIFrameLowering.cpp
   SIInsertSkips.cpp
   SIInsertWaits.cpp
+  SIInsertWaitcnts.cpp
   SIInstrInfo.cpp
   SIISelLowering.cpp
   SILoadStoreOptimizer.cpp
@@ -88,10 +91,14 @@ add_llvm_target(AMDGPUCodeGen
   SIMachineFunctionInfo.cpp
   SIMachineScheduler.cpp
   SIOptimizeExecMasking.cpp
+  SIPeepholeSDWA.cpp
   SIRegisterInfo.cpp
   SIShrinkInstructions.cpp
   SITypeRewriter.cpp
   SIWholeQuadMode.cpp
+  GCNIterativeScheduler.cpp
+  GCNMinRegStrategy.cpp
+  GCNRegPressure.cpp
   ${GLOBAL_ISEL_BUILD_FILES}
   )
 

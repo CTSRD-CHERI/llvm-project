@@ -62,8 +62,7 @@ COMMON_FLAG(
 COMMON_FLAG(
     int, verbosity, 0,
     "Verbosity level (0 - silent, 1 - a bit of output, 2+ - more output).")
-COMMON_FLAG(bool, detect_leaks, SANITIZER_WORDSIZE == 64,
-            "Enable memory leak detection.")
+COMMON_FLAG(bool, detect_leaks, !SANITIZER_MAC, "Enable memory leak detection.")
 COMMON_FLAG(
     bool, leak_check_at_exit, true,
     "Invoke leak checking in an atexit handler. Has no effect if "
@@ -143,12 +142,6 @@ COMMON_FLAG(bool, coverage_pcs, true,
 COMMON_FLAG(bool, coverage_order_pcs, false,
              "If true, the PCs will be dumped in the order they've"
              " appeared during the execution.")
-COMMON_FLAG(bool, coverage_bitset, false,
-            "If set (and if 'coverage' is set too), the coverage information "
-            "will also be dumped as a bitset to a separate file.")
-COMMON_FLAG(bool, coverage_counters, false,
-            "If set (and if 'coverage' is set too), the bitmap that corresponds"
-            " to coverage counters will be dumped.")
 COMMON_FLAG(bool, coverage_direct, SANITIZER_ANDROID,
             "If set, coverage information will be dumped directly to a memory "
             "mapped file. This way data is not lost even if the process is "
@@ -192,6 +185,9 @@ COMMON_FLAG(bool, intercept_strstr, true,
             "to find more errors.")
 COMMON_FLAG(bool, intercept_strspn, true,
             "If set, uses custom wrappers for strspn and strcspn function "
+            "to find more errors.")
+COMMON_FLAG(bool, intercept_strtok, true,
+            "If set, uses a custom wrapper for the strtok function "
             "to find more errors.")
 COMMON_FLAG(bool, intercept_strpbrk, true,
             "If set, uses custom wrappers for strpbrk function "

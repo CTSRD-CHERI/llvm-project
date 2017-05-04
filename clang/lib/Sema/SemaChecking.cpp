@@ -315,7 +315,7 @@ static bool SemaOpenCLBuiltinKernelWorkGroupSize(Sema &S, CallExpr *TheCall) {
   return checkOpenCLBlockArgs(S, BlockArg);
 }
 
-/// Diagnose integer type and any valid implicit convertion to it.
+/// Diagnose integer type and any valid implicit conversion to it.
 static bool checkOpenCLEnqueueIntType(Sema &S, Expr *E,
                                       const QualType &IntType);
 
@@ -408,7 +408,7 @@ static bool SemaOpenCLBuiltinEnqueueKernel(Sema &S, CallExpr *TheCall) {
   }
 
   // Third argument is always an ndrange_t type.
-  if (Arg2->getType().getAsString() != "ndrange_t") {
+  if (Arg2->getType().getUnqualifiedType().getAsString() != "ndrange_t") {
     S.Diag(TheCall->getArg(2)->getLocStart(),
            diag::err_opencl_enqueue_kernel_expected_type)
         << "'ndrange_t'";
@@ -1391,8 +1391,6 @@ bool Sema::CheckARMBuiltinExclusiveCall(unsigned BuiltinID, CallExpr *TheCall,
 }
 
 bool Sema::CheckARMBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
-  llvm::APSInt Result;
-
   if (BuiltinID == ARM::BI__builtin_arm_ldrex ||
       BuiltinID == ARM::BI__builtin_arm_ldaex ||
       BuiltinID == ARM::BI__builtin_arm_strex ||
@@ -1439,8 +1437,6 @@ bool Sema::CheckARMBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
 
 bool Sema::CheckAArch64BuiltinFunctionCall(unsigned BuiltinID,
                                          CallExpr *TheCall) {
-  llvm::APSInt Result;
-
   if (BuiltinID == AArch64::BI__builtin_arm_ldrex ||
       BuiltinID == AArch64::BI__builtin_arm_ldaex ||
       BuiltinID == AArch64::BI__builtin_arm_strex ||
@@ -1640,7 +1636,7 @@ bool Sema::CheckMipsBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
   case Mips::BI__builtin_msa_sldi_d: i = 2; l = 0; u = 1; break;
   // Memory offsets and immediate loads.
   // These intrinsics take a signed 10 bit immediate.
-  case Mips::BI__builtin_msa_ldi_b: i = 0; l = -128; u = 127; break;
+  case Mips::BI__builtin_msa_ldi_b: i = 0; l = -128; u = 255; break;
   case Mips::BI__builtin_msa_ldi_h:
   case Mips::BI__builtin_msa_ldi_w:
   case Mips::BI__builtin_msa_ldi_d: i = 0; l = -512; u = 511; break;
@@ -2308,7 +2304,7 @@ bool Sema::CheckX86BuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
   case X86::BI__builtin_ia32_scatterpfdps:
   case X86::BI__builtin_ia32_scatterpfqpd:
   case X86::BI__builtin_ia32_scatterpfqps:
-    i = 4; l = 1; u = 2;
+    i = 4; l = 2; u = 3;
     break;
   case X86::BI__builtin_ia32_pcmpestrm128:
   case X86::BI__builtin_ia32_pcmpestri128:
@@ -7453,7 +7449,7 @@ CheckReturnStackAddr(Sema &S, Expr *RetValExp, QualType lhsType,
   if (!stackE)
     return; // Nothing suspicious was found.
 
-  // Parameters are initalized in the calling scope, so taking the address
+  // Parameters are initialized in the calling scope, so taking the address
   // of a parameter reference doesn't need a warning.
   for (auto *DRE : refVars)
     if (isa<ParmVarDecl>(DRE->getDecl()))
@@ -9870,25 +9866,6 @@ void Sema::CheckBoolLikeConversion(Expr *E, SourceLocation CC) {
   ::CheckBoolLikeConversion(*this, E, CC);
 }
 
-/// Diagnose when expression is an integer constant expression and its evaluation
-/// results in integer overflow
-void Sema::CheckForIntOverflow (Expr *E) {
-  // Use a work list to deal with nested struct initializers.
-  SmallVector<Expr *, 2> Exprs(1, E);
-
-  do {
-    Expr *E = Exprs.pop_back_val();
-
-    if (isa<BinaryOperator>(E->IgnoreParenCasts())) {
-      E->IgnoreParenCasts()->EvaluateForOverflow(Context);
-      continue;
-    }
-
-    if (auto InitList = dyn_cast<InitListExpr>(E))
-      Exprs.append(InitList->inits().begin(), InitList->inits().end());
-  } while (!Exprs.empty());
-}
-
 namespace {
 /// \brief Visitor for expressions which looks for unsequenced operations on the
 /// same object.
@@ -10390,7 +10367,7 @@ void Sema::CheckCompletedExpr(Expr *E, SourceLocation CheckLoc,
   if (!E->isInstantiationDependent())
     CheckUnsequencedOperations(E);
   if (!IsConstexpr && !E->isValueDependent())
-    CheckForIntOverflow(E);
+    E->EvaluateForOverflow(Context);
   DiagnoseMisalignedMembers();
 }
 

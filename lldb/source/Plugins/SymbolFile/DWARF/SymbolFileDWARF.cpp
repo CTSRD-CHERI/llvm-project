@@ -1917,6 +1917,12 @@ uint32_t SymbolFileDWARF::ResolveSymbolContext(const FileSpec &file_spec,
   return sc_list.GetSize() - prev_size;
 }
 
+void SymbolFileDWARF::PreloadSymbols() {
+  std::lock_guard<std::recursive_mutex> guard(
+      GetObjectFile()->GetModule()->GetMutex());
+  Index();
+}
+
 void SymbolFileDWARF::Index() {
   if (m_indexed)
     return;
@@ -3051,7 +3057,13 @@ SymbolFileDWARF::GetDeclContextDIEContainingDIE(const DWARFDIE &orig_die) {
         case DW_TAG_lexical_block:
         case DW_TAG_subprogram:
           return die;
-
+        case DW_TAG_inlined_subroutine: {
+          DWARFDIE abs_die = die.GetReferencedDIE(DW_AT_abstract_origin);
+          if (abs_die) {
+            return abs_die;
+          }
+          break;
+        }
         default:
           break;
         }

@@ -18,6 +18,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "ConstantFold.h"
+#include "llvm/ADT/APSInt.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
@@ -222,7 +223,7 @@ static Constant *ExtractConstantBytes(Constant *C, unsigned ByteStart,
   if (ConstantInt *CI = dyn_cast<ConstantInt>(C)) {
     APInt V = CI->getValue();
     if (ByteStart)
-      V = V.lshr(ByteStart*8);
+      V.lshrInPlace(ByteStart*8);
     V = V.trunc(ByteSize*8);
     return ConstantInt::get(CI->getContext(), V);
   }
@@ -606,17 +607,15 @@ Constant *llvm::ConstantFoldCastInstruction(unsigned opc, Constant *V,
     if (ConstantFP *FPC = dyn_cast<ConstantFP>(V)) {
       const APFloat &V = FPC->getValueAPF();
       bool ignored;
-      uint64_t x[2];
       uint32_t DestBitWidth = cast<IntegerType>(DestTy)->getBitWidth();
+      APSInt IntVal(DestBitWidth, opc == Instruction::FPToUI);
       if (APFloat::opInvalidOp ==
-          V.convertToInteger(x, DestBitWidth, opc==Instruction::FPToSI,
-                             APFloat::rmTowardZero, &ignored)) {
+          V.convertToInteger(IntVal, APFloat::rmTowardZero, &ignored)) {
         // Undefined behavior invoked - the destination type can't represent
         // the input constant.
         return UndefValue::get(DestTy);
       }
-      APInt Val(DestBitWidth, x);
-      return ConstantInt::get(FPC->getContext(), Val);
+      return ConstantInt::get(FPC->getContext(), IntVal);
     }
     return nullptr; // Can't fold.
   case Instruction::IntToPtr:   //always treated as unsigned

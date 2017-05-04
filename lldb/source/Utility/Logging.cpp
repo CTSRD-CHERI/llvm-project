@@ -10,6 +10,10 @@
 #include "lldb/Utility/Logging.h"
 #include "lldb/Utility/Log.h"
 
+#include "llvm/ADT/ArrayRef.h" // for ArrayRef
+
+#include <stdarg.h> // for va_end, va_list, va_start
+
 using namespace lldb_private;
 
 static constexpr Log::Category g_categories[] = {
@@ -38,6 +42,7 @@ static constexpr Log::Category g_categories[] = {
   {{"symbol"}, {"log symbol related issues and warnings"}, LIBLLDB_LOG_SYMBOLS},
   {{"system-runtime"}, {"log system runtime events"}, LIBLLDB_LOG_SYSTEM_RUNTIME},
   {{"target"}, {"log target events and activities"}, LIBLLDB_LOG_TARGET},
+  {{"temp"}, {"log internal temporary debug messages"}, LIBLLDB_LOG_TEMPORARY},
   {{"thread"}, {"log thread events and activities"}, LIBLLDB_LOG_THREAD},
   {{"types"}, {"log type system related activities"}, LIBLLDB_LOG_TYPES},
   {{"unwind"}, {"log stack unwind activities"}, LIBLLDB_LOG_UNWIND},

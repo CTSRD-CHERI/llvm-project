@@ -75,15 +75,15 @@ public:
   bool isInGot() const { return GotIndex != -1U; }
   bool isInPlt() const { return PltIndex != -1U; }
 
-  template <class ELFT> typename ELFT::uint getVA(int64_t Addend = 0) const;
+  uint64_t getVA(int64_t Addend = 0) const;
 
-  template <class ELFT> typename ELFT::uint getGotOffset() const;
+  uint64_t getGotOffset() const;
   template <class ELFT> typename ELFT::uint getGotVA() const;
-  template <class ELFT> typename ELFT::uint getGotPltOffset() const;
-  template <class ELFT> typename ELFT::uint getGotPltVA() const;
-  template <class ELFT> typename ELFT::uint getPltVA() const;
+  uint64_t getGotPltOffset() const;
+  uint64_t getGotPltVA() const;
+  uint64_t getPltVA() const;
   template <class ELFT> typename ELFT::uint getSize() const;
-  template <class ELFT> OutputSection *getOutputSection() const;
+  OutputSection *getOutputSection() const;
 
   // The file from which this symbol was created.
   InputFile *File = nullptr;
@@ -240,7 +240,7 @@ public:
 
   // CopyRelSec and CopyRelSecOff are significant only when NeedsCopy is true.
   InputSection *CopyRelSec;
-  size_t CopyRelSecOff;
+  uint64_t CopyRelSecOff;
 
 private:
   template <class ELFT> const typename ELFT::Sym &getSym() const {
@@ -302,22 +302,25 @@ public:
 // Some linker-generated symbols need to be created as
 // DefinedRegular symbols.
 struct ElfSym {
-  // The content for _etext and etext symbols.
-  static DefinedRegular *Etext;
+  // __bss_start
+  static DefinedRegular *Bss;
+
+  // etext and _etext
+  static DefinedRegular *Etext1;
   static DefinedRegular *Etext2;
 
-  // The content for _edata and edata symbols.
-  static DefinedRegular *Edata;
+  // edata and _edata
+  static DefinedRegular *Edata1;
   static DefinedRegular *Edata2;
 
-  // The content for _end and end symbols.
-  static DefinedRegular *End;
+  // end and _end
+  static DefinedRegular *End1;
   static DefinedRegular *End2;
 
-  // The content for _gp_disp/__gnu_local_gp symbols for MIPS target.
+  // _gp, _gp_disp and __gnu_local_gp symbols. Only for MIPS.
+  static DefinedRegular *MipsGp;
   static DefinedRegular *MipsGpDisp;
   static DefinedRegular *MipsLocalGp;
-  static DefinedRegular *MipsGp;
 };
 
 // A real symbol object, SymbolBody, is usually stored within a Symbol. There's

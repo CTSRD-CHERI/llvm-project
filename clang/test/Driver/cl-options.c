@@ -14,6 +14,9 @@
 // C_P: "-E"
 // C_P: "-C"
 
+// RUN: %clang_cl /d1reportAllClassLayout -### -- %s 2>&1 | FileCheck -check-prefix=d1reportAllClassLayout %s
+// d1reportAllClassLayout: -fdump-record-layouts
+
 // RUN: %clang_cl /Dfoo=bar /D bar=baz /DMYDEF#value /DMYDEF2=foo#bar /DMYDEF3#a=b /DMYDEF4# \
 // RUN:    -### -- %s 2>&1 | FileCheck -check-prefix=D %s
 // D: "-D" "foo=bar"
@@ -296,11 +299,14 @@
 // NOSTRICT: "-relaxed-aliasing"
 
 // We recognize -f[no-]delayed-template-parsing.
+// /Zc:twoPhase[-] has the opposite meaning.
 // RUN: %clang_cl -c -### -- %s 2>&1 | FileCheck -check-prefix=DELAYEDDEFAULT %s
 // DELAYEDDEFAULT: "-fdelayed-template-parsing"
 // RUN: %clang_cl -c -fdelayed-template-parsing -### -- %s 2>&1 | FileCheck -check-prefix=DELAYEDON %s
+// RUN: %clang_cl -c /Zc:twoPhase- -### -- %s 2>&1 | FileCheck -check-prefix=DELAYEDON %s
 // DELAYEDON: "-fdelayed-template-parsing"
 // RUN: %clang_cl -c -fno-delayed-template-parsing -### -- %s 2>&1 | FileCheck -check-prefix=DELAYEDOFF %s
+// RUN: %clang_cl -c /Zc:twoPhase -### -- %s 2>&1 | FileCheck -check-prefix=DELAYEDOFF %s
 // DELAYEDOFF-NOT: "-fdelayed-template-parsing"
 
 // For some warning ids, we can map from MSVC warning to Clang warning.

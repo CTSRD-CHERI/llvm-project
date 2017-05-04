@@ -63,7 +63,6 @@ struct CieRecord {
 
 // Section for .eh_frame.
 template <class ELFT> class EhFrameSection final : public SyntheticSection {
-  typedef typename ELFT::uint uintX_t;
   typedef typename ELFT::Shdr Elf_Shdr;
   typedef typename ELFT::Rel Elf_Rel;
   typedef typename ELFT::Rela Elf_Rela;
@@ -97,7 +96,7 @@ private:
   template <class RelTy>
   bool isFdeLive(EhSectionPiece &Piece, ArrayRef<RelTy> Rels);
 
-  uintX_t getFdePc(uint8_t *Buf, size_t Off, uint8_t Enc);
+  uint64_t getFdePc(uint8_t *Buf, size_t Off, uint8_t Enc);
 
   std::vector<CieRecord *> Cies;
 
@@ -106,8 +105,6 @@ private:
 };
 
 template <class ELFT> class GotSection final : public SyntheticSection {
-  typedef typename ELFT::uint uintX_t;
-
 public:
   GotSection();
   void writeTo(uint8_t *Buf) override;
@@ -118,10 +115,10 @@ public:
   void addEntry(SymbolBody &Sym);
   bool addDynTlsEntry(SymbolBody &Sym);
   bool addTlsIndex();
-  uintX_t getGlobalDynAddr(const SymbolBody &B) const;
-  uintX_t getGlobalDynOffset(const SymbolBody &B) const;
+  uint64_t getGlobalDynAddr(const SymbolBody &B) const;
+  uint64_t getGlobalDynOffset(const SymbolBody &B) const;
 
-  uintX_t getTlsIndexVA() { return this->getVA() + TlsIndexOff; }
+  uint64_t getTlsIndexVA() { return this->getVA() + TlsIndexOff; }
   uint32_t getTlsIndexOff() const { return TlsIndexOff; }
 
   // Flag to force GOT to be in output if we have relocations
@@ -131,11 +128,11 @@ public:
 private:
   size_t NumEntries = 0;
   uint32_t TlsIndexOff = -1;
-  uintX_t Size = 0;
+  uint64_t Size = 0;
 };
 
 // .note.gnu.build-id section.
-template <class ELFT> class BuildIdSection : public SyntheticSection {
+class BuildIdSection : public SyntheticSection {
   // First 16 bytes are a header.
   static const unsigned HeaderSize = 16;
 
@@ -153,24 +150,23 @@ private:
   uint8_t *HashBuf;
 };
 
-// BssSection is used to reserve space for copy relocations. We create two
-// instances of this class for .bss and .bss.rel.ro. .bss is used for writable
-// symbols, and .bss.rel.ro is used for read-only symbols.
+// BssSection is used to reserve space for copy relocations and common symbols.
+// We create three instances of this class for .bss, .bss.rel.ro and "COMMON",
+// that are used for writable symbols, read-only symbols and common symbols,
+// respectively.
 class BssSection final : public SyntheticSection {
 public:
   BssSection(StringRef Name);
   void writeTo(uint8_t *) override {}
   bool empty() const override { return getSize() == 0; }
-  size_t reserveSpace(uint32_t Alignment, size_t Size);
+  size_t reserveSpace(uint64_t Size, uint32_t Alignment);
   size_t getSize() const override { return Size; }
 
 private:
-  size_t Size = 0;
+  uint64_t Size = 0;
 };
 
-template <class ELFT> class MipsGotSection final : public SyntheticSection {
-  typedef typename ELFT::uint uintX_t;
-
+class MipsGotSection final : public SyntheticSection {
 public:
   MipsGotSection();
   void writeTo(uint8_t *Buf) override;
@@ -181,9 +177,9 @@ public:
   void addEntry(SymbolBody &Sym, int64_t Addend, RelExpr Expr);
   bool addDynTlsEntry(SymbolBody &Sym);
   bool addTlsIndex();
-  uintX_t getPageEntryOffset(const SymbolBody &B, int64_t Addend) const;
-  uintX_t getBodyEntryOffset(const SymbolBody &B, int64_t Addend) const;
-  uintX_t getGlobalDynOffset(const SymbolBody &B) const;
+  uint64_t getPageEntryOffset(const SymbolBody &B, int64_t Addend) const;
+  uint64_t getBodyEntryOffset(const SymbolBody &B, int64_t Addend) const;
+  uint64_t getGlobalDynOffset(const SymbolBody &B) const;
 
   // Returns the symbol which corresponds to the first entry of the global part
   // of GOT on MIPS platform. It is required to fill up MIPS-specific dynamic
@@ -197,11 +193,11 @@ public:
 
   // Returns offset of TLS part of the MIPS GOT table. This part goes
   // after 'local' and 'global' entries.
-  uintX_t getTlsOffset() const;
+  uint64_t getTlsOffset() const;
 
   uint32_t getTlsIndexOff() const { return TlsIndexOff; }
 
-  uintX_t getGp() const;
+  uint64_t getGp() const;
 
 private:
   // MIPS GOT consists of three parts: local, global and tls. Each part
@@ -249,7 +245,7 @@ private:
   // to the first index of "Page" entries allocated for this section.
   llvm::SmallMapVector<const OutputSection *, size_t, 16> PageIndexMap;
 
-  typedef std::pair<const SymbolBody *, uintX_t> GotEntry;
+  typedef std::pair<const SymbolBody *, uint64_t> GotEntry;
   typedef std::vector<GotEntry> GotEntries;
   // Map from Symbol-Addend pair to the GOT index.
   llvm::DenseMap<GotEntry, size_t> EntryIndexMap;
@@ -265,7 +261,7 @@ private:
   std::vector<const SymbolBody *> TlsEntries;
 
   uint32_t TlsIndexOff = -1;
-  uintX_t Size = 0;
+  uint64_t Size = 0;
 };
 
 class GotPltSection final : public SyntheticSection {
@@ -313,17 +309,15 @@ private:
   std::vector<StringRef> Strings;
 };
 
-template <class ELFT> class DynamicReloc {
-  typedef typename ELFT::uint uintX_t;
-
+class DynamicReloc {
 public:
   DynamicReloc(uint32_t Type, const InputSectionBase *InputSec,
-               uintX_t OffsetInSec, bool UseSymVA, SymbolBody *Sym,
+               uint64_t OffsetInSec, bool UseSymVA, SymbolBody *Sym,
                int64_t Addend)
       : Type(Type), Sym(Sym), InputSec(InputSec), OffsetInSec(OffsetInSec),
         UseSymVA(UseSymVA), Addend(Addend) {}
 
-  uintX_t getOffset() const;
+  uint64_t getOffset() const;
   int64_t getAddend() const;
   uint32_t getSymIndex() const;
   const InputSectionBase *getInputSec() const { return InputSec; }
@@ -333,7 +327,7 @@ public:
 private:
   SymbolBody *Sym;
   const InputSectionBase *InputSec = nullptr;
-  uintX_t OffsetInSec;
+  uint64_t OffsetInSec;
   bool UseSymVA;
   int64_t Addend;
 };
@@ -344,7 +338,6 @@ template <class ELFT> class DynamicSection final : public SyntheticSection {
   typedef typename ELFT::Rela Elf_Rela;
   typedef typename ELFT::Shdr Elf_Shdr;
   typedef typename ELFT::Sym Elf_Sym;
-  typedef typename ELFT::uint uintX_t;
 
   // The .dynamic section contains information for the dynamic linker.
   // The section consists of fixed size entries, which consist of
@@ -380,17 +373,16 @@ public:
 private:
   void addEntries();
   void add(Entry E) { Entries.push_back(E); }
-  uintX_t Size = 0;
+  uint64_t Size = 0;
 };
 
 template <class ELFT> class RelocationSection final : public SyntheticSection {
   typedef typename ELFT::Rel Elf_Rel;
   typedef typename ELFT::Rela Elf_Rela;
-  typedef typename ELFT::uint uintX_t;
 
 public:
   RelocationSection(StringRef Name, bool Sort);
-  void addReloc(const DynamicReloc<ELFT> &Reloc);
+  void addReloc(const DynamicReloc &Reloc);
   unsigned getRelocOffset();
   void finalizeContents() override;
   void writeTo(uint8_t *Buf) override;
@@ -401,7 +393,7 @@ public:
 private:
   bool Sort;
   size_t NumRelativeRelocs = 0;
-  std::vector<DynamicReloc<ELFT>> Relocs;
+  std::vector<DynamicReloc> Relocs;
 };
 
 struct SymbolTableEntry {
@@ -412,7 +404,6 @@ struct SymbolTableEntry {
 template <class ELFT> class SymbolTableSection final : public SyntheticSection {
 public:
   typedef typename ELFT::Sym Elf_Sym;
-  typedef typename ELFT::uint uintX_t;
 
   SymbolTableSection(StringTableSection &StrTabSec);
 
@@ -436,8 +427,6 @@ private:
 // https://blogs.oracle.com/ali/entry/gnu_hash_elf_sections
 template <class ELFT>
 class GnuHashTableSection final : public SyntheticSection {
-  typedef typename ELFT::uint uintX_t;
-
 public:
   GnuHashTableSection();
   void finalizeContents() override;
@@ -449,7 +438,7 @@ public:
   void addSymbols(std::vector<SymbolTableEntry> &Symbols);
 
 private:
-  size_t getShift2() const { return ELFT::Is64Bits ? 6 : 5; }
+  size_t getShift2() const { return Config->Is64 ? 6 : 5; }
 
   void writeBloomFilter(uint8_t *Buf);
   void writeHashTable(uint8_t *Buf);
@@ -481,14 +470,15 @@ private:
 // header as its first entry that is used at run-time to resolve lazy binding.
 // The latter is used for GNU Ifunc symbols, that will be subject to a
 // Target->IRelativeRel.
-template <class ELFT> class PltSection : public SyntheticSection {
+class PltSection : public SyntheticSection {
 public:
   PltSection(size_t HeaderSize);
   void writeTo(uint8_t *Buf) override;
   size_t getSize() const override;
-  void addEntry(SymbolBody &Sym);
   bool empty() const override { return Entries.empty(); }
   void addSymbols();
+
+  template <class ELFT> void addEntry(SymbolBody &Sym);
 
 private:
   void writeHeader(uint8_t *Buf){};
@@ -499,9 +489,7 @@ private:
   size_t HeaderSize;
 };
 
-template <class ELFT> class GdbIndexSection final : public SyntheticSection {
-  typedef typename ELFT::uint uintX_t;
-
+class GdbIndexSection final : public SyntheticSection {
   const unsigned OffsetTypeSize = 4;
   const unsigned CuListOffset = 6 * OffsetTypeSize;
   const unsigned CompilationUnitSize = 16;
@@ -516,7 +504,7 @@ public:
   bool empty() const override;
 
   // Pairs of [CU Offset, CU length].
-  std::vector<std::pair<uintX_t, uintX_t>> CompilationUnits;
+  std::vector<std::pair<uint64_t, uint64_t>> CompilationUnits;
 
   llvm::StringTableBuilder StringPool;
 
@@ -551,8 +539,6 @@ private:
 // http://www.airs.com/blog/archives/460 (".eh_frame")
 // http://www.airs.com/blog/archives/462 (".eh_frame_hdr")
 template <class ELFT> class EhFrameHeader final : public SyntheticSection {
-  typedef typename ELFT::uint uintX_t;
-
 public:
   EhFrameHeader();
   void writeTo(uint8_t *Buf) override;
@@ -715,14 +701,14 @@ private:
 // of executable file which is pointed to by the DT_MIPS_RLD_MAP entry.
 // See "Dynamic section" in Chapter 5 in the following document:
 // ftp://www.linux-mips.org/pub/linux/mips/doc/ABI/mipsabi.pdf
-template <class ELFT> class MipsRldMapSection : public SyntheticSection {
+class MipsRldMapSection : public SyntheticSection {
 public:
   MipsRldMapSection();
-  size_t getSize() const override { return sizeof(typename ELFT::uint); }
+  size_t getSize() const override { return Config->Wordsize; }
   void writeTo(uint8_t *Buf) override;
 };
 
-template <class ELFT> class ARMExidxSentinelSection : public SyntheticSection {
+class ARMExidxSentinelSection : public SyntheticSection {
 public:
   ARMExidxSentinelSection();
   size_t getSize() const override { return 8; }
@@ -731,7 +717,7 @@ public:
 
 // A container for one or more linker generated thunks. Instances of these
 // thunks including ARM interworking and Mips LA25 PI to non-PI thunks.
-template <class ELFT> class ThunkSection : public SyntheticSection {
+class ThunkSection : public SyntheticSection {
 public:
   // ThunkSection in OS, with desired OutSecOff of Off
   ThunkSection(OutputSection *OS, uint64_t Off);
@@ -740,13 +726,13 @@ public:
   // Thunk is given offset from start of this InputSection
   // Thunk defines a symbol in this InputSection that can be used as target
   // of a relocation
-  void addThunk(Thunk<ELFT> *T);
+  void addThunk(Thunk *T);
   size_t getSize() const override { return Size; }
   void writeTo(uint8_t *Buf) override;
   InputSection *getTargetInputSection() const;
 
 private:
-  std::vector<const Thunk<ELFT> *> Thunks;
+  std::vector<const Thunk *> Thunks;
   size_t Size = 0;
 };
 
@@ -758,65 +744,52 @@ SymbolBody *addSyntheticLocal(StringRef Name, uint8_t Type, uint64_t Value,
                               uint64_t Size, InputSectionBase *Section);
 
 // Linker generated sections which can be used as inputs.
-template <class ELFT> struct In {
+struct InX {
   static InputSection *ARMAttributes;
-  static BuildIdSection<ELFT> *BuildId;
   static BssSection *Bss;
   static BssSection *BssRelRo;
+  static BuildIdSection *BuildId;
   static InputSection *Common;
-  static DynamicSection<ELFT> *Dynamic;
   static StringTableSection *DynStrTab;
+  static InputSection *Interp;
+  static GdbIndexSection *GdbIndex;
+  static GotPltSection *GotPlt;
+  static IgotPltSection *IgotPlt;
+  static MipsGotSection *MipsGot;
+  static MipsRldMapSection *MipsRldMap;
+  static PltSection *Plt;
+  static PltSection *Iplt;
+  static StringTableSection *ShStrTab;
+  static StringTableSection *StrTab;
+};
+
+template <class ELFT> struct In : public InX {
+  static DynamicSection<ELFT> *Dynamic;
   static SymbolTableSection<ELFT> *DynSymTab;
   static EhFrameHeader<ELFT> *EhFrameHdr;
   static GnuHashTableSection<ELFT> *GnuHashTab;
-  static GdbIndexSection<ELFT> *GdbIndex;
   static GotSection<ELFT> *Got;
   static EhFrameSection<ELFT> *EhFrame;
-  static MipsGotSection<ELFT> *MipsGot;
-  static GotPltSection *GotPlt;
-  static IgotPltSection *IgotPlt;
   static HashTableSection<ELFT> *HashTab;
-  static InputSection *Interp;
-  static MipsRldMapSection<ELFT> *MipsRldMap;
-  static PltSection<ELFT> *Plt;
-  static PltSection<ELFT> *Iplt;
   static RelocationSection<ELFT> *RelaDyn;
   static RelocationSection<ELFT> *RelaPlt;
   static RelocationSection<ELFT> *RelaIplt;
-  static StringTableSection *ShStrTab;
-  static StringTableSection *StrTab;
   static SymbolTableSection<ELFT> *SymTab;
   static VersionDefinitionSection<ELFT> *VerDef;
   static VersionTableSection<ELFT> *VerSym;
   static VersionNeedSection<ELFT> *VerNeed;
 };
 
-template <class ELFT> InputSection *In<ELFT>::ARMAttributes;
-template <class ELFT> BssSection *In<ELFT>::Bss;
-template <class ELFT> BssSection *In<ELFT>::BssRelRo;
-template <class ELFT> BuildIdSection<ELFT> *In<ELFT>::BuildId;
-template <class ELFT> InputSection *In<ELFT>::Common;
 template <class ELFT> DynamicSection<ELFT> *In<ELFT>::Dynamic;
-template <class ELFT> StringTableSection *In<ELFT>::DynStrTab;
 template <class ELFT> SymbolTableSection<ELFT> *In<ELFT>::DynSymTab;
 template <class ELFT> EhFrameHeader<ELFT> *In<ELFT>::EhFrameHdr;
-template <class ELFT> GdbIndexSection<ELFT> *In<ELFT>::GdbIndex;
 template <class ELFT> GnuHashTableSection<ELFT> *In<ELFT>::GnuHashTab;
 template <class ELFT> GotSection<ELFT> *In<ELFT>::Got;
 template <class ELFT> EhFrameSection<ELFT> *In<ELFT>::EhFrame;
-template <class ELFT> MipsGotSection<ELFT> *In<ELFT>::MipsGot;
-template <class ELFT> GotPltSection *In<ELFT>::GotPlt;
-template <class ELFT> IgotPltSection *In<ELFT>::IgotPlt;
 template <class ELFT> HashTableSection<ELFT> *In<ELFT>::HashTab;
-template <class ELFT> InputSection *In<ELFT>::Interp;
-template <class ELFT> MipsRldMapSection<ELFT> *In<ELFT>::MipsRldMap;
-template <class ELFT> PltSection<ELFT> *In<ELFT>::Plt;
-template <class ELFT> PltSection<ELFT> *In<ELFT>::Iplt;
 template <class ELFT> RelocationSection<ELFT> *In<ELFT>::RelaDyn;
 template <class ELFT> RelocationSection<ELFT> *In<ELFT>::RelaPlt;
 template <class ELFT> RelocationSection<ELFT> *In<ELFT>::RelaIplt;
-template <class ELFT> StringTableSection *In<ELFT>::ShStrTab;
-template <class ELFT> StringTableSection *In<ELFT>::StrTab;
 template <class ELFT> SymbolTableSection<ELFT> *In<ELFT>::SymTab;
 template <class ELFT> VersionDefinitionSection<ELFT> *In<ELFT>::VerDef;
 template <class ELFT> VersionTableSection<ELFT> *In<ELFT>::VerSym;

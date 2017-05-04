@@ -12,8 +12,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/Scalar/CorrelatedValuePropagation.h"
-#include "llvm/Transforms/Scalar.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/LazyValueInfo.h"
@@ -26,6 +26,7 @@
 #include "llvm/Pass.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/Local.h"
 using namespace llvm;
 
@@ -95,7 +96,8 @@ static bool processSelect(SelectInst *S, LazyValueInfo *LVI) {
   return true;
 }
 
-static bool processPHI(PHINode *P, LazyValueInfo *LVI) {
+static bool processPHI(PHINode *P, LazyValueInfo *LVI,
+                       const SimplifyQuery &SQ) {
   bool Changed = false;
 
   BasicBlock *BB = P->getParent();
@@ -149,9 +151,7 @@ static bool processPHI(PHINode *P, LazyValueInfo *LVI) {
     Changed = true;
   }
 
-  // FIXME: Provide TLI, DT, AT to SimplifyInstruction.
-  const DataLayout &DL = BB->getModule()->getDataLayout();
-  if (Value *V = SimplifyInstruction(P, DL)) {
+  if (Value *V = SimplifyInstruction(P, SQ)) {
     P->replaceAllUsesWith(V);
     P->eraseFromParent();
     Changed = true;
@@ -235,9 +235,8 @@ static bool processSwitch(SwitchInst *SI, LazyValueInfo *LVI) {
   // Analyse each switch case in turn.  This is done in reverse order so that
   // removing a case doesn't cause trouble for the iteration.
   bool Changed = false;
-  for (SwitchInst::CaseIt CI = SI->case_end(), CE = SI->case_begin(); CI-- != CE;
-       ) {
-    ConstantInt *Case = CI.getCaseValue();
+  for (auto CI = SI->case_begin(), CE = SI->case_end(); CI != CE;) {
+    ConstantInt *Case = CI->getCaseValue();
 
     // Check to see if the switch condition is equal to/not equal to the case
     // value on every incoming edge, equal/not equal being the same each time.
@@ -270,8 +269,9 @@ static bool processSwitch(SwitchInst *SI, LazyValueInfo *LVI) {
 
     if (State == LazyValueInfo::False) {
       // This case never fires - remove it.
-      CI.getCaseSuccessor()->removePredecessor(BB);
-      SI->removeCase(CI); // Does not invalidate the iterator.
+      CI->getCaseSuccessor()->removePredecessor(BB);
+      CI = SI->removeCase(CI);
+      CE = SI->case_end();
 
       // The condition can be modified by removePredecessor's PHI simplification
       // logic.
@@ -279,7 +279,9 @@ static bool processSwitch(SwitchInst *SI, LazyValueInfo *LVI) {
 
       ++NumDeadCases;
       Changed = true;
-    } else if (State == LazyValueInfo::True) {
+      continue;
+    }
+    if (State == LazyValueInfo::True) {
       // This case always fires.  Arrange for the switch to be turned into an
       // unconditional branch by replacing the switch condition with the case
       // value.
@@ -288,6 +290,9 @@ static bool processSwitch(SwitchInst *SI, LazyValueInfo *LVI) {
       Changed = true;
       break;
     }
+
+    // Increment the case iterator sense we didn't delete it.
+    ++CI;
   }
 
   if (Changed)
@@ -308,7 +313,7 @@ static bool processCallSite(CallSite CS, LazyValueInfo *LVI) {
     // Try to mark pointer typed parameters as non-null.  We skip the
     // relatively expensive analysis for constants which are obviously either
     // null or non-null to start with.
-    if (Type && !CS.paramHasAttr(ArgNo + 1, Attribute::NonNull) &&
+    if (Type && !CS.paramHasAttr(ArgNo, Attribute::NonNull) &&
         !isa<Constant>(V) && 
         LVI->getPredicateAt(ICmpInst::ICMP_EQ, V,
                             ConstantPointerNull::get(Type),
@@ -322,7 +327,7 @@ static bool processCallSite(CallSite CS, LazyValueInfo *LVI) {
   if (Indices.empty())
     return false;
 
-  AttributeSet AS = CS.getAttributes();
+  AttributeList AS = CS.getAttributes();
   LLVMContext &Ctx = CS.getInstruction()->getContext();
   AS = AS.addAttribute(Ctx, Indices, Attribute::get(Ctx, Attribute::NonNull));
   CS.setAttributes(AS);
@@ -483,9 +488,8 @@ static Constant *getConstantAt(Value *V, Instruction *At, LazyValueInfo *LVI) {
     ConstantInt::getFalse(C->getContext());
 }
 
-static bool runImpl(Function &F, LazyValueInfo *LVI) {
+static bool runImpl(Function &F, LazyValueInfo *LVI, const SimplifyQuery &SQ) {
   bool FnChanged = false;
-
   // Visiting in a pre-order depth-first traversal causes us to simplify early
   // blocks before querying later blocks (which require us to analyze early
   // blocks).  Eagerly simplifying shallow blocks means there is strictly less
@@ -500,7 +504,7 @@ static bool runImpl(Function &F, LazyValueInfo *LVI) {
         BBChanged |= processSelect(cast<SelectInst>(II), LVI);
         break;
       case Instruction::PHI:
-        BBChanged |= processPHI(cast<PHINode>(II), LVI);
+        BBChanged |= processPHI(cast<PHINode>(II), LVI, SQ);
         break;
       case Instruction::ICmp:
       case Instruction::FCmp:
@@ -561,14 +565,14 @@ bool CorrelatedValuePropagation::runOnFunction(Function &F) {
     return false;
 
   LazyValueInfo *LVI = &getAnalysis<LazyValueInfoWrapperPass>().getLVI();
-  return runImpl(F, LVI);
+  return runImpl(F, LVI, getBestSimplifyQuery(*this, F));
 }
 
 PreservedAnalyses
 CorrelatedValuePropagationPass::run(Function &F, FunctionAnalysisManager &AM) {
 
   LazyValueInfo *LVI = &AM.getResult<LazyValueAnalysis>(F);
-  bool Changed = runImpl(F, LVI);
+  bool Changed = runImpl(F, LVI, getBestSimplifyQuery(AM, F));
 
   if (!Changed)
     return PreservedAnalyses::all();

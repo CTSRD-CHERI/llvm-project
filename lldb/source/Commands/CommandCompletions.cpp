@@ -22,7 +22,6 @@
 #include "lldb/Core/FileSpecList.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Host/FileSpec.h"
 #include "lldb/Host/FileSystem.h"
 #include "lldb/Interpreter/Args.h"
 #include "lldb/Interpreter/CommandCompletions.h"
@@ -32,6 +31,8 @@
 #include "lldb/Symbol/Variable.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Utility/CleanUp.h"
+#include "lldb/Utility/FileSpec.h"
+#include "lldb/Utility/StreamString.h"
 #include "lldb/Utility/TildeExpressionResolver.h"
 
 #include "llvm/ADT/SmallString.h"
@@ -123,7 +124,8 @@ static int DiskFilesOrDirectories(const llvm::Twine &partial_name,
 
   if (CompletionBuffer.startswith("~")) {
     llvm::StringRef Buffer(CompletionBuffer);
-    size_t FirstSep = Buffer.find_if(path::is_separator);
+    size_t FirstSep =
+        Buffer.find_if([](char c) { return path::is_separator(c); });
 
     llvm::StringRef Username = Buffer.take_front(FirstSep);
     llvm::StringRef Remainder;
@@ -174,7 +176,10 @@ static int DiskFilesOrDirectories(const llvm::Twine &partial_name,
   if (PartialItem == ".")
     PartialItem = llvm::StringRef();
 
-  assert(!SearchDir.empty());
+  if (SearchDir.empty()) {
+    llvm::sys::fs::current_path(Storage);
+    SearchDir = Storage;
+  }
   assert(!PartialItem.contains(path::get_separator()));
 
   // SearchDir now contains the directory to search in, and Prefix contains the

@@ -77,14 +77,20 @@ public:
   uint64_t Addr = 0;
   uint32_t ShName = 0;
 
-  void addSection(InputSectionBase *C);
+  void addSection(InputSection *S);
   void sort(std::function<int(InputSectionBase *S)> Order);
   void sortInitFini();
   void sortCtorsDtors();
+  uint32_t getFiller();
   template <class ELFT> void writeTo(uint8_t *Buf);
   template <class ELFT> void finalize();
-  template <class ELFT> void assignOffsets();
+  template <class ELFT> void maybeCompress();
+  void assignOffsets();
   std::vector<InputSection *> Sections;
+
+  // Used for implementation of --compress-debug-sections option.
+  std::vector<uint8_t> ZDebugHeader;
+  llvm::SmallVector<char, 1> CompressedData;
 
   // Location in the output buffer.
   uint8_t *Loc = nullptr;
@@ -95,8 +101,6 @@ public:
 // until Writer is initialized.
 struct Out {
   static uint8_t First;
-  static OutputSection *Bss;
-  static OutputSection *BssRelRo;
   static OutputSection *Opd;
   static uint8_t *OpdBuf;
   static PhdrEntry *TlsPhdr;
@@ -137,6 +141,8 @@ public:
   ~OutputSectionFactory();
 
   void addInputSec(InputSectionBase *IS, StringRef OutsecName);
+  void addInputSec(InputSectionBase *IS, StringRef OutsecName,
+                   OutputSection *&Sec);
 
 private:
   llvm::SmallDenseMap<SectionKey, OutputSection *> Map;

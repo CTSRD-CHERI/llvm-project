@@ -25,8 +25,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <string>
-#if HAVE_EXECINFO_H
-# include <execinfo.h>         // For backtrace().
+#ifdef HAVE_BACKTRACE
+# include BACKTRACE_HEADER         // For backtrace().
 #endif
 #if HAVE_SIGNAL_H
 #include <signal.h>
@@ -46,8 +46,8 @@
 #ifdef HAVE__UNWIND_BACKTRACE
 // FIXME: We should be able to use <unwind.h> for any target that has an
 // _Unwind_Backtrace function, but on FreeBSD the configure test passes
-// despite the function not existing unless _GNU_SOURCE is defined, and
-// on Android, <unwind.h> conflicts with <link.h>.
+// despite the function not existing, and on Android, <unwind.h> conflicts
+// with <link.h>.
 #ifdef __GLIBC__
 #include <unwind.h>
 #else
@@ -59,7 +59,7 @@ using namespace llvm;
 
 static RETSIGTYPE SignalHandler(int Sig);  // defined below.
 
-static ManagedStatic<SmartMutex<true> > SignalsMutex;
+static ManagedStatic<sys::SmartMutex<true> > SignalsMutex;
 
 /// InterruptFunction - The function to call if ctrl-c is pressed.
 static void (*InterruptFunction)() = nullptr;
@@ -149,11 +149,7 @@ static void CreateSigAltStack() {}
 #endif
 
 static void RegisterHandlers() {
-  // We need to dereference the signals mutex during handler registration so
-  // that we force its construction. This is to prevent the first use being
-  // during handling an actual signal because you can't safely call new in a
-  // signal handler.
-  *SignalsMutex;
+  sys::SmartScopedLock<true> Guard(*SignalsMutex);
 
   // If the handlers are already registered, we're done.
   if (NumRegisteredSignals != 0) return;
@@ -223,7 +219,7 @@ static RETSIGTYPE SignalHandler(int Sig) {
   sigprocmask(SIG_UNBLOCK, &SigMask, nullptr);
 
   {
-    unique_lock<SmartMutex<true>> Guard(*SignalsMutex);
+    unique_lock<sys::SmartMutex<true>> Guard(*SignalsMutex);
     RemoveFilesToRemove();
 
     if (std::find(std::begin(IntSigs), std::end(IntSigs), Sig)
@@ -486,7 +482,7 @@ __assert(const char *func, const char *file, int line, const char *failedexpr)
     (void)fprintf(stderr,
           "Assertion failed: (%s), function %s, file %s, line %d.\n",
           failedexpr, func, file, line);
-  PrintStackTrace(llvm::errs());
+  sys::PrintStackTrace(llvm::errs());
   abort();
   /* NOTREACHED */
 }
@@ -494,7 +490,7 @@ __assert(const char *func, const char *file, int line, const char *failedexpr)
 
 
 static void PrintStackTraceSignalHandler(void *) {
-  PrintStackTrace(llvm::errs());
+  sys::PrintStackTrace(llvm::errs());
 }
 
 void llvm::sys::DisableSystemDialogsOnCrash() {}

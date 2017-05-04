@@ -31,11 +31,13 @@ struct coff_section;
 namespace pdb {
 class DbiStream;
 struct DbiStreamHeader;
+class DbiModuleDescriptorBuilder;
 class PDBFile;
 
 class DbiStreamBuilder {
 public:
   DbiStreamBuilder(msf::MSFBuilder &Msf);
+  ~DbiStreamBuilder();
 
   DbiStreamBuilder(const DbiStreamBuilder &) = delete;
   DbiStreamBuilder &operator=(const DbiStreamBuilder &) = delete;
@@ -55,12 +57,13 @@ public:
 
   uint32_t calculateSerializedLength() const;
 
-  Error addModuleInfo(StringRef ObjFile, StringRef Module);
+  Expected<DbiModuleDescriptorBuilder &> addModuleInfo(StringRef ModuleName);
   Error addModuleSourceFile(StringRef Module, StringRef File);
+  Expected<uint32_t> getSourceFileNameIndex(StringRef FileName);
 
   Error finalizeMsfLayout();
 
-  Error commit(const msf::MSFLayout &Layout, WritableBinaryStreamRef Buffer);
+  Error commit(const msf::MSFLayout &Layout, WritableBinaryStreamRef MsfBuffer);
 
   // A helper function to create Section Contributions from COFF input
   // section headers.
@@ -88,12 +91,6 @@ private:
   Error generateModiSubstream();
   Error generateFileInfoSubstream();
 
-  struct ModuleInfo {
-    std::vector<StringRef> SourceFiles;
-    StringRef Obj;
-    StringRef Mod;
-  };
-
   msf::MSFBuilder &Msf;
   BumpPtrAllocator &Allocator;
 
@@ -107,13 +104,12 @@ private:
 
   const DbiStreamHeader *Header;
 
-  StringMap<std::unique_ptr<ModuleInfo>> ModuleInfos;
-  std::vector<ModuleInfo *> ModuleInfoList;
+  StringMap<std::unique_ptr<DbiModuleDescriptorBuilder>> ModiMap;
+  std::vector<DbiModuleDescriptorBuilder *> ModiList;
 
   StringMap<uint32_t> SourceFileNames;
 
   WritableBinaryStreamRef NamesBuffer;
-  MutableBinaryByteStream ModInfoBuffer;
   MutableBinaryByteStream FileInfoBuffer;
   ArrayRef<SectionContrib> SectionContribs;
   ArrayRef<SecMapEntry> SectionMap;

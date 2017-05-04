@@ -435,6 +435,10 @@ static Instruction *insertSpills(SpillInfo &Spills, coro::Shape &Shape) {
           // normal edge and insert the spill in the new block.
           auto NewBB = SplitEdge(II->getParent(), II->getNormalDest());
           InsertPt = NewBB->getTerminator();
+        } else if (dyn_cast<PHINode>(CurrentValue)) {
+          // Skip the PHINodes and EH pads instructions.
+          InsertPt =
+              &*cast<Instruction>(E.def())->getParent()->getFirstInsertionPt();
         } else {
           // For all other values, the spill is placed immediately after
           // the definition.
@@ -701,13 +705,12 @@ void coro::buildCoroutineFrame(Function &F, Shape &Shape) {
           Spills.emplace_back(&I, U);
 
   // Rewrite materializable instructions to be materialized at the use point.
-  std::sort(Spills.begin(), Spills.end());
   DEBUG(dump("Materializations", Spills));
   rewriteMaterializableInstructions(Builder, Spills);
 
   // Collect the spills for arguments and other not-materializable values.
   Spills.clear();
-  for (Argument &A : F.getArgumentList())
+  for (Argument &A : F.args())
     for (User *U : A.users())
       if (Checker.isDefinitionAcrossSuspend(A, U))
         Spills.emplace_back(&A, U);
@@ -733,7 +736,6 @@ void coro::buildCoroutineFrame(Function &F, Shape &Shape) {
         Spills.emplace_back(&I, U);
       }
   }
-  std::sort(Spills.begin(), Spills.end());
   DEBUG(dump("Spills", Spills));
   moveSpillUsesAfterCoroBegin(F, Spills, Shape.CoroBegin);
   Shape.FrameTy = buildFrameType(F, Shape, Spills);

@@ -138,7 +138,7 @@ let Uses = [RM] in {
     def LXVW4X : XX1Form<31, 780,
                          (outs vsrc:$XT), (ins memrr:$src),
                          "lxvw4x $XT, $src", IIC_LdStLFD,
-                         [(set v4i32:$XT, (int_ppc_vsx_lxvw4x xoaddr:$src))]>;
+                         []>;
   } // mayLoad
 
   // Store indexed instructions
@@ -160,7 +160,7 @@ let Uses = [RM] in {
     def STXVW4X : XX1Form<31, 908,
                          (outs), (ins vsrc:$XT, memrr:$dst),
                          "stxvw4x $XT, $dst", IIC_LdStSTFD,
-                         [(store v4i32:$XT, xoaddr:$dst)]>;
+                         []>;
     }
   } // mayStore
 
@@ -1041,8 +1041,6 @@ let Predicates = [HasVSX, HasOnlySwappingMemOps] in {
   // Stores.
   def : Pat<(int_ppc_vsx_stxvd2x v2f64:$rS, xoaddr:$dst),
             (STXVD2X $rS, xoaddr:$dst)>;
-  def : Pat<(int_ppc_vsx_stxvw4x v4i32:$rS, xoaddr:$dst),
-            (STXVW4X $rS, xoaddr:$dst)>;
   def : Pat<(int_ppc_vsx_stxvd2x_be v2f64:$rS, xoaddr:$dst),
             (STXVD2X $rS, xoaddr:$dst)>;
   def : Pat<(int_ppc_vsx_stxvw4x_be v4i32:$rS, xoaddr:$dst),
@@ -1053,8 +1051,12 @@ let Predicates = [IsBigEndian, HasVSX, HasOnlySwappingMemOps] in {
   def : Pat<(v2f64 (load xoaddr:$src)), (LXVD2X xoaddr:$src)>;
   def : Pat<(v2i64 (load xoaddr:$src)), (LXVD2X xoaddr:$src)>;
   def : Pat<(v4i32 (load xoaddr:$src)), (LXVW4X xoaddr:$src)>;
+  def : Pat<(v4i32 (int_ppc_vsx_lxvw4x xoaddr:$src)), (LXVW4X xoaddr:$src)>;
   def : Pat<(store v2f64:$rS, xoaddr:$dst), (STXVD2X $rS, xoaddr:$dst)>;
   def : Pat<(store v2i64:$rS, xoaddr:$dst), (STXVD2X $rS, xoaddr:$dst)>;
+  def : Pat<(store v4i32:$XT, xoaddr:$dst), (STXVW4X $XT, xoaddr:$dst)>;
+  def : Pat<(int_ppc_vsx_stxvw4x v4i32:$rS, xoaddr:$dst),
+            (STXVW4X $rS, xoaddr:$dst)>;
 }
 
 // Permutes.
@@ -1410,6 +1412,11 @@ let Predicates = [HasDirectMove] in {
                               "mfvsrd $rA, $XT", IIC_VecGeneral,
                               [(set i64:$rA, (PPCmfvsr f64:$XT))]>,
       Requires<[In64BitMode]>;
+  let isCodeGenOnly = 1 in
+  def MFVRD : XX1_RS6_RD5_XO<31, 51, (outs g8rc:$rA), (ins vrrc:$XT),
+                             "mfvsrd $rA, $XT", IIC_VecGeneral,
+                             []>,
+      Requires<[In64BitMode]>;
   def MFVSRWZ : XX1_RS6_RD5_XO<31, 115, (outs gprc:$rA), (ins vsfrc:$XT),
                                "mfvsrwz $rA, $XT", IIC_VecGeneral,
                                [(set i32:$rA, (PPCmfvsr f64:$XT))]>;
@@ -1439,6 +1446,13 @@ let Predicates = [IsISA3_0, HasDirectMove] in {
 
 } // IsISA3_0, HasDirectMove
 } // UseVSXReg = 1
+
+// We want to parse this from asm, but we don't want to emit this as it would
+// be emitted with a VSX reg. So leave Emit = 0 here.
+def : InstAlias<"mfvrd $rA, $XT",
+                (MFVRD g8rc:$rA, vrrc:$XT), 0>;
+def : InstAlias<"mffprd $rA, $src",
+                (MFVSRD g8rc:$rA, f8rc:$src)>;
 
 /*  Direct moves of various widths from GPR's into VSR's. Each move lines
     the value up into element 0 (both BE and LE). Namely, entities smaller than
@@ -1878,8 +1892,8 @@ let Predicates = [IsLittleEndian, HasVSX] in
   def : Pat<(f64 (vector_extract v2f64:$S, i64:$Idx)),
             (f64 VectorExtractions.LE_VARIABLE_DOUBLE)>;
 
-  def : Pat<(v4i32 (int_ppc_vsx_lxvw4x_be xoaddr:$src)), (LXVW4X xoaddr:$src)>;
-  def : Pat<(v2f64 (int_ppc_vsx_lxvd2x_be xoaddr:$src)), (LXVD2X xoaddr:$src)>;
+def : Pat<(v4i32 (int_ppc_vsx_lxvw4x_be xoaddr:$src)), (LXVW4X xoaddr:$src)>;
+def : Pat<(v2f64 (int_ppc_vsx_lxvd2x_be xoaddr:$src)), (LXVD2X xoaddr:$src)>;
 
 let Predicates = [IsLittleEndian, HasDirectMove] in {
   // v16i8 scalar <-> vector conversions (LE)
@@ -2186,7 +2200,7 @@ let AddedComplexity = 400, Predicates = [HasP9Vector] in {
   } // UseVSXReg = 1
 
   // Pattern for matching Vector HP -> Vector SP intrinsic. Defined as a
-  // seperate pattern so that it can convert the input register class from
+  // separate pattern so that it can convert the input register class from
   // VRRC(v8i16) to VSRC.
   def : Pat<(v4f32 (int_ppc_vsx_xvcvhpsp v8i16:$A)),
             (v4f32 (XVCVHPSP (COPY_TO_REGCLASS $A, VSRC)))>;

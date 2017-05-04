@@ -1702,6 +1702,8 @@ int BoUpSLP::getEntryCost(TreeEntry *E) {
   Type *ScalarTy = VL[0]->getType();
   if (StoreInst *SI = dyn_cast<StoreInst>(VL[0]))
     ScalarTy = SI->getValueOperand()->getType();
+  else if (CmpInst *CI = dyn_cast<CmpInst>(VL[0]))
+    ScalarTy = CI->getOperand(0)->getType();
   VectorType *VecTy = VectorType::get(ScalarTy, VL.size());
 
   // If we have computed a smaller type for the expression, update VecTy so
@@ -1762,10 +1764,10 @@ int BoUpSLP::getEntryCost(TreeEntry *E) {
 
       // Calculate the cost of this instruction.
       int ScalarCost = VL.size() * TTI->getCastInstrCost(VL0->getOpcode(),
-                                                         VL0->getType(), SrcTy);
+                                                         VL0->getType(), SrcTy, VL0);
 
       VectorType *SrcVecTy = VectorType::get(SrcTy, VL.size());
-      int VecCost = TTI->getCastInstrCost(VL0->getOpcode(), VecTy, SrcVecTy);
+      int VecCost = TTI->getCastInstrCost(VL0->getOpcode(), VecTy, SrcVecTy, VL0);
       return VecCost - ScalarCost;
     }
     case Instruction::FCmp:
@@ -1774,8 +1776,8 @@ int BoUpSLP::getEntryCost(TreeEntry *E) {
       // Calculate the cost of this instruction.
       VectorType *MaskTy = VectorType::get(Builder.getInt1Ty(), VL.size());
       int ScalarCost = VecTy->getNumElements() *
-          TTI->getCmpSelInstrCost(Opcode, ScalarTy, Builder.getInt1Ty());
-      int VecCost = TTI->getCmpSelInstrCost(Opcode, VecTy, MaskTy);
+          TTI->getCmpSelInstrCost(Opcode, ScalarTy, Builder.getInt1Ty(), VL0);
+      int VecCost = TTI->getCmpSelInstrCost(Opcode, VecTy, MaskTy, VL0);
       return VecCost - ScalarCost;
     }
     case Instruction::Add:
@@ -1858,18 +1860,18 @@ int BoUpSLP::getEntryCost(TreeEntry *E) {
       // Cost of wide load - cost of scalar loads.
       unsigned alignment = dyn_cast<LoadInst>(VL0)->getAlignment();
       int ScalarLdCost = VecTy->getNumElements() *
-            TTI->getMemoryOpCost(Instruction::Load, ScalarTy, alignment, 0);
+          TTI->getMemoryOpCost(Instruction::Load, ScalarTy, alignment, 0, VL0);
       int VecLdCost = TTI->getMemoryOpCost(Instruction::Load,
-                                           VecTy, alignment, 0);
+                                           VecTy, alignment, 0, VL0);
       return VecLdCost - ScalarLdCost;
     }
     case Instruction::Store: {
       // We know that we can merge the stores. Calculate the cost.
       unsigned alignment = dyn_cast<StoreInst>(VL0)->getAlignment();
       int ScalarStCost = VecTy->getNumElements() *
-            TTI->getMemoryOpCost(Instruction::Store, ScalarTy, alignment, 0);
+          TTI->getMemoryOpCost(Instruction::Store, ScalarTy, alignment, 0, VL0);
       int VecStCost = TTI->getMemoryOpCost(Instruction::Store,
-                                           VecTy, alignment, 0);
+                                           VecTy, alignment, 0, VL0);
       return VecStCost - ScalarStCost;
     }
     case Instruction::Call: {
@@ -3897,11 +3899,13 @@ bool SLPVectorizerPass::runImpl(Function &F, ScalarEvolution *SE_,
 }
 
 /// \brief Check that the Values in the slice in VL array are still existent in
-/// the WeakVH array.
+/// the WeakTrackingVH array.
 /// Vectorization of part of the VL array may cause later values in the VL array
-/// to become invalid. We track when this has happened in the WeakVH array.
-static bool hasValueBeenRAUWed(ArrayRef<Value *> VL, ArrayRef<WeakVH> VH,
-                               unsigned SliceBegin, unsigned SliceSize) {
+/// to become invalid. We track when this has happened in the WeakTrackingVH
+/// array.
+static bool hasValueBeenRAUWed(ArrayRef<Value *> VL,
+                               ArrayRef<WeakTrackingVH> VH, unsigned SliceBegin,
+                               unsigned SliceSize) {
   VL = VL.slice(SliceBegin, SliceSize);
   VH = VH.slice(SliceBegin, SliceSize);
   return !std::equal(VL.begin(), VL.end(), VH.begin());
@@ -3919,7 +3923,7 @@ bool SLPVectorizerPass::vectorizeStoreChain(ArrayRef<Value *> Chain, BoUpSLP &R,
     return false;
 
   // Keep track of values that were deleted by vectorizing in the loop below.
-  SmallVector<WeakVH, 8> TrackValues(Chain.begin(), Chain.end());
+  SmallVector<WeakTrackingVH, 8> TrackValues(Chain.begin(), Chain.end());
 
   bool Changed = false;
   // Look for profitable vectorizable trees at all offsets, starting at zero.
@@ -4105,7 +4109,7 @@ bool SLPVectorizerPass::tryToVectorizeList(ArrayRef<Value *> VL, BoUpSLP &R,
   bool Changed = false;
 
   // Keep track of values that were deleted by vectorizing in the loop below.
-  SmallVector<WeakVH, 8> TrackValues(VL.begin(), VL.end());
+  SmallVector<WeakTrackingVH, 8> TrackValues(VL.begin(), VL.end());
 
   unsigned NextInst = 0, MaxInst = VL.size();
   for (unsigned VF = MaxVF; NextInst + 1 < MaxInst && VF >= MinVF;
@@ -4144,8 +4148,8 @@ bool SLPVectorizerPass::tryToVectorizeList(ArrayRef<Value *> VL, BoUpSLP &R,
       if (AllowReorder && R.shouldReorder()) {
         // Conceptually, there is nothing actually preventing us from trying to
         // reorder a larger list. In fact, we do exactly this when vectorizing
-        // reductions. However, at this point, we only expect to get here from
-        // tryToVectorizePair().
+        // reductions. However, at this point, we only expect to get here when
+        // there are exactly two operations.
         assert(Ops.size() == 2);
         assert(BuildVectorSlice.empty());
         Value *ReorderedOps[] = {Ops[1], Ops[0]};
@@ -4732,7 +4736,7 @@ static Value *getReductionValue(const DominatorTree *DT, PHINode *P,
 
 namespace {
 /// Tracks instructons and its children.
-class WeakVHWithLevel final : public CallbackVH {
+class WeakTrackingVHWithLevel final : public CallbackVH {
   /// Operand index of the instruction currently beeing analized.
   unsigned Level = 0;
   /// Is this the instruction that should be vectorized, or are we now
@@ -4741,8 +4745,8 @@ class WeakVHWithLevel final : public CallbackVH {
   bool IsInitial = true;
 
 public:
-  explicit WeakVHWithLevel() = default;
-  WeakVHWithLevel(Value *V) : CallbackVH(V){};
+  explicit WeakTrackingVHWithLevel() = default;
+  WeakTrackingVHWithLevel(Value *V) : CallbackVH(V){};
   /// Restart children analysis each time it is repaced by the new instruction.
   void allUsesReplacedWith(Value *New) override {
     setValPtr(New);
@@ -4769,7 +4773,7 @@ public:
            cast<Instruction>(getValPtr())->getNumOperands() > Level);
     return cast<Instruction>(getValPtr())->getOperand(Level++);
   }
-  virtual ~WeakVHWithLevel() = default;
+  virtual ~WeakTrackingVHWithLevel() = default;
 };
 } // namespace
 
@@ -4791,7 +4795,7 @@ static bool canBeVectorized(
 
   if (Root->getParent() != BB)
     return false;
-  SmallVector<WeakVHWithLevel, 8> Stack(1, Root);
+  SmallVector<WeakTrackingVHWithLevel, 8> Stack(1, Root);
   SmallSet<Value *, 8> VisitedInstrs;
   bool Res = false;
   while (!Stack.empty()) {
@@ -4902,7 +4906,13 @@ bool SLPVectorizerPass::vectorizeChainsInBlock(BasicBlock *BB, BoUpSLP &R) {
       // Try to vectorize them.
       unsigned NumElts = (SameTypeIt - IncIt);
       DEBUG(errs() << "SLP: Trying to vectorize starting at PHIs (" << NumElts << ")\n");
-      if (NumElts > 1 && tryToVectorizeList(makeArrayRef(IncIt, NumElts), R)) {
+      // The order in which the phi nodes appear in the program does not matter.
+      // So allow tryToVectorizeList to reorder them if it is beneficial. This
+      // is done when there are exactly two elements since tryToVectorizeList
+      // asserts that there are only two values when AllowReorder is true.
+      bool AllowReorder = NumElts == 2;
+      if (NumElts > 1 && tryToVectorizeList(makeArrayRef(IncIt, NumElts), R,
+                                            None, AllowReorder)) {
         // Success start over because instructions might have been changed.
         HaveVectorizedPhiNodes = true;
         Changed = true;
@@ -5061,7 +5071,8 @@ bool SLPVectorizerPass::vectorizeGEPIndices(BasicBlock *BB, BoUpSLP &R) {
       SetVector<Value *> Candidates(GEPList.begin(), GEPList.end());
 
       // Some of the candidates may have already been vectorized after we
-      // initially collected them. If so, the WeakVHs will have nullified the
+      // initially collected them. If so, the WeakTrackingVHs will have
+      // nullified the
       // values, so remove them from the set of candidates.
       Candidates.remove(nullptr);
 

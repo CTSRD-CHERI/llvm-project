@@ -76,9 +76,11 @@ set(Tests
   AbsNegAndConstantTest
   AbsNegAndConstant64Test
   AccumulateAllocationsTest
+  BadStrcmpTest
   BogusInitializeTest
   BufferOverflowOnInput
   CallerCalleeTest
+  CleanseTest
   CounterTest
   CustomCrossOverAndMutateTest
   CustomCrossOverTest
@@ -123,11 +125,13 @@ set(Tests
   SwapCmpTest
   SwitchTest
   Switch2Test
+  TableLookupTest
   ThreadedLeakTest
   ThreadedTest
   TimeoutTest
   TimeoutEmptyTest
   TraceMallocTest
+  TwoDifferentBugsTest
   )
 
 if(APPLE OR MSVC)
@@ -199,6 +203,7 @@ include_directories(..)
 
 # add_subdirectory(uninstrumented)
 add_subdirectory(no-coverage)
+add_subdirectory(trace-pc)
 add_subdirectory(ubsan)
 
 add_library(LLVMFuzzer-DSO1 SHARED DSO1.cpp)

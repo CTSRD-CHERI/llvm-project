@@ -267,7 +267,8 @@ bool ExpandPseudo::expandCopyACC(MachineBasicBlock &MBB, Iter I,
   //  copy dst_hi, $vr1
 
   unsigned Dst = I->getOperand(0).getReg(), Src = I->getOperand(1).getReg();
-  unsigned VRegSize = RegInfo.getMinimalPhysRegClass(Dst)->getSize() / 2;
+  const TargetRegisterClass *DstRC = RegInfo.getMinimalPhysRegClass(Dst);
+  unsigned VRegSize = RegInfo.getRegSizeInBits(*DstRC) / 16;
   const TargetRegisterClass *RC = RegInfo.intRegClass(VRegSize);
   unsigned VR0 = MRI.createVirtualRegister(RC);
   unsigned VR1 = MRI.createVirtualRegister(RC);
@@ -912,6 +913,7 @@ void MipsSEFrameLowering::determineCalleeSaves(MachineFunction &MF,
                                                BitVector &SavedRegs,
                                                RegScavenger *RS) const {
   TargetFrameLowering::determineCalleeSaves(MF, SavedRegs, RS);
+  const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
   MipsFunctionInfo *MipsFI = MF.getInfo<MipsFunctionInfo>();
   MipsABIInfo ABI = STI.getABI();
   unsigned FP = ABI.GetFramePtr();
@@ -937,10 +939,11 @@ void MipsSEFrameLowering::determineCalleeSaves(MachineFunction &MF,
   if (ExpandPseudo(MF).expand()) {
     // The spill slot should be half the size of the accumulator. If target is
     // mips64, it should be 64-bit, otherwise it should be 32-bt.
-    const TargetRegisterClass *RC = STI.hasMips64() ?
-      &Mips::GPR64RegClass : &Mips::GPR32RegClass;
-    int FI = MF.getFrameInfo().CreateStackObject(RC->getSize(),
-                                                  RC->getAlignment(), false);
+    const TargetRegisterClass &RC = STI.hasMips64() ?
+      Mips::GPR64RegClass : Mips::GPR32RegClass;
+    int FI = MF.getFrameInfo().CreateStackObject(TRI->getSpillSize(RC),
+                                                 TRI->getSpillAlignment(RC),
+                                                 false);
     RS->addScavengingFrameIndex(FI);
   }
 
@@ -963,10 +966,11 @@ void MipsSEFrameLowering::determineCalleeSaves(MachineFunction &MF,
   } else if (isInt<16>(MaxSPOffset))
     return;
 
-  const TargetRegisterClass *RC =
-      ABI.ArePtrs64bit() ? &Mips::GPR64RegClass : &Mips::GPR32RegClass;
-  int FI = MF.getFrameInfo().CreateStackObject(RC->getSize(),
-                                                RC->getAlignment(), false);
+  const TargetRegisterClass &RC =
+      ABI.ArePtrs64bit() ? Mips::GPR64RegClass : Mips::GPR32RegClass;
+  int FI = MF.getFrameInfo().CreateStackObject(TRI->getSpillSize(RC),
+                                               TRI->getSpillAlignment(RC),
+                                               false);
   RS->addScavengingFrameIndex(FI);
 }
 

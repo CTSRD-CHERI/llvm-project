@@ -833,7 +833,6 @@ def HasXSAVEC    : Predicate<"Subtarget->hasXSAVEC()">;
 def HasXSAVES    : Predicate<"Subtarget->hasXSAVES()">;
 def HasPCLMUL    : Predicate<"Subtarget->hasPCLMUL()">;
 def HasFMA       : Predicate<"Subtarget->hasFMA()">;
-def UseFMAOnAVX  : Predicate<"Subtarget->hasFMA() && !Subtarget->hasAVX512()">;
 def HasFMA4      : Predicate<"Subtarget->hasFMA4()">;
 def HasXOP       : Predicate<"Subtarget->hasXOP()">;
 def HasTBM       : Predicate<"Subtarget->hasTBM()">;
@@ -878,7 +877,9 @@ def In32BitMode  : Predicate<"Subtarget->is32Bit()">,
 def IsWin64      : Predicate<"Subtarget->isTargetWin64()">;
 def NotWin64     : Predicate<"!Subtarget->isTargetWin64()">;
 def NotWin64WithoutFP : Predicate<"!Subtarget->isTargetWin64() ||"
-                                  "Subtarget->getFrameLowering()->hasFP(*MF)">;
+                                  "Subtarget->getFrameLowering()->hasFP(*MF)"> {
+  let RecomputePerFunction = 1;
+}
 def IsPS4        : Predicate<"Subtarget->isTargetPS4()">;
 def NotPS4       : Predicate<"!Subtarget->isTargetPS4()">;
 def IsNaCl       : Predicate<"Subtarget->isTargetNaCl()">;
@@ -888,9 +889,9 @@ def KernelCode   : Predicate<"TM.getCodeModel() == CodeModel::Kernel">;
 def NearData     : Predicate<"TM.getCodeModel() == CodeModel::Small ||"
                              "TM.getCodeModel() == CodeModel::Kernel">;
 def IsNotPIC     : Predicate<"!TM.isPositionIndependent()">;
-def OptForSize   : Predicate<"OptForSize">;
-def OptForMinSize : Predicate<"OptForMinSize">;
-def OptForSpeed  : Predicate<"!OptForSize">;
+def OptForSize   : Predicate<"Subtarget->getOptForSize()">;
+def OptForMinSize : Predicate<"Subtarget->getOptForMinSize()">;
+def OptForSpeed  : Predicate<"!Subtarget->getOptForSize()">;
 def FastBTMem    : Predicate<"!Subtarget->isBTMemSlow()">;
 def CallImmAddr  : Predicate<"Subtarget->isLegalToCallImmediateAddr()">;
 def FavorMemIndirectCall  : Predicate<"!Subtarget->callRegIndirect()">;
@@ -898,6 +899,7 @@ def NotSlowIncDec : Predicate<"!Subtarget->slowIncDec()">;
 def HasFastMem32 : Predicate<"!Subtarget->isUnalignedMem32Slow()">;
 def HasFastLZCNT : Predicate<"Subtarget->hasFastLZCNT()">;
 def HasFastSHLDRotate : Predicate<"Subtarget->hasFastSHLDRotate()">;
+def HasERMSB : Predicate<"Subtarget->hasERMSB()">;
 def HasMFence    : Predicate<"Subtarget->hasMFence()">;
 
 //===----------------------------------------------------------------------===//
@@ -1125,13 +1127,15 @@ def POP32r  : I<0x58, AddRegFrm, (outs GR32:$reg), (ins), "pop{l}\t$reg", [],
                 IIC_POP_REG>, OpSize32, Requires<[Not64BitMode]>;
 def POP16rmr: I<0x8F, MRM0r, (outs GR16:$reg), (ins), "pop{w}\t$reg", [],
                 IIC_POP_REG>, OpSize16;
-def POP16rmm: I<0x8F, MRM0m, (outs), (ins i16mem:$dst), "pop{w}\t$dst", [],
-                IIC_POP_MEM>, OpSize16;
 def POP32rmr: I<0x8F, MRM0r, (outs GR32:$reg), (ins), "pop{l}\t$reg", [],
                 IIC_POP_REG>, OpSize32, Requires<[Not64BitMode]>;
+} // mayLoad, SchedRW
+let mayStore = 1, mayLoad = 1, SchedRW = [WriteRMW] in {
+def POP16rmm: I<0x8F, MRM0m, (outs), (ins i16mem:$dst), "pop{w}\t$dst", [],
+                IIC_POP_MEM>, OpSize16;
 def POP32rmm: I<0x8F, MRM0m, (outs), (ins i32mem:$dst), "pop{l}\t$dst", [],
                 IIC_POP_MEM>, OpSize32, Requires<[Not64BitMode]>;
-} // mayLoad, SchedRW
+} // mayStore, mayLoad, WriteRMW
 
 let mayStore = 1, SchedRW = [WriteStore] in {
 def PUSH16r  : I<0x50, AddRegFrm, (outs), (ins GR16:$reg), "push{w}\t$reg",[],
@@ -1213,9 +1217,10 @@ def POP64r   : I<0x58, AddRegFrm, (outs GR64:$reg), (ins), "pop{q}\t$reg", [],
                  IIC_POP_REG>, OpSize32, Requires<[In64BitMode]>;
 def POP64rmr: I<0x8F, MRM0r, (outs GR64:$reg), (ins), "pop{q}\t$reg", [],
                 IIC_POP_REG>, OpSize32, Requires<[In64BitMode]>;
+} // mayLoad, SchedRW
+let mayLoad = 1, mayStore = 1, SchedRW = [WriteRMW] in
 def POP64rmm: I<0x8F, MRM0m, (outs), (ins i64mem:$dst), "pop{q}\t$dst", [],
                 IIC_POP_MEM>, OpSize32, Requires<[In64BitMode]>;
-} // mayLoad, SchedRW
 let mayStore = 1, SchedRW = [WriteStore] in {
 def PUSH64r  : I<0x50, AddRegFrm, (outs), (ins GR64:$reg), "push{q}\t$reg", [],
                  IIC_PUSH_REG>, OpSize32, Requires<[In64BitMode]>;
@@ -2103,6 +2108,7 @@ def BOUNDS32rm : I<0x62, MRMSrcMem, (outs GR32:$dst), (ins i32mem:$src),
 def ARPL16rr : I<0x63, MRMDestReg, (outs GR16:$dst), (ins GR16:$src),
                  "arpl\t{$src, $dst|$dst, $src}", [], IIC_ARPL_REG>,
                  Requires<[Not64BitMode]>;
+let mayStore = 1 in
 def ARPL16mr : I<0x63, MRMDestMem, (outs), (ins i16mem:$dst, GR16:$src),
                  "arpl\t{$src, $dst|$dst, $src}", [], IIC_ARPL_MEM>,
                  Requires<[Not64BitMode]>;

@@ -62,6 +62,18 @@ public:
   /// \brief The location of the module definition.
   SourceLocation DefinitionLoc;
 
+  enum ModuleKind {
+    /// \brief This is a module that was defined by a module map and built out
+    /// of header files.
+    ModuleMapModule,
+
+    /// \brief This is a C++ Modules TS module interface unit.
+    ModuleInterfaceUnit
+  };
+
+  /// \brief The kind of this module.
+  ModuleKind Kind = ModuleMapModule;
+
   /// \brief The parent of this module. This will be NULL for the top-level
   /// module.
   Module *Parent;
@@ -214,8 +226,6 @@ public:
   /// \brief Whether files in this module can only include non-modular headers
   /// and headers from used modules.
   unsigned NoUndeclaredIncludes : 1;
-
-  unsigned WithCodegen : 1;
 
   /// \brief Describes the visibility of the various names within a
   /// particular module.

@@ -30,7 +30,6 @@ using namespace llvm;
 
 // Explicit instantiations of SymbolTableListTraits since some of the methods
 // are not in the public header file...
-template class llvm::SymbolTableListTraits<Argument>;
 template class llvm::SymbolTableListTraits<BasicBlock>;
 
 //===----------------------------------------------------------------------===//
@@ -39,12 +38,8 @@ template class llvm::SymbolTableListTraits<BasicBlock>;
 
 void Argument::anchor() { }
 
-Argument::Argument(Type *Ty, const Twine &Name, Function *Par)
-  : Value(Ty, Value::ArgumentVal) {
-  Parent = nullptr;
-
-  if (Par)
-    Par->getArgumentList().push_back(this);
+Argument::Argument(Type *Ty, const Twine &Name, Function *Par, unsigned ArgNo)
+    : Value(Ty, Value::ArgumentVal), Parent(Par), ArgNo(ArgNo) {
   setName(Name);
 }
 
@@ -52,22 +47,9 @@ void Argument::setParent(Function *parent) {
   Parent = parent;
 }
 
-unsigned Argument::getArgNo() const {
-  const Function *F = getParent();
-  assert(F && "Argument is not in a function");
-
-  Function::const_arg_iterator AI = F->arg_begin();
-  unsigned ArgIdx = 0;
-  for (; &*AI != this; ++AI)
-    ++ArgIdx;
-
-  return ArgIdx;
-}
-
 bool Argument::hasNonNullAttr() const {
   if (!getType()->isPointerTy()) return false;
-  if (getParent()->getAttributes().
-        hasAttribute(getArgNo()+1, Attribute::NonNull))
+  if (getParent()->hasParamAttribute(getArgNo(), Attribute::NonNull))
     return true;
   else if (getDereferenceableBytes() > 0 &&
            getType()->getPointerAddressSpace() == 0)
@@ -81,13 +63,11 @@ bool Argument::hasByValAttr() const {
 }
 
 bool Argument::hasSwiftSelfAttr() const {
-  return getParent()->getAttributes().
-    hasAttribute(getArgNo()+1, Attribute::SwiftSelf);
+  return getParent()->hasParamAttribute(getArgNo(), Attribute::SwiftSelf);
 }
 
 bool Argument::hasSwiftErrorAttr() const {
-  return getParent()->getAttributes().
-    hasAttribute(getArgNo()+1, Attribute::SwiftError);
+  return getParent()->hasParamAttribute(getArgNo(), Attribute::SwiftError);
 }
 
 bool Argument::hasInAllocaAttr() const {
@@ -97,15 +77,14 @@ bool Argument::hasInAllocaAttr() const {
 
 bool Argument::hasByValOrInAllocaAttr() const {
   if (!getType()->isPointerTy()) return false;
-  AttributeSet Attrs = getParent()->getAttributes();
-  return Attrs.hasAttribute(getArgNo() + 1, Attribute::ByVal) ||
-         Attrs.hasAttribute(getArgNo() + 1, Attribute::InAlloca);
+  AttributeList Attrs = getParent()->getAttributes();
+  return Attrs.hasParamAttribute(getArgNo(), Attribute::ByVal) ||
+         Attrs.hasParamAttribute(getArgNo(), Attribute::InAlloca);
 }
 
 unsigned Argument::getParamAlignment() const {
   assert(getType()->isPointerTy() && "Only pointers have alignments");
-  return getParent()->getParamAlignment(getArgNo()+1);
-
+  return getParent()->getParamAlignment(getArgNo());
 }
 
 uint64_t Argument::getDereferenceableBytes() const {
@@ -153,62 +132,39 @@ bool Argument::hasSExtAttr() const {
 }
 
 bool Argument::onlyReadsMemory() const {
-  return getParent()->getAttributes().
-      hasAttribute(getArgNo()+1, Attribute::ReadOnly) ||
-      getParent()->getAttributes().
-      hasAttribute(getArgNo()+1, Attribute::ReadNone);
+  AttributeList Attrs = getParent()->getAttributes();
+  return Attrs.hasParamAttribute(getArgNo(), Attribute::ReadOnly) ||
+         Attrs.hasParamAttribute(getArgNo(), Attribute::ReadNone);
 }
 
-void Argument::addAttr(AttributeSet AS) {
-  assert(AS.getNumSlots() <= 1 &&
-         "Trying to add more than one attribute set to an argument!");
-  AttrBuilder B(AS, AS.getSlotIndex(0));
-  getParent()->addAttributes(getArgNo() + 1,
-                             AttributeSet::get(Parent->getContext(),
-                                               getArgNo() + 1, B));
+void Argument::addAttrs(AttrBuilder &B) {
+  AttributeList AL = getParent()->getAttributes();
+  AL = AL.addAttributes(Parent->getContext(), getArgNo() + 1, B);
+  getParent()->setAttributes(AL);
 }
 
-void Argument::removeAttr(AttributeSet AS) {
-  assert(AS.getNumSlots() <= 1 &&
-         "Trying to remove more than one attribute set from an argument!");
-  AttrBuilder B(AS, AS.getSlotIndex(0));
-  getParent()->removeAttributes(getArgNo() + 1,
-                                AttributeSet::get(Parent->getContext(),
-                                                  getArgNo() + 1, B));
+void Argument::addAttr(Attribute::AttrKind Kind) {
+  getParent()->addAttribute(getArgNo() + 1, Kind);
+}
+
+void Argument::addAttr(Attribute Attr) {
+  getParent()->addAttribute(getArgNo() + 1, Attr);
+}
+
+void Argument::removeAttr(Attribute::AttrKind Kind) {
+  getParent()->removeAttribute(getArgNo() + 1, Kind);
 }
 
 bool Argument::hasAttribute(Attribute::AttrKind Kind) const {
-  return getParent()->hasAttribute(getArgNo() + 1, Kind);
+  return getParent()->hasParamAttribute(getArgNo(), Kind);
 }
 
 //===----------------------------------------------------------------------===//
 // Helper Methods in Function
 //===----------------------------------------------------------------------===//
 
-bool Function::isMaterializable() const {
-  return getGlobalObjectSubClassData() & (1 << IsMaterializableBit);
-}
-
-void Function::setIsMaterializable(bool V) {
-  unsigned Mask = 1 << IsMaterializableBit;
-  setGlobalObjectSubClassData((~Mask & getGlobalObjectSubClassData()) |
-                              (V ? Mask : 0u));
-}
-
 LLVMContext &Function::getContext() const {
   return getType()->getContext();
-}
-
-FunctionType *Function::getFunctionType() const {
-  return cast<FunctionType>(getValueType());
-}
-
-bool Function::isVarArg() const {
-  return getFunctionType()->isVarArg();
-}
-
-Type *Function::getReturnType() const {
-  return getFunctionType()->getReturnType();
 }
 
 void Function::removeFromParent() {
@@ -226,7 +182,8 @@ void Function::eraseFromParent() {
 Function::Function(FunctionType *Ty, LinkageTypes Linkage, const Twine &name,
                    Module *ParentModule)
     : GlobalObject(Ty, Value::FunctionVal,
-                   OperandTraits<Function>::op_begin(this), 0, Linkage, name) {
+                   OperandTraits<Function>::op_begin(this), 0, Linkage, name),
+      Arguments(nullptr), NumArgs(Ty->getNumParams()) {
   assert(FunctionType::isValidReturnType(getReturnType()) &&
          "invalid return type");
   setGlobalObjectSubClassData(0);
@@ -254,7 +211,8 @@ Function::~Function() {
   dropAllReferences();    // After this it is safe to delete instructions.
 
   // Delete all of the method arguments and unlink from symbol table...
-  ArgumentList.clear();
+  if (Arguments)
+    clearArguments();
 
   // Remove the function from the on-the-side GC table.
   clearGC();
@@ -262,16 +220,33 @@ Function::~Function() {
 
 void Function::BuildLazyArguments() const {
   // Create the arguments vector, all arguments start out unnamed.
-  FunctionType *FT = getFunctionType();
-  for (unsigned i = 0, e = FT->getNumParams(); i != e; ++i) {
-    assert(!FT->getParamType(i)->isVoidTy() &&
-           "Cannot have void typed arguments!");
-    ArgumentList.push_back(new Argument(FT->getParamType(i)));
+  auto *FT = getFunctionType();
+  if (NumArgs > 0) {
+    Arguments = std::allocator<Argument>().allocate(NumArgs);
+    for (unsigned i = 0, e = NumArgs; i != e; ++i) {
+      Type *ArgTy = FT->getParamType(i);
+      assert(!ArgTy->isVoidTy() && "Cannot have void typed arguments!");
+      new (Arguments + i) Argument(ArgTy, "", const_cast<Function *>(this), i);
+    }
   }
 
   // Clear the lazy arguments bit.
   unsigned SDC = getSubclassDataFromValue();
   const_cast<Function*>(this)->setValueSubclassData(SDC &= ~(1<<0));
+  assert(!hasLazyArguments());
+}
+
+static MutableArrayRef<Argument> makeArgArray(Argument *Args, size_t Count) {
+  return MutableArrayRef<Argument>(Args, Count);
+}
+
+void Function::clearArguments() {
+  for (Argument &A : makeArgArray(Arguments, NumArgs)) {
+    A.setName("");
+    A.~Argument();
+  }
+  std::allocator<Argument>().deallocate(Arguments, NumArgs);
+  Arguments = nullptr;
 }
 
 void Function::stealArgumentListFrom(Function &Src) {
@@ -279,10 +254,10 @@ void Function::stealArgumentListFrom(Function &Src) {
 
   // Drop the current arguments, if any, and set the lazy argument bit.
   if (!hasLazyArguments()) {
-    assert(llvm::all_of(ArgumentList,
+    assert(llvm::all_of(makeArgArray(Arguments, NumArgs),
                         [](const Argument &A) { return A.use_empty(); }) &&
            "Expected arguments to be unused in declaration");
-    ArgumentList.clear();
+    clearArguments();
     setValueSubclassData(getSubclassDataFromValue() | (1 << 0));
   }
 
@@ -291,16 +266,24 @@ void Function::stealArgumentListFrom(Function &Src) {
     return;
 
   // Steal arguments from Src, and fix the lazy argument bits.
-  ArgumentList.splice(ArgumentList.end(), Src.ArgumentList);
-  setValueSubclassData(getSubclassDataFromValue() & ~(1 << 0));
-  Src.setValueSubclassData(Src.getSubclassDataFromValue() | (1 << 0));
-}
+  assert(arg_size() == Src.arg_size());
+  Arguments = Src.Arguments;
+  Src.Arguments = nullptr;
+  for (Argument &A : makeArgArray(Arguments, NumArgs)) {
+    // FIXME: This does the work of transferNodesFromList inefficiently.
+    SmallString<128> Name;
+    if (A.hasName())
+      Name = A.getName();
+    if (!Name.empty())
+      A.setName("");
+    A.setParent(this);
+    if (!Name.empty())
+      A.setName(Name);
+  }
 
-size_t Function::arg_size() const {
-  return getFunctionType()->getNumParams();
-}
-bool Function::arg_empty() const {
-  return getFunctionType()->getNumParams() == 0;
+  setValueSubclassData(getSubclassDataFromValue() & ~(1 << 0));
+  assert(!hasLazyArguments());
+  Src.setValueSubclassData(Src.getSubclassDataFromValue() | (1 << 0));
 }
 
 // dropAllReferences() - This function causes all the subinstructions to "let
@@ -334,49 +317,49 @@ void Function::dropAllReferences() {
 }
 
 void Function::addAttribute(unsigned i, Attribute::AttrKind Kind) {
-  AttributeSet PAL = getAttributes();
+  AttributeList PAL = getAttributes();
   PAL = PAL.addAttribute(getContext(), i, Kind);
   setAttributes(PAL);
 }
 
 void Function::addAttribute(unsigned i, Attribute Attr) {
-  AttributeSet PAL = getAttributes();
+  AttributeList PAL = getAttributes();
   PAL = PAL.addAttribute(getContext(), i, Attr);
   setAttributes(PAL);
 }
 
-void Function::addAttributes(unsigned i, AttributeSet Attrs) {
-  AttributeSet PAL = getAttributes();
+void Function::addAttributes(unsigned i, AttributeList Attrs) {
+  AttributeList PAL = getAttributes();
   PAL = PAL.addAttributes(getContext(), i, Attrs);
   setAttributes(PAL);
 }
 
 void Function::removeAttribute(unsigned i, Attribute::AttrKind Kind) {
-  AttributeSet PAL = getAttributes();
+  AttributeList PAL = getAttributes();
   PAL = PAL.removeAttribute(getContext(), i, Kind);
   setAttributes(PAL);
 }
 
 void Function::removeAttribute(unsigned i, StringRef Kind) {
-  AttributeSet PAL = getAttributes();
+  AttributeList PAL = getAttributes();
   PAL = PAL.removeAttribute(getContext(), i, Kind);
   setAttributes(PAL);
 }
 
-void Function::removeAttributes(unsigned i, AttributeSet Attrs) {
-  AttributeSet PAL = getAttributes();
+void Function::removeAttributes(unsigned i, AttributeList Attrs) {
+  AttributeList PAL = getAttributes();
   PAL = PAL.removeAttributes(getContext(), i, Attrs);
   setAttributes(PAL);
 }
 
 void Function::addDereferenceableAttr(unsigned i, uint64_t Bytes) {
-  AttributeSet PAL = getAttributes();
+  AttributeList PAL = getAttributes();
   PAL = PAL.addDereferenceableAttr(getContext(), i, Bytes);
   setAttributes(PAL);
 }
 
 void Function::addDereferenceableOrNullAttr(unsigned i, uint64_t Bytes) {
-  AttributeSet PAL = getAttributes();
+  AttributeList PAL = getAttributes();
   PAL = PAL.addDereferenceableOrNullAttr(getContext(), i, Bytes);
   setAttributes(PAL);
 }

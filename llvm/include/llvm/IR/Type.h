@@ -23,6 +23,12 @@
 #include "llvm/Support/DataTypes.h"
 #include "llvm/Support/ErrorHandling.h"
 
+#ifndef LLVM_NO_DEFAULT_ADDRESS_SPACE
+#define LLVM_DEFAULT_AS_PARAM(name) unsigned name = 0
+#else
+#define LLVM_DEFAULT_AS_PARAM(name) unsigned name
+#endif
+
 namespace llvm {
 
 class PointerType;
@@ -290,7 +296,11 @@ public:
 
   /// If this is a vector type, return the element type, otherwise return
   /// 'this'.
-  Type *getScalarType() const LLVM_READONLY;
+  Type *getScalarType() const {
+    if (isVectorTy())
+      return getVectorElementType();
+    return const_cast<Type*>(this);
+  }
 
   //===--------------------------------------------------------------------===//
   // Type Iteration support.
@@ -397,19 +407,19 @@ public:
   // Convenience methods for getting pointer types with one of the above builtin
   // types as pointee.
   //
-  static PointerType *getHalfPtrTy(LLVMContext &C, unsigned AS = 0);
-  static PointerType *getFloatPtrTy(LLVMContext &C, unsigned AS = 0);
-  static PointerType *getDoublePtrTy(LLVMContext &C, unsigned AS = 0);
-  static PointerType *getX86_FP80PtrTy(LLVMContext &C, unsigned AS = 0);
-  static PointerType *getFP128PtrTy(LLVMContext &C, unsigned AS = 0);
-  static PointerType *getPPC_FP128PtrTy(LLVMContext &C, unsigned AS = 0);
-  static PointerType *getX86_MMXPtrTy(LLVMContext &C, unsigned AS = 0);
-  static PointerType *getIntNPtrTy(LLVMContext &C, unsigned N, unsigned AS = 0);
-  static PointerType *getInt1PtrTy(LLVMContext &C, unsigned AS = 0);
-  static PointerType *getInt8PtrTy(LLVMContext &C, unsigned AS = 0);
-  static PointerType *getInt16PtrTy(LLVMContext &C, unsigned AS = 0);
-  static PointerType *getInt32PtrTy(LLVMContext &C, unsigned AS = 0);
-  static PointerType *getInt64PtrTy(LLVMContext &C, unsigned AS = 0);
+  static PointerType *getHalfPtrTy(LLVMContext &C, LLVM_DEFAULT_AS_PARAM(AS));
+  static PointerType *getFloatPtrTy(LLVMContext &C, LLVM_DEFAULT_AS_PARAM(AS));
+  static PointerType *getDoublePtrTy(LLVMContext &C, LLVM_DEFAULT_AS_PARAM(AS));
+  static PointerType *getX86_FP80PtrTy(LLVMContext &C, LLVM_DEFAULT_AS_PARAM(AS));
+  static PointerType *getFP128PtrTy(LLVMContext &C, LLVM_DEFAULT_AS_PARAM(AS));
+  static PointerType *getPPC_FP128PtrTy(LLVMContext &C, LLVM_DEFAULT_AS_PARAM(AS));
+  static PointerType *getX86_MMXPtrTy(LLVMContext &C, LLVM_DEFAULT_AS_PARAM(AS));
+  static PointerType *getIntNPtrTy(LLVMContext &C, unsigned N, LLVM_DEFAULT_AS_PARAM(AS));
+  static PointerType *getInt1PtrTy(LLVMContext &C, LLVM_DEFAULT_AS_PARAM(AS));
+  static PointerType *getInt8PtrTy(LLVMContext &C, LLVM_DEFAULT_AS_PARAM(AS));
+  static PointerType *getInt16PtrTy(LLVMContext &C, LLVM_DEFAULT_AS_PARAM(AS));
+  static PointerType *getInt32PtrTy(LLVMContext &C, LLVM_DEFAULT_AS_PARAM(AS));
+  static PointerType *getInt64PtrTy(LLVMContext &C, LLVM_DEFAULT_AS_PARAM(AS));
 
   /// Return a pointer to the current type. This is equivalent to
   /// PointerType::get(Foo, AddrSpace).

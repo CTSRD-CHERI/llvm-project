@@ -232,6 +232,9 @@ protected:
   /// True if SHLD based rotate is fast.
   bool HasFastSHLDRotate;
 
+  /// True if the processor has enhanced REP MOVSB/STOSB.
+  bool HasERMSB;
+
   /// True if the short functions should be padded to prevent
   /// a stall when returning too early.
   bool PadShortFunctions;
@@ -325,12 +328,16 @@ private:
   X86TargetLowering TLInfo;
   X86FrameLowering FrameLowering;
 
+  bool OptForSize;
+  bool OptForMinSize;
+
 public:
   /// This constructor initializes the data members to match that
   /// of the specified triple.
   ///
   X86Subtarget(const Triple &TT, StringRef CPU, StringRef FS,
-               const X86TargetMachine &TM, unsigned StackAlignOverride);
+               const X86TargetMachine &TM, unsigned StackAlignOverride,
+               bool OptForSize, bool OptForMinSize);
 
   /// This object will take onwership of \p GISelAccessor.
   void setGISelAccessor(GISelAccessor &GISel) { this->GISel.reset(&GISel); }
@@ -435,9 +442,9 @@ public:
   bool hasPCLMUL() const { return HasPCLMUL; }
   // Prefer FMA4 to FMA - its better for commutation/memory folding and
   // has equal or better performance on all supported targets.
-  bool hasFMA() const { return HasFMA && !HasFMA4; }
+  bool hasFMA() const { return (HasFMA || hasAVX512()) && !HasFMA4; }
   bool hasFMA4() const { return HasFMA4; }
-  bool hasAnyFMA() const { return hasFMA() || hasFMA4() || hasAVX512(); }
+  bool hasAnyFMA() const { return hasFMA() || hasFMA4(); }
   bool hasXOP() const { return HasXOP; }
   bool hasTBM() const { return HasTBM; }
   bool hasMOVBE() const { return HasMOVBE; }
@@ -472,6 +479,7 @@ public:
   bool hasFastVectorFSQRT() const { return HasFastVectorFSQRT; }
   bool hasFastLZCNT() const { return HasFastLZCNT; }
   bool hasFastSHLDRotate() const { return HasFastSHLDRotate; }
+  bool hasERMSB() const { return HasERMSB; }
   bool hasSlowDivide32() const { return HasSlowDivide32; }
   bool hasSlowDivide64() const { return HasSlowDivide64; }
   bool padShortFunctions() const { return PadShortFunctions; }
@@ -494,6 +502,9 @@ public:
   bool isAtom() const { return X86ProcFamily == IntelAtom; }
   bool isSLM() const { return X86ProcFamily == IntelSLM; }
   bool useSoftFloat() const { return UseSoftFloat; }
+
+  bool getOptForSize() const { return OptForSize; }
+  bool getOptForMinSize() const { return OptForMinSize; }
 
   /// Use mfence if we have SSE2 or we're on x86-64 (even if we asked for
   /// no-sse2). There isn't any reason to disable it if the target processor
@@ -623,6 +634,9 @@ public:
 
   /// Enable the MachineScheduler pass for all X86 subtargets.
   bool enableMachineScheduler() const override { return true; }
+
+  // TODO: Update the regression tests and return true.
+  bool supportPrintSchedInfo() const override { return false; }
 
   bool enableEarlyIfConversion() const override;
 

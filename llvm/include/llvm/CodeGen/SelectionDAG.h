@@ -33,9 +33,11 @@
 
 namespace llvm {
 
+struct KnownBits;
 class MachineConstantPoolValue;
 class MachineFunction;
 class MDNode;
+class OptimizationRemarkEmitter;
 class SDDbgValue;
 class TargetLowering;
 class SelectionDAGTargetInfo;
@@ -170,6 +172,10 @@ class SelectionDAG {
   MachineFunction *MF;
   LLVMContext *Context;
   CodeGenOpt::Level OptLevel;
+
+  /// The function-level optimization remark emitter.  Used to emit remarks
+  /// whenever manipulating the DAG.
+  OptimizationRemarkEmitter *ORE;
 
   /// The starting token.
   SDNode EntryNode;
@@ -318,7 +324,7 @@ public:
   ~SelectionDAG();
 
   /// Prepare this SelectionDAG to process code in the given MachineFunction.
-  void init(MachineFunction &mf);
+  void init(MachineFunction &NewMF, OptimizationRemarkEmitter &NewORE);
 
   /// Clear state and free memory necessary to make this
   /// SelectionDAG ready to process a new block.
@@ -331,6 +337,7 @@ public:
   const TargetLowering &getTargetLoweringInfo() const { return *TLI; }
   const SelectionDAGTargetInfo &getSelectionDAGInfo() const { return *TSI; }
   LLVMContext *getContext() const {return Context; }
+  OptimizationRemarkEmitter &getORE() const { return *ORE; }
 
   /// Pop up a GraphViz/gv window with the DAG rendered using 'dot'.
   void viewGraph(const std::string &Title);
@@ -648,6 +655,15 @@ public:
     return getNode(ISD::BUILD_VECTOR, DL, VT, Ops);
   }
 
+  /// Return an ISD::BUILD_VECTOR node. The number of elements in VT,
+  /// which must be a vector type, must match the number of operands in Ops.
+  /// The operands must have the same type as (or, for integers, a type wider
+  /// than) VT's element type.
+  SDValue getBuildVector(EVT VT, const SDLoc &DL, ArrayRef<SDUse> Ops) {
+    // VerifySDNode (via InsertNode) checks BUILD_VECTOR later.
+    return getNode(ISD::BUILD_VECTOR, DL, VT, Ops);
+  }
+
   /// Return a splat ISD::BUILD_VECTOR node, consisting of Op splatted to all
   /// elements. VT must be a vector type. Op's type must be the same as (or,
   /// for integers, a type wider than) VT's element type.
@@ -671,6 +687,10 @@ public:
   ///
   /// Example: shuffle A, B, <0,5,2,7> -> shuffle B, A, <4,1,6,3>
   SDValue getCommutedVectorShuffle(const ShuffleVectorSDNode &SV);
+
+  /// Convert Op, which must be of float type, to the
+  /// float type VT, by either extending or rounding (by truncation).
+  SDValue getFPExtendOrRound(SDValue Op, const SDLoc &DL, EVT VT);
 
   /// Convert Op, which must be of integer type, to the
   /// integer type VT, by either any-extending or truncating it.
@@ -758,7 +778,7 @@ public:
   SDValue getNode(unsigned Opcode, const SDLoc &DL, EVT VT,
                   ArrayRef<SDUse> Ops);
   SDValue getNode(unsigned Opcode, const SDLoc &DL, EVT VT,
-                  ArrayRef<SDValue> Ops, const SDNodeFlags *Flags = nullptr);
+                  ArrayRef<SDValue> Ops, const SDNodeFlags Flags = SDNodeFlags());
   SDValue getNode(unsigned Opcode, const SDLoc &DL, ArrayRef<EVT> ResultTys,
                   ArrayRef<SDValue> Ops);
   SDValue getNode(unsigned Opcode, const SDLoc &DL, SDVTList VTs,
@@ -766,9 +786,10 @@ public:
 
   // Specialize based on number of operands.
   SDValue getNode(unsigned Opcode, const SDLoc &DL, EVT VT);
-  SDValue getNode(unsigned Opcode, const SDLoc &DL, EVT VT, SDValue N);
+  SDValue getNode(unsigned Opcode, const SDLoc &DL, EVT VT, SDValue N,
+                  const SDNodeFlags Flags = SDNodeFlags());
   SDValue getNode(unsigned Opcode, const SDLoc &DL, EVT VT, SDValue N1,
-                  SDValue N2, const SDNodeFlags *Flags = nullptr);
+                  SDValue N2, const SDNodeFlags Flags = SDNodeFlags());
   SDValue getNode(unsigned Opcode, const SDLoc &DL, EVT VT, SDValue N1,
                   SDValue N2, SDValue N3);
   SDValue getNode(unsigned Opcode, const SDLoc &DL, EVT VT, SDValue N1,
@@ -808,7 +829,8 @@ public:
                     SDValue Size, unsigned Align, bool isVol, bool isTailCall,
                     MachinePointerInfo DstPtrInfo);
 
-  SDValue getPointerAdd(SDLoc dl, SDValue Ptr, int64_t Offset);
+  SDValue getPointerAdd(SDLoc dl, SDValue Ptr, int64_t Offset,
+                        const SDNodeFlags Flags = SDNodeFlags());
 
   /// Helper function to make it easier to build SetCC's if you just
   /// have an ISD::CondCode instead of an SDValue.
@@ -956,7 +978,8 @@ public:
                           SDValue Offset, ISD::MemIndexedMode AM);
 
   /// Returns sum of the base pointer and offset.
-  SDValue getMemBasePlusOffset(SDValue Base, unsigned Offset, const SDLoc &DL);
+  SDValue getMemBasePlusOffset(SDValue Base, unsigned Offset, const SDLoc &DL,
+                               const SDNodeFlags Flags = SDNodeFlags());
 
   SDValue getMaskedLoad(EVT VT, const SDLoc &dl, SDValue Chain, SDValue Ptr,
                         SDValue Mask, SDValue Src0, EVT MemVT,
@@ -964,7 +987,7 @@ public:
                         bool IsExpanding = false);
   SDValue getMaskedStore(SDValue Chain, const SDLoc &dl, SDValue Val,
                          SDValue Ptr, SDValue Mask, EVT MemVT,
-                         MachineMemOperand *MMO, bool IsTruncating = false, 
+                         MachineMemOperand *MMO, bool IsTruncating = false,
                          bool IsCompressing = false);
   SDValue getMaskedGather(SDVTList VTs, EVT VT, const SDLoc &dl,
                           ArrayRef<SDValue> Ops, MachineMemOperand *MMO);
@@ -1090,7 +1113,7 @@ public:
 
   /// Get the specified node if it's already available, or else return NULL.
   SDNode *getNodeIfExists(unsigned Opcode, SDVTList VTs, ArrayRef<SDValue> Ops,
-                          const SDNodeFlags *Flags = nullptr);
+                          const SDNodeFlags Flags = SDNodeFlags());
 
   /// Creates a SDDbgValue node.
   SDDbgValue *getDbgValue(MDNode *Var, MDNode *Expr, SDNode *N, unsigned R,
@@ -1253,7 +1276,7 @@ public:
 
   SDValue FoldConstantVectorArithmetic(unsigned Opcode, const SDLoc &DL, EVT VT,
                                        ArrayRef<SDValue> Ops,
-                                       const SDNodeFlags *Flags = nullptr);
+                                       const SDNodeFlags Flags = SDNodeFlags());
 
   /// Constant fold a setcc to true or false.
   SDValue FoldSetCC(EVT VT, SDValue N1, SDValue N2, ISD::CondCode Cond,
@@ -1270,21 +1293,19 @@ public:
     const;
 
   /// Determine which bits of Op are known to be either zero or one and return
-  /// them in the KnownZero/KnownOne bitsets. For vectors, the known bits are
-  /// those that are shared by every vector element.
+  /// them in Known. For vectors, the known bits are those that are shared by
+  /// every vector element.
   /// Targets can implement the computeKnownBitsForTargetNode method in the
   /// TargetLowering class to allow target nodes to be understood.
-  void computeKnownBits(SDValue Op, APInt &KnownZero, APInt &KnownOne,
-                        unsigned Depth = 0) const;
+  void computeKnownBits(SDValue Op, KnownBits &Known, unsigned Depth = 0) const;
 
   /// Determine which bits of Op are known to be either zero or one and return
-  /// them in the KnownZero/KnownOne bitsets. The DemandedElts argument allows
-  /// us to only collect the known bits that are shared by the requested vector
-  /// elements.
+  /// them in Known. The DemandedElts argument allows us to only collect the
+  /// known bits that are shared by the requested vector elements.
   /// Targets can implement the computeKnownBitsForTargetNode method in the
   /// TargetLowering class to allow target nodes to be understood.
-  void computeKnownBits(SDValue Op, APInt &KnownZero, APInt &KnownOne,
-                        const APInt &DemandedElts, unsigned Depth = 0) const;
+  void computeKnownBits(SDValue Op, KnownBits &Known, const APInt &DemandedElts,
+                        unsigned Depth = 0) const;
 
   /// Used to represent the possible overflow behavior of an operation.
   /// Never: the operation cannot overflow.
@@ -1312,6 +1333,17 @@ public:
   /// ComputeNumSignBitsForTarget method in the TargetLowering class to allow
   /// target nodes to be understood.
   unsigned ComputeNumSignBits(SDValue Op, unsigned Depth = 0) const;
+
+  /// Return the number of times the sign bit of the register is replicated into
+  /// the other bits. We know that at least 1 bit is always equal to the sign
+  /// bit (itself), but other cases can give us information. For example,
+  /// immediately after an "SRA X, 2", we know that the top 3 bits are all equal
+  /// to each other, so we return 3. The DemandedElts argument allows
+  /// us to only collect the minimum sign bits of the requested vector elements.
+  /// Targets can implement the ComputeNumSignBitsForTarget method in the
+  /// TargetLowering class to allow target nodes to be understood.
+  unsigned ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
+                              unsigned Depth = 0) const;
 
   /// Return true if the specified operand is an ISD::ADD with a ConstantSDNode
   /// on the right-hand side, or if it is an ISD::OR with a ConstantSDNode that
@@ -1414,10 +1446,6 @@ private:
   void DeallocateNode(SDNode *N);
 
   void allnodes_clear();
-
-  SDNode *GetBinarySDNode(unsigned Opcode, const SDLoc &DL, SDVTList VTs,
-                          SDValue N1, SDValue N2,
-                          const SDNodeFlags *Flags = nullptr);
 
   /// Look up the node specified by ID in CSEMap.  If it exists, return it.  If
   /// not, return the insertion token that will make insertion faster.  This

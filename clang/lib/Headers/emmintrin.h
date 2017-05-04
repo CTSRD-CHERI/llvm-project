@@ -1750,6 +1750,24 @@ _mm_set1_pd(double __w)
   return (__m128d){ __w, __w };
 }
 
+/// \brief Constructs a 128-bit floating-point vector of [2 x double], with each
+///    of the two double-precision floating-point vector elements set to the
+///    specified double-precision floating-point value.
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the <c> VMOVDDUP / MOVLHPS </c> instruction.
+///
+/// \param __w
+///    A double-precision floating-point value used to initialize each vector
+///    element of the result.
+/// \returns An initialized 128-bit floating-point vector of [2 x double].
+static __inline__ __m128d __DEFAULT_FN_ATTRS
+_mm_set_pd1(double __w)
+{
+  return _mm_set1_pd(__w);
+}
+
 /// \brief Constructs a 128-bit floating-point vector of [2 x double]
 ///    initialized with the specified double-precision floating-point values.
 ///
@@ -1809,7 +1827,7 @@ _mm_setzero_pd(void)
 /// \brief Constructs a 128-bit floating-point vector of [2 x double]. The lower
 ///    64 bits are set to the lower 64 bits of the second parameter. The upper
 ///    64 bits are set to the upper 64 bits of the first parameter.
-//
+///
 /// \headerfile <x86intrin.h>
 ///
 /// This intrinsic corresponds to the <c> VBLENDPD / BLENDPD </c> instruction.

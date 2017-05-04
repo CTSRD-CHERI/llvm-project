@@ -42,6 +42,7 @@
 #include "llvm/IR/Value.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/KnownBits.h"
 #include "llvm/Support/MathExtras.h"
 #include <cassert>
 #include <cerrno>
@@ -689,21 +690,21 @@ Constant *SymbolicallyEvaluateBinop(unsigned Opc, Constant *Op0, Constant *Op1,
 
   if (Opc == Instruction::And) {
     unsigned BitWidth = DL.getTypeSizeInBits(Op0->getType()->getScalarType());
-    APInt KnownZero0(BitWidth, 0), KnownOne0(BitWidth, 0);
-    APInt KnownZero1(BitWidth, 0), KnownOne1(BitWidth, 0);
-    computeKnownBits(Op0, KnownZero0, KnownOne0, DL);
-    computeKnownBits(Op1, KnownZero1, KnownOne1, DL);
-    if ((KnownOne1 | KnownZero0).isAllOnesValue()) {
+    KnownBits Known0(BitWidth);
+    KnownBits Known1(BitWidth);
+    computeKnownBits(Op0, Known0, DL);
+    computeKnownBits(Op1, Known1, DL);
+    if ((Known1.One | Known0.Zero).isAllOnesValue()) {
       // All the bits of Op0 that the 'and' could be masking are already zero.
       return Op0;
     }
-    if ((KnownOne0 | KnownZero1).isAllOnesValue()) {
+    if ((Known0.One | Known1.Zero).isAllOnesValue()) {
       // All the bits of Op1 that the 'and' could be masking are already zero.
       return Op1;
     }
 
-    APInt KnownZero = KnownZero0 | KnownZero1;
-    APInt KnownOne = KnownOne0 & KnownOne1;
+    APInt KnownZero = Known0.Zero | Known1.Zero;
+    APInt KnownOne = Known0.One & Known1.One;
     if ((KnownZero | KnownOne).isAllOnesValue()) {
       return ConstantInt::get(Op0->getType(), KnownOne);
     }
@@ -1060,8 +1061,8 @@ ConstantFoldConstantImpl(const Constant *C, const DataLayout &DL,
       if (It == FoldedOps.end()) {
         if (auto *FoldedC =
                 ConstantFoldConstantImpl(NewC, DL, TLI, FoldedOps)) {
-          NewC = FoldedC;
           FoldedOps.insert({NewC, FoldedC});
+          NewC = FoldedC;
         } else {
           FoldedOps.insert({NewC, NewC});
         }
@@ -1403,7 +1404,7 @@ bool llvm::canConstantFoldCallTo(const Function *F) {
     return true;
   default:
     return false;
-  case 0: break;
+  case Intrinsic::not_intrinsic: break;
   }
 
   if (!F->hasName())
@@ -1520,9 +1521,9 @@ Constant *ConstantFoldSSEConvertToInt(const APFloat &Val, bool roundTowardZero,
   bool isExact = false;
   APFloat::roundingMode mode = roundTowardZero? APFloat::rmTowardZero
                                               : APFloat::rmNearestTiesToEven;
-  APFloat::opStatus status = Val.convertToInteger(&UIntVal, ResultWidth,
-                                                  /*isSigned=*/true, mode,
-                                                  &isExact);
+  APFloat::opStatus status =
+      Val.convertToInteger(makeMutableArrayRef(UIntVal), ResultWidth,
+                           /*isSigned=*/true, mode, &isExact);
   if (status != APFloat::opOK &&
       (!roundTowardZero || status != APFloat::opInexact))
     return nullptr;
@@ -1770,7 +1771,8 @@ Constant *ConstantFoldScalarCall(StringRef Name, unsigned IntrinsicID, Type *Ty,
     }
 
     if (isa<UndefValue>(Operands[0])) {
-      if (IntrinsicID == Intrinsic::bswap)
+      if (IntrinsicID == Intrinsic::bswap ||
+          IntrinsicID == Intrinsic::bitreverse)
         return Operands[0];
       return nullptr;
     }

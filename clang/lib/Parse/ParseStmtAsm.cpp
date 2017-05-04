@@ -12,10 +12,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/Parse/Parser.h"
-#include "RAIIObjectsForParser.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/TargetInfo.h"
+#include "clang/Parse/RAIIObjectsForParser.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/MC/MCAsmInfo.h"
@@ -452,7 +452,7 @@ StmtResult Parser::ParseMicrosoftAsmStatement(SourceLocation AsmLoc) {
         // We're no longer in a comment.
         InAsmComment = false;
         if (isAsm) {
-          // If this is a new __asm {} block we want to process it seperately
+          // If this is a new __asm {} block we want to process it separately
           // from the single-line __asm statements
           if (PP.LookAhead(0).is(tok::l_brace))
             break;

@@ -453,11 +453,13 @@ public:
   /// address space.
   static PointerType *get(Type *ElementType, unsigned AddressSpace);
 
+#ifndef LLVM_NO_DEFAULT_ADDRESS_SPACE
   /// This constructs a pointer to an object of the specified type in the
   /// generic address space (address space zero).
   static PointerType *getUnqual(Type *ElementType) {
     return PointerType::get(ElementType, 0);
   }
+#endif
 
   Type *getElementType() const { return PointeeTy; }
 

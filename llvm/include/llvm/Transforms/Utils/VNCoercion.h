@@ -32,6 +32,7 @@ class Instruction;
 class Value;
 class Type;
 class DataLayout;
+class TargetLibraryInfo;
 class GVN;
 
 namespace VNCoercion {
@@ -56,7 +57,7 @@ Value *coerceAvailableValueToLoadType(Value *StoredVal, Type *LoadedTy,
 /// On failure, it returns -1.
 int analyzeLoadFromClobberingStore(Type *LoadTy, Value *LoadPtr,
                                    StoreInst *DepSI,  const DataLayout &DL,
-                                   GVN &gvn);
+                                   const TargetLibraryInfo *TLI);
 
 /// This function determines whether a value for the pointer LoadPtr can be
 /// extracted from the load at DepLI.
@@ -64,7 +65,8 @@ int analyzeLoadFromClobberingStore(Type *LoadTy, Value *LoadPtr,
 /// On success, it returns the offset into DepLI that extraction would start.
 /// On failure, it returns -1.
 int analyzeLoadFromClobberingLoad(Type *LoadTy, Value *LoadPtr, LoadInst *DepLI,
-                                  const DataLayout &DL, GVN &gvn);
+                                  const DataLayout &DL,
+                                  const TargetLibraryInfo *TLI);
 
 /// This function determines whether a value for the pointer LoadPtr can be
 /// extracted from the memory intrinsic at DepMI.
@@ -73,20 +75,29 @@ int analyzeLoadFromClobberingLoad(Type *LoadTy, Value *LoadPtr, LoadInst *DepLI,
 /// On failure, it returns -1.
 int analyzeLoadFromClobberingMemInst(Type *LoadTy, Value *LoadPtr,
                                      MemIntrinsic *DepMI, const DataLayout &DL,
-                                     GVN &gvn);
+                                     const TargetLibraryInfo *TLI);
 
 /// If analyzeLoadFromClobberingStore returned an offset, this function can be
 /// used to actually perform the extraction of the bits from the store. It
 /// inserts instructions to do so at InsertPt, and returns the extracted value.
 Value *getStoreValueForLoad(Value *SrcVal, unsigned Offset, Type *LoadTy,
                             Instruction *InsertPt, const DataLayout &DL);
+// This is the same as getStoreValueForLoad, except it performs no insertion
+// It only allows constant inputs.
+Constant *getConstantStoreValueForLoad(Constant *SrcVal, unsigned Offset,
+                                       Type *LoadTy, const DataLayout &DL);
 
 /// If analyzeLoadFromClobberingLoad returned an offset, this function can be
 /// used to actually perform the extraction of the bits from the load, including
 /// any necessary load widening.  It inserts instructions to do so at InsertPt,
 /// and returns the extracted value.
 Value *getLoadValueForLoad(LoadInst *SrcVal, unsigned Offset, Type *LoadTy,
-                           Instruction *InsertPt, GVN &gvn);
+                           Instruction *InsertPt,  const DataLayout &DL,
+                           GVN &gvn);
+// This is the same as getLoadValueForLoad, except it is given the load value as
+// a constant. It returns nullptr if it would require widening the load.
+Constant *getConstantLoadValueForLoad(Constant *SrcVal, unsigned Offset,
+                                      Type *LoadTy, const DataLayout &DL);
 
 /// If analyzeLoadFromClobberingMemInst returned an offset, this function can be
 /// used to actually perform the extraction of the bits from the memory
@@ -95,6 +106,10 @@ Value *getLoadValueForLoad(LoadInst *SrcVal, unsigned Offset, Type *LoadTy,
 Value *getMemInstValueForLoad(MemIntrinsic *SrcInst, unsigned Offset,
                               Type *LoadTy, Instruction *InsertPt,
                               const DataLayout &DL);
+// This is the same as getStoreValueForLoad, except it performs no insertion.
+// It returns nullptr if it cannot produce a constant.
+Constant *getConstantMemInstValueForLoad(MemIntrinsic *SrcInst, unsigned Offset,
+                                         Type *LoadTy, const DataLayout &DL);
 }
 }
 #endif

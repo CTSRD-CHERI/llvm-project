@@ -604,6 +604,9 @@ namespace clang {
       OPENCL_EXTENSION_DECLS = 59,
 
       MODULAR_CODEGEN_DECLS = 60,
+
+      /// \brief Record code for \#pragma pack options.
+      PACK_PRAGMA_OPTIONS = 61,
     };
 
     /// \brief Record types used within a source manager block.
@@ -927,7 +930,9 @@ namespace clang {
       /// \brief An ObjCTypeParamType record.
       TYPE_OBJC_TYPE_PARAM       = 44,
       /// \brief A DeducedTemplateSpecializationType record.
-      TYPE_DEDUCED_TEMPLATE_SPECIALIZATION = 45
+      TYPE_DEDUCED_TEMPLATE_SPECIALIZATION = 45,
+      /// \brief A DependentSizedExtVectorType record.
+      TYPE_DEPENDENT_SIZED_EXT_VECTOR = 46
     };
 
     /// \brief The type IDs for special types constructed by semantic

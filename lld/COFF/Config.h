@@ -43,6 +43,7 @@ struct Export {
   bool Noname = false;
   bool Data = false;
   bool Private = false;
+  bool Constant = false;
 
   // If an export is a form of /export:foo=dllname.bar, that means
   // that foo should be exported as an alias to bar in the DLL.
@@ -89,7 +90,7 @@ struct Configuration {
   bool Debug = false;
   bool WriteSymtab = true;
   unsigned DebugTypes = static_cast<unsigned>(DebugType::None);
-  StringRef PDBPath;
+  llvm::SmallString<128> PDBPath;
 
   // Symbols in this set are considered as live by the garbage collector.
   std::set<SymbolBody *> GCRoot;
@@ -115,7 +116,7 @@ struct Configuration {
   unsigned LTOOptLevel = 2;
 
   // Used for /opt:lldltojobs=N
-  unsigned LTOJobs = 1;
+  unsigned LTOJobs = 0;
   // Used for /opt:lldltopartitions=N
   unsigned LTOPartitions = 1;
 
@@ -160,6 +161,7 @@ struct Configuration {
   bool TerminalServerAware = true;
   bool LargeAddressAware = false;
   bool HighEntropyVA = false;
+  bool AppContainer = false;
 
   // This is for debugging.
   bool DebugPdb = false;

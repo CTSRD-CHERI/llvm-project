@@ -106,8 +106,8 @@ private:
   /// Defaults to false.
   bool BigEndian;
 
+  unsigned AllocaAddrSpace;
   unsigned StackNaturalAlign;
-  unsigned      AllocaAS;              ///< Address space for allocas
 
   enum ManglingModeT {
     MM_None,
@@ -121,8 +121,19 @@ private:
 
   SmallVector<unsigned char, 8> LegalIntWidths;
 
-  /// \brief Primitive type alignment data.
-  SmallVector<LayoutAlignElem, 16> Alignments;
+  /// \brief Primitive type alignment data. This is sorted by type and bit
+  /// width during construction.
+  typedef SmallVector<LayoutAlignElem, 16> AlignmentsTy;
+  AlignmentsTy Alignments;
+
+  AlignmentsTy::const_iterator
+  findAlignmentLowerBound(AlignTypeEnum AlignType, uint32_t BitWidth) const {
+    return const_cast<DataLayout *>(this)->findAlignmentLowerBound(AlignType,
+                                                                   BitWidth);
+  }
+
+  AlignmentsTy::iterator
+  findAlignmentLowerBound(AlignTypeEnum AlignType, uint32_t BitWidth);
 
   /// \brief The string representation used to create this DataLayout
   std::string StringRepresentation;
@@ -136,14 +147,6 @@ private:
   }
 
   PointersTy::iterator findPointerLowerBound(uint32_t AddressSpace);
-
-  /// This member is a signal that a requested alignment type and bit width were
-  /// not found in the SmallVector.
-  static const LayoutAlignElem InvalidAlignmentElem;
-
-  /// This member is a signal that a requested pointer type and bit width were
-  /// not found in the DenseSet.
-  static const PointerAlignElem InvalidPointerElem;
 
   // The StructType -> StructLayout map.
   mutable void *LayoutMap;
@@ -162,22 +165,6 @@ private:
 
   /// Internal helper method that returns requested alignment for type.
   unsigned getAlignment(Type *Ty, bool abi_or_pref) const;
-
-  /// \brief Valid alignment predicate.
-  ///
-  /// Predicate that tests a LayoutAlignElem reference returned by get() against
-  /// InvalidAlignmentElem.
-  bool validAlignment(const LayoutAlignElem &align) const {
-    return &align != &InvalidAlignmentElem;
-  }
-
-  /// \brief Valid pointer predicate.
-  ///
-  /// Predicate that tests a PointerAlignElem reference returned by get()
-  /// against \c InvalidPointerElem.
-  bool validPointer(const PointerAlignElem &align) const {
-    return &align != &InvalidPointerElem;
-  }
 
   /// Parses a target data specification string. Assert if the string is
   /// malformed.
@@ -203,7 +190,7 @@ public:
     clear();
     StringRepresentation = DL.StringRepresentation;
     BigEndian = DL.isBigEndian();
-    AllocaAS = DL.AllocaAS;
+    AllocaAddrSpace = DL.AllocaAddrSpace;
     StackNaturalAlign = DL.StackNaturalAlign;
     ManglingMode = DL.ManglingMode;
     LegalIntWidths = DL.LegalIntWidths;
@@ -259,6 +246,9 @@ public:
   }
 
   unsigned getStackAlignment() const { return StackNaturalAlign; }
+  unsigned getAllocaAddrSpace() const { return AllocaAddrSpace; }
+  /// Sets the address space used for allocas
+  void setAllocaAS(unsigned AS) { AllocaAddrSpace = AS; }
 
   bool hasMicrosoftFastStdCallMangling() const {
     return ManglingMode == MM_WinCOFFX86;
@@ -319,12 +309,12 @@ public:
   /// Layout pointer alignment
   /// FIXME: The defaults need to be removed once all of
   /// the backends/clients are updated.
-  unsigned getPointerABIAlignment(unsigned AS = 0) const;
+  unsigned getPointerABIAlignment(LLVM_DEFAULT_AS_PARAM(AS)) const;
 
   /// Return target's alignment for stack-based pointers
   /// FIXME: The defaults need to be removed once all of
   /// the backends/clients are updated.
-  unsigned getPointerPrefAlignment(unsigned AS = 0) const;
+  unsigned getPointerPrefAlignment(LLVM_DEFAULT_AS_PARAM(AS)) const;
 
   /// Get the size of the base address component of a pointer.
   /// For pointers that are simple integer representations this returns the
@@ -351,7 +341,7 @@ public:
   /// Layout pointer size
   /// FIXME: The defaults need to be removed once all of
   /// the backends/clients are updated.
-  unsigned getPointerSize(unsigned AS = 0) const;
+  unsigned getPointerSize(LLVM_DEFAULT_AS_PARAM(AS)) const;
 
   /// Return the address spaces containing non-integral pointers.  Pointers in
   /// this address space don't have a well-defined bitwise representation.
@@ -373,7 +363,7 @@ public:
   /// Layout pointer size, in bits
   /// FIXME: The defaults need to be removed once all of
   /// the backends/clients are updated.
-  unsigned getPointerSizeInBits(unsigned AS = 0) const {
+  unsigned getPointerSizeInBits(LLVM_DEFAULT_AS_PARAM(AS)) const {
     return getPointerSize(AS) * 8;
   }
 
@@ -393,11 +383,6 @@ public:
       return getPointerBaseSizeInBits(Ty->getPointerAddressSpace());
     return getTypeSizeInBits(Ty);
   }
-
-  /// Returns the address space used for alloca instructions.
-  unsigned getAllocaAS() const { return AllocaAS; }
-  /// Sets the address space used for allocas
-  void setAllocaAS(unsigned AS) { AllocaAS = AS; }
 
   /// Size examples:
   ///
@@ -476,7 +461,8 @@ public:
 
   /// \brief Returns an integer type with size at least as big as that of a
   /// pointer in the given address space.
-  IntegerType *getIntPtrType(LLVMContext &C, unsigned AddressSpace = 0) const;
+  IntegerType *getIntPtrType(LLVMContext &C,
+                             LLVM_DEFAULT_AS_PARAM(AddressSpace)) const;
 
   /// \brief Returns an integer (vector of integer) type with size at least as
   /// big as that of a pointer of the given pointer (vector of pointer) type.

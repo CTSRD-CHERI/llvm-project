@@ -125,12 +125,11 @@ private:
     if (Decl)
       return Decl;
 
-    unsigned AS = TheModule->getDataLayout().getAllocaAS();
+    unsigned AS = TheModule->getDataLayout().getAllocaAddrSpace();
     LLVMContext &C = TheModule->getContext();
     Type *Params[] = { PointerType::get(Type::getInt8Ty(C), AS) };
-    AttributeSet Attr =
-      AttributeSet().addAttribute(C, AttributeSet::FunctionIndex,
-                                  Attribute::NoUnwind);
+    AttributeList Attr = AttributeList().addAttribute(
+        C, AttributeList::FunctionIndex, Attribute::NoUnwind);
     FunctionType *Fty = FunctionType::get(Type::getVoidTy(C), Params,
                                           /*isVarArg=*/false);
     return Decl = TheModule->getOrInsertFunction(Name, Fty, Attr);
@@ -142,14 +141,14 @@ private:
       return Decl;
 
     LLVMContext &C = TheModule->getContext();
-    unsigned AS = TheModule->getDataLayout().getAllocaAS();
+    unsigned AS = TheModule->getDataLayout().getAllocaAddrSpace();
     Type *I8X = PointerType::get(Type::getInt8Ty(C), AS);
     Type *Params[] = { I8X };
     FunctionType *Fty = FunctionType::get(I8X, Params, /*isVarArg=*/false);
-    AttributeSet Attr = AttributeSet();
+    AttributeList Attr = AttributeList();
 
     if (NoUnwind)
-      Attr = Attr.addAttribute(C, AttributeSet::FunctionIndex,
+      Attr = Attr.addAttribute(C, AttributeList::FunctionIndex,
                                Attribute::NoUnwind);
 
     return Decl = TheModule->getOrInsertFunction(Name, Fty, Attr);
@@ -160,14 +159,13 @@ private:
       return Decl;
 
     LLVMContext &C = TheModule->getContext();
-    unsigned AS = TheModule->getDataLayout().getAllocaAS();
+    unsigned AS = TheModule->getDataLayout().getAllocaAddrSpace();
     Type *I8X = PointerType::get(Type::getInt8Ty(C), AS);
     Type *I8XX = PointerType::get(I8X, AS);
     Type *Params[] = { I8XX, I8X };
 
-    AttributeSet Attr =
-      AttributeSet().addAttribute(C, AttributeSet::FunctionIndex,
-                                  Attribute::NoUnwind);
+    AttributeList Attr = AttributeList().addAttribute(
+        C, AttributeList::FunctionIndex, Attribute::NoUnwind);
     Attr = Attr.addAttribute(C, 1, Attribute::NoCapture);
 
     FunctionType *Fty = FunctionType::get(Type::getVoidTy(C), Params,

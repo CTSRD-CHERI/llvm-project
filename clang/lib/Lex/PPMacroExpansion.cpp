@@ -1422,7 +1422,7 @@ static bool EvaluateHasIncludeCommon(Token &Tok,
   const DirectoryLookup *CurDir;
   const FileEntry *File =
       PP.LookupFile(FilenameLoc, Filename, isAngled, LookupFrom, LookupFromFile,
-                    CurDir, nullptr, nullptr, nullptr);
+                    CurDir, nullptr, nullptr, nullptr, nullptr);
 
   // Get the result value.  A result of true means the file exists.
   return File != nullptr;
@@ -1746,6 +1746,7 @@ void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
           return llvm::StringSwitch<bool>(II->getName())
                       .Case("__make_integer_seq", LangOpts.CPlusPlus)
                       .Case("__type_pack_element", LangOpts.CPlusPlus)
+                      .Case("__builtin_available", true)
                       .Default(false);
         }
       });

@@ -40,7 +40,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ADT/APFloat.h"
-#include "llvm/ADT/APInt.h"
+#include "llvm/ADT/APSInt.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallPtrSet.h"
@@ -118,21 +118,6 @@ STATISTIC(NumFastIselSuccessIndependent, "Number of insts selected by "
 STATISTIC(NumFastIselSuccessTarget, "Number of insts selected by "
                                     "target-specific selector");
 STATISTIC(NumFastIselDead, "Number of dead insts removed on failure");
-
-void FastISel::ArgListEntry::setAttributes(ImmutableCallSite *CS,
-                                           unsigned AttrIdx) {
-  IsSExt = CS->paramHasAttr(AttrIdx, Attribute::SExt);
-  IsZExt = CS->paramHasAttr(AttrIdx, Attribute::ZExt);
-  IsInReg = CS->paramHasAttr(AttrIdx, Attribute::InReg);
-  IsSRet = CS->paramHasAttr(AttrIdx, Attribute::StructRet);
-  IsNest = CS->paramHasAttr(AttrIdx, Attribute::Nest);
-  IsByVal = CS->paramHasAttr(AttrIdx, Attribute::ByVal);
-  IsInAlloca = CS->paramHasAttr(AttrIdx, Attribute::InAlloca);
-  IsReturned = CS->paramHasAttr(AttrIdx, Attribute::Returned);
-  IsSwiftSelf = CS->paramHasAttr(AttrIdx, Attribute::SwiftSelf);
-  IsSwiftError = CS->paramHasAttr(AttrIdx, Attribute::SwiftError);
-  Alignment = CS->getParamAlignment(AttrIdx);
-}
 
 /// Set the current block to which generated machine instructions will be
 /// appended, and clear the local CSE map.
@@ -272,17 +257,13 @@ unsigned FastISel::materializeConstant(const Value *V, MVT VT) {
       // Try to emit the constant by using an integer constant with a cast.
       const APFloat &Flt = CF->getValueAPF();
       EVT IntVT = TLI.getPointerTy(DL);
-
-      uint64_t x[2];
       uint32_t IntBitWidth = IntVT.getSizeInBits();
+      APSInt SIntVal(IntBitWidth, /*isUnsigned=*/false);
       bool isExact;
-      (void)Flt.convertToInteger(x, IntBitWidth, /*isSigned=*/true,
-                                 APFloat::rmTowardZero, &isExact);
+      (void)Flt.convertToInteger(SIntVal, APFloat::rmTowardZero, &isExact);
       if (isExact) {
-        APInt IntVal(IntBitWidth, x);
-
         unsigned IntegerReg =
-            getRegForValue(ConstantInt::get(V->getContext(), IntVal));
+            getRegForValue(ConstantInt::get(V->getContext(), SIntVal));
         if (IntegerReg != 0)
           Reg = fastEmit_r(IntVT.getSimpleVT(), VT, ISD::SINT_TO_FP, IntegerReg,
                            /*Kill=*/false);
@@ -715,10 +696,8 @@ bool FastISel::lowerCallOperands(const CallInst *CI, unsigned ArgIdx,
   Args.reserve(NumArgs);
 
   // Populate the argument list.
-  // Attributes for args start at offset 1, after the return attribute.
   ImmutableCallSite CS(CI);
-  for (unsigned ArgI = ArgIdx, ArgE = ArgIdx + NumArgs, AttrI = ArgIdx + 1;
-       ArgI != ArgE; ++ArgI) {
+  for (unsigned ArgI = ArgIdx, ArgE = ArgIdx + NumArgs; ArgI != ArgE; ++ArgI) {
     Value *V = CI->getOperand(ArgI);
 
     assert(!V->getType()->isEmptyTy() && "Empty type passed to intrinsic.");
@@ -726,7 +705,7 @@ bool FastISel::lowerCallOperands(const CallInst *CI, unsigned ArgIdx,
     ArgListEntry Entry;
     Entry.Val = V;
     Entry.Ty = V->getType();
-    Entry.setAttributes(&CS, AttrI);
+    Entry.setAttributes(&CS, ArgIdx);
     Args.push_back(Entry);
   }
 
@@ -884,9 +863,9 @@ bool FastISel::selectPatchpoint(const CallInst *I) {
   return true;
 }
 
-/// Returns an AttributeSet representing the attributes applied to the return
+/// Returns an AttributeList representing the attributes applied to the return
 /// value of the given call.
-static AttributeSet getReturnAttrs(FastISel::CallLoweringInfo &CLI) {
+static AttributeList getReturnAttrs(FastISel::CallLoweringInfo &CLI) {
   SmallVector<Attribute::AttrKind, 2> Attrs;
   if (CLI.RetSExt)
     Attrs.push_back(Attribute::SExt);
@@ -895,8 +874,8 @@ static AttributeSet getReturnAttrs(FastISel::CallLoweringInfo &CLI) {
   if (CLI.IsInReg)
     Attrs.push_back(Attribute::InReg);
 
-  return AttributeSet::get(CLI.RetTy->getContext(), AttributeSet::ReturnIndex,
-                           Attrs);
+  return AttributeList::get(CLI.RetTy->getContext(), AttributeList::ReturnIndex,
+                            Attrs);
 }
 
 bool FastISel::lowerCallTo(const CallInst *CI, const char *SymName,
@@ -928,9 +907,10 @@ bool FastISel::lowerCallTo(const CallInst *CI, MCSymbol *Symbol,
     ArgListEntry Entry;
     Entry.Val = V;
     Entry.Ty = V->getType();
-    Entry.setAttributes(&CS, ArgI + 1);
+    Entry.setAttributes(&CS, ArgI);
     Args.push_back(Entry);
   }
+  TLI.markLibCallAttributes(MF, CS.getCallingConv(), Args);
 
   CallLoweringInfo CLI;
   CLI.setCallee(RetTy, FTy, Symbol, std::move(Args), CS, NumArgs);
@@ -1064,7 +1044,7 @@ bool FastISel::lowerCall(const CallInst *CI) {
     Entry.Ty = V->getType();
 
     // Skip the first return-type Attribute to get to params.
-    Entry.setAttributes(&CS, i - CS.arg_begin() + 1);
+    Entry.setAttributes(&CS, i - CS.arg_begin());
     Args.push_back(Entry);
   }
 
@@ -1186,9 +1166,11 @@ bool FastISel::selectIntrinsicCall(const IntrinsicInst *II) {
              "Expected inlined-at fields to agree");
       if (Op->isReg()) {
         Op->setIsDebug(true);
+        // A dbg.declare describes the address of a source variable, so lower it
+        // into an indirect DBG_VALUE.
         BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc,
-                TII.get(TargetOpcode::DBG_VALUE), false, Op->getReg(), 0,
-                DI->getVariable(), DI->getExpression());
+                TII.get(TargetOpcode::DBG_VALUE), /*IsIndirect*/ true,
+                Op->getReg(), 0, DI->getVariable(), DI->getExpression());
       } else
         BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc,
                 TII.get(TargetOpcode::DBG_VALUE))

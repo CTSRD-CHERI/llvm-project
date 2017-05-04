@@ -129,14 +129,8 @@ public:
   inline bool compare(const DominatorTree &Other) const {
     const DomTreeNode *R = getRootNode();
     const DomTreeNode *OtherR = Other.getRootNode();
-
-    if (!R || !OtherR || R->getBlock() != OtherR->getBlock())
-      return true;
-
-    if (Base::compare(Other))
-      return true;
-
-    return false;
+    return !R || !OtherR || R->getBlock() != OtherR->getBlock() ||
+           Base::compare(Other);
   }
 
   // Ensure base-class overloads are visible.
@@ -163,6 +157,10 @@ public:
   /// This should only be used for debugging as it aborts the program if the
   /// verification fails.
   void verifyDomTree() const;
+
+  // Pop up a GraphViz/gv window with the Dominator Tree rendered using `dot`.
+  void viewGraph(const Twine &Name, const Twine &Title);
+  void viewGraph();
 };
 
 //===-------------------------------------

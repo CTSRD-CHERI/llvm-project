@@ -71,7 +71,8 @@ Address CodeGenFunction::CreateTempAlloca(llvm::Type *Ty, CharUnits Align,
 /// block.
 llvm::AllocaInst *CodeGenFunction::CreateTempAlloca(llvm::Type *Ty,
                                                     const Twine &Name) {
-  return new llvm::AllocaInst(Ty, nullptr, Name, AllocaInsertPt);
+  return new llvm::AllocaInst(Ty, CGM.getDataLayout().getAllocaAddrSpace(),
+                              nullptr, Name, AllocaInsertPt);
 }
 
 /// CreateDefaultAlignTempAlloca - This creates an alloca with the
@@ -550,22 +551,36 @@ void CodeGenFunction::EmitTypeCheck(TypeCheckKind TCK, SourceLocation Loc,
   SmallVector<std::pair<llvm::Value *, SanitizerMask>, 3> Checks;
   llvm::BasicBlock *Done = nullptr;
 
+  // Quickly determine whether we have a pointer to an alloca. It's possible
+  // to skip null checks, and some alignment checks, for these pointers. This
+  // can reduce compile-time significantly.
+  auto PtrToAlloca =
+      dyn_cast<llvm::AllocaInst>(Ptr->stripPointerCastsNoFollowAliases());
+
   bool AllowNullPointers = TCK == TCK_DowncastPointer || TCK == TCK_Upcast ||
                            TCK == TCK_UpcastToVirtualBase;
   if ((SanOpts.has(SanitizerKind::Null) || AllowNullPointers) &&
-      !SkippedChecks.has(SanitizerKind::Null)) {
+      !SkippedChecks.has(SanitizerKind::Null) && !PtrToAlloca) {
     // The glvalue must not be an empty glvalue.
     llvm::Value *IsNonNull = Builder.CreateIsNotNull(Ptr);
 
-    if (AllowNullPointers) {
-      // When performing pointer casts, it's OK if the value is null.
-      // Skip the remaining checks in that case.
-      Done = createBasicBlock("null");
-      llvm::BasicBlock *Rest = createBasicBlock("not.null");
-      Builder.CreateCondBr(IsNonNull, Rest, Done);
-      EmitBlock(Rest);
-    } else {
-      Checks.push_back(std::make_pair(IsNonNull, SanitizerKind::Null));
+    // The IR builder can constant-fold the null check if the pointer points to
+    // a constant.
+    bool PtrIsNonNull =
+        IsNonNull == llvm::ConstantInt::getTrue(getLLVMContext());
+
+    // Skip the null check if the pointer is known to be non-null.
+    if (!PtrIsNonNull) {
+      if (AllowNullPointers) {
+        // When performing pointer casts, it's OK if the value is null.
+        // Skip the remaining checks in that case.
+        Done = createBasicBlock("null");
+        llvm::BasicBlock *Rest = createBasicBlock("not.null");
+        Builder.CreateCondBr(IsNonNull, Rest, Done);
+        EmitBlock(Rest);
+      } else {
+        Checks.push_back(std::make_pair(IsNonNull, SanitizerKind::Null));
+      }
     }
   }
 
@@ -581,10 +596,11 @@ void CodeGenFunction::EmitTypeCheck(TypeCheckKind TCK, SourceLocation Loc,
     llvm::Type *Tys[2] = { IntPtrTy, Int8PtrTy };
     llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::objectsize, Tys);
     llvm::Value *Min = Builder.getFalse();
+    llvm::Value *NullIsUnknown = Builder.getFalse();
     llvm::Value *CastAddr = Builder.CreateBitCast(Ptr, Int8PtrTy);
-    llvm::Value *LargeEnough =
-        Builder.CreateICmpUGE(Builder.CreateCall(F, {CastAddr, Min}),
-                              llvm::ConstantInt::get(IntPtrTy, Size));
+    llvm::Value *LargeEnough = Builder.CreateICmpUGE(
+        Builder.CreateCall(F, {CastAddr, Min, NullIsUnknown}),
+        llvm::ConstantInt::get(IntPtrTy, Size));
     Checks.push_back(std::make_pair(LargeEnough, SanitizerKind::ObjectSize));
   }
 
@@ -597,7 +613,8 @@ void CodeGenFunction::EmitTypeCheck(TypeCheckKind TCK, SourceLocation Loc,
       AlignVal = getContext().getTypeAlignInChars(Ty).getQuantity();
 
     // The glvalue must be suitably aligned.
-    if (AlignVal) {
+    if (AlignVal > 1 &&
+        (!PtrToAlloca || PtrToAlloca->getAlignment() < AlignVal)) {
       llvm::Value *Align =
           Builder.CreateAnd(Builder.CreatePtrToInt(Ptr, IntPtrTy),
                             llvm::ConstantInt::get(IntPtrTy, AlignVal - 1));
@@ -952,10 +969,7 @@ LValue CodeGenFunction::EmitUnsupportedLValue(const Expr *E,
                         E->getType());
 }
 
-bool CodeGenFunction::IsDeclRefOrWrappedCXXThis(const Expr *Obj) {
-  if (isa<DeclRefExpr>(Obj))
-    return true;
-
+bool CodeGenFunction::IsWrappedCXXThis(const Expr *Obj) {
   const Expr *Base = Obj;
   while (!isa<CXXThisExpr>(Base)) {
     // The result of a dynamic_cast can be null.
@@ -986,9 +1000,13 @@ LValue CodeGenFunction::EmitCheckedLValue(const Expr *E, TypeCheckKind TCK) {
     LV = EmitLValue(E);
   if (!isa<DeclRefExpr>(E) && !LV.isBitField() && LV.isSimple()) {
     SanitizerSet SkippedChecks;
-    if (const auto *ME = dyn_cast<MemberExpr>(E))
-      if (IsDeclRefOrWrappedCXXThis(ME->getBase()))
+    if (const auto *ME = dyn_cast<MemberExpr>(E)) {
+      bool IsBaseCXXThis = IsWrappedCXXThis(ME->getBase());
+      if (IsBaseCXXThis)
+        SkippedChecks.set(SanitizerKind::Alignment, true);
+      if (IsBaseCXXThis || isa<DeclRefExpr>(ME->getBase()))
         SkippedChecks.set(SanitizerKind::Null, true);
+    }
     EmitTypeCheck(TCK, E->getExprLoc(), LV.getPointer(),
                   E->getType(), LV.getAlignment(), SkippedChecks);
   }
@@ -1368,26 +1386,28 @@ llvm::Value *CodeGenFunction::EmitLoadOfScalar(Address Addr, bool Volatile,
                                                QualType TBAABaseType,
                                                uint64_t TBAAOffset,
                                                bool isNontemporal) {
-  // For better performance, handle vector loads differently.
-  if (Ty->isVectorType()) {
-    const llvm::Type *EltTy = Addr.getElementType();
+  if (!CGM.getCodeGenOpts().PreserveVec3Type) {
+    // For better performance, handle vector loads differently.
+    if (Ty->isVectorType()) {
+      const llvm::Type *EltTy = Addr.getElementType();
 
-    const auto *VTy = cast<llvm::VectorType>(EltTy);
+      const auto *VTy = cast<llvm::VectorType>(EltTy);
 
-    // Handle vectors of size 3 like size 4 for better performance.
-    if (VTy->getNumElements() == 3) {
+      // Handle vectors of size 3 like size 4 for better performance.
+      if (VTy->getNumElements() == 3) {
 
-      // Bitcast to vec4 type.
-      llvm::VectorType *vec4Ty = llvm::VectorType::get(VTy->getElementType(),
-                                                         4);
-      Address Cast = Builder.CreateElementBitCast(Addr, vec4Ty, "castToVec4");
-      // Now load value.
-      llvm::Value *V = Builder.CreateLoad(Cast, Volatile, "loadVec4");
+        // Bitcast to vec4 type.
+        llvm::VectorType *vec4Ty =
+            llvm::VectorType::get(VTy->getElementType(), 4);
+        Address Cast = Builder.CreateElementBitCast(Addr, vec4Ty, "castToVec4");
+        // Now load value.
+        llvm::Value *V = Builder.CreateLoad(Cast, Volatile, "loadVec4");
 
-      // Shuffle vector to get vec3.
-      V = Builder.CreateShuffleVector(V, llvm::UndefValue::get(vec4Ty),
-                                      {0, 1, 2}, "extractVec");
-      return EmitFromMemory(V, Ty);
+        // Shuffle vector to get vec3.
+        V = Builder.CreateShuffleVector(V, llvm::UndefValue::get(vec4Ty),
+                                        {0, 1, 2}, "extractVec");
+        return EmitFromMemory(V, Ty);
+      }
     }
   }
 
@@ -1455,24 +1475,25 @@ void CodeGenFunction::EmitStoreOfScalar(llvm::Value *Value, Address Addr,
                                         uint64_t TBAAOffset,
                                         bool isNontemporal) {
 
-  // Handle vectors differently to get better performance.
-  if (Ty->isVectorType()) {
-    llvm::Type *SrcTy = Value->getType();
-    auto *VecTy = cast<llvm::VectorType>(SrcTy);
-    // Handle vec3 special.
-    if (VecTy->getNumElements() == 3) {
-      // Our source is a vec3, do a shuffle vector to make it a vec4.
-      llvm::Constant *Mask[] = {Builder.getInt32(0), Builder.getInt32(1),
-                                Builder.getInt32(2),
-                                llvm::UndefValue::get(Builder.getInt32Ty())};
-      llvm::Value *MaskV = llvm::ConstantVector::get(Mask);
-      Value = Builder.CreateShuffleVector(Value,
-                                          llvm::UndefValue::get(VecTy),
-                                          MaskV, "extractVec");
-      SrcTy = llvm::VectorType::get(VecTy->getElementType(), 4);
-    }
-    if (Addr.getElementType() != SrcTy) {
-      Addr = Builder.CreateElementBitCast(Addr, SrcTy, "storetmp");
+  if (!CGM.getCodeGenOpts().PreserveVec3Type) {
+    // Handle vectors differently to get better performance.
+    if (Ty->isVectorType()) {
+      llvm::Type *SrcTy = Value->getType();
+      auto *VecTy = cast<llvm::VectorType>(SrcTy);
+      // Handle vec3 special.
+      if (VecTy->getNumElements() == 3) {
+        // Our source is a vec3, do a shuffle vector to make it a vec4.
+        llvm::Constant *Mask[] = {Builder.getInt32(0), Builder.getInt32(1),
+                                  Builder.getInt32(2),
+                                  llvm::UndefValue::get(Builder.getInt32Ty())};
+        llvm::Value *MaskV = llvm::ConstantVector::get(Mask);
+        Value = Builder.CreateShuffleVector(Value, llvm::UndefValue::get(VecTy),
+                                            MaskV, "extractVec");
+        SrcTy = llvm::VectorType::get(VecTy->getElementType(), 4);
+      }
+      if (Addr.getElementType() != SrcTy) {
+        Addr = Builder.CreateElementBitCast(Addr, SrcTy, "storetmp");
+      }
     }
   }
 
@@ -2615,8 +2636,8 @@ static void emitCheckHandlerCall(CodeGenFunction &CGF,
 
   llvm::Value *Fn = CGF.CGM.CreateRuntimeFunction(
       FnType, FnName,
-      llvm::AttributeSet::get(CGF.getLLVMContext(),
-                              llvm::AttributeSet::FunctionIndex, B),
+      llvm::AttributeList::get(CGF.getLLVMContext(),
+                               llvm::AttributeList::FunctionIndex, B),
       /*Local=*/true);
   llvm::CallInst *HandlerCall = CGF.EmitNounwindRuntimeCall(Fn, FnArgs);
   if (!MayReturn) {
@@ -2779,6 +2800,24 @@ void CodeGenFunction::EmitCfiSlowPathCheck(
   EmitBlock(Cont);
 }
 
+// Emit a stub for __cfi_check function so that the linker knows about this
+// symbol in LTO mode.
+void CodeGenFunction::EmitCfiCheckStub() {
+  llvm::Module *M = &CGM.getModule();
+  auto &Ctx = M->getContext();
+  llvm::Function *F = llvm::Function::Create(
+      llvm::FunctionType::get(VoidTy, {Int64Ty, Int8PtrTy, Int8PtrTy}, false),
+      llvm::GlobalValue::WeakAnyLinkage, "__cfi_check", M);
+  llvm::BasicBlock *BB = llvm::BasicBlock::Create(Ctx, "entry", F);
+  // FIXME: consider emitting an intrinsic call like
+  // call void @llvm.cfi_check(i64 %0, i8* %1, i8* %2)
+  // which can be lowered in CrossDSOCFI pass to the actual contents of
+  // __cfi_check. This would allow inlining of __cfi_check calls.
+  llvm::CallInst::Create(
+      llvm::Intrinsic::getDeclaration(M, llvm::Intrinsic::trap), "", BB);
+  llvm::ReturnInst::Create(Ctx, nullptr, BB);
+}
+
 // This function is basically a switch over the CFI failure kind, which is
 // extracted from CFICheckFailData (1st function argument). Each case is either
 // llvm.trap or a call to one of the two runtime handlers, based on
@@ -2891,7 +2930,7 @@ llvm::CallInst *CodeGenFunction::EmitTrapCall(llvm::Intrinsic::ID IntrID) {
   if (!CGM.getCodeGenOpts().TrapFuncName.empty()) {
     auto A = llvm::Attribute::get(getLLVMContext(), "trap-func-name",
                                   CGM.getCodeGenOpts().TrapFuncName);
-    TrapCall->addAttribute(llvm::AttributeSet::FunctionIndex, A);
+    TrapCall->addAttribute(llvm::AttributeList::FunctionIndex, A);
   }
 
   return TrapCall;
@@ -3406,7 +3445,10 @@ LValue CodeGenFunction::EmitMemberExpr(const MemberExpr *E) {
     Address Addr = EmitPointerWithAlignment(BaseExpr, &AlignSource);
     QualType PtrTy = BaseExpr->getType()->getPointeeType();
     SanitizerSet SkippedChecks;
-    if (IsDeclRefOrWrappedCXXThis(BaseExpr))
+    bool IsBaseCXXThis = IsWrappedCXXThis(BaseExpr);
+    if (IsBaseCXXThis)
+      SkippedChecks.set(SanitizerKind::Alignment, true);
+    if (IsBaseCXXThis || isa<DeclRefExpr>(BaseExpr))
       SkippedChecks.set(SanitizerKind::Null, true);
     EmitTypeCheck(TCK_MemberAccess, E->getExprLoc(), Addr.getPointer(), PtrTy,
                   /*Alignment=*/CharUnits::Zero(), SkippedChecks);
@@ -4023,6 +4065,8 @@ LValue CodeGenFunction::EmitBinaryOperatorLValue(const BinaryOperator *E) {
 
     RValue RV = EmitAnyExpr(E->getRHS());
     LValue LV = EmitCheckedLValue(E->getLHS(), TCK_Store);
+    if (RV.isScalar())
+      EmitNullabilityCheck(LV, RV.getScalarVal(), E->getExprLoc());
     EmitStoreThroughLValue(RV, LV);
     return LV;
   }

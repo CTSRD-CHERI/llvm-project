@@ -525,7 +525,6 @@
 // CHECK_CORE_AVX2_M32: #define __PCLMUL__ 1
 // CHECK_CORE_AVX2_M32: #define __POPCNT__ 1
 // CHECK_CORE_AVX2_M32: #define __RDRND__ 1
-// CHECK_CORE_AVX2_M32: #define __RTM__ 1
 // CHECK_CORE_AVX2_M32: #define __SSE2__ 1
 // CHECK_CORE_AVX2_M32: #define __SSE3__ 1
 // CHECK_CORE_AVX2_M32: #define __SSE4_1__ 1
@@ -555,7 +554,6 @@
 // CHECK_CORE_AVX2_M64: #define __PCLMUL__ 1
 // CHECK_CORE_AVX2_M64: #define __POPCNT__ 1
 // CHECK_CORE_AVX2_M64: #define __RDRND__ 1
-// CHECK_CORE_AVX2_M64: #define __RTM__ 1
 // CHECK_CORE_AVX2_M64: #define __SSE2_MATH__ 1
 // CHECK_CORE_AVX2_M64: #define __SSE2__ 1
 // CHECK_CORE_AVX2_M64: #define __SSE3__ 1
@@ -591,7 +589,6 @@
 // CHECK_BROADWELL_M32: #define __POPCNT__ 1
 // CHECK_BROADWELL_M32: #define __RDRND__ 1
 // CHECK_BROADWELL_M32: #define __RDSEED__ 1
-// CHECK_BROADWELL_M32: #define __RTM__ 1
 // CHECK_BROADWELL_M32: #define __SSE2__ 1
 // CHECK_BROADWELL_M32: #define __SSE3__ 1
 // CHECK_BROADWELL_M32: #define __SSE4_1__ 1
@@ -623,7 +620,6 @@
 // CHECK_BROADWELL_M64: #define __POPCNT__ 1
 // CHECK_BROADWELL_M64: #define __RDRND__ 1
 // CHECK_BROADWELL_M64: #define __RDSEED__ 1
-// CHECK_BROADWELL_M64: #define __RTM__ 1
 // CHECK_BROADWELL_M64: #define __SSE2_MATH__ 1
 // CHECK_BROADWELL_M64: #define __SSE2__ 1
 // CHECK_BROADWELL_M64: #define __SSE3__ 1
@@ -1961,6 +1957,14 @@
 // End X86/GCC/Linux tests ------------------
 
 // Begin PPC/GCC/Linux tests ----------------
+// Check that VSX also turns on altivec.
+// RUN: %clang -mvsx -E -dM %s -o - 2>&1 \
+// RUN:     -target powerpc-unknown-linux \
+// RUN:   | FileCheck -match-full-lines %s -check-prefix=CHECK_PPC_VSX_M32
+//
+// CHECK_PPC_VSX_M32: #define __ALTIVEC__ 1
+// CHECK_PPC_VSX_M32: #define __VSX__ 1
+//
 // RUN: %clang -mvsx -E -dM %s -o - 2>&1 \
 // RUN:     -target powerpc64-unknown-linux \
 // RUN:   | FileCheck -match-full-lines %s -check-prefix=CHECK_PPC_VSX_M64
@@ -1984,6 +1988,24 @@
 // RUN:   | FileCheck -match-full-lines %s -check-prefix=CHECK_PPC_CRYPTO_M64
 //
 // CHECK_PPC_CRYPTO_M64: #define __CRYPTO__ 1
+
+// HTM is available on power8 or later which includes all of powerpc64le as an
+// ABI choice. Test that, the cpus, and the option.
+// RUN: %clang -mhtm -E -dM %s -o - 2>&1 \
+// RUN:     -target powerpc64-unknown-linux \
+// RUN:   | FileCheck -match-full-lines %s -check-prefix=CHECK_PPC_HTM
+// RUN: %clang -E -dM %s -o - 2>&1 \
+// RUN:     -target powerpc64le-unknown-linux \
+// RUN:   | FileCheck -match-full-lines %s -check-prefix=CHECK_PPC_HTM
+// RUN: %clang -mcpu=pwr8 -E -dM %s -o - 2>&1 \
+// RUN:     -target powerpc64-unknown-linux \
+// RUN:   | FileCheck -match-full-lines %s -check-prefix=CHECK_PPC_HTM
+// RUN: %clang -mcpu=pwr9 -E -dM %s -o - 2>&1 \
+// RUN:     -target powerpc64-unknown-linux \
+// RUN:   | FileCheck -match-full-lines %s -check-prefix=CHECK_PPC_HTM
+//
+// CHECK_PPC_HTM: #define __HTM__ 1
+
 //
 // RUN: %clang -mcpu=ppc64 -E -dM %s -o - 2>&1 \
 // RUN:     -target powerpc64-unknown-unknown \

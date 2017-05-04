@@ -35,7 +35,8 @@ ARMCallLowering::ARMCallLowering(const ARMTargetLowering &TLI)
 static bool isSupportedType(const DataLayout &DL, const ARMTargetLowering &TLI,
                             Type *T) {
   EVT VT = TLI.getValueType(DL, T, true);
-  if (!VT.isSimple() || VT.isVector())
+  if (!VT.isSimple() || VT.isVector() ||
+      !(VT.isInteger() || VT.isFloatingPoint()))
     return false;
 
   unsigned VTSize = VT.getSimpleVT().getSizeInBits();
@@ -185,7 +186,7 @@ bool ARMCallLowering::lowerReturnVal(MachineIRBuilder &MIRBuilder,
 
   SmallVector<ArgInfo, 4> SplitVTs;
   ArgInfo RetInfo(VReg, Val->getType());
-  setArgFlags(RetInfo, AttributeSet::ReturnIndex, DL, F);
+  setArgFlags(RetInfo, AttributeList::ReturnIndex, DL, F);
   splitToValueTypes(RetInfo, SplitVTs, DL, MF.getRegInfo());
 
   CCAssignFn *AssignFn =
@@ -244,12 +245,21 @@ struct IncomingValueHandler : public CallLowering::ValueHandler {
       // that's what we should load.
       Size = 4;
       assert(MRI.getType(ValVReg).isScalar() && "Only scalars supported atm");
-      MRI.setType(ValVReg, LLT::scalar(32));
-    }
 
+      auto LoadVReg = MRI.createGenericVirtualRegister(LLT::scalar(32));
+      buildLoad(LoadVReg, Addr, Size, /* Alignment */ 0, MPO);
+      MIRBuilder.buildTrunc(ValVReg, LoadVReg);
+    } else {
+      // If the value is not extended, a simple load will suffice.
+      buildLoad(ValVReg, Addr, Size, /* Alignment */ 0, MPO);
+    }
+  }
+
+  void buildLoad(unsigned Val, unsigned Addr, uint64_t Size, unsigned Alignment,
+                 MachinePointerInfo &MPO) {
     auto MMO = MIRBuilder.getMF().getMachineMemOperand(
-        MPO, MachineMemOperand::MOLoad, Size, /* Alignment */ 0);
-    MIRBuilder.buildLoad(ValVReg, Addr, *MMO);
+        MPO, MachineMemOperand::MOLoad, Size, Alignment);
+    MIRBuilder.buildLoad(Val, Addr, *MMO);
   }
 
   void assignValueToReg(unsigned ValVReg, unsigned PhysReg,
@@ -333,12 +343,7 @@ bool ARMCallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
   if (Subtarget->isThumb())
     return false;
 
-  // FIXME: Support soft float (when we're ready to generate libcalls)
-  if (Subtarget->useSoftFloat() || !Subtarget->hasVFP2())
-    return false;
-
-  auto &Args = F.getArgumentList();
-  for (auto &Arg : Args)
+  for (auto &Arg : F.args())
     if (!isSupportedType(DL, TLI, Arg.getType()))
       return false;
 
@@ -347,7 +352,7 @@ bool ARMCallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
 
   SmallVector<ArgInfo, 8> ArgInfos;
   unsigned Idx = 0;
-  for (auto &Arg : Args) {
+  for (auto &Arg : F.args()) {
     ArgInfo AInfo(VRegs[Idx], Arg.getType());
     setArgFlags(AInfo, Idx + 1, DL, F);
     splitToValueTypes(AInfo, ArgInfos, DL, MF.getRegInfo());
@@ -374,6 +379,7 @@ struct CallReturnHandler : public IncomingValueHandler {
 } // End anonymous namespace.
 
 bool ARMCallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
+                                CallingConv::ID CallConv,
                                 const MachineOperand &Callee,
                                 const ArgInfo &OrigRet,
                                 ArrayRef<ArgInfo> OrigArgs) const {
@@ -387,10 +393,6 @@ bool ARMCallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
     return false;
 
   auto CallSeqStart = MIRBuilder.buildInstr(ARM::ADJCALLSTACKDOWN);
-
-  // FIXME: This is the calling convention of the caller - we should use the
-  // calling convention of the callee instead.
-  auto CallConv = MF.getFunction()->getCallingConv();
 
   // Create the call instruction so we can add the implicit uses of arg
   // registers, but don't insert it yet.

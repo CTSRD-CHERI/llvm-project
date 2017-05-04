@@ -276,8 +276,14 @@ public:
   /// filled in with the null terminated string value specified.  The new global
   /// variable will be marked mergable with any others of the same contents.  If
   /// Name is specified, it is the name of the global variable created.
-  GlobalVariable *CreateGlobalString(StringRef Str, const Twine &Name = "",
-                                     unsigned AddressSpace = 0);
+  GlobalVariable *CreateGlobalString(StringRef Str,
+#ifdef LLVM_NO_DEFAULT_ADDRESS_SPACE_FOR_GLOBAL_VARS
+                                     const Twine &Name, unsigned AddressSpace
+#else
+                                     const Twine &Name = "",
+                                     unsigned AddressSpace = 0
+#endif
+                                    );
 
   /// \brief Get a constant value representing either true or false.
   ConstantInt *getInt1(bool V) {
@@ -383,12 +389,13 @@ public:
   }
 
   /// \brief Fetch the type representing a pointer to an 8-bit integer value.
-  PointerType *getInt8PtrTy(unsigned AddrSpace = 0) {
+  PointerType *getInt8PtrTy(LLVM_DEFAULT_AS_PARAM(AddrSpace)) {
     return Type::getInt8PtrTy(Context, AddrSpace);
   }
 
   /// \brief Fetch the type representing a pointer to an integer value.
-  IntegerType *getIntPtrTy(const DataLayout &DL, unsigned AddrSpace = 0) {
+  IntegerType *getIntPtrTy(const DataLayout &DL,
+                           LLVM_DEFAULT_AS_PARAM(AddrSpace)) {
     return DL.getIntPtrType(Context, AddrSpace);
   }
 
@@ -1091,10 +1098,15 @@ public:
   // Instruction creation methods: Memory Instructions
   //===--------------------------------------------------------------------===//
 
+  AllocaInst *CreateAlloca(Type *Ty, unsigned AddrSpace,
+                           Value *ArraySize = nullptr, const Twine &Name = "") {
+    return Insert(new AllocaInst(Ty, AddrSpace, ArraySize), Name);
+  }
+
   AllocaInst *CreateAlloca(Type *Ty, Value *ArraySize = nullptr,
                            const Twine &Name = "") {
-    unsigned AS = BB->getModule()->getDataLayout().getAllocaAS();
-    return Insert(new AllocaInst(Ty, AS, ArraySize), Name);
+    const DataLayout &DL = BB->getParent()->getParent()->getDataLayout();
+    return Insert(new AllocaInst(Ty, DL.getAllocaAddrSpace(), ArraySize), Name);
   }
   // \brief Provided to resolve 'CreateLoad(Ptr, "...")' correctly, instead of
   // converting the string to 'bool' for the isVolatile parameter.
@@ -1302,8 +1314,13 @@ public:
 
   /// \brief Same as CreateGlobalString, but return a pointer with "i8*" type
   /// instead of a pointer to array of i8.
-  Value *CreateGlobalStringPtr(StringRef Str, const Twine &Name = "",
+  Value *CreateGlobalStringPtr(StringRef Str,
+#ifdef LLVM_NO_DEFAULT_ADDRESS_SPACE_FOR_GLOBAL_VARS
+                               const Twine &Name, unsigned AddressSpace) {
+#else
+                               const Twine &Name = "",
                                unsigned AddressSpace = 0) {
+#endif
     GlobalVariable *gv = CreateGlobalString(Str, Name, AddressSpace);
     Value *zero = ConstantInt::get(Type::getInt32Ty(Context), 0);
     Value *Args[] = { zero, zero };
@@ -1809,24 +1826,16 @@ public:
     return V;
   }
 
-  /// \brief Create an assume intrinsic call that represents an alignment
-  /// assumption on the provided pointer.
-  ///
-  /// An optional offset can be provided, and if it is provided, the offset
-  /// must be subtracted from the provided pointer to get the pointer with the
-  /// specified alignment.
-  CallInst *CreateAlignmentAssumption(const DataLayout &DL, Value *PtrValue,
-                                      unsigned Alignment,
-                                      Value *OffsetValue = nullptr) {
-    assert(isa<PointerType>(PtrValue->getType()) &&
-           "trying to create an alignment assumption on a non-pointer?");
-
-    PointerType *PtrTy = cast<PointerType>(PtrValue->getType());
-    Type *IntPtrTy = getIntPtrTy(DL, PtrTy->getAddressSpace());
+private:
+  /// \brief Helper function that creates an assume intrinsic call that
+  /// represents an alignment assumption on the provided Ptr, Mask, Type
+  /// and Offset.
+  CallInst *CreateAlignmentAssumptionHelper(const DataLayout &DL,
+                                            Value *PtrValue, Value *Mask,
+                                            Type *IntPtrTy,
+                                            Value *OffsetValue) {
     Value *PtrIntValue = CreatePtrToInt(PtrValue, IntPtrTy, "ptrint");
 
-    Value *Mask = ConstantInt::get(IntPtrTy,
-      Alignment > 0 ? Alignment - 1 : 0);
     if (OffsetValue) {
       bool IsOffsetZero = false;
       if (ConstantInt *CI = dyn_cast<ConstantInt>(OffsetValue))
@@ -1843,8 +1852,59 @@ public:
     Value *Zero = ConstantInt::get(IntPtrTy, 0);
     Value *MaskedPtr = CreateAnd(PtrIntValue, Mask, "maskedptr");
     Value *InvCond = CreateICmpEQ(MaskedPtr, Zero, "maskcond");
-
     return CreateAssumption(InvCond);
+  }
+
+public:
+  /// \brief Create an assume intrinsic call that represents an alignment
+  /// assumption on the provided pointer.
+  ///
+  /// An optional offset can be provided, and if it is provided, the offset
+  /// must be subtracted from the provided pointer to get the pointer with the
+  /// specified alignment.
+  CallInst *CreateAlignmentAssumption(const DataLayout &DL, Value *PtrValue,
+                                      unsigned Alignment,
+                                      Value *OffsetValue = nullptr) {
+    assert(isa<PointerType>(PtrValue->getType()) &&
+           "trying to create an alignment assumption on a non-pointer?");
+    PointerType *PtrTy = cast<PointerType>(PtrValue->getType());
+    Type *IntPtrTy = getIntPtrTy(DL, PtrTy->getAddressSpace());
+
+    Value *Mask = ConstantInt::get(IntPtrTy, Alignment > 0 ? Alignment - 1 : 0);
+    return CreateAlignmentAssumptionHelper(DL, PtrValue, Mask, IntPtrTy,
+                                           OffsetValue);
+  }
+  //
+  /// \brief Create an assume intrinsic call that represents an alignment
+  /// assumption on the provided pointer.
+  ///
+  /// An optional offset can be provided, and if it is provided, the offset
+  /// must be subtracted from the provided pointer to get the pointer with the
+  /// specified alignment.
+  ///
+  /// This overload handles the condition where the Alignment is dependent
+  /// on an existing value rather than a static value.
+  CallInst *CreateAlignmentAssumption(const DataLayout &DL, Value *PtrValue,
+                                      Value *Alignment,
+                                      Value *OffsetValue = nullptr) {
+    assert(isa<PointerType>(PtrValue->getType()) &&
+           "trying to create an alignment assumption on a non-pointer?");
+    PointerType *PtrTy = cast<PointerType>(PtrValue->getType());
+    Type *IntPtrTy = getIntPtrTy(DL, PtrTy->getAddressSpace());
+
+    if (Alignment->getType() != IntPtrTy)
+      Alignment = CreateIntCast(Alignment, IntPtrTy, /*isSigned*/ true,
+                                "alignmentcast");
+    Value *IsPositive =
+        CreateICmp(CmpInst::ICMP_SGT, Alignment,
+                   ConstantInt::get(Alignment->getType(), 0), "ispositive");
+    Value *PositiveMask =
+        CreateSub(Alignment, ConstantInt::get(IntPtrTy, 1), "positivemask");
+    Value *Mask = CreateSelect(IsPositive, PositiveMask,
+                               ConstantInt::get(IntPtrTy, 0), "mask");
+
+    return CreateAlignmentAssumptionHelper(DL, PtrValue, Mask, IntPtrTy,
+                                           OffsetValue);
   }
 };
 

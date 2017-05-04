@@ -17,7 +17,7 @@
 #include "CommandObjectHelp.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/IOHandler.h"
-#include "lldb/Core/StringList.h"
+#include "lldb/Host/OptionParser.h"
 #include "lldb/Interpreter/Args.h"
 #include "lldb/Interpreter/CommandHistory.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
@@ -28,6 +28,7 @@
 #include "lldb/Interpreter/OptionValueUInt64.h"
 #include "lldb/Interpreter/Options.h"
 #include "lldb/Interpreter/ScriptInterpreter.h"
+#include "lldb/Utility/StringList.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -49,7 +50,11 @@ class CommandObjectCommandsHistory : public CommandObjectParsed {
 public:
   CommandObjectCommandsHistory(CommandInterpreter &interpreter)
       : CommandObjectParsed(interpreter, "command history",
-                            "Dump the history of commands in this session.",
+                            "Dump the history of commands in this session.\n"
+                            "Commands in the history list can be run again "
+                            "using \"!<INDEX>\".   \"!-<OFFSET>\" will re-run "
+                            "the command that is <OFFSET> commands from the end"
+                            " of the list (counting the current command).",
                             nullptr),
         m_options() {}
 

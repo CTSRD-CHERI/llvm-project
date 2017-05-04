@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 //
 // This pass transforms loops that contain branches on loop-invariant conditions
-// to have multiple loops.  For example, it turns the left into the right code:
+// to multiple loops.  For example, it turns the left into the right code:
 //
 //  for (...)                  if (lic)
 //    A                          for (...)
@@ -33,6 +33,7 @@
 #include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/CodeMetrics.h"
+#include "llvm/Analysis/DivergenceAnalysis.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/LoopPass.h"
@@ -180,12 +181,14 @@ namespace {
     // NewBlocks contained cloned copy of basic blocks from LoopBlocks.
     std::vector<BasicBlock*> NewBlocks;
 
+    bool hasBranchDivergence;
+
   public:
     static char ID; // Pass ID, replacement for typeid
-    explicit LoopUnswitch(bool Os = false) :
+    explicit LoopUnswitch(bool Os = false, bool hasBranchDivergence = false) :
       LoopPass(ID), OptimizeForSize(Os), redoLoop(false),
       currentLoop(nullptr), DT(nullptr), loopHeader(nullptr),
-      loopPreheader(nullptr) {
+      loopPreheader(nullptr), hasBranchDivergence(hasBranchDivergence) {
         initializeLoopUnswitchPass(*PassRegistry::getPassRegistry());
       }
 
@@ -198,6 +201,8 @@ namespace {
     void getAnalysisUsage(AnalysisUsage &AU) const override {
       AU.addRequired<AssumptionCacheTracker>();
       AU.addRequired<TargetTransformInfoWrapperPass>();
+      if (hasBranchDivergence)
+        AU.addRequired<DivergenceAnalysis>();
       getLoopAnalysisUsage(AU);
     }
 
@@ -367,11 +372,12 @@ INITIALIZE_PASS_BEGIN(LoopUnswitch, "loop-unswitch", "Unswitch loops",
 INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker)
 INITIALIZE_PASS_DEPENDENCY(LoopPass)
 INITIALIZE_PASS_DEPENDENCY(TargetTransformInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(DivergenceAnalysis)
 INITIALIZE_PASS_END(LoopUnswitch, "loop-unswitch", "Unswitch loops",
                       false, false)
 
-Pass *llvm::createLoopUnswitchPass(bool Os) {
-  return new LoopUnswitch(Os);
+Pass *llvm::createLoopUnswitchPass(bool Os, bool hasBranchDivergence) {
+  return new LoopUnswitch(Os, hasBranchDivergence);
 }
 
 /// Operator chain lattice.
@@ -703,9 +709,8 @@ bool LoopUnswitch::processCurrentLoop() {
           // Do not process same value again and again.
           // At this point we have some cases already unswitched and
           // some not yet unswitched. Let's find the first not yet unswitched one.
-          for (SwitchInst::CaseIt i = SI->case_begin(), e = SI->case_end();
-               i != e; ++i) {
-            Constant *UnswitchValCandidate = i.getCaseValue();
+          for (auto Case : SI->cases()) {
+            Constant *UnswitchValCandidate = Case.getCaseValue();
             if (!BranchesInfo.isUnswitched(SI, UnswitchValCandidate)) {
               UnswitchVal = UnswitchValCandidate;
               break;
@@ -806,6 +811,15 @@ bool LoopUnswitch::UnswitchIfProfitable(Value *LoopCond, Constant *Val,
                  << " at non-trivial condition '" << *Val
                  << "' == " << *LoopCond << "\n"
                  << ". Cost too high.\n");
+    return false;
+  }
+  if (hasBranchDivergence &&
+      getAnalysis<DivergenceAnalysis>().isDivergent(LoopCond)) {
+    DEBUG(dbgs() << "NOT unswitching loop %"
+                 << currentLoop->getHeader()->getName()
+                 << " at non-trivial condition '" << *Val
+                 << "' == " << *LoopCond << "\n"
+                 << ". Condition is divergent.\n");
     return false;
   }
 
@@ -972,7 +986,7 @@ bool LoopUnswitch::TryTrivialLoopUnswitch(bool &Changed) {
       if (!Cond)
         break;
       // Find the target block we are definitely going to.
-      CurrentBB = SI->findCaseValue(Cond).getCaseSuccessor();
+      CurrentBB = SI->findCaseValue(Cond)->getCaseSuccessor();
     } else {
       // We do not understand these terminator instructions.
       break;
@@ -1036,13 +1050,12 @@ bool LoopUnswitch::TryTrivialLoopUnswitch(bool &Changed) {
     // this.
     // Note that we can't trivially unswitch on the default case or
     // on already unswitched cases.
-    for (SwitchInst::CaseIt i = SI->case_begin(), e = SI->case_end();
-         i != e; ++i) {
+    for (auto Case : SI->cases()) {
       BasicBlock *LoopExitCandidate;
-      if ((LoopExitCandidate = isTrivialLoopExitBlock(currentLoop,
-                                               i.getCaseSuccessor()))) {
+      if ((LoopExitCandidate =
+               isTrivialLoopExitBlock(currentLoop, Case.getCaseSuccessor()))) {
         // Okay, we found a trivial case, remember the value that is trivial.
-        ConstantInt *CaseVal = i.getCaseValue();
+        ConstantInt *CaseVal = Case.getCaseValue();
 
         // Check that it was not unswitched before, since already unswitched
         // trivial vals are looks trivial too.
@@ -1218,11 +1231,12 @@ void LoopUnswitch::UnswitchNontrivialCondition(Value *LIC, Constant *Val,
   LoopProcessWorklist.push_back(NewLoop);
   redoLoop = true;
 
-  // Keep a WeakVH holding onto LIC.  If the first call to RewriteLoopBody
+  // Keep a WeakTrackingVH holding onto LIC.  If the first call to
+  // RewriteLoopBody
   // deletes the instruction (for example by simplifying a PHI that feeds into
   // the condition that we're unswitching on), we don't rewrite the second
   // iteration.
-  WeakVH LICHandle(LIC);
+  WeakTrackingVH LICHandle(LIC);
 
   // Now we rewrite the original code to know that the condition is true and the
   // new code to know that the condition is false.
@@ -1249,7 +1263,7 @@ static void RemoveFromWorklist(Instruction *I,
 static void ReplaceUsesOfWith(Instruction *I, Value *V,
                               std::vector<Instruction*> &Worklist,
                               Loop *L, LPPassManager *LPM) {
-  DEBUG(dbgs() << "Replace with '" << *V << "': " << *I);
+  DEBUG(dbgs() << "Replace with '" << *V << "': " << *I << "\n");
 
   // Add uses to the worklist, which may be dead now.
   for (unsigned i = 0, e = I->getNumOperands(); i != e; ++i)
@@ -1262,7 +1276,8 @@ static void ReplaceUsesOfWith(Instruction *I, Value *V,
   LPM->deleteSimpleAnalysisValue(I, L);
   RemoveFromWorklist(I, Worklist);
   I->replaceAllUsesWith(V);
-  I->eraseFromParent();
+  if (!I->mayHaveSideEffects())
+    I->eraseFromParent();
   ++NumSimplify;
 }
 
@@ -1346,9 +1361,11 @@ void LoopUnswitch::RewriteLoopBodyWithConditionConstant(Loop *L, Value *LIC,
     // NOTE: if a case value for the switch is unswitched out, we record it
     // after the unswitch finishes. We can not record it here as the switch
     // is not a direct user of the partial LIV.
-    SwitchInst::CaseIt DeadCase = SI->findCaseValue(cast<ConstantInt>(Val));
+    SwitchInst::CaseHandle DeadCase =
+        *SI->findCaseValue(cast<ConstantInt>(Val));
     // Default case is live for multiple values.
-    if (DeadCase == SI->case_default()) continue;
+    if (DeadCase == *SI->case_default())
+      continue;
 
     // Found a dead case value.  Don't remove PHI nodes in the
     // successor if they become single-entry, those PHI nodes may
@@ -1416,7 +1433,7 @@ void LoopUnswitch::SimplifyCode(std::vector<Instruction*> &Worklist, Loop *L) {
 
     // Simple DCE.
     if (isInstructionTriviallyDead(I)) {
-      DEBUG(dbgs() << "Remove dead instruction '" << *I);
+      DEBUG(dbgs() << "Remove dead instruction '" << *I << "\n");
 
       // Add uses to the worklist, which may be dead now.
       for (unsigned i = 0, e = I->getNumOperands(); i != e; ++i)

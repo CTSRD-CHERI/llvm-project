@@ -1,4 +1,5 @@
-// RUN: clang -cc1 -triple cheri-unknown-bsd -cheri-linker -target-abi purecap -O2 -S -o - %s | FileCheck %s
+// RUN: %clang -cc1 -triple cheri-unknown-bsd -cheri-linker -target-abi purecap -O2 -S -o - %s | FileCheck %s
+// REQUIRES: clang
 // ModuleID = 'ocsp_cl.i'
 // GVN was seen to unconditionally get the size of the underlying type for a
 // pointer when it was unsized.
@@ -16,28 +17,35 @@ void fn1() {
   // CHECK: ld	$1, %call16(fn2)($gp)
   // CHECK: cgetpccsetoffset	$c12, $1
   // CHECK: cjalr	$c12, $c17
+  // CHECK: nop
   // Load address of a
-  // CHECK: ld	$2, %got_disp(a)($gp)
-  // CHECK: cfromptr	$c1, $c0, $2
+  // CHECK-NEXT: ld $1, %got_disp(.size.a)($gp)
+  // CHECK-NEXT: ld	$2, %got_disp(a)($gp)
+  // CHECK-NEXT: ld $1, 0($1)
+  // CHECK-NEXT: cfromptr	$c1, $c0, $2
+  // CHECK-NEXT: csetbounds  [[A_CAP:\$c[0-9]+]], $c1, $1
   // Store in a
-  // CHECK: csc	$c3, $zero, 0($c1)
+  // CHECK-NEXT: csc	$c3, $zero, 0([[A_CAP]])
   a = (POLICYINFO *__capability)fn2();
   // Load address of b
-  // CHECK: ld	$2, %got_disp(b)($gp)
-  // CHECK: cfromptr	$c1, $c0, $2
+  // CHECK-NEXT: ld $1, %got_disp(.size.b)($gp)
+  // CHECK-NEXT: ld	$2, %got_disp(b)($gp)
+  // CHECK-NEXT: ld $1, 0($1)
+  // CHECK-NEXT: cfromptr	$c1, $c0, $2
+  // CHECK-NEXT: csetbounds  [[B_CAP:\$c[0-9]+]], $c1, $1
   // Store in b
-  // CHECK: csc	$c3, $zero, 0($c2)
+  // CHECK-NEXT: csc	$c3, $zero, 0([[B_CAP]])
   b = a;
   // Load qualifiers
-  // CHECK: clc	$c1, $zero, 0($c3)
+  // CHECK-NEXT: clc	[[B:\$c[0-9]+]], $zero, 0($c3)
   // Create NULL capability
-  // CHECK: cfromptr	$c4, $c0, $zero
+  // CHECK-NEXT: cfromptr  [[NULLPTR:\$c[0-9]+]], $c0, $zero
   // Check if qualifiers is NULL
-  // CHECK: ceq	$1, $c1, $c4
+  // CHECK-NEXT: ceq	$1, [[B]], [[NULLPTR]]
   // CHECK: bnez	$1, .LBB0_2
   if (b->qualifiers)
     // Store above NULL capability in qualifiers
-    // CHECK: csc	$c4, $zero, 0($c3)
+    // CHECK: csc	[[NULLPTR]], $zero, 0($c3)
     b->qualifiers = 0;
   // CHECK-LABEL: .LBB0_2:
   // Call sk_push

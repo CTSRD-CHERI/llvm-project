@@ -44,9 +44,9 @@ static bool readValueFromFile(const char *Filename,
   ssize_t BytesRead;
   bool Success;
   std::tie(BytesRead, Success) = retryingReadSome(Fd, Line, Line + BufSize);
+  close(Fd);
   if (!Success)
     return false;
-  close(Fd);
   char *End = nullptr;
   long long Tmp = internal_simple_strtoll(Line, &End, 10);
   bool Result = false;
@@ -212,6 +212,12 @@ bool probeRequiredCPUFeatures() XRAY_NEVER_INSTRUMENT {
   __get_cpuid(0x80000001, &EAX, &EBX, &ECX, &EDX);
   if (!(EDX & (1u << 26))) {
     Report("Missing rdtscp support.\n");
+    return false;
+  }
+  // Also check whether we can determine the CPU frequency, since if we cannot,
+  // we should use the emulated TSC instead.
+  if (!getTSCFrequency()) {
+    Report("Unable to determine CPU frequency.\n");
     return false;
   }
   return true;

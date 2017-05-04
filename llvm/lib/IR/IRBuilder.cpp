@@ -191,7 +191,7 @@ CallInst *IRBuilderBase::CreateLifetimeStart(Value *Ptr, ConstantInt *Size) {
   Value *Ops[] = { Size, Ptr };
   Module *M = BB->getParent()->getParent();
   Value *TheFn = Intrinsic::getDeclaration(M, Intrinsic::lifetime_start,
-          Ptr->getType());
+                                           { Ptr->getType() });
   return createCallHelper(TheFn, Ops, this);
 }
 
@@ -207,7 +207,7 @@ CallInst *IRBuilderBase::CreateLifetimeEnd(Value *Ptr, ConstantInt *Size) {
   Value *Ops[] = { Size, Ptr };
   Module *M = BB->getParent()->getParent();
   Value *TheFn = Intrinsic::getDeclaration(M, Intrinsic::lifetime_end,
-          Ptr->getType());
+                                           { Ptr->getType() });
   return createCallHelper(TheFn, Ops, this);
 }
 

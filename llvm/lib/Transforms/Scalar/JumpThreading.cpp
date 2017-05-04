@@ -557,7 +557,7 @@ bool JumpThreadingPass::ComputeValueKnownInPredecessors(
         Value *LHS = PN->getIncomingValue(i);
         Value *RHS = Cmp->getOperand(1)->DoPHITranslation(BB, PredBB);
 
-        Value *Res = SimplifyCmpInst(Cmp->getPredicate(), LHS, RHS, DL);
+        Value *Res = SimplifyCmpInst(Cmp->getPredicate(), LHS, RHS, {DL});
         if (!Res) {
           if (!isa<Constant>(RHS))
             continue;
@@ -931,6 +931,14 @@ bool JumpThreadingPass::ProcessImpliedCondition(BasicBlock *BB) {
   return false;
 }
 
+/// Return true if Op is an instruction defined in the given block.
+static bool isOpDefinedInBlock(Value *Op, BasicBlock *BB) {
+  if (Instruction *OpInst = dyn_cast<Instruction>(Op))
+    if (OpInst->getParent() == BB)
+      return true;
+  return false;
+}
+
 /// SimplifyPartiallyRedundantLoad - If LI is an obviously partially redundant
 /// load instruction, eliminate it by replacing it with a PHI node.  This is an
 /// important optimization that encourages jump threading, and needs to be run
@@ -953,11 +961,10 @@ bool JumpThreadingPass::SimplifyPartiallyRedundantLoad(LoadInst *LI) {
 
   Value *LoadedPtr = LI->getOperand(0);
 
-  // If the loaded operand is defined in the LoadBB, it can't be available.
-  // TODO: Could do simple PHI translation, that would be fun :)
-  if (Instruction *PtrOp = dyn_cast<Instruction>(LoadedPtr))
-    if (PtrOp->getParent() == LoadBB)
-      return false;
+  // If the loaded operand is defined in the LoadBB and its not a phi,
+  // it can't be available in predecessors.
+  if (isOpDefinedInBlock(LoadedPtr, LoadBB) && !isa<PHINode>(LoadedPtr))
+    return false;
 
   // Scan a few instructions up from the load, to see if it is obviously live at
   // the entry to its block.
@@ -1008,23 +1015,31 @@ bool JumpThreadingPass::SimplifyPartiallyRedundantLoad(LoadInst *LI) {
     if (!PredsScanned.insert(PredBB).second)
       continue;
 
-    // Scan the predecessor to see if the value is available in the pred.
     BBIt = PredBB->end();
     unsigned NumScanedInst = 0;
-    Value *PredAvailable = FindAvailableLoadedValue(
-        LI, PredBB, BBIt, DefMaxInstsToScan, AA, &IsLoadCSE, &NumScanedInst);
+    Value *PredAvailable = nullptr;
+    // NOTE: We don't CSE load that is volatile or anything stronger than
+    // unordered, that should have been checked when we entered the function.
+    assert(LI->isUnordered() && "Attempting to CSE volatile or atomic loads");
+    // If this is a load on a phi pointer, phi-translate it and search
+    // for available load/store to the pointer in predecessors.
+    Value *Ptr = LoadedPtr->DoPHITranslation(LoadBB, PredBB);
+    PredAvailable = FindAvailablePtrLoadStore(
+        Ptr, LI->getType(), LI->isAtomic(), PredBB, BBIt, DefMaxInstsToScan,
+        AA, &IsLoadCSE, &NumScanedInst);
 
-    // If PredBB has a single predecessor, continue scanning through the single
-    // predecessor.
+    // If PredBB has a single predecessor, continue scanning through the
+    // single precessor.
     BasicBlock *SinglePredBB = PredBB;
     while (!PredAvailable && SinglePredBB && BBIt == SinglePredBB->begin() &&
            NumScanedInst < DefMaxInstsToScan) {
       SinglePredBB = SinglePredBB->getSinglePredecessor();
       if (SinglePredBB) {
         BBIt = SinglePredBB->end();
-        PredAvailable = FindAvailableLoadedValue(
-            LI, SinglePredBB, BBIt, (DefMaxInstsToScan - NumScanedInst), AA,
-            &IsLoadCSE, &NumScanedInst);
+        PredAvailable = FindAvailablePtrLoadStore(
+            Ptr, LI->getType(), LI->isAtomic(), SinglePredBB, BBIt,
+            (DefMaxInstsToScan - NumScanedInst), AA, &IsLoadCSE,
+            &NumScanedInst);
       }
     }
 
@@ -1087,10 +1102,10 @@ bool JumpThreadingPass::SimplifyPartiallyRedundantLoad(LoadInst *LI) {
   if (UnavailablePred) {
     assert(UnavailablePred->getTerminator()->getNumSuccessors() == 1 &&
            "Can't handle critical edge here!");
-    LoadInst *NewVal =
-        new LoadInst(LoadedPtr, LI->getName() + ".pr", false,
-                     LI->getAlignment(), LI->getOrdering(), LI->getSynchScope(),
-                     UnavailablePred->getTerminator());
+    LoadInst *NewVal = new LoadInst(
+        LoadedPtr->DoPHITranslation(LoadBB, UnavailablePred),
+        LI->getName() + ".pr", false, LI->getAlignment(), LI->getOrdering(),
+        LI->getSynchScope(), UnavailablePred->getTerminator());
     NewVal->setDebugLoc(LI->getDebugLoc());
     if (AATags)
       NewVal->setAAMetadata(AATags);
@@ -1235,37 +1250,53 @@ bool JumpThreadingPass::ProcessThreadableEdges(Value *Cond, BasicBlock *BB,
 
   BasicBlock *OnlyDest = nullptr;
   BasicBlock *MultipleDestSentinel = (BasicBlock*)(intptr_t)~0ULL;
+  Constant *OnlyVal = nullptr;
+  Constant *MultipleVal = (Constant *)(intptr_t)~0ULL;
 
+  unsigned PredWithKnownDest = 0;
   for (const auto &PredValue : PredValues) {
     BasicBlock *Pred = PredValue.second;
     if (!SeenPreds.insert(Pred).second)
       continue;  // Duplicate predecessor entry.
-
-    // If the predecessor ends with an indirect goto, we can't change its
-    // destination.
-    if (isa<IndirectBrInst>(Pred->getTerminator()))
-      continue;
 
     Constant *Val = PredValue.first;
 
     BasicBlock *DestBB;
     if (isa<UndefValue>(Val))
       DestBB = nullptr;
-    else if (BranchInst *BI = dyn_cast<BranchInst>(BB->getTerminator()))
+    else if (BranchInst *BI = dyn_cast<BranchInst>(BB->getTerminator())) {
+      assert(isa<ConstantInt>(Val) && "Expecting a constant integer");
       DestBB = BI->getSuccessor(cast<ConstantInt>(Val)->isZero());
-    else if (SwitchInst *SI = dyn_cast<SwitchInst>(BB->getTerminator())) {
-      DestBB = SI->findCaseValue(cast<ConstantInt>(Val)).getCaseSuccessor();
+    } else if (SwitchInst *SI = dyn_cast<SwitchInst>(BB->getTerminator())) {
+      assert(isa<ConstantInt>(Val) && "Expecting a constant integer");
+      DestBB = SI->findCaseValue(cast<ConstantInt>(Val))->getCaseSuccessor();
     } else {
       assert(isa<IndirectBrInst>(BB->getTerminator())
               && "Unexpected terminator");
+      assert(isa<BlockAddress>(Val) && "Expecting a constant blockaddress");
       DestBB = cast<BlockAddress>(Val)->getBasicBlock();
     }
 
     // If we have exactly one destination, remember it for efficiency below.
-    if (PredToDestList.empty())
+    if (PredToDestList.empty()) {
       OnlyDest = DestBB;
-    else if (OnlyDest != DestBB)
-      OnlyDest = MultipleDestSentinel;
+      OnlyVal = Val;
+    } else {
+      if (OnlyDest != DestBB)
+        OnlyDest = MultipleDestSentinel;
+      // It possible we have same destination, but different value, e.g. default
+      // case in switchinst.
+      if (Val != OnlyVal)
+        OnlyVal = MultipleVal;
+    }
+
+    // We know where this predecessor is going.
+    ++PredWithKnownDest;
+
+    // If the predecessor ends with an indirect goto, we can't change its
+    // destination.
+    if (isa<IndirectBrInst>(Pred->getTerminator()))
+      continue;
 
     PredToDestList.push_back(std::make_pair(Pred, DestBB));
   }
@@ -1273,6 +1304,43 @@ bool JumpThreadingPass::ProcessThreadableEdges(Value *Cond, BasicBlock *BB,
   // If all edges were unthreadable, we fail.
   if (PredToDestList.empty())
     return false;
+
+  // If all the predecessors go to a single known successor, we want to fold,
+  // not thread. By doing so, we do not need to duplicate the current block and
+  // also miss potential opportunities in case we dont/cant duplicate.
+  if (OnlyDest && OnlyDest != MultipleDestSentinel) {
+    if (PredWithKnownDest ==
+        (size_t)std::distance(pred_begin(BB), pred_end(BB))) {
+      bool SeenFirstBranchToOnlyDest = false;
+      for (BasicBlock *SuccBB : successors(BB)) {
+        if (SuccBB == OnlyDest && !SeenFirstBranchToOnlyDest)
+          SeenFirstBranchToOnlyDest = true; // Don't modify the first branch.
+        else
+          SuccBB->removePredecessor(BB, true); // This is unreachable successor.
+      }
+
+      // Finally update the terminator.
+      TerminatorInst *Term = BB->getTerminator();
+      BranchInst::Create(OnlyDest, Term);
+      Term->eraseFromParent();
+
+      // If the condition is now dead due to the removal of the old terminator,
+      // erase it.
+      if (auto *CondInst = dyn_cast<Instruction>(Cond)) {
+        if (CondInst->use_empty() && !CondInst->mayHaveSideEffects())
+          CondInst->eraseFromParent();
+        else if (OnlyVal && OnlyVal != MultipleVal &&
+                 CondInst->getParent() == BB) {
+          // If we just learned Cond is the same value for all uses of the
+          // condition, replace it with a constant value
+          CondInst->replaceAllUsesWith(OnlyVal);
+          if (!CondInst->mayHaveSideEffects())
+            CondInst->eraseFromParent();
+        }
+      }
+      return true;
+    }
+  }
 
   // Determine which is the most common successor.  If we have many inputs and
   // this block is a switch, we want to start by threading the batch that goes
@@ -1838,8 +1906,9 @@ bool JumpThreadingPass::DuplicateCondBranchOnPHIIntoPred(
     // If this instruction can be simplified after the operands are updated,
     // just use the simplified value instead.  This frequently happens due to
     // phi translation.
-    if (Value *IV =
-            SimplifyInstruction(New, BB->getModule()->getDataLayout())) {
+    if (Value *IV = SimplifyInstruction(
+            New,
+            {BB->getModule()->getDataLayout(), TLI, nullptr, nullptr, New})) {
       ValueMapping[&*BI] = IV;
       if (!New->mayHaveSideEffects()) {
         delete New;

@@ -1493,7 +1493,7 @@ void NVPTXAsmPrinter::printParamName(Function::const_arg_iterator I,
 
 void NVPTXAsmPrinter::emitFunctionParamList(const Function *F, raw_ostream &O) {
   const DataLayout &DL = getDataLayout();
-  const AttributeSet &PAL = F->getAttributes();
+  const AttributeList &PAL = F->getAttributes();
   const TargetLowering *TLI = nvptxSubtarget->getTargetLowering();
   Function::const_arg_iterator I, E;
   unsigned paramIndex = 0;
@@ -1550,12 +1550,12 @@ void NVPTXAsmPrinter::emitFunctionParamList(const Function *F, raw_ostream &O) {
       }
     }
 
-    if (!PAL.hasAttribute(paramIndex + 1, Attribute::ByVal)) {
+    if (!PAL.hasParamAttribute(paramIndex, Attribute::ByVal)) {
       if (Ty->isAggregateType() || Ty->isVectorTy()) {
         // Just print .param .align <a> .b8 .param[size];
         // <a> = PAL.getparamalignment
         // size = typeallocsize of element type
-        unsigned align = PAL.getParamAlignment(paramIndex + 1);
+        unsigned align = PAL.getParamAlignment(paramIndex);
         if (align == 0)
           align = DL.getABITypeAlignment(Ty);
 
@@ -1641,7 +1641,7 @@ void NVPTXAsmPrinter::emitFunctionParamList(const Function *F, raw_ostream &O) {
       // Just print .param .align <a> .b8 .param[size];
       // <a> = PAL.getparamalignment
       // size = typeallocsize of element type
-      unsigned align = PAL.getParamAlignment(paramIndex + 1);
+      unsigned align = PAL.getParamAlignment(paramIndex);
       if (align == 0)
         align = DL.getABITypeAlignment(ETy);
       // Work around a bug in ptxas. When PTX code takes address of
@@ -2004,7 +2004,7 @@ void NVPTXAsmPrinter::bufferAggregateConstant(const Constant *CPV,
     for (unsigned I = 0, E = DL.getTypeAllocSize(CPV->getType()); I < E; ++I) {
       uint8_t Byte = Val.getLoBits(8).getZExtValue();
       aggBuffer->addBytes(&Byte, 1, 1);
-      Val = Val.lshr(8);
+      Val.lshrInPlace(8);
     }
     return;
   }

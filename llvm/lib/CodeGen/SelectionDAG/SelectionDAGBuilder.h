@@ -304,10 +304,13 @@ private:
     BranchProbability DefaultProb;
   };
 
-  /// Check whether a range of clusters is dense enough for a jump table.
-  bool isDense(const CaseClusterVector &Clusters,
-               const SmallVectorImpl<unsigned> &TotalCases,
-               unsigned First, unsigned Last, unsigned MinDensity) const;
+  /// Return the range of value in [First..Last].
+  uint64_t getJumpTableRange(const CaseClusterVector &Clusters, unsigned First,
+                             unsigned Last) const;
+
+  /// Return the number of cases in [First..Last].
+  uint64_t getJumpTableNumCases(const SmallVectorImpl<unsigned> &TotalCases,
+                                unsigned First, unsigned Last) const;
 
   /// Build a jump table cluster from Clusters[First..Last]. Returns false if it
   /// decides it's not a good idea.
@@ -318,14 +321,6 @@ private:
   /// Find clusters of cases suitable for jump table lowering.
   void findJumpTables(CaseClusterVector &Clusters, const SwitchInst *SI,
                       MachineBasicBlock *DefaultMBB);
-
-  /// Check whether the range [Low,High] fits in a machine word.
-  bool rangeFitsInWord(const APInt &Low, const APInt &High);
-
-  /// Check whether these clusters are suitable for lowering with bit tests based
-  /// on the number of destinations, comparison metric, and range.
-  bool isSuitableForBitTests(unsigned NumDests, unsigned NumCmps,
-                             const APInt &Low, const APInt &High);
 
   /// Build a bit test cluster from Clusters[First..Last]. Returns false if it
   /// decides it's not a good idea.
@@ -777,6 +772,11 @@ public:
                                         bool VarArgDisallowed,
                                         bool ForceVoidReturnTy);
 
+  /// Returns the type of FrameIndex and TargetFrameIndex nodes.
+  MVT getFrameIndexTy() {
+    return DAG.getTargetLoweringInfo().getFrameIndexTy(DAG.getDataLayout());
+  }
+
 private:
   // Terminator instructions.
   void visitRet(const ReturnInst &I);
@@ -928,7 +928,7 @@ private:
   /// instruction selection, they will be inserted to the entry BB.
   bool EmitFuncArgumentDbgValue(const Value *V, DILocalVariable *Variable,
                                 DIExpression *Expr, DILocation *DL,
-                                int64_t Offset, bool IsIndirect,
+                                int64_t Offset, bool IsDbgDeclare,
                                 const SDValue &N);
 
   /// Return the next block after MBB, or nullptr if there is none.

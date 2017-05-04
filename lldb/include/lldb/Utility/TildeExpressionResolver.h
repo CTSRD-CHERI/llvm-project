@@ -10,9 +10,12 @@
 #ifndef LLDB_UTILITY_TILDE_EXPRESSION_RESOLVER_H
 #define LLDB_UTILITY_TILDE_EXPRESSION_RESOLVER_H
 
-#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSet.h"
+
+namespace llvm {
+template <typename T> class SmallVectorImpl;
+}
 
 namespace lldb_private {
 class TildeExpressionResolver {
@@ -44,6 +47,11 @@ public:
   /// \returns true if there were any matches, false otherwise.
   virtual bool ResolvePartial(llvm::StringRef Expr,
                               llvm::StringSet<> &Output) = 0;
+
+  /// \brief Resolve an entire path that begins with a tilde expression,
+  /// replacing the username portion with the matched result.
+  bool ResolveFullPath(llvm::StringRef Expr,
+                       llvm::SmallVectorImpl<char> &Output);
 };
 
 class StandardTildeExpressionResolver : public TildeExpressionResolver {

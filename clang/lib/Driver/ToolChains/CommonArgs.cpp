@@ -261,6 +261,12 @@ std::string tools::getCPUName(const ArgList &Args, const llvm::Triple &T,
     arm::getARMArchCPUFromArgs(Args, MArch, MCPU, FromAs);
     return arm::getARMTargetCPU(MCPU, MArch, T);
   }
+
+  case llvm::Triple::avr:
+    if (const Arg *A = Args.getLastArg(options::OPT_mmcu_EQ))
+      return A->getValue();
+    return "";
+
   case llvm::Triple::mips:
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
@@ -407,7 +413,7 @@ void tools::AddGoldPlugin(const ToolChain &ToolChain, const ArgList &Args,
     CmdArgs.push_back("-plugin-opt=-data-sections");
   }
 
-  if (Arg *A = Args.getLastArg(options::OPT_fprofile_sample_use_EQ)) {
+  if (Arg *A = getLastProfileSampleUseArg(Args)) {
     StringRef FName = A->getValue();
     if (!llvm::sys::fs::exists(FName))
       D.Diag(diag::err_drv_no_such_file) << FName;
@@ -426,11 +432,12 @@ void tools::addArchSpecificRPath(const ToolChain &TC, const ArgList &Args,
   }
 }
 
-void tools::addOpenMPRuntime(ArgStringList &CmdArgs, const ToolChain &TC,
-                             const ArgList &Args) {
+bool tools::addOpenMPRuntime(ArgStringList &CmdArgs, const ToolChain &TC,
+                             const ArgList &Args, bool IsOffloadingHost,
+                             bool GompNeedsRT) {
   if (!Args.hasFlag(options::OPT_fopenmp, options::OPT_fopenmp_EQ,
                     options::OPT_fno_openmp, false))
-    return;
+    return false;
 
   switch (TC.getDriver().getOpenMPRuntime(Args)) {
   case Driver::OMPRT_OMP:
@@ -438,16 +445,24 @@ void tools::addOpenMPRuntime(ArgStringList &CmdArgs, const ToolChain &TC,
     break;
   case Driver::OMPRT_GOMP:
     CmdArgs.push_back("-lgomp");
+
+    if (GompNeedsRT)
+      CmdArgs.push_back("-lrt");
     break;
   case Driver::OMPRT_IOMP5:
     CmdArgs.push_back("-liomp5");
     break;
   case Driver::OMPRT_Unknown:
     // Already diagnosed.
-    break;
+    return false;
   }
 
+  if (IsOffloadingHost)
+    CmdArgs.push_back("-lomptarget");
+
   addArchSpecificRPath(TC, Args, CmdArgs);
+
+  return true;
 }
 
 static void addSanitizerRuntime(const ToolChain &TC, const ArgList &Args,
@@ -562,6 +577,17 @@ collectSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
     StaticRuntimes.push_back("esan");
 }
 
+static void addLibFuzzerRuntime(const ToolChain &TC,
+                                const ArgList &Args,
+                                ArgStringList &CmdArgs) {
+    StringRef ParentDir = llvm::sys::path::parent_path(TC.getDriver().InstalledDir);
+    SmallString<128> P(ParentDir);
+    llvm::sys::path::append(P, "lib", "libLLVMFuzzer.a");
+    CmdArgs.push_back(Args.MakeArgString(P));
+    TC.AddCXXStdlibLibArgs(Args, CmdArgs);
+}
+
+
 // Should be called before we add system libraries (C++ ABI, libstdc++/libc++,
 // C runtime, etc). Returns true if sanitizer system deps need to be linked in.
 bool tools::addSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
@@ -571,6 +597,11 @@ bool tools::addSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
   collectSanitizerRuntimes(TC, Args, SharedRuntimes, StaticRuntimes,
                            NonWholeStaticRuntimes, HelperStaticRuntimes,
                            RequiredSymbols);
+  // Inject libfuzzer dependencies.
+  if (TC.getSanitizerArgs().needsFuzzer()) {
+    addLibFuzzerRuntime(TC, Args, CmdArgs);
+  }
+
   for (auto RT : SharedRuntimes)
     addSanitizerRuntime(TC, Args, CmdArgs, RT, true, false);
   for (auto RT : HelperStaticRuntimes)
@@ -673,6 +704,22 @@ Arg *tools::getLastProfileUseArg(const ArgList &Args) {
   return ProfileUseArg;
 }
 
+Arg *tools::getLastProfileSampleUseArg(const ArgList &Args) {
+  auto *ProfileSampleUseArg = Args.getLastArg(
+      options::OPT_fprofile_sample_use, options::OPT_fprofile_sample_use_EQ,
+      options::OPT_fauto_profile, options::OPT_fauto_profile_EQ,
+      options::OPT_fno_profile_sample_use, options::OPT_fno_auto_profile);
+
+  if (ProfileSampleUseArg &&
+      (ProfileSampleUseArg->getOption().matches(
+           options::OPT_fno_profile_sample_use) ||
+       ProfileSampleUseArg->getOption().matches(options::OPT_fno_auto_profile)))
+    return nullptr;
+
+  return Args.getLastArg(options::OPT_fprofile_sample_use_EQ,
+                         options::OPT_fauto_profile_EQ);
+}
+
 /// Parses the various -fpic/-fPIC/-fpie/-fPIE arguments.  Then,
 /// smooshes them together with platform defaults, to decide whether
 /// this compile should be using PIC mode or not. Returns a tuple of
@@ -721,9 +768,10 @@ tools::ParsePICArgs(const ToolChain &ToolChain, const ArgList &Args) {
   // OpenBSD-specific defaults for PIE
   if (Triple.getOS() == llvm::Triple::OpenBSD) {
     switch (ToolChain.getArch()) {
+    case llvm::Triple::arm:
+    case llvm::Triple::aarch64:
     case llvm::Triple::mips64:
     case llvm::Triple::mips64el:
-    case llvm::Triple::sparcel:
     case llvm::Triple::x86:
     case llvm::Triple::x86_64:
       IsPICLevelTwo = false; // "-fpie"
@@ -731,6 +779,7 @@ tools::ParsePICArgs(const ToolChain &ToolChain, const ArgList &Args) {
 
     case llvm::Triple::ppc:
     case llvm::Triple::sparc:
+    case llvm::Triple::sparcel:
     case llvm::Triple::sparcv9:
       IsPICLevelTwo = true; // "-fPIE"
       break;

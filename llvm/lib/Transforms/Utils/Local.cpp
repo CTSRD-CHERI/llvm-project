@@ -45,6 +45,7 @@
 #include "llvm/IR/PatternMatch.h"
 #include "llvm/IR/ValueHandle.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/KnownBits.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 using namespace llvm;
@@ -126,21 +127,20 @@ bool llvm::ConstantFoldTerminator(BasicBlock *BB, bool DeleteDeadConditions,
     // If the default is unreachable, ignore it when searching for TheOnlyDest.
     if (isa<UnreachableInst>(DefaultDest->getFirstNonPHIOrDbg()) &&
         SI->getNumCases() > 0) {
-      TheOnlyDest = SI->case_begin().getCaseSuccessor();
+      TheOnlyDest = SI->case_begin()->getCaseSuccessor();
     }
 
     // Figure out which case it goes to.
-    for (SwitchInst::CaseIt i = SI->case_begin(), e = SI->case_end();
-         i != e; ++i) {
+    for (auto i = SI->case_begin(), e = SI->case_end(); i != e;) {
       // Found case matching a constant operand?
-      if (i.getCaseValue() == CI) {
-        TheOnlyDest = i.getCaseSuccessor();
+      if (i->getCaseValue() == CI) {
+        TheOnlyDest = i->getCaseSuccessor();
         break;
       }
 
       // Check to see if this branch is going to the same place as the default
       // dest.  If so, eliminate it as an explicit compare.
-      if (i.getCaseSuccessor() == DefaultDest) {
+      if (i->getCaseSuccessor() == DefaultDest) {
         MDNode *MD = SI->getMetadata(LLVMContext::MD_prof);
         unsigned NCases = SI->getNumCases();
         // Fold the case metadata into the default if there will be any branches
@@ -154,7 +154,7 @@ bool llvm::ConstantFoldTerminator(BasicBlock *BB, bool DeleteDeadConditions,
             Weights.push_back(CI->getValue().getZExtValue());
           }
           // Merge weight of this case to the default weight.
-          unsigned idx = i.getCaseIndex();
+          unsigned idx = i->getCaseIndex();
           Weights[0] += Weights[idx+1];
           // Remove weight for this case.
           std::swap(Weights[idx+1], Weights.back());
@@ -165,15 +165,19 @@ bool llvm::ConstantFoldTerminator(BasicBlock *BB, bool DeleteDeadConditions,
         }
         // Remove this entry.
         DefaultDest->removePredecessor(SI->getParent());
-        SI->removeCase(i);
-        --i; --e;
+        i = SI->removeCase(i);
+        e = SI->case_end();
         continue;
       }
 
       // Otherwise, check to see if the switch only branches to one destination.
       // We do this by reseting "TheOnlyDest" to null when we find two non-equal
       // destinations.
-      if (i.getCaseSuccessor() != TheOnlyDest) TheOnlyDest = nullptr;
+      if (i->getCaseSuccessor() != TheOnlyDest)
+        TheOnlyDest = nullptr;
+
+      // Increment this iterator as we haven't removed the case.
+      ++i;
     }
 
     if (CI && !TheOnlyDest) {
@@ -209,7 +213,7 @@ bool llvm::ConstantFoldTerminator(BasicBlock *BB, bool DeleteDeadConditions,
     if (SI->getNumCases() == 1) {
       // Otherwise, we can fold this switch into a conditional branch
       // instruction if it has only one non-default destination.
-      SwitchInst::CaseIt FirstCase = SI->case_begin();
+      auto FirstCase = *SI->case_begin();
       Value *Cond = Builder.CreateICmpEQ(SI->getCondition(),
           FirstCase.getCaseValue(), "cond");
 
@@ -558,7 +562,7 @@ void llvm::RemovePredecessorAndSimplify(BasicBlock *BB, BasicBlock *Pred) {
   // that can be removed.
   BB->removePredecessor(Pred, true);
 
-  WeakVH PhiIt = &BB->front();
+  WeakTrackingVH PhiIt = &BB->front();
   while (PHINode *PN = dyn_cast<PHINode>(PhiIt)) {
     PhiIt = &*++BasicBlock::iterator(cast<Instruction>(PhiIt));
     Value *OldPhiIt = PhiIt;
@@ -1035,9 +1039,9 @@ unsigned llvm::getOrEnforceKnownAlignment(Value *V, unsigned PrefAlign,
          "getOrEnforceKnownAlignment expects a pointer!");
   unsigned BitWidth = DL.getPointerBaseSizeInBits(V->getType());
 
-  APInt KnownZero(BitWidth, 0), KnownOne(BitWidth, 0);
-  computeKnownBits(V, KnownZero, KnownOne, DL, 0, AC, CxtI, DT);
-  unsigned TrailZ = KnownZero.countTrailingOnes();
+  KnownBits Known(BitWidth);
+  computeKnownBits(V, Known, DL, 0, AC, CxtI, DT);
+  unsigned TrailZ = Known.Zero.countTrailingOnes();
 
   // Avoid trouble with ridiculously large TrailZ values, such as
   // those computed from a null pointer.
@@ -1224,13 +1228,9 @@ bool llvm::LowerDbgDeclare(Function &F) {
           // This is a call by-value or some other instruction that
           // takes a pointer to the variable. Insert a *value*
           // intrinsic that describes the alloca.
-          SmallVector<uint64_t, 1> NewDIExpr;
-          auto *DIExpr = DDI->getExpression();
-          NewDIExpr.push_back(dwarf::DW_OP_deref);
-          NewDIExpr.append(DIExpr->elements_begin(), DIExpr->elements_end());
           DIB.insertDbgValueIntrinsic(AI, 0, DDI->getVariable(),
-                                      DIB.createExpression(NewDIExpr),
-                                      DDI->getDebugLoc(), CI);
+                                      DDI->getExpression(), DDI->getDebugLoc(),
+                                      CI);
         }
       }
       DDI->eraseFromParent();
@@ -1259,37 +1259,6 @@ void llvm::findDbgValues(SmallVectorImpl<DbgValueInst *> &DbgValues, Value *V) {
           DbgValues.push_back(DVI);
 }
 
-static void DIExprAddDeref(SmallVectorImpl<uint64_t> &Expr) {
-  Expr.push_back(dwarf::DW_OP_deref);
-}
-
-static void DIExprAddOffset(SmallVectorImpl<uint64_t> &Expr, int Offset) {
-  if (Offset > 0) {
-    Expr.push_back(dwarf::DW_OP_plus);
-    Expr.push_back(Offset);
-  } else if (Offset < 0) {
-    Expr.push_back(dwarf::DW_OP_minus);
-    Expr.push_back(-Offset);
-  }
-}
-
-static DIExpression *BuildReplacementDIExpr(DIBuilder &Builder,
-                                            DIExpression *DIExpr, bool Deref,
-                                            int Offset) {
-  if (!Deref && !Offset)
-    return DIExpr;
-  // Create a copy of the original DIDescriptor for user variable, prepending
-  // "deref" operation to a list of address elements, as new llvm.dbg.declare
-  // will take a value storing address of the memory for variable, not
-  // alloca itself.
-  SmallVector<uint64_t, 4> NewDIExpr;
-  if (Deref)
-    DIExprAddDeref(NewDIExpr);
-  DIExprAddOffset(NewDIExpr, Offset);
-  if (DIExpr)
-    NewDIExpr.append(DIExpr->elements_begin(), DIExpr->elements_end());
-  return Builder.createExpression(NewDIExpr);
-}
 
 bool llvm::replaceDbgDeclare(Value *Address, Value *NewAddress,
                              Instruction *InsertBefore, DIBuilder &Builder,
@@ -1301,9 +1270,7 @@ bool llvm::replaceDbgDeclare(Value *Address, Value *NewAddress,
   auto *DIVar = DDI->getVariable();
   auto *DIExpr = DDI->getExpression();
   assert(DIVar && "Missing variable");
-
-  DIExpr = BuildReplacementDIExpr(Builder, DIExpr, Deref, Offset);
-
+  DIExpr = DIExpression::prepend(DIExpr, Deref, Offset);
   // Insert llvm.dbg.declare immediately after the original alloca, and remove
   // old llvm.dbg.declare.
   Builder.insertDeclare(NewAddress, DIVar, DIExpr, Loc, InsertBefore);
@@ -1334,11 +1301,11 @@ static void replaceOneDbgValueForAlloca(DbgValueInst *DVI, Value *NewAddress,
   // Insert the offset immediately after the first deref.
   // We could just change the offset argument of dbg.value, but it's unsigned...
   if (Offset) {
-    SmallVector<uint64_t, 4> NewDIExpr;
-    DIExprAddDeref(NewDIExpr);
-    DIExprAddOffset(NewDIExpr, Offset);
-    NewDIExpr.append(DIExpr->elements_begin() + 1, DIExpr->elements_end());
-    DIExpr = Builder.createExpression(NewDIExpr);
+    SmallVector<uint64_t, 4> Ops;
+    Ops.push_back(dwarf::DW_OP_deref);
+    DIExpression::appendOffset(Ops, Offset);
+    Ops.append(DIExpr->elements_begin() + 1, DIExpr->elements_end());
+    DIExpr = Builder.createExpression(Ops);
   }
 
   Builder.insertDbgValueIntrinsic(NewAddress, DVI->getOffset(), DIVar, DIExpr,
@@ -1355,6 +1322,59 @@ void llvm::replaceDbgValueForAlloca(AllocaInst *AI, Value *NewAllocaAddress,
         if (auto *DVI = dyn_cast<DbgValueInst>(U.getUser()))
           replaceOneDbgValueForAlloca(DVI, NewAllocaAddress, Builder, Offset);
       }
+}
+
+void llvm::salvageDebugInfo(Instruction &I) {
+  SmallVector<DbgValueInst *, 1> DbgValues;
+  auto &M = *I.getModule();
+
+  auto MDWrap = [&](Value *V) {
+    return MetadataAsValue::get(I.getContext(), ValueAsMetadata::get(V));
+  };
+
+  if (isa<BitCastInst>(&I)) {
+    findDbgValues(DbgValues, &I);
+    for (auto *DVI : DbgValues) {
+      // Bitcasts are entirely irrelevant for debug info. Rewrite the dbg.value
+      // to use the cast's source.
+      DVI->setOperand(0, MDWrap(I.getOperand(0)));
+      DEBUG(dbgs() << "SALVAGE: " << *DVI << '\n');
+    }
+  } else if (auto *GEP = dyn_cast<GetElementPtrInst>(&I)) {
+    findDbgValues(DbgValues, &I);
+    for (auto *DVI : DbgValues) {
+      // XXXAR: Is it correct to use getPointerBaseSizeInBits here?
+      // It started crashing after https://reviews.llvm.org/D30919 (297994)
+      unsigned BitWidth =
+          M.getDataLayout().getPointerBaseSizeInBits(GEP->getPointerAddressSpace());
+      APInt Offset(BitWidth, 0);
+      // Rewrite a constant GEP into a DIExpression.  Since we are performing
+      // arithmetic to compute the variable's *value* in the DIExpression, we
+      // need to mark the expression with a DW_OP_stack_value.
+      if (GEP->accumulateConstantOffset(M.getDataLayout(), Offset)) {
+        auto *DIExpr = DVI->getExpression();
+        DIBuilder DIB(M, /*AllowUnresolved*/ false);
+        // GEP offsets are i32 and thus always fit into an int64_t.
+        DIExpr = DIExpression::prepend(DIExpr, DIExpression::NoDeref,
+                                       Offset.getSExtValue(),
+                                       DIExpression::WithStackValue);
+        DVI->setOperand(0, MDWrap(I.getOperand(0)));
+        DVI->setOperand(3, MetadataAsValue::get(I.getContext(), DIExpr));
+        DEBUG(dbgs() << "SALVAGE: " << *DVI << '\n');
+      }
+    }
+  } else if (isa<LoadInst>(&I)) {
+    findDbgValues(DbgValues, &I);
+    for (auto *DVI : DbgValues) {
+      // Rewrite the load into DW_OP_deref.
+      auto *DIExpr = DVI->getExpression();
+      DIBuilder DIB(M, /*AllowUnresolved*/ false);
+      DIExpr = DIExpression::prepend(DIExpr, DIExpression::WithDeref);
+      DVI->setOperand(0, MDWrap(I.getOperand(0)));
+      DVI->setOperand(3, MetadataAsValue::get(I.getContext(), DIExpr));
+      DEBUG(dbgs() << "SALVAGE:  " << *DVI << '\n');
+    }
+  }
 }
 
 unsigned llvm::removeAllNonTerminatorAndEHPadInstructions(BasicBlock *BB) {
@@ -1458,7 +1478,7 @@ BasicBlock *llvm::changeToInvokeAndSplitBasicBlock(CallInst *CI,
   II->setAttributes(CI->getAttributes());
 
   // Make sure that anything using the call now uses the invoke!  This also
-  // updates the CallGraph if present, because it uses a WeakVH.
+  // updates the CallGraph if present, because it uses a WeakTrackingVH.
   CI->replaceAllUsesWith(II);
 
   // Delete the original call
@@ -2080,5 +2100,5 @@ void llvm::maybeMarkSanitizerLibraryCallNoBuiltin(
   if (F && !F->hasLocalLinkage() && F->hasName() &&
       TLI->getLibFunc(F->getName(), Func) && TLI->hasOptimizedCodeGen(Func) &&
       !F->doesNotAccessMemory())
-    CI->addAttribute(AttributeSet::FunctionIndex, Attribute::NoBuiltin);
+    CI->addAttribute(AttributeList::FunctionIndex, Attribute::NoBuiltin);
 }

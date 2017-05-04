@@ -244,7 +244,7 @@ void Fuzzer::RssLimitCallback() {
       GetPid(), GetPeakRSSMb(), Options.RssLimitMb);
   Printf("   To change the out-of-memory limit use -rss_limit_mb=<N>\n\n");
   if (EF->__sanitizer_print_memory_profile)
-    EF->__sanitizer_print_memory_profile(95);
+    EF->__sanitizer_print_memory_profile(95, 8);
   DumpCurrentUnit("oom-");
   Printf("SUMMARY: libFuzzer: out-of-memory\n");
   PrintFinalStats();
@@ -253,17 +253,6 @@ void Fuzzer::RssLimitCallback() {
 
 void Fuzzer::PrintStats(const char *Where, const char *End, size_t Units) {
   size_t ExecPerSec = execPerSec();
-  if (Options.OutputCSV) {
-    static bool csvHeaderPrinted = false;
-    if (!csvHeaderPrinted) {
-      csvHeaderPrinted = true;
-      Printf("runs,block_cov,bits,cc_cov,corpus,execs_per_sec,tbms,reason\n");
-    }
-    Printf("%zd,%zd,%zd,%zd,%s\n", TotalNumberOfRuns,
-           TPC.GetTotalPCCoverage(),
-           Corpus.size(), ExecPerSec, Where);
-  }
-
   if (!Options.Verbosity)
     return;
   Printf("#%zd\t%s", TotalNumberOfRuns, Where);
@@ -407,11 +396,11 @@ size_t Fuzzer::RunOne(const uint8_t *Data, size_t Size) {
 
   ExecuteCallback(Data, Size);
 
-  size_t Res = 0;
-  if (size_t NumFeatures = TPC.CollectFeatures([&](size_t Feature) -> bool {
-        return Corpus.AddFeature(Feature, Size, Options.Shrink);
-      }))
-    Res = NumFeatures;
+  size_t NumUpdatesBefore = Corpus.NumFeatureUpdates();
+  TPC.CollectFeatures([&](size_t Feature) {
+    Corpus.AddFeature(Feature, Size, Options.Shrink);
+  });
+  size_t NumUpdatesAfter = Corpus.NumFeatureUpdates();
 
   auto TimeOfUnit =
       duration_cast<seconds>(UnitStopTime - UnitStartTime).count();
@@ -424,7 +413,7 @@ size_t Fuzzer::RunOne(const uint8_t *Data, size_t Size) {
     Printf("Slowest unit: %zd s:\n", TimeOfLongestUnitInSeconds);
     WriteUnitToFileWithPrefix({Data, Data + Size}, "slow-unit-");
   }
-  return Res;
+  return NumUpdatesAfter - NumUpdatesBefore;
 }
 
 size_t Fuzzer::GetCurrentUnitInFuzzingThead(const uint8_t **Data) const {

@@ -1543,13 +1543,15 @@ __mmask64 test_mm512_movepi8_mask(__m512i __A) {
 
 __m512i test_mm512_movm_epi8(__mmask64 __A) {
   // CHECK-LABEL: @test_mm512_movm_epi8
-  // CHECK: @llvm.x86.avx512.cvtmask2b.512
+  // CHECK:  %{{.*}} = bitcast i64 %{{.*}} to <64 x i1>
+  // CHECK:  %vpmovm2.i = sext <64 x i1> %{{.*}} to <64 x i8>
   return _mm512_movm_epi8(__A); 
 }
 
 __m512i test_mm512_movm_epi16(__mmask32 __A) {
   // CHECK-LABEL: @test_mm512_movm_epi16
-  // CHECK: @llvm.x86.avx512.cvtmask2w.512
+  // CHECK:  %{{.*}} = bitcast i32 %{{.*}} to <32 x i1>
+  // CHECK:  %vpmovm2.i = sext <32 x i1> %{{.*}} to <32 x i16>
   return _mm512_movm_epi16(__A); 
 }
 
@@ -1677,19 +1679,19 @@ void test_mm512_mask_cvtepi16_storeu_epi8 (void * __P, __mmask32 __M, __m512i __
 {
  // CHECK-LABEL: @test_mm512_mask_cvtepi16_storeu_epi8
  // CHECK: @llvm.x86.avx512.mask.pmov.wb.mem.512
- __builtin_ia32_pmovwb512mem_mask ( __P,  __A, __M);
+ _mm512_mask_cvtepi16_storeu_epi8 ( __P,  __M, __A);
 }
 
 void test_mm512_mask_cvtsepi16_storeu_epi8 (void * __P, __mmask32 __M, __m512i __A)
 {
  // CHECK-LABEL: @test_mm512_mask_cvtsepi16_storeu_epi8
  // CHECK: @llvm.x86.avx512.mask.pmovs.wb.mem.512
- __builtin_ia32_pmovswb512mem_mask ( __P,  __A, __M);
+ _mm512_mask_cvtsepi16_storeu_epi8 ( __P,  __M, __A);
 }
 
 void test_mm512_mask_cvtusepi16_storeu_epi8 (void * __P, __mmask32 __M, __m512i __A)
 {
  // CHECK-LABEL: @test_mm512_mask_cvtusepi16_storeu_epi8
  // CHECK: @llvm.x86.avx512.mask.pmovus.wb.mem.512
- __builtin_ia32_pmovuswb512mem_mask ( __P, __A, __M);
+ _mm512_mask_cvtusepi16_storeu_epi8 ( __P, __M, __A);
 }

@@ -13,6 +13,7 @@
 #include "clang/AST/Decl.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/FileManager.h"
+#include "clang/Basic/MemoryBufferCache.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/Version.h"
@@ -55,9 +56,15 @@ using namespace clang;
 
 CompilerInstance::CompilerInstance(
     std::shared_ptr<PCHContainerOperations> PCHContainerOps,
-    bool BuildingModule)
-    : ModuleLoader(BuildingModule), Invocation(new CompilerInvocation()),
-      ThePCHContainerOperations(std::move(PCHContainerOps)) {}
+    MemoryBufferCache *SharedPCMCache)
+    : ModuleLoader(/* BuildingModule = */ SharedPCMCache),
+      Invocation(new CompilerInvocation()),
+      PCMCache(SharedPCMCache ? SharedPCMCache : new MemoryBufferCache),
+      ThePCHContainerOperations(std::move(PCHContainerOps)) {
+  // Don't allow this to invalidate buffers in use by others.
+  if (SharedPCMCache)
+    getPCMCache().finalizeCurrentBuffers();
+}
 
 CompilerInstance::~CompilerInstance() {
   assert(OutputFiles.empty() && "Still output files in flight?");
@@ -128,6 +135,8 @@ IntrusiveRefCntPtr<ASTReader> CompilerInstance::getModuleManager() const {
   return ModuleManager;
 }
 void CompilerInstance::setModuleManager(IntrusiveRefCntPtr<ASTReader> Reader) {
+  assert(PCMCache.get() == &Reader->getModuleManager().getPCMCache() &&
+         "Expected ASTReader to use the same PCM cache");
   ModuleManager = std::move(Reader);
 }
 
@@ -370,7 +379,7 @@ void CompilerInstance::createPreprocessor(TranslationUnitKind TUKind) {
                        getDiagnostics(), getLangOpts(), &getTarget());
   PP = std::make_shared<Preprocessor>(
       Invocation->getPreprocessorOptsPtr(), getDiagnostics(), getLangOpts(),
-      getSourceManager(), *HeaderInfo, *this, PTHMgr,
+      getSourceManager(), getPCMCache(), *HeaderInfo, *this, PTHMgr,
       /*OwnsHeaderSearch=*/true, TUKind);
   PP->Initialize(getTarget(), getAuxTarget());
 
@@ -488,6 +497,8 @@ void CompilerInstance::createPCHExternalASTSource(
       AllowPCHWithCompilerErrors, getPreprocessor(), getASTContext(),
       getPCHContainerReader(),
       getFrontendOpts().ModuleFileExtensions,
+      TheDependencyFileGenerator.get(),
+      DependencyCollectors,
       DeserializationListener,
       OwnDeserializationListener, Preamble,
       getFrontendOpts().UseGlobalModuleIndex);
@@ -498,6 +509,8 @@ IntrusiveRefCntPtr<ASTReader> CompilerInstance::createPCHExternalASTSource(
     bool AllowPCHWithCompilerErrors, Preprocessor &PP, ASTContext &Context,
     const PCHContainerReader &PCHContainerRdr,
     ArrayRef<std::shared_ptr<ModuleFileExtension>> Extensions,
+    DependencyFileGenerator *DependencyFile,
+    ArrayRef<std::shared_ptr<DependencyCollector>> DependencyCollectors,
     void *DeserializationListener, bool OwnDeserializationListener,
     bool Preamble, bool UseGlobalModuleIndex) {
   HeaderSearchOptions &HSOpts = PP.getHeaderSearchInfo().getHeaderSearchOpts();
@@ -515,6 +528,12 @@ IntrusiveRefCntPtr<ASTReader> CompilerInstance::createPCHExternalASTSource(
   Reader->setDeserializationListener(
       static_cast<ASTDeserializationListener *>(DeserializationListener),
       /*TakeOwnership=*/OwnDeserializationListener);
+
+  if (DependencyFile)
+    DependencyFile->AttachToASTReader(*Reader);
+  for (auto &Listener : DependencyCollectors)
+    Listener->attachToASTReader(*Reader);
+
   switch (Reader->ReadAST(Path,
                           Preamble ? serialization::MK_Preamble
                                    : serialization::MK_PCH,
@@ -839,7 +858,8 @@ bool CompilerInstance::InitializeSourceManager(
                             /*SearchPath=*/nullptr,
                             /*RelativePath=*/nullptr,
                             /*RequestingModule=*/nullptr,
-                            /*SuggestedModule=*/nullptr, /*SkipCache=*/true);
+                            /*SuggestedModule=*/nullptr, /*IsMapped=*/nullptr,
+                            /*SkipCache=*/true);
       // Also add the header to /showIncludes output.
       if (File)
         DepOpts.ShowIncludesPretendHeader = File->getName();
@@ -996,14 +1016,14 @@ bool CompilerInstance::ExecuteAction(FrontendAction &Act) {
 
 /// \brief Determine the appropriate source input kind based on language
 /// options.
-static InputKind getSourceInputKindFromOptions(const LangOptions &LangOpts) {
+static InputKind::Language getLanguageFromOptions(const LangOptions &LangOpts) {
   if (LangOpts.OpenCL)
-    return IK_OpenCL;
+    return InputKind::OpenCL;
   if (LangOpts.CUDA)
-    return IK_CUDA;
+    return InputKind::CUDA;
   if (LangOpts.ObjC1)
-    return LangOpts.CPlusPlus? IK_ObjCXX : IK_ObjC;
-  return LangOpts.CPlusPlus? IK_CXX : IK_C;
+    return LangOpts.CPlusPlus ? InputKind::ObjCXX : InputKind::ObjC;
+  return LangOpts.CPlusPlus ? InputKind::CXX : InputKind::C;
 }
 
 /// \brief Compile a module file for the given module, using the options 
@@ -1060,10 +1080,13 @@ static bool compileModuleImpl(CompilerInstance &ImportingInstance,
   FrontendOpts.DisableFree = false;
   FrontendOpts.GenerateGlobalModuleIndex = false;
   FrontendOpts.BuildingImplicitModule = true;
+  FrontendOpts.OriginalModuleMap =
+      ModMap.getModuleMapFileForUniquing(Module)->getName();
   // Force implicitly-built modules to hash the content of the module file.
   HSOpts.ModulesHashContent = true;
   FrontendOpts.Inputs.clear();
-  InputKind IK = getSourceInputKindFromOptions(*Invocation->getLangOpts());
+  InputKind IK(getLanguageFromOptions(*Invocation->getLangOpts()),
+               InputKind::ModuleMap);
 
   // Don't free the remapped file buffers; they are owned by our caller.
   PPOpts.RetainRemappedFileBuffers = true;
@@ -1073,9 +1096,11 @@ static bool compileModuleImpl(CompilerInstance &ImportingInstance,
          Invocation->getModuleHash() && "Module hash mismatch!");
   
   // Construct a compiler instance that will be used to actually create the
-  // module.
+  // module.  Since we're sharing a PCMCache,
+  // CompilerInstance::CompilerInstance is responsible for finalizing the
+  // buffers to prevent use-after-frees.
   CompilerInstance Instance(ImportingInstance.getPCHContainerOperations(),
-                            /*BuildingModule=*/true);
+                            &ImportingInstance.getPreprocessor().getPCMCache());
   auto &Inv = *Invocation;
   Instance.setInvocation(std::move(Invocation));
 
@@ -1106,11 +1131,12 @@ static bool compileModuleImpl(CompilerInstance &ImportingInstance,
   if (const FileEntry *ModuleMapFile =
           ModMap.getContainingModuleMapFile(Module)) {
     // Use the module map where this module resides.
-    FrontendOpts.Inputs.emplace_back(ModuleMapFile->getName(), IK);
+    FrontendOpts.Inputs.emplace_back(ModuleMapFile->getName(), IK,
+                                     +Module->IsSystem);
   } else {
     SmallString<128> FakeModuleMapFile(Module->Directory->getName());
     llvm::sys::path::append(FakeModuleMapFile, "__inferred_module.map");
-    FrontendOpts.Inputs.emplace_back(FakeModuleMapFile, IK);
+    FrontendOpts.Inputs.emplace_back(FakeModuleMapFile, IK, +Module->IsSystem);
 
     llvm::raw_string_ostream OS(InferredModuleMapContent);
     Module->print(OS);
@@ -1123,11 +1149,6 @@ static bool compileModuleImpl(CompilerInstance &ImportingInstance,
     SourceMgr.overrideFileContents(ModuleMapFile, std::move(ModuleMapBuffer));
   }
 
-  // Construct a module-generating action. Passing through the module map is
-  // safe because the FileManager is shared between the compiler instances.
-  GenerateModuleFromModuleMapAction CreateModuleAction(
-      ModMap.getModuleMapFileForUniquing(Module), Module->IsSystem);
-
   ImportingInstance.getDiagnostics().Report(ImportLoc,
                                             diag::remark_module_build)
     << Module->Name << ModuleFileName;
@@ -1136,8 +1157,12 @@ static bool compileModuleImpl(CompilerInstance &ImportingInstance,
   // thread so that we get a stack large enough.
   const unsigned ThreadStackSize = 8 << 20;
   llvm::CrashRecoveryContext CRC;
-  CRC.RunSafelyOnThread([&]() { Instance.ExecuteAction(CreateModuleAction); },
-                        ThreadStackSize);
+  CRC.RunSafelyOnThread(
+      [&]() {
+        GenerateModuleFromModuleMapAction Action;
+        Instance.ExecuteAction(Action);
+      },
+      ThreadStackSize);
 
   ImportingInstance.getDiagnostics().Report(ImportLoc,
                                             diag::remark_module_build_done)
@@ -1179,10 +1204,14 @@ static bool compileAndLoadModule(CompilerInstance &ImportingInstance,
     llvm::LockFileManager Locked(ModuleFileName);
     switch (Locked) {
     case llvm::LockFileManager::LFS_Error:
-      Diags.Report(ModuleNameLoc, diag::err_module_lock_failure)
+      // PCMCache takes care of correctness and locks are only necessary for
+      // performance. Fallback to building the module in case of any lock
+      // related errors.
+      Diags.Report(ModuleNameLoc, diag::remark_module_lock_failure)
           << Module->Name << Locked.getErrorMessage();
-      return false;
-
+      // Clear out any potential leftover.
+      Locked.unsafeRemoveLockFile();
+      // FALLTHROUGH
     case llvm::LockFileManager::LFS_Owned:
       // We're responsible for building the module ourselves.
       if (!compileModuleImpl(ImportingInstance, ModuleNameLoc, Module,
@@ -1202,11 +1231,14 @@ static bool compileAndLoadModule(CompilerInstance &ImportingInstance,
       case llvm::LockFileManager::Res_OwnerDied:
         continue; // try again to get the lock.
       case llvm::LockFileManager::Res_Timeout:
-        Diags.Report(ModuleNameLoc, diag::err_module_lock_timeout)
+        // Since PCMCache takes care of correctness, we try waiting for another
+        // process to complete the build so clang does not do it done twice. If
+        // case of timeout, build it ourselves.
+        Diags.Report(ModuleNameLoc, diag::remark_module_lock_timeout)
             << Module->Name;
         // Clear the lock file so that future invokations can make progress.
         Locked.unsafeRemoveLockFile();
-        return false;
+        continue;
       }
       break;
     }

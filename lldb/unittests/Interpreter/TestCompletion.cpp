@@ -8,15 +8,16 @@
 //===----------------------------------------------------------------------===//
 
 #include "gtest/gtest.h"
-
-#include "lldb/Core/StringList.h"
 #include "lldb/Interpreter/CommandCompletions.h"
+#include "lldb/Utility/StringList.h"
 #include "lldb/Utility/TildeExpressionResolver.h"
 
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
+
+#include "unittests/Utility/Mocks/MockTildeExpressionResolver.h"
 
 namespace fs = llvm::sys::fs;
 namespace path = llvm::sys::path;
@@ -36,77 +37,13 @@ using namespace lldb_private;
 
 namespace {
 
-class MockTildeExpressionResolver : public TildeExpressionResolver {
-  StringRef CurrentUser;
-  StringMap<StringRef> UserDirectories;
-
-public:
-  explicit MockTildeExpressionResolver(StringRef CurrentUser, StringRef HomeDir)
-      : CurrentUser(CurrentUser) {
-    UserDirectories.insert(std::make_pair(CurrentUser, HomeDir));
-  }
-
-  void AddKnownUser(StringRef User, StringRef HomeDir) {
-    assert(UserDirectories.find(User) == UserDirectories.end());
-    UserDirectories.insert(std::make_pair(User, HomeDir));
-  }
-
-  void Clear() {
-    CurrentUser = StringRef();
-    UserDirectories.clear();
-  }
-
-  void SetCurrentUser(StringRef User) {
-    assert(UserDirectories.find(User) != UserDirectories.end());
-    CurrentUser = User;
-  }
-
-  bool ResolveExact(StringRef Expr, SmallVectorImpl<char> &Output) override {
-    Output.clear();
-
-    assert(!llvm::any_of(Expr, llvm::sys::path::is_separator));
-    assert(Expr.empty() || Expr[0] == '~');
-    Expr = Expr.drop_front();
-    if (Expr.empty()) {
-      auto Dir = UserDirectories[CurrentUser];
-      Output.append(Dir.begin(), Dir.end());
-      return true;
-    }
-
-    for (const auto &User : UserDirectories) {
-      if (User.getKey() != Expr)
-        continue;
-      Output.append(User.getValue().begin(), User.getValue().end());
-      return true;
-    }
-    return false;
-  }
-
-  bool ResolvePartial(StringRef Expr, StringSet<> &Output) override {
-    Output.clear();
-
-    assert(!llvm::any_of(Expr, llvm::sys::path::is_separator));
-    assert(Expr.empty() || Expr[0] == '~');
-    Expr = Expr.drop_front();
-
-    SmallString<16> QualifiedName("~");
-    for (const auto &User : UserDirectories) {
-      if (!User.getKey().startswith(Expr))
-        continue;
-      QualifiedName.resize(1);
-      QualifiedName.append(User.getKey().begin(), User.getKey().end());
-      Output.insert(QualifiedName);
-    }
-
-    return !Output.empty();
-  }
-};
-
 class CompletionTest : public testing::Test {
 protected:
   /// Unique temporary directory in which all created filesystem entities must
   /// be placed. It is removed at the end of the test suite.
   static SmallString<128> BaseDir;
+
+  static SmallString<128> OriginalWorkingDir;
 
   static SmallString<128> DirFoo;
   static SmallString<128> DirFooA;
@@ -123,7 +60,11 @@ protected:
   static SmallString<128> FileBar;
   static SmallString<128> FileBaz;
 
+  void SetUp() override { llvm::sys::fs::set_current_path(OriginalWorkingDir); }
+
   static void SetUpTestCase() {
+    llvm::sys::fs::current_path(OriginalWorkingDir);
+
     ASSERT_NO_ERROR(fs::createUniqueDirectory("FsCompletion", BaseDir));
     const char *DirNames[] = {"foo", "fooa", "foob",       "fooc",
                               "bar", "baz",  "test_folder"};
@@ -171,9 +112,33 @@ protected:
     }
     return false;
   }
+
+  void DoDirCompletions(const Twine &Prefix,
+                        StandardTildeExpressionResolver &Resolver,
+                        StringList &Results) {
+    // When a partial name matches, it returns all matches.  If it matches both
+    // a full name AND some partial names, it returns all of them.
+    uint32_t Count =
+        CommandCompletions::DiskDirectories(Prefix + "foo", Results, Resolver);
+    ASSERT_EQ(4u, Count);
+    ASSERT_EQ(Count, Results.GetSize());
+    EXPECT_TRUE(HasEquivalentFile(DirFoo, Results));
+    EXPECT_TRUE(HasEquivalentFile(DirFooA, Results));
+    EXPECT_TRUE(HasEquivalentFile(DirFooB, Results));
+    EXPECT_TRUE(HasEquivalentFile(DirFooC, Results));
+
+    // If it matches only partial names, it still works as expected.
+    Count = CommandCompletions::DiskDirectories(Twine(Prefix) + "b", Results,
+                                                Resolver);
+    ASSERT_EQ(2u, Count);
+    ASSERT_EQ(Count, Results.GetSize());
+    EXPECT_TRUE(HasEquivalentFile(DirBar, Results));
+    EXPECT_TRUE(HasEquivalentFile(DirBaz, Results));
+  }
 };
 
 SmallString<128> CompletionTest::BaseDir;
+SmallString<128> CompletionTest::OriginalWorkingDir;
 
 SmallString<128> CompletionTest::DirFoo;
 SmallString<128> CompletionTest::DirFooA;
@@ -197,8 +162,11 @@ TEST_F(CompletionTest, DirCompletionAbsolute) {
   // by asserting an exact result count, and verifying against known
   // folders.
 
+  std::string Prefixes[] = {(Twine(BaseDir) + "/").str(), ""};
+
   StandardTildeExpressionResolver Resolver;
   StringList Results;
+
   // When a directory is specified that doesn't end in a slash, it searches
   // for that directory, not items under it.
   size_t Count =
@@ -208,8 +176,7 @@ TEST_F(CompletionTest, DirCompletionAbsolute) {
   EXPECT_TRUE(HasEquivalentFile(BaseDir, Results));
 
   // When the same directory ends with a slash, it finds all children.
-  Count = CommandCompletions::DiskDirectories(Twine(BaseDir) + "/", Results,
-                                              Resolver);
+  Count = CommandCompletions::DiskDirectories(Prefixes[0], Results, Resolver);
   ASSERT_EQ(7u, Count);
   ASSERT_EQ(Count, Results.GetSize());
   EXPECT_TRUE(HasEquivalentFile(DirFoo, Results));
@@ -220,24 +187,9 @@ TEST_F(CompletionTest, DirCompletionAbsolute) {
   EXPECT_TRUE(HasEquivalentFile(DirBaz, Results));
   EXPECT_TRUE(HasEquivalentFile(DirTestFolder, Results));
 
-  // When a partial name matches, it returns all matches.  If it matches both
-  // a full name AND some partial names, it returns all of them.
-  Count = CommandCompletions::DiskDirectories(Twine(BaseDir) + "/foo", Results,
-                                              Resolver);
-  ASSERT_EQ(4u, Count);
-  ASSERT_EQ(Count, Results.GetSize());
-  EXPECT_TRUE(HasEquivalentFile(DirFoo, Results));
-  EXPECT_TRUE(HasEquivalentFile(DirFooA, Results));
-  EXPECT_TRUE(HasEquivalentFile(DirFooB, Results));
-  EXPECT_TRUE(HasEquivalentFile(DirFooC, Results));
-
-  // If it matches only partial names, it still works as expected.
-  Count = CommandCompletions::DiskDirectories(Twine(BaseDir) + "/b", Results,
-                                              Resolver);
-  ASSERT_EQ(2u, Count);
-  ASSERT_EQ(Count, Results.GetSize());
-  EXPECT_TRUE(HasEquivalentFile(DirBar, Results));
-  EXPECT_TRUE(HasEquivalentFile(DirBaz, Results));
+  DoDirCompletions(Twine(BaseDir) + "/", Resolver, Results);
+  llvm::sys::fs::set_current_path(BaseDir);
+  DoDirCompletions("", Resolver, Results);
 }
 
 TEST_F(CompletionTest, FileCompletionAbsolute) {

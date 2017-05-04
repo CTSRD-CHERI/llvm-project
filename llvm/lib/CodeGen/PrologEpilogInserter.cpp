@@ -265,11 +265,8 @@ void PEI::calculateCallFrameInfo(MachineFunction &Fn) {
   std::vector<MachineBasicBlock::iterator> FrameSDOps;
   for (MachineFunction::iterator BB = Fn.begin(), E = Fn.end(); BB != E; ++BB)
     for (MachineBasicBlock::iterator I = BB->begin(); I != BB->end(); ++I)
-      if (I->getOpcode() == FrameSetupOpcode ||
-          I->getOpcode() == FrameDestroyOpcode) {
-        assert(I->getNumOperands() >= 1 && "Call Frame Setup/Destroy Pseudo"
-               " instructions should have a single immediate argument!");
-        unsigned Size = I->getOperand(0).getImm();
+      if (TII.isFrameInstr(*I)) {
+        unsigned Size = TII.getFrameSize(*I);
         if (Size > MaxCallFrameSize) MaxCallFrameSize = Size;
         AdjustsStack = true;
         FrameSDOps.push_back(I);
@@ -376,22 +373,22 @@ static void assignCalleeSavedSpillSlots(MachineFunction &F,
              FixedSlot->Reg != Reg)
         ++FixedSlot;
 
+      unsigned Size = RegInfo->getSpillSize(*RC);
       if (FixedSlot == FixedSpillSlots + NumFixedSpillSlots) {
         // Nope, just spill it anywhere convenient.
-        unsigned Align = RC->getAlignment();
+        unsigned Align = RegInfo->getSpillAlignment(*RC);
         unsigned StackAlign = TFI->getStackAlignment();
 
         // We may not be able to satisfy the desired alignment specification of
         // the TargetRegisterClass if the stack alignment is smaller. Use the
         // min.
         Align = std::min(Align, StackAlign);
-        FrameIdx = MFI.CreateStackObject(RC->getSize(), Align, true);
+        FrameIdx = MFI.CreateStackObject(Size, Align, true);
         if ((unsigned)FrameIdx < MinCSFrameIndex) MinCSFrameIndex = FrameIdx;
         if ((unsigned)FrameIdx > MaxCSFrameIndex) MaxCSFrameIndex = FrameIdx;
       } else {
         // Spill it to the stack where we must.
-        FrameIdx =
-            MFI.CreateFixedSpillStackObject(RC->getSize(), FixedSlot->Offset);
+        FrameIdx = MFI.CreateFixedSpillStackObject(Size, FixedSlot->Offset);
       }
 
       CS.setFrameIdx(FrameIdx);
@@ -1049,8 +1046,6 @@ void PEI::replaceFrameIndices(MachineBasicBlock *BB, MachineFunction &Fn,
   const TargetInstrInfo &TII = *Fn.getSubtarget().getInstrInfo();
   const TargetRegisterInfo &TRI = *Fn.getSubtarget().getRegisterInfo();
   const TargetFrameLowering *TFI = Fn.getSubtarget().getFrameLowering();
-  unsigned FrameSetupOpcode = TII.getCallFrameSetupOpcode();
-  unsigned FrameDestroyOpcode = TII.getCallFrameDestroyOpcode();
 
   if (RS && FrameIndexEliminationScavenging)
     RS->enterBasicBlock(*BB);
@@ -1059,11 +1054,9 @@ void PEI::replaceFrameIndices(MachineBasicBlock *BB, MachineFunction &Fn,
 
   for (MachineBasicBlock::iterator I = BB->begin(); I != BB->end(); ) {
 
-    if (I->getOpcode() == FrameSetupOpcode ||
-        I->getOpcode() == FrameDestroyOpcode) {
-      InsideCallSequence = (I->getOpcode() == FrameSetupOpcode);
+    if (TII.isFrameInstr(*I)) {
+      InsideCallSequence = TII.isFrameSetup(*I);
       SPAdj += TII.getSPAdjust(*I);
-
       I = TFI->eliminateCallFramePseudoInstr(Fn, *BB, I);
       continue;
     }

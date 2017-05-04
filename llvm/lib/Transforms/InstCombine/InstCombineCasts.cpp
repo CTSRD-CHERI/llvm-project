@@ -14,9 +14,10 @@
 #include "InstCombineInternal.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/Analysis/ConstantFolding.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/PatternMatch.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/Support/KnownBits.h"
 using namespace llvm;
 using namespace PatternMatch;
 
@@ -274,12 +275,12 @@ Instruction *InstCombiner::commonCastTransforms(CastInst &CI) {
       return NV;
 
   // If we are casting a PHI, then fold the cast into the PHI.
-  if (isa<PHINode>(Src)) {
+  if (auto *PN = dyn_cast<PHINode>(Src)) {
     // Don't do this if it would create a PHI node with an illegal type from a
     // legal type.
     if (!Src->getType()->isIntegerTy() || !CI.getType()->isIntegerTy() ||
         shouldChangeType(CI.getType(), Src->getType()))
-      if (Instruction *NV = FoldOpIntoPhi(CI))
+      if (Instruction *NV = foldOpIntoPhi(CI, PN))
         return NV;
   }
 
@@ -676,11 +677,10 @@ Instruction *InstCombiner::transformZExtICmp(ICmpInst *ICI, ZExtInst &CI,
         // This only works for EQ and NE
         ICI->isEquality()) {
       // If Op1C some other power of two, convert:
-      uint32_t BitWidth = Op1C->getType()->getBitWidth();
-      APInt KnownZero(BitWidth, 0), KnownOne(BitWidth, 0);
-      computeKnownBits(ICI->getOperand(0), KnownZero, KnownOne, 0, &CI);
+      KnownBits Known(Op1C->getType()->getBitWidth());
+      computeKnownBits(ICI->getOperand(0), Known, 0, &CI);
 
-      APInt KnownZeroMask(~KnownZero);
+      APInt KnownZeroMask(~Known.Zero);
       if (KnownZeroMask.isPowerOf2()) { // Exactly 1 possible 1?
         if (!DoTransform) return ICI;
 
@@ -726,13 +726,13 @@ Instruction *InstCombiner::transformZExtICmp(ICmpInst *ICI, ZExtInst &CI,
       Value *LHS = ICI->getOperand(0);
       Value *RHS = ICI->getOperand(1);
 
-      APInt KnownZeroLHS(BitWidth, 0), KnownOneLHS(BitWidth, 0);
-      APInt KnownZeroRHS(BitWidth, 0), KnownOneRHS(BitWidth, 0);
-      computeKnownBits(LHS, KnownZeroLHS, KnownOneLHS, 0, &CI);
-      computeKnownBits(RHS, KnownZeroRHS, KnownOneRHS, 0, &CI);
+      KnownBits KnownLHS(BitWidth);
+      KnownBits KnownRHS(BitWidth);
+      computeKnownBits(LHS, KnownLHS, 0, &CI);
+      computeKnownBits(RHS, KnownRHS, 0, &CI);
 
-      if (KnownZeroLHS == KnownZeroRHS && KnownOneLHS == KnownOneRHS) {
-        APInt KnownBits = KnownZeroLHS | KnownOneLHS;
+      if (KnownLHS.Zero == KnownRHS.Zero && KnownLHS.One == KnownRHS.One) {
+        APInt KnownBits = KnownLHS.Zero | KnownLHS.One;
         APInt UnknownBit = ~KnownBits;
         if (UnknownBit.countPopulation() == 1) {
           if (!DoTransform) return ICI;
@@ -740,7 +740,7 @@ Instruction *InstCombiner::transformZExtICmp(ICmpInst *ICI, ZExtInst &CI,
           Value *Result = Builder->CreateXor(LHS, RHS);
 
           // Mask off any bits that are set and won't be shifted away.
-          if (KnownOneLHS.uge(UnknownBit))
+          if (KnownLHS.One.uge(UnknownBit))
             Result = Builder->CreateAnd(Result,
                                         ConstantInt::get(ITy, UnknownBit));
 
@@ -904,8 +904,8 @@ Instruction *InstCombiner::visitZExt(ZExtInst &CI) {
   unsigned BitsToClear;
   if ((DestTy->isVectorTy() || shouldChangeType(SrcTy, DestTy)) &&
       canEvaluateZExtd(Src, DestTy, BitsToClear, *this, &CI)) {
-    assert(BitsToClear < SrcTy->getScalarSizeInBits() &&
-           "Unreasonable BitsToClear");
+    assert(BitsToClear <= SrcTy->getScalarSizeInBits() &&
+           "Can't clear more bits than in SrcTy");
 
     // Okay, we can transform this!  Insert the new expression now.
     DEBUG(dbgs() << "ICE: EvaluateInDifferentType converting expression type"
@@ -1049,10 +1049,10 @@ Instruction *InstCombiner::transformSExtICmp(ICmpInst *ICI, Instruction &CI) {
     if (ICI->hasOneUse() &&
         ICI->isEquality() && (Op1C->isZero() || Op1C->getValue().isPowerOf2())){
       unsigned BitWidth = Op1C->getType()->getBitWidth();
-      APInt KnownZero(BitWidth, 0), KnownOne(BitWidth, 0);
-      computeKnownBits(Op0, KnownZero, KnownOne, 0, &CI);
+      KnownBits Known(BitWidth);
+      computeKnownBits(Op0, Known, 0, &CI);
 
-      APInt KnownZeroMask(~KnownZero);
+      APInt KnownZeroMask(~Known.Zero);
       if (KnownZeroMask.isPowerOf2()) {
         Value *In = ICI->getOperand(0);
 
@@ -1442,10 +1442,22 @@ Instruction *InstCombiner::visitFPTrunc(FPTruncInst &CI) {
     case Intrinsic::round:
     case Intrinsic::nearbyint:
     case Intrinsic::trunc: {
+      Value *Src = II->getArgOperand(0);
+      if (!Src->hasOneUse())
+        break;
+
+      // Except for fabs, this transformation requires the input of the unary FP
+      // operation to be itself an fpext from the type to which we're
+      // truncating.
+      if (II->getIntrinsicID() != Intrinsic::fabs) {
+        FPExtInst *FPExtSrc = dyn_cast<FPExtInst>(Src);
+        if (!FPExtSrc || FPExtSrc->getOperand(0)->getType() != CI.getType())
+          break;
+      }
+
       // Do unary FP operation on smaller type.
       // (fptrunc (fabs x)) -> (fabs (fptrunc x))
-      Value *InnerTrunc = Builder->CreateFPTrunc(II->getArgOperand(0),
-                                                 CI.getType());
+      Value *InnerTrunc = Builder->CreateFPTrunc(Src, CI.getType());
       Type *IntrinsicType[] = { CI.getType() };
       Function *Overload = Intrinsic::getDeclaration(
         CI.getModule(), II->getIntrinsicID(), IntrinsicType);
@@ -1582,7 +1594,7 @@ Instruction *InstCombiner::commonPointerCastTransforms(CastInst &CI) {
         // GEP into CI would undo canonicalizing addrspacecast with different
         // pointer types, causing infinite loops.
         (!isa<AddrSpaceCastInst>(CI) ||
-          GEP->getType() == GEP->getPointerOperand()->getType())) {
+         GEP->getType() == GEP->getPointerOperandType())) {
       // Changing the cast operand is usually not a good idea but it is safe
       // here because the pointer operand is being replaced with another
       // pointer operand so the opcode doesn't need to change.

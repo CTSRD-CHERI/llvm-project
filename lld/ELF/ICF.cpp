@@ -209,7 +209,7 @@ template <class RelTy>
 bool ICF<ELFT>::constantEq(ArrayRef<RelTy> RelsA, ArrayRef<RelTy> RelsB) {
   auto Eq = [](const RelTy &A, const RelTy &B) {
     return A.r_offset == B.r_offset &&
-           A.getType(Config->isMips64EL()) == B.getType(Config->isMips64EL()) &&
+           A.getType(Config->IsMips64EL) == B.getType(Config->IsMips64EL) &&
            getAddend<ELFT>(A) == getAddend<ELFT>(B);
   };
 
@@ -325,8 +325,9 @@ void ICF<ELFT>::forEachClass(std::function<void(size_t, size_t)> Fn) {
   // Split sections into 256 shards and call Fn in parallel.
   size_t NumShards = 256;
   size_t Step = Sections.size() / NumShards;
-  forLoop(0, NumShards,
-          [&](size_t I) { forEachClassRange(I * Step, (I + 1) * Step, Fn); });
+  parallelFor(0, NumShards, [&](size_t I) {
+    forEachClassRange(I * Step, (I + 1) * Step, Fn);
+  });
   forEachClassRange(Step * NumShards, Sections.size(), Fn);
   ++Cnt;
 }
@@ -374,6 +375,15 @@ template <class ELFT> void ICF<ELFT>::run() {
       Sections[Begin]->replace(Sections[I]);
     }
   });
+
+  // Mark ARM Exception Index table sections that refer to folded code
+  // sections as not live. These sections have an implict dependency
+  // via the link order dependency.
+  if (Config->EMachine == EM_ARM)
+    for (InputSectionBase *Sec : InputSections)
+      if (auto *S = dyn_cast<InputSection>(Sec))
+        if (S->Flags & SHF_LINK_ORDER)
+          S->Live = S->getLinkOrderDep()->Live;
 }
 
 // ICF entry point function.

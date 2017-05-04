@@ -11,11 +11,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "RAIIObjectsForParser.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/DeclTemplate.h"
 #include "clang/Parse/ParseDiagnostic.h"
 #include "clang/Parse/Parser.h"
+#include "clang/Parse/RAIIObjectsForParser.h"
 #include "clang/Sema/DeclSpec.h"
 #include "clang/Sema/ParsedTemplate.h"
 #include "clang/Sema/Scope.h"
@@ -701,8 +701,8 @@ Parser::ParseNonTypeTemplateParameter(unsigned Depth, unsigned Position) {
     //   end of the template-parameter-list rather than a greater-than
     //   operator.
     GreaterThanIsOperatorScope G(GreaterThanIsOperator, false);
-    EnterExpressionEvaluationContext ConstantEvaluated(Actions,
-                                                       Sema::ConstantEvaluated);
+    EnterExpressionEvaluationContext ConstantEvaluated(
+        Actions, Sema::ExpressionEvaluationContext::ConstantEvaluated);
 
     DefaultArg = Actions.CorrectDelayedTyposInExpr(ParseAssignmentExpression());
     if (DefaultArg.isInvalid())
@@ -1275,7 +1275,8 @@ bool Parser::IsTemplateArgumentList(unsigned Skip) {
 bool
 Parser::ParseTemplateArgumentList(TemplateArgList &TemplateArgs) {
   // Template argument lists are constant-evaluation contexts.
-  EnterExpressionEvaluationContext EvalContext(Actions,Sema::ConstantEvaluated);
+  EnterExpressionEvaluationContext EvalContext(
+      Actions, Sema::ExpressionEvaluationContext::ConstantEvaluated);
   ColonProtectionRAIIObject ColonProtection(*this, false);
 
   do {

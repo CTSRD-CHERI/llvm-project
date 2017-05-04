@@ -5,6 +5,9 @@ function(find_compiler_rt_library name dest)
   set(dest "" PARENT_SCOPE)
   set(CLANG_COMMAND ${CMAKE_CXX_COMPILER} ${LIBCXX_COMPILE_FLAGS}
       "--rtlib=compiler-rt" "--print-libgcc-file-name")
+  if (CMAKE_CXX_COMPILER_ID MATCHES Clang AND CMAKE_CXX_COMPILER_TARGET)
+    list(APPEND CLANG_COMMAND "--target=${CMAKE_CXX_COMPILER_TARGET}")
+  endif()
   execute_process(
       COMMAND ${CLANG_COMMAND}
       RESULT_VARIABLE HAD_ERROR

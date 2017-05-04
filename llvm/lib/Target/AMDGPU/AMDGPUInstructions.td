@@ -50,6 +50,16 @@ def UnsafeFPMath : Predicate<"TM.Options.UnsafeFPMath">;
 def InstFlag : OperandWithDefaultOps <i32, (ops (i32 0))>;
 def ADDRIndirect : ComplexPattern<iPTR, 2, "SelectADDRIndirect", [], []>;
 
+def u16ImmTarget : AsmOperandClass {
+  let Name = "U16Imm";
+  let RenderMethod = "addImmOperands";
+}
+
+def s16ImmTarget : AsmOperandClass {
+  let Name = "S16Imm";
+  let RenderMethod = "addImmOperands";
+}
+
 let OperandType = "OPERAND_IMMEDIATE" in {
 
 def u32imm : Operand<i32> {
@@ -58,6 +68,12 @@ def u32imm : Operand<i32> {
 
 def u16imm : Operand<i16> {
   let PrintMethod = "printU16ImmOperand";
+  let ParserMatchClass = u16ImmTarget;
+}
+
+def s16imm : Operand<i16> {
+  let PrintMethod = "printU16ImmOperand";
+  let ParserMatchClass = s16ImmTarget;
 }
 
 def u8imm : Operand<i8> {
@@ -204,7 +220,7 @@ def COND_NULL : PatLeaf <
 //===----------------------------------------------------------------------===//
 
 class PrivateMemOp <dag ops, dag frag> : PatFrag <ops, frag, [{
-  return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUAS::PRIVATE_ADDRESS;
+  return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUASI.PRIVATE_ADDRESS;
 }]>;
 
 class PrivateLoad <SDPatternOperator op> : PrivateMemOp <
@@ -222,7 +238,7 @@ def truncstorei16_private : PrivateStore <truncstorei16>;
 def store_private : PrivateStore <store>;
 
 class GlobalMemOp <dag ops, dag frag> : PatFrag <ops, frag, [{
-  return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUAS::GLOBAL_ADDRESS;
+  return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUASI.GLOBAL_ADDRESS;
 }]>;
 
 // Global address space loads
@@ -242,7 +258,7 @@ def global_store_atomic : GlobalStore<atomic_store>;
 
 
 class ConstantMemOp <dag ops, dag frag> : PatFrag <ops, frag, [{
-  return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUAS::CONSTANT_ADDRESS;
+  return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUASI.CONSTANT_ADDRESS;
 }]>;
 
 // Constant address space loads
@@ -253,7 +269,7 @@ class ConstantLoad <SDPatternOperator op> : ConstantMemOp <
 def constant_load : ConstantLoad<load>;
 
 class LocalMemOp <dag ops, dag frag> : PatFrag <ops, frag, [{
-  return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUAS::LOCAL_ADDRESS;
+  return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUASI.LOCAL_ADDRESS;
 }]>;
 
 // Local address space loads
@@ -266,7 +282,7 @@ class LocalStore <SDPatternOperator op> : LocalMemOp <
 >;
 
 class FlatMemOp <dag ops, dag frag> : PatFrag <ops, frag, [{
-  return cast<MemSDNode>(N)->getAddressSPace() == AMDGPUAS::FLAT_ADDRESS;
+  return cast<MemSDNode>(N)->getAddressSPace() == AMDGPUASI.FLAT_ADDRESS;
 }]>;
 
 class FlatLoad <SDPatternOperator op> : FlatMemOp <
@@ -348,7 +364,7 @@ def local_store_aligned8bytes : Aligned8Bytes <
 class local_binary_atomic_op<SDNode atomic_op> :
   PatFrag<(ops node:$ptr, node:$value),
     (atomic_op node:$ptr, node:$value), [{
-  return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUAS::LOCAL_ADDRESS;
+  return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUASI.LOCAL_ADDRESS;
 }]>;
 
 
@@ -366,7 +382,7 @@ def atomic_load_umax_local : local_binary_atomic_op<atomic_load_umax>;
 
 def mskor_global : PatFrag<(ops node:$val, node:$ptr),
                             (AMDGPUstore_mskor node:$val, node:$ptr), [{
-  return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUAS::GLOBAL_ADDRESS;
+  return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUASI.GLOBAL_ADDRESS;
 }]>;
 
 multiclass AtomicCmpSwapLocal <SDNode cmp_swap_node> {
@@ -376,7 +392,7 @@ multiclass AtomicCmpSwapLocal <SDNode cmp_swap_node> {
     (cmp_swap_node node:$ptr, node:$cmp, node:$swap), [{
       AtomicSDNode *AN = cast<AtomicSDNode>(N);
       return AN->getMemoryVT() == MVT::i32 &&
-             AN->getAddressSpace() == AMDGPUAS::LOCAL_ADDRESS;
+             AN->getAddressSpace() == AMDGPUASI.LOCAL_ADDRESS;
   }]>;
 
   def _64_local : PatFrag<
@@ -384,7 +400,7 @@ multiclass AtomicCmpSwapLocal <SDNode cmp_swap_node> {
     (cmp_swap_node node:$ptr, node:$cmp, node:$swap), [{
       AtomicSDNode *AN = cast<AtomicSDNode>(N);
       return AN->getMemoryVT() == MVT::i64 &&
-             AN->getAddressSpace() == AMDGPUAS::LOCAL_ADDRESS;
+             AN->getAddressSpace() == AMDGPUASI.LOCAL_ADDRESS;
   }]>;
 }
 
@@ -394,17 +410,17 @@ multiclass global_binary_atomic_op<SDNode atomic_op> {
   def "" : PatFrag<
         (ops node:$ptr, node:$value),
         (atomic_op node:$ptr, node:$value),
-        [{return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUAS::GLOBAL_ADDRESS;}]>;
+        [{return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUASI.GLOBAL_ADDRESS;}]>;
 
   def _noret : PatFrag<
         (ops node:$ptr, node:$value),
         (atomic_op node:$ptr, node:$value),
-        [{return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUAS::GLOBAL_ADDRESS && (SDValue(N, 0).use_empty());}]>;
+        [{return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUASI.GLOBAL_ADDRESS && (SDValue(N, 0).use_empty());}]>;
 
   def _ret : PatFrag<
         (ops node:$ptr, node:$value),
         (atomic_op node:$ptr, node:$value),
-        [{return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUAS::GLOBAL_ADDRESS && (!SDValue(N, 0).use_empty());}]>;
+        [{return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUASI.GLOBAL_ADDRESS && (!SDValue(N, 0).use_empty());}]>;
 }
 
 defm atomic_swap_global : global_binary_atomic_op<atomic_swap>;
@@ -422,22 +438,22 @@ defm atomic_xor_global : global_binary_atomic_op<atomic_load_xor>;
 def AMDGPUatomic_cmp_swap_global : PatFrag<
         (ops node:$ptr, node:$value),
         (AMDGPUatomic_cmp_swap node:$ptr, node:$value),
-        [{return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUAS::GLOBAL_ADDRESS;}]>;
+        [{return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUASI.GLOBAL_ADDRESS;}]>;
 
 def atomic_cmp_swap_global : PatFrag<
       (ops node:$ptr, node:$cmp, node:$value),
       (atomic_cmp_swap node:$ptr, node:$cmp, node:$value),
-      [{return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUAS::GLOBAL_ADDRESS;}]>;
+      [{return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUASI.GLOBAL_ADDRESS;}]>;
 
 def atomic_cmp_swap_global_noret : PatFrag<
       (ops node:$ptr, node:$cmp, node:$value),
       (atomic_cmp_swap node:$ptr, node:$cmp, node:$value),
-      [{return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUAS::GLOBAL_ADDRESS && (SDValue(N, 0).use_empty());}]>;
+      [{return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUASI.GLOBAL_ADDRESS && (SDValue(N, 0).use_empty());}]>;
 
 def atomic_cmp_swap_global_ret : PatFrag<
       (ops node:$ptr, node:$cmp, node:$value),
       (atomic_cmp_swap node:$ptr, node:$cmp, node:$value),
-      [{return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUAS::GLOBAL_ADDRESS && (!SDValue(N, 0).use_empty());}]>;
+      [{return cast<MemSDNode>(N)->getAddressSpace() == AMDGPUASI.GLOBAL_ADDRESS && (!SDValue(N, 0).use_empty());}]>;
 
 //===----------------------------------------------------------------------===//
 // Misc Pattern Fragments

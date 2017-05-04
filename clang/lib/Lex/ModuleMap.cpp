@@ -91,7 +91,6 @@ ModuleMap::ModuleMap(SourceManager &SourceMgr, DiagnosticsEngine &Diags,
       HeaderInfo(HeaderInfo), BuiltinIncludeDir(nullptr),
       SourceModule(nullptr), NumCreatedModules(0) {
   MMapLangOpts.LineComment = true;
-  MMapLangOpts.ModularCodegen = LangOpts.ModularCodegen;
 }
 
 ModuleMap::~ModuleMap() {
@@ -582,6 +581,7 @@ Module *ModuleMap::createModuleForInterfaceUnit(SourceLocation Loc,
   auto *Result =
       new Module(Name, Loc, nullptr, /*IsFramework*/ false,
                  /*IsExplicit*/ false, NumCreatedModules++);
+  Result->Kind = Module::ModuleInterfaceUnit;
   Modules[Name] = SourceModule = Result;
 
   // Mark the main source file as being within the newly-created module so that
@@ -1841,7 +1841,7 @@ void ModuleMapParser::parseHeaderDecl(MMToken::TokenKind LeadingToken,
   Module::UnresolvedHeaderDirective Header;
   Header.FileName = Tok.getString();
   Header.FileNameLoc = consumeToken();
-  
+
   // Check whether we already have an umbrella.
   if (LeadingToken == MMToken::UmbrellaKeyword && ActiveModule->Umbrella) {
     Diags.Report(Header.FileNameLoc, diag::err_mmap_umbrella_clash)
@@ -1861,19 +1861,25 @@ void ModuleMapParser::parseHeaderDecl(MMToken::TokenKind LeadingToken,
     // Search for the header file within the search directory.
     SmallString<128> FullPathName(Directory->getName());
     unsigned FullPathLength = FullPathName.size();
-    
+
     if (ActiveModule->isPartOfFramework()) {
       appendSubframeworkPaths(ActiveModule, RelativePathName);
-      
+      unsigned RelativePathLength = RelativePathName.size();
+
       // Check whether this file is in the public headers.
       llvm::sys::path::append(RelativePathName, "Headers", Header.FileName);
       llvm::sys::path::append(FullPathName, RelativePathName);
       File = SourceMgr.getFileManager().getFile(FullPathName);
-      
+
+      // Check whether this file is in the private headers.
       if (!File) {
-        // Check whether this file is in the private headers.
-        // FIXME: Should we retain the subframework paths here?
-        RelativePathName.clear();
+        // Ideally, private modules in the form 'FrameworkName.Private' should
+        // be defined as 'module FrameworkName.Private', and not as
+        // 'framework module FrameworkName.Private', since a 'Private.Framework'
+        // does not usually exist. However, since both are currently widely used
+        // for private modules, make sure we find the right path in both cases.
+        RelativePathName.resize(ActiveModule->IsFramework ? 0
+                                                          : RelativePathLength);
         FullPathName.resize(FullPathLength);
         llvm::sys::path::append(RelativePathName, "PrivateHeaders",
                                 Header.FileName);
@@ -1997,9 +2003,8 @@ void ModuleMapParser::parseUmbrellaDirDecl(SourceLocation UmbrellaLoc) {
   }
   
   if (!Dir) {
-    Diags.Report(DirNameLoc, diag::err_mmap_umbrella_dir_not_found)
+    Diags.Report(DirNameLoc, diag::warn_mmap_umbrella_dir_not_found)
       << DirName;
-    HadError = true;
     return;
   }
 

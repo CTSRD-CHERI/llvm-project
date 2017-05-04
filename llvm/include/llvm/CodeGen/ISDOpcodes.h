@@ -14,6 +14,8 @@
 #ifndef LLVM_CODEGEN_ISDOPCODES_H
 #define LLVM_CODEGEN_ISDOPCODES_H
 
+#include "llvm/CodeGen/ValueTypes.h"
+
 namespace llvm {
 
 /// ISD namespace - This namespace contains an enum which represents all of the
@@ -216,6 +218,9 @@ namespace ISD {
     /// These nodes take two operands of the same value type, and produce two
     /// results.  The first result is the normal add or sub result, the second
     /// result is the carry flag result.
+    /// FIXME: These nodes are deprecated in favor of ADDCARRY and SUBCARRY.
+    /// They are kept around for now to provide a smooth transition path
+    /// toward the use of ADDCARRY/SUBCARRY and will eventually be removed.
     ADDC, SUBC,
 
     /// Carry-using nodes for multiple precision addition and subtraction. These
@@ -226,6 +231,16 @@ namespace ISD {
     /// to them to be chained together for add and sub of arbitrarily large
     /// values.
     ADDE, SUBE,
+
+    /// Carry-using nodes for multiple precision addition and subtraction.
+    /// These nodes take three operands: The first two are the normal lhs and
+    /// rhs to the add or sub, and the third is a boolean indicating if there
+    /// is an incoming carry. These nodes produce two results: the normal
+    /// result of the add or sub, and the output carry so they can be chained
+    /// together. The use of this opcode is preferable to adde/sube if the
+    /// target supports it, as the carry is a regular value rather than a
+    /// glue, which allows further optimisation.
+    ADDCARRY, SUBCARRY,
 
     /// RESULT, BOOL = [SU]ADDO(LHS, RHS) - Overflow-aware nodes for addition.
     /// These nodes take two operands: the normal LHS and RHS to the add. They
@@ -821,9 +836,10 @@ namespace ISD {
     PRE_INC,
     PRE_DEC,
     POST_INC,
-    POST_DEC,
-    LAST_INDEXED_MODE
+    POST_DEC
   };
+
+  static const int LAST_INDEXED_MODE = POST_DEC + 1;
 
   //===--------------------------------------------------------------------===//
   /// LoadExtType enum - This enum defines the three variants of LOADEXT
@@ -839,9 +855,10 @@ namespace ISD {
     NON_EXTLOAD = 0,
     EXTLOAD,
     SEXTLOAD,
-    ZEXTLOAD,
-    LAST_LOADEXT_TYPE
+    ZEXTLOAD
   };
+
+  static const int LAST_LOADEXT_TYPE = ZEXTLOAD + 1;
 
   NodeType getExtForLoadExtType(bool IsFP, LoadExtType);
 
@@ -918,7 +935,7 @@ namespace ISD {
 
   /// Return the operation corresponding to !(X op Y), where 'op' is a valid
   /// SetCC operation.
-  CondCode getSetCCInverse(CondCode Operation, bool isInteger);
+  CondCode getSetCCInverse(CondCode Operation, EVT Type);
 
   /// Return the operation corresponding to (Y op X) when given the operation
   /// for (X op Y).
@@ -927,12 +944,12 @@ namespace ISD {
   /// Return the result of a logical OR between different comparisons of
   /// identical values: ((X op1 Y) | (X op2 Y)). This function returns
   /// SETCC_INVALID if it is not possible to represent the resultant comparison.
-  CondCode getSetCCOrOperation(CondCode Op1, CondCode Op2, bool isInteger);
+  CondCode getSetCCOrOperation(CondCode Op1, CondCode Op2, EVT Type);
 
   /// Return the result of a logical AND between different comparisons of
   /// identical values: ((X op1 Y) & (X op2 Y)). This function returns
   /// SETCC_INVALID if it is not possible to represent the resultant comparison.
-  CondCode getSetCCAndOperation(CondCode Op1, CondCode Op2, bool isInteger);
+  CondCode getSetCCAndOperation(CondCode Op1, CondCode Op2, EVT Type);
 
 } // end llvm::ISD namespace
 

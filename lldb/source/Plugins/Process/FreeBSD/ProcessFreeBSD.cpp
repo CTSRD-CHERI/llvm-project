@@ -10,6 +10,13 @@
 
 // C Includes
 #include <errno.h>
+#include <pthread.h>
+#include <pthread_np.h>
+#include <stdlib.h>
+#include <sys/sysctl.h>
+#include <sys/types.h>
+#include <sys/user.h>
+#include <machine/elf.h>
 
 // C++ Includes
 #include <mutex>
@@ -17,6 +24,7 @@
 
 // Other libraries and framework includes
 #include "lldb/Core/PluginManager.h"
+#include "lldb/Core/RegisterValue.h"
 #include "lldb/Core/State.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Symbol/ObjectFile.h"
@@ -24,11 +32,11 @@
 #include "lldb/Target/Target.h"
 
 #include "FreeBSDThread.h"
+#include "Plugins/Process/POSIX/ProcessPOSIXLog.h"
 #include "Plugins/Process/Utility/FreeBSDSignals.h"
 #include "Plugins/Process/Utility/InferiorCallPOSIX.h"
 #include "ProcessFreeBSD.h"
 #include "ProcessMonitor.h"
-#include "ProcessPOSIXLog.h"
 
 // Other libraries and framework includes
 #include "lldb/Breakpoint/BreakpointLocation.h"
@@ -37,12 +45,13 @@
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/State.h"
-#include "lldb/Host/FileSpec.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/DynamicLoader.h"
 #include "lldb/Target/Platform.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/DataBufferHeap.h"
+#include "lldb/Utility/FileSpec.h"
 
 #include "lldb/Host/posix/Fcntl.h"
 
@@ -904,15 +913,18 @@ bool ProcessFreeBSD::IsAThreadRunning() {
 const DataBufferSP ProcessFreeBSD::GetAuxvData() {
   // If we're the local platform, we can ask the host for auxv data.
   PlatformSP platform_sp = GetTarget().GetPlatform();
-  if (platform_sp && platform_sp->IsHost())
-    return lldb_private::Host::GetAuxvData(this);
+  assert(platform_sp && platform_sp->IsHost());
 
-  // Somewhat unexpected - the process is not running locally or we don't have a
-  // platform.
-  assert(
-      false &&
-      "no platform or not the host - how did we get here with ProcessFreeBSD?");
-  return DataBufferSP();
+  int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_AUXV, (int)m_process->GetID()};
+  size_t auxv_size = AT_COUNT * sizeof(Elf_Auxinfo);
+  DataBufferSP buf_sp(new DataBufferHeap(auxv_size, 0));
+
+  if (::sysctl(mib, 4, buf_sp->GetBytes(), &auxv_size, NULL, 0) != 0) {
+    perror("sysctl failed on auxv");
+    buf_sp.reset();
+  }
+
+  return buf_sp;
 }
 
 struct EmulatorBaton {

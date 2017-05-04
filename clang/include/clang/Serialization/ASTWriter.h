@@ -54,6 +54,7 @@ class MacroInfo;
 class OpaqueValueExpr;
 class OpenCLOptions;
 class ASTReader;
+class MemoryBufferCache;
 class Module;
 class ModuleFileExtension;
 class ModuleFileExtensionWriter;
@@ -108,6 +109,9 @@ private:
 
   /// The buffer associated with the bitstream.
   const SmallVectorImpl<char> &Buffer;
+
+  /// \brief The PCM manager which manages memory buffers for pcm files.
+  MemoryBufferCache &PCMCache;
 
   /// \brief The ASTContext we're writing.
   ASTContext *Context = nullptr;
@@ -481,6 +485,7 @@ private:
   void WriteOptimizePragmaOptions(Sema &SemaRef);
   void WriteMSStructPragmaOptions(Sema &SemaRef);
   void WriteMSPointersToMembersPragmaOptions(Sema &SemaRef);
+  void WritePackPragmaOptions(Sema &SemaRef);
   void WriteModuleFileExtension(Sema &SemaRef,
                                 ModuleFileExtensionWriter &Writer);
 
@@ -512,6 +517,7 @@ public:
   /// \brief Create a new precompiled header writer that outputs to
   /// the given bitstream.
   ASTWriter(llvm::BitstreamWriter &Stream, SmallVectorImpl<char> &Buffer,
+            MemoryBufferCache &PCMCache,
             ArrayRef<std::shared_ptr<ModuleFileExtension>> Extensions,
             bool IncludeTimestamps = true);
   ~ASTWriter() override;

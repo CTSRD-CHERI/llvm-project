@@ -27,11 +27,10 @@ extern class LinkerDriver *Driver;
 class LinkerDriver {
 public:
   void main(ArrayRef<const char *> Args, bool CanExitEarly);
-  void addFile(StringRef Path);
+  void addFile(StringRef Path, bool WithLOption);
   void addLibrary(StringRef Name);
 
 private:
-  std::vector<MemoryBufferRef> getArchiveMembers(MemoryBufferRef MB);
   void readConfigs(llvm::opt::InputArgList &Args);
   void createFiles(llvm::opt::InputArgList &Args);
   void inferMachineType();

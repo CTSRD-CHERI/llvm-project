@@ -152,6 +152,31 @@ public:
   unsigned getCallFrameSetupOpcode() const { return CallFrameSetupOpcode; }
   unsigned getCallFrameDestroyOpcode() const { return CallFrameDestroyOpcode; }
 
+  /// Returns true if the argument is a frame pseudo instruction.
+  bool isFrameInstr(const MachineInstr &I) const {
+    return I.getOpcode() == getCallFrameSetupOpcode() ||
+      I.getOpcode() == getCallFrameDestroyOpcode();
+  }
+
+  /// Returns true if the argument is a frame setup pseudo instruction.
+  bool isFrameSetup(const MachineInstr &I) const {
+    return I.getOpcode() == getCallFrameSetupOpcode();
+  }
+
+  /// Returns size of the frame associated with the given frame instruction.
+  /// For frame setup instruction this is frame that is set up space set up
+  /// after the instruction. For frame destroy instruction this is the frame
+  /// freed by the caller.
+  /// Note, in some cases a call frame (or a part of it) may be prepared prior
+  /// to the frame setup instruction. It occurs in the calls that involve
+  /// inalloca arguments. This function reports only the size of the frame part
+  /// that is set up between the frame setup and destroy pseudo instructions.
+  int64_t getFrameSize(const MachineInstr &I) const {
+    assert(isFrameInstr(I));
+    assert(I.getOperand(0).getImm() >= 0);
+    return I.getOperand(0).getImm();
+  }
+
   unsigned getCatchReturnOpcode() const { return CatchRetOpcode; }
   unsigned getReturnOpcode() const { return ReturnOpcode; }
 
@@ -1083,7 +1108,7 @@ public:
 
 
   /// Return the noop instruction to use for a noop.
-  virtual void getNoopForMachoTarget(MCInst &NopInst) const;
+  virtual void getNoop(MCInst &NopInst) const;
 
   /// Return true for post-incremented instructions.
   virtual bool isPostIncrement(const MachineInstr &MI) const {
@@ -1503,9 +1528,11 @@ public:
     return None;
   }
 
-  /// Determines whether |Inst| is a tail call instruction.
+  /// Determines whether \p Inst is a tail call instruction. Override this
+  /// method on targets that do not properly set MCID::Return and MCID::Call on
+  /// tail call instructions."
   virtual bool isTailCall(const MachineInstr &Inst) const {
-    return false;
+    return Inst.isReturn() && Inst.isCall();
   }
 
   /// True if the instruction is bound to the top of its basic block and no

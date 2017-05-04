@@ -704,7 +704,7 @@ bool MipsSEDAGToDAGISel::selectVSplatMaskL(SDValue N, SDValue &Imm) const {
     // as the original value.
     if (ImmValue == ~(~ImmValue & ~(~ImmValue + 1))) {
 
-      Imm = CurDAG->getTargetConstant(ImmValue.countPopulation(), SDLoc(N),
+      Imm = CurDAG->getTargetConstant(ImmValue.countPopulation() - 1, SDLoc(N),
                                       EltTy);
       return true;
     }
@@ -736,7 +736,7 @@ bool MipsSEDAGToDAGISel::selectVSplatMaskR(SDValue N, SDValue &Imm) const {
     // Extract the run of set bits starting with bit zero, and test that the
     // result is the same as the original value
     if (ImmValue == (ImmValue & ~(ImmValue + 1))) {
-      Imm = CurDAG->getTargetConstant(ImmValue.countPopulation(), SDLoc(N),
+      Imm = CurDAG->getTargetConstant(ImmValue.countPopulation() - 1, SDLoc(N),
                                       EltTy);
       return true;
     }
@@ -1018,7 +1018,7 @@ bool MipsSEDAGToDAGISel::trySelect(SDNode *Node) {
                                     : (SplatBitSize == 64 ? Mips::FILL_D : 0));
 
       assert(FILLOp != 0 && "Unknown FILL Op for splat synthesis!");
-      assert((!ABI.IsO32() || (ABI.IsO32() && FILLOp != Mips::FILL_D)) &&
+      assert((!ABI.IsO32() || (FILLOp != Mips::FILL_D)) &&
              "Attempting to use fill.d on MIPS32!");
 
       const unsigned Lo = SplatValue.getLoBits(16).getZExtValue();

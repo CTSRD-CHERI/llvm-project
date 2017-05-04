@@ -14,10 +14,6 @@
 
 #include "llvm/LTO/legacy/ThinLTOCodeGenerator.h"
 
-#ifdef HAVE_LLVM_REVISION
-#include "LLVMLTORevision.h"
-#endif
-
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Analysis/ModuleSummaryAnalysis.h"
@@ -37,7 +33,6 @@
 #include "llvm/Linker/Linker.h"
 #include "llvm/MC/SubtargetFeature.h"
 #include "llvm/Object/IRObjectFile.h"
-#include "llvm/Object/ModuleSummaryIndexObjectFile.h"
 #include "llvm/Support/CachePruning.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Error.h"
@@ -47,6 +42,7 @@
 #include "llvm/Support/ThreadPool.h"
 #include "llvm/Support/Threading.h"
 #include "llvm/Support/ToolOutputFile.h"
+#include "llvm/Support/VCSRevision.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/IPO/FunctionImport.h"
@@ -187,10 +183,12 @@ crossImportIntoModule(Module &TheModule, const ModuleSummaryIndex &Index,
 }
 
 static void optimizeModule(Module &TheModule, TargetMachine &TM,
-                           unsigned OptLevel) {
+                           unsigned OptLevel, bool Freestanding) {
   // Populate the PassManager
   PassManagerBuilder PMB;
   PMB.LibraryInfo = new TargetLibraryInfoImpl(TM.getTargetTriple());
+  if (Freestanding)
+    PMB.LibraryInfo->disableAllFunctions();
   PMB.Inliner = createFunctionInliningPass();
   // FIXME: should get it from the bitcode?
   PMB.OptLevel = OptLevel;
@@ -264,7 +262,7 @@ public:
       const std::map<GlobalValue::GUID, GlobalValue::LinkageTypes> &ResolvedODR,
       const GVSummaryMapTy &DefinedFunctions,
       const DenseSet<GlobalValue::GUID> &PreservedSymbols, unsigned OptLevel,
-      const TargetMachineBuilder &TMBuilder) {
+      bool Freestanding, const TargetMachineBuilder &TMBuilder) {
     if (CachePath.empty())
       return;
 
@@ -302,7 +300,7 @@ public:
 
     // Start with the compiler revision
     Hasher.update(LLVM_VERSION_STRING);
-#ifdef HAVE_LLVM_REVISION
+#ifdef LLVM_REVISION
     Hasher.update(LLVM_REVISION);
 #endif
 
@@ -321,6 +319,7 @@ public:
       AddUnsigned(*TMBuilder.RelocModel);
     AddUnsigned(TMBuilder.CGOptLevel);
     AddUnsigned(OptLevel);
+    AddUnsigned(Freestanding);
 
     Hasher.update(ArrayRef<uint8_t>((uint8_t *)&ModHash[0], sizeof(ModHash)));
     for (auto F : ExportList)
@@ -348,7 +347,10 @@ public:
             ArrayRef<uint8_t>((const uint8_t *)&Entry, sizeof(GlobalValue::GUID)));
     }
 
-    sys::path::append(EntryPath, CachePath, toHex(Hasher.result()));
+    // This choice of file name allows the cache to be pruned (see pruneCache()
+    // in include/llvm/Support/CachePruning.h).
+    sys::path::append(EntryPath, CachePath,
+                      "llvmcache-" + toHex(Hasher.result()));
   }
 
   // Access the path to this entry in the cache.
@@ -401,7 +403,7 @@ ProcessThinLTOModule(Module &TheModule, ModuleSummaryIndex &Index,
                      const GVSummaryMapTy &DefinedGlobals,
                      const ThinLTOCodeGenerator::CachingOptions &CacheOptions,
                      bool DisableCodeGen, StringRef SaveTempsDir,
-                     unsigned OptLevel, unsigned count) {
+                     bool Freestanding, unsigned OptLevel, unsigned count) {
 
   // "Benchmark"-like optimization: single-source case
   bool SingleModule = (ModuleMap.size() == 1);
@@ -433,7 +435,7 @@ ProcessThinLTOModule(Module &TheModule, ModuleSummaryIndex &Index,
     saveTempBitcode(TheModule, SaveTempsDir, count, ".3.imported.bc");
   }
 
-  optimizeModule(TheModule, TM, OptLevel);
+  optimizeModule(TheModule, TM, OptLevel, Freestanding);
 
   saveTempBitcode(TheModule, SaveTempsDir, count, ".4.opt.bc");
 
@@ -563,24 +565,17 @@ std::unique_ptr<TargetMachine> TargetMachineBuilder::create() const {
  * "thin-link".
  */
 std::unique_ptr<ModuleSummaryIndex> ThinLTOCodeGenerator::linkCombinedIndex() {
-  std::unique_ptr<ModuleSummaryIndex> CombinedIndex;
+  std::unique_ptr<ModuleSummaryIndex> CombinedIndex =
+      llvm::make_unique<ModuleSummaryIndex>();
   uint64_t NextModuleId = 0;
   for (auto &ModuleBuffer : Modules) {
-    Expected<std::unique_ptr<object::ModuleSummaryIndexObjectFile>> ObjOrErr =
-        object::ModuleSummaryIndexObjectFile::create(
-            ModuleBuffer.getMemBuffer());
-    if (!ObjOrErr) {
+    if (Error Err = readModuleSummaryIndex(ModuleBuffer.getMemBuffer(),
+                                           *CombinedIndex, NextModuleId++)) {
       // FIXME diagnose
       logAllUnhandledErrors(
-          ObjOrErr.takeError(), errs(),
-          "error: can't create ModuleSummaryIndexObjectFile for buffer: ");
+          std::move(Err), errs(),
+          "error: can't create module summary index for buffer: ");
       return nullptr;
-    }
-    auto Index = (*ObjOrErr)->takeIndex();
-    if (CombinedIndex) {
-      CombinedIndex->mergeFrom(std::move(Index), ++NextModuleId);
-    } else {
-      CombinedIndex = std::move(Index);
     }
   }
   return CombinedIndex;
@@ -759,7 +754,7 @@ void ThinLTOCodeGenerator::optimize(Module &TheModule) {
   initTMBuilder(TMBuilder, Triple(TheModule.getTargetTriple()));
 
   // Optimize now
-  optimizeModule(TheModule, *TMBuilder.create(), OptLevel);
+  optimizeModule(TheModule, *TMBuilder.create(), OptLevel, Freestanding);
 }
 
 /**
@@ -945,7 +940,7 @@ void ThinLTOCodeGenerator::run() {
                                     ImportLists[ModuleIdentifier], ExportList,
                                     ResolvedODR[ModuleIdentifier],
                                     DefinedFunctions, GUIDPreservedSymbols,
-                                    OptLevel, TMBuilder);
+                                    OptLevel, Freestanding, TMBuilder);
         auto CacheEntryPath = CacheEntry.getEntryPath();
 
         {
@@ -991,7 +986,7 @@ void ThinLTOCodeGenerator::run() {
             *TheModule, *Index, ModuleMap, *TMBuilder.create(), ImportList,
             ExportList, GUIDPreservedSymbols,
             ModuleToDefinedGVSummaries[ModuleIdentifier], CacheOptions,
-            DisableCodeGen, SaveTempsDir, OptLevel, count);
+            DisableCodeGen, SaveTempsDir, Freestanding, OptLevel, count);
 
         // Commit to the cache (if enabled)
         CacheEntry.write(*OutputBuffer);
@@ -1023,11 +1018,7 @@ void ThinLTOCodeGenerator::run() {
     }
   }
 
-  CachePruning(CacheOptions.Path)
-      .setPruningInterval(std::chrono::seconds(CacheOptions.PruningInterval))
-      .setEntryExpiration(std::chrono::seconds(CacheOptions.Expiration))
-      .setMaxSize(CacheOptions.MaxPercentageOfAvailableSpace)
-      .prune();
+  pruneCache(CacheOptions.Path, CacheOptions.Policy);
 
   // If statistics were requested, print them out now.
   if (llvm::AreStatisticsEnabled())

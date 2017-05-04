@@ -250,12 +250,6 @@ endif()
 set(LLDB_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(LLDB_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 
-# If building on a 32-bit system, make sure off_t can store offsets > 2GB
-if( CMAKE_SIZEOF_VOID_P EQUAL 4 )
-  add_definitions( -D_LARGEFILE_SOURCE )
-  add_definitions( -D_FILE_OFFSET_BITS=64 )
-endif()
-
 if (CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
   message(FATAL_ERROR "In-source builds are not allowed. CMake would overwrite "
 "the makefiles distributed with LLDB. Please create a directory and run cmake "
@@ -270,8 +264,8 @@ string(REGEX MATCH "[0-9]+\\.[0-9]+(\\.[0-9]+)?" LLDB_VERSION
 message(STATUS "LLDB version: ${LLDB_VERSION}")
 
 include_directories(BEFORE
-  ${CMAKE_CURRENT_BINARY_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_CURRENT_BINARY_DIR}/include
   )
 
 if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
@@ -281,6 +275,17 @@ if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
     FILES_MATCHING
     PATTERN "*.h"
     PATTERN ".svn" EXCLUDE
+    PATTERN ".cmake" EXCLUDE
+    PATTERN "Config.h" EXCLUDE
+    )
+
+  install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/
+    COMPONENT lldb_headers
+    DESTINATION include
+    FILES_MATCHING
+    PATTERN "*.h"
+    PATTERN ".svn" EXCLUDE
+    PATTERN ".cmake" EXCLUDE
     )
 endif()
 
@@ -421,3 +426,4 @@ if ((CMAKE_SYSTEM_NAME MATCHES "Android") AND LLVM_BUILD_STATIC AND
 endif()
 
 find_package(Backtrace)
+include(LLDBGenerateConfig)

@@ -51,15 +51,25 @@ public:
   /// GlobalVariable ctor - If a parent module is specified, the global is
   /// automatically inserted into the end of the specified modules global list.
   GlobalVariable(Type *Ty, bool isConstant, LinkageTypes Linkage,
+#ifdef LLVM_NO_DEFAULT_ADDRESS_SPACE_FOR_GLOBAL_VARS
+                 Constant *Initializer, const Twine &Name,
+                 ThreadLocalMode, unsigned AddressSpace,
+#else
                  Constant *Initializer = nullptr, const Twine &Name = "",
                  ThreadLocalMode = NotThreadLocal, unsigned AddressSpace = 0,
+#endif
                  bool isExternallyInitialized = false);
   /// GlobalVariable ctor - This creates a global and inserts it before the
   /// specified other global.
   GlobalVariable(Module &M, Type *Ty, bool isConstant,
                  LinkageTypes Linkage, Constant *Initializer,
+#ifdef LLVM_NO_DEFAULT_ADDRESS_SPACE_FOR_GLOBAL_VARS
+                 const Twine &Name, GlobalVariable *InsertBefore,
+                 ThreadLocalMode, unsigned AddressSpace,
+#else
                  const Twine &Name = "", GlobalVariable *InsertBefore = nullptr,
                  ThreadLocalMode = NotThreadLocal, unsigned AddressSpace = 0,
+#endif
                  bool isExternallyInitialized = false);
   GlobalVariable(const GlobalVariable &) = delete;
   GlobalVariable &operator=(const GlobalVariable &) = delete;

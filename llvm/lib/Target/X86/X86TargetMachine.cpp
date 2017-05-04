@@ -15,7 +15,6 @@
 #include "X86.h"
 #include "X86CallLowering.h"
 #include "X86LegalizerInfo.h"
-#include "X86InstructionSelector.h"
 #ifdef LLVM_BUILD_GLOBAL_ISEL
 #include "X86RegisterBankInfo.h"
 #endif
@@ -30,12 +29,13 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
+#include "llvm/CodeGen/ExecutionDepsFix.h"
 #include "llvm/CodeGen/GlobalISel/CallLowering.h"
 #include "llvm/CodeGen/GlobalISel/GISelAccessor.h"
 #include "llvm/CodeGen/GlobalISel/IRTranslator.h"
+#include "llvm/CodeGen/GlobalISel/InstructionSelect.h"
 #include "llvm/CodeGen/GlobalISel/Legalizer.h"
 #include "llvm/CodeGen/GlobalISel/RegBankSelect.h"
-#include "llvm/CodeGen/GlobalISel/InstructionSelect.h"
 #include "llvm/CodeGen/MachineScheduler.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
@@ -61,6 +61,7 @@ static cl::opt<bool> EnableMachineCombinerPass("x86-machine-combiner",
 namespace llvm {
 
 void initializeWinEHStatePassPass(PassRegistry &);
+void initializeX86ExecutionDepsFixPass(PassRegistry &);
 
 } // end namespace llvm
 
@@ -74,6 +75,7 @@ extern "C" void LLVMInitializeX86Target() {
   initializeWinEHStatePassPass(PR);
   initializeFixupBWInstPassPass(PR);
   initializeEvexToVexInstPassPass(PR);
+  initializeX86ExecutionDepsFixPass(PR);
 }
 
 static std::unique_ptr<TargetLoweringObjectFile> createTLOF(const Triple &TT) {
@@ -266,6 +268,12 @@ X86TargetMachine::getSubtargetImpl(const Function &F) const {
 
   FS = Key.substr(CPU.size());
 
+  bool OptForSize = F.optForSize();
+  bool OptForMinSize = F.optForMinSize();
+
+  Key += std::string(OptForSize ? "+" : "-") + "optforsize";
+  Key += std::string(OptForMinSize ? "+" : "-") + "optforminsize";
+
   auto &I = SubtargetMap[Key];
   if (!I) {
     // This needs to be done before we create a new subtarget since any
@@ -273,19 +281,20 @@ X86TargetMachine::getSubtargetImpl(const Function &F) const {
     // function that reside in TargetOptions.
     resetTargetOptions(F);
     I = llvm::make_unique<X86Subtarget>(TargetTriple, CPU, FS, *this,
-                                        Options.StackAlignmentOverride);
+                                        Options.StackAlignmentOverride,
+                                        OptForSize, OptForMinSize);
 #ifndef LLVM_BUILD_GLOBAL_ISEL
     GISelAccessor *GISel = new GISelAccessor();
 #else
     X86GISelActualAccessor *GISel = new X86GISelActualAccessor();
 
     GISel->CallLoweringInfo.reset(new X86CallLowering(*I->getTargetLowering()));
-    GISel->Legalizer.reset(new X86LegalizerInfo(*I));
+    GISel->Legalizer.reset(new X86LegalizerInfo(*I, *this));
 
     auto *RBI = new X86RegisterBankInfo(*I->getRegisterInfo());
     GISel->RegBankInfo.reset(RBI);
-    GISel->InstSelector.reset(new X86InstructionSelector(*I, *RBI));
-
+    GISel->InstSelector.reset(createX86InstructionSelector(
+        *this, *I, *RBI));
 #endif
     I->setGISelAccessor(*GISel);
   }
@@ -349,7 +358,20 @@ public:
   void addPreSched2() override;
 };
 
+class X86ExecutionDepsFix : public ExecutionDepsFix {
+public:
+  static char ID;
+  X86ExecutionDepsFix() : ExecutionDepsFix(ID, X86::VR128XRegClass) {}
+  StringRef getPassName() const override {
+    return "X86 Execution Dependency Fix";
+  }
+};
+char X86ExecutionDepsFix::ID;
+
 } // end anonymous namespace
+
+INITIALIZE_PASS(X86ExecutionDepsFix, "x86-execution-deps-fix",
+                "X86 Execution Dependency Fix", false, false)
 
 TargetPassConfig *X86TargetMachine::createPassConfig(PassManagerBase &PM) {
   return new X86PassConfig(this, PM);
@@ -432,7 +454,7 @@ void X86PassConfig::addPreSched2() { addPass(createX86ExpandPseudoPass()); }
 
 void X86PassConfig::addPreEmitPass() {
   if (getOptLevel() != CodeGenOpt::None)
-    addPass(createExecutionDependencyFixPass(&X86::VR128XRegClass));
+    addPass(new X86ExecutionDepsFix());
 
   if (UseVZeroUpper)
     addPass(createX86IssueVZeroUpperPass());

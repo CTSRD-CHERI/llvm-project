@@ -175,6 +175,25 @@ public:
   // because of jumps.
   VarBypassDetector Bypasses;
 
+  // CodeGen lambda for loops and support for ordered clause
+  typedef llvm::function_ref<void(CodeGenFunction &, const OMPLoopDirective &,
+                                  JumpDest)>
+      CodeGenLoopTy;
+  typedef llvm::function_ref<void(CodeGenFunction &, SourceLocation,
+                                  const unsigned, const bool)>
+      CodeGenOrderedTy;
+
+  // Codegen lambda for loop bounds in worksharing loop constructs
+  typedef llvm::function_ref<std::pair<LValue, LValue>(
+      CodeGenFunction &, const OMPExecutableDirective &S)>
+      CodeGenLoopBoundsTy;
+
+  // Codegen lambda for loop bounds in dispatch-based loop implementation
+  typedef llvm::function_ref<std::pair<llvm::Value *, llvm::Value *>(
+      CodeGenFunction &, const OMPExecutableDirective &S, Address LB,
+      Address UB)>
+      CodeGenDispatchBoundsTy;
+
   /// \brief CGBuilder insert helper. This function is called after an
   /// instruction is created using Builder.
   void InsertHelper(llvm::Instruction *I, const llvm::Twine &Name,
@@ -1986,7 +2005,7 @@ public:
   /// pointer to a char.
   Address EmitMSVAListRef(const Expr *E);
 
-  /// EmitAnyExprToTemp - Similary to EmitAnyExpr(), however, the result will
+  /// EmitAnyExprToTemp - Similarly to EmitAnyExpr(), however, the result will
   /// always be accessible even if no aggregate location is provided.
   RValue EmitAnyExprToTemp(const Expr *E);
 
@@ -2077,9 +2096,8 @@ public:
   llvm::BlockAddress *GetAddrOfLabel(const LabelDecl *L);
   llvm::BasicBlock *GetIndirectGotoBlock();
 
-  /// Check if \p E is a reference, or a C++ "this" pointer wrapped in value-
-  /// preserving casts.
-  static bool IsDeclRefOrWrappedCXXThis(const Expr *E);
+  /// Check if \p E is a C++ "this" pointer wrapped in value-preserving casts.
+  static bool IsWrappedCXXThis(const Expr *E);
 
   /// EmitNullInitialization - Generate code to set a value of the given type to
   /// null, If the type contains data member pointers, they will be initialized
@@ -2465,6 +2483,12 @@ public:
   PeepholeProtection protectFromPeepholes(RValue rvalue);
   void unprotectFromPeepholes(PeepholeProtection protection);
 
+  void EmitAlignmentAssumption(llvm::Value *PtrValue, llvm::Value *Alignment,
+                               llvm::Value *OffsetValue = nullptr) {
+    Builder.CreateAlignmentAssumption(CGM.getDataLayout(), PtrValue, Alignment,
+                                      OffsetValue);
+  }
+
   //===--------------------------------------------------------------------===//
   //                             Statement Emission
   //===--------------------------------------------------------------------===//
@@ -2528,6 +2552,12 @@ public:
 
   void EmitCoroutineBody(const CoroutineBodyStmt &S);
   void EmitCoreturnStmt(const CoreturnStmt &S);
+  RValue EmitCoawaitExpr(const CoawaitExpr &E,
+                         AggValueSlot aggSlot = AggValueSlot::ignored(),
+                         bool ignoreResult = false);
+  RValue EmitCoyieldExpr(const CoyieldExpr &E,
+                         AggValueSlot aggSlot = AggValueSlot::ignored(),
+                         bool ignoreResult = false);
   RValue EmitCoroutineIntrinsic(const CallExpr *E, unsigned int IID);
 
   void EnterCXXTryStmt(const CXXTryStmt &S, bool IsFnTryBlock = false);
@@ -2745,7 +2775,6 @@ public:
   void EmitOMPTaskLoopDirective(const OMPTaskLoopDirective &S);
   void EmitOMPTaskLoopSimdDirective(const OMPTaskLoopSimdDirective &S);
   void EmitOMPDistributeDirective(const OMPDistributeDirective &S);
-  void EmitOMPDistributeLoop(const OMPDistributeDirective &S);
   void EmitOMPDistributeParallelForDirective(
       const OMPDistributeParallelForDirective &S);
   void EmitOMPDistributeParallelForSimdDirective(
@@ -2802,32 +2831,78 @@ public:
   void EmitOMPPrivateLoopCounters(const OMPLoopDirective &S,
                                   OMPPrivateScope &LoopScope);
 
+  /// Helper for the OpenMP loop directives.
+  void EmitOMPLoopBody(const OMPLoopDirective &D, JumpDest LoopExit);
+
+  /// \brief Emit code for the worksharing loop-based directive.
+  /// \return true, if this construct has any lastprivate clause, false -
+  /// otherwise.
+  bool EmitOMPWorksharingLoop(const OMPLoopDirective &S, Expr *EUB,
+                              const CodeGenLoopBoundsTy &CodeGenLoopBounds,
+                              const CodeGenDispatchBoundsTy &CGDispatchBounds);
+
 private:
   /// Helpers for blocks
   llvm::Value *EmitBlockLiteral(const CGBlockInfo &Info);
 
   /// Helpers for the OpenMP loop directives.
-  void EmitOMPLoopBody(const OMPLoopDirective &D, JumpDest LoopExit);
   void EmitOMPSimdInit(const OMPLoopDirective &D, bool IsMonotonic = false);
   void EmitOMPSimdFinal(
       const OMPLoopDirective &D,
       const llvm::function_ref<llvm::Value *(CodeGenFunction &)> &CondGen);
-  /// \brief Emit code for the worksharing loop-based directive.
-  /// \return true, if this construct has any lastprivate clause, false -
-  /// otherwise.
-  bool EmitOMPWorksharingLoop(const OMPLoopDirective &S);
-  void EmitOMPOuterLoop(bool IsMonotonic, bool DynamicOrOrdered,
-      const OMPLoopDirective &S, OMPPrivateScope &LoopScope, bool Ordered,
-      Address LB, Address UB, Address ST, Address IL, llvm::Value *Chunk);
+
+  void EmitOMPDistributeLoop(const OMPLoopDirective &S,
+                             const CodeGenLoopTy &CodeGenLoop, Expr *IncExpr);
+
+  /// struct with the values to be passed to the OpenMP loop-related functions
+  struct OMPLoopArguments {
+    /// loop lower bound
+    Address LB = Address::invalid();
+    /// loop upper bound
+    Address UB = Address::invalid();
+    /// loop stride
+    Address ST = Address::invalid();
+    /// isLastIteration argument for runtime functions
+    Address IL = Address::invalid();
+    /// Chunk value generated by sema
+    llvm::Value *Chunk = nullptr;
+    /// EnsureUpperBound
+    Expr *EUB = nullptr;
+    /// IncrementExpression
+    Expr *IncExpr = nullptr;
+    /// Loop initialization
+    Expr *Init = nullptr;
+    /// Loop exit condition
+    Expr *Cond = nullptr;
+    /// Update of LB after a whole chunk has been executed
+    Expr *NextLB = nullptr;
+    /// Update of UB after a whole chunk has been executed
+    Expr *NextUB = nullptr;
+    OMPLoopArguments() = default;
+    OMPLoopArguments(Address LB, Address UB, Address ST, Address IL,
+                     llvm::Value *Chunk = nullptr, Expr *EUB = nullptr,
+                     Expr *IncExpr = nullptr, Expr *Init = nullptr,
+                     Expr *Cond = nullptr, Expr *NextLB = nullptr,
+                     Expr *NextUB = nullptr)
+        : LB(LB), UB(UB), ST(ST), IL(IL), Chunk(Chunk), EUB(EUB),
+          IncExpr(IncExpr), Init(Init), Cond(Cond), NextLB(NextLB),
+          NextUB(NextUB) {}
+  };
+  void EmitOMPOuterLoop(bool DynamicOrOrdered, bool IsMonotonic,
+                        const OMPLoopDirective &S, OMPPrivateScope &LoopScope,
+                        const OMPLoopArguments &LoopArgs,
+                        const CodeGenLoopTy &CodeGenLoop,
+                        const CodeGenOrderedTy &CodeGenOrdered);
   void EmitOMPForOuterLoop(const OpenMPScheduleTy &ScheduleKind,
                            bool IsMonotonic, const OMPLoopDirective &S,
-                           OMPPrivateScope &LoopScope, bool Ordered, Address LB,
-                           Address UB, Address ST, Address IL,
-                           llvm::Value *Chunk);
-  void EmitOMPDistributeOuterLoop(
-      OpenMPDistScheduleClauseKind ScheduleKind,
-      const OMPDistributeDirective &S, OMPPrivateScope &LoopScope,
-      Address LB, Address UB, Address ST, Address IL, llvm::Value *Chunk);
+                           OMPPrivateScope &LoopScope, bool Ordered,
+                           const OMPLoopArguments &LoopArgs,
+                           const CodeGenDispatchBoundsTy &CGDispatchBounds);
+  void EmitOMPDistributeOuterLoop(OpenMPDistScheduleClauseKind ScheduleKind,
+                                  const OMPLoopDirective &S,
+                                  OMPPrivateScope &LoopScope,
+                                  const OMPLoopArguments &LoopArgs,
+                                  const CodeGenLoopTy &CodeGenLoopContent);
   /// \brief Emit code for sections directive.
   void EmitSections(const OMPExecutableDirective &S);
 
@@ -3294,6 +3369,7 @@ public:
   static Destroyer destroyARCStrongImprecise;
   static Destroyer destroyARCStrongPrecise;
   static Destroyer destroyARCWeak;
+  static Destroyer emitARCIntrinsicUse;
 
   void EmitObjCAutoreleasePoolPop(llvm::Value *Ptr); 
   llvm::Value *EmitObjCAutoreleasePoolPush();
@@ -3395,9 +3471,10 @@ public:
 
   /// GenerateCXXGlobalDtorsFunc - Generates code for destroying global
   /// variables.
-  void GenerateCXXGlobalDtorsFunc(llvm::Function *Fn,
-                                  const std::vector<std::pair<llvm::WeakVH,
-                                  llvm::Constant*> > &DtorsAndObjects);
+  void GenerateCXXGlobalDtorsFunc(
+      llvm::Function *Fn,
+      const std::vector<std::pair<llvm::WeakTrackingVH, llvm::Constant *>>
+          &DtorsAndObjects);
 
   void GenerateCXXGlobalVarDeclInitFunc(llvm::Function *Fn,
                                         const VarDecl *D,
@@ -3511,6 +3588,9 @@ public:
   /// \brief Emit a call to trap or debugtrap and attach function attribute
   /// "trap-func-name" if specified.
   llvm::CallInst *EmitTrapCall(llvm::Intrinsic::ID IntrID);
+
+  /// \brief Emit a stub for the cross-DSO CFI check function.
+  void EmitCfiCheckStub();
 
   /// \brief Emit a cross-DSO CFI failure handling function.
   void EmitCfiCheckFail();

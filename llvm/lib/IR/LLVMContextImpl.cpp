@@ -39,8 +39,7 @@ LLVMContextImpl::LLVMContextImpl(LLVMContext &C)
     Int16Ty(C, 16),
     Int32Ty(C, 32),
     Int64Ty(C, 64),
-    Int128Ty(C, 128),
-    AllocaAS(0) {
+    Int128Ty(C, 128) {
   InlineAsmDiagHandler = nullptr;
   InlineAsmDiagContext = nullptr;
   DiagnosticHandler = nullptr;
@@ -115,9 +114,10 @@ LLVMContextImpl::~LLVMContextImpl() {
   }
 
   // Destroy attribute lists.
-  for (FoldingSetIterator<AttributeSetImpl> I = AttrsLists.begin(),
-         E = AttrsLists.end(); I != E; ) {
-    FoldingSetIterator<AttributeSetImpl> Elem = I++;
+  for (FoldingSetIterator<AttributeListImpl> I = AttrsLists.begin(),
+                                             E = AttrsLists.end();
+       I != E;) {
+    FoldingSetIterator<AttributeListImpl> Elem = I++;
     delete &*Elem;
   }
 

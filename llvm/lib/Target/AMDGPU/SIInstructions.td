@@ -94,6 +94,12 @@ defm V_INTERP_MOV_F32 : VINTRP_m <
 //===----------------------------------------------------------------------===//
 // Pseudo Instructions
 //===----------------------------------------------------------------------===//
+def ATOMIC_FENCE : SPseudoInstSI<
+  (outs), (ins i32imm:$ordering, i32imm:$scope),
+  [(atomic_fence (i32 imm:$ordering), (i32 imm:$scope))],
+  "ATOMIC_FENCE $ordering, $scope"> {
+  let hasSideEffects = 1;
+}
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Uses = [EXEC] in {
 
@@ -110,12 +116,6 @@ def V_CNDMASK_B64_PSEUDO : VOP3Common <(outs VReg_64:$vdst),
 def V_MOV_B64_PSEUDO : VPseudoInstSI <(outs VReg_64:$vdst),
                                       (ins VSrc_b64:$src0)>;
 } // End let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Uses = [EXEC]
-
-def S_TRAP_PSEUDO : SPseudoInstSI <(outs), (ins i16imm:$simm16)> {
-  let hasSideEffects = 1;
-  let SALU = 1;
-  let usesCustomInserter = 1;
-}
 
 let usesCustomInserter = 1, SALU = 1 in {
 def GET_GROUPSTATICSIZE : PseudoInstSI <(outs SReg_32:$sdst), (ins),
@@ -152,6 +152,8 @@ def WAVE_BARRIER : SPseudoInstSI<(outs), (ins),
   let mayStore = 1;
   let isBarrier = 1;
   let isConvergent = 1;
+  let FixedSize = 1;
+  let Size = 0;
 }
 
 // SI pseudo instructions. These are used by the CFG structurizer pass
@@ -159,48 +161,44 @@ def WAVE_BARRIER : SPseudoInstSI<(outs), (ins),
 
 // Dummy terminator instruction to use after control flow instructions
 // replaced with exec mask operations.
-def SI_MASK_BRANCH : PseudoInstSI <
+def SI_MASK_BRANCH : VPseudoInstSI <
   (outs), (ins brtarget:$target)> {
   let isBranch = 0;
   let isTerminator = 1;
   let isBarrier = 0;
-  let Uses = [EXEC];
   let SchedRW = [];
   let hasNoSchedulingInfo = 1;
+  let FixedSize = 1;
+  let Size = 0;
 }
 
 let isTerminator = 1 in {
 
 def SI_IF: CFPseudoInstSI <
   (outs SReg_64:$dst), (ins SReg_64:$vcc, brtarget:$target),
-  [(set i64:$dst, (int_amdgcn_if i1:$vcc, bb:$target))], 1, 1> {
+  [(set i64:$dst, (AMDGPUif i1:$vcc, bb:$target))], 1, 1> {
   let Constraints = "";
   let Size = 12;
-  let mayLoad = 1;
-  let mayStore = 1;
   let hasSideEffects = 1;
 }
 
 def SI_ELSE : CFPseudoInstSI <
-  (outs SReg_64:$dst), (ins SReg_64:$src, brtarget:$target, i1imm:$execfix), [], 1, 1> {
+  (outs SReg_64:$dst),
+  (ins SReg_64:$src, brtarget:$target, i1imm:$execfix), [], 1, 1> {
   let Constraints = "$src = $dst";
   let Size = 12;
-  let mayStore = 1;
-  let mayLoad = 1;
   let hasSideEffects = 1;
 }
 
 def SI_LOOP : CFPseudoInstSI <
   (outs), (ins SReg_64:$saved, brtarget:$target),
-  [(int_amdgcn_loop i64:$saved, bb:$target)], 1, 1> {
+  [(AMDGPUloop i64:$saved, bb:$target)], 1, 1> {
   let Size = 8;
-  let isBranch = 1;
+  let isBranch = 0;
   let hasSideEffects = 1;
-  let mayLoad = 1;
-  let mayStore = 1;
 }
 
-} // End isBranch = 1, isTerminator = 1
+} // End isTerminator = 1
 
 def SI_END_CF : CFPseudoInstSI <
   (outs), (ins SReg_64:$saved),
@@ -208,9 +206,9 @@ def SI_END_CF : CFPseudoInstSI <
   let Size = 4;
   let isAsCheapAsAMove = 1;
   let isReMaterializable = 1;
-  let mayLoad = 1;
-  let mayStore = 1;
   let hasSideEffects = 1;
+  let mayLoad = 1; // FIXME: Should not need memory flags
+  let mayStore = 1;
 }
 
 def SI_BREAK : CFPseudoInstSI <
@@ -250,6 +248,10 @@ def SI_KILL_TERMINATOR : SPseudoInstSI <
   let isTerminator = 1;
 }
 
+def SI_ILLEGAL_COPY : SPseudoInstSI <
+  (outs unknown:$dst), (ins unknown:$src),
+  [], " ; illegal copy $src to $dst">;
+
 } // End Uses = [EXEC], Defs = [EXEC,VCC]
 
 // Branch on undef scc. Used to avoid intermediate copy from
@@ -265,6 +267,14 @@ def SI_PS_LIVE : PseudoInstSI <
   let SALU = 1;
 }
 
+def SI_MASKED_UNREACHABLE : SPseudoInstSI <(outs), (ins),
+  [(int_amdgcn_unreachable)],
+  "; divergent unreachable"> {
+  let Size = 0;
+  let hasNoSchedulingInfo = 1;
+  let FixedSize = 1;
+}
+
 // Used as an isel pseudo to directly emit initialization with an
 // s_mov_b32 rather than a copy of another initialized
 // register. MachineCSE skips copies, and we don't want to have to
@@ -276,12 +286,25 @@ def SI_INIT_M0 : SPseudoInstSI <(outs), (ins SSrc_b32:$src)> {
   let isReMaterializable = 1;
 }
 
-def SI_RETURN : SPseudoInstSI <
-  (outs), (ins variable_ops), [(AMDGPUreturn)]> {
+def SI_INIT_EXEC : SPseudoInstSI <
+  (outs), (ins i64imm:$src), []> {
+  let Defs = [EXEC];
+  let usesCustomInserter = 1;
+  let isAsCheapAsAMove = 1;
+}
+
+def SI_INIT_EXEC_FROM_INPUT : SPseudoInstSI <
+  (outs), (ins SSrc_b32:$input, i32imm:$shift), []> {
+  let Defs = [EXEC];
+  let usesCustomInserter = 1;
+}
+
+// Return for returning shaders to a shader variant epilog.
+def SI_RETURN_TO_EPILOG : SPseudoInstSI <
+  (outs), (ins variable_ops), [(AMDGPUreturn_to_epilog)]> {
   let isTerminator = 1;
   let isBarrier = 1;
   let isReturn = 1;
-  let hasSideEffects = 1;
   let hasNoSchedulingInfo = 1;
   let DisableWQM = 1;
 }
@@ -389,18 +412,23 @@ def SI_PC_ADD_REL_OFFSET : SPseudoInstSI <
 } // End SubtargetPredicate = isGCN
 
 let Predicates = [isGCN] in {
-def : Pat<
-  (trap),
-  (S_TRAP_PSEUDO TRAPID.LLVM_TRAP)
+def : Pat <
+  (AMDGPUinit_exec i64:$src),
+  (SI_INIT_EXEC (as_i64imm $src))
+>;
+
+def : Pat <
+  (AMDGPUinit_exec_from_input i32:$input, i32:$shift),
+  (SI_INIT_EXEC_FROM_INPUT (i32 $input), (as_i32imm $shift))
 >;
 
 def : Pat<
-  (debugtrap),
-  (S_TRAP_PSEUDO TRAPID.LLVM_DEBUG_TRAP)
+  (AMDGPUtrap timm:$trapid),
+  (S_TRAP $trapid)
 >;
 
 def : Pat<
-  (int_amdgcn_else i64:$src, bb:$target),
+  (AMDGPUelse i64:$src, bb:$target),
   (SI_ELSE $src, $target, 0)
 >;
 
@@ -467,8 +495,8 @@ def : Pat <
 
 // fp_to_fp16 patterns
 def : Pat <
-  (i32 (fp_to_f16 (f32 (VOP3Mods0 f32:$src0, i32:$src0_modifiers, i1:$clamp, i32:$omod)))),
-  (V_CVT_F16_F32_e64 $src0_modifiers, f32:$src0, $clamp, $omod)
+  (i32 (AMDGPUfp_to_f16 (f32 (VOP3Mods f32:$src0, i32:$src0_modifiers)))),
+  (V_CVT_F16_F32_e64 $src0_modifiers, f32:$src0, DSTCLAMP.NONE, DSTOMOD.NONE)
 >;
 
 def : Pat <
@@ -497,11 +525,11 @@ def : Pat <
 
 multiclass FMADPat <ValueType vt, Instruction inst> {
   def : Pat <
-    (vt (fmad (VOP3NoMods0 vt:$src0, i32:$src0_modifiers, i1:$clamp, i32:$omod),
-              (VOP3NoMods  vt:$src1, i32:$src1_modifiers),
-              (VOP3NoMods  vt:$src2, i32:$src2_modifiers))),
-    (inst $src0_modifiers, $src0, $src1_modifiers, $src1,
-          $src2_modifiers, $src2, $clamp, $omod)
+    (vt (fmad (VOP3NoMods vt:$src0),
+              (VOP3NoMods vt:$src1),
+              (VOP3NoMods vt:$src2))),
+    (inst SRCMODS.NONE, $src0, SRCMODS.NONE, $src1,
+          SRCMODS.NONE, $src2, DSTCLAMP.NONE, DSTOMOD.NONE)
   >;
 }
 
@@ -671,10 +699,9 @@ def : BitConvert <v16f32, v16i32, VReg_512>;
 // If denormals are not enabled, it only impacts the compare of the
 // inputs. The output result is not flushed.
 class ClampPat<Instruction inst, ValueType vt> : Pat <
-  (vt (AMDGPUclamp
-        (VOP3Mods0Clamp vt:$src0, i32:$src0_modifiers, i32:$omod))),
+  (vt (AMDGPUclamp (VOP3Mods vt:$src0, i32:$src0_modifiers))),
   (inst i32:$src0_modifiers, vt:$src0,
-        i32:$src0_modifiers, vt:$src0, DSTCLAMP.ENABLE, $omod)
+        i32:$src0_modifiers, vt:$src0, DSTCLAMP.ENABLE, DSTOMOD.NONE)
 >;
 
 def : ClampPat<V_MAX_F32_e64, f32>;
@@ -1070,6 +1097,11 @@ def : Pat <
 //===----------------------------------------------------------------------===//
 // Miscellaneous Patterns
 //===----------------------------------------------------------------------===//
+def : Pat <
+  (i32 (AMDGPUfp16_zext f16:$src)),
+  (COPY $src)
+>;
+
 
 def : Pat <
   (i32 (trunc i64:$a)),

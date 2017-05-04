@@ -930,6 +930,18 @@ void MachO::AddLinkRuntimeLib(const ArgList &Args, ArgStringList &CmdArgs,
   }
 }
 
+void MachO::AddFuzzerLinkArgs(const ArgList &Args, ArgStringList &CmdArgs) const {
+
+  // Go up one directory from Clang to find the libfuzzer archive file.
+  StringRef ParentDir = llvm::sys::path::parent_path(getDriver().InstalledDir);
+  SmallString<128> P(ParentDir);
+  llvm::sys::path::append(P, "lib", "libLLVMFuzzer.a");
+  CmdArgs.push_back(Args.MakeArgString(P));
+
+  // Libfuzzer is written in C++ and requires libcxx.
+  AddCXXStdlibLibArgs(Args, CmdArgs);
+}
+
 StringRef Darwin::getPlatformFamily() const {
   switch (TargetPlatform) {
     case DarwinPlatformKind::MacOS:
@@ -1035,10 +1047,14 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
   const SanitizerArgs &Sanitize = getSanitizerArgs();
   if (Sanitize.needsAsanRt())
     AddLinkSanitizerLibArgs(Args, CmdArgs, "asan");
+  if (Sanitize.needsLsanRt())
+    AddLinkSanitizerLibArgs(Args, CmdArgs, "lsan");
   if (Sanitize.needsUbsanRt())
     AddLinkSanitizerLibArgs(Args, CmdArgs, "ubsan");
   if (Sanitize.needsTsanRt())
     AddLinkSanitizerLibArgs(Args, CmdArgs, "tsan");
+  if (Sanitize.needsFuzzer())
+    AddFuzzerLinkArgs(Args, CmdArgs);
   if (Sanitize.needsStatsRt()) {
     StringRef OS = isTargetMacOS() ? "osx" : "iossim";
     AddLinkRuntimeLib(Args, CmdArgs,
@@ -1125,9 +1141,22 @@ void Darwin::AddDeploymentTarget(DerivedArgList &Args) const {
   }
 
   Arg *OSXVersion = Args.getLastArg(options::OPT_mmacosx_version_min_EQ);
-  Arg *iOSVersion = Args.getLastArg(options::OPT_miphoneos_version_min_EQ);
-  Arg *TvOSVersion = Args.getLastArg(options::OPT_mtvos_version_min_EQ);
-  Arg *WatchOSVersion = Args.getLastArg(options::OPT_mwatchos_version_min_EQ);
+  Arg *iOSVersion = Args.getLastArg(options::OPT_miphoneos_version_min_EQ,
+                                    options::OPT_mios_simulator_version_min_EQ);
+  Arg *TvOSVersion =
+      Args.getLastArg(options::OPT_mtvos_version_min_EQ,
+                      options::OPT_mtvos_simulator_version_min_EQ);
+  Arg *WatchOSVersion =
+      Args.getLastArg(options::OPT_mwatchos_version_min_EQ,
+                      options::OPT_mwatchos_simulator_version_min_EQ);
+
+  // Add a macro to differentiate between m(iphone|tv|watch)os-version-min=X.Y and
+  // -m(iphone|tv|watch)simulator-version-min=X.Y.
+  if (Args.hasArg(options::OPT_mios_simulator_version_min_EQ) ||
+      Args.hasArg(options::OPT_mtvos_simulator_version_min_EQ) ||
+      Args.hasArg(options::OPT_mwatchos_simulator_version_min_EQ))
+    Args.append(Args.MakeSeparateArg(nullptr, Opts.getOption(options::OPT_D),
+                                     " __APPLE_EMBEDDED_SIMULATOR__=1"));
 
   if (OSXVersion && (iOSVersion || TvOSVersion || WatchOSVersion)) {
     getDriver().Diag(diag::err_drv_argument_not_allowed_with)
@@ -1671,7 +1700,8 @@ Darwin::TranslateArgs(const DerivedArgList &Args, StringRef BoundArch,
       A = *it;
       assert(A->getOption().getID() == options::OPT_static &&
              "missing expected -static argument");
-      it = DAL->getArgs().erase(it);
+      *it = nullptr;
+      ++it;
     }
   }
 
@@ -1878,6 +1908,8 @@ SanitizerMask Darwin::getSupportedSanitizers() const {
   const bool IsX86_64 = getTriple().getArch() == llvm::Triple::x86_64;
   SanitizerMask Res = ToolChain::getSupportedSanitizers();
   Res |= SanitizerKind::Address;
+  Res |= SanitizerKind::Leak;
+  Res |= SanitizerKind::Fuzzer;
   if (isTargetMacOS()) {
     if (!isMacosxVersionLT(10, 9))
       Res |= SanitizerKind::Vptr;

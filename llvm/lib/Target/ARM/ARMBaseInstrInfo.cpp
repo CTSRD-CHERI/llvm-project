@@ -905,7 +905,7 @@ storeRegToStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       MachinePointerInfo::getFixedStack(MF, FI), MachineMemOperand::MOStore,
       MFI.getObjectSize(FI), Align);
 
-  switch (RC->getSize()) {
+  switch (TRI->getSpillSize(*RC)) {
     case 4:
       if (ARM::GPRRegClass.hasSubClassEq(RC)) {
         BuildMI(MBB, I, DL, get(ARM::STRi12))
@@ -1103,7 +1103,7 @@ loadRegFromStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       MachinePointerInfo::getFixedStack(MF, FI), MachineMemOperand::MOLoad,
       MFI.getObjectSize(FI), Align);
 
-  switch (RC->getSize()) {
+  switch (TRI->getSpillSize(*RC)) {
   case 4:
     if (ARM::GPRRegClass.hasSubClassEq(RC)) {
       BuildMI(MBB, I, DL, get(ARM::LDRi12), DestReg)
@@ -4709,19 +4709,6 @@ void ARMBaseInstrInfo::breakPartialRegDependency(
 
 bool ARMBaseInstrInfo::hasNOP() const {
   return Subtarget.getFeatureBits()[ARM::HasV6KOps];
-}
-
-bool ARMBaseInstrInfo::isTailCall(const MachineInstr &Inst) const
-{
-  switch (Inst.getOpcode()) {
-  case ARM::TAILJMPd:
-  case ARM::TAILJMPr:
-  case ARM::TCRETURNdi:
-  case ARM::TCRETURNri:
-    return true;
-  default:
-    return false;
-  }
 }
 
 bool ARMBaseInstrInfo::isSwiftFastImmShift(const MachineInstr *MI) const {

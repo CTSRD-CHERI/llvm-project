@@ -301,9 +301,14 @@ RValue CodeGenFunction::EmitCXXMemberOrOperatorMemberCallExpr(
     CallLoc = CE->getExprLoc();
 
   SanitizerSet SkippedChecks;
-  if (const auto *CMCE = dyn_cast<CXXMemberCallExpr>(CE))
-    if (IsDeclRefOrWrappedCXXThis(CMCE->getImplicitObjectArgument()))
+  if (const auto *CMCE = dyn_cast<CXXMemberCallExpr>(CE)) {
+    auto *IOA = CMCE->getImplicitObjectArgument();
+    bool IsImplicitObjectCXXThis = IsWrappedCXXThis(IOA);
+    if (IsImplicitObjectCXXThis)
+      SkippedChecks.set(SanitizerKind::Alignment, true);
+    if (IsImplicitObjectCXXThis || isa<DeclRefExpr>(IOA))
       SkippedChecks.set(SanitizerKind::Null, true);
+  }
   EmitTypeCheck(
       isa<CXXConstructorDecl>(CalleeDecl) ? CodeGenFunction::TCK_ConstructorCall
                                           : CodeGenFunction::TCK_MemberCall,
@@ -1275,10 +1280,10 @@ static RValue EmitNewDeleteCall(CodeGenFunction &CGF,
       Fn && Fn->hasFnAttribute(llvm::Attribute::NoBuiltin)) {
     // FIXME: Add addAttribute to CallSite.
     if (llvm::CallInst *CI = dyn_cast<llvm::CallInst>(CallOrInvoke))
-      CI->addAttribute(llvm::AttributeSet::FunctionIndex,
+      CI->addAttribute(llvm::AttributeList::FunctionIndex,
                        llvm::Attribute::Builtin);
     else if (llvm::InvokeInst *II = dyn_cast<llvm::InvokeInst>(CallOrInvoke))
-      II->addAttribute(llvm::AttributeSet::FunctionIndex,
+      II->addAttribute(llvm::AttributeList::FunctionIndex,
                        llvm::Attribute::Builtin);
     else
       llvm_unreachable("unexpected kind of call instruction");
