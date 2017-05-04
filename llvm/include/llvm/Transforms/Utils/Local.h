@@ -142,7 +142,8 @@ bool EliminateDuplicatePHINodes(BasicBlock *BB);
 /// eliminate.
 bool SimplifyCFG(BasicBlock *BB, const TargetTransformInfo &TTI,
                  unsigned BonusInstThreshold, AssumptionCache *AC = nullptr,
-                 SmallPtrSetImpl<BasicBlock *> *LoopHeaders = nullptr);
+                 SmallPtrSetImpl<BasicBlock *> *LoopHeaders = nullptr,
+                 bool LateSimplifyCFG = false);
 
 /// This function is used to flatten a CFG. For example, it uses parallel-and
 /// and parallel-or mode to collapse if-conditions and merge if-regions with
@@ -284,9 +285,6 @@ DbgDeclareInst *FindAllocaDbgDeclare(Value *V);
 
 /// Finds the llvm.dbg.value intrinsics describing a value.
 void findDbgValues(SmallVectorImpl<DbgValueInst *> &DbgValues, Value *V);
-
-/// Constants for \p replaceDbgDeclare and friends.
-enum { NoDeref = false, WithDeref = true };
 
 /// Replaces llvm.dbg.declare instruction when the address it describes
 /// is replaced with a new value. If Deref is true, an additional DW_OP_deref is

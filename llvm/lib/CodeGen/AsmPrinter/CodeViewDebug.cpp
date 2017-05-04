@@ -237,7 +237,7 @@ TypeIndex CodeViewDebug::getFuncIdForSubprogram(const DISubprogram *SP) {
 
   // The display name includes function template arguments. Drop them to match
   // MSVC.
-  StringRef DisplayName = SP->getDisplayName().split('<').first;
+  StringRef DisplayName = SP->getName().split('<').first;
 
   const DIScope *Scope = SP->getScope().resolve();
   TypeIndex TI;
@@ -392,7 +392,7 @@ void CodeViewDebug::endModule() {
   // subprograms.
   switchToDebugSectionForSymbol(nullptr);
 
-  MCSymbol *CompilerInfo = beginCVSubsection(ModuleSubstreamKind::Symbols);
+  MCSymbol *CompilerInfo = beginCVSubsection(ModuleDebugFragmentKind::Symbols);
   emitCompilerInformation();
   endCVSubsection(CompilerInfo);
 
@@ -416,7 +416,7 @@ void CodeViewDebug::endModule() {
 
   // Emit UDT records for any types used by global variables.
   if (!GlobalUDTs.empty()) {
-    MCSymbol *SymbolsEnd = beginCVSubsection(ModuleSubstreamKind::Symbols);
+    MCSymbol *SymbolsEnd = beginCVSubsection(ModuleDebugFragmentKind::Symbols);
     emitDebugInfoForUDTs(GlobalUDTs);
     endCVSubsection(SymbolsEnd);
   }
@@ -644,7 +644,8 @@ void CodeViewDebug::emitInlineeLinesSubsection() {
     return;
 
   OS.AddComment("Inlinee lines subsection");
-  MCSymbol *InlineEnd = beginCVSubsection(ModuleSubstreamKind::InlineeLines);
+  MCSymbol *InlineEnd =
+      beginCVSubsection(ModuleDebugFragmentKind::InlineeLines);
 
   // We don't provide any extra file info.
   // FIXME: Find out if debuggers use this info.
@@ -657,7 +658,7 @@ void CodeViewDebug::emitInlineeLinesSubsection() {
 
     OS.AddBlankLine();
     unsigned FileId = maybeRecordFile(SP->getFile());
-    OS.AddComment("Inlined function " + SP->getDisplayName() + " starts at " +
+    OS.AddComment("Inlined function " + SP->getName() + " starts at " +
                   SP->getFilename() + Twine(':') + Twine(SP->getLine()));
     OS.AddBlankLine();
     // The filechecksum table uses 8 byte entries for now, and file ids start at
@@ -759,9 +760,9 @@ void CodeViewDebug::emitDebugInfoForFunction(const Function *GV,
 
   // If we have a display name, build the fully qualified name by walking the
   // chain of scopes.
-  if (!SP->getDisplayName().empty())
+  if (!SP->getName().empty())
     FuncName =
-        getFullyQualifiedName(SP->getScope().resolve(), SP->getDisplayName());
+        getFullyQualifiedName(SP->getScope().resolve(), SP->getName());
 
   // If our DISubprogram name is empty, use the mangled name.
   if (FuncName.empty())
@@ -769,7 +770,7 @@ void CodeViewDebug::emitDebugInfoForFunction(const Function *GV,
 
   // Emit a symbol subsection, required by VS2012+ to find function boundaries.
   OS.AddComment("Symbol subsection for " + Twine(FuncName));
-  MCSymbol *SymbolsEnd = beginCVSubsection(ModuleSubstreamKind::Symbols);
+  MCSymbol *SymbolsEnd = beginCVSubsection(ModuleDebugFragmentKind::Symbols);
   {
     MCSymbol *ProcRecordBegin = MMI->getContext().createTempSymbol(),
              *ProcRecordEnd = MMI->getContext().createTempSymbol();
@@ -947,10 +948,10 @@ void CodeViewDebug::collectVariableInfo(const DISubprogram *SP) {
 
       // Handle fragments.
       auto Fragment = DIExpr->getFragmentInfo();
-      if (DIExpr && Fragment) {
+      if (Fragment) {
         IsSubfield = true;
         StructOffset = Fragment->OffsetInBits / 8;
-      } else if (DIExpr && DIExpr->getNumElements() > 0) {
+      } else if (DIExpr->getNumElements() > 0) {
         continue; // Ignore unrecognized exprs.
       }
 
@@ -1136,32 +1137,11 @@ TypeIndex CodeViewDebug::lowerTypeArray(const DICompositeType *Ty) {
   DITypeRef ElementTypeRef = Ty->getBaseType();
   TypeIndex ElementTypeIndex = getTypeIndex(ElementTypeRef);
   // IndexType is size_t, which depends on the bitness of the target.
-  TypeIndex IndexType = Asm->MAI->getPointerSize() == 8
+  TypeIndex IndexType = Asm->TM.getPointerSize() == 8
                             ? TypeIndex(SimpleTypeKind::UInt64Quad)
                             : TypeIndex(SimpleTypeKind::UInt32Long);
 
   uint64_t ElementSize = getBaseTypeSize(ElementTypeRef) / 8;
-
-
-  // We want to assert that the element type multiplied by the array lengths
-  // match the size of the overall array. However, if we don't have complete
-  // type information for the base type, we can't make this assertion. This
-  // happens if limited debug info is enabled in this case:
-  //   struct VTableOptzn { VTableOptzn(); virtual ~VTableOptzn(); };
-  //   VTableOptzn array[3];
-  // The DICompositeType of VTableOptzn will have size zero, and the array will
-  // have size 3 * sizeof(void*), and we should avoid asserting.
-  //
-  // There is a related bug in the front-end where an array of a structure,
-  // which was declared as incomplete structure first, ends up not getting a
-  // size assigned to it. (PR28303)
-  // Example:
-  //   struct A(*p)[3];
-  //   struct A { int f; } a[3];
-  bool PartiallyIncomplete = false;
-  if (Ty->getSizeInBits() == 0 || ElementSize == 0) {
-    PartiallyIncomplete = true;
-  }
 
   // Add subranges to array type.
   DINodeArray Elements = Ty->getElements();
@@ -1177,16 +1157,14 @@ TypeIndex CodeViewDebug::lowerTypeArray(const DICompositeType *Ty) {
     // Variable Length Array (VLA) has Count equal to '-1'.
     // Replace with Count '1', assume it is the minimum VLA length.
     // FIXME: Make front-end support VLA subrange and emit LF_DIMVARLU.
-    if (Count == -1) {
+    if (Count == -1)
       Count = 1;
-      PartiallyIncomplete = true;
-    }
 
     // Update the element size and element type index for subsequent subranges.
     ElementSize *= Count;
 
     // If this is the outermost array, use the size from the array. It will be
-    // more accurate if PartiallyIncomplete is true.
+    // more accurate if we had a VLA or an incomplete element type size.
     uint64_t ArraySize =
         (i == 0 && ElementSize == 0) ? Ty->getSizeInBits() / 8 : ElementSize;
 
@@ -1194,9 +1172,6 @@ TypeIndex CodeViewDebug::lowerTypeArray(const DICompositeType *Ty) {
     ArrayRecord AR(ElementTypeIndex, IndexType, ArraySize, Name);
     ElementTypeIndex = TypeTable.writeKnownType(AR);
   }
-
-  (void)PartiallyIncomplete;
-  assert(PartiallyIncomplete || ElementSize == (Ty->getSizeInBits() / 8));
 
   return ElementTypeIndex;
 }
@@ -1368,8 +1343,8 @@ TypeIndex CodeViewDebug::lowerTypeMemberPointer(const DIDerivedType *Ty) {
   assert(Ty->getTag() == dwarf::DW_TAG_ptr_to_member_type);
   TypeIndex ClassTI = getTypeIndex(Ty->getClassType());
   TypeIndex PointeeTI = getTypeIndex(Ty->getBaseType(), Ty->getClassType());
-  PointerKind PK = Asm->MAI->getPointerSize() == 8 ? PointerKind::Near64
-                                                   : PointerKind::Near32;
+  PointerKind PK = Asm->TM.getPointerSize() == 8 ? PointerKind::Near64
+                                                 : PointerKind::Near32;
   bool IsPMF = isa<DISubroutineType>(Ty->getBaseType());
   PointerMode PM = IsPMF ? PointerMode::PointerToMemberFunction
                          : PointerMode::PointerToDataMember;
@@ -1484,7 +1459,8 @@ TypeIndex CodeViewDebug::lowerTypeMemberFunction(const DISubroutineType *Ty,
 }
 
 TypeIndex CodeViewDebug::lowerTypeVFTableShape(const DIDerivedType *Ty) {
-  unsigned VSlotCount = Ty->getSizeInBits() / (8 * Asm->MAI->getPointerSize());
+  unsigned VSlotCount =
+      Ty->getSizeInBits() / (8 * Asm->MAI->getCodePointerSize());
   SmallVector<VFTableSlotKind, 4> Slots(VSlotCount, VFTableSlotKind::Near);
 
   VFTableShapeRecord VFTSR(Slots);
@@ -2139,7 +2115,7 @@ void CodeViewDebug::beginInstruction(const MachineInstr *MI) {
   maybeRecordLocation(DL, Asm->MF);
 }
 
-MCSymbol *CodeViewDebug::beginCVSubsection(ModuleSubstreamKind Kind) {
+MCSymbol *CodeViewDebug::beginCVSubsection(ModuleDebugFragmentKind Kind) {
   MCSymbol *BeginLabel = MMI->getContext().createTempSymbol(),
            *EndLabel = MMI->getContext().createTempSymbol();
   OS.EmitIntValue(unsigned(Kind), 4);
@@ -2199,7 +2175,7 @@ void CodeViewDebug::emitDebugInfoForGlobals() {
         if (!GV->hasComdat() && !GV->isDeclarationForLinker()) {
           if (!EndLabel) {
             OS.AddComment("Symbol subsection for globals");
-            EndLabel = beginCVSubsection(ModuleSubstreamKind::Symbols);
+            EndLabel = beginCVSubsection(ModuleDebugFragmentKind::Symbols);
           }
           // FIXME: emitDebugInfoForGlobal() doesn't handle DIExpressions.
           emitDebugInfoForGlobal(GVE->getVariable(), GV, Asm->getSymbol(GV));
@@ -2217,7 +2193,7 @@ void CodeViewDebug::emitDebugInfoForGlobals() {
           OS.AddComment("Symbol subsection for " +
                         Twine(GlobalValue::getRealLinkageName(GV->getName())));
           switchToDebugSectionForSymbol(GVSym);
-          EndLabel = beginCVSubsection(ModuleSubstreamKind::Symbols);
+          EndLabel = beginCVSubsection(ModuleDebugFragmentKind::Symbols);
           // FIXME: emitDebugInfoForGlobal() doesn't handle DIExpressions.
           emitDebugInfoForGlobal(GVE->getVariable(), GV, GVSym);
           endCVSubsection(EndLabel);

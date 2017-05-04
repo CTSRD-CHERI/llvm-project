@@ -180,8 +180,8 @@ static const EHPersonality &getObjCXXPersonality(const llvm::Triple &T,
   // The GCC runtime's personality function inherently doesn't support
   // mixed EH.  Use the C++ personality just to avoid returning null.
   case ObjCRuntime::GCC:
-  case ObjCRuntime::ObjFW: // XXX: this will change soon
-    return EHPersonality::GNU_ObjC;
+  case ObjCRuntime::ObjFW:
+    return getObjCPersonality(T, L);
   case ObjCRuntime::GNUstep:
     return EHPersonality::GNU_ObjCXX;
   }
@@ -231,7 +231,7 @@ static llvm::Constant *getPersonalityFn(CodeGenModule &CGM,
                                         const EHPersonality &Personality) {
   return CGM.CreateRuntimeFunction(llvm::FunctionType::get(CGM.Int32Ty, true),
                                    Personality.PersonalityFn,
-                                   llvm::AttributeSet(), /*Local=*/true);
+                                   llvm::AttributeList(), /*Local=*/true);
 }
 
 static llvm::Constant *getOpaquePersonalityFn(CodeGenModule &CGM,

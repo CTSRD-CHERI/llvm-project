@@ -548,6 +548,7 @@ lltok::Kind LLLexer::LexIdentifier() {
   KEYWORD(ninf);
   KEYWORD(nsz);
   KEYWORD(arcp);
+  KEYWORD(contract);
   KEYWORD(fast);
   KEYWORD(nuw);
   KEYWORD(nsw);
@@ -647,6 +648,7 @@ lltok::Kind LLLexer::LexIdentifier() {
   KEYWORD(returned);
   KEYWORD(returns_twice);
   KEYWORD(signext);
+  KEYWORD(speculatable);
   KEYWORD(sret);
   KEYWORD(ssp);
   KEYWORD(sspreq);

@@ -402,11 +402,8 @@ class Instruction {
                             // If so, make sure to override
                             // TargetInstrInfo::getInsertSubregLikeInputs.
 
-  // Side effect flags - When set, the flags have these meanings:
-  //
-  //  hasSideEffects - The instruction has side effects that are not
-  //    captured by any operands of the instruction or other flags.
-  //
+  // Does the instruction have side effects that are not captured by any
+  // operands of the instruction or other flags?
   bit hasSideEffects = ?;
 
   // Is this instruction a "real" instruction (with a distinct machine
@@ -533,6 +530,12 @@ class Predicate<string cond> {
   /// PredicateName - User-level name to use for the predicate. Mainly for use
   /// in diagnostics such as missing feature errors in the asm matcher.
   string PredicateName = "";
+
+  /// Setting this to '1' indicates that the predicate must be recomputed on
+  /// every function change. Most predicates can leave this at '0'.
+  ///
+  /// Ignored by SelectionDAG, it always recomputes the predicate on every use.
+  bit RecomputePerFunction = 0;
 }
 
 /// NoHonorSignDependentRounding - This predicate is true if support for

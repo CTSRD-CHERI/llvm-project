@@ -1,7 +1,7 @@
 # This file sets up a CMakeCache for the second stage of a Fuchsia toolchain
 # build.
 
-set(LLVM_TARGETS_TO_BUILD X86;AArch64 CACHE STRING "")
+set(LLVM_TARGETS_TO_BUILD X86;ARM;AArch64 CACHE STRING "")
 
 set(PACKAGE_VENDOR Fuchsia CACHE STRING "")
 
@@ -19,6 +19,10 @@ if(NOT APPLE)
   set(CLANG_DEFAULT_LINKER lld CACHE STRING "")
 endif()
 
+if(APPLE)
+  set(LLDB_CODESIGN_IDENTITY "" CACHE STRING "")
+endif()
+
 set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "")
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -gline-tables-only -DNDEBUG" CACHE STRING "")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -gline-tables-only -DNDEBUG" CACHE STRING "")
@@ -32,6 +36,7 @@ set(BUILTINS_aarch64-fuchsia-none_CMAKE_SYSTEM_NAME Fuchsia CACHE STRING "")
 # Setup toolchain.
 set(LLVM_INSTALL_TOOLCHAIN_ONLY ON CACHE BOOL "")
 set(LLVM_TOOLCHAIN_TOOLS
+  llc
   llvm-ar
   llvm-cov
   llvm-cxxfilt
@@ -45,6 +50,7 @@ set(LLVM_TOOLCHAIN_TOOLS
   llvm-readobj
   llvm-size
   llvm-symbolizer
+  opt
   CACHE STRING "")
 
 set(LLVM_DISTRIBUTION_COMPONENTS

@@ -147,15 +147,15 @@ static inline CXTranslationUnit GetTU(CXType CT) {
 static Optional<ArrayRef<TemplateArgument>>
 GetTemplateArguments(QualType Type) {
   assert(!Type.isNull());
-  if (const auto *Specialization = Type->getAs<TemplateSpecializationType>())
-    return Specialization->template_arguments();
-
   if (const auto *RecordDecl = Type->getAsCXXRecordDecl()) {
     const auto *TemplateDecl =
       dyn_cast<ClassTemplateSpecializationDecl>(RecordDecl);
     if (TemplateDecl)
       return TemplateDecl->getTemplateArgs().asArray();
   }
+
+  if (const auto *Specialization = Type->getAs<TemplateSpecializationType>())
+    return Specialization->template_arguments();
 
   return None;
 }
@@ -1038,4 +1038,13 @@ CXType clang_Type_getNamedType(CXType CT){
     return MakeCXType(cast<ElaboratedType>(TP)->getNamedType(), GetTU(CT));
 
   return MakeCXType(QualType(), GetTU(CT));
+}
+
+unsigned clang_Type_isTransparentTagTypedef(CXType TT){
+  QualType T = GetQualType(TT);
+  if (auto *TT = dyn_cast_or_null<TypedefType>(T.getTypePtrOrNull())) {
+    if (auto *D = TT->getDecl())
+      return D->isTransparentTag();
+  }
+  return false;
 }

@@ -169,7 +169,8 @@ Pass *createLoopStrengthReducePass();
 //
 // LoopUnswitch - This pass is a simple loop unswitching pass.
 //
-Pass *createLoopUnswitchPass(bool OptimizeForSize = false);
+Pass *createLoopUnswitchPass(bool OptimizeForSize = false,
+                             bool hasBranchDivergence = false);
 
 //===----------------------------------------------------------------------===//
 //
@@ -257,6 +258,14 @@ FunctionPass *createJumpThreadingPass(int Threshold = -1);
 // simplify terminator instructions, etc...
 //
 FunctionPass *createCFGSimplificationPass(
+    int Threshold = -1, std::function<bool(const Function &)> Ftor = nullptr);
+
+//===----------------------------------------------------------------------===//
+//
+// LateCFGSimplification - Like CFGSimplification, but may also
+// convert switches to lookup tables.
+//
+FunctionPass *createLateCFGSimplificationPass(
     int Threshold = -1, std::function<bool(const Function &)> Ftor = nullptr);
 
 //===----------------------------------------------------------------------===//

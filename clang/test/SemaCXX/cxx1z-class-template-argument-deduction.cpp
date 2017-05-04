@@ -179,9 +179,9 @@ namespace default_args_from_ctor {
 
 namespace transform_params {
   template<typename T, T N, template<T (*v)[N]> typename U, T (*X)[N]>
-  struct A { // expected-note 2{{candidate}}
+  struct A {
     template<typename V, V M, V (*Y)[M], template<V (*v)[M]> typename W>
-    A(U<X>, W<Y>); // expected-note {{[with V = int, M = 12, Y = &transform_params::n]}}
+    A(U<X>, W<Y>);
 
     static constexpr T v = N;
   };
@@ -189,9 +189,7 @@ namespace transform_params {
   int n[12];
   template<int (*)[12]> struct Q {};
   Q<&n> qn;
-  // FIXME: The class template argument deduction result here is correct, but
-  // we incorrectly fail to deduce arguments for the constructor!
-  A a(qn, qn); // expected-error {{no matching constructor for initialization of 'transform_params::A<int, 12, Q, &transform_params::n>'}}
+  A a(qn, qn);
   static_assert(a.v == 12);
 
   template<typename ...T> struct B {
@@ -203,19 +201,50 @@ namespace transform_params {
   };
   B b({1, 2, 3}, "foo", {'x', 'y', 'z', 'w'}); // ok
 
-  // This should be accepted once -std=c++1z implies
-  // -frelaxed-template-template-args. Without that, a template template
-  // parameter 'template<int, int, int> typename' cannot bind to a template
-  // template argument 'template<int...> typename'.
-  template<typename ...T> struct C { // expected-note {{candidate}}
+  template<typename ...T> struct C {
     template<T ...V, template<T...> typename X>
-      C(X<V...>); // expected-note {{substitution failure [with T = <int, int, int>, V = <0, 1, 2>]}}
+      C(X<V...>);
   };
   template<int...> struct Y {};
-  C c(Y<0, 1, 2>{}); // expected-error {{no viable constructor or deduction guide}}
+  C c(Y<0, 1, 2>{});
 
   template<typename ...T> struct D {
     template<T ...V> D(Y<V...>);
   };
   D d(Y<0, 1, 2>{});
+}
+
+namespace variadic {
+  int arr3[3], arr4[4];
+
+  // PR32673
+  template<typename T> struct A {
+    template<typename ...U> A(T, U...);
+  };
+  A a(1, 2, 3);
+
+  template<typename T> struct B {
+    template<int ...N> B(T, int (&...r)[N]);
+  };
+  B b(1, arr3, arr4);
+
+  template<typename T> struct C {
+    template<template<typename> typename ...U> C(T, U<int>...);
+  };
+  C c(1, a, b);
+
+  template<typename ...U> struct X {
+    template<typename T> X(T, U...);
+  };
+  X x(1, 2, 3);
+
+  template<int ...N> struct Y {
+    template<typename T> Y(T, int (&...r)[N]);
+  };
+  Y y(1, arr3, arr4);
+
+  template<template<typename> typename ...U> struct Z {
+    template<typename T> Z(T, U<int>...);
+  };
+  Z z(1, a, b);
 }

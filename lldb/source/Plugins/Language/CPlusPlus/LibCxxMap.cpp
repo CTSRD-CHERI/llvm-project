@@ -219,6 +219,7 @@ size_t lldb_private::formatters::LibcxxStdMapSyntheticFrontEnd::
     CalculateNumChildren() {
   static ConstString g___pair3_("__pair3_");
   static ConstString g___first_("__first_");
+  static ConstString g___value_("__value_");
 
   if (m_count != UINT32_MAX)
     return m_count;
@@ -227,7 +228,22 @@ size_t lldb_private::formatters::LibcxxStdMapSyntheticFrontEnd::
   ValueObjectSP m_item(m_tree->GetChildMemberWithName(g___pair3_, true));
   if (!m_item)
     return 0;
-  m_item = m_item->GetChildMemberWithName(g___first_, true);
+
+  switch (m_item->GetCompilerType().GetNumDirectBaseClasses()) {
+  case 1:
+    // Assume a pre llvm r300140 __compressed_pair implementation:
+    m_item = m_item->GetChildMemberWithName(g___first_, true);
+    break;
+  case 2: {
+    // Assume a post llvm r300140 __compressed_pair implementation:
+    ValueObjectSP first_elem_parent = m_item->GetChildAtIndex(0, true);
+    m_item = first_elem_parent->GetChildMemberWithName(g___value_, true);
+    break;
+  }
+  default:
+    return false;
+  }
+
   if (!m_item)
     return 0;
   m_count = m_item->GetValueAsUnsigned(0);
@@ -406,7 +422,7 @@ lldb_private::formatters::LibcxxStdMapSyntheticFrontEnd::GetChildAtIndex(
     case 1: {
       auto child0_sp = potential_child_sp->GetChildAtIndex(0, true);
       if (child0_sp && child0_sp->GetName() == g___cc)
-        potential_child_sp = child0_sp;
+        potential_child_sp = child0_sp->Clone(ConstString(name.GetString()));
       break;
     }
     case 2: {
@@ -414,11 +430,10 @@ lldb_private::formatters::LibcxxStdMapSyntheticFrontEnd::GetChildAtIndex(
       auto child1_sp = potential_child_sp->GetChildAtIndex(1, true);
       if (child0_sp && child0_sp->GetName() == g___cc && child1_sp &&
           child1_sp->GetName() == g___nc)
-        potential_child_sp = child0_sp;
+        potential_child_sp = child0_sp->Clone(ConstString(name.GetString()));
       break;
     }
     }
-    potential_child_sp->SetName(ConstString(name.GetString()));
   }
   m_iterators[idx] = iterator;
   return potential_child_sp;

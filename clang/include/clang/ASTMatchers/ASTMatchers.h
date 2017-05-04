@@ -180,6 +180,16 @@ const internal::VariadicDynCastAllOfMatcher<Decl, TypedefNameDecl>
 ///   matches "using Y = int", but not "typedef int X"
 const internal::VariadicDynCastAllOfMatcher<Decl, TypeAliasDecl> typeAliasDecl;
 
+/// \brief Matches type alias template declarations.
+///
+/// typeAliasTemplateDecl() matches
+/// \code
+///   template <typename T>
+///   using Y = X<T>;
+/// \endcode
+const internal::VariadicDynCastAllOfMatcher<Decl, TypeAliasTemplateDecl>
+    typeAliasTemplateDecl;
+
 /// \brief Matches AST nodes that were expanded within the main-file.
 ///
 /// Example matches X but not Y
@@ -1396,7 +1406,7 @@ const internal::VariadicDynCastAllOfMatcher<
 ///
 /// Example: Given
 /// \code
-///   struct T {void func()};
+///   struct T {void func();};
 ///   T f();
 ///   void g(T);
 /// \endcode
@@ -2585,7 +2595,7 @@ AST_MATCHER_P(CXXMemberCallExpr, on, internal::Matcher<Expr>,
 /// \brief Matches on the receiver of an ObjectiveC Message expression.
 ///
 /// Example
-/// matcher = objCMessageExpr(hasRecieverType(asString("UIWebView *")));
+/// matcher = objCMessageExpr(hasReceiverType(asString("UIWebView *")));
 /// matches the [webView ...] message invocation.
 /// \code
 ///   NSString *webViewJavaScript = ...

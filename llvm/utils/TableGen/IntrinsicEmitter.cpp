@@ -84,14 +84,11 @@ void IntrinsicEmitter::run(raw_ostream &OS) {
   // Emit the intrinsic parameter attributes.
   EmitAttributes(Ints, OS);
 
-  // Individual targets don't need GCC builtin name mappings.
-  if (!TargetOnly) {
-    // Emit code to translate GCC builtins into LLVM intrinsics.
-    EmitIntrinsicToBuiltinMap(Ints, true, OS);
+  // Emit code to translate GCC builtins into LLVM intrinsics.
+  EmitIntrinsicToBuiltinMap(Ints, true, OS);
 
-    // Emit code to translate MS builtins into LLVM intrinsics.
-    EmitIntrinsicToBuiltinMap(Ints, false, OS);
-  }
+  // Emit code to translate MS builtins into LLVM intrinsics.
+  EmitIntrinsicToBuiltinMap(Ints, false, OS);
 
   EmitSuffix(OS);
 }
@@ -479,6 +476,12 @@ struct AttributeComparator {
     if (L->isConvergent != R->isConvergent)
       return R->isConvergent;
 
+    if (L->isSpeculatable != R->isSpeculatable)
+      return R->isSpeculatable;
+
+    if (L->hasSideEffects != R->hasSideEffects)
+      return R->hasSideEffects;
+
     // Try to order by readonly/readnone attribute.
     CodeGenIntrinsic::ModRefBehavior LK = L->ModRef;
     CodeGenIntrinsic::ModRefBehavior RK = R->ModRef;
@@ -497,10 +500,10 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
   OS << "// Add parameter attributes that are not common to all intrinsics.\n";
   OS << "#ifdef GET_INTRINSIC_ATTRIBUTES\n";
   if (TargetOnly)
-    OS << "static AttributeSet getAttributes(LLVMContext &C, " << TargetPrefix
+    OS << "static AttributeList getAttributes(LLVMContext &C, " << TargetPrefix
        << "Intrinsic::ID id) {\n";
   else
-    OS << "AttributeSet Intrinsic::getAttributes(LLVMContext &C, ID id) {\n";
+    OS << "AttributeList Intrinsic::getAttributes(LLVMContext &C, ID id) {\n";
 
   // Compute the maximum number of attribute arguments and the map
   typedef std::map<const CodeGenIntrinsic*, unsigned,
@@ -518,7 +521,7 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
     N = ++AttrNum;
   }
 
-  // Emit an array of AttributeSet.  Most intrinsics will have at least one
+  // Emit an array of AttributeList.  Most intrinsics will have at least one
   // entry, for the function itself (index ~1), which is usually nounwind.
   OS << "  static const uint8_t IntrinsicsToAttributesMap[] = {\n";
 
@@ -530,7 +533,7 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
   }
   OS << "  };\n\n";
 
-  OS << "  AttributeSet AS[" << maxArgAttrs+1 << "];\n";
+  OS << "  AttributeList AS[" << maxArgAttrs + 1 << "];\n";
   OS << "  unsigned NumAttrs = 0;\n";
   OS << "  if (id != 0) {\n";
   OS << "    switch(IntrinsicsToAttributesMap[id - ";
@@ -595,15 +598,15 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
           ++ai;
         } while (ai != ae && intrinsic.ArgumentAttributes[ai].first == argNo);
         OS << "};\n";
-        OS << "      AS[" << numAttrs++ << "] = AttributeSet::get(C, "
-           << argNo+1 << ", AttrParam" << argNo +1 << ");\n";
+        OS << "      AS[" << numAttrs++ << "] = AttributeList::get(C, "
+           << argNo + 1 << ", AttrParam" << argNo + 1 << ");\n";
       }
     }
 
     if (!intrinsic.canThrow ||
         intrinsic.ModRef != CodeGenIntrinsic::ReadWriteMem ||
         intrinsic.isNoReturn || intrinsic.isNoDuplicate ||
-        intrinsic.isConvergent) {
+        intrinsic.isConvergent || intrinsic.isSpeculatable) {
       OS << "      const Attribute::AttrKind Atts[] = {";
       bool addComma = false;
       if (!intrinsic.canThrow) {
@@ -626,6 +629,12 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
         if (addComma)
           OS << ",";
         OS << "Attribute::Convergent";
+        addComma = true;
+      }
+      if (intrinsic.isSpeculatable) {
+        if (addComma)
+          OS << ",";
+        OS << "Attribute::Speculatable";
         addComma = true;
       }
 
@@ -699,8 +708,8 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
         break;
       }
       OS << "};\n";
-      OS << "      AS[" << numAttrs++ << "] = AttributeSet::get(C, "
-         << "AttributeSet::FunctionIndex, Atts);\n";
+      OS << "      AS[" << numAttrs++ << "] = AttributeList::get(C, "
+         << "AttributeList::FunctionIndex, Atts);\n";
     }
 
     if (numAttrs) {
@@ -708,14 +717,14 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
       OS << "      break;\n";
       OS << "      }\n";
     } else {
-      OS << "      return AttributeSet();\n";
+      OS << "      return AttributeList();\n";
       OS << "      }\n";
     }
   }
 
   OS << "    }\n";
   OS << "  }\n";
-  OS << "  return AttributeSet::get(C, makeArrayRef(AS, NumAttrs));\n";
+  OS << "  return AttributeList::get(C, makeArrayRef(AS, NumAttrs));\n";
   OS << "}\n";
   OS << "#endif // GET_INTRINSIC_ATTRIBUTES\n\n";
 }
@@ -756,6 +765,17 @@ void IntrinsicEmitter::EmitIntrinsicToBuiltinMap(
        << "Builtin(const char "
        << "*TargetPrefixStr, StringRef BuiltinNameStr) {\n";
   }
+
+  if (Table.Empty()) {
+    OS << "  return ";
+    if (!TargetPrefix.empty())
+      OS << "(" << TargetPrefix << "Intrinsic::ID)";
+    OS << "Intrinsic::not_intrinsic;\n";
+    OS << "}\n";
+    OS << "#endif\n\n";
+    return;
+  }
+
   OS << "  static const char BuiltinNames[] = {\n";
   Table.EmitCharArray(OS);
   OS << "  };\n\n";

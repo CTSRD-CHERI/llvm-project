@@ -1922,8 +1922,9 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
     Args.push_back(Entry);
 
     TargetLowering::CallLoweringInfo CLI(DAG);
-    CLI.setDebugLoc(DL).setChain(DAG.getEntryNode())
-      .setCallee(CallingConv::C, PtrTy, TlsGetAddr, std::move(Args));
+    CLI.setDebugLoc(DL)
+        .setChain(DAG.getEntryNode())
+        .setLibCallee(CallingConv::C, PtrTy, TlsGetAddr, std::move(Args));
     std::pair<SDValue, SDValue> CallResult = LowerCallTo(CLI);
 
     SDValue Ret = CallResult.first;
@@ -2749,7 +2750,10 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   // caller side but removing it breaks the frame size calculation.
   CCInfo.AllocateStack(ABI.GetCalleeAllocdArgSizeInBytes(CallConv), 1);
 
-  CCInfo.AnalyzeCallOperands(Outs, CC_Mips, CLI.getArgs(), Callee.getNode());
+  const ExternalSymbolSDNode *ES =
+      dyn_cast_or_null<const ExternalSymbolSDNode>(Callee.getNode());
+  CCInfo.AnalyzeCallOperands(Outs, CC_Mips, CLI.getArgs(),
+                             ES ? ES->getSymbol() : nullptr);
 
   // Get a count of how many bytes are to be pushed on the stack.
   unsigned NextStackOffset = CCInfo.getNextStackOffset();
@@ -2984,7 +2988,11 @@ SDValue MipsTargetLowering::LowerCallResult(
   SmallVector<CCValAssign, 16> RVLocs;
   MipsCCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(), RVLocs,
                      *DAG.getContext());
-  CCInfo.AnalyzeCallResult(Ins, RetCC_Mips, CLI);
+
+  const ExternalSymbolSDNode *ES =
+      dyn_cast_or_null<const ExternalSymbolSDNode>(CLI.Callee.getNode());
+  CCInfo.AnalyzeCallResult(Ins, RetCC_Mips, CLI.RetTy,
+                           ES ? ES->getSymbol() : nullptr);
 
   // Copy all of the result registers out of their specified physreg.
   for (unsigned i = 0; i != RVLocs.size(); ++i) {

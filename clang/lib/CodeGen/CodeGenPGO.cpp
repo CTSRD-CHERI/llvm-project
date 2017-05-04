@@ -612,7 +612,7 @@ uint64_t PGOHash::finalize() {
   llvm::MD5::MD5Result Result;
   MD5.final(Result);
   using namespace llvm::support;
-  return endian::read<uint64_t, little, unaligned>(Result);
+  return Result.low();
 }
 
 void CodeGenPGO::assignRegionCounters(GlobalDecl GD, llvm::Function *Fn) {
@@ -666,7 +666,7 @@ void CodeGenPGO::mapRegionCounters(const Decl *D) {
 }
 
 bool CodeGenPGO::skipRegionMappingForDecl(const Decl *D) {
-  if (SkipCoverageMapping)
+  if (!D->getBody())
     return true;
 
   // Don't map the functions in system headers.

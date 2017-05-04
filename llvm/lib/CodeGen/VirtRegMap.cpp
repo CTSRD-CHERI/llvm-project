@@ -73,8 +73,9 @@ void VirtRegMap::grow() {
 }
 
 unsigned VirtRegMap::createSpillSlot(const TargetRegisterClass *RC) {
-  int SS = MF->getFrameInfo().CreateSpillStackObject(RC->getSize(),
-                                                     RC->getAlignment());
+  unsigned Size = TRI->getSpillSize(*RC);
+  unsigned Align = TRI->getSpillAlignment(*RC);
+  int SS = MF->getFrameInfo().CreateSpillStackObject(Size, Align);
   ++NumSpillSlots;
   return SS;
 }
@@ -383,8 +384,10 @@ void VirtRegRewriter::expandCopyBundle(MachineInstr &MI) const {
 
   if (MI.isBundledWithPred() && !MI.isBundledWithSucc()) {
     // Only do this when the complete bundle is made out of COPYs.
+    MachineBasicBlock &MBB = *MI.getParent();
     for (MachineBasicBlock::reverse_instr_iterator I =
-         std::next(MI.getReverseIterator()); I->isBundledWithSucc(); ++I) {
+         std::next(MI.getReverseIterator()), E = MBB.instr_rend();
+         I != E && I->isBundledWithSucc(); ++I) {
       if (!I->isCopy())
         return;
     }

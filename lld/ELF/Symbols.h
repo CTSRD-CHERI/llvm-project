@@ -112,12 +112,6 @@ public:
   // True if this is a local symbol.
   unsigned IsLocal : 1;
 
-  // True if this symbol has an entry in the global part of MIPS GOT.
-  unsigned IsInGlobalMipsGot : 1;
-
-  // True if this symbol is referenced by 32-bit GOT relocations.
-  unsigned Is32BitMipsGot : 1;
-
   // True if this symbol is in the Iplt sub-section of the Plt.
   unsigned IsInIplt : 1;
 
@@ -240,7 +234,7 @@ public:
 
   // CopyRelSec and CopyRelSecOff are significant only when NeedsCopy is true.
   InputSection *CopyRelSec;
-  size_t CopyRelSecOff;
+  uint64_t CopyRelSecOff;
 
 private:
   template <class ELFT> const typename ELFT::Sym &getSym() const {
@@ -302,22 +296,25 @@ public:
 // Some linker-generated symbols need to be created as
 // DefinedRegular symbols.
 struct ElfSym {
-  // The content for _etext and etext symbols.
-  static DefinedRegular *Etext;
+  // __bss_start
+  static DefinedRegular *Bss;
+
+  // etext and _etext
+  static DefinedRegular *Etext1;
   static DefinedRegular *Etext2;
 
-  // The content for _edata and edata symbols.
-  static DefinedRegular *Edata;
+  // edata and _edata
+  static DefinedRegular *Edata1;
   static DefinedRegular *Edata2;
 
-  // The content for _end and end symbols.
-  static DefinedRegular *End;
+  // end and _end
+  static DefinedRegular *End1;
   static DefinedRegular *End2;
 
-  // The content for _gp_disp/__gnu_local_gp symbols for MIPS target.
+  // _gp, _gp_disp and __gnu_local_gp symbols. Only for MIPS.
+  static DefinedRegular *MipsGp;
   static DefinedRegular *MipsGpDisp;
   static DefinedRegular *MipsLocalGp;
-  static DefinedRegular *MipsGp;
 };
 
 // A real symbol object, SymbolBody, is usually stored within a Symbol. There's

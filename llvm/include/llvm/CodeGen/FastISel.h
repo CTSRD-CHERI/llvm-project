@@ -41,32 +41,8 @@ class MachineConstantPool;
 /// quickly.
 class FastISel {
 public:
-  struct ArgListEntry {
-    Value *Val = nullptr;
-    Type *Ty = nullptr;
-    bool IsSExt : 1;
-    bool IsZExt : 1;
-    bool IsInReg : 1;
-    bool IsSRet : 1;
-    bool IsNest : 1;
-    bool IsByVal : 1;
-    bool IsInAlloca : 1;
-    bool IsReturned : 1;
-    bool IsSwiftSelf : 1;
-    bool IsSwiftError : 1;
-    uint16_t Alignment = 0;
-
-    ArgListEntry()
-        : IsSExt(false), IsZExt(false), IsInReg(false), IsSRet(false),
-          IsNest(false), IsByVal(false), IsInAlloca(false), IsReturned(false),
-          IsSwiftSelf(false), IsSwiftError(false) {}
-
-    /// \brief Set CallLoweringInfo attribute flags based on a call instruction
-    /// and called function attributes.
-    void setAttributes(ImmutableCallSite *CS, unsigned AttrIdx);
-  };
-  typedef std::vector<ArgListEntry> ArgListTy;
-
+  typedef TargetLoweringBase::ArgListEntry ArgListEntry;
+  typedef TargetLoweringBase::ArgListTy ArgListTy;
   struct CallLoweringInfo {
     Type *RetTy = nullptr;
     bool RetSExt : 1;
@@ -107,12 +83,12 @@ public:
       RetTy = ResultTy;
       Callee = Target;
 
-      IsInReg = Call.paramHasAttr(0, Attribute::InReg);
+      IsInReg = Call.hasRetAttr(Attribute::InReg);
       DoesNotReturn = Call.doesNotReturn();
       IsVarArg = FuncTy->isVarArg();
       IsReturnValueUsed = !Call.getInstruction()->use_empty();
-      RetSExt = Call.paramHasAttr(0, Attribute::SExt);
-      RetZExt = Call.paramHasAttr(0, Attribute::ZExt);
+      RetSExt = Call.hasRetAttr(Attribute::SExt);
+      RetZExt = Call.hasRetAttr(Attribute::ZExt);
 
       CallConv = Call.getCallingConv();
       Args = std::move(ArgsList);
@@ -131,12 +107,12 @@ public:
       Callee = Call.getCalledValue();
       Symbol = Target;
 
-      IsInReg = Call.paramHasAttr(0, Attribute::InReg);
+      IsInReg = Call.hasRetAttr(Attribute::InReg);
       DoesNotReturn = Call.doesNotReturn();
       IsVarArg = FuncTy->isVarArg();
       IsReturnValueUsed = !Call.getInstruction()->use_empty();
-      RetSExt = Call.paramHasAttr(0, Attribute::SExt);
-      RetZExt = Call.paramHasAttr(0, Attribute::ZExt);
+      RetSExt = Call.hasRetAttr(Attribute::SExt);
+      RetZExt = Call.hasRetAttr(Attribute::ZExt);
 
       CallConv = Call.getCallingConv();
       Args = std::move(ArgsList);

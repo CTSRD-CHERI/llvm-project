@@ -47,6 +47,7 @@ class ExternalPreprocessorSource;
 class FileManager;
 class FileEntry;
 class HeaderSearch;
+class MemoryBufferCache;
 class PragmaNamespace;
 class PragmaHandler;
 class CommentHandler;
@@ -102,6 +103,7 @@ class Preprocessor {
   const TargetInfo  *AuxTarget;
   FileManager       &FileMgr;
   SourceManager     &SourceMgr;
+  MemoryBufferCache &PCMCache;
   std::unique_ptr<ScratchBuffer> ScratchBuf;
   HeaderSearch      &HeaderInfo;
   ModuleLoader      &TheModuleLoader;
@@ -652,6 +654,7 @@ class Preprocessor {
 public:
   Preprocessor(std::shared_ptr<PreprocessorOptions> PPOpts,
                DiagnosticsEngine &diags, LangOptions &opts, SourceManager &SM,
+               MemoryBufferCache &PCMCache,
                HeaderSearch &Headers, ModuleLoader &TheModuleLoader,
                IdentifierInfoLookup *IILookup = nullptr,
                bool OwnsHeaderSearch = false,
@@ -691,6 +694,7 @@ public:
   const TargetInfo *getAuxTargetInfo() const { return AuxTarget; }
   FileManager &getFileManager() const { return FileMgr; }
   SourceManager &getSourceManager() const { return SourceMgr; }
+  MemoryBufferCache &getPCMCache() const { return PCMCache; }
   HeaderSearch &getHeaderSearchInfo() const { return HeaderInfo; }
 
   IdentifierTable &getIdentifierTable() { return Identifiers; }
@@ -1259,6 +1263,10 @@ public:
       CachedTokens[CachedLexPos-1] = Tok;
   }
 
+  /// Enter an annotation token into the token stream.
+  void EnterAnnotationToken(SourceRange Range, tok::TokenKind Kind,
+                            void *AnnotationVal);
+
   /// Update the current token to represent the provided
   /// identifier, in order to cache an action performed by typo correction.
   void TypoCorrectToken(const Token &Tok) {
@@ -1598,6 +1606,7 @@ private:
                  *Ident_AbnormalTermination;
 
   const char *getCurLexerEndPos();
+  void diagnoseMissingHeaderInUmbrellaDir(const Module &Mod);
 
 public:
   void PoisonSEHIdentifiers(bool Poison = true); // Borland
@@ -1682,7 +1691,7 @@ public:
                               SmallVectorImpl<char> *SearchPath,
                               SmallVectorImpl<char> *RelativePath,
                               ModuleMap::KnownHeader *SuggestedModule,
-                              bool SkipCache = false);
+                              bool *IsMapped, bool SkipCache = false);
 
   /// \brief Get the DirectoryLookup structure used to find the current
   /// FileEntry, if CurLexer is non-null and if applicable. 
@@ -1958,6 +1967,7 @@ public:
   void HandlePragmaPoison();
   void HandlePragmaSystemHeader(Token &SysHeaderTok);
   void HandlePragmaDependency(Token &DependencyTok);
+  void HandlePragmaModuleImport(Token &Tok);
   void HandlePragmaPushMacro(Token &Tok);
   void HandlePragmaPopMacro(Token &Tok);
   void HandlePragmaIncludeAlias(Token &Tok);

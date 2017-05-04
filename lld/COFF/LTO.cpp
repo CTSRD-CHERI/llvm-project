@@ -73,7 +73,7 @@ static std::unique_ptr<lto::LTO> createLTO() {
     checkError(Conf.addSaveTemps(std::string(Config->OutputFile) + ".",
                                  /*UseInputModulePath*/ true));
   lto::ThinBackend Backend;
-  if (Config->LTOJobs != -1u)
+  if (Config->LTOJobs != 0)
     Backend = lto::createInProcessThinBackend(Config->LTOJobs);
   return llvm::make_unique<lto::LTO>(std::move(Conf), Backend,
                                      Config->LTOPartitions);
@@ -105,9 +105,7 @@ void BitcodeCompiler::add(BitcodeFile &F) {
     // flags an undefined in IR with a definition in ASM as prevailing.
     // Once IRObjectFile is fixed to report only one symbol this hack can
     // be removed.
-    R.Prevailing =
-        !(ObjSym.getFlags() & object::BasicSymbolRef::SF_Undefined) &&
-        B->getFile() == &F;
+    R.Prevailing = !ObjSym.isUndefined() && B->getFile() == &F;
     R.VisibleToRegularObj = Sym->IsUsedInRegularObj;
     if (R.Prevailing)
       undefine(Sym);

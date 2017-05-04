@@ -101,6 +101,8 @@ public:
   uint32_t getVirtualBaseDispIndex() const override;
   uint32_t getVirtualBaseOffset() const override;
   uint32_t getVirtualTableShapeId() const override;
+  std::unique_ptr<PDBSymbolTypeBuiltin>
+  getVirtualBaseTableType() const override;
   PDB_DataKind getDataKind() const override;
   PDB_SymType getSymTag() const override;
   PDB_UniqueId getGuid() const override;
@@ -197,7 +199,7 @@ public:
   bool wasInlined() const override;
   std::string getUnused() const override;
 
-private:
+protected:
   NativeSession &Session;
 };
 

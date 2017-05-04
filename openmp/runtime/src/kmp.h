@@ -38,7 +38,8 @@
 #ifdef BUILD_TIED_TASK_STACK
 #define TASK_STACK_EMPTY         0  // entries when the stack is empty
 
-#define TASK_STACK_BLOCK_BITS    5  // Used to define TASK_STACK_SIZE and TASK_STACK_MASK
+// Used to define TASK_STACK_SIZE and TASK_STACK_MASK
+#define TASK_STACK_BLOCK_BITS    5
 #define TASK_STACK_BLOCK_SIZE    ( 1 << TASK_STACK_BLOCK_BITS ) // Number of entries in each task stack array
 #define TASK_STACK_INDEX_MASK    ( TASK_STACK_BLOCK_SIZE - 1 )  // Mask for determining index into stack block
 #endif // BUILD_TIED_TASK_STACK
@@ -86,7 +87,13 @@ class kmp_stats_list;
 #endif
 
 #if KMP_USE_HWLOC && KMP_AFFINITY_SUPPORTED
-# include "hwloc.h"
+#include "hwloc.h"
+#ifndef HWLOC_OBJ_NUMANODE
+#define HWLOC_OBJ_NUMANODE HWLOC_OBJ_NODE
+#endif
+#ifndef HWLOC_OBJ_PACKAGE
+#define HWLOC_OBJ_PACKAGE HWLOC_OBJ_SOCKET
+#endif
 #endif
 
 #if KMP_ARCH_X86 || KMP_ARCH_X86_64
@@ -773,11 +780,19 @@ typedef enum kmp_cancel_kind_t {
 } kmp_cancel_kind_t;
 #endif // OMP_40_ENABLED
 
-extern int __kmp_place_num_sockets;
-extern int __kmp_place_socket_offset;
-extern int __kmp_place_num_cores;
-extern int __kmp_place_core_offset;
-extern int __kmp_place_num_threads_per_core;
+// KMP_HW_SUBSET support:
+typedef struct kmp_hws_item {
+    int num;
+    int offset;
+} kmp_hws_item_t;
+
+extern kmp_hws_item_t __kmp_hws_socket;
+extern kmp_hws_item_t __kmp_hws_node;
+extern kmp_hws_item_t __kmp_hws_tile;
+extern kmp_hws_item_t __kmp_hws_core;
+extern kmp_hws_item_t __kmp_hws_proc;
+extern int __kmp_hws_requested;
+extern int __kmp_hws_abs_flag; // absolute or per-item number requested
 
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
@@ -894,10 +909,14 @@ extern int __kmp_place_num_threads_per_core;
 #else
 # if KMP_OS_UNIX && (KMP_ARCH_X86 || KMP_ARCH_X86_64)
    // HW TSC is used to reduce overhead (clock tick instead of nanosecond).
-   extern double __kmp_ticks_per_nsec;
-#  define KMP_NOW() __kmp_hardware_timestamp()
-#  define KMP_NOW_MSEC() ((kmp_uint64)(KMP_NOW()/__kmp_ticks_per_nsec)/KMP_USEC_PER_SEC)
-#  define KMP_BLOCKTIME_INTERVAL() (__kmp_dflt_blocktime * KMP_USEC_PER_SEC * __kmp_ticks_per_nsec)
+   extern kmp_uint64 __kmp_ticks_per_msec;
+#  if KMP_COMPILER_ICC
+#   define KMP_NOW() _rdtsc()
+#  else
+#   define KMP_NOW() __kmp_hardware_timestamp()
+#  endif
+#  define KMP_NOW_MSEC() (KMP_NOW()/__kmp_ticks_per_msec)
+#  define KMP_BLOCKTIME_INTERVAL() (__kmp_dflt_blocktime * __kmp_ticks_per_msec)
 #  define KMP_BLOCKING(goal, count) ((goal) > KMP_NOW())
 # else
    // System time is retrieved sporadically while blocking.
@@ -3488,9 +3507,6 @@ KMP_EXPORT kmp_int32 __kmp_get_reduce_method( void );
 
 KMP_EXPORT kmp_uint64 __kmpc_get_taskid();
 KMP_EXPORT kmp_uint64 __kmpc_get_parent_taskid();
-
-// this function exported for testing of KMP_PLACE_THREADS functionality
-KMP_EXPORT void __kmpc_place_threads(int,int,int,int,int);
 
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */

@@ -28,15 +28,16 @@ using namespace llvm::ELF;
 using namespace lld;
 using namespace lld::elf;
 
-DefinedRegular *ElfSym::Etext;
+DefinedRegular *ElfSym::Bss;
+DefinedRegular *ElfSym::Etext1;
 DefinedRegular *ElfSym::Etext2;
-DefinedRegular *ElfSym::Edata;
+DefinedRegular *ElfSym::Edata1;
 DefinedRegular *ElfSym::Edata2;
-DefinedRegular *ElfSym::End;
+DefinedRegular *ElfSym::End1;
 DefinedRegular *ElfSym::End2;
+DefinedRegular *ElfSym::MipsGp;
 DefinedRegular *ElfSym::MipsGpDisp;
 DefinedRegular *ElfSym::MipsLocalGp;
-DefinedRegular *ElfSym::MipsGp;
 
 static uint64_t getSymVA(const SymbolBody &Body, int64_t &Addend) {
   switch (Body.kind()) {
@@ -124,8 +125,8 @@ static uint64_t getSymVA(const SymbolBody &Body, int64_t &Addend) {
 SymbolBody::SymbolBody(Kind K, StringRefZ Name, bool IsLocal, uint8_t StOther,
                        uint8_t Type)
     : SymbolKind(K), NeedsCopy(false), NeedsPltAddr(false), IsLocal(IsLocal),
-      IsInGlobalMipsGot(false), Is32BitMipsGot(false), IsInIplt(false),
-      IsInIgot(false), Type(Type), StOther(StOther), Name(Name) {}
+      IsInIplt(false), IsInIgot(false), Type(Type), StOther(StOther),
+      Name(Name) {}
 
 // Returns true if a symbol can be replaced at load-time by a symbol
 // with the same name defined in other ELF executable or DSO.
@@ -338,8 +339,7 @@ uint8_t Symbol::computeBinding() const {
     return Binding;
   if (Visibility != STV_DEFAULT && Visibility != STV_PROTECTED)
     return STB_LOCAL;
-  const SymbolBody *Body = body();
-  if (VersionId == VER_NDX_LOCAL && Body->isInCurrentDSO())
+  if (VersionId == VER_NDX_LOCAL && body()->isInCurrentDSO())
     return STB_LOCAL;
   if (Config->NoGnuUnique && Binding == STB_GNU_UNIQUE)
     return STB_GLOBAL;

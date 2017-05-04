@@ -485,10 +485,13 @@ void SourcePrinter::printSourceLine(raw_ostream &OS, uint64_t Address,
     auto FileBuffer = SourceCache.find(LineInfo.FileName);
     if (FileBuffer != SourceCache.end()) {
       auto LineBuffer = LineCache.find(LineInfo.FileName);
-      if (LineBuffer != LineCache.end())
+      if (LineBuffer != LineCache.end()) {
+        if (LineInfo.Line > LineBuffer->second.size())
+          return;
         // Vector begins at 0, line numbers are non-zero
         OS << Delimiter << LineBuffer->second[LineInfo.Line - 1].ltrim()
            << "\n";
+      }
     }
   }
   OldLineInfo = LineInfo;
@@ -1885,9 +1888,9 @@ void llvm::printExportsTrie(const ObjectFile *o) {
   }
 }
 
-void llvm::printRebaseTable(const ObjectFile *o) {
+void llvm::printRebaseTable(ObjectFile *o) {
   outs() << "Rebase table:\n";
-  if (const MachOObjectFile *MachO = dyn_cast<MachOObjectFile>(o))
+  if (MachOObjectFile *MachO = dyn_cast<MachOObjectFile>(o))
     printMachORebaseTable(MachO);
   else {
     errs() << "This operation is only currently supported "
@@ -1896,9 +1899,9 @@ void llvm::printRebaseTable(const ObjectFile *o) {
   }
 }
 
-void llvm::printBindTable(const ObjectFile *o) {
+void llvm::printBindTable(ObjectFile *o) {
   outs() << "Bind table:\n";
-  if (const MachOObjectFile *MachO = dyn_cast<MachOObjectFile>(o))
+  if (MachOObjectFile *MachO = dyn_cast<MachOObjectFile>(o))
     printMachOBindTable(MachO);
   else {
     errs() << "This operation is only currently supported "
@@ -1907,9 +1910,9 @@ void llvm::printBindTable(const ObjectFile *o) {
   }
 }
 
-void llvm::printLazyBindTable(const ObjectFile *o) {
+void llvm::printLazyBindTable(ObjectFile *o) {
   outs() << "Lazy bind table:\n";
-  if (const MachOObjectFile *MachO = dyn_cast<MachOObjectFile>(o))
+  if (MachOObjectFile *MachO = dyn_cast<MachOObjectFile>(o))
     printMachOLazyBindTable(MachO);
   else {
     errs() << "This operation is only currently supported "
@@ -1918,9 +1921,9 @@ void llvm::printLazyBindTable(const ObjectFile *o) {
   }
 }
 
-void llvm::printWeakBindTable(const ObjectFile *o) {
+void llvm::printWeakBindTable(ObjectFile *o) {
   outs() << "Weak bind table:\n";
-  if (const MachOObjectFile *MachO = dyn_cast<MachOObjectFile>(o))
+  if (MachOObjectFile *MachO = dyn_cast<MachOObjectFile>(o))
     printMachOWeakBindTable(MachO);
   else {
     errs() << "This operation is only currently supported "
@@ -2018,7 +2021,7 @@ static void printPrivateFileHeaders(const ObjectFile *o, bool onlyFirst) {
   report_error(o->getFileName(), "Invalid/Unsupported object file format");
 }
 
-static void DumpObject(const ObjectFile *o, const Archive *a = nullptr) {
+static void DumpObject(ObjectFile *o, const Archive *a = nullptr) {
   StringRef ArchiveName = a != nullptr ? a->getFileName() : "";
   // Avoid other output when using a raw option.
   if (!RawClangAST) {

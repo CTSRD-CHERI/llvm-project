@@ -50,16 +50,16 @@ bool CallLowering::lowerCall(
 
   ArgInfo OrigRet{ResReg, CS.getType(), ISD::ArgFlagsTy{}};
   if (!OrigRet.Ty->isVoidTy())
-    setArgFlags(OrigRet, AttributeSet::ReturnIndex, DL, CS);
+    setArgFlags(OrigRet, AttributeList::ReturnIndex, DL, CS);
 
-  return lowerCall(MIRBuilder, Callee, OrigRet, OrigArgs);
+  return lowerCall(MIRBuilder, CS.getCallingConv(), Callee, OrigRet, OrigArgs);
 }
 
 template <typename FuncInfoTy>
 void CallLowering::setArgFlags(CallLowering::ArgInfo &Arg, unsigned OpIdx,
                                const DataLayout &DL,
                                const FuncInfoTy &FuncInfo) const {
-  const AttributeSet &Attrs = FuncInfo.getAttributes();
+  const AttributeList &Attrs = FuncInfo.getAttributes();
   if (Attrs.hasAttribute(OpIdx, Attribute::ZExt))
     Arg.Flags.setZExt();
   if (Attrs.hasAttribute(OpIdx, Attribute::SExt))
@@ -83,8 +83,8 @@ void CallLowering::setArgFlags(CallLowering::ArgInfo &Arg, unsigned OpIdx,
     // For ByVal, alignment should be passed from FE.  BE will guess if
     // this info is not there but there are cases it cannot get right.
     unsigned FrameAlign;
-    if (FuncInfo.getParamAlignment(OpIdx))
-      FrameAlign = FuncInfo.getParamAlignment(OpIdx);
+    if (FuncInfo.getParamAlignment(OpIdx - 1))
+      FrameAlign = FuncInfo.getParamAlignment(OpIdx - 1);
     else
       FrameAlign = getTLI()->getByValTypeAlignment(ElementTy, DL);
     Arg.Flags.setByValAlign(FrameAlign);

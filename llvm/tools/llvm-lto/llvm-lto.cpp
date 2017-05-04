@@ -23,7 +23,6 @@
 #include "llvm/LTO/legacy/LTOCodeGenerator.h"
 #include "llvm/LTO/legacy/LTOModule.h"
 #include "llvm/LTO/legacy/ThinLTOCodeGenerator.h"
-#include "llvm/Object/ModuleSummaryIndexObjectFile.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/ManagedStatic.h"
@@ -62,6 +61,10 @@ static cl::opt<bool>
 static cl::opt<bool> DisableLTOVectorization(
     "disable-lto-vectorization", cl::init(false),
     cl::desc("Do not run loop or slp vectorization during LTO"));
+
+static cl::opt<bool> EnableFreestanding(
+    "lto-freestanding", cl::init(false),
+    cl::desc("Enable Freestanding (disable builtins / TLI) during LTO"));
 
 static cl::opt<bool> UseDiagnosticHandler(
     "use-diagnostic-handler", cl::init(false),
@@ -328,12 +331,9 @@ static void createCombinedModuleSummaryIndex() {
   uint64_t NextModuleId = 0;
   for (auto &Filename : InputFilenames) {
     ExitOnError ExitOnErr("llvm-lto: error loading file '" + Filename + "': ");
-    std::unique_ptr<ModuleSummaryIndex> Index =
-        ExitOnErr(llvm::getModuleSummaryIndexForFile(Filename));
-    // Skip files without a module summary.
-    if (!Index)
-      continue;
-    CombinedIndex.mergeFrom(std::move(Index), ++NextModuleId);
+    std::unique_ptr<MemoryBuffer> MB =
+        ExitOnErr(errorOrToExpected(MemoryBuffer::getFileOrSTDIN(Filename)));
+    ExitOnErr(readModuleSummaryIndex(*MB, CombinedIndex, ++NextModuleId));
   }
   std::error_code EC;
   assert(!OutputFilename.empty());
@@ -433,6 +433,7 @@ public:
     ThinGenerator.setCodePICModel(getRelocModel());
     ThinGenerator.setTargetOptions(Options);
     ThinGenerator.setCacheDir(ThinLTOCacheDir);
+    ThinGenerator.setFreestanding(EnableFreestanding);
 
     // Add all the exported symbols to the table of symbols to preserve.
     for (unsigned i = 0; i < ExportedSymbols.size(); ++i)
@@ -809,6 +810,7 @@ int main(int argc, char **argv) {
     CodeGen.setDiagnosticHandler(handleDiagnostics, nullptr);
 
   CodeGen.setCodePICModel(getRelocModel());
+  CodeGen.setFreestanding(EnableFreestanding);
 
   CodeGen.setDebugInfo(LTO_DEBUG_MODEL_DWARF);
   CodeGen.setTargetOptions(Options);

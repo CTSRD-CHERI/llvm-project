@@ -53,6 +53,19 @@ Clang-Tidy Checks
    google-runtime-memset
    google-runtime-operator
    google-runtime-references
+   hicpp-explicit-conversions
+   hicpp-function-size
+   hicpp-invalid-access-moved
+   hicpp-member-init
+   hicpp-named-parameter
+   hicpp-new-delete-operators
+   hicpp-no-assembler
+   hicpp-noexcept-move
+   hicpp-special-member-functions
+   hicpp-undelegated-constructor
+   hicpp-use-equals-default
+   hicpp-use-equals-delete
+   hicpp-use-override
    llvm-header-guard
    llvm-include-order
    llvm-namespace-comment
@@ -64,6 +77,7 @@ Clang-Tidy Checks
    misc-definitions-in-headers
    misc-fold-init-type
    misc-forward-declaration-namespace
+   misc-forwarding-reference-overload
    misc-inaccurate-erase
    misc-incorrect-roundings
    misc-inefficient-algorithm
@@ -110,6 +124,7 @@ Clang-Tidy Checks
    modernize-raw-string-literal
    modernize-redundant-void-arg
    modernize-replace-auto-ptr
+   modernize-replace-random-shuffle
    modernize-return-braced-init-list
    modernize-shrink-to-fit
    modernize-use-auto
@@ -128,6 +143,7 @@ Clang-Tidy Checks
    performance-for-range-copy
    performance-implicit-cast-in-loop
    performance-inefficient-string-concatenation
+   performance-inefficient-vector-operation
    performance-type-promotion-in-math-fn
    performance-unnecessary-copy-initialization
    performance-unnecessary-value-param
@@ -155,4 +171,3 @@ Clang-Tidy Checks
    readability-simplify-boolean-expr
    readability-static-definition-in-anonymous-namespace
    readability-uniqueptr-delete-release
-   safety-no-assembler

@@ -20,10 +20,10 @@
 #include <unistd.h>
 #endif
 
-using namespace lld::elf;
 using namespace llvm;
 
-namespace lld {
+using namespace lld;
+using namespace lld::elf;
 
 uint64_t elf::ErrorCount;
 raw_ostream *elf::ErrorOS;
@@ -32,6 +32,18 @@ StringRef elf::Argv0;
 // The functions defined in this file can be called from multiple threads,
 // but outs() or errs() are not thread-safe. We protect them using a mutex.
 static std::mutex Mu;
+
+// Prints "\n" or does nothing, depending on Msg contents of
+// the previous call of this function.
+static void newline(const Twine &Msg) {
+  // True if the previous error message contained "\n".
+  // We want to separate multi-line error messages with a newline.
+  static bool Flag;
+
+  if (Flag)
+    *ErrorOS << "\n";
+  Flag = (StringRef(Msg.str()).find('\n') != StringRef::npos);
+}
 
 static void print(StringRef S, raw_ostream::Colors C) {
   *ErrorOS << Argv0 + ": ";
@@ -48,6 +60,7 @@ void elf::log(const Twine &Msg) {
   if (Config->Verbose) {
     std::lock_guard<std::mutex> Lock(Mu);
     outs() << Argv0 << ": " << Msg << "\n";
+    outs().flush();
   }
 }
 
@@ -64,6 +77,7 @@ void elf::warn(const Twine &Msg) {
   }
   static uint64_t WarningCount = 0;
   std::lock_guard<std::mutex> Lock(Mu);
+  newline(Msg);
   if (Config->WarningLimit == 0 || WarningCount < Config->WarningLimit) {
     print("warning: ", raw_ostream::MAGENTA);
     *ErrorOS << Msg << "\n";
@@ -77,6 +91,7 @@ void elf::warn(const Twine &Msg) {
 
 void elf::error(const Twine &Msg) {
   std::lock_guard<std::mutex> Lock(Mu);
+  newline(Msg);
 
   if (Config->ErrorLimit == 0 || ErrorCount < Config->ErrorLimit) {
     print("error: ", raw_ostream::RED);
@@ -104,10 +119,6 @@ void elf::exitLld(int Val) {
 }
 
 void elf::fatal(const Twine &Msg) {
-  std::lock_guard<std::mutex> Lock(Mu);
-  print("error: ", raw_ostream::RED);
-  *ErrorOS << Msg << "\n";
+  error(Msg);
   exitLld(1);
 }
-
-} // namespace lld

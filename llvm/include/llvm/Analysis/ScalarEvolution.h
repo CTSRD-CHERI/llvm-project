@@ -877,6 +877,47 @@ private:
                                      bool ControlsExit,
                                      bool AllowPredicates = false);
 
+  // Helper functions for computeExitLimitFromCond to avoid exponential time
+  // complexity.
+
+  class ExitLimitCache {
+    // It may look like we need key on the whole (L, TBB, FBB, ControlsExit,
+    // AllowPredicates) tuple, but recursive calls to
+    // computeExitLimitFromCondCached from computeExitLimitFromCondImpl only
+    // vary the in \c ExitCond and \c ControlsExit parameters.  We remember the
+    // initial values of the other values to assert our assumption.
+    SmallDenseMap<PointerIntPair<Value *, 1>, ExitLimit> TripCountMap;
+
+    const Loop *L;
+    BasicBlock *TBB;
+    BasicBlock *FBB;
+    bool AllowPredicates;
+
+  public:
+    ExitLimitCache(const Loop *L, BasicBlock *TBB, BasicBlock *FBB,
+                   bool AllowPredicates)
+        : L(L), TBB(TBB), FBB(FBB), AllowPredicates(AllowPredicates) {}
+
+    Optional<ExitLimit> find(const Loop *L, Value *ExitCond, BasicBlock *TBB,
+                             BasicBlock *FBB, bool ControlsExit,
+                             bool AllowPredicates);
+
+    void insert(const Loop *L, Value *ExitCond, BasicBlock *TBB,
+                BasicBlock *FBB, bool ControlsExit, bool AllowPredicates,
+                const ExitLimit &EL);
+  };
+
+  typedef ExitLimitCache ExitLimitCacheTy;
+  ExitLimit computeExitLimitFromCondCached(ExitLimitCacheTy &Cache,
+                                           const Loop *L, Value *ExitCond,
+                                           BasicBlock *TBB, BasicBlock *FBB,
+                                           bool ControlsExit,
+                                           bool AllowPredicates);
+  ExitLimit computeExitLimitFromCondImpl(ExitLimitCacheTy &Cache, const Loop *L,
+                                         Value *ExitCond, BasicBlock *TBB,
+                                         BasicBlock *FBB, bool ControlsExit,
+                                         bool AllowPredicates);
+
   /// Compute the number of times the backedge of the specified loop will
   /// execute if its exit condition were a conditional branch of the ICmpInst
   /// ExitCond, TBB, and FBB. If AllowPredicates is set, this call will try
@@ -975,6 +1016,20 @@ private:
   bool isImpliedCondOperands(ICmpInst::Predicate Pred, const SCEV *LHS,
                              const SCEV *RHS, const SCEV *FoundLHS,
                              const SCEV *FoundRHS);
+
+  /// Test whether the condition described by Pred, LHS, and RHS is true
+  /// whenever the condition described by Pred, FoundLHS, and FoundRHS is
+  /// true. Here LHS is an operation that includes FoundLHS as one of its
+  /// arguments.
+  bool isImpliedViaOperations(ICmpInst::Predicate Pred,
+                              const SCEV *LHS, const SCEV *RHS,
+                              const SCEV *FoundLHS, const SCEV *FoundRHS,
+                              unsigned Depth = 0);
+
+  /// Test whether the condition described by Pred, LHS, and RHS is true.
+  /// Use only simple non-recursive types of checks, such as range analysis etc.
+  bool isKnownViaSimpleReasoning(ICmpInst::Predicate Pred,
+                                 const SCEV *LHS, const SCEV *RHS);
 
   /// Test whether the condition described by Pred, LHS, and RHS is true
   /// whenever the condition described by Pred, FoundLHS, and FoundRHS is
@@ -1123,6 +1178,9 @@ public:
   /// return true. For pointer types, this is the pointer-sized integer type.
   Type *getEffectiveSCEVType(Type *Ty) const;
 
+  // Returns a wider type among {Ty1, Ty2}.
+  Type *getWiderType(Type *Ty1, Type *Ty2) const;
+
   /// Return true if the SCEV is a scAddRecExpr or it contains
   /// scAddRecExpr. The result will be cached in HasRecMap.
   ///
@@ -1142,8 +1200,20 @@ public:
   const SCEV *getConstant(const APInt &Val);
   const SCEV *getConstant(Type *Ty, uint64_t V, bool isSigned = false);
   const SCEV *getTruncateExpr(const SCEV *Op, Type *Ty);
+
+  typedef SmallDenseMap<std::pair<const SCEV *, Type *>, const SCEV *, 8>
+      ExtendCacheTy;
   const SCEV *getZeroExtendExpr(const SCEV *Op, Type *Ty);
+  const SCEV *getZeroExtendExprCached(const SCEV *Op, Type *Ty,
+                                      ExtendCacheTy &Cache);
+  const SCEV *getZeroExtendExprImpl(const SCEV *Op, Type *Ty,
+                                    ExtendCacheTy &Cache);
+
   const SCEV *getSignExtendExpr(const SCEV *Op, Type *Ty);
+  const SCEV *getSignExtendExprCached(const SCEV *Op, Type *Ty,
+                                      ExtendCacheTy &Cache);
+  const SCEV *getSignExtendExprImpl(const SCEV *Op, Type *Ty,
+                                    ExtendCacheTy &Cache);
   const SCEV *getAnyExtendExpr(const SCEV *Op, Type *Ty);
   const SCEV *getAddExpr(SmallVectorImpl<const SCEV *> &Ops,
                          SCEV::NoWrapFlags Flags = SCEV::FlagAnyWrap,
@@ -1296,7 +1366,7 @@ public:
   ///
   /// Implemented in terms of the \c getSmallConstantTripCount overload with
   /// the single exiting block passed to it. See that routine for details.
-  unsigned getSmallConstantTripCount(Loop *L);
+  unsigned getSmallConstantTripCount(const Loop *L);
 
   /// Returns the maximum trip count of this loop as a normal unsigned
   /// value. Returns 0 if the trip count is unknown or not constant. This
@@ -1305,12 +1375,12 @@ public:
   /// before taking the branch. For loops with multiple exits, it may not be
   /// the number times that the loop header executes if the loop exits
   /// prematurely via another branch.
-  unsigned getSmallConstantTripCount(Loop *L, BasicBlock *ExitingBlock);
+  unsigned getSmallConstantTripCount(const Loop *L, BasicBlock *ExitingBlock);
 
   /// Returns the upper bound of the loop trip count as a normal unsigned
   /// value.
   /// Returns 0 if the trip count is unknown or not constant.
-  unsigned getSmallConstantMaxTripCount(Loop *L);
+  unsigned getSmallConstantMaxTripCount(const Loop *L);
 
   /// Returns the largest constant divisor of the trip count of the
   /// loop if it is a single-exit loop and we can compute a small maximum for
@@ -1318,7 +1388,7 @@ public:
   ///
   /// Implemented in terms of the \c getSmallConstantTripMultiple overload with
   /// the single exiting block passed to it. See that routine for details.
-  unsigned getSmallConstantTripMultiple(Loop *L);
+  unsigned getSmallConstantTripMultiple(const Loop *L);
 
   /// Returns the largest constant divisor of the trip count of this loop as a
   /// normal unsigned value, if possible. This means that the actual trip
@@ -1326,12 +1396,13 @@ public:
   /// count could very well be zero as well!). As explained in the comments
   /// for getSmallConstantTripCount, this assumes that control exits the loop
   /// via ExitingBlock.
-  unsigned getSmallConstantTripMultiple(Loop *L, BasicBlock *ExitingBlock);
+  unsigned getSmallConstantTripMultiple(const Loop *L,
+                                        BasicBlock *ExitingBlock);
 
   /// Get the expression for the number of loop iterations for which this loop
   /// is guaranteed not to exit via ExitingBlock. Otherwise return
   /// SCEVCouldNotCompute.
-  const SCEV *getExitCount(Loop *L, BasicBlock *ExitingBlock);
+  const SCEV *getExitCount(const Loop *L, BasicBlock *ExitingBlock);
 
   /// If the specified loop has a predictable backedge-taken count, return it,
   /// otherwise return a SCEVCouldNotCompute object. The backedge-taken count

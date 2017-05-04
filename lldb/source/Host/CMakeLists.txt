@@ -6,7 +6,6 @@ endmacro()
 add_host_subdirectory(common
   common/File.cpp
   common/FileCache.cpp
-  common/FileSpec.cpp
   common/FileSystem.cpp
   common/GetOptInc.cpp
   common/Host.cpp
@@ -16,13 +15,13 @@ add_host_subdirectory(common
   common/HostThread.cpp
   common/IOObject.cpp
   common/LockFileBase.cpp
+  common/MainLoop.cpp
   common/MonitoringProcessLauncher.cpp
   common/NativeBreakpoint.cpp
   common/NativeBreakpointList.cpp
   common/NativeWatchpointList.cpp
   common/NativeProcessProtocol.cpp
   common/NativeRegisterContext.cpp
-  common/NativeRegisterContextRegisterInfo.cpp
   common/NativeThreadProtocol.cpp
   common/OptionParser.cpp
   common/PipeBase.cpp
@@ -87,7 +86,6 @@ else()
     posix/HostProcessPosix.cpp
     posix/HostThreadPosix.cpp
     posix/LockFilePosix.cpp
-    posix/MainLoopPosix.cpp
     posix/PipePosix.cpp
     posix/ProcessLauncherPosixFork.cpp
     )
@@ -138,6 +136,12 @@ else()
     add_host_subdirectory(netbsd
       netbsd/Host.cpp
       netbsd/HostInfoNetBSD.cpp
+      )
+
+  elseif (CMAKE_SYSTEM_NAME MATCHES "OpenBSD")
+    add_host_subdirectory(openbsd
+      openbsd/Host.cpp
+      openbsd/HostInfoOpenBSD.cpp
       )
   endif()
 endif()

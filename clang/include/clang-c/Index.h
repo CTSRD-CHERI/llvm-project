@@ -32,7 +32,7 @@
  * compatible, thus CINDEX_VERSION_MAJOR is expected to remain stable.
  */
 #define CINDEX_VERSION_MAJOR 0
-#define CINDEX_VERSION_MINOR 37
+#define CINDEX_VERSION_MINOR 38
 
 #define CINDEX_VERSION_ENCODE(major, minor) ( \
       ((major) * 10000)                       \
@@ -79,6 +79,12 @@ extern "C" {
  * typically be linked together into an executable or library.
  */
 typedef void *CXIndex;
+
+/**
+ * \brief An opaque type representing target information for a given translation
+ * unit.
+ */
+typedef struct CXTargetInfoImpl *CXTargetInfo;
 
 /**
  * \brief A single translation unit, which resides in an index.
@@ -478,8 +484,8 @@ CINDEX_LINKAGE void clang_getExpansionLocation(CXSourceLocation location,
                                                unsigned *offset);
 
 /**
- * \brief Retrieve the file, line, column, and offset represented by
- * the given source location, as specified in a # line directive.
+ * \brief Retrieve the file, line and column represented by the given source
+ * location, as specified in a # line directive.
  *
  * Example: given the following source code in a file somefile.c
  *
@@ -1551,6 +1557,36 @@ typedef struct CXTUResourceUsage {
 CINDEX_LINKAGE CXTUResourceUsage clang_getCXTUResourceUsage(CXTranslationUnit TU);
 
 CINDEX_LINKAGE void clang_disposeCXTUResourceUsage(CXTUResourceUsage usage);
+
+/**
+ * \brief Get target information for this translation unit.
+ *
+ * The CXTargetInfo object cannot outlive the CXTranslationUnit object.
+ */
+CINDEX_LINKAGE CXTargetInfo
+clang_getTranslationUnitTargetInfo(CXTranslationUnit CTUnit);
+
+/**
+ * \brief Destroy the CXTargetInfo object.
+ */
+CINDEX_LINKAGE void
+clang_TargetInfo_dispose(CXTargetInfo Info);
+
+/**
+ * \brief Get the normalized target triple as a string.
+ *
+ * Returns the empty string in case of any error.
+ */
+CINDEX_LINKAGE CXString
+clang_TargetInfo_getTriple(CXTargetInfo Info);
+
+/**
+ * \brief Get the pointer width of the target in bits.
+ *
+ * Returns -1 in case of error.
+ */
+CINDEX_LINKAGE int
+clang_TargetInfo_getPointerWidth(CXTargetInfo Info);
 
 /**
  * @}
@@ -3437,6 +3473,16 @@ CINDEX_LINKAGE long long clang_getArraySize(CXType T);
 CINDEX_LINKAGE CXType clang_Type_getNamedType(CXType T);
 
 /**
+ * \brief Determine if a typedef is 'transparent' tag.
+ *
+ * A typedef is considered 'transparent' if it shares a name and spelling
+ * location with its underlying tag type, as is the case with the NS_ENUM macro.
+ *
+ * \returns non-zero if transparent and zero otherwise.
+ */
+CINDEX_LINKAGE unsigned clang_Type_isTransparentTagTypedef(CXType T);
+
+/**
  * \brief List the possible error codes for \c clang_Type_getSizeOf,
  *   \c clang_Type_getAlignOf, \c clang_Type_getOffsetOf and
  *   \c clang_Cursor_getOffsetOf.
@@ -3965,8 +4011,8 @@ CINDEX_LINKAGE int clang_Cursor_getObjCSelectorIndex(CXCursor);
 CINDEX_LINKAGE int clang_Cursor_isDynamicCall(CXCursor C);
 
 /**
- * \brief Given a cursor pointing to an Objective-C message, returns the CXType
- * of the receiver.
+ * \brief Given a cursor pointing to an Objective-C message or property
+ * reference, or C++ method call, returns the CXType of the receiver.
  */
 CINDEX_LINKAGE CXType clang_Cursor_getReceiverType(CXCursor C);
 
@@ -4024,8 +4070,8 @@ CINDEX_LINKAGE unsigned clang_Cursor_getObjCDeclQualifiers(CXCursor C);
 
 /**
  * \brief Given a cursor that represents an Objective-C method or property
- * declaration, return non-zero if the declaration was affected by "@optional".
- * Returns zero if the cursor is not such a declaration or it is "@required".
+ * declaration, return non-zero if the declaration was affected by "\@optional".
+ * Returns zero if the cursor is not such a declaration or it is "\@required".
  */
 CINDEX_LINKAGE unsigned clang_Cursor_isObjCOptional(CXCursor C);
 
@@ -4701,7 +4747,7 @@ enum CXCompletionChunkKind {
    */
   CXCompletionChunk_HorizontalSpace,
   /**
-   * Vertical space ('\n'), after which it is generally a good idea to
+   * Vertical space ('\\n'), after which it is generally a good idea to
    * perform indentation.
    */
   CXCompletionChunk_VerticalSpace
@@ -5590,7 +5636,8 @@ typedef enum {
   CXIdxEntityLang_None = 0,
   CXIdxEntityLang_C    = 1,
   CXIdxEntityLang_ObjC = 2,
-  CXIdxEntityLang_CXX  = 3
+  CXIdxEntityLang_CXX  = 3,
+  CXIdxEntityLang_Swift  = 4
 } CXIdxEntityLanguage;
 
 /**

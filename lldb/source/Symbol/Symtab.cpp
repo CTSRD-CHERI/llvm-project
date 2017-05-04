@@ -14,6 +14,7 @@
 #include "Plugins/Language/ObjC/ObjCLanguage.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/Section.h"
+#include "lldb/Core/STLUtils.h"
 #include "lldb/Core/Timer.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Symbol/Symbol.h"
@@ -424,6 +425,11 @@ void Symtab::InitNameIndexes() {
     //            }
     //        }
   }
+}
+
+void Symtab::PreloadSymbols() {
+  std::lock_guard<std::recursive_mutex> guard(m_mutex);
+  InitNameIndexes();
 }
 
 void Symtab::AppendSymbolNamesToMap(const IndexCollection &indexes,

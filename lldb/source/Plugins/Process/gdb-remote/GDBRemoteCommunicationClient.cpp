@@ -21,7 +21,6 @@
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/State.h"
 #include "lldb/Host/HostInfo.h"
-#include "lldb/Host/StringConvert.h"
 #include "lldb/Interpreter/Args.h"
 #include "lldb/Symbol/Symbol.h"
 #include "lldb/Target/MemoryRegionInfo.h"
@@ -1504,13 +1503,18 @@ Error GDBRemoteCommunicationClient::GetMemoryRegionInfo(
         }
       }
 
-      // We got a valid address range back but no permissions -- which means
-      // this is an unmapped page
-      if (region_info.GetRange().IsValid() && saw_permissions == false) {
-        region_info.SetReadable(MemoryRegionInfo::eNo);
-        region_info.SetWritable(MemoryRegionInfo::eNo);
-        region_info.SetExecutable(MemoryRegionInfo::eNo);
-        region_info.SetMapped(MemoryRegionInfo::eNo);
+      if (region_info.GetRange().IsValid()) {
+        // We got a valid address range back but no permissions -- which means
+        // this is an unmapped page
+        if (!saw_permissions) {
+          region_info.SetReadable(MemoryRegionInfo::eNo);
+          region_info.SetWritable(MemoryRegionInfo::eNo);
+          region_info.SetExecutable(MemoryRegionInfo::eNo);
+          region_info.SetMapped(MemoryRegionInfo::eNo);
+        }
+      } else {
+        // We got an invalid address range back
+        error.SetErrorString("Server returned invalid range");
       }
     } else {
       m_supports_memory_region_info = eLazyBoolNo;
@@ -3265,6 +3269,9 @@ GDBRemoteCommunicationClient::GetModulesInfo(
   StreamGDBRemote payload;
   payload.PutEscapedBytes(unescaped_payload.GetString().data(),
                           unescaped_payload.GetSize());
+
+  // Increase the timeout for jModulesInfo since this packet can take longer.
+  ScopedTimeout timeout(*this, std::chrono::seconds(10));
 
   StringExtractorGDBRemote response;
   if (SendPacketAndWaitForResponse(payload.GetString(), response, false) !=

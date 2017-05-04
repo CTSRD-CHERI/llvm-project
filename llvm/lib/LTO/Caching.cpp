@@ -13,6 +13,7 @@
 
 #include "llvm/LTO/Caching.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/Errc.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
@@ -27,9 +28,11 @@ Expected<NativeObjectCache> lto::localCache(StringRef CacheDirectoryPath,
     return errorCodeToError(EC);
 
   return [=](unsigned Task, StringRef Key) -> AddStreamFn {
-    // First, see if we have a cache hit.
+    // This choice of file name allows the cache to be pruned (see pruneCache()
+    // in include/llvm/Support/CachePruning.h).
     SmallString<64> EntryPath;
-    sys::path::append(EntryPath, CacheDirectoryPath, Key);
+    sys::path::append(EntryPath, CacheDirectoryPath, "llvmcache-" + Key);
+    // First, see if we have a cache hit.
     ErrorOr<std::unique_ptr<MemoryBuffer>> MBOrErr =
         MemoryBuffer::getFile(EntryPath);
     if (MBOrErr) {
@@ -37,7 +40,7 @@ Expected<NativeObjectCache> lto::localCache(StringRef CacheDirectoryPath,
       return AddStreamFn();
     }
 
-    if (MBOrErr.getError() != std::errc::no_such_file_or_directory)
+    if (MBOrErr.getError() != errc::no_such_file_or_directory)
       report_fatal_error(Twine("Failed to open cache file ") + EntryPath +
                          ": " + MBOrErr.getError().message() + "\n");
 

@@ -1939,6 +1939,9 @@ namespace clang {
   namespace sema {
     Attr *instantiateTemplateAttribute(const Attr *At, ASTContext &C, Sema &S,
                             const MultiLevelTemplateArgumentList &TemplateArgs);
+    Attr *instantiateTemplateAttributeForDecl(
+        const Attr *At, ASTContext &C, Sema &S,
+        const MultiLevelTemplateArgumentList &TemplateArgs);
   }
 }
 
@@ -1999,8 +2002,8 @@ Sema::InstantiateClass(SourceLocation PointOfInstantiation,
   // Enter the scope of this instantiation. We don't use
   // PushDeclContext because we don't have a scope.
   ContextRAII SavedContext(*this, Instantiation);
-  EnterExpressionEvaluationContext EvalContext(*this, 
-                                               Sema::PotentiallyEvaluated);
+  EnterExpressionEvaluationContext EvalContext(
+      *this, Sema::ExpressionEvaluationContext::PotentiallyEvaluated);
 
   // If this is an instantiation of a local class, merge this local
   // instantiation scope with the enclosing scope. Otherwise, every
@@ -2230,8 +2233,8 @@ bool Sema::InstantiateEnum(SourceLocation PointOfInstantiation,
   // Enter the scope of this instantiation. We don't use
   // PushDeclContext because we don't have a scope.
   ContextRAII SavedContext(*this, Instantiation);
-  EnterExpressionEvaluationContext EvalContext(*this,
-                                               Sema::PotentiallyEvaluated);
+  EnterExpressionEvaluationContext EvalContext(
+      *this, Sema::ExpressionEvaluationContext::PotentiallyEvaluated);
 
   LocalInstantiationScope Scope(*this, /*MergeWithParentScope*/true);
 
@@ -2302,8 +2305,8 @@ bool Sema::InstantiateInClassInitializer(
   // Enter the scope of this instantiation. We don't use PushDeclContext because
   // we don't have a scope.
   ContextRAII SavedContext(*this, Instantiation->getParent());
-  EnterExpressionEvaluationContext EvalContext(*this,
-                                               Sema::PotentiallyEvaluated);
+  EnterExpressionEvaluationContext EvalContext(
+      *this, Sema::ExpressionEvaluationContext::PotentiallyEvaluated);
 
   LocalInstantiationScope Scope(*this, true);
 
@@ -2602,10 +2605,11 @@ Sema::InstantiateClassMembers(SourceLocation PointOfInstantiation,
                                                 == TSK_ExplicitSpecialization)
         continue;
 
-      if (Context.getTargetInfo().getCXXABI().isMicrosoft() &&
+      if ((Context.getTargetInfo().getCXXABI().isMicrosoft() ||
+           Context.getTargetInfo().getTriple().isWindowsItaniumEnvironment()) &&
           TSK == TSK_ExplicitInstantiationDeclaration) {
-        // In MSVC mode, explicit instantiation decl of the outer class doesn't
-        // affect the inner class.
+        // In MSVC and Windows Itanium mode, explicit instantiation decl of the
+        // outer class doesn't affect the inner class.
         continue;
       }
 

@@ -3,11 +3,12 @@
 // RUN: ld.lld -static %t -o %tout
 // RUN: ld.lld %t -o %tout
 // RUN: ld.lld -shared %tso -o %tshared
-// RUN: not ld.lld -static %t %tshared -o %tout 2>&1 | FileCheck %s
+// RUN: not ld.lld -static %t %tshared -verbose -o %tout 2>&1 | FileCheck %s
 // REQUIRES: x86
 
 .global _start
 _start:
   call __tls_get_addr
 
-// CHECK: error: {{.*}}:(.text+0x1): undefined symbol '__tls_get_addr'
+// CHECK: error: undefined symbol: __tls_get_addr
+// CHECK: >>> referenced by {{.*}}:(.text+0x1)

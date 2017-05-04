@@ -25,6 +25,7 @@ from __future__ import print_function
 import atexit
 import os
 import errno
+import logging
 import platform
 import re
 import signal
@@ -275,7 +276,14 @@ def parseOptionsAndInitTestdirs():
         do_help = True
 
     if args.compiler:
-        configuration.compiler = args.compiler
+        configuration.compiler = os.path.realpath(args.compiler)
+        if not is_exe(configuration.compiler):
+            configuration.compiler = which(args.compiler)
+        if not is_exe(configuration.compiler):
+            logging.error(
+                    '%s is not a valid compiler executable; aborting...',
+                    args.compiler)
+            sys.exit(-1)
     else:
         # Use a compiler appropriate appropriate for the Apple SDK if one was
         # specified
@@ -361,8 +369,16 @@ def parseOptionsAndInitTestdirs():
         configuration.lldbFrameworkPath = args.framework
 
     if args.executable:
+        # lldb executable is passed explicitly
         lldbtest_config.lldbExec = os.path.realpath(args.executable)
-    
+        if not is_exe(lldbtest_config.lldbExec):
+            lldbtest_config.lldbExec = which(args.executable)
+        if not is_exe(lldbtest_config.lldbExec):
+            logging.error(
+                    '%s is not a valid executable to test; aborting...',
+                    args.executable)
+            sys.exit(-1)
+
     if args.server:
         os.environ['LLDB_DEBUGSERVER_PATH'] = args.server
 
@@ -1045,6 +1061,29 @@ def checkCompiler():
     configuration.compiler = cmd_output.split('\n')[0]
     print("'xcrun -find %s' returning %s" % (c, configuration.compiler))
 
+def canRunLibcxxTests():
+    from lldbsuite.test import lldbplatformutil
+
+    platform = lldbplatformutil.getPlatform()
+
+    if lldbplatformutil.target_is_android() or lldbplatformutil.platformIsDarwin():
+        return True, "libc++ always present"
+
+    if platform == "linux":
+        if not os.path.isdir("/usr/include/c++/v1"):
+            return False, "Unable to find libc++ installation"
+        return True, "Headers found, let's hope they work"
+
+    return False, "Don't know how to build with libc++ on %s" % platform
+
+def checkLibcxxSupport():
+    result, reason = canRunLibcxxTests()
+    if result:
+        return # libc++ supported
+    if "libc++" in configuration.categoriesList:
+        return # libc++ category explicitly requested, let it run.
+    print("Libc++ tests will not be run because: " + reason)
+    configuration.skipCategories.append("libc++")
 
 def run_suite():
     # On MacOS X, check to make sure that domain for com.apple.DebugSymbols defaults
@@ -1131,8 +1170,15 @@ def run_suite():
     if configuration.lldb_platform_working_dir:
         print("Setting remote platform working directory to '%s'..." %
               (configuration.lldb_platform_working_dir))
-        lldb.remote_platform.SetWorkingDirectory(
-            configuration.lldb_platform_working_dir)
+        error = lldb.remote_platform.MakeDirectory(
+            configuration.lldb_platform_working_dir, 448)  # 448 = 0o700
+        if error.Fail():
+            raise Exception("making remote directory '%s': %s" % (
+                remote_test_dir, error))
+
+        if not lldb.remote_platform.SetWorkingDirectory(
+                configuration.lldb_platform_working_dir):
+            raise Exception("failed to set working directory '%s'" % remote_test_dir)
         lldb.DBG.SetSelectedPlatform(lldb.remote_platform)
     else:
         lldb.remote_platform = None
@@ -1140,6 +1186,8 @@ def run_suite():
         configuration.lldb_platform_url = None
 
     target_platform = lldb.DBG.GetSelectedPlatform().GetTriple().split('-')[2]
+
+    checkLibcxxSupport()
 
     # Don't do debugserver tests on everything except OS X.
     configuration.dont_do_debugserver_test = "linux" in target_platform or "freebsd" in target_platform or "windows" in target_platform

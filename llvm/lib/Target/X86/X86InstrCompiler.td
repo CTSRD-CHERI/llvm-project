@@ -772,11 +772,11 @@ defm LCMPXCHG8B : LCMPXCHG_UnOp<0xC7, MRM1m, "cmpxchg8b",
 // the pseudo. The argument feeding EBX is ebx_input.
 //
 // The additional argument, $ebx_save, is a temporary register used to
-// save the value of RBX accross the actual instruction.
+// save the value of RBX across the actual instruction.
 //
 // To make sure the register assigned to $ebx_save does not interfere with
 // the definition of the actual instruction, we use a definition $dst which
-// is tied to $rbx_save. That way, the live-range of $rbx_save spans accross
+// is tied to $rbx_save. That way, the live-range of $rbx_save spans across
 // the instruction and we are sure we will have a valid register to restore
 // the value of RBX.
 let Defs = [EAX, EDX, EBX, EFLAGS], Uses = [EAX, ECX, EDX],
@@ -1271,11 +1271,11 @@ def or_is_add : PatFrag<(ops node:$lhs, node:$rhs), (or node:$lhs, node:$rhs),[{
   if (ConstantSDNode *CN = dyn_cast<ConstantSDNode>(N->getOperand(1)))
     return CurDAG->MaskedValueIsZero(N->getOperand(0), CN->getAPIntValue());
 
-  APInt KnownZero0, KnownOne0;
-  CurDAG->computeKnownBits(N->getOperand(0), KnownZero0, KnownOne0, 0);
-  APInt KnownZero1, KnownOne1;
-  CurDAG->computeKnownBits(N->getOperand(1), KnownZero1, KnownOne1, 0);
-  return (~KnownZero0 & ~KnownZero1) == 0;
+  KnownBits Known0;
+  CurDAG->computeKnownBits(N->getOperand(0), Known0, 0);
+  KnownBits Known1;
+  CurDAG->computeKnownBits(N->getOperand(1), Known1, 0);
+  return (~Known0.Zero & ~Known1.Zero) == 0;
 }]>;
 
 

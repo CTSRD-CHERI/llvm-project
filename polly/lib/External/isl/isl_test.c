@@ -1926,7 +1926,7 @@ static int test_coalesce_special(struct isl_ctx *ctx)
 	    "(exists (e0 = [(-2 + y)/3]: 3e0 = -2 + y and y <= 200 and "
 		"y >= 5 and o1 <= 241 and o1 >= 212)) }";
 	map1 = isl_map_read_from_str(ctx, str);
-	map1 = isl_map_align_divs(map1);
+	map1 = isl_map_align_divs_internal(map1);
 	map1 = isl_map_coalesce(map1);
 	str = "[y] -> { [S_L220_OUT[] -> T7[]] -> "
 	    "[[S_L309_IN[] -> T11[]] -> ce_imag2[o0, o1]] : "
@@ -1935,7 +1935,7 @@ static int test_coalesce_special(struct isl_ctx *ctx)
 		"o0 >= 3 - y and o0 <= -2 + y and o0 >= 0) }";
 	map2 = isl_map_read_from_str(ctx, str);
 	map2 = isl_map_union(map2, map1);
-	map2 = isl_map_align_divs(map2);
+	map2 = isl_map_align_divs_internal(map2);
 	map2 = isl_map_coalesce(map2);
 	isl_map_free(map2);
 	if (!map2)
@@ -1970,6 +1970,44 @@ static int test_coalesce_special2(struct isl_ctx *ctx)
 	return 0;
 }
 
+/* Check that calling isl_set_coalesce does not leave other sets
+ * that may share some information with the input to isl_set_coalesce
+ * in an inconsistent state.
+ * In particular, older versions of isl would modify all copies
+ * of the basic sets in the isl_set_coalesce input in a way
+ * that could leave them in an inconsistent state.
+ * The result of printing any other set containing one of these
+ * basic sets would then result in an invalid set description.
+ */
+static int test_coalesce_special3(isl_ctx *ctx)
+{
+	const char *str;
+	char *s;
+	isl_set *set1, *set2;
+	isl_printer *p;
+
+	set1 = isl_set_read_from_str(ctx, "{ [0, 0, 0] }");
+	str = "{ [a, b, a + b] : a >= 0 and b >= 0 and 0 < a + b }";
+	set2 = isl_set_read_from_str(ctx, str);
+	set1 = isl_set_union(set1, isl_set_copy(set2));
+	set1 = isl_set_coalesce(set1);
+	isl_set_free(set1);
+
+	p = isl_printer_to_str(ctx);
+	p = isl_printer_print_set(p, set2);
+	isl_set_free(set2);
+	s = isl_printer_get_str(p);
+	isl_printer_free(p);
+	set1 = isl_set_read_from_str(ctx, s);
+	free(s);
+	isl_set_free(set1);
+
+	if (!set1)
+		return -1;
+
+	return 0;
+}
+
 /* Test the functionality of isl_set_coalesce.
  * That is, check that the output is always equal to the input
  * and in some cases that the result consists of a single disjunct.
@@ -1990,6 +2028,8 @@ static int test_coalesce(struct isl_ctx *ctx)
 	if (test_coalesce_special(ctx) < 0)
 		return -1;
 	if (test_coalesce_special2(ctx) < 0)
+		return -1;
+	if (test_coalesce_special3(ctx) < 0)
 		return -1;
 
 	return 0;
@@ -3674,6 +3714,55 @@ static int test_special_conditional_schedule_constraints(isl_ctx *ctx)
 	return 0;
 }
 
+/* Check that the test for violated conditional validity constraints
+ * is not confused by domain compression.
+ * In particular, earlier versions of isl would apply
+ * a schedule on the compressed domains to the original domains,
+ * resulting in a failure to detect that the default schedule
+ * violates the conditional validity constraints.
+ */
+static int test_special_conditional_schedule_constraints_2(isl_ctx *ctx)
+{
+	const char *str;
+	isl_bool empty;
+	isl_union_set *domain;
+	isl_union_map *validity, *condition;
+	isl_schedule_constraints *sc;
+	isl_schedule *schedule;
+	isl_union_map *umap;
+	isl_map *map, *ge;
+
+	str = "{ A[0, i] : 0 <= i <= 10; B[1, i] : 0 <= i <= 10 }";
+	domain = isl_union_set_read_from_str(ctx, str);
+	sc = isl_schedule_constraints_on_domain(domain);
+	str = "{ B[1, i] -> A[0, i + 1] }";
+	condition = isl_union_map_read_from_str(ctx, str);
+	str = "{ A[0, i] -> B[1, i - 1] }";
+	validity = isl_union_map_read_from_str(ctx, str);
+	sc = isl_schedule_constraints_set_conditional_validity(sc, condition,
+						isl_union_map_copy(validity));
+	schedule = isl_schedule_constraints_compute_schedule(sc);
+	umap = isl_schedule_get_map(schedule);
+	isl_schedule_free(schedule);
+	validity = isl_union_map_apply_domain(validity,
+						isl_union_map_copy(umap));
+	validity = isl_union_map_apply_range(validity, umap);
+	map = isl_map_from_union_map(validity);
+	ge = isl_map_lex_ge(isl_space_domain(isl_map_get_space(map)));
+	map = isl_map_intersect(map, ge);
+	empty = isl_map_is_empty(map);
+	isl_map_free(map);
+
+	if (empty < 0)
+		return -1;
+	if (!empty)
+		isl_die(ctx, isl_error_unknown,
+			"conditional validity constraints not satisfied",
+			return -1);
+
+	return 0;
+}
+
 /* Input for testing of schedule construction based on
  * conditional constraints.
  *
@@ -3777,6 +3866,8 @@ static int test_conditional_schedule_constraints(isl_ctx *ctx)
 	int n_member;
 
 	if (test_special_conditional_schedule_constraints(ctx) < 0)
+		return -1;
+	if (test_special_conditional_schedule_constraints_2(ctx) < 0)
 		return -1;
 
 	for (i = 0; i < ARRAY_SIZE(live_range_tests); ++i) {

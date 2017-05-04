@@ -2466,16 +2466,14 @@ static int addMonoNonMonoModifier(OpenMPSchedType Schedule,
   return Schedule | Modifier;
 }
 
-void CGOpenMPRuntime::emitForDispatchInit(CodeGenFunction &CGF,
-                                          SourceLocation Loc,
-                                          const OpenMPScheduleTy &ScheduleKind,
-                                          unsigned IVSize, bool IVSigned,
-                                          bool Ordered, llvm::Value *UB,
-                                          llvm::Value *Chunk) {
+void CGOpenMPRuntime::emitForDispatchInit(
+    CodeGenFunction &CGF, SourceLocation Loc,
+    const OpenMPScheduleTy &ScheduleKind, unsigned IVSize, bool IVSigned,
+    bool Ordered, const DispatchRTInput &DispatchValues) {
   if (!CGF.HaveInsertPoint())
     return;
-  OpenMPSchedType Schedule =
-      getRuntimeSchedule(ScheduleKind.Schedule, Chunk != nullptr, Ordered);
+  OpenMPSchedType Schedule = getRuntimeSchedule(
+      ScheduleKind.Schedule, DispatchValues.Chunk != nullptr, Ordered);
   assert(Ordered ||
          (Schedule != OMP_sch_static && Schedule != OMP_sch_static_chunked &&
           Schedule != OMP_ord_static && Schedule != OMP_ord_static_chunked &&
@@ -2486,14 +2484,14 @@ void CGOpenMPRuntime::emitForDispatchInit(CodeGenFunction &CGF,
   //          kmp_int[32|64] stride, kmp_int[32|64] chunk);
 
   // If the Chunk was not specified in the clause - use default value 1.
-  if (Chunk == nullptr)
-    Chunk = CGF.Builder.getIntN(IVSize, 1);
+  llvm::Value *Chunk = DispatchValues.Chunk ? DispatchValues.Chunk
+                                            : CGF.Builder.getIntN(IVSize, 1);
   llvm::Value *Args[] = {
       emitUpdateLocation(CGF, Loc), getThreadID(CGF, Loc),
       CGF.Builder.getInt32(addMonoNonMonoModifier(
           Schedule, ScheduleKind.M1, ScheduleKind.M2)), // Schedule type
-      CGF.Builder.getIntN(IVSize, 0),                   // Lower
-      UB,                                               // Upper
+      DispatchValues.LB,                                // Lower
+      DispatchValues.UB,                                // Upper
       CGF.Builder.getIntN(IVSize, 1),                   // Stride
       Chunk                                             // Chunk
   };
@@ -2974,7 +2972,7 @@ void CGOpenMPRuntime::createOffloadEntriesAndInfoMetadata() {
   // Create the offloading info metadata node.
   llvm::NamedMDNode *MD = M.getOrInsertNamedMetadata("omp_offload.info");
 
-  // Auxiliar methods to create metadata values and strings.
+  // Auxiliary methods to create metadata values and strings.
   auto getMDInt = [&](unsigned v) {
     return llvm::ConstantAsMetadata::get(
         llvm::ConstantInt::get(llvm::Type::getInt32Ty(C), v));
@@ -3577,7 +3575,7 @@ static void emitPrivatesInit(CodeGenFunction &CGF,
                                     SharedRefLValue.getAddress(), Type);
           } else {
             // Initialize firstprivate array using element-by-element
-            // intialization.
+            // initialization.
             CGF.EmitOMPAggregateAssign(
                 PrivateLValue.getAddress(), SharedRefLValue.getAddress(), Type,
                 [&CGF, Elem, Init, &CapturesInfo](Address DestElement,

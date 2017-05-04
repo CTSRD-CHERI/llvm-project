@@ -39,6 +39,7 @@
 #include "llvm/Analysis/LoopAccessAnalysis.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/MemoryDependenceAnalysis.h"
+#include "llvm/Analysis/MemorySSA.h"
 #include "llvm/Analysis/ModuleSummaryAnalysis.h"
 #include "llvm/Analysis/OptimizationDiagnosticInfo.h"
 #include "llvm/Analysis/PostDominators.h"
@@ -124,6 +125,7 @@
 #include "llvm/Transforms/Scalar/Reassociate.h"
 #include "llvm/Transforms/Scalar/SCCP.h"
 #include "llvm/Transforms/Scalar/SROA.h"
+#include "llvm/Transforms/Scalar/SimpleLoopUnswitch.h"
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
 #include "llvm/Transforms/Scalar/Sink.h"
 #include "llvm/Transforms/Scalar/SpeculativeExecution.h"
@@ -135,7 +137,6 @@
 #include "llvm/Transforms/Utils/LoopSimplify.h"
 #include "llvm/Transforms/Utils/LowerInvoke.h"
 #include "llvm/Transforms/Utils/Mem2Reg.h"
-#include "llvm/Transforms/Utils/MemorySSA.h"
 #include "llvm/Transforms/Utils/NameAnonGlobals.h"
 #include "llvm/Transforms/Utils/PredicateInfo.h"
 #include "llvm/Transforms/Utils/SimplifyInstructions.h"
@@ -149,6 +150,10 @@ using namespace llvm;
 
 static cl::opt<unsigned> MaxDevirtIterations("pm-max-devirt-iterations",
                                              cl::ReallyHidden, cl::init(4));
+
+static cl::opt<bool> EnableGVNHoist(
+    "enable-npm-gvn-hoist", cl::init(false), cl::Hidden,
+    cl::desc("Enable the GVN hoisting pass for the new PM (default = off)"));
 
 static Regex DefaultAliasRegex("^(default|lto-pre-link|lto)<(O[0123sz])>$");
 
@@ -454,7 +459,8 @@ PassBuilder::buildPerModuleDefaultPipeline(OptimizationLevel Level,
   EarlyFPM.addPass(SROA());
   EarlyFPM.addPass(EarlyCSEPass());
   EarlyFPM.addPass(LowerExpectIntrinsicPass());
-  EarlyFPM.addPass(GVNHoistPass());
+  if (EnableGVNHoist)
+    EarlyFPM.addPass(GVNHoistPass());
   MPM.addPass(createModuleToFunctionPassAdaptor(std::move(EarlyFPM)));
 
   // Interprocedural constant propagation now that basic cleanup has occured
@@ -623,6 +629,10 @@ PassBuilder::buildPerModuleDefaultPipeline(OptimizationLevel Level,
 
   // And finally clean up LCSSA form before generating code.
   OptimizePM.addPass(InstSimplifierPass());
+
+  // LoopSink (and other loop passes since the last simplifyCFG) might have
+  // resulted in single-entry-single-exit or empty blocks. Clean up the CFG.
+  OptimizePM.addPass(SimplifyCFGPass());
 
   // Add the core optimizing pipeline.
   MPM.addPass(createModuleToFunctionPassAdaptor(std::move(OptimizePM)));

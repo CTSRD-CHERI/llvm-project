@@ -369,7 +369,9 @@ def warn_decl_shadow :
           "local variable|"
           "variable in %2|"
           "static data member of %2|"
-          "field of %2}1">,
+          "field of %2|"
+          "typedef in %2|"
+          "type alias in %2}1">,
   InGroup<Shadow>, DefaultIgnore;
 def warn_decl_shadow_uncaptured_local :
   Warning<warn_decl_shadow.Text>,
@@ -747,6 +749,25 @@ def err_pragma_loop_compatibility : Error<
   "%select{incompatible|duplicate}0 directives '%1' and '%2'">;
 def err_pragma_loop_precedes_nonloop : Error<
   "expected a for, while, or do-while loop to follow '%0'">;
+
+def err_pragma_attribute_matcher_subrule_contradicts_rule : Error<
+  "redundant attribute subject matcher sub-rule '%0'; '%1' already matches "
+  "those declarations">;
+def err_pragma_attribute_matcher_negated_subrule_contradicts_subrule : Error<
+  "negated attribute subject matcher sub-rule '%0' contradicts sub-rule '%1'">;
+def err_pragma_attribute_invalid_matchers : Error<
+  "attribute %0 can't be applied to %1">;
+def err_pragma_attribute_stack_mismatch : Error<
+  "'#pragma clang attribute pop' with no matching '#pragma clang attribute push'">;
+def warn_pragma_attribute_unused : Warning<
+  "unused attribute %0 in '#pragma clang attribute push' region">,
+  InGroup<PragmaClangAttribute>;
+def note_pragma_attribute_region_ends_here : Note<
+  "'#pragma clang attribute push' regions ends here">;
+def err_pragma_attribute_no_pop_eof : Error<"unterminated "
+  "'#pragma clang attribute push' at end of file">;
+def note_pragma_attribute_applied_decl_here : Note<
+  "when applied to this declaration">;
 
 /// Objective-C parser diagnostics
 def err_duplicate_class_def : Error<
@@ -1158,6 +1179,10 @@ def err_objc_kindof_nonobject : Error<
   "'__kindof' specifier cannot be applied to non-object type %0">;
 def err_objc_kindof_wrong_position : Error<
   "'__kindof' type specifier must precede the declarator">;
+
+def err_objc_method_unsupported_param_ret_type : Error<
+  "%0 %select{parameter|return}1 type is unsupported; "
+  "support for vector types for this target is introduced in %2">;
 
 // C++ declarations
 def err_static_assert_expression_is_not_constant : Error<
@@ -1687,8 +1712,8 @@ def err_init_conversion_failed : Error<
   "cannot initialize %select{a variable|a parameter|return object|an "
   "exception object|a member subobject|an array element|a new value|a value|a "
   "base class|a constructor delegation|a vector element|a block element|a "
-  "complex element|a lambda capture|a compound literal initializer|a "
-  "related result|a parameter of CF audited function}0 "
+  "block element|a complex element|a lambda capture|a compound literal "
+  "initializer|a related result|a parameter of CF audited function}0 "
   "%diff{of type $ with an %select{rvalue|lvalue}2 of type $|"
   "with an %select{rvalue|lvalue}2 of incompatible type}1,3"
   "%select{|: different classes%diff{ ($ vs $)|}5,6"
@@ -1814,8 +1839,9 @@ def note_uninit_fixit_remove_cond : Note<
   "remove the %select{'%1' if its condition|condition if it}0 "
   "is always %select{false|true}2">;
 def err_init_incomplete_type : Error<"initialization of incomplete type %0">;
-def err_list_init_in_parens : Error<"list-initializer for non-class type %0 "
-  "must not be parenthesized">;
+def err_list_init_in_parens : Error<
+  "cannot initialize %select{non-class|reference}0 type %1 with a "
+  "parenthesized initializer list">;
 
 def warn_unsequenced_mod_mod : Warning<
   "multiple unsequenced modifications to %0">, InGroup<Unsequenced>;
@@ -2797,6 +2823,9 @@ def err_regparm_mismatch : Error<"function declared with regparm(%0) "
 def err_returns_retained_mismatch : Error<
   "function declared with the ns_returns_retained attribute "
   "was previously declared without the ns_returns_retained attribute">;
+def err_function_attribute_mismatch : Error<
+  "function declared with %0 attribute "
+  "was previously declared without the %0 attribute">;
 def err_objc_precise_lifetime_bad_type : Error<
   "objc_precise_lifetime only applies to retainable types; type here is %0">;
 def warn_objc_precise_lifetime_meaningless : Error<
@@ -3228,7 +3257,8 @@ def err_attribute_regparm_invalid_number : Error<
   "'regparm' parameter must be between 0 and %0 inclusive">;
 def err_attribute_not_supported_in_lang : Error<
   "%0 attribute is not supported in %select{C|C++|Objective-C}1">;
-
+def err_attribute_not_supported_on_arch
+    : Error<"%0 attribute is not supported on '%1'">;
 
 // Clang-Specific Attributes
 def warn_attribute_iboutlet : Warning<
@@ -4977,6 +5007,8 @@ def note_protected_by_if_available : Note<
   "jump enters controlled statement of if available">;
 def note_protected_by_vla : Note<
   "jump bypasses initialization of variable length array">;
+def note_protected_by_objc_fast_enumeration : Note<
+  "jump enters Objective-C fast enumeration loop">;
 def note_protected_by_objc_try : Note<
   "jump bypasses initialization of @try block">;
 def note_protected_by_objc_catch : Note<
@@ -5865,8 +5897,8 @@ def err_builtin_func_cast_more_than_one_arg : Error<
   "function-style cast to a builtin type can only take one argument">;
 def err_value_init_for_array_type : Error<
   "array types cannot be value-initialized">;
-def err_value_init_for_function_type : Error<
-  "function types cannot be value-initialized">;
+def err_init_for_function_type : Error<
+  "cannot create object of function type %0">;
 def warn_format_nonliteral_noargs : Warning<
   "format string is not a string literal (potentially insecure)">,
   InGroup<FormatSecurity>;
@@ -8236,6 +8268,8 @@ def err_opencl_ptrptr_kernel_param : Error<
 def err_kernel_arg_address_space : Error<
   "pointer arguments to kernel functions must reside in '__global', "
   "'__constant' or '__local' address space">;
+def err_opencl_ext_vector_component_invalid_length : Error<
+  "vector component access has invalid length %0.  Supported: 1,2,3,4,8,16.">;
 def err_opencl_function_variable : Error<
   "%select{non-kernel function|function scope}0 variable cannot be declared in %1 address space">;
 def err_static_function_scope : Error<
@@ -8281,9 +8315,9 @@ def err_opencl_return_value_with_address_space : Error<
   "return value cannot be qualified with address space">;
 def err_opencl_constant_no_init : Error<
   "variable in constant address space must be initialized">;
-def err_atomic_init_constant : Error<
-  "atomic variable can only be assigned to a compile time constant"
-  " in the declaration statement in the program scope">;
+def err_opencl_atomic_init: Error<
+  "atomic variable can be %select{assigned|initialized}0 to a variable only "
+  "in global address space">;
 def err_opencl_implicit_vector_conversion : Error<
   "implicit conversions between vector types (%0 and %1) are not permitted">;
 def err_opencl_invalid_type_array : Error<
@@ -8774,9 +8808,11 @@ def err_invalid_type_for_program_scope_var : Error<
 }
 
 let CategoryName = "Modules Issue" in {
+def err_module_decl_in_module_map_module : Error<
+  "'module' declaration found while building module from module map">;
 def err_module_interface_implementation_mismatch : Error<
-  "%select{'module'|'module partition'|'module implementation'}0 declaration "
-  "found while %select{not |not |}0building module interface">;
+  "missing 'export' specifier in module declaration while "
+  "building module interface">;
 def err_current_module_name_mismatch : Error<
   "module name '%0' specified on command line does not match name of module">;
 def err_module_redefinition : Error<
@@ -8819,8 +8855,13 @@ def err_module_self_import : Error<
   "import of module '%0' appears within same top-level module '%1'">;
 def err_module_import_in_implementation : Error<
   "@import of module '%0' in implementation of '%1'; use #import">;
+
+// C++ Modules TS
 def err_export_within_export : Error<
   "export declaration appears within another export declaration">;
+def err_export_not_in_module_interface : Error<
+  "export declaration can only be used within a module interface unit after "
+  "the module declaration">;
 
 def ext_equivalent_internal_linkage_decl_in_modules : ExtWarn<
   "ambiguous use of internal linkage declaration %0 defined in multiple modules">,
@@ -8848,6 +8889,11 @@ def err_coroutine_invalid_func_context : Error<
 def err_implied_coroutine_type_not_found : Error<
   "%0 type was not found; include <experimental/coroutine> before defining "
   "a coroutine">;
+def err_implicit_coroutine_std_nothrow_type_not_found : Error<
+  "std::nothrow was not found; include <new> before defining a coroutine which "
+  "uses get_return_object_on_allocation_failure()">;
+def err_malformed_std_nothrow : Error<
+  "std::nothrow must be a valid variable declaration">;
 def err_malformed_std_coroutine_handle : Error<
   "std::experimental::coroutine_handle must be a class template">;
 def err_coroutine_handle_missing_member : Error<
@@ -8863,18 +8909,25 @@ def err_coroutine_promise_type_incomplete : Error<
 def err_coroutine_type_missing_specialization : Error<
   "this function cannot be a coroutine: missing definition of "
   "specialization %q0">;
-def err_implied_std_current_exception_not_found : Error<
-  "you need to include <exception> before defining a coroutine that implicitly "
-  "uses 'set_exception'">;
-def err_malformed_std_current_exception : Error<
-  "'std::current_exception' must be a function">;
 def err_coroutine_promise_return_ill_formed : Error<
   "%0 declares both 'return_value' and 'return_void'">;
 def note_coroutine_promise_implicit_await_transform_required_here : Note<
   "call to 'await_transform' implicitly required by 'co_await' here">;
-def note_coroutine_promise_call_implicitly_required : Note<
+def note_coroutine_promise_suspend_implicitly_required : Note<
   "call to '%select{initial_suspend|final_suspend}0' implicitly "
   "required by the %select{initial suspend point|final suspend point}0">;
+def err_coroutine_promise_unhandled_exception_required : Error<
+  "%0 is required to declare the member 'unhandled_exception()'">;
+def warn_coroutine_promise_unhandled_exception_required_with_exceptions : Warning<
+  "%0 is required to declare the member 'unhandled_exception()' when exceptions are enabled">,
+  InGroup<CoroutineMissingUnhandledException>;
+def err_coroutine_promise_get_return_object_on_allocation_failure : Error<
+  "%0: 'get_return_object_on_allocation_failure()' must be a static member function">;
+def err_coroutine_promise_new_requires_nothrow : Error<
+  "%0 is required to have a non-throwing noexcept specification when the promise "
+   "type declares 'get_return_object_on_allocation_failure()'">;
+def note_coroutine_promise_call_implicitly_required : Note<
+  "call to %0 implicitly required by coroutine function here">;
 }
 
 let CategoryName = "Documentation Issue" in {
@@ -8885,8 +8938,13 @@ def warn_not_a_doxygen_trailing_member_comment : Warning<
 let CategoryName = "Instrumentation Issue" in {
 def warn_profile_data_out_of_date : Warning<
   "profile data may be out of date: of %0 function%s0, %1 %plural{1:has|:have}1"
-  " no data and %2 %plural{1:has|:have}2 mismatched data that will be ignored">,
+  " mismatched data that will be ignored">,
   InGroup<ProfileInstrOutOfDate>;
+def warn_profile_data_missing : Warning<
+  "profile data may be incomplete: of %0 function%s0, %1 %plural{1:has|:have}1"
+  " no data">,
+  InGroup<ProfileInstrMissing>,
+  DefaultIgnore;
 def warn_profile_data_unprofiled : Warning<
   "no profile data available for file \"%0\"">,
   InGroup<ProfileInstrUnprofiled>;

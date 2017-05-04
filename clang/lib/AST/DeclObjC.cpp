@@ -539,9 +539,18 @@ void ObjCInterfaceDecl::getDesignatedInitializers(
 
 bool ObjCInterfaceDecl::isDesignatedInitializer(Selector Sel,
                                       const ObjCMethodDecl **InitMethod) const {
+  bool HasCompleteDef = isThisDeclarationADefinition();
+  // During deserialization the data record for the ObjCInterfaceDecl could
+  // be made invariant by reusing the canonical decl. Take this into account
+  // when checking for the complete definition.
+  if (!HasCompleteDef && getCanonicalDecl()->hasDefinition() &&
+      getCanonicalDecl()->getDefinition() == getDefinition())
+    HasCompleteDef = true;
+
   // Check for a complete definition and recover if not so.
-  if (!isThisDeclarationADefinition())
+  if (!HasCompleteDef)
     return false;
+
   if (data().ExternallyCompleted)
     LoadExternalDefinition();
 
@@ -979,12 +988,11 @@ ObjCMethodFamily ObjCMethodDecl::getMethodFamily() const {
     break;
       
   case OMF_performSelector:
-    if (!isInstanceMethod() ||
-        !(getReturnType()->isObjCIdType() || getReturnType()->isVoidType()))
+    if (!isInstanceMethod() || !getReturnType()->isObjCIdType())
       family = OMF_None;
     else {
       unsigned noParams = param_size();
-      if (noParams < 1 || noParams > 5)
+      if (noParams < 1 || noParams > 3)
         family = OMF_None;
       else {
         ObjCMethodDecl::param_type_iterator it = param_type_begin();
@@ -993,11 +1001,10 @@ ObjCMethodFamily ObjCMethodDecl::getMethodFamily() const {
           family = OMF_None;
           break;
         }
-        // The first type should generally always be 'id' or 'Thread *', the
-        // other types can vary.
-        if (noParams > 1) {
-          ArgT = *(it + 1);
-          if (!ArgT->isObjCObjectPointerType()) {
+        while (--noParams) {
+          it++;
+          ArgT = (*it);
+          if (!ArgT->isObjCIdType()) {
             family = OMF_None;
             break;
           }
