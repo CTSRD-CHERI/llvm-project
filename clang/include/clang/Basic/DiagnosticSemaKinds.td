@@ -5899,6 +5899,14 @@ def note_insert_intptr_fixit : Note<
   "insert cast to intptr_t to silence this warning">;
 def note_insert_vaddr_or_intptr_fixit : Note<
   "insert cast to vaddr_t or intptr_t to silence this warning">;
+def err_cheri_cast_unrelated_type : Error<
+  "invalid __cheri_cast from %0 to unrelated type %1">;
+def err_cheri_cast_invalid_target_type: Error<
+  "invalid target type %0 for __cheri_cast: target must be a capability or "
+  "a pointer">;
+def err_cheri_cast_invalid_source_type: Error<
+  "invalid source type %0 for __cheri_cast: source must be a capability or "
+  "a pointer">;
 def warn_mixed_sign_comparison : Warning<
   "comparison of integers of different signs: %0 and %1">,
   InGroup<SignCompare>, DefaultIgnore;

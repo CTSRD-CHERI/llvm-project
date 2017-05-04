@@ -2788,3 +2788,41 @@ ExprResult Sema::BuildCXXFunctionalCastExpr(TypeSourceInfo *CastTypeInfo,
                          Op.ValueKind, CastTypeInfo, Op.Kind,
                          Op.SrcExpr.get(), &Op.BasePath, LPLoc, RPLoc));
 }
+
+ExprResult Sema::BuildCheriCast(SourceLocation LParenLoc,
+                                SourceLocation KeywordLoc, QualType DestTy,
+                                TypeSourceInfo *TSInfo, Expr *SubExpr) {
+  llvm::errs() << "BuildCheriCast: ";
+  DestTy.dump();
+  SubExpr->dump();
+
+  if (!DestTy->isPointerType() && !DestTy->isMemoryCapabilityType(Context)) {
+    Diag(TSInfo->getTypeLoc().getLocStart(), diag::err_cheri_cast_invalid_target_type) << DestTy;
+    return ExprError();
+  }
+  QualType SrcTy = SubExpr->getType();
+  if (!SrcTy->isPointerType() && !SrcTy->isMemoryCapabilityType(Context)) {
+    Diag(SubExpr->getLocStart(), diag::err_cheri_cast_invalid_source_type)
+        << SrcTy;
+    return ExprError();
+  }
+  if (!Context.typesAreCompatible(SrcTy, DestTy)) {
+        Diag(SubExpr->getLocStart(), diag::err_cheri_cast_unrelated_type)
+        << SrcTy << DestTy;
+    return ExprError();
+  }
+  // TODO: actually do the casting
+  return ExprError();
+}
+
+ExprResult Sema::ActOnCheriCast(Scope *S, SourceLocation LParenLoc,
+                                SourceLocation CheriCastKeywordLoc,
+                                ParsedType Type, SourceLocation RParenLoc,
+                                Expr *SubExpr) {
+  TypeSourceInfo *TSInfo = nullptr;
+  QualType T = GetTypeFromParser(Type, &TSInfo);
+  if (!TSInfo)
+    TSInfo = Context.getTrivialTypeSourceInfo(T, LParenLoc);
+  return BuildCheriCast(LParenLoc, CheriCastKeywordLoc, T, TSInfo, SubExpr);
+}
+

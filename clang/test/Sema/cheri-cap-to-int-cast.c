@@ -62,9 +62,11 @@ typedef __PTRDIFF_TYPE__ ptrdiff_t;
 typedef __uintcap_t uintptr_t;
 typedef __intcap_t intptr_t;
 typedef uintptr_t word;
+struct test {
+  int x;
+};
 
-void foo()
-{
+void foo(void) {
   unsigned long x1 = (unsigned long)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'unsigned long' is most likely an error}} expected-note{{insert cast to vaddr_t}}
   long x2 = (long)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'long' is most likely an error}} expected-note{{insert cast to vaddr_t}}
   int x3 = (int)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'int' is most likely an error}} expected-note{{insert cast to vaddr_t}}
@@ -86,4 +88,17 @@ void foo()
 #ifndef __CHERI_PURE_CAPABILITY__
   word* x17 = (word*)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'word *' (aka '__uintcap_t *') is most likely an error}} expected-note{{insert cast to vaddr_t}}
 #endif
+}
+
+void test_cheri_cast(void) {
+  // __cheri_cast is a noop in pure ABI (but we still validate the parameter types)
+  char c;
+  struct test t;
+  struct test *tptr;
+  int * x = 0;
+  (__cheri_cast char*)x; // expected-error{{invalid __cheri_cast from 'int *' to unrelated type 'char *'}}
+  (__cheri_cast struct test*)t; // expected-error{{invalid source type 'struct test' for __cheri_cast: source must be a capability or a pointer}}
+  (__cheri_cast struct test)tptr; // expected-error{{invalid target type 'struct test' for __cheri_cast: target must be a capability or a pointer}}
+  (__cheri_cast struct test*)tptr; // this one is fine
+  // TODO: warn in hybrid mode if cast is a noop (it will always be in purecap mode but we accept it so that both compile)
 }
