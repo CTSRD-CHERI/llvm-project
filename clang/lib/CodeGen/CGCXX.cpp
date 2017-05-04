@@ -149,8 +149,9 @@ bool CodeGenModule::TryEmitDefinitionAsAlias(GlobalDecl AliasDecl,
 
   // Derive the type for the alias.
   llvm::Type *AliasValueType = getTypes().GetFunctionType(AliasDecl);
-  const unsigned DefaultAS = getTargetCodeGenInfo().getDefaultAS();
-  llvm::PointerType *AliasType = AliasValueType->getPointerTo(DefaultAS);
+  // We always want aliases to functions in AS 0 for now, because LLVM doesn't
+  // support functions in a non-zero AS.
+  llvm::PointerType *AliasType = AliasValueType->getPointerTo(0);
 
   // Find the referent.  Some aliases might require a bitcast, in
   // which case the caller is responsible for ensuring the soundness
