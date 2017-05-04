@@ -925,13 +925,13 @@ template <class ELFT> void BinaryFile::parse() {
     if (!isalnum(S[I]))
       S[I] = '_';
 
-  elf::Symtab<ELFT>::X->addRegular(Saver.save(Twine(S) + "_start"), STV_DEFAULT,
+  elf::Symtab<ELFT>::X->addRegular(Saver.save(S + "_start"), STV_DEFAULT,
                                    STT_OBJECT, 0, 0, STB_GLOBAL, Section,
                                    nullptr);
-  elf::Symtab<ELFT>::X->addRegular(Saver.save(Twine(S) + "_end"), STV_DEFAULT,
+  elf::Symtab<ELFT>::X->addRegular(Saver.save(S + "_end"), STV_DEFAULT,
                                    STT_OBJECT, Data.size(), 0, STB_GLOBAL,
                                    Section, nullptr);
-  elf::Symtab<ELFT>::X->addRegular(Saver.save(Twine(S) + "_size"), STV_DEFAULT,
+  elf::Symtab<ELFT>::X->addRegular(Saver.save(S + "_size"), STV_DEFAULT,
                                    STT_OBJECT, Data.size(), 0, STB_GLOBAL,
                                    nullptr, nullptr);
 }
