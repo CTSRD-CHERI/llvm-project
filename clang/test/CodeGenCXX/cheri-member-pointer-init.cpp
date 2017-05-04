@@ -1,6 +1,4 @@
 // RUN: %clang -target cheri-unknown-freebsd -mabi=purecap -S -emit-llvm -o - %s | FileCheck %s
-// RUN: %clang -target cheri-unknown-freebsd -mabi=purecap -c %s -o %t.obj
-// RUN: llvm-objdump -C -r %t.obj | FileCheck -check-prefix RELOCS-OBJ %s
 
 class A {
 public:
