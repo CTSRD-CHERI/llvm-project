@@ -5897,8 +5897,8 @@ def warn_capability_integer_cast : Warning<
   InGroup<CHERICapabilityToIntegerCast>;
 def note_insert_intptr_fixit : Note<
   "insert cast to intptr_t to silence this warning">;
-def note_insert_vaddr_or_intptr_fixit : Note<
-  "insert cast to vaddr_t or intptr_t to silence this warning">;
+def note_use_cheri_cast : Note<
+  "use __cheri_cast to convert between pointers and capabilities">;
 def err_cheri_cast_unrelated_type : Error<
   "invalid __cheri_cast from %0 to unrelated type %1">;
 def err_cheri_cast_invalid_target_type: Error<

@@ -67,10 +67,10 @@ struct test {
 };
 
 void foo(void) {
-  unsigned long x1 = (unsigned long)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'unsigned long' is most likely an error}} expected-note{{insert cast to vaddr_t}}
-  long x2 = (long)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'long' is most likely an error}} expected-note{{insert cast to vaddr_t}}
-  int x3 = (int)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'int' is most likely an error}} expected-note{{insert cast to vaddr_t}}
-  ptrdiff_t x4 = (ptrdiff_t)a;  // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'ptrdiff_t' (aka 'long') is most likely an error}} expected-note{{insert cast to vaddr_t}}
+  unsigned long x1 = (unsigned long)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'unsigned long' is most likely an error}}
+  long x2 = (long)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'long' is most likely an error}}
+  int x3 = (int)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'int' is most likely an error}}
+  ptrdiff_t x4 = (ptrdiff_t)a;  // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'ptrdiff_t' (aka 'long') is most likely an error}}
   // These are okay
   uintptr_t x5 = (uintptr_t)a;
   intptr_t x6 = (intptr_t)a; 
