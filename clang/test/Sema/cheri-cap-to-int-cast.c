@@ -1,5 +1,5 @@
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -o - %s -fsyntax-only -verify
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -o - %s -fsyntax-only -verify
+// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -o - %s -fsyntax-only -verify
 
 #if !__has_attribute(memory_address)
 #error "memory_address attribute not supported"
@@ -10,7 +10,7 @@ typedef __attribute__((memory_address)) unsigned __PTRDIFF_TYPE__ vaddr_t;
 typedef __attribute__((memory_address)) vaddr_t double_attribute;  // expected-warning {{attribute 'memory_address' is already applied}}
 typedef __attribute__((memory_address)) __intcap_t err_cap_type;  // expected-error {{'memory_address' attribute only applies to integer types that can store memory addresses ('__intcap_t' is invalid)}}
 typedef __attribute__((memory_address)) struct foo err_struct_type; // expected-error {{'memory_address' attribute only applies to integer types that can store memory addresses ('struct foo' is invalid)}}
-typedef int* __attribute__((memory_address)) err_pointer_type; // expected-error {{'memory_address' attribute only applies to integer types that can store memory addresses ('int *' is invalid)}}
+typedef int* __attribute__((memory_address)) err_pointer_type; // expected-error {{'memory_address' attribute only applies to integer types that can store memory addresses}}
 
 // seems like an attribute at the end is handled differently
 // FIXME: unless I make this an error I get a crash in clang:
@@ -86,7 +86,7 @@ void foo(void) {
   long x16 = (long __attribute__((memory_address)))a; // no warning
 
 #ifndef __CHERI_PURE_CAPABILITY__
-  word* x17 = (word*)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'word *' (aka '__uintcap_t *') is most likely an error}} expected-note{{insert cast to vaddr_t}}
+  word* x17 = (word*)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'word *' (aka '__uintcap_t *') is most likely an error}} expected-note{{use __cheri_cast to convert between pointers and capabilities}}
 #endif
 }
 
@@ -96,9 +96,17 @@ void test_cheri_cast(void) {
   struct test t;
   struct test *tptr;
   int * x = 0;
-  (__cheri_cast char*)x; // expected-error{{invalid __cheri_cast from 'int *' to unrelated type 'char *'}}
+  (__cheri_cast char*)x;
+#ifndef __CHERI_PURE_CAPABILITY__
+  // expected-error@-2{{invalid __cheri_cast from 'int *' to unrelated type 'char *'}}
+#else
+  // expected-error@-4{{invalid __cheri_cast from 'int * __capability' to unrelated type 'char * __capability'}}
+#endif
   (__cheri_cast struct test*)t; // expected-error{{invalid source type 'struct test' for __cheri_cast: source must be a capability or a pointer}}
   (__cheri_cast struct test)tptr; // expected-error{{invalid target type 'struct test' for __cheri_cast: target must be a capability or a pointer}}
-  (__cheri_cast struct test*)tptr; // this one is fine
-  // TODO: warn in hybrid mode if cast is a noop (it will always be in purecap mode but we accept it so that both compile)
+  (void)(__cheri_cast struct test*)tptr;
+#ifndef __CHERI_PURE_CAPABILITY__
+  // expected-warning@-2 {{__cheri_cast from 'struct test *' to 'struct test *' is a noop}}
+#endif
+  int* __capability intptr_to_cap = (__cheri_cast int* __capability)x;
 }

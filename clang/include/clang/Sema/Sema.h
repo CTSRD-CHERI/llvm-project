@@ -8068,9 +8068,9 @@ public:
                                   SourceLocation RParenLoc,
                                   Expr *SubExpr);
 
-  ExprResult BuildCheriCast(SourceLocation LParenLoc,
-                            SourceLocation CheriCastKeywordLoc, QualType T,
-                            TypeSourceInfo *TSInfo, Expr *SubExpr);
+  ExprResult BuildCheriCast(SourceLocation LParenLoc, SourceLocation KeywordLoc,
+                            QualType DestTy, TypeSourceInfo *TSInfo,
+                            SourceLocation RParenLoc, Expr *SubExpr);
 
   ExprResult ActOnCheriCast(Scope *S, SourceLocation LParenLoc,
                             SourceLocation CheriCastKeywordLoc, ParsedType Type,

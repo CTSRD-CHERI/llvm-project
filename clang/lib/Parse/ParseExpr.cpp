@@ -2357,7 +2357,6 @@ Parser::ParseParenExpression(ParenParseOption &ExprType, bool stopIfCastExpr,
     SourceLocation CheriCastKeywordLoc = ConsumeToken();
 
     // Parse a CHERI pointer cast
-    llvm::errs() << "CHERI PTR CAST: is type cast:" << isTypeCast << "\n";
     TypeResult Ty = ParseTypeName();
     T.consumeClose();
     ColonProtection.restore();

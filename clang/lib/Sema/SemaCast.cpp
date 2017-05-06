@@ -2791,38 +2791,55 @@ ExprResult Sema::BuildCXXFunctionalCastExpr(TypeSourceInfo *CastTypeInfo,
 
 ExprResult Sema::BuildCheriCast(SourceLocation LParenLoc,
                                 SourceLocation KeywordLoc, QualType DestTy,
-                                TypeSourceInfo *TSInfo, Expr *SubExpr) {
-  llvm::errs() << "BuildCheriCast: ";
-  DestTy.dump();
-  SubExpr->dump();
-
-  if (!DestTy->isPointerType() && !DestTy->isMemoryCapabilityType(Context)) {
-    Diag(TSInfo->getTypeLoc().getLocStart(), diag::err_cheri_cast_invalid_target_type) << DestTy;
+                                TypeSourceInfo *TSInfo,
+                                SourceLocation RParenLoc, Expr *SubExpr) {
+  bool DestIsCap = DestTy->isMemoryCapabilityType(Context);
+  if (!DestTy->isPointerType() && !DestIsCap) {
+    Diag(TSInfo->getTypeLoc().getLocStart(),
+         diag::err_cheri_cast_invalid_target_type) << DestTy;
     return ExprError();
   }
   QualType SrcTy = SubExpr->getType();
-  if (!SrcTy->isPointerType() && !SrcTy->isMemoryCapabilityType(Context)) {
+  bool SrcIsCap = SrcTy->isMemoryCapabilityType(Context);
+  if (!SrcTy->isPointerType() && !SrcIsCap) {
     Diag(SubExpr->getLocStart(), diag::err_cheri_cast_invalid_source_type)
-        << SrcTy;
+      << SrcTy;
     return ExprError();
   }
   if (!Context.typesAreCompatible(SrcTy, DestTy)) {
-        Diag(SubExpr->getLocStart(), diag::err_cheri_cast_unrelated_type)
-        << SrcTy << DestTy;
+    Diag(SubExpr->getLocStart(), diag::err_cheri_cast_unrelated_type)
+      << SrcTy << DestTy;
     return ExprError();
   }
-  // TODO: actually do the casting
-  return ExprError();
+  CastKind Kind = CK_NoOp;
+  if (SrcIsCap && !DestIsCap) {
+    Kind = CK_MemoryCapabilityToPointer;
+    assert(!Context.getTargetInfo().areAllPointersCapabilities() &&
+           "__cheri_cast to pointer should not be possible in purecap mode");
+  } else if (DestIsCap && !SrcIsCap) {
+    Kind = CK_PointerToMemoryCapability;
+  } else {
+    // Warn about no-op cheri casts in hybrid mode. In purecap mode all casts
+    // should be noops but we don't warn to allow compiling the same code
+    // as hybrid and as purecap without warnings
+    if (Context.getTargetInfo().areAllPointersCapabilities()) {
+      assert(SrcIsCap && DestIsCap);
+    } else {
+      Diag(KeywordLoc, diag::warn_cheri_cast_noop) << SrcTy << DestTy
+        << FixItHint::CreateRemoval(SourceRange(LParenLoc, RParenLoc));
+    }
+  }
+  return CStyleCastExpr::Create(Context, DestTy, VK_RValue, Kind, SubExpr,
+                                nullptr, TSInfo, LParenLoc, RParenLoc);
 }
 
 ExprResult Sema::ActOnCheriCast(Scope *S, SourceLocation LParenLoc,
-                                SourceLocation CheriCastKeywordLoc,
-                                ParsedType Type, SourceLocation RParenLoc,
-                                Expr *SubExpr) {
+                                SourceLocation KeywordLoc, ParsedType Type,
+                                SourceLocation RParenLoc, Expr *SubExpr) {
   TypeSourceInfo *TSInfo = nullptr;
   QualType T = GetTypeFromParser(Type, &TSInfo);
   if (!TSInfo)
     TSInfo = Context.getTrivialTypeSourceInfo(T, LParenLoc);
-  return BuildCheriCast(LParenLoc, CheriCastKeywordLoc, T, TSInfo, SubExpr);
+  return BuildCheriCast(LParenLoc, KeywordLoc, T, TSInfo, RParenLoc, SubExpr);
 }
 

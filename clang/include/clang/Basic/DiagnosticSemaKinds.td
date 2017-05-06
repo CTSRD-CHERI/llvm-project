@@ -5907,6 +5907,11 @@ def err_cheri_cast_invalid_target_type: Error<
 def err_cheri_cast_invalid_source_type: Error<
   "invalid source type %0 for __cheri_cast: source must be a capability or "
   "a pointer">;
+// TODO: make this a pedantic warning?
+def warn_cheri_cast_noop : Warning<
+  "__cheri_cast from %0 to %1 is a noop">,
+  InGroup<CHERICapabilityToIntegerCast>;
+
 def warn_mixed_sign_comparison : Warning<
   "comparison of integers of different signs: %0 and %1">,
   InGroup<SignCompare>, DefaultIgnore;
