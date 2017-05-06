@@ -6946,7 +6946,6 @@ static bool HandleMemoryAddressAttr(QualType &T, TypeProcessingState &State,
     return true;
   }
 
-  T.dump();
   if (!T->isIntegerType() || T->isMemoryCapabilityType(S.Context)) {
     S.Diag(Attr.getLoc(), diag::err_attribute_address_integers_only)
       << Attr.getName() << T;
