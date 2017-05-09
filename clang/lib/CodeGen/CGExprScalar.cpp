@@ -970,6 +970,20 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
     if (isa<llvm::PointerType>(SrcTy))
       return Builder.CreateBitCast(Src, DstTy, "conv");
 
+    // Allow conversions from floating point types -> (u)intcap
+    if (SrcType->isFloatingType()) {
+      assert(DstType->isSpecificBuiltinType(BuiltinType::UIntCap) ||
+             DstType->isSpecificBuiltinType(BuiltinType::IntCap) &&
+             "Float->cap conversions should only be possible with (u)intcap");
+      unsigned BitWidth =
+          CGF.getContext().getTargetInfo().getPointerRangeForMemoryCapability();
+      bool Signed = DstType->isSpecificBuiltinType(BuiltinType::IntCap);
+      QualType ConvertedType =
+          CGF.getContext().getIntTypeForBitwidth(BitWidth, Signed);
+      Src = EmitScalarConversion(Src, SrcType, ConvertedType, Loc,
+                                 TreatBooleanAsSigned);
+      SrcType = ConvertedType;
+    }
     assert(SrcType->isIntegerType() && "Not ptr->ptr or int->ptr conversion?");
 
     if (DstType->isMemoryCapabilityType(CGF.getContext())) {

@@ -1,5 +1,4 @@
 // RUN:  %clang_cc1 "-triple" "cheri-unknown-freebsd" "-target-abi" "purecap" -o - -O0 -emit-llvm %s
-// XFAIL: *
 
 void test(void) {
   double d = 1234.5678;
