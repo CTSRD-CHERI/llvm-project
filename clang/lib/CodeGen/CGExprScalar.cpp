@@ -977,7 +977,7 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
              "Float->cap conversions should only be possible with (u)intcap");
       unsigned BitWidth =
           CGF.getContext().getTargetInfo().getPointerRangeForMemoryCapability();
-      bool Signed = DstType->isSpecificBuiltinType(BuiltinType::IntCap);
+      bool Signed = DstType->isSignedIntegerOrEnumerationType();
       QualType ConvertedType =
           CGF.getContext().getIntTypeForBitwidth(BitWidth, Signed);
       Src = EmitScalarConversion(Src, SrcType, ConvertedType, Loc,
@@ -1011,11 +1011,12 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
       Src = CGF.getPointerOffset(Src);
       // Conversions from (u)intcap -> float should not be a bitcast:
       if (DstType->isFloatingType()) {
-        if (SrcType->isSpecificBuiltinType(BuiltinType::IntCap)) {
+        if (SrcType->isSignedIntegerOrEnumerationType()) {
           return Builder.CreateSIToFP(Src, DstTy, "conv");
+        } else {
+          assert(SrcType->isSpecificBuiltinType(BuiltinType::UIntCap));
+          return Builder.CreateUIToFP(Src, DstTy, "conv");
         }
-        assert(SrcType->isSpecificBuiltinType(BuiltinType::UIntCap));
-        return Builder.CreateUIToFP(Src, DstTy, "conv");
       }
       return Builder.CreateTruncOrBitCast(Src, DstTy, "conv");
     }
