@@ -108,5 +108,9 @@ void test_cheri_cast(void) {
 #ifndef __CHERI_PURE_CAPABILITY__
   // expected-warning@-2 {{__cheri_cast from 'struct test *' to 'struct test *' is a noop}}
 #endif
+
   int* __capability intptr_to_cap = (__cheri_cast int* __capability)x;
+  const int* __capability const_intcap = (__cheri_cast int* __capability)x;
+  (__cheri_cast int* __capability)const_intcap; // expected-error{{invalid __cheri_cast from 'const int * __capability' to unrelated type 'int * __capability'}}
+
 }
