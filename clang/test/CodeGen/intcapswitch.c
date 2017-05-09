@@ -10,6 +10,7 @@
 
 int x(__intcap_t y)
 {
+  // CHECK-LABEL: define i32 @x(i8 addrspace(200)*
   // CHECK: llvm.cheri.cap.offset.get
   // CHECK: switch i64 %{{.*}}
   switch (y)
@@ -33,6 +34,7 @@ int x(__intcap_t y)
 }
 
 int y(void) {
+  // CHECK-LABEL: define i32 @y()
   __intcap_t foo = C;
   // CHECK: switch i64 {{%.+}}, label {{%.+}} [
   switch (foo)
@@ -52,8 +54,75 @@ int y(void) {
   // CHECK-NEXT: store i32 5
   // CHECK: [[BB2]]:
   // CHECK-NEXT: store i32 6
+
+  // XXXAR: this is currently not optimized after the fix to https://github.com/CTSRD-CHERI/clang/issues/132
   // with optimization this switch gets constant folded:
-  // CHECK-OPT:      define i32 @y() local_unnamed_addr #2 {
-  // CHECK-OPT:   ret i32 6
+  // DONTCHECK-OPT-LABEL: define i32 @y()
+  // DONTCHECK-OPT:          ret i32 6
   return 0;
+}
+
+char buf[16];
+
+int z_long(void) {
+  // CHECK-OPT-LABEL: define i32 @z_long()
+  // CHECK-OPT:      [[OFFSET:%.+]] = tail call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* getelementptr inbounds ([16 x i8], [16 x i8] addrspace(200)* @buf, i64 0, i64 0))
+  // CHECK-OPT-NEXT: [[BASE:%.+]] = tail call i64 @llvm.cheri.cap.base.get(i8 addrspace(200)* getelementptr inbounds ([16 x i8], [16 x i8] addrspace(200)* @buf, i64 0, i64 0))
+  // CHECK-OPT-NEXT: [[SWITCHVAL:%.+]] = add i64 [[BASE]],  [[OFFSET]]
+  // CHECK-OPT-NEXT: switch i64 [[SWITCHVAL]], label {{%.+}} [
+
+  const char* switchval = buf;
+  switch ((long)switchval) {
+    case 0: return 0;
+    case 1: return 1;
+    case 2: return 2;
+    case 3: return 3;
+    case 4: return 4;
+    default: return -1;
+  }
+}
+
+int z_intcap(void) {
+  // Check that we actually switch on the virtual address and not the offset:
+  // CHECK-OPT-LABEL: define i32 @z_intcap()
+  // CHECK-OPT-NOT: ret i32 4
+  // CHECK-OPT:      [[OFFSET:%.+]] = tail call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* getelementptr inbounds ([16 x i8], [16 x i8] addrspace(200)* @buf, i64 0, i64 0))
+  // CHECK-OPT-NEXT: [[BASE:%.+]] = tail call i64 @llvm.cheri.cap.base.get(i8 addrspace(200)* getelementptr inbounds ([16 x i8], [16 x i8] addrspace(200)* @buf, i64 0, i64 0))
+  // CHECK-OPT-NEXT: [[SWITCHVAL:%.+]] = add i64 [[BASE]],  [[OFFSET]]
+  // CHECK-OPT-NEXT: switch i64 [[SWITCHVAL]], label {{%.+}} [
+  const char* switchval = buf;
+  switch ((__intcap_t)switchval) {
+    case 0: return 0;
+    case 1: return 1;
+    case 2: return 2;
+    case 3: return 3;
+    case 4: return 4;
+    default: return -1;
+  }
+
+}
+
+int z_fixed_offset(void) {
+  // CHECK-OPT-LABEL: define i32 @z_fixed_offset()
+  // CHECK-OPT-NOT: ret i32 4
+  // CHECK-OPT: [[CAP:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* getelementptr inbounds ([16 x i8], [16 x i8] addrspace(200)* @buf, i64 0, i64 0), i64 4)
+  // offset is know to be 4 -> just load the base and adjust the switch cases to be 4 less:
+  // CHECK-OPT-NEXT: [[SWITCHVAL:%.+]] = tail call i64 @llvm.cheri.cap.base.get(i8 addrspace(200)* [[CAP]])
+  // CHECK-OPT-NEXT: switch i64 [[SWITCHVAL]], label {{%.+}} [
+  // CHECK-OPT-NEXT:   i64 -4
+  // CHECK-OPT-NEXT:   i64 -3
+  // CHECK-OPT-NEXT:   i64 -2
+  // CHECK-OPT-NEXT:   i64 -1
+  // CHECK-OPT-NEXT:   i64 0
+  // CHECK-OPT-NEXT: ]
+
+  const char* switchval = __builtin_cheri_offset_set(buf, 4);
+  switch ((__intcap_t)switchval) {
+    case 0: return 0;
+    case 1: return 1;
+    case 2: return 2;
+    case 3: return 3;
+    case 4: return 4;
+    default: return -1;
+  }
 }

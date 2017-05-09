@@ -1637,9 +1637,12 @@ void CodeGenFunction::EmitSwitchStmt(const SwitchStmt &S) {
     EmitAutoVarDecl(*S.getConditionVariable());
   llvm::Value *CondV = EmitScalarExpr(S.getCond());
   // If we're an intcap_t, then we actually want to switch on the offset.
-  if (S.getCond()->getType()->isMemoryCapabilityType(getContext()))
-    CondV = getPointerOffset(CondV);
-
+  if (S.getCond()->getType()->isMemoryCapabilityType(getContext())) {
+    // XXXAR: In switch statements we want to switch on the virtual address and
+    // not the offset: https://github.com/CTSRD-CHERI/clang/issues/132
+    CondV = Builder.CreateAdd(getPointerOffset(CondV), getPointerBase(CondV),
+                              "intcap.vaddr");
+  }
   // Create basic block to hold stuff that comes after switch
   // statement. We also need to create a default block now so that
   // explicit case ranges tests can have a place to jump to on
