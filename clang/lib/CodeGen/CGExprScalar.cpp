@@ -1009,8 +1009,15 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
       assert(SrcType->isSpecificBuiltinType(BuiltinType::UIntCap) ||
              SrcType->isSpecificBuiltinType(BuiltinType::IntCap));
       Src = CGF.getPointerOffset(Src);
+      // Conversions from (u)intcap -> float should not be a bitcast:
+      if (DstType->isFloatingType()) {
+        if (SrcType->isSpecificBuiltinType(BuiltinType::IntCap)) {
+          return Builder.CreateSIToFP(Src, DstTy, "conv");
+        }
+        assert(SrcType->isSpecificBuiltinType(BuiltinType::UIntCap));
+        return Builder.CreateUIToFP(Src, DstTy, "conv");
+      }
       return Builder.CreateTruncOrBitCast(Src, DstTy, "conv");
-
     }
     // Must be an ptr to int cast.
     assert(isa<llvm::IntegerType>(DstTy) && "not ptr->int?");
