@@ -301,7 +301,8 @@ namespace llvm {
     /// exception address on entry to an EH pad.
     unsigned
     getExceptionPointerRegister(const Constant *PersonalityFn) const override {
-      return ABI.IsN64() ? Mips::A0_64 : Mips::A0;
+      return ABI.IsCheriSandbox() ? Mips::C16 :
+                     (ABI.IsN64() ? Mips::A0_64 : Mips::A0);
     }
 
     /// If a physical register, this returns the register that receives the
