@@ -56,10 +56,9 @@ int y(void) {
   // CHECK: [[BB2]]:
   // CHECK-NEXT: store i32 6
 
-  // XXXAR: this is currently not optimized after the fix to https://github.com/CTSRD-CHERI/clang/issues/132
   // with optimization this switch gets constant folded:
-  // DONTCHECK-OPT-LABEL: define i32 @y()
-  // DONTCHECK-OPT:          ret i32 6
+  // CHECK-OPT-LABEL: define i32 @y()
+  // CHECK-OPT:          ret i32 6
   return 0;
 }
 
