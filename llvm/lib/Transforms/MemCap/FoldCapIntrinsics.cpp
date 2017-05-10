@@ -28,6 +28,7 @@
 #include "llvm/IR/InstVisitor.h"
 #include "llvm/IR/PatternMatch.h"
 #include "llvm/Transforms/MemCap.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
 using namespace PatternMatch;
@@ -37,7 +38,29 @@ class MemCapFoldIntrinsics : public ModulePass {
   Function *IncOffset;
   Function *SetOffset;
   Function *GetOffset;
+  Function *GetBase;
+  Function *GetLength;
+  Function *GetType;
+  Function *GetPerms;
+  Function *GetTag;
+  Function *GetSealed;
+
   bool Modified;
+
+  void foldNullGet(std::initializer_list<Function*> Intrinsics) {
+    // This is probably quite inefficient...
+    for (Function* Intrin : Intrinsics) {
+      for (Value *Use : Intrin->users()) {
+        CallInst* CI = cast<CallInst>(Use);
+        if (isa<ConstantPointerNull>(CI->getOperand(0))) {
+          CI->replaceAllUsesWith(llvm::Constant::getNullValue(CI->getType()));
+          CI->eraseFromParent();
+          Modified = true;
+        }
+      }
+    }
+  }
+
   /// Replace get-offset, add, set-offset sequences with inc-offset
   void foldGetAddSetToInc() {
     std::vector<CallInst *> SetOffsets;
@@ -91,6 +114,15 @@ public:
         Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_offset_increment);
     SetOffset = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_offset_set);
     GetOffset = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_offset_get);
+    GetBase = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_base_get);
+    GetLength = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_length_get);
+    GetType = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_type_get);
+    GetPerms = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_perms_get);
+    GetSealed = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_sealed_get);
+    GetTag = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_tag_get);
+    // XXXAR: revisit this in case GetType were to return -1 for invalid types
+    foldNullGet({ GetOffset, GetBase, GetLength, GetType, GetPerms, GetSealed,
+                  GetTag });
     foldGetAddSetToInc();
     forwardGetFromSet();
     return Modified;
