@@ -1965,8 +1965,8 @@ inline const char *Registers_or1k::getRegisterName(int regNum) {
 }
 #endif // _LIBUNWIND_TARGET_OR1K
 #if defined(_LIBUNWIND_TARGET_MIPS_N64)
-/// Registers_or1k holds the register state of a thread in an OpenRISC1000
-/// process.
+/// Registers_mips_n64 holds the register state of a thread in 64-bit MIPS
+/// process with the N64 ABI.
 class _LIBUNWIND_HIDDEN Registers_mips_n64 {
 public:
   Registers_mips_n64();
@@ -2144,6 +2144,287 @@ inline const char *Registers_mips_n64::getRegisterName(int regNum) {
     return "$30";
   case UNW_MIPS_R31:
     return "$31";
+  default:
+    return "unknown register";
+  }
+
+}
+#endif // _LIBUNWIND_TARGET_MIPS_N64
+#if defined(_LIBUNWIND_TARGET_MIPS_CHERI)
+/// Registers_mips_n64 holds the register state of a thread in 64-bit MIPS
+/// process with the CHERI pure-capability ABI.
+class _LIBUNWIND_HIDDEN Registers_mips_cheri {
+public:
+  Registers_mips_cheri();
+  Registers_mips_cheri(const void *registers);
+
+  bool        validRegister(int num) const;
+  uintptr_t   getRegister(int num) const;
+  void        setRegister(int num, uintptr_t value);
+  bool        validFloatRegister(int num) const;
+  double      getFloatRegister(int num) const;
+  void        setFloatRegister(int num, double value);
+  bool        validVectorRegister(int num) const;
+  v128        getVectorRegister(int num) const;
+  void        setVectorRegister(int num, v128 value);
+  const char *getRegisterName(int num);
+  void        jumpto();
+  static int  lastDwarfRegNum() { return 103; }
+
+  uint64_t  getSP() const         { return _registers.__r[29]; }
+  void      setSP(uint64_t value) { _registers.__r[29] = value; }
+  uint64_t  getIP() const         { return _registers.__c[32]; }
+  void      setIP(uint64_t value) { _registers.__c[32] = value; }
+
+private:
+  template<typename T>
+  int64_t offset_get(T x) const {
+    return __builtin_cheri_offset_get(reinterpret_cast<void*>(x));
+  }
+  template<typename T>
+  T offset_set(T x, int64_t off) const {
+    return reinterpret_cast<T>(__builtin_cheri_offset_set(reinterpret_cast<void*>(x), off));
+  }
+  struct mips_cheri_thread_state_t {
+    uint64_t  __r[64];
+    // PCC is stored in __c[32]
+    uintptr_t __c[33];
+  };
+  mips_cheri_thread_state_t _registers;
+};
+
+inline Registers_mips_cheri::Registers_mips_cheri(const void *registers) {
+  static_assert((check_fit<Registers_mips_cheri, unw_context_t>::does_fit),
+                "mips_cheri registers do not fit into unw_context_t");
+  memcpy(&_registers, static_cast<const uint8_t *>(registers),
+         sizeof(_registers));
+#ifdef CHERI_DUMP_REGISTERS
+  for (int i=0 ; i<32 ; i++)
+  {
+      fprintf(stderr, "$%d = 0x%llx\n", i, (long long)getRegister(i));
+      usleep(1);
+  }
+  for (int i=UNW_MIPS_C0 ; i<=UNW_MIPS_C31 ; i++)
+  {
+      fprintf(stderr, "$c%d = %#p\n", i - UNW_MIPS_C0, (void*)getRegister(i));
+      usleep(1);
+  }
+#endif
+}
+
+inline Registers_mips_cheri::Registers_mips_cheri() {
+  memset(&_registers, 0, sizeof(_registers));
+}
+
+inline bool Registers_mips_cheri::validRegister(int regNum) const {
+  if (regNum == UNW_REG_IP)
+    return true;
+  if (regNum == UNW_REG_SP)
+    return true;
+  if (regNum < 0)
+    return false;
+  // FIXME: Hard float
+  if (regNum <= 32)
+    return true;
+  if ((regNum >= UNW_MIPS_C0) && (regNum <= UNW_MIPS_C31))
+    return true;
+  return false;
+}
+
+inline uintptr_t Registers_mips_cheri::getRegister(int regNum) const {
+  if (regNum >= 1 && regNum <= 32)
+    return _registers.__r[regNum];
+  if (regNum >= UNW_MIPS_C0 && regNum <= UNW_MIPS_C31)
+    return _registers.__c[regNum - UNW_MIPS_C0];
+
+  switch (regNum) {
+  case 0:
+    return 0;
+  case UNW_REG_IP:
+    return _registers.__c[32];
+  case UNW_REG_SP:
+    return offset_set(_registers.__c[11], _registers.__r[29]);
+  }
+  _LIBUNWIND_ABORT("unsupported mips_cheri register");
+}
+
+inline void Registers_mips_cheri::setRegister(int regNum, uintptr_t value) {
+  if (regNum >= UNW_MIPS_R0 && regNum <= UNW_MIPS_R31) {
+    _registers.__r[regNum - UNW_MIPS_R0] = value;
+    return;
+  }
+  if (regNum >= UNW_MIPS_C0 && regNum <= UNW_MIPS_C31) {
+    _registers.__c[regNum - UNW_MIPS_C0] = value;
+    return;
+  }
+
+  switch (regNum) {
+  case UNW_REG_IP:
+    _registers.__c[32] = value;
+    return;
+  case UNW_REG_SP:
+    _registers.__c[11] = offset_set(value, 0);
+    _registers.__r[29] = offset_get(value);
+    return;
+  }
+  _LIBUNWIND_ABORT("unsupported mips_cheri register");
+}
+
+inline bool Registers_mips_cheri::validFloatRegister(int /* regNum */) const {
+  return false;
+}
+
+inline double Registers_mips_cheri::getFloatRegister(int /* regNum */) const {
+  _LIBUNWIND_ABORT("mips_cheri float support not implemented");
+}
+
+inline void Registers_mips_cheri::setFloatRegister(int /* regNum */,
+                                             double /* value */) {
+  _LIBUNWIND_ABORT("mips_cheri float support not implemented");
+}
+
+inline bool Registers_mips_cheri::validVectorRegister(int /* regNum */) const {
+  return false;
+}
+
+inline v128 Registers_mips_cheri::getVectorRegister(int /* regNum */) const {
+  _LIBUNWIND_ABORT("mips_cheri vector support not implemented");
+}
+
+inline void Registers_mips_cheri::setVectorRegister(int /* regNum */, v128 /* value */) {
+  _LIBUNWIND_ABORT("mips_cheri vector support not implemented");
+}
+
+inline const char *Registers_mips_cheri::getRegisterName(int regNum) {
+  switch (regNum) {
+  case UNW_MIPS_R0:
+    return "$0";
+  case UNW_MIPS_R1:
+    return "$1";
+  case UNW_MIPS_R2:
+    return "$2";
+  case UNW_MIPS_R3:
+    return "$3";
+  case UNW_MIPS_R4:
+    return "$4";
+  case UNW_MIPS_R5:
+    return "$5";
+  case UNW_MIPS_R6:
+    return "$6";
+  case UNW_MIPS_R7:
+    return "$7";
+  case UNW_MIPS_R8:
+    return "$8";
+  case UNW_MIPS_R9:
+    return "$9";
+  case UNW_MIPS_R10:
+    return "$10";
+  case UNW_MIPS_R11:
+    return "$11";
+  case UNW_MIPS_R12:
+    return "$12";
+  case UNW_MIPS_R13:
+    return "$13";
+  case UNW_MIPS_R14:
+    return "$14";
+  case UNW_MIPS_R15:
+    return "$15";
+  case UNW_MIPS_R16:
+    return "$16";
+  case UNW_MIPS_R17:
+    return "$17";
+  case UNW_MIPS_R18:
+    return "$18";
+  case UNW_MIPS_R19:
+    return "$19";
+  case UNW_MIPS_R20:
+    return "$20";
+  case UNW_MIPS_R21:
+    return "$21";
+  case UNW_MIPS_R22:
+    return "$22";
+  case UNW_MIPS_R23:
+    return "$23";
+  case UNW_MIPS_R24:
+    return "$24";
+  case UNW_MIPS_R25:
+    return "$25";
+  case UNW_MIPS_R26:
+    return "$26";
+  case UNW_MIPS_R27:
+    return "$27";
+  case UNW_MIPS_R28:
+    return "$28";
+  case UNW_MIPS_R29:
+    return "$29";
+  case UNW_MIPS_R30:
+    return "$30";
+  case UNW_MIPS_R31:
+    return "$31";
+  case UNW_MIPS_C0:
+    return "$c0";
+  case UNW_MIPS_C1:
+    return "$c1";
+  case UNW_MIPS_C2:
+    return "$c2";
+  case UNW_MIPS_C3:
+    return "$c3";
+  case UNW_MIPS_C4:
+    return "$c4";
+  case UNW_MIPS_C5:
+    return "$c5";
+  case UNW_MIPS_C6:
+    return "$c6";
+  case UNW_MIPS_C7:
+    return "$c7";
+  case UNW_MIPS_C8:
+    return "$c8";
+  case UNW_MIPS_C9:
+    return "$c9";
+  case UNW_MIPS_C10:
+    return "$c10";
+  case UNW_MIPS_C11:
+    return "$c11";
+  case UNW_MIPS_C12:
+    return "$c12";
+  case UNW_MIPS_C13:
+    return "$c13";
+  case UNW_MIPS_C14:
+    return "$c14";
+  case UNW_MIPS_C15:
+    return "$c15";
+  case UNW_MIPS_C16:
+    return "$c16";
+  case UNW_MIPS_C17:
+    return "$c17";
+  case UNW_MIPS_C18:
+    return "$c18";
+  case UNW_MIPS_C19:
+    return "$c19";
+  case UNW_MIPS_C20:
+    return "$c20";
+  case UNW_MIPS_C21:
+    return "$c21";
+  case UNW_MIPS_C22:
+    return "$c22";
+  case UNW_MIPS_C23:
+    return "$c23";
+  case UNW_MIPS_C24:
+    return "$c24";
+  case UNW_MIPS_C25:
+    return "$c25";
+  case UNW_MIPS_C26:
+    return "$c26";
+  case UNW_MIPS_C27:
+    return "$c27";
+  case UNW_MIPS_C28:
+    return "$c28";
+  case UNW_MIPS_C29:
+    return "$c29";
+  case UNW_MIPS_C30:
+    return "$c30";
+  case UNW_MIPS_C31:
+    return "$c31";
   default:
     return "unknown register";
   }

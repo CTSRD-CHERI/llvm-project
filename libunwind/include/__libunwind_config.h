@@ -54,10 +54,17 @@
 #  define _LIBUNWIND_CURSOR_SIZE 28
 #  define _LIBUNWIND_HIGHEST_DWARF_REGISTER 32
 # elif defined(__mips__) && defined(__mips_n64)
-#  define _LIBUNWIND_TARGET_MIPS_N64 1
-#  define _LIBUNWIND_CONTEXT_SIZE 64
-#  define _LIBUNWIND_CURSOR_SIZE 76
-#  define _LIBUNWIND_HIGHEST_DWARF_REGISTER 64
+#   if defined(__CHERI_PURE_CAPABILITY__)
+#    define _LIBUNWIND_TARGET_MIPS_CHERI 1
+#    define _LIBUNWIND_CONTEXT_SIZE (32+32+33*(_MIPS_SZCAP/64))
+#    define _LIBUNWIND_CURSOR_SIZE (_LIBUNWIND_CONTEXT_SIZE+48)
+#    define _LIBUNWIND_HIGHEST_DWARF_REGISTER 104
+#   else
+#    define _LIBUNWIND_TARGET_MIPS_N64 1
+#    define _LIBUNWIND_CONTEXT_SIZE 64
+#    define _LIBUNWIND_CURSOR_SIZE 76
+#    define _LIBUNWIND_HIGHEST_DWARF_REGISTER 64
+#   endif
 # else
 #  error "Unsupported architecture."
 # endif

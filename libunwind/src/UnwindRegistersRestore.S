@@ -91,7 +91,89 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind16Registers_x86_646jumptoEv)
   movq  56(%rdi), %rsp  # cut back rsp to new location
   pop    %rdi      # rdi was saved here earlier
   ret            # rip was saved here
+#elif defined(__CHERI_PURE_CAPABILITY__)
+.set noreorder
 
+DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind20Registers_mips_cheri6jumptoEv)
+#
+# void libunwind::Registers_mips_n64::jumpto()
+#
+# On entry:
+#  thread_state pointer is in $c3
+#
+#define RESTORE_GPR(x) cld $x, $zero, (x*8)($c3)
+
+  RESTORE_GPR(1)
+  RESTORE_GPR(2)
+  RESTORE_GPR(3)
+  RESTORE_GPR(4)
+  RESTORE_GPR(5)
+  RESTORE_GPR(6)
+  RESTORE_GPR(7)
+  RESTORE_GPR(8)
+  RESTORE_GPR(9)
+  RESTORE_GPR(10)
+  RESTORE_GPR(11)
+  RESTORE_GPR(12)
+  RESTORE_GPR(13)
+  RESTORE_GPR(14)
+  RESTORE_GPR(15)
+  RESTORE_GPR(16)
+  RESTORE_GPR(17)
+  RESTORE_GPR(18)
+  RESTORE_GPR(19)
+  RESTORE_GPR(20)
+  RESTORE_GPR(21)
+  RESTORE_GPR(22)
+  RESTORE_GPR(23)
+  RESTORE_GPR(24)
+  RESTORE_GPR(25)
+  RESTORE_GPR(26)
+  RESTORE_GPR(27)
+  RESTORE_GPR(28)
+  RESTORE_GPR(29)
+  RESTORE_GPR(30)
+  RESTORE_GPR(31)
+#ifndef  _MIPS_SZCAP
+#error _MIPS_SZCAP must be defined!
+#endif
+  daddiu $31, $zero, 64*8+2*(_MIPS_SZCAP/8)
+  CIncOffset $c3, $c3, $31
+  cld $31, $zero, -(8+2*(_MIPS_SZCAP/8))($c3)
+#define RESTORE_CAP_REG(reg, idx) clc $c ## reg, $zero, ((idx-2)*(_MIPS_SZCAP/8))($c3)
+#define RESTORE_CAP(x) RESTORE_CAP_REG(x, x)
+  RESTORE_CAP(0)
+  RESTORE_CAP(1)
+  RESTORE_CAP(2)
+  RESTORE_CAP(4)
+  RESTORE_CAP(5)
+  RESTORE_CAP(6)
+  RESTORE_CAP(7)
+  RESTORE_CAP(8)
+  RESTORE_CAP(9)
+  RESTORE_CAP(10)
+  RESTORE_CAP(11)
+  RESTORE_CAP(12)
+  RESTORE_CAP(13)
+  RESTORE_CAP(14)
+  RESTORE_CAP(15)
+  RESTORE_CAP(16)
+  RESTORE_CAP(18)
+  RESTORE_CAP(19)
+  RESTORE_CAP(20)
+  RESTORE_CAP(21)
+  RESTORE_CAP(22)
+  RESTORE_CAP(23)
+  RESTORE_CAP(24)
+  RESTORE_CAP(25)
+  RESTORE_CAP(26)
+
+  // Load the new PC into $cra
+  
+  RESTORE_CAP_REG(17, 33)
+  // Jump to $ca, load $c3 in the delay slot
+  cjr $c17
+  RESTORE_CAP(3)
 #elif defined(__mips_n64)
 
 .set noreorder

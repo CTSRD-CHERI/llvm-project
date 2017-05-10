@@ -58,7 +58,11 @@ _LIBUNWIND_EXPORT int unw_init_local(unw_cursor_t *cursor,
 #elif defined(__or1k__)
 # define REGISTER_KIND Registers_or1k
 #elif defined(__mips_n64)
-# define REGISTER_KIND Registers_mips_n64
+# if defined(__CHERI_PURE_CAPABILITY__)
+#   define REGISTER_KIND Registers_mips_cheri
+# else
+#   define REGISTER_KIND Registers_mips_n64
+# endif
 #else
 # error Architecture not supported
 #endif

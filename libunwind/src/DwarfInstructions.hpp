@@ -56,7 +56,7 @@ private:
   static pint_t evaluateExpression(pint_t expression, A &addressSpace,
                                    const R &registers,
                                    pint_t initialStackValue);
-  static pint_t getSavedRegister(A &addressSpace, const R &registers,
+  static pint_t getSavedRegister(int reg, A &addressSpace, const R &registers,
                                  pint_t cfa, const RegisterLocation &savedReg);
   static double getSavedFloatRegister(A &addressSpace, const R &registers,
                                   pint_t cfa, const RegisterLocation &savedReg);
@@ -65,9 +65,18 @@ private:
 
   static pint_t getCFA(A &addressSpace, const PrologInfo &prolog,
                        const R &registers) {
-    if (prolog.cfaRegister != 0)
+    if (prolog.cfaRegister != 0) {
+#if defined(__mips__) && defined(__CHERI_PURE_CAPABILITY__)
+      // This is an ugly hack that's required because DWARF assumes that
+      // there's a single register for the stack.
+      return registers.getRegister(UNW_MIPS_C11) + 
+          registers.getRegister((int)prolog.cfaRegister) +
+             prolog.cfaRegisterOffset;
+#else
       return (pint_t)((sint_t)registers.getRegister((int)prolog.cfaRegister) +
              prolog.cfaRegisterOffset);
+#endif
+    }
     if (prolog.cfaExpression != 0)
       return evaluateExpression((pint_t)prolog.cfaExpression, addressSpace, 
                                 registers, 0);
@@ -79,13 +88,20 @@ private:
 
 template <typename A, typename R>
 typename A::pint_t DwarfInstructions<A, R>::getSavedRegister(
-    A &addressSpace, const R &registers, pint_t cfa,
-    const RegisterLocation &savedReg) {
+    int reg, A &addressSpace, const R &registers, pint_t cfa, const
+    RegisterLocation &savedReg) {
   switch (savedReg.location) {
   case CFI_Parser<A>::kRegisterInCFA:
+#ifdef __CHERI_PURE_CAPABILITY__
+          // FIXME: This is not the correct way of doing this, but we currently
+          // don't have a way of differentiating pointers and integers.
+    if (reg < UNW_MIPS_C0)
+      return addressSpace.get64(cfa + (pint_t)savedReg.value);
+#endif
     return addressSpace.getP(cfa + (pint_t)savedReg.value);
 
   case CFI_Parser<A>::kRegisterAtExpression:
+    *(volatile char*)savedReg.value;
     return addressSpace.getP(
         evaluateExpression((pint_t)savedReg.value, addressSpace,
                             registers, cfa));
@@ -184,11 +200,11 @@ int DwarfInstructions<A, R>::stepWithDwarf(A &addressSpace, pint_t pc,
                 i, getSavedVectorRegister(addressSpace, registers, cfa,
                                           prolog.savedRegisters[i]));
           else if (i == (int)cieInfo.returnAddressRegister)
-            returnAddress = getSavedRegister(addressSpace, registers, cfa,
+            returnAddress = getSavedRegister(i, addressSpace, registers, cfa,
                                              prolog.savedRegisters[i]);
           else if (registers.validRegister(i))
             newRegisters.setRegister(
-                i, getSavedRegister(addressSpace, registers, cfa,
+                i, getSavedRegister(i, addressSpace, registers, cfa,
                                     prolog.savedRegisters[i]));
           else
             return UNW_EBADREG;
@@ -217,6 +233,7 @@ typename A::pint_t
 DwarfInstructions<A, R>::evaluateExpression(pint_t expression, A &addressSpace,
                                             const R &registers,
                                             pint_t initialStackValue) {
+  *(volatile char*)expression;
   const bool log = false;
   pint_t p = expression;
   pint_t expressionEnd = expression + 20; // temp, until len read

@@ -109,7 +109,10 @@ struct UnwindInfoSections {
 /// making local unwinds fast.
 class __attribute__((visibility("hidden"))) LocalAddressSpace {
 public:
-#ifdef __LP64__
+#ifdef __CHERI_PURE_CAPABILITY__
+  typedef uintptr_t pint_t;
+  typedef intptr_t  sint_t;
+#elif defined(__LP64__)
   typedef uint64_t pint_t;
   typedef int64_t  sint_t;
 #else
@@ -119,13 +122,8 @@ public:
   template<typename T>
   inline T get(pint_t addr) {
     T val;
-#ifdef __CHERI_PURE_CAPABILITY__
-    void *ptr = __builtin_cheri_ddc_get();
-    ptr = __builtin_cheri_offset_set(addr);
-    memcpy(&val, (void *)ptr, sizeof(val));
-#else
+    addr = ddc_address(addr);
     memcpy(&val, (void *)addr, sizeof(val));
-#endif
     return val;
   }
   uint8_t         get8(pint_t addr) {
@@ -161,6 +159,7 @@ public:
 };
 
 inline uintptr_t LocalAddressSpace::getP(pint_t addr) {
+
   return get<uintptr_t>(addr);
 }
 
@@ -299,7 +298,7 @@ LocalAddressSpace::getEncodedP(pint_t &addr, pint_t end, uint8_t encoding,
   if (encoding & DW_EH_PE_indirect)
     result = getP(result);
 
-  return result;
+  return ddc_address(result);
 }
 
 #ifdef __APPLE__ 
@@ -388,6 +387,7 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
   };
 
   dl_iterate_cb_data cb_data = {this, &info, targetAddr};
+  using vaddr_t = size_t;
   int found = dl_iterate_phdr(
       [](struct dl_phdr_info *pinfo, size_t, void *data) -> int {
         auto cbdata = static_cast<dl_iterate_cb_data *>(data);
@@ -398,9 +398,8 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
         assert(cbdata);
         assert(cbdata->sects);
 
-        if (cbdata->targetAddr < pinfo->dlpi_addr) {
+        if (cbdata->targetAddr < pinfo->dlpi_addr)
           return false;
-        }
 
 #if !defined(Elf_Half)
         typedef ElfW(Half) Elf_Half;
@@ -412,16 +411,16 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
         for (Elf_Half i = 0; i < pinfo->dlpi_phnum; i++) {
           const Elf_Phdr *phdr = &pinfo->dlpi_phdr[i];
           if (phdr->p_type == PT_LOAD) {
-            uintptr_t begin = pinfo->dlpi_addr + phdr->p_vaddr;
-            uintptr_t end = begin + phdr->p_memsz;
-            if (cbdata->targetAddr >= begin && cbdata->targetAddr < end) {
+            uintptr_t begin = pcc_address(pinfo->dlpi_addr + phdr->p_vaddr);
+            uintptr_t end = pcc_address(begin + phdr->p_memsz);
+            if ((vaddr_t)cbdata->targetAddr >= (vaddr_t)begin && (vaddr_t)cbdata->targetAddr < (vaddr_t)end) {
               cbdata->sects->dso_base = begin;
               object_length = phdr->p_memsz;
               found_obj = true;
             }
           } else if (phdr->p_type == PT_GNU_EH_FRAME) {
             EHHeaderParser<LocalAddressSpace>::EHHeaderInfo hdrInfo;
-            uintptr_t eh_frame_hdr_start = pinfo->dlpi_addr + phdr->p_vaddr;
+            uintptr_t eh_frame_hdr_start = ddc_address(pinfo->dlpi_addr + phdr->p_vaddr);
             cbdata->sects->dwarf_index_section = eh_frame_hdr_start;
             cbdata->sects->dwarf_index_section_length = phdr->p_memsz;
             EHHeaderParser<LocalAddressSpace>::decodeEHHdr(

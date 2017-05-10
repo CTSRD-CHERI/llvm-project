@@ -75,6 +75,9 @@ typedef int unw_regnum_t;
 #if _LIBUNWIND_ARM_EHABI
 typedef uint32_t unw_word_t;
 typedef uint64_t unw_fpreg_t;
+#elif defined(__CHERI_PURE_CAPABILITY__)
+typedef uintptr_t unw_word_t;
+typedef double unw_fpreg_t;
 #else
 typedef uint64_t unw_word_t;
 typedef double unw_fpreg_t;
@@ -586,6 +589,39 @@ enum {
   UNW_MIPS_R29 = 29,
   UNW_MIPS_R30 = 30,
   UNW_MIPS_R31 = 31,
+  // CHERI registers
+  UNW_MIPS_C0  = 72,
+  UNW_MIPS_C1,
+  UNW_MIPS_C2,
+  UNW_MIPS_C3,
+  UNW_MIPS_C4,
+  UNW_MIPS_C5,
+  UNW_MIPS_C6,
+  UNW_MIPS_C7,
+  UNW_MIPS_C8,
+  UNW_MIPS_C9,
+  UNW_MIPS_C10,
+  UNW_MIPS_C11,
+  UNW_MIPS_C12,
+  UNW_MIPS_C13,
+  UNW_MIPS_C14,
+  UNW_MIPS_C15,
+  UNW_MIPS_C16,
+  UNW_MIPS_C17,
+  UNW_MIPS_C18,
+  UNW_MIPS_C19,
+  UNW_MIPS_C20,
+  UNW_MIPS_C21,
+  UNW_MIPS_C22,
+  UNW_MIPS_C23,
+  UNW_MIPS_C24,
+  UNW_MIPS_C25,
+  UNW_MIPS_C26,
+  UNW_MIPS_C27,
+  UNW_MIPS_C28,
+  UNW_MIPS_C29,
+  UNW_MIPS_C30,
+  UNW_MIPS_C31
 };
 
 #endif

@@ -74,7 +74,11 @@ public:
   };
   struct RegisterLocation {
     RegisterSavedWhere location;
+#ifdef __CHERI_PURE_CAPABILITY__
+    intptr_t value;
+#else
     int64_t value;
+#endif
   };
   /// Information about a frame layout and registers saved determined
   /// by "running" the DWARF FDE "instructions"
@@ -175,12 +179,11 @@ template <typename A>
 bool CFI_Parser<A>::findFDE(A &addressSpace, pint_t pc, pint_t ehSectionStart,
                             uint32_t sectionLength, pint_t fdeHint,
                             FDE_Info *fdeInfo, CIE_Info *cieInfo) {
-  //fprintf(stderr, "findFDE(0x%llX)\n", (long long)pc);
+  pc = pcc_address(pc);
   pint_t p = (fdeHint != 0) ? fdeHint : ehSectionStart;
   const pint_t ehSectionEnd = p + sectionLength;
   while (p < ehSectionEnd) {
     pint_t currentCFI = p;
-    //fprintf(stderr, "findFDE() CFI at 0x%llX\n", (long long)p);
     pint_t cfiLength = addressSpace.get32(p);
     p += 4;
     if (cfiLength == 0xffffffff) {
@@ -298,6 +301,11 @@ const char *CFI_Parser<A>::parseCIE(A &addressSpace, pint_t cie,
   uint64_t raReg = addressSpace.getULEB128(p, cieContentEnd);
   assert(raReg < 255 && "return address register too large");
   cieInfo->returnAddressRegister = (uint8_t)raReg;
+#ifdef __CHERI_PURE_CAPABILITY__
+  // FIXME: This is entirely wrong, but for some reason we get the wrong value
+  // from the compiler-generated DWARF
+  cieInfo->returnAddressRegister = (uint8_t)UNW_MIPS_C17;
+#endif
   // parse augmentation data based on augmentation string
   const char *result = NULL;
   if (addressSpace.get8(strStart) == 'z') {

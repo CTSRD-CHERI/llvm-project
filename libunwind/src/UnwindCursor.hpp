@@ -553,6 +553,12 @@ private:
   }
 #endif
 
+#if defined(_LIBUNWIND_TARGET_MIPS_CHERI)
+  bool compactSaysUseDwarf(Registers_mips_cheri &, uint32_t *) const {
+    return true;
+  }
+#endif
+
 
 #if defined(_LIBUNWIND_TARGET_AARCH64)
   bool compactSaysUseDwarf(Registers_arm64 &, uint32_t *offset) const {
@@ -590,6 +596,12 @@ private:
   }
 #endif
 
+#if defined(_LIBUNWIND_TARGET_MIPS_CHERI)
+  compact_unwind_encoding_t dwarfEncoding(Registers_mips_cheri &) const {
+    return 0;
+  }
+#endif
+
 #if defined(_LIBUNWIND_TARGET_PPC)
   compact_unwind_encoding_t dwarfEncoding(Registers_ppc &) const {
     return 0;
@@ -617,10 +629,18 @@ private:
   bool             _isSignalFrame;
 };
 
+template <unsigned A, unsigned B>
+void size()
+{
+	    static_assert(A==B, "fail");
+}
+
+
 template <typename A, typename R>
 UnwindCursor<A, R>::UnwindCursor(unw_context_t *context, A &as)
     : _addressSpace(as), _registers(context), _unwindInfoMissing(false),
       _isSignalFrame(false) {
+		  size<sizeof(UnwindCursor<A, R>), sizeof(unw_cursor_t)>();
   static_assert((check_fit<UnwindCursor<A, R>, unw_cursor_t>::does_fit),
                 "UnwindCursor<> does not fit in unw_cursor_t");
   memset(&_info, 0, sizeof(_info));
@@ -1247,7 +1267,9 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
         // If unwind table has entry, but entry says there is no unwind info,
         // record that we have no unwind info.
         if (_info.format == 0)
+		{
           _unwindInfoMissing = true;
+		}
         return;
       }
     }
