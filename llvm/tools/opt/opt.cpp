@@ -398,6 +398,10 @@ int main(int argc, char **argv) {
   initializeCountingFunctionInserterPass(Registry);
   initializeUnreachableBlockElimLegacyPassPass(Registry);
 
+  // Add the Cheri IR -> IR passes
+  initializeMemCapFoldIntrinsicsPass(Registry);
+  initializeMemCapDirectCallsPass(Registry);
+
 #ifdef LINK_POLLY_INTO_TOOLS
   polly::initializePollyPasses(Registry);
 #endif
