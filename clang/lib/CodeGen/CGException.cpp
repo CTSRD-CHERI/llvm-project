@@ -966,7 +966,8 @@ static void emitCatchDispatchBlock(CodeGenFunction &CGF,
     assert(handler.Type.Flags == 0 &&
            "landingpads do not support catch handler flags");
     assert(typeValue && "fell into catch-all case!");
-    typeValue = CGF.Builder.CreateBitCast(typeValue, CGF.Int8Ty->getPointerTo(0));
+    typeValue = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(typeValue,
+            CGF.Int8Ty->getPointerTo(0));
 
     // Figure out the next block.
     bool nextIsEnd;
