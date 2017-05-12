@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 "-target-abi" "purecap" -fsyntax-only -triple cheri-unknown-freebsd %s -std=c++11 -verify
+// RUN: %cheri256_cc1 "-target-abi" "purecap" -fsyntax-only -triple cheri-unknown-freebsd %s -std=c++11 -verify
 
 
 struct foo_cap { // expected-note {{Add __attribute__((aligned(32))) to ensure sufficient alignment}}
