@@ -139,7 +139,7 @@ def : InstAlias<"cgeu $rd, $cb, $ct",
                 (CLEU GPR64Opnd: $rd, CheriOpnd: $ct, CheriOpnd:$cb)>;
 let isCodeGenOnly=1 in {
   def CEQ32 : CheriFmtPtrCmp<0, GPR32Opnd, "ceq", []>;
-  def CEXEQ32 : CheriFmtPtrCmp<0, GPR32Opnd, "cexeq", []>;
+  def CEXEQ32 : CheriFmtPtrCmp<6, GPR32Opnd, "cexeq", []>;
   def CNE32 : CheriFmtPtrCmp<1, GPR32Opnd, "cne", [(set GPR32Opnd: $rd, (setne CheriOpnd: $cb, CheriOpnd:$ct))]>;
   def CLT32 : CheriFmtPtrCmp<2, GPR32Opnd, "clt", [(set GPR32Opnd: $rd, (setlt CheriOpnd: $cb, CheriOpnd:$ct))]>;
   def CLE32 : CheriFmtPtrCmp<3, GPR32Opnd, "cle", [(set GPR32Opnd: $rd, (setle CheriOpnd: $cb, CheriOpnd:$ct))]>;
