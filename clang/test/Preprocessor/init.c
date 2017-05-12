@@ -4490,7 +4490,7 @@
 // MIPS64EL:#define mips 1
 //
 
-// RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none < /dev/null | FileCheck -check-prefix CHERI256 %s
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -target-cpu cheri256 < /dev/null | FileCheck -check-prefix CHERI256 %s
 
 // CHERI256: #define MIPSEB 1
 // CHERI256: #define _ABI64 3
@@ -4816,7 +4816,7 @@
 // CHERI256: #define mips 1
 
 
-// RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -mllvm -cheri128 < /dev/null | FileCheck -check-prefix CHERI128 %s
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -target-cpu cheri128 < /dev/null | FileCheck -check-prefix CHERI128 %s
 // CHERI128: #define MIPSEB 1
 // CHERI128: #define _ABI64 3
 // CHERI128: #define _LP64 1
@@ -5140,7 +5140,7 @@
 // CHERI128: #define _mips 1
 // CHERI128: #define mips 1
 
-// RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -mllvm -cheri128 -target-abi purecap < /dev/null | FileCheck -check-prefix CHERI128-SANDBOX %s
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -target-cpu cheri128 -target-abi purecap < /dev/null | FileCheck -check-prefix CHERI128-SANDBOX %s
 // CHERI128-SANDBOX: #define _MIPS_FPSET 32
 // CHERI128-SANDBOX: #define __CHERI_PURE_CAPABILITY__ 1
 // CHERI128-SANDBOX: #define __CHERI_SANDBOX__ 3
@@ -5158,14 +5158,14 @@
 // CHERI128-SANDBOX: #define __UINTPTR_WIDTH__ 128
 // CHERI128-SANDBOX: #define __mips_fpr 64
 
-// RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -mllvm -cheri128 -target-feature +soft-float -msoft-float -mfloat-abi soft -target-abi purecap < /dev/null | FileCheck -check-prefix CHERI128-SANDBOX-SOFT %s
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -target-cpu cheri128 -target-feature +soft-float -msoft-float -mfloat-abi soft -target-abi purecap < /dev/null | FileCheck -check-prefix CHERI128-SANDBOX-SOFT %s
 // CHERI128-SANDBOX-SOFT: #define _MIPS_FPSET 32
 // CHERI128-SANDBOX-SOFT: #define __mips_fpr 64
 // CHERI128-SANDBOX-SOFT-NOT: #define __mips_hard_float 1
 // CHERI128-SANDBOX-SOFT: #define __mips_soft_float 1
 
 
-// RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -target-abi purecap < /dev/null | FileCheck -check-prefix CHERI256-SANDBOX %s
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -target-abi purecap -target-cpu cheri256 < /dev/null | FileCheck -check-prefix CHERI256-SANDBOX %s
 // CHERI256-SANDBOX: #define _MIPS_FPSET 32
 // CHERI256-SANDBOX: #define __CHERI_PURE_CAPABILITY__ 1
 // CHERI256-SANDBOX: #define __CHERI_SANDBOX__ 3
@@ -5183,7 +5183,7 @@
 // CHERI256-SANDBOX: #define __UINTPTR_WIDTH__ 256
 // CHERI256-SANDBOX: #define __mips_fpr 64
 
-// RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -target-feature +soft-float -msoft-float -mfloat-abi soft -target-abi purecap < /dev/null | FileCheck -check-prefix CHERI256-SANDBOX-SOFT %s
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=cheri-none-none -target-feature +soft-float -msoft-float -mfloat-abi soft -target-abi purecap -target-cpu cheri256 < /dev/null | FileCheck -check-prefix CHERI256-SANDBOX-SOFT %s
 // CHERI256-SANDBOX-SOFT: #define _MIPS_FPSET 32
 // CHERI256-SANDBOX-SOFT: #define __mips_fpr 64
 // CHERI256-SANDBOX-SOFT-NOT: #define __mips_hard_float 1

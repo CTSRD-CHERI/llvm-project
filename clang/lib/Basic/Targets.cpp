@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/Config/config.h"
 #include "clang/Basic/Builtins.h"
 #include "clang/Basic/Cuda.h"
 #include "clang/Basic/Diagnostic.h"
@@ -41,6 +42,11 @@ static llvm::cl::opt<bool>
 Cheri128("cheri128", llvm::cl::desc("CHERI capabilities are 128 bits"),
     llvm::cl::NotHidden, llvm::cl::init(false));
 
+#if CHERI_IS_128
+static llvm::cl::opt<bool>
+ForceCheri256("cheri256", llvm::cl::desc("CHERI capabilities are 256 bits"),
+             llvm::cl::NotHidden, llvm::cl::init(false));
+#endif
 //===----------------------------------------------------------------------===//
 //  Common code shared among targets.
 //===----------------------------------------------------------------------===//
@@ -7620,13 +7626,13 @@ protected:
   int CapSize;
 
 public:
-  MipsTargetInfo(const llvm::Triple &Triple, const TargetOptions &)
+  MipsTargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
       : TargetInfo(Triple), IsMips16(false), IsMicromips(false),
         IsNan2008(false), IsSingleFloat(false), IsNoABICalls(false),
         CanUseBSDABICalls(false), FloatABI(HardFloat),
         DspRev(NoDSP), HasMSA(false), HasFP64(false),
         IsCheri(getTriple().getArch() == llvm::Triple::cheri),
-        CapSize(Cheri128 ? 128 : 256) {
+        CapSize(-1) {
     TheCXXABI.set(TargetCXXABI::GenericMIPS);
 
     setABI((getTriple().getArch() == llvm::Triple::mips ||
@@ -7636,7 +7642,15 @@ public:
 
     CPU = ABI == "o32" ? "mips32r2" : "mips64r2";
     if (IsCheri) {
+      if (Opts.CPU == "cheri128") {
+        Cheri128 = true;
+      }
+#if CHERI_IS_128
+      if (ForceCheri256)
+        Cheri128 = false;
+#endif
       CPU = Cheri128 ? "cheri128" : "cheri";
+      CapSize = Cheri128 ? 128 : 256;
       SuitableAlign = CapSize;
     }
 
@@ -7649,6 +7663,7 @@ public:
   }
 
   bool isFP64Default() const {
+    // XXXAR: CHERI?
     return CPU == "mips32r6" || ABI == "n32" || ABI == "n64" || ABI == "64";
   }
 
