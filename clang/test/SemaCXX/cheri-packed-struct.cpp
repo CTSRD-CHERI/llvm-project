@@ -5,7 +5,7 @@ template <typename T>
 struct packed_T_and_cap {
   T t;
   void* __capability cap;
-#if _MIPS_SZCAP == 32
+#if _MIPS_SZCAP == 256
   // expected-warning-re@-2 3 {{Under aligned capability field at offset {{4|8|31}} in packed structure will trap if accessed}}
 #else
   // expected-warning-re@-4 3 {{Under aligned capability field at offset {{4|8|15}} in packed structure will trap if accessed}}
