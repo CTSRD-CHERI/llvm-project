@@ -2,11 +2,11 @@
 
 // RUN: echo "NOP" | not FileCheck -check-prefix=EMPTY1 %s 2>&1 | FileCheck -check-prefix EMPTY1-MSG %s
 // EMPTY1: [[@EXPR]]
-// EMPTY1-MSG: expressions.test:[[@LINE-1]]:19: error: Unexpected end of expression
+// EMPTY1-MSG: expressions.txt:[[@LINE-1]]:19: error: Unexpected end of expression
 
 // RUN: echo "NOP" | not FileCheck -check-prefix=EMPTY2 %s 2>&1 | FileCheck -check-prefix EMPTY2-MSG %s
 // EMPTY2: [[@EXPR  ]]
-// EMPTY2-MSG: expressions.test:[[@LINE-1]]:20: error: Unexpected end of expression
+// EMPTY2-MSG: expressions.txt:[[@LINE-1]]:20: error: Unexpected end of expression
 
 // simple mathematical expressions:
 // NOTE: These are evaluated left to right and don't handle * or / specially!
@@ -19,7 +19,7 @@
 
 // RUN: echo "NOP" | not FileCheck -check-prefix=UNCLOSED-PAREN %s 2>&1 | FileCheck -check-prefix UNCLOSED-PAREN-MSG %s
 // UNCLOSED-PAREN: [[@EXPR  2 * (3 + 6 - 2]]
-// UNCLOSED-PAREN-MSG: expressions.test:[[@LINE-1]]:42: error: Expected ')' but got '<EOF>' instead
+// UNCLOSED-PAREN-MSG: expressions.txt:[[@LINE-1]]:42: error: Expected ')' but got '<EOF>' instead
 // UNCLOSED-PAREN-MSG: note: uses incorrect expression "@EXPR 2 * (3 + 6 - 2"
 
 
@@ -47,7 +47,7 @@
 
 // RUN: echo "NOP" | not FileCheck -check-prefix=UNCLOSED-PAREN-BIN %s 2>&1 | FileCheck -check-prefix UNCLOSED-PAREN-BIN-MSG %s
 // UNCLOSED-PAREN-BIN: [[@EXPR bin(42]]
-// UNCLOSED-PAREN-BIN-MSG: expressions.test:[[@LINE-1]]:38: error: Expected ')' but got '<EOF>' instead
+// UNCLOSED-PAREN-BIN-MSG: expressions.txt:[[@LINE-1]]:38: error: Expected ')' but got '<EOF>' instead
 // UNCLOSED-PAREN-BIN-MSG: note: uses incorrect expression "@EXPR bin(42"
 
 
@@ -60,13 +60,13 @@
 // RUN: echo "22 -> 23" | not FileCheck -check-prefix=VAR-WRONG-EXPR %s 2>&1 | FileCheck -check-prefix VAR-WRONG-EXPR-MSG %s
 // VAR-WRONG-EXPR: [[FOO:[0-9]+]]
 // VAR-WRONG-EXPR: [[@EXPR FOO + 2]]
-// VAR-WRONG-EXPR-MSG: expressions.test:[[@LINE-1]]:20: error: expected string not found in input
+// VAR-WRONG-EXPR-MSG: expressions.txt:[[@LINE-1]]:20: error: expected string not found in input
 // VAR-WRONG-EXPR-MSG: note: with expression "@EXPR FOO + 2" equal to "24"
 
 // RUN: echo "22 -> 23" | not FileCheck -check-prefix=VAR-RESERVED-NAME %s 2>&1 | FileCheck -check-prefix VAR-RESERVED-NAME-MSG %s
 // VAR-RESERVED-NAME: [[hex:[0-9]+]]
 // VAR-RESERVED-NAME: [[@EXPR hex + 1]]
-// VAR-RESERVED-NAME-MSG: expressions.test:[[@LINE-1]]:35: error: Expected '(' but got '+' instead
+// VAR-RESERVED-NAME-MSG: expressions.txt:[[@LINE-1]]:35: error: Expected '(' but got '+' instead
 // VAR-RESERVED-NAME-MSG: note: uses incorrect expression "@EXPR hex + 1"
 
 // RUN: echo "22 -> 23 -> 24" | FileCheck -check-prefix=VAR-RESERVED-NAME-ESCAPED %s
@@ -76,5 +76,5 @@
 // Check variable captures
 // RUN: echo "NOP" | not FileCheck -check-prefix=UNKNOWN-VAR %s 2>&1 | FileCheck -check-prefix UNKNOWN-VAR-MSG %s
 // UNKNOWN-VAR: [[@EXPR FOO + 1]]
-// UNKNOWN-VAR-MSG: expressions.test:[[@LINE-1]]:25: error: Undefined variable FOO
+// UNKNOWN-VAR-MSG: expressions.txt:[[@LINE-1]]:25: error: Undefined variable FOO
 // UNKNOWN-VAR-MSG: note: uses incorrect expression "@EXPR FOO + 1"
