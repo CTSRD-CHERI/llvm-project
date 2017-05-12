@@ -14,8 +14,9 @@
 // CHECK:     *** Dumping AST Record Layout
 // CHECK-NEXT:  0 | class Foo
 // CHECK-NEXT:  0 |   class A & _a
-// CHECK-NEXT:    | [sizeof=32, dsize=32, align=32,
-// CHECK-NEXT:    |  nvsize=32, nvalign=32]
+// CHECK-NEXT:    | [sizeof=[[$CAP_SIZE:16|32]],
+// CHECK-SAME:       dsize=[[$CAP_SIZE]], align=[[$CAP_SIZE]],
+// CHECK-NEXT:    |  nvsize=[[$CAP_SIZE]], nvalign=[[$CAP_SIZE]]]
 
 //CHECK: LLVMType:%class.Foo = type { %class.A addrspace(200)* }
 
@@ -23,11 +24,11 @@
 // CHECK-NEXT:     0 | class Bar
 // CHECK-NEXT:     0 |   class Foo (base)
 // CHECK-NEXT:     0 |     class A & _a
-// CHECK-NEXT:    32 |   int x
-// CHECK-NEXT:       | [sizeof=64, dsize=36, align=32,
-// CHECK-NEXT:       |  nvsize=36, nvalign=32]
+// CHECK-NEXT:    [[$CAP_SIZE]] |   int x
+// CHECK-NEXT:       | [sizeof=[[@EXPR $CAP_SIZE * 2]], dsize=[[@EXPR $CAP_SIZE + 4]], align=[[$CAP_SIZE]],
+// CHECK-NEXT:       |  nvsize=[[@EXPR $CAP_SIZE + 4]], nvalign=[[$CAP_SIZE]]]
 
-// CHECK:   LLVMType:%class.Bar = type <{ %class.Foo, i32, [28 x i8] }>
+// CHECK:   LLVMType:%class.Bar = type <{ %class.Foo, i32, {{\[}}[[@EXPR $CAP_SIZE - 4]] x i8] }>
 
 class A { };
 
