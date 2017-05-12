@@ -128,6 +128,10 @@ namespace llvm {
     /// \brief Expand a capability-select into a compare and branch
     MachineBasicBlock *emitCapSelect(MachineInstr &MI,
                                      MachineBasicBlock *BB) const;
+    /// \brief Expand a capability equality into exact or inexact comparison
+    /// depending on the current mode.
+    MachineBasicBlock *emitCapEqual(MachineInstr &MI,
+                                    MachineBasicBlock *BB) const;
     /// \brief Expand a capability move
     MachineBasicBlock *emitCapMove(MachineInstr &MI,
                                    MachineBasicBlock *BB) const;

@@ -138,7 +138,8 @@ def : InstAlias<"cgtu $rd, $cb, $ct",
 def : InstAlias<"cgeu $rd, $cb, $ct",
                 (CLEU GPR64Opnd: $rd, CheriOpnd: $ct, CheriOpnd:$cb)>;
 let isCodeGenOnly=1 in {
-  def CEQ32 : CheriFmtPtrCmp<0, GPR32Opnd, "ceq", [(set GPR32Opnd: $rd, (seteq CheriOpnd: $cb, CheriOpnd:$ct))]>;
+  def CEQ32 : CheriFmtPtrCmp<0, GPR32Opnd, "ceq", []>;
+  def CEXEQ32 : CheriFmtPtrCmp<0, GPR32Opnd, "cexeq", []>;
   def CNE32 : CheriFmtPtrCmp<1, GPR32Opnd, "cne", [(set GPR32Opnd: $rd, (setne CheriOpnd: $cb, CheriOpnd:$ct))]>;
   def CLT32 : CheriFmtPtrCmp<2, GPR32Opnd, "clt", [(set GPR32Opnd: $rd, (setlt CheriOpnd: $cb, CheriOpnd:$ct))]>;
   def CLE32 : CheriFmtPtrCmp<3, GPR32Opnd, "cle", [(set GPR32Opnd: $rd, (setle CheriOpnd: $cb, CheriOpnd:$ct))]>;
@@ -162,6 +163,13 @@ class CheriPseudo<dag outs, dag ins, string asmstr,
   let usesCustomInserter = 1;
   let hasNoSchedulingInfo = 1;
 }
+
+def CEQPseudo : CheriPseudo<(outs GPR64Opnd: $rd), (ins CheriOpnd: $cb, CheriOpnd: $ct),
+                            "#CEQPsuedo $rd, $cb, $ct",
+                            [(set GPR64Opnd: $rd, (seteq CheriOpnd: $cb, CheriOpnd:$ct))]>;
+def CEQPseudo32 : CheriPseudo<(outs GPR32Opnd: $rd), (ins CheriOpnd: $cb, CheriOpnd: $ct),
+                            "#CEQPsuedo32 $rd, $cb, $ct",
+                            [(set GPR32Opnd: $rd, (seteq CheriOpnd: $cb, CheriOpnd:$ct))]>;
 
 // Pseudo instruction for capability cmov, expands to a branch sequence
 def CAP_SELECT : CheriPseudo<(outs CheriOpnd:$dst), (ins GPR32Opnd:$cond,

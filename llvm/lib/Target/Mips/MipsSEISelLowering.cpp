@@ -32,6 +32,10 @@ static cl::opt<bool>
 UseMipsTailCalls("mips-tail-calls", cl::Hidden,
                     cl::desc("MIPS: permit tail calls."), cl::init(false));
 
+static cl::opt<bool>
+CheriExactEquals("cheri-exact-equals", 
+                 cl::desc("CHERI: Capability equality comparisons are exact."), cl::init(false));
+
 static cl::opt<bool> NoDPLoadStore("mno-ldc1-sdc1", cl::init(false),
                                    cl::desc("Expand double precision loads and "
                                             "stores to their single precision "
@@ -1249,6 +1253,9 @@ MipsSETargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
     return emitCapFloat64Store(MI, BB);
   case Mips::CAP_SELECT:
     return emitCapSelect(MI, BB);
+  case Mips::CEQPseudo:
+  case Mips::CEQPseudo32:
+    return emitCapEqual(MI, BB);
   case Mips::CMove:
     return emitCapMove(MI, BB);
   case Mips::ST_F16:
@@ -3991,6 +3998,20 @@ MipsSETargetLowering::emitCapMove(MachineInstr &MI,
       .addReg(MI.getOperand(0).getReg())
       .addImm(MI.getOperand(1).getImm())
       .addReg(Mips::ZERO_64);
+  MI.eraseFromParent();
+  return BB;
+}
+MachineBasicBlock *
+MipsSETargetLowering::emitCapEqual(MachineInstr &MI,
+                                    MachineBasicBlock *BB) const {
+  bool is64 = (MI.getOpcode() == Mips::CEQPseudo);
+  unsigned Op = CheriExactEquals ? (is64 ? Mips::CEXEQ : Mips::CEXEQ32)
+                                 : (is64 ? Mips::CEQ : Mips::CEQ32);
+  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
+  BuildMI(*BB, MI, MI.getDebugLoc(), TII->get(Op))
+      .add(MI.getOperand(0))
+      .add(MI.getOperand(1))
+      .add(MI.getOperand(2));
   MI.eraseFromParent();
   return BB;
 }
