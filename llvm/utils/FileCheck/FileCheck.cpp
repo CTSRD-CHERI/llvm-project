@@ -785,9 +785,10 @@ private:
     // Otherwise check if this is a binary expressioan.
     StringRef Cur = peek();
     DEBUG(dbgs() << "  ComplexExpr: Op = " << Cur << "\n");
-    ArrayRef<StringRef> BinOps = {"+", "-", "/", "*", "&", "|", "<<", ">>"};
-    if (!any_of(BinOps, [&](StringRef S) { return S == Cur; })) {
+    ArrayRef<const char*> BinOps = {"+", "-", "/", "*", "&", "|", "<<", ">>"};
+    if (!any_of(BinOps, [&](const char* S) { return Cur == S; })) {
       // not a binary operation so just return
+      DEBUG(dbgs() << "  '" << Cur << "' is not a valid operator -> return\n");
       return LHSResult;
     }
     Cur = next(); // consume the token
