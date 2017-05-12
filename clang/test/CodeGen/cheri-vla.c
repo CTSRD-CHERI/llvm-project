@@ -1,5 +1,6 @@
-// RUN: %clang_cc1 %s "-target-abi" "purecap" -triple cheri-unknown-freebsd -o - -S -O2 | FileCheck %s -check-prefix ASM
 // RUN: %clang_cc1 %s "-target-abi" "purecap" -emit-llvm -triple cheri-unknown-freebsd -o - -O2 | FileCheck %s
+// RUN: %cheri256_cc1 %s "-target-abi" "purecap" -triple cheri-unknown-freebsd -o - -S -O2 | FileCheck %s -check-prefixes ASM,ASM256
+// RUN: %cheri128_cc1 %s "-target-abi" "purecap" -triple cheri-unknown-freebsd -o - -S -O2 | FileCheck %s -check-prefixes ASM,ASM128
 
 extern void test(const char*);
 
@@ -21,19 +22,23 @@ void foo(void) {
   // CHECK: %inc = add nuw nsw i64 %i.05, 1
   // CHECK: %exitcond = icmp eq i64 %inc, 32
   // CHECK: br i1 %exitcond, label %for.cond.cleanup, label %for.body
-
+  // ASM-DAG: daddiu  [[LOOP_REG:\$[0-9]+]], $zero, 1
+  // ASM-DAG: ld [[TEST_ADDR:\$[0-9]+]], %call16(test)($gp)
+  // ASM-DAG: daddiu  [[COUNT_REG:\$[0-9]+]], $zero, 32
+  // ASM: .LBB0_1:
   // ASM: move     [[SAVEREG:\$[0-9]+]], $sp
-  // ASM: daddiu  $1, $17, 31
+  // ASM256: daddiu  $1, [[LOOP_REG]], 31
+  // ASM128: daddiu  $1, [[LOOP_REG]], 15
   // ASM: and     $1, $1, $18
   // ASM: dsubu   $1, $sp, $1
   // ASM: move     $sp, $1
   // ASM: csetoffset      $c1, $c11, $1
-  // ASM: csetbounds      $c3, $c1, $17
-  // ASM: daddiu  $1, $17, -1
-  // ASM: cgetpccsetoffset        $c12, $16
+  // ASM: csetbounds      $c3, $c1, [[LOOP_REG]]
+  // ASM: daddiu  $1, [[LOOP_REG]], -1
+  // ASM: cgetpccsetoffset        $c12, [[TEST_ADDR]]
   // ASM: cjalr   $c12, $c17
   // ASM: csb     $zero, $1, 0($c3)
-  // ASM: daddiu  $17, $17, 1
-  // ASM: bne     $17, $19, .LBB0_1
+  // ASM: daddiu  [[LOOP_REG]], [[LOOP_REG]], 1
+  // ASM: bne     [[LOOP_REG]], [[COUNT_REG]], .LBB0_1
   // ASM: move     $sp, [[SAVEREG]]
 }

@@ -1,4 +1,5 @@
-// RUN: %clang_cc1 "-cc1" "-triple" "cheri-unknown-freebsd" "-emit-llvm" "-target-abi" "purecap" "-o" "-" %s -O2 | FileCheck %s
+// RUN: %cheri256_cc1 "-emit-llvm" "-target-abi" "purecap" "-o" "-" %s -O2 | FileCheck %s -check-prefixes CHECK,CHERI256
+// RUN: %cheri256_cc1 "-emit-llvm" "-target-abi" "purecap" "-o" "-" %s -O2 | FileCheck %s -check-prefixes CHECK,CHERI256
 struct thingy {
 	unsigned long a;
 	unsigned int b[5];
@@ -28,7 +29,8 @@ typedef struct heim_octet_string {
 // This is a bit ugly, as we're copying the struct padding in registers, but
 // that's probably needed for stable memcmpy anyway.  This won't be as bad on
 // CHERI128.
-// CHECK: declare void @h(i64 inreg, i64 inreg, i64 inreg, i64 inreg, i8 addrspace(200)* inreg)
+// CHERI256: declare void @h(i64 inreg, i64 inreg, i64 inreg, i64 inreg, i8 addrspace(200)* inreg)
+// CHERI128: declare void @h(i64 inreg, i64 inreg, i8 addrspace(200)* inreg)
 void h(heim_octet_string str);
 
 void g(void)
