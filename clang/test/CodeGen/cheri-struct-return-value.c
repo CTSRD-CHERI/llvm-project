@@ -1,5 +1,5 @@
-// RUN: %cheri256_cc1 -target-abi purecap -std=c11 -O2 -emit-llvm -o - %s | FileCheck %s
-// RUN: %cheri128_cc1 -target-abi purecap -std=c11 -O2 -emit-llvm -o - %s | FileCheck %s
+// RUN: %cheri256_cc1 -target-abi purecap -std=c11 -O2 -emit-llvm -o - %s | FileCheck %s -enable-var-scope
+// RUN: %cheri128_cc1 -target-abi purecap -std=c11 -O2 -emit-llvm -o - %s | FileCheck %s -enable-var-scope
 // RUN: %cheri256_cc1 -target-abi purecap -std=c11 -O2 -S -o - %s | FileCheck -check-prefix=ASM %s
 // RUN: %cheri128_cc1 -target-abi purecap -std=c11 -O2 -S -o - %s | FileCheck -check-prefix=ASM %s
 
@@ -8,10 +8,10 @@ int global;
 unsigned long sizeof_cap(void) {
   return sizeof(void* __capability);
   // CHECK-LABEL: define i64 @sizeof_cap() local_unnamed_addr
-  // CHECK: ret i64 [[CAP_SIZE:16|32]]
+  // CHECK: ret i64 [[$CAP_SIZE:16|32]]
   // ASM-LABEL: sizeof_cap
   // ASM: cjr     $c17
-  // ASM: daddiu   $2, $zero, [[CAP_SIZE:16|32]]
+  // ASM: daddiu   $2, $zero, [[$CAP_SIZE:16|32]]
 }
 
 typedef struct {
@@ -24,8 +24,8 @@ IntptrStruct set_int() {
   p.intptr = 0;
   return p;
   // CHECK-LABEL: define inreg { i8 addrspace(200)* } @set_int() local_unnamed_addr
-  // CHECK: %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 0)
-  // CHECK: %.fca.0.insert = insertvalue { i8 addrspace(200)* } undef, i8 addrspace(200)* %0, 0
+  // CHECK: [[VAR0:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 0)
+  // CHECK: %.fca.0.insert = insertvalue { i8 addrspace(200)* } undef, i8 addrspace(200)* [[VAR0]], 0
   // CHECK: ret { i8 addrspace(200)* } %.fca.0.insert
   // ASM-LABEL: set_int
   // ASM:       cfromptr        $c1, $c0, $zero
@@ -64,18 +64,18 @@ TwoCapsStruct two_caps_struct(TwoCapsStruct in) {
   return t;
   // argument is split up into two cap regs, but return value is indirect
   // CHECK-LABEL: define void @two_caps_struct(%struct.TwoCapsStruct addrspace(200)* noalias nocapture sret %agg.result, i64, i8 addrspace(200)* inreg %in.coerce0, i8 addrspace(200)* inreg %in.coerce1) local_unnamed_addr
-  // CHECK: %1 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in.coerce0, i64 1)
+  // CHECK: [[VAR1:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in.coerce0, i64 1)
   // CHECK: %t.sroa.0.0..sroa_idx = getelementptr inbounds %struct.TwoCapsStruct, %struct.TwoCapsStruct addrspace(200)* %agg.result, i64 0, i32 0
-  // CHECK: store i8 addrspace(200)* %1, i8 addrspace(200)* addrspace(200)* %t.sroa.0.0..sroa_idx, align [[CAP_SIZE]]
+  // CHECK: store i8 addrspace(200)* [[VAR1]], i8 addrspace(200)* addrspace(200)* %t.sroa.0.0..sroa_idx, align [[$CAP_SIZE]]
   // CHECK: %t.sroa.4.0..sroa_idx4 = getelementptr inbounds %struct.TwoCapsStruct, %struct.TwoCapsStruct addrspace(200)* %agg.result, i64 0, i32 1
-  // CHECK: store i8 addrspace(200)* %in.coerce1, i8 addrspace(200)* addrspace(200)* %t.sroa.4.0..sroa_idx4, align [[CAP_SIZE]]
+  // CHECK: store i8 addrspace(200)* %in.coerce1, i8 addrspace(200)* addrspace(200)* %t.sroa.4.0..sroa_idx4, align [[$CAP_SIZE]]
   // CHECK: ret void
   // ASM-LABEL: two_caps_struct
   // ASM:       daddiu  $1, $zero, 1
   // ASM-NEXT:  cincoffset      $c1, $c4, $1
   // ASM-NEXT:  csc     $c1, $zero, 0($c3)
   // ASM-NEXT:  cjr     $c17
-  // ASM-NEXT:  csc     $c5, $zero, [[CAP_SIZE]]($c3)
+  // ASM-NEXT:  csc     $c5, $zero, [[$CAP_SIZE]]($c3)
 
 }
 
@@ -116,7 +116,7 @@ GreaterThanIntCapSizeUnion greater_than_intcap_size_union() {
   return g;
   // CHECK-LABEL: define void @greater_than_intcap_size_union(%union.GreaterThanIntCapSizeUnion addrspace(200)* noalias nocapture sret %agg.result) local_unnamed_addr
   // CHECK: %g.sroa.0.0..sroa_idx = getelementptr inbounds %union.GreaterThanIntCapSizeUnion, %union.GreaterThanIntCapSizeUnion addrspace(200)* %agg.result, i64 0, i32 0
-  // CHECK: store i8 addrspace(200)* bitcast (i32 addrspace(200)* @global to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* %g.sroa.0.0..sroa_idx, align [[CAP_SIZE]]
+  // CHECK: store i8 addrspace(200)* bitcast (i32 addrspace(200)* @global to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* %g.sroa.0.0..sroa_idx, align [[$CAP_SIZE]]
   // CHECK: ret void
   // ASM-LABEL: greater_than_intcap_size_union
   // ASM:       ld      $2, %got_disp(.size.global)($1)
