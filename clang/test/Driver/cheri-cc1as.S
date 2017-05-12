@@ -1,19 +1,19 @@
 // Check that the ABI is forwarded to the assembler
 // RUN: %clang -target cheri-unknown-freebsd -### -c %s -mabi=n64 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI-ABI-N64 %s
-// CHERI-ABI-N64: "-target-cpu" "cheri" "-target-abi" "n64"
+// CHERI-ABI-N64: "-target-cpu" "{{cheri(128)?}}" "-target-abi" "n64"
 // RUN: %clang -target cheri-unknown-freebsd -### -c %s -mabi=purecap 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI-ABI-SANDBOX %s
-// CHERI-ABI-SANDBOX: "-target-cpu" "cheri" "-target-abi" "purecap"
+// CHERI-ABI-SANDBOX: "-target-cpu" "{{cheri(128)?}}" "-target-abi" "purecap"
 // RUN: %clang -target cheri-unknown-freebsd -### -c %s 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI-ABI-NONE %s
-// CHERI-ABI-NONE: "-target-cpu" "cheri" "-target-abi" "n64"
+// CHERI-ABI-NONE: "-target-cpu" "{{cheri(128)?}}" "-target-abi" "n64"
 
-// RUN: %clang -target cheri-unknown-freebsd -c %s -o - | llvm-readobj -h - \
+// RUN: %clang -target cheri-unknown-freebsd -mcpu=cheri -c %s -o - | llvm-readobj -h - \
 // RUN:   | FileCheck -check-prefix=NONE-HEADERS %s
-// RUN: %clang -target cheri-unknown-freebsd -mabi=n64 -c %s -o - \
+// RUN: %clang -target cheri-unknown-freebsd -mcpu=cheri -mabi=n64 -c %s -o - \
 // RUN:   | llvm-readobj -h - | FileCheck -check-prefix=N64-HEADERS %s
-// RUN: %clang -target cheri-unknown-freebsd -mabi=purecap -c %s -o - \
+// RUN: %clang -target cheri-unknown-freebsd -mcpu=cheri -mabi=purecap -c %s -o - \
 // RUN:   | llvm-readobj -h - | FileCheck -check-prefix=SANDBOX-HEADERS %s
 
 // NONE-HEADERS:     Arch: cheri
