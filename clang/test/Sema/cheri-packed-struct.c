@@ -52,15 +52,15 @@ struct correct_when_used_in_array_but_bad_alignof {
   __UINTPTR_TYPE__ cap;
 } __attribute__((packed));
 
-struct bad_uintptr_array_1 { // expected-note{{Add __attribute__((aligned(32))) to ensure sufficient alignment}}
+struct bad_uintptr_array_1 { // expected-note-re {{Add __attribute__((aligned({{16|32}}))) to ensure sufficient alignment}}
   char before[sizeof(void*)];
-  __UINTPTR_TYPE__ cap; // expected-warning {{Capability field at offset 32 in packed structure will trap if structure is used in an array}}
+  __UINTPTR_TYPE__ cap; // expected-warning-re {{Capability field at offset {{16|32}} in packed structure will trap if structure is used in an array}}
   char after[1];
 } __attribute__((packed));
 
-struct bad_uintptr_array_2 { // expected-note{{Add __attribute__((aligned(32))) to ensure sufficient alignment}}
+struct bad_uintptr_array_2 { // expected-note-re {{Add __attribute__((aligned({{16|32}}))) to ensure sufficient alignment}}
   char before[sizeof(void*)];
-  __UINTPTR_TYPE__ cap; // expected-warning {{Capability field at offset 32 in packed structure will trap if structure is used in an array}}
+  __UINTPTR_TYPE__ cap; // expected-warning-re {{Capability field at offset {{16|32}} in packed structure will trap if structure is used in an array}}
   char after[1];
 } __attribute__((packed)) __attribute__((aligned(8)));
 
@@ -71,15 +71,15 @@ struct good_uintptr_array {
 } __attribute__((packed)) __attribute__((aligned(32)));
 
 // same again but the member is a struct containing a capability
-struct bad_cap_struct_array_1 { // expected-note{{Add __attribute__((aligned(32))) to ensure sufficient alignment}}
+struct bad_cap_struct_array_1 { // expected-note-re{{Add __attribute__((aligned({{16|32}}))) to ensure sufficient alignment}}
   char before[sizeof(void*)];
-  struct cap_struct cap; // expected-warning {{Capability field at offset 32 in packed structure will trap if structure is used in an array}}
+  struct cap_struct cap; // expected-warning-re {{Capability field at offset {{16|32}} in packed structure will trap if structure is used in an array}}
   char after[1];
 } __attribute__((packed));
 
-struct bad_cap_struct_array_2 { // expected-note{{Add __attribute__((aligned(32))) to ensure sufficient alignment}}
+struct bad_cap_struct_array_2 { // expected-note-re{{Add __attribute__((aligned({{16|32}}))) to ensure sufficient alignment}}
   char before[sizeof(void*)];
-  struct cap_struct cap; // expected-warning {{Capability field at offset 32 in packed structure will trap if structure is used in an array}}
+  struct cap_struct cap; // expected-warning-re {{Capability field at offset {{16|32}} in packed structure will trap if structure is used in an array}}
   char after[1];
 } __attribute__((packed)) __attribute__((aligned(8)));
 

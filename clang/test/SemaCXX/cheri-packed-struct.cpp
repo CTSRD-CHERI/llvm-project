@@ -4,14 +4,19 @@
 template <typename T>
 struct packed_T_and_cap {
   T t;
-  void* __capability cap; // expected-warning-re 3 {{Under aligned capability field at offset {{4|8|31}} in packed structure will trap if accessed}}
+  void* __capability cap;
+#if _MIPS_SZCAP == 32
+  // expected-warning-re@-2 3 {{Under aligned capability field at offset {{4|8|31}} in packed structure will trap if accessed}}
+#else
+  // expected-warning-re@-4 3 {{Under aligned capability field at offset {{4|8|15}} in packed structure will trap if accessed}}
+#endif
 } __attribute__((packed));
 
 struct inherit_from_template_good : public packed_T_and_cap<char[sizeof(void*)]> {
   char pad[sizeof(void*)];
 };
 
-struct inherit_from_template_bad : public packed_T_and_cap<char[sizeof(void*) - 1]> { // expected-note {{in instantiation of template class 'packed_T_and_cap<char [31]>' requested here}}
+struct inherit_from_template_bad : public packed_T_and_cap<char[sizeof(void*) - 1]> { // expected-note-re {{in instantiation of template class 'packed_T_and_cap<char [{{15|31}}]>' requested here}}
   char pad[sizeof(void*)];
 };
 

@@ -25,7 +25,7 @@ int main() {
   nullptr_t nt2 = __null;
   nullptr_t nt3 = 0;
 #ifdef __CHERI_PURE_CAPABILITY__
-#define NULLPTR_SIZE 32
+#define NULLPTR_SIZE (_MIPS_SZCAP / 8)
 #define GNU_NULL_TYPE __intcap_t
 #else
 #define NULLPTR_SIZE 8
