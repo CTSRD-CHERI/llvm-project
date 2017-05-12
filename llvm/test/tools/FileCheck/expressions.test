@@ -71,7 +71,6 @@
 
 // RUN: echo "22 -> 23 -> 24" | FileCheck -check-prefix=VAR-RESERVED-NAME-ESCAPED %s
 // VAR-RESERVED-NAME-ESCAPED: [[hex:[0-9]+]]
-// VAR-RESERVED-NAME-ESCAPED: [[@EXPR $hex + 1]]
 // VAR-RESERVED-NAME-ESCAPED: [[@EXPR ${hex} + 2]]
 
 // Check variable captures
