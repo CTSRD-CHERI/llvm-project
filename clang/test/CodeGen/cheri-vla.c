@@ -10,18 +10,21 @@ void foo(void) {
     vla[i - 1] = '\0';
     test(vla);
   }
-  // CHECK-LABEL: for.body:
-  // CHECK: %i.05 = phi i64 [ 1, %entry ], [ %inc, %for.body ]
-  // CHECK: %0 = call i8* @llvm.stacksave()
-  // CHECK: %vla = alloca i8, i64 %i.05, align 1
-  // CHECK: %sub = add nsw i64 %i.05, -1
-  // CHECK: %arrayidx = getelementptr inbounds i8, i8 addrspace(200)* %vla, i64 %sub
-  // CHECK: store i8 0, i8 addrspace(200)* %arrayidx, align 1, !tbaa !1
-  // CHECK: call void @test(i8 addrspace(200)* nonnull %vla) #1
-  // CHECK: call void @llvm.stackrestore(i8* %0)
-  // CHECK: %inc = add nuw nsw i64 %i.05, 1
-  // CHECK: %exitcond = icmp eq i64 %inc, 32
-  // CHECK: br i1 %exitcond, label %for.cond.cleanup, label %for.body
+  // CHECK-LABEL: define void @foo()
+  // CHECK: br label %[[FOR_BODY:.+]]
+  // CHECK: [[FOR_BODY]]:
+  // CHECK: [[I_05:%.+]] = phi i64 [ 1, %[[ENTRY:.+]] ], [ [[INC:%.+]], %[[FOR_BODY]] ]
+  // CHECK: [[VAR0:%.+]] = call i8* @llvm.stacksave()
+  // CHECK: [[VLA:%.+]] = alloca i8, i64 [[I_05]], align 1
+  // CHECK: [[SUB:%.+]] = add nsw i64 [[I_05]], -1
+  // CHECK: [[ARRAYIDX:%.+]] = getelementptr inbounds i8, i8 addrspace(200)* [[VLA]], i64 [[SUB]]
+  // CHECK: store i8 0, i8 addrspace(200)* [[ARRAYIDX]], align 1, !tbaa !1
+  // CHECK: call void @test(i8 addrspace(200)* nonnull [[VLA]]) #1
+  // CHECK: call void @llvm.stackrestore(i8* [[VAR0]])
+  // CHECK: [[INC]] = add nuw nsw i64 [[I_05]], 1
+  // CHECK: [[EXITCOND:%.+]] = icmp eq i64 [[INC]], 32
+  // CHECK: br i1 [[EXITCOND]], label %[[FOR_COND_CLEANUP:.+]], label %[[FOR_BODY]]
+
   // ASM-DAG: daddiu  [[LOOP_REG:\$[0-9]+]], $zero, 1
   // ASM-DAG: ld [[TEST_ADDR:\$[0-9]+]], %call16(test)($gp)
   // ASM-DAG: daddiu  [[COUNT_REG:\$[0-9]+]], $zero, 32
