@@ -703,7 +703,7 @@ private:
       return error("Not implemented yet");
     } else { // variable reference
       // allow ${variable} to handle variables called hex, bin, oct, etc..
-      if (Symbol.startswith("$")) {
+      if (Symbol.startswith("${")) {
         Symbol = Symbol.substr(1);
         Symbol = Symbol.ltrim('{');
         Symbol = Symbol.rtrim('}');
