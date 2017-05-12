@@ -44,7 +44,7 @@ using namespace llvm;
 
 static llvm::cl::opt<bool>
 UnsafeUsage(
-"cheri128-test-mode", llvm::cl::Hidden,
+"cheri-test-mode", llvm::cl::Hidden,
 llvm::cl::init(false));
 
 
@@ -77,20 +77,22 @@ static std::string computeDataLayout(const Triple &TT, StringRef CPU,
 
   if (FS.find("+cheri128") != StringRef::npos) {
 #if !CHERI_IS_128
-   if (!UnsafeUsage) {
-     for (int i=0 ; i<10 ; i++) {
-       errs() << "Trying to compile CHERI128 code with a CHERI256 compiler!\n";
-     }
-     abort();
-   }
+    if (!UnsafeUsage) {
+      for (int i=0 ; i<10 ; i++) {
+        errs() << "Trying to compile CHERI128 code with a CHERI256 compiler!\n";
+      }
+      abort();
+    }
 #endif
     Ret += "-pf200:128:128";
   } else if (Triple(TT).getArch() == Triple::cheri) {
 #if CHERI_IS_128
-     for (int i=0 ; i<10 ; i++) {
-       errs() << "Trying to compile CHERI256 code with a CHERI128 compiler!\n";
-     }
-    abort();
+    if (!UnsafeUsage) {
+      for (int i=0 ; i<10 ; i++) {
+        errs() << "Trying to compile CHERI256 code with a CHERI128 compiler!\n";
+      }
+      abort();
+    }
 #endif
     Ret += "-pf200:256:256";
   }
