@@ -1,4 +1,5 @@
-; TODO: make this work for 128
+; TODO: make this work for 128 (all offsets needs to be adjusted)
+; XFAIL: cheri_is_128
 ; RUN: %cheri_llc %s -mtriple=cheri-unknown-freebsd -target-abi purecap -o - -asm-verbose -verify-regalloc -O0 | FileCheck %s
 ; RUN: %cheri_llc %s -mtriple=cheri-unknown-freebsd -target-abi purecap -o - -asm-verbose -verify-regalloc -O1 | FileCheck %s -check-prefix OPT
 ; RUN: %cheri_llc %s -mtriple=cheri-unknown-freebsd -target-abi purecap -o - -asm-verbose -verify-regalloc -O2 | FileCheck %s -check-prefix OPT
