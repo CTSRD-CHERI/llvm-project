@@ -1,4 +1,4 @@
-; RUN: llc -o - %s
+; RUN: %cheri_llc -o - %s
 ; Test that this compiles without any errors
 ; ModuleID = 'cheri-static-init.c'
 source_filename = "cheri-static-init.c"

@@ -1,4 +1,4 @@
-; RUN: llc %s -mcpu=cheri -target-abi sandbox -o - | FileCheck %s
+; RUN: %cheri_llc %s -target-abi sandbox -o - | FileCheck %s
 ; ModuleID = 'cheri-member-pointer-init.cpp'
 source_filename = "cheri-member-pointer-init.cpp"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"

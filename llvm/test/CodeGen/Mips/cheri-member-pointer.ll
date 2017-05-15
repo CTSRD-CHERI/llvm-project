@@ -1,6 +1,7 @@
-; RUN: llc %s -mtriple=cheri-unknown-freebsd -target-abi purecap -mcpu=cheri -o - -asm-verbose -verify-regalloc -O0 | FileCheck %s
-; RUN: llc %s -mtriple=cheri-unknown-freebsd -target-abi purecap -mcpu=cheri -o - -asm-verbose -verify-regalloc -O1 | FileCheck %s -check-prefix OPT
-; RUN: llc %s -mtriple=cheri-unknown-freebsd -target-abi purecap -mcpu=cheri -o - -asm-verbose -verify-regalloc -O2 | FileCheck %s -check-prefix OPT
+; TODO: make this work for 128
+; RUN: %cheri_llc %s -mtriple=cheri-unknown-freebsd -target-abi purecap -o - -asm-verbose -verify-regalloc -O0 | FileCheck %s
+; RUN: %cheri_llc %s -mtriple=cheri-unknown-freebsd -target-abi purecap -o - -asm-verbose -verify-regalloc -O1 | FileCheck %s -check-prefix OPT
+; RUN: %cheri_llc %s -mtriple=cheri-unknown-freebsd -target-abi purecap -o - -asm-verbose -verify-regalloc -O2 | FileCheck %s -check-prefix OPT
 ; ModuleID = '/local/scratch/alr48/cheri/llvm/tools/clang/test/CodeGenCXX/cheri-pointer-to-member-simple.cpp'
 source_filename = "/local/scratch/alr48/cheri/llvm/tools/clang/test/CodeGenCXX/cheri-pointer-to-member-simple.cpp"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
