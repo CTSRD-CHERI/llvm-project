@@ -45,7 +45,7 @@ using namespace llvm::support::endian;
 using namespace llvm::ELF;
 
 std::string lld::toString(uint32_t Type) {
-  auto Machine = elf::Config->EMachine == EM_MIPS_CHERI ? EM_MIPS : elf::Config->EMachine;
+  auto Machine = elf::Config->EMachine;
   if (Machine == EM_MIPS && Type > 0xff) {
     uint32_t Type1 = Type & 0xff;
     llvm::Twine Result = getELFRelocationTypeName(Machine, Type1);

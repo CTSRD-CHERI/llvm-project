@@ -359,7 +359,7 @@ template <class ELFT> void Writer<ELFT>::createSyntheticSections() {
                       Config->Pic || Config->ExportDynamic;
   if (Config->Static)
     HasDynSymTab = false; // don't create dynamic binaries if -Bstatic is passed
-  if (Config->isMIPS()) {
+  if (Config->EMachine == EM_MIPS) {
     if (!Config->Shared && HasDynSymTab) {
       In<ELFT>::MipsRldMap = make<MipsRldMapSection>();
       Add(In<ELFT>::MipsRldMap);
@@ -404,7 +404,7 @@ template <class ELFT> void Writer<ELFT>::createSyntheticSections() {
 
   // Add .got. MIPS' .got is so different from the other archs,
   // it has its own class.
-  if (Config->isMIPS()) {
+  if (Config->EMachine == EM_MIPS) {
     In<ELFT>::MipsGot = make<MipsGotSection>();
     Add(In<ELFT>::MipsGot);
   } else {
@@ -821,7 +821,7 @@ template <class ELFT> void Writer<ELFT>::addRelIpltSymbols() {
 // The linker is expected to define some symbols depending on
 // the linking result. This function defines such symbols.
 template <class ELFT> void Writer<ELFT>::addReservedSymbols() {
-  if (Config->isMIPS()) {
+  if (Config->EMachine == EM_MIPS) {
     // Define _gp for MIPS. st_value of _gp symbol will be updated by Writer
     // so that it points to an absolute address which by default is relative
     // to GOT. Default offset is 0x7ff0.
@@ -1719,7 +1719,7 @@ template <class ELFT> void Writer<ELFT>::writeHeader() {
     // but we don't have any firm guarantees of conformance. Linux AArch64
     // kernels (as of 2016) require an EABI version to be set.
     EHdr->e_flags = EF_ARM_EABI_VER5;
-  else if (Config->isMIPS())
+  else if (Config->EMachine == EM_MIPS)
     EHdr->e_flags = getMipsEFlags<ELFT>();
 
   if (!Config->Relocatable) {

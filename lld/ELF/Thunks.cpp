@@ -255,7 +255,7 @@ template <class ELFT> static Thunk *addThunkMips(SymbolBody &S) {
 template <class ELFT> Thunk *addThunk(uint32_t RelocType, SymbolBody &S) {
   if (Config->EMachine == EM_ARM)
     return addThunkArm<ELFT>(RelocType, S);
-  else if (Config->isMIPS())
+  else if (Config->EMachine == EM_MIPS)
     return addThunkMips<ELFT>(S);
   llvm_unreachable("add Thunk only supported for ARM and Mips");
   return nullptr;
