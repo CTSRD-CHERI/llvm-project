@@ -33,11 +33,11 @@
 // READOBJ-NEXT:  }
 
 // READOBJ:       Section ([[RELA_CAP_RELOCS_IDX]]) .rela__cap_relocs {
-// READOBJ-NEXT:    0x0 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE .data 0x20
+// READOBJ-NEXT:    0x0 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE .data [[$CAP_SIZE:0x20|0x10]]
 // READOBJ-NEXT:    0x8 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE x 0x0
 // READOBJ-NEXT:    0x28 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE {{(\.data\.rel\.ro 0x0)|(\.rodata 0x20)}}
 // READOBJ-NEXT:    0x30 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE buffer 0x0
-// READOBJ-NEXT:    0x50 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE .data 0x40
+// READOBJ-NEXT:    0x50 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE .data 0x[[@EXPR hex($CAP_SIZE * 2)]]
 // READOBJ-NEXT:    0x58 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE __start 0x0
 // READOBJ-NEXT:  }
 
@@ -60,11 +60,11 @@
 // DYNAMIC:      {{.*}} .dynamic 00000000 .hidden _DYNAMIC
 
 // DUMP-EXE-DAG: [[__START_ADDR]]  g    F  .text           [[__START_LEN]] __start{{$}}
-// DUMP-EXE-DAG: [[FN_PTR_ADDR]]   g       .data           00000020 fn_ptr{{$}}
+// DUMP-EXE-DAG: [[FN_PTR_ADDR]]   g       .data           [[CAP_SYMBOL_SIZE:000000(20|10)]] fn_ptr{{$}}
 // DUMP-EXE-DAG: [[X_ADDR]]        g       .data           00000004 x{{$}}
-// DUMP-EXE-DAG: [[XPTR_ADDR]]     g       .data           00000020 xptr{{$}}
+// DUMP-EXE-DAG: [[XPTR_ADDR]]     g       .data           [[CAP_SYMBOL_SIZE]] xptr{{$}}
 // DUMP-EXE-DAG: [[BUFFER_ADDR]]   g       .bss            0000002a buffer{{$}}
-// DUMP-EXE-DAG: [[BUFPTR_ADDR]]   g       {{\.rodata|\.data\.rel\.ro}}    00000020 bufptr{{$}}
+// DUMP-EXE-DAG: [[BUFPTR_ADDR]]   g       {{\.rodata|\.data\.rel\.ro}}    [[CAP_SYMBOL_SIZE]] bufptr{{$}}
 
 
 // DUMP-OBJ:      RELOCATION RECORDS FOR [.rela__cap_relocs]:
@@ -86,7 +86,7 @@
 // SHLIB-NEXT:      SHF_ALLOC (0x2)
 // SHLIB-NEXT:      SHF_WRITE (0x1)
 // SHLIB-NEXT:    ]
-// SHLIB-NEXT:    Address: [[CAP_RELOCS_ADDR:(0x30020)|(0x30000)|(0x718)|(0x770)]]
+// SHLIB-NEXT:    Address: [[CAP_RELOCS_ADDR:(0x30020)|(0x30010)|(0x30000)|(0x718)|(0x770)]]
 // SHLIB-NEXT:    Offset: [[CAP_RELOCS_ADDR]]
 // SHLIB-NEXT:    Size: 120
 // SHLIB-NEXT:    Link: 0
@@ -118,7 +118,7 @@
 // DUMP-SHLIB-NEXT: 0x[[FN_PTR_ADDR:[0-9a-f]+]]  Base: ([[ZERO]]) Offset: [[ZERO]] Length: [[UINT64_MAX]]        Permissions: [[NO_PERMS]]
 
 // DUMP-SHLIB-LABEL: SYMBOL TABLE:
-// DUMP-SHLIB-DAG: [[FN_PTR_ADDR]]   g       .data           00000020 fn_ptr{{$}}
-// DUMP-SHLIB-DAG: [[XPTR_ADDR]]     g       .data           00000020 xptr{{$}}
-// DUMP-SHLIB-DAG: [[BUFPTR_ADDR]]   g       {{\.rodata|\.data\.rel\.ro}}    00000020 bufptr{{$}}
+// DUMP-SHLIB-DAG: [[FN_PTR_ADDR]]   g       .data           [[CAP_SYMBOL_SIZE:000000(20|10)]] fn_ptr{{$}}
+// DUMP-SHLIB-DAG: [[XPTR_ADDR]]     g       .data           [[CAP_SYMBOL_SIZE]] xptr{{$}}
+// DUMP-SHLIB-DAG: [[BUFPTR_ADDR]]   g       {{\.rodata|\.data\.rel\.ro}}    [[CAP_SYMBOL_SIZE]] bufptr{{$}}
 
