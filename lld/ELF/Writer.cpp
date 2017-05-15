@@ -356,9 +356,7 @@ template <class ELFT> void Writer<ELFT>::createSyntheticSections() {
 
   // Add MIPS-specific sections.
   bool HasDynSymTab = !Symtab<ELFT>::X->getSharedFiles().empty() ||
-                      Config->Pic || Config->ExportDynamic;
-  if (Config->Static)
-    HasDynSymTab = false; // don't create dynamic binaries if -Bstatic is passed
+                      Config->Pic || (Config->ExportDynamic && !Config->Static);
   if (Config->EMachine == EM_MIPS) {
     if (!Config->Shared && HasDynSymTab) {
       In<ELFT>::MipsRldMap = make<MipsRldMapSection>();
