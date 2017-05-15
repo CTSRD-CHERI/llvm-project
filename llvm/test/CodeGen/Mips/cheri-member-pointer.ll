@@ -1,5 +1,3 @@
-; TODO: make this work for 128 (all offsets needs to be adjusted)
-; XFAIL: cheri_is_128
 ; RUN: %cheri_llc %s -mtriple=cheri-unknown-freebsd -target-abi purecap -o - -asm-verbose -verify-regalloc -O0 | FileCheck %s
 ; RUN: %cheri_llc %s -mtriple=cheri-unknown-freebsd -target-abi purecap -o - -asm-verbose -verify-regalloc -O1 | FileCheck %s -check-prefix OPT
 ; RUN: %cheri_llc %s -mtriple=cheri-unknown-freebsd -target-abi purecap -o - -asm-verbose -verify-regalloc -O2 | FileCheck %s -check-prefix OPT
@@ -49,12 +47,12 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
   ; store a copy in c2
   ; CHECK: cincoffset      $c2, $c3, $zero
   ; CHECK: andi    $2, $4, 1
-  ; CHECK: csd     $1, $sp, 184($c11)
-  ; CHECK: csc     $c2, [[STACK_VTABLE_ADDR:\$sp, 128\(\$c11\)]]
-  ; CHECK: csc     $c3, [[STACK_THIS_ADJ:\$sp, 96\(\$c11\)]]
-  ; CHECK: csc     $c1, $sp, 64($c11)
-  ; CHECK: csc     $c4, [[STACK_MEMPTR_PTR:\$sp, 32\(\$c11\)]]
-  ; CHECK: beqz    $2, .LBB0_3
+  ; CHECK: csd     $1, $sp, {{104|184}}($c11)
+  ; CHECK-NEXT: csc     $c2, [[STACK_VTABLE_ADDR:\$sp, (80|128)\(\$c11\)]]
+  ; CHECK-NEXT: csc     $c3, [[STACK_THIS_ADJ:\$sp, (64|96)\(\$c11\)]]
+  ; CHECK-NEXT: csc     $c1, $sp, {{48|64}}($c11)
+  ; CHECK-NEXT: csc     $c4, [[STACK_MEMPTR_PTR:\$sp, 32\(\$c11\)]]
+  ; CHECK-NEXT: beqz    $2, .LBB0_3
 
   ; CHECK: .LBB0_2:                                # %memptr.virtual
   ; CHECK: clc     $c1, [[STACK_VTABLE_ADDR]]
@@ -62,12 +60,12 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
   ; CHECK: clc     [[MEMPTR:\$c3]], [[STACK_MEMPTR_PTR]]
   ; CHECK: ctoptr $1, [[MEMPTR]], $c0
   ; CHECK: clc     $c2, $1, 0($c2)
-  ; CHECK: csc     $c2, [[STACK_TARGET_FN_PTR:\$sp, 0\(\$c11\)]]
+  ; CHECK: csc     $c2, [[STACK_TARGET_FN_PTR:\$sp, (16|0)\(\$c11\)]]
   ; CHECK: j       .LBB0_4
   ; CHECK: nop
 
   ; CHECK: .LBB0_3:                                # %memptr.nonvirtual
-  ; CHECK: clc     $c1, $sp, 32($c11)      # 32-byte Folded Reload
+  ; CHECK: clc     $c1, $sp, 32($c11)      # {{16|32}}-byte Folded Reload
   ; CHECK: csc     $c1, [[STACK_TARGET_FN_PTR]]
   ; CHECK: j       .LBB0_4
   ; CHECK: nop
@@ -77,8 +75,8 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
   ; CHECK: cincoffset      $c12, $c1, $zero
   ; CHECK: cjalr   $c12, $c17
   ; CHECK: nop
-  ; CHECK: clc     $c17, $sp, 192($c11)    # 32-byte Folded Reload
-  ; CHECK: daddiu  $sp, $sp, 224
+  ; CHECK: clc     $c17, $sp, {{112|192}}($c11)    # {{16|32}}-byte Folded Reload
+  ; CHECK: daddiu  $sp, $sp, {{128|224}}
   ; CHECK: cjr     $c17
 
 
@@ -97,7 +95,7 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
   ; OPT: cincoffset      $c12, $c4, $zero
   ; OPT: cjalr   $c12, $c17
   ; OPT: nop
-  ; OPT: clc     $c17, $sp, 0($c11)      # 32-byte Folded Reload
+  ; OPT: clc     $c17, $sp, 0($c11)      # {{16|32}}-byte Folded Reload
   ; OPT: cjr     $c17
 }
 
