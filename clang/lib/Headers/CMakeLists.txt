@@ -46,6 +46,7 @@ set(files
   inttypes.h
   iso646.h
   limits.h
+  lwpintrin.h
   lzcntintrin.h
   mm3dnow.h
   mmintrin.h

@@ -383,9 +383,9 @@ elf::ObjectFile<ELFT>::createInputSection(const Elf_Shdr &Sec,
     // we see. The eglibc ARM dynamic loaders require the presence of an
     // attribute section for dlopen to work.
     // In a full implementation we would merge all attribute sections.
-    if (In<ELFT>::ARMAttributes == nullptr) {
-      In<ELFT>::ARMAttributes = make<InputSection>(this, &Sec, Name);
-      return In<ELFT>::ARMAttributes;
+    if (InX::ARMAttributes == nullptr) {
+      InX::ARMAttributes = make<InputSection>(this, &Sec, Name);
+      return InX::ARMAttributes;
     }
     return &InputSection::Discarded;
   case SHT_RELA:
@@ -410,7 +410,7 @@ elf::ObjectFile<ELFT>::createInputSection(const Elf_Shdr &Sec,
 
     // Mergeable sections with relocations are tricky because relocations
     // need to be taken into account when comparing section contents for
-    // merging. It doesn't worth supporting such mergeable sections because
+    // merging. It's not worth supporting such mergeable sections because
     // they are rare and it'd complicates the internal design (we usually
     // have to determine if two sections are mergeable early in the link
     // process much before applying relocations). We simply handle mergeable
@@ -596,17 +596,13 @@ SymbolBody *elf::ObjectFile<ELFT>::createSymbolBody(const Elf_Sym *Sym) {
   }
 }
 
+ArchiveFile::ArchiveFile(std::unique_ptr<Archive> &&File)
+    : InputFile(ArchiveKind, File->getMemoryBufferRef()),
+      File(std::move(File)) {}
+
 template <class ELFT> void ArchiveFile::parse() {
-  File = check(Archive::create(MB),
-               MB.getBufferIdentifier() + ": failed to parse archive");
-
-  // Read the symbol table to construct Lazy objects.
-  for (const Archive::Symbol &Sym : File->symbols()) {
+  for (const Archive::Symbol &Sym : File->symbols())
     Symtab<ELFT>::X->addLazyArchive(this, Sym);
-  }
-
-  if (File->symbols().begin() == File->symbols().end())
-    Config->ArchiveWithoutSymbolsSeen = true;
 }
 
 // Returns a buffer pointing to a member file containing a given symbol.
@@ -979,6 +975,13 @@ MemoryBufferRef LazyObjectFile::getBuffer() {
     return MemoryBufferRef();
   Seen = true;
   return MB;
+}
+
+InputFile *LazyObjectFile::fetch() {
+  MemoryBufferRef MBRef = getBuffer();
+  if (MBRef.getBuffer().empty())
+    return nullptr;
+  return createObjectFile(MBRef, ArchiveName, OffsetInArchive);
 }
 
 template <class ELFT> void LazyObjectFile::parse() {

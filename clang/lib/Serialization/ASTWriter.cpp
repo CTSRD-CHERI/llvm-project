@@ -2413,7 +2413,6 @@ void ASTWriter::WritePreprocessor(const Preprocessor &PP, bool IsModule) {
     }
 
     AddIdentifierRef(Name, Record);
-    Record.push_back(inferSubmoduleIDFromLocation(MI->getDefinitionLoc()));
     AddSourceLocation(MI->getDefinitionLoc(), Record);
     AddSourceLocation(MI->getDefinitionEndLoc(), Record);
     Record.push_back(MI->isUsed());
@@ -2868,8 +2867,27 @@ void ASTWriter::WritePragmaDiagnosticMappings(const DiagnosticsEngine &Diag,
   unsigned CurrID = 0;
   RecordData Record;
 
+  auto EncodeDiagStateFlags =
+      [](const DiagnosticsEngine::DiagState *DS) -> unsigned {
+    unsigned Result = (unsigned)DS->ExtBehavior;
+    for (unsigned Val :
+         {(unsigned)DS->IgnoreAllWarnings, (unsigned)DS->EnableAllWarnings,
+          (unsigned)DS->WarningsAsErrors, (unsigned)DS->ErrorsAsFatal,
+          (unsigned)DS->SuppressSystemWarnings})
+      Result = (Result << 1) | Val;
+    return Result;
+  };
+
+  unsigned Flags = EncodeDiagStateFlags(Diag.DiagStatesByLoc.FirstDiagState);
+  Record.push_back(Flags);
+
   auto AddDiagState = [&](const DiagnosticsEngine::DiagState *State,
                           bool IncludeNonPragmaStates) {
+    // Ensure that the diagnostic state wasn't modified since it was created.
+    // We will not correctly round-trip this information otherwise.
+    assert(Flags == EncodeDiagStateFlags(State) &&
+           "diag state flags vary in single AST file");
+
     unsigned &DiagStateID = DiagStateIDMap[State];
     Record.push_back(DiagStateID);
   
@@ -2882,7 +2900,7 @@ void ASTWriter::WritePragmaDiagnosticMappings(const DiagnosticsEngine &Diag,
       for (const auto &I : *State) {
         if (I.second.isPragma() || IncludeNonPragmaStates) {
           Record.push_back(I.first);
-          Record.push_back(I.second.serializeBits());
+          Record.push_back(I.second.serialize());
         }
       }
       // Update the placeholder.

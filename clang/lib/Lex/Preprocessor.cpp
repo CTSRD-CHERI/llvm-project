@@ -85,10 +85,10 @@ Preprocessor::Preprocessor(std::shared_ptr<PreprocessorOptions> PPOpts,
       LastTokenWasAt(false), ModuleImportExpectsIdentifier(false),
       CodeCompletionReached(false), CodeCompletionII(nullptr),
       MainFileDir(nullptr), SkipMainFilePreamble(0, true), CurPPLexer(nullptr),
-      CurDirLookup(nullptr), CurLexerKind(CLK_Lexer), CurSubmodule(nullptr),
-      Callbacks(nullptr), CurSubmoduleState(&NullSubmoduleState),
-      MacroArgCache(nullptr), Record(nullptr), MIChainHead(nullptr),
-      DeserialMIChainHead(nullptr) {
+      CurDirLookup(nullptr), CurLexerKind(CLK_Lexer),
+      CurLexerSubmodule(nullptr), Callbacks(nullptr),
+      CurSubmoduleState(&NullSubmoduleState), MacroArgCache(nullptr),
+      Record(nullptr), MIChainHead(nullptr) {
   OwnsHeaderSearch = OwnsHeaders;
   
   CounterValue = 0; // __COUNTER__ starts at 0.
@@ -168,11 +168,6 @@ Preprocessor::~Preprocessor() {
   // before the code below that frees up the MacroArgCache list.
   std::fill(TokenLexerCache, TokenLexerCache + NumCachedTokenLexers, nullptr);
   CurTokenLexer.reset();
-
-  while (DeserializedMacroInfoChain *I = DeserialMIChainHead) {
-    DeserialMIChainHead = I->Next;
-    I->~DeserializedMacroInfoChain();
-  }
 
   // Free any cached MacroArgs.
   for (MacroArgs *ArgList = MacroArgCache; ArgList;)

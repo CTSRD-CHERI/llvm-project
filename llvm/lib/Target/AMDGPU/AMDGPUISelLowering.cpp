@@ -567,13 +567,19 @@ static bool hasSourceMods(const SDNode *N) {
   case AMDGPUISD::INTERP_P1:
   case AMDGPUISD::INTERP_P2:
   case AMDGPUISD::DIV_SCALE:
+
+  // TODO: Should really be looking at the users of the bitcast. These are
+  // problematic because bitcasts are used to legalize all stores to integer
+  // types.
+  case ISD::BITCAST:
     return false;
   default:
     return true;
   }
 }
 
-static bool allUsesHaveSourceMods(const SDNode *N, unsigned CostThreshold = 4) {
+bool AMDGPUTargetLowering::allUsesHaveSourceMods(const SDNode *N,
+                                                 unsigned CostThreshold) {
   // Some users (such as 3-operand FMA/MAD) must use a VOP3 encoding, and thus
   // it is truly free to use a source modifier in all cases. If there are
   // multiple users but for each one will necessitate using VOP3, there will be
@@ -896,6 +902,7 @@ CCAssignFn *AMDGPUTargetLowering::CCAssignFnForCall(CallingConv::ID CC,
   case CallingConv::SPIR_KERNEL:
     return CC_AMDGPU_Kernel;
   case CallingConv::AMDGPU_VS:
+  case CallingConv::AMDGPU_HS:
   case CallingConv::AMDGPU_GS:
   case CallingConv::AMDGPU_PS:
   case CallingConv::AMDGPU_CS:
@@ -2298,7 +2305,7 @@ static bool isU24(SDValue Op, SelectionDAG &DAG) {
   EVT VT = Op.getValueType();
   DAG.computeKnownBits(Op, Known);
 
-  return (VT.getSizeInBits() - Known.Zero.countLeadingOnes()) <= 24;
+  return (VT.getSizeInBits() - Known.countMinLeadingZeros()) <= 24;
 }
 
 static bool isI24(SDValue Op, SelectionDAG &DAG) {
@@ -3579,7 +3586,7 @@ void AMDGPUTargetLowering::computeKnownBitsForTargetNode(
     const SDValue Op, KnownBits &Known,
     const APInt &DemandedElts, const SelectionDAG &DAG, unsigned Depth) const {
 
-  Known.Zero.clearAllBits(); Known.One.clearAllBits(); // Don't know anything.
+  Known.resetAll(); // Don't know anything.
 
   KnownBits Known2;
   unsigned Opc = Op.getOpcode();

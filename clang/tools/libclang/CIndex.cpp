@@ -3313,7 +3313,7 @@ clang_parseTranslationUnit_Impl(CXIndex CIdx, const char *source_filename,
     Diags(CompilerInstance::createDiagnostics(new DiagnosticOptions));
 
   if (options & CXTranslationUnit_KeepGoing)
-    Diags->setFatalsAsError(true);
+    Diags->setSuppressAfterFatalError(false);
 
   // Recover resources if we crash before exiting this function.
   llvm::CrashRecoveryContextCleanupRegistrar<DiagnosticsEngine,
@@ -7476,6 +7476,35 @@ unsigned clang_Cursor_isVariadic(CXCursor C) {
   if (const ObjCMethodDecl *MD = dyn_cast<ObjCMethodDecl>(D))
     return MD->isVariadic();
 
+  return 0;
+}
+
+unsigned clang_Cursor_isExternalSymbol(CXCursor C,
+                                     CXString *language, CXString *definedIn,
+                                     unsigned *isGenerated) {
+  if (!clang_isDeclaration(C.kind))
+    return 0;
+
+  const Decl *D = getCursorDecl(C);
+
+  auto getExternalSymAttr = [](const Decl *D) -> ExternalSourceSymbolAttr* {
+    if (auto *attr = D->getAttr<ExternalSourceSymbolAttr>())
+      return attr;
+    if (auto *dcd = dyn_cast<Decl>(D->getDeclContext())) {
+      if (auto *attr = dcd->getAttr<ExternalSourceSymbolAttr>())
+        return attr;
+    }
+    return nullptr;
+  };
+  if (auto *attr = getExternalSymAttr(D)) {
+    if (language)
+      *language = cxstring::createDup(attr->getLanguage());
+    if (definedIn)
+      *definedIn = cxstring::createDup(attr->getDefinedIn());
+    if (isGenerated)
+      *isGenerated = attr->getGeneratedDeclaration();
+    return 1;
+  }
   return 0;
 }
 

@@ -506,9 +506,9 @@ ItaniumCXXABI::ConvertMemberPointerType(const MemberPointerType *MPT) {
   if (MPT->isMemberDataPointer())
     return CGM.PtrDiffTy;
   if (getContext().getTargetInfo().areAllPointersCapabilities()) {
-    return llvm::StructType::get(CGM.VoidPtrTy, CGM.PtrDiffTy, nullptr);
+    return llvm::StructType::get(CGM.VoidPtrTy, CGM.PtrDiffTy);
   }
-  return llvm::StructType::get(CGM.PtrDiffTy, CGM.PtrDiffTy, nullptr);
+  return llvm::StructType::get(CGM.PtrDiffTy, CGM.PtrDiffTy);
 }
 
 /// In the Itanium and ARM ABIs, method pointers have the form:

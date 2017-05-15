@@ -568,27 +568,16 @@ private:
       Predicates.insert(P);
     }
 
-    /*implicit*/ ExitLimit(const SCEV *E)
-        : ExactNotTaken(E), MaxNotTaken(E), MaxOrZero(false) {}
+    /*implicit*/ ExitLimit(const SCEV *E);
 
     ExitLimit(
         const SCEV *E, const SCEV *M, bool MaxOrZero,
-        ArrayRef<const SmallPtrSetImpl<const SCEVPredicate *> *> PredSetList)
-        : ExactNotTaken(E), MaxNotTaken(M), MaxOrZero(MaxOrZero) {
-      assert((isa<SCEVCouldNotCompute>(ExactNotTaken) ||
-              !isa<SCEVCouldNotCompute>(MaxNotTaken)) &&
-             "Exact is not allowed to be less precise than Max");
-      for (auto *PredSet : PredSetList)
-        for (auto *P : *PredSet)
-          addPredicate(P);
-    }
+        ArrayRef<const SmallPtrSetImpl<const SCEVPredicate *> *> PredSetList);
 
     ExitLimit(const SCEV *E, const SCEV *M, bool MaxOrZero,
-              const SmallPtrSetImpl<const SCEVPredicate *> &PredSet)
-        : ExitLimit(E, M, MaxOrZero, {&PredSet}) {}
+              const SmallPtrSetImpl<const SCEVPredicate *> &PredSet);
 
-    ExitLimit(const SCEV *E, const SCEV *M, bool MaxOrZero)
-        : ExitLimit(E, M, MaxOrZero, None) {}
+    ExitLimit(const SCEV *E, const SCEV *M, bool MaxOrZero);
 
     /// Test whether this ExitLimit contains any computed information, or
     /// whether it's all SCEVCouldNotCompute values.
@@ -782,13 +771,13 @@ private:
 
   /// Set the memoized range for the given SCEV.
   const ConstantRange &setRange(const SCEV *S, RangeSignHint Hint,
-                                const ConstantRange &CR) {
+                                ConstantRange CR) {
     DenseMap<const SCEV *, ConstantRange> &Cache =
         Hint == HINT_RANGE_UNSIGNED ? UnsignedRanges : SignedRanges;
 
-    auto Pair = Cache.insert({S, CR});
+    auto Pair = Cache.try_emplace(S, std::move(CR));
     if (!Pair.second)
-      Pair.first->second = CR;
+      Pair.first->second = std::move(CR);
     return Pair.first->second;
   }
 
@@ -815,6 +804,10 @@ private:
 
   /// Helper function called from createNodeForPHI.
   const SCEV *createAddRecFromPHI(PHINode *PN);
+
+  /// A helper function for createAddRecFromPHI to handle simple cases.
+  const SCEV *createSimpleAffineAddRec(PHINode *PN, Value *BEValueV,
+                                            Value *StartValueV);
 
   /// Helper function called from createNodeForPHI.
   const SCEV *createNodeFromSelectLikePHI(PHINode *PN);
@@ -1565,7 +1558,7 @@ public:
   /// delinearization).
   void findArrayDimensions(SmallVectorImpl<const SCEV *> &Terms,
                            SmallVectorImpl<const SCEV *> &Sizes,
-                           const SCEV *ElementSize) const;
+                           const SCEV *ElementSize);
 
   void print(raw_ostream &OS) const;
   void verify() const;

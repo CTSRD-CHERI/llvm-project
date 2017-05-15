@@ -45,6 +45,42 @@ User::op_iterator CallSite::getCallee() const {
 TerminatorInst::~TerminatorInst() {
 }
 
+unsigned TerminatorInst::getNumSuccessors() const {
+  switch (getOpcode()) {
+#define HANDLE_TERM_INST(N, OPC, CLASS)                                        \
+  case Instruction::OPC:                                                       \
+    return static_cast<const CLASS *>(this)->getNumSuccessorsV();
+#include "llvm/IR/Instruction.def"
+  default:
+    break;
+  }
+  llvm_unreachable("not a terminator");
+}
+
+BasicBlock *TerminatorInst::getSuccessor(unsigned idx) const {
+  switch (getOpcode()) {
+#define HANDLE_TERM_INST(N, OPC, CLASS)                                        \
+  case Instruction::OPC:                                                       \
+    return static_cast<const CLASS *>(this)->getSuccessorV(idx);
+#include "llvm/IR/Instruction.def"
+  default:
+    break;
+  }
+  llvm_unreachable("not a terminator");
+}
+
+void TerminatorInst::setSuccessor(unsigned idx, BasicBlock *B) {
+  switch (getOpcode()) {
+#define HANDLE_TERM_INST(N, OPC, CLASS)                                        \
+  case Instruction::OPC:                                                       \
+    return static_cast<CLASS *>(this)->setSuccessorV(idx, B);
+#include "llvm/IR/Instruction.def"
+  default:
+    break;
+  }
+  llvm_unreachable("not a terminator");
+}
+
 //===----------------------------------------------------------------------===//
 //                           UnaryInstruction Class
 //===----------------------------------------------------------------------===//
@@ -335,12 +371,12 @@ Value *CallInst::getReturnedArgOperand() const {
   unsigned Index;
 
   if (Attrs.hasAttrSomewhere(Attribute::Returned, &Index) && Index)
-    return getArgOperand(Index-1);
+    return getArgOperand(Index - AttributeList::FirstArgIndex);
   if (const Function *F = getCalledFunction())
     if (F->getAttributes().hasAttrSomewhere(Attribute::Returned, &Index) &&
         Index)
-      return getArgOperand(Index-1);
-      
+      return getArgOperand(Index - AttributeList::FirstArgIndex);
+
   return nullptr;
 }
 
@@ -356,6 +392,10 @@ void CallInst::addAttribute(unsigned i, Attribute Attr) {
   setAttributes(PAL);
 }
 
+void CallInst::addParamAttr(unsigned ArgNo, Attribute::AttrKind Kind) {
+  addAttribute(ArgNo + AttributeList::FirstArgIndex, Kind);
+}
+
 void CallInst::removeAttribute(unsigned i, Attribute::AttrKind Kind) {
   AttributeList PAL = getAttributes();
   PAL = PAL.removeAttribute(getContext(), i, Kind);
@@ -366,6 +406,10 @@ void CallInst::removeAttribute(unsigned i, StringRef Kind) {
   AttributeList PAL = getAttributes();
   PAL = PAL.removeAttribute(getContext(), i, Kind);
   setAttributes(PAL);
+}
+
+void CallInst::removeParamAttr(unsigned ArgNo, Attribute::AttrKind Kind) {
+  removeAttribute(ArgNo + AttributeList::FirstArgIndex, Kind);
 }
 
 void CallInst::addDereferenceableAttr(unsigned i, uint64_t Bytes) {
@@ -501,8 +545,8 @@ static Instruction *createMalloc(Instruction *InsertBefore,
   MCall->setTailCall();
   if (Function *F = dyn_cast<Function>(MallocFunc)) {
     MCall->setCallingConv(F->getCallingConv());
-    if (!F->doesNotAlias(AttributeList::ReturnIndex))
-      F->setDoesNotAlias(AttributeList::ReturnIndex);
+    if (!F->returnDoesNotAlias())
+      F->setReturnDoesNotAlias();
   }
   assert(!MCall->getType()->isVoidTy() && "Malloc has void return type");
 
@@ -695,12 +739,12 @@ Value *InvokeInst::getReturnedArgOperand() const {
   unsigned Index;
 
   if (Attrs.hasAttrSomewhere(Attribute::Returned, &Index) && Index)
-    return getArgOperand(Index-1);
+    return getArgOperand(Index - AttributeList::FirstArgIndex);
   if (const Function *F = getCalledFunction())
     if (F->getAttributes().hasAttrSomewhere(Attribute::Returned, &Index) &&
         Index)
-      return getArgOperand(Index-1);
-      
+      return getArgOperand(Index - AttributeList::FirstArgIndex);
+
   return nullptr;
 }
 
@@ -756,6 +800,10 @@ void InvokeInst::addAttribute(unsigned i, Attribute Attr) {
   setAttributes(PAL);
 }
 
+void InvokeInst::addParamAttr(unsigned ArgNo, Attribute::AttrKind Kind) {
+  addAttribute(ArgNo + AttributeList::FirstArgIndex, Kind);
+}
+
 void InvokeInst::removeAttribute(unsigned i, Attribute::AttrKind Kind) {
   AttributeList PAL = getAttributes();
   PAL = PAL.removeAttribute(getContext(), i, Kind);
@@ -766,6 +814,10 @@ void InvokeInst::removeAttribute(unsigned i, StringRef Kind) {
   AttributeList PAL = getAttributes();
   PAL = PAL.removeAttribute(getContext(), i, Kind);
   setAttributes(PAL);
+}
+
+void InvokeInst::removeParamAttr(unsigned ArgNo, Attribute::AttrKind Kind) {
+  removeAttribute(ArgNo + AttributeList::FirstArgIndex, Kind);
 }
 
 void InvokeInst::addDereferenceableAttr(unsigned i, uint64_t Bytes) {
@@ -1527,8 +1579,7 @@ AtomicCmpXchgInst::AtomicCmpXchgInst(Value *Ptr, Value *Cmp, Value *NewVal,
                                      SynchronizationScope SynchScope,
                                      Instruction *InsertBefore)
     : Instruction(
-          StructType::get(Cmp->getType(), Type::getInt1Ty(Cmp->getContext()),
-                          nullptr),
+          StructType::get(Cmp->getType(), Type::getInt1Ty(Cmp->getContext())),
           AtomicCmpXchg, OperandTraits<AtomicCmpXchgInst>::op_begin(this),
           OperandTraits<AtomicCmpXchgInst>::operands(this), InsertBefore) {
   Init(Ptr, Cmp, NewVal, SuccessOrdering, FailureOrdering, SynchScope);
@@ -1540,8 +1591,7 @@ AtomicCmpXchgInst::AtomicCmpXchgInst(Value *Ptr, Value *Cmp, Value *NewVal,
                                      SynchronizationScope SynchScope,
                                      BasicBlock *InsertAtEnd)
     : Instruction(
-          StructType::get(Cmp->getType(), Type::getInt1Ty(Cmp->getContext()),
-                          nullptr),
+          StructType::get(Cmp->getType(), Type::getInt1Ty(Cmp->getContext())),
           AtomicCmpXchg, OperandTraits<AtomicCmpXchgInst>::op_begin(this),
           OperandTraits<AtomicCmpXchgInst>::operands(this), InsertAtEnd) {
   Init(Ptr, Cmp, NewVal, SuccessOrdering, FailureOrdering, SynchScope);

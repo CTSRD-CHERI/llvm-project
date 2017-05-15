@@ -31,6 +31,9 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Config/config.h"
+#include "llvm/DebugInfo/CodeView/ModuleDebugFileChecksumFragment.h"
+#include "llvm/DebugInfo/CodeView/ModuleDebugInlineeLinesFragment.h"
+#include "llvm/DebugInfo/CodeView/ModuleDebugLineFragment.h"
 #include "llvm/DebugInfo/MSF/MSFBuilder.h"
 #include "llvm/DebugInfo/PDB/GenericError.h"
 #include "llvm/DebugInfo/PDB/IPDBEnumChildren.h"
@@ -44,9 +47,9 @@
 #include "llvm/DebugInfo/PDB/Native/NativeSession.h"
 #include "llvm/DebugInfo/PDB/Native/PDBFile.h"
 #include "llvm/DebugInfo/PDB/Native/PDBFileBuilder.h"
+#include "llvm/DebugInfo/PDB/Native/PDBStringTableBuilder.h"
 #include "llvm/DebugInfo/PDB/Native/RawConstants.h"
 #include "llvm/DebugInfo/PDB/Native/RawError.h"
-#include "llvm/DebugInfo/PDB/Native/StringTableBuilder.h"
 #include "llvm/DebugInfo/PDB/Native/TpiStream.h"
 #include "llvm/DebugInfo/PDB/Native/TpiStreamBuilder.h"
 #include "llvm/DebugInfo/PDB/PDB.h"
@@ -107,12 +110,22 @@ cl::list<std::string> InputFilenames(cl::Positional,
 
 cl::opt<bool> Compilands("compilands", cl::desc("Display compilands"),
                          cl::cat(TypeCategory), cl::sub(PrettySubcommand));
-cl::opt<bool> Symbols("symbols", cl::desc("Display symbols for each compiland"),
+cl::opt<bool> Symbols("module-syms",
+                      cl::desc("Display symbols for each compiland"),
                       cl::cat(TypeCategory), cl::sub(PrettySubcommand));
 cl::opt<bool> Globals("globals", cl::desc("Dump global symbols"),
                       cl::cat(TypeCategory), cl::sub(PrettySubcommand));
 cl::opt<bool> Externals("externals", cl::desc("Dump external symbols"),
                         cl::cat(TypeCategory), cl::sub(PrettySubcommand));
+cl::list<SymLevel> SymTypes(
+    "sym-types", cl::desc("Type of symbols to dump (default all)"),
+    cl::cat(TypeCategory), cl::sub(PrettySubcommand), cl::ZeroOrMore,
+    cl::values(
+        clEnumValN(SymLevel::Thunks, "thunks", "Display thunk symbols"),
+        clEnumValN(SymLevel::Data, "data", "Display data symbols"),
+        clEnumValN(SymLevel::Functions, "funcs", "Display function symbols"),
+        clEnumValN(SymLevel::All, "all", "Display all symbols (default)")));
+
 cl::opt<bool>
     Types("types",
           cl::desc("Display all types (implies -classes, -enums, -typedefs)"),
@@ -123,6 +136,16 @@ cl::opt<bool> Enums("enums", cl::desc("Display enum types"),
                     cl::cat(TypeCategory), cl::sub(PrettySubcommand));
 cl::opt<bool> Typedefs("typedefs", cl::desc("Display typedef types"),
                        cl::cat(TypeCategory), cl::sub(PrettySubcommand));
+cl::opt<SymbolSortMode> SymbolOrder(
+    "symbol-order", cl::desc("symbol sort order"),
+    cl::init(SymbolSortMode::None),
+    cl::values(clEnumValN(SymbolSortMode::None, "none",
+                          "Undefined / no particular sort order"),
+               clEnumValN(SymbolSortMode::Name, "name", "Sort symbols by name"),
+               clEnumValN(SymbolSortMode::Size, "size",
+                          "Sort symbols by size")),
+    cl::cat(TypeCategory), cl::sub(PrettySubcommand));
+
 cl::opt<ClassSortMode> ClassOrder(
     "class-order", cl::desc("Class sort order"), cl::init(ClassSortMode::None),
     cl::values(
@@ -472,6 +495,8 @@ static void yamlToPdb(StringRef Path) {
   for (auto F : Info.Features)
     InfoBuilder.addFeature(F);
 
+  auto &Strings = Builder.getStringTableBuilder().getStrings();
+
   const auto &Dbi = YamlObj.DbiStream.getValueOr(DefaultDbiStream);
   auto &DbiBuilder = Builder.getDbiBuilder();
   DbiBuilder.setAge(Dbi.Age);
@@ -498,41 +523,24 @@ static void yamlToPdb(StringRef Path) {
       // File Checksums must be emitted before line information, because line
       // info records use offsets into the checksum buffer to reference a file's
       // source file name.
-      auto Checksums = llvm::make_unique<ModuleDebugFileChecksumFragment>();
+      auto Checksums =
+          llvm::make_unique<ModuleDebugFileChecksumFragment>(Strings);
       auto &ChecksumRef = *Checksums;
       if (!FLI.FileChecksums.empty()) {
-        auto &Strings = Builder.getStringTableBuilder();
-        for (auto &FC : FLI.FileChecksums) {
-          uint32_t STOffset = Strings.getStringIndex(FC.FileName);
-          Checksums->addChecksum(STOffset, FC.Kind, FC.ChecksumBytes.Bytes);
-        }
+        for (auto &FC : FLI.FileChecksums)
+          Checksums->addChecksum(FC.FileName, FC.Kind, FC.ChecksumBytes.Bytes);
       }
       ModiBuilder.setC13FileChecksums(std::move(Checksums));
 
       for (const auto &Fragment : FLI.LineFragments) {
-        auto Lines = llvm::make_unique<ModuleDebugLineFragment>();
+        auto Lines =
+            llvm::make_unique<ModuleDebugLineFragment>(ChecksumRef, Strings);
         Lines->setCodeSize(Fragment.CodeSize);
         Lines->setRelocationAddress(Fragment.RelocSegment,
                                     Fragment.RelocOffset);
         Lines->setFlags(Fragment.Flags);
         for (const auto &LC : Fragment.Blocks) {
-          // FIXME: StringTable / StringTableBuilder should really be in
-          // DebugInfoCodeView.  This would allow us to construct the
-          // ModuleDebugLineFragment with a reference to the string table,
-          // and we could just pass strings around rather than having to
-          // remember how to calculate the right offset.
-          auto &Strings = Builder.getStringTableBuilder();
-          // The offset in the line info record is the offset of the checksum
-          // entry for the corresponding file.  That entry then contains an
-          // offset into the global string table of the file name.  So to
-          // compute the proper offset to write into the line info record, we
-          // must first get its offset in the global string table, then ask the
-          // checksum builder to find the offset in its serialized buffer that
-          // it mapped that filename string table offset to.
-          uint32_t StringOffset = Strings.getStringIndex(LC.FileName);
-          uint32_t ChecksumOffset = ChecksumRef.mapChecksumOffset(StringOffset);
-
-          Lines->createBlock(ChecksumOffset);
+          Lines->createBlock(LC.FileName);
           if (Lines->hasColumnInfo()) {
             for (const auto &Item : zip(LC.Lines, LC.Columns)) {
               auto &L = std::get<0>(Item);
@@ -550,7 +558,23 @@ static void yamlToPdb(StringRef Path) {
             }
           }
         }
-        ModiBuilder.addC13LineFragment(std::move(Lines));
+        ModiBuilder.addC13Fragment(std::move(Lines));
+      }
+
+      for (const auto &Inlinee : FLI.Inlinees) {
+        auto Inlinees = llvm::make_unique<ModuleDebugInlineeLineFragment>(
+            ChecksumRef, Inlinee.HasExtraFiles);
+        for (const auto &Site : Inlinee.Sites) {
+          Inlinees->addInlineSite(Site.Inlinee, Site.FileName,
+                                  Site.SourceLineNum);
+          if (!Inlinee.HasExtraFiles)
+            continue;
+
+          for (auto EF : Site.ExtraFiles) {
+            Inlinees->addExtraFile(EF);
+          }
+        }
+        ModiBuilder.addC13Fragment(std::move(Inlinees));
       }
     }
   }
@@ -614,6 +638,49 @@ static void diff(StringRef Path1, StringRef Path2) {
   auto O = llvm::make_unique<DiffStyle>(File1, File2);
 
   ExitOnErr(O->dump());
+}
+
+bool opts::pretty::shouldDumpSymLevel(SymLevel Search) {
+  if (SymTypes.empty())
+    return true;
+  if (llvm::find(SymTypes, Search) != SymTypes.end())
+    return true;
+  if (llvm::find(SymTypes, SymLevel::All) != SymTypes.end())
+    return true;
+  return false;
+}
+
+uint32_t llvm::pdb::getTypeLength(const PDBSymbolData &Symbol) {
+  auto SymbolType = Symbol.getType();
+  const IPDBRawSymbol &RawType = SymbolType->getRawSymbol();
+
+  return RawType.getLength();
+}
+
+bool opts::pretty::compareFunctionSymbols(
+    const std::unique_ptr<PDBSymbolFunc> &F1,
+    const std::unique_ptr<PDBSymbolFunc> &F2) {
+  assert(opts::pretty::SymbolOrder != opts::pretty::SymbolSortMode::None);
+
+  if (opts::pretty::SymbolOrder == opts::pretty::SymbolSortMode::Name)
+    return F1->getName() < F2->getName();
+
+  // Note that we intentionally sort in descending order on length, since
+  // long functions are more interesting than short functions.
+  return F1->getLength() > F2->getLength();
+}
+
+bool opts::pretty::compareDataSymbols(
+    const std::unique_ptr<PDBSymbolData> &F1,
+    const std::unique_ptr<PDBSymbolData> &F2) {
+  assert(opts::pretty::SymbolOrder != opts::pretty::SymbolSortMode::None);
+
+  if (opts::pretty::SymbolOrder == opts::pretty::SymbolSortMode::Name)
+    return F1->getName() < F2->getName();
+
+  // Note that we intentionally sort in descending order on length, since
+  // large types are more interesting than short ones.
+  return getTypeLength(*F1) > getTypeLength(*F2);
 }
 
 static void dumpPretty(StringRef Path) {
@@ -704,21 +771,42 @@ static void dumpPretty(StringRef Path) {
     Printer.NewLine();
     WithColor(Printer, PDB_ColorItem::SectionHeader).get() << "---GLOBALS---";
     Printer.Indent();
-    {
+    if (shouldDumpSymLevel(opts::pretty::SymLevel::Functions)) {
       FunctionDumper Dumper(Printer);
       auto Functions = GlobalScope->findAllChildren<PDBSymbolFunc>();
-      while (auto Function = Functions->getNext()) {
-        Printer.NewLine();
-        Dumper.start(*Function, FunctionDumper::PointerType::None);
+      if (opts::pretty::SymbolOrder == opts::pretty::SymbolSortMode::None) {
+        while (auto Function = Functions->getNext()) {
+          Printer.NewLine();
+          Dumper.start(*Function, FunctionDumper::PointerType::None);
+        }
+      } else {
+        std::vector<std::unique_ptr<PDBSymbolFunc>> Funcs;
+        while (auto Func = Functions->getNext())
+          Funcs.push_back(std::move(Func));
+        std::sort(Funcs.begin(), Funcs.end(),
+                  opts::pretty::compareFunctionSymbols);
+        for (const auto &Func : Funcs) {
+          Printer.NewLine();
+          Dumper.start(*Func, FunctionDumper::PointerType::None);
+        }
       }
     }
-    {
+    if (shouldDumpSymLevel(opts::pretty::SymLevel::Data)) {
       auto Vars = GlobalScope->findAllChildren<PDBSymbolData>();
       VariableDumper Dumper(Printer);
-      while (auto Var = Vars->getNext())
-        Dumper.start(*Var);
+      if (opts::pretty::SymbolOrder == opts::pretty::SymbolSortMode::None) {
+        while (auto Var = Vars->getNext())
+          Dumper.start(*Var);
+      } else {
+        std::vector<std::unique_ptr<PDBSymbolData>> Datas;
+        while (auto Var = Vars->getNext())
+          Datas.push_back(std::move(Var));
+        std::sort(Datas.begin(), Datas.end(), opts::pretty::compareDataSymbols);
+        for (const auto &Var : Datas)
+          Dumper.start(*Var);
+      }
     }
-    {
+    if (shouldDumpSymLevel(opts::pretty::SymLevel::Thunks)) {
       auto Thunks = GlobalScope->findAllChildren<PDBSymbolThunk>();
       CompilandDumper Dumper(Printer);
       while (auto Thunk = Thunks->getNext())

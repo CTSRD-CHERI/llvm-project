@@ -284,8 +284,8 @@ def tADJCALLSTACKUP :
             Requires<[IsThumb, IsThumb1Only]>;
 
 def tADJCALLSTACKDOWN :
-  PseudoInst<(outs), (ins i32imm:$amt), NoItinerary,
-             [(ARMcallseq_start imm:$amt)]>,
+  PseudoInst<(outs), (ins i32imm:$amt, i32imm:$amt2), NoItinerary,
+             [(ARMcallseq_start imm:$amt, imm:$amt2)]>,
             Requires<[IsThumb, IsThumb1Only]>;
 }
 
@@ -1402,7 +1402,7 @@ def tADR : T1I<(outs tGPR:$Rd), (ins t_adrlabel:$addr, pred:$p),
   let DecoderMethod = "DecodeThumbAddSpecialReg";
 }
 
-let hasSideEffects = 0, isReMaterializable = 1 in
+let hasSideEffects = 0, isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def tLEApcrel   : tPseudoInst<(outs tGPR:$Rd), (ins i32imm:$label, pred:$p),
                               2, IIC_iALUi, []>, Sched<[WriteALU]>;
 

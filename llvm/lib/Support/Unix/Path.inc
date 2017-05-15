@@ -103,13 +103,16 @@
 #define STATVFS_F_FLAG(vfs) (vfs).f_flags
 #endif
 
+#if defined(__FreeBSD__) || defined(__NetBSD__)
+#include <sys/sysctl.h>
+#endif
+
 using namespace llvm;
 
 namespace llvm {
 namespace sys  {
 namespace fs {
-#if defined(__FreeBSD__) || defined (__NetBSD__) || defined(__Bitrig__) || \
-    defined(__OpenBSD__) || defined(__minix) || defined(__FreeBSD_kernel__) || \
+#if defined(__Bitrig__) || defined(__OpenBSD__) || defined(__minix) || \
     defined(__linux__) || defined(__CYGWIN__) || defined(__DragonFly__) || \
     defined(_AIX)
 static int
@@ -164,7 +167,7 @@ getprogpath(char ret[PATH_MAX], const char *bin)
   free(pv);
   return nullptr;
 }
-#endif // __FreeBSD__ || __NetBSD__ || __FreeBSD_kernel__
+#endif // Bitrig || OpenBSD || minix || linux || CYGWIN || DragonFly || AIX
 
 /// GetMainExecutable - Return the path to the main executable, given the
 /// value of argv[0] from program startup.
@@ -180,9 +183,24 @@ std::string getMainExecutable(const char *argv0, void *MainAddr) {
     if (realpath(exe_path, link_path))
       return link_path;
   }
-#elif defined(__FreeBSD__) || defined (__NetBSD__) || defined(__Bitrig__) || \
-      defined(__OpenBSD__) || defined(__minix) || defined(__DragonFly__) || \
-      defined(__FreeBSD_kernel__) || defined(_AIX)
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__NetBSD__)
+  int mib[4];
+  mib[0] = CTL_KERN;
+#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+  mib[1] = KERN_PROC;
+  mib[2] = KERN_PROC_PATHNAME;
+  mib[3] = -1;
+#else
+  mib[1] = KERN_PROC_ARGS;
+  mib[2] = -1;
+  mib[3] = KERN_PROC_PATHNAME;
+#endif
+  char exe_path[PATH_MAX];
+  size_t cb = sizeof(exe_path);
+  if (sysctl(mib, 4, exe_path, &cb, NULL, 0) == 0)
+    return exe_path;
+#elif defined(__Bitrig__) || defined(__OpenBSD__) || defined(__minix) || \
+      defined(__DragonFly__) || defined(_AIX)
   char exe_path[PATH_MAX];
 
   if (getprogpath(exe_path, argv0) != NULL)
@@ -421,14 +439,15 @@ std::error_code resize_file(int FD, uint64_t Size) {
 #if defined(HAVE_POSIX_FALLOCATE)
   // If we have posix_fallocate use it. Unlike ftruncate it always allocates
   // space, so we get an error if the disk is full.
-  if (int Err = ::posix_fallocate(FD, 0, Size))
-    return std::error_code(Err, std::generic_category());
-#else
+  if (int Err = ::posix_fallocate(FD, 0, Size)) {
+    if (Err != EOPNOTSUPP)
+      return std::error_code(Err, std::generic_category());
+  }
+#endif
   // Use ftruncate as a fallback. It may or may not allocate space. At least on
   // OS X with HFS+ it does.
   if (::ftruncate(FD, Size) == -1)
     return std::error_code(errno, std::generic_category());
-#endif
 
   return std::error_code();
 }

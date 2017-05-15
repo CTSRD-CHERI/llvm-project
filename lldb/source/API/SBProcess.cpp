@@ -281,7 +281,7 @@ size_t SBProcess::PutSTDIN(const char *src, size_t src_len) {
   size_t ret_val = 0;
   ProcessSP process_sp(GetSP());
   if (process_sp) {
-    Error error;
+    Status error;
     ret_val = process_sp->PutSTDIN(src, src_len, error);
   }
 
@@ -298,7 +298,7 @@ size_t SBProcess::GetSTDOUT(char *dst, size_t dst_len) const {
   size_t bytes_read = 0;
   ProcessSP process_sp(GetSP());
   if (process_sp) {
-    Error error;
+    Status error;
     bytes_read = process_sp->GetSTDOUT(dst, dst_len, error);
   }
 
@@ -317,7 +317,7 @@ size_t SBProcess::GetSTDERR(char *dst, size_t dst_len) const {
   size_t bytes_read = 0;
   ProcessSP process_sp(GetSP());
   if (process_sp) {
-    Error error;
+    Status error;
     bytes_read = process_sp->GetSTDERR(dst, dst_len, error);
   }
 
@@ -336,7 +336,7 @@ size_t SBProcess::GetAsyncProfileData(char *dst, size_t dst_len) const {
   size_t bytes_read = 0;
   ProcessSP process_sp(GetSP());
   if (process_sp) {
-    Error error;
+    Status error;
     bytes_read = process_sp->GetAsyncProfileData(dst, dst_len, error);
   }
 
@@ -1157,22 +1157,34 @@ uint32_t SBProcess::LoadImage(lldb::SBFileSpec &sb_remote_image_spec,
 uint32_t SBProcess::LoadImage(const lldb::SBFileSpec &sb_local_image_spec,
                               const lldb::SBFileSpec &sb_remote_image_spec,
                               lldb::SBError &sb_error) {
+  Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_API));
   ProcessSP process_sp(GetSP());
   if (process_sp) {
     Process::StopLocker stop_locker;
     if (stop_locker.TryLock(&process_sp->GetRunLock())) {
+      if (log)
+        log->Printf("SBProcess(%p)::LoadImage() => calling Platform::LoadImage"
+                    "for: %s",
+                    static_cast<void *>(process_sp.get()),
+                    sb_local_image_spec.GetFilename());
+
       std::lock_guard<std::recursive_mutex> guard(
-          process_sp->GetTarget().GetAPIMutex());
+        process_sp->GetTarget().GetAPIMutex());
       PlatformSP platform_sp = process_sp->GetTarget().GetPlatform();
       return platform_sp->LoadImage(process_sp.get(), *sb_local_image_spec,
                                     *sb_remote_image_spec, sb_error.ref());
     } else {
-      Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_API));
       if (log)
         log->Printf("SBProcess(%p)::LoadImage() => error: process is running",
                     static_cast<void *>(process_sp.get()));
       sb_error.SetErrorString("process is running");
     }
+  } else { 
+    if (log)
+      log->Printf("SBProcess(%p)::LoadImage() => error: called with invalid"
+                    " process",
+                    static_cast<void *>(process_sp.get()));
+    sb_error.SetErrorString("process is invalid");
   }
   return LLDB_INVALID_IMAGE_TOKEN;
 }

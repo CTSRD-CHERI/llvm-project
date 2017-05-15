@@ -31,14 +31,63 @@ STATISTIC(PairUnequalAccRels, "Number of Load-Store pairs NOT removed because "
                               "of different access relations");
 STATISTIC(InBetweenStore, "Number of Load-Store pairs NOT removed because "
                           "there is another store between them");
+STATISTIC(TotalOverwritesRemoved, "Number of removed overwritten writes");
 STATISTIC(TotalRedundantWritesRemoved,
           "Number of writes of same value removed in any SCoP");
 STATISTIC(TotalStmtsRemoved, "Number of statements removed in any SCoP");
+
+static bool isImplicitRead(MemoryAccess *MA) {
+  return MA->isRead() && MA->isOriginalScalarKind();
+}
+
+static bool isExplicitAccess(MemoryAccess *MA) {
+  return MA->isOriginalArrayKind();
+}
+
+static bool isImplicitWrite(MemoryAccess *MA) {
+  return MA->isWrite() && MA->isOriginalScalarKind();
+}
+
+/// Return a vector that contains MemoryAccesses in the order in
+/// which they are executed.
+///
+/// The order is:
+/// - Implicit reads (BlockGenerator::generateScalarLoads)
+/// - Explicit reads and writes (BlockGenerator::generateArrayLoad,
+///   BlockGenerator::generateArrayStore)
+///   - In block statements, the accesses are in order in which their
+///     instructions are executed.
+///   - In region statements, that order of execution is not predictable at
+///     compile-time.
+/// - Implicit writes (BlockGenerator::generateScalarStores)
+///   The order in which implicit writes are executed relative to each other is
+///   undefined.
+static SmallVector<MemoryAccess *, 32> getAccessesInOrder(ScopStmt &Stmt) {
+
+  SmallVector<MemoryAccess *, 32> Accesses;
+
+  for (MemoryAccess *MemAcc : Stmt)
+    if (isImplicitRead(MemAcc))
+      Accesses.push_back(MemAcc);
+
+  for (MemoryAccess *MemAcc : Stmt)
+    if (isExplicitAccess(MemAcc))
+      Accesses.push_back(MemAcc);
+
+  for (MemoryAccess *MemAcc : Stmt)
+    if (isImplicitWrite(MemAcc))
+      Accesses.push_back(MemAcc);
+
+  return Accesses;
+}
 
 class Simplify : public ScopPass {
 private:
   /// The last/current SCoP that is/has been processed.
   Scop *S;
+
+  /// Number of writes that are overwritten anyway.
+  int OverwritesRemoved = 0;
 
   /// Number of redundant writes removed from this SCoP.
   int RedundantWritesRemoved = 0;
@@ -48,7 +97,8 @@ private:
 
   /// Return whether at least one simplification has been applied.
   bool isModified() const {
-    return RedundantWritesRemoved > 0 || StmtsRemoved > 0;
+    return OverwritesRemoved > 0 || RedundantWritesRemoved > 0 ||
+           StmtsRemoved > 0;
   }
 
   MemoryAccess *getReadAccessForValue(ScopStmt *Stmt, llvm::Value *Val) {
@@ -122,6 +172,59 @@ private:
     return nullptr;
   }
 
+  /// Remove writes that are overwritten unconditionally later in the same
+  /// statement.
+  ///
+  /// There must be no read of the same value between the write (that is to be
+  /// removed) and the overwrite.
+  void removeOverwrites() {
+    for (auto &Stmt : *S) {
+      auto Domain = give(Stmt.getDomain());
+      isl::union_map WillBeOverwritten =
+          isl::union_map::empty(give(S->getParamSpace()));
+
+      SmallVector<MemoryAccess *, 32> Accesses(getAccessesInOrder(Stmt));
+
+      // Iterate in reverse order, so the overwrite comes before the write that
+      // is to be removed.
+      for (auto *MA : reverse(Accesses)) {
+
+        // In region statements, the explicit accesses can be in blocks that are
+        // can be executed in any order. We therefore process only the implicit
+        // writes and stop after that.
+        if (Stmt.isRegionStmt() && isExplicitAccess(MA))
+          break;
+
+        auto AccRel = give(MA->getAccessRelation());
+        AccRel = AccRel.intersect_domain(Domain);
+        AccRel = AccRel.intersect_params(give(S->getContext()));
+
+        // If a value is read in-between, do not consider it as overwritten.
+        if (MA->isRead()) {
+          WillBeOverwritten = WillBeOverwritten.subtract(AccRel);
+          continue;
+        }
+
+        // If all of a write's elements are overwritten, remove it.
+        isl::union_map AccRelUnion = AccRel;
+        if (isl_union_map_is_subset(AccRelUnion.keep(),
+                                    WillBeOverwritten.keep()) ==
+            isl_bool_true) {
+          DEBUG(dbgs() << "Removing " << MA
+                       << " which will be overwritten anyway\n");
+
+          Stmt.removeSingleMemoryAccess(MA);
+          OverwritesRemoved++;
+          TotalOverwritesRemoved++;
+        }
+
+        // Unconditional writes overwrite other values.
+        if (MA->isMustWrite())
+          WillBeOverwritten = WillBeOverwritten.add_map(AccRel);
+      }
+    }
+  }
+
   /// Remove writes that just write the same value already stored in the
   /// element.
   void removeRedundantWrites() {
@@ -166,6 +269,7 @@ private:
         }
 
         if (auto *Conflicting = hasWriteBetween(&Stmt, RA, WA, WARel)) {
+          (void)Conflicting;
           InBetweenStore++;
           DEBUG(dbgs() << "Not cleaning up " << WA
                        << " because there is another store to the same element "
@@ -186,6 +290,8 @@ private:
       DEBUG(dbgs() << "Cleanup of " << WA << ":\n");
       DEBUG(dbgs() << "      Scalar: " << *AccVal << "\n");
       DEBUG(dbgs() << "      AccRel: " << AccRel << "\n");
+      (void)AccVal;
+      (void)AccRel;
 
       Stmt->removeSingleMemoryAccess(WA);
 
@@ -208,6 +314,8 @@ private:
   /// Print simplification statistics to @p OS.
   void printStatistics(llvm::raw_ostream &OS, int Indent = 0) const {
     OS.indent(Indent) << "Statistics {\n";
+    OS.indent(Indent + 4) << "Overwrites removed: " << OverwritesRemoved
+                          << '\n';
     OS.indent(Indent + 4) << "Redundant writes removed: "
                           << RedundantWritesRemoved << "\n";
     OS.indent(Indent + 4) << "Stmts removed: " << StmtsRemoved << "\n";
@@ -242,6 +350,9 @@ public:
     this->S = &S;
     ScopsProcessed++;
 
+    DEBUG(dbgs() << "Removing overwrites...\n");
+    removeOverwrites();
+
     DEBUG(dbgs() << "Removing redundant writes...\n");
     removeRedundantWrites();
 
@@ -270,6 +381,9 @@ public:
 
   virtual void releaseMemory() override {
     S = nullptr;
+
+    OverwritesRemoved = 0;
+    RedundantWritesRemoved = 0;
     StmtsRemoved = 0;
   }
 };

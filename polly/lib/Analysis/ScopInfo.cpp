@@ -132,11 +132,6 @@ static cl::opt<bool>
                     cl::desc("Abort if an isl error is encountered"),
                     cl::init(true), cl::cat(PollyCategory));
 
-static cl::opt<bool> UnprofitableScalarAccs(
-    "polly-unprofitable-scalar-accs",
-    cl::desc("Count statements with scalar accesses as not optimizable"),
-    cl::Hidden, cl::init(false), cl::cat(PollyCategory));
-
 static cl::opt<bool> PollyPreciseInbounds(
     "polly-precise-inbounds",
     cl::desc("Take more precise inbounds assumptions (do not scale well)"),
@@ -158,6 +153,14 @@ static cl::opt<bool> PollyPreciseFoldAccesses(
     cl::desc("Fold memory accesses to model more possible delinearizations "
              "(does not scale well)"),
     cl::Hidden, cl::init(false), cl::cat(PollyCategory));
+
+bool polly::UseInstructionNames;
+static cl::opt<bool, true> XUseInstructionNames(
+    "polly-use-llvm-names",
+    cl::desc("Use LLVM-IR names when deriving statement names"),
+    cl::location(UseInstructionNames), cl::Hidden, cl::init(false),
+    cl::ZeroOrMore, cl::cat(PollyCategory));
+
 //===----------------------------------------------------------------------===//
 
 // Create a sequence of two schedules. Either argument may be null and is
@@ -240,8 +243,9 @@ ScopArrayInfo::ScopArrayInfo(Value *BasePtr, Type *ElementType, isl_ctx *Ctx,
     : BasePtr(BasePtr), ElementType(ElementType), Kind(Kind), DL(DL), S(*S) {
   std::string BasePtrName =
       BaseName ? BaseName
-               : getIslCompatibleName("MemRef_", BasePtr,
-                                      Kind == MemoryKind::PHI ? "__phi" : "");
+               : getIslCompatibleName("MemRef", BasePtr, S->getNextArrayIdx(),
+                                      Kind == MemoryKind::PHI ? "__phi" : "",
+                                      UseInstructionNames);
   Id = isl_id_alloc(Ctx, BasePtrName.c_str(), this);
 
   updateSizes(Sizes);
@@ -273,6 +277,20 @@ bool ScopArrayInfo::isReadOnly() {
   isl_union_set_free(WriteSet);
 
   return IsReadOnly;
+}
+
+bool ScopArrayInfo::isCompatibleWith(const ScopArrayInfo *Array) const {
+  if (Array->getElementType() != getElementType())
+    return false;
+
+  if (Array->getNumberOfDimensions() != getNumberOfDimensions())
+    return false;
+
+  for (unsigned i = 0; i < getNumberOfDimensions(); i++)
+    if (Array->getDimensionSize(i) != getDimensionSize(i))
+      return false;
+
+  return true;
 }
 
 void ScopArrayInfo::updateElementType(Type *NewElementType) {
@@ -781,7 +799,7 @@ void MemoryAccess::computeBoundsOnAccessRelation(unsigned ElementSize) {
   if (Range.isFullSet())
     return;
 
-  if (Range.isWrappedSet())
+  if (Range.isWrappedSet() | Range.isSignWrappedSet())
     return;
 
   bool isWrapping = Range.isSignWrappedSet();
@@ -961,18 +979,17 @@ MemoryAccess::MemoryAccess(ScopStmt *Stmt, Instruction *AccessInst,
                            Type *ElementType, bool Affine,
                            ArrayRef<const SCEV *> Subscripts,
                            ArrayRef<const SCEV *> Sizes, Value *AccessValue,
-                           MemoryKind Kind, StringRef BaseName)
+                           MemoryKind Kind)
     : Kind(Kind), AccType(AccType), RedType(RT_NONE), Statement(Stmt),
-      InvalidDomain(nullptr), BaseAddr(BaseAddress), BaseName(BaseName),
-      ElementType(ElementType), Sizes(Sizes.begin(), Sizes.end()),
-      AccessInstruction(AccessInst), AccessValue(AccessValue), IsAffine(Affine),
+      InvalidDomain(nullptr), BaseAddr(BaseAddress), ElementType(ElementType),
+      Sizes(Sizes.begin(), Sizes.end()), AccessInstruction(AccessInst),
+      AccessValue(AccessValue), IsAffine(Affine),
       Subscripts(Subscripts.begin(), Subscripts.end()), AccessRelation(nullptr),
-      NewAccessRelation(nullptr) {
+      NewAccessRelation(nullptr), FAD(nullptr) {
   static const std::string TypeStrings[] = {"", "_Read", "_Write", "_MayWrite"};
-  const std::string Access = TypeStrings[AccType] + utostr(Stmt->size()) + "_";
+  const std::string Access = TypeStrings[AccType] + utostr(Stmt->size());
 
-  std::string IdName =
-      getIslCompatibleName(Stmt->getBaseName(), Access, BaseName);
+  std::string IdName = Stmt->getBaseName() + Access;
   Id = isl_id_alloc(Stmt->getParent()->getIslCtx(), IdName.c_str(), this);
 }
 
@@ -980,7 +997,8 @@ MemoryAccess::MemoryAccess(ScopStmt *Stmt, AccessType AccType,
                            __isl_take isl_map *AccRel)
     : Kind(MemoryKind::Array), AccType(AccType), RedType(RT_NONE),
       Statement(Stmt), InvalidDomain(nullptr), AccessInstruction(nullptr),
-      IsAffine(true), AccessRelation(nullptr), NewAccessRelation(AccRel) {
+      IsAffine(true), AccessRelation(nullptr), NewAccessRelation(AccRel),
+      FAD(nullptr) {
   auto *ArrayInfoId = isl_map_get_tuple_id(NewAccessRelation, isl_dim_out);
   auto *SAI = ScopArrayInfo::getFromId(ArrayInfoId);
   Sizes.push_back(nullptr);
@@ -988,12 +1006,10 @@ MemoryAccess::MemoryAccess(ScopStmt *Stmt, AccessType AccType,
     Sizes.push_back(SAI->getDimensionSize(i));
   ElementType = SAI->getElementType();
   BaseAddr = SAI->getBasePtr();
-  BaseName = SAI->getName();
   static const std::string TypeStrings[] = {"", "_Read", "_Write", "_MayWrite"};
-  const std::string Access = TypeStrings[AccType] + utostr(Stmt->size()) + "_";
+  const std::string Access = TypeStrings[AccType] + utostr(Stmt->size());
 
-  std::string IdName =
-      getIslCompatibleName(Stmt->getBaseName(), Access, BaseName);
+  std::string IdName = Stmt->getBaseName() + Access;
   Id = isl_id_alloc(Stmt->getParent()->getIslCtx(), IdName.c_str(), this);
 }
 
@@ -1018,6 +1034,8 @@ raw_ostream &polly::operator<<(raw_ostream &OS,
   return OS;
 }
 
+void MemoryAccess::setFortranArrayDescriptor(Value *FAD) { this->FAD = FAD; }
+
 void MemoryAccess::print(raw_ostream &OS) const {
   switch (AccType) {
   case READ:
@@ -1030,7 +1048,14 @@ void MemoryAccess::print(raw_ostream &OS) const {
     OS.indent(12) << "MayWriteAccess :=\t";
     break;
   }
+
   OS << "[Reduction Type: " << getReductionType() << "] ";
+
+  if (FAD) {
+    OS << "[Fortran array descriptor: " << FAD->getName();
+    OS << "] ";
+  };
+
   OS << "[Scalar: " << isScalarKind() << "]\n";
   OS.indent(16) << getOriginalAccessRelationStr() << ";\n";
   if (hasNewAccessRelation())
@@ -1244,6 +1269,19 @@ void ScopStmt::buildAccessRelations() {
                                            ElementType, Access->Sizes, Ty);
     Access->buildAccessRelation(SAI);
   }
+}
+
+MemoryAccess *ScopStmt::lookupPHIReadOf(PHINode *PHI) const {
+  for (auto *MA : *this) {
+    if (!MA->isRead())
+      continue;
+    if (!MA->isLatestAnyPHIKind())
+      continue;
+
+    if (MA->getAccessInstruction() == PHI)
+      return MA;
+  }
+  return nullptr;
 }
 
 void ScopStmt::addAccess(MemoryAccess *Access) {
@@ -1577,14 +1615,16 @@ ScopStmt::ScopStmt(Scop &parent, Region &R, Loop *SurroundingLoop)
     : Parent(parent), InvalidDomain(nullptr), Domain(nullptr), BB(nullptr),
       R(&R), Build(nullptr), SurroundingLoop(SurroundingLoop) {
 
-  BaseName = getIslCompatibleName("Stmt_", R.getNameStr(), "");
+  BaseName = getIslCompatibleName(
+      "Stmt", R.getNameStr(), parent.getNextStmtIdx(), "", UseInstructionNames);
 }
 
 ScopStmt::ScopStmt(Scop &parent, BasicBlock &bb, Loop *SurroundingLoop)
     : Parent(parent), InvalidDomain(nullptr), Domain(nullptr), BB(&bb),
       R(nullptr), Build(nullptr), SurroundingLoop(SurroundingLoop) {
 
-  BaseName = getIslCompatibleName("Stmt_", &bb, "");
+  BaseName = getIslCompatibleName("Stmt", &bb, parent.getNextStmtIdx(), "",
+                                  UseInstructionNames);
 }
 
 ScopStmt::ScopStmt(Scop &parent, __isl_take isl_map *SourceRel,
@@ -1817,6 +1857,24 @@ void ScopStmt::print(raw_ostream &OS) const {
 
 void ScopStmt::dump() const { print(dbgs()); }
 
+void ScopStmt::removeAccessData(MemoryAccess *MA) {
+  if (MA->isRead() && MA->isOriginalValueKind()) {
+    bool Found = ValueReads.erase(MA->getAccessValue());
+    (void)Found;
+    assert(Found && "Expected access data not found");
+  }
+  if (MA->isWrite() && MA->isOriginalValueKind()) {
+    bool Found = ValueWrites.erase(cast<Instruction>(MA->getAccessValue()));
+    (void)Found;
+    assert(Found && "Expected access data not found");
+  }
+  if (MA->isWrite() && MA->isOriginalAnyPHIKind()) {
+    bool Found = PHIWrites.erase(cast<PHINode>(MA->getAccessInstruction()));
+    (void)Found;
+    assert(Found && "Expected access data not found");
+  }
+}
+
 void ScopStmt::removeMemoryAccess(MemoryAccess *MA) {
   // Remove the memory accesses from this statement together with all scalar
   // accesses that were caused by it. MemoryKind::Value READs have no access
@@ -1827,6 +1885,10 @@ void ScopStmt::removeMemoryAccess(MemoryAccess *MA) {
   auto Predicate = [&](MemoryAccess *Acc) {
     return Acc->getAccessInstruction() == MA->getAccessInstruction();
   };
+  for (auto *MA : MemAccs) {
+    if (Predicate(MA))
+      removeAccessData(MA);
+  }
   MemAccs.erase(std::remove_if(MemAccs.begin(), MemAccs.end(), Predicate),
                 MemAccs.end());
   InstructionToAccess.erase(MA->getAccessInstruction());
@@ -1836,6 +1898,8 @@ void ScopStmt::removeSingleMemoryAccess(MemoryAccess *MA) {
   auto MAIt = std::find(MemAccs.begin(), MemAccs.end(), MA);
   assert(MAIt != MemAccs.end());
   MemAccs.erase(MAIt);
+
+  removeAccessData(MA);
 
   auto It = InstructionToAccess.find(MA->getAccessInstruction());
   if (It != InstructionToAccess.end()) {
@@ -1894,25 +1958,27 @@ void Scop::createParameterId(const SCEV *Parameter) {
 
   std::string ParameterName = "p_" + std::to_string(getNumParams() - 1);
 
-  if (const SCEVUnknown *ValueParameter = dyn_cast<SCEVUnknown>(Parameter)) {
-    Value *Val = ValueParameter->getValue();
+  if (UseInstructionNames) {
+    if (const SCEVUnknown *ValueParameter = dyn_cast<SCEVUnknown>(Parameter)) {
+      Value *Val = ValueParameter->getValue();
 
-    // If this parameter references a specific Value and this value has a name
-    // we use this name as it is likely to be unique and more useful than just
-    // a number.
-    if (Val->hasName())
-      ParameterName = Val->getName();
-    else if (LoadInst *LI = dyn_cast<LoadInst>(Val)) {
-      auto *LoadOrigin = LI->getPointerOperand()->stripInBoundsOffsets();
-      if (LoadOrigin->hasName()) {
-        ParameterName += "_loaded_from_";
-        ParameterName +=
-            LI->getPointerOperand()->stripInBoundsOffsets()->getName();
+      // If this parameter references a specific Value and this value has a name
+      // we use this name as it is likely to be unique and more useful than just
+      // a number.
+      if (Val->hasName())
+        ParameterName = Val->getName();
+      else if (LoadInst *LI = dyn_cast<LoadInst>(Val)) {
+        auto *LoadOrigin = LI->getPointerOperand()->stripInBoundsOffsets();
+        if (LoadOrigin->hasName()) {
+          ParameterName += "_loaded_from_";
+          ParameterName +=
+              LI->getPointerOperand()->stripInBoundsOffsets()->getName();
+        }
       }
     }
-  }
 
-  ParameterName = getIslCompatibleName("", ParameterName, "");
+    ParameterName = getIslCompatibleName("", ParameterName, "");
+  }
 
   auto *Id = isl_id_alloc(getIslCtx(), ParameterName.c_str(),
                           const_cast<void *>((const void *)Parameter));
@@ -3213,7 +3279,7 @@ static Loop *getLoopSurroundingScop(Scop &S, LoopInfo &LI) {
 
 Scop::Scop(Region &R, ScalarEvolution &ScalarEvolution, LoopInfo &LI,
            ScopDetection::DetectionContext &DC)
-    : SE(&ScalarEvolution), R(R), IsOptimized(false),
+    : SE(&ScalarEvolution), R(R), name(R.getNameStr()), IsOptimized(false),
       HasSingleExitEdge(R.getExitingBlock()), HasErrorBlock(false),
       MaxLoopDepth(0), CopyStmtsNum(0), DC(DC),
       IslCtx(isl_ctx_alloc(), isl_ctx_free), Context(nullptr),
@@ -3355,62 +3421,6 @@ void Scop::finalizeAccesses() {
   foldSizeConstantsToRight();
   foldAccessRelations();
   assumeNoOutOfBounds();
-}
-
-void Scop::init(AliasAnalysis &AA, AssumptionCache &AC, DominatorTree &DT,
-                LoopInfo &LI) {
-  buildInvariantEquivalenceClasses();
-
-  if (!buildDomains(&R, DT, LI))
-    return;
-
-  addUserAssumptions(AC, DT, LI);
-
-  // Remove empty statements.
-  // Exit early in case there are no executable statements left in this scop.
-  simplifySCoP(false);
-  if (Stmts.empty())
-    return;
-
-  // The ScopStmts now have enough information to initialize themselves.
-  for (ScopStmt &Stmt : Stmts)
-    Stmt.init(LI);
-
-  // Check early for a feasible runtime context.
-  if (!hasFeasibleRuntimeContext())
-    return;
-
-  // Check early for profitability. Afterwards it cannot change anymore,
-  // only the runtime context could become infeasible.
-  if (!isProfitable(UnprofitableScalarAccs)) {
-    invalidate(PROFITABLE, DebugLoc());
-    return;
-  }
-
-  buildSchedule(LI);
-
-  finalizeAccesses();
-
-  realignParams();
-  addUserContext();
-
-  // After the context was fully constructed, thus all our knowledge about
-  // the parameters is in there, we add all recorded assumptions to the
-  // assumed/invalid context.
-  addRecordedAssumptions();
-
-  simplifyContexts();
-  if (!buildAliasChecks(AA))
-    return;
-
-  hoistInvariantLoads();
-  verifyInvariantLoads();
-  simplifySCoP(true);
-
-  // Check late for a feasible runtime context because profitability did not
-  // change.
-  if (!hasFeasibleRuntimeContext())
-    return;
 }
 
 Scop::~Scop() {
@@ -3816,6 +3826,76 @@ void Scop::hoistInvariantLoads() {
   isl_union_map_free(Writes);
 }
 
+/// Find the canonical scop array info object for a set of invariant load
+/// hoisted loads. The canonical array is the one that corresponds to the
+/// first load in the list of accesses which is used as base pointer of a
+/// scop array.
+static const ScopArrayInfo *findCanonicalArray(Scop *S,
+                                               MemoryAccessList &Accesses) {
+  for (MemoryAccess *Access : Accesses) {
+    const ScopArrayInfo *CanonicalArray = S->getScopArrayInfoOrNull(
+        Access->getAccessInstruction(), MemoryKind::Array);
+    if (CanonicalArray)
+      return CanonicalArray;
+  }
+  return nullptr;
+}
+
+/// Check if @p Array severs as base array in an invariant load.
+static bool isUsedForIndirectHoistedLoad(Scop *S, const ScopArrayInfo *Array) {
+  for (InvariantEquivClassTy &EqClass2 : S->getInvariantAccesses())
+    for (MemoryAccess *Access2 : EqClass2.InvariantAccesses)
+      if (Access2->getScopArrayInfo() == Array)
+        return true;
+  return false;
+}
+
+/// Replace the base pointer arrays in all memory accesses referencing @p Old,
+/// with a reference to @p New.
+static void replaceBasePtrArrays(Scop *S, const ScopArrayInfo *Old,
+                                 const ScopArrayInfo *New) {
+  for (ScopStmt &Stmt : *S)
+    for (MemoryAccess *Access : Stmt) {
+      if (Access->getLatestScopArrayInfo() != Old)
+        continue;
+
+      isl_id *Id = New->getBasePtrId();
+      isl_map *Map = Access->getAccessRelation();
+      Map = isl_map_set_tuple_id(Map, isl_dim_out, Id);
+      Access->setAccessRelation(Map);
+    }
+}
+
+void Scop::canonicalizeDynamicBasePtrs() {
+  for (InvariantEquivClassTy &EqClass : InvariantEquivClasses) {
+    MemoryAccessList &BasePtrAccesses = EqClass.InvariantAccesses;
+
+    const ScopArrayInfo *CanonicalBasePtrSAI =
+        findCanonicalArray(this, BasePtrAccesses);
+
+    if (!CanonicalBasePtrSAI)
+      continue;
+
+    for (MemoryAccess *BasePtrAccess : BasePtrAccesses) {
+      const ScopArrayInfo *BasePtrSAI = getScopArrayInfoOrNull(
+          BasePtrAccess->getAccessInstruction(), MemoryKind::Array);
+      if (!BasePtrSAI || BasePtrSAI == CanonicalBasePtrSAI ||
+          !BasePtrSAI->isCompatibleWith(CanonicalBasePtrSAI))
+        continue;
+
+      // we currently do not canonicalize arrays where some accesses are
+      // hoisted as invariant loads. If we would, we need to update the access
+      // function of the invariant loads as well. However, as this is not a
+      // very common situation, we leave this for now to avoid further
+      // complexity increases.
+      if (isUsedForIndirectHoistedLoad(this, BasePtrSAI))
+        continue;
+
+      replaceBasePtrArrays(this, BasePtrSAI, CanonicalBasePtrSAI);
+    }
+  }
+}
+
 const ScopArrayInfo *
 Scop::getOrCreateScopArrayInfo(Value *BasePtr, Type *ElementType,
                                ArrayRef<const SCEV *> Sizes, MemoryKind Kind,
@@ -3857,8 +3937,14 @@ Scop::createScopArrayInfo(Type *ElementType, const std::string &BaseName,
   return SAI;
 }
 
-const ScopArrayInfo *Scop::getScopArrayInfo(Value *BasePtr, MemoryKind Kind) {
+const ScopArrayInfo *Scop::getScopArrayInfoOrNull(Value *BasePtr,
+                                                  MemoryKind Kind) {
   auto *SAI = ScopArrayInfoMap[std::make_pair(BasePtr, Kind)].get();
+  return SAI;
+}
+
+const ScopArrayInfo *Scop::getScopArrayInfo(Value *BasePtr, MemoryKind Kind) {
+  auto *SAI = getScopArrayInfoOrNull(BasePtr, Kind);
   assert(SAI && "No ScopArrayInfo available for this base pointer");
   return SAI;
 }
@@ -4647,7 +4733,7 @@ void ScopInfoRegionPass::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<RegionInfoPass>();
   AU.addRequired<DominatorTreeWrapperPass>();
   AU.addRequiredTransitive<ScalarEvolutionWrapperPass>();
-  AU.addRequiredTransitive<ScopDetection>();
+  AU.addRequiredTransitive<ScopDetectionWrapperPass>();
   AU.addRequired<AAResultsWrapperPass>();
   AU.addRequired<AssumptionCacheTracker>();
   AU.setPreservesAll();
@@ -4673,7 +4759,7 @@ void updateLoopCountStatistic(ScopDetection::LoopStats Stats) {
 }
 
 bool ScopInfoRegionPass::runOnRegion(Region *R, RGPassManager &RGM) {
-  auto &SD = getAnalysis<ScopDetection>();
+  auto &SD = getAnalysis<ScopDetectionWrapperPass>().getSD();
 
   if (!SD.isMaxRegionInScop(*R))
     return false;
@@ -4717,34 +4803,16 @@ INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker);
 INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass);
 INITIALIZE_PASS_DEPENDENCY(RegionInfoPass);
 INITIALIZE_PASS_DEPENDENCY(ScalarEvolutionWrapperPass);
-INITIALIZE_PASS_DEPENDENCY(ScopDetection);
+INITIALIZE_PASS_DEPENDENCY(ScopDetectionWrapperPass);
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass);
 INITIALIZE_PASS_END(ScopInfoRegionPass, "polly-scops",
                     "Polly - Create polyhedral description of Scops", false,
                     false)
 
 //===----------------------------------------------------------------------===//
-void ScopInfoWrapperPass::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addRequired<LoopInfoWrapperPass>();
-  AU.addRequired<RegionInfoPass>();
-  AU.addRequired<DominatorTreeWrapperPass>();
-  AU.addRequiredTransitive<ScalarEvolutionWrapperPass>();
-  AU.addRequiredTransitive<ScopDetection>();
-  AU.addRequired<AAResultsWrapperPass>();
-  AU.addRequired<AssumptionCacheTracker>();
-  AU.setPreservesAll();
-}
-
-bool ScopInfoWrapperPass::runOnFunction(Function &F) {
-  auto &SD = getAnalysis<ScopDetection>();
-
-  auto &SE = getAnalysis<ScalarEvolutionWrapperPass>().getSE();
-  auto &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
-  auto &AA = getAnalysis<AAResultsWrapperPass>().getAAResults();
-  auto const &DL = F.getParent()->getDataLayout();
-  auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-  auto &AC = getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F);
-
+ScopInfo::ScopInfo(const DataLayout &DL, ScopDetection &SD, ScalarEvolution &SE,
+                   LoopInfo &LI, AliasAnalysis &AA, DominatorTree &DT,
+                   AssumptionCache &AC) {
   /// Create polyhedral descripton of scops for all the valid regions of a
   /// function.
   for (auto &It : SD) {
@@ -4756,16 +4824,64 @@ bool ScopInfoWrapperPass::runOnFunction(Function &F) {
     std::unique_ptr<Scop> S = SB.getScop();
     if (!S)
       continue;
-    bool Inserted =
-        RegionToScopMap.insert(std::make_pair(R, std::move(S))).second;
+    bool Inserted = RegionToScopMap.insert({R, std::move(S)}).second;
     assert(Inserted && "Building Scop for the same region twice!");
     (void)Inserted;
   }
+}
+
+AnalysisKey ScopInfoAnalysis::Key;
+
+ScopInfoAnalysis::Result ScopInfoAnalysis::run(Function &F,
+                                               FunctionAnalysisManager &FAM) {
+  auto &SD = FAM.getResult<ScopAnalysis>(F);
+  auto &SE = FAM.getResult<ScalarEvolutionAnalysis>(F);
+  auto &LI = FAM.getResult<LoopAnalysis>(F);
+  auto &AA = FAM.getResult<AAManager>(F);
+  auto &DT = FAM.getResult<DominatorTreeAnalysis>(F);
+  auto &AC = FAM.getResult<AssumptionAnalysis>(F);
+  auto &DL = F.getParent()->getDataLayout();
+  return {DL, SD, SE, LI, AA, DT, AC};
+}
+
+PreservedAnalyses ScopInfoPrinterPass::run(Function &F,
+                                           FunctionAnalysisManager &FAM) {
+  auto &SI = FAM.getResult<ScopInfoAnalysis>(F);
+  for (auto &It : SI) {
+    if (It.second)
+      It.second->print(Stream);
+    else
+      Stream << "Invalid Scop!\n";
+  }
+  return PreservedAnalyses::all();
+}
+
+void ScopInfoWrapperPass::getAnalysisUsage(AnalysisUsage &AU) const {
+  AU.addRequired<LoopInfoWrapperPass>();
+  AU.addRequired<RegionInfoPass>();
+  AU.addRequired<DominatorTreeWrapperPass>();
+  AU.addRequiredTransitive<ScalarEvolutionWrapperPass>();
+  AU.addRequiredTransitive<ScopDetectionWrapperPass>();
+  AU.addRequired<AAResultsWrapperPass>();
+  AU.addRequired<AssumptionCacheTracker>();
+  AU.setPreservesAll();
+}
+
+bool ScopInfoWrapperPass::runOnFunction(Function &F) {
+  auto &SD = getAnalysis<ScopDetectionWrapperPass>().getSD();
+  auto &SE = getAnalysis<ScalarEvolutionWrapperPass>().getSE();
+  auto &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
+  auto &AA = getAnalysis<AAResultsWrapperPass>().getAAResults();
+  auto const &DL = F.getParent()->getDataLayout();
+  auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+  auto &AC = getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F);
+
+  Result.reset(new ScopInfo{DL, SD, SE, LI, AA, DT, AC});
   return false;
 }
 
 void ScopInfoWrapperPass::print(raw_ostream &OS, const Module *) const {
-  for (auto &It : RegionToScopMap) {
+  for (auto &It : *Result) {
     if (It.second)
       It.second->print(OS);
     else
@@ -4788,7 +4904,7 @@ INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker);
 INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass);
 INITIALIZE_PASS_DEPENDENCY(RegionInfoPass);
 INITIALIZE_PASS_DEPENDENCY(ScalarEvolutionWrapperPass);
-INITIALIZE_PASS_DEPENDENCY(ScopDetection);
+INITIALIZE_PASS_DEPENDENCY(ScopDetectionWrapperPass);
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass);
 INITIALIZE_PASS_END(
     ScopInfoWrapperPass, "polly-function-scops",

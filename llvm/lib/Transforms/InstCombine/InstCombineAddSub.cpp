@@ -847,80 +847,6 @@ Value *FAddCombine::createAddendVal(const FAddend &Opnd, bool &NeedNeg) {
   return createFMul(OpndVal, Coeff.getValue(Instr->getType()));
 }
 
-// If one of the operands only has one non-zero bit, and if the other
-// operand has a known-zero bit in a more significant place than it (not
-// including the sign bit) the ripple may go up to and fill the zero, but
-// won't change the sign. For example, (X & ~4) + 1.
-static bool checkRippleForAdd(const APInt &Op0KnownZero,
-                              const APInt &Op1KnownZero) {
-  APInt Op1MaybeOne = ~Op1KnownZero;
-  // Make sure that one of the operand has at most one bit set to 1.
-  if (Op1MaybeOne.countPopulation() != 1)
-    return false;
-
-  // Find the most significant known 0 other than the sign bit.
-  int BitWidth = Op0KnownZero.getBitWidth();
-  APInt Op0KnownZeroTemp(Op0KnownZero);
-  Op0KnownZeroTemp.clearSignBit();
-  int Op0ZeroPosition = BitWidth - Op0KnownZeroTemp.countLeadingZeros() - 1;
-
-  int Op1OnePosition = BitWidth - Op1MaybeOne.countLeadingZeros() - 1;
-  assert(Op1OnePosition >= 0);
-
-  // This also covers the case of no known zero, since in that case
-  // Op0ZeroPosition is -1.
-  return Op0ZeroPosition >= Op1OnePosition;
-}
-
-/// Return true if we can prove that:
-///    (sext (add LHS, RHS))  === (add (sext LHS), (sext RHS))
-/// This basically requires proving that the add in the original type would not
-/// overflow to change the sign bit or have a carry out.
-bool InstCombiner::WillNotOverflowSignedAdd(Value *LHS, Value *RHS,
-                                            Instruction &CxtI) {
-  // There are different heuristics we can use for this.  Here are some simple
-  // ones.
-
-  // If LHS and RHS each have at least two sign bits, the addition will look
-  // like
-  //
-  // XX..... +
-  // YY.....
-  //
-  // If the carry into the most significant position is 0, X and Y can't both
-  // be 1 and therefore the carry out of the addition is also 0.
-  //
-  // If the carry into the most significant position is 1, X and Y can't both
-  // be 0 and therefore the carry out of the addition is also 1.
-  //
-  // Since the carry into the most significant position is always equal to
-  // the carry out of the addition, there is no signed overflow.
-  if (ComputeNumSignBits(LHS, 0, &CxtI) > 1 &&
-      ComputeNumSignBits(RHS, 0, &CxtI) > 1)
-    return true;
-
-  unsigned BitWidth = LHS->getType()->getScalarSizeInBits();
-  KnownBits LHSKnown(BitWidth);
-  computeKnownBits(LHS, LHSKnown, 0, &CxtI);
-
-  KnownBits RHSKnown(BitWidth);
-  computeKnownBits(RHS, RHSKnown, 0, &CxtI);
-
-  // Addition of two 2's complement numbers having opposite signs will never
-  // overflow.
-  if ((LHSKnown.One[BitWidth - 1] && RHSKnown.Zero[BitWidth - 1]) ||
-      (LHSKnown.Zero[BitWidth - 1] && RHSKnown.One[BitWidth - 1]))
-    return true;
-
-  // Check if carry bit of addition will not cause overflow.
-  if (checkRippleForAdd(LHSKnown.Zero, RHSKnown.Zero))
-    return true;
-  if (checkRippleForAdd(RHSKnown.Zero, LHSKnown.Zero))
-    return true;
-
-  return false;
-}
-
 /// \brief Return true if we can prove that:
 ///    (sub LHS, RHS)  === (sub nsw LHS, RHS)
 /// This basically requires proving that the add in the original type would not
@@ -956,13 +882,9 @@ bool InstCombiner::WillNotOverflowSignedSub(Value *LHS, Value *RHS,
 bool InstCombiner::WillNotOverflowUnsignedSub(Value *LHS, Value *RHS,
                                               Instruction &CxtI) {
   // If the LHS is negative and the RHS is non-negative, no unsigned wrap.
-  bool LHSKnownNonNegative, LHSKnownNegative;
-  bool RHSKnownNonNegative, RHSKnownNegative;
-  ComputeSignBit(LHS, LHSKnownNonNegative, LHSKnownNegative, /*Depth=*/0,
-                 &CxtI);
-  ComputeSignBit(RHS, RHSKnownNonNegative, RHSKnownNegative, /*Depth=*/0,
-                 &CxtI);
-  if (LHSKnownNegative && RHSKnownNonNegative)
+  KnownBits LHSKnown = computeKnownBits(LHS, /*Depth=*/0, &CxtI);
+  KnownBits RHSKnown = computeKnownBits(RHS, /*Depth=*/0, &CxtI);
+  if (LHSKnown.isNegative() && RHSKnown.isNonNegative())
     return true;
 
   return false;
@@ -1029,6 +951,57 @@ static Value *checkForNegativeOperand(BinaryOperator &I,
   return nullptr;
 }
 
+static Instruction *foldAddWithConstant(BinaryOperator &Add,
+                                        InstCombiner::BuilderTy &Builder) {
+  Value *Op0 = Add.getOperand(0), *Op1 = Add.getOperand(1);
+  const APInt *C;
+  if (!match(Op1, m_APInt(C)))
+    return nullptr;
+
+  if (C->isSignMask()) {
+    // If wrapping is not allowed, then the addition must set the sign bit:
+    // X + (signmask) --> X | signmask
+    if (Add.hasNoSignedWrap() || Add.hasNoUnsignedWrap())
+      return BinaryOperator::CreateOr(Op0, Op1);
+
+    // If wrapping is allowed, then the addition flips the sign bit of LHS:
+    // X + (signmask) --> X ^ signmask
+    return BinaryOperator::CreateXor(Op0, Op1);
+  }
+
+  Value *X;
+  const APInt *C2;
+  Type *Ty = Add.getType();
+
+  // Is this add the last step in a convoluted sext?
+  // add(zext(xor i16 X, -32768), -32768) --> sext X
+  if (match(Op0, m_ZExt(m_Xor(m_Value(X), m_APInt(C2)))) &&
+      C2->isMinSignedValue() && C2->sext(Ty->getScalarSizeInBits()) == *C)
+    return CastInst::Create(Instruction::SExt, X, Ty);
+
+  // (add (zext (add nuw X, C2)), C) --> (zext (add nuw X, C2 + C))
+  // FIXME: This should check hasOneUse to not increase the instruction count?
+  if (C->isNegative() &&
+      match(Op0, m_ZExt(m_NUWAdd(m_Value(X), m_APInt(C2)))) &&
+      C->sge(-C2->sext(C->getBitWidth()))) {
+    Constant *NewC =
+        ConstantInt::get(X->getType(), *C2 + C->trunc(C2->getBitWidth()));
+    return new ZExtInst(Builder.CreateNUWAdd(X, NewC), Ty);
+  }
+
+  // Shifts and add used to flip and mask off the low bit:
+  // add (ashr (shl i32 X, 31), 31), 1 --> and (not X), 1
+  const APInt *C3;
+  if (*C == 1 && match(Op0, m_OneUse(m_AShr(m_Shl(m_Value(X), m_APInt(C2)),
+                                            m_APInt(C3)))) &&
+      C2 == C3 && *C2 == Ty->getScalarSizeInBits() - 1) {
+    Value *NotX = Builder.CreateNot(X);
+    return BinaryOperator::CreateAnd(NotX, ConstantInt::get(Ty, 1));
+  }
+
+  return nullptr;
+}
+
 Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
   bool Changed = SimplifyAssociativeOrCommutative(I);
   Value *LHS = I.getOperand(0), *RHS = I.getOperand(1);
@@ -1044,41 +1017,11 @@ Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
   if (Value *V = SimplifyUsingDistributiveLaws(I))
     return replaceInstUsesWith(I, V);
 
-  const APInt *RHSC;
-  if (match(RHS, m_APInt(RHSC))) {
-    if (RHSC->isSignMask()) {
-      // If wrapping is not allowed, then the addition must set the sign bit:
-      // X + (signmask) --> X | signmask
-      if (I.hasNoSignedWrap() || I.hasNoUnsignedWrap())
-        return BinaryOperator::CreateOr(LHS, RHS);
+  if (Instruction *X = foldAddWithConstant(I, *Builder))
+    return X;
 
-      // If wrapping is allowed, then the addition flips the sign bit of LHS:
-      // X + (signmask) --> X ^ signmask
-      return BinaryOperator::CreateXor(LHS, RHS);
-    }
-
-    // Is this add the last step in a convoluted sext?
-    Value *X;
-    const APInt *C;
-    if (match(LHS, m_ZExt(m_Xor(m_Value(X), m_APInt(C)))) &&
-        C->isMinSignedValue() &&
-        C->sext(LHS->getType()->getScalarSizeInBits()) == *RHSC) {
-      // add(zext(xor i16 X, -32768), -32768) --> sext X
-      return CastInst::Create(Instruction::SExt, X, LHS->getType());
-    }
-
-    if (RHSC->isNegative() &&
-        match(LHS, m_ZExt(m_NUWAdd(m_Value(X), m_APInt(C)))) &&
-        RHSC->sge(-C->sext(RHSC->getBitWidth()))) {
-      // (add (zext (add nuw X, C)), Val) -> (zext (add nuw X, C+Val))
-      Constant *NewC =
-          ConstantInt::get(X->getType(), *C + RHSC->trunc(C->getBitWidth()));
-      return new ZExtInst(Builder->CreateNUWAdd(X, NewC), I.getType());
-    }
-  }
-
-  // FIXME: Use the match above instead of dyn_cast to allow these transforms
-  // for splat vectors.
+  // FIXME: This should be moved into the above helper function to allow these
+  // transforms for splat vectors.
   if (ConstantInt *CI = dyn_cast<ConstantInt>(RHS)) {
     // zext(bool) + C -> bool ? C + 1 : C
     if (ZExtInst *ZI = dyn_cast<ZExtInst>(LHS))
@@ -1273,8 +1216,7 @@ Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
         Constant *CI =
             ConstantExpr::getTrunc(RHSC, LHSConv->getOperand(0)->getType());
         if (ConstantExpr::getZExt(CI, I.getType()) == RHSC &&
-            computeOverflowForUnsignedAdd(LHSConv->getOperand(0), CI, &I) ==
-                OverflowResult::NeverOverflows) {
+            willNotOverflowUnsignedAdd(LHSConv->getOperand(0), CI, I)) {
           // Insert the new, smaller add.
           Value *NewAdd =
               Builder->CreateNUWAdd(LHSConv->getOperand(0), CI, "addconv");
@@ -1291,9 +1233,8 @@ Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
       if (LHSConv->getOperand(0)->getType() ==
               RHSConv->getOperand(0)->getType() &&
           (LHSConv->hasOneUse() || RHSConv->hasOneUse()) &&
-          computeOverflowForUnsignedAdd(LHSConv->getOperand(0),
-                                        RHSConv->getOperand(0),
-                                        &I) == OverflowResult::NeverOverflows) {
+          willNotOverflowUnsignedAdd(LHSConv->getOperand(0),
+                                     RHSConv->getOperand(0), I)) {
         // Insert the new integer add.
         Value *NewAdd = Builder->CreateNUWAdd(
             LHSConv->getOperand(0), RHSConv->getOperand(0), "addconv");
@@ -1335,15 +1276,13 @@ Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
   }
 
   // TODO(jingyue): Consider WillNotOverflowSignedAdd and
-  // WillNotOverflowUnsignedAdd to reduce the number of invocations of
+  // willNotOverflowUnsignedAdd to reduce the number of invocations of
   // computeKnownBits.
   if (!I.hasNoSignedWrap() && WillNotOverflowSignedAdd(LHS, RHS, I)) {
     Changed = true;
     I.setHasNoSignedWrap(true);
   }
-  if (!I.hasNoUnsignedWrap() &&
-      computeOverflowForUnsignedAdd(LHS, RHS, &I) ==
-          OverflowResult::NeverOverflows) {
+  if (!I.hasNoUnsignedWrap() && willNotOverflowUnsignedAdd(LHS, RHS, I)) {
     Changed = true;
     I.setHasNoUnsignedWrap(true);
   }

@@ -54,33 +54,10 @@ using namespace clang;
 // Utility Methods for Preprocessor Directive Handling.
 //===----------------------------------------------------------------------===//
 
-MacroInfo *Preprocessor::AllocateMacroInfo() {
-  MacroInfoChain *MIChain = BP.Allocate<MacroInfoChain>();
-  MIChain->Next = MIChainHead;
+MacroInfo *Preprocessor::AllocateMacroInfo(SourceLocation L) {
+  auto *MIChain = new (BP) MacroInfoChain{L, MIChainHead};
   MIChainHead = MIChain;
   return &MIChain->MI;
-}
-
-MacroInfo *Preprocessor::AllocateMacroInfo(SourceLocation L) {
-  MacroInfo *MI = AllocateMacroInfo();
-  new (MI) MacroInfo(L);
-  return MI;
-}
-
-MacroInfo *Preprocessor::AllocateDeserializedMacroInfo(SourceLocation L,
-                                                       unsigned SubModuleID) {
-  static_assert(alignof(MacroInfo) >= sizeof(SubModuleID),
-                "alignment for MacroInfo is less than the ID");
-  DeserializedMacroInfoChain *MIChain =
-      BP.Allocate<DeserializedMacroInfoChain>();
-  MIChain->Next = DeserialMIChainHead;
-  DeserialMIChainHead = MIChain;
-
-  MacroInfo *MI = &MIChain->MI;
-  new (MI) MacroInfo(L);
-  MI->FromASTFile = true;
-  MI->setOwningModuleID(SubModuleID);
-  return MI;
 }
 
 DefMacroDirective *Preprocessor::AllocateDefMacroDirective(MacroInfo *MI,
@@ -2049,12 +2026,12 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
         M->getTopLevelModuleName() == getLangOpts().CurrentModule)
       return;
 
-    assert(!CurSubmodule && "should not have marked this as a module yet");
-    CurSubmodule = M;
+    assert(!CurLexerSubmodule && "should not have marked this as a module yet");
+    CurLexerSubmodule = M;
 
     // Let the macro handling code know that any future macros are within
     // the new submodule.
-    EnterSubmodule(M, HashLoc);
+    EnterSubmodule(M, HashLoc, /*ForPragma*/false);
 
     // Let the parser know that any future declarations are within the new
     // submodule.
@@ -2082,7 +2059,7 @@ void Preprocessor::HandleIncludeNextDirective(SourceLocation HashLoc,
   } else if (isInPrimaryFile()) {
     Lookup = nullptr;
     Diag(IncludeNextTok, diag::pp_include_next_in_primary);
-  } else if (CurSubmodule) {
+  } else if (CurLexerSubmodule) {
     // Start looking up in the directory *after* the one in which the current
     // file would be found, if any.
     assert(CurPPLexer && "#include_next directive in macro?");

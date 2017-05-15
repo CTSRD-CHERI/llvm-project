@@ -2790,7 +2790,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
 
     // Push a clang.arc.use cleanup for each object in RetainableOperands. The
     // cleanup will cause the use to appear after the final log call, keeping
-    // the object valid while it’s held in the log buffer.  Note that if there’s
+    // the object valid while it's held in the log buffer.  Note that if there's
     // a release cleanup on the object, it will already be active; since
     // cleanups are emitted in reverse order, the use will occur before the
     // object is released.
@@ -2809,6 +2809,31 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
                                         Layout.size().getQuantity()));
   }
 
+  case Builtin::BI__xray_customevent: {
+    if (!ShouldXRayInstrumentFunction())
+      return RValue::getIgnored();
+    if (const auto *XRayAttr = CurFuncDecl->getAttr<XRayInstrumentAttr>()) {
+      if (XRayAttr->neverXRayInstrument())
+        return RValue::getIgnored();
+    }
+    Function *F = CGM.getIntrinsic(Intrinsic::xray_customevent);
+    auto FTy = F->getFunctionType();
+    auto Arg0 = E->getArg(0);
+    auto Arg0Val = EmitScalarExpr(Arg0);
+    auto Arg0Ty = Arg0->getType();
+    auto PTy0 = FTy->getParamType(0);
+    if (PTy0 != Arg0Val->getType()) {
+      if (Arg0Ty->isArrayType())
+        Arg0Val = EmitArrayToPointerDecay(Arg0).getPointer();
+      else
+        Arg0Val = Builder.CreatePointerCast(Arg0Val, PTy0);
+    }
+    auto Arg1 = EmitScalarExpr(E->getArg(1));
+    auto PTy1 = FTy->getParamType(1);
+    if (PTy1 != Arg1->getType())
+      Arg1 = Builder.CreateTruncOrBitCast(Arg1, PTy1);
+    return RValue::get(Builder.CreateCall(F, {Arg0Val, Arg1}));
+  }
   }
 
   // If this is an alias for a lib function (e.g. __builtin_sin), emit
@@ -4588,7 +4613,7 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
     Function *F = CGM.getIntrinsic(BuiltinID == ARM::BI__builtin_arm_stlex
                                        ? Intrinsic::arm_stlexd
                                        : Intrinsic::arm_strexd);
-    llvm::Type *STy = llvm::StructType::get(Int32Ty, Int32Ty, nullptr);
+    llvm::Type *STy = llvm::StructType::get(Int32Ty, Int32Ty);
 
     Address Tmp = CreateMemTemp(E->getArg(0)->getType());
     Value *Val = EmitScalarExpr(E->getArg(0));
@@ -5420,7 +5445,7 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     Function *F = CGM.getIntrinsic(BuiltinID == AArch64::BI__builtin_arm_stlex
                                        ? Intrinsic::aarch64_stlxp
                                        : Intrinsic::aarch64_stxp);
-    llvm::Type *STy = llvm::StructType::get(Int64Ty, Int64Ty, nullptr);
+    llvm::Type *STy = llvm::StructType::get(Int64Ty, Int64Ty);
 
     Address Tmp = CreateMemTemp(E->getArg(0)->getType());
     EmitAnyExprToMem(E->getArg(0), Tmp, Qualifiers(), /*init*/ true);
@@ -7393,8 +7418,8 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
     // unsigned int __cpu_type;
     // unsigned int __cpu_subtype;
     // unsigned int __cpu_features[1];
-    llvm::Type *STy = llvm::StructType::get(
-        Int32Ty, Int32Ty, Int32Ty, llvm::ArrayType::get(Int32Ty, 1), nullptr);
+    llvm::Type *STy = llvm::StructType::get(Int32Ty, Int32Ty, Int32Ty,
+                                            llvm::ArrayType::get(Int32Ty, 1));
 
     // Grab the global __cpu_model.
     llvm::Constant *CpuModel = CGM.CreateRuntimeVariable(STy, "__cpu_model");
