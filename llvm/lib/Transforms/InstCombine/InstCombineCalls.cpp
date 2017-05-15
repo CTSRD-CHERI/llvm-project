@@ -1384,10 +1384,10 @@ static Instruction *foldCttzCtlz(IntrinsicInst &II, InstCombiner &IC) {
 
   // Create a mask for bits above (ctlz) or below (cttz) the first known one.
   bool IsTZ = II.getIntrinsicID() == Intrinsic::cttz;
-  unsigned PossibleZeros = IsTZ ? Known.One.countTrailingZeros()
-                                : Known.One.countLeadingZeros();
-  unsigned DefiniteZeros = IsTZ ? Known.Zero.countTrailingOnes()
-                                : Known.Zero.countLeadingOnes();
+  unsigned PossibleZeros = IsTZ ? Known.countMaxTrailingZeros()
+                                : Known.countMaxLeadingZeros();
+  unsigned DefiniteZeros = IsTZ ? Known.countMinTrailingZeros()
+                                : Known.countMinLeadingZeros();
 
   // If all bits above (ctlz) or below (cttz) the first known one are known
   // zero, this value is constant.
@@ -3619,7 +3619,7 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
     // then this one is redundant, and should be removed.
     KnownBits Known(1);
     computeKnownBits(IIOperand, Known, 0, II);
-    if (Known.One.isAllOnesValue())
+    if (Known.isAllOnes())
       return eraseInstFromFunction(*II);
 
     // Update the cache of affected values for this assumption (we might be
@@ -3845,7 +3845,7 @@ Instruction *InstCombiner::visitCallSite(CallSite CS) {
     if (V->getType()->isPointerTy() &&
         !CS.paramHasAttr(ArgNo, Attribute::NonNull) &&
         isKnownNonNullAt(V, CS.getInstruction(), &DT))
-      Indices.push_back(ArgNo + 1);
+      Indices.push_back(ArgNo + AttributeList::FirstArgIndex);
     ArgNo++;
   }
 

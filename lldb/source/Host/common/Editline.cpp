@@ -14,10 +14,10 @@
 #include "lldb/Host/ConnectionFileDescriptor.h"
 #include "lldb/Host/Editline.h"
 #include "lldb/Host/Host.h"
-#include "lldb/Utility/Error.h"
 #include "lldb/Utility/FileSpec.h"
 #include "lldb/Utility/LLDBAssert.h"
 #include "lldb/Utility/SelectHelper.h"
+#include "lldb/Utility/Status.h"
 #include "lldb/Utility/StreamString.h"
 #include "lldb/Utility/StringList.h"
 #include "lldb/Utility/Timeout.h"
@@ -367,7 +367,7 @@ void Editline::MoveCursor(CursorLocation from, CursorLocation to) {
   if (to == CursorLocation::EditingCursor) {
     toColumn =
         editline_cursor_position - (editline_cursor_row * m_terminal_width) + 1;
-  } else if (to == CursorLocation::BlockEnd) {
+  } else if (to == CursorLocation::BlockEnd && !m_input_lines.empty()) {
     toColumn =
         ((m_input_lines[m_input_lines.size() - 1].length() + GetPromptWidth()) %
          80) +

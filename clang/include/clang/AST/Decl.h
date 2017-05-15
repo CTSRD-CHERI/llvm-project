@@ -301,16 +301,6 @@ public:
   using Decl::isModulePrivate;
   using Decl::setModulePrivate;
 
-  /// \brief Determine whether this declaration is hidden from name lookup.
-  bool isHidden() const { return Hidden; }
-
-  /// \brief Set whether this declaration is hidden from name lookup.
-  void setHidden(bool Hide) {
-    assert((!Hide || isFromASTFile() || hasLocalOwningModuleStorage()) &&
-           "declaration with no owning module can't be hidden");
-    Hidden = Hide;
-  }
-
   /// \brief Determine whether this declaration is a C++ class member.
   bool isCXXClassMember() const {
     const DeclContext *DC = getDeclContext();
@@ -2478,7 +2468,7 @@ public:
   void setCapturedVLAType(const VariableArrayType *VLAType);
 
   /// getParent - Returns the parent of this field declaration, which
-  /// is the struct in which this method is defined.
+  /// is the struct in which this field is defined.
   const RecordDecl *getParent() const {
     return cast<RecordDecl>(getDeclContext());
   }

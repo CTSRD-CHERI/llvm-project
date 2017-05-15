@@ -72,7 +72,13 @@ const uptr AlignedChunkHeaderSize =
 
 #if SANITIZER_CAN_USE_ALLOCATOR64
 const uptr AllocatorSpace = ~0ULL;
-const uptr AllocatorSize = 0x40000000000ULL;  // 4TB.
+# if defined(__aarch64__) && SANITIZER_ANDROID
+const uptr AllocatorSize = 0x4000000000ULL;  // 256G.
+# elif defined(__aarch64__)
+const uptr AllocatorSize = 0x10000000000ULL;  // 1T.
+# else
+const uptr AllocatorSize = 0x40000000000ULL;  // 4T.
+# endif
 typedef DefaultSizeClassMap SizeClassMap;
 struct AP {
   static const uptr kSpaceBeg = AllocatorSpace;
@@ -101,11 +107,12 @@ typedef SizeClassAllocator32<0, SANITIZER_MMAP_RANGE_SIZE, 0, SizeClassMap,
 #endif  // SANITIZER_CAN_USE_ALLOCATOR64
 
 #include "scudo_allocator_secondary.h"
+#include "scudo_allocator_combined.h"
 
 typedef SizeClassAllocatorLocalCache<PrimaryAllocator> AllocatorCache;
 typedef ScudoLargeMmapAllocator SecondaryAllocator;
-typedef CombinedAllocator<PrimaryAllocator, AllocatorCache, SecondaryAllocator>
-    ScudoBackendAllocator;
+typedef ScudoCombinedAllocator<PrimaryAllocator, AllocatorCache,
+    SecondaryAllocator> ScudoBackendAllocator;
 
 void initScudo();
 

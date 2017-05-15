@@ -766,6 +766,7 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.SanitizeCoverageTracePC = Args.hasArg(OPT_fsanitize_coverage_trace_pc);
   Opts.SanitizeCoverageTracePCGuard =
       Args.hasArg(OPT_fsanitize_coverage_trace_pc_guard);
+  Opts.SanitizeCoverageNoPrune = Args.hasArg(OPT_fsanitize_coverage_no_prune);
   Opts.SanitizeMemoryTrackOrigins =
       getLastArgIntValue(Args, OPT_fsanitize_memory_track_origins_EQ, 0, Diags);
   Opts.SanitizeMemoryUseAfterDtor =
@@ -777,6 +778,8 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
     Opts.SanitizeAddressUseAfterScope =
         A->getOption().getID() == OPT_fsanitize_address_use_after_scope;
   }
+  Opts.SanitizeAddressGlobalsDeadStripping =
+      Args.hasArg(OPT_fsanitize_address_globals_dead_stripping);
   Opts.SSPBufferSize =
       getLastArgIntValue(Args, OPT_stack_protector_buffer_size, 8, Diags);
   Opts.StackRealignment = Args.hasArg(OPT_mstackrealign);

@@ -223,7 +223,11 @@ private:
 // archive file semantics.
 class LazyObjectFile : public InputFile {
 public:
-  explicit LazyObjectFile(MemoryBufferRef M) : InputFile(LazyObjectKind, M) {}
+  LazyObjectFile(MemoryBufferRef M, StringRef ArchiveName,
+                 uint64_t OffsetInArchive)
+      : InputFile(LazyObjectKind, M), OffsetInArchive(OffsetInArchive) {
+    this->ArchiveName = ArchiveName;
+  }
 
   static bool classof(const InputFile *F) {
     return F->kind() == LazyObjectKind;
@@ -231,6 +235,7 @@ public:
 
   template <class ELFT> void parse();
   MemoryBufferRef getBuffer();
+  InputFile *fetch();
 
 private:
   std::vector<StringRef> getSymbols();
@@ -238,12 +243,13 @@ private:
   std::vector<StringRef> getBitcodeSymbols();
 
   bool Seen = false;
+  uint64_t OffsetInArchive;
 };
 
 // An ArchiveFile object represents a .a file.
 class ArchiveFile : public InputFile {
 public:
-  explicit ArchiveFile(MemoryBufferRef M) : InputFile(ArchiveKind, M) {}
+  explicit ArchiveFile(std::unique_ptr<Archive> &&File);
   static bool classof(const InputFile *F) { return F->kind() == ArchiveKind; }
   template <class ELFT> void parse();
 

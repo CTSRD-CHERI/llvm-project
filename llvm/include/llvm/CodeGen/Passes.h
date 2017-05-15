@@ -129,6 +129,10 @@ namespace llvm {
   // instruction and update the MachineFunctionInfo with that information.
   extern char &ShrinkWrapID;
 
+  /// LiveRangeShrink pass. Move instruction close to its definition to shrink
+  /// the definition's live range.
+  extern char &LiveRangeShrinkID;
+
   /// Greedy register allocator.
   extern char &RAGreedyID;
 
@@ -404,6 +408,10 @@ namespace llvm {
   /// This pass performs outlining on machine instructions directly before
   /// printing assembly.
   ModulePass *createMachineOutlinerPass();
+
+  /// This pass expands the experimental reduction intrinsics into sequences of
+  /// shuffles.
+  FunctionPass *createExpandReductionsPass();
 
 } // End llvm namespace
 

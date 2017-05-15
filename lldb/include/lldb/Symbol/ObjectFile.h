@@ -805,9 +805,9 @@ public:
   bool IsInMemory() const { return m_memory_addr != LLDB_INVALID_ADDRESS; }
 
   // Strip linker annotations (such as @@VERSION) from symbol names.
-  virtual std::string
+  virtual llvm::StringRef
   StripLinkerSymbolAnnotations(llvm::StringRef symbol_name) const {
-    return symbol_name.str();
+    return symbol_name;
   }
 
   static lldb::SymbolType GetSymbolTypeFromName(
@@ -826,7 +826,7 @@ public:
   ///
   /// @return
   //------------------------------------------------------------------
-  virtual Error LoadInMemory(Target &target, bool set_pc);
+  virtual Status LoadInMemory(Target &target, bool set_pc);
 
 protected:
   //------------------------------------------------------------------

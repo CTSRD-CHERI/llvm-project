@@ -324,7 +324,7 @@ class Preprocessor {
 
   /// \brief If the current lexer is for a submodule that is being built, this
   /// is that submodule.
-  Module *CurSubmodule;
+  Module *CurLexerSubmodule;
 
   /// \brief Keeps track of the stack of files currently
   /// \#included, and macros currently being expanded from, not counting
@@ -507,16 +507,19 @@ class Preprocessor {
 
   /// \brief Information about a submodule that we're currently building.
   struct BuildingSubmoduleInfo {
-    BuildingSubmoduleInfo(Module *M, SourceLocation ImportLoc,
+    BuildingSubmoduleInfo(Module *M, SourceLocation ImportLoc, bool IsPragma,
                           SubmoduleState *OuterSubmoduleState,
                           unsigned OuterPendingModuleMacroNames)
-        : M(M), ImportLoc(ImportLoc), OuterSubmoduleState(OuterSubmoduleState),
+        : M(M), ImportLoc(ImportLoc), IsPragma(IsPragma),
+          OuterSubmoduleState(OuterSubmoduleState),
           OuterPendingModuleMacroNames(OuterPendingModuleMacroNames) {}
 
     /// The module that we are building.
     Module *M;
     /// The location at which the module was included.
     SourceLocation ImportLoc;
+    /// Whether we entered this submodule via a pragma.
+    bool IsPragma;
     /// The previous SubmoduleState.
     SubmoduleState *OuterSubmoduleState;
     /// The number of pending module macro names when we started building this.
@@ -640,14 +643,6 @@ class Preprocessor {
   /// MacroInfos are managed as a chain for easy disposal.  This is the head
   /// of that list.
   MacroInfoChain *MIChainHead;
-
-  struct DeserializedMacroInfoChain {
-    MacroInfo MI;
-    unsigned OwningModuleID; // MUST be immediately after the MacroInfo object
-                     // so it can be accessed by MacroInfo::getOwningModuleID().
-    DeserializedMacroInfoChain *Next;
-  };
-  DeserializedMacroInfoChain *DeserialMIChainHead;
 
   void updateOutOfDateIdentifier(IdentifierInfo &II) const;
 
@@ -773,8 +768,9 @@ public:
   /// expansions going on at the time.
   PreprocessorLexer *getCurrentFileLexer() const;
 
-  /// \brief Return the submodule owning the file being lexed.
-  Module *getCurrentSubmodule() const { return CurSubmodule; }
+  /// \brief Return the submodule owning the file being lexed. This may not be
+  /// the current module if we have changed modules since entering the file.
+  Module *getCurrentLexerSubmodule() const { return CurLexerSubmodule; }
 
   /// \brief Returns the FileID for the preprocessor predefines.
   FileID getPredefinesFileID() const { return PredefinesFileID; }
@@ -1665,10 +1661,6 @@ public:
   /// \brief Allocate a new MacroInfo object with the provided SourceLocation.
   MacroInfo *AllocateMacroInfo(SourceLocation L);
 
-  /// \brief Allocate a new MacroInfo object loaded from an AST file.
-  MacroInfo *AllocateDeserializedMacroInfo(SourceLocation L,
-                                           unsigned SubModuleID);
-
   /// \brief Turn the specified lexer token into a fully checked and spelled
   /// filename, e.g. as an operand of \#include. 
   ///
@@ -1726,13 +1718,16 @@ public:
   bool CheckMacroName(Token &MacroNameTok, MacroUse isDefineUndef,
                       bool *ShadowFlag = nullptr);
 
-private:
+  void EnterSubmodule(Module *M, SourceLocation ImportLoc, bool ForPragma);
+  Module *LeaveSubmodule(bool ForPragma);
 
+private:
   void PushIncludeMacroStack() {
     assert(CurLexerKind != CLK_CachingLexer && "cannot push a caching lexer");
-    IncludeMacroStack.emplace_back(
-        CurLexerKind, CurSubmodule, std::move(CurLexer), std::move(CurPTHLexer),
-        CurPPLexer, std::move(CurTokenLexer), CurDirLookup);
+    IncludeMacroStack.emplace_back(CurLexerKind, CurLexerSubmodule,
+                                   std::move(CurLexer), std::move(CurPTHLexer),
+                                   CurPPLexer, std::move(CurTokenLexer),
+                                   CurDirLookup);
     CurPPLexer = nullptr;
   }
 
@@ -1742,15 +1737,12 @@ private:
     CurPPLexer = IncludeMacroStack.back().ThePPLexer;
     CurTokenLexer = std::move(IncludeMacroStack.back().TheTokenLexer);
     CurDirLookup  = IncludeMacroStack.back().TheDirLookup;
-    CurSubmodule = IncludeMacroStack.back().TheSubmodule;
+    CurLexerSubmodule = IncludeMacroStack.back().TheSubmodule;
     CurLexerKind = IncludeMacroStack.back().CurLexerKind;
     IncludeMacroStack.pop_back();
   }
 
   void PropagateLineStartLeadingSpaceInfo(Token &Result);
-
-  void EnterSubmodule(Module *M, SourceLocation ImportLoc);
-  void LeaveSubmodule();
 
   /// Determine whether we need to create module macros for #defines in the
   /// current context.
@@ -1759,9 +1751,6 @@ private:
   /// Update the set of active module macros and ambiguity flag for a module
   /// macro name.
   void updateModuleMacroInfo(const IdentifierInfo *II, ModuleMacroInfo &Info);
-
-  /// \brief Allocate a new MacroInfo object.
-  MacroInfo *AllocateMacroInfo();
 
   DefMacroDirective *AllocateDefMacroDirective(MacroInfo *MI,
                                                SourceLocation Loc);
@@ -1967,7 +1956,6 @@ public:
   void HandlePragmaPoison();
   void HandlePragmaSystemHeader(Token &SysHeaderTok);
   void HandlePragmaDependency(Token &DependencyTok);
-  void HandlePragmaModuleImport(Token &Tok);
   void HandlePragmaPushMacro(Token &Tok);
   void HandlePragmaPopMacro(Token &Tok);
   void HandlePragmaIncludeAlias(Token &Tok);

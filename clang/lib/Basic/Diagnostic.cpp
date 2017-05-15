@@ -67,18 +67,12 @@ DiagnosticsEngine::DiagnosticsEngine(IntrusiveRefCntPtr<DiagnosticIDs> diags,
   ArgToStringCookie = nullptr;
 
   AllExtensionsSilenced = 0;
-  IgnoreAllWarnings = false;
-  WarningsAsErrors = false;
-  EnableAllWarnings = false;
-  ErrorsAsFatal = false;
-  FatalsAsError = false;
-  SuppressSystemWarnings = false;
+  SuppressAfterFatalError = true;
   SuppressAllDiagnostics = false;
   ElideType = true;
   PrintTemplateTree = false;
   ShowColors = false;
   ShowOverloads = Ovl_All;
-  ExtBehavior = diag::Severity::Ignored;
 
   ErrorLimit = 0;
   TemplateBacktraceLimit = 0;
@@ -152,10 +146,9 @@ void DiagnosticsEngine::SetDelayedDiagnostic(unsigned DiagID, StringRef Arg1,
 }
 
 void DiagnosticsEngine::ReportDelayed() {
-  Report(DelayedDiagID) << DelayedDiagArg1 << DelayedDiagArg2;
+  unsigned ID = DelayedDiagID;
   DelayedDiagID = 0;
-  DelayedDiagArg1.clear();
-  DelayedDiagArg2.clear();
+  Report(ID) << DelayedDiagArg1 << DelayedDiagArg2;
 }
 
 void DiagnosticsEngine::DiagStateMap::appendFirst(
@@ -343,8 +336,8 @@ bool DiagnosticsEngine::setDiagnosticGroupErrorAsFatal(StringRef Group,
     return setSeverityForGroup(diag::Flavor::WarningOrError, Group,
                                diag::Severity::Fatal);
 
-  // Otherwise, we want to set the diagnostic mapping's "no Werror" bit, and
-  // potentially downgrade anything already mapped to be an error.
+  // Otherwise, we want to set the diagnostic mapping's "no Wfatal-errors" bit,
+  // and potentially downgrade anything already mapped to be a fatal error.
 
   // Get the diagnostics in this group.
   SmallVector<diag::kind, 8> GroupDiags;
@@ -426,11 +419,10 @@ bool DiagnosticsEngine::EmitCurrentDiagnostic(bool Force) {
   }
 
   // Clear out the current diagnostic object.
-  unsigned DiagID = CurDiagID;
   Clear();
 
   // If there was a delayed diagnostic, emit it now.
-  if (!Force && DelayedDiagID && DelayedDiagID != DiagID)
+  if (!Force && DelayedDiagID)
     ReportDelayed();
 
   return Emitted;

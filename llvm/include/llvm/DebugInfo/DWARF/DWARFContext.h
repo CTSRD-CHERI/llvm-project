@@ -172,6 +172,9 @@ public:
     return DWOCUs[index].get();
   }
 
+  /// Get a DIE given an exact offset.
+  DWARFDie getDIEForOffset(uint32_t Offset);
+
   const DWARFUnitIndex &getCUIndex();
   DWARFGdbIndex &getGdbIndex();
   const DWARFUnitIndex &getTUIndex();
@@ -306,6 +309,11 @@ class DWARFContextInMemory : public DWARFContext {
   SmallVector<SmallString<32>, 4> UncompressedSections;
 
   StringRef *MapSectionToMember(StringRef Name);
+
+  /// If Sec is compressed section, decompresses and updates its contents
+  /// provided by Data. Otherwise leaves it unchanged.
+  Error maybeDecompress(const object::SectionRef &Sec, StringRef Name,
+                        StringRef &Data);
 
 public:
   DWARFContextInMemory(const object::ObjectFile &Obj,

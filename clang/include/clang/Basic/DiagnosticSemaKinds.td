@@ -303,6 +303,8 @@ def note_empty_parens_zero_initialize : Note<
   "replace parentheses with an initializer to declare a variable">;
 def warn_unused_function : Warning<"unused function %0">,
   InGroup<UnusedFunction>, DefaultIgnore;
+def warn_unused_template : Warning<"unused %select{function|variable}0 template %1">,
+  InGroup<UnusedTemplate>, DefaultIgnore;
 def warn_unused_member_function : Warning<"unused member function %0">,
   InGroup<UnusedMemberFunction>, DefaultIgnore;
 def warn_used_but_marked_unused: Warning<"%0 was marked unused but was used">,
@@ -730,6 +732,9 @@ def err_super_in_lambda_unsupported : Error<
 def warn_pragma_unused_undeclared_var : Warning<
   "undeclared variable %0 used as an argument for '#pragma unused'">,
   InGroup<IgnoredPragmas>;
+def warn_atl_uuid_deprecated : Warning<
+  "specifying 'uuid' as an ATL attribute is deprecated; use __declspec instead">,
+  InGroup<DeprecatedDeclarations>;
 def warn_pragma_unused_expected_var_arg : Warning<
   "only variables can be arguments to '#pragma unused'">,
   InGroup<IgnoredPragmas>;
@@ -2088,7 +2093,7 @@ def err_enum_invalid_underlying : Error<
   "non-integral type %0 is an invalid underlying type">;
 def err_enumerator_too_large : Error<
   "enumerator value is not representable in the underlying type %0">;
-def ext_enumerator_too_large : ExtWarn<
+def ext_enumerator_too_large : Extension<
   "enumerator value is not representable in the underlying type %0">,
   InGroup<MicrosoftEnumValue>;
 def err_enumerator_wrapped : Error<
@@ -2460,6 +2465,9 @@ def err_attribute_invalid_size : Error<
   "vector size not an integral multiple of component size">;
 def err_attribute_zero_size : Error<"zero vector size">;
 def err_attribute_size_too_large : Error<"vector size too large">;
+def err_typecheck_vector_not_convertable_implict_truncation : Error<
+   "cannot convert between %select{scalar|vector}0 type %1 and vector type"
+   " %2 as implicit conversion would cause truncation">;
 def err_typecheck_vector_not_convertable : Error<
   "cannot convert between vector values of different size (%0 and %1)">;
 def err_typecheck_vector_not_convertable_non_scalar : Error<
@@ -2820,9 +2828,6 @@ def warn_cconv_structors : Warning<
 def err_regparm_mismatch : Error<"function declared with regparm(%0) "
   "attribute was previously declared "
   "%plural{0:without the regparm|:with the regparm(%1)}1 attribute">;
-def err_returns_retained_mismatch : Error<
-  "function declared with the ns_returns_retained attribute "
-  "was previously declared without the ns_returns_retained attribute">;
 def err_function_attribute_mismatch : Error<
   "function declared with %0 attribute "
   "was previously declared without the %0 attribute">;
@@ -2871,7 +2876,8 @@ def warn_partial_availability : Warning<"%0 is only available conditionally">,
 def note_partial_availability_silence : Note<
   "explicitly redeclare %0 to silence this warning">;
 def note_unguarded_available_silence : Note<
-  "enclose %0 in an @available check to silence this warning">;
+  "enclose %0 in %select{an @available|a __builtin_available}1 check to silence"
+  " this warning">;
 def warn_partial_message : Warning<"%0 is partial: %1">,
     InGroup<UnguardedAvailability>, DefaultIgnore;
 def warn_partial_fwdclass_message : Warning<
@@ -4606,6 +4612,8 @@ def err_abi_tag_on_redeclaration : Error<
   "cannot add 'abi_tag' attribute in a redeclaration">;
 def err_new_abi_tag_on_redeclaration : Error<
   "'abi_tag' %0 missing in original declaration">;
+def note_use_ifdef_guards : Note<
+  "unguarded header; consider using #ifdef guards or #pragma once">;
 
 def note_deleted_dtor_no_operator_delete : Note<
   "virtual destructor requires an unambiguous, accessible 'operator delete'">;
@@ -4762,7 +4770,7 @@ def ext_forward_ref_enum : Extension<
   "ISO C forbids forward references to 'enum' types">;
 def err_forward_ref_enum : Error<
   "ISO C++ forbids forward references to 'enum' types">;
-def ext_ms_forward_ref_enum : Extension<
+def ext_ms_forward_ref_enum : ExtWarn<
   "forward references to 'enum' types are a Microsoft extension">,
   InGroup<MicrosoftEnumForwardReference>;
 def ext_forward_ref_enum_def : Extension<
@@ -5774,6 +5782,9 @@ def err_objc_object_assignment : Error<
   "cannot assign to class object (%0 invalid)">;
 def err_typecheck_invalid_operands : Error<
   "invalid operands to binary expression (%0 and %1)">;
+def err_typecheck_logical_vector_expr_gnu_cpp_restrict : Error<
+  "logical expression with vector %select{type %1 and non-vector type %2|types"
+  " %1 and %2}0 is only supported in C++">;
 def err_typecheck_sub_ptr_compatible : Error<
   "%diff{$ and $ are not pointers to compatible types|"
   "pointers to incompatible types}0,1">;
@@ -7923,7 +7934,11 @@ def warn_empty_switch_body : Warning<
 def note_empty_body_on_separate_line : Note<
   "put the semicolon on a separate line to silence this warning">;
 
-def err_va_start_used_in_non_variadic_function : Error<
+def err_va_start_captured_stmt : Error<
+  "'va_start' cannot be used in a captured statement">;
+def err_va_start_outside_function : Error<
+  "'va_start' cannot be used outside a function">;
+def err_va_start_fixed_function : Error<
   "'va_start' used in function with fixed args">;
 def err_va_start_used_in_wrong_abi_function : Error<
   "'va_start' used in %select{System V|Win64}0 ABI function">;
@@ -8048,7 +8063,7 @@ def err_64_bit_builtin_32_bit_tgt : Error<
   "this builtin is only available on 64-bit targets">;
 def err_ppc_builtin_only_on_pwr7 : Error<
   "this builtin is only valid on POWER7 or later CPUs">;
-def err_x86_builtin_32_bit_tgt : Error<
+def err_x86_builtin_64_only : Error<
   "this builtin is only available on x86-64 targets">;
 def err_x86_builtin_invalid_rounding : Error<
   "invalid rounding argument">;
@@ -8181,9 +8196,20 @@ def err_undeclared_use_suggest : Error<
   "use of undeclared %0; did you mean %1?">;
 def err_undeclared_var_use_suggest : Error<
   "use of undeclared identifier %0; did you mean %1?">;
+def err_no_template : Error<"no template named %0">;
 def err_no_template_suggest : Error<"no template named %0; did you mean %1?">;
+def err_no_member_template : Error<"no template named %0 in %1">;
 def err_no_member_template_suggest : Error<
   "no template named %0 in %1; did you mean %select{|simply }2%3?">;
+def err_non_template_in_template_id : Error<
+  "%0 does not name a template but is followed by template arguments">;
+def err_non_template_in_template_id_suggest : Error<
+  "%0 does not name a template but is followed by template arguments; "
+  "did you mean %1?">;
+def err_non_template_in_member_template_id_suggest : Error<
+  "member %0 of %1 is not a template; did you mean %select{|simply }2%3?">;
+def note_non_template_in_template_id_found : Note<
+  "non-template declaration found by name lookup">;
 def err_mem_init_not_member_or_class_suggest : Error<
   "initializer %0 does not name a non-static data member or base "
   "class; did you mean the %select{base class|member}1 %2?">;
@@ -8300,6 +8326,8 @@ def err_sampler_argument_required : Error<
   "sampler_t variable required - got %0">;
 def err_wrong_sampler_addressspace: Error<
   "sampler type cannot be used with the __local and __global address space qualifiers">;
+def err_opencl_nonconst_global_sampler : Error<
+  "global sampler requires a const or constant address space qualifier">;
 def err_opencl_cast_non_zero_to_event_t : Error<
   "cannot cast non-zero value '%0' to 'event_t'">;
 def err_opencl_global_invalid_addr_space : Error<
@@ -8868,6 +8896,13 @@ def ext_equivalent_internal_linkage_decl_in_modules : ExtWarn<
   InGroup<DiagGroup<"modules-ambiguous-internal-linkage">>;
 def note_equivalent_internal_linkage_decl : Note<
   "declared here%select{ in module '%1'|}0">;
+
+def note_redefinition_modules_same_file : Note<
+	"'%0' included multiple times, additional include site in header from module '%1'">;
+def note_redefinition_modules_same_file_modulemap : Note<
+	"consider adding '%0' as part of '%1' definition">;
+def note_redefinition_include_same_file : Note<
+	"'%0' included multiple times, additional include site here">;
 }
 
 let CategoryName = "Coroutines Issue" in {
@@ -8974,6 +9009,9 @@ def warn_nullability_lost : Warning<
   "implicit conversion from nullable pointer %0 to non-nullable pointer "
   "type %1">,
   InGroup<NullableToNonNullConversion>, DefaultIgnore;
+def warn_zero_as_null_pointer_constant : Warning<
+  "zero as null pointer constant">,
+  InGroup<DiagGroup<"zero-as-null-pointer-constant">>, DefaultIgnore;
 
 def err_nullability_cs_multilevel : Error<
   "nullability keyword %0 cannot be applied to multi-level pointer type %1">;

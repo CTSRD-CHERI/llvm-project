@@ -487,6 +487,9 @@ void TargetPassConfig::addIRPasses() {
 
   // Insert calls to mcount-like functions.
   addPass(createCountingFunctionInserterPass());
+
+  // Expand reduction intrinsics into shuffle sequences if the target wants to.
+  addPass(createExpandReductionsPass());
 }
 
 /// Turn exception handling constructs into something the code generators can
@@ -606,6 +609,9 @@ void TargetPassConfig::addMachinePasses() {
     // to one another and simplify frame index references where possible.
     addPass(&LocalStackSlotAllocationID, false);
   }
+
+  if (getOptLevel() != CodeGenOpt::None)
+    addPass(&LiveRangeShrinkID);
 
   // Run pre-ra passes.
   addPreRegAlloc();

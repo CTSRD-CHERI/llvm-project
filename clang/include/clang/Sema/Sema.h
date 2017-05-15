@@ -1456,17 +1456,20 @@ private:
   /// The modules we're currently parsing.
   llvm::SmallVector<ModuleScope, 16> ModuleScopes;
 
-  VisibleModuleSet VisibleModules;
+  /// Get the module whose scope we are currently within.
+  Module *getCurrentModule() const {
+    return ModuleScopes.empty() ? nullptr : ModuleScopes.back().Module;
+  }
 
-  Module *CachedFakeTopLevelModule;
+  VisibleModuleSet VisibleModules;
 
 public:
   /// \brief Get the module owning an entity.
-  Module *getOwningModule(Decl *Entity);
+  Module *getOwningModule(Decl *Entity) { return Entity->getOwningModule(); }
 
   /// \brief Make a merged definition of an existing hidden definition \p ND
   /// visible at the specified location.
-  void makeMergedDefinitionVisible(NamedDecl *ND, SourceLocation Loc);
+  void makeMergedDefinitionVisible(NamedDecl *ND);
 
   bool isModuleVisible(Module *M) { return VisibleModules.isVisible(M); }
 
@@ -1593,7 +1596,7 @@ public:
                                Scope *S,
                                CXXScopeSpec *SS,
                                ParsedType &SuggestedType,
-                               bool AllowClassTemplates = false);
+                               bool IsTemplateName = false);
 
   /// Attempt to behave like MSVC in situations where lookup of an unqualified
   /// type name has failed in a dependent context. In these situations, we
@@ -1737,6 +1740,23 @@ public:
   };
   TemplateNameKindForDiagnostics
   getTemplateNameKindForDiagnostics(TemplateName Name);
+
+  /// Determine whether it's plausible that E was intended to be a
+  /// template-name.
+  bool mightBeIntendedToBeTemplateName(ExprResult E) {
+    if (!getLangOpts().CPlusPlus || E.isInvalid())
+      return false;
+    if (auto *DRE = dyn_cast<DeclRefExpr>(E.get()))
+      return !DRE->hasExplicitTemplateArgs();
+    if (auto *ME = dyn_cast<MemberExpr>(E.get()))
+      return !ME->hasExplicitTemplateArgs();
+    // Any additional cases recognized here should also be handled by
+    // diagnoseExprIntendedAsTemplateName.
+    return false;
+  }
+  void diagnoseExprIntendedAsTemplateName(Scope *S, ExprResult TemplateName,
+                                          SourceLocation Less,
+                                          SourceLocation Greater);
 
   Decl *ActOnDeclarator(Scope *S, Declarator &D);
 
@@ -2336,6 +2356,7 @@ public:
   void MergeVarDeclTypes(VarDecl *New, VarDecl *Old, bool MergeTypeWithOld);
   void MergeVarDeclExceptionSpecs(VarDecl *New, VarDecl *Old);
   bool checkVarDeclRedefinition(VarDecl *OldDefn, VarDecl *NewDefn);
+  void notePreviousDefinition(SourceLocation Old, SourceLocation New);
   bool MergeCXXFunctionDecl(FunctionDecl *New, FunctionDecl *Old, Scope *S);
 
   // AssignmentAction - This is used by all the assignment diagnostic functions
@@ -2726,7 +2747,8 @@ public:
   resolveAddressOfOnlyViableOverloadCandidate(Expr *E,
                                               DeclAccessPair &FoundResult);
 
-  bool resolveAndFixAddressOfOnlyViableOverloadCandidate(ExprResult &SrcExpr);
+  bool resolveAndFixAddressOfOnlyViableOverloadCandidate(
+      ExprResult &SrcExpr, bool DoFunctionPointerConversion = false);
 
   FunctionDecl *
   ResolveSingleFunctionTemplateSpecialization(OverloadExpr *ovl,
@@ -3049,7 +3071,8 @@ public:
                           bool IncludeGlobalScope = true);
   void LookupVisibleDecls(DeclContext *Ctx, LookupNameKind Kind,
                           VisibleDeclConsumer &Consumer,
-                          bool IncludeGlobalScope = true);
+                          bool IncludeGlobalScope = true,
+                          bool IncludeDependentBases = false);
 
   enum CorrectTypoKind {
     CTK_NonError,     // CorrectTypo used in a non error recovery situation.
@@ -3765,6 +3788,9 @@ public:
   /// _Nonnull one.
   void diagnoseNullableToNonnullConversion(QualType DstType, QualType SrcType,
                                            SourceLocation Loc);
+
+  /// Warn when implicitly casting 0 to nullptr.
+  void diagnoseZeroToNullptrConversion(CastKind Kind, const Expr *E);
 
   ParsingDeclState PushParsingDeclaration(sema::DelayedDiagnosticPool &pool) {
     return DelayedDiagnostics.push(pool);
@@ -6081,6 +6107,7 @@ public:
                          TemplateArgumentListInfo *ExplicitTemplateArgs,
                                            LookupResult &Previous);
   bool CheckMemberSpecialization(NamedDecl *Member, LookupResult &Previous);
+  void CompleteMemberSpecialization(NamedDecl *Member, LookupResult &Previous);
 
   DeclResult
   ActOnExplicitInstantiation(Scope *S,
@@ -9256,6 +9283,8 @@ public:
   /// type checking binary operators (subroutines of CreateBuiltinBinOp).
   QualType InvalidOperands(SourceLocation Loc, ExprResult &LHS,
                            ExprResult &RHS);
+  QualType InvalidLogicalVectorOperands(SourceLocation Loc, ExprResult &LHS,
+                                 ExprResult &RHS);
   QualType CheckPointerToMemberOperands( // C++ 5.5
     ExprResult &LHS, ExprResult &RHS, ExprValueKind &VK,
     SourceLocation OpLoc, bool isIndirect);
@@ -10005,6 +10034,7 @@ public:
                                              MacroInfo *MacroInfo,
                                              unsigned Argument);
   void CodeCompleteNaturalLanguage();
+  void CodeCompleteAvailabilityPlatformName();
   void GatherGlobalCodeCompletions(CodeCompletionAllocator &Allocator,
                                    CodeCompletionTUInfo &CCTUInfo,
                   SmallVectorImpl<CodeCompletionResult> &Results);
@@ -10068,9 +10098,7 @@ private:
   bool CheckX86BuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall);
   bool CheckPPCBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall);
 
-  bool SemaBuiltinVAStartImpl(CallExpr *TheCall);
-  bool SemaBuiltinVAStart(CallExpr *TheCall);
-  bool SemaBuiltinMSVAStart(CallExpr *TheCall);
+  bool SemaBuiltinVAStart(unsigned BuiltinID, CallExpr *TheCall);
   bool SemaBuiltinVAStartARM(CallExpr *Call);
   bool SemaBuiltinUnorderedCompare(CallExpr *TheCall);
   bool SemaBuiltinFPClassification(CallExpr *TheCall, unsigned NumArgs);

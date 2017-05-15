@@ -25,8 +25,8 @@
 #include "lldb/Target/SectionLoadList.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Utility/DataBufferLLVM.h"
-#include "lldb/Utility/Error.h"
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/Status.h"
 #include "lldb/Utility/Stream.h"
 
 #include "llvm/ADT/PointerUnion.h"
@@ -1079,7 +1079,7 @@ Address ObjectFileELF::GetImageInfoAddress(Target *target) {
       if (dyn_base == LLDB_INVALID_ADDRESS)
         return Address();
 
-      Error error;
+      Status error;
       if (symbol.d_tag == DT_MIPS_RLD_MAP) {
         // DT_MIPS_RLD_MAP tag stores an absolute address of the debug pointer.
         Address addr;
@@ -1232,12 +1232,12 @@ size_t ObjectFileELF::ParseProgramHeaders() {
       m_header);
 }
 
-lldb_private::Error
+lldb_private::Status
 ObjectFileELF::RefineModuleDetailsFromNote(lldb_private::DataExtractor &data,
                                            lldb_private::ArchSpec &arch_spec,
                                            lldb_private::UUID &uuid) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_MODULES));
-  Error error;
+  Status error;
 
   lldb::offset_t offset = 0;
 
@@ -1763,7 +1763,7 @@ size_t ObjectFileELF::GetSectionHeaderInfo(SectionHeaderColl &section_headers,
           DataExtractor data;
           if (section_size && (set_data(data, sheader.sh_offset,
                                         section_size) == section_size)) {
-            Error error = RefineModuleDetailsFromNote(data, arch_spec, uuid);
+            Status error = RefineModuleDetailsFromNote(data, arch_spec, uuid);
             if (error.Fail()) {
               if (log)
                 log->Printf("ObjectFileELF::%s ELF note processing failed: %s",
@@ -1808,10 +1808,10 @@ DataExtractor ObjectFileELF::GetSegmentDataByIndex(lldb::user_id_t id) {
                        segment_header->p_filesz);
 }
 
-std::string
+llvm::StringRef
 ObjectFileELF::StripLinkerSymbolAnnotations(llvm::StringRef symbol_name) const {
   size_t pos = symbol_name.find('@');
-  return symbol_name.substr(0, pos).str();
+  return symbol_name.substr(0, pos);
 }
 
 //----------------------------------------------------------------------
@@ -2418,7 +2418,7 @@ unsigned ObjectFileELF::ParseSymbols(Symtab *symtab, user_id_t start_id,
                 .emplace(sect_name.GetCString(),
                          module_section_list->FindSectionByName(sect_name))
                 .first;
-      if (section_it->second && section_it->second->GetFileSize())
+      if (section_it->second)
         symbol_section_sp = section_it->second;
     }
 

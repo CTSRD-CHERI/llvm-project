@@ -400,40 +400,40 @@ getRelocTargetVA(const InputFile &File, uint32_t Type, int64_t A,
     return Body.getVA(A);
   case R_GOT:
   case R_RELAX_TLS_GD_TO_IE_ABS:
-    return Body.getGotVA<ELFT>() + A;
+    return Body.getGotVA() + A;
   case R_GOTONLY_PC:
-    return In<ELFT>::Got->getVA() + A - P;
+    return InX::Got->getVA() + A - P;
   case R_GOTONLY_PC_FROM_END:
-    return In<ELFT>::Got->getVA() + A - P + In<ELFT>::Got->getSize();
+    return InX::Got->getVA() + A - P + InX::Got->getSize();
   case R_GOTREL:
-    return Body.getVA(A) - In<ELFT>::Got->getVA();
+    return Body.getVA(A) - InX::Got->getVA();
   case R_GOTREL_FROM_END:
-    return Body.getVA(A) - In<ELFT>::Got->getVA() - In<ELFT>::Got->getSize();
+    return Body.getVA(A) - InX::Got->getVA() - InX::Got->getSize();
   case R_GOT_FROM_END:
   case R_RELAX_TLS_GD_TO_IE_END:
-    return Body.getGotOffset() + A - In<ELFT>::Got->getSize();
+    return Body.getGotOffset() + A - InX::Got->getSize();
   case R_GOT_OFF:
     return Body.getGotOffset() + A;
   case R_GOT_PAGE_PC:
   case R_RELAX_TLS_GD_TO_IE_PAGE_PC:
-    return getAArch64Page(Body.getGotVA<ELFT>() + A) - getAArch64Page(P);
+    return getAArch64Page(Body.getGotVA() + A) - getAArch64Page(P);
   case R_GOT_PC:
   case R_RELAX_TLS_GD_TO_IE:
-    return Body.getGotVA<ELFT>() + A - P;
+    return Body.getGotVA() + A - P;
   case R_HINT:
   case R_NONE:
   case R_TLSDESC_CALL:
     llvm_unreachable("cannot relocate hint relocs");
   case R_MIPS_GOTREL:
-    return Body.getVA(A) - In<ELFT>::MipsGot->getGp(&File);
+    return Body.getVA(A) - InX::MipsGot->getGp(&File);
   case R_MIPS_GOT_GP:
-    return In<ELFT>::MipsGot->getGp(&File) + A;
+    return InX::MipsGot->getGp(&File) + A;
   case R_MIPS_GOT_GP_PC: {
     // R_MIPS_LO16 expression has R_MIPS_GOT_GP_PC type iif the target
     // is _gp_disp symbol. In that case we should use the following
     // formula for calculation "AHL + GP - P + 4". For details see p. 4-19 at
     // ftp://www.linux-mips.org/pub/linux/mips/doc/ABI/mipsabi.pdf
-    uint64_t V = In<ELFT>::MipsGot->getGp(&File) + A - P;
+    uint64_t V = InX::MipsGot->getGp(&File) + A - P;
     if (Type == R_MIPS_LO16)
       V += 4;
     return V;
@@ -442,25 +442,24 @@ getRelocTargetVA(const InputFile &File, uint32_t Type, int64_t A,
     // If relocation against MIPS local symbol requires GOT entry, this entry
     // should be initialized by 'page address'. This address is high 16-bits
     // of sum the symbol's value and the addend.
-    return In<ELFT>::MipsGot->getVA() +
-           In<ELFT>::MipsGot->getPageEntryOffset(File, Body, A) -
-           In<ELFT>::MipsGot->getGp(&File);
+    return InX::MipsGot->getVA() +
+           InX::MipsGot->getPageEntryOffset(File, Body, A) -
+           InX::MipsGot->getGp(&File);
   case R_MIPS_GOT_OFF:
   case R_MIPS_GOT_OFF32:
     // In case of MIPS if a GOT relocation has non-zero addend this addend
     // should be applied to the GOT entry content not to the GOT entry offset.
     // That is why we use separate expression type.
-    return In<ELFT>::MipsGot->getVA() +
-           In<ELFT>::MipsGot->getBodyEntryOffset(File, Body, A) -
-           In<ELFT>::MipsGot->getGp(&File);
+    return InX::MipsGot->getVA() +
+           InX::MipsGot->getBodyEntryOffset(File, Body, A) -
+           InX::MipsGot->getGp(&File);
   case R_MIPS_TLSGD:
-    return In<ELFT>::MipsGot->getVA() +
-           In<ELFT>::MipsGot->getGlobalDynOffset(File, Body) -
-           In<ELFT>::MipsGot->getGp(&File);
+    return InX::MipsGot->getVA() +
+           InX::MipsGot->getGlobalDynOffset(File, Body) -
+           InX::MipsGot->getGp(&File);
   case R_MIPS_TLSLD:
-    return In<ELFT>::MipsGot->getVA() +
-           In<ELFT>::MipsGot->getTlsIndexOffset(File) -
-           In<ELFT>::MipsGot->getGp(&File);
+    return InX::MipsGot->getVA() + InX::MipsGot->getTlsIndexOffset(File) -
+           InX::MipsGot->getGp(&File);
   case R_PAGE_PC:
   case R_PLT_PAGE_PC:
     if (Body.isUndefined() && !Body.isLocal() && Body.symbol()->isWeak())
@@ -524,19 +523,18 @@ getRelocTargetVA(const InputFile &File, uint32_t Type, int64_t A,
   case R_SIZE:
     return Body.getSize<ELFT>() + A;
   case R_TLSDESC:
-    return In<ELFT>::Got->getGlobalDynAddr(Body) + A;
+    return InX::Got->getGlobalDynAddr(Body) + A;
   case R_TLSDESC_PAGE:
-    return getAArch64Page(In<ELFT>::Got->getGlobalDynAddr(Body) + A) -
+    return getAArch64Page(InX::Got->getGlobalDynAddr(Body) + A) -
            getAArch64Page(P);
   case R_TLSGD:
-    return In<ELFT>::Got->getGlobalDynOffset(Body) + A -
-           In<ELFT>::Got->getSize();
+    return InX::Got->getGlobalDynOffset(Body) + A - InX::Got->getSize();
   case R_TLSGD_PC:
-    return In<ELFT>::Got->getGlobalDynAddr(Body) + A - P;
+    return InX::Got->getGlobalDynAddr(Body) + A - P;
   case R_TLSLD:
-    return In<ELFT>::Got->getTlsIndexOff() + A - In<ELFT>::Got->getSize();
+    return InX::Got->getTlsIndexOff() + A - InX::Got->getSize();
   case R_TLSLD_PC:
-    return In<ELFT>::Got->getTlsIndexVA() + A - P;
+    return InX::Got->getTlsIndexVA() + A - P;
   }
   llvm_unreachable("Invalid expression");
 }

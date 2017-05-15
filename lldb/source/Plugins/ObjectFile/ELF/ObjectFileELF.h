@@ -152,7 +152,7 @@ public:
   // Returns segment data for the given index.
   lldb_private::DataExtractor GetSegmentDataByIndex(lldb::user_id_t id);
 
-  std::string
+  llvm::StringRef
   StripLinkerSymbolAnnotations(llvm::StringRef symbol_name) const override;
 
 private:
@@ -375,7 +375,7 @@ private:
 
   unsigned PLTRelocationType();
 
-  static lldb_private::Error
+  static lldb_private::Status
   RefineModuleDetailsFromNote(lldb_private::DataExtractor &data,
                               lldb_private::ArchSpec &arch_spec,
                               lldb_private::UUID &uuid);

@@ -192,7 +192,7 @@ template <class ELFT> void MipsOptionsSection<ELFT>::writeTo(uint8_t *Buf) {
   Options->size = getSize();
 
   if (!Config->Relocatable)
-    Reginfo.ri_gp_value = In<ELFT>::MipsGot->getGp();
+    Reginfo.ri_gp_value = InX::MipsGot->getGp();
   memcpy(Buf + sizeof(Elf_Mips_Options), &Reginfo, sizeof(Reginfo));
 }
 
@@ -250,7 +250,7 @@ MipsReginfoSection<ELFT>::MipsReginfoSection(Elf_Mips_RegInfo Reginfo)
 
 template <class ELFT> void MipsReginfoSection<ELFT>::writeTo(uint8_t *Buf) {
   if (!Config->Relocatable)
-    Reginfo.ri_gp_value = In<ELFT>::MipsGot->getGp();
+    Reginfo.ri_gp_value = InX::MipsGot->getGp();
   memcpy(Buf, &Reginfo, sizeof(Reginfo));
 }
 
@@ -362,7 +362,7 @@ void BuildIdSection::computeHash(
   std::vector<uint8_t> Hashes(Chunks.size() * HashSize);
 
   // Compute hash values.
-  parallelFor(0, Chunks.size(), [&](size_t I) {
+  parallelForEachN(0, Chunks.size(), [&](size_t I) {
     HashFn(Hashes.data() + I * HashSize, Chunks[I]);
   });
 
@@ -547,6 +547,13 @@ template <class ELFT> void EhFrameSection<ELFT>::finalizeContents() {
       Off += alignTo(Fde->size(), Config->Wordsize);
     }
   }
+
+  // The LSB standard does not allow a .eh_frame section with zero
+  // Call Frame Information records. Therefore add a CIE record length
+  // 0 as a terminator if this .eh_frame section is empty.
+  if (Off == 0)
+    Off = 4;
+
   this->Size = Off;
 }
 
@@ -617,17 +624,16 @@ template <class ELFT> void EhFrameSection<ELFT>::writeTo(uint8_t *Buf) {
   }
 }
 
-template <class ELFT>
-GotSection<ELFT>::GotSection()
+GotBaseSection::GotBaseSection()
     : SyntheticSection(SHF_ALLOC | SHF_WRITE, SHT_PROGBITS,
                        Target->GotEntrySize, ".got") {}
 
-template <class ELFT> void GotSection<ELFT>::addEntry(SymbolBody &Sym) {
+void GotBaseSection::addEntry(SymbolBody &Sym) {
   Sym.GotIndex = NumEntries;
   ++NumEntries;
 }
 
-template <class ELFT> bool GotSection<ELFT>::addDynTlsEntry(SymbolBody &Sym) {
+bool GotBaseSection::addDynTlsEntry(SymbolBody &Sym) {
   if (Sym.GlobalDynIndex != -1U)
     return false;
   Sym.GlobalDynIndex = NumEntries;
@@ -638,7 +644,7 @@ template <class ELFT> bool GotSection<ELFT>::addDynTlsEntry(SymbolBody &Sym) {
 
 // Reserves TLS entries for a TLS module ID and a TLS block offset.
 // In total it takes two GOT slots.
-template <class ELFT> bool GotSection<ELFT>::addTlsIndex() {
+bool GotBaseSection::addTlsIndex() {
   if (TlsIndexOff != uint32_t(-1))
     return false;
   TlsIndexOff = NumEntries * Config->Wordsize;
@@ -646,21 +652,19 @@ template <class ELFT> bool GotSection<ELFT>::addTlsIndex() {
   return true;
 }
 
-template <class ELFT>
-uint64_t GotSection<ELFT>::getGlobalDynAddr(const SymbolBody &B) const {
+uint64_t GotBaseSection::getGlobalDynAddr(const SymbolBody &B) const {
   return this->getVA() + B.GlobalDynIndex * Config->Wordsize;
 }
 
-template <class ELFT>
-uint64_t GotSection<ELFT>::getGlobalDynOffset(const SymbolBody &B) const {
+uint64_t GotBaseSection::getGlobalDynOffset(const SymbolBody &B) const {
   return B.GlobalDynIndex * Config->Wordsize;
 }
 
-template <class ELFT> void GotSection<ELFT>::finalizeContents() {
+void GotBaseSection::finalizeContents() {
   Size = NumEntries * Config->Wordsize;
 }
 
-template <class ELFT> bool GotSection<ELFT>::empty() const {
+bool GotBaseSection::empty() const {
   // If we have a relocation that is relative to GOT (such as GOTOFFREL),
   // we need to emit a GOT even if it's empty.
   return NumEntries == 0 && !HasGotOffRel;
@@ -1177,15 +1181,15 @@ template <class ELFT> void DynamicSection<ELFT>::addEntries() {
   // Add strings to .dynstr early so that .dynstr's size will be
   // fixed early.
   for (StringRef S : Config->AuxiliaryList)
-    add({DT_AUXILIARY, In<ELFT>::DynStrTab->addString(S)});
+    add({DT_AUXILIARY, InX::DynStrTab->addString(S)});
   if (!Config->Rpath.empty())
     add({Config->EnableNewDtags ? DT_RUNPATH : DT_RPATH,
-         In<ELFT>::DynStrTab->addString(Config->Rpath)});
+         InX::DynStrTab->addString(Config->Rpath)});
   for (SharedFile<ELFT> *F : Symtab<ELFT>::X->getSharedFiles())
     if (F->isNeeded())
-      add({DT_NEEDED, In<ELFT>::DynStrTab->addString(F->SoName)});
+      add({DT_NEEDED, InX::DynStrTab->addString(F->SoName)});
   if (!Config->SoName.empty())
-    add({DT_SONAME, In<ELFT>::DynStrTab->addString(Config->SoName)});
+    add({DT_SONAME, InX::DynStrTab->addString(Config->SoName)});
 
   // Set DT_FLAGS and DT_FLAGS_1.
   uint32_t DtFlags = 0;
@@ -1219,7 +1223,7 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
   if (this->Size)
     return; // Already finalized.
 
-  this->Link = In<ELFT>::DynStrTab->OutSec->SectionIndex;
+  this->Link = InX::DynStrTab->OutSec->SectionIndex;
   if (In<ELFT>::RelaDyn->OutSec->Size > 0) {
     bool IsRela = Config->IsRela;
     add({IsRela ? DT_RELA : DT_REL, In<ELFT>::RelaDyn});
@@ -1240,14 +1244,14 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
     add({DT_JMPREL, In<ELFT>::RelaPlt});
     add({DT_PLTRELSZ, In<ELFT>::RelaPlt->OutSec->Size});
     add({Config->EMachine == EM_MIPS ? DT_MIPS_PLTGOT : DT_PLTGOT,
-         In<ELFT>::GotPlt});
+         InX::GotPlt});
     add({DT_PLTREL, uint64_t(Config->IsRela ? DT_RELA : DT_REL)});
   }
 
   add({DT_SYMTAB, In<ELFT>::DynSymTab});
   add({DT_SYMENT, sizeof(Elf_Sym)});
-  add({DT_STRTAB, In<ELFT>::DynStrTab});
-  add({DT_STRSZ, In<ELFT>::DynStrTab->getSize()});
+  add({DT_STRTAB, InX::DynStrTab});
+  add({DT_STRSZ, InX::DynStrTab->getSize()});
   if (!Config->ZText)
     add({DT_TEXTREL, (uint64_t)0});
   if (In<ELFT>::GnuHashTab)
@@ -1290,14 +1294,14 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
     add({DT_MIPS_FLAGS, RHF_NOTPOT});
     add({DT_MIPS_BASE_ADDRESS, Config->ImageBase});
     add({DT_MIPS_SYMTABNO, In<ELFT>::DynSymTab->getNumSymbols()});
-    add({DT_MIPS_LOCAL_GOTNO, In<ELFT>::MipsGot->getLocalEntriesNum()});
-    if (const SymbolBody *B = In<ELFT>::MipsGot->getFirstGlobalEntry())
+    add({DT_MIPS_LOCAL_GOTNO, InX::MipsGot->getLocalEntriesNum()});
+    if (const SymbolBody *B = InX::MipsGot->getFirstGlobalEntry())
       add({DT_MIPS_GOTSYM, B->DynsymIndex});
     else
       add({DT_MIPS_GOTSYM, In<ELFT>::DynSymTab->getNumSymbols()});
-    add({DT_PLTGOT, In<ELFT>::MipsGot});
-    if (In<ELFT>::MipsRldMap)
-      add({DT_MIPS_RLD_MAP, In<ELFT>::MipsRldMap});
+    add({DT_PLTGOT, InX::MipsGot});
+    if (InX::MipsRldMap)
+      add({DT_MIPS_RLD_MAP, InX::MipsRldMap});
   }
 
   this->OutSec->Link = this->Link;
@@ -1344,6 +1348,7 @@ int64_t DynamicReloc::getAddend() const {
     return Sym->getVA(Addend);
   if (!OutputSec)
     return Addend;
+  // See the comment in the DynamicReloc ctor.
   return getMipsPageAddr(OutputSec->Addr) + Addend;
 }
 
@@ -2096,11 +2101,11 @@ static StringRef getFileDefName() {
 }
 
 template <class ELFT> void VersionDefinitionSection<ELFT>::finalizeContents() {
-  FileDefNameOff = In<ELFT>::DynStrTab->addString(getFileDefName());
+  FileDefNameOff = InX::DynStrTab->addString(getFileDefName());
   for (VersionDefinition &V : Config->VersionDefinitions)
-    V.NameOff = In<ELFT>::DynStrTab->addString(V.Name);
+    V.NameOff = InX::DynStrTab->addString(V.Name);
 
-  this->OutSec->Link = In<ELFT>::DynStrTab->OutSec->SectionIndex;
+  this->OutSec->Link = InX::DynStrTab->OutSec->SectionIndex;
 
   // sh_info should be set to the number of definitions. This fact is missed in
   // documentation, but confirmed by binutils community:
@@ -2196,14 +2201,14 @@ void VersionNeedSection<ELFT>::addSymbol(SharedSymbol *SS) {
   // to create one by adding it to our needed list and creating a dynstr entry
   // for the soname.
   if (File->VerdefMap.empty())
-    Needed.push_back({File, In<ELFT>::DynStrTab->addString(File->SoName)});
+    Needed.push_back({File, InX::DynStrTab->addString(File->SoName)});
   typename SharedFile<ELFT>::NeededVer &NV = File->VerdefMap[Ver];
   // If we don't already know that we need an Elf_Vernaux for this Elf_Verdef,
   // prepare to create one by allocating a version identifier and creating a
   // dynstr entry for the version name.
   if (NV.Index == 0) {
-    NV.StrTab = In<ELFT>::DynStrTab->addString(File->getStringTable().data() +
-                                               Ver->getAux()->vda_name);
+    NV.StrTab = InX::DynStrTab->addString(File->getStringTable().data() +
+                                          Ver->getAux()->vda_name);
     NV.Index = NextIndex++;
   }
   SS->symbol()->VersionId = NV.Index;
@@ -2245,7 +2250,7 @@ template <class ELFT> void VersionNeedSection<ELFT>::writeTo(uint8_t *Buf) {
 }
 
 template <class ELFT> void VersionNeedSection<ELFT>::finalizeContents() {
-  this->OutSec->Link = In<ELFT>::DynStrTab->OutSec->SectionIndex;
+  this->OutSec->Link = InX::DynStrTab->OutSec->SectionIndex;
   this->OutSec->Info = Needed.size();
 }
 
@@ -2332,7 +2337,7 @@ MipsRldMapSection::MipsRldMapSection()
 
 void MipsRldMapSection::writeTo(uint8_t *Buf) {
   // Apply filler from linker script.
-  Optional<uint32_t> Fill = Script->getFiller(this->Name);
+  Optional<uint32_t> Fill = Script->getFiller(this->OutSec);
   if (!Fill || *Fill == 0)
     return;
 
@@ -2390,9 +2395,11 @@ BssSection *InX::Bss;
 BssSection *InX::BssRelRo;
 BuildIdSection *InX::BuildId;
 InputSection *InX::Common;
+SyntheticSection *InX::Dynamic;
 StringTableSection *InX::DynStrTab;
 InputSection *InX::Interp;
 GdbIndexSection *InX::GdbIndex;
+GotBaseSection *InX::Got;
 GotPltSection *InX::GotPlt;
 IgotPltSection *InX::IgotPlt;
 MipsGotSection *InX::MipsGot;

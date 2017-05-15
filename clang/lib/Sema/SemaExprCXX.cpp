@@ -918,17 +918,18 @@ static QualType adjustCVQualifiersForCXXThisWithinLambda(
   //  tracking the enclosing DC for step 2 if needed).  Note the topmost LSI on
   //  the stack represents the innermost lambda.
   //
-  //  2) Iterate out through the DeclContext chain (if it represents a lambda's
-  //  call operator, and therefore must be a generic lambda's call operator,
-  //  which is the only time an inconsistency between the LSI and the
-  //  DeclContext should occur) querying closure types regarding capture
-  //  information.
-
+  //  2) If we run out of enclosing LSI's, check if the enclosing DeclContext
+  //  represents a lambda's call operator.  If it does, we must be instantiating
+  //  a generic lambda's call operator (represented by the Current LSI, and
+  //  should be the only scenario where an inconsistency between the LSI and the
+  //  DeclContext should occur), so climb out the DeclContexts if they
+  //  represent lambdas, while querying the corresponding closure types
+  //  regarding capture information.
 
   // 1) Climb down the function scope info stack.
   for (int I = FunctionScopes.size();
        I-- && isa<LambdaScopeInfo>(FunctionScopes[I]) &&
-       (!CurLSI || CurLSI->Lambda->getDeclContext() ==
+       (!CurLSI || !CurLSI->Lambda || CurLSI->Lambda->getDeclContext() ==
                        cast<LambdaScopeInfo>(FunctionScopes[I])->CallOperator);
        CurDC = getLambdaAwareParentOfDeclContext(CurDC)) {
     CurLSI = cast<LambdaScopeInfo>(FunctionScopes[I]);
@@ -4719,10 +4720,24 @@ static bool EvaluateBinaryTypeTrait(Sema &Self, TypeTrait BTT, QualType LhsT,
     // regard to cv-qualifiers.
 
     const RecordType *lhsRecord = LhsT->getAs<RecordType>();
-    if (!lhsRecord) return false;
-
     const RecordType *rhsRecord = RhsT->getAs<RecordType>();
-    if (!rhsRecord) return false;
+    if (!rhsRecord || !lhsRecord) {
+      const ObjCObjectType *LHSObjTy = LhsT->getAs<ObjCObjectType>();
+      const ObjCObjectType *RHSObjTy = RhsT->getAs<ObjCObjectType>();
+      if (!LHSObjTy || !RHSObjTy)
+        return false;
+
+      ObjCInterfaceDecl *BaseInterface = LHSObjTy->getInterface();
+      ObjCInterfaceDecl *DerivedInterface = RHSObjTy->getInterface();
+      if (!BaseInterface || !DerivedInterface)
+        return false;
+
+      if (Self.RequireCompleteType(
+              KeyLoc, RhsT, diag::err_incomplete_type_used_in_type_trait_expr))
+        return false;
+
+      return BaseInterface->isSuperClassOf(DerivedInterface);
+    }
 
     assert(Self.Context.hasSameUnqualifiedType(LhsT, RhsT)
              == (lhsRecord == rhsRecord));
@@ -5341,6 +5356,15 @@ QualType Sema::CXXCheckConditionalOperands(ExprResult &Cond, ExprResult &LHS,
 
   // C++11 [expr.cond]p1
   //   The first expression is contextually converted to bool.
+  //
+  // FIXME; GCC's vector extension permits the use of a?b:c where the type of
+  //        a is that of a integer vector with the same number of elements and
+  //        size as the vectors of b and c. If one of either b or c is a scalar
+  //        it is implicitly converted to match the type of the vector.
+  //        Otherwise the expression is ill-formed. If both b and c are scalars,
+  //        then b and c are checked and converted to the type of a if possible.
+  //        Unlike the OpenCL ?: operator, the expression is evaluated as
+  //        (a[0] != 0 ? b[0] : c[0], .. , a[n] != 0 ? b[n] : c[n]).
   if (!Cond.get()->isTypeDependent()) {
     ExprResult CondRes = CheckCXXBooleanCondition(Cond.get());
     if (CondRes.isInvalid())
