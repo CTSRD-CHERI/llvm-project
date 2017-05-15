@@ -2356,7 +2356,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
 
     auto MethNoTy = llvm::Type::getInt64Ty(getLLVMContext());
     auto ClsTy = ConvertType(CGM.getContext().getCHERIClassType());
-    auto ResultType = llvm::StructType::get( ClsTy, MethNoTy, nullptr);
+    auto ResultType = llvm::StructType::get(ClsTy, MethNoTy);
     LValue Obj = EmitAggExprToLValue(E->getArg(1));
     auto ClsVal = Builder.CreateBitCast(Obj.getAddress(),
         ClsTy->getPointerTo(CGM.getTargetCodeGenInfo().getDefaultAS()));
@@ -8149,7 +8149,7 @@ Value *CodeGenFunction::EmitMIPSBuiltinExpr(unsigned BuiltinID,
 
     auto MethNoTy = llvm::Type::getInt64Ty(getLLVMContext());
     auto ClsTy = ConvertType(CGM.getContext().getCHERIClassType());
-    auto ResultType = llvm::StructType::get( ClsTy, MethNoTy, nullptr);
+    auto ResultType = llvm::StructType::get(ClsTy, MethNoTy);
     LValue Obj = EmitAggExprToLValue(E->getArg(1));
     auto ClsVal = Builder.CreateBitCast(Obj.getAddress(),
         ClsTy->getPointerTo(CGM.getTargetCodeGenInfo().getDefaultAS()));

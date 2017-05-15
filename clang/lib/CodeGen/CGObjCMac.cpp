@@ -5885,7 +5885,7 @@ ObjCNonFragileABITypesHelper::ObjCNonFragileABITypesHelper(CodeGen::CodeGenModul
   EHTypeTy = llvm::StructType::create("struct._objc_typeinfo",
                                       llvm::PointerType::get(Int8PtrTy, DefaultAS),
                                       Int8PtrTy, ClassnfABIPtrTy);
-  EHTypePtrTy = llvm::PointerType::getUnqual(EHTypeTy);
+  EHTypePtrTy = llvm::PointerType::get(EHTypeTy, DefaultAS);
 }
 
 llvm::Function *CGObjCNonFragileABIMac::ModuleInitFunction() {

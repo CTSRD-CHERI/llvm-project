@@ -1657,7 +1657,7 @@ llvm::Constant *CGObjCGNU::GenerateClassStructure(
       IvarOffsets->getType(), // ivar_offsets
       Properties->getType(),  // properties
       PtrTy,                  // strong_pointers
-      PtrTy,                  // weak_pointers
+      PtrTy                   // weak_pointers
       );
 
   ConstantInitBuilder Builder(CGM);

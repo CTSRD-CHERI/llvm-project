@@ -912,7 +912,7 @@ ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
                                        ThisAdjustment.getQuantity());
   }
   if (NonConstAddr) {
-    auto MemPtrTy = llvm::StructType::get(CGM.VoidPtrTy, CGM.PtrDiffTy, nullptr);
+    auto MemPtrTy = llvm::StructType::get(CGM.VoidPtrTy, CGM.PtrDiffTy);
     auto Align = CGM.getContext().toCharUnitsFromBits(TI.getMemoryCapabilityAlign());
     auto alloca = CGF->CreateTempAlloca(MemPtrTy, Align, "memptr_tmp");
     CGF->Builder.CreateStore(NonConstAddr, CGF->Builder.CreateStructGEP(alloca, 0, CharUnits::Zero()));

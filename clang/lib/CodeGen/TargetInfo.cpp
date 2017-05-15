@@ -6764,7 +6764,7 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
     const TargetInfo &Target = getContext().getTargetInfo();
     if (Target.areAllPointersCapabilities()) {
       if (Ty->isMemberFunctionPointerType()) {
-        return llvm::StructType::get(CGM.VoidPtrTy, CGM.PtrDiffTy, nullptr);
+        return llvm::StructType::get(CGM.VoidPtrTy, CGM.PtrDiffTy);
       }
     }
     CoerceToIntArgs(TySize, ArgList);

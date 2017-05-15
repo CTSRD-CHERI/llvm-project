@@ -525,7 +525,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
       if (FPT->getCallConv() == CC_CheriCCallback) {
         auto MethNoTy = llvm::Type::getInt64Ty(getLLVMContext());
         auto ObjTy = ConvertType(Context.getCHERIClassType());
-        ResultType = llvm::StructType::get(ObjTy, MethNoTy, nullptr);
+        ResultType = llvm::StructType::get(ObjTy, MethNoTy);
         break;
       }
     }

@@ -4467,7 +4467,7 @@ llvm::Value *CodeGenModule::EmitSandboxRequiredMethod(StringRef Cls,
     auto *MethodName = GenerateAS0StringLiteral(*this, Fn);
     auto StructTy = llvm::StructType::get(Int64Ty,
         ClsName->getType(), MethodName->getType(),
-        MethodNumVar->getType(), Int64Ty, nullptr);
+        MethodNumVar->getType(), Int64Ty);
 
     auto *StructInit = llvm::ConstantStruct::get(StructTy, {Zero64,
         ClsName, MethodName, MethodNumVar, Zero64});
@@ -4513,9 +4513,9 @@ void CodeGenModule::EmitSandboxDefinedMethod(StringRef Cls, StringRef
   if (!getModule().getNamedGlobal(GlobalStructName)) {
     auto *ClsName = GenerateAS0StringLiteral(*this, Cls);
     auto *MethodName = GenerateAS0StringLiteral(*this, Method);
-    auto *StructTy = llvm::StructType::get(Int64Ty,
-        ClsName->getType(), MethodName->getType(),
-        MethodPtrVar->getType(), nullptr);
+    auto *StructTy = llvm::StructType::get(Int64Ty, ClsName->getType(),
+                                           MethodName->getType(),
+                                           MethodPtrVar->getType());
     auto *Zero64 = llvm::ConstantInt::get(Int64Ty, 0);
 
     auto *StructInit = llvm::ConstantStruct::get(StructTy, {Zero64,
