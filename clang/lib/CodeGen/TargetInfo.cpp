@@ -6879,6 +6879,10 @@ MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset) const {
     // Use indirect if the aggregate cannot fit into registers for
     // passing arguments according to the ABI
     unsigned Threshold = IsO32 ? 16 : 64;
+    const TargetInfo &Target = getContext().getTargetInfo();
+    if (Target.areAllPointersCapabilities()) {
+      Threshold = Target.getMemoryCapabilityWidth() * 8;
+    }
 
     if(getContext().getTypeSizeInChars(Ty) > CharUnits::fromQuantity(Threshold))
       return ABIArgInfo::getIndirect(CharUnits::fromQuantity(Align), true,
