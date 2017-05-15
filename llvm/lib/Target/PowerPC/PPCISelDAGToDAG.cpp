@@ -2703,7 +2703,7 @@ SDValue PPCDAGToDAGISel::getSETCCInGPR(SDValue Compare,
 
   if (ConvOpts == SetccInGPROpts::ZExtInvert ||
       ConvOpts == SetccInGPROpts::SExtInvert)
-    CC = ISD::getSetCCInverse(CC, true);
+    CC = ISD::getSetCCInverse(CC, InputVT);
 
   if (ISD::isSignedIntSetCC(CC)) {
     LHS = signExtendInputIfNeeded(LHS);
