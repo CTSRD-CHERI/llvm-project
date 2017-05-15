@@ -237,7 +237,7 @@ static void initLLVM(opt::InputArgList &Args) {
 static void checkOptions(opt::InputArgList &Args) {
   // The MIPS ABI as of 2016 does not support the GNU-style symbol lookup
   // table which is a relatively new feature.
-  if (Config->isMIPS() && Config->GnuHash)
+  if (Config->EMachine == EM_MIPS && Config->GnuHash)
     error("the .gnu.hash section is not compatible with the MIPS target.");
 
   if (Config->Pie && Config->Shared)
@@ -775,7 +775,7 @@ static void setConfigs() {
       Config->IsLE ? support::endianness::little : support::endianness::big;
   Config->IsMips64EL = (Kind == ELF64LEKind && Machine == EM_MIPS);
   Config->IsRela = Config->Is64 || IsX32 || Config->MipsN32Abi;
-  if (Config->isMIPS() && Config->OSABI == ELFOSABI_FREEBSD)
+  if (Config->EMachine == EM_MIPS && Config->OSABI == ELFOSABI_FREEBSD)
     Config->IsRela = false; // FreeBSD MIPS rtld does not support RELA relocations
   Config->Pic = Config->Pie || Config->Shared;
   Config->Wordsize = Config->Is64 ? 8 : 4;
@@ -935,7 +935,7 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   Config->WarnMissingEntry =
       (!Config->Entry.empty() || (!Config->Shared && !Config->Relocatable));
   if (Config->Entry.empty() && !Config->Relocatable)
-    Config->Entry = Config->isMIPS() ? "__start" : "_start";
+    Config->Entry = (Config->EMachine == EM_MIPS) ? "__start" : "_start";
 
   // Handle --trace-symbol.
   for (auto *Arg : Args.filtered(OPT_trace_symbol))

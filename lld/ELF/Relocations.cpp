@@ -91,7 +91,7 @@ static bool isPreemptible(const SymbolBody &Body, uint32_t Type) {
   // relocation types occupy eight bit. In case of N64 ABI we extract first
   // relocation from 3-in-1 packet because only the first relocation can
   // be against a real symbol.
-  if (Config->isMIPS() && (Type & 0xff) == R_MIPS_GPREL16)
+  if (Config->EMachine == EM_MIPS && (Type & 0xff) == R_MIPS_GPREL16)
     return false;
   return Body.isPreemptible();
 }
@@ -546,12 +546,12 @@ static RelExpr adjustExpr(SymbolBody &Body, RelExpr Expr, uint32_t Type,
 
   bool IsWrite = !Config->ZText || (S.Flags & SHF_WRITE);
   // HACK: for some reason clang generates absolute relocations in .eh_frame
-  if (Config->isMIPS() && S.Name == ".eh_frame") {
+  if (Config->EMachine == EM_MIPS && S.Name == ".eh_frame") {
     IsWrite = true;
   }
   // HACK: clang emits a read-only __cap_relocs, but for PIC code we need to
   //       emit dynamic relocations for its contents (REL32/64/NONE).
-  if (Config->isMIPS() && Config->Pic && S.Name == "__cap_relocs") {
+  if (Config->EMachine == EM_MIPS && Config->Pic && S.Name == "__cap_relocs") {
     IsWrite = true;
   }
   if (IsWrite || isStaticLinkTimeConstant<ELFT>(Expr, Type, Body, S, RelOff))

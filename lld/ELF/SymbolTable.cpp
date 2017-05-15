@@ -37,24 +37,11 @@ template <class ELFT> static bool isCompatible(InputFile *F) {
     return true;
 
   if (F->EKind == Config->EKind && F->EMachine == Config->EMachine) {
-    if (!Config->isMIPS())
+    if (Config->EMachine != EM_MIPS)
       return true;
     if (isMipsN32Abi(F) == Config->MipsN32Abi)
       return true;
   }
-
-
-  //XXXAR: hack, EM_MIPS_CHERI output should accept EM_MIPS object files
-  //TODO: fix clang to output EM_MIPS_CHERI object files
-  if (Config->MipsCheriAbi) {
-    if (F->EKind == Config->EKind && (F->EMachine == EM_MIPS || F->EMachine == EM_MIPS_CHERI)) {
-      // XXXAR: figure out if we need EM_MIPS_CHERI
-      // XXXAR: This currently generates tons of warnings, reenable when clang is fixed
-      // warn(toString(F) + " has machine type EM_MIPS and not EM_MIPS_CHERI");
-      return true;
-    }
-  }
-
 
   if (!Config->Emulation.empty())
     error(toString(F) + " is incompatible with " + Config->Emulation);

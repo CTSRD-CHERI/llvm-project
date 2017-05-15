@@ -1165,7 +1165,7 @@ DynamicSection<ELFT>::DynamicSection()
   // .dynamic section is not writable on MIPS.
   // See "Special Section" in Chapter 4 in the following document:
   // ftp://www.linux-mips.org/pub/linux/mips/doc/ABI/mipsabi.pdf
-  if (Config->isMIPS())
+  if (Config->EMachine == EM_MIPS)
     this->Flags = SHF_ALLOC;
 
   addEntries();
@@ -1230,7 +1230,7 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
     // MIPS dynamic loader does not support RELCOUNT tag.
     // The problem is in the tight relation between dynamic
     // relocations and GOT. So do not emit this tag on MIPS.
-    if (!Config->isMIPS()) {
+    if (Config->EMachine != EM_MIPS) {
       size_t NumRelativeRels = In<ELFT>::RelaDyn->getRelativeRelocCount();
       if (Config->ZCombreloc && NumRelativeRels)
         add({IsRela ? DT_RELACOUNT : DT_RELCOUNT, NumRelativeRels});
@@ -1239,7 +1239,7 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
   if (In<ELFT>::RelaPlt->OutSec->Size > 0) {
     add({DT_JMPREL, In<ELFT>::RelaPlt});
     add({DT_PLTRELSZ, In<ELFT>::RelaPlt->OutSec->Size});
-    add({Config->isMIPS() ? DT_MIPS_PLTGOT : DT_PLTGOT,
+    add({Config->EMachine == EM_MIPS ? DT_MIPS_PLTGOT : DT_PLTGOT,
          In<ELFT>::GotPlt});
     add({DT_PLTREL, uint64_t(Config->IsRela ? DT_RELA : DT_REL)});
   }
@@ -1285,7 +1285,7 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
     add({DT_VERNEEDNUM, In<ELFT>::VerNeed->getNeedNum()});
   }
 
-  if (Config->isMIPS()) {
+  if (Config->EMachine == EM_MIPS) {
     add({DT_MIPS_RLD_VERSION, 1});
     add({DT_MIPS_FLAGS, RHF_NOTPOT});
     add({DT_MIPS_BASE_ADDRESS, Config->ImageBase});
@@ -1454,7 +1454,7 @@ template <class ELFT> void SymbolTableSection<ELFT>::finalizeContents() {
     if (In<ELFT>::GnuHashTab) {
       // NB: It also sorts Symbols to meet the GNU hash table requirements.
       In<ELFT>::GnuHashTab->addSymbols(Symbols);
-    } else if (Config->isMIPS()) {
+    } else if (Config->EMachine == EM_MIPS) {
       std::stable_sort(Symbols.begin(), Symbols.end(), sortMipsSymbols);
     }
 
@@ -1547,7 +1547,7 @@ template <class ELFT> void SymbolTableSection<ELFT>::writeTo(uint8_t *Buf) {
   // pointer equality by STO_MIPS_PLT flag. That is necessary to help
   // dynamic linker distinguish such symbols and MIPS lazy-binding stubs.
   // https://sourceware.org/ml/binutils/2008-07/txt00000.txt
-  if (Config->isMIPS()) {
+  if (Config->EMachine == EM_MIPS) {
     auto *ESym = reinterpret_cast<Elf_Sym *>(Buf);
 
     for (SymbolTableEntry &Ent : Symbols) {

@@ -45,7 +45,7 @@ using namespace llvm::support::endian;
 using namespace llvm::ELF;
 
 std::string lld::toString(uint32_t Type) {
-  auto Machine = elf::Config->EMachine == EM_MIPS_CHERI ? EM_MIPS : elf::Config->EMachine;
+  auto Machine = elf::Config->EMachine;
   if (Machine == EM_MIPS && Type > 0xff) {
     uint32_t Type1 = Type & 0xff;
     llvm::Twine Result = getELFRelocationTypeName(Machine, Type1);
@@ -2411,21 +2411,21 @@ void MipsTargetInfo<ELFT>::relocateOne(uint8_t *Loc, uint32_t Type,
       writeMipsLo16<E>(Loc, Val);
     }
     break;
+  case R_MIPS_CALL16:
   case R_MIPS_GOT_DISP:
   case R_MIPS_GOT_PAGE:
   case R_MIPS_GPREL16:
   case R_MIPS_TLS_GD:
   case R_MIPS_TLS_LDM:
+  case R_MIPS_TLS_GOTTPREL:
     checkInt<16>(Loc, Val, Type);
   // fallthrough
-  case R_MIPS_CALL16:
   case R_MIPS_CALL_LO16:
   case R_MIPS_GOT_LO16:
   case R_MIPS_GOT_OFST:
   case R_MIPS_LO16:
   case R_MIPS_PCLO16:
   case R_MIPS_TLS_DTPREL_LO16:
-  case R_MIPS_TLS_GOTTPREL:
   case R_MIPS_TLS_TPREL_LO16:
     writeMipsLo16<E>(Loc, Val);
     break;
