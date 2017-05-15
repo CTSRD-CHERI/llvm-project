@@ -1,4 +1,4 @@
-// RUN: llvm-mc -filetype=obj -triple=i686-unknown-cloudabi %s -o %t.o
+// RUN: llvm-mc -filetype=obj -triple=x86_64-unknown-linux-gnu %s -o %t.o
 // RUN: ld.lld --export-dynamic %t.o -o %t
 // BFD does not add a dynamic section when --export-dynamic is passed together
 // with -Bstatic so check that we do the same
@@ -32,7 +32,7 @@
 // CHECK-NEXT:   }
 // CHECK-NEXT:   Symbol {
 // CHECK-NEXT:     Name: _start
-// CHECK-NEXT:     Value: 0x11000
+// CHECK-NEXT:     Value: 0x201000
 // CHECK-NEXT:     Size: 0
 // CHECK-NEXT:     Binding: Global
 // CHECK-NEXT:     Type: None
