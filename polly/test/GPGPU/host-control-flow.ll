@@ -32,14 +32,14 @@
 ; IR-NEXT:   %polly.indvar = phi i64 [ 0, %polly.loop_preheader ], [ %polly.indvar_next, %polly.loop_header ]
 ; ...
 ; IR:  store i64 %polly.indvar, i64* %polly_launch_0_param_1
-; IR-NEXT:  [[REGA:%.+]] = getelementptr [2 x i8*], [2 x i8*]* %polly_launch_0_params, i64 0, i64 1
+; IR-NEXT:  [[REGA:%.+]] = getelementptr [4 x i8*], [4 x i8*]* %polly_launch_0_params, i64 0, i64 1
 ; IR-NEXT:  [[REGB:%.+]] = bitcast i64* %polly_launch_0_param_1 to i8*
 ; IR-NEXT:  store i8* [[REGB]], i8** [[REGA]]
 ; IR: call i8* @polly_getKernel
 ; ...
 ; IR: call void @polly_freeKernel
 ; IR-NEXT:   %polly.indvar_next = add nsw i64 %polly.indvar, 1
-; IR-NEXT:   %polly.loop_cond = icmp sle i64 %polly.indvar, 98
+; IR-NEXT:   %polly.loop_cond = icmp sle i64 %polly.indvar_next, 99
 ; IR-NEXT:   br i1 %polly.loop_cond, label %polly.loop_header, label %polly.loop_exit
 
 ; KERNEL-IR: define ptx_kernel void @kernel_0(i8 addrspace(1)* %MemRef_A, i64 %c0)

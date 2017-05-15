@@ -270,7 +270,7 @@ bool DynamicLoaderMacOS::NotifyBreakpointHit(void *baton,
           if (header_array != static_cast<uint64_t>(-1)) {
             std::vector<addr_t> image_load_addresses;
             for (uint64_t i = 0; i < image_infos_count; i++) {
-              Error error;
+              Status error;
               addr_t addr = process->ReadUnsignedIntegerFromMemory(
                   header_array + (8 * i), 8, LLDB_INVALID_ADDRESS, error);
               if (addr != LLDB_INVALID_ADDRESS) {
@@ -397,8 +397,8 @@ DynamicLoaderMacOS::GetDyldLockVariableAddressFromModule(Module *module) {
 //  0;
 //
 //  in libdyld.dylib.
-Error DynamicLoaderMacOS::CanLoadImage() {
-  Error error;
+Status DynamicLoaderMacOS::CanLoadImage() {
+  Status error;
   addr_t symbol_address = LLDB_INVALID_ADDRESS;
   Target &target = m_process->GetTarget();
   const ModuleList &target_modules = target.GetImages();
@@ -434,24 +434,25 @@ Error DynamicLoaderMacOS::CanLoadImage() {
 
   // Default assumption is that it is OK to load images.
   // Only say that we cannot load images if we find the symbol in libdyld and it
-  // indicates that
-  // we cannot.
+  // indicates that we cannot.
 
   if (symbol_address != LLDB_INVALID_ADDRESS) {
     {
       int lock_held =
           m_process->ReadUnsignedIntegerFromMemory(symbol_address, 4, 0, error);
       if (lock_held != 0) {
-        error.SetErrorToGenericError();
+        error.SetErrorString("dyld lock held - unsafe to load images.");
       }
     }
   } else {
     // If we were unable to find _dyld_global_lock_held in any modules, or it is
-    // not loaded into
-    // memory yet, we may be at process startup (sitting at _dyld_start) - so we
-    // should not allow
-    // dlopen calls.
-    error.SetErrorToGenericError();
+    // not loaded into memory yet, we may be at process startup (sitting 
+    // at _dyld_start) - so we should not allow dlopen calls.
+    // But if we found more than one module then we are clearly past _dyld_start
+    // so in that case we'll default to "it's safe".
+    if (num_modules <= 1)
+        error.SetErrorString("could not find the dyld library or "
+                                       "the dyld lock symbol");
   }
   return error;
 }

@@ -74,7 +74,9 @@ void UseEmplaceCheck::registerMatchers(MatchFinder *Finder) {
   // emplace_back can't access private constructor.
   auto IsPrivateCtor = hasDeclaration(cxxConstructorDecl(isPrivate()));
 
-  auto HasInitList = has(ignoringImplicit(initListExpr()));
+  auto HasInitList = anyOf(has(ignoringImplicit(initListExpr())),
+                           has(cxxStdInitializerListExpr()));
+
   // FIXME: Discard 0/NULL (as nullptr), static inline const data members,
   // overloaded functions and template names.
   auto SoughtConstructExpr =

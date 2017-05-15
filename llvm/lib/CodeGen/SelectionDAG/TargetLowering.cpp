@@ -419,11 +419,10 @@ bool TargetLowering::ShrinkDemandedOp(SDValue Op, unsigned BitWidth,
     if (TLI.isTruncateFree(Op.getValueType(), SmallVT) &&
         TLI.isZExtFree(SmallVT, Op.getValueType())) {
       // We found a type with free casts.
-      SDValue X = DAG.getNode(Op.getOpcode(), dl, SmallVT,
-                              DAG.getNode(ISD::TRUNCATE, dl, SmallVT,
-                                          Op.getNode()->getOperand(0)),
-                              DAG.getNode(ISD::TRUNCATE, dl, SmallVT,
-                                          Op.getNode()->getOperand(1)));
+      SDValue X = DAG.getNode(
+          Op.getOpcode(), dl, SmallVT,
+          DAG.getNode(ISD::TRUNCATE, dl, SmallVT, Op.getOperand(0)),
+          DAG.getNode(ISD::TRUNCATE, dl, SmallVT, Op.getOperand(1)));
       bool NeedZext = DemandedSize > SmallVTBits;
       SDValue Z = DAG.getNode(NeedZext ? ISD::ZERO_EXTEND : ISD::ANY_EXTEND,
                               dl, Op.getValueType(), X);
@@ -563,8 +562,7 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
       if (Known2.One.getBitWidth() != BitWidth) {
         assert(Known2.getBitWidth() > BitWidth &&
                "Expected BUILD_VECTOR implicit truncation");
-        Known2.One = Known2.One.trunc(BitWidth);
-        Known2.Zero = Known2.Zero.trunc(BitWidth);
+        Known2 = Known2.trunc(BitWidth);
       }
 
       // Known bits are the values that are shared by every element.
@@ -661,7 +659,7 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
     // Output known-1 are known to be set if set in either the LHS | RHS.
     Known.One |= Known2.One;
     break;
-  case ISD::XOR:
+  case ISD::XOR: {
     if (SimplifyDemandedBits(Op.getOperand(1), NewMask, Known, TLO, Depth+1))
       return true;
     assert((Known.Zero & Known.One) == 0 && "Bits known to be one AND zero?");
@@ -706,28 +704,24 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
       }
     }
 
-    // If the RHS is a constant, see if we can simplify it.
-    // for XOR, we prefer to force bits to 1 if they will make a -1.
-    // If we can't force bits, try to shrink the constant.
-    if (ConstantSDNode *C = isConstOrConstSplat(Op.getOperand(1))) {
-      APInt Expanded = C->getAPIntValue() | (~NewMask);
-      // If we can expand it to have all bits set, do it.
-      if (Expanded.isAllOnesValue()) {
-        if (Expanded != C->getAPIntValue()) {
-          EVT VT = Op.getValueType();
-          SDValue New = TLO.DAG.getNode(Op.getOpcode(), dl,VT, Op.getOperand(0),
-                                        TLO.DAG.getConstant(Expanded, dl, VT));
-          return TLO.CombineTo(Op, New);
-        }
-        // If it already has all the bits set, nothing to change
-        // but don't shrink either!
-      } else if (ShrinkDemandedConstant(Op, NewMask, TLO)) {
-        return true;
+    // If the RHS is a constant, see if we can change it. Don't alter a -1
+    // constant because that's a 'not' op, and that is better for combining and
+    // codegen.
+    ConstantSDNode *C = isConstOrConstSplat(Op.getOperand(1));
+    if (C && !C->isAllOnesValue()) {
+      if (NewMask.isSubsetOf(C->getAPIntValue())) {
+        // We're flipping all demanded bits. Flip the undemanded bits too.
+        SDValue New = TLO.DAG.getNOT(dl, Op.getOperand(0), Op.getValueType());
+        return TLO.CombineTo(Op, New);
       }
+      // If we can't turn this into a 'not', try to shrink the constant.
+      if (ShrinkDemandedConstant(Op, NewMask, TLO))
+        return true;
     }
 
     Known = std::move(KnownOut);
     break;
+  }
   case ISD::SELECT:
     if (SimplifyDemandedBits(Op.getOperand(2), NewMask, Known, TLO, Depth+1))
       return true;
@@ -824,7 +818,7 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
       // Convert (shl (anyext x, c)) to (anyext (shl x, c)) if the high bits
       // are not demanded. This will likely allow the anyext to be folded away.
       if (InOp.getNode()->getOpcode() == ISD::ANY_EXTEND) {
-        SDValue InnerOp = InOp.getNode()->getOperand(0);
+        SDValue InnerOp = InOp.getOperand(0);
         EVT InnerVT = InnerOp.getValueType();
         unsigned InnerBits = InnerVT.getSizeInBits();
         if (ShAmt < InnerBits && NewMask.getActiveBits() <= InnerBits &&
@@ -1093,8 +1087,7 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
     if (SimplifyDemandedBits(Op.getOperand(0), InMask, Known, TLO, Depth+1))
       return true;
     assert((Known.Zero & Known.One) == 0 && "Bits known to be one AND zero?");
-    Known.Zero = Known.Zero.zext(BitWidth);
-    Known.One = Known.One.zext(BitWidth);
+    Known = Known.zext(BitWidth);
     Known.Zero |= NewBits;
     break;
   }
@@ -1120,8 +1113,7 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
     if (SimplifyDemandedBits(Op.getOperand(0), InDemandedBits, Known, TLO,
                              Depth+1))
       return true;
-    Known.Zero = Known.Zero.zext(BitWidth);
-    Known.One = Known.One.zext(BitWidth);
+    Known = Known.zext(BitWidth);
 
     // If the sign bit is known zero, convert this to a zero extend.
     if (Known.Zero.intersects(InSignBit))
@@ -1145,8 +1137,7 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
     if (SimplifyDemandedBits(Op.getOperand(0), InMask, Known, TLO, Depth+1))
       return true;
     assert((Known.Zero & Known.One) == 0 && "Bits known to be one AND zero?");
-    Known.Zero = Known.Zero.zext(BitWidth);
-    Known.One = Known.One.zext(BitWidth);
+    Known = Known.zext(BitWidth);
     break;
   }
   case ISD::TRUNCATE: {
@@ -1156,8 +1147,7 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
     APInt TruncMask = NewMask.zext(OperandBitWidth);
     if (SimplifyDemandedBits(Op.getOperand(0), TruncMask, Known, TLO, Depth+1))
       return true;
-    Known.Zero = Known.Zero.trunc(BitWidth);
-    Known.One = Known.One.trunc(BitWidth);
+    Known = Known.trunc(BitWidth);
 
     // If the input is only used by this truncate, see if we can shrink it based
     // on the known demanded bits.
@@ -1314,7 +1304,7 @@ void TargetLowering::computeKnownBitsForTargetNode(const SDValue Op,
           Op.getOpcode() == ISD::INTRINSIC_VOID) &&
          "Should use MaskedValueIsZero if you don't know whether Op"
          " is a target node!");
-  Known.Zero.clearAllBits(); Known.One.clearAllBits();
+  Known.resetAll();
 }
 
 /// This method can be implemented by targets that want to expose additional

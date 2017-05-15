@@ -2180,8 +2180,8 @@ Instruction *InstCombiner::visitReturnInst(ReturnInst &RI) {
   // determine the value. If so, constant fold it.
   KnownBits Known(VTy->getPrimitiveSizeInBits());
   computeKnownBits(ResultOp, Known, 0, &RI);
-  if ((Known.Zero|Known.One).isAllOnesValue())
-    RI.setOperand(0, Constant::getIntegerValue(VTy, Known.One));
+  if (Known.isConstant())
+    RI.setOperand(0, Constant::getIntegerValue(VTy, Known.getConstant()));
 
   return nullptr;
 }
@@ -2262,8 +2262,8 @@ Instruction *InstCombiner::visitSwitchInst(SwitchInst &SI) {
   unsigned BitWidth = cast<IntegerType>(Cond->getType())->getBitWidth();
   KnownBits Known(BitWidth);
   computeKnownBits(Cond, Known, 0, &SI);
-  unsigned LeadingKnownZeros = Known.Zero.countLeadingOnes();
-  unsigned LeadingKnownOnes = Known.One.countLeadingOnes();
+  unsigned LeadingKnownZeros = Known.countMinLeadingZeros();
+  unsigned LeadingKnownOnes = Known.countMinLeadingOnes();
 
   // Compute the number of leading bits we can ignore.
   // TODO: A better way to determine this would use ComputeNumSignBits().
@@ -2861,8 +2861,8 @@ bool InstCombiner::run() {
       unsigned BitWidth = Ty->getScalarSizeInBits();
       KnownBits Known(BitWidth);
       computeKnownBits(I, Known, /*Depth*/0, I);
-      if ((Known.Zero | Known.One).isAllOnesValue()) {
-        Constant *C = ConstantInt::get(Ty, Known.One);
+      if (Known.isConstant()) {
+        Constant *C = ConstantInt::get(Ty, Known.getConstant());
         DEBUG(dbgs() << "IC: ConstFold (all bits known) to: " << *C <<
                         " from: " << *I << '\n');
 
@@ -3139,7 +3139,7 @@ combineInstructionsOverFunction(Function &F, InstCombineWorklist &Worklist,
 
   // Lower dbg.declare intrinsics otherwise their value may be clobbered
   // by instcombiner.
-  bool DbgDeclaresChanged = LowerDbgDeclare(F);
+  bool MadeIRChange = LowerDbgDeclare(F);
 
   // Iterate while there is work to do.
   int Iteration = 0;
@@ -3148,18 +3148,17 @@ combineInstructionsOverFunction(Function &F, InstCombineWorklist &Worklist,
     DEBUG(dbgs() << "\n\nINSTCOMBINE ITERATION #" << Iteration << " on "
                  << F.getName() << "\n");
 
-    bool Changed = prepareICWorklistFromFunction(F, DL, &TLI, Worklist);
+    MadeIRChange |= prepareICWorklistFromFunction(F, DL, &TLI, Worklist);
 
     InstCombiner IC(Worklist, &Builder, F.optForMinSize(), ExpensiveCombines,
                     AA, AC, TLI, DT, DL, LI);
     IC.MaxArraySizeForCombine = MaxArraySize;
-    Changed |= IC.run();
 
-    if (!Changed)
+    if (!IC.run())
       break;
   }
 
-  return DbgDeclaresChanged || Iteration > 1;
+  return MadeIRChange || Iteration > 1;
 }
 
 PreservedAnalyses InstCombinePass::run(Function &F,

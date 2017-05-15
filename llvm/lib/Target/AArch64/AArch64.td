@@ -216,6 +216,7 @@ def ProcA72     : SubtargetFeature<"a72", "ARMProcFamily", "CortexA72",
                                    FeatureCRC,
                                    FeatureCrypto,
                                    FeatureFPARMv8,
+                                   FeatureFuseAES,
                                    FeatureNEON,
                                    FeaturePerfMon
                                    ]>;
@@ -358,7 +359,6 @@ def ProcThunderXT83 : SubtargetFeature<"thunderxt83", "ARMProcFamily",
                                        FeatureNEON]>;
 
 def : ProcessorModel<"generic", NoSchedModel, [
-                     FeatureCRC,
                      FeatureFPARMv8,
                      FeatureNEON,
                      FeaturePerfMon,

@@ -1,4 +1,4 @@
-//===-- llvm/CallingConv.h - LLVM Calling Conventions -----------*- C++ -*-===//
+//===- llvm/CallingConv.h - LLVM Calling Conventions ------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -20,8 +20,9 @@ namespace llvm {
 /// the well-known calling conventions.
 ///
 namespace CallingConv {
+
   /// LLVM IR allows to use arbitrary numbers as calling convention identifiers.
-  typedef unsigned ID;
+  using ID = unsigned;
 
   /// A set of enums which specify the assigned numeric values for known llvm
   /// calling conventions.
@@ -196,19 +197,28 @@ namespace CallingConv {
     /// Register calling convention used for parameters transfer optimization
     X86_RegCall = 92,
 
+    /// Calling convention used for Mesa hull shaders. (= tessellation control
+    /// shaders)
+    AMDGPU_HS = 93,
+
+    /// Calling convention used for special MSP430 rtlib functions
+    /// which have an "optimized" convention using additional registers.
+    MSP430_BUILTIN = 94,
+
     /// CHERI_CCall - Calling convention used for CHERI when crossing a
     /// protection boundary.
-    CHERI_CCall = 93,
+    CHERI_CCall = 95,
     /// CHERI_CCallee - Calling convention used for the callee of CHERI_CCall.
     /// Ignores the first two capability arguments and the first integer
     /// argument, zeroes all unused return registers on return.
-    CHERI_CCallee = 94,
+    CHERI_CCallee = 96,
 
     /// The highest possible calling convention ID. Must be some 2^k - 1.
     MaxID = 1023
   };
-} // End CallingConv namespace
 
-} // End llvm namespace
+} // end namespace CallingConv
 
-#endif
+} // end namespace llvm
+
+#endif // LLVM_IR_CALLINGCONV_H
