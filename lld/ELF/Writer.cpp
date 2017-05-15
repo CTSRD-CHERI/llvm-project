@@ -1174,6 +1174,9 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   if (ErrorCount)
     return;
 
+  if (In<ELFT>::MipsGot)
+    In<ELFT>::MipsGot->template build<ELFT>();
+
   // So far we have added sections from input object files.
   // This function adds linker-created Out::* sections.
   addPredefinedSections();
@@ -1657,8 +1660,6 @@ template <class ELFT> void Writer<ELFT>::fixPredefinedSymbols() {
   if (ElfSym::Bss)
     ElfSym::Bss->Section = findSection(".bss");
 
-  // Setup MIPS _gp_disp/__gnu_local_gp symbols which should
-  // be equal to the _gp symbol's value.
   if (Config->EMachine == EM_MIPS) {
     if (!ElfSym::MipsGp->Value) {
       // Find GP-relative section with the lowest address

@@ -404,3 +404,7 @@ def Qy : F<"Qy">;
 // Aliases for ignored options
 def alias_version_script_version_script: J<"version-script=">,
   Alias<version_script>;
+
+// Hidden option used for testing MIPS multi-GOT implementation.
+def mips_got_size: S<"mips-got-size">, Flags<[HelpHidden]>,
+  HelpText<"Max size of a single MIPS GOT. 0x10000 by default.">;
