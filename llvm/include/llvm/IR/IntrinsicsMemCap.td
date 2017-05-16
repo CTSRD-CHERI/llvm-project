@@ -123,6 +123,9 @@ def int_cheri_cap_diff:
 ////////////////////////////////////////////////////////////////////////////////
 // Pointer / capability interoperation intrinsics
 ////////////////////////////////////////////////////////////////////////////////
+def int_cheri_cap_address_get:
+  GCCBuiltin<"__builtin_cheri_address_get">,
+  Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty], [IntrNoMem]>;
 
 def int_cheri_cap_to_pointer:
   Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty, llvm_fatptr_ty], [IntrNoMem]>;
