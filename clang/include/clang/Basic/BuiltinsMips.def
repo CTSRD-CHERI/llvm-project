@@ -926,6 +926,8 @@ BUILTIN(__builtin_mips_cheri_cap_offset_increment, "v*mvC*mz", "nc")
 BUILTIN(__builtin_mips_cheri_cap_offset_set, "v*mvC*mz", "nc")
 BUILTIN(__builtin_mips_cheri_cap_offset_get, "zvC*m", "nc")
 
+BUILTIN(__builtin_mips_cheri_cap_address_get, "zvC*m", "nc")
+
 BUILTIN(__builtin_mips_cheri_cause_get, "z", "nc")
 BUILTIN(__builtin_mips_cheri_cause_set, "vz", "nc")
 BUILTIN(__builtin_mips_cheri_invoke_data_cap_get, "v*m", "nc")

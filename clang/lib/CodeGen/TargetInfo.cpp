@@ -6598,6 +6598,7 @@ class MIPSTargetCodeGenInfo : public TargetCodeGenInfo,
   mutable llvm::Function *GetOffset = nullptr;
   mutable llvm::Function *SetOffset = nullptr;
   mutable llvm::Function *GetBase = nullptr;
+  mutable llvm::Function *GetAddress = nullptr;
   mutable llvm::PointerType *I8Cap = nullptr;
   llvm::PointerType *getI8CapTy(CodeGen::CodeGenFunction &CGF) const {
     if (!I8Cap)
@@ -6642,16 +6643,10 @@ public:
 
   llvm::Value *getPointerAddress(CodeGen::CodeGenFunction &CGF, llvm::Value *V,
                               const llvm::Twine &Name) const override {
-#ifdef NOTYET
     if (!GetAddress)
       GetAddress = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_address_get);
     V = CGF.Builder.CreateBitCast(V, getI8CapTy(CGF));
     return CGF.Builder.CreateCall(GetAddress, V, Name);
-#else
-    llvm::Value *Offset = getPointerOffset(CGF, V);
-    llvm::Value *Base = getPointerBase(CGF, V);
-    return CGF.Builder.CreateAdd(Base, Offset, Name);
-#endif
   }
 
   void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
