@@ -1640,8 +1640,7 @@ void CodeGenFunction::EmitSwitchStmt(const SwitchStmt &S) {
   if (S.getCond()->getType()->isMemoryCapabilityType(getContext())) {
     // XXXAR: In switch statements we want to switch on the virtual address and
     // not the offset: https://github.com/CTSRD-CHERI/clang/issues/132
-    CondV = Builder.CreateAdd(getPointerOffset(CondV), getPointerBase(CondV),
-                              "intcap.vaddr");
+    CondV = getPointerAddress(CondV, "intcap.vaddr");
   }
   // Create basic block to hold stuff that comes after switch
   // statement. We also need to create a default block now so that

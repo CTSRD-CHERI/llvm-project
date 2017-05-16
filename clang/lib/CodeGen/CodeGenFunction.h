@@ -3773,8 +3773,8 @@ public:
   llvm::Value *setPointerOffset(llvm::Value *Ptr, llvm::Value *Offset) {
     return getTargetHooks().setPointerOffset(*this, Ptr, Offset);
   }
-  llvm::Value *getPointerBase(llvm::Value *V) {
-    return getTargetHooks().getPointerBase(*this, V);
+  llvm::Value *getPointerAddress(llvm::Value *V, const llvm::Twine &Name = "") {
+    return getTargetHooks().getPointerAddress(*this, V, Name);
   }
 
   /// EmitPointerWithAlignment - Given an expression with a pointer

@@ -443,6 +443,13 @@ unsigned TargetCodeGenInfo::getAddressSpaceForType(QualType DestTy,
   return AS;
 }
 
+llvm::Value *TargetCodeGenInfo::getPointerAddress(CodeGen::CodeGenFunction &CGF,
+                                                  llvm::Value *V,
+                                                  const Twine &Name) const {
+  assert(isa<llvm::PointerType>(V->getType()));
+  return CGF.Builder.CreatePtrToInt(V, CGF.PtrDiffTy);
+}
+
 bool TargetCodeGenInfo::canMarkAsNonNull(QualType DestTy, ASTContext& Context) const {
   unsigned AS = Context.getTargetAddressSpace(DestTy.getQualifiers());
   if (AS == 0)
@@ -6631,6 +6638,20 @@ public:
       GetBase = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_base_get);
     V = CGF.Builder.CreateBitCast(V, getI8CapTy(CGF));
     return CGF.Builder.CreateCall(GetBase, V);
+  }
+
+  llvm::Value *getPointerAddress(CodeGen::CodeGenFunction &CGF, llvm::Value *V,
+                              const llvm::Twine &Name) const override {
+#ifdef NOTYET
+    if (!GetAddress)
+      GetAddress = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_address_get);
+    V = CGF.Builder.CreateBitCast(V, getI8CapTy(CGF));
+    return CGF.Builder.CreateCall(GetAddress, V, Name);
+#else
+    llvm::Value *Offset = getPointerOffset(CGF, V);
+    llvm::Value *Base = getPointerBase(CGF, V);
+    return CGF.Builder.CreateAdd(Base, Offset, Name);
+#endif
   }
 
   void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,

@@ -245,6 +245,9 @@ public:
                                       llvm::Value *V) const {
       return V;
   }
+  virtual llvm::Value *getPointerAddress(CodeGen::CodeGenFunction &CGF,
+                                         llvm::Value *V,
+                                         const llvm::Twine &Name) const;
 
   /// Get LLVM calling convention for OpenCL kernel.
   virtual unsigned getOpenCLKernelCallingConv() const;
