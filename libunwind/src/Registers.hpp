@@ -2172,9 +2172,9 @@ public:
   static int  lastDwarfRegNum() { return 103; }
 
   uint64_t  getSP() const         { return _registers.__r[29]; }
-  void      setSP(uint64_t value) { _registers.__r[29] = value; }
+  void      setSP(uintptr_t value) { _registers.__r[29] = value; }
   uint64_t  getIP() const         { return _registers.__c[32]; }
-  void      setIP(uint64_t value) { _registers.__c[32] = value; }
+  void      setIP(uintptr_t value) { _registers.__c[32] = value; }
 
 private:
   template<typename T>
