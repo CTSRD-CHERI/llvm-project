@@ -76,10 +76,10 @@ unwind_phase1(unw_context_t *uc, unw_cursor_t *cursor, _Unwind_Exception *except
       unw_word_t pc;
       unw_get_reg(cursor, UNW_REG_IP, &pc);
       _LIBUNWIND_TRACE_UNWINDING(
-          "unwind_phase1(ex_ojb=%p): pc=0x%" PRIx64 ", start_ip=0x%" PRIx64
-          ", func=%s, lsda=0x%" PRIx64 ", personality=0x%" PRIx64 "",
-          (void *)exception_object, pc, frameInfo.start_ip, functionName,
-          frameInfo.lsda, frameInfo.handler);
+          "unwind_phase1(ex_ojb=%p): pc=%p, start_ip=%p"
+          ", func=%s, lsda=%p, personality=%p",
+          (void *)exception_object, (void*)pc, (void*)frameInfo.start_ip, functionName,
+          (void*)frameInfo.lsda, (void*)frameInfo.handler);
     }
 
     // If there is a personality routine, ask it if it will want to stop at
@@ -170,12 +170,12 @@ unwind_phase2(unw_context_t *uc, unw_cursor_t *cursor, _Unwind_Exception *except
                              &offset) != UNW_ESUCCESS) ||
           (frameInfo.start_ip + offset > frameInfo.end_ip))
         functionName = ".anonymous.";
-      _LIBUNWIND_TRACE_UNWINDING("unwind_phase2(ex_ojb=%p): start_ip=0x%" PRIx64
-                                 ", func=%s, sp=0x%" PRIx64 ", lsda=0x%" PRIx64
-                                 ", personality=0x%" PRIx64,
-                                 (void *)exception_object, frameInfo.start_ip,
-                                 functionName, sp, frameInfo.lsda,
-                                 frameInfo.handler);
+      _LIBUNWIND_TRACE_UNWINDING("unwind_phase2(ex_ojb=%p): start_ip=%p"
+                                 ", func=%s, sp=%p, lsda=%p"
+                                 ", personality=%p",
+                                 (void *)exception_object, (void*)frameInfo.start_ip,
+                                 functionName, (void*)sp, (void*)frameInfo.lsda,
+                                 (void*)frameInfo.handler);
     }
 
     // If there is a personality routine, tell it we are unwinding.
@@ -213,9 +213,8 @@ unwind_phase2(unw_context_t *uc, unw_cursor_t *cursor, _Unwind_Exception *except
           unw_get_reg(cursor, UNW_REG_IP, &pc);
           unw_get_reg(cursor, UNW_REG_SP, &sp);
           _LIBUNWIND_TRACE_UNWINDING("unwind_phase2(ex_ojb=%p): re-entering "
-                                     "user code with ip=0x%" PRIx64
-                                     ", sp=0x%" PRIx64,
-                                     (void *)exception_object, pc, sp);
+                                     "user code with ip=%p, sp=%p",
+                                     (void *)exception_object, (void*)pc, (void*)sp);
         }
         unw_resume(cursor);
         // unw_resume() only returns if there was an error.
@@ -262,10 +261,10 @@ unwind_phase2_forced(unw_context_t *uc, unw_cursor_t *cursor,
           (frameInfo.start_ip + offset > frameInfo.end_ip))
         functionName = ".anonymous.";
       _LIBUNWIND_TRACE_UNWINDING(
-          "unwind_phase2_forced(ex_ojb=%p): start_ip=0x%" PRIx64
-          ", func=%s, lsda=0x%" PRIx64 ", personality=0x%" PRIx64,
-          (void *)exception_object, frameInfo.start_ip, functionName,
-          frameInfo.lsda, frameInfo.handler);
+          "unwind_phase2_forced(ex_ojb=%p): start_ip=%p"
+          ", func=%s, lsd0x%p personality=%p",
+          (void *)exception_object, (void*)frameInfo.start_ip, functionName,
+          (void*)frameInfo.lsda, (void*)frameInfo.handler);
     }
 
     // Call stop function at each frame.

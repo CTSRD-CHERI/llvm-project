@@ -583,9 +583,9 @@ bool CFI_Parser<A>::parseInstructions(A &addressSpace, pint_t instructions,
       length = addressSpace.getULEB128(p, instructionsEnd);
       p += length;
       if (logDwarf)
-        fprintf(stderr, "DW_CFA_expression(reg=%" PRIu64
-                        ", expression=0x%" PRIx64 ", length=%" PRIu64 ")\n",
-                reg, results->savedRegisters[reg].value, length);
+        fprintf(stderr, "DW_CFA_expression(reg=0x%" PRIu64
+                        ", expression=%p, length=%" PRIu64 ")\n",
+                reg, (void*)results->savedRegisters[reg].value, length);
       break;
     case DW_CFA_offset_extended_sf:
       reg = addressSpace.getULEB128(p, instructionsEnd);
@@ -668,8 +668,8 @@ bool CFI_Parser<A>::parseInstructions(A &addressSpace, pint_t instructions,
       p += length;
       if (logDwarf)
         fprintf(stderr, "DW_CFA_val_expression(reg=%" PRIu64
-                        ", expression=0x%" PRIx64 ", length=%" PRIu64 ")\n",
-                reg, results->savedRegisters[reg].value, length);
+                        ", expression=%p, length=%" PRIu64 ")\n",
+                reg, (void*)results->savedRegisters[reg].value, length);
       break;
     case DW_CFA_GNU_args_size:
       length = addressSpace.getULEB128(p, instructionsEnd);
