@@ -112,12 +112,15 @@ public:
 #ifdef __CHERI_PURE_CAPABILITY__
   typedef uintptr_t pint_t;
   typedef intptr_t  sint_t;
+  typedef uint64_t addr_t;
 #elif defined(__LP64__)
   typedef uint64_t pint_t;
   typedef int64_t  sint_t;
+  typedef uint64_t addr_t;
 #else
   typedef uint32_t pint_t;
   typedef int32_t  sint_t;
+  typedef uint32_t addr_t;
 #endif
   template<typename T>
   inline T get(pint_t addr) {
@@ -144,6 +147,10 @@ public:
   v128             getVector(pint_t addr) {
     return get<v128>(addr);
   }
+  addr_t           getAddr(pint_t addr) {
+    return get<addr_t>(addr);
+  }
+  __attribute__((always_inline))
   uintptr_t       getP(pint_t addr);
   static uint64_t getULEB128(pint_t &addr, pint_t end);
   static int64_t  getSLEB128(pint_t &addr, pint_t end);
@@ -219,8 +226,8 @@ LocalAddressSpace::getEncodedP(pint_t &addr, pint_t end, uint8_t encoding,
   // first get value
   switch (encoding & 0x0F) {
   case DW_EH_PE_ptr:
-    result = getP(addr);
-    p += sizeof(pint_t);
+    result = getAddr(addr);
+    p += sizeof(addr_t);
     addr = (pint_t) p;
     break;
   case DW_EH_PE_uleb128:
@@ -296,7 +303,7 @@ LocalAddressSpace::getEncodedP(pint_t &addr, pint_t end, uint8_t encoding,
   }
 
   if (encoding & DW_EH_PE_indirect)
-    result = getP(result);
+    result = getAddr(pcc_address(result));
 
   return ddc_address(result);
 }
