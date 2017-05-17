@@ -8141,7 +8141,7 @@ public:
   }
 
   int getEHDataRegisterNumber(unsigned RegNo) const override {
-    if (RegNo == 0) return 4;
+    if (RegNo == 0) return CapabilityABI ? 88 : 4;
     if (RegNo == 1) return 5;
     return -1;
   }
