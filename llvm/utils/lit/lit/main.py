@@ -291,7 +291,7 @@ def main_with_tmp(builtinParameters):
     debug_group.add_argument("--use-threads", dest="executionStrategy",
                       help="Run tests in parallel with threads (not processes)",
                       action="store_const", const="THREADS")
-    execution_group.add_argument("--junit-xml-output", dest="xmlFile",
+    execution_group.add_argument("--junit-xml-output", dest="xunit_output_file",
                       help=("Write XUnit-compatible XML test reports to the"
                                                        " specified file"),
                       action="store", default=None)
@@ -557,34 +557,6 @@ def main_with_tmp(builtinParameters):
         N = len(byCode.get(code,[]))
         if N:
             print('  %s: %d' % (name,N))
-    if opts.xmlFile:
-        # Collect the tests, indexed by test suite
-        bySuite = {}
-        for t in run.tests:
-            suite = t.suite.config.name
-            if suite not in bySuite:
-                bySuite[suite] = {
-                                   'passes'   : 0,
-                                   'failures' : 0,
-                                   'tests'    : [] }
-            bySuite[suite]['tests'].append(t)
-            if t.result.code.isFailure:
-                bySuite[suite]['failures'] += 1
-            else:
-                bySuite[suite]['passes'] += 1
-        xmlFile = open(opts.xmlFile, "w")
-        xmlFile.write("<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n")
-        xmlFile.write("<testsuites>\n")
-        for suiteName in bySuite:
-            s = bySuite[suiteName]
-            xmlFile.write("<testsuite name='" + suiteName + "'")
-            xmlFile.write(" tests='" + str(s['passes'] + s['failures']) + "'")
-            xmlFile.write(" failures='" + str(s['failures']) + "'>\n")
-            for t in s['tests']:
-                xmlFile.write(t.getJUnitXML() + "\n")
-            xmlFile.write("</testsuite>\n")
-        xmlFile.write("</testsuites>")
-        xmlFile.close()
 
     if opts.xunit_output_file:
         # Collect the tests, indexed by test suite
