@@ -170,7 +170,7 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind20Registers_mips_cheri6jumptoEv)
 
   // Load the new PC into $cra
   
-  RESTORE_CAP_REG(17, 33)
+  RESTORE_CAP_REG(17, 32)
   // Jump to $ca, load $c3 in the delay slot
   cjr $c17
   RESTORE_CAP(3)
