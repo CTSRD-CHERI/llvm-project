@@ -115,6 +115,7 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
   # Offset of the start of the capability register set
   daddiu $1, $zero, 64*8
 #define SAVE_CAP(x) csc $c ## x, $1, (x * _MIPS_SZCAP/8)($c3)
+  SAVE_CAP(0)
   SAVE_CAP(11)
   SAVE_CAP(17)
   SAVE_CAP(18)
