@@ -305,7 +305,8 @@ LocalAddressSpace::getEncodedP(pint_t &addr, pint_t end, uint8_t encoding,
   if (encoding & DW_EH_PE_indirect)
     result = getAddr(pcc_address(result));
 
-  return ddc_address(result);
+  // FIXME: Is this always PCC-relative?
+  return pcc_address(result);
 }
 
 #ifdef __APPLE__ 
