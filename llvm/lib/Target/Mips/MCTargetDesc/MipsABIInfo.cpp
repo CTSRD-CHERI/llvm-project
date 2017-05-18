@@ -21,9 +21,16 @@ static const MCPhysReg O32IntRegs[4] = {Mips::A0, Mips::A1, Mips::A2, Mips::A3};
 static const MCPhysReg Mips64IntRegs[8] = {
     Mips::A0_64, Mips::A1_64, Mips::A2_64, Mips::A3_64,
     Mips::T0_64, Mips::T1_64, Mips::T2_64, Mips::T3_64};
+
+static const MCPhysReg CheriCapArgRegs[8] = {
+    Mips::C3, Mips::C4, Mips::C5, Mips::C6,
+    Mips::C7, Mips::C8, Mips::C9, Mips::C10};
+
 }
 
 ArrayRef<MCPhysReg> MipsABIInfo::GetByValArgRegs() const {
+  if (IsCheriSandbox())
+    return makeArrayRef(CheriCapArgRegs);
   if (IsO32())
     return makeArrayRef(O32IntRegs);
   if (IsN32() || IsN64())
@@ -32,6 +39,8 @@ ArrayRef<MCPhysReg> MipsABIInfo::GetByValArgRegs() const {
 }
 
 ArrayRef<MCPhysReg> MipsABIInfo::GetVarArgRegs() const {
+  if (IsCheriSandbox())
+    return makeArrayRef(CheriCapArgRegs);
   if (IsO32())
     return makeArrayRef(O32IntRegs);
   if (IsN32() || IsN64())
