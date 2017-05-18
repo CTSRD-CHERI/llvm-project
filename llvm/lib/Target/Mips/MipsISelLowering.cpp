@@ -2092,7 +2092,7 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
         const Module &M = *GV->getParent();
         std::string Name = (Twine(".size.")+GV->getName()).str();
         GlobalVariable *SizeGV = M.getGlobalVariable(Name);
-        Type *I64 = Type::getInt64Ty(M.getContext());
+        Type *I64 = Type::getInt64Ty(*DAG.getContext());
         if (!SizeGV) {
           SizeGV = new GlobalVariable(const_cast<Module&>(M),
               I64, /*isConstant*/true,
@@ -4342,7 +4342,9 @@ void MipsTargetLowering::passByValArg(
       RegTy = MVT::getIntegerVT(RegSizeInBytes * 8);
   unsigned NumRegs = LastReg - FirstReg;
 
-  if (NumRegs) {
+  // Don't pass parts of the struct in integer registers (will break caps)
+  // TODO: should also not happen in hybrid abi for structs with caps
+  if (NumRegs && !ABI.IsCheriSandbox()) {
     ArrayRef<MCPhysReg> ArgRegs = ABI.GetByValArgRegs();
     bool LeftoverBytes = (NumRegs * RegSizeInBytes > ByValSizeInBytes);
     unsigned I = 0;
@@ -4411,9 +4413,12 @@ void MipsTargetLowering::passByValArg(
   // Copy remainder of byval arg to it with memcpy.
   unsigned MemCpySize = ByValSizeInBytes - OffsetInBytes;
   SDValue Src = DAG.getPointerAdd(DL, Arg, OffsetInBytes);
+  if (ABI.IsCheriSandbox()) {
+    StackPtr = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, StackPtr);
+  }
   SDValue Dst = DAG.getPointerAdd(DL, StackPtr, VA.getLocMemOffset());
   Chain = DAG.getMemcpy(Chain, DL, Dst, Src,
-                        DAG.getConstant(MemCpySize, DL, PtrTy),
+                        DAG.getConstant(MemCpySize, DL, RegTy),
                         Alignment, /*isVolatile=*/false, /*AlwaysInline=*/false,
                         /*isTailCall=*/false,
                         MachinePointerInfo(), MachinePointerInfo());
