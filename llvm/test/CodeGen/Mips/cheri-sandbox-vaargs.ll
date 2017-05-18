@@ -11,7 +11,7 @@ target triple = "cheri-unknown-freebsd"
 ; (Yes, this is an odd thing to do.  See libxo for a real-world example)
 define void @cpy(i8 addrspace(200)* nocapture readnone %y, i32 signext %x, ...) #0 {
 entry:
-  %v = alloca i8 addrspace(200)*, align 32
+  %v = alloca i8 addrspace(200)*, align 32, addrspace(200)
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*
   %1 = addrspacecast i8 addrspace(200)* %0 to i8*
   ; Load the address of va_cpy
@@ -47,7 +47,7 @@ declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) #1
 define i8 addrspace(200)* @cpy1() #0 {
 entry:
   ; Check that va_copy can copy from a global to a register
-  %v = alloca i8 addrspace(200)*, align 32
+  %v = alloca i8 addrspace(200)*, align 32, addrspace(200)
   ; Load the address of the global
   ; CHECK: 	ld	$1, %got_disp(va_cpy)($1)
   ; CHECK: cfromptr $c1, $c0, $1
@@ -70,7 +70,7 @@ entry:
   ; should simply move the va capability from $c13 to the relevant argument
   ; register.
   ; CHECK: cincoffset	$c3, $c13, $zero
-  %v = alloca i8 addrspace(200)*, align 32
+  %v = alloca i8 addrspace(200)*, align 32, addrspace(200)
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*
   %1 = addrspacecast i8 addrspace(200)* %0 to i8*
   call void @llvm.lifetime.start.p0i8(i64 32, i8* %1) #1
@@ -100,8 +100,8 @@ entry:
 ; CHECK: csetbounds	$c2, $c3, $1
 ; CHECK: ori	$1, $zero, 65495
 ; CHECK: candperm	$c13, $c2, $1
-  %x.addr = alloca i32 addrspace(200)*, align 32
-  %y.addr = alloca i32 addrspace(200)*, align 32
+  %x.addr = alloca i32 addrspace(200)*, align 32, addrspace(200)
+  %y.addr = alloca i32 addrspace(200)*, align 32, addrspace(200)
   store i32 addrspace(200)* %x, i32 addrspace(200)* addrspace(200)* %x.addr, align 32, !tbaa !1
   store i32 addrspace(200)* %y, i32 addrspace(200)* addrspace(200)* %y.addr, align 32, !tbaa !1
   %0 = bitcast i32 addrspace(200)* addrspace(200)* %x.addr to i8 addrspace(200)*

@@ -12,7 +12,7 @@ target triple = "cheri-unknown-freebsd"
 ; Function Attrs: noinline nounwind ssp uwtable
 define void @get_next_format() #0 {
 entry:
-  %f = alloca i8 addrspace(200)*, align 32
+  %f = alloca i8 addrspace(200)*, align 32, addrspace(200)
   br label %while.cond
 
 while.cond:                                       ; preds = %while.body, %entry

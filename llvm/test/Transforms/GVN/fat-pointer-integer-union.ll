@@ -6,7 +6,7 @@ target triple = "cheri-unknown-freebsd"
 ; Function Attrs: nounwind
 define i32 @bar(i8 addrspace(200)* inreg %u.coerce) #0 {
 entry:
-  %u.sroa.0.sroa.0 = alloca i8 addrspace(200)*, align 32
+  %u.sroa.0.sroa.0 = alloca i8 addrspace(200)*, align 32, addrspace(200)
   store i8 addrspace(200)* %u.coerce, i8 addrspace(200)* addrspace(200)* %u.sroa.0.sroa.0, align 32
   %u.sroa.0.sroa.0.0.x.sroa_cast2 = bitcast i8 addrspace(200)* addrspace(200)* %u.sroa.0.sroa.0 to i32 addrspace(200)*
   %u.sroa.0.sroa.0.0.u.sroa.0.sroa.0.0.u.sroa.0.0.u.sroa.0.0. = load i32, i32 addrspace(200)* %u.sroa.0.sroa.0.0.x.sroa_cast2, align 32

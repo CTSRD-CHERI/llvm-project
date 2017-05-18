@@ -16,8 +16,8 @@ target triple = "cheri-unknown-bsd"
 ; handle the optimiser turning AddrSpaceCast instructions into ConstantExpr's
 define void @xo_emit(i8 addrspace(200)* %fmt, ...) #0 {
 entry:
-  %fmt.addr = alloca i8 addrspace(200)*, align 32
-  %c = alloca %struct.xo_handle_s addrspace(200)*, align 32
+  %fmt.addr = alloca i8 addrspace(200)*, align 32, addrspace(200)
+  %c = alloca %struct.xo_handle_s addrspace(200)*, align 32, addrspace(200)
   store i8 addrspace(200)* %fmt, i8 addrspace(200)* addrspace(200)* %fmt.addr, align 32
   store %struct.xo_handle_s addrspace(200)* @b, %struct.xo_handle_s addrspace(200)* addrspace(200)* %c, align 32
   %0 = load %struct.xo_handle_s addrspace(200)*, %struct.xo_handle_s addrspace(200)* addrspace(200)* %c, align 32

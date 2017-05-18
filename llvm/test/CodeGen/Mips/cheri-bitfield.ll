@@ -13,9 +13,9 @@ target triple = "cheri-unknown-freebsd"
 ; Function Attrs: noinline nounwind
 define i32 @main(i32 signext %argc, i8 addrspace(200)* addrspace(200)* %argv) #0 {
 entry:
-  %retval = alloca i32, align 4
-  %argc.addr = alloca i32, align 4
-  %argv.addr = alloca i8 addrspace(200)* addrspace(200)*, align 32
+  %retval = alloca i32, align 4, addrspace(200)
+  %argc.addr = alloca i32, align 4, addrspace(200)
+  %argv.addr = alloca i8 addrspace(200)* addrspace(200)*, align 32, addrspace(200)
   store i32 0, i32 addrspace(200)* %retval, align 4
   store i32 %argc, i32 addrspace(200)* %argc.addr, align 4
   store i8 addrspace(200)* addrspace(200)* %argv, i8 addrspace(200)* addrspace(200)* addrspace(200)* %argv.addr, align 32

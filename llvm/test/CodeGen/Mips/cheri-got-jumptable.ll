@@ -7,9 +7,9 @@ target triple = "cheri-unknown-freebsd"
 ; Function Attrs: noinline nounwind
 define i32 @get_next_format_from_precision(i8 addrspace(200)* addrspace(200)* %pf) #0 {
 entry:
-  %retval = alloca i32, align 4
-  %pf.addr = alloca i8 addrspace(200)* addrspace(200)*, align 32
-  %f = alloca i8 addrspace(200)*, align 32
+  %retval = alloca i32, align 4, addrspace(200)
+  %pf.addr = alloca i8 addrspace(200)* addrspace(200)*, align 32, addrspace(200)
+  %f = alloca i8 addrspace(200)*, align 32, addrspace(200)
   store i8 addrspace(200)* addrspace(200)* %pf, i8 addrspace(200)* addrspace(200)* addrspace(200)* %pf.addr, align 32
   %0 = load i8 addrspace(200)* addrspace(200)*, i8 addrspace(200)* addrspace(200)* addrspace(200)* %pf.addr, align 32
   %1 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %0, align 32
