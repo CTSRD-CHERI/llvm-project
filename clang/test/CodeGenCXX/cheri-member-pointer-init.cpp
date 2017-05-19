@@ -1,4 +1,4 @@
-// RUN: %clang -target cheri-unknown-freebsd -mabi=purecap -S -emit-llvm -o - %s | FileCheck %s
+// RUN: %clang -fno-rtti -target cheri-unknown-freebsd -mabi=purecap -S -emit-llvm -o - %s | FileCheck %s
 
 class A {
 public:
