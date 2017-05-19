@@ -3015,7 +3015,15 @@ void ItaniumRTTIBuilder::BuildVTablePointer(const Type *Ty) {
   }
 
   llvm::Constant *VTable =
-    CGM.getModule().getOrInsertGlobal(VTableName, CGM.Int8PtrTy);
+    CGM.getModule().getGlobalVariable(VTableName);
+  if (VTable)
+    VTable = llvm::ConstantExpr::getBitCast(VTable, CGM.Int8PtrPtrTy);
+  else {
+    unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+    VTable = new llvm::GlobalVariable(CGM.getModule(), CGM.Int8PtrTy, /*isConstant*/true,
+            llvm::GlobalVariable::ExternalLinkage, nullptr, VTableName,
+            nullptr, llvm::GlobalValue::NotThreadLocal, DefaultAS);
+  }
 
   llvm::Type *PtrDiffTy =
     CGM.getTypes().ConvertType(CGM.getContext().getPointerDiffType());
@@ -3228,7 +3236,9 @@ llvm::Constant *ItaniumRTTIBuilder::BuildTypeInfo(QualType Ty, bool Force,
   llvm::Module &M = CGM.getModule();
   llvm::GlobalVariable *GV =
       new llvm::GlobalVariable(M, Init->getType(),
-                               /*Constant=*/true, Linkage, Init, Name);
+                               /*Constant=*/true, Linkage, Init, Name,
+                               nullptr, llvm::GlobalVariable::NotThreadLocal,
+                               CGM.getTargetCodeGenInfo().getDefaultAS());
 
   // If there's already an old global variable, replace it with the new one.
   if (OldGV) {
