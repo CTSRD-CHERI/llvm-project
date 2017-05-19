@@ -4045,15 +4045,16 @@ MipsSETargetLowering::emitCapSelect(MachineInstr &MI,
   BB->addSuccessor(falseMBB);
   BB->addSuccessor(sinkMBB);
 
-  auto RC = MI.getRegClassConstraint(1, TII, Subtarget.getRegisterInfo());
+  auto TRI = Subtarget.getRegisterInfo();
+  auto RC = MI.getRegClassConstraint(1, TII, TRI);
   unsigned ZeroReg = -1;
   unsigned BranchInst = -1;
-  if (RC->hasType(llvm::MVT::i32)) {
-    ZeroReg = Mips::ZERO;
-    BranchInst = Mips::BNE;
-  } else if (RC->hasType(llvm::MVT::i64)) {
+  if (TRI->isTypeLegalForClass(*RC, MVT::i64)) {
     ZeroReg = Mips::ZERO_64;
     BranchInst = Mips::BNE64;
+  } else if (TRI->isTypeLegalForClass(*RC, MVT::i32)) {
+    ZeroReg = Mips::ZERO;
+    BranchInst = Mips::BNE;
   } else {
     llvm_unreachable("Invalid register class for CAP_SELECT");
   }
