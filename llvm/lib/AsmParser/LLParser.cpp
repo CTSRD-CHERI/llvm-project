@@ -6093,7 +6093,7 @@ int LLParser::ParseAlloc(Instruction *&Inst, PerFunctionState &PFS) {
   const DataLayout &DL = M->getDataLayout();
   unsigned AS = DL.getAllocaAddrSpace();
   // XXXAR: HACK: allow allocas in AS0 for CHERI
-  if (AS != AddrSpace && AS != 200) {
+  if (AS != AddrSpace) {
     // TODO: In the future it should be possible to specify addrspace per-alloca.
     return Error(ASLoc, "alloca address space " + Twine(AddrSpace) +
                  " must match datalayout AS " + Twine(AS));
