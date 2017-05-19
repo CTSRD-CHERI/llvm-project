@@ -2039,7 +2039,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.TraditionalCPP = Args.hasArg(OPT_traditional_cpp);
   bool IsCheriPureCapABI = T.getArch() == llvm::Triple::cheri && TargetOpts.ABI == "purecap";
   Opts.RTTI = Opts.CPlusPlus && !Args.hasArg(OPT_fno_rtti) &&
-    (!IsCheriPureCapABI || Opts.Exceptions || Args.hasArg(OPT_frtti));
+    (Opts.Exceptions || Args.hasArg(OPT_frtti));
   Opts.RTTIData = Opts.RTTI && !Args.hasArg(OPT_fno_rtti_data);
   Opts.Blocks = Args.hasArg(OPT_fblocks) || (Opts.OpenCL
     && Opts.OpenCLVersion >= 200);
