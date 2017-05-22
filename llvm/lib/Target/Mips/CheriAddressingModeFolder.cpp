@@ -26,6 +26,9 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
   CheriAddressingModeFolder(MipsTargetMachine &TM) : MachineFunctionPass(ID) {
     InstrInfo = TM.getSubtargetImpl()->getInstrInfo();
   }
+
+  StringRef getPassName() const override { return "Cheri Addressing Mode Folder"; }
+
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.setPreservesCFG();
     AU.addRequired<MachineLoopInfo>();
@@ -206,6 +209,16 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
           // offset
           I.getOperand(1).setReg(Offset.getReg());
         I.getOperand(3).setReg(Cap.getReg());
+        // If we were using a unique vreg here it will probably have kill set to
+        // true, so if we retain this kill state the machine instr verifier will
+        // complain if there is any other instruction later on that uses the
+        // cap reg.
+        // XXXAR: is copying the kill state the capreg enough?
+        // Could there be some corner case where the capreg is killed before
+        // this CIncOffset?
+        I.getOperand(3).setIsKill(Cap.isKill());
+        Cap.setIsKill(false);
+
         IncOffsets.insert(IncOffset);
         modified = true;
       }

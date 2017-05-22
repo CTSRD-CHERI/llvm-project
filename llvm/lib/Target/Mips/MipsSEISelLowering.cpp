@@ -2379,6 +2379,10 @@ SDValue MipsSETargetLowering::lowerINTRINSIC_WO_CHAIN(SDValue Op,
     EVT PtrVT = getPointerTy(DAG.getDataLayout());
     return DAG.getNode(MipsISD::ThreadPointer, DL, PtrVT);
   }
+  case Intrinsic::cheri_cap_address_get: {
+    assert(false && "This should have been removed by CheriExpandIntrinsicsPass");
+    abort();
+  }
   }
 }
 
@@ -4045,8 +4049,21 @@ MipsSETargetLowering::emitCapSelect(MachineInstr &MI,
   BB->addSuccessor(falseMBB);
   BB->addSuccessor(sinkMBB);
 
-  BuildMI(BB, dl, TII->get(Mips::BNE64))
-    .addReg(MI.getOperand(1).getReg()).addReg(Mips::ZERO_64).addMBB(sinkMBB);
+  auto TRI = Subtarget.getRegisterInfo();
+  auto RC = MI.getRegClassConstraint(1, TII, TRI);
+  unsigned ZeroReg = -1;
+  unsigned BranchInst = -1;
+  if (TRI->isTypeLegalForClass(*RC, MVT::i64)) {
+    ZeroReg = Mips::ZERO_64;
+    BranchInst = Mips::BNE64;
+  } else if (TRI->isTypeLegalForClass(*RC, MVT::i32)) {
+    ZeroReg = Mips::ZERO;
+    BranchInst = Mips::BNE;
+  } else {
+    llvm_unreachable("Invalid register class for CAP_SELECT");
+  }
+  BuildMI(BB, dl, TII->get(BranchInst))
+    .addReg(MI.getOperand(1).getReg()).addReg(ZeroReg).addMBB(sinkMBB);
   falseMBB->addSuccessor(sinkMBB);
 
   BuildMI(*sinkMBB, sinkMBB->begin(), dl,

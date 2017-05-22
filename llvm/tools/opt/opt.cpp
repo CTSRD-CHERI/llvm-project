@@ -400,6 +400,10 @@ int main(int argc, char **argv) {
   initializeUnreachableBlockElimLegacyPassPass(Registry);
   initializeExpandReductionsPass(Registry);
 
+  // Add the Cheri IR -> IR passes
+  initializeMemCapFoldIntrinsicsPass(Registry);
+  initializeMemCapDirectCallsPass(Registry);
+
 #ifdef LINK_POLLY_INTO_TOOLS
   polly::initializePollyPasses(Registry);
 #endif
