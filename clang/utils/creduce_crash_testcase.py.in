@@ -36,12 +36,18 @@ def main():
         die("Invalid `clang` binary`", not_cmd)
     # scan test case for RUN: lines
     run_cmds = []
+    run_lines = []
     infile = Path(args.testcase)
     with infile.open("r") as f:
         for line in f.readlines():
             match = re.match(r".*\s+RUN: (.+)", line)
             if match:
-                run_cmds.append(match.group(1).strip())
+                run_lines.append(line)
+                command = match.group(1).strip()
+                run_cmds.append(command)
+                if "\"%s\"" not in command:
+                    die("RUN: line does not contain \"%s\" -> cannot create replacement invocation")
+
     if len(run_cmds) < 1:
         die("Could not find any RUN: lines in", infile)
 
@@ -69,6 +75,13 @@ def main():
         run(creduce, cwd=tmpdir)
 
     print("DONE!")
+    with copied_input.open("r", encoding="utf-8") as f:
+        original_data = f.read()
+    result = "".join(run_lines) + original_data
+    with copied_input.open("w", encoding="utf-8") as f:
+        f.write(result)
+    print("Resulting test case ", copied_input, ":", sep="")
+    print(result)
 
 if __name__ == "__main__":
     main()
