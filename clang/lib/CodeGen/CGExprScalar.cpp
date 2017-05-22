@@ -972,8 +972,8 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
 
     // Allow conversions from floating point types -> (u)intcap
     if (SrcType->isFloatingType()) {
-      assert(DstType->isSpecificBuiltinType(BuiltinType::UIntCap) ||
-             DstType->isSpecificBuiltinType(BuiltinType::IntCap) &&
+      assert((DstType->isSpecificBuiltinType(BuiltinType::UIntCap) ||
+             DstType->isSpecificBuiltinType(BuiltinType::IntCap)) &&
              "Float->cap conversions should only be possible with (u)intcap");
       unsigned BitWidth =
           CGF.getContext().getTargetInfo().getPointerRangeForMemoryCapability();

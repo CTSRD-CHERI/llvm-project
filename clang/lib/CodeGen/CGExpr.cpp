@@ -4552,6 +4552,7 @@ RValue CodeGenFunction::convertTempToRValue(Address addr,
   case TEK_Scalar:
     return RValue::get(EmitLoadOfScalar(lvalue, loc));
   }
+  llvm_unreachable("Invalid evaluation kind");
 }
 
 void CodeGenFunction::SetFPAccuracy(llvm::Value *Val, float Accuracy) {
