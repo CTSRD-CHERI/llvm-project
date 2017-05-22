@@ -3957,7 +3957,8 @@ static void InitCatchParam(CodeGenFunction &CGF,
   auto catchRD = CatchType->getAsCXXRecordDecl();
   CharUnits caughtExnAlignment = CGF.CGM.getClassPointerAlignment(catchRD);
 
-  llvm::Type *PtrTy = LLVMCatchTy->getPointerTo(0); // addrspace 0 ok
+  unsigned DefaultAS = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
+  llvm::Type *PtrTy = LLVMCatchTy->getPointerTo(DefaultAS);
 
   // Check for a copy expression.  If we don't have a copy expression,
   // that means a trivial copy is okay.
