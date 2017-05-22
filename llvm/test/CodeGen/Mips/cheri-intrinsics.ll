@@ -34,6 +34,18 @@ entry:
 
 declare i64 @llvm.cheri.cap.length.get(i8 addrspace(200)*) nounwind readnone
 
+; CHECK-LABEL: getAddress
+define i64 @getAddress(i8 addrspace(200)* %c) nounwind readnone {
+entry:
+  ; CHECK: cgetbase [[BASE:\$[0-9]+]], $c3
+  ; CHECK: cgetoffset [[OFFSET:\$[0-9]+]], $c3
+  ; CHECK: daddu $2, [[BASE]], [[OFFSET]]
+  %0 = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %c)
+  ret i64 %0
+}
+
+declare i64 @llvm.cheri.cap.address.get(i8 addrspace(200)*) nounwind readnone
+
 ; CHECK-LABEL: getPerms
 define signext i16 @getPerms(i8 addrspace(200)* %c) nounwind readnone {
 entry:

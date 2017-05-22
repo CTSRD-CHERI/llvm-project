@@ -40,6 +40,7 @@ namespace llvm {
   FunctionPass *createCheriMemOpLowering();
   FunctionPass *createCheriLoopPointerDecanonicalize();
 
+  ModulePass *createCheriExpandIntrinsicsPass();
   ModulePass *createCheriSandboxABI();
   MachineFunctionPass *createCheriAddressingModeFolder(MipsTargetMachine &TM);
 } // end namespace llvm;

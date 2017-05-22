@@ -2379,6 +2379,10 @@ SDValue MipsSETargetLowering::lowerINTRINSIC_WO_CHAIN(SDValue Op,
     EVT PtrVT = getPointerTy(DAG.getDataLayout());
     return DAG.getNode(MipsISD::ThreadPointer, DL, PtrVT);
   }
+  case Intrinsic::cheri_cap_address_get: {
+    assert(false && "This should have been removed by CheriExpandIntrinsicsPass");
+    abort();
+  }
   }
 }
 

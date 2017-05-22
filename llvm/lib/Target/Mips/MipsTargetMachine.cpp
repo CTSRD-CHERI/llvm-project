@@ -36,6 +36,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/MemCap.h"
 #include <string>
 
 using namespace llvm;
@@ -287,6 +288,10 @@ void MipsPassConfig::addIRPasses() {
   if (getMipsSubtarget().inMips16HardFloat())
     addPass(createMips16HardFloatPass(getMipsTargetMachine()));
   if (getMipsSubtarget().isCheri()) {
+    addPass(createCheriExpandIntrinsicsPass());
+    if (getOptLevel() != CodeGenOpt::Level::None) {
+      addPass(createMemCapFoldIntrinsicsPass());
+    }
     addPass(createCheriLoopPointerDecanonicalize());
     addPass(createAggressiveDCEPass());
     addPass(createCheriRangeChecker());
