@@ -3931,7 +3931,8 @@ static void InitCatchParam(CodeGenFunction &CGF,
 
     // Otherwise, it returns a pointer into the exception object.
 
-    llvm::Type *PtrTy = LLVMCatchTy->getPointerTo(0); // addrspace 0 ok
+    unsigned DefaultAS = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
+    llvm::Type *PtrTy = LLVMCatchTy->getPointerTo(DefaultAS);
     llvm::Value *Cast = CGF.Builder.CreateBitCast(AdjustedExn, PtrTy);
 
     LValue srcLV = CGF.MakeNaturalAlignAddrLValue(Cast, CatchType);
