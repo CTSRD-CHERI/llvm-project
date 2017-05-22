@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import shutil
+import shlex
 from pathlib import Path
 
 
@@ -24,9 +25,9 @@ def main():
                         help="Path to clang build directory. Default is " + default_bindir)
     parser.add_argument("--not-cmd", help="Path to `not` tool. Default is $BINDIR/not")
     parser.add_argument("--clang-cmd", help="Path to `clang` tool. Default is $BINDIR/clang")
-    parser.add_argument("testcase", help="The file to reduce (must be a testcase with a RUN: line that crashes")
+    parser.add_argument("--output-file", help="The name of the output file")
+    parser.add_argument("testcase", help="The file to reduce (must be a testcase with a RUN: line that crashes or a .sh file from a clang crash")
     args, creduce_args = parser.parse_known_args()
-
     bindir = Path(args.bindir)
     not_cmd = Path(args.not_cmd or (bindir / "not"))
     if not not_cmd.exists():
@@ -38,28 +39,61 @@ def main():
     run_cmds = []
     run_lines = []
     infile = Path(args.testcase)
+    is_crash_reproducer = infile.suffix == ".sh"
+    if is_crash_reproducer:
+        print("Input file is a crash reproducer script")
     with infile.open("r") as f:
         for line in f.readlines():
-            match = re.match(r".*\s+RUN: (.+)", line)
-            if match:
-                run_lines.append(line)
-                command = match.group(1).strip()
-                run_cmds.append(command)
-                if "\"%s\"" not in command:
-                    die("RUN: line does not contain \"%s\" -> cannot create replacement invocation")
+            if is_crash_reproducer:
+                if line.strip().startswith("#"):
+                    continue
+                command = shlex.split(line)
+                if "clang" not in command[0]:
+                    die("Executed program should contain 'clang', but was", command[0])
+                source_file_name = command[-1]
+                source_file = infile.with_name(source_file_name)
+                if not source_file.exists():
+                    die("Reproducer input file", source_file, "does not exist!")
+                infile = source_file
+                print("Real input file is", infile)
+                command[-1] = "%s"
+                command[0] = "%clang"
+                if command[1] == "-cc1":
+                    del command[1]
+                    command[0] = "%clang_cc1"
+                print(command)
+                compiler_cmd = " ".join(shlex.quote(s) for s in command)
+                print(compiler_cmd)
+                run_cmds.append(compiler_cmd)
+                run_lines.append("// RUN: " + compiler_cmd)
+            else:
+                # test case: just search for RUN: lines
+                match = re.match(r".*\s+RUN: (.+)", line)
+                if match:
+                    run_lines.append(line)
+                    command = match.group(1).strip()
+                    run_cmds.append(command)
+                    if "\"%s\"" not in command:
+                        die("RUN: line does not contain \"%s\" -> cannot create replacement invocation")
 
     if len(run_cmds) < 1:
         die("Could not find any RUN: lines in", infile)
 
-    copied_input = infile.with_suffix(".creduce" + infile.suffix)
+    if args.output_file:
+        copied_input = Path(args.output_file)
+    else:
+        copied_input = infile.with_suffix(".creduce" + infile.suffix)
     shutil.copy(str(infile), str(copied_input))
     reduce_script_text = "#!/bin/sh\n"
     for cmd in run_cmds:
+        # check for %s should have happened earlier
+        assert "%s" in cmd, cmd
         compiler_cmd = cmd.replace("%clang_cc1 ", str(clang_cmd) + " -cc1 ")
         compiler_cmd = compiler_cmd.replace("%clang ", str(clang_cmd) + " ")
-        compiler_cmd = compiler_cmd.replace("%s", copied_input.name)
+        # ignore all the piping to FileCheck parts of the command
         if "|" in compiler_cmd:
-          compiler_cmd = compiler_cmd[0:compiler_cmd.find("|")]
+            compiler_cmd = compiler_cmd[0:compiler_cmd.find("|")]
+        compiler_cmd = compiler_cmd.replace("%s", copied_input.name)
         # exit once the first command crashes
         reduce_script_text += "{} --crash {} && exit 0\n".format(not_cmd, compiler_cmd)
     print("Reduce script:\n", reduce_script_text)
