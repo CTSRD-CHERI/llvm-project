@@ -1623,14 +1623,6 @@ static SDValue lowerMSABitClearImm(SDValue Op, SelectionDAG &DAG) {
   return DAG.getNode(ISD::AND, DL, ResTy, Op->getOperand(1), BitMask);
 }
 
-/// BuildIntrinsicOp - Return a unary operator intrinsic node with the
-/// specified intrinsic ID.
-static SDValue BuildIntrinsicOp(unsigned IID, SDValue Op, SelectionDAG &DAG,
-                                const SDLoc &dl, EVT DestVT) {
-  return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, DestVT,
-                     DAG.getConstant(IID, dl, MVT::i32), Op);
-}
-
 SDValue MipsSETargetLowering::lowerINTRINSIC_WO_CHAIN(SDValue Op,
                                                       SelectionDAG &DAG) const {
   SDLoc DL(Op);
@@ -2388,14 +2380,8 @@ SDValue MipsSETargetLowering::lowerINTRINSIC_WO_CHAIN(SDValue Op,
     return DAG.getNode(MipsISD::ThreadPointer, DL, PtrVT);
   }
   case Intrinsic::cheri_cap_address_get: {
-    SDValue Cap = Op->getOperand(1);
-    auto ResultTy = Op->getValueType(0);
-    assert(Cap.getValueType() == MVT::iFATPTR);
-    SDValue Base = BuildIntrinsicOp(Intrinsic::cheri_cap_base_get, Cap, DAG, DL,
-                                   ResultTy);
-    SDValue Offset = BuildIntrinsicOp(Intrinsic::cheri_cap_offset_get, Cap, DAG,
-                                     DL, ResultTy);
-    return DAG.getNode(ISD::ADD, DL, ResultTy, Base, Offset);
+    assert(false && "This should have been removed by CheriExpandIntrinsicsPass");
+    abort();
   }
   }
 }

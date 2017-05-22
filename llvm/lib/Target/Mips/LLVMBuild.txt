@@ -42,6 +42,7 @@ required_libraries =
  MipsInfo
  Scalar
  SelectionDAG
+ MemCap
  Support
  Target
 add_to_library_groups = Mips
