@@ -1,7 +1,7 @@
 // taken from temporaries.cpp (which crashed when run with target cheri)
 
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -DCHECK_ERROR -fsyntax-only -verify %s
-// RUN: %clang_cc1 -emit-llvm %s -o - -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 | FileCheck %s
+// RUN: %clang_cc1 -fno-rtti -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -DCHECK_ERROR -fsyntax-only -verify %s
+// RUN: %clang_cc1 -fno-rtti -emit-llvm %s -o - -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 | FileCheck %s
 
 
 namespace PR20227 {

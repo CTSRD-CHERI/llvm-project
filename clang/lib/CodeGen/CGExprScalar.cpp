@@ -1038,8 +1038,8 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
 
     // Allow conversions from floating point types -> (u)intcap
     if (SrcType->isFloatingType()) {
-      assert(DstType->isSpecificBuiltinType(BuiltinType::UIntCap) ||
-             DstType->isSpecificBuiltinType(BuiltinType::IntCap) &&
+      assert((DstType->isSpecificBuiltinType(BuiltinType::UIntCap) ||
+             DstType->isSpecificBuiltinType(BuiltinType::IntCap)) &&
              "Float->cap conversions should only be possible with (u)intcap");
       unsigned BitWidth =
           CGF.getContext().getTargetInfo().getPointerRangeForMemoryCapability();
@@ -1923,9 +1923,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
       return Builder.CreateIntToPtr(Src, ResultType);
     }
     if (IsPureCap) {
-      llvm::Value *Offset = CGF.getPointerOffset(Src);
-      llvm::Value *Base = CGF.getPointerBase(Src);
-      Src = CGF.Builder.CreateAdd(Base, Offset);
+      Src = CGF.getPointerAddress(Src);
       return Builder.CreateTruncOrBitCast(Src, ResultType);
     }
     return Builder.CreatePtrToInt(Src, ResultType);

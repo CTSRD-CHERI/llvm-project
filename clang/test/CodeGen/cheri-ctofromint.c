@@ -2,11 +2,13 @@
 // RUN: %clang_cc1 %s -emit-llvm -triple cheri-unknown-freebsd -o - -cheri-linker | FileCheck --check-prefix=CHECK-HYBRID %s
 
 
-__capability void* foo(__capability void *x){
+void* __capability foo(void *__capability x){
   // CHECK-HYBRID: ptrtoint
-  // CHECK-PURECAP: llvm.cheri.cap.offset.get
+  // CHECK-PURECAP: [[ADDR:%.+]] = call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* {{%.+}})
+  // CHECK-PURECAP-NEXT: trunc i64 [[ADDR]] to i32
   int pi = (int)x; // pi contains the result of CToPtr x, which is probably null
   // CHECK-HYBRID: inttoptr
-  // CHECK-PURECAP: llvm.cheri.cap.offset.set
-  return (__capability void*)pi;
+  // CHECK-PURECAP: [[CONV:%.+]] = sext i32 {{%.+}} to i64
+  // CHECK-PURECAP-NEXT: call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 [[CONV]])
+  return (void* __capability)pi;
 }

@@ -1183,13 +1183,15 @@ void ItaniumCXXABI::emitThrow(CodeGenFunction &CGF, const CXXThrowExpr *E) {
 
   // The address of the destructor.  If the exception type has a
   // trivial destructor (or isn't a record), we just pass null.
-  llvm::Constant *Dtor = nullptr;
+  llvm::Value *Dtor = nullptr;
   if (const RecordType *RecordTy = ThrowType->getAs<RecordType>()) {
     CXXRecordDecl *Record = cast<CXXRecordDecl>(RecordTy->getDecl());
     if (!Record->hasTrivialDestructor()) {
       CXXDestructorDecl *DtorD = Record->getDestructor();
       Dtor = CGM.getAddrOfCXXStructor(DtorD, StructorType::Complete);
-      Dtor = llvm::ConstantExpr::getBitCast(Dtor, CGM.Int8PtrTy);
+      if (CGF.getContext().getTargetInfo().areAllPointersCapabilities())
+        Dtor = CodeGenFunction::FunctionAddressToCapability(CGF, Dtor);
+      Dtor = CGF.Builder.CreateBitCast(Dtor, CGM.Int8PtrTy);
     }
   }
   if (!Dtor) Dtor = llvm::Constant::getNullValue(CGM.Int8PtrTy);
@@ -3015,7 +3017,15 @@ void ItaniumRTTIBuilder::BuildVTablePointer(const Type *Ty) {
   }
 
   llvm::Constant *VTable =
-    CGM.getModule().getOrInsertGlobal(VTableName, CGM.Int8PtrTy);
+    CGM.getModule().getGlobalVariable(VTableName);
+  if (VTable)
+    VTable = llvm::ConstantExpr::getBitCast(VTable, CGM.Int8PtrPtrTy);
+  else {
+    unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+    VTable = new llvm::GlobalVariable(CGM.getModule(), CGM.Int8PtrTy, /*isConstant*/true,
+            llvm::GlobalVariable::ExternalLinkage, nullptr, VTableName,
+            nullptr, llvm::GlobalValue::NotThreadLocal, DefaultAS);
+  }
 
   llvm::Type *PtrDiffTy =
     CGM.getTypes().ConvertType(CGM.getContext().getPointerDiffType());
@@ -3228,7 +3238,9 @@ llvm::Constant *ItaniumRTTIBuilder::BuildTypeInfo(QualType Ty, bool Force,
   llvm::Module &M = CGM.getModule();
   llvm::GlobalVariable *GV =
       new llvm::GlobalVariable(M, Init->getType(),
-                               /*Constant=*/true, Linkage, Init, Name);
+                               /*Constant=*/true, Linkage, Init, Name,
+                               nullptr, llvm::GlobalVariable::NotThreadLocal,
+                               CGM.getTargetCodeGenInfo().getDefaultAS());
 
   // If there's already an old global variable, replace it with the new one.
   if (OldGV) {
@@ -3919,7 +3931,8 @@ static void InitCatchParam(CodeGenFunction &CGF,
 
     // Otherwise, it returns a pointer into the exception object.
 
-    llvm::Type *PtrTy = LLVMCatchTy->getPointerTo(0); // addrspace 0 ok
+    unsigned DefaultAS = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
+    llvm::Type *PtrTy = LLVMCatchTy->getPointerTo(DefaultAS);
     llvm::Value *Cast = CGF.Builder.CreateBitCast(AdjustedExn, PtrTy);
 
     LValue srcLV = CGF.MakeNaturalAlignAddrLValue(Cast, CatchType);

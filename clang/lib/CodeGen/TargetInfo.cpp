@@ -443,6 +443,13 @@ unsigned TargetCodeGenInfo::getAddressSpaceForType(QualType DestTy,
   return AS;
 }
 
+llvm::Value *TargetCodeGenInfo::getPointerAddress(CodeGen::CodeGenFunction &CGF,
+                                                  llvm::Value *V,
+                                                  const Twine &Name) const {
+  assert(isa<llvm::PointerType>(V->getType()));
+  return CGF.Builder.CreatePtrToInt(V, CGF.PtrDiffTy);
+}
+
 bool TargetCodeGenInfo::canMarkAsNonNull(QualType DestTy, ASTContext& Context) const {
   unsigned AS = Context.getTargetAddressSpace(DestTy.getQualifiers());
   if (AS == 0)
@@ -6588,6 +6595,7 @@ class MIPSTargetCodeGenInfo : public TargetCodeGenInfo,
   mutable llvm::Function *GetOffset = nullptr;
   mutable llvm::Function *SetOffset = nullptr;
   mutable llvm::Function *GetBase = nullptr;
+  mutable llvm::Function *GetAddress = nullptr;
   mutable llvm::PointerType *I8Cap = nullptr;
   llvm::PointerType *getI8CapTy(CodeGen::CodeGenFunction &CGF) const {
     if (!I8Cap)
@@ -6628,6 +6636,14 @@ public:
       GetBase = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_base_get);
     V = CGF.Builder.CreateBitCast(V, getI8CapTy(CGF));
     return CGF.Builder.CreateCall(GetBase, V);
+  }
+
+  llvm::Value *getPointerAddress(CodeGen::CodeGenFunction &CGF, llvm::Value *V,
+                              const llvm::Twine &Name) const override {
+    if (!GetAddress)
+      GetAddress = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_address_get);
+    V = CGF.Builder.CreateBitCast(V, getI8CapTy(CGF));
+    return CGF.Builder.CreateCall(GetAddress, V, Name);
   }
 
   void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
