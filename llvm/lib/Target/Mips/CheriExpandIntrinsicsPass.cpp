@@ -60,7 +60,6 @@ char CheriExpandIntrinsicsPass::ID;
 
 namespace llvm {
 ModulePass *createCheriExpandIntrinsicsPass(void) {
-  llvm::errs() << "Creating expand intrinsics pass\n";
   return new CheriExpandIntrinsicsPass();
 }
 }
