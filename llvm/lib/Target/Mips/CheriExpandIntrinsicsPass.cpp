@@ -33,15 +33,22 @@ public:
 
   void expandAddrGet(Module &M, bool* Modified) {
     Function* GetAddr = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_address_get);
-    for (Value *Use : GetAddr->users()) {
-      CallInst *CI = cast<CallInst>(Use);
+    std::vector<CallInst*> ToErase;
+    for (Value* V : GetAddr->users()) {
+      CallInst *CI = cast<CallInst>(V);
       Value* Cap = CI->getOperand(0);
       IRBuilder<> B(CI);
       Value *Replacement = B.CreateAdd(B.CreateCall(GetBase, {Cap}),
                                        B.CreateCall(GetOffset, {Cap}));
       CI->replaceAllUsesWith(Replacement);
-      CI->eraseFromParent();
+      // Seems like this causes the users() iterator to be invalidated
+      // CI->eraseFromParent();
+      // Let's collect the users and erase them in separate loop instead
+      ToErase.push_back(CI);
       *Modified = true;
+    }
+    for (CallInst* CI : ToErase) {
+      CI->eraseFromParent();
     }
   }
 
@@ -60,7 +67,6 @@ char CheriExpandIntrinsicsPass::ID;
 
 namespace llvm {
 ModulePass *createCheriExpandIntrinsicsPass(void) {
-  llvm::errs() << "Creating expand intrinsics pass\n";
   return new CheriExpandIntrinsicsPass();
 }
 }
