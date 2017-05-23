@@ -48,13 +48,20 @@ class MemCapFoldIntrinsics : public ModulePass {
   bool Modified;
 
   template <typename Infer> void foldGet(Function *Intrinsic, Infer infer) {
+    // Calling eraseFromParent() inside the following loop causes iterators
+    // to be invalidated and crashes -> collect and erase instead
+    std::vector<CallInst*> ToErase;
     for (Value *Use : Intrinsic->users()) {
       CallInst *CI = cast<CallInst>(Use);
       if (Value *Replacement = infer(CI->getOperand(0), CI->getType())) {
         CI->replaceAllUsesWith(Replacement);
-        CI->eraseFromParent();
+        // CI->eraseFromParent();
+        ToErase.push_back(CI);
         Modified = true;
       }
+    }
+    for (CallInst* CI : ToErase) {
+      CI->eraseFromParent();
     }
   }
 
@@ -133,6 +140,9 @@ class MemCapFoldIntrinsics : public ModulePass {
 public:
   static char ID;
   MemCapFoldIntrinsics() : ModulePass(ID) {}
+  StringRef getPassName() const override {
+    return "CHERI fold capability intrinsics";
+  }
   bool runOnModule(Module &M) override {
     Modified = false;
     IncOffset =
