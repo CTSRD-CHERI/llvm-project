@@ -1819,13 +1819,22 @@ static llvm::Value *performTypeAdjustment(CodeGenFunction &CGF,
     llvm::Value *OffsetPtr =
         CGF.Builder.CreateConstInBoundsGEP1_64(VTablePtr, VirtualAdjustment);
 
-    OffsetPtr = CGF.Builder.CreateBitCast(OffsetPtr, 
-                      PtrDiffTy->getPointerTo(
-                       CGF.CGM.getTargetCodeGenInfo().getDefaultAS()));
+    llvm::Value *Offset;
+    if (CGF.getContext().getTargetInfo().areAllPointersCapabilities()) {
+      OffsetPtr = CGF.Builder.CreateBitCast(OffsetPtr, CGF.Int8PtrPtrTy);
+      Offset =
+        CGF.Builder.CreateAlignedLoad(OffsetPtr, CGF.getPointerAlign(),
+                                      "vbase.offset.intcap");
+      Offset = CGF.getPointerOffset(Offset);
+    } else {
+      OffsetPtr = CGF.Builder.CreateBitCast(OffsetPtr, 
+                        PtrDiffTy->getPointerTo(
+                         CGF.CGM.getTargetCodeGenInfo().getDefaultAS()));
 
-    // Load the adjustment offset from the vtable.
-    llvm::Value *Offset =
-      CGF.Builder.CreateAlignedLoad(OffsetPtr, CGF.getPointerAlign());
+      // Load the adjustment offset from the vtable.
+      Offset =
+        CGF.Builder.CreateAlignedLoad(OffsetPtr, CGF.getPointerAlign());
+    }
 
     // Adjust our pointer.
     ResultPtr = CGF.Builder.CreateInBoundsGEP(V.getPointer(), Offset);
