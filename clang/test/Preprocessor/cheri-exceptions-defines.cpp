@@ -1,9 +1,9 @@
-// RUN: %clang -x c++ -target cheri -mabi=purecap -E -dM %s |  FileCheck -check-prefixes=CHECK-CHERI-SANDBOX %s
-// RUN: %clang_cc1 -x c++ -triple cheri -target-abi purecap -E -dM %s | FileCheck -check-prefix=CHECK-CHERI-SANDBOX %s
-// CHECK-CHERI-SANDBOX-NOT: #define OBJC_ZEROCOST_EXCEPTIONS 1
-// CHECK-CHERI-SANDBOX-NOT: #define __EXCEPTIONS 1
-// CHECK-CHERI-SANDBOX-NOT: #define __GXX_RTTI 1
-// CHECK-CHERI-SANDBOX-NOT: #define __cpp_rtti 1
+// RUN: %clang -x c++ -target cheri -mabi=purecap -fno-rtti -fno-exceptions -E -dM %s |  FileCheck -check-prefixes=CHECK-CHERI-SANDBOX-NOEXCEPTIONS %s
+// RUN: %clang_cc1 -x c++ -triple cheri -target-abi purecap -fno-rtti -E -dM %s | FileCheck -check-prefix=CHECK-CHERI-SANDBOX-NOEXCEPTIONS %s
+// CHECK-CHERI-SANDBOX-NOEXCEPTIONS-NOT: #define OBJC_ZEROCOST_EXCEPTIONS 1
+// CHECK-CHERI-SANDBOX-NOEXCEPTIONS-NOT: #define __EXCEPTIONS 1
+// CHECK-CHERI-SANDBOX-NOEXCEPTIONS-NOT: #define __GXX_RTTI 1
+// CHECK-CHERI-SANDBOX-NOEXCEPTIONS-NOT: #define __cpp_rtti 1
 
 // RUN: %clang -x c++ -target cheri -mabi=n64 -E -dM %s |  FileCheck -check-prefix=CHECK-CHERI-N64 %s
 // RUN: %clang_cc1 -x c++ -triple cheri -target-abi n64 -E -dM %s | FileCheck -check-prefix=CHECK-CHERI-N64 %s
@@ -13,7 +13,7 @@
 // CHECK-CHERI-N64: #define __GXX_RTTI 1
 // CHECK-CHERI-N64: #define __cpp_rtti 1
 
-// RUN: %clang -x c++ -target cheri -mabi=purecap -fexceptions -E -dM %s 2>&1 | FileCheck -check-prefixes=CHECK-CHERI-SANDBOX-FEXCEPTIONS,IMPLICIT_RTTI %s
+// RUN: %clang -x c++ -target cheri -mabi=purecap -fexceptions -E -dM %s 2>&1 | FileCheck -check-prefixes=CHECK-CHERI-SANDBOX-FEXCEPTIONS %s
 // IMPLICIT_RTTI: warning: implicitly enabling rtti for exception handling [-Wrtti-for-exceptions]
 // RUN: %clang_cc1 -x c++ -triple cheri -target-abi purecap -fexceptions -E -dM %s | FileCheck -check-prefix=CHECK-CHERI-SANDBOX-FEXCEPTIONS %s
 // CHECK-CHERI-SANDBOX-FEXCEPTIONS: #define __EXCEPTIONS 1
