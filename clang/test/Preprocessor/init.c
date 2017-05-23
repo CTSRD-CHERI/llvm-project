@@ -9473,7 +9473,7 @@
 // GNUSOURCE:#define _GNU_SOURCE 1
 //
 // RUN: %clang_cc1 -x c++ -std=c++98 -fno-rtti -E -dM < /dev/null | FileCheck -match-full-lines -check-prefix NORTTI %s
-// RUN: %clang_cc1 -x c++ -std=c++98 -triple cheri -target-abi purecap -E -dM < /dev/null | FileCheck -match-full-lines -check-prefix NORTTI %s
+// RUN: %clang_cc1 -x c++ -std=c++98 -triple cheri -fno-rtti -target-abi purecap -E -dM < /dev/null | FileCheck -match-full-lines -check-prefix NORTTI %s
 // NORTTI: #define __GXX_ABI_VERSION {{.*}}
 // NORTTI-NOT:#define __GXX_RTTI
 // NORTTI-NOT:#define __cpp_rtti

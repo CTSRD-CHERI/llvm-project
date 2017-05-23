@@ -111,7 +111,7 @@ def main():
     print("DONE!")
     with copied_input.open("r", encoding="utf-8") as f:
         original_data = f.read()
-    result = "".join(run_lines) + original_data
+    result = "\n".join(run_lines) + "\n" + original_data
     with copied_input.open("w", encoding="utf-8") as f:
         f.write(result)
     print("Resulting test case ", copied_input, ":", sep="")
