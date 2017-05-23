@@ -203,6 +203,15 @@ bool DwarfEHPrepare::InsertUnwindResumeCalls(Function &Fn) {
   if (ResumesLeft == 0)
     return true; // We pruned them all.
 
+  // Find the rewind function if we didn't already.
+  if (!RewindFunction) {
+    ResumeInst *RI = Resumes.front();
+    Type *ExTy = cast<StructType>(RI->getValue()->getType())->elements()[0];
+    FunctionType *FTy = FunctionType::get(Type::getVoidTy(Ctx), ExTy, false);
+    const char *RewindName = TLI->getLibcallName(RTLIB::UNWIND_RESUME);
+    RewindFunction = Fn.getParent()->getOrInsertFunction(RewindName, FTy);
+  }
+
   // Create the basic block where the _Unwind_Resume call will live.
   if (ResumesLeft == 1) {
     // Instead of creating a new BB and PHI node, just append the call to
@@ -210,15 +219,6 @@ bool DwarfEHPrepare::InsertUnwindResumeCalls(Function &Fn) {
     ResumeInst *RI = Resumes.front();
     BasicBlock *UnwindBB = RI->getParent();
     Value *ExnObj = GetExceptionObject(RI);
-
-    // Find the rewind function if we didn't already.
-    if (!RewindFunction) {
-      FunctionType *FTy = FunctionType::get(Type::getVoidTy(Ctx),
-              ExnObj->getType(), false);
-      const char *RewindName = TLI->getLibcallName(RTLIB::UNWIND_RESUME);
-      RewindFunction = Fn.getParent()->getOrInsertFunction(RewindName, FTy);
-    }
-
 
     // Call the _Unwind_Resume function.
     CallInst *CI = CallInst::Create(RewindFunction, ExnObj, "", UnwindBB);
