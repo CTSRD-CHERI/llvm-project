@@ -2227,6 +2227,10 @@ bool VarDecl::checkInitIsICE() const {
     return Eval->IsICE;
 
   const auto *Init = cast<Expr>(Eval->Value);
+  // XXXAR: Hack to fix crash when compiling some code:
+  if (Init->isValueDependent())
+    return false;
+  // XXXAR: should probably fix this properly instead
   assert(!Init->isValueDependent());
 
   // In C++11, evaluate the initializer to check whether it's a constant
