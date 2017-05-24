@@ -62,10 +62,11 @@ def main():
                     del command[1]
                     command[0] = "%clang_cc1"
                 print(command)
+                command += ["-o", "-"]
                 compiler_cmd = " ".join(shlex.quote(s) for s in command)
                 print(compiler_cmd)
                 run_cmds.append(compiler_cmd)
-                run_lines.append("// RUN: " + compiler_cmd)
+                run_lines.append("// RUN: " + compiler_cmd + " | FileCheck %s")
             else:
                 # test case: just search for RUN: lines
                 match = re.match(r".*\s+RUN: (.+)", line)
@@ -73,8 +74,8 @@ def main():
                     run_lines.append(line)
                     command = match.group(1).strip()
                     run_cmds.append(command)
-                    if "\"%s\"" not in command:
-                        die("RUN: line does not contain \"%s\" -> cannot create replacement invocation")
+                    if "%s" not in command:
+                        die("RUN: line does not contain %s -> cannot create replacement invocation")
 
     if len(run_cmds) < 1:
         die("Could not find any RUN: lines in", infile)
