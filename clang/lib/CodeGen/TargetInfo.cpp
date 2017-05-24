@@ -6579,7 +6579,13 @@ public:
   MipsABIInfo(CodeGenTypes &CGT, bool _IsO32, CodeGenModule &_CGM) :
     ABIInfo(CGT), CheriCapClassifier(CGT.getContext()),
     IsO32(_IsO32), CGM(_CGM), MinABIStackAlignInBytes(IsO32 ? 4 : 8),
-    StackAlignInBytes(IsO32 ? 8 : 16) {}
+    StackAlignInBytes(IsO32 ? 8 : 16) {
+    const TargetInfo &TI = CGT.getContext().getTargetInfo();
+    if (TI.areAllPointersCapabilities()) {
+      MinABIStackAlignInBytes = TI.getMemoryCapabilityAlign() / 8;
+      StackAlignInBytes = TI.getMemoryCapabilityAlign() / 8;
+    }
+  }
 
   ABIArgInfo classifyReturnType(QualType RetTy) const;
   ABIArgInfo classifyArgumentType(QualType RetTy, uint64_t &Offset) const;

@@ -1413,13 +1413,23 @@ ItaniumCXXABI::GetVirtualBaseClassOffset(CodeGenFunction &CGF,
   llvm::Value *VBaseOffsetPtr =
     CGF.Builder.CreateConstGEP1_64(VTablePtr, VBaseOffsetOffset.getQuantity(),
                                    "vbase.offset.ptr");
-  VBaseOffsetPtr = CGF.Builder.CreateBitCast(VBaseOffsetPtr,
-                                             CGM.PtrDiffTy->getPointerTo(
-                                              CGM.getTargetCodeGenInfo().getDefaultAS()));
+  llvm::Value *VBaseOffset;
+  if (CGF.getContext().getTargetInfo().areAllPointersCapabilities()) {
+    VBaseOffsetPtr = CGF.Builder.CreateBitCast(VBaseOffsetPtr,
+                                               CGM.Int8PtrPtrTy);
+    VBaseOffset =
+      CGF.Builder.CreateAlignedLoad(VBaseOffsetPtr, CGF.getPointerAlign(),
+                                    "vbase.offset.intcap");
+    VBaseOffset = CGF.getPointerOffset(VBaseOffset);
+  } else {
+    VBaseOffsetPtr = CGF.Builder.CreateBitCast(VBaseOffsetPtr,
+                                               CGM.PtrDiffTy->getPointerTo(
+                                                CGM.getTargetCodeGenInfo().getDefaultAS()));
 
-  llvm::Value *VBaseOffset =
-    CGF.Builder.CreateAlignedLoad(VBaseOffsetPtr, CGF.getPointerAlign(),
-                                  "vbase.offset");
+    VBaseOffset =
+      CGF.Builder.CreateAlignedLoad(VBaseOffsetPtr, CGF.getPointerAlign(),
+                                    "vbase.offset");
+  }
 
   return VBaseOffset;
 }

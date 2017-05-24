@@ -1236,12 +1236,14 @@ public:
 
   /// \brief Return the uniqued reference to the type for an lvalue reference
   /// to the specified type.
-  QualType getLValueReferenceType(QualType T, bool SpelledAsLValue = true)
+  QualType getLValueReferenceType(QualType T, bool SpelledAsLValue = true, 
+                                  PointerInterpretationKind PIK = PIK_Default)
     const;
 
   /// \brief Return the uniqued reference to the type for an rvalue reference
   /// to the specified type.
-  QualType getRValueReferenceType(QualType T) const;
+  QualType getRValueReferenceType(QualType T,
+                                  PointerInterpretationKind PIK = PIK_Default) const;
 
   /// \brief Return the uniqued reference to the type for a member pointer to
   /// the specified type in the specified class.

@@ -8,6 +8,13 @@ import shutil
 import shlex
 from pathlib import Path
 
+verbose = False
+
+def verbose_print(*args, **kwargs):
+    global verbose
+    if verbose:
+        print(*args, **kwargs)
+
 
 def die(*args):
     sys.exit(" ".join(map(str, args)))
@@ -16,6 +23,47 @@ def die(*args):
 def run(*args, **kwargs):
     print(args, kwargs)
     subprocess.check_call(*args, **kwargs)
+
+def do_initial_reduce(input_path, out_file):
+    # The intial remove #includes pass takes a long time -> remove all the includes that are inside a #if 0
+    # This is especially true for C++ because there are so many #included files in preprocessed input
+    with input_path.open("r") as input_file:
+        # line_regex = re.compile(r'^#\s+\d+\s+".*".*')
+        start_rewrite_includes = re.compile(r"^\s*#if\s+0\s+/\* expanded by -frewrite-includes \*/\s*")
+        end_rewrite_includes = re.compile(r"^\s*#endif\s+/\* expanded by -frewrite-includes \*/\s*")
+        in_rewrite_includes = False
+        max_rewrite_includes_lines = 10
+        skipped_rewrite_includes = 0
+        for line in input_file.readlines():
+            if re.match(start_rewrite_includes, line):
+                verbose_print("Starting -frewrite-includes-block:", line.rstrip())
+                assert not in_rewrite_includes
+                assert skipped_rewrite_includes == 0
+                in_rewrite_includes = True
+                continue
+            elif re.match(end_rewrite_includes, line):
+                verbose_print("Ending -frewrite-includes-block, skipped", skipped_rewrite_includes, "lines")
+                assert in_rewrite_includes
+                in_rewrite_includes = False
+                skipped_rewrite_includes = 0
+                continue
+            elif in_rewrite_includes:
+                if skipped_rewrite_includes > max_rewrite_includes_lines:
+                    die("Error in initial reduction, rerun with --no-initial-reduce")
+                verbose_print("Skipping line inside -frewrite-includes:", line.rstrip())
+                skipped_rewrite_includes += 1
+                continue
+            # This appears to break creduce sometimes:
+            # elif re.match(line_regex, line):
+            #     verbose_print("Removing # line directive:", line.rstrip())
+            #     continue
+            else:
+                out_file.write(line)
+        out_file.flush()
+    global verbose
+    if verbose:
+        verbose_print("Initial reduction:")
+        subprocess.call(["diff", "-u", str(input_path), out_file.name])
 
 
 def main():
@@ -26,8 +74,17 @@ def main():
     parser.add_argument("--not-cmd", help="Path to `not` tool. Default is $BINDIR/not")
     parser.add_argument("--clang-cmd", help="Path to `clang` tool. Default is $BINDIR/clang")
     parser.add_argument("--output-file", help="The name of the output file")
+    parser.add_argument("--verbose", action="store_true", help="Print more debug output")
+    # TODO: infer this automatically from the crash reproducer?
+    parser.add_argument("--crash-message", help="If set the crash must contain this message to be accepted for reduction."
+                                                " This is useful if creduce ends up generating another crash bug that is not the one being debugged.")
+    parser.add_argument("--no-initial-reduce", help="Pass the original input file to creduce without "
+                        "removing #if 0 regions. Generally this will speed up but in very rare corner "
+                        "cases it might cause the test case to no longer crash.")
     parser.add_argument("testcase", help="The file to reduce (must be a testcase with a RUN: line that crashes or a .sh file from a clang crash")
     args, creduce_args = parser.parse_known_args()
+    global verbose
+    verbose = args.verbose
     bindir = Path(args.bindir)
     not_cmd = Path(args.not_cmd or (bindir / "not"))
     if not not_cmd.exists():
@@ -41,7 +98,7 @@ def main():
     infile = Path(args.testcase)
     is_crash_reproducer = infile.suffix == ".sh"
     if is_crash_reproducer:
-        print("Input file is a crash reproducer script")
+        verbose_print("Input file is a crash reproducer script")
     with infile.open("r") as f:
         for line in f.readlines():
             if is_crash_reproducer:
@@ -55,17 +112,18 @@ def main():
                 if not source_file.exists():
                     die("Reproducer input file", source_file, "does not exist!")
                 infile = source_file
-                print("Real input file is", infile)
+                verbose_print("Real input file is", infile)
                 command[-1] = "%s"
                 command[0] = "%clang"
                 if command[1] == "-cc1":
                     del command[1]
                     command[0] = "%clang_cc1"
-                print(command)
+                verbose_print(command)
+                command += ["-o", "-"]
                 compiler_cmd = " ".join(shlex.quote(s) for s in command)
-                print(compiler_cmd)
+                verbose_print(compiler_cmd)
                 run_cmds.append(compiler_cmd)
-                run_lines.append("// RUN: " + compiler_cmd)
+                run_lines.append("// RUN: " + compiler_cmd + " | FileCheck %s")
             else:
                 # test case: just search for RUN: lines
                 match = re.match(r".*\s+RUN: (.+)", line)
@@ -73,8 +131,8 @@ def main():
                     run_lines.append(line)
                     command = match.group(1).strip()
                     run_cmds.append(command)
-                    if "\"%s\"" not in command:
-                        die("RUN: line does not contain \"%s\" -> cannot create replacement invocation")
+                    if "%s" not in command:
+                        die("RUN: line does not contain %s -> cannot create replacement invocation")
 
     if len(run_cmds) < 1:
         die("Could not find any RUN: lines in", infile)
@@ -94,17 +152,29 @@ def main():
         if "|" in compiler_cmd:
             compiler_cmd = compiler_cmd[0:compiler_cmd.find("|")]
         compiler_cmd = compiler_cmd.replace("%s", copied_input.name)
+        grep_cmd = ""
+        if args.crash_message:
+            grep_cmd = "2>&1 | grep " + shlex.quote(args.crash_message)
         # exit once the first command crashes
-        reduce_script_text += "{} --crash {} && exit 0\n".format(not_cmd, compiler_cmd)
+        reduce_script_text += "{} --crash {} {} && exit 0\n".format(not_cmd, compiler_cmd, grep_cmd)
     print("Reduce script:\n", reduce_script_text)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         reduce_script = Path(tmpdir, "reduce_script.sh")
         reduce_script.write_text(reduce_script_text)
         reduce_script.chmod(0o755)
+        if args.no_initial_reduce:
+            creduce_input = copied_input
+        else:
+            creduce_input = Path(tmpdir, copied_input.name)
+            with creduce_input.open("w+") as reduced_file:
+                do_initial_reduce(copied_input, reduced_file)
+
         # print(reduce_script.read_text())
         # run("ulimit -S -c 0".split())
-        creduce = ["creduce", str(reduce_script), str(copied_input)] + creduce_args
+        creduce = ["creduce", str(reduce_script), str(creduce_input)] + creduce_args
+        if verbose:
+            creduce.append("--print-diff")
         print("About to run", creduce)
         run(creduce, cwd=tmpdir)
 
@@ -114,7 +184,7 @@ def main():
     result = "\n".join(run_lines) + "\n" + original_data
     with copied_input.open("w", encoding="utf-8") as f:
         f.write(result)
-    print("Resulting test case ", copied_input, ":", sep="")
+    print("\nResulting test case ", copied_input, ":", sep="")
     print(result)
 
 if __name__ == "__main__":

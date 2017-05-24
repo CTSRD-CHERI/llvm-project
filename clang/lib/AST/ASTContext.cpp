@@ -2665,14 +2665,16 @@ QualType ASTContext::getBlockPointerType(QualType T) const {
 /// getLValueReferenceType - Return the uniqued reference to the type for an
 /// lvalue reference to the specified type.
 QualType
-ASTContext::getLValueReferenceType(QualType T, bool SpelledAsLValue) const {
+ASTContext::getLValueReferenceType(QualType T, bool SpelledAsLValue, PointerInterpretationKind PIK) const {
   assert(getCanonicalType(T) != OverloadTy && 
          "Unresolved overloaded function type");
   
+  bool isMemCap = shouldUseMemcap(PIK);
+
   // Unique pointers, to guarantee there is only one pointer of a particular
   // structure.
   llvm::FoldingSetNodeID ID;
-  ReferenceType::Profile(ID, T, SpelledAsLValue);
+  ReferenceType::Profile(ID, T, SpelledAsLValue, isMemCap);
 
   void *InsertPos = nullptr;
   if (LValueReferenceType *RT =
@@ -2686,7 +2688,7 @@ ASTContext::getLValueReferenceType(QualType T, bool SpelledAsLValue) const {
   QualType Canonical;
   if (!SpelledAsLValue || InnerRef || !T.isCanonical()) {
     QualType PointeeType = (InnerRef ? InnerRef->getPointeeType() : T);
-    Canonical = getLValueReferenceType(getCanonicalType(PointeeType));
+    Canonical = getLValueReferenceType(getCanonicalType(PointeeType), true, PIK);
 
     // Get the new insert position for the node we care about.
     LValueReferenceType *NewIP =
@@ -2696,7 +2698,8 @@ ASTContext::getLValueReferenceType(QualType T, bool SpelledAsLValue) const {
 
   LValueReferenceType *New
     = new (*this, TypeAlignment) LValueReferenceType(T, Canonical,
-                                                     SpelledAsLValue);
+                                                     SpelledAsLValue,
+                                                     isMemCap);
   Types.push_back(New);
   LValueReferenceTypes.InsertNode(New, InsertPos);
 
@@ -2705,11 +2708,13 @@ ASTContext::getLValueReferenceType(QualType T, bool SpelledAsLValue) const {
 
 /// getRValueReferenceType - Return the uniqued reference to the type for an
 /// rvalue reference to the specified type.
-QualType ASTContext::getRValueReferenceType(QualType T) const {
+QualType ASTContext::getRValueReferenceType(QualType T, PointerInterpretationKind PIK) const {
   // Unique pointers, to guarantee there is only one pointer of a particular
   // structure.
+  bool isMemCap = shouldUseMemcap(PIK);
+
   llvm::FoldingSetNodeID ID;
-  ReferenceType::Profile(ID, T, false);
+  ReferenceType::Profile(ID, T, false, isMemCap);
 
   void *InsertPos = nullptr;
   if (RValueReferenceType *RT =
@@ -2723,7 +2728,7 @@ QualType ASTContext::getRValueReferenceType(QualType T) const {
   QualType Canonical;
   if (InnerRef || !T.isCanonical()) {
     QualType PointeeType = (InnerRef ? InnerRef->getPointeeType() : T);
-    Canonical = getRValueReferenceType(getCanonicalType(PointeeType));
+    Canonical = getRValueReferenceType(getCanonicalType(PointeeType), PIK);
 
     // Get the new insert position for the node we care about.
     RValueReferenceType *NewIP =
@@ -2732,7 +2737,7 @@ QualType ASTContext::getRValueReferenceType(QualType T) const {
   }
 
   RValueReferenceType *New
-    = new (*this, TypeAlignment) RValueReferenceType(T, Canonical);
+    = new (*this, TypeAlignment) RValueReferenceType(T, Canonical, isMemCap);
   Types.push_back(New);
   RValueReferenceTypes.InsertNode(New, InsertPos);
   return QualType(New, 0);

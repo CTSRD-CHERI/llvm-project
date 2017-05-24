@@ -6825,9 +6825,9 @@ static void HandleOpenCLAccessAttr(QualType &CurType, const AttributeList &Attr,
   }
 }
 
-/// HandleMemoryCapabilityAttr - Process the memory_capability attribute. It is only
-/// applicable to pointer types and specifies that this pointer should be treated as
-/// a capability.
+/// HandleMemoryCapabilityAttr - Process the memory_capability attribute. It is
+/// only applicable to pointer and reference types and specifies that this
+/// pointer/reference should be treated as a capability.
 static void HandleMemoryCapabilityAttr(QualType &CurType, TypeProcessingState &state,
                                        TypeAttrLocation TAL, AttributeList& attr) {
   static bool isDeprecatedUse = false;
@@ -6872,7 +6872,7 @@ static void HandleMemoryCapabilityAttr(QualType &CurType, TypeProcessingState &s
   } else {
     unsigned currChunkIdx = state.getCurrentChunkIndex();
     DeclaratorChunk &chunk = declarator.getTypeObject(state.getCurrentChunkIndex());
-    if (chunk.Kind == DeclaratorChunk::Pointer) {
+    if (chunk.Kind == DeclaratorChunk::Pointer || chunk.Kind == DeclaratorChunk::Reference) {
       if (isDeprecatedUse) {
         // Check for an ambiguous use where this is more than one pointer
         // level, like __capability T **. We do this by checking that the next
@@ -6916,10 +6916,15 @@ static void HandleMemoryCapabilityAttr(QualType &CurType, TypeProcessingState &s
                                           " __capability ");
         isDeprecatedUse = false;
       }
-      if (const PointerType *PT = CurType->getAs<PointerType>()) {
+      if (CurType->isPointerType() || CurType->isReferenceType()) {
         // preserve existing qualifiers on CurType
         Qualifiers Qs = CurType.getQualifiers();
-        CurType = S.Context.getPointerType(PT->getPointeeType(), ASTContext::PIK_Capability);
+        if (const PointerType *PT = CurType->getAs<PointerType>())
+          CurType = S.Context.getPointerType(PT->getPointeeType(), ASTContext::PIK_Capability);
+        else if (const LValueReferenceType *LRT = CurType->getAs<LValueReferenceType>()) 
+          CurType = S.Context.getLValueReferenceType(LRT->getPointeeType(), true, ASTContext::PIK_Capability);
+        else if (const RValueReferenceType *RRT = CurType->getAs<RValueReferenceType>()) 
+          CurType = S.Context.getRValueReferenceType(RRT->getPointeeType(), ASTContext::PIK_Capability);
         if (Qs.hasQualifiers())
           CurType = S.Context.getQualifiedType(CurType, Qs);
         return;
