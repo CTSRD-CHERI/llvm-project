@@ -385,6 +385,8 @@ bool Type::isStructureOrClassType() const {
 bool Type::isMemoryCapabilityType(const ASTContext &Context) const {
   if (const PointerType *PT = getAs<PointerType>())
     return PT->isMemoryCapability();
+  else if (const ReferenceType *RT = getAs<ReferenceType>())
+    return RT->isMemoryCapability();
   else if (isObjCObjectPointerType() || isBlockPointerType())
     return Context.getTargetInfo().areAllPointersCapabilities();
   else if (const BuiltinType *BT = getAs<BuiltinType>()) {

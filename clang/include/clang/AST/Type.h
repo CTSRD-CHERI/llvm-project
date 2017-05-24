@@ -2368,15 +2368,16 @@ public:
 ///
 class ReferenceType : public Type, public llvm::FoldingSetNode {
   QualType PointeeType;
+  bool IsMemoryCapability : 1;
 
 protected:
   ReferenceType(TypeClass tc, QualType Referencee, QualType CanonicalRef,
-                bool SpelledAsLValue) :
+                bool SpelledAsLValue, bool IsMemCap = false) :
     Type(tc, CanonicalRef, Referencee->isDependentType(),
          Referencee->isInstantiationDependentType(),
          Referencee->isVariablyModifiedType(),
          Referencee->containsUnexpandedParameterPack()),
-    PointeeType(Referencee)
+    PointeeType(Referencee), IsMemoryCapability(IsMemCap)
   {
     ReferenceTypeBits.SpelledAsLValue = SpelledAsLValue;
     ReferenceTypeBits.InnerRef = Referencee->isReferenceType();
@@ -2395,14 +2396,18 @@ public:
     return T->PointeeType;
   }
 
+  bool isMemoryCapability() const { return IsMemoryCapability; }
+
   void Profile(llvm::FoldingSetNodeID &ID) {
-    Profile(ID, PointeeType, isSpelledAsLValue());
+    Profile(ID, PointeeType, isSpelledAsLValue(), isMemoryCapability());
   }
   static void Profile(llvm::FoldingSetNodeID &ID,
                       QualType Referencee,
-                      bool SpelledAsLValue) {
+                      bool SpelledAsLValue,
+                      bool IsMemCap) {
     ID.AddPointer(Referencee.getAsOpaquePtr());
     ID.AddBoolean(SpelledAsLValue);
+    ID.AddBoolean(IsMemCap);
   }
 
   static bool classof(const Type *T) {
@@ -2415,8 +2420,8 @@ public:
 ///
 class LValueReferenceType : public ReferenceType {
   LValueReferenceType(QualType Referencee, QualType CanonicalRef,
-                      bool SpelledAsLValue) :
-    ReferenceType(LValueReference, Referencee, CanonicalRef, SpelledAsLValue)
+                      bool SpelledAsLValue, bool IsMemCap = false) :
+    ReferenceType(LValueReference, Referencee, CanonicalRef, SpelledAsLValue, IsMemCap)
   {}
   friend class ASTContext; // ASTContext creates these
 public:
@@ -2431,8 +2436,8 @@ public:
 /// An rvalue reference type, per C++11 [dcl.ref].
 ///
 class RValueReferenceType : public ReferenceType {
-  RValueReferenceType(QualType Referencee, QualType CanonicalRef) :
-    ReferenceType(RValueReference, Referencee, CanonicalRef, false) {
+  RValueReferenceType(QualType Referencee, QualType CanonicalRef, bool IsMemCap = false) :
+    ReferenceType(RValueReference, Referencee, CanonicalRef, false, IsMemCap) {
   }
   friend class ASTContext; // ASTContext creates these
 public:

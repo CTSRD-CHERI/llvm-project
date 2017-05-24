@@ -296,6 +296,13 @@ void TypePrinter::printBefore(const Type *T,Qualifiers Quals, raw_ostream &OS) {
         OS << " ";
     }
   }
+  else if (const ReferenceType *RTy = dyn_cast<ReferenceType>(T)) {
+    if (RTy->isMemoryCapability()) {
+      OS << " __capability";
+      if (hasAfterQuals || !PrevPHIsEmpty.get())
+        OS << " ";
+    }
+  }
 
   if (hasAfterQuals) {
     if (NeedARCStrongQualifier) {
