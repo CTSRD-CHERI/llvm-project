@@ -13,7 +13,7 @@
 
 // CHECK:     *** Dumping AST Record Layout
 // CHECK-NEXT:  0 | class Foo
-// CHECK-NEXT:  0 |   class A & _a
+// CHECK-NEXT:  0 |   class A & __capability _a
 // CHECK-NEXT:    | [sizeof=[[$CAP_SIZE:16|32]],
 // CHECK-SAME:       dsize=[[$CAP_SIZE]], align=[[$CAP_SIZE]],
 // CHECK-NEXT:    |  nvsize=[[$CAP_SIZE]], nvalign=[[$CAP_SIZE]]]
@@ -23,7 +23,7 @@
 // CHECK:      *** Dumping AST Record Layout
 // CHECK-NEXT:     0 | class Bar
 // CHECK-NEXT:     0 |   class Foo (base)
-// CHECK-NEXT:     0 |     class A & _a
+// CHECK-NEXT:     0 |     class A & __capability _a
 // CHECK-NEXT:    [[$CAP_SIZE]] |   int x
 // CHECK-NEXT:       | [sizeof=[[@EXPR $CAP_SIZE * 2]], dsize=[[@EXPR $CAP_SIZE + 4]], align=[[$CAP_SIZE]],
 // CHECK-NEXT:       |  nvsize=[[@EXPR $CAP_SIZE + 4]], nvalign=[[$CAP_SIZE]]]

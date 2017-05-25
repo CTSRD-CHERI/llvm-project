@@ -1193,17 +1193,21 @@ CodeGenFunction::generateObjCSetterBody(const ObjCImplementationDecl *classImpl,
       EmitLValueForIvar(TypeOfSelfObject(), LoadObjCSelf(), ivar, /*quals*/ 0);
     Address ivarAddr = ivarLValue.getAddress();
 
-    // Currently, all atomic accesses have to be through integer
-    // types, so there's no point in trying to pick a prettier type.
-    llvm::Type *bitcastType =
-      llvm::Type::getIntNTy(getLLVMContext(),
-                            getContext().toBits(strategy.getIvarSize()));
+    llvm::Type *ivarType = ivarAddr.getElementType();
+    if (ivarType->isAggregateType()) {
+      // Currently, all atomic accesses have to be through integer
+      // types, so there's no point in trying to pick a prettier type.
+      llvm::Type *bitcastType =
+        llvm::Type::getIntNTy(getLLVMContext(),
+                              getContext().toBits(strategy.getIvarSize()));
 
-    // Cast both arguments to the chosen operation type.
-    argAddr = Builder.CreateElementBitCast(argAddr, bitcastType);
-    ivarAddr = Builder.CreateElementBitCast(ivarAddr, bitcastType);
+      // Cast both arguments to the chosen operation type.
+      argAddr = Builder.CreateElementBitCast(argAddr, bitcastType);
+      ivarAddr = Builder.CreateElementBitCast(ivarAddr, bitcastType);
+    } else 
+      // Just ensure that the types match
+      argAddr = Builder.CreateElementBitCast(argAddr, ivarAddr.getElementType());
 
-    // This bitcast load is likely to cause some nasty IR.
     llvm::Value *load = Builder.CreateLoad(argAddr);
 
     // Perform an atomic store.  There are no memory ordering requirements.

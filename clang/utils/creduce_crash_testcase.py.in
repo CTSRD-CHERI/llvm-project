@@ -138,10 +138,16 @@ def main():
         die("Could not find any RUN: lines in", infile)
 
     if args.output_file:
-        copied_input = Path(args.output_file)
+        creduce_input = Path(args.output_file).absolute()
     else:
-        copied_input = infile.with_suffix(".creduce" + infile.suffix)
-    shutil.copy(str(infile), str(copied_input))
+        creduce_input = infile.with_suffix(".creduce" + infile.suffix).absolute()
+    shutil.copy(str(infile), str(creduce_input))
+    if not args.no_initial_reduce:
+        with tempfile.NamedTemporaryFile() as tmp:
+            with Path(tmp.name).open("w") as reduced_file:
+                do_initial_reduce(creduce_input, reduced_file)
+            shutil.copy(tmp.name, str(creduce_input))
+
     reduce_script_text = "#!/bin/sh\n"
     for cmd in run_cmds:
         # check for %s should have happened earlier
@@ -151,7 +157,7 @@ def main():
         # ignore all the piping to FileCheck parts of the command
         if "|" in compiler_cmd:
             compiler_cmd = compiler_cmd[0:compiler_cmd.find("|")]
-        compiler_cmd = compiler_cmd.replace("%s", copied_input.name)
+        compiler_cmd = compiler_cmd.replace("%s", creduce_input.name)
         grep_cmd = ""
         if args.crash_message:
             grep_cmd = "2>&1 | grep " + shlex.quote(args.crash_message)
@@ -163,12 +169,6 @@ def main():
         reduce_script = Path(tmpdir, "reduce_script.sh")
         reduce_script.write_text(reduce_script_text)
         reduce_script.chmod(0o755)
-        if args.no_initial_reduce:
-            creduce_input = copied_input
-        else:
-            creduce_input = Path(tmpdir, copied_input.name)
-            with creduce_input.open("w+") as reduced_file:
-                do_initial_reduce(copied_input, reduced_file)
 
         # print(reduce_script.read_text())
         # run("ulimit -S -c 0".split())
@@ -178,14 +178,15 @@ def main():
         print("About to run", creduce)
         run(creduce, cwd=tmpdir)
 
-    print("DONE!")
-    with copied_input.open("r", encoding="utf-8") as f:
+    print("\nDONE!")
+    with creduce_input.open("r", encoding="utf-8") as f:
         original_data = f.read()
     result = "\n".join(run_lines) + "\n" + original_data
-    with copied_input.open("w", encoding="utf-8") as f:
+    test_case = creduce_input.with_suffix(".creduce.test" + creduce_input.suffix)
+    with test_case.open("w", encoding="utf-8") as f:
         f.write(result)
-    print("\nResulting test case ", copied_input, ":", sep="")
-    print(result)
+    print("\nResulting test case ", test_case, ":", sep="")
+    verbose_print(result)
 
 if __name__ == "__main__":
     main()
