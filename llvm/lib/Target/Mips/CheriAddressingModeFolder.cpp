@@ -248,7 +248,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
       // try to hoist it out of the loop.
       if (Offset.isGlobal()) {
         auto Loop = MLI.getLoopFor(InsertBlock);
-        if (Loop) {
+        if (Loop && Loop->getLoopPreheader()) {
           auto *Preheader = Loop->getLoopPreheader();
           // If all paths to this block go through the preheader then hoist.
           // Note: It might be worth doing this recursively and pushing out of
