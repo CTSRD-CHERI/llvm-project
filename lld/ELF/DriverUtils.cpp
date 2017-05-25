@@ -164,6 +164,9 @@ std::string elf::createResponseFile(const opt::InputArgList &Args) {
       OS << Arg->getSpelling() << " " << quote(rewritePath(Arg->getValue()))
          << "\n";
       break;
+    case OPT_sysroot:
+      OS << Arg->getSpelling() << "=./" << quote(rewritePath(Arg->getValue()))
+         << "\n";
     default:
       OS << toString(Arg) << "\n";
     }
