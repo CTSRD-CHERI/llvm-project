@@ -50,6 +50,30 @@ defm simm8s2  : ShiftImmPattern<8, 2>;
 defm simm8s1  : ShiftImmPattern<8, 1>;
 defm simm8    : ShiftImmPattern<8, 0>;
 
+// Pattern for atomic loads on capabilities
+def SDTAtomicCapLoad : SDTypeProfile<1, 1, [
+  SDTCisPtrTy<0>, SDTCisPtrTy<1>
+]>;
+def SDTAtomicCapStore : SDTypeProfile<0, 2, [
+  SDTCisPtrTy<0>, SDTCisPtrTy<1>
+]>;
+
+def atomic_load_node      : SDNode<"ISD::ATOMIC_LOAD", SDTAtomicCapLoad,
+                    [SDNPHasChain, SDNPMayLoad, SDNPMemOperand]>;
+def atomic_load_cap :
+  PatFrag<(ops node:$ptr),
+          (atomic_load_node node:$ptr), [{
+  return cast<AtomicSDNode>(N)->getMemoryVT() == MVT::iFATPTR;
+}]>;
+
+def atomic_store_node     : SDNode<"ISD::ATOMIC_STORE", SDTAtomicCapStore,
+                    [SDNPHasChain, SDNPMayStore, SDNPMemOperand]>;
+
+def atomic_store_cap : PatFrag<(ops node:$ptr, node:$val),
+                   (atomic_store_node node:$ptr, node:$val), [{
+    return cast<AtomicSDNode>(N)->getMemoryVT() == MVT::iFATPTR;
+}]>;
+
 
 // ClearRegs values
 // TODO: Add some nice parsing so that we can get handle register lists for
@@ -548,6 +572,7 @@ def : MipsPat<(atomic_load_8 CheriRegs:$a), (CAPLOAD832 ZERO_64, (i64 0), CheriO
 def : MipsPat<(atomic_load_16 CheriRegs:$a), (CAPLOAD1632 ZERO_64, (i64 0), CheriOpnd:$a)>;
 def : MipsPat<(atomic_load_32 CheriRegs:$a), (CAPLOAD32 ZERO_64, (i64 0), CheriOpnd:$a)>;
 def : MipsPat<(atomic_load_64 CheriRegs:$a), (CAPLOAD64 ZERO_64, (i64 0), CheriOpnd:$a)>;
+def : MipsPat<(atomic_load_cap CheriRegs:$a), (LOADCAP ZERO_64, (i64 0), CheriOpnd:$a)>;
 
 // Atomic store patterns.
 def : MipsPat<(atomic_store_8 CheriRegs:$a, GPR64:$v),
@@ -564,6 +589,8 @@ def : MipsPat<(atomic_store_32 CheriRegs:$a, GPR32:$v),
               (CAPSTORE32 $v, ZERO_64, (i64 0), $a)>;
 def : MipsPat<(atomic_store_64 CheriRegs:$a, GPR64:$v),
               (CAPSTORE64 $v, ZERO_64, (i64 0), $a)>;
+def : MipsPat<(atomic_store_cap CheriRegs:$a, CheriRegs:$v),
+              (STORECAP $v, ZERO_64, (i64 0), $a)>;
 
 
 }
