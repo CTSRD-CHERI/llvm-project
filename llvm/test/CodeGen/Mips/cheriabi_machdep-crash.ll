@@ -1,4 +1,4 @@
-; RUN: llc -mtriple=cheri-unknown-freebsd -mcpu=mips64 %s -o -
+; RUN: llc -mtriple=cheri-unknown-freebsd -cheri-test-mode -mcpu=mips64 %s -o -
 
 ; ModuleID = '/local/scratch/alr48/cheri/llvm-master/tools/clang/test/CodeGen/cheriabi_machdep-crash.c'
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128"
