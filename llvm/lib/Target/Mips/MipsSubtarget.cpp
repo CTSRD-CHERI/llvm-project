@@ -154,9 +154,10 @@ MipsSubtarget &
 MipsSubtarget::initializeSubtargetDependencies(StringRef CPU, StringRef FS,
                                                const TargetMachine &TM) {
   std::string CPUName = MIPS_MC::selectMipsCPU(TM.getTargetTriple(), CPU);
-  // FIXME: This is very ugly and probably isn't even needed as we can just
-  // treat CHERIness as a feature.
-  IsCheri = (CPUName == "cheri");
+  // enable capabilties for all cheri-*-* triples even if CPUName != cheri
+  IsCheri = TM.getTargetTriple().getArch() == llvm::Triple::cheri;
+  // XXXAR: is this needed?
+  // if (IsCheri) CPUName = "cheri"
 
   // Parse features string.
   ParseSubtargetFeatures(CPUName, FS);
