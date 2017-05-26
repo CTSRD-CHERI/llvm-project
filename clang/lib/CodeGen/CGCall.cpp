@@ -4329,7 +4329,11 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
                 // key, then we should decode it so that we can use it.  DCE
                 // should later strip away the decoding if we don't use the
                 // result.
-                if (VarDecl *Key = cast<TypedefDecl>(TT->getDecl())->getOpaqueKey()) {
+
+                // TT->getDecl() could be a TypedefDecl or a TypedefNameDecl
+                const TypedefDecl* TD = dyn_cast<TypedefDecl>(TT->getDecl());
+                VarDecl *Key = TD ? TD->getOpaqueKey() : nullptr;
+                if (Key) {
                   llvm::Value *KeyV = CGM.GetAddrOfGlobalVar(Key);
                   CharUnits Alignment = getContext().getDeclAlign(Key);
                   Address Addr(V, Alignment);
