@@ -4323,7 +4323,7 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
             // function type, stripping typedefs.  We need to rediscover them to
             // create the opaque form.
             QualType Ty = cast<ValueDecl>(TargetDecl)->getType();
-            if (const FunctionType *FT = dyn_cast<FunctionType>(Ty))
+            if (const FunctionType *FT = dyn_cast<FunctionType>(Ty)) {
               if (const TypedefType *TT = dyn_cast<TypedefType>(FT->getReturnType())) {
                 // If this is a #pragma opaque return type, and we can see the
                 // key, then we should decode it so that we can use it.  DCE
@@ -4356,6 +4356,7 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
                 }
               }
             }
+          }
           return RValue::get(V);
         }
         }
