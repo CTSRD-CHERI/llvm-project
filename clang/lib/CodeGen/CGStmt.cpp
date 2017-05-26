@@ -1071,9 +1071,12 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
   } else if (TEK_Scalar == getEvaluationKind(RV->getType())) {
     llvm::Value *RetV = EmitScalarExpr(RV);
     QualType Ty = RV->getType();
-    if (Ty->isPointerType())
-      if (const TypedefType *TT = dyn_cast<TypedefType>(Ty))
-        if (VarDecl *Key = cast<TypedefDecl>(TT->getDecl())->getOpaqueKey()) {
+    if (Ty->isPointerType()) {
+      if (const TypedefType *TT = dyn_cast<TypedefType>(Ty)) {
+        // TT->getDecl() could be a TypedefDecl or a TypedefNameDecl
+        const TypedefDecl* TD = dyn_cast<TypedefDecl>(TT->getDecl());
+        VarDecl *Key = TD ? TD->getOpaqueKey() : nullptr;
+        if (Key) {
           llvm::Type *RetTy = RetV->getType();
           llvm::Value *KeyV = CGM.GetAddrOfGlobalVar(Key);
           CharUnits Alignment = getContext().getDeclAlign(Key);
@@ -1095,6 +1098,8 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
             RetV = Builder.CreateIntToPtr(RetV, RetTy);
           }
         }
+      }
+    }
     Builder.CreateStore(RetV, ReturnValue);
   } else {
     switch (getEvaluationKind(RV->getType())) {
