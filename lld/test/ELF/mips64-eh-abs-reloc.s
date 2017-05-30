@@ -36,8 +36,11 @@
 # NO-RELOCS-NEXT: ]
 
 # PIC-RELOCS: Relocations [
-# PIC-RELOCS-NEXT:  Section (7) .rela.dyn {
-# PIC-RELOCS-NEXT:    {{0x.+}} R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x10000
+# XXXAR: we use REL for FreeBSD instead of RELA:
+# UPSTREAM-PIC-RELOCS-NEXT:  Section (7) .rela.dyn {
+# UPSTREAM-PIC-RELOCS-NEXT:    {{0x.+}} R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x10000
+# PIC-RELOCS-NEXT:  Section (7) .rel.dyn {
+# PIC-RELOCS-NEXT:    {{0x.+}} R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0
 # PIC-RELOCS-NEXT:  }
 # PIC-RELOCS-NEXT:]
 
