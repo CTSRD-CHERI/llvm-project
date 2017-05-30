@@ -10,9 +10,9 @@
 
 // same again for statically dynamically linked exe:
 // Create a dummy shared library otherwise bfd won't create a dynamic executable
-// RUN: %clang_cheri_purecap %S/Inputs/dummy_shlib.c -c -o %T/dummy_shlib.o
-// RUN: %clang_link_purecap_bfd  %T/dummy_shlib.o -shared -o %T/libdummy_shlib.so
-// RUN: %clang_link_purecap_bfd -L%T -ldummy_shlib %t.o -o %t-dynamic.exe
+// RUN: %clang_cheri_purecap %S/Inputs/dummy_shlib.c -c -o %T/bfd_dummy_shlib.o
+// RUN: %clang_link_purecap_bfd  %T/bfd_dummy_shlib.o -shared -o %T/libbfd_dummy_shlib.so
+// RUN: %clang_link_purecap_bfd -L%T -lbfd_dummy_shlib %t.o -o %t-dynamic.exe
 // RUN: llvm-objdump -h -r -t -C %t-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %S/simple-cap-reloc-common.check
 
 // Look at shared libraries:
