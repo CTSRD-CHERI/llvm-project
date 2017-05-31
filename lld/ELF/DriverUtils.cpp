@@ -28,7 +28,6 @@
 #include "llvm/Support/Process.h"
 
 using namespace llvm;
-using namespace llvm::opt;
 using namespace llvm::sys;
 
 using namespace lld;
