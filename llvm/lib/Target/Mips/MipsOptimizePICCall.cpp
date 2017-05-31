@@ -158,7 +158,7 @@ static void eraseGPOpnd(MachineInstr &MI) {
     }
   }
 
-  llvm_unreachable(nullptr);
+  // If compiling with -mx-got, we can fail to remove the GP register.
 }
 
 MBBInfo::MBBInfo(MachineDomTreeNode *N) : Node(N), HTScope(nullptr) {}
