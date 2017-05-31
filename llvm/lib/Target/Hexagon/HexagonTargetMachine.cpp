@@ -223,7 +223,7 @@ namespace {
 /// Hexagon Code Generator Pass Configuration Options.
 class HexagonPassConfig : public TargetPassConfig {
 public:
-  HexagonPassConfig(HexagonTargetMachine *TM, PassManagerBase &PM)
+  HexagonPassConfig(HexagonTargetMachine &TM, PassManagerBase &PM)
     : TargetPassConfig(TM, PM) {}
 
   HexagonTargetMachine &getHexagonTargetMachine() const {
@@ -245,14 +245,14 @@ public:
 } // namespace
 
 TargetPassConfig *HexagonTargetMachine::createPassConfig(PassManagerBase &PM) {
-  return new HexagonPassConfig(this, PM);
+  return new HexagonPassConfig(*this, PM);
 }
 
 void HexagonPassConfig::addIRPasses() {
   TargetPassConfig::addIRPasses();
   bool NoOpt = (getOptLevel() == CodeGenOpt::None);
 
-  addPass(createAtomicExpandPass(TM));
+  addPass(createAtomicExpandPass());
   if (!NoOpt) {
     if (EnableLoopPrefetch)
       addPass(createLoopDataPrefetchPass());

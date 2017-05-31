@@ -286,6 +286,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
   bool runOnMachineFunction(MachineFunction &MF) override {
     if (DisableAddressingModeFolder)
       return false;
+    InstrInfo = MF.getSubtarget<MipsSubtarget>().getInstrInfo();
     bool modified = false;
     MachineLoopInfo &MLI = getAnalysis<MachineLoopInfo>();
     MachineDominatorTree &MDT = getAnalysis<MachineDominatorTree>();
@@ -311,6 +312,6 @@ INITIALIZE_PASS_END(CheriAddressingModeFolder, "cheriaddrmodefolder",
 
 
 MachineFunctionPass *
-llvm::createCheriAddressingModeFolder(MipsTargetMachine &TM) {
-  return new CheriAddressingModeFolder(TM);
+llvm::createCheriAddressingModeFolder() {
+  return new CheriAddressingModeFolder();
 }

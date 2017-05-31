@@ -26,11 +26,11 @@ class CheriInvalidatePass : public MachineFunctionPass {
 
 public:
   static char ID;
-  CheriInvalidatePass(MipsTargetMachine &TM) : MachineFunctionPass(ID) {
-    InstrInfo = TM.getSubtargetImpl()->getInstrInfo();
-  }
+  CheriInvalidatePass() : MachineFunctionPass(ID) {}
 
   void runOnMachineBasicBlock(MachineBasicBlock &MBB) {
+    if (!InstrInfo)
+      InstrInfo = MBB.getParent()->getSubtarget<MipsSubtarget>().getInstrInfo();
     for (MachineBasicBlock::iterator I = MBB.instr_begin();
          I != MBB.instr_end(); ++I) {
       int FI;
@@ -44,6 +44,9 @@ public:
   }
 
   virtual bool runOnMachineFunction(MachineFunction &F) {
+    if (!InstrInfo)
+      InstrInfo = F.getSubtarget<MipsSubtarget>().getInstrInfo();
+
 // Metadata nodes are no longer allowed to refer to functions, so we need
 // another mechanism for identifying them.  We should do it properly by adding
 // a function attribute.
@@ -118,6 +121,6 @@ public:
 
 char CheriInvalidatePass::ID;
 
-FunctionPass *llvm::createCheriInvalidatePass(MipsTargetMachine &TM) {
-  return new CheriInvalidatePass(TM);
+FunctionPass *llvm::createCheriInvalidatePass() {
+  return new CheriInvalidatePass();
 }

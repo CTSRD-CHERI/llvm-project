@@ -57,7 +57,7 @@ protected:
 
   virtual void parseImpl(DWARFContext &Context, const DWARFSection &Section,
                          const DWARFDebugAbbrev *DA, const DWARFSection *RS,
-                         StringRef SS, StringRef SOS, StringRef AOS,
+                         StringRef SS, StringRef SOS, const DWARFSection *AOS,
                          StringRef LS, bool isLittleEndian, bool isDWO) = 0;
 };
 
@@ -89,8 +89,8 @@ public:
 private:
   void parseImpl(DWARFContext &Context, const DWARFSection &Section,
                  const DWARFDebugAbbrev *DA, const DWARFSection *RS,
-                 StringRef SS, StringRef SOS, StringRef AOS, StringRef LS,
-                 bool LE, bool IsDWO) override {
+                 StringRef SS, StringRef SOS, const DWARFSection *AOS,
+                 StringRef LS, bool LE, bool IsDWO) override {
     if (Parsed)
       return;
     const auto &Index = getDWARFUnitIndex(Context, UnitType::Section);
@@ -111,7 +111,7 @@ private:
 
 class DWARFUnit {
   DWARFContext &Context;
-  // Section containing this DWARFUnit.
+  /// Section containing this DWARFUnit.
   const DWARFSection &InfoSection;
 
   const DWARFDebugAbbrev *Abbrev;
@@ -120,7 +120,7 @@ class DWARFUnit {
   StringRef LineSection;
   StringRef StringSection;
   StringRef StringOffsetSection;
-  StringRef AddrOffsetSection;
+  const DWARFSection *AddrOffsetSection;
   uint32_t AddrOffsetSectionBase;
   bool isLittleEndian;
   bool isDWO;
@@ -133,27 +133,17 @@ class DWARFUnit {
   uint8_t UnitType;
   uint8_t AddrSize;
   uint64_t BaseAddr;
-  // The compile unit debug information entry items.
+  /// The compile unit debug information entry items.
   std::vector<DWARFDebugInfoEntry> DieArray;
 
-  // Map from range's start address to end address and corresponding DIE.
-  // IntervalMap does not support range removal, as a result, we use the
-  // std::map::upper_bound for address range lookup.
+  /// Map from range's start address to end address and corresponding DIE.
+  /// IntervalMap does not support range removal, as a result, we use the
+  /// std::map::upper_bound for address range lookup.
   std::map<uint64_t, std::pair<uint64_t, DWARFDie>> AddrDieMap;
   typedef iterator_range<std::vector<DWARFDebugInfoEntry>::iterator>
       die_iterator_range;
 
-  class DWOHolder {
-    object::OwningBinary<object::ObjectFile> DWOFile;
-    std::unique_ptr<DWARFContext> DWOContext;
-    DWARFUnit *DWOU = nullptr;
-
-  public:
-    DWOHolder(StringRef DWOPath);
-
-    DWARFUnit *getUnit() const { return DWOU; }
-  };
-  std::unique_ptr<DWOHolder> DWO;
+  std::shared_ptr<DWARFUnit> DWO;
 
   const DWARFUnitIndex::Entry *IndexEntry;
 
@@ -172,8 +162,8 @@ protected:
 public:
   DWARFUnit(DWARFContext &Context, const DWARFSection &Section,
             const DWARFDebugAbbrev *DA, const DWARFSection *RS, StringRef SS,
-            StringRef SOS, StringRef AOS, StringRef LS, bool LE, bool IsDWO,
-            const DWARFUnitSectionBase &UnitSection,
+            StringRef SOS, const DWARFSection *AOS, StringRef LS, bool LE,
+            bool IsDWO, const DWARFUnitSectionBase &UnitSection,
             const DWARFUnitIndex::Entry *IndexEntry = nullptr);
 
   virtual ~DWARFUnit();
@@ -184,12 +174,12 @@ public:
   StringRef getStringSection() const { return StringSection; }
   StringRef getStringOffsetSection() const { return StringOffsetSection; }
 
-  void setAddrOffsetSection(StringRef AOS, uint32_t Base) {
+  void setAddrOffsetSection(const DWARFSection *AOS, uint32_t Base) {
     AddrOffsetSection = AOS;
     AddrOffsetSectionBase = Base;
   }
 
-  // Recursively update address to Die map.
+  /// Recursively update address to Die map.
   void updateAddressDieMap(DWARFDie Die);
 
   void setRangesSection(const DWARFSection *RS, uint32_t Base) {

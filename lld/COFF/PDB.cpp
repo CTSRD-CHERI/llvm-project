@@ -14,7 +14,8 @@
 #include "SymbolTable.h"
 #include "Symbols.h"
 #include "llvm/DebugInfo/CodeView/CVDebugRecord.h"
-#include "llvm/DebugInfo/CodeView/CVTypeDumper.h"
+#include "llvm/DebugInfo/CodeView/CVTypeVisitor.h"
+#include "llvm/DebugInfo/CodeView/LazyRandomTypeCollection.h"
 #include "llvm/DebugInfo/CodeView/SymbolDumper.h"
 #include "llvm/DebugInfo/CodeView/TypeDatabase.h"
 #include "llvm/DebugInfo/CodeView/TypeDumpVisitor.h"
@@ -98,6 +99,12 @@ static void addTypeInfo(pdb::TpiStreamBuilder &TpiBuilder,
 static void mergeDebugT(SymbolTable *Symtab, pdb::PDBFileBuilder &Builder,
                         codeview::TypeTableBuilder &TypeTable,
                         codeview::TypeTableBuilder &IDTable) {
+  // Follow type servers.  If the same type server is encountered more than
+  // once for this instance of `PDBTypeServerHandler` (for example if many
+  // object files reference the same TypeServer), the types from the
+  // TypeServer will only be visited once.
+  pdb::PDBTypeServerHandler Handler;
+
   // Visit all .debug$T sections to add them to Builder.
   for (ObjectFile *File : Symtab->ObjectFiles) {
     ArrayRef<uint8_t> Data = getDebugSection(File, ".debug$T");
@@ -107,16 +114,12 @@ static void mergeDebugT(SymbolTable *Symtab, pdb::PDBFileBuilder &Builder,
     BinaryByteStream Stream(Data, support::little);
     codeview::CVTypeArray Types;
     BinaryStreamReader Reader(Stream);
-    // Follow type servers.  If the same type server is encountered more than
-    // once for this instance of `PDBTypeServerHandler` (for example if many
-    // object files reference the same TypeServer), the types from the
-    // TypeServer will only be visited once.
-    pdb::PDBTypeServerHandler Handler;
+    SmallVector<TypeIndex, 128> SourceToDest;
     Handler.addSearchPath(llvm::sys::path::parent_path(File->getName()));
     if (auto EC = Reader.readArray(Types, Reader.getLength()))
       fatal(EC, "Reader::readArray failed");
-    if (auto Err =
-            codeview::mergeTypeStreams(IDTable, TypeTable, &Handler, Types))
+    if (auto Err = codeview::mergeTypeAndIdRecords(
+            IDTable, TypeTable, SourceToDest, &Handler, Types))
       fatal(Err, "codeview::mergeTypeStreams failed");
   }
 
@@ -133,12 +136,11 @@ static void dumpDebugT(ScopedPrinter &W, ObjectFile *File) {
   if (Data.empty())
     return;
 
-  TypeDatabase TDB(0);
-  TypeDumpVisitor TDV(TDB, &W, false);
+  LazyRandomTypeCollection Types(Data, 100);
+  TypeDumpVisitor TDV(Types, &W, false);
   // Use a default implementation that does not follow type servers and instead
   // just dumps the contents of the TypeServer2 record.
-  CVTypeDumper TypeDumper(TDB);
-  if (auto EC = TypeDumper.dump(Data, TDV))
+  if (auto EC = codeview::visitTypeStream(Types, TDV))
     fatal(EC, "CVTypeDumper::dump failed");
 }
 

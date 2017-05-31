@@ -246,11 +246,26 @@ public:
   }
 
   bool VisitObjCPropertyRefExpr(ObjCPropertyRefExpr *E) {
+    if (E->isClassReceiver())
+      IndexCtx.handleReference(E->getClassReceiver(), E->getReceiverLocation(),
+                               Parent, ParentDC);
     if (E->isExplicitProperty()) {
       SmallVector<SymbolRelation, 2> Relations;
       SymbolRoleSet Roles = getRolesForRef(E, Relations);
       return IndexCtx.handleReference(E->getExplicitProperty(), E->getLocation(),
                                       Parent, ParentDC, Roles, Relations, E);
+    } else if (const ObjCMethodDecl *Getter = E->getImplicitPropertyGetter()) {
+      // Class properties that are explicitly defined using @property
+      // declarations are represented implicitly as there is no ivar for class
+      // properties.
+      if (Getter->isClassMethod()) {
+        if (const auto *PD = Getter->getCanonicalDecl()->findPropertyDecl()) {
+          SmallVector<SymbolRelation, 2> Relations;
+          SymbolRoleSet Roles = getRolesForRef(E, Relations);
+          return IndexCtx.handleReference(PD, E->getLocation(), Parent,
+                                          ParentDC, Roles, Relations, E);
+        }
+      }
     }
 
     // No need to do a handleReference for the objc method, because there will

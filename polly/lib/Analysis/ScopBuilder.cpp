@@ -201,7 +201,7 @@ bool isFortranArrayDescriptor(Value *V) {
   return true;
 }
 
-Value *ScopBuilder::findFADGlobalNonAlloc(MemAccInst Inst) {
+Value *ScopBuilder::findFADAllocationVisible(MemAccInst Inst) {
   // match: 4.1 & 4.2 store/load
   if (!isa<LoadInst>(Inst) && !isa<StoreInst>(Inst))
     return nullptr;
@@ -272,13 +272,9 @@ Value *ScopBuilder::findFADGlobalNonAlloc(MemAccInst Inst) {
   return nullptr;
 }
 
-Value *ScopBuilder::findFADGlobalAlloc(MemAccInst Inst) {
+Value *ScopBuilder::findFADAllocationInvisible(MemAccInst Inst) {
   // match: 3
   if (!isa<LoadInst>(Inst) && !isa<StoreInst>(Inst))
-    return nullptr;
-
-  // match: 3
-  if (Inst.getAlignment() != 8)
     return nullptr;
 
   Value *Slot = Inst.getPointerOperand();
@@ -302,40 +298,6 @@ Value *ScopBuilder::findFADGlobalAlloc(MemAccInst Inst) {
     return nullptr;
 
   Value *Descriptor = dyn_cast<Value>(BitcastOperator->getOperand(0));
-  if (!Descriptor)
-    return nullptr;
-
-  if (!isFortranArrayDescriptor(Descriptor))
-    return nullptr;
-
-  return Descriptor;
-}
-
-Value *ScopBuilder::findFADLocalNonAlloc(MemAccInst Inst) {
-  // match: 3
-  if (!isa<LoadInst>(Inst) && !isa<StoreInst>(Inst))
-    return nullptr;
-
-  // match: 3
-  if (Inst.getAlignment() != 8)
-    return nullptr;
-
-  Value *Slot = Inst.getPointerOperand();
-
-  BitCastOperator *MemBitcast = nullptr;
-  // [match: 2]
-  if (auto *SlotGEP = dyn_cast<GetElementPtrInst>(Slot)) {
-    // match: 1
-    MemBitcast = dyn_cast<BitCastOperator>(SlotGEP->getPointerOperand());
-  } else {
-    // match: 1
-    MemBitcast = dyn_cast<BitCastOperator>(Slot);
-  }
-
-  if (!MemBitcast)
-    return nullptr;
-
-  Value *Descriptor = dyn_cast<Value>(MemBitcast->getOperand(0));
   if (!Descriptor)
     return nullptr;
 
@@ -445,6 +407,13 @@ bool ScopBuilder::buildAccessMultiDimParam(MemAccInst Inst, ScopStmt *Stmt) {
 
   Sizes.insert(Sizes.end(), AccItr->second.Shape->DelinearizedSizes.begin(),
                AccItr->second.Shape->DelinearizedSizes.end());
+
+  // In case only the element size is contained in the 'Sizes' array, the
+  // access does not access a real multi-dimensional array. Hence, we allow
+  // the normal single-dimensional access construction to handle this.
+  if (Sizes.size() == 1)
+    return false;
+
   // Remove the element size. This information is already provided by the
   // ElementSize parameter. In case the element size of this access and the
   // element size used for delinearization differs the delinearization is
@@ -670,8 +639,15 @@ void ScopBuilder::buildStmts(Region &SR) {
     if (I->isSubRegion())
       buildStmts(*I->getNodeAs<Region>());
     else {
+      std::vector<Instruction *> Instructions;
+      for (Instruction &Inst : *I->getNodeAs<BasicBlock>()) {
+        Loop *L = LI.getLoopFor(Inst.getParent());
+        if (!isa<TerminatorInst>(&Inst) && !canSynthesize(&Inst, *scop, &SE, L))
+          Instructions.push_back(&Inst);
+      }
       Loop *SurroundingLoop = LI.getLoopFor(I->getNodeAs<BasicBlock>());
-      scop->addScopStmt(I->getNodeAs<BasicBlock>(), SurroundingLoop);
+      scop->addScopStmt(I->getNodeAs<BasicBlock>(), SurroundingLoop,
+                        Instructions);
     }
 }
 
@@ -771,11 +747,9 @@ void ScopBuilder::addArrayAccess(
   if (!DetectFortranArrays)
     return;
 
-  if (Value *FAD = findFADGlobalNonAlloc(MemAccInst))
+  if (Value *FAD = findFADAllocationInvisible(MemAccInst))
     MemAccess->setFortranArrayDescriptor(FAD);
-  else if (Value *FAD = findFADGlobalAlloc(MemAccInst))
-    MemAccess->setFortranArrayDescriptor(FAD);
-  else if (Value *FAD = findFADLocalNonAlloc(MemAccInst))
+  else if (Value *FAD = findFADAllocationVisible(MemAccInst))
     MemAccess->setFortranArrayDescriptor(FAD);
 }
 
@@ -934,12 +908,14 @@ static void verifyUses(Scop *S, LoopInfo &LI, DominatorTree &DT) {
     return;
 
   // PHINodes in the SCoP region's exit block are also uses to be checked.
-  for (auto &Inst : *S->getRegion().getExit()) {
-    if (!isa<PHINode>(Inst))
-      break;
+  if (!S->getRegion().isTopLevelRegion()) {
+    for (auto &Inst : *S->getRegion().getExit()) {
+      if (!isa<PHINode>(Inst))
+        break;
 
-    for (auto &Op : Inst.operands())
-      verifyUse(S, Op, LI);
+      for (auto &Op : Inst.operands())
+        verifyUse(S, Op, LI);
+    }
   }
 }
 #endif
@@ -957,7 +933,7 @@ void ScopBuilder::buildScop(Region &R, AssumptionCache &AC) {
   // To handle these PHI nodes later we will now model their operands as scalar
   // accesses. Note that we do not model anything in the exit block if we have
   // an exiting block in the region, as there will not be any splitting later.
-  if (!scop->hasSingleExitEdge())
+  if (!R.isTopLevelRegion() && !scop->hasSingleExitEdge())
     buildAccessFunctions(*R.getExit(), nullptr,
                          /* IsExitBlock */ true);
 

@@ -605,11 +605,11 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
 
     if (SimplifyDemandedBits(Op.getOperand(1), NewMask, Known, TLO, Depth+1))
       return true;
-    assert((Known.Zero & Known.One) == 0 && "Bits known to be one AND zero?");
+    assert(!Known.hasConflict() && "Bits known to be one AND zero?");
     if (SimplifyDemandedBits(Op.getOperand(0), ~Known.Zero & NewMask,
                              Known2, TLO, Depth+1))
       return true;
-    assert((Known2.Zero & Known2.One) == 0 && "Bits known to be one AND zero?");
+    assert(!Known2.hasConflict() && "Bits known to be one AND zero?");
 
     // If all of the demanded bits are known one on one side, return the other.
     // These bits cannot contribute to the result of the 'and'.
@@ -635,11 +635,11 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
   case ISD::OR:
     if (SimplifyDemandedBits(Op.getOperand(1), NewMask, Known, TLO, Depth+1))
       return true;
-    assert((Known.Zero & Known.One) == 0 && "Bits known to be one AND zero?");
+    assert(!Known.hasConflict() && "Bits known to be one AND zero?");
     if (SimplifyDemandedBits(Op.getOperand(0), ~Known.One & NewMask,
                              Known2, TLO, Depth+1))
       return true;
-    assert((Known2.Zero & Known2.One) == 0 && "Bits known to be one AND zero?");
+    assert(!Known2.hasConflict() && "Bits known to be one AND zero?");
 
     // If all of the demanded bits are known zero on one side, return the other.
     // These bits cannot contribute to the result of the 'or'.
@@ -662,10 +662,10 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
   case ISD::XOR: {
     if (SimplifyDemandedBits(Op.getOperand(1), NewMask, Known, TLO, Depth+1))
       return true;
-    assert((Known.Zero & Known.One) == 0 && "Bits known to be one AND zero?");
+    assert(!Known.hasConflict() && "Bits known to be one AND zero?");
     if (SimplifyDemandedBits(Op.getOperand(0), NewMask, Known2, TLO, Depth+1))
       return true;
-    assert((Known2.Zero & Known2.One) == 0 && "Bits known to be one AND zero?");
+    assert(!Known2.hasConflict() && "Bits known to be one AND zero?");
 
     // If all of the demanded bits are known zero on one side, return the other.
     // These bits cannot contribute to the result of the 'xor'.
@@ -727,8 +727,8 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
       return true;
     if (SimplifyDemandedBits(Op.getOperand(1), NewMask, Known2, TLO, Depth+1))
       return true;
-    assert((Known.Zero & Known.One) == 0 && "Bits known to be one AND zero?");
-    assert((Known2.Zero & Known2.One) == 0 && "Bits known to be one AND zero?");
+    assert(!Known.hasConflict() && "Bits known to be one AND zero?");
+    assert(!Known2.hasConflict() && "Bits known to be one AND zero?");
 
     // If the operands are constants, see if we can simplify them.
     if (ShrinkDemandedConstant(Op, NewMask, TLO))
@@ -743,8 +743,8 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
       return true;
     if (SimplifyDemandedBits(Op.getOperand(2), NewMask, Known2, TLO, Depth+1))
       return true;
-    assert((Known.Zero & Known.One) == 0 && "Bits known to be one AND zero?");
-    assert((Known2.Zero & Known2.One) == 0 && "Bits known to be one AND zero?");
+    assert(!Known.hasConflict() && "Bits known to be one AND zero?");
+    assert(!Known2.hasConflict() && "Bits known to be one AND zero?");
 
     // If the operands are constants, see if we can simplify them.
     if (ShrinkDemandedConstant(Op, NewMask, TLO))
@@ -909,7 +909,7 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
       // Compute the new bits that are at the top now.
       if (SimplifyDemandedBits(InOp, InDemandedMask, Known, TLO, Depth+1))
         return true;
-      assert((Known.Zero & Known.One) == 0 && "Bits known to be one AND zero?");
+      assert(!Known.hasConflict() && "Bits known to be one AND zero?");
       Known.Zero.lshrInPlace(ShAmt);
       Known.One.lshrInPlace(ShAmt);
 
@@ -949,7 +949,7 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
       if (SimplifyDemandedBits(Op.getOperand(0), InDemandedMask, Known, TLO,
                                Depth+1))
         return true;
-      assert((Known.Zero & Known.One) == 0 && "Bits known to be one AND zero?");
+      assert(!Known.hasConflict() && "Bits known to be one AND zero?");
       Known.Zero.lshrInPlace(ShAmt);
       Known.One.lshrInPlace(ShAmt);
 
@@ -1031,7 +1031,7 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
     if (SimplifyDemandedBits(Op.getOperand(0), InputDemandedBits,
                              Known, TLO, Depth+1))
       return true;
-    assert((Known.Zero & Known.One) == 0 && "Bits known to be one AND zero?");
+    assert(!Known.hasConflict() && "Bits known to be one AND zero?");
 
     // If the sign bit of the input is known set or clear, then we know the
     // top bits of the result.
@@ -1086,7 +1086,7 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
 
     if (SimplifyDemandedBits(Op.getOperand(0), InMask, Known, TLO, Depth+1))
       return true;
-    assert((Known.Zero & Known.One) == 0 && "Bits known to be one AND zero?");
+    assert(!Known.hasConflict() && "Bits known to be one AND zero?");
     Known = Known.zext(BitWidth);
     Known.Zero |= NewBits;
     break;
@@ -1136,7 +1136,7 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
     APInt InMask = NewMask.trunc(OperandBitWidth);
     if (SimplifyDemandedBits(Op.getOperand(0), InMask, Known, TLO, Depth+1))
       return true;
-    assert((Known.Zero & Known.One) == 0 && "Bits known to be one AND zero?");
+    assert(!Known.hasConflict() && "Bits known to be one AND zero?");
     Known = Known.zext(BitWidth);
     break;
   }
@@ -1195,7 +1195,7 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
       }
     }
 
-    assert((Known.Zero & Known.One) == 0 && "Bits known to be one AND zero?");
+    assert(!Known.hasConflict() && "Bits known to be one AND zero?");
     break;
   }
   case ISD::AssertZext: {
@@ -1207,7 +1207,7 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
     if (SimplifyDemandedBits(Op.getOperand(0), ~InMask | NewMask,
                              Known, TLO, Depth+1))
       return true;
-    assert((Known.Zero & Known.One) == 0 && "Bits known to be one AND zero?");
+    assert(!Known.hasConflict() && "Bits known to be one AND zero?");
 
     Known.Zero |= ~InMask;
     break;
