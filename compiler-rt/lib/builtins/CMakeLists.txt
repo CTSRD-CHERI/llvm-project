@@ -42,6 +42,8 @@ set(GENERIC_SOURCES
   ashlti3.c
   ashrdi3.c
   ashrti3.c
+  bswapdi2.c
+  bswapsi2.c
   clear_cache.c
   clzdi2.c
   clzsi2.c
@@ -163,8 +165,7 @@ set(GENERIC_SOURCES
   udivti3.c
   umoddi3.c
   umodsi3.c
-  umodti3.c
-  emutls.c)
+  umodti3.c)
 
 set(GENERIC_TF_SOURCES
   comparetf2.c
@@ -193,6 +194,7 @@ option(COMPILER_RT_EXCLUDE_ATOMIC_BUILTIN
 if(NOT COMPILER_RT_BAREMETAL_BUILD)
   set(GENERIC_SOURCES
     ${GENERIC_SOURCES}
+    emutls.c 
     enable_execute_stack.c)
 endif()
 
@@ -483,11 +485,18 @@ else ()
 
   foreach (arch ${BUILTIN_SUPPORTED_ARCH})
     if (CAN_TARGET_${arch})
+      # NOTE: some architectures (e.g. i386) have multiple names.  Ensure that
+      # we catch them all.
+      set(_arch ${arch})
+      if("${arch}" STREQUAL "i686")
+        set(_arch "i386|i686")
+      endif()
+
       # Filter out generic versions of routines that are re-implemented in
       # architecture specific manner.  This prevents multiple definitions of the
       # same symbols, making the symbol selection non-deterministic.
       foreach (_file ${${arch}_SOURCES})
-        if (${_file} MATCHES ${arch}/*)
+        if (${_file} MATCHES ${_arch}/*)
           get_filename_component(_name ${_file} NAME)
           string(REPLACE ".S" ".c" _cname "${_name}")
           list(REMOVE_ITEM ${arch}_SOURCES ${_cname})

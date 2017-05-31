@@ -27,6 +27,7 @@ class OutputSection;
 // doesn't have to know about architecture-specific details.
 enum RelExpr {
   R_ABS,
+  R_ARM_SBREL,
   R_GOT,
   R_GOTONLY_PC,
   R_GOTONLY_PC_FROM_END,
@@ -119,7 +120,7 @@ template <class ELFT> void scanRelocations(InputSectionBase &);
 class ThunkSection;
 class Thunk;
 
-template <class ELFT> class ThunkCreator {
+class ThunkCreator {
 public:
   // Return true if Thunks have been added to OutputSections
   bool createThunks(ArrayRef<OutputSection *> OutputSections);

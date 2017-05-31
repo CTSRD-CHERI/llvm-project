@@ -47,9 +47,7 @@ static Value *simplifyValueKnownNonZero(Value *V, InstCombiner &IC,
   // inexact.  Similarly for <<.
   BinaryOperator *I = dyn_cast<BinaryOperator>(V);
   if (I && I->isLogicalShift() &&
-      isKnownToBeAPowerOfTwo(I->getOperand(0), IC.getDataLayout(), false, 0,
-                             &IC.getAssumptionCache(), &CxtI,
-                             &IC.getDominatorTree())) {
+      IC.isKnownToBeAPowerOfTwo(I->getOperand(0), false, 0, &CxtI)) {
     // We know that this is an exact/nuw shift and that the input is a
     // non-zero context as well.
     if (Value *V2 = simplifyValueKnownNonZero(I->getOperand(0), IC, CxtI)) {
@@ -132,8 +130,9 @@ static Constant *getLogBase2Vector(ConstantDataVector *CV) {
 
 /// \brief Return true if we can prove that:
 ///    (mul LHS, RHS)  === (mul nsw LHS, RHS)
-bool InstCombiner::WillNotOverflowSignedMul(Value *LHS, Value *RHS,
-                                            Instruction &CxtI) {
+bool InstCombiner::willNotOverflowSignedMul(const Value *LHS,
+                                            const Value *RHS,
+                                            const Instruction &CxtI) const {
   // Multiplying n * m significant bits yields a result of n + m significant
   // bits. If the total number of significant bits does not exceed the
   // result bit width (minus 1), there is no overflow.
@@ -384,7 +383,7 @@ Instruction *InstCombiner::visitMul(BinaryOperator &I) {
         Constant *CI =
             ConstantExpr::getTrunc(Op1C, Op0Conv->getOperand(0)->getType());
         if (ConstantExpr::getSExt(CI, I.getType()) == Op1C &&
-            WillNotOverflowSignedMul(Op0Conv->getOperand(0), CI, I)) {
+            willNotOverflowSignedMul(Op0Conv->getOperand(0), CI, I)) {
           // Insert the new, smaller mul.
           Value *NewMul =
               Builder->CreateNSWMul(Op0Conv->getOperand(0), CI, "mulconv");
@@ -401,7 +400,7 @@ Instruction *InstCombiner::visitMul(BinaryOperator &I) {
       if (Op0Conv->getOperand(0)->getType() ==
               Op1Conv->getOperand(0)->getType() &&
           (Op0Conv->hasOneUse() || Op1Conv->hasOneUse()) &&
-          WillNotOverflowSignedMul(Op0Conv->getOperand(0),
+          willNotOverflowSignedMul(Op0Conv->getOperand(0),
                                    Op1Conv->getOperand(0), I)) {
         // Insert the new integer mul.
         Value *NewMul = Builder->CreateNSWMul(
@@ -447,7 +446,7 @@ Instruction *InstCombiner::visitMul(BinaryOperator &I) {
     }
   }
 
-  if (!I.hasNoSignedWrap() && WillNotOverflowSignedMul(Op0, Op1, I)) {
+  if (!I.hasNoSignedWrap() && willNotOverflowSignedMul(Op0, Op1, I)) {
     Changed = true;
     I.setHasNoSignedWrap(true);
   }
@@ -1239,7 +1238,7 @@ Instruction *InstCombiner::visitSDiv(BinaryOperator &I) {
       return BO;
     }
 
-    if (isKnownToBeAPowerOfTwo(Op1, DL, /*OrZero*/ true, 0, &AC, &I, &DT)) {
+    if (isKnownToBeAPowerOfTwo(Op1, /*OrZero*/ true, 0, &I)) {
       // X sdiv (1 << Y) -> X udiv (1 << Y) ( -> X u>> Y)
       // Safe because the only negative value (1 << Y) can take on is
       // INT_MIN, and X sdiv INT_MIN == X udiv INT_MIN == 0 if X doesn't have
@@ -1486,7 +1485,7 @@ Instruction *InstCombiner::visitURem(BinaryOperator &I) {
                           I.getType());
 
   // X urem Y -> X and Y-1, where Y is a power of 2,
-  if (isKnownToBeAPowerOfTwo(Op1, DL, /*OrZero*/ true, 0, &AC, &I, &DT)) {
+  if (isKnownToBeAPowerOfTwo(Op1, /*OrZero*/ true, 0, &I)) {
     Constant *N1 = Constant::getAllOnesValue(I.getType());
     Value *Add = Builder->CreateAdd(Op1, N1);
     return BinaryOperator::CreateAnd(Op0, Add);

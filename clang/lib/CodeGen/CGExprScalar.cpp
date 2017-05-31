@@ -1740,10 +1740,10 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     if (Src->getType() == DestType)
       return Src;
     auto &TI = CGF.getContext().getTargetInfo();
+    QualType SrcTy = E->getType();
+    QualType SrcPointeeTy = SrcTy->getPointeeType();
+    QualType DstPointeeTy = DestTy->getPointeeType();
     if (TI.SupportsCapabilities()) {
-      QualType SrcTy = E->getType();
-      QualType SrcPointeeTy = SrcTy->getPointeeType();
-      QualType DstPointeeTy = DestTy->getPointeeType();
       if (SrcPointeeTy->isFunctionType() && DstPointeeTy->isFunctionType()) {
         // FIXME: Should we handle casts in the other direction by doing a
         // pcc-relative cfromptr?
@@ -1751,9 +1751,10 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
           Src = CodeGenFunction::FunctionAddressToCapability(CGF, Src);
       }
     }
-    return CGF.CGM.getTargetCodeGenInfo().performAddrSpaceCast(CGF, Src,
-                                                               E->getType(),
-                                                               DestTy);
+
+    return CGF.CGM.getTargetCodeGenInfo().performAddrSpaceCast(
+        CGF, Src, SrcPointeeTy.getAddressSpace(),
+        DstPointeeTy.getAddressSpace(), DestType);
   }
   case CK_AtomicToNonAtomic:
   case CK_NonAtomicToAtomic:

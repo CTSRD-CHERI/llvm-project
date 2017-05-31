@@ -264,6 +264,12 @@ public:
   ///                          with old sizes
   bool updateSizes(ArrayRef<const SCEV *> Sizes, bool CheckConsistency = true);
 
+  /// Make the ScopArrayInfo model a Fortran array.
+  /// It receives the Fortran array descriptor and stores this.
+  /// It also adds a piecewise expression for the outermost dimension
+  /// since this information is available for Fortran arrays at runtime.
+  void applyAndSetFAD(Value *FAD);
+
   /// Destructor to free the isl id of the base pointer.
   ~ScopArrayInfo();
 
@@ -420,6 +426,10 @@ private:
 
   /// The scop this SAI object belongs to.
   Scop &S;
+
+  /// If this array models a Fortran array, then this points
+  /// to the Fortran array descriptor.
+  Value *FAD;
 };
 
 /// Represent memory accesses in statements.
@@ -533,9 +543,6 @@ private:
   /// The #BaseAddr of a memory access of kind MemoryKind::Value is the
   /// instruction defining the value.
   AssertingVH<Value> BaseAddr;
-
-  /// An unique name of the accessed array.
-  std::string BaseName;
 
   /// Type a single array element wrt. this access.
   Type *ElementType;
@@ -859,8 +866,6 @@ public:
   /// Return a string representation of the reduction type @p RT.
   static const std::string getReductionOperatorStr(ReductionType RT);
 
-  const std::string &getBaseName() const { return BaseName; }
-
   /// Return the element type of the accessed array wrt. this access.
   Type *getElementType() const { return ElementType; }
 
@@ -895,6 +900,10 @@ public:
   /// is a map from the statement to a schedule where the innermost dimension is
   /// the dimension of the innermost loop containing the statement.
   __isl_give isl_set *getStride(__isl_take const isl_map *Schedule) const;
+
+  /// Get the FortranArrayDescriptor corresponding to this memory access if
+  /// it exists, and nullptr otherwise.
+  Value *getFortranArrayDescriptor() const { return this->FAD; };
 
   /// Is the stride of the access equal to a certain width? Schedule is a map
   /// from the statement to a schedule where the innermost dimension is the
@@ -1034,6 +1043,10 @@ public:
   /// Set the updated access relation read from JSCOP file.
   void setNewAccessRelation(__isl_take isl_map *NewAccessRelation);
 
+  /// Return whether the MemoryyAccess is a partial access. That is, the access
+  /// is not executed in some instances of the parent statement's domain.
+  bool isLatestPartialAccess() const;
+
   /// Mark this a reduction like access
   void markAsReductionLike(ReductionType RT) { RedType = RT; }
 
@@ -1128,7 +1141,8 @@ public:
   const ScopStmt &operator=(const ScopStmt &) = delete;
 
   /// Create the ScopStmt from a BasicBlock.
-  ScopStmt(Scop &parent, BasicBlock &bb, Loop *SurroundingLoop);
+  ScopStmt(Scop &parent, BasicBlock &bb, Loop *SurroundingLoop,
+           std::vector<Instruction *> Instructions);
 
   /// Create an overapproximating ScopStmt for the region @p R.
   ScopStmt(Scop &parent, Region &R, Loop *SurroundingLoop);
@@ -1234,6 +1248,9 @@ private:
 
   /// The closest loop that contains this statement.
   Loop *SurroundingLoop;
+
+  /// Vector for Instructions in a BB.
+  std::vector<Instruction *> Instructions;
 
   /// Build the statement.
   //@{
@@ -1519,6 +1536,10 @@ public:
   ///
   /// @param OS The output stream the ScopStmt is printed to.
   void print(raw_ostream &OS) const;
+
+  /// Print the instructions in ScopStmt.
+  ///
+  void printInstructions(raw_ostream &OS) const;
 
   /// Print the ScopStmt to stderr.
   void dump() const;
@@ -2006,7 +2027,9 @@ private:
   ///
   /// @param BB              The basic block we build the statement for.
   /// @param SurroundingLoop The loop the created statement is contained in.
-  void addScopStmt(BasicBlock *BB, Loop *SurroundingLoop);
+  /// @param Instructions    The instructions in the basic block.
+  void addScopStmt(BasicBlock *BB, Loop *SurroundingLoop,
+                   std::vector<Instruction *> Instructions);
 
   /// Create a new SCoP statement for @p R.
   ///
@@ -2067,6 +2090,9 @@ private:
   /// accesses always remain within bounds. We do this as last step, after
   /// all memory accesses have been modeled and canonicalized.
   void assumeNoOutOfBounds();
+
+  /// Mark arrays that have memory accesses with FortranArrayDescriptor.
+  void markFortranArrays();
 
   /// Finalize all access relations.
   ///

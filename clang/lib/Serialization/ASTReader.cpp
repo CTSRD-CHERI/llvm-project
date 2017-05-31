@@ -2756,7 +2756,8 @@ ASTReader::ReadASTBlock(ModuleFile &F, unsigned ClientLoadCapabilities) {
       // If we've already loaded the decl, perform the updates when we finish
       // loading this block.
       if (Decl *D = GetExistingDecl(ID))
-        PendingUpdateRecords.push_back(std::make_pair(ID, D));
+        PendingUpdateRecords.push_back(
+            PendingUpdateRecord(ID, D, /*JustLoaded=*/false));
       break;
     }
 
@@ -2924,6 +2925,21 @@ ASTReader::ReadASTBlock(ModuleFile &F, unsigned ClientLoadCapabilities) {
       }
       break;
 
+    case PP_CONDITIONAL_STACK:
+      if (!Record.empty()) {
+        SmallVector<PPConditionalInfo, 4> ConditionalStack;
+        for (unsigned Idx = 0, N = Record.size() - 1; Idx < N; /* in loop */) {
+          auto Loc = ReadSourceLocation(F, Record, Idx);
+          bool WasSkipping = Record[Idx++];
+          bool FoundNonSkip = Record[Idx++];
+          bool FoundElse = Record[Idx++];
+          ConditionalStack.push_back(
+              {Loc, WasSkipping, FoundNonSkip, FoundElse});
+        }
+        PP.setReplayablePreambleConditionalStack(ConditionalStack);
+      }
+      break;
+
     case PP_COUNTER_VALUE:
       if (!Record.empty() && Listener)
         Listener->ReadCounter(F, Record[0]);
@@ -3086,7 +3102,8 @@ ASTReader::ReadASTBlock(ModuleFile &F, unsigned ClientLoadCapabilities) {
         // If we've already loaded the decl, perform the updates when we finish
         // loading this block.
         if (Decl *D = GetExistingDecl(ID))
-          PendingUpdateRecords.push_back(std::make_pair(ID, D));
+          PendingUpdateRecords.push_back(
+              PendingUpdateRecord(ID, D, /*JustLoaded=*/false));
       }
       break;
     }
@@ -8962,7 +8979,7 @@ void ASTReader::finishPendingActions() {
     while (!PendingUpdateRecords.empty()) {
       auto Update = PendingUpdateRecords.pop_back_val();
       ReadingKindTracker ReadingKind(Read_Decl, *this);
-      loadDeclUpdateRecords(Update.first, Update.second);
+      loadDeclUpdateRecords(Update);
     }
   }
 
@@ -9354,12 +9371,6 @@ void ASTReader::diagnoseOdrViolations() {
         return Hash.CalculateHash();
       };
 
-      auto ComputeDeclNameODRHash = [&Hash](const DeclarationName Name) {
-        Hash.clear();
-        Hash.AddDeclarationName(Name);
-        return Hash.CalculateHash();
-      };
-
       auto ComputeQualTypeODRHash = [&Hash](QualType Ty) {
         Hash.clear();
         Hash.AddQualType(Ty);
@@ -9452,11 +9463,8 @@ void ASTReader::diagnoseOdrViolations() {
 
         QualType FirstType = FirstField->getType();
         QualType SecondType = SecondField->getType();
-        const TypedefType *FirstTypedef = dyn_cast<TypedefType>(FirstType);
-        const TypedefType *SecondTypedef = dyn_cast<TypedefType>(SecondType);
-
-        if ((FirstTypedef && !SecondTypedef) ||
-            (!FirstTypedef && SecondTypedef)) {
+        if (ComputeQualTypeODRHash(FirstType) !=
+            ComputeQualTypeODRHash(SecondType)) {
           ODRDiagError(FirstField->getLocation(), FirstField->getSourceRange(),
                        FieldTypeName)
               << FirstII << FirstType;
@@ -9466,24 +9474,6 @@ void ASTReader::diagnoseOdrViolations() {
 
           Diagnosed = true;
           break;
-        }
-
-        if (FirstTypedef && SecondTypedef) {
-          unsigned FirstHash = ComputeDeclNameODRHash(
-              FirstTypedef->getDecl()->getDeclName());
-          unsigned SecondHash = ComputeDeclNameODRHash(
-              SecondTypedef->getDecl()->getDeclName());
-          if (FirstHash != SecondHash) {
-            ODRDiagError(FirstField->getLocation(),
-                         FirstField->getSourceRange(), FieldTypeName)
-                << FirstII << FirstType;
-            ODRDiagNote(SecondField->getLocation(),
-                        SecondField->getSourceRange(), FieldTypeName)
-                << SecondII << SecondType;
-
-            Diagnosed = true;
-            break;
-          }
         }
 
         const bool IsFirstBitField = FirstField->isBitField();

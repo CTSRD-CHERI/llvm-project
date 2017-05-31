@@ -943,7 +943,7 @@ public:
 
   /// \brief Get the additional modules in which the definition \p Def has
   /// been merged.
-  ArrayRef<Module*> getModulesWithMergedDefinition(NamedDecl *Def) {
+  ArrayRef<Module*> getModulesWithMergedDefinition(const NamedDecl *Def) {
     auto MergedIt = MergedDefModules.find(Def);
     if (MergedIt == MergedDefModules.end())
       return None;
@@ -2368,8 +2368,7 @@ public:
   uint64_t getTargetNullPointerValue(QualType QT) const;
 
   bool addressSpaceMapManglingFor(unsigned AS) const {
-    return AddrSpaceMapMangling || 
-           AS >= LangAS::Count;
+    return AddrSpaceMapMangling || AS >= LangAS::FirstTargetAddressSpace;
   }
 
 private:

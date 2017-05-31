@@ -3918,6 +3918,20 @@ void clang_disposeTranslationUnit(CXTranslationUnit CTUnit) {
   }
 }
 
+unsigned clang_suspendTranslationUnit(CXTranslationUnit CTUnit) {
+  if (CTUnit) {
+    ASTUnit *Unit = cxtu::getASTUnit(CTUnit);
+
+    if (Unit && Unit->isUnsafeToFree())
+      return false;
+
+    Unit->ResetForParse();
+    return true;
+  }
+
+  return false;
+}
+
 unsigned clang_defaultReparseOptions(CXTranslationUnit TU) {
   return CXReparse_None;
 }
@@ -7487,16 +7501,7 @@ unsigned clang_Cursor_isExternalSymbol(CXCursor C,
 
   const Decl *D = getCursorDecl(C);
 
-  auto getExternalSymAttr = [](const Decl *D) -> ExternalSourceSymbolAttr* {
-    if (auto *attr = D->getAttr<ExternalSourceSymbolAttr>())
-      return attr;
-    if (auto *dcd = dyn_cast<Decl>(D->getDeclContext())) {
-      if (auto *attr = dcd->getAttr<ExternalSourceSymbolAttr>())
-        return attr;
-    }
-    return nullptr;
-  };
-  if (auto *attr = getExternalSymAttr(D)) {
+  if (auto *attr = D->getExternalSourceSymbolAttr()) {
     if (language)
       *language = cxstring::createDup(attr->getLanguage());
     if (definedIn)

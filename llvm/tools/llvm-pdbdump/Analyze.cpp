@@ -14,7 +14,6 @@
 #include "llvm/DebugInfo/CodeView/CVTypeVisitor.h"
 #include "llvm/DebugInfo/CodeView/TypeDatabase.h"
 #include "llvm/DebugInfo/CodeView/TypeDatabaseVisitor.h"
-#include "llvm/DebugInfo/CodeView/TypeDeserializer.h"
 #include "llvm/DebugInfo/CodeView/TypeRecord.h"
 #include "llvm/DebugInfo/CodeView/TypeVisitorCallbackPipeline.h"
 #include "llvm/DebugInfo/CodeView/TypeVisitorCallbacks.h"
@@ -36,7 +35,7 @@ static StringRef getLeafTypeName(TypeLeafKind LT) {
 #define TYPE_RECORD(ename, value, name)                                        \
   case ename:                                                                  \
     return #name;
-#include "llvm/DebugInfo/CodeView/TypeRecords.def"
+#include "llvm/DebugInfo/CodeView/CodeViewTypes.def"
   default:
     break;
   }
@@ -76,26 +75,15 @@ Error AnalysisStyle::dump() {
 
   TypeDatabase TypeDB(Tpi->getNumTypeRecords());
   TypeDatabaseVisitor DBV(TypeDB);
-  TypeDeserializer Deserializer;
   TypeVisitorCallbackPipeline Pipeline;
   HashLookupVisitor Hasher(*Tpi);
-  // Deserialize the types
-  Pipeline.addCallbackToPipeline(Deserializer);
   // Add them to the database
   Pipeline.addCallbackToPipeline(DBV);
   // Store their hash values
   Pipeline.addCallbackToPipeline(Hasher);
 
-  CVTypeVisitor Visitor(Pipeline);
-
-  bool Error = false;
-  for (auto Item : Tpi->types(&Error)) {
-    if (auto EC = Visitor.visitTypeRecord(Item))
-      return EC;
-  }
-  if (Error)
-    return make_error<RawError>(raw_error_code::corrupt_file,
-                                "TPI stream contained corrupt record");
+  if (auto EC = codeview::visitTypeStream(Tpi->typeArray(), Pipeline))
+    return EC;
 
   auto &Adjusters = Tpi->getHashAdjusters();
   DenseSet<uint32_t> AdjusterSet;

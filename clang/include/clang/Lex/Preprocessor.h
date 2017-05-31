@@ -283,6 +283,44 @@ class Preprocessor {
   /// This is used when loading a precompiled preamble.
   std::pair<int, bool> SkipMainFilePreamble;
 
+  class PreambleConditionalStackStore {
+    enum State {
+      Off = 0,
+      Recording = 1,
+      Replaying = 2,
+    };
+
+  public:
+    PreambleConditionalStackStore() : ConditionalStackState(Off) {}
+
+    void startRecording() { ConditionalStackState = Recording; }
+    void startReplaying() { ConditionalStackState = Replaying; }
+    bool isRecording() const { return ConditionalStackState == Recording; }
+    bool isReplaying() const { return ConditionalStackState == Replaying; }
+
+    ArrayRef<PPConditionalInfo> getStack() const {
+      return ConditionalStack;
+    }
+
+    void doneReplaying() {
+      ConditionalStack.clear();
+      ConditionalStackState = Off;
+    }
+
+    void setStack(ArrayRef<PPConditionalInfo> s) {
+      if (!isRecording() && !isReplaying())
+        return;
+      ConditionalStack.clear();
+      ConditionalStack.append(s.begin(), s.end());
+    }
+
+    bool hasRecordedPreamble() const { return !ConditionalStack.empty(); }
+
+  private:
+    SmallVector<PPConditionalInfo, 4> ConditionalStack;
+    State ConditionalStackState;
+  } PreambleConditionalStack;
+
   /// \brief The current top of the stack that we're lexing from if
   /// not expanding a macro and we are lexing directly from source code.
   ///
@@ -1695,6 +1733,11 @@ public:
   /// \brief Return true if we're in the top-level file, not in a \#include.
   bool isInPrimaryFile() const;
 
+  /// \brief Return true if we're in the main file (specifically, if we are 0
+  /// (zero) levels deep \#include. This is used by the lexer to determine if
+  /// it needs to generate errors about unterminated \#if directives.
+  bool isInMainFile() const;
+
   /// \brief Handle cases where the \#include name is expanded
   /// from a macro as multiple tokens, which need to be glued together. 
   ///
@@ -1917,14 +1960,11 @@ public:
   /// into a module, or is outside any module, returns nullptr.
   Module *getModuleForLocation(SourceLocation Loc);
 
-  /// \brief Find the module that contains the specified location, either
-  /// directly or indirectly.
-  Module *getModuleContainingLocation(SourceLocation Loc);
-
   /// \brief We want to produce a diagnostic at location IncLoc concerning a
   /// missing module import.
   ///
   /// \param IncLoc The location at which the missing import was detected.
+  /// \param M The desired module.
   /// \param MLoc A location within the desired module at which some desired
   ///        effect occurred (eg, where a desired entity was declared).
   ///
@@ -1932,7 +1972,29 @@ public:
   ///         Null if no such file could be determined or if a #include is not
   ///         appropriate.
   const FileEntry *getModuleHeaderToIncludeForDiagnostics(SourceLocation IncLoc,
+                                                          Module *M,
                                                           SourceLocation MLoc);
+
+  bool isRecordingPreamble() const {
+    return PreambleConditionalStack.isRecording();
+  }
+
+  bool hasRecordedPreamble() const {
+    return PreambleConditionalStack.hasRecordedPreamble();
+  }
+
+  ArrayRef<PPConditionalInfo> getPreambleConditionalStack() const {
+      return PreambleConditionalStack.getStack();
+  }
+
+  void setRecordedPreambleConditionalStack(ArrayRef<PPConditionalInfo> s) {
+    PreambleConditionalStack.setStack(s);
+  }
+
+  void setReplayablePreambleConditionalStack(ArrayRef<PPConditionalInfo> s) {
+    PreambleConditionalStack.startReplaying();
+    PreambleConditionalStack.setStack(s);
+  }
 
 private:
   // Macro handling.

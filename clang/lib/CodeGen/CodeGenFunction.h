@@ -1887,31 +1887,33 @@ public:
   //===--------------------------------------------------------------------===//
 
   LValue MakeAddrLValue(Address Addr, QualType T,
-                        AlignmentSource AlignSource = AlignmentSource::Type) {
-    return LValue::MakeAddr(Addr, T, getContext(), AlignSource,
+                        LValueBaseInfo BaseInfo =
+                            LValueBaseInfo(AlignmentSource::Type)) {
+    return LValue::MakeAddr(Addr, T, getContext(), BaseInfo,
                             CGM.getTBAAInfo(T));
   }
 
   LValue MakeAddrLValue(llvm::Value *V, QualType T, CharUnits Alignment,
-                        AlignmentSource AlignSource = AlignmentSource::Type) {
+                        LValueBaseInfo BaseInfo =
+                            LValueBaseInfo(AlignmentSource::Type)) {
     return LValue::MakeAddr(Address(V, Alignment), T, getContext(),
-                            AlignSource, CGM.getTBAAInfo(T));
+                            BaseInfo, CGM.getTBAAInfo(T));
   }
 
   LValue MakeNaturalAlignPointeeAddrLValue(llvm::Value *V, QualType T);
   LValue MakeNaturalAlignAddrLValue(llvm::Value *V, QualType T);
   CharUnits getNaturalTypeAlignment(QualType T,
-                                    AlignmentSource *Source = nullptr,
+                                    LValueBaseInfo *BaseInfo = nullptr,
                                     bool forPointeeType = false);
   CharUnits getNaturalPointeeTypeAlignment(QualType T,
-                                           AlignmentSource *Source = nullptr);
+                                           LValueBaseInfo *BaseInfo = nullptr);
 
   Address EmitLoadOfReference(Address Ref, const ReferenceType *RefTy,
-                              AlignmentSource *Source = nullptr);
+                              LValueBaseInfo *BaseInfo = nullptr);
   LValue EmitLoadOfReferenceLValue(Address Ref, const ReferenceType *RefTy);
 
   Address EmitLoadOfPointer(Address Ptr, const PointerType *PtrTy,
-                            AlignmentSource *Source = nullptr);
+                            LValueBaseInfo *BaseInfo = nullptr);
   LValue EmitLoadOfPointerLValue(Address Ptr, const PointerType *PtrTy);
 
 
@@ -3006,8 +3008,8 @@ public:
   /// the LLVM value representation.
   llvm::Value *EmitLoadOfScalar(Address Addr, bool Volatile, QualType Ty,
                                 SourceLocation Loc,
-                                AlignmentSource AlignSource =
-                                  AlignmentSource::Type,
+                                LValueBaseInfo BaseInfo =
+                                    LValueBaseInfo(AlignmentSource::Type),
                                 llvm::MDNode *TBAAInfo = nullptr,
                                 QualType TBAABaseTy = QualType(),
                                 uint64_t TBAAOffset = 0,
@@ -3024,7 +3026,8 @@ public:
   /// the LLVM value representation.
   void EmitStoreOfScalar(llvm::Value *Value, Address Addr,
                          bool Volatile, QualType Ty,
-                         AlignmentSource AlignSource = AlignmentSource::Type,
+                         LValueBaseInfo BaseInfo =
+                             LValueBaseInfo(AlignmentSource::Type),
                          llvm::MDNode *TBAAInfo = nullptr, bool isInit = false,
                          QualType TBAABaseTy = QualType(),
                          uint64_t TBAAOffset = 0, bool isNontemporal = false);
@@ -3097,7 +3100,7 @@ public:
   RValue EmitRValueForField(LValue LV, const FieldDecl *FD, SourceLocation Loc);
 
   Address EmitArrayToPointerDecay(const Expr *Array,
-                                  AlignmentSource *AlignSource = nullptr);
+                                  LValueBaseInfo *BaseInfo = nullptr);
 
   class ConstantEmission {
     llvm::PointerIntPair<llvm::Constant*, 1, bool> ValueAndIsReference;
@@ -3238,8 +3241,10 @@ public:
   Address EmitCXXMemberDataPointerAddress(const Expr *E, Address base,
                                           llvm::Value *memberPtr,
                                           const MemberPointerType *memberPtrType,
-                                          AlignmentSource *AlignSource = nullptr);
+                                          LValueBaseInfo *BaseInfo = nullptr);
+
   llvm::Value* EmitCXXMemberPointerAddressOf(const UnaryOperator *uo);
+
   RValue EmitCXXMemberPointerCallExpr(const CXXMemberCallExpr *E,
                                       ReturnValueSlot ReturnValue);
 
@@ -3769,29 +3774,25 @@ public:
     return getTargetHooks().getPointerAddress(*this, V, Name);
   }
 
-  /// EmitPointerWithAlignment - Given an expression with a pointer
-  /// type, emit the value and compute our best estimate of the
-  /// alignment of the pointee.
+  /// EmitPointerWithAlignment - Given an expression with a pointer type,
+  /// emit the value and compute our best estimate of the alignment of the
+  /// pointee.
   ///
-  /// Note that this function will conservatively fall back on the type
-  /// when it doesn't 
+  /// \param BaseInfo - If non-null, this will be initialized with
+  /// information about the source of the alignment and the may-alias
+  /// attribute.  Note that this function will conservatively fall back on
+  /// the type when it doesn't recognize the expression and may-alias will
+  /// be set to false.
   ///
-  /// \param Source - If non-null, this will be initialized with
-  ///   information about the source of the alignment.  Note that this
-  ///   function will conservatively fall back on the type when it
-  ///   doesn't recognize the expression, which means that sometimes
-  ///   
-  ///   a worst-case One
-  ///   reasonable way to use this information is when there's a
-  ///   language guarantee that the pointer must be aligned to some
-  ///   stricter value, and we're simply trying to ensure that
-  ///   sufficiently obvious uses of under-aligned objects don't get
-  ///   miscompiled; for example, a placement new into the address of
-  ///   a local variable.  In such a case, it's quite reasonable to
-  ///   just ignore the returned alignment when it isn't from an
-  ///   explicit source.
+  /// One reasonable way to use this information is when there's a language
+  /// guarantee that the pointer must be aligned to some stricter value, and
+  /// we're simply trying to ensure that sufficiently obvious uses of under-
+  /// aligned objects don't get miscompiled; for example, a placement new
+  /// into the address of a local variable.  In such a case, it's quite
+  /// reasonable to just ignore the returned alignment when it isn't from an
+  /// explicit source.
   Address EmitPointerWithAlignment(const Expr *Addr,
-                                   AlignmentSource *Source = nullptr);
+                                   LValueBaseInfo *BaseInfo = nullptr);
 
   void EmitSanitizerStatReport(llvm::SanitizerStatKind SSK);
 

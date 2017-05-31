@@ -326,7 +326,7 @@ private:
   /// partition.
   uint64_t BeginOffset, EndOffset;
 
-  /// \brief The start end end iterators of this partition.
+  /// \brief The start and end iterators of this partition.
   iterator SI, SJ;
 
   /// \brief A collection of split slice tails overlapping the partition.
@@ -2443,7 +2443,7 @@ private:
                         "insert");
       LI.replaceAllUsesWith(V);
       Placeholder->replaceAllUsesWith(&LI);
-      delete Placeholder;
+      Placeholder->deleteValue();
     } else {
       LI.replaceAllUsesWith(V);
     }
@@ -3898,8 +3898,7 @@ AllocaInst *SROA::rewritePartition(AllocaInst &AI, AllocaSlices &AS,
   }
 
   NumAllocaPartitionUses += NumUses;
-  MaxUsesPerAllocaPartition =
-      std::max<unsigned>(NumUses, MaxUsesPerAllocaPartition);
+  MaxUsesPerAllocaPartition.updateMax(NumUses);
 
   // Now that we've processed all the slices in the new partition, check if any
   // PHIs or Selects would block promotion.
@@ -4016,8 +4015,7 @@ bool SROA::splitAlloca(AllocaInst &AI, AllocaSlices &AS) {
   }
 
   NumAllocaPartitions += NumPartitions;
-  MaxPartitionsPerAlloca =
-      std::max<unsigned>(NumPartitions, MaxPartitionsPerAlloca);
+  MaxPartitionsPerAlloca.updateMax(NumPartitions);
 
   // Migrate debug information from the old alloca to the new alloca(s)
   // and the individual partitions.

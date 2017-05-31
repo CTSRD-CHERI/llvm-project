@@ -40,6 +40,7 @@ enum ExpressionType {
   ET_Base,
   ET_Constant,
   ET_Variable,
+  ET_Dead,
   ET_Unknown,
   ET_BasicStart,
   ET_Basic,
@@ -57,10 +58,11 @@ class Expression {
 private:
   ExpressionType EType;
   unsigned Opcode;
+  mutable hash_code HashVal;
 
 public:
   Expression(ExpressionType ET = ET_Base, unsigned O = ~2U)
-      : EType(ET), Opcode(O) {}
+      : EType(ET), Opcode(O), HashVal(0) {}
   Expression(const Expression &) = delete;
   Expression &operator=(const Expression &) = delete;
   virtual ~Expression();
@@ -80,6 +82,14 @@ public:
       return false;
 
     return equals(Other);
+  }
+  hash_code getComputedHash() const {
+    // It's theoretically possible for a thing to hash to zero.  In that case,
+    // we will just compute the hash a few extra times, which is no worse that
+    // we did before, which was to compute it always.
+    if (static_cast<unsigned>(HashVal) == 0)
+      HashVal = getHashValue();
+    return HashVal;
   }
 
   virtual bool equals(const Expression &Other) const { return true; }
@@ -380,7 +390,9 @@ public:
       OS << "ExpressionTypeStore, ";
     this->BasicExpression::printInternal(OS, false);
     OS << " represents Store  " << *Store;
-    OS << " with MemoryLeader " << *getMemoryLeader();
+    OS << " with StoredValue ";
+    StoredValue->printAsOperand(OS);
+    OS << " and MemoryLeader " << *getMemoryLeader();
   }
 };
 
@@ -510,6 +522,17 @@ public:
       OS << "ExpressionTypePhi, ";
     this->BasicExpression::printInternal(OS, false);
     OS << "bb = " << BB;
+  }
+};
+
+class DeadExpression final : public Expression {
+public:
+  DeadExpression() : Expression(ET_Dead) {}
+  DeadExpression(const DeadExpression &) = delete;
+  DeadExpression &operator=(const DeadExpression &) = delete;
+
+  static bool classof(const Expression *E) {
+    return E->getExpressionType() == ET_Dead;
   }
 };
 

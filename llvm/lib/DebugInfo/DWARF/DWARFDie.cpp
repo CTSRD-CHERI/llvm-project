@@ -60,8 +60,8 @@ static void dumpRanges(raw_ostream &OS, const DWARFAddressRangesVector& Ranges,
     OS << '\n';
     OS.indent(Indent);
     OS << format("[0x%0*" PRIx64 " - 0x%0*" PRIx64 ")",
-                 AddressSize*2, Range.first,
-                 AddressSize*2, Range.second);
+                 AddressSize*2, Range.LowPC,
+                 AddressSize*2, Range.HighPC);
   }
 }
 
@@ -211,13 +211,16 @@ Optional<uint64_t> DWARFDie::getHighPC(uint64_t LowPC) const {
   return None;
 }
 
-bool DWARFDie::getLowAndHighPC(uint64_t &LowPC, uint64_t &HighPC) const {
-  auto LowPcAddr = toAddress(find(DW_AT_low_pc));
+bool DWARFDie::getLowAndHighPC(uint64_t &LowPC, uint64_t &HighPC,
+                               uint64_t &SectionIndex) const {
+  auto F = find(DW_AT_low_pc);
+  auto LowPcAddr = toAddress(F);
   if (!LowPcAddr)
     return false;
   if (auto HighPcAddr = getHighPC(*LowPcAddr)) {
     LowPC = *LowPcAddr;
     HighPC = *HighPcAddr;
+    SectionIndex = F->getSectionIndex();
     return true;
   }
   return false;
@@ -228,10 +231,10 @@ DWARFDie::getAddressRanges() const {
   if (isNULL())
     return DWARFAddressRangesVector();
   // Single range specified by low/high PC.
-  uint64_t LowPC, HighPC;
-  if (getLowAndHighPC(LowPC, HighPC)) {
-    return DWARFAddressRangesVector(1, std::make_pair(LowPC, HighPC));
-  }
+  uint64_t LowPC, HighPC, Index;
+  if (getLowAndHighPC(LowPC, HighPC, Index))
+    return {{LowPC, HighPC, Index}};
+
   // Multiple ranges from .debug_ranges section.
   auto RangesOffset = toSectionOffset(find(DW_AT_ranges));
   if (RangesOffset) {
@@ -257,7 +260,7 @@ DWARFDie::collectChildrenAddressRanges(DWARFAddressRangesVector& Ranges) const {
 
 bool DWARFDie::addressRangeContainsAddress(const uint64_t Address) const {
   for (const auto& R : getAddressRanges()) {
-    if (R.first <= Address && Address < R.second)
+    if (R.LowPC <= Address && Address < R.HighPC)
       return true;
   }
   return false;

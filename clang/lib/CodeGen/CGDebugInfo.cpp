@@ -2618,7 +2618,7 @@ llvm::DIModule *CGDebugInfo::getParentModuleOrNull(const Decl *D) {
     // best to make this behavior a command line or debugger tuning
     // option.
     FullSourceLoc Loc(D->getLocation(), CGM.getContext().getSourceManager());
-    if (Module *M = ClangModuleMap->inferModuleFromLocation(Loc)) {
+    if (Module *M = D->getOwningModule()) {
       // This is a (sub-)module.
       auto Info = ExternalASTSource::ASTSourceDescriptor(*M);
       return getOrCreateModuleRef(Info, /*SkeletonCU=*/false);
@@ -2865,7 +2865,7 @@ void CGDebugInfo::collectFunctionDeclProps(GlobalDecl GD, llvm::DIFile *Unit,
 
   if (DebugKind >= codegenoptions::LimitedDebugInfo) {
     if (const NamespaceDecl *NSDecl =
-        dyn_cast_or_null<NamespaceDecl>(FD->getLexicalDeclContext()))
+        dyn_cast_or_null<NamespaceDecl>(FD->getDeclContext()))
       FDContext = getOrCreateNamespace(NSDecl);
     else if (const RecordDecl *RDecl =
              dyn_cast_or_null<RecordDecl>(FD->getDeclContext())) {

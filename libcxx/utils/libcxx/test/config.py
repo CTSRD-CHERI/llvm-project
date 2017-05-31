@@ -142,6 +142,7 @@ class Configuration(object):
         self.configure_sanitizer()
         self.configure_coverage()
         self.configure_modules()
+        self.configure_coroutines()
         self.configure_substitutions()
         self.configure_features()
 
@@ -465,6 +466,12 @@ class Configuration(object):
             self.config.available_features.add('glibc')
             self.config.available_features.add('glibc-%s' % maj_v)
             self.config.available_features.add('glibc-%s.%s' % (maj_v, min_v))
+
+        # Support Objective-C++ only on MacOS and if the compiler supports it.
+        if self.target_info.platform() == "darwin" and \
+           self.target_info.is_host_macosx() and \
+           self.cxx.hasCompileFlag(["-x", "objective-c++", "-fobjc-arc"]):
+            self.config.available_features.add("objective-c++")
 
     def configure_compile_flags(self):
         no_default_flags = self.get_lit_bool('no_default_flags', False)
@@ -947,6 +954,18 @@ class Configuration(object):
         if self.generate_coverage:
             self.cxx.flags += ['-g', '--coverage']
             self.cxx.compile_flags += ['-O0']
+
+    def configure_coroutines(self):
+        if self.cxx.hasCompileFlag('-fcoroutines-ts'):
+            macros = self.cxx.dumpMacros(flags=['-fcoroutines-ts'])
+            if '__cpp_coroutines' not in macros:
+                self.lit_config.warning('-fcoroutines-ts is supported but '
+                    '__cpp_coroutines is not defined')
+            # Consider coroutines supported only when the feature test macro
+            # reflects a recent value.
+            val = macros['__cpp_coroutines'].replace('L', '')
+            if int(val) >= 201703:
+                self.config.available_features.add('fcoroutines-ts')
 
     def configure_modules(self):
         modules_flags = ['-fmodules']

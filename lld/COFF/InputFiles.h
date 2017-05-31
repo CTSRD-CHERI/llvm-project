@@ -10,6 +10,7 @@
 #ifndef LLD_COFF_INPUT_FILES_H
 #define LLD_COFF_INPUT_FILES_H
 
+#include "Config.h"
 #include "lld/Core/LLVM.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseSet.h"
@@ -130,7 +131,6 @@ private:
   SymbolBody *createUndefined(COFFSymbolRef Sym);
 
   std::unique_ptr<COFFObjectFile> COFFObj;
-  llvm::BumpPtrAllocator Alloc;
   const coff_section *SXData = nullptr;
 
   // List of all chunks defined by this file. This includes both section
@@ -163,7 +163,8 @@ private:
 class ImportFile : public InputFile {
 public:
   explicit ImportFile(MemoryBufferRef M)
-      : InputFile(ImportKind, M), StringAlloc(StringAllocAux) {}
+      : InputFile(ImportKind, M), Live(!Config->DoGC) {}
+
   static bool classof(const InputFile *F) { return F->kind() == ImportKind; }
 
   DefinedImportData *ImpSym = nullptr;
@@ -174,13 +175,18 @@ public:
 private:
   void parse() override;
 
-  llvm::BumpPtrAllocator StringAllocAux;
-  llvm::StringSaver StringAlloc;
-
 public:
   StringRef ExternalName;
   const coff_import_header *Hdr;
   Chunk *Location = nullptr;
+
+  // We want to eliminate dllimported symbols if no one actually refers them.
+  // This "Live" bit is used to keep track of which import library members
+  // are actually in use.
+  //
+  // If the Live bit is turned off by MarkLive, Writer will ignore dllimported
+  // symbols provided by this import library member.
+  bool Live;
 };
 
 // Used for LTO.

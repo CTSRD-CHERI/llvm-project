@@ -22,6 +22,7 @@
 #include "asan_stats.h"
 #include "asan_suppressions.h"
 #include "lsan/lsan_common.h"
+#include "sanitizer_common/sanitizer_stackdepot.h"
 #include "sanitizer_common/sanitizer_libc.h"
 
 #if SANITIZER_POSIX
@@ -357,28 +358,22 @@ DEFINE_REAL_PTHREAD_FUNCTIONS
 
 #if SANITIZER_ANDROID
 INTERCEPTOR(void*, bsd_signal, int signum, void *handler) {
-  if (!IsHandledDeadlySignal(signum) ||
-      common_flags()->allow_user_segv_handler) {
+  if (GetHandleSignalMode(signum) != kHandleSignalExclusive)
     return REAL(bsd_signal)(signum, handler);
-  }
   return 0;
 }
 #endif
 
 INTERCEPTOR(void*, signal, int signum, void *handler) {
-  if (!IsHandledDeadlySignal(signum) ||
-      common_flags()->allow_user_segv_handler) {
+  if (GetHandleSignalMode(signum) != kHandleSignalExclusive)
     return REAL(signal)(signum, handler);
-  }
   return nullptr;
 }
 
 INTERCEPTOR(int, sigaction, int signum, const struct sigaction *act,
                             struct sigaction *oldact) {
-  if (!IsHandledDeadlySignal(signum) ||
-      common_flags()->allow_user_segv_handler) {
+  if (GetHandleSignalMode(signum) != kHandleSignalExclusive)
     return REAL(sigaction)(signum, act, oldact);
-  }
   return 0;
 }
 
@@ -711,11 +706,27 @@ INTERCEPTOR(int, __cxa_atexit, void (*func)(void *), void *arg,
 #endif  // ASAN_INTERCEPT___CXA_ATEXIT
 
 #if ASAN_INTERCEPT_FORK
+static void BeforeFork() {
+  if (SANITIZER_LINUX) {
+    get_allocator().ForceLock();
+    StackDepotLockAll();
+  }
+}
+
+static void AfterFork() {
+  if (SANITIZER_LINUX) {
+    StackDepotUnlockAll();
+    get_allocator().ForceUnlock();
+  }
+}
+
 INTERCEPTOR(int, fork, void) {
   ENSURE_ASAN_INITED();
+  BeforeFork();
   if (common_flags()->coverage) CovBeforeFork();
   int pid = REAL(fork)();
   if (common_flags()->coverage) CovAfterFork(pid);
+  AfterFork();
   return pid;
 }
 #endif  // ASAN_INTERCEPT_FORK

@@ -82,8 +82,6 @@ public:
   void sort(std::function<int(InputSectionBase *S)> Order);
   void sortInitFini();
   void sortCtorsDtors();
-  uint32_t getFiller();
-  template <class ELFT> void writeTo(uint8_t *Buf);
   template <class ELFT> void finalize();
   template <class ELFT> void maybeCompress();
   void assignOffsets();
@@ -151,6 +149,7 @@ private:
 };
 
 uint64_t getHeaderSize();
+void reportDiscarded(InputSectionBase *IS);
 
 } // namespace elf
 } // namespace lld

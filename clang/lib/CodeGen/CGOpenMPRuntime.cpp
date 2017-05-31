@@ -723,7 +723,7 @@ LValue CGOpenMPTaskOutlinedRegionInfo::getThreadIDVariableLValue(
     CodeGenFunction &CGF) {
   return CGF.MakeAddrLValue(CGF.GetAddrOfLocalVar(getThreadIDVariable()),
                             getThreadIDVariable()->getType(),
-                            AlignmentSource::Decl);
+                            LValueBaseInfo(AlignmentSource::Decl, false));
 }
 
 CGOpenMPRuntime::CGOpenMPRuntime(CodeGenModule &CGM)
@@ -763,6 +763,7 @@ emitCombinerOrInitializer(CodeGenModule &CGM, QualType Ty,
       IsCombiner ? ".omp_combiner." : ".omp_initializer.", &CGM.getModule());
   CGM.SetInternalFunctionAttributes(/*D=*/nullptr, Fn, FnInfo);
   Fn->removeFnAttr(llvm::Attribute::NoInline);
+  Fn->removeFnAttr(llvm::Attribute::OptimizeNone);
   Fn->addFnAttr(llvm::Attribute::AlwaysInline);
   CodeGenFunction CGF(CGM);
   // Map "T omp_in;" variable to "*omp_in_parm" value in all expressions.
@@ -2909,6 +2910,19 @@ CGOpenMPRuntime::createOffloadingBinaryDescriptorRegistration() {
                              Desc);
         CGM.getCXXABI().registerGlobalDtor(CGF, RegUnregVar, UnRegFn, Desc);
       });
+  if (CGM.supportsCOMDAT()) {
+    // It is sufficient to call registration function only once, so create a
+    // COMDAT group for registration/unregistration functions and associated
+    // data. That would reduce startup time and code size. Registration
+    // function serves as a COMDAT group key.
+    auto ComdatKey = M.getOrInsertComdat(RegFn->getName());
+    RegFn->setLinkage(llvm::GlobalValue::LinkOnceAnyLinkage);
+    RegFn->setVisibility(llvm::GlobalValue::HiddenVisibility);
+    RegFn->setComdat(ComdatKey);
+    UnRegFn->setComdat(ComdatKey);
+    DeviceImages->setComdat(ComdatKey);
+    Desc->setComdat(ComdatKey);
+  }
   return RegFn;
 }
 
@@ -3508,6 +3522,7 @@ emitTaskPrivateMappingFunction(CodeGenModule &CGM, SourceLocation Loc,
   CGM.SetInternalFunctionAttributes(/*D=*/nullptr, TaskPrivatesMap,
                                     TaskPrivatesMapFnInfo);
   TaskPrivatesMap->removeFnAttr(llvm::Attribute::NoInline);
+  TaskPrivatesMap->removeFnAttr(llvm::Attribute::OptimizeNone);
   TaskPrivatesMap->addFnAttr(llvm::Attribute::AlwaysInline);
   CodeGenFunction CGF(CGM);
   CGF.disableDebugInfo();
@@ -3571,7 +3586,9 @@ static void emitPrivatesInit(CodeGenFunction &CGF,
         auto SharedRefLValue = CGF.EmitLValueForField(SrcBase, SharedField);
         SharedRefLValue = CGF.MakeAddrLValue(
             Address(SharedRefLValue.getPointer(), C.getDeclAlign(OriginalVD)),
-            SharedRefLValue.getType(), AlignmentSource::Decl);
+            SharedRefLValue.getType(),
+            LValueBaseInfo(AlignmentSource::Decl,
+                           SharedRefLValue.getBaseInfo().getMayAlias()));
         QualType Type = OriginalVD->getType();
         if (Type->isArrayType()) {
           // Initialize firstprivate array.

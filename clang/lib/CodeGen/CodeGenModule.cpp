@@ -45,6 +45,7 @@
 #include "clang/Frontend/CodeGenOptions.h"
 #include "clang/Sema/SemaDiagnostic.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/DataLayout.h"
@@ -119,6 +120,7 @@ CodeGenModule::CodeGenModule(ASTContext &C, const HeaderSearchOptions &HSO,
   Int8PtrPtrTy = Int8PtrTy->getPointerTo(getTargetCodeGenInfo().getDefaultAS());
   AllocaInt8PtrTy = Int8Ty->getPointerTo(
       M.getDataLayout().getAllocaAddrSpace());
+  ASTAllocaAddressSpace = getTargetCodeGenInfo().getASTAllocaAddressSpace();
 
   RuntimeCC = getTargetCodeGenInfo().getABIInfo().getRuntimeCC();
   BuiltinCC = getTargetCodeGenInfo().getABIInfo().getBuiltinCC();
@@ -408,8 +410,11 @@ void CodeGenModule::Release() {
   }
   if (OpenMPRuntime)
     if (llvm::Function *OpenMPRegistrationFunction =
-            OpenMPRuntime->emitRegistrationFunction())
-      AddGlobalCtor(OpenMPRegistrationFunction, 0);
+            OpenMPRuntime->emitRegistrationFunction()) {
+      auto ComdatKey = OpenMPRegistrationFunction->hasComdat() ?
+        OpenMPRegistrationFunction : nullptr;
+      AddGlobalCtor(OpenMPRegistrationFunction, 0, ComdatKey);
+    }
   if (PGOReader) {
     getModule().setProfileSummary(PGOReader->getSummary().getMD(VMContext));
     if (PGOStats.hasDiagnostics())
@@ -474,18 +479,24 @@ void CodeGenModule::Release() {
     getModule().addModuleFlag(llvm::Module::Warning, "Debug Info Version",
                               llvm::DEBUG_METADATA_VERSION);
 
+  // Width of wchar_t in bytes
+  uint64_t WCharWidth =
+      Context.getTypeSizeInChars(Context.getWideCharType()).getQuantity();
+  assert(LangOpts.ShortWChar ||
+         llvm::TargetLibraryInfoImpl::getTargetWCharSize(Target.getTriple()) ==
+                 Target.getWCharWidth() / 8 &&
+             "LLVM wchar_t size out of sync");
+
   // We need to record the widths of enums and wchar_t, so that we can generate
-  // the correct build attributes in the ARM backend.
+  // the correct build attributes in the ARM backend. wchar_size is also used by
+  // TargetLibraryInfo.
+  getModule().addModuleFlag(llvm::Module::Error, "wchar_size", WCharWidth);
+
   llvm::Triple::ArchType Arch = Context.getTargetInfo().getTriple().getArch();
   if (   Arch == llvm::Triple::arm
       || Arch == llvm::Triple::armeb
       || Arch == llvm::Triple::thumb
       || Arch == llvm::Triple::thumbeb) {
-    // Width of wchar_t in bytes
-    uint64_t WCharWidth =
-        Context.getTypeSizeInChars(Context.getWideCharType()).getQuantity();
-    getModule().addModuleFlag(llvm::Module::Error, "wchar_size", WCharWidth);
-
     // The minimum width of an enum in bytes
     uint64_t EnumWidth = Context.getLangOpts().ShortEnums ? 1 : 4;
     getModule().addModuleFlag(llvm::Module::Error, "min_enum_size", EnumWidth);
@@ -908,7 +919,16 @@ void CodeGenModule::SetLLVMFunctionAttributesForDefinition(const Decl *D,
     return;
   }
 
-  if (D->hasAttr<OptimizeNoneAttr>()) {
+  // Track whether we need to add the optnone LLVM attribute,
+  // starting with the default for this optimization level.
+  bool ShouldAddOptNone =
+      !CodeGenOpts.DisableO0ImplyOptNone && CodeGenOpts.OptimizationLevel == 0;
+  // We can't add optnone in the following cases, it won't pass the verifier.
+  ShouldAddOptNone &= !D->hasAttr<MinSizeAttr>();
+  ShouldAddOptNone &= !F->hasFnAttribute(llvm::Attribute::AlwaysInline);
+  ShouldAddOptNone &= !D->hasAttr<AlwaysInlineAttr>();
+
+  if (ShouldAddOptNone || D->hasAttr<OptimizeNoneAttr>()) {
     B.addAttribute(llvm::Attribute::OptimizeNone);
 
     // OptimizeNone implies noinline; we should not be inlining such functions.
@@ -962,7 +982,8 @@ void CodeGenModule::SetLLVMFunctionAttributesForDefinition(const Decl *D,
   // function.
   if (!D->hasAttr<OptimizeNoneAttr>()) {
     if (D->hasAttr<ColdAttr>()) {
-      B.addAttribute(llvm::Attribute::OptimizeForSize);
+      if (!ShouldAddOptNone)
+        B.addAttribute(llvm::Attribute::OptimizeForSize);
       B.addAttribute(llvm::Attribute::Cold);
     }
 
@@ -1512,6 +1533,10 @@ bool CodeGenModule::imbueXRayAttrs(llvm::Function *Fn, SourceLocation Loc,
     return false;
   case ImbueAttr::ALWAYS:
     Fn->addFnAttr("function-instrument", "xray-always");
+    break;
+  case ImbueAttr::ALWAYS_ARG1:
+    Fn->addFnAttr("function-instrument", "xray-always");
+    Fn->addFnAttr("xray-log-args", "1");
     break;
   case ImbueAttr::NEVER:
     Fn->addFnAttr("function-instrument", "xray-never");

@@ -45,7 +45,7 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "pei"
+#define DEBUG_TYPE "prologepilog"
 
 typedef SmallVector<MachineBasicBlock *, 4> MBBVector;
 static void doSpillCalleeSavedRegs(MachineFunction &MF, RegScavenger *RS,
@@ -60,19 +60,8 @@ namespace {
 class PEI : public MachineFunctionPass {
 public:
   static char ID;
-  explicit PEI(const TargetMachine *TM = nullptr) : MachineFunctionPass(ID) {
+  PEI() : MachineFunctionPass(ID) {
     initializePEIPass(*PassRegistry::getPassRegistry());
-
-    if (TM && (!TM->usesPhysRegsForPEI())) {
-      SpillCalleeSavedRegisters = [](MachineFunction &, RegScavenger *,
-                                     unsigned &, unsigned &, const MBBVector &,
-                                     const MBBVector &) {};
-      ScavengeFrameVirtualRegs = [](MachineFunction &, RegScavenger *) {};
-    } else {
-      SpillCalleeSavedRegisters = doSpillCalleeSavedRegs;
-      ScavengeFrameVirtualRegs = doScavengeFrameVirtualRegs;
-      UsesCalleeSaves = true;
-    }
   }
 
   void getAnalysisUsage(AnalysisUsage &AU) const override;
@@ -140,18 +129,17 @@ WarnStackSize("warn-stack-size", cl::Hidden, cl::init((unsigned)-1),
               cl::desc("Warn for stack size bigger than the given"
                        " number"));
 
-INITIALIZE_TM_PASS_BEGIN(PEI, "prologepilog", "Prologue/Epilogue Insertion",
-                         false, false)
+INITIALIZE_PASS_BEGIN(PEI, DEBUG_TYPE, "Prologue/Epilogue Insertion", false,
+                      false)
 INITIALIZE_PASS_DEPENDENCY(MachineLoopInfo)
 INITIALIZE_PASS_DEPENDENCY(MachineDominatorTree)
 INITIALIZE_PASS_DEPENDENCY(StackProtector)
-INITIALIZE_TM_PASS_END(PEI, "prologepilog",
-                       "Prologue/Epilogue Insertion & Frame Finalization",
-                       false, false)
+INITIALIZE_PASS_END(PEI, DEBUG_TYPE,
+                    "Prologue/Epilogue Insertion & Frame Finalization", false,
+                    false)
 
-MachineFunctionPass *
-llvm::createPrologEpilogInserterPass(const TargetMachine *TM) {
-  return new PEI(TM);
+MachineFunctionPass *llvm::createPrologEpilogInserterPass() {
+  return new PEI();
 }
 
 STATISTIC(NumScavengedRegs, "Number of frame index regs scavenged");
@@ -174,6 +162,20 @@ typedef SmallSetVector<int, 8> StackObjSet;
 /// frame indexes with appropriate references.
 ///
 bool PEI::runOnMachineFunction(MachineFunction &Fn) {
+  if (!SpillCalleeSavedRegisters) {
+    const TargetMachine &TM = Fn.getTarget();
+    if (!TM.usesPhysRegsForPEI()) {
+      SpillCalleeSavedRegisters = [](MachineFunction &, RegScavenger *,
+                                     unsigned &, unsigned &, const MBBVector &,
+                                     const MBBVector &) {};
+      ScavengeFrameVirtualRegs = [](MachineFunction &, RegScavenger *) {};
+    } else {
+      SpillCalleeSavedRegisters = doSpillCalleeSavedRegs;
+      ScavengeFrameVirtualRegs = doScavengeFrameVirtualRegs;
+      UsesCalleeSaves = true;
+    }
+  }
+
   const Function* F = Fn.getFunction();
   const TargetRegisterInfo *TRI = Fn.getSubtarget().getRegisterInfo();
   const TargetFrameLowering *TFI = Fn.getSubtarget().getFrameLowering();
@@ -448,12 +450,13 @@ static void updateLiveness(MachineFunction &MF) {
 
   const std::vector<CalleeSavedInfo> &CSI = MFI.getCalleeSavedInfo();
 
+  MachineRegisterInfo &MRI = MF.getRegInfo();
   for (unsigned i = 0, e = CSI.size(); i != e; ++i) {
     for (MachineBasicBlock *MBB : Visited) {
       MCPhysReg Reg = CSI[i].getReg();
       // Add the callee-saved register as live-in.
       // It's killed at the spill.
-      if (!MBB->isLiveIn(Reg))
+      if (!MRI.isReserved(Reg) && !MBB->isLiveIn(Reg))
         MBB->addLiveIn(Reg);
     }
   }

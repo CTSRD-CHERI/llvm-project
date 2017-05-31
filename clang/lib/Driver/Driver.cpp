@@ -22,6 +22,7 @@
 #include "ToolChains/FreeBSD.h"
 #include "ToolChains/Fuchsia.h"
 #include "ToolChains/Gnu.h"
+#include "ToolChains/BareMetal.h"
 #include "ToolChains/Haiku.h"
 #include "ToolChains/Hexagon.h"
 #include "ToolChains/Lanai.h"
@@ -611,6 +612,8 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
   bool CCCPrintPhases;
 
   InputArgList Args = ParseArgStrings(ArgList.slice(1));
+  if (Diags.hasErrorOccurred())
+    return nullptr;
 
   // Silence driver warnings if requested
   Diags.setIgnoreAllWarnings(Args.hasArg(options::OPT_w));
@@ -1226,6 +1229,13 @@ bool Driver::HandleImmediateArgs(const Compilation &C) {
 
   if (Arg *A = C.getArgs().getLastArg(options::OPT_print_prog_name_EQ)) {
     llvm::outs() << GetProgramPath(A->getValue(), TC) << "\n";
+    return false;
+  }
+
+  if (Arg *A = C.getArgs().getLastArg(options::OPT_autocomplete)) {
+    // Print out all options that start with a given argument. This is used for
+    // shell autocompletion.
+    llvm::outs() << llvm::join(Opts->findByPrefix(A->getValue()), " ") << '\n';
     return false;
   }
 
@@ -3832,6 +3842,8 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
         if (Target.getVendor() == llvm::Triple::Myriad)
           TC = llvm::make_unique<toolchains::MyriadToolChain>(*this, Target,
                                                               Args);
+        else if (toolchains::BareMetal::handlesTarget(Target))
+          TC = llvm::make_unique<toolchains::BareMetal>(*this, Target, Args);
         else if (Target.isOSBinFormatELF())
           TC = llvm::make_unique<toolchains::Generic_ELF>(*this, Target, Args);
         else if (Target.isOSBinFormatMachO())

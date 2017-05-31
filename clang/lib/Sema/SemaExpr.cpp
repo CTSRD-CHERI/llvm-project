@@ -366,8 +366,18 @@ bool Sema::DiagnoseUseOfDecl(NamedDecl *D, SourceLocation Loc,
 
     if (getLangOpts().CUDA && !CheckCUDACall(Loc, FD))
       return true;
+  }
 
-    if (diagnoseArgIndependentDiagnoseIfAttrs(FD, Loc))
+  auto getReferencedObjCProp = [](const NamedDecl *D) ->
+                                      const ObjCPropertyDecl * {
+    if (const auto *MD = dyn_cast<ObjCMethodDecl>(D))
+      return MD->findPropertyDecl();
+    return nullptr;
+  };
+  if (const ObjCPropertyDecl *ObjCPDecl = getReferencedObjCProp(D)) {
+    if (diagnoseArgIndependentDiagnoseIfAttrs(ObjCPDecl, Loc))
+      return true;
+  } else if (diagnoseArgIndependentDiagnoseIfAttrs(D, Loc)) {
       return true;
   }
 
@@ -8157,28 +8167,38 @@ QualType Sema::InvalidLogicalVectorOperands(SourceLocation Loc, ExprResult &LHS,
 /// rank; for C, Obj-C, and C++ we allow any real scalar conversion except
 /// for float->int.
 ///
+/// OpenCL V2.0 6.2.6.p2:
+/// An error shall occur if any scalar operand type has greater rank
+/// than the type of the vector element.
+///
 /// \param scalar - if non-null, actually perform the conversions
 /// \return true if the operation fails (but without diagnosing the failure)
 static bool tryVectorConvertAndSplat(Sema &S, ExprResult *scalar,
                                      QualType scalarTy,
                                      QualType vectorEltTy,
-                                     QualType vectorTy) {
+                                     QualType vectorTy,
+                                     unsigned &DiagID) {
   // The conversion to apply to the scalar before splatting it,
   // if necessary.
   CastKind scalarCast = CK_Invalid;
   
   if (vectorEltTy->isIntegralType(S.Context)) {
-    if (!scalarTy->isIntegralType(S.Context))
+    if (S.getLangOpts().OpenCL && (scalarTy->isRealFloatingType() ||
+        (scalarTy->isIntegerType() &&
+         S.Context.getIntegerTypeOrder(vectorEltTy, scalarTy) < 0))) {
+      DiagID = diag::err_opencl_scalar_type_rank_greater_than_vector_type;
       return true;
-    if (S.getLangOpts().OpenCL &&
-        S.Context.getIntegerTypeOrder(vectorEltTy, scalarTy) < 0)
+    }
+    if (!scalarTy->isIntegralType(S.Context))
       return true;
     scalarCast = CK_IntegralCast;
   } else if (vectorEltTy->isRealFloatingType()) {
     if (scalarTy->isRealFloatingType()) {
       if (S.getLangOpts().OpenCL &&
-          S.Context.getFloatingTypeOrder(vectorEltTy, scalarTy) < 0)
+          S.Context.getFloatingTypeOrder(vectorEltTy, scalarTy) < 0) {
+        DiagID = diag::err_opencl_scalar_type_rank_greater_than_vector_type;
         return true;
+      }
       scalarCast = CK_FloatingCast;
     }
     else if (scalarTy->isIntegralType(S.Context))
@@ -8297,7 +8317,7 @@ static bool tryGCCVectorConvertAndSplat(Sema &S, ExprResult *Scalar,
 
   // The conversion to apply to the scalar before splatting it,
   // if necessary.
-  CastKind ScalarCast = CK_Invalid;
+  CastKind ScalarCast = CK_NoOp;
 
   // Accept cases where the vector elements are integers and the scalar is
   // an integer.
@@ -8347,7 +8367,7 @@ static bool tryGCCVectorConvertAndSplat(Sema &S, ExprResult *Scalar,
 
   // Adjust scalar if desired.
   if (Scalar) {
-    if (ScalarCast != CK_Invalid)
+    if (ScalarCast != CK_NoOp)
       *Scalar = S.ImpCastExprToType(Scalar->get(), VectorEltTy, ScalarCast);
     *Scalar = S.ImpCastExprToType(Scalar->get(), VectorTy, CK_VectorSplat);
   }
@@ -8424,10 +8444,12 @@ QualType Sema::CheckVectorOperands(ExprResult &LHS, ExprResult &RHS,
 
   // If there's a vector type and a scalar, try to convert the scalar to
   // the vector element type and splat.
+  unsigned DiagID = diag::err_typecheck_vector_not_convertable;
   if (!RHSVecType) {
     if (isa<ExtVectorType>(LHSVecType)) {
       if (!tryVectorConvertAndSplat(*this, &RHS, RHSType,
-                                    LHSVecType->getElementType(), LHSType))
+                                    LHSVecType->getElementType(), LHSType,
+                                    DiagID))
         return LHSType;
     } else {
       if (!tryGCCVectorConvertAndSplat(*this, &RHS, &LHS))
@@ -8438,7 +8460,7 @@ QualType Sema::CheckVectorOperands(ExprResult &LHS, ExprResult &RHS,
     if (isa<ExtVectorType>(RHSVecType)) {
       if (!tryVectorConvertAndSplat(*this, (IsCompAssign ? nullptr : &LHS),
                                     LHSType, RHSVecType->getElementType(),
-                                    RHSType))
+                                    RHSType, DiagID))
         return RHSType;
     } else {
       if (LHS.get()->getValueKind() == VK_LValue ||
@@ -8514,7 +8536,7 @@ QualType Sema::CheckVectorOperands(ExprResult &LHS, ExprResult &RHS,
   }
 
   // Otherwise, use the generic diagnostic.
-  Diag(Loc, diag::err_typecheck_vector_not_convertable)
+  Diag(Loc, DiagID)
     << LHSType << RHSType
     << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
   return QualType();
@@ -15869,6 +15891,13 @@ ExprResult Sema::ActOnObjCAvailabilityCheckExpr(
   VersionTuple Version;
   if (Spec != AvailSpecs.end())
     Version = Spec->getVersion();
+
+  // The use of `@available` in the enclosing function should be analyzed to
+  // warn when it's used inappropriately (i.e. not if(@available)).
+  if (getCurFunctionOrMethodDecl())
+    getEnclosingFunction()->HasPotentialAvailabilityViolations = true;
+  else if (getCurBlock() || getCurLambda())
+    getCurFunction()->HasPotentialAvailabilityViolations = true;
 
   return new (Context)
       ObjCAvailabilityCheckExpr(Version, AtLoc, RParen, Context.BoolTy);

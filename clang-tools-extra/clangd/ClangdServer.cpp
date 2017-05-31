@@ -8,19 +8,62 @@
 //===-------------------------------------------------------------------===//
 
 #include "ClangdServer.h"
+#include "clang/Format/Format.h"
 #include "clang/Frontend/ASTUnit.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/CompilerInvocation.h"
 #include "clang/Tooling/CompilationDatabase.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/raw_ostream.h"
+#include <future>
 
+using namespace clang;
 using namespace clang::clangd;
 
-WorkerRequest::WorkerRequest(WorkerRequestKind Kind, Path File,
-                             DocVersion Version)
-    : Kind(Kind), File(File), Version(Version) {}
+namespace {
 
-ClangdScheduler::ClangdScheduler(ClangdServer &Server, bool RunSynchronously)
+std::vector<tooling::Replacement> formatCode(StringRef Code, StringRef Filename,
+                                             ArrayRef<tooling::Range> Ranges) {
+  // Call clang-format.
+  // FIXME: Don't ignore style.
+  format::FormatStyle Style = format::getLLVMStyle();
+  auto Result = format::reformat(Style, Code, Ranges, Filename);
+
+  return std::vector<tooling::Replacement>(Result.begin(), Result.end());
+}
+
+} // namespace
+
+size_t clangd::positionToOffset(StringRef Code, Position P) {
+  size_t Offset = 0;
+  for (int I = 0; I != P.line; ++I) {
+    // FIXME: \r\n
+    // FIXME: UTF-8
+    size_t F = Code.find('\n', Offset);
+    if (F == StringRef::npos)
+      return 0; // FIXME: Is this reasonable?
+    Offset = F + 1;
+  }
+  return (Offset == 0 ? 0 : (Offset - 1)) + P.character;
+}
+
+/// Turn an offset in Code into a [line, column] pair.
+Position clangd::offsetToPosition(StringRef Code, size_t Offset) {
+  StringRef JustBefore = Code.substr(0, Offset);
+  // FIXME: \r\n
+  // FIXME: UTF-8
+  int Lines = JustBefore.count('\n');
+  int Cols = JustBefore.size() - JustBefore.rfind('\n') - 1;
+  return {Lines, Cols};
+}
+
+Tagged<IntrusiveRefCntPtr<vfs::FileSystem>>
+RealFileSystemProvider::getTaggedFileSystem() {
+  return make_tagged(vfs::getRealFileSystem(), VFSTag());
+}
+
+ClangdScheduler::ClangdScheduler(bool RunSynchronously)
     : RunSynchronously(RunSynchronously) {
   if (RunSynchronously) {
     // Don't start the worker thread if we're running synchronously
@@ -29,9 +72,9 @@ ClangdScheduler::ClangdScheduler(ClangdServer &Server, bool RunSynchronously)
 
   // Initialize Worker in ctor body, rather than init list to avoid potentially
   // using not-yet-initialized members
-  Worker = std::thread([&Server, this]() {
+  Worker = std::thread([this]() {
     while (true) {
-      WorkerRequest Request;
+      std::function<void()> Request;
 
       // Pick request from the queue
       {
@@ -43,19 +86,15 @@ ClangdScheduler::ClangdScheduler(ClangdServer &Server, bool RunSynchronously)
 
         assert(!RequestQueue.empty() && "RequestQueue was empty");
 
-        Request = std::move(RequestQueue.back());
-        RequestQueue.pop_back();
-
-        // Skip outdated requests
-        if (Request.Version != Server.DraftMgr.getVersion(Request.File)) {
-          // FIXME(ibiryukov): Logging
-          // Output.log("Version for " + Twine(Request.File) +
-          //            " in request is outdated, skipping request\n");
-          continue;
-        }
+        // We process requests starting from the front of the queue. Users of
+        // ClangdScheduler have a way to prioritise their requests by putting
+        // them to the either side of the queue (using either addToEnd or
+        // addToFront).
+        Request = std::move(RequestQueue.front());
+        RequestQueue.pop_front();
       } // unlock Mutex
 
-      Server.handleRequest(std::move(Request));
+      Request();
     }
   });
 }
@@ -68,53 +107,124 @@ ClangdScheduler::~ClangdScheduler() {
     std::lock_guard<std::mutex> Lock(Mutex);
     // Wake up the worker thread
     Done = true;
-    RequestCV.notify_one();
   } // unlock Mutex
+  RequestCV.notify_one();
   Worker.join();
 }
 
-void ClangdScheduler::enqueue(ClangdServer &Server, WorkerRequest Request) {
+void ClangdScheduler::addToFront(std::function<void()> Request) {
   if (RunSynchronously) {
-    Server.handleRequest(Request);
+    Request();
     return;
   }
 
-  std::lock_guard<std::mutex> Lock(Mutex);
-  RequestQueue.push_back(Request);
+  {
+    std::lock_guard<std::mutex> Lock(Mutex);
+    RequestQueue.push_front(Request);
+  }
+  RequestCV.notify_one();
+}
+
+void ClangdScheduler::addToEnd(std::function<void()> Request) {
+  if (RunSynchronously) {
+    Request();
+    return;
+  }
+
+  {
+    std::lock_guard<std::mutex> Lock(Mutex);
+    RequestQueue.push_back(Request);
+  }
   RequestCV.notify_one();
 }
 
 ClangdServer::ClangdServer(std::unique_ptr<GlobalCompilationDatabase> CDB,
                            std::unique_ptr<DiagnosticsConsumer> DiagConsumer,
+                           std::unique_ptr<FileSystemProvider> FSProvider,
                            bool RunSynchronously)
     : CDB(std::move(CDB)), DiagConsumer(std::move(DiagConsumer)),
+      FSProvider(std::move(FSProvider)),
       PCHs(std::make_shared<PCHContainerOperations>()),
-      WorkScheduler(*this, RunSynchronously) {}
+      WorkScheduler(RunSynchronously) {}
 
 void ClangdServer::addDocument(PathRef File, StringRef Contents) {
-  DocVersion NewVersion = DraftMgr.updateDraft(File, Contents);
-  WorkScheduler.enqueue(
-      *this, WorkerRequest(WorkerRequestKind::ParseAndPublishDiagnostics, File,
-                           NewVersion));
+  DocVersion Version = DraftMgr.updateDraft(File, Contents);
+  Path FileStr = File;
+  WorkScheduler.addToFront([this, FileStr, Version]() {
+    auto FileContents = DraftMgr.getDraft(FileStr);
+    if (FileContents.Version != Version)
+      return; // This request is outdated, do nothing
+
+    assert(FileContents.Draft &&
+           "No contents inside a file that was scheduled for reparse");
+    auto TaggedFS = FSProvider->getTaggedFileSystem();
+    Units.runOnUnit(
+        FileStr, *FileContents.Draft, *CDB, PCHs, TaggedFS.Value,
+        [&](ClangdUnit const &Unit) {
+          DiagConsumer->onDiagnosticsReady(
+              FileStr, make_tagged(Unit.getLocalDiagnostics(), TaggedFS.Tag));
+        });
+  });
 }
 
 void ClangdServer::removeDocument(PathRef File) {
-  auto NewVersion = DraftMgr.removeDraft(File);
-  WorkScheduler.enqueue(
-      *this, WorkerRequest(WorkerRequestKind::RemoveDocData, File, NewVersion));
+  auto Version = DraftMgr.removeDraft(File);
+  Path FileStr = File;
+  WorkScheduler.addToFront([this, FileStr, Version]() {
+    if (Version != DraftMgr.getVersion(FileStr))
+      return; // This request is outdated, do nothing
+
+    Units.removeUnitIfPresent(FileStr);
+  });
 }
 
-std::vector<CompletionItem> ClangdServer::codeComplete(PathRef File,
-                                                       Position Pos) {
+void ClangdServer::forceReparse(PathRef File) {
+  // The addDocument schedules the reparse even if the contents of the file
+  // never changed, so we just call it here.
+  addDocument(File, getDocument(File));
+}
+
+Tagged<std::vector<CompletionItem>> ClangdServer::codeComplete(PathRef File,
+                                                               Position Pos) {
   auto FileContents = DraftMgr.getDraft(File);
   assert(FileContents.Draft && "codeComplete is called for non-added document");
 
   std::vector<CompletionItem> Result;
+  auto TaggedFS = FSProvider->getTaggedFileSystem();
   Units.runOnUnitWithoutReparse(
-      File, *FileContents.Draft, *CDB, PCHs, [&](ClangdUnit &Unit) {
-        Result = Unit.codeComplete(*FileContents.Draft, Pos);
+      File, *FileContents.Draft, *CDB, PCHs, TaggedFS.Value, [&](ClangdUnit &Unit) {
+        Result = Unit.codeComplete(*FileContents.Draft, Pos, TaggedFS.Value);
       });
-  return Result;
+  return make_tagged(std::move(Result), TaggedFS.Tag);
+}
+
+std::vector<tooling::Replacement> ClangdServer::formatRange(PathRef File,
+                                                            Range Rng) {
+  std::string Code = getDocument(File);
+
+  size_t Begin = positionToOffset(Code, Rng.start);
+  size_t Len = positionToOffset(Code, Rng.end) - Begin;
+  return formatCode(Code, File, {tooling::Range(Begin, Len)});
+}
+
+std::vector<tooling::Replacement> ClangdServer::formatFile(PathRef File) {
+  // Format everything.
+  std::string Code = getDocument(File);
+  return formatCode(Code, File, {tooling::Range(0, Code.size())});
+}
+
+std::vector<tooling::Replacement> ClangdServer::formatOnType(PathRef File,
+                                                             Position Pos) {
+  // Look for the previous opening brace from the character position and
+  // format starting from there.
+  std::string Code = getDocument(File);
+  size_t CursorPos = positionToOffset(Code, Pos);
+  size_t PreviousLBracePos = StringRef(Code).find_last_of('{', CursorPos);
+  if (PreviousLBracePos == StringRef::npos)
+    PreviousLBracePos = CursorPos;
+  size_t Len = 1 + CursorPos - PreviousLBracePos;
+
+  return formatCode(Code, File, {tooling::Range(PreviousLBracePos, Len)});
 }
 
 std::string ClangdServer::getDocument(PathRef File) {
@@ -123,27 +233,23 @@ std::string ClangdServer::getDocument(PathRef File) {
   return *draft.Draft;
 }
 
-void ClangdServer::handleRequest(WorkerRequest Request) {
-  switch (Request.Kind) {
-  case WorkerRequestKind::ParseAndPublishDiagnostics: {
-    auto FileContents = DraftMgr.getDraft(Request.File);
-    if (FileContents.Version != Request.Version)
-      return; // This request is outdated, do nothing
+std::string ClangdServer::dumpAST(PathRef File) {
+  std::promise<std::string> DumpPromise;
+  auto DumpFuture = DumpPromise.get_future();
+  auto Version = DraftMgr.getVersion(File);
 
-    assert(FileContents.Draft &&
-           "No contents inside a file that was scheduled for reparse");
-    Units.runOnUnit(Request.File, *FileContents.Draft, *CDB, PCHs,
-                    [&](ClangdUnit const &Unit) {
-                      DiagConsumer->onDiagnosticsReady(
-                          Request.File, Unit.getLocalDiagnostics());
-                    });
-    break;
-  }
-  case WorkerRequestKind::RemoveDocData:
-    if (Request.Version != DraftMgr.getVersion(Request.File))
-      return; // This request is outdated, do nothing
+  WorkScheduler.addToEnd([this, &DumpPromise, File, Version]() {
+    assert(DraftMgr.getVersion(File) == Version && "Version has changed");
 
-    Units.removeUnitIfPresent(Request.File);
-    break;
-  }
+    Units.runOnExistingUnit(File, [&DumpPromise](ClangdUnit &Unit) {
+      std::string Result;
+
+      llvm::raw_string_ostream ResultOS(Result);
+      Unit.dumpAST(ResultOS);
+      ResultOS.flush();
+
+      DumpPromise.set_value(std::move(Result));
+    });
+  });
+  return DumpFuture.get();
 }

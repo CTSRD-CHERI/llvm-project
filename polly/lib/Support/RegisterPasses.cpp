@@ -99,7 +99,7 @@ static cl::opt<TargetChoice>
                           ,
                       clEnumValN(TARGET_GPU, "gpu", "generate GPU code")
 #endif
-           ),
+                          ),
            cl::init(TARGET_CPU), cl::ZeroOrMore, cl::cat(PollyCategory));
 
 #ifdef GPU_CODEGEN
@@ -230,7 +230,7 @@ void initializePollyPasses(PassRegistry &Registry) {
   initializeDependenceInfoWrapperPassPass(Registry);
   initializeJSONExporterPass(Registry);
   initializeJSONImporterPass(Registry);
-  initializeIslAstInfoPass(Registry);
+  initializeIslAstInfoWrapperPassPass(Registry);
   initializeIslScheduleOptimizerPass(Registry);
   initializePollyCanonicalizePass(Registry);
   initializePolyhedralInfoPass(Registry);
@@ -333,7 +333,7 @@ void registerPollyPasses(llvm::legacy::PassManagerBase &PM) {
   } else {
     switch (CodeGeneration) {
     case CODEGEN_AST:
-      PM.add(polly::createIslAstInfoPass());
+      PM.add(polly::createIslAstInfoWrapperPassPass());
       break;
     case CODEGEN_FULL:
       PM.add(polly::createCodeGenerationPass());

@@ -1697,9 +1697,9 @@ void Qualifiers::print(raw_ostream &OS, const PrintingPolicy& Policy,
         OS << "__shared";
         break;
       default:
-        assert(addrspace >= LangAS::Count);
+        assert(addrspace >= LangAS::FirstTargetAddressSpace);
         OS << "__attribute__((address_space(";
-        OS << addrspace - LangAS::Count;
+        OS << addrspace - LangAS::FirstTargetAddressSpace;
         OS << ")))";
     }
   }
