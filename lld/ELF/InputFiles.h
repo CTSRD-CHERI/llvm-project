@@ -96,6 +96,9 @@ public:
   // Cache for toString(). Only toString() should use this member.
   mutable std::string ToStringCache;
 
+  // Index of MIPS GOT built for this file.
+  size_t MipsGotIndex = -1;
+
 protected:
   InputFile(Kind K, MemoryBufferRef M);
   std::vector<InputSectionBase *> Sections;
