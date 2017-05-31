@@ -262,7 +262,6 @@ bool isEntryFunctionCC(CallingConv::ID CC);
 LLVM_READNONE
 inline bool isKernel(CallingConv::ID CC) {
   switch (CC) {
-  case CallingConv::C:
   case CallingConv::AMDGPU_KERNEL:
   case CallingConv::SPIR_KERNEL:
     return true;
@@ -274,6 +273,10 @@ inline bool isKernel(CallingConv::ID CC) {
 bool isSI(const MCSubtargetInfo &STI);
 bool isCI(const MCSubtargetInfo &STI);
 bool isVI(const MCSubtargetInfo &STI);
+bool isGFX9(const MCSubtargetInfo &STI);
+
+/// \brief Is Reg - scalar register
+bool isSGPR(unsigned Reg, const MCRegisterInfo* TRI);
 
 /// If \p Reg is a pseudo reg, return the correct hardware register given
 /// \p STI otherwise return \p Reg.

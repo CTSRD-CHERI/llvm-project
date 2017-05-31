@@ -150,6 +150,15 @@ using namespace llvm;
 
 static cl::opt<unsigned> MaxDevirtIterations("pm-max-devirt-iterations",
                                              cl::ReallyHidden, cl::init(4));
+static cl::opt<bool>
+    RunPartialInlining("enable-npm-partial-inlining", cl::init(false),
+                       cl::Hidden, cl::ZeroOrMore,
+                       cl::desc("Run Partial inlinining pass"));
+
+static cl::opt<bool>
+    RunNewGVN("enable-npm-newgvn", cl::init(false),
+              cl::Hidden, cl::ZeroOrMore,
+              cl::desc("Run NewGVN instead of GVN"));
 
 static cl::opt<bool> EnableGVNHoist(
     "enable-npm-gvn-hoist", cl::init(false), cl::Hidden,
@@ -332,10 +341,7 @@ PassBuilder::buildFunctionSimplificationPipeline(OptimizationLevel Level,
   // Rotate Loop - disable header duplication at -Oz
   LPM1.addPass(LoopRotatePass(Level != Oz));
   LPM1.addPass(LICMPass());
-#if 0
-  // The LoopUnswitch pass isn't yet ported to the new pass manager.
-  LPM1.addPass(LoopUnswitchPass(/* OptimizeForSize */ Level != O3));
-#endif
+  LPM1.addPass(SimpleLoopUnswitchPass());
   LPM2.addPass(IndVarSimplifyPass());
   LPM2.addPass(LoopIdiomRecognizePass());
   LPM2.addPass(LoopDeletionPass());
@@ -353,7 +359,10 @@ PassBuilder::buildFunctionSimplificationPipeline(OptimizationLevel Level,
   if (Level != O1) {
     // These passes add substantial compile time so skip them at O1.
     FPM.addPass(MergedLoadStoreMotionPass());
-    FPM.addPass(GVN());
+    if (RunNewGVN)
+      FPM.addPass(NewGVNPass());
+    else
+      FPM.addPass(GVN());
   }
 
   // Specially optimize memory movement as it doesn't look like dataflow in SSA.
@@ -424,6 +433,11 @@ static void addPGOInstrPasses(ModulePassManager &MPM, bool DebugLogging,
 
     MPM.addPass(createModuleToPostOrderCGSCCPassAdaptor(std::move(CGPipeline)));
   }
+
+  // Delete anything that is now dead to make sure that we don't instrument
+  // dead code. Instrumentation can end up keeping dead code around and
+  // dramatically increase code size.
+  MPM.addPass(GlobalDCEPass());
 
   if (RunProfileGen) {
     MPM.addPass(PGOInstrumentationGen());
@@ -551,6 +565,11 @@ PassBuilder::buildPerModuleDefaultPipeline(OptimizationLevel Level,
   // This ends the canonicalization and simplification phase of the pipeline.
   // At this point, we expect to have canonical and simple IR which we begin
   // *optimizing* for efficient execution going forward.
+
+  // Run partial inlining pass to partially inline functions that have
+  // large bodies.
+  if (RunPartialInlining)
+    MPM.addPass(PartialInlinerPass());
 
   // Eliminate externally available functions now that inlining is over -- we
   // won't emit these anyways.
@@ -765,7 +784,10 @@ ModulePassManager PassBuilder::buildLTODefaultPipeline(OptimizationLevel Level,
   // FIXME: once we fix LoopPass Manager, add LICM here.
   // FIXME: once we provide support for enabling MLSM, add it here.
   // FIXME: once we provide support for enabling NewGVN, add it here.
-  MainFPM.addPass(GVN());
+  if (RunNewGVN)
+    MainFPM.addPass(NewGVNPass());
+  else
+    MainFPM.addPass(GVN());
 
   // Remove dead memcpy()'s.
   MainFPM.addPass(MemCpyOptPass());

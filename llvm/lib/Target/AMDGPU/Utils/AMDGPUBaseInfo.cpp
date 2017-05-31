@@ -518,7 +518,18 @@ bool isCompute(CallingConv::ID cc) {
 }
 
 bool isEntryFunctionCC(CallingConv::ID CC) {
-  return true;
+  switch (CC) {
+  case CallingConv::AMDGPU_KERNEL:
+  case CallingConv::SPIR_KERNEL:
+  case CallingConv::AMDGPU_VS:
+  case CallingConv::AMDGPU_GS:
+  case CallingConv::AMDGPU_PS:
+  case CallingConv::AMDGPU_CS:
+  case CallingConv::AMDGPU_HS:
+    return true;
+  default:
+    return false;
+  }
 }
 
 bool isSI(const MCSubtargetInfo &STI) {
@@ -531,6 +542,17 @@ bool isCI(const MCSubtargetInfo &STI) {
 
 bool isVI(const MCSubtargetInfo &STI) {
   return STI.getFeatureBits()[AMDGPU::FeatureVolcanicIslands];
+}
+
+bool isGFX9(const MCSubtargetInfo &STI) {
+  return STI.getFeatureBits()[AMDGPU::FeatureGFX9];
+}
+
+bool isSGPR(unsigned Reg, const MCRegisterInfo* TRI) {
+  const MCRegisterClass SGPRClass = TRI->getRegClass(AMDGPU::SReg_32RegClassID);
+  const unsigned FirstSubReg = TRI->getSubReg(Reg, 1);
+  return SGPRClass.contains(FirstSubReg != 0 ? FirstSubReg : Reg) ||
+    Reg == AMDGPU::SCC;
 }
 
 unsigned getMCReg(unsigned Reg, const MCSubtargetInfo &STI) {

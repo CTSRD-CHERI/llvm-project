@@ -475,9 +475,9 @@ void Preprocessor::HandlePragmaSystemHeader(Token &SysHeaderTok) {
   // Emit a line marker.  This will change any source locations from this point
   // forward to realize they are in a system header.
   // Create a line note with this information.
-  SourceMgr.AddLineNote(SysHeaderTok.getLocation(), PLoc.getLine()+1,
+  SourceMgr.AddLineNote(SysHeaderTok.getLocation(), PLoc.getLine() + 1,
                         FilenameID, /*IsEntry=*/false, /*IsExit=*/false,
-                        /*IsSystem=*/true, /*IsExternC=*/false);
+                        SrcMgr::C_System);
 }
 
 /// HandlePragmaDependency - Handle \#pragma GCC dependency "foo" blah.
@@ -1405,6 +1405,24 @@ struct PragmaModuleBeginHandler : public PragmaHandler {
         return;
       }
       M = NewM;
+    }
+
+    // If the module isn't available, it doesn't make sense to enter it.
+    if (!M->isAvailable()) {
+      Module::Requirement Requirement;
+      Module::UnresolvedHeaderDirective MissingHeader;
+      (void)M->isAvailable(PP.getLangOpts(), PP.getTargetInfo(),
+                           Requirement, MissingHeader);
+      if (MissingHeader.FileNameLoc.isValid()) {
+        PP.Diag(MissingHeader.FileNameLoc, diag::err_module_header_missing)
+          << MissingHeader.IsUmbrella << MissingHeader.FileName;
+      } else {
+        PP.Diag(M->DefinitionLoc, diag::err_module_unavailable)
+          << M->getFullModuleName() << Requirement.second << Requirement.first;
+      }
+      PP.Diag(BeginLoc, diag::note_pp_module_begin_here)
+        << M->getTopLevelModuleName();
+      return;
     }
 
     // Enter the scope of the submodule.

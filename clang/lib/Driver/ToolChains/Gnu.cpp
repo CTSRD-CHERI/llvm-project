@@ -278,20 +278,20 @@ static void AddOpenMPLinkerScript(const ToolChain &TC, Compilation &C,
 
   LksStream << "SECTIONS\n";
   LksStream << "{\n";
-  LksStream << "  .omp_offloading :\n";
-  LksStream << "  ALIGN(0x10)\n";
-  LksStream << "  {\n";
 
-  for (auto &BI : InputBinaryInfo) {
-    LksStream << "    . = ALIGN(0x10);\n";
+  // Put each target binary into a separate section.
+  for (const auto &BI : InputBinaryInfo) {
+    LksStream << "  .omp_offloading." << BI.first << " :\n";
+    LksStream << "  ALIGN(0x10)\n";
+    LksStream << "  {\n";
     LksStream << "    PROVIDE_HIDDEN(.omp_offloading.img_start." << BI.first
               << " = .);\n";
     LksStream << "    " << BI.second << "\n";
     LksStream << "    PROVIDE_HIDDEN(.omp_offloading.img_end." << BI.first
               << " = .);\n";
+    LksStream << "  }\n";
   }
 
-  LksStream << "  }\n";
   // Add commands to define host entries begin and end. We use 1-byte subalign
   // so that the linker does not add any padding and the elements in this
   // section form an array.
@@ -1596,6 +1596,49 @@ bool Generic_GCC::GCCVersion::isOlderThan(int RHSMajor, int RHSMinor,
 
   // The versions are equal.
   return false;
+}
+
+/// \brief Parse a GCCVersion object out of a string of text.
+///
+/// This is the primary means of forming GCCVersion objects.
+/*static*/
+Generic_GCC::GCCVersion Generic_GCC::GCCVersion::Parse(StringRef VersionText) {
+  const GCCVersion BadVersion = {VersionText.str(), -1, -1, -1, "", "", ""};
+  std::pair<StringRef, StringRef> First = VersionText.split('.');
+  std::pair<StringRef, StringRef> Second = First.second.split('.');
+
+  GCCVersion GoodVersion = {VersionText.str(), -1, -1, -1, "", "", ""};
+  if (First.first.getAsInteger(10, GoodVersion.Major) || GoodVersion.Major < 0)
+    return BadVersion;
+  GoodVersion.MajorStr = First.first.str();
+  if (First.second.empty())
+    return GoodVersion;
+  if (Second.first.getAsInteger(10, GoodVersion.Minor) || GoodVersion.Minor < 0)
+    return BadVersion;
+  GoodVersion.MinorStr = Second.first.str();
+
+  // First look for a number prefix and parse that if present. Otherwise just
+  // stash the entire patch string in the suffix, and leave the number
+  // unspecified. This covers versions strings such as:
+  //   5        (handled above)
+  //   4.4
+  //   4.4.0
+  //   4.4.x
+  //   4.4.2-rc4
+  //   4.4.x-patched
+  // And retains any patch number it finds.
+  StringRef PatchText = GoodVersion.PatchSuffix = Second.second.str();
+  if (!PatchText.empty()) {
+    if (size_t EndNumber = PatchText.find_first_not_of("0123456789")) {
+      // Try to parse the number and any suffix.
+      if (PatchText.slice(0, EndNumber).getAsInteger(10, GoodVersion.Patch) ||
+          GoodVersion.Patch < 0)
+        return BadVersion;
+      GoodVersion.PatchSuffix = PatchText.substr(EndNumber);
+    }
+  }
+
+  return GoodVersion;
 }
 
 static llvm::StringRef getGCCToolchainDir(const ArgList &Args) {

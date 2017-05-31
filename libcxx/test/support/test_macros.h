@@ -154,6 +154,12 @@
 #define TEST_NORETURN [[noreturn]]
 #endif
 
+#if defined(_LIBCPP_SAFE_STATIC)
+#define TEST_SAFE_STATIC _LIBCPP_SAFE_STATIC
+#else
+#define TEST_SAFE_STATIC
+#endif
+
 #if TEST_STD_VER < 11
 #define ASSERT_NOEXCEPT(...)
 #define ASSERT_NOT_NOEXCEPT(...)
@@ -189,7 +195,7 @@ struct is_same<T, T> { enum {value = 1}; };
 
 #define ASSERT_SAME_TYPE(...) \
     static_assert((test_macros_detail::is_same<__VA_ARGS__>::value), \
-                 "Types differ uexpectedly")
+                 "Types differ unexpectedly")
 
 #ifndef TEST_HAS_NO_EXCEPTIONS
 #define TEST_THROW(...) throw __VA_ARGS__

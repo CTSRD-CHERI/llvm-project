@@ -264,6 +264,12 @@ public:
   ///                          with old sizes
   bool updateSizes(ArrayRef<const SCEV *> Sizes, bool CheckConsistency = true);
 
+  /// Make the ScopArrayInfo model a Fortran array.
+  /// It receives the Fortran array descriptor and stores this.
+  /// It also adds a piecewise expression for the outermost dimension
+  /// since this information is available for Fortran arrays at runtime.
+  void applyAndSetFAD(Value *FAD);
+
   /// Destructor to free the isl id of the base pointer.
   ~ScopArrayInfo();
 
@@ -420,6 +426,10 @@ private:
 
   /// The scop this SAI object belongs to.
   Scop &S;
+
+  /// If this array models a Fortran array, then this points
+  /// to the Fortran array descriptor.
+  Value *FAD;
 };
 
 /// Represent memory accesses in statements.
@@ -534,9 +544,6 @@ private:
   /// instruction defining the value.
   AssertingVH<Value> BaseAddr;
 
-  /// An unique name of the accessed array.
-  std::string BaseName;
-
   /// Type a single array element wrt. this access.
   Type *ElementType;
 
@@ -616,12 +623,12 @@ private:
   /// Updated access relation read from JSCOP file.
   isl_map *NewAccessRelation;
 
-  /// Fortran arrays that are created using "Allocate" are stored in terms
+  /// Fortran arrays whose sizes are not statically known are stored in terms
   /// of a descriptor struct. This maintains a raw pointer to the memory,
   /// along with auxiliary fields with information such as dimensions.
   /// We hold a reference to the descriptor corresponding to a MemoryAccess
   /// into a Fortran array. FAD for "Fortran Array Descriptor"
-  AssertingVH<GlobalValue> FAD;
+  AssertingVH<Value> FAD;
   // @}
 
   __isl_give isl_basic_map *createBasicAccessMap(ScopStmt *Statement);
@@ -859,8 +866,6 @@ public:
   /// Return a string representation of the reduction type @p RT.
   static const std::string getReductionOperatorStr(ReductionType RT);
 
-  const std::string &getBaseName() const { return BaseName; }
-
   /// Return the element type of the accessed array wrt. this access.
   Type *getElementType() const { return ElementType; }
 
@@ -895,6 +900,10 @@ public:
   /// is a map from the statement to a schedule where the innermost dimension is
   /// the dimension of the innermost loop containing the statement.
   __isl_give isl_set *getStride(__isl_take const isl_map *Schedule) const;
+
+  /// Get the FortranArrayDescriptor corresponding to this memory access if
+  /// it exists, and nullptr otherwise.
+  Value *getFortranArrayDescriptor() const { return this->FAD; };
 
   /// Is the stride of the access equal to a certain width? Schedule is a map
   /// from the statement to a schedule where the innermost dimension is the
@@ -1020,7 +1029,7 @@ public:
 
   /// Set the array descriptor corresponding to the Array on which the
   /// memory access is performed.
-  void setFortranArrayDescriptor(GlobalValue *FAD);
+  void setFortranArrayDescriptor(Value *FAD);
 
   /// Update the original access relation.
   ///
@@ -1033,6 +1042,10 @@ public:
 
   /// Set the updated access relation read from JSCOP file.
   void setNewAccessRelation(__isl_take isl_map *NewAccessRelation);
+
+  /// Return whether the MemoryyAccess is a partial access. That is, the access
+  /// is not executed in some instances of the parent statement's domain.
+  bool isLatestPartialAccess() const;
 
   /// Mark this a reduction like access
   void markAsReductionLike(ReductionType RT) { RedType = RT; }
@@ -1128,7 +1141,8 @@ public:
   const ScopStmt &operator=(const ScopStmt &) = delete;
 
   /// Create the ScopStmt from a BasicBlock.
-  ScopStmt(Scop &parent, BasicBlock &bb, Loop *SurroundingLoop);
+  ScopStmt(Scop &parent, BasicBlock &bb, Loop *SurroundingLoop,
+           std::vector<Instruction *> Instructions);
 
   /// Create an overapproximating ScopStmt for the region @p R.
   ScopStmt(Scop &parent, Region &R, Loop *SurroundingLoop);
@@ -1234,6 +1248,9 @@ private:
 
   /// The closest loop that contains this statement.
   Loop *SurroundingLoop;
+
+  /// Vector for Instructions in a BB.
+  std::vector<Instruction *> Instructions;
 
   /// Build the statement.
   //@{
@@ -1520,6 +1537,10 @@ public:
   /// @param OS The output stream the ScopStmt is printed to.
   void print(raw_ostream &OS) const;
 
+  /// Print the instructions in ScopStmt.
+  ///
+  void printInstructions(raw_ostream &OS) const;
+
   /// Print the ScopStmt to stderr.
   void dump() const;
 };
@@ -1571,6 +1592,9 @@ private:
 
   /// The underlying Region.
   Region &R;
+
+  /// The name of the SCoP (identical to the regions name)
+  std::string name;
 
   // Access functions of the SCoP.
   //
@@ -2003,7 +2027,9 @@ private:
   ///
   /// @param BB              The basic block we build the statement for.
   /// @param SurroundingLoop The loop the created statement is contained in.
-  void addScopStmt(BasicBlock *BB, Loop *SurroundingLoop);
+  /// @param Instructions    The instructions in the basic block.
+  void addScopStmt(BasicBlock *BB, Loop *SurroundingLoop,
+                   std::vector<Instruction *> Instructions);
 
   /// Create a new SCoP statement for @p R.
   ///
@@ -2064,6 +2090,9 @@ private:
   /// accesses always remain within bounds. We do this as last step, after
   /// all memory accesses have been modeled and canonicalized.
   void assumeNoOutOfBounds();
+
+  /// Mark arrays that have memory accesses with FortranArrayDescriptor.
+  void markFortranArrays();
 
   /// Finalize all access relations.
   ///
@@ -2200,6 +2229,8 @@ public:
   /// Return whether this scop is empty, i.e. contains no statements that
   /// could be executed.
   bool isEmpty() const { return Stmts.empty(); }
+
+  const StringRef getName() const { return name; }
 
   typedef ArrayInfoSetTy::iterator array_iterator;
   typedef ArrayInfoSetTy::const_iterator const_array_iterator;
@@ -2762,16 +2793,7 @@ public:
   void getAnalysisUsage(AnalysisUsage &AU) const override;
 };
 
-//===----------------------------------------------------------------------===//
-/// The legacy pass manager's analysis pass to compute scop information
-///        for the whole function.
-///
-/// This pass will maintain a map of the maximal region within a scop to its
-/// scop object for all the feasible scops present in a function.
-/// This pass is an alternative to the ScopInfoRegionPass in order to avoid a
-/// region pass manager.
-class ScopInfoWrapperPass : public FunctionPass {
-
+class ScopInfo {
 public:
   using RegionToScopMapTy = DenseMap<Region *, std::unique_ptr<Scop>>;
   using iterator = RegionToScopMapTy::iterator;
@@ -2783,10 +2805,9 @@ private:
   RegionToScopMapTy RegionToScopMap;
 
 public:
-  static char ID; // Pass identification, replacement for typeid
-
-  ScopInfoWrapperPass() : FunctionPass(ID) {}
-  ~ScopInfoWrapperPass() {}
+  ScopInfo(const DataLayout &DL, ScopDetection &SD, ScalarEvolution &SE,
+           LoopInfo &LI, AliasAnalysis &AA, DominatorTree &DT,
+           AssumptionCache &AC);
 
   /// Get the Scop object for the given Region
   ///
@@ -2805,11 +2826,45 @@ public:
   iterator end() { return RegionToScopMap.end(); }
   const_iterator begin() const { return RegionToScopMap.begin(); }
   const_iterator end() const { return RegionToScopMap.end(); }
+  bool empty() const { return RegionToScopMap.empty(); }
+};
+
+struct ScopInfoAnalysis : public AnalysisInfoMixin<ScopInfoAnalysis> {
+  static AnalysisKey Key;
+  using Result = ScopInfo;
+  Result run(Function &, FunctionAnalysisManager &);
+};
+
+struct ScopInfoPrinterPass : public PassInfoMixin<ScopInfoPrinterPass> {
+  ScopInfoPrinterPass(raw_ostream &O) : Stream(O) {}
+  PreservedAnalyses run(Function &, FunctionAnalysisManager &);
+  raw_ostream &Stream;
+};
+
+//===----------------------------------------------------------------------===//
+/// The legacy pass manager's analysis pass to compute scop information
+///        for the whole function.
+///
+/// This pass will maintain a map of the maximal region within a scop to its
+/// scop object for all the feasible scops present in a function.
+/// This pass is an alternative to the ScopInfoRegionPass in order to avoid a
+/// region pass manager.
+class ScopInfoWrapperPass : public FunctionPass {
+  std::unique_ptr<ScopInfo> Result;
+
+public:
+  ScopInfoWrapperPass() : FunctionPass(ID) {}
+  ~ScopInfoWrapperPass() = default;
+
+  static char ID; // Pass identification, replacement for typeid
+
+  ScopInfo *getSI() { return Result.get(); }
+  const ScopInfo *getSI() const { return Result.get(); }
 
   /// Calculate all the polyhedral scops for a given function.
   bool runOnFunction(Function &F) override;
 
-  void releaseMemory() override { RegionToScopMap.clear(); }
+  void releaseMemory() override { Result.reset(); }
 
   void print(raw_ostream &O, const Module *M = nullptr) const override;
 

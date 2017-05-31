@@ -847,116 +847,28 @@ Value *FAddCombine::createAddendVal(const FAddend &Opnd, bool &NeedNeg) {
   return createFMul(OpndVal, Coeff.getValue(Instr->getType()));
 }
 
-/// \brief Return true if we can prove that adding the two values of the
-/// knownbits will not overflow.
-/// Otherwise return false.
-static bool checkRippleForAdd(const KnownBits &LHSKnown,
-                              const KnownBits &RHSKnown) {
-  // Addition of two 2's complement numbers having opposite signs will never
-  // overflow.
-  if ((LHSKnown.isNegative() && RHSKnown.isNonNegative()) ||
-      (LHSKnown.isNonNegative() && RHSKnown.isNegative()))
-    return true;
-
-  // If either of the values is known to be non-negative, adding them can only
-  // overflow if the second is also non-negative, so we can assume that.
-  // Two non-negative numbers will only overflow if there is a carry to the 
-  // sign bit, so we can check if even when the values are as big as possible
-  // there is no overflow to the sign bit.
-  if (LHSKnown.isNonNegative() || RHSKnown.isNonNegative()) {
-    APInt MaxLHS = ~LHSKnown.Zero;
-    MaxLHS.clearSignBit();
-    APInt MaxRHS = ~RHSKnown.Zero;
-    MaxRHS.clearSignBit();
-    APInt Result = std::move(MaxLHS) + std::move(MaxRHS);
-    return Result.isSignBitClear();
-  }
-
-  // If either of the values is known to be negative, adding them can only
-  // overflow if the second is also negative, so we can assume that.
-  // Two negative number will only overflow if there is no carry to the sign
-  // bit, so we can check if even when the values are as small as possible
-  // there is overflow to the sign bit.
-  if (LHSKnown.isNegative() || RHSKnown.isNegative()) {
-    APInt MinLHS = LHSKnown.One;
-    MinLHS.clearSignBit();
-    APInt MinRHS = RHSKnown.One;
-    MinRHS.clearSignBit();
-    APInt Result = std::move(MinLHS) + std::move(MinRHS);
-    return Result.isSignBitSet();
-  }
-
-  // If we reached here it means that we know nothing about the sign bits.
-  // In this case we can't know if there will be an overflow, since by 
-  // changing the sign bits any two values can be made to overflow.
-  return false;
-}
-
-/// Return true if we can prove that:
-///    (sext (add LHS, RHS))  === (add (sext LHS), (sext RHS))
-/// This basically requires proving that the add in the original type would not
-/// overflow to change the sign bit or have a carry out.
-bool InstCombiner::WillNotOverflowSignedAdd(Value *LHS, Value *RHS,
-                                            Instruction &CxtI) {
-  // There are different heuristics we can use for this.  Here are some simple
-  // ones.
-
-  // If LHS and RHS each have at least two sign bits, the addition will look
-  // like
-  //
-  // XX..... +
-  // YY.....
-  //
-  // If the carry into the most significant position is 0, X and Y can't both
-  // be 1 and therefore the carry out of the addition is also 0.
-  //
-  // If the carry into the most significant position is 1, X and Y can't both
-  // be 0 and therefore the carry out of the addition is also 1.
-  //
-  // Since the carry into the most significant position is always equal to
-  // the carry out of the addition, there is no signed overflow.
-  if (ComputeNumSignBits(LHS, 0, &CxtI) > 1 &&
-      ComputeNumSignBits(RHS, 0, &CxtI) > 1)
-    return true;
-
-  unsigned BitWidth = LHS->getType()->getScalarSizeInBits();
-  KnownBits LHSKnown(BitWidth);
-  computeKnownBits(LHS, LHSKnown, 0, &CxtI);
-
-  KnownBits RHSKnown(BitWidth);
-  computeKnownBits(RHS, RHSKnown, 0, &CxtI);
-
-  // Check if carry bit of addition will not cause overflow.
-  if (checkRippleForAdd(LHSKnown, RHSKnown))
-    return true;
-
-  return false;
-}
-
 /// \brief Return true if we can prove that:
 ///    (sub LHS, RHS)  === (sub nsw LHS, RHS)
 /// This basically requires proving that the add in the original type would not
 /// overflow to change the sign bit or have a carry out.
 /// TODO: Handle this for Vectors.
-bool InstCombiner::WillNotOverflowSignedSub(Value *LHS, Value *RHS,
-                                            Instruction &CxtI) {
+bool InstCombiner::willNotOverflowSignedSub(const Value *LHS,
+                                            const Value *RHS,
+                                            const Instruction &CxtI) const {
   // If LHS and RHS each have at least two sign bits, the subtraction
   // cannot overflow.
   if (ComputeNumSignBits(LHS, 0, &CxtI) > 1 &&
       ComputeNumSignBits(RHS, 0, &CxtI) > 1)
     return true;
 
-  unsigned BitWidth = LHS->getType()->getScalarSizeInBits();
-  KnownBits LHSKnown(BitWidth);
-  computeKnownBits(LHS, LHSKnown, 0, &CxtI);
+  KnownBits LHSKnown = computeKnownBits(LHS, 0, &CxtI);
 
-  KnownBits RHSKnown(BitWidth);
-  computeKnownBits(RHS, RHSKnown, 0, &CxtI);
+  KnownBits RHSKnown = computeKnownBits(RHS, 0, &CxtI);
 
   // Subtraction of two 2's complement numbers having identical signs will
   // never overflow.
-  if ((LHSKnown.One[BitWidth - 1] && RHSKnown.One[BitWidth - 1]) ||
-      (LHSKnown.Zero[BitWidth - 1] && RHSKnown.Zero[BitWidth - 1]))
+  if ((LHSKnown.isNegative() && RHSKnown.isNegative()) ||
+      (LHSKnown.isNonNegative() && RHSKnown.isNonNegative()))
     return true;
 
   // TODO: implement logic similar to checkRippleForAdd
@@ -965,16 +877,13 @@ bool InstCombiner::WillNotOverflowSignedSub(Value *LHS, Value *RHS,
 
 /// \brief Return true if we can prove that:
 ///    (sub LHS, RHS)  === (sub nuw LHS, RHS)
-bool InstCombiner::WillNotOverflowUnsignedSub(Value *LHS, Value *RHS,
-                                              Instruction &CxtI) {
+bool InstCombiner::willNotOverflowUnsignedSub(const Value *LHS,
+                                              const Value *RHS,
+                                              const Instruction &CxtI) const {
   // If the LHS is negative and the RHS is non-negative, no unsigned wrap.
-  bool LHSKnownNonNegative, LHSKnownNegative;
-  bool RHSKnownNonNegative, RHSKnownNegative;
-  ComputeSignBit(LHS, LHSKnownNonNegative, LHSKnownNegative, /*Depth=*/0,
-                 &CxtI);
-  ComputeSignBit(RHS, RHSKnownNonNegative, RHSKnownNegative, /*Depth=*/0,
-                 &CxtI);
-  if (LHSKnownNegative && RHSKnownNonNegative)
+  KnownBits LHSKnown = computeKnownBits(LHS, /*Depth=*/0, &CxtI);
+  KnownBits RHSKnown = computeKnownBits(RHS, /*Depth=*/0, &CxtI);
+  if (LHSKnown.isNegative() && RHSKnown.isNonNegative())
     return true;
 
   return false;
@@ -1147,9 +1056,7 @@ Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
       // If this is a xor that was canonicalized from a sub, turn it back into
       // a sub and fuse this add with it.
       if (LHS->hasOneUse() && (XorRHS->getValue()+1).isPowerOf2()) {
-        IntegerType *IT = cast<IntegerType>(I.getType());
-        KnownBits LHSKnown(IT->getBitWidth());
-        computeKnownBits(XorLHS, LHSKnown, 0, &I);
+        KnownBits LHSKnown = computeKnownBits(XorLHS, 0, &I);
         if ((XorRHS->getValue() | LHSKnown.Zero).isAllOnesValue())
           return BinaryOperator::CreateSub(ConstantExpr::getAdd(XorRHS, CI),
                                            XorLHS);
@@ -1270,7 +1177,7 @@ Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
         Constant *CI =
             ConstantExpr::getTrunc(RHSC, LHSConv->getOperand(0)->getType());
         if (ConstantExpr::getSExt(CI, I.getType()) == RHSC &&
-            WillNotOverflowSignedAdd(LHSConv->getOperand(0), CI, I)) {
+            willNotOverflowSignedAdd(LHSConv->getOperand(0), CI, I)) {
           // Insert the new, smaller add.
           Value *NewAdd =
               Builder->CreateNSWAdd(LHSConv->getOperand(0), CI, "addconv");
@@ -1287,7 +1194,7 @@ Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
       if (LHSConv->getOperand(0)->getType() ==
               RHSConv->getOperand(0)->getType() &&
           (LHSConv->hasOneUse() || RHSConv->hasOneUse()) &&
-          WillNotOverflowSignedAdd(LHSConv->getOperand(0),
+          willNotOverflowSignedAdd(LHSConv->getOperand(0),
                                    RHSConv->getOperand(0), I)) {
         // Insert the new integer add.
         Value *NewAdd = Builder->CreateNSWAdd(LHSConv->getOperand(0),
@@ -1306,8 +1213,7 @@ Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
         Constant *CI =
             ConstantExpr::getTrunc(RHSC, LHSConv->getOperand(0)->getType());
         if (ConstantExpr::getZExt(CI, I.getType()) == RHSC &&
-            computeOverflowForUnsignedAdd(LHSConv->getOperand(0), CI, &I) ==
-                OverflowResult::NeverOverflows) {
+            willNotOverflowUnsignedAdd(LHSConv->getOperand(0), CI, I)) {
           // Insert the new, smaller add.
           Value *NewAdd =
               Builder->CreateNUWAdd(LHSConv->getOperand(0), CI, "addconv");
@@ -1324,9 +1230,8 @@ Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
       if (LHSConv->getOperand(0)->getType() ==
               RHSConv->getOperand(0)->getType() &&
           (LHSConv->hasOneUse() || RHSConv->hasOneUse()) &&
-          computeOverflowForUnsignedAdd(LHSConv->getOperand(0),
-                                        RHSConv->getOperand(0),
-                                        &I) == OverflowResult::NeverOverflows) {
+          willNotOverflowUnsignedAdd(LHSConv->getOperand(0),
+                                     RHSConv->getOperand(0), I)) {
         // Insert the new integer add.
         Value *NewAdd = Builder->CreateNUWAdd(
             LHSConv->getOperand(0), RHSConv->getOperand(0), "addconv");
@@ -1367,16 +1272,14 @@ Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
     }
   }
 
-  // TODO(jingyue): Consider WillNotOverflowSignedAdd and
-  // WillNotOverflowUnsignedAdd to reduce the number of invocations of
+  // TODO(jingyue): Consider willNotOverflowSignedAdd and
+  // willNotOverflowUnsignedAdd to reduce the number of invocations of
   // computeKnownBits.
-  if (!I.hasNoSignedWrap() && WillNotOverflowSignedAdd(LHS, RHS, I)) {
+  if (!I.hasNoSignedWrap() && willNotOverflowSignedAdd(LHS, RHS, I)) {
     Changed = true;
     I.setHasNoSignedWrap(true);
   }
-  if (!I.hasNoUnsignedWrap() &&
-      computeOverflowForUnsignedAdd(LHS, RHS, &I) ==
-          OverflowResult::NeverOverflows) {
+  if (!I.hasNoUnsignedWrap() && willNotOverflowUnsignedAdd(LHS, RHS, I)) {
     Changed = true;
     I.setHasNoUnsignedWrap(true);
   }
@@ -1445,7 +1348,7 @@ Instruction *InstCombiner::visitFAdd(BinaryOperator &I) {
           ConstantExpr::getFPToSI(CFP, LHSIntVal->getType());
         if (LHSConv->hasOneUse() &&
             ConstantExpr::getSIToFP(CI, I.getType()) == CFP &&
-            WillNotOverflowSignedAdd(LHSIntVal, CI, I)) {
+            willNotOverflowSignedAdd(LHSIntVal, CI, I)) {
           // Insert the new integer add.
           Value *NewAdd = Builder->CreateNSWAdd(LHSIntVal,
                                                 CI, "addconv");
@@ -1464,7 +1367,7 @@ Instruction *InstCombiner::visitFAdd(BinaryOperator &I) {
         // and if the integer add will not overflow.
         if (LHSIntVal->getType() == RHSIntVal->getType() &&
             (LHSConv->hasOneUse() || RHSConv->hasOneUse()) &&
-            WillNotOverflowSignedAdd(LHSIntVal, RHSIntVal, I)) {
+            willNotOverflowSignedAdd(LHSIntVal, RHSIntVal, I)) {
           // Insert the new integer add.
           Value *NewAdd = Builder->CreateNSWAdd(LHSIntVal,
                                                 RHSIntVal, "addconv");
@@ -1669,8 +1572,7 @@ Instruction *InstCombiner::visitSub(BinaryOperator &I) {
     // Turn this into a xor if LHS is 2^n-1 and the remaining bits are known
     // zero.
     if (Op0C->isMask()) {
-      KnownBits RHSKnown(BitWidth);
-      computeKnownBits(Op1, RHSKnown, 0, &I);
+      KnownBits RHSKnown = computeKnownBits(Op1, 0, &I);
       if ((*Op0C | RHSKnown.Zero).isAllOnesValue())
         return BinaryOperator::CreateXor(Op1, Op0);
     }
@@ -1770,11 +1672,11 @@ Instruction *InstCombiner::visitSub(BinaryOperator &I) {
       return replaceInstUsesWith(I, Res);
 
   bool Changed = false;
-  if (!I.hasNoSignedWrap() && WillNotOverflowSignedSub(Op0, Op1, I)) {
+  if (!I.hasNoSignedWrap() && willNotOverflowSignedSub(Op0, Op1, I)) {
     Changed = true;
     I.setHasNoSignedWrap(true);
   }
-  if (!I.hasNoUnsignedWrap() && WillNotOverflowUnsignedSub(Op0, Op1, I)) {
+  if (!I.hasNoUnsignedWrap() && willNotOverflowUnsignedSub(Op0, Op1, I)) {
     Changed = true;
     I.setHasNoUnsignedWrap(true);
   }

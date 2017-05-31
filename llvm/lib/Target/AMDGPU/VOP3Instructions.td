@@ -232,7 +232,6 @@ def V_ASHRREV_I64 : VOP3Inst <"v_ashrrev_i64", VOP3_Profile<VOP_I64_I32_I64>>;
 
 let SubtargetPredicate = isCIVI in {
 
-def V_MQSAD_U16_U8 : VOP3Inst <"v_mqsad_u16_u8", VOP3_Profile<VOP_I32_I32_I32>>;
 def V_QSAD_PK_U16_U8 : VOP3Inst <"v_qsad_pk_u16_u8", VOP3_Profile<VOP_I64_I64_I32_I64>, int_amdgcn_qsad_pk_u16_u8>;
 def V_MQSAD_U32_U8 : VOP3Inst <"v_mqsad_u32_u8", VOP3_Profile<VOP_V4I32_I64_I32_V4I32>, int_amdgcn_mqsad_u32_u8>;
 
@@ -244,7 +243,7 @@ def V_MAD_I64_I32 : VOP3Inst <"v_mad_i64_i32", VOP3b_I64_I1_I32_I32_I64>;
 } // End SubtargetPredicate = isCIVI
 
 
-let SubtargetPredicate = isVI in {
+let SubtargetPredicate = Has16BitInsts in {
 
 let isCommutable = 1 in {
 
@@ -259,12 +258,13 @@ def V_MAD_U16 : VOP3Inst <"v_mad_u16", VOP3_Profile<VOP_I16_I16_I16_I16>>;
 def V_MAD_I16 : VOP3Inst <"v_mad_i16", VOP3_Profile<VOP_I16_I16_I16_I16>>;
 
 }  // End isCommutable = 1
+} // End SubtargetPredicate = Has16BitInsts
 
+let SubtargetPredicate = isVI in {
 def V_PERM_B32 : VOP3Inst <"v_perm_b32", VOP3_Profile<VOP_I32_I32_I32_I32>>;
-
 } // End SubtargetPredicate = isVI
 
-let Predicates = [isVI] in {
+let Predicates = [Has16BitInsts] in {
 
 multiclass Ternary_i16_Pats <SDPatternOperator op1, SDPatternOperator op2,
                              Instruction inst, SDPatternOperator op3> {
@@ -289,7 +289,7 @@ def : Pat<
 defm: Ternary_i16_Pats<mul, add, V_MAD_U16, zext>;
 defm: Ternary_i16_Pats<mul, add, V_MAD_I16, sext>;
 
-} // End Predicates = [isVI]
+} // End Predicates = [Has16BitInsts]
 
 let SubtargetPredicate = isGFX9 in {
 def V_PACK_B32_F16 : VOP3Inst <"v_pack_b32_f16", VOP3_Profile<VOP_B32_F16_F16>>;
@@ -301,10 +301,19 @@ def V_AND_OR_B32 : VOP3Inst <"v_and_or_b32", VOP3_Profile<VOP_I32_I32_I32_I32>>;
 def V_OR3_B32 : VOP3Inst <"v_or3_b32", VOP3_Profile<VOP_I32_I32_I32_I32>>;
 
 def V_XAD_U32 : VOP3Inst <"v_xad_u32", VOP3_Profile<VOP_I32_I32_I32_I32>>;
+
 def V_MED3_F16 : VOP3Inst <"v_med3_f16", VOP3_Profile<VOP_F16_F16_F16_F16>, AMDGPUfmed3>;
 def V_MED3_I16 : VOP3Inst <"v_med3_i16", VOP3_Profile<VOP_I16_I16_I16_I16>, AMDGPUsmed3>;
 def V_MED3_U16 : VOP3Inst <"v_med3_u16", VOP3_Profile<VOP_I16_I16_I16_I16>, AMDGPUumed3>;
-}
+
+def V_MIN3_F16 : VOP3Inst <"v_min3_f16", VOP3_Profile<VOP_F16_F16_F16_F16>, AMDGPUfmin3>;
+def V_MIN3_I16 : VOP3Inst <"v_min3_i16", VOP3_Profile<VOP_I16_I16_I16_I16>, AMDGPUsmin3>;
+def V_MIN3_U16 : VOP3Inst <"v_min3_u16", VOP3_Profile<VOP_I16_I16_I16_I16>, AMDGPUumin3>;
+
+def V_MAX3_F16 : VOP3Inst <"v_max3_f16", VOP3_Profile<VOP_F16_F16_F16_F16>, AMDGPUfmax3>;
+def V_MAX3_I16 : VOP3Inst <"v_max3_i16", VOP3_Profile<VOP_I16_I16_I16_I16>, AMDGPUsmax3>;
+def V_MAX3_U16 : VOP3Inst <"v_max3_u16", VOP3_Profile<VOP_I16_I16_I16_I16>, AMDGPUumax3>;
+} // End SubtargetPredicate = isGFX9
 
 
 //===----------------------------------------------------------------------===//
@@ -402,7 +411,6 @@ multiclass VOP3be_Real_ci<bits<9> op> {
   }
 }
 
-defm V_MQSAD_U16_U8     : VOP3_Real_ci <0x172>;
 defm V_QSAD_PK_U16_U8   : VOP3_Real_ci <0x172>;
 defm V_MQSAD_U32_U8     : VOP3_Real_ci <0x175>;
 defm V_MAD_U64_U32      : VOP3be_Real_ci <0x176>;
@@ -426,7 +434,6 @@ multiclass VOP3be_Real_vi<bits<10> op> {
 
 } // End AssemblerPredicates = [isVI], DecoderNamespace = "VI"
 
-defm V_MQSAD_U16_U8     : VOP3_Real_vi <0x172>;
 defm V_MAD_U64_U32      : VOP3be_Real_vi <0x1E8>;
 defm V_MAD_I64_I32      : VOP3be_Real_vi <0x1E9>;
 
@@ -512,6 +519,15 @@ defm V_OR3_B32 : VOP3_Real_vi <0x202>;
 defm V_PACK_B32_F16 : VOP3_Real_vi <0x2a0>;
 
 defm V_XAD_U32 : VOP3_Real_vi <0x1f3>;
+
+defm V_MIN3_F16 : VOP3_Real_vi <0x1f4>;
+defm V_MIN3_I16 : VOP3_Real_vi <0x1f5>;
+defm V_MIN3_U16 : VOP3_Real_vi <0x1f6>;
+
+defm V_MAX3_F16 : VOP3_Real_vi <0x1f7>;
+defm V_MAX3_I16 : VOP3_Real_vi <0x1f8>;
+defm V_MAX3_U16 : VOP3_Real_vi <0x1f9>;
+
 defm V_MED3_F16 : VOP3_Real_vi <0x1fa>;
 defm V_MED3_I16 : VOP3_Real_vi <0x1fb>;
 defm V_MED3_U16 : VOP3_Real_vi <0x1fc>;

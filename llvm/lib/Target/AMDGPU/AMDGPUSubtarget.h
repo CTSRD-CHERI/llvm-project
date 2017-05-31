@@ -289,6 +289,10 @@ public:
     return getGeneration() >= GFX9;
   }
 
+  bool hasMin3Max3_16() const {
+    return getGeneration() >= GFX9;
+  }
+
   bool hasCARRY() const {
     return (getGeneration() >= EVERGREEN);
   }
@@ -410,6 +414,10 @@ public:
 
   bool hasFminFmaxLegacy() const {
     return getGeneration() < AMDGPUSubtarget::VOLCANIC_ISLANDS;
+  }
+
+  bool hasSDWA() const {
+    return HasSDWA;
   }
 
   /// \brief Returns the offset in bytes from the start of the input buffer
@@ -666,10 +674,6 @@ public:
     return HasInv2PiInlineImm;
   }
 
-  bool hasSDWA() const {
-    return HasSDWA;
-  }
-
   bool hasDPP() const {
     return HasDPP;
   }
@@ -726,7 +730,7 @@ public:
   /// \returns True if waitcnt instruction is needed before barrier instruction,
   /// false otherwise.
   bool needWaitcntBeforeBarrier() const {
-    return getGeneration() < GFX9;
+    return true;
   }
 
   /// \returns true if the flat_scratch register should be initialized with the

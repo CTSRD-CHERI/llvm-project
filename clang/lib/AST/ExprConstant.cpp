@@ -1230,8 +1230,7 @@ namespace {
       IsNullPtr = V.isNullPointer();
     }
 
-    void set(APValue::LValueBase B, unsigned I = 0, bool BInvalid = false,
-             bool IsNullPtr_ = false, uint64_t Offset_ = 0) {
+    void set(APValue::LValueBase B, unsigned I = 0, bool BInvalid = false) {
 #ifndef NDEBUG
       // We only allow a few types of invalid bases. Enforce that here.
       if (BInvalid) {
@@ -1242,11 +1241,20 @@ namespace {
 #endif
 
       Base = B;
-      Offset = CharUnits::fromQuantity(Offset_);
+      Offset = CharUnits::fromQuantity(0);
       InvalidBase = BInvalid;
       CallIndex = I;
       Designator = SubobjectDesignator(getType(B));
-      IsNullPtr = IsNullPtr_;
+      IsNullPtr = false;
+    }
+
+    void setNull(QualType PointerTy, uint64_t TargetVal) {
+      Base = (Expr *)nullptr;
+      Offset = CharUnits::fromQuantity(TargetVal);
+      InvalidBase = false;
+      CallIndex = 0;
+      Designator = SubobjectDesignator(PointerTy->getPointeeType());
+      IsNullPtr = true;
     }
 
     void setInvalid(APValue::LValueBase B, unsigned I = 0) {
@@ -4579,7 +4587,7 @@ public:
   }
 
   bool handleCallExpr(const CallExpr *E, APValue &Result,
-                     const LValue *ResultSlot) {
+                      const LValue *ResultSlot) {
     const Expr *Callee = E->getCallee()->IgnoreParens();
     QualType CalleeType = Callee->getType();
 
@@ -4587,6 +4595,23 @@ public:
     LValue *This = nullptr, ThisVal;
     auto Args = llvm::makeArrayRef(E->getArgs(), E->getNumArgs());
     bool HasQualifier = false;
+
+    struct EvaluateIgnoredRAII {
+    public:
+      EvaluateIgnoredRAII(EvalInfo &Info, llvm::ArrayRef<const Expr*> ToEval)
+          : Info(Info), ToEval(ToEval) {}
+      ~EvaluateIgnoredRAII() {
+        if (Info.noteFailure()) {
+          for (auto E : ToEval)
+            EvaluateIgnoredValue(Info, E);
+        }
+      }
+      void cancel() { ToEval = {}; }
+      void drop_front() { ToEval = ToEval.drop_front(); }
+    private:
+      EvalInfo &Info;
+      llvm::ArrayRef<const Expr*> ToEval;
+    } EvalArguments(Info, Args);
 
     // Extract function decl and 'this' pointer from the callee.
     if (CalleeType->isSpecificBuiltinType(BuiltinType::BoundMember)) {
@@ -4637,10 +4662,12 @@ public:
         if (Args.empty())
           return Error(E);
 
-        if (!EvaluateObjectArgument(Info, Args[0], ThisVal))
+        const Expr *FirstArg = Args[0];
+        Args = Args.drop_front();
+        EvalArguments.drop_front();
+        if (!EvaluateObjectArgument(Info, FirstArg, ThisVal))
           return false;
         This = &ThisVal;
-        Args = Args.slice(1);
       } else if (MD && MD->isLambdaStaticInvoker()) {   
         // Map the static invoker for the lambda back to the call operator.
         // Conveniently, we don't have to slice out the 'this' argument (as is
@@ -4692,8 +4719,12 @@ public:
     const FunctionDecl *Definition = nullptr;
     Stmt *Body = FD->getBody(Definition);
 
-    if (!CheckConstexprFunction(Info, E->getExprLoc(), FD, Definition, Body) ||
-        !HandleFunctionCall(E->getExprLoc(), Definition, This, Args, Body, Info,
+    if (!CheckConstexprFunction(Info, E->getExprLoc(), FD, Definition, Body))
+      return false;
+
+    EvalArguments.cancel();
+
+    if (!HandleFunctionCall(E->getExprLoc(), Definition, This, Args, Body, Info,
                             Result, ResultSlot))
       return false;
 
@@ -5471,8 +5502,8 @@ public:
     return true;
   }
   bool ZeroInitialization(const Expr *E) {
-    auto Offset = Info.Ctx.getTargetNullPointerValue(E->getType());
-    Result.set((Expr*)nullptr, 0, false, true, Offset);
+    auto TargetVal = Info.Ctx.getTargetNullPointerValue(E->getType());
+    Result.setNull(E->getType(), TargetVal);
     return true;
   }
 

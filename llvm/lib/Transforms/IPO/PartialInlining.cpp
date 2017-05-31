@@ -558,17 +558,17 @@ void PartialInlinerImpl::computeCallsiteToProfCountMap(
   std::vector<User *> Users(DuplicateFunction->user_begin(),
                             DuplicateFunction->user_end());
   Function *CurrentCaller = nullptr;
+  std::unique_ptr<BlockFrequencyInfo> TempBFI;
   BlockFrequencyInfo *CurrentCallerBFI = nullptr;
 
   auto ComputeCurrBFI = [&,this](Function *Caller) {
       // For the old pass manager:
       if (!GetBFI) {
-        if (CurrentCallerBFI)
-          delete CurrentCallerBFI;
         DominatorTree DT(*Caller);
         LoopInfo LI(DT);
         BranchProbabilityInfo BPI(*Caller, LI);
-        CurrentCallerBFI = new BlockFrequencyInfo(*Caller, BPI, LI);
+        TempBFI.reset(new BlockFrequencyInfo(*Caller, BPI, LI));
+        CurrentCallerBFI = TempBFI.get();
       } else {
         // New pass manager:
         CurrentCallerBFI = &(*GetBFI)(*Caller);
@@ -715,9 +715,15 @@ Function *PartialInlinerImpl::unswitchFunction(Function *F) {
   // users (function pointers, etc.) back to the original function.
   DuplicateFunction->replaceAllUsesWith(F);
   DuplicateFunction->eraseFromParent();
-  if (!AnyInline && OutlinedFunction)
+
+  if (AnyInline)
+    return OutlinedFunction;
+
+  // Remove the function that is speculatively created:
+  if (OutlinedFunction)
     OutlinedFunction->eraseFromParent();
-  return OutlinedFunction;
+
+  return nullptr;
 }
 
 bool PartialInlinerImpl::tryPartialInline(Function *DuplicateFunction,

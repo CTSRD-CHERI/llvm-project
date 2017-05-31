@@ -501,6 +501,11 @@ module std [system] {
       header "experimental/chrono"
       export *
     }
+     module coroutine {
+      requires coroutines
+      header "experimental/coroutine"
+      export *
+    }
     module deque {
       header "experimental/deque"
       export *

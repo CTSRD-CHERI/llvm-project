@@ -301,6 +301,7 @@ int main(int argc, char **argv) {
   initializeConstantHoistingLegacyPassPass(*Registry);
   initializeScalarOpts(*Registry);
   initializeVectorization(*Registry);
+  initializeScalarizeMaskedMemIntrinPass(*Registry);
   initializeExpandReductionsPass(*Registry);
 
   // Register the target printer for --version.
@@ -355,9 +356,7 @@ static bool addPass(PassManagerBase &PM, const char *argv0,
   }
 
   Pass *P;
-  if (PI->getTargetMachineCtor())
-    P = PI->getTargetMachineCtor()(&TPC.getTM<TargetMachine>());
-  else if (PI->getNormalCtor())
+  if (PI->getNormalCtor())
     P = PI->getNormalCtor()();
   else {
     errs() << argv0 << ": cannot create pass: " << PI->getPassName() << "\n";

@@ -285,7 +285,7 @@ static int getInteger(opt::InputArgList &Args, unsigned Key, int Default) {
   int V = Default;
   if (auto *Arg = Args.getLastArg(Key)) {
     StringRef S = Arg->getValue();
-    if (S.getAsInteger(10, V))
+    if (!to_integer(S, V, 10))
       error(Arg->getSpelling() + ": number expected, but got " + S);
   }
   return V;
@@ -312,7 +312,7 @@ static uint64_t getZOptionValue(opt::InputArgList &Args, StringRef Key,
     if (Pos != StringRef::npos && Key == Value.substr(0, Pos)) {
       Value = Value.substr(Pos + 1);
       uint64_t Result;
-      if (Value.getAsInteger(0, Result))
+      if (!to_integer(Value, Result))
         error("invalid " + Key + ": " + Value);
       return Result;
     }
@@ -524,7 +524,7 @@ static uint64_t parseSectionAddress(StringRef S, opt::Arg *Arg) {
   uint64_t VA = 0;
   if (S.startswith("0x"))
     S = S.drop_front(2);
-  if (S.getAsInteger(16, VA))
+  if (!to_integer(S, VA, 16))
     error("invalid argument: " + toString(Arg));
   return VA;
 }
@@ -574,10 +574,14 @@ static std::pair<bool, bool> getHashStyle(opt::InputArgList &Args) {
 // -build-id=sha1 are actually tree hashes for performance reasons.
 static std::pair<BuildIdKind, std::vector<uint8_t>>
 getBuildId(opt::InputArgList &Args) {
-  if (Args.hasArg(OPT_build_id))
+  auto *Arg = Args.getLastArg(OPT_build_id, OPT_build_id_eq);
+  if (!Arg)
+    return {BuildIdKind::None, {}};
+
+  if (Arg->getOption().getID() == OPT_build_id)
     return {BuildIdKind::Fast, {}};
 
-  StringRef S = getString(Args, OPT_build_id_eq, "none");
+  StringRef S = Arg->getValue();
   if (S == "md5")
     return {BuildIdKind::Md5, {}};
   if (S == "sha1" || S == "tree")
@@ -691,6 +695,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->ZNow = hasZOption(Args, "now");
   Config->ZOrigin = hasZOption(Args, "origin");
   Config->ZRelro = !hasZOption(Args, "norelro");
+  Config->ZRodynamic = hasZOption(Args, "rodynamic");
   Config->ZStackSize = getZOptionValue(Args, "stack-size", 0);
   Config->ZText = !hasZOption(Args, "notext");
   Config->ZWxneeded = hasZOption(Args, "wxneeded");
@@ -897,7 +902,7 @@ static uint64_t getImageBase(opt::InputArgList &Args) {
 
   StringRef S = Arg->getValue();
   uint64_t V;
-  if (S.getAsInteger(0, V)) {
+  if (!to_integer(S, V)) {
     error("-image-base: number expected, but got " + S);
     return 0;
   }

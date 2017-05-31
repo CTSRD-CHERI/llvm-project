@@ -17,13 +17,13 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/CFG.h"
 #include "llvm/Analysis/CaptureTracking.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/ValueTracking.h"
-#include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
@@ -36,6 +36,7 @@
 #include "llvm/IR/Operator.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/KnownBits.h"
 #include <algorithm>
 
 #define DEBUG_TYPE "basicaa"
@@ -682,8 +683,11 @@ static bool isIntrinsicCall(ImmutableCallSite CS, Intrinsic::ID IID) {
 
 #ifndef NDEBUG
 static const Function *getParent(const Value *V) {
-  if (const Instruction *inst = dyn_cast<Instruction>(V))
+  if (const Instruction *inst = dyn_cast<Instruction>(V)) {
+    if (!inst->getParent())
+      return nullptr;
     return inst->getParent()->getParent();
+  }
 
   if (const Argument *arg = dyn_cast<Argument>(V))
     return arg->getParent();
@@ -1283,8 +1287,9 @@ AliasResult BasicAAResult::aliasGEP(const GEPOperator *GEP1, uint64_t V1Size,
         // give up if we can't determine conditions that hold for every cycle:
         const Value *V = DecompGEP1.VarIndices[i].V;
 
-        bool SignKnownZero, SignKnownOne;
-        ComputeSignBit(V, SignKnownZero, SignKnownOne, DL, 0, &AC, nullptr, DT);
+        KnownBits Known = computeKnownBits(V, DL, 0, &AC, nullptr, DT);
+        bool SignKnownZero = Known.isNonNegative();
+        bool SignKnownOne = Known.isNegative();
 
         // Zero-extension widens the variable, and so forces the sign
         // bit to zero.

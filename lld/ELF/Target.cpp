@@ -1707,6 +1707,8 @@ RelExpr ARMTargetInfo::getRelExpr(uint32_t Type, const SymbolBody &S,
   case R_ARM_TLS_IE32:
     // GOT(S) + A - P
     return R_GOT_PC;
+  case R_ARM_SBREL32:
+    return R_ARM_SBREL;
   case R_ARM_TARGET1:
     return Config->Target1Rel ? R_PC : R_ABS;
   case R_ARM_TARGET2:
@@ -1776,8 +1778,8 @@ void ARMTargetInfo::writePltHeader(uint8_t *Buf) const {
 
 void ARMTargetInfo::addPltHeaderSymbols(InputSectionBase *ISD) const {
   auto *IS = cast<InputSection>(ISD);
-  addSyntheticLocal<ELF32LE>("$a", STT_NOTYPE, 0, 0, IS);
-  addSyntheticLocal<ELF32LE>("$d", STT_NOTYPE, 16, 0, IS);
+  addSyntheticLocal("$a", STT_NOTYPE, 0, 0, IS);
+  addSyntheticLocal("$d", STT_NOTYPE, 16, 0, IS);
 }
 
 void ARMTargetInfo::writePlt(uint8_t *Buf, uint64_t GotPltEntryAddr,
@@ -1799,8 +1801,8 @@ void ARMTargetInfo::writePlt(uint8_t *Buf, uint64_t GotPltEntryAddr,
 
 void ARMTargetInfo::addPltSymbols(InputSectionBase *ISD, uint64_t Off) const {
   auto *IS = cast<InputSection>(ISD);
-  addSyntheticLocal<ELF32LE>("$a", STT_NOTYPE, Off, 0, IS);
-  addSyntheticLocal<ELF32LE>("$d", STT_NOTYPE, Off + 12, 0, IS);
+  addSyntheticLocal("$a", STT_NOTYPE, Off, 0, IS);
+  addSyntheticLocal("$d", STT_NOTYPE, Off + 12, 0, IS);
 }
 
 bool ARMTargetInfo::needsThunk(RelExpr Expr, uint32_t RelocType,
@@ -1846,6 +1848,7 @@ void ARMTargetInfo::relocateOne(uint8_t *Loc, uint32_t Type,
   case R_ARM_GOT_PREL:
   case R_ARM_REL32:
   case R_ARM_RELATIVE:
+  case R_ARM_SBREL32:
   case R_ARM_TARGET1:
   case R_ARM_TARGET2:
   case R_ARM_TLS_GD32:
