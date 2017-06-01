@@ -346,10 +346,7 @@ static uint64_t getIncompatibleFlags(uint64_t Flags) {
 // any special treatment on top of progbits, so there doesn't
 // seem to be a harm in merging them.
 static bool canMergeToProgbits(unsigned Type) {
-  // Old GCC emits this for .debug_* sections...
-  // FIXME: add this to LLVM ELF.h
-  const unsigned SHT_MIPS_DWARF = 0x7000001e;
-
+  // Old GCC emits SHT_MIPS_DWARF this for .debug_* sections...
   return Type == SHT_NOBITS || Type == SHT_PROGBITS || Type == SHT_INIT_ARRAY ||
          Type == SHT_PREINIT_ARRAY || Type == SHT_FINI_ARRAY ||
          Type == SHT_NOTE || Type == SHT_MIPS_DWARF;

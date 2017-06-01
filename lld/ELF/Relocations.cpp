@@ -546,10 +546,6 @@ static RelExpr adjustExpr(SymbolBody &Body, RelExpr Expr, uint32_t Type,
   }
 
   bool IsWrite = !Config->ZText || (S.Flags & SHF_WRITE);
-  // HACK: for some reason clang generates absolute relocations in .eh_frame
-  if (Config->EMachine == EM_MIPS && S.Name == ".eh_frame") {
-    IsWrite = true;
-  }
   // HACK: clang emits a read-only __cap_relocs, but for PIC code we need to
   //       emit dynamic relocations for its contents (REL32/64/NONE).
   if (Config->EMachine == EM_MIPS && Config->Pic && S.Name == "__cap_relocs") {
