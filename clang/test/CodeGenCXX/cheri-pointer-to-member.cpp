@@ -288,7 +288,7 @@ int func_ptr_dereference(A* a, AMemberFuncPtr ptr) {
 
   // N64: [[MEMPTR_VIRTUAL_LABEL]]:
   // N64-NEXT: [[VAR1:%.+]] = bitcast i8* [[MEMPTR_VTABLE_ADDR]] to i8**
-  // N64-NEXT: [[VTABLE:%.+]] = load i8*, i8** [[VAR1]], align 8, !tbaa !6
+  // N64-NEXT: [[VTABLE:%.+]] = load i8*, i8** [[VAR1]], align 8,
   // N64-NEXT: [[VAR2:%.+]] = getelementptr i8, i8* [[VTABLE]], i64 [[PTR_COERCE0:%.+]]
   // N64-NEXT: [[VAR3:%.+]] = bitcast i8* [[VAR2]] to i32 (%class.A*)**
   // N64-NEXT: [[MEMPTR_VIRTUALFN:%.+]] = load i32 (%class.A*)*, i32 (%class.A*)** [[VAR3]], align 8
