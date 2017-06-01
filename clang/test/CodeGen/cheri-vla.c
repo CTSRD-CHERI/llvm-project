@@ -18,7 +18,7 @@ void foo(void) {
   // CHECK: [[VLA:%.+]] = alloca i8, i64 [[I_05]], align 1
   // CHECK: [[SUB:%.+]] = add nsw i64 [[I_05]], -1
   // CHECK: [[ARRAYIDX:%.+]] = getelementptr inbounds i8, i8 addrspace(200)* [[VLA]], i64 [[SUB]]
-  // CHECK: store i8 0, i8 addrspace(200)* [[ARRAYIDX]], align 1, !tbaa !1
+  // CHECK: store i8 0, i8 addrspace(200)* [[ARRAYIDX]], align 1, !tbaa !{{[0-9]+}}
   // CHECK: call void @test(i8 addrspace(200)* nonnull [[VLA]]) #1
   // CHECK: call void @llvm.stackrestore(i8* [[VAR0]])
   // CHECK: [[INC]] = add nuw nsw i64 [[I_05]], 1

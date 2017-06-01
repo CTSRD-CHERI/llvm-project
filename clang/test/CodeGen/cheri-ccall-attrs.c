@@ -31,7 +31,7 @@ void foo(int, int);
 
 void bar(int a, int b)
 {
-	// CHECK: load i64, i64* @__cheri_method.cls.foo, align 8, !invariant.load !1
+	// CHECK: load i64, i64* @__cheri_method.cls.foo, align 8, [[$INVARIANT_LOAD:!invariant.load ![0-9]+]]
 	// CHECK: call chericcallcc void @cheri_invoke(i8 addrspace(200)* inreg %{{.*}}, i8 addrspace(200)* inreg %{{.*}}, i64 zeroext %{{.*}}, i32 signext %{{.*}}, i32 signext %{{.*}})
 	foo_cap(other, a, b);
 	// CHECK: call chericcallcc void @cheri_invoke(i8 addrspace(200)* inreg %{{.*}}, i8 addrspace(200)* inreg %{{.*}}, i64 zeroext %{{.*}}, i32 signext %{{.*}}, i32 signext %{{.*}})
@@ -56,13 +56,13 @@ void call(void)
 	// CHECK: call chericcallcce void @fish()
 	fish();
 	// Check that we get a ccall to cheri_invoke with the correct method number
-	// CHECK: load i64, i64* @__cheri_method.cls.fish, align 8, !invariant.load !1
+	// CHECK: load i64, i64* @__cheri_method.cls.fish, align 8, [[$INVARIANT_LOAD]]
 	// CHECK: call chericcallcc void
 	// CHECK: @cheri_invoke
 	fish_cap(other);
 	// CHECK: call void @flibble()
 	flibble();
-	// CHECK: load i64, i64* @__cheri_method.cls.flibble, align 8, !invariant.load !1
+	// CHECK: load i64, i64* @__cheri_method.cls.flibble, align 8, [[$INVARIANT_LOAD]]
 	// CHECK: call chericcallcc void
 	// CHECK: @cheri_invoke
 	flibble_cap(other);
