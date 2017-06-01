@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
+# PYTHON_ARGCOMPLETE_OK
 import argparse
 import re
-import subprocess
-import sys
+import os
 import tempfile
 import shutil
 import shlex
+import subprocess
+import sys
+from enum import Enum
 from pathlib import Path
 
-verbose = False
+options = None  # type: Options
 
 def verbose_print(*args, **kwargs):
-    global verbose
-    if verbose:
+    global options
+    if options.verbose:
         print(*args, **kwargs)
 
 
@@ -20,50 +23,276 @@ def die(*args):
     sys.exit(" ".join(map(str, args)))
 
 
-def run(*args, **kwargs):
-    print(args, kwargs)
-    subprocess.check_call(*args, **kwargs)
+def run(cmd: list, **kwargs):
+    print(cmd, kwargs)
+    subprocess.check_call(list(map(str, cmd)), **kwargs)
 
-def do_initial_reduce(input_path, out_file):
-    # The intial remove #includes pass takes a long time -> remove all the includes that are inside a #if 0
-    # This is especially true for C++ because there are so many #included files in preprocessed input
-    with input_path.open("r") as input_file:
-        # line_regex = re.compile(r'^#\s+\d+\s+".*".*')
-        start_rewrite_includes = re.compile(r"^\s*#if\s+0\s+/\* expanded by -frewrite-includes \*/\s*")
-        end_rewrite_includes = re.compile(r"^\s*#endif\s+/\* expanded by -frewrite-includes \*/\s*")
-        in_rewrite_includes = False
-        max_rewrite_includes_lines = 10
-        skipped_rewrite_includes = 0
-        for line in input_file.readlines():
-            if re.match(start_rewrite_includes, line):
-                verbose_print("Starting -frewrite-includes-block:", line.rstrip())
-                assert not in_rewrite_includes
-                assert skipped_rewrite_includes == 0
-                in_rewrite_includes = True
-                continue
-            elif re.match(end_rewrite_includes, line):
-                verbose_print("Ending -frewrite-includes-block, skipped", skipped_rewrite_includes, "lines")
-                assert in_rewrite_includes
-                in_rewrite_includes = False
-                skipped_rewrite_includes = 0
-                continue
-            elif in_rewrite_includes:
-                if skipped_rewrite_includes > max_rewrite_includes_lines:
-                    die("Error in initial reduction, rerun with --no-initial-reduce")
-                verbose_print("Skipping line inside -frewrite-includes:", line.rstrip())
-                skipped_rewrite_includes += 1
-                continue
-            # This appears to break creduce sometimes:
-            # elif re.match(line_regex, line):
-            #     verbose_print("Removing # line directive:", line.rstrip())
-            #     continue
+
+class ReduceTool(object):
+    def __init__(self, args: "Options", name: str, tool: Path, interesting_exit_code: int):
+        self.tool = tool
+        self.name = name
+        self.interesting_exit_code = interesting_exit_code
+        self.args = args
+        self.run_lines = [] # RUN: lines from the test case
+        self.run_cmds = []  # the lines without RUN: suitably quoted for passing to a shell
+        self.infile_name = None
+        print("Reducing test case using", name)
+
+    # returns the real input file
+    def parse_RUN_lines(self, infile: Path) -> Path:
+        is_crash_reproducer = infile.suffix == ".sh"
+        if is_crash_reproducer:
+            verbose_print("Input file is a crash reproducer script")
+        verbose_print("Finding test command(s) in", infile)
+        with infile.open("r") as f:
+            if is_crash_reproducer:
+                real_infile = self._parse_crash_reproducer(infile, f)
             else:
-                out_file.write(line)
-        out_file.flush()
-    global verbose
-    if verbose:
-        verbose_print("Initial reduction:")
-        subprocess.call(["diff", "-u", str(input_path), out_file.name])
+                real_infile = infile
+                self._parse_test_case(f)
+        if len(self.run_cmds) < 1:
+            die("Could not find any RUN: lines in", infile)
+        return real_infile
+
+    def _parse_crash_reproducer(self, infile, f) -> Path:
+        real_in_file = None
+        for line in f.readlines():
+            if line.strip().startswith("#"):
+                continue
+            command = shlex.split(line)
+            if "clang" not in command[0]:
+                die("Executed program should contain 'clang', but was", command[0])
+            source_file_name = command[-1]
+            source_file = infile.with_name(source_file_name)
+            if not source_file.exists():
+                die("Reproducer input file", source_file, "does not exist!")
+            real_in_file = source_file
+            verbose_print("Real input file is", infile)
+            command[-1] = "%s"
+            command[0] = "%clang"
+            if command[1] == "-cc1":
+                del command[1]
+                command[0] = "%clang_cc1"
+            verbose_print(command)
+            command += ["-o", "-"]
+            compiler_cmd = " ".join(shlex.quote(s) for s in command)
+            verbose_print(compiler_cmd)
+            self.run_cmds.append(compiler_cmd)
+            self.run_lines.append("// RUN: " + compiler_cmd + " | FileCheck %s")
+        if not real_in_file:
+            die("Could not compute input file for crash reproducer")
+        return real_in_file
+
+    def _parse_test_case(self, f):
+        # test case: just search for RUN: lines
+        for line in f.readlines():
+            match = re.match(r".*\s+RUN: (.+)", line)
+            if match:
+                self.run_lines.append(line)
+                command = match.group(1).strip()
+                self.run_cmds.append(command)
+                if "%s" not in command:
+                    die("RUN: line does not contain %s -> cannot create replacement invocation")
+
+    def reduce_script_text(self, input_file):
+        result = "#!/bin/sh\n"
+        for cmd in self.run_cmds:
+            # check for %s should have happened earlier
+            assert "%s" in cmd, cmd
+            compiler_cmd = cmd.replace("%clang_cc1 ", str(self.args.clang_cmd) + " -cc1 ")
+            compiler_cmd = compiler_cmd.replace("%clang ", str(self.args.clang_cmd) + " ")
+            if "llc" in compiler_cmd:
+                compiler_cmd = re.sub(r"\bllc\b", " " + str(self.args.llc_cmd) + " ", compiler_cmd)
+            # ignore all the piping to FileCheck parts of the command
+            if "|" in compiler_cmd:
+                compiler_cmd = compiler_cmd[0:compiler_cmd.find("|")]
+            compiler_cmd = compiler_cmd.replace("%s", self.input_file_arg(input_file))
+            grep_msg = ""
+            if self.args.crash_message:
+                grep_msg = "2>&1 | grep " + shlex.quote(self.args.crash_message)
+            # exit once the first command crashes
+            result += "{} --crash {} {} && exit {}\n".format(self.args.not_cmd, compiler_cmd, grep_msg,
+                                                             self.interesting_exit_code)
+        return result
+
+    def preprocess(self, input_file: Path) -> Path:
+        return input_file
+
+    def reduce(self, args, input_file: Path, reduce_script: Path, extra_args: list, tempdir: Path):
+        raise NotImplemented()
+
+    def input_file_arg(self, input_file: Path) -> str:
+        raise NotImplemented()
+
+
+class RunBugpoint(ReduceTool):
+    def __init__(self, args: "Options"):
+        super().__init__(args, "bugpoint", tool=args.bugpoint_cmd, interesting_exit_code=1)
+
+    def reduce(self, input_file, reduce_script, extra_args, tempdir):
+        bugpoint = [self.tool, "-opt-command=" + str(self.args.opt_cmd), "-output-prefix=" + input_file.name]
+        if self.args.verbose:
+            bugpoint.append("-verbose-errors")
+
+        # use a custom script to check for matching crash message:
+        if self.args.crash_message:
+            # check that the reduce script is interesting:
+            # http://blog.llvm.org/2015/11/reduce-your-testcases-with-bugpoint-and.html
+            # ./bin/bugpoint -compile-custom -compile-command=./check.sh -opt-command=./bin/opt my_test_case.ll
+            test_result = subprocess.run([str(reduce_script.absolute()), str(input_file)])
+            if test_result.returncode == 0:
+                die("Interestingness test failed for bugpoint. Does the command really crash? Script was",
+                    reduce_script.read_text())
+            bugpoint += ["-compile-custom", "-compile-command=" + str(reduce_script.absolute()), input_file]
+        else:
+            bugpoint += ["-run-llc-ia", input_file]
+            tool_args = shlex.split(self.run_cmds[0])[1:]
+            # filter the tool args
+            bugpoint += ["--tool-args", "--"]
+            skip_next = False
+            for arg in tool_args:
+                if skip_next:
+                    skip_next = False
+                    continue
+                elif "%s" in arg:
+                    continue
+                elif arg.strip() == "-o":
+                    skip_next = True
+                    continue
+                else:
+                    bugpoint.append(arg)
+        bugpoint += extra_args
+        print("About to run", bugpoint)
+        print(os.getcwd())
+        try:
+            env = os.environ.copy()
+            env["PATH"] = str(self.args.bindir) + ":" +  env["PATH"]
+            run(bugpoint, env=env)
+        finally:
+            print("Output files are in:", os.getcwd())
+
+    def input_file_arg(self, input_file: Path):
+        # bugpoint expects a script that takes the input files as arguments:
+        return '"$@"'
+
+
+class RunCreduce(ReduceTool):
+    def __init__(self, args: "Options"):
+        super().__init__(args, "creduce", tool=args.creduce_cmd, interesting_exit_code=0)
+
+    def preprocess(self, input_file: Path):
+        # creduce wastes a lot of time trying to remove #includes and dead cases generated by -frewrite-includes
+        if self.args.no_initial_reduce:
+            return input_file
+        with tempfile.NamedTemporaryFile() as tmp:
+            shutil.copy(str(input_file), tmp.name)
+            with input_file.open("w") as reduced_file:
+                self._do_initial_reduce(Path(tmp.name), reduced_file)
+        return input_file
+
+    def reduce(self, input_file, reduce_script, extra_args, tempdir):
+        creduce = [str(self.tool), str(reduce_script), str(input_file)] + extra_args
+        if self.args.verbose:
+            creduce.append("--print-diff")
+        print("About to run", creduce)
+        run(creduce, cwd=tempdir)
+        # write the output test file:
+        print("\nDONE!")
+
+        with input_file.open("r", encoding="utf-8") as f:
+            original_data = f.read()
+            result = "\n".join(self.run_lines) + "\n" + original_data
+            test_case = input_file.with_suffix(".test" + input_file.suffix)
+        with test_case.open("w", encoding="utf-8") as f:
+            f.write(result)
+        print("\nResulting test case ", test_case, ":", sep="")
+        verbose_print(result)
+
+    def input_file_arg(self, input_file: Path):
+        # creduce creates an input file in the test directory with the same name as the original input
+        return input_file.name
+
+    def _do_initial_reduce(self, input_path, out_file):
+        # The initial remove #includes pass takes a long time -> remove all the includes that are inside a #if 0
+        # This is especially true for C++ because there are so many #included files in preprocessed input
+        with input_path.open("r") as input_file:
+            # line_regex = re.compile(r'^#\s+\d+\s+".*".*')
+            start_rewrite_includes = re.compile(r"^\s*#if\s+0\s+/\* expanded by -frewrite-includes \*/\s*")
+            end_rewrite_includes = re.compile(r"^\s*#endif\s+/\* expanded by -frewrite-includes \*/\s*")
+            in_rewrite_includes = False
+            max_rewrite_includes_lines = 10
+            skipped_rewrite_includes = 0
+            for line in input_file.readlines():
+                if re.match(start_rewrite_includes, line):
+                    verbose_print("Starting -frewrite-includes-block:", line.rstrip())
+                    assert not in_rewrite_includes
+                    assert skipped_rewrite_includes == 0
+                    in_rewrite_includes = True
+                    continue
+                elif re.match(end_rewrite_includes, line):
+                    verbose_print("Ending -frewrite-includes-block, skipped", skipped_rewrite_includes, "lines")
+                    assert in_rewrite_includes
+                    in_rewrite_includes = False
+                    skipped_rewrite_includes = 0
+                    continue
+                elif in_rewrite_includes:
+                    if skipped_rewrite_includes > max_rewrite_includes_lines:
+                        die("Error in initial reduction, rerun with --no-initial-reduce")
+                    verbose_print("Skipping line inside -frewrite-includes:", line.rstrip())
+                    skipped_rewrite_includes += 1
+                    continue
+                # This appears to break creduce sometimes:
+                # elif re.match(line_regex, line):
+                #     verbose_print("Removing # line directive:", line.rstrip())
+                #     continue
+                else:
+                    out_file.write(line)
+            out_file.flush()
+        if self.args.verbose:
+            verbose_print("Initial reduction:")
+            subprocess.call(["diff", "-u", str(input_path), out_file.name])
+
+class Options(object):
+    def __init__(self, args: argparse.Namespace):
+        self.verbose = args.verbose
+        self.bindir = Path(args.bindir)
+        self.args = args
+        self.no_initial_reduce = args.no_initial_reduce  # type: bool
+        self.crash_message = args.crash_message  # type: str
+
+    @property
+    def clang_cmd(self):
+        return self._get_command("clang")
+
+    @property
+    def opt_cmd(self):
+        return self._get_command("opt")
+
+    @property
+    def not_cmd(self):
+        return self._get_command("not")
+
+    @property
+    def llc_cmd(self):
+        return self._get_command("llc")
+
+    @property
+    def bugpoint_cmd(self):
+        return self._get_command("bugpoint")
+
+    @property
+    def creduce_cmd(self):
+        creduce_path = self.args.creduce_cmd or shutil.which("creduce")
+        if not creduce_path:
+            die("Could not find `creduce` in $PATH. Add it to $PATH or pass --creduce-cmd")
+        return Path(creduce_path)
+
+    def _get_command(self, name):
+        result = Path(getattr(self.args, name + "_cmd", None) or Path(self.bindir, name))
+        if not result.exists():
+            die("Invalid `" + name + "` binary`", result)
+        return result
 
 
 def main():
@@ -73,120 +302,63 @@ def main():
                         help="Path to clang build directory. Default is " + default_bindir)
     parser.add_argument("--not-cmd", help="Path to `not` tool. Default is $BINDIR/not")
     parser.add_argument("--clang-cmd", help="Path to `clang` tool. Default is $BINDIR/clang")
+    parser.add_argument("--llc-cmd", help="Path to `llc` tool. Default is $BINDIR/llc")
+    parser.add_argument("--opt-cmd", help="Path to `opt` tool. Default is $BINDIR/opt")
+    parser.add_argument("--bugpoint-cmd", help="Path to `bugpoint` tool. Default is $BINDIR/bugpoint")
+    parser.add_argument("--creduce-cmd", help="Path to `creduce` tool. Default is `creduce`")
     parser.add_argument("--output-file", help="The name of the output file")
     parser.add_argument("--verbose", action="store_true", help="Print more debug output")
     # TODO: infer this automatically from the crash reproducer?
     parser.add_argument("--crash-message", help="If set the crash must contain this message to be accepted for reduction."
                                                 " This is useful if creduce ends up generating another crash bug that is not the one being debugged.")
+    parser.add_argument("--reduce-tool", help="The tool to use for test case reduction. "
+                                              "Defaults to `bugpoint` if input file is a .ll or .bc file and `creduce` otherwise.",
+                        choices=["bugpoint", "creduce"])
     parser.add_argument("--no-initial-reduce", help="Pass the original input file to creduce without "
                         "removing #if 0 regions. Generally this will speed up but in very rare corner "
-                        "cases it might cause the test case to no longer crash.")
+                        "cases it might cause the test case to no longer crash.", action="store_true")
     parser.add_argument("testcase", help="The file to reduce (must be a testcase with a RUN: line that crashes or a .sh file from a clang crash")
-    args, creduce_args = parser.parse_known_args()
-    global verbose
-    verbose = args.verbose
-    bindir = Path(args.bindir)
-    not_cmd = Path(args.not_cmd or (bindir / "not"))
-    if not not_cmd.exists():
-        die("Invalid `not` binary`", not_cmd)
-    clang_cmd = Path(args.clang_cmd or (bindir / "clang"))
-    if not clang_cmd.exists():
-        die("Invalid `clang` binary`", not_cmd)
-    # scan test case for RUN: lines
-    run_cmds = []
-    run_lines = []
-    infile = Path(args.testcase)
-    is_crash_reproducer = infile.suffix == ".sh"
-    if is_crash_reproducer:
-        verbose_print("Input file is a crash reproducer script")
-    with infile.open("r") as f:
-        for line in f.readlines():
-            if is_crash_reproducer:
-                if line.strip().startswith("#"):
-                    continue
-                command = shlex.split(line)
-                if "clang" not in command[0]:
-                    die("Executed program should contain 'clang', but was", command[0])
-                source_file_name = command[-1]
-                source_file = infile.with_name(source_file_name)
-                if not source_file.exists():
-                    die("Reproducer input file", source_file, "does not exist!")
-                infile = source_file
-                verbose_print("Real input file is", infile)
-                command[-1] = "%s"
-                command[0] = "%clang"
-                if command[1] == "-cc1":
-                    del command[1]
-                    command[0] = "%clang_cc1"
-                verbose_print(command)
-                command += ["-o", "-"]
-                compiler_cmd = " ".join(shlex.quote(s) for s in command)
-                verbose_print(compiler_cmd)
-                run_cmds.append(compiler_cmd)
-                run_lines.append("// RUN: " + compiler_cmd + " | FileCheck %s")
-            else:
-                # test case: just search for RUN: lines
-                match = re.match(r".*\s+RUN: (.+)", line)
-                if match:
-                    run_lines.append(line)
-                    command = match.group(1).strip()
-                    run_cmds.append(command)
-                    if "%s" not in command:
-                        die("RUN: line does not contain %s -> cannot create replacement invocation")
+    args, reduce_args = parser.parse_known_args()
+    # bash completion for arguments:
+    try:
+        import argcomplete
+        argcomplete.autocomplete(parser)
+    except ImportError:
+        pass
 
-    if len(run_cmds) < 1:
-        die("Could not find any RUN: lines in", infile)
+    global options
+    options = Options(args)
+    infile = Path(args.testcase)
+
+    if args.reduce_tool is None:
+        args.reduce_tool = "bugpoint" if infile.suffix in (".ll", ".bc") else "creduce"
+
+    if args.reduce_tool == "bugpoint":
+        reduce_tool = RunBugpoint(options)
+    else:
+        assert args.reduce_tool == "creduce"
+        reduce_tool = RunCreduce(options)
+
+    # scan test case for RUN: lines
+    infile = reduce_tool.parse_RUN_lines(infile)
 
     if args.output_file:
-        creduce_input = Path(args.output_file).absolute()
+        reduce_input = Path(args.output_file).absolute()
     else:
-        creduce_input = infile.with_suffix(".creduce" + infile.suffix).absolute()
-    shutil.copy(str(infile), str(creduce_input))
-    if not args.no_initial_reduce:
-        with tempfile.NamedTemporaryFile() as tmp:
-            with Path(tmp.name).open("w") as reduced_file:
-                do_initial_reduce(creduce_input, reduced_file)
-            shutil.copy(tmp.name, str(creduce_input))
-
-    reduce_script_text = "#!/bin/sh\n"
-    for cmd in run_cmds:
-        # check for %s should have happened earlier
-        assert "%s" in cmd, cmd
-        compiler_cmd = cmd.replace("%clang_cc1 ", str(clang_cmd) + " -cc1 ")
-        compiler_cmd = compiler_cmd.replace("%clang ", str(clang_cmd) + " ")
-        # ignore all the piping to FileCheck parts of the command
-        if "|" in compiler_cmd:
-            compiler_cmd = compiler_cmd[0:compiler_cmd.find("|")]
-        compiler_cmd = compiler_cmd.replace("%s", creduce_input.name)
-        grep_cmd = ""
-        if args.crash_message:
-            grep_cmd = "2>&1 | grep " + shlex.quote(args.crash_message)
-        # exit once the first command crashes
-        reduce_script_text += "{} --crash {} {} && exit 0\n".format(not_cmd, compiler_cmd, grep_cmd)
+        reduce_input = infile.with_suffix(".creduce" + infile.suffix).absolute()
+    shutil.copy(str(infile), str(reduce_input))
+    reduce_input = reduce_tool.preprocess(reduce_input)
+    # TODO: not always needed
+    reduce_script_text = reduce_tool.reduce_script_text(reduce_input)
     print("Reduce script:\n", reduce_script_text)
-
     with tempfile.TemporaryDirectory() as tmpdir:
         reduce_script = Path(tmpdir, "reduce_script.sh")
         reduce_script.write_text(reduce_script_text)
         reduce_script.chmod(0o755)
-
         # print(reduce_script.read_text())
         # run("ulimit -S -c 0".split())
-        creduce = ["creduce", str(reduce_script), str(creduce_input)] + creduce_args
-        if verbose:
-            creduce.append("--print-diff")
-        print("About to run", creduce)
-        run(creduce, cwd=tmpdir)
-
-    print("\nDONE!")
-    with creduce_input.open("r", encoding="utf-8") as f:
-        original_data = f.read()
-    result = "\n".join(run_lines) + "\n" + original_data
-    test_case = creduce_input.with_suffix(".creduce.test" + creduce_input.suffix)
-    with test_case.open("w", encoding="utf-8") as f:
-        f.write(result)
-    print("\nResulting test case ", test_case, ":", sep="")
-    verbose_print(result)
+        reduce_tool.reduce(input_file=reduce_input, reduce_script=reduce_script,
+                           extra_args=reduce_args, tempdir=tmpdir)
 
 if __name__ == "__main__":
     main()
