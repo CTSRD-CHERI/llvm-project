@@ -7576,12 +7576,12 @@ class BuiltinOperatorOverloadBuilder {
   // The "promoted arithmetic types" are the arithmetic
   // types are that preserved by promotion (C++ [over.built]p2).
   static const unsigned FirstIntegralType = 4;
-  static const unsigned LastIntegralType = 21;
+  static const unsigned LastIntegralType = 23;
   static const unsigned FirstPromotedIntegralType = 4,
                         LastPromotedIntegralType = 12;
   static const unsigned FirstPromotedArithmeticType = 0,
                         LastPromotedArithmeticType = 12;
-  static const unsigned NumArithmeticTypes = 21;
+  static const unsigned NumArithmeticTypes = 23;
 
   /// \brief Get the canonical type for a given arithmetic type index.
   CanQualType getArithmeticType(unsigned index) {
@@ -7614,6 +7614,10 @@ class BuiltinOperatorOverloadBuilder {
       &ASTContext::ShortTy,
       &ASTContext::UnsignedCharTy,
       &ASTContext::UnsignedShortTy,
+      // XXXAR: not entirely sure this is right but it fixes
+      // bitwise ops between enums and __(u)intcap_t
+      &ASTContext::IntCapTy,
+      &ASTContext::UnsignedIntCapTy,
       // End of integral types.
       // FIXME: What about complex? What about half?
     };
