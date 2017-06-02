@@ -180,7 +180,7 @@ class RunBugpoint(ReduceTool):
 
 class RunCreduce(ReduceTool):
     def __init__(self, args: "Options"):
-        super().__init__(args, "creduce", tool=args.creduce_cmd, interesting_exit_code=0)
+        super().__init__(args, "creduce", tool=args.creduce_cmd)
         self.exit_statement = "&& exit 0"
 
     def preprocess(self, input_file: Path):
