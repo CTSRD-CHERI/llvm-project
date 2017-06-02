@@ -68,7 +68,7 @@ void EHHeaderParser<A>::decodeEHHdr(A &addressSpace, pint_t ehHdrStart,
   ehHdrInfo.eh_frame_ptr =
       addressSpace.getEncodedP(p, ehHdrEnd, eh_frame_ptr_enc, ehHdrStart);
   ehHdrInfo.fde_count =
-      addressSpace.getEncodedP(p, ehHdrEnd, fde_count_enc, ehHdrStart);
+      (vaddr_t)addressSpace.getEncodedP(p, ehHdrEnd, fde_count_enc, ehHdrStart);
   ehHdrInfo.table = p;
 }
 

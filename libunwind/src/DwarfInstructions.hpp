@@ -71,7 +71,7 @@ private:
       // there's a single register for the stack.
       return registers.getRegister(UNW_MIPS_C11) + 
           registers.getRegister((int)prolog.cfaRegister) +
-             prolog.cfaRegisterOffset;
+             (uint64_t)prolog.cfaRegisterOffset;
 #else
       return (pint_t)((sint_t)registers.getRegister((int)prolog.cfaRegister) +
              prolog.cfaRegisterOffset);
