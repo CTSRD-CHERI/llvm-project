@@ -16,4 +16,7 @@ struct QMapNodeBase
     void setColor(Color c) { if (c == Black) p |= Black; else p &= ~Black; } // expected-warning 2 {{binary expression on capability and non-capability types}}
     QMapNodeBase *parent() const { return reinterpret_cast<QMapNodeBase *>(p & ~Mask); } // expected-warning {{binary expression on capability and non-capability types}}
     void setParent(QMapNodeBase *pp) { p = (p & Mask) | quintptr(pp); } // expected-warning {{binary expression on capability and non-capability types}}
+
+    bool comparisonOp() const { return (p & Mask) == Black; }
+    bool comparisonOp2() const { return Red == (p & Mask); }
 };

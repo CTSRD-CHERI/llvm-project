@@ -7662,7 +7662,7 @@ class BuiltinOperatorOverloadBuilder {
 /*U128*/ {  Flt,  Dbl, LDbl, U128, U128, U128, U128, U128, U128, U128, U128 },
     };
 
-    if (L >= LastPromotedArithmeticType) {
+    if (L >= LastPromotedArithmeticType || R >= LastPromotedArithmeticType) {
       assert(L < LastCapabilityType);
       assert(R < LastCapabilityType);
       // intcap_t gets promoted to uintcap_t, everything else returns intcap_t
@@ -8143,9 +8143,9 @@ public:
       return;
 
     for (unsigned Left = FirstPromotedArithmeticType;
-         Left < LastPromotedArithmeticType; ++Left) {
+         Left < LastCapabilityType; ++Left) {
       for (unsigned Right = FirstPromotedArithmeticType;
-           Right < LastPromotedArithmeticType; ++Right) {
+           Right < LastCapabilityType; ++Right) {
         QualType LandR[2] = { getArithmeticType(Left),
                               getArithmeticType(Right) };
         QualType Result =
