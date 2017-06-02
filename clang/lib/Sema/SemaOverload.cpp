@@ -7579,6 +7579,8 @@ class BuiltinOperatorOverloadBuilder {
   static const unsigned LastIntegralType = 23;
   static const unsigned FirstPromotedIntegralType = 4,
                         LastPromotedIntegralType = 12;
+  static const unsigned FirstCapabilityType = 12;
+  static const unsigned LastCapabilityType = 14;
   static const unsigned FirstPromotedArithmeticType = 0,
                         LastPromotedArithmeticType = 12;
   static const unsigned NumArithmeticTypes = 23;
@@ -7605,6 +7607,12 @@ class BuiltinOperatorOverloadBuilder {
       &ASTContext::UnsignedInt128Ty,
       // End of promoted types.
 
+      // XXXAR: not entirely sure this is right but it fixes
+      // bitwise ops between enums and __(u)intcap_t
+      &ASTContext::IntCapTy,
+      &ASTContext::UnsignedIntCapTy,
+      // Last capability type
+
       &ASTContext::BoolTy,
       &ASTContext::CharTy,
       &ASTContext::WCharTy,
@@ -7614,10 +7622,6 @@ class BuiltinOperatorOverloadBuilder {
       &ASTContext::ShortTy,
       &ASTContext::UnsignedCharTy,
       &ASTContext::UnsignedShortTy,
-      // XXXAR: not entirely sure this is right but it fixes
-      // bitwise ops between enums and __(u)intcap_t
-      &ASTContext::IntCapTy,
-      &ASTContext::UnsignedIntCapTy,
       // End of integral types.
       // FIXME: What about complex? What about half?
     };
@@ -7658,6 +7662,12 @@ class BuiltinOperatorOverloadBuilder {
 /*U128*/ {  Flt,  Dbl, LDbl, U128, U128, U128, U128, U128, U128, U128, U128 },
     };
 
+    if (L >= LastPromotedArithmeticType) {
+      assert(L < LastCapabilityType);
+      assert(R < LastCapabilityType);
+      // intcap_t gets promoted to uintcap_t, everything else returns intcap_t
+      return getArithmeticType(std::max(L, R));
+    }
     assert(L < LastPromotedArithmeticType);
     assert(R < LastPromotedArithmeticType);
     int Idx = ConversionsTable[L][R];
@@ -7762,6 +7772,10 @@ public:
     assert(getArithmeticType(LastPromotedArithmeticType - 1)
              == S.Context.UnsignedInt128Ty &&
            "Invalid last promoted arithmetic type");
+    static_assert(FirstCapabilityType == LastPromotedIntegralType, "");
+    static_assert(LastCapabilityType == LastPromotedIntegralType + 2, "");
+    assert(getArithmeticType(FirstCapabilityType) == S.Context.IntCapTy);
+    assert(getArithmeticType(LastCapabilityType - 1) == S.Context.UnsignedIntCapTy);
   }
 
   // C++ [over.built]p3:
@@ -8183,8 +8197,9 @@ public:
     if (!HasArithmeticOrEnumeralCandidateType)
       return;
 
+    // XXXAR: allow any type as the RHS operand for a bitwise op with capabilities
     for (unsigned Left = FirstPromotedIntegralType;
-         Left < LastPromotedIntegralType; ++Left) {
+         Left < LastCapabilityType; ++Left) {
       for (unsigned Right = FirstPromotedIntegralType;
            Right < LastPromotedIntegralType; ++Right) {
         QualType LandR[2] = { getArithmeticType(Left),
@@ -8195,6 +8210,7 @@ public:
         S.AddBuiltinCandidate(Result, LandR, Args, CandidateSet);
       }
     }
+
   }
 
   // C++ [over.built]p20:
