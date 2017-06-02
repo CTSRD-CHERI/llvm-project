@@ -907,7 +907,8 @@ static SDValue performMULCombine(SDNode *N, SelectionDAG &DAG,
   EVT VT = N->getValueType(0);
 
   if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(N->getOperand(1)))
-    if (!VT.isVector())
+    // XXXAR: This would previously crash with i128. TODO: upstream
+    if (VT.isInteger() && C->getValueType(0).getSizeInBits() <= 64)
       return genConstMult(N->getOperand(0), C->getZExtValue(), SDLoc(N), VT,
                           TL->getScalarShiftAmountTy(DAG.getDataLayout(), VT),
                           DAG);
