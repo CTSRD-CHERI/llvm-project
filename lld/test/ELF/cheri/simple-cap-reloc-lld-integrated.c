@@ -9,10 +9,10 @@
 // RUN: llvm-objdump -h -r -t -C %t-static.exe | FileCheck -check-prefixes DUMP-EXE,STATIC %S/simple-cap-reloc-common.check
 
 // same again for statically dynamically linked exe:
-// Create a dummy shared library otherwise bfd won't create a dynamic executable
-// RUN: %clang_cheri_purecap %S/Inputs/dummy_shlib.c -c -o %T/bfd_dummy_shlib.o
-// RUN: ld.lld -process-cap-relocs  %T/bfd_dummy_shlib.o -shared -o %T/libbfd_dummy_shlib.so
-// RUN: ld.lld -process-cap-relocs -L%T -lbfd_dummy_shlib %t.o -o %t-dynamic.exe
+// Create a dummy shared library otherwise we won't get a dynamic executable
+// RUN: %clang_cheri_purecap %S/Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
+// RUN: ld.lld -process-cap-relocs  %T/integrated_dummy_shlib.o -shared -o %T/libintegrated_dummy_shlib.so
+// RUN: ld.lld -process-cap-relocs -L%T -lintegrated_dummy_shlib %t.o -o %t-dynamic.exe
 // RUN: llvm-objdump -h -r -t -C %t-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %S/simple-cap-reloc-common.check
 
 // Look at shared libraries:

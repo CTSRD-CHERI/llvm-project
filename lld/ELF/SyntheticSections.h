@@ -842,7 +842,7 @@ struct InMemoryCapRelocEntry {
 
 struct CheriCapRelocLocation {
   SymbolBody* BaseSym;
-  int64_t Offset;
+  uint64_t Offset;
   bool NeedsDynReloc;
   bool operator==(const CheriCapRelocLocation& Other) const {
     return BaseSym == Other.BaseSym && Offset == Other.Offset &&
@@ -942,7 +942,7 @@ struct DenseMapInfo<lld::elf::CheriCapRelocLocation> {
     return { nullptr, 0, false };
   }
   static inline lld::elf::CheriCapRelocLocation getTombstoneKey() {
-    return { nullptr, -1, false };
+    return { nullptr, std::numeric_limits<uint64_t>::max(), false };
   }
   static unsigned getHashValue(const lld::elf::CheriCapRelocLocation& Val) {
     auto Pair = std::make_pair(Val.BaseSym, Val.Offset);

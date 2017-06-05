@@ -674,6 +674,20 @@ static int64_t computeMipsAddend(const RelTy &Rel, InputSectionBase &Sec,
   return 0;
 }
 
+
+template<class ELFT>
+static std::string undefinedSymbolMessage(SymbolBody &Sym, InputSectionBase &S,
+                                          uint64_t Offset) {
+  std::string Msg =
+      "undefined symbol: " + toString(Sym) + "\n>>> referenced by ";
+
+  std::string Src = S.getSrcMsg<ELFT>(Offset);
+  if (!Src.empty())
+    Msg += Src + "\n>>>               ";
+  Msg += S.getObjMsg<ELFT>(Offset);
+  return Msg;
+}
+
 template <class ELFT>
 static void reportUndefined(SymbolBody &Sym, InputSectionBase &S,
                             uint64_t Offset) {
@@ -685,14 +699,7 @@ static void reportUndefined(SymbolBody &Sym, InputSectionBase &S,
   if (Config->UnresolvedSymbols == UnresolvedPolicy::Ignore && CanBeExternal)
     return;
 
-  std::string Msg =
-      "undefined symbol: " + toString(Sym) + "\n>>> referenced by ";
-
-  std::string Src = S.getSrcMsg<ELFT>(Offset);
-  if (!Src.empty())
-    Msg += Src + "\n>>>               ";
-  Msg += S.getObjMsg<ELFT>(Offset);
-
+  std::string Msg = undefinedSymbolMessage<ELFT>(Sym, S, Offset);
   if (Config->UnresolvedSymbols == UnresolvedPolicy::WarnAll ||
       (Config->UnresolvedSymbols == UnresolvedPolicy::Warn && CanBeExternal)) {
     warn(Msg);
@@ -1016,35 +1023,44 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
 //           << Twine((int)LocationSym.Type) << " against "
 //           << toString(TargetSym) << "\n";
     // It seems like cap_relocs are generally .data(.rel.ro) + offset and not against the symbol itself
-    int64_t LocationOffset = LocationRel.r_addend;
+    uint64_t LocationOffset = LocationRel.r_addend;
     auto *RawInput = reinterpret_cast<const InMemoryCapRelocEntry<E>*>(
         S->Data.begin() + CapRelocsOffset);
     bool LocNeedsDynReloc = false;
+    // the section where the symbol needing a cap_reloc is defined:
+    InputSectionBase* SourceSection = nullptr;
     if (DefinedRegular* SectionSym = dyn_cast<DefinedRegular>(&LocationSym)) {
-      errs() << "Adding capability relocation at " << toString(*SectionSym)
-             << "(" << SectionSym->Section->Name << "+0x" << utohexstr(LocationOffset)
-             << ") against " << toString(TargetSym) << "\n";
+      if (InputSectionBase* IS = dyn_cast<InputSectionBase>(SectionSym->Section)) {
+        SourceSection = IS;
+        if (Config->Verbose)
+          message("Adding capability relocation against " + toString(TargetSym) +
+                  ::getLocation<ELFT>(*IS, TargetSym, LocationOffset));
+      } else if (Config->Verbose) {
+        message("Adding capability relocation at " + toString(*SectionSym) +
+                "(" + SectionSym->Section->Name + "+0x" +
+                utohexstr(LocationOffset) + ") against " + toString(TargetSym) + "\n");
+      }
     } else {
       error("Unhandled symbol kind for cap_reloc: " + Twine(LocationSym.kind()));
       LocNeedsDynReloc = true;
       continue;
     }
-
-// TODO: handle these cases
-#define UNIMPLEMENTED_KIND(func, msg) \
-    if (TargetSym.func()) { \
-      warn("unimplemented: cap reloc against " msg " symbol " + \
-            toString(TargetSym) + \
-            ::getLocation<ELFT>(*S, TargetSym, CapRelocsOffset)); \
+    if (!SourceSection) {
+      warn("Could not determine source section for cap_reloc used at " +
+           S->template getObjMsg<ELFT>(CapRelocsOffset));
+      SourceSection = S;
     }
-    // UNIMPLEMENTED_KIND(isPreemptible, "preemptible");
-    UNIMPLEMENTED_KIND(isUndefined, "undefined");
-    UNIMPLEMENTED_KIND(isLazy, "lazy");
-    UNIMPLEMENTED_KIND(isShared, "shared");
-    assert(TargetSym.isDefined());
-#undef UNIMPLEMENTED_KIND
 
+    if (TargetSym.isUndefined()) {
+      // TODO: do I need a way to not make this an error?
+      error(undefinedSymbolMessage<ELFT>(TargetSym, *SourceSection, LocationOffset));
+      continue;
+    }
     bool TargetNeedsDynReloc = false;
+    if (TargetSym.isPreemptible()) {
+      // Do we need this?
+      // TargetNeedsDynReloc = true;
+    }
     switch (TargetSym.kind()) {
     case SymbolBody::DefinedRegularKind:
       break;
@@ -1052,14 +1068,23 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
       // TODO: do I need to do anything special here?
       // message("Common symbol: " + toString(TargetSym));
       break;
+    case SymbolBody::SharedKind:
+      if (Config->Static) {
+        error("cannot create a capability relocation against a shared symbol"
+              " when linking statically");
+        continue;
+      }
+      // TODO: shouldn't undefined be an error?
+      TargetNeedsDynReloc = true;
+      break;
     default:
         error("Unhandled symbol kind for cap_reloc target: " +
               Twine(TargetSym.kind()));
         continue;
     }
 
-    LocNeedsDynReloc = LocNeedsDynReloc || Config->Pic;
-    TargetNeedsDynReloc = TargetNeedsDynReloc || Config->Pic;
+    LocNeedsDynReloc = LocNeedsDynReloc || Config->Pic || Config->Pie;
+    TargetNeedsDynReloc = TargetNeedsDynReloc || Config->Pic || Config->Pie;
     uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
     auto It = RelocsMap.insert(std::pair<CheriCapRelocLocation, CheriCapReloc>(
         {&LocationSym, LocationOffset, LocNeedsDynReloc},
@@ -1070,7 +1095,7 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
       continue;
     }
     if (LocNeedsDynReloc) {
-      message("Adding dyn reloc at " + toString(this) + "+0x" + utohexstr(CurrentEntryOffset));
+      // message("Adding dyn reloc at " + toString(this) + "+0x" + utohexstr(CurrentEntryOffset));
       assert(CurrentEntryOffset < getSize());
       In<ELFT>::RelaDyn->addReloc(
           {Target->RelativeRel, this, CurrentEntryOffset, false, &LocationSym, 0});
@@ -1079,7 +1104,7 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
       // Capability target is the second field -> offset + 8
       uint64_t OffsetInOutSec = CurrentEntryOffset + 8;
       assert(OffsetInOutSec < getSize());
-      message("Adding dyn reloc at " + toString(this) + "+0x" + utohexstr(OffsetInOutSec));
+      // message("Adding dyn reloc at " + toString(this) + "+0x" + utohexstr(OffsetInOutSec));
       In<ELFT>::RelaDyn->addReloc(
           {Target->RelativeRel, this, OffsetInOutSec, false,
            &TargetSym, 0});
