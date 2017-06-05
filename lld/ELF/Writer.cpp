@@ -57,6 +57,8 @@ private:
   void finalizeSections();
   void addPredefinedSections();
 
+  void combineCapRelocsSections();
+
   std::vector<PhdrEntry> createPhdrs();
   void removeEmptyPTLoad();
   void addPtArmExid(std::vector<PhdrEntry> &Phdrs);
@@ -202,6 +204,18 @@ template <class ELFT> static void combineEhFrameSections() {
   V.erase(std::remove(V.begin(), V.end(), nullptr), V.end());
 }
 
+template <class ELFT> void Writer<ELFT>::combineCapRelocsSections() {
+  for (InputSectionBase *&S : InputSections) {
+    if (S->Name != "__cap_relocs")
+      continue;
+    // Factory.addInputSec(S, getOutputSectionName(S->Name), In<ELFT>::CapRelocs->OutSec);
+    In<ELFT>::CapRelocs->addSection(S);
+    S = nullptr;
+  }
+  std::vector<InputSectionBase *> &V = InputSections;
+  V.erase(std::remove(V.begin(), V.end(), nullptr), V.end());
+}
+
 template <class ELFT> void Writer<ELFT>::clearOutputSections() {
   // Clear the OutputSections to make sure it is not used anymore. Any
   // code from this point on should be using the linker script
@@ -218,9 +232,13 @@ template <class ELFT> void Writer<ELFT>::run() {
   createSyntheticSections();
   combineMergableSections();
 
-  if (!Config->Relocatable)
+  if (!Config->Relocatable) {
     combineEhFrameSections<ELFT>();
-
+    if (Config->ProcessCapRelocs) {
+      combineCapRelocsSections();
+      InputSections.push_back(In<ELFT>::CapRelocs);
+    }
+  }
   // We need to create some reserved symbols such as _end. Create them.
   if (!Config->Relocatable)
     addReservedSymbols();
@@ -382,6 +400,9 @@ template <class ELFT> void Writer<ELFT>::createSyntheticSections() {
   bool HasDynSymTab = !Symtab<ELFT>::X->getSharedFiles().empty() ||
                       Config->Pic || (Config->ExportDynamic && !Config->Static);
   if (Config->EMachine == EM_MIPS) {
+    if (Config->ProcessCapRelocs) {
+      In<ELFT>::CapRelocs = make<CheriCapRelocsSection<ELFT>>();
+    }
     if (!Config->Shared && HasDynSymTab) {
       InX::MipsRldMap = make<MipsRldMapSection>();
       Add(InX::MipsRldMap);
@@ -1180,6 +1201,13 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   // we can correctly decide if a dynamic relocation is needed.
   forEachRelSec(scanRelocations<ELFT>);
 
+  // Now handle __cap_relocs (must be before RelaDyn because it might
+  // result in new dynamic relocations being added)
+  if (Config->ProcessCapRelocs) {
+    applySynthetic({In<ELFT>::CapRelocs},
+                   [](SyntheticSection *SS) { SS->finalizeContents(); });
+  }
+
   if (InX::Plt && !InX::Plt->empty())
     InX::Plt->addSymbols();
   if (InX::Iplt && !InX::Iplt->empty())
@@ -1188,6 +1216,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   // Now that we have defined all possible global symbols including linker-
   // synthesized ones. Visit all symbols to give the finishing touches.
   for (Symbol *S : Symtab<ELFT>::X->getSymbols()) {
+    // XXXAR: we should always include the .size.foo symbols
     SymbolBody *Body = S->body();
 
     if (!includeInSymtab(*Body))

@@ -2387,6 +2387,150 @@ InputSection *ThunkSection::getTargetInputSection() const {
   return T->getTargetInputSection();
 }
 
+template <class ELFT>
+CheriCapRelocsSection<ELFT>::CheriCapRelocsSection()
+    : SyntheticSection(SHF_ALLOC, SHT_PROGBITS, 8, "__cap_relocs") {
+  this->Entsize = RelocSize;
+}
+
+// See CheriBSD crt_init_globals()
+template<endianness E>
+struct InMemoryCapRelocEntry {
+  using CapRelocUint64 = support::detail::packed_endian_specific_integral<uint64_t, E, aligned>;
+  InMemoryCapRelocEntry(uint64_t Loc, uint64_t Obj, uint64_t Off, uint64_t S, uint64_t Perms)
+    : capability_location(Loc), object(Obj), offset(Off), size(S), permissions(Perms) {}
+  CapRelocUint64 capability_location;
+  CapRelocUint64 object;
+  CapRelocUint64 offset;
+  CapRelocUint64 size;
+  CapRelocUint64 permissions;
+};
+
+// TODO: copy MipsABIFlagsSection::create() instead of current impl?
+template <class ELFT>
+void CheriCapRelocsSection<ELFT>::addSection(InputSectionBase *S) {
+  constexpr endianness E = ELFT::TargetEndianness;
+  assert(S->Name == "__cap_relocs");
+  assert(S->AreRelocsRela && "__cap_relocs should be RELA");
+  // make sure the section is no longer processed
+  S->OutSec = nullptr;
+  S->Live = false;
+
+  if ((S->getSize() % Entsize) != 0) {
+      error("__cap_relocs section size is not a multiple of " + Twine(Entsize) +
+            ": " + toString(S));
+      return;
+  }
+  size_t NumCapRelocs = S->getSize() / RelocSize;
+  if (NumCapRelocs * 2 != S->NumRelocations) {
+    error("expected " + Twine(NumCapRelocs * 2) + " relocations for " + toString(S) +
+          " but got " + Twine(S->NumRelocations));
+    return;
+  }
+  llvm::errs() << "Adding cap relocs from " << toString(S->File) << "\n";
+  // TODO: sort by offset (or is that always true?
+  const auto Rels = S->relas<ELFT>();
+  for (auto I = Rels.begin(), End = Rels.end(); I != End; ++I) {
+    const auto& LocationRel = *I;
+    ++I;
+    const auto& TargetRel = *I;
+    if ((LocationRel.r_offset % Entsize) != 0) {
+        error("corrupted __cap_relocs:  expected Relocation offset to be a "
+              "multiple of " + Twine(Entsize) + " but got " + Twine(LocationRel.r_offset));
+        return;
+    }
+    if (TargetRel.r_offset != LocationRel.r_offset + 8) {
+        error("corrupted __cap_relocs: expected target relocation (" +
+              Twine(TargetRel.r_offset) + " to directly follow location relocation (" +
+              Twine(LocationRel.r_offset) + ")");
+        return;
+    }
+    assert(LocationRel.r_offset + Entsize <= S->getSize());
+    if (LocationRel.getType(Config->IsMips64EL) != R_MIPS_64) {
+      error("Exptected a R_MIPS_64 relocation in __cap_relocs but got " +
+            toString(LocationRel.getType(Config->IsMips64EL)));
+      continue;
+    }
+    if (TargetRel.getType(Config->IsMips64EL) != R_MIPS_64) {
+      error("Exptected a R_MIPS_64 relocation in __cap_relocs but got " +
+            toString(LocationRel.getType(Config->IsMips64EL)));
+      continue;
+    }
+    SymbolBody &LocationSym = S->getFile<ELFT>()->getRelocTargetSym(LocationRel);
+    SymbolBody &TargetSym = S->getFile<ELFT>()->getRelocTargetSym(TargetRel);
+
+    if (LocationSym.File != S->File) {
+      error("Expected capability relocation to point to " + toString(S->File) +
+            " but got " + toString(LocationSym.File));
+      continue;
+    }
+//    errs() << "Adding cap reloc at " << toString(LocationSym) << " type "
+//           << Twine((int)LocationSym.Type) << " against "
+//           << toString(TargetSym) << "\n";
+    // It seems like cap_relocs are generally .data(.rel.ro) + offset and not against the symbol itself
+    int64_t LocationOffset = LocationRel.r_addend;
+    auto *RawInput = reinterpret_cast<const InMemoryCapRelocEntry<E>*>(S->Data.begin() + LocationRel.r_offset);
+    // TODO: duplicatates
+    auto It = RelocsMap.try_emplace(std::make_pair(&LocationSym, LocationOffset),
+                                    &TargetSym, RawInput->offset, RawInput->size);
+    if (!It.second) {
+      // Maybe happens with vtables?
+      error("Symbol already added to cap relocs");
+      continue;
+    }
+  }
+}
+
+template <class ELFT>
+void CheriCapRelocsSection<ELFT>::finalizeContents() {
+  errs() << __PRETTY_FUNCTION__ << "\n";
+  // TODO: sort by address for improved cache behaviour?
+  // TODO: add the dynamic relocations here:
+  for (const auto &I : RelocsMap) {
+    // TODO: unresolved symbols -> add dynamic reloc
+    const CheriCapReloc& Reloc = I.second;
+    SymbolBody *LocationSym = I.first.first;
+    uint64_t LocationOffset = I.first.second;
+    if (DefinedRegular* SectionSym = dyn_cast<DefinedRegular>(LocationSym)) {
+      errs() << "Adding capability relocation at " << toString(*SectionSym)
+             << "(" << SectionSym->Section->Name << "+0x" << utohexstr(LocationOffset)
+             << ") against " << toString(*Reloc.Target) << "\n";
+    } else {
+      error("Unhandled symbol kind for cap_reloc: " + Twine(LocationSym->kind()));
+      continue;
+    }
+  }
+}
+
+template <class ELFT>
+void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
+  errs() << __PRETTY_FUNCTION__ << Buf << "\n";
+  constexpr endianness E = ELFT::TargetEndianness;
+  static_assert(RelocSize == sizeof(InMemoryCapRelocEntry<E>), "cap relocs size mismatch");
+  uint64_t Offset = 0;
+  for (const auto &I : RelocsMap) {
+    const CheriCapReloc& Reloc = I.second;
+    SymbolBody *LocationSym = I.first.first;
+    uint64_t LocationOffset = I.first.second;
+    uint64_t LocationVA = LocationSym->getVA(LocationOffset);
+    uint64_t TargetVA = Reloc.Target->getVA(0);
+    uint64_t TargetOffset = Reloc.Offset;
+    uint64_t TargetSize = Reloc.Target->template getSize<ELFT>();
+    uint64_t Permissions = Reloc.Target->isFunc() ? 1ULL << 63 : 0;
+    InMemoryCapRelocEntry<E> Entry { LocationVA, TargetVA, TargetOffset, TargetSize, Permissions };
+    memcpy(Buf + Offset, &Entry, sizeof(Entry));
+    if (Config->Verbose) {
+      errs() << "Added capability reloc: loc=" << utohexstr(LocationVA)
+             << ", object=" << utohexstr(TargetVA)
+             << ", offset=" << utohexstr(TargetOffset)
+             << ", size=" << utohexstr(TargetSize)
+             << ", permissions=" << utohexstr(Permissions) << "\n";
+    }
+    Offset += RelocSize;
+  }
+  assert(Offset == getSize() && "Not all data written?");
+}
+
 InputSection *InX::ARMAttributes;
 BssSection *InX::Bss;
 BssSection *InX::BssRelRo;
@@ -2488,3 +2632,8 @@ template class elf::EhFrameSection<ELF32LE>;
 template class elf::EhFrameSection<ELF32BE>;
 template class elf::EhFrameSection<ELF64LE>;
 template class elf::EhFrameSection<ELF64BE>;
+
+template class elf::CheriCapRelocsSection<ELF32LE>;
+template class elf::CheriCapRelocsSection<ELF32BE>;
+template class elf::CheriCapRelocsSection<ELF64LE>;
+template class elf::CheriCapRelocsSection<ELF64BE>;

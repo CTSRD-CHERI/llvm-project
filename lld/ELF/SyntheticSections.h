@@ -825,6 +825,29 @@ private:
   size_t Size = 0;
 };
 
+template <class ELFT>
+class CheriCapRelocsSection : public SyntheticSection {
+public:
+  CheriCapRelocsSection();
+  static constexpr size_t RelocSize = 40;
+  // Add a __cap_relocs section from in input object file
+  void addSection(InputSectionBase *S);
+  size_t getSize() const override { return RelocsMap.size() * Entsize; }
+  void finalizeContents() override;
+  void writeTo(uint8_t *Buf) override;
+private:
+  struct CheriCapReloc {
+    CheriCapReloc(SymbolBody *T, uint64_t O, uint64_t L)
+      : Target(T), Offset(O), Length(L) {}
+    SymbolBody *Target;
+    uint64_t Offset;
+    uint64_t Length;
+  };
+  // map or vector?
+  llvm::DenseMap<std::pair<SymbolBody *, int64_t>, CheriCapReloc> RelocsMap;
+  // TODO: list of added dynamic relocations?
+};
+
 template <class ELFT> InputSection *createCommonSection();
 InputSection *createInterpSection();
 template <class ELFT> MergeInputSection *createCommentSection();
@@ -858,6 +881,8 @@ struct InX {
 };
 
 template <class ELFT> struct In : public InX {
+  // XXXAR: needs to be templated because SymbolBody->getSize() needs ELFT
+  static CheriCapRelocsSection <ELFT> *CapRelocs;
   static EhFrameHeader<ELFT> *EhFrameHdr;
   static EhFrameSection<ELFT> *EhFrame;
   static HashTableSection<ELFT> *HashTab;
@@ -869,6 +894,7 @@ template <class ELFT> struct In : public InX {
   static VersionNeedSection<ELFT> *VerNeed;
 };
 
+template <class ELFT> CheriCapRelocsSection<ELFT> *In<ELFT>::CapRelocs;
 template <class ELFT> EhFrameHeader<ELFT> *In<ELFT>::EhFrameHdr;
 template <class ELFT> EhFrameSection<ELFT> *In<ELFT>::EhFrame;
 template <class ELFT> HashTableSection<ELFT> *In<ELFT>::HashTab;

@@ -126,6 +126,7 @@ struct Configuration {
   bool OptRemarksWithHotness;
   bool Pie;
   bool PrintGcSections;
+  bool ProcessCapRelocs = false;
   bool Relocatable;
   bool SaveTemps;
   bool SingleRoRx;

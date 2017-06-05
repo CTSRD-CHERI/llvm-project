@@ -204,6 +204,9 @@ def print_gc_sections: F<"print-gc-sections">,
 def print_map: F<"print-map">,
   HelpText<"Print a link map to the standard output">;
 
+def process_cap_relocs: F<"process-cap-relocs">,
+  HelpText<"Enable special processing of __cap_relocs sections">;
+
 def reproduce: S<"reproduce">,
   HelpText<"Dump linker invocation and input files for debugging">;
 

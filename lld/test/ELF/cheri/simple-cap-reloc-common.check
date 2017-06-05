@@ -46,10 +46,10 @@
 
 // Check that static & dynamic binaries and shared libraries have a valid __cap_relocs section:
 // DUMP-EXE-LABEL: CAPABILITY RELOCATION RECORDS:
-// DUMP-EXE-NEXT: 0x[[XPTR_ADDR:[0-9a-f]+]]    Base: x (0x[[X_ADDR:[0-9a-f]+]])             Offset: 0x0000000000000000        Length: 0x0000000000000004        Permissions: 0x00000000
-// DUMP-EXE-NEXT: 0x[[BUFPTR_ADDR:[0-9a-f]+]]  Base: buffer (0x[[BUFFER_ADDR:[0-9a-f]+]])   Offset: 0x0000000000000000        Length: 0x000000000000002a        Permissions: 0x00000000
+// DUMP-EXE-DAG: 0x[[XPTR_ADDR:[0-9a-f]+]]    Base: x (0x[[X_ADDR:[0-9a-f]+]])             Offset: 0x0000000000000000        Length: 0x0000000000000004        Permissions: 0x00000000
+// DUMP-EXE-DAG: 0x[[BUFPTR_ADDR:[0-9a-f]+]]  Base: buffer (0x[[BUFFER_ADDR:[0-9a-f]+]])   Offset: 0x0000000000000000        Length: 0x000000000000002a        Permissions: 0x00000000
 // For some reason llvm-objdump doesn't find the name of __start here:
-// DUMP-EXE-NEXT: 0x[[FN_PTR_ADDR:[0-9a-f]+]]  Base: {{(__start *)?}}(0x[[__START_ADDR:[0-9a-f]+]]) Offset: 0x0000000000000000        Length: 0x00000000[[__START_LEN:[0-9a-f]+]]        Permissions: 0x8000000000000000 (Function)
+// DUMP-EXE-DAG: 0x[[FN_PTR_ADDR:[0-9a-f]+]]  Base: {{(__start *)?}}(0x[[__START_ADDR:[0-9a-f]+]]) Offset: 0x0000000000000000        Length: 0x00000000[[__START_LEN:[0-9a-f]+]]        Permissions: 0x8000000000000000 (Function)
 
 // DUMP-EXE-LABEL: Sections:
 // STATIC-NOT:   {{.*}}.interp
