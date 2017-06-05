@@ -26,6 +26,7 @@
 #include "InputSection.h"
 #include "llvm/ADT/MapVector.h"
 #include "llvm/MC/StringTableBuilder.h"
+#include "llvm/Support/Endian.h"
 
 #include <set>
 
@@ -825,6 +826,30 @@ private:
   size_t Size = 0;
 };
 
+// See CheriBSD crt_init_globals()
+template<llvm::support::endianness E>
+struct InMemoryCapRelocEntry {
+  using CapRelocUint64 = llvm::support::detail::packed_endian_specific_integral<uint64_t, E, llvm::support::aligned>;
+  InMemoryCapRelocEntry(uint64_t Loc, uint64_t Obj, uint64_t Off, uint64_t S, uint64_t Perms)
+    : capability_location(Loc), object(Obj), offset(Off), size(S), permissions(Perms) {}
+  CapRelocUint64 capability_location;
+  CapRelocUint64 object;
+  CapRelocUint64 offset;
+  CapRelocUint64 size;
+  CapRelocUint64 permissions;
+};
+
+
+struct CheriCapRelocLocation {
+  SymbolBody* BaseSym;
+  int64_t Offset;
+  bool NeedsDynReloc;
+  bool operator==(const CheriCapRelocLocation& Other) const {
+    return BaseSym == Other.BaseSym && Offset == Other.Offset &&
+        NeedsDynReloc == Other.NeedsDynReloc;
+  }
+};
+
 template <class ELFT>
 class CheriCapRelocsSection : public SyntheticSection {
 public:
@@ -836,15 +861,17 @@ public:
   void finalizeContents() override;
   void writeTo(uint8_t *Buf) override;
 private:
+  void processSection(InputSectionBase *S);
   struct CheriCapReloc {
-    CheriCapReloc(SymbolBody *T, uint64_t O, uint64_t L)
-      : Target(T), Offset(O), Length(L) {}
+    CheriCapReloc(SymbolBody *T, uint64_t O, uint64_t L, bool Dyn)
+      : Target(T), Offset(O), Length(L), NeedsDynReloc(Dyn) {}
     SymbolBody *Target;
     uint64_t Offset;
     uint64_t Length;
+    bool NeedsDynReloc;
   };
   // map or vector?
-  llvm::DenseMap<std::pair<SymbolBody *, int64_t>, CheriCapReloc> RelocsMap;
+  llvm::MapVector<CheriCapRelocLocation, CheriCapReloc> RelocsMap;
   // TODO: list of added dynamic relocations?
 };
 
@@ -906,5 +933,26 @@ template <class ELFT> VersionTableSection<ELFT> *In<ELFT>::VerSym;
 template <class ELFT> VersionNeedSection<ELFT> *In<ELFT>::VerNeed;
 } // namespace elf
 } // namespace lld
+
+
+namespace llvm {
+template<>
+struct DenseMapInfo<lld::elf::CheriCapRelocLocation> {
+  static inline lld::elf::CheriCapRelocLocation getEmptyKey() {
+    return { nullptr, 0, false };
+  }
+  static inline lld::elf::CheriCapRelocLocation getTombstoneKey() {
+    return { nullptr, -1, false };
+  }
+  static unsigned getHashValue(const lld::elf::CheriCapRelocLocation& Val) {
+    auto Pair = std::make_pair(Val.BaseSym, Val.Offset);
+    return DenseMapInfo<decltype(Pair)>::getHashValue(Pair);
+  }
+  static bool isEqual(const lld::elf::CheriCapRelocLocation& LHS,
+                      const lld::elf::CheriCapRelocLocation& RHS) {
+    return LHS == RHS;
+  }
+};
+}
 
 #endif

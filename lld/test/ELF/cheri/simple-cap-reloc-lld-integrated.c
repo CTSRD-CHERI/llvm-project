@@ -10,12 +10,12 @@
 
 // same again for statically dynamically linked exe:
 // Create a dummy shared library otherwise bfd won't create a dynamic executable
-// RUNTODO: %clang_cheri_purecap %S/Inputs/dummy_shlib.c -c -o %T/bfd_dummy_shlib.o
-// RUNTODO: ld.lld -process-cap-relocs  %T/bfd_dummy_shlib.o -shared -o %T/libbfd_dummy_shlib.so
-// RUNTODO: ld.lld -process-cap-relocs -L%T -lbfd_dummy_shlib %t.o -o %t-dynamic.exe
-// RUNTODO: llvm-objdump -h -r -t -C %t-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %S/simple-cap-reloc-common.check
+// RUN: %clang_cheri_purecap %S/Inputs/dummy_shlib.c -c -o %T/bfd_dummy_shlib.o
+// RUN: ld.lld -process-cap-relocs  %T/bfd_dummy_shlib.o -shared -o %T/libbfd_dummy_shlib.so
+// RUN: ld.lld -process-cap-relocs -L%T -lbfd_dummy_shlib %t.o -o %t-dynamic.exe
+// RUN: llvm-objdump -h -r -t -C %t-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %S/simple-cap-reloc-common.check
 
 // Look at shared libraries:
-// RUNTODO: ld.lld -process-cap-relocs %t.o -shared -o %t.so
-// RUNTODO: llvm-readobj -r -s %t.so | FileCheck -check-prefix SHLIB %S/simple-cap-reloc-common.check
-// RUNTODO: llvm-objdump -C -t %t.so | FileCheck -check-prefix DUMP-SHLIB %S/simple-cap-reloc-common.check
+// RUN: ld.lld -process-cap-relocs %t.o -shared -o %t.so
+// RUN: llvm-readobj -r -s %t.so | FileCheck -check-prefixes SHLIB,SHLIB-INTEGRATED %S/simple-cap-reloc-common.check
+// RUN: llvm-objdump -C -t %t.so | FileCheck -check-prefixes DUMP-SHLIB,DUMP-SHLIB-INTERNAL %S/simple-cap-reloc-common.check

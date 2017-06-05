@@ -16,6 +16,6 @@
 // RUN: llvm-objdump -h -r -t -C %t-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %S/simple-cap-reloc-common.check
 
 // RUN: %bigarreau_clang_link_lld %t.o -shared -o %t.so
-// RUN: llvm-readobj -r -s %t.so | FileCheck -check-prefix SHLIB %S/simple-cap-reloc-common.check
-// RUN: llvm-objdump -C -t %t.so | FileCheck -check-prefix DUMP-SHLIB %S/simple-cap-reloc-common.check
+// RUN: llvm-readobj -r -s %t.so | FileCheck -check-prefixes SHLIB,SHLIB-CAPSIZEFIX %S/simple-cap-reloc-common.check
+// RUN: llvm-objdump -C -t %t.so | FileCheck -check-prefixes DUMP-SHLIB,DUMP-SHLIB-EXTERNAL %S/simple-cap-reloc-common.check
 

@@ -967,6 +967,127 @@ template <class ELFT> void elf::scanRelocations(InputSectionBase &S) {
     scanRelocs<ELFT>(S, S.rels<ELFT>());
 }
 
+template <class ELFT>
+void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
+  constexpr endianness E = ELFT::TargetEndianness;
+  // TODO: sort by offset (or is that always true?
+  const auto Rels = S->relas<ELFT>();
+  for (auto I = Rels.begin(), End = Rels.end(); I != End; ++I) {
+    const auto& LocationRel = *I;
+    ++I;
+    const auto& TargetRel = *I;
+    if ((LocationRel.r_offset % Entsize) != 0) {
+        error("corrupted __cap_relocs:  expected Relocation offset to be a "
+              "multiple of " + Twine(Entsize) + " but got " + Twine(LocationRel.r_offset));
+        return;
+    }
+    if (TargetRel.r_offset != LocationRel.r_offset + 8) {
+        error("corrupted __cap_relocs: expected target relocation (" +
+              Twine(TargetRel.r_offset) + " to directly follow location relocation (" +
+              Twine(LocationRel.r_offset) + ")");
+        return;
+    }
+    if (LocationRel.r_addend < 0) {
+        error("corrupted __cap_relocs: addend is less than zero in" +
+              toString(S) + ": " + Twine(LocationRel.r_addend));
+        return;
+    }
+    uint64_t CapRelocsOffset = LocationRel.r_offset;
+    assert(CapRelocsOffset + Entsize <= S->getSize());
+    if (LocationRel.getType(Config->IsMips64EL) != R_MIPS_64) {
+      error("Exptected a R_MIPS_64 relocation in __cap_relocs but got " +
+            toString(LocationRel.getType(Config->IsMips64EL)));
+      continue;
+    }
+    if (TargetRel.getType(Config->IsMips64EL) != R_MIPS_64) {
+      error("Exptected a R_MIPS_64 relocation in __cap_relocs but got " +
+            toString(LocationRel.getType(Config->IsMips64EL)));
+      continue;
+    }
+    SymbolBody &LocationSym = S->getFile<ELFT>()->getRelocTargetSym(LocationRel);
+    SymbolBody &TargetSym = S->getFile<ELFT>()->getRelocTargetSym(TargetRel);
+
+    if (LocationSym.File != S->File) {
+      error("Expected capability relocation to point to " + toString(S->File) +
+            " but got " + toString(LocationSym.File));
+      continue;
+    }
+//    errs() << "Adding cap reloc at " << toString(LocationSym) << " type "
+//           << Twine((int)LocationSym.Type) << " against "
+//           << toString(TargetSym) << "\n";
+    // It seems like cap_relocs are generally .data(.rel.ro) + offset and not against the symbol itself
+    int64_t LocationOffset = LocationRel.r_addend;
+    auto *RawInput = reinterpret_cast<const InMemoryCapRelocEntry<E>*>(
+        S->Data.begin() + CapRelocsOffset);
+    bool LocNeedsDynReloc = false;
+    if (DefinedRegular* SectionSym = dyn_cast<DefinedRegular>(&LocationSym)) {
+      errs() << "Adding capability relocation at " << toString(*SectionSym)
+             << "(" << SectionSym->Section->Name << "+0x" << utohexstr(LocationOffset)
+             << ") against " << toString(TargetSym) << "\n";
+    } else {
+      error("Unhandled symbol kind for cap_reloc: " + Twine(LocationSym.kind()));
+      LocNeedsDynReloc = true;
+      continue;
+    }
+
+// TODO: handle these cases
+#define UNIMPLEMENTED_KIND(func, msg) \
+    if (TargetSym.func()) { \
+      warn("unimplemented: cap reloc against " msg " symbol " + \
+            toString(TargetSym) + \
+            ::getLocation<ELFT>(*S, TargetSym, CapRelocsOffset)); \
+    }
+    // UNIMPLEMENTED_KIND(isPreemptible, "preemptible");
+    UNIMPLEMENTED_KIND(isUndefined, "undefined");
+    UNIMPLEMENTED_KIND(isLazy, "lazy");
+    UNIMPLEMENTED_KIND(isShared, "shared");
+    assert(TargetSym.isDefined());
+#undef UNIMPLEMENTED_KIND
+
+    bool TargetNeedsDynReloc = false;
+    switch (TargetSym.kind()) {
+    case SymbolBody::DefinedRegularKind:
+      break;
+    case SymbolBody::DefinedCommonKind:
+      // TODO: do I need to do anything special here?
+      // message("Common symbol: " + toString(TargetSym));
+      break;
+    default:
+        error("Unhandled symbol kind for cap_reloc target: " +
+              Twine(TargetSym.kind()));
+        continue;
+    }
+
+    LocNeedsDynReloc = LocNeedsDynReloc || Config->Pic;
+    TargetNeedsDynReloc = TargetNeedsDynReloc || Config->Pic;
+    uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
+    auto It = RelocsMap.insert(std::pair<CheriCapRelocLocation, CheriCapReloc>(
+        {&LocationSym, LocationOffset, LocNeedsDynReloc},
+        {&TargetSym, RawInput->offset,RawInput->size, TargetNeedsDynReloc}));
+    if (!It.second) {
+      // Maybe happens with vtables?
+      error("Symbol already added to cap relocs");
+      continue;
+    }
+    if (LocNeedsDynReloc) {
+      message("Adding dyn reloc at " + toString(this) + "+0x" + utohexstr(CurrentEntryOffset));
+      assert(CurrentEntryOffset < getSize());
+      In<ELFT>::RelaDyn->addReloc(
+          {Target->RelativeRel, this, CurrentEntryOffset, false, &LocationSym, 0});
+    }
+    if (TargetNeedsDynReloc) {
+      // Capability target is the second field -> offset + 8
+      uint64_t OffsetInOutSec = CurrentEntryOffset + 8;
+      assert(OffsetInOutSec < getSize());
+      message("Adding dyn reloc at " + toString(this) + "+0x" + utohexstr(OffsetInOutSec));
+      In<ELFT>::RelaDyn->addReloc(
+          {Target->RelativeRel, this, OffsetInOutSec, false,
+           &TargetSym, 0});
+    }
+  }
+}
+
+
 // Insert the Thunks for OutputSection OS into their designated place
 // in the Sections vector, and recalculate the InputSection output section
 // offsets.
@@ -1087,3 +1208,9 @@ template void elf::scanRelocations<ELF32LE>(InputSectionBase &);
 template void elf::scanRelocations<ELF32BE>(InputSectionBase &);
 template void elf::scanRelocations<ELF64LE>(InputSectionBase &);
 template void elf::scanRelocations<ELF64BE>(InputSectionBase &);
+
+
+template void elf::CheriCapRelocsSection<ELF32LE>::processSection(InputSectionBase*);
+template void elf::CheriCapRelocsSection<ELF32BE>::processSection(InputSectionBase*);
+template void elf::CheriCapRelocsSection<ELF64LE>::processSection(InputSectionBase*);
+template void elf::CheriCapRelocsSection<ELF64BE>::processSection(InputSectionBase*);
