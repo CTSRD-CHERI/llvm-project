@@ -19,4 +19,6 @@ struct QMapNodeBase
 
     bool comparisonOp() const { return (p & Mask) == Black; }
     bool comparisonOp2() const { return Red == (p & Mask); }
+
+    bool capRHS() const { return (Black | p) == p; }
 };

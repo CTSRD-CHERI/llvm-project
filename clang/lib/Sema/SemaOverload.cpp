@@ -8201,7 +8201,7 @@ public:
     for (unsigned Left = FirstPromotedIntegralType;
          Left < LastCapabilityType; ++Left) {
       for (unsigned Right = FirstPromotedIntegralType;
-           Right < LastPromotedIntegralType; ++Right) {
+           Right < LastCapabilityType; ++Right) {
         QualType LandR[2] = { getArithmeticType(Left),
                               getArithmeticType(Right) };
         QualType Result = (Op == OO_LessLess || Op == OO_GreaterGreater)
