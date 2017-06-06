@@ -790,6 +790,17 @@ static Expected<uint64_t> getSymbolAddress(const object::ObjectFile &Obj,
   return Ret;
 }
 
+static StringRef getSymbolName(const object::ObjectFile &Obj,
+                               const RelocationRef &Reloc) {
+  object::symbol_iterator Sym = Reloc.getSymbol();
+  if (Sym != Obj.symbol_end()) {
+    Expected<StringRef> SymNameOrErr = Sym->getName();
+    if (SymNameOrErr && !SymNameOrErr->empty())
+      return *SymNameOrErr;
+  }
+  return "<unknown symbol>";
+}
+
 static bool isRelocScattered(const object::ObjectFile &Obj,
                              const RelocationRef &Reloc) {
   const MachOObjectFile *MachObj = dyn_cast<MachOObjectFile>(&Obj);
@@ -921,10 +932,19 @@ DWARFContextInMemory::DWARFContextInMemory(const object::ObjectFile &Obj,
         object::RelocVisitor V(Obj);
         object::RelocToApply R(V.visit(Reloc.getType(), Reloc, *SymAddrOrErr));
         if (V.error()) {
+          static unsigned FailedRelocs = 0;
+          constexpr unsigned MAX_FAILED_RELOCS = 20;
           SmallString<32> Name;
           Reloc.getTypeName(Name);
-          errs() << "error: failed to compute relocation: "
-                 << Name << "\n";
+          FailedRelocs++;
+          if (FailedRelocs < MAX_FAILED_RELOCS) {
+            errs() << "error: failed to compute relocation: "
+                   << Name << " against " << getSymbolName(Obj, Reloc) << "\n";
+          } else if (FailedRelocs == MAX_FAILED_RELOCS) {
+            errs() << "error: Failed to compute more than " << MAX_FAILED_RELOCS
+                   << " DWARF relocations! Probably a library is missing from"
+                   << " the linker commmand line or -Wl,-z,notext is needed.\n";
+          }
           continue;
         }
         uint64_t Address = Reloc.getOffset();
