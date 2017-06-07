@@ -4546,7 +4546,38 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     Callee.setFunctionPointer(CalleePtr);
   }
 
-  return EmitCall(FnInfo, Callee, ReturnValue, Args);
+  auto ret = EmitCall(FnInfo, Callee, ReturnValue, Args);
+  // If we're doing a CHERI ccall in C++ mode and have exceptions enabled, then
+  // translate the CHERI errno value into an exception.
+  if (CallCHERIInvoke && getLangOpts().CPlusPlus && getLangOpts().Exceptions &&
+      TargetDecl && !TargetDecl->hasAttr<NoThrowAttr>()) {
+    auto &M = CGM.getModule();
+    auto *CheriErrno = M.getNamedGlobal("cherierrno");
+    if (!CheriErrno) {
+      CheriErrno = new llvm::GlobalVariable(M, IntTy,
+          /*isConstant*/false, llvm::GlobalValue::ExternalLinkage,
+          nullptr, "cherierrno");
+      CheriErrno->setThreadLocal(true);
+    }
+    // FIXME: Don't hard code 4-byte alignment for int!
+    auto *ErrVal = Builder.CreateLoad(Address(CheriErrno, CharUnits::fromQuantity(4)));
+    auto *IsZero = Builder.CreateICmpEQ(ErrVal,
+        llvm::Constant::getNullValue(ErrVal->getType()));
+    auto *Continue = createBasicBlock("cheri_invoke_continue");
+    auto *Error = createBasicBlock("cheri_invoke_fail");
+    Builder.CreateCondBr(IsZero, Continue, Error);
+    llvm::FunctionType *FTy = llvm::FunctionType::get(VoidTy, IntTy, false);
+    llvm::AttrBuilder B;
+    B.addAttribute(llvm::Attribute::NoReturn);
+    auto *ErrorFn = CGM.CreateRuntimeFunction(FTy, "__cxa_cheri_sandbox_invoke_failure",
+        llvm::AttributeList::get(getLLVMContext(),
+          llvm::AttributeList::FunctionIndex, B));
+    EmitBlock(Error);
+    Builder.CreateCall(ErrorFn, ErrVal);
+    Builder.CreateUnreachable();
+    EmitBlock(Continue);
+  }
+  return ret;
 }
 
 LValue CodeGenFunction::
