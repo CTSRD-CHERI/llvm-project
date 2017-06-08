@@ -2459,6 +2459,11 @@ void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     uint64_t TargetVA = Reloc.NeedsDynReloc ? 0 : Reloc.Target->getVA(0);
     uint64_t TargetOffset = Reloc.Offset;
     uint64_t TargetSize = Reloc.Target->template getSize<ELFT>();
+    if (TargetSize == 0) {
+      warn("could not determine size of " + toString(*Reloc.Target));
+      // TODO: use section size (or let RTLD do that?)
+      TargetSize = std::numeric_limits<uint64_t>::max();
+    }
     uint64_t Permissions = Reloc.Target->isFunc() ? 1ULL << 63 : 0;
     InMemoryCapRelocEntry<E> Entry { LocationVA, TargetVA, TargetOffset, TargetSize, Permissions };
     memcpy(Buf + Offset, &Entry, sizeof(Entry));
