@@ -2461,8 +2461,19 @@ void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     uint64_t TargetSize = Reloc.Target->template getSize<ELFT>();
     if (TargetSize == 0) {
       warn("could not determine size of " + toString(*Reloc.Target));
-      // TODO: use section size (or let RTLD do that?)
-      TargetSize = std::numeric_limits<uint64_t>::max();
+      // TODO: check .size.foo symbols
+      // TODO: also make this work for shared symbols
+      if (OutputSection* OS = Reloc.Target->getOutputSection()) {
+        TargetSize = OS->Size;
+        // TODO: subtract offset of symbol in OS also for non-bss symbols
+        if (auto* CSym = dyn_cast<DefinedCommon>(Reloc.Target)) {
+          TargetSize -= CSym->Offset;
+        }
+      } else {
+        warn("Could not find size for symbol '" + toString(*Reloc.Target) +
+             "' and could not determine section size. Using UINT64_MAX.");
+        TargetSize = std::numeric_limits<uint64_t>::max();
+      }
     }
     uint64_t Permissions = Reloc.Target->isFunc() ? 1ULL << 63 : 0;
     InMemoryCapRelocEntry<E> Entry { LocationVA, TargetVA, TargetOffset, TargetSize, Permissions };
