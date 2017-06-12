@@ -6850,8 +6850,9 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
       // Add ((Offset - LastOffset) / 64) args of type i64.
       for (unsigned j = (Offset - LastOffset) / 64; j > 0; --j)
         ArgList.push_back(I64);
-      LastOffset = Layout.getFieldOffset(idx) + CapSize;
-      assert(CapSize == getContext().getTypeSize(Ty));
+      const uint64_t TySize = getContext().getTypeSize(Ty);
+      LastOffset = Layout.getFieldOffset(idx) + TySize;
+      assert(CapSize == TySize || (Ty->isMemberFunctionPointerType() && TySize == 2 * CapSize));
       ArgList.push_back(CGT.ConvertType(Ty));
       continue;
     }
@@ -6862,7 +6863,9 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
         llvm::Type *ElTy = CGT.ConvertType(ElementType);
         for (unsigned i=0 ; i<Elements ; ++i)
           ArgList.push_back(ElTy);
-        LastOffset += Elements * CapSize;
+        const uint64_t TySize = getContext().getTypeSize(Ty);
+        LastOffset += Elements * TySize;
+        assert(CapSize == TySize || (Ty->isMemberFunctionPointerType() && TySize == 2 * CapSize));
         continue;
       } else if (containsCapabilities(ElementType)) {
         uint64_t FieldSize = getContext().getTypeSize(ElementType);

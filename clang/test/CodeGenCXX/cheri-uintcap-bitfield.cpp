@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap %s -std=c++14 -emit-llvm -o -
+// RUN: %cheri_cc1 -triple cheri-unknown-freebsd -target-abi purecap %s -std=c++14 -emit-llvm -o -
 // XFAIL: *
 // Bitfields with underlying type __uintcap_t used to cause assertions. Found while compiling qdatetime.cpp for purecap ABI
 
