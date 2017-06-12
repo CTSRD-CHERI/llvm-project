@@ -394,7 +394,7 @@ bool Type::isMemoryCapabilityType(const ASTContext &Context) const {
     if (Kind == BuiltinType::IntCap ||
         Kind == BuiltinType::UIntCap)
       return true;
-    if (Kind == BuiltinType::ObjCId)
+    if (Kind == BuiltinType::ObjCId || Kind == BuiltinType::NullPtr)
       return Context.getTargetInfo().areAllPointersCapabilities();
   } else if (const AtomicType *AT = getAs<AtomicType>())
     return AT->getValueType()->isMemoryCapabilityType(Context);
