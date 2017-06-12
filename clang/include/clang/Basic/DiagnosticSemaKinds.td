@@ -6210,6 +6210,8 @@ def warn_cxx98_compat_cast_fn_obj : Warning<
   InGroup<CXX98CompatPedantic>, DefaultIgnore;
 def err_bad_reinterpret_cast_small_int : Error<
   "cast from pointer to smaller type %2 loses information">;
+def err_bad_cap_reinterpret_cast_small_int : Error<
+  "cast from capability to smaller type %2 loses information">;
 def err_bad_cxx_cast_vector_to_scalar_different_size : Error<
   "%select{||reinterpret_cast||C-style cast|}0 from vector %1 " 
   "to scalar %2 of different size">;

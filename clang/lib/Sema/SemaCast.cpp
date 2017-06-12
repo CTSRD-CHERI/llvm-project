@@ -2020,9 +2020,14 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
     //   type large enough to hold it. A value of std::nullptr_t can be
     //   converted to an integral type; the conversion has the same meaning
     //   and validity as a conversion of (void*)0 to the integral type.
-    if (Self.Context.getTypeSize(SrcType) >
-        Self.Context.getTypeSize(DestType)) {
-      msg = diag::err_bad_reinterpret_cast_small_int;
+    bool IsCap = SrcType->isMemoryCapabilityType(Self.Context);
+    // In purecap ABI casting to uint64_t is fine as we want the pointer range
+    uint64_t Size = IsCap
+        ? Self.Context.getTargetInfo().getPointerRangeForMemoryCapability()
+        : Self.Context.getTypeSize(SrcType);
+    if (Size > Self.Context.getTypeSize(DestType)) {
+      msg = IsCap ? diag::err_bad_cap_reinterpret_cast_small_int :
+                    diag::err_bad_reinterpret_cast_small_int;
       return TC_Failed;
     }
     Kind = CK_PointerToIntegral;
@@ -2096,10 +2101,14 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
     //   integral type size doesn't matter (except we don't allow bool).
     bool MicrosoftException = Self.getLangOpts().MicrosoftExt &&
                               !DestType->isBooleanType();
-    if ((Self.Context.getTypeSize(SrcType) >
-         Self.Context.getTypeSize(DestType)) &&
-         !MicrosoftException) {
-      msg = diag::err_bad_reinterpret_cast_small_int;
+    bool IsCap = SrcType->isMemoryCapabilityType(Self.Context);
+    // In purecap ABI casting to uint64_t is fine as we want the pointer range
+    uint64_t Size = IsCap
+        ? Self.Context.getTargetInfo().getPointerRangeForMemoryCapability()
+        : Self.Context.getTypeSize(SrcType);
+    if ((Size > Self.Context.getTypeSize(DestType)) && !MicrosoftException) {
+      msg = IsCap ? diag::err_bad_cap_reinterpret_cast_small_int :
+                    diag::err_bad_reinterpret_cast_small_int;
       return TC_Failed;
     }
     Kind = CK_PointerToIntegral;
