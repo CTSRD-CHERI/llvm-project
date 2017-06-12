@@ -120,8 +120,6 @@ void * capability cheri_program_counter_get(void) {
 }
 
 #undef __CHERI_ACCESSOR
-
-#undef __CHERI_ACCESSOR
 #undef __CHERI_GET
 #undef __CHERI_SET
 #undef __cheri_bool
