@@ -49,7 +49,7 @@ int main(int argc, const char **argv) {
   if (ExpectCrash && Result == 3)
     Result = -3;
 #endif
-  if (Result < 0) {
+  if (Result < 0 || Result == 70) {
     errs() << "Error: " << ErrMsg << "\n";
     if (ExpectCrash)
       return 0;
