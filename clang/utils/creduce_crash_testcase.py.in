@@ -8,6 +8,7 @@ import shutil
 import shlex
 import subprocess
 import sys
+from abc import ABCMeta, abstractmethod
 from enum import Enum
 from pathlib import Path
 
@@ -28,7 +29,8 @@ def run(cmd: list, **kwargs):
     subprocess.check_call(list(map(str, cmd)), **kwargs)
 
 
-class ReduceTool(object):
+
+class ReduceTool(metaclass=ABCMeta):
     def __init__(self, args: "Options", name: str, tool: Path):
         self.tool = tool
         self.name = name
@@ -39,63 +41,7 @@ class ReduceTool(object):
         self.infile_name = None
         print("Reducing test case using", name)
 
-    # returns the real input file
-    def parse_RUN_lines(self, infile: Path) -> Path:
-        is_crash_reproducer = infile.suffix == ".sh"
-        if is_crash_reproducer:
-            verbose_print("Input file is a crash reproducer script")
-        verbose_print("Finding test command(s) in", infile)
-        with infile.open("r") as f:
-            if is_crash_reproducer:
-                real_infile = self._parse_crash_reproducer(infile, f)
-            else:
-                real_infile = infile
-                self._parse_test_case(f)
-        if len(self.run_cmds) < 1:
-            die("Could not find any RUN: lines in", infile)
-        return real_infile
-
-    def _parse_crash_reproducer(self, infile, f) -> Path:
-        real_in_file = None
-        for line in f.readlines():
-            if line.strip().startswith("#"):
-                continue
-            command = shlex.split(line)
-            if "clang" not in command[0]:
-                die("Executed program should contain 'clang', but was", command[0])
-            source_file_name = command[-1]
-            source_file = infile.with_name(source_file_name)
-            if not source_file.exists():
-                die("Reproducer input file", source_file, "does not exist!")
-            real_in_file = source_file
-            verbose_print("Real input file is", infile)
-            command[-1] = "%s"
-            command[0] = "%clang"
-            if command[1] == "-cc1":
-                del command[1]
-                command[0] = "%clang_cc1"
-            verbose_print(command)
-            command += ["-o", "-"]
-            compiler_cmd = " ".join(shlex.quote(s) for s in command)
-            verbose_print(compiler_cmd)
-            self.run_cmds.append(compiler_cmd)
-            self.run_lines.append("// RUN: " + compiler_cmd + " | FileCheck %s")
-        if not real_in_file:
-            die("Could not compute input file for crash reproducer")
-        return real_in_file
-
-    def _parse_test_case(self, f):
-        # test case: just search for RUN: lines
-        for line in f.readlines():
-            match = re.match(r".*\s+RUN: (.+)", line)
-            if match:
-                self.run_lines.append(line)
-                command = match.group(1).strip()
-                self.run_cmds.append(command)
-                if "%s" not in command:
-                    die("RUN: line does not contain %s -> cannot create replacement invocation")
-
-    def reduce_script_text(self, input_file):
+    def _reduce_script_text(self, input_file: Path):
         result = "#!/bin/sh\n"
         for cmd in self.run_cmds:
             # check for %s should have happened earlier
@@ -115,12 +61,25 @@ class ReduceTool(object):
             result += "{} --crash {} {} {}\n".format(self.args.not_cmd, compiler_cmd, grep_msg, self.exit_statement)
         return result
 
+    def create_reduce_script(self, reduce_script: Path, input_file: Path):
+        reduce_script_text = self._reduce_script_text(input_file)
+        reduce_script.write_text(reduce_script_text)
+        reduce_script.chmod(0o755)
+        if not self.is_reduce_script_interesting(reduce_script, input_file):
+            die("Reduce script is not interesting!")
+
     def preprocess(self, input_file: Path) -> Path:
         return input_file
 
-    def reduce(self, args, input_file: Path, reduce_script: Path, extra_args: list, tempdir: Path):
+    @abstractmethod
+    def is_reduce_script_interesting(self, reduce_script: Path, input_file: Path) -> bool:
         raise NotImplemented()
 
+    @abstractmethod
+    def reduce(self, input_file: Path, reduce_script: Path, extra_args: list, tempdir: Path):
+        raise NotImplemented()
+
+    @abstractmethod
     def input_file_arg(self, input_file: Path) -> str:
         raise NotImplemented()
 
@@ -168,14 +127,21 @@ class RunBugpoint(ReduceTool):
         print(os.getcwd())
         try:
             env = os.environ.copy()
-            env["PATH"] = str(self.args.bindir) + ":" +  env["PATH"]
-            run(bugpoint, env=env)
+            env["PATH"] = str(self.args.bindir) + ":" + env["PATH"]
+            try:
+                run(bugpoint, env=env)
+            except KeyboardInterrupt:
+                print("CTRL+C detected, stopping bugpoint.")
         finally:
             print("Output files are in:", os.getcwd())
 
     def input_file_arg(self, input_file: Path):
         # bugpoint expects a script that takes the input files as arguments:
         return '"$@"'
+
+    def is_reduce_script_interesting(self, reduce_script: Path, input_file: Path) -> bool:
+        proc = subprocess.run([str(reduce_script), str(input_file)])
+        return proc.returncode != 0
 
 
 class RunCreduce(ReduceTool):
@@ -198,7 +164,10 @@ class RunCreduce(ReduceTool):
         if self.args.verbose:
             creduce.append("--print-diff")
         print("About to run", creduce)
-        run(creduce, cwd=tempdir)
+        try:
+            run(creduce, cwd=tempdir)
+        except KeyboardInterrupt:
+            print("CTRL+C detected, stopping creduce.")
         # write the output test file:
         print("\nDONE!")
 
@@ -208,7 +177,7 @@ class RunCreduce(ReduceTool):
             test_case = input_file.with_suffix(".test" + input_file.suffix)
         with test_case.open("w", encoding="utf-8") as f:
             f.write(result)
-        print("\nResulting test case ", test_case, ":", sep="")
+        print("\nResulting test case ", test_case, sep="")
         verbose_print(result)
 
     def input_file_arg(self, input_file: Path):
@@ -255,6 +224,20 @@ class RunCreduce(ReduceTool):
             verbose_print("Initial reduction:")
             subprocess.call(["diff", "-u", str(input_path), out_file.name])
 
+    def is_reduce_script_interesting(self, reduce_script: Path, input_file: Path) -> bool:
+        if self.args.verbose:
+            return self.__is_reduce_script_interesting(reduce_script, input_file)
+        else:
+            return True  # creduce checks anyway, this just wastes time
+
+    @staticmethod
+    def __is_reduce_script_interesting(self, reduce_script: Path, input_file: Path) -> bool:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shutil.copy(str(input_file), str(Path(tmpdir, input_file.name)))
+            proc = subprocess.run([str(reduce_script), str(input_file)], cwd=tmpdir)
+            return proc.returncode == 0
+
+
 class Options(object):
     def __init__(self, args: argparse.Namespace):
         self.verbose = args.verbose
@@ -297,6 +280,226 @@ class Options(object):
         return result
 
 
+class Reducer(object):
+    def __init__(self, parser: argparse.ArgumentParser):
+        self.args, self.reduce_args = parser.parse_known_args()
+        global options
+        options = Options(self.args)
+        self.options = options
+        self.testcase = Path(self.args.testcase)
+        self.run_lines = [] # RUN: lines from the test case
+        self.run_cmds = []  # the lines without RUN: suitably quoted for passing to a shell
+        self.reduce_tool = None  # type: ReduceTool
+
+    # returns the real input file
+    def parse_RUN_lines(self, infile: Path) -> Path:
+        is_crash_reproducer = infile.suffix == ".sh"
+        if is_crash_reproducer:
+            verbose_print("Input file is a crash reproducer script")
+        verbose_print("Finding test command(s) in", infile)
+        with infile.open("r") as f:
+            if is_crash_reproducer:
+                real_infile = self._parse_crash_reproducer(infile, f)
+            else:
+                real_infile = infile
+                self._parse_test_case(f)
+        if len(self.run_cmds) < 1:
+            die("Could not find any RUN: lines in", infile)
+        return real_infile
+
+    def _parse_crash_reproducer(self, infile, f) -> Path:
+        real_in_file = None
+        for line in f.readlines():
+            if line.strip().startswith("#"):
+                continue
+            command = shlex.split(line)
+            if "clang" not in command[0]:
+                die("Executed program should contain 'clang', but was", command[0])
+            source_file_name = command[-1]
+            source_file = infile.with_name(source_file_name)
+            if not source_file.exists():
+                die("Reproducer input file", source_file, "does not exist!")
+            real_in_file = source_file
+            verbose_print("Real input file is", real_in_file)
+            command[-1] = "%s"
+            # try to remove all unnecessary command line arguments
+            command, real_in_file = self._simplify_crash_command(command, real_in_file.absolute())
+            command.append("%s")
+            verbose_print(command)
+            compiler_cmd = " ".join(shlex.quote(s) for s in command)
+            verbose_print(compiler_cmd)
+            self.run_cmds.append(compiler_cmd)
+            self.run_lines.append("// RUN: " + compiler_cmd + " | FileCheck %s")
+        if not real_in_file:
+            die("Could not compute input file for crash reproducer")
+        return real_in_file
+
+    def _check_crash(self, command, infile):
+        if subprocess.run([str(self.options.not_cmd), "--crash"] + command + [str(infile)],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+            print(" yes")
+            return True
+        print(" no")
+        return False
+
+    def _simplify_crash_command(self, command: list, infile: Path) -> tuple:
+        new_command = command.copy()
+        new_command[0] = str(self.options.clang_cmd)
+        assert new_command[-1] == "%s"
+        del new_command[-1]
+        # output to stdout
+        if "-o" not in new_command:
+            print("Adding '-o -' to the compiler invocation")
+            new_command += ["-o", "-"]
+        print("Checking whether", " ".join(shlex.quote(s) for s in new_command), "crashes:", end="", flush=True)
+        if not self._check_crash(new_command, infile):
+            die("Crash reproducer no longer crashes?")
+        print("Checking whether compiling without debug info crashes:", end="", flush=True)
+        skip_next = False
+        no_debug_cmd = []
+        for arg in new_command:
+            if skip_next:
+                skip_next = False
+                continue
+            elif arg.startswith("-debug-info-kind=") or arg.startswith("-dwarf-version=") or arg.startswith("-debugger-tuning="):
+                continue
+            elif arg == "-coverage-notes-file":
+                skip_next = True
+                continue
+            else:
+                no_debug_cmd.append(arg)
+        if self._check_crash(no_debug_cmd, infile):
+            new_command = no_debug_cmd
+
+        # try emitting llvm-ir (i.e. frontend bug):
+        print("Checking whether -emit-llvm crashes:", end="", flush=True)
+        if self._check_crash(new_command + ["-emit-llvm"], infile):
+            new_command.append("-emit-llvm")
+            print("Must be a frontend crash, will need to use creduce for test case reduction")
+            return self._simplify_frontend_crash_cmd(new_command, infile)
+        else:
+            print("Must be a backend crash, ", end="")
+            if self.args.reduce_tool == "creduce":
+                print("but reducing with creduce requested. Will not try to convert to a bugpoint test case")
+                return self._simplify_frontend_crash_cmd(new_command, infile)
+            else:
+                print("will try to use bugpoint.")
+                return self._simplify_backend_crash_cmd(new_command, infile)
+
+    def _simplify_frontend_crash_cmd(self, command: list, infile: Path):
+        print("Checking whether compiling without warnings crashes:", end="", flush=True)
+        no_warnings_cmd = []
+        for arg in command:
+            if arg.startswith("-W") or arg == "-w":
+                continue
+            else:
+                no_warnings_cmd.append(arg)
+        no_warnings_cmd.append("-w")  # disable all warnigns
+        if self._check_crash(no_warnings_cmd, infile):
+            command = no_warnings_cmd
+        # TODO: try removing individual -mllvm options such as mxgot, etc.?
+        # add the placeholders for the RUN: line
+        command[0] = "%clang"
+        if command[1] == "-cc1":
+            del command[1]
+            command[0] = "%clang_cc1"
+        return command, infile
+
+    def _simplify_backend_crash_cmd(self, original_command: list, infile: Path):
+        # TODO: convert it to a llc commandline and use bugpoint
+        assert "-emit-llvm" not in original_command
+        assert "-o" in original_command
+        command = original_command.copy()
+        irfile = infile.with_suffix(".reduce.ll")
+        command[command.index("-o") + 1] = str(irfile.absolute())
+        if "-discard-value-names" in command:
+            command.remove("-discard-value-names")
+        command.append("-emit-llvm")
+        print("Generating IR file", irfile)
+        try:
+            subprocess.check_call(command + [str(infile)])
+        except subprocess.CalledProcessError:
+            print("Failed to generate IR from", infile, "will have to reduce using creduce")
+            return self._simplify_frontend_crash_cmd(original_command, infile)
+        if not irfile.exists():
+            die("IR file was not generated?")
+        llc_args = [str(self.options.llc_cmd), "-o", "/dev/null"]  # TODO: -o -?
+        for i, arg in enumerate(command):
+            if arg == "-triple" or arg == "-target":
+                # assume well formed command line
+                llc_args.append("-mtriple=" + command[i + 1])
+            # forward all the llvm args
+            if arg == "-mllvm":
+                llc_args.append(command[i + 1])
+            if arg == "-target-abi":
+                llc_args.append("-target-abi")
+                llc_args.append(command[i + 1])
+            if arg == "-target-cpu":
+                llc_args.append("-mcpu=" + command[i + 1])
+            if arg == "-target-feature":
+                llc_args.append("-mattr=" + command[i + 1])
+            if arg == "-mrelocation-model":
+                llc_args.append("-relocation-model=" + command[i + 1])
+            if arg == "-msoft-float":
+                llc_args.append("-float-abi=soft")
+        print("running, ", " ".join(llc_args + [str(irfile)]))
+        print("Checking whether compiling IR file with llc crashes:", end="", flush=True)
+        # Cannot select errors return 70
+        is_llvm_error = b"LLVM ERROR:" in subprocess.run(llc_args + [str(irfile)], stderr=subprocess.PIPE).stderr
+        if is_llvm_error or self._check_crash(llc_args, irfile):
+            print("Crash found with LLC -> using bugpoint.")
+            self.reduce_tool = RunBugpoint(self.options)
+            llc_args[0] = "llc"
+            return llc_args, irfile
+        else:
+            print("No crash found with LLC! Possibly needs some special argument passed or crash",
+                  "only happens when invoking clang -> using creduce.")
+            self.reduce_tool = RunCreduce(self.options)
+            return self._simplify_frontend_crash_cmd(original_command, infile)
+
+    def _parse_test_case(self, f):
+        # test case: just search for RUN: lines
+        for line in f.readlines():
+            match = re.match(r".*\s+RUN: (.+)", line)
+            if match:
+                self.run_lines.append(line)
+                command = match.group(1).strip()
+                self.run_cmds.append(command)
+                if "%s" not in command:
+                    die("RUN: line does not contain %s -> cannot create replacement invocation")
+
+    def run(self):
+        # scan test case for RUN: lines
+        infile = self.parse_RUN_lines(self.testcase)
+
+        if self.reduce_tool is None:
+            if self.args.reduce_tool is None:
+                self.args.reduce_tool = "bugpoint" if infile.suffix in (".ll", ".bc") else "creduce"
+            if self.args.reduce_tool == "bugpoint":
+                self.reduce_tool = RunBugpoint(self.options)
+            else:
+                assert self.args.reduce_tool == "creduce"
+                self.reduce_tool = RunCreduce(self.options)
+
+        # TODO: move this to ctor
+        self.reduce_tool.run_cmds = self.run_cmds
+        self.reduce_tool.run_lines = self.run_lines
+
+        if self.args.output_file:
+            reduce_input = Path(self.args.output_file).absolute()
+        else:
+            reduce_input = infile.with_suffix(".creduce" + infile.suffix).absolute()
+        shutil.copy(str(infile), str(reduce_input))
+        reduce_input = self.reduce_tool.preprocess(reduce_input)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            reduce_script = Path(tmpdir, "reduce_script.sh").absolute()
+            self.reduce_tool.create_reduce_script(reduce_script, reduce_input.absolute())
+            print("Reduce script:\n", reduce_script.read_text())
+            # run("ulimit -S -c 0".split())
+            return
+            self.reduce_tool.reduce(input_file=reduce_input, reduce_script=reduce_script,
+                                    extra_args=self.reduce_args, tempdir=tmpdir)
+
 def main():
     default_bindir = "@CMAKE_BINARY_DIR@/bin"
     parser = argparse.ArgumentParser()
@@ -320,47 +523,14 @@ def main():
                         "removing #if 0 regions. Generally this will speed up but in very rare corner "
                         "cases it might cause the test case to no longer crash.", action="store_true")
     parser.add_argument("testcase", help="The file to reduce (must be a testcase with a RUN: line that crashes or a .sh file from a clang crash")
-    args, reduce_args = parser.parse_known_args()
     # bash completion for arguments:
     try:
         import argcomplete
         argcomplete.autocomplete(parser)
     except ImportError:
         pass
+    Reducer(parser).run()
 
-    global options
-    options = Options(args)
-    infile = Path(args.testcase)
-
-    if args.reduce_tool is None:
-        args.reduce_tool = "bugpoint" if infile.suffix in (".ll", ".bc") else "creduce"
-
-    if args.reduce_tool == "bugpoint":
-        reduce_tool = RunBugpoint(options)
-    else:
-        assert args.reduce_tool == "creduce"
-        reduce_tool = RunCreduce(options)
-
-    # scan test case for RUN: lines
-    infile = reduce_tool.parse_RUN_lines(infile)
-
-    if args.output_file:
-        reduce_input = Path(args.output_file).absolute()
-    else:
-        reduce_input = infile.with_suffix(".creduce" + infile.suffix).absolute()
-    shutil.copy(str(infile), str(reduce_input))
-    reduce_input = reduce_tool.preprocess(reduce_input)
-    # TODO: not always needed
-    reduce_script_text = reduce_tool.reduce_script_text(reduce_input)
-    print("Reduce script:\n", reduce_script_text)
-    with tempfile.TemporaryDirectory() as tmpdir:
-        reduce_script = Path(tmpdir, "reduce_script.sh")
-        reduce_script.write_text(reduce_script_text)
-        reduce_script.chmod(0o755)
-        # print(reduce_script.read_text())
-        # run("ulimit -S -c 0".split())
-        reduce_tool.reduce(input_file=reduce_input, reduce_script=reduce_script,
-                           extra_args=reduce_args, tempdir=tmpdir)
 
 if __name__ == "__main__":
     main()
