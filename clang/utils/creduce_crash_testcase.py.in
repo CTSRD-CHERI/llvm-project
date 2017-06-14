@@ -80,6 +80,14 @@ class ReduceTool(metaclass=ABCMeta):
             die("Reduce script is not interesting!")
         return reduce_script
 
+    def create_test_case(self, input_text: str, test_case: Path):
+        result = "\n".join(self.run_lines) + "\n" + input_text
+        with test_case.open("w", encoding="utf-8") as f:
+            f.write(result)
+            f.flush()
+        print("\nResulting test case ", test_case, sep="")
+        verbose_print(result)
+
     def preprocess(self, input_file: Path) -> Path:
         return input_file
 
@@ -105,6 +113,13 @@ class RunBugpoint(ReduceTool):
         bugpoint = [self.tool, "-opt-command=" + str(self.args.opt_cmd), "-output-prefix=" + input_file.name]
         if self.args.verbose:
             bugpoint.append("-verbose-errors")
+        expected_output_file = Path.cwd() / (input_file.name + "-reduced-simplified.bc")
+        if expected_output_file.exists():
+            print("bugpoint output file already exists: ", bold(expected_output_file))
+            if input("Delete it and continue? [Y/n]").lower().startswith("n"):
+                die("Can't continue")
+            else:
+                expected_output_file.unlink()
 
         # use a custom script to check for matching crash message:
         if self.args.crash_message:
@@ -148,6 +163,10 @@ class RunBugpoint(ReduceTool):
         finally:
             print("Output files are in:", os.getcwd())
             # TODO: generate a test case from the output files?
+        if expected_output_file.exists():
+            print("Attempting to convert generated bitcode file to a test case...")
+            dis = subprocess.run([str(self.args.llvm_dis_cmd), "-o", "-", str(expected_output_file)], stdout=subprocess.PIPE)
+            self.create_test_case(dis.stdout.decode("utf-8"), input_file.with_suffix(".test" + input_file.suffix))
 
     def input_file_arg(self, input_file: Path):
         # bugpoint expects a script that takes the input files as arguments:
@@ -173,7 +192,7 @@ class RunCreduce(ReduceTool):
                 self._do_initial_reduce(Path(tmp.name), reduced_file)
         return input_file
 
-    def reduce(self, input_file, extra_args, tempdir):
+    def reduce(self, input_file: Path, extra_args, tempdir):
         reduce_script = self._create_reduce_script(tempdir, input_file.absolute())
         creduce = ["time", str(self.tool), str(reduce_script), str(input_file), "--timing"] + extra_args
         # This is way too verbose
@@ -186,15 +205,8 @@ class RunCreduce(ReduceTool):
             print(red("\nCTRL+C detected, stopping creduce.", style="bold"))
         # write the output test file:
         print("\nDONE!")
-
-        with input_file.open("r", encoding="utf-8") as f:
-            original_data = f.read()
-            result = "\n".join(self.run_lines) + "\n" + original_data
-            test_case = input_file.with_suffix(".test" + input_file.suffix)
-        with test_case.open("w", encoding="utf-8") as f:
-            f.write(result)
-        print("\nResulting test case ", test_case, sep="")
-        verbose_print(result)
+        self.create_test_case(input_file.read_text(encoding="utf-8"),
+                              input_file.with_suffix(".test" + input_file.suffix))
 
     def input_file_arg(self, input_file: Path):
         # creduce creates an input file in the test directory with the same name as the original input
@@ -279,6 +291,10 @@ class Options(object):
         return self._get_command("llc")
 
     @property
+    def llvm_dis_cmd(self):
+        return self._get_command("llvm-dis")
+
+    @property
     def bugpoint_cmd(self):
         return self._get_command("bugpoint")
 
@@ -344,7 +360,13 @@ class Reducer(object):
             compiler_cmd = " ".join(shlex.quote(s) for s in command)
             verbose_print("Test command is", bold(compiler_cmd))
             self.run_cmds.append(compiler_cmd)
-            self.run_lines.append("// RUN: " + compiler_cmd + " | FileCheck %s")
+            if real_in_file.suffix == ".ll":
+                comment_start = ";"
+            elif real_in_file.suffix in (".S", ".s"):
+                comment_start = "#"
+            else:
+                comment_start = "//"
+            self.run_lines.append(comment_start + " RUN: " + compiler_cmd + " | FileCheck %s")
         if not real_in_file:
             die("Could not compute input file for crash reproducer")
         return real_in_file
@@ -401,10 +423,10 @@ class Reducer(object):
         print("Checking whether -emit-llvm crashes:", end="", flush=True)
         if self._check_crash(new_command + ["-emit-llvm"], infile):
             new_command.append("-emit-llvm")
-            print("Must be a frontend crash, will need to use creduce for test case reduction")
+            print("Must be a", blue("frontend crash", style="bold"), ",  will need to use creduce for test case reduction")
             return self._simplify_frontend_crash_cmd(new_command, infile)
         else:
-            print("Must be a backend crash, ", end="")
+            print("Must be a ", blue("backend crash", style="bold"), ", ", end="", sep="")
             if self.args.reduce_tool == "creduce":
                 print("but reducing with creduce requested. Will not try to convert to a bugpoint test case")
                 return self._simplify_frontend_crash_cmd(new_command, infile)
@@ -527,6 +549,7 @@ def main():
     parser.add_argument("--clang-cmd", help="Path to `clang` tool. Default is $BINDIR/clang")
     parser.add_argument("--llc-cmd", help="Path to `llc` tool. Default is $BINDIR/llc")
     parser.add_argument("--opt-cmd", help="Path to `opt` tool. Default is $BINDIR/opt")
+    parser.add_argument("--llvm-dis-cmd", help="Path to `llvm-dis` tool. Default is $BINDIR/llvm-dis")
     parser.add_argument("--bugpoint-cmd", help="Path to `bugpoint` tool. Default is $BINDIR/bugpoint")
     parser.add_argument("--creduce-cmd", help="Path to `creduce` tool. Default is `creduce`")
     parser.add_argument("--output-file", help="The name of the output file")
