@@ -35,28 +35,33 @@ typedef unsigned __INT32_TYPE__ cheri_type_t;
 #define __IF_CAPS(x, y) x
 typedef __intcap_t intcap_t;
 typedef __uintcap_t uintcap_t;
+#ifndef NO_CHERI_MACROS
 #define capability __capability
 #define output __output
 #define input __input
+#endif
 #else
 #define __IF_CAPS(x, y) y
 typedef __INTPTR_TYPE__ intcap_t;
 typedef __INTPTR_TYPE__ uintcap_t;
+#define __capability
+#ifndef NO_CHERI_MACROS
 #define capability
-#define output 
+#define output
 #define input
+#endif
 #endif
 
 #define __CHERI_GET(__name, __type, __get, __default)            \
   static inline __type                                                        \
-  cheri_##__name##__get(void * capability __cap)                              \
+  cheri_##__name##__get(void * __capability __cap)                              \
   {                                                                           \
     return __IF_CAPS(__builtin_cheri_##__name##__get(__cap), __default);     \
   }
 
 #define __CHERI_SET(__name, __type, __set)                                   \
-  static inline void* capability                                             \
-  cheri_##__name##__set(const void * capability __cap, __type __val)          \
+  static inline void * __capability                                             \
+  cheri_##__name##__set(const void * __capability __cap, __type __val)          \
   {                                                                           \
     return __IF_CAPS(__builtin_cheri_##__name##__set(__cap, __val),          \
                      (void*)__cap);                                           \
@@ -75,47 +80,47 @@ __CHERI_GET(tag, _Bool, _get, 0)
 __CHERI_GET(sealed, _Bool, _get, 0)
 
 static inline
-void * capability cheri_offset_increment(const void *capability __cap,
+void * __capability cheri_offset_increment(const void *__capability __cap,
                                          __PTRDIFF_TYPE__ __offset) {
   return __IF_CAPS(__builtin_cheri_offset_increment(__cap, __offset),
                    ((char*)__cap) + __offset);
 }
 
 static inline
-void * capability cheri_tag_clear(const void * capability __cap) {
+void * __capability cheri_tag_clear(const void * __capability __cap) {
   return __IF_CAPS(__builtin_cheri_tag_clear(__cap), (void*)__cap);
 }
 
 static inline
-void * capability cheri_seal(const void * capability __cap,
-                             const void * capability __type) {
+void * __capability cheri_seal(const void * __capability __cap,
+                               const void * __capability __type) {
   return __IF_CAPS(__builtin_cheri_seal(__cap, __type), (void*)__cap);
 }
 
 static inline
-void * capability cheri_unseal(const void * capability __cap,
-                               const void * capability __type) {
+void * __capability cheri_unseal(const void * __capability __cap,
+                                 const void * __capability __type) {
   return __IF_CAPS(__builtin_cheri_unseal(__cap, __type), (void*)__cap);
 }
 
 static inline
-void cheri_perms_check(const void * capability __cap, cheri_perms_t __perms) {
+void cheri_perms_check(const void * __capability __cap, cheri_perms_t __perms) {
   __IF_CAPS(__builtin_cheri_perms_check(__cap, __perms), );
 }
 
 static inline
-void cheri_type_check(const void * capability __cap,
-                      const void * capability __type) {
+void cheri_type_check(const void * __capability __cap,
+                      const void * __capability __type) {
   __IF_CAPS(__builtin_cheri_type_check(__cap, __type), );
 }
 
 static inline
-void * capability cheri_global_data_get(void) {
+void * __capability cheri_global_data_get(void) {
   return __IF_CAPS(__builtin_cheri_global_data_get(), 0);
 }
 
 static inline
-void * capability cheri_program_counter_get(void) {
+void * __capability cheri_program_counter_get(void) {
   return __IF_CAPS(__builtin_cheri_program_counter_get(), 0);
 }
 
