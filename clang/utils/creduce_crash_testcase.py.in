@@ -31,7 +31,7 @@ def verbose_print(*args, **kwargs):
 
 
 def die(*args):
-    sys.exit(" ".join(map(str, args)))
+    sys.exit(red(" ".join(map(str, args)), style="bold"))
 
 
 def run(cmd: list, **kwargs):
@@ -102,7 +102,7 @@ class RunBugpoint(ReduceTool):
         self.exit_statement = "&& exit 1; exit 0"
 
     def reduce(self, input_file, extra_args, tempdir):
-        bugpoint = ["time", self.tool, "-opt-command=" + str(self.args.opt_cmd), "-output-prefix=" + input_file.name]
+        bugpoint = [self.tool, "-opt-command=" + str(self.args.opt_cmd), "-output-prefix=" + input_file.name]
         if self.args.verbose:
             bugpoint.append("-verbose-errors")
 
@@ -111,7 +111,7 @@ class RunBugpoint(ReduceTool):
             # check that the reduce script is interesting:
             # http://blog.llvm.org/2015/11/reduce-your-testcases-with-bugpoint-and.html
             # ./bin/bugpoint -compile-custom -compile-command=./check.sh -opt-command=./bin/opt my_test_case.ll
-            reduce_script = self._create_reduce_script(tempdir, reduce_input.absolute())
+            reduce_script = self._create_reduce_script(tempdir, input_file.absolute())
             print("Checking whether reduce script works")
             test_result = subprocess.run([str(reduce_script.absolute()), str(input_file)])
             if test_result.returncode == 0:
@@ -144,7 +144,7 @@ class RunBugpoint(ReduceTool):
             try:
                 run(bugpoint, env=env)
             except KeyboardInterrupt:
-                print("CTRL+C detected, stopping bugpoint.")
+                print(red("\nCTRL+C detected, stopping bugpoint.", style="bold"))
         finally:
             print("Output files are in:", os.getcwd())
             # TODO: generate a test case from the output files?
@@ -174,7 +174,7 @@ class RunCreduce(ReduceTool):
         return input_file
 
     def reduce(self, input_file, extra_args, tempdir):
-        reduce_script = self._create_reduce_script(tempdir, reduce_input.absolute())
+        reduce_script = self._create_reduce_script(tempdir, input_file.absolute())
         creduce = ["time", str(self.tool), str(reduce_script), str(input_file), "--timing"] + extra_args
         # This is way too verbose
         # if self.args.verbose:
@@ -183,7 +183,7 @@ class RunCreduce(ReduceTool):
         try:
             run(creduce, cwd=tempdir)
         except KeyboardInterrupt:
-            print("CTRL+C detected, stopping creduce.")
+            print(red("\nCTRL+C detected, stopping creduce.", style="bold"))
         # write the output test file:
         print("\nDONE!")
 
@@ -356,13 +356,18 @@ class Reducer(object):
         # treat fatal llvm errors (cannot select, etc) as crashes too:
         is_llvm_error = b"LLVM ERROR:" in proc.stderr
         if proc.returncode == 0 or is_llvm_error:
-            print(green(" yes"))
-            return True
+            if self.args.crash_message and self.args.crash_message in proc.stderr.decode("utf-8"):
+                print(green(" yes"))
+                return True
+            else:
+                print(red(" yes, but with a different crash message!"))
+                verbose_print("Expected crash message '", bold(self.args.crash_message), "' not found in:\n",
+                              proc.stderr.decode("utf-8"), sep="")
+                return False
         print(red(" no"))
         return False
 
     def _simplify_crash_command(self, command: list, infile: Path) -> tuple:
-        # TODO: handle crash message
         new_command = command.copy()
         new_command[0] = str(self.options.clang_cmd)
         assert new_command[-1] == "%s"
@@ -431,7 +436,7 @@ class Reducer(object):
         assert "-emit-llvm" not in original_command
         assert "-o" in original_command
         command = original_command.copy()
-        irfile = infile.with_suffix(".reduce.ll")
+        irfile = infile.with_name(infile.name.partition(".")[0] + "-bugpoint.ll")
         command[command.index("-o") + 1] = str(irfile.absolute())
         if "-discard-value-names" in command:
             command.remove("-discard-value-names")
@@ -506,7 +511,7 @@ class Reducer(object):
         if self.args.output_file:
             reduce_input = Path(self.args.output_file).absolute()
         else:
-            reduce_input = infile.with_suffix(".creduce" + infile.suffix).absolute()
+            reduce_input = infile.with_name(infile.name.partition(".")[0] + "-reduce" + infile.suffix).absolute()
         shutil.copy(str(infile), str(reduce_input))
         reduce_input = self.reduce_tool.preprocess(reduce_input)
         with tempfile.TemporaryDirectory() as tmpdir:
