@@ -12,6 +12,16 @@ from abc import ABCMeta, abstractmethod
 from enum import Enum
 from pathlib import Path
 
+
+try:
+    from colors import blue, red, green, bold
+except ImportError:
+    def blue(s, bg=None, style=None):
+        return s
+    bold = blue
+    red = blue
+    green = blue
+
 options = None  # type: Options
 
 def verbose_print(*args, **kwargs):
@@ -27,7 +37,6 @@ def die(*args):
 def run(cmd: list, **kwargs):
     print(cmd, kwargs)
     subprocess.check_call(list(map(str, cmd)), **kwargs)
-
 
 
 class ReduceTool(metaclass=ABCMeta):
@@ -61,22 +70,24 @@ class ReduceTool(metaclass=ABCMeta):
             result += "{} --crash {} {} {}\n".format(self.args.not_cmd, compiler_cmd, grep_msg, self.exit_statement)
         return result
 
-    def create_reduce_script(self, reduce_script: Path, input_file: Path):
+    def _create_reduce_script(self, tmpdir: Path, input_file: Path):
+        reduce_script = Path(tmpdir, "reduce_script.sh").absolute()
         reduce_script_text = self._reduce_script_text(input_file)
         reduce_script.write_text(reduce_script_text)
+        print("Reduce script:\n", bold(reduce_script_text), sep="")
         reduce_script.chmod(0o755)
         if not self.is_reduce_script_interesting(reduce_script, input_file):
             die("Reduce script is not interesting!")
+        return reduce_script
 
     def preprocess(self, input_file: Path) -> Path:
         return input_file
 
-    @abstractmethod
     def is_reduce_script_interesting(self, reduce_script: Path, input_file: Path) -> bool:
-        raise NotImplemented()
+        return False
 
     @abstractmethod
-    def reduce(self, input_file: Path, reduce_script: Path, extra_args: list, tempdir: Path):
+    def reduce(self, input_file: Path, extra_args: list, tempdir: Path):
         raise NotImplemented()
 
     @abstractmethod
@@ -90,8 +101,8 @@ class RunBugpoint(ReduceTool):
         # bugpoint wants a non-zero exit code on failure
         self.exit_statement = "&& exit 1; exit 0"
 
-    def reduce(self, input_file, reduce_script, extra_args, tempdir):
-        bugpoint = [self.tool, "-opt-command=" + str(self.args.opt_cmd), "-output-prefix=" + input_file.name]
+    def reduce(self, input_file, extra_args, tempdir):
+        bugpoint = ["time", self.tool, "-opt-command=" + str(self.args.opt_cmd), "-output-prefix=" + input_file.name]
         if self.args.verbose:
             bugpoint.append("-verbose-errors")
 
@@ -100,6 +111,8 @@ class RunBugpoint(ReduceTool):
             # check that the reduce script is interesting:
             # http://blog.llvm.org/2015/11/reduce-your-testcases-with-bugpoint-and.html
             # ./bin/bugpoint -compile-custom -compile-command=./check.sh -opt-command=./bin/opt my_test_case.ll
+            reduce_script = self._create_reduce_script(tempdir, reduce_input.absolute())
+            print("Checking whether reduce script works")
             test_result = subprocess.run([str(reduce_script.absolute()), str(input_file)])
             if test_result.returncode == 0:
                 die("Interestingness test failed for bugpoint. Does the command really crash? Script was",
@@ -124,7 +137,7 @@ class RunBugpoint(ReduceTool):
                     bugpoint.append(arg)
         bugpoint += extra_args
         print("About to run", bugpoint)
-        print(os.getcwd())
+        print("Working directory:", os.getcwd())
         try:
             env = os.environ.copy()
             env["PATH"] = str(self.args.bindir) + ":" + env["PATH"]
@@ -134,6 +147,7 @@ class RunBugpoint(ReduceTool):
                 print("CTRL+C detected, stopping bugpoint.")
         finally:
             print("Output files are in:", os.getcwd())
+            # TODO: generate a test case from the output files?
 
     def input_file_arg(self, input_file: Path):
         # bugpoint expects a script that takes the input files as arguments:
@@ -159,10 +173,12 @@ class RunCreduce(ReduceTool):
                 self._do_initial_reduce(Path(tmp.name), reduced_file)
         return input_file
 
-    def reduce(self, input_file, reduce_script, extra_args, tempdir):
-        creduce = [str(self.tool), str(reduce_script), str(input_file)] + extra_args
-        if self.args.verbose:
-            creduce.append("--print-diff")
+    def reduce(self, input_file, extra_args, tempdir):
+        reduce_script = self._create_reduce_script(tempdir, reduce_input.absolute())
+        creduce = ["time", str(self.tool), str(reduce_script), str(input_file), "--timing"] + extra_args
+        # This is way too verbose
+        # if self.args.verbose:
+        #     creduce.append("--print-diff")
         print("About to run", creduce)
         try:
             run(creduce, cwd=tempdir)
@@ -325,9 +341,8 @@ class Reducer(object):
             # try to remove all unnecessary command line arguments
             command, real_in_file = self._simplify_crash_command(command, real_in_file.absolute())
             command.append("%s")
-            verbose_print(command)
             compiler_cmd = " ".join(shlex.quote(s) for s in command)
-            verbose_print(compiler_cmd)
+            verbose_print("Test command is", bold(compiler_cmd))
             self.run_cmds.append(compiler_cmd)
             self.run_lines.append("// RUN: " + compiler_cmd + " | FileCheck %s")
         if not real_in_file:
@@ -335,14 +350,19 @@ class Reducer(object):
         return real_in_file
 
     def _check_crash(self, command, infile):
-        if subprocess.run([str(self.options.not_cmd), "--crash"] + command + [str(infile)],
-                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
-            print(" yes")
+        full_cmd = [str(self.options.not_cmd), "--crash"] + command + [str(infile)]
+        verbose_print(blue("\nRunning" + " ".join(map(shlex.quote, full_cmd))))
+        proc = subprocess.run(full_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        # treat fatal llvm errors (cannot select, etc) as crashes too:
+        is_llvm_error = b"LLVM ERROR:" in proc.stderr
+        if proc.returncode == 0 or is_llvm_error:
+            print(green(" yes"))
             return True
-        print(" no")
+        print(red(" no"))
         return False
 
     def _simplify_crash_command(self, command: list, infile: Path) -> tuple:
+        # TODO: handle crash message
         new_command = command.copy()
         new_command[0] = str(self.options.clang_cmd)
         assert new_command[-1] == "%s"
@@ -351,7 +371,7 @@ class Reducer(object):
         if "-o" not in new_command:
             print("Adding '-o -' to the compiler invocation")
             new_command += ["-o", "-"]
-        print("Checking whether", " ".join(shlex.quote(s) for s in new_command), "crashes:", end="", flush=True)
+        print("Checking whether reproducer crashes with ", self.options.clang_cmd, ":", sep="", end="", flush=True)
         if not self._check_crash(new_command, infile):
             die("Crash reproducer no longer crashes?")
         print("Checking whether compiling without debug info crashes:", end="", flush=True)
@@ -371,6 +391,7 @@ class Reducer(object):
         if self._check_crash(no_debug_cmd, infile):
             new_command = no_debug_cmd
 
+        # FIXME bugpoint thinks not interestingf
         # try emitting llvm-ir (i.e. frontend bug):
         print("Checking whether -emit-llvm crashes:", end="", flush=True)
         if self._check_crash(new_command + ["-emit-llvm"], infile):
@@ -442,12 +463,9 @@ class Reducer(object):
                 llc_args.append("-relocation-model=" + command[i + 1])
             if arg == "-msoft-float":
                 llc_args.append("-float-abi=soft")
-        print("running, ", " ".join(llc_args + [str(irfile)]))
         print("Checking whether compiling IR file with llc crashes:", end="", flush=True)
-        # Cannot select errors return 70
-        is_llvm_error = b"LLVM ERROR:" in subprocess.run(llc_args + [str(irfile)], stderr=subprocess.PIPE).stderr
-        if is_llvm_error or self._check_crash(llc_args, irfile):
-            print("Crash found with LLC -> using bugpoint.")
+        if self._check_crash(llc_args, irfile):
+            print("Crash found with LLC -> using bugpoint which is faster than creduce.")
             self.reduce_tool = RunBugpoint(self.options)
             llc_args[0] = "llc"
             return llc_args, irfile
@@ -492,13 +510,8 @@ class Reducer(object):
         shutil.copy(str(infile), str(reduce_input))
         reduce_input = self.reduce_tool.preprocess(reduce_input)
         with tempfile.TemporaryDirectory() as tmpdir:
-            reduce_script = Path(tmpdir, "reduce_script.sh").absolute()
-            self.reduce_tool.create_reduce_script(reduce_script, reduce_input.absolute())
-            print("Reduce script:\n", reduce_script.read_text())
             # run("ulimit -S -c 0".split())
-            return
-            self.reduce_tool.reduce(input_file=reduce_input, reduce_script=reduce_script,
-                                    extra_args=self.reduce_args, tempdir=tmpdir)
+            self.reduce_tool.reduce(input_file=reduce_input, extra_args=self.reduce_args, tempdir=tmpdir)
 
 def main():
     default_bindir = "@CMAKE_BINARY_DIR@/bin"
