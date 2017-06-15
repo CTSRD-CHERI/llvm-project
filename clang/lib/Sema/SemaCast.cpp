@@ -20,6 +20,7 @@
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/ExprObjC.h"
 #include "clang/AST/RecordLayout.h"
+#include "clang/AST/Attr.h"
 #include "clang/Basic/PartialDiagnostic.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Lex/Preprocessor.h"
@@ -1765,6 +1766,63 @@ static void DiagnoseCHERICast(Sema &Self, Expr *SrcExpr, QualType DestType,
   }
 }
 
+static void DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
+                                        QualType SrcType, QualType DestType) {
+  assert(SrcType->isMemoryCapabilityType(Self.Context));
+  if (DestType->isMemoryCapabilityType(Self.Context)) {
+    return; // cast from capabilty to capability is fine
+  }
+
+  const QualType CanonicalSrcType = SrcType.getCanonicalType();
+  if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalSrcType)) {
+    auto Kind = BT->getKind();
+    if (Kind == BuiltinType::IntCap || Kind == BuiltinType::UIntCap) {
+      // casting to integer from __(u)intcap_t is fine
+      return;
+    }
+  }
+
+  // auto C = DestType.getCanonicalType();
+  // llvm::errs() << "Checking if " << DestType.getAsString() << " is a memoryAddressType -- canonical=" << C.getAsString() << "\n";
+  // DestType.dump("is memaddr?");
+  // C.dump("canonical");
+  // llvm::errs() << "Is integral: " << DestType->isIntegralOrEnumerationType() << " C " << C->isIntegralOrEnumerationType() << "\n";
+  
+  // check if it is a valid type for memory addresses such as vaddr_t
+  // FIXME: is there something simpler that I can do?
+  // bool IsMemAddressType = DestType->getDecl()->hasAttr<MemoryAddressAttr>();
+  bool IsMemAddressType = false;
+  QualType CurTy = DestType;
+  while (!CurTy.isNull() && !CurTy.isCanonical()) {
+    // llvm::errs() << "Checking if " << T.getAsString() << " is a memoryAddressType\n";
+    if (auto AT = CurTy->getAs<AttributedType>()) {
+      if (AT->getAttrKind() == AttributedType::attr_memory_address) {
+        // llvm::errs() << "Found attr_memory_address: " << CurTy.getAsString() << "\n";
+        // llvm::errs() << DestType.getAsString() << " is a memoryAddressType!\n";
+        IsMemAddressType = true;
+	break;
+      }
+    }
+    if (!CurTy->isIntegralType(Self.Context)) {
+      break; // Attribute can only be applied to integers
+    }
+    auto Desugared = CurTy.getSingleStepDesugaredType(Self.Context);
+    if (Desugared == CurTy) {
+      llvm::errs() << "isMemoryAddressType(): Desugared == CurTy -> Would cause an infinite loop:\n";
+      CurTy.dump("currently checked type");
+      DestType.dump("root type");
+      break;
+    }
+    CurTy = Desugared;
+  }
+  if (!IsMemAddressType) {
+    Self.Diag(OpRange.getBegin(), diag::warn_capability_integer_cast)
+      << SrcType << DestType << OpRange;
+    Self.Diag(OpRange.getEnd(), diag::note_insert_vaddr_or_intptr_fixit)
+      << FixItHint::CreateInsertion(OpRange.getEnd(), "(vaddr_t)");
+  }
+}
+
 static void DiagnoseCastOfObjCSEL(Sema &Self, const ExprResult &SrcExpr,
                                   QualType DestType) {
   QualType SrcType = SrcExpr.get()->getType();
@@ -2131,6 +2189,11 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
     // C++ 5.2.10p4: A pointer can be explicitly converted to any integral
     //   type large enough to hold it; except in Microsoft mode, where the
     //   integral type size doesn't matter (except we don't allow bool).
+
+    if (SrcType->isMemoryCapabilityType(Self.Context)) {
+      DiagnoseCapabilityToIntCast(Self, OpRange, /*SrcExpr.get()->getLocStart(),*/
+                                  SrcType, DestType);
+    }
     bool MicrosoftException = Self.getLangOpts().MicrosoftExt &&
                               !DestType->isBooleanType();
     bool IsCap = SrcType->isCHERICapabilityType(Self.Context);
@@ -2637,7 +2700,10 @@ void CastOperation::CheckCStyleCast() {
       return;
     }
   }
-  
+  if (SrcType->isMemoryCapabilityType(Self.Context)) {
+    DiagnoseCapabilityToIntCast(Self, DestRange, /* SrcExpr.get()->getLocStart(), */
+                                SrcType, DestType);
+  }
   DiagnoseCHERICallback(Self, SrcExpr.get()->getLocStart(), SrcType, DestType);
   DiagnoseCastOfObjCSEL(Self, SrcExpr, DestType);
   DiagnoseCallingConvCast(Self, SrcExpr, DestType, OpRange);

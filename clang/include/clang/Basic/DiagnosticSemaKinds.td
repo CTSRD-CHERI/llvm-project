@@ -1206,8 +1206,8 @@ def warn_multiple_selectors: Warning<
 
 def err_objc_kindof_nonobject : Error<
   "'__kindof' specifier cannot be applied to non-object type %0">;
-def err_objc_kindof_wrong_position : Error<
-  "'__kindof' type specifier must precede the declarator">;
+def err_attr_wrong_position : Error<
+  "'%0' type specifier must precede the declarator">;
 
 def err_objc_method_unsupported_param_ret_type : Error<
   "%0 %select{parameter|return}1 type is unsupported; "
@@ -2453,6 +2453,9 @@ def err_attribute_pointers_only : Error<warn_attribute_pointers_only.Text>;
 def err_attribute_integers_only : Error<
   "%0 attribute argument may only refer to a function parameter of integer "
   "type">;
+def err_attribute_address_integers_only : Error<
+  "%0 attribute only applies to integer types that can store memory "
+  "addresses (%1 is invalid)">;
 def warn_attribute_return_pointers_only : Warning<
   "%0 attribute only applies to return values that are pointers">,
   InGroup<IgnoredAttributes>;
@@ -5889,8 +5892,13 @@ def warn_capability_no_provenance : Warning<
   "cast from provenance-free integer type to pointer type will give pointer"
   " that can not be dereferenced.  ">,
   InGroup<CHERICaps>;
+def warn_capability_integer_cast : Warning<
+  "cast from capability type %0 to non-capability, non-address type %1 is most likely an error">,
+  InGroup<CHERICapabilityToIntegerCast>;
 def note_insert_intptr_fixit : Note<
   "insert cast to intptr_t to silence this warning">;
+def note_insert_vaddr_or_intptr_fixit : Note<
+  "insert cast to vaddr_t or intptr_t to silence this warning">;
 def warn_mixed_sign_comparison : Warning<
   "comparison of integers of different signs: %0 and %1">,
   InGroup<SignCompare>, DefaultIgnore;

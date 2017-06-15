@@ -5038,6 +5038,8 @@ static AttributeList::Kind getAttrListKind(AttributedType::Kind kind) {
     return AttributeList::AT_ObjCKindOf;
   case AttributedType::attr_cheri_capability:
     return AttributeList::AT_CHERICapability;
+  case AttributedType::attr_memory_address:
+    return AttributeList::AT_MemoryAddress;
   }
   llvm_unreachable("unexpected attribute kind!");
 }
@@ -6929,6 +6931,50 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
   S.Diag(attr.getLoc(), diag::err_cheri_capability_attribute_pointers_only) << CurType;
 }
 
+
+static bool HandleMemoryAddressAttr(QualType &T, TypeProcessingState &State,
+                                    TypeAttrLocation TAL, AttributeList& Attr) {
+  Sema &S = State.getSema();
+
+  assert(Attr.getKind() == AttributeList::AT_MemoryAddress);
+  // XXXAR: FIXME: Why do I get an assertion later if I don't error out here?
+  if (TAL == TAL_DeclName) {
+    StringRef Name = Attr.getName()->getName();
+    S.Diag(Attr.getLoc(), diag::err_attr_wrong_position) << Name
+        << FixItHint::CreateRemoval(Attr.getLoc())
+        << FixItHint::CreateInsertion(State.getDeclarator().getDeclSpec().getLocStart(), Name);
+    return true;
+  }
+
+  T.dump();
+  if (!T->isIntegerType() || T->isMemoryCapabilityType(S.Context)) {
+    S.Diag(Attr.getLoc(), diag::err_attribute_address_integers_only)
+      << Attr.getName() << T;
+    return true;
+  }
+
+  SplitQualType underlyingType = T.split();
+  const Type *prevTy = nullptr;
+  while (!prevTy || prevTy != underlyingType.Ty) {
+    prevTy = underlyingType.Ty;
+    if (const AttributedType *AT = dyn_cast<AttributedType>(prevTy)) {
+      AttributedType::Kind CurAttrKind = AT->getAttrKind();
+      // You cannot specify duplicate type attributes, so if the attribute has
+      // already been applied, flag it.
+      if (CurAttrKind == AttributedType::attr_memory_address) {
+        S.Diag(Attr.getLoc(), diag::warn_duplicate_attribute_exact)
+          << Attr.getName();
+        return true;
+      }
+    }
+    underlyingType = underlyingType.getSingleStepDesugaredType();
+  }
+  T = S.Context.getAttributedType(AttributedType::attr_memory_address, T, T);
+  // llvm::errs() << "Modified type: "; T.dump();
+  return false;
+}
+
+
 static void processTypeAttrs(TypeProcessingState &state, QualType &type,
                              TypeAttrLocation TAL, AttributeList *attrs) {
   // Scan through and apply attributes to this type where it makes sense.  Some
@@ -7072,7 +7118,7 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
       case TAL_DeclChunk:
       case TAL_DeclName:
         state.getSema().Diag(attr.getLoc(),
-                             diag::err_objc_kindof_wrong_position)
+                             diag::err_attr_wrong_position) << "__kindof"
           << FixItHint::CreateRemoval(attr.getLoc())
           << FixItHint::CreateInsertion(
                state.getDeclarator().getDeclSpec().getLocStart(), "__kindof ");
@@ -7106,6 +7152,12 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
     case AttributeList::AT_CHERICapability:
       attr.setUsedAsTypeAttr();
       HandleCHERICapabilityAttr(type, state, TAL, attr);
+      break;
+    case AttributeList::AT_MemoryAddress:
+      // llvm::errs() << "applying memory_address to "; type.dump();
+      if (!HandleMemoryAddressAttr(type, state, TAL, attr)) {
+          attr.setUsedAsTypeAttr();
+      }
       break;
     }
   }
