@@ -6863,9 +6863,9 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
         llvm::Type *ElTy = CGT.ConvertType(ElementType);
         for (unsigned i=0 ; i<Elements ; ++i)
           ArgList.push_back(ElTy);
-        const uint64_t TySize = getContext().getTypeSize(Ty);
-        LastOffset += Elements * TySize;
-        assert(CapSize == TySize || (Ty->isMemberFunctionPointerType() && TySize == 2 * CapSize));
+        const uint64_t ElemSize = getContext().getTypeSize(ElementType);
+        LastOffset += Elements * ElemSize;
+        assert(CapSize == ElemSize || (Ty->isMemberFunctionPointerType() && ElemSize == 2 * CapSize));
         continue;
       } else if (containsCapabilities(ElementType)) {
         uint64_t FieldSize = getContext().getTypeSize(ElementType);
