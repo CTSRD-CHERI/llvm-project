@@ -1,4 +1,5 @@
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -o - %s -fsyntax-only -verify
+// RUN: not %clang_cc1 -triple cheri-unknown-freebsd -o - %s -fsyntax-only -ast-dump | FileCheck %s -check-prefix AST
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -o - %s -fsyntax-only -verify
 
 #if !__has_attribute(memory_address)
@@ -15,6 +16,7 @@ typedef int* __attribute__((memory_address)) err_pointer_type; // expected-error
 // seems like an attribute at the end is handled differently
 // FIXME: unless I make this an error I get a crash in clang:
 typedef unsigned __PTRDIFF_TYPE__ err_bad_location __attribute__((memory_address)); // expected-error {{'memory_address' type specifier must precede the declarator}}
+
 /*
 Assertion failed: ((attrs || DeclAttrs) && "no type attributes in the expected location!"), function fillAttributedTypeLoc, file /home/alr48/cheri/sources/llvm/tools/clang/lib/Sema/SemaType.cpp, line 4527.
 Program received signal SIGABRT, Aborted.
@@ -68,25 +70,47 @@ struct test {
 
 void foo(void) {
   unsigned long x1 = (unsigned long)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'unsigned long' is most likely an error}}
+  // AST: CStyleCastExpr {{.+}} 'unsigned long' <PointerToIntegral>
+
   long x2 = (long)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'long' is most likely an error}}
+  // AST: CStyleCastExpr {{.+}} 'long' <PointerToIntegral>
+
   int x3 = (int)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'int' is most likely an error}}
+  // AST: CStyleCastExpr {{.+}} 'int' <PointerToIntegral>
+
   ptrdiff_t x4 = (ptrdiff_t)a;  // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'ptrdiff_t' (aka 'long') is most likely an error}}
+  // AST: CStyleCastExpr {{.+}} 'ptrdiff_t':'long' <PointerToIntegral>
+
   // These are okay
   uintptr_t x5 = (uintptr_t)a;
-  intptr_t x6 = (intptr_t)a; 
+  // AST: CStyleCastExpr {{.+}} 'uintptr_t':'__uintcap_t' <PointerToIntegral>
+  intptr_t x6 = (intptr_t)a;
+  // AST: CStyleCastExpr {{.+}} 'intptr_t':'__intcap_t' <PointerToIntegral>
   __uintcap_t x7 = (__uintcap_t)a;
+  // AST: CStyleCastExpr {{.+}} '__uintcap_t':'__uintcap_t' <PointerToIntegral>
   __intcap_t x8 = (__intcap_t)a; 
+  // AST: CStyleCastExpr {{.+}} '__intcap_t':'__intcap_t' <PointerToIntegral>
 
   vaddr_t x10 = (vaddr_t)a;
+  // AST: CStyleCastExpr {{.+}} 'vaddr_t':'unsigned long' <PointerToIntegral>
   other_addr_t x11 = (other_addr_t)a;
+  // AST: CStyleCastExpr {{.+}} 'vaddr_t':'unsigned long' <PointerToIntegral>
   void* __capability x12 = (void* __capability)a;
-  int x13 = (int)(uintptr_t)a;
+  // AST: CStyleCastExpr {{.+}} 'void * __capability' <NoOp>
+  int x13 = (int)(uintptr_t)a;  // TODO: later on this should probably also be an error
+  // AST: CStyleCastExpr {{.+}} 'int' <IntegralCast>
+  // AST-NEXT: CStyleCastExpr {{.+}} 'uintptr_t':'__uintcap_t' <PointerToIntegral>
   int x14 = (int)(vaddr_t)a;
+  // AST: CStyleCastExpr {{.+}} 'int' <IntegralCast>
+  // AST-NEXT: CStyleCastExpr {{.+}} 'vaddr_t':'unsigned long' <PointerToIntegral>
   word* __capability x15 = (word* __capability)a;
+  // AST: CStyleCastExpr {{.+}} 'word * __capability' <BitCast>
   long x16 = (long __attribute__((memory_address)))a; // no warning
+  // AST: CStyleCastExpr {{.+}} 'long __attribute__((memory_address))':'long' <PointerToIntegral>
 
 #ifndef __CHERI_PURE_CAPABILITY__
   word* x17 = (word*)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'word *' (aka '__uintcap_t *') is most likely an error}} expected-note{{use __cheri_cast to convert between pointers and capabilities}}
+  // AST: CStyleCastExpr {{.+}} 'word *' <MemoryCapabilityToPointer>
 #endif
 }
 
@@ -110,7 +134,9 @@ void test_cheri_cast(void) {
 #endif
 
   int* __capability intptr_to_cap = (__cheri_cast int* __capability)x;
+  // AST: CStyleCastExpr {{.+}} 'int * __capability' <PointerToMemoryCapability>
   const int* __capability const_intcap = (__cheri_cast int* __capability)x;
+  // AST: ImplicitCastExpr {{.+}} 'const int * __capability' <BitCast>
+  // AST-NEXT: CStyleCastExpr {{.+}} 'int * __capability' <PointerToMemoryCapability>
   (__cheri_cast int* __capability)const_intcap; // expected-error{{invalid __cheri_cast from 'const int * __capability' to unrelated type 'int * __capability'}}
-
 }
