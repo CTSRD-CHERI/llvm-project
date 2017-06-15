@@ -2809,7 +2809,20 @@ ExprResult Sema::BuildCheriCast(SourceLocation LParenLoc,
       << SrcTy;
     return ExprError();
   }
-  if (!Context.typesAreCompatible(SrcTy, DestTy)) {
+  bool TypesCompatible = false;
+  if (getLangOpts().CPlusPlus) {
+    // C++ checks if the types are excatly the same -> this will fail because
+    // capability and non-capability Type* are different instances
+    //
+    // Types compatible source:
+    //   if (getLangOpts().CPlusPlus)
+    //     return hasSameType(LHS, RHS);
+    //  return !mergeTypes(LHS, RHS, false, CompareUnqualified).isNull();
+    TypesCompatible = !Context.mergeTypes(SrcTy, DestTy, false, false).isNull();
+  } else {
+    TypesCompatible = Context.typesAreCompatible(SrcTy, DestTy, false);
+  }
+  if (!TypesCompatible) {
     Diag(SubExpr->getLocStart(), diag::err_cheri_cast_unrelated_type)
       << SrcTy << DestTy;
     return ExprError();
