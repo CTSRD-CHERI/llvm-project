@@ -6830,6 +6830,16 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
   Declarator &declarator = state.getDeclarator();
   Sema& S = state.getSema();
 
+  if (TAL == TAL_DeclName) {
+    // TODO: we should use the spelling as written in the source
+    // StringRef Name = attr.getName()->getName();
+    StringRef Name = "__capability";
+    S.Diag(attr.getLoc(), diag::err_attr_wrong_position) << Name
+        << FixItHint::CreateRemoval(attr.getLoc())
+        << FixItHint::CreateInsertion(state.getDeclarator().getName().getLocStart(), Name);
+    return;
+  }
+
   if (TAL == TAL_DeclSpec) {
     // possible deprecated use; move to the outermost pointer declarator
     // unless this is a typedef'd pointer type
