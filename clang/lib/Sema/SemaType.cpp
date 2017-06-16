@@ -6956,7 +6956,7 @@ static bool HandleMemoryAddressAttr(QualType &T, TypeProcessingState &State,
     return true;
   }
 
-  if (!T->isIntegerType() || T->isMemoryCapabilityType(S.Context)) {
+  if (!T->isIntegerType() || T->isCHERICapabilityType(S.Context)) {
     S.Diag(Attr.getLoc(), diag::err_attribute_address_integers_only)
       << Attr.getName() << T;
     return true;
