@@ -378,7 +378,7 @@ class Reducer(object):
         # treat fatal llvm errors (cannot select, etc) as crashes too:
         is_llvm_error = b"LLVM ERROR:" in proc.stderr
         if proc.returncode == 0 or is_llvm_error:
-            if self.args.crash_message and self.args.crash_message in proc.stderr.decode("utf-8"):
+            if not self.args.crash_message or (self.args.crash_message in proc.stderr.decode("utf-8")):
                 print(green(" yes"))
                 return True
             else:
