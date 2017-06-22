@@ -838,6 +838,24 @@ static void reportMayClobberedLoad(LoadInst *LI, MemDepResult DepInfo,
   ORE->emit(R);
 }
 
+static bool canExtractBitsFromCapability(Type *Src, Type *Dst, int Offset,
+                                         const DataLayout &DL) {
+  // At worst capability to capability
+  if (Src == Dst && Offset == 0)
+    return true;
+  // Compute the offset in bits.
+  Offset = Offset * 8;
+  // If we're not extracting bits from a capability then we're ok.
+  if (!isa<PointerType>(Src))
+    return true;
+  if (!DL.isFatPointer(Src))
+    return true;
+  if (DL.getPointerBaseSizeInBits(Src) < Offset + DL.getTypeSizeInBits(Dst)) {
+    return false;
+  }
+  return true;
+}
+
 bool GVN::AnalyzeLoadAvailability(LoadInst *LI, MemDepResult DepInfo,
                                   Value *Address, AvailableValue &Res) {
 
@@ -857,8 +875,12 @@ bool GVN::AnalyzeLoadAvailability(LoadInst *LI, MemDepResult DepInfo,
         int Offset =
           analyzeLoadFromClobberingStore(LI->getType(), Address, DepSI, DL, TLI);
         if (Offset != -1) {
-          Res = AvailableValue::get(DepSI->getValueOperand(), Offset);
-          return true;
+          if (canExtractBitsFromCapability(DepSI->getValueOperand()->getType(),
+                                           LI->getType(), Offset, DL)) {
+            Res = AvailableValue::get(DepSI->getValueOperand(), Offset);
+            return true;
+          }
+          return false;
         }
       }
     }
@@ -875,7 +897,9 @@ bool GVN::AnalyzeLoadAvailability(LoadInst *LI, MemDepResult DepInfo,
         int Offset =
           analyzeLoadFromClobberingLoad(LI->getType(), Address, DepLI, DL, TLI);
 
-        if (Offset != -1) {
+        if (Offset != -1 &&
+            canExtractBitsFromCapability(DepLI->getType(), LI->getType(),
+                                         Offset, DL)) {
           Res = AvailableValue::getLoad(DepLI, Offset);
           return true;
         }
