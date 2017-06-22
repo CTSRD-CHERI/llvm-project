@@ -33,6 +33,10 @@
 // PTRS: ret i8*
 // PTRS: define i8* @cheri_unseal(i8* readnone returned{{.*}}, i8* nocapture readnone
 // PTRS: ret i8*
+// PTRS: define i8* @cheri_cap_from_pointer(i8* nocapture readnone %{{.*}}, i8* readnone returned %{{.*}})
+// PTRS: ret i8*
+// PTRS: define i8* @cheri_cap_to_pointer(i8* nocapture readnone %{{.*}}, i8* readnone returned %{{.*}})
+// PTRS: ret i8*
 // PTRS: define void @cheri_perms_check(i8* nocapture{{.*}}, i16 zeroext
 // PTRS: ret void
 // PTRS: define void @cheri_type_check(i8* nocapture{{.*}}, i8* nocapture
@@ -68,6 +72,10 @@
 // CAPS: call i8 addrspace(200)* @llvm.cheri.cap.seal(i8 addrspace(200)*{{.*}}, i8 addrspace(200)*
 // CAPS: define i8 addrspace(200)* @cheri_unseal(i8 addrspace(200)* readnone{{.*}}, i8 addrspace(200)* readnone
 // CAPS: call i8 addrspace(200)* @llvm.cheri.cap.unseal(i8 addrspace(200)*{{.*}}, i8 addrspace(200)*
+// CAPS: define i8 addrspace(200)* @cheri_cap_from_pointer(i8 addrspace(200)* readnone %{{.*}}, i8* %{{.*}})
+// CAPS: call i8 addrspace(200)* @llvm.cheri.cap.from.pointer(i8 addrspace(200)* %{{.*}}, i64
+// CAPS: define i8* @cheri_cap_to_pointer(i8 addrspace(200)* %{{.*}}, i8 addrspace(200)* %{{.*}})
+// CAPS: call i64 @llvm.cheri.cap.to.pointer(i8 addrspace(200)* %{{.*}}, i8 addrspace(200)*
 // CAPS: define void @cheri_perms_check(i8 addrspace(200)*{{.*}}, i16 zeroext
 // CAPS: call void @llvm.cheri.cap.perms.check(i8 addrspace(200)*{{.*}}, i64
 // CAPS: define void @cheri_type_check(i8 addrspace(200)*{{.*}}, i8 addrspace(200)*

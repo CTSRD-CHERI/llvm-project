@@ -1372,6 +1372,8 @@ BUILTIN(__builtin_cheri_callback_create, "v.", "nct")
 BUILTIN(__builtin_cheri_address_get, "zvC*m", "nc")
 
 BUILTIN(__builtin_cheri_stack_get, "v*m", "nc")
+BUILTIN(__builtin_cheri_cap_from_pointer, "v*mvC*mvC*", "nc")
+BUILTIN(__builtin_cheri_cap_to_pointer, "v*vC*mvC*m", "nc")
 
 // Safestack builtins
 BUILTIN(__builtin___get_unsafe_stack_start, "v*", "Fn")

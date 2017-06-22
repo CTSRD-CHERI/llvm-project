@@ -2342,6 +2342,21 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
       return RValue::get(llvm::ConstantExpr::getBitCast(GV, CGM.Int8PtrTy));
     break;
   }
+  case Builtin::BI__builtin_cheri_cap_from_pointer: {
+    Value *GlobalCap = EmitScalarExpr(E->getArg(0));
+    Value *Ptr = Builder.CreatePtrToInt(EmitScalarExpr(E->getArg(1)), Int64Ty);
+    return RValue::get(Builder.CreateCall(
+        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_from_pointer),
+        {GlobalCap, Ptr}));
+  }
+  case Builtin::BI__builtin_cheri_cap_to_pointer: {
+    Value *GlobalCap = EmitScalarExpr(E->getArg(0));
+    Value *Cap = EmitScalarExpr(E->getArg(1));
+    Value *Ptr = Builder.CreateCall(
+        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_to_pointer),
+        {GlobalCap, Cap});
+    return RValue::get(Builder.CreateIntToPtr(Ptr, ConvertType(E->getType())));
+  }
   case Builtin::BI__builtin_cheri_callback_create: {
     StringRef ClassName = cast<StringLiteral>(E->getArg(0))->getString();
     auto Fn = cast<DeclRefExpr>(E->getArg(2));

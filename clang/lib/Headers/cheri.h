@@ -104,6 +104,20 @@ void * __capability cheri_unseal(const void * __capability __cap,
 }
 
 static inline
+void * __capability
+cheri_cap_from_pointer(const void * __capability __cap, const void *__ptr) {
+  return __IF_CAPS(__builtin_cheri_cap_from_pointer(__cap, __ptr),
+                   (void *)__ptr);
+}
+
+static inline
+void * cheri_cap_to_pointer(const void * __capability __cap,
+                            const void * __capability __offset) {
+  return __IF_CAPS(__builtin_cheri_cap_to_pointer(__cap, __offset),
+                   (void *)__offset);
+}
+
+static inline
 void cheri_perms_check(const void * __capability __cap, cheri_perms_t __perms) {
   __IF_CAPS(__builtin_cheri_perms_check(__cap, __perms), );
 }

@@ -37,6 +37,8 @@ long long test(__capability void* foo)
 	// CHECK: call i64 @llvm.cheri.cap.type.get
 	// CHECK: call i64 @llvm.cheri.cap.tag.get
 	// CHECK: call i64 @llvm.cheri.cap.sealed.get
+	// CHECK: call i64 @llvm.cheri.cap.to.pointer
+	// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.from.pointer
 	// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.perms.and
 	// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.seal
 	// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.unseal
@@ -50,6 +52,8 @@ long long test(__capability void* foo)
 	x &= __builtin_cheri_type_get(foo);
 	x &= __builtin_cheri_tag_get(foo);
 	x &= __builtin_cheri_sealed_get(foo);
+	void * bar = __builtin_cheri_cap_to_pointer(foo, foo);
+       results[0] = __builtin_cheri_cap_from_pointer(foo, bar);
 	results[1] = __builtin_cheri_perms_and(foo, 12);
 	results[4] = __builtin_cheri_seal(foo, foo);
 	results[5] = __builtin_cheri_unseal(foo, foo);
