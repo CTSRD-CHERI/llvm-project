@@ -739,9 +739,14 @@ static Value *ConstructSSAForLoadSet(LoadInst *LI,
     if (SSAUpdate.HasValueForBlock(BB))
       continue;
 
-    Value *Materialized = AV.MaterializeAdjustedValue(LI, gvn);
-    if (Materialized != LI)
-      SSAUpdate.AddAvailableValue(BB, Materialized);
+    // I do not understand why this was added or even needed. There is
+    // no comment. There is no test. And it breaks the LLVM test suite as well
+    // as some otherwise valid codebases. Revert this and use the original
+    // code instead.
+    //Value *Materialized = AV.MaterializeAdjustedValue(LI, gvn);
+    //if (Materialized != LI)
+    //  SSAUpdate.AddAvailableValue(BB, Materialized);
+    SSAUpdate.AddAvailableValue(BB, AV.MaterializeAdjustedValue(LI, gvn));
   }
 
   // Perform PHI construction.
