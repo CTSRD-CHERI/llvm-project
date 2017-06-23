@@ -320,7 +320,9 @@ public:
   /// CHERI is not MIPSr6, but provides a hybrid implementation where
   /// in-cache-line unaligned accesses are handled in software and ones
   /// spanning cache lines are emulated in the OS.
-  bool systemSupportsUnalignedAccess() const { return IsCheri || hasMips32r6(); }
+  bool systemSupportsUnalignedAccess(unsigned AS=0) const {
+    return (IsCheri && AS==200) || hasMips32r6();
+  }
 
   // Set helper classes
   void setHelperClassesMips16();

@@ -2668,8 +2668,12 @@ SDValue MipsTargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
   LoadSDNode *LD = cast<LoadSDNode>(Op);
   EVT MemVT = LD->getMemoryVT();
 
-  if (Subtarget.systemSupportsUnalignedAccess())
+  if (Subtarget.systemSupportsUnalignedAccess(LD->getAddressSpace()))
     return Op;
+
+  // We don't handle capability-releative loads here, so make sure that we
+  // don't encounter them!
+  assert(MemVT != MVT::iFATPTR);
 
   // Return if load is aligned or if MemVT is neither i32 nor i64.
   if ((LD->getAlignment() >= MemVT.getSizeInBits() / 8) ||
@@ -2830,7 +2834,7 @@ SDValue MipsTargetLowering::lowerSTORE(SDValue Op, SelectionDAG &DAG) const {
   }
 
   // Lower unaligned integer stores.
-  if (!Subtarget.systemSupportsUnalignedAccess() &&
+  if (!Subtarget.systemSupportsUnalignedAccess(SD->getAddressSpace()) &&
       (SD->getAlignment() < MemVT.getSizeInBits() / 8) &&
       ((MemVT == MVT::i32) || (MemVT == MVT::i64)))
     return lowerUnalignedIntStore(SD, DAG, Subtarget.isLittle(),

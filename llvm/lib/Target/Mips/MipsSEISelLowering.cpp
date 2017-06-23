@@ -401,12 +401,12 @@ addMSAFloatType(MVT::SimpleValueType Ty, const TargetRegisterClass *RC) {
 
 bool
 MipsSETargetLowering::allowsMisalignedMemoryAccesses(EVT VT,
-                                                     unsigned,
+                                                     unsigned AS,
                                                      unsigned,
                                                      bool *Fast) const {
   MVT::SimpleValueType SVT = VT.getSimpleVT().SimpleTy;
 
-  if (Subtarget.systemSupportsUnalignedAccess()) {
+  if (Subtarget.systemSupportsUnalignedAccess(AS)) {
     // MIPS32r6/MIPS64r6 is required to support unaligned access. It's
     // implementation defined whether this is handled by hardware, software, or
     // a hybrid of the two but it's expected that most implementations will
@@ -421,7 +421,7 @@ MipsSETargetLowering::allowsMisalignedMemoryAccesses(EVT VT,
   case MVT::i32:
     if (Fast)
       *Fast = true;
-    return true;
+    return AS == 0;
   default:
     return false;
   }
