@@ -50,7 +50,7 @@
 #include "llvm/Transforms/IPO/AlwaysInliner.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Instrumentation.h"
-#include "llvm/Transforms/MemCap.h"
+#include "llvm/Transforms/CHERICap.h"
 #include "llvm/Transforms/ObjCARC.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/GVN.h"
@@ -148,13 +148,13 @@ private:
 static void addCHERICapDirectCallsPass(const PassManagerBuilder &Builder,
         PassManagerBase &PM) {
   if (Builder.OptLevel > 0)
-    PM.add(createMemCapDirectCallsPass());
+    PM.add(createCHERICapDirectCallsPass());
 }
 
 static void addCHERICapFoldIntrinsicsPass(const PassManagerBuilder &Builder,
         PassManagerBase &PM) {
   if (Builder.OptLevel > 0)
-    PM.add(createMemCapFoldIntrinsicsPass());
+    PM.add(createCHERICapFoldIntrinsicsPass());
 }
 
 static void addObjCARCAPElimPass(const PassManagerBuilder &Builder, PassManagerBase &PM) {
