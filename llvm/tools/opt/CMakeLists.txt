@@ -12,7 +12,7 @@ set(LLVM_LINK_COMPONENTS
   MC
   ObjCARCOpts
   ScalarOpts
-  MemCapOpts
+  CHERICapOpts
   Support
   Target
   TransformUtils

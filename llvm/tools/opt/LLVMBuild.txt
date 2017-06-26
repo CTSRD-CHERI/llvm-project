@@ -28,7 +28,7 @@ required_libraries =
  IPO
  Instrumentation
  Scalar
- MemCap
+ CHERICap
  ObjCARC
  Passes
  all-targets

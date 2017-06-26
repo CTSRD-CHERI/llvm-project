@@ -28,7 +28,7 @@
 #include "llvm/IR/PatternMatch.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/MemCap.h"
+#include "llvm/Transforms/CHERICap.h"
 
 using namespace llvm;
 using namespace PatternMatch;

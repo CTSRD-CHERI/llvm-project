@@ -1,4 +1,4 @@
-add_llvm_library(LLVMMemCapOpts
+add_llvm_library(LLVMCHERICapOpts
   FoldCapIntrinsics.cpp
   PureCapABICalls.cpp
 
@@ -6,4 +6,4 @@ add_llvm_library(LLVMMemCapOpts
   ${LLVM_MAIN_INCLUDE_DIR}/llvm/Transforms
   )
 
-add_dependencies(LLVMMemCapOpts intrinsics_gen)
+add_dependencies(LLVMCHERICapOpts intrinsics_gen)

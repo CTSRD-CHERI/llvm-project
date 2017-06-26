@@ -21,7 +21,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Transforms/MemCap.h"
+#include "llvm/Transforms/CHERICap.h"
 #include <memory>
 
 namespace llvm {

@@ -42,7 +42,7 @@ required_libraries =
  MipsInfo
  Scalar
  SelectionDAG
- MemCap
+ CHERICap
  Support
  Target
 add_to_library_groups = Mips

@@ -1,4 +1,4 @@
-;===- ./lib/Transforms/MemCap/LLVMBuild.txt --------------------*- Conf -*--===;
+;===- ./lib/Transforms/CHERICap/LLVMBuild.txt --------------------*- Conf -*--===;
 ;
 ;                     The LLVM Compiler Infrastructure
 ;
@@ -17,7 +17,7 @@
 
 [component_0]
 type = Library
-name = MemCap
+name = CHERICap
 parent = Transforms
-library_name = MemCapOpts
+library_name = CHERICapOpts
 required_libraries = Analysis Core Support TransformUtils

@@ -36,7 +36,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Transforms/Scalar.h"
-#include "llvm/Transforms/MemCap.h"
+#include "llvm/Transforms/CHERICap.h"
 #include <string>
 
 using namespace llvm;
