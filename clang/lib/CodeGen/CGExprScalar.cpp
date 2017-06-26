@@ -1720,8 +1720,8 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     return Builder.CreateBitCast(Src, DstTy);
   }
   case CK_AddressSpaceConversion:
-  case CK_MemoryCapabilityToPointer:
-  case CK_PointerToMemoryCapability: {
+  case CK_CHERICapabilityToPointer:
+  case CK_PointerToCHERICapability: {
     Expr::EvalResult Result;
     if (E->EvaluateAsRValue(Result, CGF.getContext()) &&
         Result.Val.isNullPointer()) {
@@ -1747,7 +1747,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
       if (SrcPointeeTy->isFunctionType() && DstPointeeTy->isFunctionType()) {
         // FIXME: Should we handle casts in the other direction by doing a
         // pcc-relative cfromptr?
-        if (Kind == CK_PointerToMemoryCapability)
+        if (Kind == CK_PointerToCHERICapability)
           Src = CodeGenFunction::FunctionAddressToCapability(CGF, Src);
       }
     }

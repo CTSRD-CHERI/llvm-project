@@ -5791,9 +5791,9 @@ CastKind Sema::PrepareScalarCast(ExprResult &Src, QualType DestTy) {
       if (SrcAS != DestAS)
         return CK_AddressSpaceConversion;
       else if (!SrcTy->isCHERICapabilityType(Context) && DestTy->isCHERICapabilityType(Context))
-        return CK_PointerToMemoryCapability;
+        return CK_PointerToCHERICapability;
       else if (SrcTy->isCHERICapabilityType(Context) && !DestTy->isCHERICapabilityType(Context))
-        return CK_MemoryCapabilityToPointer;
+        return CK_CHERICapabilityToPointer;
       else
         return CK_BitCast;
     }
@@ -7703,9 +7703,9 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
       else if (LHSPointer->isFunctionPointerType() && RHSPointer->isFunctionPointerType()) {
         // only allow implicit casts to and from function pointer capabilities
         if (!LHSPointer->isCHERICapability() && RHSPointer->isCHERICapability())
-          Kind = CK_MemoryCapabilityToPointer;
+          Kind = CK_CHERICapabilityToPointer;
         else if (LHSPointer->isCHERICapability() && !RHSPointer->isCHERICapability())
-          Kind = CK_PointerToMemoryCapability;
+          Kind = CK_PointerToCHERICapability;
         else
           Kind = CK_BitCast;
       } else if (LHSPointer->isCHERICapability() != RHSPointer->isCHERICapability())
@@ -9788,10 +9788,10 @@ QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
     // We only implicitly cast the NULL constant to a memory capability
     if (LHSIsNull && !LHSType->isCHERICapabilityType(Context)
                   && RHSType->isCHERICapabilityType(Context))
-        LHS = ImpCastExprToType(LHS.get(), RHSType, CK_PointerToMemoryCapability);
+        LHS = ImpCastExprToType(LHS.get(), RHSType, CK_PointerToCHERICapability);
     else if (RHSIsNull && !RHSType->isCHERICapabilityType(Context)
                        && LHSType->isCHERICapabilityType(Context))
-        RHS = ImpCastExprToType(RHS.get(), LHSType, CK_PointerToMemoryCapability);
+        RHS = ImpCastExprToType(RHS.get(), LHSType, CK_PointerToCHERICapability);
 
     // All of the following pointer-related warnings are GCC extensions, except
     // when handling null pointer constants.

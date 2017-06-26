@@ -682,8 +682,8 @@ public:
     }
 
     case CK_AddressSpaceConversion:
-    case CK_MemoryCapabilityToPointer:
-    case CK_PointerToMemoryCapability:
+    case CK_CHERICapabilityToPointer:
+    case CK_PointerToCHERICapability:
       return llvm::ConstantExpr::getAddrSpaceCast(C, destType);
 
     case CK_LValueToRValue:

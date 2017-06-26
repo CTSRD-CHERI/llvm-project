@@ -1578,14 +1578,14 @@ bool CastExpr::CastConsistency() const {
            getSubExpr()->getType()->getPointeeType().getAddressSpace());
     goto CheckNoBasePath;
 
-  case CK_MemoryCapabilityToPointer:
+  case CK_CHERICapabilityToPointer:
     assert(getType()->isPointerType());
     assert(!getType()->getAs<PointerType>()->isCHERICapability());
     assert(getSubExpr()->getType()->isPointerType());
     assert(getSubExpr()->getType()->getAs<PointerType>()->isCHERICapability());
     goto CheckNoBasePath;
 
-  case CK_PointerToMemoryCapability:
+  case CK_PointerToCHERICapability:
     assert(getType()->isPointerType());
     assert(getType()->getAs<PointerType>()->isCHERICapability());
     assert(getSubExpr()->getType()->isPointerType());
