@@ -7678,16 +7678,16 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
     return Compatible;
   }
 
-  // Cheri callbacks may only be cast to other cheri callback types
+  // CHERI callbacks may only be cast to other cheri callback types
   bool RHSIsCallback = false;
   bool LHSIsCallback = false;
   if (auto RHSPointer = dyn_cast<PointerType>(RHSType))
     if (auto RHSFnPTy = RHSPointer->getPointeeType()->getAs<FunctionType>())
-      if (RHSFnPTy->getCallConv() == CC_CheriCCallback)
+      if (RHSFnPTy->getCallConv() == CC_CHERICCallback)
         RHSIsCallback = true;
   if (auto LHSPointer = dyn_cast<PointerType>(LHSType))
     if (auto LHSFnPTy = LHSPointer->getPointeeType()->getAs<FunctionType>())
-      if (LHSFnPTy->getCallConv() == CC_CheriCCallback)
+      if (LHSFnPTy->getCallConv() == CC_CHERICCallback)
         LHSIsCallback = true;
   if (RHSIsCallback != LHSIsCallback)
     return Incompatible;

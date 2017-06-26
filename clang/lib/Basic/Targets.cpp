@@ -39,12 +39,12 @@
 using namespace clang;
 
 static llvm::cl::opt<bool>
-Cheri128("cheri128", llvm::cl::desc("CHERI capabilities are 128 bits"),
+CHERI128("cheri128", llvm::cl::desc("CHERI capabilities are 128 bits"),
     llvm::cl::NotHidden, llvm::cl::init(false));
 
 #if CHERI_IS_128
 static llvm::cl::opt<bool>
-ForceCheri256("cheri256", llvm::cl::desc("CHERI capabilities are 256 bits"),
+ForceCHERI256("cheri256", llvm::cl::desc("CHERI capabilities are 256 bits"),
              llvm::cl::NotHidden, llvm::cl::init(false));
 #endif
 //===----------------------------------------------------------------------===//
@@ -7685,8 +7685,8 @@ class MipsTargetInfo : public TargetInfo {
     else if (ABI == "n32")
       Layout = "m:e-p:32:32-i8:8:32-i16:16:32-i64:64-n32:64-S128";
     else if (ABI == "n64") {
-      if (IsCheri) {
-        if (Cheri128)
+      if (IsCHERI) {
+        if (CHERI128)
            Layout = "m:e-pf200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128";
          else
            Layout = "m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128";
@@ -7721,7 +7721,7 @@ class MipsTargetInfo : public TargetInfo {
 protected:
   bool HasFP64;
   std::string ABI;
-  bool IsCheri;
+  bool IsCHERI;
   int CapSize;
 
 public:
@@ -7730,7 +7730,7 @@ public:
         IsNan2008(false), IsSingleFloat(false), IsNoABICalls(false),
         CanUseBSDABICalls(false), FloatABI(HardFloat),
         DspRev(NoDSP), HasMSA(false), HasFP64(false),
-        IsCheri(getTriple().getArch() == llvm::Triple::cheri),
+        IsCHERI(getTriple().getArch() == llvm::Triple::cheri),
         CapSize(-1) {
     TheCXXABI.set(TargetCXXABI::GenericMIPS);
 
@@ -7740,16 +7740,16 @@ public:
                : "n64");
 
     CPU = ABI == "o32" ? "mips32r2" : "mips64r2";
-    if (IsCheri) {
+    if (IsCHERI) {
       if (Opts.CPU == "cheri128") {
-        Cheri128 = true;
+        CHERI128 = true;
       }
 #if CHERI_IS_128
-      if (ForceCheri256)
-        Cheri128 = false;
+      if (ForceCHERI256)
+        CHERI128 = false;
 #endif
-      CPU = Cheri128 ? "cheri128" : "cheri";
-      CapSize = Cheri128 ? 128 : 256;
+      CPU = CHERI128 ? "cheri128" : "cheri";
+      CapSize = CHERI128 ? 128 : 256;
       SuitableAlign = CapSize;
     }
 
@@ -8006,7 +8006,7 @@ public:
     if (HasMSA)
       Builder.defineMacro("__mips_msa", Twine(1));
 
-    if (IsCheri) {
+    if (IsCHERI) {
       Builder.defineMacro("__CHERI__", Twine(1));
       if (CapabilityABI) {
         Builder.defineMacro("__CHERI_SANDBOX__", Twine(3));
@@ -8033,7 +8033,7 @@ public:
       Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KR2C__", Twine(1<<14));
 
       Builder.defineMacro("_MIPS_SZCAP", Twine(getCHERICapabilityWidth()));
-      if (Cheri128)
+      if (CHERI128)
           Builder.defineMacro("_MIPS_CAP_ALIGN_MASK", "0xfffffffffffffff0");
       else
           Builder.defineMacro("_MIPS_CAP_ALIGN_MASK", "0xffffffffffffffe0");
@@ -8139,7 +8139,7 @@ public:
       return true;
     case 'C': // Capability register
       Info.setAllowsRegister();
-      return IsCheri;
+      return IsCHERI;
     case 'Z':
       if (Name[1] == 'C') { // An address usable by ll, and sc.
         Info.setAllowsMemory();
@@ -8165,8 +8165,8 @@ public:
   }
 
   CallingConvCheckResult checkCallingConvention(CallingConv CC) const override {
-    return (((CC == CC_CheriCCallee) || (CC == CC_CheriCCallback) ||
-             (CC == CC_CheriCCall)) && IsCheri) ?
+    return (((CC == CC_CHERICCallee) || (CC == CC_CHERICCallback) ||
+             (CC == CC_CHERICCall)) && IsCHERI) ?
         CCCR_OK : CCCR_Warning;
   }
 
@@ -8227,7 +8227,7 @@ public:
       else if (Feature == "+nan2008")
         IsNan2008 = true;
       else if (Feature == "+cheri" || Feature == "+cheri128")
-        IsCheri = true;
+        IsCHERI = true;
       else if (Feature == "-nan2008")
         IsNan2008 = false;
       else if (Feature == "+noabicalls")
@@ -8283,8 +8283,8 @@ public:
            getTriple().getArch() == llvm::Triple::mips64el;
   }
 
-  unsigned getIntCapWidth() const override { return Cheri128 ? 128 : 256; }
-  unsigned getIntCapAlign() const override { return Cheri128 ? 128 : 256; }
+  unsigned getIntCapWidth() const override { return CHERI128 ? 128 : 256; }
+  unsigned getIntCapAlign() const override { return CHERI128 ? 128 : 256; }
 
   uint64_t getCHERICapabilityWidth() const override { return CapSize; }
 
@@ -8292,7 +8292,7 @@ public:
 
   uint64_t getPointerRangeForCHERICapability() const override { return 64; }
 
-  bool SupportsCapabilities() const override { return IsCheri; }
+  bool SupportsCapabilities() const override { return IsCHERI; }
 
   bool hasBuiltinAtomic(uint64_t AtomicSizeInBits,
                         uint64_t AlignmentInBits) const override {

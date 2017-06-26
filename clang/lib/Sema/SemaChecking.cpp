@@ -115,7 +115,7 @@ static bool SemaBuiltinCHERICapCreate(Sema &S, CallExpr *TheCall) {
   // FIXME: Error on null
   auto BaseFnTy = cast<FunctionProtoType>(FnAttrType->getModifiedType());
   auto ReturnFnTy = C.adjustFunctionType(BaseFnTy,
-      BaseFnTy->getExtInfo().withCallingConv(CC_CheriCCallback));
+      BaseFnTy->getExtInfo().withCallingConv(CC_CHERICCallback));
   auto ReturnTy = C.getPointerType(QualType(ReturnFnTy, 0), ASTContext::PIK_Default);
 
   TheCall->setType(ReturnTy);

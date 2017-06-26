@@ -2663,7 +2663,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
     }
   }
 
-  if (!getCodeGenOpts().CheriLinker &&
+  if (!getCodeGenOpts().CHERILinker &&
       InitExpr && Target.SupportsCapabilities()) {
     QualType T = InitExpr->getType();
     if (TheTargetCodeGenInfo->containsCapabilities(T)) {

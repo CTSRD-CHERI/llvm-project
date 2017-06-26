@@ -33,9 +33,9 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
   const char *DefMips32CPU = "mips32r2";
   const char *DefMips64CPU = "mips64r2";
 #if CHERI_IS_128
-  const char *CheriCPU = "cheri128";
+  const char *CHERICPU = "cheri128";
 #else
-  const char *CheriCPU = "cheri";
+  const char *CHERICPU = "cheri";
 #endif
 
   // MIPS32r6 is the default for mips(el)?-img-linux-gnu and MIPS64r6 is the
@@ -46,8 +46,8 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
     DefMips64CPU = "mips64r6";
   }
   if (Triple.getArch() == llvm::Triple::cheri) {
-    DefMips32CPU = CheriCPU;
-    DefMips64CPU = CheriCPU;
+    DefMips32CPU = CHERICPU;
+    DefMips64CPU = CHERICPU;
   }
 
   // MIPS64r6 is the default for Android MIPS64 (mips64el-linux-android).
@@ -88,7 +88,7 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
       CPUName = DefMips64CPU;
       break;
     case llvm::Triple::cheri:
-      CPUName = CheriCPU;
+      CPUName = CHERICPU;
       ABIName = "n64";
       break;
     }
@@ -132,12 +132,12 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
     CPUName = llvm::StringSwitch<const char *>(ABIName)
                   .Case("o32", DefMips32CPU)
                   .Cases("n32", "n64", DefMips64CPU)
-                  .Case("purecap", CheriCPU)
+                  .Case("purecap", CHERICPU)
                   .Default("");
   }
 
   // change CPU from cheri to cheri128 if -mllvm -cheri128 was passed
-  if (CPUName == CheriCPU)
+  if (CPUName == CHERICPU)
     for (const Arg *A : Args.filtered(options::OPT_mllvm))
         if (StringRef(A->getValue(0)) == "-cheri128")
           CPUName = "cheri128";

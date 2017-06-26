@@ -522,7 +522,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     // structs containing three pointers.
     if (ETy->isFunctionProtoType()) {
       auto FPT = ETy->getAs<FunctionProtoType>();
-      if (FPT->getCallConv() == CC_CheriCCallback) {
+      if (FPT->getCallConv() == CC_CHERICCallback) {
         auto MethNoTy = llvm::Type::getInt64Ty(getLLVMContext());
         auto ObjTy = ConvertType(Context.getCHERIClassType());
         ResultType = llvm::StructType::get(ObjTy, MethNoTy);

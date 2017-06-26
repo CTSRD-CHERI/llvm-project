@@ -969,9 +969,9 @@ static unsigned getDwarfCC(CallingConv CC) {
   case CC_PreserveMost:
   case CC_PreserveAll:
   case CC_X86RegCall:
-  case CC_CheriCCall:
-  case CC_CheriCCallee:
-  case CC_CheriCCallback:
+  case CC_CHERICCall:
+  case CC_CHERICCallee:
+  case CC_CHERICCallback:
     return 0;
   }
   return 0;

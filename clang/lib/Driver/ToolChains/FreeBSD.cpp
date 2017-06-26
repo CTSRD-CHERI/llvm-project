@@ -133,11 +133,11 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       (Args.hasArg(options::OPT_pie) || ToolChain.isPIEDefault());
   ArgStringList CmdArgs;
 
-  bool IsCheriPureCapABI = false;
+  bool IsCHERIPureCapABI = false;
   if (ToolChain.getArch() == llvm::Triple::cheri)
     if (Args.hasArg(options::OPT_mabi_EQ)) {
       auto A = Args.getLastArg(options::OPT_mabi_EQ);
-      IsCheriPureCapABI = StringRef(A->getValue()).lower() == "purecap";
+      IsCHERIPureCapABI = StringRef(A->getValue()).lower() == "purecap";
     }
 
   // Silence warning for "clang -g foo.o -o foo"
@@ -164,7 +164,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-Bshareable");
     } else {
       CmdArgs.push_back("-dynamic-linker");
-      if (IsCheriPureCapABI)
+      if (IsCHERIPureCapABI)
         CmdArgs.push_back("/libexec/ld-cheri-elf.so.1");
       else
         CmdArgs.push_back("/libexec/ld-elf.so.1");
@@ -204,7 +204,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   // The FreeBSD/MIPS version of GNU ld is horribly buggy and errors out
   // complaining about linking 32-bit and 64-bit code when linking CHERI code.
-  if (IsCheriPureCapABI)
+  if (IsCHERIPureCapABI)
     CmdArgs.push_back(Args.MakeArgString("--no-warn-mismatch"));
 
   if (Output.isFilename()) {
@@ -228,7 +228,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath(crt1)));
 
     // Don't support .init and .fini sections for CheriABI.
-    if (Arch != llvm::Triple::cheri || !IsCheriPureCapABI)
+    if (Arch != llvm::Triple::cheri || !IsCHERIPureCapABI)
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crti.o")));
 
     const char *crtbegin = nullptr;
@@ -320,7 +320,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtend.o")));
 
     // Don't support .init and .fini sections for CheriABI.
-    if (Arch != llvm::Triple::cheri || !IsCheriPureCapABI)
+    if (Arch != llvm::Triple::cheri || !IsCHERIPureCapABI)
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtn.o")));
   }
 

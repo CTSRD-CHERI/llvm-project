@@ -4433,7 +4433,7 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
   // Note: It doesn't actually matter what the order of the number and class
   // are, as they will be in a different category of register.  This is *not*
   // necessarily the case for implementations that have a merged register file!
-  if (FnType->getCallConv() == CC_CheriCCallback) {
+  if (FnType->getCallConv() == CC_CHERICCallback) {
     CallCHERIInvoke = true;
     SmallVector<QualType, 16> NewParams;
     // Add the method number
@@ -4455,15 +4455,15 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     NewParams.insert(NewParams.end(), Params.begin(), Params.end());
     FnType = getContext().getFunctionType(FnPType->getReturnType(),
         NewParams, EPI)->getAs<FunctionType>();
-  } else if (FnType->getCallConv() == CC_CheriCCall &&
-             TargetDecl->hasAttr<CheriMethodClassAttr>()) {
+  } else if (FnType->getCallConv() == CC_CHERICCall &&
+             TargetDecl->hasAttr<CHERIMethodClassAttr>()) {
     assert(TargetDecl);
-    StringRef Suffix = TargetDecl->hasAttr<CheriMethodSuffixAttr>() ?
-      TargetDecl->getAttr<CheriMethodSuffixAttr>()->getSuffix() : "";
+    StringRef Suffix = TargetDecl->hasAttr<CHERIMethodSuffixAttr>() ?
+      TargetDecl->getAttr<CHERIMethodSuffixAttr>()->getSuffix() : "";
     CallCHERIInvoke = true;
     SmallVector<QualType, 16> NewParams;
     auto NumTy = getContext().UnsignedLongLongTy;
-    auto *ClsAttr = TargetDecl->getAttr<CheriMethodClassAttr>();
+    auto *ClsAttr = TargetDecl->getAttr<CHERIMethodClassAttr>();
     std::string FunctionBaseName = cast<NamedDecl>(TargetDecl)->getName().str();
     FunctionBaseName = FunctionBaseName.substr(0, FunctionBaseName.size() -
         Suffix.size());
@@ -4552,15 +4552,15 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
   if (CallCHERIInvoke && getLangOpts().CPlusPlus && getLangOpts().Exceptions &&
       TargetDecl && !TargetDecl->hasAttr<NoThrowAttr>()) {
     auto &M = CGM.getModule();
-    auto *CheriErrno = M.getNamedGlobal("cherierrno");
-    if (!CheriErrno) {
-      CheriErrno = new llvm::GlobalVariable(M, IntTy,
+    auto *CHERIErrno = M.getNamedGlobal("cherierrno");
+    if (!CHERIErrno) {
+      CHERIErrno = new llvm::GlobalVariable(M, IntTy,
           /*isConstant*/false, llvm::GlobalValue::ExternalLinkage,
           nullptr, "cherierrno");
-      CheriErrno->setThreadLocal(true);
+      CHERIErrno->setThreadLocal(true);
     }
     // FIXME: Don't hard code 4-byte alignment for int!
-    auto *ErrVal = Builder.CreateLoad(Address(CheriErrno, CharUnits::fromQuantity(4)));
+    auto *ErrVal = Builder.CreateLoad(Address(CHERIErrno, CharUnits::fromQuantity(4)));
     auto *IsZero = Builder.CreateICmpEQ(ErrVal,
         llvm::Constant::getNullValue(ErrVal->getType()));
     auto *Continue = createBasicBlock("cheri_invoke_continue");

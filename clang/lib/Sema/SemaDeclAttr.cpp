@@ -2154,7 +2154,7 @@ static void handleConstructorAttr(Sema &S, Decl *D, const AttributeList &Attr) {
                              Attr.getAttributeSpellingListIndex()));
 }
 
-static void handleCheriMethodClass(Sema &S, Decl *D, const AttributeList &Attr) {
+static void handleCHERIMethodClass(Sema &S, Decl *D, const AttributeList &Attr) {
   auto II = Attr.getArgAsIdent(0)->Ident;
   DeclarationName DN(II);
   auto *TU = S.Context.getTranslationUnitDecl();
@@ -2194,17 +2194,17 @@ static void handleCheriMethodClass(Sema &S, Decl *D, const AttributeList &Attr) 
 
 
   D->addAttr(::new (S.Context)
-             CheriMethodClassAttr(Attr.getRange(), S.Context, II,
+             CHERIMethodClassAttr(Attr.getRange(), S.Context, II,
                                    Attr.getAttributeSpellingListIndex()));
 }
 
-static void handleCheriMethodSuffix(Sema &S, Decl *D, const AttributeList &Attr) {
+static void handleCHERIMethodSuffix(Sema &S, Decl *D, const AttributeList &Attr) {
   StringRef Str;
   SourceLocation LiteralLoc;
   if (!S.checkStringLiteralArgumentAttr(Attr, 0, Str, &LiteralLoc))
     return;
   D->addAttr(::new (S.Context)
-             CheriMethodSuffixAttr(Attr.getRange(), S.Context, Str,
+             CHERIMethodSuffixAttr(Attr.getRange(), S.Context, Str,
                                    Attr.getAttributeSpellingListIndex()));
 }
 
@@ -4286,19 +4286,19 @@ static void handleCallConvAttr(Sema &S, Decl *D, const AttributeList &Attr) {
                        Attr.getAttributeSpellingListIndex()));
     return;
   }
-  case AttributeList::AT_CheriCCall:
+  case AttributeList::AT_CHERICCall:
     D->addAttr(::new (S.Context)
-               CheriCCallAttr(Attr.getRange(), S.Context,
+               CHERICCallAttr(Attr.getRange(), S.Context,
                              Attr.getAttributeSpellingListIndex()));
     return;
-  case AttributeList::AT_CheriCCallee:
+  case AttributeList::AT_CHERICCallee:
     D->addAttr(::new (S.Context)
-               CheriCCalleeAttr(Attr.getRange(), S.Context,
+               CHERICCalleeAttr(Attr.getRange(), S.Context,
                              Attr.getAttributeSpellingListIndex()));
     return;
-  case AttributeList::AT_CheriCCallback:
+  case AttributeList::AT_CHERICCallback:
     D->addAttr(::new (S.Context)
-               CheriCCallbackAttr(Attr.getRange(), S.Context,
+               CHERICCallbackAttr(Attr.getRange(), S.Context,
                              Attr.getAttributeSpellingListIndex()));
     return;
   case AttributeList::AT_IntelOclBicc:
@@ -4391,9 +4391,9 @@ bool Sema::CheckCallingConvAttr(const AttributeList &attr, CallingConv &CC,
     Diag(attr.getLoc(), diag::err_invalid_pcs);
     return true;
   }
-  case AttributeList::AT_CheriCCall: CC = CC_CheriCCall; break;
-  case AttributeList::AT_CheriCCallee: CC = CC_CheriCCallee; break;
-  case AttributeList::AT_CheriCCallback: CC = CC_CheriCCallback; break;
+  case AttributeList::AT_CHERICCall: CC = CC_CHERICCall; break;
+  case AttributeList::AT_CHERICCallee: CC = CC_CHERICCallee; break;
+  case AttributeList::AT_CHERICCallback: CC = CC_CHERICCallback; break;
   case AttributeList::AT_IntelOclBicc: CC = CC_IntelOclBicc; break;
   case AttributeList::AT_PreserveMost: CC = CC_PreserveMost; break;
   case AttributeList::AT_PreserveAll: CC = CC_PreserveAll; break;
@@ -6410,9 +6410,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     break;
   case AttributeList::AT_StdCall:
   case AttributeList::AT_CDecl:
-  case AttributeList::AT_CheriCCall:
-  case AttributeList::AT_CheriCCallee:
-  case AttributeList::AT_CheriCCallback:
+  case AttributeList::AT_CHERICCall:
+  case AttributeList::AT_CHERICCallee:
+  case AttributeList::AT_CHERICCallback:
   case AttributeList::AT_FastCall:
   case AttributeList::AT_ThisCall:
   case AttributeList::AT_Pascal:
@@ -6427,11 +6427,11 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_PreserveAll:
     handleCallConvAttr(S, D, Attr);
     break;
-  case AttributeList::AT_CheriMethodClass:
-    handleCheriMethodClass(S, D, Attr);
+  case AttributeList::AT_CHERIMethodClass:
+    handleCHERIMethodClass(S, D, Attr);
     break;
-  case AttributeList::AT_CheriMethodSuffix:
-    handleCheriMethodSuffix(S, D, Attr);
+  case AttributeList::AT_CHERIMethodSuffix:
+    handleCHERIMethodSuffix(S, D, Attr);
     break;
   case AttributeList::AT_PointerInterpretationCaps:
     handleSimpleAttribute<PointerInterpretationCapsAttr>(S, D, Attr);

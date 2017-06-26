@@ -1476,11 +1476,11 @@ void Clang::AddMIPSTargetArgs(const ArgList &Args,
   if (CPUName == "cheri128" && getToolChain().getArch() == llvm::Triple::cheri) {
     // Add -mllvm -cheri128 if -mcpu=cheri128 is passed and ensure that it is
     // only passed once because otherwise the compilation will fail
-    bool HaveCheri128Flag = false;
+    bool HaveCHERI128Flag = false;
     for (const Arg *A : Args.filtered(options::OPT_mllvm))
       if (StringRef(A->getValue(0)) == "-cheri128")
-        HaveCheri128Flag = true;
-    if (!HaveCheri128Flag) {
+        HaveCHERI128Flag = true;
+    if (!HaveCHERI128Flag) {
       CmdArgs.push_back("-mllvm");
       CmdArgs.push_back("-cheri128");
     }

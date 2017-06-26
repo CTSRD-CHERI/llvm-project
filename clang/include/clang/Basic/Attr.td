@@ -1627,28 +1627,28 @@ def PointerInterpretationCaps : InheritableAttr {
   let Documentation = [Undocumented];
 }
 
-def CheriCCall : InheritableAttr {
+def CHERICCall : InheritableAttr {
   let Spellings = [GNU<"cheri_ccall">];
   let Documentation = [Undocumented];
 }
 
-def CheriCCallee : InheritableAttr {
+def CHERICCallee : InheritableAttr {
   let Spellings = [GNU<"cheri_ccallee">];
   let Subjects = SubjectList<[Function], ErrorDiag>;
   let Documentation = [Undocumented];
 }
 
-def CheriCCallback : InheritableAttr {
+def CHERICCallback : InheritableAttr {
   let Spellings = [GNU<"cheri_ccallback">];
   let Documentation = [Undocumented];
 }
 
-def CheriMethodSuffix : InheritableAttr {
+def CHERIMethodSuffix : InheritableAttr {
   let Spellings = [GNU<"cheri_method_suffix">];
   let Documentation = [Undocumented];
   let Args = [StringArgument<"Suffix">];
 }
-def CheriMethodClass : InheritableAttr {
+def CHERIMethodClass : InheritableAttr {
   let Spellings = [GNU<"cheri_method_class">];
   let Documentation = [Undocumented];
   let Args = [IdentifierArgument<"DefaultClass">];

@@ -801,8 +801,8 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
   if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(D)) {
     auto *FT =
       dyn_cast<FunctionType>(FD->getType().getDesugaredType(getContext()));
-    if (FT && (FT->getCallConv() == CC_CheriCCallee))
-      if (auto *ClsAttr = FD->getAttr<CheriMethodClassAttr>())
+    if (FT && (FT->getCallConv() == CC_CHERICCallee))
+      if (auto *ClsAttr = FD->getAttr<CHERIMethodClassAttr>())
         CGM.EmitSandboxDefinedMethod(ClsAttr->getDefaultClass()->getName(),
                                      FD->getName(), Fn);
     if (CGM.getLangOpts().OpenMP && FD->hasAttr<OMPDeclareSimdDeclAttr>())

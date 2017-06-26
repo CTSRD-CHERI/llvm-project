@@ -1871,7 +1871,7 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
     auto PointeeTy = cast<PointerType>(T)->getPointeeType();
     if (PointeeTy->isFunctionProtoType()) {
       auto FPT = PointeeTy->getAs<FunctionProtoType>();
-      if (FPT->getCallConv() == CC_CheriCCallback) {
+      if (FPT->getCallConv() == CC_CHERICCallback) {
         Width = Target->getCHERICapabilityWidth() * 3;
         Align = Target->getCHERICapabilityAlign();
         break;

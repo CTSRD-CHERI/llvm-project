@@ -1723,11 +1723,11 @@ static void DiagnoseCHERICallback(Sema &Self, SourceLocation Loc,
   bool DestIsCallback = false;
   if (auto SrcPointer = dyn_cast<PointerType>(SrcType))
     if (auto SrcFnPTy = SrcPointer->getPointeeType()->getAs<FunctionType>())
-      if (SrcFnPTy->getCallConv() == CC_CheriCCallback)
+      if (SrcFnPTy->getCallConv() == CC_CHERICCallback)
         SrcIsCallback = true;
   if (auto DestPointer = dyn_cast<PointerType>(DestType))
     if (auto DestFnPTy = DestPointer->getPointeeType()->getAs<FunctionType>())
-      if (DestFnPTy->getCallConv() == CC_CheriCCallback)
+      if (DestFnPTy->getCallConv() == CC_CHERICCallback)
         DestIsCallback = true;
   if (SrcIsCallback != DestIsCallback)
     Self.Diag(Loc, diag::err_cheri_invalid_callback_cast);

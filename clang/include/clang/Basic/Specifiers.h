@@ -241,9 +241,9 @@ namespace clang {
     CC_X86RegCall, // __attribute__((regcall))
     CC_AAPCS,       // __attribute__((pcs("aapcs")))
     CC_AAPCS_VFP,   // __attribute__((pcs("aapcs-vfp")))
-    CC_CheriCCall,  // __attribute__((cheri_ccall))
-    CC_CheriCCallee,// __attribute__((cheri_ccallee))
-    CC_CheriCCallback,// __attribute__((cheri_ccallback))
+    CC_CHERICCall,  // __attribute__((cheri_ccall))
+    CC_CHERICCallee,// __attribute__((cheri_ccallee))
+    CC_CHERICCallback,// __attribute__((cheri_ccallback))
     CC_IntelOclBicc, // __attribute__((intel_ocl_bicc))
     CC_SpirFunction, // default for OpenCL functions on SPIR target
     CC_OpenCLKernel, // inferred for OpenCL kernels

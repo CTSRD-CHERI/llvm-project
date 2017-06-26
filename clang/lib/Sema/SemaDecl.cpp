@@ -8693,7 +8693,7 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
 
   QualType RetType = NewFD->getReturnType();
 
-  if (CheriMethodSuffixAttr *Attr = NewFD->getAttr<CheriMethodSuffixAttr>()) {
+  if (CHERIMethodSuffixAttr *Attr = NewFD->getAttr<CHERIMethodSuffixAttr>()) {
     auto *TU = Context.getTranslationUnitDecl();
     // Lookup the type of cheri_object, or generate it if it isn't specified.
     QualType CHERIClassTy;
@@ -8714,7 +8714,7 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     NewParams.push_back(CHERIClassTy);
     NewParams.insert(NewParams.end(), Params.begin(), Params.end());
     FunctionProtoType::ExtProtoInfo EPI = OFT->getExtProtoInfo();
-    EPI.ExtInfo = EPI.ExtInfo.withCallingConv(CC_CheriCCall);
+    EPI.ExtInfo = EPI.ExtInfo.withCallingConv(CC_CHERICCall);
     QualType WrappedType = Context.getFunctionType(RetType, NewParams, EPI);
     // Construct the new function name, taking the old one and adding the
     // suffix.
@@ -8736,7 +8736,7 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     // Propagate the default class (the calling convention is copied
     // automatically).  This won't be used in the suffixed version, but is used
     // to look up the method number.
-    if (CheriMethodClassAttr *Cls = NewFD->getAttr<CheriMethodClassAttr>())
+    if (CHERIMethodClassAttr *Cls = NewFD->getAttr<CHERIMethodClassAttr>())
       WrappedFD->addAttr(Cls->clone(Context));
     WrappedFD->addAttr(Attr->clone(Context));
     Attr->setSuffix(Context, "");

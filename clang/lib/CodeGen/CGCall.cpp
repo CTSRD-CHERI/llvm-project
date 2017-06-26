@@ -46,10 +46,10 @@ using namespace CodeGen;
 unsigned CodeGenTypes::ClangCallConvToLLVMCallConv(CallingConv CC) {
   switch (CC) {
   default: return llvm::CallingConv::C;
-  case CC_CheriCCall:
-  case CC_CheriCCallback:
+  case CC_CHERICCall:
+  case CC_CHERICCallback:
     return llvm::CallingConv::CHERI_CCall;
-  case CC_CheriCCallee: return llvm::CallingConv::CHERI_CCallee;
+  case CC_CHERICCallee: return llvm::CallingConv::CHERI_CCallee;
   case CC_X86StdCall: return llvm::CallingConv::X86_StdCall;
   case CC_X86FastCall: return llvm::CallingConv::X86_FastCall;
   case CC_X86RegCall: return llvm::CallingConv::X86_RegCall;
@@ -217,11 +217,11 @@ static CallingConv getCallingConventionForDecl(const Decl *D, bool IsWindows) {
   if (PcsAttr *PCS = D->getAttr<PcsAttr>())
     return (PCS->getPCS() == PcsAttr::AAPCS ? CC_AAPCS : CC_AAPCS_VFP);
 
-  if (D->hasAttr<CheriCCallAttr>())
-    return CC_CheriCCall;
+  if (D->hasAttr<CHERICCallAttr>())
+    return CC_CHERICCall;
 
-  if (D->hasAttr<CheriCCallbackAttr>())
-    return CC_CheriCCallback;
+  if (D->hasAttr<CHERICCallbackAttr>())
+    return CC_CHERICCallback;
 
   if (D->hasAttr<IntelOclBiccAttr>())
     return CC_IntelOclBicc;
