@@ -11,7 +11,7 @@
 
 // Test expected compiler warnings/errors for the __capability qualifier 
 
-// CHECK-MACRO: define __capability __attribute__((memory_capability))
+// CHECK-MACRO: define __capability __attribute__((cheri_capability))
 
 #ifdef DEPRECATED
 __capability int *x; // expected-warning{{use of __capability before}}

@@ -8040,7 +8040,7 @@ public:
 
 
       Builder.defineMacro("__capability",
-        Twine("__attribute__((memory_capability))"));
+        Twine("__attribute__((cheri_capability))"));
     }
 
     Builder.defineMacro("_MIPS_SZPTR", Twine(getPointerWidth(0)));
