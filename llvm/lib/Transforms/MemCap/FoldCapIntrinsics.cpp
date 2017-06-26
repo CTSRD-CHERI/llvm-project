@@ -34,7 +34,7 @@ using namespace llvm;
 using namespace PatternMatch;
 
 namespace {
-class MemCapFoldIntrinsics : public ModulePass {
+class CHERICapFoldIntrinsics : public ModulePass {
   Function *IncOffset;
   Function *SetOffset;
   Function *GetOffset;
@@ -139,7 +139,7 @@ class MemCapFoldIntrinsics : public ModulePass {
 
 public:
   static char ID;
-  MemCapFoldIntrinsics() : ModulePass(ID) {}
+  CHERICapFoldIntrinsics() : ModulePass(ID) {}
   StringRef getPassName() const override {
     return "CHERI fold capability intrinsics";
   }
@@ -165,10 +165,10 @@ public:
 };
 } // namespace
 
-char MemCapFoldIntrinsics::ID = 0;
-INITIALIZE_PASS(MemCapFoldIntrinsics, "cheri-fold-intrisics",
+char CHERICapFoldIntrinsics::ID = 0;
+INITIALIZE_PASS(CHERICapFoldIntrinsics, "cheri-fold-intrisics",
                 "Remove redundant capability instructions", false, false)
 
-Pass *llvm::createMemCapFoldIntrinsicsPass() {
-  return new MemCapFoldIntrinsics();
+Pass *llvm::createCHERICapFoldIntrinsicsPass() {
+  return new CHERICapFoldIntrinsics();
 }

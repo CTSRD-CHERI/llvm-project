@@ -31,13 +31,13 @@
 using namespace llvm;
 
 namespace {
-class MemCapDirectCalls : public FunctionPass,
-                          public InstVisitor<MemCapDirectCalls> {
+class CHERICapDirectCalls : public FunctionPass,
+                          public InstVisitor<CHERICapDirectCalls> {
   bool Modified = false;
 
 public:
   static char ID;
-  MemCapDirectCalls() : FunctionPass(ID) {}
+  CHERICapDirectCalls() : FunctionPass(ID) {}
   void visitCallSite(CallSite CS) {
     Value *Callee = CS.getCalledValue()->stripPointerCasts();
     if (Callee->getType()->getPointerAddressSpace() != 200)
@@ -69,8 +69,8 @@ public:
 };
 }
 
-char MemCapDirectCalls::ID = 0;
-INITIALIZE_PASS(MemCapDirectCalls, "cheri-direct-calls",
+char CHERICapDirectCalls::ID = 0;
+INITIALIZE_PASS(CHERICapDirectCalls, "cheri-direct-calls",
                 "Eliminate PCC-relative calls", false, false)
 
-Pass *llvm::createMemCapDirectCallsPass() { return new MemCapDirectCalls(); }
+Pass *llvm::createCHERICapDirectCallsPass() { return new CHERICapDirectCalls(); }

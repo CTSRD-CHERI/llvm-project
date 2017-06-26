@@ -290,7 +290,7 @@ void MipsPassConfig::addIRPasses() {
   if (getMipsSubtarget().isCheri()) {
     addPass(createCheriExpandIntrinsicsPass());
     if (getOptLevel() != CodeGenOpt::Level::None) {
-      addPass(createMemCapFoldIntrinsicsPass());
+      addPass(createCHERICapFoldIntrinsicsPass());
     }
     addPass(createCheriLoopPointerDecanonicalize());
     addPass(createAggressiveDCEPass());

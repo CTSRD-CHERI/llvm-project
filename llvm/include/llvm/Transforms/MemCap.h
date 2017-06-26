@@ -1,4 +1,4 @@
-//===-- MemCap.h - MemCap Scalar Transformations --------------*- C++ -*-===//
+//===-- MemCap.h - CHERICap Scalar Transformations --------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 //
 // This header file defines prototypes for accessor functions that expose passes
-// in the MemCap Scalar Transformations library.
+// in the CHERICap Scalar Transformations library.
 //
 //===----------------------------------------------------------------------===//
 
@@ -21,15 +21,15 @@ class Pass;
 
 //===----------------------------------------------------------------------===//
 //
-// MemCapDirectCalls - Transform PCC-relative calls into direct calls to allow
+// CHERICapDirectCalls - Transform PCC-relative calls into direct calls to allow
 // inlining.
 //
-Pass *createMemCapDirectCallsPass();
+Pass *createCHERICapDirectCallsPass();
 //===----------------------------------------------------------------------===//
 //
-// createMemCapFoldCapIntrinsics - Fold redundant capability operations.
+// createCHERICapFoldCapIntrinsics - Fold redundant capability operations.
 //
-Pass *createMemCapFoldIntrinsicsPass();
+Pass *createCHERICapFoldIntrinsicsPass();
 
 } // End llvm namespace
 
