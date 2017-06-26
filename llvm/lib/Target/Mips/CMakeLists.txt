@@ -47,6 +47,7 @@ add_llvm_target(MipsCodeGen
   MipsSubtarget.cpp
   MipsTargetMachine.cpp
   MipsTargetObjectFile.cpp
+  Cheri128FailHard.cpp
   CheriAddressingModeFolder.cpp
   CheriAddressingModeFolder.cpp
   CheriLoopPointerDecanonicalize.cpp

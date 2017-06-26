@@ -310,8 +310,10 @@ bool MipsPassConfig::addInstSelector() {
 
 void MipsPassConfig::addPreRegAlloc() {
   addPass(createMipsOptimizePICCallPass());
-  if (getMipsSubtarget().isCheri())
+  if (getMipsSubtarget().isCheri()) {
     addPass(createCheriAddressingModeFolder());
+    addPass(createCheri128FailHardPass());
+  }
 }
 
 TargetIRAnalysis MipsTargetMachine::getTargetIRAnalysis() {
