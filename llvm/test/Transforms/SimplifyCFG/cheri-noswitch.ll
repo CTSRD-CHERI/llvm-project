@@ -1,4 +1,5 @@
-; test that the Simplify CFG pass doesn't insert a switch statement for a capability
+; test that the Simplify CFG pass doesn't insert a switch statement for a
+; capability (which leads to inserting a ptrtoint)
 ; RUN: opt < %s -simplifycfg -S | FileCheck %s
 
 source_filename = "nulltest2.c"
