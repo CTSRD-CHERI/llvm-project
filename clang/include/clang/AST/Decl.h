@@ -2631,10 +2631,10 @@ public:
 
 /// Base class for declarations which introduce a typedef-name.
 class TypedefNameDecl : public TypeDecl, public Redeclarable<TypedefNameDecl> {
-  /// MemCapTypeForDecl - This indicates the Type object that represents the
+  /// CHERICapTypeForDecl - This indicates the Type object that represents the
   /// memory capability version of this TypedefNameDecl. It is a cache
   /// maintained by ASTContext::getTypedefType.
-  mutable const Type *MemCapTypeForDecl;
+  mutable const Type *CHERICapTypeForDecl;
   void anchor() override;
   typedef std::pair<TypeSourceInfo*, QualType> ModedTInfo;
   llvm::PointerUnion<TypeSourceInfo*, ModedTInfo*> MaybeModedTInfo;

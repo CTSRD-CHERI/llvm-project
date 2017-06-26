@@ -109,8 +109,8 @@ public:
     unsigned Align = Target.getTypeAlign(PtrDiff);
     if (MPT->isMemberFunctionPointer()) {
       if (Context.getTargetInfo().areAllPointersCapabilities()) {
-        Width = 2 * Context.getTargetInfo().getMemoryCapabilityWidth();
-        Align = Context.getTargetInfo().getMemoryCapabilityAlign();
+        Width = 2 * Context.getTargetInfo().getCHERICapabilityWidth();
+        Align = Context.getTargetInfo().getCHERICapabilityAlign();
       } else {
         Width = 2 * Width;
       }

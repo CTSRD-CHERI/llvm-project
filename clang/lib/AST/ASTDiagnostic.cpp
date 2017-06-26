@@ -176,7 +176,7 @@ break; \
   // If we have a pointer-like type, desugar the pointee as well.
   // FIXME: Handle other pointer-like types.
   if (const PointerType *Ty = QT->getAs<PointerType>()) {
-    ASTContext::PointerInterpretationKind PIK = Ty->isMemoryCapability() ?
+    ASTContext::PointerInterpretationKind PIK = Ty->isCHERICapability() ?
         ASTContext::PIK_Capability : ASTContext::PIK_Integer;
     QT = Context.getPointerType(Desugar(Context, Ty->getPointeeType(),
                                         ShouldAKA), PIK);

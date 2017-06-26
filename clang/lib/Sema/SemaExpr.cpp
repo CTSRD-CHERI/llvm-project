@@ -5790,9 +5790,9 @@ CastKind Sema::PrepareScalarCast(ExprResult &Src, QualType DestTy) {
       unsigned DestAS = DestTy->getPointeeType().getAddressSpace();
       if (SrcAS != DestAS)
         return CK_AddressSpaceConversion;
-      else if (!SrcTy->isMemoryCapabilityType(Context) && DestTy->isMemoryCapabilityType(Context))
+      else if (!SrcTy->isCHERICapabilityType(Context) && DestTy->isCHERICapabilityType(Context))
         return CK_PointerToMemoryCapability;
-      else if (SrcTy->isMemoryCapabilityType(Context) && !DestTy->isMemoryCapabilityType(Context))
+      else if (SrcTy->isCHERICapabilityType(Context) && !DestTy->isCHERICapabilityType(Context))
         return CK_MemoryCapabilityToPointer;
       else
         return CK_BitCast;
@@ -6486,8 +6486,8 @@ static QualType checkConditionalPointerCompatibility(Sema &S, ExprResult &LHS,
     ResultTy = S.Context.getBlockPointerType(ResultTy);
   else {
     ASTContext::PointerInterpretationKind PIK = ASTContext::PIK_Default;
-    if (LHSTy->isMemoryCapabilityType(S.Context)
-        || RHSTy->isMemoryCapabilityType(S.Context)) {
+    if (LHSTy->isCHERICapabilityType(S.Context)
+        || RHSTy->isCHERICapabilityType(S.Context)) {
       PIK = ASTContext::PIK_Capability;
     }
     ResultTy = S.Context.getPointerType(ResultTy, PIK);
@@ -6546,7 +6546,7 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
     QualType destPointee
       = S.Context.getQualifiedType(lhptee, rhptee.getQualifiers());
     QualType destType = S.Context.getPointerType(destPointee, 
-      RHSTy->isMemoryCapabilityType(S.Context) ? ASTContext::PIK_Capability : ASTContext::PIK_Default);
+      RHSTy->isCHERICapabilityType(S.Context) ? ASTContext::PIK_Capability : ASTContext::PIK_Default);
     // Add qualifiers if necessary.
     LHS = S.ImpCastExprToType(LHS.get(), destType, NopCastKind);
     // Promote to void*.
@@ -6557,7 +6557,7 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
     QualType destPointee
       = S.Context.getQualifiedType(rhptee, lhptee.getQualifiers());
     QualType destType = S.Context.getPointerType(destPointee,
-      LHSTy->isMemoryCapabilityType(S.Context) ? ASTContext::PIK_Capability : ASTContext::PIK_Default);
+      LHSTy->isCHERICapabilityType(S.Context) ? ASTContext::PIK_Capability : ASTContext::PIK_Default);
     // Add qualifiers if necessary.
     RHS = S.ImpCastExprToType(RHS.get(), destType, CK_NoOp);
     // Promote to void*.
@@ -7702,13 +7702,13 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
         Kind = CK_AddressSpaceConversion;
       else if (LHSPointer->isFunctionPointerType() && RHSPointer->isFunctionPointerType()) {
         // only allow implicit casts to and from function pointer capabilities
-        if (!LHSPointer->isMemoryCapability() && RHSPointer->isMemoryCapability())
+        if (!LHSPointer->isCHERICapability() && RHSPointer->isCHERICapability())
           Kind = CK_MemoryCapabilityToPointer;
-        else if (LHSPointer->isMemoryCapability() && !RHSPointer->isMemoryCapability())
+        else if (LHSPointer->isCHERICapability() && !RHSPointer->isCHERICapability())
           Kind = CK_PointerToMemoryCapability;
         else
           Kind = CK_BitCast;
-      } else if (LHSPointer->isMemoryCapability() != RHSPointer->isMemoryCapability())
+      } else if (LHSPointer->isCHERICapability() != RHSPointer->isCHERICapability())
 				// all other implicit casts to and from capabilities are not allowed
         return Incompatible;
 		  else
@@ -7724,7 +7724,7 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
       bool RHSIsNull = RHSNullKind != Expr::NPCK_NotNull;
       bool IsIntCap = RHSType->isSpecificBuiltinType(BuiltinType::UIntCap) ||
                       RHSType->isSpecificBuiltinType(BuiltinType::IntCap);
-      if (LHSPointer->isMemoryCapability() && !RHSIsNull && !IsIntCap)
+      if (LHSPointer->isCHERICapability() && !RHSIsNull && !IsIntCap)
         return Incompatible;
       Kind = CK_IntegralToPointer; // FIXME: null?
       return IntToPointer;
@@ -7871,7 +7871,7 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
       bool RHSIsNull = RHSNullKind != Expr::NPCK_NotNull;
       bool IsIntCap = LHSType->isSpecificBuiltinType(BuiltinType::UIntCap) ||
                       LHSType->isSpecificBuiltinType(BuiltinType::IntCap);
-      if (RHSPointer->isMemoryCapability() && !RHSIsNull && !IsIntCap)
+      if (RHSPointer->isCHERICapability() && !RHSIsNull && !IsIntCap)
         return Incompatible;
       Kind = CK_PointerToIntegral;
       return PointerToInt;
@@ -9786,11 +9786,11 @@ QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
              RHSType->isPointerType()) { // C99 6.5.8p2
 
     // We only implicitly cast the NULL constant to a memory capability
-    if (LHSIsNull && !LHSType->isMemoryCapabilityType(Context)
-                  && RHSType->isMemoryCapabilityType(Context))
+    if (LHSIsNull && !LHSType->isCHERICapabilityType(Context)
+                  && RHSType->isCHERICapabilityType(Context))
         LHS = ImpCastExprToType(LHS.get(), RHSType, CK_PointerToMemoryCapability);
-    else if (RHSIsNull && !RHSType->isMemoryCapabilityType(Context)
-                       && LHSType->isMemoryCapabilityType(Context))
+    else if (RHSIsNull && !RHSType->isCHERICapabilityType(Context)
+                       && LHSType->isCHERICapabilityType(Context))
         RHS = ImpCastExprToType(RHS.get(), LHSType, CK_PointerToMemoryCapability);
 
     // All of the following pointer-related warnings are GCC extensions, except
@@ -10187,8 +10187,8 @@ inline QualType Sema::CheckBitwiseOperands(ExprResult &LHS, ExprResult &RHS,
                                            BinaryOperatorKind Opc) {
   checkArithmeticNull(*this, LHS, RHS, Loc, /*isCompare=*/false);
 
-  bool isLHSCap = LHS.get()->getType()->isMemoryCapabilityType(Context);
-  bool isRHSCap = RHS.get()->getType()->isMemoryCapabilityType(Context);
+  bool isLHSCap = LHS.get()->getType()->isCHERICapabilityType(Context);
+  bool isRHSCap = RHS.get()->getType()->isCHERICapabilityType(Context);
   if ((isLHSCap && !isRHSCap) || (!isLHSCap && isRHSCap))
     Diag(Loc, diag::warn_mixed_capability_binop)
     << LHS.get()->getType() << RHS.get()->getType()

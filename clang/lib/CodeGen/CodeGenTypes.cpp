@@ -446,7 +446,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     case BuiltinType::UIntCap:
       ResultType =
           llvm::PointerType::get(llvm::Type::getInt8Ty(getLLVMContext()),
-              CGM.getTargetCodeGenInfo().getMemoryCapabilityAS());
+              CGM.getTargetCodeGenInfo().getCHERICapabilityAS());
       break;
 
     case BuiltinType::Half:
@@ -509,8 +509,8 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     const ReferenceType *RTy = cast<ReferenceType>(Ty);
     QualType ETy = RTy->getPointeeType();
     llvm::Type *PointeeType = ConvertTypeForMem(ETy);
-    unsigned AS = RTy->isMemoryCapability()
-                  ? CGM.getTargetCodeGenInfo().getMemoryCapabilityAS()
+    unsigned AS = RTy->isCHERICapability()
+                  ? CGM.getTargetCodeGenInfo().getCHERICapabilityAS()
                   : Context.getTargetAddressSpace(ETy.getQualifiers());
     ResultType = llvm::PointerType::get(PointeeType, AS);
     break;
@@ -532,8 +532,8 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     llvm::Type *PointeeType = ConvertTypeForMem(ETy);
     if (PointeeType->isVoidTy())
       PointeeType = llvm::Type::getInt8Ty(getLLVMContext());
-    unsigned AS = PTy->isMemoryCapability() ? 
-                  CGM.getTargetCodeGenInfo().getMemoryCapabilityAS() :
+    unsigned AS = PTy->isCHERICapability() ? 
+                  CGM.getTargetCodeGenInfo().getCHERICapabilityAS() :
                   Context.getTargetAddressSpace(ETy.getQualifiers());
     ResultType = llvm::PointerType::get(PointeeType, AS);
     break;

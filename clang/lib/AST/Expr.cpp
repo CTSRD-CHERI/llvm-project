@@ -1580,16 +1580,16 @@ bool CastExpr::CastConsistency() const {
 
   case CK_MemoryCapabilityToPointer:
     assert(getType()->isPointerType());
-    assert(!getType()->getAs<PointerType>()->isMemoryCapability());
+    assert(!getType()->getAs<PointerType>()->isCHERICapability());
     assert(getSubExpr()->getType()->isPointerType());
-    assert(getSubExpr()->getType()->getAs<PointerType>()->isMemoryCapability());
+    assert(getSubExpr()->getType()->getAs<PointerType>()->isCHERICapability());
     goto CheckNoBasePath;
 
   case CK_PointerToMemoryCapability:
     assert(getType()->isPointerType());
-    assert(getType()->getAs<PointerType>()->isMemoryCapability());
+    assert(getType()->getAs<PointerType>()->isCHERICapability());
     assert(getSubExpr()->getType()->isPointerType());
-    assert(!getSubExpr()->getType()->getAs<PointerType>()->isMemoryCapability());
+    assert(!getSubExpr()->getType()->getAs<PointerType>()->isCHERICapability());
     goto CheckNoBasePath;
 
   // These should not have an inheritance path.

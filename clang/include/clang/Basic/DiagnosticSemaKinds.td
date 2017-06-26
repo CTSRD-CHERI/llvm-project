@@ -983,9 +983,9 @@ def warn_mips_cheri_call_no_func_proto: Warning<
   InGroup<MIPSCHERIPrototypes>, DefaultIgnore;
 def note_mips_cheri_func_decl_add_types : Note<
   "candidate function declaration needs parameter types">;
-def err_memory_capability_attribute_ambiguous : Error<
+def err_cheri_capability_attribute_ambiguous : Error<
   "use of __capability is ambiguous">;
-def err_memory_capability_attribute_pointers_only : Error<
+def err_cheri_capability_attribute_pointers_only : Error<
   "__capability only applies to pointers; type here is %0">;
 def err_objc_var_decl_inclass : 
     Error<"cannot declare variable inside @interface or @protocol">;

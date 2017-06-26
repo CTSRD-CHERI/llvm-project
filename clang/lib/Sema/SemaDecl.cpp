@@ -15150,7 +15150,7 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
       [&](const RecordDecl *R) {
         for (const auto *F : R->fields()) {
           auto FTy = F->getType();
-          if (FTy->isMemoryCapabilityType(getASTContext()))
+          if (FTy->isCHERICapabilityType(getASTContext()))
             return true;
           if (FTy->isRecordType() &&
               contains_capabilities(FTy->getAs<RecordType>()->getDecl()))
@@ -15186,7 +15186,7 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
           CheckForUseInArray = F;
         }
       };
-      if (FTy->isMemoryCapabilityType(Context)) {
+      if (FTy->isCHERICapabilityType(Context)) {
         checkCapabilityFieldAlignment(diag::warn_packed_capability);
       } else if (FTy->isRecordType() &&
                  contains_capabilities(FTy->getAs<RecordType>()->getDecl())) {
@@ -15197,7 +15197,7 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
       assert(!Record->isDependentType());
       unsigned RecordAlign = Context.getTypeAlign(Record->getTypeForDecl());
       unsigned RecordSize = Context.getTypeSize(Record->getTypeForDecl());
-      unsigned CapAlign = Context.getTargetInfo().getMemoryCapabilityAlign();
+      unsigned CapAlign = Context.getTargetInfo().getCHERICapabilityAlign();
       // Warn if alignment is not a multiple of CapAlign unless size is a
       // multiple of CapAlign
       // I.e. struct { char pad[sizeof(void*)]; void* cap; char bad; } __packed

@@ -4337,8 +4337,8 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
                   Address Addr(V, Alignment);
                   KeyV = Builder.CreateLoad(Addr);
                   // If this is CHERI, enforce this in hardware
-                  if (RetTy->isMemoryCapabilityType(CGM.getContext())) {
-                    unsigned CapAS = CGM.getTargetCodeGenInfo().getMemoryCapabilityAS();
+                  if (RetTy->isCHERICapabilityType(CGM.getContext())) {
+                    unsigned CapAS = CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
                     llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_unseal);
                     llvm::Type *CapPtrTy = llvm::PointerType::get(Int8Ty, CapAS);
                     V = Builder.CreateCall(F,

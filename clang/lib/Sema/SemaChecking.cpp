@@ -98,7 +98,7 @@ static bool SemaBuiltinAnnotation(Sema &S, CallExpr *TheCall) {
   return false;
 }
 
-static bool SemaBuiltinMemcapCreate(Sema &S, CallExpr *TheCall) {
+static bool SemaBuiltinCHERICapCreate(Sema &S, CallExpr *TheCall) {
   if (checkArgCount(S, TheCall, 3))
     return true;
 
@@ -1060,7 +1060,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     break;
   // Memory capability functions
   case Builtin::BI__builtin_cheri_callback_create:
-    return SemaBuiltinMemcapCreate(*this, TheCall);
+    return SemaBuiltinCHERICapCreate(*this, TheCall);
   // OpenCL v2.0, s6.13.16 - Pipe functions
   case Builtin::BIread_pipe:
   case Builtin::BIwrite_pipe:
@@ -3192,7 +3192,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   // It would result in incorrect code generation because we would end up
   // using the _16 versions and generating i256 in the IR
   bool IsCapabilityAtomicOp = false;
-  if (pointerType->getPointeeType()->isMemoryCapabilityType(Context)) {
+  if (pointerType->getPointeeType()->isCHERICapabilityType(Context)) {
     IsCapabilityAtomicOp = true;
     Diag(DRE->getLocStart(), diag::err_sync_atomic_builtin_with_capability)
       << pointerType->getPointeeType() << FirstArg->getSourceRange();

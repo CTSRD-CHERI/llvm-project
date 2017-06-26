@@ -5036,8 +5036,8 @@ static AttributeList::Kind getAttrListKind(AttributedType::Kind kind) {
     return AttributeList::AT_TypeNullUnspecified;
   case AttributedType::attr_objc_kindof:
     return AttributeList::AT_ObjCKindOf;
-  case AttributedType::attr_memory_capability:
-    return AttributeList::AT_MemoryCapability;
+  case AttributedType::attr_cheri_capability:
+    return AttributeList::AT_CHERICapability;
   }
   llvm_unreachable("unexpected attribute kind!");
 }
@@ -6819,10 +6819,10 @@ static void HandleOpenCLAccessAttr(QualType &CurType, const AttributeList &Attr,
   }
 }
 
-/// HandleMemoryCapabilityAttr - Process the memory_capability attribute. It is
+/// HandleCHERICapabilityAttr - Process the cheri_capability attribute. It is
 /// only applicable to pointer and reference types and specifies that this
 /// pointer/reference should be treated as a capability.
-static void HandleMemoryCapabilityAttr(QualType &CurType, TypeProcessingState &state,
+static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &state,
                                        TypeAttrLocation TAL, AttributeList& attr) {
   static bool isDeprecatedUse = false;
   Declarator &declarator = state.getDeclarator();
@@ -6875,11 +6875,11 @@ static void HandleMemoryCapabilityAttr(QualType &CurType, TypeProcessingState &s
           DeclaratorChunk &nextChunk = declarator.getTypeObject(currChunkIdx-1);
           if (nextChunk.Kind == DeclaratorChunk::Pointer) {
             const AttributeList *Attr = nextChunk.getAttrs();
-            while (Attr && Attr->getKind() != AttributeList::AT_MemoryCapability)
+            while (Attr && Attr->getKind() != AttributeList::AT_CHERICapability)
               Attr = Attr->getNext();
             if (!Attr) {
               isDeprecatedUse = false;
-              S.Diag(nextChunk.Loc, diag::err_memory_capability_attribute_ambiguous);
+              S.Diag(nextChunk.Loc, diag::err_cheri_capability_attribute_ambiguous);
               return;
             }
           }
@@ -6889,7 +6889,7 @@ static void HandleMemoryCapabilityAttr(QualType &CurType, TypeProcessingState &s
         SourceRange AttrRange;
         SourceLocation AttrLoc = attr.getLoc();
         if (AttrLoc.isValid()) {
-          // The memory_capability attribute should always be inserted via
+          // The cheri_capability attribute should always be inserted via
           // the predefined __capability macro, but we also cater for when it
           // isn't in the else branch
           if (AttrLoc.isMacroID()) {
@@ -6904,7 +6904,7 @@ static void HandleMemoryCapabilityAttr(QualType &CurType, TypeProcessingState &s
             AttrRange.setEnd(AttrLoc.getLocWithOffset(18));
           }
         }
-        S.Diag(chunk.Loc, diag::warn_memory_capability_attribute_location)
+        S.Diag(chunk.Loc, diag::warn_cheri_capability_attribute_location)
             << FixItHint::CreateRemoval(AttrRange)
             << FixItHint::CreateInsertion(chunk.Loc.getLocWithOffset(1),
                                           " __capability ");
@@ -6926,7 +6926,7 @@ static void HandleMemoryCapabilityAttr(QualType &CurType, TypeProcessingState &s
     }
   }
 
-  S.Diag(attr.getLoc(), diag::err_memory_capability_attribute_pointers_only) << CurType;
+  S.Diag(attr.getLoc(), diag::err_cheri_capability_attribute_pointers_only) << CurType;
 }
 
 static void processTypeAttrs(TypeProcessingState &state, QualType &type,
@@ -7103,9 +7103,9 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
         distributeFunctionTypeAttr(state, attr, type);
       break;
 
-    case AttributeList::AT_MemoryCapability:
+    case AttributeList::AT_CHERICapability:
       attr.setUsedAsTypeAttr();
-      HandleMemoryCapabilityAttr(type, state, TAL, attr);
+      HandleCHERICapabilityAttr(type, state, TAL, attr);
       break;
     }
   }

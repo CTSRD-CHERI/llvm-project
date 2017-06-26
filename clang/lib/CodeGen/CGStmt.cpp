@@ -1083,8 +1083,8 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
           Address Addr(KeyV, Alignment);
           KeyV = Builder.CreateLoad(Addr);
           // If this is CHERI, enforce this in hardware
-          if (Ty->isMemoryCapabilityType(getContext())) {
-            unsigned CapAS = CGM.getTargetCodeGenInfo().getMemoryCapabilityAS();
+          if (Ty->isCHERICapabilityType(getContext())) {
+            unsigned CapAS = CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
             llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_seal);
             llvm::Type *CapPtrTy = llvm::PointerType::get(Int8Ty, CapAS);
             RetV = Builder.CreateCall(F,
@@ -1169,10 +1169,10 @@ void CodeGenFunction::EmitCaseStmtRange(const CaseStmt &S) {
   assert(S.getRHS() && "Expected RHS value in CaseStmt");
 
   llvm::APSInt LHS = S.getLHS()->EvaluateKnownConstInt(getContext());
-  if (S.getLHS()->getType()->isMemoryCapabilityType(getContext()))
+  if (S.getLHS()->getType()->isCHERICapabilityType(getContext()))
     LHS = LHS.trunc(64);  // XXXAR: will this always be correct???
   llvm::APSInt RHS = S.getRHS()->EvaluateKnownConstInt(getContext());
-  if (S.getRHS()->getType()->isMemoryCapabilityType(getContext()))
+  if (S.getRHS()->getType()->isCHERICapabilityType(getContext()))
     RHS = RHS.trunc(64);  // XXXAR: will this always be correct???
 
   // Emit the code for this case. We do this first to make sure it is
@@ -1265,7 +1265,7 @@ void CodeGenFunction::EmitCaseStmt(const CaseStmt &S) {
   }
   // SwitchInsn.getCondition()
   llvm::APSInt CaseIntVal = S.getLHS()->EvaluateKnownConstInt(getContext());
-  if (S.getLHS()->getType()->isMemoryCapabilityType(getContext()))
+  if (S.getLHS()->getType()->isCHERICapabilityType(getContext()))
     if (CaseIntVal.getBitWidth() > 64)
       CaseIntVal = CaseIntVal.trunc(64);  // XXXAR: will this always be correct???
   llvm::ConstantInt *CaseVal = Builder.getInt(CaseIntVal);
@@ -1316,7 +1316,7 @@ void CodeGenFunction::EmitCaseStmt(const CaseStmt &S) {
   while (NextCase && NextCase->getRHS() == nullptr) {
     CurCase = NextCase;
     CaseIntVal = CurCase->getLHS()->EvaluateKnownConstInt(getContext());
-    if (S.getLHS()->getType()->isMemoryCapabilityType(getContext()))
+    if (S.getLHS()->getType()->isCHERICapabilityType(getContext()))
       if (CaseIntVal.getBitWidth() > 64)
         CaseIntVal = CaseIntVal.trunc(64);
     llvm::ConstantInt *CaseVal = Builder.getInt(CaseIntVal);
@@ -1642,7 +1642,7 @@ void CodeGenFunction::EmitSwitchStmt(const SwitchStmt &S) {
     EmitAutoVarDecl(*S.getConditionVariable());
   llvm::Value *CondV = EmitScalarExpr(S.getCond());
   // If we're an intcap_t, then we actually want to switch on the offset.
-  if (S.getCond()->getType()->isMemoryCapabilityType(getContext())) {
+  if (S.getCond()->getType()->isCHERICapabilityType(getContext())) {
     // XXXAR: In switch statements we want to switch on the virtual address and
     // not the offset: https://github.com/CTSRD-CHERI/clang/issues/132
     CondV = getPointerAddress(CondV, "intcap.vaddr");

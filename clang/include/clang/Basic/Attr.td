@@ -1617,7 +1617,7 @@ def Packed : InheritableAttr {
 
 // CHERI-related attributes
 
-def MemoryCapability : TypeAttr {
+def CHERICapability : TypeAttr {
   let Spellings = [GNU<"cheri_capability">];
   let Documentation = [Undocumented];
 }

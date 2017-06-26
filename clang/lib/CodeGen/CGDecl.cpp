@@ -1011,7 +1011,7 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
       emission.IsConstantAggregate = true;
       if (!CGM.getCodeGenOpts().CheriLinker && Target.SupportsCapabilities() &&
           Target.areAllPointersCapabilities() &&
-          (Ty->isMemoryCapabilityType(getContext()) || Ty->isCompoundType()))
+          (Ty->isCHERICapabilityType(getContext()) || Ty->isCompoundType()))
         emission.IsConstantAggregate = false;
     }
 

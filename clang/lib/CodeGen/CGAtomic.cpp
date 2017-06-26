@@ -654,7 +654,7 @@ AddDirectArgument(CodeGenFunction &CGF, CallArgList &Args,
     // Coerce the value into an appropriately sized integer type.
     Args.add(RValue::get(Val), ValTy);
   } else {
-    if (false && ValTy->isMemoryCapabilityType(CGF.getContext())) {
+    if (false && ValTy->isCHERICapabilityType(CGF.getContext())) {
       // capabilities can be passed directly without casting to i8*
       Args.add(RValue::get(Val), ValTy);
     } else {
@@ -1157,8 +1157,8 @@ Address AtomicInfo::emitCastToAtomicIntPointer(Address addr) const {
   unsigned addrspace;
   auto addrTy = cast<llvm::PointerType>(addr.getPointer()->getType());
   llvm::Type *ty;
-  if (AtomicTy->isMemoryCapabilityType(CGF.getContext())) {
-    addrspace = CGF.CGM.getTargetCodeGenInfo().getMemoryCapabilityAS();
+  if (AtomicTy->isCHERICapabilityType(CGF.getContext())) {
+    addrspace = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
     if (addrTy->getAddressSpace() == addrspace) {
       return addr;
     }

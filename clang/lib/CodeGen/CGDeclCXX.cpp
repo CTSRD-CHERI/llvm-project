@@ -167,7 +167,7 @@ void CodeGenFunction::EmitCXXGlobalVarDeclInit(const VarDecl &D,
   // expects "this" in the "generic" address space.
   ASTContext &Context = getContext();
   unsigned ExpectedAddrSpace = Context.getTargetInfo().areAllPointersCapabilities()
-                               ? CGM.getTargetCodeGenInfo().getMemoryCapabilityAS()
+                               ? CGM.getTargetCodeGenInfo().getCHERICapabilityAS()
                                : Context.getTargetAddressSpace(T.getQualifiers());
   unsigned ActualAddrSpace = DeclPtr->getType()->getPointerAddressSpace();
   if (ActualAddrSpace != ExpectedAddrSpace) {

@@ -286,7 +286,7 @@ static Address emitVoidPtrDirectVAArg(CodeGenFunction &CGF,
     llvm::Value *PtrAsInt = Ptr;
     if (CGF.getTarget().SupportsCapabilities() &&
         Ptr->getType()->getPointerAddressSpace() ==
-        (unsigned)CGF.CGM.getTargetCodeGenInfo().getMemoryCapabilityAS()) {
+        (unsigned)CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS()) {
       PtrAsInt = CGF.getPointerOffset(PtrAsInt);
       PtrAsInt = CGF.Builder.CreateAdd(PtrAsInt,
             llvm::ConstantInt::get(CGF.IntPtrTy, DirectAlign.getQuantity() - 1));
@@ -433,8 +433,8 @@ llvm::Value *TargetCodeGenInfo::performAddrSpaceCast(
 
 unsigned TargetCodeGenInfo::getAddressSpaceForType(QualType DestTy,
                                                    ASTContext& Context) const {
-  if (DestTy->isMemoryCapabilityType(Context)) {
-    return getMemoryCapabilityAS();
+  if (DestTy->isCHERICapabilityType(Context)) {
+    return getCHERICapabilityAS();
   }
   unsigned AS = Context.getTargetAddressSpace(DestTy.getQualifiers());
   if (AS == 0)
@@ -6628,7 +6628,7 @@ class MIPSTargetCodeGenInfo : public TargetCodeGenInfo,
   mutable llvm::PointerType *I8Cap = nullptr;
   llvm::PointerType *getI8CapTy(CodeGen::CodeGenFunction &CGF) const {
     if (!I8Cap)
-      I8Cap = llvm::PointerType::get(CGF.Int8Ty, getMemoryCapabilityAS());
+      I8Cap = llvm::PointerType::get(CGF.Int8Ty, getCHERICapabilityAS());
     return I8Cap;
   }
 public:
@@ -6724,9 +6724,9 @@ public:
   }
   unsigned getDefaultAS() const override {
     const TargetInfo &Target = getABIInfo().getContext().getTargetInfo();
-    return Target.areAllPointersCapabilities() ? getMemoryCapabilityAS() : 0;
+    return Target.areAllPointersCapabilities() ? getCHERICapabilityAS() : 0;
   }
-  unsigned getMemoryCapabilityAS() const override {
+  unsigned getCHERICapabilityAS() const override {
     return 200;
   }
   unsigned getStackAS() const override {
@@ -6755,7 +6755,7 @@ bool CheriCapClassifier::containsCapabilities(ASTContext &C,
                                               const RecordDecl *RD) const {
   for (auto i = RD->field_begin(), e = RD->field_end(); i != e; ++i) {
     const QualType Ty = i->getType();
-    if (Ty->isMemoryCapabilityType(C))
+    if (Ty->isCHERICapabilityType(C))
       return true;
     if (const RecordType *RT = Ty->getAs<RecordType>())
       if (containsCapabilities(C, RT->getDecl()))
@@ -6772,7 +6772,7 @@ bool CheriCapClassifier::containsCapabilities(QualType Ty) const {
   if (Cached != ContainsCapabilities.end())
     return Cached->second;
   // Don't bother caching the trivial cases.
-  if (Ty->isMemoryCapabilityType(C))
+  if (Ty->isCHERICapabilityType(C))
       return true;
   if (Ty->isArrayType()) {
     QualType ElTy = QualType(Ty->getBaseElementTypeUnsafe(), 0);
@@ -6807,7 +6807,7 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
       (RT->isUnionType() && containsCapabilities(getContext(), RT->getDecl()))
       && getTarget().SupportsCapabilities())
     return llvm::Type::getInt8Ty(getVMContext())->getPointerTo(
-                            CGM.getTargetCodeGenInfo().getMemoryCapabilityAS());
+                            CGM.getTargetCodeGenInfo().getCHERICapabilityAS());
 
   // Unions/vectors are passed in integer registers.
   if (!RT || !RT->isStructureOrClassType()) {
@@ -6828,7 +6828,7 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
   uint64_t LastOffset = 0;
   unsigned idx = 0;
   llvm::IntegerType *I64 = llvm::IntegerType::get(getVMContext(), 64);
-  unsigned CapSize = getTarget().getMemoryCapabilityWidth();
+  unsigned CapSize = getTarget().getCHERICapabilityWidth();
 
   // Iterate over fields in the struct/class and check if there are any aligned
   // double fields.
@@ -6846,7 +6846,7 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
         continue;
       }
     }
-    if (!Ty->isConstantArrayType() && Ty->isMemoryCapabilityType(getContext())) {
+    if (!Ty->isConstantArrayType() && Ty->isCHERICapabilityType(getContext())) {
       // Add ((Offset - LastOffset) / 64) args of type i64.
       for (unsigned j = (Offset - LastOffset) / 64; j > 0; --j)
         ArgList.push_back(I64);
@@ -6859,7 +6859,7 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
     if (const ConstantArrayType *CAT = dyn_cast<ConstantArrayType>(Ty)) {
       auto ElementType = CAT->getElementType();
       unsigned Elements = CAT->getSize().getLimitedValue();
-      if (ElementType->isMemoryCapabilityType(getContext())) {
+      if (ElementType->isCHERICapabilityType(getContext())) {
         llvm::Type *ElTy = CGT.ConvertType(ElementType);
         for (unsigned i=0 ; i<Elements ; ++i)
           ArgList.push_back(ElTy);
@@ -6934,7 +6934,7 @@ MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset) const {
     unsigned Threshold = IsO32 ? 16 : 64;
     const TargetInfo &Target = getContext().getTargetInfo();
     if (Target.areAllPointersCapabilities()) {
-      Threshold = Target.getMemoryCapabilityWidth() * 8;
+      Threshold = Target.getCHERICapabilityWidth() * 8;
     }
 
     if(getContext().getTypeSizeInChars(Ty) > CharUnits::fromQuantity(Threshold))
@@ -6957,10 +6957,10 @@ MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset) const {
 
   // All integral types are promoted to the GPR width.
   if (Ty->isIntegralOrEnumerationType() &&
-      !Ty->isMemoryCapabilityType(getContext()))
+      !Ty->isCHERICapabilityType(getContext()))
     return ABIArgInfo::getExtend();
 
-  if (Ty->isMemoryCapabilityType(getContext()))
+  if (Ty->isCHERICapabilityType(getContext()))
     return ABIArgInfo::getDirect(CGT.ConvertType(Ty));
 
   return ABIArgInfo::getDirect(
@@ -7037,7 +7037,7 @@ ABIArgInfo MipsABIInfo::classifyReturnType(QualType RetTy) const {
         return ArgInfo;
       }
     } else if (getTarget().SupportsCapabilities() &&
-               Size <= getTarget().getMemoryCapabilityWidth()) {
+               Size <= getTarget().getCHERICapabilityWidth()) {
       // On CHERI, we can return unions containing capabilities or
       // structs containing only one capability directly
       const RecordType *RT = RetTy->getAs<RecordType>();

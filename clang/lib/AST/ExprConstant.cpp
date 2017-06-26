@@ -1057,7 +1057,7 @@ namespace {
   typedef ScopeRAII<false> BlockScopeRAII;
   typedef ScopeRAII<true> FullExpressionRAII;
   void GetIntCapLValue(APValue &Value, QualType QT, ASTContext &Ctx){
-    if (Value.isInt() && QT->isMemoryCapabilityType(Ctx)) {
+    if (Value.isInt() && QT->isCHERICapabilityType(Ctx)) {
       APValue::LValueBase Base;
       APSInt Val = Value.getInt();
       CharUnits Size = CharUnits::fromQuantity(Val.isNegative() ?
@@ -5555,7 +5555,7 @@ public:
 static bool EvaluatePointer(const Expr* E, LValue& Result, EvalInfo &Info,
                             bool InvalidBaseOK) {
   assert(E->isRValue() && (E->getType()->hasPointerRepresentation() ||
-        E->getType()->isMemoryCapabilityType(Info.Ctx)));
+        E->getType()->isCHERICapabilityType(Info.Ctx)));
   return PointerExprEvaluator(Info, Result, InvalidBaseOK).Visit(E);
 }
 
@@ -5644,7 +5644,7 @@ bool PointerExprEvaluator::VisitCastExpr(const CastExpr* E) {
     return ZeroInitialization(E);
 
   case CK_IntegralCast:
-    if (!E->getType()->isMemoryCapabilityType(Info.Ctx))
+    if (!E->getType()->isCHERICapabilityType(Info.Ctx))
       return false;
   // Fall through
   case CK_IntegralToPointer: {
@@ -5655,8 +5655,8 @@ bool PointerExprEvaluator::VisitCastExpr(const CastExpr* E) {
       break;
 
     if (Value.isInt()) {
-      unsigned Size = E->getType()->isMemoryCapabilityType(Info.Ctx) ?
-        Info.Ctx.getTargetInfo().getPointerRangeForMemoryCapability() :
+      unsigned Size = E->getType()->isCHERICapabilityType(Info.Ctx) ?
+        Info.Ctx.getTargetInfo().getPointerRangeForCHERICapability() :
         Info.Ctx.getIntRange(E->getType());
       uint64_t N = Value.getInt().extOrTrunc(Size).getZExtValue();
       Result.Base = (Expr*)nullptr;
@@ -10030,7 +10030,7 @@ bool Expr::EvaluateAsInt(APSInt &Result, const ASTContext &Ctx,
     // For intcap_t, pass through the result even if it isn't actually an
     // int.
     if (DidEvaluate &&
-        getType()->isMemoryCapabilityType(const_cast<ASTContext&>(Ctx)))
+        getType()->isCHERICapabilityType(const_cast<ASTContext&>(Ctx)))
       if (ExprResult.Val.isLValue() &&
           ExprResult.Val.getLValueBase().isNull()) {
         // FIXME: Ugly hack!

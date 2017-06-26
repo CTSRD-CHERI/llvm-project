@@ -8032,7 +8032,7 @@ public:
       Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KR1C__", Twine(1<<13));
       Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KR2C__", Twine(1<<14));
 
-      Builder.defineMacro("_MIPS_SZCAP", Twine(getMemoryCapabilityWidth()));
+      Builder.defineMacro("_MIPS_SZCAP", Twine(getCHERICapabilityWidth()));
       if (Cheri128)
           Builder.defineMacro("_MIPS_CAP_ALIGN_MASK", "0xfffffffffffffff0");
       else
@@ -8286,11 +8286,11 @@ public:
   unsigned getIntCapWidth() const override { return Cheri128 ? 128 : 256; }
   unsigned getIntCapAlign() const override { return Cheri128 ? 128 : 256; }
 
-  uint64_t getMemoryCapabilityWidth() const override { return CapSize; }
+  uint64_t getCHERICapabilityWidth() const override { return CapSize; }
 
-  uint64_t getMemoryCapabilityAlign() const override { return CapSize; }
+  uint64_t getCHERICapabilityAlign() const override { return CapSize; }
 
-  uint64_t getPointerRangeForMemoryCapability() const override { return 64; }
+  uint64_t getPointerRangeForCHERICapability() const override { return 64; }
 
   bool SupportsCapabilities() const override { return IsCheri; }
 
@@ -8298,8 +8298,8 @@ public:
                         uint64_t AlignmentInBits) const override {
 #if 0
     if (SupportsCapabilities() &&
-        AtomicSizeInBits == getMemoryCapabilityWidth() &&
-        AlignmentInBits == getMemoryCapabilityAlign()) {
+        AtomicSizeInBits == getCHERICapabilityWidth() &&
+        AlignmentInBits == getCHERICapabilityAlign()) {
       return true;
     }
 #endif

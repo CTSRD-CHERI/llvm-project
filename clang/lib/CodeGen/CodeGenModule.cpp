@@ -2465,7 +2465,7 @@ llvm::Constant *CodeGenModule::GetAddrOfGlobalVar(const VarDecl *D,
   ASTContext &C = getContext();
    // XXXAR: add another parameter to avoid all these ternary expressions
   unsigned AS = C.getTargetInfo().areAllPointersCapabilities() 
-                ? getTargetCodeGenInfo().getMemoryCapabilityAS()
+                ? getTargetCodeGenInfo().getCHERICapabilityAS()
                 : C.getTargetAddressSpace(ASTTy.getQualifiers());
   llvm::PointerType *PTy = llvm::PointerType::get(Ty, AS);
 
@@ -2527,7 +2527,7 @@ unsigned CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D,
     // In the hybrid ABI, AddrSpace == 200 means that D is a
     // capability-qualified pointer. 
     // FIXME-cheri-qual: We currently can't handle thread-local storage
-    unsigned CapAS = getTargetCodeGenInfo().getMemoryCapabilityAS();
+    unsigned CapAS = getTargetCodeGenInfo().getCHERICapabilityAS();
     if (Target.areAllPointersCapabilities()) { // Pure ABI
       return (D && (D->getTLSKind() != VarDecl::TLS_None)) ? 0 : CapAS;
     } else if (AddrSpace == CapAS) { // Hybrid ABI

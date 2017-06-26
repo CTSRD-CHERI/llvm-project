@@ -382,11 +382,11 @@ bool Type::isStructureOrClassType() const {
   }
   return false;
 }
-bool Type::isMemoryCapabilityType(const ASTContext &Context) const {
+bool Type::isCHERICapabilityType(const ASTContext &Context) const {
   if (const PointerType *PT = getAs<PointerType>())
-    return PT->isMemoryCapability();
+    return PT->isCHERICapability();
   else if (const ReferenceType *RT = getAs<ReferenceType>())
-    return RT->isMemoryCapability();
+    return RT->isCHERICapability();
   else if (isObjCObjectPointerType() || isBlockPointerType())
     return Context.getTargetInfo().areAllPointersCapabilities();
   else if (const BuiltinType *BT = getAs<BuiltinType>()) {
@@ -397,7 +397,7 @@ bool Type::isMemoryCapabilityType(const ASTContext &Context) const {
     if (Kind == BuiltinType::ObjCId || Kind == BuiltinType::NullPtr)
       return Context.getTargetInfo().areAllPointersCapabilities();
   } else if (const AtomicType *AT = getAs<AtomicType>())
-    return AT->getValueType()->isMemoryCapabilityType(Context);
+    return AT->getValueType()->isCHERICapabilityType(Context);
   else if  (const MemberPointerType *MPT = getAs<MemberPointerType>())
     // XXXAR: Currently member function pointers contain capabities, but
     // pointers to member data don't
@@ -3025,7 +3025,7 @@ bool AttributedType::isQualifier() const {
   case AttributedType::attr_nonnull:
   case AttributedType::attr_nullable:
   case AttributedType::attr_null_unspecified:
-  case AttributedType::attr_memory_capability:
+  case AttributedType::attr_cheri_capability:
     return true;
 
   // These aren't qualifiers; they rewrite the modified type to be a
@@ -3078,7 +3078,7 @@ bool AttributedType::isMSTypeSpec() const {
 bool AttributedType::isCallingConv() const {
   switch (getAttrKind()) {
   case attr_cheri_ccallback:
-  case attr_memory_capability:
+  case attr_cheri_capability:
   case attr_ptr32:
   case attr_ptr64:
   case attr_sptr:
