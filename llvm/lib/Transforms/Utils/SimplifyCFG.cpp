@@ -1148,10 +1148,11 @@ bool SimplifyCFGOpt::FoldValueComparisonIntoPredecessors(TerminatorInst *TI,
         AddPredecessorToBlock(NewSuccessor, Pred, BB);
 
       Builder.SetInsertPoint(PTI);
-      // Convert pointer to int before we switch.
-      if (CV->getType()->isPointerTy()) {
-        CV = Builder.CreatePtrToInt(CV, DL.getIntPtrType(CV->getType()),
-                                    "magicptr");
+      // Convert pointer to int before we switch (unless if a CHERI capability).
+      if (PointerType* PT = dyn_cast<PointerType>(CV->getType())) {
+        if (PT->getAddressSpace() == 200)
+          return false;
+        CV = Builder.CreatePtrToInt(CV, DL.getIntPtrType(PT), "magicptr");
       }
 
       // Now that the successors are updated, create the new Switch instruction.
