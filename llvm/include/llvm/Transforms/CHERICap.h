@@ -1,4 +1,4 @@
-//===-- MemCap.h - CHERICap Scalar Transformations --------------*- C++ -*-===//
+//===-- CHERICap.h - CHERICap Scalar Transformations --------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_TRANSFORMS_MEMCAP_H
-#define LLVM_TRANSFORMS_MEMCAP_H
+#ifndef LLVM_TRANSFORMS_CHERICAP_H
+#define LLVM_TRANSFORMS_CHERICAP_H
 
 namespace llvm {
 
