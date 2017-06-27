@@ -1759,6 +1759,7 @@ public:
   bool isObjCBuiltinType() const;               // 'id' or 'Class'
   bool isObjCARCBridgableType() const;
   bool isCARCBridgableType() const;
+  bool isCXXStructureOrClassType() const;       // C++ struct or class
   bool isTemplateTypeParmType() const;          // C++ template type parameter
   bool isNullPtrType() const;                   // C++11 std::nullptr_t
   bool isAlignValT() const;                     // C++17 std::align_val_t
