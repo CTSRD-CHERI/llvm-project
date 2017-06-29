@@ -20,10 +20,10 @@ void QDebug::putUcs4() {
   ts << qSetPadChar();
   // HYBRID: call inreg { i64, i64 } @_Z11qSetPadCharv()
   // HYBRID: call dereferenceable(1) %class.QTextStream* @_ZlsR11QTextStream22QTextStreamManipulator(%class.QTextStream* dereferenceable(1) {{%.+}}, i64 inreg {{%.+}}, i64 inreg {{%.+}})
-  // PURECAP: call dereferenceable(1) %class.QTextStream addrspace(200)* {{%.+}}(%class.QTextStream addrspace(200)* dereferenceable(1) {{%.+}}, { i8 addrspace(200)*, i64 } inreg {{%.+}})
+  // PURECAP: call dereferenceable(1) %class.QTextStream addrspace(200)* {{%.+}}(%class.QTextStream addrspace(200)* dereferenceable(1) {{%.+}}, %class.QTextStreamManipulator addrspace(200)* byval align 16 {{%.+}})
 }
 
 // TODO: we should probably return an inreg struct for CHERI too
 // HYBRID: declare inreg { i64, i64 } @_Z11qSetPadCharv()
-// PURECAP: declare dereferenceable(1) %class.QTextStream addrspace(200)* @_ZlsR11QTextStream22QTextStreamManipulator(%class.QTextStream addrspace(200)* dereferenceable(1), { i8 addrspace(200)*, i64 } inreg)
+// PURECAP: declare dereferenceable(1) %class.QTextStream addrspace(200)* @_ZlsR11QTextStream22QTextStreamManipulator(%class.QTextStream addrspace(200)* dereferenceable(1), %class.QTextStreamManipulator addrspace(200)* byval align 16)
 // PURECAP: declare void @_Z11qSetPadCharv(%class.QTextStreamManipulator addrspace(200)* sret)
