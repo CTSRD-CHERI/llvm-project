@@ -6763,6 +6763,15 @@ bool CHERICapClassifier::containsCapabilities(ASTContext &C,
     if (Ty->isArrayType() && containsCapabilities(Ty))
       return true;
   }
+  // In the case of C++ classes, also check base classes
+  if (const CXXRecordDecl *CRD = dyn_cast<CXXRecordDecl>(RD)) {
+    for (auto i = CRD->bases_begin(), e = CRD->bases_end(); i != e; ++i) {
+      const QualType Ty = i->getType();
+      if (const RecordType *RT = Ty->getAs<RecordType>())
+        if (containsCapabilities(C, RT->getDecl()))
+          return true;
+    }
+  }
   return false;
 }
 
@@ -6938,6 +6947,14 @@ MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset) const {
     }
 
     if(getContext().getTypeSizeInChars(Ty) > CharUnits::fromQuantity(Threshold))
+      return ABIArgInfo::getIndirect(CharUnits::fromQuantity(Align), true,
+                                     getContext().getTypeAlign(Ty) / 8 > Align);
+
+    // For CHERI, also pass C++ classes and structs that contain capabilities
+    // indirectly (for now).
+    // XXXKG: We should revisit passing fields in registers.
+    if (Ty->isCXXStructureOrClassType() 
+        && containsCapabilities(Ty) && Target.SupportsCapabilities())
       return ABIArgInfo::getIndirect(CharUnits::fromQuantity(Align), true,
                                      getContext().getTypeAlign(Ty) / 8 > Align);
 
