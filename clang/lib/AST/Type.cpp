@@ -2328,11 +2328,6 @@ bool QualType::isCXX11PODType(const ASTContext &Context) const {
   return false;
 }
 
-bool Type::isCXXStructureOrClassType() const {
-  CXXRecordDecl *CRD = getAsCXXRecordDecl();
-  return CRD && isStructureOrClassType();
-}
-
 bool Type::isAlignValT() const {
   if (auto *ET = getAs<EnumType>()) {
     auto *II = ET->getDecl()->getIdentifier();

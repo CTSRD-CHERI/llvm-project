@@ -6763,15 +6763,6 @@ bool CHERICapClassifier::containsCapabilities(ASTContext &C,
     if (Ty->isArrayType() && containsCapabilities(Ty))
       return true;
   }
-  // In the case of C++ classes, also check base classes
-  if (const CXXRecordDecl *CRD = dyn_cast<CXXRecordDecl>(RD)) {
-    for (auto i = CRD->bases_begin(), e = CRD->bases_end(); i != e; ++i) {
-      const QualType Ty = i->getType();
-      if (const RecordType *RT = Ty->getAs<RecordType>())
-        if (containsCapabilities(C, RT->getDecl()))
-          return true;
-    }
-  }
   return false;
 }
 
@@ -6813,8 +6804,7 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
   // On CHERI, we must pass unions containing capabilities in capability
   // registers.  Otherwise, pass them as integers.
   if (RT &&
-      ((RT->isUnionType() || RT->isCXXStructureOrClassType()) 
-        && containsCapabilities(getContext(), RT->getDecl()))
+      (RT->isUnionType() && containsCapabilities(getContext(), RT->getDecl()))
       && getTarget().SupportsCapabilities())
     return llvm::Type::getInt8Ty(getVMContext())->getPointerTo(
                             CGM.getTargetCodeGenInfo().getCHERICapabilityAS());
@@ -6944,7 +6934,7 @@ MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset) const {
     unsigned Threshold = IsO32 ? 16 : 64;
     const TargetInfo &Target = getContext().getTargetInfo();
     if (Target.areAllPointersCapabilities()) {
-      Threshold = Target.getCHERICapabilityWidth();
+      Threshold = Target.getCHERICapabilityWidth() * 8;
     }
 
     if(getContext().getTypeSizeInChars(Ty) > CharUnits::fromQuantity(Threshold))
