@@ -2114,7 +2114,6 @@ InitListChecker::CheckDesignatedInitializer(const InitializedEntity &Entity,
                                             unsigned &StructuredIndex,
                                             bool FinishSubobjectInit,
                                             bool TopLevelObject) {
-  // FIXME: add a test case for C99 initiliazers
   if (DesigIdx == DIE->size()) {
     // Check the actual initialization for the designated object type.
     bool prevHadError = hadError;
