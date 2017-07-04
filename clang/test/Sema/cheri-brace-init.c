@@ -31,6 +31,13 @@ void test_arrays(void* __capability cap) {
   // TODO: this should probably warn about pointer -> cap conversion
 
   void* __capability cap_array[3] = { NULL, cap, ptr };  // expected-error {{initializing 'void * __capability' with an expression of incompatible type 'int *'}}
+
+  struct foo foo_array[5] = {
+      {cap, NULL}, // no-error
+      {cap, cap}, // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
+      {.cap = NULL, .ptr = NULL}, // no-error
+      [4] = {.cap = cap, .ptr = cap} // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
+  };
 }
 
 union foo_union {
