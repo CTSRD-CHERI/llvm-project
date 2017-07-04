@@ -60,7 +60,8 @@ static cl::opt<bool>
 void MipsSubtarget::anchor() { }
 
 MipsSubtarget::MipsSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
-                             bool little, const MipsTargetMachine &TM)
+                             bool little, const MipsTargetMachine &TM,
+                             unsigned StackAlignOverride)
     : MipsGenSubtargetInfo(TT, CPU, FS), MipsArchVersion(MipsDefault),
       IsLittle(little), IsSoftFloat(false), IsSingleFloat(false), IsFPXX(false),
       NoABICalls(false), IsFP64bit(false), UseOddSPReg(true),
@@ -72,7 +73,8 @@ MipsSubtarget::MipsSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
       InMips16HardFloat(Mips16HardFloat), InMicroMipsMode(false), HasDSP(false),
       HasDSPR2(false), HasDSPR3(false), AllowMixed16_32(Mixed16_32 | Mips_Os16),
       Os16(Mips_Os16), HasMSA(false), UseTCCInDIV(false), HasSym32(false),
-      HasEVA(false), TM(TM), TargetTriple(TT), TSInfo(),
+      HasEVA(false), StackAlignOverride(StackAlignOverride), TM(TM),
+      TargetTriple(TT), TSInfo(),
       InstrInfo(
           MipsInstrInfo::create(initializeSubtargetDependencies(CPU, FS, TM))),
       FrameLowering(MipsFrameLowering::create(*this)),
@@ -163,6 +165,18 @@ MipsSubtarget::initializeSubtargetDependencies(StringRef CPU, StringRef FS,
 
   if (InMips16Mode && !IsSoftFloat)
     InMips16HardFloat = true;
+
+  if (StackAlignOverride)
+    stackAlignment = StackAlignOverride;
+  else if (isCheri()) {
+    if (isCheri128())
+      stackAlignment = 16;
+    else
+      stackAlignment = 32;
+  } else if (isGP64bit())
+    stackAlignment = 16;
+  else
+    stackAlignment = 8;
 
   return *this;
 }
