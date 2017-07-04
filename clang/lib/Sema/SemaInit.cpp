@@ -359,6 +359,10 @@ class InitListChecker {
   void CheckEmptyInitializable(const InitializedEntity &Entity,
                                SourceLocation Loc);
 
+  bool isCapNarrowing(Expr* expr, QualType DeclType, unsigned *Index,
+                      unsigned *StructuredIndex,
+                      llvm::Optional<QualType> exprType = None);
+
 public:
   InitListChecker(Sema &S, const InitializedEntity &Entity,
                   InitListExpr *IL, QualType &T, bool VerifyOnly,
@@ -1171,6 +1175,10 @@ void InitListChecker::CheckSubElementType(const InitializedEntity &Entity,
     // Brace elision is never performed if the element is not an
     // assignment-expression.
     if (Seq || isa<InitListExpr>(expr)) {
+      if (isCapNarrowing(expr, ElemType, &Index, &StructuredIndex)) {
+        hadError = true;
+        return;
+      }
       if (!VerifyOnly) {
         ExprResult Result =
           Seq.Perform(SemaRef, Entity, Kind, expr);
@@ -1237,6 +1245,10 @@ void InitListChecker::CheckSubElementType(const InitializedEntity &Entity,
     ExprRes.get();
     // Fall through for subaggregate initialization
   }
+  if (isCapNarrowing(expr, ElemType, &Index, &StructuredIndex)) {
+    hadError = true;
+    return;
+  }
 
   // C++ [dcl.init.aggr]p12:
   //
@@ -1299,6 +1311,25 @@ void InitListChecker::CheckComplexType(const InitializedEntity &Entity,
   }
 }
 
+bool InitListChecker::isCapNarrowing(Expr* expr, QualType DeclType,
+                                     unsigned *Index, unsigned *StructuredIndex,
+                                     llvm::Optional<QualType> exprType) {
+  // needed because expr->getType() returns `int` for `int & __capability`
+  QualType ExprType = exprType ? *exprType : expr->getType();
+  if (ExprType->isMemoryCapabilityType(SemaRef.Context) &&
+     !DeclType->isMemoryCapabilityType(SemaRef.Context)) {
+    // TODO: allow for nullptr, etc.
+    if (!VerifyOnly) {
+      SemaRef.Diag(expr->getLocStart(), diag::ext_init_list_type_narrowing)
+          << ExprType << DeclType << expr->getSourceRange();
+    }
+    ++(*Index);
+    ++(*StructuredIndex);
+    return true;
+  }
+  return false;
+}
+
 void InitListChecker::CheckScalarType(const InitializedEntity &Entity,
                                       InitListExpr *IList, QualType DeclType,
                                       unsigned &Index,
@@ -1318,6 +1349,10 @@ void InitListChecker::CheckScalarType(const InitializedEntity &Entity,
   }
 
   Expr *expr = IList->getInit(Index);
+  if (isCapNarrowing(expr, DeclType, &Index, &StructuredIndex)) {
+    hadError = true;
+    return;
+  }
   if (InitListExpr *SubIList = dyn_cast<InitListExpr>(expr)) {
     // FIXME: This is invalid, and accepting it causes overload resolution
     // to pick the wrong overload in some corner cases.
@@ -1417,6 +1452,16 @@ void InitListChecker::CheckReferenceType(const InitializedEntity &Entity,
     hadError = true;
 
   expr = Result.getAs<Expr>();
+  llvm::Optional<QualType> exprType = None;
+  if (DeclRefExpr* DRE = dyn_cast<DeclRefExpr>(expr)) {
+    if (ValueDecl* V = dyn_cast_or_null<ValueDecl>(DRE->getFoundDecl())) {
+      exprType = V->getType();
+    }
+  }
+  if (isCapNarrowing(expr, DeclType, &Index, &StructuredIndex, exprType)) {
+    hadError = true;
+    return;
+  }
   IList->setInit(Index, expr);
 
   if (hadError)
@@ -2069,6 +2114,7 @@ InitListChecker::CheckDesignatedInitializer(const InitializedEntity &Entity,
                                             unsigned &StructuredIndex,
                                             bool FinishSubobjectInit,
                                             bool TopLevelObject) {
+  // FIXME: add a test case for C99 initiliazers
   if (DesigIdx == DIE->size()) {
     // Check the actual initialization for the designated object type.
     bool prevHadError = hadError;
@@ -3137,6 +3183,7 @@ bool InitializationSequence::isAmbiguous() const {
   case FK_ReferenceInitDropsQualifiers:
   case FK_ReferenceInitFailed:
   case FK_ConversionFailed:
+  case FK_ConversionFromCapabilityFailed:
   case FK_ConversionFromPropertyFailed:
   case FK_TooManyInitsForScalar:
   case FK_ParenthesizedListInitForScalar:
@@ -5413,6 +5460,14 @@ void InitializationSequence::InitializeFrom(Sema &S,
                               /*CStyle=*/Kind.isCStyleOrFunctionalCast(),
                               allowObjCWritebackConversion);
 
+  if (SourceType->isMemoryCapabilityType(Context) &&
+    !DestType->isMemoryCapabilityType(Context)) {
+      SetFailed(InitializationSequence::FK_ConversionFromCapabilityFailed);
+  } /*else if (DestType->isMemoryCapabilityType(Context) &&
+      !SourceType->isMemoryCapabilityType(Context)) {
+      SetFailed(InitializationSequence::FK_ConversionToCapabilityFailed);
+  }*/
+
   if (ICS.isStandard() &&
       ICS.Standard.Second == ICK_Writeback_Conversion) {
     // Objective-C ARC writeback conversion.
@@ -7620,6 +7675,9 @@ bool InitializationSequence::Diagnose(Sema &S,
     emitBadConversionNotes(S, Entity, Args[0]);
     break;
 
+  case FK_ConversionFromCapabilityFailed:
+    llvm::errs() << "Conversion from capability failed!\n";
+    LLVM_FALLTHROUGH;
   case FK_ConversionFailed: {
     QualType FromType = Args[0]->getType();
     PartialDiagnostic PDiag = S.PDiag(diag::err_init_conversion_failed)
@@ -7924,6 +7982,10 @@ void InitializationSequence::dump(raw_ostream &OS) const {
 
     case FK_ConversionFailed:
       OS << "conversion failed";
+      break;
+
+    case FK_ConversionFromCapabilityFailed:
+      OS << "conversion from capability failed";
       break;
 
     case FK_ConversionFromPropertyFailed:

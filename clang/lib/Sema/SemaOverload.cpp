@@ -306,6 +306,10 @@ StandardConversionSequence::getNarrowingKind(ASTContext &Ctx,
   if (auto *ET = ToType->getAs<EnumType>())
     ToType = ET->getDecl()->getIntegerType();
 
+  // Converting from capability to pointer/integral is always narrowing
+  if (FromType->isMemoryCapabilityType(Ctx) && !ToType->isMemoryCapabilityType(Ctx))
+    return NK_Type_Narrowing;
+
   switch (Second) {
   // 'bool' is an integral type; dispatch to the right place to handle it.
   case ICK_Boolean_Conversion:
@@ -9611,6 +9615,8 @@ static void DiagnoseBadConversion(Sema &S, OverloadCandidate *Cand,
       << (unsigned) FnKind << FnDesc
       << (FromExpr ? FromExpr->getSourceRange() : SourceRange())
       << FromTy << ToTy << (unsigned) isObjectArgument << I+1;
+    // XXXAR: it would be nice if we could somehow diagnose capability -> pointer
+    // narrowing conversions here instead of just printing candidate not viable
     MaybeEmitInheritedConstructorNote(S, Cand->FoundDecl);
     return;
   }
