@@ -4,7 +4,6 @@
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -emit-obj -target-cpu cheri -target-abi purecap -O2 -std=gnu99 -o - -emit-llvm %s | FileCheck %s
 
 // https://github.com/CTSRD-CHERI/clang/issues/144
-// XFAIL: *
 
 int a();
 int d();
