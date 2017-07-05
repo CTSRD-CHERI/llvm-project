@@ -4343,7 +4343,8 @@ void MipsTargetLowering::copyByValRegs(
     FrameObjOffset = VA.getLocMemOffset();
 
   // Create frame object.
-  EVT PtrTy = getPointerTy(DAG.getDataLayout());
+  unsigned FrameObjAS = FuncArg->getType()->getPointerAddressSpace();
+  EVT PtrTy = getPointerTy(DAG.getDataLayout(), FrameObjAS);
   int FI = MFI.CreateFixedObject(FrameObjSize, FrameObjOffset, true);
   SDValue FIN = DAG.getFrameIndex(FI, PtrTy);
   InVals.push_back(FIN);
@@ -4352,7 +4353,8 @@ void MipsTargetLowering::copyByValRegs(
     return;
 
   // Copy arg registers.
-  MVT RegTy = MVT::getIntegerVT(GPRSizeInBytes * 8);
+  MVT RegTy = (PtrTy == MVT::iFATPTR) ? MVT::iFATPTR :
+                                        MVT::getIntegerVT(GPRSizeInBytes * 8);
   const TargetRegisterClass *RC = getRegClassFor(RegTy);
 
   for (unsigned I = 0; I < NumRegs; ++I) {
