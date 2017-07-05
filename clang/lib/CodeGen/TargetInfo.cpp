@@ -6955,7 +6955,7 @@ MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset) const {
     // XXXKG: We should revisit passing fields in registers.
     if (Ty->isCXXStructureOrClassType() 
         && containsCapabilities(Ty) && Target.SupportsCapabilities())
-      return ABIArgInfo::getIndirect(CharUnits::fromQuantity(Align), false,
+      return ABIArgInfo::getIndirect(CharUnits::fromQuantity(Align), true,
                                      getContext().getTypeAlign(Ty) / 8 > Align);
 
     // If we have reached here, aggregates are passed directly by coercing to
