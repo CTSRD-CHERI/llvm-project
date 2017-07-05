@@ -986,6 +986,13 @@ bool SimplifyCFGOpt::FoldValueComparisonIntoPredecessors(TerminatorInst *TI,
   BasicBlock *BB = TI->getParent();
   Value *CV = isValueEqualityComparison(TI); // CondVal
   assert(CV && "Not a comparison?");
+
+  // Don't fold if the value is a CHERI capability
+  if (PointerType* PT = dyn_cast<PointerType>(CV->getType())) {
+    if (PT->getAddressSpace() == 200)
+      return false;
+  }
+
   bool Changed = false;
 
   SmallVector<BasicBlock *, 16> Preds(pred_begin(BB), pred_end(BB));
@@ -1148,11 +1155,10 @@ bool SimplifyCFGOpt::FoldValueComparisonIntoPredecessors(TerminatorInst *TI,
         AddPredecessorToBlock(NewSuccessor, Pred, BB);
 
       Builder.SetInsertPoint(PTI);
-      // Convert pointer to int before we switch (unless if a CHERI capability).
-      if (PointerType* PT = dyn_cast<PointerType>(CV->getType())) {
-        if (PT->getAddressSpace() == 200)
-          return false;
-        CV = Builder.CreatePtrToInt(CV, DL.getIntPtrType(PT), "magicptr");
+      // Convert pointer to int before we switch.
+      if (CV->getType()->isPointerTy()) {
+        CV = Builder.CreatePtrToInt(CV, DL.getIntPtrType(CV->getType()), 
+                                    "magicptr");
       }
 
       // Now that the successors are updated, create the new Switch instruction.
