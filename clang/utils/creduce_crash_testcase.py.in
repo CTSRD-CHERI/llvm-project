@@ -81,7 +81,24 @@ class ReduceTool(metaclass=ABCMeta):
         return reduce_script
 
     def create_test_case(self, input_text: str, test_case: Path):
-        result = "\n".join(self.run_lines) + "\n" + input_text
+        processed_run_lines = []
+        for run_line in self.run_lines:
+            # convert %clang_cc1 -target-cpu cheri to %cheri_cc1 / %cheri_purecap_cc1
+            if "%clang_cc1" in run_line:
+                target_cpu_re = r"-target-cpu\s+cheri\s*"
+                triple_cheri_freebsd_re = r"-triple\s+cheri-unknown-freebsd\s*"
+                if re.search(target_cpu_re, run_line) or re.search(triple_cheri_freebsd_re, run_line):
+                    run_line = re.sub(target_cpu_re, "", run_line)  # remove
+                    run_line = re.sub(triple_cheri_freebsd_re, "", run_line)  # remove
+                    run_line = run_line.replace("%clang_cc1", "%cheri_cc1")
+                    target_abi_re = r"-target-abi\s+purecap\s*"
+                    if re.search(target_abi_re, run_line) is not None:
+                        compiler_cmd = "%cheri_purecap_cc1"
+                        run_line = re.sub(target_abi_re, "", run_line)  # remove
+                        assert "%cheri_cc1" in run_line
+                        run_line = run_line.replace("%cheri_cc1", "%cheri_purecap_cc1")
+            processed_run_lines.append(run_line)
+        result = "\n".join(processed_run_lines) + "\n" + input_text
         with test_case.open("w", encoding="utf-8") as f:
             f.write(result)
             f.flush()
@@ -484,7 +501,7 @@ class Reducer(object):
                                             noargs_opts_to_remove_startswith=["-W"])
         no_warnings_cmd.append("-w")  # disable all warnigns
         if self._check_crash(no_warnings_cmd, infile):
-            command = no_warnings_cmd
+            command = no_warnings_cmd[:-1]
         # try to remove some arguments that should not be needed
         command = self._try_remove_args(
             command, infile, "Checking whether misc diagnostic options can be removed:",
