@@ -188,8 +188,13 @@ class RunCreduce(ReduceTool):
             return input_file
         with tempfile.NamedTemporaryFile() as tmp:
             shutil.copy(str(input_file), tmp.name)
+            original_size = input_file.stat().st_size
             with input_file.open("w") as reduced_file:
                 self._do_initial_reduce(Path(tmp.name), reduced_file)
+            new_size = input_file.stat().st_size
+            percent_reduction = 100 - 100.0 * (new_size / original_size)
+            print("Intial preprocessing: {} bytes -> {} bytes ({}% reduction)".format(
+                  original_size, new_size, percent_reduction))
         return input_file
 
     def reduce(self, input_file: Path, extra_args, tempdir):
@@ -241,6 +246,8 @@ class RunCreduce(ReduceTool):
                     verbose_print("Skipping line inside -frewrite-includes:", line.rstrip())
                     skipped_rewrite_includes += 1
                     continue
+                elif line.lstrip().startswith("//"):
+                    continue  # skip line comments
                 # This appears to break creduce sometimes:
                 # elif re.match(line_regex, line):
                 #     verbose_print("Removing # line directive:", line.rstrip())
@@ -584,7 +591,7 @@ class Reducer(object):
 
 def main():
     default_bindir = "@CMAKE_BINARY_DIR@/bin"
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument("--bindir", default=default_bindir,
                         help="Path to clang build directory. Default is " + default_bindir)
     parser.add_argument("--not-cmd", help="Path to `not` tool. Default is $BINDIR/not")
