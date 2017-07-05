@@ -2,7 +2,6 @@
 // RUN:  %cheri256_cc1 "-triple" "cheri-unknown-freebsd" "-emit-obj" "-target-feature" "+soft-float" "-target-abi" "purecap" "-O2" "-x" "c" %s -o - -emit-llvm | FileCheck %s
 // RUN:  %cheri128_cc1 "-triple" "cheri-unknown-freebsd" "-emit-obj" "-target-feature" "+soft-float" "-target-abi" "purecap" "-O2" "-x" "c" %s -o - | FileCheck %s
 // RUN:  %cheri256_cc1 "-triple" "cheri-unknown-freebsd" "-emit-obj" "-target-feature" "+soft-float" "-target-abi" "purecap" "-O2" "-x" "c" %s -o - | FileCheck %s
-// XFAIL: *
 // CHECK-NOT: safasdg
 void other_func(void* x);
 
