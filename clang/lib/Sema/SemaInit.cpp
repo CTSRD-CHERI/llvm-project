@@ -3183,6 +3183,7 @@ bool InitializationSequence::isAmbiguous() const {
   case FK_ReferenceInitFailed:
   case FK_ConversionFailed:
   case FK_ConversionFromCapabilityFailed:
+  case FK_ConversionToCapabilityFailed:
   case FK_ConversionFromPropertyFailed:
   case FK_TooManyInitsForScalar:
   case FK_ParenthesizedListInitForScalar:
@@ -5462,10 +5463,13 @@ void InitializationSequence::InitializeFrom(Sema &S,
   if (SourceType->isMemoryCapabilityType(Context) &&
     !DestType->isMemoryCapabilityType(Context)) {
       SetFailed(InitializationSequence::FK_ConversionFromCapabilityFailed);
-  } /*else if (DestType->isMemoryCapabilityType(Context) &&
+  } else if (DestType->isMemoryCapabilityType(Context) &&
       !SourceType->isMemoryCapabilityType(Context)) {
+    // don't warn on null -> capability conversion
+    // XXXAR: is this the correct NPC_ value?
+    if (!(Initializer && Initializer->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNotNull)))
       SetFailed(InitializationSequence::FK_ConversionToCapabilityFailed);
-  }*/
+  }
 
   if (ICS.isStandard() &&
       ICS.Standard.Second == ICK_Writeback_Conversion) {
@@ -7675,8 +7679,7 @@ bool InitializationSequence::Diagnose(Sema &S,
     break;
 
   case FK_ConversionFromCapabilityFailed:
-    llvm::errs() << "Conversion from capability failed!\n";
-    LLVM_FALLTHROUGH;
+  case FK_ConversionToCapabilityFailed:
   case FK_ConversionFailed: {
     QualType FromType = Args[0]->getType();
     PartialDiagnostic PDiag = S.PDiag(diag::err_init_conversion_failed)
@@ -7985,6 +7988,10 @@ void InitializationSequence::dump(raw_ostream &OS) const {
 
     case FK_ConversionFromCapabilityFailed:
       OS << "conversion from capability failed";
+      break;
+
+    case FK_ConversionToCapabilityFailed:
+      OS << "conversion to capability failed";
       break;
 
     case FK_ConversionFromPropertyFailed:

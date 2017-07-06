@@ -19,11 +19,9 @@ int foo(int* __capability cap_arg_int, void* __capability cap_arg_void, int* ptr
   // pointer -> cap
   int* __capability intcap = ptr_arg_int; // expected-error-re {{{{initializing|(cannot initialize a variable of type)}} 'int * __capability' with an {{(expression of incompatible)|(lvalue of)}} type 'int *'}}
   void* __capability vcap = ptr_arg_int; // expected-error-re {{{{initializing|(cannot initialize a variable of type)}} 'void * __capability' with an {{(expression of incompatible)|(lvalue of)}} type 'int *'}}
-#ifdef NOTYET
   // cap -> pointer
   int* intptr = cap_arg_int; // expected-error-re {{{{initializing|(cannot initialize a variable of type)}} 'int *' with an {{(expression of incompatible)|(lvalue of)}} type 'int * __capability'}}
   void* vptr = cap_arg_int; // expected-error-re {{{{initializing|(cannot initialize a variable of type)}} 'void *' with an {{(expression of incompatible)|(lvalue of)}} type 'int * __capability'}}
-#endif
   // to void*
   void* __capability vcap2 = cap_arg_int; // casting to void* should work without a cast
   void* vptr2 = ptr_arg_int; // casting to void* should work without a cast
