@@ -1784,6 +1784,9 @@ static void DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
   if (DestType->isVoidType()) {
     return; // casting to void to silence unused variable warnings is fine
   }
+  if (SrcType->isNullPtrType()) {
+    return;
+  }
 
   const QualType CanonicalSrcType = SrcType.getCanonicalType();
   if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalSrcType)) {
