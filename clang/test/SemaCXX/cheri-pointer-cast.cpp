@@ -14,15 +14,18 @@ int foo;
 #endif
 
 #define DO_CASTS(dest, value) do { \
-  unsigned long cstyle = (dest)value; \
-  unsigned long functional = dest(value); \
-  unsigned long staticCast = static_cast<dest>(value); \
-  unsigned long reinterpretCast = reinterpret_cast<dest>(value); \
+  dest cstyle = (dest)value; \
+  dest functional = dest(value); \
+  dest staticCast = static_cast<dest>(value); \
+  dest reinterpretCast = reinterpret_cast<dest>(value); \
 } while(false)
 
 int main() {
-  void* CAP x = &foo;
+  void* CAP x = (int* CAP)&foo;
   DO_CASTS(ulong, x); //expected-error-re {{static_cast from 'void *{{( __capability)?}}' to 'ulong' (aka 'unsigned long') is not allowed}}
+#ifdef __CHERI__
+  // expected-warning@-2 3 {{cast from capability type 'void * __capability' to non-capability, non-address type 'ulong' (aka 'unsigned long') is most likely an error}}
+#endif
   DO_CASTS(uint, x);
 #ifdef __CHERI__
   // expected-error@-2 3 {{cast from capability to smaller type 'uint' (aka 'unsigned int') loses information}}
@@ -34,6 +37,10 @@ int main() {
 
   void* nocap = &foo;
   DO_CASTS(ulong, nocap); //expected-error-re {{static_cast from 'void *{{( __capability)?}}' to 'ulong' (aka 'unsigned long') is not allowed}}
+#ifdef __CHERI_PURE_CAPABILITY__
+  // expected-warning@-2 3 {{cast from capability type 'void * __capability' to non-capability, non-address type 'ulong' (aka 'unsigned long') is most likely an error}}
+#endif
+
   DO_CASTS(uint, nocap);
 #ifdef __CHERI_PURE_CAPABILITY__
   // expected-error@-2 3 {{cast from capability to smaller type 'uint' (aka 'unsigned int') loses information}}
