@@ -1314,7 +1314,7 @@ void InitListChecker::CheckComplexType(const InitializedEntity &Entity,
 bool InitListChecker::isCapNarrowing(Expr* expr, QualType DeclType,
                                      unsigned *Index, unsigned *StructuredIndex,
                                      llvm::Optional<QualType> exprType) {
-  // needed because expr->getType() returns `int` for `int & __capability`
+  // extra parameter needed because expr->getType() returns `int` for `int & __capability`
   QualType ExprType = exprType ? *exprType : expr->getType();
   if (ExprType->isMemoryCapabilityType(SemaRef.Context) &&
      !DeclType->isMemoryCapabilityType(SemaRef.Context)) {
@@ -5460,17 +5460,6 @@ void InitializationSequence::InitializeFrom(Sema &S,
                               /*CStyle=*/Kind.isCStyleOrFunctionalCast(),
                               allowObjCWritebackConversion);
 
-  if (SourceType->isMemoryCapabilityType(Context) &&
-    !DestType->isMemoryCapabilityType(Context)) {
-      SetFailed(InitializationSequence::FK_ConversionFromCapabilityFailed);
-  } else if (DestType->isMemoryCapabilityType(Context) &&
-      !SourceType->isMemoryCapabilityType(Context)) {
-    // don't warn on null -> capability conversion
-    // XXXAR: is this the correct NPC_ value?
-    if (!(Initializer && Initializer->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNotNull)))
-      SetFailed(InitializationSequence::FK_ConversionToCapabilityFailed);
-  }
-
   if (ICS.isStandard() &&
       ICS.Standard.Second == ICK_Writeback_Conversion) {
     // Objective-C ARC writeback conversion.
@@ -5507,6 +5496,19 @@ void InitializationSequence::InitializeFrom(Sema &S,
     else
       SetFailed(InitializationSequence::FK_ConversionFailed);
   } else {
+    if (SourceType->isMemoryCapabilityType(Context) &&
+      !DestType->isMemoryCapabilityType(Context)) {
+        SetFailed(InitializationSequence::FK_ConversionFromCapabilityFailed);
+        return;
+    } else if (DestType->isMemoryCapabilityType(Context) &&
+        !SourceType->isMemoryCapabilityType(Context)) {
+      // don't warn on null -> capability conversion
+      // XXXAR: is this the correct NPC_ value?
+      if (!(Initializer && Initializer->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNotNull))) {
+        SetFailed(InitializationSequence::FK_ConversionToCapabilityFailed);
+        return;
+      }
+    }
     AddConversionSequenceStep(ICS, DestType, TopLevelOfInitList);
 
     MaybeProduceObjCObject(S, *this, Entity);
