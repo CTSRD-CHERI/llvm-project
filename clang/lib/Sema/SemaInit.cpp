@@ -1452,15 +1452,17 @@ void InitListChecker::CheckReferenceType(const InitializedEntity &Entity,
     hadError = true;
 
   expr = Result.getAs<Expr>();
-  llvm::Optional<QualType> exprType = None;
-  if (DeclRefExpr* DRE = dyn_cast<DeclRefExpr>(expr)) {
-    if (ValueDecl* V = dyn_cast_or_null<ValueDecl>(DRE->getFoundDecl())) {
-      exprType = V->getType();
+  if (expr) {
+    llvm::Optional<QualType> exprType = None;
+    if (DeclRefExpr* DRE = dyn_cast<DeclRefExpr>(expr)) {
+      if (ValueDecl* V = dyn_cast_or_null<ValueDecl>(DRE->getFoundDecl())) {
+        exprType = V->getType();
+      }
     }
-  }
-  if (isCapNarrowing(expr, DeclType, &Index, &StructuredIndex, exprType)) {
-    hadError = true;
-    return;
+    if (isCapNarrowing(expr, DeclType, &Index, &StructuredIndex, exprType)) {
+      hadError = true;
+      return;
+    }
   }
   IList->setInit(Index, expr);
 
