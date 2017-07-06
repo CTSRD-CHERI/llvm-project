@@ -1781,6 +1781,9 @@ static void DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
   if (DestType->isCHERICapabilityType(Self.Context)) {
     return; // cast from capabilty to capability is fine
   }
+  if (DestType->isVoidType()) {
+    return; // casting to void to silence unused variable warnings is fine
+  }
 
   const QualType CanonicalSrcType = SrcType.getCanonicalType();
   if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalSrcType)) {
