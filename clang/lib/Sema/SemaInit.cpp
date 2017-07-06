@@ -5496,17 +5496,19 @@ void InitializationSequence::InitializeFrom(Sema &S,
     else
       SetFailed(InitializationSequence::FK_ConversionFailed);
   } else {
-    if (SourceType->isMemoryCapabilityType(Context) &&
-      !DestType->isMemoryCapabilityType(Context)) {
-        SetFailed(InitializationSequence::FK_ConversionFromCapabilityFailed);
-        return;
-    } else if (DestType->isMemoryCapabilityType(Context) &&
-        !SourceType->isMemoryCapabilityType(Context)) {
-      // don't warn on null -> capability conversion
-      // XXXAR: is this the correct NPC_ value?
-      if (!(Initializer && Initializer->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNotNull))) {
-        SetFailed(InitializationSequence::FK_ConversionToCapabilityFailed);
-        return;
+    if (ICS.isStandard() && ICS.Standard.Third == ICK_Qualification) {
+      if (SourceType->isMemoryCapabilityType(Context) &&
+        !DestType->isMemoryCapabilityType(Context)) {
+          SetFailed(InitializationSequence::FK_ConversionFromCapabilityFailed);
+          return;
+      } else if (DestType->isMemoryCapabilityType(Context) &&
+          !SourceType->isMemoryCapabilityType(Context)) {
+        // don't warn on null -> capability conversion
+        // XXXAR: is this the correct NPC_ value?
+        if (!(Initializer && Initializer->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNotNull))) {
+          SetFailed(InitializationSequence::FK_ConversionToCapabilityFailed);
+          return;
+        }
       }
     }
     AddConversionSequenceStep(ICS, DestType, TopLevelOfInitList);

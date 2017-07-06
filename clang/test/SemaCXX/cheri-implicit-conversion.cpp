@@ -1,4 +1,3 @@
-
 // check that we get the same (or more) errors when compiling as C++ code
 // RUN: %cheri_cc1 -x c -o - %s -fsyntax-only -Wall -Wno-unused-variable -verify
 // RUN: %cheri_cc1 -x c++ -o - %s -fsyntax-only -Wall -Wno-unused-variable -verify

@@ -1826,12 +1826,8 @@ static bool IsStandardConversion(Sema &S, Expr* From, QualType ToType,
                                          ObjCLifetimeConversion)) {
     SCS.Third = ICK_Qualification;
     SCS.QualificationIncludesObjCLifetime = ObjCLifetimeConversion;
-    // don't allow conversions between __capability and integer pointers
-    if (FromType->isMemoryCapabilityType(S.getASTContext()) ==
-        ToType->isMemoryCapabilityType(S.getASTContext())) {
-      // SCS.Third = ICK_Incompatible_Pointer_Conversion;
-      FromType = ToType;
-    }
+    // This may change the __capability qualifier so we need to diagnose it later
+    FromType = ToType;
   } else {
     // No conversion required
     SCS.Third = ICK_Identity;
