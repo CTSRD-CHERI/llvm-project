@@ -44,3 +44,19 @@ int foo(int* __capability cap_arg_int, void* __capability cap_arg_void, int* ptr
 #endif
   return 0;
 }
+
+#ifdef NOTYET
+void test_references(int& ptrref, int& __capability capref) {
+  // TODO: look at callers of Sema::CompareReferenceRelationship
+  int& ptr1 = ptrref; // okay
+  int& ptr2 = capref; // expected-error {{foooof}}
+
+  int& __capability cap1 = capref; // okay
+  int& __capability cap2 = ptrref; // expected-error {{foooof}}
+
+  int i;
+
+  int& ptrref2 = i;
+  int& __capability capref2 = i; //expected-error{{dasdasds}}
+}
+#endif
