@@ -1826,7 +1826,12 @@ static bool IsStandardConversion(Sema &S, Expr* From, QualType ToType,
                                          ObjCLifetimeConversion)) {
     SCS.Third = ICK_Qualification;
     SCS.QualificationIncludesObjCLifetime = ObjCLifetimeConversion;
-    FromType = ToType;
+    // don't allow conversions between __capability and integer pointers
+    if (FromType->isMemoryCapabilityType(S.getASTContext()) ==
+        ToType->isMemoryCapabilityType(S.getASTContext())) {
+      // SCS.Third = ICK_Incompatible_Pointer_Conversion;
+      FromType = ToType;
+    }
   } else {
     // No conversion required
     SCS.Third = ICK_Identity;
@@ -2136,6 +2141,9 @@ BuildSimilarlyQualifiedPointerType(const Type *FromPtr,
   if (ToType->isObjCIdType() || ToType->isObjCQualifiedIdType()) 
     return ToType.getUnqualifiedType();
 
+  const bool FromIsCap = FromPtr->isMemoryCapabilityType(Context);
+  ASTContext::PointerInterpretationKind PIK =
+      FromIsCap ? ASTContext::PIK_Capability : ASTContext::PIK_Integer;
   QualType CanonFromPointee
     = Context.getCanonicalType(FromPtr->getPointeeType());
   QualType CanonToPointee = Context.getCanonicalType(ToPointee);
@@ -2147,14 +2155,15 @@ BuildSimilarlyQualifiedPointerType(const Type *FromPtr,
   // Exact qualifier match -> return the pointer type we're converting to.
   if (CanonToPointee.getLocalQualifiers() == Quals) {
     // ToType is exactly what we need. Return it.
-    if (!ToType.isNull())
+    // XXXAR: but only if the memory capability qualifier matches
+    if (ToType->isMemoryCapabilityType(Context) == FromIsCap && !ToType.isNull())
       return ToType.getUnqualifiedType();
 
     // Build a pointer to ToPointee. It has the right qualifiers
     // already.
     if (isa<ObjCObjectPointerType>(ToType))
       return Context.getObjCObjectPointerType(ToPointee);
-    return Context.getPointerType(ToPointee);
+    return Context.getPointerType(ToPointee, PIK);
   }
 
   // Just build a canonical type that has the right qualifiers.
@@ -2163,7 +2172,7 @@ BuildSimilarlyQualifiedPointerType(const Type *FromPtr,
 
   if (isa<ObjCObjectPointerType>(ToType))
     return Context.getObjCObjectPointerType(QualifiedCanonToPointee);
-  return Context.getPointerType(QualifiedCanonToPointee);
+  return Context.getPointerType(QualifiedCanonToPointee, PIK);
 }
 
 static bool isNullPointerConstantForConversion(Expr *Expr,
@@ -2275,6 +2284,9 @@ bool Sema::IsPointerConversion(Expr *From, QualType FromType, QualType ToType,
                                                        ToPointeeType,
                                                        ToType, Context,
                                                    /*StripObjCLifetime=*/true);
+    assert(FromType->isMemoryCapabilityType(Context) ==
+           ConvertedType->isMemoryCapabilityType(Context) &&
+           "Converted type should retain capability/pointer");
     return true;
   }
 
