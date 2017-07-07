@@ -307,7 +307,7 @@ StandardConversionSequence::getNarrowingKind(ASTContext &Ctx,
     ToType = ET->getDecl()->getIntegerType();
 
   // Converting from capability to pointer/integral is always narrowing
-  if (FromType->isMemoryCapabilityType(Ctx) && !ToType->isMemoryCapabilityType(Ctx))
+  if (FromType->isCHERICapabilityType(Ctx) && !ToType->isCHERICapabilityType(Ctx))
     return NK_Type_Narrowing;
 
   switch (Second) {
@@ -2137,7 +2137,7 @@ BuildSimilarlyQualifiedPointerType(const Type *FromPtr,
   if (ToType->isObjCIdType() || ToType->isObjCQualifiedIdType()) 
     return ToType.getUnqualifiedType();
 
-  const bool FromIsCap = FromPtr->isMemoryCapabilityType(Context);
+  const bool FromIsCap = FromPtr->isCHERICapabilityType(Context);
   ASTContext::PointerInterpretationKind PIK =
       FromIsCap ? ASTContext::PIK_Capability : ASTContext::PIK_Integer;
   QualType CanonFromPointee
@@ -2152,7 +2152,7 @@ BuildSimilarlyQualifiedPointerType(const Type *FromPtr,
   if (CanonToPointee.getLocalQualifiers() == Quals) {
     // ToType is exactly what we need. Return it.
     // XXXAR: but only if the memory capability qualifier matches
-    if (ToType->isMemoryCapabilityType(Context) == FromIsCap && !ToType.isNull())
+    if (ToType->isCHERICapabilityType(Context) == FromIsCap && !ToType.isNull())
       return ToType.getUnqualifiedType();
 
     // Build a pointer to ToPointee. It has the right qualifiers
@@ -2280,8 +2280,8 @@ bool Sema::IsPointerConversion(Expr *From, QualType FromType, QualType ToType,
                                                        ToPointeeType,
                                                        ToType, Context,
                                                    /*StripObjCLifetime=*/true);
-    assert(FromType->isMemoryCapabilityType(Context) ==
-           ConvertedType->isMemoryCapabilityType(Context) &&
+    assert(FromType->isCHERICapabilityType(Context) ==
+           ConvertedType->isCHERICapabilityType(Context) &&
            "Converted type should retain capability/pointer");
     return true;
   }

@@ -1316,8 +1316,8 @@ bool InitListChecker::isCapNarrowing(Expr* expr, QualType DeclType,
                                      llvm::Optional<QualType> exprType) {
   // extra parameter needed because expr->getType() returns `int` for `int & __capability`
   QualType ExprType = exprType ? *exprType : expr->getType();
-  if (ExprType->isMemoryCapabilityType(SemaRef.Context) &&
-     !DeclType->isMemoryCapabilityType(SemaRef.Context)) {
+  if (ExprType->isCHERICapabilityType(SemaRef.Context) &&
+     !DeclType->isCHERICapabilityType(SemaRef.Context)) {
     // TODO: allow for nullptr, etc.
     if (!VerifyOnly) {
       SemaRef.Diag(expr->getLocStart(), diag::ext_init_list_type_narrowing)
@@ -5499,12 +5499,12 @@ void InitializationSequence::InitializeFrom(Sema &S,
       SetFailed(InitializationSequence::FK_ConversionFailed);
   } else {
     if (ICS.isStandard() && ICS.Standard.Third == ICK_Qualification) {
-      if (SourceType->isMemoryCapabilityType(Context) &&
-        !DestType->isMemoryCapabilityType(Context)) {
+      if (SourceType->isCHERICapabilityType(Context) &&
+        !DestType->isCHERICapabilityType(Context)) {
           SetFailed(InitializationSequence::FK_ConversionFromCapabilityFailed);
           return;
-      } else if (DestType->isMemoryCapabilityType(Context) &&
-          !SourceType->isMemoryCapabilityType(Context)) {
+      } else if (DestType->isCHERICapabilityType(Context) &&
+          !SourceType->isCHERICapabilityType(Context)) {
         // don't warn on null -> capability conversion
         // XXXAR: is this the correct NPC_ value?
         if (!(Initializer && Initializer->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNotNull))) {

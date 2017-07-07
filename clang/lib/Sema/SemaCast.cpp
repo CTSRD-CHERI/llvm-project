@@ -2837,11 +2837,11 @@ ExprResult Sema::BuildCheriCast(SourceLocation LParenLoc,
   }
   CastKind Kind = CK_NoOp;
   if (SrcIsCap && !DestIsCap) {
-    Kind = CK_MemoryCapabilityToPointer;
+    Kind = CK_CHERICapabilityToPointer;
     assert(!Context.getTargetInfo().areAllPointersCapabilities() &&
            "__cheri_cast to pointer should not be possible in purecap mode");
   } else if (DestIsCap && !SrcIsCap) {
-    Kind = CK_PointerToMemoryCapability;
+    Kind = CK_PointerToCHERICapability;
   } else {
     // Warn about no-op cheri casts in hybrid mode. In purecap mode all casts
     // should be noops but we don't warn to allow compiling the same code
