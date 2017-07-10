@@ -110,7 +110,7 @@ void foo(void) {
 
 #ifndef __CHERI_PURE_CAPABILITY__
   word* x17 = (word*)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'word *' (aka '__uintcap_t *') is most likely an error}} expected-note{{use __cheri_cast to convert between pointers and capabilities}}
-  // AST: CStyleCastExpr {{.+}} 'word *' <MemoryCapabilityToPointer>
+  // AST: CStyleCastExpr {{.+}} 'word *' <CHERICapabilityToPointer>
 #endif
 }
 
@@ -134,9 +134,9 @@ void test_cheri_cast(void) {
 #endif
 
   int* __capability intptr_to_cap = (__cheri_cast int* __capability)x;
-  // AST: CStyleCastExpr {{.+}} 'int * __capability' <PointerToMemoryCapability>
+  // AST: CStyleCastExpr {{.+}} 'int * __capability' <PointerToCHERICapability>
   const int* __capability const_intcap = (__cheri_cast int* __capability)x;
   // AST: ImplicitCastExpr {{.+}} 'const int * __capability' <BitCast>
-  // AST-NEXT: CStyleCastExpr {{.+}} 'int * __capability' <PointerToMemoryCapability>
+  // AST-NEXT: CStyleCastExpr {{.+}} 'int * __capability' <PointerToCHERICapability>
   (__cheri_cast int* __capability)const_intcap; // expected-error{{invalid __cheri_cast from 'const int * __capability' to unrelated type 'int * __capability'}}
 }
