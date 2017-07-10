@@ -27,7 +27,7 @@ void cast_vaddr() {
   v = static_cast<vaddr_t>(a); // expected-error {{static_cast from 'void * __capability' to 'vaddr_t' (aka 'unsigned long') is not allowed}}
   v = (vaddr_t)a;
   v = vaddr_t(a);
-  v = vaddr_t{a}; // expected-error {{cannot initialize a value of type 'vaddr_t' (aka 'unsigned long') with an lvalue of type 'void * __capability'}}
+  v = vaddr_t{a}; // expected-error {{type 'void * __capability' cannot be narrowed to 'vaddr_t' (aka 'unsigned long') in initializer list}}
 }
 
 void cast_vaddr2() {
@@ -49,7 +49,7 @@ void cast_long() {
   v = static_cast<long>(a);  // expected-error {{static_cast from 'void * __capability' to 'long' is not allowed}}
   v = (long)a;  // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'long' is most likely an error}}
   v = long(a); // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'long' is most likely an error}}
-  v = long{a}; // expected-error {{cannot initialize a value of type 'long' with an lvalue of type 'void * __capability'}}
+  v = long{a}; // expected-error {{type 'void * __capability' cannot be narrowed to 'long' in initializer list}}
 }
 
 
@@ -59,7 +59,7 @@ void cast_int() {
   v = static_cast<int>(a);  // expected-error {{static_cast from 'void * __capability' to 'int' is not allowed}}
   v = (int)a; // expected-error {{cast from capability to smaller type 'int' loses information}}
   v = int(a); // expected-error {{cast from capability to smaller type 'int' loses information}}
-  v = int{a}; // expected-error {{cannot initialize a value of type 'int' with an lvalue of type 'void * __capability'}}
+  v = int{a}; // expected-error {{type 'void * __capability' cannot be narrowed to 'int' in initializer list}}
 }
 
 void cast_uintcap() {
@@ -94,18 +94,16 @@ void check_uintcap_to_int() {
   int i = cap;
   i = (int)cap;
   i = int(cap);
-  i = int{cap};  // expected-error {{non-constant-expression cannot be narrowed from type '__uintcap_t' to 'int' in initializer list}} expected-note {{insert an explicit cast to silence this issue}}
+  i = int{cap};  // expected-error {{type '__uintcap_t' cannot be narrowed to 'int' in initializer list}}
   i = static_cast<int>(cap);
   long l = cap;
   l = (long)cap;
   l = long(cap);
-  l = long{cap}; // expected-error {{non-constant-expression cannot be narrowed from type '__uintcap_t' to 'long' in initializer list}} expected-note {{insert an explicit cast to silence this issue}}
+  l = long{cap}; // expected-error {{type '__uintcap_t' cannot be narrowed to 'long' in initializer list}}
   l = static_cast<long>(cap);
 
-#ifndef NOTYET
-  i = reinterpret_cast<int>(cap);
-  l = reinterpret_cast<long>(cap);
-#endif
+  i = reinterpret_cast<int>(cap);  // expected-error {{reinterpret_cast from '__uintcap_t' to 'int' is not allowed}}
+  l = reinterpret_cast<long>(cap); // expected-error {{reinterpret_cast from '__uintcap_t' to 'long' is not allowed}}
 }
 
 
@@ -128,7 +126,7 @@ void cast_ptr() {
 #ifndef __CHERI_PURE_CAPABILITY__
   // expected-warning@-2 5 {{cast from capability type 'void * __capability' to non-capability, non-address type 'voidp' (aka 'void *') is most likely an error}}
   // expected-note@-3 5{{use __cheri_cast to convert between pointers and capabilities}}
-  // not-yet-expected-error@-4 // narrowing init
+  // expected-error@-4 {{type 'void * __capability' cannot be narrowed to 'voidp' (aka 'void *') in initializer list}}
 #endif
   // expected-error@-6 {{'void' is not a class}}
 
@@ -137,21 +135,29 @@ void cast_ptr() {
   DO_ALL_CASTS(wordp, a);
 #ifndef __CHERI_PURE_CAPABILITY__
   // expected-warning@-2 4 {{cast from capability type 'void * __capability' to non-capability, non-address type 'wordp' (aka '__uintcap_t *') is most likely an error}}
-  // expected-note@-3 4{{use __cheri_cast to convert between pointers and capabilities}}
+  // expected-note@-3 4 {{use __cheri_cast to convert between pointers and capabilities}}
+  // expected-error@-4 {{type 'void * __capability' cannot be narrowed to 'wordp' (aka '__uintcap_t *') in initializer list}}
+  // expected-error@-5 {{const_cast from 'void * __capability' to 'wordp' (aka '__uintcap_t *') is not allowed}}
+#else
+  // expected-error@-7 {{const_cast from 'void * __capability' to 'wordp' (aka '__uintcap_t * __capability') is not allowed}}
+  // expected-error@-8 {{cannot initialize a value of type 'wordp' (aka '__uintcap_t * __capability') with an lvalue of type 'void * __capability'}}
 #endif
-  // expected-error-re@-5 {{cannot initialize a value of type 'wordp' (aka '__uintcap_t *{{( __capability)?}}') with an lvalue of type 'void * __capability'}}
-  // expected-error@-6 {{'__uintcap_t' is not a class}}
-  // expected-error@-7 {{const_cast from 'void * __capability' to 'wordp' (aka '__uintcap_t *') is not allowed}}
+  // expected-error@-10 {{'__uintcap_t' is not a class}}
+
 
 
   using test_class_ptr = test_class*;
   test_class* __capability b = nullptr;
   DO_ALL_CASTS(test_class_ptr, b);
 #ifndef __CHERI_PURE_CAPABILITY__
-  // expected-warning@-2 6 {{cast from capability type 'test_class * __capability' to non-capability, non-address type 'test_class_ptr' (aka 'test_class *') is most likely an error}}
-  // expected-note@-3 6{{use __cheri_cast to convert between pointers and capabilities}}
+  // expected-warning@-2 5 {{cast from capability type 'test_class * __capability' to non-capability, non-address type 'test_class_ptr' (aka 'test_class *') is most likely an error}}
+  // expected-note@-3 5 {{use __cheri_cast to convert between pointers and capabilities}}
+  // expected-error@-4 {{test_class * __capability' cannot be narrowed to 'test_class_ptr' (aka 'test_class *') in initializer list}}
+  // expected-error@-5 {{static_cast from 'test_class * __capability' to 'test_class_ptr' (aka 'test_class *'), which are not related by inheritance, is not allowed}} // TODO: this should be a better error message
 #endif
 }
+
+#ifdef NOTYET
 
 void cast_ref() {
   // XXXAR: these should also warn
@@ -166,3 +172,5 @@ void cast_ref() {
   v = intr(cap_ref);
   v = intr{cap_ref};
 }
+
+#endif
