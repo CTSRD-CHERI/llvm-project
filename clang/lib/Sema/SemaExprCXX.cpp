@@ -3959,6 +3959,16 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
     // target type isn't a reference.
     ExprValueKind VK = ToType->isReferenceType() ?
                                   From->getValueKind() : VK_RValue;
+    const bool FromIsCap = FromType->isCHERICapabilityType(Context);
+    const bool ToIsCap = ToType->isCHERICapabilityType(Context);
+    if (FromIsCap != ToIsCap) {
+      unsigned DiagID = FromIsCap ? diag::err_typecheck_convert_cap_to_ptr :
+                                    diag::err_typecheck_convert_ptr_to_cap;
+      Diag(From->getLocStart(), DiagID) << FromType << ToType
+          << FixItHint::CreateInsertion(From->getLocStart(), "(__cheri_cast " +
+                                        ToType.getAsString() + ")");
+      return ExprError();
+    }
     From = ImpCastExprToType(From, ToType.getNonLValueExprType(Context),
                              CK_NoOp, VK, /*BasePath=*/nullptr, CCK).get();
 

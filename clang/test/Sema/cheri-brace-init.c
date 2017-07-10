@@ -8,8 +8,7 @@ struct foo {
 };
 
 void test_cap_to_ptr(void* __capability a) {
-  void* non_cap = a; // expected-error {{initializing 'void *' with an expression of incompatible type 'void * __capability'}}
-  // TODO: These should warn as well
+  void* non_cap = a; // expected-error {{converting capability type 'void * __capability' to pointer type 'void *' without an explicit cast}}
   struct foo f = {a, a}; // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
   struct foo f2;
   f2 = (struct foo){a, NULL}; // this is fine
@@ -30,7 +29,7 @@ void test_arrays(void* __capability cap) {
   void* ptr_array3[3] = { [0 ... 2] = cap }; // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
   // TODO: this should probably warn about pointer -> cap conversion
 
-  void* __capability cap_array[3] = { NULL, cap, ptr };  // expected-error {{initializing 'void * __capability' with an expression of incompatible type 'int *'}}
+  void* __capability cap_array[3] = { NULL, cap, ptr };  // expected-error {{converting pointer type 'int *' to capability type 'void * __capability' without an explicit cast}}
 
   struct foo foo_array[5] = {
       {cap, NULL}, // no-error

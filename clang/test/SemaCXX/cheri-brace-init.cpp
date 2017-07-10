@@ -97,7 +97,7 @@ void test_capref_to_ptrref(int& __capability a) {
 void test_arrays(void* __capability cap) {
   int* ptr = nullptr;
   void* ptr_array[3] = { nullptr, cap, ptr }; // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
-  void* __capability cap_array[3] = { nullptr, cap, ptr }; // expected-error {{cannot initialize an array element of type 'void * __capability' with an lvalue of type 'int *'}}
+  void* __capability cap_array[3] = { nullptr, cap, ptr }; // expected-error {{converting pointer type 'int *' to capability type 'void * __capability' without an explicit cast}}
 
     struct foo foo_array[5] = {
       {cap, nullptr}, // no-error

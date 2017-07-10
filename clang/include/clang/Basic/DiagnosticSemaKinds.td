@@ -5870,6 +5870,11 @@ def note_typecheck_assign_const : Note<
   "%select{non-|}1static data member %2 declared const here|"
   "member function %q1 is declared const here}0">;
 
+def err_typecheck_convert_cap_to_ptr: Error<"converting capability type %0 to "
+  "pointer type %1 without an explicit cast; if this is intended use __cheri_cast">;
+def err_typecheck_convert_ptr_to_cap: Error<"converting pointer type %0 to "
+  "capability type %1 without an explicit cast; if this is intended use __cheri_cast">;
+
 def warn_mixed_capability_binop : Warning<
   "binary expression on capability and non-capability types: %0 and %1.  "
   "Provenance will be inherited from left-hand side">,

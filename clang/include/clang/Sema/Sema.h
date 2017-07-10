@@ -9212,6 +9212,13 @@ public:
     /// accept as an extension.
     IntToPointer,
 
+    /// CHERICapabilityToPointer - The assignment converts a capability to a
+    /// pointer, which we reject (it needs an explicit __cheri_cast).
+    CHERICapabilityToPointer,
+    /// PointerToCHERICapability - The assignment converts a pointer to a
+    /// capability, which we reject (it needs an explicit __cheri_cast).
+    PointerToCHERICapability,
+
     /// FunctionVoidPointer - The assignment is between a function pointer and
     /// void*, which the standard doesn't allow, but we accept as an extension.
     FunctionVoidPointer,

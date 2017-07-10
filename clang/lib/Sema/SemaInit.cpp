@@ -7685,7 +7685,16 @@ bool InitializationSequence::Diagnose(Sema &S,
     break;
 
   case FK_ConversionFromCapabilityFailed:
-  case FK_ConversionToCapabilityFailed:
+  case FK_ConversionToCapabilityFailed: {
+    QualType FromType = Args[0]->getType();
+    unsigned DiagID = Failure == FK_ConversionFromCapabilityFailed
+        ? diag::err_typecheck_convert_cap_to_ptr
+        : diag::err_typecheck_convert_ptr_to_cap;
+    S.Diag(Kind.getLocation(), DiagID) << FromType << DestType
+      << FixItHint::CreateInsertion(Kind.getLocation(), "(__cheri_cast " +
+                                    DestType.getAsString() + ")");
+    break;
+  }
   case FK_ConversionFailed: {
     QualType FromType = Args[0]->getType();
     PartialDiagnostic PDiag = S.PDiag(diag::err_init_conversion_failed)

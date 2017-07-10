@@ -7698,9 +7698,9 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
     if (const PointerType *RHSPointer = dyn_cast<PointerType>(RHSType)) {
       unsigned AddrSpaceL = LHSPointer->getPointeeType().getAddressSpace();
       unsigned AddrSpaceR = RHSPointer->getPointeeType().getAddressSpace();
-      if (AddrSpaceL != AddrSpaceR)
+      if (AddrSpaceL != AddrSpaceR) {
         Kind = CK_AddressSpaceConversion;
-      else if (LHSPointer->isFunctionPointerType() && RHSPointer->isFunctionPointerType()) {
+      } else if (LHSPointer->isFunctionPointerType() && RHSPointer->isFunctionPointerType()) {
         // only allow implicit casts to and from function pointer capabilities
         if (!LHSPointer->isCHERICapability() && RHSPointer->isCHERICapability())
           Kind = CK_CHERICapabilityToPointer;
@@ -7708,11 +7708,15 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
           Kind = CK_PointerToCHERICapability;
         else
           Kind = CK_BitCast;
-      } else if (LHSPointer->isCHERICapability() != RHSPointer->isCHERICapability())
-				// all other implicit casts to and from capabilities are not allowed
-        return Incompatible;
-		  else
-				Kind = CK_BitCast;
+      } else if (LHSPointer->isCHERICapability() != RHSPointer->isCHERICapability()) {
+        // all other implicit casts to and from capabilities are not allowed
+        Kind = RHSPointer->isCHERICapability() ? CK_CHERICapabilityToPointer :
+                                                 CK_PointerToCHERICapability;
+        return RHSPointer->isCHERICapability() ? CHERICapabilityToPointer :
+                                                 PointerToCHERICapability;
+      } else {
+        Kind = CK_BitCast;
+      }
       return checkPointerTypesForAssignment(*this, LHSType, RHSType);
     }
 
@@ -13229,6 +13233,18 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
     break;
   case IncompatibleObjCWeakRef:
     DiagKind = diag::err_arc_weak_unavailable_assign;
+    break;
+  case CHERICapabilityToPointer:
+  case PointerToCHERICapability:
+    DiagKind = (ConvTy == CHERICapabilityToPointer)
+        ? diag::err_typecheck_convert_cap_to_ptr
+        : diag::err_typecheck_convert_ptr_to_cap;
+    MayHaveConvFixit = true;
+    isInvalid = true;
+    Hint = FixItHint::CreateInsertion(SrcExpr->getLocStart(), "(__cheri_cast " +
+                                      DstType.getAsString() + ")");
+    // make sure that the source type comes first in the diagnostic:
+    Action = AA_Converting;  // XXXAR: not sure this is 100% correct
     break;
   case Incompatible:
     if (maybeDiagnoseAssignmentToFunction(*this, DstType, SrcExpr)) {
