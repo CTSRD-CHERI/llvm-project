@@ -208,10 +208,16 @@ std::string InputSectionBase::getLocation(uint64_t Offset) {
 
   // Find a function symbol that encloses a given location.
   for (SymbolBody *B : getFile<ELFT>()->getSymbols())
-    if (auto *D = dyn_cast<DefinedRegular>(B))
-      if (D->Section == this && D->Type == STT_FUNC)
-        if (D->Value <= Offset && Offset < D->Value + D->Size)
-          return SrcFile + ":(function " + toString(*D) + ")";
+    if (auto *D = dyn_cast<DefinedRegular>(B)) {
+      if (D->Section == this) {
+        if (D->Value <= Offset && Offset < D->Value + D->Size) {
+          if (D->Type == STT_FUNC)
+            return SrcFile + ":(function " + toString(*D) + ")";
+          else if (D->Type == STT_OBJECT)
+            return SrcFile + ":(object " + toString(*D) + ")";
+        }
+      }
+    }
 
   // If there's no symbol, print out the offset in the section.
   return (SrcFile + ":(" + Name + "+0x" + utohexstr(Offset) + ")").str();
