@@ -850,6 +850,15 @@ struct CheriCapRelocLocation {
   }
 };
 
+struct CheriCapReloc {
+  CheriCapReloc(SymbolBody *T, uint64_t O, uint64_t L, bool Dyn)
+    : Target(T), Offset(O), Length(L), NeedsDynReloc(Dyn) {}
+  SymbolBody *Target;
+  uint64_t Offset;
+  uint64_t Length;
+  bool NeedsDynReloc;
+};
+
 template <class ELFT>
 class CheriCapRelocsSection : public SyntheticSection {
 public:
@@ -862,14 +871,6 @@ public:
   void writeTo(uint8_t *Buf) override;
 private:
   void processSection(InputSectionBase *S);
-  struct CheriCapReloc {
-    CheriCapReloc(SymbolBody *T, uint64_t O, uint64_t L, bool Dyn)
-      : Target(T), Offset(O), Length(L), NeedsDynReloc(Dyn) {}
-    SymbolBody *Target;
-    uint64_t Offset;
-    uint64_t Length;
-    bool NeedsDynReloc;
-  };
   // map or vector?
   llvm::MapVector<CheriCapRelocLocation, CheriCapReloc> RelocsMap;
   // TODO: list of added dynamic relocations?

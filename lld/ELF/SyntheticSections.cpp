@@ -2433,23 +2433,87 @@ void CheriCapRelocsSection<ELFT>::finalizeContents() {
 }
 
 template <class ELFT>
+static std::string verboseToString(SymbolBody *B, uint64_t SymOffset) {
+  std::string Msg;
+
+  if (B->isLocal())
+    Msg += "local ";
+  if (B->isShared())
+    Msg += "shared ";
+  if (B->isCommon())
+    Msg += "common ";
+  if (B->isSection())
+    Msg += "section ";
+  else if (B->isTls())
+    Msg += "tls ";
+  else if (B->isFunc())
+    Msg += "function ";
+  else if (B->isGnuIFunc())
+    Msg += "gnu ifunc ";
+  else if (B->isObject())
+    Msg += "object ";
+  else if (B->isFile())
+    Msg += "object ";
+  else
+    Msg += "<unknown kind>";
+
+  if (B->isInCurrentDSO())
+    Msg += "(in current DSO) ";
+  if (B->NeedsCopy)
+    Msg += "(needs copy) ";
+  if (B->isInGot())
+    Msg += "(in GOT) ";
+  if (B->isInPlt())
+    Msg += "(in PLT) ";
+
+  std::string Name = toString(*B);
+  DefinedRegular* DR = dyn_cast<DefinedRegular>(B);
+  InputSectionBase* IS = nullptr;
+  if (Name.empty()) {
+    if (DR && DR->Section) {
+      InputSectionBase* IS = dyn_cast<InputSectionBase>(DR->Section);
+      auto Offset = DR->isSection() ? SymOffset : DR->Section->getOffset(*DR);
+      if (IS) {
+        Name = IS->getLocation<ELFT>(Offset);
+      } else {
+        Name = (DR->Section->Name + "+0x" + utohexstr(Offset)).str();
+      }
+    } else if (OutputSection* OS = B->getOutputSection()) {
+      Name = (OS->Name + "+(unknown offset)").str();
+    }
+  }
+  if (Name.empty()) {
+    Name = "<unknown symbol>";
+  }
+  Msg += Name;
+  std::string Src = IS ? IS->getSrcMsg<ELFT>(SymOffset) : toString(B->File);
+  Msg += "\n>>> defined in " + Src;
+  return Msg;
+}
+
+template <class ELFT>
+static std::string getCapRelocSource(const CheriCapRelocLocation& Src,
+                                     const CheriCapReloc& Reloc) {
+  return "against " + verboseToString<ELFT>(Reloc.Target, Reloc.Offset) +
+         "\n>>> referenced by " + verboseToString<ELFT>(Src.BaseSym, Src.Offset);
+}
+
+template <class ELFT>
 void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
   constexpr endianness E = ELFT::TargetEndianness;
   static_assert(RelocSize == sizeof(InMemoryCapRelocEntry<E>), "cap relocs size mismatch");
   uint64_t Offset = 0;
   for (const auto &I : RelocsMap) {
-    const CheriCapRelocLocation Location = I.first;
+    const CheriCapRelocLocation& Location = I.first;
     const CheriCapReloc& Reloc = I.second;
     SymbolBody *LocationSym = Location.BaseSym;
     int64_t LocationOffset = Location.Offset;
     // If we don't need a dynamic relocation just write the VA
-    // If there is a relocation an we use REL we have to write the addend
-    // (VA relative to load address) into the field because Elf_Rel has no
-    // addend field. For RELA we write 0 (not strictly required because the
-    // dynamic linker should ignore the existing value)
-    // XXXAR: always write the virtual address?
-    uint64_t LocationVA = (Location.NeedsDynReloc && Config->IsRela) ? 0 :
-        LocationSym->getVA(LocationOffset);
+    // We always write the virtual address here:
+    // In the shared library case this will be an address relative to the load
+    // address and will be handled by crt_init_globals. In the static case we
+    // can compute the final virtual address
+    uint64_t LocationVA = LocationSym->getVA(LocationOffset);
     // For the target the virtual address the addend is always zero so
     // if we need a dynamic reloc we write zero
     // TODO: would it be more efficient for local symbols to write the DSO VA
@@ -2460,7 +2524,8 @@ void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     uint64_t TargetOffset = Reloc.Offset;
     uint64_t TargetSize = Reloc.Target->template getSize<ELFT>();
     if (TargetSize == 0) {
-      warn("could not determine size of " + toString(*Reloc.Target));
+      warn("could not determine size of cap reloc " +
+           getCapRelocSource<ELFT>(Location, Reloc));
       // TODO: check .size.foo symbols
       // TODO: also make this work for shared symbols
       if (OutputSection* OS = Reloc.Target->getOutputSection()) {
@@ -2478,13 +2543,13 @@ void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     uint64_t Permissions = Reloc.Target->isFunc() ? 1ULL << 63 : 0;
     InMemoryCapRelocEntry<E> Entry { LocationVA, TargetVA, TargetOffset, TargetSize, Permissions };
     memcpy(Buf + Offset, &Entry, sizeof(Entry));
-    if (Config->Verbose) {
-      errs() << "Added capability reloc: loc=" << utohexstr(LocationVA)
-             << ", object=" << utohexstr(TargetVA)
-             << ", offset=" << utohexstr(TargetOffset)
-             << ", size=" << utohexstr(TargetSize)
-             << ", permissions=" << utohexstr(Permissions) << "\n";
-    }
+//     if (Config->Verbose) {
+//       errs() << "Added capability reloc: loc=" << utohexstr(LocationVA)
+//              << ", object=" << utohexstr(TargetVA)
+//              << ", offset=" << utohexstr(TargetOffset)
+//              << ", size=" << utohexstr(TargetSize)
+//              << ", permissions=" << utohexstr(Permissions) << "\n";
+//     }
     Offset += RelocSize;
   }
   assert(Offset == getSize() && "Not all data written?");
