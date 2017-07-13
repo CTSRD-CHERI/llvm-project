@@ -218,9 +218,9 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind18Registers_mips_n646jumptoEv)
   RESTORE_GPR(30)
   // Load the new PC into $ra
   ld $31, ($4)
-  // Jump to $ra, load $r3 in the delay slot
+  // Jump to $ra, load $r4 in the delay slot
   jr $31
-  RESTORE_GPR(3)
+  RESTORE_GPR(4)
 
 #elif defined(__ppc__)
 
