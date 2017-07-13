@@ -463,6 +463,13 @@ elf::ObjectFile<ELFT>::createInputSection(const Elf_Shdr &Sec,
   }
   }
 
+  // XXXAR: The mdebug.abi64 section causes errors when linking CheriBSD MIPS
+  // ld.lld: error: ..../cheribsd/lib/libc/gmon/mcount.c:(.mdebug.abi64+0x1C): has non-ABS reloc
+  // For now just discard that section to work around that error
+  // It is probably unused anyway and if not we can try to fix the error properly
+  if (Name.startswith(".mdebug.abi"))
+    return &InputSection::Discarded;
+
   // The GNU linker uses .note.GNU-stack section as a marker indicating
   // that the code in the object file does not expect that the stack is
   // executable (in terms of NX bit). If all input files have the marker,
