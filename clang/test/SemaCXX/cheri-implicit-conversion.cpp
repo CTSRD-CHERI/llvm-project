@@ -2,6 +2,9 @@
 // RUN: %cheri_cc1 -x c -o - %s -fsyntax-only -Wall -Wno-unused-variable -verify
 // RUN: %cheri_cc1 -x c++ -o - %s -fsyntax-only -Wall -Wno-unused-variable -verify
 
+// RUN: not %cheri_cc1 -x c++ -o - %s -fsyntax-only -Wall -Wno-unused-variable -ast-dump | FileCheck %s -check-prefix CXXAST
+// RUN: not %cheri_cc1 -x c -o - %s -fsyntax-only -Wall -Wno-unused-variable -ast-dump | FileCheck %s -check-prefix CAST
+
 
 int global_int;
 struct test_struct {
@@ -76,7 +79,7 @@ int foo(int* __capability cap_arg_int, void* __capability cap_arg_void, int* ptr
   return 0;
 }
 
-void str_to_ptr() {
+void str_to_ptr(void) {
   // conversion from string literal to const char* is fine:
   const char* ptr = "foo";
   const char* __capability cap = "foo";
@@ -91,7 +94,17 @@ void str_to_ptr() {
   // expected-warning@-3 {{conversion from string literal to 'char *' is deprecated}}
   // expected-error@-3 {{converting pointer type 'const char [4]' to capability type 'char * __capability' without an explicit cast}}
 #endif
+  // CXXAST: `-FunctionDecl {{.+}} str_to_ptr 'void (void)'
+  // CXXAST: VarDecl {{.+}} cap 'const char * __capability' cinit
+  // CXXAST-NEXT: ImplicitCastExpr {{.+}} 'const char * __capability' <PointerToCHERICapability>
+  // CXXAST-NEXT: ImplicitCastExpr {{.+}} 'const char *' <ArrayToPointerDecay>
+  // CXXAST-NEXT: StringLiteral {{.+}} 'const char [4]' lvalue "foo"
 
+  // CAST: `-FunctionDecl {{.+}} str_to_ptr 'void (void)'
+  // CAST: VarDecl {{.+}} cap 'const char * __capability' cinit
+  // CAST-NEXT: ImplicitCastExpr {{.+}} 'const char * __capability' <PointerToCHERICapability>
+  // CAST-NEXT: ImplicitCastExpr {{.+}} 'char *' <ArrayToPointerDecay>
+  // CAST-NEXT: StringLiteral {{.+}} 'char [4]' lvalue "foo"
 }
 // not yet implemented
 #if 0
