@@ -79,10 +79,17 @@ int foo(int* __capability cap_arg_int, void* __capability cap_arg_void, int* ptr
   return 0;
 }
 
+void fn_taking_const_char_ptr(const char* s);
+void fn_taking_const_char_cap(const char* __capability s);
+
 void str_to_ptr(void) {
   // conversion from string literal to const char* is fine:
   const char* ptr = "foo";
   const char* __capability cap = "foo";
+
+  // check that we can also call functions with string literals:
+  fn_taking_const_char_ptr("foo");
+  fn_taking_const_char_cap("foo");
 
   // but conversion from a pointer isn't
   const char* __capability cap2 = ptr;  // expected-error {{converting pointer type 'const char *' to capability type 'const char * __capability' without an explicit cast}}
