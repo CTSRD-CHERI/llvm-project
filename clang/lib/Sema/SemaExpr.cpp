@@ -13236,6 +13236,9 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
     break;
   case CHERICapabilityToPointer:
   case PointerToCHERICapability:
+    if (isa<StringLiteral>(SrcExpr->IgnoreParens()->IgnoreImpCasts())) {
+      return false; // conversion from string to capability is fine
+    }
     DiagKind = (ConvTy == CHERICapabilityToPointer)
         ? diag::err_typecheck_convert_cap_to_ptr
         : diag::err_typecheck_convert_ptr_to_cap;

@@ -193,6 +193,16 @@ namespace clang {
     /// \brief Whether this binds a reference to an object with a different
     /// Objective-C lifetime qualifier.
     unsigned ObjCLifetimeConversionBinding : 1;
+
+    // XXXAR: make this part of the bitfield instead of reusing a field
+    // Will require adding a constructor and adjusting lots of uses
+    // unsigned InvalidCapPointerConversion : 1;
+    bool isInvalidCHERICapabilityConversion() const {
+      return DeprecatedStringLiteralToCharPtr;
+    }
+    void setInvalidCHERIConversion(bool IsInvalid) {
+      DeprecatedStringLiteralToCharPtr = IsInvalid;
+    }
     
     /// FromType - The type that this conversion is converting
     /// from. This is an opaque pointer that can be translated into a

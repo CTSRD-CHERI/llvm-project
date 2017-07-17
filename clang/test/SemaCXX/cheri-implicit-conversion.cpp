@@ -76,6 +76,23 @@ int foo(int* __capability cap_arg_int, void* __capability cap_arg_void, int* ptr
   return 0;
 }
 
+void str_to_ptr() {
+  // conversion from string literal to const char* is fine:
+  const char* ptr = "foo";
+  const char* __capability cap = "foo";
+
+  // but conversion from a pointer isn't
+  const char* __capability cap2 = ptr;  // expected-error {{converting pointer type 'const char *' to capability type 'const char * __capability' without an explicit cast}}
+
+  // conversion to char* should be an error:
+  char* nonconst_ptr = "foo";
+  char* __capability nonconst_cap = "foo";
+#ifdef __cplusplus
+  // expected-warning@-3 {{conversion from string literal to 'char *' is deprecated}}
+  // expected-error@-3 {{converting pointer type 'const char [4]' to capability type 'char * __capability' without an explicit cast}}
+#endif
+
+}
 // not yet implemented
 #if 0
 void test_references(int& ptrref, int& __capability capref) {

@@ -1827,6 +1827,16 @@ static bool IsStandardConversion(Sema &S, Expr* From, QualType ToType,
     SCS.Third = ICK_Qualification;
     SCS.QualificationIncludesObjCLifetime = ObjCLifetimeConversion;
     // This may change the __capability qualifier so we need to diagnose it later
+    if (ToType->isCHERICapabilityType(S.getASTContext()) !=
+        FromType->isCHERICapabilityType(S.getASTContext())) {
+      // only allow implicit conversions from string literals
+      // XXXAR: should we allow any array type?
+      if (!isa<StringLiteral>(From->IgnoreParens())) {
+        // XXXAR: we should really add a new field to SCS instead of using the
+        // deprecated string literal one
+        SCS.setInvalidCHERIConversion(true);
+      }
+    }
     FromType = ToType;
   } else {
     // No conversion required

@@ -3961,7 +3961,7 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
                                   From->getValueKind() : VK_RValue;
     const bool FromIsCap = FromType->isCHERICapabilityType(Context);
     const bool ToIsCap = ToType->isCHERICapabilityType(Context);
-    if (FromIsCap != ToIsCap) {
+    if (FromIsCap != ToIsCap && SCS.isInvalidCHERICapabilityConversion()) {
       unsigned DiagID = FromIsCap ? diag::err_typecheck_convert_cap_to_ptr :
                                     diag::err_typecheck_convert_ptr_to_cap;
       Diag(From->getLocStart(), DiagID) << FromType << ToType

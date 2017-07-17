@@ -5507,7 +5507,9 @@ void InitializationSequence::InitializeFrom(Sema &S,
           !SourceType->isCHERICapabilityType(Context)) {
         // don't warn on null -> capability conversion
         // XXXAR: is this the correct NPC_ value?
-        if (!(Initializer && Initializer->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNotNull))) {
+        bool SrcIsNull = (Initializer &&
+            Initializer->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNotNull));
+        if (!SrcIsNull && ICS.Standard.isInvalidCHERICapabilityConversion()) {
           SetFailed(InitializationSequence::FK_ConversionToCapabilityFailed);
           return;
         }
