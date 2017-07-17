@@ -6834,10 +6834,43 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
   const ASTRecordLayout &Layout = getContext().getASTRecordLayout(RD);
   assert(!(TySize % 8) && "Size of structure must be multiple of 8.");
 
+
   uint64_t LastOffset = 0;
-  unsigned idx = 0;
   llvm::IntegerType *I64 = llvm::IntegerType::get(getVMContext(), 64);
   unsigned CapSize = getTarget().getCHERICapabilityWidth();
+
+  // If this is a C++ record, look for any capabilities in base classes first
+  if (const CXXRecordDecl *CXXRD = dyn_cast<CXXRecordDecl>(RD)) {
+    for (const auto &I : CXXRD->bases()) {
+      unsigned idx = 0;
+      RecordDecl *BRD = I.getType()->getAs<RecordType>()->getDecl();
+      const ASTRecordLayout &BaseLayout = getContext().getASTRecordLayout(BRD);
+      for (RecordDecl::field_iterator i = BRD->field_begin(), e = BRD->field_end();
+           i != e; ++i, ++idx) {
+        const QualType Ty = i->getType();
+        uint64_t Offset = BaseLayout.getFieldOffset(idx);
+        if (const RecordType *FRT = Ty->getAs<RecordType>()) {
+          if (containsCapabilities(getContext(), FRT->getDecl())) {
+            uint64_t FieldSize = getContext().getTypeSize(Ty);
+            LastOffset = Offset + FieldSize;
+            ArgList.push_back(HandleAggregates(Ty, FieldSize));
+            continue;
+          }
+        }
+        if (!Ty->isConstantArrayType() && Ty->isCHERICapabilityType(getContext())) {
+          // Add ((Offset - LastOffset) / 64) args of type i64.
+          for (unsigned j = (Offset - LastOffset) / 64; j > 0; --j)
+            ArgList.push_back(I64);
+          const uint64_t TySize = getContext().getTypeSize(Ty);
+          LastOffset = Offset + TySize;
+          assert(CapSize == TySize || (Ty->isMemberFunctionPointerType() && TySize == 2 * CapSize));
+          ArgList.push_back(CGT.ConvertType(Ty));
+          continue;
+        }
+      }
+    }
+  }
+  unsigned idx = 0;
 
   // Iterate over fields in the struct/class and check if there are any aligned
   // double fields.

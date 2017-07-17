@@ -1,6 +1,5 @@
 // https://github.com/CTSRD-CHERI/clang/issues/148
 // RUN: %cheri_purecap_cc1 -emit-obj -std=c++11 -o /dev/null %s
-// XFAIL: *
 
 inline namespace a {
 template <class> struct d;
