@@ -364,7 +364,8 @@ public:
   void printNotes(const ELFFile<ELFT> *Obj) override;
 
 private:
-  void printRelocation(const ELFO *Obj, Elf_Rela Rel, const Elf_Shdr *SymTab);
+  void printRelocation(const ELFO *Obj, Elf_Rela Rel, const Elf_Shdr *SymTab,
+                       bool IsRela);
   void printDynamicRelocation(const ELFO *Obj, Elf_Rela Rel);
   void printSymbol(const ELFO *Obj, const Elf_Sym *Symbol, const Elf_Sym *First,
                    StringRef StrTable, bool IsDynamic) override;
@@ -2540,7 +2541,7 @@ template <class ELFT> void GNUStyle<ELFT>::printRelocations(const ELFO *Obj) {
         Elf_Rela Rela;
         Rela.r_offset = R.r_offset;
         Rela.r_info = R.r_info;
-        Rela.r_addend = 0;
+        Rela.r_addend = 0;  // FIXME: this is wrong....
         printRelocation(Obj, SymTab, Rela, false);
       }
     } else {
@@ -3143,7 +3144,7 @@ void GNUStyle<ELFT>::printDynamicRelocations(const ELFO *Obj) {
       Elf_Rela Rela;
       Rela.r_offset = Rel.r_offset;
       Rela.r_info = Rel.r_info;
-      Rela.r_addend = 0;
+      Rela.r_addend = 0;  // FIXME: this is wrong
       printDynamicRelocation(Obj, Rela, false);
     }
   }
@@ -3536,20 +3537,20 @@ void LLVMStyle<ELFT>::printRelocations(const Elf_Shdr *Sec, const ELFO *Obj) {
       Elf_Rela Rela;
       Rela.r_offset = R.r_offset;
       Rela.r_info = R.r_info;
-      Rela.r_addend = 0;
-      printRelocation(Obj, Rela, SymTab);
+      Rela.r_addend = 0;  // FIXME: this is wrong
+      printRelocation(Obj, Rela, SymTab, /*IsRela=*/false);
     }
     break;
   case ELF::SHT_RELA:
     for (const Elf_Rela &R : unwrapOrError(Obj->relas(Sec)))
-      printRelocation(Obj, R, SymTab);
+      printRelocation(Obj, R, SymTab, /*IsRela=*/true);
     break;
   }
 }
 
 template <class ELFT>
 void LLVMStyle<ELFT>::printRelocation(const ELFO *Obj, Elf_Rela Rel,
-                                      const Elf_Shdr *SymTab) {
+                                      const Elf_Shdr *SymTab, bool IsRela) {
   SmallString<32> RelocName;
   Obj->getRelocationTypeName(Rel.getType(Obj->isMips64EL()), RelocName);
   StringRef TargetName;
@@ -3569,12 +3570,22 @@ void LLVMStyle<ELFT>::printRelocation(const ELFO *Obj, Elf_Rela Rel,
     W.printNumber("Type", RelocName, (int)Rel.getType(Obj->isMips64EL()));
     W.printNumber("Symbol", TargetName.size() > 0 ? TargetName : "-",
                   Rel.getSymbol(Obj->isMips64EL()));
-    W.printHex("Addend", Rel.r_addend);
+    if (IsRela)
+      W.printHex("Addend", Rel.r_addend);
+    else
+      W.printString("Addend",
+                    "0x" + utohexstr(Rel.r_addend) + " (real addend unknown)");
   } else {
     raw_ostream &OS = W.startLine();
     OS << W.hex(Rel.r_offset) << " " << RelocName << " "
        << (TargetName.size() > 0 ? TargetName : "-") << " "
-       << W.hex(Rel.r_addend) << "\n";
+       << W.hex(Rel.r_addend);
+    // For RELA relocations we would need to read the bits that will be
+    // relocated and that depends on the relocation type so is non-trivial
+    // Print this disclaimer instead to not confuse users of llvm-readobj
+    if (!IsRela)
+      OS << " (real addend unknown)";
+    OS << "\n";
   }
 }
 
