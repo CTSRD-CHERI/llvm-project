@@ -172,6 +172,7 @@ public:
   template <class ELFT> void relocateNonAlloc(uint8_t *Buf, uint8_t *BufEnd);
 
   std::vector<Relocation> Relocations;
+  std::vector<Relocation> FreeBSDMipsRelocationsHack;
 
   template <typename T> llvm::ArrayRef<T> getDataAs() const {
     size_t S = Data.size();

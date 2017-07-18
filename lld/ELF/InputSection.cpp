@@ -685,6 +685,12 @@ void InputSectionBase::relocateAlloc(uint8_t *Buf, uint8_t *BufEnd) {
       break;
     }
   }
+  for (const Relocation &Rel : FreeBSDMipsRelocationsHack) {
+    uint64_t Offset = getOffset(Rel.Offset);
+    uint8_t *BufLoc = Buf + Offset;
+    Target->relocateOne(BufLoc, Rel.Type, /*TargetVA=*/Rel.Addend);
+  }
+
 }
 
 template <class ELFT> void InputSection::writeTo(uint8_t *Buf) {
