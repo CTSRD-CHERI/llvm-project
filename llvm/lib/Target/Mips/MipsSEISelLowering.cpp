@@ -34,7 +34,7 @@ UseMipsTailCalls("mips-tail-calls", cl::Hidden,
 
 static cl::opt<bool>
 CheriExactEquals("cheri-exact-equals", 
-                 cl::desc("CHERI: Capability equality comparisons are exact."), cl::init(false));
+                 cl::desc("CHERI: Capability equality comparisons are exact."), cl::init(true));
 
 static cl::opt<bool> NoDPLoadStore("mno-ldc1-sdc1", cl::init(false),
                                    cl::desc("Expand double precision loads and "
