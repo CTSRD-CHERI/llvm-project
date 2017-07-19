@@ -132,6 +132,10 @@ namespace llvm {
     /// depending on the current mode.
     MachineBasicBlock *emitCapEqual(MachineInstr &MI,
                                     MachineBasicBlock *BB) const;
+    /// \brief Expand a capability non-equality into exact or inexact
+    /// comparison depending on the current mode.
+    MachineBasicBlock *emitCapNotEqual(MachineInstr &MI,
+                                       MachineBasicBlock *BB) const;
     /// \brief Expand a capability move
     MachineBasicBlock *emitCapMove(MachineInstr &MI,
                                    MachineBasicBlock *BB) const;

@@ -153,6 +153,7 @@ def CLE : CheriFmtPtrCmp<3, GPR64Opnd, "cle", []>;
 def CLTU : CheriFmtPtrCmp<4, GPR64Opnd, "cltu", []>;
 def CLEU : CheriFmtPtrCmp<5, GPR64Opnd, "cleu", []>;
 def CEXEQ : CheriFmtPtrCmp<6, GPR64Opnd, "cexeq", []>;
+def CNEXEQ : CheriFmtPtrCmp<7, GPR64Opnd, "cnexeq", []>;
 def : InstAlias<"cgt $rd, $cb, $ct",
                 (CLT GPR64Opnd: $rd, CheriOpnd: $ct, CheriOpnd:$cb)>;
 def : InstAlias<"cge $rd, $cb, $ct",
@@ -164,7 +165,8 @@ def : InstAlias<"cgeu $rd, $cb, $ct",
 let isCodeGenOnly=1 in {
   def CEQ32 : CheriFmtPtrCmp<0, GPR32Opnd, "ceq", []>;
   def CEXEQ32 : CheriFmtPtrCmp<6, GPR32Opnd, "cexeq", []>;
-  def CNE32 : CheriFmtPtrCmp<1, GPR32Opnd, "cne", [(set GPR32Opnd: $rd, (setne CheriOpnd: $cb, CheriOpnd:$ct))]>;
+  def CNEXEQ32 : CheriFmtPtrCmp<7, GPR32Opnd, "cnexeq", []>;
+  def CNE32 : CheriFmtPtrCmp<1, GPR32Opnd, "cne", []>;
   def CLT32 : CheriFmtPtrCmp<2, GPR32Opnd, "clt", [(set GPR32Opnd: $rd, (setlt CheriOpnd: $cb, CheriOpnd:$ct))]>;
   def CLE32 : CheriFmtPtrCmp<3, GPR32Opnd, "cle", [(set GPR32Opnd: $rd, (setle CheriOpnd: $cb, CheriOpnd:$ct))]>;
   def CLTU32 : CheriFmtPtrCmp<2, GPR32Opnd, "cltu", [(set GPR32Opnd: $rd, (setult CheriOpnd: $cb, CheriOpnd:$ct))]>;
@@ -194,6 +196,12 @@ def CEQPseudo : CheriPseudo<(outs GPR64Opnd: $rd), (ins CheriOpnd: $cb, CheriOpn
 def CEQPseudo32 : CheriPseudo<(outs GPR32Opnd: $rd), (ins CheriOpnd: $cb, CheriOpnd: $ct),
                             "#CEQPsuedo32 $rd, $cb, $ct",
                             [(set GPR32Opnd: $rd, (seteq CheriOpnd: $cb, CheriOpnd:$ct))]>;
+def CNEPseudo : CheriPseudo<(outs GPR64Opnd: $rd), (ins CheriOpnd: $cb, CheriOpnd: $ct),
+                            "#CEQPsuedo $rd, $cb, $ct",
+                            [(set GPR64Opnd: $rd, (setne CheriOpnd: $cb, CheriOpnd:$ct))]>;
+def CNEPseudo32 : CheriPseudo<(outs GPR32Opnd: $rd), (ins CheriOpnd: $cb, CheriOpnd: $ct),
+                              "#CEQPsuedo32 $rd, $cb, $ct",
+                              [(set GPR32Opnd: $rd, (setne CheriOpnd: $cb, CheriOpnd:$ct))]>;
 
 // Pseudo instruction for capability cmov, expands to a branch sequence
 def CAP_SELECT : CheriPseudo<(outs CheriOpnd:$dst), (ins GPR32Opnd:$cond,

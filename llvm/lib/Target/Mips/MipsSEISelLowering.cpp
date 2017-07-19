@@ -1257,6 +1257,9 @@ MipsSETargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   case Mips::CEQPseudo:
   case Mips::CEQPseudo32:
     return emitCapEqual(MI, BB);
+  case Mips::CNEPseudo:
+  case Mips::CNEPseudo32:
+    return emitCapNotEqual(MI, BB);
   case Mips::CMove:
     return emitCapMove(MI, BB);
   case Mips::ST_F16:
@@ -4003,6 +4006,20 @@ MipsSETargetLowering::emitCapMove(MachineInstr &MI,
       .addReg(MI.getOperand(0).getReg())
       .addImm(MI.getOperand(1).getImm())
       .addReg(Mips::ZERO_64);
+  MI.eraseFromParent();
+  return BB;
+}
+MachineBasicBlock *
+MipsSETargetLowering::emitCapNotEqual(MachineInstr &MI,
+                                    MachineBasicBlock *BB) const {
+  bool is64 = (MI.getOpcode() == Mips::CNEPseudo);
+  unsigned Op = CheriExactEquals ? (is64 ? Mips::CNEXEQ : Mips::CNEXEQ32)
+                                 : (is64 ? Mips::CNE : Mips::CNE32);
+  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
+  BuildMI(*BB, MI, MI.getDebugLoc(), TII->get(Op))
+      .add(MI.getOperand(0))
+      .add(MI.getOperand(1))
+      .add(MI.getOperand(2));
   MI.eraseFromParent();
   return BB;
 }
