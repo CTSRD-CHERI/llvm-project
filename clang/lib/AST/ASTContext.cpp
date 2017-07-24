@@ -1856,7 +1856,8 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
   case Type::RValueReference: {
     // alignof and sizeof should never enter this code path here, so we go
     // the pointer route.
-    if (Target->areAllPointersCapabilities()) {
+    if (T->isCHERICapabilityType(*this) ||
+        Target->areAllPointersCapabilities()) {
       Width = Target->getCHERICapabilityWidth();
       Align = Target->getCHERICapabilityAlign();
     } else {

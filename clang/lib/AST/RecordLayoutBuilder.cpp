@@ -1731,14 +1731,12 @@ void ItaniumRecordLayoutBuilder::LayoutField(const FieldDecl *D,
   } else if (const ReferenceType *RT = D->getType()->getAs<ReferenceType>()) {
     const TargetInfo &TI = Context.getTargetInfo();
     unsigned AS = RT->getPointeeType().getAddressSpace();
-    FieldSize = 
-      Context.toCharUnitsFromBits(TI.areAllPointersCapabilities()
-                                  ? TI.getCHERICapabilityWidth()
-                                  : TI.getPointerWidth(AS));
-    FieldAlign = 
-      Context.toCharUnitsFromBits(TI.areAllPointersCapabilities()
-                                  ? TI.getCHERICapabilityAlign()
-                                  : TI.getPointerAlign(AS));
+    bool IsCHERICap =
+        RT->isCHERICapabilityType(Context) || TI.areAllPointersCapabilities();
+    FieldSize = Context.toCharUnitsFromBits(
+        IsCHERICap ? TI.getCHERICapabilityWidth() : TI.getPointerWidth(AS));
+    FieldAlign = Context.toCharUnitsFromBits(
+        IsCHERICap ? TI.getCHERICapabilityAlign() : TI.getPointerAlign(AS));
   } else {
     std::pair<CharUnits, CharUnits> FieldInfo = 
       Context.getTypeInfoInChars(D->getType());
