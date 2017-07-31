@@ -906,8 +906,16 @@ static void scanRelocs(InputSectionBase &Sec, ArrayRef<RelTy> Rels) {
         addGotEntry<ELFT>(Body, Preemptible);
       }
     }
+    // XXXAR: HACK: the locations of the cap_relocs should not be preemptible
+    // This is only needed for compatibility with capsizefix and RTLD without RELA support
+    bool IsCapRelocsLocation = false;
+    if (Sec.Name == "__cap_relocs" && (Offset % 40) == 0) {
+      // The location field should never be marked as preemptible, we want to relocate the local symbol
+      // XXXAR: this is probably wrong in some cases but this is only needed for external capsizefix
+      IsCapRelocsLocation = true;
+    }
 
-    if (!needsPlt(Expr) && !needsGot(Expr) && isPreemptible(Body, Type)) {
+    if (!needsPlt(Expr) && !needsGot(Expr) && isPreemptible(Body, Type) && !IsCapRelocsLocation) {
       // We don't know anything about the finaly symbol. Just ask the dynamic
       // linker to handle the relocation for us.
       if (!Target->isPicRel(Type))

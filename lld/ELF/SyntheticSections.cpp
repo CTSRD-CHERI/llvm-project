@@ -1377,14 +1377,8 @@ void RelocationSection<ELFT>::addReloc(const DynamicReloc &Reloc) {
   Relocs.push_back(Reloc);
   auto IS = Reloc.getInputSec();
   if (!Config->IsRela && IS->AreRelocsRela) {
-    int64_t Addend = Reloc.getAddend();
-    if (Config->Verbose && Addend != 0) {
-      message("Adding hack: addend=" + Twine(Reloc.getAddend()) +
-              " offset=" + Twine(Reloc.getOffset()));
-    }
     // HACK for FreeBSD mips n64/CHERI: input is RELA, output is REL -> write the addend to the output
-    const_cast<InputSectionBase*>(IS)->FreeBSDMipsRelocationsHack.push_back({R_ABS, Reloc.Type,
-      Reloc.getOffset(), Reloc.getAddend(), nullptr});
+    const_cast<InputSectionBase*>(IS)->FreeBSDMipsRelocationsHack.push_back(Reloc);
   }
 }
 

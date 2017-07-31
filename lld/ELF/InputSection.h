@@ -27,6 +27,7 @@ namespace elf {
 class DefinedCommon;
 class SymbolBody;
 struct SectionPiece;
+class DynamicReloc;
 
 class DefinedRegular;
 class SyntheticSection;
@@ -101,17 +102,7 @@ public:
 
   static InputSectionBase Discarded;
 
-  InputSectionBase()
-      : SectionBase(Regular, "", /*Flags*/ 0, /*Entsize*/ 0, /*Alignment*/ 0,
-                    /*Type*/ 0,
-                    /*Info*/ 0, /*Link*/ 0),
-        Repl(this) {
-    Live = false;
-    Assigned = false;
-    NumRelocations = 0;
-    AreRelocsRela = false;
-  }
-
+  InputSectionBase();
   template <class ELFT>
   InputSectionBase(ObjectFile<ELFT> *File, const typename ELFT::Shdr *Header,
                    StringRef Name, Kind SectionKind);
@@ -120,6 +111,7 @@ public:
                    uint64_t Entsize, uint32_t Link, uint32_t Info,
                    uint32_t Alignment, ArrayRef<uint8_t> Data, StringRef Name,
                    Kind SectionKind);
+  ~InputSectionBase();
   OutputSection *OutSec = nullptr;
 
   // Relocations that refer to this section.
@@ -172,7 +164,7 @@ public:
   template <class ELFT> void relocateNonAlloc(uint8_t *Buf, uint8_t *BufEnd);
 
   std::vector<Relocation> Relocations;
-  std::vector<Relocation> FreeBSDMipsRelocationsHack;
+  std::vector<DynamicReloc> FreeBSDMipsRelocationsHack;
 
   template <typename T> llvm::ArrayRef<T> getDataAs() const {
     size_t S = Data.size();

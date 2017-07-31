@@ -105,6 +105,20 @@ InputSectionBase::InputSectionBase(elf::ObjectFile<ELFT> *File,
     fatal(toString(File) + ": section sh_addralign is too large");
 }
 
+InputSectionBase::InputSectionBase()
+      : SectionBase(Regular, "", /*Flags*/ 0, /*Entsize*/ 0, /*Alignment*/ 0,
+                    /*Type*/ 0,
+                    /*Info*/ 0, /*Link*/ 0),
+        Repl(this) {
+    Live = false;
+    Assigned = false;
+    NumRelocations = 0;
+    AreRelocsRela = false;
+  }
+
+
+InputSectionBase::~InputSectionBase() {}
+
 size_t InputSectionBase::getSize() const {
   if (auto *S = dyn_cast<SyntheticSection>(this))
     return S->getSize();
@@ -685,10 +699,16 @@ void InputSectionBase::relocateAlloc(uint8_t *Buf, uint8_t *BufEnd) {
       break;
     }
   }
-  for (const Relocation &Rel : FreeBSDMipsRelocationsHack) {
-    uint64_t Offset = getOffset(Rel.Offset);
+  for (const DynamicReloc &Reloc : FreeBSDMipsRelocationsHack) {
+    int64_t Addend = Reloc.getAddend();
+    // getOffset adds the output section base address here
+    uint64_t Offset = Reloc.getOffset() - getOutputSection()->Addr;
+    if (Config->Verbose) {
+      message("Adding hack: addend=0x" + utohexstr(Addend) +
+              " offset=0x" + utohexstr(Reloc.getOffset()) + " Type: 0x" + utohexstr(Reloc.Type));
+    }
     uint8_t *BufLoc = Buf + Offset;
-    Target->relocateOne(BufLoc, Rel.Type, /*TargetVA=*/Rel.Addend);
+    Target->relocateOne(BufLoc, Reloc.Type, /*TargetVA=*/Addend);
   }
 
 }
