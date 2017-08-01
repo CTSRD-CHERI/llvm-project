@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -o - %s | FileCheck %s
+// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -o - %s | FileCheck %s -check-prefix FOLDED
 
 static void
 crt_init_globals()
@@ -15,5 +15,7 @@ __start(void)
   // CHECK: [[VAR2:%.+]] = bitcast i8 addrspace(200)* [[VAR1]] to void (...) addrspace(200)*
   // CHECK: [[CALLEE_KNR_CAST:%.+]] = bitcast void (...) addrspace(200)* [[VAR2]] to void () addrspace(200)*
   // CHECK: call void [[CALLEE_KNR_CAST]]()
+  // XXXAR: the generated assembly code seems sensible, so I guess a direct call now works
+  // FOLDED: call void @crt_init_globals()
   crt_init_globals();
 }

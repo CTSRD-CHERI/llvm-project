@@ -8,6 +8,6 @@ char takes_string_ptr(const char *a) {
 
 // CHECK-LABEL: main
 int main(void) {
-  // CHECK: call signext i8 %{{.*}}(i8 addrspace(200)*
+  // CHECK: call signext i8 @takes_string_ptr(i8 addrspace(200)* getelementptr inbounds ([3 x i8], [3 x i8] addrspace(200)* @.str, i32 0, i32 0))
   return takes_string_ptr("hi");
 }
