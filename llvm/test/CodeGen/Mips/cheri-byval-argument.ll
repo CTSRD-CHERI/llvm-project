@@ -1,5 +1,6 @@
 ; This test caused assertion failures in MIPS DAG->DAG Pattern Instruction Selection
 ; REQUIRES: asserts
+; XFAIL: *
 ; RUN: %cheri128_llc -target-abi purecap %s -o - | FileCheck %s
 ; RUN: %cheri256_llc -target-abi purecap %s -o - | FileCheck %s
 ; ModuleID = '/local/scratch/alr48/cheri/llvm/tools/clang/test/CodeGen/cheri-byval-varargs.c'
@@ -29,7 +30,9 @@ entry:
   ; CHECK: cincoffset      $c4, [[GLOBAL_A]], $zero
   ; Size: 1024 * 4
   ; CHECK: daddiu  $4, $zero, 4096
-
+  ; FIXME: this should not happen: it results in a cgetpccsetoffset with a R_MIPS32 relocation....
+  ; CHECK-NOT: cgetpccsetoffset        $c12, val_fn
+  ; CHECK: cgetpccset $c12, $c99
 }
 
 declare i32 @ptr_fn(%struct.Dwarf_Error addrspace(200)*) #1
