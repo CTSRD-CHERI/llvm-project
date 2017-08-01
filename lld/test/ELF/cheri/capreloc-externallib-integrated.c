@@ -1,7 +1,7 @@
 // REQUIRES: clang
 
-// RUN: %clang_cheri_purecap %S/Inputs/external_lib_user.c -c -o %t.o
-// RUN: %clang_cheri_purecap %S/Inputs/external_lib.c -c -o %t-externs.o
+// RUN: %clang_cheri_purecap -mcpu=cheri -mllvm -cheri-test-mode %S/Inputs/external_lib_user.c -c -o %t.o
+// RUN: %clang_cheri_purecap -mcpu=cheri -mllvm -cheri-test-mode %S/Inputs/external_lib.c -c -o %t-externs.o
 
 // RUN: ld.lld -process-cap-relocs %t.o %t-externs.o -static -o %t-static.exe -e entry
 // RUN: llvm-objdump -h -r -t -C %t-static.exe | FileCheck -check-prefixes DUMP-EXE,STATIC %s
