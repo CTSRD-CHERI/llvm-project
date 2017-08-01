@@ -1,4 +1,5 @@
-; RUN: %cheri_llc -mtriple=cheri-unknown-freebsd %s -o - | FileCheck %s --check-prefixes=CHECK-EXACT,CHECK
+; RUN: %cheri_llc -mtriple=cheri-unknown-freebsd %s -o - | FileCheck %s --check-prefixes=CHECK-INEXACT,CHECK
+; RUN: %cheri_llc -cheri-exact-equals=true -mtriple=cheri-unknown-freebsd %s -o - | FileCheck %s --check-prefixes=CHECK-EXACT,CHECK
 ; RUN: %cheri_llc -cheri-exact-equals=false -mtriple=cheri-unknown-freebsd %s -o - | FileCheck %s --check-prefixes=CHECK-INEXACT,CHECK
 ; ModuleID = 'ptrcmp.c'
 target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128"
