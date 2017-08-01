@@ -1,9 +1,12 @@
-// RUN:  %cheri_purecap_cc1 -emit-llvm -o - %s -DDATA_SIZE=1024 | FileCheck %s -check-prefix EXPANDED
-// RUN:  %cheri_purecap_cc1 -emit-llvm -o - %s -DDATA_SIZE=2048 | FileCheck %s -check-prefix EXPANDED
-// RUN:  %cheri_purecap_cc1 -emit-llvm -o - %s -DDATA_SIZE=2056 | FileCheck %s -check-prefix MEMCPY
-// RUN:  %cheri_purecap_cc1 -emit-llvm -o - %s -DDATA_SIZE=4096 | FileCheck %s -check-prefix MEMCPY
 // RUN: %cheri_cc1 -target-abi n64 -emit-llvm -o - %s -DDATA_SIZE=64 | FileCheck %s -check-prefix N64-EXPANDED
 // RUN: %cheri_cc1 -target-abi n64 -emit-llvm -o - %s -DDATA_SIZE=72 | FileCheck %s -check-prefix N64-MEMCPY
+// CHERI 256 expands up to 2048 bytes!
+// RUN: %cheri256_cc1 -target-abi purecap -emit-llvm -o - %s -DDATA_SIZE=2048 | FileCheck %s -check-prefix EXPANDED
+// RUN: %cheri256_cc1 -target-abi purecap -emit-llvm -o - %s -DDATA_SIZE=2056 | FileCheck %s -check-prefix MEMCPY
+// 128 only expands up to 1024 bytes:
+// RUN: %cheri128_cc1 -target-abi purecap -emit-llvm -o - %s -DDATA_SIZE=1024 | FileCheck %s -check-prefix EXPANDED
+// RUN: %cheri128_cc1 -target-abi purecap -emit-llvm -o - %s -DDATA_SIZE=1032 | FileCheck %s -check-prefix MEMCPY
+
 struct big {
   char data[DATA_SIZE]; // FIXME: even with 2048 we get 256 i64 inreg arguments, is that correct? N64 starts using memcpy at 72
 };

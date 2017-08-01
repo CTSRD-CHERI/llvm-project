@@ -20,7 +20,7 @@ void QDebug::putUcs4() {
   ts << qSetPadChar();
   // HYBRID: call inreg { i64, i64 } @_Z11qSetPadCharv()
   // HYBRID: call dereferenceable(1) %class.QTextStream* @_ZlsR11QTextStream22QTextStreamManipulator(%class.QTextStream* dereferenceable(1) {{%.+}}, i64 inreg {{%.+}}, i64 inreg {{%.+}})
-  // PURECAP: [[TMP:%.+]] = alloca %class.QTextStreamManipulator, align 32, addrspace(200)
+  // PURECAP: [[TMP:%.+]] = alloca %class.QTextStreamManipulator, align [[$CAP_SIZE:(16|32)]], addrspace(200)
   // PURECAP: call void @_Z11qSetPadCharv(%class.QTextStreamManipulator addrspace(200)* sret [[TMP]])
   // PURECAP: call dereferenceable(1) %class.QTextStream addrspace(200)* @_ZlsR11QTextStream22QTextStreamManipulator(%class.QTextStream addrspace(200)* dereferenceable(1) {{%.+}}, %class.QTextStreamManipulator addrspace(200)*  byval align 16 [[TMP]])
 }
