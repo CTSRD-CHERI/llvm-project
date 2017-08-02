@@ -3263,6 +3263,11 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     // Register can't get to this point...
     assert(VA.isMemLoc());
 
+    // Ignore leading undef args (inserted by clang for alignment), as they
+    // break varargs
+    if (FirstOffset == -1 && Arg.isUndef() && ABI.IsCheriSandbox())
+      continue;
+
     if (FirstOffset == -1)
       FirstOffset = VA.getLocMemOffset();
     LastOffset = VA.getLocMemOffset() + (Arg.getValueSizeInBits() / 8);
