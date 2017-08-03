@@ -4,6 +4,7 @@
 // RUN: llvm-readobj -r %t.o | FileCheck -check-prefix READOBJ %s
 // RUN: llvm-objdump -C -r %t.o | FileCheck -check-prefix OBJ-CAPRELOCS %s
 
+// RUN: ld.lld -process-cap-relocs %t.o -static -o %t-static.exe -verbose 2>&1 | FileCheck -check-prefixes UNKNOWN_LENGTH_VERBOSE %s
 // RUN: ld.lld -process-cap-relocs %t.o -static -o %t-static.exe 2>&1 | FileCheck -check-prefixes UNKNOWN_LENGTH %s
 // RUN: llvm-objdump -h -r -t -C %t-static.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC %s
 
@@ -60,11 +61,14 @@ struct option options_table[] = {
 // OBJ-CAPRELOCS-SAME:{{[[:space:]]$}}
 
 
-// UNKNOWN_LENGTH: warning: could not determine size of cap reloc against local section (in current DSO) /Users/alex/cheri/llvm/tools/lld/test/ELF/cheri/capreloc-string-constant.c:(.rodata.str1.1+0x0)
-// UNKNOWN_LENGTH: warning: could not determine size of cap reloc against local section (in current DSO) /Users/alex/cheri/llvm/tools/lld/test/ELF/cheri/capreloc-string-constant.c:(.rodata.str1.1+0x6)
-// UNKNOWN_LENGTH: warning: could not determine size of cap reloc against local section (in current DSO) /Users/alex/cheri/llvm/tools/lld/test/ELF/cheri/capreloc-string-constant.c:(.rodata.str1.1+0xD)
-// UNKNOWN_LENGTH: warning: could not determine size of cap reloc against local section (in current DSO) /Users/alex/cheri/llvm/tools/lld/test/ELF/cheri/capreloc-string-constant.c:(.rodata.str1.1+0xD)
-// UNKNOWN_LENGTH: warning: could not determine size of cap reloc against local section (in current DSO) /Users/alex/cheri/llvm/tools/lld/test/ELF/cheri/capreloc-string-constant.c:(.rodata.str1.1+0xD)
+// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section (in current DSO) /Users/alex/cheri/llvm/tools/lld/test/ELF/cheri/capreloc-string-constant.c:(.rodata.str1.1+0x0)
+// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section (in current DSO) /Users/alex/cheri/llvm/tools/lld/test/ELF/cheri/capreloc-string-constant.c:(.rodata.str1.1+0x6)
+// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section (in current DSO) /Users/alex/cheri/llvm/tools/lld/test/ELF/cheri/capreloc-string-constant.c:(.rodata.str1.1+0xD)
+// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section (in current DSO) /Users/alex/cheri/llvm/tools/lld/test/ELF/cheri/capreloc-string-constant.c:(.rodata.str1.1+0xD)
+// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section (in current DSO) /Users/alex/cheri/llvm/tools/lld/test/ELF/cheri/capreloc-string-constant.c:(.rodata.str1.1+0xD)
+// UNKNOWN_LENGTH: warning: cannot find entry symbol __start
+// UNKNOWN_LENGTH-NOT: warning
+
 
 // dynamic should have 10 relocations against the load address
 // DYNAMIC-RELOCS-LABEL: Relocations [

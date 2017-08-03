@@ -2713,10 +2713,21 @@ void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     uint64_t TargetOffset = Reloc.Offset;
     uint64_t TargetSize = Reloc.Target->template getSize<ELFT>();
     if (TargetSize == 0) {
-      warn("could not determine size of cap reloc " +
-           getCapRelocSource<ELFT>(Location, Reloc));
-      // TODO: check .size.foo symbols
-      // TODO: also make this work for shared symbols
+      bool WarnAboutUnknownSize = true;
+      // currently clang doesn't emit the necessary symbol information for local string constants such as:
+      // struct config_opt opts[] = { { ..., "foo" }, { ..., "bar" } };
+      // As this pattern is quite common don't warn if the target section is .rodata.str
+      if (DefinedRegular* DefinedSym = dyn_cast<DefinedRegular>(Reloc.Target)) {
+        if (DefinedSym->isSection() && DefinedSym->Section->Name.startswith(".rodata.str")) {
+          WarnAboutUnknownSize = false;
+        }
+      }
+      // TODO: are there any other cases that can be ignored?
+
+      if (WarnAboutUnknownSize || Config->Verbose) {
+        warn("could not determine size of cap reloc " +
+             getCapRelocSource<ELFT>(Location, Reloc));
+      }
       if (OutputSection* OS = Reloc.Target->getOutputSection()) {
         TargetSize = OS->Size;
         // TODO: subtract offset of symbol in OS also for non-bss symbols
