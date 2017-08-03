@@ -41,6 +41,9 @@ def Ttext: S<"Ttext">, HelpText<"Same as --section-start with .text as the secti
 def allow_multiple_definition: F<"allow-multiple-definition">,
   HelpText<"Allow multiple definitions">;
 
+def allow_undefined_cap_relocs: F<"allow-undefined-cap-relocs">,
+  HelpText<"Allow multiple definitions">;
+
 def as_needed: F<"as-needed">,
   HelpText<"Only set DT_NEEDED for shared libraries if used">;
 

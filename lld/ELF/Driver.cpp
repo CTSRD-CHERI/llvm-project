@@ -623,6 +623,7 @@ static bool getCompressDebugSections(opt::InputArgList &Args) {
 // Initializes Config members by the command line options.
 void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->AllowMultipleDefinition = Args.hasArg(OPT_allow_multiple_definition);
+  Config->AllowUndefinedCapRelocs = Args.hasArg(OPT_allow_undefined_cap_relocs);
   Config->AuxiliaryList = getArgs(Args, OPT_auxiliary);
   Config->Bsymbolic = Args.hasArg(OPT_Bsymbolic);
   Config->BsymbolicFunctions = Args.hasArg(OPT_Bsymbolic_functions);

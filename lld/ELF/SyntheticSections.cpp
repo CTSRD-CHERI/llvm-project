@@ -2610,10 +2610,12 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     }
 
     if (TargetSym.isUndefined()) {
-      message("CAP relocs undefined");
-      // TODO: do I need a way to not make this an error?
-      error("cap_reloc against undefined symbol: " + verboseToString<ELFT>(&TargetSym) +
-            "\n>>> referenced by " + verboseToString<ELFT>(LocationSym, LocationOffset));
+      std::string Msg = "cap_reloc against undefined symbol: " + toString(TargetSym) +
+                        "\n>>> referenced by " + verboseToString<ELFT>(LocationSym, LocationOffset);
+      if (Config->AllowUndefinedCapRelocs)
+        warn(Msg);
+      else
+         error(Msg);
       continue;
     }
     bool TargetNeedsDynReloc = false;
