@@ -6,18 +6,30 @@
 
 // RUN: ld.lld -process-cap-relocs %t.o -static -o %t-static.exe -verbose 2>&1 | FileCheck -check-prefixes UNKNOWN_LENGTH_VERBOSE %s
 // RUN: ld.lld -process-cap-relocs %t.o -static -o %t-static.exe 2>&1 | FileCheck -check-prefixes UNKNOWN_LENGTH %s
-// RUN: llvm-objdump -h -r -t -C %t-static.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC %s
+// RUN: llvm-objdump -C %t-static.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC %s
 
 // same again for statically dynamically linked exe:
 // RUN: %clang_cheri_purecap %S/Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
 // RUN: ld.lld -process-cap-relocs -pie -Bdynamic %t.o -o %t-dynamic.exe
-// RUN: llvm-objdump -h -r -t -C %t-dynamic.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s
+// RUN: llvm-objdump -C %t-dynamic.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s
 // RUN: llvm-readobj -r -s %t-dynamic.exe | FileCheck -check-prefixes DYNAMIC-RELOCS %s
 
 // Look at shared libraries:
 // RUN: ld.lld -process-cap-relocs %t.o -shared -o %t.so
 // RUN: llvm-readobj -r -s %t.so | FileCheck -check-prefixes DYNAMIC-RELOCS %s
 // RUN: llvm-objdump -C -t %t.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s
+
+// RUN: ld.lld %t.o -static -o %t-static-external-capsizefix.exe
+// RUN: %capsizefix %t-static-external-capsizefix.exe
+// RUN: llvm-objdump -C %t-static-external-capsizefix.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC-EXTERNAL-CAPSIZEFIX %s
+
+
+// RUN: ld.lld %t.o -shared -o %t-external-capsizefix.so
+// RUN: %capsizefix %t-external-capsizefix.so
+// RUN: llvm-objdump -C %t-external-capsizefix.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC-EXTERNAL-CAPSIZEFIX %s
+// RUN: llvm-readobj -r -s  %t-external-capsizefix.so | FileCheck -check-prefixes DYNAMIC-RELOCS %s
+
+
 
 // FIXME: it would be good if we could set bounds here instead of having it as -1
 
@@ -100,4 +112,21 @@ struct option options_table[] = {
 // DYNAMIC-NEXT: 0x00000000000100a0      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
 // DYNAMIC-NEXT: 0x00000000000100e0      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
 // DYNAMIC-NEXT: 0x0000000000010120      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000001      Length: 0x000000000000000a      Permissions: 0x00000000{{$}}
+
+
+// The external capsizefix doesn;t set the length correctly:
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x0000000120010020      Base: <Unnamed symbol> (0x0000000120000190)     Offset: 0x0000000000000000      Length: 0x0000000000000000      Permissions: 0x00000000
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x0000000120010060      Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000004      Length: 0x0000000000000017      Permissions: 0x00000000
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000001200100a0      Base: <Unnamed symbol> (0x000000012000019d)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000001200100e0      Base: <Unnamed symbol> (0x000000012000019d)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x0000000120010120      Base: <Unnamed symbol> (0x000000012000019d)     Offset: 0x0000000000000001      Length: 0x0000000000000017      Permissions: 0x00000000{{$}}
+
+// and for dynamic it doesn't have any length information
+// DYNAMIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x0000000000010020      Base: <Unnamed symbol> (0x00000000000001c8)     Offset: 0x0000000000000000      Length: 0x0000000000000000      Permissions: 0x00000000
+// DYNAMIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x0000000000010060      Base: <Unnamed symbol> (0x00000000000001ce)     Offset: 0x0000000000000004      Length: 0x0000000000000017      Permissions: 0x00000000
+// DYNAMIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000000000100a0      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
+// DYNAMIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000000000100e0      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
+// DYNAMIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x0000000000010120      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000001      Length: 0x0000000000000017      Permissions: 0x00000000{{$}}
+
+
 // DUMP-CAPRELOCS-SAME:{{[[:space:]]$}}
