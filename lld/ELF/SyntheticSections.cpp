@@ -2729,12 +2729,16 @@ void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
              getCapRelocSource<ELFT>(Location, Reloc));
       }
       if (OutputSection* OS = Reloc.Target->getOutputSection()) {
-        TargetSize = OS->Size;
-        // TODO: subtract offset of symbol in OS also for non-bss symbols
-        if (auto* CSym = dyn_cast<DefinedCommon>(Reloc.Target)) {
-          TargetSize -= CSym->Offset;
-        }
-        // FIXME: subtract OS->getOffset(Reloc.Target)
+        assert(TargetVA >= OS->Addr);
+        uint64_t OffsetInOS = TargetVA - OS->Addr;
+        assert(OffsetInOS < OS->Size);
+        TargetSize = OS->Size - OffsetInOS;
+#if 0
+        if (Config->VerboseCapRelocs)
+          errs() << " OS OFFSET 0x" << utohexstr(OS->Addr) << "SYM OFFSET 0x"
+                 << utohexstr(OffsetInOS) << " SECLEN 0x" << utohexstr(OS->Size)
+                 << " -> target size 0x" << utohexstr(TargetSize) << "\n";
+#endif
       } else {
         warn("Could not find size for symbol '" + toString(*Reloc.Target) +
              "' and could not determine section size. Using UINT64_MAX.");

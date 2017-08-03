@@ -89,15 +89,15 @@ struct option options_table[] = {
 
 // DUMP-CAPRELOCS-LABEL: CAPABILITY RELOCATION RECORDS:
 // STATIC-NEXT: 0x0000000120010020      Base: <Unnamed symbol> (0x0000000120000190)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
-// STATIC-NEXT: 0x0000000120010060      Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000004      Length: 0x0000000000000017      Permissions: 0x00000000
-// STATIC-NEXT: 0x00000001200100a0      Base: <Unnamed symbol> (0x000000012000019d)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
-// STATIC-NEXT: 0x00000001200100e0      Base: <Unnamed symbol> (0x000000012000019d)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
-// STATIC-NEXT: 0x0000000120010120      Base: <Unnamed symbol> (0x000000012000019d)     Offset: 0x0000000000000001      Length: 0x0000000000000017      Permissions: 0x00000000{{$}}
+// STATIC-NEXT: 0x0000000120010060      Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000004      Length: 0x0000000000000011      Permissions: 0x00000000
+// STATIC-NEXT: 0x00000001200100a0      Base: <Unnamed symbol> (0x000000012000019d)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
+// STATIC-NEXT: 0x00000001200100e0      Base: <Unnamed symbol> (0x000000012000019d)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
+// STATIC-NEXT: 0x0000000120010120      Base: <Unnamed symbol> (0x000000012000019d)     Offset: 0x0000000000000001      Length: 0x000000000000000a      Permissions: 0x00000000{{$}}
 
 // PIE exe amd shlib should have dynamic relocations and only the offset values
 // DYNAMIC-NEXT: 0x0000000000010020      Base: <Unnamed symbol> (0x00000000000001c8)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
-// DYNAMIC-NEXT: 0x0000000000010060      Base: <Unnamed symbol> (0x00000000000001ce)     Offset: 0x0000000000000004      Length: 0x0000000000000017      Permissions: 0x00000000
-// DYNAMIC-NEXT: 0x00000000000100a0      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
-// DYNAMIC-NEXT: 0x00000000000100e0      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
-// DYNAMIC-NEXT: 0x0000000000010120      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000001      Length: 0x0000000000000017      Permissions: 0x00000000{{$}}
+// DYNAMIC-NEXT: 0x0000000000010060      Base: <Unnamed symbol> (0x00000000000001ce)     Offset: 0x0000000000000004      Length: 0x0000000000000011      Permissions: 0x00000000
+// DYNAMIC-NEXT: 0x00000000000100a0      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
+// DYNAMIC-NEXT: 0x00000000000100e0      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
+// DYNAMIC-NEXT: 0x0000000000010120      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000001      Length: 0x000000000000000a      Permissions: 0x00000000{{$}}
 // DUMP-CAPRELOCS-SAME:{{[[:space:]]$}}
