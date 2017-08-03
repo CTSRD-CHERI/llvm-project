@@ -2680,9 +2680,11 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
       uint64_t OffsetInOutSec = CurrentEntryOffset + 8;
       assert(OffsetInOutSec < getSize());
       // message("Adding dyn reloc at " + toString(this) + "+0x" + utohexstr(OffsetInOutSec) + " against " + toString(TargetSym));
+      // In the RELA case (not yet) addend is already written by writeTo() below
+      int64_t Addend = Config->IsRela ? TargetOffset : 0;
       In<ELFT>::RelaDyn->addReloc(
               {Target->RelativeRel, this, OffsetInOutSec, false,
-               &TargetSym, 0});  // Offset is always zero here because the capability offset is part of the __cap_reloc
+               &TargetSym, Addend});
     }
   }
 }
