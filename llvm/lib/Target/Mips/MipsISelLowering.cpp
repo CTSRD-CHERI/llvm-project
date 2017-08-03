@@ -413,7 +413,7 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
 
   setOperationAction(ISD::VASTART,           MVT::Other, Custom);
   setOperationAction(ISD::VAARG,             MVT::Other, Custom);
-  if (ABI.IsCheriSandbox())
+  if (ABI.IsCheriPureCap())
     setOperationAction(ISD::VACOPY,          MVT::Other, Custom);
   else
     setOperationAction(ISD::VACOPY,          MVT::Other, Expand);
@@ -2294,7 +2294,7 @@ SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
   SDValue FI = DAG.getFrameIndex(FuncInfo->getVarArgsFrameIndex(),
                                  getPointerTy(MF.getDataLayout()));
 
-  if (ABI.IsCheriSandbox()) {
+  if (ABI.IsCheriPureCap()) {
     unsigned Reg = MF.addLiveIn(Mips::C13, getRegClassFor(MVT::iFATPTR));
     // In the sandbox ABI, the va_start intrinsic will (to work around LLVM's
     // assumption that allocas are all in AS0) be an address space cast of the
@@ -2322,7 +2322,7 @@ SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
 
 SDValue MipsTargetLowering::lowerVACOPY(SDValue Op, SelectionDAG &DAG) const {
   // VACOPY lowering should only be custom with the sandbox ABI.
-  assert(ABI.IsCheriSandbox());
+  assert(ABI.IsCheriPureCap());
 
   SDValue Chain = Op->getOperand(0);
   SDValue Dest = Op->getOperand(1);
@@ -2528,7 +2528,7 @@ SDValue MipsTargetLowering::lowerRETURNADDR(SDValue Op,
   MachineFrameInfo &MFI = MF.getFrameInfo();
   MVT VT = Op.getSimpleValueType();
   unsigned RA = ABI.IsN64() ? Mips::RA_64 : Mips::RA;
-  if (ABI.IsCheriSandbox()) {
+  if (ABI.IsCheriPureCap()) {
      assert(VT == MVT::iFATPTR);
      RA = Mips::C17;
   }
@@ -3008,7 +3008,7 @@ SDValue MipsTargetLowering::passArgOnStack(SDValue StackPtr, unsigned Offset,
                                            SelectionDAG &DAG) const {
   if (!IsTailCall) {
     SDValue PtrOff = DAG.getPointerAdd(DL, StackPtr, Offset);
-    if (ABI.IsCheriSandbox()) {
+    if (ABI.IsCheriPureCap()) {
       PtrOff = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, PtrOff);
     }
     return DAG.getStore(Chain, DL, Arg, PtrOff, MachinePointerInfo());
@@ -3265,7 +3265,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
     // Ignore leading undef args (inserted by clang for alignment), as they
     // break varargs
-    if (FirstOffset == -1 && Arg.isUndef() && ABI.IsCheriSandbox())
+    if (FirstOffset == -1 && Arg.isUndef() && ABI.IsCheriPureCap())
       continue;
 
     if (FirstOffset == -1)
@@ -3276,7 +3276,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     MemOpChains.push_back(passArgOnStack(StackPtr, VA.getLocMemOffset(),
                                          Chain, Arg, DL, IsTailCall, DAG));
   }
-  if ((FirstOffset != -1) && ABI.IsCheriSandbox()) {
+  if ((FirstOffset != -1) && ABI.IsCheriPureCap()) {
     Intrinsic::ID SetBounds = Intrinsic::cheri_cap_bounds_set;
     SDValue PtrOff = DAG.getPointerAdd(DL, StackPtr, FirstOffset);
     PtrOff = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, PtrOff);
@@ -3366,7 +3366,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   }
   // If we're in the sandbox ABI, then we need to turn the address into a
   // PCC-derived capability.
-  if (ABI.IsCheriSandbox() && (Callee.getValueType() != MVT::iFATPTR)) {
+  if (ABI.IsCheriPureCap() && (Callee.getValueType() != MVT::iFATPTR)) {
     auto GetPCC = DAG.getConstant(Intrinsic::cheri_pcc_get, DL, MVT::i64);
     auto SetOffset = DAG.getConstant(Intrinsic::cheri_cap_offset_set, DL, MVT::i64);
     auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR, GetPCC);
@@ -3404,7 +3404,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       return DAG.getNode(MipsISD::TailCall, DL, MVT::Other, Ops);
     }
 
-    if (ABI.IsCheriSandbox())
+    if (ABI.IsCheriPureCap())
       Chain = DAG.getNode(MipsISD::CapJmpLink, DL, NodeTys, Ops);
     else
       Chain = DAG.getNode(MipsISD::JmpLink, DL, NodeTys, Ops);
@@ -3660,7 +3660,7 @@ SDValue MipsTargetLowering::LowerFormalArguments(
 
       // Create load nodes to retrieve arguments from the stack
       SDValue FIN = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
-      if (ABI.IsCheriSandbox())
+      if (ABI.IsCheriPureCap())
         FIN = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, FIN);
       SDValue ArgValue = DAG.getLoad(
           LocVT, DL, Chain, FIN,
@@ -3681,7 +3681,7 @@ SDValue MipsTargetLowering::LowerFormalArguments(
       unsigned Reg = MipsFI->getSRetReturnReg();
       if (!Reg) {
         Reg = MF.getRegInfo().createVirtualRegister(
-            getRegClassFor(ABI.IsCheriSandbox() ? MVT::iFATPTR :
+            getRegClassFor(ABI.IsCheriPureCap() ? MVT::iFATPTR :
                              (ABI.IsN64() ? MVT::i64 : MVT::i32)));
         MipsFI->setSRetReturnReg(Reg);
       }
@@ -3854,7 +3854,7 @@ MipsTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   if (MF.getFunction()->hasStructRetAttr()) {
     EVT SRetTy = getPointerTy(DAG.getDataLayout());
     unsigned V0 = ABI.IsN64() ? Mips::V0_64 : Mips::V0;
-    if (ABI.IsCheriSandbox()) {
+    if (ABI.IsCheriPureCap()) {
       V0 = Mips::C3;
       SRetTy = MVT::iFATPTR;
     }
@@ -3876,7 +3876,7 @@ MipsTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   if (Flag.getNode())
     RetOps.push_back(Flag);
 
-  if (ABI.IsCheriSandbox())
+  if (ABI.IsCheriPureCap())
     return DAG.getNode(MipsISD::CapRet, DL, MVT::Other, RetOps);
 
   // ISRs must use "eret".
@@ -4389,7 +4389,7 @@ void MipsTargetLowering::passByValArg(
 
   // Don't pass parts of the struct in integer registers (will break caps)
   // TODO: should also not happen in hybrid abi for structs with caps
-  if (NumRegs && !ABI.IsCheriSandbox()) {
+  if (NumRegs && !ABI.IsCheriPureCap()) {
     ArrayRef<MCPhysReg> ArgRegs = ABI.GetByValArgRegs();
     bool LeftoverBytes = (NumRegs * RegSizeInBytes > ByValSizeInBytes);
     unsigned I = 0;
@@ -4458,7 +4458,7 @@ void MipsTargetLowering::passByValArg(
   // Copy remainder of byval arg to it with memcpy.
   unsigned MemCpySize = ByValSizeInBytes - OffsetInBytes;
   SDValue Src = DAG.getPointerAdd(DL, Arg, OffsetInBytes);
-  if (ABI.IsCheriSandbox()) {
+  if (ABI.IsCheriPureCap()) {
     StackPtr = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, StackPtr);
   }
   SDValue Dst = DAG.getPointerAdd(DL, StackPtr, VA.getLocMemOffset());
@@ -4486,7 +4486,7 @@ void MipsTargetLowering::writeVarArgRegs(std::vector<SDValue> &OutChains,
   // Offset of the first variable argument from stack pointer.
   int VaArgOffset;
 
-  if (ABI.IsCheriSandbox()) {
+  if (ABI.IsCheriPureCap()) {
     int FI = MFI.CreateFixedObject(RegSizeInBytes, 0, true);
     MipsFI->setVarArgsFrameIndex(FI);
     return;

@@ -27,17 +27,17 @@ public:
 
 protected:
   ABI ThisABI;
-  bool isCheriSandbox = false;
+  bool isCheriPureCap = false;
 
 public:
   MipsABIInfo(ABI ThisABI, bool isAllCap=false) : ThisABI(ThisABI),
-    isCheriSandbox(isAllCap) {}
+    isCheriPureCap(isAllCap) {}
 
   static MipsABIInfo Unknown() { return MipsABIInfo(ABI::Unknown); }
   static MipsABIInfo O32() { return MipsABIInfo(ABI::O32); }
   static MipsABIInfo N32() { return MipsABIInfo(ABI::N32); }
   static MipsABIInfo N64() { return MipsABIInfo(ABI::N64); }
-  static MipsABIInfo CheriSandbox() { return MipsABIInfo(ABI::N64, true); }
+  static MipsABIInfo CheriPureCap() { return MipsABIInfo(ABI::N64, true); }
   static MipsABIInfo computeTargetABI(const Triple &TT, StringRef CPU,
                                       const MCTargetOptions &Options);
 
@@ -45,7 +45,7 @@ public:
   bool IsO32() const { return ThisABI == ABI::O32; }
   bool IsN32() const { return ThisABI == ABI::N32; }
   bool IsN64() const { return ThisABI == ABI::N64; }
-  bool IsCheriSandbox() const { return isCheriSandbox; }
+  bool IsCheriPureCap() const { return isCheriPureCap; }
   ABI GetEnumValue() const { return ThisABI; }
 
   /// The registers to use for byval arguments.

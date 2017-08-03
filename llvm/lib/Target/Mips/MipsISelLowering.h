@@ -301,7 +301,7 @@ namespace llvm {
     /// exception address on entry to an EH pad.
     unsigned
     getExceptionPointerRegister(const Constant *PersonalityFn) const override {
-      return ABI.IsCheriSandbox() ? Mips::C16 :
+      return ABI.IsCheriPureCap() ? Mips::C16 :
                      (ABI.IsN64() ? Mips::A0_64 : Mips::A0);
     }
 
@@ -358,7 +358,7 @@ namespace llvm {
                           const MachinePointerInfo &PtrInfo) const {
       SDValue Tgt = DAG.getNode(MipsISD::Wrapper, DL, Ty, getGlobalReg(DAG, Ty),
                                 getTargetNode(N, Ty, DAG, Flag));
-      if (ABI.IsCheriSandbox())
+      if (ABI.IsCheriPureCap())
         Tgt = DAG.getNode(ISD::INTTOPTR, DL, MVT::iFATPTR, Tgt);
       return DAG.getLoad(Ty, DL, Chain, Tgt, PtrInfo);
     }

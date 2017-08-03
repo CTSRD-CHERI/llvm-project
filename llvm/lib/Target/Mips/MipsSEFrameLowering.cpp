@@ -768,7 +768,7 @@ bool MipsSEFrameLowering::assignCalleeSavedSpillSlots(MachineFunction &MF,
           const TargetRegisterInfo *TRI, std::vector<CalleeSavedInfo> &CSI) const {
   // If we're on CHERI and we're compiling for the compatible ABI, then reserve
   // an extra spill slot for the return capability, if $ra is spilled.
-  if (CHERICFI && STI.isCheri() && !STI.getABI().IsCheriSandbox())
+  if (CHERICFI && STI.isCheri() && !STI.getABI().IsCheriPureCap())
     for (auto &I : CSI)
       if (I.getReg() == Mips::RA_64) {
         CSI.push_back(CalleeSavedInfo(Mips::C16, 0));
@@ -833,7 +833,7 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
 
   bool IsRetAddrTaken = MF->getFrameInfo().isReturnAddressTaken();
   bool KillRAOnSpill = true;
-  if (STI.isCheri() && !STI.getABI().IsCheriSandbox())
+  if (STI.isCheri() && !STI.getABI().IsCheriPureCap())
     KillRAOnSpill = false;
 
 
@@ -845,7 +845,7 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
     // is taken.
     unsigned Reg = CSI[i].getReg();
     bool IsRA = (Reg == Mips::RA || Reg == Mips::RA_64);
-    if (STI.getABI().IsCheriSandbox())
+    if (STI.getABI().IsCheriPureCap())
       IsRA = (Reg == Mips::C17);
     bool IsRAAndRetAddrIsTaken = IsRA && IsRetAddrTaken;
     if (!IsRAAndRetAddrIsTaken)
@@ -958,7 +958,7 @@ void MipsSEFrameLowering::determineCalleeSaves(MachineFunction &MF,
   // instructions for other spills.  The latter only matters if we're using the
   // capability-stack ABI.
   if (STI.isCheri()) {
-    if (STI.isABI_CheriSandbox()) {
+    if (STI.isABI_CheriPureCap()) {
       if (isInt<11>(MaxSPOffset))
         return;
     } else if (isInt<15>(MaxSPOffset))

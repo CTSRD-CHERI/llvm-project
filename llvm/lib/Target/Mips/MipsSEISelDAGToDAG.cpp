@@ -159,7 +159,7 @@ void MipsSEDAGToDAGISel::initGlobalBaseReg(MachineFunction &MF) {
   V1 = RegInfo.createVirtualRegister(RC);
 
   if (ABI.IsN64()) {
-    if (ABI.IsCheriSandbox()) {
+    if (ABI.IsCheriPureCap()) {
       MF.getRegInfo().addLiveIn(Mips::C12);
       MBB.addLiveIn(Mips::C12);
       BuildMI(MBB, I, DL, TII.get(Mips::CGetOffset))

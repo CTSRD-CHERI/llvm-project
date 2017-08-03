@@ -193,8 +193,8 @@ def CC_MipsN_VarArg : CallingConv<[
   CCIfType<[i64, f64], CCAssignToStack<8, 8>>
 ]>;
 
-// In sandbox mode, all variadic arguments are passed on the stack.
-def CC_MipsCheriSandbox_VarArg : CallingConv<[
+// In purecap mode, all variadic arguments are passed on the stack.
+def CC_MipsCheriPureCap_VarArg : CallingConv<[
   // Promote i8/i16 arguments to i32.
   CCIfType<[i8, i16, i32], CCPromoteToType<i64>>,
   // All stack parameter slots become 64-bit doublewords and are 8-byte aligned.
@@ -370,9 +370,9 @@ def CC_Mips_FixedArg : CallingConv<[
 ]>;
 
 def CC_Mips_VarArg : CallingConv<[
-  // If this is the CHERI sandbox ABI then we need to pass everything on the
+  // If this is the CHERI purecap ABI then we need to pass everything on the
   // stack for variadic functions.
-  CCIfSubtarget<"isABI_CheriSandbox()", CCDelegateTo<CC_MipsCheriSandbox_VarArg>>,
+  CCIfSubtarget<"isABI_CheriPureCap()", CCDelegateTo<CC_MipsCheriPureCap_VarArg>>,
   CCIfByVal<CCDelegateTo<CC_Mips_ByVal>>,
 
   CCIfSubtarget<"isABI_O32()", CCDelegateTo<CC_MipsO32_FP>>,

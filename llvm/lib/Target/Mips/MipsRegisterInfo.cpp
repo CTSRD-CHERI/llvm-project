@@ -232,7 +232,7 @@ getReservedRegs(const MachineFunction &MF) const {
   if (Subtarget.isCheri()) {
     for (unsigned I = 0; I < array_lengthof(ReservedCheriRegs); ++I)
       Reserved.set(ReservedCheriRegs[I]);
-    if (Subtarget.isABI_CheriSandbox())
+    if (Subtarget.isABI_CheriPureCap())
       Reserved.set(Mips::C11);
     if (Cheri8)
       for (unsigned I = 0; I < array_lengthof(ReservedCheri8Regs); ++I)

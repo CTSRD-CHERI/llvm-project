@@ -12,7 +12,7 @@ target triple = "cheri-unknown-bsd"
 ; CHECK-LABEL: xo_emit:
 ; Check that locally creating a va_list and then storing it to a global works
 ; (Yes, this is an odd thing to do.  See libxo for a real-world example)
-; This is similar to cheri-sandbox-vaargs.ll, but ensures CheriSandboxABI can
+; This is similar to cheri-sandbox-vaargs.ll, but ensures CheriPureCapABI can
 ; handle the optimiser turning AddrSpaceCast instructions into ConstantExpr's
 define void @xo_emit(i8 addrspace(200)* %fmt, ...) #0 {
 entry:

@@ -814,7 +814,7 @@ void MipsTargetELFStreamer::finish() {
   if (Pic)
     EFlags |= ELF::EF_MIPS_PIC | ELF::EF_MIPS_CPIC;
 
-  if (getABI().IsCheriSandbox())
+  if (getABI().IsCheriPureCap())
     EFlags |= ELF::EF_MIPS_ABI_CHERIABI;
 
   MCA.setELFHeaderEFlags(EFlags);

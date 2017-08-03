@@ -116,7 +116,7 @@ void MipsAsmPrinter::emitPseudoIndirectBranch(MCStreamer &OutStreamer,
   } else if (Subtarget->inMicroMipsMode())
     // microMIPS should use (JR_MM $rs)
     TmpInst0.setOpcode(Mips::JR_MM);
-  else if (static_cast<MipsTargetMachine &>(TM).getABI().IsCheriSandbox())
+  else if (static_cast<MipsTargetMachine &>(TM).getABI().IsCheriPureCap())
     // Everything else should use (JR $rs) or (CJR $rs), depending on the register.
     TmpInst0.setOpcode(Mips::CheriRegsRegClass.contains(MI->getOperand(0).getReg()) ? Mips::CJR : Mips::JR);
   else {

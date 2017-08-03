@@ -300,7 +300,7 @@ llvm::createMipsSETargetLowering(const MipsTargetMachine &TM,
 }
 
 uint32_t MipsSETargetLowering::getExceptionPointerAS() const {
-  return Subtarget.isABI_CheriSandbox() ? 200 : 0;
+  return Subtarget.isABI_CheriPureCap() ? 200 : 0;
 }
 
 const TargetRegisterClass *

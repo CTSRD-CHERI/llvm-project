@@ -29,7 +29,7 @@ static const MCPhysReg CheriCapArgRegs[8] = {
 }
 
 ArrayRef<MCPhysReg> MipsABIInfo::GetByValArgRegs() const {
-  if (IsCheriSandbox())
+  if (IsCheriPureCap())
     return makeArrayRef(CheriCapArgRegs);
   if (IsO32())
     return makeArrayRef(O32IntRegs);
@@ -39,7 +39,7 @@ ArrayRef<MCPhysReg> MipsABIInfo::GetByValArgRegs() const {
 }
 
 ArrayRef<MCPhysReg> MipsABIInfo::GetVarArgRegs() const {
-  if (IsCheriSandbox())
+  if (IsCheriPureCap())
     return makeArrayRef(CheriCapArgRegs);
   if (IsO32())
     return makeArrayRef(O32IntRegs);
@@ -66,7 +66,7 @@ MipsABIInfo MipsABIInfo::computeTargetABI(const Triple &TT, StringRef CPU,
   if (ABIName.startswith("n64"))
     return MipsABIInfo::N64();
   if (ABIName.startswith("sandbox") || ABIName.startswith("purecap"))
-    return MipsABIInfo::CheriSandbox();
+    return MipsABIInfo::CheriPureCap();
   assert(ABIName.empty() && "Unknown ABI option for MIPS");
 
   if (TT.getArch() == Triple::mips64 || TT.getArch() == Triple::mips64el ||

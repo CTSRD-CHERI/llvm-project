@@ -23,7 +23,7 @@ using namespace llvm;
 using std::pair;
 
 namespace {
-class CheriSandboxABI : public ModulePass, public InstVisitor<CheriSandboxABI> {
+class CheriPureCapABI : public ModulePass, public InstVisitor<CheriPureCapABI> {
   DataLayout *DL;
   Module *M;
   llvm::SmallVector<AllocaInst *, 16> Allocas;
@@ -33,8 +33,8 @@ class CheriSandboxABI : public ModulePass, public InstVisitor<CheriSandboxABI> {
 
 public:
   static char ID;
-  CheriSandboxABI() : ModulePass(ID), DL(nullptr) {}
-  virtual ~CheriSandboxABI() {
+  CheriPureCapABI() : ModulePass(ID), DL(nullptr) {}
+  virtual ~CheriPureCapABI() {
     if (DL)
       delete DL;
   }
@@ -155,8 +155,8 @@ public:
 
 } // anonymous namespace
 
-char CheriSandboxABI::ID;
+char CheriPureCapABI::ID;
 
 namespace llvm {
-ModulePass *createCheriSandboxABI(void) { return new CheriSandboxABI(); }
+ModulePass *createCheriPureCapABI(void) { return new CheriPureCapABI(); }
 }

@@ -114,7 +114,7 @@ static std::string computeDataLayout(const Triple &TT, StringRef CPU,
   else
     Ret += "-n32-S64";
 
-  if (ABI.IsCheriSandbox())
+  if (ABI.IsCheriPureCap())
     Ret += "-A200";
 
   return Ret;
@@ -297,7 +297,7 @@ void MipsPassConfig::addIRPasses() {
     addPass(createAggressiveDCEPass());
     addPass(createCheriRangeChecker());
     addPass(createCheriMemOpLowering());
-    addPass(createCheriSandboxABI());
+    addPass(createCheriPureCapABI());
   }
 }
 // Install an instruction selector pass using
