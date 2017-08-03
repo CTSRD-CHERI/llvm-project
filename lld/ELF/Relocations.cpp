@@ -674,20 +674,6 @@ static int64_t computeMipsAddend(const RelTy &Rel, InputSectionBase &Sec,
   return 0;
 }
 
-
-template<class ELFT>
-static std::string undefinedSymbolMessage(SymbolBody &Sym, InputSectionBase &S,
-                                          uint64_t Offset) {
-  std::string Msg =
-      "undefined symbol: " + toString(Sym) + "\n>>> referenced by ";
-
-  std::string Src = S.getSrcMsg<ELFT>(Offset);
-  if (!Src.empty())
-    Msg += Src + "\n>>>               ";
-  Msg += S.getObjMsg<ELFT>(Offset);
-  return Msg;
-}
-
 template <class ELFT>
 static void reportUndefined(SymbolBody &Sym, InputSectionBase &S,
                             uint64_t Offset) {
@@ -699,7 +685,13 @@ static void reportUndefined(SymbolBody &Sym, InputSectionBase &S,
   if (Config->UnresolvedSymbols == UnresolvedPolicy::Ignore && CanBeExternal)
     return;
 
-  std::string Msg = undefinedSymbolMessage<ELFT>(Sym, S, Offset);
+  std::string Msg =
+          "undefined symbol: " + toString(Sym) + "\n>>> referenced by ";
+
+  std::string Src = S.getSrcMsg<ELFT>(Offset);
+  if (!Src.empty())
+    Msg += Src + "\n>>>               ";
+  Msg += S.getObjMsg<ELFT>(Offset);
   if (Config->UnresolvedSymbols == UnresolvedPolicy::WarnAll ||
       (Config->UnresolvedSymbols == UnresolvedPolicy::Warn && CanBeExternal)) {
     warn(Msg);
@@ -982,186 +974,6 @@ template <class ELFT> void elf::scanRelocations(InputSectionBase &S) {
     scanRelocs<ELFT>(S, S.rels<ELFT>());
 }
 
-template<typename ELFT>
-static std::pair<DefinedRegular*, uint64_t> sectionWithOffsetToSymbol(InputSectionBase* IS, uint64_t Offset) {
-  DefinedRegular* FallbackResult = nullptr;
-  uint64_t FallbackOffset = Offset;
-  // llvm::errs() << "Sectionoffset: " << IS->getLocation<ELFT>(Offset) << "\n";
-  for (SymbolBody *B : IS->getFile<ELFT>()->getSymbols()) {
-    if (auto *D = dyn_cast<DefinedRegular>(B)) {
-      if (D->Section != IS)
-        continue;
-      if (D->Value <= Offset && Offset < D->Value + D->Size) {
-        // XXXAR: should we accept any symbol that encloses or only exact matches?
-        if (D->Value == Offset && (D->isFunc() || D->isObject()))
-          return std::make_pair(D, D->Value - Offset); // perfect match
-        FallbackResult = D;
-        FallbackOffset = Offset - D->Value;
-      }
-    }
-  }
-  // we should have found at least a section symbol
-  assert(FallbackResult && "SHOULD HAVE FOUND A SYMBOL!");
-  return std::make_pair(FallbackResult, FallbackOffset);
-}
-
-template <class ELFT>
-void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
-  constexpr endianness E = ELFT::TargetEndianness;
-  // TODO: sort by offset (or is that always true?
-  const auto Rels = S->relas<ELFT>();
-  for (auto I = Rels.begin(), End = Rels.end(); I != End; ++I) {
-    const auto& LocationRel = *I;
-    ++I;
-    const auto& TargetRel = *I;
-    if ((LocationRel.r_offset % Entsize) != 0) {
-        error("corrupted __cap_relocs:  expected Relocation offset to be a "
-              "multiple of " + Twine(Entsize) + " but got " + Twine(LocationRel.r_offset));
-        return;
-    }
-    if (TargetRel.r_offset != LocationRel.r_offset + 8) {
-        error("corrupted __cap_relocs: expected target relocation (" +
-              Twine(TargetRel.r_offset) + " to directly follow location relocation (" +
-              Twine(LocationRel.r_offset) + ")");
-        return;
-    }
-    if (LocationRel.r_addend < 0) {
-        error("corrupted __cap_relocs: addend is less than zero in" +
-              toString(S) + ": " + Twine(LocationRel.r_addend));
-        return;
-    }
-    uint64_t CapRelocsOffset = LocationRel.r_offset;
-    assert(CapRelocsOffset + Entsize <= S->getSize());
-    if (LocationRel.getType(Config->IsMips64EL) != R_MIPS_64) {
-      error("Exptected a R_MIPS_64 relocation in __cap_relocs but got " +
-            toString(LocationRel.getType(Config->IsMips64EL)));
-      continue;
-    }
-    if (TargetRel.getType(Config->IsMips64EL) != R_MIPS_64) {
-      error("Exptected a R_MIPS_64 relocation in __cap_relocs but got " +
-            toString(LocationRel.getType(Config->IsMips64EL)));
-      continue;
-    }
-    SymbolBody *LocationSym = &S->getFile<ELFT>()->getRelocTargetSym(LocationRel);
-    SymbolBody &TargetSym = S->getFile<ELFT>()->getRelocTargetSym(TargetRel);
-
-    if (LocationSym->File != S->File) {
-      error("Expected capability relocation to point to " + toString(S->File) +
-            " but got " + toString(LocationSym->File));
-      continue;
-    }
-//    errs() << "Adding cap reloc at " << toString(LocationSym) << " type "
-//           << Twine((int)LocationSym.Type) << " against "
-//           << toString(TargetSym) << "\n";
-    uint64_t LocationOffset = LocationRel.r_addend;
-    auto *RawInput = reinterpret_cast<const InMemoryCapRelocEntry<E>*>(
-        S->Data.begin() + CapRelocsOffset);
-    bool LocNeedsDynReloc = false;
-    std::pair<DefinedRegular*, uint64_t> RealLocation;
-    InputSectionBase* SourceSection = nullptr; // the section where the symbol needing a cap_reloc is defined
-    // TODO: just assume this is the way it has to be and error out otherwise to remove all the if statements
-    if (DefinedRegular* DefinedLocation = dyn_cast<DefinedRegular>(LocationSym)) {
-      if (InputSectionBase* IS = dyn_cast<InputSectionBase>(DefinedLocation->Section)) {
-        if (DefinedLocation->isSection()) {
-          // It seems like cap_relocs are generally .data(.rel.ro) + offset and not against the symbol itself
-          // Try to convert it to a real symbol
-          RealLocation = sectionWithOffsetToSymbol<ELFT>(IS, LocationOffset);
-        }
-        SourceSection = IS;
-        if (Config->VerboseCapRelocs)
-          message("Adding capability relocation at " + toString(RealLocation.first ? *RealLocation.first : *LocationSym) +
-                  " (" + DefinedLocation->Section->Name + "+0x" + utohexstr(LocationOffset) +
-                  ")  against " + toString(TargetSym) + ::getLocation<ELFT>(*IS, TargetSym, LocationOffset));
-      } else {
-        warn("Could not find InputSection for capability relocation at " +
-             toString(*DefinedLocation) + "(" + DefinedLocation->Section->Name + "+0x" +
-             utohexstr(LocationOffset) + ") against " + toString(TargetSym) + "\n");
-      }
-    } else {
-      error("Unhandled symbol kind for cap_reloc: " + Twine(LocationSym->kind()));
-      continue;
-    }
-    if (!SourceSection) {
-      warn("Could not determine source section for cap_reloc used at " +
-           S->template getObjMsg<ELFT>(CapRelocsOffset));
-      SourceSection = S;
-    }
-
-    if (TargetSym.isUndefined()) {
-      // TODO: do I need a way to not make this an error?
-      error(undefinedSymbolMessage<ELFT>(TargetSym, *SourceSection, LocationOffset));
-      continue;
-    }
-    bool TargetNeedsDynReloc = false;
-    if (TargetSym.isPreemptible()) {
-      // Do we need this?
-      // TargetNeedsDynReloc = true;
-    }
-    switch (TargetSym.kind()) {
-    case SymbolBody::DefinedRegularKind:
-      break;
-    case SymbolBody::DefinedCommonKind:
-      // TODO: do I need to do anything special here?
-      // message("Common symbol: " + toString(TargetSym));
-      break;
-    case SymbolBody::SharedKind:
-      if (Config->Static) {
-        error("cannot create a capability relocation against a shared symbol"
-              " when linking statically");
-        continue;
-      }
-      // TODO: shouldn't undefined be an error?
-      TargetNeedsDynReloc = true;
-      break;
-    default:
-        error("Unhandled symbol kind for cap_reloc target: " +
-              Twine(TargetSym.kind()));
-        continue;
-    }
-
-    LocNeedsDynReloc = LocNeedsDynReloc || Config->Pic || Config->Pie;
-    TargetNeedsDynReloc = TargetNeedsDynReloc || Config->Pic || Config->Pie;
-    uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
-    // For now Location should always be a
-    auto It = RelocsMap.insert(std::pair<CheriCapRelocLocation, CheriCapReloc>(
-        {LocationSym, LocationOffset, LocNeedsDynReloc},
-        {&TargetSym, RawInput->offset,RawInput->size, TargetNeedsDynReloc}));
-    if (!It.second) {
-      // Maybe happens with vtables?
-      error("Symbol already added to cap relocs");
-      continue;
-    }
-    if (LocNeedsDynReloc) {
-      assert(LocationSym->isSection());
-      // TODO: do this better
-      // message("Adding dyn reloc at " + toString(this) + "+0x" + utohexstr(CurrentEntryOffset));
-      assert(CurrentEntryOffset < getSize());
-      // Add a dynamic relocation so that RTLD fills in the right base address
-      // We only have the offset relative to the load address...
-      // Ideally RTLD/crt_init_globals would just add the load address to all
-      // cap_relocs entries that have a RELATIVE flag set instead of requiring a full
-      // Elf_Rel/Elf_Rela
-      In<ELFT>::RelaDyn->addReloc(
-          {Target->RelativeRel, this, CurrentEntryOffset, true,
-           LocationSym, static_cast<int64_t>(LocationOffset)});
-    }
-    if (TargetNeedsDynReloc) {
-      if (TargetSym.isUndefined() || TargetSym.symbol()->isWeak()) {
-        error("Adding capability relocation against undefined symbol " + toString(TargetSym));
-        continue;
-      }
-      // Capability target is the second field -> offset + 8
-      uint64_t OffsetInOutSec = CurrentEntryOffset + 8;
-      assert(OffsetInOutSec < getSize());
-      // message("Adding dyn reloc at " + toString(this) + "+0x" + utohexstr(OffsetInOutSec) + " against " + toString(TargetSym));
-      In<ELFT>::RelaDyn->addReloc(
-          {Target->RelativeRel, this, OffsetInOutSec, false,
-           &TargetSym, 0});  // Offset is always zero here because the capability offset is part of the __cap_reloc
-    }
-  }
-}
-
-
 // Insert the Thunks for OutputSection OS into their designated place
 // in the Sections vector, and recalculate the InputSection output section
 // offsets.
@@ -1282,9 +1094,3 @@ template void elf::scanRelocations<ELF32LE>(InputSectionBase &);
 template void elf::scanRelocations<ELF32BE>(InputSectionBase &);
 template void elf::scanRelocations<ELF64LE>(InputSectionBase &);
 template void elf::scanRelocations<ELF64BE>(InputSectionBase &);
-
-
-template void elf::CheriCapRelocsSection<ELF32LE>::processSection(InputSectionBase*);
-template void elf::CheriCapRelocsSection<ELF32BE>::processSection(InputSectionBase*);
-template void elf::CheriCapRelocsSection<ELF64LE>::processSection(InputSectionBase*);
-template void elf::CheriCapRelocsSection<ELF64BE>::processSection(InputSectionBase*);
