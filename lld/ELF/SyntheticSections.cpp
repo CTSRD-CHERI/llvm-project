@@ -2712,6 +2712,11 @@ void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     // Also this would make llvm-objdump -C more useful because it would
     // actually display the symbol that the relocation is against
     uint64_t TargetVA = Reloc.Target->getVA(Reloc.TargetSymbolOffset);
+    if (Reloc.NeedsDynReloc && Reloc.Target->isPreemptible()) {
+      // If we have a relocation against a preemptible symbol (even in the current DSO)
+      // we can't compute the virtual address here so we only write the addend
+      TargetVA = Reloc.TargetSymbolOffset;
+    }
     uint64_t TargetOffset = Reloc.Offset;
     uint64_t TargetSize = Reloc.Target->template getSize<ELFT>();
     if (TargetSize == 0) {
