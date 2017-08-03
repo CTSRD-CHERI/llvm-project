@@ -1146,10 +1146,14 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
            LocationSym, static_cast<int64_t>(LocationOffset)});
     }
     if (TargetNeedsDynReloc) {
+      if (TargetSym.isUndefined() || TargetSym.symbol()->isWeak()) {
+        error("Adding capability relocation against undefined symbol " + toString(TargetSym));
+        continue;
+      }
       // Capability target is the second field -> offset + 8
       uint64_t OffsetInOutSec = CurrentEntryOffset + 8;
       assert(OffsetInOutSec < getSize());
-      // message("Adding dyn reloc at " + toString(this) + "+0x" + utohexstr(OffsetInOutSec));
+      // message("Adding dyn reloc at " + toString(this) + "+0x" + utohexstr(OffsetInOutSec) + " against " + toString(TargetSym));
       In<ELFT>::RelaDyn->addReloc(
           {Target->RelativeRel, this, OffsetInOutSec, false,
            &TargetSym, 0});  // Offset is always zero here because the capability offset is part of the __cap_reloc
