@@ -2500,7 +2500,7 @@ template <class ELFT>
 static std::string getCapRelocSource(const CheriCapRelocLocation& Src,
                                      const CheriCapReloc& Reloc) {
   // return "against " + verboseToString<ELFT>(Reloc.Target, Reloc.Offset) +
-  return "against " + verboseToString<ELFT>(Reloc.Target, 0) +
+  return "against " + verboseToString<ELFT>(Reloc.Target, Reloc.TargetSymbolOffset) +
          "\n>>> referenced by " + verboseToString<ELFT>(Src.BaseSym, Src.Offset);
 }
 
@@ -2575,7 +2575,8 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
 //    errs() << "Adding cap reloc at " << toString(LocationSym) << " type "
 //           << Twine((int)LocationSym.Type) << " against "
 //           << toString(TargetSym) << "\n";
-    uint64_t LocationOffset = LocationRel.r_addend;
+    const uint64_t LocationOffset = LocationRel.r_addend;
+    const uint64_t TargetOffset = TargetRel.r_addend;
     auto *RawInput = reinterpret_cast<const InMemoryCapRelocEntry<E>*>(
             S->Data.begin() + CapRelocsOffset);
     bool LocNeedsDynReloc = false;
@@ -2588,12 +2589,14 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
           // It seems like cap_relocs are generally .data(.rel.ro) + offset and not against the symbol itself
           // Try to convert it to a real symbol
           RealLocation = sectionWithOffsetToSymbol<ELFT>(IS, LocationOffset);
+        } else {
+          RealLocation = std::make_pair(DefinedLocation, 0);
         }
         SourceSection = IS;
         if (Config->VerboseCapRelocs)
           message("Adding capability relocation at " + toString(RealLocation.first ? *RealLocation.first : *LocationSym) +
                   " (" + DefinedLocation->Section->Name + "+0x" + utohexstr(LocationOffset) +
-                  ")  against " + verboseToString<ELFT>(&TargetSym, LocationOffset));
+                  ")  against " + verboseToString<ELFT>(&TargetSym));
       } else {
         warn("Could not find InputSection for capability relocation at " +
              toString(*DefinedLocation) + "(" + DefinedLocation->Section->Name + "+0x" +
@@ -2603,6 +2606,7 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
       error("Unhandled symbol kind for cap_reloc: " + Twine(LocationSym->kind()));
       continue;
     }
+    assert(RealLocation.first != nullptr);
     if (!SourceSection) {
       warn("Could not determine source section for cap_reloc used at " +
            S->template getObjMsg<ELFT>(CapRelocsOffset));
@@ -2611,7 +2615,7 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
 
     if (TargetSym.isUndefined()) {
       std::string Msg = "cap_reloc against undefined symbol: " + toString(TargetSym) +
-                        "\n>>> referenced by " + verboseToString<ELFT>(LocationSym, LocationOffset);
+                        "\n>>> referenced by " + verboseToString<ELFT>(RealLocation.first, RealLocation.second);
       if (Config->AllowUndefinedCapRelocs)
         warn(Msg);
       else
@@ -2648,17 +2652,16 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     LocNeedsDynReloc = LocNeedsDynReloc || Config->Pic || Config->Pie;
     TargetNeedsDynReloc = TargetNeedsDynReloc || Config->Pic || Config->Pie;
     uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
-    // For now Location should always be a
     auto It = RelocsMap.insert(std::pair<CheriCapRelocLocation, CheriCapReloc>(
             {LocationSym, LocationOffset, LocNeedsDynReloc},
-            {&TargetSym, RawInput->offset,RawInput->size, TargetNeedsDynReloc}));
+            {&TargetSym, TargetOffset, RawInput->offset, RawInput->size, TargetNeedsDynReloc}));
     if (!It.second) {
       // Maybe happens with vtables?
       error("Symbol already added to cap relocs");
       continue;
     }
     if (LocNeedsDynReloc) {
-      assert(LocationSym->isSection());
+      assert(LocationSym->isSection());  // Needed because local symbols cannot be used in dynamic relocations
       // TODO: do this better
       // message("Adding dyn reloc at " + toString(this) + "+0x" + utohexstr(CurrentEntryOffset));
       assert(CurrentEntryOffset < getSize());
@@ -2667,6 +2670,7 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
       // Ideally RTLD/crt_init_globals would just add the load address to all
       // cap_relocs entries that have a RELATIVE flag set instead of requiring a full
       // Elf_Rel/Elf_Rela
+      // Can't use RealLocation here because that will usually refer to a local symbol
       In<ELFT>::RelaDyn->addReloc(
               {Target->RelativeRel, this, CurrentEntryOffset, true,
                LocationSym, static_cast<int64_t>(LocationOffset)});
@@ -2705,7 +2709,8 @@ void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     // and add a relocation against the load address?
     // Also this would make llvm-objdump -C more useful because it would
     // actually display the symbol that the relocation is against
-    uint64_t TargetVA = Reloc.NeedsDynReloc ? 0 : Reloc.Target->getVA(0);
+    uint64_t TargetVA = Reloc.NeedsDynReloc ? Reloc.TargetSymbolOffset
+                                            : Reloc.Target->getVA(Reloc.TargetSymbolOffset);
     uint64_t TargetOffset = Reloc.Offset;
     uint64_t TargetSize = Reloc.Target->template getSize<ELFT>();
     if (TargetSize == 0) {
@@ -2719,12 +2724,14 @@ void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
         if (auto* CSym = dyn_cast<DefinedCommon>(Reloc.Target)) {
           TargetSize -= CSym->Offset;
         }
+        // FIXME: subtract OS->getOffset(Reloc.Target)
       } else {
         warn("Could not find size for symbol '" + toString(*Reloc.Target) +
              "' and could not determine section size. Using UINT64_MAX.");
         TargetSize = std::numeric_limits<uint64_t>::max();
       }
     }
+    assert(TargetOffset <= TargetSize);
     uint64_t Permissions = Reloc.Target->isFunc() ? 1ULL << 63 : 0;
     InMemoryCapRelocEntry<E> Entry { LocationVA, TargetVA, TargetOffset, TargetSize, Permissions };
     memcpy(Buf + Offset, &Entry, sizeof(Entry));

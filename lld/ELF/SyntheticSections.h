@@ -851,9 +851,8 @@ struct CheriCapRelocLocation {
 };
 
 struct CheriCapReloc {
-  CheriCapReloc(SymbolBody *T, uint64_t O, uint64_t L, bool Dyn)
-    : Target(T), Offset(O), Length(L), NeedsDynReloc(Dyn) {}
-  SymbolBody *Target;
+  SymbolBody* Target;
+  uint64_t TargetSymbolOffset;  // second parameter needed if targetSymbol is a section (e.g. .rodata.str + 0x90)
   uint64_t Offset;
   uint64_t Length;
   bool NeedsDynReloc;
