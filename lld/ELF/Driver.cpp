@@ -687,6 +687,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->Undefined = getArgs(Args, OPT_undefined);
   Config->UnresolvedSymbols = getUnresolvedSymbolPolicy(Args);
   Config->Verbose = Args.hasArg(OPT_verbose);
+  Config->VerboseCapRelocs = Args.hasArg(OPT_verbose_cap_relocs);
   Config->WarnCommon = Args.hasArg(OPT_warn_common);
   Config->ZCombreloc = !hasZOption(Args, "nocombreloc");
   Config->ZExecstack = hasZOption(Args, "execstack");

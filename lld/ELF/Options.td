@@ -265,6 +265,8 @@ def v: Flag<["-"], "v">, HelpText<"Display the version number">;
 
 def verbose: F<"verbose">, HelpText<"Verbose mode">;
 
+def verbose_cap_relocs : F<"verbose-cap-relocs">, HelpText<"Print all cap_relocs information (this is a lot!)">;
+
 def version: F<"version">, HelpText<"Display the version number and exit">;
 
 def version_script: S<"version-script">,

@@ -2418,7 +2418,7 @@ void CheriCapRelocsSection<ELFT>::addSection(InputSectionBase *S) {
           " but got " + Twine(S->NumRelocations));
     return;
   }
-  if (Config->Verbose)
+  if (Config->VerboseCapRelocs)
     message("Adding cap relocs from " + toString(S->File) + "\n");
 
   processSection(S);

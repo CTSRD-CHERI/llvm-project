@@ -137,6 +137,7 @@ struct Configuration {
   bool Threads;
   bool Trace;
   bool Verbose;
+  bool VerboseCapRelocs = false;
   bool WarnCommon;
   bool WarnMissingEntry;
   bool ZCombreloc;

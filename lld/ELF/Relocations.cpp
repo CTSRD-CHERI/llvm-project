@@ -1068,7 +1068,7 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
           RealLocation = sectionWithOffsetToSymbol<ELFT>(IS, LocationOffset);
         }
         SourceSection = IS;
-        if (Config->Verbose)
+        if (Config->VerboseCapRelocs)
           message("Adding capability relocation at " + toString(RealLocation.first ? *RealLocation.first : *LocationSym) +
                   " (" + DefinedLocation->Section->Name + "+0x" + utohexstr(LocationOffset) +
                   ")  against " + toString(TargetSym) + ::getLocation<ELFT>(*IS, TargetSym, LocationOffset));
