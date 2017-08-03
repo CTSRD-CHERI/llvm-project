@@ -2709,8 +2709,7 @@ void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     // and add a relocation against the load address?
     // Also this would make llvm-objdump -C more useful because it would
     // actually display the symbol that the relocation is against
-    uint64_t TargetVA = Reloc.NeedsDynReloc ? Reloc.TargetSymbolOffset
-                                            : Reloc.Target->getVA(Reloc.TargetSymbolOffset);
+    uint64_t TargetVA = Reloc.Target->getVA(Reloc.TargetSymbolOffset);
     uint64_t TargetOffset = Reloc.Offset;
     uint64_t TargetSize = Reloc.Target->template getSize<ELFT>();
     if (TargetSize == 0) {
