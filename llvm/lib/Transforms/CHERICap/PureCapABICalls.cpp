@@ -26,7 +26,6 @@
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/InstVisitor.h"
-#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/CHERICap.h"
 
 using namespace llvm;
@@ -35,7 +34,6 @@ namespace {
 class CHERICapDirectCalls : public FunctionPass,
                           public InstVisitor<CHERICapDirectCalls> {
   bool Modified = false;
-  SmallVector<Value*,32> DeadInstructions;
 
 public:
   static char ID;
@@ -56,17 +54,13 @@ public:
         dyn_cast<Function>(PtrToInt->getOperand(0)->stripPointerCasts());
     if (!Func)
       return;
-    DeadInstructions.push_back(CS.getCalledValue());
     CS.setCalledFunction(Func);
     CS.mutateFunctionType(
         cast<FunctionType>(Func->getType()->getElementType()));
   }
   bool runOnFunction(Function &F) override {
     Modified = false;
-    DeadInstructions.clear();
     visit(F);
-    for (auto *V : DeadInstructions)
-      RecursivelyDeleteTriviallyDeadInstructions(V);
     return Modified;
   }
   void getAnalysisUsage(AnalysisUsage &AU) const override {
