@@ -2496,19 +2496,16 @@ static std::string verboseToString(SymbolBody *B, uint64_t SymOffset = 0) {
   return Msg;
 }
 
-template <class ELFT>
-static std::string getCapRelocSource(const CheriCapRelocLocation& Src,
-                                     const CheriCapReloc& Reloc) {
-  // return "against " + verboseToString<ELFT>(Reloc.Target, Reloc.Offset) +
-  return "against " + verboseToString<ELFT>(Reloc.Target, Reloc.TargetSymbolOffset) +
-         "\n>>> referenced by " + verboseToString<ELFT>(Src.BaseSym, Src.Offset);
+template<typename ELFT>
+static std::string verboseToString(SymbolAndOffset Sym) {
+  return verboseToString<ELFT>(Sym.Symbol, Sym.Offset);
 }
 
 template<typename ELFT>
-static std::pair<DefinedRegular*, uint64_t> sectionWithOffsetToSymbol(InputSectionBase* IS, uint64_t Offset) {
-  DefinedRegular* FallbackResult = nullptr;
+static SymbolAndOffset sectionWithOffsetToSymbol(InputSectionBase* IS, uint64_t Offset, SymbolBody* Src) {
+  SymbolBody* FallbackResult = nullptr;
   uint64_t FallbackOffset = Offset;
-  // llvm::errs() << "Sectionoffset: " << IS->getLocation<ELFT>(Offset) << "\n";
+  llvm::errs() << "Sectionoffset: " << IS->getLocation<ELFT>(Offset) << "\n";
   for (SymbolBody *B : IS->getFile<ELFT>()->getSymbols()) {
     if (auto *D = dyn_cast<DefinedRegular>(B)) {
       if (D->Section != IS)
@@ -2516,15 +2513,33 @@ static std::pair<DefinedRegular*, uint64_t> sectionWithOffsetToSymbol(InputSecti
       if (D->Value <= Offset && Offset < D->Value + D->Size) {
         // XXXAR: should we accept any symbol that encloses or only exact matches?
         if (D->Value == Offset && (D->isFunc() || D->isObject()))
-          return std::make_pair(D, D->Value - Offset); // perfect match
+          return {D, D->Value - Offset}; // perfect match
         FallbackResult = D;
         FallbackOffset = Offset - D->Value;
       }
     }
   }
+  if (!FallbackResult) {
+    assert(IS->Name.startswith(".rodata.str"));
+    FallbackResult = Src;
+  }
   // we should have found at least a section symbol
   assert(FallbackResult && "SHOULD HAVE FOUND A SYMBOL!");
-  return std::make_pair(FallbackResult, FallbackOffset);
+  return {FallbackResult, FallbackOffset};
+}
+
+
+template<typename ELFT>
+SymbolAndOffset SymbolAndOffset::findRealSymbol() const {
+  if (!Symbol->isSection())
+    return *this;
+
+  if (DefinedRegular* DefinedSym = dyn_cast<DefinedRegular>(Symbol)) {
+    if (InputSectionBase* IS = dyn_cast<InputSectionBase>(DefinedSym->Section)) {
+      return sectionWithOffsetToSymbol<ELFT>(IS, Offset, Symbol);
+    }
+  }
+  return *this;
 }
 
 template <class ELFT>
@@ -2533,9 +2548,9 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
   // TODO: sort by offset (or is that always true?
   const auto Rels = S->relas<ELFT>();
   for (auto I = Rels.begin(), End = Rels.end(); I != End; ++I) {
-    const auto& LocationRel = *I;
+    const auto &LocationRel = *I;
     ++I;
-    const auto& TargetRel = *I;
+    const auto &TargetRel = *I;
     if ((LocationRel.r_offset % Entsize) != 0) {
       error("corrupted __cap_relocs:  expected Relocation offset to be a "
                     "multiple of " + Twine(Entsize) + " but got " + Twine(LocationRel.r_offset));
@@ -2577,45 +2592,26 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
 //           << toString(TargetSym) << "\n";
     const uint64_t LocationOffset = LocationRel.r_addend;
     const uint64_t TargetOffset = TargetRel.r_addend;
-    auto *RawInput = reinterpret_cast<const InMemoryCapRelocEntry<E>*>(
+    auto *RawInput = reinterpret_cast<const InMemoryCapRelocEntry<E> *>(
             S->Data.begin() + CapRelocsOffset);
     bool LocNeedsDynReloc = false;
-    std::pair<DefinedRegular*, uint64_t> RealLocation;
-    InputSectionBase* SourceSection = nullptr; // the section where the symbol needing a cap_reloc is defined
-    // TODO: just assume this is the way it has to be and error out otherwise to remove all the if statements
-    if (DefinedRegular* DefinedLocation = dyn_cast<DefinedRegular>(LocationSym)) {
-      if (InputSectionBase* IS = dyn_cast<InputSectionBase>(DefinedLocation->Section)) {
-        if (DefinedLocation->isSection()) {
-          // It seems like cap_relocs are generally .data(.rel.ro) + offset and not against the symbol itself
-          // Try to convert it to a real symbol
-          RealLocation = sectionWithOffsetToSymbol<ELFT>(IS, LocationOffset);
-        } else {
-          RealLocation = std::make_pair(DefinedLocation, 0);
-        }
-        SourceSection = IS;
-        if (Config->VerboseCapRelocs)
-          message("Adding capability relocation at " + toString(RealLocation.first ? *RealLocation.first : *LocationSym) +
-                  " (" + DefinedLocation->Section->Name + "+0x" + utohexstr(LocationOffset) +
-                  ")  against " + verboseToString<ELFT>(&TargetSym));
-      } else {
-        warn("Could not find InputSection for capability relocation at " +
-             toString(*DefinedLocation) + "(" + DefinedLocation->Section->Name + "+0x" +
-             utohexstr(LocationOffset) + ") against " + toString(TargetSym) + "\n");
-      }
-    } else {
+    if (!isa<DefinedRegular>(LocationSym)){
       error("Unhandled symbol kind for cap_reloc: " + Twine(LocationSym->kind()));
       continue;
     }
-    assert(RealLocation.first != nullptr);
-    if (!SourceSection) {
-      warn("Could not determine source section for cap_reloc used at " +
-           S->template getObjMsg<ELFT>(CapRelocsOffset));
-      SourceSection = S;
+
+    const SymbolAndOffset RelocLocation{LocationSym, LocationOffset};
+    const SymbolAndOffset RelocTarget{&TargetSym, TargetOffset};
+    SymbolAndOffset RealLocation = RelocLocation.findRealSymbol<ELFT>();
+    SymbolAndOffset RealTarget = RelocTarget.findRealSymbol<ELFT>();
+    if (Config->VerboseCapRelocs) {
+      message("Adding capability relocation at " + verboseToString<ELFT>(RealLocation) +
+                      "\nagainst " + verboseToString<ELFT>(RealTarget));
     }
 
     if (TargetSym.isUndefined()) {
-      std::string Msg = "cap_reloc against undefined symbol: " + toString(TargetSym) +
-                        "\n>>> referenced by " + verboseToString<ELFT>(RealLocation.first, RealLocation.second);
+      std::string Msg = "cap_reloc against undefined symbol: " + toString(*RealTarget.Symbol) +
+                        "\n>>> referenced by " + verboseToString<ELFT>(RealLocation);
       if (Config->AllowUndefinedCapRelocs)
         warn(Msg);
       else
@@ -2654,7 +2650,7 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
     auto It = RelocsMap.insert(std::pair<CheriCapRelocLocation, CheriCapReloc>(
             {LocationSym, LocationOffset, LocNeedsDynReloc},
-            {&TargetSym, TargetOffset, RawInput->offset, RawInput->size, TargetNeedsDynReloc}));
+            {RealTarget, RawInput->offset, RawInput->size, TargetNeedsDynReloc}));
     if (!It.second) {
       // Maybe happens with vtables?
       error("Symbol already added to cap relocs");
@@ -2711,20 +2707,20 @@ void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     // and add a relocation against the load address?
     // Also this would make llvm-objdump -C more useful because it would
     // actually display the symbol that the relocation is against
-    uint64_t TargetVA = Reloc.Target->getVA(Reloc.TargetSymbolOffset);
-    if (Reloc.NeedsDynReloc && Reloc.Target->isPreemptible()) {
+    uint64_t TargetVA = Reloc.Target.Symbol->getVA(Reloc.Target.Offset);
+    if (Reloc.NeedsDynReloc && Reloc.Target.Symbol->isPreemptible()) {
       // If we have a relocation against a preemptible symbol (even in the current DSO)
       // we can't compute the virtual address here so we only write the addend
-      TargetVA = Reloc.TargetSymbolOffset;
+      TargetVA = Reloc.Target.Offset;
     }
     uint64_t TargetOffset = Reloc.Offset;
-    uint64_t TargetSize = Reloc.Target->template getSize<ELFT>();
+    uint64_t TargetSize = Reloc.Target.Symbol->template getSize<ELFT>();
     if (TargetSize == 0) {
       bool WarnAboutUnknownSize = true;
       // currently clang doesn't emit the necessary symbol information for local string constants such as:
       // struct config_opt opts[] = { { ..., "foo" }, { ..., "bar" } };
       // As this pattern is quite common don't warn if the target section is .rodata.str
-      if (DefinedRegular* DefinedSym = dyn_cast<DefinedRegular>(Reloc.Target)) {
+      if (DefinedRegular* DefinedSym = dyn_cast<DefinedRegular>(Reloc.Target.Symbol)) {
         if (DefinedSym->isSection() && DefinedSym->Section->Name.startswith(".rodata.str")) {
           WarnAboutUnknownSize = false;
         }
@@ -2732,10 +2728,11 @@ void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
       // TODO: are there any other cases that can be ignored?
 
       if (WarnAboutUnknownSize || Config->Verbose) {
-        warn("could not determine size of cap reloc " +
-             getCapRelocSource<ELFT>(Location, Reloc));
+        auto RealLocation = SymbolAndOffset(LocationSym, LocationOffset).findRealSymbol<ELFT>();
+        warn("could not determine size of cap reloc against " + verboseToString<ELFT>(Reloc.Target) +
+             "\n>>> referenced by " + verboseToString<ELFT>(RealLocation));
       }
-      if (OutputSection* OS = Reloc.Target->getOutputSection()) {
+      if (OutputSection* OS = Reloc.Target.Symbol->getOutputSection()) {
         assert(TargetVA >= OS->Addr);
         uint64_t OffsetInOS = TargetVA - OS->Addr;
         assert(OffsetInOS < OS->Size);
@@ -2747,13 +2744,13 @@ void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
                  << " -> target size 0x" << utohexstr(TargetSize) << "\n";
 #endif
       } else {
-        warn("Could not find size for symbol '" + toString(*Reloc.Target) +
+        warn("Could not find size for symbol '" + verboseToString<ELFT>(Reloc.Target) +
              "' and could not determine section size. Using UINT64_MAX.");
         TargetSize = std::numeric_limits<uint64_t>::max();
       }
     }
     assert(TargetOffset <= TargetSize);
-    uint64_t Permissions = Reloc.Target->isFunc() ? 1ULL << 63 : 0;
+    uint64_t Permissions = Reloc.Target.Symbol->isFunc() ? 1ULL << 63 : 0;
     InMemoryCapRelocEntry<E> Entry { LocationVA, TargetVA, TargetOffset, TargetSize, Permissions };
     memcpy(Buf + Offset, &Entry, sizeof(Entry));
 //     if (Config->Verbose) {

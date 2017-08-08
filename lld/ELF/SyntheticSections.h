@@ -839,6 +839,19 @@ struct InMemoryCapRelocEntry {
   CapRelocUint64 permissions;
 };
 
+struct SymbolAndOffset {
+    SymbolAndOffset(SymbolBody* S, uint64_t O) : Symbol(S), Offset(O) {}
+    SymbolAndOffset(const SymbolAndOffset&) = default;
+    SymbolAndOffset& operator=(const SymbolAndOffset&) = default;
+    SymbolBody* Symbol = nullptr;
+    uint64_t Offset = 0;
+
+    // for __cap_relocs against local symbols clang emits section+offset instead of the local symbol
+    // so that it still works even if the local symbol table is stripped.
+    // This function tries to find the local symbol to a better match
+    template<typename ELFT>
+    SymbolAndOffset findRealSymbol() const;
+};
 
 struct CheriCapRelocLocation {
   SymbolBody* BaseSym;
@@ -851,8 +864,7 @@ struct CheriCapRelocLocation {
 };
 
 struct CheriCapReloc {
-  SymbolBody* Target;
-  uint64_t TargetSymbolOffset;  // second parameter needed if targetSymbol is a section (e.g. .rodata.str + 0x90)
+  SymbolAndOffset Target;  // symbol offset is if Target.Symbol is a section (e.g. .rodata.str + 0x90)
   uint64_t Offset;
   uint64_t Length;
   bool NeedsDynReloc;
