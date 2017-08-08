@@ -2471,17 +2471,19 @@ static std::string verboseToString(SymbolBody *B, uint64_t SymOffset = 0) {
   if (B->isInPlt())
     Msg += "(in PLT) ";
 
-  std::string Name = toString(*B);
   DefinedRegular* DR = dyn_cast<DefinedRegular>(B);
   InputSectionBase* IS = nullptr;
+  if (DR && DR->Section) {
+    IS = dyn_cast<InputSectionBase>(DR->Section);
+    SymOffset = DR->isSection() ? SymOffset : DR->Section->getOffset(*DR);
+  }
+  std::string Name = toString(*B);
   if (Name.empty()) {
     if (DR && DR->Section) {
-      InputSectionBase* IS = dyn_cast<InputSectionBase>(DR->Section);
-      auto Offset = DR->isSection() ? SymOffset : DR->Section->getOffset(*DR);
       if (IS) {
-        Name = IS->getLocation<ELFT>(Offset);
+        Name = IS->getLocation<ELFT>(SymOffset);
       } else {
-        Name = (DR->Section->Name + "+0x" + utohexstr(Offset)).str();
+        Name = (DR->Section->Name + "+0x" + utohexstr(SymOffset)).str();
       }
     } else if (OutputSection* OS = B->getOutputSection()) {
       Name = (OS->Name + "+(unknown offset)").str();
@@ -2492,6 +2494,8 @@ static std::string verboseToString(SymbolBody *B, uint64_t SymOffset = 0) {
   }
   Msg += Name;
   std::string Src = IS ? IS->getSrcMsg<ELFT>(SymOffset) : toString(B->File);
+  if (IS)
+    Src += " (" + IS->getObjMsg<ELFT>(SymOffset) + ")";
   Msg += "\n>>> defined in " + Src;
   return Msg;
 }
@@ -2505,7 +2509,6 @@ template<typename ELFT>
 static SymbolAndOffset sectionWithOffsetToSymbol(InputSectionBase* IS, uint64_t Offset, SymbolBody* Src) {
   SymbolBody* FallbackResult = nullptr;
   uint64_t FallbackOffset = Offset;
-  llvm::errs() << "Sectionoffset: " << IS->getLocation<ELFT>(Offset) << "\n";
   for (SymbolBody *B : IS->getFile<ELFT>()->getSymbols()) {
     if (auto *D = dyn_cast<DefinedRegular>(B)) {
       if (D->Section != IS)
