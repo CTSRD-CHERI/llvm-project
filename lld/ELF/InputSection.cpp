@@ -16,6 +16,7 @@
 #include "Memory.h"
 #include "OutputSections.h"
 #include "Relocations.h"
+#include "SymbolTable.h"
 #include "SyntheticSections.h"
 #include "Target.h"
 #include "Thunks.h"
@@ -713,6 +714,39 @@ void InputSectionBase::relocateAlloc(uint8_t *Buf, uint8_t *BufEnd) {
 
 }
 
+template <class ELFT>
+void fillGlobalSizesSection(InputSection* IS, uint8_t* Buf, uint8_t* BufEnd) {
+  static std::mutex Mu;
+  std::lock_guard<std::mutex> Lock(Mu);
+  const endianness E = ELFT::TargetEndianness;
+
+  if (Config->VerboseCapRelocs)
+    message("Write .global_sizes: IS = " + toString(IS));
+
+  for (SymbolBody *B : IS->getFile<ELFT>()->getSymbols()) {
+    if (auto *D = dyn_cast<DefinedRegular>(B)) {
+      if (D->Section != IS)
+        continue;
+      StringRef Name = D->getName();
+      if (!Name.startswith(".size.")) {
+        error(".global_sizes symbol name is invalid: " + verboseToString<ELFT>(D));
+        continue;
+      }
+      StringRef RealSymName = Name.drop_front(strlen(".size."));
+      SymbolBody* Target = Symtab<ELFT>::X->find(RealSymName);
+      uint64_t ResolvedSize = Target->getSize<ELFT>();
+      uint8_t* Location = Buf + D->Value;
+      assert(Location + 8 <= BufEnd); // Should use a span type instead
+      assert(read64<E>(Location) == 0); // Value should be zero
+      if (ResolvedSize == 0)
+        warn("Could not find .global_size for " + verboseToString<ELFT>(Target));
+      write64<E>(Location, ResolvedSize);
+      if (Config->VerboseCapRelocs)
+        message("Writing size 0x" + utohexstr(ResolvedSize) + " for " + verboseToString<ELFT>(Target));
+    }
+  }
+}
+
 template <class ELFT> void InputSection::writeTo(uint8_t *Buf) {
   if (this->Type == SHT_NOBITS)
     return;
@@ -746,6 +780,9 @@ template <class ELFT> void InputSection::writeTo(uint8_t *Buf) {
   // and then apply relocations.
   memcpy(Buf + OutSecOff, Data.data(), Data.size());
   uint8_t *BufEnd = Buf + OutSecOff + Data.size();
+  if (Config->ProcessCapRelocs && Name == ".global_sizes") {
+    fillGlobalSizesSection<ELFT>(this, Buf + OutSecOff, BufEnd);
+  }
   this->relocate<ELFT>(Buf, BufEnd);
 }
 
