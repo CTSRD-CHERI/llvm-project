@@ -2437,73 +2437,14 @@ void CheriCapRelocsSection<ELFT>::finalizeContents() {
 //   }
 }
 
-template <class ELFT>
-static std::string verboseToString(SymbolBody *B, uint64_t SymOffset = 0) {
-  std::string Msg;
 
-  if (B->isLocal())
-    Msg += "local ";
-  if (B->isShared())
-    Msg += "shared ";
-  if (B->isCommon())
-    Msg += "common ";
-  if (B->isSection())
-    Msg += "section ";
-  else if (B->isTls())
-    Msg += "tls ";
-  else if (B->isFunc())
-    Msg += "function ";
-  else if (B->isGnuIFunc())
-    Msg += "gnu ifunc ";
-  else if (B->isObject())
-    Msg += "object ";
-  else if (B->isFile())
-    Msg += "object ";
-  else
-    Msg += "<unknown kind>";
-
-  if (B->isInCurrentDSO())
-    Msg += "(in current DSO) ";
-  if (B->NeedsCopy)
-    Msg += "(needs copy) ";
-  if (B->isInGot())
-    Msg += "(in GOT) ";
-  if (B->isInPlt())
-    Msg += "(in PLT) ";
-
-  DefinedRegular* DR = dyn_cast<DefinedRegular>(B);
-  InputSectionBase* IS = nullptr;
-  if (DR && DR->Section) {
-    IS = dyn_cast<InputSectionBase>(DR->Section);
-    SymOffset = DR->isSection() ? SymOffset : DR->Section->getOffset(*DR);
-  }
-  std::string Name = toString(*B);
-  if (Name.empty()) {
-    if (DR && DR->Section) {
-      if (IS) {
-        Name = IS->getLocation<ELFT>(SymOffset);
-      } else {
-        Name = (DR->Section->Name + "+0x" + utohexstr(SymOffset)).str();
-      }
-    } else if (OutputSection* OS = B->getOutputSection()) {
-      Name = (OS->Name + "+(unknown offset)").str();
-    }
-  }
-  if (Name.empty()) {
-    Name = "<unknown symbol>";
-  }
-  Msg += Name;
-  std::string Src = IS ? IS->getSrcMsg<ELFT>(SymOffset) : toString(B->File);
-  if (IS)
-    Src += " (" + IS->getObjMsg<ELFT>(SymOffset) + ")";
-  Msg += "\n>>> defined in " + Src;
-  return Msg;
-}
-
+namespace lld {
 template<typename ELFT>
-static std::string verboseToString(SymbolAndOffset Sym) {
-  return verboseToString<ELFT>(Sym.Symbol, Sym.Offset);
+static inline std::string verboseToString(SymbolAndOffset Sym) {
+  return ::verboseToString<ELFT>(Sym.Symbol, Sym.Offset);
 }
+}
+
 
 template<typename ELFT>
 static SymbolAndOffset sectionWithOffsetToSymbol(InputSectionBase* IS, uint64_t Offset, SymbolBody* Src) {

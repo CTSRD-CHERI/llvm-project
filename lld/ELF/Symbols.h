@@ -395,6 +395,10 @@ inline Symbol *SymbolBody::symbol() {
 } // namespace elf
 
 std::string toString(const elf::SymbolBody &B);
+
+template<class ELFT>
+std::string verboseToString(elf::SymbolBody *B, uint64_t SymOffset = 0);
+
 } // namespace lld
 
 #endif
