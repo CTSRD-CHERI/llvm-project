@@ -727,6 +727,9 @@ void fillGlobalSizesSection(InputSection* IS, uint8_t* Buf, uint8_t* BufEnd) {
     if (auto *D = dyn_cast<DefinedRegular>(B)) {
       if (D->Section != IS)
         continue;
+      // skip the initial .global_sizes symbol (exists e.g. in openpam_static_modules.o)
+      if (D->isSection() && D->isLocal() && D->getName().empty())
+        continue;
       StringRef Name = D->getName();
       if (!Name.startswith(".size.")) {
         error(".global_sizes symbol name is invalid: " + verboseToString<ELFT>(D));
