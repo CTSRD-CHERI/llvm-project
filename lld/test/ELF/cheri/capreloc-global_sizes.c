@@ -70,11 +70,11 @@ void __start(void) {
 
 // GLOBAL_SIZES-LABEL: Contents of section .global_sizes:
 // .size.external_cap then .size.external_buffer (0x10 or 0x20)
-// GLOBAL_SIZES-NEXT: 00000000 000000{{2|1}}0 00000000 000010e1  ....... ........
+// GLOBAL_SIZES-NEXT: 00000000 000000{{2|1}}0 00000000 000010e1
 // .size.bar (should pick up the value from bar.o) then .size.foo
-// GLOBAL_SIZES-NEXT: 00000000 00000baa 00000000 00000004  ................
+// GLOBAL_SIZES-NEXT: 00000000 00000baa 00000000 00000004
 // .size.bar from bar.o (not used because .size.bar points to the first one) and then .size.other_var
-// GLOBAL_SIZES-NEXT: 00000000 00000000 00000000 000000ff  ................
+// GLOBAL_SIZES-NEXT: 00000000 00000000 00000000 000000ff
 // GLOBAL_SIZES-NEXT: Contents of section .MIPS.abiflags:
 
 // DUMP-EXE-LABEL: SYMBOL TABLE:

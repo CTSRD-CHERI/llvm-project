@@ -76,14 +76,14 @@ void __start(void) {}
 
 
 // DUMP-CAPRELOCS-LABEL: CAPABILITY RELOCATION RECORDS:
-// STATIC-NEXT: 0x0000000120020000 Base: __error_unthreaded (0x00000001200100e8) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
+// STATIC-NEXT: 0x0000000120020000 Base: __error_unthreaded (0x000000012001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
 // PIE exe amd shlib should have dynamic relocations and only the offset values
-// DYNAMIC-NEXT:0x0000000000020000 Base: __error_unthreaded (0x00000000000100e8) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
+// DYNAMIC-NEXT:0x0000000000020000 Base: __error_unthreaded (0x000000000001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
 
 
 // The external capsizefix does okay for both cases:
-// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x0000000120020000 Base: __error_unthreaded (0x00000001200100e8) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
-// DYNAMIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x0000000000020000 Base: __error_unthreaded (0x00000000000100e8) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x0000000120020000 Base: __error_unthreaded (0x000000012001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
+// DYNAMIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x0000000000020000 Base: __error_unthreaded (0x000000000001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
 
 // DUMP-CAPRELOCS-SAME:{{[[:space:]]$}}
 
