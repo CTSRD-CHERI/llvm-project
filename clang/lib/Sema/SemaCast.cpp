@@ -2794,7 +2794,9 @@ ExprResult Sema::BuildCXXFunctionalCastExpr(TypeSourceInfo *CastTypeInfo,
     SubExpr = BindExpr->getSubExpr();
   if (auto *ConstructExpr = dyn_cast<CXXConstructExpr>(SubExpr))
     ConstructExpr->setParenOrBraceRange(SourceRange(LPLoc, RPLoc));
-  DiagnoseCapabilityToIntCast(*this, Op.DestRange, CastExpr->getType(), Type);
+  else /* XXXAR: only diagnose int<->cap casts for actual casts */
+    DiagnoseCapabilityToIntCast(*this, Op.DestRange, CastExpr->getType(), Type);
+
   return Op.complete(CXXFunctionalCastExpr::Create(Context, Op.ResultType,
                          Op.ValueKind, CastTypeInfo, Op.Kind,
                          Op.SrcExpr.get(), &Op.BasePath, LPLoc, RPLoc));
