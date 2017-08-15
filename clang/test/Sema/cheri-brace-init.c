@@ -1,7 +1,11 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -std=c11 -o - %s -fsyntax-only -verify
+// RUN: %cheri_cc1 -std=c11 -o - %s -fsyntax-only -verify
+// RUN: %cheri_purecap_cc1 -std=c11 -o - %s -fsyntax-only -verify
 
 #define NULL ((void*)0)
+
 // These warnings only happen in the hybrid ABI
+#ifndef __CHERI_PURE_CAPABILITY__
+
 struct foo {
   void* __capability cap;
   void* ptr;
@@ -50,3 +54,23 @@ void test_union(void* __capability a) {
   union foo_union u2 = {.ptr = a}; // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
   union foo_union u3 = {.l = a}; // expected-error {{type 'void * __capability' cannot be narrowed to 'long' in initializer list}}
 }
+
+#else /* __CHERI_PURE_CAPABILITY__ */
+// warn about the conversion from void* __capability -> bool even in C mode (already an error in C++)
+
+typedef _Bool bool;
+#define true 1
+#define false 0
+
+struct pointer_and_bool {
+  const char* name;
+  bool value;
+};
+
+struct pointer_and_bool pb_array[3] = {
+    { "foo", false },
+    { "bar", true },
+    { NULL, NULL },  // expected-error {{type 'void * __capability' cannot be narrowed to 'bool' (aka '_Bool') in initializer list}}
+};
+
+#endif
