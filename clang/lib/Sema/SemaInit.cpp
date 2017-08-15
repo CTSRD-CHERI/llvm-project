@@ -1175,10 +1175,6 @@ void InitListChecker::CheckSubElementType(const InitializedEntity &Entity,
     // Brace elision is never performed if the element is not an
     // assignment-expression.
     if (Seq || isa<InitListExpr>(expr)) {
-      if (isCapNarrowing(expr, ElemType, &Index, &StructuredIndex)) {
-        hadError = true;
-        return;
-      }
       if (!VerifyOnly) {
         ExprResult Result =
           Seq.Perform(SemaRef, Entity, Kind, expr);
