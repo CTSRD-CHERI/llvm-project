@@ -1978,6 +1978,18 @@ MachineBasicBlock *MipsTargetLowering::emitSEL_D(MachineInstr &MI,
   return BB;
 }
 
+static SDValue setBounds(SelectionDAG &DAG, SDValue Val, SDValue Length) {
+  SDLoc DL(Val);
+  Intrinsic::ID SetBounds = Intrinsic::cheri_cap_bounds_set;
+  return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
+        DAG.getConstant(SetBounds, DL, MVT::i64), Val,
+        Length);
+}
+
+static SDValue setBounds(SelectionDAG &DAG, SDValue Val, uint64_t Length) {
+   return setBounds(DAG, Val, DAG.getIntPtrConstant(Length, SDLoc(Val)));
+}
+
 SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
   const {
   SDLoc DL(Op);
@@ -1985,7 +1997,15 @@ SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
   EVT DstTy = Op.getValueType();
   if (Src.getValueType() == MVT::i64) {
     assert(Op.getValueType() == MVT::iFATPTR);
-    return DAG.getNode(ISD::INTTOPTR, DL, DstTy, Src);
+    auto Ptr = DAG.getNode(ISD::INTTOPTR, DL, DstTy, Src);
+    if (auto *N = dyn_cast<GlobalAddressSDNode>(Src)) {
+      const GlobalValue *GV = N->getGlobal();
+      if (GV->hasInternalLinkage() || GV->hasLocalLinkage()) {
+        uint64_t SizeBytes = DAG.getDataLayout().getTypeAllocSize(GV->getValueType());
+        Ptr = setBounds(DAG, Ptr, SizeBytes);
+      }
+    }
+    return Ptr;
   }
   assert(Src.getValueType() == MVT::iFATPTR);
   assert(Op.getValueType() == MVT::i64);
@@ -2042,18 +2062,6 @@ SDValue MipsTargetLowering::lowerSETCC(SDValue Op, SelectionDAG &DAG) const {
   SDValue False = DAG.getConstant(0, DL, MVT::i32);
 
   return createCMovFP(DAG, Cond, True, False, DL);
-}
-
-static SDValue setBounds(SelectionDAG &DAG, SDValue Val, SDValue Length) {
-  SDLoc DL(Val);
-  Intrinsic::ID SetBounds = Intrinsic::cheri_cap_bounds_set;
-  return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
-        DAG.getConstant(SetBounds, DL, MVT::i64), Val,
-        Length);
-}
-
-static SDValue setBounds(SelectionDAG &DAG, SDValue Val, uint64_t Length) {
-   return setBounds(DAG, Val, DAG.getIntPtrConstant(Length, SDLoc(Val)));
 }
 
 SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
