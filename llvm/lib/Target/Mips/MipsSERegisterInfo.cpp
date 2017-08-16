@@ -302,6 +302,8 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
     }
   }
 
-  MI.getOperand(OpNo).ChangeToRegister(FrameReg, false, false, IsKill);
-  MI.getOperand(OpNo + 1).ChangeToImmediate(Offset);
+  int RegOpNo = ABI.IsCheriPureCap() ? OpNo + 1 : OpNo;
+  int ImmOpNo = ABI.IsCheriPureCap() ? OpNo : OpNo + 1;
+  MI.getOperand(RegOpNo).ChangeToRegister(FrameReg, false, false, IsKill);
+  MI.getOperand(ImmOpNo).ChangeToImmediate(Offset);
 }
