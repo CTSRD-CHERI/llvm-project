@@ -5899,7 +5899,11 @@ def warn_capability_no_provenance : Warning<
   InGroup<CHERICaps>;
 def warn_capability_integer_cast : Warning<
   "cast from capability type %0 to non-capability, non-address type %1 is most likely an error">,
-  InGroup<CHERICapabilityToIntegerCast>;
+// XXXAR: this is currently too noisy when building CHERIBSD, have if off for now
+//  InGroup<CHERICapabilityToIntegerCast>;
+// XXXAR: not sure how to add a new CHERIPedantic group
+//  InGroup<CHERIPedantic>;
+  InGroup<Pedantic>;
 def note_insert_intptr_fixit : Note<
   "insert cast to intptr_t to silence this warning">;
 def note_use_cheri_cast : Note<
@@ -5912,10 +5916,11 @@ def err_cheri_cast_invalid_target_type: Error<
 def err_cheri_cast_invalid_source_type: Error<
   "invalid source type %0 for __cheri_cast: source must be a capability or "
   "a pointer">;
-// TODO: make this a pedantic warning?
 def warn_cheri_cast_noop : Warning<
   "__cheri_cast from %0 to %1 is a noop">,
-  InGroup<CHERICapabilityToIntegerCast>;
+// XXXAR: not sure how to add a new CHERIPedantic group
+//  InGroup<CHERIPedantic>;
+  InGroup<Pedantic>;
 
 def warn_mixed_sign_comparison : Warning<
   "comparison of integers of different signs: %0 and %1">,
