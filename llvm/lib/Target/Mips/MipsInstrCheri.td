@@ -471,8 +471,6 @@ def : Pat<(int_mips_kdc_get), (CIncOffset C30, ZERO_64)>;
 def : Pat<(int_mips_epcc_get), (CIncOffset C31, ZERO_64)>;
 def : Pat<(int_cheri_stack_cap_get), (CIncOffset C11, ZERO_64)>;
 
-def : Pat<(int_mips_stack_to_cap GPR64Opnd:$addr), (CSetOffset C11, $addr)>;
-def : Pat<(MipsSTC i64:$addr), (CIncOffset C11, $addr)>;
 
 defm CAP0STORE8     : StoreViaCap0<CAPSTORE8, GPR64Opnd, truncstorei8>;
 defm CAP0STORE16    : StoreViaCap0<CAPSTORE16, GPR64Opnd, truncstorei16>;
@@ -681,3 +679,9 @@ def CSCH  : CheriFmtCSC<1, (outs GPR64Opnd:$rd), (ins GPR64Opnd: $rs, CheriOpnd:
 def CSCB  : CheriFmtCSC<0, (outs GPR64Opnd:$rd), (ins GPR64Opnd: $rs, CheriOpnd:$cb),
                         "cscb\t$rd, $rs, $cb">;
 }
+
+def AddrFI : ComplexPattern<iFATPTR, 1, "selectAddrFI", [frameindex], []>;
+def StackToCapPseudo : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd: $fi),
+                            "#StackToCapPseudo $cd, $fi",
+                            []>;
+def : Pat<(int_mips_stack_to_cap AddrFI:$addr), (CIncOffset $addr, ZERO_64)>;

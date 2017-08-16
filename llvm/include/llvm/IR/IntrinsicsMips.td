@@ -1803,7 +1803,7 @@ def int_mips_epcc_get :
   Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
 
 def int_mips_stack_to_cap :
-  Intrinsic<[llvm_fatptr_ty], [llvm_ptr_ty], [IntrNoMem]>;
+  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty], [IntrNoMem]>;
 
 
 }

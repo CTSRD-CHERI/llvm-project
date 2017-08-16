@@ -44,6 +44,7 @@ private:
   void selectAddESubE(unsigned MOp, SDValue InFlag, SDValue CmpLHS,
                       const SDLoc &DL, SDNode *Node) const;
 
+  bool selectAddrFI(SDValue Addr, SDValue &Base) const override;
   bool selectAddrFrameIndex(SDValue Addr, SDValue &Base, SDValue &Offset) const;
   bool selectAddrFrameIndexOffset(SDValue Addr, SDValue &Base, SDValue &Offset,
                                   unsigned OffsetBits,

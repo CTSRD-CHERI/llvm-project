@@ -236,7 +236,8 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
   int64_t Offset;
 
   Offset = SPOffset + (int64_t)StackSize;
-  Offset += MI.getOperand(OpNo + 1).getImm();
+  if (MI.getOperand(OpNo + 1).isImm())
+    Offset += MI.getOperand(OpNo + 1).getImm();
 
   DEBUG(errs() << "Offset     : " << Offset << "\n" << "<--------->\n");
 
@@ -251,6 +252,16 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
     auto *STI = TM.getSubtargetImpl(*MF.getFunction());
     const MipsSEInstrInfo &TII = *static_cast<const MipsSEInstrInfo *>(
           STI->getInstrInfo());
+    if (MI.getOpcode() == Mips::CIncOffset) {
+      assert(isInt<16>(Offset));
+      MachineBasicBlock &MBB = *MI.getParent();
+      unsigned Reg = Offset == 0 ? Mips::ZERO_64 :
+        TII.loadImmediate(Offset, MBB, II, II->getDebugLoc(), nullptr);
+      MI.getOperand(1).ChangeToRegister(FrameReg, false);
+      MI.getOperand(2).ChangeToRegister(Reg, false);
+      return;
+    }
+
     if (STI->isCheri() && RS && RS->isScavengingFrameIndex(FrameIndex)) {
       assert(isInt<16>(Offset) &&
           "Emergency spill slot must be within 32K of the frame pointer!");

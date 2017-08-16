@@ -56,6 +56,7 @@ private:
   /// (reg + imm).
   virtual bool selectAddrRegImm(SDValue Addr, SDValue &Base,
                                 SDValue &Offset) const;
+  virtual bool selectAddrFI(SDValue Addr, SDValue &Base) const;
 
   /// Fall back on this function if all else fails.
   virtual bool selectAddrDefault(SDValue Addr, SDValue &Base,
