@@ -88,7 +88,10 @@ unsigned MipsABIInfo::GetFramePtr() const {
 }
 
 unsigned MipsABIInfo::GetBasePtr() const {
-  return ArePtrs64bit() ? Mips::S7_64 : Mips::S7;
+  // FIXME: $c25 is probably not sensible here.
+  return IsCheriPureCap() ? 
+    Mips::C25 :
+    (ArePtrs64bit() ? Mips::S7_64 : Mips::S7);
 }
 
 unsigned MipsABIInfo::GetGlobalPtr() const {
@@ -121,6 +124,12 @@ unsigned MipsABIInfo::GetPtrAndOp() const {
 
 unsigned MipsABIInfo::GetGPRMoveOp() const {
   return ArePtrs64bit() ? Mips::OR64 : Mips::OR;
+}
+
+unsigned MipsABIInfo::GetSPMoveOp() const {
+  return IsCheriPureCap() ?
+    Mips::CIncOffset :
+    (ArePtrs64bit() ? Mips::OR64 : Mips::OR);
 }
 
 unsigned MipsABIInfo::GetEhDataReg(unsigned I) const {

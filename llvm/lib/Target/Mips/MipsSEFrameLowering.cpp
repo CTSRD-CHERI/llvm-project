@@ -416,7 +416,7 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
   unsigned SP = ABI.GetStackPtr();
   unsigned FP = ABI.GetFramePtr();
   unsigned ZERO = ABI.GetNullPtr();
-  unsigned MOVE = ABI.GetGPRMoveOp();
+  unsigned MOVE = ABI.GetSPMoveOp();
   unsigned ADDiu = ABI.GetPtrAddiuOp();
   unsigned AND = ABI.IsN64() ? Mips::AND64 : Mips::AND;
 
@@ -548,9 +548,19 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
       assert(isInt<16>(MFI.getMaxAlignment()) &&
              "Function's alignment size requirement is not supported.");
       int MaxAlign = -(int)MFI.getMaxAlignment();
+      unsigned IntSP = SP;
+      if (ABI.IsCheriPureCap()) {
+        IntSP = MF.getRegInfo().createVirtualRegister(RC);
+        BuildMI(MBB, MBBI, dl, TII.get(Mips::CGetOffset), IntSP).addReg(SP);
+      }
+
 
       BuildMI(MBB, MBBI, dl, TII.get(ADDiu), VR).addReg(ZERO) .addImm(MaxAlign);
-      BuildMI(MBB, MBBI, dl, TII.get(AND), SP).addReg(SP).addReg(VR);
+      BuildMI(MBB, MBBI, dl, TII.get(AND), IntSP).addReg(SP).addReg(VR);
+
+      if (ABI.IsCheriPureCap())
+        BuildMI(MBB, MBBI, dl, TII.get(Mips::CSetOffset), SP).addReg(SP)
+          .addReg(IntSP);
 
       if (hasBP(MF)) {
         // move $s7, $sp
@@ -721,7 +731,7 @@ void MipsSEFrameLowering::emitEpilogue(MachineFunction &MF,
   unsigned SP = ABI.GetStackPtr();
   unsigned FP = ABI.GetFramePtr();
   unsigned ZERO = ABI.GetNullPtr();
-  unsigned MOVE = ABI.GetGPRMoveOp();
+  unsigned MOVE = ABI.GetSPMoveOp();
 
   // if framepointer enabled, restore the stack pointer.
   if (hasFP(MF)) {

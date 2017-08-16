@@ -76,6 +76,7 @@ public:
   unsigned GetPtrSubuOp() const;
   unsigned GetPtrAndOp() const;
   unsigned GetGPRMoveOp() const;
+  unsigned GetSPMoveOp() const;
   inline bool ArePtrs64bit() const { return IsN64(); }
   inline bool AreGprs64bit() const { return IsN32() || IsN64(); }
 
