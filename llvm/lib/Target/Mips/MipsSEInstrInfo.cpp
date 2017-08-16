@@ -207,8 +207,7 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       BuildMI(MBB, I, DL, get(Mips::DMFC1), IntReg)
         .addReg(SrcReg);
       BuildMI(MBB, I, DL, get(Mips::CAPSTORE64)).addReg(IntReg, getKillRegState(true))
-        .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
-        .addReg(Mips::C11);
+        .addReg(Mips::ZERO_64).addFrameIndex(FI).addImm(Offset).addMemOperand(MMO);
       return;
     }
     else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
@@ -222,8 +221,7 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       llvm_unreachable("Unexpected register type for CHERI!");
     }
     BuildMI(MBB, I, DL, get(Opc)).addReg(SrcReg, getKillRegState(isKill))
-      .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
-      .addReg(Mips::C11);
+      .addReg(Mips::ZERO_64).addFrameIndex(FI).addImm(Offset).addMemOperand(MMO);
     return;
   }
   if (Mips::GPR32RegClass.hasSubClassEq(RC))
@@ -323,8 +321,8 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
       unsigned IntReg = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
       BuildMI(MBB, I, DL, get(Mips::CAPLOAD64), IntReg)
-        .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
-        .addReg(Mips::C11);
+        .addReg(Mips::ZERO_64).addFrameIndex(FI).addImm(Offset)
+        .addMemOperand(MMO);
       BuildMI(MBB, I, DL, get(Mips::DMTC1), DestReg)
         .addReg(IntReg, getKillRegState(true));
       return;
@@ -334,8 +332,8 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       llvm_unreachable("Unexpected register type for CHERI!");
     }
     BuildMI(MBB, I, DL, get(Opc), DestReg)
-      .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
-      .addReg(Mips::C11);
+      .addReg(Mips::ZERO_64).addFrameIndex(FI).addImm(Offset)
+      .addMemOperand(MMO);
     return;
   }
   const Function *Func = MBB.getParent()->getFunction();
@@ -561,7 +559,12 @@ void MipsSEInstrInfo::adjustStackPtr(unsigned SP, int64_t Amount,
   if (Amount == 0)
     return;
 
-  if (isInt<16>(Amount)) {
+  if (ABI.IsCheriPureCap()) {
+    // FIXME: Use CIncOffset with an immediate operand when it exists.
+    unsigned Reg = loadImmediate(Amount, MBB, I, DL, nullptr);
+    BuildMI(MBB, I, DL, get(Mips::CIncOffset), SP)
+      .addReg(SP).addReg(Reg, RegState::Kill);
+  } else if (isInt<16>(Amount)) {
     // addi sp, sp, amount
     BuildMI(MBB, I, DL, get(ADDiu), SP).addReg(SP).addImm(Amount);
   } else {

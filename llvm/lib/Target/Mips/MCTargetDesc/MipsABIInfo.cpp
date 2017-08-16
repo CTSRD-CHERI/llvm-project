@@ -76,11 +76,15 @@ MipsABIInfo MipsABIInfo::computeTargetABI(const Triple &TT, StringRef CPU,
 }
 
 unsigned MipsABIInfo::GetStackPtr() const {
-  return ArePtrs64bit() ? Mips::SP_64 : Mips::SP;
+  return IsCheriPureCap() ? 
+    Mips::C11 :
+    (ArePtrs64bit() ? Mips::SP_64 : Mips::SP);
 }
 
 unsigned MipsABIInfo::GetFramePtr() const {
-  return ArePtrs64bit() ? Mips::FP_64 : Mips::FP;
+  return IsCheriPureCap() ? 
+    Mips::C24 :
+    (ArePtrs64bit() ? Mips::FP_64 : Mips::FP);
 }
 
 unsigned MipsABIInfo::GetBasePtr() const {

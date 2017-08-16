@@ -232,8 +232,12 @@ getReservedRegs(const MachineFunction &MF) const {
   if (Subtarget.isCheri()) {
     for (unsigned I = 0; I < array_lengthof(ReservedCheriRegs); ++I)
       Reserved.set(ReservedCheriRegs[I]);
-    if (Subtarget.isABI_CheriPureCap())
+    if (Subtarget.isABI_CheriPureCap()) {
+      // $CSP
       Reserved.set(Mips::C11);
+      // $CFP
+      Reserved.set(Mips::C24);
+    }
     if (Cheri8)
       for (unsigned I = 0; I < array_lengthof(ReservedCheri8Regs); ++I)
         Reserved.set(ReservedCheri8Regs[I]);
@@ -345,12 +349,14 @@ getFrameRegister(const MachineFunction &MF) const {
   const TargetFrameLowering *TFI = Subtarget.getFrameLowering();
   bool IsN64 =
       static_cast<const MipsTargetMachine &>(MF.getTarget()).getABI().IsN64();
+  bool IsPureCap =
+      static_cast<const MipsTargetMachine &>(MF.getTarget()).getABI().IsCheriPureCap();
 
   if (Subtarget.inMips16Mode())
     return TFI->hasFP(MF) ? Mips::S0 : Mips::SP;
   else
-    return TFI->hasFP(MF) ? (IsN64 ? Mips::FP_64 : Mips::FP) :
-                            (IsN64 ? Mips::SP_64 : Mips::SP);
+    return TFI->hasFP(MF) ? (IsPureCap ? Mips::C11 : (IsN64 ? Mips::FP_64 : Mips::FP)) :
+                            (IsPureCap ? Mips::C24 : (IsN64 ? Mips::SP_64 : Mips::SP));
 }
 
 bool MipsRegisterInfo::canRealignStack(const MachineFunction &MF) const {
