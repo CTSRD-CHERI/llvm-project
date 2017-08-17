@@ -2000,8 +2000,9 @@ SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
     auto Ptr = DAG.getNode(ISD::INTTOPTR, DL, DstTy, Src);
     if (auto *N = dyn_cast<GlobalAddressSDNode>(Src)) {
       const GlobalValue *GV = N->getGlobal();
-      if (GV->hasInternalLinkage() || GV->hasLocalLinkage()) {
-        uint64_t SizeBytes = DAG.getDataLayout().getTypeAllocSize(GV->getValueType());
+      auto *Ty = GV->getValueType();
+      if (Ty->isSized() && (GV->hasInternalLinkage() || GV->hasLocalLinkage())){
+        uint64_t SizeBytes = DAG.getDataLayout().getTypeAllocSize(Ty);
         Ptr = setBounds(DAG, Ptr, SizeBytes);
       }
     }
