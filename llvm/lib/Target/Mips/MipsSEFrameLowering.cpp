@@ -733,6 +733,9 @@ void MipsSEFrameLowering::emitEpilogue(MachineFunction &MF,
   unsigned ZERO = ABI.GetNullPtr();
   unsigned MOVE = ABI.GetSPMoveOp();
 
+  // No need to clean up if we didn't allocate space on the stack.
+  if (MFI.getStackSize() == 0 && !MFI.adjustsStack()) return;
+
   // if framepointer enabled, restore the stack pointer.
   if (hasFP(MF)) {
     // Find the first instruction that restores a callee-saved register.
