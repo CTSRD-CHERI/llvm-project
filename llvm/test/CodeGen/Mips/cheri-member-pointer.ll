@@ -47,10 +47,10 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
   ; store a copy in c2
   ; CHECK: cincoffset      $c2, $c3, $zero
   ; CHECK: andi    $2, $4, 1
-  ; CHECK:      csc     $c2, [[STACK_VTABLE_ADDR:\$zero, ([0-9]+)\(\$c24\)]]
-  ; CHECK-NEXT: csc     $c3, [[STACK_THIS_ADJ:\$zero, ([0-9]+)\(\$c24\)]]
-  ; CHECK-NEXT: csc     $c1, $zero, {{[0-9]+}}($c24)
-  ; CHECK-NEXT: csc     $c4, [[STACK_MEMPTR_PTR:\$zero, ([0-9]+)\(\$c24\)]]
+  ; CHECK:      csc     $c2, [[STACK_VTABLE_ADDR:\$zero, ([0-9]+)\(\$c11\)]]
+  ; CHECK-NEXT: csc     $c3, [[STACK_THIS_ADJ:\$zero, ([0-9]+)\(\$c11\)]]
+  ; CHECK-NEXT: csc     $c1, $zero, {{[0-9]+}}($c11)
+  ; CHECK-NEXT: csc     $c4, [[STACK_MEMPTR_PTR:\$zero, ([0-9]+)\(\$c11\)]]
   ; CHECK-NEXT: beqz    $2, .LBB0_3
 
   ; CHECK: .LBB0_2:                                # %memptr.virtual
@@ -59,12 +59,12 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
   ; CHECK: clc     [[MEMPTR:\$c3]], [[STACK_MEMPTR_PTR]]
   ; CHECK: ctoptr $1, [[MEMPTR]], $c0
   ; CHECK: clc     $c2, $1, 0($c2)
-  ; CHECK: csc     $c2, [[STACK_TARGET_FN_PTR:\$zero, ([0-9]+)\(\$c24\)]]
+  ; CHECK: csc     $c2, [[STACK_TARGET_FN_PTR:\$zero, ([0-9]+)\(\$c11\)]]
   ; CHECK: j       .LBB0_4
   ; CHECK: nop
 
   ; CHECK: .LBB0_3:                                # %memptr.nonvirtual
-  ; CHECK: clc     $c1, $zero, 32($c24)      # {{16|32}}-byte Folded Reload
+  ; CHECK: clc     $c1, $zero, 32($c11)      # {{16|32}}-byte Folded Reload
   ; CHECK: csc     $c1, [[STACK_TARGET_FN_PTR]]
   ; CHECK: j       .LBB0_4
   ; CHECK: nop
