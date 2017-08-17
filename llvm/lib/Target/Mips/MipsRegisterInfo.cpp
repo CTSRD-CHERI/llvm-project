@@ -347,16 +347,12 @@ unsigned MipsRegisterInfo::
 getFrameRegister(const MachineFunction &MF) const {
   const MipsSubtarget &Subtarget = MF.getSubtarget<MipsSubtarget>();
   const TargetFrameLowering *TFI = Subtarget.getFrameLowering();
-  bool IsN64 =
-      static_cast<const MipsTargetMachine &>(MF.getTarget()).getABI().IsN64();
-  bool IsPureCap =
-      static_cast<const MipsTargetMachine &>(MF.getTarget()).getABI().IsCheriPureCap();
+  auto &ABI = static_cast<const MipsTargetMachine &>(MF.getTarget()).getABI();
 
   if (Subtarget.inMips16Mode())
     return TFI->hasFP(MF) ? Mips::S0 : Mips::SP;
   else
-    return TFI->hasFP(MF) ? (IsPureCap ? Mips::C24 : (IsN64 ? Mips::FP_64 : Mips::FP)) :
-                            (IsPureCap ? Mips::C11 : (IsN64 ? Mips::SP_64 : Mips::SP));
+    return TFI->hasFP(MF) ? ABI.GetFramePtr() : ABI.GetStackPtr();
 }
 
 bool MipsRegisterInfo::canRealignStack(const MachineFunction &MF) const {
