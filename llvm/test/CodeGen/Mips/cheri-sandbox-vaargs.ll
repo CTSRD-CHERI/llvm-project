@@ -96,7 +96,7 @@ define void @k(i32 addrspace(200)* %x, i32 addrspace(200)* %y) #0 {
 ; When calling a variadic function, we should set $c13 to the size of the arguments
 entry:
 ; CHECK: daddiu	$1, $zero, [[$CAP_SIZE:32|16]]
-; CHECK: cincoffset	$c3, $c11, $sp
+; CHECK: cincoffset	$c3, $c11, $zero
 ; CHECK: csetbounds	$c2, $c3, $1
 ; CHECK: ori	$1, $zero, 65495
 ; CHECK: candperm	$c13, $c2, $1
