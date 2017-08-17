@@ -355,8 +355,8 @@ getFrameRegister(const MachineFunction &MF) const {
   if (Subtarget.inMips16Mode())
     return TFI->hasFP(MF) ? Mips::S0 : Mips::SP;
   else
-    return TFI->hasFP(MF) ? (IsPureCap ? Mips::C11 : (IsN64 ? Mips::FP_64 : Mips::FP)) :
-                            (IsPureCap ? Mips::C24 : (IsN64 ? Mips::SP_64 : Mips::SP));
+    return TFI->hasFP(MF) ? (IsPureCap ? Mips::C24 : (IsN64 ? Mips::FP_64 : Mips::FP)) :
+                            (IsPureCap ? Mips::C11 : (IsN64 ? Mips::SP_64 : Mips::SP));
 }
 
 bool MipsRegisterInfo::canRealignStack(const MachineFunction &MF) const {
