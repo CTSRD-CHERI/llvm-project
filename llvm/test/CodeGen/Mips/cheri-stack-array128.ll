@@ -8,7 +8,7 @@ entry:
   %buffer = alloca [42 x i32], align 4, addrspace(200)
   %arraydecay = getelementptr inbounds [42 x i32], [42 x i32] addrspace(200)* %buffer, i32 0, i32 0
   ; CHECK: daddiu	$4, $zero, 8
-  ; CHECK: cincoffset	$c1, $c24, $4
+  ; CHECK: cincoffset	$c1, $c11, $4
   ; CHECK: daddiu	$1, $zero, 168
   ; CHECK: csetbounds	$c3, $c1, $1
   %call = call i32 @bar(i32 addrspace(200)* %arraydecay)
