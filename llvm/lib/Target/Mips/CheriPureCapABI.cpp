@@ -43,31 +43,6 @@ public:
     bool Modified = false;
     for (Function &F : Mod)
       Modified |= runOnFunction(F);
-    // Now we're going to fix up all va_start calls so that they have the
-    // address space cast of the alloca directly in front of them.  This
-    // makes the cast visible to SelectionDAG and allows it to look through
-    // and find the original.
-    if (Function *Fn = M->getFunction("llvm.va_start"))
-      for (Value *V : Fn->users()) {
-        CallInst *Call = cast<CallInst>(V->stripPointerCasts());
-        Value *Cast = Call->getOperand(0);
-        Value *CastArg;
-        bool Replace;
-        if (isa<ConstantExpr>(Cast)) {
-            ConstantExpr *CastExpr = cast<ConstantExpr>(Cast);
-            CastArg = Cast;
-            Replace = (CastExpr->getOpcode() != Instruction::AddrSpaceCast);
-        } else {
-            Instruction *CastInst = cast<Instruction>(Cast);
-            CastArg = CastInst->getOperand(0);
-            Replace = (CastInst->getParent() != Call->getParent());
-        }
-        if (Replace) {
-          AddrSpaceCastInst *NewCast = new llvm::AddrSpaceCastInst(
-              CastArg, Cast->getType(), "va_cast", Call);
-          Call->setOperand(0, NewCast);
-        }
-      }
     return Modified;
   }
   int RoundUpToPowerOfTwo(int v) {
