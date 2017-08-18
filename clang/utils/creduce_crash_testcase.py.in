@@ -86,7 +86,7 @@ class ReduceTool(metaclass=ABCMeta):
             # convert %clang_cc1 -target-cpu cheri to %cheri_cc1 / %cheri_purecap_cc1
             if "%clang_cc1" in run_line:
                 target_cpu_re = r"-target-cpu\s+cheri\s*"
-                triple_cheri_freebsd_re = r"-triple\s+cheri-unknown-freebsd\s*"
+                triple_cheri_freebsd_re = r"-triple\s+cheri-unknown-freebsd\d*\s+"
                 if re.search(target_cpu_re, run_line) or re.search(triple_cheri_freebsd_re, run_line):
                     run_line = re.sub(target_cpu_re, "", run_line)  # remove
                     run_line = re.sub(triple_cheri_freebsd_re, "", run_line)  # remove
