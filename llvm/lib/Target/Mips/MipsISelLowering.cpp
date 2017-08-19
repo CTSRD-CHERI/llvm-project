@@ -379,6 +379,7 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
   setOperationAction(ISD::ROTL,              MVT::i64,   Expand);
   setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i32,  Expand);
   setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i64,  Expand);
+  setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::iFATPTR,  Expand);
 
   if (!Subtarget.hasMips32r2())
     setOperationAction(ISD::ROTR, MVT::i32,   Expand);
@@ -476,7 +477,7 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
   // and 8-byte slots on N32/N64.
   setMinStackArgumentAlignment((ABI.IsN32() || ABI.IsN64()) ? 8 : 4);
 
-  setStackPointerRegisterToSaveRestore(ABI.IsN64() ? Mips::SP_64 : Mips::SP);
+  setStackPointerRegisterToSaveRestore(ABI.GetStackPtr());
 
   MaxStoresPerMemcpy = 16;
 

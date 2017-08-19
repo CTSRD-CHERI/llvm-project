@@ -1540,14 +1540,33 @@ void SelectionDAGLegalize::ExpandDYNAMIC_STACKALLOC(SDNode* Node,
 
   SDValue Size  = Tmp2.getOperand(1);
   SDValue SP = DAG.getCopyFromReg(Chain, dl, SPReg, VT);
+  SDValue SPRegVal = SP;
   Chain = SP.getValue(1);
+  auto IntPtrTy = VT;
+  if (VT == MVT::iFATPTR) {
+    IntPtrTy = TLI.getPointerTy(DAG.getDataLayout(), 0);
+    SDValue GetOffset = DAG.getTargetConstant(Intrinsic::cheri_cap_offset_get,
+        dl, IntPtrTy);
+    SP =
+      DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, IntPtrTy , GetOffset, SPRegVal);
+  }
   unsigned Align = cast<ConstantSDNode>(Tmp3)->getZExtValue();
   unsigned StackAlign =
       DAG.getSubtarget().getFrameLowering()->getStackAlignment();
-  Tmp1 = DAG.getNode(ISD::SUB, dl, VT, SP, Size);       // Value
+  Tmp1 = DAG.getNode(ISD::SUB, dl, IntPtrTy, SP, Size);       // Value
   if (Align > StackAlign)
     Tmp1 = DAG.getNode(ISD::AND, dl, VT, Tmp1,
-                       DAG.getConstant(-(uint64_t)Align, dl, VT));
+                       DAG.getConstant(-(uint64_t)Align, dl, IntPtrTy));
+  if (VT == MVT::iFATPTR) {
+    SDValue SetOffset = DAG.getTargetConstant(Intrinsic::cheri_cap_offset_set,
+        dl, IntPtrTy);
+    SDValue SetBounds = DAG.getTargetConstant(Intrinsic::cheri_cap_bounds_set,
+        dl, IntPtrTy);
+    Tmp1 =
+      DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::iFATPTR, SetOffset, SPRegVal, Tmp1);
+    Tmp1 =
+      DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::iFATPTR, SetBounds, Tmp1, Size);
+  }
   Chain = DAG.getCopyToReg(Chain, dl, SPReg, Tmp1);     // Output chain
 
   Tmp2 = DAG.getCALLSEQ_END(Chain, DAG.getIntPtrConstant(0, dl, true),

@@ -684,4 +684,5 @@ def AddrFI : ComplexPattern<iFATPTR, 1, "selectAddrFI", [frameindex], []>;
 def StackToCapPseudo : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd: $fi),
                             "#StackToCapPseudo $cd, $fi",
                             []>;
+def : Pat<(int_mips_stack_to_cap CheriOpnd:$addr), (CIncOffset $addr, ZERO_64)>;
 def : Pat<(int_mips_stack_to_cap AddrFI:$addr), (CIncOffset $addr, ZERO_64)>;
