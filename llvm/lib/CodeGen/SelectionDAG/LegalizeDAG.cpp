@@ -1564,10 +1564,13 @@ void SelectionDAGLegalize::ExpandDYNAMIC_STACKALLOC(SDNode* Node,
         dl, IntPtrTy);
     Tmp1 =
       DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::iFATPTR, SetOffset, SPRegVal, Tmp1);
+    // Move the stack pointer *before* setting the bounds!
+    Chain = DAG.getCopyToReg(Chain, dl, SPReg, Tmp1);     // Output chain
     Tmp1 =
       DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::iFATPTR, SetBounds, Tmp1, Size);
+  } else {
+    Chain = DAG.getCopyToReg(Chain, dl, SPReg, Tmp1);     // Output chain
   }
-  Chain = DAG.getCopyToReg(Chain, dl, SPReg, Tmp1);     // Output chain
 
   Tmp2 = DAG.getCALLSEQ_END(Chain, DAG.getIntPtrConstant(0, dl, true),
                             DAG.getIntPtrConstant(0, dl, true), SDValue(), dl);
