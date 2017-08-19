@@ -5368,9 +5368,10 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
   }
   case Intrinsic::stacksave: {
     SDValue Op = getRoot();
+    unsigned AS = I.getType()->getPointerAddressSpace();
     Res = DAG.getNode(
         ISD::STACKSAVE, sdl,
-        DAG.getVTList(TLI.getPointerTy(DAG.getDataLayout()), MVT::Other), Op);
+        DAG.getVTList(TLI.getPointerTy(DAG.getDataLayout(), AS), MVT::Other), Op);
     setValue(&I, Res);
     DAG.setRoot(Res.getValue(1));
     return nullptr;
