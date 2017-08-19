@@ -1854,6 +1854,11 @@ bool LLParser::ParseOptionalCommaAlign(unsigned &Alignment,
       return false;
     }
 
+    if (Lex.getKind() == lltok::kw_addrspace) {
+      AteExtraComma = true;
+      return false;
+    }
+
     if (Lex.getKind() != lltok::kw_align)
       return Error(Lex.getLoc(), "expected metadata or 'align'");
 
@@ -1872,8 +1877,7 @@ bool LLParser::ParseOptionalCommaAlign(unsigned &Alignment,
 bool LLParser::ParseOptionalCommaAddrSpace(unsigned &AddrSpace,
                                            LocTy &Loc,
                                            bool &AteExtraComma) {
-  AteExtraComma = false;
-  while (EatIfPresent(lltok::comma)) {
+  while (AteExtraComma || EatIfPresent(lltok::comma)) {
     // Metadata at the end is an early exit.
     if (Lex.getKind() == lltok::MetadataVar) {
       AteExtraComma = true;
@@ -1886,6 +1890,7 @@ bool LLParser::ParseOptionalCommaAddrSpace(unsigned &AddrSpace,
 
     if (ParseOptionalAddrSpace(AddrSpace))
       return true;
+    AteExtraComma = false;
   }
 
   return false;
@@ -6081,8 +6086,7 @@ int LLParser::ParseAlloc(Instruction *&Inst, PerFunctionState &PFS) {
     } else {
       if (ParseTypeAndValue(Size, SizeLoc, PFS) ||
           ParseOptionalCommaAlign(Alignment, AteExtraComma) ||
-          (!AteExtraComma &&
-           ParseOptionalCommaAddrSpace(AddrSpace, ASLoc, AteExtraComma)))
+          ParseOptionalCommaAddrSpace(AddrSpace, ASLoc, AteExtraComma))
         return true;
     }
   }
