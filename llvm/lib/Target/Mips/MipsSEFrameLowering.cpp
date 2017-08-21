@@ -564,7 +564,7 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
 
       if (hasBP(MF)) {
         // move $s7, $sp
-        unsigned BP = STI.isABI_N64() ? Mips::S7_64 : Mips::S7;
+        unsigned BP = ABI.GetBasePtr();
         BuildMI(MBB, MBBI, dl, TII.get(MOVE), BP)
           .addReg(SP)
           .addReg(ZERO);
@@ -930,7 +930,7 @@ void MipsSEFrameLowering::determineCalleeSaves(MachineFunction &MF,
   MipsFunctionInfo *MipsFI = MF.getInfo<MipsFunctionInfo>();
   MipsABIInfo ABI = STI.getABI();
   unsigned FP = ABI.GetFramePtr();
-  unsigned BP = ABI.IsN64() ? Mips::S7_64 : Mips::S7;
+  unsigned BP = ABI.GetBasePtr();
 
   // Mark $fp as used if function has dedicated frame pointer.
   if (hasFP(MF))
