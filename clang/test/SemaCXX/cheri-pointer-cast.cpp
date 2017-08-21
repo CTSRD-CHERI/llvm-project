@@ -62,3 +62,37 @@ int main() {
 #endif
   return 0;
 }
+
+
+// Check that we don't warn on dependent types
+#ifdef __CHERI__
+template<typename T>
+long offset_get(T x) {
+  return __builtin_cheri_offset_get(reinterpret_cast<void* CAP>(x));
+}
+template<typename T>
+T offset_set(T x, long off) {
+  return reinterpret_cast<T>(__builtin_cheri_offset_set(reinterpret_cast<void* CAP>(x), off));
+  // expected-warning@-1 {{cast from capability type 'void * __capability' to non-capability, non-address type 'long'}}
+  // expected-warning@-2 {{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced.}} expected-note@-2 {{insert cast to intptr_t to silence this warning}}
+#ifndef __CHERI_PURE_CAPABILITY__
+  // expected-warning@-4 {{cast from capability type 'void * __capability' to non-capability, non-address type 'x *'}} expected-note@-4 {{use __cheri_cast to convert between pointers and capabilities}}
+#endif
+}
+
+struct x {
+    short y;
+    short z;
+};
+
+void use_offset_set() {
+  long wrong = 0;
+  long l = offset_set(wrong, 1); // expected-note {{in instantiation of function template specialization 'offset_set<long>' requested here}}
+#ifndef __CHERI_PURE_CAPABILITY__
+  struct x * wrong2 = nullptr;
+  (void)offset_set(wrong2, 2); // expected-note {{in instantiation of function template specialization 'offset_set<x *>' requested here}}
+#endif
+  struct x * CAP correct = nullptr;
+  (void)offset_set(correct, 2);
+}
+#endif

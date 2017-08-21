@@ -1775,6 +1775,8 @@ static void DiagnoseCHERICast(Sema &Self, Expr *SrcExpr, QualType DestType,
 
 static void DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
                                         QualType SrcType, QualType DestType) {
+  if (SrcType->isDependentType() || DestType->isDependentType())
+    return; // can't diagnose this yet
   if (!SrcType->isCHERICapabilityType(Self.Context)) {
     return; // Not casting from a capability
   }
