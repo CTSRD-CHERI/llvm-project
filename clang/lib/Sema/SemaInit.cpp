@@ -4044,7 +4044,7 @@ static void TryListInitialization(Sema &S,
       // source value is already of the destination type), and the first
       // case is handled by the general case for single-element lists below.
       ImplicitConversionSequence ICS;
-      ICS.setStandard();
+      ICS.setStandard(ImplicitConversionSequence::MemsetToZero);
       ICS.Standard.setAsIdentityConversion();
       if (!E->isRValue())
         ICS.Standard.First = ICK_Lvalue_To_Rvalue;
@@ -4261,8 +4261,7 @@ static OverloadingResult TryRefInitWithConversionFunction(
            "should not have conversion after constructor");
 
     ImplicitConversionSequence ICS;
-    ICS.setStandard();
-    ICS.Standard = Best->FinalConversion;
+    ICS.setStandard(Best->FinalConversion);
     Sequence.AddConversionSequenceStep(ICS, ICS.Standard.getToType(2));
 
     // Every implicit conversion results in a prvalue, except for a glvalue
@@ -4883,8 +4882,7 @@ static void TryUserDefinedConversion(Sema &S,
   if (Best->FinalConversion.First || Best->FinalConversion.Second ||
       Best->FinalConversion.Third) {
     ImplicitConversionSequence ICS;
-    ICS.setStandard();
-    ICS.Standard = Best->FinalConversion;
+    ICS.setStandard(Best->FinalConversion);
     Sequence.AddConversionSequenceStep(ICS, DestType, TopLevelOfInitList);
   }
 }
@@ -5040,7 +5038,7 @@ static bool tryObjCWritebackConversion(Sema &S,
   // Do we need an lvalue conversion?
   if (ArrayDecay || Initializer->isGLValue()) {
     ImplicitConversionSequence ICS;
-    ICS.setStandard();
+    ICS.setStandard(ImplicitConversionSequence::MemsetToZero);
     ICS.Standard.setAsIdentityConversion();
 
     QualType ResultType;
@@ -5472,7 +5470,7 @@ void InitializationSequence::InitializeFrom(Sema &S,
     if (ICS.Standard.First == ICK_Array_To_Pointer ||
         ICS.Standard.First == ICK_Lvalue_To_Rvalue) {
       ImplicitConversionSequence LvalueICS;
-      LvalueICS.setStandard();
+      LvalueICS.setStandard(ImplicitConversionSequence::MemsetToZero);
       LvalueICS.Standard.setAsIdentityConversion();
       LvalueICS.Standard.setAllToTypes(ICS.Standard.getToType(0));
       LvalueICS.Standard.First = ICS.Standard.First;

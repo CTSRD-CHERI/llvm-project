@@ -195,6 +195,7 @@ void StandardConversionSequence::setAsIdentityConversion() {
   BindsToRvalue = false;
   BindsImplicitObjectArgumentWithoutRefQualifier = false;
   ObjCLifetimeConversionBinding = false;
+  IncompatibleCHERIConversion = false;
   CopyConstructor = nullptr;
 }
 
@@ -1252,7 +1253,7 @@ TryUserDefinedConversion(Sema &S, Expr *From, QualType ToType,
         // Turn this into a "standard" conversion sequence, so that it
         // gets ranked with standard conversion sequences.
         DeclAccessPair Found = ICS.UserDefined.FoundConversionFunction;
-        ICS.setStandard();
+        ICS.setStandard(ImplicitConversionSequence::MemsetToZero);
         ICS.Standard.setAsIdentityConversion();
         ICS.Standard.setFromType(From->getType());
         ICS.Standard.setAllToTypes(ToType);
@@ -1321,7 +1322,7 @@ TryImplicitConversion(Sema &S, Expr *From, QualType ToType,
   ImplicitConversionSequence ICS;
   if (IsStandardConversion(S, From, ToType, InOverloadResolution,
                            ICS.Standard, CStyle, AllowObjCWritebackConversion)){
-    ICS.setStandard();
+    ICS.setStandard(ImplicitConversionSequence::KeepState);
     return ICS;
   }
 
@@ -1341,7 +1342,7 @@ TryImplicitConversion(Sema &S, Expr *From, QualType ToType,
   if (ToType->getAs<RecordType>() && FromType->getAs<RecordType>() &&
       (S.Context.hasSameUnqualifiedType(FromType, ToType) ||
        S.IsDerivedFrom(From->getLocStart(), FromType, ToType))) {
-    ICS.setStandard();
+    ICS.setStandard(ImplicitConversionSequence::MemsetToZero);
     ICS.Standard.setAsIdentityConversion();
     ICS.Standard.setFromType(FromType);
     ICS.Standard.setAllToTypes(ToType);
@@ -1567,6 +1568,7 @@ static bool IsStandardConversion(Sema &S, Expr* From, QualType ToType,
   SCS.IncompatibleObjC = false;
   SCS.setFromType(FromType);
   SCS.CopyConstructor = nullptr;
+  // assert(!SCS.IncompatibleCHERIConversion);
 
   // There are no standard conversions for class types in C++, so
   // abort early. When overloading in C, however, we do permit them.
@@ -1832,8 +1834,6 @@ static bool IsStandardConversion(Sema &S, Expr* From, QualType ToType,
       // only allow implicit conversions from string literals
       // XXXAR: should we allow any array type?
       if (!isa<StringLiteral>(From->IgnoreParens())) {
-        // XXXAR: we should really add a new field to SCS instead of using the
-        // deprecated string literal one
         SCS.setInvalidCHERIConversion(true);
       }
     }
@@ -4480,7 +4480,7 @@ TryReferenceInit(Sema &S, Expr *Init, QualType DeclType,
       //   has a type that is a derived class of the parameter type,
       //   in which case the implicit conversion sequence is a
       //   derived-to-base Conversion (13.3.3.1).
-      ICS.setStandard();
+      ICS.setStandard(ImplicitConversionSequence::MemsetToZero);
       ICS.Standard.First = ICK_Identity;
       ICS.Standard.Second = DerivedToBase? ICK_Derived_To_Base
                          : ObjCConversion? ICK_Compatible_Conversion
@@ -4499,6 +4499,7 @@ TryReferenceInit(Sema &S, Expr *Init, QualType DeclType,
       ICS.Standard.ObjCLifetimeConversionBinding = ObjCLifetimeConversion;
       ICS.Standard.CopyConstructor = nullptr;
       ICS.Standard.DeprecatedStringLiteralToCharPtr = false;
+      // FIXME: CHERI compatibility check
 
       // Nothing more to do: the inaccessibility/ambiguity check for
       // derived-to-base conversions is suppressed when we're
@@ -4538,7 +4539,7 @@ TryReferenceInit(Sema &S, Expr *Init, QualType DeclType,
       (InitCategory.isXValue() ||
        (InitCategory.isPRValue() && (T2->isRecordType() || T2->isArrayType())) ||
        (InitCategory.isLValue() && T2->isFunctionType()))) {
-    ICS.setStandard();
+    ICS.setStandard(ImplicitConversionSequence::MemsetToZero);
     ICS.Standard.First = ICK_Identity;
     ICS.Standard.Second = DerivedToBase? ICK_Derived_To_Base
                       : ObjCConversion? ICK_Compatible_Conversion
@@ -5097,7 +5098,8 @@ TryObjectArgumentInitialization(Sema &S, SourceLocation Loc, QualType FromType,
   }
 
   // Success. Mark this as a reference binding.
-  ICS.setStandard();
+  // XXXAR: FIXME: DO CHERI CHECK
+  ICS.setStandard(ImplicitConversionSequence::MemsetToZero);
   ICS.Standard.setAsIdentityConversion();
   ICS.Standard.Second = SecondKind;
   ICS.Standard.setFromType(FromType);

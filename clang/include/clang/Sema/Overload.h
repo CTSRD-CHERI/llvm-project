@@ -194,14 +194,15 @@ namespace clang {
     /// Objective-C lifetime qualifier.
     unsigned ObjCLifetimeConversionBinding : 1;
 
-    // XXXAR: make this part of the bitfield instead of reusing a field
-    // Will require adding a constructor and adjusting lots of uses
-    // unsigned InvalidCapPointerConversion : 1;
+    /// \brief e.g. conversions from pointer -> capability without an explicit __cheri_cast
+    unsigned IncompatibleCHERIConversion : 1;  // XXXAR: would be nice if we had a ctor to initialize this
+
     bool isInvalidCHERICapabilityConversion() const {
-      return DeprecatedStringLiteralToCharPtr;
+      return IncompatibleCHERIConversion;
     }
-    void setInvalidCHERIConversion(bool IsInvalid) {
-      DeprecatedStringLiteralToCharPtr = IsInvalid;
+    void setInvalidCHERIConversion(bool IsInvalid = true) {
+      assert(!IncompatibleCHERIConversion); // should have been initialized to false (see above)
+      IncompatibleCHERIConversion = IsInvalid;
     }
     
     /// FromType - The type that this conversion is converting
@@ -408,6 +409,11 @@ namespace clang {
       BadConversion
     };
 
+    enum SetKindAction {
+        MemsetToZero,
+        KeepState,
+    };
+
   private:
     enum {
       Uninitialized = BadConversion + 1
@@ -533,7 +539,15 @@ namespace clang {
       Bad.init(Failure, FromType, ToType);
     }
 
-    void setStandard() { setKind(StandardConversion); }
+    void setStandard(SetKindAction Action) {
+      setKind(StandardConversion);
+      if (Action == MemsetToZero)
+        memset(&Standard, 0, sizeof(Standard));
+    }
+    void setStandard(const StandardConversionSequence& NewSeq) {
+      setKind(StandardConversion);
+      Standard = NewSeq;
+    }
     void setEllipsis() { setKind(EllipsisConversion); }
     void setUserDefined() { setKind(UserDefinedConversion); }
     void setAmbiguous() {
@@ -543,7 +557,7 @@ namespace clang {
     }
 
     void setAsIdentityConversion(QualType T) {
-      setStandard();
+      setStandard(MemsetToZero);  // XXXAR: not sure this is correct
       Standard.setAsIdentityConversion();
       Standard.setFromType(T);
       Standard.setAllToTypes(T);

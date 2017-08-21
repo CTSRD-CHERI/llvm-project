@@ -2,8 +2,8 @@
 // RUN: %cheri_cc1 -x c -o - %s -fsyntax-only -Wall -Wno-unused-variable -verify
 // RUN: %cheri_cc1 -x c++ -o - %s -fsyntax-only -Wall -Wno-unused-variable -verify
 
-// RUN: not %cheri_cc1 -x c++ -o - %s -fsyntax-only -Wall -Wno-unused-variable -ast-dump | FileCheck %s -check-prefix CXXAST
-// RUN: not %cheri_cc1 -x c -o - %s -fsyntax-only -Wall -Wno-unused-variable -ast-dump | FileCheck %s -check-prefix CAST
+// RUN: not %cheri_cc1 -x c++ -o - %s -fsyntax-only -Wall -Wno-unused-variable -ast-dump 2>/dev/null | FileCheck %s -check-prefix CXXAST
+// RUN: not %cheri_cc1 -x c -o - %s -fsyntax-only -Wall -Wno-unused-variable -ast-dump 2>/dev/null | FileCheck %s -check-prefix CAST
 
 
 int global_int;
@@ -99,20 +99,29 @@ void str_to_ptr(void) {
   char* __capability nonconst_cap = "foo";
 #ifdef __cplusplus
   // expected-warning@-3 {{conversion from string literal to 'char *' is deprecated}}
-  // expected-error@-3 {{converting pointer type 'const char [4]' to capability type 'char * __capability' without an explicit cast}}
+  // expected-warning@-3 {{conversion from string literal to 'char * __capability' is deprecated}}
 #endif
-  // CXXAST: `-FunctionDecl {{.+}} str_to_ptr 'void (void)'
+  // CXXAST: FunctionDecl {{.+}} str_to_ptr 'void (void)'
   // CXXAST: VarDecl {{.+}} cap 'const char * __capability' cinit
   // CXXAST-NEXT: ImplicitCastExpr {{.+}} 'const char * __capability' <PointerToCHERICapability>
   // CXXAST-NEXT: ImplicitCastExpr {{.+}} 'const char *' <ArrayToPointerDecay>
   // CXXAST-NEXT: StringLiteral {{.+}} 'const char [4]' lvalue "foo"
 
-  // CAST: `-FunctionDecl {{.+}} str_to_ptr 'void (void)'
+  // CAST: FunctionDecl {{.+}} str_to_ptr 'void (void)'
   // CAST: VarDecl {{.+}} cap 'const char * __capability' cinit
   // CAST-NEXT: ImplicitCastExpr {{.+}} 'const char * __capability' <PointerToCHERICapability>
   // CAST-NEXT: ImplicitCastExpr {{.+}} 'char *' <ArrayToPointerDecay>
   // CAST-NEXT: StringLiteral {{.+}} 'char [4]' lvalue "foo"
 }
+
+// make sure that we warn about const char[] -> char* instead of suggesting __cheri_cast
+char *flag2str[] = {
+        "public ", "private ", "protected ", "static ",
+#ifdef __cplusplus
+// expected-warning@-2 4 {{conversion from string literal to 'char *' is deprecated}}
+#endif
+};
+
 // not yet implemented
 #if 0
 void test_references(int& ptrref, int& __capability capref) {
