@@ -1555,7 +1555,7 @@ void SelectionDAGLegalize::ExpandDYNAMIC_STACKALLOC(SDNode* Node,
       DAG.getSubtarget().getFrameLowering()->getStackAlignment();
   Tmp1 = DAG.getNode(ISD::SUB, dl, IntPtrTy, SP, Size);       // Value
   if (Align > StackAlign)
-    Tmp1 = DAG.getNode(ISD::AND, dl, VT, Tmp1,
+    Tmp1 = DAG.getNode(ISD::AND, dl, IntPtrTy, Tmp1,
                        DAG.getConstant(-(uint64_t)Align, dl, IntPtrTy));
   if (VT == MVT::iFATPTR) {
     SDValue SetOffset = DAG.getTargetConstant(Intrinsic::cheri_cap_offset_set,

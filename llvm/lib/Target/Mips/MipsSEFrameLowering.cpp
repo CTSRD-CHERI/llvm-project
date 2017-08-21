@@ -556,7 +556,7 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
 
 
       BuildMI(MBB, MBBI, dl, TII.get(ADDiu), VR).addReg(ZERO) .addImm(MaxAlign);
-      BuildMI(MBB, MBBI, dl, TII.get(AND), IntSP).addReg(SP).addReg(VR);
+      BuildMI(MBB, MBBI, dl, TII.get(AND), IntSP).addReg(IntSP).addReg(VR);
 
       if (ABI.IsCheriPureCap())
         BuildMI(MBB, MBBI, dl, TII.get(Mips::CSetOffset), SP).addReg(SP)
