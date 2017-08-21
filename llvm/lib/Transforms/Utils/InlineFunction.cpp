@@ -1875,8 +1875,10 @@ bool llvm::InlineFunction(CallSite CS, InlineFunctionInfo &IFI,
   if (InlinedFunctionInfo.ContainsDynamicAllocas) {
     Module *M = Caller->getParent();
     // Get the two intrinsics we care about.
-    Function *StackSave = Intrinsic::getDeclaration(M, Intrinsic::stacksave);
-    Function *StackRestore=Intrinsic::getDeclaration(M,Intrinsic::stackrestore);
+    Function *StackSave = Intrinsic::getDeclaration(M, Intrinsic::stacksave,
+      { Type::getInt8PtrTy(CS->getContext()) });
+    Function *StackRestore=Intrinsic::getDeclaration(M,Intrinsic::stackrestore,
+      { Type::getInt8PtrTy(CS->getContext()) });
 
     // Insert the llvm.stacksave.
     CallInst *SavedPtr = IRBuilder<>(&*FirstNewBlock, FirstNewBlock->begin())

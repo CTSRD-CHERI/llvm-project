@@ -15,12 +15,12 @@ C:		; preds = %T, %0
 }
 
 define i32* @test2(i32 %width) {
-	%tmp = call i8* @llvm.stacksave( )
+	%tmp = call i8* @llvm.stacksave.p0i8( )
         %tmp14 = alloca i32, i32 %width
 	ret i32* %tmp14
 } 
 
-declare i8* @llvm.stacksave()
+declare i8* @llvm.stacksave.p0i8()
 
 declare void @llvm.lifetime.start.p0i8(i64, i8*)
 declare void @llvm.lifetime.end.p0i8(i64, i8*)

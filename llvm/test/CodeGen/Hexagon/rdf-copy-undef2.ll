@@ -8,12 +8,12 @@ declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) #0
 declare signext i16 @cat(i16 signext) #1
 declare void @danny(i16 signext, i16 signext, i16 signext, i16* nocapture readonly, i16 signext, i16* nocapture) #1
 declare void @sammy(i16* nocapture readonly, i16* nocapture readonly, i16* nocapture readonly, i32* nocapture, i16* nocapture, i16 signext, i16 signext, i16 signext) #1
-declare i8* @llvm.stacksave() #2
-declare void @llvm.stackrestore(i8*) #2
+declare i8* @llvm.stacksave.p0i8() #2
+declare void @llvm.stackrestore.p0i8(i8*) #2
 
 define i32 @fred(i16 signext %p0, i16 signext %p1, i16* nocapture readonly %p2, i16 signext %p3, i16* nocapture readonly %p4, i16* nocapture %p5) #1 {
 entry:
-  %0 = tail call i8* @llvm.stacksave()
+  %0 = tail call i8* @llvm.stacksave.p0i8()
   %vla = alloca i16, i32 undef, align 8
   %call17 = call signext i16 @cat(i16 signext 1) #1
   br i1 undef, label %for.cond23.preheader, label %for.end47
@@ -45,7 +45,7 @@ for.end47.loopexit:                               ; preds = %for.end40
 for.end47:                                        ; preds = %for.end47.loopexit, %entry
   %1 = phi i16 [ %.pre, %for.end47.loopexit ], [ 0, %entry ]
   call void @danny(i16 signext %1, i16 signext %p0, i16 signext %p1, i16* %p2, i16 signext %p3, i16* %p5) #1
-  call void @llvm.stackrestore(i8* %0)
+  call void @llvm.stackrestore.p0i8(i8* %0)
   ret i32 undef
 }
 

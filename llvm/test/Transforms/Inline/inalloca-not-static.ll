@@ -23,8 +23,8 @@ target triple = "i386-pc-windows-msvc19.0.24210"
 
 %struct.Foo = type { i32 }
 
-declare i8* @llvm.stacksave()
-declare void @llvm.stackrestore(i8*)
+declare i8* @llvm.stacksave.p0i8()
+declare void @llvm.stackrestore.p0i8(i8*)
 
 declare x86_thiscallcc %struct.Foo* @"\01??0Foo@@QAE@XZ"(%struct.Foo* returned) unnamed_addr
 declare x86_thiscallcc void @"\01??1Foo@@QAE@XZ"(%struct.Foo*) unnamed_addr
@@ -37,12 +37,12 @@ entry:
 
 define internal void @g() alwaysinline {
 entry:
-  %inalloca.save = call i8* @llvm.stacksave()
+  %inalloca.save = call i8* @llvm.stacksave.p0i8()
   %argmem = alloca inalloca <{ %struct.Foo }>, align 4
   %0 = getelementptr inbounds <{ %struct.Foo }>, <{ %struct.Foo }>* %argmem, i32 0, i32 0
   %call = call x86_thiscallcc %struct.Foo* @"\01??0Foo@@QAE@XZ"(%struct.Foo* %0)
   call void @h(<{ %struct.Foo }>* inalloca %argmem)
-  call void @llvm.stackrestore(i8* %inalloca.save)
+  call void @llvm.stackrestore.p0i8(i8* %inalloca.save)
   ret void
 }
 
@@ -55,11 +55,11 @@ entry:
 }
 
 ; CHECK: define void @f()
-; CHECK:   %[[STACKSAVE:.*]] = call i8* @llvm.stacksave()
+; CHECK:   %[[STACKSAVE:.*]] = call i8* @llvm.stacksave.p0i8()
 ; CHECK:   %[[ARGMEM:.*]] = alloca inalloca <{ %struct.Foo }>, align 4
 ; CHECK:   %[[GEP1:.*]] = getelementptr inbounds <{ %struct.Foo }>, <{ %struct.Foo }>* %[[ARGMEM]], i32 0, i32 0
 ; CHECK:   %[[CALL:.*]] = call x86_thiscallcc %struct.Foo* @"\01??0Foo@@QAE@XZ"(%struct.Foo* %[[GEP1]])
 ; CHECK:   %[[GEP2:.*]] = getelementptr inbounds <{ %struct.Foo }>, <{ %struct.Foo }>* %[[ARGMEM]], i32 0, i32 0
 ; CHECK:   call x86_thiscallcc void @"\01??1Foo@@QAE@XZ"(%struct.Foo* %[[GEP2]])
-; CHECK:   call void @llvm.stackrestore(i8* %[[STACKSAVE]])
+; CHECK:   call void @llvm.stackrestore.p0i8(i8* %[[STACKSAVE]])
 ; CHECK:   ret void

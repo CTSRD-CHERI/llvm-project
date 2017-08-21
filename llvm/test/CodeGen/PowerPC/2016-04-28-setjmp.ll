@@ -14,7 +14,7 @@ define void @h() nounwind {
   %1 = load i8**, i8*** bitcast (i8** @ptr to i8***), align 8
   %2 = tail call i8* @llvm.frameaddress(i32 0)
   store i8* %2, i8** %1, align 8
-  %3 = tail call i8* @llvm.stacksave()
+  %3 = tail call i8* @llvm.stacksave.p0i8()
   %4 = getelementptr inbounds i8*, i8** %1, i64 2
   store i8* %3, i8** %4, align 8
   %5 = bitcast i8** %1 to i8*
@@ -38,7 +38,7 @@ define void @h() nounwind {
 declare i8* @llvm.frameaddress(i32)
 
 ; Function Attrs: nounwind
-declare i8* @llvm.stacksave()
+declare i8* @llvm.stacksave.p0i8()
 
 ; Function Attrs: nounwind
 declare i32 @llvm.eh.sjlj.setjmp(i8*)
