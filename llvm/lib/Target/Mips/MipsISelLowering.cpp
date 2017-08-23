@@ -2301,7 +2301,8 @@ SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
 
   SDLoc DL(Op);
   SDValue FI = DAG.getFrameIndex(FuncInfo->getVarArgsFrameIndex(),
-                                 getPointerTy(MF.getDataLayout()));
+                                 getPointerTy(MF.getDataLayout(),
+                                     ABI.StackAddrSpace()));
 
   if (ABI.IsCheriPureCap()) {
     unsigned Reg = MF.addLiveIn(Mips::C13, getRegClassFor(MVT::iFATPTR));
@@ -3019,7 +3020,8 @@ SDValue MipsTargetLowering::passArgOnStack(SDValue StackPtr, unsigned Offset,
 
   MachineFrameInfo &MFI = DAG.getMachineFunction().getFrameInfo();
   int FI = MFI.CreateFixedObject(Arg.getValueSizeInBits() / 8, Offset, false);
-  SDValue FIN = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+  SDValue FIN = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout(),
+              ABI.StackAddrSpace()));
   return DAG.getStore(Chain, DL, Arg, FIN, MachinePointerInfo(),
                       /* Alignment = */ 0, MachineMemOperand::MOVolatile);
 }
@@ -3158,7 +3160,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   SDValue StackPtr =
       DAG.getCopyFromReg(Chain, DL, ABI.GetStackPtr(),
                          getPointerTy(DAG.getDataLayout(),
-                           ABI.IsCheriPureCap() ? 200 : 0));
+                           ABI.StackAddrSpace()));
 
   std::deque< std::pair<unsigned, SDValue> > RegsToPass;
   SmallVector<SDValue, 8> MemOpChains;
@@ -3662,7 +3664,8 @@ SDValue MipsTargetLowering::LowerFormalArguments(
                                      VA.getLocMemOffset(), true);
 
       // Create load nodes to retrieve arguments from the stack
-      SDValue FIN = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+      SDValue FIN = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout(),
+                  ABI.StackAddrSpace()));
       SDValue ArgValue = DAG.getLoad(
           LocVT, DL, Chain, FIN,
           MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI));
@@ -3853,7 +3856,7 @@ MipsTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   // a virtual register in the entry block, so now we copy the value out
   // and into $v0.
   if (MF.getFunction()->hasStructRetAttr()) {
-    EVT SRetTy = getPointerTy(DAG.getDataLayout());
+    EVT SRetTy = getPointerTy(DAG.getDataLayout(), ABI.StackAddrSpace());
     unsigned V0 = ABI.IsN64() ? Mips::V0_64 : Mips::V0;
     if (ABI.IsCheriPureCap()) {
       V0 = Mips::C3;
@@ -4349,7 +4352,7 @@ void MipsTargetLowering::copyByValRegs(
     FrameObjOffset = VA.getLocMemOffset();
 
   // Create frame object.
-  EVT PtrTy = getPointerTy(DAG.getDataLayout());
+  EVT PtrTy = getPointerTy(DAG.getDataLayout(), ABI.StackAddrSpace());
   int FI = MFI.CreateFixedObject(FrameObjSize, FrameObjOffset, true);
   SDValue FIN = DAG.getFrameIndex(FI, PtrTy);
   InVals.push_back(FIN);
@@ -4384,7 +4387,7 @@ void MipsTargetLowering::passByValArg(
   unsigned OffsetInBytes = 0; // From beginning of struct
   unsigned RegSizeInBytes = Subtarget.getGPRSizeInBytes();
   unsigned Alignment = std::min(Flags.getByValAlign(), RegSizeInBytes);
-  EVT PtrTy = getPointerTy(DAG.getDataLayout()),
+  EVT PtrTy = getPointerTy(DAG.getDataLayout(), ABI.StackAddrSpace()),
       RegTy = MVT::getIntegerVT(RegSizeInBytes * 8);
   unsigned NumRegs = LastReg - FirstReg;
 
@@ -4512,7 +4515,8 @@ void MipsTargetLowering::writeVarArgRegs(std::vector<SDValue> &OutChains,
     unsigned Reg = addLiveIn(MF, ArgRegs[I], RC);
     SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, RegTy);
     FI = MFI.CreateFixedObject(RegSizeInBytes, VaArgOffset, true);
-    SDValue PtrOff = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+    SDValue PtrOff = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout(),
+                ABI.StackAddrSpace()));
     SDValue Store =
         DAG.getStore(Chain, DL, ArgValue, PtrOff, MachinePointerInfo());
     cast<StoreSDNode>(Store.getNode())->getMemOperand()->setValue(

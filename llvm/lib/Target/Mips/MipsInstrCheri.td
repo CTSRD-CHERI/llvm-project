@@ -686,3 +686,7 @@ def StackToCapPseudo : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd: $fi),
                             []>;
 def : Pat<(int_mips_stack_to_cap CheriOpnd:$addr), (CIncOffset $addr, ZERO_64)>;
 def : Pat<(int_mips_stack_to_cap AddrFI:$addr), (CIncOffset $addr, ZERO_64)>;
+def : Pat<(load AddrFI:$addr),
+              (CAPLOAD64 ZERO_64, (i64 0), $addr)>;
+def : Pat<(load AddrFI:$addr),
+              (LOADCAP ZERO_64, (i64 0), $addr)>;
