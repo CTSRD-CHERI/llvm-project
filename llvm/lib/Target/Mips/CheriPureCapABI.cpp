@@ -106,6 +106,8 @@ public:
       if (AI->isArrayAllocation())
         Size = B.CreateMul(Size, AI->getArraySize());
       Value *Alloca = B.CreateCall(StackToCapFn, BitCast);
+      if (BitCast == AI)
+        BitCast = cast<Instruction>(Alloca);
       Alloca = B.CreateCall(SetLenFun, {Alloca, Size});
       Alloca = B.CreateBitCast(Alloca, AllocaTy);
       AI->replaceAllUsesWith(Alloca);
