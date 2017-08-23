@@ -174,6 +174,9 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         // If the capability is formed by incrementing an offset, then try to
         // pull that calculation into the memory operation.
 
+        // If this is a frame index or other symbol, skip it.
+        if (!I.getOperand(3).isReg())
+          continue;
         MachineInstr *IncOffset = RI.getUniqueVRegDef(I.getOperand(3).getReg());
         if (!IncOffset)
           continue;
