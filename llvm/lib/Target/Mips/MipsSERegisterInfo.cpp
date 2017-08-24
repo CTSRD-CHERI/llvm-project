@@ -271,7 +271,7 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
       unsigned Reg = Offset == 0 ? Mips::ZERO_64 :
         TII.loadImmediate(Offset, MBB, II, II->getDebugLoc(), nullptr);
       MI.getOperand(1).ChangeToRegister(FrameReg, false);
-      MI.getOperand(2).ChangeToRegister(Reg, false);
+      MI.getOperand(2).ChangeToRegister(Reg, false, false, true);
       return;
     }
 
