@@ -967,7 +967,7 @@ void MipsSEFrameLowering::determineCalleeSaves(MachineFunction &MF,
   // We will need the emergency spill slot if we have any stack offsets that
   // don't fit in an immediate.  In normal MIPS code, this means a 16-bit
   // field, for CHERI code we have an 11-bit immediate (plus a 4-bit shift) for
-  // csc / clc, but only 8-bit immediates (plus a 3-bit shift) for c[ls]x
+  // csc / cld, but only 8-bit immediates (plus a 3-bit shift) for c[ls]x
   // instructions for other spills.  The latter only matters if we're using the
   // capability-stack ABI.
   if (STI.isCheri()) {
