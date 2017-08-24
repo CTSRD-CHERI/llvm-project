@@ -291,6 +291,7 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
           .addReg(Mips::ZERO_64)
           .addImm(Offset);
       BuildMI(MBB, II, DL, TII.get(Mips::CIncOffset), FrameReg)
+          .addReg(FrameReg)
           .addReg(Reg, isFrameReg ? RegState::Kill : 0);
       if (!isFrameReg) {
         unsigned NegReg = RegInfo.createVirtualRegister(PtrRC);
@@ -298,6 +299,7 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
           .addReg(Mips::ZERO_64)
           .addReg(Reg, RegState::Kill);
         BuildMI(MBB, II, DL, TII.get(Mips::CIncOffset), FrameReg)
+          .addReg(FrameReg)
           .addReg(NegReg, RegState::Kill);
       }
       Offset = 0;
