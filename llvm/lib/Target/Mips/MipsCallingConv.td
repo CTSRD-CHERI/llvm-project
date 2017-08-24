@@ -414,6 +414,9 @@ def CSR_N64_Cheri : CalleeSavedRegs<(add (sequence "D%u_64", 31, 24), RA_64, FP_
                                    GP_64, (sequence "S%u_64", 7, 0),
                                    (sequence "C%u", 23, 17))>;
 
+def CSR_Cheri_Purecap : CalleeSavedRegs<(add (sequence "D%u_64", 31, 24), RA_64, FP_64,
+                                   GP_64, (sequence "S%u_64", 7, 0),
+                                   (sequence "C%u", 24, 17))>;
 
 def CSR_Mips16RetHelper :
   CalleeSavedRegs<(add V0, V1, FP,
