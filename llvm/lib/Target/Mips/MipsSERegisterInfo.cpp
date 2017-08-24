@@ -239,12 +239,15 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
   if (ABI.IsCheriPureCap()) {
     RegOpNo = OpNo;
     if ((MI.getOpcode() == Mips::CAPSTORE64) ||
+        (MI.getOpcode() == Mips::CAPSTORE32) ||
         (MI.getOpcode() == Mips::STORECAP) ||
         (MI.getOpcode() == Mips::CAPLOAD64) ||
-        (MI.getOpcode() == Mips::LOADCAP))
-      ImmOpNo = OpNo - 1;
-    else
-      ImmOpNo = OpNo + 1;
+        (MI.getOpcode() == Mips::CAPLOAD32) ||
+        (MI.getOpcode() == Mips::LOADCAP)) {
+      ImmOpNo = 2;
+      RegOpNo = 3;
+    } else
+      assert(MI.getOpcode() == Mips::CIncOffset);
   }
 
 
