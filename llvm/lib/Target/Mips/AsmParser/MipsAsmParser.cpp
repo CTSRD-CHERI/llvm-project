@@ -5404,6 +5404,18 @@ int MipsAsmParser::matchFPURegisterName(StringRef Name) {
 int MipsAsmParser::matchCheriRegisterName(StringRef Name) {
   MCAsmParser &Parser = getParser();
 
+  if (ABI.IsCheriPureCap()) {
+    int CC = StringSwitch<unsigned>(Name)
+           .Case("cbp", ABI.GetBasePtr() - Mips::C0)
+           .Case("cfp", ABI.GetFramePtr() - Mips::C0)
+           .Case("cra", ABI.GetReturnAddress() - Mips::C0)
+           .Case("csp", ABI.GetStackPtr() - Mips::C0)
+           .Case("ddc", 0/*ABI.GetDefaultDataCapability() - Mips::C0 */)
+           .Default(-1);
+    if (CC != -1)
+      return CC;
+  }
+
   if (Name[0] == 'c') {
     StringRef NumString = Name.substr(1);
     unsigned IntVal;

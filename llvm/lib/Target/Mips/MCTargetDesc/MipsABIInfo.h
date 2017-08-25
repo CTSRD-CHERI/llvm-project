@@ -66,6 +66,8 @@ public:
     return ThisABI < Other.GetEnumValue();
   }
 
+  unsigned GetDefaultDataCapability() const;
+  unsigned GetReturnAddress() const;
   unsigned GetStackPtr() const;
   unsigned GetFramePtr() const;
   unsigned GetBasePtr() const;

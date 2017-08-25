@@ -94,6 +94,16 @@ unsigned MipsABIInfo::GetBasePtr() const {
     (ArePtrs64bit() ? Mips::S7_64 : Mips::S7);
 }
 
+unsigned MipsABIInfo::GetDefaultDataCapability() const {
+  return Mips::C0;
+}
+
+unsigned MipsABIInfo::GetReturnAddress() const {
+  return IsCheriPureCap() ?
+    Mips::C17 :
+    (ArePtrs64bit() ? Mips::RA_64 : Mips::RA);
+}
+
 unsigned MipsABIInfo::GetGlobalPtr() const {
   return ArePtrs64bit() ? Mips::GP_64 : Mips::GP;
 }
