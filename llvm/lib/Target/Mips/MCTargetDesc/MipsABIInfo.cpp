@@ -98,6 +98,10 @@ unsigned MipsABIInfo::GetDefaultDataCapability() const {
   return Mips::C0;
 }
 
+unsigned MipsABIInfo::GetGlobalCapability() const {
+  return Mips::C26;
+}
+
 unsigned MipsABIInfo::GetReturnAddress() const {
   return IsCheriPureCap() ?
     Mips::C17 :

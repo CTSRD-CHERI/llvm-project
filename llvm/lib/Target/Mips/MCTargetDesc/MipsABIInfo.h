@@ -72,6 +72,10 @@ public:
   unsigned GetFramePtr() const;
   unsigned GetBasePtr() const;
   unsigned GetGlobalPtr() const;
+  /// This method will eventually be replaced by GetGlobalPtr in
+  /// pure-capability mode, but until all of the new linker work is done we
+  /// need a separate $gp and $cgp as a transition step.
+  unsigned GetGlobalCapability() const;
   unsigned GetNullPtr() const;
   unsigned GetZeroReg() const;
   unsigned GetPtrAdduOp() const;

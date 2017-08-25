@@ -5408,6 +5408,7 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name) {
     int CC = StringSwitch<unsigned>(Name)
            .Case("cbp", ABI.GetBasePtr() - Mips::C0)
            .Case("cfp", ABI.GetFramePtr() - Mips::C0)
+           .Case("cgp", ABI.GetGlobalCapability() - Mips::C0)
            .Case("cra", ABI.GetReturnAddress() - Mips::C0)
            .Case("csp", ABI.GetStackPtr() - Mips::C0)
            .Case("ddc", 0/*ABI.GetDefaultDataCapability() - Mips::C0 */)
