@@ -39,7 +39,7 @@ void call_foo() {
 // things as we unwind.
 //
 // X86-LABEL: define void @"\01?call_foo@@YAXXZ"()
-// X86: call i8* @llvm.stacksave()
+// X86: call i8* @llvm.stacksave.p0i8()
 // X86: %[[argmem:[^ ]*]] = alloca inalloca [[argmem_ty]]
 // X86: %[[arg3:[^ ]*]] = getelementptr inbounds [[argmem_ty]], [[argmem_ty]]* %[[argmem]], i32 0, i32 2
 // X86: call x86_thiscallcc %struct.A* @"\01??0A@@QAE@H@Z"(%struct.A* %[[arg3]], i32 3)
@@ -48,7 +48,7 @@ void call_foo() {
 // X86: %[[arg1:[^ ]*]] = getelementptr inbounds [[argmem_ty]], [[argmem_ty]]* %[[argmem]], i32 0, i32 0
 // X86: invoke x86_thiscallcc %struct.A* @"\01??0A@@QAE@H@Z"(%struct.A* %[[arg1]], i32 1)
 // X86: call void @"\01?foo@@YAXUA@@00@Z"([[argmem_ty]]* inalloca %[[argmem]])
-// X86: call void @llvm.stackrestore
+// X86: call void @llvm.stackrestore.p0i8
 // X86: ret void
 //
 //   lpad2:

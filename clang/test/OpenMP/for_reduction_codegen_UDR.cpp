@@ -318,7 +318,7 @@ int main() {
 // CHECK: [[DIFF:%.+]] = sub i64 [[UB_CAST]], [[LB_CAST]]
 // CHECK: [[SIZE_1:%.+]] = sdiv exact i64 [[DIFF]], ptrtoint (i32* getelementptr (i32, i32* null, i32 1) to i64)
 // CHECK: [[ARR_SIZE:%.+]] = add nuw i64 [[SIZE_1]], 1
-// CHECK: call i8* @llvm.stacksave()
+// CHECK: call i8* @llvm.stacksave.p0i8()
 // CHECK: [[ARR_PRIV:%.+]] = alloca i32, i64 [[ARR_SIZE]],
 
 // Check initialization of private copy.
@@ -440,7 +440,7 @@ int main() {
 // CHECK: call void @_ZN1SIfED1Ev([[S_FLOAT_TY]]* %
 // CHECK: [[DONE:%.+]] = icmp eq [[S_FLOAT_TY]]* %{{.+}}, [[ARRS_PRIV]]
 // CHECK: br i1 [[DONE]],
-// CHECK: call void @llvm.stackrestore(i8*
+// CHECK: call void @llvm.stackrestore.p0i8(i8*
 
 // CHECK: ret void
 
@@ -509,7 +509,7 @@ int main() {
 // CHECK: store i{{[0-9]+}}* [[GTID_ADDR]], i{{[0-9]+}}** [[GTID_ADDR_ADDR:%.+]],
 
 // CHECK: [[ARR_SIZE:%.+]] = mul nuw i64 %{{.+}}, 4
-// CHECK: call i8* @llvm.stacksave()
+// CHECK: call i8* @llvm.stacksave.p0i8()
 // CHECK: [[ARR_PRIV:%.+]] = alloca i32, i64 [[ARR_SIZE]],
 
 // Check initialization of private copy.
@@ -629,7 +629,7 @@ int main() {
 // CHECK: call void @_ZN1SIfED1Ev([[S_FLOAT_TY]]* %
 // CHECK: [[DONE:%.+]] = icmp eq [[S_FLOAT_TY]]* %{{.+}}, [[BEGIN]]
 // CHECK: br i1 [[DONE]],
-// CHECK: call void @llvm.stackrestore(i8*
+// CHECK: call void @llvm.stackrestore.p0i8(i8*
 // CHECK: call void @__kmpc_barrier(
 
 // CHECK: ret void
@@ -710,7 +710,7 @@ int main() {
 // CHECK: [[BYTE_DIF:%.+]] = sub i64 [[LAST]], [[FIRST]]
 // CHECK: [[DIF:%.+]] = sdiv exact i64 [[BYTE_DIF]], ptrtoint ([[S_FLOAT_TY]]* getelementptr ([[S_FLOAT_TY]], [[S_FLOAT_TY]]* null, i32 1) to i64)
 // CHECK: [[SIZE:%.+]] = add nuw i64 [[DIF]], 1
-// CHECK: call i8* @llvm.stacksave()
+// CHECK: call i8* @llvm.stacksave.p0i8()
 // CHECK: [[VAR2_PRIV:%.+]] = alloca [[S_FLOAT_TY]], i64 [[SIZE]],
 // CHECK: [[START:%.+]] = ptrtoint [[S_FLOAT_TY]]* [[ORIG_START]] to i64
 // CHECK: [[LOW_BOUND:%.+]] = ptrtoint [[S_FLOAT_TY]]* [[LOW]] to i64
@@ -739,7 +739,7 @@ int main() {
 // CHECK: [[BYTE_DIF:%.+]] = sub i64 [[LAST]], [[FIRST]]
 // CHECK: [[DIF:%.+]] = sdiv exact i64 [[BYTE_DIF]], ptrtoint ([[S_FLOAT_TY]]* getelementptr ([[S_FLOAT_TY]], [[S_FLOAT_TY]]* null, i32 1) to i64)
 // CHECK: [[SIZE:%.+]] = add nuw i64 [[DIF]], 1
-// CHECK: call i8* @llvm.stacksave()
+// CHECK: call i8* @llvm.stacksave.p0i8()
 // CHECK: [[VVAR2_PRIV:%.+]] = alloca [[S_FLOAT_TY]], i64 [[SIZE]],
 // CHECK: [[START:%.+]] = ptrtoint [[S_FLOAT_TY]]* [[ORIG_START]] to i64
 // CHECK: [[LOW_BOUND:%.+]] = ptrtoint [[S_FLOAT_TY]]* [[LOW]] to i64
@@ -771,7 +771,7 @@ int main() {
 // CHECK: [[BYTE_DIF:%.+]] = sub i64 [[LAST]], [[FIRST]]
 // CHECK: [[DIF:%.+]] = sdiv exact i64 [[BYTE_DIF]], ptrtoint ([[S_FLOAT_TY]]* getelementptr ([[S_FLOAT_TY]], [[S_FLOAT_TY]]* null, i32 1) to i64)
 // CHECK: [[SIZE:%.+]] = add nuw i64 [[DIF]], 1
-// CHECK: call i8* @llvm.stacksave()
+// CHECK: call i8* @llvm.stacksave.p0i8()
 // CHECK: [[VAR3_PRIV:%.+]] = alloca [[S_FLOAT_TY]], i64 [[SIZE]],
 // CHECK: [[START:%.+]] = ptrtoint [[S_FLOAT_TY]]* [[ORIG_START]] to i64
 // CHECK: [[LOW_BOUND:%.+]] = ptrtoint [[S_FLOAT_TY]]* [[LOW]] to i64
