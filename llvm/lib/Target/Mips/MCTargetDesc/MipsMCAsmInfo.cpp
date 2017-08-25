@@ -62,4 +62,8 @@ MipsMCAsmInfo::MipsMCAsmInfo(const Triple &TheTriple) {
   // Enable IAS by default for Debian mips64/mips64el.
   if (TheTriple.getEnvironment() == Triple::GNUABI64)
     UseIntegratedAssembler = true;
+
+  // use IAS by default for FreeBSD
+  if (TheTriple.getOS() == Triple::FreeBSD)
+    UseIntegratedAssembler = true;
 }
