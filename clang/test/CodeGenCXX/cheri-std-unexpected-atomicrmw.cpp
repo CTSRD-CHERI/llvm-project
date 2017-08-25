@@ -47,13 +47,13 @@ handler set_handler_atomic(handler func) noexcept {
   // ASM: cgetpccsetoffset        $c1, $3
   // ASM: daddiu  $5, $zero, 5
   // ASM: move     $4, $25
-  // ASM: csc     $c4, $sp, 64($c11)
+  // ASM: csc     $c4, $zero, 64($c11)
   // ASM: cincoffset      $c4, $c2, $zero
-  // ASM: clc     $c5, $sp, 64($c11)
+  // ASM: clc     $c5, $zero, 64($c11)
   // ASM: move     $gp, $1
-  // ASM: csc     $c12, $sp, 32($c11)
+  // ASM: csc     $c12, $zero, 32($c11)
   // ASM: cincoffset      $c12, $c1, $zero
-  // ASM: csd     $2, $sp, 24($c11)
+  // ASM: csd     $2, $zero, 24($c11)
   // ASM: cjalr   $c12, $c17
 }
 
@@ -76,7 +76,7 @@ handler get_handler_atomic() noexcept {
   // ASM: move     $4, $25
   // ASM: cincoffset      $c4, $c12, $zero
   // ASM: move     $gp, $1
-  // ASM: csc     $c12, $sp, 0($c11)
+  // ASM: csc     $c12, $zero, 0($c11)
   // ASM: cincoffset      $c12, $c1, $zero
   // ASM: cjalr   $c12, $c17
 
@@ -104,13 +104,13 @@ handler set_handler_c11_atomic(handler func) noexcept {
   // ASM: cgetpccsetoffset        $c1, $3
   // ASM: daddiu  $5, $zero, 5
   // ASM: move     $4, $25
-  // ASM: csc     $c4, $sp, 64($c11)
+  // ASM: csc     $c4, $zero, 64($c11)
   // ASM: cincoffset      $c4, $c2, $zero
-  // ASM: clc     $c5, $sp, 64($c11)
+  // ASM: clc     $c5, $zero, 64($c11)
   // ASM: move     $gp, $1
-  // ASM: csc     $c12, $sp, 32($c11)
+  // ASM: csc     $c12, $zero, 32($c11)
   // ASM: cincoffset      $c12, $c1, $zero
-  // ASM: csd     $2, $sp, 24($c11)
+  // ASM: csd     $2, $zero, 24($c11)
   // ASM: cjalr   $c12, $c17
 
 }
@@ -133,7 +133,7 @@ handler get_handler_c11_atomic() noexcept {
   // ASM: move     $4, $25
   // ASM: cincoffset      $c4, $c12, $zero
   // ASM: move     $gp, $1
-  // ASM: csc     $c12, $sp, 0($c11)
+  // ASM: csc     $c12, $zero, 0($c11)
   // ASM: cincoffset      $c12, $c1, $zero
   // ASM: cjalr   $c12, $c17
 }
