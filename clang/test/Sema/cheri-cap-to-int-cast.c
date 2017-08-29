@@ -6,6 +6,11 @@
 #error "memory_address attribute not supported"
 #endif
 
+#if !__has_extension(__cheri_cast)
+#error "__cheri_cast feature should exist"
+#endif
+
+
 void* __capability a;
 typedef __attribute__((memory_address)) unsigned __PTRDIFF_TYPE__ vaddr_t;
 typedef __attribute__((memory_address)) vaddr_t double_attribute;  // expected-warning {{attribute 'memory_address' is already applied}}
