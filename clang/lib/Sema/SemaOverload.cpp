@@ -4749,10 +4749,7 @@ TryListConversion(Sema &S, InitListExpr *From, QualType ToType,
         InitializedEntity::InitializeParameter(S.Context, ToType,
                                                /*Consumed=*/false);
       if (S.CanPerformCopyInitialization(Entity, From)) {
-        Result.setStandard();
-        Result.Standard.setAsIdentityConversion();
-        Result.Standard.setFromType(ToType);
-        Result.Standard.setAllToTypes(ToType);
+        Result.setAsIdentityConversion(ToType);
         return Result;
       }
     }
@@ -4802,10 +4799,7 @@ TryListConversion(Sema &S, InitListExpr *From, QualType ToType,
     // For an empty list, we won't have computed any conversion sequence.
     // Introduce the identity conversion sequence.
     if (From->getNumInits() == 0) {
-      Result.setStandard();
-      Result.Standard.setAsIdentityConversion();
-      Result.Standard.setFromType(ToType);
-      Result.Standard.setAllToTypes(ToType);
+      Result.setAsIdentityConversion(ToType);
     }
 
     Result.setStdInitializerListElement(toStdInitializerList);
@@ -4943,10 +4937,7 @@ TryListConversion(Sema &S, InitListExpr *From, QualType ToType,
     //    - if the initializer list has no elements, the implicit conversion
     //      sequence is the identity conversion.
     else if (NumInits == 0) {
-      Result.setStandard();
-      Result.Standard.setAsIdentityConversion();
-      Result.Standard.setFromType(ToType);
-      Result.Standard.setAllToTypes(ToType);
+      Result.setAsIdentityConversion(ToType);
     }
     return Result;
   }
