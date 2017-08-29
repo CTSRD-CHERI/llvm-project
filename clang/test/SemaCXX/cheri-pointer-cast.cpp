@@ -1,6 +1,8 @@
-// RUN: %clang_cc1 -triple mips64-unknown-freebsd -target-abi n64 %s -std=c++14 -verify
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi n64 %s -std=c++14 -verify
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap %s -std=c++14 -verify
+/ RUN: %clang_cc1 -triple mips64-unknown-freebsd -target-abi n64 %s -std=c++14 -verify
+/ RUN: %clang_cc1 -triple cheri-unknown-freebsd  -target-abi n64 %s -std=c++14 -verify
+/ RUN: %clang_cc1 -triple cheri-unknown-freebsd  -target-abi purecap %s -std=c++14 -verify
+
+#pragma clang diagnostic warning "-Wcapability-to-integer-cast"
 
 typedef unsigned int uint;
 typedef unsigned long ulong;

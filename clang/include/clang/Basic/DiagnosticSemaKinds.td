@@ -5899,11 +5899,9 @@ def warn_capability_no_provenance : Warning<
   InGroup<CHERICaps>;
 def warn_capability_integer_cast : Warning<
   "cast from capability type %0 to non-capability, non-address type %1 is most likely an error">,
-// XXXAR: this is currently too noisy when building CHERIBSD, have if off for now
-//  InGroup<CHERICapabilityToIntegerCast>;
-// XXXAR: not sure how to add a new CHERIPedantic group
-//  InGroup<CHERIPedantic>;
-  InGroup<Pedantic>;
+  // XXXAR: this is currently too noisy when building CHERIBSD, have if off for now
+  // InGroup<CHERICapabilityToIntegerCast>;
+  InGroup<CHERICapabilityToIntegerCast>, DefaultIgnore;
 def note_insert_intptr_fixit : Note<
   "insert cast to intptr_t to silence this warning">;
 def note_use_cheri_cast : Note<

@@ -1,6 +1,9 @@
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -std=c++11 -o - %s -fsyntax-only -verify
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -std=c++11 -target-abi purecap -o - %s -fsyntax-only -verify
 
+#pragma clang diagnostic warning "-Wcapability-to-integer-cast"
+
+
 #if !__has_attribute(memory_address)
 #error "memory_address attribute not supported"
 #endif
