@@ -117,7 +117,7 @@ void foo(void) {
   // AST: CStyleCastExpr {{.+}} 'long __attribute__((memory_address))':'long' <PointerToIntegral>
 
 #ifndef __CHERI_PURE_CAPABILITY__
-  word* x17 = (word*)a; // expected-warning {{cast from capability type 'void * __capability' to non-capability, non-address type 'word *' (aka '__uintcap_t *') is most likely an error}} expected-note{{use __cheri_cast to convert between pointers and capabilities}}
+  word* x17 = (word*)a; // expected-error {{cast from capability type 'void * __capability' to integer pointer type 'word *' (aka '__uintcap_t *') is most likely an error}} expected-note{{use __cheri_cast to convert between pointers and capabilities}}
   // AST: CStyleCastExpr {{.+}} 'word *' <CHERICapabilityToPointer>
 #endif
 }
