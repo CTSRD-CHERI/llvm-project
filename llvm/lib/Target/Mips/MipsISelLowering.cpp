@@ -3591,6 +3591,7 @@ SDValue MipsTargetLowering::LowerFormalArguments(
 
   unsigned CurArgIdx = 0;
   CCInfo.rewindByValRegsInfo();
+  unsigned CapArgReg = -1U;
 
   for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
     CCValAssign &VA = ArgLocs[i];
@@ -3663,16 +3664,25 @@ SDValue MipsTargetLowering::LowerFormalArguments(
       // sanity check
       assert(VA.isMemLoc());
 
-      // The stack pointer offset is relative to the caller stack frame.
-      int FI = MFI.CreateFixedObject(LocVT.getSizeInBits() / 8,
-                                     VA.getLocMemOffset(), true);
 
       // Create load nodes to retrieve arguments from the stack
-      SDValue FIN = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout(),
-                  ABI.StackAddrSpace()));
-      SDValue ArgValue = DAG.getLoad(
-          LocVT, DL, Chain, FIN,
-          MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI));
+      SDValue ArgValue;
+      if (ABI.IsCheriPureCap()) {
+        if (CapArgReg == -1U)
+          CapArgReg = MF.addLiveIn(Mips::C13, getRegClassFor(MVT::iFATPTR));
+        SDValue Addr = DAG.getPointerAdd(DL, DAG.getCopyFromReg(Chain, DL,
+              CapArgReg, MVT::iFATPTR), VA.getLocMemOffset());
+        ArgValue = DAG.getLoad(LocVT, DL, Chain, Addr, MachinePointerInfo());
+      } else {
+        // The stack pointer offset is relative to the caller stack frame.
+        int FI = MFI.CreateFixedObject(LocVT.getSizeInBits() / 8,
+                                       VA.getLocMemOffset(), true);
+        SDValue FIN = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout(),
+                    ABI.StackAddrSpace()));
+        ArgValue = DAG.getLoad(
+            LocVT, DL, Chain, FIN,
+            MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI));
+      }
       OutChains.push_back(ArgValue.getValue(1));
 
       ArgValue = UnpackFromArgumentSlot(ArgValue, VA, Ins[i].ArgVT, DL, DAG);
