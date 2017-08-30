@@ -3282,16 +3282,20 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     MemOpChains.push_back(passArgOnStack(StackPtr, VA.getLocMemOffset(),
                                          Chain, Arg, DL, IsTailCall, DAG));
   }
-  if ((FirstOffset != -1) && ABI.IsCheriPureCap()) {
-    Intrinsic::ID SetBounds = Intrinsic::cheri_cap_bounds_set;
-    SDValue PtrOff = DAG.getPointerAdd(DL, StackPtr, FirstOffset);
-    PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
-        DAG.getConstant(SetBounds, DL, MVT::i64), PtrOff,
-        DAG.getIntPtrConstant(LastOffset, DL));
-    PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
-        DAG.getConstant(Intrinsic::cheri_cap_perms_and, DL, MVT::i64), PtrOff,
-        DAG.getIntPtrConstant(0xFFD7, DL));
-    RegsToPass.push_back(std::make_pair(Mips::C13, PtrOff));
+  if (ABI.IsCheriPureCap()) {
+    if (FirstOffset != -1) {
+      Intrinsic::ID SetBounds = Intrinsic::cheri_cap_bounds_set;
+      SDValue PtrOff = DAG.getPointerAdd(DL, StackPtr, FirstOffset);
+      PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
+          DAG.getConstant(SetBounds, DL, MVT::i64), PtrOff,
+          DAG.getIntPtrConstant(LastOffset, DL));
+      PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
+          DAG.getConstant(Intrinsic::cheri_cap_perms_and, DL, MVT::i64), PtrOff,
+          DAG.getIntPtrConstant(0xFFD7, DL));
+      RegsToPass.push_back(std::make_pair(Mips::C13, PtrOff));
+    } else
+      RegsToPass.push_back(std::make_pair(Mips::C13,
+                                        DAG.getConstant(0, DL, MVT::iFATPTR)));
   }
   // If we're doing a CCall then any unused arg registers should be zero.
   if (!UseClearRegs && (CallConv == CallingConv::CHERI_CCall)) {
