@@ -238,11 +238,15 @@ getReservedRegs(const MachineFunction &MF) const {
   if (Subtarget.isCheri()) {
     for (unsigned I = 0; I < array_lengthof(ReservedCheriRegs); ++I)
       Reserved.set(ReservedCheriRegs[I]);
+    auto &ABI = Subtarget.getABI();
+    auto *FL =
+      static_cast<const MipsFrameLowering*>(Subtarget.getFrameLowering());
     if (Subtarget.isABI_CheriPureCap()) {
-      // $CSP
-      Reserved.set(Mips::C11);
-      // $CFP
-      Reserved.set(Mips::C24);
+      Reserved.set(ABI.GetStackPtr());
+      if (FL->hasFP(MF))
+        Reserved.set(ABI.GetFramePtr());
+      if (FL->hasBP(MF))
+        Reserved.set(ABI.GetBasePtr());
     }
     if (Cheri8)
       for (unsigned I = 0; I < array_lengthof(ReservedCheri8Regs); ++I)
