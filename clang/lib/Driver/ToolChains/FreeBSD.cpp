@@ -259,6 +259,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     addOpenMPRuntime(CmdArgs, ToolChain, Args);
+    CmdArgs.push_back("--start-group");
     if (D.CCCIsCXX()) {
       ToolChain.AddCXXStdlibLibArgs(Args, CmdArgs);
       if (Args.hasArg(options::OPT_pg))
@@ -311,6 +312,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-lgcc_s");
       CmdArgs.push_back("--no-as-needed");
     }
+    CmdArgs.push_back("--end-group");
   }
 
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
