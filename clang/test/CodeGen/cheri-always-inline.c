@@ -3,9 +3,6 @@
 // Check that we haven't broken the inliner and that, even at -O0, we end up
 // with foo being eliminated and baz calling bar directly
 
-// currently broken because the optimization change had to be reverted
-// XFAIL: *
-
 void bar();
 
 __attribute__ ((__always_inline__))
