@@ -8938,7 +8938,21 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
       // FIXME: Allow a larger integer size than the pointer size, and allow
       // narrowing back down to pointer width in subsequent integral casts.
       // FIXME: Check integer type's active bits, not its type size.
-      if (Info.Ctx.getTypeSize(DestType) != Info.Ctx.getTypeSize(SrcType))
+      uint64_t DestUsableBits = Info.Ctx.getTypeSize(DestType);
+      uint64_t SrcBits = Info.Ctx.getTypeSize(SrcType);
+
+
+      // XXXAR: In C the only way to silence -Wcast-qual is by casting via a uintptr_t
+      // This happens e.g. in the FreeBSD __DECONST/__DEVOLATILE macros so we need to
+      // allow that case
+      if (DestType->isCHERICapabilityType(Info.Ctx)) {
+        DestUsableBits = Info.Ctx.getTargetInfo().getPointerRangeForCHERICapability();
+      }
+      if (SrcType->isCHERICapabilityType(Info.Ctx)) {
+        SrcBits = Info.Ctx.getTargetInfo().getPointerRangeForCHERICapability();
+      }
+      // XXXAR: There should be a more useful diagnostic here
+      if (DestUsableBits != SrcBits)
         return Error(E);
 
       LV.Designator.setInvalid();
