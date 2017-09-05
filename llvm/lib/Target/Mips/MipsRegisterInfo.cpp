@@ -175,11 +175,11 @@ const uint32_t *MipsRegisterInfo::getMips16RetHelperMask() {
 BitVector MipsRegisterInfo::
 getReservedRegs(const MachineFunction &MF) const {
   static const MCPhysReg ReservedGPR32[] = {
-    Mips::ZERO, Mips::K0, Mips::K1, Mips::SP
+    Mips::ZERO, Mips::K0, Mips::K1
   };
 
   static const MCPhysReg ReservedGPR64[] = {
-    Mips::ZERO_64, Mips::K0_64, Mips::K1_64, Mips::SP_64
+    Mips::ZERO_64, Mips::K0_64, Mips::K1_64
   };
 
   static const uint16_t ReservedCheriRegs[] = {
@@ -216,6 +216,12 @@ getReservedRegs(const MachineFunction &MF) const {
 
   for (unsigned I = 0; I < array_lengthof(ReservedGPR64); ++I)
     Reserved.set(ReservedGPR64[I]);
+
+  // In the CHERI pure-capability ABI, $sp is just another temporary register.
+  if (!Subtarget.isABI_CheriPureCap()) {
+    Reserved.set(Mips::SP);
+    Reserved.set(Mips::SP_64);
+  }
 
   // For mno-abicalls, GP is a program invariant!
   if (!Subtarget.isABICalls()) {

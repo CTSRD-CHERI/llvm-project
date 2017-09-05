@@ -690,3 +690,11 @@ def : Pat<(load AddrFI:$addr),
               (CAPLOAD64 ZERO_64, (i64 0), $addr)>;
 def : Pat<(load AddrFI:$addr),
               (LOADCAP ZERO_64, (i64 0), $addr)>;
+
+let Defs = [C11], Uses = [C11], hasSideEffects = 1, Predicates=[IsCHERIABI] in {
+def ADJCALLSTACKCAPDOWN : MipsPseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
+                                  [(callseq_start timm:$amt1, timm:$amt2)]>;
+def ADJCALLSTACKCAPUP   : MipsPseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
+                                  [(callseq_end timm:$amt1, timm:$amt2)]>;
+}
+

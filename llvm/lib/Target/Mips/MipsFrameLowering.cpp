@@ -145,11 +145,12 @@ uint64_t MipsFrameLowering::estimateStackSize(const MachineFunction &MF) const {
 MachineBasicBlock::iterator MipsFrameLowering::
 eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
                               MachineBasicBlock::iterator I) const {
-  unsigned SP = STI.getABI().IsN64() ? Mips::SP_64 : Mips::SP;
+  unsigned SP = STI.getABI().GetStackPtr();
 
   if (!hasReservedCallFrame(MF)) {
     int64_t Amount = I->getOperand(0).getImm();
-    if (I->getOpcode() == Mips::ADJCALLSTACKDOWN)
+    if ((I->getOpcode() == Mips::ADJCALLSTACKDOWN) ||
+        (I->getOpcode() == Mips::ADJCALLSTACKCAPDOWN))
       Amount = -Amount;
 
     STI.getInstrInfo()->adjustStackPtr(SP, Amount, MBB, I);

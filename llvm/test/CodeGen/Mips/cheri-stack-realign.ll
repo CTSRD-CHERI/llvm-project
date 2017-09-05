@@ -7,9 +7,9 @@ target triple = "cheri-unknown-freebsd"
 ; Function Attrs: nounwind
 define void @dynamic_alloca(i32 signext %x) local_unnamed_addr #0 {
 entry:
-  ; CHECK: cgetoffset	$[[SPOFFSET:[0-9]+]], $c11
-  ; CHECK: daddiu	$[[MASK:[0-9]+]], $zero, -64
-  ; CHECK: and	$[[NEWSPOFFSET:[0-9]+]], $[[SPOFFSET]], $[[MASK]]
+  ; CHECK: cgetoffset	$[[SPOFFSET:([0-9]+|sp)]], $c11
+  ; CHECK: daddiu	$[[MASK:([0-9]+|sp)]], $zero, -64
+  ; CHECK: and	$[[NEWSPOFFSET:([0-9]+|sp)]], $[[SPOFFSET]], $[[MASK]]
   ; CHECK: csetoffset	$c11, $c11, $[[NEWSPOFFSET]]
 
   %0 = zext i32 %x to i64
