@@ -4270,6 +4270,16 @@ bool MipsTargetLowering::isLegalAddressingMode(const DataLayout &DL,
   if (AM.BaseGV)
     return false;
 
+  if (AS == 200) {
+    switch (AM.Scale) {
+    case 0: // "r+i" or just "i", depending on HasBaseReg.
+    case 1:
+      return true;
+    default:
+      return false;
+    }
+  }
+
   switch (AM.Scale) {
   case 0: // "r+i" or just "i", depending on HasBaseReg.
     break;
