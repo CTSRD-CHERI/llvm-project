@@ -12,102 +12,83 @@
 
 // C Includes
 // C++ Includes
-
+#include <memory>
 #include <string>
 
 // Other libraries and framework includes
 // Project includes
 #include "Plugins/Platform/Linux/PlatformLinux.h"
 
+#include "AdbClient.h"
+
 namespace lldb_private {
 namespace platform_android {
 
-    class PlatformAndroid : public platform_linux::PlatformLinux
-    {
-    public:
-        static void
-        Initialize ();
+class PlatformAndroid : public platform_linux::PlatformLinux {
+public:
+  PlatformAndroid(bool is_host);
 
-        static void
-        Terminate ();
+  ~PlatformAndroid() override;
 
-        PlatformAndroid (bool is_host);
+  static void Initialize();
 
-        virtual
-        ~PlatformAndroid();
+  static void Terminate();
 
-        //------------------------------------------------------------
-        // lldb_private::PluginInterface functions
-        //------------------------------------------------------------
-        static lldb::PlatformSP
-        CreateInstance (bool force, const ArchSpec *arch);
+  //------------------------------------------------------------
+  // lldb_private::PluginInterface functions
+  //------------------------------------------------------------
+  static lldb::PlatformSP CreateInstance(bool force, const ArchSpec *arch);
 
-        static ConstString
-        GetPluginNameStatic (bool is_host);
+  static ConstString GetPluginNameStatic(bool is_host);
 
-        static const char *
-        GetPluginDescriptionStatic (bool is_host);
+  static const char *GetPluginDescriptionStatic(bool is_host);
 
-        ConstString
-        GetPluginName() override;
-        
-        uint32_t
-        GetPluginVersion() override
-        {
-            return 1;
-        }
+  ConstString GetPluginName() override;
 
-        //------------------------------------------------------------
-        // lldb_private::Platform functions
-        //------------------------------------------------------------
+  uint32_t GetPluginVersion() override { return 1; }
 
-        Error
-        ConnectRemote (Args& args) override;
+  //------------------------------------------------------------
+  // lldb_private::Platform functions
+  //------------------------------------------------------------
 
-        Error
-        GetFile (const FileSpec& source,
-                 const FileSpec& destination) override;
+  Status ConnectRemote(Args &args) override;
 
-        Error
-        PutFile (const FileSpec& source,
-                 const FileSpec& destination,
-                 uint32_t uid = UINT32_MAX,
-                 uint32_t gid = UINT32_MAX) override;
-        
-        uint32_t
-        GetSdkVersion();
+  Status GetFile(const FileSpec &source, const FileSpec &destination) override;
 
-        bool
-        GetRemoteOSVersion() override;
+  Status PutFile(const FileSpec &source, const FileSpec &destination,
+                 uint32_t uid = UINT32_MAX, uint32_t gid = UINT32_MAX) override;
 
-        Error
-        DisconnectRemote () override;
+  uint32_t GetSdkVersion();
 
-        uint32_t
-        GetDefaultMemoryCacheLineSize() override;
+  bool GetRemoteOSVersion() override;
 
-     protected:
-        const char *
-        GetCacheHostname () override;
+  Status DisconnectRemote() override;
 
-        Error
-        DownloadModuleSlice (const FileSpec &src_file_spec,
-                             const uint64_t src_offset,
-                             const uint64_t src_size,
+  uint32_t GetDefaultMemoryCacheLineSize() override;
+
+protected:
+  const char *GetCacheHostname() override;
+
+  Status DownloadModuleSlice(const FileSpec &src_file_spec,
+                             const uint64_t src_offset, const uint64_t src_size,
                              const FileSpec &dst_file_spec) override;
 
-        Error
-        DownloadSymbolFile (const lldb::ModuleSP& module_sp,
-                            const FileSpec& dst_file_spec) override;
+  Status DownloadSymbolFile(const lldb::ModuleSP &module_sp,
+                            const FileSpec &dst_file_spec) override;
 
-    private:
-        std::string m_device_id;
-        uint32_t m_sdk_version;
+  const char *GetLibdlFunctionDeclarations() const override;
 
-        DISALLOW_COPY_AND_ASSIGN (PlatformAndroid);
-    };
+private:
+  AdbClient::SyncService *GetSyncService(Status &error);
+
+  std::unique_ptr<AdbClient::SyncService> m_adb_sync_svc;
+  std::string m_device_id;
+  uint32_t m_sdk_version;
+
+  DISALLOW_COPY_AND_ASSIGN(PlatformAndroid);
+};
 
 } // namespace platofor_android
 } // namespace lldb_private
 
-#endif  // liblldb_PlatformAndroid_h_
+#endif // liblldb_PlatformAndroid_h_

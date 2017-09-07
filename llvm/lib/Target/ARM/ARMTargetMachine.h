@@ -14,10 +14,14 @@
 #ifndef LLVM_LIB_TARGET_ARM_ARMTARGETMACHINE_H
 #define LLVM_LIB_TARGET_ARM_ARMTARGETMACHINE_H
 
-#include "ARMInstrInfo.h"
 #include "ARMSubtarget.h"
-#include "llvm/IR/DataLayout.h"
+#include "llvm/ADT/Optional.h"
+#include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Analysis/TargetTransformInfo.h"
+#include "llvm/Support/CodeGen.h"
 #include "llvm/Target/TargetMachine.h"
+#include <memory>
 
 namespace llvm {
 
@@ -26,19 +30,20 @@ public:
   enum ARMABI {
     ARM_ABI_UNKNOWN,
     ARM_ABI_APCS,
-    ARM_ABI_AAPCS // ARM EABI
+    ARM_ABI_AAPCS, // ARM EABI
+    ARM_ABI_AAPCS16
   } TargetABI;
 
 protected:
   std::unique_ptr<TargetLoweringObjectFile> TLOF;
-  ARMSubtarget        Subtarget;
+  ARMSubtarget Subtarget;
   bool isLittle;
   mutable StringMap<std::unique_ptr<ARMSubtarget>> SubtargetMap;
 
 public:
   ARMBaseTargetMachine(const Target &T, const Triple &TT, StringRef CPU,
                        StringRef FS, const TargetOptions &Options,
-                       Reloc::Model RM, CodeModel::Model CM,
+                       Optional<Reloc::Model> RM, CodeModel::Model CM,
                        CodeGenOpt::Level OL, bool isLittle);
   ~ARMBaseTargetMachine() override;
 
@@ -57,73 +62,26 @@ public:
   }
 };
 
-/// ARMTargetMachine - ARM target machine.
+/// ARM/Thumb little endian target machine.
 ///
-class ARMTargetMachine : public ARMBaseTargetMachine {
-  virtual void anchor();
- public:
-   ARMTargetMachine(const Target &T, const Triple &TT, StringRef CPU,
-                    StringRef FS, const TargetOptions &Options, Reloc::Model RM,
-                    CodeModel::Model CM, CodeGenOpt::Level OL, bool isLittle);
-};
-
-/// ARMLETargetMachine - ARM little endian target machine.
-///
-class ARMLETargetMachine : public ARMTargetMachine {
-  void anchor() override;
+class ARMLETargetMachine : public ARMBaseTargetMachine {
 public:
   ARMLETargetMachine(const Target &T, const Triple &TT, StringRef CPU,
                      StringRef FS, const TargetOptions &Options,
-                     Reloc::Model RM, CodeModel::Model CM,
+                     Optional<Reloc::Model> RM, CodeModel::Model CM,
                      CodeGenOpt::Level OL);
 };
 
-/// ARMBETargetMachine - ARM big endian target machine.
+/// ARM/Thumb big endian target machine.
 ///
-class ARMBETargetMachine : public ARMTargetMachine {
-  void anchor() override;
+class ARMBETargetMachine : public ARMBaseTargetMachine {
 public:
   ARMBETargetMachine(const Target &T, const Triple &TT, StringRef CPU,
                      StringRef FS, const TargetOptions &Options,
-                     Reloc::Model RM, CodeModel::Model CM,
+                     Optional<Reloc::Model> RM, CodeModel::Model CM,
                      CodeGenOpt::Level OL);
-};
-
-/// ThumbTargetMachine - Thumb target machine.
-/// Due to the way architectures are handled, this represents both
-///   Thumb-1 and Thumb-2.
-///
-class ThumbTargetMachine : public ARMBaseTargetMachine {
-  virtual void anchor();
-public:
-  ThumbTargetMachine(const Target &T, const Triple &TT, StringRef CPU,
-                     StringRef FS, const TargetOptions &Options,
-                     Reloc::Model RM, CodeModel::Model CM, CodeGenOpt::Level OL,
-                     bool isLittle);
-};
-
-/// ThumbLETargetMachine - Thumb little endian target machine.
-///
-class ThumbLETargetMachine : public ThumbTargetMachine {
-  void anchor() override;
-public:
-  ThumbLETargetMachine(const Target &T, const Triple &TT, StringRef CPU,
-                       StringRef FS, const TargetOptions &Options,
-                       Reloc::Model RM, CodeModel::Model CM,
-                       CodeGenOpt::Level OL);
-};
-
-/// ThumbBETargetMachine - Thumb big endian target machine.
-///
-class ThumbBETargetMachine : public ThumbTargetMachine {
-  void anchor() override;
-public:
-  ThumbBETargetMachine(const Target &T, const Triple &TT, StringRef CPU,
-                       StringRef FS, const TargetOptions &Options,
-                       Reloc::Model RM, CodeModel::Model CM,
-                       CodeGenOpt::Level OL);
 };
 
 } // end namespace llvm
 
-#endif
+#endif // LLVM_LIB_TARGET_ARM_ARMTARGETMACHINE_H

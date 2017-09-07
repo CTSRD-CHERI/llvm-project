@@ -16,7 +16,6 @@
 
 #include "clang-c/Index.h"
 #include "clang/AST/ASTContext.h"
-#include "clang/Basic/FileManager.h"
 #include "clang/Basic/FileSystemOptions.h"
 #include "clang/Basic/LangOptions.h"
 #include "clang/Basic/SourceManager.h"
@@ -30,9 +29,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/MD5.h"
-#include "llvm/Support/Path.h"
 #include <cassert>
-#include <map>
 #include <memory>
 #include <string>
 #include <sys/types.h>
@@ -47,7 +44,6 @@ namespace clang {
 class Sema;
 class ASTContext;
 class ASTReader;
-class CodeCompleteConsumer;
 class CompilerInvocation;
 class CompilerInstance;
 class Decl;
@@ -55,13 +51,17 @@ class DiagnosticsEngine;
 class FileEntry;
 class FileManager;
 class HeaderSearch;
+class MemoryBufferCache;
 class Preprocessor;
 class PCHContainerOperations;
 class PCHContainerReader;
-class SourceManager;
 class TargetInfo;
-class ASTFrontendAction;
+class FrontendAction;
 class ASTDeserializationListener;
+
+namespace vfs {
+class FileSystem;
+}
 
 /// \brief Utility class for loading a ASTContext from an AST file.
 ///
@@ -89,12 +89,13 @@ private:
   IntrusiveRefCntPtr<DiagnosticsEngine>   Diagnostics;
   IntrusiveRefCntPtr<FileManager>         FileMgr;
   IntrusiveRefCntPtr<SourceManager>       SourceMgr;
+  IntrusiveRefCntPtr<MemoryBufferCache>   PCMCache;
   std::unique_ptr<HeaderSearch>           HeaderInfo;
   IntrusiveRefCntPtr<TargetInfo>          Target;
-  IntrusiveRefCntPtr<Preprocessor>        PP;
+  std::shared_ptr<Preprocessor>           PP;
   IntrusiveRefCntPtr<ASTContext>          Ctx;
   std::shared_ptr<TargetOptions>          TargetOpts;
-  IntrusiveRefCntPtr<HeaderSearchOptions> HSOpts;
+  std::shared_ptr<HeaderSearchOptions>    HSOpts;
   IntrusiveRefCntPtr<ASTReader> Reader;
   bool HadModuleLoaderFatalFailure;
 
@@ -113,8 +114,8 @@ private:
 
   /// Optional owned invocation, just used to make the invocation used in
   /// LoadFromCommandLine available.
-  IntrusiveRefCntPtr<CompilerInvocation> Invocation;
-  
+  std::shared_ptr<CompilerInvocation> Invocation;
+
   // OnlyLocalDecls - when true, walking this AST should only visit declarations
   // that come from the AST itself, not from included precompiled headers.
   // FIXME: This is temporary; eventually, CIndex will always do this.
@@ -363,22 +364,21 @@ public:
   }
   
   /// \brief Retrieve the allocator used to cache global code completions.
-  IntrusiveRefCntPtr<GlobalCodeCompletionAllocator>
+  std::shared_ptr<GlobalCodeCompletionAllocator>
   getCachedCompletionAllocator() {
     return CachedCompletionAllocator;
   }
 
   CodeCompletionTUInfo &getCodeCompletionTUInfo() {
     if (!CCTUInfo)
-      CCTUInfo.reset(new CodeCompletionTUInfo(
-                                            new GlobalCodeCompletionAllocator));
+      CCTUInfo = llvm::make_unique<CodeCompletionTUInfo>(
+          std::make_shared<GlobalCodeCompletionAllocator>());
     return *CCTUInfo;
   }
 
 private:
   /// \brief Allocator used to store cached code completions.
-  IntrusiveRefCntPtr<GlobalCodeCompletionAllocator>
-    CachedCompletionAllocator;
+  std::shared_ptr<GlobalCodeCompletionAllocator> CachedCompletionAllocator;
 
   std::unique_ptr<CodeCompletionTUInfo> CCTUInfo;
 
@@ -423,9 +423,9 @@ private:
   
   explicit ASTUnit(bool MainFileIsAST);
 
-  void CleanTemporaryFiles();
   bool Parse(std::shared_ptr<PCHContainerOperations> PCHContainerOps,
-             std::unique_ptr<llvm::MemoryBuffer> OverrideMainBuffer);
+             std::unique_ptr<llvm::MemoryBuffer> OverrideMainBuffer,
+             IntrusiveRefCntPtr<vfs::FileSystem> VFS);
 
   struct ComputedPreamble {
     llvm::MemoryBuffer *Buffer;
@@ -437,16 +437,15 @@ private:
                      bool PreambleEndsAtStartOfLine)
         : Buffer(Buffer), Owner(std::move(Owner)), Size(Size),
           PreambleEndsAtStartOfLine(PreambleEndsAtStartOfLine) {}
-    ComputedPreamble(ComputedPreamble &&C)
-        : Buffer(C.Buffer), Owner(std::move(C.Owner)), Size(C.Size),
-          PreambleEndsAtStartOfLine(C.PreambleEndsAtStartOfLine) {}
   };
   ComputedPreamble ComputePreamble(CompilerInvocation &Invocation,
-                                   unsigned MaxLines);
+                                   unsigned MaxLines,
+                                   IntrusiveRefCntPtr<vfs::FileSystem> VFS);
 
   std::unique_ptr<llvm::MemoryBuffer> getMainBufferWithPrecompiledPreamble(
       std::shared_ptr<PCHContainerOperations> PCHContainerOps,
-      const CompilerInvocation &PreambleInvocationIn, bool AllowRebuild = true,
+      const CompilerInvocation &PreambleInvocationIn,
+      IntrusiveRefCntPtr<vfs::FileSystem> VFS, bool AllowRebuild = true,
       unsigned MaxLines = 0);
   void RealizeTopLevelDeclsFromPreamble();
 
@@ -504,12 +503,13 @@ public:
 
   const Preprocessor &getPreprocessor() const { return *PP; }
         Preprocessor &getPreprocessor()       { return *PP; }
+  std::shared_ptr<Preprocessor> getPreprocessorPtr() const { return PP; }
 
   const ASTContext &getASTContext() const { return *Ctx; }
         ASTContext &getASTContext()       { return *Ctx; }
 
   void setASTContext(ASTContext *ctx) { Ctx = ctx; }
-  void setPreprocessor(Preprocessor *pp);
+  void setPreprocessor(std::shared_ptr<Preprocessor> pp);
 
   bool hasSema() const { return (bool)TheSema; }
   Sema &getSema() const { 
@@ -527,17 +527,14 @@ public:
 
   const FileSystemOptions &getFileSystemOpts() const { return FileSystemOpts; }
 
+  IntrusiveRefCntPtr<ASTReader> getASTReader() const;
+
   StringRef getOriginalSourceFileName() {
     return OriginalSourceFile;
   }
 
   ASTMutationListener *getASTMutationListener();
   ASTDeserializationListener *getDeserializationListener();
-
-  /// \brief Add a temporary file that the ASTUnit depends on.
-  ///
-  /// This file will be erased when the ASTUnit is destroyed.
-  void addTemporaryFile(StringRef TempFile);
 
   bool getOnlyLocalDecls() const { return OnlyLocalDecls; }
 
@@ -709,11 +706,11 @@ public:
   /// remapped contents of that file.
   typedef std::pair<std::string, llvm::MemoryBuffer *> RemappedFile;
 
-  /// \brief Create a ASTUnit. Gets ownership of the passed CompilerInvocation. 
-  static ASTUnit *create(CompilerInvocation *CI,
-                         IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
-                         bool CaptureDiagnostics,
-                         bool UserFilesAreVolatile);
+  /// \brief Create a ASTUnit. Gets ownership of the passed CompilerInvocation.
+  static std::unique_ptr<ASTUnit>
+  create(std::shared_ptr<CompilerInvocation> CI,
+         IntrusiveRefCntPtr<DiagnosticsEngine> Diags, bool CaptureDiagnostics,
+         bool UserFilesAreVolatile);
 
   /// \brief Create a ASTUnit from an AST file.
   ///
@@ -737,14 +734,21 @@ private:
   /// \brief Helper function for \c LoadFromCompilerInvocation() and
   /// \c LoadFromCommandLine(), which loads an AST from a compiler invocation.
   ///
-  /// \param PrecompilePreamble Whether to precompile the preamble of this
-  /// translation unit, to improve the performance of reparsing.
+  /// \param PrecompilePreambleAfterNParses After how many parses the preamble
+  /// of this translation unit should be precompiled, to improve the performance
+  /// of reparsing. Set to zero to disable preambles.
+  ///
+  /// \param VFS - A vfs::FileSystem to be used for all file accesses. Note that
+  /// preamble is saved to a temporary directory on a RealFileSystem, so in order
+  /// for it to be loaded correctly, VFS should have access to it(i.e., be an
+  /// overlay over RealFileSystem).
   ///
   /// \returns \c true if a catastrophic failure occurred (which means that the
   /// \c ASTUnit itself is invalid), or \c false otherwise.
   bool LoadFromCompilerInvocation(
       std::shared_ptr<PCHContainerOperations> PCHContainerOps,
-      bool PrecompilePreamble);
+      unsigned PrecompilePreambleAfterNParses,
+      IntrusiveRefCntPtr<vfs::FileSystem> VFS);
 
 public:
   
@@ -777,13 +781,14 @@ public:
   /// created ASTUnit was passed in \p Unit then the caller can check that.
   ///
   static ASTUnit *LoadFromCompilerInvocationAction(
-      CompilerInvocation *CI,
+      std::shared_ptr<CompilerInvocation> CI,
       std::shared_ptr<PCHContainerOperations> PCHContainerOps,
       IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
-      ASTFrontendAction *Action = nullptr, ASTUnit *Unit = nullptr,
+      FrontendAction *Action = nullptr, ASTUnit *Unit = nullptr,
       bool Persistent = true, StringRef ResourceFilesPath = StringRef(),
       bool OnlyLocalDecls = false, bool CaptureDiagnostics = false,
-      bool PrecompilePreamble = false, bool CacheCodeCompletionResults = false,
+      unsigned PrecompilePreambleAfterNParses = 0,
+      bool CacheCodeCompletionResults = false,
       bool IncludeBriefCommentsInCodeCompletion = false,
       bool UserFilesAreVolatile = false,
       std::unique_ptr<ASTUnit> *ErrAST = nullptr);
@@ -803,11 +808,12 @@ public:
   // FIXME: Move OnlyLocalDecls, UseBumpAllocator to setters on the ASTUnit, we
   // shouldn't need to specify them at construction time.
   static std::unique_ptr<ASTUnit> LoadFromCompilerInvocation(
-      CompilerInvocation *CI,
+      std::shared_ptr<CompilerInvocation> CI,
       std::shared_ptr<PCHContainerOperations> PCHContainerOps,
       IntrusiveRefCntPtr<DiagnosticsEngine> Diags, FileManager *FileMgr,
       bool OnlyLocalDecls = false, bool CaptureDiagnostics = false,
-      bool PrecompilePreamble = false, TranslationUnitKind TUKind = TU_Complete,
+      unsigned PrecompilePreambleAfterNParses = 0,
+      TranslationUnitKind TUKind = TU_Complete,
       bool CacheCodeCompletionResults = false,
       bool IncludeBriefCommentsInCodeCompletion = false,
       bool UserFilesAreVolatile = false);
@@ -827,9 +833,16 @@ public:
   ///
   /// \param ResourceFilesPath - The path to the compiler resource files.
   ///
+  /// \param ModuleFormat - If provided, uses the specific module format.
+  ///
   /// \param ErrAST - If non-null and parsing failed without any AST to return
   /// (e.g. because the PCH could not be loaded), this accepts the ASTUnit
   /// mainly to allow the caller to see the diagnostics.
+  ///
+  /// \param VFS - A vfs::FileSystem to be used for all file accesses. Note that
+  /// preamble is saved to a temporary directory on a RealFileSystem, so in order
+  /// for it to be loaded correctly, VFS should have access to it(i.e., be an
+  /// overlay over RealFileSystem). RealFileSystem will be used if \p VFS is nullptr.
   ///
   // FIXME: Move OnlyLocalDecls, UseBumpAllocator to setters on the ASTUnit, we
   // shouldn't need to specify them at construction time.
@@ -840,20 +853,35 @@ public:
       bool OnlyLocalDecls = false, bool CaptureDiagnostics = false,
       ArrayRef<RemappedFile> RemappedFiles = None,
       bool RemappedFilesKeepOriginalName = true,
-      bool PrecompilePreamble = false, TranslationUnitKind TUKind = TU_Complete,
+      unsigned PrecompilePreambleAfterNParses = 0,
+      TranslationUnitKind TUKind = TU_Complete,
       bool CacheCodeCompletionResults = false,
       bool IncludeBriefCommentsInCodeCompletion = false,
       bool AllowPCHWithCompilerErrors = false, bool SkipFunctionBodies = false,
       bool UserFilesAreVolatile = false, bool ForSerialization = false,
-      std::unique_ptr<ASTUnit> *ErrAST = nullptr);
+      llvm::Optional<StringRef> ModuleFormat = llvm::None,
+      std::unique_ptr<ASTUnit> *ErrAST = nullptr,
+      IntrusiveRefCntPtr<vfs::FileSystem> VFS = nullptr);
 
   /// \brief Reparse the source files using the same command-line options that
   /// were originally used to produce this translation unit.
   ///
+  /// \param VFS - A vfs::FileSystem to be used for all file accesses. Note that
+  /// preamble is saved to a temporary directory on a RealFileSystem, so in order
+  /// for it to be loaded correctly, VFS should give an access to this(i.e. be an
+  /// overlay over RealFileSystem). FileMgr->getVirtualFileSystem() will be used if
+  /// \p VFS is nullptr.
+  ///
   /// \returns True if a failure occurred that causes the ASTUnit not to
   /// contain any translation-unit information, false otherwise.
   bool Reparse(std::shared_ptr<PCHContainerOperations> PCHContainerOps,
-               ArrayRef<RemappedFile> RemappedFiles = None);
+               ArrayRef<RemappedFile> RemappedFiles = None,
+               IntrusiveRefCntPtr<vfs::FileSystem> VFS = nullptr);
+
+  /// \brief Free data that will be re-generated on the next parse.
+  ///
+  /// Preamble-related data is not affected.
+  void ResetForParse();
 
   /// \brief Perform code completion at the given file, line, and
   /// column within this translation unit.

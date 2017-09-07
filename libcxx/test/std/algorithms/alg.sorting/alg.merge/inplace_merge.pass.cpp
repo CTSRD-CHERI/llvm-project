@@ -16,6 +16,7 @@
 //   inplace_merge(Iter first, Iter middle, Iter last);
 
 #include <algorithm>
+#include <random>
 #include <cassert>
 
 #include "test_iterators.h"
@@ -24,23 +25,25 @@
 struct S {
 	S() : i_(0) {}
 	S(int i) : i_(i) {}
-	
+
 	S(const S&  rhs) : i_(rhs.i_) {}
 	S(      S&& rhs) : i_(rhs.i_) { rhs.i_ = -1; }
-	
+
 	S& operator =(const S&  rhs) { i_ = rhs.i_;              return *this; }
 	S& operator =(      S&& rhs) { i_ = rhs.i_; rhs.i_ = -2; assert(this != &rhs); return *this; }
 	S& operator =(int i)         { i_ = i;                   return *this; }
-	
+
 	bool operator  <(const S&  rhs) const { return i_ < rhs.i_; }
 	bool operator ==(const S&  rhs) const { return i_ == rhs.i_; }
 	bool operator ==(int i)         const { return i_ == i; }
 
 	void set(int i) { i_ = i; }
-	
+
 	int i_;
 	};
 #endif
+
+std::mt19937 randomness;
 
 template <class Iter>
 void
@@ -51,14 +54,14 @@ test_one(unsigned N, unsigned M)
     value_type* ia = new value_type[N];
     for (unsigned i = 0; i < N; ++i)
         ia[i] = i;
-    std::random_shuffle(ia, ia+N);
+    std::shuffle(ia, ia+N, randomness);
     std::sort(ia, ia+M);
     std::sort(ia+M, ia+N);
     std::inplace_merge(Iter(ia), Iter(ia+M), Iter(ia+N));
     if(N > 0)
     {
         assert(ia[0] == 0);
-        assert(ia[N-1] == N-1);
+        assert(ia[N-1] == static_cast<value_type>(N-1));
         assert(std::is_sorted(ia, ia+N));
     }
     delete [] ia;

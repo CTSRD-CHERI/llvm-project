@@ -14,14 +14,15 @@
 #include <forward_list>
 #include <cassert>
 #include <iterator>
+#include <cstddef>
 
 #include "min_allocator.h"
 
 typedef int T;
 const T t1[] = {0, 1, 2, 3, 4, 5, 6, 7};
 const T t2[] = {10, 11, 12, 13, 14, 15};
-const int size_t1 = std::end(t1) - std::begin(t1);
-const int size_t2 = std::end(t2) - std::begin(t2);
+const std::ptrdiff_t size_t1 = std::end(t1) - std::begin(t1);
+const std::ptrdiff_t size_t2 = std::end(t2) - std::begin(t2);
 
 template <class C>
 void
@@ -55,7 +56,7 @@ int main()
         }
     }
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     // splicing different containers
     typedef std::forward_list<T, min_allocator<T>> C;

@@ -20,6 +20,7 @@
 #include <cassert>
 #include <vector>
 #include <numeric>
+#include <cstddef>
 
 template <class T>
 inline
@@ -49,12 +50,12 @@ int main()
         D::result_type var = 0;
         D::result_type skew = 0;
         D::result_type kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (std::size_t i = 0; i < u.size(); ++i)
         {
-            D::result_type d = (u[i] - mean);
-            D::result_type d2 = sqr(d);
+            D::result_type dbl = (u[i] - mean);
+            D::result_type d2 = sqr(dbl);
             var += d2;
-            skew += d * d2;
+            skew += dbl * d2;
             kurtosis += d2 * d2;
         }
         var /= u.size();
@@ -89,12 +90,12 @@ int main()
         D::result_type var = 0;
         D::result_type skew = 0;
         D::result_type kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (std::size_t i = 0; i < u.size(); ++i)
         {
-            D::result_type d = (u[i] - mean);
-            D::result_type d2 = sqr(d);
+            D::result_type dbl = (u[i] - mean);
+            D::result_type d2 = sqr(dbl);
             var += d2;
-            skew += d * d2;
+            skew += dbl * d2;
             kurtosis += d2 * d2;
         }
         var /= u.size();
@@ -129,12 +130,12 @@ int main()
         D::result_type var = 0;
         D::result_type skew = 0;
         D::result_type kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (std::size_t i = 0; i < u.size(); ++i)
         {
-            D::result_type d = (u[i] - mean);
-            D::result_type d2 = sqr(d);
+            D::result_type dbl = (u[i] - mean);
+            D::result_type d2 = sqr(dbl);
             var += d2;
-            skew += d * d2;
+            skew += dbl * d2;
             kurtosis += d2 * d2;
         }
         var /= u.size();
@@ -169,12 +170,12 @@ int main()
         D::result_type var = 0;
         D::result_type skew = 0;
         D::result_type kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (std::size_t i = 0; i < u.size(); ++i)
         {
-            D::result_type d = (u[i] - mean);
-            D::result_type d2 = sqr(d);
+            D::result_type dbl = (u[i] - mean);
+            D::result_type d2 = sqr(dbl);
             var += d2;
-            skew += d * d2;
+            skew += dbl * d2;
             kurtosis += d2 * d2;
         }
         var /= u.size();
@@ -209,12 +210,12 @@ int main()
         D::result_type var = 0;
         D::result_type skew = 0;
         D::result_type kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (std::size_t i = 0; i < u.size(); ++i)
         {
-            D::result_type d = (u[i] - mean);
-            D::result_type d2 = sqr(d);
+            D::result_type dbl = (u[i] - mean);
+            D::result_type d2 = sqr(dbl);
             var += d2;
-            skew += d * d2;
+            skew += dbl * d2;
             kurtosis += d2 * d2;
         }
         var /= u.size();
@@ -249,12 +250,12 @@ int main()
         D::result_type var = 0;
         D::result_type skew = 0;
         D::result_type kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (std::size_t i = 0; i < u.size(); ++i)
         {
-            D::result_type d = (u[i] - mean);
-            D::result_type d2 = sqr(d);
+            D::result_type dbl = (u[i] - mean);
+            D::result_type d2 = sqr(dbl);
             var += d2;
-            skew += d * d2;
+            skew += dbl * d2;
             kurtosis += d2 * d2;
         }
         var /= u.size();
@@ -289,12 +290,12 @@ int main()
         D::result_type var = 0;
         D::result_type skew = 0;
         D::result_type kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (std::size_t i = 0; i < u.size(); ++i)
         {
-            D::result_type d = (u[i] - mean);
-            D::result_type d2 = sqr(d);
+            D::result_type dbl = (u[i] - mean);
+            D::result_type d2 = sqr(dbl);
             var += d2;
-            skew += d * d2;
+            skew += dbl * d2;
             kurtosis += d2 * d2;
         }
         var /= u.size();
@@ -329,12 +330,12 @@ int main()
         D::result_type var = 0;
         D::result_type skew = 0;
         D::result_type kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (std::size_t i = 0; i < u.size(); ++i)
         {
-            D::result_type d = (u[i] - mean);
-            D::result_type d2 = sqr(d);
+            D::result_type dbl = (u[i] - mean);
+            D::result_type d2 = sqr(dbl);
             var += d2;
-            skew += d * d2;
+            skew += dbl * d2;
             kurtosis += d2 * d2;
         }
         var /= u.size();
@@ -369,12 +370,12 @@ int main()
         D::result_type var = 0;
         D::result_type skew = 0;
         D::result_type kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (std::size_t i = 0; i < u.size(); ++i)
         {
-            D::result_type d = (u[i] - mean);
-            D::result_type d2 = sqr(d);
+            D::result_type dbl = (u[i] - mean);
+            D::result_type d2 = sqr(dbl);
             var += d2;
-            skew += d * d2;
+            skew += dbl * d2;
             kurtosis += d2 * d2;
         }
         var /= u.size();
@@ -409,12 +410,12 @@ int main()
         D::result_type var = 0;
         D::result_type skew = 0;
         D::result_type kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (std::size_t i = 0; i < u.size(); ++i)
         {
-            D::result_type d = (u[i] - mean);
-            D::result_type d2 = sqr(d);
+            D::result_type dbl = (u[i] - mean);
+            D::result_type d2 = sqr(dbl);
             var += d2;
-            skew += d * d2;
+            skew += dbl * d2;
             kurtosis += d2 * d2;
         }
         var /= u.size();
@@ -449,12 +450,12 @@ int main()
         D::result_type var = 0;
         D::result_type skew = 0;
         D::result_type kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (std::size_t i = 0; i < u.size(); ++i)
         {
-            D::result_type d = (u[i] - mean);
-            D::result_type d2 = sqr(d);
+            D::result_type dbl = (u[i] - mean);
+            D::result_type d2 = sqr(dbl);
             var += d2;
-            skew += d * d2;
+            skew += dbl * d2;
             kurtosis += d2 * d2;
         }
         var /= u.size();

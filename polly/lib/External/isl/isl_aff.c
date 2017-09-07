@@ -275,6 +275,24 @@ isl_ctx *isl_aff_get_ctx(__isl_keep isl_aff *aff)
 	return aff ? isl_local_space_get_ctx(aff->ls) : NULL;
 }
 
+/* Return a hash value that digests "aff".
+ */
+uint32_t isl_aff_get_hash(__isl_keep isl_aff *aff)
+{
+	uint32_t hash, ls_hash, v_hash;
+
+	if (!aff)
+		return 0;
+
+	hash = isl_hash_init();
+	ls_hash = isl_local_space_get_hash(aff->ls);
+	isl_hash_hash(hash, ls_hash);
+	v_hash = isl_vec_get_hash(aff->v);
+	isl_hash_hash(hash, v_hash);
+
+	return hash;
+}
+
 /* Externally, an isl_aff has a map space, but internally, the
  * ls field corresponds to the domain of that space.
  */
@@ -383,7 +401,7 @@ __isl_give isl_aff *isl_aff_reset_space_and_domain(__isl_take isl_aff *aff,
 }
 
 /* Reorder the coefficients of the affine expression based
- * on the given reodering.
+ * on the given reordering.
  * The reordering r is assumed to have been extended with the local
  * variables.
  */
@@ -398,6 +416,8 @@ static __isl_give isl_vec *vec_reorder(__isl_take isl_vec *vec,
 
 	res = isl_vec_alloc(vec->ctx,
 			    2 + isl_space_dim(r->dim, isl_dim_all) + n_div);
+	if (!res)
+		goto error;
 	isl_seq_cpy(res->el, vec->el, 2);
 	isl_seq_clr(res->el + 2, res->size - 2);
 	for (i = 0; i < r->len; ++i)
@@ -440,11 +460,15 @@ error:
 __isl_give isl_aff *isl_aff_align_params(__isl_take isl_aff *aff,
 	__isl_take isl_space *model)
 {
+	isl_bool equal_params;
+
 	if (!aff || !model)
 		goto error;
 
-	if (!isl_space_match(aff->ls->dim, isl_dim_param,
-			     model, isl_dim_param)) {
+	equal_params = isl_space_has_equal_params(aff->ls->dim, model);
+	if (equal_params < 0)
+		goto error;
+	if (!equal_params) {
 		isl_reordering *exp;
 
 		model = isl_space_drop_dims(model, isl_dim_in,
@@ -489,26 +513,6 @@ isl_bool isl_aff_is_nan(__isl_keep isl_aff *aff)
 	return isl_seq_first_non_zero(aff->v->el, 2) < 0;
 }
 
-/* Does "pa" involve any NaNs?
- */
-isl_bool isl_pw_aff_involves_nan(__isl_keep isl_pw_aff *pa)
-{
-	int i;
-
-	if (!pa)
-		return isl_bool_error;
-	if (pa->n == 0)
-		return isl_bool_false;
-
-	for (i = 0; i < pa->n; ++i) {
-		isl_bool is_nan = isl_aff_is_nan(pa->p[i].aff);
-		if (is_nan < 0 || is_nan)
-			return is_nan;
-	}
-
-	return isl_bool_false;
-}
-
 /* Are "aff1" and "aff2" obviously equal?
  *
  * NaN is not equal to anything, not even to another NaN.
@@ -535,15 +539,15 @@ isl_bool isl_aff_plain_is_equal(__isl_keep isl_aff *aff1,
  *
  * We cannot return anything meaningful in case of a NaN.
  */
-int isl_aff_get_denominator(__isl_keep isl_aff *aff, isl_int *v)
+isl_stat isl_aff_get_denominator(__isl_keep isl_aff *aff, isl_int *v)
 {
 	if (!aff)
-		return -1;
+		return isl_stat_error;
 	if (isl_aff_is_nan(aff))
 		isl_die(isl_aff_get_ctx(aff), isl_error_invalid,
-			"cannot get denominator of NaN", return -1);
+			"cannot get denominator of NaN", return isl_stat_error);
 	isl_int_set(*v, aff->v->el[0]);
-	return 0;
+	return isl_stat_ok;
 }
 
 /* Return the common denominator of "aff".
@@ -1242,7 +1246,7 @@ __isl_give isl_aff *isl_aff_neg(__isl_take isl_aff *aff)
  * expression, but we would also need to check that no other divs are
  * defined in terms of them.
  */
-__isl_give isl_aff *isl_aff_remove_unused_divs( __isl_take isl_aff *aff)
+__isl_give isl_aff *isl_aff_remove_unused_divs(__isl_take isl_aff *aff)
 {
 	int pos;
 	int off;
@@ -1268,36 +1272,6 @@ __isl_give isl_aff *isl_aff_remove_unused_divs( __isl_take isl_aff *aff)
 		return isl_aff_free(aff);
 
 	return aff;
-}
-
-/* Given two affine expressions "p" of length p_len (including the
- * denominator and the constant term) and "subs" of length subs_len,
- * plug in "subs" for the variable at position "pos".
- * The variables of "subs" and "p" are assumed to match up to subs_len,
- * but "p" may have additional variables.
- * "v" is an initialized isl_int that can be used internally.
- *
- * In particular, if "p" represents the expression
- *
- *	(a i + g)/m
- *
- * with i the variable at position "pos" and "subs" represents the expression
- *
- *	f/d
- *
- * then the result represents the expression
- *
- *	(a f + d g)/(m d)
- *
- */
-void isl_seq_substitute(isl_int *p, int pos, isl_int *subs,
-	int p_len, int subs_len, isl_int v)
-{
-	isl_int_set(v, p[1 + pos]);
-	isl_int_set_si(p[1 + pos], 0);
-	isl_seq_combine(p + 1, subs[0], p + 1, v, subs + 1, subs_len - 1);
-	isl_seq_scale(p + subs_len, p + subs_len, subs[0], p_len - subs_len);
-	isl_int_mul(p[0], p[0], subs[0]);
 }
 
 /* Look for any divs in the aff->ls with a denominator equal to one
@@ -1509,6 +1483,8 @@ __isl_give isl_aff *isl_aff_normalize(__isl_take isl_aff *aff)
  * create a new div d = [r/m] and return the expression q + d.
  * The coefficients in r are taken to lie between -m/2 and m/2.
  *
+ * reduce_div_coefficients performs the same normalization.
+ *
  * As a special case, floor(NaN) = NaN.
  */
 __isl_give isl_aff *isl_aff_floor(__isl_take isl_aff *aff)
@@ -1700,10 +1676,9 @@ __isl_give isl_aff *isl_aff_ceil(__isl_take isl_aff *aff)
  * The expansion itself is given by "exp" while the resulting
  * list of divs is given by "div".
  */
-__isl_give isl_aff *isl_aff_expand_divs( __isl_take isl_aff *aff,
+__isl_give isl_aff *isl_aff_expand_divs(__isl_take isl_aff *aff,
 	__isl_take isl_mat *div, int *exp)
 {
-	int i, j;
 	int old_n_div;
 	int new_n_div;
 	int offset;
@@ -1714,30 +1689,12 @@ __isl_give isl_aff *isl_aff_expand_divs( __isl_take isl_aff *aff,
 
 	old_n_div = isl_local_space_dim(aff->ls, isl_dim_div);
 	new_n_div = isl_mat_rows(div);
-	if (new_n_div < old_n_div)
-		isl_die(isl_mat_get_ctx(div), isl_error_invalid,
-			"not an expansion", goto error);
-
-	aff->v = isl_vec_extend(aff->v, aff->v->size + new_n_div - old_n_div);
-	if (!aff->v)
-		goto error;
-
 	offset = 1 + isl_local_space_offset(aff->ls, isl_dim_div);
-	j = old_n_div - 1;
-	for (i = new_n_div - 1; i >= 0; --i) {
-		if (j >= 0 && exp[j] == i) {
-			if (i != j)
-				isl_int_swap(aff->v->el[offset + i],
-					     aff->v->el[offset + j]);
-			j--;
-		} else
-			isl_int_set_si(aff->v->el[offset + i], 0);
-	}
 
-	aff->ls = isl_local_space_replace_divs(aff->ls, isl_mat_copy(div));
-	if (!aff->ls)
-		goto error;
-	isl_mat_free(div);
+	aff->v = isl_vec_expand(aff->v, offset, old_n_div, exp, new_n_div);
+	aff->ls = isl_local_space_replace_divs(aff->ls, div);
+	if (!aff->v || !aff->ls)
+		return isl_aff_free(aff);
 	return aff;
 error:
 	isl_aff_free(aff);
@@ -2242,13 +2199,21 @@ __isl_give isl_basic_set *isl_aff_nonneg_basic_set(__isl_take isl_aff *aff)
 }
 
 /* Return a basic set containing those elements in the domain space
+ * of "aff" where it is positive.
+ */
+__isl_give isl_basic_set *isl_aff_pos_basic_set(__isl_take isl_aff *aff)
+{
+	aff = isl_aff_add_constant_num_si(aff, -1);
+	return isl_aff_nonneg_basic_set(aff);
+}
+
+/* Return a basic set containing those elements in the domain space
  * of aff where it is negative.
  */
 __isl_give isl_basic_set *isl_aff_neg_basic_set(__isl_take isl_aff *aff)
 {
 	aff = isl_aff_neg(aff);
-	aff = isl_aff_add_constant_num_si(aff, -1);
-	return isl_aff_nonneg_basic_set(aff);
+	return isl_aff_pos_basic_set(aff);
 }
 
 /* Return a basic set containing those elements in the space
@@ -2299,6 +2264,26 @@ __isl_give isl_basic_set *isl_aff_ge_basic_set(__isl_take isl_aff *aff1,
 	return isl_aff_nonneg_basic_set(aff1);
 }
 
+/* Return a basic set containing those elements in the shared domain space
+ * of "aff1" and "aff2" where "aff1" is greater than "aff2".
+ */
+__isl_give isl_basic_set *isl_aff_gt_basic_set(__isl_take isl_aff *aff1,
+	__isl_take isl_aff *aff2)
+{
+	aff1 = isl_aff_sub(aff1, aff2);
+
+	return isl_aff_pos_basic_set(aff1);
+}
+
+/* Return a set containing those elements in the shared space
+ * of aff1 and aff2 where aff1 is greater than or equal to aff2.
+ */
+__isl_give isl_set *isl_aff_ge_set(__isl_take isl_aff *aff1,
+	__isl_take isl_aff *aff2)
+{
+	return isl_set_from_basic_set(isl_aff_ge_basic_set(aff1, aff2));
+}
+
 /* Return a basic set containing those elements in the shared space
  * of aff1 and aff2 where aff1 is smaller than or equal to aff2.
  */
@@ -2306,6 +2291,53 @@ __isl_give isl_basic_set *isl_aff_le_basic_set(__isl_take isl_aff *aff1,
 	__isl_take isl_aff *aff2)
 {
 	return isl_aff_ge_basic_set(aff2, aff1);
+}
+
+/* Return a basic set containing those elements in the shared domain space
+ * of "aff1" and "aff2" where "aff1" is smaller than "aff2".
+ */
+__isl_give isl_basic_set *isl_aff_lt_basic_set(__isl_take isl_aff *aff1,
+	__isl_take isl_aff *aff2)
+{
+	return isl_aff_gt_basic_set(aff2, aff1);
+}
+
+/* Return a set containing those elements in the shared space
+ * of aff1 and aff2 where aff1 is smaller than or equal to aff2.
+ */
+__isl_give isl_set *isl_aff_le_set(__isl_take isl_aff *aff1,
+	__isl_take isl_aff *aff2)
+{
+	return isl_aff_ge_set(aff2, aff1);
+}
+
+/* Return a set containing those elements in the shared domain space
+ * of "aff1" and "aff2" where "aff1" is smaller than "aff2".
+ */
+__isl_give isl_set *isl_aff_lt_set(__isl_take isl_aff *aff1,
+	__isl_take isl_aff *aff2)
+{
+	return isl_set_from_basic_set(isl_aff_lt_basic_set(aff1, aff2));
+}
+
+/* Return a basic set containing those elements in the shared space
+ * of aff1 and aff2 where aff1 and aff2 are equal.
+ */
+__isl_give isl_basic_set *isl_aff_eq_basic_set(__isl_take isl_aff *aff1,
+	__isl_take isl_aff *aff2)
+{
+	aff1 = isl_aff_sub(aff1, aff2);
+
+	return isl_aff_zero_basic_set(aff1);
+}
+
+/* Return a set containing those elements in the shared space
+ * of aff1 and aff2 where aff1 and aff2 are equal.
+ */
+__isl_give isl_set *isl_aff_eq_set(__isl_take isl_aff *aff1,
+	__isl_take isl_aff *aff2)
+{
+	return isl_set_from_basic_set(isl_aff_eq_basic_set(aff1, aff2));
 }
 
 __isl_give isl_aff *isl_aff_add_on_domain(__isl_keep isl_set *dom,
@@ -2549,6 +2581,8 @@ __isl_give isl_pw_aff *isl_pw_aff_from_aff(__isl_take isl_aff *aff)
 	return isl_pw_aff_alloc(dom, aff);
 }
 
+#define isl_aff_involves_nan isl_aff_is_nan
+
 #undef PW
 #define PW isl_pw_aff
 #undef EL
@@ -2570,6 +2604,8 @@ __isl_give isl_pw_aff *isl_pw_aff_from_aff(__isl_take isl_aff *aff)
 #define NO_MORPH
 
 #include <isl_pw_templ.c>
+#include <isl_pw_hash.c>
+#include <isl_pw_union_opt.c>
 
 #undef UNION
 #define UNION isl_union_pw_aff
@@ -2586,10 +2622,14 @@ static __isl_give isl_set *align_params_pw_pw_set_and(
 	__isl_give isl_set *(*fn)(__isl_take isl_pw_aff *pwaff1,
 				    __isl_take isl_pw_aff *pwaff2))
 {
+	isl_bool equal_params;
+
 	if (!pwaff1 || !pwaff2)
 		goto error;
-	if (isl_space_match(pwaff1->dim, isl_dim_param,
-			  pwaff2->dim, isl_dim_param))
+	equal_params = isl_space_has_equal_params(pwaff1->dim, pwaff2->dim);
+	if (equal_params < 0)
+		goto error;
+	if (equal_params)
 		return fn(pwaff1, pwaff2);
 	if (!isl_space_has_named_params(pwaff1->dim) ||
 	    !isl_space_has_named_params(pwaff2->dim))
@@ -2612,9 +2652,14 @@ static __isl_give isl_map *align_params_pw_pw_map_and(
 	__isl_give isl_map *(*fn)(__isl_take isl_pw_aff *pa1,
 				    __isl_take isl_pw_aff *pa2))
 {
+	isl_bool equal_params;
+
 	if (!pa1 || !pa2)
 		goto error;
-	if (isl_space_match(pa1->dim, isl_dim_param, pa2->dim, isl_dim_param))
+	equal_params = isl_space_has_equal_params(pa1->dim, pa2->dim);
+	if (equal_params < 0)
+		goto error;
+	if (equal_params)
 		return fn(pa1, pa2);
 	if (!isl_space_has_named_params(pa1->dim) ||
 	    !isl_space_has_named_params(pa2->dim))
@@ -2631,89 +2676,6 @@ error:
 
 /* Compute a piecewise quasi-affine expression with a domain that
  * is the union of those of pwaff1 and pwaff2 and such that on each
- * cell, the quasi-affine expression is the better (according to cmp)
- * of those of pwaff1 and pwaff2.  If only one of pwaff1 or pwaff2
- * is defined on a given cell, then the associated expression
- * is the defined one.
- */
-static __isl_give isl_pw_aff *pw_aff_union_opt(__isl_take isl_pw_aff *pwaff1,
-	__isl_take isl_pw_aff *pwaff2,
-	__isl_give isl_basic_set *(*cmp)(__isl_take isl_aff *aff1,
-					__isl_take isl_aff *aff2))
-{
-	int i, j, n;
-	isl_pw_aff *res;
-	isl_ctx *ctx;
-	isl_set *set;
-
-	if (!pwaff1 || !pwaff2)
-		goto error;
-
-	ctx = isl_space_get_ctx(pwaff1->dim);
-	if (!isl_space_is_equal(pwaff1->dim, pwaff2->dim))
-		isl_die(ctx, isl_error_invalid,
-			"arguments should live in same space", goto error);
-
-	if (isl_pw_aff_is_empty(pwaff1)) {
-		isl_pw_aff_free(pwaff1);
-		return pwaff2;
-	}
-
-	if (isl_pw_aff_is_empty(pwaff2)) {
-		isl_pw_aff_free(pwaff2);
-		return pwaff1;
-	}
-
-	n = 2 * (pwaff1->n + 1) * (pwaff2->n + 1);
-	res = isl_pw_aff_alloc_size(isl_space_copy(pwaff1->dim), n);
-
-	for (i = 0; i < pwaff1->n; ++i) {
-		set = isl_set_copy(pwaff1->p[i].set);
-		for (j = 0; j < pwaff2->n; ++j) {
-			struct isl_set *common;
-			isl_set *better;
-
-			common = isl_set_intersect(
-					isl_set_copy(pwaff1->p[i].set),
-					isl_set_copy(pwaff2->p[j].set));
-			better = isl_set_from_basic_set(cmp(
-					isl_aff_copy(pwaff2->p[j].aff),
-					isl_aff_copy(pwaff1->p[i].aff)));
-			better = isl_set_intersect(common, better);
-			if (isl_set_plain_is_empty(better)) {
-				isl_set_free(better);
-				continue;
-			}
-			set = isl_set_subtract(set, isl_set_copy(better));
-
-			res = isl_pw_aff_add_piece(res, better,
-						isl_aff_copy(pwaff2->p[j].aff));
-		}
-		res = isl_pw_aff_add_piece(res, set,
-						isl_aff_copy(pwaff1->p[i].aff));
-	}
-
-	for (j = 0; j < pwaff2->n; ++j) {
-		set = isl_set_copy(pwaff2->p[j].set);
-		for (i = 0; i < pwaff1->n; ++i)
-			set = isl_set_subtract(set,
-					isl_set_copy(pwaff1->p[i].set));
-		res = isl_pw_aff_add_piece(res, set,
-						isl_aff_copy(pwaff2->p[j].aff));
-	}
-
-	isl_pw_aff_free(pwaff1);
-	isl_pw_aff_free(pwaff2);
-
-	return res;
-error:
-	isl_pw_aff_free(pwaff1);
-	isl_pw_aff_free(pwaff2);
-	return NULL;
-}
-
-/* Compute a piecewise quasi-affine expression with a domain that
- * is the union of those of pwaff1 and pwaff2 and such that on each
  * cell, the quasi-affine expression is the maximum of those of pwaff1
  * and pwaff2.  If only one of pwaff1 or pwaff2 is defined on a given
  * cell, then the associated expression is the defined one.
@@ -2721,7 +2683,7 @@ error:
 static __isl_give isl_pw_aff *pw_aff_union_max(__isl_take isl_pw_aff *pwaff1,
 	__isl_take isl_pw_aff *pwaff2)
 {
-	return pw_aff_union_opt(pwaff1, pwaff2, &isl_aff_ge_basic_set);
+	return isl_pw_aff_union_opt_cmp(pwaff1, pwaff2, &isl_aff_ge_set);
 }
 
 __isl_give isl_pw_aff *isl_pw_aff_union_max(__isl_take isl_pw_aff *pwaff1,
@@ -2740,7 +2702,7 @@ __isl_give isl_pw_aff *isl_pw_aff_union_max(__isl_take isl_pw_aff *pwaff1,
 static __isl_give isl_pw_aff *pw_aff_union_min(__isl_take isl_pw_aff *pwaff1,
 	__isl_take isl_pw_aff *pwaff2)
 {
-	return pw_aff_union_opt(pwaff1, pwaff2, &isl_aff_le_basic_set);
+	return isl_pw_aff_union_opt_cmp(pwaff1, pwaff2, &isl_aff_le_set);
 }
 
 __isl_give isl_pw_aff *isl_pw_aff_union_min(__isl_take isl_pw_aff *pwaff1,
@@ -2845,7 +2807,7 @@ static __isl_give isl_set *pw_aff_locus(__isl_take isl_pw_aff *pwaff,
 	for (i = 0; i < pwaff->n; ++i) {
 		isl_basic_set *bset;
 		isl_set *set_i, *locus;
-		int rational;
+		isl_bool rational;
 
 		if (isl_aff_is_nan(pwaff->p[i].aff))
 			continue;
@@ -3272,11 +3234,15 @@ static __isl_give isl_pw_aff *isl_pw_aff_select(
  * If "cond" involves and NaN, then we conservatively return a NaN
  * on its entire domain.  In principle, we could consider the pieces
  * where it is NaN separately from those where it is not.
+ *
+ * If "pwaff_true" and "pwaff_false" are obviously equal to each other,
+ * then only use the domain of "cond" to restrict the domain.
  */
 __isl_give isl_pw_aff *isl_pw_aff_cond(__isl_take isl_pw_aff *cond,
 	__isl_take isl_pw_aff *pwaff_true, __isl_take isl_pw_aff *pwaff_false)
 {
 	isl_set *cond_true, *cond_false;
+	isl_bool equal;
 
 	if (!cond)
 		goto error;
@@ -3287,6 +3253,21 @@ __isl_give isl_pw_aff *isl_pw_aff_cond(__isl_take isl_pw_aff *cond,
 		isl_pw_aff_free(pwaff_true);
 		isl_pw_aff_free(pwaff_false);
 		return isl_pw_aff_nan_on_domain(ls);
+	}
+
+	pwaff_true = isl_pw_aff_align_params(pwaff_true,
+					    isl_pw_aff_get_space(pwaff_false));
+	pwaff_false = isl_pw_aff_align_params(pwaff_false,
+					    isl_pw_aff_get_space(pwaff_true));
+	equal = isl_pw_aff_plain_is_equal(pwaff_true, pwaff_false);
+	if (equal < 0)
+		goto error;
+	if (equal) {
+		isl_set *dom;
+
+		dom = isl_set_coalesce(isl_pw_aff_domain(cond));
+		isl_pw_aff_free(pwaff_false);
+		return isl_pw_aff_intersect_domain(pwaff_true, dom);
 	}
 
 	cond_true = isl_pw_aff_non_zero_set(isl_pw_aff_copy(cond));
@@ -3319,6 +3300,24 @@ isl_bool isl_pw_aff_is_cst(__isl_keep isl_pw_aff *pwaff)
 
 	for (i = 0; i < pwaff->n; ++i) {
 		isl_bool is_cst = isl_aff_is_cst(pwaff->p[i].aff);
+		if (is_cst < 0 || !is_cst)
+			return is_cst;
+	}
+
+	return isl_bool_true;
+}
+
+/* Are all elements of "mpa" piecewise constants?
+ */
+isl_bool isl_multi_pw_aff_is_cst(__isl_keep isl_multi_pw_aff *mpa)
+{
+	int i;
+
+	if (!mpa)
+		return isl_bool_error;
+
+	for (i = 0; i < mpa->n; ++i) {
+		isl_bool is_cst = isl_pw_aff_is_cst(mpa->p[i]);
 		if (is_cst < 0 || !is_cst)
 			return is_cst;
 	}
@@ -3549,6 +3548,40 @@ error:
 	return NULL;
 }
 
+/* Does either of "pa1" or "pa2" involve any NaN2?
+ */
+static isl_bool either_involves_nan(__isl_keep isl_pw_aff *pa1,
+	__isl_keep isl_pw_aff *pa2)
+{
+	isl_bool has_nan;
+
+	has_nan = isl_pw_aff_involves_nan(pa1);
+	if (has_nan < 0 || has_nan)
+		return has_nan;
+	return isl_pw_aff_involves_nan(pa2);
+}
+
+/* Replace "pa1" and "pa2" (at least one of which involves a NaN)
+ * by a NaN on their shared domain.
+ *
+ * In principle, the result could be refined to only being NaN
+ * on the parts of this domain where at least one of "pa1" or "pa2" is NaN.
+ */
+static __isl_give isl_pw_aff *replace_by_nan(__isl_take isl_pw_aff *pa1,
+	__isl_take isl_pw_aff *pa2)
+{
+	isl_local_space *ls;
+	isl_set *dom;
+	isl_pw_aff *pa;
+
+	dom = isl_set_intersect(isl_pw_aff_domain(pa1), isl_pw_aff_domain(pa2));
+	ls = isl_local_space_from_space(isl_set_get_space(dom));
+	pa = isl_pw_aff_nan_on_domain(ls);
+	pa = isl_pw_aff_intersect_domain(pa, dom);
+
+	return pa;
+}
+
 static __isl_give isl_pw_aff *pw_aff_min(__isl_take isl_pw_aff *pwaff1,
 	__isl_take isl_pw_aff *pwaff2)
 {
@@ -3561,12 +3594,6 @@ static __isl_give isl_pw_aff *pw_aff_min(__isl_take isl_pw_aff *pwaff1,
 				isl_pw_aff_copy(pwaff2));
 	dom = isl_set_subtract(dom, isl_set_copy(le));
 	return isl_pw_aff_select(le, pwaff1, dom, pwaff2);
-}
-
-__isl_give isl_pw_aff *isl_pw_aff_min(__isl_take isl_pw_aff *pwaff1,
-	__isl_take isl_pw_aff *pwaff2)
-{
-	return isl_pw_aff_align_params_pw_pw_and(pwaff1, pwaff2, &pw_aff_min);
 }
 
 static __isl_give isl_pw_aff *pw_aff_max(__isl_take isl_pw_aff *pwaff1,
@@ -3583,10 +3610,42 @@ static __isl_give isl_pw_aff *pw_aff_max(__isl_take isl_pw_aff *pwaff1,
 	return isl_pw_aff_select(ge, pwaff1, dom, pwaff2);
 }
 
+/* Return an expression for the minimum (if "max" is not set) or
+ * the maximum (if "max" is set) of "pa1" and "pa2".
+ * If either expression involves any NaN, then return a NaN
+ * on the shared domain as result.
+ */
+static __isl_give isl_pw_aff *pw_aff_min_max(__isl_take isl_pw_aff *pa1,
+	__isl_take isl_pw_aff *pa2, int max)
+{
+	isl_bool has_nan;
+
+	has_nan = either_involves_nan(pa1, pa2);
+	if (has_nan < 0)
+		pa1 = isl_pw_aff_free(pa1);
+	else if (has_nan)
+		return replace_by_nan(pa1, pa2);
+
+	if (max)
+		return isl_pw_aff_align_params_pw_pw_and(pa1, pa2, &pw_aff_max);
+	else
+		return isl_pw_aff_align_params_pw_pw_and(pa1, pa2, &pw_aff_min);
+}
+
+/* Return an expression for the minimum of "pwaff1" and "pwaff2".
+ */
+__isl_give isl_pw_aff *isl_pw_aff_min(__isl_take isl_pw_aff *pwaff1,
+	__isl_take isl_pw_aff *pwaff2)
+{
+	return pw_aff_min_max(pwaff1, pwaff2, 0);
+}
+
+/* Return an expression for the maximum of "pwaff1" and "pwaff2".
+ */
 __isl_give isl_pw_aff *isl_pw_aff_max(__isl_take isl_pw_aff *pwaff1,
 	__isl_take isl_pw_aff *pwaff2)
 {
-	return isl_pw_aff_align_params_pw_pw_and(pwaff1, pwaff2, &pw_aff_max);
+	return pw_aff_min_max(pwaff1, pwaff2, 1);
 }
 
 static __isl_give isl_pw_aff *pw_aff_list_reduce(
@@ -3682,39 +3741,37 @@ __isl_give isl_pw_aff_list *isl_pw_aff_list_set_rational(
 
 /* Do the parameters of "aff" match those of "space"?
  */
-int isl_aff_matching_params(__isl_keep isl_aff *aff,
+isl_bool isl_aff_matching_params(__isl_keep isl_aff *aff,
 	__isl_keep isl_space *space)
 {
 	isl_space *aff_space;
-	int match;
+	isl_bool match;
 
 	if (!aff || !space)
-		return -1;
+		return isl_bool_error;
 
 	aff_space = isl_aff_get_domain_space(aff);
 
-	match = isl_space_match(space, isl_dim_param, aff_space, isl_dim_param);
+	match = isl_space_has_equal_params(space, aff_space);
 
 	isl_space_free(aff_space);
 	return match;
 }
 
 /* Check that the domain space of "aff" matches "space".
- *
- * Return 0 on success and -1 on error.
  */
-int isl_aff_check_match_domain_space(__isl_keep isl_aff *aff,
+isl_stat isl_aff_check_match_domain_space(__isl_keep isl_aff *aff,
 	__isl_keep isl_space *space)
 {
 	isl_space *aff_space;
-	int match;
+	isl_bool match;
 
 	if (!aff || !space)
-		return -1;
+		return isl_stat_error;
 
 	aff_space = isl_aff_get_domain_space(aff);
 
-	match = isl_space_match(space, isl_dim_param, aff_space, isl_dim_param);
+	match = isl_space_has_equal_params(space, aff_space);
 	if (match < 0)
 		goto error;
 	if (!match)
@@ -3728,10 +3785,10 @@ int isl_aff_check_match_domain_space(__isl_keep isl_aff *aff,
 		isl_die(isl_aff_get_ctx(aff), isl_error_invalid,
 			"domains don't match", goto error);
 	isl_space_free(aff_space);
-	return 0;
+	return isl_stat_ok;
 error:
 	isl_space_free(aff_space);
-	return -1;
+	return isl_stat_error;
 }
 
 #undef BASE
@@ -3742,6 +3799,7 @@ error:
 
 #include <isl_multi_templ.c>
 #include <isl_multi_apply_set.c>
+#include <isl_multi_cmp.c>
 #include <isl_multi_floor.c>
 #include <isl_multi_gist.c>
 
@@ -4019,10 +4077,20 @@ __isl_give isl_set *isl_multi_aff_lex_le_set(__isl_take isl_multi_aff *ma1,
 }
 
 /* Return the set of domain elements where "ma1" is lexicographically
- * greater than or equal to "ma2".
+ * smaller than "ma2".
  */
-__isl_give isl_set *isl_multi_aff_lex_ge_set(__isl_take isl_multi_aff *ma1,
+__isl_give isl_set *isl_multi_aff_lex_lt_set(__isl_take isl_multi_aff *ma1,
 	__isl_take isl_multi_aff *ma2)
+{
+	return isl_multi_aff_lex_gt_set(ma2, ma1);
+}
+
+/* Return the set of domain elements where "ma1" and "ma2"
+ * satisfy "order".
+ */
+static __isl_give isl_set *isl_multi_aff_order_set(
+	__isl_take isl_multi_aff *ma1, __isl_take isl_multi_aff *ma2,
+	__isl_give isl_map *order(__isl_take isl_space *set_space))
 {
 	isl_space *space;
 	isl_map *map1, *map2;
@@ -4033,10 +4101,28 @@ __isl_give isl_set *isl_multi_aff_lex_ge_set(__isl_take isl_multi_aff *ma1,
 	map = isl_map_range_product(map1, map2);
 	space = isl_space_range(isl_map_get_space(map));
 	space = isl_space_domain(isl_space_unwrap(space));
-	ge = isl_map_lex_ge(space);
+	ge = order(space);
 	map = isl_map_intersect_range(map, isl_map_wrap(ge));
 
 	return isl_map_domain(map);
+}
+
+/* Return the set of domain elements where "ma1" is lexicographically
+ * greater than or equal to "ma2".
+ */
+__isl_give isl_set *isl_multi_aff_lex_ge_set(__isl_take isl_multi_aff *ma1,
+	__isl_take isl_multi_aff *ma2)
+{
+	return isl_multi_aff_order_set(ma1, ma2, &isl_map_lex_ge);
+}
+
+/* Return the set of domain elements where "ma1" is lexicographically
+ * greater than "ma2".
+ */
+__isl_give isl_set *isl_multi_aff_lex_gt_set(__isl_take isl_multi_aff *ma1,
+	__isl_take isl_multi_aff *ma2)
+{
+	return isl_multi_aff_order_set(ma1, ma2, &isl_map_lex_gt);
 }
 
 #undef PW
@@ -4063,6 +4149,7 @@ __isl_give isl_set *isl_multi_aff_lex_ge_set(__isl_take isl_multi_aff *ma1,
 #define NO_MORPH
 
 #include <isl_pw_templ.c>
+#include <isl_pw_union_opt.c>
 
 #undef NO_SUB
 
@@ -4076,121 +4163,12 @@ __isl_give isl_set *isl_multi_aff_lex_ge_set(__isl_take isl_multi_aff *ma1,
 #include <isl_union_multi.c>
 #include <isl_union_neg.c>
 
-/* Given a function "cmp" that returns the set of elements where
- * "ma1" is "better" than "ma2", return the intersection of this
- * set with "dom1" and "dom2".
- */
-static __isl_give isl_set *shared_and_better(__isl_keep isl_set *dom1,
-	__isl_keep isl_set *dom2, __isl_keep isl_multi_aff *ma1,
-	__isl_keep isl_multi_aff *ma2,
-	__isl_give isl_set *(*cmp)(__isl_take isl_multi_aff *ma1,
-				    __isl_take isl_multi_aff *ma2))
-{
-	isl_set *common;
-	isl_set *better;
-	int is_empty;
-
-	common = isl_set_intersect(isl_set_copy(dom1), isl_set_copy(dom2));
-	is_empty = isl_set_plain_is_empty(common);
-	if (is_empty >= 0 && is_empty)
-		return common;
-	if (is_empty < 0)
-		return isl_set_free(common);
-	better = cmp(isl_multi_aff_copy(ma1), isl_multi_aff_copy(ma2));
-	better = isl_set_intersect(common, better);
-
-	return better;
-}
-
-/* Given a function "cmp" that returns the set of elements where
- * "ma1" is "better" than "ma2", return a piecewise multi affine
- * expression defined on the union of the definition domains
- * of "pma1" and "pma2" that maps to the "best" of "pma1" and
- * "pma2" on each cell.  If only one of the two input functions
- * is defined on a given cell, then it is considered the best.
- */
-static __isl_give isl_pw_multi_aff *pw_multi_aff_union_opt(
-	__isl_take isl_pw_multi_aff *pma1,
-	__isl_take isl_pw_multi_aff *pma2,
-	__isl_give isl_set *(*cmp)(__isl_take isl_multi_aff *ma1,
-				    __isl_take isl_multi_aff *ma2))
-{
-	int i, j, n;
-	isl_pw_multi_aff *res = NULL;
-	isl_ctx *ctx;
-	isl_set *set = NULL;
-
-	if (!pma1 || !pma2)
-		goto error;
-
-	ctx = isl_space_get_ctx(pma1->dim);
-	if (!isl_space_is_equal(pma1->dim, pma2->dim))
-		isl_die(ctx, isl_error_invalid,
-			"arguments should live in the same space", goto error);
-
-	if (isl_pw_multi_aff_is_empty(pma1)) {
-		isl_pw_multi_aff_free(pma1);
-		return pma2;
-	}
-
-	if (isl_pw_multi_aff_is_empty(pma2)) {
-		isl_pw_multi_aff_free(pma2);
-		return pma1;
-	}
-
-	n = 2 * (pma1->n + 1) * (pma2->n + 1);
-	res = isl_pw_multi_aff_alloc_size(isl_space_copy(pma1->dim), n);
-
-	for (i = 0; i < pma1->n; ++i) {
-		set = isl_set_copy(pma1->p[i].set);
-		for (j = 0; j < pma2->n; ++j) {
-			isl_set *better;
-			int is_empty;
-
-			better = shared_and_better(pma2->p[j].set,
-					pma1->p[i].set, pma2->p[j].maff,
-					pma1->p[i].maff, cmp);
-			is_empty = isl_set_plain_is_empty(better);
-			if (is_empty < 0 || is_empty) {
-				isl_set_free(better);
-				if (is_empty < 0)
-					goto error;
-				continue;
-			}
-			set = isl_set_subtract(set, isl_set_copy(better));
-
-			res = isl_pw_multi_aff_add_piece(res, better,
-					isl_multi_aff_copy(pma2->p[j].maff));
-		}
-		res = isl_pw_multi_aff_add_piece(res, set,
-					isl_multi_aff_copy(pma1->p[i].maff));
-	}
-
-	for (j = 0; j < pma2->n; ++j) {
-		set = isl_set_copy(pma2->p[j].set);
-		for (i = 0; i < pma1->n; ++i)
-			set = isl_set_subtract(set,
-					isl_set_copy(pma1->p[i].set));
-		res = isl_pw_multi_aff_add_piece(res, set,
-					isl_multi_aff_copy(pma2->p[j].maff));
-	}
-
-	isl_pw_multi_aff_free(pma1);
-	isl_pw_multi_aff_free(pma2);
-
-	return res;
-error:
-	isl_pw_multi_aff_free(pma1);
-	isl_pw_multi_aff_free(pma2);
-	isl_set_free(set);
-	return isl_pw_multi_aff_free(res);
-}
-
 static __isl_give isl_pw_multi_aff *pw_multi_aff_union_lexmax(
 	__isl_take isl_pw_multi_aff *pma1,
 	__isl_take isl_pw_multi_aff *pma2)
 {
-	return pw_multi_aff_union_opt(pma1, pma2, &isl_multi_aff_lex_ge_set);
+	return isl_pw_multi_aff_union_opt_cmp(pma1, pma2,
+					    &isl_multi_aff_lex_ge_set);
 }
 
 /* Given two piecewise multi affine expressions, return a piecewise
@@ -4211,7 +4189,8 @@ static __isl_give isl_pw_multi_aff *pw_multi_aff_union_lexmin(
 	__isl_take isl_pw_multi_aff *pma1,
 	__isl_take isl_pw_multi_aff *pma2)
 {
-	return pw_multi_aff_union_opt(pma1, pma2, &isl_multi_aff_lex_le_set);
+	return isl_pw_multi_aff_union_opt_cmp(pma1, pma2,
+					    &isl_multi_aff_lex_le_set);
 }
 
 /* Given two piecewise multi affine expressions, return a piecewise
@@ -4336,6 +4315,8 @@ __isl_give isl_pw_multi_aff *isl_pw_multi_aff_product(
 /* Construct a map mapping the domain of the piecewise multi-affine expression
  * to its range, with each dimension in the range equated to the
  * corresponding affine expression on its cell.
+ *
+ * If the domain of "pma" is rational, then so is the constructed "map".
  */
 __isl_give isl_map *isl_map_from_pw_multi_aff(__isl_take isl_pw_multi_aff *pma)
 {
@@ -4348,12 +4329,16 @@ __isl_give isl_map *isl_map_from_pw_multi_aff(__isl_take isl_pw_multi_aff *pma)
 	map = isl_map_empty(isl_pw_multi_aff_get_space(pma));
 
 	for (i = 0; i < pma->n; ++i) {
+		isl_bool rational;
 		isl_multi_aff *maff;
 		isl_basic_map *bmap;
 		isl_map *map_i;
 
+		rational = isl_set_is_rational(pma->p[i].set);
+		if (rational < 0)
+			map = isl_map_free(map);
 		maff = isl_multi_aff_copy(pma->p[i].maff);
-		bmap = isl_basic_map_from_multi_aff(maff);
+		bmap = isl_basic_map_from_multi_aff2(maff, rational);
 		map_i = isl_map_from_basic_map(bmap);
 		map_i = isl_map_intersect_domain(map_i,
 						isl_set_copy(pma->p[i].set));
@@ -4380,58 +4365,198 @@ error:
 	return NULL;
 }
 
-/* Given a basic map with a single output dimension that is defined
- * in terms of the parameters and input dimensions using an equality,
- * extract an isl_aff that expresses the output dimension in terms
+/* Subtract the initial "n" elements in "ma" with coefficients in "c" and
+ * denominator "denom".
+ * "denom" is allowed to be negative, in which case the actual denominator
+ * is -denom and the expressions are added instead.
+ */
+static __isl_give isl_aff *subtract_initial(__isl_take isl_aff *aff,
+	__isl_keep isl_multi_aff *ma, int n, isl_int *c, isl_int denom)
+{
+	int i, first;
+	int sign;
+	isl_int d;
+
+	first = isl_seq_first_non_zero(c, n);
+	if (first == -1)
+		return aff;
+
+	sign = isl_int_sgn(denom);
+	isl_int_init(d);
+	isl_int_abs(d, denom);
+	for (i = first; i < n; ++i) {
+		isl_aff *aff_i;
+
+		if (isl_int_is_zero(c[i]))
+			continue;
+		aff_i = isl_multi_aff_get_aff(ma, i);
+		aff_i = isl_aff_scale(aff_i, c[i]);
+		aff_i = isl_aff_scale_down(aff_i, d);
+		if (sign >= 0)
+			aff = isl_aff_sub(aff, aff_i);
+		else
+			aff = isl_aff_add(aff, aff_i);
+	}
+	isl_int_clear(d);
+
+	return aff;
+}
+
+/* Extract an affine expression that expresses the output dimension "pos"
+ * of "bmap" in terms of the parameters and input dimensions from
+ * equality "eq".
+ * Note that this expression may involve integer divisions defined
+ * in terms of parameters and input dimensions.
+ * The equality may also involve references to earlier (but not later)
+ * output dimensions.  These are replaced by the corresponding elements
+ * in "ma".
+ *
+ * If the equality is of the form
+ *
+ *	f(i) + h(j) + a x + g(i) = 0,
+ *
+ * with f(i) a linear combinations of the parameters and input dimensions,
+ * g(i) a linear combination of integer divisions defined in terms of the same
+ * and h(j) a linear combinations of earlier output dimensions,
+ * then the affine expression is
+ *
+ *	(-f(i) - g(i))/a - h(j)/a
+ *
+ * If the equality is of the form
+ *
+ *	f(i) + h(j) - a x + g(i) = 0,
+ *
+ * then the affine expression is
+ *
+ *	(f(i) + g(i))/a - h(j)/(-a)
+ *
+ *
+ * If "div" refers to an integer division (i.e., it is smaller than
+ * the number of integer divisions), then the equality constraint
+ * does involve an integer division (the one at position "div") that
+ * is defined in terms of output dimensions.  However, this integer
+ * division can be eliminated by exploiting a pair of constraints
+ * x >= l and x <= l + n, with n smaller than the coefficient of "div"
+ * in the equality constraint.  "ineq" refers to inequality x >= l, i.e.,
+ * -l + x >= 0.
+ * In particular, let
+ *
+ *	x = e(i) + m floor(...)
+ *
+ * with e(i) the expression derived above and floor(...) the integer
+ * division involving output dimensions.
+ * From
+ *
+ *	l <= x <= l + n,
+ *
+ * we have
+ *
+ *	0 <= x - l <= n
+ *
+ * This means
+ *
+ *	e(i) + m floor(...) - l = (e(i) + m floor(...) - l) mod m
+ *	                        = (e(i) - l) mod m
+ *
+ * Therefore,
+ *
+ *	x - l = (e(i) - l) mod m
+ *
+ * or
+ *
+ *	x = ((e(i) - l) mod m) + l
+ *
+ * The variable "shift" below contains the expression -l, which may
+ * also involve a linear combination of earlier output dimensions.
+ */
+static __isl_give isl_aff *extract_aff_from_equality(
+	__isl_keep isl_basic_map *bmap, int pos, int eq, int div, int ineq,
+	__isl_keep isl_multi_aff *ma)
+{
+	unsigned o_out;
+	unsigned n_div, n_out;
+	isl_ctx *ctx;
+	isl_local_space *ls;
+	isl_aff *aff, *shift;
+	isl_val *mod;
+
+	ctx = isl_basic_map_get_ctx(bmap);
+	ls = isl_basic_map_get_local_space(bmap);
+	ls = isl_local_space_domain(ls);
+	aff = isl_aff_alloc(isl_local_space_copy(ls));
+	if (!aff)
+		goto error;
+	o_out = isl_basic_map_offset(bmap, isl_dim_out);
+	n_out = isl_basic_map_dim(bmap, isl_dim_out);
+	n_div = isl_basic_map_dim(bmap, isl_dim_div);
+	if (isl_int_is_neg(bmap->eq[eq][o_out + pos])) {
+		isl_seq_cpy(aff->v->el + 1, bmap->eq[eq], o_out);
+		isl_seq_cpy(aff->v->el + 1 + o_out,
+			    bmap->eq[eq] + o_out + n_out, n_div);
+	} else {
+		isl_seq_neg(aff->v->el + 1, bmap->eq[eq], o_out);
+		isl_seq_neg(aff->v->el + 1 + o_out,
+			    bmap->eq[eq] + o_out + n_out, n_div);
+	}
+	if (div < n_div)
+		isl_int_set_si(aff->v->el[1 + o_out + div], 0);
+	isl_int_abs(aff->v->el[0], bmap->eq[eq][o_out + pos]);
+	aff = subtract_initial(aff, ma, pos, bmap->eq[eq] + o_out,
+			    bmap->eq[eq][o_out + pos]);
+	if (div < n_div) {
+		shift = isl_aff_alloc(isl_local_space_copy(ls));
+		if (!shift)
+			goto error;
+		isl_seq_cpy(shift->v->el + 1, bmap->ineq[ineq], o_out);
+		isl_seq_cpy(shift->v->el + 1 + o_out,
+			    bmap->ineq[ineq] + o_out + n_out, n_div);
+		isl_int_set_si(shift->v->el[0], 1);
+		shift = subtract_initial(shift, ma, pos,
+					bmap->ineq[ineq] + o_out, ctx->negone);
+		aff = isl_aff_add(aff, isl_aff_copy(shift));
+		mod = isl_val_int_from_isl_int(ctx,
+					    bmap->eq[eq][o_out + n_out + div]);
+		mod = isl_val_abs(mod);
+		aff = isl_aff_mod_val(aff, mod);
+		aff = isl_aff_sub(aff, shift);
+	}
+
+	isl_local_space_free(ls);
+	return aff;
+error:
+	isl_local_space_free(ls);
+	isl_aff_free(aff);
+	return NULL;
+}
+
+/* Given a basic map with output dimensions defined
+ * in terms of the parameters input dimensions and earlier
+ * output dimensions using an equality (and possibly a pair on inequalities),
+ * extract an isl_aff that expresses output dimension "pos" in terms
  * of the parameters and input dimensions.
  * Note that this expression may involve integer divisions defined
  * in terms of parameters and input dimensions.
+ * "ma" contains the expressions corresponding to earlier output dimensions.
  *
  * This function shares some similarities with
  * isl_basic_map_has_defining_equality and isl_constraint_get_bound.
  */
 static __isl_give isl_aff *extract_isl_aff_from_basic_map(
-	__isl_take isl_basic_map *bmap)
+	__isl_keep isl_basic_map *bmap, int pos, __isl_keep isl_multi_aff *ma)
 {
-	int eq;
-	unsigned offset;
-	unsigned n_div;
-	isl_local_space *ls;
+	int eq, div, ineq;
 	isl_aff *aff;
 
 	if (!bmap)
 		return NULL;
-	if (isl_basic_map_dim(bmap, isl_dim_out) != 1)
-		isl_die(isl_basic_map_get_ctx(bmap), isl_error_invalid,
-			"basic map should have a single output dimension",
-			goto error);
-	eq = isl_basic_map_output_defining_equality(bmap, 0);
+	eq = isl_basic_map_output_defining_equality(bmap, pos, &div, &ineq);
 	if (eq >= bmap->n_eq)
 		isl_die(isl_basic_map_get_ctx(bmap), isl_error_invalid,
-			"unable to find suitable equality", goto error);
-	ls = isl_basic_map_get_local_space(bmap);
-	aff = isl_aff_alloc(isl_local_space_domain(ls));
-	if (!aff)
-		goto error;
-	offset = isl_basic_map_offset(bmap, isl_dim_out);
-	n_div = isl_basic_map_dim(bmap, isl_dim_div);
-	if (isl_int_is_neg(bmap->eq[eq][offset])) {
-		isl_seq_cpy(aff->v->el + 1, bmap->eq[eq], offset);
-		isl_seq_cpy(aff->v->el + 1 + offset, bmap->eq[eq] + offset + 1,
-			    n_div);
-	} else {
-		isl_seq_neg(aff->v->el + 1, bmap->eq[eq], offset);
-		isl_seq_neg(aff->v->el + 1 + offset, bmap->eq[eq] + offset + 1,
-			    n_div);
-	}
-	isl_int_abs(aff->v->el[0], bmap->eq[eq][offset]);
-	isl_basic_map_free(bmap);
+			"unable to find suitable equality", return NULL);
+	aff = extract_aff_from_equality(bmap, pos, eq, div, ineq, ma);
 
 	aff = isl_aff_remove_unused_divs(aff);
 	return aff;
-error:
-	isl_basic_map_free(bmap);
-	return NULL;
 }
 
 /* Given a basic map where each output dimension is defined
@@ -4453,14 +4578,9 @@ static __isl_give isl_multi_aff *extract_isl_multi_aff_from_basic_map(
 	n_out = isl_basic_map_dim(bmap, isl_dim_out);
 
 	for (i = 0; i < n_out; ++i) {
-		isl_basic_map *bmap_i;
 		isl_aff *aff;
 
-		bmap_i = isl_basic_map_copy(bmap);
-		bmap_i = isl_basic_map_project_out(bmap_i, isl_dim_out,
-							i + 1, n_out - (1 + i));
-		bmap_i = isl_basic_map_project_out(bmap_i, isl_dim_out, 0, i);
-		aff = extract_isl_aff_from_basic_map(bmap_i);
+		aff = extract_isl_aff_from_basic_map(bmap, i, ma);
 		ma = isl_multi_aff_set_aff(ma, i, aff);
 	}
 
@@ -4488,12 +4608,22 @@ __isl_give isl_multi_aff *isl_multi_aff_from_basic_set_equalities(
  * Since some applications expect the result of isl_pw_multi_aff_from_map
  * to only contain integer affine expressions, we compute the floor
  * of the expression before returning.
+ *
+ * Remove all constraints involving local variables without
+ * an explicit representation (resulting in the removal of those
+ * local variables) prior to the actual extraction to ensure
+ * that the local spaces in which the resulting affine expressions
+ * are created do not contain any unknown local variables.
+ * Removing such constraints is safe because constraints involving
+ * unknown local variables are not used to determine whether
+ * a basic map is obviously single-valued.
  */
 static __isl_give isl_pw_multi_aff *plain_pw_multi_aff_from_map(
 	__isl_take isl_set *domain, __isl_take isl_basic_map *bmap)
 {
 	isl_multi_aff *ma;
 
+	bmap = isl_basic_map_drop_constraint_involving_unknown_divs(bmap);
 	ma = extract_isl_multi_aff_from_basic_map(bmap);
 	ma = isl_multi_aff_floor(ma);
 	return isl_pw_multi_aff_alloc(domain, ma);
@@ -4581,9 +4711,11 @@ static __isl_give isl_pw_multi_aff *pw_multi_aff_from_map_div(
 	int n;
 	int n_in;
 	isl_pw_multi_aff *pma;
-	int is_set;
+	isl_bool is_set;
 
 	is_set = isl_map_is_set(map);
+	if (is_set < 0)
+		goto error;
 
 	offset = isl_basic_map_offset(hull, isl_dim_out);
 	ctx = isl_map_get_ctx(map);
@@ -4617,6 +4749,10 @@ static __isl_give isl_pw_multi_aff *pw_multi_aff_from_map_div(
 	pma = isl_pw_multi_aff_pullback_multi_aff(pma, ma);
 
 	return pma;
+error:
+	isl_map_free(map);
+	isl_basic_map_free(hull);
+	return NULL;
 }
 
 /* Is constraint "c" of the form
@@ -4800,7 +4936,7 @@ static __isl_give isl_multi_aff *range_map(__isl_take isl_aff *aff, int d,
  *
  * We basically plug (1) into "map", resulting in a map with "a"
  * in the range instead of "x".  The corresponding isl_pw_multi_aff
- * defining "a" is then plugged back into (1) to obtain a definition fro "x".
+ * defining "a" is then plugged back into (1) to obtain a definition for "x".
  *
  * Specifically, given the input map
  *
@@ -4852,9 +4988,11 @@ static __isl_give isl_pw_multi_aff *pw_multi_aff_from_map_stride(
 	unsigned n_in;
 	unsigned o_out;
 	unsigned n_out;
-	int is_set;
+	isl_bool is_set;
 
 	is_set = isl_map_is_set(map);
+	if (is_set < 0)
+		goto error;
 
 	n_in = isl_basic_map_dim(hull, isl_dim_in);
 	n_out = isl_basic_map_dim(hull, isl_dim_out);
@@ -4900,49 +5038,36 @@ static __isl_give isl_pw_multi_aff *pw_multi_aff_from_map_stride(
 
 	isl_basic_map_free(hull);
 	return pma;
+error:
+	isl_map_free(map);
+	isl_basic_map_free(hull);
+	return NULL;
 }
 
 /* Try and create an isl_pw_multi_aff that is equivalent to the given isl_map.
+ * "hull" contains the equalities valid for "map".
  *
- * As a special case, we first check if all output dimensions are uniquely
- * defined in terms of the parameters and input dimensions over the entire
- * domain.  If so, we extract the desired isl_pw_multi_aff directly
- * from the affine hull of "map" and its domain.
- *
- * Otherwise, we check if any of the output dimensions is "strided".
- * That is, we check if can be written as
+ * Check if any of the output dimensions is "strided".
+ * That is, we check if it can be written as
  *
  *	x = m a + f(..)
  *
- * with m greater than 1, a some combination of existentiall quantified
- * variables and f and expression in the parameters and input dimensions.
+ * with m greater than 1, a some combination of existentially quantified
+ * variables and f an expression in the parameters and input dimensions.
  * If so, we remove the stride in pw_multi_aff_from_map_stride.
  *
  * Otherwise, we continue with pw_multi_aff_from_map_check_div for a further
  * special case.
  */
-__isl_give isl_pw_multi_aff *isl_pw_multi_aff_from_map(__isl_take isl_map *map)
+static __isl_give isl_pw_multi_aff *pw_multi_aff_from_map_check_strides(
+	__isl_take isl_map *map, __isl_take isl_basic_map *hull)
 {
 	int i, j;
-	int sv;
-	isl_basic_map *hull;
 	unsigned n_out;
 	unsigned o_out;
 	unsigned n_div;
 	unsigned o_div;
 	isl_int gcd;
-
-	if (!map)
-		return NULL;
-
-	hull = isl_map_affine_hull(isl_map_copy(map));
-	sv = isl_basic_map_plain_is_single_valued(hull);
-	if (sv >= 0 && sv)
-		return plain_pw_multi_aff_from_map(isl_map_domain(map), hull);
-	if (sv < 0)
-		hull = isl_basic_map_free(hull);
-	if (!hull)
-		goto error;
 
 	n_div = isl_basic_map_dim(hull, isl_dim_div);
 	o_div = isl_basic_map_offset(hull, isl_dim_div);
@@ -4986,7 +5111,43 @@ __isl_give isl_pw_multi_aff *isl_pw_multi_aff_from_map(__isl_take isl_map *map)
 	isl_int_clear(gcd);
 	isl_basic_map_free(hull);
 	return pw_multi_aff_from_map_check_div(map);
-error:
+}
+
+/* Try and create an isl_pw_multi_aff that is equivalent to the given isl_map.
+ *
+ * As a special case, we first check if all output dimensions are uniquely
+ * defined in terms of the parameters and input dimensions over the entire
+ * domain.  If so, we extract the desired isl_pw_multi_aff directly
+ * from the affine hull of "map" and its domain.
+ *
+ * Otherwise, continue with pw_multi_aff_from_map_check_strides for more
+ * special cases.
+ */
+__isl_give isl_pw_multi_aff *isl_pw_multi_aff_from_map(__isl_take isl_map *map)
+{
+	isl_bool sv;
+	isl_basic_map *hull;
+
+	if (!map)
+		return NULL;
+
+	if (isl_map_n_basic_map(map) == 1) {
+		hull = isl_map_unshifted_simple_hull(isl_map_copy(map));
+		hull = isl_basic_map_plain_affine_hull(hull);
+		sv = isl_basic_map_plain_is_single_valued(hull);
+		if (sv >= 0 && sv)
+			return plain_pw_multi_aff_from_map(isl_map_domain(map),
+							    hull);
+		isl_basic_map_free(hull);
+	}
+	map = isl_map_detect_equalities(map);
+	hull = isl_map_unshifted_simple_hull(isl_map_copy(map));
+	sv = isl_basic_map_plain_is_single_valued(hull);
+	if (sv >= 0 && sv)
+		return plain_pw_multi_aff_from_map(isl_map_domain(map), hull);
+	if (sv >= 0)
+		return pw_multi_aff_from_map_check_strides(map, hull);
+	isl_basic_map_free(hull);
 	isl_map_free(map);
 	return NULL;
 }
@@ -5444,29 +5605,44 @@ __isl_give isl_multi_aff *isl_multi_aff_pullback_multi_aff(
 
 /* Extend the local space of "dst" to include the divs
  * in the local space of "src".
+ *
+ * If "src" does not have any divs or if the local spaces of "dst" and
+ * "src" are the same, then no extension is required.
  */
 __isl_give isl_aff *isl_aff_align_divs(__isl_take isl_aff *dst,
 	__isl_keep isl_aff *src)
 {
 	isl_ctx *ctx;
+	int src_n_div, dst_n_div;
 	int *exp1 = NULL;
 	int *exp2 = NULL;
+	isl_bool equal;
 	isl_mat *div;
 
 	if (!src || !dst)
 		return isl_aff_free(dst);
 
 	ctx = isl_aff_get_ctx(src);
-	if (!isl_space_is_equal(src->ls->dim, dst->ls->dim))
+	equal = isl_local_space_has_equal_space(src->ls, dst->ls);
+	if (equal < 0)
+		return isl_aff_free(dst);
+	if (!equal)
 		isl_die(ctx, isl_error_invalid,
 			"spaces don't match", goto error);
 
-	if (src->ls->div->n_row == 0)
+	src_n_div = isl_local_space_dim(src->ls, isl_dim_div);
+	if (src_n_div == 0)
+		return dst;
+	equal = isl_local_space_is_equal(src->ls, dst->ls);
+	if (equal < 0)
+		return isl_aff_free(dst);
+	if (equal)
 		return dst;
 
-	exp1 = isl_alloc_array(ctx, int, src->ls->div->n_row);
-	exp2 = isl_alloc_array(ctx, int, dst->ls->div->n_row);
-	if (!exp1 || (dst->ls->div->n_row && !exp2))
+	dst_n_div = isl_local_space_dim(dst->ls, isl_dim_div);
+	exp1 = isl_alloc_array(ctx, int, src_n_div);
+	exp2 = isl_alloc_array(ctx, int, dst_n_div);
+	if (!exp1 || (dst_n_div && !exp2))
 		goto error;
 
 	div = isl_merge_divs(src->ls->div, dst->ls->div, exp1, exp2);
@@ -5927,9 +6103,14 @@ __isl_give isl_pw_multi_aff *isl_pw_multi_aff_set_pw_aff(
 	__isl_take isl_pw_multi_aff *pma, unsigned pos,
 	__isl_take isl_pw_aff *pa)
 {
+	isl_bool equal_params;
+
 	if (!pma || !pa)
 		goto error;
-	if (isl_space_match(pma->dim, isl_dim_param, pa->dim, isl_dim_param))
+	equal_params = isl_space_has_equal_params(pma->dim, pa->dim);
+	if (equal_params < 0)
+		goto error;
+	if (equal_params)
 		return pw_multi_aff_set_pw_aff(pma, pos, pa);
 	if (!isl_space_has_named_params(pma->dim) ||
 	    !isl_space_has_named_params(pa->dim))
@@ -5946,39 +6127,37 @@ error:
 
 /* Do the parameters of "pa" match those of "space"?
  */
-int isl_pw_aff_matching_params(__isl_keep isl_pw_aff *pa,
+isl_bool isl_pw_aff_matching_params(__isl_keep isl_pw_aff *pa,
 	__isl_keep isl_space *space)
 {
 	isl_space *pa_space;
-	int match;
+	isl_bool match;
 
 	if (!pa || !space)
-		return -1;
+		return isl_bool_error;
 
 	pa_space = isl_pw_aff_get_space(pa);
 
-	match = isl_space_match(space, isl_dim_param, pa_space, isl_dim_param);
+	match = isl_space_has_equal_params(space, pa_space);
 
 	isl_space_free(pa_space);
 	return match;
 }
 
 /* Check that the domain space of "pa" matches "space".
- *
- * Return 0 on success and -1 on error.
  */
-int isl_pw_aff_check_match_domain_space(__isl_keep isl_pw_aff *pa,
+isl_stat isl_pw_aff_check_match_domain_space(__isl_keep isl_pw_aff *pa,
 	__isl_keep isl_space *space)
 {
 	isl_space *pa_space;
-	int match;
+	isl_bool match;
 
 	if (!pa || !space)
-		return -1;
+		return isl_stat_error;
 
 	pa_space = isl_pw_aff_get_space(pa);
 
-	match = isl_space_match(space, isl_dim_param, pa_space, isl_dim_param);
+	match = isl_space_has_equal_params(space, pa_space);
 	if (match < 0)
 		goto error;
 	if (!match)
@@ -5992,10 +6171,10 @@ int isl_pw_aff_check_match_domain_space(__isl_keep isl_pw_aff *pa,
 		isl_die(isl_pw_aff_get_ctx(pa), isl_error_invalid,
 			"domains don't match", goto error);
 	isl_space_free(pa_space);
-	return 0;
+	return isl_stat_ok;
 error:
 	isl_space_free(pa_space);
-	return -1;
+	return isl_stat_error;
 }
 
 #undef BASE
@@ -6007,6 +6186,7 @@ error:
 #include <isl_multi_apply_set.c>
 #include <isl_multi_coalesce.c>
 #include <isl_multi_gist.c>
+#include <isl_multi_hash.c>
 #include <isl_multi_intersect.c>
 
 /* Scale the elements of "pma" by the corresponding elements of "mv".
@@ -6015,6 +6195,7 @@ __isl_give isl_pw_multi_aff *isl_pw_multi_aff_scale_multi_val(
 	__isl_take isl_pw_multi_aff *pma, __isl_take isl_multi_val *mv)
 {
 	int i;
+	isl_bool equal_params;
 
 	pma = isl_pw_multi_aff_cow(pma);
 	if (!pma || !mv)
@@ -6023,8 +6204,10 @@ __isl_give isl_pw_multi_aff *isl_pw_multi_aff_scale_multi_val(
 					mv->space, isl_dim_set))
 		isl_die(isl_pw_multi_aff_get_ctx(pma), isl_error_invalid,
 			"spaces don't match", goto error);
-	if (!isl_space_match(pma->dim, isl_dim_param,
-					mv->space, isl_dim_param)) {
+	equal_params = isl_space_has_equal_params(pma->dim, mv->space);
+	if (equal_params < 0)
+		goto error;
+	if (!equal_params) {
 		pma = isl_pw_multi_aff_align_params(pma,
 					    isl_multi_val_get_space(mv));
 		mv = isl_multi_val_align_params(mv,
@@ -6308,18 +6491,29 @@ __isl_give isl_multi_pw_aff *isl_multi_pw_aff_from_pw_multi_aff(
  *
  * We first check if they are obviously equal.
  * If not, we convert them to maps and check if those are equal.
+ *
+ * If "pa1" or "pa2" contain any NaNs, then they are considered
+ * not to be the same.  A NaN is not equal to anything, not even
+ * to another NaN.
  */
-int isl_pw_aff_is_equal(__isl_keep isl_pw_aff *pa1, __isl_keep isl_pw_aff *pa2)
+isl_bool isl_pw_aff_is_equal(__isl_keep isl_pw_aff *pa1,
+	__isl_keep isl_pw_aff *pa2)
 {
-	int equal;
+	isl_bool equal;
+	isl_bool has_nan;
 	isl_map *map1, *map2;
 
 	if (!pa1 || !pa2)
-		return -1;
+		return isl_bool_error;
 
 	equal = isl_pw_aff_plain_is_equal(pa1, pa2);
 	if (equal < 0 || equal)
 		return equal;
+	has_nan = either_involves_nan(pa1, pa2);
+	if (has_nan < 0)
+		return isl_bool_error;
+	if (has_nan)
+		return isl_bool_false;
 
 	map1 = map_from_pw_aff(isl_pw_aff_copy(pa1));
 	map2 = map_from_pw_aff(isl_pw_aff_copy(pa2));
@@ -6340,13 +6534,15 @@ isl_bool isl_multi_pw_aff_is_equal(__isl_keep isl_multi_pw_aff *mpa1,
 	__isl_keep isl_multi_pw_aff *mpa2)
 {
 	int i;
-	isl_bool equal;
+	isl_bool equal, equal_params;
 
 	if (!mpa1 || !mpa2)
 		return isl_bool_error;
 
-	if (!isl_space_match(mpa1->space, isl_dim_param,
-			     mpa2->space, isl_dim_param)) {
+	equal_params = isl_space_has_equal_params(mpa1->space, mpa2->space);
+	if (equal_params < 0)
+		return isl_bool_error;
+	if (!equal_params) {
 		if (!isl_space_has_named_params(mpa1->space))
 			return isl_bool_false;
 		if (!isl_space_has_named_params(mpa2->space))
@@ -6374,6 +6570,43 @@ isl_bool isl_multi_pw_aff_is_equal(__isl_keep isl_multi_pw_aff *mpa1,
 	}
 
 	return isl_bool_true;
+}
+
+/* Do "pma1" and "pma2" represent the same function?
+ *
+ * First check if they are obviously equal.
+ * If not, then convert them to maps and check if those are equal.
+ *
+ * If "pa1" or "pa2" contain any NaNs, then they are considered
+ * not to be the same.  A NaN is not equal to anything, not even
+ * to another NaN.
+ */
+isl_bool isl_pw_multi_aff_is_equal(__isl_keep isl_pw_multi_aff *pma1,
+	__isl_keep isl_pw_multi_aff *pma2)
+{
+	isl_bool equal;
+	isl_bool has_nan;
+	isl_map *map1, *map2;
+
+	if (!pma1 || !pma2)
+		return isl_bool_error;
+
+	equal = isl_pw_multi_aff_plain_is_equal(pma1, pma2);
+	if (equal < 0 || equal)
+		return equal;
+	has_nan = isl_pw_multi_aff_involves_nan(pma1);
+	if (has_nan >= 0 && !has_nan)
+		has_nan = isl_pw_multi_aff_involves_nan(pma2);
+	if (has_nan < 0 || has_nan)
+		return isl_bool_not(has_nan);
+
+	map1 = isl_map_from_pw_multi_aff(isl_pw_multi_aff_copy(pma1));
+	map2 = isl_map_from_pw_multi_aff(isl_pw_multi_aff_copy(pma2));
+	equal = isl_map_is_equal(map1, map2);
+	isl_map_free(map1);
+	isl_map_free(map2);
+
+	return equal;
 }
 
 /* Compute the pullback of "mpa" by the function represented by "ma".
@@ -6420,10 +6653,14 @@ error:
 __isl_give isl_multi_pw_aff *isl_multi_pw_aff_pullback_multi_aff(
 	__isl_take isl_multi_pw_aff *mpa, __isl_take isl_multi_aff *ma)
 {
+	isl_bool equal_params;
+
 	if (!mpa || !ma)
 		goto error;
-	if (isl_space_match(mpa->space, isl_dim_param,
-			    ma->space, isl_dim_param))
+	equal_params = isl_space_has_equal_params(mpa->space, ma->space);
+	if (equal_params < 0)
+		goto error;
+	if (equal_params)
 		return isl_multi_pw_aff_pullback_multi_aff_aligned(mpa, ma);
 	mpa = isl_multi_pw_aff_align_params(mpa, isl_multi_aff_get_space(ma));
 	ma = isl_multi_aff_align_params(ma, isl_multi_pw_aff_get_space(mpa));
@@ -6477,9 +6714,14 @@ error:
 __isl_give isl_multi_pw_aff *isl_multi_pw_aff_pullback_pw_multi_aff(
 	__isl_take isl_multi_pw_aff *mpa, __isl_take isl_pw_multi_aff *pma)
 {
+	isl_bool equal_params;
+
 	if (!mpa || !pma)
 		goto error;
-	if (isl_space_match(mpa->space, isl_dim_param, pma->dim, isl_dim_param))
+	equal_params = isl_space_has_equal_params(mpa->space, pma->dim);
+	if (equal_params < 0)
+		goto error;
+	if (equal_params)
 		return isl_multi_pw_aff_pullback_pw_multi_aff_aligned(mpa, pma);
 	mpa = isl_multi_pw_aff_align_params(mpa,
 					    isl_pw_multi_aff_get_space(pma));
@@ -6562,10 +6804,14 @@ static __isl_give isl_pw_aff *isl_multi_pw_aff_apply_aff_aligned(
 __isl_give isl_pw_aff *isl_multi_pw_aff_apply_aff(
 	__isl_take isl_multi_pw_aff *mpa, __isl_take isl_aff *aff)
 {
+	isl_bool equal_params;
+
 	if (!aff || !mpa)
 		goto error;
-	if (isl_space_match(aff->ls->dim, isl_dim_param,
-				mpa->space, isl_dim_param))
+	equal_params = isl_space_has_equal_params(aff->ls->dim, mpa->space);
+	if (equal_params < 0)
+		goto error;
+	if (equal_params)
 		return isl_multi_pw_aff_apply_aff_aligned(mpa, aff);
 
 	aff = isl_aff_align_params(aff, isl_multi_pw_aff_get_space(mpa));
@@ -6631,9 +6877,14 @@ error:
 __isl_give isl_pw_aff *isl_multi_pw_aff_apply_pw_aff(
 	__isl_take isl_multi_pw_aff *mpa, __isl_take isl_pw_aff *pa)
 {
+	isl_bool equal_params;
+
 	if (!pa || !mpa)
 		goto error;
-	if (isl_space_match(pa->dim, isl_dim_param, mpa->space, isl_dim_param))
+	equal_params = isl_space_has_equal_params(pa->dim, mpa->space);
+	if (equal_params < 0)
+		goto error;
+	if (equal_params)
 		return isl_multi_pw_aff_apply_pw_aff_aligned(mpa, pa);
 
 	pa = isl_pw_aff_align_params(pa, isl_multi_pw_aff_get_space(mpa));
@@ -6810,7 +7061,7 @@ __isl_give isl_map *isl_multi_pw_aff_eq_map(__isl_take isl_multi_pw_aff *mpa1,
  * pairwise equal.
  */
 static __isl_give isl_map *isl_multi_pw_aff_lex_map_on_space(
-	__isl_take isl_multi_pw_aff *mpa1, __isl_take isl_multi_pw_aff *mpa2,
+	__isl_keep isl_multi_pw_aff *mpa1, __isl_keep isl_multi_pw_aff *mpa2,
 	__isl_give isl_map *(*base)(__isl_take isl_pw_aff *pa1,
 		__isl_take isl_pw_aff *pa2),
 	__isl_take isl_space *space)
@@ -6855,7 +7106,7 @@ static __isl_give isl_map *isl_multi_pw_aff_lex_map_on_space(
  * pairwise equal.
  */
 __isl_give isl_map *isl_multi_pw_aff_lex_lt_map_on_space(
-	__isl_take isl_multi_pw_aff *mpa1, __isl_take isl_multi_pw_aff *mpa2,
+	__isl_keep isl_multi_pw_aff *mpa1, __isl_keep isl_multi_pw_aff *mpa2,
 	__isl_take isl_space *space)
 {
 	return isl_multi_pw_aff_lex_map_on_space(mpa1, mpa2,
@@ -6883,7 +7134,7 @@ __isl_give isl_map *isl_multi_pw_aff_lex_lt_map(
  * pairwise equal.
  */
 __isl_give isl_map *isl_multi_pw_aff_lex_gt_map_on_space(
-	__isl_take isl_multi_pw_aff *mpa1, __isl_take isl_multi_pw_aff *mpa2,
+	__isl_keep isl_multi_pw_aff *mpa1, __isl_keep isl_multi_pw_aff *mpa2,
 	__isl_take isl_space *space)
 {
 	return isl_multi_pw_aff_lex_map_on_space(mpa1, mpa2,
@@ -7126,8 +7377,6 @@ isl_union_pw_multi_aff_pullback_union_pw_multi_aff(
 
 /* Check that the domain space of "upa" matches "space".
  *
- * Return 0 on success and -1 on error.
- *
  * This function is called from isl_multi_union_pw_aff_set_union_pw_aff and
  * can in principle never fail since the space "space" is that
  * of the isl_multi_union_pw_aff and is a set space such that
@@ -7136,24 +7385,24 @@ isl_union_pw_multi_aff_pullback_union_pw_multi_aff(
  * We check the parameters and double-check that "space" is
  * indeed that of a set.
  */
-static int isl_union_pw_aff_check_match_domain_space(
+static isl_stat isl_union_pw_aff_check_match_domain_space(
 	__isl_keep isl_union_pw_aff *upa, __isl_keep isl_space *space)
 {
 	isl_space *upa_space;
-	int match;
+	isl_bool match;
 
 	if (!upa || !space)
-		return -1;
+		return isl_stat_error;
 
 	match = isl_space_is_set(space);
 	if (match < 0)
-		return -1;
+		return isl_stat_error;
 	if (!match)
 		isl_die(isl_space_get_ctx(space), isl_error_invalid,
 			"expecting set space", return -1);
 
 	upa_space = isl_union_pw_aff_get_space(upa);
-	match = isl_space_match(space, isl_dim_param, upa_space, isl_dim_param);
+	match = isl_space_has_equal_params(space, upa_space);
 	if (match < 0)
 		goto error;
 	if (!match)
@@ -7161,26 +7410,26 @@ static int isl_union_pw_aff_check_match_domain_space(
 			"parameters don't match", goto error);
 
 	isl_space_free(upa_space);
-	return 0;
+	return isl_stat_ok;
 error:
 	isl_space_free(upa_space);
-	return -1;
+	return isl_stat_error;
 }
 
 /* Do the parameters of "upa" match those of "space"?
  */
-static int isl_union_pw_aff_matching_params(__isl_keep isl_union_pw_aff *upa,
-	__isl_keep isl_space *space)
+static isl_bool isl_union_pw_aff_matching_params(
+	__isl_keep isl_union_pw_aff *upa, __isl_keep isl_space *space)
 {
 	isl_space *upa_space;
-	int match;
+	isl_bool match;
 
 	if (!upa || !space)
-		return -1;
+		return isl_bool_error;
 
 	upa_space = isl_union_pw_aff_get_space(upa);
 
-	match = isl_space_match(space, isl_dim_param, upa_space, isl_dim_param);
+	match = isl_space_has_equal_params(space, upa_space);
 
 	isl_space_free(upa_space);
 	return match;
@@ -7222,7 +7471,7 @@ static __isl_give isl_union_pw_aff *isl_union_pw_aff_reset_domain_space(
 	__isl_take isl_union_pw_aff *upa, __isl_take isl_space *space)
 {
 	struct isl_union_pw_aff_reset_params_data data = { space };
-	int match;
+	isl_bool match;
 
 	match = isl_union_pw_aff_matching_params(upa, space);
 	if (match < 0)
@@ -7905,10 +8154,14 @@ error:
 __isl_give isl_multi_union_pw_aff *isl_multi_union_pw_aff_multi_val_on_domain(
 	__isl_take isl_union_set *domain, __isl_take isl_multi_val *mv)
 {
+	isl_bool equal_params;
+
 	if (!domain || !mv)
 		goto error;
-	if (isl_space_match(domain->dim, isl_dim_param,
-			    mv->space, isl_dim_param))
+	equal_params = isl_space_has_equal_params(domain->dim, mv->space);
+	if (equal_params < 0)
+		goto error;
+	if (equal_params)
 		return isl_multi_union_pw_aff_multi_val_on_domain_aligned(
 								    domain, mv);
 	domain = isl_union_set_align_params(domain,
@@ -7964,10 +8217,14 @@ error:
 __isl_give isl_multi_union_pw_aff *isl_multi_union_pw_aff_multi_aff_on_domain(
 	__isl_take isl_union_set *domain, __isl_take isl_multi_aff *ma)
 {
+	isl_bool equal_params;
+
 	if (!domain || !ma)
 		goto error;
-	if (isl_space_match(domain->dim, isl_dim_param,
-			    ma->space, isl_dim_param))
+	equal_params = isl_space_has_equal_params(domain->dim, ma->space);
+	if (equal_params < 0)
+		goto error;
+	if (equal_params)
 		return isl_multi_union_pw_aff_multi_aff_on_domain_aligned(
 								    domain, ma);
 	domain = isl_union_set_align_params(domain,
@@ -8138,14 +8395,13 @@ isl_union_pw_multi_aff_from_multi_union_pw_aff(
 	if (!mupa)
 		return NULL;
 
-	space = isl_multi_union_pw_aff_get_space(mupa);
-
 	n = isl_multi_union_pw_aff_dim(mupa, isl_dim_set);
 	if (n == 0)
 		isl_die(isl_multi_union_pw_aff_get_ctx(mupa), isl_error_invalid,
 			"cannot determine domain of zero-dimensional "
 			"isl_multi_union_pw_aff", goto error);
 
+	space = isl_multi_union_pw_aff_get_space(mupa);
 	upa = isl_multi_union_pw_aff_get_union_pw_aff(mupa, 0);
 	upma = isl_union_pw_multi_aff_from_union_pw_aff(upa);
 
@@ -8573,6 +8829,7 @@ __isl_give isl_multi_pw_aff *isl_multi_union_pw_aff_extract_multi_pw_aff(
 	__isl_keep isl_multi_union_pw_aff *mupa, __isl_take isl_space *space)
 {
 	int i, n;
+	isl_bool equal_params;
 	isl_space *space_mpa = NULL;
 	isl_multi_pw_aff *mpa;
 
@@ -8580,7 +8837,10 @@ __isl_give isl_multi_pw_aff *isl_multi_union_pw_aff_extract_multi_pw_aff(
 		goto error;
 
 	space_mpa = isl_multi_union_pw_aff_get_space(mupa);
-	if (!isl_space_match(space_mpa, isl_dim_param, space, isl_dim_param)) {
+	equal_params = isl_space_has_equal_params(space_mpa, space);
+	if (equal_params < 0)
+		goto error;
+	if (!equal_params) {
 		space = isl_space_drop_dims(space, isl_dim_param,
 					0, isl_space_dim(space, isl_dim_param));
 		space = isl_space_align_params(space,

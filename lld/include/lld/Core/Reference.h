@@ -1,4 +1,4 @@
-//===- Core/References.h - A Reference to Another Atom --------------------===//
+//===- Core/References.h - A Reference to Another Atom ----------*- C++ -*-===//
 //
 //                             The LLVM Linker
 //
@@ -10,10 +10,10 @@
 #ifndef LLD_CORE_REFERENCES_H
 #define LLD_CORE_REFERENCES_H
 
-#include "lld/Core/LLVM.h"
-#include "llvm/ADT/StringSwitch.h"
+#include <cstdint>
 
 namespace lld {
+
 class Atom;
 
 ///
@@ -25,15 +25,13 @@ class Atom;
 /// the Atom, then the function Atom will have a Reference of: offsetInAtom=40,
 /// kind=callsite, target=malloc, addend=0.
 ///
-/// Besides supporting traditional "relocations", References are also used
-/// grouping atoms (group comdat), forcing layout (one atom must follow
-/// another), marking data-in-code (jump tables or ARM constants), etc.
+/// Besides supporting traditional "relocations", references are also used
+/// forcing layout (one atom must follow another), marking data-in-code
+/// (jump tables or ARM constants), etc.
 ///
 /// The "kind" of a reference is a tuple of <namespace, arch, value>.  This
 /// enable us to re-use existing relocation types definded for various
-/// file formats and architectures.  For instance, in ELF the relocation type 10
-/// means R_X86_64_32 for x86_64, and R_386_GOTPC for i386. For PE/COFF
-/// relocation 10 means IMAGE_REL_AMD64_SECTION.
+/// file formats and architectures.
 ///
 /// References and atoms form a directed graph. The dead-stripping pass
 /// traverses them starting from dead-strip root atoms to garbage collect
@@ -47,16 +45,14 @@ public:
   enum class KindNamespace {
     all     = 0,
     testing = 1,
-    ELF     = 2,
-    COFF    = 3,
-    mach_o  = 4,
+    mach_o  = 2,
   };
 
   KindNamespace kindNamespace() const { return (KindNamespace)_kindNamespace; }
   void setKindNamespace(KindNamespace ns) { _kindNamespace = (uint8_t)ns; }
 
   // Which architecture the kind value is for.
-  enum class KindArch { all, AArch64, AMDGPU, ARM, Hexagon, Mips, x86, x86_64 };
+  enum class KindArch { all, AArch64, ARM, x86, x86_64};
 
   KindArch kindArch() const { return (KindArch)_kindArch; }
   void setKindArch(KindArch a) { _kindArch = (uint8_t)a; }
@@ -76,8 +72,6 @@ public:
     // kindLayoutAfter is treated as a bidirected edge by the dead-stripping
     // pass.
     kindLayoutAfter = 1,
-    // kindGroupChild is treated as a bidirected edge too.
-    kindGroupChild,
     kindAssociate,
   };
 
@@ -113,13 +107,13 @@ protected:
   /// object.  Therefore, no one but the owning File object should call
   /// delete on an Reference.  In fact, some File objects may bulk allocate
   /// an array of References, so they cannot be individually deleted by anyone.
-  virtual ~Reference() {}
+  virtual ~Reference() = default;
 
   KindValue  _kindValue;
   uint8_t    _kindNamespace;
   uint8_t    _kindArch;
 };
 
-} // namespace lld
+} // end namespace lld
 
 #endif // LLD_CORE_REFERENCES_H

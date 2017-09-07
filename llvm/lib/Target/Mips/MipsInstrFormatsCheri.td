@@ -10,7 +10,7 @@
 // BC2F
 class CheriFmtCBT<bits<5> op, dag outs, dag ins, string asmstr,
                 list<dag> pattern> :
-  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>, Sched<[]>
 {
   bits<5>  cb;
   bits<16> offset;
@@ -27,7 +27,8 @@ class CheriFmtCBT<bits<5> op, dag outs, dag ins, string asmstr,
 
 class CheriFmtRegs<bits<5> op, bits<3> fmt, dag outs, dag ins, string asmstr,
                 list<dag> pattern> :
-  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther> {
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>, Sched<[]>
+{
   bits<5> r0;
   bits<5> r1;
   bits<5> r2;
@@ -110,9 +111,13 @@ class CheriFmt3CCall<bits<5> op, dag outs, dag ins, string asmstr,
   CheriFmtRegs<op, 0, outs, ins, asmstr, pattern> {
   bits<5>  cs;
   bits<5>  cb;
-  let r0 = cs;
-  let r1 = cb;
-  let r2 = 0;
+  bits<11> selector;
+
+  let Opcode = 0x12;
+  let Inst{25-21} = 0x05;
+  let Inst{20-16} = cs;
+  let Inst{15-11} = cb;
+  let Inst{10-0} = selector;
 }
 class CheriFmt2CJMP<bits<5> op, dag outs, dag ins, string asmstr,
                 list<dag> pattern> :
@@ -126,9 +131,10 @@ class CheriFmt2CJMP<bits<5> op, dag outs, dag ins, string asmstr,
 class CheriFmt3CRet<bits<5> op, dag outs, dag ins, string asmstr,
                 list<dag> pattern> :
   CheriFmtRegs<op, 0, outs, ins, asmstr, pattern> {
-  let r0 = 0;
-  let r1 = 0;
-  let r2 = 0;
+  let Opcode = 0x12;
+  let Inst{25-21} = 0x05;
+  let Inst{20-11} = 0;
+  let Inst{10-0} = 1;
 }
 
 class CheriFmtClearTag<dag outs, dag ins, string asmstr,
@@ -142,7 +148,7 @@ class CheriFmtClearTag<dag outs, dag ins, string asmstr,
 // Load / Store capabilities
 class CheriFmtCLS<bits<6> op, dag outs, dag ins, string asmstr,
                 list<dag> pattern> :
-  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>, Sched<[]>
 {
   bits<5>  cs;
   bits<5>  cb;
@@ -158,7 +164,7 @@ class CheriFmtCLS<bits<6> op, dag outs, dag ins, string asmstr,
 
 class CheriFmtCLX<bits<2> t, bits<1> e, dag outs, dag ins, string asmstr,
                 list<dag> pattern> :
-  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>, Sched<[]>
 {
   bits<5>  rd;
   bits<5>  cb;
@@ -176,7 +182,7 @@ class CheriFmtCLX<bits<2> t, bits<1> e, dag outs, dag ins, string asmstr,
 
 class CheriFmtCSX<bits<2> t, bits<1> e, dag outs, dag ins, string asmstr,
                 list<dag> pattern> :
-  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>, Sched<[]>
 {
   bits<5>  rs;
   bits<5>  cb;
@@ -194,7 +200,7 @@ class CheriFmtCSX<bits<2> t, bits<1> e, dag outs, dag ins, string asmstr,
 
 class CheriFmtClearRegs<bits<5> regset, dag outs, dag ins, string asmstr,
                         list<dag> pattern> :
-  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>, Sched<[]>
 {
   bits<16> mask;
 
@@ -205,7 +211,7 @@ class CheriFmtClearRegs<bits<5> regset, dag outs, dag ins, string asmstr,
 }
 
 class CheriFmtCLL<bit isSigned, bits<2> type, dag outs, dag ins, string asmstr> :
-                  MipsInst<outs, ins, asmstr, [], NoItinerary, FrmOther>
+                  MipsInst<outs, ins, asmstr, [], NoItinerary, FrmOther>, Sched<[]>
 {
   bits<5> rd;
   bits<5> cb;
@@ -223,7 +229,7 @@ class CheriFmtCLL<bit isSigned, bits<2> type, dag outs, dag ins, string asmstr> 
 }
 
 class CheriFmtCSC<bits<3> type, dag outs, dag ins, string asmstr> :
-                  MipsInst<outs, ins, asmstr, [], NoItinerary, FrmOther>
+                  MipsInst<outs, ins, asmstr, [], NoItinerary, FrmOther>, Sched<[]>
 {
   bits<5> rs;
   bits<5> rd;
@@ -242,7 +248,7 @@ class CheriFmtCSC<bits<3> type, dag outs, dag ins, string asmstr> :
 }
 
 class CheriFmt3Op<bits<6> type, dag outs, dag ins, string asmstr, list<dag> pattern> :
-                  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>
+                  MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>, Sched<[]>
 {
   bits<5> r1;
   bits<5> r2;
@@ -272,12 +278,12 @@ class CheriFmt1Op<bits<5> type, dag outs, dag ins, string asmstr, list<dag> patt
 class CheriFmtCGet<bits<5> type, string op, string intr=op> :
                   CheriFmt2Op<type, (outs GPR64Opnd:$r1), (ins CheriOpnd:$r2), 
                               !strconcat("cget", op, "\t$r1, $r2"),
-                              [(set GPR64Opnd:$r1, (!cast<dag>(!strconcat("int_mips_cap_", intr, "_get")) CheriOpnd:$r2))]>;
+                              [(set GPR64Opnd:$r1, (!cast<dag>(!strconcat("int_cheri_cap_", intr, "_get")) CheriOpnd:$r2))]>;
 
 class CheriFmtCSet<bits<6> type, string op, string intr=op, string verb="set", string intr_verb=verb> :
                   CheriFmt3Op<type, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR64Opnd:$r3), 
                               !strconcat("c", verb, op, "\t$r1, $r2, $r3"),
-                              [(set CheriOpnd:$r1, (!cast<dag>(!strconcat("int_mips_cap_", intr, "_", intr_verb)) CheriOpnd:$r2, GPR64Opnd:$r3))]>;
+                              [(set CheriOpnd:$r1, (!cast<dag>(!strconcat("int_cheri_cap_", intr, "_", intr_verb)) CheriOpnd:$r2, GPR64Opnd:$r3))]>;
 
 class CheriFmtPtrCmp<bits<6> cmp, RegisterOperand RC, string instr_asm,
                      list<dag> pattern>:

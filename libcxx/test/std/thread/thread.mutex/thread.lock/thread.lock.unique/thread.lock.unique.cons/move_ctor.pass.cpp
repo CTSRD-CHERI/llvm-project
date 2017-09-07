@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// UNSUPPORTED: libcpp-has-no-threads
+// UNSUPPORTED: libcpp-has-no-threads, c++98, c++03
 
 // <mutex>
 
@@ -17,17 +17,28 @@
 
 #include <mutex>
 #include <cassert>
-
-std::mutex m;
+#include "nasty_containers.hpp"
 
 int main()
 {
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
-    std::unique_lock<std::mutex> lk0(m);
-    std::unique_lock<std::mutex> lk = std::move(lk0);
-    assert(lk.mutex() == &m);
+    {
+    typedef std::mutex M;
+    M m;
+    std::unique_lock<M> lk0(m);
+    std::unique_lock<M> lk = std::move(lk0);
+    assert(lk.mutex() == std::addressof(m));
     assert(lk.owns_lock() == true);
     assert(lk0.mutex() == nullptr);
     assert(lk0.owns_lock() == false);
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
+    }
+    {
+    typedef nasty_mutex M;
+    M m;
+    std::unique_lock<M> lk0(m);
+    std::unique_lock<M> lk = std::move(lk0);
+    assert(lk.mutex() == std::addressof(m));
+    assert(lk.owns_lock() == true);
+    assert(lk0.mutex() == nullptr);
+    assert(lk0.owns_lock() == false);
+    }
 }

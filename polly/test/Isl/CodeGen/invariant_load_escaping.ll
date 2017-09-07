@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-codegen -S < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-codegen -polly-invariant-load-hoisting=true -S < %s | FileCheck %s
 ;
 ;    int f(int *A, int *B) {
 ;      // Possible aliasing between A and B but if not then *B would be
@@ -21,7 +21,7 @@
 ; CHECK:   store i32 %polly.access.B.load, i32* %tmp.preload.s2a
 ;
 ; CHECK: polly.merge_new_and_old:
-; CHECK:   %tmp.merge = phi i32 [ %tmp.final_reload, %polly.loop_exit ], [ %tmp, %do.cond ]
+; CHECK:   %tmp.merge = phi i32 [ %tmp.final_reload, %polly.exiting ], [ %tmp, %do.cond ]
 ; CHECK:   br label %do.end
 ;
 ; CHECK: do.end:

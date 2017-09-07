@@ -1,3 +1,3 @@
-# RUN: llvm-mc -triple=mips64-unknown-freebsd -show-encoding -relocation-model=static -mcpu=mips3 %s | FileCheck %s
+# RUN: llvm-mc -triple=mips64-unknown-freebsd -show-encoding -mcpu=mips3 %s | FileCheck %s
 	j __cerror
 # CHECK: fixup A - offset: 0, value: __cerror, kind: fixup_Mips_26

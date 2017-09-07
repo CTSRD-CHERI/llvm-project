@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 // UNSUPPORTED: c++98, c++03, c++11
+// XFAIL: availability
 
 // dynarray.overview
 
@@ -58,7 +59,7 @@ void test ( const T &val, bool DefaultValueIsIndeterminate = false) {
     dynA d1 ( 4 );
     dyn_test ( d1, CheckDefaultValues );
     dyn_test_const ( d1, CheckDefaultValues );
-    
+
     dynA d2 ( 7, val );
     dyn_test ( d2 );
     dyn_test_const ( d2 );

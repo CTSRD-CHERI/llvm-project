@@ -232,15 +232,15 @@
     </contexts>
     <itemDatas>
       <itemData name="Normal Text" defStyleNum="dsNormal" />
-      <itemData name="Keyword" defStyleNum="dsKeyword" />
-      <itemData name="Data Type" defStyleNum="dsDataType" />
-      <itemData name="Int" defStyleNum="dsDecVal" />
-      <itemData name="Hex" defStyleNum="dsBaseN" />
-      <itemData name="Float" defStyleNum="dsFloat" />
+      <itemData name="Keyword" defStyleNum="dsKeyword"  spellChecking="0"/>
+      <itemData name="Data Type" defStyleNum="dsDataType" spellChecking="0"/>
+      <itemData name="Int" defStyleNum="dsDecVal" spellChecking="0"/>
+      <itemData name="Hex" defStyleNum="dsBaseN" spellChecking="0" />
+      <itemData name="Float" defStyleNum="dsFloat" spellChecking="0" />
       <itemData name="String" defStyleNum="dsString" />
-      <itemData name="Comment" defStyleNum="dsComment" />
-      <itemData name="Function" defStyleNum="dsFunction" />
-      <itemData name="Symbol" defStyleNum="dsFunction" />
+      <itemData name="Comment" defStyleNum="dsComment" spellChecking="0" />
+      <itemData name="Function" defStyleNum="dsFunction" spellChecking="0" />
+      <itemData name="Symbol" defStyleNum="dsFunction" spellChecking="0" />
     </itemDatas>
   </highlighting>
   <general>

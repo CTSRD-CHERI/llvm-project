@@ -2,7 +2,7 @@
 ; RUN: opt -O1 -S -debug %s 2>&1 | FileCheck %s --check-prefix=OPT-O1
 ; RUN: opt -O2 -S -debug %s 2>&1 | FileCheck %s --check-prefix=OPT-O1 --check-prefix=OPT-O2O3
 ; RUN: opt -O3 -S -debug %s 2>&1 | FileCheck %s --check-prefix=OPT-O1 --check-prefix=OPT-O2O3
-; RUN: opt -bb-vectorize -dce -die -loweratomic -S -debug %s 2>&1 | FileCheck %s --check-prefix=OPT-MORE
+; RUN: opt -bb-vectorize -dce -die -gvn-hoist -loweratomic -S -debug %s 2>&1 | FileCheck %s --check-prefix=OPT-MORE
 ; RUN: opt -indvars -licm -loop-deletion -loop-extract -loop-idiom -loop-instsimplify -loop-reduce -loop-reroll -loop-rotate -loop-unroll -loop-unswitch -S -debug %s 2>&1 | FileCheck %s --check-prefix=OPT-LOOP
 
 ; REQUIRES: asserts

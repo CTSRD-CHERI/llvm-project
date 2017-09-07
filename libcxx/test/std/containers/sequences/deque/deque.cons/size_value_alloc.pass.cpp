@@ -13,6 +13,7 @@
 
 #include <deque>
 #include <cassert>
+#include <cstddef>
 
 #include "min_allocator.h"
 
@@ -25,7 +26,7 @@ test(unsigned n, const T& x, const Allocator& a)
     C d(n, x, a);
     assert(d.get_allocator() == a);
     assert(d.size() == n);
-    assert(distance(d.begin(), d.end()) == d.size());
+    assert(static_cast<std::size_t>(distance(d.begin(), d.end())) == d.size());
     for (const_iterator i = d.begin(), e = d.end(); i != e; ++i)
         assert(*i == x);
 }
@@ -47,7 +48,7 @@ int main()
     test(4096, 1165, a);
     test(4097, 157, a);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     min_allocator<int> a;
     test(0, 5, a);

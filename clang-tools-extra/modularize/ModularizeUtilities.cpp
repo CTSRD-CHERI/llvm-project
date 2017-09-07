@@ -44,25 +44,22 @@ public:
 ModularizeUtilities::ModularizeUtilities(std::vector<std::string> &InputPaths,
                                          llvm::StringRef Prefix,
                                          llvm::StringRef ProblemFilesListPath)
-  : InputFilePaths(InputPaths),
-    HeaderPrefix(Prefix),
-    ProblemFilesPath(ProblemFilesListPath),
-    HasModuleMap(false),
-    MissingHeaderCount(0),
-    // Init clang stuff needed for loading the module map and preprocessing.
-    LangOpts(new LangOptions()), DiagIDs(new DiagnosticIDs()),
-    DiagnosticOpts(new DiagnosticOptions()),
-    DC(llvm::errs(), DiagnosticOpts.get()),
-    Diagnostics(
-    new DiagnosticsEngine(DiagIDs, DiagnosticOpts.get(), &DC, false)),
-    TargetOpts(new ModuleMapTargetOptions()),
-    Target(TargetInfo::CreateTargetInfo(*Diagnostics, TargetOpts)),
-    FileMgr(new FileManager(FileSystemOpts)),
-    SourceMgr(new SourceManager(*Diagnostics, *FileMgr, false)),
-    HeaderSearchOpts(new HeaderSearchOptions()),
-    HeaderInfo(new HeaderSearch(HeaderSearchOpts, *SourceMgr, *Diagnostics,
-    *LangOpts, Target.get())) {
-}
+    : InputFilePaths(InputPaths), HeaderPrefix(Prefix),
+      ProblemFilesPath(ProblemFilesListPath), HasModuleMap(false),
+      MissingHeaderCount(0),
+      // Init clang stuff needed for loading the module map and preprocessing.
+      LangOpts(new LangOptions()), DiagIDs(new DiagnosticIDs()),
+      DiagnosticOpts(new DiagnosticOptions()),
+      DC(llvm::errs(), DiagnosticOpts.get()),
+      Diagnostics(
+          new DiagnosticsEngine(DiagIDs, DiagnosticOpts.get(), &DC, false)),
+      TargetOpts(new ModuleMapTargetOptions()),
+      Target(TargetInfo::CreateTargetInfo(*Diagnostics, TargetOpts)),
+      FileMgr(new FileManager(FileSystemOpts)),
+      SourceMgr(new SourceManager(*Diagnostics, *FileMgr, false)),
+      HeaderInfo(new HeaderSearch(std::make_shared<HeaderSearchOptions>(),
+                                  *SourceMgr, *Diagnostics, *LangOpts,
+                                  Target.get())) {}
 
 // Create instance of ModularizeUtilities, to simplify setting up
 // subordinate objects.
@@ -75,9 +72,8 @@ ModularizeUtilities *ModularizeUtilities::createModularizeUtilities(
 
 // Load all header lists and dependencies.
 std::error_code ModularizeUtilities::loadAllHeaderListsAndDependencies() {
-  typedef std::vector<std::string>::iterator Iter;
   // For each input file.
-  for (Iter I = InputFilePaths.begin(), E = InputFilePaths.end(); I != E; ++I) {
+  for (auto I = InputFilePaths.begin(), E = InputFilePaths.end(); I != E; ++I) {
     llvm::StringRef InputPath = *I;
     // If it's a module map.
     if (InputPath.endswith(".modulemap")) {
@@ -124,8 +120,9 @@ std::error_code ModularizeUtilities::doCoverageCheck(
   std::error_code EC;
   for (ModuleMapIndex = 0; ModuleMapIndex < ModuleMapCount; ++ModuleMapIndex) {
     std::unique_ptr<clang::ModuleMap> &ModMap = ModuleMaps[ModuleMapIndex];
-    CoverageChecker *Checker = CoverageChecker::createCoverageChecker(
-      InputFilePaths[ModuleMapIndex], IncludePaths, CommandLine, ModMap.get());
+    auto Checker = CoverageChecker::createCoverageChecker(
+        InputFilePaths[ModuleMapIndex], IncludePaths, CommandLine,
+        ModMap.get());
     std::error_code LocalEC = Checker->doChecks();
     if (LocalEC.value() > 0)
       EC = LocalEC;
@@ -334,7 +331,7 @@ bool ModularizeUtilities::collectModuleMapHeaders(clang::ModuleMap *ModMap) {
 // Collect referenced headers from one module.
 // Collects the headers referenced in the given module into
 // HeaderFileNames.
-bool ModularizeUtilities::collectModuleHeaders(const Module &Mod) {
+bool ModularizeUtilities::collectModuleHeaders(const clang::Module &Mod) {
 
   // Ignore explicit modules because they often have dependencies
   // we can't know.
@@ -345,9 +342,8 @@ bool ModularizeUtilities::collectModuleHeaders(const Module &Mod) {
   DependentsVector UmbrellaDependents;
 
   // Recursively do submodules.
-  for (Module::submodule_const_iterator MI = Mod.submodule_begin(),
-      MIEnd = Mod.submodule_end();
-      MI != MIEnd; ++MI)
+  for (auto MI = Mod.submodule_begin(), MIEnd = Mod.submodule_end();
+       MI != MIEnd; ++MI)
     collectModuleHeaders(**MI);
 
   if (const FileEntry *UmbrellaHeader = Mod.getUmbrellaHeader().Entry) {
@@ -468,7 +464,7 @@ std::string ModularizeUtilities::getCanonicalPath(StringRef FilePath) {
 bool ModularizeUtilities::isHeader(StringRef FileName) {
   StringRef Extension = llvm::sys::path::extension(FileName);
   if (Extension.size() == 0)
-    return false;
+    return true;
   if (Extension.equals_lower(".h"))
     return true;
   if (Extension.equals_lower(".inc"))

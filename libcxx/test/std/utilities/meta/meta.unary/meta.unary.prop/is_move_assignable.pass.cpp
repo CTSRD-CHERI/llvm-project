@@ -12,17 +12,24 @@
 // is_move_assignable
 
 #include <type_traits>
+#include "test_macros.h"
 
 template <class T>
 void test_is_move_assignable()
 {
-    static_assert( std::is_move_assignable<T>::value, "");
+    static_assert(( std::is_move_assignable<T>::value), "");
+#if TEST_STD_VER > 14
+    static_assert(( std::is_move_assignable_v<T>), "");
+#endif
 }
 
 template <class T>
 void test_is_not_move_assignable()
 {
-    static_assert(!std::is_move_assignable<T>::value, "");
+    static_assert((!std::is_move_assignable<T>::value), "");
+#if TEST_STD_VER > 14
+    static_assert((!std::is_move_assignable_v<T>), "");
+#endif
 }
 
 class Empty
@@ -56,7 +63,7 @@ int main()
     test_is_move_assignable<NotEmpty> ();
     test_is_move_assignable<Empty> ();
 
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
+#if TEST_STD_VER >= 11
     test_is_not_move_assignable<const int> ();
     test_is_not_move_assignable<int[]> ();
     test_is_not_move_assignable<int[3]> ();

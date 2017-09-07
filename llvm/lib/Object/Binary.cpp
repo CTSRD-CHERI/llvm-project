@@ -1,4 +1,4 @@
-//===- Binary.cpp - A generic binary file -----------------------*- C++ -*-===//
+//===- Binary.cpp - A generic binary file ---------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -11,21 +11,26 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Object/Binary.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/Support/FileSystem.h"
-#include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/Path.h"
-
-// Include headers for createBinary.
 #include "llvm/Object/Archive.h"
+#include "llvm/Object/Binary.h"
+#include "llvm/Object/Error.h"
 #include "llvm/Object/MachOUniversal.h"
 #include "llvm/Object/ObjectFile.h"
+#include "llvm/Object/WindowsResource.h"
+#include "llvm/Support/Error.h"
+#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/ErrorOr.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/MemoryBuffer.h"
+#include <algorithm>
+#include <memory>
+#include <system_error>
 
 using namespace llvm;
 using namespace object;
 
-Binary::~Binary() {}
+Binary::~Binary() = default;
 
 Binary::Binary(unsigned int Type, MemoryBufferRef Source)
     : TypeID(Type), Data(Source) {}
@@ -36,7 +41,7 @@ StringRef Binary::getFileName() const { return Data.getBufferIdentifier(); }
 
 MemoryBufferRef Binary::getMemoryBufferRef() const { return Data; }
 
-ErrorOr<std::unique_ptr<Binary>> object::createBinary(MemoryBufferRef Buffer,
+Expected<std::unique_ptr<Binary>> object::createBinary(MemoryBufferRef Buffer,
                                                       LLVMContext *Context) {
   sys::fs::file_magic Type = sys::fs::identify_magic(Buffer.getBuffer());
 
@@ -63,28 +68,31 @@ ErrorOr<std::unique_ptr<Binary>> object::createBinary(MemoryBufferRef Buffer,
     case sys::fs::file_magic::coff_import_library:
     case sys::fs::file_magic::pecoff_executable:
     case sys::fs::file_magic::bitcode:
+    case sys::fs::file_magic::wasm_object:
       return ObjectFile::createSymbolicFile(Buffer, Type, Context);
     case sys::fs::file_magic::macho_universal_binary:
       return MachOUniversalBinary::create(Buffer);
-    case sys::fs::file_magic::unknown:
     case sys::fs::file_magic::windows_resource:
+      return WindowsResource::createWindowsResource(Buffer);
+    case sys::fs::file_magic::unknown:
+    case sys::fs::file_magic::coff_cl_gl_object:
       // Unrecognized object file format.
-      return object_error::invalid_file_type;
+      return errorCodeToError(object_error::invalid_file_type);
   }
   llvm_unreachable("Unexpected Binary File Type");
 }
 
-ErrorOr<OwningBinary<Binary>> object::createBinary(StringRef Path) {
+Expected<OwningBinary<Binary>> object::createBinary(StringRef Path) {
   ErrorOr<std::unique_ptr<MemoryBuffer>> FileOrErr =
       MemoryBuffer::getFileOrSTDIN(Path);
   if (std::error_code EC = FileOrErr.getError())
-    return EC;
+    return errorCodeToError(EC);
   std::unique_ptr<MemoryBuffer> &Buffer = FileOrErr.get();
 
-  ErrorOr<std::unique_ptr<Binary>> BinOrErr =
+  Expected<std::unique_ptr<Binary>> BinOrErr =
       createBinary(Buffer->getMemBufferRef());
-  if (std::error_code EC = BinOrErr.getError())
-    return EC;
+  if (!BinOrErr)
+    return BinOrErr.takeError();
   std::unique_ptr<Binary> &Bin = BinOrErr.get();
 
   return OwningBinary<Binary>(std::move(Bin), std::move(Buffer));

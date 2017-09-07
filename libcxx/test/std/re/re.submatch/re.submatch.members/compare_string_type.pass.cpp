@@ -15,6 +15,7 @@
 
 #include <regex>
 #include <cassert>
+#include "test_macros.h"
 
 int main()
 {
@@ -23,7 +24,6 @@ int main()
         typedef std::sub_match<const CharT*> SM;
         typedef SM::string_type string;
         SM sm = SM();
-        SM sm2 = SM();
         assert(sm.compare(string()) == 0);
         const CharT s[] = {'1', '2', '3', 0};
         sm.first = s;
@@ -37,7 +37,6 @@ int main()
         typedef std::sub_match<const CharT*> SM;
         typedef SM::string_type string;
         SM sm = SM();
-        SM sm2 = SM();
         assert(sm.compare(string()) == 0);
         const CharT s[] = {'1', '2', '3', 0};
         sm.first = s;

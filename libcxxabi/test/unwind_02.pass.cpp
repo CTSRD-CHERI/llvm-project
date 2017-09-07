@@ -7,7 +7,14 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: libcxxabi-no-exceptions
+// REQUIRES: c++98 || c++03 || c++11 || c++14
+
 #include <assert.h>
+
+#if defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wunreachable-code"
+#endif
 
 struct A
 {

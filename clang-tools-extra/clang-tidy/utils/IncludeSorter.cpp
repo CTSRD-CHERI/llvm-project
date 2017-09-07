@@ -12,6 +12,7 @@
 
 namespace clang {
 namespace tidy {
+namespace utils {
 
 namespace {
 
@@ -60,7 +61,8 @@ DetermineIncludeKind(StringRef CanonicalFile, StringRef IncludeFile,
                                       : IncludeSorter::IK_CXXSystemInclude;
   }
   StringRef CanonicalInclude = MakeCanonicalName(IncludeFile, Style);
-  if (CanonicalFile.equals(CanonicalInclude)) {
+  if (CanonicalFile.endswith(CanonicalInclude)
+      || CanonicalInclude.endswith(CanonicalFile)) {
     return IncludeSorter::IK_MainTUInclude;
   }
   if (Style == IncludeSorter::IS_Google) {
@@ -188,10 +190,7 @@ std::vector<FixItHint> IncludeSorter::GetEdits() {
   // delete inclusions.
   for (int IncludeKind = 0; IncludeKind < IK_InvalidInclude; ++IncludeKind) {
     std::sort(IncludeBucket[IncludeKind].begin(),
-              IncludeBucket[IncludeKind].end(),
-              [](const std::string &Left, const std::string &Right) {
-                return llvm::StringRef(Left).compare_lower(Right) < 0;
-              });
+              IncludeBucket[IncludeKind].end());
     for (const auto &IncludeEntry : IncludeBucket[IncludeKind]) {
       auto &Location = IncludeLocations[IncludeEntry];
       SourceRangeVector::iterator LocationIterator = Location.begin();
@@ -256,7 +255,8 @@ std::vector<FixItHint> IncludeSorter::GetEdits() {
       // Otherwise report the current block edit and start a new block.
     } else {
       if (CurrentEndLine) {
-        Fixes.push_back(CreateFixIt(CurrentRange, CurrentText));
+        Fixes.push_back(FixItHint::CreateReplacement(
+            CharSourceRange::getCharRange(CurrentRange), CurrentText));
       }
 
       CurrentEndLine = LineEdit.first;
@@ -266,23 +266,14 @@ std::vector<FixItHint> IncludeSorter::GetEdits() {
   }
   // Finally, report the current block edit if there is one.
   if (CurrentEndLine) {
-    Fixes.push_back(CreateFixIt(CurrentRange, CurrentText));
+    Fixes.push_back(FixItHint::CreateReplacement(
+        CharSourceRange::getCharRange(CurrentRange), CurrentText));
   }
 
   // Reset the remaining internal state.
   SourceLocations.clear();
   IncludeLocations.clear();
   return Fixes;
-}
-
-// Creates a fix-it for the given replacements.
-// Takes the the source location that will be replaced, and the new text.
-FixItHint IncludeSorter::CreateFixIt(SourceRange EditRange,
-                                     const std::string &NewText) {
-  FixItHint Fix;
-  Fix.RemoveRange = CharSourceRange::getCharRange(EditRange);
-  Fix.CodeToInsert = NewText;
-  return Fix;
 }
 
 IncludeSorter::IncludeStyle
@@ -294,5 +285,6 @@ StringRef IncludeSorter::toString(IncludeStyle Style) {
   return Style == IS_LLVM ? "llvm" : "google";
 }
 
+} // namespace utils
 } // namespace tidy
 } // namespace clang

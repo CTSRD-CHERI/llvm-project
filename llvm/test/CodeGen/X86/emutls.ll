@@ -21,7 +21,7 @@ define i32 @my_get_xyz() {
 ; X64:         movl $my_emutls_v_xyz, %edi
 ; X64-NEXT:    callq my_emutls_get_address
 ; X64-NEXT:    movl (%rax), %eax
-; X64-NEXT:    popq %rdx
+; X64-NEXT:    popq %rcx
 ; X64-NEXT:    retq
 
 entry:
@@ -50,7 +50,7 @@ define i32 @f1() {
 ; X64:         movl $__emutls_v.i1, %edi
 ; X64-NEXT:    callq __emutls_get_address
 ; X64-NEXT:    movl (%rax), %eax
-; X64-NEXT:    popq %rdx
+; X64-NEXT:    popq %rcx
 ; X64-NEXT:    retq
 
 entry:
@@ -67,7 +67,7 @@ define i32* @f2() {
 ; X64-LABEL: f2:
 ; X64:         movl $__emutls_v.i1, %edi
 ; X64-NEXT:    callq __emutls_get_address
-; X64-NEXT:    popq %rdx
+; X64-NEXT:    popq %rcx
 ; X64-NEXT:    retq
 
 entry:
@@ -230,7 +230,7 @@ entry:
 ; X32-LABEL: __emutls_v.i1:
 ; X32-NEXT: .long 4
 ; X32-NEXT: .long 4
-; X32-NEXT: .long 0
+; X32-NEXT: .zero 4
 ; X32-NEXT: .long __emutls_t.i1
 
 ; X32       .section .rodata,
@@ -243,7 +243,7 @@ entry:
 ; X32-LABEL: __emutls_v.i3:
 ; X32-NEXT: .long 4
 ; X32-NEXT: .long 4
-; X32-NEXT: .long 0
+; X32-NEXT: .zero 4
 ; X32-NEXT: .long __emutls_t.i3
 
 ; X32       .section .rodata,
@@ -254,7 +254,7 @@ entry:
 ; X32-LABEL: __emutls_v.i4:
 ; X32-NEXT: .long 4
 ; X32-NEXT: .long 4
-; X32-NEXT: .long 0
+; X32-NEXT: .zero 4
 ; X32-NEXT: .long __emutls_t.i4
 
 ; X32       .section .rodata,
@@ -269,7 +269,7 @@ entry:
 ; X32-LABEL: __emutls_v.s1:
 ; X32-NEXT: .long 2
 ; X32-NEXT: .long 2
-; X32-NEXT: .long 0
+; X32-NEXT: .zero 4
 ; X32-NEXT: .long __emutls_t.s1
 
 ; X32 .section .rodata,
@@ -280,8 +280,8 @@ entry:
 ; X32-LABEL: __emutls_v.b1:
 ; X32-NEXT: .long 1
 ; X32-NEXT: .long 1
-; X32-NEXT: .long 0
-; X32-NEXT: .long 0
+; X32-NEXT: .zero 4
+; X32-NEXT: .zero 4
 
 ; X32-NOT:   __emutls_t.b1
 
@@ -291,7 +291,7 @@ entry:
 ; X64-LABEL: __emutls_v.i1:
 ; X64-NEXT: .quad 4
 ; X64-NEXT: .quad 4
-; X64-NEXT: .quad 0
+; X64-NEXT: .zero 8
 ; X64-NEXT: .quad __emutls_t.i1
 
 ; X64       .section .rodata,
@@ -304,7 +304,7 @@ entry:
 ; X64-LABEL: __emutls_v.i3:
 ; X64-NEXT: .quad 4
 ; X64-NEXT: .quad 4
-; X64-NEXT: .quad 0
+; X64-NEXT: .zero 8
 ; X64-NEXT: .quad __emutls_t.i3
 
 ; X64       .section .rodata,
@@ -315,7 +315,7 @@ entry:
 ; X64-LABEL: __emutls_v.i4:
 ; X64-NEXT: .quad 4
 ; X64-NEXT: .quad 4
-; X64-NEXT: .quad 0
+; X64-NEXT: .zero 8
 ; X64-NEXT: .quad __emutls_t.i4
 
 ; X64       .section .rodata,
@@ -330,7 +330,7 @@ entry:
 ; X64-LABEL: __emutls_v.s1:
 ; X64-NEXT: .quad 2
 ; X64-NEXT: .quad 2
-; X64-NEXT: .quad 0
+; X64-NEXT: .zero 8
 ; X64-NEXT: .quad __emutls_t.s1
 
 ; X64       .section .rodata,
@@ -341,7 +341,7 @@ entry:
 ; X64-LABEL: __emutls_v.b1:
 ; X64-NEXT: .quad 1
 ; X64-NEXT: .quad 1
-; X64-NEXT: .quad 0
-; X64-NEXT: .quad 0
+; X64-NEXT: .zero 8
+; X64-NEXT: .zero 8
 
 ; X64-NOT:  __emutls_t.b1

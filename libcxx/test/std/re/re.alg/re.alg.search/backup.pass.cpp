@@ -20,11 +20,12 @@
 #include <string>
 #include <list>
 #include <cassert>
+#include "test_macros.h"
 
 int main()
 {
     // This regex_iterator uses regex_search(__wrap_iter<_Iter> __first, ...)
-    // Test for http://llvm.org/bugs/show_bug.cgi?id=16240 fixed in r185273.
+    // Test for https://bugs.llvm.org/show_bug.cgi?id=16240 fixed in r185273.
     {
         std::string s("aaaa a");
         std::regex re("\\ba");

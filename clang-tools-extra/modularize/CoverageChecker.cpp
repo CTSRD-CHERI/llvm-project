@@ -150,12 +150,12 @@ CoverageChecker::CoverageChecker(StringRef ModuleMapPath,
 
 // Create instance of CoverageChecker, to simplify setting up
 // subordinate objects.
-CoverageChecker *CoverageChecker::createCoverageChecker(
-  StringRef ModuleMapPath, std::vector<std::string> &IncludePaths,
-  ArrayRef<std::string> CommandLine, clang::ModuleMap *ModuleMap) {
+std::unique_ptr<CoverageChecker> CoverageChecker::createCoverageChecker(
+    StringRef ModuleMapPath, std::vector<std::string> &IncludePaths,
+    ArrayRef<std::string> CommandLine, clang::ModuleMap *ModuleMap) {
 
-  return new CoverageChecker(ModuleMapPath, IncludePaths, CommandLine,
-    ModuleMap);
+  return llvm::make_unique<CoverageChecker>(ModuleMapPath, IncludePaths,
+                                            CommandLine, ModuleMap);
 }
 
 // Do checks.
@@ -225,9 +225,8 @@ bool CoverageChecker::collectModuleHeaders(const Module &Mod) {
       ModuleMapHeadersSet.insert(ModularizeUtilities::getCanonicalPath(
         Header.Entry->getName()));
 
-  for (Module::submodule_const_iterator MI = Mod.submodule_begin(),
-      MIEnd = Mod.submodule_end();
-      MI != MIEnd; ++MI)
+  for (auto MI = Mod.submodule_begin(), MIEnd = Mod.submodule_end();
+       MI != MIEnd; ++MI)
     collectModuleHeaders(**MI);
 
   return true;
@@ -370,11 +369,17 @@ bool CoverageChecker::collectFileSystemHeaders(StringRef IncludePath) {
     I.increment(EC)) {
     if (EC)
       return false;
-    std::string file(I->path());
+    //std::string file(I->path());
+    StringRef file(I->path());
     I->status(Status);
     sys::fs::file_type type = Status.type();
     // If the file is a directory, ignore the name (but still recurses).
     if (type == sys::fs::file_type::directory_file)
+      continue;
+    // Assume directories or files starting with '.' are private and not to
+    // be considered.
+    if ((file.find("\\.") != StringRef::npos) ||
+        (file.find("/.") != StringRef::npos))
       continue;
     // If the file does not have a common header extension, ignore it.
     if (!ModularizeUtilities::isHeader(file))

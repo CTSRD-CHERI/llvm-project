@@ -1,4 +1,4 @@
-; RUN: llc < %s -march=arm64 -verify-machineinstrs | FileCheck %s
+; RUN: llc < %s -mtriple=arm64-eabi -verify-machineinstrs | FileCheck %s
 
 ; CHECK-LABEL: ldp_int
 ; CHECK: ldp
@@ -355,3 +355,4 @@ define i64 @ldp_sext_int_post(i32* %p) nounwind {
   %add = add nsw i64 %sexttmp1, %sexttmp
   ret i64 %add
 }
+

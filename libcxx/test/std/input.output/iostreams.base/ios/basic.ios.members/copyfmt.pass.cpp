@@ -22,6 +22,8 @@
 
 #include "platform_support.h" // locale name macros
 
+#include "test_macros.h"
+
 struct testbuf
     : public std::streambuf
 {
@@ -157,6 +159,7 @@ int main()
     ios1.copyfmt(ios1);
     assert(!f1_called);
 
+#ifndef TEST_HAS_NO_EXCEPTIONS
     try
     {
         ios1.copyfmt(ios2);
@@ -187,4 +190,5 @@ int main()
     assert(ios1.pword(1) == &d2);
     assert(ios1.tie() == (std::ostream*)2);
     assert(ios1.fill() == '2');
+#endif
 }

@@ -1,4 +1,4 @@
-; RUN: llc %s -mtriple=cheri-unknown-freebsd -target-abi sandbox -o - -O1 | FileCheck %s
+; RUN: %cheri_llc %s -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model=pic -o - -O1 | FileCheck %s
 ; ModuleID = 'va.c'
 target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
@@ -11,13 +11,11 @@ target triple = "cheri-unknown-freebsd"
 ; (Yes, this is an odd thing to do.  See libxo for a real-world example)
 define void @cpy(i8 addrspace(200)* nocapture readnone %y, i32 signext %x, ...) #0 {
 entry:
-  %v = alloca i8 addrspace(200)*, align 32
+  %v = alloca i8 addrspace(200)*, align 32, addrspace(200)
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*
   %1 = addrspacecast i8 addrspace(200)* %0 to i8*
   ; Load the address of va_cpy
-  ; CHECK: daddiu	$1, $1, %got_disp(va_cpy)
-  ; CHECK: cfromptr $c1, $c0, $1
-  ; CHECK: cld	$1, $zero, 0($c1)
+  ; CHECK: 	ld	$1, %got_disp(va_cpy)($1)
   ; CHECK: cfromptr $c1, $c0, $1
   ; Store the va_list (passed in $c13) in the global
   ; CHECK: csc	$c13, $zero, 0($c1)
@@ -49,11 +47,9 @@ declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) #1
 define i8 addrspace(200)* @cpy1() #0 {
 entry:
   ; Check that va_copy can copy from a global to a register
-  %v = alloca i8 addrspace(200)*, align 32
+  %v = alloca i8 addrspace(200)*, align 32, addrspace(200)
   ; Load the address of the global
-  ; CHECK: daddiu	$1, $1, %got_disp(va_cpy)
-  ; CHECK: cfromptr $c1, $c0, $1
-  ; CHECK: cld	$1, $zero, 0($c1)
+  ; CHECK: 	ld	$1, %got_disp(va_cpy)($1)
   ; CHECK: cfromptr $c1, $c0, $1
   ; Load the va_list into the return capability
   ; CHECK: clc	$c3, $zero, 0($c1)
@@ -74,7 +70,7 @@ entry:
   ; should simply move the va capability from $c13 to the relevant argument
   ; register.
   ; CHECK: cmove	$c3, $c13
-  %v = alloca i8 addrspace(200)*, align 32
+  %v = alloca i8 addrspace(200)*, align 32, addrspace(200)
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*
   %1 = addrspacecast i8 addrspace(200)* %0 to i8*
   call void @llvm.lifetime.start.p0i8(i64 32, i8* %1) #1
@@ -99,13 +95,13 @@ declare i8 addrspace(200)* @llvm.mips.cap.offset.set(i8 addrspace(200)*, i64) #3
 define void @k(i32 addrspace(200)* %x, i32 addrspace(200)* %y) #0 {
 ; When calling a variadic function, we should set $c13 to the size of the arguments
 entry:
-; CHECK: daddiu	$1, $zero, 32
+; CHECK: daddiu	$1, $zero, [[$CAP_SIZE:32|16]]
 ; CHECK: cincoffset	$c3, $c11, $sp
-; CHECK: csetbounds	$c3, $c3, $1
+; CHECK: csetbounds	$c2, $c3, $1
 ; CHECK: ori	$1, $zero, 65495
-; CHECK: candperm	$c13, $c3, $1
-  %x.addr = alloca i32 addrspace(200)*, align 32
-  %y.addr = alloca i32 addrspace(200)*, align 32
+; CHECK: candperm	$c13, $c2, $1
+  %x.addr = alloca i32 addrspace(200)*, align 32, addrspace(200)
+  %y.addr = alloca i32 addrspace(200)*, align 32, addrspace(200)
   store i32 addrspace(200)* %x, i32 addrspace(200)* addrspace(200)* %x.addr, align 32, !tbaa !1
   store i32 addrspace(200)* %y, i32 addrspace(200)* addrspace(200)* %y.addr, align 32, !tbaa !1
   %0 = bitcast i32 addrspace(200)* addrspace(200)* %x.addr to i8 addrspace(200)*

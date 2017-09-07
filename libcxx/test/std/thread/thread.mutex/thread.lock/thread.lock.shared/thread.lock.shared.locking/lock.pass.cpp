@@ -53,6 +53,7 @@ void f()
     assert(lk.owns_lock() == true);
     ns d = t1 - t0 - WaitTime;
     assert(d < Tolerance);  // within tolerance
+#ifndef TEST_HAS_NO_EXCEPTIONS
     try
     {
         lk.lock();
@@ -62,8 +63,10 @@ void f()
     {
         assert(e.code().value() == EDEADLK);
     }
+#endif
     lk.unlock();
     lk.release();
+#ifndef TEST_HAS_NO_EXCEPTIONS
     try
     {
         lk.lock();
@@ -73,6 +76,7 @@ void f()
     {
         assert(e.code().value() == EPERM);
     }
+#endif
 }
 
 int main()

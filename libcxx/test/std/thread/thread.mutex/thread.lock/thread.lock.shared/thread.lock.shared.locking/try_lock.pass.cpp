@@ -19,6 +19,8 @@
 #include <shared_mutex>
 #include <cassert>
 
+#include "test_macros.h"
+
 bool try_lock_called = false;
 
 struct mutex
@@ -35,11 +37,11 @@ mutex m;
 
 int main()
 {
-
     std::shared_lock<mutex> lk(m, std::defer_lock);
     assert(lk.try_lock() == true);
     assert(try_lock_called == true);
     assert(lk.owns_lock() == true);
+#ifndef TEST_HAS_NO_EXCEPTIONS
     try
     {
         lk.try_lock();
@@ -49,11 +51,13 @@ int main()
     {
         assert(e.code().value() == EDEADLK);
     }
+#endif
     lk.unlock();
     assert(lk.try_lock() == false);
     assert(try_lock_called == false);
     assert(lk.owns_lock() == false);
     lk.release();
+#ifndef TEST_HAS_NO_EXCEPTIONS
     try
     {
         lk.try_lock();
@@ -63,4 +67,5 @@ int main()
     {
         assert(e.code().value() == EPERM);
     }
+#endif
 }

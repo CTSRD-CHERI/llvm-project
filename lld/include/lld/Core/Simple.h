@@ -15,36 +15,61 @@
 #ifndef LLD_CORE_SIMPLE_H
 #define LLD_CORE_SIMPLE_H
 
+#include "lld/Core/AbsoluteAtom.h"
+#include "lld/Core/Atom.h"
 #include "lld/Core/DefinedAtom.h"
 #include "lld/Core/File.h"
-#include "lld/Core/ArchiveLibraryFile.h"
-#include "lld/Core/LinkingContext.h"
 #include "lld/Core/Reference.h"
+#include "lld/Core/SharedLibraryAtom.h"
 #include "lld/Core/UndefinedAtom.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/ilist.h"
 #include "llvm/ADT/ilist_node.h"
-#include <atomic>
+#include "llvm/Support/Allocator.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/ErrorHandling.h"
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
+#include <functional>
 
 namespace lld {
 
 class SimpleFile : public File {
 public:
-  SimpleFile(StringRef path) : File(path, kindObject) {}
+  SimpleFile(StringRef path, File::Kind kind)
+    : File(path, kind) {}
 
-  void addAtom(const DefinedAtom &a) { _defined.push_back(&a); }
-  void addAtom(const UndefinedAtom &a) { _undefined.push_back(&a); }
-  void addAtom(const SharedLibraryAtom &a) { _shared.push_back(&a); }
-  void addAtom(const AbsoluteAtom &a) { _absolute.push_back(&a); }
+  ~SimpleFile() override {
+    _defined.clear();
+    _undefined.clear();
+    _shared.clear();
+    _absolute.clear();
+  }
+
+  void addAtom(DefinedAtom &a) {
+    _defined.push_back(OwningAtomPtr<DefinedAtom>(&a));
+  }
+  void addAtom(UndefinedAtom &a) {
+    _undefined.push_back(OwningAtomPtr<UndefinedAtom>(&a));
+  }
+  void addAtom(SharedLibraryAtom &a) {
+    _shared.push_back(OwningAtomPtr<SharedLibraryAtom>(&a));
+  }
+  void addAtom(AbsoluteAtom &a) {
+    _absolute.push_back(OwningAtomPtr<AbsoluteAtom>(&a));
+  }
 
   void addAtom(const Atom &atom) {
     if (auto *p = dyn_cast<DefinedAtom>(&atom)) {
-      _defined.push_back(p);
+      addAtom(const_cast<DefinedAtom &>(*p));
     } else if (auto *p = dyn_cast<UndefinedAtom>(&atom)) {
-      _undefined.push_back(p);
+      addAtom(const_cast<UndefinedAtom &>(*p));
     } else if (auto *p = dyn_cast<SharedLibraryAtom>(&atom)) {
-      _shared.push_back(p);
+      addAtom(const_cast<SharedLibraryAtom &>(*p));
     } else if (auto *p = dyn_cast<AbsoluteAtom>(&atom)) {
-      _absolute.push_back(p);
+      addAtom(const_cast<AbsoluteAtom &>(*p));
     } else {
       llvm_unreachable("atom has unknown definition kind");
     }
@@ -52,26 +77,33 @@ public:
 
   void removeDefinedAtomsIf(std::function<bool(const DefinedAtom *)> pred) {
     auto &atoms = _defined;
-    auto newEnd = std::remove_if(atoms.begin(), atoms.end(), pred);
+    auto newEnd = std::remove_if(atoms.begin(), atoms.end(),
+                                 [&pred](OwningAtomPtr<DefinedAtom> &p) {
+                                   return pred(p.get());
+                                 });
     atoms.erase(newEnd, atoms.end());
   }
 
-  const AtomVector<DefinedAtom> &defined() const override { return _defined; }
+  const AtomRange<DefinedAtom> defined() const override { return _defined; }
 
-  const AtomVector<UndefinedAtom> &undefined() const override {
+  const AtomRange<UndefinedAtom> undefined() const override {
     return _undefined;
   }
 
-  const AtomVector<SharedLibraryAtom> &sharedLibrary() const override {
+  const AtomRange<SharedLibraryAtom> sharedLibrary() const override {
     return _shared;
   }
 
-  const AtomVector<AbsoluteAtom> &absolute() const override {
+  const AtomRange<AbsoluteAtom> absolute() const override {
     return _absolute;
   }
 
-  typedef range<std::vector<const DefinedAtom *>::iterator> DefinedAtomRange;
-  DefinedAtomRange definedAtoms() { return make_range(_defined); }
+  void clearAtoms() override {
+    _defined.clear();
+    _undefined.clear();
+    _shared.clear();
+    _absolute.clear();
+  }
 
 private:
   AtomVector<DefinedAtom> _defined;
@@ -80,61 +112,17 @@ private:
   AtomVector<AbsoluteAtom> _absolute;
 };
 
-/// \brief Archive library file that may be used as a virtual container
-/// for symbols that should be added dynamically in response to
-/// call to find() method.
-class SimpleArchiveLibraryFile : public ArchiveLibraryFile {
-public:
-  SimpleArchiveLibraryFile(StringRef filename)
-      : ArchiveLibraryFile(filename) {}
-
-  const AtomVector<DefinedAtom> &defined() const override {
-    return _definedAtoms;
-  }
-
-  const AtomVector<UndefinedAtom> &undefined() const override {
-    return _undefinedAtoms;
-  }
-
-  const AtomVector<SharedLibraryAtom> &sharedLibrary() const override {
-    return _sharedLibraryAtoms;
-  }
-
-  const AtomVector<AbsoluteAtom> &absolute() const override {
-    return _absoluteAtoms;
-  }
-
-  File *find(StringRef sym, bool dataSymbolOnly) override {
-    // For descendants:
-    // do some checks here and return dynamically generated files with atoms.
-    return nullptr;
-  }
-
-  std::error_code
-  parseAllMembers(std::vector<std::unique_ptr<File>> &result) override {
-    return std::error_code();
-  }
-
-private:
-  AtomVector<DefinedAtom> _definedAtoms;
-  AtomVector<UndefinedAtom> _undefinedAtoms;
-  AtomVector<SharedLibraryAtom> _sharedLibraryAtoms;
-  AtomVector<AbsoluteAtom> _absoluteAtoms;
-};
-
-class SimpleReference : public Reference {
+class SimpleReference : public Reference,
+                        public llvm::ilist_node<SimpleReference> {
 public:
   SimpleReference(Reference::KindNamespace ns, Reference::KindArch arch,
                   Reference::KindValue value, uint64_t off, const Atom *t,
                   Reference::Addend a)
-      : Reference(ns, arch, value), _target(t), _offsetInAtom(off), _addend(a),
-        _next(nullptr), _prev(nullptr) {
+      : Reference(ns, arch, value), _target(t), _offsetInAtom(off), _addend(a) {
   }
   SimpleReference()
       : Reference(Reference::KindNamespace::all, Reference::KindArch::all, 0),
-        _target(nullptr), _offsetInAtom(0), _addend(0), _next(nullptr),
-        _prev(nullptr) {
-  }
+        _target(nullptr), _offsetInAtom(0), _addend(0) {}
 
   uint64_t offsetInAtom() const override { return _offsetInAtom; }
 
@@ -146,69 +134,20 @@ public:
   Addend addend() const override { return _addend; }
   void setAddend(Addend a) override { _addend = a; }
   void setTarget(const Atom *newAtom) override { _target = newAtom; }
-  SimpleReference *getNext() const { return _next; }
-  SimpleReference *getPrev() const { return _prev; }
-  void setNext(SimpleReference *n) { _next = n; }
-  void setPrev(SimpleReference *p) { _prev = p; }
 
 private:
   const Atom *_target;
   uint64_t _offsetInAtom;
   Addend _addend;
-  SimpleReference *_next;
-  SimpleReference *_prev;
 };
-
-}
-
-// ilist will lazily create a sentinal (so end() can return a node past the
-// end of the list). We need this trait so that the sentinal is allocated
-// via the BumpPtrAllocator.
-namespace llvm {
-template<>
-struct ilist_sentinel_traits<lld::SimpleReference> {
-
-  ilist_sentinel_traits() : _allocator(nullptr) { }
-
-  void setAllocator(llvm::BumpPtrAllocator *alloc) {
-    _allocator = alloc;
-  }
-
-  lld::SimpleReference *createSentinel() const {
-    return new (*_allocator) lld::SimpleReference();
-  }
-
-  static void destroySentinel(lld::SimpleReference*) {}
-
-  static lld::SimpleReference *provideInitialHead() { return nullptr; }
-
-  lld::SimpleReference *ensureHead(lld::SimpleReference *&head) const {
-    if (!head) {
-      head = createSentinel();
-      noteHead(head, head);
-      ilist_traits<lld::SimpleReference>::setNext(head, nullptr);
-      return head;
-    }
-    return ilist_traits<lld::SimpleReference>::getPrev(head);
-  }
-
-  void noteHead(lld::SimpleReference *newHead,
-                lld::SimpleReference *sentinel) const {
-    ilist_traits<lld::SimpleReference>::setPrev(newHead, sentinel);
-  }
-
-private:
-  mutable llvm::BumpPtrAllocator *_allocator;
-};
-}
-
-namespace lld {
 
 class SimpleDefinedAtom : public DefinedAtom {
 public:
   explicit SimpleDefinedAtom(const File &f)
-    : _file(f), _ordinal(f.getNextAtomOrdinalAndIncrement()) {
-    _references.setAllocator(&f.allocator());
+      : _file(f), _ordinal(f.getNextAtomOrdinalAndIncrement()) {}
+
+  ~SimpleDefinedAtom() override {
+    _references.clearAndLeakNodesUnsafely();
   }
 
   const File &file() const override { return _file; }
@@ -237,28 +176,32 @@ public:
   }
 
   DefinedAtom::reference_iterator begin() const override {
-    const void *it = reinterpret_cast<const void *>(&*_references.begin());
+    const void *it =
+        reinterpret_cast<const void *>(_references.begin().getNodePtr());
     return reference_iterator(*this, it);
   }
 
   DefinedAtom::reference_iterator end() const override {
-    const void *it = reinterpret_cast<const void *>(&*_references.end());
+    const void *it =
+        reinterpret_cast<const void *>(_references.end().getNodePtr());
     return reference_iterator(*this, it);
   }
 
   const Reference *derefIterator(const void *it) const override {
-    return reinterpret_cast<const Reference*>(it);
+    return &*RefList::const_iterator(
+        *reinterpret_cast<const llvm::ilist_node<SimpleReference> *>(it));
   }
 
   void incrementIterator(const void *&it) const override {
-    const SimpleReference* node = reinterpret_cast<const SimpleReference*>(it);
-    const SimpleReference* next = node->getNext();
-    it = reinterpret_cast<const void*>(next);
+    RefList::const_iterator ref(
+        *reinterpret_cast<const llvm::ilist_node<SimpleReference> *>(it));
+    it = reinterpret_cast<const void *>(std::next(ref).getNodePtr());
   }
 
-  void addReference(Reference::KindNamespace ns, Reference::KindArch arch,
+  void addReference(Reference::KindNamespace ns,
+                    Reference::KindArch arch,
                     Reference::KindValue kindValue, uint64_t off,
-                    const Atom *target, Reference::Addend a) {
+                    const Atom *target, Reference::Addend a) override {
     assert(target && "trying to create reference to nothing");
     auto node = new (_file.allocator())
         SimpleReference(ns, arch, kindValue, off, target, a);
@@ -290,6 +233,7 @@ public:
       _references.push_back(node);
     }
   }
+
   void setOrdinal(uint64_t ord) { _ordinal = ord; }
 
 private:
@@ -306,6 +250,8 @@ public:
     assert(!name.empty() && "UndefinedAtoms must have a name");
   }
 
+  ~SimpleUndefinedAtom() override = default;
+
   /// file - returns the File that produced/owns this Atom
   const File &file() const override { return _file; }
 
@@ -320,23 +266,6 @@ private:
   StringRef _name;
 };
 
-class SimpleAbsoluteAtom : public AbsoluteAtom {
-public:
-  SimpleAbsoluteAtom(const File &f, StringRef name, Scope s, uint64_t value)
-      : _file(f), _name(name), _scope(s), _value(value) {}
-
-  const File &file() const override { return _file; }
-  StringRef name() const override { return _name; }
-  uint64_t value() const override { return _value; }
-  Scope scope() const override { return _scope; }
-
-private:
-  const File &_file;
-  StringRef _name;
-  Scope _scope;
-  uint64_t _value;
-};
-
 } // end namespace lld
 
-#endif
+#endif // LLD_CORE_SIMPLE_H

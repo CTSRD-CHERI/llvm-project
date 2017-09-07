@@ -34,8 +34,6 @@ class UndefinedAtom;
 /// if an atom has been coalesced away.
 class SymbolTable {
 public:
-  explicit SymbolTable(LinkingContext &);
-
   /// @brief add atom to symbol table
   bool add(const DefinedAtom &);
 
@@ -48,34 +46,17 @@ public:
   /// @brief add atom to symbol table
   bool add(const AbsoluteAtom &);
 
-  /// @brief checks if name is in symbol table and if so atom is not
-  ///        UndefinedAtom
-  bool isDefined(StringRef sym);
-
   /// @brief returns atom in symbol table for specified name (or nullptr)
   const Atom *findByName(StringRef sym);
 
   /// @brief returns vector of remaining UndefinedAtoms
   std::vector<const UndefinedAtom *> undefines();
 
-  /// returns vector of tentative definitions
-  std::vector<StringRef> tentativeDefinitions();
-
-  /// @brief add atom to replacement table
-  void addReplacement(const Atom *replaced, const Atom *replacement);
-
   /// @brief if atom has been coalesced away, return replacement, else return atom
   const Atom *replacement(const Atom *);
 
   /// @brief if atom has been coalesced away, return true
   bool isCoalescedAway(const Atom *);
-
-  /// @brief Find a group atom.
-  const Atom *findGroup(StringRef name);
-
-  /// @brief Add a group atom and returns true/false depending on whether the
-  /// previously existed.
-  bool addGroup(const DefinedAtom &da);
 
 private:
   typedef llvm::DenseMap<const Atom *, const Atom *> AtomToAtom;
@@ -105,10 +86,8 @@ private:
   bool addByName(const Atom &);
   bool addByContent(const DefinedAtom &);
 
-  LinkingContext &_ctx;
   AtomToAtom _replacedAtoms;
   NameToAtom _nameTable;
-  NameToAtom _groupTable;
   AtomContentSet _contentTable;
 };
 

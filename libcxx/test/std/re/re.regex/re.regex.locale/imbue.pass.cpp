@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// REQUIRES: locale.en_US.UTF-8
+
 // <regex>
 
 // template <class charT, class traits = regex_traits<charT>> class basic_regex;
@@ -17,6 +19,7 @@
 #include <locale>
 #include <cassert>
 
+#include "test_macros.h"
 #include "platform_support.h" // locale name macros
 
 int main()

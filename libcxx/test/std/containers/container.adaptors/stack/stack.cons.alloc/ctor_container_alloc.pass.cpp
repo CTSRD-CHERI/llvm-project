@@ -14,7 +14,9 @@
 
 #include <stack>
 #include <cassert>
+#include <cstddef>
 
+#include "test_macros.h"
 #include "test_allocator.h"
 
 template <class C>
@@ -36,10 +38,10 @@ struct test
 
     explicit test(const test_allocator<int>& a) : base(a) {}
     test(const container_type& c, const test_allocator<int>& a) : base(c, a) {}
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
+#if TEST_STD_VER >= 11
     test(container_type&& c, const test_allocator<int>& a) : base(std::move(c), a) {}
     test(test&& q, const test_allocator<int>& a) : base(std::move(q), a) {}
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
+#endif
     test_allocator<int> get_allocator() {return c.get_allocator();}
 };
 
@@ -49,7 +51,7 @@ int main()
     test q(d, test_allocator<int>(4));
     assert(q.get_allocator() == test_allocator<int>(4));
     assert(q.size() == 5);
-    for (int i = 0; i < d.size(); ++i)
+    for (C::size_type i = 0; i < d.size(); ++i)
     {
         assert(q.top() == d[d.size() - i - 1]);
         q.pop();

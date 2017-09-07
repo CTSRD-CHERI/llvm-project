@@ -12,15 +12,16 @@
 // RUN: %env_asan_opts=coverage=1:verbosity=1 %run %t a b 2>&1 | FileCheck %s --check-prefix=CHECK-sandbox
 // RUN: %sancov unpack coverage_sandboxing_test.sancov.packed
 // RUN: cd ..
-// RUN: %sancov print vanilla/`basename %dynamiclib`*.sancov > vanilla.txt
-// RUN: %sancov print sandbox1/`basename %dynamiclib`*.sancov > sandbox1.txt
-// RUN: %sancov print sandbox2/`basename %dynamiclib`*.sancov > sandbox2.txt
+// RUN: %sancov print vanilla/%xdynamiclib_filename*.sancov > vanilla.txt
+// RUN: %sancov print sandbox1/%xdynamiclib_filename*.sancov > sandbox1.txt
+// RUN: %sancov print sandbox2/%xdynamiclib_filename*.sancov > sandbox2.txt
 // RUN: diff vanilla.txt sandbox1.txt
 // RUN: diff vanilla.txt sandbox2.txt
 // RUN: rm -r %T/coverage_sandboxing_test
 
 // https://code.google.com/p/address-sanitizer/issues/detail?id=263
 // XFAIL: android
+// UNSUPPORTED: ios
 
 #include <assert.h>
 #include <fcntl.h>
@@ -79,8 +80,8 @@ int main(int argc, char **argv) {
 #endif
 
 // CHECK-vanilla: PID: [[PID:[0-9]+]]
-// CHECK-vanilla: .so.[[PID]].sancov: 258 PCs written
+// CHECK-vanilla: .so.[[PID]].sancov: 257 PCs written
 // CHECK-vanilla: [[PID]].sancov: 1 PCs written
 
 // CHECK-sandbox: PID: [[PID:[0-9]+]]
-// CHECK-sandbox: 258 PCs written to packed file
+// CHECK-sandbox: 257 PCs written to packed file

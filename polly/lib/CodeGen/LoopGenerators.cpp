@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "polly/ScopDetection.h"
 #include "polly/CodeGen/LoopGenerators.h"
+#include "polly/ScopDetection.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Dominators.h"
@@ -49,8 +49,11 @@ static cl::opt<int>
 // contains the loop iv 'polly.indvar', the incremented loop iv
 // 'polly.indvar_next' as well as the condition to check if we execute another
 // iteration of the loop. After the loop has finished, we branch to ExitBB.
+// We expect the type of UB, LB, UB+Stride to be large enough for values that
+// UB may take throughout the execution of the loop, including the computation
+// of indvar + Stride before the final abort.
 Value *polly::createLoop(Value *LB, Value *UB, Value *Stride,
-                         PollyIRBuilder &Builder, Pass *P, LoopInfo &LI,
+                         PollyIRBuilder &Builder, LoopInfo &LI,
                          DominatorTree &DT, BasicBlock *&ExitBB,
                          ICmpInst::Predicate Predicate,
                          ScopAnnotator *Annotator, bool Parallel,
@@ -92,7 +95,7 @@ Value *polly::createLoop(Value *LB, Value *UB, Value *Stride,
     Annotator->pushLoop(NewLoop, Parallel);
 
   // ExitBB
-  ExitBB = SplitBlock(BeforeBB, Builder.GetInsertPoint()++, &DT, &LI);
+  ExitBB = SplitBlock(BeforeBB, &*Builder.GetInsertPoint(), &DT, &LI);
   ExitBB->setName("polly.loop_exit");
 
   // BeforeBB
@@ -123,10 +126,8 @@ Value *polly::createLoop(Value *LB, Value *UB, Value *Stride,
   IV->addIncoming(LB, PreHeaderBB);
   Stride = Builder.CreateZExtOrBitCast(Stride, LoopIVType);
   Value *IncrementedIV = Builder.CreateNSWAdd(IV, Stride, "polly.indvar_next");
-  Value *LoopCondition;
-  UB = Builder.CreateSub(UB, Stride, "polly.adjust_ub");
-  LoopCondition = Builder.CreateICmp(Predicate, IV, UB);
-  LoopCondition->setName("polly.loop_cond");
+  Value *LoopCondition =
+      Builder.CreateICmp(Predicate, IncrementedIV, UB, "polly.loop_cond");
 
   // Create the loop latch and annotate it as such.
   BranchInst *B = Builder.CreateCondBr(LoopCondition, HeaderBB, ExitBB);
@@ -153,7 +154,7 @@ Value *ParallelLoopGenerator::createParallelLoop(
   BasicBlock::iterator BeforeLoop = Builder.GetInsertPoint();
   Value *IV = createSubFn(Stride, Struct, UsedValues, Map, &SubFn);
   *LoopBody = Builder.GetInsertPoint();
-  Builder.SetInsertPoint(BeforeLoop);
+  Builder.SetInsertPoint(&*BeforeLoop);
 
   Value *SubFnParam = Builder.CreateBitCast(Struct, Builder.getInt8PtrTy(),
                                             "polly.par.userContext");
@@ -166,11 +167,6 @@ Value *ParallelLoopGenerator::createParallelLoop(
   createCallSpawnThreads(SubFn, SubFnParam, LB, UB, Stride);
   Builder.CreateCall(SubFn, SubFnParam);
   createCallJoinThreads();
-
-  // Mark the end of the lifetime for the parameter struct.
-  Type *Ty = Struct->getType();
-  ConstantInt *SizeOf = Builder.getInt64(DL.getTypeAllocSize(Ty));
-  Builder.CreateLifetimeEnd(Struct, SizeOf);
 
   return IV;
 }
@@ -188,8 +184,11 @@ void ParallelLoopGenerator::createCallSpawnThreads(Value *SubFn,
 
     Type *Params[] = {PointerType::getUnqual(FunctionType::get(
                           Builder.getVoidTy(), Builder.getInt8PtrTy(), false)),
-                      Builder.getInt8PtrTy(), Builder.getInt32Ty(), LongType,
-                      LongType, LongType};
+                      Builder.getInt8PtrTy(),
+                      Builder.getInt32Ty(),
+                      LongType,
+                      LongType,
+                      LongType};
 
     FunctionType *Ty = FunctionType::get(Builder.getVoidTy(), Params, false);
     F = Function::Create(Ty, Linkage, Name, M);
@@ -283,17 +282,16 @@ ParallelLoopGenerator::storeValuesIntoStruct(SetVector<Value *> &Values) {
   for (Value *V : Values)
     Members.push_back(V->getType());
 
+  const DataLayout &DL = Builder.GetInsertBlock()->getModule()->getDataLayout();
+
   // We do not want to allocate the alloca inside any loop, thus we allocate it
   // in the entry block of the function and use annotations to denote the actual
   // live span (similar to clang).
   BasicBlock &EntryBB = Builder.GetInsertBlock()->getParent()->getEntryBlock();
-  Instruction *IP = EntryBB.getFirstInsertionPt();
+  Instruction *IP = &*EntryBB.getFirstInsertionPt();
   StructType *Ty = StructType::get(Builder.getContext(), Members);
-  AllocaInst *Struct = new AllocaInst(Ty, 0, "polly.par.userContext", IP);
-
-  // Mark the start of the lifetime for the parameter struct.
-  ConstantInt *SizeOf = Builder.getInt64(DL.getTypeAllocSize(Ty));
-  Builder.CreateLifetimeStart(Struct, SizeOf);
+  AllocaInst *Struct = new AllocaInst(Ty, DL.getAllocaAddrSpace(), nullptr,
+                                      "polly.par.userContext", IP);
 
   for (unsigned i = 0; i < Values.size(); i++) {
     Value *Address = Builder.CreateStructGEP(Ty, Struct, i);
@@ -338,10 +336,10 @@ Value *ParallelLoopGenerator::createSubFn(Value *Stride, AllocaInst *StructData,
 
   // Fill up basic block HeaderBB.
   Builder.SetInsertPoint(HeaderBB);
-  LBPtr = Builder.CreateAlloca(LongType, 0, "polly.par.LBPtr");
-  UBPtr = Builder.CreateAlloca(LongType, 0, "polly.par.UBPtr");
-  UserContext = Builder.CreateBitCast(SubFn->arg_begin(), StructData->getType(),
-                                      "polly.par.userContext");
+  LBPtr = Builder.CreateAlloca(LongType, nullptr, "polly.par.LBPtr");
+  UBPtr = Builder.CreateAlloca(LongType, nullptr, "polly.par.UBPtr");
+  UserContext = Builder.CreateBitCast(
+      &*SubFn->arg_begin(), StructData->getType(), "polly.par.userContext");
 
   extractValuesFromStruct(Data, StructData->getAllocatedType(), UserContext,
                           Map);
@@ -365,9 +363,9 @@ Value *ParallelLoopGenerator::createSubFn(Value *Stride, AllocaInst *StructData,
                          "polly.par.UBAdjusted");
 
   Builder.CreateBr(CheckNextBB);
-  Builder.SetInsertPoint(--Builder.GetInsertPoint());
-  IV = createLoop(LB, UB, Stride, Builder, P, LI, DT, AfterBB,
-                  ICmpInst::ICMP_SLE, nullptr, true, /* UseGuard */ false);
+  Builder.SetInsertPoint(&*--Builder.GetInsertPoint());
+  IV = createLoop(LB, UB, Stride, Builder, LI, DT, AfterBB, ICmpInst::ICMP_SLE,
+                  nullptr, true, /* UseGuard */ false);
 
   BasicBlock::iterator LoopBody = Builder.GetInsertPoint();
 
@@ -376,7 +374,7 @@ Value *ParallelLoopGenerator::createSubFn(Value *Stride, AllocaInst *StructData,
   createCallCleanupThread();
   Builder.CreateRetVoid();
 
-  Builder.SetInsertPoint(LoopBody);
+  Builder.SetInsertPoint(&*LoopBody);
   *SubFnPtr = SubFn;
 
   return IV;

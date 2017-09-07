@@ -12,55 +12,32 @@
 //===----------------------------------------------------------------------===//
 
 #include "lld/Config/Version.h"
-#include "llvm/Support/raw_ostream.h"
-#include <cstdlib>
-#include <cstring>
 
 using namespace llvm;
 
-namespace lld {
-
-StringRef getLLDRepositoryPath() {
-#ifdef LLD_REPOSITORY_STRING
-  return LLD_REPOSITORY_STRING;
-#else
-  return "";
-#endif
+// Returns an SVN repository path, which is usually "trunk".
+static std::string getRepositoryPath() {
+  StringRef S = LLD_REPOSITORY_STRING;
+  size_t Pos = S.find("lld/");
+  if (Pos != StringRef::npos)
+    return S.substr(Pos + 4);
+  return S;
 }
 
-StringRef getLLDRevision() {
-#ifdef LLD_REVISION_STRING
-  return LLD_REVISION_STRING;
-#else
-  return "";
-#endif
+// Returns an SVN repository name, e.g., " (trunk 284614)"
+// or an empty string if no repository info is available.
+static std::string getRepository() {
+  std::string Repo = getRepositoryPath();
+  std::string Rev = LLD_REVISION_STRING;
+
+  if (Repo.empty() && Rev.empty())
+    return "";
+  if (!Repo.empty() && !Rev.empty())
+    return " (" + Repo + " " + Rev + ")";
+  return " (" + Repo + Rev + ")";
 }
 
-std::string getLLDRepositoryVersion() {
-  std::string buf;
-  llvm::raw_string_ostream OS(buf);
-  std::string Path = getLLDRepositoryPath();
-  std::string Revision = getLLDRevision();
-  if (!Path.empty() || !Revision.empty()) {
-    OS << '(';
-    if (!Path.empty())
-      OS << Path;
-    if (!Revision.empty()) {
-      if (!Path.empty())
-        OS << ' ';
-      OS << Revision;
-    }
-    OS << ')';
-  }
-  return OS.str();
+// Returns a version string, e.g., "LLD 4.0 (lld/trunk 284614)".
+std::string lld::getLLDVersion() {
+  return "LLD " + std::string(LLD_VERSION_STRING) + getRepository();
 }
-
-StringRef getLLDVersion() {
-#ifdef LLD_VERSION_STRING
-  return LLD_VERSION_STRING;
-#else
-  return "";
-#endif
-}
-
-} // end namespace lld

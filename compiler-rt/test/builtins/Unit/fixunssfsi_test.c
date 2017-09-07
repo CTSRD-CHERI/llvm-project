@@ -1,3 +1,4 @@
+// RUN: %clang_builtins %s %librt -o %t && %run %t
 //===-- fixunssfsi_test.c - Test __fixunssfsi -----------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
@@ -74,6 +75,8 @@ int main()
 #endif
 
     if (test__fixunssfsi(0x1.000000p+31F, 0x80000000))
+        return 1;
+    if (test__fixunssfsi(0x1.000000p+32F, 0xFFFFFFFF))
         return 1;
     if (test__fixunssfsi(0x1.FFFFFEp+31F, 0xFFFFFF00))
         return 1;

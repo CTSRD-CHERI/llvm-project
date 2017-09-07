@@ -1,8 +1,9 @@
 ; RUN: opt -loop-accesses -analyze < %s | FileCheck %s
+; RUN: opt -passes='require<scalar-evolution>,require<aa>,loop(print-access-info)' -disable-output  < %s 2>&1 | FileCheck %s
 
 ; We give up analyzing the dependences in this loop due to non-constant
 ; distance between A[i+offset] and A[i] and add memchecks to prove
-; independence.  Make sure that no interesting dependences are reported in
+; independence.  Make sure that no dependences are reported in
 ; this case.
 ;
 ;   for (i = 0; i < n; i++)
@@ -12,7 +13,7 @@ target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-apple-macosx10.10.0"
 
 ; CHECK: Memory dependences are safe with run-time checks
-; CHECK-NEXT: Interesting Dependences:
+; CHECK-NEXT: Dependences:
 ; CHECK-NEXT: Run-time memory checks:
 ; CHECK-NEXT: 0:
 ; CHECK-NEXT: Comparing group

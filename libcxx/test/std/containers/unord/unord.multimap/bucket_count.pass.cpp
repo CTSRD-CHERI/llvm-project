@@ -19,18 +19,17 @@
 #include <string>
 #include <cassert>
 
+#include "test_macros.h"
+
 int main()
 {
     {
         typedef std::unordered_multimap<int, std::string> C;
-        typedef C::const_iterator I;
-        typedef std::pair<int, std::string> P;
         const C c;
-        assert(c.bucket_count() == 0);
+        LIBCPP_ASSERT(c.bucket_count() == 0);
     }
     {
         typedef std::unordered_multimap<int, std::string> C;
-        typedef C::const_iterator I;
         typedef std::pair<int, std::string> P;
         P a[] =
         {
@@ -44,6 +43,6 @@ int main()
             P(80, "eighty"),
         };
         const C c(std::begin(a), std::end(a));
-        assert(c.bucket_count() >= 11);
+        assert(c.bucket_count() >= 8);
     }
 }

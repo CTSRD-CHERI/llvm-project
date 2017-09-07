@@ -1,4 +1,5 @@
 ; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-function-scops -analyze < %s | FileCheck %s
 
 ;void f(long a[][128], long N, long M) {
 ;  long i, j;
@@ -49,26 +50,16 @@ return:                                           ; preds = %bb3, %entry
   ret void
 }
 
-; CHECK: p0: %N
-; CHECK: p1: %M
-; CHECK: Statements {
-; CHECK:   Stmt_bb1
-; CHECK:         Domain :=
-; CHECK:             [N, M] -> { Stmt_bb1[i0, i1] :
-; CHECK-DAG:             i0 >= 0
-; CHECK-DAG:          and
-; CHECK-DAG:             i0 <= 2 + 4N + 7M
-; CHECK-DAG:          and
-; CHECK-DAG:             i1 >= 0
-; CHECK-DAG:          and
-; CHECK-DAG:             i1 <= 1 + 5N - i0
-; CHECK-DAG:                     Stmt_bb1[0, i1] :
-; CHECK-DAG:             7M <= -3 - 4N
-; CHECK-DAG:          and
-; CHECK-DAG:             i1 >= 0
-; CHECK-DAG:          and
-; CHECK-DAG:             i1 <= 1 + 5N
-; CHECK:               }
-; CHECK:         MustWriteAccess := [Reduction Type: NONE]
-; CHECK:             [N, M] -> { Stmt_bb1[i0, i1] -> MemRef_a[i1, 129i0] };
-; CHECK: }
+
+; CHECK:      p0: %N
+; CHECK-NEXT: p1: %M
+;
+; CHECK:      Statements {
+; CHECK-NEXT:     Stmt_bb1
+; CHECK-NEXT:         Domain :=
+; CHECK-NEXT:             [N, M] -> { Stmt_bb1[i0, i1] : 0 <= i0 <= 2 + 4N + 7M and 0 <= i1 <= 1 + 5N - i0; Stmt_bb1[0, i1] : 7M <= -3 - 4N and 0 <= i1 <= 1 + 5N };
+; CHECK-NEXT:         Schedule :=
+; CHECK-NEXT:             [N, M] -> { Stmt_bb1[i0, i1] -> [i0, i1] : i0 <= 2 + 4N + 7M; Stmt_bb1[0, i1] -> [0, i1] : 7M <= -3 - 4N };
+; CHECK-NEXT:         MustWriteAccess :=    [Reduction Type: NONE] [Scalar: 0]
+; CHECK-NEXT:             [N, M] -> { Stmt_bb1[i0, i1] -> MemRef_a[i1, 129i0] };
+; CHECK-NEXT: }

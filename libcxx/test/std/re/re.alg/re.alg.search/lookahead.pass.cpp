@@ -16,12 +16,13 @@
 //                  const basic_regex<charT, traits>& e,
 //                  regex_constants::match_flag_type flags = regex_constants::match_default);
 
-// http://llvm.org/bugs/show_bug.cgi?id=11118
+// https://bugs.llvm.org/show_bug.cgi?id=11118
 
 #include <regex>
 #include <cassert>
+#include "test_macros.h"
 
-int main() 
+int main()
 {
     assert(!std::regex_search("ab", std::regex("(?=^)b")));
     assert(!std::regex_search("ab", std::regex("a(?=^)b")));

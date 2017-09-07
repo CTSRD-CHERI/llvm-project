@@ -41,8 +41,8 @@ DefinedAtom::ContentPermissions DefinedAtom::permissions(ContentType type) {
   case typeDTraceDOF:
   case typeCompactUnwindInfo:
   case typeProcessedUnwindInfo:
-  case typeRONote:
-  case typeNoAlloc:
+  case typeObjCImageInfo:
+  case typeObjCMethodList:
     return permR__;
 
   case typeData:
@@ -52,8 +52,8 @@ DefinedAtom::ContentPermissions DefinedAtom::permissions(ContentType type) {
   case typeObjC1Class:
   case typeLazyPointer:
   case typeLazyDylibPointer:
+  case typeNonLazyPointer:
   case typeThunkTLV:
-  case typeRWNote:
     return permRW_;
 
   case typeGOT:
@@ -68,30 +68,15 @@ DefinedAtom::ContentPermissions DefinedAtom::permissions(ContentType type) {
   case typeTLVInitialData:
   case typeTLVInitialZeroFill:
   case typeTLVInitializerPtr:
-  case typeThreadData:
-  case typeThreadZeroFill:
     return permRW_L;
 
-  case typeGroupComdat:
-  case typeGnuLinkOnce:
   case typeUnknown:
   case typeTempLTO:
   case typeSectCreate:
+  case typeDSOHandle:
     return permUnknown;
   }
   llvm_unreachable("unknown content type");
-}
-
-bool DefinedAtom::compareByPosition(const DefinedAtom *lhs,
-                                    const DefinedAtom *rhs) {
-  if (lhs == rhs)
-    return false;
-  const File *lhsFile = &lhs->file();
-  const File *rhsFile = &rhs->file();
-  if (lhsFile->ordinal() != rhsFile->ordinal())
-    return lhsFile->ordinal() < rhsFile->ordinal();
-  assert(lhs->ordinal() != rhs->ordinal());
-  return lhs->ordinal() < rhs->ordinal();
 }
 
 } // namespace

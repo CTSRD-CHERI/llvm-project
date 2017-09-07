@@ -43,7 +43,6 @@ static cl::opt<bool> RemoveTUReplacementFiles(
              "merging/replacing."),
     cl::init(false), cl::cat(ReplacementCategory));
 
-
 static cl::opt<bool> DoFormat(
     "format",
     cl::desc("Enable formatting of code changed by applying replacements.\n"
@@ -63,11 +62,11 @@ static cl::opt<std::string> FormatStyleConfig(
     cl::init(""), cl::cat(FormattingCategory));
 
 static cl::opt<std::string>
-FormatStyleOpt("style", cl::desc(format::StyleOptionHelpDescription),
-               cl::init("LLVM"), cl::cat(FormattingCategory));
+    FormatStyleOpt("style", cl::desc(format::StyleOptionHelpDescription),
+                   cl::init("LLVM"), cl::cat(FormattingCategory));
 
 namespace {
-// Helper object to remove the TUReplacement files (triggered by
+// Helper object to remove the TUReplacement and TUDiagnostic (triggered by
 // "remove-change-desc-files" command line option) when exiting current scope.
 class ScopedFileRemover {
 public:
@@ -75,9 +74,7 @@ public:
                     clang::DiagnosticsEngine &Diagnostics)
       : TURFiles(Files), Diag(Diagnostics) {}
 
-  ~ScopedFileRemover() {
-    deleteReplacementFiles(TURFiles, Diag);
-  }
+  ~ScopedFileRemover() { deleteReplacementFiles(TURFiles, Diag); }
 
 private:
   const TUReplacementFiles &TURFiles;
@@ -106,9 +103,10 @@ static void printVersion() {
 static bool
 getRewrittenData(const std::vector<tooling::Replacement> &Replacements,
                  Rewriter &Rewrites, std::string &Result) {
-  if (Replacements.empty()) return true;
+  if (Replacements.empty())
+    return true;
 
-  if (!tooling::applyAllReplacements(Replacements, Rewrites))
+  if (!applyAllReplacements(Replacements, Rewrites))
     return false;
 
   SourceManager &SM = Rewrites.getSourceMgr();
@@ -206,19 +204,30 @@ int main(int argc, char **argv) {
 
   IntrusiveRefCntPtr<DiagnosticOptions> DiagOpts(new DiagnosticOptions());
   DiagnosticsEngine Diagnostics(
-      IntrusiveRefCntPtr<DiagnosticIDs>(new DiagnosticIDs()),
-      DiagOpts.get());
+      IntrusiveRefCntPtr<DiagnosticIDs>(new DiagnosticIDs()), DiagOpts.get());
 
   // Determine a formatting style from options.
   format::FormatStyle FormatStyle;
-  if (DoFormat)
-    FormatStyle = format::getStyle(FormatStyleOpt, FormatStyleConfig, "LLVM");
+  if (DoFormat) {
+    auto FormatStyleOrError =
+        format::getStyle(FormatStyleOpt, FormatStyleConfig, "LLVM");
+    if (!FormatStyleOrError) {
+      llvm::errs() << llvm::toString(FormatStyleOrError.takeError()) << "\n";
+      return 1;
+    }
+    FormatStyle = *FormatStyleOrError;
+  }
 
-  TUReplacements TUs;
-  TUReplacementFiles TURFiles;
+  TUReplacements TURs;
+  TUReplacementFiles TUFiles;
 
   std::error_code ErrorCode =
-      collectReplacementsFromDirectory(Directory, TUs, TURFiles, Diagnostics);
+      collectReplacementsFromDirectory(Directory, TURs, TUFiles, Diagnostics);
+
+  TUDiagnostics TUDs;
+  TUFiles.clear();
+  ErrorCode =
+      collectReplacementsFromDirectory(Directory, TUDs, TUFiles, Diagnostics);
 
   if (ErrorCode) {
     errs() << "Trouble iterating over directory '" << Directory
@@ -230,13 +239,15 @@ int main(int argc, char **argv) {
   // command line option) when exiting main().
   std::unique_ptr<ScopedFileRemover> Remover;
   if (RemoveTUReplacementFiles)
-    Remover.reset(new ScopedFileRemover(TURFiles, Diagnostics));
+    Remover.reset(new ScopedFileRemover(TUFiles, Diagnostics));
 
   FileManager Files((FileSystemOptions()));
   SourceManager SM(Diagnostics, Files);
 
   FileToReplacementsMap GroupedReplacements;
-  if (!mergeAndDeduplicate(TUs, GroupedReplacements, SM))
+  if (!mergeAndDeduplicate(TURs, GroupedReplacements, SM))
+    return 1;
+  if (!mergeAndDeduplicate(TUDs, GroupedReplacements, SM))
     return 1;
 
   Rewriter ReplacementsRewriter(SM, LangOptions());
@@ -248,7 +259,7 @@ int main(int argc, char **argv) {
       continue;
 
     std::string NewFileData;
-    const char *FileName = FileAndReplacements.first->getName();
+    StringRef FileName = FileAndReplacements.first->getName();
     if (!applyReplacements(FileAndReplacements.second, NewFileData,
                            Diagnostics)) {
       errs() << "Failed to apply replacements to " << FileName << "\n";

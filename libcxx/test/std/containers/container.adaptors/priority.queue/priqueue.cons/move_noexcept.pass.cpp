@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03
+
 // <queue>
 
 // priority_queue(priority_queue&&)
@@ -22,10 +24,8 @@
 
 int main()
 {
-#if __has_feature(cxx_noexcept)
     {
         typedef std::priority_queue<MoveOnly> C;
         static_assert(std::is_nothrow_move_constructible<C>::value, "");
     }
-#endif
 }

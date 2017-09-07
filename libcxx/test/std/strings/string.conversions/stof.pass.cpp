@@ -7,8 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// XFAIL: with_system_cxx_lib=x86_64-apple-darwin11
-// XFAIL: with_system_cxx_lib=x86_64-apple-darwin12
+// PR14919 was fixed in r172447, out_of_range wasn't thrown before.
+// XFAIL: with_system_cxx_lib=macosx10.7
+// XFAIL: with_system_cxx_lib=macosx10.8
 
 // <string>
 
@@ -18,6 +19,8 @@
 #include <string>
 #include <cmath>
 #include <cassert>
+
+#include "test_macros.h"
 
 int main()
 {
@@ -35,6 +38,7 @@ int main()
     idx = 0;
     assert(std::stof(L"10g", &idx) == 10);
     assert(idx == 2);
+#ifndef TEST_HAS_NO_EXCEPTIONS
     idx = 0;
     try
     {
@@ -74,40 +78,54 @@ int main()
         assert(idx == 0);
     }
     try
+#endif
     {
         assert(std::stof("INF", &idx) == INFINITY);
         assert(idx == 3);
     }
+#ifndef TEST_HAS_NO_EXCEPTIONS
     catch (const std::out_of_range&)
     {
         assert(false);
     }
+#endif
     idx = 0;
+#ifndef TEST_HAS_NO_EXCEPTIONS
     try
+#endif
     {
         assert(std::stof(L"INF", &idx) == INFINITY);
         assert(idx == 3);
     }
+#ifndef TEST_HAS_NO_EXCEPTIONS
     catch (const std::out_of_range&)
     {
         assert(false);
     }
+#endif
     idx = 0;
+#ifndef TEST_HAS_NO_EXCEPTIONS
     try
+#endif
     {
         assert(std::isnan(std::stof("NAN", &idx)));
         assert(idx == 3);
     }
+#ifndef TEST_HAS_NO_EXCEPTIONS
     catch (const std::out_of_range&)
     {
         assert(false);
     }
+#endif
     idx = 0;
+#ifndef TEST_HAS_NO_EXCEPTIONS
     try
+#endif
     {
         assert(std::isnan(std::stof(L"NAN", &idx)));
         assert(idx == 3);
     }
+#ifndef TEST_HAS_NO_EXCEPTIONS
     catch (const std::out_of_range&)
     {
         assert(false);
@@ -167,4 +185,5 @@ int main()
     {
         assert(idx == 0);
     }
+#endif
 }

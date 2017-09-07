@@ -14,9 +14,12 @@
 
 // This tests a conforming extension
 
+// UNSUPPORTED: c++98, c++03
+
 #include <deque>
 #include <cassert>
 
+#include "test_macros.h"
 #include "MoveOnly.h"
 #include "test_allocator.h"
 
@@ -29,7 +32,7 @@ struct some_alloc
 
 int main()
 {
-#if __has_feature(cxx_noexcept)
+#if defined(_LIBCPP_VERSION)
     {
         typedef std::deque<MoveOnly> C;
         static_assert(std::is_nothrow_move_constructible<C>::value, "");
@@ -42,9 +45,9 @@ int main()
         typedef std::deque<MoveOnly, other_allocator<MoveOnly>> C;
         static_assert(std::is_nothrow_move_constructible<C>::value, "");
     }
+#endif // _LIBCPP_VERSION
     {
         typedef std::deque<MoveOnly, some_alloc<MoveOnly>> C;
         static_assert(!std::is_nothrow_move_constructible<C>::value, "");
     }
-#endif
 }

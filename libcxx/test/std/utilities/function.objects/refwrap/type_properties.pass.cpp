@@ -14,11 +14,16 @@
 // Test that reference wrapper meets the requirements of TriviallyCopyable,
 // CopyConstructible and CopyAssignable.
 
+// Test fails due to use of is_trivially_* trait.
+// XFAIL: gcc-4.9
+
 #include <functional>
 #include <type_traits>
 #include <string>
 
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
+#include "test_macros.h"
+
+#if TEST_STD_VER >= 11
 class MoveOnly
 {
     MoveOnly(const MoveOnly&);
@@ -51,8 +56,8 @@ int main()
 {
     test<int>();
     test<double>();
-    test<std::string>(); 
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
-    test<MoveOnly>(); 
+    test<std::string>();
+#if TEST_STD_VER >= 11
+    test<MoveOnly>();
 #endif
 }

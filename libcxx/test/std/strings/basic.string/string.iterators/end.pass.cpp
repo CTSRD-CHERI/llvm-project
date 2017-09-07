@@ -14,6 +14,7 @@
 
 #include <string>
 #include <cassert>
+#include <cstddef>
 
 #include "min_allocator.h"
 
@@ -29,8 +30,8 @@ test(S s)
         assert(e == s.begin());
         assert(ce == cs.begin());
     }
-    assert(e - s.begin() == s.size());
-    assert(ce - cs.begin() == cs.size());
+    assert(static_cast<std::size_t>(e - s.begin()) == s.size());
+    assert(static_cast<std::size_t>(ce - cs.begin()) == cs.size());
 }
 
 int main()
@@ -40,7 +41,7 @@ int main()
     test(S());
     test(S("123"));
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     typedef std::basic_string<char, std::char_traits<char>, min_allocator<char>> S;
     test(S());

@@ -33,26 +33,31 @@ void InefficientAlgorithmCheck::registerMatchers(MatchFinder *Finder) {
   if (!getLangOpts().CPlusPlus)
     return;
 
-  const std::string Algorithms =
-      "^::std::(find|count|equal_range|lower_bound|upper_bound)$";
-  const auto ContainerMatcher = classTemplateSpecializationDecl(
-      matchesName("^::std::(unordered_)?(multi)?(set|map)$"));
+  const auto Algorithms =
+      hasAnyName("::std::find", "::std::count", "::std::equal_range",
+                 "::std::lower_bound", "::std::upper_bound");
+  const auto ContainerMatcher = classTemplateSpecializationDecl(hasAnyName(
+      "::std::set", "::std::map", "::std::multiset", "::std::multimap",
+      "::std::unordered_set", "::std::unordered_map",
+      "::std::unordered_multiset", "::std::unordered_multimap"));
+
   const auto Matcher =
       callExpr(
-          callee(functionDecl(matchesName(Algorithms))),
+          callee(functionDecl(Algorithms)),
           hasArgument(
-              0, cxxConstructExpr(has(cxxMemberCallExpr(
+              0, cxxConstructExpr(has(ignoringParenImpCasts(cxxMemberCallExpr(
                      callee(cxxMethodDecl(hasName("begin"))),
                      on(declRefExpr(
                             hasDeclaration(decl().bind("IneffContObj")),
                             anyOf(hasType(ContainerMatcher.bind("IneffCont")),
                                   hasType(pointsTo(
                                       ContainerMatcher.bind("IneffContPtr")))))
-                            .bind("IneffContExpr")))))),
-          hasArgument(1, cxxConstructExpr(has(cxxMemberCallExpr(
-                             callee(cxxMethodDecl(hasName("end"))),
-                             on(declRefExpr(hasDeclaration(
-                                 equalsBoundNode("IneffContObj")))))))),
+                            .bind("IneffContExpr"))))))),
+          hasArgument(
+              1, cxxConstructExpr(has(ignoringParenImpCasts(cxxMemberCallExpr(
+                     callee(cxxMethodDecl(hasName("end"))),
+                     on(declRefExpr(
+                         hasDeclaration(equalsBoundNode("IneffContObj"))))))))),
           hasArgument(2, expr().bind("AlgParam")),
           unless(isInTemplateInstantiation()))
           .bind("IneffAlg");
@@ -112,7 +117,7 @@ void InefficientAlgorithmCheck::check(const MatchFinder::MatchResult &Result) {
   FixItHint Hint;
 
   SourceManager &SM = *Result.SourceManager;
-  LangOptions LangOpts = Result.Context->getLangOpts();
+  LangOptions LangOpts = getLangOpts();
 
   CharSourceRange CallRange =
       CharSourceRange::getTokenRange(AlgCall->getSourceRange());

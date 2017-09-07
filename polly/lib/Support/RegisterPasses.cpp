@@ -22,13 +22,21 @@
 #include "polly/RegisterPasses.h"
 #include "polly/Canonicalization.h"
 #include "polly/CodeGen/CodeGeneration.h"
+#include "polly/CodeGen/CodegenCleanup.h"
+#include "polly/CodeGen/PPCGCodeGeneration.h"
+#include "polly/DeLICM.h"
 #include "polly/DependenceInfo.h"
+#include "polly/FlattenSchedule.h"
 #include "polly/LinkAllPasses.h"
 #include "polly/Options.h"
+#include "polly/PolyhedralInfo.h"
 #include "polly/ScopDetection.h"
 #include "polly/ScopInfo.h"
+#include "polly/Simplify.h"
+#include "polly/Support/DumpModulePass.h"
 #include "llvm/Analysis/CFGPrinter.h"
 #include "llvm/IR/LegacyPassManager.h"
+#include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Vectorize.h"
@@ -63,26 +71,53 @@ static cl::opt<PassPositionChoice> PassPosition(
         clEnumValN(POSITION_AFTER_LOOPOPT, "after-loopopt",
                    "After the loop optimizer (but within the inline cycle)"),
         clEnumValN(POSITION_BEFORE_VECTORIZER, "before-vectorizer",
-                   "Right before the vectorizer"),
-        clEnumValEnd),
+                   "Right before the vectorizer")),
     cl::Hidden, cl::init(POSITION_EARLY), cl::ZeroOrMore,
     cl::cat(PollyCategory));
 
-static cl::opt<OptimizerChoice> Optimizer(
-    "polly-optimizer", cl::desc("Select the scheduling optimizer"),
-    cl::values(clEnumValN(OPTIMIZER_NONE, "none", "No optimizer"),
-               clEnumValN(OPTIMIZER_ISL, "isl", "The isl scheduling optimizer"),
-               clEnumValEnd),
-    cl::Hidden, cl::init(OPTIMIZER_ISL), cl::ZeroOrMore,
-    cl::cat(PollyCategory));
+static cl::opt<OptimizerChoice>
+    Optimizer("polly-optimizer", cl::desc("Select the scheduling optimizer"),
+              cl::values(clEnumValN(OPTIMIZER_NONE, "none", "No optimizer"),
+                         clEnumValN(OPTIMIZER_ISL, "isl",
+                                    "The isl scheduling optimizer")),
+              cl::Hidden, cl::init(OPTIMIZER_ISL), cl::ZeroOrMore,
+              cl::cat(PollyCategory));
 
-enum CodeGenChoice { CODEGEN_ISL, CODEGEN_NONE };
-static cl::opt<CodeGenChoice> CodeGenerator(
-    "polly-code-generator", cl::desc("Select the code generator"),
-    cl::values(clEnumValN(CODEGEN_ISL, "isl", "isl code generator"),
-               clEnumValN(CODEGEN_NONE, "none", "no code generation"),
-               clEnumValEnd),
-    cl::Hidden, cl::init(CODEGEN_ISL), cl::ZeroOrMore, cl::cat(PollyCategory));
+enum CodeGenChoice { CODEGEN_FULL, CODEGEN_AST, CODEGEN_NONE };
+static cl::opt<CodeGenChoice> CodeGeneration(
+    "polly-code-generation", cl::desc("How much code-generation to perform"),
+    cl::values(clEnumValN(CODEGEN_FULL, "full", "AST and IR generation"),
+               clEnumValN(CODEGEN_AST, "ast", "Only AST generation"),
+               clEnumValN(CODEGEN_NONE, "none", "No code generation")),
+    cl::Hidden, cl::init(CODEGEN_FULL), cl::ZeroOrMore, cl::cat(PollyCategory));
+
+enum TargetChoice { TARGET_CPU, TARGET_GPU };
+static cl::opt<TargetChoice>
+    Target("polly-target", cl::desc("The hardware to target"),
+           cl::values(clEnumValN(TARGET_CPU, "cpu", "generate CPU code")
+#ifdef GPU_CODEGEN
+                          ,
+                      clEnumValN(TARGET_GPU, "gpu", "generate GPU code")
+#endif
+                          ),
+           cl::init(TARGET_CPU), cl::ZeroOrMore, cl::cat(PollyCategory));
+
+#ifdef GPU_CODEGEN
+static cl::opt<GPURuntime> GPURuntimeChoice(
+    "polly-gpu-runtime", cl::desc("The GPU Runtime API to target"),
+    cl::values(clEnumValN(GPURuntime::CUDA, "libcudart",
+                          "use the CUDA Runtime API"),
+               clEnumValN(GPURuntime::OpenCL, "libopencl",
+                          "use the OpenCL Runtime API")),
+    cl::init(GPURuntime::CUDA), cl::ZeroOrMore, cl::cat(PollyCategory));
+
+static cl::opt<GPUArch>
+    GPUArchChoice("polly-gpu-arch", cl::desc("The GPU Architecture to target"),
+                  cl::values(clEnumValN(GPUArch::NVPTX64, "nvptx64",
+                                        "target NVIDIA 64-bit architecture")),
+                  cl::init(GPUArch::NVPTX64), cl::ZeroOrMore,
+                  cl::cat(PollyCategory));
+#endif
 
 VectorizerChoice polly::PollyVectorizerChoice;
 static cl::opt<polly::VectorizerChoice, true> Vectorizer(
@@ -91,9 +126,9 @@ static cl::opt<polly::VectorizerChoice, true> Vectorizer(
         clEnumValN(polly::VECTORIZER_NONE, "none", "No Vectorization"),
         clEnumValN(polly::VECTORIZER_POLLY, "polly",
                    "Polly internal vectorizer"),
-        clEnumValN(polly::VECTORIZER_STRIPMINE, "stripmine",
-                   "Strip-mine outer loops for the loop-vectorizer to trigger"),
-        clEnumValEnd),
+        clEnumValN(
+            polly::VECTORIZER_STRIPMINE, "stripmine",
+            "Strip-mine outer loops for the loop-vectorizer to trigger")),
     cl::location(PollyVectorizerChoice), cl::init(polly::VECTORIZER_NONE),
     cl::ZeroOrMore, cl::cat(PollyCategory));
 
@@ -140,22 +175,77 @@ static cl::opt<bool>
                cl::desc("Show the Polly CFG right after code generation"),
                cl::Hidden, cl::init(false), cl::cat(PollyCategory));
 
+static cl::opt<bool>
+    EnablePolyhedralInfo("polly-enable-polyhedralinfo",
+                         cl::desc("Enable polyhedral interface of Polly"),
+                         cl::Hidden, cl::init(false), cl::cat(PollyCategory));
+
+static cl::opt<bool>
+    DumpBefore("polly-dump-before",
+               cl::desc("Dump module before Polly transformations into a file "
+                        "suffixed with \"-before\""),
+               cl::init(false), cl::cat(PollyCategory));
+
+static cl::list<std::string> DumpBeforeFile(
+    "polly-dump-before-file",
+    cl::desc("Dump module before Polly transformations to the given file"),
+    cl::cat(PollyCategory));
+
+static cl::opt<bool>
+    DumpAfter("polly-dump-after",
+              cl::desc("Dump module after Polly transformations into a file "
+                       "suffixed with \"-after\""),
+              cl::init(false), cl::cat(PollyCategory));
+
+static cl::list<std::string> DumpAfterFile(
+    "polly-dump-after-file",
+    cl::desc("Dump module after Polly transformations to the given file"),
+    cl::ZeroOrMore, cl::cat(PollyCategory));
+
+static cl::opt<bool>
+    EnableDeLICM("polly-enable-delicm",
+                 cl::desc("Eliminate scalar loop carried dependences"),
+                 cl::Hidden, cl::init(false), cl::cat(PollyCategory));
+
+static cl::opt<bool>
+    EnableSimplify("polly-enable-simplify",
+                   cl::desc("Simplify SCoP after optimizations"),
+                   cl::init(false), cl::cat(PollyCategory));
+
+static cl::opt<bool> EnablePruneUnprofitable(
+    "polly-enable-prune-unprofitable",
+    cl::desc("Bail out on unprofitable SCoPs before rescheduling"), cl::Hidden,
+    cl::init(true), cl::cat(PollyCategory));
+
 namespace polly {
 void initializePollyPasses(PassRegistry &Registry) {
   initializeCodeGenerationPass(Registry);
+
+#ifdef GPU_CODEGEN
+  initializePPCGCodeGenerationPass(Registry);
+#endif
   initializeCodePreparationPass(Registry);
   initializeDeadCodeElimPass(Registry);
   initializeDependenceInfoPass(Registry);
+  initializeDependenceInfoWrapperPassPass(Registry);
   initializeJSONExporterPass(Registry);
   initializeJSONImporterPass(Registry);
-  initializeIslAstInfoPass(Registry);
+  initializeIslAstInfoWrapperPassPass(Registry);
   initializeIslScheduleOptimizerPass(Registry);
   initializePollyCanonicalizePass(Registry);
-  initializeScopDetectionPass(Registry);
-  initializeScopInfoPass(Registry);
+  initializePolyhedralInfoPass(Registry);
+  initializeScopDetectionWrapperPassPass(Registry);
+  initializeScopInfoRegionPassPass(Registry);
+  initializeScopInfoWrapperPassPass(Registry);
+  initializeCodegenCleanupPass(Registry);
+  initializeFlattenSchedulePass(Registry);
+  initializeDeLICMPass(Registry);
+  initializeSimplifyPass(Registry);
+  initializeDumpModulePass(Registry);
+  initializePruneUnprofitablePass(Registry);
 }
 
-/// @brief Register Polly passes such that they form a polyhedral optimizer.
+/// Register Polly passes such that they form a polyhedral optimizer.
 ///
 /// The individual Polly passes are registered in the pass manager such that
 /// they form a full polyhedral optimizer. The flow of the optimizer starts with
@@ -182,7 +272,12 @@ void initializePollyPasses(PassRegistry &Registry) {
 ///
 /// Polly supports the isl internal code generator.
 void registerPollyPasses(llvm::legacy::PassManagerBase &PM) {
-  PM.add(polly::createScopDetectionPass());
+  if (DumpBefore)
+    PM.add(polly::createDumpModulePass("-before", true));
+  for (auto &Filename : DumpBeforeFile)
+    PM.add(polly::createDumpModulePass(Filename, false));
+
+  PM.add(polly::createScopDetectionWrapperPassPass());
 
   if (PollyDetectOnly)
     return;
@@ -196,7 +291,14 @@ void registerPollyPasses(llvm::legacy::PassManagerBase &PM) {
   if (PollyOnlyPrinter)
     PM.add(polly::createDOTOnlyPrinterPass());
 
-  PM.add(polly::createScopInfoPass());
+  PM.add(polly::createScopInfoRegionPassPass());
+  if (EnablePolyhedralInfo)
+    PM.add(polly::createPolyhedralInfoPass());
+
+  if (EnableDeLICM)
+    PM.add(polly::createDeLICMPass());
+  if (EnableSimplify)
+    PM.add(polly::createSimplifyPass());
 
   if (ImportJScop)
     PM.add(polly::createJSONImporterPass());
@@ -204,28 +306,60 @@ void registerPollyPasses(llvm::legacy::PassManagerBase &PM) {
   if (DeadCodeElim)
     PM.add(polly::createDeadCodeElimPass());
 
-  switch (Optimizer) {
-  case OPTIMIZER_NONE:
-    break; /* Do nothing */
+  if (EnablePruneUnprofitable)
+    PM.add(polly::createPruneUnprofitablePass());
 
-  case OPTIMIZER_ISL:
-    PM.add(polly::createIslScheduleOptimizerPass());
-    break;
+  if (Target == TARGET_GPU) {
+    // GPU generation provides its own scheduling optimization strategy.
+  } else {
+    switch (Optimizer) {
+    case OPTIMIZER_NONE:
+      break; /* Do nothing */
+
+    case OPTIMIZER_ISL:
+      PM.add(polly::createIslScheduleOptimizerPass());
+      break;
+    }
   }
 
   if (ExportJScop)
     PM.add(polly::createJSONExporterPass());
 
-  switch (CodeGenerator) {
-  case CODEGEN_ISL:
-    PM.add(polly::createCodeGenerationPass());
-    break;
-  case CODEGEN_NONE:
-    break;
+  if (Target == TARGET_GPU) {
+#ifdef GPU_CODEGEN
+    PM.add(
+        polly::createPPCGCodeGenerationPass(GPUArchChoice, GPURuntimeChoice));
+#endif
+  } else {
+    switch (CodeGeneration) {
+    case CODEGEN_AST:
+      PM.add(polly::createIslAstInfoWrapperPassPass());
+      break;
+    case CODEGEN_FULL:
+      PM.add(polly::createCodeGenerationPass());
+      break;
+    case CODEGEN_NONE:
+      break;
+    }
   }
 
+  // FIXME: This dummy ModulePass keeps some programs from miscompiling,
+  // probably some not correctly preserved analyses. It acts as a barrier to
+  // force all analysis results to be recomputed.
+  PM.add(createBarrierNoopPass());
+
+  if (DumpAfter)
+    PM.add(polly::createDumpModulePass("-after", true));
+  for (auto &Filename : DumpAfterFile)
+    PM.add(polly::createDumpModulePass(Filename, false));
+
   if (CFGPrinter)
-    PM.add(llvm::createCFGPrinterPass());
+    PM.add(llvm::createCFGPrinterLegacyPassPass());
+
+  if (Target == TARGET_GPU) {
+    // Invariant load hoisting not yet supported by GPU code generation.
+    PollyInvariantLoadHoisting = false;
+  }
 }
 
 static bool shouldEnablePolly() {
@@ -263,7 +397,7 @@ registerPollyLoopOptimizerEndPasses(const llvm::PassManagerBuilder &Builder,
 
   PM.add(polly::createCodePreparationPass());
   polly::registerPollyPasses(PM);
-  // TODO: Add some cleanup passes
+  PM.add(createCodegenCleanupPass());
 }
 
 static void
@@ -277,10 +411,10 @@ registerPollyScalarOptimizerLatePasses(const llvm::PassManagerBuilder &Builder,
 
   PM.add(polly::createCodePreparationPass());
   polly::registerPollyPasses(PM);
-  // TODO: Add some cleanup passes
+  PM.add(createCodegenCleanupPass());
 }
 
-/// @brief Register Polly to be available as an optimizer
+/// Register Polly to be available as an optimizer
 ///
 ///
 /// We can currently run Polly at three different points int the pass manager.
@@ -328,4 +462,4 @@ static llvm::RegisterStandardPasses
 static llvm::RegisterStandardPasses RegisterPollyOptimizerScalarLate(
     llvm::PassManagerBuilder::EP_VectorizerStart,
     registerPollyScalarOptimizerLatePasses);
-}
+} // namespace polly

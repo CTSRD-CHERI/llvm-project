@@ -40,12 +40,12 @@ TEST(ValueTest, UsedInBasicBlock) {
   Function *F = M->getFunction("f");
 
   EXPECT_FALSE(F->isUsedInBasicBlock(&F->front()));
-  EXPECT_TRUE((++F->arg_begin())->isUsedInBasicBlock(&F->front()));
+  EXPECT_TRUE(std::next(F->arg_begin())->isUsedInBasicBlock(&F->front()));
   EXPECT_TRUE(F->arg_begin()->isUsedInBasicBlock(&F->front()));
 }
 
 TEST(GlobalTest, CreateAddressSpace) {
-  LLVMContext &Ctx = getGlobalContext();
+  LLVMContext Ctx;
   std::unique_ptr<Module> M(new Module("TestModule", Ctx));
   Type *Int8Ty = Type::getInt8Ty(Ctx);
   Type *Int32Ty = Type::getInt32Ty(Ctx);
@@ -92,7 +92,7 @@ TEST(GlobalTest, CreateAddressSpace) {
 #ifdef GTEST_HAS_DEATH_TEST
 #ifndef NDEBUG
 TEST(GlobalTest, AlignDeath) {
-  LLVMContext &Ctx = getGlobalContext();
+  LLVMContext Ctx;
   std::unique_ptr<Module> M(new Module("TestModule", Ctx));
   Type *Int32Ty = Type::getInt32Ty(Ctx);
   GlobalVariable *Var =

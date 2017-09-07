@@ -27,7 +27,10 @@ VERSION {
         #
         ompt_tool;           # OMPT initialization interface
         ompt_control;        # OMPT control interface
-        
+
+        # icc drops weak attribute at linking step without the following line:
+        Annotate*;           # TSAN annotation
+
         #
         # OMPT state placeholders
         #
@@ -85,18 +88,15 @@ VERSION {
         __kmp_invoke_microtask;
         __kmp_itt_fini_ittlib;
         __kmp_itt_init_ittlib;
+#if KMP_USE_MONITOR
         __kmp_launch_monitor;
-        __kmp_launch_worker;
         __kmp_reap_monitor;
+#endif
+        __kmp_launch_worker;
         __kmp_reap_worker;
-        __kmp_release_32;
         __kmp_release_64;
-        __kmp_release_oncore;
-        __kmp_wait_32;
         __kmp_wait_64;
-        __kmp_wait_oncore;
         __kmp_wait_yield_4;
-        __kmp_wait_yield_8;
 
         # ittnotify symbols to be used by debugger
         __kmp_itt_fini_ittlib;

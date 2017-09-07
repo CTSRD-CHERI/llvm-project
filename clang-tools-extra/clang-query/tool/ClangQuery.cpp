@@ -59,7 +59,7 @@ static cl::list<std::string> CommandFiles("f",
                                           cl::cat(ClangQueryCategory));
 
 int main(int argc, const char **argv) {
-  llvm::sys::PrintStackTraceOnErrorSignal();
+  llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
 
   CommonOptionsParser OptionsParser(argc, argv, ClangQueryCategory);
 
@@ -77,17 +77,13 @@ int main(int argc, const char **argv) {
   QuerySession QS(ASTs);
 
   if (!Commands.empty()) {
-    for (cl::list<std::string>::iterator I = Commands.begin(),
-                                         E = Commands.end();
-         I != E; ++I) {
-      QueryRef Q = QueryParser::parse(I->c_str(), QS);
+    for (auto I = Commands.begin(), E = Commands.end(); I != E; ++I) {
+      QueryRef Q = QueryParser::parse(*I, QS);
       if (!Q->run(llvm::outs(), QS))
         return 1;
     }
   } else if (!CommandFiles.empty()) {
-    for (cl::list<std::string>::iterator I = CommandFiles.begin(),
-                                         E = CommandFiles.end();
-         I != E; ++I) {
+    for (auto I = CommandFiles.begin(), E = CommandFiles.end(); I != E; ++I) {
       std::ifstream Input(I->c_str());
       if (!Input.is_open()) {
         llvm::errs() << argv[0] << ": cannot open " << *I << "\n";
@@ -97,7 +93,7 @@ int main(int argc, const char **argv) {
         std::string Line;
         std::getline(Input, Line);
 
-        QueryRef Q = QueryParser::parse(Line.c_str(), QS);
+        QueryRef Q = QueryParser::parse(Line, QS);
         if (!Q->run(llvm::outs(), QS))
           return 1;
       }

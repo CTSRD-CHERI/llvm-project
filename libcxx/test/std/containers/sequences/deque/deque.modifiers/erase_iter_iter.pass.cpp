@@ -14,7 +14,10 @@
 // iterator erase(const_iterator f, const_iterator l)
 
 #include <deque>
+#include <algorithm>
+#include <iterator>
 #include <cassert>
+#include <cstddef>
 
 #include "min_allocator.h"
 
@@ -45,17 +48,17 @@ void
 test(int P, C& c1, int size)
 {
     typedef typename C::iterator I;
-    assert(P + size <= c1.size());
+    assert(static_cast<std::size_t>(P + size) <= c1.size());
     std::size_t c1_osize = c1.size();
     I i = c1.erase(c1.cbegin() + P, c1.cbegin() + (P + size));
     assert(i == c1.begin() + P);
     assert(c1.size() == c1_osize - size);
-    assert(distance(c1.begin(), c1.end()) == c1.size());
+    assert(static_cast<std::size_t>(distance(c1.begin(), c1.end())) == c1.size());
     i = c1.begin();
     int j = 0;
     for (; j < P; ++j, ++i)
         assert(*i == j);
-    for (j += size; j < c1_osize; ++j, ++i)
+    for (j += size; static_cast<std::size_t>(j) < c1_osize; ++j, ++i)
         assert(*i == j);
 }
 
@@ -84,7 +87,7 @@ int main()
         for (int j = 0; j < N; ++j)
             testN<std::deque<int> >(rng[i], rng[j]);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     int rng[] = {0, 1, 2, 3, 1023, 1024, 1025, 2047, 2048, 2049};
     const int N = sizeof(rng)/sizeof(rng[0]);

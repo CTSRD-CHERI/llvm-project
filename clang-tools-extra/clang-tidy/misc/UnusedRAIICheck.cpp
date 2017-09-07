@@ -14,15 +14,15 @@
 using namespace clang::ast_matchers;
 
 namespace clang {
+namespace tidy {
+namespace misc {
+
 namespace {
 AST_MATCHER(CXXRecordDecl, hasNonTrivialDestructor) {
   // TODO: If the dtor is there but empty we don't want to warn either.
   return Node.hasDefinition() && Node.hasNonTrivialDestructor();
 }
 } // namespace
-
-namespace tidy {
-namespace misc {
 
 void UnusedRAIICheck::registerMatchers(MatchFinder *Finder) {
   // Only register the matchers for C++; the functionality currently does not
@@ -33,19 +33,22 @@ void UnusedRAIICheck::registerMatchers(MatchFinder *Finder) {
   // Look for temporaries that are constructed in-place and immediately
   // destroyed. Look for temporaries created by a functional cast but not for
   // those returned from a call.
-  auto BindTemp = cxxBindTemporaryExpr(unless(has(callExpr()))).bind("temp");
+  auto BindTemp =
+      cxxBindTemporaryExpr(unless(has(ignoringParenImpCasts(callExpr()))))
+          .bind("temp");
   Finder->addMatcher(
-      exprWithCleanups(
-          unless(isInTemplateInstantiation()),
-          hasParent(compoundStmt().bind("compound")),
-          hasType(cxxRecordDecl(hasNonTrivialDestructor())),
-          anyOf(has(BindTemp), has(cxxFunctionalCastExpr(has(BindTemp)))))
+      exprWithCleanups(unless(isInTemplateInstantiation()),
+                       hasParent(compoundStmt().bind("compound")),
+                       hasType(cxxRecordDecl(hasNonTrivialDestructor())),
+                       anyOf(has(ignoringParenImpCasts(BindTemp)),
+                             has(ignoringParenImpCasts(cxxFunctionalCastExpr(
+                                 has(ignoringParenImpCasts(BindTemp)))))))
           .bind("expr"),
       this);
 }
 
 void UnusedRAIICheck::check(const MatchFinder::MatchResult &Result) {
-  const auto *E = Result.Nodes.getStmtAs<Expr>("expr");
+  const auto *E = Result.Nodes.getNodeAs<Expr>("expr");
 
   // We ignore code expanded from macros to reduce the number of false
   // positives.
@@ -54,7 +57,7 @@ void UnusedRAIICheck::check(const MatchFinder::MatchResult &Result) {
 
   // Don't emit a warning for the last statement in the surrounding compund
   // statement.
-  const auto *CS = Result.Nodes.getStmtAs<CompoundStmt>("compound");
+  const auto *CS = Result.Nodes.getNodeAs<CompoundStmt>("compound");
   if (E == CS->body_back())
     return;
 
@@ -65,7 +68,7 @@ void UnusedRAIICheck::check(const MatchFinder::MatchResult &Result) {
 
   // If this is a default ctor we have to remove the parens or we'll introduce a
   // most vexing parse.
-  const auto *BTE = Result.Nodes.getStmtAs<CXXBindTemporaryExpr>("temp");
+  const auto *BTE = Result.Nodes.getNodeAs<CXXBindTemporaryExpr>("temp");
   if (const auto *TOE = dyn_cast<CXXTemporaryObjectExpr>(BTE->getSubExpr()))
     if (TOE->getNumArgs() == 0) {
       D << FixItHint::CreateReplacement(
@@ -82,7 +85,7 @@ void UnusedRAIICheck::check(const MatchFinder::MatchResult &Result) {
   const auto *TL = selectFirst<TypeLoc>("t", Matches);
   D << FixItHint::CreateInsertion(
       Lexer::getLocForEndOfToken(TL->getLocEnd(), 0, *Result.SourceManager,
-                                 Result.Context->getLangOpts()),
+                                 getLangOpts()),
       Replacement);
 }
 

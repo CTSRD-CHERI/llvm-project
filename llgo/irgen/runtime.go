@@ -64,6 +64,7 @@ type runtimeInterface struct {
 	// Runtime intrinsics
 	append,
 	assertInterface,
+	byteArrayToString,
 	canRecover,
 	chanCap,
 	chanLen,
@@ -92,7 +93,6 @@ type runtimeInterface struct {
 	New,
 	newChannel,
 	newMap,
-	NewNopointers,
 	newSelect,
 	panic,
 	printBool,
@@ -121,6 +121,7 @@ type runtimeInterface struct {
 	stringiter2,
 	stringPlus,
 	stringSlice,
+	stringToByteArray,
 	stringToIntArray,
 	typeDescriptorsEqual,
 	undefer runtimeFnInfo
@@ -141,7 +142,13 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 	UnsafePointer := types.Typ[types.UnsafePointer]
 
 	EmptyInterface := types.NewInterface(nil, nil)
+	ByteSlice := types.NewSlice(types.Typ[types.Byte])
 	IntSlice := types.NewSlice(types.Typ[types.Int])
+
+	AttrKind := llvm.AttributeKindID("nounwind")
+	NoUnwindAttr := module.Context().CreateEnumAttribute(AttrKind, 0)
+	AttrKind = llvm.AttributeKindID("noreturn")
+	NoReturnAttr := module.Context().CreateEnumAttribute(AttrKind, 0)
 
 	for _, rt := range [...]struct {
 		name      string
@@ -160,6 +167,13 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			rfi:  &ri.assertInterface,
 			args: []types.Type{UnsafePointer, UnsafePointer},
 			res:  []types.Type{UnsafePointer},
+		},
+		{
+			name:  "__go_byte_array_to_string",
+			rfi:   &ri.byteArrayToString,
+			args:  []types.Type{UnsafePointer, Int},
+			res:   []types.Type{String},
+			attrs: []llvm.Attribute{NoUnwindAttr},
 		},
 		{
 			name: "__go_can_recover",
@@ -301,10 +315,11 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			res:  []types.Type{Int},
 		},
 		{
-			name: "__go_new",
-			rfi:  &ri.New,
-			args: []types.Type{UnsafePointer, Uintptr},
-			res:  []types.Type{UnsafePointer},
+			name:  "__go_new",
+			rfi:   &ri.New,
+			args:  []types.Type{UnsafePointer, Uintptr},
+			res:   []types.Type{UnsafePointer},
+			attrs: []llvm.Attribute{NoUnwindAttr},
 		},
 		{
 			name: "__go_new_channel",
@@ -319,12 +334,6 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			res:  []types.Type{UnsafePointer},
 		},
 		{
-			name: "__go_new_nopointers",
-			rfi:  &ri.NewNopointers,
-			args: []types.Type{UnsafePointer, Uintptr},
-			res:  []types.Type{UnsafePointer},
-		},
-		{
 			name: "runtime.newselect",
 			rfi:  &ri.newSelect,
 			args: []types.Type{Int32},
@@ -334,7 +343,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			name:  "__go_panic",
 			rfi:   &ri.panic,
 			args:  []types.Type{EmptyInterface},
-			attrs: []llvm.Attribute{llvm.NoReturnAttribute},
+			attrs: []llvm.Attribute{NoReturnAttr},
 		},
 		{
 			name: "__go_print_bool",
@@ -413,7 +422,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			name:  "__go_runtime_error",
 			rfi:   &ri.runtimeError,
 			args:  []types.Type{Int32},
-			attrs: []llvm.Attribute{llvm.NoReturnAttribute},
+			attrs: []llvm.Attribute{NoReturnAttr},
 		},
 		{
 			name: "runtime.selectdefault",
@@ -464,6 +473,13 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			rfi:  &ri.stringSlice,
 			args: []types.Type{String, Int, Int},
 			res:  []types.Type{String},
+		},
+		{
+			name:  "__go_string_to_byte_array",
+			rfi:   &ri.stringToByteArray,
+			args:  []types.Type{String},
+			res:   []types.Type{ByteSlice},
+			attrs: []llvm.Attribute{NoUnwindAttr},
 		},
 		{
 			name: "__go_string_to_int_array",
@@ -561,12 +577,6 @@ func (fr *frame) createZExtOrTrunc(v llvm.Value, t llvm.Type, name string) llvm.
 		v = fr.builder.CreateTrunc(v, fr.target.IntPtrType(), name)
 	}
 	return v
-}
-
-func (fr *frame) createMalloc(size llvm.Value) llvm.Value {
-	return fr.runtime.NewNopointers.callOnly(fr,
-		llvm.ConstNull(llvm.PointerType(llvm.Int8Type(), 0)),
-		fr.createZExtOrTrunc(size, fr.target.IntPtrType(), ""))[0]
 }
 
 func (fr *frame) createTypeMalloc(t types.Type) llvm.Value {

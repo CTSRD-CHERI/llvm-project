@@ -17,6 +17,7 @@
 #include <isl_mat_private.h>
 #include <isl_space_private.h>
 #include <isl_equalities.h>
+#include <isl_id_private.h>
 
 isl_ctx *isl_morph_get_ctx(__isl_keep isl_morph *morph)
 {
@@ -83,19 +84,21 @@ __isl_give isl_morph *isl_morph_cow(__isl_take isl_morph *morph)
 	return isl_morph_dup(morph);
 }
 
-void isl_morph_free(__isl_take isl_morph *morph)
+__isl_null isl_morph *isl_morph_free(__isl_take isl_morph *morph)
 {
 	if (!morph)
-		return;
+		return NULL;
 
 	if (--morph->ref > 0)
-		return;
+		return NULL;
 
 	isl_basic_set_free(morph->dom);
 	isl_basic_set_free(morph->ran);
 	isl_mat_free(morph->map);
 	isl_mat_free(morph->inv);
 	free(morph);
+
+	return NULL;
 }
 
 /* Is "morph" an identity on the parameters?
@@ -352,32 +355,6 @@ __isl_give isl_morph *isl_morph_empty(__isl_keep isl_basic_set *bset)
 		id, isl_mat_copy(id));
 }
 
-/* Given a matrix that maps a (possibly) parametric domain to
- * a parametric domain, add in rows that map the "nparam" parameters onto
- * themselves.
- */
-static __isl_give isl_mat *insert_parameter_rows(__isl_take isl_mat *mat,
-	unsigned nparam)
-{
-	int i;
-
-	if (nparam == 0)
-		return mat;
-	if (!mat)
-		return NULL;
-
-	mat = isl_mat_insert_rows(mat, 1, nparam);
-	if (!mat)
-		return NULL;
-
-	for (i = 0; i < nparam; ++i) {
-		isl_seq_clr(mat->row[1 + i], mat->n_col);
-		isl_int_set(mat->row[1 + i][1 + i], mat->row[0][0]);
-	}
-
-	return mat;
-}
-
 /* Construct a basic set described by the "n" equalities of "bset" starting
  * at "first".
  */
@@ -398,7 +375,7 @@ static __isl_give isl_basic_set *copy_equalities(__isl_keep isl_basic_set *bset,
 		k = isl_basic_set_alloc_equality(eq);
 		if (k < 0)
 			goto error;
-		isl_seq_cpy(eq->eq[k], bset->eq[first + k], 1 + total);
+		isl_seq_cpy(eq->eq[k], bset->eq[first + i], 1 + total);
 	}
 
 	return eq;
@@ -407,13 +384,10 @@ error:
 	return NULL;
 }
 
-/* Given a basic set, exploit the equalties in the basic set to construct
- * a morphishm that maps the basic set to a lower-dimensional space.
+/* Given a basic set, exploit the equalities in the basic set to construct
+ * a morphism that maps the basic set to a lower-dimensional space
+ * with identifier "id".
  * Specifically, the morphism reduces the number of dimensions of type "type".
- *
- * This function is a slight generalization of isl_mat_variable_compression
- * in that it allows the input to be parametric and that it allows for the
- * compression of either parameters or set variables.
  *
  * We first select the equalities of interest, that is those that involve
  * variables of type "type" and no later variables.
@@ -424,49 +398,29 @@ error:
  * where C(p) depends on the parameters if type == isl_dim_set and
  * is a constant if type == isl_dim_param.
  *
- * First compute the (left) Hermite normal form of M,
+ * Use isl_mat_final_variable_compression to construct a compression
  *
- *		M [U1 U2] = M U = H = [H1 0]
- * or
- *		              M = H Q = [H1 0] [Q1]
- *                                             [Q2]
+ *	x = T x'
  *
- * with U, Q unimodular, Q = U^{-1} (and H lower triangular).
- * Define the transformed variables as
+ *	x' = Q x
  *
- *		x = [U1 U2] [ x1' ] = [U1 U2] [Q1] x
- *		            [ x2' ]           [Q2]
- *
- * The equalities then become
- *
- *		-C(p) + H1 x1' = 0   or   x1' = H1^{-1} C(p) = C'(p)
- *
- * If the denominator of the constant term does not divide the
- * the common denominator of the parametric terms, then every
- * integer point is mapped to a non-integer point and then the original set has no
- * integer solutions (since the x' are a unimodular transformation
- * of the x).  In this case, an empty morphism is returned.
- * Otherwise, the transformation is given by
- *
- *		x = U1 H1^{-1} C(p) + U2 x2'
- *
- * The inverse transformation is simply
- *
- *		x2' = Q2 x
+ * If T is a zero-column matrix, then the set of equality constraints
+ * do not admit a solution.  In this case, an empty morphism is returned.
  *
  * Both matrices are extended to map the full original space to the full
  * compressed space.
  */
-__isl_give isl_morph *isl_basic_set_variable_compression(
-	__isl_keep isl_basic_set *bset, enum isl_dim_type type)
+__isl_give isl_morph *isl_basic_set_variable_compression_with_id(
+	__isl_keep isl_basic_set *bset, enum isl_dim_type type,
+	__isl_keep isl_id *id)
 {
 	unsigned otype;
 	unsigned ntype;
 	unsigned orest;
 	unsigned nrest;
 	int f_eq, n_eq;
-	isl_space *dim;
-	isl_mat *H, *U, *Q, *C = NULL, *H1, *U1, *U2;
+	isl_space *space;
+	isl_mat *E, *Q, *C;
 	isl_basic_set *dom, *ran;
 
 	if (!bset)
@@ -491,73 +445,38 @@ __isl_give isl_morph *isl_basic_set_variable_compression(
 	if (n_eq == 0)
 		return isl_morph_identity(bset);
 
-	H = isl_mat_sub_alloc6(bset->ctx, bset->eq, f_eq, n_eq, otype, ntype);
-	H = isl_mat_left_hermite(H, 0, &U, &Q);
-	if (!H || !U || !Q)
-		goto error;
-	Q = isl_mat_drop_rows(Q, 0, n_eq);
-	Q = isl_mat_diagonal(isl_mat_identity(bset->ctx, otype), Q);
-	Q = isl_mat_diagonal(Q, isl_mat_identity(bset->ctx, nrest));
-	C = isl_mat_alloc(bset->ctx, 1 + n_eq, otype);
-	if (!C)
-		goto error;
-	isl_int_set_si(C->row[0][0], 1);
-	isl_seq_clr(C->row[0] + 1, otype - 1);
-	isl_mat_sub_neg(C->ctx, C->row + 1, bset->eq + f_eq, n_eq, 0, 0, otype);
-	H1 = isl_mat_sub_alloc(H, 0, H->n_row, 0, H->n_row);
-	H1 = isl_mat_lin_to_aff(H1);
-	C = isl_mat_inverse_product(H1, C);
-	if (!C)
-		goto error;
-	isl_mat_free(H);
-
-	if (!isl_int_is_one(C->row[0][0])) {
-		int i;
-		isl_int g;
-
-		isl_int_init(g);
-		for (i = 0; i < n_eq; ++i) {
-			isl_seq_gcd(C->row[1 + i] + 1, otype - 1, &g);
-			isl_int_gcd(g, g, C->row[0][0]);
-			if (!isl_int_is_divisible_by(C->row[1 + i][0], g))
-				break;
-		}
-		isl_int_clear(g);
-
-		if (i < n_eq) {
-			isl_mat_free(C);
-			isl_mat_free(U);
-			isl_mat_free(Q);
-			return isl_morph_empty(bset);
-		}
-
-		C = isl_mat_normalize(C);
+	E = isl_mat_sub_alloc6(bset->ctx, bset->eq, f_eq, n_eq, 0, orest);
+	C = isl_mat_final_variable_compression(E, otype - 1, &Q);
+	if (!Q)
+		C = isl_mat_free(C);
+	if (C && C->n_col == 0) {
+		isl_mat_free(C);
+		isl_mat_free(Q);
+		return isl_morph_empty(bset);
 	}
 
-	U1 = isl_mat_sub_alloc(U, 0, U->n_row, 0, n_eq);
-	U1 = isl_mat_lin_to_aff(U1);
-	U2 = isl_mat_sub_alloc(U, 0, U->n_row, n_eq, U->n_row - n_eq);
-	U2 = isl_mat_lin_to_aff(U2);
-	isl_mat_free(U);
-
-	C = isl_mat_product(U1, C);
-	C = isl_mat_aff_direct_sum(C, U2);
-	C = insert_parameter_rows(C, otype - 1);
+	Q = isl_mat_diagonal(Q, isl_mat_identity(bset->ctx, nrest));
 	C = isl_mat_diagonal(C, isl_mat_identity(bset->ctx, nrest));
 
-	dim = isl_space_copy(bset->dim);
-	dim = isl_space_drop_dims(dim, type, 0, ntype);
-	dim = isl_space_add_dims(dim, type, ntype - n_eq);
-	ran = isl_basic_set_universe(dim);
+	space = isl_space_copy(bset->dim);
+	space = isl_space_drop_dims(space, type, 0, ntype);
+	space = isl_space_add_dims(space, type, ntype - n_eq);
+	space = isl_space_set_tuple_id(space, isl_dim_set, isl_id_copy(id));
+	ran = isl_basic_set_universe(space);
 	dom = copy_equalities(bset, f_eq, n_eq);
 
 	return isl_morph_alloc(dom, ran, Q, C);
-error:
-	isl_mat_free(C);
-	isl_mat_free(H);
-	isl_mat_free(U);
-	isl_mat_free(Q);
-	return NULL;
+}
+
+/* Given a basic set, exploit the equalities in the basic set to construct
+ * a morphism that maps the basic set to a lower-dimensional space.
+ * Specifically, the morphism reduces the number of dimensions of type "type".
+ */
+__isl_give isl_morph *isl_basic_set_variable_compression(
+	__isl_keep isl_basic_set *bset, enum isl_dim_type type)
+{
+	return isl_basic_set_variable_compression_with_id(bset, type,
+							&isl_id_none);
 }
 
 /* Construct a parameter compression for "bset".
@@ -869,7 +788,7 @@ __isl_give isl_morph *isl_morph_inverse(__isl_take isl_morph *morph)
 	return morph;
 }
 
-/* We detect all the equalities first to avoid implicit equalties
+/* We detect all the equalities first to avoid implicit equalities
  * being discovered during the computations.  In particular,
  * the compression on the variables could expose additional stride
  * constraints on the parameters.  This would result in existentially

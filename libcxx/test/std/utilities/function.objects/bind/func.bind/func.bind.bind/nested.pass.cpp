@@ -16,7 +16,7 @@
 // template<Returnable R, CopyConstructible Fn, CopyConstructible... Types>
 //   unspecified bind(Fn, Types...);
 
-// http://llvm.org/bugs/show_bug.cgi?id=16343
+// https://bugs.llvm.org/show_bug.cgi?id=16343
 
 #include <cmath>
 #include <functional>
@@ -28,7 +28,7 @@ struct power
   T
   operator()(T a, T b)
   {
-    return std::pow(a, b);
+    return static_cast<T>(std::pow(a, b));
   }
 };
 

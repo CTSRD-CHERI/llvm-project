@@ -1,4 +1,4 @@
-//=- llvm/CodeGen/MachineDominators.h - Machine Dom Calculation --*- C++ -*-==//
+//==- llvm/CodeGen/MachineDominators.h - Machine Dom Calculation -*- C++ -*-==//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -16,11 +16,15 @@
 #define LLVM_CODEGEN_MACHINEDOMINATORS_H
 
 #include "llvm/ADT/SmallSet.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
-#include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/Support/GenericDomTree.h"
 #include "llvm/Support/GenericDomTreeConstruction.h"
+#include <cassert>
+#include <memory>
+#include <vector>
 
 namespace llvm {
 
@@ -32,7 +36,7 @@ inline void DominatorTreeBase<MachineBasicBlock>::addRoot(MachineBasicBlock* MBB
 extern template class DomTreeNodeBase<MachineBasicBlock>;
 extern template class DominatorTreeBase<MachineBasicBlock>;
 
-typedef DomTreeNodeBase<MachineBasicBlock> MachineDomTreeNode;
+using MachineDomTreeNode = DomTreeNodeBase<MachineBasicBlock>;
 
 //===-------------------------------------
 /// DominatorTree Class - Concrete subclass of DominatorTreeBase that is used to
@@ -51,6 +55,7 @@ class MachineDominatorTree : public MachineFunctionPass {
   /// The splitting of a critical edge is local and thus, it is possible
   /// to apply several of those changes at the same time.
   mutable SmallVector<CriticalEdge, 32> CriticalEdgesToSplit;
+
   /// \brief Remember all the basic blocks that are inserted during
   /// edge splitting.
   /// Invariant: NewBBs == all the basic blocks contained in the NewBB
@@ -58,6 +63,9 @@ class MachineDominatorTree : public MachineFunctionPass {
   /// I.e., forall elt in CriticalEdgesToSplit, it exists BB in NewBBs
   /// such as BB == elt.NewBB.
   mutable SmallSet<MachineBasicBlock *, 32> NewBBs;
+
+  /// The DominatorTreeBase that is used to compute a normal dominator tree
+  std::unique_ptr<DominatorTreeBase<MachineBasicBlock>> DT;
 
   /// \brief Apply all the recorded critical edges to the DT.
   /// This updates the underlying DT information in a way that uses
@@ -68,13 +76,12 @@ class MachineDominatorTree : public MachineFunctionPass {
 
 public:
   static char ID; // Pass ID, replacement for typeid
-  DominatorTreeBase<MachineBasicBlock>* DT;
 
   MachineDominatorTree();
 
-  ~MachineDominatorTree() override;
-
   DominatorTreeBase<MachineBasicBlock> &getBase() {
+    if (!DT)
+      DT.reset(new DominatorTreeBase<MachineBasicBlock>(false));
     applySplitCriticalEdges();
     return *DT;
   }
@@ -216,6 +223,8 @@ public:
 
   void releaseMemory() override;
 
+  void verifyAnalysis() const override;
+
   void print(raw_ostream &OS, const Module*) const override;
 
   /// \brief Record that the critical edge (FromBB, ToBB) has been
@@ -239,6 +248,12 @@ public:
            "A basic block inserted via edge splitting cannot appear twice");
     CriticalEdgesToSplit.push_back({FromBB, ToBB, NewBB});
   }
+
+  /// \brief Verify the correctness of the domtree by re-computing it.
+  ///
+  /// This should only be used for debugging as it aborts the program if the
+  /// verification fails.
+  void verifyDomTree() const;
 };
 
 //===-------------------------------------
@@ -248,14 +263,12 @@ public:
 
 template <class Node, class ChildIterator>
 struct MachineDomTreeGraphTraitsBase {
-  typedef Node NodeType;
-  typedef ChildIterator ChildIteratorType;
+  using NodeRef = Node *;
+  using ChildIteratorType = ChildIterator;
 
-  static NodeType *getEntryNode(NodeType *N) { return N; }
-  static inline ChildIteratorType child_begin(NodeType *N) {
-    return N->begin();
-  }
-  static inline ChildIteratorType child_end(NodeType *N) { return N->end(); }
+  static NodeRef getEntryNode(NodeRef N) { return N; }
+  static ChildIteratorType child_begin(NodeRef N) { return N->begin(); }
+  static ChildIteratorType child_end(NodeRef N) { return N->end(); }
 };
 
 template <class T> struct GraphTraits;
@@ -273,11 +286,11 @@ struct GraphTraits<const MachineDomTreeNode *>
 
 template <> struct GraphTraits<MachineDominatorTree*>
   : public GraphTraits<MachineDomTreeNode *> {
-  static NodeType *getEntryNode(MachineDominatorTree *DT) {
+  static NodeRef getEntryNode(MachineDominatorTree *DT) {
     return DT->getRootNode();
   }
 };
 
-}
+} // end namespace llvm
 
-#endif
+#endif // LLVM_CODEGEN_MACHINEDOMINATORS_H

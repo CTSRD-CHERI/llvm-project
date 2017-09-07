@@ -19,6 +19,8 @@
 
 #include "min_allocator.h"
 
+#include "test_macros.h"
+
 int sign(int x)
 {
     if (x == 0)
@@ -30,36 +32,48 @@ int sign(int x)
 
 template <class S>
 void
-test(const S& s, typename S::size_type pos1, typename S::size_type n1,
+test(const S& s,   typename S::size_type pos1, typename S::size_type n1,
      const S& str, typename S::size_type pos2, typename S::size_type n2, int x)
 {
-    try
-    {
+    if (pos1 <= s.size() && pos2 <= str.size())
         assert(sign(s.compare(pos1, n1, str, pos2, n2)) == sign(x));
-        assert(pos1 <= s.size());
-        assert(pos2 <= str.size());
-    }
-    catch (std::out_of_range&)
+#ifndef TEST_HAS_NO_EXCEPTIONS
+    else
     {
-        assert(pos1 > s.size() || pos2 > str.size());
+        try
+        {
+            s.compare(pos1, n1, str, pos2, n2);
+            assert(false);
+        }
+        catch (const std::out_of_range&)
+        {
+            assert(pos1 > s.size() || pos2 > str.size());
+        }
     }
+#endif
 }
 
 template <class S>
 void
-test_npos(const S& s, typename S::size_type pos1, typename S::size_type n1,
-     const S& str, typename S::size_type pos2, int x)
+test_npos(const S& s,   typename S::size_type pos1, typename S::size_type n1,
+          const S& str, typename S::size_type pos2, int x)
 {
-    try
-    {
+    if (pos1 <= s.size() && pos2 <= str.size())
         assert(sign(s.compare(pos1, n1, str, pos2)) == sign(x));
-        assert(pos1 <= s.size());
-        assert(pos2 <= str.size());
-    }
-    catch (std::out_of_range&)
+#ifndef TEST_HAS_NO_EXCEPTIONS
+    else
     {
-        assert(pos1 > s.size() || pos2 > str.size());
+        try
+        {
+            s.compare(pos1, n1, str, pos2);
+            assert(false);
+        }
+        catch (const std::out_of_range&)
+        {
+            assert(pos1 > s.size() || pos2 > str.size());
+        }
     }
+#endif
 }
 
 template <class S>
@@ -5884,7 +5898,7 @@ int main()
     test54<S>();
     test55<S>();
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     typedef std::basic_string<char, std::char_traits<char>, min_allocator<char>> S;
     test0<S>();

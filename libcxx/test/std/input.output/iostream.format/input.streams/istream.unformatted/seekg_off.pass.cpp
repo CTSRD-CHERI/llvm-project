@@ -7,6 +7,13 @@
 //
 //===----------------------------------------------------------------------===//
 
+// XFAIL: with_system_cxx_lib=macosx10.12
+// XFAIL: with_system_cxx_lib=macosx10.11
+// XFAIL: with_system_cxx_lib=macosx10.10
+// XFAIL: with_system_cxx_lib=macosx10.9
+// XFAIL: with_system_cxx_lib=macosx10.7
+// XFAIL: with_system_cxx_lib=macosx10.8
+
 // <istream>
 
 // basic_istream<charT,traits>& seekg(off_type off, ios_base::seekdir dir);
@@ -40,7 +47,7 @@ public:
     CharT* egptr() const {return base::egptr();}
 protected:
     typename base::pos_type seekoff(typename base::off_type off,
-                                    std::ios_base::seekdir way,
+                                    std::ios_base::seekdir,
                                     std::ios_base::openmode which)
     {
         assert(which == std::ios_base::in);

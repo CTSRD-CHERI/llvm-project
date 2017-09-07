@@ -15,7 +15,12 @@
 #ifndef POLLY_LINKALLPASSES_H
 #define POLLY_LINKALLPASSES_H
 
+#include "polly/CodeGen/PPCGCodeGeneration.h"
 #include "polly/Config/config.h"
+#include "polly/PruneUnprofitable.h"
+#include "polly/Simplify.h"
+#include "polly/Support/DumpModulePass.h"
+#include "llvm/ADT/StringRef.h"
 #include <cstdlib>
 
 namespace llvm {
@@ -23,12 +28,13 @@ class Pass;
 class PassInfo;
 class PassRegistry;
 class RegionPass;
-}
+} // namespace llvm
 
 namespace polly {
 llvm::Pass *createCodePreparationPass();
 llvm::Pass *createDeadCodeElimPass();
 llvm::Pass *createDependenceInfoPass();
+llvm::Pass *createDependenceInfoWrapperPassPass();
 llvm::Pass *createDOTOnlyPrinterPass();
 llvm::Pass *createDOTOnlyViewerPass();
 llvm::Pass *createDOTPrinterPass();
@@ -36,14 +42,22 @@ llvm::Pass *createDOTViewerPass();
 llvm::Pass *createJSONExporterPass();
 llvm::Pass *createJSONImporterPass();
 llvm::Pass *createPollyCanonicalizePass();
-llvm::Pass *createScopDetectionPass();
-llvm::Pass *createScopInfoPass();
-llvm::Pass *createIslAstInfoPass();
+llvm::Pass *createPolyhedralInfoPass();
+llvm::Pass *createScopDetectionWrapperPassPass();
+llvm::Pass *createScopInfoRegionPassPass();
+llvm::Pass *createScopInfoWrapperPassPass();
+llvm::Pass *createIslAstInfoWrapperPassPass();
 llvm::Pass *createCodeGenerationPass();
+#ifdef GPU_CODEGEN
+llvm::Pass *createPPCGCodeGenerationPass(GPUArch Arch = GPUArch::NVPTX64,
+                                         GPURuntime Runtime = GPURuntime::CUDA);
+#endif
 llvm::Pass *createIslScheduleOptimizerPass();
+llvm::Pass *createFlattenSchedulePass();
+llvm::Pass *createDeLICMPass();
 
 extern char &CodePreparationID;
-}
+} // namespace polly
 
 namespace {
 struct PollyForcePassLinking {
@@ -64,15 +78,24 @@ struct PollyForcePassLinking {
     polly::createDOTViewerPass();
     polly::createJSONExporterPass();
     polly::createJSONImporterPass();
-    polly::createScopDetectionPass();
-    polly::createScopInfoPass();
+    polly::createScopDetectionWrapperPassPass();
+    polly::createScopInfoRegionPassPass();
     polly::createPollyCanonicalizePass();
-    polly::createIslAstInfoPass();
+    polly::createPolyhedralInfoPass();
+    polly::createIslAstInfoWrapperPassPass();
     polly::createCodeGenerationPass();
+#ifdef GPU_CODEGEN
+    polly::createPPCGCodeGenerationPass();
+#endif
     polly::createIslScheduleOptimizerPass();
+    polly::createFlattenSchedulePass();
+    polly::createDeLICMPass();
+    polly::createDumpModulePass("", true);
+    polly::createSimplifyPass();
+    polly::createPruneUnprofitablePass();
   }
 } PollyForcePassLinking; // Force link by creating a global definition.
-}
+} // namespace
 
 namespace llvm {
 class PassRegistry;
@@ -80,10 +103,15 @@ void initializeCodePreparationPass(llvm::PassRegistry &);
 void initializeDeadCodeElimPass(llvm::PassRegistry &);
 void initializeJSONExporterPass(llvm::PassRegistry &);
 void initializeJSONImporterPass(llvm::PassRegistry &);
-void initializeIslAstInfoPass(llvm::PassRegistry &);
+void initializeIslAstInfoWrapperPassPass(llvm::PassRegistry &);
 void initializeCodeGenerationPass(llvm::PassRegistry &);
+#ifdef GPU_CODEGEN
+void initializePPCGCodeGenerationPass(llvm::PassRegistry &);
+#endif
 void initializeIslScheduleOptimizerPass(llvm::PassRegistry &);
 void initializePollyCanonicalizePass(llvm::PassRegistry &);
-}
+void initializeFlattenSchedulePass(llvm::PassRegistry &);
+void initializeDeLICMPass(llvm::PassRegistry &);
+} // namespace llvm
 
 #endif

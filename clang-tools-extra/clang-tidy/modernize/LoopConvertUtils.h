@@ -13,8 +13,15 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
-#include "clang/Lex/Lexer.h"
-#include "clang/Tooling/Refactoring.h"
+#include "clang/Basic/SourceLocation.h"
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/SmallSet.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
+#include <algorithm>
+#include <memory>
+#include <string>
+#include <utility>
 
 namespace clang {
 namespace tidy {
@@ -79,7 +86,7 @@ private:
 class ComponentFinderASTVisitor
     : public clang::RecursiveASTVisitor<ComponentFinderASTVisitor> {
 public:
-  ComponentFinderASTVisitor() {}
+  ComponentFinderASTVisitor() = default;
 
   /// Find the components of an expression and place them in a ComponentVector.
   void findExprComponents(const clang::Expr *SourceExpr) {
@@ -337,7 +344,8 @@ private:
   bool TraverseArraySubscriptExpr(ArraySubscriptExpr *E);
   bool TraverseCXXMemberCallExpr(CXXMemberCallExpr *MemberCall);
   bool TraverseCXXOperatorCallExpr(CXXOperatorCallExpr *OpCall);
-  bool TraverseLambdaCapture(LambdaExpr *LE, const LambdaCapture *C);
+  bool TraverseLambdaCapture(LambdaExpr *LE, const LambdaCapture *C,
+                             Expr *Init);
   bool TraverseMemberExpr(MemberExpr *Member);
   bool TraverseUnaryDeref(UnaryOperator *Uop);
   bool VisitDeclRefExpr(DeclRefExpr *E);
@@ -425,7 +433,7 @@ public:
   VariableNamer(StmtGeneratedVarNameMap *GeneratedDecls,
                 const StmtParentMap *ReverseAST, const clang::Stmt *SourceStmt,
                 const clang::VarDecl *OldIndex,
-                const clang::VarDecl *TheContainer,
+                const clang::ValueDecl *TheContainer,
                 const clang::ASTContext *Context, NamingStyle Style)
       : GeneratedDecls(GeneratedDecls), ReverseAST(ReverseAST),
         SourceStmt(SourceStmt), OldIndex(OldIndex), TheContainer(TheContainer),
@@ -443,16 +451,13 @@ private:
   const StmtParentMap *ReverseAST;
   const clang::Stmt *SourceStmt;
   const clang::VarDecl *OldIndex;
-  const clang::VarDecl *TheContainer;
+  const clang::ValueDecl *TheContainer;
   const clang::ASTContext *Context;
   const NamingStyle Style;
 
   // Determine whether or not a declaration that would conflict with Symbol
   // exists in an outer context or in any statement contained in SourceStmt.
   bool declarationExists(llvm::StringRef Symbol);
-
-  // Concatenates two identifiers following the current naming style.
-  std::string AppendWithStyle(StringRef Str, StringRef Suffix) const;
 };
 
 } // namespace modernize

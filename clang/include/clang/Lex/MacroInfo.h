@@ -105,9 +105,6 @@ class MacroInfo {
   /// \brief Must warn if the macro is unused at the end of translation unit.
   bool IsWarnIfUnused : 1;
 
-  /// \brief Whether this macro info was loaded from an AST file.
-  unsigned FromASTFile : 1;
-
   /// \brief Whether this macro was used as header guard.
   bool UsedForHeaderGuard : 1;
 
@@ -126,7 +123,7 @@ public:
   SourceLocation getDefinitionEndLoc() const { return EndLocation; }
 
   /// \brief Get length in characters of the macro definition.
-  unsigned getDefinitionLength(SourceManager &SM) const {
+  unsigned getDefinitionLength(const SourceManager &SM) const {
     if (IsDefinitionLengthCached)
       return DefinitionLength;
     return getDefinitionLengthSlow(SM);
@@ -264,33 +261,15 @@ public:
     IsDisabled = true;
   }
 
-  /// \brief Determine whether this macro info came from an AST file (such as
-  /// a precompiled header or module) rather than having been parsed.
-  bool isFromASTFile() const { return FromASTFile; }
-
   /// \brief Determine whether this macro was used for a header guard.
   bool isUsedForHeaderGuard() const { return UsedForHeaderGuard; }
 
   void setUsedForHeaderGuard(bool Val) { UsedForHeaderGuard = Val; }
 
-  /// \brief Retrieve the global ID of the module that owns this particular
-  /// macro info.
-  unsigned getOwningModuleID() const {
-    if (isFromASTFile())
-      return *(const unsigned *)(this + 1);
-
-    return 0;
-  }
-
   void dump() const;
 
 private:
-  unsigned getDefinitionLengthSlow(SourceManager &SM) const;
-
-  void setOwningModuleID(unsigned ID) {
-    assert(isFromASTFile());
-    *(unsigned *)(this + 1) = ID;
-  }
+  unsigned getDefinitionLengthSlow(const SourceManager &SM) const;
 
   friend class Preprocessor;
 };
@@ -318,13 +297,13 @@ protected:
   unsigned MDKind : 2;
 
   /// \brief True if the macro directive was loaded from a PCH file.
-  bool IsFromPCH : 1;
+  unsigned IsFromPCH : 1;
 
   // Used by VisibilityMacroDirective ----------------------------------------//
 
   /// \brief Whether the macro has public visibility (when described in a
   /// module).
-  bool IsPublic : 1;
+  unsigned IsPublic : 1;
 
   MacroDirective(Kind K, SourceLocation Loc)
       : Previous(nullptr), Loc(Loc), MDKind(K), IsFromPCH(false),

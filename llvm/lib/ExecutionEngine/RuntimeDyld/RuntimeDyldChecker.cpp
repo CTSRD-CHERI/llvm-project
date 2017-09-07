@@ -7,16 +7,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ADT/STLExtras.h"
+#include "llvm/ExecutionEngine/RuntimeDyldChecker.h"
 #include "RuntimeDyldCheckerImpl.h"
 #include "RuntimeDyldImpl.h"
-#include "llvm/ExecutionEngine/RuntimeDyldChecker.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/MC/MCContext.h"
-#include "llvm/MC/MCDisassembler.h"
+#include "llvm/MC/MCDisassembler/MCDisassembler.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/Support/Path.h"
 #include <cctype>
 #include <memory>
+#include <utility>
 
 #define DEBUG_TYPE "rtdyld"
 
@@ -97,7 +98,8 @@ private:
   public:
     EvalResult() : Value(0), ErrorMsg("") {}
     EvalResult(uint64_t Value) : Value(Value), ErrorMsg("") {}
-    EvalResult(std::string ErrorMsg) : Value(0), ErrorMsg(ErrorMsg) {}
+    EvalResult(std::string ErrorMsg)
+        : Value(0), ErrorMsg(std::move(ErrorMsg)) {}
     uint64_t getValue() const { return Value; }
     bool hasError() const { return ErrorMsg != ""; }
     const std::string &getErrorMsg() const { return ErrorMsg; }
@@ -215,7 +217,7 @@ private:
   // given symbol and get the value of the requested operand.
   // Returns an error if the instruction cannot be decoded, or the requested
   // operand is not an immediate.
-  // On success, retuns a pair containing the value of the operand, plus
+  // On success, returns a pair containing the value of the operand, plus
   // the expression remaining to be evaluated.
   std::pair<EvalResult, StringRef> evalDecodeOperand(StringRef Expr) const {
     if (!Expr.startswith("("))
@@ -461,7 +463,7 @@ private:
                           Expr.substr(FirstNonDigit));
   }
 
-  // Evaluate a constant numeric expression (hexidecimal or decimal) and
+  // Evaluate a constant numeric expression (hexadecimal or decimal) and
   // return a pair containing the result, and the expression remaining to be
   // evaluated.
   std::pair<EvalResult, StringRef> evalNumberExpr(StringRef Expr) const {
@@ -582,7 +584,7 @@ private:
   // Returns a pair containing the result of the slice operation, plus the
   // expression remaining to be parsed.
   std::pair<EvalResult, StringRef>
-  evalSliceExpr(std::pair<EvalResult, StringRef> Ctx) const {
+  evalSliceExpr(const std::pair<EvalResult, StringRef> &Ctx) const {
     EvalResult SubExprResult;
     StringRef RemainingExpr;
     std::tie(SubExprResult, RemainingExpr) = Ctx;
@@ -626,7 +628,7 @@ private:
   // Returns a pair containing the ultimate result of evaluating the
   // expression, plus the expression remaining to be evaluated.
   std::pair<EvalResult, StringRef>
-  evalComplexExpr(std::pair<EvalResult, StringRef> LHSAndRemaining,
+  evalComplexExpr(const std::pair<EvalResult, StringRef> &LHSAndRemaining,
                   ParseContext PCtx) const {
     EvalResult LHSResult;
     StringRef RemainingExpr;
@@ -776,10 +778,18 @@ RuntimeDyldCheckerImpl::findSectionAddrInfo(StringRef FileName,
   }
 
   auto SectionInfoItr = SectionMapItr->second.find(SectionName);
-  if (SectionInfoItr == SectionMapItr->second.end())
-    return std::make_pair(nullptr,
-                          ("Section '" + SectionName + "' not found in file '" +
-                           FileName + "'\n").str());
+  if (SectionInfoItr == SectionMapItr->second.end()) {
+    std::string ErrorMsg = ("Section '" + SectionName +
+                           "' not found in file '" + FileName + "'\n").str();
+    ErrorMsg += "Available sections are:";
+    for (const auto& Section : SectionMapItr->second) {
+      ErrorMsg += " '";
+      ErrorMsg += Section.first;
+      ErrorMsg += "'";
+    }
+    ErrorMsg += "\n";
+    return std::make_pair(nullptr, ErrorMsg);
+  }
 
   return std::make_pair(&SectionInfoItr->second, std::string(""));
 }
@@ -799,11 +809,10 @@ std::pair<uint64_t, std::string> RuntimeDyldCheckerImpl::getSectionAddr(
   unsigned SectionID = SectionInfo->SectionID;
   uint64_t Addr;
   if (IsInsideLoad)
-    Addr =
-      static_cast<uint64_t>(
-        reinterpret_cast<uintptr_t>(getRTDyld().Sections[SectionID].Address));
+    Addr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(
+        getRTDyld().Sections[SectionID].getAddress()));
   else
-    Addr = getRTDyld().Sections[SectionID].LoadAddress;
+    Addr = getRTDyld().Sections[SectionID].getLoadAddress();
 
   return std::make_pair(Addr, std::string(""));
 }
@@ -835,11 +844,11 @@ std::pair<uint64_t, std::string> RuntimeDyldCheckerImpl::getStubAddrFor(
 
   uint64_t Addr;
   if (IsInsideLoad) {
-    uintptr_t SectionBase =
-        reinterpret_cast<uintptr_t>(getRTDyld().Sections[SectionID].Address);
+    uintptr_t SectionBase = reinterpret_cast<uintptr_t>(
+        getRTDyld().Sections[SectionID].getAddress());
     Addr = static_cast<uint64_t>(SectionBase) + StubOffset;
   } else {
-    uint64_t SectionBase = getRTDyld().Sections[SectionID].LoadAddress;
+    uint64_t SectionBase = getRTDyld().Sections[SectionID].getLoadAddress();
     Addr = SectionBase + StubOffset;
   }
 
@@ -855,16 +864,25 @@ RuntimeDyldCheckerImpl::getSubsectionStartingAt(StringRef Name) const {
   const auto &SymInfo = pos->second;
   uint8_t *SectionAddr = getRTDyld().getSectionAddress(SymInfo.getSectionID());
   return StringRef(reinterpret_cast<const char *>(SectionAddr) +
-                     SymInfo.getOffset(),
-                   getRTDyld().Sections[SymInfo.getSectionID()].Size -
-                     SymInfo.getOffset());
+                       SymInfo.getOffset(),
+                   getRTDyld().Sections[SymInfo.getSectionID()].getSize() -
+                       SymInfo.getOffset());
+}
+
+Optional<uint64_t>
+RuntimeDyldCheckerImpl::getSectionLoadAddress(void *LocalAddress) const {
+  for (auto &S : getRTDyld().Sections) {
+    if (S.getAddress() == LocalAddress)
+      return S.getLoadAddress();
+  }
+  return Optional<uint64_t>();
 }
 
 void RuntimeDyldCheckerImpl::registerSection(
     StringRef FilePath, unsigned SectionID) {
   StringRef FileName = sys::path::filename(FilePath);
   const SectionEntry &Section = getRTDyld().Sections[SectionID];
-  StringRef SectionName = Section.Name;
+  StringRef SectionName = Section.getName();
 
   Stubs[FileName][SectionName].SectionID = SectionID;
 }
@@ -874,7 +892,7 @@ void RuntimeDyldCheckerImpl::registerStubMap(
     const RuntimeDyldImpl::StubMap &RTDyldStubs) {
   StringRef FileName = sys::path::filename(FilePath);
   const SectionEntry &Section = getRTDyld().Sections[SectionID];
-  StringRef SectionName = Section.Name;
+  StringRef SectionName = Section.getName();
 
   Stubs[FileName][SectionName].SectionID = SectionID;
 
@@ -933,4 +951,9 @@ std::pair<uint64_t, std::string>
 RuntimeDyldChecker::getSectionAddr(StringRef FileName, StringRef SectionName,
                                    bool LocalAddress) {
   return Impl->getSectionAddr(FileName, SectionName, LocalAddress);
+}
+
+Optional<uint64_t>
+RuntimeDyldChecker::getSectionLoadAddress(void *LocalAddress) const {
+  return Impl->getSectionLoadAddress(LocalAddress);
 }

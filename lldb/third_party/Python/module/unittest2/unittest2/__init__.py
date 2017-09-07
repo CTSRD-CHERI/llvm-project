@@ -26,6 +26,16 @@ AND THERE IS NO OBLIGATION WHATSOEVER TO PROVIDE MAINTENANCE,
 SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 """
 
+import sys
+
+if sys.version_info[0] >= 3:
+    # Python 3 doesn't have the builtin `cmp` function anymore
+    cmp_ = lambda x, y: (x > y) - (x < y)
+else:
+    cmp_ = cmp
+
+reversed_cmp_ = lambda x, y: -cmp_(x, y)
+
 __all__ = ['TestResult', 'TestCase', 'TestSuite',
            'TextTestRunner', 'TestLoader', 'FunctionTestCase', 'main',
            'defaultTestLoader', 'SkipTest', 'skip', 'skipIf', 'skipUnless',
@@ -59,7 +69,7 @@ except ImportError:
     # Compatibility with platforms that don't have the signal module
     pass
 else:
-    __all__.extend(['installHandler', 'registerResult', 'removeResult', 
+    __all__.extend(['installHandler', 'registerResult', 'removeResult',
                     'removeHandler'])
 
 # deprecated

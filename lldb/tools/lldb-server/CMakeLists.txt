@@ -17,42 +17,66 @@ endif ()
 if ( CMAKE_SYSTEM_NAME MATCHES "NetBSD" )
 include_directories(
   ../../../../llvm/include
+  ../../source/Plugins/Process/NetBSD
   ../../source/Plugins/Process/POSIX
   )
 endif ()
 
 include_directories(../../source)
 
-include(../../cmake/LLDBDependencies.cmake)
+set(LLDB_SYSTEM_LIBS)
+if (NOT LLDB_DISABLE_LIBEDIT)
+  list(APPEND LLDB_SYSTEM_LIBS edit)
+endif()
+if (NOT LLDB_DISABLE_CURSES)
+  list(APPEND LLDB_SYSTEM_LIBS ${CURSES_LIBRARIES})
+  if(LLVM_ENABLE_TERMINFO AND HAVE_TERMINFO)
+    list(APPEND LLDB_SYSTEM_LIBS ${TERMINFO_LIBS})
+  endif()
+endif()
 
-add_lldb_executable(lldb-server
+if (NOT HAVE_CXX_ATOMICS64_WITHOUT_LIB )
+    list(APPEND LLDB_SYSTEM_LIBS atomic)
+endif()
+
+# On FreeBSD/NetBSD backtrace() is provided by libexecinfo, not libc.
+if (CMAKE_SYSTEM_NAME MATCHES "FreeBSD" OR CMAKE_SYSTEM_NAME MATCHES "NetBSD")
+  list(APPEND LLDB_SYSTEM_LIBS execinfo)
+endif()
+
+if (NOT LLDB_DISABLE_PYTHON AND NOT LLVM_BUILD_STATIC)
+  list(APPEND LLDB_SYSTEM_LIBS ${PYTHON_LIBRARIES})
+endif()
+
+list(APPEND LLDB_SYSTEM_LIBS ${system_libs})
+
+if (LLVM_BUILD_STATIC)
+  if (NOT LLDB_DISABLE_PYTHON)
+    list(APPEND LLDB_SYSTEM_LIBS python2.7 util)
+  endif()
+  if (NOT LLDB_DISABLE_CURSES)
+    list(APPEND LLDB_SYSTEM_LIBS gpm)
+  endif()
+endif()
+
+add_lldb_tool(lldb-server INCLUDE_IN_FRAMEWORK
     Acceptor.cpp
     lldb-gdbserver.cpp
     lldb-platform.cpp
     lldb-server.cpp
     LLDBServerUtilities.cpp
+
+    LINK_LIBS
+      lldbBase
+      lldbCore
+      lldbHost
+      lldbInitialization
+      lldbInterpreter
+      ${EXTRA_LLDB_LIBS}
+      ${LLDB_SYSTEM_LIBS}
+
+    LINK_COMPONENTS
+      Support
 )
 
-if (BUILD_SHARED_LIBS )
-  target_link_libraries(lldb-server liblldb)
-  target_link_libraries(lldb-server ${LLDB_SYSTEM_LIBS})
-else()
-  # The Darwin linker doesn't understand --start-group/--end-group.
-  if (LLDB_LINKER_SUPPORTS_GROUPS)
-    target_link_libraries(lldb-server
-                          -Wl,--start-group ${LLDB_USED_LIBS} -Wl,--end-group)
-    target_link_libraries(lldb-server
-                          -Wl,--start-group ${CLANG_USED_LIBS} -Wl,--end-group)
-  else()
-    target_link_libraries(lldb-server ${LLDB_USED_LIBS})
-    target_link_libraries(lldb-server ${CLANG_USED_LIBS})
-  endif()
-  llvm_config(lldb-server ${LLVM_LINK_COMPONENTS})
-
-  target_link_libraries(lldb-server ${LLDB_SYSTEM_LIBS})
-endif()
-
-set_target_properties(lldb-server PROPERTIES VERSION ${LLDB_VERSION})
-
-install(TARGETS lldb-server
-  RUNTIME DESTINATION bin)
+target_link_libraries(lldb-server ${LLDB_SYSTEM_LIBS})

@@ -1,3 +1,4 @@
+// RUN: %clang_builtins %s %librt -o %t && %run %t
 //===--------------- multf3_test.c - Test __multf3 ------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
@@ -15,6 +16,7 @@
 
 #if __LDBL_MANT_DIG__ == 113
 
+#include "int_lib.h"
 #include "fp_test.h"
 
 // Returns: a * b
@@ -82,7 +84,7 @@ int main()
         return 1;
     // underflow
     if (test__multf3(0x1.23456734245345p-10000L,
-                     0x1.edcba524498724p-6383L,
+                     0x1.edcba524498724p-6497L,
                      UINT64_C(0x0),
                      UINT64_C(0x0)))
         return 1;

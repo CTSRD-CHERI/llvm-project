@@ -7,8 +7,12 @@
 //
 //===----------------------------------------------------------------------===//
 
+// REQUIRES: locale.en_US.UTF-8
 // REQUIRES: locale.ru_RU.UTF-8
 // UNSUPPORTED: sanitizer-new-delete
+
+// XFAIL: availability_markup=macosx10.8
+// XFAIL: availability_markup=macosx10.7
 
 // <locale>
 
@@ -18,21 +22,9 @@
 #include <new>
 #include <cassert>
 
+#include "count_new.hpp"
 #include "platform_support.h" // locale name macros
 
-int new_called = 0;
-
-void* operator new(std::size_t s) throw(std::bad_alloc)
-{
-    ++new_called;
-    return std::malloc(s);
-}
-
-void  operator delete(void* p) throw()
-{
-    --new_called;
-    std::free(p);
-}
 
 void check(const std::locale& loc)
 {
@@ -77,5 +69,5 @@ int main()
         std::locale loc2(loc, std::string(LOCALE_en_US_UTF_8), std::locale::monetary);
         check(loc2);
     }
-    assert(new_called == 0);
+    assert(globalMemCounter.checkOutstandingNewEq(0));
 }

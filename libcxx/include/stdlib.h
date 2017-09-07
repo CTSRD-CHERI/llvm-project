@@ -94,11 +94,8 @@ void *aligned_alloc(size_t alignment, size_t size);                       // C11
 #include_next <stdlib.h>
 
 #ifdef __cplusplus
-extern "C++" {
 
-#ifdef _LIBCPP_MSVCRT
-#include "support/win32/locale_win32.h"
-#endif // _LIBCPP_MSVCRT
+extern "C++" {
 
 #undef abs
 #undef div
@@ -123,6 +120,7 @@ inline _LIBCPP_INLINE_VISIBILITY lldiv_t div(long long __x, long long __y) _NOEX
 #endif // _LIBCPP_MSVCRT / __sun__ / _AIX
 
 }  // extern "C++"
+
 #endif  // __cplusplus
 
 #endif  // _LIBCPP_STDLIB_H

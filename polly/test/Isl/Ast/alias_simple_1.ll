@@ -1,8 +1,8 @@
-; RUN: opt %loadPolly -polly-code-generator=isl -polly-ast -analyze -disable-basicaa < %s | FileCheck %s --check-prefix=NOAA
-; RUN: opt %loadPolly -polly-code-generator=isl -polly-ast -analyze < %s | FileCheck %s --check-prefix=BASI
-; RUN: opt %loadPolly -polly-code-generator=isl -polly-ast -analyze -disable-basicaa -tbaa < %s | FileCheck %s --check-prefix=TBAA
-; RUN: opt %loadPolly -polly-code-generator=isl -polly-ast -analyze -disable-basicaa -scev-aa < %s | FileCheck %s --check-prefix=SCEV
-; RUN: opt %loadPolly -polly-code-generator=isl -polly-ast -analyze -disable-basicaa -globals-aa < %s | FileCheck %s --check-prefix=GLOB
+; RUN: opt %loadPolly -polly-ast -analyze -disable-basicaa < %s | FileCheck %s --check-prefix=NOAA
+; RUN: opt %loadPolly -polly-ast -analyze < %s | FileCheck %s --check-prefix=BASI
+; RUN: opt %loadPolly -polly-ast -analyze -disable-basicaa -tbaa < %s | FileCheck %s --check-prefix=TBAA
+; RUN: opt %loadPolly -polly-ast -analyze -disable-basicaa -scev-aa < %s | FileCheck %s --check-prefix=SCEV
+; RUN: opt %loadPolly -polly-ast -analyze -disable-basicaa -globals-aa < %s | FileCheck %s --check-prefix=GLOB
 ;
 ;    int A[1024];
 ;
@@ -12,11 +12,11 @@
 ;        A[i] = B[i];
 ;    }
 ;
-; NOAA: if (1 && (&MemRef_B[N] <= &MemRef_A[0] || &MemRef_A[N] <= &MemRef_B[0]))
-; BASI: if (1 && (&MemRef_B[N] <= &MemRef_A[0] || &MemRef_A[N] <= &MemRef_B[0]))
-; TBAA: if (1)
-; SCEV: if (1 && (&MemRef_B[N] <= &MemRef_A[0] || &MemRef_A[N] <= &MemRef_B[0]))
-; GLOB: if (1 && (&MemRef_B[N] <= &MemRef_A[0] || &MemRef_A[N] <= &MemRef_B[0]))
+; NOAA: if (1 && 0 == N <= 0 && (&MemRef_B[N] <= &MemRef_A[0] || &MemRef_A[N] <= &MemRef_B[0]))
+; BASI: if (1 && 0 == N <= 0 && (&MemRef_B[N] <= &MemRef_A[0] || &MemRef_A[N] <= &MemRef_B[0]))
+; TBAA: if (1 && 0 == N <= 0)
+; SCEV: if (1 && 0 == N <= 0 && (&MemRef_B[N] <= &MemRef_A[0] || &MemRef_A[N] <= &MemRef_B[0]))
+; GLOB: if (1 && 0 == N <= 0 && (&MemRef_B[N] <= &MemRef_A[0] || &MemRef_A[N] <= &MemRef_B[0]))
 ;
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 

@@ -234,7 +234,32 @@ struct ScalarBitSetTraits<SectionAttr> {
                           llvm::MachO::S_ATTR_EXT_RELOC);
     io.bitSetCase(value, "S_ATTR_LOC_RELOC",
                           llvm::MachO::S_ATTR_LOC_RELOC);
+    io.bitSetCase(value, "S_ATTR_DEBUG",
+                         llvm::MachO::S_ATTR_DEBUG);
   }
+};
+
+/// This is a custom formatter for SectionAlignment.  Values are
+/// the power to raise by, ie, the n in 2^n.
+template <> struct ScalarTraits<SectionAlignment> {
+  static void output(const SectionAlignment &value, void *ctxt,
+                     raw_ostream &out) {
+    out << llvm::format("%d", (uint32_t)value);
+  }
+
+  static StringRef input(StringRef scalar, void *ctxt,
+                         SectionAlignment &value) {
+    uint32_t alignment;
+    if (scalar.getAsInteger(0, alignment)) {
+      return "malformed alignment value";
+    }
+    if (!llvm::isPowerOf2_32(alignment))
+      return "alignment must be a power of 2";
+    value = alignment;
+    return StringRef(); // returning empty string means success
+  }
+
+  static bool mustQuote(StringRef) { return false; }
 };
 
 template <>
@@ -276,9 +301,9 @@ struct MappingTraits<Section> {
     io.mapRequired("section",         sect.sectionName);
     io.mapRequired("type",            sect.type);
     io.mapOptional("attributes",      sect.attributes);
-    io.mapOptional("alignment",       sect.alignment, (uint16_t)1);
+    io.mapOptional("alignment",       sect.alignment, (SectionAlignment)1);
     io.mapRequired("address",         sect.address);
-    if (sect.type == llvm::MachO::S_ZEROFILL) {
+    if (isZeroFillSection(sect.type)) {
       // S_ZEROFILL sections use "size:" instead of "content:"
       uint64_t size = sect.content.size();
       io.mapOptional("size",          size);
@@ -311,6 +336,8 @@ struct MappingTraits<Section> {
       NormalizedFile *file = info->_normalizeMachOFile;
       assert(file != nullptr);
       size_t size = _normalizedContent.size();
+      if (!size)
+        return None;
       uint8_t *bytes = file->ownedAllocations.Allocate<uint8_t>(size);
       std::copy(_normalizedContent.begin(), _normalizedContent.end(), bytes);
       return makeArrayRef(bytes, size);
@@ -504,10 +531,11 @@ struct ScalarTraits<VMProtect> {
 template <>
 struct MappingTraits<Segment> {
   static void mapping(IO &io, Segment& seg) {
-    io.mapRequired("name",      seg.name);
-    io.mapRequired("address",   seg.address);
-    io.mapRequired("size",      seg.size);
-    io.mapRequired("access",    seg.access);
+    io.mapRequired("name",            seg.name);
+    io.mapRequired("address",         seg.address);
+    io.mapRequired("size",            seg.size);
+    io.mapRequired("init-access",     seg.init_access);
+    io.mapRequired("max-access",      seg.max_access);
   }
 };
 
@@ -524,6 +552,14 @@ struct ScalarEnumerationTraits<LoadCommandType> {
                         llvm::MachO::LC_LOAD_UPWARD_DYLIB);
     io.enumCase(value, "LC_LAZY_LOAD_DYLIB",
                         llvm::MachO::LC_LAZY_LOAD_DYLIB);
+    io.enumCase(value, "LC_VERSION_MIN_MACOSX",
+                        llvm::MachO::LC_VERSION_MIN_MACOSX);
+    io.enumCase(value, "LC_VERSION_MIN_IPHONEOS",
+                        llvm::MachO::LC_VERSION_MIN_IPHONEOS);
+    io.enumCase(value, "LC_VERSION_MIN_TVOS",
+                        llvm::MachO::LC_VERSION_MIN_TVOS);
+    io.enumCase(value, "LC_VERSION_MIN_WATCHOS",
+                        llvm::MachO::LC_VERSION_MIN_WATCHOS);
   }
 };
 
@@ -692,6 +728,7 @@ struct MappingTraits<NormalizedFile> {
     io.mapOptional("source-version",   file.sourceVersion,  Hex64(0));
     io.mapOptional("OS",               file.os);
     io.mapOptional("min-os-version",   file.minOSverson,    PackedVersion(0));
+    io.mapOptional("min-os-version-kind",   file.minOSVersionKind, (LoadCommandType)0);
     io.mapOptional("sdk-version",      file.sdkVersion,     PackedVersion(0));
     io.mapOptional("segments",         file.segments);
     io.mapOptional("sections",         file.sections);
@@ -731,8 +768,21 @@ bool MachOYamlIOTaggedDocumentHandler::handledDocTag(llvm::yaml::IO &io,
   info->_normalizeMachOFile = &nf;
   MappingTraits<NormalizedFile>::mapping(io, nf);
   // Step 2: parse normalized mach-o struct into atoms.
-  ErrorOr<std::unique_ptr<lld::File>> foe = normalizedToAtoms(nf, info->_path,
-                                                              true);
+  auto fileOrError = normalizedToAtoms(nf, info->_path, true);
+
+  // Check that we parsed successfully.
+  if (!fileOrError) {
+    std::string buffer;
+    llvm::raw_string_ostream stream(buffer);
+    handleAllErrors(fileOrError.takeError(),
+                    [&](const llvm::ErrorInfoBase &EI) {
+      EI.log(stream);
+      stream << "\n";
+    });
+    io.setError(stream.str());
+    return false;
+  }
+
   if (nf.arch != _arch) {
     io.setError(Twine("file is wrong architecture. Expected ("
                       + MachOLinkingContext::nameFromArch(_arch)
@@ -742,16 +792,8 @@ bool MachOYamlIOTaggedDocumentHandler::handledDocTag(llvm::yaml::IO &io,
     return false;
   }
   info->_normalizeMachOFile = nullptr;
-
-  if (foe) {
-    // Transfer ownership to "out" File parameter.
-    std::unique_ptr<lld::File> f = std::move(foe.get());
-    file = f.release();
-    return true;
-  } else {
-    io.setError(foe.getError().message());
-    return false;
-  }
+  file = fileOrError->release();
+  return true;
 }
 
 
@@ -759,7 +801,7 @@ bool MachOYamlIOTaggedDocumentHandler::handledDocTag(llvm::yaml::IO &io,
 namespace normalized {
 
 /// Parses a yaml encoded mach-o file to produce an in-memory normalized view.
-ErrorOr<std::unique_ptr<NormalizedFile>>
+llvm::Expected<std::unique_ptr<NormalizedFile>>
 readYaml(std::unique_ptr<MemoryBuffer> &mb) {
   // Make empty NormalizedFile.
   std::unique_ptr<NormalizedFile> f(new NormalizedFile());
@@ -773,8 +815,9 @@ readYaml(std::unique_ptr<MemoryBuffer> &mb) {
   yin >> *f;
 
   // Return error if there were parsing problems.
-  if (yin.error())
-    return make_error_code(lld::YamlReaderError::illegal_value);
+  if (auto ec = yin.error())
+    return llvm::make_error<GenericError>(Twine("YAML parsing error: ")
+                                          + ec.message());
 
   // Hand ownership of instantiated NormalizedFile to caller.
   return std::move(f);

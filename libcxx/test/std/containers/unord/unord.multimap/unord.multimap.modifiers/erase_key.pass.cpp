@@ -18,15 +18,16 @@
 #include <unordered_map>
 #include <string>
 #include <cassert>
+#include <cstddef>
 
 #include "min_allocator.h"
 
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
 template <typename Unordered>
 bool only_deletions ( const Unordered &whole, const Unordered &part ) {
     typename Unordered::const_iterator w = whole.begin();
     typename Unordered::const_iterator p = part.begin();
-    
+
     while ( w != whole.end () && p != part.end()) {
         if ( *w == *p )
             p++;
@@ -81,8 +82,8 @@ int main()
         k = eq.first;
         assert(k->first == 4);
         assert(k->second == "four");
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
 
         assert(c.erase(2) == 2);
         assert(c.size() == 4);
@@ -104,8 +105,8 @@ int main()
         k = eq.first;
         assert(k->first == 4);
         assert(k->second == "four");
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
 
         assert(c.erase(2) == 0);
         assert(c.size() == 4);
@@ -127,8 +128,8 @@ int main()
         k = eq.first;
         assert(k->first == 4);
         assert(k->second == "four");
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
 
         assert(c.erase(4) == 1);
         assert(c.size() == 3);
@@ -145,8 +146,8 @@ int main()
         k = eq.first;
         assert(k->first == 3);
         assert(k->second == "three");
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
 
         assert(c.erase(4) == 0);
         assert(c.size() == 3);
@@ -163,8 +164,8 @@ int main()
         k = eq.first;
         assert(k->first == 3);
         assert(k->second == "three");
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
 
         assert(c.erase(1) == 2);
         assert(c.size() == 1);
@@ -173,8 +174,8 @@ int main()
         k = eq.first;
         assert(k->first == 3);
         assert(k->second == "three");
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
 
         assert(c.erase(1) == 0);
         assert(c.size() == 1);
@@ -183,24 +184,24 @@ int main()
         k = eq.first;
         assert(k->first == 3);
         assert(k->second == "three");
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
 
         assert(c.erase(3) == 1);
         assert(c.size() == 0);
         eq = c.equal_range(3);
         assert(std::distance(eq.first, eq.second) == 0);
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
 
         assert(c.erase(3) == 0);
         assert(c.size() == 0);
         eq = c.equal_range(3);
         assert(std::distance(eq.first, eq.second) == 0);
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         typedef std::unordered_multimap<int, std::string, std::hash<int>, std::equal_to<int>,
                             min_allocator<std::pair<const int, std::string>>> C;
@@ -244,8 +245,8 @@ int main()
         k = eq.first;
         assert(k->first == 4);
         assert(k->second == "four");
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
 
         assert(c.erase(2) == 2);
         assert(c.size() == 4);
@@ -267,8 +268,8 @@ int main()
         k = eq.first;
         assert(k->first == 4);
         assert(k->second == "four");
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
 
         assert(c.erase(2) == 0);
         assert(c.size() == 4);
@@ -290,8 +291,8 @@ int main()
         k = eq.first;
         assert(k->first == 4);
         assert(k->second == "four");
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
 
         assert(c.erase(4) == 1);
         assert(c.size() == 3);
@@ -308,8 +309,8 @@ int main()
         k = eq.first;
         assert(k->first == 3);
         assert(k->second == "three");
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
 
         assert(c.erase(4) == 0);
         assert(c.size() == 3);
@@ -326,8 +327,8 @@ int main()
         k = eq.first;
         assert(k->first == 3);
         assert(k->second == "three");
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
 
         assert(c.erase(1) == 2);
         assert(c.size() == 1);
@@ -336,8 +337,8 @@ int main()
         k = eq.first;
         assert(k->first == 3);
         assert(k->second == "three");
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
 
         assert(c.erase(1) == 0);
         assert(c.size() == 1);
@@ -346,22 +347,22 @@ int main()
         k = eq.first;
         assert(k->first == 3);
         assert(k->second == "three");
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
 
         assert(c.erase(3) == 1);
         assert(c.size() == 0);
         eq = c.equal_range(3);
         assert(std::distance(eq.first, eq.second) == 0);
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
 
         assert(c.erase(3) == 0);
         assert(c.size() == 0);
         eq = c.equal_range(3);
         assert(std::distance(eq.first, eq.second) == 0);
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
     }
     {
     typedef std::unordered_multimap<int, int> C;
@@ -372,7 +373,7 @@ int main()
             m2.insert(std::make_pair(i,j));
             }
         }
-    
+
     C::iterator i = m2.begin();
     int ctr = 0;
     while (i != m2.end()) {

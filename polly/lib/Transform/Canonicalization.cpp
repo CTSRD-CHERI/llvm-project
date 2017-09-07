@@ -1,4 +1,4 @@
-//===---- Canonicalization.cpp - Run canonicalization passes ======-------===//
+//===---- Canonicalization.cpp - Run canonicalization passes --------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -13,8 +13,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "polly/LinkAllPasses.h"
 #include "polly/Canonicalization.h"
+#include "polly/LinkAllPasses.h"
 #include "polly/Options.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/Scalar.h"
@@ -37,6 +37,7 @@ void polly::registerCanonicalicationPasses(llvm::legacy::PassManagerBase &PM) {
   PM.add(llvm::createLoopRotatePass());
   if (PollyInliner) {
     PM.add(llvm::createFunctionInliningPass(200));
+    PM.add(llvm::createPromoteMemoryToRegisterPass());
     PM.add(llvm::createCFGSimplificationPass());
     PM.add(llvm::createInstructionCombiningPass());
     PM.add(createBarrierNoopPass());
@@ -65,7 +66,7 @@ public:
   virtual void print(raw_ostream &OS, const Module *) const;
   //@}
 };
-}
+} // namespace
 
 PollyCanonicalize::~PollyCanonicalize() {}
 

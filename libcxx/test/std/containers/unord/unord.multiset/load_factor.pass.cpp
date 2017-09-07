@@ -18,6 +18,7 @@
 #include <unordered_set>
 #include <cassert>
 #include <cfloat>
+#include <cmath>
 
 #include "min_allocator.h"
 
@@ -38,15 +39,14 @@ int main()
             P(80)
         };
         const C c(std::begin(a), std::end(a));
-        assert(fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
+        assert(std::fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
     }
     {
         typedef std::unordered_multiset<int> C;
-        typedef int P;
         const C c;
         assert(c.load_factor() == 0);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         typedef std::unordered_multiset<int, std::hash<int>,
                                       std::equal_to<int>, min_allocator<int>> C;
@@ -63,12 +63,11 @@ int main()
             P(80)
         };
         const C c(std::begin(a), std::end(a));
-        assert(fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
+        assert(std::fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
     }
     {
         typedef std::unordered_multiset<int, std::hash<int>,
                                       std::equal_to<int>, min_allocator<int>> C;
-        typedef int P;
         const C c;
         assert(c.load_factor() == 0);
     }

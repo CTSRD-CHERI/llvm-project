@@ -13,12 +13,15 @@
 # CHECK: cjr	$c1
 # CHECK: encoding: [0x48,0x01,0x47,0xff]
 	cjr	$c1
-# CHECK: cjalr	$c4, $c1
+# CHECK: cjalr	$c1, $c4
 # CHECK: encoding: [0x48,0x04,0x0b,0x3f]
-	cjalr	$c4,$c1
+	cjalr	$c1, $c4
 # CHECK: ccall	$c2, $c3
 # CHECK: encoding: [0x48,0xa2,0x18,0x00]
 	ccall	$c2, $c3
+# CHECK: ccall	$c2, $c3, 42
+# CHECK: encoding: [0x48,0xa2,0x18,0x2a]
+	ccall	$c2, $c3, 42
 # CHECK: creturn
-# CHECK: encoding: [0x48,0xc0,0x00,0x00]
+# CHECK: encoding: [0x48,0xa0,0x00,0x01]
 	creturn

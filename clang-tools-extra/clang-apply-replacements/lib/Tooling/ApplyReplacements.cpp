@@ -20,6 +20,7 @@
 #include "clang/Format/Format.h"
 #include "clang/Lex/Lexer.h"
 #include "clang/Rewrite/Core/Rewriter.h"
+#include "clang/Tooling/DiagnosticsYaml.h"
 #include "clang/Tooling/ReplacementsYaml.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Support/FileSystem.h"
@@ -30,16 +31,58 @@
 using namespace llvm;
 using namespace clang;
 
-
 static void eatDiagnostics(const SMDiagnostic &, void *) {}
 
 namespace clang {
 namespace replace {
 
+std::error_code collectReplacementsFromDirectory(
+    const llvm::StringRef Directory, TUReplacements &TUs,
+    TUReplacementFiles &TUFiles, clang::DiagnosticsEngine &Diagnostics) {
+  using namespace llvm::sys::fs;
+  using namespace llvm::sys::path;
+
+  std::error_code ErrorCode;
+
+  for (recursive_directory_iterator I(Directory, ErrorCode), E;
+       I != E && !ErrorCode; I.increment(ErrorCode)) {
+    if (filename(I->path())[0] == '.') {
+      // Indicate not to descend into directories beginning with '.'
+      I.no_push();
+      continue;
+    }
+
+    if (extension(I->path()) != ".yaml")
+      continue;
+
+    TUFiles.push_back(I->path());
+
+    ErrorOr<std::unique_ptr<MemoryBuffer>> Out =
+        MemoryBuffer::getFile(I->path());
+    if (std::error_code BufferError = Out.getError()) {
+      errs() << "Error reading " << I->path() << ": " << BufferError.message()
+             << "\n";
+      continue;
+    }
+
+    yaml::Input YIn(Out.get()->getBuffer(), nullptr, &eatDiagnostics);
+    tooling::TranslationUnitReplacements TU;
+    YIn >> TU;
+    if (YIn.error()) {
+      // File doesn't appear to be a header change description. Ignore it.
+      continue;
+    }
+
+    // Only keep files that properly parse.
+    TUs.push_back(TU);
+  }
+
+  return ErrorCode;
+}
+
 std::error_code
 collectReplacementsFromDirectory(const llvm::StringRef Directory,
-                                 TUReplacements &TUs,
-                                 TUReplacementFiles & TURFiles,
+                                 TUDiagnostics &TUs, TUReplacementFiles &TUFiles,
                                  clang::DiagnosticsEngine &Diagnostics) {
   using namespace llvm::sys::fs;
   using namespace llvm::sys::path;
@@ -57,7 +100,7 @@ collectReplacementsFromDirectory(const llvm::StringRef Directory,
     if (extension(I->path()) != ".yaml")
       continue;
 
-    TURFiles.push_back(I->path());
+    TUFiles.push_back(I->path());
 
     ErrorOr<std::unique_ptr<MemoryBuffer>> Out =
         MemoryBuffer::getFile(I->path());
@@ -68,7 +111,7 @@ collectReplacementsFromDirectory(const llvm::StringRef Directory,
     }
 
     yaml::Input YIn(Out.get()->getBuffer(), nullptr, &eatDiagnostics);
-    tooling::TranslationUnitReplacements TU;
+    tooling::TranslationUnitDiagnostics TU;
     YIn >> TU;
     if (YIn.error()) {
       // File doesn't appear to be a header change description. Ignore it.
@@ -122,6 +165,78 @@ static void reportConflict(
   }
 }
 
+// FIXME: Remove this function after changing clang-apply-replacements to use
+// Replacements class.
+bool applyAllReplacements(const std::vector<tooling::Replacement> &Replaces,
+                          Rewriter &Rewrite) {
+  bool Result = true;
+  for (auto I = Replaces.begin(), E = Replaces.end(); I != E; ++I) {
+    if (I->isApplicable()) {
+      Result = I->apply(Rewrite) && Result;
+    } else {
+      Result = false;
+    }
+  }
+  return Result;
+}
+
+// FIXME: moved from libToolingCore. remove this when std::vector<Replacement>
+// is replaced with tooling::Replacements class.
+static void deduplicate(std::vector<tooling::Replacement> &Replaces,
+                        std::vector<tooling::Range> &Conflicts) {
+  if (Replaces.empty())
+    return;
+
+  auto LessNoPath = [](const tooling::Replacement &LHS,
+                       const tooling::Replacement &RHS) {
+    if (LHS.getOffset() != RHS.getOffset())
+      return LHS.getOffset() < RHS.getOffset();
+    if (LHS.getLength() != RHS.getLength())
+      return LHS.getLength() < RHS.getLength();
+    return LHS.getReplacementText() < RHS.getReplacementText();
+  };
+
+  auto EqualNoPath = [](const tooling::Replacement &LHS,
+                        const tooling::Replacement &RHS) {
+    return LHS.getOffset() == RHS.getOffset() &&
+           LHS.getLength() == RHS.getLength() &&
+           LHS.getReplacementText() == RHS.getReplacementText();
+  };
+
+  // Deduplicate. We don't want to deduplicate based on the path as we assume
+  // that all replacements refer to the same file (or are symlinks).
+  std::sort(Replaces.begin(), Replaces.end(), LessNoPath);
+  Replaces.erase(std::unique(Replaces.begin(), Replaces.end(), EqualNoPath),
+                 Replaces.end());
+
+  // Detect conflicts
+  tooling::Range ConflictRange(Replaces.front().getOffset(),
+                               Replaces.front().getLength());
+  unsigned ConflictStart = 0;
+  unsigned ConflictLength = 1;
+  for (unsigned i = 1; i < Replaces.size(); ++i) {
+    tooling::Range Current(Replaces[i].getOffset(), Replaces[i].getLength());
+    if (ConflictRange.overlapsWith(Current)) {
+      // Extend conflicted range
+      ConflictRange =
+          tooling::Range(ConflictRange.getOffset(),
+                         std::max(ConflictRange.getLength(),
+                                  Current.getOffset() + Current.getLength() -
+                                      ConflictRange.getOffset()));
+      ++ConflictLength;
+    } else {
+      if (ConflictLength > 1)
+        Conflicts.push_back(tooling::Range(ConflictStart, ConflictLength));
+      ConflictRange = Current;
+      ConflictStart = i;
+      ConflictLength = 1;
+    }
+  }
+
+  if (ConflictLength > 1)
+    Conflicts.push_back(tooling::Range(ConflictStart, ConflictLength));
+}
+
 /// \brief Deduplicates and tests for conflicts among the replacements for each
 /// file in \c Replacements. Any conflicts found are reported.
 ///
@@ -144,7 +259,7 @@ static bool deduplicateAndDetectConflicts(FileToReplacementsMap &Replacements,
     assert(Entry != nullptr && "No file entry!");
 
     std::vector<tooling::Range> Conflicts;
-    tooling::deduplicate(FileAndReplacements.second, Conflicts);
+    deduplicate(FileAndReplacements.second, Conflicts);
 
     if (Conflicts.empty())
       continue;
@@ -184,10 +299,35 @@ bool mergeAndDeduplicate(const TUReplacements &TUs,
   }
 
   // Ask clang to deduplicate and report conflicts.
-  if (deduplicateAndDetectConflicts(GroupedReplacements, SM))
-    return false;
+  return !deduplicateAndDetectConflicts(GroupedReplacements, SM);
+}
 
-  return true;
+bool mergeAndDeduplicate(const TUDiagnostics &TUs,
+                         FileToReplacementsMap &GroupedReplacements,
+                         clang::SourceManager &SM) {
+
+  // Group all replacements by target file.
+  std::set<StringRef> Warned;
+  for (const auto &TU : TUs) {
+    for (const auto &D : TU.Diagnostics) {
+      for (const auto &Fix : D.Fix) {
+        for (const tooling::Replacement &R : Fix.second) {
+          // Use the file manager to deduplicate paths. FileEntries are
+          // automatically canonicalized.
+          const FileEntry *Entry = SM.getFileManager().getFile(R.getFilePath());
+          if (!Entry && Warned.insert(R.getFilePath()).second) {
+            errs() << "Described file '" << R.getFilePath()
+                   << "' doesn't exist. Ignoring...\n";
+            continue;
+          }
+          GroupedReplacements[Entry].push_back(R);
+        }
+      }
+    }
+  }
+
+  // Ask clang to deduplicate and report conflicts.
+  return !deduplicateAndDetectConflicts(GroupedReplacements, SM);
 }
 
 bool applyReplacements(const FileToReplacementsMap &GroupedReplacements,
@@ -200,7 +340,7 @@ bool applyReplacements(const FileToReplacementsMap &GroupedReplacements,
   // However, until we nail down the design of ReplacementGroups, might as well
   // leave this as is.
   for (const auto &FileAndReplacements : GroupedReplacements) {
-    if (!tooling::applyAllReplacements(FileAndReplacements.second, Rewrites))
+    if (!applyAllReplacements(FileAndReplacements.second, Rewrites))
       return false;
   }
 
@@ -212,14 +352,11 @@ RangeVector calculateChangedRanges(
   RangeVector ChangedRanges;
 
   // Generate the new ranges from the replacements.
-  //
-  // NOTE: This is O(n^2) in the number of replacements. If this starts to
-  // become a problem inline shiftedCodePosition() here and do shifts in a
-  // single run through this loop.
+  int Shift = 0;
   for (const tooling::Replacement &R : Replaces) {
-    unsigned Offset = tooling::shiftedCodePosition(Replaces, R.getOffset());
+    unsigned Offset = R.getOffset() + Shift;
     unsigned Length = R.getReplacementText().size();
-
+    Shift += Length - R.getLength();
     ChangedRanges.push_back(tooling::Range(Offset, Length));
   }
 
@@ -228,10 +365,9 @@ RangeVector calculateChangedRanges(
 
 bool writeFiles(const clang::Rewriter &Rewrites) {
 
-  for (Rewriter::const_buffer_iterator BufferI = Rewrites.buffer_begin(),
-                                       BufferE = Rewrites.buffer_end();
+  for (auto BufferI = Rewrites.buffer_begin(), BufferE = Rewrites.buffer_end();
        BufferI != BufferE; ++BufferI) {
-    const char *FileName =
+    StringRef FileName =
         Rewrites.getSourceMgr().getFileEntryForID(BufferI->first)->getName();
 
     std::error_code EC;

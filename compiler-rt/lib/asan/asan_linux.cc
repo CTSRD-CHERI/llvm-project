@@ -69,18 +69,16 @@ asan_rt_version_t  __asan_rt_version;
 namespace __asan {
 
 void InitializePlatformInterceptors() {}
-
-void DisableReexec() {
-  // No need to re-exec on Linux.
-}
-
-void MaybeReexec() {
-  // No need to re-exec on Linux.
-}
+void InitializePlatformExceptionHandlers() {}
+bool IsSystemHeapAddress (uptr addr) { return false; }
 
 void *AsanDoesNotSupportStaticLinkage() {
   // This will fail to link with -static.
   return &_DYNAMIC;  // defined in link.h
+}
+
+void AsanApplyToGlobals(globals_op_fptr op, const void *needle) {
+  UNIMPLEMENTED();
 }
 
 #if SANITIZER_ANDROID
@@ -113,7 +111,7 @@ static void ReportIncompatibleRT() {
 }
 
 void AsanCheckDynamicRTPrereqs() {
-  if (!ASAN_DYNAMIC)
+  if (!ASAN_DYNAMIC || !flags()->verify_asan_link_order)
     return;
 
   // Ensure that dynamic RT is the first DSO in the list

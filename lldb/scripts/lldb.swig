@@ -31,8 +31,24 @@ o SBLineEntry: Specifies an association with a contiguous range of instructions
       and a source file location. SBCompileUnit contains SBLineEntry(s)."
 %enddef
 
+/*
+Since version 3.0.9, swig's logic for importing the native module has changed in
+a way that is incompatible with our usage of the python module as __init__.py
+(See swig bug #769).  Fortunately, since version 3.0.11, swig provides a way for
+us to override the module import logic to suit our needs. This does that.
+
+Older swig versions will simply ignore this setting.
+*/
+%define MODULEIMPORT
+"from . import $module"
+%enddef
+// These versions will not generate working python modules, so error out early.
+#if SWIG_VERSION >= 0x030009 && SWIG_VERSION < 0x030011
+#error Swig versions 3.0.9 and 3.0.10 are incompatible with lldb.
+#endif
+
 // The name of the module to be created.
-%module(docstring=DOCSTRING) lldb
+%module(docstring=DOCSTRING, moduleimport=MODULEIMPORT) lldb
 
 // Parameter types will be used in the autodoc string.
 %feature("autodoc", "1");
@@ -41,11 +57,14 @@ o SBLineEntry: Specifies an association with a contiguous range of instructions
 import uuid
 import re
 import os
+
+import six
 %}
 %include "./Python/python-typemaps.swig"
 
 /* C++ headers to be included. */
 %{
+#include <algorithm>
 #include <string>
 %}
 
@@ -80,6 +99,8 @@ import os
 #include "lldb/API/SBLaunchInfo.h"
 #include "lldb/API/SBLineEntry.h"
 #include "lldb/API/SBListener.h"
+#include "lldb/API/SBMemoryRegionInfo.h"
+#include "lldb/API/SBMemoryRegionInfoList.h"
 #include "lldb/API/SBModule.h"
 #include "lldb/API/SBModuleSpec.h"
 #include "lldb/API/SBPlatform.h"
@@ -90,6 +111,7 @@ import os
 #include "lldb/API/SBSourceManager.h"
 #include "lldb/API/SBStream.h"
 #include "lldb/API/SBStringList.h"
+#include "lldb/API/SBStructuredData.h"
 #include "lldb/API/SBSymbol.h"
 #include "lldb/API/SBSymbolContext.h"
 #include "lldb/API/SBSymbolContextList.h"
@@ -97,6 +119,8 @@ import os
 #include "lldb/API/SBThread.h"
 #include "lldb/API/SBThreadCollection.h"
 #include "lldb/API/SBThreadPlan.h"
+#include "lldb/API/SBTrace.h"
+#include "lldb/API/SBTraceOptions.h"
 #include "lldb/API/SBType.h"
 #include "lldb/API/SBTypeCategory.h"
 #include "lldb/API/SBTypeEnumMember.h"
@@ -160,6 +184,8 @@ import os
 %include "./interface/SBLaunchInfo.i"
 %include "./interface/SBLineEntry.i"
 %include "./interface/SBListener.i"
+%include "./interface/SBMemoryRegionInfo.i"
+%include "./interface/SBMemoryRegionInfoList.i"
 %include "./interface/SBModule.i"
 %include "./interface/SBModuleSpec.i"
 %include "./interface/SBPlatform.i"
@@ -170,6 +196,7 @@ import os
 %include "./interface/SBSourceManager.i"
 %include "./interface/SBStream.i"
 %include "./interface/SBStringList.i"
+%include "./interface/SBStructuredData.i"
 %include "./interface/SBSymbol.i"
 %include "./interface/SBSymbolContext.i"
 %include "./interface/SBSymbolContextList.i"
@@ -177,6 +204,8 @@ import os
 %include "./interface/SBThread.i"
 %include "./interface/SBThreadCollection.i"
 %include "./interface/SBThreadPlan.i"
+%include "./interface/SBTrace.i"
+%include "./interface/SBTraceOptions.i"
 %include "./interface/SBType.i"
 %include "./interface/SBTypeCategory.i"
 %include "./interface/SBTypeEnumMember.i"

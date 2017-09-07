@@ -16,9 +16,10 @@
 
 using namespace lld;
 
+namespace {
 class _YamlReaderErrorCategory : public std::error_category {
 public:
-  const char* name() const LLVM_NOEXCEPT override {
+  const char* name() const noexcept override {
     return "lld.yaml.reader";
   }
 
@@ -33,45 +34,10 @@ public:
                      "message defined.");
   }
 };
+} // end anonymous namespace
 
 const std::error_category &lld::YamlReaderCategory() {
   static _YamlReaderErrorCategory o;
-  return o;
-}
-
-class _LinkerScriptReaderErrorCategory : public std::error_category {
-public:
-  const char *name() const LLVM_NOEXCEPT override {
-    return "lld.linker-script.reader";
-  }
-
-  std::string message(int ev) const override {
-    switch (static_cast<LinkerScriptReaderError>(ev)) {
-    case LinkerScriptReaderError::success:
-      return "Success";
-    case LinkerScriptReaderError::parse_error:
-      return "Error parsing linker script";
-    case LinkerScriptReaderError::unknown_symbol_in_expr:
-      return "Unknown symbol found when evaluating linker script expression";
-    case LinkerScriptReaderError::unrecognized_function_in_expr:
-      return "Unrecognized function call when evaluating linker script "
-             "expression";
-    case LinkerScriptReaderError::unknown_phdr_ids:
-      return "Unknown header identifiers (missing in PHDRS command) are used";
-    case LinkerScriptReaderError::extra_program_phdr:
-      return "Extra program header is found";
-    case LinkerScriptReaderError::misplaced_program_phdr:
-      return "Program header must precede load segments";
-    case LinkerScriptReaderError::program_phdr_wrong_phdrs:
-      return "Program header has invalid PHDRS attribute";
-    }
-    llvm_unreachable("An enumerator of LinkerScriptReaderError does not have a "
-                     "message defined.");
-  }
-};
-
-const std::error_category &lld::LinkerScriptReaderCategory() {
-  static _LinkerScriptReaderErrorCategory o;
   return o;
 }
 
@@ -84,7 +50,7 @@ class dynamic_error_category : public std::error_category {
 public:
   ~dynamic_error_category() override = default;
 
-  const char *name() const LLVM_NOEXCEPT override {
+  const char *name() const noexcept override {
     return "lld.dynamic_error";
   }
 
@@ -112,16 +78,16 @@ private:
 
 static dynamic_error_category categorySingleton;
 
-std::error_code make_dynamic_error_code(const char *msg) {
-  return make_dynamic_error_code(StringRef(msg));
-}
-
 std::error_code make_dynamic_error_code(StringRef msg) {
   return std::error_code(categorySingleton.add(msg), categorySingleton);
 }
 
-std::error_code make_dynamic_error_code(const Twine &msg) {
-  return std::error_code(categorySingleton.add(msg.str()), categorySingleton);
+char GenericError::ID = 0;
+
+GenericError::GenericError(Twine Msg) : Msg(Msg.str()) { }
+
+void GenericError::log(raw_ostream &OS) const {
+  OS << Msg;
 }
 
 } // namespace lld

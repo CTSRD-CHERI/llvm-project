@@ -16,25 +16,36 @@
 #include <algorithm>
 #include <cassert>
 
+#include "test_macros.h"
 #include "min_allocator.h"
 
 template <class S>
 void
 test(const S& s, typename S::size_type pos, typename S::size_type n)
 {
-    try
+    if (pos <= s.size())
     {
         S str = s.substr(pos, n);
-        assert(str.__invariants());
+        LIBCPP_ASSERT(str.__invariants());
         assert(pos <= s.size());
         typename S::size_type rlen = std::min(n, s.size() - pos);
         assert(str.size() == rlen);
         assert(S::traits_type::compare(s.data()+pos, str.data(), rlen) == 0);
     }
-    catch (std::out_of_range&)
+#ifndef TEST_HAS_NO_EXCEPTIONS
+    else
     {
-        assert(pos > s.size());
+        try
+        {
+            S str = s.substr(pos, n);
+            assert(false);
+        }
+        catch (std::out_of_range&)
+        {
+            assert(pos > s.size());
+        }
     }
+#endif
 }
 
 int main()
@@ -100,7 +111,7 @@ int main()
     test(S("lsaijeqhtrbgcdmpfkno"), 20, 0);
     test(S("dplqartnfgejichmoskb"), 21, 0);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     typedef std::basic_string<char, std::char_traits<char>, min_allocator<char>> S;
     test(S(""), 0, 0);

@@ -7,12 +7,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "../src/config.h"
 #include "cxxabi.h"
 
 #include <cassert>
 
-#if !LIBCXXABI_HAS_NO_THREADS
+#ifndef _LIBCXXABI_HAS_NO_THREADS
 #include <thread>
 #endif
 
@@ -25,11 +24,12 @@ namespace test1 {
     }
     void helper() {
         static int a = increment();
+        ((void)a);
     }
     void test() {
-        static int a = increment();
+        static int a = increment(); ((void)a);
         assert(run_count == 1);
-        static int b = increment();
+        static int b = increment(); ((void)b);
         assert(run_count == 2);
         helper();
         assert(run_count == 3);
@@ -41,6 +41,7 @@ namespace test1 {
 // When initialization fails, ensure that we try to initialize it again next
 // time.
 namespace test2 {
+#ifndef LIBCXXABI_HAS_NO_EXCEPTIONS
     static int run_count = 0;
     int increment() {
         ++run_count;
@@ -49,7 +50,8 @@ namespace test2 {
     void helper() {
         try {
             static int a = increment();
-            assert(0);
+            assert(false);
+            ((void)a);
         } catch (...) {}
     }
     void test() {
@@ -58,6 +60,9 @@ namespace test2 {
         helper();
         assert(run_count == 2);
     }
+#else
+   void test() {}
+#endif
 }
 
 // Check that we can initialize a second value while initializing a first.
@@ -67,16 +72,16 @@ namespace test3 {
     }
 
     int one() {
-        static int b = zero();
+        static int b = zero(); ((void)b);
         return 0;
     }
 
     void test() {
-        static int a = one();
+        static int a = one(); ((void)a);
     }
 }
 
-#if !LIBCXXABI_HAS_NO_THREADS
+#ifndef _LIBCXXABI_HAS_NO_THREADS
 // A simple thread test of two threads racing to initialize a variable. This
 // isn't guaranteed to catch any particular threading problems.
 namespace test4 {
@@ -87,7 +92,7 @@ namespace test4 {
     }
 
     void helper() {
-        static int a = increment();
+        static int a = increment(); ((void)a);
     }
 
     void test() {
@@ -108,16 +113,16 @@ namespace test5 {
     }
 
     int one() {
-        static int b = zero();
+        static int b = zero(); ((void)b);
         return 0;
     }
 
     void another_helper() {
-        static int a = one();
+        static int a = one(); ((void)a);
     }
 
     void helper() {
-        static int a = one();
+        static int a = one(); ((void)a);
         std::thread t(another_helper);
         t.join();
     }
@@ -128,14 +133,14 @@ namespace test5 {
         assert(run_count == 1);
     }
 }
-#endif /* LIBCXXABI_HAS_NO_THREADS */
+#endif /* _LIBCXXABI_HAS_NO_THREADS */
 
 int main()
 {
     test1::test();
     test2::test();
     test3::test();
-#if !LIBCXXABI_HAS_NO_THREADS
+#ifndef _LIBCXXABI_HAS_NO_THREADS
     test4::test();
     test5::test();
 #endif

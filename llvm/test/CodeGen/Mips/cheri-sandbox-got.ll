@@ -1,4 +1,4 @@
-; RUN: llc %s -mtriple=cheri-unknown-freebsd -target-abi sandbox -o - | FileCheck %s
+; RUN: %cheri_llc %s -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model=pic -o - | FileCheck %s
 
 ; ModuleID = 'global.c'
 target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
@@ -9,9 +9,7 @@ target triple = "cheri-unknown-freebsd"
 ; Function Attrs: nounwind
 define void @foo(i32 signext %y) #0 {
 entry:
-  ; CHECK: 	daddiu	$1, $1, %got_disp(x)
-  ; CHECK: 	cfromptr $c1, $c0, $1
-  ; CHECK: 	cld	$1, $zero, 0($c1)
+  ; CHECK: 	ld	$1, %got_disp(x)($1)
   store i32 %y, i32 addrspace(200)* @x, align 4
   ret void
 }

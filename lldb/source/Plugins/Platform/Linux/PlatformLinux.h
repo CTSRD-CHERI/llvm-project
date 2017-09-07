@@ -10,115 +10,63 @@
 #ifndef liblldb_PlatformLinux_h_
 #define liblldb_PlatformLinux_h_
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "Plugins/Platform/POSIX/PlatformPOSIX.h"
 
 namespace lldb_private {
 namespace platform_linux {
 
-    class PlatformLinux : public PlatformPOSIX
-    {
-    public:
+class PlatformLinux : public PlatformPOSIX {
+public:
+  PlatformLinux(bool is_host);
 
-        static void
-        DebuggerInitialize (Debugger &debugger);
+  ~PlatformLinux() override;
 
-        static void
-        Initialize ();
+  static void Initialize();
 
-        static void
-        Terminate ();
+  static void Terminate();
 
-        PlatformLinux (bool is_host);
+  //------------------------------------------------------------
+  // lldb_private::PluginInterface functions
+  //------------------------------------------------------------
+  static lldb::PlatformSP CreateInstance(bool force, const ArchSpec *arch);
 
-        virtual
-        ~PlatformLinux();
+  static ConstString GetPluginNameStatic(bool is_host);
 
-        //------------------------------------------------------------
-        // lldb_private::PluginInterface functions
-        //------------------------------------------------------------
-        static lldb::PlatformSP
-        CreateInstance (bool force, const ArchSpec *arch);
+  static const char *GetPluginDescriptionStatic(bool is_host);
 
-        static ConstString
-        GetPluginNameStatic (bool is_host);
+  ConstString GetPluginName() override;
 
-        static const char *
-        GetPluginDescriptionStatic (bool is_host);
+  uint32_t GetPluginVersion() override { return 1; }
 
-        ConstString
-        GetPluginName() override;
+  //------------------------------------------------------------
+  // lldb_private::Platform functions
+  //------------------------------------------------------------
+  const char *GetDescription() override {
+    return GetPluginDescriptionStatic(IsHost());
+  }
 
-        uint32_t
-        GetPluginVersion() override
-        {
-            return 1;
-        }
+  void GetStatus(Stream &strm) override;
 
-        //------------------------------------------------------------
-        // lldb_private::Platform functions
-        //------------------------------------------------------------
-        Error
-        ResolveExecutable (const ModuleSpec &module_spec,
-                           lldb::ModuleSP &module_sp,
-                           const FileSpecList *module_search_paths_ptr) override;
+  bool GetSupportedArchitectureAtIndex(uint32_t idx, ArchSpec &arch) override;
 
-        const char *
-        GetDescription () override
-        {
-            return GetPluginDescriptionStatic(IsHost());
-        }
+  int32_t GetResumeCountForLaunchInfo(ProcessLaunchInfo &launch_info) override;
 
-        void
-        GetStatus (Stream &strm) override;
+  bool CanDebugProcess() override;
 
-        Error
-        GetFileWithUUID (const FileSpec &platform_file,
-                         const UUID* uuid, FileSpec &local_file) override;
+  lldb::ProcessSP DebugProcess(ProcessLaunchInfo &launch_info,
+                               Debugger &debugger, Target *target,
+                               Status &error) override;
 
-        bool
-        GetProcessInfo (lldb::pid_t pid, ProcessInstanceInfo &proc_info) override;
+  void CalculateTrapHandlerSymbolNames() override;
 
-        uint32_t
-        FindProcesses (const ProcessInstanceInfoMatch &match_info,
-                       ProcessInstanceInfoList &process_infos) override;
+  uint64_t ConvertMmapFlagsToPlatform(const ArchSpec &arch,
+                                      unsigned flags) override;
 
-        bool
-        GetSupportedArchitectureAtIndex (uint32_t idx, ArchSpec &arch) override;
-
-        size_t
-        GetSoftwareBreakpointTrapOpcode (Target &target,
-                                         BreakpointSite *bp_site) override;
-
-        int32_t
-        GetResumeCountForLaunchInfo (ProcessLaunchInfo &launch_info) override;
-
-        bool
-        CanDebugProcess () override;
-
-        lldb::ProcessSP
-        DebugProcess (ProcessLaunchInfo &launch_info,
-                      Debugger &debugger,
-                      Target *target,
-                      Error &error) override;
-
-        void
-        CalculateTrapHandlerSymbolNames () override;
-
-        uint64_t
-        ConvertMmapFlagsToPlatform(const ArchSpec &arch, unsigned flags) override;
-
-        ConstString
-        GetFullNameForDylib (ConstString basename) override;
-        
-    private:
-        DISALLOW_COPY_AND_ASSIGN (PlatformLinux);
-    };
+private:
+  DISALLOW_COPY_AND_ASSIGN(PlatformLinux);
+};
 
 } // namespace platform_linux
 } // namespace lldb_private
 
-#endif  // liblldb_PlatformLinux_h_
+#endif // liblldb_PlatformLinux_h_

@@ -19,7 +19,6 @@
 #include <libunwind.h>
 #include <mach-o/compact_unwind_encoding.h>
 
-#include "AddressSpace.hpp"
 #include "Registers.hpp"
 
 #define EXTRACT_BITS(value, mask)                                              \
@@ -27,6 +26,7 @@
 
 namespace libunwind {
 
+#if defined(_LIBUNWIND_TARGET_I386)
 /// CompactUnwinder_x86 uses a compact unwind info to virtually "step" (aka
 /// unwind) by modifying a Registers_x86 register set
 template <typename A>
@@ -104,7 +104,7 @@ int CompactUnwinder_x86<A>::stepWithCompactEncodingEBPFrame(
     default:
       (void)functionStart;
       _LIBUNWIND_DEBUG_LOG("bad register for EBP frame, encoding=%08X for  "
-                           "function starting at 0x%X\n",
+                           "function starting at 0x%X",
                             compactEncoding, functionStart);
       _LIBUNWIND_ABORT("invalid compact unwind encoding");
     }
@@ -223,7 +223,7 @@ int CompactUnwinder_x86<A>::stepWithCompactEncodingFrameless(
       break;
     default:
       _LIBUNWIND_DEBUG_LOG("bad register for frameless, encoding=%08X for "
-                           "function starting at 0x%X\n",
+                           "function starting at 0x%X",
                            encoding, functionStart);
       _LIBUNWIND_ABORT("invalid compact unwind encoding");
     }
@@ -255,8 +255,10 @@ void CompactUnwinder_x86<A>::framelessUnwind(
   // old esp is before return address
   registers.setSP((uint32_t)returnAddressLocation + 4);
 }
+#endif // _LIBUNWIND_TARGET_I386
 
 
+#if defined(_LIBUNWIND_TARGET_X86_64)
 /// CompactUnwinder_x86_64 uses a compact unwind info to virtually "step" (aka
 /// unwind) by modifying a Registers_x86_64 register set
 template <typename A>
@@ -333,7 +335,7 @@ int CompactUnwinder_x86_64<A>::stepWithCompactEncodingRBPFrame(
     default:
       (void)functionStart;
       _LIBUNWIND_DEBUG_LOG("bad register for RBP frame, encoding=%08X for "
-                           "function starting at 0x%llX\n",
+                           "function starting at 0x%llX",
                             compactEncoding, functionStart);
       _LIBUNWIND_ABORT("invalid compact unwind encoding");
     }
@@ -452,7 +454,7 @@ int CompactUnwinder_x86_64<A>::stepWithCompactEncodingFrameless(
       break;
     default:
       _LIBUNWIND_DEBUG_LOG("bad register for frameless, encoding=%08X for "
-                           "function starting at 0x%llX\n",
+                           "function starting at 0x%llX",
                             encoding, functionStart);
       _LIBUNWIND_ABORT("invalid compact unwind encoding");
     }
@@ -484,9 +486,11 @@ void CompactUnwinder_x86_64<A>::framelessUnwind(A &addressSpace,
   // old esp is before return address
   registers.setSP(returnAddressLocation + 8);
 }
+#endif // _LIBUNWIND_TARGET_X86_64
 
 
 
+#if defined(_LIBUNWIND_TARGET_AARCH64)
 /// CompactUnwinder_arm64 uses a compact unwind info to virtually "step" (aka
 /// unwind) by modifying a Registers_arm64 register set
 template <typename A>
@@ -686,6 +690,7 @@ int CompactUnwinder_arm64<A>::stepWithCompactEncodingFrame(
 
   return UNW_STEP_SUCCESS;
 }
+#endif // _LIBUNWIND_TARGET_AARCH64
 
 
 } // namespace libunwind

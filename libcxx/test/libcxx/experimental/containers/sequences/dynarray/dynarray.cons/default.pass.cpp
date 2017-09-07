@@ -8,6 +8,12 @@
 //===----------------------------------------------------------------------===//
 
 // UNSUPPORTED: c++98, c++03, c++11
+// XFAIL: availability=macosx10.12
+// XFAIL: availability=macosx10.11
+// XFAIL: availability=macosx10.10
+// XFAIL: availability=macosx10.9
+// XFAIL: availability=macosx10.8
+// XFAIL: availability=macosx10.7
 
 // dynarray.cons
 
@@ -28,13 +34,15 @@
 #include <new>
 #include <string>
 
+#include "test_macros.h"
+
 
 using std::experimental::dynarray;
 
 template <class T>
 void testInitList( const std::initializer_list<T> &vals ) {
     typedef dynarray<T> dynA;
-    
+
     dynA d1 ( vals );
     assert ( d1.size () == vals.size() );
     assert ( std::equal ( vals.begin (), vals.end (), d1.begin (), d1.end ()));
@@ -44,7 +52,7 @@ void testInitList( const std::initializer_list<T> &vals ) {
 template <class T>
 void test ( const T &val, bool DefaultValueIsIndeterminate = false) {
     typedef dynarray<T> dynA;
-    
+
     dynA d1 ( 4 );
     assert ( d1.size () == 4 );
     if (!DefaultValueIsIndeterminate) {
@@ -57,15 +65,17 @@ void test ( const T &val, bool DefaultValueIsIndeterminate = false) {
 
     dynA d3 ( d2 );
     assert ( d3.size () == 7 );
-    assert ( std::all_of ( d3.begin (), d3.end (), [&val]( const T &item ){ return item == val; } ));   
+    assert ( std::all_of ( d3.begin (), d3.end (), [&val]( const T &item ){ return item == val; } ));
     }
 
+#ifndef TEST_HAS_NO_EXCEPTIONS
 void test_bad_length () {
     try { dynarray<int> ( std::numeric_limits<size_t>::max() / sizeof ( int ) + 1 ); }
     catch ( std::bad_array_length & ) { return ; }
     catch (...) { assert(false); }
     assert ( false );
 }
+#endif
 
 
 int main()
@@ -75,16 +85,18 @@ int main()
     test<double> ( 14.0, true );
     test<std::complex<double>> ( std::complex<double> ( 14, 0 ));
     test<std::string> ( "fourteen" );
-    
+
     testInitList( { 1, 1, 2, 3, 5, 8 } );
     testInitList( { 1., 1., 2., 3., 5., 8. } );
     testInitList( { std::string("1"), std::string("1"), std::string("2"), std::string("3"),
                   std::string("5"), std::string("8")} );
-    
+
 //  Make sure we don't pick up the Allocator version here
     dynarray<long> d1 ( 20, 3 );
     assert ( d1.size() == 20 );
     assert ( std::all_of ( d1.begin (), d1.end (), []( long item ){ return item == 3L; } ));
 
+#ifndef TEST_HAS_NO_EXCEPTIONS
     test_bad_length ();
+#endif
 }

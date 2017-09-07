@@ -1,4 +1,5 @@
 ; RUN: opt -loop-accesses -analyze < %s | FileCheck %s
+; RUN: opt -passes='require<scalar-evolution>,require<aa>,loop(print-access-info)' -disable-output  < %s 2>&1 | FileCheck %s
 
 target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
 
@@ -12,7 +13,7 @@ target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
 ; CHECK: for.body:
 ; CHECK:     Report: unsafe dependent memory operations in loop
 ; CHECK-NOT: Report: cannot identify array bounds
-; CHECK:     Interesting Dependences:
+; CHECK:     Dependences:
 ; CHECK:       Unknown:
 ; CHECK:           %loadA = load i16, i16* %arrayidxA, align 2 ->
 ; CHECK:           store i16 %mul, i16* %arrayidxA, align 2

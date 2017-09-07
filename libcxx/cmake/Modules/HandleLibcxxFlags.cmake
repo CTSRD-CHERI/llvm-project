@@ -26,6 +26,10 @@ endmacro()
 # or added in other parts of LLVM's cmake configuration.
 macro(remove_flags)
   foreach(var ${ARGN})
+    string(REPLACE "${var}" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+    string(REPLACE "${var}" "" CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL}")
+    string(REPLACE "${var}" "" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+    string(REPLACE "${var}" "" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
     string(REPLACE "${var}" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
     string(REPLACE "${var}" "" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
     string(REPLACE "${var}" "" CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
@@ -34,6 +38,11 @@ macro(remove_flags)
     remove_definitions(${var})
   endforeach()
 endmacro(remove_flags)
+
+macro(check_flag_supported flag)
+    mangle_name("${flag}" flagname)
+    check_cxx_compiler_flag("${flag}" "LIBCXX_SUPPORTS_${flagname}_FLAG")
+endmacro()
 
 # Add a macro definition if condition is true.
 macro(define_if condition def)
@@ -69,6 +78,26 @@ endmacro()
 macro(config_define value def)
   set(${def} ${value})
   set(LIBCXX_NEEDS_SITE_CONFIG ON)
+endmacro()
+
+# Add a list of flags to all of 'CMAKE_CXX_FLAGS', 'CMAKE_C_FLAGS',
+# 'LIBCXX_COMPILE_FLAGS' and 'LIBCXX_LINK_FLAGS'.
+macro(add_target_flags)
+  foreach(value ${ARGN})
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${value}")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${value}")
+    list(APPEND LIBCXX_COMPILE_FLAGS ${value})
+    list(APPEND LIBCXX_LINK_FLAGS ${value})
+  endforeach()
+endmacro()
+
+# If the specified 'condition' is true then add a list of flags to
+# all of 'CMAKE_CXX_FLAGS', 'CMAKE_C_FLAGS', 'LIBCXX_COMPILE_FLAGS'
+# and 'LIBCXX_LINK_FLAGS'.
+macro(add_target_flags_if condition)
+  if (${condition})
+    add_target_flags(${ARGN})
+  endif()
 endmacro()
 
 # Add a specified list of flags to both 'LIBCXX_COMPILE_FLAGS' and
@@ -161,6 +190,14 @@ macro(add_library_flags_if condition)
   if(${condition})
     add_library_flags(${ARGN})
   endif()
+endmacro()
+
+# Add a list of libraries or link flags to 'LIBCXX_LIBRARIES'.
+macro(add_interface_library)
+  foreach(lib ${ARGN})
+    list(APPEND LIBCXX_LIBRARIES ${lib})
+    list(APPEND LIBCXX_INTERFACE_LIBRARIES ${lib})
+  endforeach()
 endmacro()
 
 # Turn a comma separated CMake list into a space separated string.

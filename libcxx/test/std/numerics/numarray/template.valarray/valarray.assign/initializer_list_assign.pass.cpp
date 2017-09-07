@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03
+
 // <valarray>
 
 // template<class T> class valarray;
@@ -15,10 +17,10 @@
 
 #include <valarray>
 #include <cassert>
+#include <cstddef>
 
 int main()
 {
-#ifndef _LIBCPP_HAS_NO_GENERALIZED_INITIALIZERS
     {
         typedef int T;
         T a[] = {1, 2, 3, 4, 5};
@@ -26,7 +28,7 @@ int main()
         std::valarray<T> v2;
         v2 = {1, 2, 3, 4, 5};
         assert(v2.size() == N);
-        for (int i = 0; i < v2.size(); ++i)
+        for (std::size_t i = 0; i < v2.size(); ++i)
             assert(v2[i] == a[i]);
     }
     {
@@ -36,7 +38,7 @@ int main()
         std::valarray<T> v2;
         v2 = {1, 2.5, 3, 4.25, 5};
         assert(v2.size() == N);
-        for (int i = 0; i < v2.size(); ++i)
+        for (std::size_t i = 0; i < v2.size(); ++i)
             assert(v2[i] == a[i]);
     }
     {
@@ -46,12 +48,11 @@ int main()
         std::valarray<T> v2(a, N-2);
         v2 = {T(1), T(2), T(3), T(4), T(5)};
         assert(v2.size() == N);
-        for (int i = 0; i < N; ++i)
+        for (unsigned i = 0; i < N; ++i)
         {
             assert(v2[i].size() == a[i].size());
-            for (int j = 0; j < a[i].size(); ++j)
+            for (std::size_t j = 0; j < a[i].size(); ++j)
                 assert(v2[i][j] == a[i][j]);
         }
     }
-#endif  // _LIBCPP_HAS_NO_GENERALIZED_INITIALIZERS
 }

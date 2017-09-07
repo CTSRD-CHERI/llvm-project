@@ -24,6 +24,8 @@
 #include <limits>
 #include <cmath>
 
+#include "test_macros.h"
+
 template <class T>
 void
 test()
@@ -31,11 +33,12 @@ test()
     typedef std::hash<T> H;
     static_assert((std::is_same<typename H::argument_type, T>::value), "" );
     static_assert((std::is_same<typename H::result_type, std::size_t>::value), "" );
+    ASSERT_NOEXCEPT(H()(T()));
     H h;
 
     std::size_t t0 = h(0.);
     std::size_t tn0 = h(-0.);
-    std::size_t tp1 = h(0.1);
+    std::size_t tp1 = h(static_cast<T>(0.1));
     std::size_t t1 = h(1);
     std::size_t tn1 = h(-1);
     std::size_t pinf = h(INFINITY);

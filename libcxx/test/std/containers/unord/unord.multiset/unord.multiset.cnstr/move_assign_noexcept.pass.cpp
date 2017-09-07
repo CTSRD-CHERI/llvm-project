@@ -17,9 +17,12 @@
 
 // This tests a conforming extension
 
+// UNSUPPORTED: c++98, c++03
+
 #include <unordered_set>
 #include <cassert>
 
+#include "test_macros.h"
 #include "MoveOnly.h"
 #include "test_allocator.h"
 
@@ -28,6 +31,7 @@ struct some_comp
 {
     typedef T value_type;
     some_comp& operator=(const some_comp&);
+    bool operator()(const T&, const T&) const { return false; }
 };
 
 template <class T>
@@ -37,11 +41,11 @@ struct some_hash
     some_hash();
     some_hash(const some_hash&);
     some_hash& operator=(const some_hash&);
+    std::size_t operator()(T const&) const;
 };
 
 int main()
 {
-#if __has_feature(cxx_noexcept)
     {
         typedef std::unordered_multiset<MoveOnly> C;
         static_assert(std::is_nothrow_move_assignable<C>::value, "");
@@ -51,11 +55,13 @@ int main()
                            std::equal_to<MoveOnly>, test_allocator<MoveOnly>> C;
         static_assert(!std::is_nothrow_move_assignable<C>::value, "");
     }
+#if defined(_LIBCPP_VERSION)
     {
         typedef std::unordered_multiset<MoveOnly, std::hash<MoveOnly>,
                           std::equal_to<MoveOnly>, other_allocator<MoveOnly>> C;
         static_assert(std::is_nothrow_move_assignable<C>::value, "");
     }
+#endif // _LIBCPP_VERSION
     {
         typedef std::unordered_multiset<MoveOnly, some_hash<MoveOnly>> C;
         static_assert(!std::is_nothrow_move_assignable<C>::value, "");
@@ -65,5 +71,4 @@ int main()
                                                          some_comp<MoveOnly>> C;
         static_assert(!std::is_nothrow_move_assignable<C>::value, "");
     }
-#endif
 }

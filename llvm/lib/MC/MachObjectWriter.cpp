@@ -7,23 +7,36 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/MC/MCMachObjectWriter.h"
-#include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/iterator_range.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAsmLayout.h"
 #include "llvm/MC/MCAssembler.h"
+#include "llvm/MC/MCDirectives.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCFixupKindInfo.h"
+#include "llvm/MC/MCFragment.h"
+#include "llvm/MC/MCMachObjectWriter.h"
 #include "llvm/MC/MCObjectWriter.h"
+#include "llvm/MC/MCSection.h"
 #include "llvm/MC/MCSectionMachO.h"
+#include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCSymbolMachO.h"
 #include "llvm/MC/MCValue.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MachO.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
+#include <string>
+#include <utility>
 #include <vector>
+
 using namespace llvm;
 
 #define DEBUG_TYPE "mc"
@@ -334,7 +347,7 @@ void MachObjectWriter::writeNlist(MachSymbolData &MSD,
     if (AliaseeInfo)
       SectionIndex = AliaseeInfo->SectionIndex;
     Symbol = AliasedSymbol;
-    // FIXME: Should this update Data as well?  Do we need OrigSymbol at all?
+    // FIXME: Should this update Data as well?
   }
 
   // Set the N_TYPE bits. See <mach-o/nlist.h>.
@@ -377,7 +390,9 @@ void MachObjectWriter::writeNlist(MachSymbolData &MSD,
 
   // The Mach-O streamer uses the lowest 16-bits of the flags for the 'desc'
   // value.
-  write16(cast<MCSymbolMachO>(Symbol)->getEncodedFlags());
+  bool EncodeAsAltEntry =
+    IsAlias && cast<MCSymbolMachO>(OrigSymbol).isAltEntry();
+  write16(cast<MCSymbolMachO>(Symbol)->getEncodedFlags(EncodeAsAltEntry));
   if (is64Bit())
     write64(Address);
   else
@@ -404,7 +419,7 @@ static unsigned ComputeLinkerOptionsLoadCommandSize(
   unsigned Size = sizeof(MachO::linker_option_command);
   for (const std::string &Option : Options)
     Size += Option.size() + 1;
-  return RoundUpToAlignment(Size, is64Bit ? 8 : 4);
+  return alignTo(Size, is64Bit ? 8 : 4);
 }
 
 void MachObjectWriter::writeLinkerOptionsLoadCommand(
@@ -420,7 +435,7 @@ void MachObjectWriter::writeLinkerOptionsLoadCommand(
   uint64_t BytesWritten = sizeof(MachO::linker_option_command);
   for (const std::string &Option : Options) {
     // Write each string, including the null byte.
-    writeBytes(Option.c_str(), Option.size() + 1);
+    writeBytes(Option, Option.size() + 1);
     BytesWritten += Option.size() + 1;
   }
 
@@ -455,6 +470,7 @@ void MachObjectWriter::bindIndirectSymbols(MCAssembler &Asm) {
 
     if (Section.getType() != MachO::S_NON_LAZY_SYMBOL_POINTERS &&
         Section.getType() != MachO::S_LAZY_SYMBOL_POINTERS &&
+        Section.getType() != MachO::S_THREAD_LOCAL_VARIABLE_POINTERS &&
         Section.getType() != MachO::S_SYMBOL_STUBS) {
       MCSymbol &Symbol = *it->Symbol;
       report_fatal_error("indirect symbol '" + Symbol.getName() +
@@ -468,7 +484,8 @@ void MachObjectWriter::bindIndirectSymbols(MCAssembler &Asm) {
          ie = Asm.indirect_symbol_end(); it != ie; ++it, ++IndirectIndex) {
     const MCSectionMachO &Section = cast<MCSectionMachO>(*it->Section);
 
-    if (Section.getType() != MachO::S_NON_LAZY_SYMBOL_POINTERS)
+    if (Section.getType() != MachO::S_NON_LAZY_SYMBOL_POINTERS &&
+        Section.getType() !=  MachO::S_THREAD_LOCAL_VARIABLE_POINTERS)
       continue;
 
     // Initialize the section indirect symbol base, if necessary.
@@ -606,7 +623,7 @@ void MachObjectWriter::computeSectionAddresses(const MCAssembler &Asm,
                                                const MCAsmLayout &Layout) {
   uint64_t StartAddress = 0;
   for (const MCSection *Sec : Layout.getSectionOrder()) {
-    StartAddress = RoundUpToAlignment(StartAddress, Sec->getAlignment());
+    StartAddress = alignTo(StartAddress, Sec->getAlignment());
     SectionAddress[Sec] = StartAddress;
     StartAddress += Layout.getSectionAddressSize(Sec);
 
@@ -736,7 +753,7 @@ void MachObjectWriter::writeObject(MCAssembler &Asm,
 
   // Add the loh load command size, if used.
   uint64_t LOHRawSize = Asm.getLOHContainer().getEmitSize(*this, Layout);
-  uint64_t LOHSize = RoundUpToAlignment(LOHRawSize, is64Bit() ? 8 : 4);
+  uint64_t LOHSize = alignTo(LOHRawSize, is64Bit() ? 8 : 4);
   if (LOHSize) {
     ++NumLoadCommands;
     LoadCommandsSize += sizeof(MachO::linkedit_data_command);
@@ -815,8 +832,22 @@ void MachObjectWriter::writeObject(MCAssembler &Asm,
     assert(VersionInfo.Major < 65536 && "unencodable major target version");
     uint32_t EncodedVersion = VersionInfo.Update | (VersionInfo.Minor << 8) |
       (VersionInfo.Major << 16);
-    write32(VersionInfo.Kind == MCVM_OSXVersionMin ? MachO::LC_VERSION_MIN_MACOSX :
-            MachO::LC_VERSION_MIN_IPHONEOS);
+    MachO::LoadCommandType LCType;
+    switch (VersionInfo.Kind) {
+    case MCVM_OSXVersionMin:
+      LCType = MachO::LC_VERSION_MIN_MACOSX;
+      break;
+    case MCVM_IOSVersionMin:
+      LCType = MachO::LC_VERSION_MIN_IPHONEOS;
+      break;
+    case MCVM_TvOSVersionMin:
+      LCType = MachO::LC_VERSION_MIN_TVOS;
+      break;
+    case MCVM_WatchOSVersionMin:
+      LCType = MachO::LC_VERSION_MIN_WATCHOS;
+      break;
+    }
+    write32(LCType);
     write32(sizeof(MachO::version_min_command));
     write32(EncodedVersion);
     write32(0);         // reserved.
@@ -864,7 +895,7 @@ void MachObjectWriter::writeObject(MCAssembler &Asm,
                                               sizeof(MachO::nlist_64) :
                                               sizeof(MachO::nlist));
     writeSymtabLoadCommand(SymbolTableOffset, NumSymTabSymbols,
-                           StringTableOffset, StringTable.data().size());
+                           StringTableOffset, StringTable.getSize());
 
     writeDysymtabLoadCommand(FirstLocalSymbol, NumLocalSymbols,
                              FirstExternalSymbol, NumExternalSymbols,
@@ -959,7 +990,7 @@ void MachObjectWriter::writeObject(MCAssembler &Asm,
         writeNlist(Entry, Layout);
 
     // Write the string table.
-    getStream() << StringTable.data();
+    StringTable.write(getStream());
   }
 }
 

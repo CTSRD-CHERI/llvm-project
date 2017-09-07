@@ -183,4 +183,81 @@ void test_macro_args() {
   // CHECK-MESSAGES: :[[@LINE-2]]:24: warning: use nullptr
   // CHECK-FIXES: a[2] = {ENTRY(nullptr), {nullptr}};
 #undef ENTRY
+
+#define assert1(expr) (expr) ? 0 : 1
+#define assert2 assert1
+  int *p;
+  assert2(p == 0);
+  // CHECK-MESSAGES: :[[@LINE-1]]:16: warning: use nullptr
+  // CHECK-FIXES: assert2(p == nullptr);
+  assert2(p == NULL);
+  // CHECK-MESSAGES: :[[@LINE-1]]:16: warning: use nullptr
+  // CHECK-FIXES: assert2(p == nullptr);
+#undef assert2
+#undef assert1
+
+#define ASSERT_EQ(a, b) a == b
+#define ASSERT_NULL(x) ASSERT_EQ(static_cast<void *>(NULL), x)
+  int *pp;
+  ASSERT_NULL(pp);
+  ASSERT_NULL(NULL);
+  // CHECK-MESSAGES: :[[@LINE-1]]:15: warning: use nullptr
+  // CHECK-FIXES: ASSERT_NULL(nullptr);
+#undef ASSERT_NULL
+#undef ASSERT_EQ
+}
+
+// One of the ancestor of the cast is a NestedNameSpecifierLoc.
+class NoDef;
+char function(NoDef *p);
+#define F(x) (sizeof(function(x)) == 1)
+template<class T, T t>
+class C {};
+C<bool, F(0)> c;
+// CHECK-MESSAGES: :[[@LINE-1]]:11: warning: use nullptr
+// CHECK-FIXES: C<bool, F(nullptr)> c;
+#undef F
+
+// Test default argument expression.
+struct D {
+  explicit D(void *t, int *c = NULL) {}
+  // CHECK-MESSAGES: :[[@LINE-1]]:32: warning: use nullptr
+  // CHECK-FIXES: explicit D(void *t, int *c = nullptr) {}
+};
+
+void test_default_argument() {
+  D(nullptr);
+}
+
+// Test on two neighbour CXXDefaultArgExprs nodes.
+typedef unsigned long long uint64;
+struct ZZ {
+  explicit ZZ(uint64, const uint64* = NULL) {}
+// CHECK-MESSAGES: :[[@LINE-1]]:39: warning: use nullptr
+// CHECK-FIXES: explicit ZZ(uint64, const uint64* = nullptr) {}
+  operator bool()  { return true; }
+};
+
+uint64 Hash(uint64 seed = 0) { return 0; }
+
+void f() {
+  bool a;
+  a = ZZ(Hash());
+}
+
+// Test on ignoring substituted template types.
+template<typename T>
+class TemplateClass {
+ public:
+  explicit TemplateClass(int a, T default_value = 0) {}
+
+  void h(T *default_value = 0) {}
+
+  void f(int* p = 0) {}
+// CHECK-MESSAGES: :[[@LINE-1]]:19: warning: use nullptr
+// CHECK-FIXES: void f(int* p = nullptr) {}
+};
+
+void IgnoreSubstTemplateType() {
+  TemplateClass<int*> a(1);
 }

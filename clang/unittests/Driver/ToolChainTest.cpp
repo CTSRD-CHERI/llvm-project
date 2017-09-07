@@ -58,8 +58,9 @@ TEST(ToolChainTest, VFSGCCInstallation) {
     InMemoryFileSystem->addFile(Path, 0,
                                 llvm::MemoryBuffer::getMemBuffer("\n"));
 
-  std::unique_ptr<Compilation> C(
-      TheDriver.BuildCompilation({"-fsyntax-only", "foo.cpp"}));
+  std::unique_ptr<Compilation> C(TheDriver.BuildCompilation(
+      {"-fsyntax-only", "--gcc-toolchain=", "foo.cpp"}));
+  EXPECT_TRUE(C);
 
   std::string S;
   {
@@ -97,8 +98,9 @@ TEST(ToolChainTest, VFSGCCInstallationRelativeDir) {
     InMemoryFileSystem->addFile(Path, 0,
                                 llvm::MemoryBuffer::getMemBuffer("\n"));
 
-  std::unique_ptr<Compilation> C(
-      TheDriver.BuildCompilation({"-fsyntax-only", "foo.cpp"}));
+  std::unique_ptr<Compilation> C(TheDriver.BuildCompilation(
+      {"-fsyntax-only", "--gcc-toolchain=", "foo.cpp"}));
+  EXPECT_TRUE(C);
 
   std::string S;
   {
@@ -117,4 +119,38 @@ TEST(ToolChainTest, VFSGCCInstallationRelativeDir) {
             S);
 }
 
-} // end anonymous namespace
+TEST(ToolChainTest, DefaultDriverMode) {
+  IntrusiveRefCntPtr<DiagnosticOptions> DiagOpts = new DiagnosticOptions();
+
+  IntrusiveRefCntPtr<DiagnosticIDs> DiagID(new DiagnosticIDs());
+  struct TestDiagnosticConsumer : public DiagnosticConsumer {};
+  DiagnosticsEngine Diags(DiagID, &*DiagOpts, new TestDiagnosticConsumer);
+  IntrusiveRefCntPtr<vfs::InMemoryFileSystem> InMemoryFileSystem(
+      new vfs::InMemoryFileSystem);
+
+  Driver CCDriver("/home/test/bin/clang", "arm-linux-gnueabi", Diags,
+                  InMemoryFileSystem);
+  CCDriver.setCheckInputsExist(false);
+  Driver CXXDriver("/home/test/bin/clang++", "arm-linux-gnueabi", Diags,
+                   InMemoryFileSystem);
+  CXXDriver.setCheckInputsExist(false);
+  Driver CLDriver("/home/test/bin/clang-cl", "arm-linux-gnueabi", Diags,
+                  InMemoryFileSystem);
+  CLDriver.setCheckInputsExist(false);
+
+  std::unique_ptr<Compilation> CC(CCDriver.BuildCompilation(
+      { "/home/test/bin/clang", "foo.cpp"}));
+  std::unique_ptr<Compilation> CXX(CXXDriver.BuildCompilation(
+      { "/home/test/bin/clang++", "foo.cpp"}));
+  std::unique_ptr<Compilation> CL(CLDriver.BuildCompilation(
+      { "/home/test/bin/clang-cl", "foo.cpp"}));
+
+  EXPECT_TRUE(CC);
+  EXPECT_TRUE(CXX);
+  EXPECT_TRUE(CL);
+  EXPECT_TRUE(CCDriver.CCCIsCC());
+  EXPECT_TRUE(CXXDriver.CCCIsCXX());
+  EXPECT_TRUE(CLDriver.IsCLMode());
+}
+
+} // end anonymous namespace.

@@ -1,5 +1,6 @@
 """Loading unittests."""
 
+import functools
 import os
 import re
 import sys
@@ -9,7 +10,7 @@ import unittest
 
 from fnmatch import fnmatch
 
-from unittest2 import case, suite
+from unittest2 import case, suite, cmp_
 
 try:
     from os.path import relpath
@@ -17,17 +18,6 @@ except ImportError:
     from unittest2.compatibility import relpath
 
 __unittest = True
-
-
-def _CmpToKey(mycmp):
-    'Convert a cmp= function into a key= function'
-    class K(object):
-        def __init__(self, obj):
-            self.obj = obj
-        def __lt__(self, other):
-            return mycmp(self.obj, other.obj) == -1
-    return K
-
 
 # what about .pyc or .pyo (etc)
 # we would need to avoid loading the same tests multiple times
@@ -44,8 +34,10 @@ def _make_failed_import_test(name, suiteClass):
     return _make_failed_test('ModuleImportFailure', name, ImportError(message),
                              suiteClass)
 
+
 def _make_failed_load_tests(name, exception, suiteClass):
     return _make_failed_test('LoadTestsFailure', name, exception, suiteClass)
+
 
 def _make_failed_test(classname, methodname, exception, suiteClass):
     def testFailure(self):
@@ -53,17 +45,19 @@ def _make_failed_test(classname, methodname, exception, suiteClass):
     attrs = {methodname: testFailure}
     TestClass = type(classname, (case.TestCase,), attrs)
     return suiteClass((TestClass(methodname),))
-    
+
 
 class TestLoader(unittest.TestLoader):
     """
     This class is responsible for loading tests according to various criteria
     and returning them wrapped in a TestSuite
     """
-    testMethodPrefix = 'test'
-    sortTestMethodsUsing = cmp
-    suiteClass = suite.TestSuite
-    _top_level_dir = None
+
+    def __init__(self):
+        self.testMethodPrefix = 'test'
+        self.sortTestMethodsUsing = cmp_
+        self.suiteClass = suite.TestSuite
+        self._top_level_dir = None
 
     def loadTestsFromTestCase(self, testCaseClass):
         """Return a suite of all tests cases contained in testCaseClass"""
@@ -89,7 +83,7 @@ class TestLoader(unittest.TestLoader):
         if use_load_tests and load_tests is not None:
             try:
                 return load_tests(self, tests, None)
-            except Exception, e:
+            except Exception as e:
                 return _make_failed_load_tests(module.__name__, e,
                                                self.suiteClass)
         return tests
@@ -155,9 +149,11 @@ class TestLoader(unittest.TestLoader):
                          prefix=self.testMethodPrefix):
             return attrname.startswith(prefix) and \
                 hasattr(getattr(testCaseClass, attrname), '__call__')
-        testFnNames = filter(isTestMethod, dir(testCaseClass))
+        testFnNames = list(filter(isTestMethod, dir(testCaseClass)))
         if self.sortTestMethodsUsing:
-            testFnNames.sort(key=_CmpToKey(self.sortTestMethodsUsing))
+            testFnNames.sort(
+                key=functools.cmp_to_key(
+                    self.sortTestMethodsUsing))
         return testFnNames
 
     def discover(self, start_dir, pattern='test*.py', top_level_dir=None):
@@ -183,7 +179,8 @@ class TestLoader(unittest.TestLoader):
         """
         set_implicit_top = False
         if top_level_dir is None and self._top_level_dir is not None:
-            # make top_level_dir optional if called from load_tests in a package
+            # make top_level_dir optional if called from load_tests in a
+            # package
             top_level_dir = self._top_level_dir
         elif top_level_dir is None:
             set_implicit_top = True
@@ -191,7 +188,7 @@ class TestLoader(unittest.TestLoader):
 
         top_level_dir = os.path.abspath(top_level_dir)
 
-        if not top_level_dir in sys.path:
+        if top_level_dir not in sys.path:
             # all test modules must be importable from the top level directory
             # should we *unconditionally* put the start directory in first
             # in sys.path to minimise likelihood of conflicts between installed
@@ -203,7 +200,8 @@ class TestLoader(unittest.TestLoader):
         if os.path.isdir(os.path.abspath(start_dir)):
             start_dir = os.path.abspath(start_dir)
             if start_dir != top_level_dir:
-                is_not_importable = not os.path.isfile(os.path.join(start_dir, '__init__.py'))
+                is_not_importable = not os.path.isfile(
+                    os.path.join(start_dir, '__init__.py'))
         else:
             # support for discovery from dotted module names
             try:
@@ -213,13 +211,17 @@ class TestLoader(unittest.TestLoader):
             else:
                 the_module = sys.modules[start_dir]
                 top_part = start_dir.split('.')[0]
-                start_dir = os.path.abspath(os.path.dirname((the_module.__file__)))
+                start_dir = os.path.abspath(
+                    os.path.dirname((the_module.__file__)))
                 if set_implicit_top:
-                    self._top_level_dir = os.path.abspath(os.path.dirname(os.path.dirname(sys.modules[top_part].__file__)))
+                    self._top_level_dir = os.path.abspath(os.path.dirname(
+                        os.path.dirname(sys.modules[top_part].__file__)))
                     sys.path.remove(top_level_dir)
 
         if is_not_importable:
-            raise ImportError('Start directory is not importable: %r' % start_dir)
+            raise ImportError(
+                'Start directory is not importable: %r' %
+                start_dir)
 
         tests = list(self._find_tests(start_dir, pattern))
         return self.suiteClass(tests)
@@ -241,7 +243,7 @@ class TestLoader(unittest.TestLoader):
     def _match_path(self, path, full_path, pattern):
         # override this method to use alternative matching strategy
         return fnmatch(path, pattern)
-    
+
     def _find_tests(self, start_dir, pattern):
         """Used by discovery. Yields test suites it loads."""
         paths = os.listdir(start_dir)
@@ -261,16 +263,20 @@ class TestLoader(unittest.TestLoader):
                 except:
                     yield _make_failed_import_test(name, self.suiteClass)
                 else:
-                    mod_file = os.path.abspath(getattr(module, '__file__', full_path))
+                    mod_file = os.path.abspath(
+                        getattr(module, '__file__', full_path))
                     realpath = os.path.splitext(mod_file)[0]
                     fullpath_noext = os.path.splitext(full_path)[0]
                     if realpath.lower() != fullpath_noext.lower():
                         module_dir = os.path.dirname(realpath)
-                        mod_name = os.path.splitext(os.path.basename(full_path))[0]
+                        mod_name = os.path.splitext(
+                            os.path.basename(full_path))[0]
                         expected_dir = os.path.dirname(full_path)
-                        msg = ("%r module incorrectly imported from %r. Expected %r. "
-                               "Is this module globally installed?")
-                        raise ImportError(msg % (mod_name, module_dir, expected_dir))
+                        msg = (
+                            "%r module incorrectly imported from %r. Expected %r. "
+                            "Is this module globally installed?")
+                        raise ImportError(msg %
+                                          (mod_name, module_dir, expected_dir))
                     yield self.loadTestsFromModule(module)
             elif os.path.isdir(full_path):
                 if not os.path.isfile(os.path.join(full_path, '__init__.py')):
@@ -279,11 +285,13 @@ class TestLoader(unittest.TestLoader):
                 load_tests = None
                 tests = None
                 if fnmatch(path, pattern):
-                    # only check load_tests if the package directory itself matches the filter
+                    # only check load_tests if the package directory itself
+                    # matches the filter
                     name = self._get_name_from_path(full_path)
                     package = self._get_module_from_name(name)
                     load_tests = getattr(package, 'load_tests', None)
-                    tests = self.loadTestsFromModule(package, use_load_tests=False)
+                    tests = self.loadTestsFromModule(
+                        package, use_load_tests=False)
 
                 if load_tests is None:
                     if tests is not None:
@@ -295,7 +303,7 @@ class TestLoader(unittest.TestLoader):
                 else:
                     try:
                         yield load_tests(self, tests, pattern)
-                    except Exception, e:
+                    except Exception as e:
                         yield _make_failed_load_tests(package.__name__, e,
                                                       self.suiteClass)
 
@@ -310,13 +318,22 @@ def _makeLoader(prefix, sortUsing, suiteClass=None):
         loader.suiteClass = suiteClass
     return loader
 
-def getTestCaseNames(testCaseClass, prefix, sortUsing=cmp):
+
+def getTestCaseNames(testCaseClass, prefix, sortUsing=cmp_):
     return _makeLoader(prefix, sortUsing).getTestCaseNames(testCaseClass)
 
-def makeSuite(testCaseClass, prefix='test', sortUsing=cmp,
-              suiteClass=suite.TestSuite):
-    return _makeLoader(prefix, sortUsing, suiteClass).loadTestsFromTestCase(testCaseClass)
 
-def findTestCases(module, prefix='test', sortUsing=cmp,
+def makeSuite(testCaseClass, prefix='test', sortUsing=cmp_,
+              suiteClass=suite.TestSuite):
+    return _makeLoader(
+        prefix,
+        sortUsing,
+        suiteClass).loadTestsFromTestCase(testCaseClass)
+
+
+def findTestCases(module, prefix='test', sortUsing=cmp_,
                   suiteClass=suite.TestSuite):
-    return _makeLoader(prefix, sortUsing, suiteClass).loadTestsFromModule(module)
+    return _makeLoader(
+        prefix,
+        sortUsing,
+        suiteClass).loadTestsFromModule(module)

@@ -16,11 +16,12 @@
 //                  const basic_regex<charT, traits>& e,
 //                  regex_constants::match_flag_type flags = regex_constants::match_default);
 
-// http://llvm.org/bugs/show_bug.cgi?id=16135
+// https://bugs.llvm.org/show_bug.cgi?id=16135
 
 #include <string>
 #include <regex>
 #include <cassert>
+#include "test_macros.h"
 
 void
 test1()

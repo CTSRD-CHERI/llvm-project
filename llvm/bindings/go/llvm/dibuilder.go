@@ -189,7 +189,6 @@ type DIFunction struct {
 	ScopeLine    int
 	Flags        int
 	Optimized    bool
-	Function     Value
 }
 
 // CreateCompileUnit creates function debug metadata.
@@ -211,7 +210,6 @@ func (d *DIBuilder) CreateFunction(diScope Metadata, f DIFunction) Metadata {
 		C.unsigned(f.ScopeLine),
 		C.unsigned(f.Flags),
 		boolToCInt(f.Optimized),
-		f.Function.C,
 	)
 	return Metadata{C: result}
 }
@@ -224,6 +222,7 @@ type DIAutoVariable struct {
 	Type           Metadata
 	AlwaysPreserve bool
 	Flags          int
+	AlignInBits    uint32
 }
 
 // CreateAutoVariable creates local variable debug metadata.
@@ -239,6 +238,7 @@ func (d *DIBuilder) CreateAutoVariable(scope Metadata, v DIAutoVariable) Metadat
 		v.Type.C,
 		boolToCInt(v.AlwaysPreserve),
 		C.unsigned(v.Flags),
+		C.uint32_t(v.AlignInBits),
 	)
 	return Metadata{C: result}
 }
@@ -277,10 +277,9 @@ func (d *DIBuilder) CreateParameterVariable(scope Metadata, v DIParameterVariabl
 
 // DIBasicType holds the values for creating basic type debug metadata.
 type DIBasicType struct {
-	Name        string
-	SizeInBits  uint64
-	AlignInBits uint64
-	Encoding    DwarfTypeEncoding
+	Name       string
+	SizeInBits uint64
+	Encoding   DwarfTypeEncoding
 }
 
 // CreateBasicType creates basic type debug metadata.
@@ -291,7 +290,6 @@ func (d *DIBuilder) CreateBasicType(t DIBasicType) Metadata {
 		d.ref,
 		name,
 		C.uint64_t(t.SizeInBits),
-		C.uint64_t(t.AlignInBits),
 		C.unsigned(t.Encoding),
 	)
 	return Metadata{C: result}
@@ -301,7 +299,7 @@ func (d *DIBuilder) CreateBasicType(t DIBasicType) Metadata {
 type DIPointerType struct {
 	Pointee     Metadata
 	SizeInBits  uint64
-	AlignInBits uint64 // optional
+	AlignInBits uint32 // optional
 	Name        string // optional
 }
 
@@ -313,7 +311,7 @@ func (d *DIBuilder) CreatePointerType(t DIPointerType) Metadata {
 		d.ref,
 		t.Pointee.C,
 		C.uint64_t(t.SizeInBits),
-		C.uint64_t(t.AlignInBits),
+		C.uint32_t(t.AlignInBits),
 		name,
 	)
 	return Metadata{C: result}
@@ -342,7 +340,7 @@ type DIStructType struct {
 	File        Metadata
 	Line        int
 	SizeInBits  uint64
-	AlignInBits uint64
+	AlignInBits uint32
 	Flags       int
 	DerivedFrom Metadata
 	Elements    []Metadata
@@ -360,7 +358,7 @@ func (d *DIBuilder) CreateStructType(scope Metadata, t DIStructType) Metadata {
 		t.File.C,
 		C.unsigned(t.Line),
 		C.uint64_t(t.SizeInBits),
-		C.uint64_t(t.AlignInBits),
+		C.uint32_t(t.AlignInBits),
 		C.unsigned(t.Flags),
 		t.DerivedFrom.C,
 		elements.C,
@@ -377,7 +375,7 @@ type DIReplaceableCompositeType struct {
 	Line        int
 	RuntimeLang int
 	SizeInBits  uint64
-	AlignInBits uint64
+	AlignInBits uint32
 	Flags       int
 }
 
@@ -394,7 +392,7 @@ func (d *DIBuilder) CreateReplaceableCompositeType(scope Metadata, t DIReplaceab
 		C.unsigned(t.Line),
 		C.unsigned(t.RuntimeLang),
 		C.uint64_t(t.SizeInBits),
-		C.uint64_t(t.AlignInBits),
+		C.uint32_t(t.AlignInBits),
 		C.unsigned(t.Flags),
 	)
 	return Metadata{C: result}
@@ -406,7 +404,7 @@ type DIMemberType struct {
 	File         Metadata
 	Line         int
 	SizeInBits   uint64
-	AlignInBits  uint64
+	AlignInBits  uint32
 	OffsetInBits uint64
 	Flags        int
 	Type         Metadata
@@ -423,7 +421,7 @@ func (d *DIBuilder) CreateMemberType(scope Metadata, t DIMemberType) Metadata {
 		t.File.C,
 		C.unsigned(t.Line),
 		C.uint64_t(t.SizeInBits),
-		C.uint64_t(t.AlignInBits),
+		C.uint32_t(t.AlignInBits),
 		C.uint64_t(t.OffsetInBits),
 		C.unsigned(t.Flags),
 		t.Type.C,
@@ -440,7 +438,7 @@ type DISubrange struct {
 // DIArrayType holds the values for creating array type debug metadata.
 type DIArrayType struct {
 	SizeInBits  uint64
-	AlignInBits uint64
+	AlignInBits uint32
 	ElementType Metadata
 	Subscripts  []DISubrange
 }
@@ -455,7 +453,7 @@ func (d *DIBuilder) CreateArrayType(t DIArrayType) Metadata {
 	result := C.LLVMDIBuilderCreateArrayType(
 		d.ref,
 		C.uint64_t(t.SizeInBits),
-		C.uint64_t(t.AlignInBits),
+		C.uint32_t(t.AlignInBits),
 		t.ElementType.C,
 		subscripts.C,
 	)

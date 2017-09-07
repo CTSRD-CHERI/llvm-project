@@ -22,6 +22,8 @@
 #include <chrono>
 #include <cassert>
 
+#include "test_macros.h"
+
 int main()
 {
     typedef std::chrono::system_clock Clock;
@@ -54,8 +56,8 @@ int main()
     assert(!(t1 == t2));
     assert( (t1 != t2));
     }
-    
-#if _LIBCPP_STD_VER > 11
+
+#if TEST_STD_VER > 11
     {
     constexpr T1 t1(Duration1(3));
     constexpr T1 t2(Duration1(3));

@@ -11,8 +11,8 @@
 //
 // This test uses new symbols that were not defined in the libc++ shipped on
 // darwin11 and darwin12:
-// XFAIL: with_system_cxx_lib=x86_64-apple-darwin11
-// XFAIL: with_system_cxx_lib=x86_64-apple-darwin12
+// XFAIL: availability=macosx10.7
+// XFAIL: availability=macosx10.8
 
 // <memory>
 
@@ -24,12 +24,15 @@
 //                                       shared_ptr<T> w, memory_order success,
 //                                       memory_order failure);
 
+// UNSUPPORTED: c++98, c++03
+
 #include <memory>
 #include <cassert>
 
+#include "test_macros.h"
+
 int main()
 {
-#if __has_feature(cxx_atomic)
     {
         std::shared_ptr<int> p(new int(4));
         std::shared_ptr<int> v(new int(3));
@@ -54,5 +57,4 @@ int main()
         assert(*v == 4);
         assert(*w == 2);
     }
-#endif
 }

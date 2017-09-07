@@ -18,7 +18,6 @@
 #include "HexagonISelLowering.h"
 #include "HexagonInstrInfo.h"
 #include "HexagonSelectionDAGInfo.h"
-#include "llvm/IR/DataLayout.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
 #include <string>
@@ -35,14 +34,22 @@ class HexagonSubtarget : public HexagonGenSubtargetInfo {
   virtual void anchor();
 
   bool UseMemOps, UseHVXOps, UseHVXDblOps;
+  bool UseLongCalls;
   bool ModeIEEERndNear;
 
 public:
-  enum HexagonArchEnum {
-    V4, V5, V55, V60
-  };
+#include "HexagonDepArch.h"
 
   HexagonArchEnum HexagonArchVersion;
+  /// True if the target should use Back-Skip-Back scheduling. This is the
+  /// default for V60.
+  bool UseBSBScheduling;
+
+  class HexagonDAGMutation : public ScheduleDAGMutation {
+  public:
+    void apply(ScheduleDAGInstrs *DAG) override;
+  };
+
 private:
   std::string CPUString;
   HexagonInstrInfo InstrInfo;
@@ -50,6 +57,7 @@ private:
   HexagonSelectionDAGInfo TSInfo;
   HexagonFrameLowering FrameLowering;
   InstrItineraryData InstrItins;
+  void initializeEnvironment();
 
 public:
   HexagonSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
@@ -84,16 +92,31 @@ public:
   bool useMemOps() const { return UseMemOps; }
   bool hasV5TOps() const { return getHexagonArchVersion() >= V5; }
   bool hasV5TOpsOnly() const { return getHexagonArchVersion() == V5; }
+  bool hasV55TOps() const { return getHexagonArchVersion() >= V55; }
+  bool hasV55TOpsOnly() const { return getHexagonArchVersion() == V55; }
   bool hasV60TOps() const { return getHexagonArchVersion() >= V60; }
   bool hasV60TOpsOnly() const { return getHexagonArchVersion() == V60; }
+  bool hasV62TOps() const { return getHexagonArchVersion() >= V62; }
+  bool hasV62TOpsOnly() const { return getHexagonArchVersion() == V62; }
+
   bool modeIEEERndNear() const { return ModeIEEERndNear; }
-  bool useHVXDblOps() const { return UseHVXDblOps; }
+  bool useHVXOps() const { return UseHVXOps; }
+  bool useHVXDblOps() const { return UseHVXOps && UseHVXDblOps; }
   bool useHVXSglOps() const { return UseHVXOps && !UseHVXDblOps; }
+  bool useLongCalls() const { return UseLongCalls; }
+  bool usePredicatedCalls() const;
+
+  bool useBSBScheduling() const { return UseBSBScheduling; }
   bool enableMachineScheduler() const override;
   // Always use the TargetLowering default scheduler.
   // FIXME: This will use the vliw scheduler which is probably just hurting
   // compiler time and will be removed eventually anyway.
   bool enableMachineSchedDefaultSched() const override { return false; }
+
+  AntiDepBreakMode getAntiDepBreakMode() const override { return ANTIDEP_ALL; }
+  bool enablePostRAScheduler() const override { return true; }
+
+  bool enableSubRegLiveness() const override;
 
   const std::string &getCPUString () const { return CPUString; }
 
@@ -102,8 +125,32 @@ public:
     return Hexagon_SMALL_DATA_THRESHOLD;
   }
   const HexagonArchEnum &getHexagonArchVersion() const {
-    return  HexagonArchVersion;
+    return HexagonArchVersion;
   }
+
+  void getPostRAMutations(
+      std::vector<std::unique_ptr<ScheduleDAGMutation>> &Mutations)
+      const override;
+
+  void getSMSMutations(
+      std::vector<std::unique_ptr<ScheduleDAGMutation>> &Mutations)
+      const override;
+
+  /// \brief Perform target specific adjustments to the latency of a schedule
+  /// dependency.
+  void adjustSchedDependency(SUnit *def, SUnit *use, SDep& dep) const override;
+
+  unsigned getL1CacheLineSize() const;
+  unsigned getL1PrefetchDistance() const;
+
+private:
+  // Helper function responsible for increasing the latency only.
+  void updateLatency(MachineInstr &SrcInst, MachineInstr &DstInst, SDep &Dep)
+      const;
+  void restoreLatency(SUnit *Src, SUnit *Dst) const;
+  void changeLatency(SUnit *Src, SUnit *Dst, unsigned Lat) const;
+  bool isBestZeroLatency(SUnit *Src, SUnit *Dst, const HexagonInstrInfo *TII,
+      SmallSet<SUnit*, 4> &ExclSrc, SmallSet<SUnit*, 4> &ExclDst) const;
 };
 
 } // end namespace llvm

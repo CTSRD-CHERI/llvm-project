@@ -87,19 +87,16 @@ bool Module::output(llvm::raw_fd_ostream &OS, int Indent) {
   }
 
   // Output submodules.
-  for (std::vector<Module *>::iterator I = SubModules.begin(),
-                                       E = SubModules.end();
-       I != E; ++I) {
+  for (auto I = SubModules.begin(), E = SubModules.end(); I != E; ++I) {
     if (!(*I)->output(OS, Indent))
       return false;
   }
 
   // Output header files.
-  for (std::vector<std::string>::iterator I = HeaderFileNames.begin(),
-                                          E = HeaderFileNames.end();
-       I != E; ++I) {
+  for (auto I = HeaderFileNames.begin(), E = HeaderFileNames.end(); I != E;
+       ++I) {
     OS.indent(Indent);
-    if (IsProblem)
+    if (IsProblem || strstr((*I).c_str(), ".inl"))
       OS << "exclude header \"" << *I << "\"\n";
     else
       OS << "header \"" << *I << "\"\n";
@@ -123,9 +120,7 @@ bool Module::output(llvm::raw_fd_ostream &OS, int Indent) {
 
 // Lookup a sub-module.
 Module *Module::findSubModule(llvm::StringRef SubName) {
-  for (std::vector<Module *>::iterator I = SubModules.begin(),
-                                       E = SubModules.end();
-       I != E; ++I) {
+  for (auto I = SubModules.begin(), E = SubModules.end(); I != E; ++I) {
     if ((*I)->Name == SubName)
       return *I;
   }
@@ -154,6 +149,18 @@ ensureNoCollisionWithReservedName(llvm::StringRef MightBeReservedName) {
       break;
     }
   }
+  return SafeName;
+}
+
+// Convert module name to a non-keyword.
+// Prepends a '_' to the name if and only if the name is a keyword.
+static std::string
+ensureVaidModuleName(llvm::StringRef MightBeInvalidName) {
+  std::string SafeName = MightBeInvalidName;
+  std::replace(SafeName.begin(), SafeName.end(), '-', '_');
+  std::replace(SafeName.begin(), SafeName.end(), '.', '_');
+  if (isdigit(SafeName[0]))
+    SafeName = "_" + SafeName;
   return SafeName;
 }
 
@@ -195,6 +202,7 @@ static bool addModuleDescription(Module *RootModule,
       continue;
     std::string Stem = llvm::sys::path::stem(*I);
     Stem = ensureNoCollisionWithReservedName(Stem);
+    Stem = ensureVaidModuleName(Stem);
     Module *SubModule = CurrentModule->findSubModule(Stem);
     if (!SubModule) {
       SubModule = new Module(Stem, IsProblemFile);
@@ -214,7 +222,7 @@ static Module *loadModuleDescriptions(
     DependencyMap &Dependencies, llvm::StringRef HeaderPrefix) {
 
   // Create root module.
-  Module *RootModule = new Module(RootModuleName, false);
+  auto *RootModule = new Module(RootModuleName, false);
 
   llvm::SmallString<256> CurrentDirectory;
   llvm::sys::fs::current_path(CurrentDirectory);

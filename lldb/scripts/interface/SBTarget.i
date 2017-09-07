@@ -178,7 +178,7 @@ public:
     ///     Some launch options specified by logical OR'ing 
     ///     lldb::LaunchFlags enumeration values together.
     ///
-    /// @param[in] stop_at_endtry
+    /// @param[in] stop_at_entry
     ///     If false do not stop the inferior at the entry point.
     ///
     /// @param[out]
@@ -586,6 +586,13 @@ public:
     BreakpointCreateByLocation (const lldb::SBFileSpec &file_spec, uint32_t line);
 
     lldb::SBBreakpoint
+    BreakpointCreateByLocation (const lldb::SBFileSpec &file_spec, uint32_t line, lldb::addr_t offset);
+
+    lldb::SBBreakpoint
+    BreakpointCreateByLocation (const lldb::SBFileSpec &file_spec, uint32_t line, 
+                                lldb::addr_t offset, SBFileSpecList &module_list);
+
+    lldb::SBBreakpoint
     BreakpointCreateByName (const char *symbol_name, const char *module_name = NULL);
 
     lldb::SBBreakpoint
@@ -595,14 +602,76 @@ public:
                             const SBFileSpecList &comp_unit_list);
 
     lldb::SBBreakpoint
-    BreakpointCreateByNames (const char *symbol_name[],
+    BreakpointCreateByName (const char *symbol_name,
+                            uint32_t func_name_type,           // Logical OR one or more FunctionNameType enum bits
+                            lldb::LanguageType symbol_language,
+                            const SBFileSpecList &module_list, 
+                            const SBFileSpecList &comp_unit_list);
+
+%typemap(in) (const char **symbol_name, uint32_t num_names) {
+  using namespace lldb_private;
+  /* Check if is a list  */
+  if (PythonList::Check($input)) {
+    PythonList list(PyRefType::Borrowed, $input);
+    $2 = list.GetSize();
+    int i = 0;
+    $1 = (char**)malloc(($2+1)*sizeof(char*));
+    for (i = 0; i < $2; i++) {
+      PythonString py_str = list.GetItemAtIndex(i).AsType<PythonString>();
+      if (!py_str.IsAllocated()) {
+        PyErr_SetString(PyExc_TypeError,"list must contain strings and blubby");
+        free($1);
+        return nullptr;
+      }
+
+      $1[i] = const_cast<char*>(py_str.GetString().data());
+    }
+    $1[i] = 0;
+  } else if ($input == Py_None) {
+    $1 =  NULL;
+  } else {
+    PyErr_SetString(PyExc_TypeError,"not a list");
+    return NULL;
+  }
+}
+
+//%typecheck(SWIG_TYPECHECK_STRING_ARRAY) (const char *symbol_name[], uint32_t num_names) {
+//    $1 = 1;
+//    $2 = 1;
+//}
+
+    lldb::SBBreakpoint
+    BreakpointCreateByNames (const char **symbol_name,
                              uint32_t num_names,
                              uint32_t name_type_mask,           // Logical OR one or more FunctionNameType enum bits
                              const SBFileSpecList &module_list,
                              const SBFileSpecList &comp_unit_list);
 
     lldb::SBBreakpoint
+    BreakpointCreateByNames (const char **symbol_name,
+                             uint32_t num_names,
+                             uint32_t name_type_mask,           // Logical OR one or more FunctionNameType enum bits
+                             lldb::LanguageType symbol_language,
+                             const SBFileSpecList &module_list,
+                             const SBFileSpecList &comp_unit_list);
+
+    lldb::SBBreakpoint
+    BreakpointCreateByNames (const char **symbol_name,
+                             uint32_t num_names,
+                             uint32_t name_type_mask,           // Logical OR one or more FunctionNameType enum bits
+                             lldb::LanguageType symbol_language,
+                             lldb::addr_t offset,
+                             const SBFileSpecList &module_list,
+                             const SBFileSpecList &comp_unit_list);
+
+    lldb::SBBreakpoint
     BreakpointCreateByRegex (const char *symbol_name_regex, const char *module_name = NULL);
+
+    lldb::SBBreakpoint
+    BreakpointCreateByRegex (const char *symbol_name_regex,
+                             lldb::LanguageType symbol_language,
+                             const SBFileSpecList &module_list, 
+                             const SBFileSpecList &comp_unit_list);
 
     lldb::SBBreakpoint
     BreakpointCreateBySourceRegex (const char *source_regex, const lldb::SBFileSpec &source_file, const char *module_name = NULL);
@@ -611,12 +680,21 @@ public:
     BreakpointCreateBySourceRegex (const char *source_regex, const lldb::SBFileSpecList &module_list, const lldb::SBFileSpecList &file_list);
 
     lldb::SBBreakpoint
+    BreakpointCreateBySourceRegex (const char *source_regex,
+                                   const SBFileSpecList &module_list,
+                                   const SBFileSpecList &source_file,
+                                   const SBStringList  &func_names);
+
+    lldb::SBBreakpoint
     BreakpointCreateForException  (lldb::LanguageType language,
                                    bool catch_bp,
                                    bool throw_bp);
 
     lldb::SBBreakpoint
     BreakpointCreateByAddress (addr_t address);
+
+    lldb::SBBreakpoint
+    BreakpointCreateBySBAddress (SBAddress &sb_address);
 
     uint32_t
     GetNumBreakpoints () const;
@@ -630,6 +708,9 @@ public:
     lldb::SBBreakpoint
     FindBreakpointByID (break_id_t break_id);
 
+  
+    bool FindBreakpointsByName(const char *name, SBBreakpointList &bkpt_list);
+
     bool
     EnableAllBreakpoints ();
 
@@ -638,6 +719,86 @@ public:
 
     bool
     DeleteAllBreakpoints ();
+
+     %feature("docstring", "
+    //------------------------------------------------------------------
+    /// Read breakpoints from source_file and return the newly created 
+    /// breakpoints in bkpt_list.
+    ///
+    /// @param[in] source_file
+    ///    The file from which to read the breakpoints
+    /// 
+    /// @param[out] bkpt_list
+    ///    A list of the newly created breakpoints.
+    ///
+    /// @return
+    ///     An SBError detailing any errors in reading in the breakpoints.
+    //------------------------------------------------------------------
+    ") BreakpointsCreateFromFile;
+    lldb::SBError
+    BreakpointsCreateFromFile(SBFileSpec &source_file, 
+                              SBBreakpointList &bkpt_list);
+
+     %feature("docstring", "
+    //------------------------------------------------------------------
+    /// Read breakpoints from source_file and return the newly created 
+    /// breakpoints in bkpt_list.
+    ///
+    /// @param[in] source_file
+    ///    The file from which to read the breakpoints
+    ///
+    /// @param[in] matching_names
+    ///    Only read in breakpoints whose names match one of the names in this
+    ///    list.
+    /// 
+    /// @param[out] bkpt_list
+    ///    A list of the newly created breakpoints.
+    ///
+    /// @return
+    ///     An SBError detailing any errors in reading in the breakpoints.
+    //------------------------------------------------------------------
+    ") BreakpointsCreateFromFile;
+    lldb::SBError BreakpointsCreateFromFile(SBFileSpec &source_file,
+                                          SBStringList &matching_names,
+                                          SBBreakpointList &new_bps);
+
+     %feature("docstring", "
+    //------------------------------------------------------------------
+    /// Write breakpoints to dest_file.
+    ///
+    /// @param[in] dest_file
+    ///    The file to which to write the breakpoints.
+    ///
+    /// @return
+    ///     An SBError detailing any errors in writing in the breakpoints.
+    //------------------------------------------------------------------
+    ") BreakpointsCreateFromFile;
+    lldb::SBError
+    BreakpointsWriteToFile(SBFileSpec &dest_file);
+      
+     %feature("docstring", "
+    //------------------------------------------------------------------
+    /// Write breakpoints listed in bkpt_list to dest_file.
+    ///
+    /// @param[in] dest_file
+    ///    The file to which to write the breakpoints.
+    ///
+    /// @param[in] bkpt_list
+    ///    Only write breakpoints from this list.
+    ///
+    /// @param[in] append
+    ///    If \btrue, append the breakpoints in bkpt_list to the others
+    ///    serialized in dest_file.  If dest_file doesn't exist, then a new
+    ///    file will be created and the breakpoints in bkpt_list written to it.
+    ///
+    /// @return
+    ///     An SBError detailing any errors in writing in the breakpoints.
+    //------------------------------------------------------------------
+    ") BreakpointsCreateFromFile;
+    lldb::SBError
+    BreakpointsWriteToFile(SBFileSpec &dest_file, 
+                           SBBreakpointList &bkpt_list,
+                           bool append = false);
 
     uint32_t
     GetNumWatchpoints () const;
@@ -671,6 +832,24 @@ public:
     lldb::SBBroadcaster
     GetBroadcaster () const;
               
+     %feature("docstring", "
+    //------------------------------------------------------------------
+    /// Create an SBValue with the given name by treating the memory starting at addr as an entity of type.
+    ///
+    /// @param[in] name
+    ///     The name of the resultant SBValue
+    ///
+    /// @param[in] addr
+    ///     The address of the start of the memory region to be used.
+    ///
+    /// @param[in] type
+    ///     The type to use to interpret the memory starting at addr.
+    ///
+    /// @return
+    ///     An SBValue of the given type, may be invalid if there was an error reading
+    ///     the underlying memory.
+    //------------------------------------------------------------------
+    ") CreateValueFromAddress;
     lldb::SBValue
     CreateValueFromAddress (const char *name, lldb::SBAddress addr, lldb::SBType type);
 

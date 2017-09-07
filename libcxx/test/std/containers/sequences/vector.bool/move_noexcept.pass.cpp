@@ -14,9 +14,12 @@
 
 // This tests a conforming extension
 
+// UNSUPPORTED: c++98, c++03
+
 #include <vector>
 #include <cassert>
 
+#include "test_macros.h"
 #include "test_allocator.h"
 
 template <class T>
@@ -28,7 +31,7 @@ struct some_alloc
 
 int main()
 {
-#if __has_feature(cxx_noexcept)
+#if defined(_LIBCPP_VERSION)
     {
         typedef std::vector<bool> C;
         static_assert(std::is_nothrow_move_constructible<C>::value, "");
@@ -41,14 +44,17 @@ int main()
         typedef std::vector<bool, other_allocator<bool>> C;
         static_assert(std::is_nothrow_move_constructible<C>::value, "");
     }
+#endif // _LIBCPP_VERSION
     {
-        typedef std::vector<bool, some_alloc<bool>> C;
     //  In C++17, move constructors for allocators are not allowed to throw
 #if TEST_STD_VER > 14
+#if defined(_LIBCPP_VERSION)
+        typedef std::vector<bool, some_alloc<bool>> C;
         static_assert( std::is_nothrow_move_constructible<C>::value, "");
+#endif // _LIBCPP_VERSION
 #else
+        typedef std::vector<bool, some_alloc<bool>> C;
         static_assert(!std::is_nothrow_move_constructible<C>::value, "");
 #endif
     }
-#endif
 }

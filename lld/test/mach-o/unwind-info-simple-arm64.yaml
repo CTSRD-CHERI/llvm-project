@@ -1,5 +1,5 @@
 # RUN: lld -flavor darwin -arch arm64 -o %t %s \
-# RUN: %p/Inputs/unwind-info-simple-arm64.yaml -e _main %p/Inputs/libSystem.yaml
+# RUN: %p/Inputs/unwind-info-simple-arm64.yaml -e _main %p/Inputs/arm64/libSystem.yaml
 # RUN: llvm-objdump -unwind-info %t | FileCheck %s
 
 --- !mach-o
@@ -125,7 +125,7 @@ sections:
     section:         __compact_unwind
     type:            S_REGULAR
     attributes:      [  ]
-    alignment:       3
+    alignment:       8
     address:         0x00000000000000A8
     content:         [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                        0x28, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
@@ -250,7 +250,7 @@ undefined-symbols:
 # CHECK:   Number of indices in array:                0x2
 # CHECK:   Common encodings: (count = 0)
 # CHECK:   Personality functions: (count = 1)
-# CHECK:     personality[1]: 0x00004018
+# CHECK:     personality[1]: 0x00004020
 # CHECK:   Top level indices: (count = 2)
 # CHECK:     [0]: function offset=0x00003e68, 2nd level page offset=0x00000040, LSDA offset=0x00000038
 # CHECK:     [1]: function offset=0x00003edc, 2nd level page offset=0x00000000, LSDA offset=0x00000040

@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03
+
 // <stack>
 
 // stack(stack&&)
@@ -17,11 +19,12 @@
 #include <stack>
 #include <cassert>
 
+#include "test_macros.h"
 #include "MoveOnly.h"
 
 int main()
 {
-#if __has_feature(cxx_noexcept)
+#if defined(_LIBCPP_VERSION)
     {
         typedef std::stack<MoveOnly> C;
         static_assert(std::is_nothrow_move_constructible<C>::value, "");

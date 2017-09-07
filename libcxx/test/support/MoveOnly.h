@@ -10,13 +10,16 @@
 #ifndef MOVEONLY_H
 #define MOVEONLY_H
 
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
+#include "test_macros.h"
+
+#if TEST_STD_VER >= 11
 
 #include <cstddef>
 #include <functional>
 
 class MoveOnly
 {
+    friend class MoveOnly2;
     MoveOnly(const MoveOnly&);
     MoveOnly& operator=(const MoveOnly&);
 
@@ -38,13 +41,14 @@ namespace std {
 
 template <>
 struct hash<MoveOnly>
-    : public std::unary_function<MoveOnly, std::size_t>
 {
+    typedef MoveOnly argument_type;
+    typedef size_t result_type;
     std::size_t operator()(const MoveOnly& x) const {return x.get();}
 };
 
 }
 
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
+#endif  // TEST_STD_VER >= 11
 
 #endif  // MOVEONLY_H

@@ -1,24 +1,22 @@
-//===--- PPCallbacksTracker.cpp - Preprocessor tracker -*--*-------------===//
+//===--- PPCallbacksTracker.cpp - Preprocessor tracker -*--*---------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
-//===--------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
 ///
 /// \file
 /// \brief Implementations for preprocessor tracking.
 ///
 /// See the header for details.
 ///
-//===--------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
 
 #include "PPCallbacksTracker.h"
 #include "clang/Lex/MacroArgs.h"
 #include "llvm/Support/raw_ostream.h"
-#include <stdarg.h>
-#include <stdio.h>
 
 // Utility functions.
 
@@ -326,7 +324,8 @@ PPCallbacksTracker::MacroDefined(const clang::Token &MacroNameTok,
 // Hook called whenever a macro #undef is seen.
 void PPCallbacksTracker::MacroUndefined(
     const clang::Token &MacroNameTok,
-    const clang::MacroDefinition &MacroDefinition) {
+    const clang::MacroDefinition &MacroDefinition,
+    const clang::MacroDirective *Undef) {
   beginCallback("MacroUndefined");
   appendArgument("MacroNameTok", MacroNameTok);
   appendArgument("MacroDefinition", MacroDefinition);

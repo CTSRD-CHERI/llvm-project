@@ -12,8 +12,10 @@
 
 #include <functional> // for std::hash
 
+#include "test_macros.h"
+
 struct Counter_base { static int gConstructed; };
-    
+
 template <typename T>
 class Counter : public Counter_base
 {
@@ -22,12 +24,12 @@ public:
     Counter(const T &data) : data_(data)            { ++gConstructed; }
     Counter(const Counter& rhs) : data_(rhs.data_)  { ++gConstructed; }
     Counter& operator=(const Counter& rhs)          { ++gConstructed; data_ = rhs.data_; return *this; }
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
+#if TEST_STD_VER >= 11
     Counter(Counter&& rhs) : data_(std::move(rhs.data_))  { ++gConstructed; }
     Counter& operator=(Counter&& rhs) { ++gConstructed; data_ = std::move(rhs.data_); return *this; }
 #endif
     ~Counter() { --gConstructed; }
-    
+
     const T& get() const {return data_;}
 
     bool operator==(const Counter& x) const {return data_ == x.data_;}

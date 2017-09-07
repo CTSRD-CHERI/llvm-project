@@ -76,9 +76,7 @@ template <typename T> struct QueryParser::LexOrCompleteWord {
     return *this;
   }
 
-  T Default(const T& Value) const {
-    return Switch.Default(Value);
-  }
+  T Default(const T &Value) const { return Switch.Default(Value); }
 };
 
 // Lexes a word and stores it in Word. Returns a LexOrCompleteWord<T> object
@@ -101,9 +99,9 @@ QueryParser::lexOrCompleteWord(StringRef &Word) {
 QueryRef QueryParser::parseSetBool(bool QuerySession::*Var) {
   StringRef ValStr;
   unsigned Value = lexOrCompleteWord<unsigned>(ValStr)
-                      .Case("false", 0)
-                      .Case("true", 1)
-                      .Default(~0u);
+                       .Case("false", 0)
+                       .Case("true", 1)
+                       .Default(~0u);
   if (Value == ~0u) {
     return new InvalidQuery("expected 'true' or 'false', got '" + ValStr + "'");
   }
@@ -145,11 +143,7 @@ enum ParsedQueryKind {
   PQK_Quit
 };
 
-enum ParsedQueryVariable {
-  PQV_Invalid,
-  PQV_Output,
-  PQV_BindRoot
-};
+enum ParsedQueryVariable { PQV_Invalid, PQV_Output, PQV_BindRoot };
 
 QueryRef makeInvalidQueryFromDiagnostics(const Diagnostics &Diag) {
   std::string ErrStr;
@@ -158,15 +152,13 @@ QueryRef makeInvalidQueryFromDiagnostics(const Diagnostics &Diag) {
   return new InvalidQuery(OS.str());
 }
 
-}  // namespace
+} // namespace
 
 QueryRef QueryParser::completeMatcherExpression() {
   std::vector<MatcherCompletion> Comps = Parser::completeExpression(
       StringRef(Begin, End - Begin), CompletionPos - Begin, nullptr,
       &QS.NamedValues);
-  for (std::vector<MatcherCompletion>::iterator I = Comps.begin(),
-                                                E = Comps.end();
-       I != E; ++I) {
+  for (auto I = Comps.begin(), E = Comps.end(); I != E; ++I) {
     Completions.push_back(LineEditor::Completion(I->TypedText, I->MatcherDecl));
   }
   return QueryRef();

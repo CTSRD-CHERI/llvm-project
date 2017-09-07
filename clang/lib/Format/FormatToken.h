@@ -48,12 +48,17 @@ namespace format {
   TYPE(FunctionTypeLParen) \
   TYPE(ImplicitStringLiteral) \
   TYPE(InheritanceColon) \
+  TYPE(InheritanceComma) \
   TYPE(InlineASMBrace) \
   TYPE(InlineASMColon) \
   TYPE(JavaAnnotation) \
   TYPE(JsComputedPropertyName) \
+  TYPE(JsExponentiation) \
+  TYPE(JsExponentiationEqual) \
   TYPE(JsFatArrow) \
+  TYPE(JsNonNullAssertion) \
   TYPE(JsTypeColon) \
+  TYPE(JsTypeOperator) \
   TYPE(JsTypeOptionalQuestion) \
   TYPE(LambdaArrow) \
   TYPE(LambdaLSquare) \
@@ -144,7 +149,7 @@ struct FormatToken {
   /// \brief Whether the token text contains newlines (escaped or not).
   bool IsMultiline = false;
 
-  /// \brief Indicates that this is the first token.
+  /// \brief Indicates that this is the first token of the file.
   bool IsFirst = false;
 
   /// \brief Whether there must be a line break before this token.
@@ -219,6 +224,9 @@ struct FormatToken {
   /// [], {} or <>.
   unsigned NestingLevel = 0;
 
+  /// \brief The indent level of this token. Copied from the surrounding line.
+  unsigned IndentLevel = 0;
+
   /// \brief Penalty for inserting a line break before this token.
   unsigned SplitPenalty = 0;
 
@@ -248,14 +256,19 @@ struct FormatToken {
   /// with the same precedence, contains the 0-based operator index.
   unsigned OperatorIndex = 0;
 
-  /// \brief Is this the last operator (or "."/"->") in a sequence of operators
-  /// with the same precedence?
-  bool LastOperator = false;
+  /// \brief If this is an operator (or "."/"->") in a sequence of operators
+  /// with the same precedence, points to the next operator.
+  FormatToken *NextOperator = nullptr;
 
   /// \brief Is this token part of a \c DeclStmt defining multiple variables?
   ///
   /// Only set if \c Type == \c TT_StartOfName.
   bool PartOfMultiVariableDeclStmt = false;
+
+  /// \brief Does this line comment continue a line comment section?
+  ///
+  /// Only set to true if \c Type == \c TT_LineComment.
+  bool ContinuesLineCommentSection = false;
 
   /// \brief If this is a bracket, this points to the matching one.
   FormatToken *MatchingParen = nullptr;
@@ -296,6 +309,20 @@ struct FormatToken {
   }
   template <typename T> bool isNot(T Kind) const { return !is(Kind); }
 
+  /// \c true if this token starts a sequence with the given tokens in order,
+  /// following the ``Next`` pointers, ignoring comments.
+  template <typename A, typename... Ts>
+  bool startsSequence(A K1, Ts... Tokens) const {
+    return startsSequenceInternal(K1, Tokens...);
+  }
+
+  /// \c true if this token ends a sequence with the given tokens in order,
+  /// following the ``Previous`` pointers, ignoring comments.
+  template <typename A, typename... Ts>
+  bool endsSequence(A K1, Ts... Tokens) const {
+    return endsSequenceInternal(K1, Tokens...);
+  }
+
   bool isStringLiteral() const { return tok::isStringLiteral(Tok.getKind()); }
 
   bool isObjCAtKeyword(tok::ObjCKeywordKind Kind) const {
@@ -319,11 +346,15 @@ struct FormatToken {
 
   /// \brief Returns whether \p Tok is ([{ or a template opening <.
   bool opensScope() const {
+    if (is(TT_TemplateString) && TokenText.endswith("${"))
+      return true;
     return isOneOf(tok::l_paren, tok::l_brace, tok::l_square,
                    TT_TemplateOpener);
   }
   /// \brief Returns whether \p Tok is )]} or a template closing >.
   bool closesScope() const {
+    if (is(TT_TemplateString) && TokenText.startswith("}"))
+      return true;
     return isOneOf(tok::r_paren, tok::r_brace, tok::r_square,
                    TT_TemplateCloser);
   }
@@ -381,6 +412,21 @@ struct FormatToken {
     }
   }
 
+  /// \brief Returns \c true if this is a string literal that's like a label,
+  /// e.g. ends with "=" or ":".
+  bool isLabelString() const {
+    if (!is(tok::string_literal))
+      return false;
+    StringRef Content = TokenText;
+    if (Content.startswith("\"") || Content.startswith("'"))
+      Content = Content.drop_front(1);
+    if (Content.endswith("\"") || Content.endswith("'"))
+      Content = Content.drop_back(1);
+    Content = Content.trim();
+    return Content.size() > 1 &&
+           (Content.back() == ':' || Content.back() == '=');
+  }
+
   /// \brief Returns actual token start location without leading escaped
   /// newlines and whitespace.
   ///
@@ -412,22 +458,54 @@ struct FormatToken {
 
   /// \brief Returns \c true if this tokens starts a block-type list, i.e. a
   /// list that should be indented with a block indent.
-  bool opensBlockTypeList(const FormatStyle &Style) const {
+  bool opensBlockOrBlockTypeList(const FormatStyle &Style) const {
+    if (is(TT_TemplateString) && opensScope())
+      return true;
     return is(TT_ArrayInitializerLSquare) ||
            (is(tok::l_brace) &&
             (BlockKind == BK_Block || is(TT_DictLiteral) ||
              (!Style.Cpp11BracedListStyle && NestingLevel == 0)));
   }
 
-  /// \brief Same as opensBlockTypeList, but for the closing token.
-  bool closesBlockTypeList(const FormatStyle &Style) const {
-    return MatchingParen && MatchingParen->opensBlockTypeList(Style);
+  /// \brief Same as opensBlockOrBlockTypeList, but for the closing token.
+  bool closesBlockOrBlockTypeList(const FormatStyle &Style) const {
+    if (is(TT_TemplateString) && closesScope())
+      return true;
+    return MatchingParen && MatchingParen->opensBlockOrBlockTypeList(Style);
   }
 
 private:
   // Disallow copying.
   FormatToken(const FormatToken &) = delete;
   void operator=(const FormatToken &) = delete;
+
+  template <typename A, typename... Ts>
+  bool startsSequenceInternal(A K1, Ts... Tokens) const {
+    if (is(tok::comment) && Next)
+      return Next->startsSequenceInternal(K1, Tokens...);
+    return is(K1) && Next && Next->startsSequenceInternal(Tokens...);
+  }
+
+  template <typename A>
+  bool startsSequenceInternal(A K1) const {
+    if (is(tok::comment) && Next)
+      return Next->startsSequenceInternal(K1);
+    return is(K1);
+  }
+
+  template <typename A, typename... Ts>
+  bool endsSequenceInternal(A K1) const {
+    if (is(tok::comment) && Previous)
+      return Previous->endsSequenceInternal(K1);
+    return is(K1);
+  }
+
+  template <typename A, typename... Ts>
+  bool endsSequenceInternal(A K1, Ts... Tokens) const {
+    if (is(tok::comment) && Previous)
+      return Previous->endsSequenceInternal(K1, Tokens...);
+    return is(K1) && Previous && Previous->endsSequenceInternal(Tokens...);
+  }
 };
 
 class ContinuationIndenter;
@@ -528,16 +606,28 @@ struct AdditionalKeywords {
     kw_final = &IdentTable.get("final");
     kw_override = &IdentTable.get("override");
     kw_in = &IdentTable.get("in");
+    kw_of = &IdentTable.get("of");
     kw_CF_ENUM = &IdentTable.get("CF_ENUM");
     kw_CF_OPTIONS = &IdentTable.get("CF_OPTIONS");
     kw_NS_ENUM = &IdentTable.get("NS_ENUM");
     kw_NS_OPTIONS = &IdentTable.get("NS_OPTIONS");
 
+    kw_as = &IdentTable.get("as");
+    kw_async = &IdentTable.get("async");
+    kw_await = &IdentTable.get("await");
+    kw_declare = &IdentTable.get("declare");
     kw_finally = &IdentTable.get("finally");
+    kw_from = &IdentTable.get("from");
     kw_function = &IdentTable.get("function");
+    kw_get = &IdentTable.get("get");
     kw_import = &IdentTable.get("import");
+    kw_is = &IdentTable.get("is");
     kw_let = &IdentTable.get("let");
+    kw_module = &IdentTable.get("module");
+    kw_set = &IdentTable.get("set");
+    kw_type = &IdentTable.get("type");
     kw_var = &IdentTable.get("var");
+    kw_yield = &IdentTable.get("yield");
 
     kw_abstract = &IdentTable.get("abstract");
     kw_assert = &IdentTable.get("assert");
@@ -550,9 +640,12 @@ struct AdditionalKeywords {
     kw_synchronized = &IdentTable.get("synchronized");
     kw_throws = &IdentTable.get("throws");
     kw___except = &IdentTable.get("__except");
+    kw___has_include = &IdentTable.get("__has_include");
+    kw___has_include_next = &IdentTable.get("__has_include_next");
 
     kw_mark = &IdentTable.get("mark");
 
+    kw_extend = &IdentTable.get("extend");
     kw_option = &IdentTable.get("option");
     kw_optional = &IdentTable.get("optional");
     kw_repeated = &IdentTable.get("repeated");
@@ -560,6 +653,7 @@ struct AdditionalKeywords {
     kw_returns = &IdentTable.get("returns");
 
     kw_signals = &IdentTable.get("signals");
+    kw_qsignals = &IdentTable.get("Q_SIGNALS");
     kw_slots = &IdentTable.get("slots");
     kw_qslots = &IdentTable.get("Q_SLOTS");
   }
@@ -568,18 +662,32 @@ struct AdditionalKeywords {
   IdentifierInfo *kw_final;
   IdentifierInfo *kw_override;
   IdentifierInfo *kw_in;
+  IdentifierInfo *kw_of;
   IdentifierInfo *kw_CF_ENUM;
   IdentifierInfo *kw_CF_OPTIONS;
   IdentifierInfo *kw_NS_ENUM;
   IdentifierInfo *kw_NS_OPTIONS;
   IdentifierInfo *kw___except;
+  IdentifierInfo *kw___has_include;
+  IdentifierInfo *kw___has_include_next;
 
   // JavaScript keywords.
+  IdentifierInfo *kw_as;
+  IdentifierInfo *kw_async;
+  IdentifierInfo *kw_await;
+  IdentifierInfo *kw_declare;
   IdentifierInfo *kw_finally;
+  IdentifierInfo *kw_from;
   IdentifierInfo *kw_function;
+  IdentifierInfo *kw_get;
   IdentifierInfo *kw_import;
+  IdentifierInfo *kw_is;
   IdentifierInfo *kw_let;
+  IdentifierInfo *kw_module;
+  IdentifierInfo *kw_set;
+  IdentifierInfo *kw_type;
   IdentifierInfo *kw_var;
+  IdentifierInfo *kw_yield;
 
   // Java keywords.
   IdentifierInfo *kw_abstract;
@@ -597,6 +705,7 @@ struct AdditionalKeywords {
   IdentifierInfo *kw_mark;
 
   // Proto keywords.
+  IdentifierInfo *kw_extend;
   IdentifierInfo *kw_option;
   IdentifierInfo *kw_optional;
   IdentifierInfo *kw_repeated;
@@ -605,6 +714,7 @@ struct AdditionalKeywords {
 
   // QT keywords.
   IdentifierInfo *kw_signals;
+  IdentifierInfo *kw_qsignals;
   IdentifierInfo *kw_slots;
   IdentifierInfo *kw_qslots;
 };

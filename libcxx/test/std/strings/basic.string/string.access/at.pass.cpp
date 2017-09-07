@@ -18,21 +18,41 @@
 
 #include "min_allocator.h"
 
+#include "test_macros.h"
+
 template <class S>
 void
 test(S s, typename S::size_type pos)
 {
-    try
+    const S& cs = s;
+    if (pos < s.size())
     {
-        const S& cs = s;
         assert(s.at(pos) == s[pos]);
         assert(cs.at(pos) == cs[pos]);
-        assert(pos < cs.size());
     }
-    catch (std::out_of_range&)
+#ifndef TEST_HAS_NO_EXCEPTIONS
+    else
     {
-        assert(pos >= s.size());
+        try
+        {
+            s.at(pos);
+            assert(false);
+        }
+        catch (std::out_of_range&)
+        {
+            assert(pos >= s.size());
+        }
+        try
+        {
+            cs.at(pos);
+            assert(false);
+        }
+        catch (std::out_of_range&)
+        {
+            assert(pos >= s.size());
+        }
     }
+#endif
 }
 
 int main()
@@ -45,7 +65,7 @@ int main()
     test(S("123"), 2);
     test(S("123"), 3);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     typedef std::basic_string<char, std::char_traits<char>, min_allocator<char>> S;
     test(S(), 0);

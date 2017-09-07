@@ -1,4 +1,4 @@
-//===-- PlatformRemoteiOS.h ----------------------------------------*- C++ -*-===//
+//===-- PlatformRemoteiOS.h -------------------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -12,165 +12,65 @@
 
 // C Includes
 // C++ Includes
+#include <string>
+
 // Other libraries and framework includes
-#include "lldb/Host/FileSpec.h"
-
 // Project includes
-#include "PlatformDarwin.h"
+#include "PlatformRemoteDarwinDevice.h"
+#include "lldb/Utility/FileSpec.h"
 
-class PlatformRemoteiOS : public PlatformDarwin
-{
+#include "llvm/Support/FileSystem.h"
+
+class PlatformRemoteiOS : public PlatformRemoteDarwinDevice {
 public:
+  PlatformRemoteiOS();
 
-    //------------------------------------------------------------
-    // Class Functions
-    //------------------------------------------------------------
-    static lldb::PlatformSP
-    CreateInstance (bool force, const lldb_private::ArchSpec *arch);
+  ~PlatformRemoteiOS() override = default;
 
-    static void
-    Initialize ();
+  //------------------------------------------------------------
+  // Class Functions
+  //------------------------------------------------------------
+  static lldb::PlatformSP CreateInstance(bool force,
+                                         const lldb_private::ArchSpec *arch);
 
-    static void
-    Terminate ();
-    
-    static lldb_private::ConstString
-    GetPluginNameStatic ();
+  static void Initialize();
 
-    static const char *
-    GetDescriptionStatic();
-    
-    //------------------------------------------------------------
-    // Class Methods
-    //------------------------------------------------------------
-    PlatformRemoteiOS ();
+  static void Terminate();
 
-    virtual
-    ~PlatformRemoteiOS();
+  static lldb_private::ConstString GetPluginNameStatic();
 
-    //------------------------------------------------------------
-    // lldb_private::PluginInterface functions
-    //------------------------------------------------------------
-    lldb_private::ConstString
-    GetPluginName() override
-    {
-        return GetPluginNameStatic();
-    }
-    
-    uint32_t
-    GetPluginVersion() override
-    {
-        return 1;
-    }
+  static const char *GetDescriptionStatic();
 
-    //------------------------------------------------------------
-    // lldb_private::Platform functions
-    //------------------------------------------------------------
-    lldb_private::Error
-    ResolveExecutable (const lldb_private::ModuleSpec &module_spec,
-                       lldb::ModuleSP &module_sp,
-                       const lldb_private::FileSpecList *module_search_paths_ptr) override;
+  //------------------------------------------------------------
+  // lldb_private::Platform functions
+  //------------------------------------------------------------
 
-    const char *
-    GetDescription () override
-    {
-        return GetDescriptionStatic();
-    }
+  const char *GetDescription() override { return GetDescriptionStatic(); }
 
-    void
-    GetStatus (lldb_private::Stream &strm) override;
+  //------------------------------------------------------------
+  // lldb_private::PluginInterface functions
+  //------------------------------------------------------------
+  lldb_private::ConstString GetPluginName() override {
+    return GetPluginNameStatic();
+  }
 
-    virtual lldb_private::Error
-    GetSymbolFile (const lldb_private::FileSpec &platform_file, 
-                   const lldb_private::UUID *uuid_ptr,
-                   lldb_private::FileSpec &local_file);
+  uint32_t GetPluginVersion() override { return 1; }
 
-    lldb_private::Error
-    GetSharedModule (const lldb_private::ModuleSpec &module_spec,
-                     lldb_private::Process* process,
-                     lldb::ModuleSP &module_sp,
-                     const lldb_private::FileSpecList *module_search_paths_ptr,
-                     lldb::ModuleSP *old_module_sp_ptr,
-                     bool *did_create_ptr) override;
-
-    bool
-    GetSupportedArchitectureAtIndex (uint32_t idx, 
-                                     lldb_private::ArchSpec &arch) override;
-    
-    void
-    AddClangModuleCompilationOptions (lldb_private::Target *target, std::vector<std::string> &options) override
-    {
-        return PlatformDarwin::AddClangModuleCompilationOptionsForSDKType(target, options, PlatformDarwin::SDKType::iPhoneOS);
-    }
+  bool GetSupportedArchitectureAtIndex(uint32_t idx,
+                                       lldb_private::ArchSpec &arch) override;
 
 protected:
-    struct SDKDirectoryInfo
-    {
-        SDKDirectoryInfo (const lldb_private::FileSpec &sdk_dir_spec);
-        lldb_private::FileSpec directory;
-        lldb_private::ConstString build;
-        uint32_t version_major;
-        uint32_t version_minor;
-        uint32_t version_update;
-        bool user_cached;
-    };
-    typedef std::vector<SDKDirectoryInfo> SDKDirectoryInfoCollection;
-    SDKDirectoryInfoCollection m_sdk_directory_infos;
-    std::string m_device_support_directory;
-    std::string m_device_support_directory_for_os_version;
-    std::string m_build_update;
-    uint32_t m_last_module_sdk_idx;
-    uint32_t m_connected_module_sdk_idx;
 
-    bool
-    UpdateSDKDirectoryInfosIfNeeded();
+  //------------------------------------------------------------
+  // lldb_private::PlatformRemoteDarwinDevice functions
+  //------------------------------------------------------------
 
-    const char *
-    GetDeviceSupportDirectory();
+  void GetDeviceSupportDirectoryNames (std::vector<std::string> &dirnames) override;
 
-    const char *
-    GetDeviceSupportDirectoryForOSVersion();
-
-    const SDKDirectoryInfo *
-    GetSDKDirectoryForLatestOSVersion ();
-
-    const SDKDirectoryInfo *
-    GetSDKDirectoryForCurrentOSVersion ();
-
-    static lldb_private::FileSpec::EnumerateDirectoryResult
-    GetContainedFilesIntoVectorOfStringsCallback (void *baton,
-                                                  lldb_private::FileSpec::FileType file_type,
-                                                  const lldb_private::FileSpec &file_spec);
-
-    uint32_t
-    FindFileInAllSDKs (const char *platform_file_path,
-                       lldb_private::FileSpecList &file_list);
-
-    bool
-    GetFileInSDK (const char *platform_file_path,
-                  uint32_t sdk_idx,
-                  lldb_private::FileSpec &local_file);
-
-    bool
-    GetFileInSDKRoot (const char *platform_file_path,
-                      const char *sdkroot_path,
-                      bool symbols_dirs_only,
-                      lldb_private::FileSpec &local_file);
-
-    uint32_t
-    FindFileInAllSDKs (const lldb_private::FileSpec &platform_file,
-                       lldb_private::FileSpecList &file_list);
-
-    uint32_t
-    GetConnectedSDKIndex ();
-
-    // Get index of SDK in SDKDirectoryInfoCollection by its pointer and return UINT32_MAX if that SDK not found.
-    uint32_t
-    GetSDKIndexBySDKDirectoryInfo (const SDKDirectoryInfo *sdk_info);
+  std::string GetPlatformName () override;
 
 private:
-    DISALLOW_COPY_AND_ASSIGN (PlatformRemoteiOS);
-
+  DISALLOW_COPY_AND_ASSIGN(PlatformRemoteiOS);
 };
 
-#endif  // liblldb_PlatformRemoteiOS_h_
+#endif // liblldb_PlatformRemoteiOS_h_

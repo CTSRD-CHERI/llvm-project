@@ -2,10 +2,8 @@
 ;
 ; Generate loop1 instruction for double loop sequence.
 
-; CHECK: loop0(.LBB{{.}}_{{.}}, #100)
-; CHECK: endloop0
-; CHECK: loop1(.LBB{{.}}_{{.}}, #100)
-; CHECK: loop0(.LBB{{.}}_{{.}}, #100)
+; CHECK: loop1(.LBB{{.}}_{{.}},#100)
+; CHECK: loop0(.LBB{{.}}_{{.}},#100)
 ; CHECK: endloop0
 ; CHECK: endloop1
 

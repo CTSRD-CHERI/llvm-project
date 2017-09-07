@@ -1,4 +1,4 @@
-// RUN: %clang -target x86_64-apple-darwin10 --analyze %s -o /dev/null -Xclang -analyzer-checker=debug.ConfigDumper -Xclang -analyzer-max-loop -Xclang 34 > %t 2>&1
+// RUN: %clang_analyze_cc1 -triple x86_64-apple-darwin10 %s -o /dev/null -analyzer-checker=core,osx.cocoa,debug.ConfigDumper -analyzer-max-loop 34 > %t 2>&1
 // RUN: FileCheck --input-file=%t %s
 
 void bar() {}
@@ -36,5 +36,6 @@ public:
 // CHECK-NEXT: min-cfg-size-treat-functions-as-large = 14
 // CHECK-NEXT: mode = deep
 // CHECK-NEXT: region-store-small-struct-limit = 2
+// CHECK-NEXT: widen-loops = false
 // CHECK-NEXT: [stats]
-// CHECK-NEXT: num-entries = 19
+// CHECK-NEXT: num-entries = 20

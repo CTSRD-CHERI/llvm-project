@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#ifndef LLD_READER_WRITER_MACHO_NORMALIZED_FILE_BINARY_UTILS_H
+#define LLD_READER_WRITER_MACHO_NORMALIZED_FILE_BINARY_UTILS_H
 
 #include "MachONormalizedFile.h"
 #include "lld/Core/Error.h"
@@ -16,37 +18,72 @@
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/Host.h"
+#include "llvm/Support/LEB128.h"
 #include "llvm/Support/MachO.h"
 #include <system_error>
-
-#ifndef LLD_READER_WRITER_MACHO_NORMALIZED_FILE_BINARY_UTILS_H
-#define LLD_READER_WRITER_MACHO_NORMALIZED_FILE_BINARY_UTILS_H
 
 namespace lld {
 namespace mach_o {
 namespace normalized {
+
+class ByteBuffer {
+public:
+  ByteBuffer() : _ostream(_bytes) { }
+
+  void append_byte(uint8_t b) {
+    _ostream << b;
+  }
+  void append_uleb128(uint64_t value) {
+    llvm::encodeULEB128(value, _ostream);
+  }
+  void append_uleb128Fixed(uint64_t value, unsigned byteCount) {
+    unsigned min = llvm::getULEB128Size(value);
+    assert(min <= byteCount);
+    unsigned pad = byteCount - min;
+    llvm::encodeULEB128(value, _ostream, pad);
+  }
+  void append_sleb128(int64_t value) {
+    llvm::encodeSLEB128(value, _ostream);
+  }
+  void append_string(StringRef str) {
+    _ostream << str;
+    append_byte(0);
+  }
+  void align(unsigned alignment) {
+    while ( (_ostream.tell() % alignment) != 0 )
+      append_byte(0);
+  }
+  size_t size() {
+    return _ostream.tell();
+  }
+  const uint8_t *bytes() {
+    return reinterpret_cast<const uint8_t*>(_ostream.str().data());
+  }
+
+private:
+  SmallVector<char, 128>        _bytes;
+  // Stream ivar must be after SmallVector ivar to construct properly.
+  llvm::raw_svector_ostream     _ostream;
+};
 
 using namespace llvm::support::endian;
 using llvm::sys::getSwappedBytes;
 
 template<typename T>
 static inline uint16_t read16(const T *loc, bool isBig) {
-  assert((uint64_t)loc % llvm::alignOf<T>() == 0 &&
-         "invalid pointer alignment");
+  assert((uint64_t)loc % alignof(T) == 0 && "invalid pointer alignment");
   return isBig ? read16be(loc) : read16le(loc);
 }
 
 template<typename T>
 static inline uint32_t read32(const T *loc, bool isBig) {
-  assert((uint64_t)loc % llvm::alignOf<T>() == 0 &&
-         "invalid pointer alignment");
+  assert((uint64_t)loc % alignof(T) == 0 && "invalid pointer alignment");
   return isBig ? read32be(loc) : read32le(loc);
 }
 
 template<typename T>
 static inline uint64_t read64(const T *loc, bool isBig) {
-  assert((uint64_t)loc % llvm::alignOf<T>() == 0 &&
-         "invalid pointer alignment");
+  assert((uint64_t)loc % alignof(T) == 0 && "invalid pointer alignment");
   return isBig ? read64be(loc) : read64le(loc);
 }
 
@@ -168,7 +205,8 @@ void relocatableSectionInfoForContentType(DefinedAtom::ContentType atomType,
                                           StringRef &segmentName,
                                           StringRef &sectionName,
                                           SectionType &sectionType,
-                                          SectionAttr &sectionAttrs);
+                                          SectionAttr &sectionAttrs,
+                                          bool &relocsToDefinedCanBeImplicit);
 
 } // namespace normalized
 } // namespace mach_o

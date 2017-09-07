@@ -7,13 +7,14 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: libcpp-no-exceptions
 // <memory>
 
 // template<class Y, class D, class A> shared_ptr(Y* p, D d, A a);
 
 #include <memory>
 #include <cassert>
-#include "../test_deleter.h"
+#include "deleter_types.h"
 #include "test_allocator.h"
 
 struct A

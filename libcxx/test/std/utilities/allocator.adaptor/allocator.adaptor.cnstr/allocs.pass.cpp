@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03
+
 // <memory>
 
 // template <class OuterAlloc, class... InnerAllocs>
@@ -23,8 +25,6 @@
 
 int main()
 {
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
-
     {
         typedef std::scoped_allocator_adaptor<A1<int>> A;
         A1<int> a3(3);
@@ -107,6 +107,11 @@ int main()
         assert((a.inner_allocator() ==
             std::scoped_allocator_adaptor<A2<int>, A3<int>>(A2<int>(5), A3<int>(6))));
     }
-
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
+//  Test for LWG2782
+    {
+        static_assert(!std::is_convertible<A1<int>, A2<int>>::value, "");
+        static_assert(!std::is_convertible<
+             std::scoped_allocator_adaptor<A1<int>>, 
+             std::scoped_allocator_adaptor<A2<int>>>::value, "");
+    }
 }

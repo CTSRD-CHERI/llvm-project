@@ -12,7 +12,6 @@
 //   not --crash cmd
 //     Will return true if cmd crashes (e.g. for testing crash reporting).
 
-#include "llvm/Support/Path.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/raw_ostream.h"
 using namespace llvm;
@@ -50,7 +49,7 @@ int main(int argc, const char **argv) {
   if (ExpectCrash && Result == 3)
     Result = -3;
 #endif
-  if (Result < 0) {
+  if (Result < 0 || Result == 70) {
     errs() << "Error: " << ErrMsg << "\n";
     if (ExpectCrash)
       return 0;

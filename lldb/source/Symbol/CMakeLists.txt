@@ -5,19 +5,23 @@ add_lldb_library(lldbSymbol
   ClangASTImporter.cpp
   ClangExternalASTSourceCallbacks.cpp
   ClangExternalASTSourceCommon.cpp
+  ClangUtil.cpp
   CompilerDecl.cpp
   CompilerDeclContext.cpp
   CompilerType.cpp
   CompileUnit.cpp
   CompactUnwindInfo.cpp
+  DebugMacros.cpp
   Declaration.cpp
   DWARFCallFrameInfo.cpp
   Function.cpp
   FuncUnwinders.cpp
   GoASTContext.cpp
+  JavaASTContext.cpp
   LineEntry.cpp
   LineTable.cpp
   ObjectFile.cpp
+  OCamlASTContext.cpp
   Symbol.cpp
   SymbolContext.cpp
   SymbolFile.cpp
@@ -32,4 +36,24 @@ add_lldb_library(lldbSymbol
   Variable.cpp
   VariableList.cpp
   VerifyDecl.cpp
+
+  LINK_LIBS
+    clangAST
+    clangBasic
+    clangFrontend
+    lldbCore
+    lldbExpression
+    lldbHost
+    lldbTarget
+    lldbUtility
+    lldbPluginExpressionParserClang
+    lldbPluginExpressionParserGo
+    lldbPluginSymbolFileDWARF
+    lldbPluginSymbolFilePDB
+    lldbPluginObjectContainerBSDArchive
+    lldbPluginCPlusPlusLanguage
+    lldbPluginObjCLanguage
+
+  LINK_COMPONENTS
+    Support
   )

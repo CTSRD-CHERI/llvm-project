@@ -23,7 +23,6 @@ namespace mach_o {
 //
 class SectCreateFile : public File {
 public:
-
   class SectCreateAtom : public SimpleDefinedAtom {
   public:
     SectCreateAtom(const File &file, StringRef segName, StringRef sectName,
@@ -31,6 +30,8 @@ public:
       : SimpleDefinedAtom(file),
         _combinedName((segName + "/" + sectName).str()),
         _content(std::move(content)) {}
+
+    ~SectCreateAtom() override = default;
 
     uint64_t size() const override { return _content->getBufferSize(); }
 
@@ -60,7 +61,7 @@ public:
     std::unique_ptr<MemoryBuffer> _content;
   };
 
-  SectCreateFile() : File("sectcreate", kindObject) {}
+  SectCreateFile() : File("sectcreate", kindSectCreateObject) {}
 
   void addSection(StringRef seg, StringRef sect,
                   std::unique_ptr<MemoryBuffer> content) {
@@ -68,20 +69,27 @@ public:
       new (allocator()) SectCreateAtom(*this, seg, sect, std::move(content)));
   }
 
-  const AtomVector<DefinedAtom> &defined() const {
+  const AtomRange<DefinedAtom> defined() const override {
     return _definedAtoms;
   }
 
-  const AtomVector<UndefinedAtom> &undefined() const {
+  const AtomRange<UndefinedAtom> undefined() const override {
     return _noUndefinedAtoms;
   }
 
-  const AtomVector<SharedLibraryAtom> &sharedLibrary() const {
+  const AtomRange<SharedLibraryAtom> sharedLibrary() const override {
     return _noSharedLibraryAtoms;
   }
 
-  const AtomVector<AbsoluteAtom> &absolute() const {
+  const AtomRange<AbsoluteAtom> absolute() const override {
     return _noAbsoluteAtoms;
+  }
+
+  void clearAtoms() override {
+    _definedAtoms.clear();
+    _noUndefinedAtoms.clear();
+    _noSharedLibraryAtoms.clear();
+    _noAbsoluteAtoms.clear();
   }
 
 private:

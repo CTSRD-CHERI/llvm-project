@@ -33,9 +33,10 @@ public:
       : ClangTidyCheck(CheckName, Context) {}
 
   void registerPPCallbacks(CompilerInstance &Compiler) override {
-    Inserter.reset(new IncludeInserter(Compiler.getSourceManager(),
-                                       Compiler.getLangOpts(),
-                                       IncludeSorter::IS_Google));
+    Inserter.reset(new utils::IncludeInserter(
+        Compiler.getSourceManager(),
+        Compiler.getLangOpts(),
+        utils::IncludeSorter::IS_Google));
     Compiler.getPreprocessor().addPPCallbacks(Inserter->CreatePPCallbacks());
   }
 
@@ -44,7 +45,7 @@ public:
   }
 
   void check(const ast_matchers::MatchFinder::MatchResult &Result) override {
-    auto Diag = diag(Result.Nodes.getStmtAs<DeclStmt>("stmt")->getLocStart(),
+    auto Diag = diag(Result.Nodes.getNodeAs<DeclStmt>("stmt")->getLocStart(),
                      "foo, bar");
     for (StringRef header : HeadersToInclude()) {
       auto Fixit = Inserter->CreateIncludeInsertion(
@@ -58,7 +59,7 @@ public:
   virtual std::vector<StringRef> HeadersToInclude() const = 0;
   virtual bool IsAngledInclude() const = 0;
 
-  std::unique_ptr<IncludeInserter> Inserter;
+  std::unique_ptr<utils::IncludeInserter> Inserter;
 };
 
 class NonSystemHeaderInserterCheck : public IncludeInserterCheckBase {
@@ -68,6 +69,17 @@ public:
 
   std::vector<StringRef> HeadersToInclude() const override {
     return {"path/to/header.h"};
+  }
+  bool IsAngledInclude() const override { return false; }
+};
+
+class EarlyInAlphabetHeaderInserterCheck : public IncludeInserterCheckBase {
+public:
+  EarlyInAlphabetHeaderInserterCheck(StringRef CheckName, ClangTidyContext *Context)
+      : IncludeInserterCheckBase(CheckName, Context) {}
+
+  std::vector<StringRef> HeadersToInclude() const override {
+    return {"a/header.h"};
   }
   bool IsAngledInclude() const override { return false; }
 };
@@ -98,7 +110,6 @@ class CXXSystemIncludeInserterCheck : public IncludeInserterCheckBase {
 public:
   CXXSystemIncludeInserterCheck(StringRef CheckName, ClangTidyContext *Context)
       : IncludeInserterCheckBase(CheckName, Context) {}
-  virtual ~CXXSystemIncludeInserterCheck() {}
 
   std::vector<StringRef> HeadersToInclude() const override { return {"set"}; }
   bool IsAngledInclude() const override { return true; }
@@ -114,6 +125,7 @@ std::string runCheckOnCode(StringRef Code, StringRef Filename) {
                                        "insert_includes_test_header.h",
                                        "\n"},
                                       // Non system headers
+                                      {"a/header.h", "\n"},
                                       {"path/to/a/header.h", "\n"},
                                       {"path/to/z/header.h", "\n"},
                                       {"path/to/header.h", "\n"},
@@ -522,7 +534,78 @@ void foo() {
                                    "insert_includes_test_header.cc"));
 }
 
-} // namespace
+TEST(IncludeInserterTest, DontInsertDuplicateIncludeEvenIfMiscategorized) {
+  const char *PreCode = R"(
+#include "clang_tidy/tests/insert_includes_test_header.h"
+
+#include <map>
+#include <set>
+#include <vector>
+
+#include "a/header.h"
+#include "path/to/a/header.h"
+#include "path/to/header.h"
+
+void foo() {
+  int a = 0;
+})";
+
+  const char *PostCode = R"(
+#include "clang_tidy/tests/insert_includes_test_header.h"
+
+#include <map>
+#include <set>
+#include <vector>
+
+#include "a/header.h"
+#include "path/to/a/header.h"
+#include "path/to/header.h"
+
+void foo() {
+  int a = 0;
+})";
+
+  EXPECT_EQ(PostCode, runCheckOnCode<EarlyInAlphabetHeaderInserterCheck>(
+                          PreCode, "workspace_folder/clang_tidy/tests/"
+                                   "insert_includes_test_header.cc"));
+}
+
+TEST(IncludeInserterTest, HandleOrderInSubdirectory) {
+  const char *PreCode = R"(
+#include "clang_tidy/tests/insert_includes_test_header.h"
+
+#include <map>
+#include <set>
+#include <vector>
+
+#include "path/to/a/header.h"
+#include "path/to/header.h"
+
+void foo() {
+  int a = 0;
+})";
+
+  const char *PostCode = R"(
+#include "clang_tidy/tests/insert_includes_test_header.h"
+
+#include <map>
+#include <set>
+#include <vector>
+
+#include "a/header.h"
+#include "path/to/a/header.h"
+#include "path/to/header.h"
+
+void foo() {
+  int a = 0;
+})";
+
+  EXPECT_EQ(PostCode, runCheckOnCode<EarlyInAlphabetHeaderInserterCheck>(
+                          PreCode, "workspace_folder/clang_tidy/tests/"
+                                   "insert_includes_test_header.cc"));
+}
+
+} // anonymous namespace
 } // namespace tidy
 } // namespace clang
 

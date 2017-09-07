@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: libcpp-no-exceptions
+// XFAIL: availability
 // dynarray.cons
 
 // explicit dynarray(size_type c);

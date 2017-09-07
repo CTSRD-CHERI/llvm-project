@@ -29,21 +29,21 @@ int main()
     const S& cs = s;
     for (S::size_type i = 0; i < cs.size(); ++i)
     {
-        assert(s[i] == '0' + i);
+        assert(s[i] == static_cast<char>('0' + i));
         assert(cs[i] == s[i]);
     }
     assert(cs[cs.size()] == '\0');
     const S s2 = S();
     assert(s2[0] == '\0');
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     typedef std::basic_string<char, std::char_traits<char>, min_allocator<char>> S;
     S s("0123456789");
     const S& cs = s;
     for (S::size_type i = 0; i < cs.size(); ++i)
     {
-        assert(s[i] == '0' + i);
+        assert(s[i] == static_cast<char>('0' + i));
         assert(cs[i] == s[i]);
     }
     assert(cs[cs.size()] == '\0');

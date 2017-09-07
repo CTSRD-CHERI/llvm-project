@@ -13,6 +13,7 @@
 #include "ClangTidyOptions.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/SourceManager.h"
+#include "clang/Tooling/Core/Diagnostic.h"
 #include "clang/Tooling/Refactoring.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringMap.h"
@@ -32,18 +33,6 @@ class CompilationDatabase;
 
 namespace tidy {
 
-/// \brief A message from a clang-tidy check.
-///
-/// Note that this is independent of a \c SourceManager.
-struct ClangTidyMessage {
-  ClangTidyMessage(StringRef Message = "");
-  ClangTidyMessage(StringRef Message, const SourceManager &Sources,
-                   SourceLocation Loc);
-  std::string Message;
-  std::string FilePath;
-  unsigned FileOffset;
-};
-
 /// \brief A detected error complete with information to display diagnostic and
 /// automatic fix.
 ///
@@ -51,20 +40,11 @@ struct ClangTidyMessage {
 /// dependency on a SourceManager.
 ///
 /// FIXME: Make Diagnostics flexible enough to support this directly.
-struct ClangTidyError {
-  enum Level {
-    Warning = DiagnosticsEngine::Warning,
-    Error = DiagnosticsEngine::Error
-  };
+struct ClangTidyError : tooling::Diagnostic {
+  ClangTidyError(StringRef CheckName, Level DiagLevel, StringRef BuildDirectory,
+                 bool IsWarningAsError);
 
-  ClangTidyError(StringRef CheckName, Level DiagLevel);
-
-  std::string CheckName;
-  ClangTidyMessage Message;
-  tooling::Replacements Fix;
-  SmallVector<ClangTidyMessage, 1> Notes;
-
-  Level DiagLevel;
+  bool IsWarningAsError;
 };
 
 /// \brief Read-only set of strings represented as a list of positive and
@@ -126,6 +106,8 @@ public:
   /// \brief Initializes \c ClangTidyContext instance.
   ClangTidyContext(std::unique_ptr<ClangTidyOptionsProvider> OptionsProvider);
 
+  ~ClangTidyContext();
+
   /// \brief Report any errors detected using this method.
   ///
   /// This is still under heavy development and will likely change towards using
@@ -149,28 +131,40 @@ public:
   /// \brief Sets ASTContext for the current translation unit.
   void setASTContext(ASTContext *Context);
 
-  /// \brief Gets the language options from the AST context
-  LangOptions getLangOpts() const { return LangOpts; }
+  /// \brief Gets the language options from the AST context.
+  const LangOptions &getLangOpts() const { return LangOpts; }
 
   /// \brief Returns the name of the clang-tidy check which produced this
   /// diagnostic ID.
   StringRef getCheckName(unsigned DiagnosticID) const;
 
-  /// \brief Returns check filter for the \c CurrentFile.
-  GlobList &getChecksFilter();
+  /// \brief Returns \c true if the check is enabled for the \c CurrentFile.
+  ///
+  /// The \c CurrentFile can be changed using \c setCurrentFile.
+  bool isCheckEnabled(StringRef CheckName) const;
+
+  /// \brief Returns \c true if the check should be upgraded to error for the
+  /// \c CurrentFile.
+  bool treatAsError(StringRef CheckName) const;
 
   /// \brief Returns global options.
   const ClangTidyGlobalOptions &getGlobalOptions() const;
 
   /// \brief Returns options for \c CurrentFile.
+  ///
+  /// The \c CurrentFile can be changed using \c setCurrentFile.
   const ClangTidyOptions &getOptions() const;
+
+  /// \brief Returns options for \c File. Does not change or depend on
+  /// \c CurrentFile.
+  ClangTidyOptions getOptionsForFile(StringRef File) const;
 
   /// \brief Returns \c ClangTidyStats containing issued and ignored diagnostic
   /// counters.
   const ClangTidyStats &getStats() const { return Stats; }
 
   /// \brief Returns all collected errors.
-  const std::vector<ClangTidyError> &getErrors() const { return Errors; }
+  ArrayRef<ClangTidyError> getErrors() const { return Errors; }
 
   /// \brief Clears collected errors.
   void clearErrors() { Errors.clear(); }
@@ -182,9 +176,20 @@ public:
   void setCheckProfileData(ProfileData *Profile);
   ProfileData *getCheckProfileData() const { return Profile; }
 
+  /// \brief Should be called when starting to process new translation unit.
+  void setCurrentBuildDirectory(StringRef BuildDirectory) {
+    CurrentBuildDirectory = BuildDirectory;
+  }
+
+  /// \brief Returns build directory of the current translation unit.
+  const std::string &getCurrentBuildDirectory() {
+    return CurrentBuildDirectory;
+  }
+
 private:
   // Calls setDiagnosticsEngine() and storeError().
   friend class ClangTidyDiagnosticConsumer;
+  friend class ClangTidyPluginAction;
 
   /// \brief Sets the \c DiagnosticsEngine so that Diagnostics can be generated
   /// correctly.
@@ -199,11 +204,15 @@ private:
 
   std::string CurrentFile;
   ClangTidyOptions CurrentOptions;
-  std::unique_ptr<GlobList> CheckFilter;
+  class CachedGlobList;
+  std::unique_ptr<CachedGlobList> CheckFilter;
+  std::unique_ptr<CachedGlobList> WarningAsErrorFilter;
 
   LangOptions LangOpts;
 
   ClangTidyStats Stats;
+
+  std::string CurrentBuildDirectory;
 
   llvm::DenseMap<unsigned, std::string> CheckNamesByDiagnosticID;
 
@@ -217,7 +226,8 @@ private:
 // implementation file.
 class ClangTidyDiagnosticConsumer : public DiagnosticConsumer {
 public:
-  ClangTidyDiagnosticConsumer(ClangTidyContext &Ctx);
+  ClangTidyDiagnosticConsumer(ClangTidyContext &Ctx,
+                              bool RemoveIncompatibleErrors = true);
 
   // FIXME: The concept of converting between FixItHints and Replacements is
   // more generic and should be pulled out into a more useful Diagnostics
@@ -243,11 +253,13 @@ private:
   bool passesLineFilter(StringRef FileName, unsigned LineNumber) const;
 
   ClangTidyContext &Context;
+  bool RemoveIncompatibleErrors;
   std::unique_ptr<DiagnosticsEngine> Diags;
   SmallVector<ClangTidyError, 8> Errors;
   std::unique_ptr<llvm::Regex> HeaderFilter;
   bool LastErrorRelatesToUserCode;
   bool LastErrorPassesLineFilter;
+  bool LastErrorWasIgnored;
 };
 
 } // end namespace tidy

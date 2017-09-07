@@ -41,6 +41,11 @@ namespace COFF {
       '\xaf', '\x20', '\xfa', '\xf6', '\x6a', '\xa4', '\xdc', '\xb8',
   };
 
+  static const char ClGlObjMagic[] = {
+      '\x38', '\xfe', '\xb3', '\x0c', '\xa5', '\xd9', '\xab', '\x4d',
+      '\xac', '\x9b', '\xd6', '\xb6', '\x22', '\x26', '\x53', '\xc2',
+  };
+
   // Sizes in bytes of various things in the COFF format.
   enum {
     Header16Size   = 20,
@@ -145,6 +150,30 @@ namespace COFF {
     /// Big endian: the MSB precedes the LSB in memory. This is deprecated
     /// and should be 0.
     IMAGE_FILE_BYTES_REVERSED_HI       = 0x8000
+  };
+
+  enum ResourceTypeID {
+    RID_Cursor = 1,
+    RID_Bitmap = 2,
+    RID_Icon = 3,
+    RID_Menu = 4,
+    RID_Dialog = 5,
+    RID_String = 6,
+    RID_FontDir = 7,
+    RID_Font = 8,
+    RID_Accelerator = 9,
+    RID_RCData = 10,
+    RID_MessageTable = 11,
+    RID_Group_Cursor = 12,
+    RID_Group_Icon = 14,
+    RID_Version = 16,
+    RID_DLGInclude = 17,
+    RID_PlugPlay = 19,
+    RID_VXD = 20,
+    RID_AniCursor = 21,
+    RID_AniIcon = 22,
+    RID_HTML = 23,
+    RID_Manifest = 24,
   };
 
   struct symbol {
@@ -344,6 +373,26 @@ namespace COFF {
     IMAGE_REL_ARM_BLX23T    = 0x0015
   };
 
+  enum RelocationTypesARM64 {
+    IMAGE_REL_ARM64_ABSOLUTE        = 0x0000,
+    IMAGE_REL_ARM64_ADDR32          = 0x0001,
+    IMAGE_REL_ARM64_ADDR32NB        = 0x0002,
+    IMAGE_REL_ARM64_BRANCH26        = 0x0003,
+    IMAGE_REL_ARM64_PAGEBASE_REL2   = 0x0004,
+    IMAGE_REL_ARM64_REL21           = 0x0005,
+    IMAGE_REL_ARM64_PAGEOFFSET_12A  = 0x0006,
+    IMAGE_REL_ARM64_PAGEOFFSET_12L  = 0x0007,
+    IMAGE_REL_ARM64_SECREL          = 0x0008,
+    IMAGE_REL_ARM64_SECREL_LOW12A   = 0x0009,
+    IMAGE_REL_ARM64_SECREL_HIGH12A  = 0x000A,
+    IMAGE_REL_ARM64_SECREL_LOW12L   = 0x000B,
+    IMAGE_REL_ARM64_TOKEN           = 0x000C,
+    IMAGE_REL_ARM64_SECTION         = 0x000D,
+    IMAGE_REL_ARM64_ADDR64          = 0x000E,
+    IMAGE_REL_ARM64_BRANCH19        = 0x000F,
+    IMAGE_REL_ARM64_BRANCH14        = 0x0010,
+  };
+
   enum COMDATType {
     IMAGE_COMDAT_SELECT_NODUPLICATES = 1,
     IMAGE_COMDAT_SELECT_ANY,
@@ -377,7 +426,6 @@ namespace COFF {
     uint8_t  unused[10];
   };
 
-  /// These are not documented in the spec, but are located in WinNT.h.
   enum WeakExternalCharacteristics {
     IMAGE_WEAK_EXTERN_SEARCH_NOLIBRARY = 1,
     IMAGE_WEAK_EXTERN_SEARCH_LIBRARY   = 2,
@@ -530,7 +578,7 @@ namespace COFF {
     EXCEPTION_TABLE,
     CERTIFICATE_TABLE,
     BASE_RELOCATION_TABLE,
-    DEBUG,
+    DEBUG_DIRECTORY,
     ARCHITECTURE,
     GLOBAL_PTR,
     TLS_TABLE,
@@ -599,7 +647,13 @@ namespace COFF {
     IMAGE_DEBUG_TYPE_OMAP_TO_SRC   = 7,
     IMAGE_DEBUG_TYPE_OMAP_FROM_SRC = 8,
     IMAGE_DEBUG_TYPE_BORLAND       = 9,
-    IMAGE_DEBUG_TYPE_CLSID         = 11
+    IMAGE_DEBUG_TYPE_RESERVED10    = 10,
+    IMAGE_DEBUG_TYPE_CLSID         = 11,
+    IMAGE_DEBUG_TYPE_VC_FEATURE    = 12,
+    IMAGE_DEBUG_TYPE_POGO          = 13,
+    IMAGE_DEBUG_TYPE_ILTCG         = 14,
+    IMAGE_DEBUG_TYPE_MPX           = 15,
+    IMAGE_DEBUG_TYPE_REPRO         = 16,
   };
 
   enum BaseRelocationType {
@@ -652,21 +706,12 @@ namespace COFF {
     }
 
     ImportNameType getNameType() const {
-      return static_cast<ImportNameType>((TypeInfo & 0x1C) >> 3);
+      return static_cast<ImportNameType>((TypeInfo & 0x1C) >> 2);
     }
   };
 
   enum CodeViewIdentifiers {
-    DEBUG_LINE_TABLES_HAVE_COLUMN_RECORDS = 0x1,
     DEBUG_SECTION_MAGIC = 0x4,
-    DEBUG_SYMBOL_SUBSECTION = 0xF1,
-    DEBUG_LINE_TABLE_SUBSECTION = 0xF2,
-    DEBUG_STRING_TABLE_SUBSECTION = 0xF3,
-    DEBUG_INDEX_SUBSECTION = 0xF4,
-
-    // Symbol subsections are split into records of different types.
-    DEBUG_SYMBOL_TYPE_PROC_START = 0x1147,
-    DEBUG_SYMBOL_TYPE_PROC_END = 0x114F
   };
 
   inline bool isReservedSectionNumber(int32_t SectionNumber) {

@@ -21,12 +21,12 @@
 
 namespace llvm {
 class ScalarEvolution;
-}
+} // namespace llvm
 
 namespace polly {
 class Scop;
 
-/// @brief Helper class to annotate newly generated SCoPs with metadata.
+/// Helper class to annotate newly generated SCoPs with metadata.
 ///
 /// The annotations are twofold:
 ///   1) Loops are stored in a stack-like structure in the order they are
@@ -44,23 +44,23 @@ class ScopAnnotator {
 public:
   ScopAnnotator();
 
-  /// @brief Build all alias scopes for the given SCoP.
+  /// Build all alias scopes for the given SCoP.
   void buildAliasScopes(Scop &S);
 
-  /// @brief Add a new loop @p L which is parallel if @p IsParallel is true.
+  /// Add a new loop @p L which is parallel if @p IsParallel is true.
   void pushLoop(llvm::Loop *L, bool IsParallel);
 
-  /// @brief Remove the last added loop.
+  /// Remove the last added loop.
   void popLoop(bool isParallel);
 
-  /// @brief Annotate the new instruction @p I for all parallel loops.
+  /// Annotate the new instruction @p I for all parallel loops.
   void annotate(llvm::Instruction *I);
 
-  /// @brief Annotate the loop latch @p B wrt. @p L.
+  /// Annotate the loop latch @p B wrt. @p L.
   void annotateLoopLatch(llvm::BranchInst *B, llvm::Loop *L,
                          bool IsParallel) const;
 
-  /// @brief Add alternative alias based pointers
+  /// Add alternative alias based pointers
   ///
   /// When annotating instructions with alias scope metadata, the right metadata
   /// is identified through the base pointer of the memory access. In some cases
@@ -77,66 +77,86 @@ public:
     AlternativeAliasBases.insert(NewMap.begin(), NewMap.end());
   }
 
-  /// @brief Delete the set of alternative alias bases
+  /// Delete the set of alternative alias bases
   void resetAlternativeAliasBases() { AlternativeAliasBases.clear(); }
 
+  /// Add inter iteration alias-free base pointer @p BasePtr.
+  void addInterIterationAliasFreeBasePtr(llvm::Value *BasePtr);
+
 private:
-  /// @brief The ScalarEvolution analysis we use to find base pointers.
+  /// Annotate with the second level alias metadata
+  ///
+  /// Annotate the instruction @p I with the second level alias metadata
+  /// to distinguish the individual non-aliasing accesses that have inter
+  /// iteration alias-free base pointers.
+  ///
+  /// @param I The instruction to be annotated.
+  /// @param BasePtr The base pointer of @p I.
+  void annotateSecondLevel(llvm::Instruction *I, llvm::Value *BasePtr);
+
+  /// The ScalarEvolution analysis we use to find base pointers.
   llvm::ScalarEvolution *SE;
 
-  /// @brief All loops currently under construction.
+  /// All loops currently under construction.
   llvm::SmallVector<llvm::Loop *, 8> ActiveLoops;
 
-  /// @brief Metadata pointing to parallel loops currently under construction.
+  /// Metadata pointing to parallel loops currently under construction.
   llvm::SmallVector<llvm::MDNode *, 8> ParallelLoops;
 
-  /// @brief The alias scope domain for the current SCoP.
+  /// The alias scope domain for the current SCoP.
   llvm::MDNode *AliasScopeDomain;
 
-  /// @brief A map from base pointers to its alias scope.
+  /// A map from base pointers to its alias scope.
   llvm::DenseMap<llvm::AssertingVH<llvm::Value>, llvm::MDNode *> AliasScopeMap;
 
-  /// @brief A map from base pointers to an alias scope list of other pointers.
+  /// A map from base pointers to an alias scope list of other pointers.
   llvm::DenseMap<llvm::AssertingVH<llvm::Value>, llvm::MDNode *>
       OtherAliasScopeListMap;
+
+  /// A map from pointers to second level alias scopes.
+  llvm::DenseMap<llvm::AssertingVH<llvm::Value>, llvm::MDNode *>
+      SecondLevelAliasScopeMap;
+
+  /// A map from pointers to second level alias scope list of other pointers.
+  llvm::DenseMap<llvm::AssertingVH<llvm::Value>, llvm::MDNode *>
+      SecondLevelOtherAliasScopeListMap;
+
+  /// Inter iteration alias-free base pointers.
+  llvm::SmallPtrSet<llvm::Value *, 4> InterIterationAliasFreeBasePtrs;
 
   llvm::DenseMap<llvm::AssertingVH<llvm::Value>, llvm::AssertingVH<llvm::Value>>
       AlternativeAliasBases;
 };
 
-/// @brief Add Polly specifics when running IRBuilder.
+/// Add Polly specifics when running IRBuilder.
 ///
 /// This is used to add additional items such as e.g. the llvm.loop.parallel
 /// metadata.
-template <bool PreserveNames>
-class PollyBuilderInserter
-    : protected llvm::IRBuilderDefaultInserter<PreserveNames> {
+class IRInserter : protected llvm::IRBuilderDefaultInserter {
 public:
-  PollyBuilderInserter() : Annotator(0) {}
-  PollyBuilderInserter(class ScopAnnotator &A) : Annotator(&A) {}
+  IRInserter() = default;
+  IRInserter(class ScopAnnotator &A) : Annotator(&A) {}
 
 protected:
   void InsertHelper(llvm::Instruction *I, const llvm::Twine &Name,
                     llvm::BasicBlock *BB,
                     llvm::BasicBlock::iterator InsertPt) const {
-    llvm::IRBuilderDefaultInserter<PreserveNames>::InsertHelper(I, Name, BB,
-                                                                InsertPt);
+    llvm::IRBuilderDefaultInserter::InsertHelper(I, Name, BB, InsertPt);
     if (Annotator)
       Annotator->annotate(I);
   }
 
 private:
-  class ScopAnnotator *Annotator;
+  class ScopAnnotator *Annotator = nullptr;
 };
 
 // TODO: We should not name instructions in NDEBUG builds.
 //
 // We currently always name instructions, as the polly test suite currently
 // matches for certain names.
-typedef PollyBuilderInserter<true> IRInserter;
-typedef llvm::IRBuilder<true, llvm::ConstantFolder, IRInserter> PollyIRBuilder;
+typedef llvm::IRBuilder<llvm::ConstantFolder, IRInserter> PollyIRBuilder;
 
-/// @brief Return an IR builder pointed before the @p BB terminator.
+/// Return an IR builder pointed before the @p BB terminator.
 static inline PollyIRBuilder createPollyIRBuilder(llvm::BasicBlock *BB,
                                                   ScopAnnotator &LA) {
   PollyIRBuilder Builder(BB->getContext(), llvm::ConstantFolder(),
@@ -144,5 +164,5 @@ static inline PollyIRBuilder createPollyIRBuilder(llvm::BasicBlock *BB,
   Builder.SetInsertPoint(BB->getTerminator());
   return Builder;
 }
-}
+} // namespace polly
 #endif

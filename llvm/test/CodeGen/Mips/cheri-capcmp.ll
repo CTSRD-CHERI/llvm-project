@@ -1,20 +1,34 @@
-; RUN: llc -mtriple=cheri-unknown-freebsd -mcpu=cheri %s -o - | FileCheck %s
+; RUN: %cheri_llc -mtriple=cheri-unknown-freebsd %s -o - | FileCheck %s --check-prefixes=CHECK-INEXACT,CHECK
+; RUN: %cheri_llc -cheri-exact-equals=true -mtriple=cheri-unknown-freebsd %s -o - | FileCheck %s --check-prefixes=CHECK-EXACT,CHECK
+; RUN: %cheri_llc -cheri-exact-equals=false -mtriple=cheri-unknown-freebsd %s -o - | FileCheck %s --check-prefixes=CHECK-INEXACT,CHECK
 ; ModuleID = 'ptrcmp.c'
 target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128"
 target triple = "cheri-unknown-freebsd"
 
 ; Function Attrs: nounwind readnone
-; CHECK: eq:
+; CHECK-LABEL: eq:
 define i32 @eq(i8 addrspace(200)* readnone %a, i8 addrspace(200)* readnone %b) #0 {
 entry:
-  ; CHECK: ceq	$2, $c3, $c4
+  ; CHECK-INEXACT: ceq	$2, $c3, $c4
+  ; CHECK-EXACT: cexeq	$2, $c3, $c4
   %cmp = icmp eq i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
 ; Function Attrs: nounwind readnone
-; CHECK: lt:
+; CHECK-LABEL: ne:
+define i32 @ne(i8 addrspace(200)* readnone %a, i8 addrspace(200)* readnone %b) #0 {
+entry:
+  ; CHECK-INEXACT: cne	$2, $c3, $c4
+  ; CHECK-EXACT: cnexeq	$2, $c3, $c4
+  %cmp = icmp ne i8 addrspace(200)* %a, %b
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
+; Function Attrs: nounwind readnone
+; CHECK-LABEL: lt:
 define i32 @lt(i8 addrspace(200)* readnone %a, i8 addrspace(200)* readnone %b) #0 {
 entry:
   ; CHECK: clt	$2, $c3, $c4
@@ -23,7 +37,7 @@ entry:
   ret i32 %conv
 }
 ; Function Attrs: nounwind readnone
-; CHECK: ult:
+; CHECK-LABEL: ult:
 define i32 @ult(i8 addrspace(200)* readnone %a, i8 addrspace(200)* readnone %b) #0 {
 entry:
   ; CHECK: cltu	$2, $c3, $c4
@@ -33,7 +47,7 @@ entry:
 }
 
 ; Function Attrs: nounwind readnone
-; CHECK: le:
+; CHECK-LABEL: le:
 define i32 @le(i8 addrspace(200)* readnone %a, i8 addrspace(200)* readnone %b) #0 {
 entry:
   ; CHECK: cle	$2, $c3, $c4
@@ -43,7 +57,7 @@ entry:
 }
 
 ; Function Attrs: nounwind readnone
-; CHECK: le:
+; CHECK-LABEL: le:
 define i32 @ule(i8 addrspace(200)* readnone %a, i8 addrspace(200)* readnone %b) #0 {
 entry:
   ; CHECK: cleu	$2, $c3, $c4
@@ -53,7 +67,7 @@ entry:
 }
 
 ; Function Attrs: nounwind readnone
-; CHECK: gt:
+; CHECK-LABEL: gt:
 define i32 @gt(i8 addrspace(200)* readnone %a, i8 addrspace(200)* readnone %b) #0 {
 entry:
   ; CHECK: clt	$2, $c4, $c3
@@ -63,7 +77,7 @@ entry:
 }
 
 ; Function Attrs: nounwind readnone
-; CHECK: ugt:
+; CHECK-LABEL: ugt:
 define i32 @ugt(i8 addrspace(200)* readnone %a, i8 addrspace(200)* readnone %b) #0 {
 entry:
   ; CHECK: cltu	$2, $c4, $c3
@@ -73,7 +87,7 @@ entry:
 }
 
 ; Function Attrs: nounwind readnone
-; CHECK: ge:
+; CHECK-LABEL: ge:
 define i32 @ge(i8 addrspace(200)* readnone %a, i8 addrspace(200)* readnone %b) #0 {
 entry:
   ; CHECK: cle	$2, $c4, $c3
@@ -83,7 +97,7 @@ entry:
 }
 
 ; Function Attrs: nounwind readnone
-; CHECK: uge:
+; CHECK-LABEL: uge:
 define i32 @uge(i8 addrspace(200)* readnone %a, i8 addrspace(200)* readnone %b) #0 {
 entry:
   ; CHECK: cleu	$2, $c4, $c3

@@ -48,12 +48,12 @@ int main()
         double var = 0;
         double skew = 0;
         double kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (unsigned i = 0; i < u.size(); ++i)
         {
-            double d = (u[i] - mean);
-            double d2 = sqr(d);
+            double dbl = (u[i] - mean);
+            double d2 = sqr(dbl);
             var += d2;
-            skew += d * d2;
+            skew += dbl * d2;
             kurtosis += d2 * d2;
         }
         var /= u.size();
@@ -87,12 +87,12 @@ int main()
         double var = 0;
         double skew = 0;
         double kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (unsigned i = 0; i < u.size(); ++i)
         {
-            double d = (u[i] - mean);
-            double d2 = sqr(d);
+            double dbl = (u[i] - mean);
+            double d2 = sqr(dbl);
             var += d2;
-            skew += d * d2;
+            skew += dbl * d2;
             kurtosis += d2 * d2;
         }
         var /= u.size();
@@ -126,12 +126,12 @@ int main()
         double var = 0;
         double skew = 0;
         double kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (unsigned i = 0; i < u.size(); ++i)
         {
-            double d = (u[i] - mean);
-            double d2 = sqr(d);
+            double dbl = (u[i] - mean);
+            double d2 = sqr(dbl);
             var += d2;
-            skew += d * d2;
+            skew += dbl * d2;
             kurtosis += d2 * d2;
         }
         var /= u.size();

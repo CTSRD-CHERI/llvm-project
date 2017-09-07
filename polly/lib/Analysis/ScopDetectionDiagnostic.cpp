@@ -36,19 +36,45 @@
 
 #include <string>
 
-#define BADSCOP_STAT(NAME, DESC)                                               \
-  STATISTIC(Bad##NAME##ForScop, "Number of bad regions for Scop: " DESC)
+using namespace llvm;
 
-BADSCOP_STAT(CFG, "CFG too complex");
-BADSCOP_STAT(LoopBound, "Loop bounds can not be computed");
-BADSCOP_STAT(FuncCall, "Function call with side effects appeared");
-BADSCOP_STAT(AffFunc, "Expression not affine");
-BADSCOP_STAT(Alias, "Found base address alias");
-BADSCOP_STAT(SimpleLoop, "Loop not in -loop-simplify form");
-BADSCOP_STAT(Other, "Others");
+#define SCOP_STAT(NAME, DESC)                                                  \
+  { "polly-detect", "NAME", "Number of rejected regions: " DESC, {0}, false }
+
+llvm::Statistic RejectStatistics[] = {
+    SCOP_STAT(CFG, ""),
+    SCOP_STAT(InvalidTerminator, "Unsupported terminator instruction"),
+    SCOP_STAT(UnreachableInExit, "Unreachable in exit block"),
+    SCOP_STAT(IrreducibleRegion, "Irreducible loops"),
+    SCOP_STAT(LastCFG, ""),
+    SCOP_STAT(AffFunc, ""),
+    SCOP_STAT(UndefCond, "Undefined branch condition"),
+    SCOP_STAT(InvalidCond, "Non-integer branch condition"),
+    SCOP_STAT(UndefOperand, "Undefined operands in comparison"),
+    SCOP_STAT(NonAffBranch, "Non-affine branch condition"),
+    SCOP_STAT(NoBasePtr, "No base pointer"),
+    SCOP_STAT(UndefBasePtr, "Undefined base pointer"),
+    SCOP_STAT(VariantBasePtr, "Variant base pointer"),
+    SCOP_STAT(NonAffineAccess, "Non-affine memory accesses"),
+    SCOP_STAT(DifferentElementSize, "Accesses with differing sizes"),
+    SCOP_STAT(LastAffFunc, ""),
+    SCOP_STAT(LoopBound, "Uncomputable loop bounds"),
+    SCOP_STAT(LoopHasNoExit, "Loop without exit"),
+    SCOP_STAT(FuncCall, "Function call with side effects"),
+    SCOP_STAT(NonSimpleMemoryAccess,
+              "Compilated access semantics (volatile or atomic)"),
+    SCOP_STAT(Alias, "Base address aliasing"),
+    SCOP_STAT(Other, ""),
+    SCOP_STAT(IntToPtr, "Integer to pointer conversions"),
+    SCOP_STAT(Alloca, "Stack allocations"),
+    SCOP_STAT(UnknownInst, "Unknown Instructions"),
+    SCOP_STAT(Entry, "Contains entry block"),
+    SCOP_STAT(Unprofitable, "Assumed to be unprofitable"),
+    SCOP_STAT(LastOther, ""),
+};
 
 namespace polly {
-/// @brief Small string conversion via raw_string_stream.
+/// Small string conversion via raw_string_stream.
 template <typename T> std::string operator+(Twine LHS, const T &RHS) {
   std::string Buf;
   raw_string_ostream fmt(Buf);
@@ -57,19 +83,32 @@ template <typename T> std::string operator+(Twine LHS, const T &RHS) {
 
   return LHS.concat(Buf).str();
 }
-}
+} // namespace polly
 
 namespace llvm {
-// @brief Lexicographic order on (line, col) of our debug locations.
+// Lexicographic order on (line, col) of our debug locations.
 static bool operator<(const llvm::DebugLoc &LHS, const llvm::DebugLoc &RHS) {
   return LHS.getLine() < RHS.getLine() ||
          (LHS.getLine() == RHS.getLine() && LHS.getCol() < RHS.getCol());
 }
-}
+} // namespace llvm
 
 namespace polly {
-static void getDebugLocations(const Region *R, DebugLoc &Begin, DebugLoc &End) {
-  for (const BasicBlock *BB : R->blocks())
+BBPair getBBPairForRegion(const Region *R) {
+  return std::make_pair(R->getEntry(), R->getExit());
+}
+
+void getDebugLocations(const BBPair &P, DebugLoc &Begin, DebugLoc &End) {
+  SmallPtrSet<BasicBlock *, 32> Seen;
+  SmallVector<BasicBlock *, 32> Todo;
+  Todo.push_back(P.first);
+  while (!Todo.empty()) {
+    auto *BB = Todo.pop_back_val();
+    if (BB == P.second)
+      continue;
+    if (!Seen.insert(BB).second)
+      continue;
+    Todo.append(succ_begin(BB), succ_end(BB));
     for (const Instruction &Inst : *BB) {
       DebugLoc DL = Inst.getDebugLoc();
       if (!DL)
@@ -78,15 +117,15 @@ static void getDebugLocations(const Region *R, DebugLoc &Begin, DebugLoc &End) {
       Begin = Begin ? std::min(Begin, DL) : DL;
       End = End ? std::max(End, DL) : DL;
     }
+  }
 }
 
-void emitRejectionRemarks(const llvm::Function &F, const RejectLog &Log) {
+void emitRejectionRemarks(const BBPair &P, const RejectLog &Log) {
+  Function &F = *P.first->getParent();
   LLVMContext &Ctx = F.getContext();
 
-  const Region *R = Log.region();
   DebugLoc Begin, End;
-
-  getDebugLocations(R, Begin, End);
+  getDebugLocations(P, Begin, End);
 
   emitOptimizationRemarkMissed(
       Ctx, DEBUG_TYPE, F, Begin,
@@ -96,25 +135,22 @@ void emitRejectionRemarks(const llvm::Function &F, const RejectLog &Log) {
     if (const DebugLoc &Loc = RR->getDebugLoc())
       emitOptimizationRemarkMissed(Ctx, DEBUG_TYPE, F, Loc,
                                    RR->getEndUserMessage());
+    else
+      emitOptimizationRemarkMissed(Ctx, DEBUG_TYPE, F, Begin,
+                                   RR->getEndUserMessage());
   }
 
   emitOptimizationRemarkMissed(Ctx, DEBUG_TYPE, F, End,
                                "Invalid Scop candidate ends here.");
 }
 
-void emitValidRemarks(const llvm::Function &F, const Region *R) {
-  LLVMContext &Ctx = F.getContext();
-
-  DebugLoc Begin, End;
-  getDebugLocations(R, Begin, End);
-
-  emitOptimizationRemark(Ctx, DEBUG_TYPE, F, Begin,
-                         "A valid Scop begins here.");
-  emitOptimizationRemark(Ctx, DEBUG_TYPE, F, End, "A valid Scop ends here.");
-}
-
 //===----------------------------------------------------------------------===//
 // RejectReason.
+
+RejectReason::RejectReason(RejectReasonKind K) : Kind(K) {
+  RejectStatistics[static_cast<int>(K)]++;
+}
+
 const DebugLoc RejectReason::Unknown = DebugLoc();
 
 const llvm::DebugLoc &RejectReason::getDebugLoc() const {
@@ -132,12 +168,11 @@ void RejectLog::print(raw_ostream &OS, int level) const {
 //===----------------------------------------------------------------------===//
 // ReportCFG.
 
-ReportCFG::ReportCFG(const RejectReasonKind K) : RejectReason(K) {
-  ++BadCFGForScop;
-}
+ReportCFG::ReportCFG(const RejectReasonKind K) : RejectReason(K) {}
 
 bool ReportCFG::classof(const RejectReason *RR) {
-  return RR->getKind() >= rrkCFG && RR->getKind() <= rrkLastCFG;
+  return RR->getKind() >= RejectReasonKind::CFG &&
+         RR->getKind() <= RejectReasonKind::LastCFG;
 }
 
 //===----------------------------------------------------------------------===//
@@ -152,19 +187,53 @@ const DebugLoc &ReportInvalidTerminator::getDebugLoc() const {
 }
 
 bool ReportInvalidTerminator::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkInvalidTerminator;
+  return RR->getKind() == RejectReasonKind::InvalidTerminator;
+}
+
+//===----------------------------------------------------------------------===//
+// UnreachableInExit.
+
+std::string ReportUnreachableInExit::getMessage() const {
+  std::string BBName = BB->getName();
+  return "Unreachable in exit block" + BBName;
+}
+
+const DebugLoc &ReportUnreachableInExit::getDebugLoc() const { return DbgLoc; }
+
+std::string ReportUnreachableInExit::getEndUserMessage() const {
+  return "Unreachable in exit block.";
+}
+
+bool ReportUnreachableInExit::classof(const RejectReason *RR) {
+  return RR->getKind() == RejectReasonKind::UnreachableInExit;
+}
+
+//===----------------------------------------------------------------------===//
+// ReportIrreducibleRegion.
+
+std::string ReportIrreducibleRegion::getMessage() const {
+  return "Irreducible region encountered: " + R->getNameStr();
+}
+
+const DebugLoc &ReportIrreducibleRegion::getDebugLoc() const { return DbgLoc; }
+
+std::string ReportIrreducibleRegion::getEndUserMessage() const {
+  return "Irreducible region encountered in control flow.";
+}
+
+bool ReportIrreducibleRegion::classof(const RejectReason *RR) {
+  return RR->getKind() == RejectReasonKind::IrreducibleRegion;
 }
 
 //===----------------------------------------------------------------------===//
 // ReportAffFunc.
 
 ReportAffFunc::ReportAffFunc(const RejectReasonKind K, const Instruction *Inst)
-    : RejectReason(K), Inst(Inst) {
-  ++BadAffFuncForScop;
-}
+    : RejectReason(K), Inst(Inst) {}
 
 bool ReportAffFunc::classof(const RejectReason *RR) {
-  return RR->getKind() >= rrkAffFunc && RR->getKind() <= rrkLastAffFunc;
+  return RR->getKind() >= RejectReasonKind::AffFunc &&
+         RR->getKind() <= RejectReasonKind::LastAffFunc;
 }
 
 //===----------------------------------------------------------------------===//
@@ -175,7 +244,7 @@ std::string ReportUndefCond::getMessage() const {
 }
 
 bool ReportUndefCond::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkUndefCond;
+  return RR->getKind() == RejectReasonKind::UndefCond;
 }
 
 //===----------------------------------------------------------------------===//
@@ -187,23 +256,7 @@ std::string ReportInvalidCond::getMessage() const {
 }
 
 bool ReportInvalidCond::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkInvalidCond;
-}
-
-//===----------------------------------------------------------------------===//
-// ReportUnsignedCond.
-
-std::string ReportUnsignedCond::getMessage() const {
-  return ("Condition in BB '" + BB->getName()).str() +
-         "' performs a comparision on (not yet supported) unsigned integers.";
-}
-
-std::string ReportUnsignedCond::getEndUserMessage() const {
-  return "Unsupported comparision on unsigned integers encountered";
-}
-
-bool ReportUnsignedCond::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkUnsignedCond;
+  return RR->getKind() == RejectReasonKind::InvalidCond;
 }
 
 //===----------------------------------------------------------------------===//
@@ -214,19 +267,19 @@ std::string ReportUndefOperand::getMessage() const {
 }
 
 bool ReportUndefOperand::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkUndefOperand;
+  return RR->getKind() == RejectReasonKind::UndefOperand;
 }
 
 //===----------------------------------------------------------------------===//
 // ReportNonAffBranch.
 
 std::string ReportNonAffBranch::getMessage() const {
-  return ("Non affine branch in BB '" + BB->getName()).str() + "' with LHS: " +
-         *LHS + " and RHS: " + *RHS;
+  return ("Non affine branch in BB '" + BB->getName()).str() +
+         "' with LHS: " + *LHS + " and RHS: " + *RHS;
 }
 
 bool ReportNonAffBranch::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkNonAffBranch;
+  return RR->getKind() == RejectReasonKind::NonAffBranch;
 }
 
 //===----------------------------------------------------------------------===//
@@ -235,7 +288,7 @@ bool ReportNonAffBranch::classof(const RejectReason *RR) {
 std::string ReportNoBasePtr::getMessage() const { return "No base pointer"; }
 
 bool ReportNoBasePtr::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkNoBasePtr;
+  return RR->getKind() == RejectReasonKind::NoBasePtr;
 }
 
 //===----------------------------------------------------------------------===//
@@ -246,7 +299,7 @@ std::string ReportUndefBasePtr::getMessage() const {
 }
 
 bool ReportUndefBasePtr::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkUndefBasePtr;
+  return RR->getKind() == RejectReasonKind::UndefBasePtr;
 }
 
 //===----------------------------------------------------------------------===//
@@ -261,7 +314,7 @@ std::string ReportVariantBasePtr::getEndUserMessage() const {
 }
 
 bool ReportVariantBasePtr::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkVariantBasePtr;
+  return RR->getKind() == RejectReasonKind::VariantBasePtr;
 }
 
 //===----------------------------------------------------------------------===//
@@ -272,14 +325,15 @@ std::string ReportDifferentArrayElementSize::getMessage() const {
 }
 
 bool ReportDifferentArrayElementSize::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkDifferentElementSize;
+  return RR->getKind() == RejectReasonKind::DifferentElementSize;
 }
 
 std::string ReportDifferentArrayElementSize::getEndUserMessage() const {
   llvm::StringRef BaseName = BaseValue->getName();
   std::string Name = (BaseName.size() > 0) ? BaseName : "UNKNOWN";
-  return "The array \"" + Name + "\" is accessed through elements that differ "
-                                 "in size";
+  return "The array \"" + Name +
+         "\" is accessed through elements that differ "
+         "in size";
 }
 
 //===----------------------------------------------------------------------===//
@@ -290,7 +344,7 @@ std::string ReportNonAffineAccess::getMessage() const {
 }
 
 bool ReportNonAffineAccess::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkNonAffineAccess;
+  return RR->getKind() == RejectReasonKind::NonAffineAccess;
 }
 
 std::string ReportNonAffineAccess::getEndUserMessage() const {
@@ -303,20 +357,18 @@ std::string ReportNonAffineAccess::getEndUserMessage() const {
 // ReportLoopBound.
 
 ReportLoopBound::ReportLoopBound(Loop *L, const SCEV *LoopCount)
-    : RejectReason(rrkLoopBound), L(L), LoopCount(LoopCount),
-      Loc(L->getStartLoc()) {
-  ++BadLoopBoundForScop;
-}
+    : RejectReason(RejectReasonKind::LoopBound), L(L), LoopCount(LoopCount),
+      Loc(L->getStartLoc()) {}
 
 std::string ReportLoopBound::getMessage() const {
-  return "Non affine loop bound '" + *LoopCount + "' in loop: " +
-         L->getHeader()->getName();
+  return "Non affine loop bound '" + *LoopCount +
+         "' in loop: " + L->getHeader()->getName();
 }
 
 const DebugLoc &ReportLoopBound::getDebugLoc() const { return Loc; }
 
 bool ReportLoopBound::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkLoopBound;
+  return RR->getKind() == RejectReasonKind::LoopBound;
 }
 
 std::string ReportLoopBound::getEndUserMessage() const {
@@ -324,12 +376,27 @@ std::string ReportLoopBound::getEndUserMessage() const {
 }
 
 //===----------------------------------------------------------------------===//
+// ReportLoopHasNoExit.
+
+std::string ReportLoopHasNoExit::getMessage() const {
+  return "Loop " + L->getHeader()->getName() + " has no exit.";
+}
+
+bool ReportLoopHasNoExit::classof(const RejectReason *RR) {
+  return RR->getKind() == RejectReasonKind::LoopHasNoExit;
+}
+
+const DebugLoc &ReportLoopHasNoExit::getDebugLoc() const { return Loc; }
+
+std::string ReportLoopHasNoExit::getEndUserMessage() const {
+  return "Loop cannot be handled because it has no exit.";
+}
+
+//===----------------------------------------------------------------------===//
 // ReportFuncCall.
 
 ReportFuncCall::ReportFuncCall(Instruction *Inst)
-    : RejectReason(rrkFuncCall), Inst(Inst) {
-  ++BadFuncCallForScop;
-}
+    : RejectReason(RejectReasonKind::FuncCall), Inst(Inst) {}
 
 std::string ReportFuncCall::getMessage() const {
   return "Call instruction: " + *Inst;
@@ -345,14 +412,14 @@ std::string ReportFuncCall::getEndUserMessage() const {
 }
 
 bool ReportFuncCall::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkFuncCall;
+  return RR->getKind() == RejectReasonKind::FuncCall;
 }
 
 //===----------------------------------------------------------------------===//
 // ReportNonSimpleMemoryAccess
 
 ReportNonSimpleMemoryAccess::ReportNonSimpleMemoryAccess(Instruction *Inst)
-    : ReportOther(rrkNonSimpleMemoryAccess), Inst(Inst) {}
+    : ReportOther(RejectReasonKind::NonSimpleMemoryAccess), Inst(Inst) {}
 
 std::string ReportNonSimpleMemoryAccess::getMessage() const {
   return "Non-simple memory access: " + *Inst;
@@ -368,19 +435,17 @@ std::string ReportNonSimpleMemoryAccess::getEndUserMessage() const {
 }
 
 bool ReportNonSimpleMemoryAccess::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkNonSimpleMemoryAccess;
+  return RR->getKind() == RejectReasonKind::NonSimpleMemoryAccess;
 }
 
 //===----------------------------------------------------------------------===//
 // ReportAlias.
 
 ReportAlias::ReportAlias(Instruction *Inst, AliasSet &AS)
-    : RejectReason(rrkAlias), Inst(Inst) {
+    : RejectReason(RejectReasonKind::Alias), Inst(Inst) {
 
   for (const auto &I : AS)
     Pointers.push_back(I.getValue());
-
-  ++BadAliasForScop;
 }
 
 std::string ReportAlias::formatInvalidAlias(std::string Prefix,
@@ -397,7 +462,7 @@ std::string ReportAlias::formatInvalidAlias(std::string Prefix,
     assert(V && "Diagnostic info does not match found LLVM-IR anymore.");
 
     if (V->getName().size() == 0)
-      OS << "\"" << *V << "\"";
+      OS << "\" <unknown> \"";
     else
       OS << "\"" << V->getName() << "\"";
 
@@ -426,22 +491,7 @@ std::string ReportAlias::getEndUserMessage() const {
 const DebugLoc &ReportAlias::getDebugLoc() const { return Inst->getDebugLoc(); }
 
 bool ReportAlias::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkAlias;
-}
-
-//===----------------------------------------------------------------------===//
-// ReportSimpleLoop.
-
-ReportSimpleLoop::ReportSimpleLoop() : RejectReason(rrkSimpleLoop) {
-  ++BadSimpleLoopForScop;
-}
-
-std::string ReportSimpleLoop::getMessage() const {
-  return "Loop not in simplify form is invalid!";
-}
-
-bool ReportSimpleLoop::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkSimpleLoop;
+  return RR->getKind() == RejectReasonKind::Alias;
 }
 
 //===----------------------------------------------------------------------===//
@@ -449,18 +499,17 @@ bool ReportSimpleLoop::classof(const RejectReason *RR) {
 
 std::string ReportOther::getMessage() const { return "Unknown reject reason"; }
 
-ReportOther::ReportOther(const RejectReasonKind K) : RejectReason(K) {
-  ++BadOtherForScop;
-}
+ReportOther::ReportOther(const RejectReasonKind K) : RejectReason(K) {}
 
 bool ReportOther::classof(const RejectReason *RR) {
-  return RR->getKind() >= rrkOther && RR->getKind() <= rrkLastOther;
+  return RR->getKind() >= RejectReasonKind::Other &&
+         RR->getKind() <= RejectReasonKind::LastOther;
 }
 
 //===----------------------------------------------------------------------===//
 // ReportIntToPtr.
 ReportIntToPtr::ReportIntToPtr(Instruction *BaseValue)
-    : ReportOther(rrkIntToPtr), BaseValue(BaseValue) {}
+    : ReportOther(RejectReasonKind::IntToPtr), BaseValue(BaseValue) {}
 
 std::string ReportIntToPtr::getMessage() const {
   return "Find bad intToptr prt: " + *BaseValue;
@@ -471,14 +520,14 @@ const DebugLoc &ReportIntToPtr::getDebugLoc() const {
 }
 
 bool ReportIntToPtr::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkIntToPtr;
+  return RR->getKind() == RejectReasonKind::IntToPtr;
 }
 
 //===----------------------------------------------------------------------===//
 // ReportAlloca.
 
 ReportAlloca::ReportAlloca(Instruction *Inst)
-    : ReportOther(rrkAlloca), Inst(Inst) {}
+    : ReportOther(RejectReasonKind::Alloca), Inst(Inst) {}
 
 std::string ReportAlloca::getMessage() const {
   return "Alloca instruction: " + *Inst;
@@ -489,14 +538,14 @@ const DebugLoc &ReportAlloca::getDebugLoc() const {
 }
 
 bool ReportAlloca::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkAlloca;
+  return RR->getKind() == RejectReasonKind::Alloca;
 }
 
 //===----------------------------------------------------------------------===//
 // ReportUnknownInst.
 
 ReportUnknownInst::ReportUnknownInst(Instruction *Inst)
-    : ReportOther(rrkUnknownInst), Inst(Inst) {}
+    : ReportOther(RejectReasonKind::UnknownInst), Inst(Inst) {}
 
 std::string ReportUnknownInst::getMessage() const {
   return "Unknown instruction: " + *Inst;
@@ -507,15 +556,20 @@ const DebugLoc &ReportUnknownInst::getDebugLoc() const {
 }
 
 bool ReportUnknownInst::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkUnknownInst;
+  return RR->getKind() == RejectReasonKind::UnknownInst;
 }
 
 //===----------------------------------------------------------------------===//
 // ReportEntry.
-ReportEntry::ReportEntry(BasicBlock *BB) : ReportOther(rrkEntry), BB(BB) {}
+ReportEntry::ReportEntry(BasicBlock *BB)
+    : ReportOther(RejectReasonKind::Entry), BB(BB) {}
 
 std::string ReportEntry::getMessage() const {
   return "Region containing entry block of function is invalid!";
+}
+
+std::string ReportEntry::getEndUserMessage() const {
+  return "Scop contains function entry (not yet supported).";
 }
 
 const DebugLoc &ReportEntry::getDebugLoc() const {
@@ -523,13 +577,13 @@ const DebugLoc &ReportEntry::getDebugLoc() const {
 }
 
 bool ReportEntry::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkEntry;
+  return RR->getKind() == RejectReasonKind::Entry;
 }
 
 //===----------------------------------------------------------------------===//
 // ReportUnprofitable.
 ReportUnprofitable::ReportUnprofitable(Region *R)
-    : ReportOther(rrkUnprofitable), R(R) {}
+    : ReportOther(RejectReasonKind::Unprofitable), R(R) {}
 
 std::string ReportUnprofitable::getMessage() const {
   return "Region can not profitably be optimized!";
@@ -549,6 +603,6 @@ const DebugLoc &ReportUnprofitable::getDebugLoc() const {
 }
 
 bool ReportUnprofitable::classof(const RejectReason *RR) {
-  return RR->getKind() == rrkUnprofitable;
+  return RR->getKind() == RejectReasonKind::Unprofitable;
 }
 } // namespace polly

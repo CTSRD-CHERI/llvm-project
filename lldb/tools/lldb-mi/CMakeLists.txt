@@ -1,4 +1,16 @@
-set(LLDB_MI_SOURCES
+if ( CMAKE_SYSTEM_NAME MATCHES "Windows" OR CMAKE_SYSTEM_NAME MATCHES "NetBSD" )
+  add_definitions( -DIMPORT_LIBLLDB )
+  list(APPEND extra_libs lldbHost)
+endif ()
+
+if (HAVE_LIBPTHREAD)
+  list(APPEND extra_libs pthread)
+endif ()
+
+# We need to include the llvm components we depend on manually, as liblldb does
+# not re-export those.
+set(LLVM_LINK_COMPONENTS Support)
+add_lldb_tool(lldb-mi
   MICmdArgContext.cpp
   MICmdArgSet.cpp
   MICmdArgValBase.cpp
@@ -65,7 +77,6 @@ set(LLDB_MI_SOURCES
   MIDriverBase.cpp
   MIDriverMain.cpp
   MIDriverMgr.cpp
-  MIUtilParse.cpp
   MIUtilDateTimeStd.cpp
   MIUtilDebug.cpp
   MIUtilFileStd.cpp
@@ -73,30 +84,12 @@ set(LLDB_MI_SOURCES
   MIUtilString.cpp
   MIUtilThreadBaseStd.cpp
   MIUtilVariant.cpp
-  Platform.cpp
+
+  LINK_LIBS
+    liblldb
+    ${host_lib}
+    ${extra_libs}
+
+  LINK_COMPONENTS
+    Support
   )
-
-if ( CMAKE_SYSTEM_NAME MATCHES "Windows" )
-  add_definitions( -DIMPORT_LIBLLDB )
-  list(APPEND LLDB_MI_SOURCES
-    ${LLDB_SOURCE_ROOT}/Host/common/GetOptInc.cpp
-    )
-endif ()
-
-include(../../cmake/LLDBDependencies.cmake)
-
-add_lldb_executable(lldb-mi ${LLDB_MI_SOURCES})
-
-target_link_libraries(lldb-mi liblldb)
-if ( NOT CMAKE_SYSTEM_NAME MATCHES "Windows" )
-  target_link_libraries(lldb-mi pthread)
-endif ()
-
-# TODO: why isn't this done by add_lldb_executable?
-#target_link_libraries(lldb-mi ${LLDB_USED_LIBS})
-llvm_config(lldb-mi ${LLVM_LINK_COMPONENTS})
-
-set_target_properties(lldb-mi PROPERTIES VERSION ${LLDB_VERSION})
-
-install(TARGETS lldb-mi
-  RUNTIME DESTINATION bin)

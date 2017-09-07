@@ -60,7 +60,7 @@ static StringRef GetText(const Token &Tok, const SourceManager &Sources) {
 }
 
 void UseOverrideCheck::check(const MatchFinder::MatchResult &Result) {
-  const FunctionDecl *Method = Result.Nodes.getStmtAs<FunctionDecl>("method");
+  const auto *Method = Result.Nodes.getNodeAs<FunctionDecl>("method");
   const SourceManager &Sources = *Result.SourceManager;
 
   assert(Method != nullptr);
@@ -95,16 +95,16 @@ void UseOverrideCheck::check(const MatchFinder::MatchResult &Result) {
                    : "'override' is";
     StringRef Correct = HasFinal ? "'final'" : "'override'";
 
-    Message =
-        (llvm::Twine(Redundant) +
-         " redundant since the function is already declared " + Correct).str();
+    Message = (llvm::Twine(Redundant) +
+               " redundant since the function is already declared " + Correct)
+                  .str();
   }
 
   DiagnosticBuilder Diag = diag(Method->getLocation(), Message);
 
   CharSourceRange FileRange = Lexer::makeFileCharRange(
       CharSourceRange::getTokenRange(Method->getSourceRange()), Sources,
-      Result.Context->getLangOpts());
+      getLangOpts());
 
   if (!FileRange.isValid())
     return;
@@ -118,9 +118,11 @@ void UseOverrideCheck::check(const MatchFinder::MatchResult &Result) {
   if (!HasFinal && !HasOverride) {
     SourceLocation InsertLoc;
     StringRef ReplacementText = "override ";
+    SourceLocation MethodLoc = Method->getLocation();
 
     for (Token T : Tokens) {
-      if (T.is(tok::kw___attribute)) {
+      if (T.is(tok::kw___attribute) &&
+          !Sources.isBeforeInTranslationUnit(T.getLocation(), MethodLoc)) {
         InsertLoc = T.getLocation();
         break;
       }
@@ -128,11 +130,12 @@ void UseOverrideCheck::check(const MatchFinder::MatchResult &Result) {
 
     if (Method->hasAttrs()) {
       for (const clang::Attr *A : Method->getAttrs()) {
-        if (!A->isImplicit()) {
+        if (!A->isImplicit() && !A->isInherited()) {
           SourceLocation Loc =
               Sources.getExpansionLoc(A->getRange().getBegin());
-          if (!InsertLoc.isValid() ||
-              Sources.isBeforeInTranslationUnit(Loc, InsertLoc))
+          if ((!InsertLoc.isValid() ||
+               Sources.isBeforeInTranslationUnit(Loc, InsertLoc)) &&
+              !Sources.isBeforeInTranslationUnit(Loc, MethodLoc))
             InsertLoc = Loc;
         }
       }
@@ -144,14 +147,13 @@ void UseOverrideCheck::check(const MatchFinder::MatchResult &Result) {
       // end of the declaration of the function, but prefer to put it on the
       // same line as the declaration if the beginning brace for the start of
       // the body falls on the next line.
-      Token LastNonCommentToken;
-      for (Token T : Tokens) {
-        if (!T.is(tok::comment)) {
-          LastNonCommentToken = T;
-        }
-      }
-      InsertLoc = LastNonCommentToken.getEndLoc();
       ReplacementText = " override";
+      auto LastTokenIter = std::prev(Tokens.end());
+      // When try statement is used instead of compound statement as
+      // method body - insert override keyword before it.
+      if (LastTokenIter->is(tok::kw_try))
+        LastTokenIter = std::prev(LastTokenIter);
+      InsertLoc = LastTokenIter->getEndLoc();
     }
 
     if (!InsertLoc.isValid()) {
@@ -163,6 +165,9 @@ void UseOverrideCheck::check(const MatchFinder::MatchResult &Result) {
                                 Tokens.back().is(tok::kw_delete)) &&
           GetText(Tokens[Tokens.size() - 2], Sources) == "=") {
         InsertLoc = Tokens[Tokens.size() - 2].getLocation();
+        // Check if we need to insert a space.
+        if ((Tokens[Tokens.size() - 2].getFlags() & Token::LeadingSpace) == 0)
+          ReplacementText = " override ";
       } else if (GetText(Tokens.back(), Sources) == "ABSTRACT") {
         InsertLoc = Tokens.back().getLocation();
       }

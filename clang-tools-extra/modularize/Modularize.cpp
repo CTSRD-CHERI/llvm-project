@@ -341,9 +341,7 @@ static std::string findInputFile(const CommandLineArguments &CLArgs) {
   const unsigned IncludedFlagsBitmask = options::CC1Option;
   unsigned MissingArgIndex, MissingArgCount;
   SmallVector<const char *, 256> Argv;
-  for (CommandLineArguments::const_iterator I = CLArgs.begin(),
-                                            E = CLArgs.end();
-       I != E; ++I)
+  for (auto I = CLArgs.begin(), E = CLArgs.end(); I != E; ++I)
     Argv.push_back(I->c_str());
   InputArgList Args = Opts->ParseArgs(Argv, MissingArgIndex, MissingArgCount,
                                       IncludedFlagsBitmask);
@@ -356,7 +354,8 @@ static std::string findInputFile(const CommandLineArguments &CLArgs) {
 // if no other "-x" option is present.
 static ArgumentsAdjuster
 getModularizeArgumentsAdjuster(DependencyMap &Dependencies) {
-  return [&Dependencies](const CommandLineArguments &Args) {
+  return [&Dependencies](const CommandLineArguments &Args,
+                         StringRef /*unused*/) {
     std::string InputFile = findInputFile(Args);
     DependentsVector &FileDependents = Dependencies[InputFile];
     CommandLineArguments NewArgs(Args);
@@ -570,7 +569,10 @@ public:
     return true;
   }
   bool TraverseConstructorInitializer(CXXCtorInitializer *Init) { return true; }
-  bool TraverseLambdaCapture(LambdaCapture C) { return true; }
+  bool TraverseLambdaCapture(LambdaExpr *LE, const LambdaCapture *C,
+                             Expr *Init) {
+    return true;
+  }
 
   // Check 'extern "*" {}' block for #include directives.
   bool VisitLinkageSpecDecl(LinkageSpecDecl *D) {
@@ -755,7 +757,10 @@ public:
     return true;
   }
   bool TraverseConstructorInitializer(CXXCtorInitializer *Init) { return true; }
-  bool TraverseLambdaCapture(LambdaCapture C) { return true; }
+  bool TraverseLambdaCapture(LambdaExpr *LE, const LambdaCapture *C,
+                             Expr *Init) {
+    return true;
+  }
 
   // Check 'extern "*" {}' block for #include directives.
   bool VisitLinkageSpecDecl(LinkageSpecDecl *D) {

@@ -23,7 +23,7 @@
 #include <stdarg.h>
 #include <string.h>
 
-#define INTEL_NO_MACRO_BODY 
+#define INTEL_NO_MACRO_BODY
 #define INTEL_ITTNOTIFY_API_PRIVATE
 #include "ittnotify.h"
 #include "legacy/ittnotify.h"
@@ -72,7 +72,7 @@ static const char* ittnotify_lib_name = "libittnotify.dylib";
 
 
 #ifndef LIB_VAR_NAME
-#if ITT_ARCH==ITT_ARCH_IA32 || ITT_ARCH==ITT_ARCH_ARM
+#if ITT_ARCH==ITT_ARCH_IA32 || ITT_ARCH==ITT_ARCH_ARM || ITT_ARCH==ITT_ARCH_MIPS
 #define LIB_VAR_NAME INTEL_LIBITTNOTIFY32
 #else
 #define LIB_VAR_NAME INTEL_LIBITTNOTIFY64
@@ -285,10 +285,16 @@ ITT_EXTERN_C void _N_(error_handler)(__itt_error_code, va_list args);
 #pragma warning(disable: 4055) /* warning C4055: 'type cast' : from data pointer 'void *' to function pointer 'XXX' */
 #endif /* ITT_PLATFORM==ITT_PLATFORM_WIN */
 
-static void __itt_report_error(__itt_error_code code, ...)
+static void __itt_report_error(unsigned code_arg, ...)
 {
     va_list args;
-    va_start(args, code);
+    va_start(args, code_arg);
+
+    // We use unsigned for the code argument and explicitly cast it here to the
+    // right enumerator because variadic functions are not compatible with
+    // default promotions.
+    __itt_error_code code = (__itt_error_code)code_arg;
+
     if (_N_(_ittapi_global).error_handler != NULL)
     {
         __itt_error_handler_t* handler = (__itt_error_handler_t*)(size_t)_N_(_ittapi_global).error_handler;

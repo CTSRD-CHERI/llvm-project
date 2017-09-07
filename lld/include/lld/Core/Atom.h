@@ -1,4 +1,4 @@
-//===- Core/Atom.h - A node in linking graph ------------------------------===//
+//===- Core/Atom.h - A node in linking graph --------------------*- C++ -*-===//
 //
 //                             The LLVM Linker
 //
@@ -11,10 +11,14 @@
 #define LLD_CORE_ATOM_H
 
 #include "lld/Core/LLVM.h"
+#include "llvm/ADT/StringRef.h"
 
 namespace lld {
 
 class File;
+
+template<typename T>
+class OwningAtomPtr;
 
 ///
 /// The linker has a Graph Theory model of linking. An object file is seen
@@ -24,6 +28,8 @@ class File;
 /// undefined symbol (extern declaration).
 ///
 class Atom {
+  template<typename T> friend class OwningAtomPtr;
+
 public:
   /// Whether this atom is defined or a proxy for an undefined symbol
   enum Definition {
@@ -42,7 +48,6 @@ public:
     scopeGlobal            ///< Accessible to all atoms and visible to runtime
                            ///  loader (e.g. visibility=default).
   };
-
 
   /// file - returns the File that produced/owns this Atom
   virtual const File& file() const = 0;
@@ -65,12 +70,62 @@ protected:
   /// object.  Therefore, no one but the owning File object should call
   /// delete on an Atom.  In fact, some File objects may bulk allocate
   /// an array of Atoms, so they cannot be individually deleted by anyone.
-  virtual ~Atom() {}
+  virtual ~Atom() = default;
 
 private:
   Definition _definition;
 };
 
-} // namespace lld
+/// Class which owns an atom pointer and runs the atom destructor when the
+/// owning pointer goes out of scope.
+template<typename T>
+class OwningAtomPtr {
+private:
+  OwningAtomPtr(const OwningAtomPtr &) = delete;
+  void operator=(const OwningAtomPtr &) = delete;
+
+public:
+  OwningAtomPtr() = default;
+  OwningAtomPtr(T *atom) : atom(atom) { }
+
+  ~OwningAtomPtr() {
+    if (atom)
+      runDestructor(atom);
+  }
+
+  void runDestructor(Atom *atom) {
+    atom->~Atom();
+  }
+
+  OwningAtomPtr(OwningAtomPtr &&ptr) : atom(ptr.atom) {
+    ptr.atom = nullptr;
+  }
+
+  void operator=(OwningAtomPtr&& ptr) {
+    if (atom)
+      runDestructor(atom);
+    atom = ptr.atom;
+    ptr.atom = nullptr;
+  }
+
+  T *const &get() const {
+    return atom;
+  }
+
+  T *&get() {
+    return atom;
+  }
+
+  T *release() {
+    auto *v = atom;
+    atom = nullptr;
+    return v;
+  }
+
+private:
+  T *atom = nullptr;
+};
+
+} // end namespace lld
 
 #endif // LLD_CORE_ATOM_H

@@ -10,67 +10,106 @@
 #ifndef LLD_ELF_TARGET_H
 #define LLD_ELF_TARGET_H
 
+#include "InputSection.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Object/ELF.h"
 
 #include <memory>
 
 namespace lld {
-namespace elf2 {
+namespace elf {
+class InputFile;
 class SymbolBody;
 
 class TargetInfo {
 public:
-  unsigned getPageSize() const { return PageSize; }
-  uint64_t getVAStart() const { return VAStart; }
-  unsigned getPCRelReloc() const { return PCRelReloc; }
-  unsigned getGotReloc() const { return GotReloc; }
-  unsigned getPltReloc() const { return PltReloc; }
-  unsigned getGotRefReloc() const { return GotRefReloc; }
-  unsigned getRelativeReloc() const { return RelativeReloc; }
-  unsigned getPltZeroEntrySize() const { return PltZeroEntrySize; }
-  unsigned getPltEntrySize() const { return PltEntrySize; }
-  bool supportsLazyRelocations() const { return LazyRelocations; }
-  virtual unsigned getPLTRefReloc(unsigned Type) const;
-  virtual void writeGotPltEntry(uint8_t *Buf, uint64_t Plt) const = 0;
-  virtual void writePltZeroEntry(uint8_t *Buf, uint64_t GotEntryAddr,
-                                 uint64_t PltEntryAddr) const = 0;
-  virtual void writePltEntry(uint8_t *Buf, uint64_t GotEntryAddr,
-                             uint64_t PltEntryAddr, int32_t Index) const = 0;
-  virtual bool isRelRelative(uint32_t Type) const;
-  virtual bool relocNeedsGot(uint32_t Type, const SymbolBody &S) const = 0;
-  virtual bool relocPointsToGot(uint32_t Type) const;
-  virtual bool relocNeedsPlt(uint32_t Type, const SymbolBody &S) const = 0;
-  virtual void relocateOne(uint8_t *Loc, uint8_t *BufEnd, uint32_t Type,
-                           uint64_t P, uint64_t SA) const = 0;
+  virtual bool isPicRel(uint32_t Type) const { return true; }
+  virtual uint32_t getDynRel(uint32_t Type) const { return Type; }
+  virtual void writeGotPltHeader(uint8_t *Buf) const {}
+  virtual void writeGotPlt(uint8_t *Buf, const SymbolBody &S) const {};
+  virtual void writeIgotPlt(uint8_t *Buf, const SymbolBody &S) const;
+  virtual int64_t getImplicitAddend(const uint8_t *Buf, uint32_t Type) const;
 
+  // If lazy binding is supported, the first entry of the PLT has code
+  // to call the dynamic linker to resolve PLT entries the first time
+  // they are called. This function writes that code.
+  virtual void writePltHeader(uint8_t *Buf) const {}
+
+  virtual void writePlt(uint8_t *Buf, uint64_t GotEntryAddr,
+                        uint64_t PltEntryAddr, int32_t Index,
+                        unsigned RelOff) const {}
+  virtual void addPltHeaderSymbols(InputSectionBase *IS) const {}
+  virtual void addPltSymbols(InputSectionBase *IS, uint64_t Off) const {}
+  // Returns true if a relocation only uses the low bits of a value such that
+  // all those bits are in in the same page. For example, if the relocation
+  // only uses the low 12 bits in a system with 4k pages. If this is true, the
+  // bits will always have the same value at runtime and we don't have to emit
+  // a dynamic relocation.
+  virtual bool usesOnlyLowPageBits(uint32_t Type) const;
+
+  // Decide whether a Thunk is needed for the relocation from File
+  // targeting S.
+  virtual bool needsThunk(RelExpr Expr, uint32_t RelocType,
+                          const InputFile *File, const SymbolBody &S) const;
+  virtual RelExpr getRelExpr(uint32_t Type, const SymbolBody &S,
+                             const uint8_t *Loc) const = 0;
+  virtual void relocateOne(uint8_t *Loc, uint32_t Type, uint64_t Val) const = 0;
   virtual ~TargetInfo();
 
-protected:
+  unsigned TlsGdRelaxSkip = 1;
   unsigned PageSize = 4096;
+  unsigned DefaultMaxPageSize = 4096;
 
-  // On freebsd x86_64 the first page cannot be mmaped.
-  // On linux that is controled by vm.mmap_min_addr. At least on some x86_64
+  // On FreeBSD x86_64 the first page cannot be mmaped.
+  // On Linux that is controled by vm.mmap_min_addr. At least on some x86_64
   // installs that is 65536, so the first 15 pages cannot be used.
   // Given that, the smallest value that can be used in here is 0x10000.
-  // If using 2MB pages, the smallest page aligned address that works is
-  // 0x200000, but it looks like every OS uses 4k pages for executables.
-  uint64_t VAStart = 0x10000;
+  uint64_t DefaultImageBase = 0x10000;
 
-  unsigned PCRelReloc;
-  unsigned GotRefReloc;
-  unsigned GotReloc;
-  unsigned PltReloc;
-  unsigned RelativeReloc;
-  unsigned PltEntrySize = 8;
-  unsigned PltZeroEntrySize = 0;
-  bool LazyRelocations = false;
+  uint32_t CopyRel;
+  uint32_t GotRel;
+  uint32_t PltRel;
+  uint32_t RelativeRel;
+  uint32_t IRelativeRel;
+  uint32_t TlsDescRel;
+  uint32_t TlsGotRel;
+  uint32_t TlsModuleIndexRel;
+  uint32_t TlsOffsetRel;
+  unsigned GotEntrySize = 0;
+  unsigned GotPltEntrySize = 0;
+  unsigned PltEntrySize;
+  unsigned PltHeaderSize;
+
+  // At least on x86_64 positions 1 and 2 are used by the first plt entry
+  // to support lazy loading.
+  unsigned GotPltHeaderEntriesNum = 3;
+
+  // Set to 0 for variant 2
+  unsigned TcbSize = 0;
+
+  bool NeedsThunks = false;
+
+  // A 4-byte field corresponding to one or more trap instructions, used to pad
+  // executable OutputSections.
+  uint32_t TrapInstr = 0;
+
+  virtual RelExpr adjustRelaxExpr(uint32_t Type, const uint8_t *Data,
+                                  RelExpr Expr) const;
+  virtual void relaxGot(uint8_t *Loc, uint64_t Val) const;
+  virtual void relaxTlsGdToIe(uint8_t *Loc, uint32_t Type, uint64_t Val) const;
+  virtual void relaxTlsGdToLe(uint8_t *Loc, uint32_t Type, uint64_t Val) const;
+  virtual void relaxTlsIeToLe(uint8_t *Loc, uint32_t Type, uint64_t Val) const;
+  virtual void relaxTlsLdToLe(uint8_t *Loc, uint32_t Type, uint64_t Val) const;
 };
 
 uint64_t getPPC64TocBase();
+uint64_t getAArch64Page(uint64_t Expr);
 
-extern std::unique_ptr<TargetInfo> Target;
+extern TargetInfo *Target;
 TargetInfo *createTarget();
 }
+
+std::string toString(uint32_t RelType);
 }
 
 #endif

@@ -16,6 +16,7 @@ using namespace clang::ast_matchers;
 
 namespace clang {
 namespace tidy {
+namespace readability {
 
 void UniqueptrDeleteReleaseCheck::registerMatchers(MatchFinder *Finder) {
   auto IsSusbstituted = qualType(anyOf(
@@ -27,11 +28,11 @@ void UniqueptrDeleteReleaseCheck::registerMatchers(MatchFinder *Finder) {
                                  hasName("std::default_delete")))))));
 
   Finder->addMatcher(
-      cxxDeleteExpr(
-          has(cxxMemberCallExpr(on(expr(hasType(UniquePtrWithDefaultDelete),
-                                        unless(hasType(IsSusbstituted)))
-                                       .bind("uptr")),
-                                callee(cxxMethodDecl(hasName("release"))))))
+      cxxDeleteExpr(has(ignoringParenImpCasts(cxxMemberCallExpr(
+                        on(expr(hasType(UniquePtrWithDefaultDelete),
+                                unless(hasType(IsSusbstituted)))
+                               .bind("uptr")),
+                        callee(cxxMethodDecl(hasName("release")))))))
           .bind("delete"),
       this);
 }
@@ -50,9 +51,8 @@ void UniqueptrDeleteReleaseCheck::check(
   if (PtrExpr->getType()->isDependentType())
     return;
 
-  SourceLocation AfterPtr =
-      Lexer::getLocForEndOfToken(PtrExpr->getLocEnd(), 0, *Result.SourceManager,
-                                 Result.Context->getLangOpts());
+  SourceLocation AfterPtr = Lexer::getLocForEndOfToken(
+      PtrExpr->getLocEnd(), 0, *Result.SourceManager, getLangOpts());
 
   diag(DeleteExpr->getLocStart(),
        "prefer '= nullptr' to 'delete x.release()' to reset unique_ptr<> "
@@ -64,6 +64,6 @@ void UniqueptrDeleteReleaseCheck::check(
              " = nullptr");
 }
 
+} // namespace readability
 } // namespace tidy
 } // namespace clang
-

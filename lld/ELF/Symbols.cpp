@@ -8,96 +8,379 @@
 //===----------------------------------------------------------------------===//
 
 #include "Symbols.h"
-#include "InputSection.h"
 #include "Error.h"
 #include "InputFiles.h"
+#include "InputSection.h"
+#include "OutputSections.h"
+#include "Strings.h"
+#include "SyntheticSections.h"
+#include "Target.h"
+#include "Writer.h"
 
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/Support/Path.h"
+#include <cstring>
 
 using namespace llvm;
 using namespace llvm::object;
 using namespace llvm::ELF;
 
 using namespace lld;
-using namespace lld::elf2;
+using namespace lld::elf;
 
-static uint8_t getMinVisibility(uint8_t VA, uint8_t VB) {
-  if (VA == STV_DEFAULT)
-    return VB;
-  if (VB == STV_DEFAULT)
+DefinedRegular *ElfSym::Bss;
+DefinedRegular *ElfSym::Etext1;
+DefinedRegular *ElfSym::Etext2;
+DefinedRegular *ElfSym::Edata1;
+DefinedRegular *ElfSym::Edata2;
+DefinedRegular *ElfSym::End1;
+DefinedRegular *ElfSym::End2;
+DefinedRegular *ElfSym::MipsGp;
+DefinedRegular *ElfSym::MipsGpDisp;
+DefinedRegular *ElfSym::MipsLocalGp;
+
+static uint64_t getSymVA(const SymbolBody &Body, int64_t &Addend) {
+  switch (Body.kind()) {
+  case SymbolBody::DefinedRegularKind: {
+    auto &D = cast<DefinedRegular>(Body);
+    SectionBase *IS = D.Section;
+    if (auto *ISB = dyn_cast_or_null<InputSectionBase>(IS))
+      IS = ISB->Repl;
+
+    // According to the ELF spec reference to a local symbol from outside
+    // the group are not allowed. Unfortunately .eh_frame breaks that rule
+    // and must be treated specially. For now we just replace the symbol with
+    // 0.
+    if (IS == &InputSection::Discarded)
+      return 0;
+
+    // This is an absolute symbol.
+    if (!IS)
+      return D.Value;
+
+    uint64_t Offset = D.Value;
+
+    // An object in an SHF_MERGE section might be referenced via a
+    // section symbol (as a hack for reducing the number of local
+    // symbols).
+    // Depending on the addend, the reference via a section symbol
+    // refers to a different object in the merge section.
+    // Since the objects in the merge section are not necessarily
+    // contiguous in the output, the addend can thus affect the final
+    // VA in a non-linear way.
+    // To make this work, we incorporate the addend into the section
+    // offset (and zero out the addend for later processing) so that
+    // we find the right object in the section.
+    if (D.isSection()) {
+      Offset += Addend;
+      Addend = 0;
+    }
+
+    const OutputSection *OutSec = IS->getOutputSection();
+
+    // In the typical case, this is actually very simple and boils
+    // down to adding together 3 numbers:
+    // 1. The address of the output section.
+    // 2. The offset of the input section within the output section.
+    // 3. The offset within the input section (this addition happens
+    //    inside InputSection::getOffset).
+    //
+    // If you understand the data structures involved with this next
+    // line (and how they get built), then you have a pretty good
+    // understanding of the linker.
+    uint64_t VA = (OutSec ? OutSec->Addr : 0) + IS->getOffset(Offset);
+
+    if (D.isTls() && !Config->Relocatable) {
+      if (!Out::TlsPhdr)
+        fatal(toString(D.File) +
+              " has a STT_TLS symbol but doesn't have a PT_TLS section");
+      return VA - Out::TlsPhdr->p_vaddr;
+    }
     return VA;
-  return std::min(VA, VB);
+  }
+  case SymbolBody::DefinedCommonKind:
+    if (!Config->DefineCommon)
+      return 0;
+    return InX::Common->OutSec->Addr + InX::Common->OutSecOff +
+           cast<DefinedCommon>(Body).Offset;
+  case SymbolBody::SharedKind: {
+    auto &SS = cast<SharedSymbol>(Body);
+    if (SS.NeedsCopy)
+      return SS.CopyRelSec->OutSec->Addr + SS.CopyRelSec->OutSecOff +
+             SS.CopyRelSecOff;
+    if (SS.NeedsPltAddr)
+      return Body.getPltVA();
+    return 0;
+  }
+  case SymbolBody::UndefinedKind:
+    return 0;
+  case SymbolBody::LazyArchiveKind:
+  case SymbolBody::LazyObjectKind:
+    assert(Body.symbol()->IsUsedInRegularObj && "lazy symbol reached writer");
+    return 0;
+  }
+  llvm_unreachable("invalid symbol kind");
 }
 
-// Returns 1, 0 or -1 if this symbol should take precedence
-// over the Other, tie or lose, respectively.
-template <class ELFT> int SymbolBody::compare(SymbolBody *Other) {
-  assert(!isLazy() && !Other->isLazy());
-  std::pair<bool, bool> L(isDefined(), !isWeak());
-  std::pair<bool, bool> R(Other->isDefined(), !Other->isWeak());
+SymbolBody::SymbolBody(Kind K, StringRefZ Name, bool IsLocal, uint8_t StOther,
+                       uint8_t Type)
+    : SymbolKind(K), NeedsCopy(false), NeedsPltAddr(false), IsLocal(IsLocal),
+      IsInGlobalMipsGot(false), Is32BitMipsGot(false), IsInIplt(false),
+      IsInIgot(false), Type(Type), StOther(StOther), Name(Name) {}
 
-  // Normalize
-  if (L > R)
-    return -Other->compare<ELFT>(this);
+// Returns true if a symbol can be replaced at load-time by a symbol
+// with the same name defined in other ELF executable or DSO.
+bool SymbolBody::isPreemptible() const {
+  if (isLocal())
+    return false;
 
-  Visibility = Other->Visibility =
-      getMinVisibility(Visibility, Other->Visibility);
-
-  if (IsUsedInRegularObj || Other->IsUsedInRegularObj)
-    IsUsedInRegularObj = Other->IsUsedInRegularObj = true;
-
-  if (L != R)
-    return -1;
-  if (!L.first || !L.second)
-    return 1;
+  // Shared symbols resolve to the definition in the DSO. The exceptions are
+  // symbols with copy relocations (which resolve to .bss) or preempt plt
+  // entries (which resolve to that plt entry).
   if (isShared())
-    return -1;
-  if (Other->isShared())
-    return 1;
-  if (isCommon()) {
-    if (!Other->isCommon())
-      return -1;
-    auto *ThisC = cast<DefinedCommon<ELFT>>(this);
-    auto *OtherC = cast<DefinedCommon<ELFT>>(Other);
-    typename DefinedCommon<ELFT>::uintX_t MaxAlign =
-        std::max(ThisC->MaxAlignment, OtherC->MaxAlignment);
-    if (ThisC->Sym.st_size >= OtherC->Sym.st_size) {
-      ThisC->MaxAlignment = MaxAlign;
-      return 1;
-    }
-    OtherC->MaxAlignment = MaxAlign;
-    return -1;
-  }
-  if (Other->isCommon())
-    return 1;
+    return !NeedsCopy && !NeedsPltAddr;
+
+  // That's all that can be preempted in a non-DSO.
+  if (!Config->Shared)
+    return false;
+
+  // Only symbols that appear in dynsym can be preempted.
+  if (!symbol()->includeInDynsym())
+    return false;
+
+  // Only default visibility symbols can be preempted.
+  if (symbol()->Visibility != STV_DEFAULT)
+    return false;
+
+  // -Bsymbolic means that definitions are not preempted.
+  if (Config->Bsymbolic || (Config->BsymbolicFunctions && isFunc()))
+    return !isDefined();
+  return true;
+}
+
+uint64_t SymbolBody::getVA(int64_t Addend) const {
+  uint64_t OutVA = getSymVA(*this, Addend);
+  return OutVA + Addend;
+}
+
+uint64_t SymbolBody::getGotVA() const {
+  return InX::Got->getVA() + getGotOffset();
+}
+
+uint64_t SymbolBody::getGotOffset() const {
+  return GotIndex * Target->GotEntrySize;
+}
+
+uint64_t SymbolBody::getGotPltVA() const {
+  if (this->IsInIgot)
+    return InX::IgotPlt->getVA() + getGotPltOffset();
+  return InX::GotPlt->getVA() + getGotPltOffset();
+}
+
+uint64_t SymbolBody::getGotPltOffset() const {
+  return GotPltIndex * Target->GotPltEntrySize;
+}
+
+uint64_t SymbolBody::getPltVA() const {
+  if (this->IsInIplt)
+    return InX::Iplt->getVA() + PltIndex * Target->PltEntrySize;
+  return InX::Plt->getVA() + Target->PltHeaderSize +
+         PltIndex * Target->PltEntrySize;
+}
+
+template <class ELFT> typename ELFT::uint SymbolBody::getSize() const {
+  if (const auto *C = dyn_cast<DefinedCommon>(this))
+    return C->Size;
+  if (const auto *DR = dyn_cast<DefinedRegular>(this))
+    return DR->Size;
+  if (const auto *S = dyn_cast<SharedSymbol>(this))
+    return S->getSize<ELFT>();
   return 0;
 }
 
-std::unique_ptr<InputFile> Lazy::getMember() {
-  MemoryBufferRef MBRef = File->getMember(&Sym);
+OutputSection *SymbolBody::getOutputSection() const {
+  if (auto *S = dyn_cast<DefinedRegular>(this)) {
+    if (S->Section)
+      return S->Section->getOutputSection();
+    return nullptr;
+  }
+
+  if (auto *S = dyn_cast<SharedSymbol>(this)) {
+    if (S->NeedsCopy)
+      return S->CopyRelSec->OutSec;
+    return nullptr;
+  }
+
+  if (isa<DefinedCommon>(this)) {
+    if (Config->DefineCommon)
+      return InX::Common->OutSec;
+    return nullptr;
+  }
+
+  return nullptr;
+}
+
+// If a symbol name contains '@', the characters after that is
+// a symbol version name. This function parses that.
+void SymbolBody::parseSymbolVersion() {
+  StringRef S = getName();
+  size_t Pos = S.find('@');
+  if (Pos == 0 || Pos == StringRef::npos)
+    return;
+  StringRef Verstr = S.substr(Pos + 1);
+  if (Verstr.empty())
+    return;
+
+  // Truncate the symbol name so that it doesn't include the version string.
+  Name = {S.data(), Pos};
+
+  // If this is not in this DSO, it is not a definition.
+  if (!isInCurrentDSO())
+    return;
+
+  // '@@' in a symbol name means the default version.
+  // It is usually the most recent one.
+  bool IsDefault = (Verstr[0] == '@');
+  if (IsDefault)
+    Verstr = Verstr.substr(1);
+
+  for (VersionDefinition &Ver : Config->VersionDefinitions) {
+    if (Ver.Name != Verstr)
+      continue;
+
+    if (IsDefault)
+      symbol()->VersionId = Ver.Id;
+    else
+      symbol()->VersionId = Ver.Id | VERSYM_HIDDEN;
+    return;
+  }
+
+  // It is an error if the specified version is not defined.
+  error(toString(File) + ": symbol " + S + " has undefined version " + Verstr);
+}
+
+Defined::Defined(Kind K, StringRefZ Name, bool IsLocal, uint8_t StOther,
+                 uint8_t Type)
+    : SymbolBody(K, Name, IsLocal, StOther, Type) {}
+
+template <class ELFT> bool DefinedRegular::isMipsPIC() const {
+  if (!Section || !isFunc())
+    return false;
+  return (this->StOther & STO_MIPS_MIPS16) == STO_MIPS_PIC ||
+         (cast<InputSectionBase>(Section)
+              ->template getFile<ELFT>()
+              ->getObj()
+              .getHeader()
+              ->e_flags &
+          EF_MIPS_PIC);
+}
+
+Undefined::Undefined(StringRefZ Name, bool IsLocal, uint8_t StOther,
+                     uint8_t Type, InputFile *File)
+    : SymbolBody(SymbolBody::UndefinedKind, Name, IsLocal, StOther, Type) {
+  this->File = File;
+}
+
+DefinedCommon::DefinedCommon(StringRef Name, uint64_t Size, uint32_t Alignment,
+                             uint8_t StOther, uint8_t Type, InputFile *File)
+    : Defined(SymbolBody::DefinedCommonKind, Name, /*IsLocal=*/false, StOther,
+              Type),
+      Alignment(Alignment), Size(Size) {
+  this->File = File;
+}
+
+// If a shared symbol is referred via a copy relocation, its alignment
+// becomes part of the ABI. This function returns a symbol alignment.
+// Because symbols don't have alignment attributes, we need to infer that.
+template <class ELFT> uint32_t SharedSymbol::getAlignment() const {
+  auto *File = cast<SharedFile<ELFT>>(this->File);
+  uint32_t SecAlign = File->getSection(getSym<ELFT>())->sh_addralign;
+  uint64_t SymValue = getSym<ELFT>().st_value;
+  uint32_t SymAlign = uint32_t(1) << countTrailingZeros(SymValue);
+  return std::min(SecAlign, SymAlign);
+}
+
+InputFile *Lazy::fetch() {
+  if (auto *S = dyn_cast<LazyArchive>(this))
+    return S->fetch();
+  return cast<LazyObject>(this)->fetch();
+}
+
+LazyArchive::LazyArchive(ArchiveFile &File,
+                         const llvm::object::Archive::Symbol S, uint8_t Type)
+    : Lazy(LazyArchiveKind, S.getName(), Type), Sym(S) {
+  this->File = &File;
+}
+
+LazyObject::LazyObject(StringRef Name, LazyObjectFile &File, uint8_t Type)
+    : Lazy(LazyObjectKind, Name, Type) {
+  this->File = &File;
+}
+
+InputFile *LazyArchive::fetch() {
+  std::pair<MemoryBufferRef, uint64_t> MBInfo = file()->getMember(&Sym);
 
   // getMember returns an empty buffer if the member was already
   // read from the library.
-  if (MBRef.getBuffer().empty())
-    return std::unique_ptr<InputFile>(nullptr);
-
-  return createELFFile<ObjectFile>(MBRef);
+  if (MBInfo.first.getBuffer().empty())
+    return nullptr;
+  return createObjectFile(MBInfo.first, file()->getName(), MBInfo.second);
 }
 
-template <class ELFT> static void doInitSymbols() {
-  DefinedAbsolute<ELFT>::IgnoreUndef.setBinding(STB_WEAK);
-  DefinedAbsolute<ELFT>::IgnoreUndef.setVisibility(STV_HIDDEN);
-  Undefined<ELFT>::Optional.setVisibility(STV_HIDDEN);
+InputFile *LazyObject::fetch() { return file()->fetch(); }
+
+uint8_t Symbol::computeBinding() const {
+  if (Config->Relocatable)
+    return Binding;
+  if (Visibility != STV_DEFAULT && Visibility != STV_PROTECTED)
+    return STB_LOCAL;
+  if (VersionId == VER_NDX_LOCAL && body()->isInCurrentDSO())
+    return STB_LOCAL;
+  if (Config->NoGnuUnique && Binding == STB_GNU_UNIQUE)
+    return STB_GLOBAL;
+  return Binding;
 }
 
-void lld::elf2::initSymbols() {
-  doInitSymbols<ELF32LE>();
-  doInitSymbols<ELF32BE>();
-  doInitSymbols<ELF64LE>();
-  doInitSymbols<ELF64BE>();
+bool Symbol::includeInDynsym() const {
+  if (computeBinding() == STB_LOCAL)
+    return false;
+  return ExportDynamic || body()->isShared() ||
+         (body()->isUndefined() && Config->Shared);
 }
 
-template int SymbolBody::compare<ELF32LE>(SymbolBody *Other);
-template int SymbolBody::compare<ELF32BE>(SymbolBody *Other);
-template int SymbolBody::compare<ELF64LE>(SymbolBody *Other);
-template int SymbolBody::compare<ELF64BE>(SymbolBody *Other);
+// Print out a log message for --trace-symbol.
+void elf::printTraceSymbol(Symbol *Sym) {
+  SymbolBody *B = Sym->body();
+  std::string S;
+  if (B->isUndefined())
+    S = ": reference to ";
+  else if (B->isCommon())
+    S = ": common definition of ";
+  else
+    S = ": definition of ";
+
+  message(toString(B->File) + S + B->getName());
+}
+
+// Returns a symbol for an error message.
+std::string lld::toString(const SymbolBody &B) {
+  if (Config->Demangle)
+    if (Optional<std::string> S = demangle(B.getName()))
+      return *S;
+  return B.getName();
+}
+
+template uint32_t SymbolBody::template getSize<ELF32LE>() const;
+template uint32_t SymbolBody::template getSize<ELF32BE>() const;
+template uint64_t SymbolBody::template getSize<ELF64LE>() const;
+template uint64_t SymbolBody::template getSize<ELF64BE>() const;
+
+template bool DefinedRegular::template isMipsPIC<ELF32LE>() const;
+template bool DefinedRegular::template isMipsPIC<ELF32BE>() const;
+template bool DefinedRegular::template isMipsPIC<ELF64LE>() const;
+template bool DefinedRegular::template isMipsPIC<ELF64BE>() const;
+
+template uint32_t SharedSymbol::template getAlignment<ELF32LE>() const;
+template uint32_t SharedSymbol::template getAlignment<ELF32BE>() const;
+template uint32_t SharedSymbol::template getAlignment<ELF64LE>() const;
+template uint32_t SharedSymbol::template getAlignment<ELF64BE>() const;

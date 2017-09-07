@@ -3,15 +3,23 @@ set(LLVM_LINK_COMPONENTS
   )
 
 add_clang_unittest(FormatTests
+  CleanupTest.cpp
   FormatTest.cpp
-  FormatTestJava.cpp
+  FormatTestComments.cpp
   FormatTestJS.cpp
+  FormatTestJava.cpp
+  FormatTestObjC.cpp
   FormatTestProto.cpp
   FormatTestSelective.cpp
+  NamespaceEndCommentsFixerTest.cpp
+  SortImportsTestJS.cpp
   SortIncludesTest.cpp
   )
 
 target_link_libraries(FormatTests
+  clangBasic
   clangFormat
+  clangFrontend
+  clangRewrite
   clangToolingCore
   )

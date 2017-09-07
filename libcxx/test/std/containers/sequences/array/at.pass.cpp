@@ -23,6 +23,14 @@
 // Disable the missing braces warning for this reason.
 #include "disable_missing_braces_warning.h"
 
+#if TEST_STD_VER > 14
+constexpr bool check_idx( size_t idx, double val )
+{
+    std::array<double, 3> arr = {1, 2, 3.5};
+	return arr.at(idx) == val;
+}
+#endif
+
 int main()
 {
     {
@@ -39,8 +47,14 @@ int main()
         r2 = 7.5;
         assert(c.back() == 7.5);
 
-        try { (void) c.at(3); }
+#ifndef TEST_HAS_NO_EXCEPTIONS
+        try
+        {
+            (void) c.at(3);
+            assert(false);
+        }
         catch (const std::out_of_range &) {}
+#endif
     }
     {
         typedef double T;
@@ -48,14 +62,20 @@ int main()
         const C c = {1, 2, 3.5};
         C::const_reference r1 = c.at(0);
         assert(r1 == 1);
-        
+
         C::const_reference r2 = c.at(2);
         assert(r2 == 3.5);
 
-        try { (void) c.at(3); }
+#ifndef TEST_HAS_NO_EXCEPTIONS
+        try
+        {
+            (void) c.at(3);
+            assert(false);
+        }
         catch (const std::out_of_range &) {}
+#endif
     }
-    
+
 #if TEST_STD_VER > 11
     {
         typedef double T;
@@ -70,4 +90,11 @@ int main()
     }
 #endif
 
+#if TEST_STD_VER > 14
+    {
+        static_assert (check_idx(0, 1), "");
+        static_assert (check_idx(1, 2), "");
+        static_assert (check_idx(2, 3.5), "");
+    }
+#endif
 }

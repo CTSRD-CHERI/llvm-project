@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is dual licensed under the MIT and the University of Illinois Open
+// Source Licenses. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------------===//
 #ifndef SUPPORT_NASTY_MACROS_HPP
 #define SUPPORT_NASTY_MACROS_HPP
 
@@ -28,5 +36,12 @@
 #define _X NASTY_MACRO
 #define _Y NASTY_MACRO
 #define _Z NASTY_MACRO
+
+// Test that libc++ doesn't use names reserved by WIN32 API Macros.
+// NOTE: Obviously we can only define these on non-windows platforms.
+#ifndef _WIN32
+#define __deallocate NASTY_MACRO
+#define __out NASTY_MACRO
+#endif
 
 #endif // SUPPORT_NASTY_MACROS_HPP

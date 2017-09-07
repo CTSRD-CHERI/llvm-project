@@ -14,7 +14,6 @@
 #include <new>
 #include <exception>
 #include "abort_message.h"
-#include "config.h"
 #include "cxxabi.h"
 #include "cxa_handlers.hpp"
 #include "cxa_exception.hpp"
@@ -32,7 +31,6 @@ get_unexpected() _NOEXCEPT
 //  return __cxa_unexpected_handler.load(memory_order_acq);
 }
 
-__attribute__((visibility("hidden"), noreturn))
 void
 __unexpected(unexpected_handler func)
 {
@@ -57,25 +55,24 @@ get_terminate() _NOEXCEPT
 //  return __cxa_terminate_handler.load(memory_order_acq);
 }
 
-__attribute__((visibility("hidden"), noreturn))
 void
 __terminate(terminate_handler func) _NOEXCEPT
 {
-#if __has_feature(cxx_exceptions)
+#ifndef _LIBCXXABI_NO_EXCEPTIONS
     try
     {
-#endif  // __has_feature(cxx_exceptions)
+#endif  // _LIBCXXABI_NO_EXCEPTIONS
         func();
         // handler should not return
         abort_message("terminate_handler unexpectedly returned");
-#if __has_feature(cxx_exceptions)
+#ifndef _LIBCXXABI_NO_EXCEPTIONS
     }
     catch (...)
     {
         // handler should not throw exception
         abort_message("terminate_handler unexpectedly threw an exception");
     }
-#endif  // #if __has_feature(cxx_exceptions)
+#endif  // _LIBCXXABI_NO_EXCEPTIONS
 }
 
 __attribute__((noreturn))
@@ -102,9 +99,11 @@ terminate() _NOEXCEPT
     __terminate(get_terminate());
 }
 
-extern "C" new_handler __cxa_new_handler = 0;
-// In the future these will become:
+// In the future this will become:
 // std::atomic<std::new_handler>  __cxa_new_handler(0);
+extern "C" {
+new_handler __cxa_new_handler = 0;
+}
 
 new_handler
 set_new_handler(new_handler handler) _NOEXCEPT

@@ -83,6 +83,12 @@ public:
     const char *
     GetName ();
     
+    const char *
+    GetDemangledName ();
+
+    const char *
+    GetMangledName ();
+
     lldb::SBType
     GetType ();
     
@@ -215,6 +221,9 @@ public:
     bool
     IsTypedefType ();
     
+    bool
+    IsAnonymousType ();
+    
     lldb::SBType
     GetPointerType();
 
@@ -238,6 +247,9 @@ public:
     
     lldb::SBType
     GetArrayElementType ();
+
+    lldb::SBType
+    GetArrayType (uint64_t size);
     
     lldb::SBType
     GetVectorElementType ();

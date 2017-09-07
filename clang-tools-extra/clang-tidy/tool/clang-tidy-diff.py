@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 #
 #===- clang-tidy-diff.py - ClangTidy Diff Checker ------------*- python -*--===#
 #
@@ -33,20 +33,20 @@ import sys
 
 def main():
   parser = argparse.ArgumentParser(description=
-                                   'Reformat changed lines in diff. Without -i '
-                                   'option just output the diff that would be '
-                                   'introduced.')
+                                   'Run clang-tidy against changed files, and '
+                                   'output diagnostics only for modified '
+                                   'lines.')
   parser.add_argument('-clang-tidy-binary', metavar='PATH',
                       default='clang-tidy',
                       help='path to clang-tidy binary')
   parser.add_argument('-p', metavar='NUM', default=0,
                       help='strip the smallest prefix containing P slashes')
   parser.add_argument('-regex', metavar='PATTERN', default=None,
-                      help='custom pattern selecting file paths to reformat '
+                      help='custom pattern selecting file paths to check '
                       '(case sensitive, overrides -iregex)')
   parser.add_argument('-iregex', metavar='PATTERN', default=
                       r'.*\.(cpp|cc|c\+\+|cxx|c|cl|h|hpp|m|mm|inc)',
-                      help='custom pattern selecting file paths to reformat '
+                      help='custom pattern selecting file paths to check '
                       '(case insensitive, overridden by -regex)')
 
   parser.add_argument('-fix', action='store_true', default=False,
@@ -55,6 +55,18 @@ def main():
                       help='checks filter, when not specified, use clang-tidy '
                       'default',
                       default='')
+  parser.add_argument('-path', dest='build_path',
+                      help='Path used to read a compile command database.')
+  parser.add_argument('-extra-arg', dest='extra_arg',
+                      action='append', default=[],
+                      help='Additional argument to append to the compiler '
+                      'command line.')
+  parser.add_argument('-extra-arg-before', dest='extra_arg_before',
+                      action='append', default=[],
+                      help='Additional argument to prepend to the compiler '
+                      'command line.')
+  parser.add_argument('-quiet', action='store_true', default=False,
+                      help='Run clang-tidy in quiet mode')
   clang_tidy_args = []
   argv = sys.argv[1:]
   if '--' in argv:
@@ -112,7 +124,15 @@ def main():
     command.append('-fix')
   if args.checks != '':
     command.append('-checks=' + quote + args.checks + quote)
+  if args.quiet:
+    command.append('-quiet')
+  if args.build_path is not None:
+    command.append('-p=%s' % args.build_path)
   command.extend(lines_by_file.keys())
+  for arg in args.extra_arg:
+      command.append('-extra-arg=%s' % arg)
+  for arg in args.extra_arg_before:
+      command.append('-extra-arg-before=%s' % arg)
   command.extend(clang_tidy_args)
 
   sys.exit(subprocess.call(' '.join(command), shell=True))

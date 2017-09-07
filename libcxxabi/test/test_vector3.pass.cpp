@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: libcxxabi-no-exceptions
+
 #include "cxxabi.h"
 
 #include <stdio.h>
@@ -46,7 +48,7 @@ void destroy(void* v)
   t->~T();
 }
 
-int main( int argc, char *argv [])
+int main()
 {
   std::set_terminate(my_terminate);
   {

@@ -3,6 +3,7 @@ Test discovery functions.
 """
 
 import copy
+import glob
 import os
 import sys
 
@@ -126,6 +127,14 @@ def getTestsInSuite(ts, path_in_suite, litConfig,
     # caller).
     source_path = ts.getSourcePath(path_in_suite)
     if not os.path.exists(source_path):
+        # check if the path is a glob
+        if any(c in source_path for c in ('*', '[', ']', '?')):
+            if litConfig.debug:
+                litConfig.note('Interpreting source path %r as a glob pattern' % source_path)
+            for path in glob.iglob(source_path):
+                ts, path_in_suite = getTestSuite(path, litConfig, testSuiteCache)
+                lc = getLocalConfig(ts, path_in_suite[:-1], litConfig, localConfigCache)
+                yield Test.Test(ts, path_in_suite, lc)
         return
 
     # Check if the user named a test directly.

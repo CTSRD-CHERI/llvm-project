@@ -12,6 +12,7 @@
 // is_abstract
 
 #include <type_traits>
+#include "test_macros.h"
 
 template <class T>
 void test_is_abstract()
@@ -20,6 +21,12 @@ void test_is_abstract()
     static_assert( std::is_abstract<const T>::value, "");
     static_assert( std::is_abstract<volatile T>::value, "");
     static_assert( std::is_abstract<const volatile T>::value, "");
+#if TEST_STD_VER > 14
+    static_assert( std::is_abstract_v<T>, "");
+    static_assert( std::is_abstract_v<const T>, "");
+    static_assert( std::is_abstract_v<volatile T>, "");
+    static_assert( std::is_abstract_v<const volatile T>, "");
+#endif
 }
 
 template <class T>
@@ -29,6 +36,12 @@ void test_is_not_abstract()
     static_assert(!std::is_abstract<const T>::value, "");
     static_assert(!std::is_abstract<volatile T>::value, "");
     static_assert(!std::is_abstract<const volatile T>::value, "");
+#if TEST_STD_VER > 14
+    static_assert(!std::is_abstract_v<T>, "");
+    static_assert(!std::is_abstract_v<const T>, "");
+    static_assert(!std::is_abstract_v<volatile T>, "");
+    static_assert(!std::is_abstract_v<const volatile T>, "");
+#endif
 }
 
 class Empty
@@ -52,6 +65,14 @@ class Abstract
     virtual ~Abstract() = 0;
 };
 
+template <class>
+struct AbstractTemplate {
+  virtual void test() = 0;
+};
+
+template <>
+struct AbstractTemplate<double> {};
+
 int main()
 {
     test_is_not_abstract<void>();
@@ -68,4 +89,6 @@ int main()
     test_is_not_abstract<NotEmpty>();
 
     test_is_abstract<Abstract>();
+    test_is_abstract<AbstractTemplate<int> >();
+    test_is_not_abstract<AbstractTemplate<double> >();
 }

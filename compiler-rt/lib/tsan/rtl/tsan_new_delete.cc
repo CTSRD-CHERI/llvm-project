@@ -11,6 +11,7 @@
 //
 // Interceptors for operators new and delete.
 //===----------------------------------------------------------------------===//
+#include "interception/interception.h"
 #include "sanitizer_common/sanitizer_internal_defs.h"
 #include "tsan_interceptors.h"
 
@@ -20,9 +21,12 @@ namespace std {
 struct nothrow_t {};
 }  // namespace std
 
+DECLARE_REAL(void *, malloc, uptr size)
+DECLARE_REAL(void, free, void *ptr)
+
 #define OPERATOR_NEW_BODY(mangled_name) \
   if (cur_thread()->in_symbolizer) \
-    return __libc_malloc(size); \
+    return InternalAlloc(size); \
   void *p = 0; \
   {  \
     SCOPED_INTERCEPTOR_RAW(mangled_name, size); \
@@ -58,7 +62,7 @@ void *operator new[](__sanitizer::uptr size, std::nothrow_t const&) {
 #define OPERATOR_DELETE_BODY(mangled_name) \
   if (ptr == 0) return;  \
   if (cur_thread()->in_symbolizer) \
-    return __libc_free(ptr); \
+    return InternalFree(ptr); \
   invoke_free_hook(ptr);  \
   SCOPED_INTERCEPTOR_RAW(mangled_name, ptr);  \
   user_free(thr, pc, ptr);

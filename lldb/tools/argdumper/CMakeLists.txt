@@ -1,8 +1,10 @@
-add_lldb_executable(argdumper
+include(${LLDB_PROJECT_ROOT}/cmake/LLDBDependencies.cmake)
+
+add_lldb_tool(lldb-argdumper INCLUDE_IN_FRAMEWORK
   argdumper.cpp
+
+  LINK_LIBS
+    lldbCore
+    lldbUtility
   )
 
-target_link_libraries(argdumper liblldb)
-
-install(TARGETS argdumper
-  RUNTIME DESTINATION bin)

@@ -16,6 +16,7 @@
 #include <stdexcept>
 #include <cassert>
 
+#include "test_macros.h"
 #include "min_allocator.h"
 
 template <class S>
@@ -23,20 +24,29 @@ void
 test(S s, typename S::size_type pos, typename S::size_type n,
      typename S::value_type str, S expected)
 {
-    typename S::size_type old_size = s.size();
+    const typename S::size_type old_size = s.size();
     S s0 = s;
-    try
+    if (pos <= old_size)
     {
         s.insert(pos, n, str);
-        assert(s.__invariants());
-        assert(pos <= old_size);
+        LIBCPP_ASSERT(s.__invariants());
         assert(s == expected);
     }
-    catch (std::out_of_range&)
+#ifndef TEST_HAS_NO_EXCEPTIONS
+    else
     {
-        assert(pos > old_size);
-        assert(s == s0);
+        try
+        {
+            s.insert(pos, n, str);
+            assert(false);
+        }
+        catch (std::out_of_range&)
+        {
+            assert(pos > old_size);
+            assert(s == s0);
+        }
     }
+#endif
 }
 
 int main()
@@ -124,7 +134,7 @@ int main()
     test(S("abcdefghijklmnopqrst"), 21, 10, '1', S("can't happen"));
     test(S("abcdefghijklmnopqrst"), 21, 20, '1', S("can't happen"));
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     typedef std::basic_string<char, std::char_traits<char>, min_allocator<char>> S;
     test(S(""), 0, 0, '1', S(""));

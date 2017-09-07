@@ -29,30 +29,26 @@ int main()
 {
     {
         typedef std::unordered_multiset<int> C;
-        typedef int P;
         const C c;
         assert(c.max_load_factor() == 1);
     }
     {
         typedef std::unordered_multiset<int> C;
-        typedef int P;
         C c;
         assert(c.max_load_factor() == 1);
         c.max_load_factor(2.5);
         assert(c.max_load_factor() == 2.5);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         typedef std::unordered_multiset<int, std::hash<int>,
                                       std::equal_to<int>, min_allocator<int>> C;
-        typedef int P;
         const C c;
         assert(c.max_load_factor() == 1);
     }
     {
         typedef std::unordered_multiset<int, std::hash<int>,
                                       std::equal_to<int>, min_allocator<int>> C;
-        typedef int P;
         C c;
         assert(c.max_load_factor() == 1);
         c.max_load_factor(2.5);

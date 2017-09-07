@@ -12,8 +12,6 @@
 // MemorySanitizer allocator.
 //===----------------------------------------------------------------------===//
 
-#include "sanitizer_common/sanitizer_allocator.h"
-#include "sanitizer_common/sanitizer_allocator_interface.h"
 #include "msan.h"
 #include "msan_allocator.h"
 #include "msan_origin.h"
@@ -22,79 +20,16 @@
 
 namespace __msan {
 
-struct Metadata {
-  uptr requested_size;
-};
-
-struct MsanMapUnmapCallback {
-  void OnMap(uptr p, uptr size) const {}
-  void OnUnmap(uptr p, uptr size) const {
-    __msan_unpoison((void *)p, size);
-
-    // We are about to unmap a chunk of user memory.
-    // Mark the corresponding shadow memory as not needed.
-    FlushUnneededShadowMemory(MEM_TO_SHADOW(p), size);
-    if (__msan_get_track_origins())
-      FlushUnneededShadowMemory(MEM_TO_ORIGIN(p), size);
-  }
-};
-
-#if defined(__mips64)
-  static const uptr kMaxAllowedMallocSize = 2UL << 30;
-  static const uptr kRegionSizeLog = 20;
-  static const uptr kNumRegions = SANITIZER_MMAP_RANGE_SIZE >> kRegionSizeLog;
-  typedef TwoLevelByteMap<(kNumRegions >> 12), 1 << 12> ByteMap;
-  typedef CompactSizeClassMap SizeClassMap;
-
-  typedef SizeClassAllocator32<0, SANITIZER_MMAP_RANGE_SIZE, sizeof(Metadata),
-                               SizeClassMap, kRegionSizeLog, ByteMap,
-                               MsanMapUnmapCallback> PrimaryAllocator;
-
-#elif defined(__x86_64__)
-#if SANITIZER_LINUX && !defined(MSAN_LINUX_X86_64_OLD_MAPPING)
-  static const uptr kAllocatorSpace = 0x700000000000ULL;
-#else
-  static const uptr kAllocatorSpace = 0x600000000000ULL;
-#endif
-  static const uptr kAllocatorSize = 0x80000000000; // 8T.
-  static const uptr kMetadataSize  = sizeof(Metadata);
-  static const uptr kMaxAllowedMallocSize = 8UL << 30;
-
-  typedef SizeClassAllocator64<kAllocatorSpace, kAllocatorSize, kMetadataSize,
-                             DefaultSizeClassMap,
-                             MsanMapUnmapCallback> PrimaryAllocator;
-
-#elif defined(__powerpc64__)
-  static const uptr kAllocatorSpace = 0x300000000000;
-  static const uptr kAllocatorSize  = 0x020000000000;  // 2T
-  static const uptr kMetadataSize  = sizeof(Metadata);
-  static const uptr kMaxAllowedMallocSize = 2UL << 30;  // 2G
-
-  typedef SizeClassAllocator64<kAllocatorSpace, kAllocatorSize, kMetadataSize,
-                             DefaultSizeClassMap,
-                             MsanMapUnmapCallback> PrimaryAllocator;
-#elif defined(__aarch64__)
-  static const uptr kMaxAllowedMallocSize = 2UL << 30;  // 2G
-  static const uptr kRegionSizeLog = 20;
-  static const uptr kNumRegions = SANITIZER_MMAP_RANGE_SIZE >> kRegionSizeLog;
-  typedef TwoLevelByteMap<(kNumRegions >> 12), 1 << 12> ByteMap;
-  typedef CompactSizeClassMap SizeClassMap;
-
-  typedef SizeClassAllocator32<0, SANITIZER_MMAP_RANGE_SIZE, sizeof(Metadata),
-                               SizeClassMap, kRegionSizeLog, ByteMap,
-                               MsanMapUnmapCallback> PrimaryAllocator;
-#endif
-typedef SizeClassAllocatorLocalCache<PrimaryAllocator> AllocatorCache;
-typedef LargeMmapAllocator<MsanMapUnmapCallback> SecondaryAllocator;
-typedef CombinedAllocator<PrimaryAllocator, AllocatorCache,
-                          SecondaryAllocator> Allocator;
-
 static Allocator allocator;
 static AllocatorCache fallback_allocator_cache;
 static SpinMutex fallback_mutex;
 
+Allocator &get_allocator() { return allocator; }
+
 void MsanAllocatorInit() {
-  allocator.Init(common_flags()->allocator_may_return_null);
+  allocator.Init(
+      common_flags()->allocator_may_return_null,
+      common_flags()->allocator_release_to_os_interval_ms);
 }
 
 AllocatorCache *GetAllocatorCache(MsanThreadLocalMallocStorage *ms) {
@@ -112,7 +47,7 @@ static void *MsanAllocate(StackTrace *stack, uptr size, uptr alignment,
   if (size > kMaxAllowedMallocSize) {
     Report("WARNING: MemorySanitizer failed to allocate %p bytes\n",
            (void *)size);
-    return allocator.ReturnNullOrDie();
+    return allocator.ReturnNullOrDieOnBadRequest();
   }
   MsanThread *t = GetCurrentThread();
   void *allocated;
@@ -170,7 +105,7 @@ void MsanDeallocate(StackTrace *stack, void *p) {
 
 void *MsanCalloc(StackTrace *stack, uptr nmemb, uptr size) {
   if (CallocShouldReturnNullDueToOverflow(size, nmemb))
-    return allocator.ReturnNullOrDie();
+    return allocator.ReturnNullOrDieOnBadRequest();
   return MsanReallocate(stack, nullptr, nmemb * size, sizeof(u64), true);
 }
 

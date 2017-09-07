@@ -15,6 +15,7 @@ using namespace clang::ast_matchers;
 
 namespace clang {
 namespace tidy {
+namespace cppcoreguidelines {
 
 const internal::VariadicDynCastAllOfMatcher<Stmt, VAArgExpr> vAArgExpr;
 
@@ -25,9 +26,7 @@ void ProTypeVarargCheck::registerMatchers(MatchFinder *Finder) {
   Finder->addMatcher(vAArgExpr().bind("va_use"), this);
 
   Finder->addMatcher(
-      callExpr(callee(functionDecl(isVariadic())))
-          .bind("callvararg"),
-      this);
+      callExpr(callee(functionDecl(isVariadic()))).bind("callvararg"), this);
 }
 
 static bool hasSingleVariadicArgumentWithValue(const CallExpr *C, uint64_t I) {
@@ -72,5 +71,6 @@ void ProTypeVarargCheck::check(const MatchFinder::MatchResult &Result) {
   }
 }
 
+} // namespace cppcoreguidelines
 } // namespace tidy
 } // namespace clang

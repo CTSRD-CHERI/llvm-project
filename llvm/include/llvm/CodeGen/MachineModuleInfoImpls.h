@@ -15,7 +15,9 @@
 #ifndef LLVM_CODEGEN_MACHINEMODULEINFOIMPLS_H
 #define LLVM_CODEGEN_MACHINEMODULEINFOIMPLS_H
 
+#include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
+#include "llvm/Support/Wasm.h"
 
 namespace llvm {
 class MCSymbol;
@@ -23,44 +25,35 @@ class MCSymbol;
 /// MachineModuleInfoMachO - This is a MachineModuleInfoImpl implementation
 /// for MachO targets.
 class MachineModuleInfoMachO : public MachineModuleInfoImpl {
-  /// FnStubs - Darwin '$stub' stubs.  The key is something like "Lfoo$stub",
-  /// the value is something like "_foo".
-  DenseMap<MCSymbol *, StubValueTy> FnStubs;
-
   /// GVStubs - Darwin '$non_lazy_ptr' stubs.  The key is something like
   /// "Lfoo$non_lazy_ptr", the value is something like "_foo". The extra bit
   /// is true if this GV is external.
   DenseMap<MCSymbol *, StubValueTy> GVStubs;
 
-  /// HiddenGVStubs - Darwin '$non_lazy_ptr' stubs.  The key is something like
-  /// "Lfoo$non_lazy_ptr", the value is something like "_foo".  Unlike GVStubs
-  /// these are for things with hidden visibility. The extra bit is true if
-  /// this GV is external.
-  DenseMap<MCSymbol *, StubValueTy> HiddenGVStubs;
+  /// ThreadLocalGVStubs - Darwin '$non_lazy_ptr' stubs.  The key is something
+  /// like "Lfoo$non_lazy_ptr", the value is something like "_foo". The extra
+  /// bit is true if this GV is external.
+  DenseMap<MCSymbol *, StubValueTy> ThreadLocalGVStubs;
 
   virtual void anchor(); // Out of line virtual method.
 public:
   MachineModuleInfoMachO(const MachineModuleInfo &) {}
-
-  StubValueTy &getFnStubEntry(MCSymbol *Sym) {
-    assert(Sym && "Key cannot be null");
-    return FnStubs[Sym];
-  }
 
   StubValueTy &getGVStubEntry(MCSymbol *Sym) {
     assert(Sym && "Key cannot be null");
     return GVStubs[Sym];
   }
 
-  StubValueTy &getHiddenGVStubEntry(MCSymbol *Sym) {
+  StubValueTy &getThreadLocalGVStubEntry(MCSymbol *Sym) {
     assert(Sym && "Key cannot be null");
-    return HiddenGVStubs[Sym];
+    return ThreadLocalGVStubs[Sym];
   }
 
   /// Accessor methods to return the set of stubs in sorted order.
-  SymbolListTy GetFnStubList() { return getSortedStubs(FnStubs); }
   SymbolListTy GetGVStubList() { return getSortedStubs(GVStubs); }
-  SymbolListTy GetHiddenGVStubList() { return getSortedStubs(HiddenGVStubs); }
+  SymbolListTy GetThreadLocalGVStubList() {
+    return getSortedStubs(ThreadLocalGVStubs);
+  }
 };
 
 /// MachineModuleInfoELF - This is a MachineModuleInfoImpl implementation
@@ -82,6 +75,33 @@ public:
   /// Accessor methods to return the set of stubs in sorted order.
 
   SymbolListTy GetGVStubList() { return getSortedStubs(GVStubs); }
+};
+
+/// MachineModuleInfoWasm - This is a MachineModuleInfoImpl implementation
+/// for Wasm targets.
+class MachineModuleInfoWasm : public MachineModuleInfoImpl {
+  /// WebAssembly global variables defined by CodeGen.
+  std::vector<wasm::Global> Globals;
+
+  /// The WebAssembly global variable which is the stack pointer.
+  unsigned StackPointerGlobal;
+
+  virtual void anchor(); // Out of line virtual method.
+public:
+  MachineModuleInfoWasm(const MachineModuleInfo &)
+    : StackPointerGlobal(-1U) {}
+
+  void addGlobal(const wasm::Global &G) { Globals.push_back(G); }
+  const std::vector<wasm::Global> &getGlobals() const { return Globals; }
+
+  bool hasStackPointerGlobal() const {
+    return StackPointerGlobal != -1U;
+  }
+  unsigned getStackPointerGlobal() const {
+    assert(hasStackPointerGlobal() && "Stack ptr global hasn't been set");
+    return StackPointerGlobal;
+  }
+  void setStackPointerGlobal(unsigned Global) { StackPointerGlobal = Global; }
 };
 
 } // end namespace llvm

@@ -10,8 +10,9 @@
 #ifndef liblldb_NativeThreadLinux_H_
 #define liblldb_NativeThreadLinux_H_
 
-#include "lldb/lldb-private-forward.h"
+#include "SingleStepCheck.h"
 #include "lldb/Host/common/NativeThreadProtocol.h"
+#include "lldb/lldb-private-forward.h"
 
 #include <map>
 #include <memory>
@@ -20,100 +21,96 @@
 namespace lldb_private {
 namespace process_linux {
 
-    class NativeProcessLinux;
+class NativeProcessLinux;
 
-    class NativeThreadLinux : public NativeThreadProtocol
-    {
-        friend class NativeProcessLinux;
+class NativeThreadLinux : public NativeThreadProtocol {
+  friend class NativeProcessLinux;
 
-    public:
-        NativeThreadLinux (NativeProcessLinux *process, lldb::tid_t tid);
+public:
+  NativeThreadLinux(NativeProcessLinux *process, lldb::tid_t tid);
 
-        // ---------------------------------------------------------------------
-        // NativeThreadProtocol Interface
-        // ---------------------------------------------------------------------
-        std::string
-        GetName() override;
+  // ---------------------------------------------------------------------
+  // NativeThreadProtocol Interface
+  // ---------------------------------------------------------------------
+  std::string GetName() override;
 
-        lldb::StateType
-        GetState () override;
+  lldb::StateType GetState() override;
 
-        bool
-        GetStopReason (ThreadStopInfo &stop_info, std::string& description) override;
+  bool GetStopReason(ThreadStopInfo &stop_info,
+                     std::string &description) override;
 
-        NativeRegisterContextSP
-        GetRegisterContext () override;
+  NativeRegisterContextSP GetRegisterContext() override;
 
-        Error
-        SetWatchpoint (lldb::addr_t addr, size_t size, uint32_t watch_flags, bool hardware) override;
+  Status SetWatchpoint(lldb::addr_t addr, size_t size, uint32_t watch_flags,
+                       bool hardware) override;
 
-        Error
-        RemoveWatchpoint (lldb::addr_t addr) override;
+  Status RemoveWatchpoint(lldb::addr_t addr) override;
 
-    private:
-        // ---------------------------------------------------------------------
-        // Interface for friend classes
-        // ---------------------------------------------------------------------
-        void
-        SetRunning ();
+  Status SetHardwareBreakpoint(lldb::addr_t addr, size_t size) override;
 
-        void
-        SetStepping ();
+  Status RemoveHardwareBreakpoint(lldb::addr_t addr) override;
 
-        void
-        SetStoppedBySignal(uint32_t signo, const siginfo_t *info = nullptr);
+private:
+  // ---------------------------------------------------------------------
+  // Interface for friend classes
+  // ---------------------------------------------------------------------
 
-        /// Return true if the thread is stopped.
-        /// If stopped by a signal, indicate the signo in the signo argument.
-        /// Otherwise, return LLDB_INVALID_SIGNAL_NUMBER.
-        bool
-        IsStopped (int *signo);
+  /// Resumes the thread.  If @p signo is anything but
+  /// LLDB_INVALID_SIGNAL_NUMBER, deliver that signal to the thread.
+  Status Resume(uint32_t signo);
 
-        void
-        SetStoppedByExec ();
+  /// Single steps the thread.  If @p signo is anything but
+  /// LLDB_INVALID_SIGNAL_NUMBER, deliver that signal to the thread.
+  Status SingleStep(uint32_t signo);
 
-        void
-        SetStoppedByBreakpoint ();
+  void SetStoppedBySignal(uint32_t signo, const siginfo_t *info = nullptr);
 
-        void
-        SetStoppedByWatchpoint (uint32_t wp_index);
+  /// Return true if the thread is stopped.
+  /// If stopped by a signal, indicate the signo in the signo argument.
+  /// Otherwise, return LLDB_INVALID_SIGNAL_NUMBER.
+  bool IsStopped(int *signo);
 
-        bool
-        IsStoppedAtBreakpoint ();
+  void SetStoppedByExec();
 
-        bool
-        IsStoppedAtWatchpoint ();
+  void SetStoppedByBreakpoint();
 
-        void
-        SetStoppedByTrace ();
+  void SetStoppedByWatchpoint(uint32_t wp_index);
 
-        void
-        SetStoppedWithNoReason ();
+  bool IsStoppedAtBreakpoint();
 
-        void
-        SetExited ();
+  bool IsStoppedAtWatchpoint();
 
-        Error
-        RequestStop ();
+  void SetStoppedByTrace();
 
-        // ---------------------------------------------------------------------
-        // Private interface
-        // ---------------------------------------------------------------------
-        void
-        MaybeLogStateChange (lldb::StateType new_state);
+  void SetStoppedWithNoReason();
 
-        // ---------------------------------------------------------------------
-        // Member Variables
-        // ---------------------------------------------------------------------
-        lldb::StateType m_state;
-        ThreadStopInfo m_stop_info;
-        NativeRegisterContextSP m_reg_context_sp;
-        std::string m_stop_description;
-        using WatchpointIndexMap = std::map<lldb::addr_t, uint32_t>;
-        WatchpointIndexMap m_watchpoint_index_map;
-    };
+  void SetExited();
 
-    typedef std::shared_ptr<NativeThreadLinux> NativeThreadLinuxSP;
+  Status RequestStop();
+
+  // ---------------------------------------------------------------------
+  // Private interface
+  // ---------------------------------------------------------------------
+  void MaybeLogStateChange(lldb::StateType new_state);
+
+  NativeProcessLinux &GetProcess();
+
+  void SetStopped();
+
+  // ---------------------------------------------------------------------
+  // Member Variables
+  // ---------------------------------------------------------------------
+  lldb::StateType m_state;
+  ThreadStopInfo m_stop_info;
+  NativeRegisterContextSP m_reg_context_sp;
+  std::string m_stop_description;
+  using WatchpointIndexMap = std::map<lldb::addr_t, uint32_t>;
+  WatchpointIndexMap m_watchpoint_index_map;
+  WatchpointIndexMap m_hw_break_index_map;
+  std::unique_ptr<SingleStepWorkaround> m_step_workaround;
+};
+
+typedef std::shared_ptr<NativeThreadLinux> NativeThreadLinuxSP;
 } // namespace process_linux
 } // namespace lldb_private
 

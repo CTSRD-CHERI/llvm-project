@@ -24,17 +24,18 @@ class MCInstrInfo;
 class MCObjectWriter;
 class MCRegisterInfo;
 class MCSubtargetInfo;
+class MCTargetOptions;
 class StringRef;
 class Target;
 class Triple;
 class raw_ostream;
 class raw_pwrite_stream;
 
-extern Target TheMipsTarget;
-extern Target TheMipselTarget;
-extern Target TheMips64Target;
-extern Target TheMips64elTarget;
-extern Target TheMipsCheriTarget;
+Target &getTheMipsTarget();
+Target &getTheMipselTarget();
+Target &getTheMips64Target();
+Target &getTheMips64elTarget();
+Target &getTheMipsCheriTarget();
 
 MCCodeEmitter *createMipsMCCodeEmitterEB(const MCInstrInfo &MCII,
                                          const MCRegisterInfo &MRI,
@@ -45,16 +46,20 @@ MCCodeEmitter *createMipsMCCodeEmitterEL(const MCInstrInfo &MCII,
 
 MCAsmBackend *createMipsAsmBackendEB32(const Target &T,
                                        const MCRegisterInfo &MRI,
-                                       const Triple &TT, StringRef CPU);
+                                       const Triple &TT, StringRef CPU,
+                                       const MCTargetOptions &Options);
 MCAsmBackend *createMipsAsmBackendEL32(const Target &T,
                                        const MCRegisterInfo &MRI,
-                                       const Triple &TT, StringRef CPU);
+                                       const Triple &TT, StringRef CPU,
+                                       const MCTargetOptions &Options);
 MCAsmBackend *createMipsAsmBackendEB64(const Target &T,
                                        const MCRegisterInfo &MRI,
-                                       const Triple &TT, StringRef CPU);
+                                       const Triple &TT, StringRef CPU,
+                                       const MCTargetOptions &Options);
 MCAsmBackend *createMipsAsmBackendEL64(const Target &T,
                                        const MCRegisterInfo &MRI,
-                                       const Triple &TT, StringRef CPU);
+                                       const Triple &TT, StringRef CPU,
+                                       const MCTargetOptions &Options);
 
 MCObjectWriter *createMipsELFObjectWriter(raw_pwrite_stream &OS, uint8_t OSABI,
                                           bool IsLittleEndian, bool Is64Bit);

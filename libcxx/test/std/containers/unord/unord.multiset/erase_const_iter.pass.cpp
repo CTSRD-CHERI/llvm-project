@@ -45,14 +45,18 @@ int main()
         };
         C c(a, a + sizeof(a)/sizeof(a[0]));
         C::const_iterator i = c.find(2);
+        C::const_iterator i_next = i;
+        ++i_next;
         C::iterator j = c.erase(i);
+        assert(j == i_next);
+
         assert(c.size() == 5);
         assert(c.count(1) == 2);
         assert(c.count(2) == 1);
         assert(c.count(3) == 1);
         assert(c.count(4) == 1);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         typedef std::unordered_multiset<int, std::hash<int>,
                                       std::equal_to<int>, min_allocator<int>> C;
@@ -68,7 +72,10 @@ int main()
         };
         C c(a, a + sizeof(a)/sizeof(a[0]));
         C::const_iterator i = c.find(2);
+        C::const_iterator i_next = i;
+        ++i_next;
         C::iterator j = c.erase(i);
+        assert(j == i_next);
         assert(c.size() == 5);
         assert(c.count(1) == 2);
         assert(c.count(2) == 1);
@@ -76,7 +83,7 @@ int main()
         assert(c.count(4) == 1);
     }
 #endif
-#if __cplusplus >= 201402L
+#if TEST_STD_VER >= 14
     {
     //  This is LWG #2059
         typedef TemplateConstructor T;

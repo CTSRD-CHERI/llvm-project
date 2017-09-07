@@ -19,6 +19,8 @@
 #include <future>
 #include <cassert>
 
+#include "test_macros.h"
+
 int main()
 {
     {
@@ -27,6 +29,7 @@ int main()
         p.set_value(105.5);
         assert(f.get() == 105.5);
     }
+#ifndef TEST_HAS_NO_EXCEPTIONS
     {
         std::promise<double> p;
         std::future<double> f = p.get_future();
@@ -53,4 +56,5 @@ int main()
             assert(e.code() ==  make_error_code(std::future_errc::no_state));
         }
     }
+#endif
 }

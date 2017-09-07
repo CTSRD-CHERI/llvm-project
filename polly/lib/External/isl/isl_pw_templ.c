@@ -12,12 +12,10 @@
  */
 
 #include <isl/aff.h>
+#include <isl_sort.h>
 #include <isl_val_private.h>
 
-#define xFN(TYPE,NAME) TYPE ## _ ## NAME
-#define FN(TYPE,NAME) xFN(TYPE,NAME)
-#define xS(TYPE,NAME) struct TYPE ## _ ## NAME
-#define S(TYPE,NAME) xS(TYPE,NAME)
+#include <isl_pw_macro.h>
 
 #ifdef HAS_TYPE
 __isl_give PW *FN(PW,alloc_size)(__isl_take isl_space *dim,
@@ -271,6 +269,7 @@ error:
 __isl_give PW *FN(PW,align_params)(__isl_take PW *pw, __isl_take isl_space *model)
 {
 	isl_ctx *ctx;
+	isl_bool equal_params;
 
 	if (!pw || !model)
 		goto error;
@@ -282,7 +281,10 @@ __isl_give PW *FN(PW,align_params)(__isl_take PW *pw, __isl_take isl_space *mode
 	if (!isl_space_has_named_params(pw->dim))
 		isl_die(ctx, isl_error_invalid,
 			"input has unnamed parameters", goto error);
-	if (!isl_space_match(pw->dim, isl_dim_param, model, isl_dim_param)) {
+	equal_params = isl_space_has_equal_params(pw->dim, model);
+	if (equal_params < 0)
+		goto error;
+	if (!equal_params) {
 		isl_reordering *exp;
 
 		model = isl_space_drop_dims(model, isl_dim_in,
@@ -308,10 +310,14 @@ static __isl_give PW *FN(PW,align_params_pw_pw_and)(__isl_take PW *pw1,
 	__isl_give PW *(*fn)(__isl_take PW *pw1, __isl_take PW *pw2))
 {
 	isl_ctx *ctx;
+	isl_bool equal_params;
 
 	if (!pw1 || !pw2)
 		goto error;
-	if (isl_space_match(pw1->dim, isl_dim_param, pw2->dim, isl_dim_param))
+	equal_params = isl_space_has_equal_params(pw1->dim, pw2->dim);
+	if (equal_params < 0)
+		goto error;
+	if (equal_params)
 		return fn(pw1, pw2);
 	ctx = FN(PW,get_ctx)(pw1);
 	if (!isl_space_has_named_params(pw1->dim) ||
@@ -332,10 +338,14 @@ static __isl_give PW *FN(PW,align_params_pw_set_and)(__isl_take PW *pw,
 	__isl_give PW *(*fn)(__isl_take PW *pw, __isl_take isl_set *set))
 {
 	isl_ctx *ctx;
+	isl_bool aligned;
 
 	if (!pw || !set)
 		goto error;
-	if (isl_space_match(pw->dim, isl_dim_param, set->dim, isl_dim_param))
+	aligned = isl_set_space_has_equal_params(set, pw->dim);
+	if (aligned < 0)
+		goto error;
+	if (aligned)
 		return fn(pw, set);
 	ctx = FN(PW,get_ctx)(pw);
 	if (!isl_space_has_named_params(pw->dim) ||
@@ -937,6 +947,7 @@ static __isl_give PW *FN(PW,gist_aligned)(__isl_take PW *pw,
 {
 	int i;
 	int is_universe;
+	isl_bool aligned;
 	isl_basic_set *hull = NULL;
 
 	if (!pw || !context)
@@ -955,8 +966,10 @@ static __isl_give PW *FN(PW,gist_aligned)(__isl_take PW *pw,
 		return pw;
 	}
 
-	if (!isl_space_match(pw->dim, isl_dim_param,
-				context->dim, isl_dim_param)) {
+	aligned = isl_set_space_has_equal_params(context, pw->dim);
+	if (aligned < 0)
+		goto error;
+	if (!aligned) {
 		pw = FN(PW,align_params)(pw, isl_set_get_space(context));
 		context = isl_set_align_params(context, FN(PW,get_space)(pw));
 	}
@@ -1046,30 +1059,76 @@ __isl_give PW *FN(PW,gist_params)(__isl_take PW *pw,
 						&FN(PW,gist_params_aligned));
 }
 
-__isl_give PW *FN(PW,coalesce)(__isl_take PW *pw)
+/* Return -1 if the piece "p1" should be sorted before "p2"
+ * and 1 if it should be sorted after "p2".
+ * Return 0 if they do not need to be sorted in a specific order.
+ *
+ * The two pieces are compared on the basis of their function value expressions.
+ */
+static int FN(PW,sort_field_cmp)(const void *p1, const void *p2, void *arg)
+{
+	struct FN(PW,piece) const *pc1 = p1;
+	struct FN(PW,piece) const *pc2 = p2;
+
+	return FN(EL,plain_cmp)(pc1->FIELD, pc2->FIELD);
+}
+
+/* Sort the pieces of "pw" according to their function value
+ * expressions and then combine pairs of adjacent pieces with
+ * the same such expression.
+ *
+ * The sorting is performed in place because it does not
+ * change the meaning of "pw", but care needs to be
+ * taken not to change any possible other copies of "pw"
+ * in case anything goes wrong.
+ */
+__isl_give PW *FN(PW,sort)(__isl_take PW *pw)
 {
 	int i, j;
+	isl_set *set;
 
 	if (!pw)
 		return NULL;
-	if (pw->n == 0)
+	if (pw->n <= 1)
 		return pw;
-
-	for (i = pw->n - 1; i >= 0; --i) {
-		for (j = i - 1; j >= 0; --j) {
-			if (!FN(EL,plain_is_equal)(pw->p[i].FIELD,
-							pw->p[j].FIELD))
-				continue;
-			pw->p[j].set = isl_set_union(pw->p[j].set,
-							pw->p[i].set);
-			FN(EL,free)(pw->p[i].FIELD);
-			if (i != pw->n - 1)
-				pw->p[i] = pw->p[pw->n - 1];
-			pw->n--;
-			break;
-		}
-		if (j >= 0)
+	if (isl_sort(pw->p, pw->n, sizeof(pw->p[0]),
+		    &FN(PW,sort_field_cmp), NULL) < 0)
+		return FN(PW,free)(pw);
+	for (i = pw->n - 1; i >= 1; --i) {
+		if (!FN(EL,plain_is_equal)(pw->p[i - 1].FIELD, pw->p[i].FIELD))
 			continue;
+		set = isl_set_union(isl_set_copy(pw->p[i - 1].set),
+				    isl_set_copy(pw->p[i].set));
+		if (!set)
+			return FN(PW,free)(pw);
+		isl_set_free(pw->p[i].set);
+		FN(EL,free)(pw->p[i].FIELD);
+		isl_set_free(pw->p[i - 1].set);
+		pw->p[i - 1].set = set;
+		for (j = i + 1; j < pw->n; ++j)
+			pw->p[j - 1] = pw->p[j];
+		pw->n--;
+	}
+
+	return pw;
+}
+
+/* Coalesce the domains of "pw".
+ *
+ * Prior to the actual coalescing, first sort the pieces such that
+ * pieces with the same function value expression are combined
+ * into a single piece, the combined domain of which can then
+ * be coalesced.
+ */
+__isl_give PW *FN(PW,coalesce)(__isl_take PW *pw)
+{
+	int i;
+
+	pw = FN(PW,sort)(pw);
+	if (!pw)
+		return NULL;
+
+	for (i = 0; i < pw->n; ++i) {
 		pw->p[i].set = isl_set_coalesce(pw->p[i].set);
 		if (!pw->p[i].set)
 			goto error;
@@ -1549,10 +1608,10 @@ __isl_give PW *FN(PW,reset_user)(__isl_take PW *pw)
 	return FN(PW,reset_space)(pw, space);
 }
 
-int FN(PW,has_equal_space)(__isl_keep PW *pw1, __isl_keep PW *pw2)
+isl_bool FN(PW,has_equal_space)(__isl_keep PW *pw1, __isl_keep PW *pw2)
 {
 	if (!pw1 || !pw2)
-		return -1;
+		return isl_bool_error;
 
 	return isl_space_is_equal(pw1->dim, pw2->dim);
 }
@@ -1622,18 +1681,18 @@ isl_stat FN(PW,foreach_piece)(__isl_keep PW *pw,
 }
 
 #ifndef NO_LIFT
-static int any_divs(__isl_keep isl_set *set)
+static isl_bool any_divs(__isl_keep isl_set *set)
 {
 	int i;
 
 	if (!set)
-		return -1;
+		return isl_bool_error;
 
 	for (i = 0; i < set->n; ++i)
 		if (set->p[i]->n_div > 0)
-			return 1;
+			return isl_bool_true;
 
-	return 0;
+	return isl_bool_false;
 }
 
 static isl_stat foreach_lifted_subset(__isl_take isl_set *set,
@@ -1680,12 +1739,16 @@ isl_stat FN(PW,foreach_lifted_piece)(__isl_keep PW *pw,
 		return isl_stat_error;
 
 	for (i = 0; i < pw->n; ++i) {
+		isl_bool any;
 		isl_set *set;
 		EL *el;
 
+		any = any_divs(pw->p[i].set);
+		if (any < 0)
+			return isl_stat_error;
 		set = isl_set_copy(pw->p[i].set);
 		el = FN(EL,copy)(pw->p[i].FIELD);
-		if (!any_divs(set)) {
+		if (!any) {
 			if (fn(set, el, user) < 0)
 				return isl_stat_error;
 			continue;
@@ -1884,23 +1947,21 @@ __isl_give PW *FN(PW,scale)(__isl_take PW *pw, isl_int v)
 	return FN(PW,mul_isl_int)(pw, v);
 }
 
-static int FN(PW,qsort_set_cmp)(const void *p1, const void *p2)
-{
-	isl_set *set1 = *(isl_set * const *)p1;
-	isl_set *set2 = *(isl_set * const *)p2;
-
-	return isl_set_plain_cmp(set1, set2);
-}
-
-/* We normalize in place, but if anything goes wrong we need
+/* Apply some normalization to "pw".
+ * In particular, sort the pieces according to their function value
+ * expressions, combining pairs of adjacent pieces with
+ * the same such expression, and then normalize the domains of the pieces.
+ *
+ * We normalize in place, but if anything goes wrong we need
  * to return NULL, so we need to make sure we don't change the
- * meaning of any possible other copies of map.
+ * meaning of any possible other copies of "pw".
  */
 __isl_give PW *FN(PW,normalize)(__isl_take PW *pw)
 {
-	int i, j;
+	int i;
 	isl_set *set;
 
+	pw = FN(PW,sort)(pw);
 	if (!pw)
 		return NULL;
 	for (i = 0; i < pw->n; ++i) {
@@ -1910,24 +1971,6 @@ __isl_give PW *FN(PW,normalize)(__isl_take PW *pw)
 		isl_set_free(pw->p[i].set);
 		pw->p[i].set = set;
 	}
-	qsort(pw->p, pw->n, sizeof(pw->p[0]), &FN(PW,qsort_set_cmp));
-	for (i = pw->n - 1; i >= 1; --i) {
-		if (!isl_set_plain_is_equal(pw->p[i - 1].set, pw->p[i].set))
-			continue;
-		if (!FN(EL,plain_is_equal)(pw->p[i - 1].FIELD, pw->p[i].FIELD))
-			continue;
-		set = isl_set_union(isl_set_copy(pw->p[i - 1].set),
-				    isl_set_copy(pw->p[i].set));
-		if (!set)
-			return FN(PW,free)(pw);
-		isl_set_free(pw->p[i].set);
-		FN(EL,free)(pw->p[i].FIELD);
-		isl_set_free(pw->p[i - 1].set);
-		pw->p[i - 1].set = set;
-		for (j = i + 1; j < pw->n; ++j)
-			pw->p[j - 1] = pw->p[j];
-		pw->n--;
-	}
 
 	return pw;
 }
@@ -1935,14 +1978,24 @@ __isl_give PW *FN(PW,normalize)(__isl_take PW *pw)
 /* Is pw1 obviously equal to pw2?
  * That is, do they have obviously identical cells and obviously identical
  * elements on each cell?
+ *
+ * If "pw1" or "pw2" contain any NaNs, then they are considered
+ * not to be the same.  A NaN is not equal to anything, not even
+ * to another NaN.
  */
 isl_bool FN(PW,plain_is_equal)(__isl_keep PW *pw1, __isl_keep PW *pw2)
 {
 	int i;
-	isl_bool equal;
+	isl_bool equal, has_nan;
 
 	if (!pw1 || !pw2)
 		return isl_bool_error;
+
+	has_nan = FN(PW,involves_nan)(pw1);
+	if (has_nan >= 0 && !has_nan)
+		has_nan = FN(PW,involves_nan)(pw2);
+	if (has_nan < 0 || has_nan)
+		return isl_bool_not(has_nan);
 
 	if (pw1 == pw2)
 		return isl_bool_true;
@@ -1977,18 +2030,42 @@ error:
 	return isl_bool_error;
 }
 
+/* Does "pw" involve any NaNs?
+ */
+isl_bool FN(PW,involves_nan)(__isl_keep PW *pw)
+{
+	int i;
+
+	if (!pw)
+		return isl_bool_error;
+	if (pw->n == 0)
+		return isl_bool_false;
+
+	for (i = 0; i < pw->n; ++i) {
+		isl_bool has_nan = FN(EL,involves_nan)(pw->p[i].FIELD);
+		if (has_nan < 0 || has_nan)
+			return has_nan;
+	}
+
+	return isl_bool_false;
+}
+
 #ifndef NO_PULLBACK
 static __isl_give PW *FN(PW,align_params_pw_multi_aff_and)(__isl_take PW *pw,
 	__isl_take isl_multi_aff *ma,
 	__isl_give PW *(*fn)(__isl_take PW *pw, __isl_take isl_multi_aff *ma))
 {
 	isl_ctx *ctx;
+	isl_bool equal_params;
 	isl_space *ma_space;
 
 	ma_space = isl_multi_aff_get_space(ma);
 	if (!pw || !ma || !ma_space)
 		goto error;
-	if (isl_space_match(pw->dim, isl_dim_param, ma_space, isl_dim_param)) {
+	equal_params = isl_space_has_equal_params(pw->dim, ma_space);
+	if (equal_params < 0)
+		goto error;
+	if (equal_params) {
 		isl_space_free(ma_space);
 		return fn(pw, ma);
 	}
@@ -2013,12 +2090,16 @@ static __isl_give PW *FN(PW,align_params_pw_pw_multi_aff_and)(__isl_take PW *pw,
 		__isl_take isl_pw_multi_aff *ma))
 {
 	isl_ctx *ctx;
+	isl_bool equal_params;
 	isl_space *pma_space;
 
 	pma_space = isl_pw_multi_aff_get_space(pma);
 	if (!pw || !pma || !pma_space)
 		goto error;
-	if (isl_space_match(pw->dim, isl_dim_param, pma_space, isl_dim_param)) {
+	equal_params = isl_space_has_equal_params(pw->dim, pma_space);
+	if (equal_params < 0)
+		goto error;
+	if (equal_params) {
 		isl_space_free(pma_space);
 		return fn(pw, pma);
 	}

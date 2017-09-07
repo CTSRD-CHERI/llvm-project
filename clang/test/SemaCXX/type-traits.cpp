@@ -1,19 +1,28 @@
 // RUN: %clang_cc1 -triple x86_64-apple-darwin10 -fsyntax-only -verify -std=gnu++11 -fms-extensions -Wno-microsoft %s
+// RUN: %clang_cc1 -triple x86_64-apple-darwin10 -fsyntax-only -verify -std=gnu++14 -fms-extensions -Wno-microsoft %s
+// RUN: %clang_cc1 -triple x86_64-apple-darwin10 -fsyntax-only -verify -std=gnu++1z -fms-extensions -Wno-microsoft %s
+
 #define T(b) (b) ? 1 : -1
 #define F(b) (b) ? -1 : 1
 
 struct NonPOD { NonPOD(int); };
+typedef NonPOD NonPODAr[10];
+typedef NonPOD NonPODArNB[];
+typedef NonPOD NonPODArMB[10][2];
 
 // PODs
 enum Enum { EV };
 struct POD { Enum e; int i; float f; NonPOD* p; };
 struct Empty {};
 typedef Empty EmptyAr[10];
+typedef Empty EmptyArNB[];
+typedef Empty EmptyArMB[1][2];
 typedef int Int;
 typedef Int IntAr[10];
 typedef Int IntArNB[];
 class Statics { static int priv; static NonPOD np; };
 union EmptyUnion {};
+union IncompleteUnion; // expected-note {{forward declaration of 'IncompleteUnion'}}
 union Union { int i; float f; };
 struct HasFunc { void f (); };
 struct HasOp { void operator *(); };
@@ -30,6 +39,9 @@ struct HasAnonymousUnion {
 typedef int Vector __attribute__((vector_size(16)));
 typedef int VectorExt __attribute__((ext_vector_type(4)));
 
+using ComplexFloat = _Complex float;
+using ComplexInt = _Complex int;
+
 // Not PODs
 typedef const void cvoid;
 struct Derives : POD {};
@@ -37,6 +49,10 @@ typedef Derives DerivesAr[10];
 typedef Derives DerivesArNB[];
 struct DerivesEmpty : Empty {};
 struct HasCons { HasCons(int); };
+struct HasDefaultCons { HasDefaultCons() = default; };
+struct HasExplicitDefaultCons { explicit HasExplicitDefaultCons() = default; };
+struct HasInheritedCons : HasDefaultCons { using HasDefaultCons::HasDefaultCons; };
+struct HasNoInheritedCons : HasCons {};
 struct HasCopyAssign { HasCopyAssign operator =(const HasCopyAssign&); };
 struct HasMoveAssign { HasMoveAssign operator =(const HasMoveAssign&&); };
 struct HasNoThrowMoveAssign { 
@@ -47,8 +63,15 @@ struct HasNoExceptNoThrowMoveAssign {
     const HasNoExceptNoThrowMoveAssign&&) noexcept; 
 };
 struct HasThrowMoveAssign { 
-  HasThrowMoveAssign& operator=(
-    const HasThrowMoveAssign&&) throw(POD); };
+  HasThrowMoveAssign& operator=(const HasThrowMoveAssign&&)
+#if __cplusplus <= 201402L
+  throw(POD);
+#else
+  noexcept(false);
+#endif
+};
+
+
 struct HasNoExceptFalseMoveAssign { 
   HasNoExceptFalseMoveAssign& operator=(
     const HasNoExceptFalseMoveAssign&&) noexcept(false); };
@@ -80,6 +103,7 @@ struct HasDest { ~HasDest(); };
 class  HasPriv { int priv; };
 class  HasProt { protected: int prot; };
 struct HasRef { int i; int& ref; HasRef() : i(0), ref(i) {} };
+struct HasRefAggregate { int i; int& ref; };
 struct HasNonPOD { NonPOD np; };
 struct HasVirt { virtual void Virt() {}; };
 typedef NonPOD NonPODAr[10];
@@ -151,7 +175,12 @@ struct VariadicCtor {
 };
 
 struct ThrowingDtor {
-  ~ThrowingDtor() throw(int);
+  ~ThrowingDtor()
+#if __cplusplus <= 201402L
+  throw(int);
+#else
+  noexcept(false);
+#endif
 };
 
 struct NoExceptDtor {
@@ -161,6 +190,20 @@ struct NoExceptDtor {
 struct NoThrowDtor {
   ~NoThrowDtor() throw();
 };
+
+struct ACompleteType {};
+struct AnIncompleteType; // expected-note 1+ {{forward declaration of 'AnIncompleteType'}}
+typedef AnIncompleteType AnIncompleteTypeAr[42];
+typedef AnIncompleteType AnIncompleteTypeArNB[];
+typedef AnIncompleteType AnIncompleteTypeArMB[1][10];
+
+struct HasInClassInit {
+  int x = 42;
+};
+
+struct HasPrivateBase : private ACompleteType {};
+struct HasProtectedBase : protected ACompleteType {};
+struct HasVirtBase : virtual ACompleteType {};
 
 void is_pod()
 {
@@ -235,6 +278,7 @@ void is_empty()
   { int arr[F(__is_empty(Int))]; }
   { int arr[F(__is_empty(POD))]; }
   { int arr[F(__is_empty(EmptyUnion))]; }
+  { int arr[F(__is_empty(IncompleteUnion))]; }
   { int arr[F(__is_empty(EmptyAr))]; }
   { int arr[F(__is_empty(HasRef))]; }
   { int arr[F(__is_empty(HasVirt))]; }
@@ -313,8 +357,23 @@ struct PotentiallyFinal<T*> final { };
 template<>
 struct PotentiallyFinal<int> final { };
 
+struct SealedClass sealed {
+};
+
+template<typename T>
+struct PotentiallySealed { };
+
+template<typename T>
+struct PotentiallySealed<T*> sealed { };
+
+template<>
+struct PotentiallySealed<int> sealed { };
+
 void is_final()
 {
+	{ int arr[T(__is_final(SealedClass))]; }
+	{ int arr[T(__is_final(PotentiallySealed<float*>))]; }
+	{ int arr[T(__is_final(PotentiallySealed<int>))]; }
 	{ int arr[T(__is_final(FinalClass))]; }
 	{ int arr[T(__is_final(PotentiallyFinal<float*>))]; }
 	{ int arr[T(__is_final(PotentiallyFinal<int>))]; }
@@ -330,25 +389,17 @@ void is_final()
 	{ int arr[F(__is_final(IntArNB))]; }
 	{ int arr[F(__is_final(HasAnonymousUnion))]; }
 	{ int arr[F(__is_final(PotentiallyFinal<float>))]; }
+	{ int arr[F(__is_final(PotentiallySealed<float>))]; }
 }
-
-struct SealedClass sealed {
-};
-
-template<typename T>
-struct PotentiallySealed { };
-
-template<typename T>
-struct PotentiallySealed<T*> sealed { };
-
-template<>
-struct PotentiallySealed<int> sealed { };
 
 void is_sealed()
 {
 	{ int arr[T(__is_sealed(SealedClass))]; }
 	{ int arr[T(__is_sealed(PotentiallySealed<float*>))]; }
 	{ int arr[T(__is_sealed(PotentiallySealed<int>))]; }
+	{ int arr[T(__is_sealed(FinalClass))]; }
+	{ int arr[T(__is_sealed(PotentiallyFinal<float*>))]; }
+	{ int arr[T(__is_sealed(PotentiallyFinal<int>))]; }
 
 	{ int arr[F(__is_sealed(int))]; }
 	{ int arr[F(__is_sealed(Union))]; }
@@ -361,6 +412,7 @@ void is_sealed()
 	{ int arr[F(__is_sealed(IntArNB))]; }
 	{ int arr[F(__is_sealed(HasAnonymousUnion))]; }
 	{ int arr[F(__is_sealed(PotentiallyFinal<float>))]; }
+	{ int arr[F(__is_sealed(PotentiallySealed<float>))]; }
 }
 
 typedef HasVirt Polymorph;
@@ -373,6 +425,7 @@ void is_polymorphic()
 
   { int arr[F(__is_polymorphic(int))]; }
   { int arr[F(__is_polymorphic(Union))]; }
+  { int arr[F(__is_polymorphic(IncompleteUnion))]; }
   { int arr[F(__is_polymorphic(Int))]; }
   { int arr[F(__is_polymorphic(IntAr))]; }
   { int arr[F(__is_polymorphic(UnionAr))]; }
@@ -441,6 +494,83 @@ void is_floating_point()
   int t31[F(__is_floating_point(IntArNB))];
 }
 
+template <class T>
+struct AggregateTemplate {
+  T value;
+};
+
+template <class T>
+struct NonAggregateTemplate {
+  T value;
+  NonAggregateTemplate();
+};
+
+void is_aggregate()
+{
+  constexpr bool TrueAfterCpp11 = __cplusplus > 201103L;
+  constexpr bool TrueAfterCpp14 = __cplusplus > 201402L;
+
+  __is_aggregate(AnIncompleteType); // expected-error {{incomplete type}}
+  __is_aggregate(AnIncompleteTypeAr); // expected-error {{incomplete type}}
+  __is_aggregate(AnIncompleteTypeArNB); // expected-error {{incomplete type}}
+  __is_aggregate(AnIncompleteTypeArMB); // expected-error {{incomplete type}}
+  __is_aggregate(IncompleteUnion); // expected-error {{incomplete type}}
+
+  static_assert(!__is_aggregate(NonPOD), "");
+  static_assert(__is_aggregate(NonPODAr), "");
+  static_assert(__is_aggregate(NonPODArNB), "");
+  static_assert(__is_aggregate(NonPODArMB), "");
+
+  static_assert(!__is_aggregate(Enum), "");
+  static_assert(__is_aggregate(POD), "");
+  static_assert(__is_aggregate(Empty), "");
+  static_assert(__is_aggregate(EmptyAr), "");
+  static_assert(__is_aggregate(EmptyArNB), "");
+  static_assert(__is_aggregate(EmptyArMB), "");
+  static_assert(!__is_aggregate(void), "");
+  static_assert(!__is_aggregate(const volatile void), "");
+  static_assert(!__is_aggregate(int), "");
+  static_assert(__is_aggregate(IntAr), "");
+  static_assert(__is_aggregate(IntArNB), "");
+  static_assert(__is_aggregate(EmptyUnion), "");
+  static_assert(__is_aggregate(Union), "");
+  static_assert(__is_aggregate(Statics), "");
+  static_assert(__is_aggregate(HasFunc), "");
+  static_assert(__is_aggregate(HasOp), "");
+  static_assert(__is_aggregate(HasAssign), "");
+  static_assert(__is_aggregate(HasAnonymousUnion), "");
+
+  static_assert(__is_aggregate(Derives) == TrueAfterCpp14, "");
+  static_assert(__is_aggregate(DerivesAr), "");
+  static_assert(__is_aggregate(DerivesArNB), "");
+  static_assert(!__is_aggregate(HasCons), "");
+  static_assert(__is_aggregate(HasDefaultCons), "");
+  static_assert(!__is_aggregate(HasExplicitDefaultCons), "");
+  static_assert(!__is_aggregate(HasInheritedCons), "");
+  static_assert(__is_aggregate(HasNoInheritedCons) == TrueAfterCpp14, "");
+  static_assert(__is_aggregate(HasCopyAssign), "");
+  static_assert(!__is_aggregate(NonTrivialDefault), "");
+  static_assert(__is_aggregate(HasDest), "");
+  static_assert(!__is_aggregate(HasPriv), "");
+  static_assert(!__is_aggregate(HasProt), "");
+  static_assert(__is_aggregate(HasRefAggregate), "");
+  static_assert(__is_aggregate(HasNonPOD), "");
+  static_assert(!__is_aggregate(HasVirt), "");
+  static_assert(__is_aggregate(VirtAr), "");
+  static_assert(__is_aggregate(HasInClassInit) == TrueAfterCpp11, "");
+  static_assert(!__is_aggregate(HasPrivateBase), "");
+  static_assert(!__is_aggregate(HasProtectedBase), "");
+  static_assert(!__is_aggregate(HasVirtBase), "");
+
+  static_assert(__is_aggregate(AggregateTemplate<int>), "");
+  static_assert(!__is_aggregate(NonAggregateTemplate<int>), "");
+
+  static_assert(__is_aggregate(Vector), ""); // Extension supported by GCC and Clang
+  static_assert(__is_aggregate(VectorExt), "");
+  static_assert(__is_aggregate(ComplexInt), "");
+  static_assert(__is_aggregate(ComplexFloat), "");
+}
+
 void is_arithmetic()
 {
   int t01[T(__is_arithmetic(float))];
@@ -469,9 +599,6 @@ void is_arithmetic()
   int t30[F(__is_arithmetic(cvoid))];
   int t31[F(__is_arithmetic(IntArNB))];
 }
-
-struct ACompleteType {};
-struct AnIncompleteType;
 
 void is_complete_type()
 {
@@ -1129,7 +1256,7 @@ void is_trivially_copyable2()
   int t33[F(__is_trivially_copyable(ExtDefaulted))];
 
   int t34[T(__is_trivially_copyable(const int))];
-  int t35[F(__is_trivially_copyable(volatile int))];
+  int t35[T(__is_trivially_copyable(volatile int))];
 }
 
 struct CStruct {
@@ -1503,6 +1630,9 @@ void has_nothrow_move_assign() {
 
   { int arr[T(__is_nothrow_assignable(HasNoThrowMoveAssign, HasNoThrowMoveAssign))]; }
   { int arr[F(__is_nothrow_assignable(HasThrowMoveAssign, HasThrowMoveAssign))]; }
+
+  { int arr[T(__is_assignable(HasNoThrowMoveAssign, HasNoThrowMoveAssign))]; }
+  { int arr[T(__is_assignable(HasThrowMoveAssign, HasThrowMoveAssign))]; }
 }
 
 void has_trivial_move_assign() {
@@ -1963,6 +2093,46 @@ void trivial_checks()
                                          TrivialMoveButNotCopy)))]; }
   { int arr[T((__is_trivially_assignable(TrivialMoveButNotCopy&,
                                          TrivialMoveButNotCopy&&)))]; }
+  { int arr[T((__is_trivially_assignable(int&, int)))]; }
+  { int arr[T((__is_trivially_assignable(int&, int&)))]; }
+  { int arr[T((__is_trivially_assignable(int&, int&&)))]; }
+  { int arr[T((__is_trivially_assignable(int&, const int&)))]; }
+  { int arr[T((__is_trivially_assignable(POD&, POD)))]; }
+  { int arr[T((__is_trivially_assignable(POD&, POD&)))]; }
+  { int arr[T((__is_trivially_assignable(POD&, POD&&)))]; }
+  { int arr[T((__is_trivially_assignable(POD&, const POD&)))]; }
+  { int arr[T((__is_trivially_assignable(int*&, int*)))]; }
+  { int arr[T((__is_trivially_assignable(AllDefaulted,
+                                         const AllDefaulted &)))]; }
+  { int arr[T((__is_trivially_assignable(AllDefaulted,
+                                         AllDefaulted &&)))]; }
+
+  { int arr[F((__is_assignable(int *&, float *)))]; }
+  { int arr[T((__is_assignable(HasCopyAssign &, HasCopyAssign)))]; }
+  { int arr[T((__is_assignable(HasCopyAssign &, HasCopyAssign &)))]; }
+  { int arr[T((__is_assignable(HasCopyAssign &, const HasCopyAssign &)))]; }
+  { int arr[T((__is_assignable(HasCopyAssign &, HasCopyAssign &&)))]; }
+  { int arr[T((__is_assignable(TrivialMoveButNotCopy &,
+                               TrivialMoveButNotCopy &)))]; }
+  { int arr[T((__is_assignable(TrivialMoveButNotCopy &,
+                               const TrivialMoveButNotCopy &)))]; }
+  { int arr[F((__is_assignable(AllDeleted,
+                               const AllDeleted &)))]; }
+  { int arr[F((__is_assignable(AllDeleted,
+                               AllDeleted &&)))]; }
+  { int arr[T((__is_assignable(ExtDefaulted,
+                               const ExtDefaulted &)))]; }
+  { int arr[T((__is_assignable(ExtDefaulted,
+                               ExtDefaulted &&)))]; }
+
+  { int arr[T((__is_assignable(HasDefaultTrivialCopyAssign &,
+                               HasDefaultTrivialCopyAssign &)))]; }
+  { int arr[T((__is_assignable(HasDefaultTrivialCopyAssign &,
+                               const HasDefaultTrivialCopyAssign &)))]; }
+  { int arr[T((__is_assignable(TrivialMoveButNotCopy &,
+                               TrivialMoveButNotCopy)))]; }
+  { int arr[T((__is_assignable(TrivialMoveButNotCopy &,
+                               TrivialMoveButNotCopy &&)))]; }
 }
 
 void constructible_checks() {
@@ -1991,6 +2161,9 @@ void constructible_checks() {
   // PR20228
   { int arr[T(__is_constructible(VariadicCtor,
                                  int, int, int, int, int, int, int, int, int))]; }
+
+  // PR25513
+  { int arr[F(__is_constructible(int(int)))]; }
 }
 
 // Instantiation of __is_trivially_constructible

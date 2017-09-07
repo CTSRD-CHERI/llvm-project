@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 // <algorithm>
+// REQUIRES: c++98 || c++03 || c++11 || c++14
 
 // template<RandomAccessIterator Iter, Callable<auto, Iter::difference_type> Rand>
 //   requires ShuffleIterator<Iter>
@@ -17,10 +18,13 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
+
+#include "test_macros.h"
 
 struct gen
 {
-    int operator()(int n)
+    std::ptrdiff_t operator()(std::ptrdiff_t n)
     {
         return n-1;
     }
@@ -33,5 +37,6 @@ int main()
     const unsigned sa = sizeof(ia)/sizeof(ia[0]);
     gen r;
     std::random_shuffle(ia, ia+sa, r);
-    assert(std::equal(ia, ia+sa, ia1));
+    LIBCPP_ASSERT(std::equal(ia, ia+sa, ia1));
+    assert(std::is_permutation(ia, ia+sa, ia1));
 }

@@ -15,6 +15,12 @@
 #include <iterator>
 #include <cassert>
 
+#include "test_macros.h"
+
+// std::array is explicitly allowed to be initialized with A a = { init-list };.
+// Disable the missing braces warning for this reason.
+#include "disable_missing_braces_warning.h"
+
 int main()
 {
     {
@@ -36,7 +42,7 @@ int main()
     assert(i == j);
     }
 
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
     { // N3644 testing
         {
         typedef std::array<int, 5> C;
@@ -59,7 +65,7 @@ int main()
         assert ( c.cend()    == std::cend(c));
         assert ( c.rend()    == std::rend(c));
         assert ( c.crend()   == std::crend(c));
-        
+
         assert ( std::begin(c)   != std::end(c));
         assert ( std::rbegin(c)  != std::rend(c));
         assert ( std::cbegin(c)  != std::cend(c));
@@ -105,6 +111,35 @@ int main()
         assert ( std::cbegin(c)  == std::cend(c));
         assert ( std::crbegin(c) == std::crend(c));
         }
+    }
+#endif
+#if TEST_STD_VER > 14
+    {
+        typedef std::array<int, 5> C;
+        constexpr C c{0,1,2,3,4};
+
+        static_assert ( c.begin()   == std::begin(c), "");
+        static_assert ( c.cbegin()  == std::cbegin(c), "");
+        static_assert ( c.end()     == std::end(c), "");
+        static_assert ( c.cend()    == std::cend(c), "");
+
+        static_assert ( c.rbegin()  == std::rbegin(c), "");
+        static_assert ( c.crbegin() == std::crbegin(c), "");
+        static_assert ( c.rend()    == std::rend(c), "");
+        static_assert ( c.crend()   == std::crend(c), "");
+
+        static_assert ( std::begin(c)   != std::end(c), "");
+        static_assert ( std::rbegin(c)  != std::rend(c), "");
+        static_assert ( std::cbegin(c)  != std::cend(c), "");
+        static_assert ( std::crbegin(c) != std::crend(c), "");
+
+        static_assert ( *c.begin()  == 0, "");
+        static_assert ( *c.rbegin()  == 4, "");
+
+        static_assert ( *std::begin(c)   == 0, "" );
+        static_assert ( *std::cbegin(c)  == 0, "" );
+        static_assert ( *std::rbegin(c)  == 4, "" );
+        static_assert ( *std::crbegin(c) == 4, "" );
     }
 #endif
 }

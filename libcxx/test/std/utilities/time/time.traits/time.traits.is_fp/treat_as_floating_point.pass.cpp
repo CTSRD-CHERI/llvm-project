@@ -14,12 +14,18 @@
 #include <chrono>
 #include <type_traits>
 
+#include "test_macros.h"
+
 template <class T>
 void
 test()
 {
     static_assert((std::is_base_of<std::is_floating_point<T>,
                                    std::chrono::treat_as_floating_point<T> >::value), "");
+#if TEST_STD_VER > 14
+    static_assert(std::is_floating_point<T>::value ==
+                                  std::chrono::treat_as_floating_point_v<T>, "");
+#endif
 }
 
 struct A {};

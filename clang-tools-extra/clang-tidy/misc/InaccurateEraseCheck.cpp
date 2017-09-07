@@ -25,19 +25,20 @@ void InaccurateEraseCheck::registerMatchers(MatchFinder *Finder) {
     return;
 
   const auto CheckForEndCall = hasArgument(
-      1, anyOf(cxxConstructExpr(
-                   has(cxxMemberCallExpr(callee(cxxMethodDecl(hasName("end"))))
-                           .bind("InaccEndCall"))),
+      1, anyOf(cxxConstructExpr(has(ignoringParenImpCasts(
+                   cxxMemberCallExpr(callee(cxxMethodDecl(hasName("end"))))
+                       .bind("InaccEndCall")))),
                anything()));
 
   Finder->addMatcher(
       cxxMemberCallExpr(
           on(hasType(namedDecl(matchesName("^::std::")))),
           callee(cxxMethodDecl(hasName("erase"))), argumentCountIs(1),
-          hasArgument(0, has(callExpr(callee(functionDecl(matchesName(
+          hasArgument(0, has(ignoringParenImpCasts(
+                             callExpr(callee(functionDecl(matchesName(
                                           "^::std::(remove(_if)?|unique)$"))),
                                       CheckForEndCall)
-                                 .bind("InaccAlgCall"))),
+                                 .bind("InaccAlgCall")))),
           unless(isInTemplateInstantiation()))
           .bind("InaccErase"),
       this);
@@ -56,10 +57,9 @@ void InaccurateEraseCheck::check(const MatchFinder::MatchResult &Result) {
     const auto *AlgCall = Result.Nodes.getNodeAs<CallExpr>("InaccAlgCall");
     std::string ReplacementText = Lexer::getSourceText(
         CharSourceRange::getTokenRange(EndExpr->getSourceRange()),
-        *Result.SourceManager, Result.Context->getLangOpts());
+        *Result.SourceManager, getLangOpts());
     const SourceLocation EndLoc = Lexer::getLocForEndOfToken(
-        AlgCall->getLocEnd(), 0, *Result.SourceManager,
-        Result.Context->getLangOpts());
+        AlgCall->getLocEnd(), 0, *Result.SourceManager, getLangOpts());
     Hint = FixItHint::CreateInsertion(EndLoc, ", " + ReplacementText);
   }
 

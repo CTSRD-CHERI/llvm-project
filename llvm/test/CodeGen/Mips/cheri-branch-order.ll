@@ -1,11 +1,11 @@
-; RUN: llc  -mtriple cheri-unknown-freebsd %s -o - -O0 | FileCheck %s
+; RUN: %cheri_llc -mtriple cheri-unknown-freebsd -relocation-model=pic %s -o - -O0 | FileCheck %s
 ; ModuleID = 'brazdil.c'
 target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128"
 target triple = "cheri-unknown-freebsd"
 
 ; Check that the store of the global pointer is not moved after the branch and
 ; that the branch is replaced by a branch-on-tag-set.
-; CHECK: cbts	$c3, $BB0_2
+; CHECK: cbts	$c3, .LBB0_2
 
 @.str = private unnamed_addr constant [20 x i8] c"Storing in slot %p\0A\00", align 1
 
@@ -18,7 +18,7 @@ entry:
   store i8 addrspace(200)* addrspace(200)* %y, i8 addrspace(200)* addrspace(200)** %y.addr, align 32
   %0 = load i8 addrspace(200)* addrspace(200)*, i8 addrspace(200)* addrspace(200)** %y.addr, align 32
   %1 = bitcast i8 addrspace(200)* addrspace(200)* %0 to i8 addrspace(200)*
-  %2 = call i64 @llvm.mips.cap.tag.get(i8 addrspace(200)* %1)
+  %2 = call i64 @llvm.cheri.cap.tag.get(i8 addrspace(200)* %1)
   %tobool = icmp ne i64 %2, 0
   br i1 %tobool, label %if.end, label %if.then
 
@@ -43,7 +43,7 @@ return:                                           ; preds = %if.end, %if.then
 }
 
 ; Function Attrs: nounwind readnone
-declare i64 @llvm.mips.cap.tag.get(i8 addrspace(200)*) #1
+declare i64 @llvm.cheri.cap.tag.get(i8 addrspace(200)*) #1
 
 declare i32 @printf(i8*, ...) #2
 

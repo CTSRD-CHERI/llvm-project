@@ -2,7 +2,6 @@
 #
 # RUN: lld-link /out:%t.dll /dll %t.obj /export:exportfn1 /export:exportfn2
 # RUN: llvm-objdump -p %t.dll | FileCheck -check-prefix=CHECK1 %s
-# REQUIRES: winlib
 
 # CHECK1:      Export Table:
 # CHECK1:      DLL name: export32.test.tmp.dll
@@ -74,7 +73,17 @@
 # CHECK6:     duplicate /export option: _exportfn2
 # CHECK6-NOT: duplicate /export option: _exportfn1
 
----
+# RUN: lld-link /out:%t.dll /dll %t.obj /export:foo=mangled
+# RUN: llvm-objdump -p %t.dll | FileCheck -check-prefix=CHECK7 %s
+
+# CHECK7:      Export Table:
+# CHECK7:      DLL name: export32.test.tmp.dll
+# CHECK7:      Ordinal      RVA  Name
+# CHECK7-NEXT:       0        0
+# CHECK7-NEXT:       1        0
+# CHECK7-NEXT:       2   0x1010  foo
+
+--- !COFF
 header:
   Machine:         IMAGE_FILE_MACHINE_I386
   Characteristics: []
@@ -85,7 +94,7 @@ sections:
     SectionData:     B800000000506800000000680000000050E80000000050E800000000
   - Name:            .drectve
     Characteristics: [ IMAGE_SCN_LNK_INFO, IMAGE_SCN_LNK_REMOVE ]
-    Alignment:       2147483648
+    Alignment:       1
     SectionData:     2f6578706f72743a5f6578706f7274666e3300  # /export:_exportfn3
 symbols:
   - Name:            .text

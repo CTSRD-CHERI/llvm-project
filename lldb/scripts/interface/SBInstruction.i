@@ -51,6 +51,12 @@ public:
     bool
     DoesBranch ();
 
+    bool
+    HasDelaySlot ();
+
+    bool
+    CanSetBreakpoint ();
+
     void
     Print (FILE *out);
 

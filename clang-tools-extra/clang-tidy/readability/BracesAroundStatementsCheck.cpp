@@ -39,7 +39,7 @@ SourceLocation forwardSkipWhitespaceAndComments(SourceLocation Loc,
                                                 const ASTContext *Context) {
   assert(Loc.isValid());
   for (;;) {
-    while (isWhitespace(*FullSourceLoc(Loc, SM).getCharacterData()))
+    while (isWhitespace(*SM.getCharacterData(Loc)))
       Loc = Loc.getLocWithOffset(1);
 
     tok::TokenKind TokKind = getTokenKind(Loc, SM, Context);
@@ -54,7 +54,8 @@ SourceLocation forwardSkipWhitespaceAndComments(SourceLocation Loc,
 SourceLocation findEndLocation(SourceLocation LastTokenLoc,
                                const SourceManager &SM,
                                const ASTContext *Context) {
-  SourceLocation Loc = LastTokenLoc;
+  SourceLocation Loc =
+      Lexer::GetBeginningOfToken(LastTokenLoc, SM, Context->getLangOpts());
   // Loc points to the beginning of the last (non-comment non-ws) token
   // before end or ';'.
   assert(Loc.isValid());
@@ -69,7 +70,6 @@ SourceLocation findEndLocation(SourceLocation LastTokenLoc,
 
   Loc = Lexer::getLocForEndOfToken(Loc, 0, SM, Context->getLangOpts());
   // Loc points past the last token before end or after ';'.
-
   if (SkipEndWhitespaceAndComments) {
     Loc = forwardSkipWhitespaceAndComments(Loc, SM, Context);
     tok::TokenKind TokKind = getTokenKind(Loc, SM, Context);
@@ -79,10 +79,11 @@ SourceLocation findEndLocation(SourceLocation LastTokenLoc,
 
   for (;;) {
     assert(Loc.isValid());
-    while (isHorizontalWhitespace(*FullSourceLoc(Loc, SM).getCharacterData()))
+    while (isHorizontalWhitespace(*SM.getCharacterData(Loc))) {
       Loc = Loc.getLocWithOffset(1);
+    }
 
-    if (isVerticalWhitespace(*FullSourceLoc(Loc, SM).getCharacterData())) {
+    if (isVerticalWhitespace(*SM.getCharacterData(Loc))) {
       // EOL, insert brace before.
       break;
     }
@@ -117,8 +118,8 @@ BracesAroundStatementsCheck::BracesAroundStatementsCheck(
       // Always add braces by default.
       ShortStatementLines(Options.get("ShortStatementLines", 0U)) {}
 
-void
-BracesAroundStatementsCheck::storeOptions(ClangTidyOptions::OptionMap &Opts) {
+void BracesAroundStatementsCheck::storeOptions(
+    ClangTidyOptions::OptionMap &Opts) {
   Options.store(Opts, "ShortStatementLines", ShortStatementLines);
 }
 
@@ -130,8 +131,8 @@ void BracesAroundStatementsCheck::registerMatchers(MatchFinder *Finder) {
   Finder->addMatcher(cxxForRangeStmt().bind("for-range"), this);
 }
 
-void
-BracesAroundStatementsCheck::check(const MatchFinder::MatchResult &Result) {
+void BracesAroundStatementsCheck::check(
+    const MatchFinder::MatchResult &Result) {
   const SourceManager &SM = *Result.SourceManager;
   const ASTContext *Context = Result.Context;
 
@@ -159,14 +160,14 @@ BracesAroundStatementsCheck::check(const MatchFinder::MatchResult &Result) {
       ForceBracesStmts.insert(Else);
     if (Else && !isa<IfStmt>(Else)) {
       // Omit 'else if' statements here, they will be handled directly.
-      checkStmt(Result, Else, S->getElseLoc(), SourceLocation());
+      checkStmt(Result, Else, S->getElseLoc());
     }
   } else {
     llvm_unreachable("Invalid match");
   }
 }
 
-/// Find location of right parenthesis closing condition
+/// Find location of right parenthesis closing condition.
 template <typename IfOrWhileStmt>
 SourceLocation
 BracesAroundStatementsCheck::findRParenLoc(const IfOrWhileStmt *S,
@@ -176,30 +177,25 @@ BracesAroundStatementsCheck::findRParenLoc(const IfOrWhileStmt *S,
   if (S->getLocStart().isMacroID())
     return SourceLocation();
 
-  static const char *const ErrorMessage =
-      "cannot find location of closing parenthesis ')'";
   SourceLocation CondEndLoc = S->getCond()->getLocEnd();
   if (const DeclStmt *CondVar = S->getConditionVariableDeclStmt())
     CondEndLoc = CondVar->getLocEnd();
 
-  assert(CondEndLoc.isValid());
+  if (!CondEndLoc.isValid()) {
+    return SourceLocation();
+  }
+
   SourceLocation PastCondEndLoc =
       Lexer::getLocForEndOfToken(CondEndLoc, 0, SM, Context->getLangOpts());
-  if (PastCondEndLoc.isInvalid()) {
-    diag(CondEndLoc, ErrorMessage);
+  if (PastCondEndLoc.isInvalid())
     return SourceLocation();
-  }
   SourceLocation RParenLoc =
       forwardSkipWhitespaceAndComments(PastCondEndLoc, SM, Context);
-  if (RParenLoc.isInvalid()) {
-    diag(PastCondEndLoc, ErrorMessage);
+  if (RParenLoc.isInvalid())
     return SourceLocation();
-  }
   tok::TokenKind TokKind = getTokenKind(RParenLoc, SM, Context);
-  if (TokKind != tok::r_paren) {
-    diag(RParenLoc, ErrorMessage);
+  if (TokKind != tok::r_paren)
     return SourceLocation();
-  }
   return RParenLoc;
 }
 
@@ -220,6 +216,8 @@ bool BracesAroundStatementsCheck::checkStmt(
     return false;
   }
 
+  if (!InitialLoc.isValid())
+    return false;
   const SourceManager &SM = *Result.SourceManager;
   const ASTContext *Context = Result.Context;
 
@@ -230,8 +228,6 @@ bool BracesAroundStatementsCheck::checkStmt(
   if (FileRange.isInvalid())
     return false;
 
-  // InitialLoc points at the last token before opening brace to be inserted.
-  assert(InitialLoc.isValid());
   // Convert InitialLoc to file location, if it's on the same macro expansion
   // level as the start of the statement. We also need file locations for
   // Lexer::getLocForEndOfToken working properly.

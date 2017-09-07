@@ -7,6 +7,14 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03, c++11
+// XFAIL: availability=macosx10.12
+// XFAIL: availability=macosx10.11
+// XFAIL: availability=macosx10.10
+// XFAIL: availability=macosx10.9
+// XFAIL: availability=macosx10.8
+// XFAIL: availability=macosx10.7
+
 // <optional>
 
 // class bad_optional_access is default constructible
@@ -16,8 +24,6 @@
 
 int main()
 {
-#if _LIBCPP_STD_VER > 11
     using std::experimental::bad_optional_access;
     bad_optional_access ex;
-#endif  // _LIBCPP_STD_VER > 11
 }

@@ -18,6 +18,7 @@
 #include <cassert>
 
 #include "min_allocator.h"
+#include "test_macros.h"
 
 int main()
 {
@@ -42,6 +43,7 @@ int main()
         assert(m.at(3) == 3.5);
         assert(m.at(4) == 4.5);
         assert(m.at(5) == 5.5);
+#ifndef TEST_HAS_NO_EXCEPTIONS
         try
         {
             m.at(6);
@@ -50,6 +52,7 @@ int main()
         catch (std::out_of_range&)
         {
         }
+#endif
         assert(m.at(7) == 7.5);
         assert(m.at(8) == 8.5);
         assert(m.size() == 7);
@@ -73,6 +76,7 @@ int main()
         assert(m.at(3) == 3.5);
         assert(m.at(4) == 4.5);
         assert(m.at(5) == 5.5);
+#ifndef TEST_HAS_NO_EXCEPTIONS
         try
         {
             m.at(6);
@@ -81,11 +85,12 @@ int main()
         catch (std::out_of_range&)
         {
         }
+#endif
         assert(m.at(7) == 7.5);
         assert(m.at(8) == 8.5);
         assert(m.size() == 7);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         typedef std::pair<const int, double> V;
         V ar[] =
@@ -107,6 +112,7 @@ int main()
         assert(m.at(3) == 3.5);
         assert(m.at(4) == 4.5);
         assert(m.at(5) == 5.5);
+#ifndef TEST_HAS_NO_EXCEPTIONS
         try
         {
             m.at(6);
@@ -115,6 +121,7 @@ int main()
         catch (std::out_of_range&)
         {
         }
+#endif
         assert(m.at(7) == 7.5);
         assert(m.at(8) == 8.5);
         assert(m.size() == 7);
@@ -138,6 +145,7 @@ int main()
         assert(m.at(3) == 3.5);
         assert(m.at(4) == 4.5);
         assert(m.at(5) == 5.5);
+#ifndef TEST_HAS_NO_EXCEPTIONS
         try
         {
             m.at(6);
@@ -146,6 +154,7 @@ int main()
         catch (std::out_of_range&)
         {
         }
+#endif
         assert(m.at(7) == 7.5);
         assert(m.at(8) == 8.5);
         assert(m.size() == 7);

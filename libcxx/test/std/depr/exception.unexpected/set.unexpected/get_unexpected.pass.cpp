@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// REQUIRES: c++98 || c++03 || c++11 || c++14
+
 // test get_unexpected
 
 #include <exception>
@@ -23,7 +25,7 @@ void f3()
 
 int main()
 {
-    
+
     std::unexpected_handler old = std::get_unexpected();
     // verify there is a previous unexpected handler
     assert(old);

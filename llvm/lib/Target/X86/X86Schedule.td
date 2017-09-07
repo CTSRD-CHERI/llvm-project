@@ -364,6 +364,9 @@ def IIC_SSE_PALIGNRR : InstrItinClass;
 def IIC_SSE_PALIGNRM : InstrItinClass;
 def IIC_SSE_MWAIT : InstrItinClass;
 def IIC_SSE_MONITOR : InstrItinClass;
+def IIC_SSE_MWAITX : InstrItinClass;
+def IIC_SSE_MONITORX : InstrItinClass;
+def IIC_SSE_CLZERO : InstrItinClass;
 
 def IIC_SSE_PREFETCH : InstrItinClass;
 def IIC_SSE_PAUSE : InstrItinClass;
@@ -494,6 +497,7 @@ def IIC_IN_RI : InstrItinClass;
 def IIC_OUT_RR : InstrItinClass;
 def IIC_OUT_IR : InstrItinClass;
 def IIC_INS : InstrItinClass;
+def IIC_LWP : InstrItinClass;
 def IIC_MOV_REG_DR : InstrItinClass;
 def IIC_MOV_DR_REG : InstrItinClass;
 def IIC_MOV_REG_CR : InstrItinClass;
@@ -633,13 +637,22 @@ def IIC_NOP : InstrItinClass;
 // latencies. Since these latencies are not used for pipeline hazards,
 // they do not need to be exact.
 //
-// The GenericModel contains no instruction itineraries.
-def GenericModel : SchedMachineModel {
+// The GenericX86Model contains no instruction itineraries
+// and disables PostRAScheduler.
+class GenericX86Model : SchedMachineModel {
   let IssueWidth = 4;
   let MicroOpBufferSize = 32;
   let LoadLatency = 4;
   let HighLatency = 10;
   let PostRAScheduler = 0;
+  let CompleteModel = 0;
+}
+
+def GenericModel : GenericX86Model;
+
+// Define a model with the PostRAScheduler enabled.
+def GenericPostRAModel : GenericX86Model {
+  let PostRAScheduler = 1;
 }
 
 include "X86ScheduleAtom.td"

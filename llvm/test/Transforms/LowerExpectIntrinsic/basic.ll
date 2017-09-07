@@ -1,5 +1,5 @@
 ; RUN: opt -lower-expect -strip-dead-prototypes -S -o - < %s | FileCheck %s
-; RUN: opt -S -passes=lower-expect < %s | opt -strip-dead-prototypes -S | FileCheck %s
+; RUN: opt -S -passes='function(lower-expect),strip-dead-prototypes' < %s | FileCheck %s
 
 ; CHECK-LABEL: @test1(
 define i32 @test1(i32 %x) nounwind uwtable ssp {
@@ -273,9 +273,19 @@ return:                                           ; preds = %if.end, %if.then
   ret i32 %0
 }
 
+; CHECK-LABEL: @test10(
+define i32 @test10(i64 %t6) {
+  %t7 = call i64 @llvm.expect.i64(i64 %t6, i64 0)
+  %t8 = icmp ne i64 %t7, 0
+  %t9 = select i1 %t8, i32 1, i32 2
+; CHECK: select{{.*}}, !prof !1
+  ret i32 %t9
+}
+
+
 declare i1 @llvm.expect.i1(i1, i1) nounwind readnone
 
-; CHECK: !0 = !{!"branch_weights", i32 64, i32 4}
-; CHECK: !1 = !{!"branch_weights", i32 4, i32 64}
-; CHECK: !2 = !{!"branch_weights", i32 4, i32 64, i32 4}
-; CHECK: !3 = !{!"branch_weights", i32 64, i32 4, i32 4}
+; CHECK: !0 = !{!"branch_weights", i32 2000, i32 1}
+; CHECK: !1 = !{!"branch_weights", i32 1, i32 2000}
+; CHECK: !2 = !{!"branch_weights", i32 1, i32 2000, i32 1}
+; CHECK: !3 = !{!"branch_weights", i32 2000, i32 1, i32 1}

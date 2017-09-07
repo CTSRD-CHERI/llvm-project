@@ -8,31 +8,110 @@
 //===----------------------------------------------------------------------===//
 
 #include "Error.h"
+#include "Config.h"
 
 #include "llvm/ADT/Twine.h"
+#include "llvm/Support/Error.h"
+#include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/raw_ostream.h"
+#include <mutex>
 
-namespace lld {
-namespace elf2 {
+#if !defined(_MSC_VER) && !defined(__MINGW32__)
+#include <unistd.h>
+#endif
 
-void warning(const Twine &Msg) { llvm::errs() << Msg << "\n"; }
+using namespace llvm;
 
-void error(const Twine &Msg) {
-  llvm::errs() << Msg << "\n";
-  exit(1);
+using namespace lld;
+using namespace lld::elf;
+
+uint64_t elf::ErrorCount;
+raw_ostream *elf::ErrorOS;
+StringRef elf::Argv0;
+
+// The functions defined in this file can be called from multiple threads,
+// but outs() or errs() are not thread-safe. We protect them using a mutex.
+static std::mutex Mu;
+
+// Prints "\n" or does nothing, depending on Msg contents of
+// the previous call of this function.
+static void newline(const Twine &Msg) {
+  // True if the previous error message contained "\n".
+  // We want to separate multi-line error messages with a newline.
+  static bool Flag;
+
+  if (Flag)
+    *ErrorOS << "\n";
+  Flag = (StringRef(Msg.str()).find('\n') != StringRef::npos);
 }
 
-void error(std::error_code EC, const Twine &Prefix) {
-  if (!EC)
+static void print(StringRef S, raw_ostream::Colors C) {
+  *ErrorOS << Argv0 + ": ";
+  if (Config->ColorDiagnostics) {
+    ErrorOS->changeColor(C, true);
+    *ErrorOS << S;
+    ErrorOS->resetColor();
+  } else {
+    *ErrorOS << S;
+  }
+}
+
+void elf::log(const Twine &Msg) {
+  if (Config->Verbose) {
+    std::lock_guard<std::mutex> Lock(Mu);
+    outs() << Argv0 << ": " << Msg << "\n";
+    outs().flush();
+  }
+}
+
+void elf::message(const Twine &Msg) {
+  std::lock_guard<std::mutex> Lock(Mu);
+  outs() << Msg << "\n";
+  outs().flush();
+}
+
+void elf::warn(const Twine &Msg) {
+  if (Config->FatalWarnings) {
+    error(Msg);
     return;
-  error(Prefix + ": " + EC.message());
+  }
+
+  std::lock_guard<std::mutex> Lock(Mu);
+  newline(Msg);
+  print("warning: ", raw_ostream::MAGENTA);
+  *ErrorOS << Msg << "\n";
 }
 
-void error(std::error_code EC) {
-  if (!EC)
-    return;
-  error(EC.message());
+void elf::error(const Twine &Msg) {
+  std::lock_guard<std::mutex> Lock(Mu);
+  newline(Msg);
+
+  if (Config->ErrorLimit == 0 || ErrorCount < Config->ErrorLimit) {
+    print("error: ", raw_ostream::RED);
+    *ErrorOS << Msg << "\n";
+  } else if (ErrorCount == Config->ErrorLimit) {
+    print("error: ", raw_ostream::RED);
+    *ErrorOS << "too many errors emitted, stopping now"
+             << " (use -error-limit=0 to see all errors)\n";
+    if (Config->ExitEarly)
+      exitLld(1);
+  }
+
+  ++ErrorCount;
 }
 
-} // namespace elf2
-} // namespace lld
+void elf::exitLld(int Val) {
+  // Dealloc/destroy ManagedStatic variables before calling
+  // _exit(). In a non-LTO build, this is a nop. In an LTO
+  // build allows us to get the output of -time-passes.
+  llvm_shutdown();
+
+  outs().flush();
+  errs().flush();
+  _exit(Val);
+}
+
+void elf::fatal(const Twine &Msg) {
+  error(Msg);
+  exitLld(1);
+}

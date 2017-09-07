@@ -16,6 +16,7 @@
 #include <memory>
 #include <cassert>
 
+#include "test_macros.h"
 #include "count_new.hpp"
 
 struct A
@@ -44,6 +45,25 @@ struct Foo
     virtual ~Foo() = default;
 };
 
+#ifdef _LIBCPP_VERSION
+struct Result {};
+static Result theFunction() { return Result(); }
+static int resultDeletorCount;
+static void resultDeletor(Result (*pf)()) {
+  assert(pf == theFunction);
+  ++resultDeletorCount;
+}
+
+void test_pointer_to_function() {
+    { // https://bugs.llvm.org/show_bug.cgi?id=27566
+      std::shared_ptr<Result()> x(&theFunction, &resultDeletor);
+      std::shared_ptr<Result()> y(theFunction, resultDeletor);
+    }
+    assert(resultDeletorCount == 2);
+}
+#else // _LIBCPP_VERSION
+void test_pointer_to_function() {}
+#endif // _LIBCPP_VERSION
 
 int main()
 {
@@ -58,14 +78,16 @@ int main()
     assert(p->get_char() == 'e');
     }
 
-    { // https://llvm.org/bugs/show_bug.cgi?id=24137
+    { // https://bugs.llvm.org/show_bug.cgi?id=24137
     std::shared_ptr<Foo> p1       = std::make_shared<Foo>();
     assert(p1.get());
     std::shared_ptr<const Foo> p2 = std::make_shared<const Foo>();
     assert(p2.get());
     }
 
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
+    test_pointer_to_function();
+
+#if TEST_STD_VER >= 11
     nc = globalMemCounter.outstanding_new;
     {
     char c = 'e';

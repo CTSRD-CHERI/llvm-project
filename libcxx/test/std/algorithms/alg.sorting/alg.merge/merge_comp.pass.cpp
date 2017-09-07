@@ -22,10 +22,13 @@
 
 #include <algorithm>
 #include <functional>
+#include <random>
 #include <cassert>
 
 #include "test_iterators.h"
 #include "counting_predicates.hpp"
+
+std::mt19937 randomness;
 
 template <class InIter1, class InIter2, class OutIter>
 void
@@ -46,7 +49,7 @@ test()
     OutIter r = std::merge(InIter1(ia), InIter1(ia+N),
                            InIter2(ib), InIter2(ib+N), OutIter(ic), pred);
     assert(base(r) == ic+2*N);
-    assert(ic[0] == 2*N-1);
+    assert(ic[0] == static_cast<int>(2*N-1));
     assert(ic[2*N-1] == 0);
     assert(std::is_sorted(ic, ic+2*N, std::greater<int>()));
     assert(pred.count() <= (N + N - 1));
@@ -61,7 +64,7 @@ test()
     int* ic = new int[2*N];
     for (unsigned i = 0; i < 2*N; ++i)
         ic[i] = i;
-    std::random_shuffle(ic, ic+2*N);
+    std::shuffle(ic, ic+2*N, randomness);
     std::copy(ic, ic+N, ia);
     std::copy(ic+N, ic+2*N, ib);
     std::sort(ia, ia+N, std::greater<int>());
@@ -70,7 +73,7 @@ test()
     OutIter r = std::merge(InIter1(ia), InIter1(ia+N),
                            InIter2(ib), InIter2(ib+N), OutIter(ic), pred);
     assert(base(r) == ic+2*N);
-    assert(ic[0] == 2*N-1);
+    assert(ic[0] == static_cast<int>(2*N-1));
     assert(ic[2*N-1] == 0);
     assert(std::is_sorted(ic, ic+2*N, std::greater<int>()));
     assert(pred.count() <= (N + N - 1));

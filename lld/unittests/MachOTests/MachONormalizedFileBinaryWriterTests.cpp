@@ -35,7 +35,7 @@ static void fromBinary(StringRef path, std::unique_ptr<MemoryBuffer> &mb,
   EXPECT_FALSE(ec);
   mb = std::move(mbOrErr.get());
 
-  ErrorOr<std::unique_ptr<NormalizedFile>> r =
+  llvm::Expected<std::unique_ptr<NormalizedFile>> r =
       lld::mach_o::normalized::readBinary(
           mb, lld::MachOLinkingContext::archFromName(archStr));
   EXPECT_FALSE(!r);
@@ -148,8 +148,8 @@ TEST(BinaryWriterTest, obj_relocs_x86_64) {
     std::error_code ec =
         llvm::sys::fs::createTemporaryFile(Twine("xx"), "o", tmpFl);
     EXPECT_FALSE(ec);
-    ec = writeBinary(f, tmpFl);
-    EXPECT_FALSE(ec);
+    llvm::Error ec2 = writeBinary(f, tmpFl);
+    EXPECT_FALSE(ec2);
   }
 
   std::unique_ptr<MemoryBuffer> bufferOwner;
@@ -219,6 +219,7 @@ TEST(BinaryWriterTest, obj_relocs_x86_64) {
   EXPECT_EQ(signed4.isExtern, true);
   EXPECT_EQ(signed4.symbol, 1U);
 
+  bufferOwner.reset(nullptr);
   std::error_code ec = llvm::sys::fs::remove(Twine(tmpFl));
   EXPECT_FALSE(ec);
 }
@@ -260,8 +261,8 @@ TEST(BinaryWriterTest, obj_relocs_x86) {
     std::error_code ec =
         llvm::sys::fs::createTemporaryFile(Twine("xx"), "o", tmpFl);
     EXPECT_FALSE(ec);
-    ec = writeBinary(f, tmpFl);
-    EXPECT_FALSE(ec);
+    llvm::Error ec2 = writeBinary(f, tmpFl);
+    EXPECT_FALSE(ec2);
   }
   std::unique_ptr<MemoryBuffer> bufferOwner;
   std::unique_ptr<NormalizedFile> f2;
@@ -329,6 +330,7 @@ TEST(BinaryWriterTest, obj_relocs_x86) {
   EXPECT_EQ(tlv.symbol, 1U);
 
   //llvm::errs() << "temp = " << tmpFl << "\n";
+  bufferOwner.reset(nullptr);
   std::error_code ec = llvm::sys::fs::remove(Twine(tmpFl));
   EXPECT_FALSE(ec);
 }
@@ -378,8 +380,8 @@ TEST(BinaryWriterTest, obj_relocs_armv7) {
     std::error_code ec =
         llvm::sys::fs::createTemporaryFile(Twine("xx"), "o", tmpFl);
     EXPECT_FALSE(ec);
-    ec = writeBinary(f, tmpFl);
-    EXPECT_FALSE(ec);
+    llvm::Error ec2 = writeBinary(f, tmpFl);
+    EXPECT_FALSE(ec2);
   }
   std::unique_ptr<MemoryBuffer> bufferOwner;
   std::unique_ptr<NormalizedFile> f2;
@@ -458,6 +460,7 @@ TEST(BinaryWriterTest, obj_relocs_armv7) {
   EXPECT_EQ(absPointer.symbol, 2U);
 
   //llvm::errs() << "temp = " << tmpFl << "\n";
+  bufferOwner.reset(nullptr);
   std::error_code ec = llvm::sys::fs::remove(Twine(tmpFl));
   EXPECT_FALSE(ec);
 }
@@ -534,8 +537,8 @@ TEST(BinaryWriterTest, obj_relocs_ppc) {
     std::error_code ec =
         llvm::sys::fs::createTemporaryFile(Twine("xx"), "o", tmpFl);
     EXPECT_FALSE(ec);
-    ec = writeBinary(f, tmpFl);
-    EXPECT_FALSE(ec);
+    llvm::Error ec2 = writeBinary(f, tmpFl);
+    EXPECT_FALSE(ec2);
   }
   std::unique_ptr<MemoryBuffer> bufferOwner;
   std::unique_ptr<NormalizedFile> f2;
@@ -687,6 +690,7 @@ TEST(BinaryWriterTest, obj_relocs_ppc) {
   EXPECT_EQ(absloa2.length, 2);
   EXPECT_EQ(absloa2.symbol, 0U);
 
+  bufferOwner.reset(nullptr);
   std::error_code ec = llvm::sys::fs::remove(Twine(tmpFl));
   EXPECT_FALSE(ec);
 }

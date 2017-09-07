@@ -12,7 +12,6 @@
 
 #include "clang/Basic/SourceLocation.h"
 #include "llvm/ADT/IntrusiveRefCntPtr.h"
-#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSet.h"
 #include <cassert>
@@ -41,7 +40,7 @@ enum ObjCXXARCStandardLibraryKind {
   
 /// PreprocessorOptions - This class is used for passing the various options
 /// used in preprocessor initialization to InitializePreprocessor().
-class PreprocessorOptions : public RefCountedBase<PreprocessorOptions> {
+class PreprocessorOptions {
 public:
   std::vector<std::pair<std::string, bool/*isUndef*/> > Macros;
   std::vector<std::string> Includes;
@@ -81,7 +80,14 @@ public:
   /// The boolean indicates whether the preamble ends at the start of a new
   /// line.
   std::pair<unsigned, bool> PrecompiledPreambleBytes;
-  
+
+  /// \brief True indicates that a preamble is being generated.
+  ///
+  /// When the lexer is done, one of the things that need to be preserved is the
+  /// conditional #if stack, so the ASTWriter/ASTReader can save/restore it when
+  /// processing the rest of the file.
+  bool GeneratePreamble;
+
   /// The implicit PTH input included at the start of the translation unit, or
   /// empty.
   std::string ImplicitPTHInclude;
@@ -118,7 +124,7 @@ public:
   ObjCXXARCStandardLibraryKind ObjCXXARCStandardLibrary;
     
   /// \brief Records the set of modules
-  class FailedModulesSet : public RefCountedBase<FailedModulesSet> {
+  class FailedModulesSet {
     llvm::StringSet<> Failed;
 
   public:
@@ -137,7 +143,7 @@ public:
   /// to (re)build modules, so that once a module fails to build anywhere,
   /// other instances will see that the module has failed and won't try to
   /// build it again.
-  IntrusiveRefCntPtr<FailedModulesSet> FailedModules;
+  std::shared_ptr<FailedModulesSet> FailedModules;
 
 public:
   PreprocessorOptions() : UsePredefines(true), DetailedRecord(false),
@@ -145,6 +151,7 @@ public:
                           AllowPCHWithCompilerErrors(false),
                           DumpDeserializedPCHDecls(false),
                           PrecompiledPreambleBytes(0, true),
+                          GeneratePreamble(false),
                           RemappedFilesKeepOriginalName(true),
                           RetainRemappedFileBuffers(false),
                           ObjCXXARCStandardLibrary(ARCXX_nolib) { }

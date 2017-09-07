@@ -105,6 +105,16 @@ if target:
         else:
             print('Unexpected process state: %s, killing process...' % debugger.StateAsCString (state))
             process.Kill()
+
+Sometimes you need to create an empty target that will get filled in later.  The most common use for this
+is to attach to a process by name or pid where you don't know the executable up front.  The most convenient way
+to do this is:
+
+target = debugger.CreateTarget('')
+error = lldb.SBError()
+process = target.AttachToProcessWithName(debugger.GetListener(), 'PROCESS_NAME', False, error)
+
+or the equivalent arguments for AttachToProcessWithID.
 ") SBDebugger;
 class SBDebugger
 {
@@ -342,6 +352,9 @@ public:
     
     lldb::SBTypeCategory
     GetCategory (const char* category_name);
+    
+    SBTypeCategory
+    GetCategory (lldb::LanguageType lang_type);
     
     lldb::SBTypeCategory
     CreateCategory (const char* category_name);

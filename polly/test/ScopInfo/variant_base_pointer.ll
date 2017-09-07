@@ -1,8 +1,11 @@
-; RUN: opt %loadPolly -polly-ignore-aliasing -polly-scops -analyze < %s | FileCheck %s
-; RUN: opt %loadPolly -polly-ignore-aliasing -polly-codegen -analyze < %s
+; RUN: opt %loadPolly -polly-ignore-aliasing -polly-invariant-load-hoisting=true -polly-scops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -polly-ignore-aliasing -polly-invariant-load-hoisting=true -polly-codegen -analyze < %s
 ;
-; CHECK:       Invariant Accesses: {
-; CHECK-NEXT:  }
+; %tmp is added to the list of required hoists by -polly-scops and just
+; assumed to be hoisted. Only -polly-scops recognizes it to be unhoistable
+; because ir depends on %call which cannot be executed speculatively.
+;
+; CHECK-NOT:       Invariant Accesses:
 ;
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 
@@ -16,6 +19,7 @@ if.end:                                           ; preds = %entry
   %tmp = load i16*, i16** %call, align 8
   %arrayidx = getelementptr inbounds i16, i16* %tmp, i64 0
   %tmp1 = load i16, i16* %arrayidx, align 2
+  store i16 3, i16 *%arrayidx, align 2
   br i1 false, label %if.then.2, label %if.end.3
 
 if.then.2:                                        ; preds = %if.end

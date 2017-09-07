@@ -104,16 +104,15 @@ public:
 };
 
 }
+
+// Present a minimal LLVM-like casting interface.
+template <class U> inline U cast(CodeGen::Address addr) {
+  return U::castImpl(addr);
+}
+template <class U> inline bool isa(CodeGen::Address addr) {
+  return U::isaImpl(addr);
 }
 
-namespace llvm {
-  // Present a minimal LLVM-like casting interface.
-  template <class U> inline U cast(clang::CodeGen::Address addr) {
-    return U::castImpl(addr);
-  }
-  template <class U> inline bool isa(clang::CodeGen::Address addr) {
-    return U::isaImpl(addr);
-  }
 }
 
 #endif

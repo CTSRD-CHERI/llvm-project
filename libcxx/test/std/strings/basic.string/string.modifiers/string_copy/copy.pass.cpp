@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cassert>
 
+#include "test_macros.h"
 #include "min_allocator.h"
 
 template <class S>
@@ -23,20 +24,30 @@ void
 test(S str, typename S::value_type* s, typename S::size_type n,
      typename S::size_type pos)
 {
-    try
+    const S& cs = str;
+    if (pos <= cs.size())
     {
-        const S& cs = str;
         typename S::size_type r = cs.copy(s, n, pos);
-        assert(pos <= cs.size());
         typename S::size_type rlen = std::min(n, cs.size() - pos);
         assert(r == rlen);
         for (r = 0; r < rlen; ++r)
             assert(S::traits_type::eq(cs[pos+r], s[r]));
     }
-    catch (std::out_of_range&)
+#ifndef TEST_HAS_NO_EXCEPTIONS
+    else
     {
-        assert(pos > str.size());
+        try
+        {
+            typename S::size_type r = cs.copy(s, n, pos);
+            ((void)r); // Prevent unused warning
+            assert(false);
+        }
+        catch (std::out_of_range&)
+        {
+            assert(pos > str.size());
+        }
     }
+#endif
 }
 
 int main()
@@ -103,7 +114,7 @@ int main()
     test(S("abcdefghijklmnopqrst"), s, 20, 1);
     test(S("abcdefghijklmnopqrst"), s, 21, 0);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     typedef std::basic_string<char, std::char_traits<char>, min_allocator<char>> S;
     char s[50];

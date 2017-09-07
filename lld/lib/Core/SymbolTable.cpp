@@ -28,8 +28,6 @@
 #include <vector>
 
 namespace lld {
-SymbolTable::SymbolTable(LinkingContext &context) : _ctx(context) {}
-
 bool SymbolTable::add(const UndefinedAtom &atom) { return addByName(atom); }
 
 bool SymbolTable::add(const SharedLibraryAtom &atom) { return addByName(atom); }
@@ -52,25 +50,6 @@ bool SymbolTable::add(const DefinedAtom &atom) {
       return addByContent(atom);
     // TODO: support mergeByContent of data atoms by comparing content & fixups.
   }
-  return false;
-}
-
-const Atom *SymbolTable::findGroup(StringRef sym) {
-  NameToAtom::iterator pos = _groupTable.find(sym);
-  if (pos == _groupTable.end())
-    return nullptr;
-  return pos->second;
-}
-
-bool SymbolTable::addGroup(const DefinedAtom &da) {
-  StringRef name = da.name();
-  assert(!name.empty());
-  const Atom *existing = findGroup(name);
-  if (existing == nullptr) {
-    _groupTable[name] = &da;
-    return true;
-  }
-  _replacedAtoms[&da] = existing;
   return false;
 }
 
@@ -185,19 +164,16 @@ bool SymbolTable::addByName(const Atom &newAtom) {
       // fallthrough
     }
     case MCR_Error:
-      if (!_ctx.getAllowDuplicates()) {
-        llvm::errs() << "Duplicate symbols: "
-                     << existing->name()
-                     << ":"
-                     << existing->file().path()
-                     << " and "
-                     << newAtom.name()
-                     << ":"
-                     << newAtom.file().path()
-                     << "\n";
-        llvm::report_fatal_error("duplicate symbol error");
-      }
-      useNew = false;
+      llvm::errs() << "Duplicate symbols: "
+                   << existing->name()
+                   << ":"
+                   << existing->file().path()
+                   << " and "
+                   << newAtom.name()
+                   << ":"
+                   << newAtom.file().path()
+                   << "\n";
+      llvm::report_fatal_error("duplicate symbol error");
       break;
     }
     break;
@@ -207,56 +183,13 @@ bool SymbolTable::addByName(const Atom &newAtom) {
     const UndefinedAtom* newUndef = cast<UndefinedAtom>(&newAtom);
 
     bool sameCanBeNull = (existingUndef->canBeNull() == newUndef->canBeNull());
-    if (!sameCanBeNull && _ctx.warnIfCoalesableAtomsHaveDifferentCanBeNull()) {
-      llvm::errs() << "lld warning: undefined symbol "
-                   << existingUndef->name()
-                   << " has different weakness in "
-                   << existingUndef->file().path()
-                   << " and in " << newUndef->file().path() << "\n";
-    }
-
-    const UndefinedAtom *existingFallback = existingUndef->fallback();
-    const UndefinedAtom *newFallback = newUndef->fallback();
-    bool hasDifferentFallback =
-        (existingFallback && newFallback &&
-         existingFallback->name() != newFallback->name());
-    if (hasDifferentFallback) {
-      llvm::errs() << "lld warning: undefined symbol "
-                   << existingUndef->name() << " has different fallback: "
-                   << existingFallback->name() << " in "
-                   << existingUndef->file().path() << " and "
-                   << newFallback->name() << " in "
-                   << newUndef->file().path() << "\n";
-    }
-
-    bool hasNewFallback = newUndef->fallback();
     if (sameCanBeNull)
-      useNew = hasNewFallback;
+      useNew = false;
     else
       useNew = (newUndef->canBeNull() < existingUndef->canBeNull());
     break;
   }
   case NCR_DupShLib: {
-    const SharedLibraryAtom *curShLib = cast<SharedLibraryAtom>(existing);
-    const SharedLibraryAtom *newShLib = cast<SharedLibraryAtom>(&newAtom);
-    bool sameNullness =
-        (curShLib->canBeNullAtRuntime() == newShLib->canBeNullAtRuntime());
-    bool sameName = curShLib->loadName().equals(newShLib->loadName());
-    if (sameName && !sameNullness &&
-        _ctx.warnIfCoalesableAtomsHaveDifferentCanBeNull()) {
-      // FIXME: need diagonstics interface for writing warning messages
-      llvm::errs() << "lld warning: shared library symbol "
-                   << curShLib->name() << " has different weakness in "
-                   << curShLib->file().path() << " and in "
-                   << newShLib->file().path();
-    }
-    if (!sameName && _ctx.warnIfCoalesableAtomsHaveDifferentLoadName()) {
-      // FIXME: need diagonstics interface for writing warning messages
-      llvm::errs() << "lld warning: shared library symbol "
-                   << curShLib->name() << " has different load path in "
-                   << curShLib->file().path() << " and in "
-                   << newShLib->file().path();
-    }
     useNew = false;
     break;
   }
@@ -265,9 +198,6 @@ bool SymbolTable::addByName(const Atom &newAtom) {
     llvm::report_fatal_error("duplicate symbol error");
     break;
   }
-
-  // Give context a chance to change which is kept.
-  _ctx.notifySymbolTableCoalesce(existing, &newAtom, useNew);
 
   if (useNew) {
     // Update name table to use new atom.
@@ -293,13 +223,9 @@ bool SymbolTable::AtomMappingInfo::isEqual(const DefinedAtom * const l,
                                            const DefinedAtom * const r) {
   if (l == r)
     return true;
-  if (l == getEmptyKey())
+  if (l == getEmptyKey() || r == getEmptyKey())
     return false;
-  if (r == getEmptyKey())
-    return false;
-  if (l == getTombstoneKey())
-    return false;
-  if (r == getTombstoneKey())
+  if (l == getTombstoneKey() || r == getTombstoneKey())
     return false;
   if (l->contentType() != r->contentType())
     return false;
@@ -335,17 +261,6 @@ const Atom *SymbolTable::findByName(StringRef sym) {
   return pos->second;
 }
 
-bool SymbolTable::isDefined(StringRef sym) {
-  if (const Atom *atom = findByName(sym))
-    return !isa<UndefinedAtom>(atom);
-  return false;
-}
-
-void SymbolTable::addReplacement(const Atom *replaced,
-                                 const Atom *replacement) {
-  _replacedAtoms[replaced] = replacement;
-}
-
 const Atom *SymbolTable::replacement(const Atom *atom) {
   // Find the replacement for a given atom. Atoms in _replacedAtoms
   // may be chained, so find the last one.
@@ -369,19 +284,6 @@ std::vector<const UndefinedAtom *> SymbolTable::undefines() {
     if (const auto *undef = dyn_cast<const UndefinedAtom>(atom))
       if (_replacedAtoms.count(undef) == 0)
         ret.push_back(undef);
-  }
-  return ret;
-}
-
-std::vector<StringRef> SymbolTable::tentativeDefinitions() {
-  std::vector<StringRef> ret;
-  for (auto entry : _nameTable) {
-    const Atom *atom = entry.second;
-    StringRef name   = entry.first;
-    assert(atom != nullptr);
-    if (const DefinedAtom *defAtom = dyn_cast<DefinedAtom>(atom))
-      if (defAtom->merge() == DefinedAtom::mergeAsTentative)
-        ret.push_back(name);
   }
   return ret;
 }

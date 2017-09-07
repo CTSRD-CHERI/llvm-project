@@ -7,64 +7,82 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/DebugInfo/PDB/DIA/DIAEnumSymbols.h"
 #include "llvm/DebugInfo/PDB/DIA/DIARawSymbol.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/DebugInfo/CodeView/Formatters.h"
+#include "llvm/DebugInfo/PDB/DIA/DIAEnumSymbols.h"
 #include "llvm/DebugInfo/PDB/DIA/DIASession.h"
 #include "llvm/DebugInfo/PDB/PDBExtras.h"
+#include "llvm/DebugInfo/PDB/PDBSymbolTypeBuiltin.h"
+#include "llvm/DebugInfo/PDB/PDBSymbolTypePointer.h"
+#include "llvm/DebugInfo/PDB/PDBSymbolTypeVTable.h"
+#include "llvm/DebugInfo/PDB/PDBSymbolTypeVTableShape.h"
 #include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
+using namespace llvm::pdb;
 
 namespace {
 Variant VariantFromVARIANT(const VARIANT &V) {
   Variant Result;
   switch (V.vt) {
   case VT_I1:
-    Result.Int8 = V.cVal;
+    Result.Value.Int8 = V.cVal;
     Result.Type = PDB_VariantType::Int8;
     break;
   case VT_I2:
-    Result.Int16 = V.iVal;
+    Result.Value.Int16 = V.iVal;
     Result.Type = PDB_VariantType::Int16;
     break;
   case VT_I4:
-    Result.Int32 = V.intVal;
+    Result.Value.Int32 = V.intVal;
     Result.Type = PDB_VariantType::Int32;
     break;
   case VT_I8:
-    Result.Int64 = V.llVal;
+    Result.Value.Int64 = V.llVal;
     Result.Type = PDB_VariantType::Int64;
     break;
   case VT_UI1:
-    Result.UInt8 = V.bVal;
+    Result.Value.UInt8 = V.bVal;
     Result.Type = PDB_VariantType::UInt8;
     break;
   case VT_UI2:
-    Result.UInt16 = V.uiVal;
+    Result.Value.UInt16 = V.uiVal;
     Result.Type = PDB_VariantType::UInt16;
     break;
   case VT_UI4:
-    Result.UInt32 = V.uintVal;
+    Result.Value.UInt32 = V.uintVal;
     Result.Type = PDB_VariantType::UInt32;
     break;
   case VT_UI8:
-    Result.UInt64 = V.ullVal;
+    Result.Value.UInt64 = V.ullVal;
     Result.Type = PDB_VariantType::UInt64;
     break;
   case VT_BOOL:
-    Result.Bool = (V.boolVal == VARIANT_TRUE) ? true : false;
+    Result.Value.Bool = (V.boolVal == VARIANT_TRUE) ? true : false;
     Result.Type = PDB_VariantType::Bool;
     break;
   case VT_R4:
-    Result.Single = V.fltVal;
+    Result.Value.Single = V.fltVal;
     Result.Type = PDB_VariantType::Single;
     break;
   case VT_R8:
-    Result.Double = V.dblVal;
+    Result.Value.Double = V.dblVal;
     Result.Type = PDB_VariantType::Double;
     break;
+  case VT_BSTR: {
+    const char *SrcBytes = reinterpret_cast<const char *>(V.bstrVal);
+    llvm::ArrayRef<char> SrcByteArray(SrcBytes, SysStringByteLen(V.bstrVal));
+    std::string Result8;
+    if (!llvm::convertUTF16ToUTF8String(SrcByteArray, Result8))
+      Result.Value.String = nullptr;
+    Result.Value.String = new char[Result8.length() + 1];
+    ::strcpy(Result.Value.String, Result8.c_str());
+    Result.Type = PDB_VariantType::String;
+    break;
+  }
   default:
     Result.Type = PDB_VariantType::Unknown;
     break;
@@ -165,9 +183,10 @@ void DumpDIAValue(llvm::raw_ostream &OS, int Indent, StringRef Name,
 }
 
 namespace llvm {
-raw_ostream &operator<<(raw_ostream &OS, const GUID &Guid) {
-  const PDB_UniqueId *Id = reinterpret_cast<const PDB_UniqueId *>(&Guid);
-  OS << *Id;
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, const GUID &G) {
+  StringRef GuidBytes(reinterpret_cast<const char *>(&G), sizeof(G));
+  codeview::detail::GuidAdapter A(GuidBytes);
+  A.format(OS, "");
   return OS;
 }
 }
@@ -521,8 +540,8 @@ uint32_t DIARawSymbol::getLiveRangeStartRelativeVirtualAddress() const {
       Symbol, &IDiaSymbol::get_liveRangeStartRelativeVirtualAddress);
 }
 
-PDB_RegisterId DIARawSymbol::getLocalBasePointerRegisterId() const {
-  return PrivateGetDIAValue<DWORD, PDB_RegisterId>(
+codeview::RegisterId DIARawSymbol::getLocalBasePointerRegisterId() const {
+  return PrivateGetDIAValue<DWORD, codeview::RegisterId>(
       Symbol, &IDiaSymbol::get_localBasePointerRegisterId);
 }
 
@@ -583,9 +602,9 @@ uint32_t DIARawSymbol::getRank() const {
   return PrivateGetDIAValue(Symbol, &IDiaSymbol::get_rank);
 }
 
-PDB_RegisterId DIARawSymbol::getRegisterId() const {
-  return PrivateGetDIAValue<DWORD, PDB_RegisterId>(Symbol,
-                                                   &IDiaSymbol::get_registerId);
+codeview::RegisterId DIARawSymbol::getRegisterId() const {
+  return PrivateGetDIAValue<DWORD, codeview::RegisterId>(
+      Symbol, &IDiaSymbol::get_registerId);
 }
 
 uint32_t DIARawSymbol::getRegisterType() const {
@@ -702,6 +721,18 @@ uint32_t DIARawSymbol::getVirtualTableShapeId() const {
   return PrivateGetDIAValue(Symbol, &IDiaSymbol::get_virtualTableShapeId);
 }
 
+std::unique_ptr<PDBSymbolTypeBuiltin>
+DIARawSymbol::getVirtualBaseTableType() const {
+  CComPtr<IDiaSymbol> TableType;
+  if (FAILED(Symbol->get_virtualBaseTableType(&TableType)) || !TableType)
+    return nullptr;
+
+  auto RawVT = llvm::make_unique<DIARawSymbol>(Session, TableType);
+  auto Pointer =
+      llvm::make_unique<PDBSymbolTypePointer>(Session, std::move(RawVT));
+  return unique_dyn_cast<PDBSymbolTypeBuiltin>(Pointer->getPointeeType());
+}
+
 PDB_DataKind DIARawSymbol::getDataKind() const {
   return PrivateGetDIAValue<DWORD, PDB_DataKind>(Symbol,
                                                  &IDiaSymbol::get_dataKind);
@@ -738,8 +769,8 @@ PDB_Machine DIARawSymbol::getMachineType() const {
                                                 &IDiaSymbol::get_machineType);
 }
 
-PDB_ThunkOrdinal DIARawSymbol::getThunkOrdinal() const {
-  return PrivateGetDIAValue<DWORD, PDB_ThunkOrdinal>(
+codeview::ThunkOrdinal DIARawSymbol::getThunkOrdinal() const {
+  return PrivateGetDIAValue<DWORD, codeview::ThunkOrdinal>(
       Symbol, &IDiaSymbol::get_thunkOrdinal);
 }
 

@@ -7,17 +7,21 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03
+
 // <deque>
 
-// template <class... Args> void emplace_back(Args&&... args);
+// template <class... Args> reference emplace_back(Args&&... args);
+// return type is 'reference' in C++17; 'void' before
 
 #include <deque>
+#include <cstddef>
 #include <cassert>
 
+#include "test_macros.h"
 #include "../../../Emplaceable.h"
 #include "min_allocator.h"
-
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
+#include "test_allocator.h"
 
 template <class C>
 C
@@ -47,11 +51,20 @@ test(C& c1)
 {
     typedef typename C::iterator I;
     std::size_t c1_osize = c1.size();
-    c1.emplace_back(Emplaceable(1, 2.5));
+#if TEST_STD_VER > 14
+    typedef typename C::reference Ref;
+    Ref ref = c1.emplace_back(Emplaceable(1, 2.5));
+#else
+              c1.emplace_back(Emplaceable(1, 2.5));
+#endif
     assert(c1.size() == c1_osize + 1);
-    assert(distance(c1.begin(), c1.end()) == c1.size());
+    assert(distance(c1.begin(), c1.end())
+               == static_cast<std::ptrdiff_t>(c1.size()));
     I i = c1.end();
     assert(*--i == Emplaceable(1, 2.5));
+#if TEST_STD_VER > 14
+    assert(&(*i) == &ref);
+#endif
 }
 
 template <class C>
@@ -62,11 +75,8 @@ testN(int start, int N)
     test(c1);
 }
 
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
-
 int main()
 {
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
     {
     int rng[] = {0, 1, 2, 3, 1023, 1024, 1025, 2047, 2048, 2049};
     const int N = sizeof(rng)/sizeof(rng[0]);
@@ -74,7 +84,6 @@ int main()
         for (int j = 0; j < N; ++j)
             testN<std::deque<Emplaceable> >(rng[i], rng[j]);
     }
-#if __cplusplus >= 201103L
     {
     int rng[] = {0, 1, 2, 3, 1023, 1024, 1025, 2047, 2048, 2049};
     const int N = sizeof(rng)/sizeof(rng[0]);
@@ -82,6 +91,15 @@ int main()
         for (int j = 0; j < N; ++j)
             testN<std::deque<Emplaceable, min_allocator<Emplaceable>> >(rng[i], rng[j]);
     }
-#endif
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
+    {
+        std::deque<Tag_X, TaggingAllocator<Tag_X>> c;
+        c.emplace_back();
+        assert(c.size() == 1);
+        c.emplace_back(1, 2, 3);
+        assert(c.size() == 2);
+        c.emplace_front();
+        assert(c.size() == 3);
+        c.emplace_front(1, 2, 3);
+        assert(c.size() == 4);
+    }
 }

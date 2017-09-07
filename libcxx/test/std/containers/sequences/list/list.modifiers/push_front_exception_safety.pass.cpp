@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: libcpp-no-exceptions
 // <list>
 
 // void push_front(const value_type& x);

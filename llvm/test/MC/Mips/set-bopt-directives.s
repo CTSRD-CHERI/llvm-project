@@ -1,5 +1,4 @@
-# RUN: llvm-mc %s -triple=mipsel-unknown-linux -mcpu=mips1 2>%t1
-# RUN: FileCheck %s < %t1
+# RUN: llvm-mc %s -triple=mipsel-unknown-linux -mcpu=mips1 2>&1 | FileCheck %s
 .set bopt
-# CHECK: warning: branch optimisation is not supported
+# CHECK: warning: 'bopt' feature is unsupported
 .set nobopt # should be ignored

@@ -118,6 +118,15 @@ public:
     ") GetStopReasonExtendedInfoAsJSON;
     bool
     GetStopReasonExtendedInfoAsJSON (lldb::SBStream &stream);
+    
+    %feature("autodoc", "
+    Returns a collection of historical stack traces that are significant to the
+    current stop reason. Used by ThreadSanitizer, where we provide various stack
+    traces that were involved in a data race or other type of detected issue.
+    ") GetStopReasonExtendedBacktraces;
+    SBThreadCollection
+    GetStopReasonExtendedBacktraces (InstrumentationRuntimeType type);
+
 
     %feature("autodoc", "
     Pass only an (int)length and expect to get a Python string describing the
@@ -173,12 +182,14 @@ public:
     lldb::queue_id_t
     GetQueueID() const;
 
-    %feature("autodoc", "
-    Takes a path string and a SBStream reference as parameters, returns a bool.  
-    Collects the thread's 'info' dictionary from the remote system, uses the path
-    argument to descend into the dictionary to an item of interest, and prints
-    it into the SBStream in a natural format.  Return bool is to indicate if
-    anything was printed into the stream (true) or not (false).
+    %feature("docstring", "
+    //--------------------------------------------------------------------------
+    /// Takes a path string and a SBStream reference as parameters, returns a bool.  
+    /// Collects the thread's 'info' dictionary from the remote system, uses the path
+    /// argument to descend into the dictionary to an item of interest, and prints
+    /// it into the SBStream in a natural format.  Return bool is to indicate if
+    /// anything was printed into the stream (true) or not (false).
+    //--------------------------------------------------------------------------
     ") GetInfoItemByPathAsString;
 
     bool
@@ -206,6 +217,17 @@ public:
     void
     StepInto (const char *target_name, lldb::RunMode stop_other_threads = lldb::eOnlyDuringStepping);
 
+    %feature("autodoc", "
+    Step  the current thread from the current source line to the line given by end_line, stopping if
+    the thread steps into the function given by target_name.  If target_name is None, then stepping will stop
+    in any of the places we would normally stop.
+    ") StepInto;
+    void
+    StepInto (const char *target_name,
+              uint32_t end_line,
+              SBError &error,
+              lldb::RunMode stop_other_threads = lldb::eOnlyDuringStepping);
+
     void
     StepOut ();
 
@@ -224,6 +246,9 @@ public:
     StepUsingScriptedThreadPlan (const char *script_class_name);
 
     SBError
+    StepUsingScriptedThreadPlan (const char *script_class_name, bool resume_immediately);
+
+    SBError
     JumpToLine (lldb::SBFileSpec &file_spec, uint32_t line);
 
     void
@@ -238,6 +263,14 @@ public:
     
     SBError
     ReturnFromFrame (SBFrame &frame, SBValue &return_value);
+
+    %feature("autodoc", "
+    Unwind the stack frames from the innermost expression evaluation.
+    This API is equivalent to 'thread return -x'.
+    ") UnwindInnermostExpression;
+    
+    SBError
+    UnwindInnermostExpression();
 
     %feature("docstring", "
     //--------------------------------------------------------------------------
@@ -292,6 +325,15 @@ public:
     bool
     GetDescription (lldb::SBStream &description) const;
     
+    %feature("docstring", "
+    //--------------------------------------------------------------------------
+    /// Get the description strings for this thread that match what the 
+    /// lldb driver will present, using the thread-format (stop_format==false)
+    /// or thread-stop-format (stop_format = true). 
+    //--------------------------------------------------------------------------
+    ") GetDescription;
+    bool GetDescription(lldb::SBStream &description, bool stop_format) const;
+
     bool
     GetStatus (lldb::SBStream &status) const;
     

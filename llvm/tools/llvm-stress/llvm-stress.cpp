@@ -17,10 +17,10 @@
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/LegacyPassNameParser.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
-#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/ManagedStatic.h"
@@ -28,8 +28,7 @@
 #include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/ToolOutputFile.h"
 #include <algorithm>
-#include <set>
-#include <sstream>
+#include <random>
 #include <vector>
 
 namespace llvm {
@@ -43,6 +42,8 @@ static cl::opt<std::string>
 OutputFilename("o", cl::desc("Override output filename"),
                cl::value_desc("filename"));
 
+static LLVMContext Context;
+
 namespace cl {
 template <> class parser<Type*> final : public basic_parser<Type*> {
 public:
@@ -50,7 +51,6 @@ public:
 
   // Parse options as IR types. Return true on error.
   bool parse(Option &O, StringRef, StringRef Arg, Type *&Value) {
-    auto &Context = getGlobalContext();
     if      (Arg == "half")      Value = Type::getHalfTy(Context);
     else if (Arg == "fp128")     Value = Type::getFP128Ty(Context);
     else if (Arg == "x86_fp80")  Value = Type::getX86_FP80Ty(Context);
@@ -68,7 +68,7 @@ public:
     return false;
   }
 
-  const char *getValueName() const override { return "IR scalar type"; }
+  StringRef getValueName() const override { return "IR scalar type"; }
 };
 }
 
@@ -114,6 +114,12 @@ public:
     return  Rand64() % y;
   }
 
+  /// Make this like a C++11 random device
+  typedef uint32_t result_type;
+  uint32_t operator()() { return Rand32(); }
+  static constexpr result_type min() { return 0; }
+  static constexpr result_type max() { return 0x7ffff; }
+  
 private:
   unsigned Seed;
 };
@@ -418,7 +424,9 @@ struct AllocaModifier: public Modifier {
 
   void Act() override {
     Type *Tp = pickType();
-    PT->push_back(new AllocaInst(Tp, "A", BB->getFirstNonPHI()));
+    const DataLayout &DL = BB->getModule()->getDataLayout();
+    PT->push_back(new AllocaInst(Tp, DL.getAllocaAddrSpace(),
+                                 "A", BB->getFirstNonPHI()));
   }
 };
 
@@ -612,7 +620,8 @@ struct CmpModifier: public Modifier {
     }
 
     Value *V = CmpInst::Create(fp ? Instruction::FCmp : Instruction::ICmp,
-                               op, Val0, Val1, "Cmp", BB->getTerminator());
+                               (CmpInst::Predicate)op, Val0, Val1, "Cmp",
+                               BB->getTerminator());
     return PT->push_back(V);
   }
 };
@@ -662,11 +671,11 @@ static void IntroduceControlFlow(Function *F, Random &R) {
       BoolInst.push_back(&Instr);
   }
 
-  std::random_shuffle(BoolInst.begin(), BoolInst.end(), R);
+  std::shuffle(BoolInst.begin(), BoolInst.end(), R);
 
   for (auto *Instr : BoolInst) {
     BasicBlock *Curr = Instr->getParent();
-    BasicBlock::iterator Loc = Instr;
+    BasicBlock::iterator Loc = Instr->getIterator();
     BasicBlock *Next = Curr->splitBasicBlock(Loc, "CF");
     Instr->moveBefore(Curr->getTerminator());
     if (Curr != &F->getEntryBlock()) {
@@ -686,7 +695,7 @@ int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(argc, argv, "llvm codegen stress-tester\n");
   llvm_shutdown_obj Y;
 
-  auto M = make_unique<Module>("/tmp/autogen.bc", getGlobalContext());
+  auto M = make_unique<Module>("/tmp/autogen.bc", Context);
   Function *F = GenEmptyFunction(M.get());
 
   // Pick an initial seed value

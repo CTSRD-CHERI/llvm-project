@@ -15,6 +15,7 @@
 #ifndef LLVM_CLANG_BASIC_MODULE_H
 #define LLVM_CLANG_BASIC_MODULE_H
 
+#include "clang/Basic/FileManager.h"
 #include "clang/Basic/SourceLocation.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseSet.h"
@@ -35,16 +36,23 @@ namespace llvm {
 
 namespace clang {
   
-class DirectoryEntry;
-class FileEntry;
-class FileManager;
 class LangOptions;
 class TargetInfo;
 class IdentifierInfo;
   
 /// \brief Describes the name of a module.
 typedef SmallVector<std::pair<std::string, SourceLocation>, 2> ModuleId;
-  
+
+/// The signature of a module, which is a hash of the AST content.
+struct ASTFileSignature : std::array<uint32_t, 5> {
+  ASTFileSignature(std::array<uint32_t, 5> S = {{0}})
+      : std::array<uint32_t, 5>(std::move(S)) {}
+
+  explicit operator bool() const {
+    return *this != std::array<uint32_t, 5>({{0}});
+  }
+};
+
 /// \brief Describes a module or submodule.
 class Module {
 public:
@@ -53,6 +61,18 @@ public:
   
   /// \brief The location of the module definition.
   SourceLocation DefinitionLoc;
+
+  enum ModuleKind {
+    /// \brief This is a module that was defined by a module map and built out
+    /// of header files.
+    ModuleMapModule,
+
+    /// \brief This is a C++ Modules TS module interface unit.
+    ModuleInterfaceUnit
+  };
+
+  /// \brief The kind of this module.
+  ModuleKind Kind = ModuleMapModule;
 
   /// \brief The parent of this module. This will be NULL for the top-level
   /// module.
@@ -67,7 +87,7 @@ public:
   llvm::PointerUnion<const DirectoryEntry *, const FileEntry *> Umbrella;
 
   /// \brief The module signature.
-  uint64_t Signature;
+  ASTFileSignature Signature;
 
   /// \brief The name of the umbrella entry, as written in the module map.
   std::string UmbrellaAsWritten;
@@ -152,6 +172,9 @@ public:
   /// \brief Whether this module is missing a feature from \c Requirements.
   unsigned IsMissingRequirement : 1;
 
+  /// \brief Whether we tried and failed to load a module file for this module.
+  unsigned HasIncompatibleModuleFile : 1;
+
   /// \brief Whether this module is available in the current translation unit.
   ///
   /// If the module is missing headers or does not meet all requirements then
@@ -199,6 +222,10 @@ public:
   /// that no identifier not in this list should affect how the module is
   /// built.
   unsigned ConfigMacrosExhaustive : 1;
+
+  /// \brief Whether files in this module can only include non-modular headers
+  /// and headers from used modules.
+  unsigned NoUndeclaredIncludes : 1;
 
   /// \brief Describes the visibility of the various names within a
   /// particular module.

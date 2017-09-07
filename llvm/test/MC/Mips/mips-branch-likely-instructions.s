@@ -2,7 +2,7 @@
 # RUN: FileCheck -check-prefix=CHECK32  %s
 # RUN: llvm-mc %s -triple=mips64el-unknown-linux -show-encoding -mcpu=mips64r2 | \
 # RUN: FileCheck -check-prefix=CHECK64  %s
-# XFAIL:
+# TODO: move back into MC/Mips/mips-jump-instructions.s
 
 #------------------------------------------------------------------------------
 # Branch likely instructions
@@ -14,7 +14,7 @@
 # CHECK32:   nop                    # encoding: [0x00,0x00,0x00,0x00]
 # CHECK32:   beql $9, $6, 1332      # encoding: [0x4d,0x01,0x26,0x51]
 # CHECK32:   nop                    # encoding: [0x00,0x00,0x00,0x00]
-# CHECK32:   bgezl $6, 1332         # encoding: [0x4d,0X01,0xc3,0x04]
+# CHECK32:   bgezl $6, 1332         # encoding: [0x4d,0x01,0xc3,0x04]
 # CHECK32:   nop                    # encoding: [0x00,0x00,0x00,0x00]
 # CHECK32:   bgezall $6, 1332       # encoding: [0x4d,0x01,0xd3,0x04]
 # CHECK32:   nop                    # encoding: [0x00,0x00,0x00,0x00]
@@ -33,7 +33,7 @@
 # CHECK64:   nop                    # encoding: [0x00,0x00,0x00,0x00]
 # CHECK64:   beql $9, $6, 1332      # encoding: [0x4d,0x01,0x26,0x51]
 # CHECK64:   nop                    # encoding: [0x00,0x00,0x00,0x00]
-# CHECK64:   bgezl $6, 1332         # encoding: [0x4d,0X01,0xc3,0x04]
+# CHECK64:   bgezl $6, 1332         # encoding: [0x4d,0x01,0xc3,0x04]
 # CHECK64:   nop                    # encoding: [0x00,0x00,0x00,0x00]
 # CHECK64:   bgezall $6, 1332       # encoding: [0x4d,0x01,0xd3,0x04]
 # CHECK64:   nop                    # encoding: [0x00,0x00,0x00,0x00]

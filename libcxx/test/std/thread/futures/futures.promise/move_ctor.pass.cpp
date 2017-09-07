@@ -19,6 +19,7 @@
 #include <future>
 #include <cassert>
 
+#include "test_macros.h"
 #include "test_allocator.h"
 
 int main()
@@ -31,6 +32,7 @@ int main()
         std::future<int> f = p.get_future();
         assert(test_alloc_base::alloc_count == 1);
         assert(f.valid());
+#ifndef TEST_HAS_NO_EXCEPTIONS
         try
         {
             f = p0.get_future();
@@ -41,6 +43,7 @@ int main()
             assert(e.code() == make_error_code(std::future_errc::no_state));
         }
         assert(test_alloc_base::alloc_count == 1);
+#endif
     }
     assert(test_alloc_base::alloc_count == 0);
     {
@@ -50,6 +53,7 @@ int main()
         std::future<int&> f = p.get_future();
         assert(test_alloc_base::alloc_count == 1);
         assert(f.valid());
+#ifndef TEST_HAS_NO_EXCEPTIONS
         try
         {
             f = p0.get_future();
@@ -60,6 +64,7 @@ int main()
             assert(e.code() == make_error_code(std::future_errc::no_state));
         }
         assert(test_alloc_base::alloc_count == 1);
+#endif
     }
     assert(test_alloc_base::alloc_count == 0);
     {
@@ -69,6 +74,7 @@ int main()
         std::future<void> f = p.get_future();
         assert(test_alloc_base::alloc_count == 1);
         assert(f.valid());
+#ifndef TEST_HAS_NO_EXCEPTIONS
         try
         {
             f = p0.get_future();
@@ -79,6 +85,7 @@ int main()
             assert(e.code() == make_error_code(std::future_errc::no_state));
         }
         assert(test_alloc_base::alloc_count == 1);
+#endif
     }
     assert(test_alloc_base::alloc_count == 0);
 }

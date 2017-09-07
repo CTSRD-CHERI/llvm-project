@@ -18,19 +18,21 @@
 #include <utility>
 #include <cassert>
 
+#include "test_macros.h"
+
 int main()
 {
     {
         typedef std::pair<int, short> P;
-        const P p(3, 4);
+        const P p(3, static_cast<short>(4));
         assert(std::get<0>(p) == 3);
         assert(std::get<1>(p) == 4);
     }
 
-#if __cplusplus > 201103L
+#if TEST_STD_VER > 11
     {
         typedef std::pair<int, short> P;
-        constexpr P p1(3, 4);
+        constexpr P p1(3, static_cast<short>(4));
         static_assert(std::get<0>(p1) == 3, "");
         static_assert(std::get<1>(p1) == 4, "");
     }

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 #
 #===- check_clang_tidy.py - ClangTidy Test Helper ------------*- python -*--===#
 #
@@ -21,7 +21,7 @@ Usage:
     -- [optional clang-tidy arguments]
 
 Example:
-  // RUN: %check_clang_tidy %s llvm-include-order %t -- -isystem $(dirname %s)/Inputs/Headers
+  // RUN: %check_clang_tidy %s llvm-include-order %t -- -- -isystem %S/Inputs
 """
 
 import argparse
@@ -52,12 +52,19 @@ def main():
   extension = '.cpp'
   if (input_file_name.endswith('.c')):
     extension = '.c'
+  if (input_file_name.endswith('.hpp')):
+    extension = '.hpp'
   temp_file_name = temp_file_name + extension
 
   clang_tidy_extra_args = extra_args
   if len(clang_tidy_extra_args) == 0:
     clang_tidy_extra_args = ['--', '--std=c++11'] if extension == '.cpp' \
                        else ['--']
+
+  # Tests should not rely on STL being available, and instead provide mock
+  # implementations of relevant APIs.
+  clang_tidy_extra_args.append('-nostdinc++')
+
   if resource_dir is not None:
     clang_tidy_extra_args.append('-resource-dir=%s' % resource_dir)
 

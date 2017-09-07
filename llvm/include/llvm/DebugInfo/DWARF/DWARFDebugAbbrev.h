@@ -1,4 +1,4 @@
-//===-- DWARFDebugAbbrev.h --------------------------------------*- C++ -*-===//
+//===- DWARFDebugAbbrev.h ---------------------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,11 +7,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_DEBUGINFO_DWARFDEBUGABBREV_H
-#define LLVM_LIB_DEBUGINFO_DWARFDEBUGABBREV_H
+#ifndef LLVM_DEBUGINFO_DWARFDEBUGABBREV_H
+#define LLVM_DEBUGINFO_DWARFDEBUGABBREV_H
 
 #include "llvm/DebugInfo/DWARF/DWARFAbbreviationDeclaration.h"
-#include <list>
+#include "llvm/Support/DataExtractor.h"
+#include <cstdint>
 #include <map>
 #include <vector>
 
@@ -24,6 +25,9 @@ class DWARFAbbreviationDeclarationSet {
   uint32_t FirstAbbrCode;
   std::vector<DWARFAbbreviationDeclaration> Decls;
 
+  typedef std::vector<DWARFAbbreviationDeclaration>::const_iterator
+      const_iterator;
+
 public:
   DWARFAbbreviationDeclarationSet();
 
@@ -33,6 +37,14 @@ public:
 
   const DWARFAbbreviationDeclaration *
   getAbbreviationDeclaration(uint32_t AbbrCode) const;
+
+  const_iterator begin() const {
+    return Decls.begin();
+  }
+
+  const_iterator end() const {
+    return Decls.end();
+  }
 
 private:
   void clear();
@@ -54,10 +66,18 @@ public:
   void dump(raw_ostream &OS) const;
   void extract(DataExtractor Data);
 
+  DWARFAbbreviationDeclarationSetMap::const_iterator begin() const {
+    return AbbrDeclSets.begin();
+  }
+
+  DWARFAbbreviationDeclarationSetMap::const_iterator end() const {
+    return AbbrDeclSets.end();
+  }
+
 private:
   void clear();
 };
 
-}
+} // end namespace llvm
 
-#endif
+#endif // LLVM_DEBUGINFO_DWARFDEBUGABBREV_H

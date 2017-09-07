@@ -15,6 +15,7 @@ add_clang_library(clangTidy
   clangAST
   clangASTMatchers
   clangBasic
+  clangFormat
   clangFrontend
   clangLex
   clangRewrite
@@ -25,12 +26,17 @@ add_clang_library(clangTidy
   clangToolingCore
   )
 
-add_subdirectory(tool)
+add_subdirectory(boost)
 add_subdirectory(cert)
-add_subdirectory(llvm)
 add_subdirectory(cppcoreguidelines)
 add_subdirectory(google)
+add_subdirectory(hicpp)
+add_subdirectory(llvm)
 add_subdirectory(misc)
 add_subdirectory(modernize)
+add_subdirectory(mpi)
+add_subdirectory(performance)
+add_subdirectory(plugin)
 add_subdirectory(readability)
+add_subdirectory(tool)
 add_subdirectory(utils)

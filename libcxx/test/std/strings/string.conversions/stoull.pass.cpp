@@ -7,8 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// XFAIL: with_system_cxx_lib=x86_64-apple-darwin11
-// XFAIL: with_system_cxx_lib=x86_64-apple-darwin12
+// PR14919 was fixed in r172447, out_of_range wasn't thrown before.
+// XFAIL: with_system_cxx_lib=macosx10.7
+// XFAIL: with_system_cxx_lib=macosx10.8
 
 // <string>
 
@@ -17,6 +18,8 @@
 
 #include <string>
 #include <cassert>
+
+#include "test_macros.h"
 
 int main()
 {
@@ -32,6 +35,7 @@ int main()
     idx = 0;
     assert(std::stoull(L"10g", &idx, 16) == 16);
     assert(idx == 2);
+#ifndef TEST_HAS_NO_EXCEPTIONS
     idx = 0;
     try
     {
@@ -107,4 +111,5 @@ int main()
     {
         assert(idx == 0);
     }
+#endif
 }

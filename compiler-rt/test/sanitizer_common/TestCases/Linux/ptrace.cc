@@ -10,7 +10,7 @@
 #include <sys/uio.h>
 #include <unistd.h>
 #include <elf.h>
-#if __mips64
+#if __mips64 || __arm__
  #include <asm/ptrace.h>
  #include <sys/procfs.h>
 #endif
@@ -43,23 +43,34 @@ int main(void) {
       printf("%x\n", fpregs.mxcsr);
 #endif // __x86_64__
 
-#if (__powerpc64__ || __mips64)
+#if (__powerpc64__ || __mips64 || __arm__)
     struct pt_regs regs;
     res = ptrace((enum __ptrace_request)PTRACE_GETREGS, pid, NULL, &regs);
     assert(!res);
 #if (__powerpc64__)
     if (regs.nip)
       printf("%lx\n", regs.nip);
-#else
+#elif (__mips64)
     if (regs.cp0_epc)
     printf("%lx\n", regs.cp0_epc);
+#elif (__arm__)
+    if (regs.ARM_pc)
+    printf("%lx\n", regs.ARM_pc);
 #endif
+#if (__powerpc64 || __mips64)
     elf_fpregset_t fpregs;
     res = ptrace((enum __ptrace_request)PTRACE_GETFPREGS, pid, NULL, &fpregs);
     assert(!res);
     if ((elf_greg_t)fpregs[32]) // fpscr
       printf("%lx\n", (elf_greg_t)fpregs[32]);
-#endif // (__powerpc64__ || __mips64)
+#elif (__arm__)
+    char regbuf[ARM_VFPREGS_SIZE];
+    res = ptrace((enum __ptrace_request)PTRACE_GETVFPREGS, pid, 0, regbuf);
+    assert(!res);
+    unsigned fpscr = *(unsigned*)(regbuf + (32 * 8));
+    printf ("%x\n", fpscr);
+#endif
+#endif // (__powerpc64__ || __mips64 || __arm__)
 
 #if (__aarch64__)
     struct iovec regset_io;
@@ -80,6 +91,26 @@ int main(void) {
     if (fpregs.fpsr)
       printf("%x\n", fpregs.fpsr);
 #endif // (__aarch64__)
+
+#if (__s390__)
+    struct iovec regset_io;
+
+    struct _user_regs_struct regs;
+    regset_io.iov_base = &regs;
+    regset_io.iov_len = sizeof(regs);
+    res = ptrace(PTRACE_GETREGSET, pid, (void*)NT_PRSTATUS, (void*)&regset_io);
+    assert(!res);
+    if (regs.psw.addr)
+      printf("%lx\n", regs.psw.addr);
+
+    struct _user_fpregs_struct fpregs;
+    regset_io.iov_base = &fpregs;
+    regset_io.iov_len = sizeof(fpregs);
+    res = ptrace(PTRACE_GETREGSET, pid, (void*)NT_FPREGSET, (void*)&regset_io);
+    assert(!res);
+    if (fpregs.fpc)
+      printf("%x\n", fpregs.fpc);
+#endif // (__s390__)
 
     siginfo_t siginfo;
     res = ptrace(PTRACE_GETSIGINFO, pid, NULL, &siginfo);

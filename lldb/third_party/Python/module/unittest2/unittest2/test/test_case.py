@@ -1,6 +1,7 @@
 import difflib
 import pprint
 import re
+import six
 
 from copy import deepcopy
 
@@ -19,10 +20,13 @@ class Test(object):
     "Keep these TestCase classes out of the main namespace"
 
     class Foo(unittest2.TestCase):
+
         def runTest(self): pass
+
         def test1(self): pass
 
     class Bar(Foo):
+
         def test2(self): pass
 
     class LoggingTestCase(unittest2.TestCase):
@@ -42,11 +46,11 @@ class Test(object):
             self.events.append('tearDown')
 
 
-
 class TestCleanUp(unittest2.TestCase):
 
     def testCleanUp(self):
         class TestableTest(unittest2.TestCase):
+
             def testNothing(self):
                 pass
 
@@ -64,22 +68,28 @@ class TestCleanUp(unittest2.TestCase):
         test.addCleanup(cleanup1, 1, 2, 3, four='hello', five='goodbye')
         test.addCleanup(cleanup2)
 
-        self.assertEqual(test._cleanups,
-                         [(cleanup1, (1, 2, 3), dict(four='hello', five='goodbye')),
-                          (cleanup2, (), {})])
+        self.assertEqual(
+            test._cleanups, [
+                (cleanup1, (1, 2, 3), dict(
+                    four='hello', five='goodbye')), (cleanup2, (), {})])
 
         result = test.doCleanups()
         self.assertTrue(result)
 
-        self.assertEqual(cleanups, [(2, (), {}), (1, (1, 2, 3), dict(four='hello', five='goodbye'))])
+        self.assertEqual(
+            cleanups, [
+                (2, (), {}), (1, (1, 2, 3), dict(
+                    four='hello', five='goodbye'))])
 
     def testCleanUpWithErrors(self):
         class TestableTest(unittest2.TestCase):
+
             def testNothing(self):
                 pass
 
         class MockResult(object):
             errors = []
+
             def addError(self, test, exc_info):
                 self.errors.append((test, exc_info))
 
@@ -89,6 +99,7 @@ class TestCleanUp(unittest2.TestCase):
 
         exc1 = Exception('foo')
         exc2 = Exception('bar')
+
         def cleanup1():
             raise exc1
 
@@ -100,7 +111,8 @@ class TestCleanUp(unittest2.TestCase):
 
         self.assertFalse(test.doCleanups())
 
-        (test1, (Type1, instance1, _)), (test2, (Type2, instance2, _)) = reversed(MockResult.errors)
+        (test1, (Type1, instance1, _)), (test2,
+                                         (Type2, instance2, _)) = reversed(MockResult.errors)
         self.assertEqual((test1, Type1, instance1), (test, Exception, exc1))
         self.assertEqual((test2, Type2, instance2), (test, Exception, exc2))
 
@@ -109,6 +121,7 @@ class TestCleanUp(unittest2.TestCase):
         ordering = []
 
         class TestableTest(unittest2.TestCase):
+
             def setUp(self):
                 ordering.append('setUp')
                 if blowUp:
@@ -124,6 +137,7 @@ class TestCleanUp(unittest2.TestCase):
 
         def cleanup1():
             ordering.append('cleanup1')
+
         def cleanup2():
             ordering.append('cleanup2')
         test.addCleanup(cleanup1)
@@ -151,6 +165,7 @@ class TestCleanUp(unittest2.TestCase):
         ordering = []
 
         class TestableTest(unittest2.TestCase):
+
             def setUp(self):
                 ordering.append('setUp')
                 self.addCleanup(cleanup1)
@@ -166,16 +181,19 @@ class TestCleanUp(unittest2.TestCase):
         def cleanup1():
             ordering.append('cleanup1')
             test.addCleanup(cleanup2)
+
         def cleanup2():
             ordering.append('cleanup2')
 
         test.debug()
-        self.assertEqual(ordering, ['setUp', 'test', 'tearDown', 'cleanup1', 'cleanup2'])
+        self.assertEqual(
+            ordering, [
+                'setUp', 'test', 'tearDown', 'cleanup1', 'cleanup2'])
 
 
 class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
 
-    ### Set up attributes used by inherited tests
+    # Set up attributes used by inherited tests
     ################################################################
 
     # Used by HashingMixin.test_hash and EqualityMixin.test_eq
@@ -187,8 +205,7 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
                 (Test.Foo('test1'), Test.Bar('test2'))]
 
     ################################################################
-    ### /Set up attributes used by inherited tests
-
+    # /Set up attributes used by inherited tests
 
     # "class TestCase([methodName])"
     # ...
@@ -201,7 +218,9 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
     # thing.
     def test_init__no_test_name(self):
         class Test(unittest2.TestCase):
+
             def runTest(self): raise MyException()
+
             def test(self): pass
 
         self.assertEqual(Test().id()[-13:], '.Test.runTest')
@@ -212,7 +231,9 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
     # method named methodName."
     def test_init__test_name__valid(self):
         class Test(unittest2.TestCase):
+
             def runTest(self): raise MyException()
+
             def test(self): pass
 
         self.assertEqual(Test('test').id()[-10:], '.Test.test')
@@ -223,7 +244,9 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
     # method named methodName."
     def test_init__test_name__invalid(self):
         class Test(unittest2.TestCase):
+
             def runTest(self): raise MyException()
+
             def test(self): pass
 
         try:
@@ -237,6 +260,7 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
     # TestCase instances, this will always be 1"
     def test_countTestCases(self):
         class Foo(unittest2.TestCase):
+
             def test(self): pass
 
         self.assertEqual(Foo('test').countTestCases(), 1)
@@ -247,6 +271,7 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
     # override this as necessary."
     def test_defaultTestResult(self):
         class Foo(unittest2.TestCase):
+
             def runTest(self):
                 pass
 
@@ -265,6 +290,7 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
         result = LoggingResult(events)
 
         class Foo(Test.LoggingTestCase):
+
             def setUp(self):
                 super(Foo, self).setUp()
                 raise RuntimeError('raised by Foo.setUp')
@@ -278,6 +304,7 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
         events = []
 
         class Foo(Test.LoggingTestCase):
+
             def defaultTestResult(self):
                 return LoggingResult(self.events)
 
@@ -302,6 +329,7 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
         result = LoggingResult(events)
 
         class Foo(Test.LoggingTestCase):
+
             def test(self):
                 super(Foo, self).test()
                 raise RuntimeError('raised by Foo.test')
@@ -317,6 +345,7 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
         events = []
 
         class Foo(Test.LoggingTestCase):
+
             def defaultTestResult(self):
                 return LoggingResult(self.events)
 
@@ -341,6 +370,7 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
         result = LoggingResult(events)
 
         class Foo(Test.LoggingTestCase):
+
             def test(self):
                 super(Foo, self).test()
                 self.fail('raised by Foo.test')
@@ -354,8 +384,10 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
     def test_run_call_order__failure_in_test_default_result(self):
 
         class Foo(Test.LoggingTestCase):
+
             def defaultTestResult(self):
                 return LoggingResult(self.events)
+
             def test(self):
                 super(Foo, self).test()
                 self.fail('raised by Foo.test')
@@ -378,6 +410,7 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
         result = LoggingResult(events)
 
         class Foo(Test.LoggingTestCase):
+
             def tearDown(self):
                 super(Foo, self).tearDown()
                 raise RuntimeError('raised by Foo.tearDown')
@@ -391,8 +424,10 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
     def test_run_call_order__error_in_tearDown_default_result(self):
 
         class Foo(Test.LoggingTestCase):
+
             def defaultTestResult(self):
                 return LoggingResult(self.events)
+
             def tearDown(self):
                 super(Foo, self).tearDown()
                 raise RuntimeError('raised by Foo.tearDown')
@@ -408,8 +443,10 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
     def test_run_call_order_default_result(self):
 
         class Foo(unittest2.TestCase):
+
             def defaultTestResult(self):
                 return OldTestResult()
+
             def test(self):
                 pass
 
@@ -422,6 +459,7 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
     # attribute is AssertionError"
     def test_failureException__default(self):
         class Foo(unittest2.TestCase):
+
             def test(self):
                 pass
 
@@ -438,13 +476,13 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
         result = LoggingResult(events)
 
         class Foo(unittest2.TestCase):
+
             def test(self):
                 raise RuntimeError()
 
             failureException = RuntimeError
 
         self.assertTrue(Foo('test').failureException is RuntimeError)
-
 
         Foo('test').run(result)
         expected = ['startTest', 'addFailure', 'stopTest']
@@ -461,13 +499,13 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
         result = LoggingResult(events)
 
         class Foo(unittest2.TestCase):
+
             def test(self):
                 self.fail("foo")
 
             failureException = RuntimeError
 
         self.assertTrue(Foo('test').failureException is RuntimeError)
-
 
         Foo('test').run(result)
         expected = ['startTest', 'addFailure', 'stopTest']
@@ -476,6 +514,7 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
     # "The default implementation does nothing."
     def test_setUp(self):
         class Foo(unittest2.TestCase):
+
             def runTest(self):
                 pass
 
@@ -485,6 +524,7 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
     # "The default implementation does nothing."
     def test_tearDown(self):
         class Foo(unittest2.TestCase):
+
             def runTest(self):
                 pass
 
@@ -499,10 +539,11 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
     # just say "string")
     def test_id(self):
         class Foo(unittest2.TestCase):
+
             def runTest(self):
                 pass
 
-        self.assertIsInstance(Foo().id(), basestring)
+        self.assertIsInstance(Foo().id(), six.string_types)
 
     # "If result is omitted or None, a temporary result object is created
     # and used, but is not made available to the caller. As TestCase owns the
@@ -512,6 +553,7 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
         events = []
 
         class Foo(unittest2.TestCase):
+
             def test(self):
                 events.append('test')
 
@@ -522,7 +564,7 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
         Foo('test').run()
 
         expected = ['startTestRun', 'startTest', 'test', 'addSuccess',
-            'stopTest', 'stopTestRun']
+                    'stopTest', 'stopTestRun']
         self.assertEqual(events, expected)
 
     def testShortDescriptionWithoutDocstring(self):
@@ -531,8 +573,8 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
     def testShortDescriptionWithOneLineDocstring(self):
         """Tests shortDescription() for a method with a docstring."""
         self.assertEqual(
-                self.shortDescription(),
-                'Tests shortDescription() for a method with a docstring.')
+            self.shortDescription(),
+            'Tests shortDescription() for a method with a docstring.')
 
     def testShortDescriptionWithMultiLineDocstring(self):
         """Tests shortDescription() for a method with a longer docstring.
@@ -542,15 +584,16 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
         whole thing is.
         """
         self.assertEqual(
-                self.shortDescription(),
-                 'Tests shortDescription() for a method with a longer '
-                 'docstring.')
+            self.shortDescription(),
+            'Tests shortDescription() for a method with a longer '
+            'docstring.')
 
     def testAddTypeEqualityFunc(self):
         class SadSnake(object):
             """Dummy class for test_addTypeEqualityFunc."""
         s1, s2 = SadSnake(), SadSnake()
         self.assertNotEqual(s1, s2)
+
         def AllSnakesCreatedEqual(a, b, msg=None):
             return type(a) is type(b) is SadSnake
         self.addTypeEqualityFunc(SadSnake, AllSnakesCreatedEqual)
@@ -562,12 +605,20 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
     def testAssertIs(self):
         thing = object()
         self.assertIs(thing, thing)
-        self.assertRaises(self.failureException, self.assertIs, thing, object())
+        self.assertRaises(
+            self.failureException,
+            self.assertIs,
+            thing,
+            object())
 
     def testAssertIsNot(self):
         thing = object()
         self.assertIsNot(thing, object())
-        self.assertRaises(self.failureException, self.assertIsNot, thing, thing)
+        self.assertRaises(
+            self.failureException,
+            self.assertIsNot,
+            thing,
+            thing)
 
     def testAssertIsInstance(self):
         thing = []
@@ -598,7 +649,9 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
                           animals)
 
         self.assertRaises(self.failureException, self.assertNotIn, 'c', 'abc')
-        self.assertRaises(self.failureException, self.assertNotIn, 1, [1, 2, 3])
+        self.assertRaises(
+            self.failureException, self.assertNotIn, 1, [
+                1, 2, 3])
         self.assertRaises(self.failureException, self.assertNotIn, 'cow',
                           animals)
 
@@ -624,17 +677,17 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
         self.assertRaises(unittest2.TestCase.failureException,
                           self.assertDictContainsSubset, {'a': 1, 'c': 1},
                           {'a': 1}, '.*Missing:.*Mismatched values:.*')
-        
+
         self.assertRaises(self.failureException,
                           self.assertDictContainsSubset, {1: "one"}, {})
 
     def testAssertEqual(self):
         equal_pairs = [
-                ((), ()),
-                ({}, {}),
-                ([], []),
-                (set(), set()),
-                (frozenset(), frozenset())]
+            ((), ()),
+            ({}, {}),
+            ([], []),
+            (set(), set()),
+            (frozenset(), frozenset())]
         for a, b in equal_pairs:
             # This mess of try excepts is to test the assertEqual behavior
             # itself.
@@ -653,11 +706,11 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
                           (a, b))
 
         unequal_pairs = [
-               ((), []),
-               ({}, set()),
-               (set([4,1]), frozenset([4,2])),
-               (frozenset([4,5]), set([2,3])),
-               (set([3,4]), set([5,4]))]
+            ((), []),
+            ({}, set()),
+            (set([4, 1]), frozenset([4, 2])),
+            (frozenset([4, 5]), set([2, 3])),
+            (set([3, 4]), set([5, 4]))]
         for a, b in unequal_pairs:
             self.assertRaises(self.failureException, self.assertEqual, a, b)
             self.assertRaises(self.failureException, self.assertEqual, a, b,
@@ -701,7 +754,7 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
 
         self.assertDictEqual({}, {})
 
-        c = { 'x': 1 }
+        c = {'x': 1}
         d = {}
         self.assertRaises(unittest2.TestCase.failureException,
                           self.assertDictEqual, c, d)
@@ -733,7 +786,7 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
         self.assertItemsEqual([{'a': 1}, {'b': 2}], [{'b': 2}, {'a': 1}])
         self.assertRaises(self.failureException, self.assertItemsEqual,
                           [[1]], [[2]])
-        
+
         # Test unsortable objects
         self.assertItemsEqual([2j, None], [None, 2j])
         self.assertRaises(self.failureException, self.assertItemsEqual,
@@ -744,14 +797,26 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
         set2 = set()
         self.assertSetEqual(set1, set2)
 
-        self.assertRaises(self.failureException, self.assertSetEqual, None, set2)
+        self.assertRaises(
+            self.failureException,
+            self.assertSetEqual,
+            None,
+            set2)
         self.assertRaises(self.failureException, self.assertSetEqual, [], set2)
-        self.assertRaises(self.failureException, self.assertSetEqual, set1, None)
+        self.assertRaises(
+            self.failureException,
+            self.assertSetEqual,
+            set1,
+            None)
         self.assertRaises(self.failureException, self.assertSetEqual, set1, [])
 
         set1 = set(['a'])
         set2 = set()
-        self.assertRaises(self.failureException, self.assertSetEqual, set1, set2)
+        self.assertRaises(
+            self.failureException,
+            self.assertSetEqual,
+            set1,
+            set2)
 
         set1 = set(['a'])
         set2 = set(['a'])
@@ -759,11 +824,19 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
 
         set1 = set(['a'])
         set2 = set(['a', 'b'])
-        self.assertRaises(self.failureException, self.assertSetEqual, set1, set2)
+        self.assertRaises(
+            self.failureException,
+            self.assertSetEqual,
+            set1,
+            set2)
 
         set1 = set(['a'])
         set2 = frozenset(['a', 'b'])
-        self.assertRaises(self.failureException, self.assertSetEqual, set1, set2)
+        self.assertRaises(
+            self.failureException,
+            self.assertSetEqual,
+            set1,
+            set2)
 
         set1 = set(['a', 'b'])
         set2 = frozenset(['a', 'b'])
@@ -771,13 +844,25 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
 
         set1 = set()
         set2 = "foo"
-        self.assertRaises(self.failureException, self.assertSetEqual, set1, set2)
-        self.assertRaises(self.failureException, self.assertSetEqual, set2, set1)
+        self.assertRaises(
+            self.failureException,
+            self.assertSetEqual,
+            set1,
+            set2)
+        self.assertRaises(
+            self.failureException,
+            self.assertSetEqual,
+            set2,
+            set1)
 
         # make sure any string formatting is tuple-safe
         set1 = set([(0, 1), (2, 3)])
         set2 = set([(4, 5)])
-        self.assertRaises(self.failureException, self.assertSetEqual, set1, set2)
+        self.assertRaises(
+            self.failureException,
+            self.assertSetEqual,
+            set1,
+            set2)
 
     def testInequality(self):
         # Try ints
@@ -803,10 +888,18 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
         self.assertLessEqual(1.0, 1.0)
         self.assertRaises(self.failureException, self.assertGreater, 1.0, 1.1)
         self.assertRaises(self.failureException, self.assertGreater, 1.0, 1.0)
-        self.assertRaises(self.failureException, self.assertGreaterEqual, 1.0, 1.1)
+        self.assertRaises(
+            self.failureException,
+            self.assertGreaterEqual,
+            1.0,
+            1.1)
         self.assertRaises(self.failureException, self.assertLess, 1.1, 1.0)
         self.assertRaises(self.failureException, self.assertLess, 1.0, 1.0)
-        self.assertRaises(self.failureException, self.assertLessEqual, 1.1, 1.0)
+        self.assertRaises(
+            self.failureException,
+            self.assertLessEqual,
+            1.1,
+            1.0)
 
         # Try Strings
         self.assertGreater('bug', 'ant')
@@ -815,12 +908,28 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
         self.assertLess('ant', 'bug')
         self.assertLessEqual('ant', 'bug')
         self.assertLessEqual('ant', 'ant')
-        self.assertRaises(self.failureException, self.assertGreater, 'ant', 'bug')
-        self.assertRaises(self.failureException, self.assertGreater, 'ant', 'ant')
-        self.assertRaises(self.failureException, self.assertGreaterEqual, 'ant', 'bug')
+        self.assertRaises(
+            self.failureException,
+            self.assertGreater,
+            'ant',
+            'bug')
+        self.assertRaises(
+            self.failureException,
+            self.assertGreater,
+            'ant',
+            'ant')
+        self.assertRaises(
+            self.failureException,
+            self.assertGreaterEqual,
+            'ant',
+            'bug')
         self.assertRaises(self.failureException, self.assertLess, 'bug', 'ant')
         self.assertRaises(self.failureException, self.assertLess, 'ant', 'ant')
-        self.assertRaises(self.failureException, self.assertLessEqual, 'bug', 'ant')
+        self.assertRaises(
+            self.failureException,
+            self.assertLessEqual,
+            'bug',
+            'ant')
 
         # Try Unicode
         self.assertGreater(u'bug', u'ant')
@@ -829,13 +938,36 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
         self.assertLess(u'ant', u'bug')
         self.assertLessEqual(u'ant', u'bug')
         self.assertLessEqual(u'ant', u'ant')
-        self.assertRaises(self.failureException, self.assertGreater, u'ant', u'bug')
-        self.assertRaises(self.failureException, self.assertGreater, u'ant', u'ant')
-        self.assertRaises(self.failureException, self.assertGreaterEqual, u'ant',
-                          u'bug')
-        self.assertRaises(self.failureException, self.assertLess, u'bug', u'ant')
-        self.assertRaises(self.failureException, self.assertLess, u'ant', u'ant')
-        self.assertRaises(self.failureException, self.assertLessEqual, u'bug', u'ant')
+        self.assertRaises(
+            self.failureException,
+            self.assertGreater,
+            u'ant',
+            u'bug')
+        self.assertRaises(
+            self.failureException,
+            self.assertGreater,
+            u'ant',
+            u'ant')
+        self.assertRaises(
+            self.failureException,
+            self.assertGreaterEqual,
+            u'ant',
+            u'bug')
+        self.assertRaises(
+            self.failureException,
+            self.assertLess,
+            u'bug',
+            u'ant')
+        self.assertRaises(
+            self.failureException,
+            self.assertLess,
+            u'ant',
+            u'ant')
+        self.assertRaises(
+            self.failureException,
+            self.assertLessEqual,
+            u'bug',
+            u'ant')
 
         # Try Mixed String/Unicode
         self.assertGreater('bug', u'ant')
@@ -850,20 +982,66 @@ class Test_TestCase(unittest2.TestCase, EqualityMixin, HashingMixin):
         self.assertLessEqual(u'ant', 'bug')
         self.assertLessEqual('ant', u'ant')
         self.assertLessEqual(u'ant', 'ant')
-        self.assertRaises(self.failureException, self.assertGreater, 'ant', u'bug')
-        self.assertRaises(self.failureException, self.assertGreater, u'ant', 'bug')
-        self.assertRaises(self.failureException, self.assertGreater, 'ant', u'ant')
-        self.assertRaises(self.failureException, self.assertGreater, u'ant', 'ant')
-        self.assertRaises(self.failureException, self.assertGreaterEqual, 'ant',
-                          u'bug')
-        self.assertRaises(self.failureException, self.assertGreaterEqual, u'ant',
-                          'bug')
-        self.assertRaises(self.failureException, self.assertLess, 'bug', u'ant')
-        self.assertRaises(self.failureException, self.assertLess, u'bug', 'ant')
-        self.assertRaises(self.failureException, self.assertLess, 'ant', u'ant')
-        self.assertRaises(self.failureException, self.assertLess, u'ant', 'ant')
-        self.assertRaises(self.failureException, self.assertLessEqual, 'bug', u'ant')
-        self.assertRaises(self.failureException, self.assertLessEqual, u'bug', 'ant')
+        self.assertRaises(
+            self.failureException,
+            self.assertGreater,
+            'ant',
+            u'bug')
+        self.assertRaises(
+            self.failureException,
+            self.assertGreater,
+            u'ant',
+            'bug')
+        self.assertRaises(
+            self.failureException,
+            self.assertGreater,
+            'ant',
+            u'ant')
+        self.assertRaises(
+            self.failureException,
+            self.assertGreater,
+            u'ant',
+            'ant')
+        self.assertRaises(
+            self.failureException,
+            self.assertGreaterEqual,
+            'ant',
+            u'bug')
+        self.assertRaises(
+            self.failureException,
+            self.assertGreaterEqual,
+            u'ant',
+            'bug')
+        self.assertRaises(
+            self.failureException,
+            self.assertLess,
+            'bug',
+            u'ant')
+        self.assertRaises(
+            self.failureException,
+            self.assertLess,
+            u'bug',
+            'ant')
+        self.assertRaises(
+            self.failureException,
+            self.assertLess,
+            'ant',
+            u'ant')
+        self.assertRaises(
+            self.failureException,
+            self.assertLess,
+            u'ant',
+            'ant')
+        self.assertRaises(
+            self.failureException,
+            self.assertLessEqual,
+            'bug',
+            u'ant')
+        self.assertRaises(
+            self.failureException,
+            self.assertLessEqual,
+            u'bug',
+            'ant')
 
     def testAssertMultiLineEqual(self):
         sample_text = """\
@@ -893,7 +1071,7 @@ test case
             try:
                 self.assertMultiLineEqual(type_changer(sample_text),
                                           type_changer(revised_sample_text))
-            except self.failureException, e:
+            except self.failureException as e:
                 # need to remove the first line of the error message
                 error = str(e).encode('utf8').split('\n', 1)[1]
 
@@ -902,7 +1080,7 @@ test case
                 self.assertTrue(sample_text_error == error)
 
     def testAssertSequenceEqualMaxDiff(self):
-        self.assertEqual(self.maxDiff, 80*8)
+        self.assertEqual(self.maxDiff, 80 * 8)
         seq1 = 'a' + 'x' * 80**2
         seq2 = 'b' + 'x' * 80**2
         diff = '\n'.join(difflib.ndiff(pprint.pformat(seq1).splitlines(),
@@ -910,10 +1088,10 @@ test case
         # the +1 is the leading \n added by assertSequenceEqual
         omitted = unittest2.case.DIFF_OMITTED % (len(diff) + 1,)
 
-        self.maxDiff = len(diff)//2
+        self.maxDiff = len(diff) // 2
         try:
             self.assertSequenceEqual(seq1, seq2)
-        except self.failureException, e:
+        except self.failureException as e:
             msg = e.args[0]
         else:
             self.fail('assertSequenceEqual did not fail.')
@@ -923,7 +1101,7 @@ test case
         self.maxDiff = len(diff) * 2
         try:
             self.assertSequenceEqual(seq1, seq2)
-        except self.failureException, e:
+        except self.failureException as e:
             msg = e.args[0]
         else:
             self.fail('assertSequenceEqual did not fail.')
@@ -933,7 +1111,7 @@ test case
         self.maxDiff = None
         try:
             self.assertSequenceEqual(seq1, seq2)
-        except self.failureException, e:
+        except self.failureException as e:
             msg = e.args[0]
         else:
             self.fail('assertSequenceEqual did not fail.')
@@ -956,24 +1134,26 @@ test case
 
     def testAssertDictEqualTruncates(self):
         test = unittest2.TestCase('assertEqual')
+
         def truncate(msg, diff):
             return 'foo'
         test._truncateMessage = truncate
         try:
             test.assertDictEqual({}, {1: 0})
-        except self.failureException, e:
+        except self.failureException as e:
             self.assertEqual(str(e), 'foo')
         else:
             self.fail('assertDictEqual did not fail')
 
     def testAssertMultiLineEqualTruncates(self):
         test = unittest2.TestCase('assertEqual')
+
         def truncate(msg, diff):
             return 'foo'
         test._truncateMessage = truncate
         try:
             test.assertMultiLineEqual('foo', 'bar')
-        except self.failureException, e:
+        except self.failureException as e:
             self.assertEqual(str(e), 'foo')
         else:
             self.fail('assertMultiLineEqual did not fail')
@@ -1002,38 +1182,37 @@ test case
 
     def testAssertNotRaisesRegexp(self):
         self.assertRaisesRegexp(
-                self.failureException, '^Exception not raised$',
-                self.assertRaisesRegexp, Exception, re.compile('x'),
-                lambda: None)
+            self.failureException, '^Exception not raised$',
+            self.assertRaisesRegexp, Exception, re.compile('x'),
+            lambda: None)
         self.assertRaisesRegexp(
-                self.failureException, '^Exception not raised$',
-                self.assertRaisesRegexp, Exception, 'x',
-                lambda: None)
+            self.failureException, '^Exception not raised$',
+            self.assertRaisesRegexp, Exception, 'x',
+            lambda: None)
         self.assertRaisesRegexp(
-                self.failureException, '^Exception not raised$',
-                self.assertRaisesRegexp, Exception, u'x',
-                lambda: None)
+            self.failureException, '^Exception not raised$',
+            self.assertRaisesRegexp, Exception, u'x',
+            lambda: None)
 
     def testAssertRaisesRegexpMismatch(self):
         def Stub():
             raise Exception('Unexpected')
 
         self.assertRaisesRegexp(
-                self.failureException,
-                r'"\^Expected\$" does not match "Unexpected"',
-                self.assertRaisesRegexp, Exception, '^Expected$',
-                Stub)
+            self.failureException,
+            r'"\^Expected\$" does not match "Unexpected"',
+            self.assertRaisesRegexp, Exception, '^Expected$',
+            Stub)
         self.assertRaisesRegexp(
-                self.failureException,
-                r'"\^Expected\$" does not match "Unexpected"',
-                self.assertRaisesRegexp, Exception, u'^Expected$',
-                Stub)
+            self.failureException,
+            r'"\^Expected\$" does not match "Unexpected"',
+            self.assertRaisesRegexp, Exception, u'^Expected$',
+            Stub)
         self.assertRaisesRegexp(
-                self.failureException,
-                r'"\^Expected\$" does not match "Unexpected"',
-                self.assertRaisesRegexp, Exception,
-                re.compile('^Expected$'), Stub)
-
+            self.failureException,
+            r'"\^Expected\$" does not match "Unexpected"',
+            self.assertRaisesRegexp, Exception,
+            re.compile('^Expected$'), Stub)
 
     def testSynonymAssertMethodNames(self):
         """Test undocumented method name synonyms.
@@ -1052,6 +1231,7 @@ test case
     def testDeepcopy(self):
         # Issue: 5660
         class TestableTest(unittest2.TestCase):
+
             def testNothing(self):
                 pass
 

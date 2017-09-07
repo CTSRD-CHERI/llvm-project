@@ -1,9 +1,9 @@
 ; RUN: opt %loadPolly -basicaa -pass-remarks-missed="polly-detect" -polly-detect-track-failures -polly-detect -analyze < %s 2>&1| FileCheck %s
 ; RUN: opt %loadPolly -basicaa -pass-remarks-missed="polly-detect" -polly-detect-track-failures -polly-detect -polly-delinearize=false -polly-detect-keep-going -analyze < %s 2>&1| FileCheck %s -check-prefix=ALL
-; RUN: opt %loadPolly -basicaa -pass-remarks-missed="polly-detect" -polly-detect-track-failures -polly-detect -polly-delinearize -analyze < %s 2>&1| FileCheck %s -check-prefix=DELIN
-; RUN: opt %loadPolly -basicaa -pass-remarks-missed="polly-detect" -polly-detect-track-failures -polly-detect -polly-delinearize -polly-detect-keep-going -analyze < %s 2>&1| FileCheck %s -check-prefix=DELIN-ALL
+; RUN: opt %loadPolly -basicaa -pass-remarks-missed="polly-detect" -polly-detect-track-failures -polly-detect -analyze < %s 2>&1| FileCheck %s -check-prefix=DELIN
+; RUN: opt %loadPolly -basicaa -pass-remarks-missed="polly-detect" -polly-detect-track-failures -polly-detect -polly-detect-keep-going -analyze < %s 2>&1| FileCheck %s -check-prefix=DELIN-ALL
 ; RUN: opt %loadPolly -basicaa -pass-remarks-missed="polly-detect" -polly-detect-track-failures -polly-detect -polly-allow-nonaffine -analyze < %s 2>&1| FileCheck %s -check-prefix=NONAFFINE
-; RUN: opt %loadPolly -basicaa -pass-remarks-missed="polly-detect" -polly-detect-track-failures -polly-detect -polly-delinearize -polly-allow-nonaffine -analyze < %s 2>&1| FileCheck %s -check-prefix=NONAFFINE
+; RUN: opt %loadPolly -basicaa -pass-remarks-missed="polly-detect" -polly-detect-track-failures -polly-detect -polly-allow-nonaffine -analyze < %s 2>&1| FileCheck %s -check-prefix=NONAFFINE
 
 ;  1 void manyaccesses(float A[restrict], long n, float B[restrict][n])
 ;  2 {
@@ -57,7 +57,7 @@
 
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 
-define void @manyaccesses(float* noalias %A, i64 %n, float* noalias %B) {
+define void @manyaccesses(float* noalias %A, i64 %n, float* noalias %B) !dbg !4 {
 entry:
   br label %entry.split
 
@@ -113,11 +113,10 @@ for.end:                                          ; preds = %for.body
 !llvm.module.flags = !{!7, !8}
 !llvm.ident = !{!9}
 
-!0 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.6.0 ", isOptimized: true, emissionKind: 2, file: !1, enums: !2, retainedTypes: !2, subprograms: !3, globals: !2, imports: !2)
+!0 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.6.0 ", isOptimized: true, emissionKind: 2, file: !1, enums: !2, retainedTypes: !2, globals: !2, imports: !2)
 !1 = !DIFile(filename: "/tmp/test.c", directory: "/home/grosser/Projects/polly/git/tools/polly/test")
 !2 = !{}
-!3 = !{!4}
-!4 = distinct !DISubprogram(name: "manyaccesses", line: 1, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: true, scopeLine: 2, file: !1, scope: !5, type: !6, function: void (float*, i64, float*)* @manyaccesses, variables: !2)
+!4 = distinct !DISubprogram(name: "manyaccesses", line: 1, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: true, unit: !0, scopeLine: 2, file: !1, scope: !5, type: !6, variables: !2)
 !5 = !DIFile(filename: "/tmp/test.c", directory: "/home/grosser/Projects/polly/git/tools/polly/test")
 !6 = !DISubroutineType(types: !2)
 !7 = !{i32 2, !"Dwarf Version", i32 4}

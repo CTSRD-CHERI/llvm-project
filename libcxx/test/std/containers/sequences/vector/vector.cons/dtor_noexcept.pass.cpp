@@ -11,13 +11,14 @@
 
 // ~vector() // implied noexcept;
 
+// UNSUPPORTED: c++98, c++03
+
 #include <vector>
 #include <cassert>
 
+#include "test_macros.h"
 #include "MoveOnly.h"
 #include "test_allocator.h"
-
-#if __has_feature(cxx_noexcept)
 
 template <class T>
 struct some_alloc
@@ -27,11 +28,8 @@ struct some_alloc
     ~some_alloc() noexcept(false);
 };
 
-#endif
-
 int main()
 {
-#if __has_feature(cxx_noexcept)
     {
         typedef std::vector<MoveOnly> C;
         static_assert(std::is_nothrow_destructible<C>::value, "");
@@ -44,9 +42,10 @@ int main()
         typedef std::vector<MoveOnly, other_allocator<MoveOnly>> C;
         static_assert(std::is_nothrow_destructible<C>::value, "");
     }
+#if defined(_LIBCPP_VERSION)
     {
         typedef std::vector<MoveOnly, some_alloc<MoveOnly>> C;
         static_assert(!std::is_nothrow_destructible<C>::value, "");
     }
-#endif
+#endif // _LIBCPP_VERSION
 }

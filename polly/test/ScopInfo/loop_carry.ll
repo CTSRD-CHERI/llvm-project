@@ -23,21 +23,21 @@ bb.nph:                                           ; preds = %entry
   br label %bb
 
 bb:                                               ; preds = %bb, %bb.nph
-  %1 = phi i64 [ %.pre, %bb.nph ], [ %2, %bb ]    ; <i64> [#uses=1]
+  %tmp1 = phi i64 [ %.pre, %bb.nph ], [ %tmp2, %bb ]    ; <i64> [#uses=1]
   %indvar = phi i64 [ 0, %bb.nph ], [ %tmp6, %bb ] ; <i64> [#uses=3]
-  %k.05 = phi i64 [ 1, %bb.nph ], [ %5, %bb ]     ; <i64> [#uses=1]
+  %k.05 = phi i64 [ 1, %bb.nph ], [ %tmp5, %bb ]     ; <i64> [#uses=1]
   %tmp6 = add i64 %indvar, 1                      ; <i64> [#uses=3]
   %scevgep = getelementptr i64, i64* %a, i64 %tmp6     ; <i64*> [#uses=1]
-  %2 = mul nsw i64 %1, %k.05                      ; <i64> [#uses=2]
-  store i64 %2, i64* %scevgep, align 8
+  %tmp2 = mul nsw i64 %tmp1, %k.05                      ; <i64> [#uses=2]
+  store i64 %tmp2, i64* %scevgep, align 8
   %tmp7 = shl i64 %indvar, 1                      ; <i64> [#uses=1]
   %tmp11 = add i64 %indvar, 4                     ; <i64> [#uses=1]
   %tmp8 = add i64 %tmp7, 2                        ; <i64> [#uses=1]
   %scevgep12 = getelementptr i64, i64* %a, i64 %tmp11  ; <i64*> [#uses=1]
   %scevgep9 = getelementptr i64, i64* %a, i64 %tmp8    ; <i64*> [#uses=1]
-  %3 = load i64, i64* %scevgep9, align 8               ; <i64> [#uses=1]
-  %4 = load i64, i64* %scevgep12, align 8              ; <i64> [#uses=1]
-  %5 = add nsw i64 %3, %4                         ; <i64> [#uses=1]
+  %tmp3 = load i64, i64* %scevgep9, align 8               ; <i64> [#uses=1]
+  %tmp4 = load i64, i64* %scevgep12, align 8              ; <i64> [#uses=1]
+  %tmp5 = add nsw i64 %tmp3, %tmp4                         ; <i64> [#uses=1]
   %exitcond = icmp eq i64 %tmp6, %tmp             ; <i1> [#uses=1]
   br i1 %exitcond, label %bb2, label %bb
 
@@ -45,24 +45,25 @@ bb2:                                              ; preds = %bb, %entry
   ret i64 0
 }
 
-; CHECK:     Statements {
-; CHECK:     	Stmt_bb
-; CHECK:             Domain :=
-; CHECK:                 [n] -> { Stmt_bb[i0] : i0 >= 0 and i0 <= -2 + n };
-; CHECK:             Schedule :=
-; CHECK:                 [n] -> { Stmt_bb[i0] -> [i0] };
-; CHECK:             MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 1]
-; CHECK:                 [n] -> { Stmt_bb[i0] -> MemRef_1__phi[] };
-; CHECK:             ReadAccess :=       [Reduction Type: NONE] [Scalar: 1]
-; CHECK:                 [n] -> { Stmt_bb[i0] -> MemRef_1__phi[] };
-; CHECK:             MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 1]
-; CHECK:                 [n] -> { Stmt_bb[i0] -> MemRef_k_05__phi[] };
-; CHECK:             ReadAccess :=       [Reduction Type: NONE] [Scalar: 1]
-; CHECK:                 [n] -> { Stmt_bb[i0] -> MemRef_k_05__phi[] };
-; CHECK:             MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 0]
-; CHECK:                 [n] -> { Stmt_bb[i0] -> MemRef_a[1 + i0] };
-; CHECK:             ReadAccess :=       [Reduction Type: NONE] [Scalar: 0]
-; CHECK:                 [n] -> { Stmt_bb[i0] -> MemRef_a[2 + 2i0] };
-; CHECK:             ReadAccess :=       [Reduction Type: NONE] [Scalar: 0]
-; CHECK:                 [n] -> { Stmt_bb[i0] -> MemRef_a[4 + i0] };
 
+; CHECK:      Statements {
+; CHECK-NEXT:     Stmt_bb
+; CHECK-NEXT:         Domain :=
+; CHECK-NEXT:             [n] -> { Stmt_bb[i0] : 0 <= i0 <= -2 + n };
+; CHECK-NEXT:         Schedule :=
+; CHECK-NEXT:             [n] -> { Stmt_bb[i0] -> [i0] };
+; CHECK-NEXT:         MustWriteAccess :=    [Reduction Type: NONE] [Scalar: 1]
+; CHECK-NEXT:             [n] -> { Stmt_bb[i0] -> MemRef_tmp1__phi[] };
+; CHECK-NEXT:         ReadAccess :=    [Reduction Type: NONE] [Scalar: 1]
+; CHECK-NEXT:             [n] -> { Stmt_bb[i0] -> MemRef_tmp1__phi[] };
+; CHECK-NEXT:         MustWriteAccess :=    [Reduction Type: NONE] [Scalar: 1]
+; CHECK-NEXT:             [n] -> { Stmt_bb[i0] -> MemRef_k_05__phi[] };
+; CHECK-NEXT:         ReadAccess :=    [Reduction Type: NONE] [Scalar: 1]
+; CHECK-NEXT:             [n] -> { Stmt_bb[i0] -> MemRef_k_05__phi[] };
+; CHECK-NEXT:         MustWriteAccess :=    [Reduction Type: NONE] [Scalar: 0]
+; CHECK-NEXT:             [n] -> { Stmt_bb[i0] -> MemRef_a[1 + i0] };
+; CHECK-NEXT:         ReadAccess :=    [Reduction Type: NONE] [Scalar: 0]
+; CHECK-NEXT:             [n] -> { Stmt_bb[i0] -> MemRef_a[2 + 2i0] };
+; CHECK-NEXT:         ReadAccess :=    [Reduction Type: NONE] [Scalar: 0]
+; CHECK-NEXT:             [n] -> { Stmt_bb[i0] -> MemRef_a[4 + i0] };
+; CHECK-NEXT: }

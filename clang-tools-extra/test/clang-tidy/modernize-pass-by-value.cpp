@@ -1,11 +1,16 @@
 // RUN: %check_clang_tidy %s modernize-pass-by-value %t -- -- -std=c++11 -fno-delayed-template-parsing
 
-// CHECK-FIXES: #include <utility>
-
 namespace {
 // POD types are trivially move constructible.
+struct POD {
+  int a, b, c;
+};
+
 struct Movable {
   int a, b, c;
+  Movable() = default;
+  Movable(const Movable &) {}
+  Movable(Movable &&) {}
 };
 
 struct NotMovable {
@@ -194,3 +199,17 @@ struct S {
   Movable M;
 };
 
+template <typename T, int N> struct array { T A[N]; };
+
+// Test that types that are trivially copyable will not use std::move. This will
+// cause problems with misc-move-const-arg, as it will revert it.
+struct T {
+  T(array<int, 10> a) : a_(a) {}
+  // CHECK-FIXES: T(array<int, 10> a) : a_(a) {}
+  array<int, 10> a_;
+};
+
+struct U {
+  U(const POD &M) : M(M) {}
+  POD M;
+};

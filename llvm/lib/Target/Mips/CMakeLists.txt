@@ -27,6 +27,7 @@ add_llvm_target(MipsCodeGen
   MipsConstantIslandPass.cpp
   MipsDelaySlotFiller.cpp
   MipsFastISel.cpp
+  MipsHazardSchedule.cpp
   MipsInstrInfo.cpp
   MipsISelDAGToDAG.cpp
   MipsISelLowering.cpp
@@ -46,12 +47,16 @@ add_llvm_target(MipsCodeGen
   MipsSubtarget.cpp
   MipsTargetMachine.cpp
   MipsTargetObjectFile.cpp
+  Cheri128FailHard.cpp
   CheriAddressingModeFolder.cpp
   CheriAddressingModeFolder.cpp
+  CheriLoopPointerDecanonicalize.cpp
   CheriMemOpLowering.cpp
   CheriStackInvalidatePass.cpp
   CheriRangeChecker.cpp
-  CheriSandboxABI.cpp
+  CheriPureCapABI.cpp
+  CheriExpandIntrinsicsPass.cpp
+  MicroMipsSizeReduction.cpp
   )
 
 add_subdirectory(InstPrinter)

@@ -157,6 +157,12 @@ public:
     
     bool
     IsSynthetic ();
+    
+    bool
+    IsSyntheticChildrenGenerated ();
+    
+    void
+    SetSyntheticChildrenGenerated (bool);
 
     const char *
     GetLocation ();
@@ -210,6 +216,11 @@ public:
     /// the 'x' member, and the child at index 1 will be the 'y' member
     /// (the child at index zero won't be a 'Point' instance).
     /// 
+    /// If you actually need an SBValue that represents the type pointed
+    /// to by a SBValue for which GetType().IsPointeeType() returns true,
+    /// regardless of the pointee type, you can do that with the SBValue.Dereference
+    /// method (or the equivalent deref property).
+    ///
     /// Arrays have a preset number of children that can be accessed by
     /// index and will returns invalid child values for indexes that are
     /// out of bounds unless the \a synthetic_allowed is \b true. In this
@@ -528,6 +539,23 @@ public:
         
         __swig_getmethods__["path"] = get_expr_path
         if _newclass: path = property(get_expr_path, None, doc='''A read only property that returns the expression path that one can use to reach this value in an expression.''')
+        
+        def synthetic_child_from_expression(self, name, expr, options=None):
+            if options is None: options = lldb.SBExpressionOptions()
+            child = self.CreateValueFromExpression(name, expr, options)
+            child.SetSyntheticChildrenGenerated(True)
+            return child
+        
+        def synthetic_child_from_data(self, name, data, type):
+            child = self.CreateValueFromData(name, data, type)
+            child.SetSyntheticChildrenGenerated(True)
+            return child
+                
+        def synthetic_child_from_address(self, name, addr, type):
+            child = self.CreateValueFromAddress(name, addr, type)
+            child.SetSyntheticChildrenGenerated(True)
+            return child
+
     %}
 
 };

@@ -23,6 +23,7 @@
 #include <string>
 #include <cassert>
 
+#include "test_macros.h"
 #include "min_allocator.h"
 
 int main()
@@ -43,9 +44,9 @@ int main()
         size_t bc = c.bucket_count();
         assert(bc >= 7);
         for (size_t i = 0; i < 13; ++i)
-            assert(c.bucket(i) == i % bc);
+            LIBCPP_ASSERT(c.bucket(i) == i % bc);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         typedef std::unordered_multimap<int, std::string, std::hash<int>, std::equal_to<int>,
                             min_allocator<std::pair<const int, std::string>>> C;
@@ -63,7 +64,7 @@ int main()
         size_t bc = c.bucket_count();
         assert(bc >= 7);
         for (size_t i = 0; i < 13; ++i)
-            assert(c.bucket(i) == i % bc);
+            LIBCPP_ASSERT(c.bucket(i) == i % bc);
     }
 #endif
 #if _LIBCPP_DEBUG_LEVEL >= 1

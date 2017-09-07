@@ -9,7 +9,15 @@
 ; CHECK:         br label
 
 ; CHECK-LABEL: polly.stmt.while.body.740.region_exiting:
-; CHECK:         %polly.curr.3.ph = phi i32 [ undef, %polly.stmt.if.else.864 ], [ %[[R1]], %polly.stmt.if.then.862 ]
+; CHECK:         %polly.curr.3 = phi i32 [ %[[R1]], %polly.stmt.if.then.862 ], [ undef, %polly.stmt.if.else.864 ]
+; CHECK:         br label %polly.stmt.polly.merge_new_and_old.exit
+
+; CHECK-LABEL: polly.stmt.polly.merge_new_and_old.exit:
+; CHECK:         store i32 %polly.curr.3, i32* %curr.3.s2a
+; CHECK:         br label %polly.exiting
+
+; CHECK-LABEL: polly.exiting:
+; CHECK:         %curr.3.ph.final_reload = load i32, i32* %curr.3.s2a
 ; CHECK:         br label
 
 
@@ -27,10 +35,10 @@ entry:
 
 while.body.740:                                   ; preds = %if.else.864, %if.then.862
   %curr.3 = phi i32 [ %inc863, %if.then.862 ], [ undef, %if.else.864 ]
-  unreachable
+  ret void
 
 sw.bb.748:                                        ; preds = %entry
-  unreachable
+  ret void
 
 if.then.813:                                      ; preds = %entry
   %conv823903 = and i32 undef, undef

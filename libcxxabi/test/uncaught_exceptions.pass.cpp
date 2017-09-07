@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: libcxxabi-no-exceptions
+
 #include <cxxabi.h>
 #include <exception>
 #include <cassert>
@@ -21,9 +23,9 @@ struct A {
     };
 
 struct B {
-    B(int cnt) : data_(cnt) {}
+    B(unsigned cnt) : data_(cnt) {}
     ~B() { assert( data_ == __cxxabiv1::__cxa_uncaught_exceptions()); }
-    int data_;
+    unsigned data_;
     };
 
 int main ()

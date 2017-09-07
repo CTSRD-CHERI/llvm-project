@@ -40,7 +40,9 @@ required_libraries =
  MipsAsmPrinter
  MipsDesc
  MipsInfo
+ Scalar
  SelectionDAG
+ CHERICap
  Support
  Target
 add_to_library_groups = Mips

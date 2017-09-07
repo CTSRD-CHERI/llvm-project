@@ -39,7 +39,7 @@
 //                                 memory_order m = memory_order_seq_cst) volatile;
 //     bool compare_exchange_strong(T& expc, T desr,
 //                                  memory_order m = memory_order_seq_cst);
-// 
+//
 //     atomic() = default;
 //     constexpr atomic(T desr);
 //     atomic(const atomic&) = delete;
@@ -56,6 +56,8 @@
 #include <cassert>
 
 #include <cmpxchg_loop.h>
+
+#include "test_macros.h"
 
 int main()
 {
@@ -226,8 +228,8 @@ int main()
     }
     {
         typedef std::atomic<bool> A;
-        _ALIGNAS_TYPE(A) char storage[sizeof(A)] = {1};
-        A& zero = *new (storage) A();    
+        TEST_ALIGNAS_TYPE(A) char storage[sizeof(A)] = {1};
+        A& zero = *new (storage) A();
         assert(zero == false);
         zero.~A();
     }

@@ -1,4 +1,4 @@
-//===- FastISelEmitter.cpp - Generate an instruction selector -------------===//
+///===- FastISelEmitter.cpp - Generate an instruction selector -------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -18,13 +18,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "CodeGenDAGPatterns.h"
-#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/TableGen/Error.h"
 #include "llvm/TableGen/Record.h"
 #include "llvm/TableGen/TableGenBackend.h"
+#include <utility>
 using namespace llvm;
 
 
@@ -417,9 +417,7 @@ static std::string getLegalCName(std::string OpName) {
   return OpName;
 }
 
-FastISelMap::FastISelMap(std::string instns)
-  : InstNS(instns) {
-}
+FastISelMap::FastISelMap(std::string instns) : InstNS(std::move(instns)) {}
 
 static std::string PhyRegForNode(TreePatternNode *Op,
                                  const CodeGenTarget &Target) {
@@ -566,8 +564,7 @@ void FastISelMap::collectPatterns(CodeGenDAGPatterns &CGP) {
     Operands.PrintManglingSuffix(SuffixOS, ImmediatePredicates, true);
     SuffixOS.flush();
     if (!StringSwitch<bool>(ManglingSuffix)
-        .Cases("", "r", "rr", "ri", "rf", true)
-        .Cases("rri", "i", "f", true)
+        .Cases("", "r", "rr", "ri", "i", "f", true)
         .Default(false))
       continue;
 
@@ -643,12 +640,9 @@ void FastISelMap::emitInstructionCode(raw_ostream &OS,
       OneHadNoPredicate = true;
     } else {
       if (OneHadNoPredicate) {
-        // FIXME: This should be a PrintError once the x86 target
-        // fixes PR21575.
-        PrintWarning("Multiple instructions match and one with no "
-                     "predicate came before one with a predicate!  "
-                     "name:" + Memo.Name + "  predicate: " + 
-                     PredicateCheck);
+        PrintFatalError("Multiple instructions match and one with no "
+                        "predicate came before one with a predicate!  "
+                        "name:" + Memo.Name + "  predicate: " + PredicateCheck);
       }
       OS << "  if (" + PredicateCheck + ") {\n";
       OS << "  ";
@@ -876,7 +870,7 @@ void EmitFastISel(RecordKeeper &RK, raw_ostream &OS) {
   CodeGenDAGPatterns CGP(RK);
   const CodeGenTarget &Target = CGP.getTargetInfo();
   emitSourceFileHeader("\"Fast\" Instruction Selector for the " +
-                       Target.getName() + " target", OS);
+                       Target.getName().str() + " target", OS);
 
   // Determine the target's namespace name.
   std::string InstNS = Target.getInstNamespace() + "::";

@@ -15,6 +15,7 @@
 #include <stdexcept>
 #include <cassert>
 
+#include "test_macros.h"
 #include "min_allocator.h"
 
 template <class S>
@@ -24,7 +25,7 @@ test(S s)
     typename S::size_type old_cap = s.capacity();
     S s0 = s;
     s.reserve();
-    assert(s.__invariants());
+    LIBCPP_ASSERT(s.__invariants());
     assert(s == s0);
     assert(s.capacity() <= old_cap);
     assert(s.capacity() >= s.size());
@@ -35,19 +36,29 @@ void
 test(S s, typename S::size_type res_arg)
 {
     typename S::size_type old_cap = s.capacity();
+    ((void)old_cap); // Prevent unused warning
     S s0 = s;
-    try
+    if (res_arg <= s.max_size())
     {
         s.reserve(res_arg);
-        assert(res_arg <= s.max_size());
         assert(s == s0);
         assert(s.capacity() >= res_arg);
         assert(s.capacity() >= s.size());
     }
-    catch (std::length_error&)
+#ifndef TEST_HAS_NO_EXCEPTIONS
+    else
     {
-        assert(res_arg > s.max_size());
+        try
+        {
+            s.reserve(res_arg);
+            assert(false);
+        }
+        catch (std::length_error&)
+        {
+            assert(res_arg > s.max_size());
+        }
     }
+#endif
 }
 
 int main()
@@ -82,7 +93,7 @@ int main()
     test(s, S::npos);
     }
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     typedef std::basic_string<char, std::char_traits<char>, min_allocator<char>> S;
     {

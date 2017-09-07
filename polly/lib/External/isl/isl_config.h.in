@@ -34,6 +34,9 @@
 /* Define if clang/Basic/DiagnosticOptions.h exists */
 #undef HAVE_BASIC_DIAGNOSTICOPTIONS_H
 
+/* define if the compiler supports basic C++11 syntax */
+#undef HAVE_CXX11
+
 /* Define if Driver constructor takes CXXIsProduction argument */
 #undef HAVE_CXXISPRODUCTION
 
@@ -85,6 +88,9 @@
 /* Define if Driver constructor takes IsProduction argument */
 #undef HAVE_ISPRODUCTION
 
+/* Define if clang/Lex/PreprocessorOptions.h exists */
+#undef HAVE_LEX_PREPROCESSOROPTIONS_H
+
 /* Define to 1 if you have the `gmp' library (-lgmp). */
 #undef HAVE_LIBGMP
 
@@ -124,8 +130,7 @@
 /* Return type of HandleTopLevelDeclReturn */
 #undef HandleTopLevelDeclReturn
 
-/* Define to the sub-directory in which libtool stores uninstalled libraries.
-   */
+/* Define to the sub-directory where libtool stores uninstalled libraries. */
 #undef LT_OBJDIR
 
 /* Name of package */
@@ -148,6 +153,12 @@
 
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
+
+/* Defined if CompilerInstance::setInvocation takes a shared_ptr */
+#undef SETINVOCATION_TAKES_SHARED_PTR
+
+/* Define if CompilerInvocation::setLangDefaults takes 5 arguments */
+#undef SETLANGDEFAULTS_TAKES_5_ARGUMENTS
 
 /* The size of `char', as computed by sizeof. */
 #undef SIZEOF_CHAR
@@ -196,5 +207,8 @@
 
 /* Define to getResultType for older versions of clang */
 #undef getReturnType
+
+/* Define to InitializeBuiltins for older versions of clang */
+#undef initializeBuiltins
 
 #include <isl_config_post.h>

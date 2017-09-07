@@ -11,18 +11,27 @@
 
 // is_trivially_assignable
 
+// XFAIL: gcc-4.9
+
 #include <type_traits>
+#include "test_macros.h"
 
 template <class T, class U>
 void test_is_trivially_assignable()
 {
     static_assert(( std::is_trivially_assignable<T, U>::value), "");
+#if TEST_STD_VER > 14
+    static_assert(( std::is_trivially_assignable_v<T, U>), "");
+#endif
 }
 
 template <class T, class U>
 void test_is_not_trivially_assignable()
 {
     static_assert((!std::is_trivially_assignable<T, U>::value), "");
+#if TEST_STD_VER > 14
+    static_assert((!std::is_trivially_assignable_v<T, U>), "");
+#endif
 }
 
 struct A

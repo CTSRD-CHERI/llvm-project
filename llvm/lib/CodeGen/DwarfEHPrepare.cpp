@@ -13,10 +13,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/CFG.h"
-#include "llvm/Analysis/LibCallSemantics.h"
+#include "llvm/Analysis/EHPersonalities.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Function.h"
@@ -34,8 +35,6 @@ STATISTIC(NumResumesLowered, "Number of resume calls lowered");
 
 namespace {
   class DwarfEHPrepare : public FunctionPass {
-    const TargetMachine *TM;
-
     // RewindFunction - _Unwind_Resume or the target equivalent.
     Constant *RewindFunction;
 
@@ -52,15 +51,9 @@ namespace {
   public:
     static char ID; // Pass identification, replacement for typeid.
 
-    // INITIALIZE_TM_PASS requires a default constructor, but it isn't used in
-    // practice.
     DwarfEHPrepare()
-        : FunctionPass(ID), TM(nullptr), RewindFunction(nullptr), DT(nullptr),
-          TLI(nullptr) {}
-
-    DwarfEHPrepare(const TargetMachine *TM)
-        : FunctionPass(ID), TM(TM), RewindFunction(nullptr), DT(nullptr),
-          TLI(nullptr) {}
+        : FunctionPass(ID), RewindFunction(nullptr), DT(nullptr), TLI(nullptr) {
+    }
 
     bool runOnFunction(Function &Fn) override;
 
@@ -71,25 +64,25 @@ namespace {
 
     void getAnalysisUsage(AnalysisUsage &AU) const override;
 
-    const char *getPassName() const override {
+    StringRef getPassName() const override {
       return "Exception handling preparation";
     }
   };
 } // end anonymous namespace
 
 char DwarfEHPrepare::ID = 0;
-INITIALIZE_TM_PASS_BEGIN(DwarfEHPrepare, "dwarfehprepare",
-                         "Prepare DWARF exceptions", false, false)
+INITIALIZE_PASS_BEGIN(DwarfEHPrepare, DEBUG_TYPE,
+                      "Prepare DWARF exceptions", false, false)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(TargetPassConfig)
 INITIALIZE_PASS_DEPENDENCY(TargetTransformInfoWrapperPass)
-INITIALIZE_TM_PASS_END(DwarfEHPrepare, "dwarfehprepare",
-                       "Prepare DWARF exceptions", false, false)
+INITIALIZE_PASS_END(DwarfEHPrepare, DEBUG_TYPE,
+                    "Prepare DWARF exceptions", false, false)
 
-FunctionPass *llvm::createDwarfEHPass(const TargetMachine *TM) {
-  return new DwarfEHPrepare(TM);
-}
+FunctionPass *llvm::createDwarfEHPass() { return new DwarfEHPrepare(); }
 
 void DwarfEHPrepare::getAnalysisUsage(AnalysisUsage &AU) const {
+  AU.addRequired<TargetPassConfig>();
   AU.addRequired<TargetTransformInfoWrapperPass>();
   AU.addRequired<DominatorTreeWrapperPass>();
 }
@@ -203,10 +196,11 @@ bool DwarfEHPrepare::InsertUnwindResumeCalls(Function &Fn) {
   if (ResumesLeft == 0)
     return true; // We pruned them all.
 
+  ResumeInst *RI = Resumes.front();
+  Type *ExTy = cast<StructType>(RI->getValue()->getType())->elements()[0];
   // Find the rewind function if we didn't already.
   if (!RewindFunction) {
-    FunctionType *FTy = FunctionType::get(Type::getVoidTy(Ctx),
-                                          Type::getInt8PtrTy(Ctx), false);
+    FunctionType *FTy = FunctionType::get(Type::getVoidTy(Ctx), ExTy, false);
     const char *RewindName = TLI->getLibcallName(RTLIB::UNWIND_RESUME);
     RewindFunction = Fn.getParent()->getOrInsertFunction(RewindName, FTy);
   }
@@ -229,7 +223,7 @@ bool DwarfEHPrepare::InsertUnwindResumeCalls(Function &Fn) {
   }
 
   BasicBlock *UnwindBB = BasicBlock::Create(Ctx, "unwind_resume", &Fn);
-  PHINode *PN = PHINode::Create(Type::getInt8PtrTy(Ctx), ResumesLeft,
+  PHINode *PN = PHINode::Create(ExTy, ResumesLeft,
                                 "exn.obj", UnwindBB);
 
   // Extract the exception object from the ResumeInst and add it to the PHI node
@@ -254,9 +248,10 @@ bool DwarfEHPrepare::InsertUnwindResumeCalls(Function &Fn) {
 }
 
 bool DwarfEHPrepare::runOnFunction(Function &Fn) {
-  assert(TM && "DWARF EH preparation requires a target machine");
+  const TargetMachine &TM =
+      getAnalysis<TargetPassConfig>().getTM<TargetMachine>();
   DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-  TLI = TM->getSubtargetImpl(Fn)->getTargetLowering();
+  TLI = TM.getSubtargetImpl(Fn)->getTargetLowering();
   bool Changed = InsertUnwindResumeCalls(Fn);
   DT = nullptr;
   TLI = nullptr;

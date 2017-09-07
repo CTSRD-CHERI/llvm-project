@@ -25,30 +25,41 @@ void my_dealloc2 ( void *p ) {
     std::free ( p ); 
     }
 
-void my_dealloc3 ( void *p, size_t   sz   ) {
+void my_dealloc3 ( void *p, size_t ) {
 //  std::printf ( "Freeing %lx (size %ld)\n", (unsigned long) p, sz );  
     std::free ( p ); 
     }
 
-void my_construct ( void *p ) {
+void my_construct ( void * ) {
 //  std::printf ( "Constructing %lx\n", (unsigned long) p );
     }
 
-void my_destruct  ( void *p ) {
+void my_destruct  ( void * ) {
 //  std::printf ( "Destructing  %lx\n", (unsigned long) p );
     }
 
 int gCounter;
-void count_construct ( void *p ) { ++gCounter; }
-void count_destruct  ( void *p ) { --gCounter; }
+void count_construct ( void * ) { ++gCounter; }
+void count_destruct  ( void * ) { --gCounter; }
 
 
 int gConstructorCounter;
 int gConstructorThrowTarget;
 int gDestructorCounter;
 int gDestructorThrowTarget;
-void throw_construct ( void *p ) { if ( gConstructorCounter   == gConstructorThrowTarget ) throw 1; ++gConstructorCounter; }
-void throw_destruct  ( void *p ) { if ( ++gDestructorCounter  == gDestructorThrowTarget  ) throw 2; }
+void throw_construct ( void * ) {
+#ifndef LIBCXXABI_HAS_NO_EXCEPTIONS
+    if ( gConstructorCounter   == gConstructorThrowTarget )
+        throw 1;
+    ++gConstructorCounter;
+#endif
+}
+void throw_destruct  ( void * ) {
+#ifndef LIBCXXABI_HAS_NO_EXCEPTIONS
+    if ( ++gDestructorCounter  == gDestructorThrowTarget  )
+        throw 2;
+#endif
+}
 
 #if __cplusplus >= 201103L
 #   define CAN_THROW noexcept(false)
@@ -146,6 +157,7 @@ int test_counted ( ) {
     return retVal;
     }
     
+#ifndef LIBCXXABI_HAS_NO_EXCEPTIONS
 //  Make sure the constructors and destructors are matched
 int test_exception_in_constructor ( ) {
     int retVal = 0;
@@ -202,7 +214,9 @@ int test_exception_in_constructor ( ) {
 
     return retVal;
     }
+#endif
 
+#ifndef LIBCXXABI_HAS_NO_EXCEPTIONS
 //  Make sure the constructors and destructors are matched
 int test_exception_in_destructor ( ) {
     int retVal = 0;
@@ -253,12 +267,15 @@ int test_exception_in_destructor ( ) {
 
     return retVal;
     }
+#endif
 
-int main ( int argc, char *argv [] ) {
+int main () {
     int retVal = 0;
     retVal += test_empty ();
     retVal += test_counted ();
+#ifndef LIBCXXABI_HAS_NO_EXCEPTIONS
     retVal += test_exception_in_constructor ();
     retVal += test_exception_in_destructor ();
+#endif
     return retVal;
     }

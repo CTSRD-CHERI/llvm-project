@@ -11,9 +11,11 @@
 #define LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_MISC_UNUSED_ALIAS_DECLS_H
 
 #include "../ClangTidy.h"
+#include "llvm/ADT/DenseMap.h"
 
 namespace clang {
 namespace tidy {
+namespace misc {
 
 /// Finds unused namespace alias declarations.
 class UnusedAliasDeclsCheck : public ClangTidyCheck {
@@ -28,8 +30,8 @@ private:
   llvm::DenseMap<const NamedDecl *, CharSourceRange> FoundDecls;
 };
 
+} // namespace misc
 } // namespace tidy
 } // namespace clang
 
 #endif // LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_MISC_UNUSED_ALIAS_DECLS_H
-

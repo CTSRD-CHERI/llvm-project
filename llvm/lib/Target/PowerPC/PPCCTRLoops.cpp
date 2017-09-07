@@ -54,9 +54,6 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #endif
 
-#include <algorithm>
-#include <vector>
-
 using namespace llvm;
 
 #define DEBUG_TYPE "ctrloops"
@@ -112,6 +109,7 @@ namespace {
     const DataLayout *DL;
     DominatorTree *DT;
     const TargetLibraryInfo *LibInfo;
+    bool PreserveLCSSA;
   };
 
   char PPCCTRLoops::ID = 0;
@@ -168,12 +166,16 @@ FunctionPass *llvm::createPPCCTRLoopsVerify() {
 #endif // NDEBUG
 
 bool PPCCTRLoops::runOnFunction(Function &F) {
+  if (skipFunction(F))
+    return false;
+
   LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
   SE = &getAnalysis<ScalarEvolutionWrapperPass>().getSE();
   DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
   DL = &F.getParent()->getDataLayout();
   auto *TLIP = getAnalysisIfAvailable<TargetLibraryInfoWrapperPass>();
   LibInfo = TLIP ? &TLIP->getTLI() : nullptr;
+  PreserveLCSSA = mustPreserveAnalysisID(LCSSAID);
 
   bool MadeChange = false;
 
@@ -197,10 +199,18 @@ static bool isLargeIntegerTy(bool Is32Bit, Type *Ty) {
 // Determining the address of a TLS variable results in a function call in
 // certain TLS models.
 static bool memAddrUsesCTR(const PPCTargetMachine *TM,
-                           const llvm::Value *MemAddr) {
+                           const Value *MemAddr) {
   const auto *GV = dyn_cast<GlobalValue>(MemAddr);
-  if (!GV)
+  if (!GV) {
+    // Recurse to check for constants that refer to TLS global variables.
+    if (const auto *CV = dyn_cast<Constant>(MemAddr))
+      for (const auto &CO : CV->operands())
+        if (memAddrUsesCTR(TM, CO))
+          return true;
+
     return false;
+  }
+
   if (!GV->isThreadLocal())
     return false;
   if (!TM)
@@ -235,7 +245,7 @@ bool PPCCTRLoops::mightUseCTR(const Triple &TT, BasicBlock *BB) {
       if (Function *F = CI->getCalledFunction()) {
         // Most intrinsics don't become function calls, but some might.
         // sin, cos, exp and log are always calls.
-        unsigned Opcode;
+        unsigned Opcode = 0;
         if (F->getIntrinsicID() != Intrinsic::not_intrinsic) {
           switch (F->getIntrinsicID()) {
           default: continue;
@@ -288,13 +298,17 @@ bool PPCCTRLoops::mightUseCTR(const Triple &TT, BasicBlock *BB) {
               return true;
             else
               continue; // ISD::FCOPYSIGN is never a library call.
-          case Intrinsic::sqrt:      Opcode = ISD::FSQRT;      break;
-          case Intrinsic::floor:     Opcode = ISD::FFLOOR;     break;
-          case Intrinsic::ceil:      Opcode = ISD::FCEIL;      break;
-          case Intrinsic::trunc:     Opcode = ISD::FTRUNC;     break;
-          case Intrinsic::rint:      Opcode = ISD::FRINT;      break;
-          case Intrinsic::nearbyint: Opcode = ISD::FNEARBYINT; break;
-          case Intrinsic::round:     Opcode = ISD::FROUND;     break;
+          case Intrinsic::sqrt:               Opcode = ISD::FSQRT;      break;
+          case Intrinsic::floor:              Opcode = ISD::FFLOOR;     break;
+          case Intrinsic::ceil:               Opcode = ISD::FCEIL;      break;
+          case Intrinsic::trunc:              Opcode = ISD::FTRUNC;     break;
+          case Intrinsic::rint:               Opcode = ISD::FRINT;      break;
+          case Intrinsic::nearbyint:          Opcode = ISD::FNEARBYINT; break;
+          case Intrinsic::round:              Opcode = ISD::FROUND;     break;
+          case Intrinsic::minnum:             Opcode = ISD::FMINNUM;    break;
+          case Intrinsic::maxnum:             Opcode = ISD::FMAXNUM;    break;
+          case Intrinsic::umul_with_overflow: Opcode = ISD::UMULO;      break;
+          case Intrinsic::smul_with_overflow: Opcode = ISD::SMULO;      break;
           }
         }
 
@@ -303,7 +317,7 @@ bool PPCCTRLoops::mightUseCTR(const Triple &TT, BasicBlock *BB) {
         // (i.e. soft float or atomics). If adapting for targets that do,
         // additional care is required here.
 
-        LibFunc::Func Func;
+        LibFunc Func;
         if (!F->hasLocalLinkage() && F->hasName() && LibInfo &&
             LibInfo->getLibFunc(F->getName(), Func) &&
             LibInfo->hasOptimizedCodeGen(Func)) {
@@ -317,45 +331,55 @@ bool PPCCTRLoops::mightUseCTR(const Triple &TT, BasicBlock *BB) {
 
           switch (Func) {
           default: return true;
-          case LibFunc::copysign:
-          case LibFunc::copysignf:
+          case LibFunc_copysign:
+          case LibFunc_copysignf:
             continue; // ISD::FCOPYSIGN is never a library call.
-          case LibFunc::copysignl:
+          case LibFunc_copysignl:
             return true;
-          case LibFunc::fabs:
-          case LibFunc::fabsf:
-          case LibFunc::fabsl:
+          case LibFunc_fabs:
+          case LibFunc_fabsf:
+          case LibFunc_fabsl:
             continue; // ISD::FABS is never a library call.
-          case LibFunc::sqrt:
-          case LibFunc::sqrtf:
-          case LibFunc::sqrtl:
+          case LibFunc_sqrt:
+          case LibFunc_sqrtf:
+          case LibFunc_sqrtl:
             Opcode = ISD::FSQRT; break;
-          case LibFunc::floor:
-          case LibFunc::floorf:
-          case LibFunc::floorl:
+          case LibFunc_floor:
+          case LibFunc_floorf:
+          case LibFunc_floorl:
             Opcode = ISD::FFLOOR; break;
-          case LibFunc::nearbyint:
-          case LibFunc::nearbyintf:
-          case LibFunc::nearbyintl:
+          case LibFunc_nearbyint:
+          case LibFunc_nearbyintf:
+          case LibFunc_nearbyintl:
             Opcode = ISD::FNEARBYINT; break;
-          case LibFunc::ceil:
-          case LibFunc::ceilf:
-          case LibFunc::ceill:
+          case LibFunc_ceil:
+          case LibFunc_ceilf:
+          case LibFunc_ceill:
             Opcode = ISD::FCEIL; break;
-          case LibFunc::rint:
-          case LibFunc::rintf:
-          case LibFunc::rintl:
+          case LibFunc_rint:
+          case LibFunc_rintf:
+          case LibFunc_rintl:
             Opcode = ISD::FRINT; break;
-          case LibFunc::round:
-          case LibFunc::roundf:
-          case LibFunc::roundl:
+          case LibFunc_round:
+          case LibFunc_roundf:
+          case LibFunc_roundl:
             Opcode = ISD::FROUND; break;
-          case LibFunc::trunc:
-          case LibFunc::truncf:
-          case LibFunc::truncl:
+          case LibFunc_trunc:
+          case LibFunc_truncf:
+          case LibFunc_truncl:
             Opcode = ISD::FTRUNC; break;
+          case LibFunc_fmin:
+          case LibFunc_fminf:
+          case LibFunc_fminl:
+            Opcode = ISD::FMINNUM; break;
+          case LibFunc_fmax:
+          case LibFunc_fmaxf:
+          case LibFunc_fmaxl:
+            Opcode = ISD::FMAXNUM; break;
           }
+        }
 
+        if (Opcode) {
           auto &DL = CI->getModule()->getDataLayout();
           MVT VTy = TLI->getSimpleValueType(DL, CI->getArgOperand(0)->getType(),
                                             true);
@@ -412,6 +436,25 @@ bool PPCCTRLoops::mightUseCTR(const Triple &TT, BasicBlock *BB) {
       if (SI->getNumCases() + 1 >= (unsigned)TLI->getMinimumJumpTableEntries())
         return true;
     }
+
+    if (TM->getSubtargetImpl(*BB->getParent())->getTargetLowering()->useSoftFloat()) {
+      switch(J->getOpcode()) {
+      case Instruction::FAdd:
+      case Instruction::FSub:
+      case Instruction::FMul:
+      case Instruction::FDiv:
+      case Instruction::FRem:
+      case Instruction::FPTrunc:
+      case Instruction::FPExt:
+      case Instruction::FPToUI:
+      case Instruction::FPToSI:
+      case Instruction::UIToFP:
+      case Instruction::SIToFP:
+      case Instruction::FCmp:
+        return true;
+      }
+    }
+
     for (Value *Operand : J->operands())
       if (memAddrUsesCTR(TM, Operand))
         return true;
@@ -529,7 +572,7 @@ bool PPCCTRLoops::convertToCTRLoop(Loop *L) {
   // the CTR register because some such uses might be reordered by the
   // selection DAG after the mtctr instruction).
   if (!Preheader || mightUseCTR(TT, Preheader))
-    Preheader = InsertPreheaderForLoop(L, this);
+    Preheader = InsertPreheaderForLoop(L, DT, LI, PreserveLCSSA);
   if (!Preheader)
     return MadeChange;
 
@@ -577,9 +620,9 @@ bool PPCCTRLoops::convertToCTRLoop(Loop *L) {
 }
 
 #ifndef NDEBUG
-static bool clobbersCTR(const MachineInstr *MI) {
-  for (unsigned i = 0, e = MI->getNumOperands(); i != e; ++i) {
-    const MachineOperand &MO = MI->getOperand(i);
+static bool clobbersCTR(const MachineInstr &MI) {
+  for (unsigned i = 0, e = MI.getNumOperands(); i != e; ++i) {
+    const MachineOperand &MO = MI.getOperand(i);
     if (MO.isReg()) {
       if (MO.isDef() && (MO.getReg() == PPC::CTR || MO.getReg() == PPC::CTR8))
         return true;
@@ -618,7 +661,7 @@ check_block:
       break;
     }
 
-    if (I != BI && clobbersCTR(I)) {
+    if (I != BI && clobbersCTR(*I)) {
       DEBUG(dbgs() << "BB#" << MBB->getNumber() << " (" <<
                       MBB->getFullName() << ") instruction " << *I <<
                       " clobbers CTR, invalidating " << "BB#" <<

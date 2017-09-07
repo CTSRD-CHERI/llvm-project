@@ -16,17 +16,20 @@
 //   nth_element(Iter first, Iter nth, Iter last);
 
 #include <algorithm>
+#include <random>
 #include <cassert>
 
+std::mt19937 randomness;
+
 void
-test_one(unsigned N, unsigned M)
+test_one(int N, int M)
 {
     assert(N != 0);
     assert(M < N);
     int* array = new int[N];
     for (int i = 0; i < N; ++i)
         array[i] = i;
-    std::random_shuffle(array, array+N);
+    std::shuffle(array, array+N, randomness);
     std::nth_element(array, array+M, array+N);
     assert(array[M] == M);
     std::nth_element(array, array+N, array+N); // begin, end, end
@@ -34,7 +37,7 @@ test_one(unsigned N, unsigned M)
 }
 
 void
-test(unsigned N)
+test(int N)
 {
     test_one(N, 0);
     test_one(N, 1);

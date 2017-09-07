@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03
+
 // <regex>
 
 // template <class charT, class traits = regex_traits<charT>> class basic_regex;
@@ -17,10 +19,10 @@
 
 #include <regex>
 #include <cassert>
+#include "test_macros.h"
 
 int main()
 {
-#ifndef _LIBCPP_HAS_NO_GENERALIZED_INITIALIZERS
     std::regex r2;
     r2.assign({'(', 'a', '(', '[', 'b', 'c', ']', ')', ')'});
     assert(r2.flags() == std::regex::ECMAScript);
@@ -29,5 +31,4 @@ int main()
     r2.assign({'(', 'a', '(', '[', 'b', 'c', ']', ')', ')'}, std::regex::extended);
     assert(r2.flags() == std::regex::extended);
     assert(r2.mark_count() == 2);
-#endif  // _LIBCPP_HAS_NO_GENERALIZED_INITIALIZERS
 }

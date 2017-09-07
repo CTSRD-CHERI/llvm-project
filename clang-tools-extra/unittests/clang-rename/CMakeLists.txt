@@ -8,16 +8,21 @@ include_directories(
   ${CLANG_RENAME_SOURCE_DIR}
   )
 
+# We'd like clang/unittests/Tooling/RewriterTestContext.h in the test.
+include_directories(${CLANG_SOURCE_DIR})
+
 add_extra_unittest(ClangRenameTests
-  USRLocFindingTest.cpp
-  ${CLANG_RENAME_SOURCE_DIR}/USRFinder.cpp
-  ${CLANG_RENAME_SOURCE_DIR}/USRFindingAction.cpp
+  RenameClassTest.cpp
   )
 
 target_link_libraries(ClangRenameTests
   clangAST
+  clangASTMatchers
   clangBasic
+  clangFormat
   clangFrontend
-  clangIndex
+  clangRename
+  clangRewrite
   clangTooling
+  clangToolingCore
   )

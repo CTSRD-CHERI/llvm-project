@@ -13,6 +13,7 @@
 
 #include <deque>
 #include <cassert>
+#include <cstddef>
 
 #include "min_allocator.h"
 
@@ -46,9 +47,9 @@ test(C& c1)
     std::size_t c1_osize = c1.size();
     c1.pop_back();
     assert(c1.size() == c1_osize - 1);
-    assert(distance(c1.begin(), c1.end()) == c1.size());
+    assert(static_cast<std::size_t>(distance(c1.begin(), c1.end())) == c1.size());
     I i = c1.begin();
-    for (int j = 0; j < c1.size(); ++j, ++i)
+    for (int j = 0; static_cast<std::size_t>(j) < c1.size(); ++j, ++i)
         assert(*i == j);
 }
 
@@ -72,7 +73,7 @@ int main()
         for (int j = 0; j < N; ++j)
             testN<std::deque<int> >(rng[i], rng[j]);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     int rng[] = {0, 1, 2, 3, 1023, 1024, 1025, 2047, 2048, 2049};
     const int N = sizeof(rng)/sizeof(rng[0]);

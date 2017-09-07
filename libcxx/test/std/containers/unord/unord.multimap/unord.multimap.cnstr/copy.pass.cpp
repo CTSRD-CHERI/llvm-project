@@ -19,7 +19,10 @@
 #include <string>
 #include <cassert>
 #include <cfloat>
+#include <cmath>
+#include <cstddef>
 
+#include "test_macros.h"
 #include "../../../test_compare.h"
 #include "../../../test_hash.h"
 #include "test_allocator.h"
@@ -50,7 +53,7 @@ int main()
             test_allocator<std::pair<const int, std::string> >(10)
            );
         C c = c0;
-        assert(c.bucket_count() == 7);
+        LIBCPP_ASSERT(c.bucket_count() == 7);
         assert(c.size() == 6);
         C::const_iterator i = c.cbegin();
         assert(i->first == 1);
@@ -75,12 +78,12 @@ int main()
         assert(c.get_allocator() ==
                (test_allocator<std::pair<const int, std::string> >(10)));
         assert(!c.empty());
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
-        assert(fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
+        assert(std::fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
         assert(c.max_load_factor() == 1);
     }
-#ifndef _LIBCPP_HAS_NO_ADVANCED_SFINAE
+#if TEST_STD_VER >= 11
     {
         typedef std::unordered_multimap<int, std::string,
                                    test_hash<std::hash<int> >,
@@ -104,7 +107,7 @@ int main()
             other_allocator<std::pair<const int, std::string> >(10)
            );
         C c = c0;
-        assert(c.bucket_count() == 7);
+        LIBCPP_ASSERT(c.bucket_count() == 7);
         assert(c.size() == 6);
         C::const_iterator i = c.cbegin();
         assert(i->first == 1);
@@ -129,13 +132,11 @@ int main()
         assert(c.get_allocator() ==
                (other_allocator<std::pair<const int, std::string> >(-2)));
         assert(!c.empty());
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
-        assert(fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
+        assert(std::fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
         assert(c.max_load_factor() == 1);
     }
-#endif  // _LIBCPP_HAS_NO_ADVANCED_SFINAE
-#if __cplusplus >= 201103L
     {
         typedef std::unordered_multimap<int, std::string,
                                    test_hash<std::hash<int> >,
@@ -159,7 +160,7 @@ int main()
             min_allocator<std::pair<const int, std::string> >()
            );
         C c = c0;
-        assert(c.bucket_count() == 7);
+        LIBCPP_ASSERT(c.bucket_count() == 7);
         assert(c.size() == 6);
         C::const_iterator i = c.cbegin();
         assert(i->first == 1);
@@ -184,9 +185,9 @@ int main()
         assert(c.get_allocator() ==
                (min_allocator<std::pair<const int, std::string> >()));
         assert(!c.empty());
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
-        assert(fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
+        assert(std::fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
         assert(c.max_load_factor() == 1);
     }
 #endif

@@ -154,16 +154,21 @@ func (san *sanitizerOptions) addLibs(triple string, flags []string) []string {
 }
 
 func (san *sanitizerOptions) getAttribute() llvm.Attribute {
+	var attrKind uint
+
 	switch {
 	case san.address:
-		return llvm.SanitizeAddressAttribute
+		attrKind = llvm.AttributeKindID("sanitize_address")
 	case san.thread:
-		return llvm.SanitizeThreadAttribute
+		attrKind = llvm.AttributeKindID("sanitize_thread")
 	case san.memory:
-		return llvm.SanitizeMemoryAttribute
+		attrKind = llvm.AttributeKindID("sanitize_memory")
 	default:
-		return 0
+		attrKind = 0
 	}
+
+	ctx := llvm.GlobalContext()
+	return ctx.CreateEnumAttribute(attrKind, 0)
 }
 
 type driverOptions struct {
@@ -487,9 +492,6 @@ func runPasses(opts *driverOptions, tm llvm.TargetMachine, m llvm.Module) {
 	pmb.SetOptLevel(opts.optLevel)
 	pmb.SetSizeLevel(opts.sizeLevel)
 
-	target := tm.TargetData()
-	mpm.Add(target)
-	fpm.Add(target)
 	tm.AddAnalysisPasses(mpm)
 	tm.AddAnalysisPasses(fpm)
 
@@ -746,7 +748,7 @@ func performAction(opts *driverOptions, kind actionKind, inputs []string, output
 			if opts.staticLibgo {
 				args = append(args, "-Wl,-Bstatic", "-lgo-llgo", "-Wl,-Bdynamic", "-lpthread", "-lm")
 			} else {
-				args = append(args, "-lgo-llgo")
+				args = append(args, "-lgo-llgo", "-lm")
 			}
 		} else {
 			linkerPath = opts.gccgoPath

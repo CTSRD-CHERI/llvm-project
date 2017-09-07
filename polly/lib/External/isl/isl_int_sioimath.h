@@ -20,6 +20,14 @@
 
 #define ARRAY_SIZE(array) (sizeof(array)/sizeof(*array))
 
+/* Visual Studio before VS2015 does not support the inline keyword when
+ * compiling in C mode because it was introduced in C99 which it does not
+ * officially support.  Instead, it has a proprietary extension using __inline.
+ */
+#if defined(_MSC_VER) && (_MSC_VER < 1900)
+#define inline __inline
+#endif
+
 /* The type to represent integers optimized for small values. It is either a
  * pointer to an mp_int ( = mpz_t*; big representation) or an int32_t (small
  * represenation) with a discriminator at the least significant bit. In big
@@ -522,7 +530,7 @@ inline double isl_sioimath_get_d(isl_sioimath_src val)
 /* Format a number as decimal string.
  *
  * The largest possible string from small representation is 12 characters
- *("-2147483647").
+ * ("-2147483647").
  */
 inline char *isl_sioimath_get_str(isl_sioimath_src val)
 {
@@ -719,7 +727,7 @@ inline void isl_sioimath_mul_si(isl_sioimath_ptr dst, isl_sioimath lhs,
 	isl_sioimath_try_demote(dst);
 }
 
-/* Multiply an isl_int and an unsigned long
+/* Multiply an isl_int and an unsigned long.
  */
 inline void isl_sioimath_mul_ui(isl_sioimath_ptr dst, isl_sioimath lhs,
 	unsigned long rhs)
@@ -739,9 +747,8 @@ inline void isl_sioimath_mul_ui(isl_sioimath_ptr dst, isl_sioimath lhs,
 }
 
 /* Compute the power of an isl_int to an unsigned long.
- * Always let IMath do it; the result is unlikely to be small except some
- * special
- * cases.
+ * Always let IMath do it; the result is unlikely to be small except in some
+ * special cases.
  * Note: 0^0 == 1
  */
 inline void isl_sioimath_pow_ui(isl_sioimath_ptr dst, isl_sioimath_src lhs,
@@ -1076,6 +1083,8 @@ inline int isl_sioimath_abs_cmp(isl_sioimath_src lhs, isl_sioimath_src rhs)
 }
 
 /* Return whether lhs is divisible by rhs.
+ * In particular, can rhs be multiplied by some integer to result in lhs?
+ * If rhs is zero, then this means lhs has to be zero too.
  */
 inline int isl_sioimath_is_divisible_by(isl_sioimath_src lhs,
 					isl_sioimath_src rhs)
@@ -1084,6 +1093,9 @@ inline int isl_sioimath_is_divisible_by(isl_sioimath_src lhs,
 	int32_t lhssmall, rhssmall;
 	mpz_t rem;
 	int cmp;
+
+	if (isl_sioimath_sgn(rhs) == 0)
+		return isl_sioimath_sgn(lhs) == 0;
 
 	if (isl_sioimath_decode_small(lhs, &lhssmall) &&
 	    isl_sioimath_decode_small(rhs, &rhssmall))

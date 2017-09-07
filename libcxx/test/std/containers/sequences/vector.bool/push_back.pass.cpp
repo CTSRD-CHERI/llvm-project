@@ -14,6 +14,7 @@
 
 #include <vector>
 #include <cassert>
+#include <cstddef>
 
 #include "min_allocator.h"
 
@@ -27,11 +28,11 @@ int main()
         {
             c.push_back(a[i]);
             assert(c.size() == i+1);
-            for (int j = 0; j < c.size(); ++j)
+            for (std::size_t j = 0; j < c.size(); ++j)
                 assert(c[j] == a[j]);
         }
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
         bool a[] = {0, 1, 1, 0, 1, 0, 0};
         const unsigned N = sizeof(a)/sizeof(a[0]);
@@ -40,7 +41,7 @@ int main()
         {
             c.push_back(a[i]);
             assert(c.size() == i+1);
-            for (int j = 0; j < c.size(); ++j)
+            for (std::size_t j = 0; j < c.size(); ++j)
                 assert(c[j] == a[j]);
         }
     }

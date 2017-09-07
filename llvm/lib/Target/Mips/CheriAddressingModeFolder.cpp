@@ -1,7 +1,9 @@
+#include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/MachineLoopInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/Support/CommandLine.h"
 #include "Mips.h"
@@ -17,13 +19,26 @@ static cl::opt<bool> DisableAddressingModeFolder(
 namespace {
 struct CheriAddressingModeFolder : public MachineFunctionPass {
   static char ID;
-  const MipsInstrInfo *InstrInfo;
+  const MipsInstrInfo *InstrInfo = nullptr;
 
+  CheriAddressingModeFolder() : MachineFunctionPass(ID) {
+  }
   CheriAddressingModeFolder(MipsTargetMachine &TM) : MachineFunctionPass(ID) {
     InstrInfo = TM.getSubtargetImpl()->getInstrInfo();
   }
-  bool tryToFoldAdd(unsigned vreg, MachineRegisterInfo &RI,
-                    MachineInstr *&AddInst, int64_t &offset) {
+
+  StringRef getPassName() const override { return "Cheri Addressing Mode Folder"; }
+
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
+    AU.setPreservesCFG();
+    AU.addRequired<MachineLoopInfo>();
+    AU.addRequired<MachineDominatorTree>();
+    AU.addPreserved<MachineLoopInfo>();
+    MachineFunctionPass::getAnalysisUsage(AU);
+  }
+
+  bool tryToFoldAdd(unsigned Op, unsigned vreg, MachineRegisterInfo &RI,
+      MachineInstr *&AddInst, int64_t &offset) {
     AddInst = RI.getUniqueVRegDef(vreg);
     // If we can't uniquely identify the definition, give up.
     if (AddInst == 0)
@@ -48,21 +63,77 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
       return false;
     off += offset;
     // If the result is too big to fit in the offset field, give up
-    // FIXME: Offset for clc / csc is bigger...
-    if (off < -127 || off > 127) {
+    if (!IsValidOffset(Op, off))
       return false;
-    }
     offset = off;
     return true;
   }
-  bool foldMachineFunction(MachineFunction &MF) {
-    if (DisableAddressingModeFolder)
-      return false;
+  bool IsValidOffset(unsigned Op, int immediate) {
+    switch (Op) {
+      default:
+        llvm_unreachable("No MIPS equivalent");
+      case Mips::CAPLOAD8:
+      case Mips::CAPSTORE8:
+      case Mips::CAPLOADU8:
+      case Mips::CAPLOADU832:
+      case Mips::CAPLOAD832:
+        return isShiftedInt<8,0>(immediate);
+      case Mips::CAPLOAD16:
+      case Mips::CAPLOADU16:
+      case Mips::CAPSTORE16:
+      case Mips::CAPLOAD1632:
+      case Mips::CAPLOADU1632:
+        return isShiftedInt<8,1>(immediate);
+      case Mips::CAPLOAD32:
+      case Mips::CAPLOADU32:
+      case Mips::CAPSTORE32:
+      case Mips::CAPLOAD3264:
+        return isShiftedInt<8,2>(immediate);
+      case Mips::CAPLOAD64:
+      case Mips::CAPSTORE64:
+        return isShiftedInt<8,3>(immediate);
+      case Mips::LOADCAP:
+      case Mips::STORECAP:
+        return isShiftedInt<11,4>(immediate);
+    }
+  }
+  unsigned MipsOpForCHERIOp(unsigned Op) {
+    switch (Op) {
+      default:
+        llvm_unreachable("No MIPS equivalent");
+      case Mips::CAPLOAD8: return Mips::LB64;
+      case Mips::CAPLOADU8: return Mips::LBu64;
+      case Mips::CAPLOAD16: return Mips::LH64;
+      case Mips::CAPLOADU16: return Mips::LHu64;
+      case Mips::CAPLOAD32: return Mips::LW;
+      case Mips::CAPLOADU32: return Mips::LWu;
+      case Mips::CAPLOAD832: return Mips::LB;
+      case Mips::CAPLOADU832: return Mips::LBu;
+      case Mips::CAPLOAD1632: return Mips::LH;
+      case Mips::CAPLOADU1632: return Mips::LHu;
+      case Mips::CAPLOAD3264: return Mips::LW64;
+      case Mips::CAPLOAD64: return Mips::LD;
+      case Mips::CAPSTORE8: return Mips::SB64;
+      case Mips::CAPSTORE16: return Mips::SH64;
+      case Mips::CAPSTORE32: return Mips::SW64;
+      case Mips::CAPSTORE64: return Mips::SD;
+    }
+  }
+
+  template <typename T>
+  void Remove(T &Instrs, MachineRegisterInfo &RI) {
+    for (auto *I : Instrs)
+      if (RI.use_empty(I->getOperand(0).getReg()))
+        I->eraseFromBundle();
+  }
+
+  bool foldMachineFunction(MachineFunction &MF, MachineLoopInfo &MLI,
+      MachineDominatorTree &MDT) {
 
     MachineRegisterInfo &RI = MF.getRegInfo();
     std::set<MachineInstr *> IncOffsets;
     std::set<MachineInstr *> Adds;
-    std::set<std::pair<MachineBasicBlock *, MachineInstr *>> SetPCCOffsets;
+    llvm::SmallVector<std::pair<MachineInstr *, MachineInstr *>, 8> C0Ops;
     std::set<MachineInstr *> GetPCCs;
     bool modified = false;
     for (auto &MBB : MF)
@@ -70,13 +141,6 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         int Op = I.getOpcode();
         if (Op == Mips::CGetPCC) {
           GetPCCs.insert(&I);
-          continue;
-        }
-        // Look for CSetOffset instructions that are using the result of CGetPCC
-        if (Op == Mips::CSetOffset) {
-          MachineInstr *Base = RI.getUniqueVRegDef(I.getOperand(1).getReg());
-          if (Base && (Base->getOpcode() == Mips::CGetPCC))
-            SetPCCOffsets.insert(std::make_pair(&MBB, &I));
           continue;
         }
         // Only look at cap-relative loads and stores
@@ -98,9 +162,9 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
           MachineInstr *AddInst;
           // If the register offset is a simple constant, then try to move it
           // into the memory operation
-          if (tryToFoldAdd(I.getOperand(1).getReg(), RI, AddInst, offset)) {
+          if (tryToFoldAdd(Op, I.getOperand(1).getReg(), RI, AddInst, offset)) {
             Adds.insert(AddInst);
-            I.getOperand(2).setImm(offset);
+            I.getOperand(1).setImm(offset);
             I.getOperand(1).setReg(Mips::ZERO_64);
           } else
             continue;
@@ -110,9 +174,20 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         // If the capability is formed by incrementing an offset, then try to
         // pull that calculation into the memory operation.
 
-        // Ignore ones that are not based on a CIncOffset op
         MachineInstr *IncOffset = RI.getUniqueVRegDef(I.getOperand(3).getReg());
-        if (!IncOffset || (IncOffset->getOpcode() != Mips::CIncOffset))
+        if (!IncOffset)
+          continue;
+        // If this is CFromPtr-relative load or store, then we may be able to
+        // fold it into a MIPS load.
+        if (IncOffset->getOpcode() == Mips::CFromPtr) {
+          if ((Op == Mips::LOADCAP) || (Op == Mips::STORECAP))
+            continue;
+          if (IncOffset->getOperand(1).getReg() == Mips::C0)
+            C0Ops.emplace_back(&I, IncOffset);
+          continue;
+        }
+        // Ignore ones that are not based on a CIncOffset op
+        if (IncOffset->getOpcode() != Mips::CIncOffset)
           continue;
         assert(IncOffset);
 
@@ -123,7 +198,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         // If the CIncOffset is of a daddi[u] then we can potentially replace
         // both by just folding the register and immediate offsets into the
         // load / store.
-        if (tryToFoldAdd(Offset.getReg(), RI, AddInst, offset)) {
+        if (tryToFoldAdd(Op, Offset.getReg(), RI, AddInst, offset)) {
           // If we managed to pull the offset calculation entirely away, then
           // just use the computed immediate
           Adds.insert(AddInst);
@@ -134,45 +209,109 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
           // offset
           I.getOperand(1).setReg(Offset.getReg());
         I.getOperand(3).setReg(Cap.getReg());
+        // If we were using a unique vreg here it will probably have kill set to
+        // true, so if we retain this kill state the machine instr verifier will
+        // complain if there is any other instruction later on that uses the
+        // cap reg.
+        // XXXAR: is copying the kill state the capreg enough?
+        // Could there be some corner case where the capreg is killed before
+        // this CIncOffset?
+        I.getOperand(3).setIsKill(Cap.isKill());
+        Cap.setIsKill(false);
+
         IncOffsets.insert(IncOffset);
         modified = true;
       }
-    for (auto &I : SetPCCOffsets) {
-      unsigned PCC =
-          MF.getRegInfo().createVirtualRegister(&Mips::CheriRegsRegClass);
-      BuildMI(*I.first, I.second, I.second->getDebugLoc(),
-              InstrInfo->get(Mips::CGetPCC), PCC);
-      I.second->getOperand(1).setReg(PCC);
-    }
-    for (auto *I : GetPCCs)
-      if (RI.use_empty(I->getOperand(0).getReg()))
-        I->eraseFromBundle();
-
-    for (MachineInstr *I : IncOffsets) {
-      if (!RI.use_empty(I->getOperand(0).getReg())) {
-        continue;
+    for (auto &I : C0Ops) {
+      IncOffsets.insert(I.second);
+      unsigned BaseReg = I.second->getOperand(2).getReg();
+      // This can't be a symbolic address (yet) because we don't have
+      // relocations that fit.
+      MachineOperand &Offset = I.first->getOperand(2);
+      // If this was the result of a daddiu, fold the immediate into the result
+      // as well.
+      MachineInstr *AddInst = RI.getUniqueVRegDef(BaseReg);
+      if (AddInst && (AddInst->getOpcode() == Mips::DADDiu)) {
+        MachineOperand &MO = AddInst->getOperand(2);
+        // FIXME: We could probably fold the add into the load in some cases
+        // even when it's not initially zero, as our immediate field has just
+        // grown, but that's probably not the common case.
+        if (Offset.isImm() && (Offset.getImm() == 0)) {
+          Offset = MO;
+          BaseReg = AddInst->getOperand(1).getReg();
+        }
+      } else
+        AddInst = nullptr;
+      auto InsertPoint = I.first;
+      MachineBasicBlock *InsertBlock = I.first->getParent();
+      // If this is a load of a GOT offset and it's in a loop then we want to
+      // try to hoist it out of the loop.
+      if (Offset.isGlobal()) {
+        auto Loop = MLI.getLoopFor(InsertBlock);
+        if (Loop && Loop->getLoopPreheader()) {
+          auto *Preheader = Loop->getLoopPreheader();
+          // If all paths to this block go through the preheader then hoist.
+          // Note: It might be worth doing this recursively and pushing out of
+          // nested loops.
+          if (Preheader->terminators().begin() != Preheader->terminators().end()) {
+            MachineInstr *End = &*Preheader->getFirstTerminator();
+            if (MDT.dominates(Preheader, InsertBlock))
+              if (MDT.dominates(End, I.first)) {
+                InsertBlock = Preheader;
+                InsertPoint = End;
+              }
+          }
+        }
       }
-      I->eraseFromBundle();
-    }
-    for (MachineInstr *I : Adds) {
-      if (!RI.use_empty(I->getOperand(0).getReg())) {
-        continue;
+      auto FirstOperand = I.first->getOperand(0);
+      unsigned FirstReg = FirstOperand.getReg();
+      BuildMI(*InsertBlock, InsertPoint, I.first->getDebugLoc(),
+          InstrInfo->get(MipsOpForCHERIOp(I.first->getOpcode())))
+        .addReg(FirstReg, getDefRegState(FirstOperand.isDef()))
+        .addReg(BaseReg).add(Offset);
+      I.first->eraseFromBundle();
+      if (AddInst) {
+        // If we've folded the base of the add into the load's immediate, then
+        // we the add is no longer able to kill the register.
+        AddInst->getOperand(1).setIsKill(false);
+        Adds.insert(AddInst);
       }
-      I->eraseFromBundle();
+      modified = true;
     }
+    Remove(GetPCCs, RI);
+    Remove(IncOffsets, RI);
+    Remove(Adds, RI);
     return modified;
   }
-  virtual bool runOnMachineFunction(MachineFunction &MF) {
+  bool runOnMachineFunction(MachineFunction &MF) override {
+    if (DisableAddressingModeFolder)
+      return false;
+    InstrInfo = MF.getSubtarget<MipsSubtarget>().getInstrInfo();
     bool modified = false;
-    while (foldMachineFunction(MF))
+    MachineLoopInfo &MLI = getAnalysis<MachineLoopInfo>();
+    MachineDominatorTree &MDT = getAnalysis<MachineDominatorTree>();
+    while (foldMachineFunction(MF, MLI, MDT))
       modified = true;
     return modified;
   }
 };
 }
+namespace llvm {
+  void initializeCheriAddressingModeFolderPass(PassRegistry&);
+}
+
+
 char CheriAddressingModeFolder::ID;
+INITIALIZE_PASS_BEGIN(CheriAddressingModeFolder, "cheriaddrmodefolder",
+                    "CHERI addressing mode folder", false, false)
+INITIALIZE_PASS_DEPENDENCY(MachineLoopInfo)
+INITIALIZE_PASS_DEPENDENCY(MachineDominatorTree)
+INITIALIZE_PASS_END(CheriAddressingModeFolder, "cheriaddrmodefolder",
+                    "CHERI addressing mode folder", false, false)
+
+
 
 MachineFunctionPass *
-llvm::createCheriAddressingModeFolder(MipsTargetMachine &TM) {
-  return new CheriAddressingModeFolder(TM);
+llvm::createCheriAddressingModeFolder() {
+  return new CheriAddressingModeFolder();
 }

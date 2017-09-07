@@ -20,6 +20,7 @@
 #include <iterator>
 #include <cassert>
 
+#include "test_macros.h"
 #include "min_allocator.h"
 
 int main()
@@ -33,7 +34,7 @@ int main()
     j = c.cbegin();
     assert(i == j);
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     typedef std::deque<int, min_allocator<int>> C;
     C c;
@@ -44,7 +45,7 @@ int main()
     assert(i == j);
     }
 #endif
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
     { // N3644 testing
         std::deque<int>::iterator ii1{}, ii2{};
         std::deque<int>::iterator ii4 = ii1;
@@ -68,7 +69,7 @@ int main()
         assert ( (cii >= ii1 ));
         assert (cii - ii1 == 0);
         assert (ii1 - cii == 0);
-        
+
 //         std::deque<int> c;
 //         assert ( ii1 != c.cbegin());
 //         assert ( cii != c.begin());

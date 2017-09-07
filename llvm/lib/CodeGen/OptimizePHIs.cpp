@@ -23,7 +23,7 @@
 #include "llvm/Target/TargetSubtargetInfo.h"
 using namespace llvm;
 
-#define DEBUG_TYPE "phi-opt"
+#define DEBUG_TYPE "opt-phis"
 
 STATISTIC(NumPHICycles, "Number of PHI cycles replaced");
 STATISTIC(NumDeadPHICycles, "Number of dead PHI cycles");
@@ -59,11 +59,11 @@ namespace {
 
 char OptimizePHIs::ID = 0;
 char &llvm::OptimizePHIsID = OptimizePHIs::ID;
-INITIALIZE_PASS(OptimizePHIs, "opt-phis",
+INITIALIZE_PASS(OptimizePHIs, DEBUG_TYPE,
                 "Optimize machine instruction PHIs", false, false)
 
 bool OptimizePHIs::runOnMachineFunction(MachineFunction &Fn) {
-  if (skipOptnoneFunction(*Fn.getFunction()))
+  if (skipFunction(*Fn.getFunction()))
     return false;
 
   MRI = &Fn.getRegInfo();
@@ -184,7 +184,7 @@ bool OptimizePHIs::OptimizeBB(MachineBasicBlock &MBB) {
       for (InstrSetIterator PI = PHIsInCycle.begin(), PE = PHIsInCycle.end();
            PI != PE; ++PI) {
         MachineInstr *PhiMI = *PI;
-        if (&*MII == PhiMI)
+        if (MII == PhiMI)
           ++MII;
         PhiMI->eraseFromParent();
       }

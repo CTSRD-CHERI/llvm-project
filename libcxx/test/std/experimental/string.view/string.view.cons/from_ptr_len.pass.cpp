@@ -18,6 +18,8 @@
 #include <string>
 #include <cassert>
 
+#include "test_macros.h"
+
 template<typename CharT>
 void test ( const CharT *s, size_t sz ) {
     {
@@ -32,7 +34,7 @@ int main () {
     test ( "QBCDE", 5 );
     test ( "QBCDE", 2 );
     test ( "", 0 );
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
     {
     constexpr const char *s = "QBCDE";
     constexpr std::experimental::basic_string_view<char> sv1 ( s, 2 );
@@ -44,7 +46,7 @@ int main () {
     test ( L"QBCDE", 5 );
     test ( L"QBCDE", 2 );
     test ( L"", 0 );
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
     {
     constexpr const wchar_t *s = L"QBCDE";
     constexpr std::experimental::basic_string_view<wchar_t> sv1 ( s, 2 );
@@ -53,11 +55,11 @@ int main () {
     }
 #endif
 
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     test ( u"QBCDE", 5 );
     test ( u"QBCDE", 2 );
     test ( u"", 0 );
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
     {
     constexpr const char16_t *s = u"QBCDE";
     constexpr std::experimental::basic_string_view<char16_t> sv1 ( s, 2 );
@@ -69,7 +71,7 @@ int main () {
     test ( U"QBCDE", 5 );
     test ( U"QBCDE", 2 );
     test ( U"", 0 );
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
     {
     constexpr const char32_t *s = U"QBCDE";
     constexpr std::experimental::basic_string_view<char32_t> sv1 ( s, 2 );

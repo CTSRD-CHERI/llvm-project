@@ -14,6 +14,7 @@
 
 #include <deque>
 #include <cassert>
+#include <cstddef>
 
 #include "test_iterators.h"
 #include "test_allocator.h"
@@ -28,8 +29,8 @@ test(InputIterator f, InputIterator l, const Allocator& a)
     typedef typename C::const_iterator const_iterator;
     C d(f, l, a);
     assert(d.get_allocator() == a);
-    assert(d.size() == std::distance(f, l));
-    assert(distance(d.begin(), d.end()) == d.size());
+    assert(d.size() == static_cast<std::size_t>(std::distance(f, l)));
+    assert(static_cast<std::size_t>(distance(d.begin(), d.end())) == d.size());
     for (const_iterator i = d.begin(), e = d.end(); i != e; ++i, ++f)
         assert(*i == *f);
 }
@@ -42,7 +43,7 @@ int main()
     test(forward_iterator<const int*>(ab), forward_iterator<const int*>(an), test_allocator<int>(4));
     test(bidirectional_iterator<const int*>(ab), bidirectional_iterator<const int*>(an), test_allocator<int>(5));
     test(random_access_iterator<const int*>(ab), random_access_iterator<const int*>(an), test_allocator<int>(6));
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     test(input_iterator<const int*>(ab), input_iterator<const int*>(an), min_allocator<int>());
     test(forward_iterator<const int*>(ab), forward_iterator<const int*>(an), min_allocator<int>());
     test(bidirectional_iterator<const int*>(ab), bidirectional_iterator<const int*>(an), min_allocator<int>());

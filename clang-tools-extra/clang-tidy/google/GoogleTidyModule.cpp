@@ -15,11 +15,13 @@
 #include "../readability/NamespaceCommentCheck.h"
 #include "../readability/RedundantSmartptrGetCheck.h"
 #include "AvoidCStyleCastsCheck.h"
+#include "DefaultArgumentsCheck.h"
 #include "ExplicitConstructorCheck.h"
 #include "ExplicitMakePairCheck.h"
 #include "GlobalNamesInHeadersCheck.h"
 #include "IntegerTypesCheck.h"
 #include "MemsetZeroLengthCheck.h"
+#include "NonConstReferences.h"
 #include "OverloadedUnaryAndCheck.h"
 #include "StringReferenceMemberCheck.h"
 #include "TodoCommentCheck.h"
@@ -41,12 +43,16 @@ public:
         "google-build-namespaces");
     CheckFactories.registerCheck<build::UsingNamespaceDirectiveCheck>(
         "google-build-using-namespace");
+    CheckFactories.registerCheck<DefaultArgumentsCheck>(
+        "google-default-arguments");
     CheckFactories.registerCheck<ExplicitConstructorCheck>(
         "google-explicit-constructor");
     CheckFactories.registerCheck<runtime::IntegerTypesCheck>(
         "google-runtime-int");
     CheckFactories.registerCheck<runtime::OverloadedUnaryAndCheck>(
         "google-runtime-operator");
+    CheckFactories.registerCheck<runtime::NonConstReferences>(
+        "google-runtime-references");
     CheckFactories.registerCheck<runtime::StringReferenceMemberCheck>(
         "google-runtime-member-string-references");
     CheckFactories.registerCheck<runtime::MemsetZeroLengthCheck>(

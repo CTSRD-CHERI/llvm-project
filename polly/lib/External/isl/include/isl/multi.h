@@ -32,6 +32,8 @@ __isl_null isl_multi_##BASE *isl_multi_##BASE##_free(			\
 isl_bool isl_multi_##BASE##_plain_is_equal(				\
 	__isl_keep isl_multi_##BASE *multi1,				\
 	__isl_keep isl_multi_##BASE *multi2);				\
+isl_bool isl_multi_##BASE##_involves_nan(				\
+	__isl_keep isl_multi_##BASE *multi);				\
 int isl_multi_##BASE##_find_dim_by_id(					\
 	__isl_keep isl_multi_##BASE *multi, enum isl_dim_type type,	\
 	__isl_keep isl_id *id);						\
@@ -73,9 +75,11 @@ __isl_give isl_multi_##BASE *isl_multi_##BASE##_range_splice(		\
 	__isl_take isl_multi_##BASE *multi2);				\
 __isl_give isl_multi_##BASE *isl_multi_##BASE##_flatten_range(		\
 	__isl_take isl_multi_##BASE *multi);				\
+__isl_export								\
 __isl_give isl_multi_##BASE *isl_multi_##BASE##_flat_range_product(	\
 	__isl_take isl_multi_##BASE *multi1,				\
 	__isl_take isl_multi_##BASE *multi2);				\
+__isl_export								\
 __isl_give isl_multi_##BASE *isl_multi_##BASE##_range_product(		\
 	__isl_take isl_multi_##BASE *multi1,				\
 	__isl_take isl_multi_##BASE *multi2);				\
@@ -100,6 +104,7 @@ __isl_give isl_multi_##BASE *isl_multi_##BASE##_scale_down_multi_val(	\
 __isl_give isl_multi_##BASE *isl_multi_##BASE##_mod_multi_val(		\
 	__isl_take isl_multi_##BASE *multi,				\
 	__isl_take isl_multi_val *mv);					\
+__isl_export								\
 __isl_give isl_multi_##BASE *isl_multi_##BASE##_add(			\
 	__isl_take isl_multi_##BASE *multi1,				\
 	__isl_take isl_multi_##BASE *multi2);				\
@@ -111,6 +116,10 @@ __isl_give isl_multi_##BASE *isl_multi_##BASE##_align_params(		\
 	__isl_take isl_space *model);					\
 __isl_give isl_multi_##BASE *isl_multi_##BASE##_from_range(		\
 	__isl_take isl_multi_##BASE *multi);
+
+#define ISL_DECLARE_MULTI_CMP(BASE)					\
+int isl_multi_##BASE##_plain_cmp(__isl_keep isl_multi_##BASE *multi1,	\
+	__isl_keep isl_multi_##BASE *multi2);
 
 #define ISL_DECLARE_MULTI_NEG(BASE)					\
 __isl_give isl_multi_##BASE *isl_multi_##BASE##_neg(		 	\
@@ -128,6 +137,7 @@ __isl_give isl_multi_##BASE *isl_multi_##BASE##_add_dims(		\
 	unsigned n);
 
 #define ISL_DECLARE_MULTI_WITH_DOMAIN(BASE)				\
+__isl_export								\
 __isl_give isl_multi_##BASE *isl_multi_##BASE##_product(		\
 	__isl_take isl_multi_##BASE *multi1,				\
 	__isl_take isl_multi_##BASE *multi2);				\

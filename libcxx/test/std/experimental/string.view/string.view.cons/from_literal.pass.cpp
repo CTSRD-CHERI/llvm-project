@@ -18,6 +18,7 @@
 #include <string>
 #include <cassert>
 
+#include "test_macros.h"
 #include "constexpr_char_traits.hpp"
 
 template<typename CharT>
@@ -40,12 +41,12 @@ int main () {
     test ( "QBCDE" );
     test ( "A" );
     test ( "" );
-    
+
     test ( L"QBCDE" );
     test ( L"A" );
     test ( L"" );
 
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     test ( u"QBCDE" );
     test ( u"A" );
     test ( u"" );
@@ -55,7 +56,7 @@ int main () {
     test ( U"" );
 #endif
 
-#if _LIBCPP_STD_VER > 11
+#if TEST_STD_VER > 11
     {
     constexpr std::experimental::basic_string_view<char, constexpr_char_traits<char>> sv1 ( "ABCDE" );
     static_assert ( sv1.size() == 5, "");

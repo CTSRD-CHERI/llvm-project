@@ -19,9 +19,12 @@
 //   merge(InIter1 first1, InIter1 last1, InIter2 first2, InIter2 last2, OutIter result);
 
 #include <algorithm>
+#include <random>
 #include <cassert>
 
 #include "test_iterators.h"
+
+std::mt19937 randomness;
 
 template <class InIter1, class InIter2, class OutIter>
 void
@@ -40,7 +43,7 @@ test()
                            InIter2(ib), InIter2(ib+N), OutIter(ic));
     assert(base(r) == ic+2*N);
     assert(ic[0] == 0);
-    assert(ic[2*N-1] == 2*N-1);
+    assert(ic[2*N-1] == static_cast<int>(2*N-1));
     assert(std::is_sorted(ic, ic+2*N));
     delete [] ic;
     delete [] ib;
@@ -53,7 +56,7 @@ test()
     int* ic = new int[2*N];
     for (unsigned i = 0; i < 2*N; ++i)
         ic[i] = i;
-    std::random_shuffle(ic, ic+2*N);
+    std::shuffle(ic, ic+2*N, randomness);
     std::copy(ic, ic+N, ia);
     std::copy(ic+N, ic+2*N, ib);
     std::sort(ia, ia+N);
@@ -62,7 +65,7 @@ test()
                            InIter2(ib), InIter2(ib+N), OutIter(ic));
     assert(base(r) == ic+2*N);
     assert(ic[0] == 0);
-    assert(ic[2*N-1] == 2*N-1);
+    assert(ic[2*N-1] == static_cast<int>(2*N-1));
     assert(std::is_sorted(ic, ic+2*N));
     delete [] ic;
     delete [] ib;

@@ -15,23 +15,33 @@
 #include <stdexcept>
 #include <cassert>
 
+#include "test_macros.h"
 #include "min_allocator.h"
 
 template <class S>
 void
 test(S s, typename S::size_type n, typename S::value_type c, S expected)
 {
-    try
+    if (n <= s.max_size())
     {
         s.resize(n, c);
-        assert(s.__invariants());
-        assert(n <= s.max_size());
+        LIBCPP_ASSERT(s.__invariants());
         assert(s == expected);
     }
-    catch (std::length_error&)
+#ifndef TEST_HAS_NO_EXCEPTIONS
+    else
     {
-        assert(n > s.max_size());
+        try
+        {
+            s.resize(n, c);
+            assert(false);
+        }
+        catch (std::length_error&)
+        {
+            assert(n > s.max_size());
+        }
     }
+#endif
 }
 
 int main()
@@ -55,7 +65,7 @@ int main()
          S("12345678901234567890123456789012345678901234567890aaaaaaaaaa"));
     test(S(), S::npos, 'a', S("not going to happen"));
     }
-#if __cplusplus >= 201103L
+#if TEST_STD_VER >= 11
     {
     typedef std::basic_string<char, std::char_traits<char>, min_allocator<char>> S;
     test(S(), 0, 'a', S());

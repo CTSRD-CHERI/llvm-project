@@ -1,4 +1,5 @@
 ; RUN: opt < %s -sample-profile -sample-profile-file=%S/Inputs/gcc-simple.afdo -S | FileCheck %s
+; RUN: opt < %s -passes=sample-profile -sample-profile-file=%S/Inputs/gcc-simple.afdo -S | FileCheck %s
 ; XFAIL: powerpc64-, s390x, mips-, mips64-, sparc
 ; Original code:
 ;
@@ -24,7 +25,7 @@
 ; $ perf record -b ./gcc-simple
 ; $ create_gcov --binary=gcc-simple --gcov=gcc-simple.afdo
 
-define i64 @_Z3fool(i64 %i) #0 {
+define i64 @_Z3fool(i64 %i) #0 !dbg !4 {
 ; CHECK: !prof ![[EC1:[0-9]+]]
 entry:
   %retval = alloca i64, align 8
@@ -66,7 +67,7 @@ declare void @llvm.dbg.declare(metadata, metadata, metadata) #1
 declare i32 @rand() #2
 
 ; Function Attrs: nounwind uwtable
-define i32 @main() #0 {
+define i32 @main() #0 !dbg !9 {
 ; CHECK: !prof ![[EC2:[0-9]+]]
 entry:
   %retval = alloca i32, align 4
@@ -144,16 +145,15 @@ attributes #3 = { nounwind }
 !llvm.module.flags = !{!13, !14}
 !llvm.ident = !{!15}
 
-!0 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, file: !1, producer: "clang version 3.8.0 (trunk 247554) (llvm/trunk 247557)", isOptimized: false, runtimeVersion: 0, emissionKind: 1, enums: !2, subprograms: !3)
+!0 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, file: !1, producer: "clang version 3.8.0 (trunk 247554) (llvm/trunk 247557)", isOptimized: false, runtimeVersion: 0, emissionKind: NoDebug, enums: !2)
 !1 = !DIFile(filename: "discriminator.cc", directory: "/usr/local/google/home/dnovillo/llvm/test/autofdo")
 !2 = !{}
-!3 = !{!4, !9}
-!4 = distinct !DISubprogram(name: "foo", linkageName: "_Z3fool", scope: !1, file: !1, line: 3, type: !5, isLocal: false, isDefinition: true, scopeLine: 3, flags: DIFlagPrototyped, isOptimized: false, function: i64 (i64)* @_Z3fool, variables: !2)
+!4 = distinct !DISubprogram(name: "foo", linkageName: "_Z3fool", scope: !1, file: !1, line: 3, type: !5, isLocal: false, isDefinition: true, scopeLine: 3, flags: DIFlagPrototyped, isOptimized: false, unit: !0, variables: !2)
 !5 = !DISubroutineType(types: !6)
 !6 = !{!7, !8}
 !7 = !DIBasicType(name: "long long int", size: 64, align: 64, encoding: DW_ATE_signed)
 !8 = !DIBasicType(name: "long int", size: 64, align: 64, encoding: DW_ATE_signed)
-!9 = distinct !DISubprogram(name: "main", scope: !1, file: !1, line: 7, type: !10, isLocal: false, isDefinition: true, scopeLine: 7, flags: DIFlagPrototyped, isOptimized: false, function: i32 ()* @main, variables: !2)
+!9 = distinct !DISubprogram(name: "main", scope: !1, file: !1, line: 7, type: !10, isLocal: false, isDefinition: true, scopeLine: 7, flags: DIFlagPrototyped, isOptimized: false, unit: !0, variables: !2)
 !10 = !DISubroutineType(types: !11)
 !11 = !{!12}
 !12 = !DIBasicType(name: "int", size: 32, align: 32, encoding: DW_ATE_signed)

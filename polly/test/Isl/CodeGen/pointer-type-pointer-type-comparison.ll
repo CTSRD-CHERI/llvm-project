@@ -1,10 +1,6 @@
 ; RUN: opt %loadPolly -polly-ast -analyze < %s | FileCheck %s
 ; RUN: opt %loadPolly -polly-codegen -S < %s | FileCheck %s -check-prefix=CODEGEN
 ;
-; TODO: FIXME: IslExprBuilder is not capable of producing valid code
-;              for arbitrary pointer expressions at the moment. Until
-;              this is fixed we disallow pointer expressions completely.
-; XFAIL: *
 
 ;    void f(int a[], int N, float *P, float *Q) {
 ;      int i;
@@ -25,7 +21,7 @@ bb:
   br i1 %brcond, label %store, label %bb.backedge
 
 store:
-  %scevgep = getelementptr i64, i64* %a, i64 %i
+  %scevgep = getelementptr inbounds i64, i64* %a, i64 %i
   store i64 %i, i64* %scevgep
   br label %bb.backedge
 
@@ -38,15 +34,18 @@ return:
   ret void
 }
 
-; CHECK: if (Q >= P + 1) {
-; CHECK:   for (int c0 = 0; c0 < N; c0 += 1)
-; CHECK:     Stmt_store(c0);
-; CHECK: } else if (P >= Q + 1)
-; CHECK:   for (int c0 = 0; c0 < N; c0 += 1)
-; CHECK:     Stmt_store(c0);
-; CHECK: }
+; CHECK:      if (Q >= P + 1 || P >= Q + 1)
+; CHECK-NEXT:   for (int c0 = 0; c0 < N; c0 += 1)
+; CHECK-NEXT:     Stmt_store(c0);
 
-; CODEGEN:       %[[Pinc:[_a-zA-Z0-9]+]] = getelementptr float, float* %P, i64 1
-; CODEGEN-NEXT:                             icmp uge float* %Q, %[[Pinc]]
-; CODEGEN:       %[[Qinc:[_a-zA-Z0-9]+]] = getelementptr float, float* %Q, i64 1
-; CODEGEN-NEXT:                             icmp uge float* %P, %[[Qinc]]
+; CODEGEN:       polly.cond:
+; CODEGEN-NEXT:  %[[Q:[_a-zA-Z0-9]+]] = ptrtoint float* %Q to i64
+; CODEGEN-NEXT:  %[[P:[_a-zA-Z0-9]+]] = ptrtoint float* %P to i64
+; CODEGEN-NEXT:  %[[PInc:[_a-zA-Z0-9]+]] = add nsw i64 %[[P]], 1
+; CODEGEN-NEXT:  %[[CMP:[_a-zA-Z0-9]+]] = icmp sge i64 %[[Q]], %[[PInc]]
+; CODEGEN-NEXT:  %[[P2:[_a-zA-Z0-9]+]] = ptrtoint float* %P to i64
+; CODEGEN-NEXT:  %[[Q2:[_a-zA-Z0-9]+]] = ptrtoint float* %Q to i64
+; CODEGEN-NEXT:  %[[QInc:[_a-zA-Z0-9]+]] = add nsw i64 %[[Q2]], 1
+; CODEGEN-NEXT:  %[[CMP2:[_a-zA-Z0-9]+]] = icmp sge i64 %[[P2]], %[[QInc]]
+; CODEGEN-NEXT:  %[[CMP3:[_a-zA-Z0-9]+]] = or i1 %[[CMP]], %[[CMP2]]
+; CODEGEN-NEXT:  br i1 %[[CMP3]]

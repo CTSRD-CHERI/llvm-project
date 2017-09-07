@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// REQUIRES: locale.en_US.UTF-8
+
 // <iomanip>
 
 // template <class charT> T9 get_time(struct tm* tmb, const charT* fmt);
@@ -42,7 +44,7 @@ int main()
         testbuf<char> sb("  Sat Dec 31 23:55:59 2061");
         std::istream is(&sb);
         is.imbue(std::locale(LOCALE_en_US_UTF_8));
-        std::tm t = {0};
+        std::tm t = {};
         is >> std::get_time(&t, "%a %b %d %H:%M:%S %Y");
         assert(t.tm_sec == 59);
         assert(t.tm_min == 55);
@@ -58,7 +60,7 @@ int main()
         testbuf<wchar_t> sb(L"  Sat Dec 31 23:55:59 2061");
         std::wistream is(&sb);
         is.imbue(std::locale(LOCALE_en_US_UTF_8));
-        std::tm t = {0};
+        std::tm t = {};
         is >> std::get_time(&t, L"%a %b %d %H:%M:%S %Y");
         assert(t.tm_sec == 59);
         assert(t.tm_min == 55);

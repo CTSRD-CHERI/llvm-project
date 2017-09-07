@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03
+
 // <memory>
 
 // template <class OuterAlloc, class... InnerAllocs>
@@ -22,8 +24,6 @@
 
 int main()
 {
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
-
     // sanity checks
     static_assert( (std::is_same<
     		std::allocator_traits<A1<int>>::is_always_equal, std::false_type>::value
@@ -32,7 +32,7 @@ int main()
     static_assert( (std::is_same<
     		std::allocator_traits<min_allocator<int>>::is_always_equal, std::true_type>::value
     		), "" );
-    
+
     // wrapping one allocator
     static_assert(
         (std::is_same<
@@ -51,14 +51,14 @@ int main()
     static_assert((
             std::scoped_allocator_adaptor<A1<int>, A2<int>>::is_always_equal::value ==
             ( std::allocator_traits<A1<int>>::is_always_equal::value &&
-              std::allocator_traits<A2<int>>::is_always_equal::value)    
+              std::allocator_traits<A2<int>>::is_always_equal::value)
         ), "");
 
     // wrapping two allocators (check the values instead of the types)
     static_assert((
             std::scoped_allocator_adaptor<A1<int>, min_allocator<int>>::is_always_equal::value ==
             ( std::allocator_traits<A1<int>>::is_always_equal::value &&
-              std::allocator_traits<min_allocator<int>>::is_always_equal::value)    
+              std::allocator_traits<min_allocator<int>>::is_always_equal::value)
         ), "");
 
 
@@ -66,10 +66,7 @@ int main()
     static_assert((
             std::scoped_allocator_adaptor<A1<int>, A2<int>, A3<int>>::is_always_equal::value ==
             ( std::allocator_traits<A1<int>>::is_always_equal::value &&
-              std::allocator_traits<A2<int>>::is_always_equal::value &&    
-              std::allocator_traits<A3<int>>::is_always_equal::value)    
+              std::allocator_traits<A2<int>>::is_always_equal::value &&
+              std::allocator_traits<A3<int>>::is_always_equal::value)
         ), "");
-
-
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
 }
