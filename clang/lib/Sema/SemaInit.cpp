@@ -45,29 +45,6 @@ static bool IsWideCharCompatible(QualType T, ASTContext &Context) {
   return false;
 }
 
-/// XXXAR: Expr->getType() returns int for the initializers expression in
-/// `void x(int& __capability arg) { int& a = arg }`
-/// DeclRefExpr 0x7ffb54000590 'int' lvalue ParmVar 0x7ffb53873eb8 'arg' 'int & __capability'
-/// We need to also check the underlying type and return that
-static QualType getRealReferenceType(const Expr* E) {
-  // The type of an InitListExpr is void -> if it is a single element one get
-  // the type of that element
-  if (const InitListExpr* ILE = dyn_cast<const InitListExpr>(E)) {
-    if (ILE->getNumInits() == 1)
-      E = ILE->getInit(0);
-  }
-  if (const DeclRefExpr* DRE = dyn_cast<const DeclRefExpr>(E)) {
-    // XXXAR: or should this be getFoundDecl instead of getDecl?
-    if (const ValueDecl* V = dyn_cast_or_null<const ValueDecl>(DRE->getDecl())) {
-      QualType TargetType = V->getType();
-      if (TargetType->isReferenceType()) {
-        return TargetType;
-      }
-    }
-  }
-  return E->getType();
-}
-
 enum StringInitFailureKind {
   SIF_None,
   SIF_NarrowStringIntoWideChar,
@@ -1333,7 +1310,7 @@ void InitListChecker::CheckComplexType(const InitializedEntity &Entity,
 bool InitListChecker::isCapNarrowing(Expr* expr, QualType DeclType,
                                      unsigned *Index, unsigned *StructuredIndex) {
   // XXXAR: expr->getType() will return int for int&!
-  QualType ExprType = getRealReferenceType(expr);
+  QualType ExprType = expr->getRealReferenceType();
   if (ExprType->isCHERICapabilityType(SemaRef.Context) &&
      !DeclType->isCHERICapabilityType(SemaRef.Context)) {
     // TODO: allow for nullptr, etc.
@@ -4356,7 +4333,7 @@ static void CheckReferenceInitCHERI(Sema& S, const InitializedEntity &Entity,
   // If we are in the purecap ABI we can't create non-capabality references so no need to check
   if (!PureCapABI) {
     bool DestIsCap = Entity.getType()->isCHERICapabilityType(S.getASTContext());
-    QualType RealSrcType = getRealReferenceType(Initializer);
+    QualType RealSrcType = Initializer->getRealReferenceType();
     bool SrcExprIsCap = RealSrcType->isCHERICapabilityType(S.getASTContext());
     if (DestIsCap != SrcExprIsCap) {
       Sequence.SetFailed(InitializationSequence::FK_ReferenceInitChangesCapabilityQualifier);
@@ -7726,7 +7703,7 @@ bool InitializationSequence::Diagnose(Sema &S,
   case FK_ReferenceInitChangesCapabilityQualifier:
   case FK_ConversionFromCapabilityFailed:
   case FK_ConversionToCapabilityFailed: {
-    QualType FromType = getRealReferenceType(Args[0]);
+    QualType FromType = Args[0]->getRealReferenceType();
     bool PrintRefInMessage = false;
     // Failure == FK_ConversionFromCapabilityFailed
     unsigned DiagID = DestType->isCHERICapabilityType(S.getASTContext())

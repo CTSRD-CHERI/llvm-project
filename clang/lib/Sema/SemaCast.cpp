@@ -210,7 +210,7 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
                                         CastKind &Kind);
 
 static void DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
-                                        QualType SrcType, QualType DestType);
+                                        const Expr* E, QualType DestType);
 
 
 /// ActOnCXXNamedCast - Parse {dynamic,static,reinterpret,const}_cast's.
@@ -262,7 +262,7 @@ Sema::BuildCXXNamedCast(SourceLocation OpLoc, tok::TokenKind Kind,
         return ExprError();
       DiscardMisalignedMemberAddress(DestType.getTypePtr(), E);
     }
-    DiagnoseCapabilityToIntCast(*this, AngleBrackets, E->getType(), DestType);
+    DiagnoseCapabilityToIntCast(*this, AngleBrackets, E, DestType);
     return Op.complete(CXXConstCastExpr::Create(Context, Op.ResultType,
                                   Op.ValueKind, Op.SrcExpr.get(), DestTInfo,
                                                 OpLoc, Parens.getEnd(),
@@ -274,7 +274,7 @@ Sema::BuildCXXNamedCast(SourceLocation OpLoc, tok::TokenKind Kind,
       if (Op.SrcExpr.isInvalid())
         return ExprError();
     }
-    DiagnoseCapabilityToIntCast(*this, AngleBrackets, E->getType(), DestType);
+    DiagnoseCapabilityToIntCast(*this, AngleBrackets, E, DestType);
     return Op.complete(CXXDynamicCastExpr::Create(Context, Op.ResultType,
                                     Op.ValueKind, Op.Kind, Op.SrcExpr.get(),
                                                   &Op.BasePath, DestTInfo,
@@ -288,7 +288,7 @@ Sema::BuildCXXNamedCast(SourceLocation OpLoc, tok::TokenKind Kind,
         return ExprError();
       DiscardMisalignedMemberAddress(DestType.getTypePtr(), E);
     }
-    DiagnoseCapabilityToIntCast(*this, AngleBrackets, E->getType(), DestType);
+    DiagnoseCapabilityToIntCast(*this, AngleBrackets, E, DestType);
     return Op.complete(CXXReinterpretCastExpr::Create(Context, Op.ResultType,
                                     Op.ValueKind, Op.Kind, Op.SrcExpr.get(),
                                                       nullptr, DestTInfo, OpLoc,
@@ -300,7 +300,7 @@ Sema::BuildCXXNamedCast(SourceLocation OpLoc, tok::TokenKind Kind,
       Op.CheckStaticCast();
       if (Op.SrcExpr.isInvalid())
         return ExprError();
-      DiagnoseCapabilityToIntCast(*this, AngleBrackets, E->getType(), DestType);
+      DiagnoseCapabilityToIntCast(*this, AngleBrackets, E, DestType);
       DiscardMisalignedMemberAddress(DestType.getTypePtr(), E);
     }
     
@@ -1774,7 +1774,8 @@ static void DiagnoseCHERICast(Sema &Self, Expr *SrcExpr, QualType DestType,
 }
 
 static void DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
-                                        QualType SrcType, QualType DestType) {
+                                        const Expr* SrcExpr, QualType DestType) {
+  QualType SrcType = SrcExpr->getRealReferenceType();
   if (SrcType->isDependentType() || DestType->isDependentType())
     return; // can't diagnose this yet
   if (!SrcType->isCHERICapabilityType(Self.Context)) {
@@ -1832,7 +1833,7 @@ static void DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
     }
     CurTy = Desugared;
   }
-  if (DestType->isPointerType()) {
+  if (DestType->isPointerType() || DestType->isReferenceType()) {
     Self.Diag(OpRange.getBegin(), diag::warn_capability_pointer_cast)
             << SrcType << DestType << OpRange;
     Self.Diag(OpRange.getEnd(), diag::note_use_cheri_cast)
@@ -2770,7 +2771,7 @@ ExprResult Sema::BuildCStyleCastExpr(SourceLocation LPLoc,
   if (Op.SrcExpr.isInvalid())
     return ExprError();
 
-  DiagnoseCapabilityToIntCast(*this, Op.DestRange, CastExpr->getType(),
+  DiagnoseCapabilityToIntCast(*this, Op.DestRange, CastExpr,
                               CastTypeInfo->getType());
 
   return Op.complete(CStyleCastExpr::Create(Context, Op.ResultType,
@@ -2798,7 +2799,7 @@ ExprResult Sema::BuildCXXFunctionalCastExpr(TypeSourceInfo *CastTypeInfo,
   if (auto *ConstructExpr = dyn_cast<CXXConstructExpr>(SubExpr))
     ConstructExpr->setParenOrBraceRange(SourceRange(LPLoc, RPLoc));
   else /* XXXAR: only diagnose int<->cap casts for actual casts */
-    DiagnoseCapabilityToIntCast(*this, Op.DestRange, CastExpr->getType(), Type);
+    DiagnoseCapabilityToIntCast(*this, Op.DestRange, CastExpr, Type);
 
   return Op.complete(CXXFunctionalCastExpr::Create(Context, Op.ResultType,
                          Op.ValueKind, CastTypeInfo, Op.Kind,

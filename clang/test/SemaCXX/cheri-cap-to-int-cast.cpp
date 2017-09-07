@@ -164,16 +164,16 @@ void cast_ptr() {
 #endif
 }
 
-#ifdef NOTYET
 void cast_ref(int & __capability cap_ref) {
   int x;
   using intref = int&;
-  int& v = reinterpret_cast<int&>(cap_ref);
-  v = static_cast<int&>(cap_ref);
-  v = const_cast<int&>(cap_ref);
+  int& v = reinterpret_cast<int&>(cap_ref); // expected-error{{cast from capability type 'int & __capability' to non-capability type 'int &' is most likely an error}} expected-note {{use __cheri_cast to convert between pointers and capabilities}}
+  v = static_cast<int&>(cap_ref); // expected-error{{cast from capability type 'int & __capability' to non-capability type 'int &' is most likely an error}} expected-note {{use __cheri_cast to convert between pointers and capabilities}}
+  // FIXME: this error shouldn/t be there twice:
+  // expected-error@-2 {{converting capability type 'int & __capability' to non-capability type 'int &' without an explicit cast}}
+  v = const_cast<int&>(cap_ref); // expected-error{{cast from capability type 'int & __capability' to non-capability type 'int &' is most likely an error}} expected-note {{use __cheri_cast to convert between pointers and capabilities}}
   v = dynamic_cast<int&>(cap_ref); // expected-error{{'int' is not a class}}
-  v = (int&)cap_ref;
-  v = intref(cap_ref);
-  v = intref{cap_ref};
+  v = (int&)cap_ref; // expected-error{{cast from capability type 'int & __capability' to non-capability type 'int &' is most likely an error}} expected-note {{use __cheri_cast to convert between pointers and capabilities}}
+  v = intref(cap_ref); // expected-error{{cast from capability type 'int & __capability' to non-capability type 'intref' (aka 'int &') is most likely an error}} expected-note {{use __cheri_cast to convert between pointers and capabilities}}
+  v = intref{cap_ref}; // expected-error{{converting capability type 'int & __capability' to non-capability type 'intref' (aka 'int &') without an explicit cast}}
 }
-#endif
