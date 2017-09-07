@@ -184,11 +184,15 @@ break; \
     QT = Context.getObjCObjectPointerType(Desugar(Context, Ty->getPointeeType(),
                                                   ShouldAKA));
   } else if (const LValueReferenceType *Ty = QT->getAs<LValueReferenceType>()) {
+    ASTContext::PointerInterpretationKind PIK =
+        Ty->isCHERICapability() ? ASTContext::PIK_Capability : ASTContext::PIK_Integer;
     QT = Context.getLValueReferenceType(Desugar(Context, Ty->getPointeeType(),
-                                                ShouldAKA));
+                                                ShouldAKA), true, PIK);
   } else if (const RValueReferenceType *Ty = QT->getAs<RValueReferenceType>()) {
+    ASTContext::PointerInterpretationKind PIK =
+        Ty->isCHERICapability() ? ASTContext::PIK_Capability : ASTContext::PIK_Integer;
     QT = Context.getRValueReferenceType(Desugar(Context, Ty->getPointeeType(),
-                                                ShouldAKA));
+                                                ShouldAKA), PIK);
   } else if (const auto *Ty = QT->getAs<ObjCObjectType>()) {
     if (Ty->getBaseType().getTypePtr() != Ty && !ShouldAKA) {
       QualType BaseType = Desugar(Context, Ty->getBaseType(), ShouldAKA);
