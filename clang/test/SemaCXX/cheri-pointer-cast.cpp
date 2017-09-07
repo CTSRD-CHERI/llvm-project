@@ -1,6 +1,6 @@
-/ RUN: %clang_cc1 -triple mips64-unknown-freebsd -target-abi n64 %s -std=c++14 -verify
-/ RUN: %clang_cc1 -triple cheri-unknown-freebsd  -target-abi n64 %s -std=c++14 -verify
-/ RUN: %clang_cc1 -triple cheri-unknown-freebsd  -target-abi purecap %s -std=c++14 -verify
+// RUN: %clang_cc1 -triple mips64-unknown-freebsd -target-abi n64 %s -std=c++14 -verify
+// RUN: %clang_cc1 -triple cheri-unknown-freebsd  -target-abi n64 %s -std=c++14 -verify
+// RUN: %clang_cc1 -triple cheri-unknown-freebsd  -target-abi purecap %s -std=c++14 -verify
 
 #pragma clang diagnostic warning "-Wcapability-to-integer-cast"
 
@@ -78,7 +78,7 @@ T offset_set(T x, long off) {
   // expected-warning@-1 {{cast from capability type 'void * __capability' to non-capability, non-address type 'long'}}
   // expected-warning@-2 {{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced.}} expected-note@-2 {{insert cast to intptr_t to silence this warning}}
 #ifndef __CHERI_PURE_CAPABILITY__
-  // expected-error@-4 {{cast from capability type 'void * __capability' to integer pointer type 'x *'}} expected-note@-4 {{use __cheri_cast to convert between pointers and capabilities}}
+  // expected-error@-4 {{cast from capability type 'void * __capability' to non-capability type 'x *'}} expected-note@-4 {{use __cheri_cast to convert between pointers and capabilities}}
 #endif
 }
 

@@ -1,11 +1,11 @@
 // RUN: %cheri_cc1 %s -fsyntax-only -verify
 void f() {
   char * __capability x;
-  char *y = x; // expected-error {{converting capability type 'char * __capability' to pointer type 'char *' without an explicit cast}}
+  char *y = x; // expected-error {{converting capability type 'char * __capability' to non-capability type 'char *' without an explicit cast}}
 }
 void g() {
   char *x;
-  char * __capability y = x; // expected-error {{converting pointer type 'char *' to capability type 'char * __capability' without an explicit cast}}
+  char * __capability y = x; // expected-error {{converting non-capability type 'char *' to capability type 'char * __capability' without an explicit cast}}
 }
 void h() {
   char * __capability x;

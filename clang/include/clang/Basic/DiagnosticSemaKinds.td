@@ -5870,10 +5870,12 @@ def note_typecheck_assign_const : Note<
   "%select{non-|}1static data member %2 declared const here|"
   "member function %q1 is declared const here}0">;
 
-def err_typecheck_convert_cap_to_ptr: Error<"converting capability type %0 to "
-  "pointer type %1 without an explicit cast; if this is intended use __cheri_cast">;
-def err_typecheck_convert_ptr_to_cap: Error<"converting pointer type %0 to "
-  "capability type %1 without an explicit cast; if this is intended use __cheri_cast">;
+def err_typecheck_convert_cap_to_ptr: Error<"converting capability"
+  "%select{| reference to}2 type %0 to non-capability type %1 without "
+  "an explicit cast; if this is intended use __cheri_cast">;
+def err_typecheck_convert_ptr_to_cap: Error<"converting non-capability"
+  "%select{| reference to}2 type %0 to capability type %1 without "
+  "an explicit cast; if this is intended use __cheri_cast">;
 
 def warn_mixed_capability_binop : Warning<
   "binary expression on capability and non-capability types: %0 and %1.  "
@@ -5903,7 +5905,7 @@ def warn_capability_integer_cast : Warning<
   // InGroup<CHERICapabilityToIntegerCast>;
   InGroup<CHERICapabilityToIntegerCast>, DefaultIgnore;
 def warn_capability_pointer_cast : Warning<
-  "cast from capability type %0 to integer pointer type %1 is most likely an error">,
+  "cast from capability type %0 to non-capability type %1 is most likely an error">,
   InGroup<CHERICaps>, DefaultError;
 def note_insert_intptr_fixit : Note<
   "insert cast to intptr_t to silence this warning">;

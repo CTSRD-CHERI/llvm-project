@@ -78,26 +78,12 @@ void test_cap_to_ptr(void* __capability a) {
   foo f3{nullptr, nullptr};
 }
 
-struct foo2 {
-  int& __capability cap;
-  int& ptr;
-};
-
-void test_capref_to_ptrref(int& __capability a) {
-  int i = 0;
-  int& __capability cap_ref = i;
-  int& non_cap{a}; // todo-expected-error {{cap_to_int}}
-  int& non_cap2 = {a}; // todo-expected-error {{cap_to_int}}
-  foo2 f{a, a}; // expected-error {{type 'int & __capability' cannot be narrowed to 'int &' in initializer list}}
-  foo2 f2 = {a, a}; // expected-error {{type 'int & __capability' cannot be narrowed to 'int &' in initializer list}}
-  foo2 f3 = {cap_ref, cap_ref}; // expected-error {{type 'int & __capability' cannot be narrowed to 'int &' in initializer list}}
-}
 
 // check arrays:
 void test_arrays(void* __capability cap) {
   int* ptr = nullptr;
   void* ptr_array[3] = { nullptr, cap, ptr }; // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
-  void* __capability cap_array[3] = { nullptr, cap, ptr }; // expected-error {{converting pointer type 'int *' to capability type 'void * __capability' without an explicit cast}}
+  void* __capability cap_array[3] = { nullptr, cap, ptr }; // expected-error {{converting non-capability type 'int *' to capability type 'void * __capability' without an explicit cast}}
 
     struct foo foo_array[5] = {
       {cap, nullptr}, // no-error

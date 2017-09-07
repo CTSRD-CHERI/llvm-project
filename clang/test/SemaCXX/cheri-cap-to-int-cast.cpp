@@ -131,7 +131,7 @@ void cast_ptr() {
   using voidp = void*;
   DO_ALL_CASTS(voidp, a);
 #ifndef __CHERI_PURE_CAPABILITY__
-  // expected-error@-2 5 {{cast from capability type 'void * __capability' to integer pointer type 'voidp' (aka 'void *') is most likely an error}}
+  // expected-error@-2 5 {{cast from capability type 'void * __capability' to non-capability type 'voidp' (aka 'void *') is most likely an error}}
   // expected-note@-3 5{{use __cheri_cast to convert between pointers and capabilities}}
   // expected-error@-4 {{type 'void * __capability' cannot be narrowed to 'voidp' (aka 'void *') in initializer list}}
 #endif
@@ -141,7 +141,7 @@ void cast_ptr() {
   using wordp = word*;
   DO_ALL_CASTS(wordp, a);
 #ifndef __CHERI_PURE_CAPABILITY__
-  // expected-error@-2 4 {{cast from capability type 'void * __capability' to integer pointer type 'wordp' (aka '__uintcap_t *') is most likely an error}}
+  // expected-error@-2 4 {{cast from capability type 'void * __capability' to non-capability type 'wordp' (aka '__uintcap_t *') is most likely an error}}
   // expected-note@-3 4 {{use __cheri_cast to convert between pointers and capabilities}}
   // expected-error@-4 {{type 'void * __capability' cannot be narrowed to 'wordp' (aka '__uintcap_t *') in initializer list}}
   // expected-error@-5 {{const_cast from 'void * __capability' to 'wordp' (aka '__uintcap_t *') is not allowed}}
@@ -157,7 +157,7 @@ void cast_ptr() {
   test_class* __capability b = nullptr;
   DO_ALL_CASTS(test_class_ptr, b);
 #ifndef __CHERI_PURE_CAPABILITY__
-  // expected-error@-2 5 {{cast from capability type 'test_class * __capability' to integer pointer type 'test_class_ptr' (aka 'test_class *') is most likely an error}}
+  // expected-error@-2 5 {{cast from capability type 'test_class * __capability' to non-capability type 'test_class_ptr' (aka 'test_class *') is most likely an error}}
   // expected-note@-3 5 {{use __cheri_cast to convert between pointers and capabilities}}
   // expected-error@-4 {{test_class * __capability' cannot be narrowed to 'test_class_ptr' (aka 'test_class *') in initializer list}}
   // expected-error@-5 {{static_cast from 'test_class * __capability' to 'test_class_ptr' (aka 'test_class *'), which are not related by inheritance, is not allowed}} // TODO: this should be a better error message
@@ -165,19 +165,15 @@ void cast_ptr() {
 }
 
 #ifdef NOTYET
-
-void cast_ref() {
-  // XXXAR: these should also warn
+void cast_ref(int & __capability cap_ref) {
   int x;
-  int & __capability cap_ref = x;
-  using intr = int&;
+  using intref = int&;
   int& v = reinterpret_cast<int&>(cap_ref);
   v = static_cast<int&>(cap_ref);
   v = const_cast<int&>(cap_ref);
   v = dynamic_cast<int&>(cap_ref); // expected-error{{'int' is not a class}}
   v = (int&)cap_ref;
-  v = intr(cap_ref);
-  v = intr{cap_ref};
+  v = intref(cap_ref);
+  v = intref{cap_ref};
 }
-
 #endif

@@ -13246,8 +13246,8 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
     isInvalid = true;
     Hint = FixItHint::CreateInsertion(SrcExpr->getLocStart(), "(__cheri_cast " +
                                       DstType.getAsString() + ")");
-    // make sure that the source type comes first in the diagnostic:
-    Action = AA_Converting;  // XXXAR: not sure this is 100% correct
+    Diag(Loc, DiagKind) << SrcType << DstType << false << Hint;
+    return true;
     break;
   case Incompatible:
     if (maybeDiagnoseAssignmentToFunction(*this, DstType, SrcExpr)) {

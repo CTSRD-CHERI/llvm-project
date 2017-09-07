@@ -3966,7 +3966,7 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
       if (SCS.isInvalidCHERICapabilityConversion()) {
         unsigned DiagID = FromIsCap ? diag::err_typecheck_convert_cap_to_ptr :
                                       diag::err_typecheck_convert_ptr_to_cap;
-        Diag(From->getLocStart(), DiagID) << FromType << ToType
+        Diag(From->getLocStart(), DiagID) << FromType << ToType << false
             << FixItHint::CreateInsertion(From->getLocStart(), "(__cheri_cast " +
                                           ToType.getAsString() + ")");
         return ExprError();

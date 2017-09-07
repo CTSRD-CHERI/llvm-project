@@ -22,6 +22,7 @@
 #include "clang/Sema/Lookup.h"
 #include "clang/Sema/SemaInternal.h"
 #include "llvm/ADT/APInt.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
@@ -42,6 +43,29 @@ static bool IsWideCharCompatible(QualType T, ASTContext &Context) {
            Context.typesAreCompatible(Context.Char32Ty, T);
   }
   return false;
+}
+
+/// XXXAR: Expr->getType() returns int for the initializers expression in
+/// `void x(int& __capability arg) { int& a = arg }`
+/// DeclRefExpr 0x7ffb54000590 'int' lvalue ParmVar 0x7ffb53873eb8 'arg' 'int & __capability'
+/// We need to also check the underlying type and return that
+static QualType getRealReferenceType(const Expr* E) {
+  // The type of an InitListExpr is void -> if it is a single element one get
+  // the type of that element
+  if (const InitListExpr* ILE = dyn_cast<const InitListExpr>(E)) {
+    if (ILE->getNumInits() == 1)
+      E = ILE->getInit(0);
+  }
+  if (const DeclRefExpr* DRE = dyn_cast<const DeclRefExpr>(E)) {
+    // XXXAR: or should this be getFoundDecl instead of getDecl?
+    if (const ValueDecl* V = dyn_cast_or_null<const ValueDecl>(DRE->getDecl())) {
+      QualType TargetType = V->getType();
+      if (TargetType->isReferenceType()) {
+        return TargetType;
+      }
+    }
+  }
+  return E->getType();
 }
 
 enum StringInitFailureKind {
@@ -360,8 +384,7 @@ class InitListChecker {
                                SourceLocation Loc);
 
   bool isCapNarrowing(Expr* expr, QualType DeclType, unsigned *Index,
-                      unsigned *StructuredIndex,
-                      llvm::Optional<QualType> exprType = None);
+                      unsigned *StructuredIndex);
 
 public:
   InitListChecker(Sema &S, const InitializedEntity &Entity,
@@ -1308,10 +1331,9 @@ void InitListChecker::CheckComplexType(const InitializedEntity &Entity,
 }
 
 bool InitListChecker::isCapNarrowing(Expr* expr, QualType DeclType,
-                                     unsigned *Index, unsigned *StructuredIndex,
-                                     llvm::Optional<QualType> exprType) {
-  // extra parameter needed because expr->getType() returns `int` for `int & __capability`
-  QualType ExprType = exprType ? *exprType : expr->getType();
+                                     unsigned *Index, unsigned *StructuredIndex) {
+  // XXXAR: expr->getType() will return int for int&!
+  QualType ExprType = getRealReferenceType(expr);
   if (ExprType->isCHERICapabilityType(SemaRef.Context) &&
      !DeclType->isCHERICapabilityType(SemaRef.Context)) {
     // TODO: allow for nullptr, etc.
@@ -1449,13 +1471,7 @@ void InitListChecker::CheckReferenceType(const InitializedEntity &Entity,
 
   expr = Result.getAs<Expr>();
   if (expr) {
-    llvm::Optional<QualType> exprType = None;
-    if (DeclRefExpr* DRE = dyn_cast<DeclRefExpr>(expr)) {
-      if (ValueDecl* V = dyn_cast_or_null<ValueDecl>(DRE->getFoundDecl())) {
-        exprType = V->getType();
-      }
-    }
-    if (isCapNarrowing(expr, DeclType, &Index, &StructuredIndex, exprType)) {
+    if (isCapNarrowing(expr, DeclType, &Index, &StructuredIndex)) {
       hadError = true;
       return;
     }
@@ -3182,6 +3198,7 @@ bool InitializationSequence::isAmbiguous() const {
   case FK_ConversionFailed:
   case FK_ConversionFromCapabilityFailed:
   case FK_ConversionToCapabilityFailed:
+  case FK_ReferenceInitChangesCapabilityQualifier:
   case FK_ConversionFromPropertyFailed:
   case FK_TooManyInitsForScalar:
   case FK_ParenthesizedListInitForScalar:
@@ -4327,6 +4344,27 @@ static bool isNonReferenceableGLValue(Expr *E) {
   return E->refersToBitField() || E->refersToVectorElement();
 }
 
+
+static void CheckReferenceInitCHERI(Sema& S, const InitializedEntity &Entity,
+                                    Expr *Initializer,
+                                    InitializationSequence &Sequence) {
+  if (!Sequence)
+    return; // already failed so no need to diagnose
+
+  // Check that we aren't converting between capability and non-capability references
+  const bool PureCapABI = S.getASTContext().getTargetInfo().areAllPointersCapabilities();
+  // If we are in the purecap ABI we can't create non-capabality references so no need to check
+  if (!PureCapABI) {
+    bool DestIsCap = Entity.getType()->isCHERICapabilityType(S.getASTContext());
+    QualType RealSrcType = getRealReferenceType(Initializer);
+    bool SrcExprIsCap = RealSrcType->isCHERICapabilityType(S.getASTContext());
+    if (DestIsCap != SrcExprIsCap) {
+      Sequence.SetFailed(InitializationSequence::FK_ReferenceInitChangesCapabilityQualifier);
+      return;
+    }
+  }
+}
+
 /// \brief Reference initialization without resolving overloaded functions.
 static void TryReferenceInitializationCore(Sema &S,
                                            const InitializedEntity &Entity,
@@ -4349,6 +4387,11 @@ static void TryReferenceInitializationCore(Sema &S,
   Sema::ReferenceCompareResult RefRelationship
     = S.CompareReferenceRelationship(DeclLoc, cv1T1, cv2T2, DerivedToBase,
                                      ObjCConversion, ObjCLifetimeConversion);
+
+  // make sure to check that we aren't converting from capability to non-capability
+  auto CheckCheriCompatibility = llvm::make_scope_exit([&]() {
+    CheckReferenceInitCHERI(S, Entity, Initializer, Sequence);
+  });
 
   // C++0x [dcl.init.ref]p5:
   //   A reference to type "cv1 T1" is initialized by an expression of type
@@ -7680,13 +7723,20 @@ bool InitializationSequence::Diagnose(Sema &S,
     emitBadConversionNotes(S, Entity, Args[0]);
     break;
 
+  case FK_ReferenceInitChangesCapabilityQualifier:
   case FK_ConversionFromCapabilityFailed:
   case FK_ConversionToCapabilityFailed: {
-    QualType FromType = Args[0]->getType();
-    unsigned DiagID = Failure == FK_ConversionFromCapabilityFailed
-        ? diag::err_typecheck_convert_cap_to_ptr
-        : diag::err_typecheck_convert_ptr_to_cap;
-    S.Diag(Kind.getLocation(), DiagID) << FromType << DestType
+    QualType FromType = getRealReferenceType(Args[0]);
+    bool PrintRefInMessage = false;
+    // Failure == FK_ConversionFromCapabilityFailed
+    unsigned DiagID = DestType->isCHERICapabilityType(S.getASTContext())
+                      ? diag::err_typecheck_convert_ptr_to_cap
+                      : diag::err_typecheck_convert_cap_to_ptr;
+    if (Failure == FK_ReferenceInitChangesCapabilityQualifier) {
+      PrintRefInMessage = !FromType->isReferenceType();
+    }
+
+    S.Diag(Kind.getLocation(), DiagID) << FromType << DestType << PrintRefInMessage
       << FixItHint::CreateInsertion(Kind.getLocation(), "(__cheri_cast " +
                                     DestType.getAsString() + ")");
     break;
@@ -8003,6 +8053,10 @@ void InitializationSequence::dump(raw_ostream &OS) const {
 
     case FK_ConversionToCapabilityFailed:
       OS << "conversion to capability failed";
+      break;
+
+    case FK_ReferenceInitChangesCapabilityQualifier:
+      OS << "reference initialization changes capability qualifier";
       break;
 
     case FK_ConversionFromPropertyFailed:
