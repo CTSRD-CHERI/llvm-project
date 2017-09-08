@@ -4332,10 +4332,14 @@ static void CheckReferenceInitCHERI(Sema& S, const InitializedEntity &Entity,
   const bool PureCapABI = S.getASTContext().getTargetInfo().areAllPointersCapabilities();
   // If we are in the purecap ABI we can't create non-capabality references so no need to check
   if (!PureCapABI) {
-    bool DestIsCap = Entity.getType()->isCHERICapabilityType(S.getASTContext());
+    bool DestIsCapRef = PureCapABI;
+    if (auto DestRef = Entity.getType()->getAs<ReferenceType>())
+      DestIsCapRef = DestRef->isCHERICapability();
     QualType RealSrcType = Initializer->getRealReferenceType();
-    bool SrcExprIsCap = RealSrcType->isCHERICapabilityType(S.getASTContext());
-    if (DestIsCap != SrcExprIsCap) {
+    bool SrcIsCapRef = false;
+    if (auto SrcRef = RealSrcType->getAs<ReferenceType>())
+      SrcIsCapRef = SrcRef->isCHERICapability();
+    if (SrcIsCapRef != DestIsCapRef) {
       Sequence.SetFailed(InitializationSequence::FK_ReferenceInitChangesCapabilityQualifier);
       return;
     }

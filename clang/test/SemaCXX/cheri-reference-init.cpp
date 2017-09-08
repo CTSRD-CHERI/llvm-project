@@ -89,3 +89,15 @@ void test_struct_with_ctor(int& ptrref, int& __capability capref, int i) {
   struct_with_ctor_cap c2 = capref;
   struct_with_ctor_cap c3 = i; // expected-error{{converting non-capability reference to type 'int' to capability type 'int & __capability' without an explicit cast}}
 }
+
+__intcap_t get_intcap();
+
+
+void test_intcap(__intcap_t& lval, __intcap_t&& rval) {
+  __intcap_t& ref1 = get_intcap(); // expected-error {{non-const lvalue reference to type '__intcap_t' cannot bind to a temporary of type '__intcap_t'}}
+  const __intcap_t& ref2 = get_intcap();
+  __intcap_t&& ref3 = get_intcap();
+
+  __uintcap_t intcap1 = lval;
+  __uintcap_t intcap2 = rval;
+}
