@@ -158,9 +158,8 @@ void cast_ptr() {
   DO_ALL_CASTS(test_class_ptr, b);
 #ifndef __CHERI_PURE_CAPABILITY__
   // expected-error@-2 5 {{cast from capability type 'test_class * __capability' to non-capability type 'test_class_ptr' (aka 'test_class *') is most likely an error}}
-  // expected-note@-3 5 {{use __cheri_cast to convert between pointers and capabilities}}
-  // expected-error@-4 {{test_class * __capability' cannot be narrowed to 'test_class_ptr' (aka 'test_class *') in initializer list}}
-  // expected-error@-5 {{static_cast from 'test_class * __capability' to 'test_class_ptr' (aka 'test_class *'), which are not related by inheritance, is not allowed}} // TODO: this should be a better error message
+  // expected-error@-3 {{test_class * __capability' cannot be narrowed to 'test_class_ptr' (aka 'test_class *') in initializer list}}
+  // expected-error@-4 {{static_cast from 'test_class * __capability' to 'test_class_ptr' (aka 'test_class *'), which are not related by inheritance, is not allowed}} // TODO: this should be a better error message
 #endif
 }
 

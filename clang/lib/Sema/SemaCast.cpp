@@ -1836,8 +1836,7 @@ static void DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
   }
   if (DestType->isPointerType() || DestType->isReferenceType()) {
     Self.Diag(OpRange.getBegin(), diag::warn_capability_pointer_cast)
-            << SrcType << DestType << OpRange;
-    Self.Diag(OpRange.getEnd(), diag::note_use_cheri_cast)
+      << SrcType << DestType << OpRange
       << FixItHint::CreateReplacement(OpRange, "__cheri_cast " +
                                                DestType.getAsString());
   } else if (!IsMemAddressType) {

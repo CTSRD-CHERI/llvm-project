@@ -5909,12 +5909,11 @@ def warn_capability_integer_cast : Warning<
   // InGroup<CHERICapabilityToIntegerCast>;
   InGroup<CHERICapabilityToIntegerCast>, DefaultIgnore;
 def warn_capability_pointer_cast : Warning<
-  "cast from capability type %0 to non-capability type %1 is most likely an error">,
+  "cast from capability type %0 to non-capability type %1 is most likely an "
+   "error; use __cheri_cast to convert between pointers and capabilities">,
   InGroup<CHERICaps>, DefaultError;
 def note_insert_intptr_fixit : Note<
   "insert cast to intptr_t to silence this warning">;
-def note_use_cheri_cast : Note<
-  "use __cheri_cast to convert between pointers and capabilities">;
 def err_cheri_cast_unrelated_type : Error<
   "invalid __cheri_cast from %0 to unrelated type %1">;
 def err_cheri_cast_invalid_target_type: Error<
