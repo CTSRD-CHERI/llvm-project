@@ -1769,6 +1769,7 @@ static void DiagnoseCHERICast(Sema &Self, Expr *SrcExpr, QualType DestType,
         << static_cast<unsigned>(SrcAlign.getQuantity())
         << static_cast<unsigned>(DestAlign.getQuantity())
         << Range << SrcExpr->getSourceRange();
+      Self.Diag(Range.getEnd(), diag::note_cheri_cast_align_fixit);
     }
   }
 }

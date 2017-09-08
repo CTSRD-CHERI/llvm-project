@@ -3186,6 +3186,10 @@ def warn_cast_align : Warning<
   InGroup<CastAlign>, DefaultIgnore;
 def err_cheri_cast_align : Error<
   "cast from %0 to %1 increases required alignment from %2 to %3">;
+// creating the right fixit replacement string is non-trivial, add a note instead
+def note_cheri_cast_align_fixit : Note<
+  "use __builtin_assume_aligned(..., sizeof(void* __capability)) if you know "
+  "that the source type is sufficiently aligned">;
 def warn_old_style_cast : Warning<
   "use of old-style cast">, InGroup<OldStyleCast>, DefaultIgnore;
 
