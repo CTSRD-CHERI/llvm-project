@@ -6236,6 +6236,9 @@ def err_bad_cxx_cast_bitfield : Error<
 def err_bad_cxx_cast_qualifiers_away : Error<
   "%select{const_cast|static_cast|reinterpret_cast|dynamic_cast|C-style cast|"
   "functional-style cast}0 from %1 to %2 casts away qualifiers">;
+def err_bad_cxx_reference_cast_capability_qualifier : Error<
+"%select{const_cast|static_cast|reinterpret_cast|dynamic_cast|C-style cast|"
+"functional-style cast}0 to reference type %2 changes __capability qualifier">;
 def err_bad_const_cast_dest : Error<
   "%select{const_cast||||C-style cast|functional-style cast}0 to %2, "
   "which is not a reference, pointer-to-object, or pointer-to-data-member">;

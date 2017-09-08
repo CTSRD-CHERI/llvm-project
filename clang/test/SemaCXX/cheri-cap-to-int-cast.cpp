@@ -132,17 +132,16 @@ void cast_ptr() {
   DO_ALL_CASTS(voidp, a);
 #ifndef __CHERI_PURE_CAPABILITY__
   // expected-error@-2 5 {{cast from capability type 'void * __capability' to non-capability type 'voidp' (aka 'void *') is most likely an error}}
-  // expected-note@-3 5{{use __cheri_cast to convert between pointers and capabilities}}
-  // expected-error@-4 {{type 'void * __capability' cannot be narrowed to 'voidp' (aka 'void *') in initializer list}}
+  // expected-error@-3 {{type 'void * __capability' cannot be narrowed to 'voidp' (aka 'void *') in initializer list}}
 #endif
-  // expected-error@-6 {{'void' is not a class}}
+  // expected-error@-5 {{'void' is not a class}}
 
 
   using wordp = word*;
   DO_ALL_CASTS(wordp, a);
+
 #ifndef __CHERI_PURE_CAPABILITY__
-  // expected-error@-2 4 {{cast from capability type 'void * __capability' to non-capability type 'wordp' (aka '__uintcap_t *') is most likely an error}}
-  // expected-note@-3 4 {{use __cheri_cast to convert between pointers and capabilities}}
+  // expected-error@-3 4 {{cast from capability type 'void * __capability' to non-capability type 'wordp' (aka '__uintcap_t *') is most likely an error}}
   // expected-error@-4 {{type 'void * __capability' cannot be narrowed to 'wordp' (aka '__uintcap_t *') in initializer list}}
   // expected-error@-5 {{const_cast from 'void * __capability' to 'wordp' (aka '__uintcap_t *') is not allowed}}
 #else
@@ -163,16 +162,48 @@ void cast_ptr() {
 #endif
 }
 
+#ifndef __CHERI_PURE_CAPABILITY__
 void cast_ref(int & __capability cap_ref) {
   int x;
-  using intref = int&;
-  int& v = reinterpret_cast<int&>(cap_ref); // expected-error{{cast from capability type 'int & __capability' to non-capability type 'int &' is most likely an error}} expected-note {{use __cheri_cast to convert between pointers and capabilities}}
-  v = static_cast<int&>(cap_ref); // expected-error{{cast from capability type 'int & __capability' to non-capability type 'int &' is most likely an error}} expected-note {{use __cheri_cast to convert between pointers and capabilities}}
-  // FIXME: this error shouldn/t be there twice:
-  // expected-error@-2 {{converting capability type 'int & __capability' to non-capability type 'int &' without an explicit cast}}
-  v = const_cast<int&>(cap_ref); // expected-error{{cast from capability type 'int & __capability' to non-capability type 'int &' is most likely an error}} expected-note {{use __cheri_cast to convert between pointers and capabilities}}
-  v = dynamic_cast<int&>(cap_ref); // expected-error{{'int' is not a class}}
-  v = (int&)cap_ref; // expected-error{{cast from capability type 'int & __capability' to non-capability type 'int &' is most likely an error}} expected-note {{use __cheri_cast to convert between pointers and capabilities}}
-  v = intref(cap_ref); // expected-error{{cast from capability type 'int & __capability' to non-capability type 'intref' (aka 'int &') is most likely an error}} expected-note {{use __cheri_cast to convert between pointers and capabilities}}
-  v = intref{cap_ref}; // expected-error{{converting capability type 'int & __capability' to non-capability type 'intref' (aka 'int &') without an explicit cast}}
+  using intref = int &;
+  int &v = reinterpret_cast<int &>(cap_ref); // expected-error{{reinterpret_cast to reference type 'int &' changes __capability qualifier}}
+  v = static_cast<int &>(cap_ref); // expected-error{{static_cast to reference type 'int &' changes __capability qualifier}}
+  v = const_cast<int &>(cap_ref); // expected-error{{const_cast to reference type 'int &' changes __capability qualifier}}
+  v = dynamic_cast<int &>(cap_ref); // expected-error{{'int' is not a class}}
+  v = (int &) cap_ref; // expected-error {{C-style cast to reference type 'int &' changes __capability qualifier}}
+  v = intref(cap_ref); // expected-error {{functional-style cast to reference type 'intref' (aka 'int &') changes __capability qualifier}}
+  v = intref{cap_ref}; // expected-error {{converting capability type 'int & __capability' to non-capability type 'intref' (aka 'int &') without an explicit cast}}
 }
+
+class Foo {
+public:
+    virtual ~Foo() = default;
+};
+
+class Bar : public Foo {
+public:
+    virtual ~Bar() = default;
+};
+
+void cast_classes(Foo& f, Foo& __capability foo_capref) {
+  (void)static_cast<Bar&>(f);
+  (void)static_cast<Bar& __capability>(f); // expected-error{{static_cast to reference type 'Bar & __capability' changes __capability qualifier}}
+  (void)static_cast<Foo&>(foo_capref);  // expected-error{{static_cast to reference type 'Foo &' changes __capability qualifier}}
+  (void)static_cast<Bar&>(foo_capref);  // expected-error{{static_cast to reference type 'Bar &' changes __capability qualifier}}
+
+  (void)dynamic_cast<Bar&>(f);
+  (void)dynamic_cast<Bar& __capability>(f); // expected-error{{dynamic_cast to reference type 'Bar & __capability' changes __capability qualifier}}
+  (void)dynamic_cast<Foo&>(foo_capref);     // expected-error{{dynamic_cast to reference type 'Foo &' changes __capability qualifier}}
+  (void)dynamic_cast<Bar&>(foo_capref);     // expected-error{{dynamic_cast to reference type 'Bar &' changes __capability qualifier}}
+
+  (void)const_cast<Bar&>(f);  // expected-error{{const_cast from 'Foo' to 'Bar &' is not allowed}}
+  (void)const_cast<Bar& __capability>(f); // expected-error{{const_cast to reference type 'Bar & __capability' changes __capability qualifier}}
+  (void)const_cast<Foo&>(foo_capref);     // expected-error{{const_cast to reference type 'Foo &' changes __capability qualifier}}
+  (void)const_cast<Bar&>(foo_capref);     // expected-error{{const_cast to reference type 'Bar &' changes __capability qualifier}}
+
+  (void)reinterpret_cast<Bar&>(f);
+  (void)reinterpret_cast<Bar& __capability>(f); // expected-error {{reinterpret_cast to reference type 'Bar & __capability' changes __capability qualifier}}
+  (void)reinterpret_cast<Foo&>(foo_capref);     // expected-error {{reinterpret_cast to reference type 'Foo &' changes __capability qualifier}}
+  (void)reinterpret_cast<Bar&>(foo_capref);     // expected-error {{reinterpret_cast to reference type 'Bar &' changes __capability qualifier}}
+}
+#endif

@@ -47,6 +47,9 @@ enum CastType {
   CT_Functional   ///< Type(expr)
 };
 
+static CastKind DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
+                                        const Expr* E, QualType DestType);
+
 namespace {
   struct CastOperation {
     CastOperation(Sema &S, QualType destType, ExprResult src)
@@ -87,6 +90,20 @@ namespace {
     /// Complete an apparently-successful cast operation that yields
     /// the given expression.
     ExprResult complete(CastExpr *castExpr) {
+      SourceRange CastRange = OpRange;
+      if (CXXNamedCastExpr* CNC = dyn_cast<CXXNamedCastExpr>(castExpr)) {
+        CastRange = CNC->getAngleBrackets();
+      }
+      if (!isa<CXXConstructExpr>(SrcExpr.get())) {
+        CastKind CK = DiagnoseCapabilityToIntCast(Self, CastRange,
+                                                  SrcExpr.get(), DestType);
+        // Make sure that the types actually match:
+        if (CK == CK_CHERICapabilityToPointer && DestType->isReferenceType()) {
+          // return ExprError();
+        }
+      }
+
+
       // If this is an unbridged cast, wrap the result in an implicit
       // cast that yields the unbridged-cast placeholder type.
       if (IsARCUnbridgedCast) {
@@ -209,9 +226,6 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
                                         unsigned &msg,
                                         CastKind &Kind);
 
-static void DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
-                                        const Expr* E, QualType DestType);
-
 
 /// ActOnCXXNamedCast - Parse {dynamic,static,reinterpret,const}_cast's.
 ExprResult
@@ -262,7 +276,6 @@ Sema::BuildCXXNamedCast(SourceLocation OpLoc, tok::TokenKind Kind,
         return ExprError();
       DiscardMisalignedMemberAddress(DestType.getTypePtr(), E);
     }
-    DiagnoseCapabilityToIntCast(*this, AngleBrackets, E, DestType);
     return Op.complete(CXXConstCastExpr::Create(Context, Op.ResultType,
                                   Op.ValueKind, Op.SrcExpr.get(), DestTInfo,
                                                 OpLoc, Parens.getEnd(),
@@ -274,7 +287,6 @@ Sema::BuildCXXNamedCast(SourceLocation OpLoc, tok::TokenKind Kind,
       if (Op.SrcExpr.isInvalid())
         return ExprError();
     }
-    DiagnoseCapabilityToIntCast(*this, AngleBrackets, E, DestType);
     return Op.complete(CXXDynamicCastExpr::Create(Context, Op.ResultType,
                                     Op.ValueKind, Op.Kind, Op.SrcExpr.get(),
                                                   &Op.BasePath, DestTInfo,
@@ -288,7 +300,6 @@ Sema::BuildCXXNamedCast(SourceLocation OpLoc, tok::TokenKind Kind,
         return ExprError();
       DiscardMisalignedMemberAddress(DestType.getTypePtr(), E);
     }
-    DiagnoseCapabilityToIntCast(*this, AngleBrackets, E, DestType);
     return Op.complete(CXXReinterpretCastExpr::Create(Context, Op.ResultType,
                                     Op.ValueKind, Op.Kind, Op.SrcExpr.get(),
                                                       nullptr, DestTInfo, OpLoc,
@@ -300,7 +311,6 @@ Sema::BuildCXXNamedCast(SourceLocation OpLoc, tok::TokenKind Kind,
       Op.CheckStaticCast();
       if (Op.SrcExpr.isInvalid())
         return ExprError();
-      DiagnoseCapabilityToIntCast(*this, AngleBrackets, E, DestType);
       DiscardMisalignedMemberAddress(DestType.getTypePtr(), E);
     }
     
@@ -682,6 +692,15 @@ void CastOperation::CheckDynamicCast() {
   if (!DestPointee.isAtLeastAsQualifiedAs(SrcPointee)) {
     Self.Diag(OpRange.getBegin(), diag::err_bad_cxx_cast_qualifiers_away)
       << CT_Dynamic << OrigSrcType << this->DestType << OpRange;
+    SrcExpr = ExprError();
+    return;
+  }
+
+  // Check that the dynamic cast doesn't change the capability qualifier
+  if (DestReference && (DestReference->isCHERICapability() !=
+                        SrcExpr.get()->getRealReferenceType()->isCHERICapabilityType(Self.getASTContext()))) {
+    Self.Diag(OpRange.getBegin(), diag::err_bad_cxx_reference_cast_capability_qualifier)
+            << CT_Dynamic << 0 << DestType;
     SrcExpr = ExprError();
     return;
   }
@@ -1226,6 +1245,12 @@ TryStaticReferenceDowncast(Sema &Self, Expr *SrcExpr, QualType DestType,
 
   QualType DestPointee = DestReference->getPointeeType();
 
+  if (DestReference->isCHERICapability() !=
+      SrcExpr->getRealReferenceType()->isCHERICapabilityType(Self.getASTContext())) {
+    msg = diag::err_bad_cxx_reference_cast_capability_qualifier;
+    return TC_Failed;
+  }
+
   // FIXME: If the source is a prvalue, we should issue a warning (because the
   // cast always has undefined behavior), and for AST consistency, we should
   // materialize a temporary.
@@ -1607,6 +1632,12 @@ static TryCastResult TryConstCast(Sema &Self, ExprResult &SrcExpr,
       return TC_NotApplicable;
     }
 
+    if (DestTypeTmp->isCHERICapability() !=
+        SrcExpr.get()->getRealReferenceType()->isCHERICapabilityType(Self.getASTContext())) {
+      msg = diag::err_bad_cxx_reference_cast_capability_qualifier;
+      return TC_NotApplicable;
+    }
+
     DestType = Self.Context.getPointerType(DestTypeTmp->getPointeeType());
     SrcType = Self.Context.getPointerType(SrcType);
   }
@@ -1774,22 +1805,23 @@ static void DiagnoseCHERICast(Sema &Self, Expr *SrcExpr, QualType DestType,
   }
 }
 
-static void DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
-                                        const Expr* SrcExpr, QualType DestType) {
+static CastKind DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
+                                            const Expr* SrcExpr,
+                                            QualType DestType) {
   QualType SrcType = SrcExpr->getRealReferenceType();
   if (SrcType->isDependentType() || DestType->isDependentType())
-    return; // can't diagnose this yet
+    return CK_NoOp; // can't diagnose this yet
   if (!SrcType->isCHERICapabilityType(Self.Context)) {
-    return; // Not casting from a capability
+    return CK_NoOp; // Not casting from a capability
   }
   if (DestType->isCHERICapabilityType(Self.Context)) {
-    return; // cast from capabilty to capability is fine
+    return CK_NoOp; // cast from capabilty to capability is fine
   }
   if (DestType->isVoidType()) {
-    return; // casting to void to silence unused variable warnings is fine
+    return CK_NoOp; // casting to void to silence unused variable warnings is fine
   }
   if (SrcType->isNullPtrType()) {
-    return;
+    return CK_NoOp;
   }
 
   const QualType CanonicalSrcType = SrcType.getCanonicalType();
@@ -1797,7 +1829,7 @@ static void DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
     auto Kind = BT->getKind();
     if (Kind == BuiltinType::IntCap || Kind == BuiltinType::UIntCap) {
       // casting to integer from __(u)intcap_t is fine
-      return;
+      return CK_NoOp;
     }
   }
 
@@ -1819,7 +1851,7 @@ static void DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
         // llvm::errs() << "Found attr_memory_address: " << CurTy.getAsString() << "\n";
         // llvm::errs() << DestType.getAsString() << " is a memoryAddressType!\n";
         IsMemAddressType = true;
-	break;
+	    break;
       }
     }
     if (!CurTy->isIntegralType(Self.Context)) {
@@ -1839,10 +1871,13 @@ static void DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
       << SrcType << DestType << OpRange
       << FixItHint::CreateReplacement(OpRange, "__cheri_cast " +
                                                DestType.getAsString());
+    return CK_CHERICapabilityToPointer;
+
   } else if (!IsMemAddressType) {
       Self.Diag(OpRange.getBegin(), diag::warn_capability_integer_cast)
               << SrcType << DestType << OpRange;
   }
+  return CK_NoOp;
 }
 
 static void DiagnoseCastOfObjCSEL(Sema &Self, const ExprResult &SrcExpr,
@@ -2072,6 +2107,12 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
           << OpRange << SrcExpr.get()->getSourceRange();
       msg = 0; SrcExpr = ExprError();
       return TC_NotApplicable;
+    }
+
+    if (DestTypeTmp->isCHERICapability() !=
+        SrcExpr.get()->getRealReferenceType()->isCHERICapabilityType(Self.getASTContext())) {
+      msg = diag::err_bad_cxx_reference_cast_capability_qualifier;
+      return TC_Failed;
     }
 
     // This code does this transformation for the checked types.
@@ -2722,6 +2763,7 @@ void CastOperation::CheckCStyleCast() {
   DiagnoseBadFunctionCast(Self, SrcExpr, DestType);
   Kind = Self.PrepareScalarCast(SrcExpr, DestType);
   DiagnoseCHERICast(Self, SrcExpr.get(), DestType, Kind, OpRange);
+
   if (SrcExpr.isInvalid())
     return;
 
@@ -2771,9 +2813,6 @@ ExprResult Sema::BuildCStyleCastExpr(SourceLocation LPLoc,
   if (Op.SrcExpr.isInvalid())
     return ExprError();
 
-  DiagnoseCapabilityToIntCast(*this, Op.DestRange, CastExpr,
-                              CastTypeInfo->getType());
-
   return Op.complete(CStyleCastExpr::Create(Context, Op.ResultType,
                               Op.ValueKind, Op.Kind, Op.SrcExpr.get(),
                               &Op.BasePath, CastTypeInfo, LPLoc, RPLoc));
@@ -2798,8 +2837,6 @@ ExprResult Sema::BuildCXXFunctionalCastExpr(TypeSourceInfo *CastTypeInfo,
     SubExpr = BindExpr->getSubExpr();
   if (auto *ConstructExpr = dyn_cast<CXXConstructExpr>(SubExpr))
     ConstructExpr->setParenOrBraceRange(SourceRange(LPLoc, RPLoc));
-  else /* XXXAR: only diagnose int<->cap casts for actual casts */
-    DiagnoseCapabilityToIntCast(*this, Op.DestRange, CastExpr, Type);
 
   return Op.complete(CXXFunctionalCastExpr::Create(Context, Op.ResultType,
                          Op.ValueKind, CastTypeInfo, Op.Kind,
@@ -2872,4 +2909,3 @@ ExprResult Sema::ActOnCheriCast(Scope *S, SourceLocation LParenLoc,
     TSInfo = Context.getTrivialTypeSourceInfo(T, LParenLoc);
   return BuildCheriCast(LParenLoc, KeywordLoc, T, TSInfo, RParenLoc, SubExpr);
 }
-
