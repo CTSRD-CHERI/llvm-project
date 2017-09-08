@@ -589,6 +589,14 @@ CastsAwayConstness(Sema &Self, QualType SrcType, QualType DestType,
                                     ObjCLifetimeConversion);
 }
 
+static bool IsBadCheriReferenceCast(const ReferenceType* Dest, Expr* SrcExpr,
+                                    const ASTContext& Ctx) {
+  bool SrcIsCapRef = Ctx.getTargetInfo().areAllPointersCapabilities();
+  if (auto SrcRef = SrcExpr->getRealReferenceType()->getAs<ReferenceType>())
+    SrcIsCapRef = SrcRef->isCHERICapability();
+  return Dest->isCHERICapability() != SrcIsCapRef;
+}
+
 /// CheckDynamicCast - Check that a dynamic_cast\<DestType\>(SrcExpr) is valid.
 /// Refer to C++ 5.2.7 for details. Dynamic casts are used mostly for runtime-
 /// checked downcasts in class hierarchies.
@@ -697,8 +705,7 @@ void CastOperation::CheckDynamicCast() {
   }
 
   // Check that the dynamic cast doesn't change the capability qualifier
-  if (DestReference && (DestReference->isCHERICapability() !=
-                        SrcExpr.get()->getRealReferenceType()->isCHERICapabilityType(Self.getASTContext()))) {
+  if (IsBadCheriReferenceCast(DestReference, SrcExpr.get(), Self.getASTContext())) {
     Self.Diag(OpRange.getBegin(), diag::err_bad_cxx_reference_cast_capability_qualifier)
             << CT_Dynamic << 0 << DestType;
     SrcExpr = ExprError();
@@ -1245,8 +1252,7 @@ TryStaticReferenceDowncast(Sema &Self, Expr *SrcExpr, QualType DestType,
 
   QualType DestPointee = DestReference->getPointeeType();
 
-  if (DestReference->isCHERICapability() !=
-      SrcExpr->getRealReferenceType()->isCHERICapabilityType(Self.getASTContext())) {
+  if (IsBadCheriReferenceCast(DestReference, SrcExpr, Self.getASTContext())) {
     msg = diag::err_bad_cxx_reference_cast_capability_qualifier;
     return TC_Failed;
   }
@@ -1632,8 +1638,7 @@ static TryCastResult TryConstCast(Sema &Self, ExprResult &SrcExpr,
       return TC_NotApplicable;
     }
 
-    if (DestTypeTmp->isCHERICapability() !=
-        SrcExpr.get()->getRealReferenceType()->isCHERICapabilityType(Self.getASTContext())) {
+    if (IsBadCheriReferenceCast(DestTypeTmp, SrcExpr.get(), Self.getASTContext())) {
       msg = diag::err_bad_cxx_reference_cast_capability_qualifier;
       return TC_NotApplicable;
     }
@@ -2109,8 +2114,7 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
       return TC_NotApplicable;
     }
 
-    if (DestTypeTmp->isCHERICapability() !=
-        SrcExpr.get()->getRealReferenceType()->isCHERICapabilityType(Self.getASTContext())) {
+    if (IsBadCheriReferenceCast(DestTypeTmp, SrcExpr.get(), Self.getASTContext())) {
       msg = diag::err_bad_cxx_reference_cast_capability_qualifier;
       return TC_Failed;
     }
