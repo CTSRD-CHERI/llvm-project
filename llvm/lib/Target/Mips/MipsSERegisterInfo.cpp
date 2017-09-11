@@ -279,7 +279,7 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
     }
 
     if (ABI.IsCheriPureCap()) {
-      if (!isInt<11>(Offset)) {
+      if (!isIntN(OffsetBitSize, Offset)) {
         assert(isInt<16>(Offset) &&
             "Emergency spill slot must be within 32K of the frame pointer!");
         MachineBasicBlock &MBB = *MI.getParent();
