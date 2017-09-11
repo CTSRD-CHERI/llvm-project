@@ -705,7 +705,8 @@ void CastOperation::CheckDynamicCast() {
   }
 
   // Check that the dynamic cast doesn't change the capability qualifier
-  if (IsBadCheriReferenceCast(DestReference, SrcExpr.get(), Self.getASTContext())) {
+  if (DestReference && IsBadCheriReferenceCast(DestReference, SrcExpr.get(),
+                                               Self.getASTContext())) {
     Self.Diag(OpRange.getBegin(), diag::err_bad_cxx_reference_cast_capability_qualifier)
             << CT_Dynamic << 0 << DestType;
     SrcExpr = ExprError();
