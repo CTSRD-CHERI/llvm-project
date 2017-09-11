@@ -309,7 +309,7 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
               .addReg(NegReg, RegState::Kill);
           }
         } else
-          MI.getOperand(1).ChangeToRegister(Reg, false, false, IsKill);
+          MI.getOperand(1).ChangeToRegister(Reg, false, false, true);
         Offset = 0;
       }
     } else if (OffsetBitSize < 16 && isInt<16>(Offset) &&
