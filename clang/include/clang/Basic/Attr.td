@@ -1622,7 +1622,7 @@ def CHERICapability : TypeAttr {
   let Documentation = [Undocumented];
 }
 def MemoryAddress : TypeAttr {
-  let Spellings = [GNU<"memory_address">];
+  let Spellings = [GNU<"memory_address">, CXX11<"cheri","memory_address">];
   let Documentation = [Undocumented];
 }
 
