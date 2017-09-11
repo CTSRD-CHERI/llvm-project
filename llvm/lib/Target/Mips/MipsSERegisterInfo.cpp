@@ -287,6 +287,7 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
         // If we have an offset that needs to fit into a signed n-bit immediate
         // (where n < 16) and doesn't, but does fit into 16-bits then use an ADDiu
         bool isFrameReg = MI.getOperand(0).getReg() == FrameReg;
+        bool needsIncOffset = MI.getOperand(1).getReg() != Mips::ZERO_64;
         const TargetRegisterClass *PtrRC =
             ABI.ArePtrs64bit() ? &Mips::GPR64RegClass : &Mips::GPR32RegClass;
         MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
@@ -294,18 +295,21 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
         BuildMI(MBB, II, DL, TII.get(ABI.GetPtrAddiuOp()), Reg)
             .addReg(Mips::ZERO_64)
             .addImm(Offset);
-        BuildMI(MBB, II, DL, TII.get(Mips::CIncOffset), FrameReg)
-            .addReg(FrameReg)
-            .addReg(Reg, isFrameReg ? RegState::Kill : 0);
-        if (!isFrameReg) {
-          unsigned NegReg = RegInfo.createVirtualRegister(PtrRC);
-          BuildMI(MBB, (++II), DL, TII.get(Mips::DSUBu), NegReg)
-            .addReg(Mips::ZERO_64)
-            .addReg(Reg, RegState::Kill);
+        if (needsIncOffset) {
           BuildMI(MBB, II, DL, TII.get(Mips::CIncOffset), FrameReg)
-            .addReg(FrameReg)
-            .addReg(NegReg, RegState::Kill);
-        }
+              .addReg(FrameReg)
+              .addReg(Reg, isFrameReg ? RegState::Kill : 0);
+          if (!isFrameReg) {
+            unsigned NegReg = RegInfo.createVirtualRegister(PtrRC);
+            BuildMI(MBB, (++II), DL, TII.get(Mips::DSUBu), NegReg)
+              .addReg(Mips::ZERO_64)
+              .addReg(Reg, RegState::Kill);
+            BuildMI(MBB, II, DL, TII.get(Mips::CIncOffset), FrameReg)
+              .addReg(FrameReg)
+              .addReg(NegReg, RegState::Kill);
+          }
+        } else
+          MI.getOperand(1).ChangeToRegister(Reg, false, false, IsKill);
         Offset = 0;
       }
     } else if (OffsetBitSize < 16 && isInt<16>(Offset) &&
