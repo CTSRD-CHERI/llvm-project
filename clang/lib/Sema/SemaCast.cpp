@@ -48,7 +48,7 @@ enum CastType {
 };
 
 static CastKind DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
-                                        const Expr* E, QualType DestType);
+                                            const Expr *E, QualType DestType);
 
 namespace {
   struct CastOperation {
@@ -589,8 +589,8 @@ CastsAwayConstness(Sema &Self, QualType SrcType, QualType DestType,
                                     ObjCLifetimeConversion);
 }
 
-static bool IsBadCheriReferenceCast(const ReferenceType* Dest, Expr* SrcExpr,
-                                    const ASTContext& Ctx) {
+static bool IsBadCheriReferenceCast(const ReferenceType *Dest, Expr *SrcExpr,
+                                    const ASTContext &Ctx) {
   bool SrcIsCapRef = Ctx.getTargetInfo().areAllPointersCapabilities();
   if (auto SrcRef = SrcExpr->getRealReferenceType()->getAs<ReferenceType>())
     SrcIsCapRef = SrcRef->isCHERICapability();
@@ -623,7 +623,7 @@ void CastOperation::CheckDynamicCast() {
     DestPointee = DestReference->getPointeeType();
   } else {
     Self.Diag(OpRange.getBegin(), diag::err_bad_dynamic_cast_not_ref_or_ptr)
-      << this->DestType << DestRange;
+        << this->DestType << DestRange;
     SrcExpr = ExprError();
     return;
   }
@@ -1638,7 +1638,8 @@ static TryCastResult TryConstCast(Sema &Self, ExprResult &SrcExpr,
       return TC_NotApplicable;
     }
 
-    if (IsBadCheriReferenceCast(DestTypeTmp, SrcExpr.get(), Self.getASTContext())) {
+    if (IsBadCheriReferenceCast(DestTypeTmp, SrcExpr.get(),
+                                Self.getASTContext())) {
       msg = diag::err_bad_cxx_reference_cast_capability_qualifier;
       return TC_NotApplicable;
     }
@@ -1811,7 +1812,7 @@ static void DiagnoseCHERICast(Sema &Self, Expr *SrcExpr, QualType DestType,
 }
 
 static CastKind DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
-                                            const Expr* SrcExpr,
+                                            const Expr *SrcExpr,
                                             QualType DestType) {
   QualType SrcType = SrcExpr->getRealReferenceType();
   if (SrcType->isDependentType() || DestType->isDependentType())
@@ -1856,7 +1857,7 @@ static CastKind DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
         // llvm::errs() << "Found attr_memory_address: " << CurTy.getAsString() << "\n";
         // llvm::errs() << DestType.getAsString() << " is a memoryAddressType!\n";
         IsMemAddressType = true;
-	    break;
+        break;
       }
     }
     if (!CurTy->isIntegralType(Self.Context)) {
@@ -1873,14 +1874,14 @@ static CastKind DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
   }
   if (DestType->isPointerType() || DestType->isReferenceType()) {
     Self.Diag(OpRange.getBegin(), diag::warn_capability_pointer_cast)
-      << SrcType << DestType << OpRange
-      << FixItHint::CreateReplacement(OpRange, "__cheri_cast " +
-                                               DestType.getAsString());
+        << SrcType << DestType << OpRange
+        << FixItHint::CreateReplacement(OpRange, "__cheri_cast " +
+                                                     DestType.getAsString());
     return CK_CHERICapabilityToPointer;
 
   } else if (!IsMemAddressType) {
-      Self.Diag(OpRange.getBegin(), diag::warn_capability_integer_cast)
-              << SrcType << DestType << OpRange;
+    Self.Diag(OpRange.getBegin(), diag::warn_capability_integer_cast)
+        << SrcType << DestType << OpRange;
   }
   return CK_NoOp;
 }
@@ -2865,18 +2866,18 @@ ExprResult Sema::BuildCheriCast(SourceLocation LParenLoc,
     return ExprError();
   }
   bool TypesCompatible = false;
-  if (getLangOpts().CPlusPlus) {
-    // C++ checks if the types are excatly the same -> this will fail because
-    // capability and non-capability Type* are different instances
-    //
-    // Types compatible source:
-    //   if (getLangOpts().CPlusPlus)
-    //     return hasSameType(LHS, RHS);
-    //  return !mergeTypes(LHS, RHS, false, CompareUnqualified).isNull();
+  // C++ checks if the types are excatly the same -> this will fail because
+  // capability and non-capability Type* are different instances
+  //
+  // Types compatible source:
+  //   if (getLangOpts().CPlusPlus)
+  //     return hasSameType(LHS, RHS);
+  //  return !mergeTypes(LHS, RHS, false, CompareUnqualified).isNull();
+  if (getLangOpts().CPlusPlus)
     TypesCompatible = !Context.mergeTypes(SrcTy, DestTy, false, false).isNull();
-  } else {
+  else
     TypesCompatible = Context.typesAreCompatible(SrcTy, DestTy, false);
-  }
+
   if (!TypesCompatible) {
     Diag(SubExpr->getLocStart(), diag::err_cheri_cast_unrelated_type)
       << SrcTy << DestTy;

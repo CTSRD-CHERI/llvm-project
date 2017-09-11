@@ -1568,7 +1568,6 @@ static bool IsStandardConversion(Sema &S, Expr* From, QualType ToType,
   SCS.IncompatibleObjC = false;
   SCS.setFromType(FromType);
   SCS.CopyConstructor = nullptr;
-  // assert(!SCS.IncompatibleCHERIConversion);
 
   // There are no standard conversions for class types in C++, so
   // abort early. When overloading in C, however, we do permit them.

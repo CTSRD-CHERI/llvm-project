@@ -6612,10 +6612,6 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_XRayLogArgs:
     handleXRayLogArgsAttr(S, D, Attr);
     break;
-//   case AttributeList::AT_MemoryAddress:
-//     D->dump(llvm::errs());
-//     assert(false && "AT_MEMORY_ADDRESS in declattr");
-//     break;
   }
 }
 

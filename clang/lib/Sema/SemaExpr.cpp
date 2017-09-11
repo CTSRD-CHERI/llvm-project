@@ -7698,9 +7698,9 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
     if (const PointerType *RHSPointer = dyn_cast<PointerType>(RHSType)) {
       unsigned AddrSpaceL = LHSPointer->getPointeeType().getAddressSpace();
       unsigned AddrSpaceR = RHSPointer->getPointeeType().getAddressSpace();
-      if (AddrSpaceL != AddrSpaceR) {
+      if (AddrSpaceL != AddrSpaceR)
         Kind = CK_AddressSpaceConversion;
-      } else if (LHSPointer->isFunctionPointerType() && RHSPointer->isFunctionPointerType()) {
+      else if (LHSPointer->isFunctionPointerType() && RHSPointer->isFunctionPointerType()) {
         // only allow implicit casts to and from function pointer capabilities
         if (!LHSPointer->isCHERICapability() && RHSPointer->isCHERICapability())
           Kind = CK_CHERICapabilityToPointer;
