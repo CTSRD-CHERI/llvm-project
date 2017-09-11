@@ -15,9 +15,9 @@
 void* __capability a;
 using vaddr_t = __attribute__((memory_address)) unsigned __PTRDIFF_TYPE__;
 using double_attribute = __attribute__((memory_address)) vaddr_t;  // expected-warning {{attribute 'memory_address' is already applied}}
-using err_cap_type = __attribute__((memory_address)) __intcap_t;  // expected-error {{'memory_address' attribute only applies to integer types that can store memory addresses ('__intcap_t' is invalid)}}
-using err_struct_type = __attribute__((memory_address)) struct foo; // expected-error {{'memory_address' attribute only applies to integer types that can store memory addresses ('struct foo' is invalid)}}
-using err_pointer_type = int* __attribute__((memory_address)); // expected-error {{'memory_address' attribute only applies to integer types that can store memory addresses}}
+using err_cap_type = __attribute__((memory_address)) __intcap_t;  // expected-error {{'memory_address' attribute only applies to integer types that can store addresses ('__intcap_t' is invalid)}}
+using err_struct_type = __attribute__((memory_address)) struct foo; // expected-error {{'memory_address' attribute only applies to integer types that can store addresses ('struct foo' is invalid)}}
+using err_pointer_type = int* __attribute__((memory_address)); // expected-error {{'memory_address' attribute only applies to integer types that can store addresses}}
 
 typedef const vaddr_t other_addr_t;
 typedef __PTRDIFF_TYPE__ ptrdiff_t;

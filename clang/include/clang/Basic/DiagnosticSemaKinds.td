@@ -2454,8 +2454,8 @@ def err_attribute_integers_only : Error<
   "%0 attribute argument may only refer to a function parameter of integer "
   "type">;
 def err_attribute_address_integers_only : Error<
-  "%0 attribute only applies to integer types that can store memory "
-  "addresses (%1 is invalid)">;
+  "%0 attribute only applies to integer types that can store addresses "
+  "(%1 is invalid)">;
 def warn_attribute_return_pointers_only : Warning<
   "%0 attribute only applies to return values that are pointers">,
   InGroup<IgnoredAttributes>;
