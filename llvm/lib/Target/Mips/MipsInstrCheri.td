@@ -239,8 +239,8 @@ def CGetSealed : CheriFmtCGet<5, "sealed">;
 def CGetOffset : CheriFmtCGet<6, "offset">;
 
 // Versions of property setters that take immediate operands
-def CSetBoundsImm : CheriFmtCSetImm<0x11, simm11s0, simm11s0Pattern, "bounds">;
-def CIncOffsetImm : CheriFmtCSetImm<0x12, simm11s0, simm11s0Pattern, "offset", "offset", "inc", "increment">;
+def CSetBoundsImm : CheriFmtCSetImm<0x14, simm11s0, simm11s0Pattern, "bounds">;
+def CIncOffsetImm : CheriFmtCSetImm<0x13, simm11s0, simm11s0Pattern, "offset", "offset", "inc", "increment">;
 // Property setters
 def CAndPerms  : CheriFmtCSet<0xd, "perm", "perms", "and">;
 def CSetOffset : CheriFmtCSet<0xf, "offset">;
