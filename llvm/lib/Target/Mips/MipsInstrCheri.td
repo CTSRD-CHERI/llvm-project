@@ -121,7 +121,7 @@ def : Pat<(brcond (i32 (setne (int_cheri_cap_tag_get CheriOpnd:$cb), 1)), bb:$of
 
 let isCall=1, hasDelaySlot=1 in {
 def CJALR : CheriFmt2Op<0xc, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2),
-                              "cjalr\t${r1}, ${r2}",
+                              "cjalr\t${r2}, ${r1}",
                               []>;
 def CCall : CheriFmt3CCall<0x05, (outs), (ins CheriOpnd:$cs, CheriOpnd:$cb, uimm11: $selector),
                               "ccall\t${cs}, ${cb}, ${selector}",
