@@ -244,7 +244,7 @@ def CIncOffsetImm : CheriFmtCSetImm<0x12, simm11s0, simm11s0Pattern, "offset", "
 // Property setters
 def CAndPerms  : CheriFmtCSet<0xd, "perm", "perms", "and">;
 def CSetOffset : CheriFmtCSet<0xf, "offset">;
-def CSetBounds : CheriFmtCSet<0x10, "bounds">;
+def CSetBounds : CheriFmtCSet<0x8, "bounds">;
 def CIncOffset : CheriFmtCSet<0x11, "offset", "offset", "inc", "increment">;
 def CClearTag  : CheriFmt2Op<0xb, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2), 
                               "ccleartag\t$r1, $r2",
