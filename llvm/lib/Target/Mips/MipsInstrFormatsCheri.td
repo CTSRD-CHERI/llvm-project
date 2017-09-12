@@ -134,7 +134,7 @@ class CheriFmt3CRet<bits<5> op, dag outs, dag ins, string asmstr,
   let Opcode = 0x12;
   let Inst{25-21} = 0x05;
   let Inst{20-11} = 0;
-  let Inst{10-0} = 1;
+  let Inst{10-0} = -1;
 }
 
 class CheriFmtClearTag<dag outs, dag ins, string asmstr,
