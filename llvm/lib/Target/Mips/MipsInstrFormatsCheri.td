@@ -263,6 +263,25 @@ class CheriFmt3Op<bits<6> type, dag outs, dag ins, string asmstr, list<dag> patt
   let Inst{5-0}   = type;
 }
 
+class CheriFmtCSetImm<bits<5> type, Operand immOp, PatFrag immPat, string op, string intr=op, string verb="set", string intr_verb=verb> :
+                      MipsInst<(outs CheriOpnd:$cd), (ins CheriOpnd:$cb, immOp: $imm),
+                               !strconcat("c", verb, op, "\t$cd, $cb, ${imm}"),
+                               [(set CheriOpnd:$cd, (!cast<dag>(!strconcat("int_cheri_cap_", intr, "_", intr_verb)) CheriOpnd:$cb, (i64 immPat: $imm)))],
+                               NoItinerary, FrmOther>,
+                      Sched<[]>
+{
+  bits<5> cd;
+  bits<5> cb;
+  bits<11> imm;
+
+  let Opcode = 0x12;
+
+  let Inst{25-21} = type;
+  let Inst{20-16} = cd;
+  let Inst{15-11} = cb;
+  let Inst{10-0} = imm;
+}
+
 class CheriFmt2Op<bits<5> type, dag outs, dag ins, string asmstr, list<dag> pattern> :
                   CheriFmt3Op<0x3f, outs, ins, asmstr, pattern>
 {

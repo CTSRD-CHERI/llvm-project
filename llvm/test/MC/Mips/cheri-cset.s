@@ -16,6 +16,15 @@
 # CHECK: csetbounds	$c1, $c2, $12
 # CHECK: encoding: [0x48,0x01,0x13,0x10]
 	csetbounds	$c1, $c2, $t0
+# CHECK: csetbounds	$c1, $c2, 64
+# CHECK: encoding: [0x4a,0x21,0x10,0x40]
+	csetbounds	$c1, $c2, 64
+# CHECK: cincoffset	$c1, $c2, $12
+# CHECK: encoding: [0x48,0x01,0x13,0x11]
+	cincoffset	$c1, $c2, $t0
+# CHECK: cincoffset	$c1, $c2, 64
+# CHECK: encoding: [0x4a,0x41,0x10,0x40]
+	cincoffset	$c1, $c2, 64
 # CHECK: ccleartag	$c1
 # CHECK: encoding: [0x48,0x01,0x0a,0xff]
 	ccleartag	$c1, $c1

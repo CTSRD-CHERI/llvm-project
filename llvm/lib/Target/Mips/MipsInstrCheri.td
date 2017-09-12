@@ -49,6 +49,8 @@ defm simm8s3  : ShiftImmPattern<8, 3>;
 defm simm8s2  : ShiftImmPattern<8, 2>;
 defm simm8s1  : ShiftImmPattern<8, 1>;
 defm simm8    : ShiftImmPattern<8, 0>;
+// 11-bit immediate offset used by immediate versions of cincoffset / csetbounds
+defm simm11s0 : ShiftImmPattern<11, 0>;
 
 // Pattern for atomic loads on capabilities
 def SDTAtomicCapLoad : SDTypeProfile<1, 1, [
@@ -118,8 +120,8 @@ def : Pat<(brcond (i32 (setne (int_cheri_cap_tag_get CheriOpnd:$cb), 1)), bb:$of
           (CBTU CheriOpnd: $cb, bb:$offset)>;
 
 let isCall=1, hasDelaySlot=1 in {
-def CJALR : CheriFmt2Op<0xc, (outs CheriOpnd:$cd), (ins CheriOpnd:$cb),
-                              "cjalr\t${cb}, ${cd}",
+def CJALR : CheriFmt2Op<0xc, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2),
+                              "cjalr\t${r1}, ${r2}",
                               []>;
 def CCall : CheriFmt3CCall<0x05, (outs), (ins CheriOpnd:$cs, CheriOpnd:$cb, uimm11: $selector),
                               "ccall\t${cs}, ${cb}, ${selector}",
@@ -236,6 +238,9 @@ def CGetTag    : CheriFmtCGet<4, "tag">;
 def CGetSealed : CheriFmtCGet<5, "sealed">;
 def CGetOffset : CheriFmtCGet<6, "offset">;
 
+// Versions of property setters that take immediate operands
+def CSetBoundsImm : CheriFmtCSetImm<0x11, simm11s0, simm11s0Pattern, "bounds">;
+def CIncOffsetImm : CheriFmtCSetImm<0x12, simm11s0, simm11s0Pattern, "offset", "offset", "inc", "increment">;
 // Property setters
 def CAndPerms  : CheriFmtCSet<0xd, "perm", "perms", "and">;
 def CSetOffset : CheriFmtCSet<0xf, "offset">;
@@ -244,6 +249,8 @@ def CIncOffset : CheriFmtCSet<0x11, "offset", "offset", "inc", "increment">;
 def CClearTag  : CheriFmt2Op<0xb, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2), 
                               "ccleartag\t$r1, $r2",
                               [(set CheriOpnd:$r1, (int_cheri_cap_tag_clear CheriOpnd:$r2))]>;
+
+
 // PCC access
 def CGetPCC : CheriFmt1Op<0x0, (outs CheriOpnd:$r1), (ins),
                           "cgetpcc\t${r1}",
@@ -276,8 +283,8 @@ def CToPtr32 : CheriFmt3Op<0x13, (outs GPR32Opnd:$r1), (ins CheriOpnd:$r2, Cheri
 }
 def CSub : CheriFmt3Op<0xa, (outs GPR64Opnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3),
   "csub\t$r1, $r2, $r3", [(set GPR64Opnd:$r1, (int_cheri_cap_diff CheriOpnd:$r2, CheriOpnd:$r3))]>;
-def CMove : CheriFmt2Op<0xa, (outs CheriOpnd: $cd), (ins CheriOpnd:$cs),
-  "cmove\t$cd,  $cs",
+def CMove : CheriFmt2Op<0xa, (outs CheriOpnd: $r1), (ins CheriOpnd:$r2),
+  "cmove\t$r1,  $r2",
   []>;
 
 
