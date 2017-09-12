@@ -307,6 +307,8 @@ def CCheckType : CheriFmt2Op<0x9, (outs), (ins CheriOpnd:$r1, CheriOpnd:$r2),
 // Cursors
 def : Pat<(ptradd CheriOpnd:$r2, GPR64Opnd:$r3),
           (CIncOffset $r2, $r3)>;
+def : Pat<(ptradd CheriOpnd:$r2, simm11s0Pattern:$imm),
+          (CIncOffsetImm $r2, simm11s0Pattern: $imm)>;
 // Int to pointer in address space 0
 def : Pat<(inttoptr GPR64Opnd:$rt),
           (CFromPtr C0, $rt)>;
