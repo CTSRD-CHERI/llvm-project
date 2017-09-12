@@ -5204,6 +5204,8 @@ SDValue SelectionDAG::getPointerAdd(const SDLoc dl, SDValue Ptr, int64_t Offset,
                                     const SDNodeFlags Flags) {
   EVT BasePtrVT = Ptr.getValueType();
   if (BasePtrVT == MVT::iFATPTR) {
+    if (Offset == 0)
+      return Ptr;
     // Assume that address space 0 has the range of any pointer.
     MVT IntPtrTy = MVT::getIntegerVT(
         getDataLayout().getPointerSizeInBits(0));
