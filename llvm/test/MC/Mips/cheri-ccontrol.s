@@ -10,6 +10,12 @@
 # CHECK: cbts	$c1, 100
 # CHECK: encoding: [0x49,0x41,0x00,0x19]
 	cbts	$c1, 100
+# CHECK: cbez	$c1, 100
+# CHECK: encoding: [0x4a,0x21,0x00,0x19]
+	cbez	$c1, 100
+# CHECK: cbnz	$c1, 100
+# CHECK: encoding: [0x4a,0x41,0x00,0x19]
+	cbnz	$c1, 100
 # CHECK: cjr	$c1
 # CHECK: encoding: [0x48,0x01,0x47,0xff]
 	cjr	$c1
