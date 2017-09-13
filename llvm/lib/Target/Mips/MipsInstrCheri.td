@@ -271,14 +271,14 @@ def CUnSeal : CheriFmt3Op<0xc, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, CheriOp
 
 // Pointer arithmetic
 
-def CFromPtr : CheriFmt3Op<0x12, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR64Opnd:$r3),
+def CFromPtr : CheriFmt3Op<0x13, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR64Opnd:$r3),
   "cfromptr\t$r1, $r2, $r3", [(set CheriOpnd: $r1, (int_cheri_cap_from_pointer CheriOpnd: $r2, GPR64Opnd: $r3))]>;
-def CToPtr : CheriFmt3Op<0x13, (outs GPR64Opnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3),
+def CToPtr : CheriFmt3Op<0x12, (outs GPR64Opnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3),
   "ctoptr\t$r1, $r2, $r3", [(set GPR64Opnd: $r1, (int_cheri_cap_to_pointer CheriOpnd: $r3, CheriOpnd: $r2))]>;
 let isCodeGenOnly = 1 in {
-def CFromPtr32 : CheriFmt3Op<0x12, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR32Opnd:$r3),
+def CFromPtr32 : CheriFmt3Op<0x13, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR32Opnd:$r3),
   "cfromptr\t$r1, $r2, $r3", []>;
-def CToPtr32 : CheriFmt3Op<0x13, (outs GPR32Opnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3),
+def CToPtr32 : CheriFmt3Op<0x12, (outs GPR32Opnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3),
   "ctoptr\t$r1, $r2, $r3", []>;
 }
 def CSub : CheriFmt3Op<0xa, (outs GPR64Opnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3),
