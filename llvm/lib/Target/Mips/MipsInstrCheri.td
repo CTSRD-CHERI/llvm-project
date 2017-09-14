@@ -108,7 +108,7 @@ def CBNZ : CheriFmtCBT<0x12, (outs), (ins CheriOpnd:$cb, brtarget:$offset),
                         "cbnz\t$cb, $offset",
                         [(brcond (i32 (setne CheriOpnd:$cb, (inttoptr (i64 0)))), bb:$offset)]>;
 }
-def CJR : CheriFmt1Op<0x08, (outs), (ins CheriOpnd:$r1),
+def CJR : CheriFmt1Op<0x3, (outs), (ins CheriOpnd:$r1),
                               "cjr\t${r1}",
                               []>;
 }
