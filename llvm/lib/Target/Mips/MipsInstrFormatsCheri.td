@@ -308,5 +308,14 @@ class CheriFmtPtrCmp<bits<6> cmp, RegisterOperand RC, string instr_asm,
                      list<dag> pattern>:
   CheriFmt3Op<cmp, (outs RC: $rd), (ins CheriOpnd: $cb, CheriOpnd: $ct),
            !strconcat(instr_asm, "\t$rd, $cb, $ct"),
-           pattern>;
+           pattern>
+{
+  bits<5> rd;
+  bits<5> cb;
+  bits<5> ct;
+
+  let r1 = rd;
+  let r2 = cb;
+  let r3 = ct;
+}
 
