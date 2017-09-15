@@ -473,9 +473,12 @@ void __ubsan::__ubsan_handle_function_type_mismatch_abort(
   Die();
 }
 
-static void handleNonNullReturn(NonNullReturnData *Data, ReportOptions Opts,
-                                bool IsAttr) {
-  SourceLocation Loc = Data->Loc.acquire();
+static void handleNonNullReturn(NonNullReturnData *Data, SourceLocation *LocPtr,
+                                ReportOptions Opts, bool IsAttr) {
+  if (!LocPtr)
+    UNREACHABLE("source location pointer is null!");
+
+  SourceLocation Loc = LocPtr->acquire();
   ErrorType ET = ErrorType::InvalidNullReturn;
 
   if (ignoreReport(Loc, Opts, ET))
@@ -491,25 +494,29 @@ static void handleNonNullReturn(NonNullReturnData *Data, ReportOptions Opts,
                    : "_Nonnull return type annotation");
 }
 
-void __ubsan::__ubsan_handle_nonnull_return(NonNullReturnData *Data) {
+void __ubsan::__ubsan_handle_nonnull_return_v1(NonNullReturnData *Data,
+                                               SourceLocation *LocPtr) {
   GET_REPORT_OPTIONS(false);
-  handleNonNullReturn(Data, Opts, true);
+  handleNonNullReturn(Data, LocPtr, Opts, true);
 }
 
-void __ubsan::__ubsan_handle_nonnull_return_abort(NonNullReturnData *Data) {
+void __ubsan::__ubsan_handle_nonnull_return_v1_abort(NonNullReturnData *Data,
+                                                     SourceLocation *LocPtr) {
   GET_REPORT_OPTIONS(true);
-  handleNonNullReturn(Data, Opts, true);
+  handleNonNullReturn(Data, LocPtr, Opts, true);
   Die();
 }
 
-void __ubsan::__ubsan_handle_nullability_return(NonNullReturnData *Data) {
+void __ubsan::__ubsan_handle_nullability_return_v1(NonNullReturnData *Data,
+                                                   SourceLocation *LocPtr) {
   GET_REPORT_OPTIONS(false);
-  handleNonNullReturn(Data, Opts, false);
+  handleNonNullReturn(Data, LocPtr, Opts, false);
 }
 
-void __ubsan::__ubsan_handle_nullability_return_abort(NonNullReturnData *Data) {
+void __ubsan::__ubsan_handle_nullability_return_v1_abort(
+    NonNullReturnData *Data, SourceLocation *LocPtr) {
   GET_REPORT_OPTIONS(true);
-  handleNonNullReturn(Data, Opts, false);
+  handleNonNullReturn(Data, LocPtr, Opts, false);
   Die();
 }
 
@@ -551,6 +558,43 @@ void __ubsan::__ubsan_handle_nullability_arg(NonNullArgData *Data) {
 void __ubsan::__ubsan_handle_nullability_arg_abort(NonNullArgData *Data) {
   GET_REPORT_OPTIONS(true);
   handleNonNullArg(Data, Opts, false);
+  Die();
+}
+
+static void handlePointerOverflowImpl(PointerOverflowData *Data,
+                                      ValueHandle Base,
+                                      ValueHandle Result,
+                                      ReportOptions Opts) {
+  SourceLocation Loc = Data->Loc.acquire();
+  ErrorType ET = ErrorType::PointerOverflow;
+
+  if (ignoreReport(Loc, Opts, ET))
+    return;
+
+  ScopedReport R(Opts, Loc, ET);
+
+  if ((sptr(Base) >= 0) == (sptr(Result) >= 0))
+    Diag(Loc, DL_Error, "unsigned pointer index expression result is %0, "
+                        "preceding its base %1")
+        << (void *)Result << (void *)Base;
+  else
+    Diag(Loc, DL_Error,
+         "pointer index expression with base %0 overflowed to %1")
+        << (void *)Base << (void *)Result;
+}
+
+void __ubsan::__ubsan_handle_pointer_overflow(PointerOverflowData *Data,
+                                              ValueHandle Base,
+                                              ValueHandle Result) {
+  GET_REPORT_OPTIONS(false);
+  handlePointerOverflowImpl(Data, Base, Result, Opts);
+}
+
+void __ubsan::__ubsan_handle_pointer_overflow_abort(PointerOverflowData *Data,
+                                                    ValueHandle Base,
+                                                    ValueHandle Result) {
+  GET_REPORT_OPTIONS(true);
+  handlePointerOverflowImpl(Data, Base, Result, Opts);
   Die();
 }
 

@@ -139,7 +139,7 @@ public:
 
   // Methods for support type inquiry through isa, cast, and
   // dyn_cast
-  static inline bool classof(const Value *V) {
+  static bool classof(const Value *V) {
     unsigned ID = V->getValueID();
     return ID == MemoryUseVal || ID == MemoryPhiVal || ID == MemoryDefVal;
   }
@@ -147,7 +147,6 @@ public:
   MemoryAccess(const MemoryAccess &) = delete;
   MemoryAccess &operator=(const MemoryAccess &) = delete;
 
-  void *operator new(size_t, unsigned) = delete;
   void *operator new(size_t) = delete;
 
   BasicBlock *getBlock() const { return Block; }
@@ -232,7 +231,6 @@ inline raw_ostream &operator<<(raw_ostream &OS, const MemoryAccess &MA) {
 /// MemoryDef instead.
 class MemoryUseOrDef : public MemoryAccess {
 public:
-  void *operator new(size_t, unsigned) = delete;
   void *operator new(size_t) = delete;
 
   DECLARE_TRANSPARENT_OPERAND_ACCESSORS(MemoryAccess);
@@ -243,7 +241,7 @@ public:
   /// \brief Get the access that produces the memory state used by this Use.
   MemoryAccess *getDefiningAccess() const { return getOperand(0); }
 
-  static inline bool classof(const Value *MA) {
+  static bool classof(const Value *MA) {
     return MA->getValueID() == MemoryUseVal || MA->getValueID() == MemoryDefVal;
   }
 
@@ -298,9 +296,8 @@ public:
 
   // allocate space for exactly one operand
   void *operator new(size_t s) { return User::operator new(s, 1); }
-  void *operator new(size_t, unsigned) = delete;
 
-  static inline bool classof(const Value *MA) {
+  static bool classof(const Value *MA) {
     return MA->getValueID() == MemoryUseVal;
   }
 
@@ -355,9 +352,8 @@ public:
 
   // allocate space for exactly one operand
   void *operator new(size_t s) { return User::operator new(s, 1); }
-  void *operator new(size_t, unsigned) = delete;
 
-  static inline bool classof(const Value *MA) {
+  static bool classof(const Value *MA) {
     return MA->getValueID() == MemoryDefVal;
   }
 
@@ -437,8 +433,6 @@ public:
         ReservedSpace(NumPreds) {
     allocHungoffUses(ReservedSpace);
   }
-
-  void *operator new(size_t, unsigned) = delete;
 
   // Block iterator interface. This provides access to the list of incoming
   // basic blocks, which parallels the list of incoming values.
@@ -532,7 +526,7 @@ public:
     return getIncomingValue(Idx);
   }
 
-  static inline bool classof(const Value *V) {
+  static bool classof(const Value *V) {
     return V->getValueID() == MemoryPhiVal;
   }
 

@@ -30,7 +30,8 @@ CODEGENOPT(Name, Bits, Default)
 
 CODEGENOPT(CHERILinker, 1, 0) ///< -cheri-linker
 CODEGENOPT(DisableIntegratedAS, 1, 0) ///< -no-integrated-as
-CODEGENOPT(CompressDebugSections, 1, 0) ///< -Wa,-compress-debug-sections
+ENUM_CODEGENOPT(CompressDebugSections, llvm::DebugCompressionType, 2,
+                llvm::DebugCompressionType::None)
 CODEGENOPT(RelaxELFRelocations, 1, 0) ///< -Wa,--mrelax-relocations
 CODEGENOPT(AsmVerbose        , 1, 0) ///< -dA, -fverbose-asm.
 CODEGENOPT(PreserveAsmComments, 1, 1) ///< -dA, -fno-preserve-as-comments.
@@ -57,6 +58,8 @@ CODEGENOPT(DisableLifetimeMarkers, 1, 0) ///< Don't emit any lifetime markers
 CODEGENOPT(DisableO0ImplyOptNone , 1, 0) ///< Don't annonate function with optnone at O0
 CODEGENOPT(ExperimentalNewPassManager, 1, 0) ///< Enables the new, experimental
                                              ///< pass manager.
+CODEGENOPT(DebugPassManager, 1, 0) ///< Prints debug information for the new
+                                   ///< pass manager.
 CODEGENOPT(DisableRedZone    , 1, 0) ///< Set when -mno-red-zone is enabled.
 CODEGENOPT(DisableTailCalls  , 1, 0) ///< Do not emit tail calls.
 CODEGENOPT(EmitDeclMetadata  , 1, 0) ///< Emit special metadata indicating what
@@ -164,6 +167,7 @@ CODEGENOPT(SanitizeCoverageTracePC, 1, 0) ///< Enable PC tracing
                                           ///< in sanitizer coverage.
 CODEGENOPT(SanitizeCoverageTracePCGuard, 1, 0) ///< Enable PC tracing with guard
                                                ///< in sanitizer coverage.
+CODEGENOPT(SanitizeCoverageInline8bitCounters, 1, 0) ///< Use inline 8bit counters.
 CODEGENOPT(SanitizeCoverageNoPrune, 1, 0) ///< Disable coverage pruning.
 CODEGENOPT(SanitizeStats     , 1, 0) ///< Collect statistics for sanitizers.
 CODEGENOPT(SimplifyLibCalls  , 1, 1) ///< Set when -fbuiltin is enabled.
@@ -176,7 +180,6 @@ CODEGENOPT(RerollLoops       , 1, 0) ///< Control whether loops are rerolled.
 CODEGENOPT(NoUseJumpTables   , 1, 0) ///< Set when -fno-jump-tables is enabled.
 CODEGENOPT(UnsafeFPMath      , 1, 0) ///< Allow unsafe floating point optzns.
 CODEGENOPT(UnwindTables      , 1, 0) ///< Emit unwind tables.
-CODEGENOPT(VectorizeBB       , 1, 0) ///< Run basic block vectorizer.
 CODEGENOPT(VectorizeLoop     , 1, 0) ///< Run loop vectorizer.
 CODEGENOPT(VectorizeSLP      , 1, 0) ///< Run SLP vectorizer.
 

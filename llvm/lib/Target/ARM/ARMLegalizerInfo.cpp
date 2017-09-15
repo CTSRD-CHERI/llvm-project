@@ -12,8 +12,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "ARMLegalizerInfo.h"
+#include "ARMCallLowering.h"
 #include "ARMSubtarget.h"
 #include "llvm/CodeGen/GlobalISel/LegalizerHelper.h"
+#include "llvm/CodeGen/LowLevelType.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/DerivedTypes.h"
@@ -45,7 +47,7 @@ ARMLegalizerInfo::ARMLegalizerInfo(const ARMSubtarget &ST) {
     setAction({Op, 1, p0}, Legal);
   }
 
-  for (unsigned Op : {G_ADD, G_SUB, G_MUL}) {
+  for (unsigned Op : {G_ADD, G_SUB, G_MUL, G_AND, G_OR, G_XOR}) {
     for (auto Ty : {s1, s8, s16})
       setAction({Op, Ty}, WidenScalar);
     setAction({Op, s32}, Legal);
@@ -53,15 +55,22 @@ ARMLegalizerInfo::ARMLegalizerInfo(const ARMSubtarget &ST) {
 
   for (unsigned Op : {G_SDIV, G_UDIV}) {
     for (auto Ty : {s8, s16})
-      // FIXME: We need WidenScalar here, but in the case of targets with
-      // software division we'll also need Libcall afterwards. Treat as Custom
-      // until we have better support for chaining legalization actions.
-      setAction({Op, Ty}, Custom);
+      setAction({Op, Ty}, WidenScalar);
     if (ST.hasDivideInARMMode())
       setAction({Op, s32}, Legal);
     else
       setAction({Op, s32}, Libcall);
   }
+
+  // FIXME: Support s8 and s16 as well
+  for (unsigned Op : {G_SREM, G_UREM})
+    if (ST.hasDivideInARMMode())
+      setAction({Op, s32}, Lower);
+    else if (ST.isTargetAEABI() || ST.isTargetGNUAEABI() ||
+             ST.isTargetMuslAEABI())
+      setAction({Op, s32}, Custom);
+    else
+      setAction({Op, s32}, Libcall);
 
   for (unsigned Op : {G_SEXT, G_ZEXT}) {
     setAction({Op, s32}, Legal);
@@ -72,7 +81,17 @@ ARMLegalizerInfo::ARMLegalizerInfo(const ARMSubtarget &ST) {
   setAction({G_GEP, p0}, Legal);
   setAction({G_GEP, 1, s32}, Legal);
 
+  setAction({G_SELECT, s32}, Legal);
+  setAction({G_SELECT, p0}, Legal);
+  setAction({G_SELECT, 1, s1}, Legal);
+
   setAction({G_CONSTANT, s32}, Legal);
+
+  setAction({G_ICMP, s1}, Legal);
+  for (auto Ty : {s8, s16})
+    setAction({G_ICMP, 1, Ty}, WidenScalar);
+  for (auto Ty : {s32, p0})
+    setAction({G_ICMP, 1, Ty}, Legal);
 
   if (!ST.useSoftFloat() && ST.hasVFP2()) {
     setAction({G_FADD, s32}, Legal);
@@ -100,39 +119,38 @@ bool ARMLegalizerInfo::legalizeCustom(MachineInstr &MI,
   switch (MI.getOpcode()) {
   default:
     return false;
-  case G_SDIV:
-  case G_UDIV: {
-    LLT Ty = MRI.getType(MI.getOperand(0).getReg());
-    if (Ty != LLT::scalar(16) && Ty != LLT::scalar(8))
+  case G_SREM:
+  case G_UREM: {
+    unsigned OriginalResult = MI.getOperand(0).getReg();
+    auto Size = MRI.getType(OriginalResult).getSizeInBits();
+    if (Size != 32)
       return false;
 
-    // We need to widen to 32 bits and then maybe, if the target requires,
-    // transform into a libcall.
-    LegalizerHelper Helper(MIRBuilder.getMF());
+    auto Libcall =
+        MI.getOpcode() == G_SREM ? RTLIB::SDIVREM_I32 : RTLIB::UDIVREM_I32;
 
-    MachineInstr *NewMI = nullptr;
-    Helper.MIRBuilder.recordInsertions([&](MachineInstr *MI) {
-      // Store the new, 32-bit div instruction.
-      if (MI->getOpcode() == G_SDIV || MI->getOpcode() == G_UDIV)
-        NewMI = MI;
-    });
+    // Our divmod libcalls return a struct containing the quotient and the
+    // remainder. We need to create a virtual register for it.
+    auto &Ctx = MIRBuilder.getMF().getFunction()->getContext();
+    Type *ArgTy = Type::getInt32Ty(Ctx);
+    StructType *RetTy = StructType::get(Ctx, {ArgTy, ArgTy}, /* Packed */ true);
+    auto RetVal = MRI.createGenericVirtualRegister(
+        getLLTForType(*RetTy, MIRBuilder.getMF().getDataLayout()));
 
-    auto Result = Helper.widenScalar(MI, 0, LLT::scalar(32));
-    Helper.MIRBuilder.stopRecordingInsertions();
-    if (Result == LegalizerHelper::UnableToLegalize) {
+    auto Status = replaceWithLibcall(MI, MIRBuilder, Libcall, {RetVal, RetTy},
+                                     {{MI.getOperand(1).getReg(), ArgTy},
+                                      {MI.getOperand(2).getReg(), ArgTy}});
+    if (Status != LegalizerHelper::Legalized)
       return false;
-    }
-    assert(NewMI && "Couldn't find widened instruction");
-    assert((NewMI->getOpcode() == G_SDIV || NewMI->getOpcode() == G_UDIV) &&
-           "Unexpected widened instruction");
-    assert(MRI.getType(NewMI->getOperand(0).getReg()).getSizeInBits() == 32 &&
-           "Unexpected type for the widened instruction");
 
-    Result = Helper.legalizeInstrStep(*NewMI);
-    if (Result == LegalizerHelper::UnableToLegalize) {
-      return false;
-    }
-    return true;
+    // The remainder is the second result of divmod. Split the return value into
+    // a new, unused register for the quotient and the destination of the
+    // original instruction for the remainder.
+    MIRBuilder.buildUnmerge(
+        {MRI.createGenericVirtualRegister(LLT::scalar(32)), OriginalResult},
+        RetVal);
+
+    return LegalizerHelper::Legalized;
   }
   }
 }

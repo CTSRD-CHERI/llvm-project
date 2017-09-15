@@ -51,6 +51,9 @@ public:
       : BaseT(TM, F.getParent()->getDataLayout()), ST(TM->getSubtargetImpl(F)),
         TLI(ST->getTargetLowering()) {}
 
+  bool areInlineCompatible(const Function *Caller,
+                           const Function *Callee) const;
+
   /// \name Scalar TTI Implementations
   /// @{
 
@@ -78,7 +81,7 @@ public:
     return 31;
   }
 
-  unsigned getRegisterBitWidth(bool Vector) {
+  unsigned getRegisterBitWidth(bool Vector) const {
     if (Vector) {
       if (ST->hasNEON())
         return 128;
@@ -119,7 +122,8 @@ public:
 
   int getCostOfKeepingLiveOverCall(ArrayRef<Type *> Tys);
 
-  void getUnrollingPreferences(Loop *L, TTI::UnrollingPreferences &UP);
+  void getUnrollingPreferences(Loop *L, ScalarEvolution &SE,
+                               TTI::UnrollingPreferences &UP);
 
   Value *getOrCreateResultFromMemIntrinsic(IntrinsicInst *Inst,
                                            Type *ExpectedType);

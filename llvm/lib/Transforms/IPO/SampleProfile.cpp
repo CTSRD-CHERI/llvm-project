@@ -690,11 +690,21 @@ bool SampleProfileLoader::inlineHotFunctions(
     for (auto I : CIS) {
       InlineFunctionInfo IFI(nullptr, ACT ? &GetAssumptionCache : nullptr);
       Function *CalledFunction = CallSite(I).getCalledFunction();
+      // Do not inline recursive calls.
+      if (CalledFunction == &F)
+        continue;
       Instruction *DI = I;
       if (!CalledFunction && !PromotedInsns.count(I) &&
           CallSite(I).isIndirectCall())
         for (const auto *FS : findIndirectCallFunctionSamples(*I)) {
           auto CalleeFunctionName = FS->getName();
+          // If it is a recursive call, we do not inline it as it could bloat
+          // the code exponentially. There is way to better handle this, e.g.
+          // clone the caller first, and inline the cloned caller if it is
+          // recursive. As llvm does not inline recursive calls, we will simply
+          // ignore it instead of handling it explicitly.
+          if (CalleeFunctionName == F.getName())
+            continue;
           const char *Reason = "Callee function not available";
           auto R = SymbolMap.find(CalleeFunctionName);
           if (R == SymbolMap.end())
@@ -1474,7 +1484,8 @@ bool SampleProfileLoader::runOnFunction(Function &F) {
 PreservedAnalyses SampleProfileLoaderPass::run(Module &M,
                                                ModuleAnalysisManager &AM) {
 
-  SampleProfileLoader SampleLoader(SampleProfileFile);
+  SampleProfileLoader SampleLoader(
+      ProfileFileName.empty() ? SampleProfileFile : ProfileFileName);
 
   SampleLoader.doInitialization(M);
 

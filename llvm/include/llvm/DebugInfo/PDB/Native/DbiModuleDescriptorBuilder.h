@@ -14,6 +14,7 @@
 #include "llvm/DebugInfo/CodeView/DebugChecksumsSubsection.h"
 #include "llvm/DebugInfo/CodeView/DebugInlineeLinesSubsection.h"
 #include "llvm/DebugInfo/CodeView/DebugLinesSubsection.h"
+#include "llvm/DebugInfo/CodeView/DebugSubsectionRecord.h"
 #include "llvm/DebugInfo/CodeView/SymbolRecord.h"
 #include "llvm/DebugInfo/PDB/Native/RawTypes.h"
 #include "llvm/Support/Error.h"
@@ -49,15 +50,17 @@ public:
   void setObjFileName(StringRef Name);
   void addSymbol(codeview::CVSymbol Symbol);
 
-  void addC13Fragment(std::unique_ptr<codeview::DebugLinesSubsection> Lines);
-  void addC13Fragment(
-      std::unique_ptr<codeview::DebugInlineeLinesSubsection> Inlinees);
-  void setC13FileChecksums(
-      std::unique_ptr<codeview::DebugChecksumsSubsection> Checksums);
+  void
+  addDebugSubsection(std::shared_ptr<codeview::DebugSubsection> Subsection);
+
+  void
+  addDebugSubsection(const codeview::DebugSubsectionRecord &SubsectionContents);
 
   uint16_t getStreamIndex() const;
   StringRef getModuleName() const { return ModuleName; }
   StringRef getObjFileName() const { return ObjFileName; }
+
+  unsigned getModuleIndex() const { return Layout.Mod; }
 
   ArrayRef<std::string> source_files() const {
     return makeArrayRef(SourceFiles);
@@ -82,10 +85,6 @@ private:
   std::string ObjFileName;
   std::vector<std::string> SourceFiles;
   std::vector<codeview::CVSymbol> Symbols;
-
-  std::unique_ptr<codeview::DebugChecksumsSubsection> ChecksumInfo;
-  std::vector<std::unique_ptr<codeview::DebugLinesSubsection>> LineInfo;
-  std::vector<std::unique_ptr<codeview::DebugInlineeLinesSubsection>> Inlinees;
 
   std::vector<std::unique_ptr<codeview::DebugSubsectionRecordBuilder>>
       C13Builders;

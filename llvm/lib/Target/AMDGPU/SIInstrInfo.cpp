@@ -20,10 +20,10 @@
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/CodeGen/ScheduleDAG.h"
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/Function.h"
-#include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/MC/MCInstrDesc.h"
 #include "llvm/Support/Debug.h"
 
@@ -468,13 +468,11 @@ void SIInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
 
     Builder.addReg(RI.getSubReg(SrcReg, SubIdx));
 
-    if (Idx == SubIndices.size() - 1)
-      Builder.addReg(SrcReg, getKillRegState(KillSrc) | RegState::Implicit);
-
     if (Idx == 0)
       Builder.addReg(DestReg, RegState::Define | RegState::Implicit);
 
-    Builder.addReg(SrcReg, RegState::Implicit);
+    bool UseKill = KillSrc && Idx == SubIndices.size() - 1;
+    Builder.addReg(SrcReg, getKillRegState(UseKill) | RegState::Implicit);
   }
 }
 
@@ -772,7 +770,7 @@ void SIInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
 
     if (ST.hasScalarStores()) {
       // m0 is used for offset to scalar stores if used to spill.
-      Spill.addReg(AMDGPU::M0, RegState::ImplicitDefine);
+      Spill.addReg(AMDGPU::M0, RegState::ImplicitDefine | RegState::Dead);
     }
 
     return;
@@ -873,7 +871,7 @@ void SIInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
 
     if (ST.hasScalarStores()) {
       // m0 is used for offset to scalar stores if used to spill.
-      Spill.addReg(AMDGPU::M0, RegState::ImplicitDefine);
+      Spill.addReg(AMDGPU::M0, RegState::ImplicitDefine | RegState::Dead);
     }
 
     return;
@@ -2110,7 +2108,9 @@ bool SIInstrInfo::isInlineConstant(const APInt &Imm) const {
 
 bool SIInstrInfo::isInlineConstant(const MachineOperand &MO,
                                    uint8_t OperandType) const {
-  if (!MO.isImm() || OperandType < MCOI::OPERAND_FIRST_TARGET)
+  if (!MO.isImm() ||
+      OperandType < AMDGPU::OPERAND_SRC_FIRST ||
+      OperandType > AMDGPU::OPERAND_SRC_LAST)
     return false;
 
   // MachineOperand provides no way to tell the true operand size, since it only
@@ -2331,11 +2331,12 @@ static bool isSubRegOf(const SIRegisterInfo &TRI,
 bool SIInstrInfo::verifyInstruction(const MachineInstr &MI,
                                     StringRef &ErrInfo) const {
   uint16_t Opcode = MI.getOpcode();
-
   if (SIInstrInfo::isGenericOpcode(MI.getOpcode()))
     return true;
 
-  const MachineRegisterInfo &MRI = MI.getParent()->getParent()->getRegInfo();
+  const MachineFunction *MF = MI.getParent()->getParent();
+  const MachineRegisterInfo &MRI = MF->getRegInfo();
+
   int Src0Idx = AMDGPU::getNamedOperandIdx(Opcode, AMDGPU::OpName::src0);
   int Src1Idx = AMDGPU::getNamedOperandIdx(Opcode, AMDGPU::OpName::src1);
   int Src2Idx = AMDGPU::getNamedOperandIdx(Opcode, AMDGPU::OpName::src2);
@@ -2434,8 +2435,77 @@ bool SIInstrInfo::verifyInstruction(const MachineInstr &MI,
     }
   }
 
+  // Verify SDWA
+  if (isSDWA(MI)) {
+
+    if (!ST.hasSDWA()) {
+      ErrInfo = "SDWA is not supported on this target";
+      return false;
+    }
+
+    int DstIdx = AMDGPU::getNamedOperandIdx(Opcode, AMDGPU::OpName::vdst);
+
+    const int OpIndicies[] = { DstIdx, Src0Idx, Src1Idx, Src2Idx };
+
+    for (int OpIdx: OpIndicies) {
+      if (OpIdx == -1)
+        continue;
+      const MachineOperand &MO = MI.getOperand(OpIdx);
+
+      if (!ST.hasSDWAScalar()) {
+        // Only VGPRS on VI
+        if (!MO.isReg() || !RI.hasVGPRs(RI.getRegClassForReg(MRI, MO.getReg()))) {
+          ErrInfo = "Only VGPRs allowed as operands in SDWA instructions on VI";
+          return false;
+        }
+      } else {
+        // No immediates on GFX9
+        if (!MO.isReg()) {
+          ErrInfo = "Only reg allowed as operands in SDWA instructions on GFX9";
+          return false;
+        }
+      }
+    }
+
+    if (!ST.hasSDWAOmod()) {
+      // No omod allowed on VI
+      const MachineOperand *OMod = getNamedOperand(MI, AMDGPU::OpName::omod);
+      if (OMod != nullptr &&
+        (!OMod->isImm() || OMod->getImm() != 0)) {
+        ErrInfo = "OMod not allowed in SDWA instructions on VI";
+        return false;
+      }
+    }
+
+    uint16_t BasicOpcode = AMDGPU::getBasicFromSDWAOp(Opcode);
+    if (isVOPC(BasicOpcode)) {
+      if (!ST.hasSDWASdst() && DstIdx != -1) {
+        // Only vcc allowed as dst on VI for VOPC
+        const MachineOperand &Dst = MI.getOperand(DstIdx);
+        if (!Dst.isReg() || Dst.getReg() != AMDGPU::VCC) {
+          ErrInfo = "Only VCC allowed as dst in SDWA instructions on VI";
+          return false;
+        }
+      } else if (!ST.hasSDWAOutModsVOPC()) {
+        // No clamp allowed on GFX9 for VOPC
+        const MachineOperand *Clamp = getNamedOperand(MI, AMDGPU::OpName::clamp);
+        if (Clamp && (!Clamp->isImm() || Clamp->getImm() != 0)) {
+          ErrInfo = "Clamp not allowed in VOPC SDWA instructions on VI";
+          return false;
+        }
+
+        // No omod allowed on GFX9 for VOPC
+        const MachineOperand *OMod = getNamedOperand(MI, AMDGPU::OpName::omod);
+        if (OMod && (!OMod->isImm() || OMod->getImm() != 0)) {
+          ErrInfo = "OMod not allowed in VOPC SDWA instructions on VI";
+          return false;
+        }
+      }
+    }
+  }
+
   // Verify VOP*
-  if (isVOP1(MI) || isVOP2(MI) || isVOP3(MI) || isVOPC(MI)) {
+  if (isVOP1(MI) || isVOP2(MI) || isVOP3(MI) || isVOPC(MI) || isSDWA(MI)) {
     // Only look at the true operands. Only a real operand can use the constant
     // bus, and we don't want to check pseudo-operands like the source modifier
     // flags.
@@ -2562,6 +2632,14 @@ bool SIInstrInfo::verifyInstruction(const MachineInstr &MI,
         ErrInfo = "scalar stores must use m0 as offset register";
         return false;
       }
+    }
+  }
+
+  if (isFLAT(MI) && !MF->getSubtarget<SISubtarget>().hasFlatInstOffsets()) {
+    const MachineOperand *Offset = getNamedOperand(MI, AMDGPU::OpName::offset);
+    if (Offset->getImm() != 0) {
+      ErrInfo = "subtarget does not support offsets in flat instructions";
+      return false;
     }
   }
 

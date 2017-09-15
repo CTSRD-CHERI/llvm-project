@@ -402,6 +402,16 @@ enum class LocalSymFlags : uint16_t {
 };
 CV_DEFINE_ENUM_CLASS_FLAGS_OPERATORS(LocalSymFlags)
 
+/// Corresponds to the CV_PUBSYMFLAGS bitfield.
+enum class PublicSymFlags : uint32_t {
+  None = 0,
+  Code = 1 << 0,
+  Function = 1 << 1,
+  Managed = 1 << 2,
+  MSIL = 1 << 3,
+};
+CV_DEFINE_ENUM_CLASS_FLAGS_OPERATORS(PublicSymFlags)
+
 /// Corresponds to the CV_PROCFLAGS bitfield.
 enum class ProcSymFlags : uint8_t {
   None = 0,
@@ -418,6 +428,8 @@ CV_DEFINE_ENUM_CLASS_FLAGS_OPERATORS(ProcSymFlags)
 
 /// Corresponds to COMPILESYM2::Flags bitfield.
 enum class CompileSym2Flags : uint32_t {
+  None = 0,
+  SourceLanguageMask = 0xFF,
   EC = 1 << 8,
   NoDbgInfo = 1 << 9,
   LTCG = 1 << 10,
@@ -432,6 +444,8 @@ CV_DEFINE_ENUM_CLASS_FLAGS_OPERATORS(CompileSym2Flags)
 
 /// Corresponds to COMPILESYM3::Flags bitfield.
 enum class CompileSym3Flags : uint32_t {
+  None = 0,
+  SourceLanguageMask = 0xFF,
   EC = 1 << 8,
   NoDbgInfo = 1 << 9,
   LTCG = 1 << 10,
@@ -448,6 +462,7 @@ enum class CompileSym3Flags : uint32_t {
 CV_DEFINE_ENUM_CLASS_FLAGS_OPERATORS(CompileSym3Flags)
 
 enum class ExportFlags : uint16_t {
+  None = 0,
   IsConstant = 1 << 0,
   IsData = 1 << 1,
   IsPrivate = 1 << 2,
@@ -574,6 +589,32 @@ struct FrameData {
     IsFunctionStart = 1 << 2,
   };
 };
+
+// Corresponds to LocalIdAndGlobalIdPair structure.
+// This structure information allows cross-referencing between PDBs.  For
+// example, when a PDB is being built during compilation it is not yet known
+// what other modules may end up in the PDB at link time.  So certain types of
+// IDs may clash between the various compile time PDBs.  For each affected
+// module, a subsection would be put into the PDB containing a mapping from its
+// local IDs to a single ID namespace for all items in the PDB file.
+struct CrossModuleExport {
+  support::ulittle32_t Local;
+  support::ulittle32_t Global;
+};
+
+struct CrossModuleImport {
+  support::ulittle32_t ModuleNameOffset;
+  support::ulittle32_t Count; // Number of elements
+  // support::ulittle32_t ids[Count]; // id from referenced module
+};
+
+enum class CodeViewContainer { ObjectFile, Pdb };
+
+inline uint32_t alignOf(CodeViewContainer Container) {
+  if (Container == CodeViewContainer::ObjectFile)
+    return 1;
+  return 4;
+}
 }
 }
 

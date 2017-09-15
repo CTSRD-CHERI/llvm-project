@@ -28,26 +28,26 @@
 #include "GCNSchedStrategy.h"
 #include "R600MachineScheduler.h"
 #include "SIMachineScheduler.h"
-#include "llvm/CodeGen/GlobalISel/InstructionSelect.h"
 #include "llvm/CodeGen/GlobalISel/IRTranslator.h"
+#include "llvm/CodeGen/GlobalISel/InstructionSelect.h"
 #include "llvm/CodeGen/GlobalISel/Legalizer.h"
 #include "llvm/CodeGen/GlobalISel/RegBankSelect.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
-#include "llvm/Support/TargetRegistry.h"
-#include "llvm/Transforms/IPO.h"
-#include "llvm/Transforms/IPO/AlwaysInliner.h"
-#include "llvm/Transforms/IPO/PassManagerBuilder.h"
-#include "llvm/Transforms/Scalar.h"
-#include "llvm/Transforms/Scalar/GVN.h"
-#include "llvm/Transforms/Vectorize.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
+#include "llvm/Support/TargetRegistry.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
+#include "llvm/Transforms/IPO.h"
+#include "llvm/Transforms/IPO/AlwaysInliner.h"
+#include "llvm/Transforms/IPO/PassManagerBuilder.h"
+#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Scalar/GVN.h"
+#include "llvm/Transforms/Vectorize.h"
 #include <memory>
 
 using namespace llvm;
@@ -116,7 +116,7 @@ static cl::opt<bool> EnableAMDGPUAliasAnalysis("enable-amdgpu-aa", cl::Hidden,
 static cl::opt<bool> EnableSIInsertWaitcntsPass(
   "enable-si-insert-waitcnts",
   cl::desc("Use new waitcnt insertion pass"),
-  cl::init(false));
+  cl::init(true));
 
 // Option to run late CFG structurizer
 static cl::opt<bool> LateCFGStructurize(
@@ -139,6 +139,7 @@ extern "C" void LLVMInitializeAMDGPUTarget() {
   initializeSIShrinkInstructionsPass(*PR);
   initializeSIFixControlFlowLiveIntervalsPass(*PR);
   initializeSILoadStoreOptimizerPass(*PR);
+  initializeAMDGPUAlwaysInlinePass(*PR);
   initializeAMDGPUAnnotateKernelFeaturesPass(*PR);
   initializeAMDGPUAnnotateUniformValuesPass(*PR);
   initializeAMDGPULowerIntrinsicsPass(*PR);
@@ -340,6 +341,14 @@ void AMDGPUTargetMachine::adjustPassManager(PassManagerBuilder &Builder) {
         PM.add(createAMDGPUAAWrapperPass());
         PM.add(createAMDGPUExternalAAWrapperPass());
       }
+  });
+
+  Builder.addExtension(
+    PassManagerBuilder::EP_CGSCCOptimizerLate,
+    [](const PassManagerBuilder &, legacy::PassManagerBase &PM) {
+      // Add infer address spaces pass to the opt pipeline after inlining
+      // but before SROA to increase SROA opportunities.
+      PM.add(createInferAddressSpacesPass());
   });
 }
 
@@ -711,7 +720,6 @@ bool GCNPassConfig::addPreISel() {
     addPass(createStructurizeCFGPass(true)); // true -> SkipUniformRegions
   }
   addPass(createSinkingPass());
-  addPass(createSITypeRewriter());
   addPass(createAMDGPUAnnotateUniformValues());
   if (!LateCFGStructurize) {
     addPass(createSIAnnotateControlFlowPass());
@@ -733,7 +741,6 @@ void GCNPassConfig::addMachineSSAOptimization() {
   addPass(&SIFoldOperandsID);
   addPass(&DeadMachineInstructionElimID);
   addPass(&SILoadStoreOptimizerID);
-  addPass(createSIShrinkInstructionsPass());
   if (EnableSDWAPeephole) {
     addPass(&SIPeepholeSDWAID);
     addPass(&MachineLICMID);
@@ -741,6 +748,7 @@ void GCNPassConfig::addMachineSSAOptimization() {
     addPass(&SIFoldOperandsID);
     addPass(&DeadMachineInstructionElimID);
   }
+  addPass(createSIShrinkInstructionsPass());
 }
 
 bool GCNPassConfig::addILPOpts() {

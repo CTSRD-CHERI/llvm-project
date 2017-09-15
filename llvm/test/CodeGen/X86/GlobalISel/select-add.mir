@@ -24,16 +24,6 @@
     ret i8 %ret
   }
 
-  define float @test_add_float(float %arg1, float %arg2) {
-    %ret = fadd float %arg1, %arg2
-    ret float %ret
-  }
-
-  define double @test_add_double(double %arg1, double %arg2) {
-    %ret = fadd double %arg1, %arg2
-    ret double %ret
-  }
-
   define <4 x i32> @test_add_v4i32(<4 x i32> %arg1, <4 x i32> %arg2) {
     %ret = add <4 x i32> %arg1, %arg2
     ret <4 x i32> %ret
@@ -51,9 +41,9 @@ name:            test_add_i64
 legalized:       true
 regBankSelected: true
 # ALL:      registers:
-# ALL-NEXT:  - { id: 0, class: gr64 }
-# ALL-NEXT:  - { id: 1, class: gr64 }
-# ALL-NEXT:  - { id: 2, class: gr64 }
+# ALL-NEXT:  - { id: 0, class: gr64, preferred-register: '' }
+# ALL-NEXT:  - { id: 1, class: gr64, preferred-register: '' }
+# ALL-NEXT:  - { id: 2, class: gr64, preferred-register: '' }
 registers:
   - { id: 0, class: gpr }
   - { id: 1, class: gpr }
@@ -78,9 +68,9 @@ name:            test_add_i32
 legalized:       true
 regBankSelected: true
 # ALL:      registers:
-# ALL-NEXT:  - { id: 0, class: gr32 }
-# ALL-NEXT:  - { id: 1, class: gr32 }
-# ALL-NEXT:  - { id: 2, class: gr32 }
+# ALL-NEXT:  - { id: 0, class: gr32, preferred-register: '' }
+# ALL-NEXT:  - { id: 1, class: gr32, preferred-register: '' }
+# ALL-NEXT:  - { id: 2, class: gr32, preferred-register: '' }
 registers:
   - { id: 0, class: gpr }
   - { id: 1, class: gpr }
@@ -106,9 +96,9 @@ legalized:       true
 regBankSelected: true
 selected:        false
 # ALL:      registers:
-# ALL-NEXT:  - { id: 0, class: gr16 }
-# ALL-NEXT:  - { id: 1, class: gr16 }
-# ALL-NEXT:  - { id: 2, class: gr16 }
+# ALL-NEXT:  - { id: 0, class: gr16, preferred-register: '' }
+# ALL-NEXT:  - { id: 1, class: gr16, preferred-register: '' }
+# ALL-NEXT:  - { id: 2, class: gr16, preferred-register: '' }
 registers:
   - { id: 0, class: gpr }
   - { id: 1, class: gpr }
@@ -135,9 +125,9 @@ legalized:       true
 regBankSelected: true
 selected:        false
 # ALL:      registers:
-# ALL-NEXT:  - { id: 0, class: gr8 }
-# ALL-NEXT:  - { id: 1, class: gr8 }
-# ALL-NEXT:  - { id: 2, class: gr8 }
+# ALL-NEXT:  - { id: 0, class: gr8, preferred-register: '' }
+# ALL-NEXT:  - { id: 1, class: gr8, preferred-register: '' }
+# ALL-NEXT:  - { id: 2, class: gr8, preferred-register: '' }
 registers:
   - { id: 0, class: gpr }
   - { id: 1, class: gpr }
@@ -157,76 +147,6 @@ body:             |
 
 ...
 ---
-name:            test_add_float
-# ALL-LABEL: name:            test_add_float
-alignment:       4
-legalized:       true
-regBankSelected: true
-selected:        false
-tracksRegLiveness: true
-# ALL: registers:
-# NO_AVX512F-NEXT:  - { id: 0, class: fr32 }
-# NO_AVX512F-NEXT:  - { id: 1, class: fr32 }
-# NO_AVX512F-NEXT:  - { id: 2, class: fr32 }
-# AVX512ALL-NEXT:  - { id: 0, class: fr32x }
-# AVX512ALL-NEXT:  - { id: 1, class: fr32x }
-# AVX512ALL-NEXT:  - { id: 2, class: fr32x }
-registers:
-  - { id: 0, class: vecr }
-  - { id: 1, class: vecr }
-  - { id: 2, class: vecr }
-# ALL:          %0 = COPY %xmm0
-# ALL-NEXT:     %1 = COPY %xmm1
-# SSE-NEXT:     %2 = ADDSSrr %0, %1
-# AVX-NEXT:     %2 = VADDSSrr %0, %1
-# AVX512F-NEXT: %2 = VADDSSZrr %0, %1
-body:             |
-  bb.1 (%ir-block.0):
-    liveins: %xmm0, %xmm1
-
-    %0(s32) = COPY %xmm0
-    %1(s32) = COPY %xmm1
-    %2(s32) = G_FADD %0, %1
-    %xmm0 = COPY %2(s32)
-    RET 0, implicit %xmm0
-
-...
----
-name:            test_add_double
-# ALL-LABEL: name:            test_add_double
-alignment:       4
-legalized:       true
-regBankSelected: true
-selected:        false
-tracksRegLiveness: true
-# ALL: registers:
-# NO_AVX512F-NEXT:  - { id: 0, class: fr64 }
-# NO_AVX512F-NEXT:  - { id: 1, class: fr64 }
-# NO_AVX512F-NEXT:  - { id: 2, class: fr64 }
-# AVX512ALL-NEXT:  - { id: 0, class: fr64x }
-# AVX512ALL-NEXT:  - { id: 1, class: fr64x }
-# AVX512ALL-NEXT:  - { id: 2, class: fr64x }
-registers:
-  - { id: 0, class: vecr }
-  - { id: 1, class: vecr }
-  - { id: 2, class: vecr }
-# ALL:          %0 = COPY %xmm0
-# ALL-NEXT:     %1 = COPY %xmm1
-# SSE-NEXT:     %2 = ADDSDrr %0, %1
-# AVX-NEXT:     %2 = VADDSDrr %0, %1
-# AVX512F-NEXT: %2 = VADDSDZrr %0, %1
-body:             |
-  bb.1 (%ir-block.0):
-    liveins: %xmm0, %xmm1
-
-    %0(s64) = COPY %xmm0
-    %1(s64) = COPY %xmm1
-    %2(s64) = G_FADD %0, %1
-    %xmm0 = COPY %2(s64)
-    RET 0, implicit %xmm0
-
-...
----
 name:            test_add_v4i32
 # ALL-LABEL: name:            test_add_v4i32
 alignment:       4
@@ -235,12 +155,12 @@ regBankSelected: true
 selected:        false
 tracksRegLiveness: true
 # ALL: registers:
-# NO_AVX512VL-NEXT:  - { id: 0, class: vr128 }
-# NO_AVX512VL-NEXT:  - { id: 1, class: vr128 }
-# NO_AVX512VL-NEXT:  - { id: 2, class: vr128 }
-# AVX512VL-NEXT:  - { id: 0, class: vr128x }
-# AVX512VL-NEXT:  - { id: 1, class: vr128x }
-# AVX512VL-NEXT:  - { id: 2, class: vr128x }
+# NO_AVX512VL-NEXT:  - { id: 0, class: vr128, preferred-register: '' }
+# NO_AVX512VL-NEXT:  - { id: 1, class: vr128, preferred-register: '' }
+# NO_AVX512VL-NEXT:  - { id: 2, class: vr128, preferred-register: '' }
+# AVX512VL-NEXT:  - { id: 0, class: vr128x, preferred-register: '' }
+# AVX512VL-NEXT:  - { id: 1, class: vr128x, preferred-register: '' }
+# AVX512VL-NEXT:  - { id: 2, class: vr128x, preferred-register: '' }
 registers:
   - { id: 0, class: vecr }
   - { id: 1, class: vecr }
@@ -271,12 +191,12 @@ regBankSelected: true
 selected:        false
 tracksRegLiveness: true
 # ALL: registers:
-# NO_AVX512VL-NEXT:  - { id: 0, class: vr128 }
-# NO_AVX512VL-NEXT:  - { id: 1, class: vr128 }
-# NO_AVX512VL-NEXT:  - { id: 2, class: vr128 }
-# AVX512VL-NEXT:  - { id: 0, class: vr128x }
-# AVX512VL-NEXT:  - { id: 1, class: vr128x }
-# AVX512VL-NEXT:  - { id: 2, class: vr128x }
+# NO_AVX512VL-NEXT:  - { id: 0, class: vr128, preferred-register: '' }
+# NO_AVX512VL-NEXT:  - { id: 1, class: vr128, preferred-register: '' }
+# NO_AVX512VL-NEXT:  - { id: 2, class: vr128, preferred-register: '' }
+# AVX512VL-NEXT:  - { id: 0, class: vr128x, preferred-register: '' }
+# AVX512VL-NEXT:  - { id: 1, class: vr128x, preferred-register: '' }
+# AVX512VL-NEXT:  - { id: 2, class: vr128x, preferred-register: '' }
 registers:
   - { id: 0, class: vecr }
   - { id: 1, class: vecr }

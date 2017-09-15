@@ -113,7 +113,6 @@ void GetThreadStackTopAndBottom(bool at_initialization, uptr *stack_top,
   my_pthread_attr_getstack(&attr, &stackaddr, &stacksize);
   pthread_attr_destroy(&attr);
 
-  CHECK_LE(stacksize, kMaxThreadStackSize);  // Sanity check.
   *stack_top = (uptr)stackaddr + stacksize;
   *stack_bottom = (uptr)stackaddr;
 }
@@ -551,6 +550,13 @@ void LogMessageOnPrintf(const char *str) {
   if (common_flags()->log_to_syslog && ShouldLogAfterPrintf())
     WriteToSyslog(str);
 }
+
+#if SANITIZER_ANDROID && __ANDROID_API__ >= 21
+extern "C" void android_set_abort_message(const char *msg);
+void SetAbortMessage(const char *str) { android_set_abort_message(str); }
+#else
+void SetAbortMessage(const char *str) {}
+#endif
 
 #endif // SANITIZER_LINUX
 

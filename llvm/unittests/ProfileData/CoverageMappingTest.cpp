@@ -28,6 +28,19 @@ static ::testing::AssertionResult NoError(Error E) {
                                        << "\n";
 }
 
+static ::testing::AssertionResult ErrorEquals(coveragemap_error Expected,
+                                              Error E) {
+  coveragemap_error Found;
+  std::string FoundMsg;
+  handleAllErrors(std::move(E), [&](const CoverageMapError &CME) {
+    Found = CME.get();
+    FoundMsg = CME.message();
+  });
+  if (Expected == Found)
+    return ::testing::AssertionSuccess();
+  return ::testing::AssertionFailure() << "error: " << FoundMsg << "\n";
+}
+
 namespace llvm {
 namespace coverage {
 void PrintTo(const Counter &C, ::std::ostream *os) {
@@ -219,25 +232,29 @@ struct CoverageMappingTest : ::testing::TestWithParam<std::pair<bool, bool>> {
   }
 
   Expected<std::unique_ptr<CoverageMapping>> readOutputFunctions() {
-    if (!UseMultipleReaders) {
-      CoverageMappingReaderMock CovReader(OutputFunctions);
-      return CoverageMapping::load(CovReader, *ProfileReader);
-    }
-
     std::vector<std::unique_ptr<CoverageMappingReader>> CoverageReaders;
-    for (const auto &OF : OutputFunctions) {
-      ArrayRef<OutputFunctionCoverageData> Funcs(OF);
-      CoverageReaders.push_back(make_unique<CoverageMappingReaderMock>(Funcs));
+    if (UseMultipleReaders) {
+      for (const auto &OF : OutputFunctions) {
+        ArrayRef<OutputFunctionCoverageData> Funcs(OF);
+        CoverageReaders.push_back(
+            make_unique<CoverageMappingReaderMock>(Funcs));
+      }
+    } else {
+      ArrayRef<OutputFunctionCoverageData> Funcs(OutputFunctions);
+      CoverageReaders.push_back(
+          make_unique<CoverageMappingReaderMock>(Funcs));
     }
     return CoverageMapping::load(CoverageReaders, *ProfileReader);
   }
 
-  void loadCoverageMapping(bool EmitFilenames = true) {
+  Error loadCoverageMapping(bool EmitFilenames = true) {
     readProfCounts();
     writeAndReadCoverageRegions(EmitFilenames);
     auto CoverageOrErr = readOutputFunctions();
-    ASSERT_TRUE(NoError(CoverageOrErr.takeError()));
+    if (!CoverageOrErr)
+      return CoverageOrErr.takeError();
     LoadedCoverage = std::move(CoverageOrErr.get());
+    return Error::success();
   }
 };
 
@@ -304,13 +321,21 @@ TEST_P(CoverageMappingTest, load_coverage_for_more_than_two_files) {
     // in order to preserve that information during possible sorting of CMRs.
     addCMR(Counter::getCounter(0), FileNames[I], I, 1, I, 1);
 
-  loadCoverageMapping();
+  NoError(loadCoverageMapping());
 
   for (unsigned I = 0; I < N; ++I) {
     CoverageData Data = LoadedCoverage->getCoverageForFile(FileNames[I]);
     ASSERT_TRUE(!Data.empty());
     EXPECT_EQ(I, Data.begin()->Line);
   }
+}
+
+TEST_P(CoverageMappingTest, load_coverage_with_bogus_function_name) {
+  InstrProfRecord RecordFunc1("", 0x1234, {10});
+  NoError(ProfileWriter.addRecord(std::move(RecordFunc1)));
+  startFunction("", 0x1234);
+  addCMR(Counter::getCounter(0), "foo", 1, 1, 5, 5);
+  ErrorEquals(coveragemap_error::malformed, loadCoverageMapping());
 }
 
 TEST_P(CoverageMappingTest, load_coverage_for_several_functions) {
@@ -325,7 +350,7 @@ TEST_P(CoverageMappingTest, load_coverage_for_several_functions) {
   startFunction("func2", 0x2345);
   addCMR(Counter::getCounter(0), "bar", 2, 2, 6, 6);
 
-  loadCoverageMapping();
+  NoError(loadCoverageMapping());
 
   const auto FunctionRecords = LoadedCoverage->getCoveredFunctions();
   EXPECT_EQ(2, std::distance(FunctionRecords.begin(), FunctionRecords.end()));
@@ -369,7 +394,7 @@ TEST_P(CoverageMappingTest, basic_coverage_iteration) {
   addCMR(Counter::getCounter(1), "file1", 1, 1, 4, 7);
   addCMR(Counter::getCounter(2), "file1", 5, 8, 9, 1);
   addCMR(Counter::getCounter(3), "file1", 10, 10, 11, 11);
-  loadCoverageMapping();
+  NoError(loadCoverageMapping());
 
   CoverageData Data = LoadedCoverage->getCoverageForFile("file1");
   std::vector<CoverageSegment> Segments(Data.begin(), Data.end());
@@ -386,7 +411,7 @@ TEST_P(CoverageMappingTest, basic_coverage_iteration) {
 TEST_P(CoverageMappingTest, uncovered_function) {
   startFunction("func", 0x1234);
   addCMR(Counter::getZero(), "file1", 1, 2, 3, 4);
-  loadCoverageMapping();
+  NoError(loadCoverageMapping());
 
   CoverageData Data = LoadedCoverage->getCoverageForFile("file1");
   std::vector<CoverageSegment> Segments(Data.begin(), Data.end());
@@ -399,7 +424,7 @@ TEST_P(CoverageMappingTest, uncovered_function_with_mapping) {
   startFunction("func", 0x1234);
   addCMR(Counter::getCounter(0), "file1", 1, 1, 9, 9);
   addCMR(Counter::getCounter(1), "file1", 1, 1, 4, 7);
-  loadCoverageMapping();
+  NoError(loadCoverageMapping());
 
   CoverageData Data = LoadedCoverage->getCoverageForFile("file1");
   std::vector<CoverageSegment> Segments(Data.begin(), Data.end());
@@ -417,7 +442,7 @@ TEST_P(CoverageMappingTest, combine_regions) {
   addCMR(Counter::getCounter(0), "file1", 1, 1, 9, 9);
   addCMR(Counter::getCounter(1), "file1", 3, 3, 4, 4);
   addCMR(Counter::getCounter(2), "file1", 3, 3, 4, 4);
-  loadCoverageMapping();
+  NoError(loadCoverageMapping());
 
   CoverageData Data = LoadedCoverage->getCoverageForFile("file1");
   std::vector<CoverageSegment> Segments(Data.begin(), Data.end());
@@ -436,7 +461,7 @@ TEST_P(CoverageMappingTest, restore_combined_counter_after_nested_region) {
   addCMR(Counter::getCounter(0), "file1", 1, 1, 9, 9);
   addCMR(Counter::getCounter(1), "file1", 1, 1, 9, 9);
   addCMR(Counter::getCounter(2), "file1", 3, 3, 5, 5);
-  loadCoverageMapping();
+  NoError(loadCoverageMapping());
 
   CoverageData Data = LoadedCoverage->getCoverageForFile("file1");
   std::vector<CoverageSegment> Segments(Data.begin(), Data.end());
@@ -460,7 +485,7 @@ TEST_P(CoverageMappingTest, dont_combine_expansions) {
   addCMR(Counter::getCounter(1), "file1", 3, 3, 4, 4);
   addCMR(Counter::getCounter(1), "include1", 6, 6, 7, 7);
   addExpansionCMR("file1", "include1", 3, 3, 4, 4);
-  loadCoverageMapping();
+  NoError(loadCoverageMapping());
 
   CoverageData Data = LoadedCoverage->getCoverageForFile("file1");
   std::vector<CoverageSegment> Segments(Data.begin(), Data.end());
@@ -483,7 +508,7 @@ TEST_P(CoverageMappingTest, combine_expansions) {
   addExpansionCMR("file", "include1", 3, 1, 3, 5);
   addExpansionCMR("file", "include2", 3, 1, 3, 5);
 
-  loadCoverageMapping();
+  NoError(loadCoverageMapping());
 
   CoverageData Data = LoadedCoverage->getCoverageForFile("file");
   std::vector<CoverageSegment> Segments(Data.begin(), Data.end());
@@ -500,7 +525,7 @@ TEST_P(CoverageMappingTest, strip_filename_prefix) {
 
   startFunction("file1:func", 0x1234);
   addCMR(Counter::getCounter(0), "file1", 1, 1, 9, 9);
-  loadCoverageMapping();
+  NoError(loadCoverageMapping());
 
   std::vector<std::string> Names;
   for (const auto &Func : LoadedCoverage->getCoveredFunctions())
@@ -515,7 +540,7 @@ TEST_P(CoverageMappingTest, strip_unknown_filename_prefix) {
 
   startFunction("<unknown>:func", 0x1234);
   addCMR(Counter::getCounter(0), "", 1, 1, 9, 9);
-  loadCoverageMapping(/*EmitFilenames=*/false);
+  NoError(loadCoverageMapping(/*EmitFilenames=*/false));
 
   std::vector<std::string> Names;
   for (const auto &Func : LoadedCoverage->getCoveredFunctions())
@@ -538,7 +563,7 @@ TEST_P(CoverageMappingTest, dont_detect_false_instantiations) {
   addCMR(Counter::getCounter(0), "expanded", 1, 1, 1, 10);
   addExpansionCMR("main", "expanded", 9, 1, 9, 5);
 
-  loadCoverageMapping();
+  NoError(loadCoverageMapping());
 
   std::vector<const FunctionRecord *> Instantiations =
       LoadedCoverage->getInstantiations("expanded");
@@ -553,7 +578,7 @@ TEST_P(CoverageMappingTest, load_coverage_for_expanded_file) {
   addCMR(Counter::getCounter(0), "expanded", 1, 1, 1, 10);
   addExpansionCMR("main", "expanded", 4, 1, 4, 5);
 
-  loadCoverageMapping();
+  NoError(loadCoverageMapping());
 
   CoverageData Data = LoadedCoverage->getCoverageForFile("expanded");
   std::vector<CoverageSegment> Segments(Data.begin(), Data.end());
@@ -572,7 +597,7 @@ TEST_P(CoverageMappingTest, skip_duplicate_function_record) {
   startFunction("func", 0x1234);
   addCMR(Counter::getCounter(0), "file1", 1, 1, 9, 9);
 
-  loadCoverageMapping();
+  NoError(loadCoverageMapping());
 
   auto Funcs = LoadedCoverage->getCoveredFunctions();
   unsigned NumFuncs = std::distance(Funcs.begin(), Funcs.end());
@@ -584,6 +609,6 @@ INSTANTIATE_TEST_CASE_P(ParameterizedCovMapTest, CoverageMappingTest,
                         ::testing::Values(std::pair<bool, bool>({false, false}),
                                           std::pair<bool, bool>({false, true}),
                                           std::pair<bool, bool>({true, false}),
-                                          std::pair<bool, bool>({true, true})));
+                                          std::pair<bool, bool>({true, true})),);
 
 } // end anonymous namespace

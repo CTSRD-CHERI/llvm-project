@@ -16,8 +16,8 @@
 #ifndef LLVM_OBJECTYAML_WASMYAML_H
 #define LLVM_OBJECTYAML_WASMYAML_H
 
+#include "llvm/BinaryFormat/Wasm.h"
 #include "llvm/ObjectYAML/YAML.h"
-#include "llvm/Support/Wasm.h"
 
 namespace llvm {
 namespace WasmYAML {
@@ -112,8 +112,13 @@ struct Signature {
   ValueType ReturnType;
 };
 
+struct SymbolInfo {
+  StringRef Name;
+  uint32_t Flags;
+};
+
 struct Section {
-  Section(SectionType SecType) : Type(SecType) {}
+  explicit Section(SectionType SecType) : Type(SecType) {}
   virtual ~Section();
 
   SectionType Type;
@@ -121,18 +126,36 @@ struct Section {
 };
 
 struct CustomSection : Section {
-  CustomSection() : Section(wasm::WASM_SEC_CUSTOM) {}
+  explicit CustomSection(StringRef Name)
+      : Section(wasm::WASM_SEC_CUSTOM), Name(Name) {}
   static bool classof(const Section *S) {
     return S->Type == wasm::WASM_SEC_CUSTOM;
   }
 
   StringRef Name;
   yaml::BinaryRef Payload;
+};
 
-  // The follow is used by the "name" custom section.
-  // TODO(sbc): Add support for more then just functions names.  The wasm
-  // name section can support multiple sub-sections.
+struct NameSection : CustomSection {
+  NameSection() : CustomSection("name") {}
+  static bool classof(const Section *S) {
+    auto C = dyn_cast<CustomSection>(S);
+    return C && C->Name == "name";
+  }
+
   std::vector<NameEntry> FunctionNames;
+};
+
+struct LinkingSection : CustomSection {
+  LinkingSection() : CustomSection("linking") {}
+  static bool classof(const Section *S) {
+    auto C = dyn_cast<CustomSection>(S);
+    return C && C->Name == "linking";
+  }
+
+  std::vector<SymbolInfo> SymbolInfos;
+  uint32_t DataSize;
+  uint32_t DataAlignment;
 };
 
 struct TypeSection : Section {
@@ -256,7 +279,7 @@ LLVM_YAML_IS_SEQUENCE_VECTOR(llvm::WasmYAML::Function)
 LLVM_YAML_IS_SEQUENCE_VECTOR(llvm::WasmYAML::LocalDecl)
 LLVM_YAML_IS_SEQUENCE_VECTOR(llvm::WasmYAML::Relocation)
 LLVM_YAML_IS_SEQUENCE_VECTOR(llvm::WasmYAML::NameEntry)
-LLVM_YAML_IS_FLOW_SEQUENCE_VECTOR(uint32_t)
+LLVM_YAML_IS_SEQUENCE_VECTOR(llvm::WasmYAML::SymbolInfo)
 
 namespace llvm {
 namespace yaml {
@@ -327,6 +350,10 @@ template <> struct MappingTraits<WasmYAML::DataSegment> {
 
 template <> struct MappingTraits<WasmYAML::ElemSegment> {
   static void mapping(IO &IO, WasmYAML::ElemSegment &Segment);
+};
+
+template <> struct MappingTraits<WasmYAML::SymbolInfo> {
+  static void mapping(IO &IO, WasmYAML::SymbolInfo &Info);
 };
 
 template <> struct ScalarEnumerationTraits<WasmYAML::ValueType> {

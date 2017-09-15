@@ -212,7 +212,7 @@ Error CVSymbolDumperImpl::visitKnownRecord(CVSymbol &CVR,
 Error CVSymbolDumperImpl::visitKnownRecord(CVSymbol &CVR,
                                            FileStaticSym &FileStatic) {
   DictScope S(W, "FileStatic");
-  W.printNumber("Index", FileStatic.Index);
+  printTypeIndex("Index", FileStatic.Index);
   W.printNumber("ModFilenameOffset", FileStatic.ModFilenameOffset);
   W.printFlags("Flags", uint16_t(FileStatic.Flags), getLocalFlagNames());
   W.printString("Name", FileStatic.Name);
@@ -516,7 +516,7 @@ Error CVSymbolDumperImpl::visitKnownRecord(CVSymbol &CVR,
 Error CVSymbolDumperImpl::visitKnownRecord(CVSymbol &CVR,
                                            RegisterSym &Register) {
   DictScope S(W, "RegisterSym");
-  W.printNumber("Type", Register.Index);
+  printTypeIndex("Type", Register.Index);
   W.printEnum("Seg", uint16_t(Register.Register), getRegisterNames());
   W.printString("Name", Register.Name);
   return Error::success();
@@ -524,7 +524,7 @@ Error CVSymbolDumperImpl::visitKnownRecord(CVSymbol &CVR,
 
 Error CVSymbolDumperImpl::visitKnownRecord(CVSymbol &CVR, PublicSym32 &Public) {
   DictScope S(W, "PublicSym");
-  W.printNumber("Type", Public.Index);
+  W.printFlags("Flags", uint32_t(Public.Flags), getPublicSymFlagNames());
   W.printNumber("Seg", Public.Segment);
   W.printNumber("Off", Public.Offset);
   W.printString("Name", Public.Name);
@@ -631,7 +631,7 @@ Error CVSymbolDumperImpl::visitKnownRecord(CVSymbol &CVR,
 
   W.printHex("Offset", RegRel.Offset);
   printTypeIndex("Type", RegRel.Type);
-  W.printHex("Register", RegRel.Register);
+  W.printEnum("Register", uint16_t(RegRel.Register), getRegisterNames());
   W.printString("VarName", RegRel.Name);
   return Error::success();
 }
@@ -668,7 +668,7 @@ Error CVSymbolDumperImpl::visitUnknownSymbol(CVSymbol &CVR) {
 
 Error CVSymbolDumper::dump(CVRecord<SymbolKind> &Record) {
   SymbolVisitorCallbackPipeline Pipeline;
-  SymbolDeserializer Deserializer(ObjDelegate.get());
+  SymbolDeserializer Deserializer(ObjDelegate.get(), Container);
   CVSymbolDumperImpl Dumper(Types, ObjDelegate.get(), W, PrintRecordBytes);
 
   Pipeline.addCallbackToPipeline(Deserializer);
@@ -679,7 +679,7 @@ Error CVSymbolDumper::dump(CVRecord<SymbolKind> &Record) {
 
 Error CVSymbolDumper::dump(const CVSymbolArray &Symbols) {
   SymbolVisitorCallbackPipeline Pipeline;
-  SymbolDeserializer Deserializer(ObjDelegate.get());
+  SymbolDeserializer Deserializer(ObjDelegate.get(), Container);
   CVSymbolDumperImpl Dumper(Types, ObjDelegate.get(), W, PrintRecordBytes);
 
   Pipeline.addCallbackToPipeline(Deserializer);

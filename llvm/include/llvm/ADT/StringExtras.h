@@ -14,12 +14,15 @@
 #ifndef LLVM_ADT_STRINGEXTRAS_H
 #define LLVM_ADT_STRINGEXTRAS_H
 
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
-#include <iterator>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
+#include <iterator>
 #include <string>
 #include <utility>
 
@@ -38,6 +41,11 @@ static inline char hexdigit(unsigned X, bool LowerCase = false) {
 /// Construct a string ref from a boolean.
 static inline StringRef toStringRef(bool B) {
   return StringRef(B ? "true" : "false");
+}
+
+/// Construct a string ref from an array ref of unsigned chars.
+static inline StringRef toStringRef(ArrayRef<uint8_t> Input) {
+  return StringRef(reinterpret_cast<const char *>(Input.begin()), Input.size());
 }
 
 /// Interpret the given character \p C as a hexadecimal digit and return its
@@ -68,7 +76,7 @@ static inline std::string utohexstr(uint64_t X, bool LowerCase = false) {
 
 /// Convert buffer \p Input to its hexadecimal representation.
 /// The returned string is double the size of \p Input.
-static inline std::string toHex(StringRef Input) {
+inline std::string toHex(StringRef Input) {
   static const char *const LUT = "0123456789ABCDEF";
   size_t Length = Input.size();
 
@@ -80,6 +88,10 @@ static inline std::string toHex(StringRef Input) {
     Output.push_back(LUT[c & 15]);
   }
   return Output;
+}
+
+inline std::string toHex(ArrayRef<uint8_t> Input) {
+  return toHex(toStringRef(Input));
 }
 
 static inline uint8_t hexFromNibbles(char MSB, char LSB) {
@@ -117,6 +129,32 @@ static inline std::string fromHex(StringRef Input) {
 /// Returns true if the number was successfully converted, false otherwise.
 template <typename N> bool to_integer(StringRef S, N &Num, unsigned Base = 0) {
   return !S.getAsInteger(Base, Num);
+}
+
+namespace detail {
+template <typename N>
+inline bool to_float(const Twine &T, N &Num, N (*StrTo)(const char *, char **)) {
+  SmallString<32> Storage;
+  StringRef S = T.toNullTerminatedStringRef(Storage);
+  char *End;
+  N Temp = StrTo(S.data(), &End);
+  if (*End != '\0')
+    return false;
+  Num = Temp;
+  return true;
+}
+}
+
+inline bool to_float(const Twine &T, float &Num) {
+  return detail::to_float(T, Num, strtof);
+}
+
+inline bool to_float(const Twine &T, double &Num) {
+  return detail::to_float(T, Num, strtod);
+}
+
+inline bool to_float(const Twine &T, long double &Num) {
+  return detail::to_float(T, Num, strtold);
 }
 
 static inline std::string utostr(uint64_t X, bool isNeg = false) {

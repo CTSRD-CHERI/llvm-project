@@ -840,7 +840,9 @@ Decl *Parser::ParseStaticAssertDeclaration(SourceLocation &DeclEnd){
     return nullptr;
   }
 
-  ExprResult AssertExpr(ParseConstantExpression());
+  EnterExpressionEvaluationContext ConstantEvaluated(
+      Actions, Sema::ExpressionEvaluationContext::ConstantEvaluated);
+  ExprResult AssertExpr(ParseConstantExpressionInExprEvalContext());
   if (AssertExpr.isInvalid()) {
     SkipMalformedDecl();
     return nullptr;
@@ -1885,7 +1887,8 @@ void Parser::ParseClassSpecifier(tok::TokenKind TagTokKind,
                                        SourceLocation(), false,
                                        clang::TypeResult(),
                                        DSC == DSC_type_specifier,
-                                       &SkipBody);
+                                       DSC == DSC_template_param ||
+                                       DSC == DSC_template_type_arg, &SkipBody);
 
     // If ActOnTag said the type was dependent, try again with the
     // less common call.
@@ -1912,7 +1915,7 @@ void Parser::ParseClassSpecifier(tok::TokenKind TagTokKind,
   }
 
   if (!TagOrTempResult.isInvalid())
-    // Delayed proccessing of attributes.
+    // Delayed processing of attributes.
     Actions.ProcessDeclAttributeDelayed(TagOrTempResult.get(), attrs.getList());
 
   const char *PrevSpec = nullptr;
@@ -4215,6 +4218,7 @@ void Parser::ParseMicrosoftIfExistsClassDeclaration(DeclSpec::TST TagType,
     Diag(Result.KeywordLoc, diag::warn_microsoft_dependent_exists)
       << Result.IsIfExists;
     // Fall through to skip.
+    LLVM_FALLTHROUGH;
       
   case IEB_Skip:
     Braces.skipToEnd();

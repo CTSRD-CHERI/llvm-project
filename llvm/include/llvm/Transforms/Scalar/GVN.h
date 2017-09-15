@@ -82,9 +82,6 @@ public:
     typedef DenseMap<std::pair<uint32_t, const BasicBlock *>, uint32_t>
         PhiTranslateMap;
     PhiTranslateMap PhiTranslateTable;
-    // Map the block to reversed postorder traversal number. It is used to
-    // find back edge easily.
-    DenseMap<const BasicBlock *, uint32_t> BlockRPONumber;
 
     AliasAnalysis *AA;
     MemoryDependenceResults *MD;
@@ -114,7 +111,6 @@ public:
                             Value *LHS, Value *RHS);
     uint32_t phiTranslate(const BasicBlock *BB, const BasicBlock *PhiBlock,
                           uint32_t Num, GVN &Gvn);
-    void assignBlockRPONumber(Function &F);
     bool exists(Value *V) const;
     void add(Value *V, uint32_t num);
     void clear();
@@ -155,6 +151,10 @@ private:
   // to the remaining instructions in the block.
   SmallMapVector<llvm::Value *, llvm::Constant *, 4> ReplaceWithConstMap;
   SmallVector<Instruction *, 8> InstrsToErase;
+
+  // Map the block to reversed postorder traversal number. It is used to
+  // find back edge easily.
+  DenseMap<const BasicBlock *, uint32_t> BlockRPONumber;
 
   typedef SmallVector<NonLocalDepResult, 64> LoadDepVect;
   typedef SmallVector<gvn::AvailableValueInBlock, 64> AvailValInBlkVect;
@@ -234,12 +234,12 @@ private:
   // Other helper routines
   bool processInstruction(Instruction *I);
   bool processBlock(BasicBlock *BB);
-  void dump(DenseMap<uint32_t, Value *> &d);
+  void dump(DenseMap<uint32_t, Value *> &d) const;
   bool iterateOnFunction(Function &F);
   bool performPRE(Function &F);
   bool performScalarPRE(Instruction *I);
   bool performScalarPREInsertion(Instruction *Instr, BasicBlock *Pred,
-                                 unsigned int ValNo);
+                                 BasicBlock *Curr, unsigned int ValNo);
   Value *findLeader(const BasicBlock *BB, uint32_t num);
   void cleanupGlobalSets();
   void verifyRemoved(const Instruction *I) const;
@@ -251,6 +251,7 @@ private:
   bool processFoldableCondBr(BranchInst *BI);
   void addDeadBlock(BasicBlock *BB);
   void assignValNumForDeadCode();
+  void assignBlockRPONumber(Function &F);
 };
 
 /// Create a legacy GVN pass. This also allows parameterizing whether or not

@@ -12,8 +12,8 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/TargetParser.h"
 #include "llvm/Support/Host.h"
+#include "llvm/Support/TargetParser.h"
 #include <cstring>
 using namespace llvm;
 
@@ -174,6 +174,7 @@ StringRef Triple::getOSTypeName(OSType Kind) {
   switch (Kind) {
   case UnknownOS: return "unknown";
 
+  case Ananas: return "ananas";
   case CloudABI: return "cloudabi";
   case Darwin: return "darwin";
   case DragonFly: return "dragonfly";
@@ -455,6 +456,7 @@ static Triple::VendorType parseVendor(StringRef VendorName) {
 
 static Triple::OSType parseOS(StringRef OSName) {
   return StringSwitch<Triple::OSType>(OSName)
+    .StartsWith("ananas", Triple::Ananas)
     .StartsWith("cloudabi", Triple::CloudABI)
     .StartsWith("darwin", Triple::Darwin)
     .StartsWith("dragonfly", Triple::DragonFly)
@@ -649,12 +651,10 @@ static Triple::ObjectFormatType getDefaultFormat(const Triple &T) {
   case Triple::tce:
   case Triple::tcele:
   case Triple::thumbeb:
-  case Triple::xcore:
-    return Triple::ELF;
-
   case Triple::wasm32:
   case Triple::wasm64:
-    return Triple::Wasm;
+  case Triple::xcore:
+    return Triple::ELF;
 
   case Triple::ppc:
   case Triple::ppc64:
@@ -878,6 +878,10 @@ std::string Triple::normalize(StringRef Str) {
       Components[3] = NormalizedEnvironment;
     }
   }
+
+  // SUSE uses "gnueabi" to mean "gnueabihf"
+  if (Vendor == Triple::SUSE && Environment == llvm::Triple::GNUEABI)
+    Components[3] = "gnueabihf";
 
   if (OS == Triple::Win32) {
     Components.resize(4);
@@ -1486,6 +1490,21 @@ bool Triple::isLittleEndian() const {
 }
 
 bool Triple::isCompatibleWith(const Triple &Other) const {
+  // ARM and Thumb triples are compatible, if subarch, vendor and OS match.
+  if ((getArch() == Triple::thumb && Other.getArch() == Triple::arm) ||
+      (getArch() == Triple::arm && Other.getArch() == Triple::thumb) ||
+      (getArch() == Triple::thumbeb && Other.getArch() == Triple::armeb) ||
+      (getArch() == Triple::armeb && Other.getArch() == Triple::thumbeb)) {
+    if (getVendor() == Triple::Apple)
+      return getSubArch() == Other.getSubArch() &&
+             getVendor() == Other.getVendor() && getOS() == Other.getOS();
+    else
+      return getSubArch() == Other.getSubArch() &&
+             getVendor() == Other.getVendor() && getOS() == Other.getOS() &&
+             getEnvironment() == Other.getEnvironment() &&
+             getObjectFormat() == Other.getObjectFormat();
+  }
+
   // If vendor is apple, ignore the version number.
   if (getVendor() == Triple::Apple)
     return getArch() == Other.getArch() && getSubArch() == Other.getSubArch() &&

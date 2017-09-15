@@ -345,6 +345,7 @@ ArgType ScanfSpecifier::getArgType(ASTContext &Ctx) const {
         case LengthModifier::AsShort:
           if (Ctx.getTargetInfo().getTriple().isOSMSVCRT())
             return ArgType::PtrTo(ArgType::AnyCharTy);
+          LLVM_FALLTHROUGH;
         default:
           return ArgType::Invalid();
       }
@@ -361,6 +362,7 @@ ArgType ScanfSpecifier::getArgType(ASTContext &Ctx) const {
         case LengthModifier::AsShort:
           if (Ctx.getTargetInfo().getTriple().isOSMSVCRT())
             return ArgType::PtrTo(ArgType::AnyCharTy);
+          LLVM_FALLTHROUGH;
         default:
           return ArgType::Invalid();
       }

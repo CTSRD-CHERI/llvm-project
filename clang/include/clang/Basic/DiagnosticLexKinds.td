@@ -527,6 +527,10 @@ def err_pp_module_end_without_module_begin : Error<
   "'#pragma clang module end'">;
 def note_pp_module_begin_here : Note<
   "entering module '%0' due to this pragma">;
+def err_pp_module_build_pth : Error<
+  "'#pragma clang module build' not supported in pretokenized header">;
+def err_pp_module_build_missing_end : Error<
+  "no matching '#pragma clang module endbuild' for this '#pragma clang module build'">;
 
 def err_defined_macro_name : Error<"'defined' cannot be used as a macro name">;
 def err_paste_at_start : Error<
@@ -664,6 +668,12 @@ def warn_mmap_mismatched_top_level_private : Warning<
   InGroup<PrivateModule>;
 def note_mmap_rename_top_level_private_as_submodule : Note<
   "make '%0' a submodule of '%1' to ensure it can be found by name">;
+def err_mmap_duplicate_header_attribute : Error<
+  "header attribute '%0' specified multiple times">;
+def err_mmap_invalid_header_attribute_value : Error<
+  "expected integer literal as value for header attribute '%0'">;
+def err_mmap_expected_header_attribute : Error<
+  "expected a header attribute name ('size' or 'mtime')">;
 
 def warn_auto_module_import : Warning<
   "treating #%select{include|import|include_next|__include_macros}0 as an "

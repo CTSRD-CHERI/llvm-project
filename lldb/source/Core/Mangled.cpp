@@ -10,7 +10,7 @@
 #include "lldb/Core/Mangled.h"
 
 #if defined(_WIN32)
-#include <windows.h>
+#include "lldb/Host/windows/windows.h"
 
 #include <dbghelp.h>
 #pragma comment(lib, "dbghelp.lib")
@@ -27,12 +27,12 @@
 #include <cxxabi.h>
 #endif
 
-#include "lldb/Core/Timer.h"
 #include "lldb/Utility/ConstString.h"
 #include "lldb/Utility/Log.h"
 #include "lldb/Utility/Logging.h"
 #include "lldb/Utility/RegularExpression.h"
 #include "lldb/Utility/Stream.h"
+#include "lldb/Utility/Timer.h"
 #include "lldb/lldb-enumerations.h" // for LanguageType
 
 #include "Plugins/Language/CPlusPlus/CPlusPlusLanguage.h"

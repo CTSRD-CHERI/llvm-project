@@ -242,6 +242,11 @@ static cl::opt<bool> PassRemarksWithHotness(
     cl::desc("With PGO, include profile count in optimization remarks"),
     cl::Hidden);
 
+static cl::opt<unsigned> PassRemarksHotnessThreshold(
+    "pass-remarks-hotness-threshold",
+    cl::desc("Minimum profile count required for an optimization remark to be output"),
+    cl::Hidden);
+
 static cl::opt<std::string>
     RemarksFilename("pass-remarks-output",
                     cl::desc("YAML output filename for pass remarks"),
@@ -420,7 +425,10 @@ int main(int argc, char **argv) {
     Context.enableDebugTypeODRUniquing();
 
   if (PassRemarksWithHotness)
-    Context.setDiagnosticHotnessRequested(true);
+    Context.setDiagnosticsHotnessRequested(true);
+
+  if (PassRemarksHotnessThreshold)
+    Context.setDiagnosticsHotnessThreshold(PassRemarksHotnessThreshold);
 
   std::unique_ptr<tool_output_file> YamlFile;
   if (RemarksFilename != "") {
@@ -518,7 +526,9 @@ int main(int argc, char **argv) {
   if (PassPipeline.getNumOccurrences() > 0) {
     OutputKind OK = OK_NoOutput;
     if (!NoOutput)
-      OK = OutputAssembly ? OK_OutputAssembly : OK_OutputBitcode;
+      OK = OutputAssembly
+               ? OK_OutputAssembly
+               : (OutputThinLTOBC ? OK_OutputThinLTOBitcode : OK_OutputBitcode);
 
     VerifierKind VK = VK_VerifyInAndOut;
     if (NoVerify)
@@ -529,7 +539,7 @@ int main(int argc, char **argv) {
     // The user has asked to use the new pass manager and provided a pipeline
     // string. Hand off the rest of the functionality to the new code for that
     // layer.
-    return runPassPipeline(argv[0], *M, TM.get(), Out.get(),
+    return runPassPipeline(argv[0], *M, TM.get(), Out.get(), ThinLinkOut.get(),
                            PassPipeline, OK, VK, PreserveAssemblyUseListOrder,
                            PreserveBitcodeUseListOrder, EmitSummaryIndex,
                            EmitModuleHash)

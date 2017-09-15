@@ -100,7 +100,8 @@ def FeatureRAS : SubtargetFeature<"ras", "HasRAS", "true",
                 "Enable Reliability, Availability and Serviceability extensions">;
 def FeatureFPAO : SubtargetFeature<"fpao", "HasFPAO", "true",
                 "Enable fast computation of positive address offsets">;
-
+def FeatureFuseAES : SubtargetFeature<"fuse-aes", "HasFuseAES", "true",
+                                      "CPU fuses AES crypto operations">;
 
 // Cyclone has preferred instructions for zeroing VFP registers, which can
 // execute in 0 cycles.
@@ -205,6 +206,13 @@ def FeatureAvoidPartialCPSR : SubtargetFeature<"avoid-partial-cpsr",
                                                "AvoidCPSRPartialUpdate", "true",
                                  "Avoid CPSR partial update for OOO execution">;
 
+/// Disable +1 predication cost for instructions updating CPSR.
+/// Enabled for Cortex-A57.
+def FeatureCheapPredicableCPSR : SubtargetFeature<"cheap-predicable-cpsr",
+                                                  "CheapPredicableCPSRDef",
+                                                  "true",
+                  "Disable +1 predication cost for instructions updating CPSR">;
+
 def FeatureAvoidMOVsShOp : SubtargetFeature<"avoid-movs-shop",
                                             "AvoidMOVsShifterOperand", "true",
                                 "Avoid movs instructions with shifter operand">;
@@ -213,6 +221,13 @@ def FeatureAvoidMOVsShOp : SubtargetFeature<"avoid-movs-shop",
 // "normal" call instructions to callees which do not return.
 def FeatureHasRetAddrStack : SubtargetFeature<"ret-addr-stack", "HasRetAddrStack", "true",
                                      "Has return address stack">;
+
+// Some processors have no branch predictor, which changes the expected cost of
+// taking a branch which affects the choice of whether to use predicated
+// instructions.
+def FeatureHasNoBranchPredictor : SubtargetFeature<"no-branch-predictor",
+                                                   "HasBranchPredictor", "false",
+                                                   "Has no branch predictor">;
 
 /// DSP extension.
 def FeatureDSP : SubtargetFeature<"dsp", "HasDSP", "true",
@@ -532,7 +547,7 @@ def ARMv7s   : Architecture<"armv7s",      "ARMv7a",   [ARMv7a]>;
 //
 
 // Dummy CPU, used to target architectures
-def : ProcNoItin<"generic",                             []>;
+def : ProcessorModel<"generic",     CortexA8Model,      []>;
 
 def : ProcNoItin<"arm8",                                [ARMv4]>;
 def : ProcNoItin<"arm810",                              [ARMv4]>;
@@ -748,13 +763,19 @@ def : ProcessorModel<"cortex-r8",   CortexA8Model,      [ARMv7r,
                                                          FeatureHasSlowFPVMLx,
                                                          FeatureAvoidPartialCPSR]>;
 
-def : ProcNoItin<"cortex-m3",                           [ARMv7m, ProcM3]>;
-def : ProcNoItin<"sc300",                               [ARMv7m, ProcM3]>;
+def : ProcessorModel<"cortex-m3", CortexM3Model,        [ARMv7m,
+                                                         ProcM3,
+                                                         FeatureHasNoBranchPredictor]>;
 
-def : ProcNoItin<"cortex-m4",                           [ARMv7em,
+def : ProcessorModel<"sc300",     CortexM3Model,        [ARMv7m,
+                                                         ProcM3,
+                                                         FeatureHasNoBranchPredictor]>;
+
+def : ProcessorModel<"cortex-m4", CortexM3Model,        [ARMv7em,
                                                          FeatureVFP4,
                                                          FeatureVFPOnlySP,
-                                                         FeatureD16]>;
+                                                         FeatureD16,
+                                                         FeatureHasNoBranchPredictor]>;
 
 def : ProcNoItin<"cortex-m7",                           [ARMv7em,
                                                          FeatureFPARMv8,
@@ -763,11 +784,12 @@ def : ProcNoItin<"cortex-m7",                           [ARMv7em,
 def : ProcNoItin<"cortex-m23",                          [ARMv8mBaseline,
                                                          FeatureNoMovt]>;
 
-def : ProcNoItin<"cortex-m33",                          [ARMv8mMainline,
+def : ProcessorModel<"cortex-m33", CortexM3Model,       [ARMv8mMainline,
                                                          FeatureDSP,
                                                          FeatureFPARMv8,
                                                          FeatureD16,
-                                                         FeatureVFPOnlySP]>;
+                                                         FeatureVFPOnlySP,
+                                                         FeatureHasNoBranchPredictor]>;
 
 def : ProcNoItin<"cortex-a32",                           [ARMv8a,
                                                          FeatureHWDivThumb,
@@ -788,12 +810,14 @@ def : ProcNoItin<"cortex-a53",                          [ARMv8a, ProcA53,
                                                          FeatureCRC,
                                                          FeatureFPAO]>;
 
-def : ProcNoItin<"cortex-a57",                          [ARMv8a, ProcA57,
-                                                         FeatureHWDivThumb,
-                                                         FeatureHWDivARM,
-                                                         FeatureCrypto,
-                                                         FeatureCRC,
-                                                         FeatureFPAO]>;
+def : ProcessorModel<"cortex-a57",  CortexA57Model, [ARMv8a, ProcA57,
+                                                     FeatureHWDivThumb,
+                                                     FeatureHWDivARM,
+                                                     FeatureCrypto,
+                                                     FeatureCRC,
+                                                     FeatureFPAO,
+                                                     FeatureAvoidPartialCPSR,
+                                                     FeatureCheapPredicableCPSR]>;
 
 def : ProcNoItin<"cortex-a72",                          [ARMv8a, ProcA72,
                                                          FeatureHWDivThumb,

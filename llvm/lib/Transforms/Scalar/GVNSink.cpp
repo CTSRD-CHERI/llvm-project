@@ -64,6 +64,17 @@ using namespace llvm;
 
 STATISTIC(NumRemoved, "Number of instructions removed");
 
+namespace llvm {
+namespace GVNExpression {
+
+LLVM_DUMP_METHOD void Expression::dump() const {
+  print(dbgs());
+  dbgs() << "\n";
+}
+
+}
+}
+
 namespace {
 
 static bool isMemoryInst(const Instruction *I) {
@@ -169,8 +180,8 @@ struct SinkingInstructionCandidate {
             NumExtraPHIs) // PHIs are expensive, so make sure they're worth it.
            - SplitEdgeCost;
   }
-  bool operator>=(const SinkingInstructionCandidate &Other) const {
-    return Cost >= Other.Cost;
+  bool operator>(const SinkingInstructionCandidate &Other) const {
+    return Cost > Other.Cost;
   }
 };
 
@@ -745,7 +756,7 @@ unsigned GVNSink::sinkBB(BasicBlock *BBEnd) {
   std::stable_sort(
       Candidates.begin(), Candidates.end(),
       [](const SinkingInstructionCandidate &A,
-         const SinkingInstructionCandidate &B) { return A >= B; });
+         const SinkingInstructionCandidate &B) { return A > B; });
   DEBUG(dbgs() << " -- Sinking candidates:\n"; for (auto &C
                                                     : Candidates) dbgs()
                                                << "  " << C << "\n";);

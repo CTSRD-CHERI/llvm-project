@@ -492,6 +492,11 @@ void UnwrappedLineParser::parseBlock(bool MustBeDeclaration, bool AddLevel,
     nextToken();
   Line->Level = InitialLevel;
   Line->MatchingOpeningBlockLineIndex = OpeningLineIndex;
+  if (OpeningLineIndex != UnwrappedLine::kInvalidIndex) {
+    // Update the opening line to add the forward reference as well
+    (*CurrentLines)[OpeningLineIndex].MatchingOpeningBlockLineIndex =
+            CurrentLines->size() - 1;
+  }
 }
 
 static bool isGoogScope(const UnwrappedLine &Line) {
@@ -1171,9 +1176,12 @@ void UnwrappedLineParser::parseStructuralElement() {
       }
 
       nextToken();
-      if (FormatTok->Tok.is(tok::l_brace)) {
+      if (FormatTok->Tok.is(tok::l_brace))
         parseBracedList();
-      }
+      else if (Style.Language == FormatStyle::LK_Proto &&
+               FormatTok->Tok.is(tok::less))
+        parseBracedList(/*ContinueOnSemicolons=*/false,
+                        /*ClosingBraceKind=*/tok::greater);
       break;
     case tok::l_square:
       parseSquare();
@@ -1341,7 +1349,8 @@ bool UnwrappedLineParser::tryToParseBracedList() {
   return true;
 }
 
-bool UnwrappedLineParser::parseBracedList(bool ContinueOnSemicolons) {
+bool UnwrappedLineParser::parseBracedList(bool ContinueOnSemicolons,
+                                          tok::TokenKind ClosingBraceKind) {
   bool HasError = false;
   nextToken();
 
@@ -1370,6 +1379,10 @@ bool UnwrappedLineParser::parseBracedList(bool ContinueOnSemicolons) {
         parseChildBlock();
       }
     }
+    if (FormatTok->Tok.getKind() == ClosingBraceKind) {
+      nextToken();
+      return !HasError;
+    }
     switch (FormatTok->Tok.getKind()) {
     case tok::caret:
       nextToken();
@@ -1396,9 +1409,6 @@ bool UnwrappedLineParser::parseBracedList(bool ContinueOnSemicolons) {
       FormatTok->BlockKind = BK_BracedInit;
       parseBracedList();
       break;
-    case tok::r_brace:
-      nextToken();
-      return !HasError;
     case tok::semi:
       // JavaScript (or more precisely TypeScript) can have semicolons in braced
       // lists (in so-called TypeMemberLists). Thus, the semicolon cannot be
@@ -1511,6 +1521,8 @@ void UnwrappedLineParser::parseSquare() {
 void UnwrappedLineParser::parseIfThenElse() {
   assert(FormatTok->Tok.is(tok::kw_if) && "'if' expected");
   nextToken();
+  if (FormatTok->Tok.is(tok::kw_constexpr))
+    nextToken();
   if (FormatTok->Tok.is(tok::l_paren))
     parseParens();
   bool NeedsUnwrappedLine = false;

@@ -15,13 +15,13 @@
 #ifndef LLVM_TRANSFORMS_UTILS_LOCAL_H
 #define LLVM_TRANSFORMS_UTILS_LOCAL_H
 
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Operator.h"
-#include "llvm/ADT/SmallPtrSet.h"
 
 namespace llvm {
 
@@ -379,6 +379,19 @@ unsigned replaceDominatedUsesWith(Value *From, Value *To, DominatorTree &DT,
 /// Most passes can and should ignore this information, and it is only used
 /// during lowering by the GC infrastructure.
 bool callsGCLeafFunction(ImmutableCallSite CS);
+
+/// Copy a nonnull metadata node to a new load instruction.
+///
+/// This handles mapping it to range metadata if the new load is an integer
+/// load instead of a pointer load.
+void copyNonnullMetadata(const LoadInst &OldLI, MDNode *N, LoadInst &NewLI);
+
+/// Copy a range metadata node to a new load instruction.
+///
+/// This handles mapping it to nonnull metadata if the new load is a pointer
+/// load instead of an integer load and the range doesn't cover null.
+void copyRangeMetadata(const DataLayout &DL, const LoadInst &OldLI, MDNode *N,
+                       LoadInst &NewLI);
 
 //===----------------------------------------------------------------------===//
 //  Intrinsic pattern matching

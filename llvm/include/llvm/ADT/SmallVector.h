@@ -388,7 +388,10 @@ public:
   void swap(SmallVectorImpl &RHS);
 
   /// Add the specified range to the end of the SmallVector.
-  template<typename in_iter>
+  template <typename in_iter,
+            typename = typename std::enable_if<std::is_convertible<
+                typename std::iterator_traits<in_iter>::iterator_category,
+                std::input_iterator_tag>::value>::type>
   void append(in_iter in_start, in_iter in_end) {
     size_type NumInputs = std::distance(in_start, in_end);
     // Grow allocated space if needed.
@@ -415,12 +418,24 @@ public:
     append(IL.begin(), IL.end());
   }
 
+  // FIXME: Consider assigning over existing elements, rather than clearing &
+  // re-initializing them - for all assign(...) variants.
+
   void assign(size_type NumElts, const T &Elt) {
     clear();
     if (this->capacity() < NumElts)
       this->grow(NumElts);
     this->setEnd(this->begin()+NumElts);
     std::uninitialized_fill(this->begin(), this->end(), Elt);
+  }
+
+  template <typename in_iter,
+            typename = typename std::enable_if<std::is_convertible<
+                typename std::iterator_traits<in_iter>::iterator_category,
+                std::input_iterator_tag>::value>::type>
+  void assign(in_iter in_start, in_iter in_end) {
+    clear();
+    append(in_start, in_end);
   }
 
   void assign(std::initializer_list<T> IL) {
@@ -571,7 +586,10 @@ public:
     return I;
   }
 
-  template<typename ItTy>
+  template <typename ItTy,
+            typename = typename std::enable_if<std::is_convertible<
+                typename std::iterator_traits<ItTy>::iterator_category,
+                std::input_iterator_tag>::value>::type>
   iterator insert(iterator I, ItTy From, ItTy To) {
     // Convert iterator to elt# to avoid invalidating iterator when we reserve()
     size_t InsertElt = I - this->begin();
@@ -852,7 +870,10 @@ public:
     this->assign(Size, Value);
   }
 
-  template<typename ItTy>
+  template <typename ItTy,
+            typename = typename std::enable_if<std::is_convertible<
+                typename std::iterator_traits<ItTy>::iterator_category,
+                std::input_iterator_tag>::value>::type>
   SmallVector(ItTy S, ItTy E) : SmallVectorImpl<T>(N) {
     this->append(S, E);
   }

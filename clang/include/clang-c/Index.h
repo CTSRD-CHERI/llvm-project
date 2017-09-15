@@ -7,7 +7,7 @@
 |*                                                                            *|
 |*===----------------------------------------------------------------------===*|
 |*                                                                            *|
-|* This header provides a public inferface to a Clang library for extracting  *|
+|* This header provides a public interface to a Clang library for extracting  *|
 |* high-level symbol information from source files without exposing the full  *|
 |* Clang C++ API.                                                             *|
 |*                                                                            *|
@@ -32,7 +32,7 @@
  * compatible, thus CINDEX_VERSION_MAJOR is expected to remain stable.
  */
 #define CINDEX_VERSION_MAJOR 0
-#define CINDEX_VERSION_MINOR 41
+#define CINDEX_VERSION_MINOR 43
 
 #define CINDEX_VERSION_ENCODE(major, minor) ( \
       ((major) * 10000)                       \
@@ -171,7 +171,60 @@ typedef struct CXVersion {
    */
   int Subminor;
 } CXVersion;
-  
+
+/**
+ * \brief Describes the exception specification of a cursor.
+ *
+ * A negative value indicates that the cursor is not a function declaration.
+ */
+enum CXCursor_ExceptionSpecificationKind {
+
+  /**
+   * \brief The cursor has no exception specification.
+   */
+  CXCursor_ExceptionSpecificationKind_None,
+
+  /**
+   * \brief The cursor has exception specification throw()
+   */
+  CXCursor_ExceptionSpecificationKind_DynamicNone,
+
+  /**
+   * \brief The cursor has exception specification throw(T1, T2)
+   */
+  CXCursor_ExceptionSpecificationKind_Dynamic,
+
+  /**
+   * \brief The cursor has exception specification throw(...).
+   */
+  CXCursor_ExceptionSpecificationKind_MSAny,
+
+  /**
+   * \brief The cursor has exception specification basic noexcept.
+   */
+  CXCursor_ExceptionSpecificationKind_BasicNoexcept,
+
+  /**
+   * \brief The cursor has exception specification computed noexcept.
+   */
+  CXCursor_ExceptionSpecificationKind_ComputedNoexcept,
+
+  /**
+   * \brief The exception specification has not yet been evaluated.
+   */
+  CXCursor_ExceptionSpecificationKind_Unevaluated,
+
+  /**
+   * \brief The exception specification has not yet been instantiated.
+   */
+  CXCursor_ExceptionSpecificationKind_Uninstantiated,
+
+  /**
+   * \brief The exception specification has not been parsed yet.
+   */
+  CXCursor_ExceptionSpecificationKind_Unparsed
+};
+
 /**
  * \brief Provides a shared context for creating translation units.
  *
@@ -1234,7 +1287,12 @@ enum CXTranslationUnit_Flags {
    * purposes of an IDE, this is undesirable behavior and as much information
    * as possible should be reported. Use this flag to enable this behavior.
    */
-  CXTranslationUnit_KeepGoing = 0x200
+  CXTranslationUnit_KeepGoing = 0x200,
+
+  /**
+   * \brief Sets the preprocessor in a mode for parsing a single file only.
+   */
+  CXTranslationUnit_SingleFileParse = 0x400
 };
 
 /**
@@ -3421,6 +3479,16 @@ CINDEX_LINKAGE unsigned clang_isVolatileQualifiedType(CXType T);
 CINDEX_LINKAGE unsigned clang_isRestrictQualifiedType(CXType T);
 
 /**
+ * \brief Returns the address space of the given type.
+ */
+CINDEX_LINKAGE unsigned clang_getAddressSpace(CXType T);
+
+/**
+ * \brief Returns the typedef name of the given type.
+ */
+CINDEX_LINKAGE CXString clang_getTypedefName(CXType CT);
+
+/**
  * \brief For pointer types, returns the type of the pointee.
  */
 CINDEX_LINKAGE CXType clang_getPointeeType(CXType T);
@@ -3460,6 +3528,13 @@ CINDEX_LINKAGE enum CXCallingConv clang_getFunctionTypeCallingConv(CXType T);
 CINDEX_LINKAGE CXType clang_getResultType(CXType T);
 
 /**
+ * \brief Retrieve the exception specification type associated with a function type.
+ *
+ * If a non-function type is passed in, an error code of -1 is returned.
+ */
+CINDEX_LINKAGE int clang_getExceptionSpecificationType(CXType T);
+
+/**
  * \brief Retrieve the number of non-variadic parameters associated with a
  * function type.
  *
@@ -3486,6 +3561,13 @@ CINDEX_LINKAGE unsigned clang_isFunctionTypeVariadic(CXType T);
  * This only returns a valid type if the cursor refers to a function or method.
  */
 CINDEX_LINKAGE CXType clang_getCursorResultType(CXCursor C);
+
+/**
+ * \brief Retrieve the exception specification type associated with a given cursor.
+ *
+ * This only returns a valid result if the cursor refers to a function or method.
+ */
+CINDEX_LINKAGE int clang_getCursorExceptionSpecificationType(CXCursor C);
 
 /**
  * \brief Return 1 if the CXType is a POD (plain old data) type, and 0

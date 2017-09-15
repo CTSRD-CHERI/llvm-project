@@ -21,7 +21,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Transforms/Utils/UnrollLoop.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/LoopIterator.h"
@@ -37,6 +36,8 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/Transforms/Utils/LoopUtils.h"
+#include "llvm/Transforms/Utils/UnrollLoop.h"
 #include <algorithm>
 
 using namespace llvm;
@@ -45,6 +46,10 @@ using namespace llvm;
 
 STATISTIC(NumRuntimeUnrolled,
           "Number of loops unrolled with run-time trip counts");
+static cl::opt<bool> UnrollRuntimeMultiExit(
+    "unroll-runtime-multi-exit", cl::init(false), cl::Hidden,
+    cl::desc("Allow runtime unrolling for loops with multiple exits, when "
+             "epilog is generated"));
 
 /// Connect the unrolling prolog code to the original loop.
 /// The unrolling prolog code contains code to execute the
@@ -285,15 +290,13 @@ static void ConnectEpilog(Loop *L, Value *ModVal, BasicBlock *NewExit,
 /// The cloned blocks should be inserted between InsertTop and InsertBot.
 /// If loop structure is cloned InsertTop should be new preheader, InsertBot
 /// new loop exit.
-///
-static void CloneLoopBlocks(Loop *L, Value *NewIter,
-                            const bool CreateRemainderLoop,
-                            const bool UseEpilogRemainder,
-                            BasicBlock *InsertTop, BasicBlock *InsertBot,
-                            BasicBlock *Preheader,
-                            std::vector<BasicBlock *> &NewBlocks,
-                            LoopBlocksDFS &LoopBlocks, ValueToValueMapTy &VMap,
-                            DominatorTree *DT, LoopInfo *LI) {
+/// Return the new cloned loop that is created when CreateRemainderLoop is true.
+static Loop *
+CloneLoopBlocks(Loop *L, Value *NewIter, const bool CreateRemainderLoop,
+                const bool UseEpilogRemainder, BasicBlock *InsertTop,
+                BasicBlock *InsertBot, BasicBlock *Preheader,
+                std::vector<BasicBlock *> &NewBlocks, LoopBlocksDFS &LoopBlocks,
+                ValueToValueMapTy &VMap, DominatorTree *DT, LoopInfo *LI) {
   StringRef suffix = UseEpilogRemainder ? "epil" : "prol";
   BasicBlock *Header = L->getHeader();
   BasicBlock *Latch = L->getLoopLatch();
@@ -418,7 +421,10 @@ static void CloneLoopBlocks(Loop *L, Value *NewIter,
     // Set operand 0 to refer to the loop id itself.
     NewLoopID->replaceOperandWith(0, NewLoopID);
     NewLoop->setLoopID(NewLoopID);
+    return NewLoop;
   }
+  else
+    return nullptr;
 }
 
 /// Insert code in the prolog/epilog code when unrolling a loop with a
@@ -465,16 +471,51 @@ bool llvm::UnrollRuntimeLoopRemainder(Loop *L, unsigned Count,
                                       LoopInfo *LI, ScalarEvolution *SE,
                                       DominatorTree *DT, bool PreserveLCSSA) {
   // for now, only unroll loops that contain a single exit
-  if (!L->getExitingBlock())
+  if (!UnrollRuntimeMultiExit && !L->getExitingBlock())
     return false;
 
-  // Make sure the loop is in canonical form, and there is a single
-  // exit block only.
+  // Make sure the loop is in canonical form.
   if (!L->isLoopSimplifyForm())
     return false;
-  BasicBlock *Exit = L->getUniqueExitBlock(); // successor out of loop
-  if (!Exit)
+
+  // Guaranteed by LoopSimplifyForm.
+  BasicBlock *Latch = L->getLoopLatch();
+  BasicBlock *Header = L->getHeader();
+
+  BasicBlock *LatchExit = L->getUniqueExitBlock(); // successor out of loop
+  if (!LatchExit && !UnrollRuntimeMultiExit)
     return false;
+  // These are exit blocks other than the target of the latch exiting block.
+  SmallVector<BasicBlock *, 4> OtherExits;
+  BranchInst *LatchBR = cast<BranchInst>(Latch->getTerminator());
+  unsigned int ExitIndex = LatchBR->getSuccessor(0) == Header ? 1 : 0;
+  // Cloning the loop basic blocks (`CloneLoopBlocks`) requires that one of the
+  // targets of the Latch be an exit block out of the loop. This needs
+  // to be guaranteed by the callers of UnrollRuntimeLoopRemainder.
+  assert(!L->contains(LatchBR->getSuccessor(ExitIndex)) &&
+         "one of the loop latch successors should be the exit block!");
+  // Support runtime unrolling for multiple exit blocks and multiple exiting
+  // blocks.
+  if (!LatchExit) {
+    assert(UseEpilogRemainder && "Multi exit unrolling is currently supported "
+                                 "unrolling with epilog remainder only!");
+    LatchExit = LatchBR->getSuccessor(ExitIndex);
+    // We rely on LCSSA form being preserved when the exit blocks are
+    // transformed.
+    if (!PreserveLCSSA)
+      return false;
+    // TODO: Support multiple exiting blocks jumping to the `LatchExit`. This
+    // will need updating the logic in connectEpilog.
+    if (!LatchExit->getSinglePredecessor())
+        return false;
+    SmallVector<BasicBlock *, 4> Exits;
+    L->getUniqueExitBlocks(Exits);
+    for (auto *BB : Exits)
+      if (BB != LatchExit)
+        OtherExits.push_back(BB);
+  }
+
+  assert(LatchExit && "Latch Exit should exist!");
 
   // Use Scalar Evolution to compute the trip count. This allows more loops to
   // be unrolled than relying on induction var simplification.
@@ -483,7 +524,11 @@ bool llvm::UnrollRuntimeLoopRemainder(Loop *L, unsigned Count,
 
   // Only unroll loops with a computable trip count, and the trip count needs
   // to be an int value (allowing a pointer type is a TODO item).
-  const SCEV *BECountSC = SE->getBackedgeTakenCount(L);
+  // We calculate the backedge count by using getExitCount on the Latch block,
+  // which is proven to be the only exiting block in this loop. This is same as
+  // calculating getBackedgeTakenCount on the loop (which computes SCEV for all
+  // exiting blocks).
+  const SCEV *BECountSC = SE->getExitCount(L, Latch);
   if (isa<SCEVCouldNotCompute>(BECountSC) ||
       !BECountSC->getType()->isIntegerTy())
     return false;
@@ -496,7 +541,6 @@ bool llvm::UnrollRuntimeLoopRemainder(Loop *L, unsigned Count,
   if (isa<SCEVCouldNotCompute>(TripCountSC))
     return false;
 
-  BasicBlock *Header = L->getHeader();
   BasicBlock *PreHeader = L->getLoopPreheader();
   BranchInst *PreHeaderBR = cast<BranchInst>(PreHeader->getTerminator());
   const DataLayout &DL = Header->getModule()->getDataLayout();
@@ -510,25 +554,13 @@ bool llvm::UnrollRuntimeLoopRemainder(Loop *L, unsigned Count,
   if (Log2_32(Count) > BEWidth)
     return false;
 
-  BasicBlock *Latch = L->getLoopLatch();
-
-  // Cloning the loop basic blocks (`CloneLoopBlocks`) requires that one of the
-  // targets of the Latch be the single exit block out of the loop. This needs
-  // to be guaranteed by the callers of UnrollRuntimeLoopRemainder.
-  BranchInst *LatchBR = cast<BranchInst>(Latch->getTerminator());
-  assert(
-      (LatchBR->getSuccessor(0) == Exit || LatchBR->getSuccessor(1) == Exit) &&
-      "one of the loop latch successors should be "
-      "the exit block!");
-  // Avoid warning of unused `LatchBR` variable in release builds.
-  (void)LatchBR;
   // Loop structure is the following:
   //
   // PreHeader
   //   Header
   //   ...
   //   Latch
-  // Exit
+  // LatchExit
 
   BasicBlock *NewPreHeader;
   BasicBlock *NewExit = nullptr;
@@ -541,9 +573,9 @@ bool llvm::UnrollRuntimeLoopRemainder(Loop *L, unsigned Count,
     // Split PreHeader to insert a branch around loop for unrolling.
     NewPreHeader = SplitBlock(PreHeader, PreHeader->getTerminator(), DT, LI);
     NewPreHeader->setName(PreHeader->getName() + ".new");
-    // Split Exit to create phi nodes from branch above.
-    SmallVector<BasicBlock*, 4> Preds(predecessors(Exit));
-    NewExit = SplitBlockPredecessors(Exit, Preds, ".unr-lcssa",
+    // Split LatchExit to create phi nodes from branch above.
+    SmallVector<BasicBlock*, 4> Preds(predecessors(LatchExit));
+    NewExit = SplitBlockPredecessors(LatchExit, Preds, ".unr-lcssa",
                                      DT, LI, PreserveLCSSA);
     // Split NewExit to insert epilog remainder loop.
     EpilogPreHeader = SplitBlock(NewExit, NewExit->getTerminator(), DT, LI);
@@ -570,7 +602,7 @@ bool llvm::UnrollRuntimeLoopRemainder(Loop *L, unsigned Count,
   //   Latch             Header
   // *NewExit            ...
   // *EpilogPreHeader    Latch
-  // Exit              Exit
+  // LatchExit              LatchExit
 
   // Calculate conditions for branch around loop for unrolling
   // in epilog case and around prolog remainder loop in prolog case.
@@ -648,16 +680,53 @@ bool llvm::UnrollRuntimeLoopRemainder(Loop *L, unsigned Count,
   // Clone all the basic blocks in the loop. If Count is 2, we don't clone
   // the loop, otherwise we create a cloned loop to execute the extra
   // iterations. This function adds the appropriate CFG connections.
-  BasicBlock *InsertBot = UseEpilogRemainder ? Exit : PrologExit;
+  BasicBlock *InsertBot = UseEpilogRemainder ? LatchExit : PrologExit;
   BasicBlock *InsertTop = UseEpilogRemainder ? EpilogPreHeader : PrologPreHeader;
-  CloneLoopBlocks(L, ModVal, CreateRemainderLoop, UseEpilogRemainder, InsertTop,
-                  InsertBot, NewPreHeader, NewBlocks, LoopBlocks, VMap, DT, LI);
+  Loop *remainderLoop = CloneLoopBlocks(
+      L, ModVal, CreateRemainderLoop, UseEpilogRemainder, InsertTop, InsertBot,
+      NewPreHeader, NewBlocks, LoopBlocks, VMap, DT, LI);
 
   // Insert the cloned blocks into the function.
   F->getBasicBlockList().splice(InsertBot->getIterator(),
                                 F->getBasicBlockList(),
                                 NewBlocks[0]->getIterator(),
                                 F->end());
+
+  // Now the loop blocks are cloned and the other exiting blocks from the
+  // remainder are connected to the original Loop's exit blocks. The remaining
+  // work is to update the phi nodes in the original loop, and take in the
+  // values from the cloned region. Also update the dominator info for
+  // OtherExits, since we have new edges into OtherExits.
+  for (auto *BB : OtherExits) {
+   for (auto &II : *BB) {
+
+     // Given we preserve LCSSA form, we know that the values used outside the
+     // loop will be used through these phi nodes at the exit blocks that are
+     // transformed below.
+     if (!isa<PHINode>(II))
+       break;
+     PHINode *Phi = cast<PHINode>(&II);
+     unsigned oldNumOperands = Phi->getNumIncomingValues();
+     // Add the incoming values from the remainder code to the end of the phi
+     // node.
+     for (unsigned i =0; i < oldNumOperands; i++){
+       Value *newVal = VMap[Phi->getIncomingValue(i)];
+       if (!newVal) {
+         assert(isa<Constant>(Phi->getIncomingValue(i)) &&
+                "VMap should exist for all values except constants!");
+         newVal = Phi->getIncomingValue(i);
+       }
+       Phi->addIncoming(newVal,
+                           cast<BasicBlock>(VMap[Phi->getIncomingBlock(i)]));
+     }
+   }
+   // Update the dominator info because the immediate dominator is no longer the
+   // header of the original Loop. BB has edges both from L and remainder code.
+   // Since the preheader determines which loop is run (L or directly jump to
+   // the remainder code), we set the immediate dominator as the preheader.
+   if (DT)
+     DT->changeImmediateDominator(BB, PreHeader);
+  }
 
   // Loop structure should be the following:
   //  Epilog             Prolog
@@ -672,7 +741,7 @@ bool llvm::UnrollRuntimeLoopRemainder(Loop *L, unsigned Count,
   //   EpilogHeader      Header
   //   ...               ...
   //   EpilogLatch       Latch
-  // Exit              Exit
+  // LatchExit              LatchExit
 
   // Rewrite the cloned instruction operands to use the values created when the
   // clone is created.
@@ -686,7 +755,7 @@ bool llvm::UnrollRuntimeLoopRemainder(Loop *L, unsigned Count,
   if (UseEpilogRemainder) {
     // Connect the epilog code to the original loop and update the
     // PHI functions.
-    ConnectEpilog(L, ModVal, NewExit, Exit, PreHeader,
+    ConnectEpilog(L, ModVal, NewExit, LatchExit, PreHeader,
                   EpilogPreHeader, NewPreHeader, VMap, DT, LI,
                   PreserveLCSSA);
 
@@ -720,6 +789,19 @@ bool llvm::UnrollRuntimeLoopRemainder(Loop *L, unsigned Count,
   // parent loop, so the Scalar Evolution pass needs to be run again.
   if (Loop *ParentLoop = L->getParentLoop())
     SE->forgetLoop(ParentLoop);
+
+  // Canonicalize to LoopSimplifyForm both original and remainder loops. We
+  // cannot rely on the LoopUnrollPass to do this because it only does
+  // canonicalization for parent/subloops and not the sibling loops.
+  if (OtherExits.size() > 0) {
+    // Generate dedicated exit blocks for the original loop, to preserve
+    // LoopSimplifyForm.
+    formDedicatedExitBlocks(L, DT, LI, PreserveLCSSA);
+    // Generate dedicated exit blocks for the remainder loop if one exists, to
+    // preserve LoopSimplifyForm.
+    if (remainderLoop)
+      formDedicatedExitBlocks(remainderLoop, DT, LI, PreserveLCSSA);
+  }
 
   NumRuntimeUnrolled++;
   return true;

@@ -1,4 +1,4 @@
-//===- EnumTables.cpp - Enum to string conversion tables --------*- C++ -*-===//
+//===- EnumTables.cpp - Enum to string conversion tables ------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -8,6 +8,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/DebugInfo/CodeView/EnumTables.h"
+#include "llvm/Support/ScopedPrinter.h"
+#include <type_traits>
 
 using namespace llvm;
 using namespace codeview;
@@ -80,6 +82,13 @@ static const EnumEntry<uint16_t> RegisterNames[] = {
     CV_ENUM_CLASS_ENT(RegisterId, R13),
     CV_ENUM_CLASS_ENT(RegisterId, R14),
     CV_ENUM_CLASS_ENT(RegisterId, R15),
+};
+
+static const EnumEntry<uint32_t> PublicSymFlagNames[] = {
+    CV_ENUM_CLASS_ENT(PublicSymFlags, Code),
+    CV_ENUM_CLASS_ENT(PublicSymFlags, Function),
+    CV_ENUM_CLASS_ENT(PublicSymFlags, Managed),
+    CV_ENUM_CLASS_ENT(PublicSymFlags, MSIL),
 };
 
 static const EnumEntry<uint8_t> ProcSymFlagNames[] = {
@@ -326,6 +335,7 @@ static const EnumEntry<COFF::SectionCharacteristics>
 
 namespace llvm {
 namespace codeview {
+
 ArrayRef<EnumEntry<SymbolKind>> getSymbolTypeNames() {
   return makeArrayRef(SymbolTypeNames);
 }
@@ -338,48 +348,66 @@ ArrayRef<EnumEntry<uint16_t>> getRegisterNames() {
   return makeArrayRef(RegisterNames);
 }
 
+ArrayRef<EnumEntry<uint32_t>> getPublicSymFlagNames() {
+  return makeArrayRef(PublicSymFlagNames);
+}
+
 ArrayRef<EnumEntry<uint8_t>> getProcSymFlagNames() {
   return makeArrayRef(ProcSymFlagNames);
 }
+
 ArrayRef<EnumEntry<uint16_t>> getLocalFlagNames() {
   return makeArrayRef(LocalFlags);
 }
+
 ArrayRef<EnumEntry<uint8_t>> getFrameCookieKindNames() {
   return makeArrayRef(FrameCookieKinds);
 }
+
 ArrayRef<EnumEntry<SourceLanguage>> getSourceLanguageNames() {
   return makeArrayRef(SourceLanguages);
 }
+
 ArrayRef<EnumEntry<uint32_t>> getCompileSym2FlagNames() {
   return makeArrayRef(CompileSym2FlagNames);
 }
+
 ArrayRef<EnumEntry<uint32_t>> getCompileSym3FlagNames() {
   return makeArrayRef(CompileSym3FlagNames);
 }
+
 ArrayRef<EnumEntry<uint32_t>> getFileChecksumNames() {
   return makeArrayRef(FileChecksumNames);
 }
+
 ArrayRef<EnumEntry<unsigned>> getCPUTypeNames() {
   return makeArrayRef(CPUTypeNames);
 }
+
 ArrayRef<EnumEntry<uint32_t>> getFrameProcSymFlagNames() {
   return makeArrayRef(FrameProcSymFlagNames);
 }
+
 ArrayRef<EnumEntry<uint16_t>> getExportSymFlagNames() {
   return makeArrayRef(ExportSymFlagNames);
 }
+
 ArrayRef<EnumEntry<uint32_t>> getModuleSubstreamKindNames() {
   return makeArrayRef(ModuleSubstreamKindNames);
 }
+
 ArrayRef<EnumEntry<uint8_t>> getThunkOrdinalNames() {
   return makeArrayRef(ThunkOrdinalNames);
 }
+
 ArrayRef<EnumEntry<uint16_t>> getTrampolineNames() {
   return makeArrayRef(TrampolineNames);
 }
+
 ArrayRef<EnumEntry<COFF::SectionCharacteristics>>
 getImageSectionCharacteristicNames() {
   return makeArrayRef(ImageSectionCharacteristicNames);
 }
-}
-}
+
+} // end namespace codeview
+} // end namespace llvm

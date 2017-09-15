@@ -1,5 +1,9 @@
-; RUN: llc %s -o - -mtriple=aarch64-unknown -mcpu=cortex-a57 | FileCheck %s --check-prefix=CHECK --check-prefix=CHECKA57A72
-; RUN: llc %s -o - -mtriple=aarch64-unknown -mcpu=cortex-a72 | FileCheck %s --check-prefix=CHECK --check-prefix=CHECKA57A72
+; RUN: llc %s -o - -mtriple=aarch64-unknown -mattr=+fuse-aes,+crypto | FileCheck %s --check-prefix=CHECK --check-prefix=CHECKFUSEALLPAIRS
+; RUN: llc %s -o - -mtriple=aarch64-unknown -mcpu=generic -mattr=+crypto | FileCheck %s --check-prefix=CHECK --check-prefix=CHECKFUSEALLPAIRS
+; RUN: llc %s -o - -mtriple=aarch64-unknown -mcpu=cortex-a53 | FileCheck %s --check-prefix=CHECK --check-prefix=CHECKFUSEALLPAIRS
+; RUN: llc %s -o - -mtriple=aarch64-unknown -mcpu=cortex-a57 | FileCheck %s --check-prefix=CHECK --check-prefix=CHECKFUSEALLPAIRS
+; RUN: llc %s -o - -mtriple=aarch64-unknown -mcpu=cortex-a72 | FileCheck %s --check-prefix=CHECK --check-prefix=CHECKFUSEALLPAIRS
+; RUN: llc %s -o - -mtriple=aarch64-unknown -mcpu=cortex-a73 | FileCheck %s --check-prefix=CHECK --check-prefix=CHECKFUSEALLPAIRS
 ; RUN: llc %s -o - -mtriple=aarch64-unknown -mcpu=exynos-m1  | FileCheck %s --check-prefix=CHECK --check-prefix=CHECKM1
 
 declare <16 x i8> @llvm.aarch64.crypto.aese(<16 x i8> %d, <16 x i8> %k)
@@ -72,22 +76,23 @@ define void @aesea(<16 x i8>* %a0, <16 x i8>* %b0, <16 x i8>* %c0, <16 x i8> %d,
   ret void
 
 ; CHECK-LABEL: aesea:
-; CHECKA57A72: aese [[VA:v[0-7].16b]], {{v[0-7].16b}}
-; CHECKA57A72-NEXT: aesmc {{v[0-7].16b}}, [[VA]]
-; CHECKA57A72: aese [[VB:v[0-7].16b]], {{v[0-7].16b}}
-; CHECKA57A72-NEXT: aesmc {{v[0-7].16b}}, [[VB]]
-; CHECKA57A72: aese [[VC:v[0-7].16b]], {{v[0-7].16b}}
-; CHECKA57A72-NEXT: aesmc {{v[0-7].16b}}, [[VC]]
-; CHECKA57A72: aese [[VD:v[0-7].16b]], {{v[0-7].16b}}
-; CHECKA57A72-NEXT: aesmc {{v[0-7].16b}}, [[VD]]
-; CHECKA57A72: aese [[VE:v[0-7].16b]], {{v[0-7].16b}}
-; CHECKA57A72-NEXT: aesmc {{v[0-7].16b}}, [[VE]]
-; CHECKA57A72: aese [[VF:v[0-7].16b]], {{v[0-7].16b}}
-; CHECKA57A72-NEXT: aesmc {{v[0-7].16b}}, [[VF]]
-; CHECKA57A72: aese [[VG:v[0-7].16b]], {{v[0-7].16b}}
-; CHECKA57A72-NEXT: aesmc {{v[0-7].16b}}, [[VG]]
-; CHECKA57A72: aese [[VH:v[0-7].16b]], {{v[0-7].16b}}
-; CHECKA57A72-NEXT: aesmc {{v[0-7].16b}}, [[VH]]
+; CHECKFUSEALLPAIRS: aese [[VA:v[0-7].16b]], {{v[0-7].16b}}
+; CHECKFUSEALLPAIRS-NEXT: aesmc {{v[0-7].16b}}, [[VA]]
+; CHECKFUSEALLPAIRS: aese [[VB:v[0-7].16b]], {{v[0-7].16b}}
+; CHECKFUSEALLPAIRS-NEXT: aesmc {{v[0-7].16b}}, [[VB]]
+; CHECKFUSEALLPAIRS: aese [[VC:v[0-7].16b]], {{v[0-7].16b}}
+; CHECKFUSEALLPAIRS-NEXT: aesmc {{v[0-7].16b}}, [[VC]]
+; CHECKFUSEALLPAIRS: aese [[VD:v[0-7].16b]], {{v[0-7].16b}}
+; CHECKFUSEALLPAIRS-NEXT: aesmc {{v[0-7].16b}}, [[VD]]
+; CHECKFUSEALLPAIRS: aese [[VE:v[0-7].16b]], {{v[0-7].16b}}
+; CHECKFUSEALLPAIRS-NEXT: aesmc {{v[0-7].16b}}, [[VE]]
+; CHECKFUSEALLPAIRS: aese [[VF:v[0-7].16b]], {{v[0-7].16b}}
+; CHECKFUSEALLPAIRS-NEXT: aesmc {{v[0-7].16b}}, [[VF]]
+; CHECKFUSEALLPAIRS: aese [[VG:v[0-7].16b]], {{v[0-7].16b}}
+; CHECKFUSEALLPAIRS-NEXT: aesmc {{v[0-7].16b}}, [[VG]]
+; CHECKFUSEALLPAIRS: aese [[VH:v[0-7].16b]], {{v[0-7].16b}}
+; CHECKFUSEALLPAIRS-NEXT: aesmc {{v[0-7].16b}}, [[VH]]
+; CHECKFUSEALLPAIRS-NOT: aesmc
 
 ; CHECKM1: aese [[VA:v[0-7].16b]], {{v[0-7].16b}}
 ; CHECKM1-NEXT: aesmc {{v[0-7].16b}}, [[VA]]
@@ -173,22 +178,23 @@ define void @aesda(<16 x i8>* %a0, <16 x i8>* %b0, <16 x i8>* %c0, <16 x i8> %d,
   ret void
 
 ; CHECK-LABEL: aesda:
-; CHECKA57A72: aesd [[VA:v[0-7].16b]], {{v[0-7].16b}}
-; CHECKA57A72-NEXT: aesimc {{v[0-7].16b}}, [[VA]]
-; CHECKA57A72: aesd [[VB:v[0-7].16b]], {{v[0-7].16b}}
-; CHECKA57A72-NEXT: aesimc {{v[0-7].16b}}, [[VB]]
-; CHECKA57A72: aesd [[VC:v[0-7].16b]], {{v[0-7].16b}}
-; CHECKA57A72-NEXT: aesimc {{v[0-7].16b}}, [[VC]]
-; CHECKA57A72: aesd [[VD:v[0-7].16b]], {{v[0-7].16b}}
-; CHECKA57A72-NEXT: aesimc {{v[0-7].16b}}, [[VD]]
-; CHECKA57A72: aesd [[VE:v[0-7].16b]], {{v[0-7].16b}}
-; CHECKA57A72-NEXT: aesimc {{v[0-7].16b}}, [[VE]]
-; CHECKA57A72: aesd [[VF:v[0-7].16b]], {{v[0-7].16b}}
-; CHECKA57A72-NEXT: aesimc {{v[0-7].16b}}, [[VF]]
-; CHECKA57A72: aesd [[VG:v[0-7].16b]], {{v[0-7].16b}}
-; CHECKA57A72-NEXT: aesimc {{v[0-7].16b}}, [[VG]]
-; CHECKA57A72: aesd [[VH:v[0-7].16b]], {{v[0-7].16b}}
-; CHECKA57A72-NEXT: aesimc {{v[0-7].16b}}, [[VH]]
+; CHECKFUSEALLPAIRS: aesd [[VA:v[0-7].16b]], {{v[0-7].16b}}
+; CHECKFUSEALLPAIRS-NEXT: aesimc {{v[0-7].16b}}, [[VA]]
+; CHECKFUSEALLPAIRS: aesd [[VB:v[0-7].16b]], {{v[0-7].16b}}
+; CHECKFUSEALLPAIRS-NEXT: aesimc {{v[0-7].16b}}, [[VB]]
+; CHECKFUSEALLPAIRS: aesd [[VC:v[0-7].16b]], {{v[0-7].16b}}
+; CHECKFUSEALLPAIRS-NEXT: aesimc {{v[0-7].16b}}, [[VC]]
+; CHECKFUSEALLPAIRS: aesd [[VD:v[0-7].16b]], {{v[0-7].16b}}
+; CHECKFUSEALLPAIRS-NEXT: aesimc {{v[0-7].16b}}, [[VD]]
+; CHECKFUSEALLPAIRS: aesd [[VE:v[0-7].16b]], {{v[0-7].16b}}
+; CHECKFUSEALLPAIRS-NEXT: aesimc {{v[0-7].16b}}, [[VE]]
+; CHECKFUSEALLPAIRS: aesd [[VF:v[0-7].16b]], {{v[0-7].16b}}
+; CHECKFUSEALLPAIRS-NEXT: aesimc {{v[0-7].16b}}, [[VF]]
+; CHECKFUSEALLPAIRS: aesd [[VG:v[0-7].16b]], {{v[0-7].16b}}
+; CHECKFUSEALLPAIRS-NEXT: aesimc {{v[0-7].16b}}, [[VG]]
+; CHECKFUSEALLPAIRS: aesd [[VH:v[0-7].16b]], {{v[0-7].16b}}
+; CHECKFUSEALLPAIRS-NEXT: aesimc {{v[0-7].16b}}, [[VH]]
+; CHECKFUSEALLPAIRS-NOT: aesimc
 
 ; CHECKM1: aesd [[VA:v[0-7].16b]], {{v[0-7].16b}}
 ; CHECKM1-NEXT: aesimc {{v[0-7].16b}}, [[VA]]
@@ -234,4 +240,5 @@ entry:
 ; CHECK-NEXT: aesmc {{v[0-7].16b}}, [[VA]]
 ; CHECK: aese [[VB:v[0-7].16b]], {{v[0-7].16b}}
 ; CHECK-NEXT: aesmc {{v[0-7].16b}}, [[VB]]
+; CHECK-NOT: aesmc
 }

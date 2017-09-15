@@ -20,6 +20,7 @@
 #include "llvm/DebugInfo/CodeView/EnumTables.h"
 #include "llvm/DebugInfo/CodeView/TypeDeserializer.h"
 #include "llvm/DebugInfo/CodeView/TypeTableBuilder.h"
+#include "llvm/Support/BinaryStreamWriter.h"
 
 using namespace llvm;
 using namespace llvm::codeview;
@@ -28,7 +29,6 @@ using namespace llvm::CodeViewYAML::detail;
 using namespace llvm::yaml;
 
 LLVM_YAML_IS_SEQUENCE_VECTOR(OneMethodRecord)
-LLVM_YAML_IS_SEQUENCE_VECTOR(StringRef)
 LLVM_YAML_IS_SEQUENCE_VECTOR(VFTableSlotKind)
 LLVM_YAML_IS_FLOW_SEQUENCE_VECTOR(TypeIndex)
 
@@ -66,7 +66,7 @@ struct LeafRecordBase {
 
   virtual ~LeafRecordBase() {}
   virtual void map(yaml::IO &io) = 0;
-  virtual CVType toCodeViewRecord(BumpPtrAllocator &Allocator) const = 0;
+  virtual CVType toCodeViewRecord(TypeTableBuilder &TTB) const = 0;
   virtual Error fromCodeViewRecord(CVType Type) = 0;
 };
 
@@ -80,10 +80,9 @@ template <typename T> struct LeafRecordImpl : public LeafRecordBase {
     return TypeDeserializer::deserializeAs<T>(Type, Record);
   }
 
-  CVType toCodeViewRecord(BumpPtrAllocator &Allocator) const override {
-    TypeTableBuilder Table(Allocator);
-    Table.writeKnownType(Record);
-    return CVType(Kind, Table.records().front());
+  CVType toCodeViewRecord(TypeTableBuilder &TTB) const override {
+    TTB.writeKnownType(Record);
+    return CVType(Kind, TTB.records().back());
   }
 
   mutable T Record;
@@ -93,7 +92,7 @@ template <> struct LeafRecordImpl<FieldListRecord> : public LeafRecordBase {
   explicit LeafRecordImpl(TypeLeafKind K) : LeafRecordBase(K) {}
 
   void map(yaml::IO &io) override;
-  CVType toCodeViewRecord(BumpPtrAllocator &Allocator) const override;
+  CVType toCodeViewRecord(TypeTableBuilder &TTB) const override;
   Error fromCodeViewRecord(CVType Type) override;
 
   std::vector<MemberRecord> Members;
@@ -138,7 +137,7 @@ StringRef ScalarTraits<TypeIndex>::input(StringRef Scalar, void *Ctx,
 
 void ScalarTraits<APSInt>::output(const APSInt &S, void *,
                                   llvm::raw_ostream &OS) {
-  S.print(OS, true);
+  S.print(OS, S.isSigned());
 }
 
 StringRef ScalarTraits<APSInt>::input(StringRef Scalar, void *Ctx, APSInt &S) {
@@ -440,16 +439,15 @@ Error LeafRecordImpl<FieldListRecord>::fromCodeViewRecord(CVType Type) {
   return visitMemberRecordStream(Type.content(), V);
 }
 
-CVType LeafRecordImpl<FieldListRecord>::toCodeViewRecord(
-    BumpPtrAllocator &Allocator) const {
-  TypeTableBuilder TTB(Allocator);
+CVType
+LeafRecordImpl<FieldListRecord>::toCodeViewRecord(TypeTableBuilder &TTB) const {
   FieldListRecordBuilder FLRB(TTB);
   FLRB.begin();
   for (const auto &Member : Members) {
     Member.Member->writeTo(FLRB);
   }
   FLRB.end(true);
-  return CVType(Kind, TTB.records().front());
+  return CVType(Kind, TTB.records().back());
 }
 
 void MappingTraits<OneMethodRecord>::mapping(IO &io, OneMethodRecord &Record) {
@@ -634,8 +632,13 @@ Expected<LeafRecord> LeafRecord::fromCodeViewRecord(CVType Type) {
   return make_error<CodeViewError>(cv_error_code::corrupt_record);
 }
 
-CVType LeafRecord::toCodeViewRecord(BumpPtrAllocator &Allocator) const {
-  return Leaf->toCodeViewRecord(Allocator);
+CVType LeafRecord::toCodeViewRecord(BumpPtrAllocator &Alloc) const {
+  TypeTableBuilder TTB(Alloc);
+  return Leaf->toCodeViewRecord(TTB);
+}
+
+CVType LeafRecord::toCodeViewRecord(TypeTableBuilder &TTB) const {
+  return Leaf->toCodeViewRecord(TTB);
 }
 
 namespace llvm {
@@ -709,4 +712,44 @@ void MappingTraits<MemberRecord>::mapping(IO &IO, MemberRecord &Obj) {
 #include "llvm/DebugInfo/CodeView/CodeViewTypes.def"
   default: { llvm_unreachable("Unknown member kind!"); }
   }
+}
+
+std::vector<LeafRecord>
+llvm::CodeViewYAML::fromDebugT(ArrayRef<uint8_t> DebugT) {
+  ExitOnError Err("Invalid .debug$T section!");
+  BinaryStreamReader Reader(DebugT, support::little);
+  CVTypeArray Types;
+  uint32_t Magic;
+
+  Err(Reader.readInteger(Magic));
+  assert(Magic == COFF::DEBUG_SECTION_MAGIC && "Invalid .debug$T section!");
+
+  std::vector<LeafRecord> Result;
+  Err(Reader.readArray(Types, Reader.bytesRemaining()));
+  for (const auto &T : Types) {
+    auto CVT = Err(LeafRecord::fromCodeViewRecord(T));
+    Result.push_back(CVT);
+  }
+  return Result;
+}
+
+ArrayRef<uint8_t> llvm::CodeViewYAML::toDebugT(ArrayRef<LeafRecord> Leafs,
+                                               BumpPtrAllocator &Alloc) {
+  TypeTableBuilder TTB(Alloc, false);
+  uint32_t Size = sizeof(uint32_t);
+  for (const auto &Leaf : Leafs) {
+    CVType T = Leaf.toCodeViewRecord(TTB);
+    Size += T.length();
+    assert(T.length() % 4 == 0 && "Improper type record alignment!");
+  }
+  uint8_t *ResultBuffer = Alloc.Allocate<uint8_t>(Size);
+  MutableArrayRef<uint8_t> Output(ResultBuffer, Size);
+  BinaryStreamWriter Writer(Output, support::little);
+  ExitOnError Err("Error writing type record to .debug$T section");
+  Err(Writer.writeInteger<uint32_t>(COFF::DEBUG_SECTION_MAGIC));
+  for (const auto &R : TTB.records()) {
+    Err(Writer.writeBytes(R));
+  }
+  assert(Writer.bytesRemaining() == 0 && "Didn't write all type record bytes!");
+  return Output;
 }

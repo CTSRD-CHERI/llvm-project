@@ -160,11 +160,20 @@ static cl::opt<bool>
               cl::Hidden, cl::ZeroOrMore,
               cl::desc("Run NewGVN instead of GVN"));
 
+static cl::opt<bool> EnableEarlyCSEMemSSA(
+    "enable-npm-earlycse-memssa", cl::init(true), cl::Hidden,
+    cl::desc("Enable the EarlyCSE w/ MemorySSA pass for the new PM (default = on)"));
+
 static cl::opt<bool> EnableGVNHoist(
     "enable-npm-gvn-hoist", cl::init(false), cl::Hidden,
     cl::desc("Enable the GVN hoisting pass for the new PM (default = off)"));
 
-static Regex DefaultAliasRegex("^(default|lto-pre-link|lto)<(O[0123sz])>$");
+static cl::opt<bool> EnableGVNSink(
+    "enable-npm-gvn-sink", cl::init(false), cl::Hidden,
+    cl::desc("Enable the GVN hoisting pass for the new PM (default = off)"));
+
+static Regex DefaultAliasRegex(
+    "^(default|thinlto-pre-link|thinlto|lto-pre-link|lto)<(O[0123sz])>$");
 
 static bool isOptimizingForSize(PassBuilder::OptimizationLevel Level) {
   switch (Level) {
@@ -307,7 +316,17 @@ PassBuilder::buildFunctionSimplificationPipeline(OptimizationLevel Level,
   FPM.addPass(SROA());
 
   // Catch trivial redundancies
-  FPM.addPass(EarlyCSEPass());
+  FPM.addPass(EarlyCSEPass(EnableEarlyCSEMemSSA));
+
+  // Hoisting of scalars and load expressions.
+  if (EnableGVNHoist)
+    FPM.addPass(GVNHoistPass());
+
+  // Global value numbering based sinking.
+  if (EnableGVNSink) {
+    FPM.addPass(GVNSinkPass());
+    FPM.addPass(SimplifyCFGPass());
+  }
 
   // Speculative execution if the target has divergent branches; otherwise nop.
   FPM.addPass(SpeculativeExecutionPass());
@@ -345,6 +364,9 @@ PassBuilder::buildFunctionSimplificationPipeline(OptimizationLevel Level,
   LPM2.addPass(IndVarSimplifyPass());
   LPM2.addPass(LoopIdiomRecognizePass());
   LPM2.addPass(LoopDeletionPass());
+  // FIXME: The old pass manager has a hack to disable loop unrolling during
+  // ThinLTO when using sample PGO. Need to either fix it or port some
+  // workaround.
   LPM2.addPass(LoopUnrollPass::createFull(Level));
 
   // We provide the opt remark emitter pass for LICM to use. We only need to do
@@ -442,10 +464,15 @@ static void addPGOInstrPasses(ModulePassManager &MPM, bool DebugLogging,
   if (RunProfileGen) {
     MPM.addPass(PGOInstrumentationGen());
 
+    FunctionPassManager FPM;
+    FPM.addPass(createFunctionToLoopPassAdaptor(LoopRotatePass()));
+    MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
+
     // Add the profile lowering pass.
     InstrProfOptions Options;
     if (!ProfileGenFile.empty())
       Options.InstrProfileOutput = ProfileGenFile;
+    Options.DoCounterPromotion = true;
     MPM.addPass(InstrProfiling(Options));
   }
 
@@ -453,14 +480,18 @@ static void addPGOInstrPasses(ModulePassManager &MPM, bool DebugLogging,
     MPM.addPass(PGOInstrumentationUse(ProfileUseFile));
 }
 
-ModulePassManager
-PassBuilder::buildPerModuleDefaultPipeline(OptimizationLevel Level,
-                                           bool DebugLogging) {
-  assert(Level != O0 && "Must request optimizations for the default pipeline!");
-  ModulePassManager MPM(DebugLogging);
+static InlineParams
+getInlineParamsFromOptLevel(PassBuilder::OptimizationLevel Level) {
+  auto O3 = PassBuilder::O3;
+  unsigned OptLevel = Level > O3 ? 2 : Level;
+  unsigned SizeLevel = Level > O3 ? Level - O3 : 0;
+  return getInlineParams(OptLevel, SizeLevel);
+}
 
-  // Force any function attributes we want the rest of the pipeline te observe.
-  MPM.addPass(ForceFunctionAttrsPass());
+ModulePassManager
+PassBuilder::buildModuleSimplificationPipeline(OptimizationLevel Level,
+                                               bool DebugLogging) {
+  ModulePassManager MPM(DebugLogging);
 
   // Do basic inference of function attributes from known properties of system
   // libraries and other oracles.
@@ -473,8 +504,6 @@ PassBuilder::buildPerModuleDefaultPipeline(OptimizationLevel Level,
   EarlyFPM.addPass(SROA());
   EarlyFPM.addPass(EarlyCSEPass());
   EarlyFPM.addPass(LowerExpectIntrinsicPass());
-  if (EnableGVNHoist)
-    EarlyFPM.addPass(GVNHoistPass());
   MPM.addPass(createModuleToFunctionPassAdaptor(std::move(EarlyFPM)));
 
   // Interprocedural constant propagation now that basic cleanup has occured
@@ -504,16 +533,20 @@ PassBuilder::buildPerModuleDefaultPipeline(OptimizationLevel Level,
   GlobalCleanupPM.addPass(SimplifyCFGPass());
   MPM.addPass(createModuleToFunctionPassAdaptor(std::move(GlobalCleanupPM)));
 
-  // Add all the requested passes for PGO Instrumentation, if requested.
+  // Add all the requested passes for PGO, if requested.
   if (PGOOpt) {
-    assert(PGOOpt->RunProfileGen || PGOOpt->SamplePGO ||
+    assert(PGOOpt->RunProfileGen || !PGOOpt->SampleProfileFile.empty() ||
            !PGOOpt->ProfileUseFile.empty());
-    addPGOInstrPasses(MPM, DebugLogging, Level, PGOOpt->RunProfileGen,
-                      PGOOpt->ProfileGenFile, PGOOpt->ProfileUseFile);
-  }
+    if (PGOOpt->SampleProfileFile.empty())
+      addPGOInstrPasses(MPM, DebugLogging, Level, PGOOpt->RunProfileGen,
+                        PGOOpt->ProfileGenFile, PGOOpt->ProfileUseFile);
+    else
+      MPM.addPass(SampleProfileLoaderPass(PGOOpt->SampleProfileFile));
 
-  // Indirect call promotion that promotes intra-module targes only.
-  MPM.addPass(PGOIndirectCallPromotion(false, PGOOpt && PGOOpt->SamplePGO));
+    // Indirect call promotion that promotes intra-module targes only.
+    MPM.addPass(PGOIndirectCallPromotion(
+        false, PGOOpt && !PGOOpt->SampleProfileFile.empty()));
+  }
 
   // Require the GlobalsAA analysis for the module so we can query it within
   // the CGSCC pipeline.
@@ -537,8 +570,7 @@ PassBuilder::buildPerModuleDefaultPipeline(OptimizationLevel Level,
   // Run the inliner first. The theory is that we are walking bottom-up and so
   // the callees have already been fully optimized, and we want to inline them
   // into the callers so that our optimizations can reflect that.
-  // FIXME; Customize the threshold based on optimization level.
-  MainCGPipeline.addPass(InlinerPass());
+  MainCGPipeline.addPass(InlinerPass(getInlineParamsFromOptLevel(Level)));
 
   // Now deduce any function attributes based in the current code.
   MainCGPipeline.addPass(PostOrderFunctionAttrsPass());
@@ -562,17 +594,30 @@ PassBuilder::buildPerModuleDefaultPipeline(OptimizationLevel Level,
       createModuleToPostOrderCGSCCPassAdaptor(createDevirtSCCRepeatedPass(
           std::move(MainCGPipeline), MaxDevirtIterations, DebugLogging)));
 
-  // This ends the canonicalization and simplification phase of the pipeline.
-  // At this point, we expect to have canonical and simple IR which we begin
-  // *optimizing* for efficient execution going forward.
+  return MPM;
+}
+
+ModulePassManager
+PassBuilder::buildModuleOptimizationPipeline(OptimizationLevel Level,
+                                             bool DebugLogging) {
+  ModulePassManager MPM(DebugLogging);
+
+  // Optimize globals now that the module is fully simplified.
+  MPM.addPass(GlobalOptPass());
 
   // Run partial inlining pass to partially inline functions that have
   // large bodies.
   if (RunPartialInlining)
     MPM.addPass(PartialInlinerPass());
 
-  // Eliminate externally available functions now that inlining is over -- we
-  // won't emit these anyways.
+  // Remove avail extern fns and globals definitions since we aren't compiling
+  // an object file for later LTO. For LTO we want to preserve these so they
+  // are eligible for inlining at link-time. Note if they are unreferenced they
+  // will be removed by GlobalDCE later, so this only impacts referenced
+  // available externally globals. Eventually they will be suppressed during
+  // codegen, but eliminating here enables more opportunity for GlobalDCE as it
+  // may make globals referenced by available external functions dead and saves
+  // running remaining passes on the eliminated functions.
   MPM.addPass(EliminateAvailableExternallyPass());
 
   // Do RPO function attribute inference across the module to forward-propagate
@@ -671,6 +716,84 @@ PassBuilder::buildPerModuleDefaultPipeline(OptimizationLevel Level,
 }
 
 ModulePassManager
+PassBuilder::buildPerModuleDefaultPipeline(OptimizationLevel Level,
+                                           bool DebugLogging) {
+  assert(Level != O0 && "Must request optimizations for the default pipeline!");
+
+  ModulePassManager MPM(DebugLogging);
+
+  // Force any function attributes we want the rest of the pipeline to observe.
+  MPM.addPass(ForceFunctionAttrsPass());
+
+  // Add the core simplification pipeline.
+  MPM.addPass(buildModuleSimplificationPipeline(Level, DebugLogging));
+
+  // Now add the optimization pipeline.
+  MPM.addPass(buildModuleOptimizationPipeline(Level, DebugLogging));
+
+  return MPM;
+}
+
+ModulePassManager
+PassBuilder::buildThinLTOPreLinkDefaultPipeline(OptimizationLevel Level,
+                                                bool DebugLogging) {
+  assert(Level != O0 && "Must request optimizations for the default pipeline!");
+
+  ModulePassManager MPM(DebugLogging);
+
+  // Force any function attributes we want the rest of the pipeline to observe.
+  MPM.addPass(ForceFunctionAttrsPass());
+
+  // If we are planning to perform ThinLTO later, we don't bloat the code with
+  // unrolling/vectorization/... now. Just simplify the module as much as we
+  // can.
+  MPM.addPass(buildModuleSimplificationPipeline(Level, DebugLogging));
+
+  // Run partial inlining pass to partially inline functions that have
+  // large bodies.
+  // FIXME: It isn't clear whether this is really the right place to run this
+  // in ThinLTO. Because there is another canonicalization and simplification
+  // phase that will run after the thin link, running this here ends up with
+  // less information than will be available later and it may grow functions in
+  // ways that aren't beneficial.
+  if (RunPartialInlining)
+    MPM.addPass(PartialInlinerPass());
+
+  // Reduce the size of the IR as much as possible.
+  MPM.addPass(GlobalOptPass());
+
+  return MPM;
+}
+
+ModulePassManager
+PassBuilder::buildThinLTODefaultPipeline(OptimizationLevel Level,
+                                         bool DebugLogging) {
+  // FIXME: The summary index is not hooked in the new pass manager yet.
+  // When it's going to be hooked, enable WholeProgramDevirt and LowerTypeTest
+  // here.
+
+  ModulePassManager MPM(DebugLogging);
+
+  // Force any function attributes we want the rest of the pipeline to observe.
+  MPM.addPass(ForceFunctionAttrsPass());
+
+  // During the ThinLTO backend phase we perform early indirect call promotion
+  // here, before globalopt. Otherwise imported available_externally functions
+  // look unreferenced and are removed.
+  MPM.addPass(PGOIndirectCallPromotion(
+      true /* InLTO */, PGOOpt && !PGOOpt->SampleProfileFile.empty() &&
+                            !PGOOpt->ProfileUseFile.empty()));
+
+  // Add the core simplification pipeline.
+  MPM.addPass(buildModuleSimplificationPipeline(Level, DebugLogging));
+
+  // Now add the optimization pipeline.
+  MPM.addPass(buildModuleOptimizationPipeline(Level, DebugLogging));
+
+  return MPM;
+}
+
+ModulePassManager
 PassBuilder::buildLTOPreLinkDefaultPipeline(OptimizationLevel Level,
                                             bool DebugLogging) {
   assert(Level != O0 && "Must request optimizations for the default pipeline!");
@@ -699,8 +822,8 @@ ModulePassManager PassBuilder::buildLTODefaultPipeline(OptimizationLevel Level,
     // left by the earlier promotion pass that promotes intra-module targets.
     // This two-step promotion is to save the compile time. For LTO, it should
     // produce the same result as if we only do promotion here.
-    MPM.addPass(PGOIndirectCallPromotion(true /* InLTO */,
-                                         PGOOpt && PGOOpt->SamplePGO));
+    MPM.addPass(PGOIndirectCallPromotion(
+        true /* InLTO */, PGOOpt && !PGOOpt->SampleProfileFile.empty()));
 
     // Propagate constants at call sites into the functions they call.  This
     // opens opportunities for globalopt (and inlining) by substituting function
@@ -753,7 +876,8 @@ ModulePassManager PassBuilder::buildLTODefaultPipeline(OptimizationLevel Level,
   // valuable as the inliner doesn't currently care whether it is inlining an
   // invoke or a call.
   // Run the inliner now.
-  MPM.addPass(createModuleToPostOrderCGSCCPassAdaptor(InlinerPass()));
+  MPM.addPass(createModuleToPostOrderCGSCCPassAdaptor(
+      InlinerPass(getInlineParamsFromOptLevel(Level))));
 
   // Optimize globals again after we ran the inliner.
   MPM.addPass(GlobalOptPass());
@@ -812,9 +936,6 @@ ModulePassManager PassBuilder::buildLTODefaultPipeline(OptimizationLevel Level,
 #if 0
   MainFPM.add(AlignmentFromAssumptionsPass());
 #endif
-
-  // FIXME: Conditionally run LoadCombine here, after it's ported
-  // (in case we still have this pass, given its questionable usefulness).
 
   // FIXME: add peephole extensions to the PM here.
   MainFPM.addPass(InstCombinePass());
@@ -893,9 +1014,16 @@ static Optional<int> parseDevirtPassName(StringRef Name) {
   return Count;
 }
 
+/// Tests whether a pass name starts with a valid prefix for a default pipeline
+/// alias.
+static bool startsWithDefaultPipelineAliasPrefix(StringRef Name) {
+  return Name.startswith("default") || Name.startswith("thinlto") ||
+         Name.startswith("lto");
+}
+
 static bool isModulePassName(StringRef Name) {
   // Manually handle aliases for pre-configured pipeline fragments.
-  if (Name.startswith("default") || Name.startswith("lto"))
+  if (startsWithDefaultPipelineAliasPrefix(Name))
     return DefaultAliasRegex.match(Name);
 
   // Explicitly handle pass manager names.
@@ -1090,7 +1218,7 @@ bool PassBuilder::parseModulePass(ModulePassManager &MPM,
   }
 
   // Manually handle aliases for pre-configured pipeline fragments.
-  if (Name.startswith("default") || Name.startswith("lto")) {
+  if (startsWithDefaultPipelineAliasPrefix(Name)) {
     SmallVector<StringRef, 3> Matches;
     if (!DefaultAliasRegex.match(Name, &Matches))
       return false;
@@ -1109,6 +1237,10 @@ bool PassBuilder::parseModulePass(ModulePassManager &MPM,
 
     if (Matches[1] == "default") {
       MPM.addPass(buildPerModuleDefaultPipeline(L, DebugLogging));
+    } else if (Matches[1] == "thinlto-pre-link") {
+      MPM.addPass(buildThinLTOPreLinkDefaultPipeline(L, DebugLogging));
+    } else if (Matches[1] == "thinlto") {
+      MPM.addPass(buildThinLTODefaultPipeline(L, DebugLogging));
     } else if (Matches[1] == "lto-pre-link") {
       MPM.addPass(buildLTOPreLinkDefaultPipeline(L, DebugLogging));
     } else {

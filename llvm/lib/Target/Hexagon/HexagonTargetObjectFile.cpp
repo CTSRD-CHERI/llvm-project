@@ -17,6 +17,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
+#include "llvm/BinaryFormat/ELF.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/GlobalObject.h"
@@ -28,7 +29,6 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Support/ELF.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
 
@@ -48,6 +48,10 @@ static cl::opt<bool> StaticsInSData("hexagon-statics-in-small-data",
 static cl::opt<bool> TraceGVPlacement("trace-gv-placement",
   cl::Hidden, cl::init(false),
   cl::desc("Trace global value placement"));
+
+static cl::opt<bool>
+    EmitJtInText("hexagon-emit-jt-text", cl::Hidden, cl::init(false),
+                 cl::desc("Emit hexagon jump tables in function section"));
 
 // TraceGVPlacement controls messages for all builds. For builds with assertions
 // (debug or release), messages are also controlled by the usual debug flags
@@ -254,6 +258,11 @@ bool HexagonTargetObjectFile::isSmallDataEnabled() const {
 
 unsigned HexagonTargetObjectFile::getSmallDataSize() const {
   return SmallDataThreshold;
+}
+
+bool HexagonTargetObjectFile::shouldPutJumpTableInFunctionSection(
+    bool UsesLabelDifference, const Function &F) const {
+  return EmitJtInText;
 }
 
 /// Descends any type down to "elementary" components,

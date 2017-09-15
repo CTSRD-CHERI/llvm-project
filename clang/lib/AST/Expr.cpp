@@ -1570,14 +1570,6 @@ bool CastExpr::CastConsistency() const {
     assert(getSubExpr()->getType()->isFunctionType());
     goto CheckNoBasePath;
 
-  case CK_AddressSpaceConversion:
-    assert(getType()->isPointerType() || getType()->isBlockPointerType());
-    assert(getSubExpr()->getType()->isPointerType() ||
-           getSubExpr()->getType()->isBlockPointerType());
-    assert(getType()->getPointeeType().getAddressSpace() !=
-           getSubExpr()->getType()->getPointeeType().getAddressSpace());
-    goto CheckNoBasePath;
-
   case CK_CHERICapabilityToPointer:
     assert(getType()->isPointerType());
     assert(!getType()->getAs<PointerType>()->isCHERICapability());
@@ -1592,6 +1584,13 @@ bool CastExpr::CastConsistency() const {
     assert(!getSubExpr()->getType()->getAs<PointerType>()->isCHERICapability());
     goto CheckNoBasePath;
 
+  case CK_AddressSpaceConversion:
+    assert(getType()->isPointerType() || getType()->isBlockPointerType());
+    assert(getSubExpr()->getType()->isPointerType() ||
+           getSubExpr()->getType()->isBlockPointerType());
+    assert(getType()->getPointeeType().getAddressSpace() !=
+           getSubExpr()->getType()->getPointeeType().getAddressSpace());
+    LLVM_FALLTHROUGH;
   // These should not have an inheritance path.
   case CK_Dynamic:
   case CK_ToUnion:
@@ -1656,25 +1655,32 @@ const char *CastExpr::getCastKindName() const {
   llvm_unreachable("Unhandled cast kind!");
 }
 
+namespace {
+  Expr *skipImplicitTemporary(Expr *expr) {
+    // Skip through reference binding to temporary.
+    if (MaterializeTemporaryExpr *Materialize
+                                  = dyn_cast<MaterializeTemporaryExpr>(expr))
+      expr = Materialize->GetTemporaryExpr();
+
+    // Skip any temporary bindings; they're implicit.
+    if (CXXBindTemporaryExpr *Binder = dyn_cast<CXXBindTemporaryExpr>(expr))
+      expr = Binder->getSubExpr();
+
+    return expr;
+  }
+}
+
 Expr *CastExpr::getSubExprAsWritten() {
   Expr *SubExpr = nullptr;
   CastExpr *E = this;
   do {
-    SubExpr = E->getSubExpr();
+    SubExpr = skipImplicitTemporary(E->getSubExpr());
 
-    // Skip through reference binding to temporary.
-    if (MaterializeTemporaryExpr *Materialize 
-                                  = dyn_cast<MaterializeTemporaryExpr>(SubExpr))
-      SubExpr = Materialize->GetTemporaryExpr();
-        
-    // Skip any temporary bindings; they're implicit.
-    if (CXXBindTemporaryExpr *Binder = dyn_cast<CXXBindTemporaryExpr>(SubExpr))
-      SubExpr = Binder->getSubExpr();
-    
     // Conversions by constructor and conversion functions have a
     // subexpression describing the call; strip it off.
     if (E->getCastKind() == CK_ConstructorConversion)
-      SubExpr = cast<CXXConstructExpr>(SubExpr)->getArg(0);
+      SubExpr =
+        skipImplicitTemporary(cast<CXXConstructExpr>(SubExpr)->getArg(0));
     else if (E->getCastKind() == CK_UserDefinedConversion) {
       assert((isa<CXXMemberCallExpr>(SubExpr) ||
               isa<BlockExpr>(SubExpr)) &&
@@ -2118,6 +2124,7 @@ bool Expr::isUnusedResultAWarning(const Expr *&WarnE, SourceLocation &Loc,
     }
 
     // Fallthrough for generic call handling.
+    LLVM_FALLTHROUGH;
   }
   case CallExprClass:
   case CXXMemberCallExprClass:
