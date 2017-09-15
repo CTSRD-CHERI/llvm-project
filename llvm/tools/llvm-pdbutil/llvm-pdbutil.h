@@ -143,7 +143,10 @@ extern llvm::cl::opt<bool> DumpIdExtras;
 extern llvm::cl::list<uint32_t> DumpIdIndex;
 extern llvm::cl::opt<bool> DumpSymbols;
 extern llvm::cl::opt<bool> DumpSymRecordBytes;
+extern llvm::cl::opt<bool> DumpGlobals;
+extern llvm::cl::opt<bool> DumpGlobalExtras;
 extern llvm::cl::opt<bool> DumpPublics;
+extern llvm::cl::opt<bool> DumpPublicExtras;
 extern llvm::cl::opt<bool> DumpSectionContribs;
 extern llvm::cl::opt<bool> DumpSectionMap;
 extern llvm::cl::opt<bool> DumpModules;
@@ -168,6 +171,13 @@ extern llvm::cl::opt<bool> DumpModuleFiles;
 extern llvm::cl::list<ModuleSubsection> DumpModuleSubsections;
 extern llvm::cl::opt<bool> DumpModuleSyms;
 } // namespace pdb2yaml
+
+namespace diff {
+extern llvm::cl::opt<bool> PrintValueColumns;
+extern llvm::cl::opt<bool> PrintResultColumn;
+extern llvm::cl::opt<std::string> LeftRoot;
+extern llvm::cl::opt<std::string> RightRoot;
+} // namespace diff
 }
 
 #endif

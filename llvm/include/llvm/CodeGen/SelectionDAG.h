@@ -930,7 +930,7 @@ public:
                            SDValue Cmp, SDValue Swp, MachinePointerInfo PtrInfo,
                            unsigned Alignment, AtomicOrdering SuccessOrdering,
                            AtomicOrdering FailureOrdering,
-                           SynchronizationScope SynchScope);
+                           SyncScope::ID SSID);
   SDValue getAtomicCmpSwap(unsigned Opcode, const SDLoc &dl, EVT MemVT,
                            SDVTList VTs, SDValue Chain, SDValue Ptr,
                            SDValue Cmp, SDValue Swp, MachineMemOperand *MMO);
@@ -940,7 +940,7 @@ public:
   SDValue getAtomic(unsigned Opcode, const SDLoc &dl, EVT MemVT, SDValue Chain,
                     SDValue Ptr, SDValue Val, const Value *PtrVal,
                     unsigned Alignment, AtomicOrdering Ordering,
-                    SynchronizationScope SynchScope);
+                    SyncScope::ID SSID);
   SDValue getAtomic(unsigned Opcode, const SDLoc &dl, EVT MemVT, SDValue Chain,
                     SDValue Ptr, SDValue Val, MachineMemOperand *MMO);
 
@@ -1171,17 +1171,15 @@ public:
 
   /// Creates a SDDbgValue node.
   SDDbgValue *getDbgValue(MDNode *Var, MDNode *Expr, SDNode *N, unsigned R,
-                          bool IsIndirect, uint64_t Off, const DebugLoc &DL,
-                          unsigned O);
+                          bool IsIndirect, const DebugLoc &DL, unsigned O);
 
   /// Constant
   SDDbgValue *getConstantDbgValue(MDNode *Var, MDNode *Expr, const Value *C,
-                                  uint64_t Off, const DebugLoc &DL, unsigned O);
+                                  const DebugLoc &DL, unsigned O);
 
   /// FrameIndex
   SDDbgValue *getFrameIndexDbgValue(MDNode *Var, MDNode *Expr, unsigned FI,
-                                    uint64_t Off, const DebugLoc &DL,
-                                    unsigned O);
+                                    const DebugLoc &DL, unsigned O);
 
   /// Remove the specified node from the system. If any of its
   /// operands then becomes dead, remove them as well. Inform UpdateListener
@@ -1310,6 +1308,14 @@ public:
   /// Constant fold a setcc to true or false.
   SDValue FoldSetCC(EVT VT, SDValue N1, SDValue N2, ISD::CondCode Cond,
                     const SDLoc &dl);
+
+  /// See if the specified operand can be simplified with the knowledge that only
+  /// the bits specified by Mask are used.  If so, return the simpler operand,
+  /// otherwise return a null SDValue.
+  ///
+  /// (This exists alongside SimplifyDemandedBits because GetDemandedBits can
+  /// simplify nodes with multiple uses more aggressively.)
+  SDValue GetDemandedBits(SDValue V, const APInt &Mask);
 
   /// Return true if the sign bit of Op is known to be zero.
   /// We use this predicate to simplify operations downstream.

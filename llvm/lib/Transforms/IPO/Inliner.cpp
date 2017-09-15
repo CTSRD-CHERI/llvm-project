@@ -909,7 +909,7 @@ PreservedAnalyses InlinerPass::run(LazyCallGraph::SCC &InitialC,
         // To check this we also need to nuke any dead constant uses (perhaps
         // made dead by this operation on other functions).
         Callee.removeDeadConstantUsers();
-        if (Callee.use_empty()) {
+        if (Callee.use_empty() && !CG.isLibFunction(Callee)) {
           Calls.erase(
               std::remove_if(Calls.begin() + i + 1, Calls.end(),
                              [&Callee](const std::pair<CallSite, int> &Call) {
@@ -989,5 +989,13 @@ PreservedAnalyses InlinerPass::run(LazyCallGraph::SCC &InitialC,
     // And delete the actual function from the module.
     M.getFunctionList().erase(DeadF);
   }
-  return Changed ? PreservedAnalyses::none() : PreservedAnalyses::all();
+
+  if (!Changed)
+    return PreservedAnalyses::all();
+
+  // Even if we change the IR, we update the core CGSCC data structures and so
+  // can preserve the proxy to the function analysis manager.
+  PreservedAnalyses PA;
+  PA.preserve<FunctionAnalysisManagerCGSCCProxy>();
+  return PA;
 }

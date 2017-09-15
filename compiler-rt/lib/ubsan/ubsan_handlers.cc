@@ -437,6 +437,30 @@ void __ubsan::__ubsan_handle_load_invalid_value_abort(InvalidValueData *Data,
   Die();
 }
 
+static void handleInvalidBuiltin(InvalidBuiltinData *Data, ReportOptions Opts) {
+  SourceLocation Loc = Data->Loc.acquire();
+  ErrorType ET = ErrorType::InvalidBuiltin;
+
+  if (ignoreReport(Loc, Opts, ET))
+    return;
+
+  ScopedReport R(Opts, Loc, ET);
+
+  Diag(Loc, DL_Error,
+       "passing zero to %0, which is not a valid argument")
+    << ((Data->Kind == BCK_CTZPassedZero) ? "ctz()" : "clz()");
+}
+
+void __ubsan::__ubsan_handle_invalid_builtin(InvalidBuiltinData *Data) {
+  GET_REPORT_OPTIONS(true);
+  handleInvalidBuiltin(Data, Opts);
+}
+void __ubsan::__ubsan_handle_invalid_builtin_abort(InvalidBuiltinData *Data) {
+  GET_REPORT_OPTIONS(true);
+  handleInvalidBuiltin(Data, Opts);
+  Die();
+}
+
 static void handleFunctionTypeMismatch(FunctionTypeMismatchData *Data,
                                        ValueHandle Function,
                                        ReportOptions Opts) {
@@ -573,14 +597,19 @@ static void handlePointerOverflowImpl(PointerOverflowData *Data,
 
   ScopedReport R(Opts, Loc, ET);
 
-  if ((sptr(Base) >= 0) == (sptr(Result) >= 0))
-    Diag(Loc, DL_Error, "unsigned pointer index expression result is %0, "
-                        "preceding its base %1")
-        << (void *)Result << (void *)Base;
-  else
+  if ((sptr(Base) >= 0) == (sptr(Result) >= 0)) {
+    if (Base > Result)
+      Diag(Loc, DL_Error, "addition of unsigned offset to %0 overflowed to %1")
+          << (void *)Base << (void *)Result;
+    else
+      Diag(Loc, DL_Error,
+           "subtraction of unsigned offset from %0 overflowed to %1")
+          << (void *)Base << (void *)Result;
+  } else {
     Diag(Loc, DL_Error,
          "pointer index expression with base %0 overflowed to %1")
         << (void *)Base << (void *)Result;
+  }
 }
 
 void __ubsan::__ubsan_handle_pointer_overflow(PointerOverflowData *Data,

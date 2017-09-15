@@ -24,6 +24,7 @@ SRCS="
 	../../sanitizer_common/sanitizer_common.cc
 	../../sanitizer_common/sanitizer_common_libcdep.cc
 	../../sanitizer_common/sanitizer_deadlock_detector2.cc
+	../../sanitizer_common/sanitizer_file.cc
 	../../sanitizer_common/sanitizer_flag_parser.cc
 	../../sanitizer_common/sanitizer_flags.cc
 	../../sanitizer_common/sanitizer_libc.cc
@@ -69,7 +70,7 @@ elif [ "`uname -a | grep FreeBSD`" != "" ]; then
 	"
 elif [ "`uname -a | grep Darwin`" != "" ]; then
 	SUFFIX="darwin_amd64"
-	OSCFLAGS="-fPIC -Wno-unused-const-variable -Wno-unknown-warning-option -mmacosx-version-min=10.7"
+	OSCFLAGS="-fPIC -Wno-unused-const-variable -Wno-unknown-warning-option -isysroot $(xcodebuild -version -sdk macosx Path) -mmacosx-version-min=10.7"
 	OSLDFLAGS="-lpthread -fPIC -fpie -mmacosx-version-min=10.7"
 	SRCS="
 		$SRCS

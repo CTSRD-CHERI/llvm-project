@@ -745,7 +745,7 @@ define <4 x i32> @testv4i32u(<4 x i32> %in) nounwind {
 ; AVX512CDVL-NEXT:    vpsubd %xmm0, %xmm1, %xmm1
 ; AVX512CDVL-NEXT:    vpand %xmm1, %xmm0, %xmm0
 ; AVX512CDVL-NEXT:    vplzcntd %xmm0, %xmm0
-; AVX512CDVL-NEXT:    vpbroadcastd {{.*}}(%rip), %xmm1
+; AVX512CDVL-NEXT:    vpbroadcastd {{.*#+}} xmm1 = [31,31,31,31]
 ; AVX512CDVL-NEXT:    vpsubd %xmm0, %xmm1, %xmm0
 ; AVX512CDVL-NEXT:    retq
 ;
@@ -755,7 +755,7 @@ define <4 x i32> @testv4i32u(<4 x i32> %in) nounwind {
 ; AVX512CD-NEXT:    vpsubd %xmm0, %xmm1, %xmm1
 ; AVX512CD-NEXT:    vpand %xmm1, %xmm0, %xmm0
 ; AVX512CD-NEXT:    vplzcntd %zmm0, %zmm0
-; AVX512CD-NEXT:    vpbroadcastd {{.*}}(%rip), %xmm1
+; AVX512CD-NEXT:    vpbroadcastd {{.*#+}} xmm1 = [31,31,31,31]
 ; AVX512CD-NEXT:    vpsubd %xmm0, %xmm1, %xmm0
 ; AVX512CD-NEXT:    vzeroupper
 ; AVX512CD-NEXT:    retq
@@ -928,17 +928,10 @@ define <8 x i16> @testv8i16(<8 x i16> %in) nounwind {
 ; AVX512VPOPCNTDQ-NEXT:    vpand %xmm1, %xmm0, %xmm0
 ; AVX512VPOPCNTDQ-NEXT:    vpcmpeqd %xmm1, %xmm1, %xmm1
 ; AVX512VPOPCNTDQ-NEXT:    vpaddw %xmm1, %xmm0, %xmm0
-; AVX512VPOPCNTDQ-NEXT:    vmovdqa {{.*#+}} xmm1 = [15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15]
-; AVX512VPOPCNTDQ-NEXT:    vpand %xmm1, %xmm0, %xmm2
-; AVX512VPOPCNTDQ-NEXT:    vmovdqa {{.*#+}} xmm3 = [0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4]
-; AVX512VPOPCNTDQ-NEXT:    vpshufb %xmm2, %xmm3, %xmm2
-; AVX512VPOPCNTDQ-NEXT:    vpsrlw $4, %xmm0, %xmm0
-; AVX512VPOPCNTDQ-NEXT:    vpand %xmm1, %xmm0, %xmm0
-; AVX512VPOPCNTDQ-NEXT:    vpshufb %xmm0, %xmm3, %xmm0
-; AVX512VPOPCNTDQ-NEXT:    vpaddb %xmm2, %xmm0, %xmm0
-; AVX512VPOPCNTDQ-NEXT:    vpsllw $8, %xmm0, %xmm1
-; AVX512VPOPCNTDQ-NEXT:    vpaddb %xmm0, %xmm1, %xmm0
-; AVX512VPOPCNTDQ-NEXT:    vpsrlw $8, %xmm0, %xmm0
+; AVX512VPOPCNTDQ-NEXT:    vpmovzxwq {{.*#+}} zmm0 = xmm0[0],zero,zero,zero,xmm0[1],zero,zero,zero,xmm0[2],zero,zero,zero,xmm0[3],zero,zero,zero,xmm0[4],zero,zero,zero,xmm0[5],zero,zero,zero,xmm0[6],zero,zero,zero,xmm0[7],zero,zero,zero
+; AVX512VPOPCNTDQ-NEXT:    vpopcntq %zmm0, %zmm0
+; AVX512VPOPCNTDQ-NEXT:    vpmovqw %zmm0, %xmm0
+; AVX512VPOPCNTDQ-NEXT:    vzeroupper
 ; AVX512VPOPCNTDQ-NEXT:    retq
 ;
 ; X32-SSE-LABEL: testv8i16:
@@ -1095,17 +1088,10 @@ define <8 x i16> @testv8i16u(<8 x i16> %in) nounwind {
 ; AVX512VPOPCNTDQ-NEXT:    vpand %xmm1, %xmm0, %xmm0
 ; AVX512VPOPCNTDQ-NEXT:    vpcmpeqd %xmm1, %xmm1, %xmm1
 ; AVX512VPOPCNTDQ-NEXT:    vpaddw %xmm1, %xmm0, %xmm0
-; AVX512VPOPCNTDQ-NEXT:    vmovdqa {{.*#+}} xmm1 = [15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15]
-; AVX512VPOPCNTDQ-NEXT:    vpand %xmm1, %xmm0, %xmm2
-; AVX512VPOPCNTDQ-NEXT:    vmovdqa {{.*#+}} xmm3 = [0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4]
-; AVX512VPOPCNTDQ-NEXT:    vpshufb %xmm2, %xmm3, %xmm2
-; AVX512VPOPCNTDQ-NEXT:    vpsrlw $4, %xmm0, %xmm0
-; AVX512VPOPCNTDQ-NEXT:    vpand %xmm1, %xmm0, %xmm0
-; AVX512VPOPCNTDQ-NEXT:    vpshufb %xmm0, %xmm3, %xmm0
-; AVX512VPOPCNTDQ-NEXT:    vpaddb %xmm2, %xmm0, %xmm0
-; AVX512VPOPCNTDQ-NEXT:    vpsllw $8, %xmm0, %xmm1
-; AVX512VPOPCNTDQ-NEXT:    vpaddb %xmm0, %xmm1, %xmm0
-; AVX512VPOPCNTDQ-NEXT:    vpsrlw $8, %xmm0, %xmm0
+; AVX512VPOPCNTDQ-NEXT:    vpmovzxwq {{.*#+}} zmm0 = xmm0[0],zero,zero,zero,xmm0[1],zero,zero,zero,xmm0[2],zero,zero,zero,xmm0[3],zero,zero,zero,xmm0[4],zero,zero,zero,xmm0[5],zero,zero,zero,xmm0[6],zero,zero,zero,xmm0[7],zero,zero,zero
+; AVX512VPOPCNTDQ-NEXT:    vpopcntq %zmm0, %zmm0
+; AVX512VPOPCNTDQ-NEXT:    vpmovqw %zmm0, %xmm0
+; AVX512VPOPCNTDQ-NEXT:    vzeroupper
 ; AVX512VPOPCNTDQ-NEXT:    retq
 ;
 ; X32-SSE-LABEL: testv8i16u:
@@ -1243,14 +1229,10 @@ define <16 x i8> @testv16i8(<16 x i8> %in) nounwind {
 ; AVX512VPOPCNTDQ-NEXT:    vpand %xmm1, %xmm0, %xmm0
 ; AVX512VPOPCNTDQ-NEXT:    vpcmpeqd %xmm1, %xmm1, %xmm1
 ; AVX512VPOPCNTDQ-NEXT:    vpaddb %xmm1, %xmm0, %xmm0
-; AVX512VPOPCNTDQ-NEXT:    vmovdqa {{.*#+}} xmm1 = [15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15]
-; AVX512VPOPCNTDQ-NEXT:    vpand %xmm1, %xmm0, %xmm2
-; AVX512VPOPCNTDQ-NEXT:    vmovdqa {{.*#+}} xmm3 = [0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4]
-; AVX512VPOPCNTDQ-NEXT:    vpshufb %xmm2, %xmm3, %xmm2
-; AVX512VPOPCNTDQ-NEXT:    vpsrlw $4, %xmm0, %xmm0
-; AVX512VPOPCNTDQ-NEXT:    vpand %xmm1, %xmm0, %xmm0
-; AVX512VPOPCNTDQ-NEXT:    vpshufb %xmm0, %xmm3, %xmm0
-; AVX512VPOPCNTDQ-NEXT:    vpaddb %xmm2, %xmm0, %xmm0
+; AVX512VPOPCNTDQ-NEXT:    vpmovzxbd {{.*#+}} zmm0 = xmm0[0],zero,zero,zero,xmm0[1],zero,zero,zero,xmm0[2],zero,zero,zero,xmm0[3],zero,zero,zero,xmm0[4],zero,zero,zero,xmm0[5],zero,zero,zero,xmm0[6],zero,zero,zero,xmm0[7],zero,zero,zero,xmm0[8],zero,zero,zero,xmm0[9],zero,zero,zero,xmm0[10],zero,zero,zero,xmm0[11],zero,zero,zero,xmm0[12],zero,zero,zero,xmm0[13],zero,zero,zero,xmm0[14],zero,zero,zero,xmm0[15],zero,zero,zero
+; AVX512VPOPCNTDQ-NEXT:    vpopcntd %zmm0, %zmm0
+; AVX512VPOPCNTDQ-NEXT:    vpmovdb %zmm0, %xmm0
+; AVX512VPOPCNTDQ-NEXT:    vzeroupper
 ; AVX512VPOPCNTDQ-NEXT:    retq
 ;
 ; X32-SSE-LABEL: testv16i8:
@@ -1384,14 +1366,10 @@ define <16 x i8> @testv16i8u(<16 x i8> %in) nounwind {
 ; AVX512VPOPCNTDQ-NEXT:    vpand %xmm1, %xmm0, %xmm0
 ; AVX512VPOPCNTDQ-NEXT:    vpcmpeqd %xmm1, %xmm1, %xmm1
 ; AVX512VPOPCNTDQ-NEXT:    vpaddb %xmm1, %xmm0, %xmm0
-; AVX512VPOPCNTDQ-NEXT:    vmovdqa {{.*#+}} xmm1 = [15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15]
-; AVX512VPOPCNTDQ-NEXT:    vpand %xmm1, %xmm0, %xmm2
-; AVX512VPOPCNTDQ-NEXT:    vmovdqa {{.*#+}} xmm3 = [0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4]
-; AVX512VPOPCNTDQ-NEXT:    vpshufb %xmm2, %xmm3, %xmm2
-; AVX512VPOPCNTDQ-NEXT:    vpsrlw $4, %xmm0, %xmm0
-; AVX512VPOPCNTDQ-NEXT:    vpand %xmm1, %xmm0, %xmm0
-; AVX512VPOPCNTDQ-NEXT:    vpshufb %xmm0, %xmm3, %xmm0
-; AVX512VPOPCNTDQ-NEXT:    vpaddb %xmm2, %xmm0, %xmm0
+; AVX512VPOPCNTDQ-NEXT:    vpmovzxbd {{.*#+}} zmm0 = xmm0[0],zero,zero,zero,xmm0[1],zero,zero,zero,xmm0[2],zero,zero,zero,xmm0[3],zero,zero,zero,xmm0[4],zero,zero,zero,xmm0[5],zero,zero,zero,xmm0[6],zero,zero,zero,xmm0[7],zero,zero,zero,xmm0[8],zero,zero,zero,xmm0[9],zero,zero,zero,xmm0[10],zero,zero,zero,xmm0[11],zero,zero,zero,xmm0[12],zero,zero,zero,xmm0[13],zero,zero,zero,xmm0[14],zero,zero,zero,xmm0[15],zero,zero,zero
+; AVX512VPOPCNTDQ-NEXT:    vpopcntd %zmm0, %zmm0
+; AVX512VPOPCNTDQ-NEXT:    vpmovdb %zmm0, %xmm0
+; AVX512VPOPCNTDQ-NEXT:    vzeroupper
 ; AVX512VPOPCNTDQ-NEXT:    retq
 ;
 ; X32-SSE-LABEL: testv16i8u:

@@ -1799,6 +1799,7 @@ DEF_TRAVERSE_DECL(CXXRecordDecl, { TRY_TO(TraverseCXXRecordHelper(D)); })
     if (TypeSourceInfo *TSI = D->getTypeAsWritten())                           \
       TRY_TO(TraverseTypeLoc(TSI->getTypeLoc()));                              \
                                                                                \
+    TRY_TO(TraverseNestedNameSpecifierLoc(D->getQualifierLoc()));              \
     if (!getDerived().shouldVisitTemplateInstantiations() &&                   \
         D->getTemplateSpecializationKind() != TSK_ExplicitSpecialization)      \
       /* Returning from here skips traversing the                              \
@@ -3012,6 +3013,52 @@ RecursiveASTVisitor<Derived>::VisitOMPReductionClause(OMPReductionClause *C) {
   for (auto *E : C->reduction_ops()) {
     TRY_TO(TraverseStmt(E));
   }
+  return true;
+}
+
+template <typename Derived>
+bool RecursiveASTVisitor<Derived>::VisitOMPTaskReductionClause(
+    OMPTaskReductionClause *C) {
+  TRY_TO(TraverseNestedNameSpecifierLoc(C->getQualifierLoc()));
+  TRY_TO(TraverseDeclarationNameInfo(C->getNameInfo()));
+  TRY_TO(VisitOMPClauseList(C));
+  TRY_TO(VisitOMPClauseWithPostUpdate(C));
+  for (auto *E : C->privates()) {
+    TRY_TO(TraverseStmt(E));
+  }
+  for (auto *E : C->lhs_exprs()) {
+    TRY_TO(TraverseStmt(E));
+  }
+  for (auto *E : C->rhs_exprs()) {
+    TRY_TO(TraverseStmt(E));
+  }
+  for (auto *E : C->reduction_ops()) {
+    TRY_TO(TraverseStmt(E));
+  }
+  return true;
+}
+
+template <typename Derived>
+bool RecursiveASTVisitor<Derived>::VisitOMPInReductionClause(
+    OMPInReductionClause *C) {
+  TRY_TO(TraverseNestedNameSpecifierLoc(C->getQualifierLoc()));
+  TRY_TO(TraverseDeclarationNameInfo(C->getNameInfo()));
+  TRY_TO(VisitOMPClauseList(C));
+  TRY_TO(VisitOMPClauseWithPostUpdate(C));
+  for (auto *E : C->privates()) {
+    TRY_TO(TraverseStmt(E));
+  }
+  for (auto *E : C->lhs_exprs()) {
+    TRY_TO(TraverseStmt(E));
+  }
+  for (auto *E : C->rhs_exprs()) {
+    TRY_TO(TraverseStmt(E));
+  }
+  for (auto *E : C->reduction_ops()) {
+    TRY_TO(TraverseStmt(E));
+  }
+  for (auto *E : C->taskgroup_descriptors())
+    TRY_TO(TraverseStmt(E));
   return true;
 }
 

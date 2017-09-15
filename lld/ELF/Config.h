@@ -44,7 +44,7 @@ enum class DiscardPolicy { Default, All, Locals, None };
 enum class StripPolicy { None, All, Debug };
 
 // For --unresolved-symbols.
-enum class UnresolvedPolicy { ReportError, Warn, WarnAll, Ignore, IgnoreAll };
+enum class UnresolvedPolicy { ReportError, Warn, Ignore, IgnoreAll };
 
 // For --sort-section and linkerscript sorting rules.
 enum class SortSectionPolicy { Default, None, Alignment, Name, Priority };
@@ -82,6 +82,7 @@ struct Configuration {
   uint8_t OSABI = 0;
   llvm::CachePruningPolicy ThinLTOCachePolicy;
   llvm::StringMap<uint64_t> SectionStartMap;
+  llvm::StringRef Chroot;
   llvm::StringRef DynamicLinker;
   llvm::StringRef Entry;
   llvm::StringRef Emulation;
@@ -97,7 +98,9 @@ struct Configuration {
   llvm::StringRef ThinLTOCacheDir;
   std::string Rpath;
   std::vector<VersionDefinition> VersionDefinitions;
+  std::vector<llvm::StringRef> Argv;
   std::vector<llvm::StringRef> AuxiliaryList;
+  std::vector<llvm::StringRef> FilterList;
   std::vector<llvm::StringRef> SearchPaths;
   std::vector<llvm::StringRef> SymbolOrderingFile;
   std::vector<llvm::StringRef> Undefined;
@@ -126,6 +129,7 @@ struct Configuration {
   bool MipsN32Abi = false;
   bool NoGnuUnique;
   bool NoUndefinedVersion;
+  bool NoinhibitExec;
   bool Nostdlib;
   bool OFormatBinary;
   bool Omagic;

@@ -73,10 +73,12 @@
 
 using namespace llvm;
 
-static cl::opt<bool> PrintWholeRegMask(
-    "print-whole-regmask",
-    cl::desc("Print the full contents of regmask operands in IR dumps"),
-    cl::init(true), cl::Hidden);
+static cl::opt<int> PrintRegMaskNumRegs(
+    "print-regmask-num-regs",
+    cl::desc("Number of registers to limit to when "
+             "printing regmask operands in IR dumps. "
+             "unlimited = -1"),
+    cl::init(32), cl::Hidden);
 
 //===----------------------------------------------------------------------===//
 // MachineOperand Implementation
@@ -447,6 +449,14 @@ void MachineOperand::print(raw_ostream &OS, ModuleSlotTracker &MST,
       SmallString<16> Str;
       getFPImm()->getValueAPF().toString(Str);
       OS << "quad " << Str;
+    } else if (getFPImm()->getType()->isX86_FP80Ty()) {
+      APFloat APF = getFPImm()->getValueAPF();
+      OS << "x86_fp80 0xK";
+      APInt API = APF.bitcastToAPInt();
+      OS << format_hex_no_prefix(API.getHiBits(16).getZExtValue(), 4,
+                                 /*Upper=*/true);
+      OS << format_hex_no_prefix(API.getLoBits(64).getZExtValue(), 16,
+                                 /*Upper=*/true);
     } else {
       OS << getFPImm()->getValueAPF().convertToDouble();
     }
@@ -495,7 +505,8 @@ void MachineOperand::print(raw_ostream &OS, ModuleSlotTracker &MST,
       unsigned MaskWord = i / 32;
       unsigned MaskBit = i % 32;
       if (getRegMask()[MaskWord] & (1 << MaskBit)) {
-        if (PrintWholeRegMask || NumRegsEmitted <= 10) {
+        if (PrintRegMaskNumRegs < 0 ||
+            NumRegsEmitted <= static_cast<unsigned>(PrintRegMaskNumRegs)) {
           OS << " " << PrintReg(i, TRI);
           NumRegsEmitted++;
         }
@@ -598,15 +609,16 @@ MachinePointerInfo MachinePointerInfo::getGOT(MachineFunction &MF) {
 }
 
 MachinePointerInfo MachinePointerInfo::getStack(MachineFunction &MF,
-                                                int64_t Offset) {
-  return MachinePointerInfo(MF.getPSVManager().getStack(), Offset);
+                                                int64_t Offset,
+                                                uint8_t ID) {
+  return MachinePointerInfo(MF.getPSVManager().getStack(), Offset,ID);
 }
 
 MachineMemOperand::MachineMemOperand(MachinePointerInfo ptrinfo, Flags f,
                                      uint64_t s, unsigned int a,
                                      const AAMDNodes &AAInfo,
                                      const MDNode *Ranges,
-                                     SynchronizationScope SynchScope,
+                                     SyncScope::ID SSID,
                                      AtomicOrdering Ordering,
                                      AtomicOrdering FailureOrdering)
     : PtrInfo(ptrinfo), Size(s), FlagVals(f), BaseAlignLog2(Log2_32(a) + 1),
@@ -617,8 +629,8 @@ MachineMemOperand::MachineMemOperand(MachinePointerInfo ptrinfo, Flags f,
   assert(getBaseAlignment() == a && "Alignment is not a power of 2!");
   assert((isLoad() || isStore()) && "Not a load/store!");
 
-  AtomicInfo.SynchScope = static_cast<unsigned>(SynchScope);
-  assert(getSynchScope() == SynchScope && "Value truncated");
+  AtomicInfo.SSID = static_cast<unsigned>(SSID);
+  assert(getSyncScopeID() == SSID && "Value truncated");
   AtomicInfo.Ordering = static_cast<unsigned>(Ordering);
   assert(getOrdering() == Ordering && "Value truncated");
   AtomicInfo.FailureOrdering = static_cast<unsigned>(FailureOrdering);
@@ -744,6 +756,12 @@ void MachineMemOperand::print(raw_ostream &OS, ModuleSlotTracker &MST) const {
     OS << "(dereferenceable)";
   if (isInvariant())
     OS << "(invariant)";
+  if (getFlags() & MOTargetFlag1)
+    OS << "(flag1)";
+  if (getFlags() & MOTargetFlag2)
+    OS << "(flag2)";
+  if (getFlags() & MOTargetFlag3)
+    OS << "(flag3)";
 }
 
 //===----------------------------------------------------------------------===//
@@ -2316,8 +2334,8 @@ void MachineInstr::emitError(StringRef Msg) const {
 
 MachineInstrBuilder llvm::BuildMI(MachineFunction &MF, const DebugLoc &DL,
                                   const MCInstrDesc &MCID, bool IsIndirect,
-                                  unsigned Reg, unsigned Offset,
-                                  const MDNode *Variable, const MDNode *Expr) {
+                                  unsigned Reg, const MDNode *Variable,
+                                  const MDNode *Expr) {
   assert(isa<DILocalVariable>(Variable) && "not a variable");
   assert(cast<DIExpression>(Expr)->isValid() && "not an expression");
   assert(cast<DILocalVariable>(Variable)->isValidLocationForIntrinsic(DL) &&
@@ -2325,30 +2343,26 @@ MachineInstrBuilder llvm::BuildMI(MachineFunction &MF, const DebugLoc &DL,
   if (IsIndirect)
     return BuildMI(MF, DL, MCID)
         .addReg(Reg, RegState::Debug)
-        .addImm(Offset)
+        .addImm(0U)
         .addMetadata(Variable)
         .addMetadata(Expr);
-  else {
-    assert(Offset == 0 && "A direct address cannot have an offset.");
+  else
     return BuildMI(MF, DL, MCID)
         .addReg(Reg, RegState::Debug)
         .addReg(0U, RegState::Debug)
         .addMetadata(Variable)
         .addMetadata(Expr);
-  }
 }
 
 MachineInstrBuilder llvm::BuildMI(MachineBasicBlock &BB,
                                   MachineBasicBlock::iterator I,
                                   const DebugLoc &DL, const MCInstrDesc &MCID,
                                   bool IsIndirect, unsigned Reg,
-                                  unsigned Offset, const MDNode *Variable,
-                                  const MDNode *Expr) {
+                                  const MDNode *Variable, const MDNode *Expr) {
   assert(isa<DILocalVariable>(Variable) && "not a variable");
   assert(cast<DIExpression>(Expr)->isValid() && "not an expression");
   MachineFunction &MF = *BB.getParent();
-  MachineInstr *MI =
-      BuildMI(MF, DL, MCID, IsIndirect, Reg, Offset, Variable, Expr);
+  MachineInstr *MI = BuildMI(MF, DL, MCID, IsIndirect, Reg, Variable, Expr);
   BB.insert(I, MI);
   return MachineInstrBuilder(MF, MI);
 }
@@ -2360,7 +2374,8 @@ MachineInstr *llvm::buildDbgValueForSpill(MachineBasicBlock &BB,
   const MDNode *Var = Orig.getDebugVariable();
   const auto *Expr = cast_or_null<DIExpression>(Orig.getDebugExpression());
   bool IsIndirect = Orig.isIndirectDebugValue();
-  uint64_t Offset = IsIndirect ? Orig.getOperand(1).getImm() : 0;
+  if (IsIndirect)
+    assert(Orig.getOperand(1).getImm() == 0 && "DBG_VALUE with nonzero offset");
   DebugLoc DL = Orig.getDebugLoc();
   assert(cast<DILocalVariable>(Var)->isValidLocationForIntrinsic(DL) &&
          "Expected inlined-at fields to agree");
@@ -2371,7 +2386,7 @@ MachineInstr *llvm::buildDbgValueForSpill(MachineBasicBlock &BB,
     Expr = DIExpression::prepend(Expr, DIExpression::WithDeref);
   return BuildMI(BB, I, DL, Orig.getDesc())
       .addFrameIndex(FrameIndex)
-      .addImm(Offset)
+      .addImm(0U)
       .addMetadata(Var)
       .addMetadata(Expr);
 }

@@ -155,6 +155,13 @@ public:
   int getGEPCost(Type *PointeeType, const Value *Ptr,
                  ArrayRef<const Value *> Operands) const;
 
+  /// \brief Estimate the cost of a EXT operation when lowered.
+  ///
+  /// The contract for this function is the same as \c getOperationCost except
+  /// that it supports an interface that provides extra information specific to
+  /// the EXT operation.
+  int getExtCost(const Instruction *I, const Value *Src) const;
+
   /// \brief Estimate the cost of a function call when lowered.
   ///
   /// The contract for this is the same as \c getOperationCost except that it
@@ -413,10 +420,12 @@ public:
   /// this target, for a load/store of the specified type.
   /// The type may be VoidTy, in which case only return true if the addressing
   /// mode is legal for a load/store of any legal type.
+  /// If target returns true in LSRWithInstrQueries(), I may be valid.
   /// TODO: Handle pre/postinc as well.
   bool isLegalAddressingMode(Type *Ty, GlobalValue *BaseGV, int64_t BaseOffset,
                              bool HasBaseReg, int64_t Scale,
-                             unsigned AddrSpace = 0) const;
+                             unsigned AddrSpace = 0,
+                             Instruction *I = nullptr) const;
 
   /// \brief Return true if LSR cost of C1 is lower than C1.
   bool isLSRCostLess(TargetTransformInfo::LSRCost &C1,
@@ -445,6 +454,12 @@ public:
   int getScalingFactorCost(Type *Ty, GlobalValue *BaseGV, int64_t BaseOffset,
                            bool HasBaseReg, int64_t Scale,
                            unsigned AddrSpace = 0) const;
+
+  /// \brief Return true if the loop strength reduce pass should make
+  /// Instruction* based TTI queries to isLegalAddressingMode(). This is
+  /// needed on SystemZ, where e.g. a memcpy can only have a 12 bit unsigned
+  /// immediate offset and no index register.
+  bool LSRWithInstrQueries() const;
 
   /// \brief Return true if target supports the load / store
   /// instruction with the given Offset on the form reg + Offset. It
@@ -696,7 +711,8 @@ public:
   /// Split:
   ///  (v0, v1, v2, v3)
   ///  ((v0+v2), (v1+v3), undef, undef)
-  int getReductionCost(unsigned Opcode, Type *Ty, bool IsPairwiseForm) const;
+  int getArithmeticReductionCost(unsigned Opcode, Type *Ty,
+                                 bool IsPairwiseForm) const;
 
   /// \returns The cost of Intrinsic instructions. Analyses the real arguments.
   /// Three cases are handled: 1. scalar instruction 2. vector instruction
@@ -752,6 +768,28 @@ public:
   /// from the given intrinsic.
   Value *getOrCreateResultFromMemIntrinsic(IntrinsicInst *Inst,
                                            Type *ExpectedType) const;
+
+  /// \returns The type to use in a loop expansion of a memcpy call.
+  Type *getMemcpyLoopLoweringType(LLVMContext &Context, Value *Length,
+                                  unsigned SrcAlign, unsigned DestAlign) const;
+
+  /// \param[out] OpsOut The operand types to copy RemainingBytes of memory.
+  /// \param RemainingBytes The number of bytes to copy.
+  ///
+  /// Calculates the operand types to use when copying \p RemainingBytes of
+  /// memory, where source and destination alignments are \p SrcAlign and
+  /// \p DestAlign respectively.
+  void getMemcpyLoopResidualLoweringType(SmallVectorImpl<Type *> &OpsOut,
+                                         LLVMContext &Context,
+                                         unsigned RemainingBytes,
+                                         unsigned SrcAlign,
+                                         unsigned DestAlign) const;
+
+  /// \returns True if we want to test the new memcpy lowering functionality in
+  /// Transform/Utils.
+  /// Temporary. Will be removed once we move to the new functionality and
+  /// remove the old.
+  bool useWideIRMemcpyLoopLowering() const;
 
   /// \returns True if the two functions have compatible attributes for inlining
   /// purposes.
@@ -827,6 +865,7 @@ public:
   virtual int getOperationCost(unsigned Opcode, Type *Ty, Type *OpTy) = 0;
   virtual int getGEPCost(Type *PointeeType, const Value *Ptr,
                          ArrayRef<const Value *> Operands) = 0;
+  virtual int getExtCost(const Instruction *I, const Value *Src) = 0;
   virtual int getCallCost(FunctionType *FTy, int NumArgs) = 0;
   virtual int getCallCost(const Function *F, int NumArgs) = 0;
   virtual int getCallCost(const Function *F,
@@ -852,7 +891,8 @@ public:
   virtual bool isLegalAddressingMode(Type *Ty, GlobalValue *BaseGV,
                                      int64_t BaseOffset, bool HasBaseReg,
                                      int64_t Scale,
-                                     unsigned AddrSpace) = 0;
+                                     unsigned AddrSpace,
+                                     Instruction *I) = 0;
   virtual bool isLSRCostLess(TargetTransformInfo::LSRCost &C1,
                              TargetTransformInfo::LSRCost &C2) = 0;
   virtual bool isLegalMaskedStore(Type *DataType) = 0;
@@ -863,6 +903,7 @@ public:
   virtual int getScalingFactorCost(Type *Ty, GlobalValue *BaseGV,
                                    int64_t BaseOffset, bool HasBaseReg,
                                    int64_t Scale, unsigned AddrSpace) = 0;
+  virtual bool LSRWithInstrQueries() = 0;
   virtual bool isFoldableMemAccessOffset(Instruction *I, int64_t Offset) = 0;
   virtual bool isTruncateFree(Type *Ty1, Type *Ty2) = 0;
   virtual bool isProfitableToHoist(Instruction *I) = 0;
@@ -935,8 +976,8 @@ public:
                                          ArrayRef<unsigned> Indices,
                                          unsigned Alignment,
                                          unsigned AddressSpace) = 0;
-  virtual int getReductionCost(unsigned Opcode, Type *Ty,
-                               bool IsPairwiseForm) = 0;
+  virtual int getArithmeticReductionCost(unsigned Opcode, Type *Ty,
+                                         bool IsPairwiseForm) = 0;
   virtual int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
                       ArrayRef<Type *> Tys, FastMathFlags FMF,
                       unsigned ScalarizationCostPassed) = 0;
@@ -953,6 +994,12 @@ public:
   virtual unsigned getAtomicMemIntrinsicMaxElementSize() const = 0;
   virtual Value *getOrCreateResultFromMemIntrinsic(IntrinsicInst *Inst,
                                                    Type *ExpectedType) = 0;
+  virtual Type *getMemcpyLoopLoweringType(LLVMContext &Context, Value *Length,
+                                          unsigned SrcAlign,
+                                          unsigned DestAlign) const = 0;
+  virtual void getMemcpyLoopResidualLoweringType(
+      SmallVectorImpl<Type *> &OpsOut, LLVMContext &Context,
+      unsigned RemainingBytes, unsigned SrcAlign, unsigned DestAlign) const = 0;
   virtual bool areInlineCompatible(const Function *Caller,
                                    const Function *Callee) const = 0;
   virtual unsigned getLoadStoreVecRegBitWidth(unsigned AddrSpace) const = 0;
@@ -993,6 +1040,9 @@ public:
   int getGEPCost(Type *PointeeType, const Value *Ptr,
                  ArrayRef<const Value *> Operands) override {
     return Impl.getGEPCost(PointeeType, Ptr, Operands);
+  }
+  int getExtCost(const Instruction *I, const Value *Src) override {
+    return Impl.getExtCost(I, Src);
   }
   int getCallCost(FunctionType *FTy, int NumArgs) override {
     return Impl.getCallCost(FTy, NumArgs);
@@ -1046,9 +1096,10 @@ public:
   }
   bool isLegalAddressingMode(Type *Ty, GlobalValue *BaseGV, int64_t BaseOffset,
                              bool HasBaseReg, int64_t Scale,
-                             unsigned AddrSpace) override {
+                             unsigned AddrSpace,
+                             Instruction *I) override {
     return Impl.isLegalAddressingMode(Ty, BaseGV, BaseOffset, HasBaseReg,
-                                      Scale, AddrSpace);
+                                      Scale, AddrSpace, I);
   }
   bool isLSRCostLess(TargetTransformInfo::LSRCost &C1,
                      TargetTransformInfo::LSRCost &C2) override {
@@ -1074,6 +1125,9 @@ public:
                            unsigned AddrSpace) override {
     return Impl.getScalingFactorCost(Ty, BaseGV, BaseOffset, HasBaseReg,
                                      Scale, AddrSpace);
+  }
+  bool LSRWithInstrQueries() override {
+    return Impl.LSRWithInstrQueries();
   }
   bool isFoldableMemAccessOffset(Instruction *I, int64_t Offset) override {
     return Impl.isFoldableMemAccessOffset(I, Offset);
@@ -1228,9 +1282,9 @@ public:
     return Impl.getInterleavedMemoryOpCost(Opcode, VecTy, Factor, Indices,
                                            Alignment, AddressSpace);
   }
-  int getReductionCost(unsigned Opcode, Type *Ty,
-                       bool IsPairwiseForm) override {
-    return Impl.getReductionCost(Opcode, Ty, IsPairwiseForm);
+  int getArithmeticReductionCost(unsigned Opcode, Type *Ty,
+                                 bool IsPairwiseForm) override {
+    return Impl.getArithmeticReductionCost(Opcode, Ty, IsPairwiseForm);
   }
   int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy, ArrayRef<Type *> Tys,
                FastMathFlags FMF, unsigned ScalarizationCostPassed) override {
@@ -1265,6 +1319,19 @@ public:
   Value *getOrCreateResultFromMemIntrinsic(IntrinsicInst *Inst,
                                            Type *ExpectedType) override {
     return Impl.getOrCreateResultFromMemIntrinsic(Inst, ExpectedType);
+  }
+  Type *getMemcpyLoopLoweringType(LLVMContext &Context, Value *Length,
+                                  unsigned SrcAlign,
+                                  unsigned DestAlign) const override {
+    return Impl.getMemcpyLoopLoweringType(Context, Length, SrcAlign, DestAlign);
+  }
+  void getMemcpyLoopResidualLoweringType(SmallVectorImpl<Type *> &OpsOut,
+                                         LLVMContext &Context,
+                                         unsigned RemainingBytes,
+                                         unsigned SrcAlign,
+                                         unsigned DestAlign) const override {
+    Impl.getMemcpyLoopResidualLoweringType(OpsOut, Context, RemainingBytes,
+                                           SrcAlign, DestAlign);
   }
   bool areInlineCompatible(const Function *Caller,
                            const Function *Callee) const override {

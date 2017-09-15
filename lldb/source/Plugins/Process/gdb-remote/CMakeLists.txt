@@ -7,12 +7,8 @@ set(LLDB_PLUGINS
   lldbPluginPlatformMacOSX
 )
 
-if(CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
-  list(APPEND LLDB_PLUGINS lldbPluginProcessLinux)
-endif()
-
-if(CMAKE_SYSTEM_NAME MATCHES "NetBSD")
-  list(APPEND LLDB_PLUGINS lldbPluginProcessNetBSD)
+if(HAVE_LIBCOMPRESSION)
+  set(LIBCOMPRESSION compression)
 endif()
 
 add_lldb_library(lldbPluginProcessGDBRemote PLUGIN
@@ -38,6 +34,7 @@ add_lldb_library(lldbPluginProcessGDBRemote PLUGIN
     lldbTarget
     lldbUtility
     ${LLDB_PLUGINS}
+    ${LIBCOMPRESSION}
   LINK_COMPONENTS
     Support
   )

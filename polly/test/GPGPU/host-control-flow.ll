@@ -14,9 +14,7 @@
 
 ; REQUIRES: pollyacc
 
-; CODE: # host
-; CODE-NEXT: {
-; CODE-NEXT:   cudaCheckReturn(cudaMemcpy(dev_MemRef_A, MemRef_A, (2) * (100) * sizeof(float), cudaMemcpyHostToDevice));
+; CODE:        cudaCheckReturn(cudaMemcpy(dev_MemRef_A, MemRef_A, (2) * (100) * sizeof(float), cudaMemcpyHostToDevice));
 ; CODE-NEXT:   for (int c0 = 0; c0 <= 99; c0 += 1)
 ; CODE-NEXT:     {
 ; CODE-NEXT:       dim3 k0_dimBlock(32);
@@ -26,6 +24,7 @@
 ; CODE-NEXT:     }
 
 ; CODE:   cudaCheckReturn(cudaMemcpy(MemRef_A, dev_MemRef_A, (2) * (100) * sizeof(float), cudaMemcpyDeviceToHost));
+; CODE-NEXT: cudaCheckReturn(cudaFree(dev_MemRef_A));
 ; CODE-NEXT: }
 
 ; IR-LABEL: polly.loop_header:                                ; preds = %polly.loop_header, %polly.loop_preheader
@@ -42,7 +41,7 @@
 ; IR-NEXT:   %polly.loop_cond = icmp sle i64 %polly.indvar_next, 99
 ; IR-NEXT:   br i1 %polly.loop_cond, label %polly.loop_header, label %polly.loop_exit
 
-; KERNEL-IR: define ptx_kernel void @kernel_0(i8 addrspace(1)* %MemRef_A, i64 %c0)
+; KERNEL-IR: define ptx_kernel void @FUNC_foo_SCOP_0_KERNEL_0(i8 addrspace(1)* %MemRef_A, i64 %c0)
 ; KERNEL-IR-LABEL: entry:
 ; KERNEL-IR-NEXT:   %0 = call i32 @llvm.nvvm.read.ptx.sreg.ctaid.x()
 ; KERNEL-IR-NEXT:   %b0 = zext i32 %0 to i64

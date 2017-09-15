@@ -411,7 +411,8 @@ public:
 
   /// \brief Add options that need to be passed to cc1 for this target.
   virtual void addClangTargetOptions(const llvm::opt::ArgList &DriverArgs,
-                                     llvm::opt::ArgStringList &CC1Args) const;
+                                     llvm::opt::ArgStringList &CC1Args,
+                                     Action::OffloadKind DeviceOffloadKind) const;
 
   /// \brief Add warning options that need to be passed to cc1 for this target.
   virtual void addClangWarningOptions(llvm::opt::ArgStringList &CC1Args) const;
@@ -430,6 +431,10 @@ public:
   virtual void
   AddClangCXXStdlibIncludeArgs(const llvm::opt::ArgList &DriverArgs,
                                llvm::opt::ArgStringList &CC1Args) const;
+
+  /// Returns if the C++ standard library should be linked in.
+  /// Note that e.g. -lm should still be linked even if this returns false.
+  bool ShouldLinkCXXStdlib(const llvm::opt::ArgList &Args) const;
 
   /// AddCXXStdlibLibArgs - Add the system specific linker arguments to use
   /// for the given C++ standard library type.

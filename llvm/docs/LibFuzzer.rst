@@ -345,6 +345,9 @@ possible event codes are:
 ``NEW``
   The fuzzer has created a test input that covers new areas of the code
   under test.  This input will be saved to the primary corpus directory.
+``REDUCE``
+  The fuzzer has found a better (smaller) input that triggers previously
+  discovered features (set ``-reduce_inputs=0`` to disable).
 ``pulse``
   The fuzzer has generated 2\ :sup:`n` inputs (generated periodically to reassure
   the user that the fuzzer is still working).
@@ -587,7 +590,7 @@ The simplest way is to have a statically initialized global object inside
 
 Alternatively, you may define an optional init function and it will receive
 the program arguments that you can read and modify. Do this **only** if you
-realy need to access ``argv``/``argc``.
+really need to access ``argv``/``argc``.
 
 .. code-block:: c++
 

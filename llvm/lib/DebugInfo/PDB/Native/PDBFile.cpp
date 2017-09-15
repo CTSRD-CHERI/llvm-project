@@ -318,8 +318,7 @@ Expected<PublicsStream &> PDBFile::getPDBPublicsStream() {
         ContainerLayout, *Buffer, DbiS->getPublicSymbolStreamIndex());
     if (!PublicS)
       return PublicS.takeError();
-    auto TempPublics =
-        llvm::make_unique<PublicsStream>(*this, std::move(*PublicS));
+    auto TempPublics = llvm::make_unique<PublicsStream>(std::move(*PublicS));
     if (auto EC = TempPublics->reload())
       return std::move(EC);
     Publics = std::move(TempPublics);
@@ -385,8 +384,11 @@ bool PDBFile::hasPDBDbiStream() const { return StreamDBI < getNumStreams(); }
 
 bool PDBFile::hasPDBGlobalsStream() {
   auto DbiS = getPDBDbiStream();
-  if (!DbiS)
+  if (!DbiS) {
+    consumeError(DbiS.takeError());
     return false;
+  }
+
   return DbiS->getGlobalSymbolStreamIndex() < getNumStreams();
 }
 
@@ -396,8 +398,10 @@ bool PDBFile::hasPDBIpiStream() const { return StreamIPI < getNumStreams(); }
 
 bool PDBFile::hasPDBPublicsStream() {
   auto DbiS = getPDBDbiStream();
-  if (!DbiS)
+  if (!DbiS) {
+    consumeError(DbiS.takeError());
     return false;
+  }
   return DbiS->getPublicSymbolStreamIndex() < getNumStreams();
 }
 

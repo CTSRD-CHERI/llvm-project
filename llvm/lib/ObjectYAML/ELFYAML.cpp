@@ -12,12 +12,18 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ObjectYAML/ELFYAML.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/BinaryFormat/ELF.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MipsABIFlags.h"
+#include "llvm/Support/YAMLTraits.h"
+#include <cassert>
+#include <cstdint>
 
 namespace llvm {
 
-ELFYAML::Section::~Section() {}
+ELFYAML::Section::~Section() = default;
 
 namespace yaml {
 
@@ -31,6 +37,21 @@ void ScalarEnumerationTraits<ELFYAML::ELF_ET>::enumeration(
   ECase(ET_CORE);
 #undef ECase
   IO.enumFallback<Hex16>(Value);
+}
+
+void ScalarEnumerationTraits<ELFYAML::ELF_PT>::enumeration(
+    IO &IO, ELFYAML::ELF_PT &Value) {
+#define ECase(X) IO.enumCase(Value, #X, ELF::X)
+  ECase(PT_NULL);
+  ECase(PT_LOAD);
+  ECase(PT_DYNAMIC);
+  ECase(PT_INTERP);
+  ECase(PT_NOTE);
+  ECase(PT_SHLIB);
+  ECase(PT_PHDR);
+  ECase(PT_TLS);
+#undef ECase
+  IO.enumFallback<Hex32>(Value);
 }
 
 void ScalarEnumerationTraits<ELFYAML::ELF_EM>::enumeration(
@@ -409,6 +430,14 @@ void ScalarEnumerationTraits<ELFYAML::ELF_SHT>::enumeration(
 #undef ECase
 }
 
+void ScalarBitSetTraits<ELFYAML::ELF_PF>::bitset(IO &IO,
+                                                 ELFYAML::ELF_PF &Value) {
+#define BCase(X) IO.bitSetCase(Value, #X, ELF::X)
+  BCase(PF_X);
+  BCase(PF_W);
+  BCase(PF_R);
+}
+
 void ScalarBitSetTraits<ELFYAML::ELF_SHF>::bitset(IO &IO,
                                                   ELFYAML::ELF_SHF &Value) {
   const auto *Object = static_cast<ELFYAML::Object *>(IO.getContext());
@@ -646,7 +675,17 @@ void MappingTraits<ELFYAML::FileHeader>::mapping(IO &IO,
   IO.mapOptional("Entry", FileHdr.Entry, Hex64(0));
 }
 
+void MappingTraits<ELFYAML::ProgramHeader>::mapping(
+    IO &IO, ELFYAML::ProgramHeader &Phdr) {
+  IO.mapRequired("Type", Phdr.Type);
+  IO.mapOptional("Flags", Phdr.Flags, ELFYAML::ELF_PF(0));
+  IO.mapOptional("Sections", Phdr.Sections);
+  IO.mapOptional("VAddr", Phdr.VAddr, Hex64(0));
+  IO.mapOptional("PAddr", Phdr.PAddr, Hex64(0));
+}
+
 namespace {
+
 struct NormalizedOther {
   NormalizedOther(IO &)
       : Visibility(ELFYAML::ELF_STV(0)), Other(ELFYAML::ELF_STO(0)) {}
@@ -658,7 +697,8 @@ struct NormalizedOther {
   ELFYAML::ELF_STV Visibility;
   ELFYAML::ELF_STO Other;
 };
-}
+
+} // end anonymous namespace
 
 void MappingTraits<ELFYAML::Symbol>::mapping(IO &IO, ELFYAML::Symbol &Symbol) {
   IO.mapOptional("Name", Symbol.Name, StringRef());
@@ -713,6 +753,11 @@ static void groupSectionMapping(IO &IO, ELFYAML::Group &group) {
 void MappingTraits<ELFYAML::SectionOrType>::mapping(
     IO &IO, ELFYAML::SectionOrType &sectionOrType) {
   IO.mapRequired("SectionOrType", sectionOrType.sectionNameOrType);
+}
+
+void MappingTraits<ELFYAML::SectionName>::mapping(
+    IO &IO, ELFYAML::SectionName &sectionName) {
+  IO.mapRequired("Section", sectionName.Section);
 }
 
 static void sectionMapping(IO &IO, ELFYAML::MipsABIFlags &Section) {
@@ -781,6 +826,7 @@ StringRef MappingTraits<std::unique_ptr<ELFYAML::Section>>::validate(
 }
 
 namespace {
+
 struct NormalizedMips64RelType {
   NormalizedMips64RelType(IO &)
       : Type(ELFYAML::ELF_REL(ELF::R_MIPS_NONE)),
@@ -801,7 +847,8 @@ struct NormalizedMips64RelType {
   ELFYAML::ELF_REL Type3;
   ELFYAML::ELF_RSS SpecSym;
 };
-}
+
+} // end anonymous namespace
 
 void MappingTraits<ELFYAML::Relocation>::mapping(IO &IO,
                                                  ELFYAML::Relocation &Rel) {
@@ -830,6 +877,7 @@ void MappingTraits<ELFYAML::Object>::mapping(IO &IO, ELFYAML::Object &Object) {
   IO.setContext(&Object);
   IO.mapTag("!ELF", true);
   IO.mapRequired("FileHeader", Object.Header);
+  IO.mapOptional("ProgramHeaders", Object.ProgramHeaders);
   IO.mapOptional("Sections", Object.Sections);
   IO.mapOptional("Symbols", Object.Symbols);
   IO.setContext(nullptr);
@@ -842,4 +890,5 @@ LLVM_YAML_STRONG_TYPEDEF(uint32_t, MIPS_AFL_ASE)
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, MIPS_AFL_FLAGS1)
 
 } // end namespace yaml
+
 } // end namespace llvm

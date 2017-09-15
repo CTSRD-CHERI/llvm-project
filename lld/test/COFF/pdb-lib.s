@@ -1,3 +1,4 @@
+# REQUIRES: x86
 # RUN: rm -rf %t && mkdir -p %t && cd %t
 # RUN: llvm-mc -filetype=obj -triple=i686-windows-msvc %s -o foo.obj
 # RUN: llc %S/Inputs/bar.ll -filetype=obj -mtriple=i686-windows-msvc -o bar.obj
@@ -13,12 +14,15 @@
 # CHECK-NEXT:   Mod 0000 | Name: `{{.*pdb-lib.s.tmp[/\\]foo.obj}}`:
 # CHECK-NEXT:              Obj: `{{.*pdb-lib.s.tmp[/\\]foo.obj}}`:
 # CHECK-NEXT:              debug stream: 9, # files: 0, has ec info: false
+# CHECK-NEXT:              pdb file ni: 0 ``, src file ni: 0 ``
 # CHECK-NEXT:   Mod 0001 | Name: `bar.obj`:
 # CHECK-NEXT:              Obj: `{{.*pdb-lib.s.tmp[/\\]bar.lib}}`:
 # CHECK-NEXT:              debug stream: 10, # files: 0, has ec info: false
+# CHECK-NEXT:              pdb file ni: 0 ``, src file ni: 0 ``
 # CHECK-NEXT:   Mod 0002 | Name: `* Linker *`:
 # CHECK-NEXT:              Obj: ``:
 # CHECK-NEXT:              debug stream: 11, # files: 0, has ec info: false
+# CHECK-NEXT:              pdb file ni: 1 `{{.*foo.pdb}}`, src file ni: 0 ``
 
         .def     _main;
         .scl    2;

@@ -665,6 +665,15 @@ Error LTO::addThinLTO(BitcodeModule BM, ArrayRef<InputFile::Symbol> Syms,
         auto GUID = GlobalValue::getGUID(GlobalValue::getGlobalIdentifier(
             Sym.getIRName(), GlobalValue::ExternalLinkage, ""));
         ThinLTO.PrevailingModuleForGUID[GUID] = BM.getModuleIdentifier();
+
+        // For linker redefined symbols (via --wrap or --defsym) we want to
+        // switch the linkage to `weak` to prevent IPOs from happening.
+        // Find the summary in the module for this very GV and record the new
+        // linkage so that we can switch it when we import the GV.
+        if (Res.LinkerRedefined)
+          if (auto S = ThinLTO.CombinedIndex.findSummaryInModule(
+                  GUID, BM.getModuleIdentifier()))
+            S->setLinkage(GlobalValue::WeakAnyLinkage);
       }
     }
   }
@@ -1021,7 +1030,7 @@ Error LTO::runThinLTO(AddStreamFn AddStream, NativeObjectCache Cache,
 
   // Collect for each module the list of function it defines (GUID ->
   // Summary).
-  StringMap<std::map<GlobalValue::GUID, GlobalValueSummary *>>
+  StringMap<GVSummaryMapTy>
       ModuleToDefinedGVSummaries(ThinLTO.ModuleMap.size());
   ThinLTO.CombinedIndex.collectDefinedGVSummariesPerModule(
       ModuleToDefinedGVSummaries);
@@ -1062,6 +1071,12 @@ Error LTO::runThinLTO(AddStreamFn AddStream, NativeObjectCache Cache,
       if (ThinLTO.CombinedIndex.isGUIDLive(GUID))
         ExportedGUIDs.insert(GUID);
     }
+
+    // Any functions referenced by the jump table in the regular LTO object must
+    // be exported.
+    for (auto &Def : ThinLTO.CombinedIndex.cfiFunctionDefs())
+      ExportedGUIDs.insert(
+          GlobalValue::getGUID(GlobalValue::dropLLVMManglingEscape(Def)));
 
     auto isExported = [&](StringRef ModuleIdentifier, GlobalValue::GUID GUID) {
       const auto &ExportList = ExportLists.find(ModuleIdentifier);

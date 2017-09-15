@@ -14,6 +14,7 @@
 
 #include "sanitizer_common/sanitizer_atomic.h"
 #include "sanitizer_common/sanitizer_common.h"
+#include "sanitizer_common/sanitizer_file.h"
 #include "sanitizer_common/sanitizer_libc.h"
 #include "sanitizer_common/sanitizer_stackdepot.h"
 #include "sanitizer_common/sanitizer_placement_new.h"
@@ -104,7 +105,8 @@ Context::Context()
   , racy_stacks(MBlockRacyStacks)
   , racy_addresses(MBlockRacyAddresses)
   , fired_suppressions_mtx(MutexTypeFired, StatMtxFired)
-  , fired_suppressions(8) {
+  , fired_suppressions(8)
+  , clock_alloc("clock allocator") {
 }
 
 // The objects are allocated in TLS, so one may rely on zero-initialization.

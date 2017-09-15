@@ -53,12 +53,6 @@ using namespace llvm;
 
 STATISTIC(VersionedScops, "Number of SCoPs that required versioning.");
 
-// The maximal number of dimensions we allow during invariant load construction.
-// More complex access ranges will result in very high compile time and are also
-// unlikely to result in good code. This value is very high and should only
-// trigger for corner cases (e.g., the "dct_luma" function in h264, SPEC2006).
-static int const MaxDimensionsInAccessRange = 9;
-
 static cl::opt<bool> PollyGenerateRTCPrint(
     "polly-codegen-emit-rtc-print",
     cl::desc("Emit code that prints the runtime check result dynamically."),
@@ -87,7 +81,6 @@ IslNodeBuilder::getUpperBound(__isl_keep isl_ast_node *For,
 
   Cond = isl_ast_node_for_get_cond(For);
   Iterator = isl_ast_node_for_get_iterator(For);
-  isl_ast_expr_get_type(Cond);
   assert(isl_ast_expr_get_type(Cond) == isl_ast_expr_op &&
          "conditional expression is not an atomic upper bound");
 
@@ -322,6 +315,22 @@ void IslNodeBuilder::getReferencesInSubtree(__isl_keep isl_ast_node *For,
   Loops.remove_if([this](const Loop *L) {
     return S.contains(L) || L->contains(S.getEntry());
   });
+
+  // Contains Values that may need to be replaced with other values
+  // due to replacements from the ValueMap. We should make sure
+  // that we return correctly remapped values.
+  // NOTE: this code path is tested by:
+  //     1.  test/Isl/CodeGen/OpenMP/single_loop_with_loop_invariant_baseptr.ll
+  //     2.  test/Isl/CodeGen/OpenMP/loop-body-references-outer-values-3.ll
+  SetVector<Value *> ReplacedValues;
+  for (Value *V : Values) {
+    auto It = ValueMap.find(V);
+    if (It == ValueMap.end())
+      ReplacedValues.insert(V);
+    else
+      ReplacedValues.insert(It->second);
+  }
+  Values = ReplacedValues;
 }
 
 void IslNodeBuilder::updateValues(ValueMapT &NewValues) {
@@ -796,7 +805,7 @@ IslNodeBuilder::createNewAccesses(ScopStmt *Stmt,
       auto Dom = Stmt->getDomain();
       auto SchedDom = isl_set_from_union_set(
           isl_union_map_domain(isl_union_map_copy(Schedule)));
-      auto AccDom = isl_map_domain(MA->getAccessRelation());
+      auto AccDom = isl_map_domain(MA->getAccessRelation().release());
       Dom = isl_set_intersect_params(Dom, Stmt->getParent()->getContext());
       SchedDom =
           isl_set_intersect_params(SchedDom, Stmt->getParent()->getContext());
@@ -810,7 +819,8 @@ IslNodeBuilder::createNewAccesses(ScopStmt *Stmt,
     }
 #endif
 
-    auto PWAccRel = MA->applyScheduleToAccessRelation(Schedule);
+    auto PWAccRel =
+        MA->applyScheduleToAccessRelation(isl::manage(Schedule)).release();
 
     // isl cannot generate an index expression for access-nothing accesses.
     isl::set AccDomain =
@@ -821,7 +831,8 @@ IslNodeBuilder::createNewAccesses(ScopStmt *Stmt,
     }
 
     auto AccessExpr = isl_ast_build_access_from_pw_multi_aff(Build, PWAccRel);
-    NewAccesses = isl_id_to_ast_expr_set(NewAccesses, MA->getId(), AccessExpr);
+    NewAccesses =
+        isl_id_to_ast_expr_set(NewAccesses, MA->getId().release(), AccessExpr);
   }
 
   return NewAccesses;
@@ -874,9 +885,10 @@ void IslNodeBuilder::generateCopyStmt(
          "Accesses use the same data type");
   assert((*ReadAccess)->isArrayKind() && (*WriteAccess)->isArrayKind());
   auto *AccessExpr =
-      isl_id_to_ast_expr_get(NewAccesses, (*ReadAccess)->getId());
+      isl_id_to_ast_expr_get(NewAccesses, (*ReadAccess)->getId().release());
   auto *LoadValue = ExprBuilder.create(AccessExpr);
-  AccessExpr = isl_id_to_ast_expr_get(NewAccesses, (*WriteAccess)->getId());
+  AccessExpr =
+      isl_id_to_ast_expr_get(NewAccesses, (*WriteAccess)->getId().release());
   auto *StoreAddr = ExprBuilder.createAccessAddress(AccessExpr);
   Builder.CreateStore(LoadValue, StoreAddr);
 }
@@ -1092,7 +1104,7 @@ bool IslNodeBuilder::materializeFortranArrayOutermostDimension() {
       if (!FAD)
         continue;
 
-      isl_pw_aff *ParametricPwAff = Array->getDimensionSizePw(0);
+      isl_pw_aff *ParametricPwAff = Array->getDimensionSizePw(0).release();
       assert(ParametricPwAff && "parametric pw_aff corresponding "
                                 "to outermost dimension does not "
                                 "exist");
@@ -1118,26 +1130,9 @@ bool IslNodeBuilder::materializeFortranArrayOutermostDimension() {
   return true;
 }
 
-/// Add the number of dimensions in @p BS to @p U.
-static isl_stat countTotalDims(__isl_take isl_basic_set *BS, void *U) {
-  unsigned *NumTotalDim = static_cast<unsigned *>(U);
-  *NumTotalDim += isl_basic_set_total_dim(BS);
-  isl_basic_set_free(BS);
-  return isl_stat_ok;
-}
-
 Value *IslNodeBuilder::preloadUnconditionally(isl_set *AccessRange,
                                               isl_ast_build *Build,
                                               Instruction *AccInst) {
-
-  // TODO: This check could be performed in the ScopInfo already.
-  unsigned NumTotalDim = 0;
-  isl_set_foreach_basic_set(AccessRange, countTotalDims, &NumTotalDim);
-  if (NumTotalDim > MaxDimensionsInAccessRange) {
-    isl_set_free(AccessRange);
-    return nullptr;
-  }
-
   isl_pw_multi_aff *PWAccRel = isl_pw_multi_aff_from_set(AccessRange);
   isl_ast_expr *Access =
       isl_ast_build_access_from_pw_multi_aff(Build, PWAccRel);
@@ -1168,7 +1163,7 @@ Value *IslNodeBuilder::preloadUnconditionally(isl_set *AccessRange,
 Value *IslNodeBuilder::preloadInvariantLoad(const MemoryAccess &MA,
                                             isl_set *Domain) {
 
-  isl_set *AccessRange = isl_map_range(MA.getAddressFunction());
+  isl_set *AccessRange = isl_map_range(MA.getAddressFunction().release());
   AccessRange = isl_set_gist_params(AccessRange, S.getContext());
 
   if (!materializeParameters(AccessRange)) {

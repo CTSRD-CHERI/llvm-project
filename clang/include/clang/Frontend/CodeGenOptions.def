@@ -167,6 +167,7 @@ CODEGENOPT(SanitizeCoverageTracePC, 1, 0) ///< Enable PC tracing
 CODEGENOPT(SanitizeCoverageTracePCGuard, 1, 0) ///< Enable PC tracing with guard
                                                ///< in sanitizer coverage.
 CODEGENOPT(SanitizeCoverageInline8bitCounters, 1, 0) ///< Use inline 8bit counters.
+CODEGENOPT(SanitizeCoveragePCTable, 1, 0) ///< Create a PC Table.
 CODEGENOPT(SanitizeCoverageNoPrune, 1, 0) ///< Disable coverage pruning.
 CODEGENOPT(SanitizeStats     , 1, 0) ///< Collect statistics for sanitizers.
 CODEGENOPT(SimplifyLibCalls  , 1, 1) ///< Set when -fbuiltin is enabled.
@@ -260,6 +261,10 @@ VALUE_CODEGENOPT(EmitCheckPathComponentsToStrip, 32, 0)
 
 /// Whether to report the hotness of the code region for optimization remarks.
 CODEGENOPT(DiagnosticsWithHotness, 1, 0)
+
+/// The minimum hotness value a diagnostic needs in order to be included in
+/// optimization diagnostics.
+VALUE_CODEGENOPT(DiagnosticsHotnessThreshold, 32, 0)
 
 /// Whether copy relocations support is available when building as PIE.
 CODEGENOPT(PIECopyRelocations, 1, 0)

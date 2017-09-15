@@ -194,6 +194,16 @@ def clang_ignored_f_Group : OptionGroup<"<clang ignored f group>">,
 def clang_ignored_m_Group : OptionGroup<"<clang ignored m group>">,
   Group<m_Group>, Flags<[Ignored]>;
 
+// Group for clang options in the process of deprecation.
+// Please include the version that deprecated the flag as comment to allow
+// easier garbage collection.
+def clang_ignored_legacy_options_Group : OptionGroup<"<clang legacy flags>">,
+  Group<f_Group>, Flags<[Ignored]>;
+
+// Retired with clang-5.0
+def : Flag<["-"], "fslp-vectorize-aggressive">, Group<clang_ignored_legacy_options_Group>;
+def : Flag<["-"], "fno-slp-vectorize-aggressive">, Group<clang_ignored_legacy_options_Group>;
+
 // Group that ignores all gcc optimizations that won't be implemented
 def clang_ignored_gcc_optimization_f_Group : OptionGroup<
   "<clang_ignored_gcc_optimization_f_Group>">, Group<f_Group>, Flags<[Ignored]>;
@@ -723,6 +733,9 @@ def fdiagnostics_print_source_range_info : Flag<["-"], "fdiagnostics-print-sourc
     HelpText<"Print source range spans in numeric form">;
 def fdiagnostics_show_hotness : Flag<["-"], "fdiagnostics-show-hotness">, Group<f_Group>,
     Flags<[CC1Option]>, HelpText<"Enable profile hotness information in diagnostic line">;
+def fdiagnostics_hotness_threshold_EQ : Joined<["-"], "fdiagnostics-hotness-threshold=">,
+    Group<f_Group>, Flags<[CC1Option]>, MetaVarName<"<number>">,
+    HelpText<"Prevent optimization remarks from being output if they do not have at least this profile count">;
 def fdiagnostics_show_option : Flag<["-"], "fdiagnostics-show-option">, Group<f_Group>,
     Flags<[CC1Option]>, HelpText<"Print option name with mappable diagnostics">;
 def fdiagnostics_show_note_include_stack : Flag<["-"], "fdiagnostics-show-note-include-stack">,
@@ -2014,10 +2027,30 @@ def mmsa : Flag<["-"], "mmsa">, Group<m_Group>,
   HelpText<"Enable MSA ASE (MIPS only)">;
 def mno_msa : Flag<["-"], "mno-msa">, Group<m_Group>,
   HelpText<"Disable MSA ASE (MIPS only)">;
+def mmt : Flag<["-"], "mmt">, Group<m_Group>,
+  HelpText<"Enable MT ASE (MIPS only)">;
+def mno_mt : Flag<["-"], "mno-mt">, Group<m_Group>,
+  HelpText<"Disable MT ASE (MIPS only)">;
 def mfp64 : Flag<["-"], "mfp64">, Group<m_Group>,
   HelpText<"Use 64-bit floating point registers (MIPS only)">;
 def mfp32 : Flag<["-"], "mfp32">, Group<m_Group>,
   HelpText<"Use 32-bit floating point registers (MIPS only)">;
+def mgpopt : Flag<["-"], "mgpopt">, Group<m_Group>,
+  HelpText<"Use GP relative accesses for symbols known to be in a small"
+           " data section (MIPS)">;
+def mno_gpopt : Flag<["-"], "mno-gpopt">, Group<m_Group>,
+  HelpText<"Do not use GP relative accesses for symbols known to be in a small"
+           " data section (MIPS)">;
+def mlocal_sdata : Flag<["-"], "mlocal-sdata">, Group<m_Group>,
+  HelpText<"Extend the -G behaviour to object local data (MIPS)">;
+def mno_local_sdata : Flag<["-"], "mno-local-sdata">, Group<m_Group>,
+  HelpText<"Do not extend the -G behaviour to object local data (MIPS)">;
+def mextern_sdata : Flag<["-"], "mextern-sdata">, Group<m_Group>,
+  HelpText<"Assume that externally defined data is in the small data if it"
+           " meets the -G <size> threshold (MIPS)">;
+def mno_extern_sdata : Flag<["-"], "mno-extern-sdata">, Group<m_Group>,
+  HelpText<"Do not assume that externally defined data is in the small data if"
+           " it meets the -G <size> threshold (MIPS)">;
 def mnan_EQ : Joined<["-"], "mnan=">, Group<m_Group>;
 def mabicalls : Flag<["-"], "mabicalls">, Group<m_Group>,
   HelpText<"Enable SVR4-style position-independent code (Mips only)">;
@@ -2102,6 +2135,7 @@ def nofixprebinding : Flag<["-"], "nofixprebinding">;
 def nolibc : Flag<["-"], "nolibc">;
 def nomultidefs : Flag<["-"], "nomultidefs">;
 def nopie : Flag<["-"], "nopie">;
+def no_pie : Flag<["-"], "no-pie">, Alias<nopie>;
 def noprebind : Flag<["-"], "noprebind">;
 def noseglinkedit : Flag<["-"], "noseglinkedit">;
 def nostartfiles : Flag<["-"], "nostartfiles">;
@@ -2110,6 +2144,7 @@ def nostdlibinc : Flag<["-"], "nostdlibinc">;
 def nostdincxx : Flag<["-"], "nostdinc++">, Flags<[CC1Option]>,
   HelpText<"Disable standard #include directories for the C++ standard library">;
 def nostdlib : Flag<["-"], "nostdlib">;
+def nostdlibxx : Flag<["-"], "nostdlib++">;
 def object : Flag<["-"], "object">;
 def o : JoinedOrSeparate<["-"], "o">, Flags<[DriverOption, RenderAsInput, CC1Option, CC1AsOption]>,
   HelpText<"Write output to <file>">, MetaVarName<"<file>">;

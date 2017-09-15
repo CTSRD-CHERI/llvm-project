@@ -298,12 +298,12 @@ static void __kmp_bget_dequeue(kmp_info_t *th) {
 #if USE_CMP_XCHG_FOR_BGET
     {
       volatile void *old_value = TCR_SYNC_PTR(th->th.th_local.bget_list);
-      while (!KMP_COMPARE_AND_STORE_PTR(&th->th.th_local.bget_list, old_value,
-                                        NULL)) {
+      while (!KMP_COMPARE_AND_STORE_PTR(&th->th.th_local.bget_list,
+                                        CCAST(void *, old_value), nullptr)) {
         KMP_CPU_PAUSE();
         old_value = TCR_SYNC_PTR(th->th.th_local.bget_list);
       }
-      p = (void *)old_value;
+      p = CCAST(void *, old_value);
     }
 #else /* ! USE_CMP_XCHG_FOR_BGET */
 #ifdef USE_QUEUING_LOCK_FOR_BGET
@@ -362,15 +362,15 @@ static void __kmp_bget_enqueue(kmp_info_t *th, void *buf
     volatile void *old_value = TCR_PTR(th->th.th_local.bget_list);
     /* the next pointer must be set before setting bget_list to buf to avoid
        exposing a broken list to other threads, even for an instant. */
-    b->ql.flink = BFH(old_value);
+    b->ql.flink = BFH(CCAST(void *, old_value));
 
-    while (!KMP_COMPARE_AND_STORE_PTR(&th->th.th_local.bget_list, old_value,
-                                      buf)) {
+    while (!KMP_COMPARE_AND_STORE_PTR(&th->th.th_local.bget_list,
+                                      CCAST(void *, old_value), buf)) {
       KMP_CPU_PAUSE();
       old_value = TCR_PTR(th->th.th_local.bget_list);
       /* the next pointer must be set before setting bget_list to buf to avoid
          exposing a broken list to other threads, even for an instant. */
-      b->ql.flink = BFH(old_value);
+      b->ql.flink = BFH(CCAST(void *, old_value));
     }
   }
 #else /* ! USE_CMP_XCHG_FOR_BGET */
@@ -607,7 +607,7 @@ static void *bget(kmp_info_t *th, bufsize requested_size) {
   if (thr->acqfcn != 0) {
     if (size > (bufsize)(thr->exp_incr - sizeof(bhead_t))) {
       /* Request is too large to fit in a single expansion block.
-	 Try to satisy it by a direct buffer acquisition. */
+         Try to satisy it by a direct buffer acquisition. */
       bdhead_t *bdh;
 
       size += sizeof(bdhead_t) - sizeof(bhead_t);
@@ -794,7 +794,7 @@ static void brel(kmp_info_t *th, void *buf) {
        the length of this buffer to the previous free buffer. Note that we
        subtract the size in the buffer being released, since it's negative to
        indicate that the buffer is allocated. */
-    register bufsize size = b->bh.bb.bsize;
+    bufsize size = b->bh.bb.bsize;
 
     /* Make the previous buffer the one we're working on. */
     KMP_DEBUG_ASSERT(BH((char *)b - b->bh.bb.prevfree)->bb.bsize ==
@@ -1696,7 +1696,7 @@ void *___kmp_fast_allocate(kmp_info_t *this_thr, size_t size KMP_SRC_LOC_DECL) {
     // threads only)
     // pop the head of the sync free list, push NULL instead
     while (!KMP_COMPARE_AND_STORE_PTR(
-        &this_thr->th.th_free_lists[index].th_free_list_sync, ptr, NULL)) {
+        &this_thr->th.th_free_lists[index].th_free_list_sync, ptr, nullptr)) {
       KMP_CPU_PAUSE();
       ptr = TCR_SYNC_PTR(this_thr->th.th_free_lists[index].th_free_list_sync);
     }

@@ -299,6 +299,15 @@ static bool checkOpenCLBlockArgs(Sema &S, Expr *BlockArg) {
   return IllegalParams;
 }
 
+static bool checkOpenCLSubgroupExt(Sema &S, CallExpr *Call) {
+  if (!S.getOpenCLOptions().isEnabled("cl_khr_subgroups")) {
+    S.Diag(Call->getLocStart(), diag::err_opencl_requires_extension)
+          << 1 << Call->getDirectCallee() << "cl_khr_subgroups";
+    return true;
+  }
+  return false;
+}
+
 /// OpenCL C v2.0, s6.13.17.6 - Check the argument to the
 /// get_kernel_work_group_size
 /// and get_kernel_preferred_work_group_size_multiple builtin functions.
@@ -309,7 +318,8 @@ static bool SemaOpenCLBuiltinKernelWorkGroupSize(Sema &S, CallExpr *TheCall) {
   Expr *BlockArg = TheCall->getArg(0);
   if (!isBlockPointer(BlockArg)) {
     S.Diag(BlockArg->getLocStart(),
-           diag::err_opencl_enqueue_kernel_expected_type) << "block";
+           diag::err_opencl_builtin_expected_type)
+        << TheCall->getDirectCallee() << "block";
     return true;
   }
   return checkOpenCLBlockArgs(S, BlockArg);
@@ -394,24 +404,24 @@ static bool SemaOpenCLBuiltinEnqueueKernel(Sema &S, CallExpr *TheCall) {
   // First argument always needs to be a queue_t type.
   if (!Arg0->getType()->isQueueT()) {
     S.Diag(TheCall->getArg(0)->getLocStart(),
-           diag::err_opencl_enqueue_kernel_expected_type)
-        << S.Context.OCLQueueTy;
+           diag::err_opencl_builtin_expected_type)
+        << TheCall->getDirectCallee() << S.Context.OCLQueueTy;
     return true;
   }
 
   // Second argument always needs to be a kernel_enqueue_flags_t enum value.
   if (!Arg1->getType()->isIntegerType()) {
     S.Diag(TheCall->getArg(1)->getLocStart(),
-           diag::err_opencl_enqueue_kernel_expected_type)
-        << "'kernel_enqueue_flags_t' (i.e. uint)";
+           diag::err_opencl_builtin_expected_type)
+        << TheCall->getDirectCallee() << "'kernel_enqueue_flags_t' (i.e. uint)";
     return true;
   }
 
   // Third argument is always an ndrange_t type.
   if (Arg2->getType().getUnqualifiedType().getAsString() != "ndrange_t") {
     S.Diag(TheCall->getArg(2)->getLocStart(),
-           diag::err_opencl_enqueue_kernel_expected_type)
-        << "'ndrange_t'";
+           diag::err_opencl_builtin_expected_type)
+        << TheCall->getDirectCallee() << "'ndrange_t'";
     return true;
   }
 
@@ -420,8 +430,8 @@ static bool SemaOpenCLBuiltinEnqueueKernel(Sema &S, CallExpr *TheCall) {
   if (NumArgs == 4) {
     // check that the last argument is the right block type.
     if (!isBlockPointer(Arg3)) {
-      S.Diag(Arg3->getLocStart(), diag::err_opencl_enqueue_kernel_expected_type)
-          << "block";
+      S.Diag(Arg3->getLocStart(), diag::err_opencl_builtin_expected_type)
+          << TheCall->getDirectCallee() << "block";
       return true;
     }
     // we have a block type, check the prototype
@@ -443,8 +453,8 @@ static bool SemaOpenCLBuiltinEnqueueKernel(Sema &S, CallExpr *TheCall) {
     // check common block argument.
     Expr *Arg6 = TheCall->getArg(6);
     if (!isBlockPointer(Arg6)) {
-      S.Diag(Arg6->getLocStart(), diag::err_opencl_enqueue_kernel_expected_type)
-          << "block";
+      S.Diag(Arg6->getLocStart(), diag::err_opencl_builtin_expected_type)
+          << TheCall->getDirectCallee() << "block";
       return true;
     }
     if (checkOpenCLBlockArgs(S, Arg6))
@@ -453,8 +463,8 @@ static bool SemaOpenCLBuiltinEnqueueKernel(Sema &S, CallExpr *TheCall) {
     // Forth argument has to be any integer type.
     if (!Arg3->getType()->isIntegerType()) {
       S.Diag(TheCall->getArg(3)->getLocStart(),
-             diag::err_opencl_enqueue_kernel_expected_type)
-          << "integer";
+             diag::err_opencl_builtin_expected_type)
+          << TheCall->getDirectCallee() << "integer";
       return true;
     }
     // check remaining common arguments.
@@ -466,7 +476,8 @@ static bool SemaOpenCLBuiltinEnqueueKernel(Sema &S, CallExpr *TheCall) {
                                      Expr::NPC_ValueDependentIsNotNull) &&
         !Arg4->getType()->getPointeeOrArrayElementType()->isClkEventT()) {
       S.Diag(TheCall->getArg(4)->getLocStart(),
-             diag::err_opencl_enqueue_kernel_expected_type)
+             diag::err_opencl_builtin_expected_type)
+          << TheCall->getDirectCallee()
           << S.Context.getPointerType(S.Context.OCLClkEventTy);
       return true;
     }
@@ -477,7 +488,8 @@ static bool SemaOpenCLBuiltinEnqueueKernel(Sema &S, CallExpr *TheCall) {
         !(Arg5->getType()->isPointerType() &&
           Arg5->getType()->getPointeeType()->isClkEventT())) {
       S.Diag(TheCall->getArg(5)->getLocStart(),
-             diag::err_opencl_enqueue_kernel_expected_type)
+             diag::err_opencl_builtin_expected_type)
+          << TheCall->getDirectCallee()
           << S.Context.getPointerType(S.Context.OCLClkEventTy);
       return true;
     }
@@ -757,6 +769,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     if (CheckObjCString(TheCall->getArg(0)))
       return ExprError();
     break;
+  case Builtin::BI__builtin_ms_va_start:
   case Builtin::BI__builtin_stdarg_start:
   case Builtin::BI__builtin_va_start:
     if (SemaBuiltinVAStart(BuiltinID, TheCall))
@@ -1044,9 +1057,17 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
   case Builtin::BIreserve_write_pipe:
   case Builtin::BIwork_group_reserve_read_pipe:
   case Builtin::BIwork_group_reserve_write_pipe:
+    if (SemaBuiltinReserveRWPipe(*this, TheCall))
+      return ExprError();
+    // Since return type of reserve_read/write_pipe built-in function is
+    // reserve_id_t, which is not defined in the builtin def file , we used int
+    // as return type and need to override the return type of these functions.
+    TheCall->setType(Context.OCLReserveIDTy);
+    break;
   case Builtin::BIsub_group_reserve_read_pipe:
   case Builtin::BIsub_group_reserve_write_pipe:
-    if (SemaBuiltinReserveRWPipe(*this, TheCall))
+    if (checkOpenCLSubgroupExt(*this, TheCall) ||
+        SemaBuiltinReserveRWPipe(*this, TheCall))
       return ExprError();
     // Since return type of reserve_read/write_pipe built-in function is
     // reserve_id_t, which is not defined in the builtin def file , we used int
@@ -1057,9 +1078,13 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
   case Builtin::BIcommit_write_pipe:
   case Builtin::BIwork_group_commit_read_pipe:
   case Builtin::BIwork_group_commit_write_pipe:
+    if (SemaBuiltinCommitRWPipe(*this, TheCall))
+      return ExprError();
+    break;
   case Builtin::BIsub_group_commit_read_pipe:
   case Builtin::BIsub_group_commit_write_pipe:
-    if (SemaBuiltinCommitRWPipe(*this, TheCall))
+    if (checkOpenCLSubgroupExt(*this, TheCall) ||
+        SemaBuiltinCommitRWPipe(*this, TheCall))
       return ExprError();
     break;
   case Builtin::BIget_pipe_num_packets:
@@ -1736,9 +1761,11 @@ bool Sema::CheckSystemZBuiltinFunctionCall(unsigned BuiltinID,
   case SystemZ::BI__builtin_s390_vfaezbs:
   case SystemZ::BI__builtin_s390_vfaezhs:
   case SystemZ::BI__builtin_s390_vfaezfs: i = 2; l = 0; u = 15; break;
+  case SystemZ::BI__builtin_s390_vfisb:
   case SystemZ::BI__builtin_s390_vfidb:
     return SemaBuiltinConstantArgRange(TheCall, 1, 0, 15) ||
            SemaBuiltinConstantArgRange(TheCall, 2, 0, 15);
+  case SystemZ::BI__builtin_s390_vftcisb:
   case SystemZ::BI__builtin_s390_vftcidb: i = 1; l = 0; u = 4095; break;
   case SystemZ::BI__builtin_s390_vlbb: i = 1; l = 0; u = 15; break;
   case SystemZ::BI__builtin_s390_vpdi: i = 2; l = 0; u = 15; break;
@@ -1755,6 +1782,11 @@ bool Sema::CheckSystemZBuiltinFunctionCall(unsigned BuiltinID,
   case SystemZ::BI__builtin_s390_vstrczbs:
   case SystemZ::BI__builtin_s390_vstrczhs:
   case SystemZ::BI__builtin_s390_vstrczfs: i = 3; l = 0; u = 15; break;
+  case SystemZ::BI__builtin_s390_vmslg: i = 3; l = 0; u = 15; break;
+  case SystemZ::BI__builtin_s390_vfminsb:
+  case SystemZ::BI__builtin_s390_vfmaxsb:
+  case SystemZ::BI__builtin_s390_vfmindb:
+  case SystemZ::BI__builtin_s390_vfmaxdb: i = 2; l = 0; u = 15; break;
   }
   return SemaBuiltinConstantArgRange(TheCall, i, l, u);
 }
@@ -2091,9 +2123,6 @@ bool Sema::CheckX86BuiltinGatherScatterScale(unsigned BuiltinID,
 bool Sema::CheckX86BuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
   if (BuiltinID == X86::BI__builtin_cpu_supports)
     return SemaBuiltinCpuSupports(*this, TheCall);
-
-  if (BuiltinID == X86::BI__builtin_ms_va_start)
-    return SemaBuiltinVAStart(BuiltinID, TheCall);
 
   // If the intrinsic has rounding or SAE make sure its valid.
   if (CheckX86BuiltinRoundingOrSAE(BuiltinID, TheCall))
@@ -3619,24 +3648,25 @@ ExprResult Sema::CheckOSLogFormatStringArg(Expr *Arg) {
 static bool checkVAStartABI(Sema &S, unsigned BuiltinID, Expr *Fn) {
   const llvm::Triple &TT = S.Context.getTargetInfo().getTriple();
   bool IsX64 = TT.getArch() == llvm::Triple::x86_64;
+  bool IsAArch64 = TT.getArch() == llvm::Triple::aarch64;
   bool IsWindows = TT.isOSWindows();
-  bool IsMSVAStart = BuiltinID == X86::BI__builtin_ms_va_start;
-  if (IsX64) {
+  bool IsMSVAStart = BuiltinID == Builtin::BI__builtin_ms_va_start;
+  if (IsX64 || IsAArch64) {
     clang::CallingConv CC = CC_C;
     if (const FunctionDecl *FD = S.getCurFunctionDecl())
       CC = FD->getType()->getAs<FunctionType>()->getCallConv();
     if (IsMSVAStart) {
       // Don't allow this in System V ABI functions.
-      if (CC == CC_X86_64SysV || (!IsWindows && CC != CC_X86_64Win64))
+      if (CC == CC_X86_64SysV || (!IsWindows && CC != CC_Win64))
         return S.Diag(Fn->getLocStart(),
                       diag::err_ms_va_start_used_in_sysv_function);
     } else {
-      // On x86-64 Unix, don't allow this in Win64 ABI functions.
+      // On x86-64/AArch64 Unix, don't allow this in Win64 ABI functions.
       // On x64 Windows, don't allow this in System V ABI functions.
       // (Yes, that means there's no corresponding way to support variadic
       // System V ABI functions on Windows.)
       if ((IsWindows && CC == CC_X86_64SysV) ||
-          (!IsWindows && CC == CC_X86_64Win64))
+          (!IsWindows && CC == CC_Win64))
         return S.Diag(Fn->getLocStart(),
                       diag::err_va_start_used_in_wrong_abi_function)
                << !IsWindows;
@@ -3645,7 +3675,7 @@ static bool checkVAStartABI(Sema &S, unsigned BuiltinID, Expr *Fn) {
   }
 
   if (IsMSVAStart)
-    return S.Diag(Fn->getLocStart(), diag::err_x86_builtin_64_only);
+    return S.Diag(Fn->getLocStart(), diag::err_builtin_x64_aarch64_only);
   return false;
 }
 
@@ -12094,6 +12124,8 @@ void Sema::RefersToMemberWithReducedAlignment(
     if (ME->isArrow())
       BaseType = BaseType->getPointeeType();
     RecordDecl *RD = BaseType->getAs<RecordType>()->getDecl();
+    if (RD->isInvalidDecl())
+      return;
 
     ValueDecl *MD = ME->getMemberDecl();
     auto *FD = dyn_cast<FieldDecl>(MD);

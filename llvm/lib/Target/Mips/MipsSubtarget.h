@@ -155,12 +155,18 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
   // related instructions.
   bool DisableMadd4;
 
+  // HasMT -- support MT ASE.
+  bool HasMT;
+  
   /// The minimum alignment known to hold of the stack frame on
   /// entry to the function and which must be maintained by every function.
   unsigned stackAlignment;
 
   /// Override the stack alignment.
   unsigned StackAlignOverride;
+
+  // Disable use of the `jal` instruction.
+  bool UseLongCalls = false;
 
   InstrItineraryData InstrItins;
 
@@ -275,6 +281,7 @@ public:
   bool hasMSA() const { return HasMSA; }
   bool disableMadd4() const { return DisableMadd4; }
   bool hasEVA() const { return HasEVA; }
+  bool hasMT() const { return HasMT; }
   bool useSmallSection() const { return UseSmallSection; }
   bool isCheri() const { return IsCheri; }
   bool isCheri128() const { return IsCheri128; }
@@ -292,6 +299,8 @@ public:
   bool hasStandardEncoding() const { return !inMips16Mode(); }
 
   bool useSoftFloat() const { return IsSoftFloat; }
+
+  bool useLongCalls() const { return UseLongCalls; }
 
   bool enableLongBranchPass() const {
     return hasStandardEncoding() || allowMixed16_32();

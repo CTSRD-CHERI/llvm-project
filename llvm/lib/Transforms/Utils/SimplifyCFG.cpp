@@ -5158,8 +5158,11 @@ static bool SwitchToLookupTable(SwitchInst *SI, IRBuilder<> &Builder,
                                 const TargetTransformInfo &TTI) {
   assert(SI->getNumCases() > 1 && "Degenerate switch?");
 
-  // Only build lookup table when we have a target that supports it.
-  if (!TTI.shouldBuildLookupTables())
+  Function *Fn = SI->getParent()->getParent();
+  // Only build lookup table when we have a target that supports it or the
+  // attribute is not set.
+  if (!TTI.shouldBuildLookupTables() ||
+      (Fn->getFnAttribute("no-jump-tables").getValueAsString() == "true"))
     return false;
 
   // FIXME: This is a work-around for the lack of linker support in CHERI: We
@@ -5350,7 +5353,7 @@ static bool SwitchToLookupTable(SwitchInst *SI, IRBuilder<> &Builder,
 
     // If using a bitmask, use any value to fill the lookup table holes.
     Constant *DV = NeedMask ? ResultLists[PHI][0].second : DefaultResults[PHI];
-    StringRef FuncName = SI->getParent()->getParent()->getName();
+    StringRef FuncName = Fn->getName();
     SwitchLookupTable Table(Mod, TableSize, MinCaseVal, ResultList, DV, DL,
                             FuncName);
 
@@ -5673,20 +5676,22 @@ static bool TryToMergeLandingPad(LandingPadInst *LPad, BranchInst *BI,
 bool SimplifyCFGOpt::SimplifyUncondBranch(BranchInst *BI,
                                           IRBuilder<> &Builder) {
   BasicBlock *BB = BI->getParent();
+  BasicBlock *Succ = BI->getSuccessor(0);
 
   if (SinkCommon && SinkThenElseCodeToEnd(BI))
     return true;
 
   // If the Terminator is the only non-phi instruction, simplify the block.
-  // if LoopHeader is provided, check if the block is a loop header
-  // (This is for early invocations before loop simplify and vectorization
-  // to keep canonical loop forms for nested loops.
-  // These blocks can be eliminated when the pass is invoked later
-  // in the back-end.)
+  // if LoopHeader is provided, check if the block or its successor is a loop
+  // header (This is for early invocations before loop simplify and
+  // vectorization to keep canonical loop forms for nested loops. These blocks
+  // can be eliminated when the pass is invoked later in the back-end.)
+  bool NeedCanonicalLoop =
+      !LateSimplifyCFG &&
+      (LoopHeaders && (LoopHeaders->count(BB) || LoopHeaders->count(Succ)));
   BasicBlock::iterator I = BB->getFirstNonPHIOrDbg()->getIterator();
   if (I->isTerminator() && BB != &BB->getParent()->getEntryBlock() &&
-      (!LoopHeaders || !LoopHeaders->count(BB)) &&
-      TryToSimplifyUncondBranchFromEmptyBlock(BB))
+      !NeedCanonicalLoop && TryToSimplifyUncondBranchFromEmptyBlock(BB))
     return true;
 
   // If the only instruction in the block is a seteq/setne comparison
@@ -5771,8 +5776,8 @@ bool SimplifyCFGOpt::SimplifyCondBranch(BranchInst *BI, IRBuilder<> &Builder) {
   if (BasicBlock *Dom = BB->getSinglePredecessor()) {
     auto *PBI = dyn_cast_or_null<BranchInst>(Dom->getTerminator());
     if (PBI && PBI->isConditional() &&
-        PBI->getSuccessor(0) != PBI->getSuccessor(1) &&
-        (PBI->getSuccessor(0) == BB || PBI->getSuccessor(1) == BB)) {
+        PBI->getSuccessor(0) != PBI->getSuccessor(1)) {
+      assert(PBI->getSuccessor(0) == BB || PBI->getSuccessor(1) == BB);
       bool CondIsFalse = PBI->getSuccessor(1) == BB;
       Optional<bool> Implication = isImpliedCondition(
           PBI->getCondition(), BI->getCondition(), DL, CondIsFalse);

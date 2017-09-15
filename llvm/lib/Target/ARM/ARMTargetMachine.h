@@ -36,7 +36,6 @@ public:
 
 protected:
   std::unique_ptr<TargetLoweringObjectFile> TLOF;
-  ARMSubtarget Subtarget;
   bool isLittle;
   mutable StringMap<std::unique_ptr<ARMSubtarget>> SubtargetMap;
 
@@ -47,8 +46,11 @@ public:
                        CodeGenOpt::Level OL, bool isLittle);
   ~ARMBaseTargetMachine() override;
 
-  const ARMSubtarget *getSubtargetImpl() const { return &Subtarget; }
   const ARMSubtarget *getSubtargetImpl(const Function &F) const override;
+  // DO NOT IMPLEMENT: There is no such thing as a valid default subtarget,
+  // subtargets are per-function entities based on the target-specific
+  // attributes of each function.
+  const ARMSubtarget *getSubtargetImpl() const = delete;
   bool isLittleEndian() const { return isLittle; }
 
   /// \brief Get the TargetIRAnalysis for this target.

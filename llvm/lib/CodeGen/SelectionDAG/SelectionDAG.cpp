@@ -34,6 +34,7 @@
 #include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/RuntimeLibcalls.h"
+#include "llvm/CodeGen/SelectionDAGAddressAnalysis.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/SelectionDAGTargetInfo.h"
 #include "llvm/CodeGen/ValueTypes.h"
@@ -1963,6 +1964,69 @@ SDValue SelectionDAG::FoldSetCC(EVT VT, SDValue N1, SDValue N2,
   }
 
   // Could not fold it.
+  return SDValue();
+}
+
+/// See if the specified operand can be simplified with the knowledge that only
+/// the bits specified by Mask are used.
+SDValue SelectionDAG::GetDemandedBits(SDValue V, const APInt &Mask) {
+  switch (V.getOpcode()) {
+  default:
+    break;
+  case ISD::Constant: {
+    const ConstantSDNode *CV = cast<ConstantSDNode>(V.getNode());
+    assert(CV && "Const value should be ConstSDNode.");
+    const APInt &CVal = CV->getAPIntValue();
+    APInt NewVal = CVal & Mask;
+    if (NewVal != CVal)
+      return getConstant(NewVal, SDLoc(V), V.getValueType());
+    break;
+  }
+  case ISD::OR:
+  case ISD::XOR:
+    // If the LHS or RHS don't contribute bits to the or, drop them.
+    if (MaskedValueIsZero(V.getOperand(0), Mask))
+      return V.getOperand(1);
+    if (MaskedValueIsZero(V.getOperand(1), Mask))
+      return V.getOperand(0);
+    break;
+  case ISD::SRL:
+    // Only look at single-use SRLs.
+    if (!V.getNode()->hasOneUse())
+      break;
+    if (ConstantSDNode *RHSC = dyn_cast<ConstantSDNode>(V.getOperand(1))) {
+      // See if we can recursively simplify the LHS.
+      unsigned Amt = RHSC->getZExtValue();
+
+      // Watch out for shift count overflow though.
+      if (Amt >= Mask.getBitWidth())
+        break;
+      APInt NewMask = Mask << Amt;
+      if (SDValue SimplifyLHS = GetDemandedBits(V.getOperand(0), NewMask))
+        return getNode(ISD::SRL, SDLoc(V), V.getValueType(), SimplifyLHS,
+                       V.getOperand(1));
+    }
+    break;
+  case ISD::AND: {
+    // X & -1 -> X (ignoring bits which aren't demanded).
+    ConstantSDNode *AndVal = isConstOrConstSplat(V.getOperand(1));
+    if (AndVal && Mask.isSubsetOf(AndVal->getAPIntValue()))
+      return V.getOperand(0);
+    break;
+  }
+  case ISD::ANY_EXTEND: {
+    SDValue Src = V.getOperand(0);
+    unsigned SrcBitWidth = Src.getScalarValueSizeInBits();
+    // Being conservative here - only peek through if we only demand bits in the
+    // non-extended source (even though the extended bits are technically undef).
+    if (Mask.getActiveBits() > SrcBitWidth)
+      break;
+    APInt SrcMask = Mask.trunc(SrcBitWidth);
+    if (SDValue DemandedSrc = GetDemandedBits(Src, SrcMask))
+      return getNode(ISD::ANY_EXTEND, SDLoc(V), V.getValueType(), DemandedSrc);
+    break;
+  }
+  }
   return SDValue();
 }
 
@@ -5485,7 +5549,7 @@ SDValue SelectionDAG::getAtomicCmpSwap(
     unsigned Opcode, const SDLoc &dl, EVT MemVT, SDVTList VTs, SDValue Chain,
     SDValue Ptr, SDValue Cmp, SDValue Swp, MachinePointerInfo PtrInfo,
     unsigned Alignment, AtomicOrdering SuccessOrdering,
-    AtomicOrdering FailureOrdering, SynchronizationScope SynchScope) {
+    AtomicOrdering FailureOrdering, SyncScope::ID SSID) {
   assert(Opcode == ISD::ATOMIC_CMP_SWAP ||
          Opcode == ISD::ATOMIC_CMP_SWAP_WITH_SUCCESS);
   assert(Cmp.getValueType() == Swp.getValueType() && "Invalid Atomic Op Types");
@@ -5501,7 +5565,7 @@ SDValue SelectionDAG::getAtomicCmpSwap(
                MachineMemOperand::MOStore;
   MachineMemOperand *MMO =
     MF.getMachineMemOperand(PtrInfo, Flags, MemVT.getStoreSize(), Alignment,
-                            AAMDNodes(), nullptr, SynchScope, SuccessOrdering,
+                            AAMDNodes(), nullptr, SSID, SuccessOrdering,
                             FailureOrdering);
 
   return getAtomicCmpSwap(Opcode, dl, MemVT, VTs, Chain, Ptr, Cmp, Swp, MMO);
@@ -5523,7 +5587,7 @@ SDValue SelectionDAG::getAtomic(unsigned Opcode, const SDLoc &dl, EVT MemVT,
                                 SDValue Chain, SDValue Ptr, SDValue Val,
                                 const Value *PtrVal, unsigned Alignment,
                                 AtomicOrdering Ordering,
-                                SynchronizationScope SynchScope) {
+                                SyncScope::ID SSID) {
   if (Alignment == 0)  // Ensure that codegen never sees alignment 0
     Alignment = getEVTAlignment(MemVT);
 
@@ -5543,7 +5607,7 @@ SDValue SelectionDAG::getAtomic(unsigned Opcode, const SDLoc &dl, EVT MemVT,
   MachineMemOperand *MMO =
     MF.getMachineMemOperand(MachinePointerInfo(PtrVal), Flags,
                             MemVT.getStoreSize(), Alignment, AAMDNodes(),
-                            nullptr, SynchScope, Ordering);
+                            nullptr, SSID, Ordering);
 
   return getAtomic(Opcode, dl, MemVT, Chain, Ptr, Val, MMO);
 }
@@ -6620,7 +6684,7 @@ SDNode* SelectionDAG::mutateStrictFPToFP(SDNode *Node) {
   unsigned NewOpc;
   bool IsUnary = false;
   switch (OrigOpc) {
-  default: 
+  default:
     llvm_unreachable("mutateStrictFPToFP called with unexpected opcode!");
   case ISD::STRICT_FADD: NewOpc = ISD::FADD; break;
   case ISD::STRICT_FSUB: NewOpc = ISD::FSUB; break;
@@ -6656,7 +6720,7 @@ SDNode* SelectionDAG::mutateStrictFPToFP(SDNode *Node) {
   else
     Res = MorphNodeTo(Node, NewOpc, VTs, { Node->getOperand(1),
                                            Node->getOperand(2) });
-  
+
   // MorphNodeTo can operate in two ways: if an existing node with the
   // specified operands exists, it can just return it.  Otherwise, it
   // updates the node in place to have the requested operands.
@@ -6669,7 +6733,7 @@ SDNode* SelectionDAG::mutateStrictFPToFP(SDNode *Node) {
     RemoveDeadNode(Node);
   }
 
-  return Res; 
+  return Res;
 }
 
 /// getMachineNode - These are used for target selectors to create a new node
@@ -6834,31 +6898,30 @@ SDNode *SelectionDAG::getNodeIfExists(unsigned Opcode, SDVTList VTList,
 ///
 /// SDNode
 SDDbgValue *SelectionDAG::getDbgValue(MDNode *Var, MDNode *Expr, SDNode *N,
-                                      unsigned R, bool IsIndirect, uint64_t Off,
+                                      unsigned R, bool IsIndirect,
                                       const DebugLoc &DL, unsigned O) {
   assert(cast<DILocalVariable>(Var)->isValidLocationForIntrinsic(DL) &&
          "Expected inlined-at fields to agree");
   return new (DbgInfo->getAlloc())
-      SDDbgValue(Var, Expr, N, R, IsIndirect, Off, DL, O);
+      SDDbgValue(Var, Expr, N, R, IsIndirect, DL, O);
 }
 
 /// Constant
 SDDbgValue *SelectionDAG::getConstantDbgValue(MDNode *Var, MDNode *Expr,
-                                              const Value *C, uint64_t Off,
+                                              const Value *C,
                                               const DebugLoc &DL, unsigned O) {
   assert(cast<DILocalVariable>(Var)->isValidLocationForIntrinsic(DL) &&
          "Expected inlined-at fields to agree");
-  return new (DbgInfo->getAlloc()) SDDbgValue(Var, Expr, C, Off, DL, O);
+  return new (DbgInfo->getAlloc()) SDDbgValue(Var, Expr, C, DL, O);
 }
 
 /// FrameIndex
 SDDbgValue *SelectionDAG::getFrameIndexDbgValue(MDNode *Var, MDNode *Expr,
-                                                unsigned FI, uint64_t Off,
-                                                const DebugLoc &DL,
+                                                unsigned FI, const DebugLoc &DL,
                                                 unsigned O) {
   assert(cast<DILocalVariable>(Var)->isValidLocationForIntrinsic(DL) &&
          "Expected inlined-at fields to agree");
-  return new (DbgInfo->getAlloc()) SDDbgValue(Var, Expr, FI, Off, DL, O);
+  return new (DbgInfo->getAlloc()) SDDbgValue(Var, Expr, FI, DL, O);
 }
 
 namespace {
@@ -7292,10 +7355,9 @@ void SelectionDAG::TransferDbgValues(SDValue From, SDValue To) {
         Dbg->getResNo() == From.getResNo() && !Dbg->isInvalidated()) {
       assert(FromNode != ToNode &&
              "Should not transfer Debug Values intranode");
-      SDDbgValue *Clone =
-          getDbgValue(Dbg->getVariable(), Dbg->getExpression(), ToNode,
-                      To.getResNo(), Dbg->isIndirect(), Dbg->getOffset(),
-                      Dbg->getDebugLoc(), Dbg->getOrder());
+      SDDbgValue *Clone = getDbgValue(Dbg->getVariable(), Dbg->getExpression(),
+                                      ToNode, To.getResNo(), Dbg->isIndirect(),
+                                      Dbg->getDebugLoc(), Dbg->getOrder());
       ClonedDVs.push_back(Clone);
       Dbg->setIsInvalidated();
     }
@@ -7673,45 +7735,13 @@ bool SelectionDAG::areNonVolatileConsecutiveLoads(LoadSDNode *LD,
 
   SDValue Loc = LD->getOperand(1);
   SDValue BaseLoc = Base->getOperand(1);
-  if (Loc.getOpcode() == ISD::FrameIndex) {
-    if (BaseLoc.getOpcode() != ISD::FrameIndex)
-      return false;
-    const MachineFrameInfo &MFI = getMachineFunction().getFrameInfo();
-    int FI  = cast<FrameIndexSDNode>(Loc)->getIndex();
-    int BFI = cast<FrameIndexSDNode>(BaseLoc)->getIndex();
-    int FS  = MFI.getObjectSize(FI);
-    int BFS = MFI.getObjectSize(BFI);
-    if (FS != BFS || FS != (int)Bytes) return false;
-    return MFI.getObjectOffset(FI) == (MFI.getObjectOffset(BFI) + Dist*Bytes);
-  }
 
-  // Handle X + C.
-  if (isBaseWithConstantOffset(Loc)) {
-    int64_t LocOffset = cast<ConstantSDNode>(Loc.getOperand(1))->getSExtValue();
-    if (Loc.getOperand(0) == BaseLoc) {
-      // If the base location is a simple address with no offset itself, then
-      // the second load's first add operand should be the base address.
-      if (LocOffset == Dist * (int)Bytes)
-        return true;
-    } else if (isBaseWithConstantOffset(BaseLoc)) {
-      // The base location itself has an offset, so subtract that value from the
-      // second load's offset before comparing to distance * size.
-      int64_t BOffset =
-        cast<ConstantSDNode>(BaseLoc.getOperand(1))->getSExtValue();
-      if (Loc.getOperand(0) == BaseLoc.getOperand(0)) {
-        if ((LocOffset - BOffset) == Dist * (int)Bytes)
-          return true;
-      }
-    }
-  }
-  const GlobalValue *GV1 = nullptr;
-  const GlobalValue *GV2 = nullptr;
-  int64_t Offset1 = 0;
-  int64_t Offset2 = 0;
-  bool isGA1 = TLI->isGAPlusOffset(Loc.getNode(), GV1, Offset1);
-  bool isGA2 = TLI->isGAPlusOffset(BaseLoc.getNode(), GV2, Offset2);
-  if (isGA1 && isGA2 && GV1 == GV2)
-    return Offset1 == (Offset2 + Dist*Bytes);
+  auto BaseLocDecomp = BaseIndexOffset::match(BaseLoc, *this);
+  auto LocDecomp = BaseIndexOffset::match(Loc, *this);
+
+  int64_t Offset = 0;
+  if (BaseLocDecomp.equalBaseIndex(LocDecomp, *this, Offset))
+    return (Dist * Bytes == Offset);
   return false;
 }
 

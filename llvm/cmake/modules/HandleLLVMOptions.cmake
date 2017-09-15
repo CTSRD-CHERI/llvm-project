@@ -381,6 +381,7 @@ if( MSVC )
 
 elseif( LLVM_COMPILER_IS_GCC_COMPATIBLE )
   append_if(LLVM_ENABLE_WERROR "-Werror" CMAKE_C_FLAGS CMAKE_CXX_FLAGS)
+  append_if(LLVM_ENABLE_WERROR "-Wno-error" CMAKE_REQUIRED_FLAGS)
   add_flag_if_supported("-Werror=date-time" WERROR_DATE_TIME)
   if (LLVM_ENABLE_CXX1Y)
     check_cxx_compiler_flag("-std=c++1y" CXX_SUPPORTS_CXX1Y)
@@ -686,8 +687,8 @@ endif()
 # lld doesn't print colored diagnostics when invoked from Ninja
 if (UNIX AND CMAKE_GENERATOR STREQUAL "Ninja")
   include(CheckLinkerFlag)
-  check_linker_flag("-Wl,-color-diagnostics" LINKER_SUPPORTS_COLOR_DIAGNOSTICS)
-  append_if(LINKER_SUPPORTS_COLOR_DIAGNOSTICS "-Wl,-color-diagnostics"
+  check_linker_flag("-Wl,--color-diagnostics" LINKER_SUPPORTS_COLOR_DIAGNOSTICS)
+  append_if(LINKER_SUPPORTS_COLOR_DIAGNOSTICS "-Wl,--color-diagnostics"
     CMAKE_EXE_LINKER_FLAGS CMAKE_MODULE_LINKER_FLAGS CMAKE_SHARED_LINKER_FLAGS)
 endif()
 

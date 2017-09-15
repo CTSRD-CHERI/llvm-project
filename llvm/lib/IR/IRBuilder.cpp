@@ -374,6 +374,7 @@ CallInst *IRBuilderBase::CreateMaskedLoad(Value *Ptr, unsigned Align,
   PointerType *PtrTy = cast<PointerType>(Ptr->getType());
   Type *DataTy = PtrTy->getElementType();
   assert(DataTy->isVectorTy() && "Ptr should point to a vector");
+  assert(Mask && "Mask should not be all-ones (null)");
   if (!PassThru)
     PassThru = UndefValue::get(DataTy);
   Type *OverloadedTypes[] = { DataTy, PtrTy };
@@ -393,6 +394,7 @@ CallInst *IRBuilderBase::CreateMaskedStore(Value *Val, Value *Ptr,
   PointerType *PtrTy = cast<PointerType>(Ptr->getType());
   Type *DataTy = PtrTy->getElementType();
   assert(DataTy->isVectorTy() && "Ptr should point to a vector");
+  assert(Mask && "Mask should not be all-ones (null)");
   Type *OverloadedTypes[] = { DataTy, PtrTy };
   Value *Ops[] = { Val, Ptr, getInt32(Align), Mask };
   return CreateMaskedIntrinsic(Intrinsic::masked_store, Ops, OverloadedTypes);

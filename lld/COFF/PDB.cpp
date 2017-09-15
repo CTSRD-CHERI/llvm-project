@@ -13,28 +13,33 @@
 #include "Error.h"
 #include "SymbolTable.h"
 #include "Symbols.h"
+#include "Writer.h"
 #include "llvm/DebugInfo/CodeView/CVDebugRecord.h"
-#include "llvm/DebugInfo/CodeView/CVTypeVisitor.h"
 #include "llvm/DebugInfo/CodeView/DebugSubsectionRecord.h"
-#include "llvm/DebugInfo/CodeView/DebugSubsectionVisitor.h"
 #include "llvm/DebugInfo/CodeView/LazyRandomTypeCollection.h"
+#include "llvm/DebugInfo/CodeView/SymbolSerializer.h"
+#include "llvm/DebugInfo/CodeView/TypeDeserializer.h"
 #include "llvm/DebugInfo/CodeView/TypeDumpVisitor.h"
 #include "llvm/DebugInfo/CodeView/TypeIndexDiscovery.h"
 #include "llvm/DebugInfo/CodeView/TypeStreamMerger.h"
 #include "llvm/DebugInfo/CodeView/TypeTableBuilder.h"
 #include "llvm/DebugInfo/MSF/MSFBuilder.h"
 #include "llvm/DebugInfo/MSF/MSFCommon.h"
+#include "llvm/DebugInfo/PDB/GenericError.h"
+#include "llvm/DebugInfo/PDB/Native/DbiModuleDescriptorBuilder.h"
 #include "llvm/DebugInfo/PDB/Native/DbiStream.h"
 #include "llvm/DebugInfo/PDB/Native/DbiStreamBuilder.h"
 #include "llvm/DebugInfo/PDB/Native/InfoStream.h"
 #include "llvm/DebugInfo/PDB/Native/InfoStreamBuilder.h"
+#include "llvm/DebugInfo/PDB/Native/NativeSession.h"
 #include "llvm/DebugInfo/PDB/Native/PDBFile.h"
 #include "llvm/DebugInfo/PDB/Native/PDBFileBuilder.h"
-#include "llvm/DebugInfo/PDB/Native/DbiModuleDescriptorBuilder.h"
 #include "llvm/DebugInfo/PDB/Native/PDBStringTableBuilder.h"
-#include "llvm/DebugInfo/PDB/Native/PDBTypeServerHandler.h"
+#include "llvm/DebugInfo/PDB/Native/PublicsStreamBuilder.h"
+#include "llvm/DebugInfo/PDB/Native/TpiHashing.h"
 #include "llvm/DebugInfo/PDB/Native/TpiStream.h"
 #include "llvm/DebugInfo/PDB/Native/TpiStreamBuilder.h"
+#include "llvm/DebugInfo/PDB/PDB.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Support/BinaryByteStream.h"
 #include "llvm/Support/Endian.h"
@@ -52,8 +57,81 @@ using llvm::object::coff_section;
 
 static ExitOnError ExitOnErr;
 
+namespace {
+/// Map from type index and item index in a type server PDB to the
+/// corresponding index in the destination PDB.
+struct CVIndexMap {
+  SmallVector<TypeIndex, 0> TPIMap;
+  SmallVector<TypeIndex, 0> IPIMap;
+  bool IsTypeServerMap = false;
+};
+
+class PDBLinker {
+public:
+  PDBLinker(SymbolTable *Symtab)
+      : Alloc(), Symtab(Symtab), Builder(Alloc), TypeTable(Alloc),
+        IDTable(Alloc) {}
+
+  /// Emit the basic PDB structure: initial streams, headers, etc.
+  void initialize(const llvm::codeview::DebugInfo *DI);
+
+  /// Link CodeView from each object file in the symbol table into the PDB.
+  void addObjectsToPDB();
+
+  /// Link CodeView from a single object file into the PDB.
+  void addObjFile(ObjFile *File);
+
+  /// Produce a mapping from the type and item indices used in the object
+  /// file to those in the destination PDB.
+  ///
+  /// If the object file uses a type server PDB (compiled with /Zi), merge TPI
+  /// and IPI from the type server PDB and return a map for it. Each unique type
+  /// server PDB is merged at most once, so this may return an existing index
+  /// mapping.
+  ///
+  /// If the object does not use a type server PDB (compiled with /Z7), we merge
+  /// all the type and item records from the .debug$S stream and fill in the
+  /// caller-provided ObjectIndexMap.
+  const CVIndexMap &mergeDebugT(ObjFile *File, CVIndexMap &ObjectIndexMap);
+
+  const CVIndexMap &maybeMergeTypeServerPDB(ObjFile *File,
+                                            TypeServer2Record &TS);
+
+  /// Add the section map and section contributions to the PDB.
+  void addSections(ArrayRef<uint8_t> SectionTable);
+
+  /// Write the PDB to disk.
+  void commit();
+
+private:
+  BumpPtrAllocator Alloc;
+
+  SymbolTable *Symtab;
+
+  pdb::PDBFileBuilder Builder;
+
+  /// Type records that will go into the PDB TPI stream.
+  TypeTableBuilder TypeTable;
+
+  /// Item records that will go into the PDB IPI stream.
+  TypeTableBuilder IDTable;
+
+  /// PDBs use a single global string table for filenames in the file checksum
+  /// table.
+  DebugStringTableSubsection PDBStrTab;
+
+  llvm::SmallString<128> NativePath;
+
+  std::vector<pdb::SecMapEntry> SectionMap;
+
+  /// Type index mappings of type server PDBs that we've loaded so far.
+  std::map<GUID, CVIndexMap> TypeServerIndexMappings;
+};
+}
+
 // Returns a list of all SectionChunks.
-static void addSectionContribs(SymbolTable *Symtab, pdb::DbiStreamBuilder &DbiBuilder) {
+static void addSectionContribs(SymbolTable *Symtab,
+                               pdb::DbiStreamBuilder &DbiBuilder) {
   for (Chunk *C : Symtab->getChunks())
     if (auto *SC = dyn_cast<SectionChunk>(C))
       DbiBuilder.addSectionContrib(SC->File->ModuleDBI, SC->Header);
@@ -77,7 +155,7 @@ static ArrayRef<uint8_t> consumeDebugMagic(ArrayRef<uint8_t> Data,
   return Data.slice(4);
 }
 
-static ArrayRef<uint8_t> getDebugSection(ObjectFile *File, StringRef SecName) {
+static ArrayRef<uint8_t> getDebugSection(ObjFile *File, StringRef SecName) {
   if (SectionChunk *Sec = findByName(File->getDebugChunks(), SecName))
     return consumeDebugMagic(Sec->getContents(), SecName);
   return {};
@@ -88,31 +166,127 @@ static void addTypeInfo(pdb::TpiStreamBuilder &TpiBuilder,
   // Start the TPI or IPI stream header.
   TpiBuilder.setVersionHeader(pdb::PdbTpiV80);
 
-  // Flatten the in memory type table.
+  // Flatten the in memory type table and hash each type.
   TypeTable.ForEachRecord([&](TypeIndex TI, ArrayRef<uint8_t> Rec) {
-    // FIXME: Hash types.
-    TpiBuilder.addTypeRecord(Rec, None);
+    assert(Rec.size() >= sizeof(RecordPrefix));
+    const RecordPrefix *P = reinterpret_cast<const RecordPrefix *>(Rec.data());
+    CVType Type(static_cast<TypeLeafKind>(unsigned(P->RecordKind)), Rec);
+    auto Hash = pdb::hashTypeRecord(Type);
+    if (auto E = Hash.takeError())
+      fatal("type hashing error");
+    TpiBuilder.addTypeRecord(Rec, *Hash);
   });
 }
 
-static void mergeDebugT(ObjectFile *File,
-                        TypeTableBuilder &IDTable,
-                        TypeTableBuilder &TypeTable,
-                        SmallVectorImpl<TypeIndex> &TypeIndexMap,
-                        pdb::PDBTypeServerHandler &Handler) {
+static Optional<TypeServer2Record>
+maybeReadTypeServerRecord(CVTypeArray &Types) {
+  auto I = Types.begin();
+  if (I == Types.end())
+    return None;
+  const CVType &Type = *I;
+  if (Type.kind() != LF_TYPESERVER2)
+    return None;
+  TypeServer2Record TS;
+  if (auto EC = TypeDeserializer::deserializeAs(const_cast<CVType &>(Type), TS))
+    fatal(EC, "error reading type server record");
+  return std::move(TS);
+}
+
+const CVIndexMap &PDBLinker::mergeDebugT(ObjFile *File,
+                                         CVIndexMap &ObjectIndexMap) {
   ArrayRef<uint8_t> Data = getDebugSection(File, ".debug$T");
   if (Data.empty())
-    return;
+    return ObjectIndexMap;
 
   BinaryByteStream Stream(Data, support::little);
   CVTypeArray Types;
   BinaryStreamReader Reader(Stream);
-  Handler.addSearchPath(sys::path::parent_path(File->getName()));
   if (auto EC = Reader.readArray(Types, Reader.getLength()))
     fatal(EC, "Reader::readArray failed");
+
+  // Look through type servers. If we've already seen this type server, don't
+  // merge any type information.
+  if (Optional<TypeServer2Record> TS = maybeReadTypeServerRecord(Types))
+    return maybeMergeTypeServerPDB(File, *TS);
+
+  // This is a /Z7 object. Fill in the temporary, caller-provided
+  // ObjectIndexMap.
   if (auto Err = mergeTypeAndIdRecords(IDTable, TypeTable,
-                                                 TypeIndexMap, &Handler, Types))
-    fatal(Err, "codeview::mergeTypeStreams failed");
+                                       ObjectIndexMap.TPIMap, Types))
+    fatal(Err, "codeview::mergeTypeAndIdRecords failed");
+  return ObjectIndexMap;
+}
+
+static Expected<std::unique_ptr<pdb::NativeSession>>
+tryToLoadPDB(const GUID &GuidFromObj, StringRef TSPath) {
+  std::unique_ptr<pdb::IPDBSession> ThisSession;
+  if (auto EC =
+          pdb::loadDataForPDB(pdb::PDB_ReaderType::Native, TSPath, ThisSession))
+    return std::move(EC);
+
+  std::unique_ptr<pdb::NativeSession> NS(
+      static_cast<pdb::NativeSession *>(ThisSession.release()));
+  pdb::PDBFile &File = NS->getPDBFile();
+  auto ExpectedInfo = File.getPDBInfoStream();
+  // All PDB Files should have an Info stream.
+  if (!ExpectedInfo)
+    return ExpectedInfo.takeError();
+
+  // Just because a file with a matching name was found and it was an actual
+  // PDB file doesn't mean it matches.  For it to match the InfoStream's GUID
+  // must match the GUID specified in the TypeServer2 record.
+  if (ExpectedInfo->getGuid() != GuidFromObj)
+    return make_error<pdb::GenericError>(
+        pdb::generic_error_code::type_server_not_found, TSPath);
+
+  return std::move(NS);
+}
+
+const CVIndexMap &PDBLinker::maybeMergeTypeServerPDB(ObjFile *File,
+                                                     TypeServer2Record &TS) {
+  // First, check if we already loaded a PDB with this GUID. Return the type
+  // index mapping if we have it.
+  auto Insertion = TypeServerIndexMappings.insert({TS.getGuid(), CVIndexMap()});
+  CVIndexMap &IndexMap = Insertion.first->second;
+  if (!Insertion.second)
+    return IndexMap;
+
+  // Mark this map as a type server map.
+  IndexMap.IsTypeServerMap = true;
+
+  // Check for a PDB at:
+  // 1. The given file path
+  // 2. Next to the object file or archive file
+  auto ExpectedSession = tryToLoadPDB(TS.getGuid(), TS.getName());
+  if (!ExpectedSession) {
+    consumeError(ExpectedSession.takeError());
+    StringRef LocalPath =
+        !File->ParentName.empty() ? File->ParentName : File->getName();
+    SmallString<128> Path = sys::path::parent_path(LocalPath);
+    sys::path::append(
+        Path, sys::path::filename(TS.getName(), sys::path::Style::windows));
+    ExpectedSession = tryToLoadPDB(TS.getGuid(), Path);
+  }
+  if (auto E = ExpectedSession.takeError())
+    fatal(E, "Type server PDB was not found");
+
+  // Merge TPI first, because the IPI stream will reference type indices.
+  auto ExpectedTpi = (*ExpectedSession)->getPDBFile().getPDBTpiStream();
+  if (auto E = ExpectedTpi.takeError())
+    fatal(E, "Type server does not have TPI stream");
+  if (auto Err = mergeTypeRecords(TypeTable, IndexMap.TPIMap,
+                                  ExpectedTpi->typeArray()))
+    fatal(Err, "codeview::mergeTypeRecords failed");
+
+  // Merge IPI.
+  auto ExpectedIpi = (*ExpectedSession)->getPDBFile().getPDBIpiStream();
+  if (auto E = ExpectedIpi.takeError())
+    fatal(E, "Type server does not have TPI stream");
+  if (auto Err = mergeIdRecords(IDTable, IndexMap.TPIMap, IndexMap.IPIMap,
+                                ExpectedIpi->typeArray()))
+    fatal(Err, "codeview::mergeIdRecords failed");
+
+  return IndexMap;
 }
 
 static bool remapTypeIndex(TypeIndex &TI, ArrayRef<TypeIndex> TypeIndexMap) {
@@ -124,26 +298,31 @@ static bool remapTypeIndex(TypeIndex &TI, ArrayRef<TypeIndex> TypeIndexMap) {
   return true;
 }
 
-static bool remapTypesInSymbolRecord(ObjectFile *File,
+static void remapTypesInSymbolRecord(ObjFile *File,
                                      MutableArrayRef<uint8_t> Contents,
-                                     ArrayRef<TypeIndex> TypeIndexMap,
+                                     const CVIndexMap &IndexMap,
                                      ArrayRef<TiReference> TypeRefs) {
   for (const TiReference &Ref : TypeRefs) {
     unsigned ByteSize = Ref.Count * sizeof(TypeIndex);
-    if (Contents.size() < Ref.Offset + ByteSize) {
-      log("ignoring short symbol record");
-      return false;
-    }
+    if (Contents.size() < Ref.Offset + ByteSize)
+      fatal("symbol record too short");
+
+    // This can be an item index or a type index. Choose the appropriate map.
+    ArrayRef<TypeIndex> TypeOrItemMap = IndexMap.TPIMap;
+    if (Ref.Kind == TiRefKind::IndexRef && IndexMap.IsTypeServerMap)
+      TypeOrItemMap = IndexMap.IPIMap;
+
     MutableArrayRef<TypeIndex> TIs(
         reinterpret_cast<TypeIndex *>(Contents.data() + Ref.Offset), Ref.Count);
-    for (TypeIndex &TI : TIs)
-      if (!remapTypeIndex(TI, TypeIndexMap)) {
+    for (TypeIndex &TI : TIs) {
+      if (!remapTypeIndex(TI, TypeOrItemMap)) {
+        TI = TypeIndex(SimpleTypeKind::NotTranslated);
         log("ignoring symbol record in " + File->getName() +
             " with bad type index 0x" + utohexstr(TI.getIndex()));
-        return false;
+        continue;
       }
+    }
   }
-  return true;
 }
 
 /// MSVC translates S_PROC_ID_END to S_END.
@@ -176,14 +355,79 @@ static MutableArrayRef<uint8_t> copySymbolForPdb(const CVSymbol &Sym,
   return NewData;
 }
 
-static void mergeSymbolRecords(BumpPtrAllocator &Alloc, ObjectFile *File,
-                               ArrayRef<TypeIndex> TypeIndexMap,
+/// Return true if this symbol opens a scope. This implies that the symbol has
+/// "parent" and "end" fields, which contain the offset of the S_END or
+/// S_INLINESITE_END record.
+static bool symbolOpensScope(SymbolKind Kind) {
+  switch (Kind) {
+  case SymbolKind::S_GPROC32:
+  case SymbolKind::S_LPROC32:
+  case SymbolKind::S_LPROC32_ID:
+  case SymbolKind::S_GPROC32_ID:
+  case SymbolKind::S_BLOCK32:
+  case SymbolKind::S_SEPCODE:
+  case SymbolKind::S_THUNK32:
+  case SymbolKind::S_INLINESITE:
+  case SymbolKind::S_INLINESITE2:
+    return true;
+  default:
+    break;
+  }
+  return false;
+}
+
+static bool symbolEndsScope(SymbolKind Kind) {
+  switch (Kind) {
+  case SymbolKind::S_END:
+  case SymbolKind::S_PROC_ID_END:
+  case SymbolKind::S_INLINESITE_END:
+    return true;
+  default:
+    break;
+  }
+  return false;
+}
+
+struct ScopeRecord {
+  ulittle32_t PtrParent;
+  ulittle32_t PtrEnd;
+};
+
+struct SymbolScope {
+  ScopeRecord *OpeningRecord;
+  uint32_t ScopeOffset;
+};
+
+static void scopeStackOpen(SmallVectorImpl<SymbolScope> &Stack,
+                           uint32_t CurOffset, CVSymbol &Sym) {
+  assert(symbolOpensScope(Sym.kind()));
+  SymbolScope S;
+  S.ScopeOffset = CurOffset;
+  S.OpeningRecord = const_cast<ScopeRecord *>(
+      reinterpret_cast<const ScopeRecord *>(Sym.content().data()));
+  S.OpeningRecord->PtrParent = Stack.empty() ? 0 : Stack.back().ScopeOffset;
+  Stack.push_back(S);
+}
+
+static void scopeStackClose(SmallVectorImpl<SymbolScope> &Stack,
+                            uint32_t CurOffset, ObjFile *File) {
+  if (Stack.empty()) {
+    warn("symbol scopes are not balanced in " + File->getName());
+    return;
+  }
+  SymbolScope S = Stack.pop_back_val();
+  S.OpeningRecord->PtrEnd = CurOffset;
+}
+
+static void mergeSymbolRecords(BumpPtrAllocator &Alloc, ObjFile *File,
+                               const CVIndexMap &IndexMap,
                                BinaryStreamRef SymData) {
   // FIXME: Improve error recovery by warning and skipping records when
   // possible.
   CVSymbolArray Syms;
   BinaryStreamReader Reader(SymData);
   ExitOnErr(Reader.readArray(Syms, Reader.getLength()));
+  SmallVector<SymbolScope, 4> Scopes;
   for (const CVSymbol &Sym : Syms) {
     // Discover type index references in the record. Skip it if we don't know
     // where they are.
@@ -199,14 +443,17 @@ static void mergeSymbolRecords(BumpPtrAllocator &Alloc, ObjectFile *File,
     // Re-map all the type index references.
     MutableArrayRef<uint8_t> Contents =
         NewData.drop_front(sizeof(RecordPrefix));
-    if (!remapTypesInSymbolRecord(File, Contents, TypeIndexMap, TypeRefs))
-      continue;
+    remapTypesInSymbolRecord(File, Contents, IndexMap, TypeRefs);
 
-    // FIXME: Fill in "Parent" and "End" fields by maintaining a stack of
-    // scopes.
+    // Fill in "Parent" and "End" fields by maintaining a stack of scopes.
+    CVSymbol NewSym(Sym.kind(), NewData);
+    if (symbolOpensScope(Sym.kind()))
+      scopeStackOpen(Scopes, File->ModuleDBI->getNextSymbolOffset(), NewSym);
+    else if (symbolEndsScope(Sym.kind()))
+      scopeStackClose(Scopes, File->ModuleDBI->getNextSymbolOffset(), File);
 
     // Add the symbol to the module.
-    File->ModuleDBI->addSymbol(CVSymbol(Sym.kind(), NewData));
+    File->ModuleDBI->addSymbol(NewSym);
   }
 }
 
@@ -221,116 +468,196 @@ static ArrayRef<uint8_t> relocateDebugChunk(BumpPtrAllocator &Alloc,
                            ".debug$S");
 }
 
-// Add all object files to the PDB. Merge .debug$T sections into IpiData and
-// TpiData.
-static void addObjectsToPDB(BumpPtrAllocator &Alloc, SymbolTable *Symtab,
-                            pdb::PDBFileBuilder &Builder,
-                            TypeTableBuilder &TypeTable,
-                            TypeTableBuilder &IDTable) {
-  // Follow type servers.  If the same type server is encountered more than
-  // once for this instance of `PDBTypeServerHandler` (for example if many
-  // object files reference the same TypeServer), the types from the
-  // TypeServer will only be visited once.
-  pdb::PDBTypeServerHandler Handler;
+void PDBLinker::addObjFile(ObjFile *File) {
+  // Add a module descriptor for every object file. We need to put an absolute
+  // path to the object into the PDB. If this is a plain object, we make its
+  // path absolute. If it's an object in an archive, we make the archive path
+  // absolute.
+  bool InArchive = !File->ParentName.empty();
+  SmallString<128> Path = InArchive ? File->ParentName : File->getName();
+  sys::fs::make_absolute(Path);
+  sys::path::native(Path, sys::path::Style::windows);
+  StringRef Name = InArchive ? File->getName() : StringRef(Path);
 
-  // PDBs use a single global string table for filenames in the file checksum
-  // table.
-  auto PDBStrTab = std::make_shared<DebugStringTableSubsection>();
+  File->ModuleDBI = &ExitOnErr(Builder.getDbiBuilder().addModuleInfo(Name));
+  File->ModuleDBI->setObjFileName(Path);
 
-  // Visit all .debug$T sections to add them to Builder.
-  for (ObjectFile *File : Symtab->ObjectFiles) {
-    // Add a module descriptor for every object file. We need to put an absolute
-    // path to the object into the PDB. If this is a plain object, we make its
-    // path absolute. If it's an object in an archive, we make the archive path
-    // absolute.
-    bool InArchive = !File->ParentName.empty();
-    SmallString<128> Path = InArchive ? File->ParentName : File->getName();
-    sys::fs::make_absolute(Path);
-    StringRef Name = InArchive ? File->getName() : StringRef(Path);
-    File->ModuleDBI = &ExitOnErr(Builder.getDbiBuilder().addModuleInfo(Name));
-    File->ModuleDBI->setObjFileName(Path);
+  // Before we can process symbol substreams from .debug$S, we need to process
+  // type information, file checksums, and the string table.  Add type info to
+  // the PDB first, so that we can get the map from object file type and item
+  // indices to PDB type and item indices.
+  CVIndexMap ObjectIndexMap;
+  const CVIndexMap &IndexMap = mergeDebugT(File, ObjectIndexMap);
 
-    // Before we can process symbol substreams from .debug$S, we need to process
-    // type information, file checksums, and the string table.  Add type info to
-    // the PDB first, so that we can get the map from object file type and item
-    // indices to PDB type and item indices.
-    SmallVector<TypeIndex, 128> TypeIndexMap;
-    mergeDebugT(File, IDTable, TypeTable, TypeIndexMap, Handler);
+  // Now do all live .debug$S sections.
+  for (SectionChunk *DebugChunk : File->getDebugChunks()) {
+    if (!DebugChunk->isLive() || DebugChunk->getSectionName() != ".debug$S")
+      continue;
 
-    // Now do all line info.
-    for (SectionChunk *DebugChunk : File->getDebugChunks()) {
-      if (!DebugChunk->isLive() || DebugChunk->getSectionName() != ".debug$S")
-        continue;
+    ArrayRef<uint8_t> RelocatedDebugContents =
+        relocateDebugChunk(Alloc, DebugChunk);
+    if (RelocatedDebugContents.empty())
+      continue;
 
-      ArrayRef<uint8_t> RelocatedDebugContents =
-          relocateDebugChunk(Alloc, DebugChunk);
-      if (RelocatedDebugContents.empty())
-        continue;
+    DebugSubsectionArray Subsections;
+    BinaryStreamReader Reader(RelocatedDebugContents, support::little);
+    ExitOnErr(Reader.readArray(Subsections, RelocatedDebugContents.size()));
 
-      DebugSubsectionArray Subsections;
-      BinaryStreamReader Reader(RelocatedDebugContents, support::little);
-      ExitOnErr(Reader.readArray(Subsections, RelocatedDebugContents.size()));
-
-      DebugStringTableSubsectionRef CVStrTab;
-      DebugChecksumsSubsectionRef Checksums;
-      for (const DebugSubsectionRecord &SS : Subsections) {
-        switch (SS.kind()) {
-        case DebugSubsectionKind::StringTable:
-          ExitOnErr(CVStrTab.initialize(SS.getRecordData()));
-          break;
-        case DebugSubsectionKind::FileChecksums:
-          ExitOnErr(Checksums.initialize(SS.getRecordData()));
-          break;
-        case DebugSubsectionKind::Lines:
-          // We can add the relocated line table directly to the PDB without
-          // modification because the file checksum offsets will stay the same.
-          File->ModuleDBI->addDebugSubsection(SS);
-          break;
-        case DebugSubsectionKind::Symbols:
-          mergeSymbolRecords(Alloc, File, TypeIndexMap, SS.getRecordData());
-          break;
-        default:
-          // FIXME: Process the rest of the subsections.
-          break;
-        }
-      }
-
-      if (Checksums.valid()) {
-        // Make a new file checksum table that refers to offsets in the PDB-wide
-        // string table. Generally the string table subsection appears after the
-        // checksum table, so we have to do this after looping over all the
-        // subsections.
-        if (!CVStrTab.valid())
-          fatal(".debug$S sections must have both a string table subsection "
-                "and a checksum subsection table or neither");
-        auto NewChecksums =
-            make_unique<DebugChecksumsSubsection>(*PDBStrTab);
-        for (FileChecksumEntry &FC : Checksums) {
-          StringRef FileName = ExitOnErr(CVStrTab.getString(FC.FileNameOffset));
-          ExitOnErr(Builder.getDbiBuilder().addModuleSourceFile(
-              *File->ModuleDBI, FileName));
-          NewChecksums->addChecksum(FileName, FC.Kind, FC.Checksum);
-        }
-        File->ModuleDBI->addDebugSubsection(std::move(NewChecksums));
+    DebugStringTableSubsectionRef CVStrTab;
+    DebugChecksumsSubsectionRef Checksums;
+    for (const DebugSubsectionRecord &SS : Subsections) {
+      switch (SS.kind()) {
+      case DebugSubsectionKind::StringTable:
+        ExitOnErr(CVStrTab.initialize(SS.getRecordData()));
+        break;
+      case DebugSubsectionKind::FileChecksums:
+        ExitOnErr(Checksums.initialize(SS.getRecordData()));
+        break;
+      case DebugSubsectionKind::Lines:
+        // We can add the relocated line table directly to the PDB without
+        // modification because the file checksum offsets will stay the same.
+        File->ModuleDBI->addDebugSubsection(SS);
+        break;
+      case DebugSubsectionKind::Symbols:
+        mergeSymbolRecords(Alloc, File, IndexMap, SS.getRecordData());
+        break;
+      default:
+        // FIXME: Process the rest of the subsections.
+        break;
       }
     }
+
+    if (Checksums.valid()) {
+      // Make a new file checksum table that refers to offsets in the PDB-wide
+      // string table. Generally the string table subsection appears after the
+      // checksum table, so we have to do this after looping over all the
+      // subsections.
+      if (!CVStrTab.valid())
+        fatal(".debug$S sections must have both a string table subsection "
+              "and a checksum subsection table or neither");
+      auto NewChecksums = make_unique<DebugChecksumsSubsection>(PDBStrTab);
+      for (FileChecksumEntry &FC : Checksums) {
+        StringRef FileName = ExitOnErr(CVStrTab.getString(FC.FileNameOffset));
+        ExitOnErr(Builder.getDbiBuilder().addModuleSourceFile(*File->ModuleDBI,
+                                                              FileName));
+        NewChecksums->addChecksum(FileName, FC.Kind, FC.Checksum);
+      }
+      File->ModuleDBI->addDebugSubsection(std::move(NewChecksums));
+    }
+  }
+}
+
+static PublicSym32 createPublic(Defined *Def) {
+  PublicSym32 Pub(SymbolKind::S_PUB32);
+  Pub.Name = Def->getName();
+  if (auto *D = dyn_cast<DefinedCOFF>(Def)) {
+    if (D->getCOFFSymbol().isFunctionDefinition())
+      Pub.Flags = PublicSymFlags::Function;
+  } else if (isa<DefinedImportThunk>(Def)) {
+    Pub.Flags = PublicSymFlags::Function;
   }
 
-  Builder.getStringTableBuilder().setStrings(*PDBStrTab);
+  OutputSection *OS = Def->getChunk()->getOutputSection();
+  assert(OS && "all publics should be in final image");
+  Pub.Offset = Def->getRVA() - OS->getRVA();
+  Pub.Segment = OS->SectionIndex;
+  return Pub;
+}
+
+// Add all object files to the PDB. Merge .debug$T sections into IpiData and
+// TpiData.
+void PDBLinker::addObjectsToPDB() {
+  for (ObjFile *File : ObjFile::Instances)
+    addObjFile(File);
+
+  Builder.getStringTableBuilder().setStrings(PDBStrTab);
 
   // Construct TPI stream contents.
   addTypeInfo(Builder.getTpiBuilder(), TypeTable);
 
   // Construct IPI stream contents.
   addTypeInfo(Builder.getIpiBuilder(), IDTable);
+
+  // Compute the public symbols.
+  std::vector<PublicSym32> Publics;
+  Symtab->forEachSymbol([&Publics](Symbol *S) {
+    // Only emit defined, live symbols that have a chunk.
+    auto *Def = dyn_cast<Defined>(S->body());
+    if (Def && Def->isLive() && Def->getChunk())
+      Publics.push_back(createPublic(Def));
+  });
+
+  if (!Publics.empty()) {
+    // Sort the public symbols and add them to the stream.
+    std::sort(Publics.begin(), Publics.end(),
+              [](const PublicSym32 &L, const PublicSym32 &R) {
+                return L.Name < R.Name;
+              });
+    auto &PublicsBuilder = Builder.getPublicsBuilder();
+    for (const PublicSym32 &Pub : Publics)
+      PublicsBuilder.addPublicSymbol(Pub);
+  }
+  // Add globals stream.  For now we don't actually write any thing useful to
+  // the globals stream, but the act of "getting" it also creates it lazily so
+  // that we write an empty stream.
+  (void)Builder.getGlobalsBuilder();
+}
+
+static void addLinkerModuleSymbols(StringRef Path,
+                                   pdb::DbiModuleDescriptorBuilder &Mod,
+                                   BumpPtrAllocator &Allocator) {
+  codeview::SymbolSerializer Serializer(Allocator, CodeViewContainer::Pdb);
+  codeview::ObjNameSym ONS(SymbolRecordKind::ObjNameSym);
+  codeview::Compile3Sym CS(SymbolRecordKind::Compile3Sym);
+  codeview::EnvBlockSym EBS(SymbolRecordKind::EnvBlockSym);
+
+  ONS.Name = "* Linker *";
+  ONS.Signature = 0;
+
+  CS.Machine = Config->is64() ? CPUType::X64 : CPUType::Intel80386;
+  CS.Flags = CompileSym3Flags::None;
+  CS.VersionBackendBuild = 0;
+  CS.VersionBackendMajor = 0;
+  CS.VersionBackendMinor = 0;
+  CS.VersionBackendQFE = 0;
+  CS.VersionFrontendBuild = 0;
+  CS.VersionFrontendMajor = 0;
+  CS.VersionFrontendMinor = 0;
+  CS.VersionFrontendQFE = 0;
+  CS.Version = "LLVM Linker";
+  CS.setLanguage(SourceLanguage::Link);
+
+  ArrayRef<StringRef> Args = makeArrayRef(Config->Argv).drop_front();
+  std::string ArgStr = llvm::join(Args, " ");
+  EBS.Fields.push_back("cwd");
+  SmallString<64> cwd;
+  sys::fs::current_path(cwd);
+  EBS.Fields.push_back(cwd);
+  EBS.Fields.push_back("exe");
+  EBS.Fields.push_back(Config->Argv[0]);
+  EBS.Fields.push_back("pdb");
+  EBS.Fields.push_back(Path);
+  EBS.Fields.push_back("cmd");
+  EBS.Fields.push_back(ArgStr);
+  Mod.addSymbol(codeview::SymbolSerializer::writeOneSymbol(
+      ONS, Allocator, CodeViewContainer::Pdb));
+  Mod.addSymbol(codeview::SymbolSerializer::writeOneSymbol(
+      CS, Allocator, CodeViewContainer::Pdb));
+  Mod.addSymbol(codeview::SymbolSerializer::writeOneSymbol(
+      EBS, Allocator, CodeViewContainer::Pdb));
 }
 
 // Creates a PDB file.
-void coff::createPDB(StringRef Path, SymbolTable *Symtab,
-                     ArrayRef<uint8_t> SectionTable,
+void coff::createPDB(SymbolTable *Symtab, ArrayRef<uint8_t> SectionTable,
                      const llvm::codeview::DebugInfo *DI) {
-  BumpPtrAllocator Alloc;
-  pdb::PDBFileBuilder Builder(Alloc);
+  PDBLinker PDB(Symtab);
+  PDB.initialize(DI);
+  PDB.addObjectsToPDB();
+  PDB.addSections(SectionTable);
+  PDB.commit();
+}
+
+void PDBLinker::initialize(const llvm::codeview::DebugInfo *DI) {
   ExitOnErr(Builder.initialize(4096)); // 4096 is blocksize
 
   // Create streams in MSF for predefined streams, namely
@@ -342,39 +669,46 @@ void coff::createPDB(StringRef Path, SymbolTable *Symtab,
   auto &InfoBuilder = Builder.getInfoBuilder();
   InfoBuilder.setAge(DI ? DI->PDB70.Age : 0);
 
-  pdb::PDB_UniqueId uuid{};
+  GUID uuid{};
   if (DI)
     memcpy(&uuid, &DI->PDB70.Signature, sizeof(uuid));
   InfoBuilder.setGuid(uuid);
-  // Should be the current time, but set 0 for reproducibilty.
-  InfoBuilder.setSignature(0);
+  InfoBuilder.setSignature(time(nullptr));
   InfoBuilder.setVersion(pdb::PdbRaw_ImplVer::PdbImplVC70);
 
-  // Add an empty DPI stream.
+  // Add an empty DBI stream.
   pdb::DbiStreamBuilder &DbiBuilder = Builder.getDbiBuilder();
-  DbiBuilder.setVersionHeader(pdb::PdbDbiV110);
+  DbiBuilder.setVersionHeader(pdb::PdbDbiV70);
+  ExitOnErr(DbiBuilder.addDbgStream(pdb::DbgHeaderType::NewFPO, {}));
+}
 
-  TypeTableBuilder TypeTable(BAlloc);
-  TypeTableBuilder IDTable(BAlloc);
-  addObjectsToPDB(Alloc, Symtab, Builder, TypeTable, IDTable);
-
+void PDBLinker::addSections(ArrayRef<uint8_t> SectionTable) {
   // Add Section Contributions.
+  pdb::DbiStreamBuilder &DbiBuilder = Builder.getDbiBuilder();
   addSectionContribs(Symtab, DbiBuilder);
 
   // Add Section Map stream.
   ArrayRef<object::coff_section> Sections = {
       (const object::coff_section *)SectionTable.data(),
       SectionTable.size() / sizeof(object::coff_section)};
-  std::vector<pdb::SecMapEntry> SectionMap =
-      pdb::DbiStreamBuilder::createSectionMap(Sections);
+  SectionMap = pdb::DbiStreamBuilder::createSectionMap(Sections);
   DbiBuilder.setSectionMap(SectionMap);
 
-  ExitOnErr(DbiBuilder.addModuleInfo("* Linker *"));
+  // It's not entirely clear what this is, but the * Linker * module uses it.
+  NativePath = Config->PDBPath;
+  sys::fs::make_absolute(NativePath);
+  sys::path::native(NativePath, sys::path::Style::windows);
+  uint32_t PdbFilePathNI = DbiBuilder.addECName(NativePath);
+  auto &LinkerModule = ExitOnErr(DbiBuilder.addModuleInfo("* Linker *"));
+  LinkerModule.setPdbFilePathNI(PdbFilePathNI);
+  addLinkerModuleSymbols(NativePath, LinkerModule, Alloc);
 
   // Add COFF section header stream.
   ExitOnErr(
       DbiBuilder.addDbgStream(pdb::DbgHeaderType::SectionHdr, SectionTable));
+}
 
+void PDBLinker::commit() {
   // Write to a file.
-  ExitOnErr(Builder.commit(Path));
+  ExitOnErr(Builder.commit(Config->PDBPath));
 }

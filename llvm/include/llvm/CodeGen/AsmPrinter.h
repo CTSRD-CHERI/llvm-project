@@ -294,7 +294,7 @@ public:
   void emitFrameAlloc(const MachineInstr &MI);
 
   enum CFIMoveType { CFI_M_None, CFI_M_EH, CFI_M_Debug };
-  CFIMoveType needsCFIMoves();
+  CFIMoveType needsCFIMoves() const;
 
   /// Returns false if needsCFIMoves() == CFI_M_EH for any function
   /// in the module.
@@ -608,8 +608,8 @@ private:
   // Internal Implementation Details
   //===------------------------------------------------------------------===//
 
-  /// This emits visibility information about symbol, if this is suported by the
-  /// target.
+  /// This emits visibility information about symbol, if this is supported by
+  /// the target.
   void EmitVisibility(MCSymbol *Sym, unsigned Visibility,
                       bool IsDefinition = true) const;
 

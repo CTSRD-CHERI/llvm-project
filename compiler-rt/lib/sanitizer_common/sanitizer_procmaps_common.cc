@@ -12,7 +12,7 @@
 
 #include "sanitizer_platform.h"
 
-#if SANITIZER_FREEBSD || SANITIZER_LINUX
+#if SANITIZER_FREEBSD || SANITIZER_LINUX || SANITIZER_NETBSD
 
 #include "sanitizer_common.h"
 #include "sanitizer_placement_new.h"
@@ -62,6 +62,12 @@ bool IsHex(char c) {
 
 uptr ParseHex(const char **p) {
   return ParseNumber(p, 16);
+}
+
+void MemoryMappedSegment::AddAddressRanges(LoadedModule *module) {
+  // data_ should be unused on this platform
+  CHECK(!data_);
+  module->addAddressRange(start, end, IsExecutable(), IsWritable());
 }
 
 MemoryMappingLayout::MemoryMappingLayout(bool cache_enabled) {
@@ -119,12 +125,10 @@ void MemoryMappingLayout::LoadFromCache() {
 void MemoryMappingLayout::DumpListOfModules(
     InternalMmapVector<LoadedModule> *modules) {
   Reset();
-  uptr cur_beg, cur_end, cur_offset, prot;
   InternalScopedString module_name(kMaxPathLength);
-  for (uptr i = 0; Next(&cur_beg, &cur_end, &cur_offset, module_name.data(),
-                        module_name.size(), &prot);
-       i++) {
-    const char *cur_name = module_name.data();
+  MemoryMappedSegment segment(module_name.data(), module_name.size());
+  for (uptr i = 0; Next(&segment); i++) {
+    const char *cur_name = segment.filename;
     if (cur_name[0] == '\0')
       continue;
     // Don't subtract 'cur_beg' from the first entry:
@@ -138,11 +142,10 @@ void MemoryMappingLayout::DumpListOfModules(
     //   mapped high at address space (in particular, higher than
     //   shadow memory of the tool), so the module can't be the
     //   first entry.
-    uptr base_address = (i ? cur_beg : 0) - cur_offset;
+    uptr base_address = (i ? segment.start : 0) - segment.offset;
     LoadedModule cur_module;
     cur_module.set(cur_name, base_address);
-    cur_module.addAddressRange(cur_beg, cur_end, prot & kProtectionExecute,
-                               prot & kProtectionWrite);
+    segment.AddAddressRanges(&cur_module);
     modules->push_back(cur_module);
   }
 }
@@ -173,4 +176,4 @@ void GetMemoryProfile(fill_profile_f cb, uptr *stats, uptr stats_size) {
 
 } // namespace __sanitizer
 
-#endif // SANITIZER_FREEBSD || SANITIZER_LINUX
+#endif // SANITIZER_FREEBSD || SANITIZER_LINUX || SANITIZER_NETBSD

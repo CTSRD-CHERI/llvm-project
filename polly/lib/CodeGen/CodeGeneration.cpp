@@ -63,7 +63,7 @@ static void verifyGeneratedFunction(Scop &S, Function &F, IslAstInfo &AI) {
   DEBUG({
     errs() << "== ISL Codegen created an invalid function ==\n\n== The "
               "SCoP ==\n";
-    S.print(errs());
+    errs() << S;
     errs() << "\n== The isl AST ==\n";
     AI.print(errs());
     errs() << "\n== The invalid function ==\n";
@@ -176,7 +176,7 @@ static bool CodeGen(Scop &S, IslAstInfo &AI, LoopInfo &LI, DominatorTree &DT,
   // which may introduce scalar dependences that prevent us from correctly
   // code generating this scop.
   BBPair StartExitBlocks =
-      executeScopConditionally(S, Builder.getTrue(), DT, RI, LI);
+      std::get<0>(executeScopConditionally(S, Builder.getTrue(), DT, RI, LI));
   BasicBlock *StartBlock = std::get<0>(StartExitBlocks);
   BasicBlock *ExitBlock = std::get<1>(StartExitBlocks);
 

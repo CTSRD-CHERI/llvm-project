@@ -18,7 +18,7 @@
 namespace llvm {
 namespace pdb {
 
-NativeExeSymbol::NativeExeSymbol(NativeSession &Session, uint32_t SymbolId)
+NativeExeSymbol::NativeExeSymbol(NativeSession &Session, SymIndexId SymbolId)
     : NativeRawSymbol(Session, SymbolId), File(Session.getPDBFile()) {}
 
 std::unique_ptr<NativeRawSymbol> NativeExeSymbol::clone() const {
@@ -56,12 +56,12 @@ std::string NativeExeSymbol::getSymbolsFileName() const {
   return File.getFilePath();
 }
 
-PDB_UniqueId NativeExeSymbol::getGuid() const {
+codeview::GUID NativeExeSymbol::getGuid() const {
   auto IS = File.getPDBInfoStream();
   if (IS)
     return IS->getGuid();
   consumeError(IS.takeError());
-  return PDB_UniqueId{{0}};
+  return codeview::GUID{{0}};
 }
 
 bool NativeExeSymbol::hasCTypes() const {

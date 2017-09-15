@@ -19,6 +19,7 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Analysis/CFG.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CallSite.h"
@@ -103,6 +104,7 @@ struct RewriteStatepointsForGC : public ModulePass {
     // else.  We could in theory preserve a lot more analyses here.
     AU.addRequired<DominatorTreeWrapperPass>();
     AU.addRequired<TargetTransformInfoWrapperPass>();
+    AU.addRequired<TargetLibraryInfoWrapperPass>();
   }
 
   /// The IR fed into RewriteStatepointsForGC may have had attributes and
@@ -1954,7 +1956,7 @@ static void rematerializeLiveValues(CallSite CS,
       // to identify the newly generated AlternateRootPhi (.base version of phi)
       // and RootOfChain (the original phi node itself) are the same, so that we
       // can rematerialize the gep and casts. This is a workaround for the
-      // deficieny in the findBasePointer algorithm.
+      // deficiency in the findBasePointer algorithm.
       if (!AreEquivalentPhiNodes(*OrigRootPhi, *AlternateRootPhi))
         continue;
       // Now that the phi nodes are proved to be the same, assert that
@@ -1994,7 +1996,7 @@ static void rematerializeLiveValues(CallSite CS,
       Instruction *LastClonedValue = nullptr;
       Instruction *LastValue = nullptr;
       for (Instruction *Instr: ChainToBase) {
-        // Only GEP's and casts are suported as we need to be careful to not
+        // Only GEP's and casts are supported as we need to be careful to not
         // introduce any new uses of pointers not in the liveset.
         // Note that it's fine to introduce new uses of pointers which were
         // otherwise not used after this statepoint.
@@ -2419,10 +2421,12 @@ bool RewriteStatepointsForGC::runOnFunction(Function &F) {
   DominatorTree &DT = getAnalysis<DominatorTreeWrapperPass>(F).getDomTree();
   TargetTransformInfo &TTI =
       getAnalysis<TargetTransformInfoWrapperPass>().getTTI(F);
+  const TargetLibraryInfo &TLI =
+      getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
 
-  auto NeedsRewrite = [](Instruction &I) {
+  auto NeedsRewrite = [&TLI](Instruction &I) {
     if (ImmutableCallSite CS = ImmutableCallSite(&I))
-      return !callsGCLeafFunction(CS) && !isStatepoint(CS);
+      return !callsGCLeafFunction(CS, TLI) && !isStatepoint(CS);
     return false;
   };
 

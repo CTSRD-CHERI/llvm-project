@@ -1462,6 +1462,54 @@ void Clang::AddMIPSTargetArgs(const ArgList &Args,
     A->claim();
   }
 
+  Arg *GPOpt = Args.getLastArg(options::OPT_mgpopt, options::OPT_mno_gpopt);
+  Arg *ABICalls =
+      Args.getLastArg(options::OPT_mabicalls, options::OPT_mno_abicalls);
+
+  // -mabicalls is the default for many MIPS environments, even with -fno-pic.
+  // -mgpopt is the default for static, -fno-pic environments but these two
+  // options conflict. We want to be certain that -mno-abicalls -mgpopt is
+  // the only case where -mllvm -mgpopt is passed.
+  // NOTE: We need a warning here or in the backend to warn when -mgpopt is
+  //       passed explicitly when compiling something with -mabicalls
+  //       (implictly) in affect. Currently the warning is in the backend.
+  bool NoABICalls =
+      ABICalls && ABICalls->getOption().matches(options::OPT_mno_abicalls);
+  bool WantGPOpt = GPOpt && GPOpt->getOption().matches(options::OPT_mgpopt);
+  // We quietly ignore -mno-gpopt as the backend defaults to -mno-gpopt.
+  if (NoABICalls && (!GPOpt || WantGPOpt)) {
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back("-mgpopt");
+
+    Arg *LocalSData = Args.getLastArg(options::OPT_mlocal_sdata,
+                                      options::OPT_mno_local_sdata);
+    Arg *ExternSData = Args.getLastArg(options::OPT_mextern_sdata,
+                                      options::OPT_mno_extern_sdata);
+    if (LocalSData) {
+      CmdArgs.push_back("-mllvm");
+      if (LocalSData->getOption().matches(options::OPT_mlocal_sdata)) {
+        CmdArgs.push_back("-mlocal-sdata=1");
+      } else {
+        CmdArgs.push_back("-mlocal-sdata=0");
+      }
+      LocalSData->claim();
+    }
+
+    if (ExternSData) {
+      CmdArgs.push_back("-mllvm");
+      if (ExternSData->getOption().matches(options::OPT_mextern_sdata)) {
+        CmdArgs.push_back("-mextern-sdata=1");
+      } else {
+        CmdArgs.push_back("-mextern-sdata=0");
+      }
+      ExternSData->claim();
+    }
+  } else if ((!ABICalls || (!NoABICalls && ABICalls)) && WantGPOpt)
+    D.Diag(diag::warn_drv_unsupported_gpopt) << (ABICalls ? 0 : 1);
+
+  if (GPOpt)
+    GPOpt->claim();
+
   if (Arg *A = Args.getLastArg(options::OPT_mcompact_branches_EQ)) {
     StringRef Val = StringRef(A->getValue());
     if (mips::hasCompactBranches(CPUName)) {
@@ -2070,10 +2118,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     if (D.isUsingLTO()) {
       Args.AddLastArg(CmdArgs, options::OPT_flto, options::OPT_flto_EQ);
 
-      // The Darwin linker currently uses the legacy LTO API, which does not
-      // support LTO unit features (CFI, whole program vtable opt) under
-      // ThinLTO.
-      if (!getToolChain().getTriple().isOSDarwin() ||
+      // The Darwin and PS4 linkers currently use the legacy LTO API, which
+      // does not support LTO unit features (CFI, whole program vtable opt)
+      // under ThinLTO.
+      if (!(getToolChain().getTriple().isOSDarwin() ||
+            getToolChain().getTriple().isPS4()) ||
           D.getLTOMode() == LTOK_Full)
         CmdArgs.push_back("-flto-unit");
     }
@@ -2544,7 +2593,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                    AsynchronousUnwindTables))
     CmdArgs.push_back("-munwind-tables");
 
-  getToolChain().addClangTargetOptions(Args, CmdArgs);
+  getToolChain().addClangTargetOptions(Args, CmdArgs,
+                                       JA.getOffloadingDeviceKind());
 
   if (Arg *A = Args.getLastArg(options::OPT_flimited_precision_EQ)) {
     CmdArgs.push_back("-mlimit-float-precision");
@@ -2974,6 +3024,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     A->claim();
   }
 
+  for (const Arg *A :
+       Args.filtered(options::OPT_clang_ignored_legacy_options_Group)) {
+    D.Diag(diag::warn_ignored_clang_option) << A->getAsString(Args);
+    A->claim();
+  }
+
   claimNoWarnArgs(Args);
 
   Args.AddAllArgs(CmdArgs, options::OPT_R_Group);
@@ -3193,9 +3249,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddLastArg(CmdArgs, options::OPT_femit_all_decls);
   Args.AddLastArg(CmdArgs, options::OPT_fheinous_gnu_extensions);
   Args.AddLastArg(CmdArgs, options::OPT_fno_operator_names);
-  // Emulated TLS is enabled by default on Android, and can be enabled manually
-  // with -femulated-tls.
-  bool EmulatedTLSDefault = Triple.isAndroid() || Triple.isWindowsCygwinEnvironment();
+  // Emulated TLS is enabled by default on Android and OpenBSD, and can be enabled
+  // manually with -femulated-tls.
+  bool EmulatedTLSDefault = Triple.isAndroid() || Triple.isOSOpenBSD() ||
+                            Triple.isWindowsCygwinEnvironment();
   if (Args.hasFlag(options::OPT_femulated_tls, options::OPT_fno_emulated_tls,
                    EmulatedTLSDefault))
     CmdArgs.push_back("-femulated-tls");
@@ -4042,6 +4099,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasFlag(options::OPT_fdiagnostics_show_hotness,
                    options::OPT_fno_diagnostics_show_hotness, false))
     CmdArgs.push_back("-fdiagnostics-show-hotness");
+
+  if (const Arg *A =
+          Args.getLastArg(options::OPT_fdiagnostics_hotness_threshold_EQ)) {
+    std::string Opt = std::string("-fdiagnostics-hotness-threshold=") + A->getValue();
+    CmdArgs.push_back(Args.MakeArgString(Opt));
+  }
 
   if (const Arg *A = Args.getLastArg(options::OPT_fdiagnostics_format_EQ)) {
     CmdArgs.push_back("-fdiagnostics-format");

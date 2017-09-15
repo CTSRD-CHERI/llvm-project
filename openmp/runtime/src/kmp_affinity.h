@@ -618,8 +618,8 @@ public:
 };
 
 static int __kmp_affinity_cmp_Address_labels(const void *a, const void *b) {
-  const Address *aa = (const Address *)&(((AddrUnsPair *)a)->first);
-  const Address *bb = (const Address *)&(((AddrUnsPair *)b)->first);
+  const Address *aa = &(((const AddrUnsPair *)a)->first);
+  const Address *bb = &(((const AddrUnsPair *)b)->first);
   unsigned depth = aa->depth;
   unsigned i;
   KMP_DEBUG_ASSERT(depth == bb->depth);
@@ -688,8 +688,11 @@ public:
       : maxLevels(7), depth(1), uninitialized(not_initialized), resizing(0) {}
 
   void fini() {
-    if (!uninitialized && numPerLevel)
+    if (!uninitialized && numPerLevel) {
       __kmp_free(numPerLevel);
+      numPerLevel = NULL;
+      uninitialized = not_initialized;
+    }
   }
 
   void init(AddrUnsPair *adr2os, int num_addrs) {
@@ -765,7 +768,6 @@ public:
       skipPerLevel[i] = 2 * skipPerLevel[i - 1];
 
     uninitialized = initialized; // One writer
-
   }
 
   // Resize the hierarchy if nproc changes to something larger than before
@@ -832,7 +834,6 @@ public:
 
     base_num_threads = nproc;
     resizing = 0; // One writer
-
   }
 };
 #endif // KMP_AFFINITY_H

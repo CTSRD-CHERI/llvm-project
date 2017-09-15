@@ -1678,8 +1678,7 @@ static Value *convertValue(const DataLayout &DL, IRBuilderTy &IRB, Value *V,
 
   // See if we need inttoptr for this type pair. A cast involving both scalars
   // and vectors requires and additional bitcast.
-  if (OldTy->getScalarType()->isIntegerTy() &&
-      NewTy->getScalarType()->isPointerTy()) {
+  if (OldTy->isIntOrIntVectorTy() && NewTy->isPtrOrPtrVectorTy()) {
     // Expand <2 x i32> to i8* --> <2 x i32> to i64 to i8*
     if (OldTy->isVectorTy() && !NewTy->isVectorTy())
       return IRB.CreateIntToPtr(IRB.CreateBitCast(V, DL.getIntPtrType(NewTy)),
@@ -1695,8 +1694,7 @@ static Value *convertValue(const DataLayout &DL, IRBuilderTy &IRB, Value *V,
 
   // See if we need ptrtoint for this type pair. A cast involving both scalars
   // and vectors requires and additional bitcast.
-  if (OldTy->getScalarType()->isPointerTy() &&
-      NewTy->getScalarType()->isIntegerTy()) {
+  if (OldTy->isPtrOrPtrVectorTy() && NewTy->isIntOrIntVectorTy()) {
     // Expand <2 x i8*> to i128 --> <2 x i8*> to <2 x i64> to i128
     if (OldTy->isVectorTy() && !NewTy->isVectorTy())
       return IRB.CreateBitCast(IRB.CreatePtrToInt(V, DL.getIntPtrType(OldTy)),
@@ -2411,7 +2409,7 @@ private:
       LoadInst *NewLI = IRB.CreateAlignedLoad(&NewAI, NewAI.getAlignment(),
                                               LI.isVolatile(), LI.getName());
       if (LI.isVolatile())
-        NewLI->setAtomic(LI.getOrdering(), LI.getSynchScope());
+        NewLI->setAtomic(LI.getOrdering(), LI.getSyncScopeID());
 
       // Any !nonnull metadata or !range metadata on the old load is also valid
       // on the new load. This is even true in some cases even when the loads
@@ -2446,7 +2444,7 @@ private:
                                               getSliceAlign(TargetTy),
                                               LI.isVolatile(), LI.getName());
       if (LI.isVolatile())
-        NewLI->setAtomic(LI.getOrdering(), LI.getSynchScope());
+        NewLI->setAtomic(LI.getOrdering(), LI.getSyncScopeID());
 
       V = NewLI;
       IsPtrAdjusted = true;
@@ -2589,7 +2587,7 @@ private:
     }
     NewSI->copyMetadata(SI, LLVMContext::MD_mem_parallel_loop_access);
     if (SI.isVolatile())
-      NewSI->setAtomic(SI.getOrdering(), SI.getSynchScope());
+      NewSI->setAtomic(SI.getOrdering(), SI.getSyncScopeID());
     Pass.DeadInsts.insert(&SI);
     deleteIfTriviallyDead(OldOp);
 

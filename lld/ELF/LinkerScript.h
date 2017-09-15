@@ -110,36 +110,8 @@ struct MemoryRegion {
   std::string Name;
   uint64_t Origin;
   uint64_t Length;
-  uint64_t Offset;
   uint32_t Flags;
   uint32_t NegFlags;
-};
-
-struct OutputSectionCommand : BaseCommand {
-  OutputSectionCommand(StringRef Name)
-      : BaseCommand(OutputSectionKind), Name(Name) {}
-
-  static bool classof(const BaseCommand *C);
-
-  OutputSection *Sec = nullptr;
-  MemoryRegion *MemRegion = nullptr;
-  StringRef Name;
-  Expr AddrExpr;
-  Expr AlignExpr;
-  Expr LMAExpr;
-  Expr SubalignExpr;
-  std::vector<BaseCommand *> Commands;
-  std::vector<StringRef> Phdrs;
-  llvm::Optional<uint32_t> Filler;
-  ConstraintKind Constraint = ConstraintKind::NoConstraint;
-  std::string Location;
-  std::string MemoryRegionName;
-  bool Noload = false;
-
-  template <class ELFT> void finalize();
-  template <class ELFT> void writeTo(uint8_t *Buf);
-  template <class ELFT> void maybeCompress();
-  uint32_t getFiller();
 };
 
 // This struct represents one section match pattern in SECTIONS() command.
@@ -222,8 +194,18 @@ struct ScriptConfiguration {
 };
 
 class LinkerScript final {
-  llvm::DenseMap<OutputSection *, OutputSectionCommand *> SecToCommand;
-  llvm::DenseMap<StringRef, OutputSectionCommand *> NameToOutputSectionCommand;
+  // Temporary state used in processCommands() and assignAddresses()
+  // that must be reinitialized for each call to the above functions, and must
+  // not be used outside of the scope of a call to the above functions.
+  struct AddressState {
+    uint64_t ThreadBssOffset = 0;
+    OutputSection *OutSec = nullptr;
+    MemoryRegion *MemRegion = nullptr;
+    llvm::DenseMap<const MemoryRegion *, uint64_t> MemRegionOffset;
+    std::function<uint64_t()> LMAOffset;
+    AddressState(const ScriptConfiguration &Opt);
+  };
+  llvm::DenseMap<StringRef, OutputSection *> NameToOutputSection;
 
   void assignSymbol(SymbolAssignment *Cmd, bool InSec);
   void setDot(Expr E, const Twine &Loc, bool InSec);
@@ -231,35 +213,28 @@ class LinkerScript final {
   std::vector<InputSection *>
   computeInputSections(const InputSectionDescription *);
 
-  std::vector<InputSectionBase *>
-  createInputSectionList(OutputSectionCommand &Cmd);
+  std::vector<InputSectionBase *> createInputSectionList(OutputSection &Cmd);
 
   std::vector<size_t> getPhdrIndices(OutputSection *Sec);
   size_t getPhdrIndex(const Twine &Loc, StringRef PhdrName);
 
-  MemoryRegion *findMemoryRegion(OutputSectionCommand *Cmd);
+  MemoryRegion *findMemoryRegion(OutputSection *Sec);
 
   void switchTo(OutputSection *Sec);
   uint64_t advance(uint64_t Size, unsigned Align);
   void output(InputSection *Sec);
   void process(BaseCommand &Base);
 
+  AddressState *CurAddressState = nullptr;
   OutputSection *Aether;
 
   uint64_t Dot;
-  uint64_t ThreadBssOffset = 0;
-
-  std::function<uint64_t()> LMAOffset;
-  OutputSection *CurOutSec = nullptr;
-  MemoryRegion *CurMemRegion = nullptr;
 
 public:
   bool ErrorOnMissingSection = false;
-  OutputSectionCommand *createOutputSectionCommand(StringRef Name,
-                                                   StringRef Location);
-  OutputSectionCommand *getOrCreateOutputSectionCommand(StringRef Name);
+  OutputSection *createOutputSection(StringRef Name, StringRef Location);
+  OutputSection *getOrCreateOutputSection(StringRef Name);
 
-  OutputSectionCommand *getCmd(OutputSection *Sec) const;
   bool hasPhdrsCommands() { return !Opt.PhdrsCommands.empty(); }
   uint64_t getDot() { return Dot; }
   void discard(ArrayRef<InputSectionBase *> V);
@@ -273,16 +248,13 @@ public:
   void adjustSectionsBeforeSorting();
   void adjustSectionsAfterSorting();
 
-  std::vector<PhdrEntry> createPhdrs();
+  std::vector<PhdrEntry *> createPhdrs();
   bool ignoreInterpSection();
 
-  bool hasLMA(OutputSection *Sec);
   bool shouldKeep(InputSectionBase *S);
-  void assignOffsets(OutputSectionCommand *Cmd);
-  void createOrphanCommands();
-  void processNonSectionCommands();
-  void assignAddresses(std::vector<PhdrEntry> &Phdrs);
-
+  void assignOffsets(OutputSection *Sec);
+  void assignAddresses();
+  void allocateHeaders(std::vector<PhdrEntry *> &Phdrs);
   void addSymbol(SymbolAssignment *Cmd);
   void processCommands(OutputSectionFactory &Factory);
 

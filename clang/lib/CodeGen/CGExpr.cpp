@@ -73,9 +73,12 @@ Address CodeGenFunction::CreateTempAlloca(llvm::Type *Ty, CharUnits Align,
   // cast alloca to the default address space when necessary.
   if (CastToDefaultAddrSpace && getASTAllocaAddressSpace() != LangAS::Default) {
     auto DestAddrSpace = getContext().getTargetAddressSpace(LangAS::Default);
+    auto CurIP = Builder.saveIP();
+    Builder.SetInsertPoint(AllocaInsertPt);
     V = getTargetHooks().performAddrSpaceCast(
         *this, V, getASTAllocaAddressSpace(), LangAS::Default,
         Ty->getPointerTo(DestAddrSpace), /*non-null*/ true);
+    Builder.restoreIP(CurIP);
   }
 
   return Address(V, Align);
@@ -338,9 +341,10 @@ pushTemporaryCleanup(CodeGenFunction &CGF, const MaterializeTemporaryExpr *M,
   }
 }
 
-static Address
-createReferenceTemporary(CodeGenFunction &CGF,
-                         const MaterializeTemporaryExpr *M, const Expr *Inner) {
+static Address createReferenceTemporary(CodeGenFunction &CGF,
+                                        const MaterializeTemporaryExpr *M,
+                                        const Expr *Inner) {
+  auto &TCG = CGF.getTargetHooks();
   switch (M->getStorageDuration()) {
   case SD_FullExpression:
   case SD_Automatic: {
@@ -353,13 +357,24 @@ createReferenceTemporary(CodeGenFunction &CGF,
         (Ty->isArrayType() || Ty->isRecordType()) &&
         CGF.CGM.isTypeConstant(Ty, true))
       if (llvm::Constant *Init = CGF.CGM.EmitConstantExpr(Inner, Ty, &CGF)) {
-        auto *GV = new llvm::GlobalVariable(
-            CGF.CGM.getModule(), Init->getType(), /*isConstant=*/true,
-            llvm::GlobalValue::PrivateLinkage, Init, ".ref.tmp");
-        CharUnits alignment = CGF.getContext().getTypeAlignInChars(Ty);
-        GV->setAlignment(alignment.getQuantity());
-        // FIXME: Should we put the new global into a COMDAT?
-        return Address(GV, alignment);
+        if (auto AddrSpace = CGF.getTarget().getConstantAddressSpace()) {
+          auto AS = AddrSpace.getValue();
+          auto *GV = new llvm::GlobalVariable(
+              CGF.CGM.getModule(), Init->getType(), /*isConstant=*/true,
+              llvm::GlobalValue::PrivateLinkage, Init, ".ref.tmp", nullptr,
+              llvm::GlobalValue::NotThreadLocal,
+              CGF.getContext().getTargetAddressSpace(AS));
+          CharUnits alignment = CGF.getContext().getTypeAlignInChars(Ty);
+          GV->setAlignment(alignment.getQuantity());
+          llvm::Constant *C = GV;
+          if (AS != LangAS::Default)
+            C = TCG.performAddrSpaceCast(
+                CGF.CGM, GV, AS, LangAS::Default,
+                GV->getValueType()->getPointerTo(
+                    CGF.getContext().getTargetAddressSpace(LangAS::Default)));
+          // FIXME: Should we put the new global into a COMDAT?
+          return Address(C, alignment);
+        }
       }
     return CGF.CreateMemTemp(Ty, "ref.tmp");
   }
@@ -440,9 +455,11 @@ EmitMaterializeTemporaryExpr(const MaterializeTemporaryExpr *M) {
 
   // Create and initialize the reference temporary.
   Address Object = createReferenceTemporary(*this, M, E);
-  if (auto *Var = dyn_cast<llvm::GlobalVariable>(Object.getPointer())) {
+  if (auto *Var = dyn_cast<llvm::GlobalVariable>(
+          Object.getPointer()->stripPointerCasts())) {
     Object = Address(llvm::ConstantExpr::getBitCast(
-        Var, ConvertTypeForMem(E->getType())->getPointerTo()),
+                         cast<llvm::Constant>(Object.getPointer()),
+                         ConvertTypeForMem(E->getType())->getPointerTo()),
                      Object.getAlignment());
     // If the temporary is a global and has a constant initializer or is a
     // constant temporary that we promoted to a global, we may have already
@@ -587,20 +604,23 @@ void CodeGenFunction::EmitTypeCheck(TypeCheckKind TCK, SourceLocation Loc,
   auto PtrToAlloca =
       dyn_cast<llvm::AllocaInst>(Ptr->stripPointerCastsNoFollowAliases());
 
+  llvm::Value *IsNonNull = nullptr;
+  bool IsGuaranteedNonNull =
+      SkippedChecks.has(SanitizerKind::Null) || PtrToAlloca;
   bool AllowNullPointers = TCK == TCK_DowncastPointer || TCK == TCK_Upcast ||
                            TCK == TCK_UpcastToVirtualBase;
   if ((SanOpts.has(SanitizerKind::Null) || AllowNullPointers) &&
-      !SkippedChecks.has(SanitizerKind::Null) && !PtrToAlloca) {
+      !IsGuaranteedNonNull) {
     // The glvalue must not be an empty glvalue.
-    llvm::Value *IsNonNull = Builder.CreateIsNotNull(Ptr);
+    IsNonNull = Builder.CreateIsNotNull(Ptr);
 
     // The IR builder can constant-fold the null check if the pointer points to
     // a constant.
-    bool PtrIsNonNull =
+    IsGuaranteedNonNull =
         IsNonNull == llvm::ConstantInt::getTrue(getLLVMContext());
 
     // Skip the null check if the pointer is known to be non-null.
-    if (!PtrIsNonNull) {
+    if (!IsGuaranteedNonNull) {
       if (AllowNullPointers) {
         // When performing pointer casts, it's OK if the value is null.
         // Skip the remaining checks in that case.
@@ -674,12 +694,24 @@ void CodeGenFunction::EmitTypeCheck(TypeCheckKind TCK, SourceLocation Loc,
   //    -- the [pointer or glvalue] is used to access a non-static data member
   //       or call a non-static member function
   CXXRecordDecl *RD = Ty->getAsCXXRecordDecl();
+  bool HasNullCheck = IsGuaranteedNonNull || IsNonNull;
   if (SanOpts.has(SanitizerKind::Vptr) &&
-      !SkippedChecks.has(SanitizerKind::Vptr) &&
+      !SkippedChecks.has(SanitizerKind::Vptr) && HasNullCheck &&
       (TCK == TCK_MemberAccess || TCK == TCK_MemberCall ||
        TCK == TCK_DowncastPointer || TCK == TCK_DowncastReference ||
        TCK == TCK_UpcastToVirtualBase) &&
       RD && RD->hasDefinition() && RD->isDynamicClass()) {
+    // Ensure that the pointer is non-null before loading it. If there is no
+    // compile-time guarantee, reuse the run-time null check.
+    if (!IsGuaranteedNonNull) {
+      assert(IsNonNull && "Missing run-time null check");
+      if (!Done)
+        Done = createBasicBlock("vptr.null");
+      llvm::BasicBlock *VptrNotNull = createBasicBlock("vptr.not.null");
+      Builder.CreateCondBr(IsNonNull, VptrNotNull, Done);
+      EmitBlock(VptrNotNull);
+    }
+
     // Compute a hash of the mangled name of the type.
     //
     // FIXME: This is not guaranteed to be deterministic! Move to a
@@ -3038,7 +3070,9 @@ static llvm::Value *emitArraySubscriptGEP(CodeGenFunction &CGF,
                                           SourceLocation loc,
                                     const llvm::Twine &name = "arrayidx") {
   if (inbounds) {
-    return CGF.EmitCheckedInBoundsGEP(ptr, indices, signedIndices, loc, name);
+    return CGF.EmitCheckedInBoundsGEP(ptr, indices, signedIndices,
+                                      CodeGenFunction::NotSubtraction, loc,
+                                      name);
   } else {
     return CGF.Builder.CreateGEP(ptr, indices, name);
   }

@@ -794,6 +794,7 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.SanitizeCoverageNoPrune = Args.hasArg(OPT_fsanitize_coverage_no_prune);
   Opts.SanitizeCoverageInline8bitCounters =
       Args.hasArg(OPT_fsanitize_coverage_inline_8bit_counters);
+  Opts.SanitizeCoveragePCTable = Args.hasArg(OPT_fsanitize_coverage_pc_table);
   Opts.SanitizeMemoryTrackOrigins =
       getLastArgIntValue(Args, OPT_fsanitize_memory_track_origins_EQ, 0, Diags);
   Opts.SanitizeMemoryUseAfterDtor =
@@ -909,12 +910,18 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.DiagnosticsWithHotness =
       Args.hasArg(options::OPT_fdiagnostics_show_hotness);
   bool UsingSampleProfile = !Opts.SampleProfileFile.empty();
+  bool UsingProfile = UsingSampleProfile ||
+      (Opts.getProfileUse() != CodeGenOptions::ProfileNone);
 
-  if (Opts.DiagnosticsWithHotness &&
-      Opts.getProfileUse() == CodeGenOptions::ProfileNone &&
-      !UsingSampleProfile) {
-    Diags.Report(diag::warn_drv_fdiagnostics_show_hotness_requires_pgo);
-  }
+  if (Opts.DiagnosticsWithHotness && !UsingProfile)
+    Diags.Report(diag::warn_drv_diagnostics_hotness_requires_pgo)
+        << "-fdiagnostics-show-hotness";
+
+  Opts.DiagnosticsHotnessThreshold = getLastArgUInt64Value(
+      Args, options::OPT_fdiagnostics_hotness_threshold_EQ, 0);
+  if (Opts.DiagnosticsHotnessThreshold > 0 && !UsingProfile)
+    Diags.Report(diag::warn_drv_diagnostics_hotness_requires_pgo)
+        << "-fdiagnostics-hotness-threshold=";
 
   // If the user requested to use a sample profile for PGO, then the
   // backend will need to track source location information so the profile
@@ -1677,6 +1684,7 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
   Opts.CPlusPlus11 = Std.isCPlusPlus11();
   Opts.CPlusPlus14 = Std.isCPlusPlus14();
   Opts.CPlusPlus1z = Std.isCPlusPlus1z();
+  Opts.CPlusPlus2a = Std.isCPlusPlus2a();
   Opts.Digraphs = Std.hasDigraphs();
   Opts.GNUMode = Std.isGNUMode();
   Opts.GNUInline = !Opts.C99 && !Opts.CPlusPlus;
@@ -2562,7 +2570,7 @@ static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
       Diags.Report(diag::err_drv_invalid_value) << A->getAsString(Args)
                                                 << Value;
     else
-      Opts.EABIVersion = Value;
+      Opts.EABIVersion = EABIVersion;
   }
   Opts.CPU = Args.getLastArgValue(OPT_target_cpu);
   Opts.FPMath = Args.getLastArgValue(OPT_mfpmath);

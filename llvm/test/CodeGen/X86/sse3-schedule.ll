@@ -7,7 +7,7 @@
 ; RUN: llc < %s -mtriple=x86_64-unknown-unknown -print-schedule -mcpu=haswell | FileCheck %s --check-prefix=CHECK --check-prefix=HASWELL
 ; RUN: llc < %s -mtriple=x86_64-unknown-unknown -print-schedule -mcpu=skylake | FileCheck %s --check-prefix=CHECK --check-prefix=HASWELL
 ; RUN: llc < %s -mtriple=x86_64-unknown-unknown -print-schedule -mcpu=btver2 | FileCheck %s --check-prefix=CHECK --check-prefix=BTVER2
-; RUN: llc < %s -mtriple=x86_64-unknown-unknown -print-schedule -mcpu=znver1 | FileCheck %s --check-prefix=CHECK --check-prefix=BTVER2
+; RUN: llc < %s -mtriple=x86_64-unknown-unknown -print-schedule -mcpu=znver1 | FileCheck %s --check-prefix=CHECK --check-prefix=ZNVER1
 
 define <2 x double> @test_addsubpd(<2 x double> %a0, <2 x double> %a1, <2 x double> *%a2) {
 ; GENERIC-LABEL: test_addsubpd:
@@ -31,8 +31,8 @@ define <2 x double> @test_addsubpd(<2 x double> %a0, <2 x double> %a1, <2 x doub
 ; SANDY-LABEL: test_addsubpd:
 ; SANDY:       # BB#0:
 ; SANDY-NEXT:    vaddsubpd %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
-; SANDY-NEXT:    vaddsubpd (%rdi), %xmm0, %xmm0 # sched: [7:1.00]
-; SANDY-NEXT:    retq # sched: [5:1.00]
+; SANDY-NEXT:    vaddsubpd (%rdi), %xmm0, %xmm0 # sched: [9:1.00]
+; SANDY-NEXT:    retq # sched: [1:1.00]
 ;
 ; HASWELL-LABEL: test_addsubpd:
 ; HASWELL:       # BB#0:
@@ -45,6 +45,12 @@ define <2 x double> @test_addsubpd(<2 x double> %a0, <2 x double> %a1, <2 x doub
 ; BTVER2-NEXT:    vaddsubpd %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
 ; BTVER2-NEXT:    vaddsubpd (%rdi), %xmm0, %xmm0 # sched: [8:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
+;
+; ZNVER1-LABEL: test_addsubpd:
+; ZNVER1:       # BB#0:
+; ZNVER1-NEXT:    vaddsubpd %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
+; ZNVER1-NEXT:    vaddsubpd (%rdi), %xmm0, %xmm0 # sched: [10:1.00]
+; ZNVER1-NEXT:    retq # sched: [5:0.50]
   %1 = call <2 x double> @llvm.x86.sse3.addsub.pd(<2 x double> %a0, <2 x double> %a1)
   %2 = load <2 x double>, <2 x double> *%a2, align 16
   %3 = call <2 x double> @llvm.x86.sse3.addsub.pd(<2 x double> %1, <2 x double> %2)
@@ -74,8 +80,8 @@ define <4 x float> @test_addsubps(<4 x float> %a0, <4 x float> %a1, <4 x float> 
 ; SANDY-LABEL: test_addsubps:
 ; SANDY:       # BB#0:
 ; SANDY-NEXT:    vaddsubps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
-; SANDY-NEXT:    vaddsubps (%rdi), %xmm0, %xmm0 # sched: [7:1.00]
-; SANDY-NEXT:    retq # sched: [5:1.00]
+; SANDY-NEXT:    vaddsubps (%rdi), %xmm0, %xmm0 # sched: [9:1.00]
+; SANDY-NEXT:    retq # sched: [1:1.00]
 ;
 ; HASWELL-LABEL: test_addsubps:
 ; HASWELL:       # BB#0:
@@ -88,6 +94,12 @@ define <4 x float> @test_addsubps(<4 x float> %a0, <4 x float> %a1, <4 x float> 
 ; BTVER2-NEXT:    vaddsubps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
 ; BTVER2-NEXT:    vaddsubps (%rdi), %xmm0, %xmm0 # sched: [8:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
+;
+; ZNVER1-LABEL: test_addsubps:
+; ZNVER1:       # BB#0:
+; ZNVER1-NEXT:    vaddsubps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
+; ZNVER1-NEXT:    vaddsubps (%rdi), %xmm0, %xmm0 # sched: [10:1.00]
+; ZNVER1-NEXT:    retq # sched: [5:0.50]
   %1 = call <4 x float> @llvm.x86.sse3.addsub.ps(<4 x float> %a0, <4 x float> %a1)
   %2 = load <4 x float>, <4 x float> *%a2, align 16
   %3 = call <4 x float> @llvm.x86.sse3.addsub.ps(<4 x float> %1, <4 x float> %2)
@@ -116,9 +128,9 @@ define <2 x double> @test_haddpd(<2 x double> %a0, <2 x double> %a1, <2 x double
 ;
 ; SANDY-LABEL: test_haddpd:
 ; SANDY:       # BB#0:
-; SANDY-NEXT:    vhaddpd %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
-; SANDY-NEXT:    vhaddpd (%rdi), %xmm0, %xmm0 # sched: [7:1.00]
-; SANDY-NEXT:    retq # sched: [5:1.00]
+; SANDY-NEXT:    vhaddpd %xmm1, %xmm0, %xmm0 # sched: [5:2.00]
+; SANDY-NEXT:    vhaddpd (%rdi), %xmm0, %xmm0 # sched: [11:2.00]
+; SANDY-NEXT:    retq # sched: [1:1.00]
 ;
 ; HASWELL-LABEL: test_haddpd:
 ; HASWELL:       # BB#0:
@@ -131,6 +143,12 @@ define <2 x double> @test_haddpd(<2 x double> %a0, <2 x double> %a1, <2 x double
 ; BTVER2-NEXT:    vhaddpd %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
 ; BTVER2-NEXT:    vhaddpd (%rdi), %xmm0, %xmm0 # sched: [8:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
+;
+; ZNVER1-LABEL: test_haddpd:
+; ZNVER1:       # BB#0:
+; ZNVER1-NEXT:    vhaddpd %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
+; ZNVER1-NEXT:    vhaddpd (%rdi), %xmm0, %xmm0 # sched: [10:1.00]
+; ZNVER1-NEXT:    retq # sched: [5:0.50]
   %1 = call <2 x double> @llvm.x86.sse3.hadd.pd(<2 x double> %a0, <2 x double> %a1)
   %2 = load <2 x double>, <2 x double> *%a2, align 16
   %3 = call <2 x double> @llvm.x86.sse3.hadd.pd(<2 x double> %1, <2 x double> %2)
@@ -159,9 +177,9 @@ define <4 x float> @test_haddps(<4 x float> %a0, <4 x float> %a1, <4 x float> *%
 ;
 ; SANDY-LABEL: test_haddps:
 ; SANDY:       # BB#0:
-; SANDY-NEXT:    vhaddps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
-; SANDY-NEXT:    vhaddps (%rdi), %xmm0, %xmm0 # sched: [7:1.00]
-; SANDY-NEXT:    retq # sched: [5:1.00]
+; SANDY-NEXT:    vhaddps %xmm1, %xmm0, %xmm0 # sched: [5:2.00]
+; SANDY-NEXT:    vhaddps (%rdi), %xmm0, %xmm0 # sched: [11:2.00]
+; SANDY-NEXT:    retq # sched: [1:1.00]
 ;
 ; HASWELL-LABEL: test_haddps:
 ; HASWELL:       # BB#0:
@@ -174,6 +192,12 @@ define <4 x float> @test_haddps(<4 x float> %a0, <4 x float> %a1, <4 x float> *%
 ; BTVER2-NEXT:    vhaddps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
 ; BTVER2-NEXT:    vhaddps (%rdi), %xmm0, %xmm0 # sched: [8:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
+;
+; ZNVER1-LABEL: test_haddps:
+; ZNVER1:       # BB#0:
+; ZNVER1-NEXT:    vhaddps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
+; ZNVER1-NEXT:    vhaddps (%rdi), %xmm0, %xmm0 # sched: [10:1.00]
+; ZNVER1-NEXT:    retq # sched: [5:0.50]
   %1 = call <4 x float> @llvm.x86.sse3.hadd.ps(<4 x float> %a0, <4 x float> %a1)
   %2 = load <4 x float>, <4 x float> *%a2, align 16
   %3 = call <4 x float> @llvm.x86.sse3.hadd.ps(<4 x float> %1, <4 x float> %2)
@@ -202,9 +226,9 @@ define <2 x double> @test_hsubpd(<2 x double> %a0, <2 x double> %a1, <2 x double
 ;
 ; SANDY-LABEL: test_hsubpd:
 ; SANDY:       # BB#0:
-; SANDY-NEXT:    vhsubpd %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
-; SANDY-NEXT:    vhsubpd (%rdi), %xmm0, %xmm0 # sched: [7:1.00]
-; SANDY-NEXT:    retq # sched: [5:1.00]
+; SANDY-NEXT:    vhsubpd %xmm1, %xmm0, %xmm0 # sched: [5:2.00]
+; SANDY-NEXT:    vhsubpd (%rdi), %xmm0, %xmm0 # sched: [11:2.00]
+; SANDY-NEXT:    retq # sched: [1:1.00]
 ;
 ; HASWELL-LABEL: test_hsubpd:
 ; HASWELL:       # BB#0:
@@ -217,6 +241,12 @@ define <2 x double> @test_hsubpd(<2 x double> %a0, <2 x double> %a1, <2 x double
 ; BTVER2-NEXT:    vhsubpd %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
 ; BTVER2-NEXT:    vhsubpd (%rdi), %xmm0, %xmm0 # sched: [8:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
+;
+; ZNVER1-LABEL: test_hsubpd:
+; ZNVER1:       # BB#0:
+; ZNVER1-NEXT:    vhsubpd %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
+; ZNVER1-NEXT:    vhsubpd (%rdi), %xmm0, %xmm0 # sched: [10:1.00]
+; ZNVER1-NEXT:    retq # sched: [5:0.50]
   %1 = call <2 x double> @llvm.x86.sse3.hsub.pd(<2 x double> %a0, <2 x double> %a1)
   %2 = load <2 x double>, <2 x double> *%a2, align 16
   %3 = call <2 x double> @llvm.x86.sse3.hsub.pd(<2 x double> %1, <2 x double> %2)
@@ -245,9 +275,9 @@ define <4 x float> @test_hsubps(<4 x float> %a0, <4 x float> %a1, <4 x float> *%
 ;
 ; SANDY-LABEL: test_hsubps:
 ; SANDY:       # BB#0:
-; SANDY-NEXT:    vhsubps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
-; SANDY-NEXT:    vhsubps (%rdi), %xmm0, %xmm0 # sched: [7:1.00]
-; SANDY-NEXT:    retq # sched: [5:1.00]
+; SANDY-NEXT:    vhsubps %xmm1, %xmm0, %xmm0 # sched: [5:2.00]
+; SANDY-NEXT:    vhsubps (%rdi), %xmm0, %xmm0 # sched: [11:2.00]
+; SANDY-NEXT:    retq # sched: [1:1.00]
 ;
 ; HASWELL-LABEL: test_hsubps:
 ; HASWELL:       # BB#0:
@@ -260,6 +290,12 @@ define <4 x float> @test_hsubps(<4 x float> %a0, <4 x float> %a1, <4 x float> *%
 ; BTVER2-NEXT:    vhsubps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
 ; BTVER2-NEXT:    vhsubps (%rdi), %xmm0, %xmm0 # sched: [8:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
+;
+; ZNVER1-LABEL: test_hsubps:
+; ZNVER1:       # BB#0:
+; ZNVER1-NEXT:    vhsubps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
+; ZNVER1-NEXT:    vhsubps (%rdi), %xmm0, %xmm0 # sched: [10:1.00]
+; ZNVER1-NEXT:    retq # sched: [5:0.50]
   %1 = call <4 x float> @llvm.x86.sse3.hsub.ps(<4 x float> %a0, <4 x float> %a1)
   %2 = load <4 x float>, <4 x float> *%a2, align 16
   %3 = call <4 x float> @llvm.x86.sse3.hsub.ps(<4 x float> %1, <4 x float> %2)
@@ -287,8 +323,8 @@ define <16 x i8> @test_lddqu(i8* %a0) {
 ;
 ; SANDY-LABEL: test_lddqu:
 ; SANDY:       # BB#0:
-; SANDY-NEXT:    vlddqu (%rdi), %xmm0 # sched: [4:0.50]
-; SANDY-NEXT:    retq # sched: [5:1.00]
+; SANDY-NEXT:    vlddqu (%rdi), %xmm0 # sched: [6:0.50]
+; SANDY-NEXT:    retq # sched: [1:1.00]
 ;
 ; HASWELL-LABEL: test_lddqu:
 ; HASWELL:       # BB#0:
@@ -299,6 +335,11 @@ define <16 x i8> @test_lddqu(i8* %a0) {
 ; BTVER2:       # BB#0:
 ; BTVER2-NEXT:    vlddqu (%rdi), %xmm0 # sched: [5:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
+;
+; ZNVER1-LABEL: test_lddqu:
+; ZNVER1:       # BB#0:
+; ZNVER1-NEXT:    vlddqu (%rdi), %xmm0 # sched: [8:0.50]
+; ZNVER1-NEXT:    retq # sched: [5:0.50]
   %1 = call <16 x i8> @llvm.x86.sse3.ldu.dq(i8* %a0)
   ret <16 x i8> %1
 }
@@ -330,9 +371,9 @@ define <2 x double> @test_movddup(<2 x double> %a0, <2 x double> *%a1) {
 ; SANDY-LABEL: test_movddup:
 ; SANDY:       # BB#0:
 ; SANDY-NEXT:    vmovddup {{.*#+}} xmm0 = xmm0[0,0] sched: [1:1.00]
-; SANDY-NEXT:    vmovddup {{.*#+}} xmm1 = mem[0,0] sched: [4:0.50]
+; SANDY-NEXT:    vmovddup {{.*#+}} xmm1 = mem[0,0] sched: [6:0.50]
 ; SANDY-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
-; SANDY-NEXT:    retq # sched: [5:1.00]
+; SANDY-NEXT:    retq # sched: [1:1.00]
 ;
 ; HASWELL-LABEL: test_movddup:
 ; HASWELL:       # BB#0:
@@ -347,6 +388,13 @@ define <2 x double> @test_movddup(<2 x double> %a0, <2 x double> *%a1) {
 ; BTVER2-NEXT:    vmovddup {{.*#+}} xmm0 = xmm0[0,0] sched: [1:0.50]
 ; BTVER2-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
+;
+; ZNVER1-LABEL: test_movddup:
+; ZNVER1:       # BB#0:
+; ZNVER1-NEXT:    vmovddup {{.*#+}} xmm1 = mem[0,0] sched: [8:0.50]
+; ZNVER1-NEXT:    vmovddup {{.*#+}} xmm0 = xmm0[0,0] sched: [1:0.50]
+; ZNVER1-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
+; ZNVER1-NEXT:    retq # sched: [5:0.50]
   %1 = shufflevector <2 x double> %a0, <2 x double> undef, <2 x i32> zeroinitializer
   %2 = load <2 x double>, <2 x double> *%a1, align 16
   %3 = shufflevector <2 x double> %2, <2 x double> undef, <2 x i32> zeroinitializer
@@ -380,9 +428,9 @@ define <4 x float> @test_movshdup(<4 x float> %a0, <4 x float> *%a1) {
 ; SANDY-LABEL: test_movshdup:
 ; SANDY:       # BB#0:
 ; SANDY-NEXT:    vmovshdup {{.*#+}} xmm0 = xmm0[1,1,3,3] sched: [1:1.00]
-; SANDY-NEXT:    vmovshdup {{.*#+}} xmm1 = mem[1,1,3,3] sched: [4:0.50]
+; SANDY-NEXT:    vmovshdup {{.*#+}} xmm1 = mem[1,1,3,3] sched: [6:0.50]
 ; SANDY-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
-; SANDY-NEXT:    retq # sched: [5:1.00]
+; SANDY-NEXT:    retq # sched: [1:1.00]
 ;
 ; HASWELL-LABEL: test_movshdup:
 ; HASWELL:       # BB#0:
@@ -397,6 +445,13 @@ define <4 x float> @test_movshdup(<4 x float> %a0, <4 x float> *%a1) {
 ; BTVER2-NEXT:    vmovshdup {{.*#+}} xmm0 = xmm0[1,1,3,3] sched: [1:0.50]
 ; BTVER2-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
+;
+; ZNVER1-LABEL: test_movshdup:
+; ZNVER1:       # BB#0:
+; ZNVER1-NEXT:    vmovshdup {{.*#+}} xmm1 = mem[1,1,3,3] sched: [8:0.50]
+; ZNVER1-NEXT:    vmovshdup {{.*#+}} xmm0 = xmm0[1,1,3,3] sched: [1:0.50]
+; ZNVER1-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
+; ZNVER1-NEXT:    retq # sched: [5:0.50]
   %1 = shufflevector <4 x float> %a0, <4 x float> undef, <4 x i32> <i32 1, i32 1, i32 3, i32 3>
   %2 = load <4 x float>, <4 x float> *%a1, align 16
   %3 = shufflevector <4 x float> %2, <4 x float> undef, <4 x i32> <i32 1, i32 1, i32 3, i32 3>
@@ -430,9 +485,9 @@ define <4 x float> @test_movsldup(<4 x float> %a0, <4 x float> *%a1) {
 ; SANDY-LABEL: test_movsldup:
 ; SANDY:       # BB#0:
 ; SANDY-NEXT:    vmovsldup {{.*#+}} xmm0 = xmm0[0,0,2,2] sched: [1:1.00]
-; SANDY-NEXT:    vmovsldup {{.*#+}} xmm1 = mem[0,0,2,2] sched: [4:0.50]
+; SANDY-NEXT:    vmovsldup {{.*#+}} xmm1 = mem[0,0,2,2] sched: [6:0.50]
 ; SANDY-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
-; SANDY-NEXT:    retq # sched: [5:1.00]
+; SANDY-NEXT:    retq # sched: [1:1.00]
 ;
 ; HASWELL-LABEL: test_movsldup:
 ; HASWELL:       # BB#0:
@@ -447,6 +502,13 @@ define <4 x float> @test_movsldup(<4 x float> %a0, <4 x float> *%a1) {
 ; BTVER2-NEXT:    vmovsldup {{.*#+}} xmm0 = xmm0[0,0,2,2] sched: [1:0.50]
 ; BTVER2-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
+;
+; ZNVER1-LABEL: test_movsldup:
+; ZNVER1:       # BB#0:
+; ZNVER1-NEXT:    vmovsldup {{.*#+}} xmm1 = mem[0,0,2,2] sched: [8:0.50]
+; ZNVER1-NEXT:    vmovsldup {{.*#+}} xmm0 = xmm0[0,0,2,2] sched: [1:0.50]
+; ZNVER1-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
+; ZNVER1-NEXT:    retq # sched: [5:0.50]
   %1 = shufflevector <4 x float> %a0, <4 x float> undef, <4 x i32> <i32 0, i32 0, i32 2, i32 2>
   %2 = load <4 x float>, <4 x float> *%a1, align 16
   %3 = shufflevector <4 x float> %2, <4 x float> undef, <4 x i32> <i32 0, i32 0, i32 2, i32 2>

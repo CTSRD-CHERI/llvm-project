@@ -712,6 +712,19 @@ def err_pragma_options_align_mac68k_target_unsupported : Error<
 def warn_pragma_pack_invalid_alignment : Warning<
   "expected #pragma pack parameter to be '1', '2', '4', '8', or '16'">,
   InGroup<IgnoredPragmas>;
+def warn_pragma_pack_non_default_at_include : Warning<
+  "non-default #pragma pack value changes the alignment of struct or union "
+  "members in the included file">, InGroup<PragmaPackSuspiciousInclude>,
+  DefaultIgnore;
+def warn_pragma_pack_modified_after_include : Warning<
+  "the current #pragma pack aligment value is modified in the included "
+  "file">, InGroup<PragmaPack>;
+def warn_pragma_pack_no_pop_eof : Warning<"unterminated "
+  "'#pragma pack (push, ...)' at end of file">, InGroup<PragmaPack>;
+def note_pragma_pack_here : Note<
+  "previous '#pragma pack' directive that modifies alignment is here">;
+def note_pragma_pack_pop_instead_reset : Note<
+  "did you intend to use '#pragma pack (pop)' instead of '#pragma pack()'?">;
 // Follow the Microsoft implementation.
 def warn_pragma_pack_show : Warning<"value of #pragma pack(show) == %0">;
 def warn_pragma_pack_pop_identifer_and_alignment : Warning<
@@ -808,8 +821,10 @@ def warn_property_types_are_incompatible : Warning<
   "property type %0 is incompatible with type %1 inherited from %2">,
   InGroup<DiagGroup<"incompatible-property-type">>;
 def warn_protocol_property_mismatch : Warning<
-  "property of type %0 was selected for synthesis">,
+  "property %select{of type %1|with attribute '%1'|without attribute '%1'|with "
+  "getter %1|with setter %1}0 was selected for synthesis">,
   InGroup<DiagGroup<"protocol-property-synthesis-ambiguity">>;
+def err_protocol_property_mismatch: Error<warn_protocol_property_mismatch.Text>;
 def err_undef_interface : Error<"cannot find interface declaration for %0">;
 def err_category_forward_interface : Error<
   "cannot define %select{category|class extension}0 for undefined class %1">;
@@ -1029,6 +1044,8 @@ def warn_auto_synthesizing_protocol_property :Warning<
   "auto property synthesis will not synthesize property %0"
   " declared in protocol %1">,
   InGroup<DiagGroup<"objc-protocol-property-synthesis">>;
+def note_add_synthesize_directive : Note<
+  "add a '@synthesize' directive">;
 def warn_no_autosynthesis_shared_ivar_property : Warning <
   "auto property synthesis will not synthesize property "
   "%0 because it cannot share an ivar with another synthesized property">,
@@ -1086,7 +1103,9 @@ def err_category_property : Error<
 def note_property_declare : Note<
   "property declared here">;
 def note_protocol_property_declare : Note<
-  "it could also be property of type %0 declared here">;
+  "it could also be property "
+  "%select{of type %1|without attribute '%1'|with attribute '%1'|with getter "
+  "%1|with setter %1}0 declared here">;
 def note_property_synthesize : Note<
   "property synthesized here">;
 def err_synthesize_category_decl : Error<
@@ -2381,8 +2400,9 @@ def err_attribute_requires_positive_integer : Error<
 def err_attribute_requires_opencl_version : Error<
   "%0 attribute requires OpenCL version %1%select{| or above}2">;
 def warn_unsupported_target_attribute
-    : Warning<"Ignoring unsupported '%0' in the target attribute string">,
-    InGroup<IgnoredAttributes>;
+    : Warning<"ignoring %select{unsupported|duplicate}0"
+              "%select{| architecture}1 '%2' in the target attribute string">,
+      InGroup<IgnoredAttributes>;
 def err_attribute_unsupported
     : Error<"%0 attribute is not supported for this target">;
 // The err_*_attribute_argument_not_int are separate because they're used by
@@ -2878,7 +2898,7 @@ def warn_partial_availability : Warning<"%0 is only available conditionally">,
 def warn_partial_availability_new : Warning<warn_partial_availability.Text>,
   InGroup<UnguardedAvailabilityNew>;
 def note_partial_availability_silence : Note<
-  "explicitly redeclare %0 to silence this warning">;
+  "annotate %select{%1|anonymous %1}0 with an availability attribute to silence">;
 def note_unguarded_available_silence : Note<
   "enclose %0 in %select{an @available|a __builtin_available}1 check to silence"
   " this warning">;
@@ -3516,6 +3536,8 @@ def note_ovl_candidate_substitution_failure : Note<
     "candidate template ignored: substitution failure%0%1">;
 def note_ovl_candidate_disabled_by_enable_if : Note<
     "candidate template ignored: disabled by %0%1">;
+def note_ovl_candidate_disabled_by_requirement : Note<
+    "candidate template ignored: requirement '%0' was not satisfied%1">;
 def note_ovl_candidate_has_pass_object_size_params: Note<
     "candidate address cannot be taken because parameter %0 has "
     "pass_object_size attribute">;
@@ -4429,6 +4451,9 @@ def err_typename_nested_not_found : Error<"no type named %0 in %1">;
 def err_typename_nested_not_found_enable_if : Error<
   "no type named 'type' in %0; 'enable_if' cannot be used to disable "
   "this declaration">;
+def err_typename_nested_not_found_requirement : Error<
+  "failed requirement '%0'; 'enable_if' cannot be used to disable this "
+  "declaration">;
 def err_typename_nested_not_type : Error<
     "typename specifier refers to non-type member %0 in %1">;
 def note_typename_refers_here : Note<
@@ -4568,8 +4593,11 @@ def warn_deprecated_fwdclass_message : Warning<
     "%0 may be deprecated because the receiver type is unknown">,
     InGroup<DeprecatedDeclarations>;
 def warn_deprecated_def : Warning<
-    "Implementing deprecated %select{method|class|category}0">,
-    InGroup<DeprecatedImplementations>, DefaultIgnore;
+  "implementing deprecated %select{method|class|category}0">,
+  InGroup<DeprecatedImplementations>, DefaultIgnore;
+def warn_unavailable_def : Warning<
+  "implementing unavailable method">,
+  InGroup<DeprecatedImplementations>, DefaultIgnore;
 def err_unavailable : Error<"%0 is unavailable">;
 def err_property_method_unavailable :
     Error<"property access is using %0 method which is unavailable">;
@@ -6353,15 +6381,13 @@ def err_exceptions_disabled : Error<
   "cannot use '%0' with exceptions disabled">;
 def err_objc_exceptions_disabled : Error<
   "cannot use '%0' with Objective-C exceptions disabled">;
-def warn_throw_in_noexcept_func 
-    : Warning<"%0 has a non-throwing exception specification but can still "
-      "throw, resulting in unexpected program termination">,
-      InGroup<Exceptions>;
-def note_throw_in_dtor 
-    : Note<"destructor or deallocator has a (possibly implicit) non-throwing "
-      "excepton specification">;
-def note_throw_in_function 
-    : Note<"non-throwing function declare here">;
+def warn_throw_in_noexcept_func : Warning<
+  "%0 has a non-throwing exception specification but can still throw">,
+  InGroup<Exceptions>;
+def note_throw_in_dtor : Note<
+  "%select{destructor|deallocator}0 has a %select{non-throwing|implicit "
+  "non-throwing}1 exception specification">;
+def note_throw_in_function : Note<"function declared non-throwing here">;
 def err_seh_try_outside_functions : Error<
   "cannot use SEH '__try' in blocks, captured regions, or Obj-C method decls">;
 def err_mixing_cxx_try_seh_try : Error<
@@ -6408,8 +6434,8 @@ def warn_overaligned_type : Warning<
   "guarantees %2 bytes">,
   InGroup<OveralignedType>, DefaultIgnore;
 def warn_aligned_allocation_unavailable :Warning<
-  "aligned %select{allocation|deallocation}0 function of type '%1' possibly "
-  "unavailable on %2">, InGroup<AlignedAllocationUnavailable>, DefaultError;
+  "aligned %select{allocation|deallocation}0 function of type '%1' is only "
+  "available on %2 %3 or newer">, InGroup<AlignedAllocationUnavailable>, DefaultError;
 def note_silence_unligned_allocation_unavailable : Note<
   "if you supply your own aligned allocation functions, use "
   "-Wno-aligned-allocation-unavailable to silence this diagnostic">;
@@ -8101,10 +8127,10 @@ def err_systemz_invalid_tabort_code : Error<
   "invalid transaction abort code">;
 def err_64_bit_builtin_32_bit_tgt : Error<
   "this builtin is only available on 64-bit targets">;
+def err_builtin_x64_aarch64_only : Error<
+  "this builtin is only available on x86-64 and aarch64 targets">;
 def err_ppc_builtin_only_on_pwr7 : Error<
   "this builtin is only valid on POWER7 or later CPUs">;
-def err_x86_builtin_64_only : Error<
-  "this builtin is only available on x86-64 targets">;
 def err_x86_builtin_invalid_rounding : Error<
   "invalid rounding argument">;
 def err_x86_builtin_invalid_scale : Error<
@@ -8455,8 +8481,6 @@ def err_opencl_builtin_to_addr_invalid_arg : Error<
 // OpenCL v2.0 s6.13.17 Enqueue kernel restrictions.
 def err_opencl_enqueue_kernel_incorrect_args : Error<
   "illegal call to enqueue_kernel, incorrect argument types">;
-def err_opencl_enqueue_kernel_expected_type : Error<
-  "illegal call to enqueue_kernel, expected %0 argument type">;
 def err_opencl_enqueue_kernel_local_size_args : Error<
   "mismatch in number of block parameters and local size arguments passed">;
 def err_opencl_enqueue_kernel_invalid_local_size_type : Error<
@@ -8465,6 +8489,9 @@ def err_opencl_enqueue_kernel_blocks_non_local_void_args : Error<
   "blocks used in enqueue_kernel call are expected to have parameters of type 'local void*'">;
 def err_opencl_enqueue_kernel_blocks_no_args : Error<
   "blocks with parameters are not accepted in this prototype of enqueue_kernel call">;
+
+def err_opencl_builtin_expected_type : Error<
+  "illegal call to %0, expected %1 argument type">;
 
 // OpenCL v2.2 s2.1.2.3 - Vector Component Access
 def ext_opencl_ext_vector_type_rgba_selector: ExtWarn<
@@ -8505,6 +8532,8 @@ def err_omp_expected_var_name_member_expr : Error<
   "expected variable name%select{| or data member of current class}0">;
 def err_omp_expected_var_name_member_expr_or_array_item : Error<
   "expected variable name%select{|, data member of current class}0, array element or array section">;
+def err_omp_expected_addressable_lvalue_or_array_item : Error<
+  "expected addressable lvalue expression, array element or array section">;
 def err_omp_expected_named_var_member_or_array_expression: Error<
   "expected expression containing only member accesses and/or array sections based on named variables">;
 def err_omp_bit_fields_forbidden_in_clause : Error<
@@ -8642,11 +8671,11 @@ def err_omp_unknown_reduction_identifier : Error<
 def err_omp_not_resolved_reduction_identifier : Error<
   "unable to resolve declare reduction construct for type %0">;
 def err_omp_reduction_ref_type_arg : Error<
-  "argument of OpenMP clause 'reduction' must reference the same object in all threads">;
+  "argument of OpenMP clause '%0' must reference the same object in all threads">;
 def err_omp_clause_not_arithmetic_type_arg : Error<
-  "arguments of OpenMP clause 'reduction' for 'min' or 'max' must be of %select{scalar|arithmetic}0 type">;
+  "arguments of OpenMP clause '%0' for 'min' or 'max' must be of %select{scalar|arithmetic}1 type">;
 def err_omp_clause_floating_type_arg : Error<
-  "arguments of OpenMP clause 'reduction' with bitwise operators cannot be of floating type">;
+  "arguments of OpenMP clause '%0' with bitwise operators cannot be of floating type">;
 def err_omp_once_referenced : Error<
   "variable can appear only once in OpenMP '%0' clause">;
 def err_omp_once_referenced_in_target_update : Error<
@@ -8657,6 +8686,12 @@ def err_omp_reduction_in_task : Error<
   "reduction variables may not be accessed in an explicit task">;
 def err_omp_reduction_id_not_compatible : Error<
   "list item of type %0 is not valid for specified reduction operation: unable to provide default initialization value">;
+def err_omp_in_reduction_not_task_reduction : Error<
+  "in_reduction variable must appear in a task_reduction clause">;
+def err_omp_reduction_identifier_mismatch : Error<
+  "in_reduction variable must have the same reduction operation as in a task_reduction clause">;
+def note_omp_previous_reduction_identifier : Note<
+  "previously marked as task_reduction with different reduction operation">;
 def err_omp_prohibited_region : Error<
   "region cannot be%select{| closely}0 nested inside '%1' region"
   "%select{|; perhaps you forget to enclose 'omp %3' directive into a parallel region?|"
@@ -8808,12 +8843,6 @@ def note_omp_critical_hint_here : Note<
   "%select{|previous }0'hint' clause with value '%1'">;
 def note_omp_critical_no_hint : Note<
   "%select{|previous }0directive with no 'hint' clause specified">;
-def err_omp_firstprivate_distribute_private_teams : Error<
-  "private variable in '#pragma omp teams' cannot be firstprivate in '#pragma omp distribute'">;
-def err_omp_firstprivate_and_lastprivate_in_distribute : Error<
-  "lastprivate variable cannot be firstprivate in '#pragma omp distribute'">;
-def err_omp_firstprivate_distribute_in_teams_reduction : Error<
-  "reduction variable in '#pragma omp teams' cannot be firstprivate in '#pragma omp distribute'">;
 def err_omp_depend_clause_thread_simd : Error<
   "'depend' clauses cannot be mixed with '%0' clause">;
 def err_omp_depend_sink_expected_loop_iteration : Error<
@@ -8854,6 +8883,10 @@ def warn_omp_nesting_simd : Warning<
 def err_omp_orphaned_device_directive : Error<
   "orphaned 'omp %0' directives are prohibited"
   "; perhaps you forget to enclose the directive into a %select{|||target |teams }1region?">;
+def err_omp_reduction_non_addressable_expression : Error<
+  "expected addressable reduction item for the task-based directives">;
+def err_omp_reduction_with_nogroup : Error<
+  "'reduction' clause cannot be used with 'nogroup' clause">;
 } // end of OpenMP category
 
 let CategoryName = "Related Result Type Issue" in {

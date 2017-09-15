@@ -24,6 +24,7 @@
 
 #include "sanitizer_common.h"
 #include "sanitizer_dbghelp.h"
+#include "sanitizer_file.h"
 #include "sanitizer_libc.h"
 #include "sanitizer_mutex.h"
 #include "sanitizer_placement_new.h"
@@ -291,7 +292,8 @@ void DontDumpShadowMemory(uptr addr, uptr length) {
   // FIXME: add madvise-analog when we move to 64-bits.
 }
 
-uptr FindAvailableMemoryRange(uptr size, uptr alignment, uptr left_padding) {
+uptr FindAvailableMemoryRange(uptr size, uptr alignment, uptr left_padding,
+                              uptr *largest_gap_found) {
   uptr address = 0;
   while (true) {
     MEMORY_BASIC_INFORMATION info;

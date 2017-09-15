@@ -15,9 +15,11 @@
 #include "llvm/DebugInfo/PDB/GenericError.h"
 #include "llvm/DebugInfo/PDB/Native/DbiStream.h"
 #include "llvm/DebugInfo/PDB/Native/DbiStreamBuilder.h"
+#include "llvm/DebugInfo/PDB/Native/GlobalsStreamBuilder.h"
 #include "llvm/DebugInfo/PDB/Native/InfoStream.h"
 #include "llvm/DebugInfo/PDB/Native/InfoStreamBuilder.h"
 #include "llvm/DebugInfo/PDB/Native/PDBStringTableBuilder.h"
+#include "llvm/DebugInfo/PDB/Native/PublicsStreamBuilder.h"
 #include "llvm/DebugInfo/PDB/Native/RawError.h"
 #include "llvm/DebugInfo/PDB/Native/TpiStream.h"
 #include "llvm/DebugInfo/PDB/Native/TpiStreamBuilder.h"
@@ -32,6 +34,8 @@ using namespace llvm::support;
 
 PDBFileBuilder::PDBFileBuilder(BumpPtrAllocator &Allocator)
     : Allocator(Allocator) {}
+
+PDBFileBuilder::~PDBFileBuilder() {}
 
 Error PDBFileBuilder::initialize(uint32_t BlockSize) {
   auto ExpectedMsf = MSFBuilder::create(Allocator, BlockSize);
@@ -71,6 +75,18 @@ PDBStringTableBuilder &PDBFileBuilder::getStringTableBuilder() {
   return Strings;
 }
 
+PublicsStreamBuilder &PDBFileBuilder::getPublicsBuilder() {
+  if (!Publics)
+    Publics = llvm::make_unique<PublicsStreamBuilder>(*Msf);
+  return *Publics;
+}
+
+GlobalsStreamBuilder &PDBFileBuilder::getGlobalsBuilder() {
+  if (!Globals)
+    Globals = llvm::make_unique<GlobalsStreamBuilder>(*Msf);
+  return *Globals;
+}
+
 Error PDBFileBuilder::addNamedStream(StringRef Name, uint32_t Size) {
   auto ExpectedStream = Msf->addStream(Size);
   if (!ExpectedStream)
@@ -96,8 +112,6 @@ Expected<msf::MSFLayout> PDBFileBuilder::finalizeMsfLayout() {
     return std::move(EC);
   if (auto EC = addNamedStream("/LinkInfo", 0))
     return std::move(EC);
-  if (auto EC = addNamedStream("/src/headerblock", 0))
-    return std::move(EC);
 
   if (Info) {
     if (auto EC = Info->finalizeMsfLayout())
@@ -114,6 +128,21 @@ Expected<msf::MSFLayout> PDBFileBuilder::finalizeMsfLayout() {
   if (Ipi) {
     if (auto EC = Ipi->finalizeMsfLayout())
       return std::move(EC);
+  }
+  if (Publics) {
+    if (auto EC = Publics->finalizeMsfLayout())
+      return std::move(EC);
+    if (Dbi) {
+      Dbi->setPublicsStreamIndex(Publics->getStreamIndex());
+      Dbi->setSymbolRecordStreamIndex(Publics->getRecordStreamIdx());
+    }
+  }
+
+  if (Globals) {
+    if (auto EC = Globals->finalizeMsfLayout())
+      return std::move(EC);
+    if (Dbi)
+      Dbi->setGlobalsStreamIndex(Globals->getStreamIndex());
   }
 
   return Msf->build();
@@ -191,6 +220,25 @@ Error PDBFileBuilder::commit(StringRef Filename) {
 
   if (Ipi) {
     if (auto EC = Ipi->commit(Layout, Buffer))
+      return EC;
+  }
+
+  if (Publics) {
+    auto PS = WritableMappedBlockStream::createIndexedStream(
+        Layout, Buffer, Publics->getStreamIndex(), Allocator);
+    auto PRS = WritableMappedBlockStream::createIndexedStream(
+        Layout, Buffer, Publics->getRecordStreamIdx(), Allocator);
+    BinaryStreamWriter PSWriter(*PS);
+    BinaryStreamWriter RecWriter(*PRS);
+    if (auto EC = Publics->commit(PSWriter, RecWriter))
+      return EC;
+  }
+
+  if (Globals) {
+    auto GS = WritableMappedBlockStream::createIndexedStream(
+        Layout, Buffer, Globals->getStreamIndex(), Allocator);
+    BinaryStreamWriter GSWriter(*GS);
+    if (auto EC = Globals->commit(GSWriter))
       return EC;
   }
 

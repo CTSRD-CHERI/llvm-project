@@ -41,12 +41,16 @@ public:
   // a branch and fall through to the first Symbol in the Target.
   virtual InputSection *getTargetInputSection() const { return nullptr; }
 
+  // To reuse a Thunk the caller as identified by the RelocType must be
+  // compatible with it.
+  virtual bool isCompatibleWith(uint32_t RelocType) const { return true; }
+
   // The alignment requirement for this Thunk, defaults to the size of the
   // typical code section alignment.
   const SymbolBody &Destination;
   SymbolBody *ThunkSym;
   uint64_t Offset;
-  uint32_t alignment = 4;
+  uint32_t Alignment = 4;
 };
 
 // For a Relocation to symbol S create a Thunk to be added to a synthetic

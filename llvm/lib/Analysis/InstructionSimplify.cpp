@@ -560,7 +560,7 @@ static Value *SimplifyAddInst(Value *Op0, Value *Op1, bool isNSW, bool isNUW,
     return Y;
 
   /// i1 add -> xor.
-  if (MaxRecurse && Op0->getType()->getScalarType()->isIntegerTy(1))
+  if (MaxRecurse && Op0->getType()->isIntOrIntVectorTy(1))
     if (Value *V = SimplifyXorInst(Op0, Op1, Q, MaxRecurse-1))
       return V;
 
@@ -598,7 +598,7 @@ Value *llvm::SimplifyAddInst(Value *Op0, Value *Op1, bool isNSW, bool isNUW,
 /// folding.
 static Constant *stripAndComputeConstantOffsets(const DataLayout &DL, Value *&V,
                                                 bool AllowNonInbounds = false) {
-  assert(V->getType()->getScalarType()->isPointerTy());
+  assert(V->getType()->isPtrOrPtrVectorTy());
 
   Type *IntPtrTy = DL.getIntPtrType(V->getType())->getScalarType();
   APInt Offset = APInt::getNullValue(IntPtrTy->getIntegerBitWidth());
@@ -627,8 +627,7 @@ static Constant *stripAndComputeConstantOffsets(const DataLayout &DL, Value *&V,
         }
       break;
     }
-    assert(V->getType()->getScalarType()->isPointerTy() &&
-           "Unexpected operand type!");
+    assert(V->getType()->isPtrOrPtrVectorTy() && "Unexpected operand type!");
   } while (Visited.insert(V).second);
 
   Constant *OffsetIntPtr = ConstantInt::get(IntPtrTy, Offset);
@@ -771,7 +770,7 @@ static Value *SimplifySubInst(Value *Op0, Value *Op1, bool isNSW, bool isNUW,
       return ConstantExpr::getIntegerCast(Result, Op0->getType(), true);
 
   // i1 sub -> xor.
-  if (MaxRecurse && Op0->getType()->getScalarType()->isIntegerTy(1))
+  if (MaxRecurse && Op0->getType()->isIntOrIntVectorTy(1))
     if (Value *V = SimplifyXorInst(Op0, Op1, Q, MaxRecurse-1))
       return V;
 
@@ -902,7 +901,7 @@ static Value *SimplifyMulInst(Value *Op0, Value *Op1, const SimplifyQuery &Q,
     return X;
 
   // i1 mul -> and.
-  if (MaxRecurse && Op0->getType()->getScalarType()->isIntegerTy(1))
+  if (MaxRecurse && Op0->getType()->isIntOrIntVectorTy(1))
     if (Value *V = SimplifyAndInst(Op0, Op1, Q, MaxRecurse-1))
       return V;
 
@@ -998,7 +997,7 @@ static Value *simplifyDivRem(Value *Op0, Value *Op1, bool IsDiv) {
   // X % 1 -> 0
   // If this is a boolean op (single-bit element type), we can't have
   // division-by-zero or remainder-by-zero, so assume the divisor is 1.
-  if (match(Op1, m_One()) || Ty->getScalarType()->isIntegerTy(1))
+  if (match(Op1, m_One()) || Ty->isIntOrIntVectorTy(1))
     return IsDiv ? Op0 : Constant::getNullValue(Ty);
 
   return nullptr;
@@ -1746,14 +1745,11 @@ static Value *SimplifyAndInst(Value *Op0, Value *Op1, const SimplifyQuery &Q,
     return Constant::getNullValue(Op0->getType());
 
   // (A | ?) & A = A
-  Value *A = nullptr, *B = nullptr;
-  if (match(Op0, m_Or(m_Value(A), m_Value(B))) &&
-      (A == Op1 || B == Op1))
+  if (match(Op0, m_c_Or(m_Specific(Op1), m_Value())))
     return Op1;
 
   // A & (A | ?) = A
-  if (match(Op1, m_Or(m_Value(A), m_Value(B))) &&
-      (A == Op0 || B == Op0))
+  if (match(Op1, m_c_Or(m_Specific(Op0), m_Value())))
     return Op0;
 
   // A mask that only clears known zeros of a shifted value is a no-op.
@@ -1853,26 +1849,22 @@ static Value *SimplifyOrInst(Value *Op0, Value *Op1, const SimplifyQuery &Q,
     return Constant::getAllOnesValue(Op0->getType());
 
   // (A & ?) | A = A
-  Value *A = nullptr, *B = nullptr;
-  if (match(Op0, m_And(m_Value(A), m_Value(B))) &&
-      (A == Op1 || B == Op1))
+  if (match(Op0, m_c_And(m_Specific(Op1), m_Value())))
     return Op1;
 
   // A | (A & ?) = A
-  if (match(Op1, m_And(m_Value(A), m_Value(B))) &&
-      (A == Op0 || B == Op0))
+  if (match(Op1, m_c_And(m_Specific(Op0), m_Value())))
     return Op0;
 
   // ~(A & ?) | A = -1
-  if (match(Op0, m_Not(m_And(m_Value(A), m_Value(B)))) &&
-      (A == Op1 || B == Op1))
+  if (match(Op0, m_Not(m_c_And(m_Specific(Op1), m_Value()))))
     return Constant::getAllOnesValue(Op1->getType());
 
   // A | ~(A & ?) = -1
-  if (match(Op1, m_Not(m_And(m_Value(A), m_Value(B)))) &&
-      (A == Op0 || B == Op0))
+  if (match(Op1, m_Not(m_c_And(m_Specific(Op1), m_Value()))))
     return Constant::getAllOnesValue(Op0->getType());
 
+  Value *A, *B;
   // (A & ~B) | (A ^ B) -> (A ^ B)
   // (~B & A) | (A ^ B) -> (A ^ B)
   // (A & ~B) | (B ^ A) -> (B ^ A)
@@ -2251,7 +2243,7 @@ static Value *simplifyICmpOfBools(CmpInst::Predicate Pred, Value *LHS,
                                   Value *RHS, const SimplifyQuery &Q) {
   Type *ITy = GetCompareTy(LHS); // The return type.
   Type *OpTy = LHS->getType();   // The operand type.
-  if (!OpTy->getScalarType()->isIntegerTy(1))
+  if (!OpTy->isIntOrIntVectorTy(1))
     return nullptr;
 
   // A boolean compared to true/false can be simplified in 14 out of the 20

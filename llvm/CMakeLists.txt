@@ -20,7 +20,7 @@ if(POLICY CMP0057)
 endif()
 
 if(NOT DEFINED LLVM_VERSION_MAJOR)
-  set(LLVM_VERSION_MAJOR 5)
+  set(LLVM_VERSION_MAJOR 6)
 endif()
 if(NOT DEFINED LLVM_VERSION_MINOR)
   set(LLVM_VERSION_MINOR 0)
@@ -288,6 +288,10 @@ set(LLVM_LIBDIR_SUFFIX "" CACHE STRING "Define suffix of library directory name 
 set(LLVM_TOOLS_INSTALL_DIR "bin" CACHE STRING "Path for binary subdirectory (defaults to 'bin')")
 mark_as_advanced(LLVM_TOOLS_INSTALL_DIR)
 
+set(LLVM_UTILS_INSTALL_DIR "bin" CACHE STRING
+    "Path to install LLVM utilities (enabled by LLVM_INSTALL_UTILS=ON) (defaults to LLVM_TOOLS_INSTALL_DIR)")
+mark_as_advanced(LLVM_TOOLS_INSTALL_DIR)
+
 # They are used as destination of target generators.
 set(LLVM_RUNTIME_OUTPUT_INTDIR ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/bin)
 set(LLVM_LIBRARY_OUTPUT_INTDIR ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/lib${LLVM_LIBDIR_SUFFIX})
@@ -363,6 +367,8 @@ set(LLVM_TARGET_ARCH "host"
   CACHE STRING "Set target to use for LLVM JIT or use \"host\" for automatic detection.")
 
 option(LLVM_ENABLE_TERMINFO "Use terminfo database if available." ON)
+
+option(LLVM_ENABLE_LIBXML2 "Use libxml2 if available." ON)
 
 option(LLVM_ENABLE_LIBEDIT "Use libedit if available." ON)
 
@@ -844,15 +850,6 @@ add_subdirectory(lib/TableGen)
 
 add_subdirectory(utils/TableGen)
 
-# Force target to be built as soon as possible. Clang modules builds depend
-# header-wise on it as they ship all headers from the umbrella folders. Building
-# an entire module might include header, which depends on intrinsics_gen. This
-# should be right after LLVMSupport and LLVMTableGen otherwise we introduce a
-# circular dependence.
-if (LLVM_ENABLE_MODULES)
-  list(APPEND LLVM_COMMON_DEPENDS intrinsics_gen)
-endif(LLVM_ENABLE_MODULES)
-
 add_subdirectory(include/llvm)
 
 add_subdirectory(lib)
@@ -905,6 +902,7 @@ if( LLVM_INCLUDE_TESTS )
       NO_INSTALL
       ALWAYS_CLEAN)
   endif()
+  add_subdirectory(utils/lit/tests)
   add_subdirectory(test)
   add_subdirectory(unittests)
   if( LLVM_INCLUDE_UTILS )
