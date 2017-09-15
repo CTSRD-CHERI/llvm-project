@@ -78,7 +78,7 @@ protected: // Can only create subclasses.
   std::string TargetFS;
 
   Reloc::Model RM = Reloc::Static;
-  CodeModel::Model CMModel = CodeModel::Default;
+  CodeModel::Model CMModel = CodeModel::Small;
   CodeGenOpt::Level OptLevel = CodeGenOpt::Default;
 
   /// Contains target specific asm information.
@@ -259,6 +259,12 @@ public:
   /// PEI. If false (virtual-register machines), then callee-save register
   /// spilling and scavenging are not needed or used.
   virtual bool usesPhysRegsForPEI() const { return true; }
+
+  /// True if the target wants to use interprocedural register allocation by
+  /// default. The -enable-ipra flag can be used to override this.
+  virtual bool useIPRA() const {
+    return false;
+  }
 };
 
 /// This class describes a target machine that is implemented with the LLVM

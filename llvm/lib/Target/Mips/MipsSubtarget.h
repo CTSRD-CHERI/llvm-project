@@ -168,6 +168,13 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
   // Disable use of the `jal` instruction.
   bool UseLongCalls = false;
 
+  /// The minimum alignment known to hold of the stack frame on
+  /// entry to the function and which must be maintained by every function.
+  unsigned stackAlignment;
+
+  /// The overridden stack alignment.
+  unsigned StackAlignOverride;
+
   InstrItineraryData InstrItins;
 
   // We can override the determination of whether we are in mips16 mode

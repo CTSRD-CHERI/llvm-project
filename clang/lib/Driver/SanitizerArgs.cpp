@@ -32,7 +32,7 @@ enum : SanitizerMask {
   RequiresPIE = DataFlow,
   NeedsUnwindTables = Address | Thread | Memory | DataFlow,
   SupportsCoverage = Address | KernelAddress | Memory | Leak | Undefined |
-                     Integer | Nullability | DataFlow | Fuzzer,
+                     Integer | Nullability | DataFlow | Fuzzer | FuzzerNoLink,
   RecoverableByDefault = Undefined | Integer | Nullability,
   Unrecoverable = Unreachable | Return,
   LegacyFsanitizeRecoverMask = Undefined | Integer,
@@ -101,6 +101,8 @@ static bool getDefaultBlacklist(const Driver &D, SanitizerMask Kinds,
     BlacklistFile = "dfsan_abilist.txt";
   else if (Kinds & CFI)
     BlacklistFile = "cfi_blacklist.txt";
+  else if (Kinds & Undefined)
+    BlacklistFile = "ubsan_blacklist.txt";
 
   if (BlacklistFile) {
     clang::SmallString<64> Path(D.ResourceDir);
@@ -169,7 +171,7 @@ bool SanitizerArgs::needsUbsanRt() const {
   return ((Sanitizers.Mask & NeedsUbsanRt & ~TrapSanitizers.Mask) ||
           CoverageFeatures) &&
          !Sanitizers.has(Address) && !Sanitizers.has(Memory) &&
-         !Sanitizers.has(Thread) && !Sanitizers.has(DataFlow) && 
+         !Sanitizers.has(Thread) && !Sanitizers.has(DataFlow) &&
          !Sanitizers.has(Leak) && !CfiCrossDso;
 }
 
@@ -284,9 +286,13 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
       Add &= ~InvalidTrappingKinds;
       Add &= Supported;
 
-      // Enable coverage if the fuzzing flag is set.
       if (Add & Fuzzer)
-        CoverageFeatures |= CoverageTracePCGuard | CoverageIndirCall | CoverageTraceCmp;
+        Add |= FuzzerNoLink;
+
+      // Enable coverage if the fuzzing flag is set.
+      if (Add & FuzzerNoLink)
+        CoverageFeatures |= CoverageTracePCGuard | CoverageIndirCall |
+                            CoverageTraceCmp | CoveragePCTable;
 
       Kinds |= Add;
     } else if (Arg->getOption().matches(options::OPT_fno_sanitize_EQ)) {
@@ -305,13 +311,6 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
       (RTTIMode == ToolChain::RM_DisabledImplicitly ||
        RTTIMode == ToolChain::RM_DisabledExplicitly)) {
     Kinds &= ~Vptr;
-  }
-
-  // Disable -fsanitize=vptr if -fsanitize=null is not enabled (the vptr
-  // instrumentation is broken without run-time null checks).
-  if ((Kinds & Vptr) && !(Kinds & Null)) {
-    Kinds &= ~Vptr;
-    D.Diag(diag::warn_drv_disabling_vptr_no_null_check);
   }
 
   // Check that LTO is enabled if we need it.
@@ -547,8 +546,10 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
         << "-fsanitize-coverage=trace-pc-guard";
 
   int InsertionPointTypes = CoverageFunc | CoverageBB | CoverageEdge;
+  int InstrumentationTypes =
+      CoverageTracePC | CoverageTracePCGuard | CoverageInline8bitCounters;
   if ((CoverageFeatures & InsertionPointTypes) &&
-      !(CoverageFeatures &(CoverageTracePC | CoverageTracePCGuard))) {
+      !(CoverageFeatures & InstrumentationTypes)) {
     D.Diag(clang::diag::warn_drv_deprecated_arg)
         << "-fsanitize-coverage=[func|bb|edge]"
         << "-fsanitize-coverage=[func|bb|edge],[trace-pc-guard|trace-pc]";
@@ -562,8 +563,9 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
 
   if (AllAddedKinds & Address) {
     AsanSharedRuntime =
-        Args.hasArg(options::OPT_shared_libasan) || TC.getTriple().isAndroid();
-    NeedPIE |= TC.getTriple().isAndroid();
+        Args.hasArg(options::OPT_shared_libasan) ||
+        TC.getTriple().isAndroid() || TC.getTriple().isOSFuchsia();
+    NeedPIE |= TC.getTriple().isAndroid() || TC.getTriple().isOSFuchsia();
     if (Arg *A =
             Args.getLastArg(options::OPT_fsanitize_address_field_padding)) {
         StringRef S = A->getValue();
@@ -597,7 +599,7 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
     // globals in ASan is disabled by default on ELF targets.
     // See https://sourceware.org/bugzilla/show_bug.cgi?id=19002
     AsanGlobalsDeadStripping =
-        !TC.getTriple().isOSBinFormatELF() ||
+        !TC.getTriple().isOSBinFormatELF() || TC.getTriple().isOSFuchsia() ||
         Args.hasArg(options::OPT_fsanitize_address_globals_dead_stripping);
   } else {
     AsanUseAfterScope = false;

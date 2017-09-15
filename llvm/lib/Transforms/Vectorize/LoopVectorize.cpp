@@ -4863,8 +4863,10 @@ void InnerLoopVectorizer::vectorizeInstruction(Instruction &I) {
       Value *B = getOrCreateVectorValue(Cmp->getOperand(1), Part);
       Value *C = nullptr;
       if (FCmp) {
+        // Propagate fast math flags.
+        IRBuilder<>::FastMathFlagGuard FMFG(Builder);
+        Builder.setFastMathFlags(Cmp->getFastMathFlags());
         C = Builder.CreateFCmp(Cmp->getPredicate(), A, B);
-        cast<FCmpInst>(C)->copyFastMathFlags(Cmp);
       } else {
         C = Builder.CreateICmp(Cmp->getPredicate(), A, B);
       }
@@ -6278,6 +6280,18 @@ Optional<unsigned> LoopVectorizationCostModel::computeMaxVF(bool OptForSize) {
     return None;
   }
 
+  if (Legal->getRuntimePointerChecking()->Need && TTI.hasBranchDivergence()) {
+    // TODO: It may by useful to do since it's still likely to be dynamically
+    // uniform if the target can skip.
+    DEBUG(dbgs() << "LV: Not inserting runtime ptr check for divergent target");
+
+    ORE->emit(
+      createMissedAnalysis("CantVersionLoopWithDivergentTarget")
+      << "runtime pointer checks needed. Not enabled for divergent target");
+
+    return None;
+  }
+
   if (!OptForSize) // Remaining checks deal with scalar loop when OptForSize.
     return computeFeasibleMaxVF(OptForSize);
 
@@ -7641,7 +7655,7 @@ void LoopVectorizationPlanner::executePlan(InnerLoopVectorizer &ILV) {
   // 2. Copy and widen instructions from the old loop into the new loop.
 
   // Move instructions to handle first-order recurrences.
-  DenseMap<Instruction *, Instruction *> SinkAfter = Legal->getSinkAfter();
+  DenseMap<Instruction *, Instruction *> &SinkAfter = Legal->getSinkAfter();
   for (auto &Entry : SinkAfter) {
     Entry.first->removeFromParent();
     Entry.first->insertAfter(Entry.second);

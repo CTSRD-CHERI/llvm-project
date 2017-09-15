@@ -451,13 +451,8 @@ static void AsanInitInternal() {
   InitTlsSize();
 
   // Create main thread.
-  AsanThread *main_thread = AsanThread::Create(
-      /* start_routine */ nullptr, /* arg */ nullptr, /* parent_tid */ 0,
-      /* stack */ nullptr, /* detached */ true);
+  AsanThread *main_thread = CreateMainThread();
   CHECK_EQ(0, main_thread->tid());
-  SetCurrentThread(main_thread);
-  main_thread->ThreadStart(internal_getpid(),
-                           /* signal_thread_is_registered */ nullptr);
   force_interface_symbols();  // no-op.
   SanitizerInitializeUnwinder();
 
@@ -484,6 +479,11 @@ static void AsanInitInternal() {
   }
 
   VReport(1, "AddressSanitizer Init done\n");
+
+  if (flags()->sleep_after_init) {
+    Report("Sleeping for %d second(s)\n", flags()->sleep_after_init);
+    SleepForSeconds(flags()->sleep_after_init);
+  }
 }
 
 // Initialize as requested from some part of ASan runtime library (interceptors,
@@ -523,6 +523,7 @@ void NOINLINE __asan_handle_no_return() {
     top = curr_thread->stack_top();
     bottom = ((uptr)&local_stack - PageSize) & ~(PageSize - 1);
   } else {
+    CHECK(!SANITIZER_FUCHSIA);
     // If we haven't seen this thread, try asking the OS for stack bounds.
     uptr tls_addr, tls_size, stack_size;
     GetThreadStackAndTls(/*main=*/false, &bottom, &stack_size, &tls_addr,

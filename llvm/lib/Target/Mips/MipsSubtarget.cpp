@@ -57,7 +57,7 @@ static cl::opt<bool>
     GPOpt("mgpopt", cl::Hidden,
           cl::desc("Enable gp-relative addressing of mips small data items"));
 
-void MipsSubtarget::anchor() { }
+void MipsSubtarget::anchor() {}
 
 MipsSubtarget::MipsSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
                              bool little, const MipsTargetMachine &TM,
@@ -73,10 +73,10 @@ MipsSubtarget::MipsSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
       InMips16HardFloat(Mips16HardFloat), InMicroMipsMode(false), HasDSP(false),
       HasDSPR2(false), HasDSPR3(false), AllowMixed16_32(Mixed16_32 | Mips_Os16),
       Os16(Mips_Os16), HasMSA(false), UseTCCInDIV(false), HasSym32(false),
-      HasEVA(false), DisableMadd4(false), HasMT(false), StackAlignOverride(StackAlignOverride), TM(TM),
-      TargetTriple(TT), TSInfo(),
-      InstrInfo(
-          MipsInstrInfo::create(initializeSubtargetDependencies(CPU, FS, TM))),
+      HasEVA(false), DisableMadd4(false), HasMT(false),
+      StackAlignOverride(StackAlignOverride), TM(TM), TargetTriple(TT),
+      TSInfo(), InstrInfo(MipsInstrInfo::create(
+                    initializeSubtargetDependencies(CPU, FS, TM))),
       FrameLowering(MipsFrameLowering::create(*this)),
       TLInfo(MipsTargetLowering::create(TM, *this)) {
 
@@ -139,8 +139,8 @@ bool MipsSubtarget::enablePostRAScheduler() const { return true; }
 
 void MipsSubtarget::getCriticalPathRCs(RegClassVector &CriticalPathRCs) const {
   CriticalPathRCs.clear();
-  CriticalPathRCs.push_back(isGP64bit() ?
-                            &Mips::GPR64RegClass : &Mips::GPR32RegClass);
+  CriticalPathRCs.push_back(isGP64bit() ? &Mips::GPR64RegClass
+                                        : &Mips::GPR32RegClass);
   if (IsCheri)
     CriticalPathRCs.push_back(&Mips::CheriRegsRegClass);
 }
@@ -173,10 +173,12 @@ MipsSubtarget::initializeSubtargetDependencies(StringRef CPU, StringRef FS,
       stackAlignment = 16;
     else
       stackAlignment = 32;
-  } else if (isGP64bit())
+  } else if (isABI_N32() || isABI_N64())
     stackAlignment = 16;
-  else
+  else {
+    assert(isABI_O32() && "Unknown ABI for stack alignment!");
     stackAlignment = 8;
+  }
 
   return *this;
 }

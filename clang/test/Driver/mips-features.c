@@ -10,6 +10,11 @@
 // RUN:   | FileCheck --check-prefix=CHECK-MNOABICALLS %s
 // CHECK-MNOABICALLS: "-target-feature" "+noabicalls"
 //
+// -mno-abicalls non-PIC N64
+// RUN: %clang -target mips64-linux-gnu -### -c -fno-PIC %s 2>&1 \
+// RUN:   | FileCheck --check-prefix=CHECK-MNOABICALLS-N64NPIC %s
+// CHECK-MNOABICALLS-N64NPIC: "-target-feature" "+noabicalls"
+//
 // -mgpopt
 // RUN: %clang -target mips-linux-gnu -### -c %s -mno-gpopt -mgpopt -Wno-unsupported-gpopt 2>&1 \
 // RUN:   | FileCheck --check-prefix=CHECK-MGPOPT-DEF-ABICALLS %s
@@ -64,6 +69,39 @@
 // RUN: %clang -target mips-linux-gnu -### -c %s -mno-abicalls -mgpopt 2>&1 \
 // RUN:   | FileCheck --check-prefix=CHECK-MEXTERNSDATADEF %s
 // CHECK-MEXTERNSDATADEF-NOT: "-mllvm" "-mextern-sdata"
+//
+// -mno-abicalls -mgpopt -membedded-data
+// RUN: %clang -target mips-linux-gnu -### -c %s -mno-abicalls -mgpopt -mno-embedded-data -membedded-data 2>&1 \
+// RUN:   | FileCheck --check-prefix=CHECK-MEMBEDDEDDATA %s
+// CHECK-MEMBEDDEDDATA: "-mllvm" "-membedded-data=1"
+//
+// -mno-abicalls -mgpopt -mno-embedded-data
+// RUN: %clang -target mips-linux-gnu -### -c %s -mno-abicalls -mgpopt -membedded-data -mno-embedded-data 2>&1 \
+// RUN:   | FileCheck --check-prefix=CHECK-MNOEMBEDDEDDATA %s
+// CHECK-MNOEMBEDDEDDATA: "-mllvm" "-membedded-data=0"
+//
+// -mno-abicalls -mgpopt
+// RUN: %clang -target mips-linux-gnu -### -c %s -mno-abicalls -mgpopt 2>&1 \
+// RUN:   | FileCheck --check-prefix=CHECK-MEMBEDDEDDATADEF %s
+// CHECK-MEMBEDDEDDATADEF-NOT: "-mllvm" "-membedded-data"
+//
+// MIPS64 + N64: -fno-pic -> -mno-abicalls -mgpopt
+// RUN: %clang -target mips64-mti-elf -mabi=64 -### -c %s -fno-pic 2>&1 \
+// RUN:   | FileCheck --check-prefix=CHECK-N64-GPOPT %s
+// CHECK-N64-GPOPT: "-target-feature" "+noabicalls"
+// CHECK-N64-GPOPT: "-mllvm" "-mgpopt"
+//
+// MIPS64 + N64: -fno-pic -mno-gpopt
+// RUN: %clang -target mips64-mti-elf -mabi=64 -### -c %s -fno-pic -mno-gpopt 2>&1 \
+// RUN:   | FileCheck --check-prefix=CHECK-N64-MNO-GPOPT %s
+// CHECK-N64-MNO-GPOPT: "-target-feature" "+noabicalls"
+// CHECK-N64-MNO-GPOPT-NOT: "-mllvm" "-mgpopt"
+//
+// MIPS64 + N64: -mgpopt (-fpic is implicit)
+// RUN: %clang -target mips64-mti-linux-gnu -mabi=64 -### -c %s -mgpopt 2>&1 \
+// RUN:   | FileCheck --check-prefix=CHECK-N64-PIC-GPOPT %s
+// CHECK-N64-PIC-GPOPT-NOT: "-mllvm" "-mgpopt"
+// CHECK-N64-PIC-GPOPT: ignoring '-mgpopt' option as it cannot be used with the implicit usage of -mabicalls
 //
 // -mips16
 // RUN: %clang -target mips-linux-gnu -### -c %s \
@@ -316,11 +354,15 @@
 // CHECK-IMG-SINGLEFLOAT-FPXX: "-target-feature" "+fpxx"
 
 // -mlong-call
-// RUN: %clang -target mips-img-linux-gnu -### -c %s -mlong-calls 2>&1 \
+// RUN: %clang -target mips-img-linux-gnu -### -c %s \
+// RUN:        -mno-abicalls -mlong-calls 2>&1 \
 // RUN:   | FileCheck --check-prefix=LONG-CALLS-ON %s
-// RUN: %clang -target mips-img-linux-gnu -### -c %s -mno-long-calls 2>&1 \
+// RUN: %clang -target mips-img-linux-gnu -### -c %s \
+// RUN:        -mno-abicalls -mno-long-calls 2>&1 \
 // RUN:   | FileCheck --check-prefix=LONG-CALLS-OFF %s
 // RUN: %clang -target mips-img-linux-gnu -### -c %s 2>&1 \
+// RUN:   | FileCheck --check-prefix=LONG-CALLS-DEF %s
+// RUN: %clang -target mips-img-linux-gnu -### -c %s -mlong-calls 2>&1 \
 // RUN:   | FileCheck --check-prefix=LONG-CALLS-DEF %s
 // LONG-CALLS-ON: "-target-feature" "+long-calls"
 // LONG-CALLS-OFF: "-target-feature" "-long-calls"

@@ -82,13 +82,16 @@ class TracePC {
   void SetUseCounters(bool UC) { UseCounters = UC; }
   void SetUseValueProfile(bool VP) { UseValueProfile = VP; }
   void SetPrintNewPCs(bool P) { DoPrintNewPCs = P; }
+  void UpdateObservedPCs();
   template <class Callback> void CollectFeatures(Callback CB) const;
 
   void ResetMaps() {
     ValueProfileMap.Reset();
-    memset(Counters(), 0, GetNumPCs());
+    if (NumModules)
+      memset(Counters(), 0, GetNumPCs());
     ClearExtraCounters();
     ClearInlineCounters();
+    ClearClangCounters();
   }
 
   void ClearInlineCounters();
@@ -109,8 +112,6 @@ class TracePC {
   TableOfRecentCompares<Word, 32> TORCW;
   MemMemTable<1024> MMT;
 
-  void PrintNewPCs();
-  void InitializePrintNewPCs();
   size_t GetNumPCs() const {
     return NumGuards == 0 ? (1 << kTracePcBits) : Min(kNumPCs, NumGuards + 1);
   }
@@ -132,6 +133,12 @@ class TracePC {
     return reinterpret_cast<uintptr_t>(__builtin_frame_address(0));
   }
   uintptr_t GetMaxStackOffset() const { return InitialStack - LowestStack; }
+
+  template<class CallBack>
+  void ForEachObservedPC(CallBack CB) {
+    for (auto PC : ObservedPCs)
+      CB(PC);
+  }
 
 private:
   bool UseCounters = false;
@@ -157,13 +164,14 @@ private:
   uint8_t *Counters() const;
   uintptr_t *PCs() const;
 
-  std::set<uintptr_t> *PrintedPCs;
+  std::set<uintptr_t> ObservedPCs;
 
   ValueBitMap ValueProfileMap;
   uintptr_t InitialStack, LowestStack;  // Assume stack grows down.
 };
 
-template <class Callback> // void Callback(size_t Idx, uint8_t Value);
+template <class Callback>
+// void Callback(size_t FirstFeature, size_t Idx, uint8_t Value);
 ATTRIBUTE_NO_SANITIZE_ALL
 void ForEachNonZeroByte(const uint8_t *Begin, const uint8_t *End,
                         size_t FirstFeature, Callback Handle8bitCounter) {
@@ -174,28 +182,24 @@ void ForEachNonZeroByte(const uint8_t *Begin, const uint8_t *End,
   // Iterate by 1 byte until either the alignment boundary or the end.
   for (; reinterpret_cast<uintptr_t>(P) & StepMask && P < End; P++)
     if (uint8_t V = *P)
-      Handle8bitCounter(FirstFeature + P - Begin, V);
+      Handle8bitCounter(FirstFeature, P - Begin, V);
 
   // Iterate by Step bytes at a time.
   for (; P < End; P += Step)
     if (LargeType Bundle = *reinterpret_cast<const LargeType *>(P))
       for (size_t I = 0; I < Step; I++, Bundle >>= 8)
         if (uint8_t V = Bundle & 0xff)
-          Handle8bitCounter(FirstFeature + P - Begin + I, V);
+          Handle8bitCounter(FirstFeature, P - Begin + I, V);
 
   // Iterate by 1 byte until the end.
   for (; P < End; P++)
     if (uint8_t V = *P)
-      Handle8bitCounter(FirstFeature + P - Begin, V);
+      Handle8bitCounter(FirstFeature, P - Begin, V);
 }
 
-template <class Callback>  // bool Callback(size_t Feature)
-ATTRIBUTE_NO_SANITIZE_ADDRESS
-__attribute__((noinline))
-void TracePC::CollectFeatures(Callback HandleFeature) const {
-  uint8_t *Counters = this->Counters();
-  size_t N = GetNumPCs();
-  auto Handle8bitCounter = [&](size_t Idx, uint8_t Counter) {
+// Given a non-zero Counters returns a number in [0,7].
+template<class T>
+unsigned CounterToFeature(T Counter) {
     assert(Counter);
     unsigned Bit = 0;
     /**/ if (Counter >= 128) Bit = 7;
@@ -205,19 +209,41 @@ void TracePC::CollectFeatures(Callback HandleFeature) const {
     else if (Counter >= 4) Bit = 3;
     else if (Counter >= 3) Bit = 2;
     else if (Counter >= 2) Bit = 1;
-    HandleFeature(Idx * 8 + Bit);
+    return Bit;
+}
+
+template <class Callback>  // bool Callback(size_t Feature)
+ATTRIBUTE_NO_SANITIZE_ADDRESS
+__attribute__((noinline))
+void TracePC::CollectFeatures(Callback HandleFeature) const {
+  uint8_t *Counters = this->Counters();
+  size_t N = GetNumPCs();
+  auto Handle8bitCounter = [&](size_t FirstFeature,
+                               size_t Idx, uint8_t Counter) {
+    HandleFeature(FirstFeature + Idx * 8 + CounterToFeature(Counter));
   };
 
   size_t FirstFeature = 0;
+
   if (!NumInline8bitCounters) {
     ForEachNonZeroByte(Counters, Counters + N, FirstFeature, Handle8bitCounter);
     FirstFeature += N * 8;
   }
 
-  for (size_t i = 0; i < NumModulesWithInline8bitCounters; i++) {
-    ForEachNonZeroByte(ModuleCounters[i].Start, ModuleCounters[i].Stop,
-                       FirstFeature, Handle8bitCounter);
-    FirstFeature += 8 * (ModuleCounters[i].Stop - ModuleCounters[i].Start);
+  if (NumInline8bitCounters) {
+    for (size_t i = 0; i < NumModulesWithInline8bitCounters; i++) {
+      ForEachNonZeroByte(ModuleCounters[i].Start, ModuleCounters[i].Stop,
+                         FirstFeature, Handle8bitCounter);
+      FirstFeature += 8 * (ModuleCounters[i].Stop - ModuleCounters[i].Start);
+    }
+  }
+
+  if (size_t NumClangCounters = ClangCountersEnd() - ClangCountersBegin()) {
+    auto P = ClangCountersBegin();
+    for (size_t Idx = 0; Idx < NumClangCounters; Idx++)
+      if (auto Cnt = P[Idx])
+        HandleFeature(FirstFeature + Idx * 8 + CounterToFeature(Cnt));
+    FirstFeature += NumClangCounters;
   }
 
   ForEachNonZeroByte(ExtraCountersBegin(), ExtraCountersEnd(), FirstFeature,

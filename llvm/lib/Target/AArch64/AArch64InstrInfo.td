@@ -18,12 +18,16 @@ def HasV8_1a         : Predicate<"Subtarget->hasV8_1aOps()">,
                                  AssemblerPredicate<"HasV8_1aOps", "armv8.1a">;
 def HasV8_2a         : Predicate<"Subtarget->hasV8_2aOps()">,
                                  AssemblerPredicate<"HasV8_2aOps", "armv8.2a">;
+def HasV8_3a         : Predicate<"Subtarget->hasV8_3aOps()">,
+                                 AssemblerPredicate<"HasV8_3aOps", "armv8.3a">;
 def HasFPARMv8       : Predicate<"Subtarget->hasFPARMv8()">,
                                AssemblerPredicate<"FeatureFPARMv8", "fp-armv8">;
 def HasNEON          : Predicate<"Subtarget->hasNEON()">,
                                  AssemblerPredicate<"FeatureNEON", "neon">;
 def HasCrypto        : Predicate<"Subtarget->hasCrypto()">,
                                  AssemblerPredicate<"FeatureCrypto", "crypto">;
+def HasDotProd       : Predicate<"Subtarget->hasDotProd()">,
+                                 AssemblerPredicate<"FeatureDotProd", "dotprod">;
 def HasCRC           : Predicate<"Subtarget->hasCRC()">,
                                  AssemblerPredicate<"FeatureCRC", "crc">;
 def HasLSE           : Predicate<"Subtarget->hasLSE()">,
@@ -42,6 +46,8 @@ def HasFuseAES       : Predicate<"Subtarget->hasFuseAES()">,
                                  "fuse-aes">;
 def HasSVE           : Predicate<"Subtarget->hasSVE()">,
                                  AssemblerPredicate<"FeatureSVE", "sve">;
+def HasRCPC          : Predicate<"Subtarget->hasRCPC()">,
+                                 AssemblerPredicate<"FeatureRCPC", "rcpc">;
 
 def IsLE             : Predicate<"Subtarget->isLittleEndian()">;
 def IsBE             : Predicate<"!Subtarget->isLittleEndian()">;
@@ -431,6 +437,92 @@ def DSB   : CRmSystemI<barrier_op, 0b100, "dsb",
 def ISB   : CRmSystemI<barrier_op, 0b110, "isb",
                        [(int_aarch64_isb (i32 imm32_0_15:$CRm))]>;
 }
+
+// ARMv8.2 Dot Product
+let Predicates = [HasDotProd] in {
+def UDOT2S    : BaseSIMDThreeSameVectorDot<0, 1, "udot", ".2s", ".8b">;
+def SDOT2S    : BaseSIMDThreeSameVectorDot<0, 0, "sdot", ".2s", ".8b">;
+def UDOT4S    : BaseSIMDThreeSameVectorDot<1, 1, "udot", ".4s", ".16b">;
+def SDOT4S    : BaseSIMDThreeSameVectorDot<1, 0, "sdot", ".4s", ".16b">;
+def UDOTIDX2S : BaseSIMDThreeSameVectorDotIndex<0, 1, "udot", ".2s", ".8b", ".4b">;
+def SDOTIDX2S : BaseSIMDThreeSameVectorDotIndex<0, 0, "sdot", ".2s", ".8b", ".4b">;
+def UDOTIDX4S : BaseSIMDThreeSameVectorDotIndex<1, 1, "udot", ".4s", ".16b", ".4b">;
+def SDOTIDX4S : BaseSIMDThreeSameVectorDotIndex<1, 0, "sdot", ".4s", ".16b", ".4b">;
+}
+
+let Predicates = [HasRCPC] in {
+  // v8.3 Release Consistent Processor Consistent support
+  def LDAPRB  : RCPCLoad<0b00, "ldaprb", GPR32>;
+  def LDAPRH  : RCPCLoad<0b01, "ldaprh", GPR32>;
+  def LDAPRW  : RCPCLoad<0b10, "ldapr", GPR32>;
+  def LDAPRX  : RCPCLoad<0b11, "ldapr", GPR64>;
+}
+
+let Predicates = [HasV8_3a] in {
+  // v8.3a Pointer Authentication
+  let Uses = [LR], Defs = [LR] in {
+    def PACIAZ   : SystemNoOperands<0b000, "paciaz">;
+    def PACIBZ   : SystemNoOperands<0b010, "pacibz">;
+    def AUTIAZ   : SystemNoOperands<0b100, "autiaz">;
+    def AUTIBZ   : SystemNoOperands<0b110, "autibz">;
+  }
+  let Uses = [LR, SP], Defs = [LR] in {
+    def PACIASP  : SystemNoOperands<0b001, "paciasp">;
+    def PACIBSP  : SystemNoOperands<0b011, "pacibsp">;
+    def AUTIASP  : SystemNoOperands<0b101, "autiasp">;
+    def AUTIBSP  : SystemNoOperands<0b111, "autibsp">;
+  }
+  let Uses = [X16, X17], Defs = [X17], CRm = 0b0001 in {
+    def PACIA1716  : SystemNoOperands<0b000, "pacia1716">;
+    def PACIB1716  : SystemNoOperands<0b010, "pacib1716">;
+    def AUTIA1716  : SystemNoOperands<0b100, "autia1716">;
+    def AUTIB1716  : SystemNoOperands<0b110, "autib1716">;
+  }
+
+  let Uses = [LR], Defs = [LR], CRm = 0b0000 in {
+    def XPACLRI   : SystemNoOperands<0b111, "xpaclri">;
+  }
+
+  multiclass SignAuth<bits<3> prefix, bits<3> prefix_z, string asm> {
+    def IA   : SignAuthOneData<prefix, 0b00, !strconcat(asm, "ia")>;
+    def IB   : SignAuthOneData<prefix, 0b01, !strconcat(asm, "ib")>;
+    def DA   : SignAuthOneData<prefix, 0b10, !strconcat(asm, "da")>;
+    def DB   : SignAuthOneData<prefix, 0b11, !strconcat(asm, "db")>;
+    def IZA  : SignAuthZero<prefix_z, 0b00, !strconcat(asm, "iza")>;
+    def DZA  : SignAuthZero<prefix_z, 0b10, !strconcat(asm, "dza")>;
+    def IZB  : SignAuthZero<prefix_z, 0b01, !strconcat(asm, "izb")>;
+    def DZB  : SignAuthZero<prefix_z, 0b11, !strconcat(asm, "dzb")>;
+  }
+
+  defm PAC : SignAuth<0b000, 0b010, "pac">;
+  defm AUT : SignAuth<0b001, 0b011, "aut">;
+
+  def XPACI : SignAuthZero<0b100, 0b00, "xpaci">;
+  def XPACD : SignAuthZero<0b100, 0b01, "xpacd">;
+  def PACGA : SignAuthTwoOperand<0b1100, "pacga", null_frag>;
+
+  // Combined Instructions
+  def BRAA    : AuthBranchTwoOperands<0, 0, "braa">;
+  def BRAB    : AuthBranchTwoOperands<0, 1, "brab">;
+  def BLRAA   : AuthBranchTwoOperands<1, 0, "blraa">;
+  def BLRAB   : AuthBranchTwoOperands<1, 1, "blrab">;
+
+  def BRAAZ   : AuthOneOperand<0b000, 0, "braaz">;
+  def BRABZ   : AuthOneOperand<0b000, 1, "brabz">;
+  def BLRAAZ  : AuthOneOperand<0b001, 0, "blraaz">;
+  def BLRABZ  : AuthOneOperand<0b001, 1, "blrabz">;
+
+  let isReturn = 1 in {
+    def RETAA   : AuthReturn<0b010, 0, "retaa">;
+    def RETAB   : AuthReturn<0b010, 1, "retab">;
+    def ERETAA  : AuthReturn<0b100, 0, "eretaa">;
+    def ERETAB  : AuthReturn<0b100, 1, "eretab">;
+  }
+
+  defm LDRAA  : AuthLoad<0, "ldraa", simm10Scaled>;
+  defm LDRAB  : AuthLoad<1, "ldrab", simm10Scaled>;
+
+} // HasV8_3A
 
 def : InstAlias<"clrex", (CLREX 0xf)>;
 def : InstAlias<"isb", (ISB 0xf)>;
