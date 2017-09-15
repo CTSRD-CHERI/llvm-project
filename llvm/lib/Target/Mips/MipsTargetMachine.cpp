@@ -146,7 +146,7 @@ MipsTargetMachine::MipsTargetMachine(const Target &T, const Triple &TT,
                                      CodeGenOpt::Level OL, bool JIT,
                                      bool isLittle)
     : LLVMTargetMachine(T, computeDataLayout(TT, CPU, Options, FS, isLittle), TT,
-                        CPU, FS, Options, getEffectiveRelocModel(CM, RM),
+                        CPU, FS, Options, getEffectiveRelocModel(JIT, RM),
                         getEffectiveCodeModel(CM), OL),
       isLittle(isLittle), TLOF(llvm::make_unique<MipsTargetObjectFile>()),
       ABI(MipsABIInfo::computeTargetABI(TT, CPU, Options.MCOptions)),
@@ -187,9 +187,9 @@ void MipsCheriTargetMachine::anchor() { }
 MipsCheriTargetMachine::
 MipsCheriTargetMachine(const Target &T, const Triple &TT,
                       StringRef CPU, StringRef FS, const TargetOptions &Options,
-                      Optional<Reloc::Model> RM, CodeModel::Model CM,
-                      CodeGenOpt::Level OL)
-  : MipsebTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL) {}
+                      Optional<Reloc::Model> RM, Optional<CodeModel::Model> CM,
+                      CodeGenOpt::Level OL, bool JIT)
+  : MipsebTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, JIT) {}
 
 const MipsSubtarget *
 MipsTargetMachine::getSubtargetImpl(const Function &F) const {
