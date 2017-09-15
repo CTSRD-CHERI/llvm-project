@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "InstCombineInternal.h"
+#include "llvm/Analysis/CmpInstAnalysis.h"
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/ValueTracking.h"
@@ -219,16 +220,15 @@ Instruction *InstCombiner::foldSelectOpOp(SelectInst &SI, Instruction *TI,
 }
 
 static bool isSelect01(Constant *C1, Constant *C2) {
-  ConstantInt *C1I = dyn_cast<ConstantInt>(C1);
-  if (!C1I)
+  const APInt *C1I, *C2I;
+  if (!match(C1, m_APInt(C1I)))
     return false;
-  ConstantInt *C2I = dyn_cast<ConstantInt>(C2);
-  if (!C2I)
+  if (!match(C2, m_APInt(C2I)))
     return false;
-  if (!C1I->isZero() && !C2I->isZero()) // One side must be zero.
+  if (!C1I->isNullValue() && !C2I->isNullValue()) // One side must be zero.
     return false;
-  return C1I->isOne() || C1I->isMinusOne() ||
-         C2I->isOne() || C2I->isMinusOne();
+  return C1I->isOneValue() || C1I->isAllOnesValue() ||
+         C2I->isOneValue() || C2I->isAllOnesValue();
 }
 
 /// Try to fold the select into one of the operands to allow further
@@ -309,11 +309,13 @@ Instruction *InstCombiner::foldSelectIntoOp(SelectInst &SI, Value *TrueVal,
 /// 1. The icmp predicate is inverted
 /// 2. The select operands are reversed
 /// 3. The magnitude of C2 and C1 are flipped
-static Value *foldSelectICmpAndOr(const SelectInst &SI, Value *TrueVal,
+static Value *foldSelectICmpAndOr(const ICmpInst *IC, Value *TrueVal,
                                   Value *FalseVal,
                                   InstCombiner::BuilderTy &Builder) {
-  const ICmpInst *IC = dyn_cast<ICmpInst>(SI.getCondition());
-  if (!IC || !SI.getType()->isIntegerTy())
+  // Only handle integer compares. Also, if this is a vector select, we need a
+  // vector compare.
+  if (!TrueVal->getType()->isIntOrIntVectorTy() ||
+      TrueVal->getType()->isVectorTy() != IC->getType()->isVectorTy())
     return nullptr;
 
   Value *CmpLHS = IC->getOperand(0);
@@ -367,8 +369,8 @@ static Value *foldSelectICmpAndOr(const SelectInst &SI, Value *TrueVal,
 
   bool NeedXor = (!IsEqualZero && OrOnFalseVal) || (IsEqualZero && OrOnTrueVal);
   bool NeedShift = C1Log != C2Log;
-  bool NeedZExtTrunc = Y->getType()->getIntegerBitWidth() !=
-                       V->getType()->getIntegerBitWidth();
+  bool NeedZExtTrunc = Y->getType()->getScalarSizeInBits() !=
+                       V->getType()->getScalarSizeInBits();
 
   // Make sure we don't create more instructions than we save.
   Value *Or = OrOnFalseVal ? FalseVal : TrueVal;
@@ -593,6 +595,15 @@ canonicalizeMinMaxWithConstant(SelectInst &Sel, ICmpInst &Cmp,
 /// icmp instruction with zero, and we have an 'and' with the non-constant value
 /// and a power of two we can turn the select into a shift on the result of the
 /// 'and'.
+/// This folds:
+///  select (icmp eq (and X, C1)), C2, C3
+///    iff C1 is a power 2 and the difference between C2 and C3 is a power of 2.
+/// To something like:
+///  (shr (and (X, C1)), (log2(C1) - log2(C2-C3))) + C3
+/// Or:
+///  (shl (and (X, C1)), (log2(C2-C3) - log2(C1))) + C3
+/// With some variations depending if C3 is larger than C2, or the shift
+/// isn't needed, or the bit widths don't match.
 static Value *foldSelectICmpAnd(Type *SelType, const ICmpInst *IC,
                                 APInt TrueVal, APInt FalseVal,
                                 InstCombiner::BuilderTy &Builder) {
@@ -602,16 +613,32 @@ static Value *foldSelectICmpAnd(Type *SelType, const ICmpInst *IC,
   if (SelType->isVectorTy() != IC->getType()->isVectorTy())
     return nullptr;
 
-  if (!IC->isEquality())
-    return nullptr;
+  Value *V;
+  APInt AndMask;
+  bool CreateAnd = false;
+  ICmpInst::Predicate Pred = IC->getPredicate();
+  if (ICmpInst::isEquality(Pred)) {
+    if (!match(IC->getOperand(1), m_Zero()))
+      return nullptr;
 
-  if (!match(IC->getOperand(1), m_Zero()))
-    return nullptr;
+    V = IC->getOperand(0);
 
-  const APInt *AndRHS;
-  Value *LHS = IC->getOperand(0);
-  if (!match(LHS, m_And(m_Value(), m_Power2(AndRHS))))
+    const APInt *AndRHS;
+    if (!match(V, m_And(m_Value(), m_Power2(AndRHS))))
+      return nullptr;
+
+    AndMask = *AndRHS;
+  } else if (decomposeBitTestICmp(IC->getOperand(0), IC->getOperand(1),
+                                  Pred, V, AndMask)) {
+    assert(ICmpInst::isEquality(Pred) && "Not equality test?");
+
+    if (!AndMask.isPowerOf2())
+      return nullptr;
+
+    CreateAnd = true;
+  } else {
     return nullptr;
+  }
 
   // If both select arms are non-zero see if we have a select of the form
   // 'x ? 2^n + C : C'. Then we can offset both arms by C, use the logic
@@ -638,11 +665,15 @@ static Value *foldSelectICmpAnd(Type *SelType, const ICmpInst *IC,
   // desired result.
   const APInt &ValC = !TrueVal.isNullValue() ? TrueVal : FalseVal;
   unsigned ValZeros = ValC.logBase2();
-  unsigned AndZeros = AndRHS->logBase2();
+  unsigned AndZeros = AndMask.logBase2();
+
+  if (CreateAnd) {
+    // Insert the AND instruction on the input to the truncate.
+    V = Builder.CreateAnd(V, ConstantInt::get(V->getType(), AndMask));
+  }
 
   // If types don't match we can still convert the select by introducing a zext
   // or a trunc of the 'and'.
-  Value *V = LHS;
   if (ValZeros > AndZeros) {
     V = Builder.CreateZExtOrTrunc(V, SelType);
     V = Builder.CreateShl(V, ValZeros - AndZeros);
@@ -655,7 +686,7 @@ static Value *foldSelectICmpAnd(Type *SelType, const ICmpInst *IC,
   // Okay, now we know that everything is set up, we just don't know whether we
   // have a icmp_ne or icmp_eq and whether the true or false val is the zero.
   bool ShouldNotVal = !TrueVal.isNullValue();
-  ShouldNotVal ^= IC->getPredicate() == ICmpInst::ICMP_NE;
+  ShouldNotVal ^= Pred == ICmpInst::ICMP_NE;
   if (ShouldNotVal)
     V = Builder.CreateXor(V, ValC);
 
@@ -671,15 +702,6 @@ Instruction *InstCombiner::foldSelectInstWithICmp(SelectInst &SI,
   Value *TrueVal = SI.getTrueValue();
   Value *FalseVal = SI.getFalseValue();
 
-  {
-    const APInt *TrueValC, *FalseValC;
-    if (match(TrueVal, m_APInt(TrueValC)) &&
-        match(FalseVal, m_APInt(FalseValC)))
-      if (Value *V = foldSelectICmpAnd(SI.getType(), ICI, *TrueValC,
-                                       *FalseValC, Builder))
-        return replaceInstUsesWith(SI, V);
-  }
-
   if (Instruction *NewSel = canonicalizeMinMaxWithConstant(SI, *ICI, Builder))
     return NewSel;
 
@@ -694,30 +716,44 @@ Instruction *InstCombiner::foldSelectInstWithICmp(SelectInst &SI,
   // FIXME: Type and constness constraints could be lifted, but we have to
   //        watch code size carefully. We should consider xor instead of
   //        sub/add when we decide to do that.
-  if (IntegerType *Ty = dyn_cast<IntegerType>(CmpLHS->getType())) {
-    if (TrueVal->getType() == Ty) {
-      if (ConstantInt *Cmp = dyn_cast<ConstantInt>(CmpRHS)) {
-        ConstantInt *C1 = nullptr, *C2 = nullptr;
-        if (Pred == ICmpInst::ICMP_SGT && Cmp->isMinusOne()) {
-          C1 = dyn_cast<ConstantInt>(TrueVal);
-          C2 = dyn_cast<ConstantInt>(FalseVal);
-        } else if (Pred == ICmpInst::ICMP_SLT && Cmp->isZero()) {
-          C1 = dyn_cast<ConstantInt>(FalseVal);
-          C2 = dyn_cast<ConstantInt>(TrueVal);
-        }
-        if (C1 && C2) {
+  // TODO: Merge this with foldSelectICmpAnd somehow.
+  if (CmpLHS->getType()->isIntOrIntVectorTy() &&
+      CmpLHS->getType() == TrueVal->getType()) {
+    const APInt *C1, *C2;
+    if (match(TrueVal, m_APInt(C1)) && match(FalseVal, m_APInt(C2))) {
+      ICmpInst::Predicate Pred = ICI->getPredicate();
+      Value *X;
+      APInt Mask;
+      if (decomposeBitTestICmp(CmpLHS, CmpRHS, Pred, X, Mask)) {
+        if (Mask.isSignMask()) {
+          assert(X == CmpLHS && "Expected to use the compare input directly");
+          assert(ICmpInst::isEquality(Pred) && "Expected equality predicate");
+
+          if (Pred == ICmpInst::ICMP_NE)
+            std::swap(C1, C2);
+
           // This shift results in either -1 or 0.
-          Value *AShr = Builder.CreateAShr(CmpLHS, Ty->getBitWidth() - 1);
+          Value *AShr = Builder.CreateAShr(X, Mask.getBitWidth() - 1);
 
           // Check if we can express the operation with a single or.
-          if (C2->isMinusOne())
-            return replaceInstUsesWith(SI, Builder.CreateOr(AShr, C1));
+          if (C2->isAllOnesValue())
+            return replaceInstUsesWith(SI, Builder.CreateOr(AShr, *C1));
 
-          Value *And = Builder.CreateAnd(AShr, C2->getValue() - C1->getValue());
-          return replaceInstUsesWith(SI, Builder.CreateAdd(And, C1));
+          Value *And = Builder.CreateAnd(AShr, *C2 - *C1);
+          return replaceInstUsesWith(SI, Builder.CreateAdd(And,
+                                        ConstantInt::get(And->getType(), *C1)));
         }
       }
     }
+  }
+
+  {
+    const APInt *TrueValC, *FalseValC;
+    if (match(TrueVal, m_APInt(TrueValC)) &&
+        match(FalseVal, m_APInt(FalseValC)))
+      if (Value *V = foldSelectICmpAnd(SI.getType(), ICI, *TrueValC,
+                                       *FalseValC, Builder))
+        return replaceInstUsesWith(SI, V);
   }
 
   // NOTE: if we wanted to, this is where to detect integer MIN/MAX
@@ -784,7 +820,7 @@ Instruction *InstCombiner::foldSelectInstWithICmp(SelectInst &SI,
     }
   }
 
-  if (Value *V = foldSelectICmpAndOr(SI, TrueVal, FalseVal, Builder))
+  if (Value *V = foldSelectICmpAndOr(ICI, TrueVal, FalseVal, Builder))
     return replaceInstUsesWith(SI, V);
 
   if (Value *V = foldSelectCttzCtlz(ICI, TrueVal, FalseVal, Builder))
@@ -1529,10 +1565,6 @@ Instruction *InstCombiner::visitSelectInst(SelectInst &SI) {
       if (V != &SI)
         return replaceInstUsesWith(SI, V);
       return &SI;
-    }
-
-    if (isa<ConstantAggregateZero>(CondVal)) {
-      return replaceInstUsesWith(SI, FalseVal);
     }
   }
 

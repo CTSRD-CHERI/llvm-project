@@ -45,6 +45,7 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
 #include "llvm/IR/GlobalVariable.h"
@@ -1659,7 +1660,7 @@ SelectionDAGBuilder::EmitBranchForMergedCondition(const Value *Cond,
       }
 
       CaseBlock CB(Condition, BOp->getOperand(0), BOp->getOperand(1), nullptr,
-                   TBB, FBB, CurBB, TProb, FProb);
+                   TBB, FBB, CurBB, getCurSDLoc(), TProb, FProb);
       SwitchCases.push_back(CB);
       return;
     }
@@ -1668,7 +1669,7 @@ SelectionDAGBuilder::EmitBranchForMergedCondition(const Value *Cond,
   // Create a CaseBlock record representing this branch.
   ISD::CondCode Opc = InvertCond ? ISD::SETNE : ISD::SETEQ;
   CaseBlock CB(Opc, Cond, ConstantInt::getTrue(*DAG.getContext()),
-               nullptr, TBB, FBB, CurBB, TProb, FProb);
+               nullptr, TBB, FBB, CurBB, getCurSDLoc(), TProb, FProb);
   SwitchCases.push_back(CB);
 }
 
@@ -1907,7 +1908,7 @@ void SelectionDAGBuilder::visitBr(const BranchInst &I) {
 
   // Create a CaseBlock record representing this branch.
   CaseBlock CB(ISD::SETEQ, CondVal, ConstantInt::getTrue(*DAG.getContext()),
-               nullptr, Succ0MBB, Succ1MBB, BrMBB);
+               nullptr, Succ0MBB, Succ1MBB, BrMBB, getCurSDLoc());
 
   // Use visitSwitchCase to actually insert the fast branch sequence for this
   // cond branch.
@@ -1920,7 +1921,7 @@ void SelectionDAGBuilder::visitSwitchCase(CaseBlock &CB,
                                           MachineBasicBlock *SwitchBB) {
   SDValue Cond;
   SDValue CondLHS = getValue(CB.CmpLHS);
-  SDLoc dl = getCurSDLoc();
+  SDLoc dl = CB.DL;
 
   // Build the setcc now.
   if (!CB.CmpMHS) {
@@ -4826,6 +4827,26 @@ bool SelectionDAGBuilder::EmitFuncArgumentDbgValue(
     // Check if ValueMap has reg number.
     DenseMap<const Value *, unsigned>::iterator VMI = FuncInfo.ValueMap.find(V);
     if (VMI != FuncInfo.ValueMap.end()) {
+      auto *Ty = V->getType();
+      const auto &TLI = DAG.getTargetLoweringInfo();
+      EVT VT = TLI.getValueType(DAG.getDataLayout(), Ty);
+      unsigned NumRegs = TLI.getNumRegisters(Ty->getContext(), VT);
+      if (NumRegs > 1) {
+        // The registers are guaranteed to be allocated in sequence.
+        unsigned Offset = 0;
+        MVT RegisterVT = TLI.getRegisterType(Ty->getContext(), VT);
+        unsigned RegisterSize = RegisterVT.getSizeInBits();
+        for (unsigned I = 0; I != NumRegs; ++I) {
+          Op = MachineOperand::CreateReg(VMI->second + I, false);
+          auto *FragmentExpr = DIExpression::createFragmentExpression(
+              Expr, Offset, RegisterSize);
+          FuncInfo.ArgDbgValues.push_back(
+              BuildMI(MF, DL, TII->get(TargetOpcode::DBG_VALUE), IsDbgDeclare,
+                      Op->getReg(), Variable, FragmentExpr));
+          Offset += RegisterSize;
+        }
+        return true;
+      }
       Op = MachineOperand::CreateReg(VMI->second, false);
       IsIndirect = IsDbgDeclare;
     }
@@ -5456,6 +5477,7 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
   case Intrinsic::experimental_constrained_fmul:
   case Intrinsic::experimental_constrained_fdiv:
   case Intrinsic::experimental_constrained_frem:
+  case Intrinsic::experimental_constrained_fma:
   case Intrinsic::experimental_constrained_sqrt:
   case Intrinsic::experimental_constrained_pow:
   case Intrinsic::experimental_constrained_powi:
@@ -5987,6 +6009,9 @@ void SelectionDAGBuilder::visitConstrainedFPIntrinsic(
   case Intrinsic::experimental_constrained_frem:
     Opcode = ISD::STRICT_FREM;
     break;
+  case Intrinsic::experimental_constrained_fma:
+    Opcode = ISD::STRICT_FMA;
+    break;
   case Intrinsic::experimental_constrained_sqrt:
     Opcode = ISD::STRICT_FSQRT;
     break;
@@ -6033,10 +6058,15 @@ void SelectionDAGBuilder::visitConstrainedFPIntrinsic(
   SDVTList VTs = DAG.getVTList(ValueVTs);
   SDValue Result;
   if (FPI.isUnaryOp())
-    Result = DAG.getNode(Opcode, sdl, VTs, 
+    Result = DAG.getNode(Opcode, sdl, VTs,
                          { Chain, getValue(FPI.getArgOperand(0)) });
+  else if (FPI.isTernaryOp())
+    Result = DAG.getNode(Opcode, sdl, VTs,
+                         { Chain, getValue(FPI.getArgOperand(0)),
+                                  getValue(FPI.getArgOperand(1)),
+                                  getValue(FPI.getArgOperand(2)) });
   else
-    Result = DAG.getNode(Opcode, sdl, VTs, 
+    Result = DAG.getNode(Opcode, sdl, VTs,
                          { Chain, getValue(FPI.getArgOperand(0)),
                            getValue(FPI.getArgOperand(1))  });
 
@@ -7040,6 +7070,7 @@ static bool createVirtualRegs(SmallVector<unsigned, 4> &Regs, unsigned NumRegs,
   return true;
 }
 
+namespace {
 class ExtraFlags {
   unsigned Flags = 0;
 
@@ -7073,6 +7104,7 @@ public:
 
   unsigned get() const { return Flags; }
 };
+} // namespace
 
 /// visitInlineAsm - Handle a call to an InlineAsm object.
 ///
@@ -9603,8 +9635,8 @@ void SelectionDAGBuilder::lowerWorkItem(SwitchWorkListItem W, Value *Cond,
         }
 
         // The false probability is the sum of all unhandled cases.
-        CaseBlock CB(CC, LHS, RHS, MHS, I->MBB, Fallthrough, CurMBB, I->Prob,
-                     UnhandledProbs);
+        CaseBlock CB(CC, LHS, RHS, MHS, I->MBB, Fallthrough, CurMBB,
+                     getCurSDLoc(), I->Prob, UnhandledProbs);
 
         if (CurMBB == SwitchMBB)
           visitSwitchCase(CB, SwitchMBB);
@@ -9755,7 +9787,7 @@ void SelectionDAGBuilder::splitWorkItem(SwitchWorkList &WorkList,
 
   // Create the CaseBlock record that will be used to lower the branch.
   CaseBlock CB(ISD::SETLT, Cond, Pivot, nullptr, LeftMBB, RightMBB, W.MBB,
-               LeftProb, RightProb);
+               getCurSDLoc(), LeftProb, RightProb);
 
   if (W.MBB == SwitchMBB)
     visitSwitchCase(CB, SwitchMBB);

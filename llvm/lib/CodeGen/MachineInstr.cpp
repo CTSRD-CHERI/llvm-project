@@ -1700,9 +1700,6 @@ bool MachineInstr::mayAlias(AliasAnalysis *AA, MachineInstr &Other,
   int64_t OffsetA = MMOa->getOffset();
   int64_t OffsetB = MMOb->getOffset();
 
-  assert((OffsetA >= 0) && "Negative MachineMemOperand offset");
-  assert((OffsetB >= 0) && "Negative MachineMemOperand offset");
-
   int64_t MinOffset = std::min(OffsetA, OffsetB);
   int64_t WidthA = MMOa->getSize();
   int64_t WidthB = MMOb->getSize();
@@ -1712,9 +1709,9 @@ bool MachineInstr::mayAlias(AliasAnalysis *AA, MachineInstr &Other,
   if (!SameVal) {
     const PseudoSourceValue *PSVa = MMOa->getPseudoValue();
     const PseudoSourceValue *PSVb = MMOb->getPseudoValue();
-    if (PSVa && PSVa->isConstant(&MFI))
+    if (PSVa && ValB && !PSVa->mayAlias(&MFI))
       return false;
-    if (PSVb && PSVb->isConstant(&MFI))
+    if (PSVb && ValA && !PSVb->mayAlias(&MFI))
       return false;
     if (PSVa && PSVb && (PSVa == PSVb))
       SameVal = true;
@@ -1732,11 +1729,15 @@ bool MachineInstr::mayAlias(AliasAnalysis *AA, MachineInstr &Other,
   if (!ValA || !ValB)
     return true;
 
+  assert((OffsetA >= 0) && "Negative MachineMemOperand offset");
+  assert((OffsetB >= 0) && "Negative MachineMemOperand offset");
+
   int64_t Overlapa = WidthA + OffsetA - MinOffset;
   int64_t Overlapb = WidthB + OffsetB - MinOffset;
 
   AliasResult AAResult = AA->alias(
-      MemoryLocation(ValA, Overlapa, UseTBAA ? MMOa->getAAInfo() : AAMDNodes()),
+      MemoryLocation(ValA, Overlapa,
+                     UseTBAA ? MMOa->getAAInfo() : AAMDNodes()),
       MemoryLocation(ValB, Overlapb,
                      UseTBAA ? MMOb->getAAInfo() : AAMDNodes()));
 

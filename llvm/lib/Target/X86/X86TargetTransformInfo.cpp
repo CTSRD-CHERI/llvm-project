@@ -66,6 +66,57 @@ X86TTIImpl::getPopcntSupport(unsigned TyWidth) {
   return ST->hasPOPCNT() ? TTI::PSK_FastHardware : TTI::PSK_Software;
 }
 
+llvm::Optional<unsigned> X86TTIImpl::getCacheSize(
+  TargetTransformInfo::CacheLevel Level) const {
+  switch (Level) {
+  case TargetTransformInfo::CacheLevel::L1D:
+    //   - Penry
+    //   - Nehalem
+    //   - Westmere
+    //   - Sandy Bridge
+    //   - Ivy Bridge
+    //   - Haswell
+    //   - Broadwell
+    //   - Skylake
+    //   - Kabylake
+    return 32 * 1024;  //  32 KByte
+  case TargetTransformInfo::CacheLevel::L2D:
+    //   - Penry
+    //   - Nehalem
+    //   - Westmere
+    //   - Sandy Bridge
+    //   - Ivy Bridge
+    //   - Haswell
+    //   - Broadwell
+    //   - Skylake
+    //   - Kabylake
+    return 256 * 1024; // 256 KByte
+  }
+
+  llvm_unreachable("Unknown TargetTransformInfo::CacheLevel");
+}
+
+llvm::Optional<unsigned> X86TTIImpl::getCacheAssociativity(
+  TargetTransformInfo::CacheLevel Level) const {
+  //   - Penry
+  //   - Nehalem
+  //   - Westmere
+  //   - Sandy Bridge
+  //   - Ivy Bridge
+  //   - Haswell
+  //   - Broadwell
+  //   - Skylake
+  //   - Kabylake
+  switch (Level) {
+  case TargetTransformInfo::CacheLevel::L1D:
+    LLVM_FALLTHROUGH;
+  case TargetTransformInfo::CacheLevel::L2D:
+    return 8;
+  }
+
+  llvm_unreachable("Unknown TargetTransformInfo::CacheLevel");
+}
+
 unsigned X86TTIImpl::getNumberOfRegisters(bool Vector) {
   if (Vector && !ST->hasSSE1())
     return 0;
@@ -859,6 +910,28 @@ int X86TTIImpl::getShuffleCost(TTI::ShuffleKind Kind, Type *Tp, int Index,
 
   if (ST->hasAVX2())
     if (const auto *Entry = CostTableLookup(AVX2ShuffleTbl, Kind, LT.second))
+      return LT.first * Entry->Cost;
+
+  static const CostTblEntry XOPShuffleTbl[] = {
+    { TTI::SK_PermuteSingleSrc, MVT::v4f64,   2 }, // vperm2f128 + vpermil2pd
+    { TTI::SK_PermuteSingleSrc, MVT::v8f32,   2 }, // vperm2f128 + vpermil2ps
+    { TTI::SK_PermuteSingleSrc, MVT::v4i64,   2 }, // vperm2f128 + vpermil2pd
+    { TTI::SK_PermuteSingleSrc, MVT::v8i32,   2 }, // vperm2f128 + vpermil2ps
+    { TTI::SK_PermuteSingleSrc, MVT::v16i16,  4 }, // vextractf128 + 2*vpperm
+                                                   // + vinsertf128
+    { TTI::SK_PermuteSingleSrc, MVT::v32i8,   4 }, // vextractf128 + 2*vpperm
+                                                   // + vinsertf128
+
+    { TTI::SK_PermuteTwoSrc,    MVT::v16i16,  9 }, // 2*vextractf128 + 6*vpperm
+                                                   // + vinsertf128
+    { TTI::SK_PermuteTwoSrc,    MVT::v8i16,   1 }, // vpperm
+    { TTI::SK_PermuteTwoSrc,    MVT::v32i8,   9 }, // 2*vextractf128 + 6*vpperm
+                                                   // + vinsertf128
+    { TTI::SK_PermuteTwoSrc,    MVT::v16i8,   1 }, // vpperm
+  };
+
+  if (ST->hasXOP())
+    if (const auto *Entry = CostTableLookup(XOPShuffleTbl, Kind, LT.second))
       return LT.first * Entry->Cost;
 
   static const CostTblEntry AVX1ShuffleTbl[] = {
@@ -2089,6 +2162,21 @@ int X86TTIImpl::getIntImmCost(Intrinsic::ID IID, unsigned Idx, const APInt &Imm,
     break;
   }
   return X86TTIImpl::getIntImmCost(Imm, Ty);
+}
+
+unsigned X86TTIImpl::getUserCost(const User *U,
+                                 ArrayRef<const Value *> Operands) {
+  if (isa<StoreInst>(U)) {
+    Value *Ptr = U->getOperand(1);
+    // Store instruction with index and scale costs 2 Uops.
+    // Check the preceding GEP to identify non-const indices.
+    if (auto GEP = dyn_cast<GetElementPtrInst>(Ptr)) {
+      if (!all_of(GEP->indices(), [](Value *V) { return isa<Constant>(V); }))
+        return TTI::TCC_Basic * 2;
+    }
+    return TTI::TCC_Basic;
+  }
+  return BaseT::getUserCost(U, Operands);
 }
 
 // Return an average cost of Gather / Scatter instruction, maybe improved later

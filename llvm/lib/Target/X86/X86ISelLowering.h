@@ -474,7 +474,7 @@ namespace llvm {
       VPMADD52L, VPMADD52H,
 
       // FMA nodes.
-      FMADD,
+      // We use the target independent ISD::FMA for the non-inverted case.
       FNMADD,
       FMSUB,
       FNMSUB,
@@ -1030,9 +1030,7 @@ namespace llvm {
     bool shouldConvertConstantLoadToIntImm(const APInt &Imm,
                                            Type *Ty) const override;
 
-    bool convertSelectOfConstantsToMath() const override {
-      return true;
-    }
+    bool convertSelectOfConstantsToMath(EVT VT) const override;
 
     /// Return true if EXTRACT_SUBVECTOR is cheap for this result type
     /// with this index.
@@ -1285,6 +1283,10 @@ namespace llvm {
     MachineBasicBlock *
     EmitVAStartSaveXMMRegsWithCustomInserter(MachineInstr &BInstr,
                                              MachineBasicBlock *BB) const;
+
+    MachineBasicBlock *EmitLoweredCascadedSelect(MachineInstr &MI1,
+                                                 MachineInstr &MI2,
+                                                 MachineBasicBlock *BB) const;
 
     MachineBasicBlock *EmitLoweredSelect(MachineInstr &I,
                                          MachineBasicBlock *BB) const;

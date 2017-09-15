@@ -33,7 +33,7 @@ define <8 x double> @sltof864(<8 x i64> %a) {
 ; NODQ-NEXT:    vcvtsi2sdq %rax, %xmm4, %xmm2
 ; NODQ-NEXT:    vunpcklpd {{.*#+}} xmm2 = xmm2[0],xmm3[0]
 ; NODQ-NEXT:    vinsertf128 $1, %xmm1, %ymm2, %ymm1
-; NODQ-NEXT:    vextracti32x4 $1, %zmm0, %xmm2
+; NODQ-NEXT:    vextracti128 $1, %ymm0, %xmm2
 ; NODQ-NEXT:    vpextrq $1, %xmm2, %rax
 ; NODQ-NEXT:    vcvtsi2sdq %rax, %xmm4, %xmm3
 ; NODQ-NEXT:    vmovq %xmm2, %rax
@@ -407,7 +407,7 @@ define <8 x double> @ultof64(<8 x i64> %a) {
 ; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm4, %xmm2
 ; NODQ-NEXT:    vunpcklpd {{.*#+}} xmm2 = xmm2[0],xmm3[0]
 ; NODQ-NEXT:    vinsertf128 $1, %xmm1, %ymm2, %ymm1
-; NODQ-NEXT:    vextracti32x4 $1, %zmm0, %xmm2
+; NODQ-NEXT:    vextracti128 $1, %ymm0, %xmm2
 ; NODQ-NEXT:    vpextrq $1, %xmm2, %rax
 ; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm4, %xmm3
 ; NODQ-NEXT:    vmovq %xmm2, %rax
@@ -642,19 +642,12 @@ define <4 x i32> @fptosi03(<4 x double> %a) {
 }
 
 define <16 x float> @fptrunc00(<16 x double> %b) nounwind {
-; NODQ-LABEL: fptrunc00:
-; NODQ:       # BB#0:
-; NODQ-NEXT:    vcvtpd2ps %zmm0, %ymm0
-; NODQ-NEXT:    vcvtpd2ps %zmm1, %ymm1
-; NODQ-NEXT:    vinsertf64x4 $1, %ymm1, %zmm0, %zmm0
-; NODQ-NEXT:    retq
-;
-; DQ-LABEL: fptrunc00:
-; DQ:       # BB#0:
-; DQ-NEXT:    vcvtpd2ps %zmm0, %ymm0
-; DQ-NEXT:    vcvtpd2ps %zmm1, %ymm1
-; DQ-NEXT:    vinsertf32x8 $1, %ymm1, %zmm0, %zmm0
-; DQ-NEXT:    retq
+; ALL-LABEL: fptrunc00:
+; ALL:       # BB#0:
+; ALL-NEXT:    vcvtpd2ps %zmm0, %ymm0
+; ALL-NEXT:    vcvtpd2ps %zmm1, %ymm1
+; ALL-NEXT:    vinsertf64x4 $1, %ymm1, %zmm0, %zmm0
+; ALL-NEXT:    retq
   %a = fptrunc <16 x double> %b to <16 x float>
   ret <16 x float> %a
 }
@@ -876,21 +869,13 @@ define i32 @float_to_int(float %x) {
 }
 
 define <16 x double> @uitof64(<16 x i32> %a) nounwind {
-; NODQ-LABEL: uitof64:
-; NODQ:       # BB#0:
-; NODQ-NEXT:    vcvtudq2pd %ymm0, %zmm2
-; NODQ-NEXT:    vextractf64x4 $1, %zmm0, %ymm0
-; NODQ-NEXT:    vcvtudq2pd %ymm0, %zmm1
-; NODQ-NEXT:    vmovaps %zmm2, %zmm0
-; NODQ-NEXT:    retq
-;
-; DQ-LABEL: uitof64:
-; DQ:       # BB#0:
-; DQ-NEXT:    vcvtudq2pd %ymm0, %zmm2
-; DQ-NEXT:    vextractf32x8 $1, %zmm0, %ymm0
-; DQ-NEXT:    vcvtudq2pd %ymm0, %zmm1
-; DQ-NEXT:    vmovaps %zmm2, %zmm0
-; DQ-NEXT:    retq
+; ALL-LABEL: uitof64:
+; ALL:       # BB#0:
+; ALL-NEXT:    vcvtudq2pd %ymm0, %zmm2
+; ALL-NEXT:    vextractf64x4 $1, %zmm0, %ymm0
+; ALL-NEXT:    vcvtudq2pd %ymm0, %zmm1
+; ALL-NEXT:    vmovaps %zmm2, %zmm0
+; ALL-NEXT:    retq
   %b = uitofp <16 x i32> %a to <16 x double>
   ret <16 x double> %b
 }
@@ -1545,19 +1530,19 @@ define <4 x double> @uitofp_4i1_double(<4 x i32> %a) {
 }
 
 define <2 x float> @uitofp_2i1_float(<2 x i32> %a) {
-; NOVL-LABEL: uitofp_2i1_float:
-; NOVL:       # BB#0:
-; NOVL-NEXT:    vpxor %xmm1, %xmm1, %xmm1
-; NOVL-NEXT:    vpblendd {{.*#+}} xmm0 = xmm0[0],xmm1[1],xmm0[2],xmm1[3]
-; NOVL-NEXT:    vpcmpgtq %xmm0, %xmm1, %xmm0
-; NOVL-NEXT:    vpextrb $8, %xmm0, %eax
-; NOVL-NEXT:    andl $1, %eax
-; NOVL-NEXT:    vcvtsi2ssl %eax, %xmm2, %xmm1
-; NOVL-NEXT:    vpextrb $0, %xmm0, %eax
-; NOVL-NEXT:    andl $1, %eax
-; NOVL-NEXT:    vcvtsi2ssl %eax, %xmm2, %xmm0
-; NOVL-NEXT:    vinsertps {{.*#+}} xmm0 = xmm0[0],xmm1[0],xmm0[2,3]
-; NOVL-NEXT:    retq
+; KNL-LABEL: uitofp_2i1_float:
+; KNL:       # BB#0:
+; KNL-NEXT:    vpxor %xmm1, %xmm1, %xmm1
+; KNL-NEXT:    vpblendd {{.*#+}} xmm0 = xmm0[0],xmm1[1],xmm0[2],xmm1[3]
+; KNL-NEXT:    vpcmpgtq %xmm0, %xmm1, %xmm0
+; KNL-NEXT:    vpextrb $8, %xmm0, %eax
+; KNL-NEXT:    andl $1, %eax
+; KNL-NEXT:    vpextrb $0, %xmm0, %ecx
+; KNL-NEXT:    vcvtsi2ssl %eax, %xmm2, %xmm0
+; KNL-NEXT:    andl $1, %ecx
+; KNL-NEXT:    vcvtsi2ssl %ecx, %xmm2, %xmm1
+; KNL-NEXT:    vinsertps {{.*#+}} xmm0 = xmm1[0],xmm0[0],xmm1[2,3]
+; KNL-NEXT:    retq
 ;
 ; VL-LABEL: uitofp_2i1_float:
 ; VL:       # BB#0:
@@ -1567,6 +1552,34 @@ define <2 x float> @uitofp_2i1_float(<2 x i32> %a) {
 ; VL-NEXT:    vpbroadcastd {{.*}}(%rip), %xmm0 {%k1} {z}
 ; VL-NEXT:    vcvtudq2ps %xmm0, %xmm0
 ; VL-NEXT:    retq
+;
+; AVX512DQ-LABEL: uitofp_2i1_float:
+; AVX512DQ:       # BB#0:
+; AVX512DQ-NEXT:    vpxor %xmm1, %xmm1, %xmm1
+; AVX512DQ-NEXT:    vpblendd {{.*#+}} xmm0 = xmm0[0],xmm1[1],xmm0[2],xmm1[3]
+; AVX512DQ-NEXT:    vpcmpgtq %xmm0, %xmm1, %xmm0
+; AVX512DQ-NEXT:    vpextrb $8, %xmm0, %eax
+; AVX512DQ-NEXT:    andl $1, %eax
+; AVX512DQ-NEXT:    vcvtsi2ssl %eax, %xmm2, %xmm1
+; AVX512DQ-NEXT:    vpextrb $0, %xmm0, %eax
+; AVX512DQ-NEXT:    andl $1, %eax
+; AVX512DQ-NEXT:    vcvtsi2ssl %eax, %xmm2, %xmm0
+; AVX512DQ-NEXT:    vinsertps {{.*#+}} xmm0 = xmm0[0],xmm1[0],xmm0[2,3]
+; AVX512DQ-NEXT:    retq
+;
+; AVX512BW-LABEL: uitofp_2i1_float:
+; AVX512BW:       # BB#0:
+; AVX512BW-NEXT:    vpxor %xmm1, %xmm1, %xmm1
+; AVX512BW-NEXT:    vpblendd {{.*#+}} xmm0 = xmm0[0],xmm1[1],xmm0[2],xmm1[3]
+; AVX512BW-NEXT:    vpcmpgtq %xmm0, %xmm1, %xmm0
+; AVX512BW-NEXT:    vpextrb $8, %xmm0, %eax
+; AVX512BW-NEXT:    andl $1, %eax
+; AVX512BW-NEXT:    vcvtsi2ssl %eax, %xmm2, %xmm1
+; AVX512BW-NEXT:    vpextrb $0, %xmm0, %eax
+; AVX512BW-NEXT:    andl $1, %eax
+; AVX512BW-NEXT:    vcvtsi2ssl %eax, %xmm2, %xmm0
+; AVX512BW-NEXT:    vinsertps {{.*#+}} xmm0 = xmm0[0],xmm1[0],xmm0[2,3]
+; AVX512BW-NEXT:    retq
   %mask = icmp ult <2 x i32> %a, zeroinitializer
   %1 = uitofp <2 x i1> %mask to <2 x float>
   ret <2 x float> %1

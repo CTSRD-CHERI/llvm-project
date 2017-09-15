@@ -4,7 +4,11 @@ Clang-Tidy Checks
 =================
 
 .. toctree::
+   android-cloexec-accept
+   android-cloexec-accept4
    android-cloexec-creat
+   android-cloexec-epoll-create
+   android-cloexec-epoll-create1
    android-cloexec-dup
    android-cloexec-fopen
    android-cloexec-inotify-init
@@ -75,6 +79,7 @@ Clang-Tidy Checks
    hicpp-new-delete-operators (redirects to misc-new-delete-overloads) <hicpp-new-delete-operators>
    hicpp-no-assembler
    hicpp-noexcept-move (redirects to misc-noexcept-moveconstructor) <hicpp-noexcept-move>
+   hicpp-signed-bitwise
    hicpp-special-member-functions (redirects to cppcoreguidelines-special-member-functions) <hicpp-special-member-functions>
    hicpp-undelegated-constructor (redirects to misc-undelegated-constructor) <hicpp-undelegated-constructor>
    hicpp-use-equals-default (redirects to modernize-use-equals-default) <hicpp-use-equals-default>

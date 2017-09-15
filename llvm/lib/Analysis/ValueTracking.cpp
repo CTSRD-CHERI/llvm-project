@@ -1564,6 +1564,8 @@ void computeKnownBits(const Value *V, KnownBits &Known, unsigned Depth,
 /// types and vectors of integers.
 bool isKnownToBeAPowerOfTwo(const Value *V, bool OrZero, unsigned Depth,
                             const Query &Q) {
+  assert(Depth <= MaxDepth && "Limit Search Depth");
+
   if (const Constant *C = dyn_cast<Constant>(V)) {
     if (C->isNullValue())
       return OrZero;
@@ -2023,6 +2025,7 @@ static unsigned ComputeNumSignBits(const Value *V, unsigned Depth,
 /// vector element with the mininum number of known sign bits.
 static unsigned ComputeNumSignBitsImpl(const Value *V, unsigned Depth,
                                        const Query &Q) {
+  assert(Depth <= MaxDepth && "Limit Search Depth");
 
   // We return the minimum number of sign bits that are guaranteed to be present
   // in V, so for undef we have to conservatively return 1.  We don't have the
@@ -2198,6 +2201,17 @@ static unsigned ComputeNumSignBitsImpl(const Value *V, unsigned Depth,
     Tmp = ComputeNumSignBits(U->getOperand(0), Depth + 1, Q);
     if (Tmp == 1) return 1;  // Early out.
     return std::min(Tmp, Tmp2)-1;
+
+  case Instruction::Mul: {
+    // The output of the Mul can be at most twice the valid bits in the inputs.
+    unsigned SignBitsOp0 = ComputeNumSignBits(U->getOperand(0), Depth + 1, Q);
+    if (SignBitsOp0 == 1) return 1;  // Early out.
+    unsigned SignBitsOp1 = ComputeNumSignBits(U->getOperand(1), Depth + 1, Q);
+    if (SignBitsOp1 == 1) return 1;
+    unsigned OutValidBits =
+        (TyBits - SignBitsOp0 + 1) + (TyBits - SignBitsOp1 + 1);
+    return OutValidBits > TyBits ? 1 : TyBits - OutValidBits + 1;
+  }
 
   case Instruction::PHI: {
     const PHINode *PN = cast<PHINode>(U);

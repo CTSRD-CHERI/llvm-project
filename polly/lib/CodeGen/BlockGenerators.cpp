@@ -450,7 +450,12 @@ void BlockGenerator::copyBB(ScopStmt &Stmt, BasicBlock *BB, BasicBlock *CopyBB,
                             isl_id_to_ast_expr *NewAccesses) {
   EntryBB = &CopyBB->getParent()->getEntryBlock();
 
-  if (Stmt.isBlockStmt())
+  // Block statements and the entry blocks of region statement are code
+  // generated from instruction lists. This allow us to optimize the
+  // instructions that belong to a certain scop statement. As the code
+  // structure of region statements might be arbitrary complex, optimizing the
+  // instruction list is not yet supported.
+  if (Stmt.isBlockStmt() || (Stmt.isRegionStmt() && Stmt.getEntryBlock() == BB))
     for (Instruction *Inst : Stmt.getInstructions())
       copyInstruction(Stmt, Inst, BBMap, LTS, NewAccesses);
   else
@@ -601,11 +606,6 @@ void BlockGenerator::generateConditionalExecution(
     const std::function<void()> &GenThenFunc) {
   isl::set StmtDom = Stmt.getDomain();
 
-  // Don't call GenThenFunc if it is never executed. An ast index expression
-  // might not be defined in this case.
-  if (Subdomain.is_empty())
-    return;
-
   // If the condition is a tautology, don't generate a condition around the
   // code.
   bool IsPartialWrite =
@@ -618,6 +618,13 @@ void BlockGenerator::generateConditionalExecution(
 
   // Generate the condition.
   Value *Cond = buildContainsCondition(Stmt, Subdomain);
+
+  // Don't call GenThenFunc if it is never executed. An ast index expression
+  // might not be defined in this case.
+  if (auto *Const = dyn_cast<ConstantInt>(Cond))
+    if (Const->isZero())
+      return;
+
   BasicBlock *HeadBlock = Builder.GetInsertBlock();
   StringRef BlockName = HeadBlock->getName();
 

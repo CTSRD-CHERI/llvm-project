@@ -373,6 +373,23 @@ static bool canEvaluateTruncated(Value *V, Type *Ty, InstCombiner &IC,
     }
     break;
   }
+  case Instruction::AShr: {
+    // If this is a truncate of an arithmetic shr, we can truncate it to a
+    // smaller ashr iff we know that all the bits from the sign bit of the
+    // original type and the sign bit of the truncate type are similar.
+    // TODO: It is enough to check that the bits we would be shifting in are
+    //       similar to sign bit of the truncate type.
+    const APInt *Amt;
+    if (match(I->getOperand(1), m_APInt(Amt))) {
+      uint32_t OrigBitWidth = OrigTy->getScalarSizeInBits();
+      uint32_t BitWidth = Ty->getScalarSizeInBits();
+      if (Amt->getLimitedValue(BitWidth) < BitWidth &&
+          OrigBitWidth - BitWidth <
+              IC.ComputeNumSignBits(I->getOperand(0), 0, CxtI))
+        return canEvaluateTruncated(I->getOperand(0), Ty, IC, CxtI);
+    }
+    break;
+  }
   case Instruction::Trunc:
     // trunc(trunc(x)) -> trunc(x)
     return true;
@@ -755,13 +772,13 @@ Instruction *InstCombiner::transformZExtICmp(ICmpInst *ICI, ZExtInst &CI,
   // If we are just checking for a icmp eq of a single bit and zext'ing it
   // to an integer, then shift the bit to the appropriate place and then
   // cast to integer to avoid the comparison.
-  if (ConstantInt *Op1C = dyn_cast<ConstantInt>(ICI->getOperand(1))) {
-    const APInt &Op1CV = Op1C->getValue();
+  const APInt *Op1CV;
+  if (match(ICI->getOperand(1), m_APInt(Op1CV))) {
 
     // zext (x <s  0) to i32 --> x>>u31      true if signbit set.
     // zext (x >s -1) to i32 --> (x>>u31)^1  true if signbit clear.
-    if ((ICI->getPredicate() == ICmpInst::ICMP_SLT && Op1CV.isNullValue()) ||
-        (ICI->getPredicate() == ICmpInst::ICMP_SGT && Op1CV.isAllOnesValue())) {
+    if ((ICI->getPredicate() == ICmpInst::ICMP_SLT && Op1CV->isNullValue()) ||
+        (ICI->getPredicate() == ICmpInst::ICMP_SGT && Op1CV->isAllOnesValue())) {
       if (!DoTransform) return ICI;
 
       Value *In = ICI->getOperand(0);
@@ -787,7 +804,7 @@ Instruction *InstCombiner::transformZExtICmp(ICmpInst *ICI, ZExtInst &CI,
     // zext (X != 0) to i32 --> X>>1     iff X has only the 2nd bit set.
     // zext (X != 1) to i32 --> X^1      iff X has only the low bit set.
     // zext (X != 2) to i32 --> (X>>1)^1 iff X has only the 2nd bit set.
-    if ((Op1CV.isNullValue() || Op1CV.isPowerOf2()) &&
+    if ((Op1CV->isNullValue() || Op1CV->isPowerOf2()) &&
         // This only works for EQ and NE
         ICI->isEquality()) {
       // If Op1C some other power of two, convert:
@@ -798,7 +815,7 @@ Instruction *InstCombiner::transformZExtICmp(ICmpInst *ICI, ZExtInst &CI,
         if (!DoTransform) return ICI;
 
         bool isNE = ICI->getPredicate() == ICmpInst::ICMP_NE;
-        if (!Op1CV.isNullValue() && (Op1CV != KnownZeroMask)) {
+        if (!Op1CV->isNullValue() && (*Op1CV != KnownZeroMask)) {
           // (X&4) == 2 --> false
           // (X&4) != 2 --> true
           Constant *Res = ConstantInt::get(Type::getInt1Ty(CI.getContext()),
@@ -816,7 +833,7 @@ Instruction *InstCombiner::transformZExtICmp(ICmpInst *ICI, ZExtInst &CI,
                                   In->getName() + ".lobit");
         }
 
-        if (!Op1CV.isNullValue() == isNE) { // Toggle the low bit.
+        if (!Op1CV->isNullValue() == isNE) { // Toggle the low bit.
           Constant *One = ConstantInt::get(In->getType(), 1);
           In = Builder.CreateXor(In, One);
         }
@@ -933,8 +950,13 @@ static bool canEvaluateZExtd(Value *V, Type *Ty, unsigned &BitsToClear,
       unsigned VSize = V->getType()->getScalarSizeInBits();
       if (IC.MaskedValueIsZero(I->getOperand(1),
                                APInt::getHighBitsSet(VSize, BitsToClear),
-                               0, CxtI))
+                               0, CxtI)) {
+        // If this is an And instruction and all of the BitsToClear are
+        // known to be zero we can reset BitsToClear.
+        if (Opc == Instruction::And)
+          BitsToClear = 0;
         return true;
+      }
     }
 
     // Otherwise, we don't know how to analyze this BitsToClear case yet.

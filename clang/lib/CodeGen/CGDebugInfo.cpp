@@ -29,6 +29,7 @@
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/Version.h"
 #include "clang/Frontend/CodeGenOptions.h"
+#include "clang/Frontend/FrontendOptions.h"
 #include "clang/Lex/HeaderSearchOptions.h"
 #include "clang/Lex/ModuleMap.h"
 #include "clang/Lex/PreprocessorOptions.h"
@@ -495,6 +496,16 @@ void CGDebugInfo::CreateCompileUnit() {
       llvm::sys::path::append(MainFileDirSS, MainFileName);
       MainFileName = MainFileDirSS.str();
     }
+    // If the main file name provided is identical to the input file name, and
+    // if the input file is a preprocessed source, use the module name for
+    // debug info. The module name comes from the name specified in the first
+    // linemarker if the input is a preprocessed source.
+    if (MainFile->getName() == MainFileName &&
+        FrontendOptions::getInputKindForExtension(
+            MainFile->getName().rsplit('.').second)
+            .isPreprocessed())
+      MainFileName = CGM.getModule().getName().str();
+
     CSKind = computeChecksum(SM.getMainFileID(), Checksum);
   }
 
@@ -3276,7 +3287,7 @@ void CGDebugInfo::EmitInlineFunctionStart(CGBuilderTy &Builder, GlobalDecl GD) {
   llvm::DISubprogram *SP = nullptr;
   if (FI != SPCache.end())
     SP = dyn_cast_or_null<llvm::DISubprogram>(FI->second);
-  if (!SP)
+  if (!SP || !SP->isDefinition())
     SP = getFunctionStub(GD);
   FnBeginRegionCount.push_back(LexicalBlockStack.size());
   LexicalBlockStack.emplace_back(SP);

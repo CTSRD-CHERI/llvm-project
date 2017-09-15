@@ -23,7 +23,6 @@
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Support/FileOutputBuffer.h"
-#include "llvm/Support/raw_ostream.h"
 #include <climits>
 
 using namespace llvm;
@@ -124,7 +123,7 @@ template <class ELFT> static bool needsInterpSection() {
 template <class ELFT> void elf::writeResult() { Writer<ELFT>().run(); }
 
 template <class ELFT> void Writer<ELFT>::removeEmptyPTLoad() {
-  auto I = llvm::remove_if(Phdrs, [&](const PhdrEntry *P) {
+  llvm::erase_if(Phdrs, [&](const PhdrEntry *P) {
     if (P->p_type != PT_LOAD)
       return false;
     if (!P->First)
@@ -132,7 +131,6 @@ template <class ELFT> void Writer<ELFT>::removeEmptyPTLoad() {
     uint64_t Size = P->Last->Addr + P->Last->Size - P->First->Addr;
     return Size == 0;
   });
-  Phdrs.erase(I, Phdrs.end());
 }
 
 template <class ELFT> static void combineEhFrameSections() {
@@ -689,8 +687,8 @@ static unsigned getSectionRank(const OutputSection *Sec) {
   if (IsNoBits)
     Rank |= RF_BSS;
 
-  // // Some architectures have additional ordering restrictions for sections
-  // // within the same PT_LOAD.
+  // Some architectures have additional ordering restrictions for sections
+  // within the same PT_LOAD.
   if (Config->EMachine == EM_PPC64) {
     // PPC64 has a number of special SHT_PROGBITS+SHF_ALLOC+SHF_WRITE sections
     // that we would like to make sure appear is a specific order to maximize
@@ -1142,13 +1140,11 @@ static void removeUnusedSyntheticSections() {
     // output.
     if (OS->Commands.empty()) {
       // Also remove script commands matching the output section.
-      auto &Cmds = Script->Opt.Commands;
-      auto I = std::remove_if(Cmds.begin(), Cmds.end(), [&](BaseCommand *Cmd2) {
-        if (auto *Sec = dyn_cast<OutputSection>(Cmd2))
+      llvm::erase_if(Script->Opt.Commands, [&](BaseCommand *Cmd) {
+        if (auto *Sec = dyn_cast<OutputSection>(Cmd))
           return Sec == OS;
         return false;
       });
-      Cmds.erase(I, Cmds.end());
     }
   }
 }
@@ -1856,7 +1852,7 @@ template <class ELFT> void Writer<ELFT>::writeSectionsBinary() {
 }
 
 static void fillTrap(uint8_t *I, uint8_t *End) {
-  for (; I + 4 < End; I += 4)
+  for (; I + 4 <= End; I += 4)
     memcpy(I, &Target->TrapInstr, 4);
 }
 

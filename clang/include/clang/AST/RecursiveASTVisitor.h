@@ -83,7 +83,7 @@ namespace clang {
       return false;                                                            \
   } while (false)
 
-/// \brief A class that does preordor or postorder
+/// \brief A class that does preorder or postorder
 /// depth-first traversal on the entire Clang AST and visits each node.
 ///
 /// This class performs three distinct tasks:
@@ -496,6 +496,8 @@ public:
   }                                                                            \
   bool Visit##CLASS##Decl(CLASS##Decl *D) { return true; }
 #include "clang/AST/DeclNodes.inc"
+
+  bool canIgnoreChildDeclWhileTraversingDeclContext(const Decl *Child);
 
 private:
   // These are helper methods used by more than one Traverse* method.
@@ -1345,14 +1347,20 @@ DEF_TRAVERSE_TYPELOC(PipeType, { TRY_TO(TraverseTypeLoc(TL.getValueLoc())); })
 // than those.
 
 template <typename Derived>
+bool RecursiveASTVisitor<Derived>::canIgnoreChildDeclWhileTraversingDeclContext(
+    const Decl *Child) {
+  // BlockDecls and CapturedDecls are traversed through BlockExprs and
+  // CapturedStmts respectively.
+  return isa<BlockDecl>(Child) || isa<CapturedDecl>(Child);
+}
+
+template <typename Derived>
 bool RecursiveASTVisitor<Derived>::TraverseDeclContextHelper(DeclContext *DC) {
   if (!DC)
     return true;
 
   for (auto *Child : DC->decls()) {
-    // BlockDecls and CapturedDecls are traversed through BlockExprs and
-    // CapturedStmts respectively.
-    if (!isa<BlockDecl>(Child) && !isa<CapturedDecl>(Child))
+    if (!canIgnoreChildDeclWhileTraversingDeclContext(Child))
       TRY_TO(TraverseDecl(Child));
   }
 

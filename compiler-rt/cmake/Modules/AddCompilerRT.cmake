@@ -86,6 +86,14 @@ function(add_compiler_rt_component name)
   add_dependencies(compiler-rt ${name})
 endfunction()
 
+macro(set_output_name output name arch)
+  if(ANDROID AND ${arch} STREQUAL "i386")
+    set(${output} "${name}-i686${COMPILER_RT_OS_SUFFIX}")
+  else()
+    set(${output} "${name}-${arch}${COMPILER_RT_OS_SUFFIX}")
+  endif()
+endmacro()
+
 # Adds static or shared runtime for a list of architectures and operating
 # systems and puts it in the proper directory in the build and install trees.
 # add_compiler_rt_runtime(<name>
@@ -142,15 +150,15 @@ function(add_compiler_rt_runtime name type)
       endif()
       if(type STREQUAL "STATIC")
         set(libname "${name}-${arch}")
-        set(output_name_${libname} ${libname}${COMPILER_RT_OS_SUFFIX})
+        set_output_name(output_name_${libname} ${name} ${arch})
       else()
         set(libname "${name}-dynamic-${arch}")
         set(extra_cflags_${libname} ${TARGET_${arch}_CFLAGS} ${LIB_CFLAGS})
         set(extra_link_flags_${libname} ${TARGET_${arch}_LINK_FLAGS} ${LIB_LINK_FLAGS})
         if(WIN32)
-          set(output_name_${libname} ${name}_dynamic-${arch}${COMPILER_RT_OS_SUFFIX})
+          set_output_name(output_name_${libname} ${name}_dynamic ${arch})
         else()
-          set(output_name_${libname} ${name}-${arch}${COMPILER_RT_OS_SUFFIX})
+          set_output_name(output_name_${libname} ${name} ${arch})
         endif()
       endif()
       set(sources_${libname} ${LIB_SOURCES})
@@ -202,10 +210,10 @@ function(add_compiler_rt_runtime name type)
     set_target_properties(${libname} PROPERTIES
         OUTPUT_NAME ${output_name_${libname}})
     set_target_properties(${libname} PROPERTIES FOLDER "Compiler-RT Runtime")
+    if(LIB_LINK_LIBS)
+      target_link_libraries(${libname} ${LIB_LINK_LIBS})
+    endif()
     if(${type} STREQUAL "SHARED")
-      if(LIB_LINK_LIBS)
-        target_link_libraries(${libname} ${LIB_LINK_LIBS})
-      endif()
       if(WIN32 AND NOT CYGWIN AND NOT MINGW)
         set_target_properties(${libname} PROPERTIES IMPORT_PREFIX "")
         set_target_properties(${libname} PROPERTIES IMPORT_SUFFIX ".lib")
@@ -368,15 +376,17 @@ function(add_compiler_rt_test test_suite test_name arch)
     set(TEST_LINK_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${TEST_LINK_FLAGS}")
     separate_arguments(TEST_LINK_FLAGS)
   endif()
-  add_custom_target(${test_name}
-    COMMAND ${COMPILER_RT_TEST_COMPILER} ${TEST_OBJECTS}
-            -o "${output_bin}"
+  add_custom_command(
+    OUTPUT "${output_bin}"
+    COMMAND ${COMPILER_RT_TEST_COMPILER} ${TEST_OBJECTS} -o "${output_bin}"
             ${TEST_LINK_FLAGS}
-    DEPENDS ${TEST_DEPS})
-  set_target_properties(${test_name} PROPERTIES FOLDER "Compiler-RT Tests")
+    DEPENDS ${TEST_DEPS}
+    )
+  add_custom_target(T${test_name} DEPENDS "${output_bin}")
+  set_target_properties(T${test_name} PROPERTIES FOLDER "Compiler-RT Tests")
 
   # Make the test suite depend on the binary.
-  add_dependencies(${test_suite} ${test_name})
+  add_dependencies(${test_suite} T${test_name})
 endfunction()
 
 macro(add_compiler_rt_resource_file target_name file_name component)

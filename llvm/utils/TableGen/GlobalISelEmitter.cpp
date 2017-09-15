@@ -110,30 +110,28 @@ public:
   const LLT &get() const { return Ty; }
 
   /// This ordering is used for std::unique() and std::sort(). There's no
-  /// particular logic behind the order.
+  /// particular logic behind the order but either A < B or B < A must be
+  /// true if A != B.
   bool operator<(const LLTCodeGen &Other) const {
+    if (Ty.isValid() != Other.Ty.isValid())
+      return Ty.isValid() < Other.Ty.isValid();
     if (!Ty.isValid())
-      return Other.Ty.isValid();
-    if (Ty.isScalar()) {
-      if (!Other.Ty.isValid())
-        return false;
-      if (Other.Ty.isScalar())
-        return Ty.getSizeInBits() < Other.Ty.getSizeInBits();
       return false;
-    }
-    if (Ty.isVector()) {
-      if (!Other.Ty.isValid() || Other.Ty.isScalar())
-        return false;
-      if (Other.Ty.isVector()) {
-        if (Ty.getNumElements() < Other.Ty.getNumElements())
-          return true;
-        if (Ty.getNumElements() > Other.Ty.getNumElements())
-          return false;
-        return Ty.getSizeInBits() < Other.Ty.getSizeInBits();
-      }
-      return false;
-    }
-    llvm_unreachable("Unhandled LLT");
+
+    if (Ty.isVector() != Other.Ty.isVector())
+      return Ty.isVector() < Other.Ty.isVector();
+    if (Ty.isScalar() != Other.Ty.isScalar())
+      return Ty.isScalar() < Other.Ty.isScalar();
+    if (Ty.isPointer() != Other.Ty.isPointer())
+      return Ty.isPointer() < Other.Ty.isPointer();
+
+    if (Ty.isPointer() && Ty.getAddressSpace() != Other.Ty.getAddressSpace())
+      return Ty.getAddressSpace() < Other.Ty.getAddressSpace();
+
+    if (Ty.isVector() && Ty.getNumElements() != Other.Ty.getNumElements())
+      return Ty.getNumElements() < Other.Ty.getNumElements();
+
+    return Ty.getSizeInBits() < Other.Ty.getSizeInBits();
   }
 };
 
@@ -182,17 +180,19 @@ static Error failedImport(const Twine &Reason) {
 static Error isTrivialOperatorNode(const TreePatternNode *N) {
   std::string Explanation = "";
   std::string Separator = "";
-  if (N->isLeaf()) {
-    if (isa<IntInit>(N->getLeafValue()))
-      return Error::success();
 
-    Explanation = "Is a leaf";
-    Separator = ", ";
-  }
+  bool HasUnsupportedPredicate = false;
+  for (const auto &Predicate : N->getPredicateFns()) {
+    if (Predicate.isAlwaysTrue())
+      continue;
 
-  if (N->hasAnyPredicate()) {
+    if (Predicate.isImmediatePattern())
+      continue;
+
+    HasUnsupportedPredicate = true;
     Explanation = Separator + "Has a predicate (" + explainPredicates(N) + ")";
     Separator = ", ";
+    break;
   }
 
   if (N->getTransformFn()) {
@@ -200,7 +200,7 @@ static Error isTrivialOperatorNode(const TreePatternNode *N) {
     Separator = ", ";
   }
 
-  if (!N->isLeaf() && !N->hasAnyPredicate() && !N->getTransformFn())
+  if (!HasUnsupportedPredicate && !N->getTransformFn())
     return Error::success();
 
   return failedImport(Explanation);
@@ -525,6 +525,10 @@ private:
   typedef std::vector<std::unique_ptr<PredicateTy>> PredicateVec;
   PredicateVec Predicates;
 
+  /// Template instantiations should specialize this to return a string to use
+  /// for the comment emitted when there are no predicates.
+  std::string getNoPredicateComment() const;
+
 public:
   /// Construct a new operand predicate and add it to the matcher.
   template <class Kind, class... Args>
@@ -551,7 +555,8 @@ public:
   template <class... Args>
   void emitPredicateListOpcodes(MatchTable &Table, Args &&... args) const {
     if (Predicates.empty()) {
-      Table << MatchTable::Comment("No predicates") << MatchTable::LineBreak;
+      Table << MatchTable::Comment(getNoPredicateComment())
+            << MatchTable::LineBreak;
       return;
     }
 
@@ -628,14 +633,24 @@ public:
   virtual unsigned countRendererFns() const { return 0; }
 };
 
+template <>
+std::string
+PredicateListMatcher<OperandPredicateMatcher>::getNoPredicateComment() const {
+  return "No operand predicates";
+}
+
 /// Generates code to check that an operand is a particular LLT.
 class LLTOperandMatcher : public OperandPredicateMatcher {
 protected:
   LLTCodeGen Ty;
 
 public:
+  static std::set<LLTCodeGen> KnownTypes;
+
   LLTOperandMatcher(const LLTCodeGen &Ty)
-      : OperandPredicateMatcher(OPM_LLT), Ty(Ty) {}
+      : OperandPredicateMatcher(OPM_LLT), Ty(Ty) {
+    KnownTypes.insert(Ty);
+  }
 
   static bool classof(const OperandPredicateMatcher *P) {
     return P->getKind() == OPM_LLT;
@@ -650,6 +665,8 @@ public:
           << MatchTable::LineBreak;
   }
 };
+
+std::set<LLTCodeGen> LLTOperandMatcher::KnownTypes;
 
 /// Generates code to check that an operand is a particular target constant.
 class ComplexPatternOperandMatcher : public OperandPredicateMatcher {
@@ -919,6 +936,7 @@ protected:
   /// must be tested first.
   enum PredicateKind {
     IPM_Opcode,
+    IPM_ImmPredicate,
   };
 
   PredicateKind Kind;
@@ -946,6 +964,12 @@ public:
   /// matcher.
   virtual unsigned countRendererFns() const { return 0; }
 };
+
+template <>
+std::string
+PredicateListMatcher<InstructionPredicateMatcher>::getNoPredicateComment() const {
+  return "No instruction predicates";
+}
 
 /// Generates code to check the opcode of an instruction.
 class InstructionOpcodeMatcher : public InstructionPredicateMatcher {
@@ -990,6 +1014,54 @@ public:
 
   bool isConstantInstruction() const {
     return I->TheDef->getName() == "G_CONSTANT";
+  }
+};
+
+/// Generates code to check that this instruction is a constant whose value
+/// meets an immediate predicate.
+///
+/// Immediates are slightly odd since they are typically used like an operand
+/// but are represented as an operator internally. We typically write simm8:$src
+/// in a tablegen pattern, but this is just syntactic sugar for
+/// (imm:i32)<<P:Predicate_simm8>>:$imm which more directly describes the nodes
+/// that will be matched and the predicate (which is attached to the imm
+/// operator) that will be tested. In SelectionDAG this describes a
+/// ConstantSDNode whose internal value will be tested using the simm8 predicate.
+///
+/// The corresponding GlobalISel representation is %1 = G_CONSTANT iN Value. In
+/// this representation, the immediate could be tested with an
+/// InstructionMatcher, InstructionOpcodeMatcher, OperandMatcher, and a
+/// OperandPredicateMatcher-subclass to check the Value meets the predicate but
+/// there are two implementation issues with producing that matcher
+/// configuration from the SelectionDAG pattern:
+/// * ImmLeaf is a PatFrag whose root is an InstructionMatcher. This means that
+///   were we to sink the immediate predicate to the operand we would have to
+///   have two partial implementations of PatFrag support, one for immediates
+///   and one for non-immediates.
+/// * At the point we handle the predicate, the OperandMatcher hasn't been
+///   created yet. If we were to sink the predicate to the OperandMatcher we
+///   would also have to complicate (or duplicate) the code that descends and
+///   creates matchers for the subtree.
+/// Overall, it's simpler to handle it in the place it was found.
+class InstructionImmPredicateMatcher : public InstructionPredicateMatcher {
+protected:
+  TreePredicateFn Predicate;
+
+public:
+  InstructionImmPredicateMatcher(const TreePredicateFn &Predicate)
+      : InstructionPredicateMatcher(IPM_ImmPredicate), Predicate(Predicate) {}
+
+  static bool classof(const InstructionPredicateMatcher *P) {
+    return P->getKind() == IPM_ImmPredicate;
+  }
+
+  void emitPredicateOpcodes(MatchTable &Table, RuleMatcher &Rule,
+                            unsigned InsnVarID) const override {
+    Table << MatchTable::Opcode("GIM_CheckImmPredicate")
+          << MatchTable::Comment("MI") << MatchTable::IntValue(InsnVarID)
+          << MatchTable::Comment("Predicate")
+          << MatchTable::NamedValue("GIPFP_" + Predicate.getFnName())
+          << MatchTable::LineBreak;
   }
 };
 
@@ -1767,22 +1839,28 @@ bool OperandPredicateMatcher::isHigherPriorityThan(
   // LiteralInt because it can cover more nodes but theres an exception to
   // this. G_CONSTANT's are less important than either of those two because they
   // are more permissive.
-  if (const InstructionOperandMatcher *AOM =
-          dyn_cast<InstructionOperandMatcher>(this)) {
-    if (AOM->getInsnMatcher().isConstantInstruction()) {
-      if (B.Kind == OPM_Int) {
-        return false;
-      }
-    }
+
+  const InstructionOperandMatcher *AOM =
+      dyn_cast<InstructionOperandMatcher>(this);
+  const InstructionOperandMatcher *BOM =
+      dyn_cast<InstructionOperandMatcher>(&B);
+  bool AIsConstantInsn = AOM && AOM->getInsnMatcher().isConstantInstruction();
+  bool BIsConstantInsn = BOM && BOM->getInsnMatcher().isConstantInstruction();
+
+  if (AOM && BOM) {
+    // The relative priorities between a G_CONSTANT and any other instruction
+    // don't actually matter but this code is needed to ensure a strict weak
+    // ordering. This is particularly important on Windows where the rules will
+    // be incorrectly sorted without it.
+    if (AIsConstantInsn != BIsConstantInsn)
+      return AIsConstantInsn < BIsConstantInsn;
+    return false;
   }
-  if (const InstructionOperandMatcher *BOM =
-          dyn_cast<InstructionOperandMatcher>(&B)) {
-    if (BOM->getInsnMatcher().isConstantInstruction()) {
-      if (Kind == OPM_Int) {
-        return true;
-      }
-    }
-  }
+
+  if (AOM && AIsConstantInsn && (B.Kind == OPM_Int || B.Kind == OPM_LiteralInt))
+    return false;
+  if (BOM && BIsConstantInsn && (Kind == OPM_Int || Kind == OPM_LiteralInt))
+    return true;
 
   return Kind < B.Kind;
 }
@@ -1921,6 +1999,19 @@ GlobalISelEmitter::createAndImportSelDAGMatcher(InstructionMatcher &InsnMatcher,
     OM.addPredicate<LLTOperandMatcher>(*OpTyOrNone);
   }
 
+  for (const auto &Predicate : Src->getPredicateFns()) {
+    if (Predicate.isAlwaysTrue())
+      continue;
+
+    if (Predicate.isImmediatePattern()) {
+      InsnMatcher.addPredicate<InstructionImmPredicateMatcher>(Predicate);
+      continue;
+    }
+
+    return failedImport("Src pattern child has predicate (" +
+                        explainPredicates(Src) + ")");
+  }
+
   if (Src->isLeaf()) {
     Init *SrcInit = Src->getLeafValue();
     if (IntInit *SrcIntInit = dyn_cast<IntInit>(SrcInit)) {
@@ -1972,10 +2063,6 @@ Error GlobalISelEmitter::importChildMatcher(InstructionMatcher &InsnMatcher,
                                             unsigned &TempOpIdx) const {
   OperandMatcher &OM =
       InsnMatcher.addOperand(OpIdx, SrcChild->getName(), TempOpIdx);
-
-  if (SrcChild->hasAnyPredicate())
-    return failedImport("Src pattern child has predicate (" +
-                        explainPredicates(SrcChild) + ")");
 
   ArrayRef<EEVT::TypeSet> ChildTypes = SrcChild->getExtTypes();
   if (ChildTypes.size() != 1)
@@ -2056,6 +2143,11 @@ Error GlobalISelEmitter::importChildMatcher(InstructionMatcher &InsnMatcher,
 Error GlobalISelEmitter::importExplicitUseRenderer(
     BuildMIAction &DstMIBuilder, TreePatternNode *DstChild,
     const InstructionMatcher &InsnMatcher) const {
+  if (DstChild->getTransformFn() != nullptr) {
+    return failedImport("Dst pattern child has transform fn " +
+                        DstChild->getTransformFn()->getName());
+  }
+
   if (!DstChild->isLeaf()) {
     // We accept 'bb' here. It's an operator because BasicBlockSDNode isn't
     // inline, but in MI it's just another operand.
@@ -2078,14 +2170,10 @@ Error GlobalISelEmitter::importExplicitUseRenderer(
       return Error::success();
     }
 
-    return failedImport("Dst pattern child isn't a leaf node or an MBB");
+    return failedImport("Dst pattern child isn't a leaf node or an MBB" + llvm::to_string(*DstChild));
   }
 
   // Otherwise, we're looking for a bog-standard RegisterClass operand.
-  if (DstChild->hasAnyPredicate())
-    return failedImport("Dst pattern child has predicate (" +
-                        explainPredicates(DstChild) + ")");
-
   if (auto *ChildDefInit = dyn_cast<DefInit>(DstChild->getLeafValue())) {
     auto *ChildRec = ChildDefInit->getDef();
 
@@ -2287,8 +2375,42 @@ Expected<RuleMatcher> GlobalISelEmitter::runOnPattern(const PatternToMatch &P) {
     return failedImport("Src pattern root isn't a trivial operator (" +
                         toString(std::move(Err)) + ")");
 
-  if (Dst->isLeaf())
+  InstructionMatcher &InsnMatcherTemp = M.addInstructionMatcher(Src->getName());
+  unsigned TempOpIdx = 0;
+  auto InsnMatcherOrError =
+      createAndImportSelDAGMatcher(InsnMatcherTemp, Src, TempOpIdx);
+  if (auto Error = InsnMatcherOrError.takeError())
+    return std::move(Error);
+  InstructionMatcher &InsnMatcher = InsnMatcherOrError.get();
+
+  if (Dst->isLeaf()) {
+    Record *RCDef = getInitValueAsRegClass(Dst->getLeafValue());
+
+    const CodeGenRegisterClass &RC = Target.getRegisterClass(RCDef);
+    if (RCDef) {
+      // We need to replace the def and all its uses with the specified
+      // operand. However, we must also insert COPY's wherever needed.
+      // For now, emit a copy and let the register allocator clean up.
+      auto &DstI = Target.getInstruction(RK.getDef("COPY"));
+      const auto &DstIOperand = DstI.Operands[0];
+
+      OperandMatcher &OM0 = InsnMatcher.getOperand(0);
+      OM0.setSymbolicName(DstIOperand.Name);
+      OM0.addPredicate<RegisterBankOperandMatcher>(RC);
+
+      auto &DstMIBuilder = M.addAction<BuildMIAction>(0, &DstI, InsnMatcher);
+      DstMIBuilder.addRenderer<CopyRenderer>(0, InsnMatcher, DstIOperand.Name);
+      DstMIBuilder.addRenderer<CopyRenderer>(0, InsnMatcher, Dst->getName());
+      M.addAction<ConstrainOperandToRegClassAction>(0, 0, RC);
+
+      // We're done with this pattern!  It's eligible for GISel emission; return
+      // it.
+      ++NumPatternImported;
+      return std::move(M);
+    }
+
     return failedImport("Dst pattern root isn't a known leaf");
+  }
 
   // Start with the defined operands (i.e., the results of the root operator).
   Record *DstOp = Dst->getOperator();
@@ -2300,14 +2422,6 @@ Expected<RuleMatcher> GlobalISelEmitter::runOnPattern(const PatternToMatch &P) {
     return failedImport("Src pattern results and dst MI defs are different (" +
                         to_string(Src->getExtTypes().size()) + " def(s) vs " +
                         to_string(DstI.Operands.NumDefs) + " def(s))");
-
-  InstructionMatcher &InsnMatcherTemp = M.addInstructionMatcher(Src->getName());
-  unsigned TempOpIdx = 0;
-  auto InsnMatcherOrError =
-      createAndImportSelDAGMatcher(InsnMatcherTemp, Src, TempOpIdx);
-  if (auto Error = InsnMatcherOrError.takeError())
-    return std::move(Error);
-  InstructionMatcher &InsnMatcher = InsnMatcherOrError.get();
 
   // The root of the match also has constraints on the register bank so that it
   // matches the result instruction.
@@ -2498,7 +2612,7 @@ void GlobalISelEmitter::run(raw_ostream &OS) {
 
   OS << "#ifdef GET_GLOBALISEL_TEMPORARIES_INIT\n"
      << ", State(" << MaxTemporaries << "),\n"
-     << "MatcherInfo({TypeObjects, FeatureBitsets, {\n"
+     << "MatcherInfo({TypeObjects, FeatureBitsets, ImmPredicateFns, {\n"
      << "  nullptr, // GICP_Invalid\n";
   for (const auto &Record : ComplexPredicates)
     OS << "  &" << Target.getName()
@@ -2535,18 +2649,12 @@ void GlobalISelEmitter::run(raw_ostream &OS) {
 
   // Emit a table containing the LLT objects needed by the matcher and an enum
   // for the matcher to reference them with.
-  std::vector<LLTCodeGen> TypeObjects = {
-      LLT::scalar(8),      LLT::scalar(16),     LLT::scalar(32),
-      LLT::scalar(64),     LLT::scalar(80),     LLT::vector(8, 1),
-      LLT::vector(16, 1),  LLT::vector(32, 1),  LLT::vector(64, 1),
-      LLT::vector(8, 8),   LLT::vector(16, 8),  LLT::vector(32, 8),
-      LLT::vector(64, 8),  LLT::vector(4, 16),  LLT::vector(8, 16),
-      LLT::vector(16, 16), LLT::vector(32, 16), LLT::vector(2, 32),
-      LLT::vector(4, 32),  LLT::vector(8, 32),  LLT::vector(16, 32),
-      LLT::vector(2, 64),  LLT::vector(4, 64),  LLT::vector(8, 64),
-  };
+  std::vector<LLTCodeGen> TypeObjects;
+  for (const auto &Ty : LLTOperandMatcher::KnownTypes)
+    TypeObjects.push_back(Ty);
   std::sort(TypeObjects.begin(), TypeObjects.end());
-  OS << "enum {\n";
+  OS << "// LLT Objects.\n"
+     << "enum {\n";
   for (const auto &TypeObject : TypeObjects) {
     OS << "  ";
     TypeObject.emitCxxEnumValue(OS);
@@ -2584,7 +2692,8 @@ void GlobalISelEmitter::run(raw_ostream &OS) {
   FeatureBitsets.erase(
       std::unique(FeatureBitsets.begin(), FeatureBitsets.end()),
       FeatureBitsets.end());
-  OS << "enum {\n"
+  OS << "// Feature bitsets.\n"
+     << "enum {\n"
      << "  GIFBS_Invalid,\n";
   for (const auto &FeatureBitset : FeatureBitsets) {
     if (FeatureBitset.empty())
@@ -2608,12 +2717,40 @@ void GlobalISelEmitter::run(raw_ostream &OS) {
   OS << "};\n\n";
 
   // Emit complex predicate table and an enum to reference them with.
-  OS << "enum {\n"
+  OS << "// ComplexPattern predicates.\n"
+     << "enum {\n"
      << "  GICP_Invalid,\n";
   for (const auto &Record : ComplexPredicates)
     OS << "  GICP_" << Record->getName() << ",\n";
   OS << "};\n"
      << "// See constructor for table contents\n\n";
+
+  // Emit imm predicate table and an enum to reference them with.
+  // The 'Predicate_' part of the name is redundant but eliminating it is more
+  // trouble than it's worth.
+  {
+    OS << "// PatFrag predicates.\n"
+       << "enum {\n";
+    StringRef EnumeratorSeparator = " = GIPFP_Invalid + 1,\n";
+    for (const auto *Record : RK.getAllDerivedDefinitions("PatFrag")) {
+      if (!Record->getValueAsString("ImmediateCode").empty()) {
+        OS << "  GIPFP_Predicate_" << Record->getName() << EnumeratorSeparator;
+        EnumeratorSeparator = ",\n";
+      }
+    }
+    OS << "};\n";
+  }
+  for (const auto *Record : RK.getAllDerivedDefinitions("PatFrag"))
+    if (!Record->getValueAsString("ImmediateCode").empty())
+      OS << "  static bool Predicate_" << Record->getName() << "(int64_t Imm) {"
+         << Record->getValueAsString("ImmediateCode") << "  }\n";
+  OS << "static InstructionSelector::ImmediatePredicateFn ImmPredicateFns[] = "
+        "{\n"
+     << "  nullptr,\n";
+  for (const auto *Record : RK.getAllDerivedDefinitions("PatFrag"))
+    if (!Record->getValueAsString("ImmediateCode").empty())
+      OS << "  Predicate_" << Record->getName() << ",\n";
+  OS << "};\n";
 
   OS << "bool " << Target.getName()
      << "InstructionSelector::selectImpl(MachineInstr &I) const {\n"

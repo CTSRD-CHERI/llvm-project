@@ -158,13 +158,6 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
   // HasMT -- support MT ASE.
   bool HasMT;
   
-  /// The minimum alignment known to hold of the stack frame on
-  /// entry to the function and which must be maintained by every function.
-  unsigned stackAlignment;
-
-  /// Override the stack alignment.
-  unsigned StackAlignOverride;
-
   // Disable use of the `jal` instruction.
   bool UseLongCalls = false;
 

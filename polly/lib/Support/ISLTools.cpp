@@ -366,13 +366,6 @@ polly::computeArrayUnused(isl::union_map Schedule, isl::union_map Writes,
   auto WriteActions =
       give(isl_union_map_apply_domain(Schedule.copy(), Writes.copy()));
 
-  // { [Element[] -> Scatter[] }
-  auto AfterReads = afterScatter(ReadActions, ReadEltInSameInst);
-  auto WritesBeforeAnyReads =
-      give(isl_union_map_subtract(WriteActions.take(), AfterReads.take()));
-  auto BeforeWritesBeforeAnyReads =
-      beforeScatter(WritesBeforeAnyReads, !IncludeWrite);
-
   // { [Element[] -> DomainWrite[]] -> Scatter[] }
   auto EltDomWrites = give(isl_union_map_apply_range(
       isl_union_map_range_map(isl_union_map_reverse(Writes.copy())),
@@ -390,15 +383,26 @@ polly::computeArrayUnused(isl::union_map Schedule, isl::union_map Writes,
   auto ReadsOverwrittenRotated = give(isl_union_map_reverse(
       isl_union_map_curry(reverseDomain(ReadsOverwritten).take())));
   auto LastOverwrittenRead =
-      give(isl_union_map_lexmax(ReadsOverwrittenRotated.take()));
+      give(isl_union_map_lexmax(ReadsOverwrittenRotated.copy()));
 
   // { [Element[] -> DomainWrite[]] -> Scatter[] }
   auto BetweenLastReadOverwrite = betweenScatter(
       LastOverwrittenRead, EltDomWrites, IncludeLastRead, IncludeWrite);
 
-  return give(isl_union_map_union(
-      BeforeWritesBeforeAnyReads.take(),
-      isl_union_map_domain_factor_domain(BetweenLastReadOverwrite.take())));
+  // { [Element[] -> Scatter[]] -> DomainWrite[] }
+  isl::union_map ReachingOverwriteZone = computeReachingWrite(
+      Schedule, Writes, true, IncludeLastRead, IncludeWrite);
+
+  // { [Element[] -> DomainWrite[]] -> Scatter[] }
+  isl::union_map ReachingOverwriteRotated =
+      reverseDomain(ReachingOverwriteZone).curry().reverse();
+
+  // { [Element[] -> DomainWrite[]] -> Scatter[] }
+  isl::union_map WritesWithoutReads = ReachingOverwriteRotated.subtract_domain(
+      ReadsOverwrittenRotated.domain());
+
+  return BetweenLastReadOverwrite.unite(WritesWithoutReads)
+      .domain_factor_domain();
 }
 
 isl::union_set polly::convertZoneToTimepoints(isl::union_set Zone,
@@ -528,4 +532,9 @@ isl::union_map polly::applyDomainRange(isl::union_map UMap,
   auto LifetedFunc = liftDomains(std::move(Func), DomainDomain);
 
   return std::move(UMap).apply_domain(std::move(LifetedFunc));
+}
+
+isl::map polly::intersectRange(isl::map Map, isl::union_set Range) {
+  isl::set RangeSet = Range.extract_set(Map.get_space().range());
+  return Map.intersect_range(RangeSet);
 }

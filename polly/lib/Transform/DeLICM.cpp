@@ -61,6 +61,16 @@ STATISTIC(MappedPHIScalars, "Number of mapped PHI scalars");
 STATISTIC(TargetsMapped, "Number of stores used for at least one mapping");
 STATISTIC(DeLICMScopsModified, "Number of SCoPs optimized");
 
+STATISTIC(NumValueWrites, "Number of scalar value writes after DeLICM");
+STATISTIC(NumValueWritesInLoops,
+          "Number of scalar value writes nested in affine loops after DeLICM");
+STATISTIC(NumPHIWrites, "Number of scalar phi writes after DeLICM");
+STATISTIC(NumPHIWritesInLoops,
+          "Number of scalar phi writes nested in affine loops after DeLICM");
+STATISTIC(NumSingletonWrites, "Number of singleton writes after DeLICM");
+STATISTIC(NumSingletonWritesInLoops,
+          "Number of singleton writes nested in affine loops after DeLICM");
+
 isl::union_map computeReachingOverwrite(isl::union_map Schedule,
                                         isl::union_map Writes,
                                         bool InclPrevWrite,
@@ -1247,10 +1257,7 @@ public:
   /// @return True if the computed lifetimes (#Zone) is usable.
   bool computeZone() {
     // Check that nothing strange occurs.
-    if (!isCompatibleScop()) {
-      DeLICMIncompatible++;
-      return false;
-    }
+    collectCompatibleElts();
 
     isl::union_set EltUnused;
     isl::union_map EltKnown, EltWritten;
@@ -1335,6 +1342,32 @@ public:
           continue;
         }
 
+        if (!isa<StoreInst>(MA->getAccessInstruction())) {
+          DEBUG(dbgs() << "Access " << MA
+                       << " pruned because it is not a StoreInst\n");
+          OptimizationRemarkMissed R(DEBUG_TYPE, "NotAStore",
+                                     MA->getAccessInstruction());
+          R << "skipped possible mapping target because non-store instructions "
+               "are not supported";
+          S->getFunction().getContext().diagnose(R);
+          continue;
+        }
+
+        isl::union_set TouchedElts = MA->getLatestAccessRelation().range();
+        if (!TouchedElts.is_subset(CompatibleElts)) {
+          DEBUG(
+              dbgs()
+              << "Access " << MA
+              << " is incompatible because it touches incompatible elements\n");
+          OptimizationRemarkMissed R(DEBUG_TYPE, "IncompatibleElts",
+                                     MA->getAccessInstruction());
+          R << "skipped possible mapping target because a target location "
+               "cannot be reliably analyzed";
+          S->getFunction().getContext().diagnose(R);
+          continue;
+        }
+
+        assert(isCompatibleAccess(MA));
         NumberOfCompatibleTargets++;
         DEBUG(dbgs() << "Analyzing target access " << MA << "\n");
         if (collapseScalarsToStore(MA))
@@ -1401,6 +1434,14 @@ public:
     releaseMemory();
 
     collapseToUnused(S);
+
+    auto ScopStats = S.getStatistics();
+    NumValueWrites += ScopStats.NumValueWrites;
+    NumValueWritesInLoops += ScopStats.NumValueWritesInLoops;
+    NumPHIWrites += ScopStats.NumPHIWrites;
+    NumPHIWritesInLoops += ScopStats.NumPHIWritesInLoops;
+    NumSingletonWrites += ScopStats.NumSingletonWrites;
+    NumSingletonWritesInLoops += ScopStats.NumSingletonWritesInLoops;
 
     return false;
   }
