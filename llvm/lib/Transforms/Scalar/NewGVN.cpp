@@ -378,6 +378,15 @@ private:
 };
 
 namespace llvm {
+struct ExactEqualsExpression {
+  const Expression &E;
+  explicit ExactEqualsExpression(const Expression &E) : E(E) {}
+  hash_code getComputedHash() const { return E.getComputedHash(); }
+  bool operator==(const Expression &Other) const {
+    return E.exactlyEquals(Other);
+  }
+};
+
 template <> struct DenseMapInfo<const Expression *> {
   static const Expression *getEmptyKey() {
     auto Val = static_cast<uintptr_t>(-1);
@@ -390,8 +399,17 @@ template <> struct DenseMapInfo<const Expression *> {
     return reinterpret_cast<const Expression *>(Val);
   }
   static unsigned getHashValue(const Expression *E) {
-    return static_cast<unsigned>(E->getComputedHash());
+    return E->getComputedHash();
   }
+  static unsigned getHashValue(const ExactEqualsExpression &E) {
+    return E.getComputedHash();
+  }
+  static bool isEqual(const ExactEqualsExpression &LHS, const Expression *RHS) {
+    if (RHS == getTombstoneKey() || RHS == getEmptyKey())
+      return false;
+    return LHS == *RHS;
+  }
+
   static bool isEqual(const Expression *LHS, const Expression *RHS) {
     if (LHS == RHS)
       return true;
@@ -848,6 +866,8 @@ PHIExpression *NewGVN::createPHIExpression(Instruction *I, bool &HasBackedge,
     // Things in TOPClass are equivalent to everything.
     if (ValueToClass.lookup(*U) == TOPClass)
       return false;
+    if (lookupOperandLeader(*U) == PN)
+      return false;
     return true;
   });
   std::transform(Filtered.begin(), Filtered.end(), op_inserter(E),
@@ -1224,27 +1244,24 @@ const Expression *NewGVN::performSymbolicStoreEvaluation(Instruction *I) const {
     // only do this for simple stores, we should expand to cover memcpys, etc.
     const auto *LastStore = createStoreExpression(SI, StoreRHS);
     const auto *LastCC = ExpressionToClass.lookup(LastStore);
-    // Basically, check if the congruence class the store is in is defined by a
-    // store that isn't us, and has the same value.  MemorySSA takes care of
-    // ensuring the store has the same memory state as us already.
-    // The RepStoredValue gets nulled if all the stores disappear in a class, so
-    // we don't need to check if the class contains a store besides us.
-    if (LastCC &&
-        LastCC->getStoredValue() == lookupOperandLeader(SI->getValueOperand()))
+    // We really want to check whether the expression we matched was a store. No
+    // easy way to do that. However, we can check that the class we found has a
+    // store, which, assuming the value numbering state is not corrupt, is
+    // sufficient, because we must also be equivalent to that store's expression
+    // for it to be in the same class as the load.
+    if (LastCC && LastCC->getStoredValue() == LastStore->getStoredValue())
       return LastStore;
-    deleteExpression(LastStore);
     // Also check if our value operand is defined by a load of the same memory
     // location, and the memory state is the same as it was then (otherwise, it
     // could have been overwritten later. See test32 in
     // transforms/DeadStoreElimination/simple.ll).
-    if (auto *LI =
-            dyn_cast<LoadInst>(lookupOperandLeader(SI->getValueOperand()))) {
+    if (auto *LI = dyn_cast<LoadInst>(LastStore->getStoredValue()))
       if ((lookupOperandLeader(LI->getPointerOperand()) ==
-           lookupOperandLeader(SI->getPointerOperand())) &&
+           LastStore->getOperand(0)) &&
           (lookupMemoryLeader(getMemoryAccess(LI)->getDefiningAccess()) ==
            StoreRHS))
-        return createStoreExpression(SI, StoreRHS);
-    }
+        return LastStore;
+    deleteExpression(LastStore);
   }
 
   // If the store is not equivalent to anything, value number it as a store that
@@ -1572,30 +1589,6 @@ bool NewGVN::isCycleFree(const Instruction *I) const {
 
 // Evaluate PHI nodes symbolically, and create an expression result.
 const Expression *NewGVN::performSymbolicPHIEvaluation(Instruction *I) const {
-  // Resolve irreducible and reducible phi cycles.
-  // FIXME: This is hopefully a temporary solution while we resolve the issues
-  // with fixpointing self-cycles.  It currently should be "guaranteed" to be
-  // correct, but non-optimal.  The SCCFinder does not, for example, take
-  // reachability of arguments into account, etc.
-  SCCFinder.Start(I);
-  bool CanOptimize = true;
-  SmallPtrSet<Value *, 8> OuterOps;
-
-  auto &Component = SCCFinder.getComponentFor(I);
-  for (auto *Member : Component) {
-    if (!isa<PHINode>(Member)) {
-      CanOptimize = false;
-      break;
-    }
-    for (auto &PHIOp : cast<PHINode>(Member)->operands())
-      if (!isa<PHINode>(PHIOp) || !Component.count(cast<PHINode>(PHIOp)))
-        OuterOps.insert(PHIOp);
-  }
-  if (CanOptimize && OuterOps.size() == 1) {
-    DEBUG(dbgs() << "Resolving cyclic phi to value " << *(*OuterOps.begin())
-                 << "\n");
-    return createVariableOrConstant(*OuterOps.begin());
-  }
   // True if one of the incoming phi edges is a backedge.
   bool HasBackedge = false;
   // All constant tracks the state of whether all the *original* phi operands
@@ -1663,7 +1656,12 @@ const Expression *NewGVN::performSymbolicPHIEvaluation(Instruction *I) const {
         if (!someEquivalentDominates(AllSameInst, I))
           return E;
     }
-
+    // Can't simplify to something that comes later in the iteration.
+    // Otherwise, when and if it changes congruence class, we will never catch
+    // up. We will always be a class behind it.
+    if (isa<Instruction>(AllSameValue) &&
+        InstrToDFSNum(AllSameValue) > InstrToDFSNum(I))
+      return E;
     NumGVNPhisAllSame++;
     DEBUG(dbgs() << "Simplified PHI node " << *I << " to " << *AllSameValue
                  << "\n");
@@ -2159,7 +2157,17 @@ void NewGVN::moveValueToNewCongruenceClass(Instruction *I, const Expression *E,
     if (OldClass->getDefiningExpr()) {
       DEBUG(dbgs() << "Erasing expression " << *OldClass->getDefiningExpr()
                    << " from table\n");
-      ExpressionToClass.erase(OldClass->getDefiningExpr());
+      // We erase it as an exact expression to make sure we don't just erase an
+      // equivalent one.
+      auto Iter = ExpressionToClass.find_as(
+          ExactEqualsExpression(*OldClass->getDefiningExpr()));
+      if (Iter != ExpressionToClass.end())
+        ExpressionToClass.erase(Iter);
+#ifdef EXPENSIVE_CHECKS
+      assert(
+          (*OldClass->getDefiningExpr() != *E || ExpressionToClass.lookup(E)) &&
+          "We erased the expression we just inserted, which should not happen");
+#endif
     }
   } else if (OldClass->getLeader() == I) {
     // When the leader changes, the value numbering of
@@ -2185,7 +2193,7 @@ void NewGVN::moveValueToNewCongruenceClass(Instruction *I, const Expression *E,
 // For a given expression, mark the phi of ops instructions that could have
 // changed as a result.
 void NewGVN::markPhiOfOpsChanged(const Expression *E) {
-  touchAndErase(ExpressionToPhiOfOps, E);
+  touchAndErase(ExpressionToPhiOfOps, ExactEqualsExpression(*E));
 }
 
 // Perform congruence finding on a given value numbering expression.
@@ -2273,8 +2281,13 @@ void NewGVN::performCongruenceFinding(Instruction *I, const Expression *E) {
     auto *OldE = ValueToExpression.lookup(I);
     // It could just be that the old class died. We don't want to erase it if we
     // just moved classes.
-    if (OldE && isa<StoreExpression>(OldE) && *E != *OldE)
-      ExpressionToClass.erase(OldE);
+    if (OldE && isa<StoreExpression>(OldE) && *E != *OldE) {
+      // Erase this as an exact expression to ensure we don't erase expressions
+      // equivalent to it.
+      auto Iter = ExpressionToClass.find_as(ExactEqualsExpression(*OldE));
+      if (Iter != ExpressionToClass.end())
+        ExpressionToClass.erase(Iter);
+    }
   }
   ValueToExpression[I] = E;
 }
@@ -2317,9 +2330,7 @@ void NewGVN::updateReachableEdge(BasicBlock *From, BasicBlock *To) {
 // see if we know some constant value for it already.
 Value *NewGVN::findConditionEquivalence(Value *Cond) const {
   auto Result = lookupOperandLeader(Cond);
-  if (isa<Constant>(Result))
-    return Result;
-  return nullptr;
+  return isa<Constant>(Result) ? Result : nullptr;
 }
 
 // Process the outgoing edges of a block for reachability.
@@ -2413,8 +2424,7 @@ void NewGVN::addPhiOfOps(PHINode *Op, BasicBlock *BB,
   AllTempInstructions.insert(Op);
   PHIOfOpsPHIs[BB].push_back(Op);
   TempToBlock[Op] = BB;
-  if (ExistingValue)
-    RealToTemp[ExistingValue] = Op;
+  RealToTemp[ExistingValue] = Op;
 }
 
 static bool okayForPHIOfOps(const Instruction *I) {
@@ -2999,14 +3009,27 @@ void NewGVN::verifyIterationSettled(Function &F) {
 // a no-longer valid StoreExpression.
 void NewGVN::verifyStoreExpressions() const {
 #ifndef NDEBUG
-  DenseSet<std::pair<const Value *, const Value *>> StoreExpressionSet;
+  // This is the only use of this, and it's not worth defining a complicated
+  // densemapinfo hash/equality function for it.
+  std::set<
+      std::pair<const Value *,
+                std::tuple<const Value *, const CongruenceClass *, Value *>>>
+      StoreExpressionSet;
   for (const auto &KV : ExpressionToClass) {
     if (auto *SE = dyn_cast<StoreExpression>(KV.first)) {
       // Make sure a version that will conflict with loads is not already there
-      auto Res =
-          StoreExpressionSet.insert({SE->getOperand(0), SE->getMemoryLeader()});
-      assert(Res.second &&
-             "Stored expression conflict exists in expression table");
+      auto Res = StoreExpressionSet.insert(
+          {SE->getOperand(0), std::make_tuple(SE->getMemoryLeader(), KV.second,
+                                              SE->getStoredValue())});
+      bool Okay = Res.second;
+      // It's okay to have the same expression already in there if it is
+      // identical in nature.
+      // This can happen when the leader of the stored value changes over time.
+      if (!Okay)
+        Okay = (std::get<1>(Res.first->second) == KV.second) &&
+               (lookupOperandLeader(std::get<2>(Res.first->second)) ==
+                lookupOperandLeader(SE->getStoredValue()));
+      assert(Okay && "Stored expression conflict exists in expression table");
       auto *ValueExpr = ValueToExpression.lookup(SE->getStoreInst());
       assert(ValueExpr && ValueExpr->equals(*SE) &&
              "StoreExpression in ExpressionToClass is not latest "
@@ -3061,6 +3084,9 @@ void NewGVN::iterateTouchedInstructions() {
         }
         updateProcessedCount(CurrBlock);
       }
+      // Reset after processing (because we may mark ourselves as touched when
+      // we propagate equalities).
+      TouchedInstructions.reset(InstrNum);
 
       if (auto *MP = dyn_cast<MemoryPhi>(V)) {
         DEBUG(dbgs() << "Processing MemoryPhi " << *MP << "\n");
@@ -3071,9 +3097,6 @@ void NewGVN::iterateTouchedInstructions() {
         llvm_unreachable("Should have been a MemoryPhi or Instruction");
       }
       updateProcessedCount(V);
-      // Reset after processing (because we may mark ourselves as touched when
-      // we propagate equalities).
-      TouchedInstructions.reset(InstrNum);
     }
   }
   NumGVNMaxIterations = std::max(NumGVNMaxIterations.getValue(), Iterations);
@@ -3546,7 +3569,7 @@ bool NewGVN::eliminateInstructions(Function &F) {
     // TODO: It would be faster to use getNumIncomingBlocks() on a phi node in
     // the block and subtract the pred count, but it's more complicated.
     if (ReachablePredCount.lookup(BB) !=
-        std::distance(pred_begin(BB), pred_end(BB))) {
+        unsigned(std::distance(pred_begin(BB), pred_end(BB)))) {
       for (auto II = BB->begin(); isa<PHINode>(II); ++II) {
         auto &PHI = cast<PHINode>(*II);
         ReplaceUnreachablePHIArgs(PHI, BB);

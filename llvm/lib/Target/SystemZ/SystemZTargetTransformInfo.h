@@ -45,7 +45,8 @@ public:
 
   TTI::PopcntSupportKind getPopcntSupport(unsigned TyWidth);
 
-  void getUnrollingPreferences(Loop *L, TTI::UnrollingPreferences &UP);
+  void getUnrollingPreferences(Loop *L, ScalarEvolution &SE,
+                               TTI::UnrollingPreferences &UP);
 
   /// @}
 
@@ -53,7 +54,7 @@ public:
   /// @{
 
   unsigned getNumberOfRegisters(bool Vector);
-  unsigned getRegisterBitWidth(bool Vector);
+  unsigned getRegisterBitWidth(bool Vector) const;
 
   bool prefersVectorizedAddressing() { return false; }
   bool supportsEfficientVectorElementLoadStore() { return true; }

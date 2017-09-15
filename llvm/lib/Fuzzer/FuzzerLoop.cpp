@@ -10,8 +10,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "FuzzerCorpus.h"
-#include "FuzzerInternal.h"
 #include "FuzzerIO.h"
+#include "FuzzerInternal.h"
 #include "FuzzerMutate.h"
 #include "FuzzerRandom.h"
 #include "FuzzerShmem.h"
@@ -301,7 +301,9 @@ void Fuzzer::SetMaxInputLen(size_t MaxInputLen) {
   this->MaxInputLen = MaxInputLen;
   this->MaxMutationLen = MaxInputLen;
   AllocateCurrentUnitData();
-  Printf("INFO: -max_len is not provided, using %zd\n", MaxInputLen);
+  Printf("INFO: -max_len is not provided; "
+         "libFuzzer will not generate inputs larger than %zd bytes\n",
+         MaxInputLen);
 }
 
 void Fuzzer::SetMaxMutationLen(size_t MaxMutationLen) {

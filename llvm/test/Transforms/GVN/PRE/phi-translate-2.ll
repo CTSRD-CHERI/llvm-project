@@ -103,3 +103,29 @@ for.end:                                          ; preds = %for.body, %for.cond
   ret void
 }
 
+; It is incorrect to use the value of %andres in last loop iteration
+; to do pre.
+; CHECK-LABEL: @test4(
+; CHECK: for.body:
+; CHECK-NOT: %andres.pre-phi = phi i32
+; CHECK: br i1 %tobool1
+
+define i32 @test4(i32 %cond, i32 %SectionAttrs.0231.ph, i32 *%AttrFlag) {
+for.body.preheader:
+  %t514 = load volatile i32, i32* %AttrFlag
+  br label %for.body
+
+for.body:
+  %t320 = phi i32 [ %t334, %bb343 ], [ %t514, %for.body.preheader ]
+  %andres = and i32 %t320, %SectionAttrs.0231.ph
+  %tobool1 = icmp eq i32 %andres, 0
+  br i1 %tobool1, label %bb343, label %critedge.loopexit
+
+bb343:
+  %t334 = load volatile i32, i32* %AttrFlag
+  %tobool2 = icmp eq i32 %cond, 0
+  br i1 %tobool2, label %critedge.loopexit, label %for.body
+
+critedge.loopexit:
+  unreachable
+}

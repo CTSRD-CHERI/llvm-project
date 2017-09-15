@@ -63,6 +63,13 @@ public:
 
   PDB_Machine getMachineType() const;
 
+  BinarySubstreamRef getSectionContributionData() const;
+  BinarySubstreamRef getSecMapSubstreamData() const;
+  BinarySubstreamRef getModiSubstreamData() const;
+  BinarySubstreamRef getFileInfoSubstreamData() const;
+  BinarySubstreamRef getTypeServerMapSubstreamData() const;
+  BinarySubstreamRef getECSubstreamData() const;
+
   /// If the given stream type is present, returns its stream index. If it is
   /// not present, returns InvalidStreamIndex.
   uint32_t getDebugStreamIndex(DbgHeaderType Type) const;
@@ -87,16 +94,19 @@ private:
 
   PDBStringTable ECNames;
 
-  BinaryStreamRef SecContrSubstream;
-  BinaryStreamRef SecMapSubstream;
-  BinaryStreamRef TypeServerMapSubstream;
-  BinaryStreamRef ECSubstream;
+  BinarySubstreamRef SecContrSubstream;
+  BinarySubstreamRef SecMapSubstream;
+  BinarySubstreamRef ModiSubstream;
+  BinarySubstreamRef FileInfoSubstream;
+  BinarySubstreamRef TypeServerMapSubstream;
+  BinarySubstreamRef ECSubstream;
 
   DbiModuleList Modules;
 
   FixedStreamArray<support::ulittle16_t> DbgStreams;
 
-  PdbRaw_DbiSecContribVer SectionContribVersion;
+  PdbRaw_DbiSecContribVer SectionContribVersion =
+      PdbRaw_DbiSecContribVer::DbiSecContribVer60;
   FixedStreamArray<SectionContrib> SectionContribs;
   FixedStreamArray<SectionContrib2> SectionContribs2;
   FixedStreamArray<SecMapEntry> SectionMap;

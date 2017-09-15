@@ -1252,7 +1252,7 @@ static bool isSafeSelectToSpeculate(SelectInst &SI) {
     if (!LI || !LI->isSimple())
       return false;
 
-    // Both operands to the select need to be dereferencable, either
+    // Both operands to the select need to be dereferenceable, either
     // absolutely (e.g. allocas) or at this point because we can see other
     // accesses to it.
     if (!isSafeToLoadUnconditionally(TValue, LI->getAlignment(), DL, LI))
@@ -1642,8 +1642,17 @@ static bool canConvertValue(const DataLayout &DL, Type *OldTy, Type *NewTy) {
       return cast<PointerType>(NewTy)->getPointerAddressSpace() ==
         cast<PointerType>(OldTy)->getPointerAddressSpace();
     }
-    if (NewTy->isIntegerTy() || OldTy->isIntegerTy())
-      return true;
+
+    // We can convert integers to integral pointers, but not to non-integral
+    // pointers.
+    if (OldTy->isIntegerTy())
+      return !DL.isNonIntegralPointerType(NewTy);
+
+    // We can convert integral pointers to integers, but non-integral pointers
+    // need to remain pointers.
+    if (!DL.isNonIntegralPointerType(OldTy))
+      return NewTy->isIntegerTy();
+
     return false;
   }
 
@@ -2404,9 +2413,20 @@ private:
       if (LI.isVolatile())
         NewLI->setAtomic(LI.getOrdering(), LI.getSynchScope());
 
+      // Any !nonnull metadata or !range metadata on the old load is also valid
+      // on the new load. This is even true in some cases even when the loads
+      // are different types, for example by mapping !nonnull metadata to
+      // !range metadata by modeling the null pointer constant converted to the
+      // integer type.
+      // FIXME: Add support for range metadata here. Currently the utilities
+      // for this don't propagate range metadata in trivial cases from one
+      // integer load to another, don't handle non-addrspace-0 null pointers
+      // correctly, and don't have any support for mapping ranges as the
+      // integer type becomes winder or narrower.
+      if (MDNode *N = LI.getMetadata(LLVMContext::MD_nonnull))
+        copyNonnullMetadata(LI, N, *NewLI);
+
       // Try to preserve nonnull metadata
-      if (TargetTy->isPointerTy())
-        NewLI->copyMetadata(LI, LLVMContext::MD_nonnull);
       V = NewLI;
 
       // If this is an integer load past the end of the slice (which means the
@@ -3582,10 +3602,11 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
     int Idx = 0, Size = Offsets.Splits.size();
     for (;;) {
       auto *PartTy = Type::getIntNTy(Ty->getContext(), PartSize * 8);
-      auto *PartPtrTy = PartTy->getPointerTo(LI->getPointerAddressSpace());
+      auto AS = LI->getPointerAddressSpace();
+      auto *PartPtrTy = PartTy->getPointerTo(AS);
       LoadInst *PLoad = IRB.CreateAlignedLoad(
           getAdjustedPtr(IRB, DL, BasePtr,
-                         APInt(DL.getPointerSizeInBits(), PartOffset),
+                         APInt(DL.getPointerSizeInBits(AS), PartOffset),
                          PartPtrTy, BasePtr->getName() + "."),
           getAdjustedAlignment(LI, PartOffset, DL), /*IsVolatile*/ false,
           LI->getName());
@@ -3637,10 +3658,12 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
         auto *PartPtrTy =
             PLoad->getType()->getPointerTo(SI->getPointerAddressSpace());
 
+        auto AS = SI->getPointerAddressSpace();
         StoreInst *PStore = IRB.CreateAlignedStore(
-            PLoad, getAdjustedPtr(IRB, DL, StoreBasePtr,
-                                  APInt(DL.getPointerSizeInBits(), PartOffset),
-                                  PartPtrTy, StoreBasePtr->getName() + "."),
+            PLoad,
+            getAdjustedPtr(IRB, DL, StoreBasePtr,
+                           APInt(DL.getPointerSizeInBits(AS), PartOffset),
+                           PartPtrTy, StoreBasePtr->getName() + "."),
             getAdjustedAlignment(SI, PartOffset, DL), /*IsVolatile*/ false);
         PStore->copyMetadata(*LI, LLVMContext::MD_mem_parallel_loop_access);
         DEBUG(dbgs() << "      +" << PartOffset << ":" << *PStore << "\n");
@@ -3709,7 +3732,8 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
     int Idx = 0, Size = Offsets.Splits.size();
     for (;;) {
       auto *PartTy = Type::getIntNTy(Ty->getContext(), PartSize * 8);
-      auto *PartPtrTy = PartTy->getPointerTo(SI->getPointerAddressSpace());
+      auto *LoadPartPtrTy = PartTy->getPointerTo(LI->getPointerAddressSpace());
+      auto *StorePartPtrTy = PartTy->getPointerTo(SI->getPointerAddressSpace());
 
       // Either lookup a split load or create one.
       LoadInst *PLoad;
@@ -3717,20 +3741,23 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
         PLoad = (*SplitLoads)[Idx];
       } else {
         IRB.SetInsertPoint(LI);
+        auto AS = LI->getPointerAddressSpace();
         PLoad = IRB.CreateAlignedLoad(
             getAdjustedPtr(IRB, DL, LoadBasePtr,
-                           APInt(DL.getPointerSizeInBits(), PartOffset),
-                           PartPtrTy, LoadBasePtr->getName() + "."),
+                           APInt(DL.getPointerSizeInBits(AS), PartOffset),
+                           LoadPartPtrTy, LoadBasePtr->getName() + "."),
             getAdjustedAlignment(LI, PartOffset, DL), /*IsVolatile*/ false,
             LI->getName());
       }
 
       // And store this partition.
       IRB.SetInsertPoint(SI);
+      auto AS = SI->getPointerAddressSpace();
       StoreInst *PStore = IRB.CreateAlignedStore(
-          PLoad, getAdjustedPtr(IRB, DL, StoreBasePtr,
-                                APInt(DL.getPointerSizeInBits(), PartOffset),
-                                PartPtrTy, StoreBasePtr->getName() + "."),
+          PLoad,
+          getAdjustedPtr(IRB, DL, StoreBasePtr,
+                         APInt(DL.getPointerSizeInBits(AS), PartOffset),
+                         StorePartPtrTy, StoreBasePtr->getName() + "."),
           getAdjustedAlignment(SI, PartOffset, DL), /*IsVolatile*/ false);
 
       // Now build a new slice for the alloca.

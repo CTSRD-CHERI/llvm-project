@@ -35,6 +35,7 @@ public:
 
   uint32_t getStreamSize() const;
 
+  bool containsIdStream() const;
   PdbRaw_ImplVer getVersion() const;
   uint32_t getSignature() const;
   uint32_t getAge() const;
@@ -45,6 +46,8 @@ public:
   ArrayRef<PdbRaw_FeatureSig> getFeatureSignatures() const;
 
   const NamedStreamMap &getNamedStreams() const;
+
+  BinarySubstreamRef getNamedStreamsBuffer() const;
 
   uint32_t getNamedStreamIndex(llvm::StringRef Name) const;
   iterator_range<StringMapConstIterator<uint32_t>> named_streams() const;
@@ -69,6 +72,8 @@ private:
   // signature present on VC70 and higher PDBs which is guaranteed to be
   // universally unique.
   PDB_UniqueId Guid;
+
+  BinarySubstreamRef SubNamedStreams;
 
   std::vector<PdbRaw_FeatureSig> FeatureSignatures;
   PdbRaw_Features Features = PdbFeatureNone;

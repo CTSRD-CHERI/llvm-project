@@ -80,6 +80,16 @@ Error PDBFileBuilder::addNamedStream(StringRef Name, uint32_t Size) {
 }
 
 Expected<msf::MSFLayout> PDBFileBuilder::finalizeMsfLayout() {
+
+  if (Ipi && Ipi->getRecordCount() > 0) {
+    // In theory newer PDBs always have an ID stream, but by saying that we're
+    // only going to *really* have an ID stream if there is at least one ID
+    // record, we leave open the opportunity to test older PDBs such as those
+    // that don't have an ID stream.
+    auto &Info = getInfoBuilder();
+    Info.addFeature(PdbRaw_FeatureSig::VC140);
+  }
+
   uint32_t StringsLen = Strings.calculateSerializedSize();
 
   if (auto EC = addNamedStream("/names", StringsLen))
@@ -140,8 +150,8 @@ Error PDBFileBuilder::commit(StringRef Filename) {
   if (auto EC = Writer.writeArray(Layout.DirectoryBlocks))
     return EC;
 
-  auto DirStream =
-      WritableMappedBlockStream::createDirectoryStream(Layout, Buffer);
+  auto DirStream = WritableMappedBlockStream::createDirectoryStream(
+      Layout, Buffer, Allocator);
   BinaryStreamWriter DW(*DirStream);
   if (auto EC = DW.writeInteger<uint32_t>(Layout.StreamSizes.size()))
     return EC;
@@ -158,8 +168,8 @@ Error PDBFileBuilder::commit(StringRef Filename) {
   if (!ExpectedSN)
     return ExpectedSN.takeError();
 
-  auto NS = WritableMappedBlockStream::createIndexedStream(Layout, Buffer,
-                                                           *ExpectedSN);
+  auto NS = WritableMappedBlockStream::createIndexedStream(
+      Layout, Buffer, *ExpectedSN, Allocator);
   BinaryStreamWriter NSWriter(*NS);
   if (auto EC = Strings.commit(NSWriter))
     return EC;

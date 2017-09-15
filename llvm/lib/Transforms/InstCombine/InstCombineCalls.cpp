@@ -16,9 +16,9 @@
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/None.h"
-#include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
@@ -94,75 +94,80 @@ static Constant *getNegativeIsTrueBoolVec(ConstantDataVector *V) {
   return ConstantVector::get(BoolVec);
 }
 
-Instruction *
-InstCombiner::SimplifyElementAtomicMemCpy(ElementAtomicMemCpyInst *AMI) {
+Instruction *InstCombiner::SimplifyElementUnorderedAtomicMemCpy(
+    ElementUnorderedAtomicMemCpyInst *AMI) {
   // Try to unfold this intrinsic into sequence of explicit atomic loads and
   // stores.
   // First check that number of elements is compile time constant.
-  auto *NumElementsCI = dyn_cast<ConstantInt>(AMI->getNumElements());
-  if (!NumElementsCI)
+  auto *LengthCI = dyn_cast<ConstantInt>(AMI->getLength());
+  if (!LengthCI)
     return nullptr;
 
   // Check that there are not too many elements.
-  uint64_t NumElements = NumElementsCI->getZExtValue();
+  uint64_t LengthInBytes = LengthCI->getZExtValue();
+  uint32_t ElementSizeInBytes = AMI->getElementSizeInBytes();
+  uint64_t NumElements = LengthInBytes / ElementSizeInBytes;
   if (NumElements >= UnfoldElementAtomicMemcpyMaxElements)
     return nullptr;
 
-  // Don't unfold into illegal integers
-  uint64_t ElementSizeInBytes = AMI->getElementSizeInBytes() * 8;
-  if (!getDataLayout().isLegalInteger(ElementSizeInBytes))
-    return nullptr;
+  // Only expand if there are elements to copy.
+  if (NumElements > 0) {
+    // Don't unfold into illegal integers
+    uint64_t ElementSizeInBits = ElementSizeInBytes * 8;
+    if (!getDataLayout().isLegalInteger(ElementSizeInBits))
+      return nullptr;
 
-  // Cast source and destination to the correct type. Intrinsic input arguments
-  // are usually represented as i8*.
-  // Often operands will be explicitly casted to i8* and we can just strip
-  // those casts instead of inserting new ones. However it's easier to rely on
-  // other InstCombine rules which will cover trivial cases anyway.
-  Value *Src = AMI->getRawSource();
-  Value *Dst = AMI->getRawDest();
-  Type *ElementPointerType = Type::getIntNPtrTy(
-      AMI->getContext(), ElementSizeInBytes, Src->getType()->getPointerAddressSpace());
+    // Cast source and destination to the correct type. Intrinsic input
+    // arguments are usually represented as i8*. Often operands will be
+    // explicitly casted to i8* and we can just strip those casts instead of
+    // inserting new ones. However it's easier to rely on other InstCombine
+    // rules which will cover trivial cases anyway.
+    Value *Src = AMI->getRawSource();
+    Value *Dst = AMI->getRawDest();
+    Type *ElementPointerType =
+        Type::getIntNPtrTy(AMI->getContext(), ElementSizeInBits,
+                           Src->getType()->getPointerAddressSpace());
 
-  Value *SrcCasted = Builder->CreatePointerCast(Src, ElementPointerType,
-                                                "memcpy_unfold.src_casted");
-  Value *DstCasted = Builder->CreatePointerCast(Dst, ElementPointerType,
-                                                "memcpy_unfold.dst_casted");
+    Value *SrcCasted = Builder->CreatePointerCast(Src, ElementPointerType,
+                                                  "memcpy_unfold.src_casted");
+    Value *DstCasted = Builder->CreatePointerCast(Dst, ElementPointerType,
+                                                  "memcpy_unfold.dst_casted");
 
-  for (uint64_t i = 0; i < NumElements; ++i) {
-    // Get current element addresses
-    ConstantInt *ElementIdxCI =
-        ConstantInt::get(AMI->getContext(), APInt(64, i));
-    Value *SrcElementAddr =
-        Builder->CreateGEP(SrcCasted, ElementIdxCI, "memcpy_unfold.src_addr");
-    Value *DstElementAddr =
-        Builder->CreateGEP(DstCasted, ElementIdxCI, "memcpy_unfold.dst_addr");
+    for (uint64_t i = 0; i < NumElements; ++i) {
+      // Get current element addresses
+      ConstantInt *ElementIdxCI =
+          ConstantInt::get(AMI->getContext(), APInt(64, i));
+      Value *SrcElementAddr =
+          Builder->CreateGEP(SrcCasted, ElementIdxCI, "memcpy_unfold.src_addr");
+      Value *DstElementAddr =
+          Builder->CreateGEP(DstCasted, ElementIdxCI, "memcpy_unfold.dst_addr");
 
-    // Load from the source. Transfer alignment information and mark load as
-    // unordered atomic.
-    LoadInst *Load = Builder->CreateLoad(SrcElementAddr, "memcpy_unfold.val");
-    Load->setOrdering(AtomicOrdering::Unordered);
-    // We know alignment of the first element. It is also guaranteed by the
-    // verifier that element size is less or equal than first element alignment
-    // and both of this values are powers of two.
-    // This means that all subsequent accesses are at least element size
-    // aligned.
-    // TODO: We can infer better alignment but there is no evidence that this
-    // will matter.
-    Load->setAlignment(i == 0 ? AMI->getSrcAlignment()
-                              : AMI->getElementSizeInBytes());
-    Load->setDebugLoc(AMI->getDebugLoc());
+      // Load from the source. Transfer alignment information and mark load as
+      // unordered atomic.
+      LoadInst *Load = Builder->CreateLoad(SrcElementAddr, "memcpy_unfold.val");
+      Load->setOrdering(AtomicOrdering::Unordered);
+      // We know alignment of the first element. It is also guaranteed by the
+      // verifier that element size is less or equal than first element
+      // alignment and both of this values are powers of two. This means that
+      // all subsequent accesses are at least element size aligned.
+      // TODO: We can infer better alignment but there is no evidence that this
+      // will matter.
+      Load->setAlignment(i == 0 ? AMI->getParamAlignment(1)
+                                : ElementSizeInBytes);
+      Load->setDebugLoc(AMI->getDebugLoc());
 
-    // Store loaded value via unordered atomic store.
-    StoreInst *Store = Builder->CreateStore(Load, DstElementAddr);
-    Store->setOrdering(AtomicOrdering::Unordered);
-    Store->setAlignment(i == 0 ? AMI->getDstAlignment()
-                               : AMI->getElementSizeInBytes());
-    Store->setDebugLoc(AMI->getDebugLoc());
+      // Store loaded value via unordered atomic store.
+      StoreInst *Store = Builder->CreateStore(Load, DstElementAddr);
+      Store->setOrdering(AtomicOrdering::Unordered);
+      Store->setAlignment(i == 0 ? AMI->getParamAlignment(0)
+                                 : ElementSizeInBytes);
+      Store->setDebugLoc(AMI->getDebugLoc());
+    }
   }
 
   // Set the number of elements of the copy to 0, it will be deleted on the
   // next iteration.
-  AMI->setNumElements(Constant::getNullValue(NumElementsCI->getType()));
+  AMI->setLength(Constant::getNullValue(LengthCI->getType()));
   return AMI;
 }
 
@@ -393,7 +398,7 @@ static Value *simplifyX86immShift(const IntrinsicInst &II,
   unsigned BitWidth = SVT->getPrimitiveSizeInBits();
 
   // If shift-by-zero then just return the original value.
-  if (Count == 0)
+  if (Count.isNullValue())
     return Vec;
 
   // Handle cases when Shift >= BitWidth.
@@ -1373,10 +1378,6 @@ static Instruction *foldCttzCtlz(IntrinsicInst &II, InstCombiner &IC) {
           II.getIntrinsicID() == Intrinsic::ctlz) &&
          "Expected cttz or ctlz intrinsic");
   Value *Op0 = II.getArgOperand(0);
-  // FIXME: Try to simplify vectors of integers.
-  auto *IT = dyn_cast<IntegerType>(Op0->getType());
-  if (!IT)
-    return nullptr;
 
   KnownBits Known = IC.computeKnownBits(Op0, 0, &II);
 
@@ -1392,20 +1393,61 @@ static Instruction *foldCttzCtlz(IntrinsicInst &II, InstCombiner &IC) {
   // FIXME: This should be in InstSimplify because we're replacing an
   // instruction with a constant.
   if (PossibleZeros == DefiniteZeros) {
-    auto *C = ConstantInt::get(IT, DefiniteZeros);
+    auto *C = ConstantInt::get(Op0->getType(), DefiniteZeros);
     return IC.replaceInstUsesWith(II, C);
   }
 
   // If the input to cttz/ctlz is known to be non-zero,
   // then change the 'ZeroIsUndef' parameter to 'true'
   // because we know the zero behavior can't affect the result.
-  if (Known.One != 0 ||
+  if (!Known.One.isNullValue() ||
       isKnownNonZero(Op0, IC.getDataLayout(), 0, &IC.getAssumptionCache(), &II,
                      &IC.getDominatorTree())) {
     if (!match(II.getArgOperand(1), m_One())) {
       II.setOperand(1, IC.Builder->getTrue());
       return &II;
     }
+  }
+
+  // Add range metadata since known bits can't completely reflect what we know.
+  // TODO: Handle splat vectors.
+  auto *IT = dyn_cast<IntegerType>(Op0->getType());
+  if (IT && IT->getBitWidth() != 1 && !II.getMetadata(LLVMContext::MD_range)) {
+    Metadata *LowAndHigh[] = {
+        ConstantAsMetadata::get(ConstantInt::get(IT, DefiniteZeros)),
+        ConstantAsMetadata::get(ConstantInt::get(IT, PossibleZeros + 1))};
+    II.setMetadata(LLVMContext::MD_range,
+                   MDNode::get(II.getContext(), LowAndHigh));
+    return &II;
+  }
+
+  return nullptr;
+}
+
+static Instruction *foldCtpop(IntrinsicInst &II, InstCombiner &IC) {
+  assert(II.getIntrinsicID() == Intrinsic::ctpop &&
+         "Expected ctpop intrinsic");
+  Value *Op0 = II.getArgOperand(0);
+  // FIXME: Try to simplify vectors of integers.
+  auto *IT = dyn_cast<IntegerType>(Op0->getType());
+  if (!IT)
+    return nullptr;
+
+  unsigned BitWidth = IT->getBitWidth();
+  KnownBits Known(BitWidth);
+  IC.computeKnownBits(Op0, Known, 0, &II);
+
+  unsigned MinCount = Known.countMinPopulation();
+  unsigned MaxCount = Known.countMaxPopulation();
+
+  // Add range metadata since known bits can't completely reflect what we know.
+  if (IT->getBitWidth() != 1 && !II.getMetadata(LLVMContext::MD_range)) {
+    Metadata *LowAndHigh[] = {
+        ConstantAsMetadata::get(ConstantInt::get(IT, MinCount)),
+        ConstantAsMetadata::get(ConstantInt::get(IT, MaxCount + 1))};
+    II.setMetadata(LLVMContext::MD_range,
+                   MDNode::get(II.getContext(), LowAndHigh));
+    return &II;
   }
 
   return nullptr;
@@ -1818,8 +1860,8 @@ Instruction *InstCombiner::visitVACopyInst(VACopyInst &I) {
 /// lifting.
 Instruction *InstCombiner::visitCallInst(CallInst &CI) {
   auto Args = CI.arg_operands();
-  if (Value *V =
-          SimplifyCall(CI.getCalledValue(), Args.begin(), Args.end(), SQ))
+  if (Value *V = SimplifyCall(&CI, CI.getCalledValue(), Args.begin(),
+                              Args.end(), SQ.getWithInstruction(&CI)))
     return replaceInstUsesWith(CI, V);
 
   if (isFreeCall(&CI, &TLI))
@@ -1892,12 +1934,12 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
     if (Changed) return II;
   }
 
-  if (auto *AMI = dyn_cast<ElementAtomicMemCpyInst>(II)) {
-    if (Constant *C = dyn_cast<Constant>(AMI->getNumElements()))
+  if (auto *AMI = dyn_cast<ElementUnorderedAtomicMemCpyInst>(II)) {
+    if (Constant *C = dyn_cast<Constant>(AMI->getLength()))
       if (C->isNullValue())
         return eraseInstFromFunction(*AMI);
 
-    if (Instruction *I = SimplifyElementAtomicMemCpy(AMI))
+    if (Instruction *I = SimplifyElementUnorderedAtomicMemCpy(AMI))
       return I;
   }
 
@@ -1943,7 +1985,7 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
     Value *X = nullptr;
 
     // bitreverse(bitreverse(x)) -> x
-    if (match(IIOperand, m_Intrinsic<Intrinsic::bitreverse>(m_Value(X))))
+    if (match(IIOperand, m_BitReverse(m_Value(X))))
       return replaceInstUsesWith(CI, X);
     break;
   }
@@ -1977,6 +2019,11 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
   case Intrinsic::cttz:
   case Intrinsic::ctlz:
     if (auto *I = foldCttzCtlz(*II, *this))
+      return I;
+    break;
+
+  case Intrinsic::ctpop:
+    if (auto *I = foldCtpop(*II, *this))
       return I;
     break;
 
@@ -3838,24 +3885,24 @@ Instruction *InstCombiner::visitCallSite(CallSite CS) {
   // Mark any parameters that are known to be non-null with the nonnull
   // attribute.  This is helpful for inlining calls to functions with null
   // checks on their arguments.
-  SmallVector<unsigned, 4> Indices;
+  SmallVector<unsigned, 4> ArgNos;
   unsigned ArgNo = 0;
 
   for (Value *V : CS.args()) {
     if (V->getType()->isPointerTy() &&
         !CS.paramHasAttr(ArgNo, Attribute::NonNull) &&
         isKnownNonNullAt(V, CS.getInstruction(), &DT))
-      Indices.push_back(ArgNo + AttributeList::FirstArgIndex);
+      ArgNos.push_back(ArgNo);
     ArgNo++;
   }
 
   assert(ArgNo == CS.arg_size() && "sanity check");
 
-  if (!Indices.empty()) {
+  if (!ArgNos.empty()) {
     AttributeList AS = CS.getAttributes();
     LLVMContext &Ctx = CS.getInstruction()->getContext();
-    AS = AS.addAttribute(Ctx, Indices,
-                         Attribute::get(Ctx, Attribute::NonNull));
+    AS = AS.addParamAttribute(Ctx, ArgNos,
+                              Attribute::get(Ctx, Attribute::NonNull));
     CS.setAttributes(AS);
     Changed = true;
   }

@@ -19,6 +19,7 @@
 #include "clang/Lex/LexDiagnostic.h"
 #include "clang/Lex/LiteralSupport.h"
 #include "clang/Lex/Preprocessor.h"
+#include "clang/Lex/PreprocessorOptions.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Support/Compiler.h"
@@ -2498,6 +2499,7 @@ void Lexer::ReadToEndOfLine(SmallVectorImpl<char> *Result) {
         break;
       }
       // FALL THROUGH.
+      LLVM_FALLTHROUGH;
     case '\r':
     case '\n':
       // Okay, we found the end of the line. First, back up past the \0, \r, \n.
@@ -2749,7 +2751,7 @@ static const char *findPlaceholderEnd(const char *CurPtr,
 
 bool Lexer::lexEditorPlaceholder(Token &Result, const char *CurPtr) {
   assert(CurPtr[-1] == '<' && CurPtr[0] == '#' && "Not a placeholder!");
-  if (!PP || LexingRawMode)
+  if (!PP || !PP->getPreprocessorOpts().LexEditorPlaceholders || LexingRawMode)
     return false;
   const char *End = findPlaceholderEnd(CurPtr + 1, BufferEnd);
   if (!End)
@@ -3247,6 +3249,7 @@ LexNextToken:
       return LexCharConstant(Result, ConsumeChar(CurPtr, SizeTmp, Result),
                              tok::wide_char_constant);
     // FALL THROUGH, treating L like the start of an identifier.
+    LLVM_FALLTHROUGH;
 
   // C99 6.4.2: Identifiers.
   case 'A': case 'B': case 'C': case 'D': case 'E': case 'F': case 'G':

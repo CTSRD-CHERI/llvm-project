@@ -14,11 +14,11 @@
 #ifndef LLVM_IR_VALUE_H
 #define LLVM_IR_VALUE_H
 
+#include "llvm-c/Types.h"
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/IR/Use.h"
 #include "llvm/Support/CBindingWrapping.h"
 #include "llvm/Support/Casting.h"
-#include "llvm-c/Types.h"
 #include <cassert>
 #include <iterator>
 #include <memory>
@@ -49,8 +49,9 @@ template<typename ValueTy> class StringMapEntry;
 class StringRef;
 class Twine;
 class Type;
+class User;
 
-using ValueName = StringMapEntry<Value*>;
+using ValueName = StringMapEntry<Value *>;
 
 //===----------------------------------------------------------------------===//
 //                                 Value Class
@@ -212,7 +213,7 @@ protected:
 
 public:
   Value(const Value &) = delete;
-  void operator=(const Value &) = delete;
+  Value &operator=(const Value &) = delete;
 
   /// Delete a pointer to a generic Value.
   void deleteValue();
@@ -660,7 +661,7 @@ struct ValueDeleter { void operator()(Value *V) { V->deleteValue(); } };
 /// Use this instead of std::unique_ptr<Value> or std::unique_ptr<Instruction>.
 /// Those don't work because Value and Instruction's destructors are protected,
 /// aren't virtual, and won't destroy the complete object.
-typedef std::unique_ptr<Value, ValueDeleter> unique_value;
+using unique_value = std::unique_ptr<Value, ValueDeleter>;
 
 inline raw_ostream &operator<<(raw_ostream &OS, const Value &V) {
   V.print(OS);

@@ -22,7 +22,6 @@
 #include "sanitizer_common/sanitizer_platform_interceptors.h"
 #include "sanitizer_common/sanitizer_platform_limits_posix.h"
 #include "sanitizer_common/sanitizer_posix.h"
-#include "sanitizer_common/sanitizer_stackdepot.h"
 #include "sanitizer_common/sanitizer_tls_get_addr.h"
 #include "lsan.h"
 #include "lsan_allocator.h"
@@ -71,7 +70,6 @@ INTERCEPTOR(void*, calloc, uptr nmemb, uptr size) {
     CHECK(allocated < kCallocPoolSize);
     return mem;
   }
-  if (CallocShouldReturnNullDueToOverflow(size, nmemb)) return nullptr;
   ENSURE_LSAN_INITED;
   GET_STACK_TRACE_MALLOC;
   return lsan_calloc(nmemb, size, stack);
@@ -97,24 +95,6 @@ INTERCEPTOR(void*, valloc, uptr size) {
   return lsan_valloc(size, stack);
 }
 #endif
-
-static void BeforeFork() {
-  LockAllocator();
-  StackDepotLockAll();
-}
-
-static void AfterFork() {
-  StackDepotUnlockAll();
-  UnlockAllocator();
-}
-
-INTERCEPTOR(int, fork, void) {
-  ENSURE_LSAN_INITED;
-  BeforeFork();
-  int pid = REAL(fork)();
-  AfterFork();
-  return pid;
-}
 
 #if SANITIZER_INTERCEPT_MEMALIGN
 INTERCEPTOR(void*, memalign, uptr alignment, uptr size) {
@@ -218,23 +198,37 @@ INTERCEPTOR(int, mprobe, void *ptr) {
 }
 #endif // SANITIZER_INTERCEPT_MCHECK_MPROBE
 
-#define OPERATOR_NEW_BODY                              \
-  ENSURE_LSAN_INITED;                                  \
-  GET_STACK_TRACE_MALLOC;                              \
-  return Allocate(stack, size, 1, kAlwaysClearMemory);
 
-INTERCEPTOR_ATTRIBUTE
-void *operator new(size_t size) { OPERATOR_NEW_BODY; }
-INTERCEPTOR_ATTRIBUTE
-void *operator new[](size_t size) { OPERATOR_NEW_BODY; }
-INTERCEPTOR_ATTRIBUTE
-void *operator new(size_t size, std::nothrow_t const&) { OPERATOR_NEW_BODY; }
-INTERCEPTOR_ATTRIBUTE
-void *operator new[](size_t size, std::nothrow_t const&) { OPERATOR_NEW_BODY; }
+// TODO(alekseys): throw std::bad_alloc instead of dying on OOM.
+#define OPERATOR_NEW_BODY(nothrow)                         \
+  ENSURE_LSAN_INITED;                                      \
+  GET_STACK_TRACE_MALLOC;                                  \
+  void *res = Allocate(stack, size, 1, kAlwaysClearMemory);\
+  if (!nothrow && UNLIKELY(!res)) DieOnFailure::OnOOM();\
+  return res;
 
 #define OPERATOR_DELETE_BODY \
   ENSURE_LSAN_INITED;        \
   Deallocate(ptr);
+
+// On OS X it's not enough to just provide our own 'operator new' and
+// 'operator delete' implementations, because they're going to be in the runtime
+// dylib, and the main executable will depend on both the runtime dylib and
+// libstdc++, each of has its implementation of new and delete.
+// To make sure that C++ allocation/deallocation operators are overridden on
+// OS X we need to intercept them using their mangled names.
+#if !SANITIZER_MAC
+
+INTERCEPTOR_ATTRIBUTE
+void *operator new(size_t size) { OPERATOR_NEW_BODY(false /*nothrow*/); }
+INTERCEPTOR_ATTRIBUTE
+void *operator new[](size_t size) { OPERATOR_NEW_BODY(false /*nothrow*/); }
+INTERCEPTOR_ATTRIBUTE
+void *operator new(size_t size, std::nothrow_t const&)
+{ OPERATOR_NEW_BODY(true /*nothrow*/); }
+INTERCEPTOR_ATTRIBUTE
+void *operator new[](size_t size, std::nothrow_t const&)
+{ OPERATOR_NEW_BODY(true /*nothrow*/); }
 
 INTERCEPTOR_ATTRIBUTE
 void operator delete(void *ptr) NOEXCEPT { OPERATOR_DELETE_BODY; }
@@ -243,9 +237,31 @@ void operator delete[](void *ptr) NOEXCEPT { OPERATOR_DELETE_BODY; }
 INTERCEPTOR_ATTRIBUTE
 void operator delete(void *ptr, std::nothrow_t const&) { OPERATOR_DELETE_BODY; }
 INTERCEPTOR_ATTRIBUTE
-void operator delete[](void *ptr, std::nothrow_t const &) {
-  OPERATOR_DELETE_BODY;
-}
+void operator delete[](void *ptr, std::nothrow_t const &)
+{ OPERATOR_DELETE_BODY; }
+
+#else  // SANITIZER_MAC
+
+INTERCEPTOR(void *, _Znwm, size_t size)
+{ OPERATOR_NEW_BODY(false /*nothrow*/); }
+INTERCEPTOR(void *, _Znam, size_t size)
+{ OPERATOR_NEW_BODY(false /*nothrow*/); }
+INTERCEPTOR(void *, _ZnwmRKSt9nothrow_t, size_t size, std::nothrow_t const&)
+{ OPERATOR_NEW_BODY(true /*nothrow*/); }
+INTERCEPTOR(void *, _ZnamRKSt9nothrow_t, size_t size, std::nothrow_t const&)
+{ OPERATOR_NEW_BODY(true /*nothrow*/); }
+
+INTERCEPTOR(void, _ZdlPv, void *ptr)
+{ OPERATOR_DELETE_BODY; }
+INTERCEPTOR(void, _ZdaPv, void *ptr)
+{ OPERATOR_DELETE_BODY; }
+INTERCEPTOR(void, _ZdlPvRKSt9nothrow_t, void *ptr, std::nothrow_t const&)
+{ OPERATOR_DELETE_BODY; }
+INTERCEPTOR(void, _ZdaPvRKSt9nothrow_t, void *ptr, std::nothrow_t const&)
+{ OPERATOR_DELETE_BODY; }
+
+#endif  // !SANITIZER_MAC
+
 
 ///// Thread initialization and finalization. /////
 
@@ -355,7 +371,6 @@ void InitializeInterceptors() {
   LSAN_MAYBE_INTERCEPT_MALLOPT;
   INTERCEPT_FUNCTION(pthread_create);
   INTERCEPT_FUNCTION(pthread_join);
-  INTERCEPT_FUNCTION(fork);
 
   if (pthread_key_create(&g_thread_finalize_key, &thread_finalize)) {
     Report("LeakSanitizer: failed to create thread key.\n");

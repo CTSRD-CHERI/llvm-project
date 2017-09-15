@@ -410,7 +410,7 @@ uint64_t ComputeHash(StringRef K);
 /// on how PGO name is formed.
 class InstrProfSymtab {
 public:
-  typedef std::vector<std::pair<uint64_t, uint64_t>> AddrHashMap;
+  using AddrHashMap = std::vector<std::pair<uint64_t, uint64_t>>;
 
 private:
   StringRef Data;
@@ -450,11 +450,11 @@ public:
   /// decls from module \c M. This interface is used by transformation
   /// passes such as indirect function call promotion. Variable \c InLTO
   /// indicates if this is called from LTO optimization passes.
-  void create(Module &M, bool InLTO = false);
+  Error create(Module &M, bool InLTO = false);
 
   /// Create InstrProfSymtab from a set of names iteratable from
   /// \p IterRange. This interface is used by IndexedProfReader.
-  template <typename NameIterRange> void create(const NameIterRange &IterRange);
+  template <typename NameIterRange> Error create(const NameIterRange &IterRange);
 
   // If the symtab is created by a series of calls to \c addFuncName, \c
   // finalizeSymtab needs to be called before looking up function names.
@@ -464,11 +464,14 @@ public:
 
   /// Update the symtab by adding \p FuncName to the table. This interface
   /// is used by the raw and text profile readers.
-  void addFuncName(StringRef FuncName) {
+  Error addFuncName(StringRef FuncName) {
+    if (FuncName.empty())
+      return make_error<InstrProfError>(instrprof_error::malformed);
     auto Ins = NameTab.insert(FuncName);
     if (Ins.second)
       MD5NameMap.push_back(std::make_pair(
           IndexedInstrProf::ComputeHash(FuncName), Ins.first->getKey()));
+    return Error::success();
   }
 
   /// Map a function address to its name's MD5 hash. This interface
@@ -511,11 +514,13 @@ Error InstrProfSymtab::create(StringRef NameStrings) {
 }
 
 template <typename NameIterRange>
-void InstrProfSymtab::create(const NameIterRange &IterRange) {
+Error InstrProfSymtab::create(const NameIterRange &IterRange) {
   for (auto Name : IterRange)
-    addFuncName(Name);
+    if (Error E = addFuncName(Name))
+      return E;
 
   finalizeSymtab();
+  return Error::success();
 }
 
 void InstrProfSymtab::finalizeSymtab() {
@@ -593,8 +598,30 @@ struct InstrProfRecord {
   InstrProfRecord() = default;
   InstrProfRecord(StringRef Name, uint64_t Hash, std::vector<uint64_t> Counts)
       : Name(Name), Hash(Hash), Counts(std::move(Counts)) {}
+  InstrProfRecord(InstrProfRecord &&) = default;
+  InstrProfRecord(const InstrProfRecord &RHS)
+      : Name(RHS.Name), Hash(RHS.Hash), Counts(RHS.Counts), SIPE(RHS.SIPE),
+        ValueData(RHS.ValueData
+                      ? llvm::make_unique<ValueProfData>(*RHS.ValueData)
+                      : nullptr) {}
+  InstrProfRecord &operator=(InstrProfRecord &&) = default;
+  InstrProfRecord &operator=(const InstrProfRecord &RHS) {
+    Name = RHS.Name;
+    Hash = RHS.Hash;
+    Counts = RHS.Counts;
+    SIPE = RHS.SIPE;
+    if (!RHS.ValueData) {
+      ValueData = nullptr;
+      return *this;
+    }
+    if (!ValueData)
+      ValueData = llvm::make_unique<ValueProfData>(*RHS.ValueData);
+    else
+      *ValueData = *RHS.ValueData;
+    return *this;
+  }
 
-  typedef std::vector<std::pair<uint64_t, uint64_t>> ValueMapType;
+  using ValueMapType = std::vector<std::pair<uint64_t, uint64_t>>;
 
   /// Return the number of value profile kinds with non-zero number
   /// of profile sites.
@@ -642,12 +669,9 @@ struct InstrProfRecord {
 
   /// Sort value profile data (per site) by count.
   void sortValueData() {
-    for (uint32_t Kind = IPVK_First; Kind <= IPVK_Last; ++Kind) {
-      std::vector<InstrProfValueSiteRecord> &SiteRecords =
-          getValueSitesForKind(Kind);
-      for (auto &SR : SiteRecords)
+    for (uint32_t Kind = IPVK_First; Kind <= IPVK_Last; ++Kind)
+      for (auto &SR : getValueSitesForKind(Kind))
         SR.sortByCount();
-    }
   }
 
   /// Clear value data entries and edge counters.
@@ -657,36 +681,54 @@ struct InstrProfRecord {
   }
 
   /// Clear value data entries
-  void clearValueData() {
-    for (uint32_t Kind = IPVK_First; Kind <= IPVK_Last; ++Kind)
-      getValueSitesForKind(Kind).clear();
-  }
+  void clearValueData() { ValueData = nullptr; }
 
   /// Get the error contained within the record's soft error counter.
   Error takeError() { return SIPE.takeError(); }
 
 private:
-  std::vector<InstrProfValueSiteRecord> IndirectCallSites;
-  std::vector<InstrProfValueSiteRecord> MemOPSizes;
-  const std::vector<InstrProfValueSiteRecord> &
+  struct ValueProfData {
+    std::vector<InstrProfValueSiteRecord> IndirectCallSites;
+    std::vector<InstrProfValueSiteRecord> MemOPSizes;
+  };
+  std::unique_ptr<ValueProfData> ValueData;
 
+  MutableArrayRef<InstrProfValueSiteRecord>
+  getValueSitesForKind(uint32_t ValueKind) {
+    // Cast to /add/ const (should be an implicit_cast, ideally, if that's ever
+    // implemented in LLVM) to call the const overload of this function, then
+    // cast away the constness from the result.
+    auto AR = const_cast<const InstrProfRecord *>(this)->getValueSitesForKind(
+        ValueKind);
+    return makeMutableArrayRef(
+        const_cast<InstrProfValueSiteRecord *>(AR.data()), AR.size());
+  }
+  ArrayRef<InstrProfValueSiteRecord>
   getValueSitesForKind(uint32_t ValueKind) const {
+    if (!ValueData)
+      return None;
     switch (ValueKind) {
     case IPVK_IndirectCallTarget:
-      return IndirectCallSites;
+      return ValueData->IndirectCallSites;
     case IPVK_MemOPSize:
-      return MemOPSizes;
+      return ValueData->MemOPSizes;
     default:
       llvm_unreachable("Unknown value kind!");
     }
-    return IndirectCallSites;
   }
 
   std::vector<InstrProfValueSiteRecord> &
-  getValueSitesForKind(uint32_t ValueKind) {
-    return const_cast<std::vector<InstrProfValueSiteRecord> &>(
-        const_cast<const InstrProfRecord *>(this)
-            ->getValueSitesForKind(ValueKind));
+  getOrCreateValueSitesForKind(uint32_t ValueKind) {
+    if (!ValueData)
+      ValueData = llvm::make_unique<ValueProfData>();
+    switch (ValueKind) {
+    case IPVK_IndirectCallTarget:
+      return ValueData->IndirectCallSites;
+    case IPVK_MemOPSize:
+      return ValueData->MemOPSizes;
+    default:
+      llvm_unreachable("Unknown value kind!");
+    }
   }
 
   // Map indirect call target name hash to name string.
@@ -760,9 +802,9 @@ uint64_t InstrProfRecord::getValueForSite(InstrProfValueData Dest[],
 }
 
 void InstrProfRecord::reserveSites(uint32_t ValueKind, uint32_t NumValueSites) {
-  std::vector<InstrProfValueSiteRecord> &ValueSites =
-      getValueSitesForKind(ValueKind);
-  ValueSites.reserve(NumValueSites);
+  if (!NumValueSites)
+    return;
+  getOrCreateValueSitesForKind(ValueKind).reserve(NumValueSites);
 }
 
 inline support::endianness getHostEndianness() {
@@ -873,6 +915,11 @@ struct Summary {
   // The number of Cutoff Entries (Summary::Entry) following summary fields.
   uint64_t NumCutoffEntries;
 
+  Summary() = delete;
+  Summary(uint32_t Size) { memset(this, 0, Size); }
+
+  void operator delete(void *ptr) { ::operator delete(ptr); }
+
   static uint32_t getSize(uint32_t NumSumFields, uint32_t NumCutoffEntries) {
     return sizeof(Summary) + NumCutoffEntries * sizeof(Entry) +
            NumSumFields * sizeof(uint64_t);
@@ -911,11 +958,6 @@ struct Summary {
     ER.MinBlockCount = E.MinCount;
     ER.NumBlocks = E.NumCounts;
   }
-
-  Summary(uint32_t Size) { memset(this, 0, Size); }
-  void operator delete(void *ptr) { ::operator delete(ptr); }
-
-  Summary() = delete;
 };
 
 inline std::unique_ptr<Summary> allocSummary(uint32_t TotalSize) {

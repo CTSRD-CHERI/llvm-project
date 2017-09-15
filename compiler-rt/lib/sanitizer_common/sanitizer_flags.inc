@@ -93,6 +93,9 @@ COMMON_FLAG(HandleSignalMode, handle_sigill, kHandleSignalNo,
 COMMON_FLAG(HandleSignalMode, handle_sigfpe, kHandleSignalYes,
             COMMON_FLAG_HANDLE_SIGNAL_HELP(SIGFPE))
 #undef COMMON_FLAG_HANDLE_SIGNAL_HELP
+COMMON_FLAG(bool, allow_user_segv_handler, true,
+            "Deprecated. True has no effect, use handle_sigbus=1. If false, "
+            "handle_*=1 will be upgraded to handle_*=2.")
 COMMON_FLAG(bool, use_sigaltstack, true,
             "If set, uses alternate stack for signal handling.")
 COMMON_FLAG(bool, detect_deadlocks, false,
@@ -138,16 +141,6 @@ COMMON_FLAG(
     bool, coverage, false,
     "If set, coverage information will be dumped at program shutdown (if the "
     "coverage instrumentation was enabled at compile time).")
-COMMON_FLAG(bool, coverage_pcs, true,
-            "If set (and if 'coverage' is set too), the coverage information "
-            "will be dumped as a set of PC offsets for every module.")
-COMMON_FLAG(bool, coverage_order_pcs, false,
-             "If true, the PCs will be dumped in the order they've"
-             " appeared during the execution.")
-COMMON_FLAG(bool, coverage_direct, SANITIZER_ANDROID,
-            "If set, coverage information will be dumped directly to a memory "
-            "mapped file. This way data is not lost even if the process is "
-            "suddenly killed.")
 COMMON_FLAG(const char *, coverage_dir, ".",
             "Target directory for coverage dumps. Defaults to the current "
             "directory.")
@@ -196,6 +189,9 @@ COMMON_FLAG(bool, intercept_strpbrk, true,
             "to find more errors.")
 COMMON_FLAG(bool, intercept_strlen, true,
             "If set, uses custom wrappers for strlen and strnlen functions "
+            "to find more errors.")
+COMMON_FLAG(bool, intercept_strndup, true,
+            "If set, uses custom wrappers for strndup functions "
             "to find more errors.")
 COMMON_FLAG(bool, intercept_strchr, true,
             "If set, uses custom wrappers for strchr, strchrnul, and strrchr "

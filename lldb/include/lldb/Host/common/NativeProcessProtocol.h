@@ -10,9 +10,10 @@
 #ifndef liblldb_NativeProcessProtocol_h_
 #define liblldb_NativeProcessProtocol_h_
 
-#include "lldb/Core/TraceOptions.h"
+#include "lldb/Host/Host.h"
 #include "lldb/Host/MainLoop.h"
 #include "lldb/Utility/Status.h"
+#include "lldb/Utility/TraceOptions.h"
 #include "lldb/lldb-private-forward.h"
 #include "lldb/lldb-types.h"
 #include "llvm/ADT/ArrayRef.h"
@@ -158,12 +159,9 @@ public:
   //----------------------------------------------------------------------
   // Exit Status
   //----------------------------------------------------------------------
-  virtual bool GetExitStatus(lldb_private::ExitType *exit_type, int *status,
-                             std::string &exit_description);
+  virtual llvm::Optional<WaitStatus> GetExitStatus();
 
-  virtual bool SetExitStatus(lldb_private::ExitType exit_type, int status,
-                             const char *exit_description,
-                             bool bNotifyStateChange);
+  virtual bool SetExitStatus(WaitStatus status, bool bNotifyStateChange);
 
   //----------------------------------------------------------------------
   // Access to threads
@@ -335,7 +333,7 @@ public:
   //------------------------------------------------------------------
   /// StopTracing API as the name suggests stops a tracing instance.
   ///
-  /// @param[in] uid
+  /// @param[in] traceid
   ///     The user id of the trace intended to be stopped. Now a
   ///     user_id may map to multiple threads in which case this API
   ///     could be used to stop the tracing for a specific thread by
@@ -348,7 +346,7 @@ public:
   /// @return
   ///     Status indicating what went wrong.
   //------------------------------------------------------------------
-  virtual Status StopTrace(lldb::user_id_t uid,
+  virtual Status StopTrace(lldb::user_id_t traceid,
                            lldb::tid_t thread = LLDB_INVALID_THREAD_ID) {
     return Status("Not implemented");
   }
@@ -357,8 +355,8 @@ public:
   /// This API provides the trace data collected in the form of raw
   /// data.
   ///
-  /// @param[in] uid thread
-  ///     The uid and thread provide the context for the trace
+  /// @param[in] traceid thread
+  ///     The traceid and thread provide the context for the trace
   ///     instance.
   ///
   /// @param[in] buffer
@@ -374,7 +372,7 @@ public:
   /// @return
   ///     The size of the data actually read.
   //------------------------------------------------------------------
-  virtual Status GetData(lldb::user_id_t uid, lldb::tid_t thread,
+  virtual Status GetData(lldb::user_id_t traceid, lldb::tid_t thread,
                          llvm::MutableArrayRef<uint8_t> &buffer,
                          size_t offset = 0) {
     return Status("Not implemented");
@@ -384,7 +382,7 @@ public:
   /// Similar API as above except it aims to provide any extra data
   /// useful for decoding the actual trace data.
   //------------------------------------------------------------------
-  virtual Status GetMetaData(lldb::user_id_t uid, lldb::tid_t thread,
+  virtual Status GetMetaData(lldb::user_id_t traceid, lldb::tid_t thread,
                              llvm::MutableArrayRef<uint8_t> &buffer,
                              size_t offset = 0) {
     return Status("Not implemented");
@@ -393,7 +391,7 @@ public:
   //------------------------------------------------------------------
   /// API to query the TraceOptions for a given user id
   ///
-  /// @param[in] uid
+  /// @param[in] traceid
   ///     The user id of the tracing instance.
   ///
   /// @param[in] config
@@ -407,7 +405,7 @@ public:
   /// @param[out] config
   ///     The actual configuration being used for tracing.
   //------------------------------------------------------------------
-  virtual Status GetTraceConfig(lldb::user_id_t uid, TraceOptions &config) {
+  virtual Status GetTraceConfig(lldb::user_id_t traceid, TraceOptions &config) {
     return Status("Not implemented");
   }
 
@@ -421,9 +419,8 @@ protected:
   lldb::StateType m_state;
   mutable std::recursive_mutex m_state_mutex;
 
-  lldb_private::ExitType m_exit_type;
-  int m_exit_status;
-  std::string m_exit_description;
+  llvm::Optional<WaitStatus> m_exit_status;
+
   std::recursive_mutex m_delegates_mutex;
   std::vector<NativeDelegate *> m_delegates;
   NativeBreakpointList m_breakpoint_list;

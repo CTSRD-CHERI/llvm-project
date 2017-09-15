@@ -2534,9 +2534,8 @@ bool FunctionDecl::hasTrivialBody() const
 
 bool FunctionDecl::isDefined(const FunctionDecl *&Definition) const {
   for (auto I : redecls()) {
-    if (I->IsDeleted || I->IsDefaulted || I->Body || I->IsLateTemplateParsed ||
-        I->hasDefiningAttr()) {
-      Definition = I->IsDeleted ? I->getCanonicalDecl() : I;
+    if (I->isThisDeclarationADefinition()) {
+      Definition = I;
       return true;
     }
   }
@@ -2631,7 +2630,7 @@ bool FunctionDecl::isReservedGlobalPlacementOperator() const {
   return (proto->getParamType(1).getCanonicalType() == Context.VoidPtrTy);
 }
 
-bool FunctionDecl::isReplaceableGlobalAllocationFunction() const {
+bool FunctionDecl::isReplaceableGlobalAllocationFunction(bool *IsAligned) const {
   if (getDeclName().getNameKind() != DeclarationName::CXXOperatorName)
     return false;
   if (getDeclName().getCXXOverloadedOperator() != OO_New &&
@@ -2677,8 +2676,11 @@ bool FunctionDecl::isReplaceableGlobalAllocationFunction() const {
 
   // In C++17, the next parameter can be a 'std::align_val_t' for aligned
   // new/delete.
-  if (Ctx.getLangOpts().AlignedAllocation && !Ty.isNull() && Ty->isAlignValT())
+  if (Ctx.getLangOpts().AlignedAllocation && !Ty.isNull() && Ty->isAlignValT()) {
+    if (IsAligned)
+      *IsAligned = true;
     Consume();
+  }
 
   // Finally, if this is not a sized delete, the final parameter can
   // be a 'const std::nothrow_t&'.
@@ -4107,15 +4109,19 @@ void ImplicitParamDecl::anchor() { }
 
 ImplicitParamDecl *ImplicitParamDecl::Create(ASTContext &C, DeclContext *DC,
                                              SourceLocation IdLoc,
-                                             IdentifierInfo *Id,
-                                             QualType Type) {
-  return new (C, DC) ImplicitParamDecl(C, DC, IdLoc, Id, Type);
+                                             IdentifierInfo *Id, QualType Type,
+                                             ImplicitParamKind ParamKind) {
+  return new (C, DC) ImplicitParamDecl(C, DC, IdLoc, Id, Type, ParamKind);
+}
+
+ImplicitParamDecl *ImplicitParamDecl::Create(ASTContext &C, QualType Type,
+                                             ImplicitParamKind ParamKind) {
+  return new (C, nullptr) ImplicitParamDecl(C, Type, ParamKind);
 }
 
 ImplicitParamDecl *ImplicitParamDecl::CreateDeserialized(ASTContext &C,
                                                          unsigned ID) {
-  return new (C, ID) ImplicitParamDecl(C, nullptr, SourceLocation(), nullptr,
-                                       QualType());
+  return new (C, ID) ImplicitParamDecl(C, QualType(), ImplicitParamKind::Other);
 }
 
 FunctionDecl *FunctionDecl::Create(ASTContext &C, DeclContext *DC,

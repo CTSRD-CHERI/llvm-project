@@ -10,6 +10,7 @@
 #include "llvm/DebugInfo/PDB/Native/DbiStreamBuilder.h"
 
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/BinaryFormat/COFF.h"
 #include "llvm/DebugInfo/MSF/MSFBuilder.h"
 #include "llvm/DebugInfo/MSF/MappedBlockStream.h"
 #include "llvm/DebugInfo/PDB/Native/DbiModuleDescriptorBuilder.h"
@@ -17,7 +18,6 @@
 #include "llvm/DebugInfo/PDB/Native/RawError.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Support/BinaryStreamWriter.h"
-#include "llvm/Support/COFF.h"
 
 using namespace llvm;
 using namespace llvm::codeview;
@@ -44,10 +44,6 @@ void DbiStreamBuilder::setPdbDllRbld(uint16_t R) { PdbDllRbld = R; }
 void DbiStreamBuilder::setFlags(uint16_t F) { Flags = F; }
 
 void DbiStreamBuilder::setMachineType(PDB_Machine M) { MachineType = M; }
-
-void DbiStreamBuilder::setSectionContribs(ArrayRef<SectionContrib> Arr) {
-  SectionContribs = Arr;
-}
 
 void DbiStreamBuilder::setSectionMap(ArrayRef<SecMapEntry> SecMap) {
   SectionMap = SecMap;
@@ -94,10 +90,14 @@ Error DbiStreamBuilder::addModuleSourceFile(StringRef Module, StringRef File) {
   if (ModIter == ModiMap.end())
     return make_error<RawError>(raw_error_code::no_entry,
                                 "The specified module was not found");
+  return addModuleSourceFile(*ModIter->second, File);
+}
+
+Error DbiStreamBuilder::addModuleSourceFile(DbiModuleDescriptorBuilder &Module,
+                                            StringRef File) {
   uint32_t Index = SourceFileNames.size();
   SourceFileNames.insert(std::make_pair(File, Index));
-  auto &ModEntry = *ModIter;
-  ModEntry.second->addSourceFile(File);
+  Module.addSourceFile(File);
   return Error::success();
 }
 
@@ -237,6 +237,7 @@ Error DbiStreamBuilder::finalize() {
     return EC;
 
   DbiStreamHeader *H = Allocator.Allocate<DbiStreamHeader>();
+  ::memset(H, 0, sizeof(DbiStreamHeader));
   H->VersionHeader = *VerHeader;
   H->VersionSignature = -1;
   H->Age = Age;
@@ -293,23 +294,17 @@ static uint16_t toSecMapFlags(uint32_t Flags) {
   return Ret;
 }
 
-// A utility function to create Section Contributions
-// for a given input sections.
-std::vector<SectionContrib> DbiStreamBuilder::createSectionContribs(
-    ArrayRef<object::coff_section> SecHdrs) {
-  std::vector<SectionContrib> Ret;
-
-  // Create a SectionContrib for each input section.
-  for (auto &Sec : SecHdrs) {
-    Ret.emplace_back();
-    auto &Entry = Ret.back();
-    memset(&Entry, 0, sizeof(Entry));
-
-    Entry.Off = Sec.PointerToRawData;
-    Entry.Size = Sec.SizeOfRawData;
-    Entry.Characteristics = Sec.Characteristics;
-  }
-  return Ret;
+void DbiStreamBuilder::addSectionContrib(DbiModuleDescriptorBuilder *ModuleDbi,
+                                         const object::coff_section *SecHdr) {
+  SectionContrib SC;
+  memset(&SC, 0, sizeof(SC));
+  SC.ISect = (uint16_t)~0U; // This represents nil.
+  SC.Off = SecHdr->PointerToRawData;
+  SC.Size = SecHdr->SizeOfRawData;
+  SC.Characteristics = SecHdr->Characteristics;
+  // Use the module index in the module dbi stream or nil (-1).
+  SC.Imod = ModuleDbi ? ModuleDbi->getModuleIndex() : (uint16_t)~0U;
+  SectionContribs.emplace_back(SC);
 }
 
 // A utility function to create a Section Map for a given list of COFF sections.
@@ -357,8 +352,8 @@ Error DbiStreamBuilder::commit(const msf::MSFLayout &Layout,
   if (auto EC = finalize())
     return EC;
 
-  auto DbiS = WritableMappedBlockStream::createIndexedStream(Layout, MsfBuffer,
-                                                             StreamDBI);
+  auto DbiS = WritableMappedBlockStream::createIndexedStream(
+      Layout, MsfBuffer, StreamDBI, Allocator);
 
   BinaryStreamWriter Writer(*DbiS);
   if (auto EC = Writer.writeObject(*Header))
@@ -372,7 +367,7 @@ Error DbiStreamBuilder::commit(const msf::MSFLayout &Layout,
   if (!SectionContribs.empty()) {
     if (auto EC = Writer.writeEnum(DbiSecContribVer60))
       return EC;
-    if (auto EC = Writer.writeArray(SectionContribs))
+    if (auto EC = Writer.writeArray(makeArrayRef(SectionContribs)))
       return EC;
   }
 
@@ -396,7 +391,7 @@ Error DbiStreamBuilder::commit(const msf::MSFLayout &Layout,
     if (Stream.StreamNumber == kInvalidStreamIndex)
       continue;
     auto WritableStream = WritableMappedBlockStream::createIndexedStream(
-        Layout, MsfBuffer, Stream.StreamNumber);
+        Layout, MsfBuffer, Stream.StreamNumber, Allocator);
     BinaryStreamWriter DbgStreamWriter(*WritableStream);
     if (auto EC = DbgStreamWriter.writeArray(Stream.Data))
       return EC;

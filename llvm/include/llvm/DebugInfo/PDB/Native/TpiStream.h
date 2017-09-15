@@ -16,6 +16,7 @@
 #include "llvm/DebugInfo/PDB/Native/RawTypes.h"
 #include "llvm/DebugInfo/PDB/PDBTypes.h"
 #include "llvm/Support/BinaryStreamArray.h"
+#include "llvm/Support/BinaryStreamRef.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include "llvm/Support/Error.h"
@@ -34,8 +35,7 @@ class TpiStream {
   friend class TpiStreamBuilder;
 
 public:
-  TpiStream(const PDBFile &File,
-            std::unique_ptr<msf::MappedBlockStream> Stream);
+  TpiStream(PDBFile &File, std::unique_ptr<msf::MappedBlockStream> Stream);
   ~TpiStream();
   Error reload();
 
@@ -58,13 +58,17 @@ public:
 
   codeview::LazyRandomTypeCollection &typeCollection() { return *Types; }
 
+  BinarySubstreamRef getTypeRecordsSubstream() const;
+
   Error commit();
 
 private:
-  const PDBFile &Pdb;
+  PDBFile &Pdb;
   std::unique_ptr<msf::MappedBlockStream> Stream;
 
   std::unique_ptr<codeview::LazyRandomTypeCollection> Types;
+
+  BinarySubstreamRef TypeRecordsSubstream;
 
   codeview::CVTypeArray TypeRecords;
 

@@ -85,6 +85,8 @@ template <typename T> class ArrayRef;
                               const Instruction *CxtI = nullptr,
                               const DominatorTree *DT = nullptr);
 
+  bool isOnlyUsedInZeroEqualityComparison(const Instruction *CxtI);
+  
   /// Return true if the given value is known to be non-zero when defined. For
   /// vectors, return true if every element is known to be non-zero when
   /// defined. For pointers, if the context instruction and dominator tree are
@@ -247,8 +249,8 @@ template <typename T> class ArrayRef;
   };
 
   /// Returns true if the value \p V is a pointer into a ContantDataArray.
-  /// If successfull \p Index will point to a ConstantDataArray info object
-  /// with an apropriate offset.
+  /// If successful \p Index will point to a ConstantDataArray info object
+  /// with an appropriate offset.
   bool getConstantDataArrayInfo(const Value *V, ConstantDataArraySlice &Slice,
                                 unsigned ElementSize, uint64_t Offset = 0);
 

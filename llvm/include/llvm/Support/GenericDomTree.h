@@ -26,9 +26,9 @@
 
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/GraphTraits.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <cassert>
@@ -58,59 +58,23 @@ template <typename GT>
 using DominatorTreeBaseByGraphTraits =
     typename detail::DominatorTreeBaseTraits<GT>::type;
 
-/// \brief Base class that other, more interesting dominator analyses
-/// inherit from.
-template <class NodeT> class DominatorBase {
-protected:
-  std::vector<NodeT *> Roots;
-  bool IsPostDominators;
-
-  explicit DominatorBase(bool isPostDom)
-      : Roots(), IsPostDominators(isPostDom) {}
-
-  DominatorBase(DominatorBase &&Arg)
-      : Roots(std::move(Arg.Roots)),
-        IsPostDominators(std::move(Arg.IsPostDominators)) {
-    Arg.Roots.clear();
-  }
-
-  DominatorBase &operator=(DominatorBase &&RHS) {
-    Roots = std::move(RHS.Roots);
-    IsPostDominators = std::move(RHS.IsPostDominators);
-    RHS.Roots.clear();
-    return *this;
-  }
-
-public:
-  /// getRoots - Return the root blocks of the current CFG.  This may include
-  /// multiple blocks if we are computing post dominators.  For forward
-  /// dominators, this will always be a single block (the entry node).
-  ///
-  const std::vector<NodeT *> &getRoots() const { return Roots; }
-
-  /// isPostDominator - Returns true if analysis based of postdoms
-  ///
-  bool isPostDominator() const { return IsPostDominators; }
-};
-
 /// \brief Base class for the actual dominator tree node.
 template <class NodeT> class DomTreeNodeBase {
   friend struct PostDominatorTree;
   template <class N> friend class DominatorTreeBase;
 
   NodeT *TheBB;
-  DomTreeNodeBase<NodeT> *IDom;
-  std::vector<DomTreeNodeBase<NodeT> *> Children;
-  mutable int DFSNumIn = -1;
-  mutable int DFSNumOut = -1;
+  DomTreeNodeBase *IDom;
+  std::vector<DomTreeNodeBase *> Children;
+  mutable unsigned DFSNumIn = ~0;
+  mutable unsigned DFSNumOut = ~0;
 
-public:
-  DomTreeNodeBase(NodeT *BB, DomTreeNodeBase<NodeT> *iDom)
-      : TheBB(BB), IDom(iDom) {}
+ public:
+  DomTreeNodeBase(NodeT *BB, DomTreeNodeBase *iDom) : TheBB(BB), IDom(iDom) {}
 
-  typedef typename std::vector<DomTreeNodeBase<NodeT> *>::iterator iterator;
-  typedef typename std::vector<DomTreeNodeBase<NodeT> *>::const_iterator
-      const_iterator;
+  using iterator = typename std::vector<DomTreeNodeBase *>::iterator;
+  using const_iterator =
+      typename std::vector<DomTreeNodeBase *>::const_iterator;
 
   iterator begin() { return Children.begin(); }
   iterator end() { return Children.end(); }
@@ -118,14 +82,12 @@ public:
   const_iterator end() const { return Children.end(); }
 
   NodeT *getBlock() const { return TheBB; }
-  DomTreeNodeBase<NodeT> *getIDom() const { return IDom; }
+  DomTreeNodeBase *getIDom() const { return IDom; }
 
-  const std::vector<DomTreeNodeBase<NodeT> *> &getChildren() const {
-    return Children;
-  }
+  const std::vector<DomTreeNodeBase *> &getChildren() const { return Children; }
 
-  std::unique_ptr<DomTreeNodeBase<NodeT>>
-  addChild(std::unique_ptr<DomTreeNodeBase<NodeT>> C) {
+  std::unique_ptr<DomTreeNodeBase> addChild(
+      std::unique_ptr<DomTreeNodeBase> C) {
     Children.push_back(C.get());
     return C;
   }
@@ -134,7 +96,7 @@ public:
 
   void clearAllChildren() { Children.clear(); }
 
-  bool compare(const DomTreeNodeBase<NodeT> *Other) const {
+  bool compare(const DomTreeNodeBase *Other) const {
     if (getNumChildren() != Other->getNumChildren())
       return true;
 
@@ -152,10 +114,10 @@ public:
     return false;
   }
 
-  void setIDom(DomTreeNodeBase<NodeT> *NewIDom) {
+  void setIDom(DomTreeNodeBase *NewIDom) {
     assert(IDom && "No immediate dominator?");
     if (IDom != NewIDom) {
-      typename std::vector<DomTreeNodeBase<NodeT> *>::iterator I =
+      typename std::vector<DomTreeNodeBase *>::iterator I =
           find(IDom->Children, this);
       assert(I != IDom->Children.end() &&
              "Not in immediate dominator children set!");
@@ -177,192 +139,103 @@ public:
 private:
   // Return true if this node is dominated by other. Use this only if DFS info
   // is valid.
-  bool DominatedBy(const DomTreeNodeBase<NodeT> *other) const {
+  bool DominatedBy(const DomTreeNodeBase *other) const {
     return this->DFSNumIn >= other->DFSNumIn &&
            this->DFSNumOut <= other->DFSNumOut;
   }
 };
 
 template <class NodeT>
-raw_ostream &operator<<(raw_ostream &o, const DomTreeNodeBase<NodeT> *Node) {
+raw_ostream &operator<<(raw_ostream &O, const DomTreeNodeBase<NodeT> *Node) {
   if (Node->getBlock())
-    Node->getBlock()->printAsOperand(o, false);
+    Node->getBlock()->printAsOperand(O, false);
   else
-    o << " <<exit node>>";
+    O << " <<exit node>>";
 
-  o << " {" << Node->getDFSNumIn() << "," << Node->getDFSNumOut() << "}";
+  O << " {" << Node->getDFSNumIn() << "," << Node->getDFSNumOut() << "}";
 
-  return o << "\n";
+  return O << "\n";
 }
 
 template <class NodeT>
-void PrintDomTree(const DomTreeNodeBase<NodeT> *N, raw_ostream &o,
+void PrintDomTree(const DomTreeNodeBase<NodeT> *N, raw_ostream &O,
                   unsigned Lev) {
-  o.indent(2 * Lev) << "[" << Lev << "] " << N;
+  O.indent(2 * Lev) << "[" << Lev << "] " << N;
   for (typename DomTreeNodeBase<NodeT>::const_iterator I = N->begin(),
                                                        E = N->end();
        I != E; ++I)
-    PrintDomTree<NodeT>(*I, o, Lev + 1);
+    PrintDomTree<NodeT>(*I, O, Lev + 1);
 }
+
+namespace DomTreeBuilder {
+template <class NodeT>
+struct SemiNCAInfo;
 
 // The calculate routine is provided in a separate header but referenced here.
 template <class FuncT, class N>
 void Calculate(DominatorTreeBaseByGraphTraits<GraphTraits<N>> &DT, FuncT &F);
 
+// The verify function is provided in a separate header but referenced here.
+template <class N>
+bool Verify(const DominatorTreeBaseByGraphTraits<GraphTraits<N>> &DT);
+}  // namespace DomTreeBuilder
+
 /// \brief Core dominator tree base class.
 ///
 /// This class is a generic template over graph nodes. It is instantiated for
 /// various graphs in the LLVM IR or in the code generator.
-template <class NodeT> class DominatorTreeBase : public DominatorBase<NodeT> {
-  bool dominatedBySlowTreeWalk(const DomTreeNodeBase<NodeT> *A,
-                               const DomTreeNodeBase<NodeT> *B) const {
-    assert(A != B);
-    assert(isReachableFromEntry(B));
-    assert(isReachableFromEntry(A));
+template <class NodeT> class DominatorTreeBase {
+ protected:
+  std::vector<NodeT *> Roots;
+  bool IsPostDominators;
 
-    const DomTreeNodeBase<NodeT> *IDom;
-    while ((IDom = B->getIDom()) != nullptr && IDom != A && IDom != B)
-      B = IDom; // Walk up the tree
-    return IDom != nullptr;
-  }
-
-  /// \brief Wipe this tree's state without releasing any resources.
-  ///
-  /// This is essentially a post-move helper only. It leaves the object in an
-  /// assignable and destroyable state, but otherwise invalid.
-  void wipe() {
-    DomTreeNodes.clear();
-    IDoms.clear();
-    Vertex.clear();
-    Info.clear();
-    RootNode = nullptr;
-  }
-
-protected:
-  typedef DenseMap<NodeT *, std::unique_ptr<DomTreeNodeBase<NodeT>>>
-      DomTreeNodeMapType;
+  using DomTreeNodeMapType =
+     DenseMap<NodeT *, std::unique_ptr<DomTreeNodeBase<NodeT>>>;
   DomTreeNodeMapType DomTreeNodes;
   DomTreeNodeBase<NodeT> *RootNode;
 
   mutable bool DFSInfoValid = false;
   mutable unsigned int SlowQueries = 0;
-  // Information record used during immediate dominators computation.
-  struct InfoRec {
-    unsigned DFSNum = 0;
-    unsigned Parent = 0;
-    unsigned Semi = 0;
-    NodeT *Label = nullptr;
 
-    InfoRec() = default;
-  };
+  friend struct DomTreeBuilder::SemiNCAInfo<NodeT>;
+  using SNCAInfoTy = DomTreeBuilder::SemiNCAInfo<NodeT>;
 
-  DenseMap<NodeT *, NodeT *> IDoms;
-
-  // Vertex - Map the DFS number to the NodeT*
-  std::vector<NodeT *> Vertex;
-
-  // Info - Collection of information used during the computation of idoms.
-  DenseMap<NodeT *, InfoRec> Info;
-
-  void reset() {
-    DomTreeNodes.clear();
-    IDoms.clear();
-    this->Roots.clear();
-    Vertex.clear();
-    RootNode = nullptr;
-    DFSInfoValid = false;
-    SlowQueries = 0;
-  }
-
-  // NewBB is split and now it has one successor. Update dominator tree to
-  // reflect this change.
-  template <class N>
-  void Split(typename GraphTraits<N>::NodeRef NewBB) {
-    using GraphT = GraphTraits<N>;
-    using NodeRef = typename GraphT::NodeRef;
-    assert(std::distance(GraphT::child_begin(NewBB),
-                         GraphT::child_end(NewBB)) == 1 &&
-           "NewBB should have a single successor!");
-    NodeRef NewBBSucc = *GraphT::child_begin(NewBB);
-
-    std::vector<NodeRef> PredBlocks;
-    for (const auto &Pred : children<Inverse<N>>(NewBB))
-      PredBlocks.push_back(Pred);
-
-    assert(!PredBlocks.empty() && "No predblocks?");
-
-    bool NewBBDominatesNewBBSucc = true;
-    for (const auto &Pred : children<Inverse<N>>(NewBBSucc)) {
-      if (Pred != NewBB && !dominates(NewBBSucc, Pred) &&
-          isReachableFromEntry(Pred)) {
-        NewBBDominatesNewBBSucc = false;
-        break;
-      }
-    }
-
-    // Find NewBB's immediate dominator and create new dominator tree node for
-    // NewBB.
-    NodeT *NewBBIDom = nullptr;
-    unsigned i = 0;
-    for (i = 0; i < PredBlocks.size(); ++i)
-      if (isReachableFromEntry(PredBlocks[i])) {
-        NewBBIDom = PredBlocks[i];
-        break;
-      }
-
-    // It's possible that none of the predecessors of NewBB are reachable;
-    // in that case, NewBB itself is unreachable, so nothing needs to be
-    // changed.
-    if (!NewBBIDom)
-      return;
-
-    for (i = i + 1; i < PredBlocks.size(); ++i) {
-      if (isReachableFromEntry(PredBlocks[i]))
-        NewBBIDom = findNearestCommonDominator(NewBBIDom, PredBlocks[i]);
-    }
-
-    // Create the new dominator tree node... and set the idom of NewBB.
-    DomTreeNodeBase<NodeT> *NewBBNode = addNewBlock(NewBB, NewBBIDom);
-
-    // If NewBB strictly dominates other blocks, then it is now the immediate
-    // dominator of NewBBSucc.  Update the dominator tree as appropriate.
-    if (NewBBDominatesNewBBSucc) {
-      DomTreeNodeBase<NodeT> *NewBBSuccNode = getNode(NewBBSucc);
-      changeImmediateDominator(NewBBSuccNode, NewBBNode);
-    }
-  }
-
-public:
-  explicit DominatorTreeBase(bool isPostDom)
-      : DominatorBase<NodeT>(isPostDom) {}
+ public:
+  explicit DominatorTreeBase(bool isPostDom) : IsPostDominators(isPostDom) {}
 
   DominatorTreeBase(DominatorTreeBase &&Arg)
-      : DominatorBase<NodeT>(
-            std::move(static_cast<DominatorBase<NodeT> &>(Arg))),
+      : Roots(std::move(Arg.Roots)),
+        IsPostDominators(Arg.IsPostDominators),
         DomTreeNodes(std::move(Arg.DomTreeNodes)),
         RootNode(std::move(Arg.RootNode)),
         DFSInfoValid(std::move(Arg.DFSInfoValid)),
-        SlowQueries(std::move(Arg.SlowQueries)), IDoms(std::move(Arg.IDoms)),
-        Vertex(std::move(Arg.Vertex)), Info(std::move(Arg.Info)) {
+        SlowQueries(std::move(Arg.SlowQueries)) {
     Arg.wipe();
   }
 
   DominatorTreeBase &operator=(DominatorTreeBase &&RHS) {
-    DominatorBase<NodeT>::operator=(
-        std::move(static_cast<DominatorBase<NodeT> &>(RHS)));
+    Roots = std::move(RHS.Roots);
+    IsPostDominators = RHS.IsPostDominators;
     DomTreeNodes = std::move(RHS.DomTreeNodes);
     RootNode = std::move(RHS.RootNode);
     DFSInfoValid = std::move(RHS.DFSInfoValid);
     SlowQueries = std::move(RHS.SlowQueries);
-    IDoms = std::move(RHS.IDoms);
-    Vertex = std::move(RHS.Vertex);
-    Info = std::move(RHS.Info);
     RHS.wipe();
     return *this;
   }
 
   DominatorTreeBase(const DominatorTreeBase &) = delete;
   DominatorTreeBase &operator=(const DominatorTreeBase &) = delete;
+
+  /// getRoots - Return the root blocks of the current CFG.  This may include
+  /// multiple blocks if we are computing post dominators.  For forward
+  /// dominators, this will always be a single block (the entry node).
+  ///
+  const std::vector<NodeT *> &getRoots() const { return Roots; }
+
+  /// isPostDominator - Returns true if analysis based of postdoms
+  ///
+  bool isPostDominator() const { return IsPostDominators; }
 
   /// compare - Return false if the other dominator tree base matches this
   /// dominator tree base. Otherwise return true.
@@ -601,7 +474,6 @@ public:
     assert(!this->isPostDominator() &&
            "Cannot change root of post-dominator tree");
     DFSInfoValid = false;
-    auto &Roots = DominatorBase<NodeT>::Roots;
     DomTreeNodeBase<NodeT> *NewNode = (DomTreeNodes[BB] =
       llvm::make_unique<DomTreeNodeBase<NodeT>>(BB, nullptr)).get();
     if (Roots.empty()) {
@@ -663,59 +535,19 @@ public:
 
   /// print - Convert to human readable form
   ///
-  void print(raw_ostream &o) const {
-    o << "=============================--------------------------------\n";
+  void print(raw_ostream &O) const {
+    O << "=============================--------------------------------\n";
     if (this->isPostDominator())
-      o << "Inorder PostDominator Tree: ";
+      O << "Inorder PostDominator Tree: ";
     else
-      o << "Inorder Dominator Tree: ";
+      O << "Inorder Dominator Tree: ";
     if (!DFSInfoValid)
-      o << "DFSNumbers invalid: " << SlowQueries << " slow queries.";
-    o << "\n";
+      O << "DFSNumbers invalid: " << SlowQueries << " slow queries.";
+    O << "\n";
 
     // The postdom tree can have a null root if there are no returns.
-    if (getRootNode())
-      PrintDomTree<NodeT>(getRootNode(), o, 1);
+    if (getRootNode()) PrintDomTree<NodeT>(getRootNode(), O, 1);
   }
-
-protected:
-  template <class GraphT>
-  friend typename GraphT::NodeRef
-  Eval(DominatorTreeBaseByGraphTraits<GraphT> &DT, typename GraphT::NodeRef V,
-       unsigned LastLinked);
-
-  template <class GraphT>
-  friend unsigned ReverseDFSPass(DominatorTreeBaseByGraphTraits<GraphT> &DT,
-                                 typename GraphT::NodeRef V, unsigned N);
-
-  template <class GraphT>
-  friend unsigned DFSPass(DominatorTreeBaseByGraphTraits<GraphT> &DT,
-                          typename GraphT::NodeRef V, unsigned N);
-
-  template <class FuncT, class N>
-  friend void Calculate(DominatorTreeBaseByGraphTraits<GraphTraits<N>> &DT,
-                        FuncT &F);
-
-  DomTreeNodeBase<NodeT> *getNodeForBlock(NodeT *BB) {
-    if (DomTreeNodeBase<NodeT> *Node = getNode(BB))
-      return Node;
-
-    // Haven't calculated this node yet?  Get or calculate the node for the
-    // immediate dominator.
-    NodeT *IDom = getIDom(BB);
-
-    assert(IDom || DomTreeNodes[nullptr]);
-    DomTreeNodeBase<NodeT> *IDomNode = getNodeForBlock(IDom);
-
-    // Add a new tree node for this NodeT, and link it as a child of
-    // IDomNode
-    return (DomTreeNodes[BB] = IDomNode->addChild(
-                llvm::make_unique<DomTreeNodeBase<NodeT>>(BB, IDomNode))).get();
-  }
-
-  NodeT *getIDom(NodeT *BB) const { return IDoms.lookup(BB); }
-
-  void addRoot(NodeT *BB) { this->Roots.push_back(BB); }
 
 public:
   /// updateDFSNumbers - Assign In and Out numbers to the nodes while walking
@@ -770,24 +602,120 @@ public:
 
   /// recalculate - compute a dominator tree for the given function
   template <class FT> void recalculate(FT &F) {
-    typedef GraphTraits<FT *> TraitsTy;
+    using TraitsTy = GraphTraits<FT *>;
     reset();
-    Vertex.push_back(nullptr);
 
     if (!this->IsPostDominators) {
       // Initialize root
       NodeT *entry = TraitsTy::getEntryNode(&F);
       addRoot(entry);
 
-      Calculate<FT, NodeT *>(*this, F);
+      DomTreeBuilder::Calculate<FT, NodeT *>(*this, F);
     } else {
       // Initialize the roots list
       for (auto *Node : nodes(&F))
         if (TraitsTy::child_begin(Node) == TraitsTy::child_end(Node))
           addRoot(Node);
 
-      Calculate<FT, Inverse<NodeT *>>(*this, F);
+      DomTreeBuilder::Calculate<FT, Inverse<NodeT *>>(*this, F);
     }
+  }
+
+  /// verify - check parent and sibling property
+  bool verify() const {
+    return this->isPostDominator()
+           ? DomTreeBuilder::Verify<Inverse<NodeT *>>(*this)
+           : DomTreeBuilder::Verify<NodeT *>(*this);
+  }
+
+ protected:
+  void addRoot(NodeT *BB) { this->Roots.push_back(BB); }
+
+  void reset() {
+    DomTreeNodes.clear();
+    this->Roots.clear();
+    RootNode = nullptr;
+    DFSInfoValid = false;
+    SlowQueries = 0;
+  }
+
+  // NewBB is split and now it has one successor. Update dominator tree to
+  // reflect this change.
+  template <class N>
+  void Split(typename GraphTraits<N>::NodeRef NewBB) {
+    using GraphT = GraphTraits<N>;
+    using NodeRef = typename GraphT::NodeRef;
+    assert(std::distance(GraphT::child_begin(NewBB),
+                         GraphT::child_end(NewBB)) == 1 &&
+           "NewBB should have a single successor!");
+    NodeRef NewBBSucc = *GraphT::child_begin(NewBB);
+
+    std::vector<NodeRef> PredBlocks;
+    for (const auto &Pred : children<Inverse<N>>(NewBB))
+      PredBlocks.push_back(Pred);
+
+    assert(!PredBlocks.empty() && "No predblocks?");
+
+    bool NewBBDominatesNewBBSucc = true;
+    for (const auto &Pred : children<Inverse<N>>(NewBBSucc)) {
+      if (Pred != NewBB && !dominates(NewBBSucc, Pred) &&
+          isReachableFromEntry(Pred)) {
+        NewBBDominatesNewBBSucc = false;
+        break;
+      }
+    }
+
+    // Find NewBB's immediate dominator and create new dominator tree node for
+    // NewBB.
+    NodeT *NewBBIDom = nullptr;
+    unsigned i = 0;
+    for (i = 0; i < PredBlocks.size(); ++i)
+      if (isReachableFromEntry(PredBlocks[i])) {
+        NewBBIDom = PredBlocks[i];
+        break;
+      }
+
+    // It's possible that none of the predecessors of NewBB are reachable;
+    // in that case, NewBB itself is unreachable, so nothing needs to be
+    // changed.
+    if (!NewBBIDom) return;
+
+    for (i = i + 1; i < PredBlocks.size(); ++i) {
+      if (isReachableFromEntry(PredBlocks[i]))
+        NewBBIDom = findNearestCommonDominator(NewBBIDom, PredBlocks[i]);
+    }
+
+    // Create the new dominator tree node... and set the idom of NewBB.
+    DomTreeNodeBase<NodeT> *NewBBNode = addNewBlock(NewBB, NewBBIDom);
+
+    // If NewBB strictly dominates other blocks, then it is now the immediate
+    // dominator of NewBBSucc.  Update the dominator tree as appropriate.
+    if (NewBBDominatesNewBBSucc) {
+      DomTreeNodeBase<NodeT> *NewBBSuccNode = getNode(NewBBSucc);
+      changeImmediateDominator(NewBBSuccNode, NewBBNode);
+    }
+  }
+
+ private:
+  bool dominatedBySlowTreeWalk(const DomTreeNodeBase<NodeT> *A,
+                               const DomTreeNodeBase<NodeT> *B) const {
+    assert(A != B);
+    assert(isReachableFromEntry(B));
+    assert(isReachableFromEntry(A));
+
+    const DomTreeNodeBase<NodeT> *IDom;
+    while ((IDom = B->getIDom()) != nullptr && IDom != A && IDom != B)
+      B = IDom;  // Walk up the tree
+    return IDom != nullptr;
+  }
+
+  /// \brief Wipe this tree's state without releasing any resources.
+  ///
+  /// This is essentially a post-move helper only. It leaves the object in an
+  /// assignable and destroyable state, but otherwise invalid.
+  void wipe() {
+    DomTreeNodes.clear();
+    RootNode = nullptr;
   }
 };
 

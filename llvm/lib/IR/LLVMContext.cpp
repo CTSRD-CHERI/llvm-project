@@ -13,11 +13,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/IR/LLVMContext.h"
+#include "LLVMContextImpl.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
-#include "LLVMContextImpl.h"
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/DiagnosticPrinter.h"
 #include "llvm/IR/Metadata.h"
@@ -125,11 +125,11 @@ void LLVMContext::setDiagnosticHandler(DiagnosticHandlerTy DiagnosticHandler,
   pImpl->RespectDiagnosticFilters = RespectFilters;
 }
 
-void LLVMContext::setDiagnosticHotnessRequested(bool Requested) {
-  pImpl->DiagnosticHotnessRequested = Requested;
+void LLVMContext::setDiagnosticsHotnessRequested(bool Requested) {
+  pImpl->DiagnosticsHotnessRequested = Requested;
 }
-bool LLVMContext::getDiagnosticHotnessRequested() const {
-  return pImpl->DiagnosticHotnessRequested;
+bool LLVMContext::getDiagnosticsHotnessRequested() const {
+  return pImpl->DiagnosticsHotnessRequested;
 }
 
 yaml::Output *LLVMContext::getDiagnosticsOutputFile() {

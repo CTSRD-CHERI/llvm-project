@@ -54,10 +54,23 @@ define [16 x i32] @test_ret_demotion() {
   ret [16 x i32] %res
 }
 
-define void @test_structs({i32, i32} %struct) {
-; CHECK: remark: {{.*}} unable to lower arguments: void ({ i32, i32 })*
-; CHECK-LABEL: warning: Instruction selection used fallback path for test_structs
-  ret void
+%large.struct = type { i32, i32, i32, i32, i32} ; Doesn't fit in R0-R3
+
+declare %large.struct @large_struct_return_target()
+
+define %large.struct @test_large_struct_return() {
+; CHECK: remark: {{.*}} unable to translate instruction: call{{.*}} @large_struct_return_target
+; CHECK-LABEL: warning: Instruction selection used fallback path for test_large_struct_return
+  %r = call %large.struct @large_struct_return_target()
+  ret %large.struct %r
+}
+
+%mixed.struct = type {i32*, float, i32}
+
+define %mixed.struct @test_mixed_struct(%mixed.struct %x) {
+; CHECK: remark: {{.*}} unable to lower arguments: %mixed.struct (%mixed.struct)*
+; CHECK-LABEL: warning: Instruction selection used fallback path for test_mixed_struct
+  ret %mixed.struct %x
 }
 
 define void @test_vararg_definition(i32 %a, ...) {

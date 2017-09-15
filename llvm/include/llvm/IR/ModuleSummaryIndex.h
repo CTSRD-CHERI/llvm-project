@@ -18,13 +18,13 @@
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/IR/Module.h"
 #include "llvm/IR/GlobalValue.h"
+#include "llvm/IR/Module.h"
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -32,6 +32,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -134,16 +135,18 @@ public:
     /// be renamed or references something that can't be renamed).
     unsigned NotEligibleToImport : 1;
 
-    /// Indicate that the global value must be considered a live root for
-    /// index-based liveness analysis. Used for special LLVM values such as
-    /// llvm.global_ctors that the linker does not know about.
-    unsigned LiveRoot : 1;
+    /// In per-module summary, indicate that the global value must be considered
+    /// a live root for index-based liveness analysis. Used for special LLVM
+    /// values such as llvm.global_ctors that the linker does not know about.
+    ///
+    /// In combined summary, indicate that the global value is live.
+    unsigned Live : 1;
 
     /// Convenience Constructors
     explicit GVFlags(GlobalValue::LinkageTypes Linkage,
-                     bool NotEligibleToImport, bool LiveRoot)
+                     bool NotEligibleToImport, bool Live)
         : Linkage(Linkage), NotEligibleToImport(NotEligibleToImport),
-          LiveRoot(LiveRoot) {}
+          Live(Live) {}
   };
 
 private:
@@ -171,6 +174,8 @@ private:
   /// from within a function). This does not include functions called, which
   /// are listed in the derived FunctionSummary object.
   std::vector<ValueInfo> RefEdgeList;
+
+  bool isLive() const { return Flags.Live; }
 
 protected:
   GlobalValueSummary(SummaryKind K, GVFlags Flags, std::vector<ValueInfo> Refs)
@@ -213,19 +218,17 @@ public:
   /// Return true if this global value can't be imported.
   bool notEligibleToImport() const { return Flags.NotEligibleToImport; }
 
-  /// Return true if this global value must be considered a root for live
-  /// value analysis on the index.
-  bool liveRoot() const { return Flags.LiveRoot; }
-
-  /// Flag that this global value must be considered a root for live
-  /// value analysis on the index.
-  void setLiveRoot() { Flags.LiveRoot = true; }
+  void setLive(bool Live) { Flags.Live = Live; }
 
   /// Flag that this global value cannot be imported.
   void setNotEligibleToImport() { Flags.NotEligibleToImport = true; }
 
   /// Return the list of values referenced by this global value definition.
   ArrayRef<ValueInfo> refs() const { return RefEdgeList; }
+
+  friend class ModuleSummaryIndex;
+  friend void computeDeadSymbols(class ModuleSummaryIndex &,
+                                 const DenseSet<GlobalValue::GUID> &);
 };
 
 /// \brief Alias summary information.
@@ -535,6 +538,14 @@ private:
   /// GUIDs, it will be mapped to 0.
   std::map<GlobalValue::GUID, GlobalValue::GUID> OidGuidMap;
 
+  /// Indicates that summary-based GlobalValue GC has run, and values with
+  /// GVFlags::Live==false are really dead. Otherwise, all values must be
+  /// considered live.
+  bool WithGlobalValueDeadStripping = false;
+
+  std::set<std::string> CfiFunctionDefs;
+  std::set<std::string> CfiFunctionDecls;
+
   // YAML I/O support.
   friend yaml::MappingTraits<ModuleSummaryIndex>;
 
@@ -549,6 +560,18 @@ public:
   gvsummary_iterator end() { return GlobalValueMap.end(); }
   const_gvsummary_iterator end() const { return GlobalValueMap.end(); }
   size_t size() const { return GlobalValueMap.size(); }
+
+  bool withGlobalValueDeadStripping() const {
+    return WithGlobalValueDeadStripping;
+  }
+  void setWithGlobalValueDeadStripping() {
+    WithGlobalValueDeadStripping = true;
+  }
+
+  bool isGlobalValueLive(const GlobalValueSummary *GVS) const {
+    return !WithGlobalValueDeadStripping || GVS->isLive();
+  }
+  bool isGUIDLive(GlobalValue::GUID GUID) const;
 
   /// Return a ValueInfo for GUID if it exists, otherwise return ValueInfo().
   ValueInfo getValueInfo(GlobalValue::GUID GUID) const {
@@ -573,6 +596,12 @@ public:
     const auto I = OidGuidMap.find(OriginalID);
     return I == OidGuidMap.end() ? 0 : I->second;
   }
+
+  std::set<std::string> &cfiFunctionDefs() { return CfiFunctionDefs; }
+  const std::set<std::string> &cfiFunctionDefs() const { return CfiFunctionDefs; }
+
+  std::set<std::string> &cfiFunctionDecls() { return CfiFunctionDecls; }
+  const std::set<std::string> &cfiFunctionDecls() const { return CfiFunctionDecls; }
 
   /// Add a global value summary for a value of the given name.
   void addGlobalValueSummary(StringRef ValueName,
@@ -673,14 +702,13 @@ public:
     return Pair.first;
   }
 
-  /// Add a new module path with the given \p Hash, mapped to the given \p
-  /// ModID, and return an iterator to the entry in the index.
-  ModulePathStringTableTy::iterator
-  addModulePath(StringRef ModPath, uint64_t ModId,
-                ModuleHash Hash = ModuleHash{{0}}) {
-    return ModulePathStringTable.insert(std::make_pair(
-                                            ModPath,
-                                            std::make_pair(ModId, Hash))).first;
+  typedef ModulePathStringTableTy::value_type ModuleInfo;
+
+  /// Add a new module with the given \p Hash, mapped to the given \p
+  /// ModID, and return a reference to the module.
+  ModuleInfo *addModule(StringRef ModPath, uint64_t ModId,
+                        ModuleHash Hash = ModuleHash{{0}}) {
+    return &*ModulePathStringTable.insert({ModPath, {ModId, Hash}}).first;
   }
 
   /// Check if the given Module has any functions available for exporting

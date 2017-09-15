@@ -16,12 +16,12 @@
 #define LLVM_LIB_TARGET_AMDGPU_AMDGPUSUBTARGET_H
 
 #include "AMDGPU.h"
-#include "R600InstrInfo.h"
-#include "R600ISelLowering.h"
 #include "R600FrameLowering.h"
-#include "SIInstrInfo.h"
-#include "SIISelLowering.h"
+#include "R600ISelLowering.h"
+#include "R600InstrInfo.h"
 #include "SIFrameLowering.h"
+#include "SIISelLowering.h"
+#include "SIInstrInfo.h"
 #include "SIMachineFunctionInfo.h"
 #include "Utils/AMDGPUBaseInfo.h"
 #include "llvm/ADT/Triple.h"
@@ -57,9 +57,12 @@ public:
 
   enum {
     ISAVersion0_0_0,
+    ISAVersion6_0_0,
+    ISAVersion6_0_1,
     ISAVersion7_0_0,
     ISAVersion7_0_1,
     ISAVersion7_0_2,
+    ISAVersion7_0_3,
     ISAVersion8_0_0,
     ISAVersion8_0_1,
     ISAVersion8_0_2,
@@ -67,7 +70,9 @@ public:
     ISAVersion8_0_4,
     ISAVersion8_1_0,
     ISAVersion9_0_0,
-    ISAVersion9_0_1
+    ISAVersion9_0_1,
+    ISAVersion9_0_2,
+    ISAVersion9_0_3
   };
 
   enum TrapHandlerAbi {
@@ -110,6 +115,7 @@ protected:
   bool FPExceptions;
   bool DX10Clamp;
   bool FlatForGlobal;
+  bool AutoWaitcntBeforeBarrier;
   bool UnalignedScratchAccess;
   bool UnalignedBufferAccess;
   bool HasApertureRegs;
@@ -143,6 +149,11 @@ protected:
   bool HasScalarStores;
   bool HasInv2PiInlineImm;
   bool HasSDWA;
+  bool HasSDWAOmod;
+  bool HasSDWAScalar;
+  bool HasSDWASdst;
+  bool HasSDWAMac;
+  bool HasSDWAOutModsVOPC;
   bool HasDPP;
   bool FlatAddressSpace;
   bool FlatInstOffsets;
@@ -195,7 +206,8 @@ public:
   }
 
   bool isOpenCLEnv() const {
-    return TargetTriple.getEnvironment() == Triple::OpenCL;
+    return TargetTriple.getEnvironment() == Triple::OpenCL ||
+           TargetTriple.getEnvironmentName() == "amdgizcl";
   }
 
   Generation getGeneration() const {
@@ -363,6 +375,10 @@ public:
     return FlatForGlobal;
   }
 
+  bool hasAutoWaitcntBeforeBarrier() const {
+    return AutoWaitcntBeforeBarrier;
+  }
+
   bool hasUnalignedBufferAccess() const {
     return UnalignedBufferAccess;
   }
@@ -418,6 +434,26 @@ public:
 
   bool hasSDWA() const {
     return HasSDWA;
+  }
+
+  bool hasSDWAOmod() const {
+    return HasSDWAOmod;
+  }
+
+  bool hasSDWAScalar() const {
+    return HasSDWAScalar;
+  }
+
+  bool hasSDWASdst() const {
+    return HasSDWASdst;
+  }
+
+  bool hasSDWAMac() const {
+    return HasSDWAMac;
+  }
+
+  bool hasSDWAOutModsVOPC() const {
+    return HasSDWAOutModsVOPC;
   }
 
   /// \brief Returns the offset in bytes from the start of the input buffer
@@ -727,12 +763,6 @@ public:
   /// Return the maximum number of waves per SIMD for kernels using \p VGPRs VGPRs
   unsigned getOccupancyWithNumVGPRs(unsigned VGPRs) const;
 
-  /// \returns True if waitcnt instruction is needed before barrier instruction,
-  /// false otherwise.
-  bool needWaitcntBeforeBarrier() const {
-    return true;
-  }
-
   /// \returns true if the flat_scratch register should be initialized with the
   /// pointer to the wave's scratch memory rather than a size and offset.
   bool flatScratchIsPointer() const {
@@ -787,7 +817,7 @@ public:
 
   /// \returns VGPR allocation granularity supported by the subtarget.
   unsigned getVGPRAllocGranule() const {
-    return AMDGPU::IsaInfo::getVGPRAllocGranule(getFeatureBits());;
+    return AMDGPU::IsaInfo::getVGPRAllocGranule(getFeatureBits());
   }
 
   /// \returns VGPR encoding granularity supported by the subtarget.

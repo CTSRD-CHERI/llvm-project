@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "gtest/gtest.h"
 #include "llvm/ADT/Triple.h"
+#include "gtest/gtest.h"
 
 using namespace llvm;
 
@@ -199,6 +199,12 @@ TEST(TripleTest, ParsedIDs) {
   EXPECT_EQ(Triple::spir64, T.getArch());
   EXPECT_EQ(Triple::UnknownVendor, T.getVendor());
   EXPECT_EQ(Triple::UnknownOS, T.getOS());
+
+  T = Triple("x86_64-unknown-ananas");
+  EXPECT_EQ(Triple::x86_64, T.getArch());
+  EXPECT_EQ(Triple::UnknownVendor, T.getVendor());
+  EXPECT_EQ(Triple::Ananas, T.getOS());
+  EXPECT_EQ(Triple::UnknownEnvironment, T.getEnvironment());
 
   T = Triple("x86_64-unknown-cloudabi");
   EXPECT_EQ(Triple::x86_64, T.getArch());
@@ -1090,11 +1096,16 @@ TEST(TripleTest, NormalizeARM) {
   EXPECT_EQ("armv6eb--netbsd-eabihf", Triple::normalize("armv6eb-netbsd-eabihf"));
   EXPECT_EQ("armv7eb--netbsd-eabihf", Triple::normalize("armv7eb-netbsd-eabihf"));
 
+  EXPECT_EQ("armv7-suse-linux-gnueabihf",
+            Triple::normalize("armv7-suse-linux-gnueabi"));
+
   Triple T;
   T = Triple("armv6--netbsd-eabi");
   EXPECT_EQ(Triple::arm, T.getArch());
   T = Triple("armv6eb--netbsd-eabi");
   EXPECT_EQ(Triple::armeb, T.getArch());
+  T = Triple("armv7-suse-linux-gnueabihf");
+  EXPECT_EQ(Triple::GNUEABIHF, T.getEnvironment());
 }
 
 TEST(TripleTest, ParseARMArch) {

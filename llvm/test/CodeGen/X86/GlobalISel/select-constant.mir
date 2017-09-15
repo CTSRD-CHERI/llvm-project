@@ -13,6 +13,10 @@
     ret i32 4
   }
 
+  define i32 @const_i32_0() {
+    ret i32 0
+  }
+
   define i64 @const_i64() {
     ret i64 68719476720
   }
@@ -33,7 +37,7 @@ regBankSelected: true
 selected:        false
 # CHECK-LABEL: name:            const_i8
 # CHECK: registers:
-# CHECK-NEXT:  - { id: 0, class: gr8 }
+# CHECK-NEXT:  - { id: 0, class: gr8, preferred-register: '' }
 registers:
   - { id: 0, class: gpr }
 # CHECK:  body:
@@ -52,7 +56,7 @@ regBankSelected: true
 selected:        false
 # CHECK-LABEL: name:            const_i16
 # CHECK: registers:
-# CHECK-NEXT:  - { id: 0, class: gr16 }
+# CHECK-NEXT:  - { id: 0, class: gr16, preferred-register: '' }
 registers:
   - { id: 0, class: gpr }
 # CHECK:  body:
@@ -71,7 +75,7 @@ regBankSelected: true
 selected:        false
 # CHECK-LABEL: name:            const_i32
 # CHECK: registers:
-# CHECK-NEXT:  - { id: 0, class: gr32 }
+# CHECK-NEXT:  - { id: 0, class: gr32, preferred-register: '' }
 registers:
   - { id: 0, class: gpr }
 # CHECK:  body:
@@ -84,13 +88,30 @@ body:             |
 
 ...
 ---
+name:            const_i32_0
+# CHECK-LABEL: name:  const_i32_0
+legalized:       true
+regBankSelected: true
+# CHECK:      registers:
+# CHECK-NEXT:   - { id: 0, class: gr32, preferred-register: '' }
+registers:
+  - { id: 0, class: gpr }
+# CHECK:          %0 = MOV32r0 implicit-def %eflags
+body:             |
+  bb.1 (%ir-block.0):
+    %0(s32) = G_CONSTANT i32 0
+    %eax = COPY %0(s32)
+    RET 0, implicit %eax
+
+...
+---
 name:            const_i64
 legalized:       true
 regBankSelected: true
 selected:        false
 # CHECK-LABEL: name:            const_i64
 # CHECK: registers:
-# CHECK-NEXT:  - { id: 0, class: gr64 }
+# CHECK-NEXT:  - { id: 0, class: gr64, preferred-register: '' }
 registers:
   - { id: 0, class: gpr }
 # CHECK:  body:
@@ -110,7 +131,7 @@ regBankSelected: true
 selected:        false
 # CHECK-LABEL: name:            const_i64_u32
 # CHECK: registers:
-# CHECK-NEXT:  - { id: 0, class: gr64 }
+# CHECK-NEXT:  - { id: 0, class: gr64, preferred-register: '' }
 registers:
   - { id: 0, class: gpr }
 # CHECK:  body:
@@ -129,7 +150,7 @@ regBankSelected: true
 selected:        false
 # CHECK-LABEL: name:            const_i64_i32
 # CHECK: registers:
-# CHECK-NEXT:  - { id: 0, class: gr64 }
+# CHECK-NEXT:  - { id: 0, class: gr64, preferred-register: '' }
 registers:
   - { id: 0, class: gpr }
 # CHECK:  body:

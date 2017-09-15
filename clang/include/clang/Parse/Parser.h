@@ -166,6 +166,7 @@ class Parser : public CodeCompletionHandler {
   std::unique_ptr<PragmaHandler> FPContractHandler;
   std::unique_ptr<PragmaHandler> OpenCLExtensionHandler;
   std::unique_ptr<PragmaHandler> OpenMPHandler;
+  std::unique_ptr<PragmaHandler> PCSectionHandler;
   std::unique_ptr<PragmaHandler> MSCommentHandler;
   std::unique_ptr<PragmaHandler> MSDetectMismatchHandler;
   std::unique_ptr<PragmaHandler> MSPointersToMembers;
@@ -603,7 +604,7 @@ public:
   }
 
   /// getTypeAnnotation - Read a parsed type out of an annotation token.
-  static ParsedType getTypeAnnotation(Token &Tok) {
+  static ParsedType getTypeAnnotation(const Token &Tok) {
     return ParsedType::getFromOpaquePtr(Tok.getAnnotationValue());
   }
 
@@ -614,7 +615,7 @@ private:
 
   /// \brief Read an already-translated primary expression out of an annotation
   /// token.
-  static ExprResult getExprAnnotation(Token &Tok) {
+  static ExprResult getExprAnnotation(const Token &Tok) {
     return ExprResult::getFromOpaquePointer(Tok.getAnnotationValue());
   }
 
@@ -1460,7 +1461,8 @@ public:
   };
 
   ExprResult ParseExpression(TypeCastState isTypeCast = NotTypeCast);
-  ExprResult ParseConstantExpressionInExprEvalContext(TypeCastState isTypeCast);
+  ExprResult ParseConstantExpressionInExprEvalContext(
+      TypeCastState isTypeCast = NotTypeCast);
   ExprResult ParseConstantExpression(TypeCastState isTypeCast = NotTypeCast);
   ExprResult ParseConstraintExpression();
   // Expr that doesn't include commas.
@@ -1850,6 +1852,7 @@ private:
     DSC_trailing, // C++11 trailing-type-specifier in a trailing return type
     DSC_alias_declaration, // C++11 type-specifier-seq in an alias-declaration
     DSC_top_level, // top-level/namespace declaration context
+    DSC_template_param, // template parameter context
     DSC_template_type_arg, // template type argument context
     DSC_objc_method_result, // ObjC method result context, enables 'instancetype'
     DSC_condition // condition declaration context
@@ -1860,6 +1863,7 @@ private:
   static bool isTypeSpecifier(DeclSpecContext DSC) {
     switch (DSC) {
     case DSC_normal:
+    case DSC_template_param:
     case DSC_class:
     case DSC_top_level:
     case DSC_objc_method_result:
@@ -1880,6 +1884,7 @@ private:
   static bool isClassTemplateDeductionContext(DeclSpecContext DSC) {
     switch (DSC) {
     case DSC_normal:
+    case DSC_template_param:
     case DSC_class:
     case DSC_top_level:
     case DSC_condition:

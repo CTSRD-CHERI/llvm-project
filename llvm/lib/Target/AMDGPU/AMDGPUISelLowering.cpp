@@ -21,6 +21,7 @@
 #include "AMDGPURegisterInfo.h"
 #include "AMDGPUSubtarget.h"
 #include "R600MachineFunctionInfo.h"
+#include "SIInstrInfo.h"
 #include "SIMachineFunctionInfo.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/MachineFunction.h"
@@ -30,7 +31,6 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/Support/KnownBits.h"
-#include "SIInstrInfo.h"
 using namespace llvm;
 
 static bool allocateKernArg(unsigned ValNo, MVT ValVT, MVT LocVT,
@@ -3527,18 +3527,25 @@ SDValue AMDGPUTargetLowering::PerformDAGCombine(SDNode *N,
 //===----------------------------------------------------------------------===//
 
 SDValue AMDGPUTargetLowering::CreateLiveInRegister(SelectionDAG &DAG,
-                                                  const TargetRegisterClass *RC,
-                                                   unsigned Reg, EVT VT) const {
+                                                   const TargetRegisterClass *RC,
+                                                   unsigned Reg, EVT VT,
+                                                   const SDLoc &SL,
+                                                   bool RawReg) const {
   MachineFunction &MF = DAG.getMachineFunction();
   MachineRegisterInfo &MRI = MF.getRegInfo();
-  unsigned VirtualRegister;
+  unsigned VReg;
+
   if (!MRI.isLiveIn(Reg)) {
-    VirtualRegister = MRI.createVirtualRegister(RC);
-    MRI.addLiveIn(Reg, VirtualRegister);
+    VReg = MRI.createVirtualRegister(RC);
+    MRI.addLiveIn(Reg, VReg);
   } else {
-    VirtualRegister = MRI.getLiveInVirtReg(Reg);
+    VReg = MRI.getLiveInVirtReg(Reg);
   }
-  return DAG.getRegister(VirtualRegister, VT);
+
+  if (RawReg)
+    return DAG.getRegister(VReg, VT);
+
+  return DAG.getCopyFromReg(DAG.getEntryNode(), SL, VReg, VT);
 }
 
 uint32_t AMDGPUTargetLowering::getImplicitParameterOffset(
@@ -3657,6 +3664,8 @@ const char* AMDGPUTargetLowering::getTargetNodeName(unsigned Opcode) const {
   NODE_NAME_CASE(STORE_MSKOR)
   NODE_NAME_CASE(LOAD_CONSTANT)
   NODE_NAME_CASE(TBUFFER_STORE_FORMAT)
+  NODE_NAME_CASE(TBUFFER_STORE_FORMAT_X3)
+  NODE_NAME_CASE(TBUFFER_LOAD_FORMAT)
   NODE_NAME_CASE(ATOMIC_CMP_SWAP)
   NODE_NAME_CASE(ATOMIC_INC)
   NODE_NAME_CASE(ATOMIC_DEC)

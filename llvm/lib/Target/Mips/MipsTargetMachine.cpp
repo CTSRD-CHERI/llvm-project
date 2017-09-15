@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "MipsTargetMachine.h"
 #include "llvm/Config/config.h"
 #include "MCTargetDesc/MipsABIInfo.h"
 #include "MCTargetDesc/MipsMCTargetDesc.h"
@@ -19,7 +20,6 @@
 #include "MipsSEISelDAGToDAG.h"
 #include "MipsSubtarget.h"
 #include "MipsTargetObjectFile.h"
-#include "MipsTargetMachine.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"

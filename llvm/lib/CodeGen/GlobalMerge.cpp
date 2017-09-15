@@ -553,7 +553,12 @@ bool GlobalMerge::doInitialization(Module &M) {
   // Grab all non-const globals.
   for (auto &GV : M.globals()) {
     // Merge is safe for "normal" internal or external globals only
-    if (GV.isDeclaration() || GV.isThreadLocal() || GV.hasSection())
+    if (GV.isDeclaration() || GV.isThreadLocal() ||
+        GV.hasSection() || GV.hasImplicitSection())
+      continue;
+
+    // It's not safe to merge globals that may be preempted
+    if (TM && !TM->shouldAssumeDSOLocal(M, &GV))
       continue;
 
     if (!(MergeExternalGlobals && GV.hasExternalLinkage()) &&

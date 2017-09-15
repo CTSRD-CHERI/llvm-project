@@ -11,20 +11,21 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/FoldingSet.h"
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/None.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/STLExtras.h"
 #include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/Analysis/Loads.h"
 #include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/CodeGen/GlobalISel/RegisterBank.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunction.h"
-#include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineInstrBundle.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
@@ -47,8 +48,8 @@
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
 #include "llvm/MC/MCInstrDesc.h"
-#include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
@@ -556,6 +557,23 @@ LLVM_DUMP_METHOD void MachineOperand::dump() const {
 unsigned MachinePointerInfo::getAddrSpace() const {
   if (V.isNull() || V.is<const PseudoSourceValue*>()) return 0;
   return cast<PointerType>(V.get<const Value*>()->getType())->getAddressSpace();
+}
+
+/// isDereferenceable - Return true if V is always dereferenceable for 
+/// Offset + Size byte.
+bool MachinePointerInfo::isDereferenceable(unsigned Size, LLVMContext &C,
+                                           const DataLayout &DL) const {
+  if (!V.is<const Value*>())
+    return false;
+
+  const Value *BasePtr = V.get<const Value*>();
+  if (BasePtr == nullptr)
+    return false;
+
+  return isDereferenceableAndAlignedPointer(BasePtr, 1,
+                                            APInt(DL.getPointerSize(),
+                                                  Offset + Size),
+                                            DL);
 }
 
 /// getConstantPool - Return a MachinePointerInfo record that refers to the

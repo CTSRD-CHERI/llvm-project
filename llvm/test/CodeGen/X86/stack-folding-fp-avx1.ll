@@ -1651,9 +1651,26 @@ define <8 x float> @stack_fold_sqrtps_ymm(<8 x float> %a0) {
 }
 declare <8 x float> @llvm.x86.avx.sqrt.ps.256(<8 x float>) nounwind readnone
 
-; TODO stack_fold_sqrtsd
+define double @stack_fold_sqrtsd(double %a0) {
+  ;CHECK-LABEL: stack_fold_sqrtsd
+  ;CHECK:       vsqrtsd {{-?[0-9]*}}(%rsp), {{%xmm[0-9][0-9]*}}, {{%xmm[0-9][0-9]*}} {{.*#+}} 8-byte Folded Reload
+  %1 = tail call <2 x i64> asm sideeffect "nop", "=x,~{xmm1},~{xmm2},~{xmm3},~{xmm4},~{xmm5},~{xmm6},~{xmm7},~{xmm8},~{xmm9},~{xmm10},~{xmm11},~{xmm12},~{xmm13},~{xmm14},~{xmm15},~{flags}"()
+  %2 = call double @llvm.sqrt.f64(double %a0)
+  ret double %2
+}
+declare double @llvm.sqrt.f64(double) nounwind readnone
+
 ; TODO stack_fold_sqrtsd_int
-; TODO stack_fold_sqrtss
+
+define float @stack_fold_sqrtss(float %a0) {
+  ;CHECK-LABEL: stack_fold_sqrtss
+  ;CHECK:       vsqrtss {{-?[0-9]*}}(%rsp), {{%xmm[0-9][0-9]*}}, {{%xmm[0-9][0-9]*}} {{.*#+}} 4-byte Folded Reload
+  %1 = tail call <2 x i64> asm sideeffect "nop", "=x,~{xmm1},~{xmm2},~{xmm3},~{xmm4},~{xmm5},~{xmm6},~{xmm7},~{xmm8},~{xmm9},~{xmm10},~{xmm11},~{xmm12},~{xmm13},~{xmm14},~{xmm15},~{flags}"()
+  %2 = call float @llvm.sqrt.f32(float %a0)
+  ret float %2
+}
+declare float @llvm.sqrt.f32(float) nounwind readnone
+
 ; TODO stack_fold_sqrtss_int
 
 define <2 x double> @stack_fold_subpd(<2 x double> %a0, <2 x double> %a1) {
@@ -1924,6 +1941,20 @@ define <8 x float> @stack_fold_xorps_ymm(<8 x float> %a0, <8 x float> %a1) {
   ; fadd forces execution domain
   %6 = fadd <8 x float> %5, <float 0x0, float 0x0, float 0x0, float 0x0, float 0x0, float 0x0, float 0x0, float 0x0>
   ret <8 x float> %6
+}
+
+define <4 x float> @stack_nofold_insertps(<8 x float> %a0, <8 x float> %a1) {
+; Cannot fold this without changing the immediate.
+; CHECK-LABEL: stack_nofold_insertps
+; CHECK:       32-byte Spill
+; CHECK:       nop
+; CHECK:       32-byte Reload
+; CHECK:       vinsertps $179, {{%xmm., %xmm., %xmm.}}
+  %1 = tail call <2 x i64> asm sideeffect "nop", "=x,~{xmm2},~{xmm3},~{xmm4},~{xmm5},~{xmm6},~{xmm7},~{xmm8},~{xmm9},~{xmm10},~{xmm11},~{xmm12},~{xmm13},~{xmm14},~{xmm15},~{flags}"()
+  %v0 = shufflevector <8 x float> %a0, <8 x float> undef, <4 x i32> <i32 0, i32 1, i32 2, i32 3>
+  %v1 = shufflevector <8 x float> %a1, <8 x float> undef, <4 x i32> <i32 0, i32 1, i32 2, i32 3>
+  %res = call <4 x float> @llvm.x86.sse41.insertps(<4 x float> %v0, <4 x float> %v1, i8 179)
+  ret <4 x float> %res
 }
 
 attributes #0 = { "unsafe-fp-math"="false" }

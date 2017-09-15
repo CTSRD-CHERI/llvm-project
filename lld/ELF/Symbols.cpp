@@ -35,6 +35,7 @@ DefinedRegular *ElfSym::Edata1;
 DefinedRegular *ElfSym::Edata2;
 DefinedRegular *ElfSym::End1;
 DefinedRegular *ElfSym::End2;
+DefinedRegular *ElfSym::GlobalOffsetTable;
 DefinedRegular *ElfSym::MipsGp;
 DefinedRegular *ElfSym::MipsGpDisp;
 DefinedRegular *ElfSym::MipsLocalGp;
@@ -101,12 +102,12 @@ static uint64_t getSymVA(const SymbolBody &Body, int64_t &Addend) {
   case SymbolBody::DefinedCommonKind:
     if (!Config->DefineCommon)
       return 0;
-    return InX::Common->OutSec->Addr + InX::Common->OutSecOff +
+    return InX::Common->getParent()->Addr + InX::Common->OutSecOff +
            cast<DefinedCommon>(Body).Offset;
   case SymbolBody::SharedKind: {
     auto &SS = cast<SharedSymbol>(Body);
     if (SS.NeedsCopy)
-      return SS.CopyRelSec->OutSec->Addr + SS.CopyRelSec->OutSecOff +
+      return SS.CopyRelSec->getParent()->Addr + SS.CopyRelSec->OutSecOff +
              SS.CopyRelSecOff;
     if (SS.NeedsPltAddr)
       return Body.getPltVA();
@@ -158,6 +159,21 @@ bool SymbolBody::isPreemptible() const {
   return true;
 }
 
+// Overwrites all attributes except symbol name with Other's so that
+// this symbol becomes an alias to Other. This is useful for handling
+// some options such as --wrap.
+//
+// The reason why we want to keep the symbol name is because, if we
+// copy symbol names, we'll end up having symbol tables in resulting
+// executables or DSOs containing two or more identical symbols, which
+// is just inconvenient.
+void SymbolBody::copy(SymbolBody *Other) {
+  StringRef S = Name;
+  memcpy(symbol()->Body.buffer, Other->symbol()->Body.buffer,
+         sizeof(Symbol::Body));
+  Name = S;
+}
+
 uint64_t SymbolBody::getVA(int64_t Addend) const {
   uint64_t OutVA = getSymVA(*this, Addend);
   return OutVA + Addend;
@@ -207,13 +223,13 @@ OutputSection *SymbolBody::getOutputSection() const {
 
   if (auto *S = dyn_cast<SharedSymbol>(this)) {
     if (S->NeedsCopy)
-      return S->CopyRelSec->OutSec;
+      return S->CopyRelSec->getParent();
     return nullptr;
   }
 
   if (isa<DefinedCommon>(this)) {
     if (Config->DefineCommon)
-      return InX::Common->OutSec;
+      return InX::Common->getParent();
     return nullptr;
   }
 
@@ -264,15 +280,14 @@ Defined::Defined(Kind K, StringRefZ Name, bool IsLocal, uint8_t StOther,
     : SymbolBody(K, Name, IsLocal, StOther, Type) {}
 
 template <class ELFT> bool DefinedRegular::isMipsPIC() const {
+  typedef typename ELFT::Ehdr Elf_Ehdr;
   if (!Section || !isFunc())
     return false;
+
+  auto *Sec = cast<InputSectionBase>(Section);
+  const Elf_Ehdr *Hdr = Sec->template getFile<ELFT>()->getObj().getHeader();
   return (this->StOther & STO_MIPS_MIPS16) == STO_MIPS_PIC ||
-         (cast<InputSectionBase>(Section)
-              ->template getFile<ELFT>()
-              ->getObj()
-              .getHeader()
-              ->e_flags &
-          EF_MIPS_PIC);
+         (Hdr->e_flags & EF_MIPS_PIC);
 }
 
 Undefined::Undefined(StringRefZ Name, bool IsLocal, uint8_t StOther,

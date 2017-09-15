@@ -25,8 +25,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/CodeGen/Passes.h"
-#include "llvm/CodeGen/TargetPassConfig.h"
 #include "BranchFolding.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallPtrSet.h"
@@ -41,7 +39,9 @@
 #include "llvm/CodeGen/MachineLoopInfo.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/CodeGen/MachinePostDominators.h"
+#include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TailDuplicator.h"
+#include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
@@ -594,8 +594,8 @@ BranchProbability MachineBlockPlacement::collectViableSuccessors(
   // Assume A->C is very hot (>90%), and C->D has a 50% probability, then after
   // A->C is chosen as a fall-through, D won't be selected as a successor of C
   // due to CFG constraint (the probability of C->D is not greater than
-  // HotProb to break top-order). If we exclude E that is not in BlockFilter
-  // when calculating the  probability of C->D, D will be selected and we
+  // HotProb to break topo-order). If we exclude E that is not in BlockFilter
+  // when calculating the probability of C->D, D will be selected and we
   // will get A C D B as the layout of this loop.
   auto AdjustedSumProb = BranchProbability::getOne();
   for (MachineBasicBlock *Succ : BB->successors()) {
@@ -1156,7 +1156,7 @@ void MachineBlockPlacement::precomputeTriangleChains() {
       continue;
 
     // Now we have an interesting triangle. Insert it if it's not part of an
-    // existing chain
+    // existing chain.
     // Note: This cannot be replaced with a call insert() or emplace() because
     // the find key is BB, but the insert/emplace key is PDom.
     auto Found = TriangleChainMap.find(&BB);
@@ -1298,9 +1298,9 @@ bool MachineBlockPlacement::hasBetterLayoutPredecessor(
   //       |    |                             |  |
   //    ---BB   |                             |  BB
   //    |       |                             |  |
-  //    |  pred--                             |  Succ--
+  //    |  Pred--                             |  Succ--
   //    |  |                                  |       |
-  //    ---succ                               ---pred--
+  //    ---Succ                               ---Pred--
   //
   // cost = freq(S->Pred) + freq(BB->Succ)    cost = 2 * freq (S->Pred)
   //      = freq(S->Pred) + freq(S->BB)

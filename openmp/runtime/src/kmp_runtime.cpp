@@ -101,7 +101,6 @@ static kmp_info_t *__kmp_thread_pool_insert_pt = NULL;
 /* Calculate the identifier of the current thread */
 /* fast (and somewhat portable) way to get unique identifier of executing
    thread. Returns KMP_GTID_DNE if we haven't been assigned a gtid. */
-
 int __kmp_get_global_thread_id() {
   int i;
   kmp_info_t **other_threads;
@@ -912,7 +911,6 @@ static int __kmp_reserve_threads(kmp_root_t *root, kmp_team_t *parent_team,
   }
 
   // Check if the threads array is large enough, or needs expanding.
-  //
   // See comment in __kmp_register_root() about the adjustment if
   // __kmp_threads[0] == NULL.
   capacity = __kmp_threads_capacity;
@@ -949,17 +947,18 @@ static int __kmp_reserve_threads(kmp_root_t *root, kmp_team_t *parent_team,
     }
   }
 
+#ifdef KMP_DEBUG
   if (new_nthreads == 1) {
     KC_TRACE(10,
              ("__kmp_reserve_threads: T#%d serializing team after reclaiming "
               "dead roots and rechecking; requested %d threads\n",
               __kmp_get_gtid(), set_nthreads));
-    return 1;
+  } else {
+    KC_TRACE(10, ("__kmp_reserve_threads: T#%d allocating %d threads; requested"
+                  " %d threads\n",
+                  __kmp_get_gtid(), new_nthreads, set_nthreads));
   }
-
-  KC_TRACE(10, ("__kmp_reserve_threads: T#%d allocating %d threads; requested "
-                "%d threads\n",
-                __kmp_get_gtid(), new_nthreads, set_nthreads));
+#endif // KMP_DEBUG
   return new_nthreads;
 }
 
@@ -1424,9 +1423,8 @@ int __kmp_fork_call(ident_t *loc, int gtid,
     // used to launch non-serial teams even if nested is not allowed
     active_level = parent_team->t.t_active_level;
 #if OMP_40_ENABLED
-    teams_level =
-        master_th->th
-            .th_teams_level; // needed to check nesting inside the teams
+    // needed to check nesting inside the teams
+    teams_level = master_th->th.th_teams_level;
 #endif
 #if KMP_NESTED_HOT_TEAMS
     p_hot_teams = &master_th->th.th_hot_teams;
@@ -1434,8 +1432,8 @@ int __kmp_fork_call(ident_t *loc, int gtid,
       *p_hot_teams = (kmp_hot_team_ptr_t *)__kmp_allocate(
           sizeof(kmp_hot_team_ptr_t) * __kmp_hot_teams_max_level);
       (*p_hot_teams)[0].hot_team = root->r.r_hot_team;
-      (*p_hot_teams)[0].hot_team_nth =
-          1; // it is either actual or not needed (when active_level > 0)
+      // it is either actual or not needed (when active_level > 0)
+      (*p_hot_teams)[0].hot_team_nth = 1;
     }
 #endif
 
@@ -1572,8 +1570,7 @@ int __kmp_fork_call(ident_t *loc, int gtid,
 #if USE_DEBUGGER
       if (__kmp_debugging) { // Let debugger override number of threads.
         int nth = __kmp_omp_num_threads(loc);
-        if (nth >
-            0) { // 0 means debugger does not want to change number of threads.
+        if (nth > 0) { // 0 means debugger doesn't want to change num threads
           master_set_numthreads = nth;
         }; // if
       }; // if
@@ -1640,17 +1637,15 @@ int __kmp_fork_call(ident_t *loc, int gtid,
 #endif /* OMP_40_ENABLED */
                                          )) ||
             (__kmp_library == library_serial)) {
-          KC_TRACE(
-              10,
-              ("__kmp_fork_call: T#%d serializing team; requested %d threads\n",
-               gtid, nthreads));
+          KC_TRACE(10, ("__kmp_fork_call: T#%d serializing team; requested %d"
+                        " threads\n",
+                        gtid, nthreads));
           nthreads = 1;
         }
       }
       if (nthreads > 1) {
         /* determine how many new threads we can use */
         __kmp_acquire_bootstrap_lock(&__kmp_forkjoin_lock);
-
         nthreads = __kmp_reserve_threads(
             root, parent_team, master_tid, nthreads
 #if OMP_40_ENABLED
@@ -2048,13 +2043,8 @@ int __kmp_fork_call(ident_t *loc, int gtid,
     if (__kmp_tasking_mode != tskm_immediate_exec) {
       // Set master's task team to team's task team. Unless this is hot team, it
       // should be NULL.
-#if 0
-      // Patch out an assertion that trips while the runtime seems to operate
-      // correctly. Avoiding the preconditions that cause the assertion to trip
-      // has been promised as a forthcoming patch.
       KMP_DEBUG_ASSERT(master_th->th.th_task_team ==
                        parent_team->t.t_task_team[master_th->th.th_task_state]);
-#endif
       KA_TRACE(20, ("__kmp_fork_call: Master T#%d pushing task_team %p / team "
                     "%p, new task_team %p / team %p\n",
                     __kmp_gtid_from_thread(master_th),
@@ -2088,9 +2078,8 @@ int __kmp_fork_call(ident_t *loc, int gtid,
             master_th->th.th_task_state;
         master_th->th.th_task_state_top++;
 #if KMP_NESTED_HOT_TEAMS
-        if (team ==
-            master_th->th.th_hot_teams[active_level]
-                .hot_team) { // Restore master's nested state if nested hot team
+        if (team == master_th->th.th_hot_teams[active_level].hot_team) {
+          // Restore master's nested state if nested hot team
           master_th->th.th_task_state =
               master_th->th
                   .th_task_state_memo_stack[master_th->th.th_task_state_top];
@@ -2174,8 +2163,8 @@ int __kmp_fork_call(ident_t *loc, int gtid,
         master_th->th.th_frame_time = tmp_time;
         if (__kmp_forkjoin_frames_mode == 3)
           team->t.t_region_time = tmp_time;
-      } else // only one notification scheme (either "submit" or
-// "forking/joined", not both)
+      } else
+// only one notification scheme (either "submit" or "forking/joined", not both)
 #endif /* USE_ITT_NOTIFY */
           if ((__itt_frame_begin_v3_ptr || KMP_ITT_DEBUG) &&
               __kmp_forkjoin_frames && !__kmp_forkjoin_frames_mode) {
@@ -2201,8 +2190,9 @@ int __kmp_fork_call(ident_t *loc, int gtid,
 #endif /* USE_ITT_BUILD */
 
 #if OMP_40_ENABLED
-    if (ap) // AC: skip __kmp_internal_fork at teams construct, let only master
-// threads execute
+    // AC: skip __kmp_internal_fork at teams construct, let only master
+    // threads execute
+    if (ap)
 #endif /* OMP_40_ENABLED */
     {
       __kmp_internal_fork(loc, gtid, team);
@@ -2754,7 +2744,7 @@ void __kmp_set_schedule(int gtid, kmp_sched_t kind, int chunk) {
         __kmp_sch_map[kind - kmp_sched_lower_ext + kmp_sched_upper_std -
                       kmp_sched_lower - 2];
   }
-  if (kind == kmp_sched_auto) {
+  if (kind == kmp_sched_auto || chunk < 1) {
     // ignore parameter chunk for schedule auto
     thread->th.th_current_task->td_icvs.sched.chunk = KMP_DEFAULT_CHUNK;
   } else {
@@ -4379,7 +4369,6 @@ static void __kmp_reinitialize_team(kmp_team_t *team,
   KMP_CHECK_UPDATE(team->t.t_ident, loc);
 
   KMP_CHECK_UPDATE(team->t.t_id, KMP_GEN_TEAM_ID());
-
   // Copy ICVs to the master thread's implicit taskdata
   __kmp_init_implicit_task(loc, team->t.t_threads[0], team, 0, FALSE);
   copy_icvs(&team->t.t_implicit_task_taskdata[0].td_icvs, new_icvs);
@@ -4797,8 +4786,7 @@ __kmp_allocate_team(kmp_root_t *root, int new_nproc, int max_nproc,
     if (team->t.t_nproc == new_nproc) { // Check changes in number of threads
       KA_TRACE(20, ("__kmp_allocate_team: reusing hot team\n"));
       // This case can mean that omp_set_num_threads() was called and the hot
-      // team size
-      // was already reduced, so we check the special flag
+      // team size was already reduced, so we check the special flag
       if (team->t.t_size_changed == -1) {
         team->t.t_size_changed = 1;
       } else {
@@ -6280,7 +6268,7 @@ void __kmp_unregister_library(void) {
 // End of Library registration stuff.
 // -----------------------------------------------------------------------------
 
-#if KMP_ARCH_X86_64 && (KMP_OS_LINUX || KMP_OS_WINDOWS)
+#if KMP_MIC_SUPPORTED
 
 static void __kmp_check_mic_type() {
   kmp_cpuid_t cpuid_state = {0};
@@ -6296,7 +6284,7 @@ static void __kmp_check_mic_type() {
   }
 }
 
-#endif /* KMP_ARCH_X86_64 && (KMP_OS_LINUX || KMP_OS_WINDOWS) */
+#endif /* KMP_MIC_SUPPORTED */
 
 static void __kmp_do_serial_initialize(void) {
   int i, gtid;
@@ -6368,7 +6356,7 @@ static void __kmp_do_serial_initialize(void) {
 
   __kmp_runtime_initialize();
 
-#if KMP_ARCH_X86_64 && (KMP_OS_LINUX || KMP_OS_WINDOWS)
+#if KMP_MIC_SUPPORTED
   __kmp_check_mic_type();
 #endif
 
@@ -6435,7 +6423,7 @@ static void __kmp_do_serial_initialize(void) {
 #undef kmp_reduction_barrier_release_bb
 #undef kmp_reduction_barrier_gather_bb
 #endif // KMP_FAST_REDUCTION_BARRIER
-#if KMP_ARCH_X86_64 && (KMP_OS_LINUX || KMP_OS_WINDOWS)
+#if KMP_MIC_SUPPORTED
   if (__kmp_mic_type == mic2) { // KNC
     // AC: plane=3,2, forkjoin=2,1 are optimal for 240 threads on KNC
     __kmp_barrier_gather_branch_bits[bs_plain_barrier] = 3; // plain gather
@@ -6449,8 +6437,8 @@ static void __kmp_do_serial_initialize(void) {
     __kmp_barrier_gather_pattern[bs_reduction_barrier] = bp_hierarchical_bar;
     __kmp_barrier_release_pattern[bs_reduction_barrier] = bp_hierarchical_bar;
   }
-#endif
-#endif
+#endif // KMP_FAST_REDUCTION_BARRIER
+#endif // KMP_MIC_SUPPORTED
 
 // From KMP_CHECKS initialization
 #ifdef KMP_DEBUG
@@ -7525,7 +7513,7 @@ __kmp_determine_reduction_method(
 
     int teamsize_cutoff = 4;
 
-#if KMP_ARCH_X86_64 && (KMP_OS_LINUX || KMP_OS_WINDOWS)
+#if KMP_MIC_SUPPORTED
     if (__kmp_mic_type != non_mic) {
       teamsize_cutoff = 8;
     }

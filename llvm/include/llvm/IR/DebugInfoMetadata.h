@@ -16,15 +16,15 @@
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/BitmaskEnum.h"
-#include "llvm/ADT/iterator_range.h"
 #include "llvm/ADT/None.h"
 #include "llvm/ADT/Optional.h"
-#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/iterator_range.h"
+#include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/Support/Casting.h"
-#include "llvm/Support/Dwarf.h"
 #include <cassert>
 #include <climits>
 #include <cstddef>
@@ -148,7 +148,7 @@ public:
 /// Tagged DWARF-like metadata node.
 ///
 /// A metadata node with a DWARF tag (i.e., a constant named \c DW_TAG_*,
-/// defined in llvm/Support/Dwarf.h).  Called \a DINode because it's
+/// defined in llvm/BinaryFormat/Dwarf.h).  Called \a DINode because it's
 /// potentially used for non-DWARF output.
 class DINode : public MDNode {
   friend class LLVMContextImpl;
@@ -2117,9 +2117,6 @@ public:
 /// variable, or the location of a single piece of a variable, or (when using
 /// DW_OP_stack_value) is the constant variable value.
 ///
-/// FIXME: Instead of DW_OP_plus taking an argument, this should use DW_OP_const
-/// and have DW_OP_plus consume the topmost elements on the stack.
-///
 /// TODO: Co-allocate the expression elements.
 /// TODO: Separate from MDNode, or otherwise drop Distinct and Temporary
 /// storage types.
@@ -2642,7 +2639,8 @@ public:
 /// Macro Info DWARF-like metadata node.
 ///
 /// A metadata node with a DWARF macro info (i.e., a constant named
-/// \c DW_MACINFO_*, defined in llvm/Support/Dwarf.h).  Called \a DIMacroNode
+/// \c DW_MACINFO_*, defined in llvm/BinaryFormat/Dwarf.h).  Called \a
+/// DIMacroNode
 /// because it's potentially used for non-DWARF output.
 class DIMacroNode : public MDNode {
   friend class LLVMContextImpl;

@@ -765,9 +765,6 @@ let AdditionalPredicates = [NotInMicroMips] in {
   defm : OneOrTwoOperandMacroImmediateAlias<"xor", XORi64, GPR64Opnd, imm64>,
          GPR_64;
 }
-def : MipsInstAlias<"dsll $rd, $rt, $rs",
-                    (DSLLV GPR64Opnd:$rd, GPR64Opnd:$rt, GPR32Opnd:$rs), 0>,
-                    ISA_MIPS3;
 let AdditionalPredicates = [NotInMicroMips] in {
   def : MipsInstAlias<"dneg $rt, $rs",
                       (DSUB GPR64Opnd:$rt, ZERO_64, GPR64Opnd:$rs), 1>,
@@ -820,8 +817,17 @@ def : MipsInstAlias<"beqzl $rs,$offset",
                     (BEQL64 GPR64Opnd:$rs, ZERO_64, brtarget:$offset), 0>;
 
 let AdditionalPredicates = [NotInMicroMips] in {
+  def : MipsInstAlias<"dsll $rd, $rt, $rs",
+                      (DSLLV GPR64Opnd:$rd, GPR64Opnd:$rt, GPR32Opnd:$rs), 0>,
+                      ISA_MIPS3;
   def : MipsInstAlias<"dsrl $rd, $rt, $rs",
                       (DSRLV GPR64Opnd:$rd, GPR64Opnd:$rt, GPR32Opnd:$rs), 0>,
+                      ISA_MIPS3;
+  def : MipsInstAlias<"dsrl $rd, $rt",
+                      (DSRLV GPR64Opnd:$rd, GPR64Opnd:$rd, GPR32Opnd:$rt), 0>,
+                      ISA_MIPS3;
+  def : MipsInstAlias<"dsll $rd, $rt",
+                      (DSLLV GPR64Opnd:$rd, GPR64Opnd:$rd, GPR32Opnd:$rt), 0>,
                       ISA_MIPS3;
 
 // Two operand (implicit 0 selector) versions:

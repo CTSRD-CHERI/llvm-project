@@ -1581,11 +1581,19 @@ TEST(MemorySanitizer, strdup) {
 TEST(MemorySanitizer, strndup) {
   char buf[4] = "abc";
   __msan_poison(buf + 2, sizeof(*buf));
-  char *x = strndup(buf, 3);
+  char *x;
+  EXPECT_UMR(x = strndup(buf, 3));
   EXPECT_NOT_POISONED(x[0]);
   EXPECT_NOT_POISONED(x[1]);
   EXPECT_POISONED(x[2]);
   EXPECT_NOT_POISONED(x[3]);
+  free(x);
+  // Check handling of non 0 terminated strings.
+  buf[3] = 'z';
+  __msan_poison(buf + 3, sizeof(*buf));
+  EXPECT_UMR(x = strndup(buf + 3, 1));
+  EXPECT_POISONED(x[0]);
+  EXPECT_NOT_POISONED(x[1]);
   free(x);
 }
 
@@ -1593,7 +1601,8 @@ TEST(MemorySanitizer, strndup_short) {
   char buf[4] = "abc";
   __msan_poison(buf + 1, sizeof(*buf));
   __msan_poison(buf + 2, sizeof(*buf));
-  char *x = strndup(buf, 2);
+  char *x;
+  EXPECT_UMR(x = strndup(buf, 2));
   EXPECT_NOT_POISONED(x[0]);
   EXPECT_POISONED(x[1]);
   EXPECT_NOT_POISONED(x[2]);
@@ -1696,6 +1705,48 @@ TEST(MemorySanitizer, strncat_overflow) {  // NOLINT
   EXPECT_NOT_POISONED(a[5]);
   EXPECT_POISONED(a[6]);
   EXPECT_POISONED(a[7]);
+}
+
+TEST(MemorySanitizer, wcscat) {
+  wchar_t a[10];
+  wchar_t b[] = L"def";
+  wcscpy(a, L"abc");
+
+  wcscat(a, b);
+  EXPECT_EQ(6U, wcslen(a));
+  EXPECT_POISONED(a[7]);
+
+  a[3] = 0;
+  __msan_poison(b + 1, sizeof(wchar_t));
+  EXPECT_UMR(wcscat(a, b));
+
+  __msan_unpoison(b + 1, sizeof(wchar_t));
+  __msan_poison(a + 2, sizeof(wchar_t));
+  EXPECT_UMR(wcscat(a, b));
+}
+
+TEST(MemorySanitizer, wcsncat) {
+  wchar_t a[10];
+  wchar_t b[] = L"def";
+  wcscpy(a, L"abc");
+
+  wcsncat(a, b, 5);
+  EXPECT_EQ(6U, wcslen(a));
+  EXPECT_POISONED(a[7]);
+
+  a[3] = 0;
+  __msan_poison(a + 4, sizeof(wchar_t) * 6);
+  wcsncat(a, b, 2);
+  EXPECT_EQ(5U, wcslen(a));
+  EXPECT_POISONED(a[6]);
+
+  a[3] = 0;
+  __msan_poison(b + 1, sizeof(wchar_t));
+  EXPECT_UMR(wcsncat(a, b, 2));
+
+  __msan_unpoison(b + 1, sizeof(wchar_t));
+  __msan_poison(a + 2, sizeof(wchar_t));
+  EXPECT_UMR(wcsncat(a, b, 2));
 }
 
 #define TEST_STRTO_INT(func_name, char_type, str_prefix) \

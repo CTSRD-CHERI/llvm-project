@@ -17,9 +17,9 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/InstructionSimplify.h"
-#include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/Loads.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/OptimizationDiagnosticInfo.h"
 #include "llvm/Analysis/VectorUtils.h"
 #include "llvm/IR/CallSite.h"
@@ -171,6 +171,18 @@ bool llvm::haveNoCommonBitsSet(const Value *LHS, const Value *RHS,
   return (LHSKnown.Zero | RHSKnown.Zero).isAllOnesValue();
 }
 
+
+bool llvm::isOnlyUsedInZeroEqualityComparison(const Instruction *CxtI) {
+  for (const User *U : CxtI->users()) {
+    if (const ICmpInst *IC = dyn_cast<ICmpInst>(U))
+      if (IC->isEquality())
+        if (Constant *C = dyn_cast<Constant>(IC->getOperand(1)))
+          if (C->isNullValue())
+            continue;
+    return false;
+  }
+  return true;
+}
 
 static bool isKnownToBeAPowerOfTwo(const Value *V, bool OrZero, unsigned Depth,
                                    const Query &Q);
@@ -674,8 +686,7 @@ static void computeKnownBitsFromAssume(const Value *V, KnownBits &Known,
       Known.One  |= RHSKnown.Zero;
     // assume(v >> c = a)
     } else if (match(Arg,
-                     m_c_ICmp(Pred, m_CombineOr(m_LShr(m_V, m_ConstantInt(C)),
-                                                m_AShr(m_V, m_ConstantInt(C))),
+                     m_c_ICmp(Pred, m_Shr(m_V, m_ConstantInt(C)),
                               m_Value(A))) &&
                Pred == ICmpInst::ICMP_EQ &&
                isValidAssumeForContext(I, Q.CxtI, Q.DT)) {
@@ -686,9 +697,7 @@ static void computeKnownBitsFromAssume(const Value *V, KnownBits &Known,
       Known.Zero |= RHSKnown.Zero << C->getZExtValue();
       Known.One  |= RHSKnown.One  << C->getZExtValue();
     // assume(~(v >> c) = a)
-    } else if (match(Arg, m_c_ICmp(Pred, m_Not(m_CombineOr(
-                                             m_LShr(m_V, m_ConstantInt(C)),
-                                             m_AShr(m_V, m_ConstantInt(C)))),
+    } else if (match(Arg, m_c_ICmp(Pred, m_Not(m_Shr(m_V, m_ConstantInt(C))),
                                    m_Value(A))) &&
                Pred == ICmpInst::ICMP_EQ &&
                isValidAssumeForContext(I, Q.CxtI, Q.DT)) {
@@ -840,7 +849,8 @@ static void computeKnownBitsFromShiftOperator(
   Optional<bool> ShifterOperandIsNonZero;
 
   // Early exit if we can't constrain any well-defined shift amount.
-  if (!(ShiftAmtKZ & (BitWidth - 1)) && !(ShiftAmtKO & (BitWidth - 1))) {
+  if (!(ShiftAmtKZ & (PowerOf2Ceil(BitWidth) - 1)) &&
+      !(ShiftAmtKO & (PowerOf2Ceil(BitWidth) - 1))) {
     ShifterOperandIsNonZero =
         isKnownNonZero(I->getOperand(1), Depth + 1, Q);
     if (!*ShifterOperandIsNonZero)
@@ -1970,7 +1980,7 @@ static bool isAddOfNonZero(const Value *V1, const Value *V2, const Query &Q) {
 
 /// Return true if it is known that V1 != V2.
 static bool isKnownNonEqual(const Value *V1, const Value *V2, const Query &Q) {
-  if (V1->getType()->isVectorTy() || V1 == V2)
+  if (V1 == V2)
     return false;
   if (V1->getType() != V2->getType())
     // We can't look through casts yet.
@@ -1978,18 +1988,14 @@ static bool isKnownNonEqual(const Value *V1, const Value *V2, const Query &Q) {
   if (isAddOfNonZero(V1, V2, Q) || isAddOfNonZero(V2, V1, Q))
     return true;
 
-  if (IntegerType *Ty = dyn_cast<IntegerType>(V1->getType())) {
+  if (V1->getType()->isIntOrIntVectorTy()) {
     // Are any known bits in V1 contradictory to known bits in V2? If V1
     // has a known zero where V2 has a known one, they must not be equal.
-    auto BitWidth = Ty->getBitWidth();
-    KnownBits Known1(BitWidth);
-    computeKnownBits(V1, Known1, 0, Q);
-    KnownBits Known2(BitWidth);
-    computeKnownBits(V2, Known2, 0, Q);
+    KnownBits Known1 = computeKnownBits(V1, 0, Q);
+    KnownBits Known2 = computeKnownBits(V2, 0, Q);
 
-    APInt OppositeBits = (Known1.Zero & Known2.One) |
-                         (Known2.Zero & Known1.One);
-    if (OppositeBits.getBoolValue())
+    if (Known1.Zero.intersects(Known2.One) ||
+        Known2.Zero.intersects(Known1.One))
       return true;
   }
   return false;
@@ -2328,6 +2334,7 @@ bool llvm::ComputeMultiple(Value *V, unsigned Base, Value *&Multiple,
   case Instruction::SExt:
     if (!LookThroughSExt) return false;
     // otherwise fall through to ZExt
+    LLVM_FALLTHROUGH;
   case Instruction::ZExt:
     return ComputeMultiple(I->getOperand(0), Base, Multiple,
                            LookThroughSExt, Depth+1);
@@ -3018,7 +3025,7 @@ bool llvm::getConstantDataArrayInfo(const Value *V,
   if (GV->getInitializer()->isNullValue()) {
     Type *GVTy = GV->getValueType();
     if ( (ArrayTy = dyn_cast<ArrayType>(GVTy)) ) {
-      // A zeroinitializer for the array; There is no ConstantDataArray.
+      // A zeroinitializer for the array; there is no ConstantDataArray.
       Array = nullptr;
     } else {
       const DataLayout &DL = GV->getParent()->getDataLayout();
@@ -3070,7 +3077,7 @@ bool llvm::getConstantStringInfo(const Value *V, StringRef &Str,
       Str = StringRef("", 1);
       return true;
     }
-    // We cannot instantiate a StringRef as we do not have an apropriate string
+    // We cannot instantiate a StringRef as we do not have an appropriate string
     // of 0s at hand.
     return false;
   }

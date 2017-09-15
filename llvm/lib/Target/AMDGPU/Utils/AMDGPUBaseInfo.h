@@ -149,13 +149,6 @@ int16_t getNamedOperandIdx(uint16_t Opcode, uint16_t NamedIdx);
 
 void initDefaultAMDKernelCodeT(amd_kernel_code_t &Header,
                                const FeatureBitset &Features);
-MCSection *getHSATextSection(MCContext &Ctx);
-
-MCSection *getHSADataGlobalAgentSection(MCContext &Ctx);
-
-MCSection *getHSADataGlobalProgramSection(MCContext &Ctx);
-
-MCSection *getHSARodataReadonlyAgentSection(MCContext &Ctx);
 
 bool isGroupSegment(const GlobalValue *GV, AMDGPUAS AS);
 bool isGlobalSegment(const GlobalValue *GV, AMDGPUAS AS);
@@ -277,6 +270,9 @@ bool isGFX9(const MCSubtargetInfo &STI);
 
 /// \brief Is Reg - scalar register
 bool isSGPR(unsigned Reg, const MCRegisterInfo* TRI);
+
+/// \brief Is there any intersection between registers
+bool isRegIntersect(unsigned Reg0, unsigned Reg1, const MCRegisterInfo* TRI);
 
 /// If \p Reg is a pseudo reg, return the correct hardware register given
 /// \p STI otherwise return \p Reg.

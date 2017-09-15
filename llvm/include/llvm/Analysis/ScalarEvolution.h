@@ -262,7 +262,7 @@ public:
   const SCEVConstant *getRHS() const { return RHS; }
 
   /// Methods for support type inquiry through isa, cast, and dyn_cast:
-  static inline bool classof(const SCEVPredicate *P) {
+  static bool classof(const SCEVPredicate *P) {
     return P->getKind() == P_Equal;
   }
 };
@@ -360,7 +360,7 @@ public:
   bool isAlwaysTrue() const override;
 
   /// Methods for support type inquiry through isa, cast, and dyn_cast:
-  static inline bool classof(const SCEVPredicate *P) {
+  static bool classof(const SCEVPredicate *P) {
     return P->getKind() == P_Wrap;
   }
 };
@@ -406,7 +406,7 @@ public:
   unsigned getComplexity() const override { return Preds.size(); }
 
   /// Methods for support type inquiry through isa, cast, and dyn_cast:
-  static inline bool classof(const SCEVPredicate *P) {
+  static bool classof(const SCEVPredicate *P) {
     return P->getKind() == P_Union;
   }
 };
@@ -636,7 +636,7 @@ private:
     /// @}
 
   public:
-    BackedgeTakenInfo() : MaxAndComplete(nullptr, 0) {}
+    BackedgeTakenInfo() : MaxAndComplete(nullptr, 0), MaxOrZero(false) {}
 
     BackedgeTakenInfo(BackedgeTakenInfo &&) = default;
     BackedgeTakenInfo &operator=(BackedgeTakenInfo &&) = default;
@@ -784,7 +784,9 @@ private:
   }
 
   /// Determine the range for a particular SCEV.
-  ConstantRange getRange(const SCEV *S, RangeSignHint Hint);
+  /// NOTE: This returns a reference to an entry in a cache. It must be
+  /// copied if its needed for longer.
+  const ConstantRange &getRangeRef(const SCEV *S, RangeSignHint Hint);
 
   /// Determines the range for the affine SCEVAddRecExpr {\p Start,+,\p Stop}.
   /// Helper for \c getRange.
@@ -1195,45 +1197,38 @@ public:
   const SCEV *getConstant(const APInt &Val);
   const SCEV *getConstant(Type *Ty, uint64_t V, bool isSigned = false);
   const SCEV *getTruncateExpr(const SCEV *Op, Type *Ty);
-
-  typedef SmallDenseMap<std::pair<const SCEV *, Type *>, const SCEV *, 8>
-      ExtendCacheTy;
-  const SCEV *getZeroExtendExpr(const SCEV *Op, Type *Ty);
-  const SCEV *getZeroExtendExprCached(const SCEV *Op, Type *Ty,
-                                      ExtendCacheTy &Cache);
-  const SCEV *getZeroExtendExprImpl(const SCEV *Op, Type *Ty,
-                                    ExtendCacheTy &Cache);
-
-  const SCEV *getSignExtendExpr(const SCEV *Op, Type *Ty);
-  const SCEV *getSignExtendExprCached(const SCEV *Op, Type *Ty,
-                                      ExtendCacheTy &Cache);
-  const SCEV *getSignExtendExprImpl(const SCEV *Op, Type *Ty,
-                                    ExtendCacheTy &Cache);
+  const SCEV *getZeroExtendExpr(const SCEV *Op, Type *Ty, unsigned Depth = 0);
+  const SCEV *getSignExtendExpr(const SCEV *Op, Type *Ty, unsigned Depth = 0);
   const SCEV *getAnyExtendExpr(const SCEV *Op, Type *Ty);
   const SCEV *getAddExpr(SmallVectorImpl<const SCEV *> &Ops,
                          SCEV::NoWrapFlags Flags = SCEV::FlagAnyWrap,
                          unsigned Depth = 0);
   const SCEV *getAddExpr(const SCEV *LHS, const SCEV *RHS,
-                         SCEV::NoWrapFlags Flags = SCEV::FlagAnyWrap) {
+                         SCEV::NoWrapFlags Flags = SCEV::FlagAnyWrap,
+                         unsigned Depth = 0) {
     SmallVector<const SCEV *, 2> Ops = {LHS, RHS};
-    return getAddExpr(Ops, Flags);
+    return getAddExpr(Ops, Flags, Depth);
   }
   const SCEV *getAddExpr(const SCEV *Op0, const SCEV *Op1, const SCEV *Op2,
-                         SCEV::NoWrapFlags Flags = SCEV::FlagAnyWrap) {
+                         SCEV::NoWrapFlags Flags = SCEV::FlagAnyWrap,
+                         unsigned Depth = 0) {
     SmallVector<const SCEV *, 3> Ops = {Op0, Op1, Op2};
-    return getAddExpr(Ops, Flags);
+    return getAddExpr(Ops, Flags, Depth);
   }
   const SCEV *getMulExpr(SmallVectorImpl<const SCEV *> &Ops,
-                         SCEV::NoWrapFlags Flags = SCEV::FlagAnyWrap);
+                         SCEV::NoWrapFlags Flags = SCEV::FlagAnyWrap,
+                         unsigned Depth = 0);
   const SCEV *getMulExpr(const SCEV *LHS, const SCEV *RHS,
-                         SCEV::NoWrapFlags Flags = SCEV::FlagAnyWrap) {
+                         SCEV::NoWrapFlags Flags = SCEV::FlagAnyWrap,
+                         unsigned Depth = 0) {
     SmallVector<const SCEV *, 2> Ops = {LHS, RHS};
-    return getMulExpr(Ops, Flags);
+    return getMulExpr(Ops, Flags, Depth);
   }
   const SCEV *getMulExpr(const SCEV *Op0, const SCEV *Op1, const SCEV *Op2,
-                         SCEV::NoWrapFlags Flags = SCEV::FlagAnyWrap) {
+                         SCEV::NoWrapFlags Flags = SCEV::FlagAnyWrap,
+                         unsigned Depth = 0) {
     SmallVector<const SCEV *, 3> Ops = {Op0, Op1, Op2};
-    return getMulExpr(Ops, Flags);
+    return getMulExpr(Ops, Flags, Depth);
   }
   const SCEV *getUDivExpr(const SCEV *LHS, const SCEV *RHS);
   const SCEV *getUDivExactExpr(const SCEV *LHS, const SCEV *RHS);
@@ -1287,7 +1282,8 @@ public:
 
   /// Return LHS-RHS.  Minus is represented in SCEV as A+B*-1.
   const SCEV *getMinusSCEV(const SCEV *LHS, const SCEV *RHS,
-                           SCEV::NoWrapFlags Flags = SCEV::FlagAnyWrap);
+                           SCEV::NoWrapFlags Flags = SCEV::FlagAnyWrap,
+                           unsigned Depth = 0);
 
   /// Return a SCEV corresponding to a conversion of the input value to the
   /// specified type.  If the type must be extended, it is zero extended.
@@ -1458,15 +1454,35 @@ public:
   uint32_t GetMinTrailingZeros(const SCEV *S);
 
   /// Determine the unsigned range for a particular SCEV.
-  ///
+  /// NOTE: This returns a copy of the reference returned by getRangeRef.
   ConstantRange getUnsignedRange(const SCEV *S) {
-    return getRange(S, HINT_RANGE_UNSIGNED);
+    return getRangeRef(S, HINT_RANGE_UNSIGNED);
+  }
+
+  /// Determine the min of the unsigned range for a particular SCEV.
+  APInt getUnsignedRangeMin(const SCEV *S) {
+    return getRangeRef(S, HINT_RANGE_UNSIGNED).getUnsignedMin();
+  }
+
+  /// Determine the max of the unsigned range for a particular SCEV.
+  APInt getUnsignedRangeMax(const SCEV *S) {
+    return getRangeRef(S, HINT_RANGE_UNSIGNED).getUnsignedMax();
   }
 
   /// Determine the signed range for a particular SCEV.
-  ///
+  /// NOTE: This returns a copy of the reference returned by getRangeRef.
   ConstantRange getSignedRange(const SCEV *S) {
-    return getRange(S, HINT_RANGE_SIGNED);
+    return getRangeRef(S, HINT_RANGE_SIGNED);
+  }
+
+  /// Determine the min of the signed range for a particular SCEV.
+  APInt getSignedRangeMin(const SCEV *S) {
+    return getRangeRef(S, HINT_RANGE_SIGNED).getSignedMin();
+  }
+
+  /// Determine the max of the signed range for a particular SCEV.
+  APInt getSignedRangeMax(const SCEV *S) {
+    return getRangeRef(S, HINT_RANGE_SIGNED).getSignedMax();
   }
 
   /// Test if the given expression is known to be negative.
@@ -1693,8 +1709,12 @@ private:
   bool doesIVOverflowOnGT(const SCEV *RHS, const SCEV *Stride, bool IsSigned,
                           bool NoWrap);
 
-  /// Get add expr already created or create a new one
+  /// Get add expr already created or create a new one.
   const SCEV *getOrCreateAddExpr(SmallVectorImpl<const SCEV *> &Ops,
+                                 SCEV::NoWrapFlags Flags);
+
+  /// Get mul expr already created or create a new one.
+  const SCEV *getOrCreateMulExpr(SmallVectorImpl<const SCEV *> &Ops,
                                  SCEV::NoWrapFlags Flags);
 
 private:

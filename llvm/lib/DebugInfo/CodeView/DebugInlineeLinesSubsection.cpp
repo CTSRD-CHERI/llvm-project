@@ -1,4 +1,4 @@
-//===- DebugInlineeLinesSubsection.cpp ------------------------*- C++-*-===//
+//===- DebugInlineeLinesSubsection.cpp ------------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -8,18 +8,21 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/DebugInfo/CodeView/DebugInlineeLinesSubsection.h"
-
-#include "llvm/DebugInfo/CodeView/CodeViewError.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/DebugInfo/CodeView/CodeView.h"
 #include "llvm/DebugInfo/CodeView/DebugChecksumsSubsection.h"
-#include "llvm/DebugInfo/CodeView/DebugStringTableSubsection.h"
-#include "llvm/DebugInfo/CodeView/DebugSubsectionRecord.h"
+#include "llvm/Support/BinaryStreamReader.h"
+#include "llvm/Support/BinaryStreamWriter.h"
+#include "llvm/Support/Endian.h"
+#include "llvm/Support/Error.h"
+#include <cassert>
+#include <cstdint>
 
 using namespace llvm;
 using namespace llvm::codeview;
 
-Error VarStreamArrayExtractor<InlineeSourceLine>::extract(
-    BinaryStreamRef Stream, uint32_t &Len, InlineeSourceLine &Item,
-    bool HasExtraFiles) {
+Error VarStreamArrayExtractor<InlineeSourceLine>::
+operator()(BinaryStreamRef Stream, uint32_t &Len, InlineeSourceLine &Item) {
   BinaryStreamReader Reader(Stream);
 
   if (auto EC = Reader.readObject(Item.Header))
@@ -44,8 +47,8 @@ Error DebugInlineeLinesSubsectionRef::initialize(BinaryStreamReader Reader) {
   if (auto EC = Reader.readEnum(Signature))
     return EC;
 
-  if (auto EC =
-          Reader.readArray(Lines, Reader.bytesRemaining(), hasExtraFiles()))
+  Lines.getExtractor().HasExtraFiles = hasExtraFiles();
+  if (auto EC = Reader.readArray(Lines, Reader.bytesRemaining()))
     return EC;
 
   assert(Reader.bytesRemaining() == 0);

@@ -245,17 +245,6 @@ void DwarfCompileUnit::addRange(RangeSpan Range) {
   CURanges.back().setEnd(Range.getEnd());
 }
 
-DIE::value_iterator
-DwarfCompileUnit::addSectionLabel(DIE &Die, dwarf::Attribute Attribute,
-                                  const MCSymbol *Label, const MCSymbol *Sec) {
-  if (Asm->MAI->doesDwarfUseRelocationsAcrossSections())
-    return addLabel(Die, Attribute,
-                    DD->getDwarfVersion() >= 4 ? dwarf::DW_FORM_sec_offset
-                                               : dwarf::DW_FORM_data4,
-                    Label);
-  return addSectionDelta(Die, Attribute, Label, Sec);
-}
-
 void DwarfCompileUnit::initStmtList() {
   // Define start line table label for each Compile Unit.
   MCSymbol *LineTableStartSym =
@@ -378,15 +367,6 @@ void DwarfCompileUnit::constructScopeDIE(
     ScopeDIE->addChild(std::move(I));
 
   FinalChildren.push_back(std::move(ScopeDIE));
-}
-
-DIE::value_iterator
-DwarfCompileUnit::addSectionDelta(DIE &Die, dwarf::Attribute Attribute,
-                                  const MCSymbol *Hi, const MCSymbol *Lo) {
-  return Die.addValue(DIEValueAllocator, Attribute,
-                      DD->getDwarfVersion() >= 4 ? dwarf::DW_FORM_sec_offset
-                                                 : dwarf::DW_FORM_data4,
-                      new (DIEValueAllocator) DIEDelta(Hi, Lo));
 }
 
 void DwarfCompileUnit::addScopeRangeList(DIE &ScopeDIE,
@@ -552,7 +532,7 @@ DIE *DwarfCompileUnit::constructVariableDIEImpl(const DbgVariable &DV,
     int Offset = TFI->getFrameIndexReference(*Asm->MF, Fragment.FI, FrameReg);
     DwarfExpr.addFragmentOffset(Expr);
     SmallVector<uint64_t, 8> Ops;
-    Ops.push_back(dwarf::DW_OP_plus);
+    Ops.push_back(dwarf::DW_OP_plus_uconst);
     Ops.push_back(Offset);
     Ops.append(Expr->elements_begin(), Expr->elements_end());
     DIExpressionCursor Cursor(Ops);
@@ -821,7 +801,7 @@ void DwarfCompileUnit::addAddress(DIE &Die, dwarf::Attribute Attribute,
 
   SmallVector<uint64_t, 8> Ops;
   if (Location.isIndirect() && Location.getOffset()) {
-    Ops.push_back(dwarf::DW_OP_plus);
+    Ops.push_back(dwarf::DW_OP_plus_uconst);
     Ops.push_back(Location.getOffset());
   }
   DIExpressionCursor Cursor(Ops);
@@ -850,7 +830,7 @@ void DwarfCompileUnit::addComplexAddress(const DbgVariable &DV, DIE &Die,
 
   SmallVector<uint64_t, 8> Ops;
   if (Location.isIndirect() && Location.getOffset()) {
-    Ops.push_back(dwarf::DW_OP_plus);
+    Ops.push_back(dwarf::DW_OP_plus_uconst);
     Ops.push_back(Location.getOffset());
   }
   Ops.append(DIExpr->elements_begin(), DIExpr->elements_end());

@@ -238,7 +238,7 @@ SystemZTTIImpl::getPopcntSupport(unsigned TyWidth) {
   return TTI::PSK_Software;
 }
 
-void SystemZTTIImpl::getUnrollingPreferences(Loop *L,
+void SystemZTTIImpl::getUnrollingPreferences(Loop *L, ScalarEvolution &SE,
                                              TTI::UnrollingPreferences &UP) {
   // Find out if L contains a call, what the machine instruction count
   // estimate is, and how many stores there are.
@@ -302,7 +302,7 @@ unsigned SystemZTTIImpl::getNumberOfRegisters(bool Vector) {
   return 0;
 }
 
-unsigned SystemZTTIImpl::getRegisterBitWidth(bool Vector) {
+unsigned SystemZTTIImpl::getRegisterBitWidth(bool Vector) const {
   if (!Vector)
     return 64;
   if (ST->hasVector())

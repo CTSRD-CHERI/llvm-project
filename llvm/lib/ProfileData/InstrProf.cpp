@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/ProfileData/InstrProf.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
@@ -29,7 +30,6 @@
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
-#include "llvm/ProfileData/InstrProf.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
@@ -45,8 +45,8 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
-#include <cstring>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <system_error>
@@ -330,14 +330,15 @@ GlobalVariable *createPGOFuncNameVar(Function &F, StringRef PGOFuncName) {
   return createPGOFuncNameVar(*F.getParent(), F.getLinkage(), PGOFuncName);
 }
 
-void InstrProfSymtab::create(Module &M, bool InLTO) {
+Error InstrProfSymtab::create(Module &M, bool InLTO) {
   for (Function &F : M) {
     // Function may not have a name: like using asm("") to overwrite the name.
     // Ignore in this case.
     if (!F.hasName())
       continue;
     const std::string &PGOFuncName = getPGOFuncName(F, InLTO);
-    addFuncName(PGOFuncName);
+    if (Error E = addFuncName(PGOFuncName))
+      return E;
     MD5FuncMap.emplace_back(Function::getGUID(PGOFuncName), &F);
     // In ThinLTO, local function may have been promoted to global and have
     // suffix added to the function name. We need to add the stripped function
@@ -346,13 +347,15 @@ void InstrProfSymtab::create(Module &M, bool InLTO) {
       auto pos = PGOFuncName.find('.');
       if (pos != std::string::npos) {
         const std::string &OtherFuncName = PGOFuncName.substr(0, pos);
-        addFuncName(OtherFuncName);
+        if (Error E = addFuncName(OtherFuncName))
+          return E;
         MD5FuncMap.emplace_back(Function::getGUID(OtherFuncName), &F);
       }
     }
   }
 
   finalizeSymtab();
+  return Error::success();
 }
 
 Error collectPGOFuncNameStrings(ArrayRef<std::string> NameStrs,
@@ -447,7 +450,8 @@ Error readPGOFuncNameStrings(StringRef NameStrings, InstrProfSymtab &Symtab) {
     SmallVector<StringRef, 0> Names;
     NameStrings.split(Names, getInstrProfNameSeparator());
     for (StringRef &Name : Names)
-      Symtab.addFuncName(Name);
+      if (Error E = Symtab.addFuncName(Name))
+        return E;
 
     while (P < EndP && *P == 0)
       P++;
@@ -500,9 +504,11 @@ void InstrProfRecord::mergeValueProfData(uint32_t ValueKind,
     SIPE.addError(instrprof_error::value_site_count_mismatch);
     return;
   }
+  if (!ThisNumValueSites)
+    return;
   std::vector<InstrProfValueSiteRecord> &ThisSiteRecords =
-      getValueSitesForKind(ValueKind);
-  std::vector<InstrProfValueSiteRecord> &OtherSiteRecords =
+      getOrCreateValueSitesForKind(ValueKind);
+  MutableArrayRef<InstrProfValueSiteRecord> OtherSiteRecords =
       Src.getValueSitesForKind(ValueKind);
   for (uint32_t I = 0; I < ThisNumValueSites; I++)
     ThisSiteRecords[I].merge(SIPE, OtherSiteRecords[I], Weight);
@@ -529,11 +535,8 @@ void InstrProfRecord::merge(InstrProfRecord &Other, uint64_t Weight) {
 }
 
 void InstrProfRecord::scaleValueProfData(uint32_t ValueKind, uint64_t Weight) {
-  uint32_t ThisNumValueSites = getNumValueSites(ValueKind);
-  std::vector<InstrProfValueSiteRecord> &ThisSiteRecords =
-      getValueSitesForKind(ValueKind);
-  for (uint32_t I = 0; I < ThisNumValueSites; I++)
-    ThisSiteRecords[I].scale(SIPE, Weight);
+  for (auto &R : getValueSitesForKind(ValueKind))
+    R.scale(SIPE, Weight);
 }
 
 void InstrProfRecord::scale(uint64_t Weight) {
@@ -579,7 +582,7 @@ void InstrProfRecord::addValueData(uint32_t ValueKind, uint32_t Site,
     VData[I].Value = remapValue(VData[I].Value, ValueKind, ValueMap);
   }
   std::vector<InstrProfValueSiteRecord> &ValueSites =
-      getValueSitesForKind(ValueKind);
+      getOrCreateValueSitesForKind(ValueKind);
   if (N == 0)
     ValueSites.emplace_back();
   else
@@ -638,8 +641,9 @@ static ValueProfRecordClosure InstrProfRecordClosure = {
 
 // Wrapper implementation using the closure mechanism.
 uint32_t ValueProfData::getSize(const InstrProfRecord &Record) {
-  InstrProfRecordClosure.Record = &Record;
-  return getValueProfDataSize(&InstrProfRecordClosure);
+  auto Closure = InstrProfRecordClosure;
+  Closure.Record = &Record;
+  return getValueProfDataSize(&Closure);
 }
 
 // Wrapper implementation using the closure mechanism.

@@ -17,8 +17,8 @@
 
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/ADT/PostOrderIterator.h"
-#include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SetVector.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/Dominators.h"
 
@@ -91,8 +91,9 @@ getExitEdges(SmallVectorImpl<Edge> &ExitEdges) const {
 
 /// getLoopPreheader - If there is a preheader for this loop, return it.  A
 /// loop has a preheader if there is only one edge to the header of the loop
-/// from outside of the loop.  If this is the case, the block branching to the
-/// header of the loop is the preheader node.
+/// from outside of the loop and it is legal to hoist instructions into the
+/// predecessor. If this is the case, the block branching to the header of the
+/// loop is the preheader node.
 ///
 /// This method returns null if there is no preheader for the loop.
 ///
@@ -101,6 +102,10 @@ BlockT *LoopBase<BlockT, LoopT>::getLoopPreheader() const {
   // Keep track of nodes outside the loop branching to the header...
   BlockT *Out = getLoopPredecessor();
   if (!Out) return nullptr;
+
+  // Make sure we are allowed to hoist instructions into the predecessor.
+  if (!Out->isLegalToHoistInto())
+    return nullptr;
 
   // Make sure there is only one exit out of the preheader.
   typedef GraphTraits<BlockT*> BlockTraits;

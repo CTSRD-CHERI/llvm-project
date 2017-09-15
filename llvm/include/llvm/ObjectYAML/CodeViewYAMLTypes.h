@@ -18,8 +18,12 @@
 #include "llvm/DebugInfo/CodeView/CodeView.h"
 #include "llvm/DebugInfo/CodeView/TypeRecord.h"
 #include "llvm/ObjectYAML/YAML.h"
+#include "llvm/Support/Allocator.h"
 
 namespace llvm {
+namespace codeview {
+class TypeTableBuilder;
+}
 namespace CodeViewYAML {
 namespace detail {
 struct LeafRecordBase;
@@ -34,8 +38,12 @@ struct LeafRecord {
   std::shared_ptr<detail::LeafRecordBase> Leaf;
 
   codeview::CVType toCodeViewRecord(BumpPtrAllocator &Allocator) const;
+  codeview::CVType toCodeViewRecord(codeview::TypeTableBuilder &TS) const;
   static Expected<LeafRecord> fromCodeViewRecord(codeview::CVType Type);
 };
+
+std::vector<LeafRecord> fromDebugT(ArrayRef<uint8_t> DebugT);
+ArrayRef<uint8_t> toDebugT(ArrayRef<LeafRecord>, BumpPtrAllocator &Alloc);
 } // namespace CodeViewYAML
 } // namespace llvm
 

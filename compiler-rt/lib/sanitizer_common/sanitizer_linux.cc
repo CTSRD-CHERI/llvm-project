@@ -62,8 +62,6 @@
 #if SANITIZER_FREEBSD
 #include <sys/exec.h>
 #include <sys/sysctl.h>
-#include <vm/vm_param.h>
-#include <vm/pmap.h>
 #include <machine/atomic.h>
 extern "C" {
 // <sys/umtx.h> must be included after <errno.h> and <sys/types.h> on
@@ -237,7 +235,8 @@ static void kernel_stat_to_stat(struct kernel_stat *in, struct stat *out) {
 
 uptr internal_stat(const char *path, void *buf) {
 #if SANITIZER_FREEBSD
-  return internal_syscall(SYSCALL(stat), path, buf);
+  return internal_syscall(SYSCALL(fstatat), AT_FDCWD, (uptr)path,
+                          (uptr)buf, 0);
 #elif SANITIZER_USES_CANONICAL_LINUX_SYSCALLS
   return internal_syscall(SYSCALL(newfstatat), AT_FDCWD, (uptr)path,
                           (uptr)buf, 0);
@@ -261,7 +260,8 @@ uptr internal_stat(const char *path, void *buf) {
 
 uptr internal_lstat(const char *path, void *buf) {
 #if SANITIZER_FREEBSD
-  return internal_syscall(SYSCALL(lstat), path, buf);
+  return internal_syscall(SYSCALL(fstatat), AT_FDCWD, (uptr)path,
+                          (uptr)buf, AT_SYMLINK_NOFOLLOW);
 #elif SANITIZER_USES_CANONICAL_LINUX_SYSCALLS
   return internal_syscall(SYSCALL(newfstatat), AT_FDCWD, (uptr)path,
                          (uptr)buf, AT_SYMLINK_NOFOLLOW);
@@ -604,7 +604,9 @@ uptr internal_getppid() {
 }
 
 uptr internal_getdents(fd_t fd, struct linux_dirent *dirp, unsigned int count) {
-#if SANITIZER_USES_CANONICAL_LINUX_SYSCALLS
+#if SANITIZER_FREEBSD
+  return internal_syscall(SYSCALL(getdirentries), fd, (uptr)dirp, count, NULL);
+#elif SANITIZER_USES_CANONICAL_LINUX_SYSCALLS
   return internal_syscall(SYSCALL(getdents64), fd, (uptr)dirp, count);
 #else
   return internal_syscall(SYSCALL(getdents), fd, (uptr)dirp, count);
@@ -1394,7 +1396,7 @@ AndroidApiLevel AndroidGetApiLevel() {
 
 #endif
 
-HandleSignalMode GetHandleSignalMode(int signum) {
+static HandleSignalMode GetHandleSignalModeImpl(int signum) {
   switch (signum) {
     case SIGABRT:
       return common_flags()->handle_abort;
@@ -1408,6 +1410,13 @@ HandleSignalMode GetHandleSignalMode(int signum) {
       return common_flags()->handle_sigbus;
   }
   return kHandleSignalNo;
+}
+
+HandleSignalMode GetHandleSignalMode(int signum) {
+  HandleSignalMode result = GetHandleSignalModeImpl(signum);
+  if (result == kHandleSignalYes && !common_flags()->allow_user_segv_handler)
+    return kHandleSignalExclusive;
+  return result;
 }
 
 #if !SANITIZER_GO
@@ -1593,6 +1602,32 @@ void CheckNoDeepBind(const char *filename, int flag) {
 uptr FindAvailableMemoryRange(uptr size, uptr alignment, uptr left_padding) {
   UNREACHABLE("FindAvailableMemoryRange is not available");
   return 0;
+}
+
+bool GetRandom(void *buffer, uptr length) {
+  if (!buffer || !length || length > 256)
+    return false;
+#if defined(__NR_getrandom)
+  static atomic_uint8_t skip_getrandom_syscall;
+  if (!atomic_load_relaxed(&skip_getrandom_syscall)) {
+    // Up to 256 bytes, getrandom will not be interrupted.
+    uptr res = internal_syscall(SYSCALL(getrandom), buffer, length, 0);
+    int rverrno = 0;
+    if (internal_iserror(res, &rverrno) && rverrno == ENOSYS)
+      atomic_store_relaxed(&skip_getrandom_syscall, 1);
+    else if (res == length)
+      return true;
+  }
+#endif
+  uptr fd = internal_open("/dev/urandom", O_RDONLY);
+  if (internal_iserror(fd))
+    return false;
+  // internal_read deals with EINTR.
+  uptr res = internal_read(fd, buffer, length);
+  if (internal_iserror(res))
+    return false;
+  internal_close(fd);
+  return true;
 }
 
 } // namespace __sanitizer

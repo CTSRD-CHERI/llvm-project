@@ -568,7 +568,6 @@ void GVN::ValueTable::clear() {
   expressionNumbering.clear();
   NumberingPhi.clear();
   PhiTranslateTable.clear();
-  BlockRPONumber.clear();
   nextValueNumber = 1;
   Expressions.clear();
   ExprIdx.clear();
@@ -620,7 +619,7 @@ PreservedAnalyses GVN::run(Function &F, FunctionAnalysisManager &AM) {
 }
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
-LLVM_DUMP_METHOD void GVN::dump(DenseMap<uint32_t, Value*>& d) {
+LLVM_DUMP_METHOD void GVN::dump(DenseMap<uint32_t, Value*>& d) const {
   errs() << "{\n";
   for (DenseMap<uint32_t, Value*>::iterator I = d.begin(),
        E = d.end(); I != E; ++I) {
@@ -1518,13 +1517,6 @@ GVN::ValueTable::assignExpNewValueNum(Expression &Exp) {
   return {e, CreateNewValNum};
 }
 
-void GVN::ValueTable::assignBlockRPONumber(Function &F) {
-  uint32_t NextBlockNumber = 1;
-  ReversePostOrderTraversal<Function *> RPOT(&F);
-  for (BasicBlock *BB : RPOT)
-    BlockRPONumber[BB] = NextBlockNumber++;
-}
-
 /// Return whether all the values related with the same \p num are
 /// defined in \p BB.
 bool GVN::ValueTable::areAllValsInBB(uint32_t Num, const BasicBlock *BB,
@@ -1553,8 +1545,6 @@ uint32_t GVN::ValueTable::phiTranslateImpl(const BasicBlock *Pred,
                                            const BasicBlock *PhiBlock,
                                            uint32_t Num, GVN &Gvn) {
   if (PHINode *PN = NumberingPhi[Num]) {
-    if (BlockRPONumber[Pred] >= BlockRPONumber[PhiBlock])
-      return Num;
     for (unsigned i = 0; i != PN->getNumIncomingValues(); ++i) {
       if (PN->getParent() == PhiBlock && PN->getIncomingBlock(i) == Pred)
         if (uint32_t TransVal = lookup(PN->getIncomingValue(i), false))
@@ -1569,7 +1559,7 @@ uint32_t GVN::ValueTable::phiTranslateImpl(const BasicBlock *Pred,
   if (!areAllValsInBB(Num, PhiBlock, Gvn))
     return Num;
 
-  if (ExprIdx[Num] == 0 || Num >= ExprIdx.size())
+  if (Num >= ExprIdx.size() || ExprIdx[Num] == 0)
     return Num;
   Expression Exp = Expressions[ExprIdx[Num]];
 
@@ -1643,6 +1633,15 @@ static bool isOnlyReachableViaThisEdge(const BasicBlockEdge &E,
          "No edge between these basic blocks!");
   return Pred != nullptr;
 }
+
+
+void GVN::assignBlockRPONumber(Function &F) {
+  uint32_t NextBlockNumber = 1;
+  ReversePostOrderTraversal<Function *> RPOT(&F);
+  for (BasicBlock *BB : RPOT)
+    BlockRPONumber[BB] = NextBlockNumber++;
+}
+
 
 // Tries to replace instruction with const, using information from
 // ReplaceWithConstMap.
@@ -2005,7 +2004,7 @@ bool GVN::runImpl(Function &F, AssumptionCache &RunAC, DominatorTree &RunDT,
     // Fabricate val-num for dead-code in order to suppress assertion in
     // performPRE().
     assignValNumForDeadCode();
-    VN.assignBlockRPONumber(F);
+    assignBlockRPONumber(F);
     bool PREChanged = true;
     while (PREChanged) {
       PREChanged = performPRE(F);
@@ -2077,7 +2076,7 @@ bool GVN::processBlock(BasicBlock *BB) {
 
 // Instantiate an expression in a predecessor that lacked it.
 bool GVN::performScalarPREInsertion(Instruction *Instr, BasicBlock *Pred,
-                                    unsigned int ValNo) {
+                                    BasicBlock *Curr, unsigned int ValNo) {
   // Because we are going top-down through the block, all value numbers
   // will be available in the predecessor by the time we need them.  Any
   // that weren't originally present will have been instantiated earlier
@@ -2096,7 +2095,7 @@ bool GVN::performScalarPREInsertion(Instruction *Instr, BasicBlock *Pred,
       break;
     }
     uint32_t TValNo =
-        VN.phiTranslate(Pred, Instr->getParent(), VN.lookup(Op), *this);
+        VN.phiTranslate(Pred, Curr, VN.lookup(Op), *this);
     if (Value *V = findLeader(Pred, TValNo)) {
       Instr->setOperand(i, V);
     } else {
@@ -2157,13 +2156,21 @@ bool GVN::performScalarPRE(Instruction *CurInst) {
 
   SmallVector<std::pair<Value *, BasicBlock *>, 8> predMap;
   for (BasicBlock *P : predecessors(CurrentBlock)) {
-    // We're not interested in PRE where the block is its
-    // own predecessor, or in blocks with predecessors
-    // that are not reachable.
-    if (P == CurrentBlock) {
+    // We're not interested in PRE where blocks with predecessors that are
+    // not reachable.
+    if (!DT->isReachableFromEntry(P)) {
       NumWithout = 2;
       break;
-    } else if (!DT->isReachableFromEntry(P)) {
+    }
+    // It is not safe to do PRE when P->CurrentBlock is a loop backedge, and
+    // when CurInst has operand defined in CurrentBlock (so it may be defined
+    // by phi in the loop header).
+    if (BlockRPONumber[P] >= BlockRPONumber[CurrentBlock] &&
+        any_of(CurInst->operands(), [&](const Use &U) {
+          if (auto *Inst = dyn_cast<Instruction>(U.get()))
+            return Inst->getParent() == CurrentBlock;
+          return false;
+        })) {
       NumWithout = 2;
       break;
     }
@@ -2209,7 +2216,7 @@ bool GVN::performScalarPRE(Instruction *CurInst) {
     }
     // We need to insert somewhere, so let's give it a shot
     PREInstr = CurInst->clone();
-    if (!performScalarPREInsertion(PREInstr, PREPred, ValNo)) {
+    if (!performScalarPREInsertion(PREInstr, PREPred, CurrentBlock, ValNo)) {
       // If we failed insertion, make sure we remove the instruction.
       DEBUG(verifyRemoved(PREInstr));
       PREInstr->deleteValue();
@@ -2323,6 +2330,7 @@ bool GVN::iterateOnFunction(Function &F) {
 void GVN::cleanupGlobalSets() {
   VN.clear();
   LeaderTable.clear();
+  BlockRPONumber.clear();
   TableAllocator.Reset();
 }
 

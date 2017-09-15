@@ -21,7 +21,7 @@
 #include "llvm/CodeGen/PseudoSourceValue.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Metadata.h"
-#include "llvm/IR/Value.h"  // PointerLikeTypeTraits<Value*>
+#include "llvm/IR/Value.h" // PointerLikeTypeTraits<Value*>
 #include "llvm/Support/AtomicOrdering.h"
 #include "llvm/Support/DataTypes.h"
 
@@ -58,6 +58,11 @@ struct MachinePointerInfo {
       return MachinePointerInfo(V.get<const Value*>(), Offset+O);
     return MachinePointerInfo(V.get<const PseudoSourceValue*>(), Offset+O);
   }
+
+  /// Return true if memory region [V, V+Offset+Size) is known to be
+  /// dereferenceable.
+  bool isDereferenceable(unsigned Size, LLVMContext &C,
+                         const DataLayout &DL) const;
 
   /// Return the LLVM IR address space number that this pointer points into.
   unsigned getAddrSpace() const;

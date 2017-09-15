@@ -661,7 +661,7 @@ Instruction *InstCombiner::transformZExtICmp(ICmpInst *ICI, ZExtInst &CI,
 
     // zext (x <s  0) to i32 --> x>>u31      true if signbit set.
     // zext (x >s -1) to i32 --> (x>>u31)^1  true if signbit clear.
-    if ((ICI->getPredicate() == ICmpInst::ICMP_SLT && Op1CV == 0) ||
+    if ((ICI->getPredicate() == ICmpInst::ICMP_SLT && Op1CV.isNullValue()) ||
         (ICI->getPredicate() == ICmpInst::ICMP_SGT && Op1CV.isAllOnesValue())) {
       if (!DoTransform) return ICI;
 
@@ -688,7 +688,7 @@ Instruction *InstCombiner::transformZExtICmp(ICmpInst *ICI, ZExtInst &CI,
     // zext (X != 0) to i32 --> X>>1     iff X has only the 2nd bit set.
     // zext (X != 1) to i32 --> X^1      iff X has only the low bit set.
     // zext (X != 2) to i32 --> (X>>1)^1 iff X has only the 2nd bit set.
-    if ((Op1CV == 0 || Op1CV.isPowerOf2()) &&
+    if ((Op1CV.isNullValue() || Op1CV.isPowerOf2()) &&
         // This only works for EQ and NE
         ICI->isEquality()) {
       // If Op1C some other power of two, convert:
@@ -699,7 +699,7 @@ Instruction *InstCombiner::transformZExtICmp(ICmpInst *ICI, ZExtInst &CI,
         if (!DoTransform) return ICI;
 
         bool isNE = ICI->getPredicate() == ICmpInst::ICMP_NE;
-        if (Op1CV != 0 && (Op1CV != KnownZeroMask)) {
+        if (!Op1CV.isNullValue() && (Op1CV != KnownZeroMask)) {
           // (X&4) == 2 --> false
           // (X&4) != 2 --> true
           Constant *Res = ConstantInt::get(Type::getInt1Ty(CI.getContext()),
@@ -717,7 +717,7 @@ Instruction *InstCombiner::transformZExtICmp(ICmpInst *ICI, ZExtInst &CI,
                                    In->getName() + ".lobit");
         }
 
-        if ((Op1CV != 0) == isNE) { // Toggle the low bit.
+        if (!Op1CV.isNullValue() == isNE) { // Toggle the low bit.
           Constant *One = ConstantInt::get(In->getType(), 1);
           In = Builder->CreateXor(In, One);
         }
@@ -1900,6 +1900,18 @@ static Instruction *foldBitCastBitwiseLogic(BitCastInst &BitCast,
     // bitcast(logic(Y, bitcast(X))) --> logic'(bitcast(Y), X)
     Value *CastedOp0 = Builder.CreateBitCast(BO->getOperand(0), DestTy);
     return BinaryOperator::Create(BO->getOpcode(), CastedOp0, X);
+  }
+
+  // Canonicalize vector bitcasts to come before vector bitwise logic with a
+  // constant. This eases recognition of special constants for later ops.
+  // Example:
+  // icmp u/s (a ^ signmask), (b ^ signmask) --> icmp s/u a, b
+  Constant *C;
+  if (match(BO->getOperand(1), m_Constant(C))) {
+    // bitcast (logic X, C) --> logic (bitcast X, C')
+    Value *CastedOp0 = Builder.CreateBitCast(BO->getOperand(0), DestTy);
+    Value *CastedC = ConstantExpr::getBitCast(C, DestTy);
+    return BinaryOperator::Create(BO->getOpcode(), CastedOp0, CastedC);
   }
 
   return nullptr;
