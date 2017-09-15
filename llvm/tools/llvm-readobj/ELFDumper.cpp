@@ -3602,7 +3602,7 @@ void LLVMStyle<ELFT>::printRelocation(const ELFO *Obj, Elf_Rela Rel,
     raw_ostream &OS = W.startLine();
     OS << W.hex(Rel.r_offset) << " " << RelocName << " "
        << (!TargetName.empty() ? TargetName : "-") << " "
-       << W.hex(Rel.r_addend) << "\n";
+       << W.hex(Rel.r_addend);
     // For RELA relocations we would need to read the bits that will be
     // relocated and that depends on the relocation type so is non-trivial
     // Print this disclaimer instead to not confuse users of llvm-readobj
