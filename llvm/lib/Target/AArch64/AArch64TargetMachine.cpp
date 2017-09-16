@@ -161,6 +161,7 @@ extern "C" void LLVMInitializeAArch64Target() {
   initializeAArch64PromoteConstantPass(*PR);
   initializeAArch64RedundantCopyEliminationPass(*PR);
   initializeAArch64StorePairSuppressPass(*PR);
+  initializeFalkorHWPFFixPass(*PR);
   initializeFalkorMarkStridedAccessesLegacyPass(*PR);
   initializeLDTLSCleanupPass(*PR);
 }
@@ -186,7 +187,7 @@ static std::string computeDataLayout(const Triple &TT,
   if (TT.isOSBinFormatMachO())
     return "e-m:o-i64:64-i128:128-n32:64-S128";
   if (TT.isOSBinFormatCOFF())
-    return "e-m:w-i64:64-i128:128-n32:64-S128";
+    return "e-m:w-p:64:64-i32:32-i64:64-i128:128-n32:64-S128";
   if (LittleEndian)
     return "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128";
   return "E-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128";
@@ -211,8 +212,6 @@ AArch64TargetMachine::AArch64TargetMachine(
     const Target &T, const Triple &TT, StringRef CPU, StringRef FS,
     const TargetOptions &Options, Optional<Reloc::Model> RM,
     CodeModel::Model CM, CodeGenOpt::Level OL, bool LittleEndian)
-    // This nested ternary is horrible, but DL needs to be properly
-    // initialized before TLInfo is constructed.
     : LLVMTargetMachine(T, computeDataLayout(TT, Options.MCOptions,
                                              LittleEndian),
                         TT, CPU, FS, Options,
@@ -486,8 +485,12 @@ void AArch64PassConfig::addPreSched2() {
   // Expand some pseudo instructions to allow proper scheduling.
   addPass(createAArch64ExpandPseudoPass());
   // Use load/store pair instructions when possible.
-  if (TM->getOptLevel() != CodeGenOpt::None && EnableLoadStoreOpt)
-    addPass(createAArch64LoadStoreOptimizationPass());
+  if (TM->getOptLevel() != CodeGenOpt::None) {
+    if (EnableLoadStoreOpt)
+      addPass(createAArch64LoadStoreOptimizationPass());
+    if (EnableFalkorHWPFFix)
+      addPass(createFalkorHWPFFixPass());
+  }
 }
 
 void AArch64PassConfig::addPreEmitPass() {

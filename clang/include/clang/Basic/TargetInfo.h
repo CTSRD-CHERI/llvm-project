@@ -503,21 +503,6 @@ public:
   /// types for the given target.
   unsigned getSimdDefaultAlign() const { return SimdDefaultAlign; }
 
-  /// Return the alignment (in bits) of the thrown exception object. This is
-  /// only meaningful for targets that allocate C++ exceptions in a system
-  /// runtime, such as those using the Itanium C++ ABI.
-  virtual unsigned getExnObjectAlignment() const {
-    // Itanium says that an _Unwind_Exception has to be "double-word"
-    // aligned (and thus the end of it is also so-aligned), meaning 16
-    // bytes.  Of course, that was written for the actual Itanium,
-    // which is a 64-bit platform.  Classically, the ABI doesn't really
-    // specify the alignment on other platforms, but in practice
-    // libUnwind declares the struct with __attribute__((aligned)), so
-    // we assume that alignment here.  (It's generally 16 bytes, but
-    // some targets overwrite it.)
-    return getDefaultAlignForAttributeAligned();
-  }
-
   /// \brief Return the size of intmax_t and uintmax_t for this target, in bits.
   unsigned getIntMaxTWidth() const {
     return getTypeWidth(IntMaxType);
@@ -908,6 +893,11 @@ public:
     return false;
   }
 
+  /// brief Determine whether this TargetInfo supports the given CPU name.
+  virtual bool isValidCPUName(StringRef Name) const {
+    return false;
+  }
+
   /// \brief Use the specified ABI.
   ///
   /// \return False on error (invalid ABI name).
@@ -928,6 +918,11 @@ public:
                                  StringRef Name,
                                  bool Enabled) const {
     Features[Name] = Enabled;
+  }
+
+  /// \brief Determine whether this TargetInfo supports the given feature.
+  virtual bool isValidFeatureName(StringRef Feature) const {
+    return false;
   }
 
   /// \brief Perform initialization based on the user configured

@@ -322,7 +322,7 @@ void Writer::createMiscChunks() {
 
   std::set<Defined *> Handlers;
 
-  for (lld::coff::ObjectFile *File : Symtab->ObjectFiles) {
+  for (ObjFile *File : ObjFile::Instances) {
     if (!File->SEHCompat)
       return;
     for (SymbolBody *B : File->SEHandlers) {
@@ -345,13 +345,13 @@ void Writer::createMiscChunks() {
 // IdataContents class abstracted away the details for us,
 // so we just let it create chunks and add them to the section.
 void Writer::createImportTables() {
-  if (Symtab->ImportFiles.empty())
+  if (ImportFile::Instances.empty())
     return;
 
   // Initialize DLLOrder so that import entries are ordered in
   // the same order as in the command line. (That affects DLL
   // initialization order, and this ordering is MSVC-compatible.)
-  for (ImportFile *File : Symtab->ImportFiles) {
+  for (ImportFile *File : ImportFile::Instances) {
     if (!File->Live)
       continue;
 
@@ -361,7 +361,7 @@ void Writer::createImportTables() {
   }
 
   OutputSection *Text = createSection(".text");
-  for (ImportFile *File : Symtab->ImportFiles) {
+  for (ImportFile *File : ImportFile::Instances) {
     if (!File->Live)
       continue;
 
@@ -432,19 +432,12 @@ Optional<coff_symbol16> Writer::createSymbol(Defined *Def) {
   if (isa<DefinedSynthetic>(Def))
     return None;
 
-  if (auto *D = dyn_cast<DefinedRegular>(Def)) {
-    // Don't write dead symbols or symbols in codeview sections to the symbol
-    // table.
-    if (!D->getChunk()->isLive() || D->getChunk()->isCodeView())
-      return None;
-  }
-
-  if (auto *Sym = dyn_cast<DefinedImportData>(Def))
-    if (!Sym->File->Live)
-      return None;
-
-  if (auto *Sym = dyn_cast<DefinedImportThunk>(Def))
-    if (!Sym->WrappedSym->File->Live)
+  // Don't write dead symbols or symbols in codeview sections to the symbol
+  // table.
+  if (!Def->isLive())
+    return None;
+  if (auto *D = dyn_cast<DefinedRegular>(Def))
+    if (D->getChunk()->isCodeView())
       return None;
 
   coff_symbol16 Sym;
@@ -501,7 +494,7 @@ void Writer::createSymbolAndStringTable() {
     Sec->setStringTableOff(addEntryToStringTable(Name));
   }
 
-  for (lld::coff::ObjectFile *File : Symtab->ObjectFiles) {
+  for (ObjFile *File : ObjFile::Instances) {
     for (SymbolBody *B : File->getSymbols()) {
       auto *D = dyn_cast<Defined>(B);
       if (!D || D->WrittenToSymtab)

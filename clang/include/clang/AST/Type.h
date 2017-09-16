@@ -1763,6 +1763,7 @@ public:
   bool isTemplateTypeParmType() const;          // C++ template type parameter
   bool isNullPtrType() const;                   // C++11 std::nullptr_t
   bool isAlignValT() const;                     // C++17 std::align_val_t
+  bool isStdByteType() const;                   // C++17 std::byte
   bool isAtomicType() const;                    // C11 _Atomic()
 
 #define IMAGE_TYPE(ImgType, Id, SingletonId, Access, Suffix) \
@@ -3901,6 +3902,7 @@ public:
     attr_sptr,
     attr_uptr,
     attr_nonnull,
+    attr_ns_returns_retained,
     attr_nullable,
     attr_null_unspecified,
     attr_objc_kindof,

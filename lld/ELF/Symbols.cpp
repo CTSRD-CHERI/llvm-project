@@ -325,7 +325,7 @@ LazyArchive::LazyArchive(ArchiveFile &File,
   this->File = &File;
 }
 
-LazyObject::LazyObject(StringRef Name, LazyObjectFile &File, uint8_t Type)
+LazyObject::LazyObject(StringRef Name, LazyObjFile &File, uint8_t Type)
     : Lazy(LazyObjectKind, Name, Type) {
   this->File = &File;
 }
@@ -357,8 +357,9 @@ uint8_t Symbol::computeBinding() const {
 bool Symbol::includeInDynsym() const {
   if (computeBinding() == STB_LOCAL)
     return false;
-  return ExportDynamic || body()->isShared() ||
-         (body()->isUndefined() && Config->Shared);
+  if (body()->isUndefined())
+    return Config->Shared;
+  return ExportDynamic || body()->isShared();
 }
 
 // Print out a log message for --trace-symbol.

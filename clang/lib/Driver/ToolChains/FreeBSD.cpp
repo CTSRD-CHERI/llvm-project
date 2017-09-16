@@ -261,7 +261,8 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     addOpenMPRuntime(CmdArgs, ToolChain, Args);
     CmdArgs.push_back("--start-group");
     if (D.CCCIsCXX()) {
-      ToolChain.AddCXXStdlibLibArgs(Args, CmdArgs);
+      if (ToolChain.ShouldLinkCXXStdlib(Args))
+        ToolChain.AddCXXStdlibLibArgs(Args, CmdArgs);
       if (Args.hasArg(options::OPT_pg))
         CmdArgs.push_back("-lm_p");
       else
