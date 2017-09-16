@@ -20,7 +20,10 @@
 #include "ARMISelLowering.h"
 #include "ARMSelectionDAGInfo.h"
 #include "llvm/ADT/Triple.h"
-#include "llvm/CodeGen/GlobalISel/GISelAccessor.h"
+#include "llvm/CodeGen/GlobalISel/CallLowering.h"
+#include "llvm/CodeGen/GlobalISel/InstructionSelector.h"
+#include "llvm/CodeGen/GlobalISel/LegalizerInfo.h"
+#include "llvm/CodeGen/GlobalISel/RegisterBankInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/MC/MCInstrItineraries.h"
 #include "llvm/MC/MCSchedule.h"
@@ -50,10 +53,12 @@ protected:
     CortexA35,
     CortexA5,
     CortexA53,
+    CortexA55,
     CortexA57,
     CortexA7,
     CortexA72,
     CortexA73,
+    CortexA75,
     CortexA8,
     CortexA9,
     CortexM3,
@@ -187,6 +192,10 @@ protected:
 
   /// UseMISched - True if MachineScheduler should be used for this subtarget.
   bool UseMISched = false;
+
+  /// UsePostRAScheduler - True if scheduling should happen again after
+  /// register allocation.
+  bool UsePostRAScheduler = false;
 
   /// HasThumb2 - True if Thumb2 instructions are supported.
   bool HasThumb2 = false;
@@ -424,9 +433,6 @@ public:
   ARMSubtarget(const Triple &TT, const std::string &CPU, const std::string &FS,
                const ARMBaseTargetMachine &TM, bool IsLittle);
 
-  /// This object will take onwership of \p GISelAccessor.
-  void setGISelAccessor(GISelAccessor &GISel) { this->GISel.reset(&GISel); }
-
   /// getMaxInlineSizeThreshold - Returns the maximum memset / memcpy size
   /// that still makes it profitable to inline the call.
   unsigned getMaxInlineSizeThreshold() const {
@@ -474,10 +480,11 @@ private:
   std::unique_ptr<ARMBaseInstrInfo> InstrInfo;
   ARMTargetLowering   TLInfo;
 
-  /// Gather the accessor points to GlobalISel-related APIs.
-  /// This is used to avoid ifndefs spreading around while GISel is
-  /// an optional library.
-  std::unique_ptr<GISelAccessor> GISel;
+  /// GlobalISel related APIs.
+  std::unique_ptr<CallLowering> CallLoweringInfo;
+  std::unique_ptr<InstructionSelector> InstSelector;
+  std::unique_ptr<LegalizerInfo> Legalizer;
+  std::unique_ptr<RegisterBankInfo> RegBankInfo;
 
   void initializeEnvironment();
   void initSubtargetFeatures(StringRef CPU, StringRef FS);
@@ -659,6 +666,7 @@ public:
   bool isRWPI() const;
 
   bool useMachineScheduler() const { return UseMISched; }
+  bool usePostRAScheduler() const { return UsePostRAScheduler; }
   bool useSoftFloat() const { return UseSoftFloat; }
   bool isThumb() const { return InThumbMode; }
   bool isThumb1Only() const { return InThumbMode && !HasThumb2; }

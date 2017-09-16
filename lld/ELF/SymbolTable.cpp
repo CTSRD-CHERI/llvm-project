@@ -250,7 +250,7 @@ std::pair<Symbol *, bool> SymbolTable::insert(StringRef Name, uint8_t Type,
                                               uint8_t Visibility,
                                               bool CanOmitFromDynSym,
                                               InputFile *File) {
-  bool IsUsedInRegularObj = !File || File->kind() == InputFile::ObjectKind;
+  bool IsUsedInRegularObj = !File || File->kind() == InputFile::ObjKind;
   Symbol *S;
   bool WasInserted;
   std::tie(S, WasInserted) = insert(Name);
@@ -525,13 +525,6 @@ SymbolBody *SymbolTable::find(StringRef Name) {
   if (V.Idx == -1)
     return nullptr;
   return SymVector[V.Idx]->body();
-}
-
-SymbolBody *SymbolTable::findInCurrentDSO(StringRef Name) {
-  if (SymbolBody *S = find(Name))
-    if (S->isInCurrentDSO())
-      return S;
-  return nullptr;
 }
 
 template <class ELFT>

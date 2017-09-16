@@ -49,19 +49,24 @@ using namespace lld::elf;
 
 LinkerScript *elf::Script;
 
+static uint64_t getOutputSectionVA(SectionBase *InputSec, StringRef Loc) {
+  if (OutputSection *OS = InputSec->getOutputSection())
+    return OS->Addr;
+  error(Loc + ": unable to evaluate expression: input section " +
+        InputSec->Name + " has no output section assigned");
+  return 0;
+}
+
 uint64_t ExprValue::getValue() const {
-  if (Sec) {
-    if (OutputSection *OS = Sec->getOutputSection())
-      return alignTo(Sec->getOffset(Val) + OS->Addr, Alignment);
-    error(Loc + ": unable to evaluate expression: input section " + Sec->Name +
-          " has no output section assigned");
-  }
+  if (Sec)
+    return alignTo(Sec->getOffset(Val) + getOutputSectionVA(Sec, Loc),
+                   Alignment);
   return alignTo(Val, Alignment);
 }
 
 uint64_t ExprValue::getSecAddr() const {
   if (Sec)
-    return Sec->getOffset(0) + Sec->getOutputSection()->Addr;
+    return Sec->getOffset(0) + getOutputSectionVA(Sec, Loc);
   return 0;
 }
 
@@ -169,18 +174,22 @@ bool BytesDataCommand::classof(const BaseCommand *C) {
   return C->Kind == BytesDataKind;
 }
 
-static StringRef basename(InputSectionBase *S) {
-  if (S->File)
-    return sys::path::filename(S->File->getName());
-  return "";
+static std::string filename(InputSectionBase *S) {
+  if (!S->File)
+    return "";
+  if (S->File->ArchiveName.empty())
+    return S->File->getName();
+  return (S->File->ArchiveName + "(" + S->File->getName() + ")").str();
 }
 
 bool LinkerScript::shouldKeep(InputSectionBase *S) {
-  for (InputSectionDescription *ID : Opt.KeptSections)
-    if (ID->FilePat.match(basename(S)))
+  for (InputSectionDescription *ID : Opt.KeptSections) {
+    std::string Filename = filename(S);
+    if (ID->FilePat.match(Filename))
       for (SectionPattern &P : ID->SectionPatterns)
         if (P.SectionPat.match(S->Name))
           return true;
+  }
   return false;
 }
 
@@ -275,7 +284,7 @@ LinkerScript::computeInputSections(const InputSectionDescription *Cmd) {
       if (Sec->Type == SHT_REL || Sec->Type == SHT_RELA)
         continue;
 
-      StringRef Filename = basename(Sec);
+      std::string Filename = filename(Sec);
       if (!Cmd->FilePat.match(Filename) ||
           Pat.ExcludedFilePat.match(Filename) ||
           !Pat.SectionPat.match(Sec->Name))
@@ -718,6 +727,17 @@ void LinkerScript::adjustSectionsAfterSorting() {
   removeEmptyCommands();
 }
 
+// Try to find an address for the file and program headers output sections,
+// which were unconditionally added to the first PT_LOAD segment earlier.
+//
+// When using the default layout, we check if the headers fit below the first
+// allocated section. When using a linker script, we also check if the headers
+// are covered by the output section. This allows omitting the headers by not
+// leaving enough space for them in the linker script; this pattern is common
+// in embedded systems.
+//
+// If there isn't enough space for these sections, we'll remove them from the
+// PT_LOAD segment, and we'll also remove the PT_PHDR segment.
 void LinkerScript::allocateHeaders(std::vector<PhdrEntry *> &Phdrs) {
   uint64_t Min = std::numeric_limits<uint64_t>::max();
   for (OutputSection *Sec : OutputSections)
@@ -731,14 +751,17 @@ void LinkerScript::allocateHeaders(std::vector<PhdrEntry *> &Phdrs) {
   PhdrEntry *FirstPTLoad = *It;
 
   uint64_t HeaderSize = getHeaderSize();
-  if (HeaderSize <= Min || Script->hasPhdrsCommands()) {
-    Min = alignDown(Min - HeaderSize, Config->MaxPageSize);
+  // When linker script with SECTIONS is being used, don't output headers
+  // unless there's a space for them.
+  uint64_t Base = Opt.HasSections ? alignDown(Min, Config->MaxPageSize) : 0;
+  if (HeaderSize <= Min - Base || Script->hasPhdrsCommands()) {
+    Min = Opt.HasSections ? Base
+                          : alignDown(Min - HeaderSize, Config->MaxPageSize);
     Out::ElfHeader->Addr = Min;
     Out::ProgramHeaders->Addr = Min + Out::ElfHeader->Size;
     return;
   }
 
-  assert(FirstPTLoad->First == Out::ElfHeader);
   OutputSection *ActualFirst = nullptr;
   for (OutputSection *Sec : OutputSections) {
     if (Sec->FirstInPtLoad == Out::ElfHeader) {
@@ -842,8 +865,13 @@ bool LinkerScript::ignoreInterpSection() {
 }
 
 ExprValue LinkerScript::getSymbolValue(const Twine &Loc, StringRef S) {
-  if (S == ".")
-    return {CurAddressState->OutSec, Dot - CurAddressState->OutSec->Addr, Loc};
+  if (S == ".") {
+    if (CurAddressState)
+      return {CurAddressState->OutSec, Dot - CurAddressState->OutSec->Addr,
+              Loc};
+    error(Loc + ": unable to get location counter value");
+    return 0;
+  }
   if (SymbolBody *B = Symtab->find(S)) {
     if (auto *D = dyn_cast<DefinedRegular>(B))
       return {D->Section, D->Value, Loc};

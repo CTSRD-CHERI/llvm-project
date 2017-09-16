@@ -451,7 +451,7 @@ def SDOTIDX4S : BaseSIMDThreeSameVectorDotIndex<1, 0, "sdot", ".4s", ".16b", ".4
 }
 
 let Predicates = [HasRCPC] in {
-  // v8.3 Release Consistent Processor Consistent support
+  // v8.3 Release Consistent Processor Consistent support, optional in v8.2.
   def LDAPRB  : RCPCLoad<0b00, "ldaprb", GPR32>;
   def LDAPRH  : RCPCLoad<0b01, "ldaprh", GPR32>;
   def LDAPRW  : RCPCLoad<0b10, "ldapr", GPR32>;
@@ -521,6 +521,13 @@ let Predicates = [HasV8_3a] in {
 
   defm LDRAA  : AuthLoad<0, "ldraa", simm10Scaled>;
   defm LDRAB  : AuthLoad<1, "ldrab", simm10Scaled>;
+
+  // v8.3a floating point conversion for javascript
+  let Predicates = [HasV8_3a, HasFPARMv8] in
+  def FJCVTZS  : BaseFPToIntegerUnscaled<0b01, 0b11, 0b110, FPR64, GPR32,
+                                        "fjcvtzs", []> {
+    let Inst{31} = 0;
+  }
 
 } // HasV8_3A
 
@@ -2683,6 +2690,8 @@ defm FMOV : UnscaledConversion<"fmov">;
 
 // Add pseudo ops for FMOV 0 so we can mark them as isReMaterializable
 let isReMaterializable = 1, isCodeGenOnly = 1, isAsCheapAsAMove = 1 in {
+def FMOVH0 : Pseudo<(outs FPR16:$Rd), (ins), [(set f16:$Rd, (fpimm0))]>,
+    Sched<[WriteF]>;
 def FMOVS0 : Pseudo<(outs FPR32:$Rd), (ins), [(set f32:$Rd, (fpimm0))]>,
     Sched<[WriteF]>;
 def FMOVD0 : Pseudo<(outs FPR64:$Rd), (ins), [(set f64:$Rd, (fpimm0))]>,

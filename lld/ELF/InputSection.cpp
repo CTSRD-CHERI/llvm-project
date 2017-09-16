@@ -194,23 +194,18 @@ OutputSection *SectionBase::getOutputSection() {
 }
 
 // Uncompress section contents. Note that this function is called
-// from parallel_for_each, so it must be thread-safe.
+// from parallelForEach, so it must be thread-safe.
 void InputSectionBase::uncompress() {
   Decompressor Dec = check(Decompressor::create(Name, toStringRef(Data),
                                                 Config->IsLE, Config->Is64));
 
   size_t Size = Dec.getDecompressedSize();
-  char *OutputBuf;
-  {
-    static std::mutex Mu;
-    std::lock_guard<std::mutex> Lock(Mu);
-    OutputBuf = BAlloc.Allocate<char>(Size);
-  }
-
-  if (Error E = Dec.decompress({OutputBuf, Size}))
+  UncompressBuf.reset(new std::vector<uint8_t>(Size));
+  if (Error E = Dec.decompress({(char *)UncompressBuf->data(), Size}))
     fatal(toString(this) +
           ": decompress failed: " + llvm::toString(std::move(E)));
-  this->Data = ArrayRef<uint8_t>((uint8_t *)OutputBuf, Size);
+
+  this->Data = *UncompressBuf;
   this->Flags &= ~(uint64_t)SHF_COMPRESSED;
 }
 
@@ -925,7 +920,7 @@ MergeInputSection::MergeInputSection(ObjFile<ELFT> *F,
 // that need to be linked. This is responsible to split section contents
 // into small chunks for further processing.
 //
-// Note that this function is called from parallel_for_each. This must be
+// Note that this function is called from parallelForEach. This must be
 // thread-safe (i.e. no memory allocation from the pools).
 void MergeInputSection::splitIntoPieces() {
   ArrayRef<uint8_t> Data = this->Data;

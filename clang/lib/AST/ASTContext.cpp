@@ -1667,6 +1667,7 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
   uint64_t Width = 0;
   unsigned Align = 8;
   bool AlignIsRequired = false;
+  unsigned AS = 0;
   switch (T->getTypeClass()) {
 #define TYPE(Class, Base)
 #define ABSTRACT_TYPE(Class, Base)
@@ -1818,28 +1819,18 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
       Width = Target->getPointerWidth(0); 
       Align = Target->getPointerAlign(0);
       break;
-    case BuiltinType::OCLSampler: {
-      auto AS = getTargetAddressSpace(LangAS::opencl_constant);
-      Width = Target->getPointerWidth(AS);
-      Align = Target->getPointerAlign(AS);
-      break;
-    }
+    case BuiltinType::OCLSampler:
     case BuiltinType::OCLEvent:
     case BuiltinType::OCLClkEvent:
     case BuiltinType::OCLQueue:
     case BuiltinType::OCLReserveID:
-      // Currently these types are pointers to opaque types.
-      Width = Target->getPointerWidth(0);
-      Align = Target->getPointerAlign(0);
-      break;
 #define IMAGE_TYPE(ImgType, Id, SingletonId, Access, Suffix) \
     case BuiltinType::Id:
 #include "clang/Basic/OpenCLImageTypes.def"
-      {
-        auto AS = getTargetAddressSpace(Target->getOpenCLImageAddrSpace());
-        Width = Target->getPointerWidth(AS);
-        Align = Target->getPointerAlign(AS);
-      }
+      AS = getTargetAddressSpace(Target->getOpenCLTypeAddrSpace(T));
+      Width = Target->getPointerWidth(AS);
+      Align = Target->getPointerAlign(AS);
+      break;
     }
     break;
   case Type::ObjCObjectPointer: {
@@ -1852,8 +1843,7 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
       Width = Target->getCHERICapabilityWidth();
       Align = Target->getCHERICapabilityAlign();
     } else {
-      unsigned AS = getTargetAddressSpace(
-          cast<BlockPointerType>(T)->getPointeeType());
+      AS = getTargetAddressSpace(cast<BlockPointerType>(T)->getPointeeType());
       Width = Target->getPointerWidth(AS);
       Align = Target->getPointerAlign(AS);
     }
@@ -1868,8 +1858,7 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
       Width = Target->getCHERICapabilityWidth();
       Align = Target->getCHERICapabilityAlign();
     } else {
-      unsigned AS = getTargetAddressSpace(
-          cast<ReferenceType>(T)->getPointeeType());
+      AS = getTargetAddressSpace(cast<ReferenceType>(T)->getPointeeType());
       Width = Target->getPointerWidth(AS);
       Align = Target->getPointerAlign(AS);
     }
@@ -1890,7 +1879,7 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
       Width = Target->getCHERICapabilityWidth();
       Align = Target->getCHERICapabilityAlign();
     } else {
-      unsigned AS = getTargetAddressSpace(PointeeTy);
+      AS = getTargetAddressSpace(PointeeTy);
       Width = Target->getPointerWidth(AS);
       Align = Target->getPointerAlign(AS);
     }

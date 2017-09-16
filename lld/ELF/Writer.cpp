@@ -23,7 +23,6 @@
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Support/FileOutputBuffer.h"
-#include "llvm/Support/raw_ostream.h"
 #include <climits>
 
 using namespace llvm;
@@ -689,8 +688,8 @@ static unsigned getSectionRank(const OutputSection *Sec) {
   if (IsNoBits)
     Rank |= RF_BSS;
 
-  // // Some architectures have additional ordering restrictions for sections
-  // // within the same PT_LOAD.
+  // Some architectures have additional ordering restrictions for sections
+  // within the same PT_LOAD.
   if (Config->EMachine == EM_PPC64) {
     // PPC64 has a number of special SHT_PROGBITS+SHF_ALLOC+SHF_WRITE sections
     // that we would like to make sure appear is a specific order to maximize
@@ -1293,14 +1292,18 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
 
   // Dynamic section must be the last one in this list and dynamic
   // symbol table section (DynSymTab) must be the first one.
-  applySynthetic({InX::DynSymTab,    InX::Bss,           InX::BssRelRo,
-                  InX::GnuHashTab,   In<ELFT>::HashTab,  InX::SymTab,
-                  InX::ShStrTab,     InX::StrTab,        In<ELFT>::VerDef,
-                  InX::DynStrTab,    InX::GdbIndex,      InX::Got,
-                  InX::MipsGot,      InX::IgotPlt,       InX::GotPlt,
-                  In<ELFT>::RelaDyn, In<ELFT>::RelaIplt, In<ELFT>::RelaPlt,
-                  InX::Plt,          InX::Iplt,          In<ELFT>::EhFrameHdr,
-                  In<ELFT>::VerSym,  In<ELFT>::VerNeed,  InX::Dynamic},
+  applySynthetic({InX::DynSymTab,    InX::Bss,
+                  InX::BssRelRo,     InX::GnuHashTab,
+                  In<ELFT>::HashTab, InX::SymTab,
+                  InX::ShStrTab,     InX::StrTab,
+                  In<ELFT>::VerDef,  InX::DynStrTab,
+                  InX::Got,          InX::MipsGot,
+                  InX::IgotPlt,      InX::GotPlt,
+                  In<ELFT>::RelaDyn, In<ELFT>::RelaIplt,
+                  In<ELFT>::RelaPlt, InX::Plt,
+                  InX::Iplt,         In<ELFT>::EhFrameHdr,
+                  In<ELFT>::VerSym,  In<ELFT>::VerNeed,
+                  InX::Dynamic},
                  [](SyntheticSection *SS) { SS->finalizeContents(); });
 
   // Some architectures use small displacements for jump instructions.
@@ -1852,7 +1855,7 @@ template <class ELFT> void Writer<ELFT>::writeSectionsBinary() {
 }
 
 static void fillTrap(uint8_t *I, uint8_t *End) {
-  for (; I + 4 < End; I += 4)
+  for (; I + 4 <= End; I += 4)
     memcpy(I, &Target->TrapInstr, 4);
 }
 

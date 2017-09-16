@@ -283,7 +283,7 @@ static int getInteger(opt::InputArgList &Args, unsigned Key, int Default) {
   if (auto *Arg = Args.getLastArg(Key)) {
     StringRef S = Arg->getValue();
     if (!to_integer(S, V, 10))
-      error(Arg->getSpelling() + ": number expected, but got " + S);
+      error(Arg->getSpelling() + ": number expected, but got '" + S + "'");
   }
   return V;
 }
@@ -716,7 +716,8 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
       Config->ThinLTOJobs = parseInt(S.substr(5), Arg);
     else if (!S.startswith("/") && !S.startswith("-fresolution=") &&
              !S.startswith("-pass-through=") && !S.startswith("mcpu=") &&
-             !S.startswith("thinlto"))
+             !S.startswith("thinlto") && S != "-function-sections" &&
+             S != "-data-sections")
       error(Arg->getSpelling() + ": unknown option: " + S);
   }
 
@@ -1011,6 +1012,11 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   for (InputFile *F : Files)
     Symtab->addFile<ELFT>(F);
 
+  // Some symbols (such as __ehdr_start) are defined lazily only when there
+  // are undefined symbols for them, so we add these to trigger that logic.
+  for (StringRef Sym : Script->Opt.ReferencedSymbols)
+    Symtab->addUndefined<ELFT>(Sym);
+
   // If an entry symbol is in a static archive, pull out that file now
   // to complete the symbol table. After this, no new names except a
   // few linker-synthesized ones will be added to the symbol table.
@@ -1045,11 +1051,6 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   Symtab->addCombinedLTOObject<ELFT>();
   if (ErrorCount)
     return;
-
-  // Some symbols (such as __ehdr_start) are defined lazily only when there
-  // are undefined symbols for them, so we add these to trigger that logic.
-  for (StringRef Sym : Script->Opt.ReferencedSymbols)
-    Symtab->addUndefined<ELFT>(Sym);
 
   // Apply symbol renames for -wrap and -defsym
   Symtab->applySymbolRenames();

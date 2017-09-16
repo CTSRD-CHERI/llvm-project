@@ -148,6 +148,7 @@ PHIExpression::~PHIExpression() = default;
 }
 }
 
+namespace {
 // Tarjan's SCC finding algorithm with Nuutila's improvements
 // SCCIterator is actually fairly complex for the simple thing we want.
 // It also wants to hand us SCC's that are unrelated to the phi node we ask
@@ -380,6 +381,7 @@ private:
   // This is used so we can detect store equivalence changes properly.
   int StoreCount = 0;
 };
+} // namespace
 
 namespace llvm {
 struct ExactEqualsExpression {
@@ -1023,7 +1025,7 @@ const Expression *NewGVN::createExpression(Instruction *I) const {
       return SimplifiedE;
   } else if (isa<SelectInst>(I)) {
     if (isa<Constant>(E->getOperand(0)) ||
-        E->getOperand(0) == E->getOperand(1)) {
+        E->getOperand(1) == E->getOperand(2)) {
       assert(E->getOperand(1)->getType() == I->getOperand(1)->getType() &&
              E->getOperand(2)->getType() == I->getOperand(2)->getType());
       Value *V = SimplifySelectInst(E->getOperand(0), E->getOperand(1),

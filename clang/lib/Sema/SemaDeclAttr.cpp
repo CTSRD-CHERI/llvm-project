@@ -7618,6 +7618,10 @@ public:
 
   bool TraverseLambdaExpr(LambdaExpr *E) { return true; }
 
+  // for 'case X:' statements, don't bother looking at the 'X'; it can't lead
+  // to any useful diagnostics.
+  bool TraverseCaseStmt(CaseStmt *CS) { return TraverseStmt(CS->getSubStmt()); }
+
   bool VisitObjCPropertyRefExpr(ObjCPropertyRefExpr *PRE) {
     if (PRE->isClassReceiver())
       DiagnoseDeclAvailability(PRE->getClassReceiver(), PRE->getReceiverLocation());
@@ -7800,8 +7804,7 @@ bool DiagnoseUnguardedAvailability::TraverseIfStmt(IfStmt *If) {
     // If we're using the '*' case here or if this check is redundant, then we
     // use the enclosing version to check both branches.
     if (CondVersion.empty() || CondVersion <= AvailabilityStack.back())
-      return Base::TraverseStmt(If->getThen()) &&
-             Base::TraverseStmt(If->getElse());
+      return TraverseStmt(If->getThen()) && TraverseStmt(If->getElse());
   } else {
     // This isn't an availability checking 'if', we can just continue.
     return Base::TraverseIfStmt(If);
