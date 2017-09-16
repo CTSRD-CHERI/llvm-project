@@ -46,7 +46,7 @@
 ; ASM: [[after_inc_eax:\.Ltmp.*]]:
 ; ASM:         #DEBUG_VALUE: inlineinc:b <- %EAX
 ; ASM:         #DEBUG_VALUE: b <- %EAX
-; ASM:         incl    x(%rip)
+; ASM:         addl    $1, x(%rip)
 ; ASM: [[after_if:\.Ltmp.*]]:
 ; ASM: .LBB0_2:                                # %if.else
 ; ASM:         #DEBUG_VALUE: f:p <- %ESI
@@ -104,7 +104,7 @@
 ; OBJ:     LocalVariableAddrRange {
 ; OBJ:       OffsetStart: .text+0x7
 ; OBJ:       ISectStart: 0x0
-; OBJ:       Range: 0x19
+; OBJ:       Range: 0x1A
 ; OBJ:     }
 ; OBJ:   }
 ; OBJ:   LocalSym {
@@ -146,7 +146,7 @@
 ; OBJ:     MayHaveNoName: 0
 ; OBJ:       OffsetStart: .text+0x13
 ; OBJ:       ISectStart: 0x0
-; OBJ:       Range: 0x6
+; OBJ:       Range: 0x7
 ; OBJ:     }
 ; OBJ:   }
 ; OBJ:   InlineSiteSym {
@@ -180,7 +180,7 @@
 ; OBJ:     LocalVariableAddrRange {
 ; OBJ:       OffsetStart: .text+0x13
 ; OBJ:       ISectStart: 0x0
-; OBJ:       Range: 0x6
+; OBJ:       Range: 0x7
 ; OBJ:     }
 ; OBJ:   }
 ; OBJ:   InlineSiteEnd {
@@ -240,7 +240,7 @@ attributes #3 = { nounwind }
 !llvm.module.flags = !{!8, !9, !10}
 !llvm.ident = !{!11}
 
-!0 = !DIGlobalVariableExpression(var: !1)
+!0 = !DIGlobalVariableExpression(var: !1, expr: !DIExpression())
 !1 = !DIGlobalVariable(name: "x", scope: !2, file: !3, line: 1, type: !6, isLocal: false, isDefinition: true)
 !2 = distinct !DICompileUnit(language: DW_LANG_C99, file: !3, producer: "clang version 3.9.0 (trunk 260617) (llvm/trunk 260619)", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !4, globals: !5)
 !3 = !DIFile(filename: "t.cpp", directory: "D:\5Csrc\5Cllvm\5Cbuild")

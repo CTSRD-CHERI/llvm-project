@@ -35,9 +35,9 @@ public:
   Fuzzer(UserCallback CB, InputCorpus &Corpus, MutationDispatcher &MD,
          FuzzingOptions Options);
   ~Fuzzer();
-  void Loop();
+  void Loop(const Vector<std::string> &CorpusDirs);
+  void ReadAndExecuteSeedCorpora(const Vector<std::string> &CorpusDirs);
   void MinimizeCrashLoop(const Unit &U);
-  void ShuffleAndMinimize(UnitVector *V);
   void RereadOutputCorpus(size_t MaxSize);
 
   size_t secondsSinceProcessStartUp() {
@@ -69,9 +69,9 @@ public:
               InputInfo *II = nullptr);
 
   // Merge Corpora[1:] into Corpora[0].
-  void Merge(const std::vector<std::string> &Corpora);
-  void CrashResistantMerge(const std::vector<std::string> &Args,
-                           const std::vector<std::string> &Corpora,
+  void Merge(const Vector<std::string> &Corpora);
+  void CrashResistantMerge(const Vector<std::string> &Args,
+                           const Vector<std::string> &Corpora,
                            const char *CoverageSummaryInputPathOrNull,
                            const char *CoverageSummaryOutputPathOrNull);
   void CrashResistantMergeInternalStep(const std::string &ControlFilePath);
@@ -102,7 +102,6 @@ private:
   void WriteUnitToFileWithPrefix(const Unit &U, const char *Prefix);
   void PrintStats(const char *Where, const char *End = "\n", size_t Units = 0);
   void PrintStatusForNewUnit(const Unit &U, const char *Text);
-  void ShuffleCorpus(UnitVector *V);
   void CheckExitOnSrcPosOrItem();
 
   static void StaticDeathCallback();
@@ -139,7 +138,7 @@ private:
   size_t MaxMutationLen = 0;
   size_t TmpMaxMutationLen = 0;
 
-  std::vector<uint32_t> UniqFeatureSetTmp;
+  Vector<uint32_t> UniqFeatureSetTmp;
 
   // Need to know our own thread.
   static thread_local bool IsMyThread;

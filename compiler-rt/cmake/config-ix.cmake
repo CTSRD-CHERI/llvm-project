@@ -174,7 +174,7 @@ endmacro()
 
 set(ARM64 aarch64)
 set(ARM32 arm armhf)
-set(X86 i386 i686)
+set(X86 i386)
 set(X86_64 x86_64)
 set(MIPS32 mips mipsel)
 set(MIPS64 mips64 mips64el)
@@ -470,8 +470,8 @@ else()
   set(OS_NAME "${CMAKE_SYSTEM_NAME}")
 endif()
 
-set(ALL_SANITIZERS asan;dfsan;msan;tsan;safestack;cfi;esan;scudo)
-set(COMPILER_RT_SANITIZERS_TO_BUILD ${ALL_SANITIZERS} CACHE STRING
+set(ALL_SANITIZERS asan;dfsan;msan;tsan;safestack;cfi;esan;scudo;ubsan_minimal)
+set(COMPILER_RT_SANITIZERS_TO_BUILD all CACHE STRING
     "sanitizers to build if supported on the target (all;${ALL_SANITIZERS})")
 list_replace(COMPILER_RT_SANITIZERS_TO_BUILD all "${ALL_SANITIZERS}")
 
@@ -545,6 +545,13 @@ else()
   set(COMPILER_RT_HAS_UBSAN FALSE)
 endif()
 
+if (COMPILER_RT_HAS_SANITIZER_COMMON AND UBSAN_SUPPORTED_ARCH AND
+    OS_NAME MATCHES "Linux|FreeBSD|NetBSD|Android")
+  set(COMPILER_RT_HAS_UBSAN_MINIMAL TRUE)
+else()
+  set(COMPILER_RT_HAS_UBSAN_MINIMAL FALSE)
+endif()
+
 if (COMPILER_RT_HAS_SANITIZER_COMMON AND SAFESTACK_SUPPORTED_ARCH AND
     OS_NAME MATCHES "Darwin|Linux|FreeBSD|NetBSD")
   set(COMPILER_RT_HAS_SAFESTACK TRUE)
@@ -581,7 +588,7 @@ else()
 endif()
 
 if (COMPILER_RT_HAS_SANITIZER_COMMON AND FUZZER_SUPPORTED_ARCH AND
-      OS_NAME MATCHES "Darwin|Linux")
+      OS_NAME MATCHES "Darwin|Linux|NetBSD")
   set(COMPILER_RT_HAS_FUZZER TRUE)
 else()
   set(COMPILER_RT_HAS_FUZZER FALSE)

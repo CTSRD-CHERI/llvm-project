@@ -676,9 +676,12 @@ LLVM_ATTRIBUTE_NORETURN void report_fatal_error(Error Err,
 ///
 ///   cantFail(foo(false));
 ///   @endcode
-inline void cantFail(Error Err) {
-  if (Err)
-    llvm_unreachable("Failure value returned from cantFail wrapped call");
+inline void cantFail(Error Err, const char *Msg = nullptr) {
+  if (Err) {
+    if (!Msg)
+      Msg = "Failure value returned from cantFail wrapped call";
+    llvm_unreachable(Msg);
+  }
 }
 
 /// Report a fatal error if ValOrErr is a failure value, otherwise unwraps and
@@ -695,11 +698,14 @@ inline void cantFail(Error Err) {
 ///   int X = cantFail(foo(false));
 ///   @endcode
 template <typename T>
-T cantFail(Expected<T> ValOrErr) {
+T cantFail(Expected<T> ValOrErr, const char *Msg = nullptr) {
   if (ValOrErr)
     return std::move(*ValOrErr);
-  else
-    llvm_unreachable("Failure value returned from cantFail wrapped call");
+  else {
+    if (!Msg)
+      Msg = "Failure value returned from cantFail wrapped call";
+    llvm_unreachable(Msg);
+  }
 }
 
 /// Report a fatal error if ValOrErr is a failure value, otherwise unwraps and
@@ -716,11 +722,14 @@ T cantFail(Expected<T> ValOrErr) {
 ///   Bar &X = cantFail(foo(false));
 ///   @endcode
 template <typename T>
-T& cantFail(Expected<T&> ValOrErr) {
+T& cantFail(Expected<T&> ValOrErr, const char *Msg = nullptr) {
   if (ValOrErr)
     return *ValOrErr;
-  else
-    llvm_unreachable("Failure value returned from cantFail wrapped call");
+  else {
+    if (!Msg)
+      Msg = "Failure value returned from cantFail wrapped call";
+    llvm_unreachable(Msg);
+  }
 }
 
 /// Helper for testing applicability of, and applying, handlers for
@@ -775,7 +784,7 @@ public:
   }
 };
 
-/// Specialization for functions of the form 'Error (std::unique_ptr<ErrT>)'.
+/// Specialization for functions of the form 'void (std::unique_ptr<ErrT>)'.
 template <typename ErrT>
 class ErrorHandlerTraits<void (&)(std::unique_ptr<ErrT>)> {
 public:
@@ -813,7 +822,7 @@ class ErrorHandlerTraits<RetT (C::*)(const ErrT &) const>
     : public ErrorHandlerTraits<RetT (&)(ErrT &)> {};
 
 /// Specialization for member functions of the form
-/// 'RetT (std::unique_ptr<ErrT>) const'.
+/// 'RetT (std::unique_ptr<ErrT>)'.
 template <typename C, typename RetT, typename ErrT>
 class ErrorHandlerTraits<RetT (C::*)(std::unique_ptr<ErrT>)>
     : public ErrorHandlerTraits<RetT (&)(std::unique_ptr<ErrT>)> {};
@@ -876,6 +885,43 @@ void handleAllErrors(Error E, HandlerTs &&... Handlers) {
 /// If E is an error report_fatal_error will be called.
 inline void handleAllErrors(Error E) {
   cantFail(std::move(E));
+}
+
+/// Handle any errors (if present) in an Expected<T>, then try a recovery path.
+///
+/// If the incoming value is a success value it is returned unmodified. If it
+/// is a failure value then it the contained error is passed to handleErrors.
+/// If handleErrors is able to handle the error then the RecoveryPath functor
+/// is called to supply the final result. If handleErrors is not able to
+/// handle all errors then the unhandled errors are returned.
+///
+/// This utility enables the follow pattern:
+///
+///   @code{.cpp}
+///   enum FooStrategy { Aggressive, Conservative };
+///   Expected<Foo> foo(FooStrategy S);
+///
+///   auto ResultOrErr =
+///     handleExpected(
+///       foo(Aggressive),
+///       []() { return foo(Conservative); },
+///       [](AggressiveStrategyError&) {
+///         // Implicitly conusme this - we'll recover by using a conservative
+///         // strategy.
+///       });
+///
+///   @endcode
+template <typename T, typename RecoveryFtor, typename... HandlerTs>
+Expected<T> handleExpected(Expected<T> ValOrErr, RecoveryFtor &&RecoveryPath,
+                           HandlerTs &&... Handlers) {
+  if (ValOrErr)
+    return ValOrErr;
+
+  if (auto Err = handleErrors(ValOrErr.takeError(),
+                              std::forward<HandlerTs>(Handlers)...))
+    return std::move(Err);
+
+  return RecoveryPath();
 }
 
 /// Log all errors (if any) in E to OS. If there are any errors, ErrorBanner

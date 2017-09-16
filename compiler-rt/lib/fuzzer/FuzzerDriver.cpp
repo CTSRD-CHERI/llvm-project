@@ -74,7 +74,7 @@ static const FlagDescription FlagDescriptions [] {
 static const size_t kNumFlags =
     sizeof(FlagDescriptions) / sizeof(FlagDescriptions[0]);
 
-static std::vector<std::string> *Inputs;
+static Vector<std::string> *Inputs;
 static std::string *ProgName;
 
 static void PrintHelp() {
@@ -175,7 +175,7 @@ static bool ParseOneFlag(const char *Param) {
 }
 
 // We don't use any library to minimize dependencies.
-static void ParseFlags(const std::vector<std::string> &Args) {
+static void ParseFlags(const Vector<std::string> &Args) {
   for (size_t F = 0; F < kNumFlags; F++) {
     if (FlagDescriptions[F].IntFlag)
       *FlagDescriptions[F].IntFlag = FlagDescriptions[F].Default;
@@ -185,7 +185,7 @@ static void ParseFlags(const std::vector<std::string> &Args) {
     if (FlagDescriptions[F].StrFlag)
       *FlagDescriptions[F].StrFlag = nullptr;
   }
-  Inputs = new std::vector<std::string>;
+  Inputs = new Vector<std::string>;
   for (size_t A = 1; A < Args.size(); A++) {
     if (ParseOneFlag(Args[A].c_str())) {
       if (Flags.ignore_remaining_args)
@@ -225,7 +225,7 @@ static void WorkerThread(const std::string &Cmd, std::atomic<unsigned> *Counter,
   }
 }
 
-std::string CloneArgsWithoutX(const std::vector<std::string> &Args,
+std::string CloneArgsWithoutX(const Vector<std::string> &Args,
                               const char *X1, const char *X2) {
   std::string Cmd;
   for (auto &S : Args) {
@@ -236,12 +236,12 @@ std::string CloneArgsWithoutX(const std::vector<std::string> &Args,
   return Cmd;
 }
 
-static int RunInMultipleProcesses(const std::vector<std::string> &Args,
+static int RunInMultipleProcesses(const Vector<std::string> &Args,
                                   unsigned NumWorkers, unsigned NumJobs) {
   std::atomic<unsigned> Counter(0);
   std::atomic<bool> HasErrors(false);
   std::string Cmd = CloneArgsWithoutX(Args, "jobs", "workers");
-  std::vector<std::thread> V;
+  Vector<std::thread> V;
   std::thread Pulse(PulseThread);
   Pulse.detach();
   for (unsigned i = 0; i < NumWorkers; i++)
@@ -294,7 +294,7 @@ static std::string GetDedupTokenFromFile(const std::string &Path) {
   return S.substr(Beg, End - Beg);
 }
 
-int CleanseCrashInput(const std::vector<std::string> &Args,
+int CleanseCrashInput(const Vector<std::string> &Args,
                        const FuzzingOptions &Options) {
   if (Inputs->size() != 1 || !Flags.exact_artifact_path) {
     Printf("ERROR: -cleanse_crash should be given one input file and"
@@ -322,7 +322,7 @@ int CleanseCrashInput(const std::vector<std::string> &Args,
   auto U = FileToVector(CurrentFilePath);
   size_t Size = U.size();
 
-  const std::vector<uint8_t> ReplacementBytes = {' ', 0xff};
+  const Vector<uint8_t> ReplacementBytes = {' ', 0xff};
   for (int NumAttempts = 0; NumAttempts < 5; NumAttempts++) {
     bool Changed = false;
     for (size_t Idx = 0; Idx < Size; Idx++) {
@@ -354,7 +354,7 @@ int CleanseCrashInput(const std::vector<std::string> &Args,
   return 0;
 }
 
-int MinimizeCrashInput(const std::vector<std::string> &Args,
+int MinimizeCrashInput(const Vector<std::string> &Args,
                        const FuzzingOptions &Options) {
   if (Inputs->size() != 1) {
     Printf("ERROR: -minimize_crash should be given one input file\n");
@@ -456,17 +456,17 @@ int MinimizeCrashInputInternalStep(Fuzzer *F, InputCorpus *Corpus) {
   return 0;
 }
 
-int AnalyzeDictionary(Fuzzer *F, const std::vector<Unit>& Dict,
+int AnalyzeDictionary(Fuzzer *F, const Vector<Unit>& Dict,
                       UnitVector& Corpus) {
   Printf("Started dictionary minimization (up to %d tests)\n",
          Dict.size() * Corpus.size() * 2);
 
   // Scores and usage count for each dictionary unit.
-  std::vector<int> Scores(Dict.size());
-  std::vector<int> Usages(Dict.size());
+  Vector<int> Scores(Dict.size());
+  Vector<int> Usages(Dict.size());
 
-  std::vector<size_t> InitialFeatures;
-  std::vector<size_t> ModifiedFeatures;
+  Vector<size_t> InitialFeatures;
+  Vector<size_t> ModifiedFeatures;
   for (auto &C : Corpus) {
     // Get coverage for the testcase without modifications.
     F->ExecuteCallback(C.data(), C.size());
@@ -477,7 +477,7 @@ int AnalyzeDictionary(Fuzzer *F, const std::vector<Unit>& Dict,
     });
 
     for (size_t i = 0; i < Dict.size(); ++i) {
-      auto Data = C;
+      Vector<uint8_t> Data = C;
       auto StartPos = std::search(Data.begin(), Data.end(),
                                   Dict[i].begin(), Dict[i].end());
       // Skip dictionary unit, if the testcase does not contain it.
@@ -531,7 +531,7 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
   EF = new ExternalFunctions();
   if (EF->LLVMFuzzerInitialize)
     EF->LLVMFuzzerInitialize(argc, argv);
-  const std::vector<std::string> Args(*argv, *argv + *argc);
+  const Vector<std::string> Args(*argv, *argv + *argc);
   assert(!Args.empty());
   ProgName = new std::string(Args[0]);
   if (Argv0 != *ProgName) {
@@ -558,8 +558,6 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
   if (Flags.workers > 0 && Flags.jobs > 0)
     return RunInMultipleProcesses(Args, Flags.workers, Flags.jobs);
 
-  const size_t kMaxSaneLen = 1 << 20;
-  const size_t kMinDefaultLen = 4096;
   FuzzingOptions Options;
   Options.Verbosity = Flags.verbosity;
   Options.MaxLen = Flags.max_len;
@@ -593,7 +591,7 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
     Options.ArtifactPrefix = Flags.artifact_prefix;
   if (Flags.exact_artifact_path)
     Options.ExactArtifactPath = Flags.exact_artifact_path;
-  std::vector<Unit> Dictionary;
+  Vector<Unit> Dictionary;
   if (Flags.dict)
     if (!ParseDictionaryFile(FileToString(Flags.dict), &Dictionary))
       return 1;
@@ -603,6 +601,7 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
   Options.SaveArtifacts =
       !DoPlainRun || Flags.minimize_crash_internal_step;
   Options.PrintNewCovPcs = Flags.print_pcs;
+  Options.PrintNewCovFuncs = Flags.print_funcs;
   Options.PrintFinalStats = Flags.print_final_stats;
   Options.PrintCorpusStats = Flags.print_corpus_stats;
   Options.PrintCoverage = Flags.print_coverage;
@@ -701,8 +700,10 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
   }
 
   if (Flags.merge) {
+    const size_t kDefaultMaxMergeLen = 1 << 20;
     if (Options.MaxLen == 0)
-      F->SetMaxInputLen(kMaxSaneLen);
+      F->SetMaxInputLen(kDefaultMaxMergeLen);
+
     if (Flags.merge_control_file)
       F->CrashResistantMergeInternalStep(Flags.merge_control_file);
     else
@@ -712,16 +713,16 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
     exit(0);
   }
 
-  size_t TemporaryMaxLen = Options.MaxLen ? Options.MaxLen : kMaxSaneLen;
-
-  UnitVector InitialCorpus;
-  for (auto &Inp : *Inputs) {
-    Printf("Loading corpus dir: %s\n", Inp.c_str());
-    ReadDirToVectorOfUnits(Inp.c_str(), &InitialCorpus, nullptr,
-                           TemporaryMaxLen, /*ExitOnError=*/false);
-  }
 
   if (Flags.analyze_dict) {
+    size_t MaxLen = INT_MAX;  // Large max length.
+    UnitVector InitialCorpus;
+    for (auto &Inp : *Inputs) {
+      Printf("Loading corpus dir: %s\n", Inp.c_str());
+      ReadDirToVectorOfUnits(Inp.c_str(), &InitialCorpus, nullptr,
+                             MaxLen, /*ExitOnError=*/false);
+    }
+
     if (Dictionary.empty() || Inputs->empty()) {
       Printf("ERROR: can't analyze dict without dict and corpus provided\n");
       return 1;
@@ -734,21 +735,7 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
     exit(0);
   }
 
-  if (Options.MaxLen == 0) {
-    size_t MaxLen = 0;
-    for (auto &U : InitialCorpus)
-      MaxLen = std::max(U.size(), MaxLen);
-    F->SetMaxInputLen(std::min(std::max(kMinDefaultLen, MaxLen), kMaxSaneLen));
-  }
-
-  if (InitialCorpus.empty()) {
-    InitialCorpus.push_back(Unit({'\n'}));  // Valid ASCII input.
-    if (Options.Verbosity)
-      Printf("INFO: A corpus is not provided, starting from an empty corpus\n");
-  }
-  F->ShuffleAndMinimize(&InitialCorpus);
-  InitialCorpus.clear();  // Don't need this memory any more.
-  F->Loop();
+  F->Loop(*Inputs);
 
   if (Flags.verbosity)
     Printf("Done %zd runs in %zd second(s)\n", F->getTotalNumberOfRuns(),

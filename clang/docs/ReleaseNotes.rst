@@ -26,10 +26,9 @@ documentation <http://llvm.org/docs/ReleaseNotes.html>`_. All LLVM
 releases may be downloaded from the `LLVM releases web
 site <http://llvm.org/releases/>`_.
 
-For more information about Clang or LLVM, including information about
-the latest release, please check out the main please see the `Clang Web
-Site <http://clang.llvm.org>`_ or the `LLVM Web
-Site <http://llvm.org>`_.
+For more information about Clang or LLVM, including information about the
+latest release, please see the `Clang Web Site <http://clang.llvm.org>`_ or the
+`LLVM Web Site <http://llvm.org>`_.
 
 Note that if you are reading this file from a Subversion checkout or the
 main Clang web page, this document applies to the *next* release, not
@@ -65,6 +64,12 @@ Improvements to Clang's diagnostics
     ``#include`` when the included file contains structures or unions affected by
     a non-default alignment that has been specified using a ``#pragma pack``
     directive prior to the ``#include``.
+
+- ``-Wobjc-messaging-id`` is a new, non-default warning that warns about
+  message sends to unqualified ``id`` in Objective-C. This warning is useful
+  for projects that would like to avoid any potential future compiler
+  errors/warnings, as the system frameworks might add a method with the same
+  selector which could make the message send to ``id`` ambiguous.
 
 Non-comprehensive list of changes in this release
 -------------------------------------------------

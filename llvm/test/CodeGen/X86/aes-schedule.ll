@@ -5,7 +5,7 @@
 ; RUN: llc < %s -mtriple=x86_64-unknown-unknown -print-schedule -mcpu=sandybridge | FileCheck %s --check-prefix=CHECK --check-prefix=SANDY
 ; RUN: llc < %s -mtriple=x86_64-unknown-unknown -print-schedule -mcpu=ivybridge | FileCheck %s --check-prefix=CHECK --check-prefix=SANDY
 ; RUN: llc < %s -mtriple=x86_64-unknown-unknown -print-schedule -mcpu=haswell | FileCheck %s --check-prefix=CHECK --check-prefix=HASWELL
-; RUN: llc < %s -mtriple=x86_64-unknown-unknown -print-schedule -mcpu=skylake | FileCheck %s --check-prefix=CHECK --check-prefix=HASWELL
+; RUN: llc < %s -mtriple=x86_64-unknown-unknown -print-schedule -mcpu=skylake | FileCheck %s --check-prefix=CHECK --check-prefix=SKYLAKE
 ; RUN: llc < %s -mtriple=x86_64-unknown-unknown -print-schedule -mcpu=btver2 | FileCheck %s --check-prefix=CHECK --check-prefix=BTVER2
 ; RUN: llc < %s -mtriple=x86_64-unknown-unknown -print-schedule -mcpu=znver1 | FileCheck %s --check-prefix=CHECK --check-prefix=ZNVER1
 
@@ -32,7 +32,13 @@ define <2 x i64> @test_aesdec(<2 x i64> %a0, <2 x i64> %a1, <2 x i64> *%a2) {
 ; HASWELL:       # BB#0:
 ; HASWELL-NEXT:    vaesdec %xmm1, %xmm0, %xmm0 # sched: [7:1.00]
 ; HASWELL-NEXT:    vaesdec (%rdi), %xmm0, %xmm0 # sched: [7:1.00]
-; HASWELL-NEXT:    retq # sched: [1:1.00]
+; HASWELL-NEXT:    retq # sched: [2:1.00]
+;
+; SKYLAKE-LABEL: test_aesdec:
+; SKYLAKE:       # BB#0:
+; SKYLAKE-NEXT:    vaesdec %xmm1, %xmm0, %xmm0 # sched: [7:1.00]
+; SKYLAKE-NEXT:    vaesdec (%rdi), %xmm0, %xmm0 # sched: [7:1.00]
+; SKYLAKE-NEXT:    retq # sched: [2:1.00]
 ;
 ; BTVER2-LABEL: test_aesdec:
 ; BTVER2:       # BB#0:
@@ -44,7 +50,7 @@ define <2 x i64> @test_aesdec(<2 x i64> %a0, <2 x i64> %a1, <2 x i64> *%a2) {
 ; ZNVER1:       # BB#0:
 ; ZNVER1-NEXT:    vaesdec %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; ZNVER1-NEXT:    vaesdec (%rdi), %xmm0, %xmm0 # sched: [11:0.50]
-; ZNVER1-NEXT:    retq # sched: [5:0.50]
+; ZNVER1-NEXT:    retq # sched: [1:0.50]
   %1 = load <2 x i64>, <2 x i64> *%a2, align 16
   %2 = call <2 x i64> @llvm.x86.aesni.aesdec(<2 x i64> %a0, <2 x i64> %a1)
   %3 = call <2 x i64> @llvm.x86.aesni.aesdec(<2 x i64> %2, <2 x i64> %1)
@@ -75,7 +81,13 @@ define <2 x i64> @test_aesdeclast(<2 x i64> %a0, <2 x i64> %a1, <2 x i64> *%a2) 
 ; HASWELL:       # BB#0:
 ; HASWELL-NEXT:    vaesdeclast %xmm1, %xmm0, %xmm0 # sched: [7:1.00]
 ; HASWELL-NEXT:    vaesdeclast (%rdi), %xmm0, %xmm0 # sched: [7:1.00]
-; HASWELL-NEXT:    retq # sched: [1:1.00]
+; HASWELL-NEXT:    retq # sched: [2:1.00]
+;
+; SKYLAKE-LABEL: test_aesdeclast:
+; SKYLAKE:       # BB#0:
+; SKYLAKE-NEXT:    vaesdeclast %xmm1, %xmm0, %xmm0 # sched: [7:1.00]
+; SKYLAKE-NEXT:    vaesdeclast (%rdi), %xmm0, %xmm0 # sched: [7:1.00]
+; SKYLAKE-NEXT:    retq # sched: [2:1.00]
 ;
 ; BTVER2-LABEL: test_aesdeclast:
 ; BTVER2:       # BB#0:
@@ -87,7 +99,7 @@ define <2 x i64> @test_aesdeclast(<2 x i64> %a0, <2 x i64> %a1, <2 x i64> *%a2) 
 ; ZNVER1:       # BB#0:
 ; ZNVER1-NEXT:    vaesdeclast %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; ZNVER1-NEXT:    vaesdeclast (%rdi), %xmm0, %xmm0 # sched: [11:0.50]
-; ZNVER1-NEXT:    retq # sched: [5:0.50]
+; ZNVER1-NEXT:    retq # sched: [1:0.50]
   %1 = load <2 x i64>, <2 x i64> *%a2, align 16
   %2 = call <2 x i64> @llvm.x86.aesni.aesdeclast(<2 x i64> %a0, <2 x i64> %a1)
   %3 = call <2 x i64> @llvm.x86.aesni.aesdeclast(<2 x i64> %2, <2 x i64> %1)
@@ -118,7 +130,13 @@ define <2 x i64> @test_aesenc(<2 x i64> %a0, <2 x i64> %a1, <2 x i64> *%a2) {
 ; HASWELL:       # BB#0:
 ; HASWELL-NEXT:    vaesenc %xmm1, %xmm0, %xmm0 # sched: [7:1.00]
 ; HASWELL-NEXT:    vaesenc (%rdi), %xmm0, %xmm0 # sched: [7:1.00]
-; HASWELL-NEXT:    retq # sched: [1:1.00]
+; HASWELL-NEXT:    retq # sched: [2:1.00]
+;
+; SKYLAKE-LABEL: test_aesenc:
+; SKYLAKE:       # BB#0:
+; SKYLAKE-NEXT:    vaesenc %xmm1, %xmm0, %xmm0 # sched: [7:1.00]
+; SKYLAKE-NEXT:    vaesenc (%rdi), %xmm0, %xmm0 # sched: [7:1.00]
+; SKYLAKE-NEXT:    retq # sched: [2:1.00]
 ;
 ; BTVER2-LABEL: test_aesenc:
 ; BTVER2:       # BB#0:
@@ -130,7 +148,7 @@ define <2 x i64> @test_aesenc(<2 x i64> %a0, <2 x i64> %a1, <2 x i64> *%a2) {
 ; ZNVER1:       # BB#0:
 ; ZNVER1-NEXT:    vaesenc %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; ZNVER1-NEXT:    vaesenc (%rdi), %xmm0, %xmm0 # sched: [11:0.50]
-; ZNVER1-NEXT:    retq # sched: [5:0.50]
+; ZNVER1-NEXT:    retq # sched: [1:0.50]
   %1 = load <2 x i64>, <2 x i64> *%a2, align 16
   %2 = call <2 x i64> @llvm.x86.aesni.aesenc(<2 x i64> %a0, <2 x i64> %a1)
   %3 = call <2 x i64> @llvm.x86.aesni.aesenc(<2 x i64> %2, <2 x i64> %1)
@@ -161,7 +179,13 @@ define <2 x i64> @test_aesenclast(<2 x i64> %a0, <2 x i64> %a1, <2 x i64> *%a2) 
 ; HASWELL:       # BB#0:
 ; HASWELL-NEXT:    vaesenclast %xmm1, %xmm0, %xmm0 # sched: [7:1.00]
 ; HASWELL-NEXT:    vaesenclast (%rdi), %xmm0, %xmm0 # sched: [7:1.00]
-; HASWELL-NEXT:    retq # sched: [1:1.00]
+; HASWELL-NEXT:    retq # sched: [2:1.00]
+;
+; SKYLAKE-LABEL: test_aesenclast:
+; SKYLAKE:       # BB#0:
+; SKYLAKE-NEXT:    vaesenclast %xmm1, %xmm0, %xmm0 # sched: [7:1.00]
+; SKYLAKE-NEXT:    vaesenclast (%rdi), %xmm0, %xmm0 # sched: [7:1.00]
+; SKYLAKE-NEXT:    retq # sched: [2:1.00]
 ;
 ; BTVER2-LABEL: test_aesenclast:
 ; BTVER2:       # BB#0:
@@ -173,7 +197,7 @@ define <2 x i64> @test_aesenclast(<2 x i64> %a0, <2 x i64> %a1, <2 x i64> *%a2) 
 ; ZNVER1:       # BB#0:
 ; ZNVER1-NEXT:    vaesenclast %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; ZNVER1-NEXT:    vaesenclast (%rdi), %xmm0, %xmm0 # sched: [11:0.50]
-; ZNVER1-NEXT:    retq # sched: [5:0.50]
+; ZNVER1-NEXT:    retq # sched: [1:0.50]
   %1 = load <2 x i64>, <2 x i64> *%a2, align 16
   %2 = call <2 x i64> @llvm.x86.aesni.aesenclast(<2 x i64> %a0, <2 x i64> %a1)
   %3 = call <2 x i64> @llvm.x86.aesni.aesenclast(<2 x i64> %2, <2 x i64> %1)
@@ -208,7 +232,14 @@ define <2 x i64> @test_aesimc(<2 x i64> %a0, <2 x i64> *%a1) {
 ; HASWELL-NEXT:    vaesimc %xmm0, %xmm0 # sched: [14:2.00]
 ; HASWELL-NEXT:    vaesimc (%rdi), %xmm1 # sched: [14:2.00]
 ; HASWELL-NEXT:    vpor %xmm1, %xmm0, %xmm0 # sched: [1:0.33]
-; HASWELL-NEXT:    retq # sched: [1:1.00]
+; HASWELL-NEXT:    retq # sched: [2:1.00]
+;
+; SKYLAKE-LABEL: test_aesimc:
+; SKYLAKE:       # BB#0:
+; SKYLAKE-NEXT:    vaesimc %xmm0, %xmm0 # sched: [14:2.00]
+; SKYLAKE-NEXT:    vaesimc (%rdi), %xmm1 # sched: [14:2.00]
+; SKYLAKE-NEXT:    vpor %xmm1, %xmm0, %xmm0 # sched: [1:0.33]
+; SKYLAKE-NEXT:    retq # sched: [2:1.00]
 ;
 ; BTVER2-LABEL: test_aesimc:
 ; BTVER2:       # BB#0:
@@ -222,7 +253,7 @@ define <2 x i64> @test_aesimc(<2 x i64> %a0, <2 x i64> *%a1) {
 ; ZNVER1-NEXT:    vaesimc (%rdi), %xmm1 # sched: [11:0.50]
 ; ZNVER1-NEXT:    vaesimc %xmm0, %xmm0 # sched: [4:0.50]
 ; ZNVER1-NEXT:    vpor %xmm1, %xmm0, %xmm0 # sched: [1:0.25]
-; ZNVER1-NEXT:    retq # sched: [5:0.50]
+; ZNVER1-NEXT:    retq # sched: [1:0.50]
   %1 = load <2 x i64>, <2 x i64> *%a1, align 16
   %2 = call <2 x i64> @llvm.x86.aesni.aesimc(<2 x i64> %a0)
   %3 = call <2 x i64> @llvm.x86.aesni.aesimc(<2 x i64> %1)
@@ -255,10 +286,17 @@ define <2 x i64> @test_aeskeygenassist(<2 x i64> %a0, <2 x i64> *%a1) {
 ;
 ; HASWELL-LABEL: test_aeskeygenassist:
 ; HASWELL:       # BB#0:
-; HASWELL-NEXT:    vaeskeygenassist $7, %xmm0, %xmm0 # sched: [10:8.00]
-; HASWELL-NEXT:    vaeskeygenassist $7, (%rdi), %xmm1 # sched: [10:7.00]
+; HASWELL-NEXT:    vaeskeygenassist $7, %xmm0, %xmm0 # sched: [29:7.00]
+; HASWELL-NEXT:    vaeskeygenassist $7, (%rdi), %xmm1 # sched: [28:7.00]
 ; HASWELL-NEXT:    vpor %xmm1, %xmm0, %xmm0 # sched: [1:0.33]
-; HASWELL-NEXT:    retq # sched: [1:1.00]
+; HASWELL-NEXT:    retq # sched: [2:1.00]
+;
+; SKYLAKE-LABEL: test_aeskeygenassist:
+; SKYLAKE:       # BB#0:
+; SKYLAKE-NEXT:    vaeskeygenassist $7, %xmm0, %xmm0 # sched: [29:7.00]
+; SKYLAKE-NEXT:    vaeskeygenassist $7, (%rdi), %xmm1 # sched: [28:7.00]
+; SKYLAKE-NEXT:    vpor %xmm1, %xmm0, %xmm0 # sched: [1:0.33]
+; SKYLAKE-NEXT:    retq # sched: [2:1.00]
 ;
 ; BTVER2-LABEL: test_aeskeygenassist:
 ; BTVER2:       # BB#0:
@@ -272,7 +310,7 @@ define <2 x i64> @test_aeskeygenassist(<2 x i64> %a0, <2 x i64> *%a1) {
 ; ZNVER1-NEXT:    vaeskeygenassist $7, (%rdi), %xmm1 # sched: [11:0.50]
 ; ZNVER1-NEXT:    vaeskeygenassist $7, %xmm0, %xmm0 # sched: [4:0.50]
 ; ZNVER1-NEXT:    vpor %xmm1, %xmm0, %xmm0 # sched: [1:0.25]
-; ZNVER1-NEXT:    retq # sched: [5:0.50]
+; ZNVER1-NEXT:    retq # sched: [1:0.50]
   %1 = load <2 x i64>, <2 x i64> *%a1, align 16
   %2 = call <2 x i64> @llvm.x86.aesni.aeskeygenassist(<2 x i64> %a0, i8 7)
   %3 = call <2 x i64> @llvm.x86.aesni.aeskeygenassist(<2 x i64> %1, i8 7)

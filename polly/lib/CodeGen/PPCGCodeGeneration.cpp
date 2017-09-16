@@ -1383,15 +1383,36 @@ isl_bool collectReferencesInGPUStmt(__isl_keep isl_ast_node *Node, void *User) {
 
 /// A list of functions that are available in NVIDIA's libdevice.
 const std::set<std::string> CUDALibDeviceFunctions = {
-    "exp",   "expf",     "expl",      "cos",       "cosf", "sqrt",
-    "sqrtf", "copysign", "copysignf", "copysignl", "log",  "logf"};
+    "exp",      "expf",      "expl",      "cos", "cosf", "sqrt", "sqrtf",
+    "copysign", "copysignf", "copysignl", "log", "logf", "powi", "powif"};
+
+// A map from intrinsics to their corresponding libdevice functions.
+const std::map<std::string, std::string> IntrinsicToLibdeviceFunc = {
+    {"llvm.exp.f64", "exp"},
+    {"llvm.exp.f32", "expf"},
+    {"llvm.powi.f64", "powi"},
+    {"llvm.powi.f32", "powif"}};
 
 /// Return the corresponding CUDA libdevice function name for @p F.
+/// Note that this function will try to convert instrinsics in the list
+/// IntrinsicToLibdeviceFunc into libdevice functions.
+/// This is because some intrinsics such as `exp`
+/// are not supported by the NVPTX backend.
+/// If this restriction of the backend is lifted, we should refactor our code
+/// so that we use intrinsics whenever possible.
 ///
 /// Return "" if we are not compiling for CUDA.
 std::string getCUDALibDeviceFuntion(Function *F) {
-  if (CUDALibDeviceFunctions.count(F->getName()))
-    return std::string("__nv_") + std::string(F->getName());
+  const std::string FnName = [&] {
+    auto It = IntrinsicToLibdeviceFunc.find(F->getName());
+    if (It != IntrinsicToLibdeviceFunc.end())
+      return It->second;
+
+    return std::string(F->getName());
+  }();
+
+  if (CUDALibDeviceFunctions.count(FnName))
+    return "__nv_" + FnName;
 
   return "";
 }
@@ -1409,7 +1430,7 @@ static bool isValidFunctionInKernel(llvm::Function *F, bool AllowLibDevice) {
 
   return F->isIntrinsic() &&
          (Name.startswith("llvm.sqrt") || Name.startswith("llvm.fabs") ||
-          Name.startswith("llvm.copysign") || Name.startswith("llvm.powi"));
+          Name.startswith("llvm.copysign"));
 }
 
 /// Do not take `Function` as a subtree value.
@@ -2362,9 +2383,22 @@ bool GPUNodeBuilder::requiresCUDALibDevice() {
     if (!F.isDeclaration())
       continue;
 
-    std::string CUDALibDeviceFunc = getCUDALibDeviceFuntion(&F);
+    const std::string CUDALibDeviceFunc = getCUDALibDeviceFuntion(&F);
     if (CUDALibDeviceFunc.length() != 0) {
-      F.setName(CUDALibDeviceFunc);
+      // We need to handle the case where a module looks like this:
+      // @expf(..)
+      // @llvm.exp.f64(..)
+      // Both of these functions would be renamed to `__nv_expf`.
+      //
+      // So, we must first check for the existence of the libdevice function.
+      // If this exists, we replace our current function with it.
+      //
+      // If it does not exist, we rename the current function to the
+      // libdevice functiono name.
+      if (Function *Replacement = F.getParent()->getFunction(CUDALibDeviceFunc))
+        F.replaceAllUsesWith(Replacement);
+      else
+        F.setName(CUDALibDeviceFunc);
       RequiresLibDevice = true;
     }
   }
@@ -3520,6 +3554,8 @@ public:
   void printScop(raw_ostream &, Scop &) const override {}
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
+    ScopPass::getAnalysisUsage(AU);
+
     AU.addRequired<DominatorTreeWrapperPass>();
     AU.addRequired<RegionInfoPass>();
     AU.addRequired<ScalarEvolutionWrapperPass>();
@@ -3527,19 +3563,8 @@ public:
     AU.addRequired<ScopInfoRegionPass>();
     AU.addRequired<LoopInfoWrapperPass>();
 
-    AU.addPreserved<AAResultsWrapperPass>();
-    AU.addPreserved<BasicAAWrapperPass>();
-    AU.addPreserved<LoopInfoWrapperPass>();
-    AU.addPreserved<DominatorTreeWrapperPass>();
-    AU.addPreserved<GlobalsAAWrapperPass>();
-    AU.addPreserved<ScopDetectionWrapperPass>();
-    AU.addPreserved<ScalarEvolutionWrapperPass>();
-    AU.addPreserved<SCEVAAWrapperPass>();
-
     // FIXME: We do not yet add regions for the newly generated code to the
     //        region tree.
-    AU.addPreserved<RegionInfoPass>();
-    AU.addPreserved<ScopInfoRegionPass>();
   }
 };
 } // namespace
