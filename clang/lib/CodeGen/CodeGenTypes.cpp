@@ -452,6 +452,11 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
           llvm::PointerType::get(llvm::Type::getInt8Ty(getLLVMContext()),
               CGM.getTargetCodeGenInfo().getCHERICapabilityAS());
       break;
+    case BuiltinType::Float16:
+      ResultType =
+          getTypeForFormat(getLLVMContext(), Context.getFloatTypeSemantics(T),
+                           /* UseNativeHalf = */ true);
+      break;
 
     case BuiltinType::Half:
       // Half FP can either be storage-only (lowered to i16) or native.

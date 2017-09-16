@@ -54,35 +54,24 @@ uint64_t SyntheticSection::getVA() const {
   return 0;
 }
 
-template <class ELFT> static std::vector<DefinedCommon *> getCommonSymbols() {
-  std::vector<DefinedCommon *> V;
-  for (Symbol *S : Symtab->getSymbols())
-    if (auto *B = dyn_cast<DefinedCommon>(S->body()))
-      V.push_back(B);
-  return V;
-}
-
-// Find all common symbols and allocate space for them.
-template <class ELFT> InputSection *elf::createCommonSection() {
+std::vector<InputSection *> elf::createCommonSections() {
   if (!Config->DefineCommon)
-    return nullptr;
+    return {};
 
-  // Sort the common symbols by alignment as an heuristic to pack them better.
-  std::vector<DefinedCommon *> Syms = getCommonSymbols<ELFT>();
-  if (Syms.empty())
-    return nullptr;
+  std::vector<InputSection *> Ret;
+  for (Symbol *S : Symtab->getSymbols()) {
+    auto *Sym = dyn_cast<DefinedCommon>(S->body());
+    if (!Sym || !Sym->Live)
+      continue;
 
-  std::stable_sort(Syms.begin(), Syms.end(),
-                   [](const DefinedCommon *A, const DefinedCommon *B) {
-                     return A->Alignment > B->Alignment;
-                   });
-
-  // Allocate space for common symbols.
-  BssSection *Sec = make<BssSection>("COMMON");
-  for (DefinedCommon *Sym : Syms)
-    if (Sym->Live)
-      Sym->Offset = Sec->reserveSpace(Sym->Size, Sym->Alignment);
-  return Sec;
+    Sym->Section = make<BssSection>("COMMON");
+    size_t Pos = Sym->Section->reserveSpace(Sym->Size, Sym->Alignment);
+    assert(Pos == 0);
+    (void)Pos;
+    Sym->Section->File = Sym->getFile();
+    Ret.push_back(Sym->Section);
+  }
+  return Ret;
 }
 
 // Returns an LLD version string.
@@ -112,7 +101,6 @@ template <class ELFT> MergeInputSection *elf::createCommentSection() {
   auto *Ret =
       make<MergeInputSection>((ObjFile<ELFT> *)nullptr, &Hdr, ".comment");
   Ret->Data = getVersion();
-  Ret->splitIntoPieces();
   return Ret;
 }
 
@@ -447,8 +435,15 @@ bool EhFrameSection<ELFT>::isFdeLive(EhSectionPiece &Piece,
                                      ArrayRef<RelTy> Rels) {
   auto *Sec = cast<EhInputSection>(Piece.ID);
   unsigned FirstRelI = Piece.FirstRelocation;
+
+  // An FDE should point to some function because FDEs are to describe
+  // functions. That's however not always the case due to an issue of
+  // ld.gold with -r. ld.gold may discard only functions and leave their
+  // corresponding FDEs, which results in creating bad .eh_frame sections.
+  // To deal with that, we ignore such FDEs.
   if (FirstRelI == (unsigned)-1)
     return false;
+
   const RelTy &Rel = Rels[FirstRelI];
   SymbolBody &B = Sec->template getFile<ELFT>()->getRelocTargetSym(Rel);
   auto *D = dyn_cast<DefinedRegular>(&B);
@@ -524,9 +519,14 @@ template <class ELFT>
 static void writeCieFde(uint8_t *Buf, ArrayRef<uint8_t> D) {
   memcpy(Buf, D.data(), D.size());
 
+  size_t Aligned = alignTo(D.size(), sizeof(typename ELFT::uint));
+
+  // Zero-clear trailing padding if it exists.
+  memset(Buf + D.size(), 0, Aligned - D.size());
+
   // Fix the size field. -4 since size does not include the size field itself.
   const endianness E = ELFT::TargetEndianness;
-  write32<E>(Buf, alignTo(D.size(), sizeof(typename ELFT::uint)) - 4);
+  write32<E>(Buf, Aligned - 4);
 }
 
 template <class ELFT> void EhFrameSection<ELFT>::finalizeContents() {
@@ -2317,7 +2317,6 @@ InputSection *InX::ARMAttributes;
 BssSection *InX::Bss;
 BssSection *InX::BssRelRo;
 BuildIdSection *InX::BuildId;
-InputSection *InX::Common;
 SyntheticSection *InX::Dynamic;
 StringTableSection *InX::DynStrTab;
 SymbolTableBaseSection *InX::DynSymTab;
@@ -2344,11 +2343,6 @@ template void PltSection::addEntry<ELF32LE>(SymbolBody &Sym);
 template void PltSection::addEntry<ELF32BE>(SymbolBody &Sym);
 template void PltSection::addEntry<ELF64LE>(SymbolBody &Sym);
 template void PltSection::addEntry<ELF64BE>(SymbolBody &Sym);
-
-template InputSection *elf::createCommonSection<ELF32LE>();
-template InputSection *elf::createCommonSection<ELF32BE>();
-template InputSection *elf::createCommonSection<ELF64LE>();
-template InputSection *elf::createCommonSection<ELF64BE>();
 
 template MergeInputSection *elf::createCommentSection<ELF32LE>();
 template MergeInputSection *elf::createCommentSection<ELF32BE>();

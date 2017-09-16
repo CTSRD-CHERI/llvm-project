@@ -60,9 +60,8 @@ void PrintMemoryByte(InternalScopedString *str, const char *before, u8 byte,
                      bool in_shadow, const char *after) {
   Decorator d;
   str->append("%s%s%x%x%s%s", before,
-              in_shadow ? d.ShadowByte(byte) : d.MemoryByte(),
-              byte >> 4, byte & 15,
-              in_shadow ? d.EndShadowByte() : d.EndMemoryByte(), after);
+              in_shadow ? d.ShadowByte(byte) : d.MemoryByte(), byte >> 4,
+              byte & 15, d.Default(), after);
 }
 
 static void PrintZoneForPointer(uptr ptr, uptr zone_ptr,
@@ -261,15 +260,9 @@ StaticSpinMutex ScopedInErrorReport::lock_;
 u32 ScopedInErrorReport::reporting_thread_tid_ = kInvalidTid;
 ErrorDescription ScopedInErrorReport::current_error_;
 
-void ReportStackOverflow(const SignalContext &sig) {
+void ReportDeadlySignal(const SignalContext &sig) {
   ScopedInErrorReport in_report(/*fatal*/ true);
-  ErrorStackOverflow error(GetCurrentTidOrInvalid(), sig);
-  in_report.ReportError(error);
-}
-
-void ReportDeadlySignal(int signo, const SignalContext &sig) {
-  ScopedInErrorReport in_report(/*fatal*/ true);
-  ErrorDeadlySignal error(GetCurrentTidOrInvalid(), sig, signo);
+  ErrorDeadlySignal error(GetCurrentTidOrInvalid(), sig);
   in_report.ReportError(error);
 }
 

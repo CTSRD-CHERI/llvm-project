@@ -200,12 +200,12 @@ void InputSectionBase::uncompress() {
                                                 Config->IsLE, Config->Is64));
 
   size_t Size = Dec.getDecompressedSize();
-  UncompressBuf.reset(new std::vector<uint8_t>(Size));
-  if (Error E = Dec.decompress({(char *)UncompressBuf->data(), Size}))
+  UncompressBuf.reset(new char[Size]());
+  if (Error E = Dec.decompress({UncompressBuf.get(), Size}))
     fatal(toString(this) +
           ": decompress failed: " + llvm::toString(std::move(E)));
 
-  this->Data = *UncompressBuf;
+  this->Data = makeArrayRef((uint8_t *)UncompressBuf.get(), Size);
   this->Flags &= ~(uint64_t)SHF_COMPRESSED;
 }
 
@@ -485,9 +485,9 @@ static uint64_t getAArch64UndefinedRelativeWeakVA(uint64_t Type, uint64_t A,
 // of the RW segment.
 static uint64_t getARMStaticBase(const SymbolBody &Body) {
   OutputSection *OS = Body.getOutputSection();
-  if (!OS || !OS->FirstInPtLoad)
+  if (!OS || !OS->PtLoad || !OS->PtLoad->FirstSec)
     fatal("SBREL relocation to " + Body.getName() + " without static base");
-  return OS->FirstInPtLoad->Addr;
+  return OS->PtLoad->FirstSec->Addr;
 }
 
 static uint64_t getRelocTargetVA(uint32_t Type, int64_t A, uint64_t P,
@@ -534,7 +534,7 @@ static uint64_t getRelocTargetVA(uint32_t Type, int64_t A, uint64_t P,
     // formula for calculation "AHL + GP - P + 4". For details see p. 4-19 at
     // ftp://www.linux-mips.org/pub/linux/mips/doc/ABI/mipsabi.pdf
     uint64_t V = InX::MipsGot->getGp() + A - P;
-    if (Type == R_MIPS_LO16)
+    if (Type == R_MIPS_LO16 || Type == R_MICROMIPS_LO16)
       V += 4;
     return V;
   }
@@ -560,7 +560,7 @@ static uint64_t getRelocTargetVA(uint32_t Type, int64_t A, uint64_t P,
   case R_PAGE_PC:
   case R_PLT_PAGE_PC: {
     uint64_t Dest;
-    if (Body.isUndefined() && !Body.isLocal() && Body.symbol()->isWeak())
+    if (Body.isUndefWeak())
       Dest = getAArch64Page(A);
     else
       Dest = getAArch64Page(Body.getVA(A));
@@ -568,7 +568,7 @@ static uint64_t getRelocTargetVA(uint32_t Type, int64_t A, uint64_t P,
   }
   case R_PC: {
     uint64_t Dest;
-    if (Body.isUndefined() && !Body.isLocal() && Body.symbol()->isWeak()) {
+    if (Body.isUndefWeak()) {
       // On ARM and AArch64 a branch to an undefined weak resolves to the
       // next instruction, otherwise the place.
       if (Config->EMachine == EM_ARM)
@@ -923,6 +923,7 @@ MergeInputSection::MergeInputSection(ObjFile<ELFT> *F,
 // Note that this function is called from parallelForEach. This must be
 // thread-safe (i.e. no memory allocation from the pools).
 void MergeInputSection::splitIntoPieces() {
+  assert(Pieces.empty());
   ArrayRef<uint8_t> Data = this->Data;
   uint64_t EntSize = this->Entsize;
   if (this->Flags & SHF_STRINGS)

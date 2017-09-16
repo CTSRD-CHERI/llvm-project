@@ -851,6 +851,7 @@ CCAssignFn *AMDGPUCallLowering::CCAssignFnForCall(CallingConv::ID CC,
     return CC_AMDGPU;
   case CallingConv::C:
   case CallingConv::Fast:
+  case CallingConv::Cold:
     return CC_AMDGPU_Func;
   default:
     report_fatal_error("Unsupported calling convention.");
@@ -871,6 +872,7 @@ CCAssignFn *AMDGPUCallLowering::CCAssignFnForReturn(CallingConv::ID CC,
     return RetCC_SI_Shader;
   case CallingConv::C:
   case CallingConv::Fast:
+  case CallingConv::Cold:
     return RetCC_AMDGPU_Func;
   default:
     report_fatal_error("Unsupported calling convention.");
@@ -3886,8 +3888,8 @@ void AMDGPUTargetLowering::computeKnownBitsForTargetNode(
   case AMDGPUISD::MUL_U24:
   case AMDGPUISD::MUL_I24: {
     KnownBits LHSKnown, RHSKnown;
-    DAG.computeKnownBits(Op.getOperand(0), LHSKnown);
-    DAG.computeKnownBits(Op.getOperand(1), RHSKnown);
+    DAG.computeKnownBits(Op.getOperand(0), LHSKnown, Depth + 1);
+    DAG.computeKnownBits(Op.getOperand(1), RHSKnown, Depth + 1);
 
     unsigned TrailZ = LHSKnown.countMinTrailingZeros() +
                       RHSKnown.countMinTrailingZeros();

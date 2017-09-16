@@ -2,7 +2,7 @@
 # RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux %s -o %t1.o
 # RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux %p/Inputs/gdb-index.s -o %t2.o
 # RUN: ld.lld --gdb-index -e main %t1.o %t2.o -o %t
-# RUN: llvm-dwarfdump -debug-dump=gdb_index %t | FileCheck %s
+# RUN: llvm-dwarfdump -gdb-index %t | FileCheck %s
 # RUN: llvm-objdump -d %t | FileCheck %s --check-prefix=DISASM
 
 # DISASM:       Disassembly of section .text:
@@ -34,6 +34,10 @@
 # CHECK-NEXT:    0(0x0): 0x30000000
 # CHECK-NEXT:    1(0x8): 0x90000000 0x90000001
 # CHECK-NEXT:    2(0x14): 0x30000001
+
+# RUN: ld.lld --gdb-index --no-gdb-index -e main %t1.o %t2.o -o %t2
+# RUN: llvm-readobj -sections %t2 | FileCheck -check-prefix=NOGDB %s
+# NOGDB-NOT: Name: .gdb_index
 
 ## The following section contents are created by this using gcc 7.1.0:
 ## echo 'int main() { return 0; }' | gcc -gsplit-dwarf -xc++ -S -o- -

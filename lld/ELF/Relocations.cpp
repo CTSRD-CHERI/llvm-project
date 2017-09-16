@@ -91,8 +91,12 @@ static bool isPreemptible(const SymbolBody &Body, uint32_t Type) {
   // relocation types occupy eight bit. In case of N64 ABI we extract first
   // relocation from 3-in-1 packet because only the first relocation can
   // be against a real symbol.
-  if (Config->EMachine == EM_MIPS && (Type & 0xff) == R_MIPS_GPREL16)
-    return false;
+  if (Config->EMachine == EM_MIPS) {
+    Type &= 0xff;
+    if (Type == R_MIPS_GPREL16 || Type == R_MICROMIPS_GPREL16 ||
+        Type == R_MICROMIPS_GPREL7_S2)
+      return false;
+  }
   return Body.isPreemptible();
 }
 
@@ -301,6 +305,8 @@ static uint32_t getMipsPairType(uint32_t Type, const SymbolBody &Sym) {
     return R_MIPS_LO16;
   case R_MIPS_GOT16:
     return Sym.isLocal() ? R_MIPS_LO16 : R_MIPS_NONE;
+  case R_MICROMIPS_GOT16:
+    return Sym.isLocal() ? R_MICROMIPS_LO16 : R_MIPS_NONE;
   case R_MIPS_PCHI16:
     return R_MIPS_PCLO16;
   case R_MICROMIPS_HI16:
@@ -313,8 +319,8 @@ static uint32_t getMipsPairType(uint32_t Type, const SymbolBody &Sym) {
 // True if non-preemptable symbol always has the same value regardless of where
 // the DSO is loaded.
 static bool isAbsolute(const SymbolBody &Body) {
-  if (Body.isUndefined())
-    return !Body.isLocal() && Body.symbol()->isWeak();
+  if (Body.isUndefWeak())
+    return true;
   if (const auto *DR = dyn_cast<DefinedRegular>(&Body))
     return DR->Section == nullptr; // Absolute symbol.
   return false;
@@ -396,7 +402,7 @@ static bool isStaticLinkTimeConstant(RelExpr E, uint32_t Type,
   // between start of a function and '_gp' value and defined as absolute just
   // to simplify the code.
   assert(AbsVal && RelE);
-  if (Body.isUndefined() && !Body.isLocal() && Body.symbol()->isWeak())
+  if (Body.isUndefWeak())
     return true;
 
   error("relocation " + toString(Type) + " cannot refer to absolute symbol: " +
@@ -519,8 +525,12 @@ template <class ELFT> static void addCopyRelSymbol(SharedSymbol *SS) {
   // See if this symbol is in a read-only segment. If so, preserve the symbol's
   // memory protection by reserving space in the .bss.rel.ro section.
   bool IsReadOnly = isReadOnly<ELFT>(SS);
-  BssSection *Sec = IsReadOnly ? InX::BssRelRo : InX::Bss;
-  uint64_t Off = Sec->reserveSpace(SymSize, SS->getAlignment<ELFT>());
+  BssSection *Sec = make<BssSection>(IsReadOnly ? ".bss.rel.ro" : ".bss");
+  Sec->reserveSpace(SymSize, SS->getAlignment<ELFT>());
+  if (IsReadOnly)
+    InX::BssRelRo->getParent()->addSection(Sec);
+  else
+    InX::Bss->getParent()->addSection(Sec);
 
   // Look through the DSO's dynamic symbol table for aliases and create a
   // dynamic symbol for each one. This causes the copy relocation to correctly
@@ -528,11 +538,10 @@ template <class ELFT> static void addCopyRelSymbol(SharedSymbol *SS) {
   for (SharedSymbol *Sym : getSymbolsAt<ELFT>(SS)) {
     Sym->CopyRelSec = Sec;
     Sym->IsPreemptible = false;
-    Sym->CopyRelSecOff = Off;
     Sym->symbol()->IsUsedInRegularObj = true;
   }
 
-  In<ELFT>::RelaDyn->addReloc({Target->CopyRel, Sec, Off, false, SS, 0});
+  In<ELFT>::RelaDyn->addReloc({Target->CopyRel, Sec, 0, false, SS, 0});
 }
 
 static void errorOrWarn(const Twine &Msg) {
@@ -559,8 +568,17 @@ static RelExpr adjustExpr(SymbolBody &Body, RelExpr Expr, uint32_t Type,
   if (IsWrite || isStaticLinkTimeConstant<ELFT>(Expr, Type, Body, S, RelOff))
     return Expr;
 
-  // This relocation would require the dynamic linker to write a value to read
-  // only memory. We can hack around it if we are producing an executable and
+  // If we got here we know that this relocation would require the dynamic
+  // linker to write a value to read only memory.
+
+  // If the relocation is to a weak undef, give up on it and produce a
+  // non preemptible 0.
+  if (Body.isUndefWeak()) {
+    Body.IsPreemptible = false;
+    return Expr;
+  }
+
+  // We can hack around it if we are producing an executable and
   // the refered symbol can be preemepted to refer to the executable.
   if (Config->Shared || (Config->Pic && !isRelExpr(Expr))) {
     error("can't create dynamic relocation " + toString(Type) + " against " +
@@ -1014,24 +1032,27 @@ static uint32_t findEndOfFirstNonExec(OutputSection &Cmd) {
   return 0;
 }
 
-ThunkSection *ThunkCreator::getOSThunkSec(OutputSection *Cmd,
+ThunkSection *ThunkCreator::getOSThunkSec(OutputSection *OS,
                                           std::vector<InputSection *> *ISR) {
   if (CurTS == nullptr) {
-    uint32_t Off = findEndOfFirstNonExec(*Cmd);
-    CurTS = addThunkSection(Cmd, ISR, Off);
+    uint32_t Off = findEndOfFirstNonExec(*OS);
+    CurTS = addThunkSection(OS, ISR, Off);
   }
   return CurTS;
 }
 
-ThunkSection *ThunkCreator::getISThunkSec(InputSection *IS, OutputSection *OS) {
+// Add a Thunk that needs to be placed in a ThunkSection that immediately
+// precedes its Target.
+ThunkSection *ThunkCreator::getISThunkSec(InputSection *IS) {
   ThunkSection *TS = ThunkedSections.lookup(IS);
   if (TS)
     return TS;
 
-  // Find InputSectionRange within TOS that IS is in
-  OutputSection *C = IS->getParent();
+  // Find InputSectionRange within Target Output Section (TOS) that the
+  // InputSection (IS) that we need to precede is in.
+  OutputSection *TOS = IS->getParent();
   std::vector<InputSection *> *Range = nullptr;
-  for (BaseCommand *BC : C->Commands)
+  for (BaseCommand *BC : TOS->Commands)
     if (auto *ISD = dyn_cast<InputSectionDescription>(BC)) {
       InputSection *first = ISD->Sections.front();
       InputSection *last = ISD->Sections.back();
@@ -1041,15 +1062,15 @@ ThunkSection *ThunkCreator::getISThunkSec(InputSection *IS, OutputSection *OS) {
         break;
       }
     }
-  TS = addThunkSection(C, Range, IS->OutSecOff);
+  TS = addThunkSection(TOS, Range, IS->OutSecOff);
   ThunkedSections[IS] = TS;
   return TS;
 }
 
-ThunkSection *ThunkCreator::addThunkSection(OutputSection *Cmd,
+ThunkSection *ThunkCreator::addThunkSection(OutputSection *OS,
                                             std::vector<InputSection *> *ISR,
                                             uint64_t Off) {
-  auto *TS = make<ThunkSection>(Cmd, Off);
+  auto *TS = make<ThunkSection>(OS, Off);
   ThunkSections[ISR].push_back(TS);
   return TS;
 }
@@ -1108,7 +1129,7 @@ bool ThunkCreator::createThunks(ArrayRef<OutputSection *> OutputSections) {
   // We separate the creation of ThunkSections from the insertion of the
   // ThunkSections back into the OutputSection as ThunkSections are not always
   // inserted into the same OutputSection as the caller.
-  forEachExecInputSection(OutputSections, [&](OutputSection *Cmd,
+  forEachExecInputSection(OutputSections, [&](OutputSection *OS,
                                               std::vector<InputSection *> *ISR,
                                               InputSection *IS) {
     for (Relocation &Rel : IS->Relocations) {
@@ -1123,9 +1144,9 @@ bool ThunkCreator::createThunks(ArrayRef<OutputSection *> OutputSections) {
         // Find or create a ThunkSection for the new Thunk
         ThunkSection *TS;
         if (auto *TIS = T->getTargetInputSection())
-          TS = getISThunkSec(TIS, Cmd);
+          TS = getISThunkSec(TIS);
         else
-          TS = getOSThunkSec(Cmd, ISR);
+          TS = getOSThunkSec(OS, ISR);
         TS->addThunk(T);
         Thunks[T->ThunkSym] = T;
       }

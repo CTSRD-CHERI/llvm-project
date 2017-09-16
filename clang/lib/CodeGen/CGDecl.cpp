@@ -222,7 +222,7 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
     Name = getStaticDeclName(*this, D);
 
   llvm::Type *LTy = getTypes().ConvertTypeForMem(Ty);
-  unsigned AS = GetGlobalVarAddressSpace(&D, getAddressSpaceForType(Ty));
+  unsigned AS = GetGlobalVarAddressSpace(&D);
   unsigned TargetAS = getContext().getTargetAddressSpace(AS);
 
   // Local address space cannot have an initializer.
@@ -1302,8 +1302,7 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
                                    isVolatile, Builder);
     }
   } else {
-    unsigned AddrSpace = CGM.GetGlobalVarAddressSpace(&D,
-        CGM.getAddressSpaceForType(type));
+    unsigned AddrSpace = CGM.GetGlobalVarAddressSpace(&D);
     // Otherwise, create a temporary global with the initializer then
     // memcpy from the global to the alloca.
     std::string Name = getStaticDeclName(CGM, D);

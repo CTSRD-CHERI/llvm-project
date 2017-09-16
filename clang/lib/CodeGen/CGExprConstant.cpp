@@ -1942,7 +1942,7 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
     return llvm::ConstantArray::get(AType, Elts);
   }
   case APValue::MemberPointer:
-    return CGM.getCXXABI().EmitMemberPointer(Value, DestType);
+    return CGM.getCXXABI().EmitMemberPointer(Value, DestType, CGF);
   }
   llvm_unreachable("Unknown APValue kind");
 }

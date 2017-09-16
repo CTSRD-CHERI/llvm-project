@@ -742,12 +742,11 @@ void UnwrappedLineParser::parsePPEndIf() {
   // preprocessor indent.
   unsigned TokenPosition = Tokens->getPosition();
   FormatToken *PeekNext = AllTokens[TokenPosition];
-  if (FoundIncludeGuardStart && PPBranchLevel == -1 && PeekNext->is(tok::eof)) {
-    for (auto &Line : Lines) {
+  if (FoundIncludeGuardStart && PPBranchLevel == -1 && PeekNext->is(tok::eof) &&
+      Style.IndentPPDirectives != FormatStyle::PPDIS_None)
+    for (auto &Line : Lines)
       if (Line.InPPDirective && Line.Level > 0)
         --Line.Level;
-    }
-  }
 }
 
 void UnwrappedLineParser::parsePPDefine() {
@@ -1040,7 +1039,12 @@ void UnwrappedLineParser::parseStructuralElement() {
     if (FormatTok->Tok.is(tok::string_literal)) {
       nextToken();
       if (FormatTok->Tok.is(tok::l_brace)) {
-        parseBlock(/*MustBeDeclaration=*/true, /*AddLevel=*/false);
+        if (Style.BraceWrapping.AfterExternBlock) {
+          addUnwrappedLine();
+          parseBlock(/*MustBeDeclaration=*/true);
+        } else {
+          parseBlock(/*MustBeDeclaration=*/true, /*AddLevel=*/false);
+        }
         addUnwrappedLine();
         return;
       }

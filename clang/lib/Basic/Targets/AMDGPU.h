@@ -103,7 +103,7 @@ public:
     return getPointerWidthV(AddrSpace);
   }
 
-  uint64_t getMaxPointerWidth() const override {
+  uint64_t getMaxPointerRange() const override {
     return getTriple().getArch() == llvm::Triple::amdgcn ? 64 : 32;
   }
 
@@ -202,6 +202,10 @@ public:
   case BuiltinType::Id:                                                        \
     return LangAS::opencl_constant;
 #include "clang/Basic/OpenCLImageTypes.def"
+    case BuiltinType::OCLClkEvent:
+    case BuiltinType::OCLQueue:
+    case BuiltinType::OCLReserveID:
+      return LangAS::opencl_global;
 
     default:
       return TargetInfo::getOpenCLTypeAddrSpace(T);

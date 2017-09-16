@@ -119,6 +119,8 @@ class LLVM_LIBRARY_VISIBILITY CodeViewDebug : public DebugHandlerBase {
 
     SmallVector<LocalVariable, 1> Locals;
 
+    std::vector<std::pair<MCSymbol *, MDNode *>> Annotations;
+
     const MCSymbol *Begin = nullptr;
     const MCSymbol *End = nullptr;
     unsigned FuncId = 0;
@@ -285,7 +287,8 @@ class LLVM_LIBRARY_VISIBILITY CodeViewDebug : public DebugHandlerBase {
   codeview::TypeIndex lowerTypeVFTableShape(const DIDerivedType *Ty);
   codeview::TypeIndex lowerTypeMemberFunction(const DISubroutineType *Ty,
                                               const DIType *ClassTy,
-                                              int ThisAdjustment);
+                                              int ThisAdjustment,
+                                              bool IsStaticMethod);
   codeview::TypeIndex lowerTypeEnum(const DICompositeType *Ty);
   codeview::TypeIndex lowerTypeClass(const DICompositeType *Ty);
   codeview::TypeIndex lowerTypeUnion(const DICompositeType *Ty);

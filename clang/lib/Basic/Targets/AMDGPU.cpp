@@ -326,8 +326,8 @@ AMDGPUTargetInfo::AMDGPUTargetInfo(const llvm::Triple &Triple,
   UseAddrSpaceMapMangling = true;
 
   // Set pointer width and alignment for target address space 0.
-  PointerWidth = PointerAlign = DataLayout->getPointerSizeInBits();
-  if (getMaxPointerWidth() == 64) {
+  PointerWidth = PointerAlign = DataLayout->getPointerSizeInBits(0);
+  if (getMaxPointerRange() == 64) {
     LongWidth = LongAlign = 64;
     SizeType = UnsignedLong;
     PtrDiffType = SignedLong;
