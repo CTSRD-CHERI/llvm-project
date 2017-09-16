@@ -13,6 +13,7 @@
 #include "clang/Basic/LLVM.h"
 #include "clang/Tooling/Refactoring/RefactoringActionRule.h"
 #include "clang/Tooling/Refactoring/RefactoringActionRuleRequirements.h"
+#include "clang/Tooling/Refactoring/RefactoringResultConsumer.h"
 #include "clang/Tooling/Refactoring/RefactoringRuleContext.h"
 #include "llvm/Support/Error.h"
 #include <type_traits>
@@ -22,39 +23,24 @@ namespace tooling {
 namespace refactoring_action_rules {
 namespace internal {
 
-/// A wrapper around a specific refactoring action rule that calls a generic
-/// 'perform' method from the specific refactoring method.
-template <typename T> struct SpecificRefactoringRuleAdapter {};
-
-template <>
-class SpecificRefactoringRuleAdapter<AtomicChanges>
-    : public SourceChangeRefactoringRule {
-public:
-  virtual Expected<Optional<AtomicChanges>>
-  perform(RefactoringRuleContext &Context) = 0;
-
-  Expected<Optional<AtomicChanges>>
-  createSourceReplacements(RefactoringRuleContext &Context) final override {
-    return perform(Context);
-  }
-};
-
 /// A specialized refactoring action rule that calls the stored function once
 /// all the of the requirements are fullfilled. The values produced during the
 /// evaluation of requirements are passed to the stored function.
-template <typename ResultType, typename FunctionType,
-          typename... RequirementTypes>
-class PlainFunctionRule final
-    : public SpecificRefactoringRuleAdapter<ResultType> {
+template <typename FunctionType, typename... RequirementTypes>
+class PlainFunctionRule final : public RefactoringActionRule {
 public:
   PlainFunctionRule(FunctionType Function,
                     std::tuple<RequirementTypes...> &&Requirements)
       : Function(Function), Requirements(std::move(Requirements)) {}
 
-  Expected<Optional<ResultType>>
-  perform(RefactoringRuleContext &Context) override {
-    return performImpl(Context,
-                       llvm::index_sequence_for<RequirementTypes...>());
+  void invoke(RefactoringResultConsumer &Consumer,
+              RefactoringRuleContext &Context) override {
+    return invokeImpl(Consumer, Context,
+                      llvm::index_sequence_for<RequirementTypes...>());
+  }
+
+  bool hasSelectionRequirement() override {
+    return traits::HasSelectionRequirement<RequirementTypes...>::value;
   }
 
 private:
@@ -95,8 +81,9 @@ private:
   }
 
   template <size_t... Is>
-  Expected<Optional<ResultType>> performImpl(RefactoringRuleContext &Context,
-                                             llvm::index_sequence<Is...>) {
+  void invokeImpl(RefactoringResultConsumer &Consumer,
+                  RefactoringRuleContext &Context,
+                  llvm::index_sequence<Is...> Seq) {
     // Initiate the operation.
     auto Values =
         std::make_tuple(std::get<Is>(Requirements).evaluate(Context)...);
@@ -105,12 +92,19 @@ private:
     if (InitiationFailure) {
       llvm::Error Error = std::move(*InitiationFailure);
       if (!Error)
-        return None;
-      return std::move(Error);
+        // FIXME: Use a diagnostic.
+        return Consumer.handleError(llvm::make_error<llvm::StringError>(
+            "refactoring action can't be initiated with the specified "
+            "selection range",
+            llvm::inconvertibleErrorCode()));
+      return Consumer.handleError(std::move(Error));
     }
     // Perform the operation.
-    return Function(
-        unwrapRequirementResult(std::move(std::get<Is>(Values)))...);
+    auto Result = Function(
+        Context, unwrapRequirementResult(std::move(std::get<Is>(Values)))...);
+    if (!Result)
+      return Consumer.handleError(Result.takeError());
+    Consumer.handle(std::move(*Result));
   }
 
   FunctionType Function;
@@ -121,8 +115,9 @@ private:
 /// createRefactoringRule.
 template <typename T> struct LambdaDeducer;
 template <typename T, typename R, typename... Args>
-struct LambdaDeducer<R (T::*)(Args...) const> {
+struct LambdaDeducer<R (T::*)(const RefactoringRuleContext &, Args...) const> {
   using ReturnType = R;
+  using FunctionType = R (*)(const RefactoringRuleContext &, Args...);
 };
 
 } // end namespace internal

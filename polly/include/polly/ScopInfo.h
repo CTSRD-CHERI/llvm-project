@@ -301,6 +301,10 @@ public:
   /// since this information is available for Fortran arrays at runtime.
   void applyAndSetFAD(Value *FAD);
 
+  /// Get the FortranArrayDescriptor corresponding to this array if it exists,
+  /// nullptr otherwise.
+  Value *getFortranArrayDescriptor() const { return this->FAD; }
+
   /// Set the base pointer to @p BP.
   void setBasePtr(Value *BP) { BasePtr = BP; }
 
@@ -1581,8 +1585,6 @@ public:
   /// Set the list of instructions for this statement. It replaces the current
   /// list.
   void setInstructions(ArrayRef<Instruction *> Range) {
-    assert(isBlockStmt() &&
-           "The instruction list only matters for block-statements");
     Instructions.assign(Range.begin(), Range.end());
   }
 

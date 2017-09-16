@@ -1695,15 +1695,20 @@ SDValue SelectionDAG::getRegisterMask(const uint32_t *RegMask) {
 
 SDValue SelectionDAG::getEHLabel(const SDLoc &dl, SDValue Root,
                                  MCSymbol *Label) {
+  return getLabelNode(ISD::EH_LABEL, dl, Root, Label);
+}
+
+SDValue SelectionDAG::getLabelNode(unsigned Opcode, const SDLoc &dl,
+                                   SDValue Root, MCSymbol *Label) {
   FoldingSetNodeID ID;
   SDValue Ops[] = { Root };
-  AddNodeIDNode(ID, ISD::EH_LABEL, getVTList(MVT::Other), Ops);
+  AddNodeIDNode(ID, Opcode, getVTList(MVT::Other), Ops);
   ID.AddPointer(Label);
   void *IP = nullptr;
   if (SDNode *E = FindNodeOrInsertPos(ID, IP))
     return SDValue(E, 0);
 
-  auto *N = newSDNode<EHLabelSDNode>(dl.getIROrder(), dl.getDebugLoc(), Label);
+  auto *N = newSDNode<LabelSDNode>(dl.getIROrder(), dl.getDebugLoc(), Label);
   createOperands(N, Ops);
 
   CSEMap.InsertNode(N, IP);
@@ -3134,16 +3139,16 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
   case ISD::ROTL:
   case ISD::ROTR:
     if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(Op.getOperand(1))) {
-      unsigned RotAmt = C->getZExtValue() & (VTBits-1);
+      unsigned RotAmt = C->getAPIntValue().urem(VTBits);
 
       // Handle rotate right by N like a rotate left by 32-N.
       if (Op.getOpcode() == ISD::ROTR)
-        RotAmt = (VTBits-RotAmt) & (VTBits-1);
+        RotAmt = (VTBits - RotAmt) % VTBits;
 
       // If we aren't rotating out all of the known-in sign bits, return the
       // number that are left.  This handles rotl(sext(x), 1) for example.
       Tmp = ComputeNumSignBits(Op.getOperand(0), Depth+1);
-      if (Tmp > RotAmt+1) return Tmp-RotAmt;
+      if (Tmp > (RotAmt + 1)) return (Tmp - RotAmt);
     }
     break;
   case ISD::ADD:

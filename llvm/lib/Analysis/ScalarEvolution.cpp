@@ -2981,6 +2981,34 @@ const SCEV *ScalarEvolution::getMulExpr(SmallVectorImpl<const SCEV *> &Ops,
   return getOrCreateMulExpr(Ops, Flags);
 }
 
+/// Represents an unsigned remainder expression based on unsigned division.
+const SCEV *ScalarEvolution::getURemExpr(const SCEV *LHS,
+                                         const SCEV *RHS) {
+  assert(getEffectiveSCEVType(LHS->getType()) ==
+         getEffectiveSCEVType(RHS->getType()) &&
+         "SCEVURemExpr operand types don't match!");
+
+  // Short-circuit easy cases
+  if (const SCEVConstant *RHSC = dyn_cast<SCEVConstant>(RHS)) {
+    // If constant is one, the result is trivial
+    if (RHSC->getValue()->isOne())
+      return getZero(LHS->getType()); // X urem 1 --> 0
+
+    // If constant is a power of two, fold into a zext(trunc(LHS)).
+    if (RHSC->getAPInt().isPowerOf2()) {
+      Type *FullTy = LHS->getType();
+      Type *TruncTy =
+          IntegerType::get(getContext(), RHSC->getAPInt().logBase2());
+      return getZeroExtendExpr(getTruncateExpr(LHS, TruncTy), FullTy);
+    }
+  }
+
+  // Fallback to %a == %x urem %y == %x -<nuw> ((%x udiv %y) *<nuw> %y)
+  const SCEV *UDiv = getUDivExpr(LHS, RHS);
+  const SCEV *Mult = getMulExpr(UDiv, RHS, SCEV::FlagNUW);
+  return getMinusSCEV(LHS, Mult, SCEV::FlagNUW);
+}
+
 /// Get a canonical unsigned division expression, or something simpler if
 /// possible.
 const SCEV *ScalarEvolution::getUDivExpr(const SCEV *LHS,
@@ -4147,6 +4175,7 @@ static Optional<BinaryOp> MatchBinaryOp(Value *V, DominatorTree &DT) {
   case Instruction::Sub:
   case Instruction::Mul:
   case Instruction::UDiv:
+  case Instruction::URem:
   case Instruction::And:
   case Instruction::Or:
   case Instruction::AShr:
@@ -4417,7 +4446,7 @@ ScalarEvolution::createAddRecFromPHIWithCastsImpl(const SCEVUnknown *SymbolicPHI
   // varying inside the loop.
   if (!isLoopInvariant(Accum, L))
     return None;
-  
+
   // *** Part2: Create the predicates 
 
   // Analysis was successful: we have a phi-with-cast pattern for which we
@@ -4467,27 +4496,71 @@ ScalarEvolution::createAddRecFromPHIWithCastsImpl(const SCEVUnknown *SymbolicPHI
   //
   // By induction, the same applies to all iterations 1<=i<n:
   //
-  
+
   // Create a truncated addrec for which we will add a no overflow check (P1).
   const SCEV *StartVal = getSCEV(StartValueV);
-  const SCEV *PHISCEV = 
+  const SCEV *PHISCEV =
       getAddRecExpr(getTruncateExpr(StartVal, TruncTy),
-                    getTruncateExpr(Accum, TruncTy), L, SCEV::FlagAnyWrap); 
-  const auto *AR = cast<SCEVAddRecExpr>(PHISCEV);
+                    getTruncateExpr(Accum, TruncTy), L, SCEV::FlagAnyWrap);
 
-  SCEVWrapPredicate::IncrementWrapFlags AddedFlags =
-      Signed ? SCEVWrapPredicate::IncrementNSSW
-             : SCEVWrapPredicate::IncrementNUSW;
-  const SCEVPredicate *AddRecPred = getWrapPredicate(AR, AddedFlags);
-  Predicates.push_back(AddRecPred);
+  // PHISCEV can be either a SCEVConstant or a SCEVAddRecExpr.
+  // ex: If truncated Accum is 0 and StartVal is a constant, then PHISCEV
+  // will be constant.
+  //
+  //  If PHISCEV is a constant, then P1 degenerates into P2 or P3, so we don't
+  // add P1.
+  if (const auto *AR = dyn_cast<SCEVAddRecExpr>(PHISCEV)) {
+    SCEVWrapPredicate::IncrementWrapFlags AddedFlags =
+        Signed ? SCEVWrapPredicate::IncrementNSSW
+               : SCEVWrapPredicate::IncrementNUSW;
+    const SCEVPredicate *AddRecPred = getWrapPredicate(AR, AddedFlags);
+    Predicates.push_back(AddRecPred);
+  } else
+    assert(isa<SCEVConstant>(PHISCEV) && "Expected constant SCEV");
 
   // Create the Equal Predicates P2,P3:
-  auto AppendPredicate = [&](const SCEV *Expr) -> void {
+
+  // It is possible that the predicates P2 and/or P3 are computable at
+  // compile time due to StartVal and/or Accum being constants.
+  // If either one is, then we can check that now and escape if either P2
+  // or P3 is false.
+
+  // Construct the extended SCEV: (Ext ix (Trunc iy (Expr) to ix) to iy)
+  // for each of StartVal and Accum
+  auto GetExtendedExpr = [&](const SCEV *Expr) -> const SCEV * {
     assert(isLoopInvariant(Expr, L) && "Expr is expected to be invariant");
     const SCEV *TruncatedExpr = getTruncateExpr(Expr, TruncTy);
     const SCEV *ExtendedExpr =
         Signed ? getSignExtendExpr(TruncatedExpr, Expr->getType())
                : getZeroExtendExpr(TruncatedExpr, Expr->getType());
+    return ExtendedExpr;
+  };
+
+  // Given:
+  //  ExtendedExpr = (Ext ix (Trunc iy (Expr) to ix) to iy
+  //               = GetExtendedExpr(Expr)
+  // Determine whether the predicate P: Expr == ExtendedExpr
+  // is known to be false at compile time
+  auto PredIsKnownFalse = [&](const SCEV *Expr,
+                              const SCEV *ExtendedExpr) -> bool {
+    return Expr != ExtendedExpr &&
+           isKnownPredicate(ICmpInst::ICMP_NE, Expr, ExtendedExpr);
+  };
+
+  const SCEV *StartExtended = GetExtendedExpr(StartVal);
+  if (PredIsKnownFalse(StartVal, StartExtended)) {
+    DEBUG(dbgs() << "P2 is compile-time false\n";);
+    return None;
+  }
+
+  const SCEV *AccumExtended = GetExtendedExpr(Accum);
+  if (PredIsKnownFalse(Accum, AccumExtended)) {
+    DEBUG(dbgs() << "P3 is compile-time false\n";);
+    return None;
+  }
+
+  auto AppendPredicate = [&](const SCEV *Expr,
+                             const SCEV *ExtendedExpr) -> void {
     if (Expr != ExtendedExpr &&
         !isKnownPredicate(ICmpInst::ICMP_EQ, Expr, ExtendedExpr)) {
       const SCEVPredicate *Pred = getEqualPredicate(Expr, ExtendedExpr);
@@ -4495,10 +4568,10 @@ ScalarEvolution::createAddRecFromPHIWithCastsImpl(const SCEVUnknown *SymbolicPHI
       Predicates.push_back(Pred);
     }
   };
-  
-  AppendPredicate(StartVal);
-  AppendPredicate(Accum);
-  
+
+  AppendPredicate(StartVal, StartExtended);
+  AppendPredicate(Accum, AccumExtended);
+
   // *** Part3: Predicates are ready. Now go ahead and create the new addrec in
   // which the casts had been folded away. The caller can rewrite SymbolicPHI
   // into NewAR if it will also add the runtime overflow checks specified in
@@ -5790,6 +5863,8 @@ const SCEV *ScalarEvolution::createSCEV(Value *V) {
     }
     case Instruction::UDiv:
       return getUDivExpr(getSCEV(BO->LHS), getSCEV(BO->RHS));
+    case Instruction::URem:
+      return getURemExpr(getSCEV(BO->LHS), getSCEV(BO->RHS));
     case Instruction::Sub: {
       SCEV::NoWrapFlags Flags = SCEV::FlagAnyWrap;
       if (BO->Op)
@@ -6286,7 +6361,7 @@ ScalarEvolution::getBackedgeTakenInfo(const Loop *L) {
 void ScalarEvolution::forgetLoop(const Loop *L) {
   // Drop any stored trip count value.
   auto RemoveLoopFromBackedgeMap =
-      [L](DenseMap<const Loop *, BackedgeTakenInfo> &Map) {
+      [](DenseMap<const Loop *, BackedgeTakenInfo> &Map, const Loop *L) {
         auto BTCPos = Map.find(L);
         if (BTCPos != Map.end()) {
           BTCPos->second.clear();
@@ -6294,53 +6369,58 @@ void ScalarEvolution::forgetLoop(const Loop *L) {
         }
       };
 
-  RemoveLoopFromBackedgeMap(BackedgeTakenCounts);
-  RemoveLoopFromBackedgeMap(PredicatedBackedgeTakenCounts);
+  SmallVector<const Loop *, 16> LoopWorklist(1, L);
+  SmallVector<Instruction *, 32> Worklist;
+  SmallPtrSet<Instruction *, 16> Visited;
 
-  // Drop information about predicated SCEV rewrites for this loop.
-  for (auto I = PredicatedSCEVRewrites.begin();
-       I != PredicatedSCEVRewrites.end();) {
-    std::pair<const SCEV *, const Loop *> Entry = I->first;
-    if (Entry.second == L)
-      PredicatedSCEVRewrites.erase(I++);
-    else
-      ++I;
-  }
+  // Iterate over all the loops and sub-loops to drop SCEV information.
+  while (!LoopWorklist.empty()) {
+    auto *CurrL = LoopWorklist.pop_back_val();
 
-  // Drop information about expressions based on loop-header PHIs.
-  SmallVector<Instruction *, 16> Worklist;
-  PushLoopPHIs(L, Worklist);
+    RemoveLoopFromBackedgeMap(BackedgeTakenCounts, CurrL);
+    RemoveLoopFromBackedgeMap(PredicatedBackedgeTakenCounts, CurrL);
 
-  SmallPtrSet<Instruction *, 8> Visited;
-  while (!Worklist.empty()) {
-    Instruction *I = Worklist.pop_back_val();
-    if (!Visited.insert(I).second)
-      continue;
-
-    ValueExprMapType::iterator It =
-      ValueExprMap.find_as(static_cast<Value *>(I));
-    if (It != ValueExprMap.end()) {
-      eraseValueFromMap(It->first);
-      forgetMemoizedResults(It->second);
-      if (PHINode *PN = dyn_cast<PHINode>(I))
-        ConstantEvolutionLoopExitValue.erase(PN);
+    // Drop information about predicated SCEV rewrites for this loop.
+    for (auto I = PredicatedSCEVRewrites.begin();
+         I != PredicatedSCEVRewrites.end();) {
+      std::pair<const SCEV *, const Loop *> Entry = I->first;
+      if (Entry.second == CurrL)
+        PredicatedSCEVRewrites.erase(I++);
+      else
+        ++I;
     }
 
-    PushDefUseChildren(I, Worklist);
+    // Drop information about expressions based on loop-header PHIs.
+    PushLoopPHIs(CurrL, Worklist);
+
+    while (!Worklist.empty()) {
+      Instruction *I = Worklist.pop_back_val();
+      if (!Visited.insert(I).second)
+        continue;
+
+      ValueExprMapType::iterator It =
+          ValueExprMap.find_as(static_cast<Value *>(I));
+      if (It != ValueExprMap.end()) {
+        eraseValueFromMap(It->first);
+        forgetMemoizedResults(It->second);
+        if (PHINode *PN = dyn_cast<PHINode>(I))
+          ConstantEvolutionLoopExitValue.erase(PN);
+      }
+
+      PushDefUseChildren(I, Worklist);
+    }
+
+    for (auto I = ExitLimits.begin(); I != ExitLimits.end(); ++I) {
+      auto &Query = I->first;
+      if (Query.L == CurrL)
+        ExitLimits.erase(I);
+    }
+
+    LoopPropertiesCache.erase(CurrL);
+    // Forget all contained loops too, to avoid dangling entries in the
+    // ValuesAtScopes map.
+    LoopWorklist.append(CurrL->begin(), CurrL->end());
   }
-
-  for (auto I = ExitLimits.begin(); I != ExitLimits.end(); ++I) {
-    auto &Query = I->first;
-    if (Query.L == L)
-      ExitLimits.erase(I);
-  }
-
-  // Forget all contained loops too, to avoid dangling entries in the
-  // ValuesAtScopes map.
-  for (Loop *I : *L)
-    forgetLoop(I);
-
-  LoopPropertiesCache.erase(L);
 }
 
 void ScalarEvolution::forgetValue(Value *V) {

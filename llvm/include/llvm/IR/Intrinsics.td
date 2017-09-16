@@ -653,6 +653,13 @@ def int_annotation : Intrinsic<[llvm_anyint_ty],
                                 llvm_ptr_ty, llvm_i32_ty],
                                [], "llvm.annotation">;
 
+// Annotates the current program point with metadata strings which are emitted
+// as CodeView debug info records. This is expensive, as it disables inlining
+// and is modelled as having side effects.
+def int_codeview_annotation : Intrinsic<[], [llvm_metadata_ty],
+                                        [IntrInaccessibleMemOnly, IntrNoDuplicate],
+                                        "llvm.codeview.annotation">;
+
 //===------------------------ Trampoline Intrinsics -----------------------===//
 //
 def int_init_trampoline : Intrinsic<[],

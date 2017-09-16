@@ -4827,23 +4827,27 @@ bool SelectionDAGBuilder::EmitFuncArgumentDbgValue(
     // Check if ValueMap has reg number.
     DenseMap<const Value *, unsigned>::iterator VMI = FuncInfo.ValueMap.find(V);
     if (VMI != FuncInfo.ValueMap.end()) {
-      auto *Ty = V->getType();
       const auto &TLI = DAG.getTargetLoweringInfo();
-      EVT VT = TLI.getValueType(DAG.getDataLayout(), Ty);
-      unsigned NumRegs = TLI.getNumRegisters(Ty->getContext(), VT);
+      RegsForValue RFV(V->getContext(), TLI, DAG.getDataLayout(), VMI->second,
+                       V->getType(), isABIRegCopy(V));
+      unsigned NumRegs =
+          std::accumulate(RFV.RegCount.begin(), RFV.RegCount.end(), 0);
       if (NumRegs > 1) {
-        // The registers are guaranteed to be allocated in sequence.
+        unsigned I = 0;
         unsigned Offset = 0;
-        MVT RegisterVT = TLI.getRegisterType(Ty->getContext(), VT);
-        unsigned RegisterSize = RegisterVT.getSizeInBits();
-        for (unsigned I = 0; I != NumRegs; ++I) {
-          Op = MachineOperand::CreateReg(VMI->second + I, false);
-          auto *FragmentExpr = DIExpression::createFragmentExpression(
-              Expr, Offset, RegisterSize);
-          FuncInfo.ArgDbgValues.push_back(
-              BuildMI(MF, DL, TII->get(TargetOpcode::DBG_VALUE), IsDbgDeclare,
-                      Op->getReg(), Variable, FragmentExpr));
-          Offset += RegisterSize;
+        auto RegisterVT = RFV.RegVTs.begin();
+        for (auto RegCount : RFV.RegCount) {
+          unsigned RegisterSize = (RegisterVT++)->getSizeInBits();
+          for (unsigned E = I + RegCount; I != E; ++I) {
+            // The vregs are guaranteed to be allocated in sequence.
+            Op = MachineOperand::CreateReg(VMI->second + I, false);
+            auto *FragmentExpr = DIExpression::createFragmentExpression(
+                Expr, Offset, RegisterSize);
+            FuncInfo.ArgDbgValues.push_back(
+                BuildMI(MF, DL, TII->get(TargetOpcode::DBG_VALUE), IsDbgDeclare,
+                        Op->getReg(), Variable, FragmentExpr));
+            Offset += RegisterSize;
+          }
         }
         return true;
       }
@@ -5674,6 +5678,18 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
   case Intrinsic::var_annotation:
     // Discard annotate attributes and assumptions
     return nullptr;
+
+  case Intrinsic::codeview_annotation: {
+    // Emit a label associated with this metadata.
+    MachineFunction &MF = DAG.getMachineFunction();
+    MCSymbol *Label =
+        MF.getMMI().getContext().createTempSymbol("annotation", true);
+    Metadata *MD = cast<MetadataAsValue>(I.getArgOperand(0))->getMetadata();
+    MF.addCodeViewAnnotation(Label, cast<MDNode>(MD));
+    Res = DAG.getLabelNode(ISD::ANNOTATION_LABEL, sdl, getRoot(), Label);
+    DAG.setRoot(Res);
+    return nullptr;
+  }
 
   case Intrinsic::init_trampoline: {
     const Function *F = cast<Function>(I.getArgOperand(1)->stripPointerCasts());

@@ -72,7 +72,12 @@ static bool ShouldUpgradeX86Intrinsic(Function *F, StringRef Name) {
   // like to use this information to remove upgrade code for some older
   // intrinsics. It is currently undecided how we will determine that future
   // point.
-  if (Name.startswith("sse2.pcmpeq.") || // Added in 3.1
+  if (Name=="ssse3.pabs.b.128" || // Added in 6.0
+      Name=="ssse3.pabs.w.128" || // Added in 6.0
+      Name=="ssse3.pabs.d.128" || // Added in 6.0
+      Name.startswith("avx2.pabs.") || // Added in 6.0
+      Name.startswith("avx512.mask.pabs.") || // Added in 6.0
+      Name.startswith("sse2.pcmpeq.") || // Added in 3.1
       Name.startswith("sse2.pcmpgt.") || // Added in 3.1
       Name.startswith("avx2.pcmpeq.") || // Added in 3.1
       Name.startswith("avx2.pcmpgt.") || // Added in 3.1
@@ -252,7 +257,10 @@ static bool ShouldUpgradeX86Intrinsic(Function *F, StringRef Name) {
       Name.startswith("avx512.mask.move.s") || // Added in 4.0
       Name.startswith("avx512.cvtmask2") || // Added in 5.0
       (Name.startswith("xop.vpcom") && // Added in 3.2
-       F->arg_size() == 2))
+       F->arg_size() == 2) ||
+      Name.startswith("sse2.pavg") || // Added in 6.0
+      Name.startswith("avx2.pavg") || // Added in 6.0
+      Name.startswith("avx512.mask.pavg")) // Added in 6.0
     return true;
 
   return false;
@@ -790,6 +798,20 @@ static Value *UpgradeMaskedLoad(IRBuilder<> &Builder,
   return Builder.CreateMaskedLoad(Ptr, Align, Mask, Passthru);
 }
 
+static Value *upgradeAbs(IRBuilder<> &Builder, CallInst &CI) {
+  Value *Op0 = CI.getArgOperand(0);
+  llvm::Type *Ty = Op0->getType();
+  Value *Zero = llvm::Constant::getNullValue(Ty);
+  Value *Cmp = Builder.CreateICmp(ICmpInst::ICMP_SGT, Op0, Zero);
+  Value *Neg = Builder.CreateNeg(Op0);
+  Value *Res = Builder.CreateSelect(Cmp, Op0, Neg);
+
+  if (CI.getNumArgOperands() == 3)
+    Res = EmitX86Select(Builder,CI.getArgOperand(2), Res, CI.getArgOperand(1));
+
+  return Res;
+}
+
 static Value *upgradeIntMinMax(IRBuilder<> &Builder, CallInst &CI,
                                ICmpInst::Predicate Pred) {
   Value *Op0 = CI.getArgOperand(0);
@@ -1053,6 +1075,12 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
     } else if (IsX86 && Name.startswith("avx512.mask.ucmp")) {
       unsigned Imm = cast<ConstantInt>(CI->getArgOperand(2))->getZExtValue();
       Rep = upgradeMaskedCompare(Builder, *CI, Imm, false);
+    } else if(IsX86 && (Name == "ssse3.pabs.b.128" ||
+                        Name == "ssse3.pabs.w.128" ||
+                        Name == "ssse3.pabs.d.128" ||
+                        Name.startswith("avx2.pabs") ||
+                        Name.startswith("avx512.mask.pabs"))) {
+      Rep = upgradeAbs(Builder, *CI);
     } else if (IsX86 && (Name == "sse41.pmaxsb" ||
                          Name == "sse2.pmaxs.w" ||
                          Name == "sse41.pmaxsd" ||
@@ -1972,6 +2000,25 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
       LoadInst *LI = Builder.CreateAlignedLoad(BC, VTy->getBitWidth() / 8);
       LI->setMetadata(M->getMDKindID("nontemporal"), Node);
       Rep = LI;
+    } else if (IsX86 &&
+               (Name.startswith("sse2.pavg") || Name.startswith("avx2.pavg") ||
+                Name.startswith("avx512.mask.pavg"))) {
+      // llvm.x86.sse2.pavg.b/w, llvm.x86.avx2.pavg.b/w,
+      // llvm.x86.avx512.mask.pavg.b/w
+      Value *A = CI->getArgOperand(0);
+      Value *B = CI->getArgOperand(1);
+      VectorType *ZextType = VectorType::getExtendedElementVectorType(
+          cast<VectorType>(A->getType()));
+      Value *ExtendedA = Builder.CreateZExt(A, ZextType);
+      Value *ExtendedB = Builder.CreateZExt(B, ZextType);
+      Value *Sum = Builder.CreateAdd(ExtendedA, ExtendedB);
+      Value *AddOne = Builder.CreateAdd(Sum, ConstantInt::get(ZextType, 1));
+      Value *ShiftR = Builder.CreateLShr(AddOne, ConstantInt::get(ZextType, 1));
+      Rep = Builder.CreateTrunc(ShiftR, A->getType());
+      if (CI->getNumArgOperands() > 2) {
+        Rep = EmitX86Select(Builder, CI->getArgOperand(3), Rep,
+                            CI->getArgOperand(2));
+      }
     } else if (IsNVVM && (Name == "abs.i" || Name == "abs.ll")) {
       Value *Arg = CI->getArgOperand(0);
       Value *Neg = Builder.CreateNeg(Arg, "neg");
@@ -2311,6 +2358,24 @@ bool llvm::UpgradeModuleFlags(Module &M) {
               ConstantAsMetadata::get(ConstantInt::get(Int32Ty, Module::Max)),
               MDString::get(M.getContext(), ID->getString()),
               Op->getOperand(2)};
+          ModFlags->setOperand(I, MDNode::get(M.getContext(), Ops));
+          Changed = true;
+        }
+      }
+    }
+    // Upgrade Objective-C Image Info Section. Removed the whitespce in the
+    // section name so that llvm-lto will not complain about mismatching
+    // module flags that is functionally the same.
+    if (ID->getString() == "Objective-C Image Info Section") {
+      if (auto *Value = dyn_cast_or_null<MDString>(Op->getOperand(2))) {
+        SmallVector<StringRef, 4> ValueComp;
+        Value->getString().split(ValueComp, " ");
+        if (ValueComp.size() != 1) {
+          std::string NewValue;
+          for (auto &S : ValueComp)
+            NewValue += S.str();
+          Metadata *Ops[3] = {Op->getOperand(0), Op->getOperand(1),
+                              MDString::get(M.getContext(), NewValue)};
           ModFlags->setOperand(I, MDNode::get(M.getContext(), Ops));
           Changed = true;
         }

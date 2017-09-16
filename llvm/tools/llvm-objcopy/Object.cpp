@@ -90,14 +90,58 @@ void StringTableSection::writeSection(FileOutputBuffer &Out) const {
   StrTabBuilder.write(Out.getBufferStart() + Offset);
 }
 
+static bool isValidReservedSectionIndex(uint16_t Index, uint16_t Machine) {
+  switch (Index) {
+  case SHN_ABS:
+  case SHN_COMMON:
+    return true;
+  }
+  if (Machine == EM_HEXAGON) {
+    switch (Index) {
+    case SHN_HEXAGON_SCOMMON:
+    case SHN_HEXAGON_SCOMMON_2:
+    case SHN_HEXAGON_SCOMMON_4:
+    case SHN_HEXAGON_SCOMMON_8:
+      return true;
+    }
+  }
+  return false;
+}
+
+uint16_t Symbol::getShndx() const {
+  if (DefinedIn != nullptr) {
+    return DefinedIn->Index;
+  }
+  switch (ShndxType) {
+  // This means that we don't have a defined section but we do need to
+  // output a legitimate section index.
+  case SYMBOL_SIMPLE_INDEX:
+    return SHN_UNDEF;
+  case SYMBOL_ABS:
+  case SYMBOL_COMMON:
+  case SYMBOL_HEXAGON_SCOMMON:
+  case SYMBOL_HEXAGON_SCOMMON_2:
+  case SYMBOL_HEXAGON_SCOMMON_4:
+  case SYMBOL_HEXAGON_SCOMMON_8:
+    return static_cast<uint16_t>(ShndxType);
+  }
+  llvm_unreachable("Symbol with invalid ShndxType encountered");
+}
+
 void SymbolTableSection::addSymbol(StringRef Name, uint8_t Bind, uint8_t Type,
                                    SectionBase *DefinedIn, uint64_t Value,
-                                   uint64_t Sz) {
+                                   uint16_t Shndx, uint64_t Sz) {
   Symbol Sym;
   Sym.Name = Name;
   Sym.Binding = Bind;
   Sym.Type = Type;
   Sym.DefinedIn = DefinedIn;
+  if (DefinedIn == nullptr) {
+    if (Shndx >= SHN_LORESERVE)
+      Sym.ShndxType = static_cast<SymbolShndxType>(Shndx);
+    else
+      Sym.ShndxType = SYMBOL_SIMPLE_INDEX;
+  }
   Sym.Value = Value;
   Sym.Size = Sz;
   Sym.Index = Symbols.size();
@@ -146,12 +190,42 @@ void SymbolTableSectionImpl<ELFT>::writeSection(
     Sym->st_size = Symbol->Size;
     Sym->setBinding(Symbol->Binding);
     Sym->setType(Symbol->Type);
-    if (Symbol->DefinedIn)
-      Sym->st_shndx = Symbol->DefinedIn->Index;
-    else
-      Sym->st_shndx = SHN_UNDEF;
+    Sym->st_shndx = Symbol->getShndx();
     ++Sym;
   }
+}
+
+template <class ELFT> void RelocationSection<ELFT>::finalize() {
+  this->Link = Symbols->Index;
+  this->Info = SecToApplyRel->Index;
+}
+
+template <class ELFT>
+void setAddend(Elf_Rel_Impl<ELFT, false> &Rel, uint64_t Addend) {}
+
+template <class ELFT>
+void setAddend(Elf_Rel_Impl<ELFT, true> &Rela, uint64_t Addend) {
+  Rela.r_addend = Addend;
+}
+
+template <class ELFT>
+template <class T>
+void RelocationSection<ELFT>::writeRel(T *Buf) const {
+  for (const auto &Reloc : Relocations) {
+    Buf->r_offset = Reloc.Offset;
+    setAddend(*Buf, Reloc.Addend);
+    Buf->setSymbolAndType(Reloc.RelocSymbol->Index, Reloc.Type, false);
+    ++Buf;
+  }
+}
+
+template <class ELFT>
+void RelocationSection<ELFT>::writeSection(llvm::FileOutputBuffer &Out) const {
+  uint8_t *Buf = Out.getBufferStart() + Offset;
+  if (Type == SHT_REL)
+    writeRel(reinterpret_cast<Elf_Rel *>(Buf));
+  else
+    writeRel(reinterpret_cast<Elf_Rela *>(Buf));
 }
 
 // Returns true IFF a section is wholly inside the range of a segment
@@ -218,7 +292,14 @@ void Object<ELFT>::initSymbolTable(const llvm::object::ELFFile<ELFT> &ElfFile,
   for (const auto &Sym : unwrapOrError(ElfFile.symbols(&Shdr))) {
     SectionBase *DefSection = nullptr;
     StringRef Name = unwrapOrError(Sym.getName(StrTabData));
-    if (Sym.st_shndx != SHN_UNDEF) {
+    if (Sym.st_shndx >= SHN_LORESERVE) {
+      if (!isValidReservedSectionIndex(Sym.st_shndx, Machine)) {
+        error(
+            "Symbol '" + Name +
+            "' has unsupported value greater than or equal to SHN_LORESERVE: " +
+            Twine(Sym.st_shndx));
+      }
+    } else if (Sym.st_shndx != SHN_UNDEF) {
       if (Sym.st_shndx >= Sections.size())
         error("Symbol '" + Name +
               "' is defined in invalid section with index " +
@@ -226,7 +307,28 @@ void Object<ELFT>::initSymbolTable(const llvm::object::ELFFile<ELFT> &ElfFile,
       DefSection = Sections[Sym.st_shndx - 1].get();
     }
     SymTab->addSymbol(Name, Sym.getBinding(), Sym.getType(), DefSection,
-                      Sym.getValue(), Sym.st_size);
+                      Sym.getValue(), Sym.st_shndx, Sym.st_size);
+  }
+}
+
+template <class ELFT>
+static void getAddend(uint64_t &ToSet, const Elf_Rel_Impl<ELFT, false> &Rel) {}
+
+template <class ELFT>
+static void getAddend(uint64_t &ToSet, const Elf_Rel_Impl<ELFT, true> &Rela) {
+  ToSet = Rela.r_addend;
+}
+
+template <class ELFT, class T>
+void initRelocations(RelocationSection<ELFT> *Relocs,
+                     SymbolTableSection *SymbolTable, T RelRange) {
+  for (const auto &Rel : RelRange) {
+    Relocation ToAdd;
+    ToAdd.Offset = Rel.r_offset;
+    getAddend(ToAdd.Addend, Rel);
+    ToAdd.Type = Rel.getType(false);
+    ToAdd.RelocSymbol = SymbolTable->getSymbolByIndex(Rel.getSymbol(false));
+    Relocs->addRelocation(ToAdd);
   }
 }
 
@@ -236,6 +338,9 @@ Object<ELFT>::makeSection(const llvm::object::ELFFile<ELFT> &ElfFile,
                           const Elf_Shdr &Shdr) {
   ArrayRef<uint8_t> Data;
   switch (Shdr.sh_type) {
+  case SHT_REL:
+  case SHT_RELA:
+    return llvm::make_unique<RelocationSection<ELFT>>();
   case SHT_STRTAB:
     return llvm::make_unique<StringTableSection>();
   case SHT_SYMTAB: {
@@ -279,6 +384,35 @@ void Object<ELFT>::readSectionHeaders(const ELFFile<ELFT> &ElfFile) {
   // details about symbol tables.
   if (SymbolTable)
     initSymbolTable(ElfFile, SymbolTable);
+
+  // Now that all sections and symbols have been added we can add
+  // relocations that reference symbols and set the link and info fields for
+  // relocation sections.
+  for (auto &Section : Sections) {
+    if (auto RelSec = dyn_cast<RelocationSection<ELFT>>(Section.get())) {
+      if (RelSec->Link - 1 >= Sections.size() || RelSec->Link == 0) {
+        error("Link field value " + Twine(RelSec->Link) + " in section " +
+              RelSec->Name + " is invalid");
+      }
+      if (RelSec->Info - 1 >= Sections.size() || RelSec->Info == 0) {
+        error("Info field value " + Twine(RelSec->Link) + " in section " +
+              RelSec->Name + " is invalid");
+      }
+      auto SymTab =
+          dyn_cast<SymbolTableSection>(Sections[RelSec->Link - 1].get());
+      if (SymTab == nullptr) {
+        error("Link field of relocation section " + RelSec->Name +
+              " is not a symbol table");
+      }
+      RelSec->setSymTab(SymTab);
+      RelSec->setSection(Sections[RelSec->Info - 1].get());
+      auto Shdr = unwrapOrError(ElfFile.sections()).begin() + RelSec->Index;
+      if (RelSec->Type == SHT_REL)
+        initRelocations(RelSec, SymTab, unwrapOrError(ElfFile.rels(Shdr)));
+      else
+        initRelocations(RelSec, SymTab, unwrapOrError(ElfFile.relas(Shdr)));
+    }
+  }
 }
 
 template <class ELFT> Object<ELFT>::Object(const ELFObjectFile<ELFT> &Obj) {
@@ -329,7 +463,7 @@ template <class ELFT>
 void Object<ELFT>::writeSectionHeaders(FileOutputBuffer &Out) const {
   uint8_t *Buf = Out.getBufferStart() + SHOffset;
   // This reference serves to write the dummy section header at the begining
-  // of the file.
+  // of the file. It is not used for anything else
   Elf_Shdr &Shdr = *reinterpret_cast<Elf_Shdr *>(Buf);
   Shdr.sh_name = 0;
   Shdr.sh_type = SHT_NULL;

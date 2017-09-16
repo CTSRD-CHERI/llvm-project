@@ -15,6 +15,9 @@
 
 namespace clang {
 namespace tooling {
+
+class RefactoringRuleContext;
+
 namespace refactoring_action_rules {
 
 /// Creates a new refactoring action rule that invokes the given function once
@@ -40,17 +43,15 @@ namespace refactoring_action_rules {
 template <typename ResultType, typename... RequirementTypes>
 std::unique_ptr<RefactoringActionRule>
 createRefactoringRule(Expected<ResultType> (*RefactoringFunction)(
+                          const RefactoringRuleContext &,
                           typename RequirementTypes::OutputType...),
                       const RequirementTypes &... Requirements) {
-  static_assert(
-      std::is_base_of<
-          RefactoringActionRule,
-          internal::SpecificRefactoringRuleAdapter<ResultType>>::value,
-      "invalid refactoring result type");
+  static_assert(tooling::traits::IsValidRefactoringResult<ResultType>::value,
+                "invalid refactoring result type");
   static_assert(traits::IsRequirement<RequirementTypes...>::value,
                 "invalid refactoring action rule requirement");
   return llvm::make_unique<internal::PlainFunctionRule<
-      ResultType, decltype(RefactoringFunction), RequirementTypes...>>(
+      decltype(RefactoringFunction), RequirementTypes...>>(
       RefactoringFunction, std::make_tuple(Requirements...));
 }
 
@@ -59,13 +60,12 @@ template <
     typename Fn = decltype(&Callable::operator()),
     typename ResultType = typename internal::LambdaDeducer<Fn>::ReturnType,
     bool IsNonCapturingLambda = std::is_convertible<
-        Callable,
-        ResultType (*)(typename RequirementTypes::OutputType...)>::value,
+        Callable, typename internal::LambdaDeducer<Fn>::FunctionType>::value,
     typename = typename std::enable_if<IsNonCapturingLambda>::type>
 std::unique_ptr<RefactoringActionRule>
 createRefactoringRule(const Callable &C,
                       const RequirementTypes &... Requirements) {
-  ResultType (*Func)(typename RequirementTypes::OutputType...) = C;
+  typename internal::LambdaDeducer<Fn>::FunctionType Func = C;
   return createRefactoringRule(Func, Requirements...);
 }
 

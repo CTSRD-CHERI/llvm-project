@@ -233,9 +233,9 @@ public:
   ///                    filtered.
   /// \param Filter The filter function that should return true for all groups
   ///               that should be removed from the list.
-  static void
-  filterGroups(std::vector<CloneDetector::CloneGroup> &CloneGroups,
-               std::function<bool(const CloneDetector::CloneGroup &)> Filter) {
+  static void filterGroups(
+      std::vector<CloneDetector::CloneGroup> &CloneGroups,
+      llvm::function_ref<bool(const CloneDetector::CloneGroup &)> Filter) {
     CloneGroups.erase(
         std::remove_if(CloneGroups.begin(), CloneGroups.end(), Filter),
         CloneGroups.end());
@@ -249,7 +249,8 @@ public:
   ///                to the same CloneGroup.
   static void splitCloneGroups(
       std::vector<CloneDetector::CloneGroup> &CloneGroups,
-      std::function<bool(const StmtSequence &, const StmtSequence &)> Compare);
+      llvm::function_ref<bool(const StmtSequence &, const StmtSequence &)>
+          Compare);
 };
 
 /// This constraint moves clones into clone groups of type II via hashing.
@@ -287,14 +288,19 @@ public:
   MinComplexityConstraint(unsigned MinComplexity)
       : MinComplexity(MinComplexity) {}
 
-  size_t calculateStmtComplexity(const StmtSequence &Seq,
+  /// Calculates the complexity of the given StmtSequence.
+  /// \param Limit The limit of complexity we probe for. After reaching
+  ///              this limit during calculation, this method is exiting
+  ///              early to improve performance and returns this limit.
+  size_t calculateStmtComplexity(const StmtSequence &Seq, std::size_t Limit,
                                  const std::string &ParentMacroStack = "");
 
   void constrain(std::vector<CloneDetector::CloneGroup> &CloneGroups) {
     CloneConstraint::filterGroups(
         CloneGroups, [this](const CloneDetector::CloneGroup &A) {
           if (!A.empty())
-            return calculateStmtComplexity(A.front()) < MinComplexity;
+            return calculateStmtComplexity(A.front(), MinComplexity) <
+                   MinComplexity;
           else
             return false;
         });
