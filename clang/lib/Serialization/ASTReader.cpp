@@ -8269,7 +8269,7 @@ ASTReader::getSourceDescriptor(unsigned ID) {
     return ExternalASTSource::ASTSourceDescriptor(*M);
 
   // If there is only a single PCH, return it instead.
-  // Chained PCH are not suported.
+  // Chained PCH are not supported.
   const auto &PCHChain = ModuleMgr.pch_modules();
   if (std::distance(std::begin(PCHChain), std::end(PCHChain))) {
     ModuleFile &MF = ModuleMgr.getPrimaryModule();
@@ -9320,6 +9320,7 @@ void ASTReader::diagnoseOdrViolations() {
         TypeAlias,
         TypeDef,
         Var,
+        Friend,
         Other
       } FirstDiffType = Other,
         SecondDiffType = Other;
@@ -9353,6 +9354,8 @@ void ASTReader::diagnoseOdrViolations() {
           return TypeDef;
         case Decl::Var:
           return Var;
+        case Decl::Friend:
+          return Friend;
         }
       };
 
@@ -9469,6 +9472,9 @@ void ASTReader::diagnoseOdrViolations() {
         VarSingleInitializer,
         VarDifferentInitializer,
         VarConstexpr,
+        FriendTypeFunction,
+        FriendType,
+        FriendFunction,
       };
 
       // These lambdas have the common portions of the ODR diagnostics.  This
@@ -9977,6 +9983,53 @@ void ASTReader::diagnoseOdrViolations() {
           Diagnosed = true;
           break;
         }
+        break;
+      }
+      case Friend: {
+        FriendDecl *FirstFriend = cast<FriendDecl>(FirstDecl);
+        FriendDecl *SecondFriend = cast<FriendDecl>(SecondDecl);
+
+        NamedDecl *FirstND = FirstFriend->getFriendDecl();
+        NamedDecl *SecondND = SecondFriend->getFriendDecl();
+
+        TypeSourceInfo *FirstTSI = FirstFriend->getFriendType();
+        TypeSourceInfo *SecondTSI = SecondFriend->getFriendType();
+
+        if (FirstND && SecondND) {
+          ODRDiagError(FirstFriend->getFriendLoc(),
+                       FirstFriend->getSourceRange(), FriendFunction)
+              << FirstND;
+          ODRDiagNote(SecondFriend->getFriendLoc(),
+                      SecondFriend->getSourceRange(), FriendFunction)
+              << SecondND;
+
+          Diagnosed = true;
+          break;
+        }
+
+        if (FirstTSI && SecondTSI) {
+          QualType FirstFriendType = FirstTSI->getType();
+          QualType SecondFriendType = SecondTSI->getType();
+          assert(ComputeQualTypeODRHash(FirstFriendType) !=
+                 ComputeQualTypeODRHash(SecondFriendType));
+          ODRDiagError(FirstFriend->getFriendLoc(),
+                       FirstFriend->getSourceRange(), FriendType)
+              << FirstFriendType;
+          ODRDiagNote(SecondFriend->getFriendLoc(),
+                      SecondFriend->getSourceRange(), FriendType)
+              << SecondFriendType;
+          Diagnosed = true;
+          break;
+        }
+
+        ODRDiagError(FirstFriend->getFriendLoc(), FirstFriend->getSourceRange(),
+                     FriendTypeFunction)
+            << (FirstTSI == nullptr);
+        ODRDiagNote(SecondFriend->getFriendLoc(),
+                    SecondFriend->getSourceRange(), FriendTypeFunction)
+            << (SecondTSI == nullptr);
+
+        Diagnosed = true;
         break;
       }
       }

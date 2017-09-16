@@ -82,25 +82,13 @@ void ODRHash::AddDeclarationName(DeclarationName Name) {
 }
 
 void ODRHash::AddNestedNameSpecifier(const NestedNameSpecifier *NNS) {
-  // Unlike the other pointer handling functions, allow null pointers here.
-  if (!NNS) {
-    AddBoolean(false);
-    return;
+  assert(NNS && "Expecting non-null pointer.");
+  const auto *Prefix = NNS->getPrefix();
+  AddBoolean(Prefix);
+  if (Prefix) {
+    AddNestedNameSpecifier(Prefix);
   }
-
-  // Skip inlined namespaces.
   auto Kind = NNS->getKind();
-  if (Kind == NestedNameSpecifier::Namespace) {
-    if (NNS->getAsNamespace()->isInline()) {
-      return AddNestedNameSpecifier(NNS->getPrefix());
-    }
-  }
-
-  AddBoolean(true);
-
-  // Process prefix
-  AddNestedNameSpecifier(NNS->getPrefix());
-
   ID.AddInteger(Kind);
   switch (Kind) {
   case NestedNameSpecifier::Identifier:
@@ -240,6 +228,13 @@ public:
     Hash.AddQualType(T);
   }
 
+  void AddDecl(const Decl *D) {
+    Hash.AddBoolean(D);
+    if (D) {
+      Hash.AddDecl(D);
+    }
+  }
+
   void Visit(const Decl *D) {
     ID.AddInteger(D->getKind());
     Inherited::Visit(D);
@@ -251,7 +246,9 @@ public:
   }
 
   void VisitValueDecl(const ValueDecl *D) {
-    AddQualType(D->getType());
+    if (!isa<FunctionDecl>(D)) {
+      AddQualType(D->getType());
+    }
     Inherited::VisitValueDecl(D);
   }
 
@@ -310,6 +307,8 @@ public:
       Hash.AddSubDecl(Param);
     }
 
+    AddQualType(D->getReturnType());
+
     Inherited::VisitFunctionDecl(D);
   }
 
@@ -333,6 +332,16 @@ public:
   void VisitTypeAliasDecl(const TypeAliasDecl *D) {
     Inherited::VisitTypeAliasDecl(D);
   }
+
+  void VisitFriendDecl(const FriendDecl *D) {
+    TypeSourceInfo *TSI = D->getFriendType();
+    Hash.AddBoolean(TSI);
+    if (TSI) {
+      AddQualType(TSI->getType());
+    } else {
+      AddDecl(D->getFriendDecl());
+    }
+  }
 };
 
 // Only allow a small portion of Decl's to be processed.  Remove this once
@@ -347,6 +356,7 @@ bool ODRHash::isWhitelistedDecl(const Decl *D, const CXXRecordDecl *Parent) {
     case Decl::AccessSpec:
     case Decl::CXXMethod:
     case Decl::Field:
+    case Decl::Friend:
     case Decl::StaticAssert:
     case Decl::TypeAlias:
     case Decl::Typedef:
@@ -441,7 +451,10 @@ public:
   }
 
   void AddNestedNameSpecifier(const NestedNameSpecifier *NNS) {
-    Hash.AddNestedNameSpecifier(NNS);
+    Hash.AddBoolean(NNS);
+    if (NNS) {
+      Hash.AddNestedNameSpecifier(NNS);
+    }
   }
 
   void AddIdentifierInfo(const IdentifierInfo *II) {

@@ -3453,6 +3453,8 @@ static llvm::GlobalValue::LinkageTypes getLinkageForRTTI(QualType Ty) {
     return llvm::GlobalValue::InternalLinkage;
 
   case VisibleNoLinkage:
+  case ModuleInternalLinkage:
+  case ModuleLinkage:
   case ExternalLinkage:
     return llvm::GlobalValue::LinkOnceODRLinkage;
   }

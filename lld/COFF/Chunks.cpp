@@ -52,6 +52,7 @@ static void add16(uint8_t *P, int16_t V) { write16le(P, read16le(P) + V); }
 static void add32(uint8_t *P, int32_t V) { write32le(P, read32le(P) + V); }
 static void add64(uint8_t *P, int64_t V) { write64le(P, read64le(P) + V); }
 static void or16(uint8_t *P, uint16_t V) { write16le(P, read16le(P) | V); }
+static void or32(uint8_t *P, uint32_t V) { write32le(P, read32le(P) | V); }
 
 static void applySecRel(const SectionChunk *Sec, uint8_t *Off,
                         OutputSection *OS, uint64_t S) {
@@ -166,6 +167,41 @@ void SectionChunk::applyRelARM(uint8_t *Off, uint16_t Type, OutputSection *OS,
   }
 }
 
+static void applyArm64Addr(uint8_t *Off, uint64_t Imm) {
+  uint32_t ImmLo = (Imm & 0x3) << 29;
+  uint32_t ImmHi = (Imm & 0x1FFFFC) << 3;
+  uint64_t Mask = (0x3 << 29) | (0x1FFFFC << 3);
+  write32le(Off, (read32le(Off) & ~Mask) | ImmLo | ImmHi);
+}
+
+// Update the immediate field in a AARCH64 ldr, str, and add instruction.
+static void applyArm64Imm(uint8_t *Off, uint64_t Imm) {
+  uint32_t Orig = read32le(Off);
+  Imm += (Orig >> 10) & 0xFFF;
+  Orig &= ~(0xFFF << 10);
+  write32le(Off, Orig | ((Imm & 0xFFF) << 10));
+}
+
+static void applyArm64Ldr(uint8_t *Off, uint64_t Imm) {
+  int Size = read32le(Off) >> 30;
+  Imm >>= Size;
+  applyArm64Imm(Off, Imm);
+}
+
+void SectionChunk::applyRelARM64(uint8_t *Off, uint16_t Type, OutputSection *OS,
+                                 uint64_t S, uint64_t P) const {
+  switch (Type) {
+  case IMAGE_REL_ARM64_PAGEBASE_REL21: applyArm64Addr(Off, (S >> 12) - (P >> 12)); break;
+  case IMAGE_REL_ARM64_PAGEOFFSET_12A: applyArm64Imm(Off, S & 0xfff); break;
+  case IMAGE_REL_ARM64_PAGEOFFSET_12L: applyArm64Ldr(Off, S & 0xfff); break;
+  case IMAGE_REL_ARM64_BRANCH26:       or32(Off, ((S - P) & 0x0FFFFFFC) >> 2); break;
+  case IMAGE_REL_ARM64_ADDR32:         add32(Off, S + Config->ImageBase); break;
+  case IMAGE_REL_ARM64_ADDR64:         add64(Off, S + Config->ImageBase); break;
+  default:
+    fatal("unsupported relocation type 0x" + Twine::utohexstr(Type));
+  }
+}
+
 void SectionChunk::writeTo(uint8_t *Buf) const {
   if (!hasData())
     return;
@@ -174,7 +210,15 @@ void SectionChunk::writeTo(uint8_t *Buf) const {
   memcpy(Buf + OutputSectionOff, A.data(), A.size());
 
   // Apply relocations.
+  size_t InputSize = getSize();
   for (const coff_relocation &Rel : Relocs) {
+    // Check for an invalid relocation offset. This check isn't perfect, because
+    // we don't have the relocation size, which is only known after checking the
+    // machine and relocation type. As a result, a relocation may overwrite the
+    // beginning of the following input section.
+    if (Rel.VirtualAddress >= InputSize)
+      fatal("relocation points beyond the end of its parent section");
+
     uint8_t *Off = Buf + OutputSectionOff + Rel.VirtualAddress;
 
     // Get the output section of the symbol for this relocation.  The output
@@ -210,6 +254,9 @@ void SectionChunk::writeTo(uint8_t *Buf) const {
     case ARMNT:
       applyRelARM(Off, Rel.Type, OS, S, P);
       break;
+    case ARM64:
+      applyRelARM64(Off, Rel.Type, OS, S, P);
+      break;
     default:
       llvm_unreachable("unknown machine type");
     }
@@ -235,6 +282,10 @@ static uint8_t getBaserelType(const coff_relocation &Rel) {
       return IMAGE_REL_BASED_HIGHLOW;
     if (Rel.Type == IMAGE_REL_ARM_MOV32T)
       return IMAGE_REL_BASED_ARM_MOV32T;
+    return IMAGE_REL_BASED_ABSOLUTE;
+  case ARM64:
+    if (Rel.Type == IMAGE_REL_ARM64_ADDR64)
+      return IMAGE_REL_BASED_DIR64;
     return IMAGE_REL_BASED_ABSOLUTE;
   default:
     llvm_unreachable("unknown machine type");
@@ -343,6 +394,14 @@ void ImportThunkChunkARM::writeTo(uint8_t *Buf) const {
   memcpy(Buf + OutputSectionOff, ImportThunkARM, sizeof(ImportThunkARM));
   // Fix mov.w and mov.t operands.
   applyMOV32T(Buf + OutputSectionOff, ImpSymbol->getRVA() + Config->ImageBase);
+}
+
+void ImportThunkChunkARM64::writeTo(uint8_t *Buf) const {
+  int64_t PageOff = (ImpSymbol->getRVA() >> 12) - (RVA >> 12);
+  int64_t Off = ImpSymbol->getRVA() & 0xfff;
+  memcpy(Buf + OutputSectionOff, ImportThunkARM64, sizeof(ImportThunkARM64));
+  applyArm64Addr(Buf + OutputSectionOff, PageOff);
+  applyArm64Ldr(Buf + OutputSectionOff + 4, Off);
 }
 
 void LocalImportChunk::getBaserels(std::vector<Baserel> *Res) {

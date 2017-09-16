@@ -94,7 +94,7 @@ static uint64_t getSymVA(const SymbolBody &Body, int64_t &Addend) {
     if (D.isTls() && !Config->Relocatable) {
       if (!Out::TlsPhdr)
         fatal(toString(D.File) +
-              " has a STT_TLS symbol but doesn't have a PT_TLS section");
+              " has an STT_TLS symbol but doesn't have an SHF_TLS section");
       return VA - Out::TlsPhdr->p_vaddr;
     }
     return VA;
@@ -159,19 +159,12 @@ bool SymbolBody::isPreemptible() const {
   return true;
 }
 
-// Overwrites all attributes except symbol name with Other's so that
-// this symbol becomes an alias to Other. This is useful for handling
-// some options such as --wrap.
-//
-// The reason why we want to keep the symbol name is because, if we
-// copy symbol names, we'll end up having symbol tables in resulting
-// executables or DSOs containing two or more identical symbols, which
-// is just inconvenient.
+// Overwrites all attributes with Other's so that this symbol becomes
+// an alias to Other. This is useful for handling some options such as
+// --wrap.
 void SymbolBody::copy(SymbolBody *Other) {
-  StringRef S = Name;
   memcpy(symbol()->Body.buffer, Other->symbol()->Body.buffer,
          sizeof(Symbol::Body));
-  Name = S;
 }
 
 uint64_t SymbolBody::getVA(int64_t Addend) const {
@@ -272,7 +265,12 @@ void SymbolBody::parseSymbolVersion() {
   }
 
   // It is an error if the specified version is not defined.
-  error(toString(File) + ": symbol " + S + " has undefined version " + Verstr);
+  // Usually version script is not provided when linking executable,
+  // but we may still want to override a versioned symbol from DSO,
+  // so we do not report error in this case.
+  if (Config->Shared)
+    error(toString(File) + ": symbol " + S + " has undefined version " +
+          Verstr);
 }
 
 Defined::Defined(Kind K, StringRefZ Name, bool IsLocal, uint8_t StOther,

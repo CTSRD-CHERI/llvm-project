@@ -817,8 +817,10 @@ def warn_property_types_are_incompatible : Warning<
   "property type %0 is incompatible with type %1 inherited from %2">,
   InGroup<DiagGroup<"incompatible-property-type">>;
 def warn_protocol_property_mismatch : Warning<
-  "property of type %0 was selected for synthesis">,
+  "property %select{of type %1|with attribute '%1'|without attribute '%1'|with "
+  "getter %1|with setter %1}0 was selected for synthesis">,
   InGroup<DiagGroup<"protocol-property-synthesis-ambiguity">>;
+def err_protocol_property_mismatch: Error<warn_protocol_property_mismatch.Text>;
 def err_undef_interface : Error<"cannot find interface declaration for %0">;
 def err_category_forward_interface : Error<
   "cannot define %select{category|class extension}0 for undefined class %1">;
@@ -1053,6 +1055,8 @@ def warn_auto_synthesizing_protocol_property :Warning<
   "auto property synthesis will not synthesize property %0"
   " declared in protocol %1">,
   InGroup<DiagGroup<"objc-protocol-property-synthesis">>;
+def note_add_synthesize_directive : Note<
+  "add a '@synthesize' directive">;
 def warn_no_autosynthesis_shared_ivar_property : Warning <
   "auto property synthesis will not synthesize property "
   "%0 because it cannot share an ivar with another synthesized property">,
@@ -1110,7 +1114,9 @@ def err_category_property : Error<
 def note_property_declare : Note<
   "property declared here">;
 def note_protocol_property_declare : Note<
-  "it could also be property of type %0 declared here">;
+  "it could also be property "
+  "%select{of type %1|without attribute '%1'|with attribute '%1'|with getter "
+  "%1|with setter %1}0 declared here">;
 def note_property_synthesize : Note<
   "property synthesized here">;
 def err_synthesize_category_decl : Error<
@@ -2902,7 +2908,7 @@ def warn_partial_availability : Warning<"%0 is only available conditionally">,
 def warn_partial_availability_new : Warning<warn_partial_availability.Text>,
   InGroup<UnguardedAvailabilityNew>;
 def note_partial_availability_silence : Note<
-  "explicitly redeclare %0 to silence this warning">;
+  "annotate %select{%1|anonymous %1}0 with an availability attribute to silence">;
 def note_unguarded_available_silence : Note<
   "enclose %0 in %select{an @available|a __builtin_available}1 check to silence"
   " this warning">;
@@ -3542,6 +3548,8 @@ def note_ovl_candidate_substitution_failure : Note<
     "candidate template ignored: substitution failure%0%1">;
 def note_ovl_candidate_disabled_by_enable_if : Note<
     "candidate template ignored: disabled by %0%1">;
+def note_ovl_candidate_disabled_by_requirement : Note<
+    "candidate template ignored: requirement '%0' was not satisfied%1">;
 def note_ovl_candidate_has_pass_object_size_params: Note<
     "candidate address cannot be taken because parameter %0 has "
     "pass_object_size attribute">;
@@ -4455,6 +4463,9 @@ def err_typename_nested_not_found : Error<"no type named %0 in %1">;
 def err_typename_nested_not_found_enable_if : Error<
   "no type named 'type' in %0; 'enable_if' cannot be used to disable "
   "this declaration">;
+def err_typename_nested_not_found_requirement : Error<
+  "failed requirement '%0'; 'enable_if' cannot be used to disable this "
+  "declaration">;
 def err_typename_nested_not_type : Error<
     "typename specifier refers to non-type member %0 in %1">;
 def note_typename_refers_here : Note<
@@ -4594,8 +4605,11 @@ def warn_deprecated_fwdclass_message : Warning<
     "%0 may be deprecated because the receiver type is unknown">,
     InGroup<DeprecatedDeclarations>;
 def warn_deprecated_def : Warning<
-    "Implementing deprecated %select{method|class|category}0">,
-    InGroup<DeprecatedImplementations>, DefaultIgnore;
+  "implementing deprecated %select{method|class|category}0">,
+  InGroup<DeprecatedImplementations>, DefaultIgnore;
+def warn_unavailable_def : Warning<
+  "implementing unavailable method">,
+  InGroup<DeprecatedImplementations>, DefaultIgnore;
 def err_unavailable : Error<"%0 is unavailable">;
 def err_property_method_unavailable :
     Error<"property access is using %0 method which is unavailable">;
@@ -6406,15 +6420,13 @@ def err_exceptions_disabled : Error<
   "cannot use '%0' with exceptions disabled">;
 def err_objc_exceptions_disabled : Error<
   "cannot use '%0' with Objective-C exceptions disabled">;
-def warn_throw_in_noexcept_func 
-    : Warning<"%0 has a non-throwing exception specification but can still "
-      "throw, resulting in unexpected program termination">,
-      InGroup<Exceptions>;
-def note_throw_in_dtor 
-    : Note<"destructor or deallocator has a (possibly implicit) non-throwing "
-      "excepton specification">;
-def note_throw_in_function 
-    : Note<"non-throwing function declare here">;
+def warn_throw_in_noexcept_func : Warning<
+  "%0 has a non-throwing exception specification but can still throw">,
+  InGroup<Exceptions>;
+def note_throw_in_dtor : Note<
+  "%select{destructor|deallocator}0 has a %select{non-throwing|implicit "
+  "non-throwing}1 exception specification">;
+def note_throw_in_function : Note<"function declared non-throwing here">;
 def err_seh_try_outside_functions : Error<
   "cannot use SEH '__try' in blocks, captured regions, or Obj-C method decls">;
 def err_mixing_cxx_try_seh_try : Error<
@@ -8515,8 +8527,6 @@ def err_opencl_builtin_to_addr_invalid_arg : Error<
 // OpenCL v2.0 s6.13.17 Enqueue kernel restrictions.
 def err_opencl_enqueue_kernel_incorrect_args : Error<
   "illegal call to enqueue_kernel, incorrect argument types">;
-def err_opencl_enqueue_kernel_expected_type : Error<
-  "illegal call to enqueue_kernel, expected %0 argument type">;
 def err_opencl_enqueue_kernel_local_size_args : Error<
   "mismatch in number of block parameters and local size arguments passed">;
 def err_opencl_enqueue_kernel_invalid_local_size_type : Error<
@@ -8525,6 +8535,9 @@ def err_opencl_enqueue_kernel_blocks_non_local_void_args : Error<
   "blocks used in enqueue_kernel call are expected to have parameters of type 'local void*'">;
 def err_opencl_enqueue_kernel_blocks_no_args : Error<
   "blocks with parameters are not accepted in this prototype of enqueue_kernel call">;
+
+def err_opencl_builtin_expected_type : Error<
+  "illegal call to %0, expected %1 argument type">;
 
 // OpenCL v2.2 s2.1.2.3 - Vector Component Access
 def ext_opencl_ext_vector_type_rgba_selector: ExtWarn<
@@ -8914,6 +8927,10 @@ def warn_omp_nesting_simd : Warning<
 def err_omp_orphaned_device_directive : Error<
   "orphaned 'omp %0' directives are prohibited"
   "; perhaps you forget to enclose the directive into a %select{|||target |teams }1region?">;
+def err_omp_reduction_non_addressable_expression : Error<
+  "expected addressable reduction item for the task-based directives">;
+def err_omp_reduction_with_nogroup : Error<
+  "'reduction' clause cannot be used with 'nogroup' clause">;
 } // end of OpenMP category
 
 let CategoryName = "Related Result Type Issue" in {

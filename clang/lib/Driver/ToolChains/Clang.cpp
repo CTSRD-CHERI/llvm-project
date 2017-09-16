@@ -2093,10 +2093,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     if (D.isUsingLTO()) {
       Args.AddLastArg(CmdArgs, options::OPT_flto, options::OPT_flto_EQ);
 
-      // The Darwin linker currently uses the legacy LTO API, which does not
-      // support LTO unit features (CFI, whole program vtable opt) under
-      // ThinLTO.
-      if (!getToolChain().getTriple().isOSDarwin() ||
+      // The Darwin and PS4 linkers currently use the legacy LTO API, which
+      // does not support LTO unit features (CFI, whole program vtable opt)
+      // under ThinLTO.
+      if (!(getToolChain().getTriple().isOSDarwin() ||
+            getToolChain().getTriple().isPS4()) ||
           D.getLTOMode() == LTOK_Full)
         CmdArgs.push_back("-flto-unit");
     }
@@ -2567,7 +2568,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                    AsynchronousUnwindTables))
     CmdArgs.push_back("-munwind-tables");
 
-  getToolChain().addClangTargetOptions(Args, CmdArgs);
+  getToolChain().addClangTargetOptions(Args, CmdArgs,
+                                       JA.getOffloadingDeviceKind());
 
   if (Arg *A = Args.getLastArg(options::OPT_flimited_precision_EQ)) {
     CmdArgs.push_back("-mlimit-float-precision");
@@ -2995,6 +2997,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   for (const Arg *A :
        Args.filtered(options::OPT_clang_ignored_gcc_optimization_f_Group)) {
     D.Diag(diag::warn_ignored_gcc_optimization) << A->getAsString(Args);
+    A->claim();
+  }
+
+  for (const Arg *A :
+       Args.filtered(options::OPT_clang_ignored_legacy_options_Group)) {
+    D.Diag(diag::warn_ignored_clang_option) << A->getAsString(Args);
     A->claim();
   }
 
@@ -4066,6 +4074,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasFlag(options::OPT_fdiagnostics_show_hotness,
                    options::OPT_fno_diagnostics_show_hotness, false))
     CmdArgs.push_back("-fdiagnostics-show-hotness");
+
+  if (const Arg *A =
+          Args.getLastArg(options::OPT_fdiagnostics_hotness_threshold_EQ)) {
+    std::string Opt = std::string("-fdiagnostics-hotness-threshold=") + A->getValue();
+    CmdArgs.push_back(Args.MakeArgString(Opt));
+  }
 
   if (const Arg *A = Args.getLastArg(options::OPT_fdiagnostics_format_EQ)) {
     CmdArgs.push_back("-fdiagnostics-format");

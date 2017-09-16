@@ -1998,8 +1998,7 @@ static void filterNonConflictingPreviousTypedefDecls(Sema &S,
 
       // If both declarations give a tag declaration a typedef name for linkage
       // purposes, then they declare the same entity.
-      if (S.getLangOpts().CPlusPlus &&
-          OldTD->getAnonDeclWithTypedefName(/*AnyRedecl*/true) &&
+      if (OldTD->getAnonDeclWithTypedefName(/*AnyRedecl*/true) &&
           Decl->getAnonDeclWithTypedefName())
         continue;
     }
@@ -2117,7 +2116,7 @@ void Sema::MergeTypedefNameDecl(Scope *S, TypedefNameDecl *New,
     auto *OldTag = OldTD->getAnonDeclWithTypedefName(/*AnyRedecl*/true);
     auto *NewTag = New->getAnonDeclWithTypedefName();
     NamedDecl *Hidden = nullptr;
-    if (getLangOpts().CPlusPlus && OldTag && NewTag &&
+    if (OldTag && NewTag &&
         OldTag->getCanonicalDecl() != NewTag->getCanonicalDecl() &&
         !hasVisibleDefinition(OldTag, &Hidden)) {
       // There is a definition of this tag, but it is not visible. Use it
@@ -12054,7 +12053,7 @@ Sema::CheckForFunctionRedefinition(FunctionDecl *FD,
   if (canRedefineFunction(Definition, getLangOpts()))
     return;
 
-  // Don't emit an error when this is redifinition of a typo-corrected
+  // Don't emit an error when this is redefinition of a typo-corrected
   // definition.
   if (TypoCorrectedFunctionDefinitions.count(Definition))
     return;
@@ -13312,6 +13311,55 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
   if (TUK == TUK_Friend || TUK == TUK_Reference)
     Redecl = NotForRedeclaration;
 
+  /// Create a new tag decl in C/ObjC. Since the ODR-like semantics for ObjC/C
+  /// implemented asks for structural equivalence checking, the returned decl
+  /// here is passed back to the parser, allowing the tag body to be parsed.
+  auto createTagFromNewDecl = [&]() -> TagDecl * {
+    assert(!getLangOpts().CPlusPlus && "not meant for C++ usage");
+    // If there is an identifier, use the location of the identifier as the
+    // location of the decl, otherwise use the location of the struct/union
+    // keyword.
+    SourceLocation Loc = NameLoc.isValid() ? NameLoc : KWLoc;
+    TagDecl *New = nullptr;
+
+    if (Kind == TTK_Enum) {
+      New = EnumDecl::Create(Context, SearchDC, KWLoc, Loc, Name, nullptr,
+                             ScopedEnum, ScopedEnumUsesClassTag,
+                             !EnumUnderlying.isNull());
+      // If this is an undefined enum, bail.
+      if (TUK != TUK_Definition && !Invalid)
+        return nullptr;
+      if (EnumUnderlying) {
+        EnumDecl *ED = cast<EnumDecl>(New);
+        if (TypeSourceInfo *TI = EnumUnderlying.dyn_cast<TypeSourceInfo *>())
+          ED->setIntegerTypeSourceInfo(TI);
+        else
+          ED->setIntegerType(QualType(EnumUnderlying.get<const Type *>(), 0));
+        ED->setPromotionType(ED->getIntegerType());
+      }
+    } else { // struct/union
+      New = RecordDecl::Create(Context, Kind, SearchDC, KWLoc, Loc, Name,
+                               nullptr);
+    }
+
+    if (RecordDecl *RD = dyn_cast<RecordDecl>(New)) {
+      // Add alignment attributes if necessary; these attributes are checked
+      // when the ASTContext lays out the structure.
+      //
+      // It is important for implementing the correct semantics that this
+      // happen here (in ActOnTag). The #pragma pack stack is
+      // maintained as a result of parser callbacks which can occur at
+      // many points during the parsing of a struct declaration (because
+      // the #pragma tokens are effectively skipped over during the
+      // parsing of the struct).
+      if (TUK == TUK_Definition) {
+        AddAlignmentAttributesForRecord(RD);
+        AddMsStructLayoutForRecord(RD);
+      }
+    }
+    return New;
+  };
+
   LookupResult Previous(*this, Name, NameLoc, LookupTagName, Redecl);
   if (Name && SS.isNotEmpty()) {
     // We have a nested-name tag ('struct foo::bar').
@@ -13717,16 +13765,28 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
                     TSK_ExplicitSpecialization;
               }
 
+              // Note that clang allows ODR-like semantics for ObjC/C, i.e., do
+              // not keep more that one definition around (merge them). However,
+              // ensure the decl passes the structural compatibility check in
+              // C11 6.2.7/1 (or 6.1.2.6/1 in C89).
               NamedDecl *Hidden = nullptr;
-              if (SkipBody && getLangOpts().CPlusPlus &&
-                  !hasVisibleDefinition(Def, &Hidden)) {
+              if (SkipBody && !hasVisibleDefinition(Def, &Hidden)) {
                 // There is a definition of this tag, but it is not visible. We
                 // explicitly make use of C++'s one definition rule here, and
                 // assume that this definition is identical to the hidden one
                 // we already have. Make the existing definition visible and
                 // use it in place of this one.
-                SkipBody->ShouldSkip = true;
-                makeMergedDefinitionVisible(Hidden);
+                if (!getLangOpts().CPlusPlus) {
+                  // Postpone making the old definition visible until after we
+                  // complete parsing the new one and do the structural
+                  // comparison.
+                  SkipBody->CheckSameAsPrevious = true;
+                  SkipBody->New = createTagFromNewDecl();
+                  SkipBody->Previous = Hidden;
+                } else {
+                  SkipBody->ShouldSkip = true;
+                  makeMergedDefinitionVisible(Hidden);
+                }
                 return Def;
               } else if (!IsExplicitSpecializationAfterInstantiation) {
                 // A redeclaration in function prototype scope in C isn't
@@ -13954,7 +14014,7 @@ CreateNewDecl:
     // the ASTContext lays out the structure.
     //
     // It is important for implementing the correct semantics that this
-    // happen here (in act on tag decl). The #pragma pack stack is
+    // happen here (in ActOnTag). The #pragma pack stack is
     // maintained as a result of parser callbacks which can occur at
     // many points during the parsing of a struct declaration (because
     // the #pragma tokens are effectively skipped over during the
@@ -14088,6 +14148,16 @@ void Sema::ActOnTagStartDefinition(Scope *S, Decl *TagD) {
   // If there's a #pragma GCC visibility in scope, set the visibility of this
   // record.
   AddPushedVisibilityAttribute(Tag);
+}
+
+bool Sema::ActOnDuplicateDefinition(DeclSpec &DS, Decl *Prev,
+                                    SkipBodyInfo &SkipBody) {
+  if (!hasStructuralCompatLayout(Prev, SkipBody.New))
+    return false;
+
+  // Make the previous decl visible.
+  makeMergedDefinitionVisible(SkipBody.Previous);
+  return true;
 }
 
 Decl *Sema::ActOnObjCContainerStartDefinition(Decl *IDecl) {
@@ -15585,7 +15655,7 @@ Decl *Sema::ActOnEnumConstant(Scope *S, Decl *theEnumDecl, Decl *lastEnumConst,
   // different from T:
   // - every enumerator of every member of class T that is an unscoped
   // enumerated type
-  if (!TheEnumDecl->isScoped())
+  if (getLangOpts().CPlusPlus && !TheEnumDecl->isScoped())
     DiagnoseClassNameShadow(TheEnumDecl->getDeclContext(),
                             DeclarationNameInfo(Id, IdLoc));
 
@@ -16137,8 +16207,6 @@ Sema::DeclGroupPtrTy Sema::ActOnModuleDecl(SourceLocation StartLoc,
     return nullptr;
   }
 
-  // FIXME: Create a ModuleDecl and return it.
-
   // FIXME: Most of this work should be done by the preprocessor rather than
   // here, in order to support macro import.
 
@@ -16152,6 +16220,8 @@ Sema::DeclGroupPtrTy Sema::ActOnModuleDecl(SourceLocation StartLoc,
     ModuleName += Piece.first->getName();
   }
 
+  // FIXME: If we've already seen a module-declaration, report an error.
+
   // If a module name was explicitly specified on the command line, it must be
   // correct.
   if (!getLangOpts().CurrentModule.empty() &&
@@ -16164,6 +16234,7 @@ Sema::DeclGroupPtrTy Sema::ActOnModuleDecl(SourceLocation StartLoc,
   const_cast<LangOptions&>(getLangOpts()).CurrentModule = ModuleName;
 
   auto &Map = PP.getHeaderSearchInfo().getModuleMap();
+  Module *Mod;
 
   switch (MDK) {
   case ModuleDeclKind::Module: {
@@ -16182,12 +16253,9 @@ Sema::DeclGroupPtrTy Sema::ActOnModuleDecl(SourceLocation StartLoc,
     }
 
     // Create a Module for the module that we're defining.
-    Module *Mod = Map.createModuleForInterfaceUnit(ModuleLoc, ModuleName);
+    Mod = Map.createModuleForInterfaceUnit(ModuleLoc, ModuleName);
     assert(Mod && "module creation should not fail");
-
-    // Enter the semantic scope of the module.
-    ActOnModuleBegin(ModuleLoc, Mod);
-    return nullptr;
+    break;
   }
 
   case ModuleDeclKind::Partition:
@@ -16197,14 +16265,26 @@ Sema::DeclGroupPtrTy Sema::ActOnModuleDecl(SourceLocation StartLoc,
   case ModuleDeclKind::Implementation:
     std::pair<IdentifierInfo *, SourceLocation> ModuleNameLoc(
         PP.getIdentifierInfo(ModuleName), Path[0].second);
-
-    DeclResult Import = ActOnModuleImport(ModuleLoc, ModuleLoc, ModuleNameLoc);
-    if (Import.isInvalid())
+    Mod = getModuleLoader().loadModule(ModuleLoc, Path, Module::AllVisible,
+                                       /*IsIncludeDirective=*/false);
+    if (!Mod)
       return nullptr;
-    return ConvertDeclToDeclGroup(Import.get());
+    break;
   }
 
-  llvm_unreachable("unexpected module decl kind");
+  // Enter the semantic scope of the module.
+  ModuleScopes.push_back({});
+  ModuleScopes.back().Module = Mod;
+  ModuleScopes.back().OuterVisibleModules = std::move(VisibleModules);
+  VisibleModules.setVisible(Mod, ModuleLoc);
+
+  // From now on, we have an owning module for all declarations we see.
+  // However, those declarations are module-private unless explicitly
+  // exported.
+  Context.getTranslationUnitDecl()->setLocalOwningModule(Mod);
+
+  // FIXME: Create a ModuleDecl.
+  return nullptr;
 }
 
 DeclResult Sema::ActOnModuleImport(SourceLocation StartLoc,
@@ -16417,6 +16497,7 @@ Decl *Sema::ActOnStartExportDecl(Scope *S, SourceLocation ExportLoc,
 
   CurContext->addDecl(D);
   PushDeclContext(S, D);
+  D->setModuleOwnershipKind(Decl::ModuleOwnershipKind::VisibleWhenImported);
   return D;
 }
 

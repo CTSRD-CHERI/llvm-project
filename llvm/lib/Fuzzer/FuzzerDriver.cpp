@@ -186,7 +186,11 @@ static void ParseFlags(const std::vector<std::string> &Args) {
   }
   Inputs = new std::vector<std::string>;
   for (size_t A = 1; A < Args.size(); A++) {
-    if (ParseOneFlag(Args[A].c_str())) continue;
+    if (ParseOneFlag(Args[A].c_str())) {
+      if (Flags.ignore_remaining_args)
+        break;
+      continue;
+    }
     Inputs->push_back(Args[A]);
   }
 }
@@ -265,7 +269,7 @@ int RunOneTest(Fuzzer *F, const char *InputFilePath, size_t MaxLen) {
   Unit U = FileToVector(InputFilePath);
   if (MaxLen && MaxLen < U.size())
     U.resize(MaxLen);
-  F->RunOne(U.data(), U.size());
+  F->ExecuteCallback(U.data(), U.size());
   F->TryDetectingAMemoryLeak(U.data(), U.size(), true);
   return 0;
 }
@@ -356,16 +360,17 @@ int MinimizeCrashInput(const std::vector<std::string> &Args,
     exit(1);
   }
   std::string InputFilePath = Inputs->at(0);
-  std::string BaseCmd =
-      CloneArgsWithoutX(Args, "minimize_crash", "exact_artifact_path");
-  auto InputPos = BaseCmd.find(" " + InputFilePath + " ");
+  auto BaseCmd = SplitBefore(
+      "-ignore_remaining_args=1",
+      CloneArgsWithoutX(Args, "minimize_crash", "exact_artifact_path"));
+  auto InputPos = BaseCmd.first.find(" " + InputFilePath + " ");
   assert(InputPos != std::string::npos);
-  BaseCmd.erase(InputPos, InputFilePath.size() + 1);
+  BaseCmd.first.erase(InputPos, InputFilePath.size() + 1);
   if (Flags.runs <= 0 && Flags.max_total_time == 0) {
     Printf("INFO: you need to specify -runs=N or "
            "-max_total_time=N with -minimize_crash=1\n"
            "INFO: defaulting to -max_total_time=600\n");
-    BaseCmd += " -max_total_time=600";
+    BaseCmd.first += " -max_total_time=600";
   }
 
   auto LogFilePath = DirPlusFile(
@@ -378,7 +383,8 @@ int MinimizeCrashInput(const std::vector<std::string> &Args,
     Printf("CRASH_MIN: minimizing crash input: '%s' (%zd bytes)\n",
            CurrentFilePath.c_str(), U.size());
 
-    auto Cmd = BaseCmd + " " + CurrentFilePath + LogFileRedirect;
+    auto Cmd = BaseCmd.first + " " + CurrentFilePath + LogFileRedirect + " " +
+               BaseCmd.second;
 
     Printf("CRASH_MIN: executing: %s\n", Cmd.c_str());
     int ExitCode = ExecuteCommand(Cmd);
@@ -441,7 +447,6 @@ int MinimizeCrashInputInternalStep(Fuzzer *F, InputCorpus *Corpus) {
     Printf("INFO: The input is small enough, exiting\n");
     exit(0);
   }
-  Corpus->AddToCorpus(U, 0);
   F->SetMaxInputLen(U.size());
   F->SetMaxMutationLen(U.size() - 1);
   F->MinimizeCrashLoop(U);
@@ -572,6 +577,7 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
   Options.UseCmp = Flags.use_cmp;
   Options.UseValueProfile = Flags.use_value_profile;
   Options.Shrink = Flags.shrink;
+  Options.ReduceInputs = Flags.reduce_inputs;
   Options.ShuffleAtStartUp = Flags.shuffle;
   Options.PreferSmall = Flags.prefer_small;
   Options.ReloadIntervalSec = Flags.reload;
@@ -657,7 +663,7 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
       size_t Size = SMR.ReadByteArraySize();
       SMR.WriteByteArray(nullptr, 0);
       const Unit tmp(SMR.GetByteArray(), SMR.GetByteArray() + Size);
-      F->RunOne(tmp.data(), tmp.size());
+      F->ExecuteCallback(tmp.data(), tmp.size());
       SMR.PostServer();
     }
     return 0;

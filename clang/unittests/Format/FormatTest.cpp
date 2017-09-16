@@ -333,6 +333,16 @@ TEST_F(FormatTest, RecognizesBinaryOperatorKeywords) {
   verifyFormat("x = (a) xor (b);");
 }
 
+TEST_F(FormatTest, RecognizesUnaryOperatorKeywords) {
+  verifyFormat("x = compl(a);");
+  verifyFormat("x = not(a);");
+  verifyFormat("x = bitand(a);");
+  // Unary operator must not be merged with the next identifier
+  verifyFormat("x = compl a;");
+  verifyFormat("x = not a;");
+  verifyFormat("x = bitand a;");
+}
+
 //===----------------------------------------------------------------------===//
 // Tests for control statements.
 //===----------------------------------------------------------------------===//
@@ -825,12 +835,35 @@ TEST_F(FormatTest, FormatsSwitchStatement) {
                "  case A:\n"
                "    f();\n"
                "    break;\n"
-               "  // On B:\n"
+               "    // fallthrough\n"
                "  case B:\n"
                "    g();\n"
                "    break;\n"
                "  }\n"
                "});");
+  EXPECT_EQ("DEBUG({\n"
+            "  switch (x) {\n"
+            "  case A:\n"
+            "    f();\n"
+            "    break;\n"
+            "  // On B:\n"
+            "  case B:\n"
+            "    g();\n"
+            "    break;\n"
+            "  }\n"
+            "});",
+            format("DEBUG({\n"
+                   "  switch (x) {\n"
+                   "  case A:\n"
+                   "    f();\n"
+                   "    break;\n"
+                   "  // On B:\n"
+                   "  case B:\n"
+                   "    g();\n"
+                   "    break;\n"
+                   "  }\n"
+                   "});",
+                   getLLVMStyle()));
   verifyFormat("switch (a) {\n"
                "case (b):\n"
                "  return;\n"

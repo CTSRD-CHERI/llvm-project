@@ -138,6 +138,9 @@ static cl::opt<int> EnableGlobalISelAtO(
     cl::desc("Enable GlobalISel at or below an opt level (-1 to disable)"),
     cl::init(-1));
 
+static cl::opt<bool> EnableFalkorHWPFFix("aarch64-enable-falkor-hwpf-fix",
+                                         cl::init(true), cl::Hidden);
+
 extern "C" void LLVMInitializeAArch64Target() {
   // Register the target.
   RegisterTargetMachine<AArch64leTargetMachine> X(getTheAArch64leTarget());
@@ -158,6 +161,7 @@ extern "C" void LLVMInitializeAArch64Target() {
   initializeAArch64PromoteConstantPass(*PR);
   initializeAArch64RedundantCopyEliminationPass(*PR);
   initializeAArch64StorePairSuppressPass(*PR);
+  initializeFalkorMarkStridedAccessesLegacyPass(*PR);
   initializeLDTLSCleanupPass(*PR);
 }
 
@@ -277,17 +281,19 @@ public:
 
   ScheduleDAGInstrs *
   createMachineScheduler(MachineSchedContext *C) const override {
+    const AArch64Subtarget &ST = C->MF->getSubtarget<AArch64Subtarget>();
     ScheduleDAGMILive *DAG = createGenericSchedLive(C);
     DAG->addMutation(createLoadClusterDAGMutation(DAG->TII, DAG->TRI));
     DAG->addMutation(createStoreClusterDAGMutation(DAG->TII, DAG->TRI));
-    DAG->addMutation(createAArch64MacroFusionDAGMutation());
+    if (ST.hasFusion())
+      DAG->addMutation(createAArch64MacroFusionDAGMutation());
     return DAG;
   }
 
   ScheduleDAGInstrs *
   createPostMachineScheduler(MachineSchedContext *C) const override {
     const AArch64Subtarget &ST = C->MF->getSubtarget<AArch64Subtarget>();
-    if (ST.hasFuseAES() || ST.hasFuseLiterals()) {
+    if (ST.hasFusion()) {
       // Run the Macro Fusion after RA again since literals are expanded from
       // pseudos then (v. addPreSched2()).
       ScheduleDAGMI *DAG = createGenericSchedPostRA(C);
@@ -344,8 +350,12 @@ void AArch64PassConfig::addIRPasses() {
   //
   // Run this before LSR to remove the multiplies involved in computing the
   // pointer values N iterations ahead.
-  if (TM->getOptLevel() != CodeGenOpt::None && EnableLoopDataPrefetch)
-    addPass(createLoopDataPrefetchPass());
+  if (TM->getOptLevel() != CodeGenOpt::None) {
+    if (EnableLoopDataPrefetch)
+      addPass(createLoopDataPrefetchPass());
+    if (EnableFalkorHWPFFix)
+      addPass(createFalkorMarkStridedAccessesPass());
+  }
 
   TargetPassConfig::addIRPasses();
 

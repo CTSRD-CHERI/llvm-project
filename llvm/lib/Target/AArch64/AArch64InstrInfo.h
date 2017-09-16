@@ -27,6 +27,13 @@ namespace llvm {
 class AArch64Subtarget;
 class AArch64TargetMachine;
 
+static const MachineMemOperand::Flags MOSuppressPair =
+    MachineMemOperand::MOTargetFlag1;
+static const MachineMemOperand::Flags MOStridedAccess =
+    MachineMemOperand::MOTargetFlag2;
+
+#define FALKOR_STRIDED_ACCESS_MD "falkor.strided.access"
+
 class AArch64InstrInfo final : public AArch64GenInstrInfo {
   const AArch64RegisterInfo RI;
   const AArch64Subtarget &Subtarget;
@@ -80,6 +87,9 @@ public:
   /// Return true if pairing the given load or store is hinted to be
   /// unprofitable.
   bool isLdStPairSuppressed(const MachineInstr &MI) const;
+
+  /// Return true if the given load or store is a strided memory access.
+  bool isStridedAccess(const MachineInstr &MI) const;
 
   /// Return true if this is an unscaled load/store.
   bool isUnscaledLdSt(unsigned Opc) const;
@@ -263,8 +273,8 @@ public:
   /// \param Pattern - combiner pattern
   bool isThroughputPattern(MachineCombinerPattern Pattern) const override;
   /// Return true when there is potentially a faster code sequence
-  /// for an instruction chain ending in <Root>. All potential patterns are
-  /// listed in the <Patterns> array.
+  /// for an instruction chain ending in ``Root``. All potential patterns are
+  /// listed in the ``Patterns`` array.
   bool getMachineCombinerPatterns(MachineInstr &Root,
                   SmallVectorImpl<MachineCombinerPattern> &Patterns)
       const override;
@@ -289,6 +299,8 @@ public:
   getSerializableDirectMachineOperandTargetFlags() const override;
   ArrayRef<std::pair<unsigned, const char *>>
   getSerializableBitmaskMachineOperandTargetFlags() const override;
+  ArrayRef<std::pair<MachineMemOperand::Flags, const char *>>
+  getSerializableMachineMemOperandTargetFlags() const override;
 
   bool isFunctionSafeToOutlineFrom(MachineFunction &MF) const override;
   unsigned getOutliningBenefit(size_t SequenceSize, size_t Occurrences,

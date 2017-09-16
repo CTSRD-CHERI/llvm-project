@@ -427,11 +427,7 @@ static void initTargetOptions(llvm::TargetOptions &Options,
   Options.RelaxELFRelocations = CodeGenOpts.RelaxELFRelocations;
 
   // Set EABI version.
-  Options.EABIVersion = llvm::StringSwitch<llvm::EABI>(TargetOpts.EABIVersion)
-                            .Case("4", llvm::EABI::EABI4)
-                            .Case("5", llvm::EABI::EABI5)
-                            .Case("gnu", llvm::EABI::GNU)
-                            .Default(llvm::EABI::Default);
+  Options.EABIVersion = TargetOpts.EABIVersion;
 
   if (LangOpts.SjLjExceptions)
     Options.ExceptionModel = llvm::ExceptionHandling::SjLj;
@@ -1022,7 +1018,7 @@ static void runThinLTOBackend(ModuleSummaryIndex *CombinedIndex, Module *M,
                               std::unique_ptr<raw_pwrite_stream> OS,
                               std::string SampleProfile,
                               BackendAction Action) {
-  StringMap<std::map<GlobalValue::GUID, GlobalValueSummary *>>
+  StringMap<DenseMap<GlobalValue::GUID, GlobalValueSummary *>>
       ModuleToDefinedGVSummaries;
   CombinedIndex->collectDefinedGVSummariesPerModule(ModuleToDefinedGVSummaries);
 
