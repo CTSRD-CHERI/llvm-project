@@ -13,21 +13,17 @@
 
 #include "X86.h"
 
-#ifdef LLVM_BUILD_GLOBAL_ISEL
 #include "X86CallLowering.h"
 #include "X86LegalizerInfo.h"
 #include "X86RegisterBankInfo.h"
-#endif
 #include "X86Subtarget.h"
 #include "MCTargetDesc/X86BaseInfo.h"
 #include "X86TargetMachine.h"
 #include "llvm/ADT/Triple.h"
-#ifdef LLVM_BUILD_GLOBAL_ISEL
 #include "llvm/CodeGen/GlobalISel/CallLowering.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelect.h"
 #include "llvm/CodeGen/GlobalISel/Legalizer.h"
 #include "llvm/CodeGen/GlobalISel/RegBankSelect.h"
-#endif
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/Function.h"
@@ -103,6 +99,22 @@ X86Subtarget::classifyLocalReference(const GlobalValue *GV) const {
   return X86II::MO_GOTOFF;
 }
 
+static bool shouldAssumeGlobalReferenceLocal(const X86Subtarget *ST,
+                                             const TargetMachine &TM,
+                                             const Module &M,
+                                             const GlobalValue *GV) {
+  if (!TM.shouldAssumeDSOLocal(M, GV))
+    return false;
+  // A weak reference can end up being 0. If the code can be more that 4g away
+  // from zero and we are using the small code model we have to treat it as non
+  // local.
+  if (GV && GV->hasExternalWeakLinkage() &&
+      TM.getCodeModel() == CodeModel::Small && TM.isPositionIndependent() &&
+      ST->is64Bit() && ST->isTargetELF())
+    return false;
+  return true;
+}
+
 unsigned char X86Subtarget::classifyGlobalReference(const GlobalValue *GV,
                                                     const Module &M) const {
   // Large model never uses stubs.
@@ -122,7 +134,7 @@ unsigned char X86Subtarget::classifyGlobalReference(const GlobalValue *GV,
     }
   }
 
-  if (TM.shouldAssumeDSOLocal(M, GV))
+  if (shouldAssumeGlobalReferenceLocal(this, TM, M, GV))
     return classifyLocalReference(GV);
 
   if (isTargetCOFF())
@@ -151,7 +163,12 @@ X86Subtarget::classifyGlobalFunctionReference(const GlobalValue *GV,
   if (TM.shouldAssumeDSOLocal(M, GV))
     return X86II::MO_NO_FLAG;
 
-  assert(!isTargetCOFF());
+  if (isTargetCOFF()) {
+    assert(GV->hasDLLImportStorageClass() &&
+           "shouldAssumeDSOLocal gave inconsistent answer");
+    return X86II::MO_DLLIMPORT;
+  }
+
   const Function *F = dyn_cast_or_null<Function>(GV);
 
   if (isTargetELF()) {
@@ -352,7 +369,6 @@ X86Subtarget &X86Subtarget::initializeSubtargetDependencies(StringRef CPU,
   return *this;
 }
 
-#ifdef LLVM_BUILD_GLOBAL_ISEL
 namespace {
 
 struct X86GISelActualAccessor : public GISelAccessor {
@@ -379,7 +395,6 @@ struct X86GISelActualAccessor : public GISelAccessor {
 };
 
 } // end anonymous namespace
-#endif
 
 X86Subtarget::X86Subtarget(const Triple &TT, StringRef CPU, StringRef FS,
                            const X86TargetMachine &TM,
@@ -405,9 +420,6 @@ X86Subtarget::X86Subtarget(const Triple &TT, StringRef CPU, StringRef FS,
     setPICStyle(PICStyles::StubPIC);
   else if (isTargetELF())
     setPICStyle(PICStyles::GOT);
-#ifndef LLVM_BUILD_GLOBAL_ISEL
-  GISelAccessor *GISel = new GISelAccessor();
-#else
   X86GISelActualAccessor *GISel = new X86GISelActualAccessor();
 
   GISel->CallLoweringInfo.reset(new X86CallLowering(*getTargetLowering()));
@@ -416,7 +428,6 @@ X86Subtarget::X86Subtarget(const Triple &TT, StringRef CPU, StringRef FS,
   auto *RBI = new X86RegisterBankInfo(*getRegisterInfo());
   GISel->RegBankInfo.reset(RBI);
   GISel->InstSelector.reset(createX86InstructionSelector(TM, *this, *RBI));
-#endif
   setGISelAccessor(*GISel);
 }
 

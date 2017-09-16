@@ -1706,7 +1706,7 @@ define <16 x i16> @shuffle_v16i16_28_zz_zz_zz_29_zz_zz_zz_30_zz_zz_zz_31_zz_zz_z
 ; AVX512VL-LABEL: shuffle_v16i16_28_zz_zz_zz_29_zz_zz_zz_30_zz_zz_zz_31_zz_zz_zz:
 ; AVX512VL:       # BB#0:
 ; AVX512VL-NEXT:    vmovdqa {{.*#+}} ymm2 = [28,1,2,3,29,5,6,7,30,9,10,11,31,13,14,15]
-; AVX512VL-NEXT:    vpxor %ymm1, %ymm1, %ymm1
+; AVX512VL-NEXT:    vpxor %xmm1, %xmm1, %xmm1
 ; AVX512VL-NEXT:    vpermt2w %ymm0, %ymm2, %ymm1
 ; AVX512VL-NEXT:    vmovdqa %ymm1, %ymm0
 ; AVX512VL-NEXT:    retq
@@ -4009,7 +4009,7 @@ define <16 x i16> @insert_dup_mem_v16i16_sext_i16(i16* %ptr) {
 ; AVX512VL-LABEL: insert_dup_mem_v16i16_sext_i16:
 ; AVX512VL:       # BB#0:
 ; AVX512VL-NEXT:    movswl (%rdi), %eax
-; AVX512VL-NEXT:    vpbroadcastw %ax, %ymm0
+; AVX512VL-NEXT:    vpbroadcastw %eax, %ymm0
 ; AVX512VL-NEXT:    retq
   %tmp = load i16, i16* %ptr, align 2
   %tmp1 = sext i16 %tmp to i32

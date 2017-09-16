@@ -812,6 +812,8 @@ namespace llvm {
     /// This method returns the name of a target specific DAG node.
     const char *getTargetNodeName(unsigned Opcode) const override;
 
+    bool mergeStoresAfterLegalization() const override { return true; }
+
     bool isCheapToSpeculateCttz() const override;
 
     bool isCheapToSpeculateCtlz() const override;
@@ -866,6 +868,8 @@ namespace llvm {
                                              const APInt &DemandedElts,
                                              const SelectionDAG &DAG,
                                              unsigned Depth) const override;
+
+    SDValue unwrapAddress(SDValue N) const override;
 
     bool isGAPlusOffset(SDNode *N, const GlobalValue* &GA,
                         int64_t &Offset) const override;
@@ -1032,7 +1036,8 @@ namespace llvm {
 
     /// Return true if EXTRACT_SUBVECTOR is cheap for this result type
     /// with this index.
-    bool isExtractSubvectorCheap(EVT ResVT, unsigned Index) const override;
+    bool isExtractSubvectorCheap(EVT ResVT, EVT SrcVT,
+                                 unsigned Index) const override;
 
     /// Intel processors have a unified instruction and data cache
     const char * getClearCacheBuiltinName() const override {

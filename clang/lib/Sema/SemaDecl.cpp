@@ -9615,7 +9615,7 @@ bool Sema::CheckFunctionDeclaration(Scope *S, FunctionDecl *NewFD,
         AnyNoexcept |= HasNoexcept(T);
       if (AnyNoexcept)
         Diag(NewFD->getLocation(),
-             diag::warn_cxx1z_compat_exception_spec_in_signature)
+             diag::warn_cxx17_compat_exception_spec_in_signature)
             << NewFD;
     }
 
@@ -12169,8 +12169,9 @@ Decl *Sema::ActOnStartOfFunctionDef(Scope *FnBodyScope, Decl *D,
     FD->setInvalidDecl();
   }
 
-  // See if this is a redefinition.
-  if (!FD->isLateTemplateParsed()) {
+  // See if this is a redefinition. If 'will have body' is already set, then
+  // these checks were already performed when it was set.
+  if (!FD->willHaveBody() && !FD->isLateTemplateParsed()) {
     CheckForFunctionRedefinition(FD, nullptr, SkipBody);
 
     // If we're skipping the body, we're done. Don't enter the scope.
@@ -12756,12 +12757,16 @@ NamedDecl *Sema::ImplicitlyDefineFunction(SourceLocation Loc,
                 SourceLocation());
   D.SetIdentifier(&II, Loc);
 
-  // Insert this function into translation-unit scope.
+  // Insert this function into the enclosing block scope.
+  while (S && !S->isCompoundStmtScope())
+    S = S->getParent();
+  if (S == nullptr)
+    S = TUScope;
 
   DeclContext *PrevDC = CurContext;
   CurContext = Context.getTranslationUnitDecl();
 
-  FunctionDecl *FD = cast<FunctionDecl>(ActOnDeclarator(TUScope, D));
+  FunctionDecl *FD = cast<FunctionDecl>(ActOnDeclarator(S, D));
   FD->setImplicit();
 
   CurContext = PrevDC;
@@ -13372,6 +13377,7 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
         AddMsStructLayoutForRecord(RD);
       }
     }
+    New->setLexicalDeclContext(CurContext);
     return New;
   };
 

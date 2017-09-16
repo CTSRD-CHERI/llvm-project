@@ -9,7 +9,7 @@
 ;;        Thus, it worths transforming.
 ;;
 ;;   2. CmovNotInCriticalPath:
-;;        similar test like in (1), just that CMOV is not in the hot path.
+;;        Similar test like in (1), just that CMOV is not in the hot path.
 ;;        Thus, it does not worth transforming.
 ;;
 ;;   3. MaxIndex:
@@ -32,10 +32,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;void CmovInHotPath(int n, int a, int b, int *c, int *d) {
 ;;  for (int i = 0; i < n; i++) {
-;;    int t = c[i];
+;;    int t = c[i] + 1;
 ;;    if (c[i] * a > b)
 ;;      t = 10;
-;;    c[i] = t;
+;;    c[i] = (c[i] + 1) * t;
 ;;  }
 ;;}
 ;;
@@ -87,6 +87,16 @@
 ;;  }
 ;;  return Curr->Val;
 ;;}
+;;
+;;
+;;void SmallGainPerLoop(int n, int a, int b, int *c, int *d) {
+;;  for (int i = 0; i < n; i++) {
+;;    int t = c[i];
+;;    if (c[i] * a > b)
+;;      t = 10;
+;;    c[i] = t;
+;;  }
+;;}
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 %struct.Node = type { i32, %struct.Node*, %struct.Node* }
@@ -111,10 +121,12 @@ for.body:                                         ; preds = %for.body.preheader,
   %indvars.iv = phi i64 [ %indvars.iv.next, %for.body ], [ 0, %for.body.preheader ]
   %arrayidx = getelementptr inbounds i32, i32* %c, i64 %indvars.iv
   %0 = load i32, i32* %arrayidx, align 4
+  %add = add nsw i32 %0, 1
   %mul = mul nsw i32 %0, %a
   %cmp3 = icmp sgt i32 %mul, %b
-  %. = select i1 %cmp3, i32 10, i32 %0
-  store i32 %., i32* %arrayidx, align 4
+  %. = select i1 %cmp3, i32 10, i32 %add
+  %mul7 = mul nsw i32 %., %add
+  store i32 %mul7, i32* %arrayidx, align 4
   %indvars.iv.next = add nuw nsw i64 %indvars.iv, 1
   %exitcond = icmp eq i64 %indvars.iv.next, %wide.trip.count
   br i1 %exitcond, label %for.cond.cleanup, label %for.body

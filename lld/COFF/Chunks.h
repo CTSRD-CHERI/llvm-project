@@ -82,7 +82,7 @@ public:
   // An output section has pointers to chunks in the section, and each
   // chunk has a back pointer to an output section.
   void setOutputSection(OutputSection *O) { Out = O; }
-  OutputSection *getOutputSection() { return Out; }
+  OutputSection *getOutputSection() const { return Out; }
 
   // Windows-specific.
   // Collect all locations that contain absolute addresses for base relocations.
@@ -243,6 +243,7 @@ public:
   bool hasData() const override { return false; }
   uint32_t getPermissions() const override;
   StringRef getSectionName() const override { return ".bss"; }
+  void setAlign(uint32_t NewAlign);
 
 private:
   const COFFSymbolRef Sym;

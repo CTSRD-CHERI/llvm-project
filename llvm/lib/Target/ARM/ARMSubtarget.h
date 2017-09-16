@@ -98,6 +98,7 @@ protected:
     ARMv7ve,
     ARMv81a,
     ARMv82a,
+    ARMv83a,
     ARMv8a,
     ARMv8mBaseline,
     ARMv8mMainline,
@@ -143,6 +144,7 @@ protected:
   bool HasV8Ops = false;
   bool HasV8_1aOps = false;
   bool HasV8_2aOps = false;
+  bool HasV8_3aOps = false;
   bool HasV8MBaselineOps = false;
   bool HasV8MMainlineOps = false;
 
@@ -153,6 +155,9 @@ protected:
   bool HasVFPv4 = false;
   bool HasFPARMv8 = false;
   bool HasNEON = false;
+
+  /// HasDotProd - True if the ARMv8.2A dot product instructions are supported.
+  bool HasDotProd = false;
 
   /// UseNEONForSinglePrecisionFP - if the NEONFP attribute has been
   /// specified. Use the method useNEONForSinglePrecisionFP() to
@@ -492,6 +497,7 @@ public:
   bool hasV8Ops()   const { return HasV8Ops;  }
   bool hasV8_1aOps() const { return HasV8_1aOps; }
   bool hasV8_2aOps() const { return HasV8_2aOps; }
+  bool hasV8_3aOps() const { return HasV8_3aOps; }
   bool hasV8MBaselineOps() const { return HasV8MBaselineOps; }
   bool hasV8MMainlineOps() const { return HasV8MMainlineOps; }
 
@@ -518,6 +524,7 @@ public:
   bool hasFPARMv8() const { return HasFPARMv8; }
   bool hasNEON() const { return HasNEON;  }
   bool hasCrypto() const { return HasCrypto; }
+  bool hasDotProd() const { return HasDotProd; }
   bool hasCRC() const { return HasCRC; }
   bool hasRAS() const { return HasRAS; }
   bool hasVirtualization() const { return HasVirtualization; }

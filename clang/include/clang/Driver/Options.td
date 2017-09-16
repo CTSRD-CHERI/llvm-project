@@ -469,6 +469,10 @@ def Xcuda_fatbinary : Separate<["-"], "Xcuda-fatbinary">,
   HelpText<"Pass <arg> to fatbinary invocation">, MetaVarName<"<arg>">;
 def Xcuda_ptxas : Separate<["-"], "Xcuda-ptxas">,
   HelpText<"Pass <arg> to the ptxas assembler">, MetaVarName<"<arg>">;
+def Xopenmp_target : Separate<["-"], "Xopenmp-target">,
+  HelpText<"Pass <arg> to the target offloading toolchain.">, MetaVarName<"<arg>">;
+def Xopenmp_target_EQ : JoinedAndSeparate<["-"], "Xopenmp-target=">,
+  HelpText<"Pass <arg> to the specified target offloading toolchain. The triple that identifies the toolchain must be provided after the equals sign.">, MetaVarName<"<arg>">;
 def z : Separate<["-"], "z">, Flags<[LinkerInput, RenderAsInput]>,
   HelpText<"Pass -z <arg> to the linker">, MetaVarName<"<arg>">,
   Group<Link_Group>;
@@ -1317,6 +1321,10 @@ def fopenmp_targets_EQ : CommaJoined<["-"], "fopenmp-targets=">, Flags<[DriverOp
   HelpText<"Specify comma-separated list of triples OpenMP offloading targets to be supported">;
 def fopenmp_dump_offload_linker_script : Flag<["-"], "fopenmp-dump-offload-linker-script">, Group<f_Group>, 
   Flags<[NoArgumentUnused]>;
+def fopenmp_relocatable_target : Flag<["-"], "fopenmp-relocatable-target">, Group<f_Group>, Flags<[CC1Option, NoArgumentUnused]>,
+  HelpText<"OpenMP target code is compiled as relocatable using the -c flag. For OpenMP targets the code is relocatable by default.">;
+def fnoopenmp_relocatable_target : Flag<["-"], "fnoopenmp-relocatable-target">, Group<f_Group>, Flags<[CC1Option, NoArgumentUnused]>,
+  HelpText<"Do not compile OpenMP target code as relocatable.">;
 def fno_optimize_sibling_calls : Flag<["-"], "fno-optimize-sibling-calls">, Group<f_Group>;
 def foptimize_sibling_calls : Flag<["-"], "foptimize-sibling-calls">, Group<f_Group>;
 def force__cpusubtype__ALL : Flag<["-"], "force_cpusubtype_ALL">;
@@ -2061,6 +2069,12 @@ def mextern_sdata : Flag<["-"], "mextern-sdata">, Group<m_Group>,
 def mno_extern_sdata : Flag<["-"], "mno-extern-sdata">, Group<m_Group>,
   HelpText<"Do not assume that externally defined data is in the small data if"
            " it meets the -G <size> threshold (MIPS)">;
+def membedded_data : Flag<["-"], "membedded-data">, Group<m_Group>,
+  HelpText<"Place constants in the .rodata section instead of the .sdata "
+           "section even if they meet the -G <size> threshold (MIPS)">;
+def mno_embedded_data : Flag<["-"], "mno-embedded-data">, Group<m_Group>,
+  HelpText<"Do not place constants in the .rodata section instead of the "
+           ".sdata if they meet the -G <size> threshold (MIPS)">;
 def mnan_EQ : Joined<["-"], "mnan=">, Group<m_Group>;
 def mabicalls : Flag<["-"], "mabicalls">, Group<m_Group>,
   HelpText<"Enable SVR4-style position-independent code (Mips only)">;

@@ -37,10 +37,6 @@
 
 using namespace llvm;
 
-#ifndef LLVM_BUILD_GLOBAL_ISEL
-#error "You shouldn't build this"
-#endif
-
 namespace {
 
 #define GET_GLOBALISEL_PREDICATE_BITSET
@@ -706,7 +702,8 @@ bool AArch64InstructionSelector::select(MachineInstr &I) const {
         return false;
       }
     } else {
-      if (Ty != s32 && Ty != s64 && Ty != p0) {
+      // s32 and s64 are covered by tablegen.
+      if (Ty != p0) {
         DEBUG(dbgs() << "Unable to materialize integer " << Ty
                      << " constant, expected: " << s32 << ", " << s64 << ", or "
                      << p0 << '\n');

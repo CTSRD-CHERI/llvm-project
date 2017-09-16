@@ -23,6 +23,16 @@ using namespace clang::clangd;
 
 namespace {
 
+class FulfillPromiseGuard {
+public:
+  FulfillPromiseGuard(std::promise<void> &Promise) : Promise(Promise) {}
+
+  ~FulfillPromiseGuard() { Promise.set_value(); }
+
+private:
+  std::promise<void> &Promise;
+};
+
 std::vector<tooling::Replacement> formatCode(StringRef Code, StringRef Filename,
                                              ArrayRef<tooling::Range> Ranges) {
   // Call clang-format.
@@ -68,40 +78,52 @@ RealFileSystemProvider::getTaggedFileSystem(PathRef File) {
   return make_tagged(vfs::getRealFileSystem(), VFSTag());
 }
 
-ClangdScheduler::ClangdScheduler(bool RunSynchronously)
-    : RunSynchronously(RunSynchronously) {
+unsigned clangd::getDefaultAsyncThreadsCount() {
+  unsigned HardwareConcurrency = std::thread::hardware_concurrency();
+  // C++ standard says that hardware_concurrency()
+  // may return 0, fallback to 1 worker thread in
+  // that case.
+  if (HardwareConcurrency == 0)
+    return 1;
+  return HardwareConcurrency;
+}
+
+ClangdScheduler::ClangdScheduler(unsigned AsyncThreadsCount)
+    : RunSynchronously(AsyncThreadsCount == 0) {
   if (RunSynchronously) {
     // Don't start the worker thread if we're running synchronously
     return;
   }
 
-  // Initialize Worker in ctor body, rather than init list to avoid potentially
-  // using not-yet-initialized members
-  Worker = std::thread([this]() {
-    while (true) {
-      std::function<void()> Request;
+  Workers.reserve(AsyncThreadsCount);
+  for (unsigned I = 0; I < AsyncThreadsCount; ++I) {
+    Workers.push_back(std::thread([this]() {
+      while (true) {
+        std::future<void> Request;
 
-      // Pick request from the queue
-      {
-        std::unique_lock<std::mutex> Lock(Mutex);
-        // Wait for more requests.
-        RequestCV.wait(Lock, [this] { return !RequestQueue.empty() || Done; });
-        if (Done)
-          return;
+        // Pick request from the queue
+        {
+          std::unique_lock<std::mutex> Lock(Mutex);
+          // Wait for more requests.
+          RequestCV.wait(Lock,
+                         [this] { return !RequestQueue.empty() || Done; });
+          if (Done)
+            return;
 
-        assert(!RequestQueue.empty() && "RequestQueue was empty");
+          assert(!RequestQueue.empty() && "RequestQueue was empty");
 
-        // We process requests starting from the front of the queue. Users of
-        // ClangdScheduler have a way to prioritise their requests by putting
-        // them to the either side of the queue (using either addToEnd or
-        // addToFront).
-        Request = std::move(RequestQueue.front());
-        RequestQueue.pop_front();
-      } // unlock Mutex
+          // We process requests starting from the front of the queue. Users of
+          // ClangdScheduler have a way to prioritise their requests by putting
+          // them to the either side of the queue (using either addToEnd or
+          // addToFront).
+          Request = std::move(RequestQueue.front());
+          RequestQueue.pop_front();
+        } // unlock Mutex
 
-      Request();
-    }
-  });
+        Request.get();
+      }
+    }));
+  }
 }
 
 ClangdScheduler::~ClangdScheduler() {
@@ -113,81 +135,53 @@ ClangdScheduler::~ClangdScheduler() {
     // Wake up the worker thread
     Done = true;
   } // unlock Mutex
-  RequestCV.notify_one();
-  Worker.join();
-}
+  RequestCV.notify_all();
 
-void ClangdScheduler::addToFront(std::function<void()> Request) {
-  if (RunSynchronously) {
-    Request();
-    return;
-  }
-
-  {
-    std::lock_guard<std::mutex> Lock(Mutex);
-    RequestQueue.push_front(Request);
-  }
-  RequestCV.notify_one();
-}
-
-void ClangdScheduler::addToEnd(std::function<void()> Request) {
-  if (RunSynchronously) {
-    Request();
-    return;
-  }
-
-  {
-    std::lock_guard<std::mutex> Lock(Mutex);
-    RequestQueue.push_back(Request);
-  }
-  RequestCV.notify_one();
+  for (auto &Worker : Workers)
+    Worker.join();
 }
 
 ClangdServer::ClangdServer(GlobalCompilationDatabase &CDB,
                            DiagnosticsConsumer &DiagConsumer,
                            FileSystemProvider &FSProvider,
-                           bool RunSynchronously,
+                           unsigned AsyncThreadsCount,
                            llvm::Optional<StringRef> ResourceDir)
     : CDB(CDB), DiagConsumer(DiagConsumer), FSProvider(FSProvider),
       ResourceDir(ResourceDir ? ResourceDir->str() : getStandardResourceDir()),
       PCHs(std::make_shared<PCHContainerOperations>()),
-      WorkScheduler(RunSynchronously) {}
+      WorkScheduler(AsyncThreadsCount) {}
 
-void ClangdServer::addDocument(PathRef File, StringRef Contents) {
+std::future<void> ClangdServer::addDocument(PathRef File, StringRef Contents) {
   DocVersion Version = DraftMgr.updateDraft(File, Contents);
-  Path FileStr = File;
-  WorkScheduler.addToFront([this, FileStr, Version]() {
-    auto FileContents = DraftMgr.getDraft(FileStr);
-    if (FileContents.Version != Version)
-      return; // This request is outdated, do nothing
 
-    assert(FileContents.Draft &&
-           "No contents inside a file that was scheduled for reparse");
-    auto TaggedFS = FSProvider.getTaggedFileSystem(FileStr);
-    Units.runOnUnit(
-        FileStr, *FileContents.Draft, ResourceDir, CDB, PCHs, TaggedFS.Value,
-        [&](ClangdUnit const &Unit) {
-          DiagConsumer.onDiagnosticsReady(
-              FileStr, make_tagged(Unit.getLocalDiagnostics(), TaggedFS.Tag));
-        });
-  });
+  auto TaggedFS = FSProvider.getTaggedFileSystem(File);
+  std::shared_ptr<CppFile> Resources =
+      Units.getOrCreateFile(File, ResourceDir, CDB, PCHs, TaggedFS.Value);
+  return scheduleReparseAndDiags(File, VersionedDraft{Version, Contents.str()},
+                                 std::move(Resources), std::move(TaggedFS));
 }
 
-void ClangdServer::removeDocument(PathRef File) {
-  auto Version = DraftMgr.removeDraft(File);
-  Path FileStr = File;
-  WorkScheduler.addToFront([this, FileStr, Version]() {
-    if (Version != DraftMgr.getVersion(FileStr))
-      return; // This request is outdated, do nothing
-
-    Units.removeUnitIfPresent(FileStr);
-  });
+std::future<void> ClangdServer::removeDocument(PathRef File) {
+  DraftMgr.removeDraft(File);
+  std::shared_ptr<CppFile> Resources = Units.removeIfPresent(File);
+  return scheduleCancelRebuild(std::move(Resources));
 }
 
-void ClangdServer::forceReparse(PathRef File) {
-  // The addDocument schedules the reparse even if the contents of the file
-  // never changed, so we just call it here.
-  addDocument(File, getDocument(File));
+std::future<void> ClangdServer::forceReparse(PathRef File) {
+  auto FileContents = DraftMgr.getDraft(File);
+  assert(FileContents.Draft &&
+         "forceReparse() was called for non-added document");
+
+  auto TaggedFS = FSProvider.getTaggedFileSystem(File);
+  auto Recreated = Units.recreateFileIfCompileCommandChanged(
+      File, ResourceDir, CDB, PCHs, TaggedFS.Value);
+
+  // Note that std::future from this cleanup action is ignored.
+  scheduleCancelRebuild(std::move(Recreated.RemovedFile));
+  // Schedule a reparse.
+  return scheduleReparseAndDiags(File, std::move(FileContents),
+                                 std::move(Recreated.FileInCollection),
+                                 std::move(TaggedFS));
 }
 
 Tagged<std::vector<CompletionItem>>
@@ -208,12 +202,14 @@ ClangdServer::codeComplete(PathRef File, Position Pos,
   if (UsedFS)
     *UsedFS = TaggedFS.Value;
 
-  std::vector<CompletionItem> Result;
-  Units.runOnUnitWithoutReparse(File, *OverridenContents, ResourceDir, CDB,
-                                PCHs, TaggedFS.Value, [&](ClangdUnit &Unit) {
-                                  Result = Unit.codeComplete(
-                                      *OverridenContents, Pos, TaggedFS.Value);
-                                });
+  std::shared_ptr<CppFile> Resources = Units.getFile(File);
+  assert(Resources && "Calling completion on non-added file");
+
+  auto Preamble = Resources->getPossiblyStalePreamble();
+  std::vector<CompletionItem> Result =
+      clangd::codeComplete(File, Resources->getCompileCommand(),
+                           Preamble ? &Preamble->Preamble : nullptr,
+                           *OverridenContents, Pos, TaggedFS.Value, PCHs);
   return make_tagged(std::move(Result), TaggedFS.Tag);
 }
 
@@ -253,37 +249,95 @@ std::string ClangdServer::getDocument(PathRef File) {
 }
 
 std::string ClangdServer::dumpAST(PathRef File) {
-  std::promise<std::string> DumpPromise;
-  auto DumpFuture = DumpPromise.get_future();
-  auto Version = DraftMgr.getVersion(File);
+  std::shared_ptr<CppFile> Resources = Units.getFile(File);
+  assert(Resources && "dumpAST is called for non-added document");
 
-  WorkScheduler.addToEnd([this, &DumpPromise, File, Version]() {
-    assert(DraftMgr.getVersion(File) == Version && "Version has changed");
-    (void)Version;
-
-    Units.runOnExistingUnit(File, [&DumpPromise](ClangdUnit &Unit) {
-      std::string Result;
-
-      llvm::raw_string_ostream ResultOS(Result);
-      Unit.dumpAST(ResultOS);
-      ResultOS.flush();
-
-      DumpPromise.set_value(std::move(Result));
-    });
+  std::string Result;
+  Resources->getAST().get()->runUnderLock([&Result](ParsedAST *AST) {
+    llvm::raw_string_ostream ResultOS(Result);
+    if (AST) {
+      clangd::dumpAST(*AST, ResultOS);
+    } else {
+      ResultOS << "<no-ast>";
+    }
+    ResultOS.flush();
   });
-  return DumpFuture.get();
+  return Result;
 }
 
-Tagged<std::vector<Location>>
-ClangdServer::findDefinitions(PathRef File, Position Pos) {
+Tagged<std::vector<Location>> ClangdServer::findDefinitions(PathRef File,
+                                                            Position Pos) {
   auto FileContents = DraftMgr.getDraft(File);
-  assert(FileContents.Draft && "findDefinitions is called for non-added document");
+  assert(FileContents.Draft &&
+         "findDefinitions is called for non-added document");
+
+  auto TaggedFS = FSProvider.getTaggedFileSystem(File);
+
+  std::shared_ptr<CppFile> Resources = Units.getFile(File);
+  assert(Resources && "Calling findDefinitions on non-added file");
 
   std::vector<Location> Result;
-  auto TaggedFS = FSProvider.getTaggedFileSystem(File);
-  Units.runOnUnit(File, *FileContents.Draft, ResourceDir, CDB, PCHs,
-      TaggedFS.Value, [&](ClangdUnit &Unit) {
-        Result = Unit.findDefinitions(Pos);
-      });
+  Resources->getAST().get()->runUnderLock([Pos, &Result](ParsedAST *AST) {
+    if (!AST)
+      return;
+    Result = clangd::findDefinitions(*AST, Pos);
+  });
   return make_tagged(std::move(Result), TaggedFS.Tag);
+}
+
+std::future<void> ClangdServer::scheduleReparseAndDiags(
+    PathRef File, VersionedDraft Contents, std::shared_ptr<CppFile> Resources,
+    Tagged<IntrusiveRefCntPtr<vfs::FileSystem>> TaggedFS) {
+
+  assert(Contents.Draft && "Draft must have contents");
+  std::future<llvm::Optional<std::vector<DiagWithFixIts>>> DeferredRebuild =
+      Resources->deferRebuild(*Contents.Draft, TaggedFS.Value);
+  std::promise<void> DonePromise;
+  std::future<void> DoneFuture = DonePromise.get_future();
+
+  DocVersion Version = Contents.Version;
+  Path FileStr = File;
+  VFSTag Tag = TaggedFS.Tag;
+  auto ReparseAndPublishDiags =
+      [this, FileStr, Version,
+       Tag](std::future<llvm::Optional<std::vector<DiagWithFixIts>>>
+                DeferredRebuild,
+            std::promise<void> DonePromise) -> void {
+    FulfillPromiseGuard Guard(DonePromise);
+
+    auto CurrentVersion = DraftMgr.getVersion(FileStr);
+    if (CurrentVersion != Version)
+      return; // This request is outdated
+
+    auto Diags = DeferredRebuild.get();
+    if (!Diags)
+      return; // A new reparse was requested before this one completed.
+    DiagConsumer.onDiagnosticsReady(FileStr,
+                                    make_tagged(std::move(*Diags), Tag));
+  };
+
+  WorkScheduler.addToFront(std::move(ReparseAndPublishDiags),
+                           std::move(DeferredRebuild), std::move(DonePromise));
+  return DoneFuture;
+}
+
+std::future<void>
+ClangdServer::scheduleCancelRebuild(std::shared_ptr<CppFile> Resources) {
+  std::promise<void> DonePromise;
+  std::future<void> DoneFuture = DonePromise.get_future();
+  if (!Resources) {
+    // No need to schedule any cleanup.
+    DonePromise.set_value();
+    return DoneFuture;
+  }
+
+  std::future<void> DeferredCancel = Resources->deferCancelRebuild();
+  auto CancelReparses = [Resources](std::promise<void> DonePromise,
+                                    std::future<void> DeferredCancel) {
+    FulfillPromiseGuard Guard(DonePromise);
+    DeferredCancel.get();
+  };
+  WorkScheduler.addToFront(std::move(CancelReparses), std::move(DonePromise),
+                           std::move(DeferredCancel));
+  return DoneFuture;
 }

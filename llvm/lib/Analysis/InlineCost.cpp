@@ -66,10 +66,20 @@ static cl::opt<int>
                          cl::ZeroOrMore,
                          cl::desc("Threshold for hot callsites "));
 
+static cl::opt<int> LocallyHotCallSiteThreshold(
+    "locally-hot-callsite-threshold", cl::Hidden, cl::init(525), cl::ZeroOrMore,
+    cl::desc("Threshold for locally hot callsites "));
+
 static cl::opt<int> ColdCallSiteRelFreq(
     "cold-callsite-rel-freq", cl::Hidden, cl::init(2), cl::ZeroOrMore,
     cl::desc("Maxmimum block frequency, expressed as a percentage of caller's "
              "entry frequency, for a callsite to be cold in the absence of "
+             "profile information."));
+
+static cl::opt<int> HotCallSiteRelFreq(
+    "hot-callsite-rel-freq", cl::Hidden, cl::init(60), cl::ZeroOrMore,
+    cl::desc("Minimum block frequency, expressed as a multiple of caller's "
+             "entry frequency, for a callsite to be hot in the absence of "
              "profile information."));
 
 namespace {
@@ -182,6 +192,10 @@ class CallAnalyzer : public InstVisitor<CallAnalyzer, bool> {
   /// Return true if \p CS is a cold callsite.
   bool isColdCallSite(CallSite CS, BlockFrequencyInfo *CallerBFI);
 
+  /// Return a higher threshold if \p CS is a hot callsite.
+  Optional<int> getHotCallSiteThreshold(CallSite CS,
+                                        BlockFrequencyInfo *CallerBFI);
+
   // Custom analysis routines.
   bool analyzeBlock(BasicBlock *BB, SmallPtrSetImpl<const Value *> &EphValues);
 
@@ -207,6 +221,8 @@ class CallAnalyzer : public InstVisitor<CallAnalyzer, bool> {
   bool visitCastInst(CastInst &I);
   bool visitUnaryInstruction(UnaryInstruction &I);
   bool visitCmpInst(CmpInst &I);
+  bool visitAnd(BinaryOperator &I);
+  bool visitOr(BinaryOperator &I);
   bool visitSub(BinaryOperator &I);
   bool visitBinaryOperator(BinaryOperator &I);
   bool visitLoad(LoadInst &I);
@@ -643,21 +659,51 @@ bool CallAnalyzer::allowSizeGrowth(CallSite CS) {
 bool CallAnalyzer::isColdCallSite(CallSite CS, BlockFrequencyInfo *CallerBFI) {
   // If global profile summary is available, then callsite's coldness is
   // determined based on that.
-  if (PSI->hasProfileSummary())
+  if (PSI && PSI->hasProfileSummary())
     return PSI->isColdCallSite(CS, CallerBFI);
+
+  // Otherwise we need BFI to be available.
   if (!CallerBFI)
     return false;
 
-  // In the absence of global profile summary, determine if the callsite is cold
-  // relative to caller's entry. We could potentially cache the computation of
-  // scaled entry frequency, but the added complexity is not worth it unless
-  // this scaling shows up high in the profiles.
+  // Determine if the callsite is cold relative to caller's entry. We could
+  // potentially cache the computation of scaled entry frequency, but the added
+  // complexity is not worth it unless this scaling shows up high in the
+  // profiles.
   const BranchProbability ColdProb(ColdCallSiteRelFreq, 100);
   auto CallSiteBB = CS.getInstruction()->getParent();
   auto CallSiteFreq = CallerBFI->getBlockFreq(CallSiteBB);
   auto CallerEntryFreq =
       CallerBFI->getBlockFreq(&(CS.getCaller()->getEntryBlock()));
   return CallSiteFreq < CallerEntryFreq * ColdProb;
+}
+
+Optional<int>
+CallAnalyzer::getHotCallSiteThreshold(CallSite CS,
+                                      BlockFrequencyInfo *CallerBFI) {
+
+  // If global profile summary is available, then callsite's hotness is
+  // determined based on that.
+  if (PSI && PSI->hasProfileSummary() && PSI->isHotCallSite(CS, CallerBFI))
+    return Params.HotCallSiteThreshold;
+
+  // Otherwise we need BFI to be available and to have a locally hot callsite
+  // threshold.
+  if (!CallerBFI || !Params.LocallyHotCallSiteThreshold)
+    return None;
+
+  // Determine if the callsite is hot relative to caller's entry. We could
+  // potentially cache the computation of scaled entry frequency, but the added
+  // complexity is not worth it unless this scaling shows up high in the
+  // profiles.
+  auto CallSiteBB = CS.getInstruction()->getParent();
+  auto CallSiteFreq = CallerBFI->getBlockFreq(CallSiteBB).getFrequency();
+  auto CallerEntryFreq = CallerBFI->getEntryFreq();
+  if (CallSiteFreq >= CallerEntryFreq * HotCallSiteRelFreq)
+    return Params.LocallyHotCallSiteThreshold;
+
+  // Otherwise treat it normally.
+  return None;
 }
 
 void CallAnalyzer::updateThreshold(CallSite CS, Function &Callee) {
@@ -729,45 +775,48 @@ void CallAnalyzer::updateThreshold(CallSite CS, Function &Callee) {
   if (!Caller->optForMinSize()) {
     if (Callee.hasFnAttribute(Attribute::InlineHint))
       Threshold = MaxIfValid(Threshold, Params.HintThreshold);
-    if (PSI) {
-      BlockFrequencyInfo *CallerBFI = GetBFI ? &((*GetBFI)(*Caller)) : nullptr;
-      // FIXME: After switching to the new passmanager, simplify the logic below
-      // by checking only the callsite hotness/coldness. The check for CallerBFI
-      // exists only because we do not have BFI available with the old PM.
-      //
-      // Use callee's hotness information only if we have no way of determining
-      // callsite's hotness information. Callsite hotness can be determined if
-      // sample profile is used (which adds hotness metadata to calls) or if
-      // caller's BlockFrequencyInfo is available.
-      if (CallerBFI || PSI->hasSampleProfile()) {
-        if (PSI->isHotCallSite(CS, CallerBFI)) {
-          DEBUG(dbgs() << "Hot callsite.\n");
-          Threshold = Params.HotCallSiteThreshold.getValue();
-        } else if (isColdCallSite(CS, CallerBFI)) {
-          DEBUG(dbgs() << "Cold callsite.\n");
-          // Do not apply bonuses for a cold callsite including the
-          // LastCallToStatic bonus. While this bonus might result in code size
-          // reduction, it can cause the size of a non-cold caller to increase
-          // preventing it from being inlined.
-          DisallowAllBonuses();
-          Threshold = MinIfValid(Threshold, Params.ColdCallSiteThreshold);
-        }
-      } else {
-        if (PSI->isFunctionEntryHot(&Callee)) {
-          DEBUG(dbgs() << "Hot callee.\n");
-          // If callsite hotness can not be determined, we may still know
-          // that the callee is hot and treat it as a weaker hint for threshold
-          // increase.
-          Threshold = MaxIfValid(Threshold, Params.HintThreshold);
-        } else if (PSI->isFunctionEntryCold(&Callee)) {
-          DEBUG(dbgs() << "Cold callee.\n");
-          // Do not apply bonuses for a cold callee including the
-          // LastCallToStatic bonus. While this bonus might result in code size
-          // reduction, it can cause the size of a non-cold caller to increase
-          // preventing it from being inlined.
-          DisallowAllBonuses();
-          Threshold = MinIfValid(Threshold, Params.ColdThreshold);
-        }
+
+    // FIXME: After switching to the new passmanager, simplify the logic below
+    // by checking only the callsite hotness/coldness as we will reliably
+    // have local profile information.
+    //
+    // Callsite hotness and coldness can be determined if sample profile is
+    // used (which adds hotness metadata to calls) or if caller's
+    // BlockFrequencyInfo is available.
+    BlockFrequencyInfo *CallerBFI = GetBFI ? &((*GetBFI)(*Caller)) : nullptr;
+    auto HotCallSiteThreshold = getHotCallSiteThreshold(CS, CallerBFI);
+    if (!Caller->optForSize() && HotCallSiteThreshold) {
+      DEBUG(dbgs() << "Hot callsite.\n");
+      // FIXME: This should update the threshold only if it exceeds the
+      // current threshold, but AutoFDO + ThinLTO currently relies on this
+      // behavior to prevent inlining of hot callsites during ThinLTO
+      // compile phase.
+      Threshold = HotCallSiteThreshold.getValue();
+    } else if (isColdCallSite(CS, CallerBFI)) {
+      DEBUG(dbgs() << "Cold callsite.\n");
+      // Do not apply bonuses for a cold callsite including the
+      // LastCallToStatic bonus. While this bonus might result in code size
+      // reduction, it can cause the size of a non-cold caller to increase
+      // preventing it from being inlined.
+      DisallowAllBonuses();
+      Threshold = MinIfValid(Threshold, Params.ColdCallSiteThreshold);
+    } else if (PSI) {
+      // Use callee's global profile information only if we have no way of
+      // determining this via callsite information.
+      if (PSI->isFunctionEntryHot(&Callee)) {
+        DEBUG(dbgs() << "Hot callee.\n");
+        // If callsite hotness can not be determined, we may still know
+        // that the callee is hot and treat it as a weaker hint for threshold
+        // increase.
+        Threshold = MaxIfValid(Threshold, Params.HintThreshold);
+      } else if (PSI->isFunctionEntryCold(&Callee)) {
+        DEBUG(dbgs() << "Cold callee.\n");
+        // Do not apply bonuses for a cold callee including the
+        // LastCallToStatic bonus. While this bonus might result in code size
+        // reduction, it can cause the size of a non-cold caller to increase
+        // preventing it from being inlined.
+        DisallowAllBonuses();
+        Threshold = MinIfValid(Threshold, Params.ColdThreshold);
       }
     }
   }
@@ -841,6 +890,34 @@ bool CallAnalyzer::visitCmpInst(CmpInst &I) {
   }
 
   return false;
+}
+
+bool CallAnalyzer::visitOr(BinaryOperator &I) {
+  // This is necessary because the generic simplify instruction only works if
+  // both operands are constants.
+  for (unsigned i = 0; i < 2; ++i) {
+    if (ConstantInt *C = dyn_cast_or_null<ConstantInt>(
+            SimplifiedValues.lookup(I.getOperand(i))))
+      if (C->isAllOnesValue()) {
+        SimplifiedValues[&I] = C;
+        return true;
+      }
+  }
+  return Base::visitOr(I);
+}
+
+bool CallAnalyzer::visitAnd(BinaryOperator &I) {
+  // This is necessary because the generic simplify instruction only works if
+  // both operands are constants.
+  for (unsigned i = 0; i < 2; ++i) {
+    if (ConstantInt *C = dyn_cast_or_null<ConstantInt>(
+            SimplifiedValues.lookup(I.getOperand(i))))
+      if (C->isZero()) {
+        SimplifiedValues[&I] = C;
+        return true;
+      }
+  }
+  return Base::visitAnd(I);
 }
 
 bool CallAnalyzer::visitSub(BinaryOperator &I) {
@@ -1606,11 +1683,12 @@ InlineCost llvm::getInlineCost(
 
   // Never inline functions with conflicting attributes (unless callee has
   // always-inline attribute).
-  if (!functionsHaveCompatibleAttributes(CS.getCaller(), Callee, CalleeTTI))
+  Function *Caller = CS.getCaller();
+  if (!functionsHaveCompatibleAttributes(Caller, Callee, CalleeTTI))
     return llvm::InlineCost::getNever();
 
   // Don't inline this call if the caller has the optnone attribute.
-  if (CS.getCaller()->hasFnAttribute(Attribute::OptimizeNone))
+  if (Caller->hasFnAttribute(Attribute::OptimizeNone))
     return llvm::InlineCost::getNever();
 
   // Don't inline functions which can be interposed at link-time.  Don't inline
@@ -1698,6 +1776,16 @@ InlineParams llvm::getInlineParams(int Threshold) {
   // Set the HotCallSiteThreshold knob from the -hot-callsite-threshold.
   Params.HotCallSiteThreshold = HotCallSiteThreshold;
 
+  // If the -locally-hot-callsite-threshold is explicitly specified, use it to
+  // populate LocallyHotCallSiteThreshold. Later, we populate
+  // Params.LocallyHotCallSiteThreshold from -locally-hot-callsite-threshold if
+  // we know that optimization level is O3 (in the getInlineParams variant that
+  // takes the opt and size levels).
+  // FIXME: Remove this check (and make the assignment unconditional) after
+  // addressing size regression issues at O2.
+  if (LocallyHotCallSiteThreshold.getNumOccurrences() > 0)
+    Params.LocallyHotCallSiteThreshold = LocallyHotCallSiteThreshold;
+
   // Set the ColdCallSiteThreshold knob from the -inline-cold-callsite-threshold.
   Params.ColdCallSiteThreshold = ColdCallSiteThreshold;
 
@@ -1737,5 +1825,12 @@ static int computeThresholdFromOptLevels(unsigned OptLevel,
 }
 
 InlineParams llvm::getInlineParams(unsigned OptLevel, unsigned SizeOptLevel) {
-  return getInlineParams(computeThresholdFromOptLevels(OptLevel, SizeOptLevel));
+  auto Params =
+      getInlineParams(computeThresholdFromOptLevels(OptLevel, SizeOptLevel));
+  // At O3, use the value of -locally-hot-callsite-threshold option to populate
+  // Params.LocallyHotCallSiteThreshold. Below O3, this flag has effect only
+  // when it is specified explicitly.
+  if (OptLevel > 2)
+    Params.LocallyHotCallSiteThreshold = LocallyHotCallSiteThreshold;
+  return Params;
 }

@@ -2759,6 +2759,15 @@ void CodeGenFunction::EmitLambdaBlockInvokeBody() {
   const BlockDecl *BD = BlockInfo->getBlockDecl();
   const VarDecl *variable = BD->capture_begin()->getVariable();
   const CXXRecordDecl *Lambda = variable->getType()->getAsCXXRecordDecl();
+  const CXXMethodDecl *CallOp = Lambda->getLambdaCallOperator();
+
+  if (CallOp->isVariadic()) {
+    // FIXME: Making this work correctly is nasty because it requires either
+    // cloning the body of the call operator or making the call operator
+    // forward.
+    CGM.ErrorUnsupported(CurCodeDecl, "lambda conversion to variadic function");
+    return;
+  }
 
   // Start building arguments for forwarding call
   CallArgList CallArgs;
@@ -2773,18 +2782,7 @@ void CodeGenFunction::EmitLambdaBlockInvokeBody() {
 
   assert(!Lambda->isGenericLambda() &&
             "generic lambda interconversion to block not implemented");
-  EmitForwardingCallToLambda(Lambda->getLambdaCallOperator(), CallArgs);
-}
-
-void CodeGenFunction::EmitLambdaToBlockPointerBody(FunctionArgList &Args) {
-  if (cast<CXXMethodDecl>(CurCodeDecl)->isVariadic()) {
-    // FIXME: Making this work correctly is nasty because it requires either
-    // cloning the body of the call operator or making the call operator forward.
-    CGM.ErrorUnsupported(CurCodeDecl, "lambda conversion to variadic function");
-    return;
-  }
-
-  EmitFunctionBody(Args, cast<FunctionDecl>(CurGD.getDecl())->getBody());
+  EmitForwardingCallToLambda(CallOp, CallArgs);
 }
 
 void CodeGenFunction::EmitLambdaDelegatingInvokeBody(const CXXMethodDecl *MD) {
@@ -2817,7 +2815,7 @@ void CodeGenFunction::EmitLambdaDelegatingInvokeBody(const CXXMethodDecl *MD) {
   EmitForwardingCallToLambda(CallOp, CallArgs);
 }
 
-void CodeGenFunction::EmitLambdaStaticInvokeFunction(const CXXMethodDecl *MD) {
+void CodeGenFunction::EmitLambdaStaticInvokeBody(const CXXMethodDecl *MD) {
   if (MD->isVariadic()) {
     // FIXME: Making this work correctly is nasty because it requires either
     // cloning the body of the call operator or making the call operator forward.
