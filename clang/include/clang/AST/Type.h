@@ -1016,10 +1016,10 @@ public:
   }
 
   /// Return the address space of this type.
-  inline unsigned getAddressSpace() const;
+  inline unsigned getAddressSpace(void* dummy) const;
 
   inline bool isInAddressSpace(LangAS::ID AddrSpace) const {
-    return getAddressSpace() == AddrSpace;
+    return getAddressSpace(nullptr) == AddrSpace;
   }
 
   /// Returns gc attribute of this type.
@@ -5627,7 +5627,10 @@ inline void QualType::removeLocalCVRQualifiers(unsigned Mask) {
 }
 
 /// Return the address space of this type.
-inline unsigned QualType::getAddressSpace() const {
+inline unsigned QualType::getAddressSpace(void* dummy) const {
+  // XXXAR: we have this parameter so that upstream merge fail to compile
+  // until we have checked whether the call is correct
+  (void)dummy;
   return getQualifiers().getAddressSpace();
 }
 

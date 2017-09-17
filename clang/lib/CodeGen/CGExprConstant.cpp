@@ -612,7 +612,7 @@ static ConstantAddress tryEmitGlobalCompoundLiteral(CodeGenModule &CGM,
           CGM.getAddrOfConstantCompoundLiteralIfEmitted(E))
     return ConstantAddress(Addr, Align);
 
-  unsigned addressSpace = E->getType().getAddressSpace();
+  unsigned addressSpace = E->getType().getAddressSpace(nullptr);
 
   ConstantEmitter emitter(CGM, CGF);
   llvm::Constant *C = emitter.tryEmitForInitializer(E->getInitializer(),
@@ -727,8 +727,8 @@ public:
     case CK_AddressSpaceConversion: {
       auto C = Emitter.tryEmitPrivate(subExpr, subExpr->getType());
       if (!C) return nullptr;
-      unsigned destAS = E->getType()->getPointeeType().getAddressSpace();
-      unsigned srcAS = subExpr->getType()->getPointeeType().getAddressSpace();
+      unsigned destAS = E->getType()->getPointeeType().getAddressSpace(nullptr);
+      unsigned srcAS = subExpr->getType()->getPointeeType().getAddressSpace(nullptr);
       llvm::Type *destTy = ConvertType(E->getType());
       return CGM.getTargetCodeGenInfo().performAddrSpaceCast(CGM, C, srcAS,
                                                              destAS, destTy);
@@ -1181,7 +1181,7 @@ ConstantEmitter::emitAbstract(SourceLocation loc, const APValue &value,
 }
 
 llvm::Constant *ConstantEmitter::tryEmitForInitializer(const VarDecl &D) {
-  initializeNonAbstract(D.getType().getAddressSpace());
+  initializeNonAbstract(D.getType().getAddressSpace(nullptr));
   return markIfFailed(tryEmitPrivateForVarInit(D));
 }
 

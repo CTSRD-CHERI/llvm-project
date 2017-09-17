@@ -2476,7 +2476,7 @@ LValue CodeGenFunction::EmitUnaryOpLValue(const UnaryOperator *E) {
     LValueBaseInfo BaseInfo;
     Address Addr = EmitPointerWithAlignment(E->getSubExpr(), &BaseInfo);
     LValue LV = MakeAddrLValue(Addr, T, BaseInfo);
-    LV.getQuals().setAddressSpace(ExprTy.getAddressSpace());
+    LV.getQuals().setAddressSpace(ExprTy.getAddressSpace(nullptr));
 
     // We should not generate __weak write barrier on indirect reference
     // of a pointer to object; as in void foo (__weak id *param); *param = 0;
@@ -3101,7 +3101,7 @@ Address CodeGenFunction::EmitArrayToPointerDecay(const Expr *E,
 
   // FIXME-cheri-qual: should getTargetAddressSpace return 200? 
   unsigned AS =
-    getContext().getTargetAddressSpace(E->getType().getAddressSpace());
+    getContext().getTargetAddressSpace(E->getType().getAddressSpace(nullptr));
   llvm::PointerType *PtrTy = cast<llvm::PointerType>(Addr.getPointer()->getType());
   if (PtrTy->getPointerAddressSpace() != AS) {
     if (getContext().getTargetInfo().areAllPointersCapabilities()) {

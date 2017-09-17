@@ -2650,7 +2650,7 @@ CharUnits CodeGenModule::GetTargetTypeStoreSize(llvm::Type *Ty) const {
 
 unsigned CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D) {
   if (LangOpts.OpenCL) {
-    unsigned AddrSpace = D ? D->getType().getAddressSpace()
+    unsigned AddrSpace = D ? D->getType().getAddressSpace(nullptr)
                            : static_cast<unsigned>(LangAS::opencl_global);
     assert(AddrSpace == LangAS::opencl_global ||
            AddrSpace == LangAS::opencl_constant ||
@@ -3842,7 +3842,7 @@ ConstantAddress CodeGenModule::GetAddrOfGlobalTemporary(
     Value = &EvalResult.Val;
 
   unsigned AddrSpace = VD ? GetGlobalVarAddressSpace(VD)
-                          : MaterializedType.getAddressSpace();
+                          : MaterializedType.getAddressSpace(nullptr);
 
   Optional<ConstantEmitter> emitter;
   llvm::Constant *InitialValue = nullptr;

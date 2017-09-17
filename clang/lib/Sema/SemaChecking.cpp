@@ -3172,7 +3172,7 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
           // Keep address space of non-atomic pointer type.
           if (const PointerType *PtrTy =
                   ValArg->getType()->getAs<PointerType>()) {
-            AS = PtrTy->getPointeeType().getAddressSpace();
+            AS = PtrTy->getPointeeType().getAddressSpace(nullptr);
           }
           Ty = Context.getPointerType(
               Context.getAddrSpaceQualType(ValType.getUnqualifiedType(), AS));

@@ -1330,7 +1330,7 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
   default: llvm_unreachable("This attribute should have been handled already");
   case AttributedType::attr_address_space:
     OS << "address_space(";
-    OS << T->getEquivalentType().getAddressSpace();
+    OS << T->getEquivalentType().getAddressSpace(nullptr);
     OS << ')';
     break;
 

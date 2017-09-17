@@ -443,7 +443,7 @@ unsigned TargetCodeGenInfo::getGlobalVarAddressSpace(CodeGenModule &CGM,
   assert(!CGM.getLangOpts().OpenCL &&
          !(CGM.getLangOpts().CUDA && CGM.getLangOpts().CUDAIsDevice) &&
          "Address space agnostic languages only");
-  return D ? D->getType().getAddressSpace()
+  return D ? D->getType().getAddressSpace(nullptr)
            : static_cast<unsigned>(LangAS::Default);
 }
 
@@ -7989,7 +7989,7 @@ AMDGPUTargetCodeGenInfo::getGlobalVarAddressSpace(CodeGenModule &CGM,
   if (!D)
     return DefaultGlobalAS;
 
-  unsigned AddrSpace = D->getType().getAddressSpace();
+  unsigned AddrSpace = D->getType().getAddressSpace(nullptr);
   assert(AddrSpace == LangAS::Default ||
          AddrSpace >= LangAS::FirstTargetAddressSpace);
   if (AddrSpace != LangAS::Default)

@@ -5700,8 +5700,8 @@ CastKind Sema::PrepareScalarCast(ExprResult &Src, QualType DestTy) {
   case Type::STK_ObjCObjectPointer:
     switch (DestTy->getScalarTypeKind()) {
     case Type::STK_CPointer: {
-      unsigned SrcAS = SrcTy->getPointeeType().getAddressSpace();
-      unsigned DestAS = DestTy->getPointeeType().getAddressSpace();
+      unsigned SrcAS = SrcTy->getPointeeType().getAddressSpace(nullptr);
+      unsigned DestAS = DestTy->getPointeeType().getAddressSpace(nullptr);
       if (SrcAS != DestAS)
         return CK_AddressSpaceConversion;
       else if (!SrcTy->isCHERICapabilityType(Context) && DestTy->isCHERICapabilityType(Context))
@@ -6451,7 +6451,8 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
   QualType rhptee = RHSTy->getAs<PointerType>()->getPointeeType();
 
   // Get the cast kind to use for adding qualifiers
-  CastKind NopCastKind = (lhptee.getAddressSpace() == rhptee.getAddressSpace())
+  // XXXAR: Three should probably be a CK_CHERICapabilityToPointer here?
+  CastKind NopCastKind = (lhptee.getAddressSpace(nullptr) == rhptee.getAddressSpace(nullptr))
     ?  CK_NoOp : CK_AddressSpaceConversion;
 
   // ignore qualifiers on void (C99 6.5.15p3, clause 6)
@@ -7616,8 +7617,8 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
   if (const PointerType *LHSPointer = dyn_cast<PointerType>(LHSType)) {
     // U* -> T*
     if (const PointerType *RHSPointer = dyn_cast<PointerType>(RHSType)) {
-      unsigned AddrSpaceL = LHSPointer->getPointeeType().getAddressSpace();
-      unsigned AddrSpaceR = RHSPointer->getPointeeType().getAddressSpace();
+      unsigned AddrSpaceL = LHSPointer->getPointeeType().getAddressSpace(nullptr);
+      unsigned AddrSpaceR = RHSPointer->getPointeeType().getAddressSpace(nullptr);
       if (AddrSpaceL != AddrSpaceR)
         Kind = CK_AddressSpaceConversion;
       else if (LHSPointer->isFunctionPointerType() && RHSPointer->isFunctionPointerType()) {
@@ -7674,10 +7675,10 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
     // U^ -> void*
     if (RHSType->getAs<BlockPointerType>()) {
       if (LHSPointer->getPointeeType()->isVoidType()) {
-        unsigned AddrSpaceL = LHSPointer->getPointeeType().getAddressSpace();
+        unsigned AddrSpaceL = LHSPointer->getPointeeType().getAddressSpace(nullptr);
         unsigned AddrSpaceR = RHSType->getAs<BlockPointerType>()
                                   ->getPointeeType()
-                                  .getAddressSpace();
+                                  .getAddressSpace(nullptr);
         Kind =
             AddrSpaceL != AddrSpaceR ? CK_AddressSpaceConversion : CK_BitCast;
         return Compatible;
@@ -7693,10 +7694,10 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
     if (RHSType->isBlockPointerType()) {
       unsigned AddrSpaceL = LHSType->getAs<BlockPointerType>()
                                 ->getPointeeType()
-                                .getAddressSpace();
+                                .getAddressSpace(nullptr);
       unsigned AddrSpaceR = RHSType->getAs<BlockPointerType>()
                                 ->getPointeeType()
-                                .getAddressSpace();
+                                .getAddressSpace(nullptr);
       Kind = AddrSpaceL != AddrSpaceR ? CK_AddressSpaceConversion : CK_BitCast;
       return checkBlockPointerTypesForAssignment(*this, LHSType, RHSType);
     }
@@ -9753,8 +9754,8 @@ QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
               << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
         }
       }
-      unsigned AddrSpaceL = LCanPointeeTy.getAddressSpace();
-      unsigned AddrSpaceR = RCanPointeeTy.getAddressSpace();
+      unsigned AddrSpaceL = LCanPointeeTy.getAddressSpace(nullptr);
+      unsigned AddrSpaceR = RCanPointeeTy.getAddressSpace(nullptr);
       CastKind Kind = AddrSpaceL != AddrSpaceR ? CK_AddressSpaceConversion
                                                : CK_BitCast;
       if (LHSIsNull && !RHSIsNull)

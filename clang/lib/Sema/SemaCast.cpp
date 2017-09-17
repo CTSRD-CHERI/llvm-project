@@ -1912,7 +1912,7 @@ static void checkIntToPointerCast(bool CStyle, SourceLocation Loc,
                                   const Expr *SrcExpr, QualType DestType,
                                   Sema &Self) {
   QualType SrcType = SrcExpr->getType();
-  unsigned AS = DestType->getPointeeType().getAddressSpace();
+  unsigned AS = DestType->getPointeeType().getAddressSpace(nullptr);
   ASTContext &Ctx = Self.getASTContext();
 
   if (Ctx.getTargetInfo().areAllPointersCapabilities() &&

@@ -2623,7 +2623,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
       CGM.getContext().getTargetAddressSpace(LangAS::opencl_generic));
     auto NewRetT = llvm::PointerType::get(Int8Ty,
       CGM.getContext().getTargetAddressSpace(
-        E->getType()->getPointeeType().getAddressSpace()));
+        E->getType()->getPointeeType().getAddressSpace(nullptr)));
     auto FTy = llvm::FunctionType::get(NewRetT, {NewArgT}, false);
     llvm::Value *NewArg;
     if (Arg0->getType()->getPointerAddressSpace() !=

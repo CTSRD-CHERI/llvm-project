@@ -2357,7 +2357,7 @@ ASTContext::getExtQualType(const Type *baseType, Qualifiers quals) const {
 QualType
 ASTContext::getAddrSpaceQualType(QualType T, unsigned AddressSpace) const {
   QualType CanT = getCanonicalType(T);
-  if (CanT.getAddressSpace() == AddressSpace)
+  if (CanT.getAddressSpace(nullptr) == AddressSpace)
     return T;
 
   // If we are composing extended qualifiers together, merge together
@@ -9775,12 +9775,13 @@ uint64_t ASTContext::getTargetNullPointerValue(QualType QT) const {
   if (QT->getUnqualifiedDesugaredType()->isNullPtrType())
     AS = 0;
   else
-    AS = QT->getPointeeType().getAddressSpace();
+    AS = QT->getPointeeType().getAddressSpace(nullptr);
 
   return getTargetInfo().getNullPointerValue(AS);
 }
 
 unsigned ASTContext::getTargetAddressSpace(unsigned AS) const {
+  // FIXME: disable this
   if (AS >= LangAS::FirstTargetAddressSpace)
     return AS - LangAS::FirstTargetAddressSpace;
   else

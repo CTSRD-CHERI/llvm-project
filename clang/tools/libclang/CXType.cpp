@@ -400,10 +400,10 @@ unsigned clang_getAddressSpace(CXType CT) {
   QualType T = GetQualType(CT);
 
   // For non language-specific address space, use separate helper function.
-  if (T.getAddressSpace() >= LangAS::FirstTargetAddressSpace) {
+  if (T.getAddressSpace(nullptr) >= LangAS::FirstTargetAddressSpace) {
     return T.getQualifiers().getAddressSpaceAttributePrintValue();
   }
-  return T.getAddressSpace();
+  return T.getAddressSpace(nullptr);
 }
 
 CXString clang_getTypedefName(CXType CT) {

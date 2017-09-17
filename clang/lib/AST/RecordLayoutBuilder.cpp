@@ -1733,7 +1733,7 @@ void ItaniumRecordLayoutBuilder::LayoutField(const FieldDecl *D,
     FieldAlign = Context.getTypeAlignInChars(ATy->getElementType());
   } else if (const ReferenceType *RT = D->getType()->getAs<ReferenceType>()) {
     const TargetInfo &TI = Context.getTargetInfo();
-    unsigned AS = RT->getPointeeType().getAddressSpace();
+    unsigned AS = RT->getPointeeType().getAddressSpace(nullptr);
     bool IsCHERICap =
         RT->isCHERICapabilityType(Context) || TI.areAllPointersCapabilities();
     FieldSize = Context.toCharUnitsFromBits(
