@@ -2651,10 +2651,11 @@ CharUnits CodeGenModule::GetTargetTypeStoreSize(llvm::Type *Ty) const {
       getDataLayout().getTypeStoreSizeInBits(Ty));
 }
 
-unsigned CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D) {
+LangAS::ID CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D) {
   if (LangOpts.OpenCL) {
-    unsigned AddrSpace = D ? D->getType().getAddressSpace(nullptr)
-                           : static_cast<unsigned>(LangAS::opencl_global);
+    LangAS::ID AddrSpace =
+         D ? static_cast<LangAS::ID>(D->getType().getAddressSpace(nullptr))
+           : LangAS::opencl_global;
     assert(AddrSpace == LangAS::opencl_global ||
            AddrSpace == LangAS::opencl_constant ||
            AddrSpace == LangAS::opencl_local ||
@@ -2679,13 +2680,14 @@ unsigned CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D) {
     unsigned CapAS = getTargetCodeGenInfo().getCHERICapabilityAS();
     if (Target.areAllPointersCapabilities()) { // Pure ABI
       // FIXME: should TLS always be AS 0?
-      return (D && (D->getTLSKind() != VarDecl::TLS_None)) ? 0 : CapAS;
+      return (D && (D->getTLSKind() != VarDecl::TLS_None))
+             ? LangAS::Default : (LangAS::ID)(CapAS + LangAS::FirstTargetAddressSpace);
     } else if (D && getAddressSpaceForType(D->getType()) == CapAS) { // Hybrid ABI
-      return 0;
+      return LangAS::Default;
     }
   }
 
-  return getTargetCodeGenInfo().getGlobalVarAddressSpace(*this, D);
+  return (LangAS::ID)getTargetCodeGenInfo().getGlobalVarAddressSpace(*this, D);
 }
 
 template<typename SomeDecl>

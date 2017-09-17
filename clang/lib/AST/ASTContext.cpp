@@ -9783,6 +9783,7 @@ uint64_t ASTContext::getTargetNullPointerValue(QualType QT) const {
 unsigned ASTContext::getTargetAddressSpace(unsigned AS, void* dummy) const {
   (void)dummy; // Dummy parameter needed to find all calls to getTargetAddressSpace()
   // XXXAR: this will no longer be necessary if we can to use LangAS for CHERI
+  assert(AS != 200 && "CHERI AS should not be used here!");
   if (AS >= LangAS::FirstTargetAddressSpace)
     return AS - LangAS::FirstTargetAddressSpace;
   else
