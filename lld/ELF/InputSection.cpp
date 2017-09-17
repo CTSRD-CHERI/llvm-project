@@ -152,8 +152,6 @@ InputSectionBase::InputSectionBase()
   }
 
 
-InputSectionBase::~InputSectionBase() {}
-
 size_t InputSectionBase::getSize() const {
   if (auto *S = dyn_cast<SyntheticSection>(this))
     return S->getSize();
@@ -812,7 +810,7 @@ void fillGlobalSizesSection(InputSection* IS, uint8_t* Buf, uint8_t* BufEnd) {
         continue;
       }
       StringRef RealSymName = Name.drop_front(strlen(".size."));
-      SymbolBody* Target = Symtab<ELFT>::X->find(RealSymName);
+      SymbolBody* Target = Symtab->find(RealSymName);
       uint64_t ResolvedSize = Target->getSize<ELFT>();
       uint8_t* Location = Buf + D->Value;
       assert(Location + 8 <= BufEnd); // Should use a span type instead

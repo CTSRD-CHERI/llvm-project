@@ -401,8 +401,6 @@ std::string lld::verboseToString(SymbolBody *B, uint64_t SymOffset) {
 
   if (B->isInCurrentDSO())
     Msg += "(in current DSO) ";
-  if (B->NeedsCopy)
-    Msg += "(needs copy) ";
   if (B->isInGot())
     Msg += "(in GOT) ";
   if (B->isInPlt())
@@ -430,7 +428,7 @@ std::string lld::verboseToString(SymbolBody *B, uint64_t SymOffset) {
     Name = "<unknown symbol>";
   }
   Msg += Name;
-  std::string Src = IS ? IS->getSrcMsg<ELFT>(SymOffset) : toString(B->File);
+  std::string Src = IS ? IS->getSrcMsg<ELFT>(SymOffset) : toString(B->getFile());
   if (IS)
     Src += " (" + IS->getObjMsg<ELFT>(SymOffset) + ")";
   Msg += "\n>>> defined in " + Src;

@@ -2489,7 +2489,6 @@ void CheriCapRelocsSection<ELFT>::addSection(InputSectionBase *S) {
   assert(S->Name == "__cap_relocs");
   assert(S->AreRelocsRela && "__cap_relocs should be RELA");
   // make sure the section is no longer processed
-  S->OutSec = nullptr;
   S->Live = false;
 
   if ((S->getSize() % Entsize) != 0) {
@@ -2611,9 +2610,9 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     SymbolBody *LocationSym = &S->getFile<ELFT>()->getRelocTargetSym(LocationRel);
     SymbolBody &TargetSym = S->getFile<ELFT>()->getRelocTargetSym(TargetRel);
 
-    if (LocationSym->File != S->File) {
+    if (LocationSym->getFile() != S->File) {
       error("Expected capability relocation to point to " + toString(S->File) +
-            " but got " + toString(LocationSym->File));
+            " but got " + toString(LocationSym->getFile()));
       continue;
     }
 //    errs() << "Adding cap reloc at " << toString(LocationSym) << " type "
