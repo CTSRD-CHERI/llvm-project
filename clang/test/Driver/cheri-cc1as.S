@@ -1,13 +1,13 @@
 // Check that the ABI is forwarded to the assembler
 // RUN: %clang -target cheri-unknown-freebsd -### -c %s -mabi=n64 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI-ABI-N64 %s
-// CHERI-ABI-N64: "-target-cpu" "{{cheri(128)?}}" "-target-abi" "n64"
+// CHERI-ABI-N64: "-target-cpu" "{{cheri(128)?}}" {{.*}} "-target-abi" "n64"
 // RUN: %clang -target cheri-unknown-freebsd -### -c %s -mabi=purecap 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI-ABI-SANDBOX %s
-// CHERI-ABI-SANDBOX: "-target-cpu" "{{cheri(128)?}}" "-target-abi" "purecap"
+// CHERI-ABI-SANDBOX: "-target-cpu" "{{cheri(128)?}}" {{.*}} "-target-abi" "purecap"
 // RUN: %clang -target cheri-unknown-freebsd -### -c %s 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI-ABI-NONE %s
-// CHERI-ABI-NONE: "-target-cpu" "{{cheri(128)?}}" "-target-abi" "n64"
+// CHERI-ABI-NONE: "-target-cpu" "{{cheri(128)?}}" {{.*}} "-target-abi" "n64"
 
 // RUN: %clang -target cheri-unknown-freebsd -mcpu=cheri -c %s -o - | llvm-readobj -h - \
 // RUN:   | FileCheck -check-prefix=NONE-HEADERS %s
@@ -37,15 +37,15 @@
 // Check that the ABI is forwarded to the assembler
 // RUN: %clang -target cheri-unknown-freebsd -### -c %s -mabi=n64 -mllvm -cheri128 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI128-ABI-N64 %s
-// CHERI128-ABI-N64: "-target-cpu" "cheri128" "-target-abi" "n64"
+// CHERI128-ABI-N64: "-target-cpu" "cheri128" {{.*}} "-target-abi" "n64"
 // CHERI128-ABI-N64: "-mllvm" "-cheri128"
 // RUN: %clang -target cheri-unknown-freebsd -### -c %s -mabi=purecap -mllvm -cheri128 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI128-ABI-SANDBOX %s
-// CHERI128-ABI-SANDBOX: "-target-cpu" "cheri128" "-target-abi" "purecap"
+// CHERI128-ABI-SANDBOX: "-target-cpu" "cheri128" {{.*}} "-target-abi" "purecap"
 // CHERI128-ABI-SANDBOX: "-mllvm" "-cheri128"
 // RUN: %clang -target cheri-unknown-freebsd -### -c %s -mllvm -cheri128 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHERI128-ABI-NONE %s
-// CHERI128-ABI-NONE: "-target-cpu" "cheri128" "-target-abi" "n64"
+// CHERI128-ABI-NONE: "-target-cpu" "cheri128" {{.*}} "-target-abi" "n64"
 // CHERI128-ABI-NONE: "-mllvm" "-cheri128"
 
 // RUN: %clang -target cheri-unknown-freebsd -c %s -o - -mllvm -cheri128 | llvm-readobj -h - \
