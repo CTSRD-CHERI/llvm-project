@@ -252,7 +252,7 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
   }
 
   // Make sure the result is of the correct type.
-  unsigned ExpectedAS = getAddressSpaceForType(Ty);
+  unsigned ExpectedAS = Ty.getAddressSpace(nullptr);
   llvm::Constant *Addr = GV;
   if (AS != ExpectedAS) {
     Addr = getTargetCodeGenInfo().performAddrSpaceCast(
