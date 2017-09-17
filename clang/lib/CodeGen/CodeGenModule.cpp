@@ -2499,11 +2499,10 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
   }
 
   auto ExpectedAS =
-      D ? D->getType().getAddressSpace()
+      D ? D->getType().getAddressSpace(nullptr)
         : static_cast<unsigned>(LangOpts.OpenCL ? LangAS::opencl_global
                                                 : LangAS::Default);
-  assert(getContext().getTargetAddressSpace(ExpectedAS) ==
-         Ty->getPointerAddressSpace());
+  assert(getAddressSpaceForType(D->getType()) == Ty->getPointerAddressSpace());
   if (AddrSpace != ExpectedAS)
     return getTargetCodeGenInfo().performAddrSpaceCast(*this, GV, AddrSpace,
                                                        ExpectedAS, Ty);
