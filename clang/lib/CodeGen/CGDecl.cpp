@@ -1321,7 +1321,7 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
 
     Address SrcPtr = Address(GV, Loc.getAlignment());
     if (SrcPtr.getType() != BP)
-      SrcPtr = Builder.CreateBitCast(SrcPtr, BP);
+      SrcPtr = Builder.CreatePointerBitCastOrAddrSpaceCast(SrcPtr, BP);
 
     Builder.CreateMemCpy(Loc, SrcPtr, SizeVal, isVolatile);
   }

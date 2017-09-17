@@ -143,7 +143,7 @@ static llvm::Constant *buildBlockDescriptor(CodeGenModule &CGM,
                                    llvm::GlobalValue::InternalLinkage,
                                    AddrSpace);
 
-  return llvm::ConstantExpr::getBitCast(global, CGM.getBlockDescriptorType());
+  return llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(global, CGM.getBlockDescriptorType());
 }
 
 /*
