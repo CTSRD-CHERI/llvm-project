@@ -180,6 +180,7 @@ struct Configuration {
   uint64_t WarningLimit = 20;
   uint64_t ImageBase;
   uint64_t MaxPageSize;
+  uint64_t MipsGotSize;
   uint64_t ZStackSize;
   unsigned LTOPartitions;
   unsigned LTOO;
