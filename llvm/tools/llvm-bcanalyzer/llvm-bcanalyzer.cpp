@@ -71,6 +71,10 @@ static cl::opt<bool>
   ShowBinaryBlobs("show-binary-blobs",
                   cl::desc("Print binary blobs using hex escapes"));
 
+static cl::opt<std::string> CheckHash(
+    "check-hash",
+    cl::desc("Check module hash using the argument as a string table"));
+
 namespace {
 
 /// CurStreamTypeType - A type for CurStreamType
@@ -125,6 +129,7 @@ static const char *GetBlockName(unsigned BlockID,
                                       return "FULL_LTO_GLOBALVAL_SUMMARY_BLOCK";
   case bitc::MODULE_STRTAB_BLOCK_ID:       return "MODULE_STRTAB_BLOCK";
   case bitc::STRTAB_BLOCK_ID:              return "STRTAB_BLOCK";
+  case bitc::SYMTAB_BLOCK_ID:              return "SYMTAB_BLOCK";
   }
 }
 
@@ -320,6 +325,8 @@ static const char *GetCodeName(unsigned CodeID, unsigned BlockID,
       STRINGIFY_CODE(FS, TYPE_TEST_ASSUME_CONST_VCALL)
       STRINGIFY_CODE(FS, TYPE_CHECKED_LOAD_CONST_VCALL)
       STRINGIFY_CODE(FS, VALUE_GUID)
+      STRINGIFY_CODE(FS, CFI_FUNCTION_DEFS)
+      STRINGIFY_CODE(FS, CFI_FUNCTION_DECLS)
     }
   case bitc::METADATA_ATTACHMENT_ID:
     switch(CodeID) {
@@ -390,6 +397,11 @@ static const char *GetCodeName(unsigned CodeID, unsigned BlockID,
     switch(CodeID) {
     default: return nullptr;
     case bitc::STRTAB_BLOB: return "BLOB";
+    }
+  case bitc::SYMTAB_BLOCK_ID:
+    switch(CodeID) {
+    default: return nullptr;
+    case bitc::SYMTAB_BLOB: return "BLOB";
     }
   }
 #undef STRINGIFY_CODE
@@ -644,13 +656,15 @@ static bool ParseBlock(BitstreamCursor &Stream, BitstreamBlockInfo &BlockInfo,
       }
 
       // If we found a module hash, let's verify that it matches!
-      if (BlockID == bitc::MODULE_BLOCK_ID && Code == bitc::MODULE_CODE_HASH) {
+      if (BlockID == bitc::MODULE_BLOCK_ID && Code == bitc::MODULE_CODE_HASH &&
+          !CheckHash.empty()) {
         if (Record.size() != 5)
           outs() << " (invalid)";
         else {
           // Recompute the hash and compare it to the one in the bitcode
           SHA1 Hasher;
           StringRef Hash;
+          Hasher.update(CheckHash);
           {
             int BlockSize = (CurrentRecordPos / 8) - BlockEntryPos;
             auto Ptr = Stream.getPointerToByte(BlockEntryPos, BlockSize);

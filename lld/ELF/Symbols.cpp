@@ -35,6 +35,7 @@ DefinedRegular *ElfSym::Edata1;
 DefinedRegular *ElfSym::Edata2;
 DefinedRegular *ElfSym::End1;
 DefinedRegular *ElfSym::End2;
+DefinedRegular *ElfSym::GlobalOffsetTable;
 DefinedRegular *ElfSym::MipsGp;
 DefinedRegular *ElfSym::MipsGpDisp;
 DefinedRegular *ElfSym::MipsLocalGp;
@@ -93,7 +94,7 @@ static uint64_t getSymVA(const SymbolBody &Body, int64_t &Addend) {
     if (D.isTls() && !Config->Relocatable) {
       if (!Out::TlsPhdr)
         fatal(toString(D.File) +
-              " has a STT_TLS symbol but doesn't have a PT_TLS section");
+              " has an STT_TLS symbol but doesn't have an SHF_TLS section");
       return VA - Out::TlsPhdr->p_vaddr;
     }
     return VA;
@@ -156,6 +157,14 @@ bool SymbolBody::isPreemptible() const {
   if (Config->Bsymbolic || (Config->BsymbolicFunctions && isFunc()))
     return !isDefined();
   return true;
+}
+
+// Overwrites all attributes with Other's so that this symbol becomes
+// an alias to Other. This is useful for handling some options such as
+// --wrap.
+void SymbolBody::copy(SymbolBody *Other) {
+  memcpy(symbol()->Body.buffer, Other->symbol()->Body.buffer,
+         sizeof(Symbol::Body));
 }
 
 uint64_t SymbolBody::getVA(int64_t Addend) const {
@@ -256,7 +265,12 @@ void SymbolBody::parseSymbolVersion() {
   }
 
   // It is an error if the specified version is not defined.
-  error(toString(File) + ": symbol " + S + " has undefined version " + Verstr);
+  // Usually version script is not provided when linking executable,
+  // but we may still want to override a versioned symbol from DSO,
+  // so we do not report error in this case.
+  if (Config->Shared)
+    error(toString(File) + ": symbol " + S + " has undefined version " +
+          Verstr);
 }
 
 Defined::Defined(Kind K, StringRefZ Name, bool IsLocal, uint8_t StOther,

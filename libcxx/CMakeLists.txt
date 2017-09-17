@@ -118,6 +118,7 @@ if (LIBCXX_CXX_ABI STREQUAL "default")
     cxxabi.h
     PATHS ${LLVM_MAIN_SRC_DIR}/projects/libcxxabi/include
           ${LLVM_MAIN_SRC_DIR}/runtimes/libcxxabi/include
+          ${LLVM_MAIN_SRC_DIR}/../libcxxabi/include
     NO_DEFAULT_PATH
   )
   if (LIBCXX_TARGETING_MSVC)
@@ -350,6 +351,13 @@ else()
   set(LIBCXX_LIBRARY_DIR ${CMAKE_BINARY_DIR}/lib${LIBCXX_LIBDIR_SUFFIX})
 endif()
 file(MAKE_DIRECTORY "${LIBCXX_BINARY_INCLUDE_DIR}")
+
+set(LIBCXX_INSTALL_PREFIX "" CACHE STRING
+    "Define libc++ destination prefix.")
+
+if (NOT LIBCXX_INSTALL_PREFIX MATCHES "^$|.*/")
+  message(FATAL_ERROR "LIBCXX_INSTALL_PREFIX has to end with \"/\".")
+endif()
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${LIBCXX_LIBRARY_DIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${LIBCXX_LIBRARY_DIR})

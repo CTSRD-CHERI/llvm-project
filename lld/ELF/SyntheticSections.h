@@ -504,7 +504,7 @@ class GdbIndexSection final : public SyntheticSection {
   const unsigned SymTabEntrySize = 2 * OffsetTypeSize;
 
 public:
-  GdbIndexSection();
+  GdbIndexSection(std::vector<GdbIndexChunk> &&Chunks);
   void finalizeContents() override;
   void writeTo(uint8_t *Buf) override;
   size_t getSize() const override;
@@ -525,7 +525,6 @@ public:
   std::vector<GdbIndexChunk> Chunks;
 
 private:
-  GdbIndexChunk readDwarf(InputSection *Sec);
   void buildIndex();
 
   uint32_t CuTypesOffset;
@@ -538,6 +537,8 @@ private:
 
   bool Finalized = false;
 };
+
+template <class ELFT> GdbIndexSection *createGdbIndex();
 
 // --eh-frame-hdr option tells linker to construct a header for all the
 // .eh_frame sections. This header is placed to a section named .eh_frame_hdr

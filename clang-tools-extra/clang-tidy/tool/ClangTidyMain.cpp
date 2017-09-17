@@ -462,6 +462,11 @@ extern volatile int BoostModuleAnchorSource;
 static int LLVM_ATTRIBUTE_UNUSED BoostModuleAnchorDestination =
     BoostModuleAnchorSource;
 
+// This anchor is used to force the linker to link the BugproneModule.
+extern volatile int BugproneModuleAnchorSource;
+static int LLVM_ATTRIBUTE_UNUSED BugproneModuleAnchorDestination =
+    BugproneModuleAnchorSource;
+
 // This anchor is used to force the linker to link the LLVMModule.
 extern volatile int LLVMModuleAnchorSource;
 static int LLVM_ATTRIBUTE_UNUSED LLVMModuleAnchorDestination =
@@ -476,6 +481,11 @@ static int LLVM_ATTRIBUTE_UNUSED CppCoreGuidelinesModuleAnchorDestination =
 extern volatile int GoogleModuleAnchorSource;
 static int LLVM_ATTRIBUTE_UNUSED GoogleModuleAnchorDestination =
     GoogleModuleAnchorSource;
+
+// This anchor is used to force the linker to link the AndroidModule.
+extern volatile int AndroidModuleAnchorSource;
+static int LLVM_ATTRIBUTE_UNUSED AndroidModuleAnchorDestination =
+    AndroidModuleAnchorSource;
 
 // This anchor is used to force the linker to link the MiscModule.
 extern volatile int MiscModuleAnchorSource;

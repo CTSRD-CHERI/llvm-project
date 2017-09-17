@@ -667,7 +667,12 @@ bool GotSection::empty() const {
   return NumEntries == 0 && !HasGotOffRel;
 }
 
-void GotSection::writeTo(uint8_t *Buf) { relocateAlloc(Buf, Buf + Size); }
+void GotSection::writeTo(uint8_t *Buf) {
+  // Buf points to the start of this section's buffer,
+  // whereas InputSectionBase::relocateAlloc() expects its argument
+  // to point to the start of the output section.
+  relocateAlloc(Buf - OutSecOff, Buf - OutSecOff + Size);
+}
 
 MipsGotSection::MipsGotSection()
     : SyntheticSection(SHF_ALLOC | SHF_WRITE | SHF_MIPS_GPREL, SHT_PROGBITS, 16,
@@ -1078,10 +1083,11 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
     return; // Already finalized.
 
   this->Link = InX::DynStrTab->getParent()->SectionIndex;
-  if (In<ELFT>::RelaDyn->getParent()->Size > 0) {
+  if (In<ELFT>::RelaDyn->getParent() && !In<ELFT>::RelaDyn->empty()) {
     bool IsRela = Config->IsRela;
     add({IsRela ? DT_RELA : DT_REL, In<ELFT>::RelaDyn});
-    add({IsRela ? DT_RELASZ : DT_RELSZ, In<ELFT>::RelaDyn->getParent()->Size});
+    add({IsRela ? DT_RELASZ : DT_RELSZ, In<ELFT>::RelaDyn->getParent(),
+         Entry::SecSize});
     add({IsRela ? DT_RELAENT : DT_RELENT,
          uint64_t(IsRela ? sizeof(Elf_Rela) : sizeof(Elf_Rel))});
 
@@ -1094,11 +1100,20 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
         add({IsRela ? DT_RELACOUNT : DT_RELCOUNT, NumRelativeRels});
     }
   }
-  if (In<ELFT>::RelaPlt->getParent()->Size > 0) {
+  if (In<ELFT>::RelaPlt->getParent() && !In<ELFT>::RelaPlt->empty()) {
     add({DT_JMPREL, In<ELFT>::RelaPlt});
-    add({DT_PLTRELSZ, In<ELFT>::RelaPlt->getParent()->Size});
-    add({Config->EMachine == EM_MIPS ? DT_MIPS_PLTGOT : DT_PLTGOT,
-         InX::GotPlt});
+    add({DT_PLTRELSZ, In<ELFT>::RelaPlt->getParent(), Entry::SecSize});
+    switch (Config->EMachine) {
+    case EM_MIPS:
+      add({DT_MIPS_PLTGOT, In<ELFT>::GotPlt});
+      break;
+    case EM_SPARCV9:
+      add({DT_PLTGOT, In<ELFT>::Plt});
+      break;
+    default:
+      add({DT_PLTGOT, In<ELFT>::GotPlt});
+      break;
+    }
     add({DT_PLTREL, uint64_t(Config->IsRela ? DT_RELA : DT_REL)});
   }
 
@@ -1391,7 +1406,6 @@ template <class ELFT> void SymbolTableSection<ELFT>::writeTo(uint8_t *Buf) {
     }
 
     ESym->st_name = Ent.StrTabOffset;
-    ESym->st_size = Body->getSize<ELFT>();
 
     // Set a section index.
     if (const OutputSection *OutSec = Body->getOutputSection())
@@ -1400,6 +1414,14 @@ template <class ELFT> void SymbolTableSection<ELFT>::writeTo(uint8_t *Buf) {
       ESym->st_shndx = SHN_ABS;
     else if (isa<DefinedCommon>(Body))
       ESym->st_shndx = SHN_COMMON;
+
+    // Copy symbol size if it is a defined symbol. st_size is not significant
+    // for undefined symbols, so whether copying it or not is up to us if that's
+    // the case. We'll leave it as zero because by not setting a value, we can
+    // get the exact same outputs for two sets of input files that differ only
+    // in undefined symbol size in DSOs.
+    if (ESym->st_shndx != SHN_UNDEF)
+      ESym->st_size = Body->getSize<ELFT>();
 
     // st_value is usually an address of a symbol, but that has a
     // special meaining for uninstantiated common symbols (this can
@@ -1640,7 +1662,12 @@ template <class ELFT> void HashTableSection<ELFT>::writeTo(uint8_t *Buf) {
 
 PltSection::PltSection(size_t S)
     : SyntheticSection(SHF_ALLOC | SHF_EXECINSTR, SHT_PROGBITS, 16, ".plt"),
-      HeaderSize(S) {}
+      HeaderSize(S) {
+  // The PLT needs to be writable on SPARC as the dynamic linker will
+  // modify the instructions in the PLT entries.
+  if (Config->EMachine == EM_SPARCV9)
+    this->Flags |= SHF_WRITE;
+}
 
 void PltSection::writeTo(uint8_t *Buf) {
   // At beginning of PLT but not the IPLT, we have code to call the dynamic
@@ -1693,9 +1720,9 @@ unsigned PltSection::getPltRelocOff() const {
   return (HeaderSize == 0) ? InX::Plt->getSize() : 0;
 }
 
-GdbIndexSection::GdbIndexSection()
+GdbIndexSection::GdbIndexSection(std::vector<GdbIndexChunk> &&Chunks)
     : SyntheticSection(0, SHT_PROGBITS, 1, ".gdb_index"),
-      StringPool(llvm::StringTableBuilder::ELF) {}
+      StringPool(llvm::StringTableBuilder::ELF), Chunks(std::move(Chunks)) {}
 
 // Iterative hash function for symbol's name is described in .gdb_index format
 // specification. Note that we use one for version 5 to 7 here, it is different
@@ -1707,11 +1734,10 @@ static uint32_t hash(StringRef Str) {
   return R;
 }
 
-static std::vector<CompilationUnitEntry> readCuList(DWARFContext &Dwarf,
-                                                    InputSection *Sec) {
+static std::vector<CompilationUnitEntry> readCuList(DWARFContext &Dwarf) {
   std::vector<CompilationUnitEntry> Ret;
   for (std::unique_ptr<DWARFCompileUnit> &CU : Dwarf.compile_units())
-    Ret.push_back({Sec->OutSecOff + CU->getOffset(), CU->getLength() + 4});
+    Ret.push_back({CU->getOffset(), CU->getLength() + 4});
   return Ret;
 }
 
@@ -1758,18 +1784,14 @@ static std::vector<InputSection *> getDebugInfoSections() {
   std::vector<InputSection *> Ret;
   for (InputSectionBase *S : InputSections)
     if (InputSection *IS = dyn_cast<InputSection>(S))
-      if (IS->getParent() && IS->Name == ".debug_info")
+      if (IS->Name == ".debug_info")
         Ret.push_back(IS);
   return Ret;
 }
 
 void GdbIndexSection::buildIndex() {
-  std::vector<InputSection *> V = getDebugInfoSections();
-  if (V.empty())
+  if (Chunks.empty())
     return;
-
-  for (InputSection *Sec : V)
-    Chunks.push_back(readDwarf(Sec));
 
   uint32_t CuId = 0;
   for (GdbIndexChunk &D : Chunks) {
@@ -1796,21 +1818,31 @@ void GdbIndexSection::buildIndex() {
   }
 }
 
-GdbIndexChunk GdbIndexSection::readDwarf(InputSection *Sec) {
-  Expected<std::unique_ptr<object::ObjectFile>> Obj =
-      object::ObjectFile::createObjectFile(Sec->File->MB);
-  if (!Obj) {
-    error(toString(Sec->File) + ": error creating DWARF context");
-    return {};
-  }
-
-  DWARFContextInMemory Dwarf(*Obj.get());
-
+static GdbIndexChunk readDwarf(DWARFContextInMemory &Dwarf, InputSection *Sec) {
   GdbIndexChunk Ret;
-  Ret.CompilationUnits = readCuList(Dwarf, Sec);
+  Ret.DebugInfoSec = Sec;
+  Ret.CompilationUnits = readCuList(Dwarf);
   Ret.AddressArea = readAddressArea(Dwarf, Sec);
   Ret.NamesAndTypes = readPubNamesAndTypes(Dwarf, Config->IsLE);
   return Ret;
+}
+
+template <class ELFT> GdbIndexSection *elf::createGdbIndex() {
+  std::vector<GdbIndexChunk> Chunks;
+  for (InputSection *Sec : getDebugInfoSections()) {
+    InputFile *F = Sec->File;
+    std::error_code EC;
+    ELFObjectFile<ELFT> Obj(F->MB, EC);
+    if (EC)
+      fatal(EC.message());
+    DWARFContextInMemory Dwarf(Obj, nullptr, [&](Error E) {
+      error(toString(F) + ": error parsing DWARF data:\n>>> " +
+            toString(std::move(E)));
+      return ErrorPolicy::Continue;
+    });
+    Chunks.push_back(readDwarf(Dwarf, Sec));
+  }
+  return make<GdbIndexSection>(std::move(Chunks));
 }
 
 static size_t getCuSize(std::vector<GdbIndexChunk> &C) {
@@ -1870,7 +1902,7 @@ void GdbIndexSection::writeTo(uint8_t *Buf) {
   // Write the CU list.
   for (GdbIndexChunk &D : Chunks) {
     for (CompilationUnitEntry &Cu : D.CompilationUnits) {
-      write64le(Buf, Cu.CuOffset);
+      write64le(Buf, D.DebugInfoSec->OutSecOff + Cu.CuOffset);
       write64le(Buf + 8, Cu.CuLength);
       Buf += 16;
     }
@@ -2655,6 +2687,11 @@ PltSection *InX::Iplt;
 StringTableSection *InX::ShStrTab;
 StringTableSection *InX::StrTab;
 SymbolTableBaseSection *InX::SymTab;
+
+template GdbIndexSection *elf::createGdbIndex<ELF32LE>();
+template GdbIndexSection *elf::createGdbIndex<ELF32BE>();
+template GdbIndexSection *elf::createGdbIndex<ELF64LE>();
+template GdbIndexSection *elf::createGdbIndex<ELF64BE>();
 
 template void PltSection::addEntry<ELF32LE>(SymbolBody &Sym);
 template void PltSection::addEntry<ELF32BE>(SymbolBody &Sym);

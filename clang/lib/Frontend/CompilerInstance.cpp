@@ -11,6 +11,7 @@
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Decl.h"
+#include "clang/Basic/CharInfo.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/MemoryBufferCache.h"
@@ -516,7 +517,7 @@ IntrusiveRefCntPtr<ASTReader> CompilerInstance::createPCHExternalASTSource(
   HeaderSearchOptions &HSOpts = PP.getHeaderSearchInfo().getHeaderSearchOpts();
 
   IntrusiveRefCntPtr<ASTReader> Reader(new ASTReader(
-      PP, Context, PCHContainerRdr, Extensions,
+      PP, &Context, PCHContainerRdr, Extensions,
       Sysroot.empty() ? "" : Sysroot.data(), DisablePCHValidation,
       AllowPCHWithCompilerErrors, /*AllowConfigurationMismatch*/ false,
       HSOpts.ModulesValidateSystemHeaders, UseGlobalModuleIndex));
@@ -824,8 +825,11 @@ bool CompilerInstance::InitializeSourceManager(
     const FrontendInputFile &Input, DiagnosticsEngine &Diags,
     FileManager &FileMgr, SourceManager &SourceMgr, HeaderSearch *HS,
     DependencyOutputOptions &DepOpts, const FrontendOptions &Opts) {
-  SrcMgr::CharacteristicKind
-    Kind = Input.isSystem() ? SrcMgr::C_System : SrcMgr::C_User;
+  SrcMgr::CharacteristicKind Kind =
+      Input.getKind().getFormat() == InputKind::ModuleMap
+          ? Input.isSystem() ? SrcMgr::C_System_ModuleMap
+                             : SrcMgr::C_User_ModuleMap
+          : Input.isSystem() ? SrcMgr::C_System : SrcMgr::C_User;
 
   if (Input.isBuffer()) {
     SourceMgr.setMainFileID(SourceMgr.createFileID(
@@ -932,8 +936,9 @@ bool CompilerInstance::ExecuteAction(FrontendAction &Act) {
   if (!hasTarget())
     return false;
 
-  // Create TargetInfo for the other side of CUDA compilation.
-  if (getLangOpts().CUDA && !getFrontendOpts().AuxTriple.empty()) {
+  // Create TargetInfo for the other side of CUDA and OpenMP compilation.
+  if ((getLangOpts().CUDA || getLangOpts().OpenMPIsDevice) &&
+      !getFrontendOpts().AuxTriple.empty()) {
     auto TO = std::make_shared<TargetOptions>();
     TO->Triple = getFrontendOpts().AuxTriple;
     TO->HostTriple = getTarget().getTriple().str();
@@ -1468,7 +1473,7 @@ void CompilerInstance::createModuleManager() {
                                                  "Reading modules",
                                                  *FrontendTimerGroup);
     ModuleManager = new ASTReader(
-        getPreprocessor(), getASTContext(), getPCHContainerReader(),
+        getPreprocessor(), &getASTContext(), getPCHContainerReader(),
         getFrontendOpts().ModuleFileExtensions,
         Sysroot.empty() ? "" : Sysroot.c_str(), PPOpts.DisablePCHValidation,
         /*AllowASTWithCompilerErrors=*/false,
@@ -1902,17 +1907,23 @@ CompilerInstance::loadModule(SourceLocation ImportLoc,
 void CompilerInstance::loadModuleFromSource(SourceLocation ImportLoc,
                                             StringRef ModuleName,
                                             StringRef Source) {
+  // Avoid creating filenames with special characters.
+  SmallString<128> CleanModuleName(ModuleName);
+  for (auto &C : CleanModuleName)
+    if (!isAlphanumeric(C))
+      C = '_';
+
   // FIXME: Using a randomized filename here means that our intermediate .pcm
   // output is nondeterministic (as .pcm files refer to each other by name).
   // Can this affect the output in any way?
   SmallString<128> ModuleFileName;
   if (std::error_code EC = llvm::sys::fs::createTemporaryFile(
-          ModuleName, "pcm", ModuleFileName)) {
+          CleanModuleName, "pcm", ModuleFileName)) {
     getDiagnostics().Report(ImportLoc, diag::err_fe_unable_to_open_output)
         << ModuleFileName << EC.message();
     return;
   }
-  std::string ModuleMapFileName = (ModuleName + ".map").str();
+  std::string ModuleMapFileName = (CleanModuleName + ".map").str();
 
   FrontendInputFile Input(
       ModuleMapFileName,

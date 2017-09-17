@@ -10,17 +10,25 @@
 #ifndef LLVM_TOOLS_LLVMPDBDUMP_LINEPRINTER_H
 #define LLVM_TOOLS_LLVMPDBDUMP_LINEPRINTER_H
 
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
-#include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/BinaryStreamRef.h"
+#include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/Regex.h"
+#include "llvm/Support/raw_ostream.h"
 
 #include <list>
 
 namespace llvm {
+class BinaryStreamReader;
+namespace msf {
+class MSFStreamLayout;
+} // namespace msf
 namespace pdb {
 
 class ClassLayout;
+class PDBFile;
 
 class LinePrinter {
   friend class WithColor;
@@ -28,9 +36,30 @@ class LinePrinter {
 public:
   LinePrinter(int Indent, bool UseColor, raw_ostream &Stream);
 
-  void Indent();
-  void Unindent();
+  void Indent(uint32_t Amount = 0);
+  void Unindent(uint32_t Amount = 0);
   void NewLine();
+
+  void printLine(const Twine &T);
+  void print(const Twine &T);
+  template <typename... Ts> void formatLine(const char *Fmt, Ts &&... Items) {
+    printLine(formatv(Fmt, std::forward<Ts>(Items)...));
+  }
+  template <typename... Ts> void format(const char *Fmt, Ts &&... Items) {
+    print(formatv(Fmt, std::forward<Ts>(Items)...));
+  }
+
+  void formatBinary(StringRef Label, ArrayRef<uint8_t> Data,
+                    uint32_t StartOffset);
+  void formatBinary(StringRef Label, ArrayRef<uint8_t> Data, uint64_t BaseAddr,
+                    uint32_t StartOffset);
+
+  void formatMsfStreamData(StringRef Label, PDBFile &File, uint32_t StreamIdx,
+                           StringRef StreamPurpose, uint32_t Offset,
+                           uint32_t Size);
+  void formatMsfStreamData(StringRef Label, PDBFile &File,
+                           const msf::MSFStreamLayout &Stream,
+                           BinarySubstreamRef Substream);
 
   bool hasColor() const { return UseColor; }
   raw_ostream &getStream() { return OS; }
@@ -61,6 +90,17 @@ private:
   std::list<Regex> IncludeCompilandFilters;
   std::list<Regex> IncludeTypeFilters;
   std::list<Regex> IncludeSymbolFilters;
+};
+
+struct AutoIndent {
+  explicit AutoIndent(LinePrinter &L, uint32_t Amount = 0)
+      : L(L), Amount(Amount) {
+    L.Indent(Amount);
+  }
+  ~AutoIndent() { L.Unindent(Amount); }
+
+  LinePrinter &L;
+  uint32_t Amount = 0;
 };
 
 template <class T>

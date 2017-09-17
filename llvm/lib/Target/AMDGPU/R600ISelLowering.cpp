@@ -584,23 +584,23 @@ SDValue R600TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
       return LowerImplicitParameter(DAG, VT, DL, 8);
 
     case Intrinsic::r600_read_tgid_x:
-      return CreateLiveInRegister(DAG, &AMDGPU::R600_TReg32RegClass,
-                                  AMDGPU::T1_X, VT);
+      return CreateLiveInRegisterRaw(DAG, &AMDGPU::R600_TReg32RegClass,
+                                     AMDGPU::T1_X, VT);
     case Intrinsic::r600_read_tgid_y:
-      return CreateLiveInRegister(DAG, &AMDGPU::R600_TReg32RegClass,
-                                  AMDGPU::T1_Y, VT);
+      return CreateLiveInRegisterRaw(DAG, &AMDGPU::R600_TReg32RegClass,
+                                     AMDGPU::T1_Y, VT);
     case Intrinsic::r600_read_tgid_z:
-      return CreateLiveInRegister(DAG, &AMDGPU::R600_TReg32RegClass,
-                                  AMDGPU::T1_Z, VT);
+      return CreateLiveInRegisterRaw(DAG, &AMDGPU::R600_TReg32RegClass,
+                                     AMDGPU::T1_Z, VT);
     case Intrinsic::r600_read_tidig_x:
-      return CreateLiveInRegister(DAG, &AMDGPU::R600_TReg32RegClass,
-                                  AMDGPU::T0_X, VT);
+      return CreateLiveInRegisterRaw(DAG, &AMDGPU::R600_TReg32RegClass,
+                                     AMDGPU::T0_X, VT);
     case Intrinsic::r600_read_tidig_y:
-      return CreateLiveInRegister(DAG, &AMDGPU::R600_TReg32RegClass,
-                                  AMDGPU::T0_Y, VT);
+      return CreateLiveInRegisterRaw(DAG, &AMDGPU::R600_TReg32RegClass,
+                                     AMDGPU::T0_Y, VT);
     case Intrinsic::r600_read_tidig_z:
-      return CreateLiveInRegister(DAG, &AMDGPU::R600_TReg32RegClass,
-                                  AMDGPU::T0_Z, VT);
+      return CreateLiveInRegisterRaw(DAG, &AMDGPU::R600_TReg32RegClass,
+                                     AMDGPU::T0_Z, VT);
 
     case Intrinsic::r600_recipsqrt_ieee:
       return DAG.getNode(AMDGPUISD::RSQ, DL, VT, Op.getOperand(1));
@@ -1618,7 +1618,8 @@ EVT R600TargetLowering::getSetCCResultType(const DataLayout &DL, LLVMContext &,
    return VT.changeVectorElementTypeToInteger();
 }
 
-bool R600TargetLowering::canMergeStoresTo(unsigned AS, EVT MemVT) const {
+bool R600TargetLowering::canMergeStoresTo(unsigned AS, EVT MemVT,
+                                          const SelectionDAG &DAG) const {
   // Local and Private addresses do not handle vectors. Limit to i32
   if ((AS == AMDGPUASI.LOCAL_ADDRESS || AS == AMDGPUASI.PRIVATE_ADDRESS)) {
     return (MemVT.getSizeInBits() <= 32);

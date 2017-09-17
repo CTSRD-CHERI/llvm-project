@@ -65,12 +65,15 @@ public:
     return SymbolKind == LazyArchiveKind || SymbolKind == LazyObjectKind;
   }
   bool isShared() const { return SymbolKind == SharedKind; }
-  bool isInCurrentDSO() const { return !isUndefined() && !isShared(); }
+  bool isInCurrentDSO() const {
+    return !isUndefined() && !isShared() && !isLazy();
+  }
   bool isLocal() const { return IsLocal; }
   bool isPreemptible() const;
   StringRef getName() const { return Name; }
   uint8_t getVisibility() const { return StOther & 0x3; }
   void parseSymbolVersion();
+  void copy(SymbolBody *Other);
 
   bool isInGot() const { return GotIndex != -1U; }
   bool isInPlt() const { return PltIndex != -1U; }
@@ -217,7 +220,7 @@ public:
         Verdef(Verdef), ElfSym(ElfSym) {
     // IFuncs defined in DSOs are treated as functions by the static linker.
     if (isGnuIFunc())
-      Type = llvm::ELF::STT_FUNC;
+      this->Type = llvm::ELF::STT_FUNC;
     this->File = File;
   }
 
@@ -316,6 +319,11 @@ struct ElfSym {
   // end and _end
   static DefinedRegular *End1;
   static DefinedRegular *End2;
+
+  // The _GLOBAL_OFFSET_TABLE_ symbol is defined by target convention to
+  // be at some offset from the base of the .got section, usually 0 or
+  // the end of the .got.
+  static DefinedRegular *GlobalOffsetTable;
 
   // _gp, _gp_disp and __gnu_local_gp symbols. Only for MIPS.
   static DefinedRegular *MipsGp;

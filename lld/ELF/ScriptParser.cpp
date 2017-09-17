@@ -113,6 +113,12 @@ private:
 };
 } // namespace
 
+static StringRef unquote(StringRef S) {
+  if (S.startswith("\""))
+    return S.substr(1, S.size() - 2);
+  return S;
+}
+
 static bool isUnderSysroot(StringRef Path) {
   if (Config->Sysroot == "")
     return false;
@@ -1103,6 +1109,10 @@ void ScriptParser::readVersionDeclaration(StringRef VerStr) {
   expect(";");
 }
 
+static bool hasWildcard(StringRef S) {
+  return S.find_first_of("?*[") != StringRef::npos;
+}
+
 // Reads a list of symbols, e.g. "{ global: foo; bar; local: *; };".
 std::pair<std::vector<SymbolVersion>, std::vector<SymbolVersion>>
 ScriptParser::readSymbols() {
@@ -1191,8 +1201,7 @@ void ScriptParser::readMemory() {
     if (It != Script->Opt.MemoryRegions.end())
       setError("region '" + Name + "' already defined");
     else
-      Script->Opt.MemoryRegions[Name] = {Name,   Origin, Length,
-                                         Origin, Flags,  NegFlags};
+      Script->Opt.MemoryRegions[Name] = {Name, Origin, Length, Flags, NegFlags};
   }
 }
 

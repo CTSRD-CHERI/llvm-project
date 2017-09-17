@@ -230,6 +230,14 @@ ArrayRef<support::ulittle32_t> PDBFile::getDirectoryBlockArray() const {
   return ContainerLayout.DirectoryBlocks;
 }
 
+MSFStreamLayout PDBFile::getStreamLayout(uint32_t StreamIdx) const {
+  MSFStreamLayout Result;
+  auto Blocks = getStreamBlockList(StreamIdx);
+  Result.Blocks.assign(Blocks.begin(), Blocks.end());
+  Result.Length = getStreamByteSize(StreamIdx);
+  return Result;
+}
+
 Expected<GlobalsStream &> PDBFile::getPDBGlobalsStream() {
   if (!Globals) {
     auto DbiS = getPDBDbiStream();
@@ -363,12 +371,25 @@ Expected<PDBStringTable &> PDBFile::getStringTable() {
   return *Strings;
 }
 
+uint32_t PDBFile::getPointerSize() {
+  auto DbiS = getPDBDbiStream();
+  if (!DbiS)
+    return 0;
+  PDB_Machine Machine = DbiS->getMachineType();
+  if (Machine == PDB_Machine::Amd64)
+    return 8;
+  return 4;
+}
+
 bool PDBFile::hasPDBDbiStream() const { return StreamDBI < getNumStreams(); }
 
 bool PDBFile::hasPDBGlobalsStream() {
   auto DbiS = getPDBDbiStream();
-  if (!DbiS)
+  if (!DbiS) {
+    consumeError(DbiS.takeError());
     return false;
+  }
+
   return DbiS->getGlobalSymbolStreamIndex() < getNumStreams();
 }
 
@@ -378,8 +399,10 @@ bool PDBFile::hasPDBIpiStream() const { return StreamIPI < getNumStreams(); }
 
 bool PDBFile::hasPDBPublicsStream() {
   auto DbiS = getPDBDbiStream();
-  if (!DbiS)
+  if (!DbiS) {
+    consumeError(DbiS.takeError());
     return false;
+  }
   return DbiS->getPublicSymbolStreamIndex() < getNumStreams();
 }
 

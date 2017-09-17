@@ -31,12 +31,6 @@ class ReturnValueTestCase(TestBase):
             "<=",
             "3.6"],
         archs=["i386"])
-    @expectedFailureAll(
-        bugnumber="llvm.org/pr25785",
-        hostoslist=["windows"],
-        compiler="gcc",
-        archs=["i386"],
-        triple='.*-android')
     @expectedFailureAll(oslist=["windows"], bugnumber="llvm.org/pr24778")
     @add_test_categories(['pyapi'])
     def test_with_python(self):
@@ -185,12 +179,6 @@ class ReturnValueTestCase(TestBase):
             "<=",
             "3.6"],
         archs=["i386"])
-    @expectedFailureAll(
-        bugnumber="llvm.org/pr25785",
-        hostoslist=["windows"],
-        compiler="gcc",
-        archs=["i386"],
-        triple='.*-android')
     @expectedFailureAll(compiler=["gcc"], archs=["x86_64", "i386"])
     @expectedFailureAll(oslist=["windows"], bugnumber="llvm.org/pr24778")
     def test_vector_values(self):

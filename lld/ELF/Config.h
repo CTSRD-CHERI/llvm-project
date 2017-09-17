@@ -70,7 +70,7 @@ struct VersionDefinition {
 // Structure for mapping renamed symbols
 struct RenamedSymbol {
   Symbol *Target;
-  uint8_t OrigBinding;
+  uint8_t OriginalBinding;
 };
 
 // This struct contains the global configuration for the linker.
@@ -97,6 +97,7 @@ struct Configuration {
   llvm::StringRef ThinLTOCacheDir;
   std::string Rpath;
   std::vector<VersionDefinition> VersionDefinitions;
+  std::vector<llvm::StringRef> Argv;
   std::vector<llvm::StringRef> AuxiliaryList;
   std::vector<llvm::StringRef> FilterList;
   std::vector<llvm::StringRef> SearchPaths;

@@ -1,4 +1,4 @@
-//===-- llvm/Target/TargetLowering.h - Target Lowering Info -----*- C++ -*-===//
+//===- llvm/Target/TargetLowering.h - Target Lowering Info ------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -23,6 +23,7 @@
 #ifndef LLVM_TARGET_TARGETLOWERING_H
 #define LLVM_TARGET_TARGETLOWERING_H
 
+#include "llvm/ADT/APInt.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLExtras.h"
@@ -40,6 +41,7 @@
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Instruction.h"
@@ -66,10 +68,13 @@ namespace llvm {
 class BranchProbability;
 class CCState;
 class CCValAssign;
+class Constant;
 class FastISel;
 class FunctionLoweringInfo;
+class GlobalValue;
 class IntrinsicInst;
 struct KnownBits;
+class LLVMContext;
 class MachineBasicBlock;
 class MachineFunction;
 class MachineInstr;
@@ -78,6 +83,7 @@ class MachineLoop;
 class MachineRegisterInfo;
 class MCContext;
 class MCExpr;
+class Module;
 class TargetRegisterClass;
 class TargetLibraryInfo;
 class TargetRegisterInfo;
@@ -127,7 +133,7 @@ public:
 
   /// LegalizeKind holds the legalization kind that needs to happen to EVT
   /// in order to type-legalize it.
-  typedef std::pair<LegalizeTypeAction, EVT> LegalizeKind;
+  using LegalizeKind = std::pair<LegalizeTypeAction, EVT>;
 
   /// Enum that describes how the target represents true/false values.
   enum BooleanContent {
@@ -189,7 +195,7 @@ public:
 
     void setAttributes(ImmutableCallSite *CS, unsigned ArgIdx);
   };
-  typedef std::vector<ArgListEntry> ArgListTy;
+  using ArgListTy = std::vector<ArgListEntry>;
 
   virtual void markLibCallAttributes(MachineFunction *MF, unsigned CC,
                                      ArgListTy &Args) const {};
@@ -211,8 +217,8 @@ public:
 
   /// NOTE: The TargetMachine owns TLOF.
   explicit TargetLoweringBase(const TargetMachine &TM);
-  TargetLoweringBase(const TargetLoweringBase&) = delete;
-  void operator=(const TargetLoweringBase&) = delete;
+  TargetLoweringBase(const TargetLoweringBase &) = delete;
+  TargetLoweringBase &operator=(const TargetLoweringBase &) = delete;
   virtual ~TargetLoweringBase() = default;
 
 protected:
@@ -404,8 +410,13 @@ public:
     return false;
   }
 
+  /// Should we merge stores after Legalization (generally
+  /// better quality) or before (simpler)
+  virtual bool mergeStoresAfterLegalization() const { return false; }
+
   /// Returns if it's reasonable to merge stores to MemVT size.
-  virtual bool canMergeStoresTo(unsigned AddressSpace, EVT MemVT) const {
+  virtual bool canMergeStoresTo(unsigned AS, EVT MemVT,
+                                const SelectionDAG &DAG) const {
     return true;
   }
 
@@ -1364,6 +1375,12 @@ public:
   /// Returns the target-specific address of the unsafe stack pointer.
   virtual Value *getSafeStackPointerLocation(IRBuilder<> &IRB) const;
 
+  /// Returns the name of the symbol used to emit stack probes or the empty
+  /// string if not applicable.
+  virtual StringRef getStackProbeSymbolName(MachineFunction &MF) const {
+    return "";
+  }
+
   /// Returns true if a cast between SrcAS and DestAS is a noop.
   virtual bool isNoopAddrSpaceCast(unsigned SrcAS, unsigned DestAS) const {
     return false;
@@ -1995,6 +2012,35 @@ public:
     return isExtFreeImpl(I);
   }
 
+  /// Return true if \p Load and \p Ext can form an ExtLoad.
+  /// For example, in AArch64
+  ///   %L = load i8, i8* %ptr
+  ///   %E = zext i8 %L to i32
+  /// can be lowered into one load instruction
+  ///   ldrb w0, [x0]
+  bool isExtLoad(const LoadInst *Load, const Instruction *Ext,
+                 const DataLayout &DL) const {
+    EVT VT = getValueType(DL, Ext->getType());
+    EVT LoadVT = getValueType(DL, Load->getType());
+
+    // If the load has other users and the truncate is not free, the ext
+    // probably isn't free.
+    if (!Load->hasOneUse() && (isTypeLegal(LoadVT) || !isTypeLegal(VT)) &&
+        !isTruncateFree(Ext->getType(), Load->getType()))
+      return false;
+
+    // Check whether the target supports casts folded into loads.
+    unsigned LType;
+    if (isa<ZExtInst>(Ext))
+      LType = ISD::ZEXTLOAD;
+    else {
+      assert(isa<SExtInst>(Ext) && "Unexpected ext type!");
+      LType = ISD::SEXTLOAD;
+    }
+
+    return isLoadExtLegal(LType, VT, LoadVT);
+  }
+
   /// Return true if any actual instruction that defines a value of type FromTy
   /// implicitly zero-extends the value to ToTy in the result register.
   ///
@@ -2035,7 +2081,7 @@ public:
   /// this information should not be provided because it will generate more
   /// loads.
   virtual bool hasPairedLoad(EVT /*LoadedType*/,
-                             unsigned & /*RequiredAligment*/) const {
+                             unsigned & /*RequiredAlignment*/) const {
     return false;
   }
 
@@ -2455,8 +2501,8 @@ class TargetLowering : public TargetLoweringBase {
 public:
   struct DAGCombinerInfo;
 
-  TargetLowering(const TargetLowering&) = delete;
-  void operator=(const TargetLowering&) = delete;
+  TargetLowering(const TargetLowering &) = delete;
+  TargetLowering &operator=(const TargetLowering &) = delete;
 
   /// NOTE: The TargetMachine owns TLOF.
   explicit TargetLowering(const TargetMachine &TM);
@@ -2706,8 +2752,20 @@ public:
   //  This transformation may not be desirable if it disrupts a particularly
   //  auspicious target-specific tree (e.g. bitfield extraction in AArch64).
   //  By default, it returns true.
-  virtual bool isDesirableToCommuteWithShift(const SDNode *N /*Op*/) const {
+  virtual bool isDesirableToCommuteWithShift(const SDNode *N) const {
     return true;
+  }
+
+  // Return true if it is profitable to combine a BUILD_VECTOR to a TRUNCATE.
+  // Example of such a combine:
+  // v4i32 build_vector((extract_elt V, 0),
+  //                    (extract_elt V, 2),
+  //                    (extract_elt V, 4),
+  //                    (extract_elt V, 6))
+  //  -->
+  // v4i32 truncate (bitcast V to v4i64)
+  virtual bool isDesirableToCombineBuildVectorToTruncate() const {
+    return false;
   }
 
   /// Return true if the target has native support for the specified value type
@@ -2772,7 +2830,6 @@ public:
   /// described by the Ins array, into the specified DAG. The implementation
   /// should fill in the InVals array with legal-type argument values, and
   /// return the resulting token chain value.
-  ///
   virtual SDValue LowerFormalArguments(
       SDValue /*Chain*/, CallingConv::ID /*CallConv*/, bool /*isVarArg*/,
       const SmallVectorImpl<ISD::InputArg> & /*Ins*/, const SDLoc & /*dl*/,
@@ -2786,7 +2843,7 @@ public:
   /// implementation.
   struct CallLoweringInfo {
     SDValue Chain;
-    Type *RetTy;
+    Type *RetTy = nullptr;
     bool RetSExt           : 1;
     bool RetZExt           : 1;
     bool IsVarArg          : 1;
@@ -2794,30 +2851,31 @@ public:
     bool DoesNotReturn     : 1;
     bool IsReturnValueUsed : 1;
     bool IsConvergent      : 1;
+    bool IsPatchPoint      : 1;
 
     // IsTailCall should be modified by implementations of
     // TargetLowering::LowerCall that perform tail call conversions.
-    bool IsTailCall;
+    bool IsTailCall = false;
 
-    unsigned NumFixedArgs;
-    CallingConv::ID CallConv;
+    // Is Call lowering done post SelectionDAG type legalization.
+    bool IsPostTypeLegalization = false;
+
+    unsigned NumFixedArgs = -1;
+    CallingConv::ID CallConv = CallingConv::C;
     SDValue Callee;
     ArgListTy Args;
     SelectionDAG &DAG;
     SDLoc DL;
-    ImmutableCallSite *CS;
-    bool IsPatchPoint;
+    ImmutableCallSite *CS = nullptr;
     SmallVector<ISD::OutputArg, 32> Outs;
     SmallVector<SDValue, 32> OutVals;
     SmallVector<ISD::InputArg, 32> Ins;
     SmallVector<SDValue, 4> InVals;
 
     CallLoweringInfo(SelectionDAG &DAG)
-        : RetTy(nullptr), RetSExt(false), RetZExt(false), IsVarArg(false),
-          IsInReg(false), DoesNotReturn(false), IsReturnValueUsed(true),
-          IsConvergent(false), IsTailCall(false), NumFixedArgs(-1),
-          CallConv(CallingConv::C), DAG(DAG), CS(nullptr), IsPatchPoint(false) {
-    }
+        : RetSExt(false), RetZExt(false), IsVarArg(false), IsInReg(false),
+          DoesNotReturn(false), IsReturnValueUsed(true), IsConvergent(false),
+          IsPatchPoint(false), DAG(DAG) {}
 
     CallLoweringInfo &setDebugLoc(const SDLoc &dl) {
       DL = dl;
@@ -2921,6 +2979,11 @@ public:
 
     CallLoweringInfo &setIsPatchPoint(bool Value = true) {
       IsPatchPoint = Value;
+      return *this;
+    }
+
+    CallLoweringInfo &setIsPostTypeLegalization(bool Value=true) {
+      IsPostTypeLegalization = Value;
       return *this;
     }
 
@@ -3042,6 +3105,13 @@ public:
     return Chain;
   }
 
+  /// This callback is used to inspect load/store instructions and add
+  /// target-specific MachineMemOperand flags to them.  The default
+  /// implementation does nothing.
+  virtual MachineMemOperand::Flags getMMOFlags(const Instruction &I) const {
+    return MachineMemOperand::MONone;
+  }
+
   /// This callback is invoked by the type legalizer to legalize nodes with an
   /// illegal operand type but legal result types.  It replaces the
   /// LowerOperation callback in the type Legalizer.  The reason we can not do
@@ -3091,7 +3161,6 @@ public:
     return nullptr;
   }
 
-
   bool verifyReturnAddressArgumentIsConstant(SDValue Op,
                                              SelectionDAG &DAG) const;
 
@@ -3140,15 +3209,19 @@ public:
 
     /// Information about the constraint code, e.g. Register, RegisterClass,
     /// Memory, Other, Unknown.
-    TargetLowering::ConstraintType ConstraintType;
+    TargetLowering::ConstraintType ConstraintType = TargetLowering::C_Unknown;
 
     /// If this is the result output operand or a clobber, this is null,
     /// otherwise it is the incoming operand to the CallInst.  This gets
     /// modified as the asm is processed.
-    Value *CallOperandVal;
+    Value *CallOperandVal = nullptr;
 
     /// The ValueType for the operand value.
-    MVT ConstraintVT;
+    MVT ConstraintVT = MVT::Other;
+
+    /// Copy constructor for copying from a ConstraintInfo.
+    AsmOperandInfo(InlineAsm::ConstraintInfo Info)
+        : InlineAsm::ConstraintInfo(std::move(Info)) {}
 
     /// Return true of this is an input operand that is a matching constraint
     /// like "4".
@@ -3157,15 +3230,9 @@ public:
     /// If this is an input matching constraint, this method returns the output
     /// operand it matches.
     unsigned getMatchedOperand() const;
-
-    /// Copy constructor for copying from a ConstraintInfo.
-    AsmOperandInfo(InlineAsm::ConstraintInfo Info)
-        : InlineAsm::ConstraintInfo(std::move(Info)),
-          ConstraintType(TargetLowering::C_Unknown), CallOperandVal(nullptr),
-          ConstraintVT(MVT::Other) {}
   };
 
-  typedef std::vector<AsmOperandInfo> AsmOperandInfoVector;
+  using AsmOperandInfoVector = std::vector<AsmOperandInfo>;
 
   /// Split up the constraint string from the inline assembly value into the
   /// specific constraints and their prefixes, and also tie in the associated

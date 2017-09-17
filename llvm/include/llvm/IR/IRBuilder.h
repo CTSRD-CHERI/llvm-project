@@ -435,27 +435,25 @@ public:
                          MDNode *ScopeTag = nullptr,
                          MDNode *NoAliasTag = nullptr);
 
-  /// \brief Create and insert an atomic memcpy between the specified
-  /// pointers.
+  /// \brief Create and insert an element unordered-atomic memcpy between the
+  /// specified pointers.
   ///
   /// If the pointers aren't i8*, they will be converted.  If a TBAA tag is
   /// specified, it will be added to the instruction. Likewise with alias.scope
   /// and noalias tags.
-  CallInst *CreateElementAtomicMemCpy(
-      Value *Dst, Value *Src, uint64_t NumElements, uint32_t ElementSize,
+  CallInst *CreateElementUnorderedAtomicMemCpy(
+      Value *Dst, Value *Src, uint64_t Size, uint32_t ElementSize,
       MDNode *TBAATag = nullptr, MDNode *TBAAStructTag = nullptr,
       MDNode *ScopeTag = nullptr, MDNode *NoAliasTag = nullptr) {
-    return CreateElementAtomicMemCpy(Dst, Src, getInt64(NumElements),
-                                     ElementSize, TBAATag, TBAAStructTag,
-                                     ScopeTag, NoAliasTag);
+    return CreateElementUnorderedAtomicMemCpy(
+        Dst, Src, getInt64(Size), ElementSize, TBAATag, TBAAStructTag, ScopeTag,
+        NoAliasTag);
   }
 
-  CallInst *CreateElementAtomicMemCpy(Value *Dst, Value *Src,
-                                      Value *NumElements, uint32_t ElementSize,
-                                      MDNode *TBAATag = nullptr,
-                                      MDNode *TBAAStructTag = nullptr,
-                                      MDNode *ScopeTag = nullptr,
-                                      MDNode *NoAliasTag = nullptr);
+  CallInst *CreateElementUnorderedAtomicMemCpy(
+      Value *Dst, Value *Src, Value *Size, uint32_t ElementSize,
+      MDNode *TBAATag = nullptr, MDNode *TBAAStructTag = nullptr,
+      MDNode *ScopeTag = nullptr, MDNode *NoAliasTag = nullptr);
 
   /// \brief Create and insert a memmove between the specified
   /// pointers.
@@ -1064,7 +1062,7 @@ public:
 
   Value *CreateAnd(Value *LHS, Value *RHS, const Twine &Name = "") {
     if (Constant *RC = dyn_cast<Constant>(RHS)) {
-      if (isa<ConstantInt>(RC) && cast<ConstantInt>(RC)->isAllOnesValue())
+      if (isa<ConstantInt>(RC) && cast<ConstantInt>(RC)->isMinusOne())
         return LHS;  // LHS & -1 -> LHS
       if (Constant *LC = dyn_cast<Constant>(LHS))
         return Insert(Folder.CreateAnd(LC, RC), Name);
@@ -1205,22 +1203,22 @@ public:
     return SI;
   }
   FenceInst *CreateFence(AtomicOrdering Ordering,
-                         SynchronizationScope SynchScope = CrossThread,
+                         SyncScope::ID SSID = SyncScope::System,
                          const Twine &Name = "") {
-    return Insert(new FenceInst(Context, Ordering, SynchScope), Name);
+    return Insert(new FenceInst(Context, Ordering, SSID), Name);
   }
   AtomicCmpXchgInst *
   CreateAtomicCmpXchg(Value *Ptr, Value *Cmp, Value *New,
                       AtomicOrdering SuccessOrdering,
                       AtomicOrdering FailureOrdering,
-                      SynchronizationScope SynchScope = CrossThread) {
+                      SyncScope::ID SSID = SyncScope::System) {
     return Insert(new AtomicCmpXchgInst(Ptr, Cmp, New, SuccessOrdering,
-                                        FailureOrdering, SynchScope));
+                                        FailureOrdering, SSID));
   }
   AtomicRMWInst *CreateAtomicRMW(AtomicRMWInst::BinOp Op, Value *Ptr, Value *Val,
                                  AtomicOrdering Ordering,
-                               SynchronizationScope SynchScope = CrossThread) {
-    return Insert(new AtomicRMWInst(Op, Ptr, Val, Ordering, SynchScope));
+                                 SyncScope::ID SSID = SyncScope::System) {
+    return Insert(new AtomicRMWInst(Op, Ptr, Val, Ordering, SSID));
   }
   Value *CreateGEP(Value *Ptr, ArrayRef<Value *> IdxList,
                    const Twine &Name = "") {
@@ -1519,11 +1517,9 @@ public:
                                 const Twine &Name = "") {
     if (V->getType() == DestTy)
       return V;
-    if (V->getType()->getScalarType()->isPointerTy() &&
-        DestTy->getScalarType()->isIntegerTy())
+    if (V->getType()->isPtrOrPtrVectorTy() && DestTy->isIntOrIntVectorTy())
       return CreatePtrToInt(V, DestTy, Name);
-    if (V->getType()->getScalarType()->isIntegerTy() &&
-        DestTy->getScalarType()->isPointerTy())
+    if (V->getType()->isIntOrIntVectorTy() && DestTy->isPtrOrPtrVectorTy())
       return CreateIntToPtr(V, DestTy, Name);
 
     return CreateBitCast(V, DestTy, Name);

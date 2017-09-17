@@ -45,9 +45,9 @@
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/State.h"
 #include "lldb/Core/StreamFile.h"
-#include "lldb/Core/Timer.h"
 #include "lldb/Utility/Log.h"
 #include "lldb/Utility/Stream.h"
+#include "lldb/Utility/Timer.h"
 
 #ifndef LLDB_DISABLE_LIBEDIT
 #include "lldb/Host/Editline.h"
@@ -2475,7 +2475,7 @@ void CommandInterpreter::HandleCommandsFromFile(
 }
 
 ScriptInterpreter *CommandInterpreter::GetScriptInterpreter(bool can_create) {
-  std::lock_guard<std::mutex> locker(m_script_interpreter_mutex);
+  std::lock_guard<std::recursive_mutex> locker(m_script_interpreter_mutex);
   if (!m_script_interpreter_sp) {
     if (!can_create)
       return nullptr;

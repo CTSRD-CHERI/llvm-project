@@ -770,7 +770,7 @@ void SIInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
 
     if (ST.hasScalarStores()) {
       // m0 is used for offset to scalar stores if used to spill.
-      Spill.addReg(AMDGPU::M0, RegState::ImplicitDefine);
+      Spill.addReg(AMDGPU::M0, RegState::ImplicitDefine | RegState::Dead);
     }
 
     return;
@@ -871,7 +871,7 @@ void SIInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
 
     if (ST.hasScalarStores()) {
       // m0 is used for offset to scalar stores if used to spill.
-      Spill.addReg(AMDGPU::M0, RegState::ImplicitDefine);
+      Spill.addReg(AMDGPU::M0, RegState::ImplicitDefine | RegState::Dead);
     }
 
     return;
@@ -2022,10 +2022,12 @@ MachineInstr *SIInstrInfo::convertToThreeAddress(MachineFunction::iterator &MBB,
     return nullptr;
   case AMDGPU::V_MAC_F16_e64:
     IsF16 = true;
+    LLVM_FALLTHROUGH;
   case AMDGPU::V_MAC_F32_e64:
     break;
   case AMDGPU::V_MAC_F16_e32:
     IsF16 = true;
+    LLVM_FALLTHROUGH;
   case AMDGPU::V_MAC_F32_e32: {
     int Src0Idx = AMDGPU::getNamedOperandIdx(MI.getOpcode(),
                                              AMDGPU::OpName::src0);
@@ -2108,7 +2110,9 @@ bool SIInstrInfo::isInlineConstant(const APInt &Imm) const {
 
 bool SIInstrInfo::isInlineConstant(const MachineOperand &MO,
                                    uint8_t OperandType) const {
-  if (!MO.isImm() || OperandType < MCOI::OPERAND_FIRST_TARGET)
+  if (!MO.isImm() ||
+      OperandType < AMDGPU::OPERAND_SRC_FIRST ||
+      OperandType > AMDGPU::OPERAND_SRC_LAST)
     return false;
 
   // MachineOperand provides no way to tell the true operand size, since it only
@@ -2433,8 +2437,77 @@ bool SIInstrInfo::verifyInstruction(const MachineInstr &MI,
     }
   }
 
+  // Verify SDWA
+  if (isSDWA(MI)) {
+
+    if (!ST.hasSDWA()) {
+      ErrInfo = "SDWA is not supported on this target";
+      return false;
+    }
+
+    int DstIdx = AMDGPU::getNamedOperandIdx(Opcode, AMDGPU::OpName::vdst);
+
+    const int OpIndicies[] = { DstIdx, Src0Idx, Src1Idx, Src2Idx };
+
+    for (int OpIdx: OpIndicies) {
+      if (OpIdx == -1)
+        continue;
+      const MachineOperand &MO = MI.getOperand(OpIdx);
+
+      if (!ST.hasSDWAScalar()) {
+        // Only VGPRS on VI
+        if (!MO.isReg() || !RI.hasVGPRs(RI.getRegClassForReg(MRI, MO.getReg()))) {
+          ErrInfo = "Only VGPRs allowed as operands in SDWA instructions on VI";
+          return false;
+        }
+      } else {
+        // No immediates on GFX9
+        if (!MO.isReg()) {
+          ErrInfo = "Only reg allowed as operands in SDWA instructions on GFX9";
+          return false;
+        }
+      }
+    }
+
+    if (!ST.hasSDWAOmod()) {
+      // No omod allowed on VI
+      const MachineOperand *OMod = getNamedOperand(MI, AMDGPU::OpName::omod);
+      if (OMod != nullptr &&
+        (!OMod->isImm() || OMod->getImm() != 0)) {
+        ErrInfo = "OMod not allowed in SDWA instructions on VI";
+        return false;
+      }
+    }
+
+    uint16_t BasicOpcode = AMDGPU::getBasicFromSDWAOp(Opcode);
+    if (isVOPC(BasicOpcode)) {
+      if (!ST.hasSDWASdst() && DstIdx != -1) {
+        // Only vcc allowed as dst on VI for VOPC
+        const MachineOperand &Dst = MI.getOperand(DstIdx);
+        if (!Dst.isReg() || Dst.getReg() != AMDGPU::VCC) {
+          ErrInfo = "Only VCC allowed as dst in SDWA instructions on VI";
+          return false;
+        }
+      } else if (!ST.hasSDWAOutModsVOPC()) {
+        // No clamp allowed on GFX9 for VOPC
+        const MachineOperand *Clamp = getNamedOperand(MI, AMDGPU::OpName::clamp);
+        if (Clamp && (!Clamp->isImm() || Clamp->getImm() != 0)) {
+          ErrInfo = "Clamp not allowed in VOPC SDWA instructions on VI";
+          return false;
+        }
+
+        // No omod allowed on GFX9 for VOPC
+        const MachineOperand *OMod = getNamedOperand(MI, AMDGPU::OpName::omod);
+        if (OMod && (!OMod->isImm() || OMod->getImm() != 0)) {
+          ErrInfo = "OMod not allowed in VOPC SDWA instructions on VI";
+          return false;
+        }
+      }
+    }
+  }
+
   // Verify VOP*
-  if (isVOP1(MI) || isVOP2(MI) || isVOP3(MI) || isVOPC(MI)) {
+  if (isVOP1(MI) || isVOP2(MI) || isVOP3(MI) || isVOPC(MI) || isSDWA(MI)) {
     // Only look at the true operands. Only a real operand can use the constant
     // bus, and we don't want to check pseudo-operands like the source modifier
     // flags.
@@ -3335,8 +3408,8 @@ void SIInstrInfo::legalizeOperands(MachineInstr &MI) const {
 }
 
 void SIInstrInfo::moveToVALU(MachineInstr &TopInst) const {
-  SmallVector<MachineInstr *, 128> Worklist;
-  Worklist.push_back(&TopInst);
+  SetVectorType Worklist;
+  Worklist.insert(&TopInst);
 
   while (!Worklist.empty()) {
     MachineInstr &Inst = *Worklist.pop_back_val();
@@ -3537,7 +3610,7 @@ void SIInstrInfo::moveToVALU(MachineInstr &TopInst) const {
   }
 }
 
-void SIInstrInfo::lowerScalarAbs(SmallVectorImpl<MachineInstr *> &Worklist,
+void SIInstrInfo::lowerScalarAbs(SetVectorType &Worklist,
                                  MachineInstr &Inst) const {
   MachineBasicBlock &MBB = *Inst.getParent();
   MachineRegisterInfo &MRI = MBB.getParent()->getRegInfo();
@@ -3562,7 +3635,7 @@ void SIInstrInfo::lowerScalarAbs(SmallVectorImpl<MachineInstr *> &Worklist,
 }
 
 void SIInstrInfo::splitScalar64BitUnaryOp(
-    SmallVectorImpl<MachineInstr *> &Worklist, MachineInstr &Inst,
+    SetVectorType &Worklist, MachineInstr &Inst,
     unsigned Opcode) const {
   MachineBasicBlock &MBB = *Inst.getParent();
   MachineRegisterInfo &MRI = MBB.getParent()->getRegInfo();
@@ -3613,7 +3686,7 @@ void SIInstrInfo::splitScalar64BitUnaryOp(
 }
 
 void SIInstrInfo::splitScalar64BitBinaryOp(
-    SmallVectorImpl<MachineInstr *> &Worklist, MachineInstr &Inst,
+    SetVectorType &Worklist, MachineInstr &Inst,
     unsigned Opcode) const {
   MachineBasicBlock &MBB = *Inst.getParent();
   MachineRegisterInfo &MRI = MBB.getParent()->getRegInfo();
@@ -3680,7 +3753,7 @@ void SIInstrInfo::splitScalar64BitBinaryOp(
 }
 
 void SIInstrInfo::splitScalar64BitBCNT(
-    SmallVectorImpl<MachineInstr *> &Worklist, MachineInstr &Inst) const {
+    SetVectorType &Worklist, MachineInstr &Inst) const {
   MachineBasicBlock &MBB = *Inst.getParent();
   MachineRegisterInfo &MRI = MBB.getParent()->getRegInfo();
 
@@ -3716,7 +3789,7 @@ void SIInstrInfo::splitScalar64BitBCNT(
   addUsersToMoveToVALUWorklist(ResultReg, MRI, Worklist);
 }
 
-void SIInstrInfo::splitScalar64BitBFE(SmallVectorImpl<MachineInstr *> &Worklist,
+void SIInstrInfo::splitScalar64BitBFE(SetVectorType &Worklist,
                                       MachineInstr &Inst) const {
   MachineBasicBlock &MBB = *Inst.getParent();
   MachineRegisterInfo &MRI = MBB.getParent()->getRegInfo();
@@ -3780,12 +3853,12 @@ void SIInstrInfo::splitScalar64BitBFE(SmallVectorImpl<MachineInstr *> &Worklist,
 void SIInstrInfo::addUsersToMoveToVALUWorklist(
   unsigned DstReg,
   MachineRegisterInfo &MRI,
-  SmallVectorImpl<MachineInstr *> &Worklist) const {
+  SetVectorType &Worklist) const {
   for (MachineRegisterInfo::use_iterator I = MRI.use_begin(DstReg),
          E = MRI.use_end(); I != E;) {
     MachineInstr &UseMI = *I->getParent();
     if (!canReadVGPR(UseMI, I.getOperandNo())) {
-      Worklist.push_back(&UseMI);
+      Worklist.insert(&UseMI);
 
       do {
         ++I;
@@ -3796,7 +3869,7 @@ void SIInstrInfo::addUsersToMoveToVALUWorklist(
   }
 }
 
-void SIInstrInfo::movePackToVALU(SmallVectorImpl<MachineInstr *> &Worklist,
+void SIInstrInfo::movePackToVALU(SetVectorType &Worklist,
                                  MachineRegisterInfo &MRI,
                                  MachineInstr &Inst) const {
   unsigned ResultReg = MRI.createVirtualRegister(&AMDGPU::VGPR_32RegClass);
@@ -3859,7 +3932,7 @@ void SIInstrInfo::movePackToVALU(SmallVectorImpl<MachineInstr *> &Worklist,
 }
 
 void SIInstrInfo::addSCCDefUsersToVALUWorklist(
-    MachineInstr &SCCDefInst, SmallVectorImpl<MachineInstr *> &Worklist) const {
+    MachineInstr &SCCDefInst, SetVectorType &Worklist) const {
   // This assumes that all the users of SCC are in the same block
   // as the SCC def.
   for (MachineInstr &MI :
@@ -3870,7 +3943,7 @@ void SIInstrInfo::addSCCDefUsersToVALUWorklist(
       return;
 
     if (MI.findRegisterUseOperandIdx(AMDGPU::SCC) != -1)
-      Worklist.push_back(&MI);
+      Worklist.insert(&MI);
   }
 }
 
@@ -4247,6 +4320,24 @@ SIInstrInfo::CreateTargetPostRAHazardRecognizer(const InstrItineraryData *II,
 ScheduleHazardRecognizer *
 SIInstrInfo::CreateTargetPostRAHazardRecognizer(const MachineFunction &MF) const {
   return new GCNHazardRecognizer(MF);
+}
+
+std::pair<unsigned, unsigned>
+SIInstrInfo::decomposeMachineOperandsTargetFlags(unsigned TF) const {
+  return std::make_pair(TF & MO_MASK, TF & ~MO_MASK);
+}
+
+ArrayRef<std::pair<unsigned, const char *>>
+SIInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
+  static const std::pair<unsigned, const char *> TargetFlags[] = {
+    { MO_GOTPCREL, "amdgpu-gotprel" },
+    { MO_GOTPCREL32_LO, "amdgpu-gotprel32-lo" },
+    { MO_GOTPCREL32_HI, "amdgpu-gotprel32-hi" },
+    { MO_REL32_LO, "amdgpu-rel32-lo" },
+    { MO_REL32_HI, "amdgpu-rel32-hi" }
+  };
+
+  return makeArrayRef(TargetFlags);
 }
 
 bool SIInstrInfo::isBasicBlockPrologue(const MachineInstr &MI) const {

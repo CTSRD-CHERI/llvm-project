@@ -383,7 +383,7 @@ TEST_F(LexerTest, DontOverallocateStringifyArgs) {
   MacroInfo *MI = PP->AllocateMacroInfo({});
   MI->setIsFunctionLike();
   MI->setArgumentList(ArgList, Allocator);
-  EXPECT_EQ(3, MI->getNumArgs());
+  EXPECT_EQ(3u, MI->getNumArgs());
   EXPECT_TRUE(MI->isFunctionLike());
 
   Token Eof;
@@ -402,7 +402,9 @@ TEST_F(LexerTest, DontOverallocateStringifyArgs) {
       ArgTokens.push_back(tok);
   }
 
-  MacroArgs *MA = MacroArgs::create(MI, ArgTokens, false, *PP);
+  auto MacroArgsDeleter = [&PP](MacroArgs *M) { M->destroy(*PP); };
+  std::unique_ptr<MacroArgs, decltype(MacroArgsDeleter)> MA(
+      MacroArgs::create(MI, ArgTokens, false, *PP), MacroArgsDeleter);
   Token Result = MA->getStringifiedArgument(0, *PP, {}, {});
   EXPECT_EQ(tok::string_literal, Result.getKind());
   EXPECT_STREQ("\"\\\"StrArg\\\"\"", Result.getLiteralData());

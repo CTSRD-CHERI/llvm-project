@@ -140,8 +140,6 @@ struct FunctionSummaryYaml {
 } // End yaml namespace
 } // End llvm namespace
 
-LLVM_YAML_IS_FLOW_SEQUENCE_VECTOR(uint64_t)
-
 namespace llvm {
 namespace yaml {
 
@@ -240,6 +238,23 @@ template <> struct MappingTraits<ModuleSummaryIndex> {
     io.mapOptional("TypeIdMap", index.TypeIdMap);
     io.mapOptional("WithGlobalValueDeadStripping",
                    index.WithGlobalValueDeadStripping);
+
+    if (io.outputting()) {
+      std::vector<std::string> CfiFunctionDefs(index.CfiFunctionDefs.begin(),
+                                               index.CfiFunctionDefs.end());
+      io.mapOptional("CfiFunctionDefs", CfiFunctionDefs);
+      std::vector<std::string> CfiFunctionDecls(index.CfiFunctionDecls.begin(),
+                                                index.CfiFunctionDecls.end());
+      io.mapOptional("CfiFunctionDecls", CfiFunctionDecls);
+    } else {
+      std::vector<std::string> CfiFunctionDefs;
+      io.mapOptional("CfiFunctionDefs", CfiFunctionDefs);
+      index.CfiFunctionDefs = {CfiFunctionDefs.begin(), CfiFunctionDefs.end()};
+      std::vector<std::string> CfiFunctionDecls;
+      io.mapOptional("CfiFunctionDecls", CfiFunctionDecls);
+      index.CfiFunctionDecls = {CfiFunctionDecls.begin(),
+                                CfiFunctionDecls.end()};
+    }
   }
 };
 

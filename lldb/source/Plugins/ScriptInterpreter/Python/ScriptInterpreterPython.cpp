@@ -33,7 +33,6 @@
 #include "lldb/Core/Communication.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/Timer.h"
 #include "lldb/Core/ValueObject.h"
 #include "lldb/DataFormatters/TypeSummary.h"
 #include "lldb/Host/ConnectionFileDescriptor.h"
@@ -44,6 +43,7 @@
 #include "lldb/Interpreter/CommandReturnObject.h"
 #include "lldb/Target/Thread.h"
 #include "lldb/Target/ThreadPlan.h"
+#include "lldb/Utility/Timer.h"
 
 #if defined(_WIN32)
 #include "lldb/Host/windows/ConnectionGenericFileWindows.h"
@@ -1857,14 +1857,12 @@ StructuredData::DictionarySP ScriptInterpreterPython::GetDynamicSettings(
     return StructuredData::DictionarySP();
 
   PythonObject reply_pyobj;
-  {
-    Locker py_lock(this,
-                   Locker::AcquireLock | Locker::InitSession | Locker::NoSTDIN);
-    TargetSP target_sp(target->shared_from_this());
-    reply_pyobj.Reset(PyRefType::Owned,
-                      (PyObject *)g_swig_plugin_get(generic->GetValue(),
-                                                    setting_name, target_sp));
-  }
+  Locker py_lock(this,
+                 Locker::AcquireLock | Locker::InitSession | Locker::NoSTDIN);
+  TargetSP target_sp(target->shared_from_this());
+  reply_pyobj.Reset(PyRefType::Owned,
+                    (PyObject *)g_swig_plugin_get(generic->GetValue(),
+                                                  setting_name, target_sp));
 
   PythonDictionary py_dict(PyRefType::Borrowed, reply_pyobj.get());
   return py_dict.CreateStructuredDictionary();

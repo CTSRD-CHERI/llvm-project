@@ -39,7 +39,7 @@ using namespace lld::elf;
 // The calling thread returns almost immediately.
 void elf::unlinkAsync(StringRef Path) {
   if (!Config->Threads || !sys::fs::exists(Config->OutputFile) ||
-      Config->OutputFile == "-")
+      !sys::fs::is_regular_file(Config->OutputFile))
     return;
 
   // First, rename Path to avoid race condition. We cannot remove

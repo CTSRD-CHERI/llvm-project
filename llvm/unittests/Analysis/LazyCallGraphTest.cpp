@@ -216,10 +216,17 @@ static const char DiamondOfTrianglesRefGraph[] =
      "  ret void\n"
      "}\n";
 
+static LazyCallGraph buildCG(Module &M) {
+  TargetLibraryInfoImpl TLII(Triple(M.getTargetTriple()));
+  TargetLibraryInfo TLI(TLII);
+  LazyCallGraph CG(M, TLI);
+  return CG;
+}
+
 TEST(LazyCallGraphTest, BasicGraphFormation) {
   LLVMContext Context;
   std::unique_ptr<Module> M = parseAssembly(Context, DiamondOfTriangles);
-  LazyCallGraph CG(*M);
+  LazyCallGraph CG = buildCG(*M);
 
   // The order of the entry nodes should be stable w.r.t. the source order of
   // the IR, and everything in our module is an entry node, so just directly
@@ -407,7 +414,7 @@ TEST(LazyCallGraphTest, BasicGraphMutation) {
                                                      "entry:\n"
                                                      "  ret void\n"
                                                      "}\n");
-  LazyCallGraph CG(*M);
+  LazyCallGraph CG = buildCG(*M);
 
   LazyCallGraph::Node &A = CG.get(lookupFunction(*M, "a"));
   LazyCallGraph::Node &B = CG.get(lookupFunction(*M, "b"));
@@ -445,7 +452,7 @@ TEST(LazyCallGraphTest, BasicGraphMutation) {
 TEST(LazyCallGraphTest, InnerSCCFormation) {
   LLVMContext Context;
   std::unique_ptr<Module> M = parseAssembly(Context, DiamondOfTriangles);
-  LazyCallGraph CG(*M);
+  LazyCallGraph CG = buildCG(*M);
 
   // Now mutate the graph to connect every node into a single RefSCC to ensure
   // that our inner SCC formation handles the rest.
@@ -542,7 +549,7 @@ TEST(LazyCallGraphTest, MultiArmSCC) {
                                                      "  call void @f1()\n"
                                                      "  ret void\n"
                                                      "}\n");
-  LazyCallGraph CG(*M);
+  LazyCallGraph CG = buildCG(*M);
 
   // Force the graph to be fully expanded.
   CG.buildRefSCCs();
@@ -593,7 +600,7 @@ TEST(LazyCallGraphTest, OutgoingEdgeMutation) {
                                                      "entry:\n"
                                                      "  ret void\n"
                                                      "}\n");
-  LazyCallGraph CG(*M);
+  LazyCallGraph CG = buildCG(*M);
 
   // Force the graph to be fully expanded.
   CG.buildRefSCCs();
@@ -739,7 +746,7 @@ TEST(LazyCallGraphTest, IncomingEdgeInsertion) {
   //      a3--a2      |
   //
   std::unique_ptr<Module> M = parseAssembly(Context, DiamondOfTriangles);
-  LazyCallGraph CG(*M);
+  LazyCallGraph CG = buildCG(*M);
 
   // Force the graph to be fully expanded.
   CG.buildRefSCCs();
@@ -831,7 +838,7 @@ TEST(LazyCallGraphTest, IncomingEdgeInsertionRefGraph) {
   // references rather than calls.
   std::unique_ptr<Module> M =
       parseAssembly(Context, DiamondOfTrianglesRefGraph);
-  LazyCallGraph CG(*M);
+  LazyCallGraph CG = buildCG(*M);
 
   // Force the graph to be fully expanded.
   CG.buildRefSCCs();
@@ -938,7 +945,7 @@ TEST(LazyCallGraphTest, IncomingEdgeInsertionLargeCallCycle) {
                                                      "entry:\n"
                                                      "  ret void\n"
                                                      "}\n");
-  LazyCallGraph CG(*M);
+  LazyCallGraph CG = buildCG(*M);
 
   // Force the graph to be fully expanded.
   CG.buildRefSCCs();
@@ -1015,7 +1022,7 @@ TEST(LazyCallGraphTest, IncomingEdgeInsertionLargeRefCycle) {
                              "entry:\n"
                              "  ret void\n"
                              "}\n");
-  LazyCallGraph CG(*M);
+  LazyCallGraph CG = buildCG(*M);
 
   // Force the graph to be fully expanded.
   CG.buildRefSCCs();
@@ -1077,7 +1084,7 @@ TEST(LazyCallGraphTest, InlineAndDeleteFunction) {
   //      a3--a2      |
   //
   std::unique_ptr<Module> M = parseAssembly(Context, DiamondOfTriangles);
-  LazyCallGraph CG(*M);
+  LazyCallGraph CG = buildCG(*M);
 
   // Force the graph to be fully expanded.
   CG.buildRefSCCs();
@@ -1221,7 +1228,7 @@ TEST(LazyCallGraphTest, InternalEdgeMutation) {
                                                      "  call void @a()\n"
                                                      "  ret void\n"
                                                      "}\n");
-  LazyCallGraph CG(*M);
+  LazyCallGraph CG = buildCG(*M);
 
   // Force the graph to be fully expanded.
   CG.buildRefSCCs();
@@ -1277,9 +1284,10 @@ TEST(LazyCallGraphTest, InternalEdgeMutation) {
   // be invalidated.
   LazyCallGraph::SCC &AC = *CG.lookupSCC(A);
   LazyCallGraph::SCC &CC = *CG.lookupSCC(C);
-  auto InvalidatedSCCs = RC.switchInternalEdgeToCall(A, C);
-  ASSERT_EQ(1u, InvalidatedSCCs.size());
-  EXPECT_EQ(&AC, InvalidatedSCCs[0]);
+  EXPECT_TRUE(RC.switchInternalEdgeToCall(A, C, [&](ArrayRef<LazyCallGraph::SCC *> MergedCs) {
+    ASSERT_EQ(1u, MergedCs.size());
+    EXPECT_EQ(&AC, MergedCs[0]);
+  }));
   EXPECT_EQ(2, CC.size());
   EXPECT_EQ(&CC, CG.lookupSCC(A));
   EXPECT_EQ(&CC, CG.lookupSCC(C));
@@ -1314,7 +1322,7 @@ TEST(LazyCallGraphTest, InternalEdgeRemoval) {
                "  store i8* bitcast (void(i8**)* @c to i8*), i8** %ptr\n"
                "  ret void\n"
                "}\n");
-  LazyCallGraph CG(*M);
+  LazyCallGraph CG = buildCG(*M);
 
   // Force the graph to be fully expanded.
   CG.buildRefSCCs();
@@ -1389,7 +1397,7 @@ TEST(LazyCallGraphTest, InternalNoOpEdgeRemoval) {
                "  store i8* bitcast (void(i8**)* @b to i8*), i8** %ptr\n"
                "  ret void\n"
                "}\n");
-  LazyCallGraph CG(*M);
+  LazyCallGraph CG = buildCG(*M);
 
   // Force the graph to be fully expanded.
   CG.buildRefSCCs();
@@ -1466,7 +1474,7 @@ TEST(LazyCallGraphTest, InternalCallEdgeToRef) {
                                                      "  call void @c()\n"
                                                      "  ret void\n"
                                                      "}\n");
-  LazyCallGraph CG(*M);
+  LazyCallGraph CG = buildCG(*M);
 
   // Force the graph to be fully expanded.
   CG.buildRefSCCs();
@@ -1559,7 +1567,7 @@ TEST(LazyCallGraphTest, InternalRefEdgeToCall) {
                              "  store void()* @a, void()** undef\n"
                              "  ret void\n"
                              "}\n");
-  LazyCallGraph CG(*M);
+  LazyCallGraph CG = buildCG(*M);
 
   // Force the graph to be fully expanded.
   CG.buildRefSCCs();
@@ -1586,8 +1594,7 @@ TEST(LazyCallGraphTest, InternalRefEdgeToCall) {
 
   // Switch the ref edge from A -> D to a call edge. This should have no
   // effect as it is already in postorder and no new cycles are formed.
-  auto MergedCs = RC.switchInternalEdgeToCall(A, D);
-  EXPECT_EQ(0u, MergedCs.size());
+  EXPECT_FALSE(RC.switchInternalEdgeToCall(A, D));
   ASSERT_EQ(4, RC.size());
   EXPECT_EQ(&DC, &RC[0]);
   EXPECT_EQ(&BC, &RC[1]);
@@ -1596,8 +1603,7 @@ TEST(LazyCallGraphTest, InternalRefEdgeToCall) {
 
   // Switch B -> C to a call edge. This doesn't form any new cycles but does
   // require reordering the SCCs.
-  MergedCs = RC.switchInternalEdgeToCall(B, C);
-  EXPECT_EQ(0u, MergedCs.size());
+  EXPECT_FALSE(RC.switchInternalEdgeToCall(B, C));
   ASSERT_EQ(4, RC.size());
   EXPECT_EQ(&DC, &RC[0]);
   EXPECT_EQ(&CC, &RC[1]);
@@ -1605,9 +1611,10 @@ TEST(LazyCallGraphTest, InternalRefEdgeToCall) {
   EXPECT_EQ(&AC, &RC[3]);
 
   // Switch C -> B to a call edge. This forms a cycle and forces merging SCCs.
-  MergedCs = RC.switchInternalEdgeToCall(C, B);
-  ASSERT_EQ(1u, MergedCs.size());
-  EXPECT_EQ(&CC, MergedCs[0]);
+  EXPECT_TRUE(RC.switchInternalEdgeToCall(C, B, [&](ArrayRef<LazyCallGraph::SCC *> MergedCs) {
+    ASSERT_EQ(1u, MergedCs.size());
+    EXPECT_EQ(&CC, MergedCs[0]);
+  }));
   ASSERT_EQ(3, RC.size());
   EXPECT_EQ(&DC, &RC[0]);
   EXPECT_EQ(&BC, &RC[1]);
@@ -1672,7 +1679,7 @@ TEST(LazyCallGraphTest, InternalRefEdgeToCallNoCycleInterleaved) {
                              "  store void()* @a, void()** undef\n"
                              "  ret void\n"
                              "}\n");
-  LazyCallGraph CG(*M);
+  LazyCallGraph CG = buildCG(*M);
 
   // Force the graph to be fully expanded.
   CG.buildRefSCCs();
@@ -1720,8 +1727,7 @@ TEST(LazyCallGraphTest, InternalRefEdgeToCallNoCycleInterleaved) {
   // Switch C3 -> B1 to a call edge. This doesn't form any new cycles but does
   // require reordering the SCCs in the face of tricky internal node
   // structures.
-  auto MergedCs = RC.switchInternalEdgeToCall(C3, B1);
-  EXPECT_EQ(0u, MergedCs.size());
+  EXPECT_FALSE(RC.switchInternalEdgeToCall(C3, B1));
   ASSERT_EQ(8, RC.size());
   EXPECT_EQ(&DC, &RC[0]);
   EXPECT_EQ(&B3C, &RC[1]);
@@ -1803,7 +1809,7 @@ TEST(LazyCallGraphTest, InternalRefEdgeToCallBothPartitionAndMerge) {
                              "  store void()* @a, void()** undef\n"
                              "  ret void\n"
                              "}\n");
-  LazyCallGraph CG(*M);
+  LazyCallGraph CG = buildCG(*M);
 
   // Force the graph to be fully expanded.
   CG.buildRefSCCs();
@@ -1852,10 +1858,12 @@ TEST(LazyCallGraphTest, InternalRefEdgeToCallBothPartitionAndMerge) {
   // C   F      C   |  |
   //  \ /        \ /   |
   //   G          G    |
-  auto MergedCs = RC.switchInternalEdgeToCall(F, B);
-  ASSERT_EQ(2u, MergedCs.size());
-  EXPECT_EQ(&FC, MergedCs[0]);
-  EXPECT_EQ(&DC, MergedCs[1]);
+  EXPECT_TRUE(RC.switchInternalEdgeToCall(
+      F, B, [&](ArrayRef<LazyCallGraph::SCC *> MergedCs) {
+        ASSERT_EQ(2u, MergedCs.size());
+        EXPECT_EQ(&FC, MergedCs[0]);
+        EXPECT_EQ(&DC, MergedCs[1]);
+      }));
   EXPECT_EQ(3, BC.size());
 
   // And make sure the postorder was updated.
@@ -1884,7 +1892,7 @@ TEST(LazyCallGraphTest, HandleBlockAddress) {
                              "  store i8* blockaddress(@f, %bb), i8** %ptr\n"
                              "  ret void\n"
                              "}\n");
-  LazyCallGraph CG(*M);
+  LazyCallGraph CG = buildCG(*M);
 
   CG.buildRefSCCs();
   auto I = CG.postorder_ref_scc_begin();
@@ -1932,7 +1940,7 @@ TEST(LazyCallGraphTest, ReplaceNodeFunction) {
                     "  store i8* bitcast (void(i8**)* @d to i8*), i8** %ptr\n"
                     "  ret void\n"
                     "}\n");
-  LazyCallGraph CG(*M);
+  LazyCallGraph CG = buildCG(*M);
 
   // Force the graph to be fully expanded.
   CG.buildRefSCCs();
@@ -2010,7 +2018,7 @@ TEST(LazyCallGraphTest, RemoveFunctionWithSpurriousRef) {
                     "entry:\n"
                     "  ret void\n"
                     "}\n");
-  LazyCallGraph CG(*M);
+  LazyCallGraph CG = buildCG(*M);
 
   // Insert spurious ref edges.
   LazyCallGraph::Node &AN = CG.get(lookupFunction(*M, "a"));

@@ -164,6 +164,13 @@ set(LIBUNWIND_SOURCE_DIR  ${CMAKE_CURRENT_SOURCE_DIR})
 set(LIBUNWIND_BINARY_DIR  ${CMAKE_CURRENT_BINARY_DIR})
 set(LIBUNWIND_LIBRARY_DIR ${CMAKE_BINARY_DIR}/lib${LLVM_LIBDIR_SUFFIX})
 
+set(LIBUNWIND_INSTALL_PREFIX "" CACHE STRING
+    "Define libunwind destination prefix.")
+
+if (NOT LIBUNWIND_INSTALL_PREFIX MATCHES "^$|.*/")
+  message(FATAL_ERROR "LIBUNWIND_INSTALL_PREFIX has to end with \"/\".")
+endif()
+
 set(LIBUNWIND_C_FLAGS "")
 set(LIBUNWIND_CXX_FLAGS "")
 set(LIBUNWIND_COMPILE_FLAGS "")
@@ -321,3 +328,5 @@ add_subdirectory(src)
 if (LIBUNWIND_INCLUDE_DOCS)
   add_subdirectory(docs)
 endif()
+
+add_subdirectory(test)

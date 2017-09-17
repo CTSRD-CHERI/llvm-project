@@ -108,6 +108,9 @@ class SITargetLowering final : public AMDGPUTargetLowering {
 
   unsigned getFusedOpcode(const SelectionDAG &DAG,
                           const SDNode *N0, const SDNode *N1) const;
+  SDValue performAddCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue performAddCarrySubCarryCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue performSubCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performFAddCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performFSubCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performSetCCCombine(SDNode *N, DAGCombinerInfo &DCI) const;
@@ -150,7 +153,8 @@ public:
   bool isLegalAddressingMode(const DataLayout &DL, const AddrMode &AM, Type *Ty,
                              unsigned AS) const override;
 
-  bool canMergeStoresTo(unsigned AS, EVT MemVT) const override;
+  bool canMergeStoresTo(unsigned AS, EVT MemVT,
+                        const SelectionDAG &DAG) const override;
 
   bool allowsMisalignedMemoryAccesses(EVT VT, unsigned AS,
                                       unsigned Align,
@@ -216,8 +220,6 @@ public:
   void AdjustInstrPostInstrSelection(MachineInstr &MI,
                                      SDNode *Node) const override;
 
-  SDValue CreateLiveInRegister(SelectionDAG &DAG, const TargetRegisterClass *RC,
-                               unsigned Reg, EVT VT) const override;
   SDNode *legalizeTargetIndependentNode(SDNode *Node, SelectionDAG &DAG) const;
 
   MachineSDNode *wrapAddr64Rsrc(SelectionDAG &DAG, const SDLoc &DL,

@@ -55,8 +55,8 @@ std::vector<SpecificAllocBase *> SpecificAllocBase::Instances;
 bool link(ArrayRef<const char *> Args, raw_ostream &Diag) {
   ErrorCount = 0;
   ErrorOS = &Diag;
-  Argv0 = Args[0];
   Config = make<Configuration>();
+  Config->Argv = {Args.begin(), Args.end()};
   Config->ColorDiagnostics =
       (ErrorOS == &llvm::errs() && Process::StandardErrHasColors());
   Driver = make<LinkerDriver>();
@@ -703,8 +703,12 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     }
   }
 
-  if (!Args.hasArgNoClaim(OPT_INPUT))
-    fatal("no input files");
+  if (!Args.hasArgNoClaim(OPT_INPUT)) {
+    if (Args.hasArgNoClaim(OPT_deffile))
+      Config->NoEntry = true;
+    else
+      fatal("no input files");
+  }
 
   // Construct search path list.
   SearchPaths.push_back("");
@@ -901,7 +905,6 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     Config->TerminalServerAware = false;
   if (Args.hasArg(OPT_nosymtab))
     Config->WriteSymtab = false;
-  Config->DumpPdb = Args.hasArg(OPT_dumppdb);
 
   Config->MapFile = getMapFile(Args);
 
@@ -932,9 +935,9 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     Config->Machine = AMD64;
   }
 
-  // Windows specific -- Input files can be Windows resource files (.res files).
-  // We invoke cvtres.exe to convert resource files to a regular COFF file
-  // then link the result file normally.
+  // Input files can be Windows resource files (.res files). We use
+  // WindowsResource to convert resource files to a regular COFF file,
+  // then link the resulting file normally.
   if (!Resources.empty())
     addBuffer(convertResToCOFF(Resources));
 
@@ -986,6 +989,13 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     parseModuleDefs(Arg->getValue());
   }
 
+  // Handle generation of import library from a def file.
+  if (!Args.hasArgNoClaim(OPT_INPUT)) {
+    fixupExports();
+    createImportLibrary();
+    exit(0);
+  }
+
   // Handle /delayload
   for (auto *Arg : Args.filtered(OPT_delayload)) {
     Config->DelayLoads.insert(StringRef(Arg->getValue()).lower());
@@ -1016,17 +1026,21 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   if (Config->ImageBase == uint64_t(-1))
     Config->ImageBase = getDefaultImageBase();
 
-  Symtab.addRelative(mangle("__ImageBase"), 0);
+  Symtab.addSynthetic(mangle("__ImageBase"), nullptr);
   if (Config->Machine == I386) {
-    Config->SEHTable = Symtab.addRelative("___safe_se_handler_table", 0);
-    Config->SEHCount = Symtab.addAbsolute("___safe_se_handler_count", 0);
+    Symtab.addAbsolute("___safe_se_handler_table", 0);
+    Symtab.addAbsolute("___safe_se_handler_count", 0);
   }
 
   // We do not support /guard:cf (control flow protection) yet.
   // Define CFG symbols anyway so that we can link MSVC 2015 CRT.
-  Symtab.addAbsolute(mangle("__guard_fids_table"), 0);
   Symtab.addAbsolute(mangle("__guard_fids_count"), 0);
+  Symtab.addAbsolute(mangle("__guard_fids_table"), 0);
   Symtab.addAbsolute(mangle("__guard_flags"), 0x100);
+  Symtab.addAbsolute(mangle("__guard_iat_count"), 0);
+  Symtab.addAbsolute(mangle("__guard_iat_table"), 0);
+  Symtab.addAbsolute(mangle("__guard_longjmp_count"), 0);
+  Symtab.addAbsolute(mangle("__guard_longjmp_table"), 0);
 
   // This code may add new undefined symbols to the link, which may enqueue more
   // symbol resolution tasks, so we need to continue executing tasks until we

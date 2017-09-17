@@ -78,7 +78,7 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
   // IsNan2008 - IEEE 754-2008 NaN encoding.
   bool IsNaN2008bit;
 
-  // IsFP64bit - General-purpose registers are 64 bits wide
+  // IsGP64bit - General-purpose registers are 64 bits wide
   bool IsGP64bit;
 
   // IsPTR64bit - Pointers are 64 bit wide
@@ -148,6 +148,12 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
   // nomadd4 - disables generation of 4-operand madd.s, madd.d and
   // related instructions.
   bool DisableMadd4;
+
+  // HasMT -- support MT ASE.
+  bool HasMT;
+
+  // Disable use of the `jal` instruction.
+  bool UseLongCalls = false;
 
   InstrItineraryData InstrItins;
 
@@ -259,11 +265,14 @@ public:
   bool hasMSA() const { return HasMSA; }
   bool disableMadd4() const { return DisableMadd4; }
   bool hasEVA() const { return HasEVA; }
+  bool hasMT() const { return HasMT; }
   bool useSmallSection() const { return UseSmallSection; }
 
   bool hasStandardEncoding() const { return !inMips16Mode(); }
 
   bool useSoftFloat() const { return IsSoftFloat; }
+
+  bool useLongCalls() const { return UseLongCalls; }
 
   bool enableLongBranchPass() const {
     return hasStandardEncoding() || allowMixed16_32();

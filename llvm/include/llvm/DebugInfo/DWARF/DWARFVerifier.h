@@ -21,6 +21,7 @@ class DWARFContext;
 class DWARFDie;
 class DWARFUnit;
 class DWARFAcceleratorTable;
+class DWARFDataExtractor;
 
 /// A class that verifies DWARF debug information given a DWARF Context.
 class DWARFVerifier {
@@ -30,9 +31,32 @@ class DWARFVerifier {
   /// can verify each reference points to a valid DIE and not an offset that
   /// lies between to valid DIEs.
   std::map<uint64_t, std::set<uint32_t>> ReferenceToDIEOffsets;
-  uint32_t NumDebugInfoErrors;
-  uint32_t NumDebugLineErrors;
-  uint32_t NumAppleNamesErrors;
+  uint32_t NumDebugInfoErrors = 0;
+  uint32_t NumDebugLineErrors = 0;
+  uint32_t NumAppleNamesErrors = 0;
+
+  /// Verifies the header of a unit in the .debug_info section.
+  ///
+  /// This function currently checks for:
+  /// - Unit is in 32-bit DWARF format. The function can be modified to
+  /// support 64-bit format.
+  /// - The DWARF version is valid
+  /// - The unit type is valid (if unit is in version >=5)
+  /// - The unit doesn't extend beyond .debug_info section
+  /// - The address size is valid
+  /// - The offset in the .debug_abbrev section is valid
+  ///
+  /// \param DebugInfoData The .debug_info section data
+  /// \param Offset A reference to the offset start of the unit. The offset will
+  /// be updated to point to the next unit in .debug_info
+  /// \param UnitIndex The index of the unit to be verified
+  /// \param isUnitDWARF64 A reference to a flag that shows whether the unit is
+  /// in 64-bit format.
+  ///
+  /// \returns true if the header is verified successfully, false otherwise.
+  bool verifyUnitHeader(const DWARFDataExtractor DebugInfoData,
+                        uint32_t *Offset, unsigned UnitIndex,
+                        bool &isUnitDWARF64);
 
   /// Verifies the attribute's DWARF attribute and its value.
   ///
@@ -40,8 +64,8 @@ class DWARFVerifier {
   /// - DW_AT_ranges values is a valid .debug_ranges offset
   /// - DW_AT_stmt_list is a valid .debug_line offset
   ///
-  /// @param Die          The DWARF DIE that owns the attribute value
-  /// @param AttrValue    The DWARF attribute value to check
+  /// \param Die          The DWARF DIE that owns the attribute value
+  /// \param AttrValue    The DWARF attribute value to check
   void verifyDebugInfoAttribute(const DWARFDie &Die, DWARFAttribute &AttrValue);
 
   /// Verifies the attribute's DWARF form.
@@ -51,8 +75,8 @@ class DWARFVerifier {
   /// - All DW_FORM_ref_addr values have valid .debug_info offsets
   /// - All DW_FORM_strp values have valid .debug_str offsets
   ///
-  /// @param Die          The DWARF DIE that owns the attribute value
-  /// @param AttrValue    The DWARF attribute value to check
+  /// \param Die          The DWARF DIE that owns the attribute value
+  /// \param AttrValue    The DWARF attribute value to check
   void verifyDebugInfoForm(const DWARFDie &Die, DWARFAttribute &AttrValue);
 
   /// Verifies the all valid references that were found when iterating through
@@ -77,14 +101,21 @@ class DWARFVerifier {
 
 public:
   DWARFVerifier(raw_ostream &S, DWARFContext &D)
-      : OS(S), DCtx(D), NumDebugInfoErrors(0), NumDebugLineErrors(0),
-        NumAppleNamesErrors(0) {}
+      : OS(S), DCtx(D) {}
+  /// Verify the unit header chain in the .debug_info section.
+  ///
+  /// Any errors are reported to the stream that this object was
+  /// constructed with.
+  ///
+  /// \returns true if the unit header chain verifies successfully, false
+  /// otherwise.
+  bool handleDebugInfoUnitHeaderChain();
   /// Verify the information in the .debug_info section.
   ///
   /// Any errors are reported to the stream that was this object was
   /// constructed with.
   ///
-  /// @return True if the .debug_info verifies successfully, false otherwise.
+  /// \returns true if the .debug_info verifies successfully, false otherwise.
   bool handleDebugInfo();
 
   /// Verify the information in the .debug_line section.
@@ -92,7 +123,7 @@ public:
   /// Any errors are reported to the stream that was this object was
   /// constructed with.
   ///
-  /// @return True if the .debug_line verifies successfully, false otherwise.
+  /// \returns true if the .debug_line verifies successfully, false otherwise.
   bool handleDebugLine();
 
   /// Verify the information in the .apple_names accelerator table.
@@ -100,7 +131,7 @@ public:
   /// Any errors are reported to the stream that was this object was
   /// constructed with.
   ///
-  /// @return True if the .apple_names verifies successfully, false otherwise.
+  /// \returns true if the .apple_names verifies successfully, false otherwise.
   bool handleAppleNames();
 };
 

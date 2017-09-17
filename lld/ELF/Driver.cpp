@@ -74,13 +74,13 @@ bool elf::link(ArrayRef<const char *> Args, bool CanExitEarly,
                raw_ostream &Error) {
   ErrorCount = 0;
   ErrorOS = &Error;
-  Argv0 = Args[0];
   InputSections.clear();
   Tar = nullptr;
 
   Config = make<Configuration>();
   Driver = make<LinkerDriver>();
   Script = make<LinkerScript>();
+  Config->Argv = {Args.begin(), Args.end()};
 
   Driver->main(Args, CanExitEarly);
   freeArena();
@@ -201,6 +201,7 @@ void LinkerDriver::addFile(StringRef Path, bool WithLOption) {
       error("attempted static link of dynamic object " + Path);
       return;
     }
+
     // DSOs usually have DT_SONAME tags in their ELF headers, and the
     // sonames are used to identify DSOs. But if they are missing,
     // they are identified by filenames. We don't know whether the new
@@ -211,8 +212,8 @@ void LinkerDriver::addFile(StringRef Path, bool WithLOption) {
     // If a file was specified by -lfoo, the directory part is not
     // significant, as a user did not specify it. This behavior is
     // compatible with GNU.
-    Files.push_back(createSharedFile(
-        MBRef, WithLOption ? sys::path::filename(Path) : Path));
+    Files.push_back(
+        createSharedFile(MBRef, WithLOption ? path::filename(Path) : Path));
     return;
   default:
     if (InLib)
@@ -305,7 +306,7 @@ static uint64_t getZOptionValue(opt::InputArgList &Args, StringRef Key,
   for (auto *Arg : Args.filtered(OPT_z)) {
     std::pair<StringRef, StringRef> KV = StringRef(Arg->getValue()).split('=');
     if (KV.first == Key) {
-      uint64_t Result;
+      uint64_t Result = Default;
       if (!to_integer(KV.second, Result))
         error("invalid " + Key + ": " + KV.second);
       return Result;
@@ -925,12 +926,47 @@ getDefsym(opt::InputArgList &Args) {
   return Ret;
 }
 
+// Parses `--exclude-libs=lib,lib,...`.
+// The library names may be delimited by commas or colons.
+static DenseSet<StringRef> getExcludeLibs(opt::InputArgList &Args) {
+  DenseSet<StringRef> Ret;
+  for (auto *Arg : Args.filtered(OPT_exclude_libs)) {
+    StringRef S = Arg->getValue();
+    for (;;) {
+      size_t Pos = S.find_first_of(",:");
+      if (Pos == StringRef::npos)
+        break;
+      Ret.insert(S.substr(0, Pos));
+      S = S.substr(Pos + 1);
+    }
+    Ret.insert(S);
+  }
+  return Ret;
+}
+
+// Handles the -exclude-libs option. If a static library file is specified
+// by the -exclude-libs option, all public symbols from the archive become
+// private unless otherwise specified by version scripts or something.
+// A special library name "ALL" means all archive files.
+//
+// This is not a popular option, but some programs such as bionic libc use it.
+static void excludeLibs(opt::InputArgList &Args, ArrayRef<InputFile *> Files) {
+  DenseSet<StringRef> Libs = getExcludeLibs(Args);
+  bool All = Libs.count("ALL");
+
+  for (InputFile *File : Files)
+    if (auto *F = dyn_cast<ArchiveFile>(File))
+      if (All || Libs.count(path::filename(F->getName())))
+        for (Symbol *Sym : F->getSymbols())
+          Sym->VersionId = VER_NDX_LOCAL;
+}
+
 // Do actual linking. Note that when this function is called,
 // all linker scripts have already been parsed.
 template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   SymbolTable<ELFT> Symtab;
   elf::Symtab<ELFT>::X = &Symtab;
-  Target = createTarget();
+  Target = getTarget();
 
   Config->MaxPageSize = getMaxPageSize(Args);
   Config->ImageBase = getImageBase(Args);
@@ -986,8 +1022,17 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   if (ErrorCount)
     return;
 
+  // Handle the `--undefined <sym>` options.
   Symtab.scanUndefinedFlags();
+
+  // Handle undefined symbols in DSOs.
   Symtab.scanShlibUndefined();
+
+  // Handle the -exclude-libs option.
+  if (Args.hasArg(OPT_exclude_libs))
+    excludeLibs(Args, Files);
+
+  // Apply version scripts.
   Symtab.scanVersionScript();
 
   // Create wrapped symbols for -wrap option.

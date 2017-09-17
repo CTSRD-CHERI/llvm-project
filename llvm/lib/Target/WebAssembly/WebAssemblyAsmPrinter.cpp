@@ -84,7 +84,7 @@ void WebAssemblyAsmPrinter::EmitEndOfAsmFile(Module &M) {
       SmallVector<MVT, 4> Results;
       SmallVector<MVT, 4> Params;
       ComputeSignatureVTs(F, TM, Params, Results);
-      getTargetStreamer()->emitIndirectFunctionType(F.getName(), Params,
+      getTargetStreamer()->emitIndirectFunctionType(getSymbol(&F), Params,
                                                     Results);
     }
   }
@@ -95,13 +95,6 @@ void WebAssemblyAsmPrinter::EmitEndOfAsmFile(Module &M) {
       OutStreamer->emitELFSize(getSymbol(&G),
                                MCConstantExpr::create(Size, OutContext));
     }
-  }
-
-  if (!TM.getTargetTriple().isOSBinFormatELF()) {
-    MachineModuleInfoWasm &MMIW = MMI->getObjFileInfo<MachineModuleInfoWasm>();
-    getTargetStreamer()->emitGlobal(MMIW.getGlobals());
-    if (MMIW.hasStackPointerGlobal())
-      getTargetStreamer()->emitStackPointer(MMIW.getStackPointerGlobal());
   }
 }
 
@@ -221,11 +214,8 @@ void WebAssemblyAsmPrinter::EmitInstruction(const MachineInstr *MI) {
 const MCExpr *WebAssemblyAsmPrinter::lowerConstant(const Constant *CV) {
   if (const GlobalValue *GV = dyn_cast<GlobalValue>(CV))
     if (GV->getValueType()->isFunctionTy()) {
-      MCSymbol* Sym = getSymbol(GV);
-      if (!isa<MCSymbolELF>(Sym))
-        cast<MCSymbolWasm>(Sym)->setIsFunction(true);
       return MCSymbolRefExpr::create(
-          Sym, MCSymbolRefExpr::VK_WebAssembly_FUNCTION, OutContext);
+          getSymbol(GV), MCSymbolRefExpr::VK_WebAssembly_FUNCTION, OutContext);
     }
   return AsmPrinter::lowerConstant(CV);
 }
