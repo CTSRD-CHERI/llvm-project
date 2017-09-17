@@ -28,8 +28,8 @@
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/AutoUpgrade.h"
 #include "llvm/IR/BasicBlock.h"
-#include "llvm/IR/CallingConv.h"
 #include "llvm/IR/CallSite.h"
+#include "llvm/IR/CallingConv.h"
 #include "llvm/IR/Comdat.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
@@ -40,13 +40,13 @@
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/DiagnosticPrinter.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/GVMaterializer.h"
 #include "llvm/IR/GlobalAlias.h"
 #include "llvm/IR/GlobalIFunc.h"
 #include "llvm/IR/GlobalIndirectSymbol.h"
 #include "llvm/IR/GlobalObject.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/GlobalVariable.h"
-#include "llvm/IR/GVMaterializer.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/InstrTypes.h"
@@ -739,7 +739,7 @@ private:
   std::pair<ValueInfo, GlobalValue::GUID>
   getValueInfoFromValueId(unsigned ValueId);
 
-  ModulePathStringTableTy::iterator addThisModulePath();
+  ModuleSummaryIndex::ModuleInfo *addThisModule();
 };
 
 } // end anonymous namespace
@@ -865,11 +865,11 @@ static GlobalValueSummary::GVFlags getDecodedGVSummaryFlags(uint64_t RawFlags,
   auto Linkage = GlobalValue::LinkageTypes(RawFlags & 0xF); // 4 bits
   RawFlags = RawFlags >> 4;
   bool NotEligibleToImport = (RawFlags & 0x1) || Version < 3;
-  // The LiveRoot flag wasn't introduced until version 3. For dead stripping
+  // The Live flag wasn't introduced until version 3. For dead stripping
   // to work correctly on earlier versions, we must conservatively treat all
   // values as live.
-  bool LiveRoot = (RawFlags & 0x2) || Version < 3;
-  return GlobalValueSummary::GVFlags(Linkage, NotEligibleToImport, LiveRoot);
+  bool Live = (RawFlags & 0x2) || Version < 3;
+  return GlobalValueSummary::GVFlags(Linkage, NotEligibleToImport, Live);
 }
 
 static GlobalValue::VisibilityTypes getDecodedVisibility(unsigned Val) {
@@ -2608,6 +2608,16 @@ Error BitcodeReader::materializeMetadata() {
     if (Error Err = MDLoader->parseModuleMetadata())
       return Err;
   }
+
+  // Upgrade "Linker Options" module flag to "llvm.linker.options" module-level
+  // metadata.
+  if (Metadata *Val = TheModule->getModuleFlag("Linker Options")) {
+    NamedMDNode *LinkerOpts =
+        TheModule->getOrInsertNamedMetadata("llvm.linker.options");
+    for (const MDOperand &MDOptions : cast<MDNode>(Val)->operands())
+      LinkerOpts->addOperand(cast<MDNode>(MDOptions));
+  }
+
   DeferredMetadataInfo.clear();
   return Error::success();
 }
@@ -4691,9 +4701,9 @@ ModuleSummaryIndexBitcodeReader::ModuleSummaryIndexBitcodeReader(
     : BitcodeReaderBase(std::move(Cursor), Strtab), TheIndex(TheIndex),
       ModulePath(ModulePath), ModuleId(ModuleId) {}
 
-ModulePathStringTableTy::iterator
-ModuleSummaryIndexBitcodeReader::addThisModulePath() {
-  return TheIndex.addModulePath(ModulePath, ModuleId);
+ModuleSummaryIndex::ModuleInfo *
+ModuleSummaryIndexBitcodeReader::addThisModule() {
+  return TheIndex.addModule(ModulePath, ModuleId);
 }
 
 std::pair<ValueInfo, GlobalValue::GUID>
@@ -4889,7 +4899,7 @@ Error ModuleSummaryIndexBitcodeReader::parseModule() {
         case bitc::MODULE_CODE_HASH: {
           if (Record.size() != 5)
             return error("Invalid hash length " + Twine(Record.size()).str());
-          auto &Hash = addThisModulePath()->second.second;
+          auto &Hash = addThisModule()->second.second;
           int Pos = 0;
           for (auto &Val : Record) {
             assert(!(Val >> 32) && "Unexpected high bits set");
@@ -5070,7 +5080,7 @@ Error ModuleSummaryIndexBitcodeReader::parseEntireSummary() {
       PendingTypeTestAssumeConstVCalls.clear();
       PendingTypeCheckedLoadConstVCalls.clear();
       auto VIAndOriginalGUID = getValueInfoFromValueId(ValueID);
-      FS->setModulePath(addThisModulePath()->first());
+      FS->setModulePath(addThisModule()->first());
       FS->setOriginalName(VIAndOriginalGUID.second);
       TheIndex.addGlobalValueSummary(VIAndOriginalGUID.first, std::move(FS));
       break;
@@ -5090,7 +5100,7 @@ Error ModuleSummaryIndexBitcodeReader::parseEntireSummary() {
       // string table section in the per-module index, we create a single
       // module path string table entry with an empty (0) ID to take
       // ownership.
-      AS->setModulePath(addThisModulePath()->first());
+      AS->setModulePath(addThisModule()->first());
 
       GlobalValue::GUID AliaseeGUID =
           getValueInfoFromValueId(AliaseeID).first.getGUID();
@@ -5113,7 +5123,7 @@ Error ModuleSummaryIndexBitcodeReader::parseEntireSummary() {
       std::vector<ValueInfo> Refs =
           makeRefList(ArrayRef<uint64_t>(Record).slice(2));
       auto FS = llvm::make_unique<GlobalVarSummary>(Flags, std::move(Refs));
-      FS->setModulePath(addThisModulePath()->first());
+      FS->setModulePath(addThisModule()->first());
       auto GUID = getValueInfoFromValueId(ValueID);
       FS->setOriginalName(GUID.second);
       TheIndex.addGlobalValueSummary(GUID.first, std::move(FS));
@@ -5255,7 +5265,7 @@ Error ModuleSummaryIndexBitcodeReader::parseModuleStringTable() {
   SmallVector<uint64_t, 64> Record;
 
   SmallString<128> ModulePath;
-  ModulePathStringTableTy::iterator LastSeenModulePath;
+  ModuleSummaryIndex::ModuleInfo *LastSeenModule = nullptr;
 
   while (true) {
     BitstreamEntry Entry = Stream.advanceSkippingSubblocks();
@@ -5282,8 +5292,8 @@ Error ModuleSummaryIndexBitcodeReader::parseModuleStringTable() {
       if (convertToString(Record, 1, ModulePath))
         return error("Invalid record");
 
-      LastSeenModulePath = TheIndex.addModulePath(ModulePath, ModuleId);
-      ModuleIdMap[ModuleId] = LastSeenModulePath->first();
+      LastSeenModule = TheIndex.addModule(ModulePath, ModuleId);
+      ModuleIdMap[ModuleId] = LastSeenModule->first();
 
       ModulePath.clear();
       break;
@@ -5292,15 +5302,15 @@ Error ModuleSummaryIndexBitcodeReader::parseModuleStringTable() {
     case bitc::MST_CODE_HASH: {
       if (Record.size() != 5)
         return error("Invalid hash length " + Twine(Record.size()).str());
-      if (LastSeenModulePath == TheIndex.modulePaths().end())
+      if (!LastSeenModule)
         return error("Invalid hash that does not follow a module path");
       int Pos = 0;
       for (auto &Val : Record) {
         assert(!(Val >> 32) && "Unexpected high bits set");
-        LastSeenModulePath->second.second[Pos++] = Val;
+        LastSeenModule->second.second[Pos++] = Val;
       }
-      // Reset LastSeenModulePath to avoid overriding the hash unexpectedly.
-      LastSeenModulePath = TheIndex.modulePaths().end();
+      // Reset LastSeenModule to avoid overriding the hash unexpectedly.
+      LastSeenModule = nullptr;
       break;
     }
     }
@@ -5370,12 +5380,20 @@ static Expected<StringRef> readStrtab(BitstreamCursor &Stream) {
 
 Expected<std::vector<BitcodeModule>>
 llvm::getBitcodeModuleList(MemoryBufferRef Buffer) {
+  auto FOrErr = getBitcodeFileContents(Buffer);
+  if (!FOrErr)
+    return FOrErr.takeError();
+  return std::move(FOrErr->Mods);
+}
+
+Expected<BitcodeFileContents>
+llvm::getBitcodeFileContents(MemoryBufferRef Buffer) {
   Expected<BitstreamCursor> StreamOrErr = initStream(Buffer);
   if (!StreamOrErr)
     return StreamOrErr.takeError();
   BitstreamCursor &Stream = *StreamOrErr;
 
-  std::vector<BitcodeModule> Modules;
+  BitcodeFileContents F;
   while (true) {
     uint64_t BCBegin = Stream.getCurrentByteNo();
 
@@ -5383,7 +5401,7 @@ llvm::getBitcodeModuleList(MemoryBufferRef Buffer) {
     // of the bitcode stream (e.g. Apple's ar tool). If we are close enough to
     // the end that there cannot possibly be another module, stop looking.
     if (BCBegin + 8 >= Stream.getBitcodeBytes().size())
-      return Modules;
+      return F;
 
     BitstreamEntry Entry = Stream.advance();
     switch (Entry.Kind) {
@@ -5409,10 +5427,10 @@ llvm::getBitcodeModuleList(MemoryBufferRef Buffer) {
         if (Stream.SkipBlock())
           return error("Malformed block");
 
-        Modules.push_back({Stream.getBitcodeBytes().slice(
-                               BCBegin, Stream.getCurrentByteNo() - BCBegin),
-                           Buffer.getBufferIdentifier(), IdentificationBit,
-                           ModuleBit});
+        F.Mods.push_back({Stream.getBitcodeBytes().slice(
+                              BCBegin, Stream.getCurrentByteNo() - BCBegin),
+                          Buffer.getBufferIdentifier(), IdentificationBit,
+                          ModuleBit});
         continue;
       }
 
@@ -5424,7 +5442,7 @@ llvm::getBitcodeModuleList(MemoryBufferRef Buffer) {
         // not have its own string table. A bitcode file may have multiple
         // string tables if it was created by binary concatenation, for example
         // with "llvm-cat -b".
-        for (auto I = Modules.rbegin(), E = Modules.rend(); I != E; ++I) {
+        for (auto I = F.Mods.rbegin(), E = F.Mods.rend(); I != E; ++I) {
           if (!I->Strtab.empty())
             break;
           I->Strtab = *Strtab;

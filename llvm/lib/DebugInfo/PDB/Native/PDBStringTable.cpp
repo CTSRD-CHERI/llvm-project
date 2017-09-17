@@ -56,6 +56,11 @@ Error PDBStringTable::readStrings(BinaryStreamReader &Reader) {
   return Error::success();
 }
 
+const codeview::DebugStringTableSubsectionRef &
+PDBStringTable::getStringTable() const {
+  return Strings;
+}
+
 Error PDBStringTable::readHashTable(BinaryStreamReader &Reader) {
   const support::ulittle32_t *HashCount;
   if (auto EC = Reader.readObject(HashCount))

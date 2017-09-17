@@ -81,26 +81,43 @@ entry:
  ret void
 }
 
+define i8 @e(i32* nocapture %a, i32 %b) nounwind {
+; CHECK-LABEL: e:
+; CHECK:       # BB#0:
+; CHECK-NEXT:    # kill: %ESI<def> %ESI<kill> %RSI<def>
+; CHECK-NEXT:    movl (%rdi), %ecx
+; CHECK-NEXT:    leal (%rsi,%rcx), %edx
+; CHECK-NEXT:    addl %esi, %edx
+; CHECK-NEXT:    setb %al
+; CHECK-NEXT:    addl %esi, %ecx
+; CHECK-NEXT:    movl %edx, (%rdi)
+; CHECK-NEXT:    adcb $0, %al
+; CHECK-NEXT:    retq
+  %1 = load i32, i32* %a, align 4
+  %2 = add i32 %1, %b
+  %3 = icmp ult i32 %2, %b
+  %4 = zext i1 %3 to i8
+  %5 = add i32 %2, %b
+  store i32 %5, i32* %a, align 4
+  %6 = icmp ult i32 %5, %b
+  %7 = zext i1 %6 to i8
+  %8 = add nuw nsw i8 %7, %4
+  ret i8 %8
+}
+
 %scalar = type { [4 x i64] }
 
 define %scalar @pr31719(%scalar* nocapture readonly %this, %scalar %arg.b) {
 ; CHECK-LABEL: pr31719:
 ; CHECK:       # BB#0: # %entry
-; CHECK-NEXT:    xorl %r10d, %r10d
-; CHECK-NEXT:    addq 8(%rsi), %rcx
-; CHECK-NEXT:    setb %r10b
-; CHECK-NEXT:    xorl %eax, %eax
-; CHECK-NEXT:    addq 16(%rsi), %r8
-; CHECK-NEXT:    setb %al
-; CHECK-NEXT:    addq 24(%rsi), %r9
 ; CHECK-NEXT:    addq (%rsi), %rdx
-; CHECK-NEXT:    adcq $0, %rcx
-; CHECK-NEXT:    adcq %r8, %r10
-; CHECK-NEXT:    adcq %r9, %rax
+; CHECK-NEXT:    adcq 8(%rsi), %rcx
+; CHECK-NEXT:    adcq 16(%rsi), %r8
+; CHECK-NEXT:    adcq 24(%rsi), %r9
 ; CHECK-NEXT:    movq %rdx, (%rdi)
 ; CHECK-NEXT:    movq %rcx, 8(%rdi)
-; CHECK-NEXT:    movq %r10, 16(%rdi)
-; CHECK-NEXT:    movq %rax, 24(%rdi)
+; CHECK-NEXT:    movq %r8, 16(%rdi)
+; CHECK-NEXT:    movq %r9, 24(%rdi)
 ; CHECK-NEXT:    movq %rdi, %rax
 ; CHECK-NEXT:    retq
 entry:
@@ -190,9 +207,9 @@ entry:
 define i64 @shiftadd(i64 %a, i64 %b, i64 %c, i64 %d) {
 ; CHECK-LABEL: shiftadd:
 ; CHECK:       # BB#0: # %entry
-; CHECK-NEXT:    leaq (%rdx,%rcx), %rax
 ; CHECK-NEXT:    addq %rsi, %rdi
-; CHECK-NEXT:    adcq $0, %rax
+; CHECK-NEXT:    adcq %rcx, %rdx
+; CHECK-NEXT:    movq %rdx, %rax
 ; CHECK-NEXT:    retq
 entry:
   %0 = zext i64 %a to i128

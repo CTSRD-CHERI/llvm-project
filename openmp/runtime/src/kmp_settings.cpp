@@ -2173,7 +2173,7 @@ static void __kmp_parse_affinity_env(char const *name, char const *value,
     }; // if
 
     if (__kmp_affinity_gran == affinity_gran_default) {
-#if KMP_ARCH_X86_64 && (KMP_OS_LINUX || KMP_OS_WINDOWS)
+#if KMP_MIC_SUPPORTED
       if (__kmp_mic_type != non_mic) {
         if (__kmp_affinity_verbose || __kmp_affinity_warnings) {
           KMP_WARNING(AffGranUsing, "KMP_AFFINITY", "fine");
@@ -2819,7 +2819,7 @@ static void __kmp_stg_parse_proc_bind(char const *name, char const *value,
     // OMP_PROC_BIND => granularity=fine,scatter on MIC
     // OMP_PROC_BIND => granularity=core,scatter elsewhere
     __kmp_affinity_type = affinity_scatter;
-#if KMP_ARCH_X86_64 && (KMP_OS_LINUX || KMP_OS_WINDOWS)
+#if KMP_MIC_SUPPORTED
     if (__kmp_mic_type != non_mic)
       __kmp_affinity_gran = affinity_gran_fine;
     else
@@ -5033,6 +5033,16 @@ void __kmp_env_initialize(char const *string) {
     // affinity.
     const char *var = "KMP_AFFINITY";
     KMPAffinity::pick_api();
+#if KMP_USE_HWLOC
+    // If Hwloc topology discovery was requested but affinity was also disabled,
+    // then tell user that Hwloc request is being ignored and use default
+    // topology discovery method.
+    if (__kmp_affinity_top_method == affinity_top_method_hwloc &&
+        __kmp_affinity_dispatch->get_api_type() != KMPAffinity::HWLOC) {
+      KMP_WARNING(AffIgnoringHwloc, var);
+      __kmp_affinity_top_method = affinity_top_method_all;
+    }
+#endif
     if (__kmp_affinity_type == affinity_disabled) {
       KMP_AFFINITY_DISABLE();
     } else if (!KMP_AFFINITY_CAPABLE()) {
@@ -5063,6 +5073,33 @@ void __kmp_env_initialize(char const *string) {
     if (KMP_AFFINITY_CAPABLE()) {
 
 #if KMP_GROUP_AFFINITY
+      // This checks to see if the initial affinity mask is equal
+      // to a single windows processor group.  If it is, then we do
+      // not respect the initial affinity mask and instead, use the
+      // entire machine.
+      bool exactly_one_group = false;
+      if (__kmp_num_proc_groups > 1) {
+        int group;
+        bool within_one_group;
+        // Get the initial affinity mask and determine if it is
+        // contained within a single group.
+        kmp_affin_mask_t *init_mask;
+        KMP_CPU_ALLOC(init_mask);
+        __kmp_get_system_affinity(init_mask, TRUE);
+        group = __kmp_get_proc_group(init_mask);
+        within_one_group = (group >= 0);
+        // If the initial affinity is within a single group,
+        // then determine if it is equal to that single group.
+        if (within_one_group) {
+          DWORD num_bits_in_group = __kmp_GetActiveProcessorCount(group);
+          int num_bits_in_mask = 0;
+          for (int bit = init_mask->begin(); bit != init_mask->end();
+               bit = init_mask->next(bit))
+            num_bits_in_mask++;
+          exactly_one_group = (num_bits_in_group == num_bits_in_mask);
+        }
+        KMP_CPU_FREE(init_mask);
+      }
 
       // Handle the Win 64 group affinity stuff if there are multiple
       // processor groups, or if the user requested it, and OMP 4.0
@@ -5073,7 +5110,8 @@ void __kmp_env_initialize(char const *string) {
            && (__kmp_nested_proc_bind.bind_types[0] == proc_bind_default))
 #endif
           || (__kmp_affinity_top_method == affinity_top_method_group)) {
-        if (__kmp_affinity_respect_mask == affinity_respect_mask_default) {
+        if (__kmp_affinity_respect_mask == affinity_respect_mask_default &&
+            exactly_one_group) {
           __kmp_affinity_respect_mask = FALSE;
         }
         if (__kmp_affinity_type == affinity_default) {
@@ -5150,7 +5188,7 @@ void __kmp_env_initialize(char const *string) {
       {
         if (__kmp_affinity_respect_mask == affinity_respect_mask_default) {
 #if KMP_GROUP_AFFINITY
-          if (__kmp_num_proc_groups > 1) {
+          if (__kmp_num_proc_groups > 1 && exactly_one_group) {
             __kmp_affinity_respect_mask = FALSE;
           } else
 #endif /* KMP_GROUP_AFFINITY */
@@ -5169,7 +5207,7 @@ void __kmp_env_initialize(char const *string) {
 #endif /* OMP_40_ENABLED */
             if (__kmp_affinity_type == affinity_default) {
 #if OMP_40_ENABLED
-#if KMP_ARCH_X86_64 && (KMP_OS_LINUX || KMP_OS_WINDOWS)
+#if KMP_MIC_SUPPORTED
           if (__kmp_mic_type != non_mic) {
             __kmp_nested_proc_bind.bind_types[0] = proc_bind_intel;
           } else
@@ -5178,7 +5216,7 @@ void __kmp_env_initialize(char const *string) {
             __kmp_nested_proc_bind.bind_types[0] = proc_bind_false;
           }
 #endif /* OMP_40_ENABLED */
-#if KMP_ARCH_X86_64 && (KMP_OS_LINUX || KMP_OS_WINDOWS)
+#if KMP_MIC_SUPPORTED
           if (__kmp_mic_type != non_mic) {
             __kmp_affinity_type = affinity_scatter;
           } else
@@ -5189,7 +5227,7 @@ void __kmp_env_initialize(char const *string) {
         }
         if ((__kmp_affinity_gran == affinity_gran_default) &&
             (__kmp_affinity_gran_levels < 0)) {
-#if KMP_ARCH_X86_64 && (KMP_OS_LINUX || KMP_OS_WINDOWS)
+#if KMP_MIC_SUPPORTED
           if (__kmp_mic_type != non_mic) {
             __kmp_affinity_gran = affinity_gran_fine;
           } else

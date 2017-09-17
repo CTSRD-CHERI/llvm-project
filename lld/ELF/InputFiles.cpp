@@ -206,13 +206,27 @@ template <class ELFT>
 StringRef
 elf::ObjectFile<ELFT>::getShtGroupSignature(ArrayRef<Elf_Shdr> Sections,
                                             const Elf_Shdr &Sec) {
+  // Group signatures are stored as symbol names in object files.
+  // sh_info contains a symbol index, so we fetch a symbol and read its name.
   if (this->Symbols.empty())
     this->initSymtab(
         Sections,
         check(object::getSection<ELFT>(Sections, Sec.sh_link), toString(this)));
+
   const Elf_Sym *Sym = check(
       object::getSymbol<ELFT>(this->Symbols, Sec.sh_info), toString(this));
-  return check(Sym->getName(this->StringTable), toString(this));
+  StringRef Signature = check(Sym->getName(this->StringTable), toString(this));
+
+  // As a special case, if a symbol is a section symbol and has no name,
+  // we use a section name as a signature.
+  //
+  // Such SHT_GROUP sections are invalid from the perspective of the ELF
+  // standard, but GNU gold 1.14 (the neweset version as of July 2017) or
+  // older produce such sections as outputs for the -r option, so we need
+  // a bug-compatibility.
+  if (Signature.empty() && Sym->getType() == STT_SECTION)
+    return getSectionName(Sec);
+  return Signature;
 }
 
 template <class ELFT>
@@ -288,8 +302,7 @@ void elf::ObjectFile<ELFT>::initializeSections(
       check(this->getObj().sections(), toString(this));
   uint64_t Size = ObjSections.size();
   this->Sections.resize(Size);
-
-  StringRef SectionStringTable =
+  this->SectionStringTable =
       check(Obj.getSectionStringTable(ObjSections), toString(this));
 
   for (size_t I = 0, E = ObjSections.size(); I < E; I++) {
@@ -307,21 +320,23 @@ void elf::ObjectFile<ELFT>::initializeSections(
 
     switch (Sec.sh_type) {
     case SHT_GROUP: {
-      // We discard comdat sections usually. When -r we should not do that. We
-      // still do deduplication in this case to simplify implementation, because
-      // otherwise merging group sections together would requre additional
-      // regeneration of its contents.
-      bool New = ComdatGroups
-                     .insert(CachedHashStringRef(
-                         getShtGroupSignature(ObjSections, Sec)))
-                     .second;
-      if (New && Config->Relocatable)
-        this->Sections[I] = createInputSection(Sec, SectionStringTable);
-      else
-        this->Sections[I] = &InputSection::Discarded;
-      if (New)
-        continue;
+      // De-duplicate section groups by their signatures.
+      StringRef Signature = getShtGroupSignature(ObjSections, Sec);
+      bool IsNew = ComdatGroups.insert(CachedHashStringRef(Signature)).second;
+      this->Sections[I] = &InputSection::Discarded;
 
+      // If it is a new section group, we want to keep group members.
+      // Group leader sections, which contain indices of group members, are
+      // discarded because they are useless beyond this point. The only
+      // exception is the -r option because in order to produce re-linkable
+      // object files, we want to pass through basically everything.
+      if (IsNew) {
+        if (Config->Relocatable)
+          this->Sections[I] = createInputSection(Sec);
+        continue;
+      }
+
+      // Otherwise, discard group members.
       for (uint32_t SecIndex : getShtGroupEntries(Sec)) {
         if (SecIndex >= Size)
           fatal(toString(this) +
@@ -341,7 +356,7 @@ void elf::ObjectFile<ELFT>::initializeSections(
     case SHT_NULL:
       break;
     default:
-      this->Sections[I] = createInputSection(Sec, SectionStringTable);
+      this->Sections[I] = createInputSection(Sec);
     }
 
     // .ARM.exidx sections have a reverse dependency on the InputSection they
@@ -385,10 +400,8 @@ InputSectionBase *toRegularSection(MergeInputSection *Sec) {
 
 template <class ELFT>
 InputSectionBase *
-elf::ObjectFile<ELFT>::createInputSection(const Elf_Shdr &Sec,
-                                          StringRef SectionStringTable) {
-  StringRef Name = check(
-      this->getObj().getSectionName(&Sec, SectionStringTable), toString(this));
+elf::ObjectFile<ELFT>::createInputSection(const Elf_Shdr &Sec) {
+  StringRef Name = getSectionName(Sec);
 
   switch (Sec.sh_type) {
   case SHT_ARM_ATTRIBUTES:
@@ -525,6 +538,12 @@ elf::ObjectFile<ELFT>::createInputSection(const Elf_Shdr &Sec,
   if (shouldMerge(Sec))
     return make<MergeInputSection>(this, &Sec, Name);
   return make<InputSection>(this, &Sec, Name);
+}
+
+template <class ELFT>
+StringRef elf::ObjectFile<ELFT>::getSectionName(const Elf_Shdr &Sec) {
+  return check(this->getObj().getSectionName(&Sec, SectionStringTable),
+               toString(this));
 }
 
 template <class ELFT> void elf::ObjectFile<ELFT>::initializeSymbols() {

@@ -22,6 +22,7 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/CodeGen/DIE.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
@@ -38,7 +39,6 @@
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Support/Dwarf.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/LEB128.h"
@@ -1511,7 +1511,7 @@ static void emitDebugLocValue(const AsmPrinter &AP, const DIBasicType *BT,
       DwarfExpr.setMemoryLocationKind();
     SmallVector<uint64_t, 8> Ops;
     if (Location.isIndirect() && Location.getOffset()) {
-      Ops.push_back(dwarf::DW_OP_plus);
+      Ops.push_back(dwarf::DW_OP_plus_uconst);
       Ops.push_back(Location.getOffset());
     }
     Ops.append(DIExpr->elements_begin(), DIExpr->elements_end());

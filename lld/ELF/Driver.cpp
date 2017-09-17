@@ -36,6 +36,7 @@
 #include "ScriptParser.h"
 #include "Strings.h"
 #include "SymbolTable.h"
+#include "SyntheticSections.h"
 #include "Target.h"
 #include "Threads.h"
 #include "Writer.h"
@@ -43,7 +44,6 @@
 #include "lld/Driver/Driver.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSwitch.h"
-#include "llvm/Object/Decompressor.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compression.h"
 #include "llvm/Support/Path.h"
@@ -99,7 +99,7 @@ static std::tuple<ELFKind, uint16_t, uint8_t> parseEmulation(StringRef Emul) {
   std::pair<ELFKind, uint16_t> Ret =
       StringSwitch<std::pair<ELFKind, uint16_t>>(S)
           .Cases("aarch64elf", "aarch64linux", {ELF64LEKind, EM_AARCH64})
-          .Case("armelf_linux_eabi", {ELF32LEKind, EM_ARM})
+          .Cases("armelf", "armelf_linux_eabi", {ELF32LEKind, EM_ARM})
           .Case("elf32_x86_64", {ELF32LEKind, EM_X86_64})
           .Cases("elf32btsmip", "elf32btsmipn32", {ELF32BEKind, EM_MIPS})
           .Cases("elf32ltsmip", "elf32ltsmipn32", {ELF32LEKind, EM_MIPS})
@@ -186,7 +186,7 @@ void LinkerDriver::addFile(StringRef Path, bool WithLOption) {
     // is attempting LTO and using a default ar command that doesn't
     // understand the LLVM bitcode file. It is a pretty common error, so
     // we'll handle it as if it had a symbol table.
-    if (!File->hasSymbolTable()) {
+    if (!File->isEmpty() && !File->hasSymbolTable()) {
       for (const auto &P : getArchiveMembers(MBRef))
         Files.push_back(make<LazyObjectFile>(P.first, Path, P.second));
       return;
@@ -303,13 +303,11 @@ static bool hasZOption(opt::InputArgList &Args, StringRef Key) {
 static uint64_t getZOptionValue(opt::InputArgList &Args, StringRef Key,
                                 uint64_t Default) {
   for (auto *Arg : Args.filtered(OPT_z)) {
-    StringRef Value = Arg->getValue();
-    size_t Pos = Value.find("=");
-    if (Pos != StringRef::npos && Key == Value.substr(0, Pos)) {
-      Value = Value.substr(Pos + 1);
+    std::pair<StringRef, StringRef> KV = StringRef(Arg->getValue()).split('=');
+    if (KV.first == Key) {
       uint64_t Result;
-      if (!to_integer(Value, Result))
-        error("invalid " + Key + ": " + Value);
+      if (!to_integer(KV.second, Result))
+        error("invalid " + Key + ": " + KV.second);
       return Result;
     }
   }
@@ -992,6 +990,14 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   Symtab.scanShlibUndefined();
   Symtab.scanVersionScript();
 
+  // Create wrapped symbols for -wrap option.
+  for (auto *Arg : Args.filtered(OPT_wrap))
+    Symtab.addSymbolWrap(Arg->getValue());
+
+  // Create alias symbols for -defsym option.
+  for (std::pair<StringRef, StringRef> &Def : getDefsym(Args))
+    Symtab.addSymbolAlias(Def.first, Def.second);
+
   Symtab.addCombinedLTOObject();
   if (ErrorCount)
     return;
@@ -1001,12 +1007,8 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   for (StringRef Sym : Script->Opt.ReferencedSymbols)
     Symtab.addUndefined(Sym);
 
-  for (auto *Arg : Args.filtered(OPT_wrap))
-    Symtab.wrap(Arg->getValue());
-
-  // Handle --defsym=sym=alias option.
-  for (std::pair<StringRef, StringRef> &Def : getDefsym(Args))
-    Symtab.alias(Def.first, Def.second);
+  // Apply symbol renames for -wrap and -defsym
+  Symtab.applySymbolRenames();
 
   // Now that we have a complete list of input files.
   // Beyond this point, no new files are added.
@@ -1019,23 +1021,19 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
     for (InputSectionBase *S : F->getSections())
       InputSections.push_back(cast<InputSection>(S));
 
-  // Do size optimizations: garbage collection and identical code folding.
+  // This adds a .comment section containing a version string. We have to add it
+  // before decompressAndMergeSections because the .comment section is a
+  // mergeable section.
+  if (!Config->Relocatable)
+    InputSections.push_back(createCommentSection<ELFT>());
+
+  // Do size optimizations: garbage collection, merging of SHF_MERGE sections
+  // and identical code folding.
   if (Config->GcSections)
     markLive<ELFT>();
+  decompressAndMergeSections();
   if (Config->ICF)
     doIcf<ELFT>();
-
-  // MergeInputSection::splitIntoPieces needs to be called before
-  // any call of MergeInputSection::getOffset. Do that.
-  parallelForEach(InputSections.begin(), InputSections.end(),
-                  [](InputSectionBase *S) {
-                    if (!S->Live)
-                      return;
-                    if (Decompressor::isCompressedELFSection(S->Flags, S->Name))
-                      S->uncompress();
-                    if (auto *MS = dyn_cast<MergeInputSection>(S))
-                      MS->splitIntoPieces();
-                  });
 
   // Write the result to the file.
   writeResult<ELFT>();

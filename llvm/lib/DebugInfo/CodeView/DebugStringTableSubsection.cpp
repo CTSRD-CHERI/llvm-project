@@ -23,6 +23,9 @@ Error DebugStringTableSubsectionRef::initialize(BinaryStreamRef Contents) {
   Stream = Contents;
   return Error::success();
 }
+Error DebugStringTableSubsectionRef::initialize(BinaryStreamReader &Reader) {
+  return Reader.readStreamRef(Stream);
+}
 
 Expected<StringRef>
 DebugStringTableSubsectionRef::getString(uint32_t Offset) const {
@@ -52,27 +55,31 @@ uint32_t DebugStringTableSubsection::calculateSerializedSize() const {
 }
 
 Error DebugStringTableSubsection::commit(BinaryStreamWriter &Writer) const {
-  assert(Writer.bytesRemaining() == StringSize);
-  uint32_t MaxOffset = 1;
+  uint32_t Begin = Writer.getOffset();
+  uint32_t End = Begin + StringSize;
+
+  // Write a null string at the beginning.
+  if (auto EC = Writer.writeCString(StringRef()))
+    return EC;
 
   for (auto &Pair : Strings) {
     StringRef S = Pair.getKey();
-    uint32_t Offset = Pair.getValue();
+    uint32_t Offset = Begin + Pair.getValue();
     Writer.setOffset(Offset);
     if (auto EC = Writer.writeCString(S))
       return EC;
-    MaxOffset = std::max<uint32_t>(MaxOffset, Offset + S.size() + 1);
+    assert(Writer.getOffset() <= End);
   }
 
-  Writer.setOffset(MaxOffset);
-  assert(Writer.bytesRemaining() == 0);
+  Writer.setOffset(End);
+  assert((End - Begin) == StringSize);
   return Error::success();
 }
 
 uint32_t DebugStringTableSubsection::size() const { return Strings.size(); }
 
 uint32_t DebugStringTableSubsection::getStringId(StringRef S) const {
-  auto P = Strings.find(S);
-  assert(P != Strings.end());
-  return P->second;
+  auto Iter = Strings.find(S);
+  assert(Iter != Strings.end());
+  return Iter->second;
 }

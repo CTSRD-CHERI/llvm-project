@@ -7,18 +7,19 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/DebugInfo/DWARF/DWARFDebugFrame.h"
+
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/Optional.h"
-#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/DebugInfo/DWARF/DWARFDebugFrame.h"
+#include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/DataExtractor.h"
-#include "llvm/Support/Dwarf.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
@@ -513,20 +514,26 @@ static uint64_t readPointer(const DataExtractor &Data, uint32_t &Offset,
   }
 }
 
+// This is a workaround for old compilers which do not allow
+// noreturn attribute usage in lambdas. Once the support for those
+// compilers are phased out, we can remove this and return back to
+// a ReportError lambda: [StartOffset](const char *ErrorMsg).
+#define ReportError(ErrorMsg) ReportErrorImpl(StartOffset,ErrorMsg)
+static void LLVM_ATTRIBUTE_NORETURN
+ReportErrorImpl(uint32_t StartOffset, const char *ErrorMsg) {
+      std::string Str;
+      raw_string_ostream OS(Str);
+      OS << format(ErrorMsg, StartOffset);
+      OS.flush();
+      report_fatal_error(Str);
+}
+
 void DWARFDebugFrame::parse(DataExtractor Data) {
   uint32_t Offset = 0;
   DenseMap<uint32_t, CIE *> CIEs;
 
   while (Data.isValidOffset(Offset)) {
     uint32_t StartOffset = Offset;
-
-    auto ReportError = [StartOffset](const char *ErrorMsg) {
-      std::string Str;
-      raw_string_ostream OS(Str);
-      OS << format(ErrorMsg, StartOffset);
-      OS.flush();
-      report_fatal_error(Str);
-    };
 
     bool IsDWARF64 = false;
     uint64_t Length = Data.getU32(&Offset);

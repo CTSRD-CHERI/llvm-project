@@ -19,12 +19,12 @@
 #include "llvm/ADT/ilist_node.h"
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/ADT/simple_ilist.h"
-#include "llvm/CodeGen/MachineInstrBundleIterator.h"
 #include "llvm/CodeGen/MachineInstr.h"
+#include "llvm/CodeGen/MachineInstrBundleIterator.h"
 #include "llvm/IR/DebugLoc.h"
-#include "llvm/Support/BranchProbability.h"
 #include "llvm/MC/LaneBitmask.h"
 #include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/Support/BranchProbability.h"
 #include <cassert>
 #include <cstdint>
 #include <functional>
@@ -334,6 +334,9 @@ public:
   iterator_range<livein_iterator> liveins() const {
     return make_range(livein_begin(), livein_end());
   }
+
+  /// Remove entry from the livein set and return iterator to the next.
+  livein_iterator removeLiveIn(livein_iterator I);
 
   /// Get the clobber mask for the start of this basic block. Funclets use this
   /// to prevent register allocation across funclet transitions.

@@ -36,8 +36,8 @@ template <> struct VarStreamArrayExtractor<codeview::FileChecksumEntry> {
 public:
   typedef void ContextType;
 
-  static Error extract(BinaryStreamRef Stream, uint32_t &Len,
-                       codeview::FileChecksumEntry &Item);
+  Error operator()(BinaryStreamRef Stream, uint32_t &Len,
+                   codeview::FileChecksumEntry &Item);
 };
 }
 
@@ -60,8 +60,8 @@ public:
   Error initialize(BinaryStreamReader Reader);
   Error initialize(BinaryStreamRef Stream);
 
-  Iterator begin() { return Checksums.begin(); }
-  Iterator end() { return Checksums.end(); }
+  Iterator begin() const { return Checksums.begin(); }
+  Iterator end() const { return Checksums.end(); }
 
   const FileChecksumArray &getArray() const { return Checksums; }
 

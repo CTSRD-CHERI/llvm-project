@@ -736,6 +736,7 @@ namespace {
             if (!HasFoldFailureDiagnostic)
               break;
             // We've already failed to fold something. Keep that diagnostic.
+            LLVM_FALLTHROUGH;
           case EM_ConstantExpression:
           case EM_PotentialConstantExpression:
           case EM_ConstantExpressionUnevaluated:
@@ -4587,7 +4588,7 @@ public:
   }
 
   bool handleCallExpr(const CallExpr *E, APValue &Result,
-                      const LValue *ResultSlot) {
+                     const LValue *ResultSlot) {
     const Expr *Callee = E->getCallee()->IgnoreParens();
     QualType CalleeType = Callee->getType();
 
@@ -4595,23 +4596,6 @@ public:
     LValue *This = nullptr, ThisVal;
     auto Args = llvm::makeArrayRef(E->getArgs(), E->getNumArgs());
     bool HasQualifier = false;
-
-    struct EvaluateIgnoredRAII {
-    public:
-      EvaluateIgnoredRAII(EvalInfo &Info, llvm::ArrayRef<const Expr*> ToEval)
-          : Info(Info), ToEval(ToEval) {}
-      ~EvaluateIgnoredRAII() {
-        if (Info.noteFailure()) {
-          for (auto E : ToEval)
-            EvaluateIgnoredValue(Info, E);
-        }
-      }
-      void cancel() { ToEval = {}; }
-      void drop_front() { ToEval = ToEval.drop_front(); }
-    private:
-      EvalInfo &Info;
-      llvm::ArrayRef<const Expr*> ToEval;
-    } EvalArguments(Info, Args);
 
     // Extract function decl and 'this' pointer from the callee.
     if (CalleeType->isSpecificBuiltinType(BuiltinType::BoundMember)) {
@@ -4662,12 +4646,10 @@ public:
         if (Args.empty())
           return Error(E);
 
-        const Expr *FirstArg = Args[0];
-        Args = Args.drop_front();
-        EvalArguments.drop_front();
-        if (!EvaluateObjectArgument(Info, FirstArg, ThisVal))
+        if (!EvaluateObjectArgument(Info, Args[0], ThisVal))
           return false;
         This = &ThisVal;
+        Args = Args.slice(1);
       } else if (MD && MD->isLambdaStaticInvoker()) {   
         // Map the static invoker for the lambda back to the call operator.
         // Conveniently, we don't have to slice out the 'this' argument (as is
@@ -4719,12 +4701,8 @@ public:
     const FunctionDecl *Definition = nullptr;
     Stmt *Body = FD->getBody(Definition);
 
-    if (!CheckConstexprFunction(Info, E->getExprLoc(), FD, Definition, Body))
-      return false;
-
-    EvalArguments.cancel();
-
-    if (!HandleFunctionCall(E->getExprLoc(), Definition, This, Args, Body, Info,
+    if (!CheckConstexprFunction(Info, E->getExprLoc(), FD, Definition, Body) ||
+        !HandleFunctionCall(E->getExprLoc(), Definition, This, Args, Body, Info,
                             Result, ResultSlot))
       return false;
 
@@ -10374,6 +10352,7 @@ static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
     }
 
     // OffsetOf falls through here.
+    LLVM_FALLTHROUGH;
   }
   case Expr::OffsetOfExprClass: {
     // Note that per C99, offsetof must be an ICE. And AFAIK, using
@@ -10476,6 +10455,7 @@ static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
       return Worst(LHSResult, RHSResult);
     }
     }
+    LLVM_FALLTHROUGH;
   }
   case Expr::ImplicitCastExprClass:
   case Expr::CStyleCastExprClass:

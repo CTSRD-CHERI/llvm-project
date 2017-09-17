@@ -289,13 +289,27 @@ static void addHeaderInclude(StringRef HeaderName,
 ///
 /// \param Includes Will be augmented with the set of \#includes or \#imports
 /// needed to load all of the named headers.
-static std::error_code
-collectModuleHeaderIncludes(const LangOptions &LangOpts, FileManager &FileMgr,
-                            ModuleMap &ModMap, clang::Module *Module,
-                            SmallVectorImpl<char> &Includes) {
+static std::error_code collectModuleHeaderIncludes(
+    const LangOptions &LangOpts, FileManager &FileMgr, DiagnosticsEngine &Diag,
+    ModuleMap &ModMap, clang::Module *Module, SmallVectorImpl<char> &Includes) {
   // Don't collect any headers for unavailable modules.
   if (!Module->isAvailable())
     return std::error_code();
+
+  // Resolve all lazy header directives to header files.
+  ModMap.resolveHeaderDirectives(Module);
+
+  // If any headers are missing, we can't build this module. In most cases,
+  // diagnostics for this should have already been produced; we only get here
+  // if explicit stat information was provided.
+  // FIXME: If the name resolves to a file with different stat information,
+  // produce a better diagnostic.
+  if (!Module->MissingHeaders.empty()) {
+    auto &MissingHeader = Module->MissingHeaders.front();
+    Diag.Report(MissingHeader.FileNameLoc, diag::err_module_header_missing)
+      << MissingHeader.IsUmbrella << MissingHeader.FileName;
+    return std::error_code();
+  }
 
   // Add includes for each of these headers.
   for (auto HK : {Module::HK_Normal, Module::HK_Private}) {
@@ -367,16 +381,16 @@ collectModuleHeaderIncludes(const LangOptions &LangOpts, FileManager &FileMgr,
                                       SubEnd = Module->submodule_end();
        Sub != SubEnd; ++Sub)
     if (std::error_code Err = collectModuleHeaderIncludes(
-            LangOpts, FileMgr, ModMap, *Sub, Includes))
+            LangOpts, FileMgr, Diag, ModMap, *Sub, Includes))
       return Err;
 
   return std::error_code();
 }
 
-static bool
-loadModuleMapForModuleBuild(CompilerInstance &CI, StringRef Filename,
-                            bool IsSystem, bool IsPreprocessed,
-                            unsigned &Offset) {
+static bool loadModuleMapForModuleBuild(CompilerInstance &CI, bool IsSystem,
+                                        bool IsPreprocessed,
+                                        std::string &PresumedModuleMapFile,
+                                        unsigned &Offset) {
   auto &SrcMgr = CI.getSourceManager();
   HeaderSearch &HS = CI.getPreprocessor().getHeaderSearchInfo();
 
@@ -388,16 +402,15 @@ loadModuleMapForModuleBuild(CompilerInstance &CI, StringRef Filename,
   // line directives are not part of the module map syntax in general.
   Offset = 0;
   if (IsPreprocessed) {
-    std::string PresumedModuleMapFile;
     SourceLocation EndOfLineMarker =
         ReadOriginalFileName(CI, PresumedModuleMapFile, /*AddLineNote*/true);
     if (EndOfLineMarker.isValid())
       Offset = CI.getSourceManager().getDecomposedLoc(EndOfLineMarker).second;
-    // FIXME: Use PresumedModuleMapFile as the MODULE_MAP_FILE in the PCM.
   }
 
   // Load the module map file.
-  if (HS.loadModuleMapFile(ModuleMap, IsSystem, ModuleMapID, &Offset))
+  if (HS.loadModuleMapFile(ModuleMap, IsSystem, ModuleMapID, &Offset,
+                           PresumedModuleMapFile))
     return true;
 
   if (SrcMgr.getBuffer(ModuleMapID)->getBufferSize() == Offset)
@@ -430,21 +443,9 @@ static Module *prepareToBuildModule(CompilerInstance &CI,
   }
 
   // Check whether we can build this module at all.
-  clang::Module::Requirement Requirement;
-  clang::Module::UnresolvedHeaderDirective MissingHeader;
-  if (!M->isAvailable(CI.getLangOpts(), CI.getTarget(), Requirement,
-                      MissingHeader)) {
-    if (MissingHeader.FileNameLoc.isValid()) {
-      CI.getDiagnostics().Report(MissingHeader.FileNameLoc,
-                                 diag::err_module_header_missing)
-        << MissingHeader.IsUmbrella << MissingHeader.FileName;
-    } else {
-      CI.getDiagnostics().Report(diag::err_module_unavailable)
-        << M->getFullModuleName() << Requirement.second << Requirement.first;
-    }
-
+  if (Preprocessor::checkModuleIsAvailable(CI.getLangOpts(), CI.getTarget(),
+                                           CI.getDiagnostics(), M))
     return nullptr;
-  }
 
   // Inform the preprocessor that includes from within the input buffer should
   // be resolved relative to the build directory of the module map file.
@@ -494,7 +495,7 @@ getInputBufferForModule(CompilerInstance &CI, Module *M) {
     addHeaderInclude(UmbrellaHeader.NameAsWritten, HeaderContents,
                      CI.getLangOpts(), M->IsExternC);
   Err = collectModuleHeaderIncludes(
-      CI.getLangOpts(), FileMgr,
+      CI.getLangOpts(), FileMgr, CI.getDiagnostics(),
       CI.getPreprocessor().getHeaderSearchInfo().getModuleMap(), M,
       HeaderContents);
 
@@ -509,7 +510,8 @@ getInputBufferForModule(CompilerInstance &CI, Module *M) {
 }
 
 bool FrontendAction::BeginSourceFile(CompilerInstance &CI,
-                                     const FrontendInputFile &Input) {
+                                     const FrontendInputFile &RealInput) {
+  FrontendInputFile Input(RealInput);
   assert(!Instance && "Already processing a source file!");
   assert(!Input.isEmpty() && "Unexpected empty filename!");
   setCurrentInput(Input);
@@ -517,15 +519,72 @@ bool FrontendAction::BeginSourceFile(CompilerInstance &CI,
 
   StringRef InputFile = Input.getFile();
   bool HasBegunSourceFile = false;
+  bool ReplayASTFile = Input.getKind().getFormat() == InputKind::Precompiled &&
+                       usesPreprocessorOnly();
   if (!BeginInvocation(CI))
     goto failure;
+
+  // If we're replaying the build of an AST file, import it and set up
+  // the initial state from its build.
+  if (ReplayASTFile) {
+    IntrusiveRefCntPtr<DiagnosticsEngine> Diags(&CI.getDiagnostics());
+
+    // The AST unit populates its own diagnostics engine rather than ours.
+    IntrusiveRefCntPtr<DiagnosticsEngine> ASTDiags(
+        new DiagnosticsEngine(Diags->getDiagnosticIDs(),
+                              &Diags->getDiagnosticOptions()));
+    ASTDiags->setClient(Diags->getClient(), /*OwnsClient*/false);
+
+    std::unique_ptr<ASTUnit> AST = ASTUnit::LoadFromASTFile(
+        InputFile, CI.getPCHContainerReader(), ASTDiags, CI.getFileSystemOpts(),
+        CI.getCodeGenOpts().DebugTypeExtRefs);
+    if (!AST)
+      goto failure;
+
+    // Options relating to how we treat the input (but not what we do with it)
+    // are inherited from the AST unit.
+    CI.getHeaderSearchOpts() = AST->getHeaderSearchOpts();
+    CI.getPreprocessorOpts() = AST->getPreprocessorOpts();
+    CI.getLangOpts() = AST->getLangOpts();
+
+    // Preload all the module files loaded transitively by the AST unit.
+    if (auto ASTReader = AST->getASTReader()) {
+      auto &MM = ASTReader->getModuleManager();
+      for (ModuleFile &MF : MM)
+        if (&MF != &MM.getPrimaryModule())
+          CI.getFrontendOpts().ModuleFiles.push_back(MF.FileName);
+    }
+    // FIXME: Preload module maps loaded by the AST unit.
+
+    // Set the shared objects, these are reset when we finish processing the
+    // file, otherwise the CompilerInstance will happily destroy them.
+    CI.setFileManager(&AST->getFileManager());
+    CI.createSourceManager(CI.getFileManager());
+    CI.getSourceManager().initializeForReplay(AST->getSourceManager());
+    CI.createPreprocessor(getTranslationUnitKind());
+
+    // Set up the input file for replay purposes.
+    auto Kind = AST->getInputKind();
+    if (Kind.getFormat() == InputKind::ModuleMap) {
+      Module *ASTModule =
+          AST->getPreprocessor().getHeaderSearchInfo().lookupModule(
+              AST->getLangOpts().CurrentModule, /*AllowSearch*/ false);
+      Input = FrontendInputFile(ASTModule->PresumedModuleMapFile, Kind);
+    } else {
+      auto &SM = CI.getSourceManager();
+      FileID ID = SM.getMainFileID();
+      if (auto *File = SM.getFileEntryForID(ID))
+        Input = FrontendInputFile(File->getName(), Kind);
+      else
+        Input = FrontendInputFile(SM.getBuffer(ID), Kind);
+    }
+    setCurrentInput(Input, std::move(AST));
+  }
 
   // AST files follow a very different path, since they share objects via the
   // AST unit.
   if (Input.getKind().getFormat() == InputKind::Precompiled) {
-    // FIXME: We should not be asserting on bad command-line arguments.
-    assert(!usesPreprocessorOnly() &&
-           "Attempt to pass AST file to preprocessor only action!");
+    assert(!usesPreprocessorOnly() && "this case was handled above");
     assert(hasASTFileSupport() &&
            "This action does not have AST file support!");
 
@@ -555,7 +614,7 @@ bool FrontendAction::BeginSourceFile(CompilerInstance &CI,
     setCurrentInput(Input, std::move(AST));
 
     // Initialize the action.
-    if (!BeginSourceFileAction(CI, InputFile))
+    if (!BeginSourceFileAction(CI))
       goto failure;
 
     // Create the AST consumer.
@@ -602,7 +661,7 @@ bool FrontendAction::BeginSourceFile(CompilerInstance &CI,
     HasBegunSourceFile = true;
 
     // Initialize the action.
-    if (!BeginSourceFileAction(CI, InputFile))
+    if (!BeginSourceFileAction(CI))
       goto failure;
 
     // Initialize the main file entry.
@@ -664,14 +723,18 @@ bool FrontendAction::BeginSourceFile(CompilerInstance &CI,
   if (Input.getKind().getFormat() == InputKind::ModuleMap) {
     CI.getLangOpts().setCompilingModule(LangOptions::CMK_ModuleMap);
 
+    std::string PresumedModuleMapFile;
     unsigned OffsetToContents;
-    if (loadModuleMapForModuleBuild(CI, Input.getFile(), Input.isSystem(),
-                                    Input.isPreprocessed(), OffsetToContents))
+    if (loadModuleMapForModuleBuild(CI, Input.isSystem(),
+                                    Input.isPreprocessed(),
+                                    PresumedModuleMapFile, OffsetToContents))
       goto failure;
 
     auto *CurrentModule = prepareToBuildModule(CI, Input.getFile());
     if (!CurrentModule)
       goto failure;
+
+    CurrentModule->PresumedModuleMapFile = PresumedModuleMapFile;
 
     if (OffsetToContents)
       // If the module contents are in the same file, skip to them.
@@ -691,7 +754,7 @@ bool FrontendAction::BeginSourceFile(CompilerInstance &CI,
   }
 
   // Initialize the action.
-  if (!BeginSourceFileAction(CI, InputFile))
+  if (!BeginSourceFileAction(CI))
     goto failure;
 
   // Create the AST context and consumer unless this is a preprocessor only
@@ -811,14 +874,7 @@ bool FrontendAction::BeginSourceFile(CompilerInstance &CI,
 
   // If we failed, reset state since the client will not end up calling the
   // matching EndSourceFile().
-  failure:
-  if (isCurrentFileAST()) {
-    CI.setASTContext(nullptr);
-    CI.setPreprocessor(nullptr);
-    CI.setSourceManager(nullptr);
-    CI.setFileManager(nullptr);
-  }
-
+failure:
   if (HasBegunSourceFile)
     CI.getDiagnosticClient().EndSourceFile();
   CI.clearOutputFiles(/*EraseFiles=*/true);
@@ -896,6 +952,7 @@ void FrontendAction::EndSourceFile() {
       CI.resetAndLeakPreprocessor();
       CI.resetAndLeakSourceManager();
       CI.resetAndLeakFileManager();
+      BuryPointer(CurrentASTUnit.release());
     } else {
       CI.setPreprocessor(nullptr);
       CI.setSourceManager(nullptr);
@@ -955,11 +1012,10 @@ WrapperFrontendAction::CreateASTConsumer(CompilerInstance &CI,
 bool WrapperFrontendAction::BeginInvocation(CompilerInstance &CI) {
   return WrappedAction->BeginInvocation(CI);
 }
-bool WrapperFrontendAction::BeginSourceFileAction(CompilerInstance &CI,
-                                                  StringRef Filename) {
+bool WrapperFrontendAction::BeginSourceFileAction(CompilerInstance &CI) {
   WrappedAction->setCurrentInput(getCurrentInput());
   WrappedAction->setCompilerInstance(&CI);
-  auto Ret = WrappedAction->BeginSourceFileAction(CI, Filename);
+  auto Ret = WrappedAction->BeginSourceFileAction(CI);
   // BeginSourceFileAction may change CurrentInput, e.g. during module builds.
   setCurrentInput(WrappedAction->getCurrentInput());
   return Ret;

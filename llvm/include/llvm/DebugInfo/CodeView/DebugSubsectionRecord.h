@@ -31,40 +31,46 @@ struct DebugSubsectionHeader {
 class DebugSubsectionRecord {
 public:
   DebugSubsectionRecord();
-  DebugSubsectionRecord(DebugSubsectionKind Kind, BinaryStreamRef Data);
+  DebugSubsectionRecord(DebugSubsectionKind Kind, BinaryStreamRef Data,
+                        CodeViewContainer Container);
 
-  static Error initialize(BinaryStreamRef Stream, DebugSubsectionRecord &Info);
+  static Error initialize(BinaryStreamRef Stream, DebugSubsectionRecord &Info,
+                          CodeViewContainer Container);
 
   uint32_t getRecordLength() const;
   DebugSubsectionKind kind() const;
   BinaryStreamRef getRecordData() const;
 
 private:
+  CodeViewContainer Container;
   DebugSubsectionKind Kind;
   BinaryStreamRef Data;
 };
 
 class DebugSubsectionRecordBuilder {
 public:
-  DebugSubsectionRecordBuilder(DebugSubsectionKind Kind, DebugSubsection &Frag);
+  DebugSubsectionRecordBuilder(std::shared_ptr<DebugSubsection> Subsection,
+                               CodeViewContainer Container);
   uint32_t calculateSerializedLength();
-  Error commit(BinaryStreamWriter &Writer);
+  Error commit(BinaryStreamWriter &Writer) const;
 
 private:
-  DebugSubsectionKind Kind;
-  DebugSubsection &Frag;
+  std::shared_ptr<DebugSubsection> Subsection;
+  CodeViewContainer Container;
 };
 
 } // namespace codeview
 
 template <> struct VarStreamArrayExtractor<codeview::DebugSubsectionRecord> {
-  typedef void ContextType;
-
-  static Error extract(BinaryStreamRef Stream, uint32_t &Length,
-                       codeview::DebugSubsectionRecord &Info) {
-    if (auto EC = codeview::DebugSubsectionRecord::initialize(Stream, Info))
+  Error operator()(BinaryStreamRef Stream, uint32_t &Length,
+                   codeview::DebugSubsectionRecord &Info) {
+    // FIXME: We need to pass the container type through to this function.  In
+    // practice this isn't super important since the subsection header describes
+    // its length and we can just skip it.  It's more important when writing.
+    if (auto EC = codeview::DebugSubsectionRecord::initialize(
+            Stream, Info, codeview::CodeViewContainer::Pdb))
       return EC;
-    Length = Info.getRecordLength();
+    Length = alignTo(Info.getRecordLength(), 4);
     return Error::success();
   }
 };

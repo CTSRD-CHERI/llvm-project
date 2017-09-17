@@ -22,12 +22,12 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/CodeGen/CallingConvLower.h"
+#include "llvm/CodeGen/FunctionLoweringInfo.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineJumpTableInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/CodeGen/FunctionLoweringInfo.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/CallingConv.h"
@@ -69,6 +69,48 @@ static bool isShiftedMask(uint64_t I, uint64_t &Pos, uint64_t &Size) {
   Size = countPopulation(I);
   Pos = countTrailingZeros(I);
   return true;
+}
+
+// The MIPS MSA ABI passes vector arguments in the integer register set.
+// The number of integer registers used is dependant on the ABI used.
+MVT MipsTargetLowering::getRegisterTypeForCallingConv(MVT VT) const {
+  if (VT.isVector() && Subtarget.hasMSA())
+    return Subtarget.isABI_O32() ? MVT::i32 : MVT::i64;
+  return MipsTargetLowering::getRegisterType(VT);
+}
+
+MVT MipsTargetLowering::getRegisterTypeForCallingConv(LLVMContext &Context,
+                                                      EVT VT) const {
+  if (VT.isVector()) {
+      if (Subtarget.isABI_O32()) {
+        return MVT::i32;
+      } else {
+        return (VT.getSizeInBits() == 32) ? MVT::i32 : MVT::i64;
+      }
+  }
+  return MipsTargetLowering::getRegisterType(Context, VT);
+}
+
+unsigned MipsTargetLowering::getNumRegistersForCallingConv(LLVMContext &Context,
+                                                           EVT VT) const {
+  if (VT.isVector())
+    return std::max((VT.getSizeInBits() / (Subtarget.isABI_O32() ? 32 : 64)),
+                    1U);
+  return MipsTargetLowering::getNumRegisters(Context, VT);
+}
+
+unsigned MipsTargetLowering::getVectorTypeBreakdownForCallingConv(
+    LLVMContext &Context, EVT VT, EVT &IntermediateVT,
+    unsigned &NumIntermediates, MVT &RegisterVT) const {
+
+  // Break down vector types to either 2 i64s or 4 i32s.
+  RegisterVT = getRegisterTypeForCallingConv(Context, VT) ;
+  IntermediateVT = RegisterVT;
+  NumIntermediates = VT.getSizeInBits() < RegisterVT.getSizeInBits()
+                         ? VT.getVectorNumElements()
+                         : VT.getSizeInBits() / RegisterVT.getSizeInBits();
+
+  return NumIntermediates;
 }
 
 SDValue MipsTargetLowering::getGlobalReg(SelectionDAG &DAG, EVT Ty) const {
@@ -322,6 +364,18 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
   setOperationAction(ISD::UDIV, MVT::i64, Expand);
   setOperationAction(ISD::UREM, MVT::i64, Expand);
 
+  if (!(Subtarget.hasDSP() && Subtarget.hasMips32r2())) {
+    setOperationAction(ISD::ADDC, MVT::i32, Expand);
+    setOperationAction(ISD::ADDE, MVT::i32, Expand);
+  }
+
+  setOperationAction(ISD::ADDC, MVT::i64, Expand);
+  setOperationAction(ISD::ADDE, MVT::i64, Expand);
+  setOperationAction(ISD::SUBC, MVT::i32, Expand);
+  setOperationAction(ISD::SUBE, MVT::i32, Expand);
+  setOperationAction(ISD::SUBC, MVT::i64, Expand);
+  setOperationAction(ISD::SUBE, MVT::i64, Expand);
+
   // Operations not directly supported by Mips.
   setOperationAction(ISD::BR_CC,             MVT::f32,   Expand);
   setOperationAction(ISD::BR_CC,             MVT::f64,   Expand);
@@ -427,6 +481,7 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
   setTargetDAGCombine(ISD::AND);
   setTargetDAGCombine(ISD::OR);
   setTargetDAGCombine(ISD::ADD);
+  setTargetDAGCombine(ISD::SUB);
   setTargetDAGCombine(ISD::AssertZext);
   setTargetDAGCombine(ISD::SHL);
 
@@ -470,8 +525,9 @@ MipsTargetLowering::createFastISel(FunctionLoweringInfo &funcInfo,
                      !Subtarget.hasMips32r6() && !Subtarget.inMips16Mode() &&
                      !Subtarget.inMicroMipsMode();
 
-  // Disable if we don't generate PIC or the ABI isn't O32.
-  if (!TM.isPositionIndependent() || !TM.getABI().IsO32())
+  // Disable if either of the following is true:
+  // We do not generate PIC, the ABI is not O32, LargeGOT is being used.
+  if (!TM.isPositionIndependent() || !TM.getABI().IsO32() || LargeGOT)
     UseFastISel = false;
 
   return UseFastISel ? Mips::createFastISel(funcInfo, libInfo) : nullptr;
@@ -875,14 +931,130 @@ static SDValue performORCombine(SDNode *N, SelectionDAG &DAG,
   }
 }
 
+static SDValue performMADD_MSUBCombine(SDNode *ROOTNode, SelectionDAG &CurDAG,
+                                       const MipsSubtarget &Subtarget) {
+  // ROOTNode must have a multiplication as an operand for the match to be
+  // successful.
+  if (ROOTNode->getOperand(0).getOpcode() != ISD::MUL &&
+      ROOTNode->getOperand(1).getOpcode() != ISD::MUL)
+    return SDValue();
+
+  // We don't handle vector types here.
+  if (ROOTNode->getValueType(0).isVector())
+    return SDValue();
+
+  // For MIPS64, madd / msub instructions are inefficent to use with 64 bit
+  // arithmetic. E.g.
+  // (add (mul a b) c) =>
+  //   let res = (madd (mthi (drotr c 32))x(mtlo c) a b) in
+  //   MIPS64:   (or (dsll (mfhi res) 32) (dsrl (dsll (mflo res) 32) 32)
+  //   or
+  //   MIPS64R2: (dins (mflo res) (mfhi res) 32 32)
+  //
+  // The overhead of setting up the Hi/Lo registers and reassembling the
+  // result makes this a dubious optimzation for MIPS64. The core of the
+  // problem is that Hi/Lo contain the upper and lower 32 bits of the
+  // operand and result.
+  //
+  // It requires a chain of 4 add/mul for MIPS64R2 to get better code
+  // density than doing it naively, 5 for MIPS64. Additionally, using
+  // madd/msub on MIPS64 requires the operands actually be 32 bit sign
+  // extended operands, not true 64 bit values.
+  //
+  // FIXME: For the moment, disable this completely for MIPS64.
+  if (Subtarget.hasMips64())
+    return SDValue();
+
+  SDValue Mult = ROOTNode->getOperand(0).getOpcode() == ISD::MUL
+                     ? ROOTNode->getOperand(0)
+                     : ROOTNode->getOperand(1);
+
+  SDValue AddOperand = ROOTNode->getOperand(0).getOpcode() == ISD::MUL
+                     ? ROOTNode->getOperand(1)
+                     : ROOTNode->getOperand(0);
+
+  // Transform this to a MADD only if the user of this node is the add.
+  // If there are other users of the mul, this function returns here.
+  if (!Mult.hasOneUse())
+    return SDValue();
+
+  // maddu and madd are unusual instructions in that on MIPS64 bits 63..31
+  // must be in canonical form, i.e. sign extended. For MIPS32, the operands
+  // of the multiply must have 32 or more sign bits, otherwise we cannot
+  // perform this optimization. We have to check this here as we're performing
+  // this optimization pre-legalization.
+  SDValue MultLHS = Mult->getOperand(0);
+  SDValue MultRHS = Mult->getOperand(1);
+  unsigned LHSSB = CurDAG.ComputeNumSignBits(MultLHS);
+  unsigned RHSSB = CurDAG.ComputeNumSignBits(MultRHS);
+
+  if (LHSSB < 32 || RHSSB < 32)
+    return SDValue();
+
+  APInt HighMask =
+      APInt::getHighBitsSet(Mult->getValueType(0).getScalarSizeInBits(), 32);
+  bool IsUnsigned = CurDAG.MaskedValueIsZero(Mult->getOperand(0), HighMask) &&
+                    CurDAG.MaskedValueIsZero(Mult->getOperand(1), HighMask) &&
+                    CurDAG.MaskedValueIsZero(AddOperand, HighMask);
+
+  // Initialize accumulator.
+  SDLoc DL(ROOTNode);
+  SDValue TopHalf;
+  SDValue BottomHalf;
+  BottomHalf = CurDAG.getNode(ISD::EXTRACT_ELEMENT, DL, MVT::i32, AddOperand,
+                              CurDAG.getIntPtrConstant(0, DL));
+
+  TopHalf = CurDAG.getNode(ISD::EXTRACT_ELEMENT, DL, MVT::i32, AddOperand,
+                           CurDAG.getIntPtrConstant(1, DL));
+  SDValue ACCIn = CurDAG.getNode(MipsISD::MTLOHI, DL, MVT::Untyped,
+                                  BottomHalf,
+                                  TopHalf);
+
+  // Create MipsMAdd(u) / MipsMSub(u) node.
+  bool IsAdd = ROOTNode->getOpcode() == ISD::ADD;
+  unsigned Opcode = IsAdd ? (IsUnsigned ? MipsISD::MAddu : MipsISD::MAdd)
+                          : (IsUnsigned ? MipsISD::MSubu : MipsISD::MSub);
+  SDValue MAddOps[3] = {
+      CurDAG.getNode(ISD::TRUNCATE, DL, MVT::i32, Mult->getOperand(0)),
+      CurDAG.getNode(ISD::TRUNCATE, DL, MVT::i32, Mult->getOperand(1)), ACCIn};
+  EVT VTs[2] = {MVT::i32, MVT::i32};
+  SDValue MAdd = CurDAG.getNode(Opcode, DL, VTs, MAddOps);
+
+  SDValue ResLo = CurDAG.getNode(MipsISD::MFLO, DL, MVT::i32, MAdd);
+  SDValue ResHi = CurDAG.getNode(MipsISD::MFHI, DL, MVT::i32, MAdd);
+  SDValue Combined =
+      CurDAG.getNode(ISD::BUILD_PAIR, DL, MVT::i64, ResLo, ResHi);
+  return Combined;
+}
+
+static SDValue performSUBCombine(SDNode *N, SelectionDAG &DAG,
+                                 TargetLowering::DAGCombinerInfo &DCI,
+                                 const MipsSubtarget &Subtarget) {
+  // (sub v0 (mul v1, v2)) => (msub v1, v2, v0)
+  if (DCI.isBeforeLegalizeOps()) {
+    if (Subtarget.hasMips32() && !Subtarget.hasMips32r6() &&
+        !Subtarget.inMips16Mode() && N->getValueType(0) == MVT::i64)
+      return performMADD_MSUBCombine(N, DAG, Subtarget);
+
+    return SDValue();
+  }
+
+  return SDValue();
+}
+
 static SDValue performADDCombine(SDNode *N, SelectionDAG &DAG,
                                  TargetLowering::DAGCombinerInfo &DCI,
                                  const MipsSubtarget &Subtarget) {
-  // (add v0, (add v1, abs_lo(tjt))) => (add (add v0, v1), abs_lo(tjt))
+  // (add v0 (mul v1, v2)) => (madd v1, v2, v0)
+  if (DCI.isBeforeLegalizeOps()) {
+    if (Subtarget.hasMips32() && !Subtarget.hasMips32r6() &&
+        !Subtarget.inMips16Mode() && N->getValueType(0) == MVT::i64)
+      return performMADD_MSUBCombine(N, DAG, Subtarget);
 
-  if (DCI.isBeforeLegalizeOps())
     return SDValue();
+  }
 
+  // (add v0, (add v1, abs_lo(tjt))) => (add (add v0, v1), abs_lo(tjt))
   SDValue Add = N->getOperand(1);
 
   if (Add.getOpcode() != ISD::ADD)
@@ -1010,6 +1182,8 @@ SDValue  MipsTargetLowering::PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI)
     return performAssertZextCombine(N, DAG, DCI, Subtarget);
   case ISD::SHL:
     return performSHLCombine(N, DAG, DCI, Subtarget);
+  case ISD::SUB:
+    return performSUBCombine(N, DAG, DCI, Subtarget);
   }
 
   return SDValue();
@@ -2551,6 +2725,11 @@ SDValue MipsTargetLowering::lowerFP_TO_SINT(SDValue Op,
 //       yet to hold an argument. Otherwise, use A2, A3 and stack. If A1 is
 //       not used, it must be shadowed. If only A3 is available, shadow it and
 //       go to stack.
+// vXiX - Received as scalarized i32s, passed in A0 - A3 and the stack.
+// vXf32 - Passed in either a pair of registers {A0, A1}, {A2, A3} or {A0 - A3}
+//         with the remainder spilled to the stack.
+// vXf64 - Passed in either {A0, A1, A2, A3} or {A2, A3} and in both cases
+//         spilling the remainder to the stack.
 //
 //  For vararg functions, all arguments are passed in A0, A1, A2, A3 and stack.
 //===----------------------------------------------------------------------===//
@@ -2562,7 +2741,12 @@ static bool CC_MipsO32(unsigned ValNo, MVT ValVT, MVT LocVT,
       State.getMachineFunction().getSubtarget());
 
   static const MCPhysReg IntRegs[] = { Mips::A0, Mips::A1, Mips::A2, Mips::A3 };
+
+  const MipsCCState * MipsState = static_cast<MipsCCState *>(&State);
+
   static const MCPhysReg F32Regs[] = { Mips::F12, Mips::F14 };
+
+  static const MCPhysReg FloatVectorIntRegs[] = { Mips::A0, Mips::A2 };
 
   // Do not process byval args here.
   if (ArgFlags.isByVal())
@@ -2601,8 +2785,26 @@ static bool CC_MipsO32(unsigned ValNo, MVT ValVT, MVT LocVT,
                                 State.getFirstUnallocated(F32Regs) != ValNo;
   unsigned OrigAlign = ArgFlags.getOrigAlign();
   bool isI64 = (ValVT == MVT::i32 && OrigAlign == 8);
+  bool isVectorFloat = MipsState->WasOriginalArgVectorFloat(ValNo);
 
-  if (ValVT == MVT::i32 || (ValVT == MVT::f32 && AllocateFloatsInIntReg)) {
+  // The MIPS vector ABI for floats passes them in a pair of registers
+  if (ValVT == MVT::i32 && isVectorFloat) {
+    // This is the start of an vector that was scalarized into an unknown number
+    // of components. It doesn't matter how many there are. Allocate one of the
+    // notional 8 byte aligned registers which map onto the argument stack, and
+    // shadow the register lost to alignment requirements.
+    if (ArgFlags.isSplit()) {
+      Reg = State.AllocateReg(FloatVectorIntRegs);
+      if (Reg == Mips::A2)
+        State.AllocateReg(Mips::A1);
+      else if (Reg == 0)
+        State.AllocateReg(Mips::A3);
+    } else {
+      // If we're an intermediate component of the split, we can just attempt to
+      // allocate a register directly.
+      Reg = State.AllocateReg(IntRegs);
+    }
+  } else if (ValVT == MVT::i32 || (ValVT == MVT::f32 && AllocateFloatsInIntReg)) {
     Reg = State.AllocateReg(IntRegs);
     // If this is the first part of an i64 arg,
     // the allocated register must be either A0 or A2.

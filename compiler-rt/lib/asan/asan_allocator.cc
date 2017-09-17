@@ -47,6 +47,8 @@ static u32 RZSize2Log(u32 rz_size) {
   return res;
 }
 
+static AsanAllocator &get_allocator();
+
 // The memory chunk allocated from the underlying allocator looks like this:
 // L L L L L L H H U U U U U U R R
 //   L -- left redzone words (0 or more bytes)
@@ -233,6 +235,8 @@ struct Allocator {
   AllocatorCache fallback_allocator_cache;
   QuarantineCache fallback_quarantine_cache;
 
+  atomic_uint8_t rss_limit_exceeded;
+
   // ------------------- Options --------------------------
   atomic_uint16_t min_redzone;
   atomic_uint16_t max_redzone;
@@ -264,6 +268,14 @@ struct Allocator {
   void Initialize(const AllocatorOptions &options) {
     allocator.Init(options.may_return_null, options.release_to_os_interval_ms);
     SharedInitCode(options);
+  }
+
+  bool RssLimitExceeded() {
+    return atomic_load(&rss_limit_exceeded, memory_order_relaxed);
+  }
+
+  void SetRssLimitExceeded(bool limit_exceeded) {
+    atomic_store(&rss_limit_exceeded, limit_exceeded, memory_order_relaxed);
   }
 
   void RePoisonChunk(uptr chunk) {
@@ -361,6 +373,8 @@ struct Allocator {
                  AllocType alloc_type, bool can_fill) {
     if (UNLIKELY(!asan_inited))
       AsanInitFromRtl();
+    if (RssLimitExceeded())
+      return allocator.ReturnNullOrDieOnOOM();
     Flags &fl = *flags();
     CHECK(stack);
     const uptr min_alignment = SHADOW_GRANULARITY;
@@ -398,16 +412,15 @@ struct Allocator {
 
     AsanThread *t = GetCurrentThread();
     void *allocated;
-    bool check_rss_limit = true;
     if (t) {
       AllocatorCache *cache = GetAllocatorCache(&t->malloc_storage());
       allocated =
-          allocator.Allocate(cache, needed_size, 8, false, check_rss_limit);
+          allocator.Allocate(cache, needed_size, 8, false);
     } else {
       SpinMutexLock l(&fallback_mutex);
       AllocatorCache *cache = &fallback_allocator_cache;
       allocated =
-          allocator.Allocate(cache, needed_size, 8, false, check_rss_limit);
+          allocator.Allocate(cache, needed_size, 8, false);
     }
 
     if (!allocated) return allocator.ReturnNullOrDieOnOOM();
@@ -717,7 +730,7 @@ struct Allocator {
 
 static Allocator instance(LINKER_INITIALIZED);
 
-AsanAllocator &get_allocator() {
+static AsanAllocator &get_allocator() {
   return instance.allocator;
 }
 
@@ -864,8 +877,8 @@ void asan_mz_force_unlock() {
   instance.ForceUnlock();
 }
 
-void AsanSoftRssLimitExceededCallback(bool exceeded) {
-  instance.allocator.SetRssLimitIsExceeded(exceeded);
+void AsanSoftRssLimitExceededCallback(bool limit_exceeded) {
+  instance.SetRssLimitExceeded(limit_exceeded);
 }
 
 } // namespace __asan

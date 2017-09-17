@@ -17,12 +17,12 @@
 #define _USE_MATH_DEFINES
 #endif
 
+#include "SIISelLowering.h"
 #include "AMDGPU.h"
 #include "AMDGPUIntrinsicInfo.h"
-#include "AMDGPUTargetMachine.h"
 #include "AMDGPUSubtarget.h"
+#include "AMDGPUTargetMachine.h"
 #include "SIDefines.h"
-#include "SIISelLowering.h"
 #include "SIInstrInfo.h"
 #include "SIMachineFunctionInfo.h"
 #include "SIRegisterInfo.h"
@@ -567,9 +567,17 @@ bool SITargetLowering::getAddrModeArguments(IntrinsicInst *II,
 }
 
 bool SITargetLowering::isLegalFlatAddressingMode(const AddrMode &AM) const {
-  // Flat instructions do not have offsets, and only have the register
-  // address.
-  return AM.BaseOffs == 0 && (AM.Scale == 0 || AM.Scale == 1);
+  if (!Subtarget->hasFlatInstOffsets()) {
+    // Flat instructions do not have offsets, and only have the register
+    // address.
+    return AM.BaseOffs == 0 && AM.Scale == 0;
+  }
+
+  // GFX9 added a 13-bit signed offset. When using regular flat instructions,
+  // the sign bit is ignored and is treated as a 12-bit unsigned offset.
+
+  // Just r + i
+  return isUInt<12>(AM.BaseOffs) && AM.Scale == 0;
 }
 
 bool SITargetLowering::isLegalMUBUFAddressingMode(const AddrMode &AM) const {
@@ -2604,7 +2612,7 @@ SDValue SITargetLowering::lowerFP_ROUND(SDValue Op, SelectionDAG &DAG) const {
 
   SDValue FpToFp16 = DAG.getNode(ISD::FP_TO_FP16, DL, MVT::i32, Src);
   SDValue Trunc = DAG.getNode(ISD::TRUNCATE, DL, MVT::i16, FpToFp16);
-  return DAG.getNode(ISD::BITCAST, DL, MVT::f16, Trunc);;
+  return DAG.getNode(ISD::BITCAST, DL, MVT::f16, Trunc);
 }
 
 SDValue SITargetLowering::lowerTRAP(SDValue Op, SelectionDAG &DAG) const {
@@ -3571,7 +3579,7 @@ SDValue SITargetLowering::LowerLOAD(SDValue Op, SelectionDAG &DAG) const {
   }
   if (AS == AMDGPUASI.CONSTANT_ADDRESS || AS == AMDGPUASI.GLOBAL_ADDRESS) {
     if (Subtarget->getScalarizeGlobalBehavior() && isMemOpUniform(Load) &&
-                  isMemOpHasNoClobberedMemOperand(Load))
+        !Load->isVolatile() && isMemOpHasNoClobberedMemOperand(Load))
       return SDValue();
     // Non-uniform loads will be selected to MUBUF instructions, so they
     // have the same legalization requirements as global and private

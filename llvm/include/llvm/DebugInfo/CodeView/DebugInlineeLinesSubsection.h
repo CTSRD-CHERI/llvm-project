@@ -43,10 +43,9 @@ struct InlineeSourceLine {
 }
 
 template <> struct VarStreamArrayExtractor<codeview::InlineeSourceLine> {
-  typedef bool ContextType;
-
-  static Error extract(BinaryStreamRef Stream, uint32_t &Len,
-                       codeview::InlineeSourceLine &Item, bool HasExtraFiles);
+  Error operator()(BinaryStreamRef Stream, uint32_t &Len,
+                   codeview::InlineeSourceLine &Item);
+  bool HasExtraFiles = false;
 };
 
 namespace codeview {
@@ -74,8 +73,13 @@ private:
 
 class DebugInlineeLinesSubsection final : public DebugSubsection {
 public:
+  struct Entry {
+    std::vector<support::ulittle32_t> ExtraFiles;
+    InlineeSourceLineHeader Header;
+  };
+
   DebugInlineeLinesSubsection(DebugChecksumsSubsection &Checksums,
-                              bool HasExtraFiles);
+                              bool HasExtraFiles = false);
 
   static bool classof(const DebugSubsection *S) {
     return S->kind() == DebugSubsectionKind::InlineeLines;
@@ -87,16 +91,18 @@ public:
   void addInlineSite(TypeIndex FuncId, StringRef FileName, uint32_t SourceLine);
   void addExtraFile(StringRef FileName);
 
+  bool hasExtraFiles() const { return HasExtraFiles; }
+  void setHasExtraFiles(bool Has) { HasExtraFiles = Has; }
+
+  std::vector<Entry>::const_iterator begin() const { return Entries.begin(); }
+  std::vector<Entry>::const_iterator end() const { return Entries.end(); }
+
 private:
   DebugChecksumsSubsection &Checksums;
 
   bool HasExtraFiles = false;
   uint32_t ExtraFileCount = 0;
 
-  struct Entry {
-    std::vector<support::ulittle32_t> ExtraFiles;
-    InlineeSourceLineHeader Header;
-  };
   std::vector<Entry> Entries;
 };
 }

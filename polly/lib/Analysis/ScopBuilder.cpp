@@ -642,7 +642,8 @@ void ScopBuilder::buildStmts(Region &SR) {
       std::vector<Instruction *> Instructions;
       for (Instruction &Inst : *I->getNodeAs<BasicBlock>()) {
         Loop *L = LI.getLoopFor(Inst.getParent());
-        if (!isa<TerminatorInst>(&Inst) && !canSynthesize(&Inst, *scop, &SE, L))
+        if (!isa<TerminatorInst>(&Inst) && !isIgnoredIntrinsic(&Inst) &&
+            !canSynthesize(&Inst, *scop, &SE, L))
           Instructions.push_back(&Inst);
       }
       Loop *SurroundingLoop = LI.getLoopFor(I->getNodeAs<BasicBlock>());
@@ -704,7 +705,7 @@ MemoryAccess *ScopBuilder::addMemoryAccess(
 
   bool isKnownMustAccess = false;
 
-  // Accesses in single-basic block statements are always excuted.
+  // Accesses in single-basic block statements are always executed.
   if (Stmt->isBlockStmt())
     isKnownMustAccess = true;
 

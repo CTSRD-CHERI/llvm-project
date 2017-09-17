@@ -75,8 +75,8 @@
 #define STATVFS_F_FRSIZE(vfs) vfs.f_frsize
 #else
 #if defined(__OpenBSD__) || defined(__FreeBSD__)
-#include <sys/param.h>
 #include <sys/mount.h>
+#include <sys/param.h>
 #elif defined(__linux__)
 #if defined(HAVE_LINUX_MAGIC_H)
 #include <linux/magic.h>
@@ -381,6 +381,11 @@ static bool is_local_impl(struct STATVFS &Vfs) {
 #elif defined(__CYGWIN__)
   // Cygwin doesn't expose this information; would need to use Win32 API.
   return false;
+#elif defined(__sun)
+  // statvfs::f_basetype contains a null-terminated FSType name of the mounted target
+  StringRef fstype(Vfs.f_basetype);
+  // NFS is the only non-local fstype??
+  return !fstype.equals("nfs");
 #else
   return !!(STATVFS_F_FLAG(Vfs) & MNT_LOCAL);
 #endif

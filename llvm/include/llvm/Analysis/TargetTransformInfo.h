@@ -267,6 +267,19 @@ public:
   /// incurs significant execution cost.
   bool isLoweredToCall(const Function *F) const;
 
+  struct LSRCost {
+    /// TODO: Some of these could be merged. Also, a lexical ordering
+    /// isn't always optimal.
+    unsigned Insns;
+    unsigned NumRegs;
+    unsigned AddRecCost;
+    unsigned NumIVMuls;
+    unsigned NumBaseAdds;
+    unsigned ImmCost;
+    unsigned SetupCost;
+    unsigned ScaleCost;
+  };
+
   /// Parameters that control the generic loop unrolling transformation.
   struct UnrollingPreferences {
     /// The cost threshold for the unrolled loop. Should be relative to the
@@ -385,6 +398,10 @@ public:
                              bool HasBaseReg, int64_t Scale,
                              unsigned AddrSpace = 0) const;
 
+  /// \brief Return true if LSR cost of C1 is lower than C1.
+  bool isLSRCostLess(TargetTransformInfo::LSRCost &C1,
+                     TargetTransformInfo::LSRCost &C2) const;
+
   /// \brief Return true if the target supports masked load/store
   /// AVX2 and AVX-512 targets allow masks for consecutive load and store
   bool isLegalMaskedStore(Type *DataType) const;
@@ -453,6 +470,9 @@ public:
 
   /// \brief Don't restrict interleaved unrolling to small loops.
   bool enableAggressiveInterleaving(bool LoopHasReductions) const;
+
+  /// \brief Enable inline expansion of memcmp
+  bool expandMemCmp(Instruction *I, unsigned &MaxLoadSize) const;
 
   /// \brief Enable matching of interleaved access groups.
   bool enableInterleavedAccessVectorization() const;
@@ -702,6 +722,10 @@ public:
   /// if false is returned.
   bool getTgtMemIntrinsic(IntrinsicInst *Inst, MemIntrinsicInfo &Info) const;
 
+  /// \returns The maximum element size, in bytes, for an element
+  /// unordered-atomic memory intrinsic.
+  unsigned getAtomicMemIntrinsicMaxElementSize() const;
+
   /// \returns A value which is the result of the given memory intrinsic.  New
   /// instructions may be created to extract the result from the given intrinsic
   /// memory operation.  Returns nullptr if the target cannot create a result
@@ -806,6 +830,8 @@ public:
                                      int64_t BaseOffset, bool HasBaseReg,
                                      int64_t Scale,
                                      unsigned AddrSpace) = 0;
+  virtual bool isLSRCostLess(TargetTransformInfo::LSRCost &C1,
+                             TargetTransformInfo::LSRCost &C2) = 0;
   virtual bool isLegalMaskedStore(Type *DataType) = 0;
   virtual bool isLegalMaskedLoad(Type *DataType) = 0;
   virtual bool isLegalMaskedScatter(Type *DataType) = 0;
@@ -828,6 +854,7 @@ public:
                                                     unsigned VF) = 0;
   virtual bool supportsEfficientVectorElementLoadStore() = 0;
   virtual bool enableAggressiveInterleaving(bool LoopHasReductions) = 0;
+  virtual bool expandMemCmp(Instruction *I, unsigned &MaxLoadSize) = 0;
   virtual bool enableInterleavedAccessVectorization() = 0;
   virtual bool isFPVectorizationPotentiallyUnsafe() = 0;
   virtual bool allowsMisalignedMemoryAccesses(LLVMContext &Context,
@@ -846,7 +873,7 @@ public:
   virtual int getIntImmCost(Intrinsic::ID IID, unsigned Idx, const APInt &Imm,
                             Type *Ty) = 0;
   virtual unsigned getNumberOfRegisters(bool Vector) = 0;
-  virtual unsigned getRegisterBitWidth(bool Vector) = 0;
+  virtual unsigned getRegisterBitWidth(bool Vector) const = 0;
   virtual unsigned getMinVectorRegisterBitWidth() = 0;
   virtual bool shouldConsiderAddressTypePromotion(
       const Instruction &I, bool &AllowPromotionWithoutCommonHeader) = 0;
@@ -900,6 +927,7 @@ public:
   virtual unsigned getCostOfKeepingLiveOverCall(ArrayRef<Type *> Tys) = 0;
   virtual bool getTgtMemIntrinsic(IntrinsicInst *Inst,
                                   MemIntrinsicInfo &Info) = 0;
+  virtual unsigned getAtomicMemIntrinsicMaxElementSize() const = 0;
   virtual Value *getOrCreateResultFromMemIntrinsic(IntrinsicInst *Inst,
                                                    Type *ExpectedType) = 0;
   virtual bool areInlineCompatible(const Function *Caller,
@@ -992,6 +1020,10 @@ public:
     return Impl.isLegalAddressingMode(Ty, BaseGV, BaseOffset, HasBaseReg,
                                       Scale, AddrSpace);
   }
+  bool isLSRCostLess(TargetTransformInfo::LSRCost &C1,
+                     TargetTransformInfo::LSRCost &C2) override {
+    return Impl.isLSRCostLess(C1, C2);
+  }
   bool isLegalMaskedStore(Type *DataType) override {
     return Impl.isLegalMaskedStore(DataType);
   }
@@ -1047,6 +1079,9 @@ public:
   bool enableAggressiveInterleaving(bool LoopHasReductions) override {
     return Impl.enableAggressiveInterleaving(LoopHasReductions);
   }
+  bool expandMemCmp(Instruction *I, unsigned &MaxLoadSize) override {
+    return Impl.expandMemCmp(I, MaxLoadSize);
+  }
   bool enableInterleavedAccessVectorization() override {
     return Impl.enableInterleavedAccessVectorization();
   }
@@ -1084,7 +1119,7 @@ public:
   unsigned getNumberOfRegisters(bool Vector) override {
     return Impl.getNumberOfRegisters(Vector);
   }
-  unsigned getRegisterBitWidth(bool Vector) override {
+  unsigned getRegisterBitWidth(bool Vector) const override {
     return Impl.getRegisterBitWidth(Vector);
   }
   unsigned getMinVectorRegisterBitWidth() override {
@@ -1193,6 +1228,9 @@ public:
   bool getTgtMemIntrinsic(IntrinsicInst *Inst,
                           MemIntrinsicInfo &Info) override {
     return Impl.getTgtMemIntrinsic(Inst, Info);
+  }
+  unsigned getAtomicMemIntrinsicMaxElementSize() const override {
+    return Impl.getAtomicMemIntrinsicMaxElementSize();
   }
   Value *getOrCreateResultFromMemIntrinsic(IntrinsicInst *Inst,
                                            Type *ExpectedType) override {

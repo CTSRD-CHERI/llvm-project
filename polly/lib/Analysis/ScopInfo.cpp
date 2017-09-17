@@ -930,7 +930,7 @@ static bool isDivisible(const SCEV *Expr, unsigned Size, ScalarEvolution &SE) {
   }
 
   // For other n-ary expressions (Add, AddRec, Max,...) all operands need
-  // to be divisble.
+  // to be divisible.
   if (auto *NAryExpr = dyn_cast<SCEVNAryExpr>(Expr)) {
     for (auto *OpExpr : NAryExpr->operands())
       if (!isDivisible(OpExpr, Size, SE))
@@ -2019,7 +2019,7 @@ static std::string getCallParamName(CallInst *Call) {
 
   auto Iterator = KnownNames.find(Name);
   if (Iterator != KnownNames.end())
-    Name = "__" + KnownNames[Name];
+    Name = "__" + Iterator->getValue();
   OS << Name;
   for (auto &Operand : Call->arg_operands()) {
     ConstantInt *Op = cast<ConstantInt>(&Operand);
@@ -2518,7 +2518,7 @@ static inline Loop *getRegionNodeLoop(RegionNode *RN, LoopInfo &LI) {
     // able to model them and to later eliminate the run-time bounds checks.
     //
     // Specifically, for basic blocks that terminate in an unreachable and
-    // where the immeditate predecessor is part of a loop, we assume these
+    // where the immediate predecessor is part of a loop, we assume these
     // basic blocks belong to the loop the predecessor belongs to. This
     // allows us to model the following code.
     //
@@ -3187,12 +3187,9 @@ MemoryAccess *Scop::lookupBasePtrAccess(MemoryAccess *MA) {
 }
 
 bool Scop::hasNonHoistableBasePtrInScop(MemoryAccess *MA,
-                                        __isl_keep isl_union_map *Writes) {
+                                        isl::union_map Writes) {
   if (auto *BasePtrMA = lookupBasePtrAccess(MA)) {
-    auto *NHCtx = getNonHoistableCtx(BasePtrMA, Writes);
-    bool Hoistable = NHCtx != nullptr;
-    isl_set_free(NHCtx);
-    return !Hoistable;
+    return getNonHoistableCtx(BasePtrMA, Writes).is_null();
   }
 
   Value *BaseAddr = MA->getOriginalBaseAddr();
@@ -3742,8 +3739,8 @@ static bool canAlwaysBeHoisted(MemoryAccess *MA, bool StmtInvalidCtxIsEmpty,
   if (!NonHoistableCtxIsEmpty)
     return false;
 
-  // If a dereferencable load is in a statement that is modeled precisely we can
-  // hoist it.
+  // If a dereferenceable load is in a statement that is modeled precisely we
+  // can hoist it.
   if (StmtInvalidCtxIsEmpty && MAInvalidCtxIsEmpty)
     return true;
 
@@ -3883,8 +3880,7 @@ void Scop::addInvariantLoads(ScopStmt &Stmt, InvariantAccessesTy &InvMAs) {
   isl_set_free(DomainCtx);
 }
 
-__isl_give isl_set *Scop::getNonHoistableCtx(MemoryAccess *Access,
-                                             __isl_keep isl_union_map *Writes) {
+isl::set Scop::getNonHoistableCtx(MemoryAccess *Access, isl::union_map Writes) {
   // TODO: Loads that are not loop carried, hence are in a statement with
   //       zero iterators, are by construction invariant, though we
   //       currently "hoist" them anyway. This is necessary because we allow
@@ -3911,49 +3907,41 @@ __isl_give isl_set *Scop::getNonHoistableCtx(MemoryAccess *Access,
   if (hasNonHoistableBasePtrInScop(Access, Writes))
     return nullptr;
 
-  isl_map *AccessRelation = Access->getAccessRelation();
-  assert(!isl_map_is_empty(AccessRelation));
+  isl::map AccessRelation = give(Access->getAccessRelation());
+  assert(!AccessRelation.is_empty());
 
-  if (isl_map_involves_dims(AccessRelation, isl_dim_in, 0,
-                            Stmt.getNumIterators())) {
-    isl_map_free(AccessRelation);
+  if (AccessRelation.involves_dims(isl::dim::in, 0, Stmt.getNumIterators()))
     return nullptr;
-  }
 
-  AccessRelation = isl_map_intersect_domain(AccessRelation, Stmt.getDomain());
-  isl_set *SafeToLoad;
+  AccessRelation = AccessRelation.intersect_domain(give(Stmt.getDomain()));
+  isl::set SafeToLoad;
 
   auto &DL = getFunction().getParent()->getDataLayout();
   if (isSafeToLoadUnconditionally(LI->getPointerOperand(), LI->getAlignment(),
                                   DL)) {
-    SafeToLoad =
-        isl_set_universe(isl_space_range(isl_map_get_space(AccessRelation)));
-    isl_map_free(AccessRelation);
+    SafeToLoad = isl::set::universe(AccessRelation.get_space().range());
   } else if (BB != LI->getParent()) {
     // Skip accesses in non-affine subregions as they might not be executed
     // under the same condition as the entry of the non-affine subregion.
-    isl_map_free(AccessRelation);
     return nullptr;
   } else {
-    SafeToLoad = isl_map_range(AccessRelation);
+    SafeToLoad = AccessRelation.range();
   }
 
-  isl_union_map *Written = isl_union_map_intersect_range(
-      isl_union_map_copy(Writes), isl_union_set_from_set(SafeToLoad));
-  auto *WrittenCtx = isl_union_map_params(Written);
-  bool IsWritten = !isl_set_is_empty(WrittenCtx);
+  isl::union_map Written = Writes.intersect_range(SafeToLoad);
+  isl::set WrittenCtx = Written.params();
+  bool IsWritten = !WrittenCtx.is_empty();
 
   if (!IsWritten)
     return WrittenCtx;
 
-  WrittenCtx = isl_set_remove_divs(WrittenCtx);
-  bool TooComplex = isl_set_n_basic_set(WrittenCtx) >= MaxDisjunctsInDomain;
-  if (TooComplex || !isRequiredInvariantLoad(LI)) {
-    isl_set_free(WrittenCtx);
+  WrittenCtx = WrittenCtx.remove_divs();
+  bool TooComplex =
+      isl_set_n_basic_set(WrittenCtx.get()) >= MaxDisjunctsInDomain;
+  if (TooComplex || !isRequiredInvariantLoad(LI))
     return nullptr;
-  }
 
-  addAssumption(INVARIANTLOAD, isl_set_copy(WrittenCtx), LI->getDebugLoc(),
+  addAssumption(INVARIANTLOAD, WrittenCtx.copy(), LI->getDebugLoc(),
                 AS_RESTRICTION);
   return WrittenCtx;
 }
@@ -3974,20 +3962,19 @@ void Scop::hoistInvariantLoads() {
   if (!PollyInvariantLoadHoisting)
     return;
 
-  isl_union_map *Writes = getWrites();
+  isl::union_map Writes = give(getWrites());
   for (ScopStmt &Stmt : *this) {
     InvariantAccessesTy InvariantAccesses;
 
     for (MemoryAccess *Access : Stmt)
-      if (auto *NHCtx = getNonHoistableCtx(Access, Writes))
-        InvariantAccesses.push_back({Access, NHCtx});
+      if (isl::set NHCtx = getNonHoistableCtx(Access, Writes))
+        InvariantAccesses.push_back({Access, NHCtx.release()});
 
     // Transfer the memory access from the statement to the SCoP.
     for (auto InvMA : InvariantAccesses)
       Stmt.removeMemoryAccess(InvMA.MA);
     addInvariantLoads(Stmt, InvariantAccesses);
   }
-  isl_union_map_free(Writes);
 }
 
 /// Find the canonical scop array info object for a set of invariant load
@@ -4126,6 +4113,12 @@ std::string Scop::getInvalidContextStr() const {
 
 std::string Scop::getNameStr() const {
   std::string ExitName, EntryName;
+  std::tie(EntryName, ExitName) = getEntryExitStr();
+  return EntryName + "---" + ExitName;
+}
+
+std::pair<std::string, std::string> Scop::getEntryExitStr() const {
+  std::string ExitName, EntryName;
   raw_string_ostream ExitStr(ExitName);
   raw_string_ostream EntryStr(EntryName);
 
@@ -4138,7 +4131,7 @@ std::string Scop::getNameStr() const {
   } else
     ExitName = "FunctionExit";
 
-  return EntryName + "---" + ExitName;
+  return std::make_pair(EntryName, ExitName);
 }
 
 __isl_give isl_set *Scop::getContext() const { return isl_set_copy(Context); }
@@ -4956,7 +4949,7 @@ INITIALIZE_PASS_END(ScopInfoRegionPass, "polly-scops",
 ScopInfo::ScopInfo(const DataLayout &DL, ScopDetection &SD, ScalarEvolution &SE,
                    LoopInfo &LI, AliasAnalysis &AA, DominatorTree &DT,
                    AssumptionCache &AC) {
-  /// Create polyhedral descripton of scops for all the valid regions of a
+  /// Create polyhedral description of scops for all the valid regions of a
   /// function.
   for (auto &It : SD) {
     Region *R = const_cast<Region *>(It);

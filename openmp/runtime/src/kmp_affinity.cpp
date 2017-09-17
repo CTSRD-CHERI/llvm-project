@@ -61,7 +61,10 @@ void KMPAffinity::pick_api() {
   if (picked_api)
     return;
 #if KMP_USE_HWLOC
-  if (__kmp_affinity_top_method == affinity_top_method_hwloc) {
+  // Only use Hwloc if affinity isn't explicitly disabled and
+  // user requests Hwloc topology method
+  if (__kmp_affinity_top_method == affinity_top_method_hwloc &&
+      __kmp_affinity_type != affinity_disabled) {
     affinity_dispatch = new KMPHwlocAffinity();
   } else
 #endif
@@ -2089,7 +2092,7 @@ restart_radix_check:
         if (threadInfo[i][threadIdIndex] == UINT_MAX) {
           threadInfo[i][threadIdIndex] = threadIdCt++;
         }
-        // Aparrently the thread id field was specified for some entries and not
+        // Apparently the thread id field was specified for some entries and not
         // others. Start the thread id counter off at the next higher thread id.
         else if (threadIdCt <= threadInfo[i][threadIdIndex]) {
           threadIdCt = threadInfo[i][threadIdIndex] + 1;

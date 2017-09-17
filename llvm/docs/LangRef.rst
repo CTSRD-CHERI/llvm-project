@@ -4033,26 +4033,26 @@ DICompileUnit
 """""""""""""
 
 ``DICompileUnit`` nodes represent a compile unit. The ``enums:``,
-``retainedTypes:``, ``subprograms:``, ``globals:``, ``imports:`` and ``macros:``
-fields are tuples containing the debug info to be emitted along with the compile
-unit, regardless of code optimizations (some nodes are only emitted if there are
-references to them from instructions). The ``debugInfoForProfiling:`` field is a
-boolean indicating whether or not line-table discriminators are updated to
-provide more-accurate debug info for profiling results.
+``retainedTypes:``, ``globals:``, ``imports:`` and ``macros:`` fields are tuples
+containing the debug info to be emitted along with the compile unit, regardless
+of code optimizations (some nodes are only emitted if there are references to
+them from instructions). The ``debugInfoForProfiling:`` field is a boolean
+indicating whether or not line-table discriminators are updated to provide
+more-accurate debug info for profiling results.
 
 .. code-block:: text
 
     !0 = !DICompileUnit(language: DW_LANG_C99, file: !1, producer: "clang",
                         isOptimized: true, flags: "-O2", runtimeVersion: 2,
                         splitDebugFilename: "abc.debug", emissionKind: FullDebug,
-                        enums: !2, retainedTypes: !3, subprograms: !4,
-                        globals: !5, imports: !6, macros: !7, dwoId: 0x0abcd)
+                        enums: !2, retainedTypes: !3, globals: !4, imports: !5,
+                        macros: !6, dwoId: 0x0abcd)
 
 Compile unit descriptors provide the root scope for objects declared in a
-specific compilation unit. File descriptors are defined using this scope.
-These descriptors are collected by a named metadata ``!llvm.dbg.cu``. They
-keep track of subprograms, global variables, type information, and imported
-entities (declarations and namespaces).
+specific compilation unit. File descriptors are defined using this scope.  These
+descriptors are collected by a named metadata node ``!llvm.dbg.cu``. They keep
+track of global variables, type information, and imported entities (declarations
+and namespaces).
 
 .. _DIFile:
 
@@ -4326,8 +4326,8 @@ and ``scope:``.
                                 containingType: !4,
                                 virtuality: DW_VIRTUALITY_pure_virtual,
                                 virtualIndex: 10, flags: DIFlagPrototyped,
-                                isOptimized: true, templateParams: !5,
-                                declaration: !6, variables: !7)
+                                isOptimized: true, unit: !5, templateParams: !6,
+                                declaration: !7, variables: !8, thrownTypes: !9)
 
 .. _DILexicalBlock:
 
@@ -4404,7 +4404,12 @@ referenced LLVM variable relates to the source language variable.
 The current supported vocabulary is limited:
 
 - ``DW_OP_deref`` dereferences the top of the expression stack.
-- ``DW_OP_plus, 93`` adds ``93`` to the working expression.
+- ``DW_OP_plus`` pops the last two entries from the expression stack, adds
+  them together and appends the result to the expression stack.
+- ``DW_OP_minus`` pops the last two entries from the expression stack, subtracts
+  the last entry from the second last entry and appends the result to the
+  expression stack.
+- ``DW_OP_plus_uconst, 93`` adds ``93`` to the working expression.
 - ``DW_OP_LLVM_fragment, 16, 8`` specifies the offset and size (``16`` and ``8``
   here, respectively) of the variable fragment from the working expression. Note
   that contrary to DW_OP_bit_piece, the offset is describing the the location
@@ -4426,9 +4431,10 @@ combined with a concrete location.
 .. code-block:: llvm
 
     !0 = !DIExpression(DW_OP_deref)
-    !1 = !DIExpression(DW_OP_plus, 3)
+    !1 = !DIExpression(DW_OP_plus_uconst, 3)
+    !1 = !DIExpression(DW_OP_constu, 3, DW_OP_plus)
     !2 = !DIExpression(DW_OP_bit_piece, 3, 7)
-    !3 = !DIExpression(DW_OP_deref, DW_OP_plus, 3, DW_OP_LLVM_fragment, 3, 7)
+    !3 = !DIExpression(DW_OP_deref, DW_OP_constu, 3, DW_OP_plus, DW_OP_LLVM_fragment, 3, 7)
     !4 = !DIExpression(DW_OP_constu, 2, DW_OP_swap, DW_OP_xderef)
     !5 = !DIExpression(DW_OP_constu, 42, DW_OP_stack_value)
 
@@ -5352,40 +5358,6 @@ Some important flag interactions:
 -  A module with ``Objective-C Garbage Collection`` set to 0 cannot be
    merged with a module with ``Objective-C GC Only`` set to 6.
 
-Automatic Linker Flags Module Flags Metadata
---------------------------------------------
-
-Some targets support embedding flags to the linker inside individual object
-files. Typically this is used in conjunction with language extensions which
-allow source files to explicitly declare the libraries they depend on, and have
-these automatically be transmitted to the linker via object files.
-
-These flags are encoded in the IR using metadata in the module flags section,
-using the ``Linker Options`` key. The merge behavior for this flag is required
-to be ``AppendUnique``, and the value for the key is expected to be a metadata
-node which should be a list of other metadata nodes, each of which should be a
-list of metadata strings defining linker options.
-
-For example, the following metadata section specifies two separate sets of
-linker options, presumably to link against ``libz`` and the ``Cocoa``
-framework::
-
-    !0 = !{ i32 6, !"Linker Options",
-       !{
-          !{ !"-lz" },
-          !{ !"-framework", !"Cocoa" } } }
-    !llvm.module.flags = !{ !0 }
-
-The metadata encoding as lists of lists of options, as opposed to a collapsed
-list of options, is chosen so that the IR encoding can use multiple option
-strings to specify e.g., a single library, while still having that specifier be
-preserved as an atomic element that can be recognized by a target specific
-assembly writer or object file emitter.
-
-Each individual option is required to be either a valid option for the target's
-linker, or an option that is reserved by the target specific assembly writer or
-object file emitter. No other aspect of these options is defined by the IR.
-
 C type width Module Flags Metadata
 ----------------------------------
 
@@ -5421,6 +5393,37 @@ enum is the smallest type which can represent all of its values::
     !llvm.module.flags = !{!0, !1}
     !0 = !{i32 1, !"short_wchar", i32 1}
     !1 = !{i32 1, !"short_enum", i32 0}
+
+Automatic Linker Flags Named Metadata
+=====================================
+
+Some targets support embedding flags to the linker inside individual object
+files. Typically this is used in conjunction with language extensions which
+allow source files to explicitly declare the libraries they depend on, and have
+these automatically be transmitted to the linker via object files.
+
+These flags are encoded in the IR using named metadata with the name
+``!llvm.linker.options``. Each operand is expected to be a metadata node
+which should be a list of other metadata nodes, each of which should be a
+list of metadata strings defining linker options.
+
+For example, the following metadata section specifies two separate sets of
+linker options, presumably to link against ``libz`` and the ``Cocoa``
+framework::
+
+    !0 = !{ !"-lz" },
+    !1 = !{ !"-framework", !"Cocoa" } } }
+    !llvm.linker.options = !{ !0, !1 }
+
+The metadata encoding as lists of lists of options, as opposed to a collapsed
+list of options, is chosen so that the IR encoding can use multiple option
+strings to specify e.g., a single library, while still having that specifier be
+preserved as an atomic element that can be recognized by a target specific
+assembly writer or object file emitter.
+
+Each individual option is required to be either a valid option for the target's
+linker, or an option that is reserved by the target specific assembly writer or
+object file emitter. No other aspect of these options is defined by the IR.
 
 .. _intrinsicglobalvariables:
 
@@ -6691,15 +6694,14 @@ Semantics:
 The value produced is ``op1`` \* 2\ :sup:`op2` mod 2\ :sup:`n`,
 where ``n`` is the width of the result. If ``op2`` is (statically or
 dynamically) equal to or larger than the number of bits in
-``op1``, the result is undefined. If the arguments are vectors, each
-vector element of ``op1`` is shifted by the corresponding shift amount
-in ``op2``.
+``op1``, this instruction returns a :ref:`poison value <poisonvalues>`.
+If the arguments are vectors, each vector element of ``op1`` is shifted
+by the corresponding shift amount in ``op2``.
 
-If the ``nuw`` keyword is present, then the shift produces a :ref:`poison
-value <poisonvalues>` if it shifts out any non-zero bits. If the
-``nsw`` keyword is present, then the shift produces a :ref:`poison
-value <poisonvalues>` if it shifts out any bits that disagree with the
-resultant sign bit.
+If the ``nuw`` keyword is present, then the shift produces a poison
+value if it shifts out any non-zero bits.
+If the ``nsw`` keyword is present, then the shift produces a poison
+value it shifts out any bits that disagree with the resultant sign bit.
 
 Example:
 """"""""
@@ -6742,13 +6744,12 @@ Semantics:
 This instruction always performs a logical shift right operation. The
 most significant bits of the result will be filled with zero bits after
 the shift. If ``op2`` is (statically or dynamically) equal to or larger
-than the number of bits in ``op1``, the result is undefined. If the
-arguments are vectors, each vector element of ``op1`` is shifted by the
-corresponding shift amount in ``op2``.
+than the number of bits in ``op1``, this instruction returns a :ref:`poison
+value <poisonvalues>`. If the arguments are vectors, each vector element
+of ``op1`` is shifted by the corresponding shift amount in ``op2``.
 
 If the ``exact`` keyword is present, the result value of the ``lshr`` is
-a :ref:`poison value <poisonvalues>` if any of the bits shifted out are
-non-zero.
+a poison value if any of the bits shifted out are non-zero.
 
 Example:
 """"""""
@@ -6793,13 +6794,12 @@ Semantics:
 This instruction always performs an arithmetic shift right operation,
 The most significant bits of the result will be filled with the sign bit
 of ``op1``. If ``op2`` is (statically or dynamically) equal to or larger
-than the number of bits in ``op1``, the result is undefined. If the
-arguments are vectors, each vector element of ``op1`` is shifted by the
-corresponding shift amount in ``op2``.
+than the number of bits in ``op1``, this instruction returns a :ref:`poison
+value <poisonvalues>`. If the arguments are vectors, each vector element
+of ``op1`` is shifted by the corresponding shift amount in ``op2``.
 
 If the ``exact`` keyword is present, the result value of the ``ashr`` is
-a :ref:`poison value <poisonvalues>` if any of the bits shifted out are
-non-zero.
+a poison value if any of the bits shifted out are non-zero.
 
 Example:
 """"""""

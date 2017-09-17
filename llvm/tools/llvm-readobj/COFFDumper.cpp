@@ -21,6 +21,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/BinaryFormat/COFF.h"
 #include "llvm/DebugInfo/CodeView/CVTypeVisitor.h"
 #include "llvm/DebugInfo/CodeView/CodeView.h"
 #include "llvm/DebugInfo/CodeView/DebugChecksumsSubsection.h"
@@ -45,7 +46,6 @@
 #include "llvm/Object/COFF.h"
 #include "llvm/Object/ObjectFile.h"
 #include "llvm/Support/BinaryStreamReader.h"
-#include "llvm/Support/COFF.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/ConvertUTF.h"
@@ -123,6 +123,10 @@ private:
   void printRelocatedField(StringRef Label, const coff_section *Sec,
                            uint32_t RelocOffset, uint32_t Offset,
                            StringRef *RelocSym = nullptr);
+
+  uint32_t countTotalTableEntries(ResourceSectionRef RSF,
+                                  const coff_resource_dir_table &Table,
+                                  StringRef Level);
 
   void printResourceDirectoryTable(ResourceSectionRef RSF,
                                    const coff_resource_dir_table &Table,
@@ -978,7 +982,8 @@ void COFFDumper::printCodeViewSymbolsSubsection(StringRef Subsection,
                                Subsection.bytes_end());
   auto CODD = llvm::make_unique<COFFObjectDumpDelegate>(*this, Section, Obj,
                                                         SectionContents);
-  CVSymbolDumper CVSD(W, Types, std::move(CODD), opts::CodeViewSubsectionBytes);
+  CVSymbolDumper CVSD(W, Types, CodeViewContainer::ObjectFile, std::move(CODD),
+                      opts::CodeViewSubsectionBytes);
   CVSymbolArray Symbols;
   BinaryStreamReader Reader(BinaryData, llvm::support::little);
   if (auto EC = Reader.readArray(Symbols, Reader.getLength())) {
@@ -1525,6 +1530,11 @@ void COFFDumper::printCOFFResources() {
     if ((Name == ".rsrc") || (Name == ".rsrc$01")) {
       ResourceSectionRef RSF(Ref);
       auto &BaseTable = unwrapOrError(RSF.getBaseTable());
+      W.printNumber("Total Number of Resources",
+                    countTotalTableEntries(RSF, BaseTable, "Type"));
+      W.printHex("Base Table Address",
+                 Obj->getCOFFSection(S)->PointerToRawData);
+      W.startLine() << "\n";
       printResourceDirectoryTable(RSF, BaseTable, "Type");
     }
     if (opts::SectionData)
@@ -1532,15 +1542,35 @@ void COFFDumper::printCOFFResources() {
   }
 }
 
+uint32_t
+COFFDumper::countTotalTableEntries(ResourceSectionRef RSF,
+                                   const coff_resource_dir_table &Table,
+                                   StringRef Level) {
+  uint32_t TotalEntries = 0;
+  for (int i = 0; i < Table.NumberOfNameEntries + Table.NumberOfIDEntries;
+       i++) {
+    auto Entry = unwrapOrError(getResourceDirectoryTableEntry(Table, i));
+    if (Entry.Offset.isSubDir()) {
+      StringRef NextLevel;
+      if (Level == "Name")
+        NextLevel = "Language";
+      else
+        NextLevel = "Name";
+      auto &NextTable = unwrapOrError(RSF.getEntrySubDir(Entry));
+      TotalEntries += countTotalTableEntries(RSF, NextTable, NextLevel);
+    } else {
+      TotalEntries += 1;
+    }
+  }
+  return TotalEntries;
+}
+
 void COFFDumper::printResourceDirectoryTable(
     ResourceSectionRef RSF, const coff_resource_dir_table &Table,
     StringRef Level) {
-  W.printNumber("String Name Entries", Table.NumberOfNameEntries);
-  W.printNumber("ID Entries", Table.NumberOfIDEntries);
 
-  char FormattedTime[20] = {};
-  time_t TDS = time_t(Table.TimeDateStamp);
-  strftime(FormattedTime, 20, "%Y-%m-%d %H:%M:%S", gmtime(&TDS));
+  W.printNumber("Number of String Entries", Table.NumberOfNameEntries);
+  W.printNumber("Number of ID Entries", Table.NumberOfIDEntries);
 
   // Iterate through level in resource directory tree.
   for (int i = 0; i < Table.NumberOfNameEntries + Table.NumberOfIDEntries;
@@ -1577,6 +1607,7 @@ void COFFDumper::printResourceDirectoryTable(
     Name = StringRef(IDStr);
     ListScope ResourceType(W, Level.str() + Name.str());
     if (Entry.Offset.isSubDir()) {
+      W.printHex("Table Offset", Entry.Offset.value());
       StringRef NextLevel;
       if (Level == "Name")
         NextLevel = "Language";
@@ -1585,9 +1616,14 @@ void COFFDumper::printResourceDirectoryTable(
       auto &NextTable = unwrapOrError(RSF.getEntrySubDir(Entry));
       printResourceDirectoryTable(RSF, NextTable, NextLevel);
     } else {
+      W.printHex("Entry Offset", Entry.Offset.value());
+      char FormattedTime[20] = {};
+      time_t TDS = time_t(Table.TimeDateStamp);
+      strftime(FormattedTime, 20, "%Y-%m-%d %H:%M:%S", gmtime(&TDS));
       W.printHex("Time/Date Stamp", FormattedTime, Table.TimeDateStamp);
       W.printNumber("Major Version", Table.MajorVersion);
       W.printNumber("Minor Version", Table.MinorVersion);
+      W.printNumber("Characteristics", Table.Characteristics);
     }
   }
 }

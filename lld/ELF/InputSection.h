@@ -111,8 +111,12 @@ public:
                    uint64_t Entsize, uint32_t Link, uint32_t Info,
                    uint32_t Alignment, ArrayRef<uint8_t> Data, StringRef Name,
                    Kind SectionKind);
-  ~InputSectionBase();
-  OutputSection *OutSec = nullptr;
+
+  // Input sections are part of an output section. Special sections
+  // like .eh_frame and merge sections are first combined into a
+  // synthetic section that is then added to an output section. In all
+  // cases this points one level up.
+  SectionBase *Parent = nullptr;
 
   // Relocations that refer to this section.
   const void *FirstRelocation = nullptr;
@@ -150,7 +154,7 @@ public:
     return getFile<ELFT>()->getObj();
   }
 
-  InputSectionBase *getLinkOrderDep() const;
+  InputSection *getLinkOrderDep() const;
 
   void uncompress();
 
@@ -230,10 +234,7 @@ public:
   SectionPiece *getSectionPiece(uint64_t Offset);
   const SectionPiece *getSectionPiece(uint64_t Offset) const;
 
-  // MergeInputSections are aggregated to a synthetic input sections,
-  // and then added to an OutputSection. This pointer points to a
-  // synthetic MergeSyntheticSection which this section belongs to.
-  MergeSyntheticSection *MergeSec = nullptr;
+  SyntheticSection *getParent() const;
 
 private:
   void splitStrings(ArrayRef<uint8_t> A, size_t Size);
@@ -273,7 +274,8 @@ public:
   // Splittable sections are handled as a sequence of data
   // rather than a single large blob of data.
   std::vector<EhSectionPiece> Pieces;
-  SyntheticSection *EHSec = nullptr;
+
+  SyntheticSection *getParent() const;
 };
 
 // This is a section that is added directly to an output section
@@ -291,6 +293,8 @@ public:
   // Write this section to a mmap'ed file, assuming Buf is pointing to
   // beginning of the output section.
   template <class ELFT> void writeTo(uint8_t *Buf);
+
+  OutputSection *getParent() const;
 
   // The offset from beginning of the output sections this section was assigned
   // to. The writer sets a value.
@@ -313,7 +317,7 @@ private:
   template <class ELFT, class RelTy>
   void copyRelocations(uint8_t *Buf, llvm::ArrayRef<RelTy> Rels);
 
-  void copyShtGroup(uint8_t *Buf);
+  template <class ELFT> void copyShtGroup(uint8_t *Buf);
 };
 
 // The list of all input sections.

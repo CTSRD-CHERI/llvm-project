@@ -35,8 +35,8 @@
 #include "Thunks.h"
 #include "Writer.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/BinaryFormat/ELF.h"
 #include "llvm/Object/ELF.h"
-#include "llvm/Support/ELF.h"
 #include "llvm/Support/Endian.h"
 
 using namespace llvm;
@@ -74,10 +74,10 @@ static void or32be(uint8_t *P, int32_t V) { write32be(P, read32be(P) | V); }
 template <class ELFT> static std::string getErrorLoc(const uint8_t *Loc) {
   for (InputSectionBase *D : InputSections) {
     auto *IS = dyn_cast_or_null<InputSection>(D);
-    if (!IS || !IS->OutSec)
+    if (!IS || !IS->getParent())
       continue;
 
-    uint8_t *ISLoc = cast<OutputSection>(IS->OutSec)->Loc + IS->OutSecOff;
+    uint8_t *ISLoc = IS->getParent()->Loc + IS->OutSecOff;
     if (ISLoc <= Loc && Loc < ISLoc + IS->getSize())
       return IS->template getLocation<ELFT>(Loc - ISLoc) + ": ";
   }
@@ -551,7 +551,17 @@ void X86TargetInfo::relocateOne(uint8_t *Loc, uint32_t Type,
     write16le(Loc, Val);
     break;
   case R_386_PC16:
-    checkInt<16>(Loc, Val, Type);
+    // R_386_PC16 is normally used with 16 bit code. In that situation
+    // the PC is 16 bits, just like the addend. This means that it can
+    // point from any 16 bit address to any other if the possibility
+    // of wrapping is included.
+    // The only restriction we have to check then is that the destination
+    // address fits in 16 bits. That is impossible to do here. The problem is
+    // that we are passed the final value, which already had the
+    // current location subtracted from it.
+    // We just check that Val fits in 17 bits. This misses some cases, but
+    // should have no false positives.
+    checkInt<17>(Loc, Val, Type);
     write16le(Loc, Val);
     break;
   default:
@@ -2118,7 +2128,7 @@ RelExpr MipsTargetInfo<ELFT>::getRelExpr(uint32_t Type, const SymbolBody &S,
       return R_MIPS_GOT_GP_PC;
     if (&S == ElfSym::MipsLocalGp)
       return R_MIPS_GOT_GP;
-    // fallthrough
+    LLVM_FALLTHROUGH;
   case R_MIPS_GOT_OFST:
     return R_ABS;
   case R_MIPS_PC32:
@@ -2132,7 +2142,7 @@ RelExpr MipsTargetInfo<ELFT>::getRelExpr(uint32_t Type, const SymbolBody &S,
   case R_MIPS_GOT16:
     if (S.isLocal())
       return R_MIPS_GOT_LOCAL_PAGE;
-  // fallthrough
+    LLVM_FALLTHROUGH;
   case R_MIPS_CALL16:
   case R_MIPS_GOT_DISP:
   case R_MIPS_TLS_GOTTPREL:
@@ -2384,7 +2394,6 @@ void MipsTargetInfo<ELFT>::relocateOne(uint8_t *Loc, uint32_t Type,
       writeMipsLo16<E>(Loc, Val);
     }
     break;
-  case R_MIPS_CALL16:
   case R_MIPS_GOT_DISP:
   case R_MIPS_GOT_PAGE:
   case R_MIPS_GPREL16:
@@ -2392,7 +2401,8 @@ void MipsTargetInfo<ELFT>::relocateOne(uint8_t *Loc, uint32_t Type,
   case R_MIPS_TLS_LDM:
   case R_MIPS_TLS_GOTTPREL:
     checkInt<16>(Loc, Val, Type);
-  // fallthrough
+    LLVM_FALLTHROUGH;
+  case R_MIPS_CALL16:
   case R_MIPS_CALL_LO16:
   case R_MIPS_GOT_LO16:
   case R_MIPS_GOT_OFST:
