@@ -1121,6 +1121,7 @@ bool LLParser::ParseFnAttributeValuePairs(AttrBuilder &B,
       B.addAttribute(Attribute::SanitizeThread); break;
     case lltok::kw_sanitize_memory:
       B.addAttribute(Attribute::SanitizeMemory); break;
+    case lltok::kw_strictfp: B.addAttribute(Attribute::StrictFP); break;
     case lltok::kw_uwtable: B.addAttribute(Attribute::UWTable); break;
     case lltok::kw_writeonly: B.addAttribute(Attribute::WriteOnly); break;
 
@@ -1446,6 +1447,7 @@ bool LLParser::ParseOptionalParamAttrs(AttrBuilder &B) {
     case lltok::kw_sspreq:
     case lltok::kw_sspstrong:
     case lltok::kw_safestack:
+    case lltok::kw_strictfp:
     case lltok::kw_uwtable:
       HaveError |= Error(Lex.getLoc(), "invalid use of function-only attribute");
       break;
@@ -1537,6 +1539,7 @@ bool LLParser::ParseOptionalReturnAttrs(AttrBuilder &B) {
     case lltok::kw_sspreq:
     case lltok::kw_sspstrong:
     case lltok::kw_safestack:
+    case lltok::kw_strictfp:
     case lltok::kw_uwtable:
       HaveError |= Error(Lex.getLoc(), "invalid use of function-only attribute");
       break;
@@ -1670,7 +1673,7 @@ void LLParser::ParseOptionalDLLStorageClass(unsigned &Res) {
 ///   ::= 'spir_func'
 ///   ::= 'spir_kernel'
 ///   ::= 'x86_64_sysvcc'
-///   ::= 'x86_64_win64cc'
+///   ::= 'win64cc'
 ///   ::= 'webkit_jscc'
 ///   ::= 'anyregcc'
 ///   ::= 'preserve_mostcc'
@@ -1712,7 +1715,7 @@ bool LLParser::ParseOptionalCallingConv(unsigned &CC) {
   case lltok::kw_spir_func:      CC = CallingConv::SPIR_FUNC; break;
   case lltok::kw_intel_ocl_bicc: CC = CallingConv::Intel_OCL_BI; break;
   case lltok::kw_x86_64_sysvcc:  CC = CallingConv::X86_64_SysV; break;
-  case lltok::kw_x86_64_win64cc: CC = CallingConv::X86_64_Win64; break;
+  case lltok::kw_win64cc:        CC = CallingConv::Win64; break;
   case lltok::kw_webkit_jscc:    CC = CallingConv::WebKit_JS; break;
   case lltok::kw_anyregcc:       CC = CallingConv::AnyReg; break;
   case lltok::kw_preserve_mostcc:CC = CallingConv::PreserveMost; break;
@@ -4411,13 +4414,15 @@ bool LLParser::ParseDIImportedEntity(MDNode *&Result, bool IsDistinct) {
   REQUIRED(tag, DwarfTagField, );                                              \
   REQUIRED(scope, MDField, );                                                  \
   OPTIONAL(entity, MDField, );                                                 \
+  OPTIONAL(file, MDField, );                                                   \
   OPTIONAL(line, LineField, );                                                 \
   OPTIONAL(name, MDStringField, );
   PARSE_MD_FIELDS();
 #undef VISIT_MD_FIELDS
 
-  Result = GET_OR_DISTINCT(DIImportedEntity, (Context, tag.Val, scope.Val,
-                                              entity.Val, line.Val, name.Val));
+  Result = GET_OR_DISTINCT(
+      DIImportedEntity,
+      (Context, tag.Val, scope.Val, entity.Val, file.Val, line.Val, name.Val));
   return false;
 }
 

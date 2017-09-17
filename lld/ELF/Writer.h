@@ -20,11 +20,10 @@ namespace elf {
 class InputFile;
 class OutputSection;
 class InputSectionBase;
-template <class ELFT> class ObjectFile;
-template <class ELFT> class SymbolTable;
+template <class ELFT> class ObjFile;
+class SymbolTable;
 template <class ELFT> void writeResult();
 template <class ELFT> void markLive();
-bool isRelroSection(const OutputSection *Sec);
 
 // This describes a program header entry.
 // Each contains type, access flags and range of output sections that will be
@@ -55,7 +54,7 @@ uint8_t getMipsFpAbiFlag(uint8_t OldFlag, uint8_t NewFlag,
                          llvm::StringRef FileName);
 
 bool isMipsN32Abi(const InputFile *F);
-}
-}
+} // namespace elf
+} // namespace lld
 
 #endif

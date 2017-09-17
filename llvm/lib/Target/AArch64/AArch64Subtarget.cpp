@@ -18,7 +18,6 @@
 #include "AArch64PBQPRegAlloc.h"
 #include "AArch64TargetMachine.h"
 
-#ifdef LLVM_BUILD_GLOBAL_ISEL
 #include "AArch64CallLowering.h"
 #include "AArch64LegalizerInfo.h"
 #include "AArch64RegisterBankInfo.h"
@@ -27,7 +26,6 @@
 #include "llvm/CodeGen/GlobalISel/InstructionSelect.h"
 #include "llvm/CodeGen/GlobalISel/Legalizer.h"
 #include "llvm/CodeGen/GlobalISel/RegBankSelect.h"
-#endif
 #include "llvm/CodeGen/MachineScheduler.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/Support/TargetRegistry.h"
@@ -130,16 +128,19 @@ void AArch64Subtarget::initializeProperties() {
     MinVectorRegisterBitWidth = 128;
     break;
   case CortexA35: break;
-  case CortexA53: break;
+  case CortexA53:
+    PrefFunctionAlignment = 3;
+    break;
   case CortexA72:
     PrefFunctionAlignment = 4;
     break;
-  case CortexA73: break;
+  case CortexA73:
+    PrefFunctionAlignment = 4;
+    break;
   case Others: break;
   }
 }
 
-#ifdef LLVM_BUILD_GLOBAL_ISEL
 namespace {
 
 struct AArch64GISelActualAccessor : public GISelAccessor {
@@ -166,18 +167,15 @@ struct AArch64GISelActualAccessor : public GISelAccessor {
 };
 
 } // end anonymous namespace
-#endif
 
 AArch64Subtarget::AArch64Subtarget(const Triple &TT, const std::string &CPU,
                                    const std::string &FS,
                                    const TargetMachine &TM, bool LittleEndian)
-    : AArch64GenSubtargetInfo(TT, CPU, FS), ReserveX18(TT.isOSDarwin()),
+    : AArch64GenSubtargetInfo(TT, CPU, FS),
+      ReserveX18(TT.isOSDarwin() || TT.isOSWindows()),
       IsLittle(LittleEndian), TargetTriple(TT), FrameLowering(),
       InstrInfo(initializeSubtargetDependencies(FS, CPU)), TSInfo(),
       TLInfo(TM, *this), GISel() {
-#ifndef LLVM_BUILD_GLOBAL_ISEL
-  GISelAccessor *AArch64GISel = new GISelAccessor();
-#else
   AArch64GISelActualAccessor *AArch64GISel = new AArch64GISelActualAccessor();
   AArch64GISel->CallLoweringInfo.reset(
       new AArch64CallLowering(*getTargetLowering()));
@@ -192,7 +190,6 @@ AArch64Subtarget::AArch64Subtarget(const Triple &TT, const std::string &CPU,
       *static_cast<const AArch64TargetMachine *>(&TM), *this, *RBI));
 
   AArch64GISel->RegBankInfo.reset(RBI);
-#endif
   setGISelAccessor(*AArch64GISel);
 }
 

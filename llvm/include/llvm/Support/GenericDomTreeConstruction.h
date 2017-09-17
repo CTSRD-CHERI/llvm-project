@@ -21,8 +21,8 @@
 /// faster than the almost-linear O(n*alpha(n)) version, even for large CFGs.
 ///
 /// The file uses the Depth Based Search algorithm to perform incremental
-/// upates (insertion and deletions). The implemented algorithm is based on this
-/// publication:
+/// updates (insertion and deletions). The implemented algorithm is based on
+/// this publication:
 ///
 ///   An Experimental Study of Dynamic Dominators
 ///   Loukas Georgiadis, et al., April 12 2016, pp. 5-7, 9-10:
@@ -131,7 +131,7 @@ struct SemiNCAInfo {
   // Custom DFS implementation which can skip nodes based on a provided
   // predicate. It also collects ReverseChildren so that we don't have to spend
   // time getting predecessors in SemiNCA.
-  template <bool Inverse, typename DescendCondition>
+  template <typename DescendCondition>
   unsigned runDFS(NodePtr V, unsigned LastNum, DescendCondition Condition,
                   unsigned AttachToNum) {
     assert(V);
@@ -148,10 +148,10 @@ struct SemiNCAInfo {
       BBInfo.Label = BB;
       NumToNode.push_back(BB);
 
-      for (const NodePtr Succ : ChildrenGetter<NodePtr, Inverse>::Get(BB)) {
+      for (const NodePtr Succ : ChildrenGetter<NodePtr, IsPostDom>::Get(BB)) {
         const auto SIT = NodeToInfo.find(Succ);
         // Don't visit nodes more than once but remember to collect
-        // RerverseChildren.
+        // ReverseChildren.
         if (SIT != NodeToInfo.end() && SIT->second.DFSNum != 0) {
           if (Succ != BB) SIT->second.ReverseChildren.push_back(BB);
           continue;
@@ -260,7 +260,8 @@ struct SemiNCAInfo {
   unsigned doFullDFSWalk(const DomTreeT &DT, DescendCondition DC) {
     unsigned Num = 0;
 
-    if (DT.Roots.size() > 1) {
+    // If the DT is a PostDomTree, always add a virtual root.
+    if (IsPostDom) {
       auto &BBInfo = NodeToInfo[nullptr];
       BBInfo.DFSNum = BBInfo.Semi = ++Num;
       BBInfo.Label = nullptr;
@@ -268,34 +269,42 @@ struct SemiNCAInfo {
       NumToNode.push_back(nullptr);  // NumToNode[n] = V;
     }
 
-    if (DT.isPostDominator()) {
-      for (auto *Root : DT.Roots) Num = runDFS<true>(Root, Num, DC, 1);
-    } else {
-      assert(DT.Roots.size() == 1);
-      Num = runDFS<false>(DT.Roots[0], Num, DC, Num);
-    }
+    const unsigned InitialNum = Num;
+    for (auto *Root : DT.Roots) Num = runDFS(Root, Num, DC, InitialNum);
 
     return Num;
   }
 
-  void calculateFromScratch(DomTreeT &DT, const unsigned NumBlocks) {
+  static void FindAndAddRoots(DomTreeT &DT) {
+    assert(DT.Parent && "Parent pointer is not set");
+    using TraitsTy = GraphTraits<typename DomTreeT::ParentPtr>;
+
+    if (!IsPostDom) {
+      // Dominators have a single root that is the function's entry.
+      NodeT *entry = TraitsTy::getEntryNode(DT.Parent);
+      DT.addRoot(entry);
+    } else {
+      // Initialize the roots list for PostDominators.
+      for (auto *Node : nodes(DT.Parent))
+        if (TraitsTy::child_begin(Node) == TraitsTy::child_end(Node))
+          DT.addRoot(Node);
+    }
+  }
+
+  void calculateFromScratch(DomTreeT &DT) {
     // Step #0: Number blocks in depth-first order and initialize variables used
     // in later stages of the algorithm.
-    const unsigned LastDFSNum = doFullDFSWalk(DT, AlwaysDescend);
+    FindAndAddRoots(DT);
+    doFullDFSWalk(DT, AlwaysDescend);
 
     runSemiNCA(DT);
 
     if (DT.Roots.empty()) return;
 
-    // Add a node for the root.  This node might be the actual root, if there is
-    // one exit block, or it may be the virtual exit (denoted by
-    // (BasicBlock *)0) which postdominates all real exits if there are multiple
-    // exit blocks, or an infinite loop.
-    // It might be that some blocks did not get a DFS number (e.g., blocks of
-    // infinite loops). In these cases an artificial exit node is required.
-    const bool MultipleRoots = DT.Roots.size() > 1 || (DT.isPostDominator() &&
-                                                       LastDFSNum != NumBlocks);
-    NodePtr Root = !MultipleRoots ? DT.Roots[0] : nullptr;
+    // Add a node for the root. If the tree is a PostDominatorTree it will be
+    // the virtual exit (denoted by (BasicBlock *) nullptr) which postdominates
+    // all real exits (including multiple exit blocks, infinite loops).
+    NodePtr Root = IsPostDom ? nullptr : DT.Roots[0];
 
     DT.RootNode = (DT.DomTreeNodes[Root] =
                        llvm::make_unique<DomTreeNodeBase<NodeT>>(Root, nullptr))
@@ -424,34 +433,42 @@ struct SemiNCAInfo {
     const unsigned NCDLevel = NCD->getLevel();
     DEBUG(dbgs() << "Visiting " << BlockNamePrinter(TN) << "\n");
 
-    assert(TN->getBlock());
-    for (const NodePtr Succ :
-        ChildrenGetter<NodePtr, IsPostDom>::Get(TN->getBlock())) {
-      const TreeNodePtr SuccTN = DT.getNode(Succ);
-      assert(SuccTN && "Unreachable successor found at reachable insertion");
-      const unsigned SuccLevel = SuccTN->getLevel();
+    SmallVector<TreeNodePtr, 8> Stack = {TN};
+    assert(TN->getBlock() && II.Visited.count(TN) && "Preconditions!");
 
-      DEBUG(dbgs() << "\tSuccessor " << BlockNamePrinter(Succ)
-                   << ", level = " << SuccLevel << "\n");
+    do {
+      TreeNodePtr Next = Stack.pop_back_val();
 
-      // Succ dominated by subtree From -- not affected.
-      // (Based on the lemma 2.5 from the second paper.)
-      if (SuccLevel > RootLevel) {
-        DEBUG(dbgs() << "\t\tDominated by subtree From\n");
-        if (II.Visited.count(SuccTN) != 0) continue;
+      for (const NodePtr Succ :
+           ChildrenGetter<NodePtr, IsPostDom>::Get(Next->getBlock())) {
+        const TreeNodePtr SuccTN = DT.getNode(Succ);
+        assert(SuccTN && "Unreachable successor found at reachable insertion");
+        const unsigned SuccLevel = SuccTN->getLevel();
 
-        DEBUG(dbgs() << "\t\tMarking visited not affected "
-                     << BlockNamePrinter(Succ) << "\n");
-        II.Visited.insert(SuccTN);
-        II.VisitedNotAffectedQueue.push_back(SuccTN);
-        VisitInsertion(DT, SuccTN, RootLevel, NCD, II);
-      } else if ((SuccLevel > NCDLevel + 1) && II.Affected.count(SuccTN) == 0) {
-        DEBUG(dbgs() << "\t\tMarking affected and adding "
-                     << BlockNamePrinter(Succ) << " to a Bucket\n");
-        II.Affected.insert(SuccTN);
-        II.Bucket.push({SuccLevel, SuccTN});
+        DEBUG(dbgs() << "\tSuccessor " << BlockNamePrinter(Succ)
+                     << ", level = " << SuccLevel << "\n");
+
+        // Succ dominated by subtree From -- not affected.
+        // (Based on the lemma 2.5 from the second paper.)
+        if (SuccLevel > RootLevel) {
+          DEBUG(dbgs() << "\t\tDominated by subtree From\n");
+          if (II.Visited.count(SuccTN) != 0)
+            continue;
+
+          DEBUG(dbgs() << "\t\tMarking visited not affected "
+                       << BlockNamePrinter(Succ) << "\n");
+          II.Visited.insert(SuccTN);
+          II.VisitedNotAffectedQueue.push_back(SuccTN);
+          Stack.push_back(SuccTN);
+        } else if ((SuccLevel > NCDLevel + 1) &&
+                   II.Affected.count(SuccTN) == 0) {
+          DEBUG(dbgs() << "\t\tMarking affected and adding "
+                       << BlockNamePrinter(Succ) << " to a Bucket\n");
+          II.Affected.insert(SuccTN);
+          II.Bucket.push({SuccLevel, SuccTN});
+        }
       }
-    }
+    } while (!Stack.empty());
   }
 
   // Updates immediate dominators and levels after insertion.
@@ -523,7 +540,7 @@ struct SemiNCAInfo {
     };
 
     SemiNCAInfo SNCA;
-    SNCA.runDFS<IsPostDom>(Root, 0, UnreachableDescender, 0);
+    SNCA.runDFS(Root, 0, UnreachableDescender, 0);
     SNCA.runSemiNCA(DT);
     SNCA.attachNewSubtree(DT, Incoming);
 
@@ -569,11 +586,25 @@ struct SemiNCAInfo {
     assert(From && To && "Cannot disconnect nullptrs");
     DEBUG(dbgs() << "Deleting edge " << BlockNamePrinter(From) << " -> "
                  << BlockNamePrinter(To) << "\n");
+
+#ifndef NDEBUG
+    // Ensure that the edge was in fact deleted from the CFG before informing
+    // the DomTree about it.
+    // The check is O(N), so run it only in debug configuration.
+    auto IsSuccessor = [](const NodePtr SuccCandidate, const NodePtr Of) {
+      auto Successors = ChildrenGetter<NodePtr, IsPostDom>::Get(Of);
+      return llvm::find(Successors, SuccCandidate) != Successors.end();
+    };
+    (void)IsSuccessor;
+    assert(!IsSuccessor(To, From) && "Deleted edge still exists in the CFG!");
+#endif
+
     const TreeNodePtr FromTN = DT.getNode(From);
     // Deletion in an unreachable subtree -- nothing to do.
     if (!FromTN) return;
 
     const TreeNodePtr ToTN = DT.getNode(To);
+    assert(ToTN && "To already unreachable -- there is no edge to delete");
     const NodePtr NCDBlock = DT.findNearestCommonDominator(From, To);
     const TreeNodePtr NCD = DT.getNode(NCDBlock);
 
@@ -624,7 +655,7 @@ struct SemiNCAInfo {
     DEBUG(dbgs() << "\tTop of subtree: " << BlockNamePrinter(ToIDomTN) << "\n");
 
     SemiNCAInfo SNCA;
-    SNCA.runDFS<IsPostDom>(ToIDom, 0, DescendBelow, 0);
+    SNCA.runDFS(ToIDom, 0, DescendBelow, 0);
     DEBUG(dbgs() << "\tRunning Semi-NCA\n");
     SNCA.runSemiNCA(DT, Level);
     SNCA.reattachExistingSubtree(DT, PrevIDomSubTree);
@@ -678,11 +709,11 @@ struct SemiNCAInfo {
 
     SemiNCAInfo SNCA;
     unsigned LastDFSNum =
-        SNCA.runDFS<IsPostDom>(ToTN->getBlock(), 0, DescendAndCollect, 0);
+        SNCA.runDFS(ToTN->getBlock(), 0, DescendAndCollect, 0);
 
     TreeNodePtr MinNode = ToTN;
 
-    // Identify the top of the subtree to rebuilt by finding the NCD of all
+    // Identify the top of the subtree to rebuild by finding the NCD of all
     // the affected nodes.
     for (const NodePtr N : AffectedQueue) {
       const TreeNodePtr TN = DT.getNode(N);
@@ -730,7 +761,7 @@ struct SemiNCAInfo {
       const TreeNodePtr ToTN = DT.getNode(To);
       return ToTN && ToTN->getLevel() > MinLevel;
     };
-    SNCA.runDFS<IsPostDom>(MinNode->getBlock(), 0, DescendBelow, 0);
+    SNCA.runDFS(MinNode->getBlock(), 0, DescendBelow, 0);
 
     DEBUG(dbgs() << "Previous IDom(MinNode) = " << BlockNamePrinter(PrevIDom)
                  << "\nRunning Semi-NCA\n");
@@ -931,11 +962,10 @@ struct SemiNCAInfo {
   }
 };
 
-
-template <class DomTreeT, class FuncT>
-void Calculate(DomTreeT &DT, FuncT &F) {
+template <class DomTreeT>
+void Calculate(DomTreeT &DT) {
   SemiNCAInfo<DomTreeT> SNCA;
-  SNCA.calculateFromScratch(DT, GraphTraits<FuncT *>::size(&F));
+  SNCA.calculateFromScratch(DT);
 }
 
 template <class DomTreeT>

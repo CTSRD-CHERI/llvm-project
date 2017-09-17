@@ -1520,7 +1520,7 @@ MacroInfo *ASTReader::ReadMacroRecord(ModuleFile &F, uint64_t Offset) {
 
   Stream.JumpToBit(Offset);
   RecordData Record;
-  SmallVector<IdentifierInfo*, 16> MacroArgs;
+  SmallVector<IdentifierInfo*, 16> MacroParams;
   MacroInfo *Macro = nullptr;
 
   while (true) {
@@ -1571,17 +1571,17 @@ MacroInfo *ASTReader::ReadMacroRecord(ModuleFile &F, uint64_t Offset) {
         bool isC99VarArgs = Record[NextIndex++];
         bool isGNUVarArgs = Record[NextIndex++];
         bool hasCommaPasting = Record[NextIndex++];
-        MacroArgs.clear();
+        MacroParams.clear();
         unsigned NumArgs = Record[NextIndex++];
         for (unsigned i = 0; i != NumArgs; ++i)
-          MacroArgs.push_back(getLocalIdentifier(F, Record[NextIndex++]));
+          MacroParams.push_back(getLocalIdentifier(F, Record[NextIndex++]));
 
         // Install function-like macro info.
         MI->setIsFunctionLike();
         if (isC99VarArgs) MI->setIsC99Varargs();
         if (isGNUVarArgs) MI->setIsGNUVarargs();
         if (hasCommaPasting) MI->setHasCommaPasting();
-        MI->setArgumentList(MacroArgs, PP.getPreprocessorAllocator());
+        MI->setParameterList(MacroParams, PP.getPreprocessorAllocator());
       }
 
       // Remember that we saw this macro last so that we add the tokens that
@@ -2060,14 +2060,12 @@ InputFile ASTReader::getInputFile(ModuleFile &F, unsigned ID, bool Complain) {
   StringRef Filename = FI.Filename;
 
   const FileEntry *File = FileMgr.getFile(Filename, /*OpenFile=*/false);
-
   // If we didn't find the file, resolve it relative to the
   // original directory from which this AST file was created.
-  if (File == nullptr && !F.OriginalDir.empty() && !CurrentDir.empty() &&
-      F.OriginalDir != CurrentDir) {
-    std::string Resolved = resolveFileRelativeToOriginalDir(Filename,
-                                                            F.OriginalDir,
-                                                            CurrentDir);
+  if (File == nullptr && !F.OriginalDir.empty() && !F.BaseDirectory.empty() &&
+      F.OriginalDir != F.BaseDirectory) {
+    std::string Resolved = resolveFileRelativeToOriginalDir(
+        Filename, F.OriginalDir, F.BaseDirectory);
     if (!Resolved.empty())
       File = FileMgr.getFile(Resolved);
   }
@@ -3384,6 +3382,7 @@ ASTReader::ReadASTBlock(ModuleFile &F, unsigned ClientLoadCapabilities) {
         PragmaPackStackEntry Entry;
         Entry.Value = Record[Idx++];
         Entry.Location = ReadSourceLocation(F, Record[Idx++]);
+        Entry.PushLocation = ReadSourceLocation(F, Record[Idx++]);
         PragmaPackStrings.push_back(ReadString(Record, Idx));
         Entry.SlotLabel = PragmaPackStrings.back();
         PragmaPackStack.push_back(Entry);
@@ -4064,13 +4063,6 @@ ASTReader::ReadASTCore(StringRef FileName,
   }
 
   assert(M && "Missing module file");
-
-  // FIXME: This seems rather a hack. Should CurrentDir be part of the
-  // module?
-  if (FileName != "-") {
-    CurrentDir = llvm::sys::path::parent_path(FileName);
-    if (CurrentDir.empty()) CurrentDir = ".";
-  }
 
   ModuleFile &F = *M;
   BitstreamCursor &Stream = F.Stream;
@@ -7579,13 +7571,14 @@ void ASTReader::UpdateSema() {
              "Expected a default alignment value");
       SemaObj->PackStack.Stack.emplace_back(
           PragmaPackStack.front().SlotLabel, SemaObj->PackStack.CurrentValue,
-          SemaObj->PackStack.CurrentPragmaLocation);
+          SemaObj->PackStack.CurrentPragmaLocation,
+          PragmaPackStack.front().PushLocation);
       DropFirst = true;
     }
     for (const auto &Entry :
          llvm::makeArrayRef(PragmaPackStack).drop_front(DropFirst ? 1 : 0))
       SemaObj->PackStack.Stack.emplace_back(Entry.SlotLabel, Entry.Value,
-                                            Entry.Location);
+                                            Entry.Location, Entry.PushLocation);
     if (PragmaPackCurrentLocation.isInvalid()) {
       assert(*PragmaPackCurrentValue == SemaObj->PackStack.DefaultValue &&
              "Expected a default alignment value");

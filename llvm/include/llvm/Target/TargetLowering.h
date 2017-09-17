@@ -733,8 +733,7 @@ public:
   /// VECTOR_SHUFFLE operations, those with specific masks.  By default, if a
   /// target supports the VECTOR_SHUFFLE node, all mask values are assumed to be
   /// legal.
-  virtual bool isShuffleMaskLegal(const SmallVectorImpl<int> &/*Mask*/,
-                                  EVT /*VT*/) const {
+  virtual bool isShuffleMaskLegal(ArrayRef<int> /*Mask*/, EVT /*VT*/) const {
     return true;
   }
 
@@ -1887,7 +1886,8 @@ public:
   ///
   /// TODO: Remove default argument
   virtual bool isLegalAddressingMode(const DataLayout &DL, const AddrMode &AM,
-                                     Type *Ty, unsigned AddrSpace) const;
+                                     Type *Ty, unsigned AddrSpace,
+                                     Instruction *I = nullptr) const;
 
   /// \brief Return the cost of the scaling factor used in the addressing mode
   /// represented by AM for this target, for a load/store of the specified type.
@@ -1902,10 +1902,6 @@ public:
     if (isLegalAddressingMode(DL, AM, Ty, AS))
       return 0;
     return -1;
-  }
-
-  virtual bool isFoldableMemAccessOffset(Instruction *I, int64_t Offset) const {
-    return true;
   }
 
   /// Return true if the specified immediate is legal icmp immediate, that is
@@ -2176,11 +2172,12 @@ public:
     return false;
   }
 
-  /// Return true if EXTRACT_SUBVECTOR is cheap for this result type
-  /// with this index. This is needed because EXTRACT_SUBVECTOR usually
-  /// has custom lowering that depends on the index of the first element,
-  /// and only the target knows which lowering is cheap.
-  virtual bool isExtractSubvectorCheap(EVT ResVT, unsigned Index) const {
+  /// Return true if EXTRACT_SUBVECTOR is cheap for extracting this result type
+  /// from this source type with this index. This is needed because
+  /// EXTRACT_SUBVECTOR usually has custom lowering that depends on the index of
+  /// the first element, and only the target knows which lowering is cheap.
+  virtual bool isExtractSubvectorCheap(EVT ResVT, EVT SrcVT,
+                                       unsigned Index) const {
     return false;
   }
 
@@ -2727,6 +2724,9 @@ public:
                         bool foldBooleans, DAGCombinerInfo &DCI,
                         const SDLoc &dl) const;
 
+  // For targets which wrap address, unwrap for analysis.
+  virtual SDValue unwrapAddress(SDValue N) const { return N; }
+
   /// Returns true (and the GlobalValue and the offset) if the node is a
   /// GlobalAddress + offset.
   virtual bool
@@ -2765,6 +2765,20 @@ public:
   //  -->
   // v4i32 truncate (bitcast V to v4i64)
   virtual bool isDesirableToCombineBuildVectorToTruncate() const {
+    return false;
+  }
+
+  // Return true if it is profitable to combine a BUILD_VECTOR with a stride-pattern
+  // to a shuffle and a truncate.
+  // Example of such a combine:
+  // v4i32 build_vector((extract_elt V, 1),
+  //                    (extract_elt V, 3),
+  //                    (extract_elt V, 5),
+  //                    (extract_elt V, 7))
+  //  -->
+  // v4i32 truncate (bitcast (shuffle<1,u,3,u,5,u,7,u> V, u) to v4i64)
+  virtual bool isDesirableToCombineBuildVectorToShuffleTruncate(
+      ArrayRef<int> ShuffleMask, EVT SrcVT, EVT TruncVT) const {
     return false;
   }
 
@@ -2866,7 +2880,7 @@ public:
     ArgListTy Args;
     SelectionDAG &DAG;
     SDLoc DL;
-    ImmutableCallSite *CS = nullptr;
+    ImmutableCallSite CS;
     SmallVector<ISD::OutputArg, 32> Outs;
     SmallVector<SDValue, 32> OutVals;
     SmallVector<ISD::InputArg, 32> Ins;
@@ -2913,7 +2927,7 @@ public:
 
     CallLoweringInfo &setCallee(Type *ResultType, FunctionType *FTy,
                                 SDValue Target, ArgListTy &&ArgsList,
-                                ImmutableCallSite &Call) {
+                                ImmutableCallSite Call) {
       RetTy = ResultType;
 
       IsInReg = Call.hasRetAttr(Attribute::InReg);
@@ -2932,7 +2946,7 @@ public:
       NumFixedArgs = FTy->getNumParams();
       Args = std::move(ArgsList);
 
-      CS = &Call;
+      CS = Call;
 
       return *this;
     }

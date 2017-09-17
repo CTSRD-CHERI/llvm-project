@@ -22,7 +22,7 @@ target datalayout = "e-m:e-i64:64-i128:128-n32:64-S128"
 ; CHECK:       middle.block:
 ; CHECK:         %vector.recur.extract = extractelement <4 x i32> [[L1]], i32 3
 ; CHECK:       scalar.ph:
-; CHECK:         %scalar.recur.init = phi i32 [ %vector.recur.extract, %middle.block ], [ %pre_load, %vector.memcheck ], [ %pre_load, %min.iters.checked ], [ %pre_load, %for.preheader ]
+; CHECK:         %scalar.recur.init = phi i32 [ %vector.recur.extract, %middle.block ], [ %pre_load, %vector.memcheck ], [ %pre_load, %for.preheader ]
 ; CHECK:       scalar.body:
 ; CHECK:         %scalar.recur = phi i32 [ %scalar.recur.init, %scalar.ph ], [ {{.*}}, %scalar.body ]
 ;
@@ -79,7 +79,7 @@ for.exit:
 ; CHECK:       middle.block:
 ; CHECK:         %vector.recur.extract = extractelement <4 x i32> [[L1]], i32 3
 ; CHECK:       scalar.ph:
-; CHECK:         %scalar.recur.init = phi i32 [ %vector.recur.extract, %middle.block ], [ %.pre, %min.iters.checked ], [ %.pre, %for.preheader ]
+; CHECK:         %scalar.recur.init = phi i32 [ %vector.recur.extract, %middle.block ], [ %.pre, %for.preheader ]
 ; CHECK:       scalar.body:
 ; CHECK:         %scalar.recur = phi i32 [ %scalar.recur.init, %scalar.ph ], [ {{.*}}, %scalar.body ]
 ;
@@ -140,11 +140,14 @@ scalar.body:
 ; CHECK:       vector.body:
 ; CHECK:         %vector.recur = phi <4 x i16> [ %vector.recur.init, %vector.ph ], [ [[L1:%[a-zA-Z0-9.]+]], %vector.body ]
 ; CHECK:         [[L1]] = load <4 x i16>
-; CHECK:         {{.*}} = shufflevector <4 x i16> %vector.recur, <4 x i16> [[L1]], <4 x i32> <i32 3, i32 4, i32 5, i32 6>
+; CHECK:         [[SHUF:%[a-zA-Z0-9.]+]] = shufflevector <4 x i16> %vector.recur, <4 x i16> [[L1]], <4 x i32> <i32 3, i32 4, i32 5, i32 6>
+; Check also that the casts were not moved needlessly.
+; CHECK:         sitofp <4 x i16> [[L1]] to <4 x double>
+; CHECK:         sitofp <4 x i16> [[SHUF]] to <4 x double> 
 ; CHECK:       middle.block:
 ; CHECK:         %vector.recur.extract = extractelement <4 x i16> [[L1]], i32 3
 ; CHECK:       scalar.ph:
-; CHECK:         %scalar.recur.init = phi i16 [ %vector.recur.extract, %middle.block ], [ %0, %vector.memcheck ], [ %0, %min.iters.checked ], [ %0, %for.preheader ]
+; CHECK:         %scalar.recur.init = phi i16 [ %vector.recur.extract, %middle.block ], [ %0, %vector.memcheck ], [ %0, %for.preheader ]
 ; CHECK:       scalar.body:
 ; CHECK:         %scalar.recur = phi i16 [ %scalar.recur.init, %scalar.ph ], [ {{.*}}, %scalar.body ]
 ;
@@ -288,7 +291,7 @@ for.cond.cleanup3:
 
 ; UNROLL-NO-IC-LABEL: @PR30183(
 ; UNROLL-NO-IC:       vector.ph:
-; UNROLL-NO-IC-NEXT:    [[VECTOR_RECUR_INIT:%.*]] = insertelement <4 x i32> undef, i32 [[PRE_LOAD:%.*]], i32 3
+; UNROLL-NO-IC:         [[VECTOR_RECUR_INIT:%.*]] = insertelement <4 x i32> undef, i32 [[PRE_LOAD:%.*]], i32 3
 ; UNROLL-NO-IC-NEXT:    br label %vector.body
 ; UNROLL-NO-IC:       vector.body:
 ; UNROLL-NO-IC-NEXT:    [[INDEX:%.*]] = phi i64 [ 0, %vector.ph ], [ [[INDEX_NEXT:%.*]], %vector.body ]

@@ -33,7 +33,7 @@ def : GINodeEquiv<G_TRUNC, trunc>;
 def : GINodeEquiv<G_BITCAST, bitconvert>;
 // G_INTTOPTR - SelectionDAG has no equivalent.
 // G_PTRTOINT - SelectionDAG has no equivalent.
-// G_CONSTANT - Not needed since constants aren't operators.
+def : GINodeEquiv<G_CONSTANT, imm>;
 // G_FCONSTANT - Not needed since constants aren't operators.
 def : GINodeEquiv<G_ADD, add>;
 def : GINodeEquiv<G_SUB, sub>;
@@ -58,6 +58,7 @@ def : GINodeEquiv<G_SITOFP, sint_to_fp>;
 def : GINodeEquiv<G_UITOFP, uint_to_fp>;
 def : GINodeEquiv<G_FADD, fadd>;
 def : GINodeEquiv<G_FSUB, fsub>;
+def : GINodeEquiv<G_FMA, fma>;
 def : GINodeEquiv<G_FMUL, fmul>;
 def : GINodeEquiv<G_FDIV, fdiv>;
 def : GINodeEquiv<G_FREM, frem>;

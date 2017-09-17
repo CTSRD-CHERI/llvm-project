@@ -87,82 +87,6 @@ static void DiagnoseUnusedOfDecl(Sema &S, NamedDecl *D, SourceLocation Loc) {
   }
 }
 
-std::pair<AvailabilityResult, const NamedDecl *>
-Sema::ShouldDiagnoseAvailabilityOfDecl(const NamedDecl *D,
-                                       std::string *Message) {
-  AvailabilityResult Result = D->getAvailability(Message);
-
-  // For typedefs, if the typedef declaration appears available look
-  // to the underlying type to see if it is more restrictive.
-  while (const TypedefNameDecl *TD = dyn_cast<TypedefNameDecl>(D)) {
-    if (Result == AR_Available) {
-      if (const TagType *TT = TD->getUnderlyingType()->getAs<TagType>()) {
-        D = TT->getDecl();
-        Result = D->getAvailability(Message);
-        continue;
-      }
-    }
-    break;
-  }
-
-  // Forward class declarations get their attributes from their definition.
-  if (const ObjCInterfaceDecl *IDecl = dyn_cast<ObjCInterfaceDecl>(D)) {
-    if (IDecl->getDefinition()) {
-      D = IDecl->getDefinition();
-      Result = D->getAvailability(Message);
-    }
-  }
-
-  if (const auto *ECD = dyn_cast<EnumConstantDecl>(D))
-    if (Result == AR_Available) {
-      const DeclContext *DC = ECD->getDeclContext();
-      if (const auto *TheEnumDecl = dyn_cast<EnumDecl>(DC)) {
-        Result = TheEnumDecl->getAvailability(Message);
-        D = TheEnumDecl;
-      }
-    }
-
-  return {Result, D};
-}
-
-static void
-DiagnoseAvailabilityOfDecl(Sema &S, NamedDecl *D, SourceLocation Loc,
-                           const ObjCInterfaceDecl *UnknownObjCClass,
-                           bool ObjCPropertyAccess,
-                           bool AvoidPartialAvailabilityChecks = false) {
-  std::string Message;
-  AvailabilityResult Result;
-  const NamedDecl* OffendingDecl;
-  // See if this declaration is unavailable, deprecated, or partial.
-  std::tie(Result, OffendingDecl) = S.ShouldDiagnoseAvailabilityOfDecl(D, &Message);
-  if (Result == AR_Available)
-    return;
-
-  if (Result == AR_NotYetIntroduced) {
-    if (AvoidPartialAvailabilityChecks)
-      return;
-    if (S.getCurFunctionOrMethodDecl()) {
-      S.getEnclosingFunction()->HasPotentialAvailabilityViolations = true;
-      return;
-    } else if (S.getCurBlock() || S.getCurLambda()) {
-      S.getCurFunction()->HasPotentialAvailabilityViolations = true;
-      return;
-    }
-  }
-
-  const ObjCPropertyDecl *ObjCPDecl = nullptr;
-  if (const ObjCMethodDecl *MD = dyn_cast<ObjCMethodDecl>(D)) {
-    if (const ObjCPropertyDecl *PD = MD->findPropertyDecl()) {
-      AvailabilityResult PDeclResult = PD->getAvailability(nullptr);
-      if (PDeclResult == Result)
-        ObjCPDecl = PD;
-    }
-  }
-
-  S.EmitAvailabilityWarning(Result, D, OffendingDecl, Message, Loc,
-                            UnknownObjCClass, ObjCPDecl, ObjCPropertyAccess);
-}
-
 /// \brief Emit a note explaining that this function is deleted.
 void Sema::NoteDeletedFunction(FunctionDecl *Decl) {
   assert(Decl->isDeleted());
@@ -363,8 +287,7 @@ bool Sema::DiagnoseUseOfDecl(NamedDecl *D, SourceLocation Loc,
     return true;
   }
 
-  DiagnoseAvailabilityOfDecl(*this, D, Loc, UnknownObjCClass,
-                             ObjCPropertyAccess,
+  DiagnoseAvailabilityOfDecl(D, Loc, UnknownObjCClass, ObjCPropertyAccess,
                              AvoidPartialAvailabilityChecks);
 
   DiagnoseUnusedOfDecl(*this, D, Loc);
@@ -1579,8 +1502,9 @@ static ExprResult BuildCookedLiteralOperatorCall(Sema &S, Scope *Scope,
 
   LookupResult R(S, OpName, UDSuffixLoc, Sema::LookupOrdinaryName);
   if (S.LookupLiteralOperator(Scope, R, llvm::makeArrayRef(ArgTy, Args.size()),
-                              /*AllowRaw*/false, /*AllowTemplate*/false,
-                              /*AllowStringTemplate*/false) == Sema::LOLR_Error)
+                              /*AllowRaw*/ false, /*AllowTemplate*/ false,
+                              /*AllowStringTemplate*/ false,
+                              /*DiagnoseMissing*/ true) == Sema::LOLR_Error)
     return ExprError();
 
   return S.BuildLiteralOperatorCall(R, OpNameInfo, Args, LitEndLoc);
@@ -1671,8 +1595,9 @@ Sema::ActOnStringLiteral(ArrayRef<Token> StringToks, Scope *UDLScope) {
 
   LookupResult R(*this, OpName, UDSuffixLoc, LookupOrdinaryName);
   switch (LookupLiteralOperator(UDLScope, R, ArgTy,
-                                /*AllowRaw*/false, /*AllowTemplate*/false,
-                                /*AllowStringTemplate*/true)) {
+                                /*AllowRaw*/ false, /*AllowTemplate*/ false,
+                                /*AllowStringTemplate*/ true,
+                                /*DiagnoseMissing*/ true)) {
 
   case LOLR_Cooked: {
     llvm::APInt Len(Context.getIntWidth(SizeType), Literal.GetNumStringChars());
@@ -1705,6 +1630,7 @@ Sema::ActOnStringLiteral(ArrayRef<Token> StringToks, Scope *UDLScope) {
   }
   case LOLR_Raw:
   case LOLR_Template:
+  case LOLR_ErrorNoDiagnostic:
     llvm_unreachable("unexpected literal operator lookup result");
   case LOLR_Error:
     return ExprError();
@@ -3327,11 +3253,15 @@ ExprResult Sema::ActOnNumericConstant(const Token &Tok, Scope *UDLScope) {
     // literal or a cooked one.
     LookupResult R(*this, OpName, UDSuffixLoc, LookupOrdinaryName);
     switch (LookupLiteralOperator(UDLScope, R, CookedTy,
-                                  /*AllowRaw*/true, /*AllowTemplate*/true,
-                                  /*AllowStringTemplate*/false)) {
+                                  /*AllowRaw*/ true, /*AllowTemplate*/ true,
+                                  /*AllowStringTemplate*/ false,
+                                  /*DiagnoseMissing*/ !Literal.isImaginary)) {
+    case LOLR_ErrorNoDiagnostic:
+      // Lookup failure for imaginary constants isn't fatal, there's still the
+      // GNU extension producing _Complex types.
+      break;
     case LOLR_Error:
       return ExprError();
-
     case LOLR_Cooked: {
       Expr *Lit;
       if (Literal.isFloatingLiteral()) {
@@ -3547,10 +3477,12 @@ ExprResult Sema::ActOnNumericConstant(const Token &Tok, Scope *UDLScope) {
   }
 
   // If this is an imaginary literal, create the ImaginaryLiteral wrapper.
-  if (Literal.isImaginary)
+  if (Literal.isImaginary) {
     Res = new (Context) ImaginaryLiteral(Res,
                                         Context.getComplexType(Res->getType()));
 
+    Diag(Tok.getLocation(), diag::ext_imaginary_constant);
+  }
   return Res;
 }
 
@@ -4554,6 +4486,22 @@ bool Sema::CheckCXXDefaultArgExpr(SourceLocation CallLoc, FunctionDecl *FD,
         *this, ExpressionEvaluationContext::PotentiallyEvaluated, Param);
 
     // Instantiate the expression.
+    //
+    // FIXME: Pass in a correct Pattern argument, otherwise
+    // getTemplateInstantiationArgs uses the lexical context of FD, e.g.
+    //
+    // template<typename T>
+    // struct A {
+    //   static int FooImpl();
+    //
+    //   template<typename Tp>
+    //   // bug: default argument A<T>::FooImpl() is evaluated with 2-level
+    //   // template argument list [[T], [Tp]], should be [[Tp]].
+    //   friend A<Tp> Foo(int a);
+    // };
+    //
+    // template<typename T>
+    // A<T> Foo(int a = A<T>::FooImpl());
     MultiLevelTemplateArgumentList MutiLevelArgList
       = getTemplateInstantiationArgs(FD, nullptr, /*RelativeToPrimary=*/true);
 
@@ -7591,6 +7539,12 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
   if (unsupportedTypeConversion(*this, LHSType, RHSType))
     return Incompatible;
 
+  // Disallow assigning a _Complex to a real type in C++ mode since it simply
+  // discards the imaginary part.
+  if (getLangOpts().CPlusPlus && RHSType->getAs<ComplexType>() &&
+      !LHSType->getAs<ComplexType>())
+    return Incompatible;
+
   // Arithmetic conversions.
   if (LHSType->isArithmeticType() && RHSType->isArithmeticType() &&
       !(getLangOpts().CPlusPlus && LHSType->isEnumeralType())) {
@@ -8365,7 +8319,7 @@ QualType Sema::CheckVectorOperands(ExprResult &LHS, ExprResult &RHS,
     // type. Note that this is already done by non-compound assignments in
     // CheckAssignmentConstraints. If it's a scalar type, only bitcast for
     // <1 x T> -> T. The result is also a vector type.
-    } else if (OtherType->isExtVectorType() ||
+    } else if (OtherType->isExtVectorType() || OtherType->isVectorType() ||
                (OtherType->isScalarType() && VT->getNumElements() == 1)) {
       ExprResult *RHSExpr = &RHS;
       *RHSExpr = ImpCastExprToType(RHSExpr->get(), LHSType, CK_BitCast);
@@ -14074,6 +14028,8 @@ static bool captureInCapturedRegion(CapturedRegionScopeInfo *RSI,
     Field->setImplicit(true);
     Field->setAccess(AS_private);
     RD->addDecl(Field);
+    if (S.getLangOpts().OpenMP && RSI->CapRegionKind == CR_OpenMP)
+      S.setOpenMPCaptureKind(Field, Var, RSI->OpenMPLevel);
  
     CopyExpr = new (S.Context) DeclRefExpr(Var, RefersToCapturedVariable,
                                             DeclRefType, VK_LValue, Loc);

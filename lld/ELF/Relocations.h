@@ -21,7 +21,7 @@ class SymbolBody;
 class InputSection;
 class InputSectionBase;
 class OutputSection;
-struct OutputSectionCommand;
+class OutputSection;
 
 // List of target-independent relocation types. Relocations read
 // from files are converted to these types so that the main code
@@ -103,7 +103,8 @@ struct RelExprMaskBuilder<Head, Tail...> {
 // RelExpr's as a constant bit mask and test for membership with a
 // couple cheap bitwise operations.
 template <RelExpr... Exprs> bool isRelExprOneOf(RelExpr Expr) {
-  assert(0 <= Expr && (int)Expr < 64 && "RelExpr is too large for 64-bit mask!");
+  assert(0 <= Expr && (int)Expr < 64 &&
+         "RelExpr is too large for 64-bit mask!");
   return (uint64_t(1) << Expr) & RelExprMaskBuilder<Exprs...>::build();
 }
 
@@ -124,7 +125,7 @@ class Thunk;
 class ThunkCreator {
 public:
   // Return true if Thunks have been added to OutputSections
-  bool createThunks(ArrayRef<OutputSectionCommand *> OutputSections);
+  bool createThunks(ArrayRef<OutputSection *> OutputSections);
 
   // The number of completed passes of createThunks this permits us
   // to do one time initialization on Pass 0 and put a limit on the
@@ -133,16 +134,16 @@ public:
 
 private:
   void mergeThunks();
-  ThunkSection *getOSThunkSec(OutputSectionCommand *Cmd,
+  ThunkSection *getOSThunkSec(OutputSection *Cmd,
                               std::vector<InputSection *> *ISR);
   ThunkSection *getISThunkSec(InputSection *IS, OutputSection *OS);
   void forEachExecInputSection(
-      ArrayRef<OutputSectionCommand *> OutputSections,
-      std::function<void(OutputSectionCommand *, std::vector<InputSection *> *,
+      ArrayRef<OutputSection *> OutputSections,
+      std::function<void(OutputSection *, std::vector<InputSection *> *,
                          InputSection *)>
           Fn);
   std::pair<Thunk *, bool> getThunk(SymbolBody &Body, uint32_t Type);
-  ThunkSection *addThunkSection(OutputSection *OS,
+  ThunkSection *addThunkSection(OutputSection *Cmd,
                                 std::vector<InputSection *> *, uint64_t Off);
   // Record all the available Thunks for a Symbol
   llvm::DenseMap<SymbolBody *, std::vector<Thunk *>> ThunkedSymbols;
@@ -178,7 +179,7 @@ template <class ELFT>
 static inline int64_t getAddend(const typename ELFT::Rela &Rel) {
   return Rel.r_addend;
 }
-}
-}
+} // namespace elf
+} // namespace lld
 
 #endif

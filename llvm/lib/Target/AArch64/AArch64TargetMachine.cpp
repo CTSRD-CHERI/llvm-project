@@ -161,6 +161,7 @@ extern "C" void LLVMInitializeAArch64Target() {
   initializeAArch64PromoteConstantPass(*PR);
   initializeAArch64RedundantCopyEliminationPass(*PR);
   initializeAArch64StorePairSuppressPass(*PR);
+  initializeFalkorHWPFFixPass(*PR);
   initializeFalkorMarkStridedAccessesLegacyPass(*PR);
   initializeLDTLSCleanupPass(*PR);
 }
@@ -186,7 +187,7 @@ static std::string computeDataLayout(const Triple &TT,
   if (TT.isOSBinFormatMachO())
     return "e-m:o-i64:64-i128:128-n32:64-S128";
   if (TT.isOSBinFormatCOFF())
-    return "e-m:w-i64:64-i128:128-n32:64-S128";
+    return "e-m:w-p:64:64-i32:32-i64:64-i128:128-n32:64-S128";
   if (LittleEndian)
     return "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128";
   return "E-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128";
@@ -205,20 +206,42 @@ static Reloc::Model getEffectiveRelocModel(const Triple &TT,
   return *RM;
 }
 
+static CodeModel::Model getEffectiveCodeModel(const Triple &TT,
+                                              Optional<CodeModel::Model> CM,
+                                              bool JIT) {
+  if (CM) {
+    if (*CM != CodeModel::Small && *CM != CodeModel::Large) {
+      if (!TT.isOSFuchsia())
+        report_fatal_error(
+            "Only small and large code models are allowed on AArch64");
+      else if (CM != CodeModel::Kernel)
+        report_fatal_error(
+            "Only small, kernel, and large code models are allowed on AArch64");
+    }
+    return *CM;
+  }
+  // The default MCJIT memory managers make no guarantees about where they can
+  // find an executable page; JITed code needs to be able to refer to globals
+  // no matter how far away they are.
+  if (JIT)
+    return CodeModel::Large;
+  return CodeModel::Small;
+}
+
 /// Create an AArch64 architecture model.
 ///
-AArch64TargetMachine::AArch64TargetMachine(
-    const Target &T, const Triple &TT, StringRef CPU, StringRef FS,
-    const TargetOptions &Options, Optional<Reloc::Model> RM,
-    CodeModel::Model CM, CodeGenOpt::Level OL, bool LittleEndian)
-    // This nested ternary is horrible, but DL needs to be properly
-    // initialized before TLInfo is constructed.
-    : LLVMTargetMachine(T, computeDataLayout(TT, Options.MCOptions,
-                                             LittleEndian),
-                        TT, CPU, FS, Options,
-			getEffectiveRelocModel(TT, RM), CM, OL),
-      TLOF(createTLOF(getTargetTriple())),
-      isLittle(LittleEndian) {
+AArch64TargetMachine::AArch64TargetMachine(const Target &T, const Triple &TT,
+                                           StringRef CPU, StringRef FS,
+                                           const TargetOptions &Options,
+                                           Optional<Reloc::Model> RM,
+                                           Optional<CodeModel::Model> CM,
+                                           CodeGenOpt::Level OL, bool JIT,
+                                           bool LittleEndian)
+    : LLVMTargetMachine(T,
+                        computeDataLayout(TT, Options.MCOptions, LittleEndian),
+                        TT, CPU, FS, Options, getEffectiveRelocModel(TT, RM),
+                        getEffectiveCodeModel(TT, CM, JIT), OL),
+      TLOF(createTLOF(getTargetTriple())), isLittle(LittleEndian) {
   initAsmInfo();
 }
 
@@ -253,16 +276,16 @@ void AArch64leTargetMachine::anchor() { }
 AArch64leTargetMachine::AArch64leTargetMachine(
     const Target &T, const Triple &TT, StringRef CPU, StringRef FS,
     const TargetOptions &Options, Optional<Reloc::Model> RM,
-    CodeModel::Model CM, CodeGenOpt::Level OL)
-    : AArch64TargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, true) {}
+    Optional<CodeModel::Model> CM, CodeGenOpt::Level OL, bool JIT)
+    : AArch64TargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, JIT, true) {}
 
 void AArch64beTargetMachine::anchor() { }
 
 AArch64beTargetMachine::AArch64beTargetMachine(
     const Target &T, const Triple &TT, StringRef CPU, StringRef FS,
     const TargetOptions &Options, Optional<Reloc::Model> RM,
-    CodeModel::Model CM, CodeGenOpt::Level OL)
-    : AArch64TargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, false) {}
+    Optional<CodeModel::Model> CM, CodeGenOpt::Level OL, bool JIT)
+    : AArch64TargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, JIT, false) {}
 
 namespace {
 
@@ -307,13 +330,11 @@ public:
   void addIRPasses()  override;
   bool addPreISel() override;
   bool addInstSelector() override;
-#ifdef LLVM_BUILD_GLOBAL_ISEL
   bool addIRTranslator() override;
   bool addLegalizeMachineIR() override;
   bool addRegBankSelect() override;
   void addPreGlobalInstructionSelect() override;
   bool addGlobalInstructionSelect() override;
-#endif
   bool addILPOpts() override;
   void addPreRegAlloc() override;
   void addPostRegAlloc() override;
@@ -409,7 +430,6 @@ bool AArch64PassConfig::addInstSelector() {
   return false;
 }
 
-#ifdef LLVM_BUILD_GLOBAL_ISEL
 bool AArch64PassConfig::addIRTranslator() {
   addPass(new IRTranslator());
   return false;
@@ -435,7 +455,6 @@ bool AArch64PassConfig::addGlobalInstructionSelect() {
   addPass(new InstructionSelect());
   return false;
 }
-#endif
 
 bool AArch64PassConfig::isGlobalISelEnabled() const {
   return TM->getOptLevel() <= EnableGlobalISelAtO;
@@ -486,8 +505,12 @@ void AArch64PassConfig::addPreSched2() {
   // Expand some pseudo instructions to allow proper scheduling.
   addPass(createAArch64ExpandPseudoPass());
   // Use load/store pair instructions when possible.
-  if (TM->getOptLevel() != CodeGenOpt::None && EnableLoadStoreOpt)
-    addPass(createAArch64LoadStoreOptimizationPass());
+  if (TM->getOptLevel() != CodeGenOpt::None) {
+    if (EnableLoadStoreOpt)
+      addPass(createAArch64LoadStoreOptimizationPass());
+    if (EnableFalkorHWPFFix)
+      addPass(createFalkorHWPFFixPass());
+  }
 }
 
 void AArch64PassConfig::addPreEmitPass() {

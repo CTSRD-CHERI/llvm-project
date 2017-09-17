@@ -24,7 +24,7 @@ namespace llvm {
 
 class AMDGPUMachineFunction;
 class AMDGPUSubtarget;
-class MachineRegisterInfo;
+struct ArgDescriptor;
 
 class AMDGPUTargetLowering : public TargetLowering {
 private:
@@ -171,6 +171,15 @@ public:
                       const SmallVectorImpl<ISD::OutputArg> &Outs,
                       const SmallVectorImpl<SDValue> &OutVals, const SDLoc &DL,
                       SelectionDAG &DAG) const override;
+
+  SDValue addTokenForArgument(SDValue Chain,
+                              SelectionDAG &DAG,
+                              MachineFrameInfo &MFI,
+                              int ClobberedFI) const;
+
+  SDValue lowerUnhandledCall(CallLoweringInfo &CLI,
+                             SmallVectorImpl<SDValue> &InVals,
+                             StringRef Reason) const;
   SDValue LowerCall(CallLoweringInfo &CLI,
                     SmallVectorImpl<SDValue> &InVals) const override;
 
@@ -237,6 +246,25 @@ public:
     return CreateLiveInRegister(DAG, RC, Reg, VT, SDLoc(DAG.getEntryNode()), true);
   }
 
+  /// Similar to CreateLiveInRegister, except value maybe loaded from a stack
+  /// slot rather than passed in a register.
+  SDValue loadStackInputValue(SelectionDAG &DAG,
+                              EVT VT,
+                              const SDLoc &SL,
+                              int64_t Offset) const;
+
+  SDValue storeStackInputValue(SelectionDAG &DAG,
+                               const SDLoc &SL,
+                               SDValue Chain,
+                               SDValue StackPtr,
+                               SDValue ArgVal,
+                               int64_t Offset) const;
+
+  SDValue loadInputValue(SelectionDAG &DAG,
+                         const TargetRegisterClass *RC,
+                         EVT VT, const SDLoc &SL,
+                         const ArgDescriptor &Arg) const;
+
   enum ImplicitParameter {
     FIRST_IMPLICIT,
     GRID_DIM = FIRST_IMPLICIT,
@@ -268,6 +296,7 @@ enum NodeType : unsigned {
 
   // Function call.
   CALL,
+  TC_RETURN,
   TRAP,
 
   // Masked control flow nodes.

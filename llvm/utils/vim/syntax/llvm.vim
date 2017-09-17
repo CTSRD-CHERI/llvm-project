@@ -144,6 +144,7 @@ syn keyword llvmKeyword
       \ ssp
       \ sspreq
       \ sspstrong
+      \ strictfp
       \ swiftcc
       \ tail
       \ target
@@ -161,7 +162,7 @@ syn keyword llvmKeyword
       \ within
       \ writeonly
       \ x86_64_sysvcc
-      \ x86_64_win64cc
+      \ win64cc
       \ x86_fastcallcc
       \ x86_stdcallcc
       \ x86_thiscallcc

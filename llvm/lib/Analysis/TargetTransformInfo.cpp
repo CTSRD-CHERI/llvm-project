@@ -144,9 +144,10 @@ bool TargetTransformInfo::isLegalAddressingMode(Type *Ty, GlobalValue *BaseGV,
                                                 int64_t BaseOffset,
                                                 bool HasBaseReg,
                                                 int64_t Scale,
-                                                unsigned AddrSpace) const {
+                                                unsigned AddrSpace,
+                                                Instruction *I) const {
   return TTIImpl->isLegalAddressingMode(Ty, BaseGV, BaseOffset, HasBaseReg,
-                                        Scale, AddrSpace);
+                                        Scale, AddrSpace, I);
 }
 
 bool TargetTransformInfo::isLSRCostLess(LSRCost &C1, LSRCost &C2) const {
@@ -166,7 +167,7 @@ bool TargetTransformInfo::isLegalMaskedGather(Type *DataType) const {
 }
 
 bool TargetTransformInfo::isLegalMaskedScatter(Type *DataType) const {
-  return TTIImpl->isLegalMaskedGather(DataType);
+  return TTIImpl->isLegalMaskedScatter(DataType);
 }
 
 bool TargetTransformInfo::prefersVectorizedAddressing() const {
@@ -184,9 +185,8 @@ int TargetTransformInfo::getScalingFactorCost(Type *Ty, GlobalValue *BaseGV,
   return Cost;
 }
 
-bool TargetTransformInfo::isFoldableMemAccessOffset(Instruction *I,
-                                                    int64_t Offset) const {
-  return TTIImpl->isFoldableMemAccessOffset(I, Offset);
+bool TargetTransformInfo::LSRWithInstrQueries() const {
+  return TTIImpl->LSRWithInstrQueries();
 }
 
 bool TargetTransformInfo::isTruncateFree(Type *Ty1, Type *Ty2) const {
@@ -467,9 +467,9 @@ int TargetTransformInfo::getAddressComputationCost(Type *Tp,
   return Cost;
 }
 
-int TargetTransformInfo::getReductionCost(unsigned Opcode, Type *Ty,
-                                          bool IsPairwiseForm) const {
-  int Cost = TTIImpl->getReductionCost(Opcode, Ty, IsPairwiseForm);
+int TargetTransformInfo::getArithmeticReductionCost(unsigned Opcode, Type *Ty,
+                                                    bool IsPairwiseForm) const {
+  int Cost = TTIImpl->getArithmeticReductionCost(Opcode, Ty, IsPairwiseForm);
   assert(Cost >= 0 && "TTI should not produce negative costs!");
   return Cost;
 }

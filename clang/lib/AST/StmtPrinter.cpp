@@ -836,6 +836,51 @@ void OMPClausePrinter::VisitOMPReductionClause(OMPReductionClause *Node) {
   }
 }
 
+void OMPClausePrinter::VisitOMPTaskReductionClause(
+    OMPTaskReductionClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "task_reduction(";
+    NestedNameSpecifier *QualifierLoc =
+        Node->getQualifierLoc().getNestedNameSpecifier();
+    OverloadedOperatorKind OOK =
+        Node->getNameInfo().getName().getCXXOverloadedOperator();
+    if (QualifierLoc == nullptr && OOK != OO_None) {
+      // Print reduction identifier in C format
+      OS << getOperatorSpelling(OOK);
+    } else {
+      // Use C++ format
+      if (QualifierLoc != nullptr)
+        QualifierLoc->print(OS, Policy);
+      OS << Node->getNameInfo();
+    }
+    OS << ":";
+    VisitOMPClauseList(Node, ' ');
+    OS << ")";
+  }
+}
+
+void OMPClausePrinter::VisitOMPInReductionClause(OMPInReductionClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "in_reduction(";
+    NestedNameSpecifier *QualifierLoc =
+        Node->getQualifierLoc().getNestedNameSpecifier();
+    OverloadedOperatorKind OOK =
+        Node->getNameInfo().getName().getCXXOverloadedOperator();
+    if (QualifierLoc == nullptr && OOK != OO_None) {
+      // Print reduction identifier in C format
+      OS << getOperatorSpelling(OOK);
+    } else {
+      // Use C++ format
+      if (QualifierLoc != nullptr)
+        QualifierLoc->print(OS, Policy);
+      OS << Node->getNameInfo();
+    }
+    OS << ":";
+    VisitOMPClauseList(Node, ' ');
+    OS << ")";
+  }
+}
+
 void OMPClausePrinter::VisitOMPLinearClause(OMPLinearClause *Node) {
   if (!Node->varlist_empty()) {
     OS << "linear";
@@ -1081,7 +1126,7 @@ void StmtPrinter::VisitOMPTaskwaitDirective(OMPTaskwaitDirective *Node) {
 }
 
 void StmtPrinter::VisitOMPTaskgroupDirective(OMPTaskgroupDirective *Node) {
-  Indent() << "#pragma omp taskgroup";
+  Indent() << "#pragma omp taskgroup ";
   PrintOMPExecutableDirective(Node);
 }
 
@@ -1846,7 +1891,8 @@ void StmtPrinter::VisitAtomicExpr(AtomicExpr *Node) {
   // AtomicExpr stores its subexpressions in a permuted order.
   PrintExpr(Node->getPtr());
   if (Node->getOp() != AtomicExpr::AO__c11_atomic_load &&
-      Node->getOp() != AtomicExpr::AO__atomic_load_n) {
+      Node->getOp() != AtomicExpr::AO__atomic_load_n &&
+      Node->getOp() != AtomicExpr::AO__opencl_atomic_load) {
     OS << ", ";
     PrintExpr(Node->getVal1());
   }
@@ -1860,7 +1906,8 @@ void StmtPrinter::VisitAtomicExpr(AtomicExpr *Node) {
     OS << ", ";
     PrintExpr(Node->getWeak());
   }
-  if (Node->getOp() != AtomicExpr::AO__c11_atomic_init) {
+  if (Node->getOp() != AtomicExpr::AO__c11_atomic_init &&
+      Node->getOp() != AtomicExpr::AO__opencl_atomic_init) {
     OS << ", ";
     PrintExpr(Node->getOrder());
   }

@@ -73,10 +73,12 @@
 
 using namespace llvm;
 
-static cl::opt<bool> PrintWholeRegMask(
-    "print-whole-regmask",
-    cl::desc("Print the full contents of regmask operands in IR dumps"),
-    cl::init(true), cl::Hidden);
+static cl::opt<int> PrintRegMaskNumRegs(
+    "print-regmask-num-regs",
+    cl::desc("Number of registers to limit to when "
+             "printing regmask operands in IR dumps. "
+             "unlimited = -1"),
+    cl::init(32), cl::Hidden);
 
 //===----------------------------------------------------------------------===//
 // MachineOperand Implementation
@@ -209,6 +211,19 @@ void MachineOperand::ChangeToFrameIndex(int Idx) {
 
   OpKind = MO_FrameIndex;
   setIndex(Idx);
+}
+
+void MachineOperand::ChangeToTargetIndex(unsigned Idx, int64_t Offset,
+                                         unsigned char TargetFlags) {
+  assert((!isReg() || !isTied()) &&
+         "Cannot change a tied operand into a FrameIndex");
+
+  removeRegFromUses();
+
+  OpKind = MO_TargetIndex;
+  setIndex(Idx);
+  setOffset(Offset);
+  setTargetFlags(TargetFlags);
 }
 
 /// ChangeToRegister - Replace this operand with a new register operand of
@@ -503,7 +518,8 @@ void MachineOperand::print(raw_ostream &OS, ModuleSlotTracker &MST,
       unsigned MaskWord = i / 32;
       unsigned MaskBit = i % 32;
       if (getRegMask()[MaskWord] & (1 << MaskBit)) {
-        if (PrintWholeRegMask || NumRegsEmitted <= 10) {
+        if (PrintRegMaskNumRegs < 0 ||
+            NumRegsEmitted <= static_cast<unsigned>(PrintRegMaskNumRegs)) {
           OS << " " << PrintReg(i, TRI);
           NumRegsEmitted++;
         }
@@ -578,10 +594,8 @@ bool MachinePointerInfo::isDereferenceable(unsigned Size, LLVMContext &C,
   if (BasePtr == nullptr)
     return false;
 
-  return isDereferenceableAndAlignedPointer(BasePtr, 1,
-                                            APInt(DL.getPointerSize(),
-                                                  Offset + Size),
-                                            DL);
+  return isDereferenceableAndAlignedPointer(
+      BasePtr, 1, APInt(DL.getPointerSizeInBits(), Offset + Size), DL);
 }
 
 /// getConstantPool - Return a MachinePointerInfo record that refers to the
@@ -606,8 +620,9 @@ MachinePointerInfo MachinePointerInfo::getGOT(MachineFunction &MF) {
 }
 
 MachinePointerInfo MachinePointerInfo::getStack(MachineFunction &MF,
-                                                int64_t Offset) {
-  return MachinePointerInfo(MF.getPSVManager().getStack(), Offset);
+                                                int64_t Offset,
+                                                uint8_t ID) {
+  return MachinePointerInfo(MF.getPSVManager().getStack(), Offset,ID);
 }
 
 MachineMemOperand::MachineMemOperand(MachinePointerInfo ptrinfo, Flags f,
@@ -1648,6 +1663,7 @@ bool MachineInstr::mayAlias(AliasAnalysis *AA, MachineInstr &Other,
                             bool UseTBAA) {
   const MachineFunction *MF = getParent()->getParent();
   const TargetInstrInfo *TII = MF->getSubtarget().getInstrInfo();
+  const MachineFrameInfo &MFI = MF->getFrameInfo();
 
   // If neither instruction stores to memory, they can't alias in any
   // meaningful way, even if they read from the same address.
@@ -1658,18 +1674,12 @@ bool MachineInstr::mayAlias(AliasAnalysis *AA, MachineInstr &Other,
   if (TII->areMemAccessesTriviallyDisjoint(*this, Other, AA))
     return false;
 
-  if (!AA)
-    return true;
-
   // FIXME: Need to handle multiple memory operands to support all targets.
   if (!hasOneMemOperand() || !Other.hasOneMemOperand())
     return true;
 
   MachineMemOperand *MMOa = *memoperands_begin();
   MachineMemOperand *MMOb = *Other.memoperands_begin();
-
-  if (!MMOa->getValue() || !MMOb->getValue())
-    return true;
 
   // The following interface to AA is fashioned after DAGCombiner::isAlias
   // and operates with MachineMemOperand offset with some important
@@ -1683,22 +1693,52 @@ bool MachineInstr::mayAlias(AliasAnalysis *AA, MachineInstr &Other,
   //   - There should never be any negative offsets here.
   //
   // FIXME: Modify API to hide this math from "user"
-  // FIXME: Even before we go to AA we can reason locally about some
+  // Even before we go to AA we can reason locally about some
   // memory objects. It can save compile time, and possibly catch some
   // corner cases not currently covered.
 
-  assert((MMOa->getOffset() >= 0) && "Negative MachineMemOperand offset");
-  assert((MMOb->getOffset() >= 0) && "Negative MachineMemOperand offset");
+  int64_t OffsetA = MMOa->getOffset();
+  int64_t OffsetB = MMOb->getOffset();
 
-  int64_t MinOffset = std::min(MMOa->getOffset(), MMOb->getOffset());
-  int64_t Overlapa = MMOa->getSize() + MMOa->getOffset() - MinOffset;
-  int64_t Overlapb = MMOb->getSize() + MMOb->getOffset() - MinOffset;
+  assert((OffsetA >= 0) && "Negative MachineMemOperand offset");
+  assert((OffsetB >= 0) && "Negative MachineMemOperand offset");
 
-  AliasResult AAResult =
-      AA->alias(MemoryLocation(MMOa->getValue(), Overlapa,
-                               UseTBAA ? MMOa->getAAInfo() : AAMDNodes()),
-                MemoryLocation(MMOb->getValue(), Overlapb,
-                               UseTBAA ? MMOb->getAAInfo() : AAMDNodes()));
+  int64_t MinOffset = std::min(OffsetA, OffsetB);
+  int64_t WidthA = MMOa->getSize();
+  int64_t WidthB = MMOb->getSize();
+  const Value *ValA = MMOa->getValue();
+  const Value *ValB = MMOb->getValue();
+  bool SameVal = (ValA && ValB && (ValA == ValB));
+  if (!SameVal) {
+    const PseudoSourceValue *PSVa = MMOa->getPseudoValue();
+    const PseudoSourceValue *PSVb = MMOb->getPseudoValue();
+    if (PSVa && PSVa->isConstant(&MFI))
+      return false;
+    if (PSVb && PSVb->isConstant(&MFI))
+      return false;
+    if (PSVa && PSVb && (PSVa == PSVb))
+      SameVal = true;
+  }
+
+  if (SameVal) {
+    int64_t MaxOffset = std::max(OffsetA, OffsetB);
+    int64_t LowWidth = (MinOffset == OffsetA) ? WidthA : WidthB;
+    return (MinOffset + LowWidth > MaxOffset);
+  }
+
+  if (!AA)
+    return true;
+
+  if (!ValA || !ValB)
+    return true;
+
+  int64_t Overlapa = WidthA + OffsetA - MinOffset;
+  int64_t Overlapb = WidthB + OffsetB - MinOffset;
+
+  AliasResult AAResult = AA->alias(
+      MemoryLocation(ValA, Overlapa, UseTBAA ? MMOa->getAAInfo() : AAMDNodes()),
+      MemoryLocation(ValB, Overlapb,
+                     UseTBAA ? MMOb->getAAInfo() : AAMDNodes()));
 
   return (AAResult != NoAlias);
 }
@@ -2330,8 +2370,8 @@ void MachineInstr::emitError(StringRef Msg) const {
 
 MachineInstrBuilder llvm::BuildMI(MachineFunction &MF, const DebugLoc &DL,
                                   const MCInstrDesc &MCID, bool IsIndirect,
-                                  unsigned Reg, unsigned Offset,
-                                  const MDNode *Variable, const MDNode *Expr) {
+                                  unsigned Reg, const MDNode *Variable,
+                                  const MDNode *Expr) {
   assert(isa<DILocalVariable>(Variable) && "not a variable");
   assert(cast<DIExpression>(Expr)->isValid() && "not an expression");
   assert(cast<DILocalVariable>(Variable)->isValidLocationForIntrinsic(DL) &&
@@ -2339,30 +2379,26 @@ MachineInstrBuilder llvm::BuildMI(MachineFunction &MF, const DebugLoc &DL,
   if (IsIndirect)
     return BuildMI(MF, DL, MCID)
         .addReg(Reg, RegState::Debug)
-        .addImm(Offset)
+        .addImm(0U)
         .addMetadata(Variable)
         .addMetadata(Expr);
-  else {
-    assert(Offset == 0 && "A direct address cannot have an offset.");
+  else
     return BuildMI(MF, DL, MCID)
         .addReg(Reg, RegState::Debug)
         .addReg(0U, RegState::Debug)
         .addMetadata(Variable)
         .addMetadata(Expr);
-  }
 }
 
 MachineInstrBuilder llvm::BuildMI(MachineBasicBlock &BB,
                                   MachineBasicBlock::iterator I,
                                   const DebugLoc &DL, const MCInstrDesc &MCID,
                                   bool IsIndirect, unsigned Reg,
-                                  unsigned Offset, const MDNode *Variable,
-                                  const MDNode *Expr) {
+                                  const MDNode *Variable, const MDNode *Expr) {
   assert(isa<DILocalVariable>(Variable) && "not a variable");
   assert(cast<DIExpression>(Expr)->isValid() && "not an expression");
   MachineFunction &MF = *BB.getParent();
-  MachineInstr *MI =
-      BuildMI(MF, DL, MCID, IsIndirect, Reg, Offset, Variable, Expr);
+  MachineInstr *MI = BuildMI(MF, DL, MCID, IsIndirect, Reg, Variable, Expr);
   BB.insert(I, MI);
   return MachineInstrBuilder(MF, MI);
 }
@@ -2374,7 +2410,8 @@ MachineInstr *llvm::buildDbgValueForSpill(MachineBasicBlock &BB,
   const MDNode *Var = Orig.getDebugVariable();
   const auto *Expr = cast_or_null<DIExpression>(Orig.getDebugExpression());
   bool IsIndirect = Orig.isIndirectDebugValue();
-  uint64_t Offset = IsIndirect ? Orig.getOperand(1).getImm() : 0;
+  if (IsIndirect)
+    assert(Orig.getOperand(1).getImm() == 0 && "DBG_VALUE with nonzero offset");
   DebugLoc DL = Orig.getDebugLoc();
   assert(cast<DILocalVariable>(Var)->isValidLocationForIntrinsic(DL) &&
          "Expected inlined-at fields to agree");
@@ -2385,7 +2422,7 @@ MachineInstr *llvm::buildDbgValueForSpill(MachineBasicBlock &BB,
     Expr = DIExpression::prepend(Expr, DIExpression::WithDeref);
   return BuildMI(BB, I, DL, Orig.getDesc())
       .addFrameIndex(FrameIndex)
-      .addImm(Offset)
+      .addImm(0U)
       .addMetadata(Var)
       .addMetadata(Expr);
 }

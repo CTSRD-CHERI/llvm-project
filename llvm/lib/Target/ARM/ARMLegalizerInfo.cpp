@@ -24,10 +24,6 @@
 
 using namespace llvm;
 
-#ifndef LLVM_BUILD_GLOBAL_ISEL
-#error "You shouldn't build this"
-#endif
-
 static bool AEABI(const ARMSubtarget &ST) {
   return ST.isTargetAEABI() || ST.isTargetGNUAEABI() || ST.isTargetMuslAEABI();
 }
@@ -43,6 +39,7 @@ ARMLegalizerInfo::ARMLegalizerInfo(const ARMSubtarget &ST) {
   const LLT s32 = LLT::scalar(32);
   const LLT s64 = LLT::scalar(64);
 
+  setAction({G_GLOBAL_VALUE, p0}, Legal);
   setAction({G_FRAME_INDEX, p0}, Legal);
 
   for (unsigned Op : {G_LOAD, G_STORE}) {
@@ -66,14 +63,16 @@ ARMLegalizerInfo::ARMLegalizerInfo(const ARMSubtarget &ST) {
       setAction({Op, s32}, Libcall);
   }
 
-  // FIXME: Support s8 and s16 as well
-  for (unsigned Op : {G_SREM, G_UREM})
+  for (unsigned Op : {G_SREM, G_UREM}) {
+    for (auto Ty : {s8, s16})
+      setAction({Op, Ty}, WidenScalar);
     if (ST.hasDivideInARMMode())
       setAction({Op, s32}, Lower);
     else if (AEABI(ST))
       setAction({Op, s32}, Custom);
     else
       setAction({Op, s32}, Libcall);
+  }
 
   for (unsigned Op : {G_SEXT, G_ZEXT}) {
     setAction({Op, s32}, Legal);

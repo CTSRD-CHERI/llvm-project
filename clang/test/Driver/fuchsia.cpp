@@ -7,6 +7,7 @@
 // CHECK: "-internal-isystem" "{{.*[/\\]}}x86_64-fuchsia{{/|\\\\}}include{{/|\\\\}}c++{{/|\\\\}}v1"
 // CHECK: "-internal-externc-isystem" "[[SYSROOT]]{{/|\\\\}}include"
 // CHECK: {{.*}}lld{{.*}}" "-flavor" "gnu"
+// CHECK: "-z" "rodynamic"
 // CHECK: "--sysroot=[[SYSROOT]]"
 // CHECK: "-pie"
 // CHECK: "--build-id"
@@ -27,8 +28,8 @@
 
 // RUN: %clangxx %s -### --target=x86_64-unknown-fuchsia -static-libstdc++ 2>&1 \
 // RUN:     | FileCheck %s -check-prefix=CHECK-STATIC
-// CHECK-STATIC: "-Bstatic"
+// CHECK-STATIC-NOT: "-Bstatic"
 // CHECK-STATIC: "-lc++" "-lc++abi" "-lunwind"
-// CHECK-STATIC: "-Bdynamic"
+// CHECK-STATIC-NOT: "-Bdynamic"
 // CHECK-STATIC: "-lm"
 // CHECK-STATIC: "-lc"

@@ -417,8 +417,10 @@ Value *InstCombiner::SimplifyDemandedUseBits(Value *V, APInt DemandedMask,
       // the highest demanded bit, we just return the other side.
       if (DemandedFromOps.isSubsetOf(RHSKnown.Zero))
         return I->getOperand(0);
-      // We can't do this with the LHS for subtraction.
-      if (I->getOpcode() == Instruction::Add &&
+      // We can't do this with the LHS for subtraction, unless we are only
+      // demanding the LSB.
+      if ((I->getOpcode() == Instruction::Add ||
+           DemandedFromOps.isOneValue()) &&
           DemandedFromOps.isSubsetOf(LHSKnown.Zero))
         return I->getOperand(1);
     }
@@ -525,20 +527,16 @@ Value *InstCombiner::SimplifyDemandedUseBits(Value *V, APInt DemandedMask,
       Known.Zero.lshrInPlace(ShiftAmt);
       Known.One.lshrInPlace(ShiftAmt);
 
-      // Handle the sign bits.
-      APInt SignMask(APInt::getSignMask(BitWidth));
-      // Adjust to where it is now in the mask.
-      SignMask.lshrInPlace(ShiftAmt);
-
       // If the input sign bit is known to be zero, or if none of the top bits
       // are demanded, turn this into an unsigned shift right.
-      if (BitWidth <= ShiftAmt || Known.Zero[BitWidth-ShiftAmt-1] ||
+      assert(BitWidth > ShiftAmt && "Shift amount not saturated?");
+      if (Known.Zero[BitWidth-ShiftAmt-1] ||
           !DemandedMask.intersects(HighBits)) {
         BinaryOperator *LShr = BinaryOperator::CreateLShr(I->getOperand(0),
                                                           I->getOperand(1));
         LShr->setIsExact(cast<BinaryOperator>(I)->isExact());
         return InsertNewInstWith(LShr, *I);
-      } else if (Known.One.intersects(SignMask)) { // New bits are known one.
+      } else if (Known.One[BitWidth-ShiftAmt-1]) { // New bits are known one.
         Known.One |= HighBits;
       }
     }

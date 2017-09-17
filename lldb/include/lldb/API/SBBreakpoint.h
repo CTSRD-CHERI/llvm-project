@@ -70,6 +70,10 @@ public:
 
   const char *GetCondition();
 
+  void SetAutoContinue(bool auto_continue);
+
+  bool GetAutoContinue();
+
   void SetThreadID(lldb::tid_t sb_thread_id);
 
   lldb::tid_t GetThreadID();
@@ -154,9 +158,9 @@ public:
 
   SBBreakpoint FindBreakpointByID(lldb::break_id_t);
 
-  void Append(const SBBreakpoint &sb_file);
+  void Append(const SBBreakpoint &sb_bkpt);
 
-  bool AppendIfUnique(const SBBreakpoint &sb_file);
+  bool AppendIfUnique(const SBBreakpoint &sb_bkpt);
 
   void AppendByID(lldb::break_id_t id);
 

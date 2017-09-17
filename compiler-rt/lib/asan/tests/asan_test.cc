@@ -13,6 +13,17 @@
 #include "asan_test_utils.h"
 
 #include <errno.h>
+#include <stdarg.h>
+
+#ifdef _LIBCPP_GET_C_LOCALE
+#define SANITIZER_GET_C_LOCALE _LIBCPP_GET_C_LOCALE
+#else
+#if defined(__FreeBSD__)
+#define SANITIZER_GET_C_LOCALE 0
+#elif defined(__NetBSD__)
+#define SANITIZER_GET_C_LOCALE LC_C_LOCALE
+#endif
+#endif
 
 NOINLINE void *malloc_fff(size_t size) {
   void *res = malloc/**/(size); break_optimization(0); return res;}
@@ -82,13 +93,6 @@ TEST(AddressSanitizer, VariousMallocsTest) {
   EXPECT_EQ(0, pm_res);
   EXPECT_NE(nullptr, pm);
   free(pm);
-
-  // Alignment is not a power of 2.
-  EXPECT_DEATH(posix_memalign(&pm, 3, kPageSize),
-               "allocator is terminating the process instead of returning 0");
-  // Alignment is a power of 2, but not a multiple of size(void *).
-  EXPECT_DEATH(posix_memalign(&pm, 2, kPageSize),
-               "allocator is terminating the process instead of returning 0");
 #endif  // SANITIZER_TEST_HAS_POSIX_MEMALIGN
 
 #if SANITIZER_TEST_HAS_MEMALIGN
@@ -96,9 +100,6 @@ TEST(AddressSanitizer, VariousMallocsTest) {
   EXPECT_EQ(0U, (uintptr_t)ma % kPageSize);
   ma[123] = 0;
   free(ma);
-
-  EXPECT_DEATH(memalign(3, kPageSize),
-               "allocator is terminating the process instead of returning 0");
 #endif  // SANITIZER_TEST_HAS_MEMALIGN
 }
 
@@ -1338,19 +1339,18 @@ static int vsnprintf_l_wrapper(char *s, size_t n,
 TEST(AddressSanitizer, snprintf_l) {
   char buff[5];
   // Check that snprintf_l() works fine with Asan.
-  int res = snprintf_l(buff, 5,
-                       _LIBCPP_GET_C_LOCALE, "%s", "snprintf_l()");
+  int res = snprintf_l(buff, 5, SANITIZER_GET_C_LOCALE, "%s", "snprintf_l()");
   EXPECT_EQ(12, res);
   // Check that vsnprintf_l() works fine with Asan.
-  res = vsnprintf_l_wrapper(buff, 5,
-                            _LIBCPP_GET_C_LOCALE, "%s", "vsnprintf_l()");
+  res = vsnprintf_l_wrapper(buff, 5, SANITIZER_GET_C_LOCALE, "%s",
+                            "vsnprintf_l()");
   EXPECT_EQ(13, res);
 
-  EXPECT_DEATH(snprintf_l(buff, 10,
-                          _LIBCPP_GET_C_LOCALE, "%s", "snprintf_l()"),
-                "AddressSanitizer: stack-buffer-overflow");
-  EXPECT_DEATH(vsnprintf_l_wrapper(buff, 10,
-                                  _LIBCPP_GET_C_LOCALE, "%s", "vsnprintf_l()"),
-                "AddressSanitizer: stack-buffer-overflow");
+  EXPECT_DEATH(
+      snprintf_l(buff, 10, SANITIZER_GET_C_LOCALE, "%s", "snprintf_l()"),
+      "AddressSanitizer: stack-buffer-overflow");
+  EXPECT_DEATH(vsnprintf_l_wrapper(buff, 10, SANITIZER_GET_C_LOCALE, "%s",
+                                   "vsnprintf_l()"),
+               "AddressSanitizer: stack-buffer-overflow");
 }
 #endif

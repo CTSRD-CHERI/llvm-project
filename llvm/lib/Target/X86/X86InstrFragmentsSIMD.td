@@ -698,17 +698,20 @@ def alignedstore512 : PatFrag<(ops node:$val, node:$ptr),
 
 // Like 'load', but always requires 128-bit vector alignment.
 def alignedload : PatFrag<(ops node:$ptr), (load node:$ptr), [{
-  return cast<LoadSDNode>(N)->getAlignment() >= 16;
+  return cast<LoadSDNode>(N)->getAlignment() >= 16 &&
+         (!Subtarget->hasSSE41() || !cast<LoadSDNode>(N)->isNonTemporal());
 }]>;
 
 // Like 'load', but always requires 256-bit vector alignment.
 def alignedload256 : PatFrag<(ops node:$ptr), (load node:$ptr), [{
-  return cast<LoadSDNode>(N)->getAlignment() >= 32;
+  return cast<LoadSDNode>(N)->getAlignment() >= 32 &&
+         (!Subtarget->hasAVX2() || !cast<LoadSDNode>(N)->isNonTemporal());
 }]>;
 
 // Like 'load', but always requires 512-bit vector alignment.
 def alignedload512 : PatFrag<(ops node:$ptr), (load node:$ptr), [{
-  return cast<LoadSDNode>(N)->getAlignment() >= 64;
+  return cast<LoadSDNode>(N)->getAlignment() >= 64 &&
+         (!Subtarget->hasAVX512() || !cast<LoadSDNode>(N)->isNonTemporal());
 }]>;
 
 // 128-bit aligned load pattern fragments
@@ -1135,9 +1138,4 @@ def masked_truncstore_s_vi32 : PatFrag<(ops node:$src1, node:$src2, node:$src3),
 def masked_truncstore_us_vi32 : PatFrag<(ops node:$src1, node:$src2, node:$src3),
                                (X86MTruncUSStore node:$src1, node:$src2, node:$src3), [{
   return cast<MaskedTruncUSStoreSDNode>(N)->getMemoryVT().getScalarType() == MVT::i32;
-}]>;
-
-def assertzext_i1 :
-  PatFrag<(ops node:$src), (assertzext node:$src), [{
-    return cast<VTSDNode>(N->getOperand(1))->getVT() == MVT::i1;
 }]>;

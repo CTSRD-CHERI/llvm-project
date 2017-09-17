@@ -66,7 +66,7 @@ public:
 
 template <class T>
 Tagged<typename std::decay<T>::type> make_tagged(T &&Value, VFSTag Tag) {
-  return Tagged<T>(std::forward<T>(Value), Tag);
+  return Tagged<typename std::decay<T>::type>(std::forward<T>(Value), Tag);
 }
 
 class DiagnosticsConsumer {
@@ -101,38 +101,70 @@ public:
 
 class ClangdServer;
 
-/// Handles running WorkerRequests of ClangdServer on a separate threads.
-/// Currently runs only one worker thread.
+/// Returns a number of a default async threads to use for ClangdScheduler.
+/// Returned value is always >= 1 (i.e. will not cause requests to be processed
+/// synchronously).
+unsigned getDefaultAsyncThreadsCount();
+
+/// Handles running WorkerRequests of ClangdServer on a number of worker
+/// threads.
 class ClangdScheduler {
 public:
-  ClangdScheduler(bool RunSynchronously);
+  /// If \p AsyncThreadsCount is 0, requests added using addToFront and addToEnd
+  /// will be processed synchronously on the calling thread.
+  // Otherwise, \p AsyncThreadsCount threads will be created to schedule the
+  // requests.
+  ClangdScheduler(unsigned AsyncThreadsCount);
   ~ClangdScheduler();
 
-  /// Add \p Request to the start of the queue. \p Request will be run on a
-  /// separate worker thread.
-  /// \p Request is scheduled to be executed before all currently added
-  /// requests.
-  void addToFront(std::function<void()> Request);
-  /// Add \p Request to the end of the queue. \p Request will be run on a
-  /// separate worker thread.
-  /// \p Request is scheduled to be executed after all currently added
-  /// requests.
-  void addToEnd(std::function<void()> Request);
+  /// Add a new request to run function \p F with args \p As to the start of the
+  /// queue. The request will be run on a separate thread.
+  template <class Func, class... Args>
+  void addToFront(Func &&F, Args &&... As) {
+    if (RunSynchronously) {
+      std::forward<Func>(F)(std::forward<Args>(As)...);
+      return;
+    }
+
+    {
+      std::lock_guard<std::mutex> Lock(Mutex);
+      RequestQueue.push_front(std::async(std::launch::deferred,
+                                         std::forward<Func>(F),
+                                         std::forward<Args>(As)...));
+    }
+    RequestCV.notify_one();
+  }
+
+  /// Add a new request to run function \p F with args \p As to the end of the
+  /// queue. The request will be run on a separate thread.
+  template <class Func, class... Args> void addToEnd(Func &&F, Args &&... As) {
+    if (RunSynchronously) {
+      std::forward<Func>(F)(std::forward<Args>(As)...);
+      return;
+    }
+
+    {
+      std::lock_guard<std::mutex> Lock(Mutex);
+      RequestQueue.push_back(std::async(std::launch::deferred,
+                                        std::forward<Func>(F),
+                                        std::forward<Args>(As)...));
+    }
+    RequestCV.notify_one();
+  }
 
 private:
   bool RunSynchronously;
   std::mutex Mutex;
-  /// We run some tasks on a separate thread(parsing, ClangdUnit cleanup).
-  /// This thread looks into RequestQueue to find requests to handle and
-  /// terminates when Done is set to true.
-  std::thread Worker;
-  /// Setting Done to true will make the worker thread terminate.
+  /// We run some tasks on separate threads(parsing, CppFile cleanup).
+  /// These threads looks into RequestQueue to find requests to handle and
+  /// terminate when Done is set to true.
+  std::vector<std::thread> Workers;
+  /// Setting Done to true will make the worker threads terminate.
   bool Done = false;
-  /// A queue of requests.
-  /// FIXME(krasimir): code completion should always have priority over parsing
-  /// for diagnostics.
-  std::deque<std::function<void()>> RequestQueue;
-  /// Condition variable to wake up the worker thread.
+  /// A queue of requests. Elements of this vector are async computations (i.e.
+  /// results of calling std::async(std::launch::deferred, ...)).
+  std::deque<std::future<void>> RequestQueue;
+  /// Condition variable to wake up worker threads.
   std::condition_variable RequestCV;
 };
 
@@ -141,44 +173,52 @@ private:
 /// diagnostics for tracked files).
 class ClangdServer {
 public:
-  /// Creates a new ClangdServer. If \p RunSynchronously is false, no worker
-  /// thread will be created and all requests will be completed synchronously on
-  /// the calling thread (this is mostly used for tests). If \p RunSynchronously
-  /// is true, a worker thread will be created to parse files in the background
-  /// and provide diagnostics results via DiagConsumer.onDiagnosticsReady
-  /// callback. File accesses for each instance of parsing will be conducted via
-  /// a vfs::FileSystem provided by \p FSProvider. Results of code
-  /// completion/diagnostics also include a tag, that \p FSProvider returns
-  /// along with the vfs::FileSystem.
-  /// When \p ResourceDir is set, it will be used to search for internal headers
+  /// Creates a new ClangdServer. To server parsing requests ClangdScheduler,
+  /// that spawns \p AsyncThreadsCount worker threads will be created (when \p
+  /// AsyncThreadsCount is 0, requests will be processed on the calling thread).
+  /// instance of parsing will be conducted via a vfs::FileSystem provided by \p
+  /// FSProvider. Results of code completion/diagnostics also include a tag,
+  /// that \p FSProvider returns along with the vfs::FileSystem. When \p
+  /// ResourceDir is set, it will be used to search for internal headers
   /// (overriding defaults and -resource-dir compiler flag, if set). If \p
   /// ResourceDir is None, ClangdServer will attempt to set it to a standard
   /// location, obtained via CompilerInvocation::GetResourcePath.
   ClangdServer(GlobalCompilationDatabase &CDB,
                DiagnosticsConsumer &DiagConsumer,
-               FileSystemProvider &FSProvider, bool RunSynchronously,
+               FileSystemProvider &FSProvider, unsigned AsyncThreadsCount,
                llvm::Optional<StringRef> ResourceDir = llvm::None);
 
   /// Add a \p File to the list of tracked C++ files or update the contents if
   /// \p File is already tracked. Also schedules parsing of the AST for it on a
   /// separate thread. When the parsing is complete, DiagConsumer passed in
   /// constructor will receive onDiagnosticsReady callback.
-  void addDocument(PathRef File, StringRef Contents);
+  /// \return A future that will become ready when the rebuild (including
+  /// diagnostics) is finished.
+  std::future<void> addDocument(PathRef File, StringRef Contents);
   /// Remove \p File from list of tracked files, schedule a request to free
   /// resources associated with it.
-  void removeDocument(PathRef File);
+  /// \return A future that will become ready when the file is removed and all
+  /// associated resources are freed.
+  std::future<void> removeDocument(PathRef File);
   /// Force \p File to be reparsed using the latest contents.
-  void forceReparse(PathRef File);
+  /// Will also check if CompileCommand, provided by GlobalCompilationDatabase
+  /// for \p File has changed. If it has, will remove currently stored Preamble
+  /// and AST and rebuild them from scratch.
+  std::future<void> forceReparse(PathRef File);
 
   /// Run code completion for \p File at \p Pos. If \p OverridenContents is not
   /// None, they will used only for code completion, i.e. no diagnostics update
   /// will be scheduled and a draft for \p File will not be updated.
   /// If \p OverridenContents is None, contents of the current draft for \p File
   /// will be used.
-  /// This method should only be called for currently tracked files.
+  /// If \p UsedFS is non-null, it will be overwritten by vfs::FileSystem used
+  /// for completion.
+  /// This method should only be called for currently tracked
+  /// files.
   Tagged<std::vector<CompletionItem>>
   codeComplete(PathRef File, Position Pos,
-               llvm::Optional<StringRef> OverridenContents = llvm::None);
+               llvm::Optional<StringRef> OverridenContents = llvm::None,
+               IntrusiveRefCntPtr<vfs::FileSystem> *UsedFS = nullptr);
   /// Get definition of symbol at a specified \p Line and \p Column in \p File.
   Tagged<std::vector<Location>> findDefinitions(PathRef File, Position Pos);
 
@@ -201,11 +241,18 @@ public:
   std::string dumpAST(PathRef File);
 
 private:
+  std::future<void>
+  scheduleReparseAndDiags(PathRef File, VersionedDraft Contents,
+                          std::shared_ptr<CppFile> Resources,
+                          Tagged<IntrusiveRefCntPtr<vfs::FileSystem>> TaggedFS);
+
+  std::future<void> scheduleCancelRebuild(std::shared_ptr<CppFile> Resources);
+
   GlobalCompilationDatabase &CDB;
   DiagnosticsConsumer &DiagConsumer;
   FileSystemProvider &FSProvider;
   DraftStore DraftMgr;
-  ClangdUnitStore Units;
+  CppFileCollection Units;
   std::string ResourceDir;
   std::shared_ptr<PCHContainerOperations> PCHs;
   // WorkScheduler has to be the last member, because its destructor has to be

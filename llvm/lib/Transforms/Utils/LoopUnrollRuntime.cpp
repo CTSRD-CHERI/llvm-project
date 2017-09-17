@@ -294,7 +294,8 @@ static void ConnectEpilog(Loop *L, Value *ModVal, BasicBlock *NewExit,
 /// Return the new cloned loop that is created when CreateRemainderLoop is true.
 static Loop *
 CloneLoopBlocks(Loop *L, Value *NewIter, const bool CreateRemainderLoop,
-                const bool UseEpilogRemainder, BasicBlock *InsertTop,
+                const bool UseEpilogRemainder, const bool UnrollRemainder,
+                BasicBlock *InsertTop,
                 BasicBlock *InsertBot, BasicBlock *Preheader,
                 std::vector<BasicBlock *> &NewBlocks, LoopBlocksDFS &LoopBlocks,
                 ValueToValueMapTy &VMap, DominatorTree *DT, LoopInfo *LI) {
@@ -413,10 +414,13 @@ CloneLoopBlocks(Loop *L, Value *NewIter, const bool CreateRemainderLoop,
     }
 
     LLVMContext &Context = NewLoop->getHeader()->getContext();
-    SmallVector<Metadata *, 1> DisableOperands;
-    DisableOperands.push_back(MDString::get(Context, "llvm.loop.unroll.disable"));
-    MDNode *DisableNode = MDNode::get(Context, DisableOperands);
-    MDs.push_back(DisableNode);
+    if (!UnrollRemainder) {
+      SmallVector<Metadata *, 1> DisableOperands;
+      DisableOperands.push_back(MDString::get(Context,
+                                              "llvm.loop.unroll.disable"));
+      MDNode *DisableNode = MDNode::get(Context, DisableOperands);
+      MDs.push_back(DisableNode);
+    }
 
     MDNode *NewLoopID = MDNode::get(Context, MDs);
     // Set operand 0 to refer to the loop id itself.
@@ -435,12 +439,9 @@ canSafelyUnrollMultiExitLoop(Loop *L, SmallVectorImpl<BasicBlock *> &OtherExits,
                              BasicBlock *LatchExit, bool PreserveLCSSA,
                              bool UseEpilogRemainder) {
 
-  // Support runtime unrolling for multiple exit blocks and multiple exiting
-  // blocks.
-  if (!UnrollRuntimeMultiExit)
-    return false;
-  // Even if runtime multi exit is enabled, we currently have some correctness
-  // constrains in unrolling a multi-exit loop.
+  // We currently have some correctness constrains in unrolling a multi-exit
+  // loop. Check for these below.
+
   // We rely on LCSSA form being preserved when the exit blocks are transformed.
   if (!PreserveLCSSA)
     return false;
@@ -470,7 +471,22 @@ canSafelyUnrollMultiExitLoop(Loop *L, SmallVectorImpl<BasicBlock *> &OtherExits,
   return true;
 }
 
+/// Returns true if we can profitably unroll the multi-exit loop L. Currently,
+/// we return true only if UnrollRuntimeMultiExit is set to true.
+static bool canProfitablyUnrollMultiExitLoop(
+    Loop *L, SmallVectorImpl<BasicBlock *> &OtherExits, BasicBlock *LatchExit,
+    bool PreserveLCSSA, bool UseEpilogRemainder) {
 
+#if !defined(NDEBUG)
+  SmallVector<BasicBlock *, 8> OtherExitsDummyCheck;
+  assert(canSafelyUnrollMultiExitLoop(L, OtherExitsDummyCheck, LatchExit,
+                                      PreserveLCSSA, UseEpilogRemainder) &&
+         "Should be safe to unroll before checking profitability!");
+#endif
+  // Priority goes to UnrollRuntimeMultiExit if it's supplied.
+  return UnrollRuntimeMultiExit.getNumOccurrences() ? UnrollRuntimeMultiExit
+                                                    : false;
+}
 
 /// Insert code in the prolog/epilog code when unrolling a loop with a
 /// run-time trip-count.
@@ -513,8 +529,11 @@ canSafelyUnrollMultiExitLoop(Loop *L, SmallVectorImpl<BasicBlock *> &OtherExits,
 bool llvm::UnrollRuntimeLoopRemainder(Loop *L, unsigned Count,
                                       bool AllowExpensiveTripCount,
                                       bool UseEpilogRemainder,
+                                      bool UnrollRemainder,
                                       LoopInfo *LI, ScalarEvolution *SE,
-                                      DominatorTree *DT, bool PreserveLCSSA) {
+                                      DominatorTree *DT, AssumptionCache *AC,
+                                      OptimizationRemarkEmitter *ORE,
+                                      bool PreserveLCSSA) {
   DEBUG(dbgs() << "Trying runtime unrolling on Loop: \n");
   DEBUG(L->dump());
 
@@ -538,8 +557,11 @@ bool llvm::UnrollRuntimeLoopRemainder(Loop *L, unsigned Count,
          "one of the loop latch successors should be the exit block!");
   // These are exit blocks other than the target of the latch exiting block.
   SmallVector<BasicBlock *, 4> OtherExits;
-  bool isMultiExitUnrollingEnabled = canSafelyUnrollMultiExitLoop(
-      L, OtherExits, LatchExit, PreserveLCSSA, UseEpilogRemainder);
+  bool isMultiExitUnrollingEnabled =
+      canSafelyUnrollMultiExitLoop(L, OtherExits, LatchExit, PreserveLCSSA,
+                                   UseEpilogRemainder) &&
+      canProfitablyUnrollMultiExitLoop(L, OtherExits, LatchExit, PreserveLCSSA,
+                                       UseEpilogRemainder);
   // Support only single exit and exiting block unless multi-exit loop unrolling is enabled.
   if (!isMultiExitUnrollingEnabled &&
       (!L->getExitingBlock() || OtherExits.size())) {
@@ -724,7 +746,8 @@ bool llvm::UnrollRuntimeLoopRemainder(Loop *L, unsigned Count,
   BasicBlock *InsertBot = UseEpilogRemainder ? LatchExit : PrologExit;
   BasicBlock *InsertTop = UseEpilogRemainder ? EpilogPreHeader : PrologPreHeader;
   Loop *remainderLoop = CloneLoopBlocks(
-      L, ModVal, CreateRemainderLoop, UseEpilogRemainder, InsertTop, InsertBot,
+      L, ModVal, CreateRemainderLoop, UseEpilogRemainder, UnrollRemainder,
+      InsertTop, InsertBot,
       NewPreHeader, NewBlocks, LoopBlocks, VMap, DT, LI);
 
   // Insert the cloned blocks into the function.
@@ -866,6 +889,15 @@ bool llvm::UnrollRuntimeLoopRemainder(Loop *L, unsigned Count,
     // preserve LoopSimplifyForm.
     if (remainderLoop)
       formDedicatedExitBlocks(remainderLoop, DT, LI, PreserveLCSSA);
+  }
+
+  if (remainderLoop && UnrollRemainder) {
+    UnrollLoop(remainderLoop, /*Count*/Count - 1, /*TripCount*/Count - 1,
+               /*Force*/false, /*AllowRuntime*/false,
+               /*AllowExpensiveTripCount*/false, /*PreserveCondBr*/true,
+               /*PreserveOnlyFirst*/false, /*TripMultiple*/1,
+               /*PeelCount*/0, /*UnrollRemainder*/false, LI, SE, DT, AC, ORE,
+               PreserveLCSSA);
   }
 
   NumRuntimeUnrolled++;

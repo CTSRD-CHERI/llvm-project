@@ -82,6 +82,7 @@ struct Configuration {
   SymbolBody *Entry = nullptr;
   bool NoEntry = false;
   std::string OutputFile;
+  std::string ImportName;
   bool ColorDiagnostics;
   bool DoGC = true;
   bool DoICF = true;
@@ -129,7 +130,7 @@ struct Configuration {
   std::map<StringRef, uint32_t> Section;
 
   // Options for manifest files.
-  ManifestKind Manifest = SideBySide;
+  ManifestKind Manifest = No;
   int ManifestID = 1;
   StringRef ManifestDependency;
   bool ManifestUAC = true;
@@ -137,6 +138,9 @@ struct Configuration {
   StringRef ManifestLevel = "'asInvoker'";
   StringRef ManifestUIAccess = "'false'";
   StringRef ManifestFile;
+
+  // Used for /aligncomm.
+  std::map<std::string, int> AlignComm;
 
   // Used for /failifmismatch.
   std::map<StringRef, StringRef> MustMatch;
