@@ -5543,7 +5543,7 @@ static void HandleAddressSpaceTypeAttribute(QualType &Type,
   // If this type is already address space qualified, reject it.
   // ISO/IEC TR 18037 S5.3 (amending C99 6.7.3): "No type shall be qualified by
   // qualifiers for two or more different address spaces."
-  if (Type.getAddressSpace()) {
+  if (!Type.isInAddressSpace(LangAS::Default)) {
     S.Diag(Attr.getLoc(), diag::err_attribute_address_multiple_qualifiers);
     Attr.setInvalid();
     return;
@@ -7147,7 +7147,7 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
   // Pointers that are declared without pointing to a named address space point
   // to the generic address space.
   if (state.getSema().getLangOpts().OpenCLVersion >= 200 &&
-      !hasOpenCLAddressSpace && type.getAddressSpace() == 0 &&
+      !hasOpenCLAddressSpace && type.isInAddressSpace(LangAS::Default) &&
       (TAL == TAL_DeclSpec || TAL == TAL_DeclChunk)) {
     Declarator &D = state.getDeclarator();
     if (state.getCurrentChunkIndex() > 0 &&

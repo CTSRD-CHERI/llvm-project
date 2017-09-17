@@ -3108,7 +3108,7 @@ Address CodeGenFunction::EmitArrayToPointerDecay(const Expr *E,
       assert(PtrTy->getPointerAddressSpace() == 
                         CGM.getTargetCodeGenInfo().getCHERICapabilityAS() &&
              "Expected memory capability address space in pure capability ABI");
-      assert(E->getType().getAddressSpace() == 0 &&
+      assert(E->getType().isInAddressSpace(LangAS::Default) &&
              "non-zero address space in pure capability ABI");
       return Addr;
     } else

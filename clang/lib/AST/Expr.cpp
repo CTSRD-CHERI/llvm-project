@@ -3269,7 +3269,7 @@ Expr::isNullPointerConstant(ASTContext &Ctx,
         // and should be ignored.
         bool IsASValid = true;
         if (Ctx.getLangOpts().OpenCLVersion >= 200) {
-          if (Pointee.getAddressSpace() == LangAS::opencl_generic)
+          if (Pointee.isInAddressSpace(LangAS::opencl_generic))
             Q.removeAddressSpace();
           else
             IsASValid = false;

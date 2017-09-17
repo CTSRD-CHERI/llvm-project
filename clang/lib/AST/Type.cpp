@@ -72,7 +72,7 @@ bool QualType::isConstant(QualType T, const ASTContext &Ctx) {
   if (const ArrayType *AT = Ctx.getAsArrayType(T))
     return AT->getElementType().isConstant(Ctx);
 
-  return T.getAddressSpace() == LangAS::opencl_constant;
+  return T.isInAddressSpace(LangAS::opencl_constant);
 }
 
 unsigned ConstantArrayType::getNumAddressingBits(const ASTContext &Context,

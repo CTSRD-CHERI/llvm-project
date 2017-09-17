@@ -597,7 +597,7 @@ static void GenOpenCLArgMetadata(const FunctionDecl *FD, llvm::Function *Fn,
       if (ty.isRestrictQualified())
         typeQuals = "restrict";
       if (pointeeTy.isConstQualified() ||
-          (pointeeTy.getAddressSpace() == LangAS::opencl_constant))
+          (pointeeTy.isInAddressSpace(LangAS::opencl_constant)))
         typeQuals += typeQuals.empty() ? "const" : " const";
       if (pointeeTy.isVolatileQualified())
         typeQuals += typeQuals.empty() ? "volatile" : " volatile";

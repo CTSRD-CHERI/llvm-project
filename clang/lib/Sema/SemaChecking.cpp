@@ -793,8 +793,8 @@ static bool SemaOpenCLBuiltinToAddr(Sema &S, unsigned BuiltinID,
   }
 
   auto RT = Call->getArg(0)->getType();
-  if (!RT->isPointerType() || RT->getPointeeType()
-      .getAddressSpace() == LangAS::opencl_constant) {
+  if (!RT->isPointerType() ||
+      RT->getPointeeType().isInAddressSpace(LangAS::opencl_constant)) {
     S.Diag(Call->getLocStart(), diag::err_opencl_builtin_to_addr_invalid_arg)
         << Call->getArg(0) << Call->getDirectCallee() << Call->getSourceRange();
     return true;
@@ -3060,7 +3060,7 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
       return ExprError();
     }
     if (AtomTy.isConstQualified() ||
-        AtomTy.getAddressSpace() == LangAS::opencl_constant) {
+        AtomTy.isInAddressSpace(LangAS::opencl_constant)) {
       Diag(DRE->getLocStart(), diag::err_atomic_op_needs_non_const_atomic)
           << (AtomTy.isConstQualified() ? 0 : 1) << Ptr->getType()
           << Ptr->getSourceRange();

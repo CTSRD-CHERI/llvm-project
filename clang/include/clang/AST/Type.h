@@ -1018,6 +1018,10 @@ public:
   /// Return the address space of this type.
   inline unsigned getAddressSpace() const;
 
+  inline bool isInAddressSpace(LangAS::ID AddrSpace) const {
+    return getAddressSpace() == AddrSpace;
+  }
+
   /// Returns gc attribute of this type.
   inline Qualifiers::GC getObjCGCAttr() const;
 
