@@ -2649,10 +2649,9 @@ CharUnits CodeGenModule::GetTargetTypeStoreSize(llvm::Type *Ty) const {
 }
 
 unsigned CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D) {
-  unsigned AddrSpace = getAddressSpaceForType(D->getType());
   if (LangOpts.OpenCL) {
-    AddrSpace = D ? D->getType().getAddressSpace()
-                  : static_cast<unsigned>(LangAS::opencl_global);
+    unsigned AddrSpace = D ? D->getType().getAddressSpace()
+                           : static_cast<unsigned>(LangAS::opencl_global);
     assert(AddrSpace == LangAS::opencl_global ||
            AddrSpace == LangAS::opencl_constant ||
            AddrSpace == LangAS::opencl_local ||
@@ -2677,7 +2676,7 @@ unsigned CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D) {
     unsigned CapAS = getTargetCodeGenInfo().getCHERICapabilityAS();
     if (Target.areAllPointersCapabilities()) { // Pure ABI
       return (D && (D->getTLSKind() != VarDecl::TLS_None)) ? 0 : CapAS;
-    } else if (AddrSpace == CapAS) { // Hybrid ABI
+    } else if (D && getAddressSpaceForType(D->getType()) == CapAS) { // Hybrid ABI
       return 0;
     }
   }
