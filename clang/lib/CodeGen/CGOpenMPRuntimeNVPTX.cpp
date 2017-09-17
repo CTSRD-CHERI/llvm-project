@@ -1503,7 +1503,7 @@ static llvm::Value *emitInterWarpCopyFunction(CodeGenModule &CGM,
       M.getGlobalVariable(TransferMediumName);
   if (!TransferMedium) {
     auto *Ty = llvm::ArrayType::get(CGM.Int64Ty, WarpSize);
-    unsigned SharedAddressSpace = C.getTargetAddressSpace(LangAS::cuda_shared);
+    unsigned SharedAddressSpace = CGM.getTargetAddressSpace(LangAS::cuda_shared);
     TransferMedium = new llvm::GlobalVariable(
         M, Ty,
         /*isConstant=*/false, llvm::GlobalVariable::CommonLinkage,

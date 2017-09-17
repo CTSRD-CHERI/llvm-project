@@ -2207,7 +2207,7 @@ void CXXNameMangler::mangleQualifiers(Qualifiers Quals) {
 
     if (Context.getASTContext().addressSpaceMapManglingFor(AS)) {
       //  <target-addrspace> ::= "AS" <address-space-number>
-      unsigned TargetAS = Context.getASTContext().getTargetAddressSpace(AS);
+      unsigned TargetAS = Context.getASTContext().getTargetAddressSpace(AS, nullptr);
       ASString = "AS" + llvm::utostr(TargetAS);
     } else {
       switch (AS) {

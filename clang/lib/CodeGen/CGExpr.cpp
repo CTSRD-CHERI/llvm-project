@@ -72,7 +72,7 @@ Address CodeGenFunction::CreateTempAlloca(llvm::Type *Ty, CharUnits Align,
   // in C++ the auto variables are in the default address space. Therefore
   // cast alloca to the default address space when necessary.
   if (CastToDefaultAddrSpace && getASTAllocaAddressSpace() != LangAS::Default) {
-    auto DestAddrSpace = getContext().getTargetAddressSpace(LangAS::Default);
+    auto DestAddrSpace = CGM.getTargetAddressSpace(LangAS::Default);
     auto CurIP = Builder.saveIP();
     Builder.SetInsertPoint(AllocaInsertPt);
     V = getTargetHooks().performAddrSpaceCast(
@@ -363,7 +363,7 @@ static Address createReferenceTemporary(CodeGenFunction &CGF,
               CGF.CGM.getModule(), Init->getType(), /*isConstant=*/true,
               llvm::GlobalValue::PrivateLinkage, Init, ".ref.tmp", nullptr,
               llvm::GlobalValue::NotThreadLocal,
-              CGF.getContext().getTargetAddressSpace(AS));
+              CGF.CGM.getTargetAddressSpace((LangAS::ID)AS));
           CharUnits alignment = CGF.getContext().getTypeAlignInChars(Ty);
           GV->setAlignment(alignment.getQuantity());
           llvm::Constant *C = GV;
@@ -371,7 +371,7 @@ static Address createReferenceTemporary(CodeGenFunction &CGF,
             C = TCG.performAddrSpaceCast(
                 CGF.CGM, GV, AS, LangAS::Default,
                 GV->getValueType()->getPointerTo(
-                    CGF.getContext().getTargetAddressSpace(LangAS::Default)));
+                    CGF.CGM.getTargetAddressSpace(LangAS::Default)));
           // FIXME: Should we put the new global into a COMDAT?
           return Address(C, alignment);
         }
@@ -3101,7 +3101,7 @@ Address CodeGenFunction::EmitArrayToPointerDecay(const Expr *E,
 
   // FIXME-cheri-qual: should getTargetAddressSpace return 200? 
   unsigned AS =
-    getContext().getTargetAddressSpace(E->getType().getAddressSpace(nullptr));
+    CGM.getTargetAddressSpace((LangAS::ID)E->getType().getAddressSpace(nullptr));
   llvm::PointerType *PtrTy = cast<llvm::PointerType>(Addr.getPointer()->getType());
   if (PtrTy->getPointerAddressSpace() != AS) {
     if (getContext().getTargetInfo().areAllPointersCapabilities()) {

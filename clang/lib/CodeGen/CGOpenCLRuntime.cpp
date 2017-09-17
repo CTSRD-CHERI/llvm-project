@@ -35,7 +35,7 @@ llvm::Type *CGOpenCLRuntime::convertOpenCLSpecificType(const Type *T) {
          "Not an OpenCL specific type!");
 
   llvm::LLVMContext& Ctx = CGM.getLLVMContext();
-  uint32_t AddrSpc = CGM.getContext().getTargetAddressSpace(
+  uint32_t AddrSpc = CGM.getTargetAddressSpace(
       CGM.getTarget().getOpenCLTypeAddrSpace(T));
   switch (cast<BuiltinType>(T)->getKind()) {
   default:
@@ -66,7 +66,7 @@ llvm::Type *CGOpenCLRuntime::convertOpenCLSpecificType(const Type *T) {
 
 llvm::Type *CGOpenCLRuntime::getPipeType(const PipeType *T) {
   if (!PipeTy){
-    uint32_t PipeAddrSpc = CGM.getContext().getTargetAddressSpace(
+    uint32_t PipeAddrSpc = CGM.getTargetAddressSpace(
         CGM.getTarget().getOpenCLTypeAddrSpace(T));
     PipeTy = llvm::PointerType::get(llvm::StructType::create(
       CGM.getLLVMContext(), "opencl.pipe_t"), PipeAddrSpc);
@@ -79,7 +79,7 @@ llvm::PointerType *CGOpenCLRuntime::getSamplerType(const Type *T) {
   if (!SamplerTy)
     SamplerTy = llvm::PointerType::get(llvm::StructType::create(
       CGM.getLLVMContext(), "opencl.sampler_t"),
-      CGM.getContext().getTargetAddressSpace(
+      CGM.getTargetAddressSpace(
           CGM.getTarget().getOpenCLTypeAddrSpace(T)));
   return SamplerTy;
 }

@@ -223,7 +223,7 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
 
   llvm::Type *LTy = getTypes().ConvertTypeForMem(Ty);
   unsigned AS = GetGlobalVarAddressSpace(&D);
-  unsigned TargetAS = getContext().getTargetAddressSpace(AS);
+  unsigned TargetAS = getTargetAddressSpace((LangAS::ID)AS);
 
   // Local address space cannot have an initializer.
   llvm::Constant *Init = nullptr;
@@ -257,7 +257,7 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
   if (AS != ExpectedAS) {
     Addr = getTargetCodeGenInfo().performAddrSpaceCast(
         *this, GV, AS, ExpectedAS,
-        LTy->getPointerTo(getContext().getTargetAddressSpace(ExpectedAS)));
+        LTy->getPointerTo(getTargetAddressSpace((LangAS::ID)ExpectedAS)));
   }
 
   setStaticLocalDeclAddress(&D, Addr);
@@ -1308,7 +1308,7 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
     std::string Name = getStaticDeclName(CGM, D);
     unsigned AS = AddrSpace;
     if (getLangOpts().OpenCL) {
-      AS = CGM.getContext().getTargetAddressSpace(LangAS::opencl_constant);
+      AS = CGM.getTargetAddressSpace(LangAS::opencl_constant);
       BP = llvm::PointerType::getInt8PtrTy(getLLVMContext(), AS);
     }
     llvm::GlobalVariable *GV =

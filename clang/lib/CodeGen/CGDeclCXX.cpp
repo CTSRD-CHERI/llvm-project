@@ -167,9 +167,7 @@ void CodeGenFunction::EmitCXXGlobalVarDeclInit(const VarDecl &D,
   // "shared" address space qualifier, but the constructor of StructWithCtor
   // expects "this" in the "generic" address space.
   ASTContext &Context = getContext();
-  unsigned ExpectedAddrSpace = Context.getTargetInfo().areAllPointersCapabilities()
-                               ? CGM.getTargetCodeGenInfo().getCHERICapabilityAS()
-                               : Context.getTargetAddressSpace(T.getQualifiers());
+  unsigned ExpectedAddrSpace = CGM.getAddressSpaceForType(T);
   unsigned ActualAddrSpace = DeclPtr->getType()->getPointerAddressSpace();
   if (ActualAddrSpace != ExpectedAddrSpace) {
     llvm::Type *LTy = CGM.getTypes().ConvertTypeForMem(T);

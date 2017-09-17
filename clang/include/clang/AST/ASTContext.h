@@ -2380,16 +2380,16 @@ public:
                                              QualType typeDomain) const;
 
 private:
-  unsigned getTargetAddressSpace(QualType T) const {
-    return getTargetAddressSpace(T.getQualifiers());
+  unsigned getTargetAddressSpace(QualType T, void* dummy) const {
+    return getTargetAddressSpace(T.getQualifiers(), dummy);
   }
 
 public:
-  unsigned getTargetAddressSpace(Qualifiers Q) const {
-    return getTargetAddressSpace(Q.getAddressSpace());
+  unsigned getTargetAddressSpace(Qualifiers Q, void* dummy) const {
+    return getTargetAddressSpace(Q.getAddressSpace(), dummy);
   }
 
-  unsigned getTargetAddressSpace(unsigned AS) const;
+  unsigned getTargetAddressSpace(unsigned AS, void* dummy) const;
 
   /// Get target-dependent integer value for null pointer which is used for
   /// constant folding.

@@ -291,6 +291,13 @@ unsigned CodeGenModule::getAddressSpaceForType(QualType T) {
     return getTargetCodeGenInfo().getAddressSpaceForType(T, getContext());
 }
 
+unsigned CodeGenModule::getTargetAddressSpace(LangAS::ID AddrSpace) {
+  // XXXAR: Hack for cheri not using LangAS
+  if (AddrSpace == LangAS::Default)
+    return getTargetCodeGenInfo().getDefaultAS();
+  return getContext().getTargetAddressSpace(AddrSpace, nullptr);
+}
+
 void CodeGenModule::checkAliases() {
   // Check if the constructed aliases are well formed. It is really unfortunate
   // that we have to do this in CodeGen, but we only construct mangled names
@@ -2394,7 +2401,7 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
   }
 
   auto AddrSpace = GetGlobalVarAddressSpace(D);
-  auto TargetAddrSpace = getContext().getTargetAddressSpace(AddrSpace);
+  auto TargetAddrSpace = getTargetAddressSpace((LangAS::ID)AddrSpace);
 
   auto *GV = new llvm::GlobalVariable(
       getModule(), Ty->getElementType(), false,
@@ -2598,11 +2605,7 @@ llvm::Constant *CodeGenModule::GetAddrOfGlobalVar(const VarDecl *D,
   if (!Ty)
     Ty = getTypes().ConvertTypeForMem(ASTTy);
 
-  ASTContext &C = getContext();
-   // XXXAR: add another parameter to avoid all these ternary expressions
-  unsigned AS = C.getTargetInfo().areAllPointersCapabilities() 
-                ? getTargetCodeGenInfo().getCHERICapabilityAS()
-                : C.getTargetAddressSpace(ASTTy.getQualifiers());
+  unsigned AS = getAddressSpaceForType(ASTTy);
   llvm::PointerType *PTy = llvm::PointerType::get(Ty, AS);
 
   StringRef MangledName = getMangledName(D);
@@ -2674,6 +2677,7 @@ unsigned CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D) {
     // FIXME-cheri-qual: We currently can't handle thread-local storage
     unsigned CapAS = getTargetCodeGenInfo().getCHERICapabilityAS();
     if (Target.areAllPointersCapabilities()) { // Pure ABI
+      // FIXME: should TLS always be AS 0?
       return (D && (D->getTLSKind() != VarDecl::TLS_None)) ? 0 : CapAS;
     } else if (D && getAddressSpaceForType(D->getType()) == CapAS) { // Hybrid ABI
       return 0;
@@ -2848,7 +2852,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
   // from the type of the global (this happens with unions).
   if (!GV || GV->getType()->getElementType() != InitType ||
       GV->getType()->getAddressSpace() !=
-          getContext().getTargetAddressSpace(GetGlobalVarAddressSpace(D))) {
+          getTargetAddressSpace((LangAS::ID)GetGlobalVarAddressSpace(D))) {
 
     // Move the old entry aside so that we'll create a new one.
     Entry->setName(StringRef());
@@ -3688,7 +3692,7 @@ GenerateStringLiteral(llvm::Constant *C, llvm::GlobalValue::LinkageTypes LT,
   // OpenCL v1.2 s6.5.3: a string literal is in the constant address space.
   unsigned AddrSpace = 0;
   if (CGM.getLangOpts().OpenCL)
-    AddrSpace = CGM.getContext().getTargetAddressSpace(LangAS::opencl_constant);
+    AddrSpace = CGM.getTargetAddressSpace(LangAS::opencl_constant);
   else
     AddrSpace = CGM.getTargetCodeGenInfo().getDefaultAS();
 
@@ -3876,7 +3880,7 @@ ConstantAddress CodeGenModule::GetAddrOfGlobalTemporary(
       Linkage = llvm::GlobalVariable::InternalLinkage;
     }
   }
-  auto TargetAS = getContext().getTargetAddressSpace(AddrSpace);
+  auto TargetAS = getTargetAddressSpace((LangAS::ID)AddrSpace);
   auto *GV = new llvm::GlobalVariable(
       getModule(), Type, Constant, Linkage, InitialValue, Name.c_str(),
       /*InsertBefore=*/nullptr, llvm::GlobalVariable::NotThreadLocal, TargetAS);
@@ -3891,8 +3895,7 @@ ConstantAddress CodeGenModule::GetAddrOfGlobalTemporary(
   if (AddrSpace != LangAS::Default)
     CV = getTargetCodeGenInfo().performAddrSpaceCast(
         *this, GV, AddrSpace, LangAS::Default,
-        Type->getPointerTo(
-            getContext().getTargetAddressSpace(LangAS::Default)));
+        Type->getPointerTo(getTargetAddressSpace(LangAS::Default)));
   MaterializedGlobalTemporaryMap[E] = CV;
   return ConstantAddress(CV, Align);
 }

@@ -639,6 +639,8 @@ public:
   
   unsigned getAddressSpaceForType(QualType T);
 
+  unsigned getTargetAddressSpace(LangAS::ID AddrSpace);
+
   CodeGenTypes &getTypes() { return Types; }
  
   CodeGenVTables &getVTables() { return VTables; }

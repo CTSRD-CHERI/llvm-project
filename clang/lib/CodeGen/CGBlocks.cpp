@@ -91,7 +91,7 @@ static llvm::Constant *buildBlockDescriptor(CodeGenModule &CGM,
   if (CGM.getLangOpts().OpenCL)
     i8p = 
       llvm::Type::getInt8PtrTy(
-           CGM.getLLVMContext(), C.getTargetAddressSpace(LangAS::opencl_constant));
+           CGM.getLLVMContext(), CGM.getTargetAddressSpace(LangAS::opencl_generic));
   else
     i8p = CGM.VoidPtrTy;
 
@@ -134,7 +134,7 @@ static llvm::Constant *buildBlockDescriptor(CodeGenModule &CGM,
 
   unsigned AddrSpace = CGM.getTargetCodeGenInfo().getDefaultAS();
   if (C.getLangOpts().OpenCL)
-    AddrSpace = C.getTargetAddressSpace(LangAS::opencl_constant);
+    AddrSpace = CGM.getTargetAddressSpace(LangAS::opencl_generic);
 
   llvm::GlobalVariable *global =
     elements.finishAndCreateGlobal("__block_descriptor_tmp",
@@ -982,7 +982,7 @@ llvm::Type *CodeGenModule::getBlockDescriptorType() {
   // Now form a pointer to that.
   unsigned AddrSpace = getTargetCodeGenInfo().getDefaultAS();
   if (getLangOpts().OpenCL)
-    AddrSpace = getContext().getTargetAddressSpace(LangAS::opencl_constant);
+    AddrSpace = getTargetAddressSpace(LangAS::opencl_constant);
   BlockDescriptorType = llvm::PointerType::get(BlockDescriptorType, AddrSpace);
   return BlockDescriptorType;
 }
@@ -1021,7 +1021,7 @@ RValue CodeGenFunction::EmitBlockCallExpr(const CallExpr *E,
   // variables.
   unsigned AddrSpace = CGM.getTargetCodeGenInfo().getDefaultAS();
   if (getLangOpts().OpenCL)
-    AddrSpace = getContext().getTargetAddressSpace(LangAS::opencl_generic);
+    AddrSpace = CGM.getTargetAddressSpace(LangAS::opencl_generic);
 
   llvm::Type *BlockLiteralTy =
       llvm::PointerType::get(CGM.getGenericBlockLiteralType(), AddrSpace);
@@ -1042,7 +1042,7 @@ RValue CodeGenFunction::EmitBlockCallExpr(const CallExpr *E,
   llvm::Type *GenericVoidPtrTy = VoidPtrTy;
   if (getLangOpts().OpenCL) {
     GenericVoidPtrTy = Builder.getInt8PtrTy(
-        getContext().getTargetAddressSpace(LangAS::opencl_generic));
+        CGM.getTargetAddressSpace(LangAS::opencl_generic));
     VoidPtrQualTy =
         getContext().getPointerType(getContext().getAddrSpaceQualType(
             getContext().VoidTy, LangAS::opencl_generic));
@@ -1181,7 +1181,7 @@ static llvm::Constant *buildGlobalBlock(CodeGenModule &CGM,
 
   unsigned AddrSpace = 0;
   if (CGM.getContext().getLangOpts().OpenCL)
-    AddrSpace = CGM.getContext().getTargetAddressSpace(LangAS::opencl_global);
+    AddrSpace = CGM.getTargetAddressSpace(LangAS::opencl_global);
 
   llvm::Constant *literal = fields.finishAndCreateGlobal(
       "__block_literal_global", blockInfo.BlockAlign,
@@ -1228,8 +1228,8 @@ void CodeGenFunction::setBlockContextParameter(const ImplicitParamDecl *D,
       arg,
       BlockInfo->StructureType->getPointerTo(
           getContext().getLangOpts().OpenCL
-              ? getContext().getTargetAddressSpace(LangAS::opencl_generic)
-              :  CGM.getTargetCodeGenInfo().getDefaultAS()),
+              ? CGM.getTargetAddressSpace(LangAS::opencl_generic)
+              : CGM.getTargetCodeGenInfo().getDefaultAS()),
       "block");
 }
 

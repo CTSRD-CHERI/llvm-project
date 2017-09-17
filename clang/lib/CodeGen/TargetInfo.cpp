@@ -462,7 +462,7 @@ unsigned TargetCodeGenInfo::getAddressSpaceForType(QualType DestTy,
   if (DestTy->isCHERICapabilityType(Context)) {
     return getCHERICapabilityAS();
   }
-  unsigned AS = Context.getTargetAddressSpace(DestTy.getQualifiers());
+  unsigned AS = Context.getTargetAddressSpace(DestTy.getQualifiers(), nullptr);
   if (AS == 0)
     AS = getDefaultAS();
   return AS;
@@ -476,7 +476,7 @@ llvm::Value *TargetCodeGenInfo::getPointerAddress(CodeGen::CodeGenFunction &CGF,
 }
 
 bool TargetCodeGenInfo::canMarkAsNonNull(QualType DestTy, ASTContext& Context) const {
-  unsigned AS = Context.getTargetAddressSpace(DestTy.getQualifiers());
+  unsigned AS = Context.getTargetAddressSpace(DestTy.getQualifiers(), nullptr);
   if (AS == 0)
     return true;
   return false;
@@ -7969,10 +7969,9 @@ llvm::Constant *AMDGPUTargetCodeGenInfo::getNullPointer(
     QualType QT) const {
   if (CGM.getContext().getTargetNullPointerValue(QT) == 0)
     return llvm::ConstantPointerNull::get(PT);
-
-  auto &Ctx = CGM.getContext();
+  // XXXAR: FIXME: remove const_cast here
   auto NPT = llvm::PointerType::get(PT->getElementType(),
-      Ctx.getTargetAddressSpace(LangAS::opencl_generic));
+      const_cast<CodeGen::CodeGenModule &>(CGM).getTargetAddressSpace(LangAS::opencl_generic));
   return llvm::ConstantExpr::getAddrSpaceCast(
       llvm::ConstantPointerNull::get(NPT), PT);
 }
@@ -7985,7 +7984,7 @@ AMDGPUTargetCodeGenInfo::getGlobalVarAddressSpace(CodeGenModule &CGM,
          "Address space agnostic languages only");
   unsigned DefaultGlobalAS =
       LangAS::FirstTargetAddressSpace +
-      CGM.getContext().getTargetAddressSpace(LangAS::opencl_global);
+      CGM.getTargetAddressSpace(LangAS::opencl_global);
   if (!D)
     return DefaultGlobalAS;
 

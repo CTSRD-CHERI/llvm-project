@@ -961,7 +961,7 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
       auto AS = PT->getAs<PointerType>()->getPointeeType().getAddressSpace(nullptr);
       if (AS == LangAS::opencl_generic)
         return V;
-      auto DestAS = getContext().getTargetAddressSpace(LangAS::opencl_generic);
+      auto DestAS = CGM.getTargetAddressSpace(LangAS::opencl_generic);
       auto T = V->getType();
       auto *DestType = T->getPointerElementType()->getPointerTo(DestAS);
 
