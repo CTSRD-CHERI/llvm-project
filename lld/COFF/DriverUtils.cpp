@@ -32,12 +32,11 @@
 #include "llvm/Support/Process.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/WindowsManifest/WindowsManifestMerger.h"
 #include <memory>
 
 using namespace llvm::COFF;
 using namespace llvm;
-using llvm::cl::ExpandResponseFiles;
-using llvm::cl::TokenizeWindowsCommandLine;
 using llvm::sys::Process;
 
 namespace lld {
@@ -58,7 +57,7 @@ public:
   void run() {
     ErrorOr<std::string> ExeOrErr = sys::findProgramByName(Prog);
     if (auto EC = ExeOrErr.getError())
-      fatal(EC, "unable to find " + Prog + " in PATH: ");
+      fatal(EC, "unable to find " + Prog + " in PATH");
     StringRef Exe = Saver.save(*ExeOrErr);
     Args.insert(Args.begin(), Exe);
 
@@ -328,16 +327,9 @@ public:
 };
 }
 
-// Create the default manifest file as a temporary file.
-TemporaryFile createDefaultXml() {
-  // Create a temporary file.
-  TemporaryFile File("defaultxml", "manifest");
-
-  // Open the temporary file for writing.
-  std::error_code EC;
-  raw_fd_ostream OS(File.Path, EC, sys::fs::F_Text);
-  if (EC)
-    fatal(EC, "failed to open " + File.Path);
+static std::string createDefaultXml() {
+  std::string Ret;
+  raw_string_ostream OS(Ret);
 
   // Emit the XML. Note that we do *not* verify that the XML attributes are
   // syntactically correct. This is intentional for link.exe compatibility.
@@ -362,37 +354,66 @@ TemporaryFile createDefaultXml() {
        << "  </dependency>\n";
   }
   OS << "</assembly>\n";
+  return OS.str();
+}
+
+static std::string createManifestXmlWithInternalMt(StringRef DefaultXml) {
+  std::unique_ptr<MemoryBuffer> DefaultXmlCopy =
+      MemoryBuffer::getMemBufferCopy(DefaultXml);
+
+  windows_manifest::WindowsManifestMerger Merger;
+  if (auto E = Merger.merge(*DefaultXmlCopy.get()))
+    fatal(E, "internal manifest tool failed on default xml");
+
+  for (StringRef Filename : Config->ManifestInput) {
+    std::unique_ptr<MemoryBuffer> Manifest =
+        check(MemoryBuffer::getFile(Filename));
+    if (auto E = Merger.merge(*Manifest.get()))
+      fatal(E, "internal manifest tool failed on file " + Filename);
+  }
+
+  return Merger.getMergedManifest().get()->getBuffer();
+}
+
+static std::string createManifestXmlWithExternalMt(StringRef DefaultXml) {
+  // Create the default manifest file as a temporary file.
+  TemporaryFile Default("defaultxml", "manifest");
+  std::error_code EC;
+  raw_fd_ostream OS(Default.Path, EC, sys::fs::F_Text);
+  if (EC)
+    fatal(EC, "failed to open " + Default.Path);
+  OS << DefaultXml;
   OS.close();
-  return File;
-}
 
-static std::string readFile(StringRef Path) {
-  std::unique_ptr<MemoryBuffer> MB =
-      check(MemoryBuffer::getFile(Path), "could not open " + Path);
-  return MB->getBuffer();
-}
-
-static std::string createManifestXml() {
-  // Create the default manifest file.
-  TemporaryFile File1 = createDefaultXml();
-  if (Config->ManifestInput.empty())
-    return readFile(File1.Path);
-
-  // If manifest files are supplied by the user using /MANIFESTINPUT
-  // option, we need to merge them with the default manifest.
-  TemporaryFile File2("user", "manifest");
+  // Merge user-supplied manifests if they are given.  Since libxml2 is not
+  // enabled, we must shell out to Microsoft's mt.exe tool.
+  TemporaryFile User("user", "manifest");
 
   Executor E("mt.exe");
   E.add("/manifest");
-  E.add(File1.Path);
+  E.add(Default.Path);
   for (StringRef Filename : Config->ManifestInput) {
     E.add("/manifest");
     E.add(Filename);
   }
   E.add("/nologo");
-  E.add("/out:" + StringRef(File2.Path));
+  E.add("/out:" + StringRef(User.Path));
   E.run();
-  return readFile(File2.Path);
+
+  return check(MemoryBuffer::getFile(User.Path), "could not open " + User.Path)
+      .get()
+      ->getBuffer();
+}
+
+static std::string createManifestXml() {
+  std::string DefaultXml = createDefaultXml();
+  if (Config->ManifestInput.empty())
+    return DefaultXml;
+
+  if (windows_manifest::isAvailable())
+    return createManifestXmlWithInternalMt(DefaultXml);
+
+  return createManifestXmlWithExternalMt(DefaultXml);
 }
 
 static std::unique_ptr<MemoryBuffer>
@@ -667,7 +688,7 @@ void runMSVCLinker(std::string Rsp, ArrayRef<StringRef> Objects) {
 #undef PREFIX
 
 // Create table mapping all options defined in Options.td
-static const llvm::opt::OptTable::Info infoTable[] = {
+static const llvm::opt::OptTable::Info InfoTable[] = {
 #define OPTION(X1, X2, ID, KIND, GROUP, ALIAS, X7, X8, X9, X10, X11, X12)      \
   {X1, X2, X10,         X11,         OPT_##ID, llvm::opt::Option::KIND##Class, \
    X9, X8, OPT_##GROUP, OPT_##ALIAS, X7,       X12},
@@ -675,26 +696,42 @@ static const llvm::opt::OptTable::Info infoTable[] = {
 #undef OPTION
 };
 
-class COFFOptTable : public llvm::opt::OptTable {
-public:
-  COFFOptTable() : OptTable(infoTable, true) {}
-};
+COFFOptTable::COFFOptTable() : OptTable(InfoTable, true) {}
+
+static cl::TokenizerCallback getQuotingStyle(opt::InputArgList &Args) {
+  if (auto *Arg = Args.getLastArg(OPT_rsp_quoting)) {
+    StringRef S = Arg->getValue();
+    if (S != "windows" && S != "posix")
+      error("invalid response file quoting: " + S);
+    if (S == "windows")
+      return cl::TokenizeWindowsCommandLine;
+    return cl::TokenizeGNUCommandLine;
+  }
+  // The COFF linker always defaults to Windows quoting.
+  return cl::TokenizeWindowsCommandLine;
+}
 
 // Parses a given list of options.
-opt::InputArgList ArgParser::parse(ArrayRef<const char *> ArgsArr) {
-  // First, replace respnose files (@<file>-style options).
-  std::vector<const char *> Argv = replaceResponseFiles(ArgsArr);
-
+opt::InputArgList ArgParser::parse(ArrayRef<const char *> Argv) {
   // Make InputArgList from string vectors.
-  COFFOptTable Table;
   unsigned MissingIndex;
   unsigned MissingCount;
-  opt::InputArgList Args = Table.ParseArgs(Argv, MissingIndex, MissingCount);
+  SmallVector<const char *, 256> Vec(Argv.data(), Argv.data() + Argv.size());
+
+  // We need to get the quoting style for response files before parsing all
+  // options so we parse here before and ignore all the options but
+  // --rsp-quoting.
+  opt::InputArgList Args = Table.ParseArgs(Vec, MissingIndex, MissingCount);
+
+  // Expand response files (arguments in the form of @<filename>)
+  // and then parse the argument again.
+  cl::ExpandResponseFiles(Saver, getQuotingStyle(Args), Vec);
+  Args = Table.ParseArgs(Vec, MissingIndex, MissingCount);
 
   // Print the real command line if response files are expanded.
-  if (Args.hasArg(OPT_verbose) && ArgsArr.size() != Argv.size()) {
+  if (Args.hasArg(OPT_verbose) && Argv.size() != Vec.size()) {
     std::string Msg = "Command line:";
-    for (const char *S : Argv)
+    for (const char *S : Vec)
       Msg += " " + std::string(S);
     message(Msg);
   }
@@ -709,31 +746,22 @@ opt::InputArgList ArgParser::parse(ArrayRef<const char *> ArgsArr) {
 // link.exe has an interesting feature. If LINK or _LINK_ environment
 // variables exist, their contents are handled as command line strings.
 // So you can pass extra arguments using them.
-opt::InputArgList ArgParser::parseLINK(std::vector<const char *> Args) {
+opt::InputArgList ArgParser::parseLINK(std::vector<const char *> Argv) {
   // Concatenate LINK env and command line arguments, and then parse them.
   if (Optional<std::string> S = Process::GetEnv("LINK")) {
     std::vector<const char *> V = tokenize(*S);
-    Args.insert(Args.begin(), V.begin(), V.end());
+    Argv.insert(Argv.begin(), V.begin(), V.end());
   }
   if (Optional<std::string> S = Process::GetEnv("_LINK_")) {
     std::vector<const char *> V = tokenize(*S);
-    Args.insert(Args.begin(), V.begin(), V.end());
+    Argv.insert(Argv.begin(), V.begin(), V.end());
   }
-  return parse(Args);
+  return parse(Argv);
 }
 
 std::vector<const char *> ArgParser::tokenize(StringRef S) {
   SmallVector<const char *, 16> Tokens;
   cl::TokenizeWindowsCommandLine(S, Saver, Tokens);
-  return std::vector<const char *>(Tokens.begin(), Tokens.end());
-}
-
-// Creates a new command line by replacing options starting with '@'
-// character. '@<filename>' is replaced by the file's contents.
-std::vector<const char *>
-ArgParser::replaceResponseFiles(std::vector<const char *> Argv) {
-  SmallVector<const char *, 256> Tokens(Argv.data(), Argv.data() + Argv.size());
-  ExpandResponseFiles(Saver, TokenizeWindowsCommandLine, Tokens);
   return std::vector<const char *>(Tokens.begin(), Tokens.end());
 }
 

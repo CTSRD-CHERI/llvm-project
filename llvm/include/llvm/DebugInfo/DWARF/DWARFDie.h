@@ -123,6 +123,10 @@ public:
   void dump(raw_ostream &OS, unsigned recurseDepth, unsigned indent = 0,
             DIDumpOptions DumpOpts = DIDumpOptions()) const;
 
+
+  /// Convenience zero-argument overload for debugging.
+  LLVM_DUMP_METHOD void dump() const;
+
   /// Extract the specified attribute from this DIE.
   ///
   /// Extract an attribute value from this DIE only. This call doesn't look
@@ -302,6 +306,10 @@ inline bool operator==(const DWARFDie &LHS, const DWARFDie &RHS) {
 
 inline bool operator!=(const DWARFDie &LHS, const DWARFDie &RHS) {
   return !(LHS == RHS);
+}
+
+inline bool operator<(const DWARFDie &LHS, const DWARFDie &RHS) {
+  return LHS.getOffset() < RHS.getOffset();
 }
 
 class DWARFDie::iterator : public iterator_facade_base<iterator,

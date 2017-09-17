@@ -65,6 +65,8 @@ public:
         for (auto &C : CS->captures()) {
           if (C.capturesVariable() || C.capturesVariableByCopy()) {
             auto *VD = C.getCapturedVar();
+            assert(VD == VD->getCanonicalDecl() &&
+                        "Canonical decl must be captured.");
             DeclRefExpr DRE(const_cast<VarDecl *>(VD),
                             isCapturedVar(CGF, VD) ||
                                 (CGF.CapturedStmtInfo &&
@@ -1231,12 +1233,14 @@ void CodeGenFunction::EmitOMPInnerLoop(
   EmitBlock(LoopExit.getBlock());
 }
 
-void CodeGenFunction::EmitOMPLinearClauseInit(const OMPLoopDirective &D) {
+bool CodeGenFunction::EmitOMPLinearClauseInit(const OMPLoopDirective &D) {
   if (!HaveInsertPoint())
-    return;
+    return false;
   // Emit inits for the linear variables.
+  bool HasLinears = false;
   for (const auto *C : D.getClausesOfKind<OMPLinearClause>()) {
     for (auto *Init : C->inits()) {
+      HasLinears = true;
       auto *VD = cast<VarDecl>(cast<DeclRefExpr>(Init)->getDecl());
       if (auto *Ref = dyn_cast<DeclRefExpr>(VD->getInit()->IgnoreImpCasts())) {
         AutoVarEmission Emission = EmitAutoVarAlloca(*VD);
@@ -1261,6 +1265,7 @@ void CodeGenFunction::EmitOMPLinearClauseInit(const OMPLoopDirective &D) {
         EmitIgnoredExpr(CS);
       }
   }
+  return HasLinears;
 }
 
 void CodeGenFunction::EmitOMPLinearClauseFinal(
@@ -1550,7 +1555,7 @@ void CodeGenFunction::EmitOMPSimdDirective(const OMPSimdDirective &S) {
     CGF.EmitOMPSimdInit(S);
 
     emitAlignedClause(CGF, S);
-    CGF.EmitOMPLinearClauseInit(S);
+    (void)CGF.EmitOMPLinearClauseInit(S);
     {
       OMPPrivateScope LoopScope(CGF);
       CGF.EmitOMPPrivateLoopCounters(S, LoopScope);
@@ -1687,7 +1692,8 @@ void CodeGenFunction::EmitOMPOuterLoop(
   // Tell the runtime we are done.
   auto &&CodeGen = [DynamicOrOrdered, &S](CodeGenFunction &CGF) {
     if (!DynamicOrOrdered)
-      CGF.CGM.getOpenMPRuntime().emitForStaticFinish(CGF, S.getLocEnd());
+      CGF.CGM.getOpenMPRuntime().emitForStaticFinish(CGF, S.getLocEnd(),
+                                                     S.getDirectiveKind());
   };
   OMPCancelStack.emitExit(*this, S.getDirectiveKind(), CodeGen);
 }
@@ -2170,7 +2176,7 @@ bool CodeGenFunction::EmitOMPWorksharingLoop(
 
     llvm::DenseSet<const Expr *> EmittedFinals;
     emitAlignedClause(*this, S);
-    EmitOMPLinearClauseInit(S);
+    bool HasLinears = EmitOMPLinearClauseInit(S);
     // Emit helper vars inits.
 
     std::pair<LValue, LValue> Bounds = CodeGenLoopBounds(*this, S);
@@ -2184,7 +2190,7 @@ bool CodeGenFunction::EmitOMPWorksharingLoop(
     // Emit 'then' code.
     {
       OMPPrivateScope LoopScope(*this);
-      if (EmitOMPFirstprivateClause(S, LoopScope)) {
+      if (EmitOMPFirstprivateClause(S, LoopScope) || HasLinears) {
         // Emit implicit barrier to synchronize threads and avoid data races on
         // initialization of firstprivate variables and post-update of
         // lastprivate variables.
@@ -2251,7 +2257,8 @@ bool CodeGenFunction::EmitOMPWorksharingLoop(
         EmitBlock(LoopExit.getBlock());
         // Tell the runtime we are done.
         auto &&CodeGen = [&S](CodeGenFunction &CGF) {
-          CGF.CGM.getOpenMPRuntime().emitForStaticFinish(CGF, S.getLocEnd());
+          CGF.CGM.getOpenMPRuntime().emitForStaticFinish(CGF, S.getLocEnd(),
+                                                         S.getDirectiveKind());
         };
         OMPCancelStack.emitExit(*this, S.getDirectiveKind(), CodeGen);
       } else {
@@ -2482,7 +2489,8 @@ void CodeGenFunction::EmitSections(const OMPExecutableDirective &S) {
                          [](CodeGenFunction &) {});
     // Tell the runtime we are done.
     auto &&CodeGen = [&S](CodeGenFunction &CGF) {
-      CGF.CGM.getOpenMPRuntime().emitForStaticFinish(CGF, S.getLocEnd());
+      CGF.CGM.getOpenMPRuntime().emitForStaticFinish(CGF, S.getLocEnd(),
+                                                     S.getDirectiveKind());
     };
     CGF.OMPCancelStack.emitExit(CGF, S.getDirectiveKind(), CodeGen);
     CGF.EmitOMPReductionClauseFinal(S, /*ReductionKind=*/OMPD_parallel);
@@ -3115,7 +3123,7 @@ void CodeGenFunction::EmitOMPDistributeLoop(const OMPLoopDirective &S,
                          [](CodeGenFunction &) {});
         EmitBlock(LoopExit.getBlock());
         // Tell the runtime we are done.
-        RT.emitForStaticFinish(*this, S.getLocStart());
+        RT.emitForStaticFinish(*this, S.getLocStart(), S.getDirectiveKind());
       } else {
         // Emit the outer loop, which requests its work chunk [LB..UB] from
         // runtime and runs the inner loop to process it.

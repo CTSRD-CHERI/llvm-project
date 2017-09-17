@@ -185,7 +185,7 @@ def ext_hex_literal_invalid : Extension<
 def warn_cxx17_hex_literal : Warning<
   "hexadecimal floating literals are incompatible with "
   "C++ standards before C++17">,
-  InGroup<CXXPre1zCompatPedantic>, DefaultIgnore;
+  InGroup<CXXPre17CompatPedantic>, DefaultIgnore;
 def ext_binary_literal : Extension<
   "binary integer literals are a GNU extension">, InGroup<GNUBinaryLiteral>;
 def ext_binary_literal_cxx14 : Extension<
@@ -209,7 +209,7 @@ def warn_cxx98_compat_unicode_literal : Warning<
   InGroup<CXX98Compat>, DefaultIgnore;
 def warn_cxx14_compat_u8_character_literal : Warning<
   "unicode literals are incompatible with C++ standards before C++17">,
-  InGroup<CXXPre1zCompat>, DefaultIgnore;
+  InGroup<CXXPre17Compat>, DefaultIgnore;
 def warn_cxx11_compat_user_defined_literal : Warning<
   "identifier after literal will be treated as a user-defined literal suffix "
   "in C++11">, InGroup<CXX11Compat>, DefaultIgnore;
@@ -674,6 +674,13 @@ def err_mmap_invalid_header_attribute_value : Error<
   "expected integer literal as value for header attribute '%0'">;
 def err_mmap_expected_header_attribute : Error<
   "expected a header attribute name ('size' or 'mtime')">;
+def err_mmap_conflicting_export_as : Error<
+  "conflicting re-export of module '%0' as '%1' or '%2'">;
+def warn_mmap_redundant_export_as : Warning<
+  "module '%0' already re-exported as '%1'">,
+  InGroup<PrivateModule>;
+def err_mmap_submodule_export_as : Error<
+  "only top-level modules can be re-exported as public">;
 
 def warn_auto_module_import : Warning<
   "treating #%select{include|import|include_next|__include_macros}0 as an "

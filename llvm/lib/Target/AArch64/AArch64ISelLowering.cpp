@@ -166,6 +166,7 @@ AArch64TargetLowering::AArch64TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::GlobalTLSAddress, MVT::i64, Custom);
   setOperationAction(ISD::SETCC, MVT::i32, Custom);
   setOperationAction(ISD::SETCC, MVT::i64, Custom);
+  setOperationAction(ISD::SETCC, MVT::f16, Custom);
   setOperationAction(ISD::SETCC, MVT::f32, Custom);
   setOperationAction(ISD::SETCC, MVT::f64, Custom);
   setOperationAction(ISD::BITREVERSE, MVT::i32, Legal);
@@ -173,14 +174,17 @@ AArch64TargetLowering::AArch64TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::BRCOND, MVT::Other, Expand);
   setOperationAction(ISD::BR_CC, MVT::i32, Custom);
   setOperationAction(ISD::BR_CC, MVT::i64, Custom);
+  setOperationAction(ISD::BR_CC, MVT::f16, Custom);
   setOperationAction(ISD::BR_CC, MVT::f32, Custom);
   setOperationAction(ISD::BR_CC, MVT::f64, Custom);
   setOperationAction(ISD::SELECT, MVT::i32, Custom);
   setOperationAction(ISD::SELECT, MVT::i64, Custom);
+  setOperationAction(ISD::SELECT, MVT::f16, Custom);
   setOperationAction(ISD::SELECT, MVT::f32, Custom);
   setOperationAction(ISD::SELECT, MVT::f64, Custom);
   setOperationAction(ISD::SELECT_CC, MVT::i32, Custom);
   setOperationAction(ISD::SELECT_CC, MVT::i64, Custom);
+  setOperationAction(ISD::SELECT_CC, MVT::f16, Custom);
   setOperationAction(ISD::SELECT_CC, MVT::f32, Custom);
   setOperationAction(ISD::SELECT_CC, MVT::f64, Custom);
   setOperationAction(ISD::BR_JT, MVT::Other, Expand);
@@ -317,119 +321,118 @@ AArch64TargetLowering::AArch64TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::FPOW, MVT::f64, Expand);
   setOperationAction(ISD::FCOPYSIGN, MVT::f64, Custom);
   setOperationAction(ISD::FCOPYSIGN, MVT::f32, Custom);
+  if (Subtarget->hasFullFP16())
+    setOperationAction(ISD::FCOPYSIGN, MVT::f16, Custom);
+  else
+    setOperationAction(ISD::FCOPYSIGN, MVT::f16, Promote);
 
-  // f16 is a storage-only type, always promote it to f32.
-  setOperationAction(ISD::SETCC,       MVT::f16,  Promote);
-  setOperationAction(ISD::BR_CC,       MVT::f16,  Promote);
-  setOperationAction(ISD::SELECT_CC,   MVT::f16,  Promote);
-  setOperationAction(ISD::SELECT,      MVT::f16,  Promote);
-  setOperationAction(ISD::FADD,        MVT::f16,  Promote);
-  setOperationAction(ISD::FSUB,        MVT::f16,  Promote);
-  setOperationAction(ISD::FMUL,        MVT::f16,  Promote);
-  setOperationAction(ISD::FDIV,        MVT::f16,  Promote);
-  setOperationAction(ISD::FREM,        MVT::f16,  Promote);
-  setOperationAction(ISD::FMA,         MVT::f16,  Promote);
-  setOperationAction(ISD::FNEG,        MVT::f16,  Promote);
-  setOperationAction(ISD::FABS,        MVT::f16,  Promote);
-  setOperationAction(ISD::FCEIL,       MVT::f16,  Promote);
-  setOperationAction(ISD::FCOPYSIGN,   MVT::f16,  Promote);
-  setOperationAction(ISD::FCOS,        MVT::f16,  Promote);
-  setOperationAction(ISD::FFLOOR,      MVT::f16,  Promote);
-  setOperationAction(ISD::FNEARBYINT,  MVT::f16,  Promote);
-  setOperationAction(ISD::FPOW,        MVT::f16,  Promote);
-  setOperationAction(ISD::FPOWI,       MVT::f16,  Promote);
-  setOperationAction(ISD::FRINT,       MVT::f16,  Promote);
-  setOperationAction(ISD::FSIN,        MVT::f16,  Promote);
-  setOperationAction(ISD::FSINCOS,     MVT::f16,  Promote);
-  setOperationAction(ISD::FSQRT,       MVT::f16,  Promote);
-  setOperationAction(ISD::FEXP,        MVT::f16,  Promote);
-  setOperationAction(ISD::FEXP2,       MVT::f16,  Promote);
-  setOperationAction(ISD::FLOG,        MVT::f16,  Promote);
-  setOperationAction(ISD::FLOG2,       MVT::f16,  Promote);
-  setOperationAction(ISD::FLOG10,      MVT::f16,  Promote);
-  setOperationAction(ISD::FROUND,      MVT::f16,  Promote);
-  setOperationAction(ISD::FTRUNC,      MVT::f16,  Promote);
-  setOperationAction(ISD::FMINNUM,     MVT::f16,  Promote);
-  setOperationAction(ISD::FMAXNUM,     MVT::f16,  Promote);
-  setOperationAction(ISD::FMINNAN,     MVT::f16,  Promote);
-  setOperationAction(ISD::FMAXNAN,     MVT::f16,  Promote);
+  setOperationAction(ISD::FREM,    MVT::f16,   Promote);
+  setOperationAction(ISD::FREM,    MVT::v4f16, Promote);
+  setOperationAction(ISD::FREM,    MVT::v8f16, Promote);
+  setOperationAction(ISD::FPOW,    MVT::f16,   Promote);
+  setOperationAction(ISD::FPOW,    MVT::v4f16, Promote);
+  setOperationAction(ISD::FPOW,    MVT::v8f16, Promote);
+  setOperationAction(ISD::FPOWI,   MVT::f16,   Promote);
+  setOperationAction(ISD::FCOS,    MVT::f16,   Promote);
+  setOperationAction(ISD::FCOS,    MVT::v4f16, Promote);
+  setOperationAction(ISD::FCOS,    MVT::v8f16, Promote);
+  setOperationAction(ISD::FSIN,    MVT::f16,   Promote);
+  setOperationAction(ISD::FSIN,    MVT::v4f16, Promote);
+  setOperationAction(ISD::FSIN,    MVT::v8f16, Promote);
+  setOperationAction(ISD::FSINCOS, MVT::f16,   Promote);
+  setOperationAction(ISD::FSINCOS, MVT::v4f16, Promote);
+  setOperationAction(ISD::FSINCOS, MVT::v8f16, Promote);
+  setOperationAction(ISD::FEXP,    MVT::f16,   Promote);
+  setOperationAction(ISD::FEXP,    MVT::v4f16, Promote);
+  setOperationAction(ISD::FEXP,    MVT::v8f16, Promote);
+  setOperationAction(ISD::FEXP2,   MVT::f16,   Promote);
+  setOperationAction(ISD::FEXP2,   MVT::v4f16, Promote);
+  setOperationAction(ISD::FEXP2,   MVT::v8f16, Promote);
+  setOperationAction(ISD::FLOG,    MVT::f16,   Promote);
+  setOperationAction(ISD::FLOG,    MVT::v4f16, Promote);
+  setOperationAction(ISD::FLOG,    MVT::v8f16, Promote);
+  setOperationAction(ISD::FLOG2,   MVT::f16,   Promote);
+  setOperationAction(ISD::FLOG2,   MVT::v4f16, Promote);
+  setOperationAction(ISD::FLOG2,   MVT::v8f16, Promote);
+  setOperationAction(ISD::FLOG10,  MVT::f16,   Promote);
+  setOperationAction(ISD::FLOG10,  MVT::v4f16, Promote);
+  setOperationAction(ISD::FLOG10,  MVT::v8f16, Promote);
 
-  // v4f16 is also a storage-only type, so promote it to v4f32 when that is
-  // known to be safe.
-  setOperationAction(ISD::FADD, MVT::v4f16, Promote);
-  setOperationAction(ISD::FSUB, MVT::v4f16, Promote);
-  setOperationAction(ISD::FMUL, MVT::v4f16, Promote);
-  setOperationAction(ISD::FDIV, MVT::v4f16, Promote);
-  setOperationAction(ISD::FP_EXTEND, MVT::v4f16, Promote);
-  setOperationAction(ISD::FP_ROUND, MVT::v4f16, Promote);
-  AddPromotedToType(ISD::FADD, MVT::v4f16, MVT::v4f32);
-  AddPromotedToType(ISD::FSUB, MVT::v4f16, MVT::v4f32);
-  AddPromotedToType(ISD::FMUL, MVT::v4f16, MVT::v4f32);
-  AddPromotedToType(ISD::FDIV, MVT::v4f16, MVT::v4f32);
-  AddPromotedToType(ISD::FP_EXTEND, MVT::v4f16, MVT::v4f32);
-  AddPromotedToType(ISD::FP_ROUND, MVT::v4f16, MVT::v4f32);
+  if (!Subtarget->hasFullFP16()) {
+    setOperationAction(ISD::SELECT,      MVT::f16,  Promote);
+    setOperationAction(ISD::SELECT_CC,   MVT::f16,  Promote);
+    setOperationAction(ISD::SETCC,       MVT::f16,  Promote);
+    setOperationAction(ISD::BR_CC,       MVT::f16,  Promote);
+    setOperationAction(ISD::FADD,        MVT::f16,  Promote);
+    setOperationAction(ISD::FSUB,        MVT::f16,  Promote);
+    setOperationAction(ISD::FMUL,        MVT::f16,  Promote);
+    setOperationAction(ISD::FDIV,        MVT::f16,  Promote);
+    setOperationAction(ISD::FMA,         MVT::f16,  Promote);
+    setOperationAction(ISD::FNEG,        MVT::f16,  Promote);
+    setOperationAction(ISD::FABS,        MVT::f16,  Promote);
+    setOperationAction(ISD::FCEIL,       MVT::f16,  Promote);
+    setOperationAction(ISD::FSQRT,       MVT::f16,  Promote);
+    setOperationAction(ISD::FFLOOR,      MVT::f16,  Promote);
+    setOperationAction(ISD::FNEARBYINT,  MVT::f16,  Promote);
+    setOperationAction(ISD::FRINT,       MVT::f16,  Promote);
+    setOperationAction(ISD::FROUND,      MVT::f16,  Promote);
+    setOperationAction(ISD::FTRUNC,      MVT::f16,  Promote);
+    setOperationAction(ISD::FMINNUM,     MVT::f16,  Promote);
+    setOperationAction(ISD::FMAXNUM,     MVT::f16,  Promote);
+    setOperationAction(ISD::FMINNAN,     MVT::f16,  Promote);
+    setOperationAction(ISD::FMAXNAN,     MVT::f16,  Promote);
 
-  // Expand all other v4f16 operations.
-  // FIXME: We could generate better code by promoting some operations to
-  // a pair of v4f32s
-  setOperationAction(ISD::FABS, MVT::v4f16, Expand);
-  setOperationAction(ISD::FCEIL, MVT::v4f16, Expand);
-  setOperationAction(ISD::FCOPYSIGN, MVT::v4f16, Expand);
-  setOperationAction(ISD::FCOS, MVT::v4f16, Expand);
-  setOperationAction(ISD::FFLOOR, MVT::v4f16, Expand);
-  setOperationAction(ISD::FMA, MVT::v4f16, Expand);
-  setOperationAction(ISD::FNEARBYINT, MVT::v4f16, Expand);
-  setOperationAction(ISD::FNEG, MVT::v4f16, Expand);
-  setOperationAction(ISD::FPOW, MVT::v4f16, Expand);
-  setOperationAction(ISD::FREM, MVT::v4f16, Expand);
-  setOperationAction(ISD::FROUND, MVT::v4f16, Expand);
-  setOperationAction(ISD::FRINT, MVT::v4f16, Expand);
-  setOperationAction(ISD::FSIN, MVT::v4f16, Expand);
-  setOperationAction(ISD::FSINCOS, MVT::v4f16, Expand);
-  setOperationAction(ISD::FSQRT, MVT::v4f16, Expand);
-  setOperationAction(ISD::FTRUNC, MVT::v4f16, Expand);
-  setOperationAction(ISD::SETCC, MVT::v4f16, Expand);
-  setOperationAction(ISD::BR_CC, MVT::v4f16, Expand);
-  setOperationAction(ISD::SELECT, MVT::v4f16, Expand);
-  setOperationAction(ISD::SELECT_CC, MVT::v4f16, Expand);
-  setOperationAction(ISD::FEXP, MVT::v4f16, Expand);
-  setOperationAction(ISD::FEXP2, MVT::v4f16, Expand);
-  setOperationAction(ISD::FLOG, MVT::v4f16, Expand);
-  setOperationAction(ISD::FLOG2, MVT::v4f16, Expand);
-  setOperationAction(ISD::FLOG10, MVT::v4f16, Expand);
+    // promote v4f16 to v4f32 when that is known to be safe.
+    setOperationAction(ISD::FADD,        MVT::v4f16, Promote);
+    setOperationAction(ISD::FSUB,        MVT::v4f16, Promote);
+    setOperationAction(ISD::FMUL,        MVT::v4f16, Promote);
+    setOperationAction(ISD::FDIV,        MVT::v4f16, Promote);
+    setOperationAction(ISD::FP_EXTEND,   MVT::v4f16, Promote);
+    setOperationAction(ISD::FP_ROUND,    MVT::v4f16, Promote);
+    AddPromotedToType(ISD::FADD,         MVT::v4f16, MVT::v4f32);
+    AddPromotedToType(ISD::FSUB,         MVT::v4f16, MVT::v4f32);
+    AddPromotedToType(ISD::FMUL,         MVT::v4f16, MVT::v4f32);
+    AddPromotedToType(ISD::FDIV,         MVT::v4f16, MVT::v4f32);
+    AddPromotedToType(ISD::FP_EXTEND,    MVT::v4f16, MVT::v4f32);
+    AddPromotedToType(ISD::FP_ROUND,     MVT::v4f16, MVT::v4f32);
 
+    setOperationAction(ISD::FABS,        MVT::v4f16, Expand);
+    setOperationAction(ISD::FNEG,        MVT::v4f16, Expand);
+    setOperationAction(ISD::FROUND,      MVT::v4f16, Expand);
+    setOperationAction(ISD::FMA,         MVT::v4f16, Expand);
+    setOperationAction(ISD::SETCC,       MVT::v4f16, Expand);
+    setOperationAction(ISD::BR_CC,       MVT::v4f16, Expand);
+    setOperationAction(ISD::SELECT,      MVT::v4f16, Expand);
+    setOperationAction(ISD::SELECT_CC,   MVT::v4f16, Expand);
+    setOperationAction(ISD::FTRUNC,      MVT::v4f16, Expand);
+    setOperationAction(ISD::FCOPYSIGN,   MVT::v4f16, Expand);
+    setOperationAction(ISD::FFLOOR,      MVT::v4f16, Expand);
+    setOperationAction(ISD::FCEIL,       MVT::v4f16, Expand);
+    setOperationAction(ISD::FRINT,       MVT::v4f16, Expand);
+    setOperationAction(ISD::FNEARBYINT,  MVT::v4f16, Expand);
+    setOperationAction(ISD::FSQRT,       MVT::v4f16, Expand);
 
-  // v8f16 is also a storage-only type, so expand it.
-  setOperationAction(ISD::FABS, MVT::v8f16, Expand);
-  setOperationAction(ISD::FADD, MVT::v8f16, Expand);
-  setOperationAction(ISD::FCEIL, MVT::v8f16, Expand);
-  setOperationAction(ISD::FCOPYSIGN, MVT::v8f16, Expand);
-  setOperationAction(ISD::FCOS, MVT::v8f16, Expand);
-  setOperationAction(ISD::FDIV, MVT::v8f16, Expand);
-  setOperationAction(ISD::FFLOOR, MVT::v8f16, Expand);
-  setOperationAction(ISD::FMA, MVT::v8f16, Expand);
-  setOperationAction(ISD::FMUL, MVT::v8f16, Expand);
-  setOperationAction(ISD::FNEARBYINT, MVT::v8f16, Expand);
-  setOperationAction(ISD::FNEG, MVT::v8f16, Expand);
-  setOperationAction(ISD::FPOW, MVT::v8f16, Expand);
-  setOperationAction(ISD::FREM, MVT::v8f16, Expand);
-  setOperationAction(ISD::FROUND, MVT::v8f16, Expand);
-  setOperationAction(ISD::FRINT, MVT::v8f16, Expand);
-  setOperationAction(ISD::FSIN, MVT::v8f16, Expand);
-  setOperationAction(ISD::FSINCOS, MVT::v8f16, Expand);
-  setOperationAction(ISD::FSQRT, MVT::v8f16, Expand);
-  setOperationAction(ISD::FSUB, MVT::v8f16, Expand);
-  setOperationAction(ISD::FTRUNC, MVT::v8f16, Expand);
-  setOperationAction(ISD::SETCC, MVT::v8f16, Expand);
-  setOperationAction(ISD::BR_CC, MVT::v8f16, Expand);
-  setOperationAction(ISD::SELECT, MVT::v8f16, Expand);
-  setOperationAction(ISD::SELECT_CC, MVT::v8f16, Expand);
-  setOperationAction(ISD::FP_EXTEND, MVT::v8f16, Expand);
-  setOperationAction(ISD::FEXP, MVT::v8f16, Expand);
-  setOperationAction(ISD::FEXP2, MVT::v8f16, Expand);
-  setOperationAction(ISD::FLOG, MVT::v8f16, Expand);
-  setOperationAction(ISD::FLOG2, MVT::v8f16, Expand);
-  setOperationAction(ISD::FLOG10, MVT::v8f16, Expand);
+    setOperationAction(ISD::FABS,        MVT::v8f16, Expand);
+    setOperationAction(ISD::FADD,        MVT::v8f16, Expand);
+    setOperationAction(ISD::FCEIL,       MVT::v8f16, Expand);
+    setOperationAction(ISD::FCOPYSIGN,   MVT::v8f16, Expand);
+    setOperationAction(ISD::FDIV,        MVT::v8f16, Expand);
+    setOperationAction(ISD::FFLOOR,      MVT::v8f16, Expand);
+    setOperationAction(ISD::FMA,         MVT::v8f16, Expand);
+    setOperationAction(ISD::FMUL,        MVT::v8f16, Expand);
+    setOperationAction(ISD::FNEARBYINT,  MVT::v8f16, Expand);
+    setOperationAction(ISD::FNEG,        MVT::v8f16, Expand);
+    setOperationAction(ISD::FROUND,      MVT::v8f16, Expand);
+    setOperationAction(ISD::FRINT,       MVT::v8f16, Expand);
+    setOperationAction(ISD::FSQRT,       MVT::v8f16, Expand);
+    setOperationAction(ISD::FSUB,        MVT::v8f16, Expand);
+    setOperationAction(ISD::FTRUNC,      MVT::v8f16, Expand);
+    setOperationAction(ISD::SETCC,       MVT::v8f16, Expand);
+    setOperationAction(ISD::BR_CC,       MVT::v8f16, Expand);
+    setOperationAction(ISD::SELECT,      MVT::v8f16, Expand);
+    setOperationAction(ISD::SELECT_CC,   MVT::v8f16, Expand);
+    setOperationAction(ISD::FP_EXTEND,   MVT::v8f16, Expand);
+  }
 
   // AArch64 has implementations of a lot of rounding-like FP operations.
   for (MVT Ty : {MVT::f32, MVT::f64}) {
@@ -443,6 +446,19 @@ AArch64TargetLowering::AArch64TargetLowering(const TargetMachine &TM,
     setOperationAction(ISD::FMAXNUM, Ty, Legal);
     setOperationAction(ISD::FMINNAN, Ty, Legal);
     setOperationAction(ISD::FMAXNAN, Ty, Legal);
+  }
+
+  if (Subtarget->hasFullFP16()) {
+    setOperationAction(ISD::FNEARBYINT, MVT::f16, Legal);
+    setOperationAction(ISD::FFLOOR,  MVT::f16, Legal);
+    setOperationAction(ISD::FCEIL,   MVT::f16, Legal);
+    setOperationAction(ISD::FRINT,   MVT::f16, Legal);
+    setOperationAction(ISD::FTRUNC,  MVT::f16, Legal);
+    setOperationAction(ISD::FROUND,  MVT::f16, Legal);
+    setOperationAction(ISD::FMINNUM, MVT::f16, Legal);
+    setOperationAction(ISD::FMAXNUM, MVT::f16, Legal);
+    setOperationAction(ISD::FMINNAN, MVT::f16, Legal);
+    setOperationAction(ISD::FMAXNAN, MVT::f16, Legal);
   }
 
   setOperationAction(ISD::PREFETCH, MVT::Other, Custom);
@@ -775,8 +791,9 @@ void AArch64TargetLowering::addTypeForNEON(MVT VT, MVT PromotedBitwiseVT) {
     for (unsigned Opcode : {ISD::SMIN, ISD::SMAX, ISD::UMIN, ISD::UMAX})
       setOperationAction(Opcode, VT, Legal);
 
-  // F[MIN|MAX][NUM|NAN] are available for all FP NEON types (not f16 though!).
-  if (VT.isFloatingPoint() && VT.getVectorElementType() != MVT::f16)
+  // F[MIN|MAX][NUM|NAN] are available for all FP NEON types.
+  if (VT.isFloatingPoint() &&
+      (VT.getVectorElementType() != MVT::f16 || Subtarget->hasFullFP16()))
     for (unsigned Opcode : {ISD::FMINNAN, ISD::FMAXNAN,
                             ISD::FMINNUM, ISD::FMAXNUM})
       setOperationAction(Opcode, VT, Legal);
@@ -1414,16 +1431,20 @@ static void changeVectorFPCCToAArch64CC(ISD::CondCode CC,
 
 static bool isLegalArithImmed(uint64_t C) {
   // Matches AArch64DAGToDAGISel::SelectArithImmed().
-  return (C >> 12 == 0) || ((C & 0xFFFULL) == 0 && C >> 24 == 0);
+  bool IsLegal = (C >> 12 == 0) || ((C & 0xFFFULL) == 0 && C >> 24 == 0);
+  DEBUG(dbgs() << "Is imm " << C << " legal: " << (IsLegal ? "yes\n" : "no\n"));
+  return IsLegal;
 }
 
 static SDValue emitComparison(SDValue LHS, SDValue RHS, ISD::CondCode CC,
                               const SDLoc &dl, SelectionDAG &DAG) {
   EVT VT = LHS.getValueType();
+  const bool FullFP16 =
+    static_cast<const AArch64Subtarget &>(DAG.getSubtarget()).hasFullFP16();
 
   if (VT.isFloatingPoint()) {
     assert(VT != MVT::f128);
-    if (VT == MVT::f16) {
+    if (VT == MVT::f16 && !FullFP16) {
       LHS = DAG.getNode(ISD::FP_EXTEND, dl, MVT::f32, LHS);
       RHS = DAG.getNode(ISD::FP_EXTEND, dl, MVT::f32, RHS);
       VT = MVT::f32;
@@ -1513,9 +1534,12 @@ static SDValue emitConditionalComparison(SDValue LHS, SDValue RHS,
                                          AArch64CC::CondCode OutCC,
                                          const SDLoc &DL, SelectionDAG &DAG) {
   unsigned Opcode = 0;
+  const bool FullFP16 =
+    static_cast<const AArch64Subtarget &>(DAG.getSubtarget()).hasFullFP16();
+
   if (LHS.getValueType().isFloatingPoint()) {
     assert(LHS.getValueType() != MVT::f128);
-    if (LHS.getValueType() == MVT::f16) {
+    if (LHS.getValueType() == MVT::f16 && !FullFP16) {
       LHS = DAG.getNode(ISD::FP_EXTEND, DL, MVT::f32, LHS);
       RHS = DAG.getNode(ISD::FP_EXTEND, DL, MVT::f32, RHS);
     }
@@ -2171,8 +2195,9 @@ SDValue AArch64TargetLowering::LowerFP_TO_INT(SDValue Op,
   if (Op.getOperand(0).getValueType().isVector())
     return LowerVectorFP_TO_INT(Op, DAG);
 
-  // f16 conversions are promoted to f32.
-  if (Op.getOperand(0).getValueType() == MVT::f16) {
+  // f16 conversions are promoted to f32 when full fp16 is not supported.
+  if (Op.getOperand(0).getValueType() == MVT::f16 &&
+      !Subtarget->hasFullFP16()) {
     SDLoc dl(Op);
     return DAG.getNode(
         Op.getOpcode(), dl, Op.getValueType(),
@@ -2227,8 +2252,9 @@ SDValue AArch64TargetLowering::LowerINT_TO_FP(SDValue Op,
   if (Op.getValueType().isVector())
     return LowerVectorINT_TO_FP(Op, DAG);
 
-  // f16 conversions are promoted to f32.
-  if (Op.getValueType() == MVT::f16) {
+  // f16 conversions are promoted to f32 when full fp16 is not supported.
+  if (Op.getValueType() == MVT::f16 &&
+      !Subtarget->hasFullFP16()) {
     SDLoc dl(Op);
     return DAG.getNode(
         ISD::FP_ROUND, dl, MVT::f16,
@@ -2517,6 +2543,9 @@ SDValue AArch64TargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
 
 SDValue AArch64TargetLowering::LowerOperation(SDValue Op,
                                               SelectionDAG &DAG) const {
+  DEBUG(dbgs() << "Custom lowering: ");
+  DEBUG(Op.dump());
+
   switch (Op.getOpcode()) {
   default:
     llvm_unreachable("unimplemented operand");
@@ -2640,7 +2669,7 @@ CCAssignFn *AArch64TargetLowering::CCAssignFnForCall(CallingConv::ID CC,
                                                      bool IsVarArg) const {
   switch (CC) {
   default:
-    llvm_unreachable("Unsupported calling convention.");
+    report_fatal_error("Unsupported calling convention.");
   case CallingConv::WebKit_JS:
     return CC_AArch64_WebKit_JS;
   case CallingConv::GHC:
@@ -4017,7 +4046,8 @@ SDValue AArch64TargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
                        Cmp);
   }
 
-  assert(LHS.getValueType() == MVT::f32 || LHS.getValueType() == MVT::f64);
+  assert(LHS.getValueType() == MVT::f16 || LHS.getValueType() == MVT::f32 ||
+         LHS.getValueType() == MVT::f64);
 
   // Unfortunately, the mapping of LLVM FP CC's onto AArch64 CC's isn't totally
   // clean.  Some of them require two branches to implement.
@@ -4051,25 +4081,26 @@ SDValue AArch64TargetLowering::LowerFCOPYSIGN(SDValue Op,
     In2 = DAG.getNode(ISD::FP_ROUND, DL, VT, In2, DAG.getIntPtrConstant(0, DL));
 
   EVT VecVT;
-  EVT EltVT;
   uint64_t EltMask;
   SDValue VecVal1, VecVal2;
-  if (VT == MVT::f32 || VT == MVT::v2f32 || VT == MVT::v4f32) {
-    EltVT = MVT::i32;
-    VecVT = (VT == MVT::v2f32 ? MVT::v2i32 : MVT::v4i32);
-    EltMask = 0x80000000ULL;
 
+  auto setVecVal = [&] (int Idx) {
     if (!VT.isVector()) {
-      VecVal1 = DAG.getTargetInsertSubreg(AArch64::ssub, DL, VecVT,
+      VecVal1 = DAG.getTargetInsertSubreg(Idx, DL, VecVT,
                                           DAG.getUNDEF(VecVT), In1);
-      VecVal2 = DAG.getTargetInsertSubreg(AArch64::ssub, DL, VecVT,
+      VecVal2 = DAG.getTargetInsertSubreg(Idx, DL, VecVT,
                                           DAG.getUNDEF(VecVT), In2);
     } else {
       VecVal1 = DAG.getNode(ISD::BITCAST, DL, VecVT, In1);
       VecVal2 = DAG.getNode(ISD::BITCAST, DL, VecVT, In2);
     }
+  };
+
+  if (VT == MVT::f32 || VT == MVT::v2f32 || VT == MVT::v4f32) {
+    VecVT = (VT == MVT::v2f32 ? MVT::v2i32 : MVT::v4i32);
+    EltMask = 0x80000000ULL;
+    setVecVal(AArch64::ssub);
   } else if (VT == MVT::f64 || VT == MVT::v2f64) {
-    EltVT = MVT::i64;
     VecVT = MVT::v2i64;
 
     // We want to materialize a mask with the high bit set, but the AdvSIMD
@@ -4077,15 +4108,11 @@ SDValue AArch64TargetLowering::LowerFCOPYSIGN(SDValue Op,
     // 64-bit elements. Instead, materialize zero and then negate it.
     EltMask = 0;
 
-    if (!VT.isVector()) {
-      VecVal1 = DAG.getTargetInsertSubreg(AArch64::dsub, DL, VecVT,
-                                          DAG.getUNDEF(VecVT), In1);
-      VecVal2 = DAG.getTargetInsertSubreg(AArch64::dsub, DL, VecVT,
-                                          DAG.getUNDEF(VecVT), In2);
-    } else {
-      VecVal1 = DAG.getNode(ISD::BITCAST, DL, VecVT, In1);
-      VecVal2 = DAG.getNode(ISD::BITCAST, DL, VecVT, In2);
-    }
+    setVecVal(AArch64::dsub);
+  } else if (VT == MVT::f16 || VT == MVT::v4f16 || VT == MVT::v8f16) {
+    VecVT = (VT == MVT::v4f16 ? MVT::v4i16 : MVT::v8i16);
+    EltMask = 0x8000ULL;
+    setVecVal(AArch64::hsub);
   } else {
     llvm_unreachable("Invalid type for copysign!");
   }
@@ -4103,6 +4130,8 @@ SDValue AArch64TargetLowering::LowerFCOPYSIGN(SDValue Op,
   SDValue Sel =
       DAG.getNode(AArch64ISD::BIT, DL, VecVT, VecVal1, VecVal2, BuildVec);
 
+  if (VT == MVT::f16)
+    return DAG.getTargetExtractSubreg(AArch64::hsub, DL, VT, Sel);
   if (VT == MVT::f32)
     return DAG.getTargetExtractSubreg(AArch64::ssub, DL, VT, Sel);
   else if (VT == MVT::f64)
@@ -4185,7 +4214,8 @@ SDValue AArch64TargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
   }
 
   // Now we know we're dealing with FP values.
-  assert(LHS.getValueType() == MVT::f32 || LHS.getValueType() == MVT::f64);
+  assert(LHS.getValueType() == MVT::f16 || LHS.getValueType() == MVT::f32 ||
+         LHS.getValueType() == MVT::f64);
 
   // If that fails, we'll need to perform an FCMP + CSEL sequence.  Go ahead
   // and do the comparison.
@@ -4235,7 +4265,7 @@ SDValue AArch64TargetLowering::LowerSELECT_CC(ISD::CondCode CC, SDValue LHS,
   }
 
   // Also handle f16, for which we need to do a f32 comparison.
-  if (LHS.getValueType() == MVT::f16) {
+  if (LHS.getValueType() == MVT::f16 && !Subtarget->hasFullFP16()) {
     LHS = DAG.getNode(ISD::FP_EXTEND, dl, MVT::f32, LHS);
     RHS = DAG.getNode(ISD::FP_EXTEND, dl, MVT::f32, RHS);
   }
@@ -4356,13 +4386,13 @@ SDValue AArch64TargetLowering::LowerSELECT_CC(ISD::CondCode CC, SDValue LHS,
 
     SDValue CCVal;
     SDValue Cmp = getAArch64Cmp(LHS, RHS, CC, CCVal, DAG, dl);
-
     EVT VT = TVal.getValueType();
     return DAG.getNode(Opcode, dl, VT, TVal, FVal, CCVal, Cmp);
   }
 
   // Now we know we're dealing with FP values.
-  assert(LHS.getValueType() == MVT::f32 || LHS.getValueType() == MVT::f64);
+  assert(LHS.getValueType() == MVT::f16 || LHS.getValueType() == MVT::f32 ||
+         LHS.getValueType() == MVT::f64);
   assert(LHS.getValueType() == RHS.getValueType());
   EVT VT = TVal.getValueType();
   SDValue Cmp = emitComparison(LHS, RHS, CC, dl, DAG);
@@ -4849,20 +4879,47 @@ SDValue AArch64TargetLowering::LowerShiftLeftParts(SDValue Op,
 
 bool AArch64TargetLowering::isOffsetFoldingLegal(
     const GlobalAddressSDNode *GA) const {
-  // The AArch64 target doesn't support folding offsets into global addresses.
+  DEBUG(dbgs() << "Skipping offset folding global address: ");
+  DEBUG(GA->dump());
+  DEBUG(dbgs() << "AArch64 doesn't support folding offsets into global "
+        "addresses\n");
   return false;
 }
 
 bool AArch64TargetLowering::isFPImmLegal(const APFloat &Imm, EVT VT) const {
   // We can materialize #0.0 as fmov $Rd, XZR for 64-bit and 32-bit cases.
   // FIXME: We should be able to handle f128 as well with a clever lowering.
-  if (Imm.isPosZero() && (VT == MVT::f64 || VT == MVT::f32))
+  if (Imm.isPosZero() && (VT == MVT::f16 || VT == MVT::f64 || VT == MVT::f32)) {
+    DEBUG(dbgs() << "Legal fp imm: materialize 0 using the zero register\n");
     return true;
+  }
 
-  if (VT == MVT::f64)
-    return AArch64_AM::getFP64Imm(Imm) != -1;
-  else if (VT == MVT::f32)
-    return AArch64_AM::getFP32Imm(Imm) != -1;
+  StringRef FPType;
+  bool IsLegal = false;
+  SmallString<128> ImmStrVal;
+  Imm.toString(ImmStrVal);
+
+  if (VT == MVT::f64) {
+    FPType = "f64";
+    IsLegal = AArch64_AM::getFP64Imm(Imm) != -1;
+  } else if (VT == MVT::f32) {
+    FPType = "f32";
+    IsLegal = AArch64_AM::getFP32Imm(Imm) != -1;
+  } else if (VT == MVT::f16 && Subtarget->hasFullFP16()) {
+    FPType = "f16";
+    IsLegal = AArch64_AM::getFP16Imm(Imm) != -1;
+  }
+
+  if (IsLegal) {
+    DEBUG(dbgs() << "Legal " << FPType << " imm value: " << ImmStrVal << "\n");
+    return true;
+  }
+
+  if (!FPType.empty())
+    DEBUG(dbgs() << "Illegal " << FPType << " imm value: " << ImmStrVal << "\n");
+  else
+    DEBUG(dbgs() << "Illegal fp imm " << ImmStrVal << ": unsupported fp type\n");
+
   return false;
 }
 
@@ -5301,6 +5358,7 @@ static SDValue NarrowVector(SDValue V128Reg, SelectionDAG &DAG) {
 SDValue AArch64TargetLowering::ReconstructShuffle(SDValue Op,
                                                   SelectionDAG &DAG) const {
   assert(Op.getOpcode() == ISD::BUILD_VECTOR && "Unknown opcode!");
+  DEBUG(dbgs() << "AArch64TargetLowering::ReconstructShuffle\n");
   SDLoc dl(Op);
   EVT VT = Op.getValueType();
   unsigned NumElts = VT.getVectorNumElements();
@@ -5336,8 +5394,10 @@ SDValue AArch64TargetLowering::ReconstructShuffle(SDValue Op,
       continue;
     else if (V.getOpcode() != ISD::EXTRACT_VECTOR_ELT ||
              !isa<ConstantSDNode>(V.getOperand(1))) {
-      // A shuffle can only come from building a vector from various
-      // elements of other vectors, provided their indices are constant.
+      DEBUG(dbgs() << "Reshuffle failed: "
+                      "a shuffle can only come from building a vector from "
+                      "various elements of other vectors, provided their "
+                      "indices are constant\n");
       return SDValue();
     }
 
@@ -5353,10 +5413,11 @@ SDValue AArch64TargetLowering::ReconstructShuffle(SDValue Op,
     Source->MaxElt = std::max(Source->MaxElt, EltNo);
   }
 
-  // Currently only do something sane when at most two source vectors
-  // are involved.
-  if (Sources.size() > 2)
+  if (Sources.size() > 2) {
+    DEBUG(dbgs() << "Reshuffle failed: currently only do something sane when at "
+                    "most two source vectors are involved\n");
     return SDValue();
+  }
 
   // Find out the smallest element size among result and two sources, and use
   // it as element size to build the shuffle_vector.
@@ -5400,7 +5461,7 @@ SDValue AArch64TargetLowering::ReconstructShuffle(SDValue Op,
     assert(SrcVT.getSizeInBits() == 2 * VT.getSizeInBits());
 
     if (Src.MaxElt - Src.MinElt >= NumSrcElts) {
-      // Span too large for a VEXT to cope
+      DEBUG(dbgs() << "Reshuffle failed: span too large for a VEXT to cope\n");
       return SDValue();
     }
 
@@ -5481,8 +5542,10 @@ SDValue AArch64TargetLowering::ReconstructShuffle(SDValue Op,
   }
 
   // Final check before we try to produce nonsense...
-  if (!isShuffleMaskLegal(Mask, ShuffleVT))
+  if (!isShuffleMaskLegal(Mask, ShuffleVT)) {
+    DEBUG(dbgs() << "Reshuffle failed: illegal shuffle mask\n");
     return SDValue();
+  }
 
   SDValue ShuffleOps[] = { DAG.getUNDEF(ShuffleVT), DAG.getUNDEF(ShuffleVT) };
   for (unsigned i = 0; i < Sources.size(); ++i)
@@ -5490,7 +5553,16 @@ SDValue AArch64TargetLowering::ReconstructShuffle(SDValue Op,
 
   SDValue Shuffle = DAG.getVectorShuffle(ShuffleVT, dl, ShuffleOps[0],
                                          ShuffleOps[1], Mask);
-  return DAG.getNode(ISD::BITCAST, dl, VT, Shuffle);
+  SDValue V = DAG.getNode(ISD::BITCAST, dl, VT, Shuffle);
+
+  DEBUG(
+    dbgs() << "Reshuffle, creating node: ";
+    Shuffle.dump();
+    dbgs() << "Reshuffle, creating node: ";
+    V.dump();
+  );
+
+  return V;
 }
 
 // check if an EXT instruction can handle the shuffle mask when the
@@ -6703,27 +6775,36 @@ FailedModImm:
       usesOnlyOneValue = false;
   }
 
-  if (!Value.getNode())
+  if (!Value.getNode()) {
+    DEBUG(dbgs() << "LowerBUILD_VECTOR: value undefined, creating undef node\n");
     return DAG.getUNDEF(VT);
+  }
 
-  if (isOnlyLowElement)
+  if (isOnlyLowElement) {
+    DEBUG(dbgs() << "LowerBUILD_VECTOR: only low element used, creating 1 "
+                    "SCALAR_TO_VECTOR node\n");
     return DAG.getNode(ISD::SCALAR_TO_VECTOR, dl, VT, Value);
+  }
 
-  // Use DUP for non-constant splats.  For f32 constant splats, reduce to
+  // Use DUP for non-constant splats. For f32 constant splats, reduce to
   // i32 and try again.
   if (usesOnlyOneValue) {
     if (!isConstant) {
       if (Value.getOpcode() != ISD::EXTRACT_VECTOR_ELT ||
-          Value.getValueType() != VT)
+          Value.getValueType() != VT) {
+        DEBUG(dbgs() << "LowerBUILD_VECTOR: use DUP for non-constant splats\n");
         return DAG.getNode(AArch64ISD::DUP, dl, VT, Value);
+      }
 
       // This is actually a DUPLANExx operation, which keeps everything vectory.
 
-      // DUPLANE works on 128-bit vectors, widen it if necessary.
       SDValue Lane = Value.getOperand(1);
       Value = Value.getOperand(0);
-      if (Value.getValueSizeInBits() == 64)
+      if (Value.getValueSizeInBits() == 64) {
+        DEBUG(dbgs() << "LowerBUILD_VECTOR: DUPLANE works on 128-bit vectors, "
+                        "widening it\n");
         Value = WidenVector(Value, DAG);
+      }
 
       unsigned Opcode = getDUPLANEOp(VT.getVectorElementType());
       return DAG.getNode(Opcode, dl, VT, Value, Lane);
@@ -6734,11 +6815,17 @@ FailedModImm:
       EVT EltTy = VT.getVectorElementType();
       assert ((EltTy == MVT::f16 || EltTy == MVT::f32 || EltTy == MVT::f64) &&
               "Unsupported floating-point vector type");
+      DEBUG(dbgs() << "LowerBUILD_VECTOR: float constant splats, creating int "
+                      "BITCASTS, and try again\n");
       MVT NewType = MVT::getIntegerVT(EltTy.getSizeInBits());
       for (unsigned i = 0; i < NumElts; ++i)
         Ops.push_back(DAG.getNode(ISD::BITCAST, dl, NewType, Op.getOperand(i)));
       EVT VecVT = EVT::getVectorVT(*DAG.getContext(), NewType, NumElts);
       SDValue Val = DAG.getBuildVector(VecVT, dl, Ops);
+      DEBUG(
+        dbgs() << "LowerBUILD_VECTOR: trying to lower new vector: ";
+        Val.dump();
+      );
       Val = LowerBUILD_VECTOR(Val, DAG);
       if (Val.getNode())
         return DAG.getNode(ISD::BITCAST, dl, VT, Val);
@@ -6764,11 +6851,12 @@ FailedModImm:
     return Val;
   }
 
-  // If all elements are constants and the case above didn't get hit, fall back
-  // to the default expansion, which will generate a load from the constant
-  // pool.
-  if (isConstant)
+  // This will generate a load from the constant pool.
+  if (isConstant) {
+    DEBUG(dbgs() << "LowerBUILD_VECTOR: all elements are constant, use default "
+                    "expansion\n");
     return SDValue();
+  }
 
   // Empirical tests suggest this is rarely worth it for vectors of length <= 2.
   if (NumElts >= 4) {
@@ -6783,6 +6871,9 @@ FailedModImm:
   // shuffle is valid for the target) and materialization element by element
   // on the stack followed by a load for everything else.
   if (!isConstant && !usesOnlyOneValue) {
+    DEBUG(dbgs() << "LowerBUILD_VECTOR: alternatives failed, creating sequence "
+                    "of INSERT_VECTOR_ELT\n");
+
     SDValue Vec = DAG.getUNDEF(VT);
     SDValue Op0 = Op.getOperand(0);
     unsigned i = 0;
@@ -6798,9 +6889,14 @@ FailedModImm:
     // extended (i32) and it is safe to cast them to the vector type by ignoring
     // the upper bits of the lowest lane (e.g. v8i8, v4i16).
     if (!Op0.isUndef()) {
+      DEBUG(dbgs() << "Creating node for op0, it is not undefined:\n");
       Vec = DAG.getNode(ISD::SCALAR_TO_VECTOR, dl, VT, Op0);
       ++i;
     }
+    DEBUG(
+      if (i < NumElts)
+        dbgs() << "Creating nodes for the other vector elements:\n";
+    );
     for (; i < NumElts; ++i) {
       SDValue V = Op.getOperand(i);
       if (V.isUndef())
@@ -6811,7 +6907,8 @@ FailedModImm:
     return Vec;
   }
 
-  // Just use the default expansion. We failed to find a better alternative.
+  DEBUG(dbgs() << "LowerBUILD_VECTOR: use default expansion, failed to find "
+                  "better alternative\n");
   return SDValue();
 }
 
@@ -7802,12 +7899,17 @@ EVT AArch64TargetLowering::getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
 
 // 12-bit optionally shifted immediates are legal for adds.
 bool AArch64TargetLowering::isLegalAddImmediate(int64_t Immed) const {
-  // Avoid UB for INT64_MIN.
-  if (Immed == std::numeric_limits<int64_t>::min())
+  if (Immed == std::numeric_limits<int64_t>::min()) {
+    DEBUG(dbgs() << "Illegal add imm " << Immed << ": avoid UB for INT64_MIN\n");
     return false;
+  }
   // Same encoding for add/sub, just flip the sign.
   Immed = std::abs(Immed);
-  return ((Immed >> 12) == 0 || ((Immed & 0xfff) == 0 && Immed >> 24 == 0));
+  bool IsLegal = ((Immed >> 12) == 0 ||
+                  ((Immed & 0xfff) == 0 && Immed >> 24 == 0));
+  DEBUG(dbgs() << "Is " << Immed << " legal add imm: " <<
+        (IsLegal ? "yes" : "no") << "\n");
+  return IsLegal;
 }
 
 // Integer comparisons are implemented with ADDS/SUBS, so the range of valid
@@ -10257,6 +10359,7 @@ SDValue AArch64TargetLowering::PerformDAGCombine(SDNode *N,
   SelectionDAG &DAG = DCI.DAG;
   switch (N->getOpcode()) {
   default:
+    DEBUG(dbgs() << "Custom combining: skipping\n");
     break;
   case ISD::ADD:
   case ISD::SUB:
@@ -10730,7 +10833,7 @@ Value *AArch64TargetLowering::getIRStackGuard(IRBuilder<> &IRB) const {
     return UseTlsOffset(IRB, 0x28);
 
   // Fuchsia is similar.
-  // <magenta/tls.h> defines MX_TLS_STACK_GUARD_OFFSET with this value.
+  // <zircon/tls.h> defines ZX_TLS_STACK_GUARD_OFFSET with this value.
   if (Subtarget->isTargetFuchsia())
     return UseTlsOffset(IRB, -0x10);
 
@@ -10745,7 +10848,7 @@ Value *AArch64TargetLowering::getSafeStackPointerLocation(IRBuilder<> &IRB) cons
     return UseTlsOffset(IRB, 0x48);
 
   // Fuchsia is similar.
-  // <magenta/tls.h> defines MX_TLS_UNSAFE_SP_OFFSET with this value.
+  // <zircon/tls.h> defines ZX_TLS_UNSAFE_SP_OFFSET with this value.
   if (Subtarget->isTargetFuchsia())
     return UseTlsOffset(IRB, -0x8);
 

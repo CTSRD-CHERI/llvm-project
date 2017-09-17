@@ -134,6 +134,14 @@ template <> struct ScalarEnumerationTraits<FormatStyle::BreakConstructorInitiali
 };
 
 template <>
+struct ScalarEnumerationTraits<FormatStyle::PPDirectiveIndentStyle> {
+  static void enumeration(IO &IO, FormatStyle::PPDirectiveIndentStyle &Value) {
+    IO.enumCase(Value, "None", FormatStyle::PPDIS_None);
+    IO.enumCase(Value, "AfterHash", FormatStyle::PPDIS_AfterHash);
+  }
+};
+
+template <>
 struct ScalarEnumerationTraits<FormatStyle::ReturnTypeBreakingStyle> {
   static void enumeration(IO &IO, FormatStyle::ReturnTypeBreakingStyle &Value) {
     IO.enumCase(Value, "None", FormatStyle::RTBS_None);
@@ -350,6 +358,7 @@ template <> struct MappingTraits<FormatStyle> {
     IO.mapOptional("IncludeCategories", Style.IncludeCategories);
     IO.mapOptional("IncludeIsMainRegex", Style.IncludeIsMainRegex);
     IO.mapOptional("IndentCaseLabels", Style.IndentCaseLabels);
+    IO.mapOptional("IndentPPDirectives", Style.IndentPPDirectives);
     IO.mapOptional("IndentWidth", Style.IndentWidth);
     IO.mapOptional("IndentWrappedFunctionNames",
                    Style.IndentWrappedFunctionNames);
@@ -411,6 +420,7 @@ template <> struct MappingTraits<FormatStyle::BraceWrappingFlags> {
     IO.mapOptional("AfterObjCDeclaration", Wrapping.AfterObjCDeclaration);
     IO.mapOptional("AfterStruct", Wrapping.AfterStruct);
     IO.mapOptional("AfterUnion", Wrapping.AfterUnion);
+    IO.mapOptional("AfterExternBlock", Wrapping.AfterExternBlock);
     IO.mapOptional("BeforeCatch", Wrapping.BeforeCatch);
     IO.mapOptional("BeforeElse", Wrapping.BeforeElse);
     IO.mapOptional("IndentBraces", Wrapping.IndentBraces);
@@ -491,9 +501,9 @@ static FormatStyle expandPresets(const FormatStyle &Style) {
   if (Style.BreakBeforeBraces == FormatStyle::BS_Custom)
     return Style;
   FormatStyle Expanded = Style;
-  Expanded.BraceWrapping = {false, false, false, false, false, false,
-                            false, false, false, false, false, true,
-                            true,  true};
+  Expanded.BraceWrapping = {false, false, false, false, false, false, 
+                            false, false, false, false, false, false, 
+                            true,  true,  true};
   switch (Style.BreakBeforeBraces) {
   case FormatStyle::BS_Linux:
     Expanded.BraceWrapping.AfterClass = true;
@@ -506,7 +516,8 @@ static FormatStyle expandPresets(const FormatStyle &Style) {
     Expanded.BraceWrapping.AfterFunction = true;
     Expanded.BraceWrapping.AfterStruct = true;
     Expanded.BraceWrapping.AfterUnion = true;
-    Expanded.BraceWrapping.SplitEmptyFunction = false;
+    Expanded.BraceWrapping.AfterExternBlock = true;
+    Expanded.BraceWrapping.SplitEmptyFunction = true;
     Expanded.BraceWrapping.SplitEmptyRecord = false;
     break;
   case FormatStyle::BS_Stroustrup:
@@ -522,13 +533,14 @@ static FormatStyle expandPresets(const FormatStyle &Style) {
     Expanded.BraceWrapping.AfterNamespace = true;
     Expanded.BraceWrapping.AfterObjCDeclaration = true;
     Expanded.BraceWrapping.AfterStruct = true;
+    Expanded.BraceWrapping.AfterExternBlock = true;
     Expanded.BraceWrapping.BeforeCatch = true;
     Expanded.BraceWrapping.BeforeElse = true;
     break;
   case FormatStyle::BS_GNU:
-    Expanded.BraceWrapping = {true, true, true, true, true, true,
-                              true, true, true, true, true, true,
-                              true, true};
+    Expanded.BraceWrapping = {true, true, true, true, true, true, 
+                              true, true, true, true, true, true, 
+                              true, true, true};
     break;
   case FormatStyle::BS_WebKit:
     Expanded.BraceWrapping.AfterFunction = true;
@@ -564,9 +576,9 @@ FormatStyle getLLVMStyle() {
   LLVMStyle.BreakBeforeBinaryOperators = FormatStyle::BOS_None;
   LLVMStyle.BreakBeforeTernaryOperators = true;
   LLVMStyle.BreakBeforeBraces = FormatStyle::BS_Attach;
-  LLVMStyle.BraceWrapping = {false, false, false, false, false, false,
-                             false, false, false, false, false, true,
-                             true,  true};
+  LLVMStyle.BraceWrapping = {false, false, false, false, false, false, 
+                             false, false, false, false, false, false, 
+                             true,  true,  true};
   LLVMStyle.BreakAfterJavaFieldAnnotations = false;
   LLVMStyle.BreakConstructorInitializers = FormatStyle::BCIS_BeforeColon;
   LLVMStyle.BreakBeforeInheritanceComma = false;
@@ -589,6 +601,7 @@ FormatStyle getLLVMStyle() {
                                  {".*", 1}};
   LLVMStyle.IncludeIsMainRegex = "(Test)?$";
   LLVMStyle.IndentCaseLabels = false;
+  LLVMStyle.IndentPPDirectives = FormatStyle::PPDIS_None;
   LLVMStyle.IndentWrappedFunctionNames = false;
   LLVMStyle.IndentWidth = 2;
   LLVMStyle.JavaScriptQuotes = FormatStyle::JSQS_Leave;
@@ -1539,11 +1552,17 @@ bool isMpegTS(StringRef Code) {
   return Code.size() > 188 && Code[0] == 0x47 && Code[188] == 0x47;
 }
 
+bool isLikelyXml(StringRef Code) {
+  return Code.ltrim().startswith("<");
+}
+
 tooling::Replacements sortIncludes(const FormatStyle &Style, StringRef Code,
                                    ArrayRef<tooling::Range> Ranges,
                                    StringRef FileName, unsigned *Cursor) {
   tooling::Replacements Replaces;
   if (!Style.SortIncludes)
+    return Replaces;
+  if (isLikelyXml(Code))
     return Replaces;
   if (Style.Language == FormatStyle::LanguageKind::LK_JavaScript &&
       isMpegTS(Code))
@@ -1893,6 +1912,8 @@ tooling::Replacements reformat(const FormatStyle &Style, StringRef Code,
                                FormattingAttemptStatus *Status) {
   FormatStyle Expanded = expandPresets(Style);
   if (Expanded.DisableFormat)
+    return tooling::Replacements();
+  if (isLikelyXml(Code))
     return tooling::Replacements();
   if (Expanded.Language == FormatStyle::LK_JavaScript && isMpegTS(Code))
     return tooling::Replacements();

@@ -501,6 +501,7 @@ private:
     DK_CV_DEF_RANGE,
     DK_CV_STRINGTABLE,
     DK_CV_FILECHECKSUMS,
+    DK_CV_FILECHECKSUM_OFFSET,
     DK_CFI_SECTIONS,
     DK_CFI_STARTPROC,
     DK_CFI_ENDPROC,
@@ -576,6 +577,7 @@ private:
   bool parseDirectiveCVDefRange();
   bool parseDirectiveCVStringTable();
   bool parseDirectiveCVFileChecksums();
+  bool parseDirectiveCVFileChecksumOffset();
 
   // .cfi directives
   bool parseDirectiveCFIRegister(SMLoc DirectiveLoc);
@@ -1327,10 +1329,10 @@ bool AsmParser::isAltmacroString(SMLoc &StrLoc, SMLoc &EndLoc) {
   assert((StrLoc.getPointer() != NULL) &&
          "Argument to the function cannot be a NULL value");
   const char *CharPtr = StrLoc.getPointer();
-  while ((*CharPtr != '>') && (*CharPtr != '\n') &&
-         (*CharPtr != '\r') && (*CharPtr != '\0')){
-	  if(*CharPtr == '!')
-		  CharPtr++;
+  while ((*CharPtr != '>') && (*CharPtr != '\n') && (*CharPtr != '\r') &&
+         (*CharPtr != '\0')) {
+    if (*CharPtr == '!')
+      CharPtr++;
     CharPtr++;
   }
   if (*CharPtr == '>') {
@@ -1648,16 +1650,6 @@ bool AsmParser::parseStatement(ParseStatementInfo &Info,
     Lex();
     return false;
   }
-  if (Lexer.is(AsmToken::Hash)) {
-    // Seeing a hash here means that it was an end-of-line comment in
-    // an asm syntax where hash's are not comment and the previous
-    // statement parser did not check the end of statement. Relex as
-    // EndOfStatement.
-    StringRef CommentStr = parseStringToEndOfStatement();
-    Lexer.Lex();
-    Lexer.UnLex(AsmToken(AsmToken::EndOfStatement, CommentStr));
-    return false;
-  }
   // Statements always start with an identifier.
   AsmToken ID = getTok();
   SMLoc IDLoc = ID.getLoc();
@@ -1697,6 +1689,11 @@ bool AsmParser::parseStatement(ParseStatementInfo &Info,
     // Treat '}' as a valid identifier in this context.
     Lex();
     IDVal = "}";
+  } else if (Lexer.is(AsmToken::Star) &&
+             getTargetParser().starIsStartOfStatement()) {
+    // Accept '*' as a valid start of statement.
+    Lex();
+    IDVal = "*";
   } else if (parseIdentifier(IDVal)) {
     if (!TheCondState.Ignore) {
       Lex(); // always eat a token
@@ -2035,6 +2032,8 @@ bool AsmParser::parseStatement(ParseStatementInfo &Info,
       return parseDirectiveCVStringTable();
     case DK_CV_FILECHECKSUMS:
       return parseDirectiveCVFileChecksums();
+    case DK_CV_FILECHECKSUM_OFFSET:
+      return parseDirectiveCVFileChecksumOffset();
     case DK_CFI_SECTIONS:
       return parseDirectiveCFISections();
     case DK_CFI_STARTPROC:
@@ -3462,25 +3461,34 @@ bool AsmParser::parseDirectiveStabs() {
 }
 
 /// parseDirectiveCVFile
-/// ::= .cv_file number filename
+/// ::= .cv_file number filename [checksum] [checksumkind]
 bool AsmParser::parseDirectiveCVFile() {
   SMLoc FileNumberLoc = getTok().getLoc();
   int64_t FileNumber;
   std::string Filename;
+  std::string Checksum;
+  int64_t ChecksumKind = 0;
 
   if (parseIntToken(FileNumber,
                     "expected file number in '.cv_file' directive") ||
       check(FileNumber < 1, FileNumberLoc, "file number less than one") ||
       check(getTok().isNot(AsmToken::String),
             "unexpected token in '.cv_file' directive") ||
-      // Usually directory and filename are together, otherwise just
-      // directory. Allow the strings to have escaped octal character sequence.
-      parseEscapedString(Filename) ||
-      parseToken(AsmToken::EndOfStatement,
-                 "unexpected token in '.cv_file' directive"))
+      parseEscapedString(Filename))
     return true;
+  if (!parseOptionalToken(AsmToken::EndOfStatement)) {
+    if (check(getTok().isNot(AsmToken::String),
+              "unexpected token in '.cv_file' directive") ||
+        parseEscapedString(Checksum) ||
+        parseIntToken(ChecksumKind,
+                      "expected checksum kind in '.cv_file' directive") ||
+        parseToken(AsmToken::EndOfStatement,
+                   "unexpected token in '.cv_file' directive"))
+      return true;
+  }
 
-  if (!getStreamer().EmitCVFileDirective(FileNumber, Filename))
+  if (!getStreamer().EmitCVFileDirective(FileNumber, Filename, Checksum,
+                                         static_cast<uint8_t>(ChecksumKind)))
     return Error(FileNumberLoc, "file number already allocated");
 
   return false;
@@ -3756,6 +3764,18 @@ bool AsmParser::parseDirectiveCVStringTable() {
 /// ::= .cv_filechecksums
 bool AsmParser::parseDirectiveCVFileChecksums() {
   getStreamer().EmitCVFileChecksumsDirective();
+  return false;
+}
+
+/// parseDirectiveCVFileChecksumOffset
+/// ::= .cv_filechecksumoffset fileno
+bool AsmParser::parseDirectiveCVFileChecksumOffset() {
+  int64_t FileNo;
+  if (parseIntToken(FileNo, "expected identifier in directive"))
+    return true;
+  if (parseToken(AsmToken::EndOfStatement, "Expected End of Statement"))
+    return true;
+  getStreamer().EmitCVFileChecksumOffsetDirective(FileNo);
   return false;
 }
 
@@ -5141,6 +5161,7 @@ void AsmParser::initializeDirectiveKindMap() {
   DirectiveKindMap[".cv_def_range"] = DK_CV_DEF_RANGE;
   DirectiveKindMap[".cv_stringtable"] = DK_CV_STRINGTABLE;
   DirectiveKindMap[".cv_filechecksums"] = DK_CV_FILECHECKSUMS;
+  DirectiveKindMap[".cv_filechecksumoffset"] = DK_CV_FILECHECKSUM_OFFSET;
   DirectiveKindMap[".sleb128"] = DK_SLEB128;
   DirectiveKindMap[".uleb128"] = DK_ULEB128;
   DirectiveKindMap[".cfi_sections"] = DK_CFI_SECTIONS;
@@ -5583,8 +5604,6 @@ bool AsmParser::parseMSInlineAsm(
   array_pod_sort(AsmStrRewrites.begin(), AsmStrRewrites.end(), rewritesSort);
   for (const AsmRewrite &AR : AsmStrRewrites) {
     AsmRewriteKind Kind = AR.Kind;
-    if (Kind == AOK_Delete)
-      continue;
 
     const char *Loc = AR.Loc.getPointer();
     assert(Loc >= AsmStart && "Expected Loc to be at or after Start!");
@@ -5604,11 +5623,21 @@ bool AsmParser::parseMSInlineAsm(
     switch (Kind) {
     default:
       break;
-    case AOK_Imm:
-      OS << "$$" << AR.Val;
-      break;
-    case AOK_ImmPrefix:
-      OS << "$$";
+    case AOK_IntelExpr:
+      assert(AR.IntelExp.isValid() && "cannot write invalid intel expression");
+      if (AR.IntelExp.NeedBracs)
+        OS << "[";
+      if (AR.IntelExp.hasBaseReg())
+        OS << AR.IntelExp.BaseReg;
+      if (AR.IntelExp.hasIndexReg())
+        OS << (AR.IntelExp.hasBaseReg() ? " + " : "")
+           << AR.IntelExp.IndexReg;
+      if (AR.IntelExp.Scale > 1)
+          OS << " * $$" << AR.IntelExp.Scale;
+      if (AR.IntelExp.Imm || !AR.IntelExp.hasRegs())
+        OS << (AR.IntelExp.hasRegs() ? " + $$" : "$$") << AR.IntelExp.Imm;
+      if (AR.IntelExp.NeedBracs)
+        OS << "]";
       break;
     case AOK_Label:
       OS << Ctx.getAsmInfo()->getPrivateLabelPrefix() << AR.Label;
@@ -5651,13 +5680,6 @@ bool AsmParser::parseMSInlineAsm(
     }
     case AOK_EVEN:
       OS << ".even";
-      break;
-    case AOK_DotOperator:
-      // Insert the dot if the user omitted it.
-      OS.flush();
-      if (AsmStringIR.back() != '.')
-        OS << '.';
-      OS << AR.Val;
       break;
     case AOK_EndOfStatement:
       OS << "\n\t";

@@ -35,7 +35,7 @@ defm defsym: Eq<"defsym">, HelpText<"Define a symbol alias">;
 defm library_path: Eq<"library-path">,
   HelpText<"Add a directory to the library search path">, MetaVarName<"<dir>">;
 
-def O: Joined<["-"], "O">, HelpText<"Optimize output file size">;
+def O: JoinedOrSeparate<["-"], "O">, HelpText<"Optimize output file size">;
 
 defm Tbss: Eq<"Tbss">,
   HelpText<"Same as --section-start with .bss as the sectionname">;
@@ -182,11 +182,17 @@ def no_demangle: F<"no-demangle">,
 def no_dynamic_linker: F<"no-dynamic-linker">,
   HelpText<"Inhibit output of .interp section">;
 
+def no_eh_frame_hdr: F<"no-eh-frame-hdr">,
+  HelpText<"Do not create .eh_frame_hdr section">;
+
 def no_export_dynamic: F<"no-export-dynamic">;
 def no_fatal_warnings: F<"no-fatal-warnings">;
 
 def no_gc_sections: F<"no-gc-sections">,
   HelpText<"Disable garbage collection of unused sections">;
+
+def no_gdb_index: F<"no-gdb-index">,
+  HelpText<"Do not generate .gdb_index section">;
 
 def no_gnu_unique: F<"no-gnu-unique">,
   HelpText<"Disable STB_GNU_UNIQUE symbol binding">;

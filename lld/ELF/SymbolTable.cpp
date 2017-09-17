@@ -250,7 +250,7 @@ std::pair<Symbol *, bool> SymbolTable::insert(StringRef Name, uint8_t Type,
                                               uint8_t Visibility,
                                               bool CanOmitFromDynSym,
                                               InputFile *File) {
-  bool IsUsedInRegularObj = !File || File->kind() == InputFile::ObjectKind;
+  bool IsUsedInRegularObj = !File || File->kind() == InputFile::ObjKind;
   Symbol *S;
   bool WasInserted;
   std::tie(S, WasInserted) = insert(Name);
@@ -301,7 +301,7 @@ Symbol *SymbolTable::addUndefined(StringRef Name, bool IsLocal, uint8_t Binding,
   }
   if (Binding != STB_WEAK) {
     SymbolBody *B = S->body();
-    if (B->isShared() || B->isLazy() || B->isUndefined())
+    if (!B->isInCurrentDSO())
       S->Binding = Binding;
     if (auto *SS = dyn_cast<SharedSymbol>(B))
       SS->getFile<ELFT>()->IsUsed = true;
@@ -680,6 +680,24 @@ void SymbolTable::handleAnonymousVersion() {
     assignWildcardVersion(Ver, VER_NDX_LOCAL);
 }
 
+// Handles -dynamic-list.
+void SymbolTable::handleDynamicList() {
+  for (SymbolVersion &Ver : Config->DynamicList) {
+    std::vector<SymbolBody *> Syms;
+    if (Ver.HasWildcard)
+      Syms = findByVersion(Ver);
+    else
+      Syms = findAllByVersion(Ver);
+
+    for (SymbolBody *B : Syms) {
+      if (!Config->Shared)
+        B->symbol()->VersionId = VER_NDX_GLOBAL;
+      else if (B->symbol()->includeInDynsym())
+        B->IsPreemptible = true;
+    }
+  }
+}
+
 // Set symbol versions to symbols. This function handles patterns
 // containing no wildcard characters.
 void SymbolTable::assignExactVersion(SymbolVersion Ver, uint16_t VersionId,
@@ -729,6 +747,7 @@ void SymbolTable::assignWildcardVersion(SymbolVersion Ver, uint16_t VersionId) {
 void SymbolTable::scanVersionScript() {
   // Handle edge cases first.
   handleAnonymousVersion();
+  handleDynamicList();
 
   // Now we have version definitions, so we need to set version ids to symbols.
   // Each version definition has a glob pattern, and all symbols that match

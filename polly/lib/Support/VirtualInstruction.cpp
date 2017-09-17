@@ -78,7 +78,7 @@ VirtualUse VirtualUse::create(Scop *S, ScopStmt *UserStmt, Loop *UserScope,
   // A use is inter-statement if either it is defined in another statement, or
   // there is a MemoryAccess that reads its value that has been written by
   // another statement.
-  if (InputMA || (!Virtual && !UserStmt->represents(Inst->getParent())))
+  if (InputMA || (!Virtual && UserStmt != S->getStmtFor(Inst)))
     return VirtualUse(UserStmt, Val, Inter, nullptr, InputMA);
 
   return VirtualUse(UserStmt, Val, Intra, nullptr, nullptr);
@@ -180,12 +180,16 @@ static bool isEscaping(MemoryAccess *MA) {
 static void
 addInstructionRoots(ScopStmt *Stmt,
                     SmallVectorImpl<VirtualInstruction> &RootInsts) {
-  // For region statements we must keep all instructions because we do not
-  // support removing instructions from region statements.
   if (!Stmt->isBlockStmt()) {
-    for (auto *BB : Stmt->getRegion()->blocks())
-      for (Instruction &Inst : *BB)
-        RootInsts.emplace_back(Stmt, &Inst);
+    // In region statements the terminator statement and all statements that
+    // are not in the entry block cannot be eliminated and consequently must
+    // be roots.
+    RootInsts.emplace_back(Stmt,
+                           Stmt->getRegion()->getEntry()->getTerminator());
+    for (BasicBlock *BB : Stmt->getRegion()->blocks())
+      if (Stmt->getRegion()->getEntry() != BB)
+        for (Instruction &Inst : *BB)
+          RootInsts.emplace_back(Stmt, &Inst);
     return;
   }
 

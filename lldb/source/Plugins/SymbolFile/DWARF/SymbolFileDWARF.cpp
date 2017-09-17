@@ -71,6 +71,7 @@
 #include "LogChannelDWARF.h"
 #include "SymbolFileDWARFDebugMap.h"
 #include "SymbolFileDWARFDwo.h"
+#include "SymbolFileDWARFDwp.h"
 
 #include "llvm/Support/FileSystem.h"
 
@@ -1568,6 +1569,16 @@ SymbolFileDWARF::GetDwoSymbolFileForCompileUnit(
   if (!dwo_name)
     return nullptr;
 
+  SymbolFileDWARFDwp *dwp_symfile = GetDwpSymbolFile();
+  if (dwp_symfile) {
+    uint64_t dwo_id = cu_die.GetAttributeValueAsUnsigned(this, &dwarf_cu,
+                                                         DW_AT_GNU_dwo_id, 0);
+    std::unique_ptr<SymbolFileDWARFDwo> dwo_symfile =
+        dwp_symfile->GetSymbolFileForDwoId(&dwarf_cu, dwo_id);
+    if (dwo_symfile)
+      return dwo_symfile;
+  }
+
   FileSpec dwo_file(dwo_name, true);
   if (dwo_file.IsRelative()) {
     const char *comp_dir = cu_die.GetAttributeValueAsString(
@@ -1629,7 +1640,29 @@ void SymbolFileDWARF::UpdateExternalModuleListIfNeeded() {
             }
             dwo_module_spec.GetArchitecture() =
                 m_obj_file->GetModule()->GetArchitecture();
-            // printf ("Loading dwo = '%s'\n", dwo_path);
+
+            // When LLDB loads "external" modules it looks at the
+            // presence of DW_AT_GNU_dwo_name.
+            // However, when the already created module
+            // (corresponding to .dwo itself) is being processed,
+            // it will see the presence of DW_AT_GNU_dwo_name
+            // (which contains the name of dwo file) and
+            // will try to call ModuleList::GetSharedModule again.
+            // In some cases (i.e. for empty files) Clang 4.0
+            // generates a *.dwo file which has DW_AT_GNU_dwo_name,
+            // but no DW_AT_comp_dir. In this case the method
+            // ModuleList::GetSharedModule will fail and
+            // the warning will be printed. However, as one can notice
+            // in this case we don't actually need to try to load the already
+            // loaded module (corresponding to .dwo) so we simply skip it.
+            if (m_obj_file->GetFileSpec()
+                        .GetFileNameExtension()
+                        .GetStringRef() == "dwo" &&
+                llvm::StringRef(m_obj_file->GetFileSpec().GetPath())
+                    .endswith(dwo_module_spec.GetFileSpec().GetPath())) {
+              continue;
+            }
+
             Status error = ModuleList::GetSharedModule(
                 dwo_module_spec, module_sp, NULL, NULL, NULL);
             if (!module_sp) {
@@ -1669,9 +1702,8 @@ SymbolFileDWARF::GlobalVariableMap &SymbolFileDWARF::GetGlobalAranges() {
                 const DWARFExpression &location = var_sp->LocationExpression();
                 Value location_result;
                 Status error;
-                if (location.Evaluate(nullptr, nullptr, nullptr,
-                                      LLDB_INVALID_ADDRESS, nullptr, nullptr,
-                                      location_result, &error)) {
+                if (location.Evaluate(nullptr, LLDB_INVALID_ADDRESS, nullptr,
+                                      nullptr, location_result, &error)) {
                   if (location_result.GetValueType() ==
                       Value::eValueTypeFileAddress) {
                     lldb::addr_t file_addr =
@@ -4316,4 +4348,15 @@ SymbolFileDWARFDebugMap *SymbolFileDWARF::GetDebugMapSymfile() {
 DWARFExpression::LocationListFormat
 SymbolFileDWARF::GetLocationListFormat() const {
   return DWARFExpression::RegularLocationList;
+}
+
+SymbolFileDWARFDwp *SymbolFileDWARF::GetDwpSymbolFile() {
+  llvm::call_once(m_dwp_symfile_once_flag, [this]() {
+    FileSpec dwp_filespec(m_obj_file->GetFileSpec().GetPath() + ".dwp", false);
+    if (dwp_filespec.Exists()) {
+      m_dwp_symfile = SymbolFileDWARFDwp::Create(GetObjectFile()->GetModule(),
+                                                 dwp_filespec);
+    }
+  });
+  return m_dwp_symfile.get();
 }

@@ -25,6 +25,7 @@
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineLoopInfo.h"
 #include "llvm/CodeGen/MachineOperand.h"
+#include "llvm/CodeGen/PseudoSourceValue.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/Support/BranchProbability.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -324,13 +325,13 @@ public:
                              unsigned SubIdx, const MachineInstr &Orig,
                              const TargetRegisterInfo &TRI) const;
 
-  /// Create a duplicate of the Orig instruction in MF. This is like
-  /// MachineFunction::CloneMachineInstr(), but the target may update operands
+  /// \brief Clones instruction or the whole instruction bundle \p Orig and
+  /// insert into \p MBB before \p InsertBefore. The target may update operands
   /// that are required to be unique.
   ///
-  /// The instruction must be duplicable as indicated by isNotDuplicable().
-  virtual MachineInstr *duplicate(MachineInstr &Orig,
-                                  MachineFunction &MF) const;
+  /// \p Orig must not return true for MachineInstr::isNotDuplicable().
+  virtual MachineInstr &duplicate(MachineBasicBlock &MBB,
+      MachineBasicBlock::iterator InsertBefore, const MachineInstr &Orig) const;
 
   /// This method must be implemented by targets that
   /// set the M_CONVERTIBLE_TO_3_ADDR flag.  When this flag is set, the target
@@ -1018,6 +1019,13 @@ protected:
   }
 
 public:
+  /// getAddressSpaceForPseudoSourceKind - Given the kind of memory
+  /// (e.g. stack) the target returns the corresponding address space.
+  virtual unsigned
+  getAddressSpaceForPseudoSourceKind(PseudoSourceValue::PSVKind Kind) const {
+    return 0;
+  }
+
   /// unfoldMemoryOperand - Separate a single instruction which folded a load or
   /// a store or a load and a store into two or more instruction. If this is
   /// possible, returns true as well as the new instructions by reference.
@@ -1097,8 +1105,8 @@ public:
   /// or
   ///   DAG->addMutation(createStoreClusterDAGMutation(DAG->TII, DAG->TRI));
   /// to TargetPassConfig::createMachineScheduler() to have an effect.
-  virtual bool shouldClusterMemOps(MachineInstr &FirstLdSt,
-                                   MachineInstr &SecondLdSt,
+  virtual bool shouldClusterMemOps(MachineInstr &FirstLdSt, unsigned BaseReg1,
+                                   MachineInstr &SecondLdSt, unsigned BaseReg2,
                                    unsigned NumLoads) const {
     llvm_unreachable("target did not implement shouldClusterMemOps()");
   }

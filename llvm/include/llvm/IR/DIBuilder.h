@@ -112,6 +112,8 @@ namespace llvm {
     /// \param SplitDebugInlining    Whether to emit inline debug info.
     /// \param DebugInfoForProfiling Whether to emit extra debug info for
     ///                              profile collection.
+    /// \param GnuPubnames   Whether to emit .debug_gnu_pubnames section instead
+    ///                      of .debug_pubnames.
     DICompileUnit *
     createCompileUnit(unsigned Lang, DIFile *File, StringRef Producer,
                       bool isOptimized, StringRef Flags, unsigned RV,
@@ -119,7 +121,8 @@ namespace llvm {
                       DICompileUnit::DebugEmissionKind Kind =
                           DICompileUnit::DebugEmissionKind::FullDebug,
                       uint64_t DWOId = 0, bool SplitDebugInlining = true,
-                      bool DebugInfoForProfiling = false);
+                      bool DebugInfoForProfiling = false,
+                      bool GnuPubnames = false);
 
     /// Create a file descriptor to hold debugging information for a file.
     /// \param Filename  File name.
@@ -550,18 +553,6 @@ namespace llvm {
     /// \param Addr        An array of complex address operations.
     DIExpression *createExpression(ArrayRef<uint64_t> Addr = None);
     DIExpression *createExpression(ArrayRef<int64_t> Addr);
-
-    /// Create a descriptor to describe one part of an aggregate variable that
-    /// is fragmented across multiple Values. The DW_OP_LLVM_fragment operation
-    /// will be appended to the elements of \c Expr. If \c Expr already contains
-    /// a \c DW_OP_LLVM_fragment \c OffsetInBits is interpreted as an offset
-    /// into the existing fragment.
-    ///
-    /// \param OffsetInBits Offset of the piece in bits.
-    /// \param SizeInBits   Size of the piece in bits.
-    DIExpression *createFragmentExpression(unsigned OffsetInBits,
-                                           unsigned SizeInBits,
-                                           const DIExpression *Expr = nullptr);
 
     /// Create an expression for a variable that does not have an address, but
     /// does have a constant value.

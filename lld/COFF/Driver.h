@@ -41,26 +41,30 @@ void markLive(const std::vector<Chunk *> &Chunks);
 // Implemented in ICF.cpp.
 void doICF(const std::vector<Chunk *> &Chunks);
 
+class COFFOptTable : public llvm::opt::OptTable {
+public:
+  COFFOptTable();
+};
+
 class ArgParser {
 public:
-  // Parses command line options.
-  llvm::opt::InputArgList parse(llvm::ArrayRef<const char *> Args);
-
-  // Concatenate LINK environment varirable and given arguments and parse them.
+  // Concatenate LINK environment variable and given arguments and parse them.
   llvm::opt::InputArgList parseLINK(std::vector<const char *> Args);
 
   // Tokenizes a given string and then parses as command line options.
   llvm::opt::InputArgList parse(StringRef S) { return parse(tokenize(S)); }
 
 private:
+  // Parses command line options.
+  llvm::opt::InputArgList parse(llvm::ArrayRef<const char *> Args);
+
   std::vector<const char *> tokenize(StringRef S);
 
-  std::vector<const char *> replaceResponseFiles(std::vector<const char *>);
+  COFFOptTable Table;
 };
 
 class LinkerDriver {
 public:
-  LinkerDriver() { coff::Symtab = &Symtab; }
   void link(llvm::ArrayRef<const char *> Args);
 
   // Used by the resolver to parse .drectve section contents.
@@ -71,9 +75,6 @@ public:
                             StringRef ParentName);
 
 private:
-  ArgParser Parser;
-  SymbolTable Symtab;
-
   std::unique_ptr<llvm::TarWriter> Tar; // for /linkrepro
 
   // Opens a file. Path has to be resolved already.
@@ -109,11 +110,11 @@ private:
   void invokeMSVC(llvm::opt::InputArgList &Args);
 
   MemoryBufferRef takeBuffer(std::unique_ptr<MemoryBuffer> MB);
-  void addBuffer(std::unique_ptr<MemoryBuffer> MB);
+  void addBuffer(std::unique_ptr<MemoryBuffer> MB, bool WholeArchive);
   void addArchiveBuffer(MemoryBufferRef MBRef, StringRef SymName,
                         StringRef ParentName);
 
-  void enqueuePath(StringRef Path);
+  void enqueuePath(StringRef Path, bool WholeArchive);
 
   void enqueueTask(std::function<void()> Task);
   bool run();

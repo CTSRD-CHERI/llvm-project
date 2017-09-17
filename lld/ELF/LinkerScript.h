@@ -53,6 +53,7 @@ struct ExprValue {
   bool isAbsolute() const { return ForceAbsolute || Sec == nullptr; }
   uint64_t getValue() const;
   uint64_t getSecAddr() const;
+  uint64_t getSectionOffset() const;
 };
 
 // This represents an expression in the linker script.
@@ -187,7 +188,7 @@ struct ScriptConfiguration {
   std::vector<InputSectionDescription *> KeptSections;
 
   // A map from memory region name to a memory region descriptor.
-  llvm::DenseMap<llvm::StringRef, MemoryRegion> MemoryRegions;
+  llvm::DenseMap<llvm::StringRef, MemoryRegion *> MemoryRegions;
 
   // A list of symbols referenced by the script.
   std::vector<llvm::StringRef> ReferencedSymbols;

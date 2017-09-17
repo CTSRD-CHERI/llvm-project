@@ -70,7 +70,7 @@ int main() {
 // CHECK-NEXT: br label %[[INNER_FOR_COND]]
 // CHECK:      [[INNER_LOOP_END]]
   }
-// CHECK:      call void @__kmpc_for_static_fini(%{{.+}}* @{{.+}}, i32 [[GTID]])
+// CHECK:      call void @__kmpc_for_static_fini(%{{.+}}* [[SECTIONS_LOC]], i32 [[GTID]])
 // CHECK:      call void @__kmpc_barrier(%{{.+}}* [[IMPLICIT_BARRIER_SECTIONS_LOC]],
 #pragma omp sections nowait
   {
@@ -84,7 +84,7 @@ int main() {
 
 // CHECK-LABEL: tmain
 // CHECK:       call void {{.*}} @__kmpc_fork_call(
-// CHECK-NOT:   __kmpc_global_thread_num
+// CHECK:       __kmpc_global_thread_num
 // CHECK:       call void @__kmpc_for_static_init_4(
 // CHECK:       invoke void @{{.*}}foo{{.*}}()
 // CHECK-NEXT:  unwind label %[[TERM_LPAD:.+]]

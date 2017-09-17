@@ -151,7 +151,8 @@ public:
                              int64_t &Offset,
                              const TargetRegisterInfo *TRI) const final;
 
-  bool shouldClusterMemOps(MachineInstr &FirstLdSt, MachineInstr &SecondLdSt,
+  bool shouldClusterMemOps(MachineInstr &FirstLdSt, unsigned BaseReg1,
+                           MachineInstr &SecondLdSt, unsigned BaseReg2,
                            unsigned NumLoads) const final;
 
   void copyPhysReg(MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
@@ -257,6 +258,9 @@ public:
                           MachineBasicBlock::iterator I, const DebugLoc &DL,
                           unsigned DstReg, ArrayRef<MachineOperand> Cond,
                           unsigned TrueReg, unsigned FalseReg) const;
+
+  unsigned getAddressSpaceForPseudoSourceKind(
+             PseudoSourceValue::PSVKind Kind) const override;
 
   bool
   areMemAccessesTriviallyDisjoint(MachineInstr &MIa, MachineInstr &MIb,
@@ -548,11 +552,23 @@ public:
   }
 
   static bool hasFPClamp(const MachineInstr &MI) {
-    return MI.getDesc().TSFlags & SIInstrFlags::HasFPClamp;
+    return MI.getDesc().TSFlags & SIInstrFlags::FPClamp;
   }
 
   bool hasFPClamp(uint16_t Opcode) const {
-    return get(Opcode).TSFlags & SIInstrFlags::HasFPClamp;
+    return get(Opcode).TSFlags & SIInstrFlags::FPClamp;
+  }
+
+  static bool hasIntClamp(const MachineInstr &MI) {
+    return MI.getDesc().TSFlags & SIInstrFlags::IntClamp;
+  }
+
+  uint64_t getClampMask(const MachineInstr &MI) const {
+    const uint64_t ClampFlags = SIInstrFlags::FPClamp |
+                                SIInstrFlags::IntClamp |
+                                SIInstrFlags::ClampLo |
+                                SIInstrFlags::ClampHi;
+      return MI.getDesc().TSFlags & ClampFlags;
   }
 
   bool isVGPRCopy(const MachineInstr &MI) const {

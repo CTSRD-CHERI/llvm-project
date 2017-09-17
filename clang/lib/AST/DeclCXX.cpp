@@ -55,15 +55,18 @@ CXXRecordDecl::DefinitionData::DefinitionData(CXXRecordDecl *D)
       HasOnlyCMembers(true), HasInClassInitializer(false),
       HasUninitializedReferenceMember(false), HasUninitializedFields(false),
       HasInheritedConstructor(false), HasInheritedAssignment(false),
+      NeedOverloadResolutionForCopyConstructor(false),
       NeedOverloadResolutionForMoveConstructor(false),
       NeedOverloadResolutionForMoveAssignment(false),
       NeedOverloadResolutionForDestructor(false),
+      DefaultedCopyConstructorIsDeleted(false),
       DefaultedMoveConstructorIsDeleted(false),
       DefaultedMoveAssignmentIsDeleted(false),
       DefaultedDestructorIsDeleted(false), HasTrivialSpecialMembers(SMF_All),
       DeclaredNonTrivialSpecialMembers(0), HasIrrelevantDestructor(true),
       HasConstexprNonCopyMoveConstructor(false),
       HasDefaultedDefaultConstructor(false),
+      CanPassInRegisters(true),
       DefaultedDefaultConstructorIsConstexpr(true),
       HasConstexprDefaultConstructor(false),
       HasNonLiteralTypeFieldsOrBases(false), ComputedVisibleConversions(false),
@@ -352,8 +355,10 @@ CXXRecordDecl::setBases(CXXBaseSpecifier const * const *Bases,
       setHasVolatileMember(true);
 
     // Keep track of the presence of mutable fields.
-    if (BaseClassDecl->hasMutableFields())
+    if (BaseClassDecl->hasMutableFields()) {
       data().HasMutableFields = true;
+      data().NeedOverloadResolutionForCopyConstructor = true;
+    }
 
     if (BaseClassDecl->hasUninitializedReferenceMember())
       data().HasUninitializedReferenceMember = true;
@@ -406,6 +411,8 @@ void CXXRecordDecl::addedClassSubobject(CXXRecordDecl *Subobj) {
   //    -- a direct or virtual base class B that cannot be copied/moved [...]
   //    -- a non-static data member of class type M (or array thereof)
   //       that cannot be copied or moved [...]
+  if (!Subobj->hasSimpleCopyConstructor())
+    data().NeedOverloadResolutionForCopyConstructor = true;
   if (!Subobj->hasSimpleMoveConstructor())
     data().NeedOverloadResolutionForMoveConstructor = true;
 
@@ -426,6 +433,7 @@ void CXXRecordDecl::addedClassSubobject(CXXRecordDecl *Subobj) {
   //    -- any non-static data member has a type with a destructor
   //       that is deleted or inaccessible from the defaulted [ctor or dtor].
   if (!Subobj->hasSimpleDestructor()) {
+    data().NeedOverloadResolutionForCopyConstructor = true;
     data().NeedOverloadResolutionForMoveConstructor = true;
     data().NeedOverloadResolutionForDestructor = true;
   }
@@ -711,8 +719,10 @@ void CXXRecordDecl::addedMember(Decl *D) {
       data().IsStandardLayout = false;
 
     // Keep track of the presence of mutable fields.
-    if (Field->isMutable())
+    if (Field->isMutable()) {
       data().HasMutableFields = true;
+      data().NeedOverloadResolutionForCopyConstructor = true;
+    }
 
     // C++11 [class.union]p8, DR1460:
     //   If X is a union, a non-static data member of X that is not an anonymous
@@ -756,6 +766,12 @@ void CXXRecordDecl::addedMember(Decl *D) {
       //   A standard-layout class is a class that:
       //    -- has no non-static data members of type [...] reference,
       data().IsStandardLayout = false;
+
+      // C++1z [class.copy.ctor]p10:
+      //   A defaulted copy constructor for a class X is defined as deleted if X has:
+      //    -- a non-static data member of rvalue reference type
+      if (T->isRValueReferenceType())
+        data().DefaultedCopyConstructorIsDeleted = true;
     }
 
     if (!Field->hasInClassInitializer() && !Field->isMutable()) {
@@ -809,6 +825,10 @@ void CXXRecordDecl::addedMember(Decl *D) {
         // We may need to perform overload resolution to determine whether a
         // field can be moved if it's const or volatile qualified.
         if (T.getCVRQualifiers() & (Qualifiers::Const | Qualifiers::Volatile)) {
+          // We need to care about 'const' for the copy constructor because an
+          // implicit copy constructor might be declared with a non-const
+          // parameter.
+          data().NeedOverloadResolutionForCopyConstructor = true;
           data().NeedOverloadResolutionForMoveConstructor = true;
           data().NeedOverloadResolutionForMoveAssignment = true;
         }
@@ -819,6 +839,8 @@ void CXXRecordDecl::addedMember(Decl *D) {
         //    -- X is a union-like class that has a variant member with a
         //       non-trivial [corresponding special member]
         if (isUnion()) {
+          if (FieldRec->hasNonTrivialCopyConstructor())
+            data().DefaultedCopyConstructorIsDeleted = true;
           if (FieldRec->hasNonTrivialMoveConstructor())
             data().DefaultedMoveConstructorIsDeleted = true;
           if (FieldRec->hasNonTrivialMoveAssignment())
@@ -830,6 +852,8 @@ void CXXRecordDecl::addedMember(Decl *D) {
         // For an anonymous union member, our overload resolution will perform
         // overload resolution for its members.
         if (Field->isAnonymousStructOrUnion()) {
+          data().NeedOverloadResolutionForCopyConstructor |=
+              FieldRec->data().NeedOverloadResolutionForCopyConstructor;
           data().NeedOverloadResolutionForMoveConstructor |=
               FieldRec->data().NeedOverloadResolutionForMoveConstructor;
           data().NeedOverloadResolutionForMoveAssignment |=
@@ -915,8 +939,10 @@ void CXXRecordDecl::addedMember(Decl *D) {
         }
         
         // Keep track of the presence of mutable fields.
-        if (FieldRec->hasMutableFields())
+        if (FieldRec->hasMutableFields()) {
           data().HasMutableFields = true;
+          data().NeedOverloadResolutionForCopyConstructor = true;
+        }
 
         // C++11 [class.copy]p13:
         //   If the implicitly-defined constructor would satisfy the
@@ -1444,13 +1470,60 @@ bool CXXRecordDecl::isAnyDestructorNoReturn() const {
   return false;
 }
 
+bool CXXRecordDecl::isInterfaceLike() const {
+  assert(hasDefinition() && "checking for interface-like without a definition");
+  // All __interfaces are inheritently interface-like.
+  if (isInterface())
+    return true;
+
+  // Interface-like types cannot have a user declared constructor, destructor,
+  // friends, VBases, conversion functions, or fields.  Additionally, lambdas
+  // cannot be interface types.
+  if (isLambda() || hasUserDeclaredConstructor() ||
+      hasUserDeclaredDestructor() || !field_empty() || hasFriends() ||
+      getNumVBases() > 0 || conversion_end() - conversion_begin() > 0)
+    return false;
+
+  // No interface-like type can have a method with a definition.
+  for (const auto *const Method : methods())
+    if (Method->isDefined())
+      return false;
+
+  // Check "Special" types.
+  const auto *Uuid = getAttr<UuidAttr>();
+  if (Uuid && isStruct() && getDeclContext()->isTranslationUnit() &&
+      ((getName() == "IUnknown" &&
+        Uuid->getGuid() == "00000000-0000-0000-C000-000000000046") ||
+       (getName() == "IDispatch" &&
+        Uuid->getGuid() == "00020400-0000-0000-C000-000000000046"))) {
+    if (getNumBases() > 0)
+      return false;
+    return true;
+  }
+
+  // FIXME: Any access specifiers is supposed to make this no longer interface
+  // like.
+
+  // If this isn't a 'special' type, it must have a single interface-like base.
+  if (getNumBases() != 1)
+    return false;
+
+  const auto BaseSpec = *bases_begin();
+  if (BaseSpec.isVirtual() || BaseSpec.getAccessSpecifier() != AS_public)
+    return false;
+  const auto *Base = BaseSpec.getType()->getAsCXXRecordDecl();
+  if (Base->isInterface() || !Base->isInterfaceLike())
+    return false;
+  return true;
+}
+
 void CXXRecordDecl::completeDefinition() {
   completeDefinition(nullptr);
 }
 
 void CXXRecordDecl::completeDefinition(CXXFinalOverriderMap *FinalOverriders) {
   RecordDecl::completeDefinition();
-  
+
   // If the class may be abstract (but hasn't been marked as such), check for
   // any pure final overriders.
   if (mayBeAbstract()) {

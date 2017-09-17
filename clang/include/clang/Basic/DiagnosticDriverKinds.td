@@ -101,6 +101,10 @@ def err_drv_force_crash : Error<
   "failing because %select{environment variable 'FORCE_CLANG_DIAGNOSTICS_CRASH' is set|'-gen-reproducer' is used}0">;
 def err_drv_invalid_mfloat_abi : Error<
   "invalid float ABI '%0'">;
+def err_drv_invalid_mtp : Error<
+  "invalid thread pointer reading mode '%0'">;
+def err_drv_missing_arg_mtp : Error<
+  "missing argument to '%0'">;
 def err_drv_invalid_libcxx_deployment : Error<
   "invalid deployment target for -stdlib=libc++ (requires %0 or later)">;
 def err_drv_invalid_argument_to_fdebug_prefix_map : Error<
@@ -285,6 +289,12 @@ def warn_target_unsupported_nan2008 : Warning<
 def warn_target_unsupported_nanlegacy : Warning<
   "ignoring '-mnan=legacy' option because the '%0' architecture does not support it">,
   InGroup<UnsupportedNan>;
+def warn_target_unsupported_abslegacy : Warning<
+  "ignoring '-mabs=legacy' option because the '%0' architecture does not support it">,
+  InGroup<UnsupportedAbs>;
+def warn_target_unsupported_abs2008 : Warning<
+  "ignoring '-mabs=2008' option because the '%0' architecture does not support it">,
+  InGroup<UnsupportedAbs>;
 def warn_target_unsupported_compact_branches : Warning<
   "ignoring '-mcompact-branches=' option because the '%0' architecture does not"
   " support it">, InGroup<UnsupportedCB>;

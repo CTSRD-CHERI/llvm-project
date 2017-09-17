@@ -403,7 +403,7 @@ define void @example25() nounwind {
 ; AVX2-LABEL: example25:
 ; AVX2:       # BB#0: # %vector.ph
 ; AVX2-NEXT:    movq $-4096, %rax # imm = 0xF000
-; AVX2-NEXT:    vbroadcastss {{.*}}(%rip), %ymm0
+; AVX2-NEXT:    vbroadcastss {{.*#+}} ymm0 = [1,1,1,1,1,1,1,1]
 ; AVX2-NEXT:    .p2align 4, 0x90
 ; AVX2-NEXT:  .LBB5_1: # %vector.body
 ; AVX2-NEXT:    # =>This Inner Loop Header: Depth=1
@@ -411,8 +411,8 @@ define void @example25() nounwind {
 ; AVX2-NEXT:    vcmpltps db+4096(%rax), %ymm1, %ymm1
 ; AVX2-NEXT:    vmovups dc+4096(%rax), %ymm2
 ; AVX2-NEXT:    vcmpltps dd+4096(%rax), %ymm2, %ymm2
+; AVX2-NEXT:    vandps %ymm0, %ymm2, %ymm2
 ; AVX2-NEXT:    vandps %ymm2, %ymm1, %ymm1
-; AVX2-NEXT:    vandps %ymm0, %ymm1, %ymm1
 ; AVX2-NEXT:    vmovups %ymm1, dj+4096(%rax)
 ; AVX2-NEXT:    addq $32, %rax
 ; AVX2-NEXT:    jne .LBB5_1

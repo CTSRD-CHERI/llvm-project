@@ -16,6 +16,7 @@
 #include "llvm/DebugInfo/DWARF/DWARFAbbreviationDeclaration.h"
 #include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #include "llvm/DebugInfo/DWARF/DWARFDebugRangeList.h"
+#include "llvm/DebugInfo/DWARF/DWARFExpression.h"
 #include "llvm/DebugInfo/DWARF/DWARFFormValue.h"
 #include "llvm/DebugInfo/DWARF/DWARFUnit.h"
 #include "llvm/Object/ObjectFile.h"
@@ -58,7 +59,7 @@ static void dumpRanges(const DWARFObject &Obj, raw_ostream &OS,
                        unsigned AddressSize, unsigned Indent,
                        const DIDumpOptions &DumpOpts) {
   ArrayRef<SectionName> SectionNames;
-  if (!DumpOpts.Brief)
+  if (DumpOpts.Verbose)
     SectionNames = Obj.getSectionNames();
 
   for (size_t I = 0; I < Ranges.size(); ++I) {
@@ -77,7 +78,49 @@ static void dumpRanges(const DWARFObject &Obj, raw_ostream &OS,
 
     // Print section index if name is not unique.
     if (!SectionNames[R.SectionIndex].IsNameUnique)
-      OS << format(" [%u]", R.SectionIndex);
+      OS << format(" [%" PRIu64 "]", R.SectionIndex);
+  }
+}
+
+static void dumpLocation(raw_ostream &OS, DWARFFormValue &FormValue,
+                         DWARFUnit *U, unsigned Indent,
+                         DIDumpOptions DumpOpts) {
+  DWARFContext &Ctx = U->getContext();
+  const DWARFObject &Obj = Ctx.getDWARFObj();
+  const MCRegisterInfo *MRI = Ctx.getRegisterInfo();
+  if (FormValue.isFormClass(DWARFFormValue::FC_Block) ||
+      FormValue.isFormClass(DWARFFormValue::FC_Exprloc)) {
+    ArrayRef<uint8_t> Expr = *FormValue.getAsBlock();
+    DataExtractor Data(StringRef((const char *)Expr.data(), Expr.size()),
+                       Ctx.isLittleEndian(), 0);
+    DWARFExpression(Data, U->getVersion(), U->getAddressByteSize())
+        .print(OS, MRI);
+    return;
+  }
+
+  FormValue.dump(OS, DumpOpts);
+  if (FormValue.isFormClass(DWARFFormValue::FC_SectionOffset)) {
+    const DWARFSection &LocSection = Obj.getLocSection();
+    const DWARFSection &LocDWOSection = Obj.getLocDWOSection();
+    uint32_t Offset = *FormValue.getAsSectionOffset();
+
+    if (!LocSection.Data.empty()) {
+      DWARFDebugLoc DebugLoc;
+      DWARFDataExtractor Data(Obj, LocSection, Ctx.isLittleEndian(),
+                              Obj.getAddressSize());
+      auto LL = DebugLoc.parseOneLocationList(Data, &Offset);
+      if (LL)
+        LL->dump(OS, Ctx.isLittleEndian(), Obj.getAddressSize(), MRI, Indent);
+      else
+        OS << "error extracting location list.";
+    } else if (!LocDWOSection.Data.empty()) {
+      DataExtractor Data(LocDWOSection.Data, Ctx.isLittleEndian(), 0);
+      auto LL = DWARFDebugLocDWO::parseOneLocationList(Data, &Offset);
+      if (LL)
+        LL->dump(OS, Ctx.isLittleEndian(), Obj.getAddressSize(), MRI, Indent);
+      else
+        OS << "error extracting location list.";
+    }
   }
 }
 
@@ -96,7 +139,7 @@ static void dumpAttribute(raw_ostream &OS, const DWARFDie &Die,
   else
     WithColor(OS, syntax::Attribute).get() << format("DW_AT_Unknown_%x", Attr);
 
-  if (!DumpOpts.Brief) {
+  if (DumpOpts.Verbose) {
     auto formString = FormEncodingString(Form);
     if (!formString.empty())
       OS << " [" << formString << ']';
@@ -106,12 +149,12 @@ static void dumpAttribute(raw_ostream &OS, const DWARFDie &Die,
 
   DWARFUnit *U = Die.getDwarfUnit();
   DWARFFormValue formValue(Form);
-  
+
   if (!formValue.extractValue(U->getDebugInfoExtractor(), OffsetPtr, U))
     return;
-  
+
   OS << "\t(";
-  
+
   StringRef Name;
   std::string File;
   auto Color = syntax::Enumerator;
@@ -124,14 +167,17 @@ static void dumpAttribute(raw_ostream &OS, const DWARFDie &Die,
       }
   } else if (Optional<uint64_t> Val = formValue.getAsUnsignedConstant())
     Name = AttributeValueString(Attr, *Val);
-  
+
   if (!Name.empty())
     WithColor(OS, Color) << Name;
   else if (Attr == DW_AT_decl_line || Attr == DW_AT_call_line)
     OS << *formValue.getAsUnsignedConstant();
+  else if (Attr == DW_AT_location || Attr == DW_AT_frame_base ||
+           Attr == DW_AT_data_member_location)
+    dumpLocation(OS, formValue, U, sizeof(BaseIndent) + Indent + 4, DumpOpts);
   else
-    formValue.dump(OS);
-  
+    formValue.dump(OS, DumpOpts);
+
   // We have dumped the attribute raw value. For some attributes
   // having both the raw value and the pretty-printed value is
   // interesting. These attributes are handled below.
@@ -328,11 +374,11 @@ void DWARFDie::dump(raw_ostream &OS, unsigned RecurseDepth, unsigned Indent,
   DWARFDataExtractor debug_info_data = U->getDebugInfoExtractor();
   const uint32_t Offset = getOffset();
   uint32_t offset = Offset;
-  
+
   if (debug_info_data.isValidOffset(offset)) {
     uint32_t abbrCode = debug_info_data.getULEB128(&offset);
     WithColor(OS, syntax::Address).get() << format("\n0x%8.8x: ", Offset);
-    
+
     if (abbrCode) {
       auto AbbrevDecl = getAbbreviationDeclarationPtr();
       if (AbbrevDecl) {
@@ -343,7 +389,7 @@ void DWARFDie::dump(raw_ostream &OS, unsigned RecurseDepth, unsigned Indent,
           WithColor(OS, syntax::Tag).get().indent(Indent)
           << format("DW_TAG_Unknown_%x", getTag());
 
-        if (!DumpOpts.Brief)
+        if (DumpOpts.Verbose)
           OS << format(" [%u] %c", abbrCode,
                        AbbrevDecl->hasChildren() ? '*' : ' ');
         OS << '\n';
@@ -359,7 +405,7 @@ void DWARFDie::dump(raw_ostream &OS, unsigned RecurseDepth, unsigned Indent,
           dumpAttribute(OS, *this, &offset, AttrSpec.Attr, AttrSpec.Form,
                         Indent, DumpOpts);
         }
-        
+
         DWARFDie child = getFirstChild();
         if (RecurseDepth > 0 && child) {
           while (child) {
@@ -376,6 +422,8 @@ void DWARFDie::dump(raw_ostream &OS, unsigned RecurseDepth, unsigned Indent,
     }
   }
 }
+
+LLVM_DUMP_METHOD void DWARFDie::dump() const { dump(llvm::errs(), 0); }
 
 DWARFDie DWARFDie::getParent() const {
   if (isValid())

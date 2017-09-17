@@ -61,24 +61,36 @@ cl::opt<unsigned>
                                 "is no less than the max frequency of the "
                                 "function multiplied by this percent."));
 
-// Command line option to turn on CFG dot dump after profile annotation.
-cl::opt<bool>
-    PGOViewCounts("pgo-view-counts", cl::init(false), cl::Hidden,
-                  cl::desc("A boolean option to show CFG dag with "
-                           "block profile counts and branch probabilities "
-                           "right after PGO profile annotation step. The "
-                           "profile counts are computed using branch "
-                           "probabilities from the runtime profile data and "
-                           "block frequency propagation algorithm. To view "
-                           "the raw counts from the profile, use option "
-                           "-pgo-view-raw-counts instead. To limit graph "
-                           "display to only one function, use filtering option "
-                           "-view-bfi-func-name."));
+// Command line option to turn on CFG dot or text dump after profile annotation.
+cl::opt<PGOViewCountsType> PGOViewCounts(
+    "pgo-view-counts", cl::Hidden,
+    cl::desc("A boolean option to show CFG dag or text with "
+             "block profile counts and branch probabilities "
+             "right after PGO profile annotation step. The "
+             "profile counts are computed using branch "
+             "probabilities from the runtime profile data and "
+             "block frequency propagation algorithm. To view "
+             "the raw counts from the profile, use option "
+             "-pgo-view-raw-counts instead. To limit graph "
+             "display to only one function, use filtering option "
+             "-view-bfi-func-name."),
+    cl::values(clEnumValN(PGOVCT_None, "none", "do not show."),
+               clEnumValN(PGOVCT_Graph, "graph", "show a graph."),
+               clEnumValN(PGOVCT_Text, "text", "show in text.")));
+
+static cl::opt<bool> PrintBlockFreq(
+    "print-bfi", cl::init(false), cl::Hidden,
+    cl::desc("Print the block frequency info."));
+
+cl::opt<std::string> PrintBlockFreqFuncName(
+    "print-bfi-func-name", cl::Hidden,
+    cl::desc("The option to specify the name of the function "
+             "whose block frequency info is printed."));
 
 namespace llvm {
 
 static GVDAGType getGVDT() {
-  if (PGOViewCounts)
+  if (PGOViewCounts == PGOVCT_Graph)
     return GVDT_Count;
   return ViewBlockFreqPropagationDAG;
 }
@@ -179,6 +191,11 @@ void BlockFrequencyInfo::calculate(const Function &F,
       (ViewBlockFreqFuncName.empty() ||
        F.getName().equals(ViewBlockFreqFuncName))) {
     view();
+  }
+  if (PrintBlockFreq &&
+      (PrintBlockFreqFuncName.empty() ||
+       F.getName().equals(PrintBlockFreqFuncName))) {
+    print(dbgs());
   }
 }
 

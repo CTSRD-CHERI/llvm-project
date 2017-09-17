@@ -40,6 +40,20 @@ def getTestSuite(item, litConfig, cache):
             ts, relative = search(parent)
             return (ts, relative + (base,))
 
+        # This is a private builtin parameter which can be used to perform
+        # translation of configuration paths.  Specifically, this parameter
+        # can be set to a dictionary that the discovery process will consult
+        # when it finds a configuration it is about to load.  If the given
+        # path is in the map, the value of that key is a path to the
+        # configuration to load instead.
+        config_map = litConfig.params.get('config_map')
+        if config_map:
+            cfgpath = os.path.normpath(cfgpath)
+            cfgpath = os.path.normcase(cfgpath)
+            target = config_map.get(cfgpath)
+            if target:
+                cfgpath = target
+
         # We found a test suite, create a new config for it and load it.
         if litConfig.debug:
             litConfig.note('loading suite config %r' % cfgpath)
@@ -52,13 +66,14 @@ def getTestSuite(item, litConfig, cache):
 
     def search(path):
         # Check for an already instantiated test suite.
-        res = cache.get(path)
+        real_path = os.path.realpath(path)
+        res = cache.get(real_path)
         if res is None:
-            cache[path] = res = search1(path)
+            cache[real_path] = res = search1(path)
         return res
 
     # Canonicalize the path.
-    item = os.path.realpath(item)
+    item = os.path.normpath(os.path.join(os.getcwd(), item))
 
     # Skip files and virtual components.
     components = []
@@ -211,7 +226,7 @@ def find_tests_for_inputs(lit_config, inputs):
                 f.close()
         else:
             actual_inputs.append(input)
-                    
+
     # Load the tests from the inputs.
     tests = []
     test_suite_cache = {}

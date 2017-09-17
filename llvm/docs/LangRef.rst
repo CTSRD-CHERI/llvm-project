@@ -579,7 +579,9 @@ Global variables in other translation units can also be declared, in which
 case they don't have an initializer.
 
 Either global variable definitions or declarations may have an explicit section
-to be placed in and may have an optional explicit alignment specified.
+to be placed in and may have an optional explicit alignment specified. If there 
+is a mismatch between the explicit or inferred section information for the 
+variable declaration and its definition the resulting behavior is undefined. 
 
 A variable may be defined as a global ``constant``, which indicates that
 the contents of the variable will **never** be modified (enabling better
@@ -621,6 +623,12 @@ LLVM allows an explicit section to be specified for globals. If the
 target supports it, it will emit globals to the section specified.
 Additionally, the global can placed in a comdat if the target has the necessary
 support.
+
+External declarations may have an explicit section specified. Section 
+information is retained in LLVM IR for targets that make use of this 
+information. Attaching section information to an external declaration is an 
+assertion that its definition is located in the specified section. If the 
+definition is located in a different section, the behavior is undefined.   
 
 By default, global initializers are optimized by assuming that global
 variables defined within the module are not modified from their
@@ -2025,8 +2033,11 @@ to the following rules:
 A pointer value is *based* on another pointer value according to the
 following rules:
 
--  A pointer value formed from a ``getelementptr`` operation is *based*
-   on the second value operand of the ``getelementptr``.
+-  A pointer value formed from a scalar ``getelementptr`` operation is *based* on
+   the pointer-typed operand of the ``getelementptr``.
+-  The pointer in lane *l* of the result of a vector ``getelementptr`` operation
+   is *based* on the pointer in lane *l* of the vector-of-pointers-typed operand
+   of the ``getelementptr``.
 -  The result value of a ``bitcast`` is *based* on the operand of the
    ``bitcast``.
 -  A pointer value formed by an ``inttoptr`` is *based* on all pointer
@@ -5377,6 +5388,10 @@ The following behaviors are supported:
            Appends the two values, which are required to be metadata
            nodes. However, duplicate entries in the second list are dropped
            during the append operation.
+
+   * - 7
+     - **Max**
+           Takes the max of the two values, which are required to be integers.
 
 It is an error for a particular unique flag ID to have multiple behaviors,
 except in the case of **Require** (which adds restrictions on another metadata
@@ -10143,7 +10158,7 @@ argument to specify the step of the increment.
 Arguments:
 """"""""""
 The first four arguments are the same as '``llvm.instrprof_increment``'
-instrinsic.
+intrinsic.
 
 The last argument specifies the value of the increment of the counter variable.
 
@@ -13009,6 +13024,41 @@ The value produced is the floating point remainder from the division of the two
 value operands and has the same type as the operands.  The remainder has the
 same sign as the dividend. 
 
+'``llvm.experimental.constrained.fma``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+::
+
+      declare <type>
+      @llvm.experimental.constrained.fma(<type> <op1>, <type> <op2>, <type> <op3>,
+                                          metadata <rounding mode>,
+                                          metadata <exception behavior>)
+
+Overview:
+"""""""""
+
+The '``llvm.experimental.constrained.fma``' intrinsic returns the result of a
+fused-multiply-add operation on its operands.
+
+Arguments:
+""""""""""
+
+The first three arguments to the '``llvm.experimental.constrained.fma``'
+intrinsic must be :ref:`floating point <t_floating>` or :ref:`vector
+<t_vector>` of floating point values. All arguments must have identical types.
+
+The fourth and fifth arguments specify the rounding mode and exception behavior
+as described above.
+
+Semantics:
+""""""""""
+
+The result produced is the product of the first two operands added to the third
+operand computed with infinite precision, and then rounded to the target
+precision.
 
 Constrained libm-equivalent Intrinsics
 --------------------------------------
@@ -13578,6 +13628,27 @@ This intrinsic allows annotations to be put on arbitrary expressions
 with arbitrary strings. This can be useful for special purpose
 optimizations that want to look for these annotations. These have no
 other defined use; they are ignored by code generation and optimization.
+
+'``llvm.codeview.annotation``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+This annotation emits a label at its program point and an associated
+``S_ANNOTATION`` codeview record with some additional string metadata. This is
+used to implement MSVC's ``__annotation`` intrinsic. It is marked
+``noduplicate``, so calls to this intrinsic prevent inlining and should be
+considered expensive.
+
+::
+
+      declare void @llvm.codeview.annotation(metadata)
+
+Arguments:
+""""""""""
+
+The argument should be an MDTuple containing any number of MDStrings.
 
 '``llvm.trap``' Intrinsic
 ^^^^^^^^^^^^^^^^^^^^^^^^^

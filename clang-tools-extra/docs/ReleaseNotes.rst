@@ -70,6 +70,17 @@ Improvements to clang-tidy
       ``AllowConditionalIntegerCasts`` -> ``AllowIntegerConditions``,
       ``AllowConditionalPointerCasts`` -> ``AllowPointerConditions``.
 
+- New `android-cloexec-accept
+  <http://clang.llvm.org/extra/clang-tidy/checks/android-cloexec-accept.html>`_ check
+
+  Detects usage of ``accept()``.
+
+- New `android-cloexec-accept4
+  <http://clang.llvm.org/extra/clang-tidy/checks/android-cloexec-accept4.html>`_ check
+
+  Checks if the required file flag ``SOCK_CLOEXEC`` is present in the argument of
+  ``accept4()``.
+
 - New `android-cloexec-dup
   <http://clang.llvm.org/extra/clang-tidy/checks/android-cloexec-dup.html>`_ check
 
@@ -79,6 +90,17 @@ Improvements to clang-tidy
   <http://clang.llvm.org/extra/clang-tidy/checks/android-cloexec-inotify-init.html>`_ check
 
   Detects usage of ``inotify_init()``.
+
+- New `android-cloexec-epoll-create1
+  <http://clang.llvm.org/extra/clang-tidy/checks/android-cloexec-epoll-create1.html>`_ check
+
+  Checks if the required file flag ``EPOLL_CLOEXEC`` is present in the argument of
+  ``epoll_create1()``.
+
+- New `android-cloexec-epoll-create
+  <http://clang.llvm.org/extra/clang-tidy/checks/android-cloexec-epoll-create.html>`_ check
+
+  Detects usage of ``epoll_create()``.
 
 - New `android-cloexec-memfd_create
   <http://clang.llvm.org/extra/clang-tidy/checks/android-cloexec-memfd_create.html>`_ check
@@ -92,11 +114,22 @@ Improvements to clang-tidy
   Finds cases where integer division in a floating point context is likely to
   cause unintended loss of precision.
 
+- New `cppcoreguidelines-owning-memory <http://clang.llvm.org/extra/clang-tidy/checks/cppcoreguidelines-owning-memory.html>`_ check 
+
+  This check implements the type-based semantic of ``gsl::owner<T*>``, but without
+  flow analysis.
+
 - New `hicpp-exception-baseclass
   <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-exception-baseclass.html>`_ check
 
   Ensures that all exception will be instances of ``std::exception`` and classes 
   that are derived from it.
+
+- New `hicpp-signed-bitwise
+  <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-signed-bitwise.html>`_ check
+
+  Finds uses of bitwise operations on signed integer types, which may lead to 
+  undefined or implementation defined behaviour.
 
 - New `android-cloexec-inotify-init1
   <http://clang.llvm.org/extra/clang-tidy/checks/android-cloexec-inotify-init1.html>`_ check
@@ -114,7 +147,19 @@ Improvements to clang-tidy
   <http://clang.llvm.org/extra/clang-tidy/checks/modernize-use-emplace.html#cmdoption-arg-IgnoreImplicitConstructors>`_
   option.
 
-- Added alias `hicpp-braces-around-statements <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-braces-around-statements.html>`_ 
+- Added aliases for the `High Integrity C++ Coding Standard <http://www.codingstandard.com/section/index/>`_ 
+  to already implemented checks in other modules.
+
+  - `hicpp-deprecated-headers <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-deprecated-headers.html>`_
+  - `hicpp-move-const-arg <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-move-const-arg.html>`_
+  - `hicpp-no-array-decay <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-no-array-decay.html>`_
+  - `hicpp-no-malloc <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-no-malloc.html>`_
+  - `hicpp-static-assert <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-static-assert.html>`_
+  - `hicpp-use-auto <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-use-auto.html>`_
+  - `hicpp-use-emplace <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-use-emplace.html>`_
+  - `hicpp-use-noexcept <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-use-noexcept.html>`_
+  - `hicpp-use-nullptr <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-use-nullptr.html>`_
+  - `hicpp-vararg <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-vararg.html>`_
 
 Improvements to include-fixer
 -----------------------------

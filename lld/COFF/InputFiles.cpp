@@ -83,6 +83,25 @@ void ArchiveFile::addMember(const Archive::Symbol *Sym) {
   Driver->enqueueArchiveMember(C, Sym->getName(), getName());
 }
 
+std::vector<MemoryBufferRef> getArchiveMembers(Archive *File) {
+  std::vector<MemoryBufferRef> V;
+  Error Err = Error::success();
+  for (const ErrorOr<Archive::Child> &COrErr : File->children(Err)) {
+    Archive::Child C =
+        check(COrErr,
+              File->getFileName() + ": could not get the child of the archive");
+    MemoryBufferRef MBRef =
+        check(C.getMemoryBufferRef(),
+              File->getFileName() +
+                  ": could not get the buffer for a child of the archive");
+    V.push_back(MBRef);
+  }
+  if (Err)
+    fatal(File->getFileName() +
+          ": Archive::children failed: " + toString(std::move(Err)));
+  return V;
+}
+
 void ObjFile::parse() {
   // Parse a memory buffer as a COFF file.
   std::unique_ptr<Binary> Bin = check(createBinary(MB), toString(this));
@@ -336,19 +355,16 @@ void ImportFile::parse() {
   this->Hdr = Hdr;
   ExternalName = ExtName;
 
-  ImpSym = cast<DefinedImportData>(
-      Symtab->addImportData(ImpName, this)->body());
+  ImpSym = Symtab->addImportData(ImpName, this);
+
   if (Hdr->getType() == llvm::COFF::IMPORT_CONST)
-    ConstSym =
-        cast<DefinedImportData>(Symtab->addImportData(Name, this)->body());
+    static_cast<void>(Symtab->addImportData(Name, this));
 
   // If type is function, we need to create a thunk which jump to an
   // address pointed by the __imp_ symbol. (This allows you to call
   // DLL functions just like regular non-DLL functions.)
-  if (Hdr->getType() != llvm::COFF::IMPORT_CODE)
-    return;
-  ThunkSym = cast<DefinedImportThunk>(
-      Symtab->addImportThunk(Name, ImpSym, Hdr->Machine)->body());
+  if (Hdr->getType() == llvm::COFF::IMPORT_CODE)
+    ThunkSym = Symtab->addImportThunk(Name, ImpSym, Hdr->Machine);
 }
 
 void BitcodeFile::parse() {

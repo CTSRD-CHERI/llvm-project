@@ -264,8 +264,10 @@ void initializePollyPasses(PassRegistry &Registry) {
   initializePollyCanonicalizePass(Registry);
   initializePolyhedralInfoPass(Registry);
   initializeScopDetectionWrapperPassPass(Registry);
+  initializeScopInlinerPass(Registry);
   initializeScopInfoRegionPassPass(Registry);
   initializeScopInfoWrapperPassPass(Registry);
+  initializeRewriteByrefParamsPass(Registry);
   initializeCodegenCleanupPass(Registry);
   initializeFlattenSchedulePass(Registry);
   initializeForwardOpTreePass(Registry);
@@ -326,13 +328,13 @@ void registerPollyPasses(llvm::legacy::PassManagerBase &PM) {
     PM.add(polly::createPolyhedralInfoPass());
 
   if (EnableSimplify)
-    PM.add(polly::createSimplifyPass());
+    PM.add(polly::createSimplifyPass(0));
   if (EnableForwardOpTree)
     PM.add(polly::createForwardOpTreePass());
   if (EnableDeLICM)
     PM.add(polly::createDeLICMPass());
   if (EnableSimplify)
-    PM.add(polly::createSimplifyPass());
+    PM.add(polly::createSimplifyPass(1));
 
   if (ImportJScop)
     PM.add(polly::createJSONImporterPass());

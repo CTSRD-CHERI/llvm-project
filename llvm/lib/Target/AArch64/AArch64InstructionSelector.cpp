@@ -317,7 +317,9 @@ static bool selectCopy(MachineInstr &I, const TargetInstrInfo &TII,
   const TargetRegisterClass *RC = nullptr;
 
   if (RegBank.getID() == AArch64::FPRRegBankID) {
-    if (DstSize <= 32)
+    if (DstSize <= 16)
+      RC = &AArch64::FPR16RegClass;
+    else if (DstSize <= 32)
       RC = &AArch64::FPR32RegClass;
     else if (DstSize <= 64)
       RC = &AArch64::FPR64RegClass;
@@ -590,13 +592,14 @@ bool AArch64InstructionSelector::select(MachineInstr &I) const {
   MachineRegisterInfo &MRI = MF.getRegInfo();
 
   unsigned Opcode = I.getOpcode();
-  if (!isPreISelGenericOpcode(I.getOpcode())) {
+  // G_PHI requires same handling as PHI
+  if (!isPreISelGenericOpcode(Opcode) || Opcode == TargetOpcode::G_PHI) {
     // Certain non-generic instructions also need some special handling.
 
     if (Opcode ==  TargetOpcode::LOAD_STACK_GUARD)
       return constrainSelectedInstRegOperands(I, TII, TRI, RBI);
 
-    if (Opcode == TargetOpcode::PHI) {
+    if (Opcode == TargetOpcode::PHI || Opcode == TargetOpcode::G_PHI) {
       const unsigned DefReg = I.getOperand(0).getReg();
       const LLT DefTy = MRI.getType(DefReg);
 
@@ -621,6 +624,7 @@ bool AArch64InstructionSelector::select(MachineInstr &I) const {
           }
         }
       }
+      I.setDesc(TII.get(TargetOpcode::PHI));
 
       return RBI.constrainGenericRegister(DefReg, *DefRC, MRI);
     }
@@ -1163,62 +1167,18 @@ bool AArch64InstructionSelector::select(MachineInstr &I) const {
 
 
   case TargetOpcode::G_INTTOPTR:
-  case TargetOpcode::G_BITCAST:
+    // The importer is currently unable to import pointer types since they
+    // didn't exist in SelectionDAG.
     return selectCopy(I, TII, MRI, TRI, RBI);
 
-  case TargetOpcode::G_FPEXT: {
-    if (MRI.getType(I.getOperand(0).getReg()) != LLT::scalar(64)) {
-      DEBUG(dbgs() << "G_FPEXT to type " << Ty
-                   << ", expected: " << LLT::scalar(64) << '\n');
-      return false;
-    }
-
-    if (MRI.getType(I.getOperand(1).getReg()) != LLT::scalar(32)) {
-      DEBUG(dbgs() << "G_FPEXT from type " << Ty
-                   << ", expected: " << LLT::scalar(32) << '\n');
-      return false;
-    }
-
-    const unsigned DefReg = I.getOperand(0).getReg();
-    const RegisterBank &RB = *RBI.getRegBank(DefReg, MRI, TRI);
-
-    if (RB.getID() != AArch64::FPRRegBankID) {
-      DEBUG(dbgs() << "G_FPEXT on bank: " << RB << ", expected: FPR\n");
-      return false;
-    }
-
-    I.setDesc(TII.get(AArch64::FCVTDSr));
-    constrainSelectedInstRegOperands(I, TII, TRI, RBI);
-
-    return true;
-  }
-
-  case TargetOpcode::G_FPTRUNC: {
-    if (MRI.getType(I.getOperand(0).getReg()) != LLT::scalar(32)) {
-      DEBUG(dbgs() << "G_FPTRUNC to type " << Ty
-                   << ", expected: " << LLT::scalar(32) << '\n');
-      return false;
-    }
-
-    if (MRI.getType(I.getOperand(1).getReg()) != LLT::scalar(64)) {
-      DEBUG(dbgs() << "G_FPTRUNC from type " << Ty
-                   << ", expected: " << LLT::scalar(64) << '\n');
-      return false;
-    }
-
-    const unsigned DefReg = I.getOperand(0).getReg();
-    const RegisterBank &RB = *RBI.getRegBank(DefReg, MRI, TRI);
-
-    if (RB.getID() != AArch64::FPRRegBankID) {
-      DEBUG(dbgs() << "G_FPTRUNC on bank: " << RB << ", expected: FPR\n");
-      return false;
-    }
-
-    I.setDesc(TII.get(AArch64::FCVTSDr));
-    constrainSelectedInstRegOperands(I, TII, TRI, RBI);
-
-    return true;
-  }
+  case TargetOpcode::G_BITCAST:
+    // Imported SelectionDAG rules can handle every bitcast except those that
+    // bitcast from a type to the same type. Ideally, these shouldn't occur
+    // but we might not run an optimizer that deletes them.
+    if (MRI.getType(I.getOperand(0).getReg()) ==
+        MRI.getType(I.getOperand(1).getReg()))
+      return selectCopy(I, TII, MRI, TRI, RBI);
+    return false;
 
   case TargetOpcode::G_SELECT: {
     if (MRI.getType(I.getOperand(1).getReg()) != LLT::scalar(1)) {

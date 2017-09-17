@@ -1121,12 +1121,13 @@ public:
     CXXInvalid
   };
 
-  typedef std::pair<CXXRecordDecl*, CXXSpecialMember> SpecialMemberDecl;
+  typedef llvm::PointerIntPair<CXXRecordDecl *, 3, CXXSpecialMember>
+      SpecialMemberDecl;
 
   /// The C++ special members which we are currently in the process of
   /// declaring. If this process recursively triggers the declaration of the
   /// same special member, we should act as if it is not yet declared.
-  llvm::SmallSet<SpecialMemberDecl, 4> SpecialMembersBeingDeclared;
+  llvm::SmallPtrSet<SpecialMemberDecl, 4> SpecialMembersBeingDeclared;
 
   /// The function definitions which were renamed as part of typo-correction
   /// to match their respective declarations. We want to keep track of them
@@ -2781,6 +2782,14 @@ public:
   /// failing attribute, or NULL if they were all successful.
   EnableIfAttr *CheckEnableIf(FunctionDecl *Function, ArrayRef<Expr *> Args,
                               bool MissingImplicitThis = false);
+
+  /// Find the failed Boolean condition within a given Boolean
+  /// constant expression, and describe it with a string.
+  ///
+  /// \param AllowTopLevelCond Whether to allow the result to be the
+  /// complete top-level condition.
+  std::pair<Expr *, std::string>
+  findFailedBooleanCondition(Expr *Cond, bool AllowTopLevelCond);
 
   /// Emit diagnostics for the diagnose_if attributes on Function, ignoring any
   /// non-ArgDependent DiagnoseIfAttrs.
@@ -6052,7 +6061,7 @@ public:
                              SourceLocation ExportLoc,
                              SourceLocation TemplateLoc,
                              SourceLocation LAngleLoc,
-                             ArrayRef<Decl *> Params,
+                             ArrayRef<NamedDecl *> Params,
                              SourceLocation RAngleLoc,
                              Expr *RequiresClause);
 
@@ -8587,9 +8596,11 @@ public:
   /// \brief Finish current declare reduction construct initializer.
   void ActOnOpenMPDeclareReductionCombinerEnd(Decl *D, Expr *Combiner);
   /// \brief Initialize declare reduction construct initializer.
-  void ActOnOpenMPDeclareReductionInitializerStart(Scope *S, Decl *D);
+  /// \return omp_priv variable.
+  VarDecl *ActOnOpenMPDeclareReductionInitializerStart(Scope *S, Decl *D);
   /// \brief Finish current declare reduction construct initializer.
-  void ActOnOpenMPDeclareReductionInitializerEnd(Decl *D, Expr *Initializer);
+  void ActOnOpenMPDeclareReductionInitializerEnd(Decl *D, Expr *Initializer,
+                                                 VarDecl *OmpPrivParm);
   /// \brief Called at the end of '#pragma omp declare reduction'.
   DeclGroupPtrTy ActOnOpenMPDeclareReductionDirectiveEnd(
       Scope *S, DeclGroupPtrTy DeclReductions, bool IsValid);

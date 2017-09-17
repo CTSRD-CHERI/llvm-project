@@ -68,7 +68,11 @@ public:
     ModuleMapModule,
 
     /// \brief This is a C++ Modules TS module interface unit.
-    ModuleInterfaceUnit
+    ModuleInterfaceUnit,
+
+    /// \brief This is a fragment of the global module within some C++ Modules
+    /// TS module.
+    GlobalModuleFragment,
   };
 
   /// \brief The kind of this module.
@@ -95,6 +99,10 @@ public:
 
   /// \brief The name of the umbrella entry, as written in the module map.
   std::string UmbrellaAsWritten;
+
+  /// \brief The module through which entities defined in this module will
+  /// eventually be exposed, for use in "private" modules.
+  std::string ExportAsModule;
   
 private:
   /// \brief The submodules of this module, indexed by name.
@@ -389,6 +397,15 @@ public:
   /// framework.
   bool isSubFramework() const {
     return IsFramework && Parent && Parent->isPartOfFramework();
+  }
+
+  /// Set the parent of this module. This should only be used if the parent
+  /// could not be set during module creation.
+  void setParent(Module *M) {
+    assert(!Parent);
+    Parent = M;
+    Parent->SubModuleIndex[Name] = Parent->SubModules.size();
+    Parent->SubModules.push_back(this);
   }
 
   /// \brief Retrieve the full name of this module, including the path from

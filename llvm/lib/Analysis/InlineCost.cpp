@@ -82,6 +82,11 @@ static cl::opt<int> HotCallSiteRelFreq(
              "entry frequency, for a callsite to be hot in the absence of "
              "profile information."));
 
+static cl::opt<bool> OptComputeFullInlineCost(
+    "inline-cost-full", cl::Hidden, cl::init(false),
+    cl::desc("Compute the full inline cost of a call site even when the cost "
+             "exceeds the threshold."));
+
 namespace {
 
 class CallAnalyzer : public InstVisitor<CallAnalyzer, bool> {
@@ -106,6 +111,9 @@ class CallAnalyzer : public InstVisitor<CallAnalyzer, bool> {
   // Cache the DataLayout since we use it a lot.
   const DataLayout &DL;
 
+  /// The OptimizationRemarkEmitter available for this compilation.
+  OptimizationRemarkEmitter *ORE;
+
   /// The candidate callsite being analyzed. Please do not use this to do
   /// analysis in the caller function; we want the inline cost query to be
   /// easily cacheable. Instead, use the cover function paramHasAttr.
@@ -116,6 +124,7 @@ class CallAnalyzer : public InstVisitor<CallAnalyzer, bool> {
 
   int Threshold;
   int Cost;
+  bool ComputeFullInlineCost;
 
   bool IsCallerRecursive;
   bool IsRecursiveCall;
@@ -243,12 +252,14 @@ public:
   CallAnalyzer(const TargetTransformInfo &TTI,
                std::function<AssumptionCache &(Function &)> &GetAssumptionCache,
                Optional<function_ref<BlockFrequencyInfo &(Function &)>> &GetBFI,
-               ProfileSummaryInfo *PSI, Function &Callee, CallSite CSArg,
-               const InlineParams &Params)
+               ProfileSummaryInfo *PSI, OptimizationRemarkEmitter *ORE,
+               Function &Callee, CallSite CSArg, const InlineParams &Params)
       : TTI(TTI), GetAssumptionCache(GetAssumptionCache), GetBFI(GetBFI),
-        PSI(PSI), F(Callee), DL(F.getParent()->getDataLayout()),
+        PSI(PSI), F(Callee), DL(F.getParent()->getDataLayout()), ORE(ORE),
         CandidateCS(CSArg), Params(Params), Threshold(Params.DefaultThreshold),
-        Cost(0), IsCallerRecursive(false), IsRecursiveCall(false),
+        Cost(0), ComputeFullInlineCost(OptComputeFullInlineCost ||
+                                       Params.ComputeFullInlineCost || ORE),
+        IsCallerRecursive(false), IsRecursiveCall(false),
         ExposesReturnsTwice(false), HasDynamicAlloca(false),
         ContainsNoDuplicateCall(false), HasReturn(false), HasIndirectBr(false),
         HasFrameEscape(false), AllocatedSize(0), NumInstructions(0),
@@ -1138,7 +1149,7 @@ bool CallAnalyzer::visitCallSite(CallSite CS) {
   // out. Pretend to inline the function, with a custom threshold.
   auto IndirectCallParams = Params;
   IndirectCallParams.DefaultThreshold = InlineConstants::IndirectCallThreshold;
-  CallAnalyzer CA(TTI, GetAssumptionCache, GetBFI, PSI, *F, CS,
+  CallAnalyzer CA(TTI, GetAssumptionCache, GetBFI, PSI, ORE, *F, CS,
                   IndirectCallParams);
   if (CA.analyzeCall(CS)) {
     // We were able to inline the indirect call! Subtract the cost from the
@@ -1198,7 +1209,7 @@ bool CallAnalyzer::visitSwitchInst(SwitchInst &SI) {
       std::min((int64_t)CostUpperBound,
                (int64_t)SI.getNumCases() * InlineConstants::InstrCost + Cost);
 
-  if (CostLowerBound > Threshold) {
+  if (CostLowerBound > Threshold && !ComputeFullInlineCost) {
     Cost = CostLowerBound;
     return false;
   }
@@ -1347,21 +1358,36 @@ bool CallAnalyzer::analyzeBlock(BasicBlock *BB,
     else
       Cost += InlineConstants::InstrCost;
 
+    using namespace ore;
     // If the visit this instruction detected an uninlinable pattern, abort.
     if (IsRecursiveCall || ExposesReturnsTwice || HasDynamicAlloca ||
-        HasIndirectBr || HasFrameEscape)
+        HasIndirectBr || HasFrameEscape) {
+      if (ORE)
+        ORE->emit(OptimizationRemarkMissed(DEBUG_TYPE, "NeverInline",
+                                           CandidateCS.getInstruction())
+                  << NV("Callee", &F)
+                  << " has uninlinable pattern and cost is not fully computed");
       return false;
+    }
 
     // If the caller is a recursive function then we don't want to inline
     // functions which allocate a lot of stack space because it would increase
     // the caller stack usage dramatically.
     if (IsCallerRecursive &&
-        AllocatedSize > InlineConstants::TotalAllocaSizeRecursiveCaller)
+        AllocatedSize > InlineConstants::TotalAllocaSizeRecursiveCaller) {
+      if (ORE)
+        ORE->emit(
+            OptimizationRemarkMissed(DEBUG_TYPE, "NeverInline",
+                                     CandidateCS.getInstruction())
+            << NV("Callee", &F)
+            << " is recursive and allocates too much stack space. Cost is "
+               "not fully computed");
       return false;
+    }
 
     // Check if we've past the maximum possible threshold so we don't spin in
     // huge basic blocks that will never inline.
-    if (Cost > Threshold)
+    if (Cost >= Threshold && !ComputeFullInlineCost)
       return false;
   }
 
@@ -1447,7 +1473,7 @@ bool CallAnalyzer::analyzeCall(CallSite CS) {
     Cost += InlineConstants::ColdccPenalty;
 
   // Check if we're done. This can happen due to bonuses and penalties.
-  if (Cost > Threshold)
+  if (Cost >= Threshold && !ComputeFullInlineCost)
     return false;
 
   if (F.empty())
@@ -1513,7 +1539,7 @@ bool CallAnalyzer::analyzeCall(CallSite CS) {
   for (unsigned Idx = 0; Idx != BBWorklist.size(); ++Idx) {
     // Bail out the moment we cross the threshold. This means we'll under-count
     // the cost, but only when undercounting doesn't matter.
-    if (Cost > Threshold)
+    if (Cost >= Threshold && !ComputeFullInlineCost)
       break;
 
     BasicBlock *BB = BBWorklist[Idx];
@@ -1657,9 +1683,9 @@ InlineCost llvm::getInlineCost(
     CallSite CS, const InlineParams &Params, TargetTransformInfo &CalleeTTI,
     std::function<AssumptionCache &(Function &)> &GetAssumptionCache,
     Optional<function_ref<BlockFrequencyInfo &(Function &)>> GetBFI,
-    ProfileSummaryInfo *PSI) {
+    ProfileSummaryInfo *PSI, OptimizationRemarkEmitter *ORE) {
   return getInlineCost(CS, CS.getCalledFunction(), Params, CalleeTTI,
-                       GetAssumptionCache, GetBFI, PSI);
+                       GetAssumptionCache, GetBFI, PSI, ORE);
 }
 
 InlineCost llvm::getInlineCost(
@@ -1667,7 +1693,7 @@ InlineCost llvm::getInlineCost(
     TargetTransformInfo &CalleeTTI,
     std::function<AssumptionCache &(Function &)> &GetAssumptionCache,
     Optional<function_ref<BlockFrequencyInfo &(Function &)>> GetBFI,
-    ProfileSummaryInfo *PSI) {
+    ProfileSummaryInfo *PSI, OptimizationRemarkEmitter *ORE) {
 
   // Cannot inline indirect calls.
   if (!Callee)
@@ -1700,9 +1726,9 @@ InlineCost llvm::getInlineCost(
     return llvm::InlineCost::getNever();
 
   DEBUG(llvm::dbgs() << "      Analyzing call of " << Callee->getName()
-                     << "...\n");
+                     << "... (caller:" << Caller->getName() << ")\n");
 
-  CallAnalyzer CA(CalleeTTI, GetAssumptionCache, GetBFI, PSI, *Callee, CS,
+  CallAnalyzer CA(CalleeTTI, GetAssumptionCache, GetBFI, PSI, ORE, *Callee, CS,
                   Params);
   bool ShouldInline = CA.analyzeCall(CS);
 

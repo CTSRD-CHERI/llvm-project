@@ -1200,7 +1200,14 @@ emitCombinerOrInitializer(CodeGenModule &CGM, QualType Ty,
         .getAddress();
   });
   (void)Scope.Privatize();
-  CGF.EmitIgnoredExpr(CombinerInitializer);
+  if (!IsCombiner && Out->hasInit() &&
+      !CGF.isTrivialInitializer(Out->getInit())) {
+    CGF.EmitAnyExprToMem(Out->getInit(), CGF.GetAddrOfLocalVar(Out),
+                         Out->getType().getQualifiers(),
+                         /*IsInitializer=*/true);
+  }
+  if (CombinerInitializer)
+    CGF.EmitIgnoredExpr(CombinerInitializer);
   Scope.ForceCleanup();
   CGF.FinishFunction();
   return Fn;
@@ -1226,7 +1233,10 @@ void CGOpenMPRuntime::emitUserDefinedReduction(
       Orig = &C.Idents.get("omp_orig");
     }
     Initializer = emitCombinerOrInitializer(
-        CGM, D->getType(), Init, cast<VarDecl>(D->lookup(Orig).front()),
+        CGM, D->getType(),
+        D->getInitializerKind() == OMPDeclareReductionDecl::CallInit ? Init
+                                                                     : nullptr,
+        cast<VarDecl>(D->lookup(Orig).front()),
         cast<VarDecl>(D->lookup(Priv).front()),
         /*IsCombiner=*/false);
   }
@@ -1438,19 +1448,22 @@ llvm::Value *CGOpenMPRuntime::getThreadID(CodeGenFunction &CGF,
     if (ThreadID != nullptr)
       return ThreadID;
   }
-  if (auto *OMPRegionInfo =
-          dyn_cast_or_null<CGOpenMPRegionInfo>(CGF.CapturedStmtInfo)) {
-    if (OMPRegionInfo->getThreadIDVariable()) {
-      // Check if this an outlined function with thread id passed as argument.
-      auto LVal = OMPRegionInfo->getThreadIDVariableLValue(CGF);
-      ThreadID = CGF.EmitLoadOfLValue(LVal, Loc).getScalarVal();
-      // If value loaded in entry block, cache it and use it everywhere in
-      // function.
-      if (CGF.Builder.GetInsertBlock() == CGF.AllocaInsertPt->getParent()) {
-        auto &Elem = OpenMPLocThreadIDMap.FindAndConstruct(CGF.CurFn);
-        Elem.second.ThreadID = ThreadID;
+  // If exceptions are enabled, do not use parameter to avoid possible crash.
+  if (!CGF.getInvokeDest()) {
+    if (auto *OMPRegionInfo =
+            dyn_cast_or_null<CGOpenMPRegionInfo>(CGF.CapturedStmtInfo)) {
+      if (OMPRegionInfo->getThreadIDVariable()) {
+        // Check if this an outlined function with thread id passed as argument.
+        auto LVal = OMPRegionInfo->getThreadIDVariableLValue(CGF);
+        ThreadID = CGF.EmitLoadOfLValue(LVal, Loc).getScalarVal();
+        // If value loaded in entry block, cache it and use it everywhere in
+        // function.
+        if (CGF.Builder.GetInsertBlock() == CGF.AllocaInsertPt->getParent()) {
+          auto &Elem = OpenMPLocThreadIDMap.FindAndConstruct(CGF.CurFn);
+          Elem.second.ThreadID = ThreadID;
+        }
+        return ThreadID;
       }
-      return ThreadID;
     }
   }
 
@@ -3046,11 +3059,19 @@ void CGOpenMPRuntime::emitDistributeStaticInit(
 }
 
 void CGOpenMPRuntime::emitForStaticFinish(CodeGenFunction &CGF,
-                                          SourceLocation Loc) {
+                                          SourceLocation Loc,
+                                          OpenMPDirectiveKind DKind) {
   if (!CGF.HaveInsertPoint())
     return;
   // Call __kmpc_for_static_fini(ident_t *loc, kmp_int32 tid);
-  llvm::Value *Args[] = {emitUpdateLocation(CGF, Loc), getThreadID(CGF, Loc)};
+  llvm::Value *Args[] = {
+      emitUpdateLocation(CGF, Loc,
+                         isOpenMPDistributeDirective(DKind)
+                             ? OMP_IDENT_WORK_DISTRIBUTE
+                             : isOpenMPLoopDirective(DKind)
+                                   ? OMP_IDENT_WORK_LOOP
+                                   : OMP_IDENT_WORK_SECTIONS),
+      getThreadID(CGF, Loc)};
   CGF.EmitRuntimeCall(createRuntimeFunction(OMPRTL__kmpc_for_static_fini),
                       Args);
 }

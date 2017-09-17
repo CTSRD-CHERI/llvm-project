@@ -579,7 +579,11 @@ LLVM_DUMP_METHOD void MachineOperand::dump() const {
 /// getAddrSpace - Return the LLVM IR address space number that this pointer
 /// points into.
 unsigned MachinePointerInfo::getAddrSpace() const {
-  if (V.isNull() || V.is<const PseudoSourceValue*>()) return 0;
+  if (V.isNull()) return 0;
+
+  if (V.is<const PseudoSourceValue*>())
+    return V.get<const PseudoSourceValue*>()->getAddressSpace();
+
   return cast<PointerType>(V.get<const Value*>()->getType())->getAddressSpace();
 }
 
@@ -1700,9 +1704,6 @@ bool MachineInstr::mayAlias(AliasAnalysis *AA, MachineInstr &Other,
   int64_t OffsetA = MMOa->getOffset();
   int64_t OffsetB = MMOb->getOffset();
 
-  assert((OffsetA >= 0) && "Negative MachineMemOperand offset");
-  assert((OffsetB >= 0) && "Negative MachineMemOperand offset");
-
   int64_t MinOffset = std::min(OffsetA, OffsetB);
   int64_t WidthA = MMOa->getSize();
   int64_t WidthB = MMOb->getSize();
@@ -1712,9 +1713,9 @@ bool MachineInstr::mayAlias(AliasAnalysis *AA, MachineInstr &Other,
   if (!SameVal) {
     const PseudoSourceValue *PSVa = MMOa->getPseudoValue();
     const PseudoSourceValue *PSVb = MMOb->getPseudoValue();
-    if (PSVa && PSVa->isConstant(&MFI))
+    if (PSVa && ValB && !PSVa->mayAlias(&MFI))
       return false;
-    if (PSVb && PSVb->isConstant(&MFI))
+    if (PSVb && ValA && !PSVb->mayAlias(&MFI))
       return false;
     if (PSVa && PSVb && (PSVa == PSVb))
       SameVal = true;
@@ -1732,11 +1733,15 @@ bool MachineInstr::mayAlias(AliasAnalysis *AA, MachineInstr &Other,
   if (!ValA || !ValB)
     return true;
 
+  assert((OffsetA >= 0) && "Negative MachineMemOperand offset");
+  assert((OffsetB >= 0) && "Negative MachineMemOperand offset");
+
   int64_t Overlapa = WidthA + OffsetA - MinOffset;
   int64_t Overlapb = WidthB + OffsetB - MinOffset;
 
   AliasResult AAResult = AA->alias(
-      MemoryLocation(ValA, Overlapa, UseTBAA ? MMOa->getAAInfo() : AAMDNodes()),
+      MemoryLocation(ValA, Overlapa,
+                     UseTBAA ? MMOa->getAAInfo() : AAMDNodes()),
       MemoryLocation(ValB, Overlapb,
                      UseTBAA ? MMOb->getAAInfo() : AAMDNodes()));
 
@@ -2403,26 +2408,36 @@ MachineInstrBuilder llvm::BuildMI(MachineBasicBlock &BB,
   return MachineInstrBuilder(MF, MI);
 }
 
+/// Compute the new DIExpression to use with a DBG_VALUE for a spill slot.
+/// This prepends DW_OP_deref when spilling an indirect DBG_VALUE.
+static const DIExpression *computeExprForSpill(const MachineInstr &MI) {
+  assert(MI.getOperand(0).isReg() && "can't spill non-register");
+  assert(MI.getDebugVariable()->isValidLocationForIntrinsic(MI.getDebugLoc()) &&
+         "Expected inlined-at fields to agree");
+
+  const DIExpression *Expr = MI.getDebugExpression();
+  if (MI.isIndirectDebugValue()) {
+    assert(MI.getOperand(1).getImm() == 0 && "DBG_VALUE with nonzero offset");
+    Expr = DIExpression::prepend(Expr, DIExpression::WithDeref);
+  }
+  return Expr;
+}
+
 MachineInstr *llvm::buildDbgValueForSpill(MachineBasicBlock &BB,
                                           MachineBasicBlock::iterator I,
                                           const MachineInstr &Orig,
                                           int FrameIndex) {
-  const MDNode *Var = Orig.getDebugVariable();
-  const auto *Expr = cast_or_null<DIExpression>(Orig.getDebugExpression());
-  bool IsIndirect = Orig.isIndirectDebugValue();
-  if (IsIndirect)
-    assert(Orig.getOperand(1).getImm() == 0 && "DBG_VALUE with nonzero offset");
-  DebugLoc DL = Orig.getDebugLoc();
-  assert(cast<DILocalVariable>(Var)->isValidLocationForIntrinsic(DL) &&
-         "Expected inlined-at fields to agree");
-  // If the DBG_VALUE already was a memory location, add an extra
-  // DW_OP_deref. Otherwise just turning this from a register into a
-  // memory/indirect location is sufficient.
-  if (IsIndirect)
-    Expr = DIExpression::prepend(Expr, DIExpression::WithDeref);
-  return BuildMI(BB, I, DL, Orig.getDesc())
+  const DIExpression *Expr = computeExprForSpill(Orig);
+  return BuildMI(BB, I, Orig.getDebugLoc(), Orig.getDesc())
       .addFrameIndex(FrameIndex)
       .addImm(0U)
-      .addMetadata(Var)
+      .addMetadata(Orig.getDebugVariable())
       .addMetadata(Expr);
+}
+
+void llvm::updateDbgValueForSpill(MachineInstr &Orig, int FrameIndex) {
+  const DIExpression *Expr = computeExprForSpill(Orig);
+  Orig.getOperand(0).ChangeToFrameIndex(FrameIndex);
+  Orig.getOperand(1).ChangeToImmediate(0U);
+  Orig.getOperand(3).setMetadata(Expr);
 }

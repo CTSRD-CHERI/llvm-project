@@ -911,6 +911,10 @@ public:
     return !isVI();
   }
 
+  bool hasIntClamp() const {
+    return getFeatureBits()[AMDGPU::FeatureIntClamp];
+  }
+
   AMDGPUTargetStreamer &getTargetStreamer() {
     MCTargetStreamer &TS = *getParser().getStreamer().getTargetStreamer();
     return static_cast<AMDGPUTargetStreamer &>(TS);
@@ -1011,6 +1015,7 @@ private:
   bool validateInstruction(const MCInst &Inst, const SMLoc &IDLoc);
   bool validateConstantBusLimitations(const MCInst &Inst);
   bool validateEarlyClobberLimitations(const MCInst &Inst);
+  bool validateIntClampSupported(const MCInst &Inst);
   bool usesConstantBus(const MCInst &Inst, unsigned OpIdx);
   bool isInlineConstant(const MCInst &Inst, unsigned OpIdx) const;
   unsigned findImplicitSGPRReadInVOP(const MCInst &Inst) const;
@@ -1069,7 +1074,10 @@ public:
                OptionalImmIndexMap &OptionalIdx);
   void cvtVOP3OpSel(MCInst &Inst, const OperandVector &Operands);
   void cvtVOP3(MCInst &Inst, const OperandVector &Operands);
+  void cvtVOP3PImpl(MCInst &Inst, const OperandVector &Operands,
+                    bool IsPacked);
   void cvtVOP3P(MCInst &Inst, const OperandVector &Operands);
+  void cvtVOP3P_NotPacked(MCInst &Inst, const OperandVector &Operands);
 
   void cvtVOP3Interp(MCInst &Inst, const OperandVector &Operands);
 
@@ -2199,6 +2207,20 @@ bool AMDGPUAsmParser::validateEarlyClobberLimitations(const MCInst &Inst) {
   return true;
 }
 
+bool AMDGPUAsmParser::validateIntClampSupported(const MCInst &Inst) {
+
+  const unsigned Opc = Inst.getOpcode();
+  const MCInstrDesc &Desc = MII.get(Opc);
+
+  if ((Desc.TSFlags & SIInstrFlags::IntClamp) != 0 && !hasIntClamp()) {
+    int ClampIdx = AMDGPU::getNamedOperandIdx(Opc, AMDGPU::OpName::clamp);
+    assert(ClampIdx != -1);
+    return Inst.getOperand(ClampIdx).getImm() == 0;
+  }
+
+  return true;
+}
+
 bool AMDGPUAsmParser::validateInstruction(const MCInst &Inst,
                                           const SMLoc &IDLoc) {
   if (!validateConstantBusLimitations(Inst)) {
@@ -2209,6 +2231,11 @@ bool AMDGPUAsmParser::validateInstruction(const MCInst &Inst,
   if (!validateEarlyClobberLimitations(Inst)) {
     Error(IDLoc,
       "destination must be different than all sources");
+    return false;
+  }
+  if (!validateIntClampSupported(Inst)) {
+    Error(IDLoc,
+      "integer clamping is not supported on this GPU");
     return false;
   }
 
@@ -4230,7 +4257,9 @@ void AMDGPUAsmParser::cvtVOP3(MCInst &Inst, const OperandVector &Operands) {
   cvtVOP3(Inst, Operands, OptionalIdx);
 }
 
-void AMDGPUAsmParser::cvtVOP3P(MCInst &Inst, const OperandVector &Operands) {
+void AMDGPUAsmParser::cvtVOP3PImpl(MCInst &Inst,
+                                   const OperandVector &Operands,
+                                   bool IsPacked) {
   OptionalImmIndexMap OptIdx;
 
   cvtVOP3(Inst, Operands, OptIdx);
@@ -4243,11 +4272,15 @@ void AMDGPUAsmParser::cvtVOP3P(MCInst &Inst, const OperandVector &Operands) {
 
   int OpSelHiIdx = AMDGPU::getNamedOperandIdx(Opc, AMDGPU::OpName::op_sel_hi);
   if (OpSelHiIdx != -1) {
-    addOptionalImmOperand(Inst, Operands, OptIdx, AMDGPUOperand::ImmTyOpSelHi, -1);
+    // TODO: Should we change the printing to match?
+    int DefaultVal = IsPacked ? -1 : 0;
+    addOptionalImmOperand(Inst, Operands, OptIdx, AMDGPUOperand::ImmTyOpSelHi,
+                          DefaultVal);
   }
 
   int NegLoIdx = AMDGPU::getNamedOperandIdx(Opc, AMDGPU::OpName::neg_lo);
   if (NegLoIdx != -1) {
+    assert(IsPacked);
     addOptionalImmOperand(Inst, Operands, OptIdx, AMDGPUOperand::ImmTyNegLo);
     addOptionalImmOperand(Inst, Operands, OptIdx, AMDGPUOperand::ImmTyNegHi);
   }
@@ -4299,6 +4332,15 @@ void AMDGPUAsmParser::cvtVOP3P(MCInst &Inst, const OperandVector &Operands) {
 
     Inst.getOperand(ModIdx).setImm(Inst.getOperand(ModIdx).getImm() | ModVal);
   }
+}
+
+void AMDGPUAsmParser::cvtVOP3P(MCInst &Inst, const OperandVector &Operands) {
+  cvtVOP3PImpl(Inst, Operands, true);
+}
+
+void AMDGPUAsmParser::cvtVOP3P_NotPacked(MCInst &Inst,
+                                         const OperandVector &Operands) {
+  cvtVOP3PImpl(Inst, Operands, false);
 }
 
 //===----------------------------------------------------------------------===//

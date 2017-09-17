@@ -1,4 +1,4 @@
-//===------ ForwardOpTree.h -------------------------------------*- C++ -*-===//
+//===- ForwardOpTree.h ------------------------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -12,9 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/ForwardOpTree.h"
-
 #include "polly/Options.h"
-#include "polly/RegisterPasses.h"
 #include "polly/ScopBuilder.h"
 #include "polly/ScopInfo.h"
 #include "polly/ScopPass.h"
@@ -23,12 +21,30 @@
 #include "polly/Support/ISLTools.h"
 #include "polly/Support/VirtualInstruction.h"
 #include "polly/ZoneAlgo.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/Statistic.h"
+#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/Value.h"
+#include "llvm/Pass.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Compiler.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/raw_ostream.h"
+#include "isl/ctx.h"
+#include "isl/isl-noexceptions.h"
+#include <cassert>
+#include <memory>
 
 #define DEBUG_TYPE "polly-optree"
 
-using namespace polly;
 using namespace llvm;
+using namespace polly;
 
 static cl::opt<bool>
     AnalyzeKnown("polly-optree-analyze-known",
@@ -44,7 +60,6 @@ static cl::opt<unsigned long>
 STATISTIC(KnownAnalyzed, "Number of successfully analyzed SCoPs");
 STATISTIC(KnownOutOfQuota,
           "Analyses aborted because max_operations was reached");
-STATISTIC(KnownIncompatible, "Number of SCoPs incompatible for analysis");
 
 STATISTIC(TotalInstructionsCopied, "Number of copied instructions");
 STATISTIC(TotalKnownLoadsForwarded,
@@ -55,6 +70,16 @@ STATISTIC(TotalModifiedStmts,
           "Number of statements with at least one forwarded tree");
 
 STATISTIC(ScopsModified, "Number of SCoPs with at least one forwarded tree");
+
+STATISTIC(NumValueWrites, "Number of scalar value writes after OpTree");
+STATISTIC(NumValueWritesInLoops,
+          "Number of scalar value writes nested in affine loops after OpTree");
+STATISTIC(NumPHIWrites, "Number of scalar phi writes after OpTree");
+STATISTIC(NumPHIWritesInLoops,
+          "Number of scalar phi writes nested in affine loops after OpTree");
+STATISTIC(NumSingletonWrites, "Number of singleton writes after OpTree");
+STATISTIC(NumSingletonWritesInLoops,
+          "Number of singleton writes nested in affine loops after OpTree");
 
 namespace {
 
@@ -223,6 +248,9 @@ private:
   }
 
 public:
+  ForwardOpTreeImpl(Scop *S, LoopInfo *LI)
+      : ZoneAlgorithm("polly-optree", S, LI) {}
+
   /// Compute the zones of known array element contents.
   ///
   /// @return True if the computed #Known is usable.
@@ -230,10 +258,7 @@ public:
     isl::union_map MustKnown, KnownFromLoad, KnownFromInit;
 
     // Check that nothing strange occurs.
-    if (!isCompatibleScop()) {
-      KnownIncompatible++;
-      return false;
-    }
+    collectCompatibleElts();
 
     isl_ctx_reset_error(IslCtx.get());
     {
@@ -277,7 +302,7 @@ public:
     OS.indent(Indent) << "}\n";
   }
 
-  void printStatements(llvm::raw_ostream &OS, int Indent = 0) const {
+  void printStatements(raw_ostream &OS, int Indent = 0) const {
     OS.indent(Indent) << "After statements {\n";
     for (auto &Stmt : *S) {
       OS.indent(Indent + 4) << Stmt.getBaseName() << "\n";
@@ -385,17 +410,17 @@ public:
     if (!LI)
       return FD_NotApplicable;
 
-    // If the load is already in the statement, not forwarding is necessary.
+    // If the load is already in the statement, no forwarding is necessary.
     // However, it might happen that the LoadInst is already present in the
     // statement's instruction list. In that case we do as follows:
     // - For the evaluation (DoIt==false), we can trivially forward it as it is
     //   benefit of forwarding an already present instruction.
-    // - For the execution (DoIt==false), prepend the instruction (to make it
+    // - For the execution (DoIt==true), prepend the instruction (to make it
     //   available to all instructions following in the instruction list), but
     //   do not add another MemoryAccess.
     MemoryAccess *Access = TargetStmt->getArrayAccessOrNULLFor(LI);
     if (Access && !DoIt)
-      return FD_CanForwardLeaf;
+      return FD_CanForwardTree;
 
     if (DoIt)
       TargetStmt->prependInstruction(LI);
@@ -592,8 +617,8 @@ public:
   ///
   /// @return If DoIt==false, return whether the operand tree can be forwarded.
   ///         If DoIt==true, return FD_DidForward.
-  ForwardingDecision forwardTree(ScopStmt *TargetStmt, llvm::Value *UseVal,
-                                 ScopStmt *UseStmt, llvm::Loop *UseLoop,
+  ForwardingDecision forwardTree(ScopStmt *TargetStmt, Value *UseVal,
+                                 ScopStmt *UseStmt, Loop *UseLoop,
                                  isl::map UseToTarget, bool DoIt) {
     ScopStmt *DefStmt = nullptr;
     Loop *DefLoop = nullptr;
@@ -735,10 +760,6 @@ public:
     return true;
   }
 
-public:
-  ForwardOpTreeImpl(Scop *S, LoopInfo *LI)
-      : ZoneAlgorithm("polly-optree", S, LI) {}
-
   /// Return which SCoP this instance is processing.
   Scop *getScop() const { return S; }
 
@@ -746,10 +767,6 @@ public:
   /// to forward them into the statement.
   bool forwardOperandTrees() {
     for (ScopStmt &Stmt : *S) {
-      // Currently we cannot modify the instruction list of region statements.
-      if (!Stmt.isBlockStmt())
-        continue;
-
       bool StmtModified = false;
 
       // Because we are modifying the MemoryAccess list, collect them first to
@@ -786,7 +803,7 @@ public:
 
   /// Print the pass result, performed transformations and the SCoP after the
   /// transformation.
-  void print(llvm::raw_ostream &OS, int Indent = 0) {
+  void print(raw_ostream &OS, int Indent = 0) {
     printStatistics(OS, Indent);
 
     if (!Modified) {
@@ -809,9 +826,6 @@ public:
 /// there are less scalars to be mapped.
 class ForwardOpTree : public ScopPass {
 private:
-  ForwardOpTree(const ForwardOpTree &) = delete;
-  const ForwardOpTree &operator=(const ForwardOpTree &) = delete;
-
   /// The pass implementation, also holding per-scop data.
   std::unique_ptr<ForwardOpTreeImpl> Impl;
 
@@ -819,19 +833,21 @@ public:
   static char ID;
 
   explicit ForwardOpTree() : ScopPass(ID) {}
+  ForwardOpTree(const ForwardOpTree &) = delete;
+  ForwardOpTree &operator=(const ForwardOpTree &) = delete;
 
-  virtual void getAnalysisUsage(AnalysisUsage &AU) const override {
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequiredTransitive<ScopInfoRegionPass>();
     AU.addRequired<LoopInfoWrapperPass>();
     AU.setPreservesAll();
   }
 
-  virtual bool runOnScop(Scop &S) override {
+  bool runOnScop(Scop &S) override {
     // Free resources for previous SCoP's computation, if not yet done.
     releaseMemory();
 
     LoopInfo &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
-    Impl = make_unique<ForwardOpTreeImpl>(&S, &LI);
+    Impl = llvm::make_unique<ForwardOpTreeImpl>(&S, &LI);
 
     if (AnalyzeKnown) {
       DEBUG(dbgs() << "Prepare forwarders...\n");
@@ -844,10 +860,19 @@ public:
     DEBUG(dbgs() << "\nFinal Scop:\n");
     DEBUG(dbgs() << S);
 
+    // Update statistics
+    auto ScopStats = S.getStatistics();
+    NumValueWrites += ScopStats.NumValueWrites;
+    NumValueWritesInLoops += ScopStats.NumValueWritesInLoops;
+    NumPHIWrites += ScopStats.NumPHIWrites;
+    NumPHIWritesInLoops += ScopStats.NumPHIWritesInLoops;
+    NumSingletonWrites += ScopStats.NumSingletonWrites;
+    NumSingletonWritesInLoops += ScopStats.NumSingletonWritesInLoops;
+
     return false;
   }
 
-  virtual void printScop(raw_ostream &OS, Scop &S) const override {
+  void printScop(raw_ostream &OS, Scop &S) const override {
     if (!Impl)
       return;
 
@@ -855,12 +880,12 @@ public:
     Impl->print(OS);
   }
 
-  virtual void releaseMemory() override { Impl.reset(); }
-
+  void releaseMemory() override { Impl.reset(); }
 }; // class ForwardOpTree
 
 char ForwardOpTree::ID;
-} // anonymous namespace
+
+} // namespace
 
 ScopPass *polly::createForwardOpTreePass() { return new ForwardOpTree(); }
 

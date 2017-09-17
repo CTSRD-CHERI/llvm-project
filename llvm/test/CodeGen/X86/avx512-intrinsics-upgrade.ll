@@ -959,7 +959,7 @@ define void @test_storent_ps_512(<16 x float> %data, i8* %ptr) {
 define <16 x i32> @test_xor_epi32(<16 x i32> %a, <16 x i32> %b) {
 ; CHECK-LABEL: test_xor_epi32:
 ; CHECK:       ## BB#0:
-; CHECK-NEXT:    vpxord %zmm1, %zmm0, %zmm0
+; CHECK-NEXT:    vpxorq %zmm1, %zmm0, %zmm0
 ; CHECK-NEXT:    retq
   %res = call <16 x i32> @llvm.x86.avx512.mask.pxor.d.512(<16 x i32> %a,<16 x i32> %b, <16 x i32>zeroinitializer, i16 -1)
   ret < 16 x i32> %res
@@ -981,7 +981,7 @@ declare <16 x i32> @llvm.x86.avx512.mask.pxor.d.512(<16 x i32>, <16 x i32>, <16 
 define <16 x i32> @test_or_epi32(<16 x i32> %a, <16 x i32> %b) {
 ; CHECK-LABEL: test_or_epi32:
 ; CHECK:       ## BB#0:
-; CHECK-NEXT:    vpord %zmm1, %zmm0, %zmm0
+; CHECK-NEXT:    vporq %zmm1, %zmm0, %zmm0
 ; CHECK-NEXT:    retq
   %res = call <16 x i32> @llvm.x86.avx512.mask.por.d.512(<16 x i32> %a,<16 x i32> %b, <16 x i32>zeroinitializer, i16 -1)
   ret < 16 x i32> %res
@@ -1003,7 +1003,7 @@ declare <16 x i32> @llvm.x86.avx512.mask.por.d.512(<16 x i32>, <16 x i32>, <16 x
 define <16 x i32> @test_and_epi32(<16 x i32> %a, <16 x i32> %b) {
 ; CHECK-LABEL: test_and_epi32:
 ; CHECK:       ## BB#0:
-; CHECK-NEXT:    vpandd %zmm1, %zmm0, %zmm0
+; CHECK-NEXT:    vpandq %zmm1, %zmm0, %zmm0
 ; CHECK-NEXT:    retq
   %res = call <16 x i32> @llvm.x86.avx512.mask.pand.d.512(<16 x i32> %a,<16 x i32> %b, <16 x i32>zeroinitializer, i16 -1)
   ret < 16 x i32> %res
@@ -2880,7 +2880,6 @@ declare <8 x i64> @llvm.x86.avx512.mask.pmulu.dq.512(<16 x i32>, <16 x i32>, <8 
 define <4 x float> @test_mask_vextractf32x4(<4 x float> %b, <16 x float> %a, i8 %mask) {
 ; CHECK-LABEL: test_mask_vextractf32x4:
 ; CHECK:       ## BB#0:
-; CHECK-NEXT:    vextractf32x4 $2, %zmm1, %xmm1
 ; CHECK-NEXT:    kmovw %edi, %k0
 ; CHECK-NEXT:    kshiftlw $12, %k0, %k1
 ; CHECK-NEXT:    kshiftrw $15, %k1, %k1
@@ -2898,6 +2897,7 @@ define <4 x float> @test_mask_vextractf32x4(<4 x float> %b, <16 x float> %a, i8 
 ; CHECK-NEXT:    vpinsrb $8, %eax, %xmm2, %xmm2
 ; CHECK-NEXT:    kmovw %k1, %eax
 ; CHECK-NEXT:    vpinsrb $12, %eax, %xmm2, %xmm2
+; CHECK-NEXT:    vextractf32x4 $2, %zmm1, %xmm1
 ; CHECK-NEXT:    vpslld $31, %xmm2, %xmm2
 ; CHECK-NEXT:    vblendvps %xmm2, %xmm1, %xmm0, %xmm0
 ; CHECK-NEXT:    retq
@@ -2941,7 +2941,6 @@ declare <4 x i64> @llvm.x86.avx512.mask.vextracti64x4.512(<8 x i64>, i32, <4 x i
 define <4 x i32> @test_maskz_vextracti32x4(<16 x i32> %a, i8 %mask) {
 ; CHECK-LABEL: test_maskz_vextracti32x4:
 ; CHECK:       ## BB#0:
-; CHECK-NEXT:    vextracti32x4 $2, %zmm0, %xmm0
 ; CHECK-NEXT:    kmovw %edi, %k0
 ; CHECK-NEXT:    kshiftlw $12, %k0, %k1
 ; CHECK-NEXT:    kshiftrw $15, %k1, %k1
@@ -2959,6 +2958,7 @@ define <4 x i32> @test_maskz_vextracti32x4(<16 x i32> %a, i8 %mask) {
 ; CHECK-NEXT:    vpinsrb $8, %eax, %xmm1, %xmm1
 ; CHECK-NEXT:    kmovw %k1, %eax
 ; CHECK-NEXT:    vpinsrb $12, %eax, %xmm1, %xmm1
+; CHECK-NEXT:    vextracti32x4 $2, %zmm0, %xmm0
 ; CHECK-NEXT:    vpslld $31, %xmm1, %xmm1
 ; CHECK-NEXT:    vpsrad $31, %xmm1, %xmm1
 ; CHECK-NEXT:    vpand %xmm0, %xmm1, %xmm0
@@ -3581,3 +3581,36 @@ define <8 x i64>@test_int_x86_avx512_mask_broadcasti64x4_512_load(<4 x i64>* %x0
   %res = call <8 x i64> @llvm.x86.avx512.mask.broadcasti64x4.512(<4 x i64> %x0, <8 x i64> %x2, i8 %mask)
   ret <8 x i64> %res
 }
+
+declare <16 x i32> @llvm.x86.avx512.mask.pabs.d.512(<16 x i32>, <16 x i32>, i16)
+
+define <16 x i32>@test_int_x86_avx512_mask_pabs_d_512(<16 x i32> %x0, <16 x i32> %x1, i16 %x2) {
+; CHECK-LABEL: test_int_x86_avx512_mask_pabs_d_512:
+; CHECK:       ## BB#0:
+; CHECK-NEXT:    vpabsd %zmm0, %zmm2
+; CHECK-NEXT:    kmovw %edi, %k1
+; CHECK-NEXT:    vpabsd %zmm0, %zmm1 {%k1}
+; CHECK-NEXT:    vpaddd %zmm2, %zmm1, %zmm0
+; CHECK-NEXT:    retq
+  %res = call <16 x i32> @llvm.x86.avx512.mask.pabs.d.512(<16 x i32> %x0, <16 x i32> %x1, i16 %x2)
+  %res1 = call <16 x i32> @llvm.x86.avx512.mask.pabs.d.512(<16 x i32> %x0, <16 x i32> %x1, i16 -1)
+  %res2 = add <16 x i32> %res, %res1
+  ret <16 x i32> %res2
+}
+
+declare <8 x i64> @llvm.x86.avx512.mask.pabs.q.512(<8 x i64>, <8 x i64>, i8)
+
+define <8 x i64>@test_int_x86_avx512_mask_pabs_q_512(<8 x i64> %x0, <8 x i64> %x1, i8 %x2) {
+; CHECK-LABEL: test_int_x86_avx512_mask_pabs_q_512:
+; CHECK:       ## BB#0:
+; CHECK-NEXT:    vpabsq %zmm0, %zmm2
+; CHECK-NEXT:    kmovw %edi, %k1
+; CHECK-NEXT:    vpabsq %zmm0, %zmm1 {%k1}
+; CHECK-NEXT:    vpaddq %zmm2, %zmm1, %zmm0
+; CHECK-NEXT:    retq
+  %res = call <8 x i64> @llvm.x86.avx512.mask.pabs.q.512(<8 x i64> %x0, <8 x i64> %x1, i8 %x2)
+  %res1 = call <8 x i64> @llvm.x86.avx512.mask.pabs.q.512(<8 x i64> %x0, <8 x i64> %x1, i8 -1)
+  %res2 = add <8 x i64> %res, %res1
+  ret <8 x i64> %res2
+}
+

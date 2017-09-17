@@ -15,6 +15,7 @@
 ; KERNEL-IR:   declare float @llvm.sqrt.f32(float)
 ; KERNEL-IR:   declare float @llvm.fabs.f32(float)
 
+
 ; Check that kernel launch is generated in host IR.
 ; the declare would not be generated unless a call to a kernel exists.
 ; HOST-IR: declare void @polly_launchKernel(i8*, i32, i32, i32, i32, i32, i8*)
@@ -26,7 +27,7 @@
 ;       float tmp1 = sqrt(tmp1);
 ;       float tmp2 = fabs(tmp2);
 ;       float tmp3 = copysignf(tmp1, tmp2);
-;       B[i] = tmp3;
+;       B[i] = tmp4;
 ;   }
 ; }
 

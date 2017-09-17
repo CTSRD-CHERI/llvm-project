@@ -87,6 +87,15 @@ static bool DecodeARMFeatures(const Driver &D, StringRef text,
   return true;
 }
 
+static void DecodeARMFeaturesFromCPU(const Driver &D, StringRef CPU,
+                                     std::vector<StringRef> &Features) {
+  if (CPU != "generic") {
+    llvm::ARM::ArchKind ArchKind = llvm::ARM::parseCPUArch(CPU);
+    unsigned Extension = llvm::ARM::getDefaultExtensions(CPU, ArchKind);
+    llvm::ARM::getExtensionFeatures(Extension, Features);
+  }
+}
+
 // Check if -march is valid by checking if it can be canonicalised and parsed.
 // getARMArch is used here instead of just checking the -march value in order
 // to handle -march=native correctly.
@@ -120,6 +129,26 @@ bool arm::useAAPCSForMachO(const llvm::Triple &T) {
   // the frontend matches that.
   return T.getEnvironment() == llvm::Triple::EABI ||
          T.getOS() == llvm::Triple::UnknownOS || isARMMProfile(T);
+}
+
+// Select mode for reading thread pointer (-mtp=soft/cp15).
+arm::ReadTPMode arm::getReadTPMode(const ToolChain &TC, const ArgList &Args) {
+  if (Arg *A = Args.getLastArg(options::OPT_mtp_mode_EQ)) {
+    const Driver &D = TC.getDriver();
+    arm::ReadTPMode ThreadPointer =
+        llvm::StringSwitch<arm::ReadTPMode>(A->getValue())
+            .Case("cp15", ReadTPMode::Cp15)
+            .Case("soft", ReadTPMode::Soft)
+            .Default(ReadTPMode::Invalid);
+    if (ThreadPointer != ReadTPMode::Invalid)
+      return ThreadPointer;
+    if (StringRef(A->getValue()).empty())
+      D.Diag(diag::err_drv_missing_arg_mtp) << A->getAsString(Args);
+    else
+      D.Diag(diag::err_drv_invalid_mtp) << A->getAsString(Args);
+    return ReadTPMode::Invalid;
+  }
+  return ReadTPMode::Soft;
 }
 
 // Select the float ABI as determined by -msoft-float, -mhard-float, and
@@ -253,6 +282,7 @@ void arm::getARMTargetFeatures(const ToolChain &TC,
   bool KernelOrKext =
       Args.hasArg(options::OPT_mkernel, options::OPT_fapple_kext);
   arm::FloatABI ABI = arm::getARMFloatABI(TC, Args);
+  arm::ReadTPMode ThreadPointer = arm::getReadTPMode(TC, Args);
   const Arg *WaCPU = nullptr, *WaFPU = nullptr;
   const Arg *WaHDiv = nullptr, *WaArch = nullptr;
 
@@ -294,6 +324,9 @@ void arm::getARMTargetFeatures(const ToolChain &TC,
     }
   }
 
+  if (ThreadPointer == arm::ReadTPMode::Cp15)
+    Features.push_back("+read-tp-hard");
+
   // Check -march. ClangAs gives preference to -Wa,-march=.
   const Arg *ArchArg = Args.getLastArg(options::OPT_march_EQ);
   StringRef ArchName;
@@ -331,6 +364,8 @@ void arm::getARMTargetFeatures(const ToolChain &TC,
       for (auto &F : HostFeatures)
         Features.push_back(
             Args.MakeArgString((F.second ? "+" : "-") + F.first()));
+  } else if (!CPUName.empty()) {
+    DecodeARMFeaturesFromCPU(D, CPUName, Features);
   }
 
   // Honor -mfpu=. ClangAs gives preference to -Wa,-mfpu=.

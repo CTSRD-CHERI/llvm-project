@@ -200,8 +200,7 @@ INITIALIZE_PASS_DEPENDENCY(LiveIntervals)
 INITIALIZE_PASS_END(MachineScheduler, DEBUG_TYPE,
                     "Machine Instruction Scheduler", false, false)
 
-MachineScheduler::MachineScheduler()
-: MachineSchedulerBase(ID) {
+MachineScheduler::MachineScheduler() : MachineSchedulerBase(ID) {
   initializeMachineSchedulerPass(*PassRegistry::getPassRegistry());
 }
 
@@ -225,8 +224,7 @@ char &llvm::PostMachineSchedulerID = PostMachineScheduler::ID;
 INITIALIZE_PASS(PostMachineScheduler, "postmisched",
                 "PostRA Machine Instruction Scheduler", false, false)
 
-PostMachineScheduler::PostMachineScheduler()
-: MachineSchedulerBase(ID) {
+PostMachineScheduler::PostMachineScheduler() : MachineSchedulerBase(ID) {
   initializePostMachineSchedulerPass(*PassRegistry::getPassRegistry());
 }
 
@@ -405,6 +403,7 @@ bool PostMachineScheduler::runOnMachineFunction(MachineFunction &mf) {
 
   // Initialize the context of the pass.
   MF = &mf;
+  MLI = &getAnalysis<MachineLoopInfo>();
   PassConfig = &getAnalysis<TargetPassConfig>();
 
   if (VerifyScheduling)
@@ -437,11 +436,67 @@ static bool isSchedBoundary(MachineBasicBlock::iterator MI,
   return MI->isCall() || TII->isSchedulingBoundary(*MI, MBB, *MF);
 }
 
+/// A region of an MBB for scheduling.
+namespace {
+struct SchedRegion {
+  /// RegionBegin is the first instruction in the scheduling region, and
+  /// RegionEnd is either MBB->end() or the scheduling boundary after the
+  /// last instruction in the scheduling region. These iterators cannot refer
+  /// to instructions outside of the identified scheduling region because
+  /// those may be reordered before scheduling this region.
+  MachineBasicBlock::iterator RegionBegin;
+  MachineBasicBlock::iterator RegionEnd;
+  unsigned NumRegionInstrs;
+
+  SchedRegion(MachineBasicBlock::iterator B, MachineBasicBlock::iterator E,
+              unsigned N) :
+    RegionBegin(B), RegionEnd(E), NumRegionInstrs(N) {}
+};
+} // end anonymous namespace
+
+using MBBRegionsVector = SmallVector<SchedRegion, 16>;
+
+static void
+getSchedRegions(MachineBasicBlock *MBB,
+                MBBRegionsVector &Regions,
+                bool RegionsTopDown) {
+  MachineFunction *MF = MBB->getParent();
+  const TargetInstrInfo *TII = MF->getSubtarget().getInstrInfo();
+
+  MachineBasicBlock::iterator I = nullptr;
+  for(MachineBasicBlock::iterator RegionEnd = MBB->end();
+      RegionEnd != MBB->begin(); RegionEnd = I) {
+
+    // Avoid decrementing RegionEnd for blocks with no terminator.
+    if (RegionEnd != MBB->end() ||
+        isSchedBoundary(&*std::prev(RegionEnd), &*MBB, MF, TII)) {
+      --RegionEnd;
+    }
+
+    // The next region starts above the previous region. Look backward in the
+    // instruction stream until we find the nearest boundary.
+    unsigned NumRegionInstrs = 0;
+    I = RegionEnd;
+    for (;I != MBB->begin(); --I) {
+      MachineInstr &MI = *std::prev(I);
+      if (isSchedBoundary(&MI, &*MBB, MF, TII))
+        break;
+      if (!MI.isDebugValue())
+        // MBB::size() uses instr_iterator to count. Here we need a bundle to
+        // count as a single instruction.
+        ++NumRegionInstrs;
+    }
+
+    Regions.push_back(SchedRegion(I, RegionEnd, NumRegionInstrs));
+  }
+
+  if (RegionsTopDown)
+    std::reverse(Regions.begin(), Regions.end());
+}
+
 /// Main driver for both MachineScheduler and PostMachineScheduler.
 void MachineSchedulerBase::scheduleRegions(ScheduleDAGInstrs &Scheduler,
                                            bool FixKillFlags) {
-  const TargetInstrInfo *TII = MF->getSubtarget().getInstrInfo();
-
   // Visit all machine basic blocks.
   //
   // TODO: Visit blocks in global postorder or postorder within the bottom-up
@@ -459,39 +514,28 @@ void MachineSchedulerBase::scheduleRegions(ScheduleDAGInstrs &Scheduler,
       continue;
 #endif
 
-    // Break the block into scheduling regions [I, RegionEnd), and schedule each
-    // region as soon as it is discovered. RegionEnd points the scheduling
-    // boundary at the bottom of the region. The DAG does not include RegionEnd,
-    // but the region does (i.e. the next RegionEnd is above the previous
-    // RegionBegin). If the current block has no terminator then RegionEnd ==
-    // MBB->end() for the bottom region.
+    // Break the block into scheduling regions [I, RegionEnd). RegionEnd
+    // points to the scheduling boundary at the bottom of the region. The DAG
+    // does not include RegionEnd, but the region does (i.e. the next
+    // RegionEnd is above the previous RegionBegin). If the current block has
+    // no terminator then RegionEnd == MBB->end() for the bottom region.
+    //
+    // All the regions of MBB are first found and stored in MBBRegions, which
+    // will be processed (MBB) top-down if initialized with true.
     //
     // The Scheduler may insert instructions during either schedule() or
     // exitRegion(), even for empty regions. So the local iterators 'I' and
-    // 'RegionEnd' are invalid across these calls.
-    //
-    // MBB::size() uses instr_iterator to count. Here we need a bundle to count
-    // as a single instruction.
-    for(MachineBasicBlock::iterator RegionEnd = MBB->end();
-        RegionEnd != MBB->begin(); RegionEnd = Scheduler.begin()) {
+    // 'RegionEnd' are invalid across these calls. Instructions must not be
+    // added to other regions than the current one without updating MBBRegions.
 
-      // Avoid decrementing RegionEnd for blocks with no terminator.
-      if (RegionEnd != MBB->end() ||
-          isSchedBoundary(&*std::prev(RegionEnd), &*MBB, MF, TII)) {
-        --RegionEnd;
-      }
+    MBBRegionsVector MBBRegions;
+    getSchedRegions(&*MBB, MBBRegions, Scheduler.doMBBSchedRegionsTopDown());
+    for (MBBRegionsVector::iterator R = MBBRegions.begin();
+         R != MBBRegions.end(); ++R) {
+      MachineBasicBlock::iterator I = R->RegionBegin;
+      MachineBasicBlock::iterator RegionEnd = R->RegionEnd;
+      unsigned NumRegionInstrs = R->NumRegionInstrs;
 
-      // The next region starts above the previous region. Look backward in the
-      // instruction stream until we find the nearest boundary.
-      unsigned NumRegionInstrs = 0;
-      MachineBasicBlock::iterator I = RegionEnd;
-      for (; I != MBB->begin(); --I) {
-        MachineInstr &MI = *std::prev(I);
-        if (isSchedBoundary(&MI, &*MBB, MF, TII))
-          break;
-        if (!MI.isDebugValue())
-          ++NumRegionInstrs;
-      }
       // Notify the scheduler of the region, even if we may skip scheduling
       // it. Perhaps it still needs to be bundled.
       Scheduler.enterRegion(&*MBB, I, RegionEnd, NumRegionInstrs);
@@ -517,15 +561,11 @@ void MachineSchedulerBase::scheduleRegions(ScheduleDAGInstrs &Scheduler,
       }
 
       // Schedule a region: possibly reorder instructions.
-      // This invalidates 'RegionEnd' and 'I'.
+      // This invalidates the original region iterators.
       Scheduler.schedule();
 
       // Close the current region.
       Scheduler.exitRegion();
-
-      // Scheduling has invalidated the current iterator 'I'. Ask the
-      // scheduler for the top of it's scheduled region.
-      RegionEnd = Scheduler.begin();
     }
     Scheduler.finishBlock();
     // FIXME: Ideally, no further passes should rely on kill flags. However,
@@ -648,6 +688,16 @@ void ScheduleDAGMI::releasePred(SUnit *SU, SDep *PredEdge) {
 void ScheduleDAGMI::releasePredecessors(SUnit *SU) {
   for (SDep &Pred : SU->Preds)
     releasePred(SU, &Pred);
+}
+
+void ScheduleDAGMI::startBlock(MachineBasicBlock *bb) {
+  ScheduleDAGInstrs::startBlock(bb);
+  SchedImpl->enterMBB(bb);
+}
+
+void ScheduleDAGMI::finishBlock() {
+  SchedImpl->leaveMBB();
+  ScheduleDAGInstrs::finishBlock();
 }
 
 /// enterRegion - Called back from MachineScheduler::runOnMachineFunction after
@@ -1511,14 +1561,10 @@ void BaseMemOpClusterMutation::clusterNeighboringMemOps(
   std::sort(MemOpRecords.begin(), MemOpRecords.end());
   unsigned ClusterLength = 1;
   for (unsigned Idx = 0, End = MemOpRecords.size(); Idx < (End - 1); ++Idx) {
-    if (MemOpRecords[Idx].BaseReg != MemOpRecords[Idx+1].BaseReg) {
-      ClusterLength = 1;
-      continue;
-    }
-
     SUnit *SUa = MemOpRecords[Idx].SU;
     SUnit *SUb = MemOpRecords[Idx+1].SU;
-    if (TII->shouldClusterMemOps(*SUa->getInstr(), *SUb->getInstr(),
+    if (TII->shouldClusterMemOps(*SUa->getInstr(), MemOpRecords[Idx].BaseReg,
+                                 *SUb->getInstr(), MemOpRecords[Idx+1].BaseReg,
                                  ClusterLength) &&
         DAG->addEdge(SUb, SDep(SUa, SDep::Cluster))) {
       DEBUG(dbgs() << "Cluster ld/st SU(" << SUa->NodeNum << ") - SU("
@@ -1541,7 +1587,6 @@ void BaseMemOpClusterMutation::clusterNeighboringMemOps(
 
 /// \brief Callback from DAG postProcessing to create cluster edges for loads.
 void BaseMemOpClusterMutation::apply(ScheduleDAGInstrs *DAGInstrs) {
-
   ScheduleDAGMI *DAG = static_cast<ScheduleDAGMI*>(DAGInstrs);
 
   // Map DAG NodeNum to store chain ID.
@@ -1587,6 +1632,7 @@ namespace {
 class CopyConstrain : public ScheduleDAGMutation {
   // Transient state.
   SlotIndex RegionBeginIdx;
+
   // RegionEndIdx is the slot index of the last non-debug instruction in the
   // scheduling region. So we may have RegionBeginIdx == RegionEndIdx.
   SlotIndex RegionEndIdx;
@@ -3199,7 +3245,6 @@ void PostGenericScheduler::registerRoots() {
 /// \param TryCand refers to the next SUnit candidate, otherwise uninitialized.
 void PostGenericScheduler::tryCandidate(SchedCandidate &Cand,
                                         SchedCandidate &TryCand) {
-
   // Initialize the candidate if needed.
   if (!Cand.isValid()) {
     TryCand.Reason = NodeOrder;
@@ -3438,6 +3483,7 @@ class InstructionShuffler : public MachineSchedStrategy {
   // instructions to be scheduled first.
   PriorityQueue<SUnit*, std::vector<SUnit*>, SUnitOrder<false>>
     TopQ;
+
   // When scheduling bottom-up, use greater-than as the queue priority.
   PriorityQueue<SUnit*, std::vector<SUnit*>, SUnitOrder<true>>
     BottomQ;
@@ -3554,6 +3600,7 @@ struct DOTGraphTraits<ScheduleDAGMI*> : public DefaultDOTGraphTraits {
       SS << " I:" << DFS->getNumInstrs(SU);
     return SS.str();
   }
+
   static std::string getNodeDescription(const SUnit *SU, const ScheduleDAG *G) {
     return G->getGraphNodeLabel(SU);
   }
@@ -3577,7 +3624,6 @@ struct DOTGraphTraits<ScheduleDAGMI*> : public DefaultDOTGraphTraits {
 
 /// viewGraph - Pop up a ghostview window with the reachable parts of the DAG
 /// rendered using 'dot'.
-///
 void ScheduleDAGMI::viewGraph(const Twine &Name, const Twine &Title) {
 #ifndef NDEBUG
   ViewGraph(this, Name, false, Title);

@@ -50,6 +50,7 @@ public:
     armeb,          // ARM (big endian): armeb
     aarch64,        // AArch64 (little endian): aarch64
     aarch64_be,     // AArch64 (big endian): aarch64_be
+    arc,            // ARC: Synopsys ARC
     avr,            // AVR: Atmel AVR microcontroller
     bpfel,          // eBPF or extended BPF or 64-bit BPF (little endian)
     bpfeb,          // eBPF or extended BPF or 64-bit BPF (big endian)
@@ -184,6 +185,7 @@ public:
     UnknownEnvironment,
 
     GNU,
+    GNUABIN32,
     GNUABI64,
     GNUEABI,
     GNUEABIHF,
@@ -495,13 +497,18 @@ public:
 
   bool isGNUEnvironment() const {
     EnvironmentType Env = getEnvironment();
-    return Env == Triple::GNU || Env == Triple::GNUABI64 ||
-           Env == Triple::GNUEABI || Env == Triple::GNUEABIHF ||
-           Env == Triple::GNUX32;
+    return Env == Triple::GNU || Env == Triple::GNUABIN32 ||
+           Env == Triple::GNUABI64 || Env == Triple::GNUEABI ||
+           Env == Triple::GNUEABIHF || Env == Triple::GNUX32;
   }
 
   bool isOSContiki() const {
     return getOS() == Triple::Contiki;
+  }
+
+  /// Tests whether the OS is Haiku.
+  bool isOSHaiku() const {
+    return getOS() == Triple::Haiku;
   }
 
   /// Checks if the environment could be MSVC.

@@ -920,6 +920,8 @@ extern int __kmp_hws_abs_flag; // absolute or per-item number requested
   (((blocktime) + (KMP_BLOCKTIME_MULTIPLIER / (monitor_wakeups)) - 1) /        \
    (KMP_BLOCKTIME_MULTIPLIER / (monitor_wakeups)))
 #else
+#define KMP_BLOCKTIME(team, tid)                                               \
+  (get__bt_set(team, tid) ? get__blocktime(team, tid) : __kmp_dflt_blocktime)
 #if KMP_OS_UNIX && (KMP_ARCH_X86 || KMP_ARCH_X86_64)
 // HW TSC is used to reduce overhead (clock tick instead of nanosecond).
 extern kmp_uint64 __kmp_ticks_per_msec;
@@ -929,14 +931,16 @@ extern kmp_uint64 __kmp_ticks_per_msec;
 #define KMP_NOW() __kmp_hardware_timestamp()
 #endif
 #define KMP_NOW_MSEC() (KMP_NOW() / __kmp_ticks_per_msec)
-#define KMP_BLOCKTIME_INTERVAL() (__kmp_dflt_blocktime * __kmp_ticks_per_msec)
+#define KMP_BLOCKTIME_INTERVAL(team, tid)                                      \
+  (KMP_BLOCKTIME(team, tid) * __kmp_ticks_per_msec)
 #define KMP_BLOCKING(goal, count) ((goal) > KMP_NOW())
 #else
 // System time is retrieved sporadically while blocking.
 extern kmp_uint64 __kmp_now_nsec();
 #define KMP_NOW() __kmp_now_nsec()
 #define KMP_NOW_MSEC() (KMP_NOW() / KMP_USEC_PER_SEC)
-#define KMP_BLOCKTIME_INTERVAL() (__kmp_dflt_blocktime * KMP_USEC_PER_SEC)
+#define KMP_BLOCKTIME_INTERVAL(team, tid)                                      \
+  (KMP_BLOCKTIME(team, tid) * KMP_USEC_PER_SEC)
 #define KMP_BLOCKING(goal, count) ((count) % 1000 != 0 || (goal) > KMP_NOW())
 #endif
 #define KMP_YIELD_NOW()                                                        \
@@ -1192,28 +1196,6 @@ typedef struct kmp_cpuinfo {
   char name[3 * sizeof(kmp_cpuid_t)]; // CPUID(0x80000002,0x80000003,0x80000004)
 } kmp_cpuinfo_t;
 #endif
-
-#ifdef BUILD_TV
-
-struct tv_threadprivate {
-  /* Record type #1 */
-  void *global_addr;
-  void *thread_addr;
-};
-
-struct tv_data {
-  struct tv_data *next;
-  void *type;
-  union tv_union {
-    struct tv_threadprivate tp;
-  } u;
-};
-
-extern kmp_key_t __kmp_tv_key;
-
-#endif /* BUILD_TV */
-
-/* ------------------------------------------------------------------------ */
 
 #if USE_ITT_BUILD
 // We cannot include "kmp_itt.h" due to circular dependency. Declare the only
@@ -1960,10 +1942,6 @@ typedef struct kmp_local {
 #endif /* USE_LOCK_FOR_BGET */
 #endif /* ! USE_CMP_XCHG_FOR_BGET */
 #endif /* KMP_USE_BGET */
-
-#ifdef BUILD_TV
-  struct tv_data *tv_data;
-#endif
 
   PACKED_REDUCTION_METHOD_T
   packed_reduction_method; /* stored by __kmpc_reduce*(), used by
@@ -3057,17 +3035,12 @@ extern void __kmp_parallel_dxo(int *gtid_ref, int *cid_ref, ident_t *loc_ref);
 extern int __kmp_get_load_balance(int);
 #endif
 
-#ifdef BUILD_TV
-extern void __kmp_tv_threadprivate_store(kmp_info_t *th, void *global_addr,
-                                         void *thread_addr);
-#endif
-
 extern int __kmp_get_global_thread_id(void);
 extern int __kmp_get_global_thread_id_reg(void);
 extern void __kmp_exit_thread(int exit_status);
 extern void __kmp_abort(char const *format, ...);
 extern void __kmp_abort_thread(void);
-extern void __kmp_abort_process(void);
+KMP_NORETURN extern void __kmp_abort_process(void);
 extern void __kmp_warn(char const *format, ...);
 
 extern void __kmp_set_num_threads(int new_nth, int gtid);

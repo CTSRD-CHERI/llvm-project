@@ -311,6 +311,9 @@ bool llvm::stripDebugInfo(Function &F) {
     }
 
     auto *TermInst = BB.getTerminator();
+    if (!TermInst)
+      // This is invalid IR, but we may not have run the verifier yet
+      continue;
     if (auto *LoopID = TermInst->getMetadata(LLVMContext::MD_loop)) {
       auto *NewLoopID = LoopIDsMap.lookup(LoopID);
       if (!NewLoopID)
@@ -470,7 +473,7 @@ private:
         CU->getSplitDebugFilename(), DICompileUnit::LineTablesOnly, EnumTypes,
         RetainedTypes, GlobalVariables, ImportedEntities, CU->getMacros(),
         CU->getDWOId(), CU->getSplitDebugInlining(),
-        CU->getDebugInfoForProfiling());
+        CU->getDebugInfoForProfiling(), CU->getGnuPubnames());
   }
 
   DILocation *getReplacementMDLocation(DILocation *MLD) {

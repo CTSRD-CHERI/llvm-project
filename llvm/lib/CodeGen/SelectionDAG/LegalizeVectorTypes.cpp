@@ -484,6 +484,9 @@ bool DAGTypeLegalizer::ScalarizeVectorOperand(SDNode *N, unsigned OpNo) {
     case ISD::VSELECT:
       Res = ScalarizeVecOp_VSELECT(N);
       break;
+    case ISD::SETCC:
+      Res = ScalarizeVecOp_VSETCC(N);
+      break;
     case ISD::STORE:
       Res = ScalarizeVecOp_STORE(cast<StoreSDNode>(N), OpNo);
       break;
@@ -558,6 +561,36 @@ SDValue DAGTypeLegalizer::ScalarizeVecOp_VSELECT(SDNode *N) {
 
   return DAG.getNode(ISD::SELECT, SDLoc(N), VT, ScalarCond, N->getOperand(1),
                      N->getOperand(2));
+}
+
+/// If the operand is a vector that needs to be scalarized then the
+/// result must be v1i1, so just convert to a scalar SETCC and wrap
+/// with a scalar_to_vector since the res type is legal if we got here
+SDValue DAGTypeLegalizer::ScalarizeVecOp_VSETCC(SDNode *N) {
+  assert(N->getValueType(0).isVector() &&
+         N->getOperand(0).getValueType().isVector() &&
+         "Operand types must be vectors");
+  assert(N->getValueType(0) == MVT::v1i1 && "Expected v1i1 type");
+
+  EVT VT = N->getValueType(0);
+  SDValue LHS = GetScalarizedVector(N->getOperand(0));
+  SDValue RHS = GetScalarizedVector(N->getOperand(1));
+
+  EVT OpVT = N->getOperand(0).getValueType();
+  EVT NVT = VT.getVectorElementType();
+  SDLoc DL(N);
+  // Turn it into a scalar SETCC.
+  SDValue Res = DAG.getNode(ISD::SETCC, DL, MVT::i1, LHS, RHS,
+      N->getOperand(2));
+
+  // Vectors may have a different boolean contents to scalars.  Promote the
+  // value appropriately.
+  ISD::NodeType ExtendCode =
+      TargetLowering::getExtendForContent(TLI.getBooleanContents(OpVT));
+
+  Res = DAG.getNode(ExtendCode, DL, NVT, Res);
+
+  return DAG.getNode(ISD::SCALAR_TO_VECTOR, DL, VT, Res);
 }
 
 /// If the value to store is a vector that needs to be scalarized, it must be
@@ -1937,13 +1970,12 @@ SDValue DAGTypeLegalizer::SplitVecOp_MSCATTER(MaskedScatterSDNode *N,
                          MachineMemOperand::MOStore,  HiMemVT.getStoreSize(),
                          Alignment, N->getAAInfo(), N->getRanges());
 
-  SDValue OpsHi[] = {Ch, DataHi, MaskHi, Ptr, IndexHi};
-  Hi = DAG.getMaskedScatter(DAG.getVTList(MVT::Other), DataHi.getValueType(),
-                            DL, OpsHi, MMO);
-
-  // Build a factor node to remember that this store is independent of the
-  // other one.
-  return DAG.getNode(ISD::TokenFactor, DL, MVT::Other, Lo, Hi);
+  // The order of the Scatter operation after split is well defined. The "Hi"
+  // part comes after the "Lo". So these two operations should be chained one
+  // after another.
+  SDValue OpsHi[] = {Lo, DataHi, MaskHi, Ptr, IndexHi};
+  return DAG.getMaskedScatter(DAG.getVTList(MVT::Other), DataHi.getValueType(),
+                              DL, OpsHi, MMO);
 }
 
 SDValue DAGTypeLegalizer::SplitVecOp_STORE(StoreSDNode *N, unsigned OpNo) {

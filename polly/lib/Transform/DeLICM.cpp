@@ -55,11 +55,20 @@ cl::opt<bool>
 STATISTIC(DeLICMAnalyzed, "Number of successfully analyzed SCoPs");
 STATISTIC(DeLICMOutOfQuota,
           "Analyses aborted because max_operations was reached");
-STATISTIC(DeLICMIncompatible, "Number of SCoPs incompatible for analysis");
 STATISTIC(MappedValueScalars, "Number of mapped Value scalars");
 STATISTIC(MappedPHIScalars, "Number of mapped PHI scalars");
 STATISTIC(TargetsMapped, "Number of stores used for at least one mapping");
 STATISTIC(DeLICMScopsModified, "Number of SCoPs optimized");
+
+STATISTIC(NumValueWrites, "Number of scalar value writes after DeLICM");
+STATISTIC(NumValueWritesInLoops,
+          "Number of scalar value writes nested in affine loops after DeLICM");
+STATISTIC(NumPHIWrites, "Number of scalar phi writes after DeLICM");
+STATISTIC(NumPHIWritesInLoops,
+          "Number of scalar phi writes nested in affine loops after DeLICM");
+STATISTIC(NumSingletonWrites, "Number of singleton writes after DeLICM");
+STATISTIC(NumSingletonWritesInLoops,
+          "Number of singleton writes nested in affine loops after DeLICM");
 
 isl::union_map computeReachingOverwrite(isl::union_map Schedule,
                                         isl::union_map Writes,
@@ -109,15 +118,13 @@ isl::union_map computeScalarReachingOverwrite(isl::union_map Schedule,
 isl::map computeScalarReachingOverwrite(isl::union_map Schedule,
                                         isl::set Writes, bool InclPrevWrite,
                                         bool InclOverwrite) {
-  auto ScatterSpace = getScatterSpace(Schedule);
-  auto DomSpace = give(isl_set_get_space(Writes.keep()));
+  isl::space ScatterSpace = getScatterSpace(Schedule);
+  isl::space DomSpace = Writes.get_space();
 
-  auto ReachOverwrite = computeScalarReachingOverwrite(
-      Schedule, give(isl_union_set_from_set(Writes.take())), InclPrevWrite,
-      InclOverwrite);
+  isl::union_map ReachOverwrite = computeScalarReachingOverwrite(
+      Schedule, isl::union_set(Writes), InclPrevWrite, InclOverwrite);
 
-  auto ResultSpace = give(isl_space_map_from_domain_and_range(
-      ScatterSpace.take(), DomSpace.take()));
+  isl::space ResultSpace = ScatterSpace.map_from_domain_and_range(DomSpace);
   return singleton(std::move(ReachOverwrite), ResultSpace);
 }
 
@@ -131,13 +138,11 @@ isl::map computeScalarReachingOverwrite(isl::union_map Schedule,
 ///         same elements and in addition the elements of @p Universe to some
 ///         undefined elements. The function prefers to return simple maps.
 isl::union_map expandMapping(isl::union_map Relevant, isl::union_set Universe) {
-  Relevant = give(isl_union_map_coalesce(Relevant.take()));
-  auto RelevantDomain = give(isl_union_map_domain(Relevant.copy()));
-  auto Simplified =
-      give(isl_union_map_gist_domain(Relevant.take(), RelevantDomain.take()));
-  Simplified = give(isl_union_map_coalesce(Simplified.take()));
-  return give(
-      isl_union_map_intersect_domain(Simplified.take(), Universe.take()));
+  Relevant = Relevant.coalesce();
+  isl::union_set RelevantDomain = Relevant.domain();
+  isl::union_map Simplified = Relevant.gist_domain(RelevantDomain);
+  Simplified = Simplified.coalesce();
+  return Simplified.intersect_domain(Universe);
 }
 
 /// Represent the knowledge of the contents of any array elements in any zone or
@@ -1247,10 +1252,7 @@ public:
   /// @return True if the computed lifetimes (#Zone) is usable.
   bool computeZone() {
     // Check that nothing strange occurs.
-    if (!isCompatibleScop()) {
-      DeLICMIncompatible++;
-      return false;
-    }
+    collectCompatibleElts();
 
     isl::union_set EltUnused;
     isl::union_map EltKnown, EltWritten;
@@ -1335,6 +1337,32 @@ public:
           continue;
         }
 
+        if (!isa<StoreInst>(MA->getAccessInstruction())) {
+          DEBUG(dbgs() << "Access " << MA
+                       << " pruned because it is not a StoreInst\n");
+          OptimizationRemarkMissed R(DEBUG_TYPE, "NotAStore",
+                                     MA->getAccessInstruction());
+          R << "skipped possible mapping target because non-store instructions "
+               "are not supported";
+          S->getFunction().getContext().diagnose(R);
+          continue;
+        }
+
+        isl::union_set TouchedElts = MA->getLatestAccessRelation().range();
+        if (!TouchedElts.is_subset(CompatibleElts)) {
+          DEBUG(
+              dbgs()
+              << "Access " << MA
+              << " is incompatible because it touches incompatible elements\n");
+          OptimizationRemarkMissed R(DEBUG_TYPE, "IncompatibleElts",
+                                     MA->getAccessInstruction());
+          R << "skipped possible mapping target because a target location "
+               "cannot be reliably analyzed";
+          S->getFunction().getContext().diagnose(R);
+          continue;
+        }
+
+        assert(isCompatibleAccess(MA));
         NumberOfCompatibleTargets++;
         DEBUG(dbgs() << "Analyzing target access " << MA << "\n");
         if (collapseScalarsToStore(MA))
@@ -1401,6 +1429,14 @@ public:
     releaseMemory();
 
     collapseToUnused(S);
+
+    auto ScopStats = S.getStatistics();
+    NumValueWrites += ScopStats.NumValueWrites;
+    NumValueWritesInLoops += ScopStats.NumValueWritesInLoops;
+    NumPHIWrites += ScopStats.NumPHIWrites;
+    NumPHIWritesInLoops += ScopStats.NumPHIWritesInLoops;
+    NumSingletonWrites += ScopStats.NumSingletonWrites;
+    NumSingletonWritesInLoops += ScopStats.NumSingletonWritesInLoops;
 
     return false;
   }

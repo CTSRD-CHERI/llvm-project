@@ -54,35 +54,24 @@ uint64_t SyntheticSection::getVA() const {
   return 0;
 }
 
-template <class ELFT> static std::vector<DefinedCommon *> getCommonSymbols() {
-  std::vector<DefinedCommon *> V;
-  for (Symbol *S : Symtab->getSymbols())
-    if (auto *B = dyn_cast<DefinedCommon>(S->body()))
-      V.push_back(B);
-  return V;
-}
-
-// Find all common symbols and allocate space for them.
-template <class ELFT> InputSection *elf::createCommonSection() {
+std::vector<InputSection *> elf::createCommonSections() {
   if (!Config->DefineCommon)
-    return nullptr;
+    return {};
 
-  // Sort the common symbols by alignment as an heuristic to pack them better.
-  std::vector<DefinedCommon *> Syms = getCommonSymbols<ELFT>();
-  if (Syms.empty())
-    return nullptr;
+  std::vector<InputSection *> Ret;
+  for (Symbol *S : Symtab->getSymbols()) {
+    auto *Sym = dyn_cast<DefinedCommon>(S->body());
+    if (!Sym || !Sym->Live)
+      continue;
 
-  std::stable_sort(Syms.begin(), Syms.end(),
-                   [](const DefinedCommon *A, const DefinedCommon *B) {
-                     return A->Alignment > B->Alignment;
-                   });
-
-  // Allocate space for common symbols.
-  BssSection *Sec = make<BssSection>("COMMON");
-  for (DefinedCommon *Sym : Syms)
-    if (Sym->Live)
-      Sym->Offset = Sec->reserveSpace(Sym->Size, Sym->Alignment);
-  return Sec;
+    Sym->Section = make<BssSection>("COMMON");
+    size_t Pos = Sym->Section->reserveSpace(Sym->Size, Sym->Alignment);
+    assert(Pos == 0);
+    (void)Pos;
+    Sym->Section->File = Sym->getFile();
+    Ret.push_back(Sym->Section);
+  }
+  return Ret;
 }
 
 // Returns an LLD version string.
@@ -112,7 +101,6 @@ template <class ELFT> MergeInputSection *elf::createCommentSection() {
   auto *Ret =
       make<MergeInputSection>((ObjFile<ELFT> *)nullptr, &Hdr, ".comment");
   Ret->Data = getVersion();
-  Ret->splitIntoPieces();
   return Ret;
 }
 
@@ -452,8 +440,15 @@ bool EhFrameSection<ELFT>::isFdeLive(EhSectionPiece &Piece,
                                      ArrayRef<RelTy> Rels) {
   auto *Sec = cast<EhInputSection>(Piece.ID);
   unsigned FirstRelI = Piece.FirstRelocation;
+
+  // An FDE should point to some function because FDEs are to describe
+  // functions. That's however not always the case due to an issue of
+  // ld.gold with -r. ld.gold may discard only functions and leave their
+  // corresponding FDEs, which results in creating bad .eh_frame sections.
+  // To deal with that, we ignore such FDEs.
   if (FirstRelI == (unsigned)-1)
     return false;
+
   const RelTy &Rel = Rels[FirstRelI];
   SymbolBody &B = Sec->template getFile<ELFT>()->getRelocTargetSym(Rel);
   auto *D = dyn_cast<DefinedRegular>(&B);
@@ -529,9 +524,14 @@ template <class ELFT>
 static void writeCieFde(uint8_t *Buf, ArrayRef<uint8_t> D) {
   memcpy(Buf, D.data(), D.size());
 
+  size_t Aligned = alignTo(D.size(), sizeof(typename ELFT::uint));
+
+  // Zero-clear trailing padding if it exists.
+  memset(Buf + D.size(), 0, Aligned - D.size());
+
   // Fix the size field. -4 since size does not include the size field itself.
   const endianness E = ELFT::TargetEndianness;
-  write32<E>(Buf, alignTo(D.size(), sizeof(typename ELFT::uint)) - 4);
+  write32<E>(Buf, Aligned - 4);
 }
 
 template <class ELFT> void EhFrameSection<ELFT>::finalizeContents() {
@@ -1721,14 +1721,8 @@ unsigned PltSection::getPltRelocOff() const {
   return (HeaderSize == 0) ? InX::Plt->getSize() : 0;
 }
 
-GdbIndexSection::GdbIndexSection(std::vector<GdbIndexChunk> &&Chunks)
-    : SyntheticSection(0, SHT_PROGBITS, 1, ".gdb_index"),
-      StringPool(llvm::StringTableBuilder::ELF), Chunks(std::move(Chunks)) {}
-
-// Iterative hash function for symbol's name is described in .gdb_index format
-// specification. Note that we use one for version 5 to 7 here, it is different
-// for version 4.
-static uint32_t hash(StringRef Str) {
+// The hash function used for .gdb_index version 5 or above.
+static uint32_t gdbHash(StringRef Str) {
   uint32_t R = 0;
   for (uint8_t C : Str)
     R = R * 67 + tolower(C) - 113;
@@ -1803,12 +1797,12 @@ void GdbIndexSection::buildIndex() {
 
     // Populate constant pool area.
     for (NameTypeEntry &NameType : D.NamesAndTypes) {
-      uint32_t Hash = hash(NameType.Name);
+      uint32_t Hash = gdbHash(NameType.Name);
       size_t Offset = StringPool.add(NameType.Name);
 
       bool IsNew;
       GdbSymbol *Sym;
-      std::tie(IsNew, Sym) = SymbolTable.add(Hash, Offset);
+      std::tie(IsNew, Sym) = HashTab.add(Hash, Offset);
       if (IsNew) {
         Sym->CuVectorIndex = CuVectors.size();
         CuVectors.resize(CuVectors.size() + 1);
@@ -1841,58 +1835,51 @@ template <class ELFT> GdbIndexSection *elf::createGdbIndex() {
   return make<GdbIndexSection>(std::move(Chunks));
 }
 
-static size_t getCuSize(std::vector<GdbIndexChunk> &C) {
+static size_t getCuSize(ArrayRef<GdbIndexChunk> Arr) {
   size_t Ret = 0;
-  for (GdbIndexChunk &D : C)
+  for (const GdbIndexChunk &D : Arr)
     Ret += D.CompilationUnits.size();
   return Ret;
 }
 
-static size_t getAddressAreaSize(std::vector<GdbIndexChunk> &C) {
+static size_t getAddressAreaSize(ArrayRef<GdbIndexChunk> Arr) {
   size_t Ret = 0;
-  for (GdbIndexChunk &D : C)
+  for (const GdbIndexChunk &D : Arr)
     Ret += D.AddressArea.size();
   return Ret;
 }
 
-void GdbIndexSection::finalizeContents() {
-  if (Finalized)
-    return;
-  Finalized = true;
-
+GdbIndexSection::GdbIndexSection(std::vector<GdbIndexChunk> &&C)
+    : SyntheticSection(0, SHT_PROGBITS, 1, ".gdb_index"),
+      StringPool(llvm::StringTableBuilder::ELF), Chunks(std::move(C)) {
   buildIndex();
-
-  SymbolTable.finalizeContents();
+  HashTab.finalizeContents();
 
   // GdbIndex header consist from version fields
   // and 5 more fields with different kinds of offsets.
   CuTypesOffset = CuListOffset + getCuSize(Chunks) * CompilationUnitSize;
   SymTabOffset = CuTypesOffset + getAddressAreaSize(Chunks) * AddressEntrySize;
-
-  ConstantPoolOffset =
-      SymTabOffset + SymbolTable.getCapacity() * SymTabEntrySize;
+  ConstantPoolOffset = SymTabOffset + HashTab.getCapacity() * SymTabEntrySize;
 
   for (std::set<uint32_t> &CuVec : CuVectors) {
     CuVectorsOffset.push_back(CuVectorsSize);
     CuVectorsSize += OffsetTypeSize * (CuVec.size() + 1);
   }
   StringPoolOffset = ConstantPoolOffset + CuVectorsSize;
-
   StringPool.finalizeInOrder();
 }
 
 size_t GdbIndexSection::getSize() const {
-  const_cast<GdbIndexSection *>(this)->finalizeContents();
   return StringPoolOffset + StringPool.getSize();
 }
 
 void GdbIndexSection::writeTo(uint8_t *Buf) {
-  write32le(Buf, 7);                       // Write version.
-  write32le(Buf + 4, CuListOffset);        // CU list offset.
-  write32le(Buf + 8, CuTypesOffset);       // Types CU list offset.
-  write32le(Buf + 12, CuTypesOffset);      // Address area offset.
-  write32le(Buf + 16, SymTabOffset);       // Symbol table offset.
-  write32le(Buf + 20, ConstantPoolOffset); // Constant pool offset.
+  write32le(Buf, 7);                       // Write version
+  write32le(Buf + 4, CuListOffset);        // CU list offset
+  write32le(Buf + 8, CuTypesOffset);       // Types CU list offset
+  write32le(Buf + 12, CuTypesOffset);      // Address area offset
+  write32le(Buf + 16, SymTabOffset);       // Symbol table offset
+  write32le(Buf + 20, ConstantPoolOffset); // Constant pool offset
   Buf += 24;
 
   // Write the CU list.
@@ -1917,8 +1904,8 @@ void GdbIndexSection::writeTo(uint8_t *Buf) {
   }
 
   // Write the symbol table.
-  for (size_t I = 0; I < SymbolTable.getCapacity(); ++I) {
-    GdbSymbol *Sym = SymbolTable.getSymbol(I);
+  for (size_t I = 0; I < HashTab.getCapacity(); ++I) {
+    GdbSymbol *Sym = HashTab.getSymbol(I);
     if (Sym) {
       size_t NameOffset =
           Sym->NameOffset + StringPoolOffset - ConstantPoolOffset;
@@ -2660,7 +2647,6 @@ InputSection *InX::ARMAttributes;
 BssSection *InX::Bss;
 BssSection *InX::BssRelRo;
 BuildIdSection *InX::BuildId;
-InputSection *InX::Common;
 SyntheticSection *InX::Dynamic;
 StringTableSection *InX::DynStrTab;
 SymbolTableBaseSection *InX::DynSymTab;
@@ -2687,11 +2673,6 @@ template void PltSection::addEntry<ELF32LE>(SymbolBody &Sym);
 template void PltSection::addEntry<ELF32BE>(SymbolBody &Sym);
 template void PltSection::addEntry<ELF64LE>(SymbolBody &Sym);
 template void PltSection::addEntry<ELF64BE>(SymbolBody &Sym);
-
-template InputSection *elf::createCommonSection<ELF32LE>();
-template InputSection *elf::createCommonSection<ELF32BE>();
-template InputSection *elf::createCommonSection<ELF64LE>();
-template InputSection *elf::createCommonSection<ELF64BE>();
 
 template MergeInputSection *elf::createCommentSection<ELF32LE>();
 template MergeInputSection *elf::createCommentSection<ELF32BE>();

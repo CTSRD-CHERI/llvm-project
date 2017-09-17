@@ -18,6 +18,13 @@ if(NOT APPLE)
   set(CLANG_DEFAULT_LINKER lld CACHE STRING "")
 endif()
 
+# This is a "Does your linker support it?" option that only applies
+# to x86-64 ELF targets.  All Fuchsia target linkers do support it.
+# For x86-64 Linux, it's supported by LLD and by GNU linkers since
+# binutils 2.27, so one can hope that all Linux hosts in use handle it.
+# Ideally this would be settable as a per-target option.
+set(ENABLE_X86_RELAX_RELOCATIONS ON CACHE BOOL "")
+
 if(APPLE)
   set(LLDB_CODESIGN_IDENTITY "" CACHE STRING "")
 endif()
@@ -33,10 +40,10 @@ foreach(target x86_64;aarch64)
 endforeach()
 
 if(NOT APPLE)
-  list(APPEND LLVM_BUILTIN_TARGETS "default")
+  set(LLVM_BUILTIN_TARGETS "default;${LLVM_BUILTIN_TARGETS}" CACHE STRING "" FORCE)
 endif()
 
-set(LLVM_RUNTIME_TARGETS "default;x86_64-fuchsia;aarch64-fuchsia" CACHE STRING "")
+set(LLVM_RUNTIME_TARGETS "default;x86_64-fuchsia;aarch64-fuchsia;x86_64-fuchsia-asan:x86_64-fuchsia;aarch64-fuchsia-asan:aarch64-fuchsia" CACHE STRING "")
 foreach(target x86_64;aarch64)
   set(RUNTIMES_${target}-fuchsia_CMAKE_BUILD_WITH_INSTALL_RPATH ON CACHE BOOL "")
   set(RUNTIMES_${target}-fuchsia_CMAKE_SYSROOT ${FUCHSIA_${target}_SYSROOT} CACHE PATH "")
@@ -44,6 +51,7 @@ foreach(target x86_64;aarch64)
   set(RUNTIMES_${target}-fuchsia_UNIX 1 CACHE BOOL "")
   set(RUNTIMES_${target}-fuchsia_LLVM_ENABLE_LIBCXX ON CACHE BOOL "")
   set(RUNTIMES_${target}-fuchsia_LIBUNWIND_USE_COMPILER_RT ON CACHE BOOL "")
+  set(RUNTIMES_${target}-fuchsia_LIBUNWIND_ENABLE_STATIC OFF CACHE BOOL "")
   set(RUNTIMES_${target}-fuchsia_LIBCXXABI_USE_COMPILER_RT ON CACHE BOOL "")
   set(RUNTIMES_${target}-fuchsia_LIBCXXABI_USE_LLVM_UNWINDER ON CACHE BOOL "")
   set(RUNTIMES_${target}-fuchsia_LIBCXXABI_ENABLE_STATIC OFF CACHE BOOL "")
@@ -51,6 +59,11 @@ foreach(target x86_64;aarch64)
   set(RUNTIMES_${target}-fuchsia_LIBCXX_ABI_VERSION 2 CACHE STRING "")
   set(RUNTIMES_${target}-fuchsia_LIBCXX_ENABLE_STATIC OFF CACHE BOOL "")
   set(RUNTIMES_${target}-fuchsia_SANITIZER_USE_COMPILER_RT ON CACHE BOOL "")
+
+  set(RUNTIMES_${target}-fuchsia-asan_LLVM_USE_SANITIZER Address CACHE STRING "")
+  set(RUNTIMES_${target}-fuchsia-asan_LLVM_RUNTIMES_PREFIX "${target}-fuchsia/" CACHE STRING "")
+  set(RUNTIMES_${target}-fuchsia-asan_LLVM_RUNTIMES_LIBDIR_SUFFIX "/asan" CACHE STRING "")
+  set(RUNTIMES_${target}-fuchsia-asan_LIBCXX_INSTALL_HEADERS OFF CACHE BOOL "")
 endforeach()
 
 # Setup toolchain.
@@ -81,7 +94,6 @@ set(LLVM_DISTRIBUTION_COMPONENTS
   lld
   lldb
   liblldb
-  LLVMFuzzer
   LTO
   clang-format
   clang-headers

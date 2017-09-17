@@ -242,7 +242,8 @@ public:
   bool getMemOpInfo(unsigned Opcode, unsigned &Scale, unsigned &Width,
                     int64_t &MinOffset, int64_t &MaxOffset) const;
 
-  bool shouldClusterMemOps(MachineInstr &FirstLdSt, MachineInstr &SecondLdSt,
+  bool shouldClusterMemOps(MachineInstr &FirstLdSt, unsigned BaseReg1,
+                           MachineInstr &SecondLdSt, unsigned BaseReg2,
                            unsigned NumLoads) const override;
 
   void copyPhysRegTuple(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
@@ -367,6 +368,9 @@ public:
   insertOutlinedCall(Module &M, MachineBasicBlock &MBB,
                      MachineBasicBlock::iterator &It, MachineFunction &MF,
                      unsigned CallClass) const override;
+  /// Returns true if the instruction has a shift left that can be executed
+  /// more efficiently.
+  bool isExynosShiftLeftFast(const MachineInstr &MI) const;
   /// Returns true if the instruction has a shift by immediate that can be
   /// executed in one cycle less.
   bool isFalkorShiftExtFast(const MachineInstr &MI) const;

@@ -22,6 +22,7 @@
 #include "clang/CodeGen/SwiftCallingConv.h"
 #include "clang/Frontend/CodeGenOptions.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Type.h"
@@ -183,7 +184,11 @@ const TargetInfo &ABIInfo::getTarget() const {
   return CGT.getTarget();
 }
 
-bool ABIInfo:: isAndroid() const { return getTarget().getTriple().isAndroid(); }
+const CodeGenOptions &ABIInfo::getCodeGenOpts() const {
+  return CGT.getCodeGenOpts();
+}
+
+bool ABIInfo::isAndroid() const { return getTarget().getTriple().isAndroid(); }
 
 bool ABIInfo::isHomogeneousAggregateBaseType(QualType Ty) const {
   return false;
@@ -870,7 +875,10 @@ bool IsX86_MMXType(llvm::Type *IRType) {
 static llvm::Type* X86AdjustInlineAsmType(CodeGen::CodeGenFunction &CGF,
                                           StringRef Constraint,
                                           llvm::Type* Ty) {
-  if ((Constraint == "y" || Constraint == "&y") && Ty->isVectorTy()) {
+  bool IsMMXCons = llvm::StringSwitch<bool>(Constraint)
+                     .Cases("y", "&y", "^Ym", true)
+                     .Default(false);
+  if (IsMMXCons && Ty->isVectorTy()) {
     if (cast<llvm::VectorType>(Ty)->getBitWidth() != 64) {
       // Invalid MMX constraint
       return nullptr;
@@ -1078,14 +1086,14 @@ public:
   getUBSanFunctionSignature(CodeGen::CodeGenModule &CGM) const override {
     unsigned Sig = (0xeb << 0) |  // jmp rel8
                    (0x06 << 8) |  //           .+0x08
-                   ('F' << 16) |
-                   ('T' << 24);
+                   ('v' << 16) |
+                   ('2' << 24);
     return llvm::ConstantInt::get(CGM.Int32Ty, Sig);
   }
 
   StringRef getARCRetainAutoreleasedReturnValueMarker() const override {
     return "movl\t%ebp, %ebp"
-           "\t\t## marker for objc_retainAutoreleaseReturnValue";
+           "\t\t// marker for objc_retainAutoreleaseReturnValue";
   }
 };
 
@@ -2108,9 +2116,14 @@ class X86_64ABIInfo : public SwiftABIInfo {
     return !getTarget().getTriple().isOSDarwin();
   }
 
-  /// GCC classifies <1 x long long> as SSE but compatibility with older clang
-  // compilers require us to classify it as INTEGER.
+  /// GCC classifies <1 x long long> as SSE but some platform ABIs choose to
+  /// classify it as INTEGER (for compatibility with older clang compilers).
   bool classifyIntegerMMXAsSSE() const {
+    // Clang <= 3.8 did not do this.
+    if (getCodeGenOpts().getClangABICompat() <=
+        CodeGenOptions::ClangABI::Ver3_8)
+      return false;
+
     const llvm::Triple &Triple = getTarget().getTriple();
     if (Triple.isOSDarwin() || Triple.getOS() == llvm::Triple::PS4)
       return false;
@@ -2264,17 +2277,10 @@ public:
 
   llvm::Constant *
   getUBSanFunctionSignature(CodeGen::CodeGenModule &CGM) const override {
-    unsigned Sig;
-    if (getABIInfo().has64BitPointers())
-      Sig = (0xeb << 0) |  // jmp rel8
-            (0x0a << 8) |  //           .+0x0c
-            ('F' << 16) |
-            ('T' << 24);
-    else
-      Sig = (0xeb << 0) |  // jmp rel8
-            (0x06 << 8) |  //           .+0x08
-            ('F' << 16) |
-            ('T' << 24);
+    unsigned Sig = (0xeb << 0) | // jmp rel8
+                   (0x06 << 8) | //           .+0x08
+                   ('v' << 16) |
+                   ('2' << 24);
     return llvm::ConstantInt::get(CGM.Int32Ty, Sig);
   }
 
@@ -2284,6 +2290,15 @@ public:
     if (!IsForDefinition)
       return;
     if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(D)) {
+      if (FD->hasAttr<X86ForceAlignArgPointerAttr>()) {
+        // Get the LLVM function.
+        auto *Fn = cast<llvm::Function>(GV);
+
+        // Now add the 'alignstack' attribute with a value of 16.
+        llvm::AttrBuilder B;
+        B.addStackAlignmentAttr(16);
+        Fn->addAttributes(llvm::AttributeList::FunctionIndex, B);
+      }
       if (FD->hasAttr<AnyX86InterruptAttr>()) {
         llvm::Function *Fn = cast<llvm::Function>(GV);
         Fn->setCallingConv(llvm::CallingConv::X86_INTR);
@@ -2412,6 +2427,15 @@ void WinX86_64TargetCodeGenInfo::setTargetAttributes(
   if (!IsForDefinition)
     return;
   if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(D)) {
+    if (FD->hasAttr<X86ForceAlignArgPointerAttr>()) {
+      // Get the LLVM function.
+      auto *Fn = cast<llvm::Function>(GV);
+
+      // Now add the 'alignstack' attribute with a value of 16.
+      llvm::AttrBuilder B;
+      B.addStackAlignmentAttr(16);
+      Fn->addAttributes(llvm::AttributeList::FunctionIndex, B);
+    }
     if (FD->hasAttr<AnyX86InterruptAttr>()) {
       llvm::Function *Fn = cast<llvm::Function>(GV);
       Fn->setCallingConv(llvm::CallingConv::X86_INTR);
@@ -4880,7 +4904,7 @@ public:
       : TargetCodeGenInfo(new AArch64ABIInfo(CGT, Kind)) {}
 
   StringRef getARCRetainAutoreleasedReturnValueMarker() const override {
-    return "mov\tfp, fp\t\t# marker for objc_retainAutoreleaseReturnValue";
+    return "mov\tfp, fp\t\t// marker for objc_retainAutoreleaseReturnValue";
   }
 
   int getDwarfEHStackPointer(CodeGen::CodeGenModule &M) const override {
@@ -5486,7 +5510,7 @@ public:
   }
 
   StringRef getARCRetainAutoreleasedReturnValueMarker() const override {
-    return "mov\tr7, r7\t\t@ marker for objc_retainAutoreleaseReturnValue";
+    return "mov\tr7, r7\t\t// marker for objc_retainAutoreleaseReturnValue";
   }
 
   bool initDwarfEHRegSizeTable(CodeGen::CodeGenFunction &CGF,

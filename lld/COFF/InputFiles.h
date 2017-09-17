@@ -31,6 +31,8 @@ class DbiModuleDescriptorBuilder;
 namespace lld {
 namespace coff {
 
+std::vector<MemoryBufferRef> getArchiveMembers(llvm::object::Archive *File);
+
 using llvm::COFF::IMAGE_FILE_MACHINE_UNKNOWN;
 using llvm::COFF::MachineTypes;
 using llvm::object::Archive;
@@ -184,7 +186,6 @@ public:
   static std::vector<ImportFile *> Instances;
 
   DefinedImportData *ImpSym = nullptr;
-  DefinedImportData *ConstSym = nullptr;
   DefinedImportThunk *ThunkSym = nullptr;
   std::string DLLName;
 

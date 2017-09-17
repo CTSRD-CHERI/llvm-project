@@ -406,14 +406,26 @@ bool polly::isErrorBlock(BasicBlock &BB, const Region &R, LoopInfo &LI,
   //        not post dominated by the load and check if it is a conditional
   //        or a loop header.
   auto *DTNode = DT.getNode(&BB);
-  auto *IDomBB = DTNode->getIDom()->getBlock();
+  if (!DTNode)
+    return false;
+
+  DTNode = DTNode->getIDom();
+
+  if (!DTNode)
+    return false;
+
+  auto *IDomBB = DTNode->getBlock();
   if (LI.isLoopHeader(IDomBB))
     return false;
 
   for (Instruction &Inst : BB)
     if (CallInst *CI = dyn_cast<CallInst>(&Inst)) {
       if (isIgnoredIntrinsic(CI))
-        return false;
+        continue;
+
+      // memset, memcpy and memmove are modeled intrinsics.
+      if (isa<MemSetInst>(CI) || isa<MemTransferInst>(CI))
+        continue;
 
       if (!CI->doesNotAccessMemory())
         return true;

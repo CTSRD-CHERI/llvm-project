@@ -1,4 +1,4 @@
-//===-- llvm/CodeGen/DwarfCompileUnit.cpp - Dwarf Compile Units -----------===//
+//===- llvm/CodeGen/DwarfCompileUnit.cpp - Dwarf Compile Units ------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -12,39 +12,58 @@
 //===----------------------------------------------------------------------===//
 
 #include "DwarfCompileUnit.h"
+#include "AddressPool.h"
+#include "DwarfDebug.h"
 #include "DwarfExpression.h"
+#include "DwarfUnit.h"
+#include "llvm/ADT/None.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/BinaryFormat/Dwarf.h"
+#include "llvm/CodeGen/AsmPrinter.h"
+#include "llvm/CodeGen/DIE.h"
+#include "llvm/CodeGen/LexicalScopes.h"
 #include "llvm/CodeGen/MachineFunction.h"
-#include "llvm/IR/Constants.h"
+#include "llvm/CodeGen/MachineInstr.h"
+#include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/IR/DataLayout.h"
-#include "llvm/IR/GlobalValue.h"
+#include "llvm/IR/DebugInfo.h"
+#include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/GlobalVariable.h"
-#include "llvm/IR/Instruction.h"
 #include "llvm/MC/MachineLocation.h"
-#include "llvm/MC/MCAsmInfo.h"
+#include "llvm/MC/MCSection.h"
 #include "llvm/MC/MCStreamer.h"
+#include "llvm/MC/MCSymbol.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Target/TargetFrameLowering.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Target/TargetMachine.h"
+#include "llvm/Target/TargetOptions.h"
 #include "llvm/Target/TargetRegisterInfo.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
+#include <iterator>
+#include <memory>
+#include <string>
+#include <utility>
 
-namespace llvm {
+using namespace llvm;
 
 DwarfCompileUnit::DwarfCompileUnit(unsigned UID, const DICompileUnit *Node,
                                    AsmPrinter *A, DwarfDebug *DW,
                                    DwarfFile *DWU)
-    : DwarfUnit(dwarf::DW_TAG_compile_unit, Node, A, DW, DWU), UniqueID(UID),
-      Skeleton(nullptr), BaseAddress(nullptr) {
+    : DwarfUnit(dwarf::DW_TAG_compile_unit, Node, A, DW, DWU), UniqueID(UID) {
   insertDIE(Node, &getUnitDie());
   MacroLabelBegin = Asm->createTempSymbol("cu_macro_begin");
 }
 
 /// addLabelAddress - Add a dwarf label attribute data and value using
 /// DW_FORM_addr or DW_FORM_GNU_addr_index.
-///
 void DwarfCompileUnit::addLabelAddress(DIE &Die, dwarf::Attribute Attribute,
                                        const MCSymbol *Label) {
-
   // Don't use the address pool in non-fission or in the skeleton unit itself.
   // FIXME: Once GDB supports this, it's probably worthwhile using the address
   // pool from the skeleton - maybe even in non-fission (possibly fewer
@@ -718,7 +737,7 @@ DbgVariable *DwarfCompileUnit::getExistingAbstractVariable(
 void DwarfCompileUnit::createAbstractVariable(const DILocalVariable *Var,
                                         LexicalScope *Scope) {
   assert(Scope && Scope->isAbstractScope());
-  auto AbsDbgVariable = make_unique<DbgVariable>(Var, /* IA */ nullptr);
+  auto AbsDbgVariable = llvm::make_unique<DbgVariable>(Var, /* IA */ nullptr);
   DU->addScopeVariable(Scope, AbsDbgVariable.get());
   getAbstractVariables()[Var] = std::move(AbsDbgVariable);
 }
@@ -736,10 +755,19 @@ void DwarfCompileUnit::emitHeader(bool UseOffsets) {
   DwarfUnit::emitCommonHeader(UseOffsets, UT);
 }
 
+bool DwarfCompileUnit::hasDwarfPubSections() const {
+  // Opting in to GNU Pubnames/types overrides the default to ensure these are
+  // generated for things like Gold's gdb_index generation.
+  if (CUNode->getGnuPubnames())
+    return true;
+
+  return DD->tuneForGDB() && !includeMinimalInlineScopes();
+}
+
 /// addGlobalName - Add a new global name to the compile unit.
 void DwarfCompileUnit::addGlobalName(StringRef Name, const DIE &Die,
                                      const DIScope *Context) {
-  if (!DD->hasDwarfPubSections(includeMinimalInlineScopes()))
+  if (!hasDwarfPubSections())
     return;
   std::string FullName = getParentContextString(Context) + Name.str();
   GlobalNames[FullName] = &Die;
@@ -747,7 +775,7 @@ void DwarfCompileUnit::addGlobalName(StringRef Name, const DIE &Die,
 
 void DwarfCompileUnit::addGlobalNameForTypeUnit(StringRef Name,
                                                 const DIScope *Context) {
-  if (!DD->hasDwarfPubSections(includeMinimalInlineScopes()))
+  if (!hasDwarfPubSections())
     return;
   std::string FullName = getParentContextString(Context) + Name.str();
   // Insert, allowing the entry to remain as-is if it's already present
@@ -760,7 +788,7 @@ void DwarfCompileUnit::addGlobalNameForTypeUnit(StringRef Name,
 /// Add a new global type to the unit.
 void DwarfCompileUnit::addGlobalType(const DIType *Ty, const DIE &Die,
                                      const DIScope *Context) {
-  if (!DD->hasDwarfPubSections(includeMinimalInlineScopes()))
+  if (!hasDwarfPubSections())
     return;
   std::string FullName = getParentContextString(Context) + Ty->getName().str();
   GlobalTypes[FullName] = &Die;
@@ -768,7 +796,7 @@ void DwarfCompileUnit::addGlobalType(const DIType *Ty, const DIE &Die,
 
 void DwarfCompileUnit::addGlobalTypeUnitType(const DIType *Ty,
                                              const DIScope *Context) {
-  if (!DD->hasDwarfPubSections(includeMinimalInlineScopes()))
+  if (!hasDwarfPubSections())
     return;
   std::string FullName = getParentContextString(Context) + Ty->getName().str();
   // Insert, allowing the entry to remain as-is if it's already present
@@ -879,4 +907,3 @@ bool DwarfCompileUnit::includeMinimalInlineScopes() const {
   return getCUNode()->getEmissionKind() == DICompileUnit::LineTablesOnly ||
          (DD->useSplitDwarf() && !Skeleton);
 }
-} // end llvm namespace
