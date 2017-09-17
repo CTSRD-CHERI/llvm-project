@@ -293,9 +293,10 @@ unsigned CodeGenModule::getAddressSpaceForType(QualType T) {
 
 unsigned CodeGenModule::getTargetAddressSpace(LangAS::ID AddrSpace) {
   // XXXAR: Hack for cheri not using LangAS
-  if (AddrSpace == LangAS::Default)
+  unsigned Result = getContext().getTargetAddressSpace(AddrSpace, nullptr);
+  if (Result == LangAS::Default)
     return getTargetCodeGenInfo().getDefaultAS();
-  return getContext().getTargetAddressSpace(AddrSpace, nullptr);
+  return Result;
 }
 
 void CodeGenModule::checkAliases() {
