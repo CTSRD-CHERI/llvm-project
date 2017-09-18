@@ -292,8 +292,10 @@ unsigned CodeGenModule::getAddressSpaceForType(QualType T) {
 }
 
 unsigned CodeGenModule::getTargetAddressSpace(LangAS::ID AddrSpace) {
-  // XXXAR: Hack for cheri not using LangAS
+  if (AddrSpace == LangAS::cheri_tls)
+    return 0; // XXXAR: CHERI still needs rdhwr29 which is AS0
   unsigned Result = getContext().getTargetAddressSpace(AddrSpace, nullptr);
+  // XXXAR: Hack for CHERI purecap ABI where we want default to mean AS200
   if (Result == LangAS::Default)
     return getTargetCodeGenInfo().getDefaultAS();
   return Result;
@@ -2401,8 +2403,8 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
       return llvm::ConstantExpr::getBitCast(Entry, Ty);
   }
 
-  auto AddrSpace = GetGlobalVarAddressSpace(D);
-  auto TargetAddrSpace = getTargetAddressSpace((LangAS::ID)AddrSpace);
+  LangAS::ID AddrSpace = GetGlobalVarAddressSpace(D);
+  auto TargetAddrSpace = getTargetAddressSpace(AddrSpace);
 
   auto *GV = new llvm::GlobalVariable(
       getModule(), Ty->getElementType(), false,
@@ -2688,9 +2690,9 @@ LangAS::ID CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D) {
     // FIXME-cheri-qual: We currently can't handle thread-local storage
     unsigned CapAS = getTargetCodeGenInfo().getCHERICapabilityAS();
     if (Target.areAllPointersCapabilities()) { // Pure ABI
-      // FIXME: should TLS always be AS 0?
+      // CHERI TLS currently relies on mips rdhwr 29 which is AS0
       return (D && (D->getTLSKind() != VarDecl::TLS_None))
-             ? LangAS::Default : (LangAS::ID)(CapAS + LangAS::FirstTargetAddressSpace);
+             ? LangAS::cheri_tls : (LangAS::ID)(CapAS + LangAS::FirstTargetAddressSpace);
     } else if (D && getAddressSpaceForType(D->getType()) == CapAS) { // Hybrid ABI
       return LangAS::Default; // XXXAR: FIXME: is this really  correct?
     }
@@ -3856,8 +3858,8 @@ ConstantAddress CodeGenModule::GetAddrOfGlobalTemporary(
       !EvalResult.hasSideEffects())
     Value = &EvalResult.Val;
 
-  unsigned AddrSpace = VD ? GetGlobalVarAddressSpace(VD)
-                          : MaterializedType.getAddressSpace(nullptr);
+  LangAS::ID AddrSpace = VD ? GetGlobalVarAddressSpace(VD)
+                          : static_cast<LangAS::ID>(MaterializedType.getAddressSpace(nullptr));
 
   Optional<ConstantEmitter> emitter;
   llvm::Constant *InitialValue = nullptr;
@@ -3892,7 +3894,7 @@ ConstantAddress CodeGenModule::GetAddrOfGlobalTemporary(
       Linkage = llvm::GlobalVariable::InternalLinkage;
     }
   }
-  auto TargetAS = getTargetAddressSpace((LangAS::ID)AddrSpace);
+  auto TargetAS = getTargetAddressSpace(AddrSpace);
   auto *GV = new llvm::GlobalVariable(
       getModule(), Type, Constant, Linkage, InitialValue, Name.c_str(),
       /*InsertBefore=*/nullptr, llvm::GlobalVariable::NotThreadLocal, TargetAS);

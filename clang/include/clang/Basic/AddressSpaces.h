@@ -45,7 +45,13 @@ enum ID {
   // This denotes the count of language-specific address spaces and also
   // the offset added to the target-specific address spaces, which are usually
   // specified by address space attributes __attribute__(address_space(n))).
-  FirstTargetAddressSpace
+  FirstTargetAddressSpace,
+
+  // Currently CHERI TLS variables need to be in AS0 otherwise we get Cannot select errors
+  // This is hack to force CodeGen to use AS0 even if default == AS200
+  cheri_tls = FirstTargetAddressSpace + 0xdead,
+  // TODO: should we add this:
+  // cheri_capability = FirstTargetAddressSpace + 200,
 };
 
 /// The type of a lookup table which maps from language-specific address spaces
