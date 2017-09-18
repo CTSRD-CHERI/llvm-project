@@ -2609,7 +2609,12 @@ llvm::Constant *CodeGenModule::GetAddrOfGlobalVar(const VarDecl *D,
   if (!Ty)
     Ty = getTypes().ConvertTypeForMem(ASTTy);
 
-  unsigned AS = getAddressSpaceForType(ASTTy);
+  // a pointer to __intcap_t should not be AS200 in hybrid ABI
+  // So This is not quite right: `unsigned AS = getAddressSpaceForType(ASTTy);`
+  unsigned AS =
+      getContext().getTargetInfo().areAllPointersCapabilities()
+          ? getTargetCodeGenInfo().getCHERICapabilityAS()
+          : getTargetAddressSpace((LangAS::ID)ASTTy.getAddressSpace(nullptr));
   llvm::PointerType *PTy = llvm::PointerType::get(Ty, AS);
 
   StringRef MangledName = getMangledName(D);
