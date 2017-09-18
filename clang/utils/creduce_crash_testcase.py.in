@@ -64,10 +64,19 @@ class ReduceTool(metaclass=ABCMeta):
                 compiler_cmd = compiler_cmd[0:compiler_cmd.find("|")]
             compiler_cmd = compiler_cmd.replace("%s", self.input_file_arg(input_file))
             grep_msg = ""
+            crash_flag = "--crash"
+            if self.args.llvm_error:
+                grep_msg += "2>&1 | grep 'LLVM ERROR:' "
+                crash_flag = ""  # it doesn't actually crash now but returns 1
+                if not self.args.crash_message:
+                    self.args.crash_message = "Cannot select"
             if self.args.crash_message:
-                grep_msg = "2>&1 | grep " + shlex.quote(self.args.crash_message)
+                grep_msg += "2>&1 | grep " + shlex.quote(self.args.crash_message)
             # exit once the first command crashes
-            result += "{} --crash {} {} {}\n".format(self.args.not_cmd, compiler_cmd, grep_msg, self.exit_statement)
+            result += "{not_cmd} {crash_flag} {command} {grep_msg} {exit_stmt}\n".format(
+                not_cmd=self.args.not_cmd, crash_flag=crash_flag,
+                command=compiler_cmd, grep_msg=grep_msg,
+                exit_stmt=self.exit_statement)
         return result
 
     def _create_reduce_script(self, tmpdir: Path, input_file: Path):
@@ -297,6 +306,7 @@ class Options(object):
         self.args = args
         self.no_initial_reduce = args.no_initial_reduce  # type: bool
         self.crash_message = args.crash_message  # type: str
+        self.llvm_error = args.llvm_error  # type: bool
 
     @property
     def clang_cmd(self):
@@ -631,6 +641,7 @@ def main():
     parser.add_argument("--creduce-cmd", help="Path to `creduce` tool. Default is `creduce`")
     parser.add_argument("--output-file", help="The name of the output file")
     parser.add_argument("--verbose", action="store_true", help="Print more debug output")
+    parser.add_argument("--llvm-error", action="store_true", help="Reduce a LLVM ERROR: message instead of a crash")
     # TODO: infer this automatically from the crash reproducer?
     parser.add_argument("--crash-message", help="If set the crash must contain this message to be accepted for reduction."
                                                 " This is useful if creduce ends up generating another crash bug that is not the one being debugged.")
