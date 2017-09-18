@@ -2510,7 +2510,8 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
       D ? D->getType().getAddressSpace(nullptr)
         : static_cast<unsigned>(LangOpts.OpenCL ? LangAS::opencl_global
                                                 : LangAS::Default);
-  if (D && D->getType()->isCHERICapabilityType(getContext()))
+  // XXXAR: not quite sure if this is correct (actually I think it's not needed)
+  if (getContext().getTargetInfo().areAllPointersCapabilities())
     ExpectedAS = getTargetCodeGenInfo().getCHERICapabilityAS() +
                  LangAS::FirstTargetAddressSpace;
   assert(getTargetAddressSpace((LangAS::ID)ExpectedAS) == Ty->getPointerAddressSpace());
