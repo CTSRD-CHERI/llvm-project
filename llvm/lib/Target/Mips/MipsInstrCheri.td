@@ -157,14 +157,14 @@ def : InstAlias<"cgtu $rd, $cb, $ct",
 def : InstAlias<"cgeu $rd, $cb, $ct",
                 (CLTU GPR64Opnd: $rd, CheriOpnd: $ct, CheriOpnd:$cb)>;
 let isCodeGenOnly=1 in {
-  def CEQ32 : CheriFmtPtrCmp<0, GPR32Opnd, "ceq", []>;
-  def CEXEQ32 : CheriFmtPtrCmp<6, GPR32Opnd, "cexeq", []>;
-  def CNEXEQ32 : CheriFmtPtrCmp<7, GPR32Opnd, "cnexeq", []>;
-  def CNE32 : CheriFmtPtrCmp<1, GPR32Opnd, "cne", []>;
-  def CLT32 : CheriFmtPtrCmp<2, GPR32Opnd, "clt", [(set GPR32Opnd: $rd, (setlt CheriOpnd: $cb, CheriOpnd:$ct))]>;
-  def CLE32 : CheriFmtPtrCmp<3, GPR32Opnd, "cle", [(set GPR32Opnd: $rd, (setle CheriOpnd: $cb, CheriOpnd:$ct))]>;
-  def CLTU32 : CheriFmtPtrCmp<2, GPR32Opnd, "cltu", [(set GPR32Opnd: $rd, (setult CheriOpnd: $cb, CheriOpnd:$ct))]>;
-  def CLEU32 : CheriFmtPtrCmp<3, GPR32Opnd, "cleu", [(set GPR32Opnd: $rd, (setule CheriOpnd: $cb, CheriOpnd:$ct))]>;
+  def CEQ32 : CheriFmtPtrCmp<0x14, GPR32Opnd, "ceq", []>;
+  def CEXEQ32 : CheriFmtPtrCmp<x01a, GPR32Opnd, "cexeq", []>;
+  def CNEXEQ32 : CheriFmtPtrCmp<0x21, GPR32Opnd, "cnexeq", []>;
+  def CNE32 : CheriFmtPtrCmp<0x15, GPR32Opnd, "cne", []>;
+  def CLT32 : CheriFmtPtrCmp<0x16, GPR32Opnd, "clt", [(set GPR32Opnd: $rd, (setlt CheriOpnd: $cb, CheriOpnd:$ct))]>;
+  def CLE32 : CheriFmtPtrCmp<0x17, GPR32Opnd, "cle", [(set GPR32Opnd: $rd, (setle CheriOpnd: $cb, CheriOpnd:$ct))]>;
+  def CLTU32 : CheriFmtPtrCmp<0x18, GPR32Opnd, "cltu", [(set GPR32Opnd: $rd, (setult CheriOpnd: $cb, CheriOpnd:$ct))]>;
+  def CLEU32 : CheriFmtPtrCmp<0x19, GPR32Opnd, "cleu", [(set GPR32Opnd: $rd, (setule CheriOpnd: $cb, CheriOpnd:$ct))]>;
 }
 def : Pat<(setugt CheriOpnd: $cb, CheriOpnd:$ct), (CLTU32 CheriOpnd: $ct, CheriOpnd:$cb)>;
 def : Pat<(setuge CheriOpnd: $cb, CheriOpnd:$ct), (CLEU32 CheriOpnd: $ct, CheriOpnd:$cb)>;
