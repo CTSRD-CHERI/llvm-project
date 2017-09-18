@@ -438,13 +438,13 @@ llvm::Constant *TargetCodeGenInfo::getNullPointer(const CodeGen::CodeGenModule &
   return llvm::ConstantPointerNull::get(T);
 }
 
-unsigned TargetCodeGenInfo::getGlobalVarAddressSpace(CodeGenModule &CGM,
-                                                     const VarDecl *D) const {
+LangAS::ID TargetCodeGenInfo::getGlobalVarAddressSpace(CodeGenModule &CGM,
+                                                       const VarDecl *D) const {
   assert(!CGM.getLangOpts().OpenCL &&
          !(CGM.getLangOpts().CUDA && CGM.getLangOpts().CUDAIsDevice) &&
          "Address space agnostic languages only");
-  return D ? D->getType().getAddressSpace(nullptr)
-           : static_cast<unsigned>(LangAS::Default);
+  return static_cast<LangAS::ID>(D ? D->getType().getAddressSpace(nullptr)
+                                   : static_cast<unsigned>(LangAS::Default));
 }
 
 llvm::Value *TargetCodeGenInfo::performAddrSpaceCast(
@@ -477,7 +477,7 @@ llvm::Value *TargetCodeGenInfo::getPointerAddress(CodeGen::CodeGenFunction &CGF,
 
 bool TargetCodeGenInfo::canMarkAsNonNull(QualType DestTy, ASTContext& Context) const {
   unsigned AS = Context.getTargetAddressSpace(DestTy.getQualifiers(), nullptr);
-  if (AS == 0)
+  if (AS == 0 || AS == getCHERICapabilityAS())
     return true;
   return false;
 }
@@ -7885,12 +7885,12 @@ public:
   llvm::Constant *getNullPointer(const CodeGen::CodeGenModule &CGM,
       llvm::PointerType *T, QualType QT) const override;
 
-  unsigned getASTAllocaAddressSpace() const override {
-    return LangAS::FirstTargetAddressSpace +
-           getABIInfo().getDataLayout().getAllocaAddrSpace();
+  LangAS::ID getASTAllocaAddressSpace() const override {
+    return (LangAS::ID)(LangAS::FirstTargetAddressSpace +
+                        getABIInfo().getDataLayout().getAllocaAddrSpace());
   }
-  unsigned getGlobalVarAddressSpace(CodeGenModule &CGM,
-                                    const VarDecl *D) const override;
+  LangAS::ID getGlobalVarAddressSpace(CodeGenModule &CGM,
+                                      const VarDecl *D) const override;
   llvm::SyncScope::ID getLLVMSyncScopeID(SyncScope S,
                                          llvm::LLVMContext &C) const override;
 };
@@ -7976,19 +7976,19 @@ llvm::Constant *AMDGPUTargetCodeGenInfo::getNullPointer(
       llvm::ConstantPointerNull::get(NPT), PT);
 }
 
-unsigned
+LangAS::ID
 AMDGPUTargetCodeGenInfo::getGlobalVarAddressSpace(CodeGenModule &CGM,
                                                   const VarDecl *D) const {
   assert(!CGM.getLangOpts().OpenCL &&
          !(CGM.getLangOpts().CUDA && CGM.getLangOpts().CUDAIsDevice) &&
          "Address space agnostic languages only");
-  unsigned DefaultGlobalAS =
-      LangAS::FirstTargetAddressSpace +
-      CGM.getTargetAddressSpace(LangAS::opencl_global);
+  LangAS::ID DefaultGlobalAS =
+      (LangAS::ID)(LangAS::FirstTargetAddressSpace +
+                   CGM.getTargetAddressSpace(LangAS::opencl_global));
   if (!D)
     return DefaultGlobalAS;
 
-  unsigned AddrSpace = D->getType().getAddressSpace(nullptr);
+  LangAS::ID AddrSpace = (LangAS::ID)D->getType().getAddressSpace(nullptr);
   assert(AddrSpace == LangAS::Default ||
          AddrSpace >= LangAS::FirstTargetAddressSpace);
   if (AddrSpace != LangAS::Default)
@@ -7996,7 +7996,7 @@ AMDGPUTargetCodeGenInfo::getGlobalVarAddressSpace(CodeGenModule &CGM,
 
   if (CGM.isTypeConstant(D->getType(), false)) {
     if (auto ConstAS = CGM.getTarget().getConstantAddressSpace())
-      return ConstAS.getValue();
+      return (LangAS::ID)ConstAS.getValue();
   }
   return DefaultGlobalAS;
 }

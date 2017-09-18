@@ -2510,6 +2510,9 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
       D ? D->getType().getAddressSpace(nullptr)
         : static_cast<unsigned>(LangOpts.OpenCL ? LangAS::opencl_global
                                                 : LangAS::Default);
+  if (D && D->getType()->isCHERICapabilityType(getContext()))
+    ExpectedAS = getTargetCodeGenInfo().getCHERICapabilityAS() +
+                 LangAS::FirstTargetAddressSpace;
   assert(getTargetAddressSpace((LangAS::ID)ExpectedAS) == Ty->getPointerAddressSpace());
   if (AddrSpace != ExpectedAS)
     return getTargetCodeGenInfo().performAddrSpaceCast(*this, GV, AddrSpace,
@@ -2687,7 +2690,7 @@ LangAS::ID CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D) {
     }
   }
 
-  return (LangAS::ID)getTargetCodeGenInfo().getGlobalVarAddressSpace(*this, D);
+  return getTargetCodeGenInfo().getGlobalVarAddressSpace(*this, D);
 }
 
 template<typename SomeDecl>

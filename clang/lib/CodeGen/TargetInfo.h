@@ -266,11 +266,13 @@ public:
   /// other than OpenCL and CUDA.
   /// If \p D is nullptr, returns the default target favored address space
   /// for global variable.
-  virtual unsigned getGlobalVarAddressSpace(CodeGenModule &CGM,
-                                            const VarDecl *D) const;
+  virtual LangAS::ID getGlobalVarAddressSpace(CodeGenModule &CGM,
+                                              const VarDecl *D) const;
 
   /// Get the AST address space for alloca.
-  virtual unsigned getASTAllocaAddressSpace() const { return LangAS::Default; }
+  virtual LangAS::ID getASTAllocaAddressSpace() const {
+    return LangAS::Default;
+  }
 
   /// Perform address space cast of an expression of pointer type.
   /// \param V is the LLVM value to be casted to another address space.
