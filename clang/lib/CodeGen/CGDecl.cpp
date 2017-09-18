@@ -1302,11 +1302,11 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
                                    isVolatile, Builder);
     }
   } else {
-    unsigned AddrSpace = CGM.GetGlobalVarAddressSpace(&D);
+    LangAS::ID AddrSpace = CGM.GetGlobalVarAddressSpace(&D);
     // Otherwise, create a temporary global with the initializer then
     // memcpy from the global to the alloca.
     std::string Name = getStaticDeclName(CGM, D);
-    unsigned AS = AddrSpace;
+    unsigned AS = CGM.getTargetAddressSpace(AddrSpace);
     if (getLangOpts().OpenCL) {
       AS = CGM.getTargetAddressSpace(LangAS::opencl_constant);
       BP = llvm::PointerType::getInt8PtrTy(getLLVMContext(), AS);
