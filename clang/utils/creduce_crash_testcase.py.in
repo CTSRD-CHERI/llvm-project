@@ -574,7 +574,7 @@ class Reducer(object):
             llc_args[0] = "llc"
             return llc_args, irfile
         print("Checking whether compiling IR file with opt crashes:", end="", flush=True)
-        opt_args = self.llc_args.copy()
+        opt_args = llc_args.copy()
         opt_args[0] = str(self.options.opt_cmd)
         opt_args.append("-S")
         opt_args.append("-O3")
