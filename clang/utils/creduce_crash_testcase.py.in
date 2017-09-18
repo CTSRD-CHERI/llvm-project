@@ -481,9 +481,9 @@ class Reducer(object):
                 noargs_opts_to_remove=["-disable-llvm-verifier"])
 
         # try emitting llvm-ir (i.e. frontend bug):
-        print("Checking whether -emit-llvm crashes:", end="", flush=True)
-        if self._check_crash(new_command + ["-emit-llvm"], infile):
-            new_command.append("-emit-llvm")
+        print("Checking whether -O0 -emit-llvm crashes:", end="", flush=True)
+        if self._check_crash(new_command + ["-O0", "-emit-llvm"], infile):
+            new_command.append("-O0 -emit-llvm")
             print("Must be a", blue("frontend crash", style="bold"), ",  will need to use creduce for test case reduction")
             return self._simplify_frontend_crash_cmd(new_command, infile)
         else:
@@ -531,7 +531,8 @@ class Reducer(object):
         command.append("-emit-llvm")
         print("Generating IR file", irfile)
         try:
-            subprocess.check_call(command + [str(infile)])
+            verbose_print(command + ["-O0", str(infile)])
+            subprocess.check_call(command + ["-O0", str(infile)])
         except subprocess.CalledProcessError:
             print("Failed to generate IR from", infile, "will have to reduce using creduce")
             return self._simplify_frontend_crash_cmd(original_command, infile)
@@ -562,6 +563,16 @@ class Reducer(object):
             self.reduce_tool = RunBugpoint(self.options)
             llc_args[0] = "llc"
             return llc_args, irfile
+        print("Checking whether compiling IR file with opt crashes:", end="", flush=True)
+        opt_args = self.llc_args.copy()
+        opt_args[0] = str(self.options.opt_cmd)
+        opt_args.append("-S")
+        opt_args.append("-O3")
+        if self._check_crash(opt_args, irfile):
+            print("Crash found with LLC -> using bugpoint which is faster than creduce.")
+            self.reduce_tool = RunBugpoint(self.options)
+            opt_args[0] = "opt"
+            return opt_args, irfile
         else:
             print("No crash found with LLC! Possibly needs some special argument passed or crash",
                   "only happens when invoking clang -> using creduce.")
