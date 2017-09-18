@@ -112,7 +112,8 @@ template<typename T, bool cross> class TypeBuilder<const volatile T, cross>
 template<typename T, bool cross> class TypeBuilder<T*, cross> {
 public:
   static PointerType *get(LLVMContext &Context) {
-    return PointerType::getUnqual(TypeBuilder<T,cross>::get(Context));
+    // XXXAR: FIXME: AS0 hardcoded
+    return PointerType::get(TypeBuilder<T,cross>::get(Context), 0);
   }
 };
 

@@ -813,7 +813,8 @@ public:
   bool rangeFitsInWord(const APInt &Low, const APInt &High,
                        const DataLayout &DL) const {
     // FIXME: Using the pointer type doesn't seem ideal.
-    uint64_t BW = DL.getPointerSizeInBits();
+    // XXXAR: AS0 hardcoded
+    uint64_t BW = DL.getPointerBaseSizeInBits(0u);
     uint64_t Range = (High - Low).getLimitedValue(UINT64_MAX - 1) + 1;
     return Range <= BW;
   }
