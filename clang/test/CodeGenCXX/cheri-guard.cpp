@@ -8,7 +8,7 @@ foo *f() {
   // CHECK-LABEL: define %struct.foo addrspace(200)* @_Z1fv() #0 {
   // CHECK: [[LOADED_GUARD:%.+]] = load atomic i8, i8 addrspace(200)* bitcast (i64 addrspace(200)* @_ZGVZ1fvE1x to i8 addrspace(200)*) acquire, align 8
   // CHECK-NEXT: [[UNINITIALIZED:%.+]] = icmp eq i8 [[LOADED_GUARD]], 0
-  // CHECK-NEXT: br i1 [[UNINITIALIZED]], label %[[ACQUIRE_LABEL:.+]], label %[[EXIT_LABEL:[^ !]+]]
+  // CHECK-NEXT: br i1 [[UNINITIALIZED]], label %[[ACQUIRE_LABEL:.+]], label %[[EXIT_LABEL:[^, !]+]]
 
   // CHECK: [[ACQUIRE_LABEL]]:
   // CHECK-NEXT: [[ACQUIRED:%.+]] = call i32 @__cxa_guard_acquire(i64 addrspace(200)* @_ZGVZ1fvE1x)
