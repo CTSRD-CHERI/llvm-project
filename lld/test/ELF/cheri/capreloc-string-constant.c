@@ -73,11 +73,11 @@ struct option options_table[] = {
 // OBJ-CAPRELOCS-SAME:{{[[:space:]]$}}
 
 
-// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section (in current DSO) {{.+}}/capreloc-string-constant.c:(.rodata.str1.1+0x0)
-// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section (in current DSO) {{.+}}/capreloc-string-constant.c:(.rodata.str1.1+0x6)
-// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section (in current DSO) {{.+}}/capreloc-string-constant.c:(.rodata.str1.1+0xD)
-// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section (in current DSO) {{.+}}/capreloc-string-constant.c:(.rodata.str1.1+0xD)
-// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section (in current DSO) {{.+}}/capreloc-string-constant.c:(.rodata.str1.1+0xD)
+// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section (in current DSO) capreloc-string-constant.c:(.rodata.str1.1+0x0)
+// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section (in current DSO) capreloc-string-constant.c:(.rodata.str1.1+0x6)
+// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section (in current DSO) capreloc-string-constant.c:(.rodata.str1.1+0xD)
+// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section (in current DSO) capreloc-string-constant.c:(.rodata.str1.1+0xD)
+// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section (in current DSO) capreloc-string-constant.c:(.rodata.str1.1+0xD)
 // UNKNOWN_LENGTH: warning: cannot find entry symbol __start
 // UNKNOWN_LENGTH-NOT: warning
 
