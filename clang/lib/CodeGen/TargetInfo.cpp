@@ -477,7 +477,8 @@ llvm::Value *TargetCodeGenInfo::getPointerAddress(CodeGen::CodeGenFunction &CGF,
 
 bool TargetCodeGenInfo::canMarkAsNonNull(QualType DestTy, ASTContext& Context) const {
   unsigned AS = Context.getTargetAddressSpace(DestTy.getQualifiers(), nullptr);
-  if (AS == 0 || AS == getCHERICapabilityAS())
+  if (AS == 0 || (Context.getTargetInfo().SupportsCapabilities() &&
+                  AS == getCHERICapabilityAS()))
     return true;
   return false;
 }
