@@ -18,6 +18,6 @@ class initializer_list
 }
 
 int main() {
-  // CHECK: addrspacecast ([3 x i32]* @.ref.tmp to [3 x i32] addrspace(200)*
+  // CHECK: store i32 addrspace(200)* getelementptr inbounds ([3 x i32], [3 x i32] addrspace(200)* @.ref.tmp, i64 0, i64 0), i32 addrspace(200)* addrspace(200)* %__begin_
   std::initializer_list<int> l1 = {1, 2, 3};
 }
