@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-// XXXAR: TODO fix this file as well
-#undef LLVM_NO_DEFAULT_ADDRESS_SPACE
+// XXXAR: TODO fix default address space in this file as well
+#define getUnqual(arg) get(arg, 0u)
 
 #include "CGCXXABI.h"
 #include "CGCleanup.h"
