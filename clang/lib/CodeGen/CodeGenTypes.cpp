@@ -518,9 +518,11 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     const ReferenceType *RTy = cast<ReferenceType>(Ty);
     QualType ETy = RTy->getPointeeType();
     llvm::Type *PointeeType = ConvertTypeForMem(ETy);
+    // XXXAR: If Rty is capability, use AS200 otherwise the same as LangAS as
+    // the underlying type
     unsigned AS = RTy->isCHERICapability()
-                  ? CGM.getTargetCodeGenInfo().getCHERICapabilityAS()
-                  : CGM.getAddressSpaceForType(ETy);
+                      ? CGM.getTargetCodeGenInfo().getCHERICapabilityAS()
+                      : CGM.getTargetAddressSpace(ETy.getQualifiers());
     ResultType = llvm::PointerType::get(PointeeType, AS);
     break;
   }
@@ -541,9 +543,11 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     llvm::Type *PointeeType = ConvertTypeForMem(ETy);
     if (PointeeType->isVoidTy())
       PointeeType = llvm::Type::getInt8Ty(getLLVMContext());
-    unsigned AS = PTy->isCHERICapability() ?
-                  CGM.getTargetCodeGenInfo().getCHERICapabilityAS() :
-                  CGM.getAddressSpaceForType(ETy);
+    // XXXAR: If Pty is capability, use AS200 otherwise the same as LangAS as
+    // the underlying type
+    unsigned AS = PTy->isCHERICapability()
+                      ? CGM.getTargetCodeGenInfo().getCHERICapabilityAS()
+                      : CGM.getTargetAddressSpace(ETy.getQualifiers());
     ResultType = llvm::PointerType::get(PointeeType, AS);
     break;
   }
@@ -635,7 +639,11 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
   case Type::BlockPointer: {
     const QualType FTy = cast<BlockPointerType>(Ty)->getPointeeType();
     llvm::Type *PointeeType = ConvertTypeForMem(FTy);
-    unsigned AS = CGM.getAddressSpaceForType(FTy);
+    // XXXAR: If Ty is capability, use AS200 otherwise the same as LangAS as the
+    // underlying type
+    unsigned AS = Ty->isCHERICapabilityType(CGM.getContext())
+                      ? CGM.getTargetCodeGenInfo().getCHERICapabilityAS()
+                      : CGM.getTargetAddressSpace(FTy.getQualifiers());
     ResultType = llvm::PointerType::get(PointeeType, AS);
     break;
   }

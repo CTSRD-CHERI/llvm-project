@@ -2692,7 +2692,7 @@ LangAS::ID CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D) {
       return (D && (D->getTLSKind() != VarDecl::TLS_None))
              ? LangAS::Default : (LangAS::ID)(CapAS + LangAS::FirstTargetAddressSpace);
     } else if (D && getAddressSpaceForType(D->getType()) == CapAS) { // Hybrid ABI
-      return LangAS::Default;
+      return LangAS::Default; // XXXAR: FIXME: is this really  correct?
     }
   }
 

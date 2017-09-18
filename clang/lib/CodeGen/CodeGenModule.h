@@ -641,6 +641,10 @@ public:
 
   unsigned getTargetAddressSpace(LangAS::ID AddrSpace);
 
+  inline unsigned getTargetAddressSpace(Qualifiers Q) {
+    return getTargetAddressSpace(static_cast<LangAS::ID>(Q.getAddressSpace()));
+  }
+
   CodeGenTypes &getTypes() { return Types; }
  
   CodeGenVTables &getVTables() { return VTables; }
