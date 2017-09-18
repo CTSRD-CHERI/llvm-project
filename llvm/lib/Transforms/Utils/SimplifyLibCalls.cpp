@@ -761,12 +761,14 @@ Value *LibCallSimplifier::optimizeMemCmp(CallInst *CI, IRBuilder<> &B) {
     // First, see if we can fold either argument to a constant.
     Value *LHSV = nullptr;
     if (auto *LHSC = dyn_cast<Constant>(LHS)) {
-      LHSC = ConstantExpr::getBitCast(LHSC, IntType->getPointerTo());
+      unsigned AS = LHSC->getType()->getPointerAddressSpace();
+      LHSC = ConstantExpr::getBitCast(LHSC, IntType->getPointerTo(AS));
       LHSV = ConstantFoldLoadFromConstPtr(LHSC, IntType, DL);
     }
     Value *RHSV = nullptr;
     if (auto *RHSC = dyn_cast<Constant>(RHS)) {
-      RHSC = ConstantExpr::getBitCast(RHSC, IntType->getPointerTo());
+      unsigned AS = RHSC->getType()->getPointerAddressSpace();
+      RHSC = ConstantExpr::getBitCast(RHSC, IntType->getPointerTo(AS));
       RHSV = ConstantFoldLoadFromConstPtr(RHSC, IntType, DL);
     }
 
