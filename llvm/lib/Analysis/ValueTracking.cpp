@@ -1697,7 +1697,7 @@ bool isKnownToBeAPowerOfTwo(const Value *V, bool OrZero, unsigned Depth,
 /// Currently this routine does not support vector GEPs.
 static bool isGEPKnownNonNull(const GEPOperator *GEP, unsigned Depth,
                               const Query &Q) {
-  if (!GEP->isInBounds() || GEP->getPointerAddressSpace() != 0)
+  if (!GEP->isInBounds() || (GEP->getPointerAddressSpace() != 0 && !Q.DL.isFatPointer(GEP->getPointerAddressSpace())))
     return false;
 
   // FIXME: Support vector-GEPs.
@@ -1852,9 +1852,11 @@ bool isKnownNonZero(const Value *V, unsigned Depth, const Query &Q) {
     // or an absolute symbol reference. Other address spaces may have null as a
     // valid address for a global, so we can't assume anything.
     if (const GlobalValue *GV = dyn_cast<GlobalValue>(V)) {
-      if (!GV->isAbsoluteSymbolRef() && !GV->hasExternalWeakLinkage() &&
-          GV->getType()->getAddressSpace() == 0)
-        return true;
+      if (!GV->isAbsoluteSymbolRef() && !GV->hasExternalWeakLinkage()) {
+        unsigned GVAddrSpace = GV->getType()->getAddressSpace();
+        if (GVAddrSpace == 0 || Q.DL.isFatPointer(GVAddrSpace))
+          return true;
+      }
     } else
       return false;
   }
@@ -1874,8 +1876,12 @@ bool isKnownNonZero(const Value *V, unsigned Depth, const Query &Q) {
   // Check for pointer simplifications.
   if (V->getType()->isPointerTy()) {
     // Alloca never returns null, malloc might.
-    if (isa<AllocaInst>(V) && Q.DL.getAllocaAddrSpace() == 0)
-      return true;
+    if (isa<AllocaInst>(V)) {
+      unsigned AS = Q.DL.getAllocaAddrSpace();
+      // XXXAR: AMDGPU broke this because their allocaAddressSpace is weird
+      if (AS == 0 || Q.DL.isFatPointer(AS))
+        return true;
+    }
 
     // A byval, inalloca, or nonnull argument is never null.
     if (const Argument *A = dyn_cast<Argument>(V))

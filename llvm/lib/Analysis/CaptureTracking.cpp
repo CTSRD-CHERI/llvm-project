@@ -331,7 +331,7 @@ void llvm::PointerMayBeCaptured(const Value *V, CaptureTracker *Tracker) {
       // with null, for example.
       if (ConstantPointerNull *CPN =
           dyn_cast<ConstantPointerNull>(I->getOperand(1)))
-        if (CPN->getType()->getAddressSpace() == 0)
+        if (CPN->getType()->getAddressSpace() == 0)  // XXXAR: should we also allow this for CHERI AS 200?
           if (isNoAliasCall(V->stripPointerCasts()))
             break;
       // Comparison against value stored in global variable. Given the pointer
