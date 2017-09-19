@@ -482,10 +482,6 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
   }
   assert((VK == VK_RValue || !E->isRValue()) && "can't cast rvalue to lvalue");
 #endif
-  if (Kind == CK_FunctionToPointerDecay) {
-    QualType FnTy = Ty->getPointeeType();
-    Ty = Context.getPointerType(FnTy);
-  }
 
   diagnoseNullableToNonnullConversion(Ty, E->getType(), E->getLocStart());
   diagnoseZeroToNullptrConversion(Kind, E);
