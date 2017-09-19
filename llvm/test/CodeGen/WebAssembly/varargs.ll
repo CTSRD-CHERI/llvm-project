@@ -16,7 +16,7 @@ entry:
   %0 = bitcast i8** %ap to i8*
 ; Store the second argument (the hidden vararg buffer pointer) into ap
 ; CHECK: i32.store 0($0), $1
-  call void @llvm.va_start(i8* %0)
+  call void @llvm.va_start.p0i8(i8* %0)
   ret void
 }
 
@@ -28,7 +28,7 @@ entry:
 define void @end(i8** %ap) {
 entry:
   %0 = bitcast i8** %ap to i8*
-  call void @llvm.va_end(i8* %0)
+  call void @llvm.va_end.p0i8(i8* %0)
   ret void
 }
 
@@ -43,7 +43,7 @@ define void @copy(i8** %ap, i8** %bp) {
 entry:
   %0 = bitcast i8** %ap to i8*
   %1 = bitcast i8** %bp to i8*
-  call void @llvm.va_copy(i8* %0, i8* %1)
+  call void @llvm.va_copy.p0i8.p0i8(i8* %0, i8* %1)
   ret void
 }
 
@@ -139,11 +139,11 @@ bb1:
   %0 = bitcast i8** %ap to i8*
 ; Store the second argument (the hidden vararg buffer pointer) into ap
 ; CHECK: i32.store 0($1), $2
-  call void @llvm.va_start(i8* %0)
+  call void @llvm.va_start.p0i8(i8* %0)
   ret void
 }
 
 
-declare void @llvm.va_start(i8*)
-declare void @llvm.va_end(i8*)
-declare void @llvm.va_copy(i8*, i8*)
+declare void @llvm.va_start.p0i8(i8*)
+declare void @llvm.va_end.p0i8(i8*)
+declare void @llvm.va_copy.p0i8.p0i8(i8*, i8*)

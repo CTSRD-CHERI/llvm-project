@@ -40,7 +40,7 @@ define void @fn9(i32* %a1, i32 %a2, i32 %a3, i32 %a4, i32 %a5, i32 %a6, i32 %a7,
   store i32 %a9, i32* %9, align 4
   store i32 %a9, i32* %a1
   %10 = bitcast i8** %args to i8*
-  call void @llvm.va_start(i8* %10)
+  call void @llvm.va_start.p0i8(i8* %10)
   %11 = va_arg i8** %args, i32
   store i32 %11, i32* %a10, align 4
   %12 = va_arg i8** %args, i32
@@ -50,7 +50,7 @@ define void @fn9(i32* %a1, i32 %a2, i32 %a3, i32 %a4, i32 %a5, i32 %a6, i32 %a7,
   ret void
 }
 
-declare void @llvm.va_start(i8*) nounwind
+declare void @llvm.va_start.p0i8(i8*) nounwind
 
 define i32 @main() nounwind ssp {
 ; CHECK-LABEL: main:
@@ -113,7 +113,7 @@ entry:
   %vv = alloca <4 x i32>, align 16
   store i8* %fmt, i8** %fmt.addr, align 8
   %args1 = bitcast i8** %args to i8*
-  call void @llvm.va_start(i8* %args1)
+  call void @llvm.va_start.p0i8(i8* %args1)
   %0 = va_arg i8** %args, i32
   store i32 %0, i32* %vc, align 4
   %1 = va_arg i8** %args, <4 x i32>
@@ -154,7 +154,7 @@ entry:
   %vs = alloca %struct.s41, align 16
   store i8* %fmt, i8** %fmt.addr, align 8
   %args1 = bitcast i8** %args to i8*
-  call void @llvm.va_start(i8* %args1)
+  call void @llvm.va_start.p0i8(i8* %args1)
   %0 = va_arg i8** %args, i32
   store i32 %0, i32* %vc, align 4
   %ap.cur = load i8*, i8** %args

@@ -7,8 +7,8 @@ target triple = "aarch64_be-arm-none-eabi"
 
 %struct.__va_list = type { i8*, i8*, i8*, i32, i32 }
 
-declare void @llvm.va_start(i8*) nounwind
-declare void @llvm.va_end(i8*) nounwind
+declare void @llvm.va_start.p0i8(i8*) nounwind
+declare void @llvm.va_end.p0i8(i8*) nounwind
 
 define double @callee(i32 %a, ...) {
 ; CHECK: stp
@@ -20,7 +20,7 @@ define double @callee(i32 %a, ...) {
 entry:
   %vl = alloca %struct.__va_list, align 8
   %vl1 = bitcast %struct.__va_list* %vl to i8*
-  call void @llvm.va_start(i8* %vl1)
+  call void @llvm.va_start.p0i8(i8* %vl1)
   %vr_offs_p = getelementptr inbounds %struct.__va_list, %struct.__va_list* %vl, i64 0, i32 4
   %vr_offs = load i32, i32* %vr_offs_p, align 4
   %0 = icmp sgt i32 %vr_offs, -1
@@ -53,6 +53,6 @@ vaarg.end:                                        ; preds = %vaarg.on_stack, %va
   %.sink = phi i8* [ %4, %vaarg.in_reg ], [ %stack, %vaarg.on_stack ]
   %5 = bitcast i8* %.sink to double*
   %6 = load double, double* %5, align 8
-  call void @llvm.va_end(i8* %vl1)
+  call void @llvm.va_end.p0i8(i8* %vl1)
   ret double %6
 }

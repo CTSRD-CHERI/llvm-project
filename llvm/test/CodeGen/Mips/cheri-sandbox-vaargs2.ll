@@ -27,13 +27,13 @@ entry:
   ; CHECK: ld	$1, %got_disp(b)($1)
   ; CHECK: cfromptr $c1, $c0, $1
   ; Store the va_list (passed in $c13) in the global
-  ; CHECK: csc	$c13, $zero, 0($c1)
-  call void @llvm.va_start(i8* %xo_vap1)
+  ; CHECK: csc	$c13
+  call void @llvm.va_start.p200i8(i8* %xo_vap1)
   ret void
 }
 
 ; Function Attrs: nounwind
-declare void @llvm.va_start(i8*) #1
+declare void @llvm.va_start.p200i8(i8*) #1
 
 attributes #0 = { nounwind "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "target-features"="+cheri" "unsafe-fp-math"="false" "use-soft-float"="false" }
 attributes #1 = { nounwind }

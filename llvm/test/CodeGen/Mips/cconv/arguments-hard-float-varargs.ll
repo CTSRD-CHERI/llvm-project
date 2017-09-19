@@ -30,11 +30,11 @@ entry:
 
         %ap = alloca i8*
         %ap2 = bitcast i8** %ap to i8*
-        call void @llvm.va_start(i8* %ap2)
+        call void @llvm.va_start.p0i8(i8* %ap2)
         %b = va_arg i8** %ap, double
         %1 = getelementptr [11 x double], [11 x double]* @doubles, i32 0, i32 2
         store volatile double %b, double* %1
-        call void @llvm.va_end(i8* %ap2)
+        call void @llvm.va_end.p0i8(i8* %ap2)
         ret void
 }
 
@@ -95,11 +95,11 @@ entry:
 
         %ap = alloca i8*
         %ap2 = bitcast i8** %ap to i8*
-        call void @llvm.va_start(i8* %ap2)
+        call void @llvm.va_start.p0i8(i8* %ap2)
         %b = va_arg i8** %ap, float
         %1 = getelementptr [11 x float], [11 x float]* @floats, i32 0, i32 2
         store volatile float %b, float* %1
-        call void @llvm.va_end(i8* %ap2)
+        call void @llvm.va_end.p0i8(i8* %ap2)
         ret void
 }
 
@@ -156,6 +156,6 @@ entry:
 ; NEWBE-DAG:         lwc1 [[FTMP1:\$f[0-9]+]], 12($sp)
 ; ALL-DAG:           swc1 [[FTMP1]], 8([[R2]])
 
-declare void @llvm.va_start(i8*)
-declare void @llvm.va_copy(i8*, i8*)
-declare void @llvm.va_end(i8*)
+declare void @llvm.va_start.p0i8(i8*)
+declare void @llvm.va_copy.p0i8.p0i8(i8*, i8*)
+declare void @llvm.va_end.p0i8(i8*)

@@ -51,7 +51,7 @@ define %struct.tree_node* @build_stmt(i32 %code, ...) nounwind {
 entry:
 	%p = alloca i8*		; <i8**> [#uses=3]
 	%p1 = bitcast i8** %p to i8*		; <i8*> [#uses=2]
-	call void @llvm.va_start(i8* %p1)
+	call void @llvm.va_start.p0i8(i8* %p1)
 	%0 = call fastcc %struct.tree_node* @make_node(i32 %code) nounwind		; <%struct.tree_node*> [#uses=2]
 	%1 = getelementptr [256 x i32], [256 x i32]* @tree_code_length, i32 0, i32 %code		; <i32*> [#uses=1]
 	%2 = load i32, i32* %1, align 4		; <i32> [#uses=2]
@@ -76,12 +76,12 @@ bb:		; preds = %bb, %entry
 	br i1 %exitcond, label %bb3, label %bb
 
 bb3:		; preds = %bb, %entry
-	call void @llvm.va_end(i8* %p1)
+	call void @llvm.va_end.p0i8(i8* %p1)
 	ret %struct.tree_node* %0
 }
 
-declare void @llvm.va_start(i8*) nounwind
+declare void @llvm.va_start.p0i8(i8*) nounwind
 
-declare void @llvm.va_end(i8*) nounwind
+declare void @llvm.va_end.p0i8(i8*) nounwind
 
 declare fastcc %struct.tree_node* @make_node(i32) nounwind

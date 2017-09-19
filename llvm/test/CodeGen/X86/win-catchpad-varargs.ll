@@ -1,8 +1,8 @@
 ; RUN: llc -stack-symbol-ordering=0 -mtriple=x86_64-windows-msvc < %s | FileCheck %s --check-prefix=X64
 ; RUN: llc -stack-symbol-ordering=0 -mtriple=i686-windows-msvc < %s | FileCheck %s --check-prefix=X86
 
-declare void @llvm.va_start(i8*)
-declare void @llvm.va_end(i8*)
+declare void @llvm.va_start.p0i8(i8*)
+declare void @llvm.va_end.p0i8(i8*)
 declare i32 @__CxxFrameHandler3(...)
 declare void @g()
 
@@ -18,11 +18,11 @@ catch.dispatch:                                   ; preds = %entry
 catch:                                            ; preds = %catch.dispatch
   %0 = catchpad within %cs1 [i8* null, i32 64, i8* null]
   %ap1 = bitcast i8** %ap to i8*
-  call void @llvm.va_start(i8* %ap1)
+  call void @llvm.va_start.p0i8(i8* %ap1)
   %argp.cur = load i8*, i8** %ap
   %1 = bitcast i8* %argp.cur to i32*
   %arg2 = load i32, i32* %1
-  call void @llvm.va_end(i8* %ap1)
+  call void @llvm.va_end.p0i8(i8* %ap1)
   catchret from %0 to label %return
 
 return:                                           ; preds = %entry, %catch

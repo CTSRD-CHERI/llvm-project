@@ -304,10 +304,10 @@ class MSBuiltin<string name> {
 //===--------------- Variable Argument Handling Intrinsics ----------------===//
 //
 
-def int_vastart : Intrinsic<[], [llvm_ptr_ty], [], "llvm.va_start">;
-def int_vacopy  : Intrinsic<[], [llvm_ptr_ty, llvm_ptr_ty], [],
+def int_vastart : Intrinsic<[], [llvm_anyptr_ty], [], "llvm.va_start">;
+def int_vacopy  : Intrinsic<[], [llvm_anyptr_ty, llvm_anyptr_ty], [],
                             "llvm.va_copy">;
-def int_vaend   : Intrinsic<[], [llvm_ptr_ty], [], "llvm.va_end">;
+def int_vaend   : Intrinsic<[], [llvm_anyptr_ty], [], "llvm.va_end">;
 
 //===------------------- Garbage Collection Intrinsics --------------------===//
 //

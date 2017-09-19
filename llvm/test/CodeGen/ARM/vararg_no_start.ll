@@ -7,4 +7,4 @@ define void @foo(i8*, ...) {
 ; CHECK-LABEL: {{^_?}}foo:
 ; CHECK-NOT: str
 ; CHECK: {{bx lr|mov pc, lr}}
-declare void @llvm.va_start(i8*) nounwind
+declare void @llvm.va_start.p0i8(i8*) nounwind

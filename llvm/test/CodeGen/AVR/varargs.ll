@@ -1,8 +1,8 @@
 ; RUN: llc -mattr=sram,movw,addsubiw < %s -march=avr | FileCheck %s
 
-declare void @llvm.va_start(i8*)
+declare void @llvm.va_start.p0i8(i8*)
 declare i16 @vsprintf(i8* nocapture, i8* nocapture, i8*)
-declare void @llvm.va_end(i8*)
+declare void @llvm.va_end.p0i8(i8*)
 
 define i16 @varargs1(i8* nocapture %x, ...) {
 ; CHECK-LABEL: varargs1:
@@ -17,11 +17,11 @@ define i16 @varargs1(i8* nocapture %x, ...) {
   %buffer = alloca [32 x i8]
   %ap = alloca i8*
   %ap1 = bitcast i8** %ap to i8*
-  call void @llvm.va_start(i8* %ap1)
+  call void @llvm.va_start.p0i8(i8* %ap1)
   %arraydecay = getelementptr inbounds [32 x i8], [32 x i8]* %buffer, i16 0, i16 0
   %1 = load i8*, i8** %ap
   %call = call i16 @vsprintf(i8* %arraydecay, i8* %x, i8* %1)
-  call void @llvm.va_end(i8* %ap1)
+  call void @llvm.va_end.p0i8(i8* %ap1)
   ret i16 0
 }
 
@@ -31,9 +31,9 @@ define i16 @varargs2(i8* nocapture %x, ...) {
 ; CHECK: ldd r25, Z+1
   %ap = alloca i8*
   %ap1 = bitcast i8** %ap to i8*
-  call void @llvm.va_start(i8* %ap1)
+  call void @llvm.va_start.p0i8(i8* %ap1)
   %1 = va_arg i8** %ap, i16
-  call void @llvm.va_end(i8* %ap1)
+  call void @llvm.va_end.p0i8(i8* %ap1)
   ret i16 %1
 }
 

@@ -7,13 +7,13 @@ entry:
 ; CHECK: fcvt
   %argp = alloca i8*, align 8
   %argp1 = bitcast i8** %argp to i8*
-  call void @llvm.va_start(i8* %argp1)
+  call void @llvm.va_start.p0i8(i8* %argp1)
   %0 = va_arg i8** %argp, i32
   %1 = va_arg i8** %argp, float
-  call void @llvm.va_end(i8* %argp1)
+  call void @llvm.va_end.p0i8(i8* %argp1)
   ret float %1
 }
 
-declare void @llvm.va_start(i8*) nounwind
+declare void @llvm.va_start.p0i8(i8*) nounwind
 
-declare void @llvm.va_end(i8*) nounwind
+declare void @llvm.va_end.p0i8(i8*) nounwind

@@ -111,7 +111,7 @@ define i32 @sum(i32 %count, ...) !dbg !4 {
 entry:
   %vl = alloca i8*, align 4
   %vl1 = bitcast i8** %vl to i8*
-  call void @llvm.va_start(i8* %vl1)
+  call void @llvm.va_start.p0i8(i8* %vl1)
   %cmp4 = icmp sgt i32 %count, 0
   br i1 %cmp4, label %for.body, label %for.end
 
@@ -128,12 +128,12 @@ for.body:                                         ; preds = %entry, %for.body
   br i1 %exitcond, label %for.end, label %for.body
 
 for.end:                                          ; preds = %for.body, %entry
-  call void @llvm.va_end(i8* %vl1)
+  call void @llvm.va_end.p0i8(i8* %vl1)
   ret i32 undef
 }
 
-declare void @llvm.va_start(i8*) nounwind
+declare void @llvm.va_start.p0i8(i8*) nounwind
 
 declare i32 @foo(i32)
 
-declare void @llvm.va_end(i8*) nounwind
+declare void @llvm.va_end.p0i8(i8*) nounwind

@@ -15,7 +15,7 @@ define void @f2(i32 %p, ...) "no-frame-pointer-elim"="true" {
   ; CHECK:      movq    %rdx, 32(%rbp)
   ; CHECK:      leaq    32(%rbp), %rax
   %ap = alloca i8, align 8
-  call void @llvm.va_start(i8* %ap)
+  call void @llvm.va_start.p0i8(i8* %ap)
   ret void
 }
 
@@ -206,4 +206,4 @@ declare i8* @llvm.returnaddress(i32) nounwind readnone
 declare i8* @llvm.addressofreturnaddress() nounwind readnone
 declare i64 @llvm.x86.flags.read.u64()
 
-declare void @llvm.va_start(i8*) nounwind
+declare void @llvm.va_start.p0i8(i8*) nounwind

@@ -25,16 +25,16 @@ define i32 @vargs_not_affected(<4 x float> %v, i8* %f, ...) {
 entry:
   %ap = alloca i8*, align 4
   %0 = bitcast i8** %ap to i8*
-  call void @llvm.va_start(i8* %0)
+  call void @llvm.va_start.p0i8(i8* %0)
   %argp.cur = load i8*, i8** %ap, align 4
   %argp.next = getelementptr inbounds i8, i8* %argp.cur, i32 4
   store i8* %argp.next, i8** %ap, align 4
   %1 = bitcast i8* %argp.cur to i32*
   %2 = load i32, i32* %1, align 4
-  call void @llvm.va_end(i8* %0)
+  call void @llvm.va_end.p0i8(i8* %0)
   ret i32 %2
 }
 
-declare void @llvm.va_start(i8*)
+declare void @llvm.va_start.p0i8(i8*)
 
-declare void @llvm.va_end(i8*)
+declare void @llvm.va_end.p0i8(i8*)

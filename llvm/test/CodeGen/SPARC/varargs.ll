@@ -18,7 +18,7 @@ define double @varargsfunc(i8* nocapture %fmt, double %sum, ...) {
 entry:
   %ap = alloca i8*, align 4
   %ap1 = bitcast i8** %ap to i8*
-  call void @llvm.va_start(i8* %ap1)
+  call void @llvm.va_start.p0i8(i8* %ap1)
   br label %for.cond
 
 for.cond:
@@ -60,7 +60,7 @@ sw.default:
   ret double %sum.addr.0
 }
 
-declare void @llvm.va_start(i8*)
+declare void @llvm.va_start.p0i8(i8*)
 
 @.str = private unnamed_addr constant [4 x i8] c"abc\00", align 1
 

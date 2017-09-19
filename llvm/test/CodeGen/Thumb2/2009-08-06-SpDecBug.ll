@@ -13,7 +13,7 @@ entry:
 ; CHECK-NOT: mov sp, r7
 ; CHECK: add sp, #8
 	call void @__gcov_flush() nounwind
-	call void @llvm.va_start(i8* null)
+	call void @llvm.va_start.p0i8(i8* null)
 	br i1 undef, label %bb5, label %bb
 
 bb:		; preds = %bb, %entry
@@ -29,4 +29,4 @@ declare hidden void @__gcov_flush()
 
 declare i32 @execvp(i8*, i8**) nounwind
 
-declare void @llvm.va_start(i8*) nounwind
+declare void @llvm.va_start.p0i8(i8*) nounwind
