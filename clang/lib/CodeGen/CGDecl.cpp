@@ -1302,14 +1302,19 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
                                    isVolatile, Builder);
     }
   } else {
-    LangAS::ID AddrSpace = CGM.GetGlobalVarAddressSpace(&D);
     // Otherwise, create a temporary global with the initializer then
     // memcpy from the global to the alloca.
     std::string Name = getStaticDeclName(CGM, D);
-    unsigned AS = CGM.getTargetAddressSpace(AddrSpace);
+    unsigned AS = 0;
     if (getLangOpts().OpenCL) {
       AS = CGM.getTargetAddressSpace(LangAS::opencl_constant);
       BP = llvm::PointerType::getInt8PtrTy(getLLVMContext(), AS);
+    } else {
+      // XXXAR: should we also change BP here? I guess not, because we still
+      // want the TLS vars to end up as being AS200 and not AS0 in purecap mode
+      // Dont move before if(OpenCL): GetGlobalVarAddressSpace() will assert
+      LangAS::ID AddrSpace = CGM.GetGlobalVarAddressSpace(&D);
+      AS = CGM.getTargetAddressSpace(AddrSpace);
     }
     llvm::GlobalVariable *GV =
       new llvm::GlobalVariable(CGM.getModule(), constant->getType(), true,
