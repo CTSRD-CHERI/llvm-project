@@ -312,10 +312,8 @@ public:
   /// specified address space.
   uint64_t getPointerWidth(unsigned AddrSpace) const {
     if (AddrSpace == 0) {
-      if (areAllPointersCapabilities()) {
-        assert(getCHERICapabilityWidth() == 128 || getCHERICapabilityWidth() == 256);
+      if (areAllPointersCapabilities())
         return getCHERICapabilityWidth();
-      }
       return PointerWidth;
     }
     return getPointerWidthV(AddrSpace);
@@ -331,10 +329,8 @@ public:
   }
   uint64_t getPointerAlign(unsigned AddrSpace) const {
     if (AddrSpace == 0) {
-      if (areAllPointersCapabilities()) {
-        assert(getCHERICapabilityAlign() == 128 || getCHERICapabilityAlign() == 256);
+      if (areAllPointersCapabilities())
         return getCHERICapabilityAlign();
-      }
       return PointerAlign;
     }
     return getPointerAlignV(AddrSpace);
