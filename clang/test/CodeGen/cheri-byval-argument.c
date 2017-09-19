@@ -7,6 +7,10 @@
 // RUN: %cheri128_cc1 -target-abi purecap -emit-llvm -o - %s -DDATA_SIZE=1024 | FileCheck %s -check-prefix EXPANDED
 // RUN: %cheri128_cc1 -target-abi purecap -emit-llvm -o - %s -DDATA_SIZE=1032 | FileCheck %s -check-prefix MEMCPY
 
+// The code to pass arguments indirectly was reverted in 32ad8fc799f90f5f15b2f2be29b3e328deb1e7dc
+// XFAIL: *
+
+
 struct big {
   char data[DATA_SIZE]; // FIXME: even with 2048 we get 256 i64 inreg arguments, is that correct? N64 starts using memcpy at 72
 };
