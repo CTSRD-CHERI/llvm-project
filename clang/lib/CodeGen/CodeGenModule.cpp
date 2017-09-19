@@ -296,7 +296,7 @@ unsigned CodeGenModule::getTargetAddressSpace(LangAS::ID AddrSpace) {
     return 0; // XXXAR: CHERI still needs rdhwr29 which is AS0
   unsigned Result = getContext().getTargetAddressSpace(AddrSpace, nullptr);
   // XXXAR: Hack for CHERI purecap ABI where we want default to mean AS200
-  if (Result == LangAS::Default)
+  if (Result == 0)
     return getTargetCodeGenInfo().getDefaultAS();
   return Result;
 }
@@ -2508,10 +2508,9 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
     }
   }
 
-  auto ExpectedAS =
+  LangAS::ID ExpectedAS =
       D ? D->getType().getAddressSpace(nullptr)
-        : static_cast<unsigned>(LangOpts.OpenCL ? LangAS::opencl_global
-                                                : LangAS::Default);
+        : (LangOpts.OpenCL ? LangAS::opencl_global : LangAS::Default);
   // XXXAR: not quite sure if this is correct (actually I think it's not needed)
   if (getContext().getTargetInfo().areAllPointersCapabilities())
     ExpectedAS = getTargetCodeGenInfo().getCHERICapabilityAS() +

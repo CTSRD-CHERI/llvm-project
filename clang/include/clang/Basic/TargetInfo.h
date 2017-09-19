@@ -346,10 +346,8 @@ public:
   }
 
   /// \brief Get integer value for null pointer.
-  /// \param AddrSpace address space of pointee in source language.
-  virtual uint64_t getNullPointerValue(unsigned AddrSpace) const {
-    return 0;
-  }
+  /// \param AddrSpace AST address space of pointee in source language.
+  virtual uint64_t getNullPointerValue(LangAS::ID AddrSpace) const { return 0; }
 
   virtual uint64_t getCHERICapabilityWidth() const { return -1; }
 
@@ -1012,7 +1010,7 @@ public:
   /// for constant global memory. It must be possible to convert pointers into
   /// this address space to LangAS::Default. If no such address space exists,
   /// this may return None, and such optimizations will be disabled.
-  virtual llvm::Optional<unsigned> getConstantAddressSpace() const {
+  virtual llvm::Optional<LangAS::ID> getConstantAddressSpace() const {
     return LangAS::Default;
   }
 

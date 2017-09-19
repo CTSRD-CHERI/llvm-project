@@ -2261,7 +2261,8 @@ CGOpenMPRuntimeNVPTX::translateParameter(const FieldDecl *FD,
   ArgType = CGM.getContext().getPointerType(PointeeTy);
   QC.addRestrict();
   enum { NVPTX_local_addr = 5 };
-  QC.addAddressSpace(NVPTX_local_addr);
+  // XXXAR: shouldn't this add FirstTargetAddressSpace?
+  QC.addAddressSpace((LangAS::ID)NVPTX_local_addr);
   ArgType = QC.apply(CGM.getContext(), ArgType);
   return ImplicitParamDecl::Create(
       CGM.getContext(), /*DC=*/nullptr, NativeParam->getLocation(),
@@ -2280,8 +2281,8 @@ CGOpenMPRuntimeNVPTX::getParameterAddress(CodeGenFunction &CGF,
   QualifierCollector QC;
   const Type *NonQualTy = QC.strip(NativeParamType);
   QualType NativePointeeTy = cast<ReferenceType>(NonQualTy)->getPointeeType();
-  unsigned NativePointeeAddrSpace =
-      NativePointeeTy.getQualifiers().getAddressSpace();
+  unsigned NativePointeeAddrSpace = CGF.CGM.getTargetAddressSpace(
+      NativePointeeTy.getQualifiers().getAddressSpace());
   QualType TargetTy = TargetParam->getType();
   llvm::Value *TargetAddr = CGF.EmitLoadOfScalar(
       LocalAddr, /*Volatile=*/false, TargetTy, SourceLocation());

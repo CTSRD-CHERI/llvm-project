@@ -1090,7 +1090,7 @@ public:
   /// The resulting type has a union of the qualifiers from T and the address
   /// space. If T already has an address space specifier, it is silently
   /// replaced.
-  QualType getAddrSpaceQualType(QualType T, unsigned AddressSpace) const;
+  QualType getAddrSpaceQualType(QualType T, LangAS::ID AddressSpace) const;
 
   /// \brief Apply Objective-C protocol qualifiers to the given type.
   /// \param allowOnPointerType specifies if we can apply protocol
@@ -2389,13 +2389,13 @@ public:
     return getTargetAddressSpace(Q.getAddressSpace(), dummy);
   }
 
-  unsigned getTargetAddressSpace(unsigned AS, void* dummy) const;
+  unsigned getTargetAddressSpace(LangAS::ID AS, void *dummy) const;
 
   /// Get target-dependent integer value for null pointer which is used for
   /// constant folding.
   uint64_t getTargetNullPointerValue(QualType QT) const;
 
-  bool addressSpaceMapManglingFor(unsigned AS) const {
+  bool addressSpaceMapManglingFor(LangAS::ID AS) const {
     return AddrSpaceMapMangling || AS >= LangAS::FirstTargetAddressSpace;
   }
 

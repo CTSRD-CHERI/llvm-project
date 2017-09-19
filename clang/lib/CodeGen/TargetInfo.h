@@ -281,8 +281,8 @@ public:
   /// \param DestTy is the destination LLVM pointer type.
   /// \param IsNonNull is the flag indicating \p V is known to be non null.
   virtual llvm::Value *performAddrSpaceCast(CodeGen::CodeGenFunction &CGF,
-                                            llvm::Value *V, unsigned SrcAddr,
-                                            unsigned DestAddr,
+                                            llvm::Value *V, LangAS::ID SrcAddr,
+                                            LangAS::ID DestAddr,
                                             llvm::Type *DestTy,
                                             bool IsNonNull = false) const;
 
@@ -294,9 +294,11 @@ public:
   /// \param SrcAddr is the language address space of \p V.
   /// \param DestAddr is the targeted language address space.
   /// \param DestTy is the destination LLVM pointer type.
-  virtual llvm::Constant *
-  performAddrSpaceCast(CodeGenModule &CGM, llvm::Constant *V, unsigned SrcAddr,
-                       unsigned DestAddr, llvm::Type *DestTy) const;
+  virtual llvm::Constant *performAddrSpaceCast(CodeGenModule &CGM,
+                                               llvm::Constant *V,
+                                               LangAS::ID SrcAddr,
+                                               LangAS::ID DestAddr,
+                                               llvm::Type *DestTy) const;
 
   /// Get the syncscope used in LLVM IR.
   virtual llvm::SyncScope::ID getLLVMSyncScopeID(SyncScope S,

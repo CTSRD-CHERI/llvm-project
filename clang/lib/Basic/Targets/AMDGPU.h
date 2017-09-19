@@ -212,7 +212,7 @@ public:
     }
   }
 
-  llvm::Optional<unsigned> getConstantAddressSpace() const override {
+  llvm::Optional<LangAS::ID> getConstantAddressSpace() const override {
     return LangAS::FirstTargetAddressSpace + AS.Constant;
   }
 
@@ -251,7 +251,7 @@ public:
   // In amdgcn target the null pointer in global, constant, and generic
   // address space has value 0 but in private and local address space has
   // value ~0.
-  uint64_t getNullPointerValue(unsigned AS) const override {
+  uint64_t getNullPointerValue(LangAS::ID AS) const override {
     return AS == LangAS::opencl_local ? ~0 : 0;
   }
 };

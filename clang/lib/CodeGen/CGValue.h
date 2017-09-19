@@ -330,7 +330,7 @@ public:
   const Qualifiers &getQuals() const { return Quals; }
   Qualifiers &getQuals() { return Quals; }
 
-  unsigned getAddressSpace() const { return Quals.getAddressSpace(); }
+  LangAS::ID getAddressSpace() const { return Quals.getAddressSpace(); }
 
   CharUnits getAlignment() const { return CharUnits::fromQuantity(Alignment); }
   void setAlignment(CharUnits A) { Alignment = A.getQuantity(); }

@@ -443,13 +443,12 @@ LangAS::ID TargetCodeGenInfo::getGlobalVarAddressSpace(CodeGenModule &CGM,
   assert(!CGM.getLangOpts().OpenCL &&
          !(CGM.getLangOpts().CUDA && CGM.getLangOpts().CUDAIsDevice) &&
          "Address space agnostic languages only");
-  return static_cast<LangAS::ID>(D ? D->getType().getAddressSpace(nullptr)
-                                   : static_cast<unsigned>(LangAS::Default));
+  return D ? D->getType().getAddressSpace(nullptr) : LangAS::Default;
 }
 
 llvm::Value *TargetCodeGenInfo::performAddrSpaceCast(
-    CodeGen::CodeGenFunction &CGF, llvm::Value *Src, unsigned SrcAddr,
-    unsigned DestAddr, llvm::Type *DestTy, bool isNonNull) const {
+    CodeGen::CodeGenFunction &CGF, llvm::Value *Src, LangAS::ID SrcAddr,
+    LangAS::ID DestAddr, llvm::Type *DestTy, bool isNonNull) const {
   // Since target may map different address spaces in AST to the same address
   // space, an address space conversion may end up as a bitcast.
   if (auto *C = dyn_cast<llvm::Constant>(Src))
@@ -485,7 +484,7 @@ bool TargetCodeGenInfo::canMarkAsNonNull(QualType DestTy, ASTContext& Context) c
 
 llvm::Constant *
 TargetCodeGenInfo::performAddrSpaceCast(CodeGenModule &CGM, llvm::Constant *Src,
-                                        unsigned SrcAddr, unsigned DestAddr,
+                                        LangAS::ID SrcAddr, LangAS::ID DestAddr,
                                         llvm::Type *DestTy) const {
   // Since target may map different address spaces in AST to the same address
   // space, an address space conversion may end up as a bitcast.

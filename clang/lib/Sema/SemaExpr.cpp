@@ -5067,7 +5067,7 @@ static FunctionDecl *rewriteBuiltinFunctionDecl(Sema *Sema, ASTContext &Context,
     }
 
     NeedsNewDecl = true;
-    unsigned AS = ArgType->getPointeeType().getQualifiers().getAddressSpace();
+    LangAS::ID AS = ArgType->getPointeeType().getQualifiers().getAddressSpace();
 
     QualType PointeeType = ParamType->getPointeeType();
     PointeeType = Context.getAddrSpaceQualType(PointeeType, AS);
@@ -5700,8 +5700,8 @@ CastKind Sema::PrepareScalarCast(ExprResult &Src, QualType DestTy) {
   case Type::STK_ObjCObjectPointer:
     switch (DestTy->getScalarTypeKind()) {
     case Type::STK_CPointer: {
-      unsigned SrcAS = SrcTy->getPointeeType().getAddressSpace(nullptr);
-      unsigned DestAS = DestTy->getPointeeType().getAddressSpace(nullptr);
+      LangAS::ID SrcAS = SrcTy->getPointeeType().getAddressSpace(nullptr);
+      LangAS::ID DestAS = DestTy->getPointeeType().getAddressSpace(nullptr);
       if (SrcAS != DestAS)
         return CK_AddressSpaceConversion;
       else if (!SrcTy->isCHERICapabilityType(Context) && DestTy->isCHERICapabilityType(Context))
@@ -6310,9 +6310,9 @@ static QualType checkConditionalPointerCompatibility(Sema &S, ExprResult &LHS,
   Qualifiers lhQual = lhptee.getQualifiers();
   Qualifiers rhQual = rhptee.getQualifiers();
 
-  unsigned ResultAddrSpace = 0;
-  unsigned LAddrSpace = lhQual.getAddressSpace();
-  unsigned RAddrSpace = rhQual.getAddressSpace();
+  LangAS::ID ResultAddrSpace = LangAS::Default;
+  LangAS::ID LAddrSpace = lhQual.getAddressSpace();
+  LangAS::ID RAddrSpace = rhQual.getAddressSpace();
   if (S.getLangOpts().OpenCL) {
     // OpenCL v1.1 s6.5 - Conversion between pointers to distinct address
     // spaces is disallowed.
@@ -7617,8 +7617,10 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
   if (const PointerType *LHSPointer = dyn_cast<PointerType>(LHSType)) {
     // U* -> T*
     if (const PointerType *RHSPointer = dyn_cast<PointerType>(RHSType)) {
-      unsigned AddrSpaceL = LHSPointer->getPointeeType().getAddressSpace(nullptr);
-      unsigned AddrSpaceR = RHSPointer->getPointeeType().getAddressSpace(nullptr);
+      LangAS::ID AddrSpaceL =
+          LHSPointer->getPointeeType().getAddressSpace(nullptr);
+      LangAS::ID AddrSpaceR =
+          RHSPointer->getPointeeType().getAddressSpace(nullptr);
       if (AddrSpaceL != AddrSpaceR)
         Kind = CK_AddressSpaceConversion;
       else if (LHSPointer->isFunctionPointerType() && RHSPointer->isFunctionPointerType()) {
@@ -7675,10 +7677,11 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
     // U^ -> void*
     if (RHSType->getAs<BlockPointerType>()) {
       if (LHSPointer->getPointeeType()->isVoidType()) {
-        unsigned AddrSpaceL = LHSPointer->getPointeeType().getAddressSpace(nullptr);
-        unsigned AddrSpaceR = RHSType->getAs<BlockPointerType>()
-                                  ->getPointeeType()
-                                  .getAddressSpace(nullptr);
+        LangAS::ID AddrSpaceL =
+            LHSPointer->getPointeeType().getAddressSpace(nullptr);
+        LangAS::ID AddrSpaceR = RHSType->getAs<BlockPointerType>()
+                                    ->getPointeeType()
+                                    .getAddressSpace(nullptr);
         Kind =
             AddrSpaceL != AddrSpaceR ? CK_AddressSpaceConversion : CK_BitCast;
         return Compatible;
@@ -7692,12 +7695,12 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
   if (isa<BlockPointerType>(LHSType)) {
     // U^ -> T^
     if (RHSType->isBlockPointerType()) {
-      unsigned AddrSpaceL = LHSType->getAs<BlockPointerType>()
-                                ->getPointeeType()
-                                .getAddressSpace(nullptr);
-      unsigned AddrSpaceR = RHSType->getAs<BlockPointerType>()
-                                ->getPointeeType()
-                                .getAddressSpace(nullptr);
+      LangAS::ID AddrSpaceL =
+          LHSType->getAs<BlockPointerType>()->getPointeeType().getAddressSpace(
+              nullptr);
+      LangAS::ID AddrSpaceR =
+          RHSType->getAs<BlockPointerType>()->getPointeeType().getAddressSpace(
+              nullptr);
       Kind = AddrSpaceL != AddrSpaceR ? CK_AddressSpaceConversion : CK_BitCast;
       return checkBlockPointerTypesForAssignment(*this, LHSType, RHSType);
     }
@@ -9754,8 +9757,8 @@ QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
               << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
         }
       }
-      unsigned AddrSpaceL = LCanPointeeTy.getAddressSpace(nullptr);
-      unsigned AddrSpaceR = RCanPointeeTy.getAddressSpace(nullptr);
+      LangAS::ID AddrSpaceL = LCanPointeeTy.getAddressSpace(nullptr);
+      LangAS::ID AddrSpaceR = RCanPointeeTy.getAddressSpace(nullptr);
       CastKind Kind = AddrSpaceL != AddrSpaceR ? CK_AddressSpaceConversion
                                                : CK_BitCast;
       if (LHSIsNull && !RHSIsNull)
@@ -13133,8 +13136,8 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
 
     Qualifiers lhq = SrcType->getPointeeType().getQualifiers();
     Qualifiers rhq = DstType->getPointeeType().getQualifiers();
-    unsigned LAS = lhq.getAddressSpace();
-    unsigned RAS = rhq.getAddressSpace();
+    LangAS::ID LAS = lhq.getAddressSpace();
+    LangAS::ID RAS = rhq.getAddressSpace();
     if (LAS != RAS) {
       DiagKind = diag::err_typecheck_incompatible_address_space;
       break;

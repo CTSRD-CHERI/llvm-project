@@ -403,7 +403,7 @@ unsigned clang_getAddressSpace(CXType CT) {
   if (T.getAddressSpace(nullptr) >= LangAS::FirstTargetAddressSpace) {
     return T.getQualifiers().getAddressSpaceAttributePrintValue();
   }
-  return T.getAddressSpace(nullptr);
+  return (unsigned)T.getAddressSpace(nullptr);
 }
 
 CXString clang_getTypedefName(CXType CT) {

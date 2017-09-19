@@ -8594,8 +8594,10 @@ bool IntExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
       // The comparison here must be unsigned, and performed with the same
       // width as a pointer offset.
       auto &TI = Info.Ctx.getTargetInfo();
-      // XXXAR: not sure whehter getAddressSpace() is correct here
-      unsigned AS = LHSTy->getPointeeType().getAddressSpace(nullptr);
+      // XXXAR: not sure whehter getAddressSpace() or getTargetAddressSpace is
+      // correct here
+      unsigned AS = Info.Ctx.getTargetAddressSpace(
+          LHSTy->getPointeeType().getAddressSpace(nullptr), nullptr);
       unsigned PtrSize = TI.getTypeWidth(TI.getPtrDiffType(AS));
       uint64_t CompareLHS = LHSOffset.getQuantity();
       uint64_t CompareRHS = RHSOffset.getQuantity();

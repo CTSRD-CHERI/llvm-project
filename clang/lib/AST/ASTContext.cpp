@@ -1822,7 +1822,7 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
     case BuiltinType::ObjCId:
     case BuiltinType::ObjCClass:
     case BuiltinType::ObjCSel:
-      Width = Target->getPointerWidth(0); 
+      Width = Target->getPointerWidth(0);
       Align = Target->getPointerAlign(0);
       break;
     case BuiltinType::OCLSampler:
@@ -2354,8 +2354,8 @@ ASTContext::getExtQualType(const Type *baseType, Qualifiers quals) const {
   return QualType(eq, fastQuals);
 }
 
-QualType
-ASTContext::getAddrSpaceQualType(QualType T, unsigned AddressSpace) const {
+QualType ASTContext::getAddrSpaceQualType(QualType T,
+                                          LangAS::ID AddressSpace) const {
   QualType CanT = getCanonicalType(T);
   if (CanT.getAddressSpace(nullptr) == AddressSpace)
     return T;
@@ -8942,7 +8942,8 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
       unsigned AddrSpace = strtoul(Str, &End, 10);
       if (End != Str && AddrSpace != 0) {
         Type = Context.getAddrSpaceQualType(
-            Type, AddrSpace + LangAS::FirstTargetAddressSpace);
+            Type, static_cast<LangAS::ID>(
+                      AddrSpace + (unsigned)LangAS::FirstTargetAddressSpace));
         Str = End;
       }
       if (c == '*') {
@@ -9771,23 +9772,23 @@ ASTContext::ObjCMethodsAreEqual(const ObjCMethodDecl *MethodDecl,
 }
 
 uint64_t ASTContext::getTargetNullPointerValue(QualType QT) const {
-  unsigned AS;
+  LangAS::ID AS;
   if (QT->getUnqualifiedDesugaredType()->isNullPtrType())
-    AS = 0;
+    AS = LangAS::Default;
   else
     AS = QT->getPointeeType().getAddressSpace(nullptr);
 
   return getTargetInfo().getNullPointerValue(AS);
 }
 
-unsigned ASTContext::getTargetAddressSpace(unsigned AS, void* dummy) const {
+unsigned ASTContext::getTargetAddressSpace(LangAS::ID AS, void *dummy) const {
   (void)dummy; // Dummy parameter needed to find all calls to getTargetAddressSpace()
   // XXXAR: this will no longer be necessary if we can to use LangAS for CHERI
-  assert(AS != 200 && "CHERI AS should not be used here!");
+  assert((unsigned)AS != 200 && "CHERI AS should not be used here!");
   if (AS >= LangAS::FirstTargetAddressSpace)
-    return AS - LangAS::FirstTargetAddressSpace;
+    return (unsigned)AS - (unsigned)LangAS::FirstTargetAddressSpace;
   else
-    return (*AddrSpaceMap)[AS];
+    return (*AddrSpaceMap)[(unsigned)AS];
 }
 
 // Explicitly instantiate this in case a Redeclarable<T> is used from a TU that

@@ -1330,7 +1330,7 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
   default: llvm_unreachable("This attribute should have been handled already");
   case AttributedType::attr_address_space:
     OS << "address_space(";
-    OS << T->getEquivalentType().getAddressSpace(nullptr);
+    OS << (unsigned)T->getEquivalentType().getAddressSpace(nullptr);
     OS << ')';
     break;
 
@@ -1658,7 +1658,7 @@ bool Qualifiers::isEmptyWhenPrinted(const PrintingPolicy &Policy) const {
   if (getCVRQualifiers())
     return false;
 
-  if (getAddressSpace())
+  if (getAddressSpace() != LangAS::Default)
     return false;
 
   if (getObjCGCAttr())
@@ -1689,7 +1689,8 @@ void Qualifiers::print(raw_ostream &OS, const PrintingPolicy& Policy,
     OS << "__unaligned";
     addSpace = true;
   }
-  if (unsigned addrspace = getAddressSpace()) {
+  LangAS::ID addrspace = getAddressSpace();
+  if (addrspace != LangAS::Default) {
     if (addSpace)
       OS << ' ';
     addSpace = true;
@@ -1716,7 +1717,7 @@ void Qualifiers::print(raw_ostream &OS, const PrintingPolicy& Policy,
       default:
         assert(addrspace >= LangAS::FirstTargetAddressSpace);
         OS << "__attribute__((address_space(";
-        OS << addrspace - LangAS::FirstTargetAddressSpace;
+        OS << (unsigned)addrspace - (unsigned)LangAS::FirstTargetAddressSpace;
         OS << ")))";
     }
   }

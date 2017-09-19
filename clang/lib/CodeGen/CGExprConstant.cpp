@@ -612,7 +612,7 @@ static ConstantAddress tryEmitGlobalCompoundLiteral(CodeGenModule &CGM,
           CGM.getAddrOfConstantCompoundLiteralIfEmitted(E))
     return ConstantAddress(Addr, Align);
 
-  unsigned addressSpace = E->getType().getAddressSpace(nullptr);
+  LangAS::ID addressSpace = E->getType().getAddressSpace(nullptr);
 
   ConstantEmitter emitter(CGM, CGF);
   llvm::Constant *C = emitter.tryEmitForInitializer(E->getInitializer(),
@@ -727,8 +727,10 @@ public:
     case CK_AddressSpaceConversion: {
       auto C = Emitter.tryEmitPrivate(subExpr, subExpr->getType());
       if (!C) return nullptr;
-      unsigned destAS = E->getType()->getPointeeType().getAddressSpace(nullptr);
-      unsigned srcAS = subExpr->getType()->getPointeeType().getAddressSpace(nullptr);
+      LangAS::ID destAS =
+          E->getType()->getPointeeType().getAddressSpace(nullptr);
+      LangAS::ID srcAS =
+          subExpr->getType()->getPointeeType().getAddressSpace(nullptr);
       llvm::Type *destTy = ConvertType(E->getType());
       return CGM.getTargetCodeGenInfo().performAddrSpaceCast(CGM, C, srcAS,
                                                              destAS, destTy);
@@ -1186,14 +1188,14 @@ llvm::Constant *ConstantEmitter::tryEmitForInitializer(const VarDecl &D) {
 }
 
 llvm::Constant *ConstantEmitter::tryEmitForInitializer(const Expr *E,
-                                                       unsigned destAddrSpace,
+                                                       LangAS::ID destAddrSpace,
                                                        QualType destType) {
   initializeNonAbstract(destAddrSpace);
   return markIfFailed(tryEmitPrivateForMemory(E, destType));
 }
 
 llvm::Constant *ConstantEmitter::emitForInitializer(const APValue &value,
-                                                    unsigned destAddrSpace,
+                                                    LangAS::ID destAddrSpace,
                                                     QualType destType) {
   initializeNonAbstract(destAddrSpace);
   auto C = tryEmitPrivateForMemory(value, destType);

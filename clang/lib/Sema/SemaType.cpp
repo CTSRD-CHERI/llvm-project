@@ -5560,7 +5560,7 @@ static void HandleAddressSpaceTypeAttribute(QualType &Type,
     return;
   }
 
-  unsigned ASIdx;
+  LangAS::ID ASIdx;
   if (Attr.getKind() == AttributeList::AT_AddressSpace) {
     // Check the attribute arguments.
     if (Attr.getNumArgs() != 1) {
@@ -5591,7 +5591,8 @@ static void HandleAddressSpaceTypeAttribute(QualType &Type,
       addrSpace.setIsSigned(false);
     }
     llvm::APSInt max(addrSpace.getBitWidth());
-    max = Qualifiers::MaxAddressSpace - LangAS::FirstTargetAddressSpace;
+    max = (unsigned)Qualifiers::MaxAddressSpace -
+          (unsigned)LangAS::FirstTargetAddressSpace;
     if (addrSpace > max) {
       S.Diag(Attr.getLoc(), diag::err_attribute_address_space_too_high)
         << (unsigned)max.getZExtValue() << ASArgExpr->getSourceRange();
@@ -5613,7 +5614,8 @@ static void HandleAddressSpaceTypeAttribute(QualType &Type,
       ASIdx = LangAS::opencl_generic; break;
     default:
       assert(Attr.getKind() == AttributeList::AT_OpenCLPrivateAddressSpace);
-      ASIdx = 0; break;
+      ASIdx = LangAS::Default;
+      break;
     }
   }
   

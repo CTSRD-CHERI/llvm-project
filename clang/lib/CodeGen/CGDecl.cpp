@@ -222,8 +222,8 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
     Name = getStaticDeclName(*this, D);
 
   llvm::Type *LTy = getTypes().ConvertTypeForMem(Ty);
-  unsigned AS = GetGlobalVarAddressSpace(&D);
-  unsigned TargetAS = getTargetAddressSpace((LangAS::ID)AS);
+  LangAS::ID AS = GetGlobalVarAddressSpace(&D);
+  unsigned TargetAS = getTargetAddressSpace(AS);
 
   // Local address space cannot have an initializer.
   llvm::Constant *Init = nullptr;
@@ -252,7 +252,7 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
   }
 
   // Make sure the result is of the correct type.
-  unsigned ExpectedAS = Ty.getAddressSpace(nullptr);
+  LangAS::ID ExpectedAS = Ty.getAddressSpace(nullptr);
   llvm::Constant *Addr = GV;
   if (AS != ExpectedAS) {
     Addr = getTargetCodeGenInfo().performAddrSpaceCast(

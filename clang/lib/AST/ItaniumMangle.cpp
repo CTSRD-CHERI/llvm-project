@@ -2203,7 +2203,7 @@ void CXXNameMangler::mangleQualifiers(Qualifiers Quals) {
     //   <type> ::= U <CUDA-addrspace>
 
     SmallString<64> ASString;
-    unsigned AS = Quals.getAddressSpace();
+    LangAS::ID AS = Quals.getAddressSpace();
 
     if (Context.getASTContext().addressSpaceMapManglingFor(AS)) {
       //  <target-addrspace> ::= "AS" <address-space-number>
