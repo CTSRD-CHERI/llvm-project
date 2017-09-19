@@ -1419,10 +1419,9 @@ Sema::CreateGenericSelectionExpr(SourceLocation KeyLoc,
   SmallVector<unsigned, 1> CompatIndices;
   unsigned DefaultIndex = -1U;
   for (unsigned i = 0; i < NumAssocs; ++i) {
-    QualType ControllingType = ControllingExpr->getType();
     if (!Types[i])
       DefaultIndex = i;
-    else if (Context.typesAreCompatible(ControllingType,
+    else if (Context.typesAreCompatible(ControllingExpr->getType(),
                                         Types[i]->getType()))
       CompatIndices.push_back(i);
   }
@@ -1558,8 +1557,9 @@ Sema::ActOnStringLiteral(ArrayRef<Token> StringToks, Scope *UDLScope) {
                                  ArrayType::Normal, 0);
 
   // OpenCL v1.1 s6.5.3: a string literal is in the constant address space.
-  if (getLangOpts().OpenCL)
+  if (getLangOpts().OpenCL) {
     StrTy = Context.getAddrSpaceQualType(StrTy, LangAS::opencl_constant);
+  }
 
   // Pass &StringTokLocs[0], StringTokLocs.size() to factory!
   StringLiteral *Lit = StringLiteral::Create(Context, Literal.GetString(),
@@ -11159,8 +11159,7 @@ QualType Sema::CheckAddressOfOperand(ExprResult &OrigOp, SourceLocation OpLoc) {
 
   CheckAddressOfPackedMember(op);
 
-  QualType Ty = op->getType();
-  return Context.getPointerType(Ty);
+  return Context.getPointerType(op->getType());
 }
 
 static void RecordModifiableNonNullParam(Sema &S, const Expr *Exp) {
