@@ -110,7 +110,7 @@ struct DriverSuffix {
   const char *ModeFlag;
 };
 
-const DriverSuffix *FindDriverSuffix(StringRef ProgName, size_t &Pos) {
+const DriverSuffix *FindDriverSuffix(StringRef ProgName) {
   // A list of known driver suffixes. Suffixes are compared against the
   // program name in order. If there is a match, the frontend type is updated as
   // necessary by applying the ModeFlag.
@@ -129,13 +129,9 @@ const DriverSuffix *FindDriverSuffix(StringRef ProgName, size_t &Pos) {
       {"++", "--driver-mode=g++"},
   };
 
-  for (size_t i = 0; i < llvm::array_lengthof(DriverSuffixes); ++i) {
-    StringRef Suffix(DriverSuffixes[i].Suffix);
-    if (ProgName.endswith(Suffix)) {
-      Pos = ProgName.size() - Suffix.size();
+  for (size_t i = 0; i < llvm::array_lengthof(DriverSuffixes); ++i)
+    if (ProgName.endswith(DriverSuffixes[i].Suffix))
       return &DriverSuffixes[i];
-    }
-  }
   return nullptr;
 }
 
@@ -150,7 +146,7 @@ std::string normalizeProgramName(llvm::StringRef Argv0) {
   return ProgName;
 }
 
-const DriverSuffix *parseDriverSuffix(StringRef ProgName, size_t &Pos) {
+const DriverSuffix *parseDriverSuffix(StringRef ProgName) {
   // Try to infer frontend type and default target from the program name by
   // comparing it against DriverSuffixes in order.
 
@@ -158,46 +154,47 @@ const DriverSuffix *parseDriverSuffix(StringRef ProgName, size_t &Pos) {
   // E.g. "x86_64-linux-clang" as interpreted as suffix "clang" with target
   // prefix "x86_64-linux". If such a target prefix is found, it may be
   // added via -target as implicit first argument.
-  const DriverSuffix *DS = FindDriverSuffix(ProgName, Pos);
+  const DriverSuffix *DS = FindDriverSuffix(ProgName);
 
   if (!DS) {
     // Try again after stripping any trailing version number:
     // clang++3.5 -> clang++
     ProgName = ProgName.rtrim("0123456789.");
-    DS = FindDriverSuffix(ProgName, Pos);
+    DS = FindDriverSuffix(ProgName);
   }
 
   if (!DS) {
     // Try again after stripping trailing -component.
     // clang++-tot -> clang++
     ProgName = ProgName.slice(0, ProgName.rfind('-'));
-    DS = FindDriverSuffix(ProgName, Pos);
+    DS = FindDriverSuffix(ProgName);
   }
   return DS;
 }
 } // anonymous namespace
 
-ParsedClangName
+std::pair<std::string, std::string>
 ToolChain::getTargetAndModeFromProgramName(StringRef PN) {
   std::string ProgName = normalizeProgramName(PN);
-  size_t SuffixPos;
-  const DriverSuffix *DS = parseDriverSuffix(ProgName, SuffixPos);
+  const DriverSuffix *DS = parseDriverSuffix(ProgName);
   if (!DS)
-    return ParsedClangName();
-  size_t SuffixEnd = SuffixPos + strlen(DS->Suffix);
+    return std::make_pair("", "");
+  std::string ModeFlag = DS->ModeFlag == nullptr ? "" : DS->ModeFlag;
 
-  size_t LastComponent = ProgName.rfind('-', SuffixPos);
+  std::string::size_type LastComponent =
+      ProgName.rfind('-', ProgName.size() - strlen(DS->Suffix));
   if (LastComponent == std::string::npos)
-    return ParsedClangName(ProgName.substr(0, SuffixEnd), DS->ModeFlag);
-  std::string ModeSuffix = ProgName.substr(LastComponent + 1,
-                                           SuffixEnd - LastComponent - 1);
+    return std::make_pair("", ModeFlag);
 
   // Infer target from the prefix.
   StringRef Prefix(ProgName);
   Prefix = Prefix.slice(0, LastComponent);
   std::string IgnoredError;
-  bool IsRegistered = llvm::TargetRegistry::lookupTarget(Prefix, IgnoredError);
-  return ParsedClangName{Prefix, ModeSuffix, DS->ModeFlag, IsRegistered};
+  std::string Target;
+  if (llvm::TargetRegistry::lookupTarget(Prefix, IgnoredError)) {
+    Target = Prefix;
+  }
+  return std::make_pair(Target, ModeFlag);
 }
 
 StringRef ToolChain::getDefaultUniversalArchName() const {
