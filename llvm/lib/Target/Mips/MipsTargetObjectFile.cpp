@@ -122,6 +122,8 @@ IsGlobalInSmallSectionImpl(const GlobalObject *GO,
     return false;
   }
 
+  // FIXME: for some reason this is being called with unsized extern types
+
   // Enforce -mlocal-sdata.
   if (!LocalSData && GVA->hasLocalLinkage())
     return false;
@@ -136,6 +138,11 @@ IsGlobalInSmallSectionImpl(const GlobalObject *GO,
     return false;
 
   Type *Ty = GVA->getValueType();
+
+  // Don't crash when called with unsized types (see fixme above)
+  if (!Ty->isSized())
+    return false;
+
   return IsInSmallSection(
       GVA->getParent()->getDataLayout().getTypeAllocSize(Ty));
 }
