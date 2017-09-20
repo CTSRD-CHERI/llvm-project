@@ -108,7 +108,7 @@ public:
   template <class ELFT> void finalize();
   template <class ELFT> void writeTo(uint8_t *Buf);
   template <class ELFT> void maybeCompress();
-  uint32_t getFiller();
+  llvm::Optional<uint32_t> getFiller();
 
   void sort(std::function<int(InputSectionBase *S)> Order);
   void sortInitFini();
