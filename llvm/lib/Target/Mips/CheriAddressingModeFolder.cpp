@@ -196,8 +196,8 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
           continue;
         assert(IncOffset);
 
-        MachineOperand Cap = IncOffset->getOperand(1);
-        MachineOperand Offset = IncOffset->getOperand(2);
+        MachineOperand& Cap = IncOffset->getOperand(1);
+        MachineOperand& Offset = IncOffset->getOperand(2);
         assert(Cap.isReg());
         // If the IncOffset is in a different basic block we need to be more
         // careful: The machine verifier currently complains because we
@@ -208,11 +208,12 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         // We are going to use the CIncOffset's source capability at the
         // load/store instruction, so first we need to check it has not been
         // killed before the use
+        auto* TRI = RI.getTargetRegisterInfo();
         bool CapKilled = false;
         for (auto J = std::prev(I), JE = MachineBasicBlock::iterator(IncOffset);
             J != JE; --J) {
-          if (J->modifiesRegister(Cap.getReg(), RI.getTargetRegisterInfo()) ||
-              J->killsRegister(Cap.getReg(), RI.getTargetRegisterInfo())) {
+          if (J->modifiesRegister(Cap.getReg(), TRI) ||
+              J->killsRegister(Cap.getReg(), TRI)) {
             CapKilled = true;
             break;
           }
