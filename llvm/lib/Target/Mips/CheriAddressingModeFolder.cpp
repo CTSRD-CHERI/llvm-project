@@ -194,6 +194,12 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         MachineOperand Cap = IncOffset->getOperand(1);
         MachineOperand Offset = IncOffset->getOperand(2);
         assert(Cap.isReg());
+        // If the IncOffset is in a different basic block we need to be more
+        // careful: The machine verifier currently complains because we
+        // kill vregs here that we use later
+        if (&MBB != IncOffset->getParent())
+          continue;
+
         MachineInstr *AddInst;
         // If the CIncOffset is of a daddi[u] then we can potentially replace
         // both by just folding the register and immediate offsets into the
