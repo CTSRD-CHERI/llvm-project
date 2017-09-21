@@ -268,11 +268,11 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
     auto *STI = TM.getSubtargetImpl(*MF.getFunction());
     const MipsSEInstrInfo &TII = *static_cast<const MipsSEInstrInfo *>(
           STI->getInstrInfo());
+    DebugLoc DL = II->getDebugLoc();
+
     if (MI.getOpcode() == Mips::CIncOffset) {
-      assert(isInt<16>(Offset));
       MachineBasicBlock &MBB = *MI.getParent();
-      unsigned Reg = Offset == 0 ? Mips::ZERO_64 :
-        TII.loadImmediate(Offset, MBB, II, II->getDebugLoc(), nullptr);
+      unsigned Reg = TII.loadImmediate(Offset, MBB, II, DL, nullptr);
       MI.getOperand(1).ChangeToRegister(FrameReg, false);
       MI.getOperand(2).ChangeToRegister(Reg, false, false, true);
       return;
@@ -280,10 +280,7 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
 
     if (ABI.IsCheriPureCap()) {
       if (!isIntN(OffsetBitSize, Offset)) {
-        assert(isInt<16>(Offset) &&
-            "Emergency spill slot must be within 32K of the frame pointer!");
         MachineBasicBlock &MBB = *MI.getParent();
-        DebugLoc DL = II->getDebugLoc();
         // If we have an offset that needs to fit into a signed n-bit immediate
         // (where n < 16) and doesn't, but does fit into 16-bits then use an ADDiu
         bool isFrameReg = MI.getOperand(0).getReg() == FrameReg;
@@ -291,10 +288,7 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
         const TargetRegisterClass *PtrRC =
             ABI.ArePtrs64bit() ? &Mips::GPR64RegClass : &Mips::GPR32RegClass;
         MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
-        unsigned Reg = RegInfo.createVirtualRegister(PtrRC);
-        BuildMI(MBB, II, DL, TII.get(ABI.GetPtrAddiuOp()), Reg)
-            .addReg(Mips::ZERO_64)
-            .addImm(Offset);
+        unsigned Reg = TII.loadImmediate(Offset, MBB, II, DL, nullptr);
         if (needsIncOffset) {
           BuildMI(MBB, II, DL, TII.get(Mips::CIncOffset), FrameReg)
               .addReg(FrameReg)
@@ -318,7 +312,6 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
       // If we have an offset that needs to fit into a signed n-bit immediate
       // (where n < 16) and doesn't, but does fit into 16-bits then use an ADDiu
       MachineBasicBlock &MBB = *MI.getParent();
-      DebugLoc DL = II->getDebugLoc();
       const TargetRegisterClass *PtrRC =
           ABI.ArePtrs64bit() ? &Mips::GPR64RegClass : &Mips::GPR32RegClass;
       MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
