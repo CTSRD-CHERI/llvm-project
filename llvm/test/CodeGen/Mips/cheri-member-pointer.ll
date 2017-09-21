@@ -81,14 +81,12 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
 
 
 
-
-  ; OPT: cincoffset      [[THIS_NON_ADJ:\$c1]], $c3, $zero
-  ; OPT: dsra    [[ADJ:\$2]], $4, 1
-  ; OPT: andi    $1, $4, 1
-  ; OPT: beqz    $1, .LBB0_2
-  ; OPT: cincoffset      [[THIS_ADJ:\$c3]], [[THIS_NON_ADJ]], [[ADJ]]
+  ; OPT: dsra    [[ADJ:\$[0-9]+]], $4, 1
+  ; OPT: andi    [[ISVIRT:\$[0-9]+]], $4, 1
+  ; OPT: beqz    [[ISVIRT]], .LBB0_2
+  ; OPT: cincoffset [[THIS_ADJ:\$c3]], [[THIS_NON_ADJ:\$c3]], [[ADJ]]
   ; virtual case:
-  ; OPT: clc     [[VTABLE:\$c[0-9]+]], [[ADJ]], 0([[THIS_NON_ADJ]])
+  ; OPT: clc     [[VTABLE:\$c[0-9]+]], $zero, 0([[THIS_ADJ]])
   ; OPT: ctoptr  [[VTABLE_OFFSET:\$1]], $c4, $c0
   ; OPT: clc     $c4, [[VTABLE_OFFSET]], 0([[VTABLE]])
   ; OPT: .LBB0_2:                                # %memptr.end
