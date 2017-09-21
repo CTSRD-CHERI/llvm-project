@@ -186,6 +186,20 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
             C0Ops.emplace_back(&I, IncOffset);
           continue;
         }
+
+        // If this is a CIncOffset with an immediate then try to fold it into
+        // the operation.
+        if (IncOffset->getOpcode() == Mips::CIncOffsetImm) {
+          uint64_t offsetImm = IncOffset->getOperand(2).getImm();
+          if (IsValidOffset(Op, offset + offsetImm)) {
+            IncOffset->getOperand(1).setIsKill(false);
+            I.getOperand(3).setReg(IncOffset->getOperand(1).getReg());
+            I.getOperand(2).setImm(offset + offsetImm);
+            Adds.insert(IncOffset);
+          }
+          continue;
+        }
+
         // Ignore ones that are not based on a CIncOffset op
         if (IncOffset->getOpcode() != Mips::CIncOffset)
           continue;
