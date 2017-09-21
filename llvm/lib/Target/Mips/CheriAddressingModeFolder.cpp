@@ -137,10 +137,12 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
     std::set<MachineInstr *> GetPCCs;
     bool modified = false;
     for (auto &MBB : MF)
-      for (MachineInstr &I : MBB) {
-        int Op = I.getOpcode();
+      for (MachineBasicBlock::iterator I = MBB.begin(), IE = MBB.end();
+                     I != IE; ++I) {
+        MachineInstr &MI = *I;
+        int Op = MI.getOpcode();
         if (Op == Mips::CGetPCC) {
-          GetPCCs.insert(&I);
+          GetPCCs.insert(&MI);
           continue;
         }
         // Only look at cap-relative loads and stores
@@ -154,18 +156,21 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
               Op == Mips::LOADCAP || Op == Mips::STORECAP ||
               Op == Mips::CAPSTORE32 || Op == Mips::CAPSTORE64))
           continue;
-        int64_t offset = I.getOperand(2).getImm();
         // If the load is not currently at register-zero offset, we can't fix
         // it up to use relative addressing, but we may be able to modify it so
         // that it is...
-        if (I.getOperand(1).getReg() != Mips::ZERO_64) {
+        if (MI.getOperand(1).getReg() != Mips::ZERO_64) {
+          // Don't try to fold in things that have relocations yet
+          if (!MI.getOperand(2).isImm())
+            continue;
+          int64_t offset = MI.getOperand(2).getImm();
           MachineInstr *AddInst;
           // If the register offset is a simple constant, then try to move it
           // into the memory operation
-          if (tryToFoldAdd(Op, I.getOperand(1).getReg(), RI, AddInst, offset)) {
+          if (tryToFoldAdd(Op, MI.getOperand(1).getReg(), RI, AddInst, offset)) {
             Adds.insert(AddInst);
-            I.getOperand(1).setImm(offset);
-            I.getOperand(1).setReg(Mips::ZERO_64);
+            MI.getOperand(1).setImm(offset);
+            MI.getOperand(1).setReg(Mips::ZERO_64);
           } else
             continue;
         }
@@ -174,7 +179,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         // If the capability is formed by incrementing an offset, then try to
         // pull that calculation into the memory operation.
 
-        MachineInstr *IncOffset = RI.getUniqueVRegDef(I.getOperand(3).getReg());
+        MachineInstr *IncOffset = RI.getUniqueVRegDef(MI.getOperand(3).getReg());
         if (!IncOffset)
           continue;
         // If this is CFromPtr-relative load or store, then we may be able to
@@ -183,7 +188,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
           if ((Op == Mips::LOADCAP) || (Op == Mips::STORECAP))
             continue;
           if (IncOffset->getOperand(1).getReg() == Mips::C0)
-            C0Ops.emplace_back(&I, IncOffset);
+            C0Ops.emplace_back(&MI, IncOffset);
           continue;
         }
         // Ignore ones that are not based on a CIncOffset op
@@ -200,21 +205,43 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         if (&MBB != IncOffset->getParent())
           continue;
 
+        // We are going to use the CIncOffset's source capability at the
+        // load/store instruction, so first we need to check it has not been
+        // killed before the use
+        bool CapKilled = false;
+        for (auto J = std::prev(I), JE = MachineBasicBlock::iterator(IncOffset);
+            J != JE; --J) {
+          if (J->modifiesRegister(Cap.getReg(), RI.getTargetRegisterInfo()) ||
+              J->killsRegister(Cap.getReg(), RI.getTargetRegisterInfo())) {
+            CapKilled = true;
+            break;
+          }
+        }
+        if (CapKilled)
+          continue;
+
         MachineInstr *AddInst;
         // If the CIncOffset is of a daddi[u] then we can potentially replace
         // both by just folding the register and immediate offsets into the
-        // load / store.
-        if (tryToFoldAdd(Op, Offset.getReg(), RI, AddInst, offset)) {
-          // If we managed to pull the offset calculation entirely away, then
-          // just use the computed immediate
-          Adds.insert(AddInst);
-          I.getOperand(1).setReg(Mips::ZERO_64);
-          I.getOperand(2).setImm(offset);
+        // load / store. Don't try to fold in things that have relocations yet.
+        if (MI.getOperand(2).isImm()) {
+          int64_t offset = MI.getOperand(2).getImm();
+          if (tryToFoldAdd(Op, Offset.getReg(), RI, AddInst, offset)) {
+            // If we managed to pull the offset calculation entirely away, then
+            // just use the computed immediate
+            Adds.insert(AddInst);
+            MI.getOperand(1).setReg(Mips::ZERO_64);
+            MI.getOperand(2).setImm(offset);
+          } else
+            // If we didn't, then use the CIncOffset's register value as our
+            // offset
+            MI.getOperand(1).setReg(Offset.getReg());
         } else
-          // If we didn't, then use the CIncOffset's register value as our
-          // offset
-          I.getOperand(1).setReg(Offset.getReg());
-        I.getOperand(3).setReg(Cap.getReg());
+          // If it has a relocation, then use the CIncOffset's register value
+          // as our offset
+          MI.getOperand(1).setReg(Offset.getReg());
+        MI.getOperand(3).setReg(Cap.getReg());
+
         // If we were using a unique vreg here it will probably have kill set to
         // true, so if we retain this kill state the machine instr verifier will
         // complain if there is any other instruction later on that uses the
@@ -222,7 +249,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         // XXXAR: is copying the kill state the capreg enough?
         // Could there be some corner case where the capreg is killed before
         // this CIncOffset?
-        I.getOperand(3).setIsKill(Cap.isKill());
+        MI.getOperand(3).setIsKill(Cap.isKill());
         Cap.setIsKill(false);
 
         IncOffsets.insert(IncOffset);
