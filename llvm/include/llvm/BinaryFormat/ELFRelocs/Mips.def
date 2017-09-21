@@ -61,6 +61,41 @@ ELF_RELOC(R_MIPS_PC18_S3,            62)
 ELF_RELOC(R_MIPS_PC19_S2,            63)
 ELF_RELOC(R_MIPS_PCHI16,             64)
 ELF_RELOC(R_MIPS_PCLO16,             65)
+
+
+// Low 16 bits GCT index into GPR
+ELF_RELOC(R_MIPS_CHERI_CAPTAB_LO16,     80)
+// High 16 bits GCT index into GPR
+ELF_RELOC(R_MIPS_CHERI_CAPTAB_HI16,     81)
+// scaled GCT offset for clc immediate
+ELF_RELOC(R_MIPS_CHERI_CAPTAB_CLC11,    82)
+
+// same thing again but this time they are allowed to resolve to PLT stubs
+ELF_RELOC(R_MIPS_CHERI_CAPCALL_LO16,  83)
+ELF_RELOC(R_MIPS_CHERI_CAPCALL_HI16,  84)
+ELF_RELOC(R_MIPS_CHERI_CAPCALL_CLC11, 85)
+
+// RTLD should set the following to a capability pointing to symbol. This can be
+// preemptible and if not we can optimize it to a
+// R_MIPS_CHERI_SETTAG/R_MIPS_CHERI_SETTAG_LOADADDR
+ELF_RELOC(R_MIPS_CHERI_CAPABILITY,      90)
+// The same as R_MIPS_CHERI_CAPABILITY but must not be preemptible
+// The linker should always be able to optimize this into a
+// R_MIPS_CHERI_SETTAG_LOADADDR or R_MIPS_CHERI_SETTAG
+ELF_RELOC(R_MIPS_CHERI_LOCAL_CAPABILITY,91)
+// Set the tag bit on the referenced data (must point within the current object)
+// Must not be preemtible!
+ELF_RELOC(R_MIPS_CHERI_SETTAG,          92)
+// Set the tag bit after adding the ELF object load address to the raw capability bits
+ELF_RELOC(R_MIPS_CHERI_SETTAG_LOADADDR, 93)
+// Write a capability pointing to the capability table for the referenced symbol
+// and set the tag bit (if processed by rtld). When linking statically we can
+// fill in the bits and change it to a R_MIPS_CHERI_SETTAG
+// When linking dynamically it should always be possible to change this to a
+// R_MIPS_CHERI_SETTAG_LOADADDR relocation
+ELF_RELOC(R_MIPS_CHERI_GLOBALS_TABLE,   94)
+
+
 ELF_RELOC(R_MIPS16_26,               100)
 ELF_RELOC(R_MIPS16_GPREL,            101)
 ELF_RELOC(R_MIPS16_GOT16,            102)
