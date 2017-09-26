@@ -683,6 +683,13 @@ AsmToken AsmLexer::LexToken() {
               .StartsWith("tlsldm", {AsmToken::PercentTlsldm, 7})
               .StartsWith("tprel_hi", {AsmToken::PercentTprel_Hi, 9})
               .StartsWith("tprel_lo", {AsmToken::PercentTprel_Lo, 9})
+              // CHERI extensions
+              .StartsWith("captab", {AsmToken::PercentCapTab11, 7})
+              .StartsWith("captab_lo", {AsmToken::PercentCapTab_Lo, 10})
+              .StartsWith("captab_hi", {AsmToken::PercentCapTab_Hi, 10})
+              .StartsWith("capcall", {AsmToken::PercentCapTabCall11, 8})
+              .StartsWith("capcall_hi", {AsmToken::PercentCapTabCall_Hi, 11})
+              .StartsWith("capcall_lo", {AsmToken::PercentCapTabCall_Lo, 11})
               .Default({AsmToken::Percent, 1});
 
       if (Operator != AsmToken::Percent) {
