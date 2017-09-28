@@ -2476,6 +2476,38 @@ static void handleIndirectSymViaGOTPCRel(AsmPrinter &AP, const MCExpr **ME,
     AP.GlobalGOTEquivs[GOTEquivSym] = std::make_pair(GV, NumUses);
 }
 
+static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
+                                       AsmPrinter &AP) {
+  // TODO: allow falling back to the __cap_relocs path for benchmarking
+  const uint64_t CapWidth = DL.getPointerTypeSize(CV->getType());
+  assert(CapWidth == 32 || CapWidth == 16);
+  // Handle (void *)5 etc as an untagged capability with base/length/perms 0,
+  // and offset 5.
+  const MCExpr *Expr = AP.lowerConstant(CV);
+  // FIXME: we shouldn't care about the format of the cheri capability here
+  // Probably better to emit a .chericap 0x123456 and let the linker fill it in?
+  if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Expr)) {
+    AP.OutStreamer->EmitIntValue(0, 8);
+    AP.OutStreamer->EmitIntValue(CE->getValue(), 8);
+    if (CapWidth > 16) {
+      AP.OutStreamer->EmitIntValue(0, 8);
+      AP.OutStreamer->EmitIntValue(0, 8);
+    }
+    return;
+  }
+
+  GlobalValue *GV;
+  APInt Addend;
+  if (IsConstantOffsetFromGlobal(const_cast<Constant *>(CV), GV, Addend, DL,
+                                 true)) {
+    AP.OutStreamer->EmitCHERICapability(AP.getSymbol(GV), Addend.getSExtValue(),
+                                        CapWidth, SMLoc());
+    return;
+  }
+  llvm_unreachable("Tried to emit a capability which is neither a constant nor "
+                   "a global+offset");
+}
+
 static void emitGlobalConstantImpl(const DataLayout &DL, const Constant *CV,
                                    AsmPrinter &AP, const Constant *BaseCV,
                                    uint64_t Offset) {
@@ -2545,6 +2577,9 @@ static void emitGlobalConstantImpl(const DataLayout &DL, const Constant *CV,
 
   if (const ConstantVector *V = dyn_cast<ConstantVector>(CV))
     return emitGlobalConstantVector(DL, V, AP);
+
+  if (CV->getType()->isPointerTy() && DL.isFatPointer(CV->getType()))
+    return emitGlobalConstantCHERICap(DL, CV, AP);
 
   // Otherwise, it must be a ConstantExpr.  Lower it to an MCExpr, then emit it
   // thread the streamer with EmitValue.
