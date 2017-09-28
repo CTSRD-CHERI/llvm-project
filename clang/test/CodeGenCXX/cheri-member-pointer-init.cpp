@@ -1,4 +1,5 @@
-// RUN: %clang -fno-rtti -target cheri-unknown-freebsd -mabi=purecap -S -emit-llvm -o - %s | FileCheck %s
+// RUN: %cheri_purecap_cc1 -emit-llvm -cheri-linker -o - %s | FileCheck %s
+// RUN: %cheri_purecap_cc1 -emit-obj -cheri-linker -o - %s | llvm-readobj -r - | FileCheck -check-prefix=RELOCS %s
 
 class A {
 public:
@@ -20,25 +21,34 @@ int (*global_fn_ptr)() = &global_fn;
 // CHECK: @global_fn_ptr = addrspace(200) global i32 () addrspace(200)* addrspacecast (i32 ()* @_Z9global_fnv to i32 () addrspace(200)*), align [[$CAP_SIZE]]
 
 int call_nonvirt(A* a) {
+  // CHECK: load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* @global_nonvirt_ptr, align [[$CAP_SIZE]]
   return (a->*global_nonvirt_ptr)();
 }
 
 int call_virt(A* a) {
-  return (a->*global_nonvirt_ptr)();
+  // CHECK: load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* @global_virt_ptr, align [[$CAP_SIZE]]
+  return (a->*global_virt_ptr)();
 }
 
 int call_local_nonvirt(A* a) {
   MemberPtr local_nonvirt = &A::nonvirt2;
+  // FIXME: should we rather memcopy from a global that has been initialized?
+  // This way we don't need to be able to derive it from PCC
+  // CHECK: call i8 addrspace(200)* @llvm.cheri.pcc.get()
+  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %{{.+}}, i64 ptrtoint (i32 (%class.A addrspace(200)*)* @_ZN1A8nonvirt2Ev to i64))
   return (a->*local_nonvirt)();
 }
 
 int call_local_virt(A* a) {
   MemberPtr local_virt = &A::virt2;
+  // CHECK: store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 32 to i8 addrspace(200)*), i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)* %{{.+}}, align [[$CAP_SIZE]]
   return (a->*local_virt)();
 }
 
 int call_local_fn_ptr(A* a) {
-int (*local_fn_ptr)() = &global_fn;
+  int (*local_fn_ptr)() = &global_fn;
+  // CHECK: call i8 addrspace(200)* @llvm.cheri.pcc.get()
+  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %{{.+}}, i64 ptrtoint (i32 ()* @_Z9global_fnv to i64))
   return local_fn_ptr();
 }
 
@@ -50,19 +60,16 @@ int main() {
   call_virt(&a);
 }
 
-// RELOCS-OBJ: RELOCATION RECORDS FOR [.rela__cap_relocs]:
-// RELOCS-OBJ: 0000000000000000 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE .data
-// RELOCS-OBJ: 0000000000000008 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE _ZN1A7nonvirtEv
-// RELOCS-OBJ: 0000000000000028 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE .data
-// RELOCS-OBJ: 0000000000000030 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE _Z9global_fnv
-// RELOCS-OBJ: 0000000000000050 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE .data.rel.ro._ZTV1A
-// RELOCS-OBJ: 0000000000000058 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE _ZN1A4virtEv
-// RELOCS-OBJ: 0000000000000078 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE .data.rel.ro._ZTV1A
-// RELOCS-OBJ: 0000000000000080 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE _ZN1A5virt2Ev
-
-// RELOCS-OBJ: CAPABILITY RELOCATION RECORDS:
-// RELOCS-OBJ: 0x0000000000000000      Base:  (0x0000000000000000)     Offset: 0x0000000000000000        Length: 0x0000000000000000        Permissions: 0x00000000
-// RELOCS-OBJ: 0x0000000000000000      Base:  (0x0000000000000000)     Offset: 0x0000000000000000        Length: 0x0000000000000000        Permissions: 0x00000000
-// RELOCS-OBJ: 0x0000000000000000      Base:  (0x0000000000000000)     Offset: 0x0000000000000000        Length: 0x0000000000000000        Permissions: 0x00000000
-// RELOCS-OBJ: 0x0000000000000000      Base:  (0x0000000000000000)     Offset: 0x0000000000000000        Length: 0x0000000000000000        Permissions: 0x00000000
-
+// RELOCS:      Section (22) .rela.data {
+// RELOCS-NEXT:   0x0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _ZN1A7nonvirtEv 0x0
+// RELOCS-NEXT:   0x{{4|8}}0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _Z9global_fnv 0x0
+// RELOCS-NEXT: }
+// RELOCS-NEXT: Section (25) .rela.data.rel.ro._ZTV1A {
+// RELOCS-NEXT:   0x{{1|2}}0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _ZTI1A 0x0
+// RELOCS-NEXT:   0x{{2|4}}0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _ZN1A4virtEv 0x0
+// RELOCS-NEXT:   0x{{3|6}}0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _ZN1A5virt2Ev 0x0
+// RELOCS-NEXT: }
+// RELOCS-NEXT: Section (30) .rela.data.rel.ro._ZTI1A {
+// RELOCS-NEXT:   0x0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _ZTVN10__cxxabiv117__class_type_infoE 0x40
+// RELOCS-NEXT:   0x{{1|2}}0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _ZTS1A 0x0
+// RELOCS-NEXT: }
