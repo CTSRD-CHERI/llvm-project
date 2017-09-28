@@ -1413,7 +1413,7 @@ DecodeStatus CheriDisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
                                                raw_ostream &VStream,
                                                raw_ostream &CStream) const {
   uint32_t Insn;
-
+  Size = 0;
   DecodeStatus Result = readInstruction32(Bytes, Address, Size, Insn,
           /*IsBigEndian*/ true, /*IsMicroMips*/false);
   if (Result == MCDisassembler::Fail)
@@ -1440,7 +1440,6 @@ DecodeStatus CheriDisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
     Size = 4;
     return Result;
   }
-
   return MCDisassembler::Fail;
 }
 
