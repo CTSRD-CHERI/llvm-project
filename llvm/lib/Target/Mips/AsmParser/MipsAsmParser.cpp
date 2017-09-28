@@ -361,6 +361,7 @@ class MipsAsmParser : public MCTargetAsmParser {
   bool parseDirectiveTpRelDWord();
   bool parseDirectiveModule();
   bool parseDirectiveModuleFP();
+  bool parseDirectiveCHERICap(SMLoc Loc);
   bool parseFpABIValue(MipsABIFlagsSection::FpABIKind &FpABI,
                        StringRef Directive);
 
@@ -641,6 +642,14 @@ public:
   }
   bool hasMT() const {
     return getSTI().getFeatureBits()[Mips::FeatureMT];
+  }
+
+  bool isCheri() const {
+    return getSTI().getFeatureBits()[Mips::FeatureMipsCheri];
+  }
+
+  bool isCheri128() const {
+    return getSTI().getFeatureBits()[Mips::FeatureMipsCheri128];
   }
 
   /// Warn if RegIndex is the same as the current AT.
@@ -7652,6 +7661,68 @@ bool MipsAsmParser::parseFpABIValue(MipsABIFlagsSection::FpABIKind &FpABI,
   return false;
 }
 
+/// parseDirectiveCHERICap
+///  ::= .chericap sym[+off]
+bool MipsAsmParser::parseDirectiveCHERICap(SMLoc Loc) {
+  MCAsmParser &Parser = getParser();
+  const MCExpr *SymExpr;
+
+  if (!isCheri()) {
+    reportParseError(Loc, "'.chericap' requires CHERI");
+    return false;
+  }
+
+  if (getParser().parseExpression(SymExpr))
+    return true;
+
+  const MCSymbolRefExpr *SRE;
+  int64_t Offset;
+  if (const MCBinaryExpr *BE = dyn_cast<MCBinaryExpr>(SymExpr)) {
+    SRE = dyn_cast<MCSymbolRefExpr>(BE->getLHS());
+    const MCConstantExpr *CE;
+    bool Neg = false;
+
+    switch (BE->getOpcode()) {
+      case MCBinaryExpr::Sub:
+        Neg = true;
+        // fall through
+      case MCBinaryExpr::Add:
+        CE = dyn_cast<MCConstantExpr>(BE->getRHS());
+        break;
+      default:
+        CE = nullptr;
+        break;
+    }
+
+    if (!SRE || !CE) {
+      reportParseError(Loc, "must be sym[+const]");
+      return false;
+    }
+
+    Offset = CE->getValue();
+    if (Neg)
+      Offset = -Offset;
+  } else {
+    SRE = dyn_cast<MCSymbolRefExpr>(SymExpr);
+    if (!SRE) {
+      reportParseError(Loc, "must be sym[+const]");
+      return false;
+    }
+    Offset = 0;
+  }
+
+  const MCSymbol &Symbol = SRE->getSymbol();
+  // FIXME: is there a better check? Can we somehow access DataLayout here?
+  unsigned CapSize = isCheri128() ? 16 : 32;
+  getParser().getStreamer().EmitCHERICapability(&Symbol, Offset, CapSize, Loc);
+
+  if (getLexer().isNot(AsmToken::EndOfStatement))
+    return Error(getLexer().getLoc(),
+                "unexpected token, expected end of statement");
+  Parser.Lex(); // Eat EndOfStatement token.
+  return false;
+}
+
 bool MipsAsmParser::ParseDirective(AsmToken DirectiveID) {
   // This returns false if this function recognizes the directive
   // regardless of whether it is successfully handles or reports an
@@ -7976,6 +8047,11 @@ bool MipsAsmParser::ParseDirective(AsmToken DirectiveID) {
   }
   if (IDVal == ".sdata") {
     parseSSectionDirective(IDVal, ELF::SHT_PROGBITS);
+    return false;
+  }
+
+  if (IDVal == ".chericap") {
+    parseDirectiveCHERICap(DirectiveID.getLoc());
     return false;
   }
 
