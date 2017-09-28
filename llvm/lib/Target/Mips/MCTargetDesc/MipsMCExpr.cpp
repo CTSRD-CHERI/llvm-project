@@ -115,6 +115,24 @@ void MipsMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
   case MEK_TPREL_LO:
     OS << "%tprel_lo";
     break;
+  case MEK_CAPCALL11:
+    OS << "%capcall";
+    break;
+  case MEK_CAPCALL_HI16:
+    OS << "%capcall_hi";
+    break;
+  case MEK_CAPCALL_LO16:
+    OS << "%capcall_lo";
+    break;
+  case MEK_CAPTABLE11:
+    OS << "%captab";
+    break;
+  case MEK_CAPTABLE_HI16:
+    OS << "%captab_hi";
+    break;
+  case MEK_CAPTABLE_LO16:
+    OS << "%captab_lo";
+    break;
   case MEK_CHERI_CAP:
     // FIXME: should we really end up here?
     OS << "%chericap";
@@ -180,6 +198,12 @@ MipsMCExpr::evaluateAsRelocatableImpl(MCValue &Res,
     case MEK_TLSLDM:
     case MEK_TPREL_HI:
     case MEK_TPREL_LO:
+    case MEK_CAPCALL11:
+    case MEK_CAPCALL_LO16:
+    case MEK_CAPCALL_HI16:
+    case MEK_CAPTABLE11:
+    case MEK_CAPTABLE_HI16:
+    case MEK_CAPTABLE_LO16:
       return false;
     case MEK_LO:
     case MEK_CALL_LO16:
@@ -273,6 +297,12 @@ void MipsMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {
   case MEK_PCREL_HI16:
   case MEK_PCREL_LO16:
   case MEK_TLSLDM:
+  case MEK_CAPCALL11:
+  case MEK_CAPCALL_LO16:
+  case MEK_CAPCALL_HI16:
+  case MEK_CAPTABLE11:
+  case MEK_CAPTABLE_HI16:
+  case MEK_CAPTABLE_LO16:
     // If we do have nested target-specific expressions, they will be in
     // a consecutive chain.
     if (const MipsMCExpr *E = dyn_cast<const MipsMCExpr>(getSubExpr()))

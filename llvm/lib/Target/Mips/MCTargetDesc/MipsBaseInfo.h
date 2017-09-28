@@ -91,6 +91,14 @@ namespace MipsII {
     MO_CALL_HI16,
     MO_CALL_LO16,
 
+    /// CHERI capability relocations:
+    MO_CAPTAB11,       // offset into the capability table
+    MO_CAPTAB_CALL11,  // same as above but only for calls
+    /// Same relocations with large offsets:
+    MO_CAPTAB_LO16,
+    MO_CAPTAB_HI16,
+    MO_CAPTAB_CALL_LO16,
+    MO_CAPTAB_CALL_HI16,
   };
 
   enum {
