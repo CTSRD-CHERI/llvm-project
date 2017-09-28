@@ -61,6 +61,9 @@ public:
   /// Emits all the option records stored up until the point it's called.
   void EmitMipsOptionRecords();
 
+  void EmitCHERICapability(const MCSymbol *Symbol, int64_t Offset,
+                           unsigned CapSize, SMLoc Loc) override;
+
   /// Mark labels as microMIPS, if necessary for the subtarget.
   void createPendingLabelRelocs();
 };
