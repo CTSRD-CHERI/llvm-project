@@ -1,26 +1,41 @@
-; RUN: %cheri_llc %s -target-abi sandbox -o - | FileCheck %s
+; RUN: %cheri256_llc %s -target-abi sandbox -o - | FileCheck %s
+; TODO: handle CHERI 128
 ; ModuleID = 'cheri-member-pointer-init.cpp'
 source_filename = "cheri-member-pointer-init.cpp"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
 
-; CHECK: 	.section	__cap_relocs,"a",@progbits
-; CHECK: 	.8byte	.L
-; CHECK: 	.8byte	_ZN1A7nonvirtEv
-; CHECK: 	.space	8
-; CHECK: 	.space	16
-; CHECK: 	.8byte	.L
-; CHECK: 	.8byte	_Z9global_fnv
-; CHECK: 	.space	8
-; CHECK: 	.space	16
-; CHECK: 	.8byte	.L
-; CHECK: 	.8byte	_ZN1A4virtEv
-; CHECK: 	.space	8
-; CHECK: 	.space	16
-; CHECK: 	.8byte	.L
-; CHECK: 	.8byte	_ZN1A5virt2Ev
-; CHECK: 	.space	8
-; CHECK: 	.space	16
+; CHECK-LABEL: global_nonvirt_ptr:
+; CHECK-NEXT:  .chericap       _ZN1A7nonvirtEv
+; CHECK-NEXT:  .8byte  0
+; CHECK-NEXT:  .space  24
+; CHECK-NEXT:  .size   global_nonvirt_ptr, 64
+
+; CHECK-LABEL: global_virt_ptr:
+; CHECK-NEXT:  .space  32
+; CHECK-NEXT:  .8byte  1
+; CHECK-NEXT:  .space  24
+; CHECK-NEXT:  .size   global_virt_ptr, 64
+
+; CHECK-LABEL: global_fn_ptr:
+; CHECK-NEXT:  .chericap       _Z9global_fnv
+; CHECK-NEXT:  .size   global_fn_ptr, 32
+
+; CHECK:       .type   _ZTV1A,@object          # @_ZTV1A
+; CHECK-NEXT:  .section        .rodata,"a",@progbits
+; CHECK-NEXT:  .weak   _ZTV1A
+; CHECK-NEXT:  .p2align        5
+; CHECK-LABEL: _ZTV1A:
+; CHECK-NEXT:  .space  32
+; CHECK-NEXT:  .space  32
+; CHECK-NEXT:  .chericap       _ZN1A4virtEv
+; CHECK-NEXT:  .chericap       _ZN1A5virt2Ev
+; CHECK-NEXT:  .size   _ZTV1A, 128
+
+; FIXME: we shouldn't need these anymore:
+; CHECK-LABEL: .size.global_nonvirt_ptr:
+; CHECK-LABEL: .size.global_fn_ptr:
+; CHECK-LABEL: .size._ZTV1A:
 
 %class.A = type { i32 (...) addrspace(200)* addrspace(200)* }
 
