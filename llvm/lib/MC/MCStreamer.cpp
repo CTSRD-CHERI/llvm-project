@@ -196,6 +196,11 @@ void MCStreamer::EmitGPRel32Value(const MCExpr *Value) {
   report_fatal_error("unsupported directive in streamer");
 }
 
+void MCStreamer::EmitCHERICapability(const MCSymbol *Value, int64_t Addend,
+                                     unsigned CapSize, SMLoc Loc) {
+  report_fatal_error("EmitCHERICapability is not implemented for this target!");
+}
+
 /// Emit NumBytes bytes worth of the value specified by FillValue.
 /// This implements directives such as '.space'.
 void MCStreamer::emitFill(uint64_t NumBytes, uint8_t FillValue) {

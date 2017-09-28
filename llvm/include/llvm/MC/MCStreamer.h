@@ -644,6 +644,9 @@ public:
   /// This is used to implement assembler directives such as .gprel32 on
   /// targets that support them.
   virtual void EmitGPRel32Value(const MCExpr *Value);
+  // \brief Emit the expression \p Value into the output as a CHERI capability
+  virtual void EmitCHERICapability(const MCSymbol *Value, int64_t Addend,
+                                   unsigned CapSize, SMLoc Loc);
 
   /// \brief Emit NumBytes bytes worth of the value specified by FillValue.
   /// This implements directives such as '.space'.
