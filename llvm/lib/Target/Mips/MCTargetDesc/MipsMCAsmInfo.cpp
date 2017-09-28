@@ -70,4 +70,8 @@ MipsMCAsmInfo::MipsMCAsmInfo(const Triple &TheTriple) {
   // Enable IAS by default for Android mips64el that uses N64 ABI.
   if (TheTriple.getArch() == Triple::mips64el && TheTriple.isAndroid())
     UseIntegratedAssembler = true;
+
+  // FIXME: cheri cap size can't be set yet
+  if (TheTriple.getArch() == Triple::cheri)
+    SupportsCHERI = true;
 }

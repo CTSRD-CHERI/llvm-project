@@ -374,6 +374,10 @@ protected:
   // %hi(), and similar unary operators.
   bool HasMipsExpressions = false;
 
+  // Whether CHERI specific instructions are supported (i.e. the linker understands CHERI)
+  bool SupportsCHERI = false;
+  unsigned CHERICapSize = 0;
+
 public:
   explicit MCAsmInfo();
   virtual ~MCAsmInfo();
@@ -616,6 +620,9 @@ public:
   bool canRelaxRelocations() const { return RelaxELFRelocations; }
   void setRelaxELFRelocations(bool V) { RelaxELFRelocations = V; }
   bool hasMipsExpressions() const { return HasMipsExpressions; }
+  bool supportsCHERI() const { return SupportsCHERI; }
+  bool sizeofCHERICap() const { return CHERICapSize; }
+
 };
 
 } // end namespace llvm

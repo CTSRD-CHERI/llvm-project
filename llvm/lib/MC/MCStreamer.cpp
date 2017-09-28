@@ -123,41 +123,9 @@ void MCStreamer::EmitSLEB128IntValue(int64_t Value) {
 }
 
 void MCStreamer::EmitValue(const MCExpr *Value, unsigned Size, SMLoc Loc) {
-  // This is a massive hack, but it needs rewriting once we have proper linker
-  // support.
-  if (Size > 8) {
-    if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Value)) {
-      assert(Size == 32 || Size == 16);
-      EmitIntValue(0, 8);
-      EmitIntValue(CE->getValue(), 8);
-      if (Size == 32) {
-          EmitIntValue(0, 8);
-          EmitIntValue(0, 8);
-      }
-      return;
-    }
-    MCSymbol *Here = Context.createTempSymbol();
-    EmitLabel(Here);
-    const MCSectionELF *Section =
-        dyn_cast<const MCSectionELF>(SectionStack.back().first.first);
-    const MCSymbolELF *Group = nullptr;
-    if (Section && Section->getGroup())
-      Group = Section->getGroup();
-
-    if (Group) {
-      Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS,
-                            ELF::SHF_ALLOC | ELF::SHF_GROUP,
-                            0, Group->getName());
-      FatRelocs.push_back(std::make_tuple(Here, Value, Group->getName()));
-    }
-    else {
-      Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
-      FatRelocs.push_back(std::make_tuple(Here, Value, StringRef()));
-    }
-
-    EmitZeros(Size);
-    // We do this here to ensure that the section exists.
-  } else
+  if (Size > 8) // FIXME: shouldn't ever be called
+    EmitLegacyCHERICapability(Value, Size, Loc);
+  else
     EmitValueImpl(Value, Size, Loc);
 }
 
@@ -194,6 +162,45 @@ void MCStreamer::EmitGPRel64Value(const MCExpr *Value) {
 
 void MCStreamer::EmitGPRel32Value(const MCExpr *Value) {
   report_fatal_error("unsupported directive in streamer");
+}
+
+void MCStreamer::EmitLegacyCHERICapability(const MCExpr *Value, unsigned CapSize,
+                                     SMLoc Loc) {
+  assert(false && "Should not be called!");
+  if (!this->getContext().getAsmInfo()->supportsCHERI())
+    report_fatal_error("CHERI is not supported by this target!");
+  // MCStreamers with proper capability support will emit real relocations
+  // instead of using the __cap_relocs hack
+  if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Value)) {
+    assert(CapSize == 32 || CapSize == 16);
+    EmitIntValue(0, 8);
+    EmitIntValue(CE->getValue(), 8);
+    if (CapSize == 32) {
+      EmitIntValue(0, 8);
+      EmitIntValue(0, 8);
+    }
+    return;
+  }
+  MCSymbol *Here = Context.createTempSymbol();
+  EmitLabel(Here);
+  const MCSectionELF *Section =
+    dyn_cast<const MCSectionELF>(SectionStack.back().first.first);
+  const MCSymbolELF *Group = nullptr;
+  if (Section && Section->getGroup())
+    Group = Section->getGroup();
+
+  if (Group) {
+    Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS,
+                          ELF::SHF_ALLOC | ELF::SHF_GROUP,
+                          0, Group->getName());
+    FatRelocs.push_back(std::make_tuple(Here, Value, Group->getName()));
+  }
+  else {
+    Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
+    FatRelocs.push_back(std::make_tuple(Here, Value, StringRef()));
+  }
+  // We do this here to ensure that the section exists.
+  EmitZeros(CapSize);
 }
 
 void MCStreamer::EmitCHERICapability(const MCSymbol *Value, int64_t Addend,
