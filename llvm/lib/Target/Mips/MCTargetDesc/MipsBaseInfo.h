@@ -89,7 +89,8 @@ namespace MipsII {
     MO_GOT_HI16,
     MO_GOT_LO16,
     MO_CALL_HI16,
-    MO_CALL_LO16
+    MO_CALL_LO16,
+
   };
 
   enum {

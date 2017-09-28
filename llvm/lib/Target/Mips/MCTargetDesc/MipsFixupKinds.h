@@ -216,6 +216,10 @@ namespace Mips {
     fixup_Mips_SUB,
     fixup_MICROMIPS_SUB,
 
+
+    // resulting in - R_MIPS_CHERI_CAPABILITY
+    fixup_CHERI_CAPABILITY,
+
     // Marker
     LastTargetFixupKind,
     NumTargetFixupKinds = LastTargetFixupKind - FirstTargetFixupKind

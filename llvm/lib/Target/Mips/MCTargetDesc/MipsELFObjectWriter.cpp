@@ -382,6 +382,9 @@ unsigned MipsELFObjectWriter::getRelocType(MCContext &Ctx,
     return ELF::R_MICROMIPS_TLS_TPREL_LO16;
   case Mips::fixup_MICROMIPS_SUB:
     return ELF::R_MICROMIPS_SUB;
+
+  case Mips::fixup_CHERI_CAPABILITY:
+    return ELF::R_MIPS_CHERI_CAPABILITY;
   }
 
   llvm_unreachable("invalid fixup kind!");
@@ -559,6 +562,17 @@ bool MipsELFObjectWriter::needsRelocateWithSymbol(const MCSymbol &Sym,
   case ELF::R_MIPS_PC16:
   case ELF::R_MIPS_SUB:
     return false;
+
+  // CHERI Capability relocations need to preserve the symbol in order to be
+  // able to get tight bounds on the resulting capability.
+  case ELF::R_MIPS_CHERI_CAPABILITY:
+    return true;
+  case ELF::R_MIPS_CHERI_SETTAG:
+  case ELF::R_MIPS_CHERI_SETTAG_LOADADDR:
+  case ELF::R_MIPS_CHERI_LOCAL_CAPABILITY:
+  case ELF::R_MIPS_CHERI_GLOBALS_TABLE:
+    llvm_unreachable("This relocation should not be genreated yet!");
+    return true;
 
   // FIXME: Many of these relocations should probably return false but this
   //        hasn't been confirmed to be safe yet.

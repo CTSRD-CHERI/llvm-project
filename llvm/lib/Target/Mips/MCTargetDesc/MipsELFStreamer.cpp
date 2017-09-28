@@ -8,6 +8,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "MipsELFStreamer.h"
+#include "MipsFixupKinds.h"
+#include "MipsMCExpr.h"
 #include "MipsOptionRecord.h"
 #include "MipsTargetStreamer.h"
 #include "llvm/BinaryFormat/ELF.h"
@@ -82,6 +84,31 @@ void MipsELFStreamer::EmitValueImpl(const MCExpr *Value, unsigned Size,
                                     SMLoc Loc) {
   MCELFStreamer::EmitValueImpl(Value, Size, Loc);
   Labels.clear();
+}
+
+void MipsELFStreamer::EmitCHERICapability(const MCSymbol *Symbol, int64_t Offset,
+                                          unsigned CapSize, SMLoc Loc) {
+  visitUsedSymbol(*Symbol);
+  MCContext &Context = getContext();
+
+  const MCSymbolRefExpr *SRE =
+    MCSymbolRefExpr::create(Symbol, MCSymbolRefExpr::VK_None, Context);
+  const MCBinaryExpr *CapExpr = MCBinaryExpr::createAdd(
+    MipsMCExpr::create(MipsMCExpr::MEK_CHERI_CAP, SRE, Context),
+    MCConstantExpr::create(Offset, Context), Context);
+
+  const unsigned ByteAlignment = CapSize;
+  insert(new MCAlignFragment(ByteAlignment, 0, 1, ByteAlignment));
+  // Update the maximum alignment on the current section if necessary.
+  MCSection *CurSec = getCurrentSectionOnly();
+  if (ByteAlignment > CurSec->getAlignment())
+    CurSec->setAlignment(ByteAlignment);
+
+  MCDataFragment *DF = new MCDataFragment();
+  MCFixup cheriFixup = MCFixup::create(0, CapExpr, MCFixupKind(Mips::fixup_CHERI_CAPABILITY));
+  DF->getFixups().push_back(cheriFixup);
+  DF->getContents().resize(DF->getContents().size() + CapSize, 0xca);
+  insert(DF);
 }
 
 void MipsELFStreamer::EmitMipsOptionRecords() {

@@ -115,6 +115,10 @@ void MipsMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
   case MEK_TPREL_LO:
     OS << "%tprel_lo";
     break;
+  case MEK_CHERI_CAP:
+    // FIXME: should we really end up here?
+    OS << "%chericap";
+    break;
   }
 
   OS << '(';
@@ -157,6 +161,8 @@ MipsMCExpr::evaluateAsRelocatableImpl(MCValue &Res,
     case MEK_None:
     case MEK_Special:
       llvm_unreachable("MEK_None and MEK_Special are invalid");
+    case MEK_CHERI_CAP:
+      llvm_unreachable("MEK_CHERI_CAP is invalid");
     case MEK_DTPREL_HI:
     case MEK_DTPREL_LO:
     case MEK_GOT:
@@ -243,6 +249,9 @@ void MipsMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {
   case MEK_None:
   case MEK_Special:
     llvm_unreachable("MEK_None and MEK_Special are invalid");
+    break;
+  case MEK_CHERI_CAP:
+    llvm_unreachable("MEK_CHERI_CAP is not handled here");
     break;
   case MEK_CALL_HI16:
   case MEK_CALL_LO16:

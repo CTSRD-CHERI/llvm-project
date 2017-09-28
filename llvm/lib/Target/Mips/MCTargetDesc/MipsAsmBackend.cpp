@@ -43,6 +43,9 @@ static unsigned adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
   switch (Kind) {
   default:
     return 0;
+  case Mips::fixup_CHERI_CAPABILITY:
+    // This should never change anything, it is just a marker for the linker
+    return 0;
   case FK_Data_2:
   case Mips::fixup_Mips_LO16:
   case Mips::fixup_Mips_GPREL16:
@@ -263,6 +266,9 @@ void MipsAsmBackend::applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
   case Mips::fixup_Mips_64:
     FullSize = 8;
     break;
+  case Mips::fixup_CHERI_CAPABILITY:
+    llvm_unreachable("fixup_CHERI_CAPABILITY shouldn't happen here!");
+    break;
   case FK_Data_4:
   default:
     FullSize = 4;
@@ -372,7 +378,8 @@ getFixupKindInfo(MCFixupKind Kind) const {
     { "fixup_MICROMIPS_TLS_TPREL_HI16",  0,     16,   0 },
     { "fixup_MICROMIPS_TLS_TPREL_LO16",  0,     16,   0 },
     { "fixup_Mips_SUB",                  0,     64,   0 },
-    { "fixup_MICROMIPS_SUB",             0,     64,   0 }
+    { "fixup_MICROMIPS_SUB",             0,     64,   0 },
+    { "fixup_CHERI_CAPABILITY",          0,     0xdead,   0 },
   };
 
   const static MCFixupKindInfo BigEndianInfos[Mips::NumTargetFixupKinds] = {
@@ -444,14 +451,19 @@ getFixupKindInfo(MCFixupKind Kind) const {
     { "fixup_MICROMIPS_TLS_TPREL_HI16",  16,     16,   0 },
     { "fixup_MICROMIPS_TLS_TPREL_LO16",  16,     16,   0 },
     { "fixup_Mips_SUB",                   0,     64,   0 },
-    { "fixup_MICROMIPS_SUB",              0,     64,   0 }
+    { "fixup_MICROMIPS_SUB",              0,     64,   0 },
+    { "fixup_CHERI_CAPABILITY",     0,    0xdead,   0 },
   };
+
+  // FIXME: sizeof fixup_CHERI_CAPABILITY depends on target
 
   if (Kind < FirstTargetFixupKind)
     return MCAsmBackend::getFixupKindInfo(Kind);
 
   assert(unsigned(Kind - FirstTargetFixupKind) < getNumFixupKinds() &&
           "Invalid kind!");
+
+  assert(Kind - FirstTargetFixupKind != Mips::fixup_CHERI_CAPABILITY);
 
   if (IsLittle)
     return LittleEndianInfos[Kind - FirstTargetFixupKind];
