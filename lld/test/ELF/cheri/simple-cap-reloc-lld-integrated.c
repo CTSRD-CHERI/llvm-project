@@ -1,6 +1,6 @@
 // REQUIRES: clang
 
-// RUN: %clang_cheri_purecap %S/simple-cap-reloc.c -c -o %t.o
+// RUN: %clang_cheri_purecap_legacy_capreloc %S/simple-cap-reloc.c -c -o %t.o
 // RUN: llvm-readobj -s -r %t.o | FileCheck -check-prefix READOBJ %S/simple-cap-reloc-common.check
 // RUN: llvm-objdump -C -r %t.o | FileCheck -check-prefix DUMP-OBJ %S/simple-cap-reloc-common.check
 
@@ -10,7 +10,7 @@
 
 // same again for statically dynamically linked exe:
 // Create a dummy shared library otherwise we won't get a dynamic executable
-// RUN: %clang_cheri_purecap %S/Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
+// RUN: %clang_cheri_purecap_legacy_capreloc %S/Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
 // RUN: ld.lld -process-cap-relocs  %T/integrated_dummy_shlib.o -shared -o %T/libintegrated_dummy_shlib.so
 // RUN: ld.lld -process-cap-relocs -L%T -lintegrated_dummy_shlib %t.o -o %t-dynamic.exe
 // RUN: llvm-objdump -h -r -t -C %t-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %S/simple-cap-reloc-common.check

@@ -1,6 +1,6 @@
 // REQUIRES: clang
 
-// RUN: %clang_cheri_purecap %s -c -o %t.o
+// RUN: %clang_cheri_purecap_legacy_capreloc %s -c -o %t.o
 // RUN: llvm-readobj -s -r %t.o | FileCheck -check-prefix READOBJ %S/simple-cap-reloc-common.check
 // RUN: llvm-objdump -C -r %t.o | FileCheck -check-prefix DUMP-OBJ %S/simple-cap-reloc-common.check
 
@@ -10,7 +10,7 @@
 
 // same a gain for statically dynamically linked exe:
 // Create a dummy shared library otherwise bfd won't create a dynamic executable
-// RUN: %clang_cheri_purecap %S/Inputs/dummy_shlib.c -c -o %T/dummy_shlib.o
+// RUN: %clang_cheri_purecap_legacy_capreloc %S/Inputs/dummy_shlib.c -c -o %T/dummy_shlib.o
 // RUN: %clang_link_purecap  %T/dummy_shlib.o -shared -o %T/libdummy_shlib.so
 // RUN: %clang_link_purecap -L%T -ldummy_shlib %t.o -o %t-dynamic.exe
 // RUN: llvm-objdump -h -r -t -C %t-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %S/simple-cap-reloc-common.check
