@@ -23,12 +23,13 @@
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCSection.h"
-#include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSectionCOFF.h"
+#include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCWin64EH.h"
 #include "llvm/MC/MCWinEH.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/LEB128.h"
 #include "llvm/Support/MathExtras.h"
@@ -74,6 +75,14 @@ void MCTargetStreamer::emitValue(const MCExpr *Value) {
 }
 
 void MCTargetStreamer::emitAssignment(MCSymbol *Symbol, const MCExpr *Value) {}
+
+static cl::opt<bool> LegacyCheriCapRelocs(
+    "legacy-cheri-cap-relocs", cl::init(false), cl::Hidden,
+    cl::desc("Use the legacy __cap_relocs hack when emitting capabilities"));
+
+bool MCTargetStreamer::useLegacyCapRelocs() const {
+  return LegacyCheriCapRelocs;
+}
 
 MCStreamer::MCStreamer(MCContext &Ctx)
     : Context(Ctx), CurrentWinFrameInfo(nullptr) {
@@ -186,15 +195,13 @@ void MCStreamer::EmitGPRel32Value(const MCExpr *Value) {
   report_fatal_error("unsupported directive in streamer");
 }
 
-void MCStreamer::EmitLegacyCHERICapability(const MCExpr *Value, unsigned CapSize,
-                                     SMLoc Loc) {
-  assert(false && "Should not be called!");
-  if (!this->getContext().getAsmInfo()->supportsCHERI())
-    report_fatal_error("CHERI is not supported by this target!");
+void MCStreamer::EmitLegacyCHERICapability(const MCExpr *Value,
+                                           unsigned CapSize, SMLoc Loc) {
+  assert(TargetStreamer->useLegacyCapRelocs());
+  assert(CapSize == 32 || CapSize == 16);
   // MCStreamers with proper capability support will emit real relocations
   // instead of using the __cap_relocs hack
   if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Value)) {
-    assert(CapSize == 32 || CapSize == 16);
     EmitIntValue(0, 8);
     EmitIntValue(CE->getValue(), 8);
     if (CapSize == 32) {
@@ -206,18 +213,16 @@ void MCStreamer::EmitLegacyCHERICapability(const MCExpr *Value, unsigned CapSize
   MCSymbol *Here = Context.createTempSymbol();
   EmitLabel(Here);
   const MCSectionELF *Section =
-    dyn_cast<const MCSectionELF>(SectionStack.back().first.first);
+      dyn_cast<const MCSectionELF>(SectionStack.back().first.first);
   const MCSymbolELF *Group = nullptr;
   if (Section && Section->getGroup())
     Group = Section->getGroup();
 
   if (Group) {
     Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS,
-                          ELF::SHF_ALLOC | ELF::SHF_GROUP,
-                          0, Group->getName());
+                          ELF::SHF_ALLOC | ELF::SHF_GROUP, 0, Group->getName());
     FatRelocs.push_back(std::make_tuple(Here, Value, Group->getName()));
-  }
-  else {
+  } else {
     Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
     FatRelocs.push_back(std::make_tuple(Here, Value, StringRef()));
   }
