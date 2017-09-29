@@ -646,10 +646,10 @@ public:
   virtual void EmitGPRel32Value(const MCExpr *Value);
   // \brief Emit the expression \p Value into the output as a CHERI capability
   virtual void EmitCHERICapability(const MCSymbol *Value, int64_t Addend,
-                                   unsigned CapSize, SMLoc Loc);
+                                   unsigned CapSize, SMLoc Loc = SMLoc());
   // Emit a CHERI capability using the legacy __cap_relocs hack
   virtual void EmitLegacyCHERICapability(const MCExpr *Value, unsigned CapSize,
-                                   SMLoc Loc);
+                                         SMLoc Loc = SMLoc());
 
   /// \brief Emit NumBytes bytes worth of the value specified by FillValue.
   /// This implements directives such as '.space'.
