@@ -1697,6 +1697,7 @@ private:
   friend class ScopBuilder;
 
   ScalarEvolution *SE;
+  DominatorTree *DT;
 
   /// The underlying Region.
   Region &R;
@@ -1912,6 +1913,14 @@ private:
   /// A number that uniquely represents a Scop within its function
   const int ID;
 
+  /// Map of values to the MemoryAccess that writes its definition.
+  ///
+  /// There must be at most one definition per llvm::Instruction in a SCoP.
+  DenseMap<Value *, MemoryAccess *> ValueDefAccs;
+
+  /// Map of values to the MemoryAccess that reads a PHI.
+  DenseMap<PHINode *, MemoryAccess *> PHIReadAccs;
+
   /// List of all uses (i.e. read MemoryAccesses) for a MemoryKind::Value
   /// scalar.
   DenseMap<const ScopArrayInfo *, SmallVector<MemoryAccess *, 4>> ValueUseAccs;
@@ -1925,11 +1934,8 @@ private:
   static int getNextID(std::string ParentFunc);
 
   /// Scop constructor; invoked from ScopBuilder::buildScop.
-  Scop(Region &R, ScalarEvolution &SE, LoopInfo &LI,
+  Scop(Region &R, ScalarEvolution &SE, LoopInfo &LI, DominatorTree &DT,
        ScopDetection::DetectionContext &DC, OptimizationRemarkEmitter &ORE);
-
-  /// Return the LoopInfo used for this Scop.
-  LoopInfo *getLI() const { return Affinator.getLI(); }
 
   //@}
 
@@ -2392,6 +2398,18 @@ public:
   ///        created in this pass.
   void addAccessFunction(MemoryAccess *Access) {
     AccessFunctions.emplace_back(Access);
+
+    // Register value definitions.
+    if (Access->isWrite() && Access->isOriginalValueKind()) {
+      assert(!ValueDefAccs.count(Access->getAccessValue()) &&
+             "there can be just one definition per value");
+      ValueDefAccs[Access->getAccessValue()] = Access;
+    } else if (Access->isRead() && Access->isOriginalPHIKind()) {
+      PHINode *PHI = cast<PHINode>(Access->getAccessInstruction());
+      assert(!PHIReadAccs.count(PHI) &&
+             "there can be just one PHI read per PHINode");
+      PHIReadAccs[PHI] = Access;
+    }
   }
 
   /// Add metadata for @p Access.
@@ -2400,7 +2418,14 @@ public:
   /// Remove the metadata stored for @p Access.
   void removeAccessData(MemoryAccess *Access);
 
+  /// Return the scalar evolution.
   ScalarEvolution *getSE() const;
+
+  /// Return the dominator tree.
+  DominatorTree *getDT() const { return DT; }
+
+  /// Return the LoopInfo used for this Scop.
+  LoopInfo *getLI() const { return Affinator.getLI(); }
 
   /// Get the count of parameters used in this Scop.
   ///

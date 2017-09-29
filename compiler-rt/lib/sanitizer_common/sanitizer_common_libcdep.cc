@@ -147,7 +147,15 @@ void BackgroundThread(void *arg) {
 }
 #endif
 
-#if !SANITIZER_GO
+#if !SANITIZER_FUCHSIA && !SANITIZER_GO
+void StartReportDeadlySignal() {
+  // Write the first message using fd=2, just in case.
+  // It may actually fail to write in case stderr is closed.
+  CatastrophicErrorWrite(SanitizerToolName, internal_strlen(SanitizerToolName));
+  static const char kDeadlySignal[] = ":DEADLYSIGNAL\n";
+  CatastrophicErrorWrite(kDeadlySignal, sizeof(kDeadlySignal) - 1);
+}
+
 static void MaybeReportNonExecRegion(uptr pc) {
 #if SANITIZER_FREEBSD || SANITIZER_LINUX || SANITIZER_NETBSD
   MemoryMappingLayout proc_maps(/*cache_enabled*/ true);
@@ -246,7 +254,19 @@ void ReportDeadlySignal(const SignalContext &sig, u32 tid,
   else
     ReportDeadlySignalImpl(sig, tid, unwind, unwind_context);
 }
-#endif  // !SANITIZER_GO
+
+void HandleDeadlySignal(void *siginfo, void *context, u32 tid,
+                        UnwindSignalStackCallbackType unwind,
+                        const void *unwind_context) {
+  StartReportDeadlySignal();
+  ScopedErrorReportLock rl;
+  SignalContext sig(siginfo, context);
+  ReportDeadlySignal(sig, tid, unwind, unwind_context);
+  Report("ABORTING\n");
+  Die();
+}
+
+#endif  // !SANITIZER_FUCHSIA && !SANITIZER_GO
 
 void WriteToSyslog(const char *msg) {
   InternalScopedString msg_copy(kErrorMessageBufferSize);
@@ -276,6 +296,46 @@ void MaybeStartBackgroudThread() {
   if (!&real_pthread_create) return;  // Can't spawn the thread anyway.
   internal_start_thread(BackgroundThread, nullptr);
 #endif
+}
+
+static atomic_uintptr_t reporting_thread = {0};
+
+ScopedErrorReportLock::ScopedErrorReportLock() {
+  uptr current = GetThreadSelf();
+  for (;;) {
+    uptr expected = 0;
+    if (atomic_compare_exchange_strong(&reporting_thread, &expected, current,
+                                       memory_order_relaxed)) {
+      // We've claimed reporting_thread so proceed.
+      CommonSanitizerReportMutex.Lock();
+      return;
+    }
+
+    if (expected == current) {
+      // This is either asynch signal or nested error during error reporting.
+      // Fail simple to avoid deadlocks in Report().
+
+      // Can't use Report() here because of potential deadlocks in nested
+      // signal handlers.
+      CatastrophicErrorWrite(SanitizerToolName,
+                             internal_strlen(SanitizerToolName));
+      static const char msg[] = ": nested bug in the same thread, aborting.\n";
+      CatastrophicErrorWrite(msg, sizeof(msg) - 1);
+
+      internal__exit(common_flags()->exitcode);
+    }
+
+    internal_sched_yield();
+  }
+}
+
+ScopedErrorReportLock::~ScopedErrorReportLock() {
+  CommonSanitizerReportMutex.Unlock();
+  atomic_store_relaxed(&reporting_thread, 0);
+}
+
+void ScopedErrorReportLock::CheckLocked() {
+  CommonSanitizerReportMutex.CheckLocked();
 }
 
 }  // namespace __sanitizer

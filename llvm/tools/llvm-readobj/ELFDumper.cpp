@@ -18,6 +18,7 @@
 #include "StackMapPrinter.h"
 #include "llvm-readobj.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/PointerIntPair.h"
 #include "llvm/ADT/SmallString.h"
@@ -967,7 +968,7 @@ static const EnumEntry<unsigned> ElfMachineType[] = {
   ENUM_ENT(EM_L10M,          "EM_L10M"),
   ENUM_ENT(EM_K10M,          "EM_K10M"),
   ENUM_ENT(EM_AARCH64,       "AArch64"),
-  ENUM_ENT(EM_AVR32,         "Atmel AVR 8-bit microcontroller"),
+  ENUM_ENT(EM_AVR32,         "Atmel Corporation 32-bit microprocessor family"),
   ENUM_ENT(EM_STM8,          "STMicroeletronics STM8 8-bit microcontroller"),
   ENUM_ENT(EM_TILE64,        "Tilera TILE64 multicore architecture family"),
   ENUM_ENT(EM_TILEPRO,       "Tilera TILEPro multicore architecture family"),
@@ -1287,12 +1288,12 @@ ELFDumper<ELFT>::ELFDumper(const ELFFile<ELFT> *Obj, ScopedPrinter &Writer)
     switch (Sec.sh_type) {
     case ELF::SHT_SYMTAB:
       if (DotSymtabSec != nullptr)
-        reportError("Multilpe SHT_SYMTAB");
+        reportError("Multiple SHT_SYMTAB");
       DotSymtabSec = &Sec;
       break;
     case ELF::SHT_DYNSYM:
       if (DynSymRegion.Size)
-        reportError("Multilpe SHT_DYNSYM");
+        reportError("Multiple SHT_DYNSYM");
       DynSymRegion = createDRIFrom(&Sec);
       // This is only used (if Elf_Shdr present)for naming section in GNU style
       DynSymtabName = unwrapOrError(Obj->getSectionName(&Sec));
@@ -1312,7 +1313,7 @@ ELFDumper<ELFT>::ELFDumper(const ELFFile<ELFT> *Obj, ScopedPrinter &Writer)
       break;
     case ELF::SHT_GNU_verneed:
       if (dot_gnu_version_r_sec != nullptr)
-        reportError("Multilpe SHT_GNU_verneed");
+        reportError("Multiple SHT_GNU_verneed");
       dot_gnu_version_r_sec = &Sec;
       break;
     }
@@ -2489,18 +2490,40 @@ std::vector<GroupSection> getGroups(const ELFFile<ELFT> *Obj) {
   }
   return Ret;
 }
+
+DenseMap<uint64_t, const GroupSection *>
+mapSectionsToGroups(ArrayRef<GroupSection> Groups) {
+  DenseMap<uint64_t, const GroupSection *> Ret;
+  for (const GroupSection &G : Groups)
+    for (const GroupMember &GM : G.Members)
+      Ret.insert({GM.Index, &G});
+  return Ret;
+}
+
 } // namespace
 
 template <class ELFT> void GNUStyle<ELFT>::printGroupSections(const ELFO *Obj) {
   std::vector<GroupSection> V = getGroups<ELFT>(Obj);
+  DenseMap<uint64_t, const GroupSection *> Map = mapSectionsToGroups(V);
   for (const GroupSection &G : V) {
     OS << "\n"
        << getGroupType(G.Type) << " group section ["
        << format_decimal(G.Index, 5) << "] `" << G.Name << "' [" << G.Signature
        << "] contains " << G.Members.size() << " sections:\n"
        << "   [Index]    Name\n";
-    for (const GroupMember &GM : G.Members)
+    for (const GroupMember &GM : G.Members) {
+      const GroupSection *MainGroup = Map[GM.Index];
+      if (MainGroup != &G) {
+        OS.flush();
+        errs() << "Error: section [" << format_decimal(GM.Index, 5)
+               << "] in group section [" << format_decimal(G.Index, 5)
+               << "] already in group section ["
+               << format_decimal(MainGroup->Index, 5) << "]";
+        errs().flush();
+        continue;
+      }
       OS << "   [" << format_decimal(GM.Index, 5) << "]   " << GM.Name << "\n";
+    }
   }
 
   if (V.empty())
@@ -3525,6 +3548,7 @@ template <class ELFT>
 void LLVMStyle<ELFT>::printGroupSections(const ELFO *Obj) {
   DictScope Lists(W, "Groups");
   std::vector<GroupSection> V = getGroups<ELFT>(Obj);
+  DenseMap<uint64_t, const GroupSection *> Map = mapSectionsToGroups(V);
   for (const GroupSection &G : V) {
     DictScope D(W, "Group");
     W.printNumber("Name", G.Name, G.ShName);
@@ -3533,13 +3557,25 @@ void LLVMStyle<ELFT>::printGroupSections(const ELFO *Obj) {
     W.startLine() << "Signature: " << G.Signature << "\n";
 
     ListScope L(W, "Section(s) in group");
-    for (const GroupMember &GM : G.Members)
+    for (const GroupMember &GM : G.Members) {
+      const GroupSection *MainGroup = Map[GM.Index];
+      if (MainGroup != &G) {
+        W.flush();
+        errs() << "Error: " << GM.Name << " (" << GM.Index
+               << ") in a group " + G.Name + " (" << G.Index
+               << ") is already in a group " + MainGroup->Name + " ("
+               << MainGroup->Index << ")\n";
+        errs().flush();
+        continue;
+      }
       W.startLine() << GM.Name << " (" << GM.Index << ")\n";
+    }
   }
 
   if (V.empty())
     W.startLine() << "There are no group sections in the file.\n";
 }
+
 template <class ELFT> void LLVMStyle<ELFT>::printRelocations(const ELFO *Obj) {
   ListScope D(W, "Relocations");
 

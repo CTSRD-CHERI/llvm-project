@@ -1231,12 +1231,14 @@ public:
       // FIXME: Add interleave.disable metadata. This will allow
       // vectorize.disable to be used without disabling the pass and errors
       // to differentiate between disabled vectorization and a width of 1.
-      ORE.emit(OptimizationRemarkAnalysis(vectorizeAnalysisPassName(),
+      ORE.emit([&]() {
+        return OptimizationRemarkAnalysis(vectorizeAnalysisPassName(),
                                           "AllDisabled", L->getStartLoc(),
                                           L->getHeader())
                << "loop not vectorized: vectorization and interleaving are "
                   "explicitly disabled, or the loop has already been "
-                  "vectorized");
+                  "vectorized";
+      });
       return false;
     }
 
@@ -3454,7 +3456,7 @@ BasicBlock *InnerLoopVectorizer::createVectorizedLoopSkeleton() {
       MiddleBlock->splitBasicBlock(MiddleBlock->getTerminator(), "scalar.ph");
 
   // Create and register the new vector loop.
-  Loop *Lp = new Loop();
+  Loop *Lp = LI->AllocateLoop();
   Loop *ParentLoop = OrigLoop->getParentLoop();
 
   // Insert the new loop into the loop nest and register the new basic blocks

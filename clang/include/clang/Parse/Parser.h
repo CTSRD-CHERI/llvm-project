@@ -1476,7 +1476,6 @@ public:
 
   ExprResult ParseMSAsmIdentifier(llvm::SmallVectorImpl<Token> &LineToks,
                                   unsigned &NumLineToksConsumed,
-                                  void *Info,
                                   bool IsUnevaluated);
 
 private:

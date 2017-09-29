@@ -71,6 +71,11 @@ uint64_t ExprValue::getSecAddr() const {
 }
 
 uint64_t ExprValue::getSectionOffset() const {
+  // If the alignment is trivial, we don't have to compute the full
+  // value to know the offset. This allows this function to succeed in
+  // cases where the output section is not yet known.
+  if (Alignment == 1)
+    return Val;
   return getValue() - getSecAddr();
 }
 
@@ -87,7 +92,7 @@ static SymbolBody *addRegular(SymbolAssignment *Cmd) {
   // We want to set symbol values early if we can. This allows us to use symbols
   // as variables in linker scripts. Doing so allows us to write expressions
   // like this: `alignment = 16; . = ALIGN(., alignment)`
-  uint64_t SymValue = Value.isAbsolute() ? Value.getValue() : 0;
+  uint64_t SymValue = Value.Sec ? 0 : Value.getValue();
   replaceBody<DefinedRegular>(Sym, nullptr, Cmd->Name, /*IsLocal=*/false,
                               Visibility, STT_NOTYPE, SymValue, 0, Sec);
   return Sym->body();
@@ -143,6 +148,7 @@ void LinkerScript::assignSymbol(SymbolAssignment *Cmd, bool InSec) {
   ExprValue V = Cmd->Expression();
   if (V.isAbsolute()) {
     Sym->Value = V.getValue();
+    Sym->Section = nullptr;
   } else {
     Sym->Section = V.Sec;
     Sym->Value = V.getSectionOffset();
@@ -241,25 +247,10 @@ static void sortSections(InputSection **Begin, InputSection **End,
     std::stable_sort(Begin, End, getComparator(K));
 }
 
-static llvm::DenseMap<SectionBase *, int> getSectionOrder() {
-  switch (Config->EKind) {
-  case ELF32LEKind:
-    return buildSectionOrder<ELF32LE>();
-  case ELF32BEKind:
-    return buildSectionOrder<ELF32BE>();
-  case ELF64LEKind:
-    return buildSectionOrder<ELF64LE>();
-  case ELF64BEKind:
-    return buildSectionOrder<ELF64BE>();
-  default:
-    llvm_unreachable("unknown ELF type");
-  }
-}
-
 static void sortBySymbolOrder(InputSection **Begin, InputSection **End) {
   if (Config->SymbolOrderingFile.empty())
     return;
-  static llvm::DenseMap<SectionBase *, int> Order = getSectionOrder();
+  static llvm::DenseMap<SectionBase *, int> Order = buildSectionOrder();
   MutableArrayRef<InputSection *> In(Begin, End - Begin);
   sortByOrder(In, [&](InputSectionBase *S) { return Order.lookup(S); });
 }
@@ -437,7 +428,7 @@ void LinkerScript::processCommands(OutputSectionFactory &Factory) {
 
 void LinkerScript::fabricateDefaultCommands() {
   // Define start address
-  uint64_t StartAddr = -1;
+  uint64_t StartAddr = UINT64_MAX;
 
   // The Sections with -T<section> have been sorted in order of ascending
   // address. We must lower StartAddr if the lowest -T<section address> as
@@ -445,15 +436,11 @@ void LinkerScript::fabricateDefaultCommands() {
   for (auto &KV : Config->SectionStartMap)
     StartAddr = std::min(StartAddr, KV.second);
 
+  auto Expr = [=] {
+    return std::min(StartAddr, Config->ImageBase + elf::getHeaderSize());
+  };
   Opt.Commands.insert(Opt.Commands.begin(),
-                      make<SymbolAssignment>(".",
-                                             [=] {
-                                               return std::min(
-                                                   StartAddr,
-                                                   Config->ImageBase +
-                                                       elf::getHeaderSize());
-                                             },
-                                             ""));
+                      make<SymbolAssignment>(".", Expr, ""));
 }
 
 // Add sections that didn't match any sections command.
@@ -469,6 +456,7 @@ void LinkerScript::addOrphanSections(OutputSectionFactory &Factory) {
         return Sec->Name == Name;
       return false;
     });
+    log(toString(S) + " is being placed in '" + Name + "'");
     if (I == End) {
       Factory.addInputSec(S, Name);
       assert(S->getOutputSection()->SectionIndex == INT_MAX);
@@ -668,8 +656,8 @@ void LinkerScript::adjustSectionsBeforeSorting() {
   // consequeces and gives us a section to put the symbol in.
   uint64_t Flags = SHF_ALLOC;
 
-  for (int I = 0, E = Opt.Commands.size(); I != E; ++I) {
-    auto *Sec = dyn_cast<OutputSection>(Opt.Commands[I]);
+  for (BaseCommand * Cmd : Opt.Commands) {
+    auto *Sec = dyn_cast<OutputSection>(Cmd);
     if (!Sec)
       continue;
     if (Sec->Live) {
@@ -681,7 +669,6 @@ void LinkerScript::adjustSectionsBeforeSorting() {
       continue;
 
     Sec->Live = true;
-    Sec->SectionIndex = I;
     Sec->Flags = Flags;
   }
 }
@@ -765,8 +752,7 @@ void LinkerScript::allocateHeaders(std::vector<PhdrEntry *> &Phdrs) {
   // unless there's a space for them.
   uint64_t Base = Opt.HasSections ? alignDown(Min, Config->MaxPageSize) : 0;
   if (HeaderSize <= Min - Base || Script->hasPhdrsCommands()) {
-    Min = Opt.HasSections ? Base
-                          : alignDown(Min - HeaderSize, Config->MaxPageSize);
+    Min = alignDown(Min - HeaderSize, Config->MaxPageSize);
     Out::ElfHeader->Addr = Min;
     Out::ProgramHeaders->Addr = Min + Out::ElfHeader->Size;
     return;

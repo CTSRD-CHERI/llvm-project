@@ -96,6 +96,10 @@ private:
   std::map<uint64_t, std::set<uint32_t>> ReferenceToDIEOffsets;
   uint32_t NumDebugLineErrors = 0;
 
+  raw_ostream &error() const;
+  raw_ostream &warn() const;
+  raw_ostream &note() const;
+
   /// Verifies the abbreviations section.
   ///
   /// This function currently checks that:
@@ -215,7 +219,8 @@ private:
                             DataExtractor *StrData, const char *SectionName);
 
 public:
-  DWARFVerifier(raw_ostream &S, DWARFContext &D, DIDumpOptions DumpOpts = {})
+  DWARFVerifier(raw_ostream &S, DWARFContext &D,
+                DIDumpOptions DumpOpts = DIDumpOptions::getForSingleDIE())
       : OS(S), DCtx(D), DumpOpts(std::move(DumpOpts)) {}
   /// Verify the information in any of the following sections, if available:
   /// .debug_abbrev, debug_abbrev.dwo

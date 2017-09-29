@@ -28,7 +28,6 @@
 #include "sanitizer_libc.h"
 #include "sanitizer_mutex.h"
 #include "sanitizer_placement_new.h"
-#include "sanitizer_procmaps.h"
 #include "sanitizer_stacktrace.h"
 #include "sanitizer_symbolizer.h"
 #include "sanitizer_win_defs.h"
@@ -855,10 +854,6 @@ void UnsetAlternateSignalStack() {
 
 void InstallDeadlySignalHandlers(SignalHandlerType handler) {
   (void)handler;
-  // FIXME: Decide what to do on Windows.
-}
-
-void StartReportDeadlySignal() {
   // FIXME: Decide what to do on Windows.
 }
 

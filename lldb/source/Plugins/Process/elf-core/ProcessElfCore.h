@@ -84,6 +84,14 @@ public:
 
   void RefreshStateAfterStop() override;
 
+  lldb_private::Status WillResume() override {
+    lldb_private::Status error;
+    error.SetErrorStringWithFormat(
+        "error: %s does not support resuming processes",
+        GetPluginName().GetCString());
+    return error;
+  }
+
   //------------------------------------------------------------------
   // Process Queries
   //------------------------------------------------------------------
