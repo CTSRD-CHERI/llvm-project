@@ -5920,7 +5920,8 @@ MipsAsmParser::parseInvNum(OperandVector &Operands) {
   if (getParser().parseExpression(IdVal))
     return MatchOperand_ParseFail;
   const MCConstantExpr *MCE = dyn_cast<MCConstantExpr>(IdVal);
-  assert(MCE && "Unexpected MCExpr type.");
+  if (!MCE)
+    return MatchOperand_ParseFail;
   int64_t Val = MCE->getValue();
   SMLoc E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer() - 1);
   Operands.push_back(MipsOperand::CreateImm(
