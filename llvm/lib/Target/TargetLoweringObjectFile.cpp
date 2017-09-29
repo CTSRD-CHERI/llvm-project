@@ -126,6 +126,26 @@ void TargetLoweringObjectFile::emitPersonalityValue(MCStreamer &Streamer,
                                                     const MCSymbol *Sym) const {
 }
 
+// TODO: these functions should move somewhere else
+static bool isCapabilityType(const Type* T, const DataLayout& DL) {
+  T->dump();
+  if (T->isPointerTy() && DL.isFatPointer(T))
+    return true;
+  for (const Type* SubTy : T->subtypes()) {
+    if (isCapabilityType(SubTy, DL))
+      return true;
+  }
+  return false;
+}
+
+/// Check whether the global variable needs a capability relocation (such as
+/// setting the tag bit on startup). This is needed to check whether the
+/// variable can be placed into the read only section
+static bool needsCapabilityRelocation(const GlobalVariable* GV,
+                                      const DataLayout& DL) {
+  // TODO: make it dependent on the initializer
+  return isCapabilityType(GV->getValueType(), DL);
+}
 
 /// getKindForGlobal - This is a top-level target-independent classifier for
 /// a global variable.  Given an global variable and information from TM, it
@@ -212,6 +232,11 @@ SectionKind TargetLoweringObjectFile::getKindForGlobal(const GlobalObject *GO,
       }
 
     } else {
+      // Even with a static relocation model the startup code will have to
+      // modify capabilities to initialize them because we can't store tag bits
+      // in the ELF file
+      if (needsCapabilityRelocation(GVar, GVar->getParent()->getDataLayout()))
+        return SectionKind::getReadOnlyWithRel();
       // In static, ROPI and RWPI relocation models, the linker will resolve
       // all addresses, so the relocation entries will actually be constants by
       // the time the app starts up.  However, we can't put this into a
