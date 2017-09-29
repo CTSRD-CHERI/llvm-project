@@ -240,23 +240,23 @@ def JALR64 : JumpLinkReg<"jalr", GPR64Opnd>, JALR_FM;
 /// Jump and Branch Instructions
 let isCodeGenOnly = 1 in {
   def BEQ64  : CBranch<"beq", brtarget, seteq, GPR64Opnd>, BEQ_FM<4>;
-  def BEQL64 : CBranch<"beql", brtarget, seteq, GPR64Opnd, 0>,
+  def BEQL64 : CBranchLikely<"beql", brtarget, GPR64Opnd>,
                BEQ_FM<20>, ISA_MIPS2_NOT_32R6_64R6;
   def BNE64  : CBranch<"bne", brtarget, setne, GPR64Opnd>, BEQ_FM<5>;
-  def BNEL64 : CBranch<"bnel", brtarget, setne, GPR64Opnd, 0>,
+  def BNEL64 : CBranchLikely<"bnel", brtarget, GPR64Opnd>,
                BEQ_FM<21>, ISA_MIPS2_NOT_32R6_64R6;
   def BGEZ64 : CBranchZero<"bgez", brtarget, setge, GPR64Opnd>, BGEZ_FM<1, 1>;
-  def BGEZL64: CBranchZero<"bgezl", brtarget, setge, GPR64Opnd, 0>,
+  def BGEZL64: CBranchZeroLikely<"bgezl", brtarget, GPR64Opnd>,
                BGEZ_FM<1, 3>, ISA_MIPS2_NOT_32R6_64R6;
 
   def BGTZ64 : CBranchZero<"bgtz", brtarget, setgt, GPR64Opnd>, BGEZ_FM<7, 0>;
-  def BGTZL64: CBranchZero<"bgtzl", brtarget, setgt, GPR64Opnd, 0>,
+  def BGTZL64: CBranchZeroLikely<"bgtzl", brtarget, GPR64Opnd>,
                BGEZ_FM<23, 0>, ISA_MIPS2_NOT_32R6_64R6;
   def BLEZ64 : CBranchZero<"blez", brtarget, setle, GPR64Opnd>, BGEZ_FM<6, 0>;
-  def BLEZL64: CBranchZero<"blezl", brtarget, setle, GPR64Opnd, 0>,
+  def BLEZL64: CBranchZeroLikely<"blezl", brtarget, GPR64Opnd>,
                BGEZ_FM<22, 0>, ISA_MIPS2_NOT_32R6_64R6;
   def BLTZ64 : CBranchZero<"bltz", brtarget, setlt, GPR64Opnd>, BGEZ_FM<1, 0>;
-  def BLTZL64: CBranchZero<"bltzl", brtarget, setlt, GPR64Opnd, 0>,
+  def BLTZL64: CBranchZeroLikely<"bltzl", brtarget, GPR64Opnd>,
                BGEZ_FM<1, 2>, ISA_MIPS2_NOT_32R6_64R6;
   def JALR64Pseudo : JumpLinkRegPseudo<GPR64Opnd, JALR, RA, GPR32Opnd>;
   def CPSETUP : MipsPseudo<(outs GPR64Opnd: $gp), (ins GPR64Opnd: $t9), []>;
