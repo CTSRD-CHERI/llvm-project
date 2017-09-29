@@ -45,7 +45,7 @@ std::string lld::toString(const InputSectionBase *Sec) {
   return (toString(Sec->File) + ":(" + Sec->Name + ")").str();
 }
 
-template <class ELFT> DenseMap<SectionBase *, int> elf::buildSectionOrder() {
+DenseMap<SectionBase *, int> elf::buildSectionOrder() {
   // Build a map from symbols to their priorities. Symbols that didn't
   // appear in the symbol ordering file have the lowest priority 0.
   // All explicitly mentioned symbols have negative (higher) priorities.
@@ -56,7 +56,7 @@ template <class ELFT> DenseMap<SectionBase *, int> elf::buildSectionOrder() {
 
   // Build a map from sections to their priorities.
   DenseMap<SectionBase *, int> SectionOrder;
-  for (ObjFile<ELFT> *File : ObjFile<ELFT>::Instances) {
+  for (InputFile *File : ObjectFiles) {
     for (SymbolBody *Body : File->getSymbols()) {
       auto *D = dyn_cast<DefinedRegular>(Body);
       if (!D || !D->Section)
@@ -76,6 +76,22 @@ static ArrayRef<uint8_t> getSectionContents(ObjFile<ELFT> *File,
   return check(File->getObj().getSectionContents(Hdr));
 }
 
+// Return true if a section with given section flags is live (will never be
+// GCed) by default. If a section can be GCed, this function returns false.
+static bool isLiveByDefault(uint64_t Flags, uint32_t Type) {
+  // If GC is enabled, all memory-mapped sections are subject of GC.
+  if (!Config->GcSections)
+    return true;
+  if (Flags & SHF_ALLOC)
+    return false;
+
+  // Besides that, relocation sections can also be GCed because their
+  // relocation target sections may be GCed. This doesn't really matter
+  // in most cases because the linker usually consumes relocation
+  // sections instead of emitting them, but -emit-reloc needs this.
+  return Type != SHT_REL && Type != SHT_RELA;
+}
+
 InputSectionBase::InputSectionBase(InputFile *File, uint64_t Flags,
                                    uint32_t Type, uint64_t Entsize,
                                    uint32_t Link, uint32_t Info,
@@ -84,7 +100,7 @@ InputSectionBase::InputSectionBase(InputFile *File, uint64_t Flags,
     : SectionBase(SectionKind, Name, Flags, Entsize, Alignment, Type, Info,
                   Link),
       File(File), Data(Data), Repl(this) {
-  Live = !Config->GcSections || !(Flags & SHF_ALLOC);
+  Live = isLiveByDefault(Flags, Type);
   Assigned = false;
   NumRelocations = 0;
   AreRelocsRela = false;
@@ -231,9 +247,9 @@ InputSection *InputSectionBase::getLinkOrderDep() const {
     InputSectionBase *L = File->getSections()[Link];
     if (auto *IS = dyn_cast<InputSection>(L))
       return IS;
-    error(
-        "Merge and .eh_frame sections are not supported with SHF_LINK_ORDER " +
-        toString(L));
+    error("a section with SHF_LINK_ORDER should not refer a non-regular "
+          "section: " +
+          toString(L));
   }
   return nullptr;
 }
@@ -387,11 +403,6 @@ InputSectionBase *InputSection::getRelocatedSection() {
 template <class ELFT, class RelTy>
 void InputSection::copyRelocations(uint8_t *Buf, ArrayRef<RelTy> Rels) {
   InputSectionBase *RelocatedSection = getRelocatedSection();
-
-  // Loop is slow and have complexity O(N*M), where N - amount of
-  // relocations and M - amount of symbols in symbol table.
-  // That happens because getSymbolIndex(...) call below performs
-  // simple linear search.
   for (const RelTy &Rel : Rels) {
     uint32_t Type = Rel.getType(Config->IsMips64EL);
     SymbolBody &Body = this->getFile<ELFT>()->getRelocTargetSym(Rel);
@@ -490,6 +501,7 @@ static uint64_t getAArch64UndefinedRelativeWeakVA(uint64_t Type, uint64_t A,
   case R_AARCH64_PREL32:
   case R_AARCH64_PREL64:
   case R_AARCH64_ADR_PREL_LO21:
+  case R_AARCH64_LD_PREL_LO19:
     return P + A;
   }
   llvm_unreachable("AArch64 pc-relative relocation expected\n");
@@ -1075,11 +1087,6 @@ uint64_t MergeInputSection::getOffset(uint64_t Offset) const {
   uint64_t Addend = Offset - Piece.InputOff;
   return Piece.OutputOff + Addend;
 }
-
-template DenseMap<SectionBase *, int> elf::buildSectionOrder<ELF32LE>();
-template DenseMap<SectionBase *, int> elf::buildSectionOrder<ELF32BE>();
-template DenseMap<SectionBase *, int> elf::buildSectionOrder<ELF64LE>();
-template DenseMap<SectionBase *, int> elf::buildSectionOrder<ELF64BE>();
 
 template InputSection::InputSection(ObjFile<ELF32LE> *, const ELF32LE::Shdr *,
                                     StringRef);

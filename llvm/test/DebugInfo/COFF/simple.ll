@@ -17,7 +17,7 @@
 
 ; X86-LABEL: _f:
 ; X86:      # BB
-; X86:      .cv_file 1 "D:\\test.c" "f310ab26998ca831cbdf169e4eecacfa" 1
+; X86:      .cv_file 1 "D:\\test.c" "F310AB26998CA831CBDF169E4EECACFA" 1
 ; X86:      .cv_loc 0 1 4 2 is_stmt 0 # test.c:4:2
 ; X86:      calll   _g
 ; X86:      .cv_loc 0 1 5 0 # test.c:5:0
@@ -87,15 +87,12 @@
 ; OBJ32-NEXT: ]
 ; OBJ32:       Subsection [
 ; OBJ32:         SubSectionType: FileChecksums (0xF4)
-; OBJ32-NEXT:    SubSectionSize: 0x28
+; OBJ32-NEXT:    SubSectionSize: 0x18
 ; OBJ32-NEXT:    FileChecksum {
 ; OBJ32-NEXT:      Filename: D:\test.c (0x1)
-; OBJ32-NEXT:      ChecksumSize: 0x20
+; OBJ32-NEXT:      ChecksumSize: 0x10
 ; OBJ32-NEXT:      ChecksumKind: MD5 (0x1)
-; OBJ32-NEXT:      ChecksumBytes (
-; OBJ32-NEXT:        0000: 66333130 61623236 39393863 61383331  |f310ab26998ca831|
-; OBJ32-NEXT:        0010: 63626466 31363965 34656563 61636661  |cbdf169e4eecacfa|
-; OBJ32-NEXT:      )
+; OBJ32-NEXT:      ChecksumBytes: (F3 10 AB 26 99 8C A8 31 CB DF 16 9E 4E EC AC FA)
 ; OBJ32-NEXT:    }
 ; OBJ32-NEXT:  ]
 ; OBJ32:      FunctionLineTable [
@@ -123,7 +120,7 @@
 
 ; X64-LABEL: f:
 ; X64-NEXT: .L{{.*}}:{{$}}
-; X64:      .cv_file 1 "D:\\test.c" "f310ab26998ca831cbdf169e4eecacfa" 1
+; X64:      .cv_file 1 "D:\\test.c" "F310AB26998CA831CBDF169E4EECACFA" 1
 ; X64:      .cv_loc 0 1 3 0 is_stmt 0 # test.c:3:0
 ; X64:      # BB
 ; X64:      subq    $40, %rsp
@@ -197,15 +194,12 @@
 ; OBJ64-NEXT: ]
 ; OBJ64:       Subsection [
 ; OBJ64:         SubSectionType: FileChecksums (0xF4)
-; OBJ64-NEXT:    SubSectionSize: 0x28
+; OBJ64-NEXT:    SubSectionSize: 0x18
 ; OBJ64-NEXT:    FileChecksum {
 ; OBJ64-NEXT:      Filename: D:\test.c (0x1)
-; OBJ64-NEXT:      ChecksumSize: 0x20
+; OBJ64-NEXT:      ChecksumSize: 0x10
 ; OBJ64-NEXT:      ChecksumKind: MD5 (0x1)
-; OBJ64-NEXT:      ChecksumBytes (
-; OBJ64-NEXT:        0000: 66333130 61623236 39393863 61383331  |f310ab26998ca831|
-; OBJ64-NEXT:        0010: 63626466 31363965 34656563 61636661  |cbdf169e4eecacfa|
-; OBJ64-NEXT:      )
+; OBJ64-NEXT:      ChecksumBytes: (F3 10 AB 26 99 8C A8 31 CB DF 16 9E 4E EC AC FA)
 ; OBJ64-NEXT:    }
 ; OBJ64-NEXT:  ]
 ; OBJ64:      FunctionLineTable [

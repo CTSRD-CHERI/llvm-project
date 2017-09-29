@@ -596,8 +596,9 @@ lldb::TypeSystemSP ClangASTContext::CreateInstance(lldb::LanguageType language,
           ast_sp->SetArchitecture(fixed_arch);
           ast_sp->m_scratch_ast_source_ap.reset(
               new ClangASTSource(target->shared_from_this()));
+          lldbassert(ast_sp->getFileManager());
           ast_sp->m_scratch_ast_source_ap->InstallASTContext(
-              ast_sp->getASTContext());
+              *ast_sp->getASTContext(), *ast_sp->getFileManager(), true);
           llvm::IntrusiveRefCntPtr<clang::ExternalASTSource> proxy_ast_source(
               ast_sp->m_scratch_ast_source_ap->CreateProxy());
           ast_sp->SetExternalSource(proxy_ast_source);
@@ -1430,7 +1431,7 @@ static TemplateParameterList *CreateTemplateParameterList(
           is_typename, parameter_pack));
     }
   }
-  
+
   if (template_param_infos.packed_args &&
       template_param_infos.packed_args->args.size()) {
     IdentifierInfo *identifier_info = nullptr;
@@ -5009,6 +5010,7 @@ lldb::Encoding ClangASTContext::GetEncoding(lldb::opaque_compiler_type_t type,
 
     case clang::BuiltinType::Half:
     case clang::BuiltinType::Float:
+    case clang::BuiltinType::Float16:
     case clang::BuiltinType::Float128:
     case clang::BuiltinType::Double:
     case clang::BuiltinType::LongDouble:
@@ -10121,3 +10123,10 @@ PersistentExpressionState *
 ClangASTContextForExpressions::GetPersistentExpressionState() {
   return m_persistent_variables.get();
 }
+
+clang::ExternalASTMerger &
+ClangASTContextForExpressions::GetMergerUnchecked() {
+  lldbassert(m_scratch_ast_source_ap != nullptr);
+  return m_scratch_ast_source_ap->GetMergerUnchecked();
+}
+

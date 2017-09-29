@@ -346,18 +346,19 @@ void CoveragePrinterHTML::emitFileSummary(raw_ostream &OS, StringRef SF,
   }
 
   Columns.emplace_back(tag("td", tag("pre", Filename)));
-  AddCoverageTripleToColumn(FCS.FunctionCoverage.Executed,
-                            FCS.FunctionCoverage.NumFunctions,
+  AddCoverageTripleToColumn(FCS.FunctionCoverage.getExecuted(),
+                            FCS.FunctionCoverage.getNumFunctions(),
                             FCS.FunctionCoverage.getPercentCovered());
   if (Opts.ShowInstantiationSummary)
-    AddCoverageTripleToColumn(FCS.InstantiationCoverage.Executed,
-                              FCS.InstantiationCoverage.NumFunctions,
+    AddCoverageTripleToColumn(FCS.InstantiationCoverage.getExecuted(),
+                              FCS.InstantiationCoverage.getNumFunctions(),
                               FCS.InstantiationCoverage.getPercentCovered());
-  AddCoverageTripleToColumn(FCS.LineCoverage.Covered, FCS.LineCoverage.NumLines,
+  AddCoverageTripleToColumn(FCS.LineCoverage.getCovered(),
+                            FCS.LineCoverage.getNumLines(),
                             FCS.LineCoverage.getPercentCovered());
   if (Opts.ShowRegionSummary)
-    AddCoverageTripleToColumn(FCS.RegionCoverage.Covered,
-                              FCS.RegionCoverage.NumRegions,
+    AddCoverageTripleToColumn(FCS.RegionCoverage.getCovered(),
+                              FCS.RegionCoverage.getNumRegions(),
                               FCS.RegionCoverage.getPercentCovered());
 
   OS << tag("tr", join(Columns.begin(), Columns.end(), ""), "light-row");
@@ -365,7 +366,7 @@ void CoveragePrinterHTML::emitFileSummary(raw_ostream &OS, StringRef SF,
 
 Error CoveragePrinterHTML::createIndexFile(
     ArrayRef<std::string> SourceFiles,
-    const coverage::CoverageMapping &Coverage) {
+    const coverage::CoverageMapping &Coverage, const CoverageFilter &Filters) {
   // Emit the default stylesheet.
   auto CSSOrErr = createOutputStream("style", "css", /*InToplevel=*/true);
   if (Error E = CSSOrErr.takeError())
@@ -403,11 +404,11 @@ Error CoveragePrinterHTML::createIndexFile(
   OSRef << BeginCenteredDiv << BeginTable;
   emitColumnLabelsForIndex(OSRef, Opts);
   FileCoverageSummary Totals("TOTALS");
-  auto FileReports =
-      CoverageReport::prepareFileReports(Coverage, Totals, SourceFiles, Opts);
+  auto FileReports = CoverageReport::prepareFileReports(
+      Coverage, Totals, SourceFiles, Opts, Filters);
   bool EmptyFiles = false;
   for (unsigned I = 0, E = FileReports.size(); I < E; ++I) {
-    if (FileReports[I].FunctionCoverage.NumFunctions)
+    if (FileReports[I].FunctionCoverage.getNumFunctions())
       emitFileSummary(OSRef, SourceFiles[I], FileReports[I]);
     else
       EmptyFiles = true;
@@ -424,7 +425,7 @@ Error CoveragePrinterHTML::createIndexFile(
                       "by the preprocessor.)\n");
     OSRef << BeginCenteredDiv << BeginTable;
     for (unsigned I = 0, E = FileReports.size(); I < E; ++I)
-      if (!FileReports[I].FunctionCoverage.NumFunctions) {
+      if (!FileReports[I].FunctionCoverage.getNumFunctions()) {
         std::string Link = buildLinkToFile(SourceFiles[I], FileReports[I]);
         OSRef << tag("tr", tag("td", tag("pre", Link)), "light-row") << '\n';
       }
@@ -526,7 +527,7 @@ void SourceCoverageViewHTML::renderLine(
     const auto *CurSeg = Segments[I];
     if (CurSeg->Col == ExpansionCol)
       Color = "cyan";
-    else if (CheckIfUncovered(CurSeg))
+    else if (!CurSeg->IsGapRegion && CheckIfUncovered(CurSeg))
       Color = "red";
     else
       Color = None;
@@ -619,7 +620,7 @@ void SourceCoverageViewHTML::renderExpansionView(raw_ostream &OS,
                                                  unsigned ViewDepth) {
   OS << BeginExpansionDiv;
   ESV.View->print(OS, /*WholeFile=*/false, /*ShowSourceName=*/false,
-                  ViewDepth + 1);
+                  /*ShowTitle=*/false, ViewDepth + 1);
   OS << EndExpansionDiv;
 }
 
@@ -635,7 +636,7 @@ void SourceCoverageViewHTML::renderInstantiationView(raw_ostream &OS,
        << EndSourceNameDiv;
   else
     ISV.View->print(OS, /*WholeFile=*/false, /*ShowSourceName=*/true,
-                    ViewDepth);
+                    /*ShowTitle=*/false, ViewDepth);
   OS << EndExpansionDiv;
 }
 

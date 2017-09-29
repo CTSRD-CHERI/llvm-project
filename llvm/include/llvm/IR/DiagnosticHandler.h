@@ -10,6 +10,9 @@
 // custom diagnostic reporting.
 //===----------------------------------------------------------------------===//
 
+#ifndef LLVM_IR_DIAGNOSTICHANDLER_H
+#define LLVM_IR_DIAGNOSTICHANDLER_H
+
 #include "llvm/ADT/StringRef.h"
 
 namespace llvm {
@@ -57,11 +60,16 @@ struct DiagnosticHandler {
   /// to provide different implementation.
   virtual bool isPassedOptRemarkEnabled(StringRef PassName) const;
 
-  /// Return true if any type of remarks are enabled.
+  /// Return true if any type of remarks are enabled for this pass.
   bool isAnyRemarkEnabled(StringRef PassName) const {
     return (isMissedOptRemarkEnabled(PassName) ||
             isPassedOptRemarkEnabled(PassName) ||
             isAnalysisRemarkEnabled(PassName));
   }
+
+  /// Return true if any type of remarks are enabled for any pass.
+  virtual bool isAnyRemarkEnabled() const;
 };
-}
+} // namespace llvm
+
+#endif // LLVM_IR_DIAGNOSTICHANDLER_H

@@ -99,14 +99,8 @@ static uint64_t getSymVA(const SymbolBody &Body, int64_t &Addend) {
     }
     return VA;
   }
-  case SymbolBody::DefinedCommonKind: {
-    if (!Config->DefineCommon)
-      return 0;
-    auto DC = cast<DefinedCommon>(Body);
-    if (!DC.Live)
-      return 0;
-    return DC.Section->getParent()->Addr + DC.Section->OutSecOff;
-  }
+  case SymbolBody::DefinedCommonKind:
+    llvm_unreachable("common are converted to bss");
   case SymbolBody::SharedKind: {
     auto &SS = cast<SharedSymbol>(Body);
     if (SS.CopyRelSec)
@@ -151,7 +145,7 @@ InputFile *SymbolBody::getFile() const {
 // Overwrites all attributes with Other's so that this symbol becomes
 // an alias to Other. This is useful for handling some options such as
 // --wrap.
-void SymbolBody::copy(SymbolBody *Other) {
+void SymbolBody::copyFrom(SymbolBody *Other) {
   memcpy(symbol()->Body.buffer, Other->symbol()->Body.buffer,
          sizeof(Symbol::Body));
 }
@@ -285,7 +279,7 @@ DefinedCommon::DefinedCommon(StringRef Name, uint64_t Size, uint32_t Alignment,
                              uint8_t StOther, uint8_t Type)
     : Defined(SymbolBody::DefinedCommonKind, Name, /*IsLocal=*/false, StOther,
               Type),
-      Live(!Config->GcSections), Alignment(Alignment), Size(Size) {}
+      Alignment(Alignment), Size(Size) {}
 
 // If a shared symbol is referred via a copy relocation, its alignment
 // becomes part of the ABI. This function returns a symbol alignment.

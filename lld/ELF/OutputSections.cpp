@@ -259,12 +259,14 @@ void OutputSectionFactory::addInputSec(InputSectionBase *IS,
     return;
   }
 
-  // Sections with the SHT_GROUP attribute reach here only when the - r option
-  // is given. Such sections define "section groups", and InputFiles.cpp has
-  // dedup'ed section groups by their signatures. For the -r, we want to pass
-  // through all SHT_GROUP sections without merging them because merging them
-  // creates broken section contents.
-  if (IS->Type == SHT_GROUP) {
+  // Sections with SHT_GROUP or SHF_GROUP attributes reach here only when the -r
+  // option is given. A section with SHT_GROUP defines a "section group", and
+  // its members have SHF_GROUP attribute. Usually these flags have already been
+  // stripped by InputFiles.cpp as section groups are processed and uniquified.
+  // However, for the -r option, we want to pass through all section groups
+  // as-is because adding/removing members or merging them with other groups
+  // change their semantics.
+  if (IS->Type == SHT_GROUP || (IS->Flags & SHF_GROUP)) {
     addSection(IS, OutsecName, nullptr);
     return;
   }
@@ -457,12 +459,14 @@ template <class ELFT> void OutputSection::finalize() {
   // but sort must consider them all at once.
   std::vector<InputSection **> ScriptSections;
   std::vector<InputSection *> Sections;
-  for (BaseCommand *Base : Commands)
-    if (auto *ISD = dyn_cast<InputSectionDescription>(Base))
+  for (BaseCommand *Base : Commands) {
+    if (auto *ISD = dyn_cast<InputSectionDescription>(Base)) {
       for (InputSection *&IS : ISD->Sections) {
         ScriptSections.push_back(&IS);
         Sections.push_back(IS);
       }
+    }
+  }
 
   if (Flags & SHF_LINK_ORDER) {
     std::stable_sort(Sections.begin(), Sections.end(), compareByFilePosition);

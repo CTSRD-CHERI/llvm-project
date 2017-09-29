@@ -75,7 +75,12 @@ bool elf::link(ArrayRef<const char *> Args, bool CanExitEarly,
   ErrorCount = 0;
   ErrorOS = &Error;
   InputSections.clear();
+  OutputSections.clear();
   Tar = nullptr;
+  BinaryFiles.clear();
+  BitcodeFiles.clear();
+  ObjectFiles.clear();
+  SharedFiles.clear();
 
   Config = make<Configuration>();
   Driver = make<LinkerDriver>();
@@ -129,6 +134,7 @@ std::vector<std::pair<MemoryBufferRef, uint64_t>> static getArchiveMembers(
 
   std::vector<std::pair<MemoryBufferRef, uint64_t>> V;
   Error Err = Error::success();
+  bool AddToTar = File->isThin() && Tar;
   for (const ErrorOr<Archive::Child> &COrErr : File->children(Err)) {
     Archive::Child C =
         check(COrErr, MB.getBufferIdentifier() +
@@ -137,6 +143,8 @@ std::vector<std::pair<MemoryBufferRef, uint64_t>> static getArchiveMembers(
         check(C.getMemoryBufferRef(),
               MB.getBufferIdentifier() +
                   ": could not get the buffer for a child of the archive");
+    if (AddToTar)
+      Tar->append(relativeToRoot(check(C.getFullName())), MBRef.getBuffer());
     V.push_back(std::make_pair(MBRef, C.getChildOffset()));
   }
   if (Err)
@@ -1039,8 +1047,8 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   // producing a shared library.
   // We also need one if any shared libraries are used and for pie executables
   // (probably because the dynamic linker needs it).
-  Config->HasDynSymTab = !SharedFile<ELFT>::Instances.empty() || Config->Pic ||
-                         (Config->ExportDynamic && !Config->Static);
+  Config->HasDynSymTab =
+      !SharedFiles.empty() || Config->Pic || (Config->ExportDynamic && !Config->Static);
 
   // Some symbols (such as __ehdr_start) are defined lazily only when there
   // are undefined symbols for them, so we add these to trigger that logic.
@@ -1088,11 +1096,11 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   // Now that we have a complete list of input files.
   // Beyond this point, no new files are added.
   // Aggregate all input sections into one place.
-  for (ObjFile<ELFT> *F : ObjFile<ELFT>::Instances)
+  for (InputFile *F : ObjectFiles)
     for (InputSectionBase *S : F->getSections())
       if (S && S != &InputSection::Discarded)
         InputSections.push_back(S);
-  for (BinaryFile *F : BinaryFile::Instances)
+  for (BinaryFile *F : BinaryFiles)
     for (InputSectionBase *S : F->getSections())
       InputSections.push_back(cast<InputSection>(S));
 
@@ -1101,6 +1109,14 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   // mergeable section.
   if (!Config->Relocatable)
     InputSections.push_back(createCommentSection<ELFT>());
+
+  // Create a .bss section for each common symbol and then replace the common
+  // symbol with a DefinedRegular symbol. As a result, all common symbols are
+  // "instantiated" as regular defined symbols, so that we don't need to care
+  // about common symbols beyond this point. Note that if -r is given, we just
+  // need to pass through common symbols as-is.
+  if (Config->DefineCommon)
+    createCommonSections<ELFT>();
 
   // Do size optimizations: garbage collection, merging of SHF_MERGE sections
   // and identical code folding.

@@ -12,6 +12,10 @@ a.out: lib_a lib_b lib_c lib_d hidden_lib_d
 
 lib_%:
 	$(MAKE) -f $*.mk
+ifeq ($(OS),Darwin)
+	install_name_tool -id @executable_path/libloadunload_d.dylib libloadunload_d.dylib
+endif
+
 
 hidden_lib_d:
 	$(MAKE) -C hidden

@@ -117,9 +117,9 @@ StringRef elf::getOutputSectionName(StringRef Name) {
   return Name;
 }
 
-template <class ELFT> static bool needsInterpSection() {
-  return !SharedFile<ELFT>::Instances.empty() &&
-         !Config->DynamicLinker.empty() && !Script->ignoreInterpSection();
+static bool needsInterpSection() {
+  return !SharedFiles.empty() && !Config->DynamicLinker.empty() &&
+         !Script->ignoreInterpSection();
 }
 
 template <class ELFT> void elf::writeResult() { Writer<ELFT>().run(); }
@@ -291,7 +291,7 @@ template <class ELFT> void Writer<ELFT>::createSyntheticSections() {
   Out::ProgramHeaders = make<OutputSection>("", 0, SHF_ALLOC);
   Out::ProgramHeaders->updateAlignment(Config->Wordsize);
 
-  if (needsInterpSection<ELFT>()) {
+  if (needsInterpSection()) {
     InX::Interp = createInterpSection();
     Add(InX::Interp);
   } else {
@@ -307,9 +307,6 @@ template <class ELFT> void Writer<ELFT>::createSyntheticSections() {
     InX::BuildId = make<BuildIdSection>();
     Add(InX::BuildId);
   }
-
-  for (InputSection *S : createCommonSections())
-    Add(S);
 
   InX::Bss = make<BssSection>(".bss");
   Add(InX::Bss);
@@ -354,8 +351,8 @@ template <class ELFT> void Writer<ELFT>::createSyntheticSections() {
     }
 
     if (Config->SysvHash) {
-      In<ELFT>::HashTab = make<HashTableSection<ELFT>>();
-      Add(In<ELFT>::HashTab);
+      InX::HashTab = make<HashTableSection>();
+      Add(InX::HashTab);
     }
 
     Add(InX::Dynamic);
@@ -462,11 +459,7 @@ static bool includeInSymtab(const SymbolBody &B) {
     if (auto *S = dyn_cast<MergeInputSection>(Sec))
       if (!S->getSectionPiece(D->Value)->Live)
         return false;
-    return true;
   }
-
-  if (auto *Sym = dyn_cast<DefinedCommon>(&B))
-    return Sym->Live;
   return true;
 }
 
@@ -475,7 +468,8 @@ static bool includeInSymtab(const SymbolBody &B) {
 template <class ELFT> void Writer<ELFT>::copyLocalSymbols() {
   if (!InX::SymTab)
     return;
-  for (ObjFile<ELFT> *F : ObjFile<ELFT>::Instances) {
+  for (InputFile *File : ObjectFiles) {
+    ObjFile<ELFT> *F = cast<ObjFile<ELFT>>(File);
     for (SymbolBody *B : F->getLocalSymbols()) {
       if (!B->IsLocal)
         fatal(toString(F) +
@@ -856,17 +850,17 @@ template <class ELFT> void Writer<ELFT>::addReservedSymbols() {
   if (Script->Opt.HasSections)
     return;
 
-  auto Add = [](StringRef S, int64_t Pos = -1) {
+  auto Add = [](StringRef S, int64_t Pos) {
     return addOptionalRegular<ELFT>(S, Out::ElfHeader, Pos, STV_DEFAULT);
   };
 
   ElfSym::Bss = Add("__bss_start", 0);
-  ElfSym::End1 = Add("end");
-  ElfSym::End2 = Add("_end");
-  ElfSym::Etext1 = Add("etext");
-  ElfSym::Etext2 = Add("_etext");
-  ElfSym::Edata1 = Add("edata");
-  ElfSym::Edata2 = Add("_edata");
+  ElfSym::End1 = Add("end", -1);
+  ElfSym::End2 = Add("_end", -1);
+  ElfSym::Etext1 = Add("etext", -1);
+  ElfSym::Etext2 = Add("_etext", -1);
+  ElfSym::Edata1 = Add("edata", -1);
+  ElfSym::Edata2 = Add("_edata", -1);
 }
 
 // Sort input sections by section name suffixes for
@@ -883,12 +877,12 @@ static void sortCtorsDtors(OutputSection *Cmd) {
 }
 
 // Sort input sections using the list provided by --symbol-ordering-file.
-template <class ELFT> static void sortBySymbolsOrder() {
+static void sortBySymbolsOrder() {
   if (Config->SymbolOrderingFile.empty())
     return;
 
   // Sort sections by priority.
-  DenseMap<SectionBase *, int> SectionOrder = buildSectionOrder<ELFT>();
+  DenseMap<SectionBase *, int> SectionOrder = buildSectionOrder();
   for (BaseCommand *Base : Script->Opt.Commands)
     if (auto *Sec = dyn_cast<OutputSection>(Base))
       Sec->sort([&](InputSectionBase *S) { return SectionOrder.lookup(S); });
@@ -918,7 +912,7 @@ template <class ELFT> void Writer<ELFT>::createSections() {
                               Old.end());
 
   Script->fabricateDefaultCommands();
-  sortBySymbolsOrder<ELFT>();
+  sortBySymbolsOrder();
   sortInitFini(findSection(".init_array"));
   sortInitFini(findSection(".fini_array"));
   sortCtorsDtors(findSection(".ctors"));
@@ -984,7 +978,7 @@ template <class ELFT> void Writer<ELFT>::setReservedSymbolSections() {
 
   // Setup MIPS _gp_disp/__gnu_local_gp symbols which should
   // be equal to the _gp symbol's value.
-  if (ElfSym::MipsGp && !ElfSym::MipsGp->Value) {
+  if (ElfSym::MipsGp) {
     // Find GP-relative section with the lowest address
     // and use this address to calculate default _gp value.
     for (OutputSection *OS : OutputSections) {
@@ -1064,6 +1058,17 @@ findOrphanPos(std::vector<BaseCommand *>::iterator B,
       llvm::make_reverse_iterator(I), llvm::make_reverse_iterator(B),
       [](BaseCommand *Cmd) { return isa<OutputSection>(Cmd); });
   I = J.base();
+
+  // As a special case, if the orphan section is the last section, put
+  // it at the very end, past any other commands.
+  // This matches bfd's behavior and is convenient when the linker script fully
+  // specifies the start of the file, but doesn't care about the end (the non
+  // alloc sections for example).
+  auto NextSec = std::find_if(
+      I, E, [](BaseCommand *Cmd) { return isa<OutputSection>(Cmd); });
+  if (NextSec == E)
+    return E;
+
   while (I != E && shouldSkip(*I))
     ++I;
   return I;
@@ -1195,8 +1200,6 @@ static void removeUnusedSyntheticSections() {
       return;
     OutputSection *OS = SS->getParent();
     if (!SS->empty() || !OS)
-      continue;
-    if ((SS == InX::Got || SS == InX::MipsGot) && ElfSym::GlobalOffsetTable)
       continue;
 
     std::vector<BaseCommand *>::iterator Empty = OS->Commands.end();
@@ -1374,7 +1377,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   // symbol table section (DynSymTab) must be the first one.
   applySynthetic({InX::DynSymTab,    InX::Bss,
                   InX::BssRelRo,     InX::GnuHashTab,
-                  In<ELFT>::HashTab, InX::SymTab,
+                  InX::HashTab,      InX::SymTab,
                   InX::ShStrTab,     InX::StrTab,
                   In<ELFT>::VerDef,  InX::DynStrTab,
                   InX::Got,          InX::MipsGot,

@@ -588,6 +588,19 @@ bool ScopDetection::isValidBranch(BasicBlock &BB, BranchInst *BI,
     }
   }
 
+  if (auto PHI = dyn_cast<PHINode>(Condition)) {
+    auto *Unique = dyn_cast_or_null<ConstantInt>(
+        getUniqueNonErrorValue(PHI, &Context.CurRegion, LI, DT));
+    if (Unique && (Unique->isZero() || Unique->isOne()))
+      return true;
+  }
+
+  if (auto Load = dyn_cast<LoadInst>(Condition))
+    if (!IsLoopBranch) {
+      Context.RequiredILS.insert(Load);
+      return true;
+    }
+
   // Non constant conditions of branches need to be ICmpInst.
   if (!isa<ICmpInst>(Condition)) {
     if (!IsLoopBranch && AllowNonAffineSubRegions &&
@@ -606,6 +619,9 @@ bool ScopDetection::isValidBranch(BasicBlock &BB, BranchInst *BI,
   Loop *L = LI.getLoopFor(&BB);
   const SCEV *LHS = SE.getSCEVAtScope(ICmp->getOperand(0), L);
   const SCEV *RHS = SE.getSCEVAtScope(ICmp->getOperand(1), L);
+
+  LHS = tryForwardThroughPHI(LHS, Context.CurRegion, SE, LI, DT);
+  RHS = tryForwardThroughPHI(RHS, Context.CurRegion, SE, LI, DT);
 
   // If unsigned operations are not allowed try to approximate the region.
   if (ICmp->isUnsigned() && !PollyAllowUnsignedOperations)
@@ -1168,8 +1184,17 @@ bool ScopDetection::isValidInstruction(Instruction &Inst,
     if (!OpInst)
       continue;
 
-    if (isErrorBlock(*OpInst->getParent(), Context.CurRegion, LI, DT))
-      return false;
+    if (isErrorBlock(*OpInst->getParent(), Context.CurRegion, LI, DT)) {
+      auto *PHI = dyn_cast<PHINode>(OpInst);
+      if (PHI) {
+        for (User *U : PHI->users()) {
+          if (!isa<TerminatorInst>(U))
+            return false;
+        }
+      } else {
+        return false;
+      }
+    }
   }
 
   if (isa<LandingPadInst>(&Inst) || isa<ResumeInst>(&Inst))

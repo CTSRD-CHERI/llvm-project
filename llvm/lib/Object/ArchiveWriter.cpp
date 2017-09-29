@@ -111,19 +111,12 @@ Expected<NewArchiveMember> NewArchiveMember::getFile(StringRef FileName,
 }
 
 template <typename T>
-static void printWithSpacePadding(raw_fd_ostream &OS, T Data, unsigned Size,
-                                  bool MayTruncate = false) {
+static void printWithSpacePadding(raw_ostream &OS, T Data, unsigned Size) {
   uint64_t OldPos = OS.tell();
   OS << Data;
   unsigned SizeSoFar = OS.tell() - OldPos;
-  if (Size > SizeSoFar) {
-    OS.indent(Size - SizeSoFar);
-  } else if (Size < SizeSoFar) {
-    assert(MayTruncate && "Data doesn't fit in Size");
-    // Some of the data this is used for (like UID) can be larger than the
-    // space available in the archive format. Truncate in that case.
-    OS.seek(OldPos + Size);
-  }
+  assert(SizeSoFar <= Size && "Data doesn't fit in Size");
+  OS.indent(Size - SizeSoFar);
 }
 
 static bool isBSDLike(object::Archive::Kind Kind) {
@@ -133,7 +126,7 @@ static bool isBSDLike(object::Archive::Kind Kind) {
   case object::Archive::K_BSD:
   case object::Archive::K_DARWIN:
     return true;
-  case object::Archive::K_MIPS64:
+  case object::Archive::K_GNU64:
   case object::Archive::K_DARWIN64:
   case object::Archive::K_COFF:
     break;
@@ -150,18 +143,22 @@ static void print32(raw_ostream &Out, object::Archive::Kind Kind,
 }
 
 static void printRestOfMemberHeader(
-    raw_fd_ostream &Out, const sys::TimePoint<std::chrono::seconds> &ModTime,
+    raw_ostream &Out, const sys::TimePoint<std::chrono::seconds> &ModTime,
     unsigned UID, unsigned GID, unsigned Perms, unsigned Size) {
   printWithSpacePadding(Out, sys::toTimeT(ModTime), 12);
-  printWithSpacePadding(Out, UID, 6, true);
-  printWithSpacePadding(Out, GID, 6, true);
+
+  // The format has only 6 chars for uid and gid. Truncate if the provided
+  // values don't fit.
+  printWithSpacePadding(Out, UID % 1000000, 6);
+  printWithSpacePadding(Out, GID % 1000000, 6);
+
   printWithSpacePadding(Out, format("%o", Perms), 8);
   printWithSpacePadding(Out, Size, 10);
   Out << "`\n";
 }
 
 static void
-printGNUSmallMemberHeader(raw_fd_ostream &Out, StringRef Name,
+printGNUSmallMemberHeader(raw_ostream &Out, StringRef Name,
                           const sys::TimePoint<std::chrono::seconds> &ModTime,
                           unsigned UID, unsigned GID, unsigned Perms,
                           unsigned Size) {
@@ -170,7 +167,7 @@ printGNUSmallMemberHeader(raw_fd_ostream &Out, StringRef Name,
 }
 
 static void
-printBSDMemberHeader(raw_fd_ostream &Out, StringRef Name,
+printBSDMemberHeader(raw_ostream &Out, StringRef Name,
                      const sys::TimePoint<std::chrono::seconds> &ModTime,
                      unsigned UID, unsigned GID, unsigned Perms,
                      unsigned Size) {
@@ -192,7 +189,7 @@ static bool useStringTable(bool Thin, StringRef Name) {
 }
 
 static void
-printMemberHeader(raw_fd_ostream &Out, object::Archive::Kind Kind, bool Thin,
+printMemberHeader(raw_ostream &Out, object::Archive::Kind Kind, bool Thin,
                   StringRef Name,
                   std::vector<unsigned>::iterator &StringMapIndexIter,
                   const sys::TimePoint<std::chrono::seconds> &ModTime,
@@ -280,8 +277,20 @@ static sys::TimePoint<std::chrono::seconds> now(bool Deterministic) {
   return sys::TimePoint<seconds>();
 }
 
+static bool isArchiveSymbol(const object::BasicSymbolRef &S) {
+  uint32_t Symflags = S.getFlags();
+  if (Symflags & object::SymbolRef::SF_FormatSpecific)
+    return false;
+  if (!(Symflags & object::SymbolRef::SF_Global))
+    return false;
+  if (Symflags & object::SymbolRef::SF_Undefined &&
+      !(Symflags & object::SymbolRef::SF_Indirect))
+    return false;
+  return true;
+}
+
 // Returns the offset of the first reference to a member offset.
-static ErrorOr<unsigned>
+static Expected<unsigned>
 writeSymbolTable(raw_fd_ostream &Out, object::Archive::Kind Kind,
                  ArrayRef<NewArchiveMember> Members,
                  std::vector<unsigned> &MemberOffsetRefs, bool Deterministic) {
@@ -313,18 +322,12 @@ writeSymbolTable(raw_fd_ostream &Out, object::Archive::Kind Kind,
     }
 
     for (const object::BasicSymbolRef &S : Obj.symbols()) {
-      uint32_t Symflags = S.getFlags();
-      if (Symflags & object::SymbolRef::SF_FormatSpecific)
-        continue;
-      if (!(Symflags & object::SymbolRef::SF_Global))
-        continue;
-      if (Symflags & object::SymbolRef::SF_Undefined &&
-          !(Symflags & object::SymbolRef::SF_Indirect))
+      if (!isArchiveSymbol(S))
         continue;
 
       unsigned NameOffset = NameOS.tell();
-      if (auto EC = S.printName(NameOS))
-        return EC;
+      if (std::error_code EC = S.printName(NameOS))
+        return errorCodeToError(EC);
       NameOS << '\0';
       MemberOffsetRefs.push_back(MemberNum);
       if (isBSDLike(Kind))
@@ -352,9 +355,12 @@ writeSymbolTable(raw_fd_ostream &Out, object::Archive::Kind Kind,
   if (StringTable.size() == 0)
     print32(Out, Kind, 0);
 
-  // ld64 requires the next member header to start at an offset that is
-  // 4 bytes aligned.
-  unsigned Pad = OffsetToAlignment(Out.tell(), 4);
+  // ld64 expects the members to be 8-byte aligned for 64-bit content and at
+  // least 4-byte aligned for 32-bit content.  Opt for the larger encoding
+  // uniformly.
+  // We do this for all bsd formats because it simplifies aligning members.
+  unsigned Alignment = isBSDLike(Kind) ? 8 : 2;
+  unsigned Pad = OffsetToAlignment(Out.tell(), Alignment);
   while (Pad--)
     Out.write(uint8_t(0));
 
@@ -376,19 +382,19 @@ writeSymbolTable(raw_fd_ostream &Out, object::Archive::Kind Kind,
   return BodyStartOffset + 4;
 }
 
-std::error_code
-llvm::writeArchive(StringRef ArcName, std::vector<NewArchiveMember> &NewMembers,
-                   bool WriteSymtab, object::Archive::Kind Kind,
-                   bool Deterministic, bool Thin,
-                   std::unique_ptr<MemoryBuffer> OldArchiveBuf) {
+Error llvm::writeArchive(StringRef ArcName,
+                         ArrayRef<NewArchiveMember> NewMembers,
+                         bool WriteSymtab, object::Archive::Kind Kind,
+                         bool Deterministic, bool Thin,
+                         std::unique_ptr<MemoryBuffer> OldArchiveBuf) {
   assert((!Thin || !isBSDLike(Kind)) && "Only the gnu format has a thin mode");
   SmallString<128> TmpArchive;
   int TmpArchiveFD;
   if (auto EC = sys::fs::createUniqueFile(ArcName + ".temp-archive-%%%%%%%.a",
                                           TmpArchiveFD, TmpArchive))
-    return EC;
+    return errorCodeToError(EC);
 
-  tool_output_file Output(TmpArchive, TmpArchiveFD);
+  ToolOutputFile Output(TmpArchive, TmpArchiveFD);
   raw_fd_ostream &Out = Output.os();
   if (Thin)
     Out << "!<thin>\n";
@@ -399,10 +405,10 @@ llvm::writeArchive(StringRef ArcName, std::vector<NewArchiveMember> &NewMembers,
 
   unsigned MemberReferenceOffset = 0;
   if (WriteSymtab) {
-    ErrorOr<unsigned> MemberReferenceOffsetOrErr = writeSymbolTable(
+    Expected<unsigned> MemberReferenceOffsetOrErr = writeSymbolTable(
         Out, Kind, NewMembers, MemberOffsetRefs, Deterministic);
-    if (auto EC = MemberReferenceOffsetOrErr.getError())
-      return EC;
+    if (auto E = MemberReferenceOffsetOrErr.takeError())
+      return E;
     MemberReferenceOffset = MemberReferenceOffsetOrErr.get();
   }
 
@@ -464,5 +470,5 @@ llvm::writeArchive(StringRef ArcName, std::vector<NewArchiveMember> &NewMembers,
   OldArchiveBuf.reset();
 
   sys::fs::rename(TmpArchive, ArcName);
-  return std::error_code();
+  return Error::success();
 }

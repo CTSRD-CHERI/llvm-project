@@ -27,6 +27,7 @@ namespace llvm {
 
 struct CodeGenHwModes;
 class Record;
+class raw_ostream;
 
 template <typename InfoT> struct InfoByHwMode;
 
@@ -63,23 +64,30 @@ struct InfoByHwMode {
   typedef typename MapType::const_iterator const_iterator;
 
   InfoByHwMode() = default;
-  InfoByHwMode(const MapType &&M) : Map(M) {}
+  InfoByHwMode(const MapType &M) : Map(M) {}
 
+  LLVM_ATTRIBUTE_ALWAYS_INLINE
   iterator begin() { return Map.begin(); }
+  LLVM_ATTRIBUTE_ALWAYS_INLINE
   iterator end()   { return Map.end(); }
+  LLVM_ATTRIBUTE_ALWAYS_INLINE
   const_iterator begin() const { return Map.begin(); }
+  LLVM_ATTRIBUTE_ALWAYS_INLINE
   const_iterator end() const   { return Map.end(); }
+  LLVM_ATTRIBUTE_ALWAYS_INLINE
   bool empty() const { return Map.empty(); }
 
+  LLVM_ATTRIBUTE_ALWAYS_INLINE
   bool hasMode(unsigned M) const { return Map.find(M) != Map.end(); }
+  LLVM_ATTRIBUTE_ALWAYS_INLINE
   bool hasDefault() const { return hasMode(DefaultMode); }
 
   InfoT &get(unsigned Mode) {
     if (!hasMode(Mode)) {
       assert(hasMode(DefaultMode));
-      Map[Mode] = Map[DefaultMode];
+      Map.insert({Mode, Map.at(DefaultMode)});
     }
-    return Map[Mode];
+    return Map.at(Mode);
   }
   const InfoT &get(unsigned Mode) const {
     auto F = Map.find(Mode);
@@ -89,9 +97,11 @@ struct InfoByHwMode {
     return F->second;
   }
 
+  LLVM_ATTRIBUTE_ALWAYS_INLINE
   bool isSimple() const {
     return Map.size() == 1 && Map.begin()->first == DefaultMode;
   }
+  LLVM_ATTRIBUTE_ALWAYS_INLINE
   InfoT getSimple() const {
     assert(isSimple());
     return Map.begin()->second;
@@ -120,8 +130,8 @@ struct ValueTypeByHwMode : public InfoByHwMode<MVT> {
   MVT getType(unsigned Mode) const { return get(Mode); }
   MVT &getOrCreateTypeForMode(unsigned Mode, MVT Type);
 
-  static std::string getMVTName(MVT T);
-  std::string getAsString() const;
+  static StringRef getMVTName(MVT T);
+  void writeToStream(raw_ostream &OS) const;
   void dump() const;
 };
 
@@ -145,7 +155,7 @@ struct RegSizeInfo {
   }
 
   bool isSubClassOf(const RegSizeInfo &I) const;
-  std::string getAsString() const;
+  void writeToStream(raw_ostream &OS) const;
 };
 
 struct RegSizeInfoByHwMode : public InfoByHwMode<RegSizeInfo> {
@@ -160,8 +170,13 @@ struct RegSizeInfoByHwMode : public InfoByHwMode<RegSizeInfo> {
   bool isSubClassOf(const RegSizeInfoByHwMode &I) const;
   bool hasStricterSpillThan(const RegSizeInfoByHwMode &I) const;
 
-  std::string getAsString() const;
+  void writeToStream(raw_ostream &OS) const;
 };
+
+raw_ostream &operator<<(raw_ostream &OS, const ValueTypeByHwMode &T);
+raw_ostream &operator<<(raw_ostream &OS, const RegSizeInfo &T);
+raw_ostream &operator<<(raw_ostream &OS, const RegSizeInfoByHwMode &T);
+
 } // namespace llvm
 
 #endif // LLVM_UTILS_TABLEGEN_INFOBYHWMODE_H

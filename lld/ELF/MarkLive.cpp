@@ -64,11 +64,6 @@ static void resolveReloc(InputSectionBase &Sec, RelT &Rel,
                          std::function<void(InputSectionBase *, uint64_t)> Fn) {
   SymbolBody &B = Sec.getFile<ELFT>()->getRelocTargetSym(Rel);
 
-  if (auto *Sym = dyn_cast<DefinedCommon>(&B)) {
-    Sym->Live = true;
-    return;
-  }
-
   if (auto *D = dyn_cast<DefinedRegular>(&B)) {
     if (!D->Section)
       return;
@@ -135,7 +130,7 @@ scanEhFrameSection(EhInputSection &EH, ArrayRef<RelTy> Rels,
     // This is a FDE. The relocations point to the described function or to
     // a LSDA. We only need to keep the LSDA alive, so ignore anything that
     // points to executable sections.
-    typename ELFT::uint PieceEnd = Piece.InputOff + Piece.size();
+    typename ELFT::uint PieceEnd = Piece.InputOff + Piece.Size;
     for (unsigned I2 = FirstRelI, N2 = Rels.size(); I2 < N2; ++I2) {
       const RelTy &Rel = Rels[I2];
       if (Rel.r_offset >= PieceEnd)
@@ -223,13 +218,9 @@ template <class ELFT> void elf::markLive() {
   };
 
   auto MarkSymbol = [&](SymbolBody *Sym) {
-    if (auto *D = dyn_cast_or_null<DefinedRegular>(Sym)) {
+    if (auto *D = dyn_cast_or_null<DefinedRegular>(Sym))
       if (auto *IS = cast_or_null<InputSectionBase>(D->Section))
         Enqueue(IS, D->Value);
-      return;
-    }
-    if (auto *S = dyn_cast_or_null<DefinedCommon>(Sym))
-      S->Live = true;
   };
 
   // Add GC root symbols.

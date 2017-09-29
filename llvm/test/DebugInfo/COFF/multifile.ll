@@ -18,10 +18,10 @@
 
 ; X86-LABEL: _f:
 ; X86:      # BB
-; X86:      .cv_file 1 "D:\\one.c" "70b51f534d80639d033ae92c6a856af6" 1
+; X86:      .cv_file 1 "D:\\one.c" "70B51F534D80639D033AE92C6A856AF6" 1
 ; X86:      .cv_loc 0 1 1 0 is_stmt 0 # one.c:1:0
 ; X86:      calll   _g
-; X86:      .cv_file 2 "D:\\two.c" "70b51f534d80639d033ae92c6a856af6" 1
+; X86:      .cv_file 2 "D:\\two.c" "70B51F534D80639D033AE92C6A856AF6" 1
 ; X86:      .cv_loc 0 2 2 0 # two.c:2:0
 ; X86:      calll   _g
 ; X86:      .cv_loc 0 1 7 0 # one.c:7:0
@@ -53,24 +53,18 @@
 ; OBJ32-NEXT: ]
 ; OBJ32:	  Subsection [
 ; OBJ32:        SubSectionType: FileChecksums (0xF4)
-; OBJ32-NEXT:   SubSectionSize: 0x50
+; OBJ32-NEXT:   SubSectionSize: 0x30
 ; OBJ32-NEXT:   FileChecksum {
 ; OBJ32-NEXT:     Filename: D:\one.c (0x1)
-; OBJ32-NEXT:     ChecksumSize: 0x20
+; OBJ32-NEXT:     ChecksumSize: 0x10
 ; OBJ32-NEXT:     ChecksumKind: MD5 (0x1)
-; OBJ32-NEXT:     ChecksumBytes (
-; OBJ32-NEXT:       0000: 37306235 31663533 34643830 36333964  |70b51f534d80639d|
-; OBJ32-NEXT:       0010: 30333361 65393263 36613835 36616636  |033ae92c6a856af6|
-; OBJ32-NEXT:     )
+; OBJ32-NEXT:     ChecksumBytes: (70 B5 1F 53 4D 80 63 9D 03 3A E9 2C 6A 85 6A F6)
 ; OBJ32-NEXT:   }
 ; OBJ32-NEXT:   FileChecksum {
 ; OBJ32-NEXT:     Filename: D:\two.c (0xA)
-; OBJ32-NEXT:     ChecksumSize: 0x20
+; OBJ32-NEXT:     ChecksumSize: 0x10
 ; OBJ32-NEXT:     ChecksumKind: MD5 (0x1)
-; OBJ32-NEXT:     ChecksumBytes (
-; OBJ32-NEXT:       0000: 37306235 31663533 34643830 36333964  |70b51f534d80639d|
-; OBJ32-NEXT:       0010: 30333361 65393263 36613835 36616636  |033ae92c6a856af6|
-; OBJ32-NEXT:     )
+; OBJ32-NEXT:     ChecksumBytes: (70 B5 1F 53 4D 80 63 9D 03 3A E9 2C 6A 85 6A F6)
 ; OBJ32-NEXT:   }
 ; OBJ32-NEXT:  ]
 ; OBJ32:      FunctionLineTable [
@@ -110,14 +104,14 @@
 
 ; X64-LABEL: f:
 ; X64-NEXT: .L{{.*}}:{{$}}
-; X64:      .cv_file 1 "D:\\input.c" "70b51f534d80639d033ae92c6a856af6" 1
+; X64:      .cv_file 1 "D:\\input.c" "70B51F534D80639D033AE92C6A856AF6" 1
 ; X64:      .cv_loc 0 1 3 0 is_stmt 0 # input.c:3:0
 ; X64:      # BB
 ; X64:      subq    $40, %rsp
-; X64:      .cv_file 2 "D:\\one.c" "70b51f534d80639d033ae92c6a856af6" 1
+; X64:      .cv_file 2 "D:\\one.c" "70B51F534D80639D033AE92C6A856AF6" 1
 ; X64:      .cv_loc 0 2 1 0 # one.c:1:0
 ; X64:      callq   g
-; X64:      .cv_file 3 "D:\\two.c" "70b51f534d80639d033ae92c6a856af6" 1
+; X64:      .cv_file 3 "D:\\two.c" "70B51F534D80639D033AE92C6A856AF6" 1
 ; X64:      .cv_loc 0 3 2 0 # two.c:2:0
 ; X64:      callq   g
 ; X64:      .cv_loc 0 2 7 0 # one.c:7:0
@@ -147,33 +141,24 @@
 ; OBJ64-NEXT: ]
 ; OBJ64:	  Subsection [
 ; OBJ64:        SubSectionType: FileChecksums (0xF4)
-; OBJ64-NEXT:   SubSectionSize: 0x78
+; OBJ64-NEXT:   SubSectionSize: 0x48
 ; OBJ64-NEXT:   FileChecksum {
 ; OBJ64-NEXT:     Filename: D:\input.c (0x1)
-; OBJ64-NEXT:     ChecksumSize: 0x20
+; OBJ64-NEXT:     ChecksumSize: 0x10
 ; OBJ64-NEXT:     ChecksumKind: MD5 (0x1)
-; OBJ64-NEXT:     ChecksumBytes (
-; OBJ64-NEXT:       0000: 37306235 31663533 34643830 36333964  |70b51f534d80639d|
-; OBJ64-NEXT:       0010: 30333361 65393263 36613835 36616636  |033ae92c6a856af6|
-; OBJ64-NEXT:     )
+; OBJ64-NEXT:     ChecksumBytes: (70 B5 1F 53 4D 80 63 9D 03 3A E9 2C 6A 85 6A F6)
 ; OBJ64-NEXT:   }
 ; OBJ64-NEXT:   FileChecksum {
 ; OBJ64-NEXT:     Filename: D:\one.c (0xC)
-; OBJ64-NEXT:     ChecksumSize: 0x20
+; OBJ64-NEXT:     ChecksumSize: 0x10
 ; OBJ64-NEXT:     ChecksumKind: MD5 (0x1)
-; OBJ64-NEXT:     ChecksumBytes (
-; OBJ64-NEXT:       0000: 37306235 31663533 34643830 36333964  |70b51f534d80639d|
-; OBJ64-NEXT:       0010: 30333361 65393263 36613835 36616636  |033ae92c6a856af6|
-; OBJ64-NEXT:     )
+; OBJ64-NEXT:     ChecksumBytes: (70 B5 1F 53 4D 80 63 9D 03 3A E9 2C 6A 85 6A F6)
 ; OBJ64-NEXT:   }
 ; OBJ64-NEXT:   FileChecksum {
 ; OBJ64-NEXT:     Filename: D:\two.c (0x15)
-; OBJ64-NEXT:     ChecksumSize: 0x20
+; OBJ64-NEXT:     ChecksumSize: 0x10
 ; OBJ64-NEXT:     ChecksumKind: MD5 (0x1)
-; OBJ64-NEXT:     ChecksumBytes (
-; OBJ64-NEXT:       0000: 37306235 31663533 34643830 36333964  |70b51f534d80639d|
-; OBJ64-NEXT:       0010: 30333361 65393263 36613835 36616636  |033ae92c6a856af6|
-; OBJ64-NEXT:     )
+; OBJ64-NEXT:     ChecksumBytes: (70 B5 1F 53 4D 80 63 9D 03 3A E9 2C 6A 85 6A F6)
 ; OBJ64-NEXT:   }
 ; OBJ64-NEXT:  ]
 ; OBJ64:      FunctionLineTable [

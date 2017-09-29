@@ -162,7 +162,7 @@ public:
 
   bool isValidFileNumber(unsigned FileNumber) const;
   bool addFile(MCStreamer &OS, unsigned FileNumber, StringRef Filename,
-               StringRef Checksum, uint8_t ChecksumKind);
+               ArrayRef<uint8_t> ChecksumBytes, uint8_t ChecksumKind);
 
   /// Records the function id of a normal function. Returns false if the
   /// function id has already been used, and true otherwise.
@@ -300,16 +300,17 @@ private:
   struct FileInfo {
     unsigned StringTableOffset;
 
-    // Checksum offset stored as a symbol because it might be requested
-    // before it has been calculated, so a fixup may be needed.
-    MCSymbol *ChecksumTableOffset;
-
     // Indicates if this FileInfo corresponds to an actual file, or hasn't been
     // set yet.
     bool Assigned = false;
 
-    std::string Checksum;
     uint8_t ChecksumKind;
+
+    ArrayRef<uint8_t> Checksum;
+
+    // Checksum offset stored as a symbol because it might be requested
+    // before it has been calculated, so a fixup may be needed.
+    MCSymbol *ChecksumTableOffset;
   };
 
   /// Array storing added file information.
