@@ -77,12 +77,15 @@ static bool ShouldUpgradeX86Intrinsic(Function *F, StringRef Name) {
       Name=="ssse3.pabs.d.128" || // Added in 6.0
       Name.startswith("avx2.pabs.") || // Added in 6.0
       Name.startswith("avx512.mask.pabs.") || // Added in 6.0
+      Name.startswith("avx512.mask.pbroadcast") || // Added in 6.0
       Name.startswith("sse2.pcmpeq.") || // Added in 3.1
       Name.startswith("sse2.pcmpgt.") || // Added in 3.1
       Name.startswith("avx2.pcmpeq.") || // Added in 3.1
       Name.startswith("avx2.pcmpgt.") || // Added in 3.1
       Name.startswith("avx512.mask.pcmpeq.") || // Added in 3.9
       Name.startswith("avx512.mask.pcmpgt.") || // Added in 3.9
+      Name.startswith("avx.vperm2f128.") || // Added in 6.0
+      Name == "avx2.vperm2i128" || // Added in 6.0
       Name == "sse.add.ss" || // Added in 4.0
       Name == "sse2.add.sd" || // Added in 4.0
       Name == "sse.sub.ss" || // Added in 4.0
@@ -1029,6 +1032,12 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
       Rep = Builder.CreateICmp(CmpEq ? ICmpInst::ICMP_EQ : ICmpInst::ICMP_SGT,
                                CI->getArgOperand(0), CI->getArgOperand(1));
       Rep = Builder.CreateSExt(Rep, CI->getType(), "");
+    } else if (IsX86 && (Name.startswith("avx512.mask.pbroadcast"))){
+      unsigned NumElts =
+          CI->getArgOperand(1)->getType()->getVectorNumElements();
+      Rep = Builder.CreateVectorSplat(NumElts, CI->getArgOperand(0));
+      Rep = EmitX86Select(Builder, CI->getArgOperand(2), Rep,
+                          CI->getArgOperand(1));
     } else if (IsX86 && (Name == "sse.add.ss" || Name == "sse2.add.sd")) {
       Type *I32Ty = Type::getInt32Ty(C);
       Value *Elt0 = Builder.CreateExtractElement(CI->getArgOperand(0),
@@ -1426,6 +1435,42 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
       if (CI->getNumArgOperands() == 4)
         Rep = EmitX86Select(Builder, CI->getArgOperand(3), Rep,
                             CI->getArgOperand(2));
+    } else if (IsX86 && (Name.startswith("avx.vperm2f128.") ||
+                         Name == "avx2.vperm2i128")) {
+      // The immediate permute control byte looks like this:
+      //    [1:0] - select 128 bits from sources for low half of destination
+      //    [2]   - ignore
+      //    [3]   - zero low half of destination
+      //    [5:4] - select 128 bits from sources for high half of destination
+      //    [6]   - ignore
+      //    [7]   - zero high half of destination
+
+      uint8_t Imm = cast<ConstantInt>(CI->getArgOperand(2))->getZExtValue();
+
+      unsigned NumElts = CI->getType()->getVectorNumElements();
+      unsigned HalfSize = NumElts / 2;
+      SmallVector<uint32_t, 8> ShuffleMask(NumElts);
+
+      // Determine which operand(s) are actually in use for this instruction.
+      Value *V0 = (Imm & 0x02) ? CI->getArgOperand(1) : CI->getArgOperand(0);
+      Value *V1 = (Imm & 0x20) ? CI->getArgOperand(1) : CI->getArgOperand(0);
+
+      // If needed, replace operands based on zero mask.
+      V0 = (Imm & 0x08) ? ConstantAggregateZero::get(CI->getType()) : V0;
+      V1 = (Imm & 0x80) ? ConstantAggregateZero::get(CI->getType()) : V1;
+
+      // Permute low half of result.
+      unsigned StartIndex = (Imm & 0x01) ? HalfSize : 0;
+      for (unsigned i = 0; i < HalfSize; ++i)
+        ShuffleMask[i] = StartIndex + i;
+
+      // Permute high half of result.
+      StartIndex = (Imm & 0x10) ? HalfSize : 0;
+      for (unsigned i = 0; i < HalfSize; ++i)
+        ShuffleMask[i + HalfSize] = NumElts + StartIndex + i;
+
+      Rep = Builder.CreateShuffleVector(V0, V1, ShuffleMask);
+
     } else if (IsX86 && (Name.startswith("avx.vpermil.") ||
                          Name == "sse2.pshuf.d" ||
                          Name.startswith("avx512.mask.vpermil.p") ||

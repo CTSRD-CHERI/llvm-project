@@ -2414,8 +2414,9 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
     ReplaceNode(Node, getGlobalBaseReg());
     return;
 
+  case X86ISD::SELECT:
   case X86ISD::SHRUNKBLEND: {
-    // SHRUNKBLEND selects like a regular VSELECT.
+    // SHRUNKBLEND selects like a regular VSELECT. Same with X86ISD::SELECT.
     SDValue VSelect = CurDAG->getNode(
         ISD::VSELECT, SDLoc(Node), Node->getValueType(0), Node->getOperand(0),
         Node->getOperand(1), Node->getOperand(2));
@@ -2931,19 +2932,6 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
         SDValue Imm = CurDAG->getTargetConstant(Mask, dl, MVT::i8);
         SDValue Reg = N0.getOperand(0);
 
-        // On x86-32, only the ABCD registers have 8-bit subregisters.
-        if (!Subtarget->is64Bit()) {
-          const TargetRegisterClass *TRC;
-          switch (N0.getSimpleValueType().SimpleTy) {
-          case MVT::i32: TRC = &X86::GR32_ABCDRegClass; break;
-          case MVT::i16: TRC = &X86::GR16_ABCDRegClass; break;
-          default: llvm_unreachable("Unsupported TEST operand type!");
-          }
-          SDValue RC = CurDAG->getTargetConstant(TRC->getID(), dl, MVT::i32);
-          Reg = SDValue(CurDAG->getMachineNode(X86::COPY_TO_REGCLASS, dl,
-                                               Reg.getValueType(), Reg, RC), 0);
-        }
-
         // Extract the l-register.
         SDValue Subreg = CurDAG->getTargetExtractSubreg(X86::sub_8bit, dl,
                                                         MVT::i8, Reg);
@@ -2965,18 +2953,6 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
         // Shift the immediate right by 8 bits.
         SDValue ShiftedImm = CurDAG->getTargetConstant(Mask >> 8, dl, MVT::i8);
         SDValue Reg = N0.getOperand(0);
-
-        // Put the value in an ABCD register.
-        const TargetRegisterClass *TRC;
-        switch (N0.getSimpleValueType().SimpleTy) {
-        case MVT::i64: TRC = &X86::GR64_ABCDRegClass; break;
-        case MVT::i32: TRC = &X86::GR32_ABCDRegClass; break;
-        case MVT::i16: TRC = &X86::GR16_ABCDRegClass; break;
-        default: llvm_unreachable("Unsupported TEST operand type!");
-        }
-        SDValue RC = CurDAG->getTargetConstant(TRC->getID(), dl, MVT::i32);
-        Reg = SDValue(CurDAG->getMachineNode(X86::COPY_TO_REGCLASS, dl,
-                                             Reg.getValueType(), Reg, RC), 0);
 
         // Extract the h-register.
         SDValue Subreg = CurDAG->getTargetExtractSubreg(X86::sub_8bit_hi, dl,

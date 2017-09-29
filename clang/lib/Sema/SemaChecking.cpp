@@ -8171,8 +8171,11 @@ struct IntRange {
     // For enum types, use the known bit width of the enumerators.
     if (const EnumType *ET = dyn_cast<EnumType>(T)) {
       EnumDecl *Enum = ET->getDecl();
+      // In C++11, enums without definitions can have an explicitly specified
+      // underlying type.  Use this type to compute the range.
       if (!Enum->isCompleteDefinition())
-        return IntRange(C.getIntWidth(QualType(T, 0)), false);
+        return IntRange(C.getIntWidth(QualType(T, 0)),
+                        !ET->isSignedIntegerOrEnumerationType());
 
       unsigned NumPositive = Enum->getNumPositiveBits();
       unsigned NumNegative = Enum->getNumNegativeBits();
@@ -8583,7 +8586,7 @@ bool CheckTautologicalComparisonWithZero(Sema &S, BinaryOperator *E) {
 
   // bool values are handled by DiagnoseOutOfRangeComparison().
 
-  BinaryOperatorKind op = E->getOpcode();
+  BinaryOperatorKind Op = E->getOpcode();
   if (E->isValueDependent())
     return false;
 
@@ -8592,22 +8595,26 @@ bool CheckTautologicalComparisonWithZero(Sema &S, BinaryOperator *E) {
 
   bool Match = true;
 
-  if (op == BO_LT && isNonBooleanUnsignedValue(LHS) && IsZero(S, RHS)) {
-    S.Diag(E->getOperatorLoc(), diag::warn_lunsigned_always_true_comparison)
-      << "< 0" << "false" << HasEnumType(LHS)
-      << LHS->getSourceRange() << RHS->getSourceRange();
-  } else if (op == BO_GE && isNonBooleanUnsignedValue(LHS) && IsZero(S, RHS)) {
-    S.Diag(E->getOperatorLoc(), diag::warn_lunsigned_always_true_comparison)
-      << ">= 0" << "true" << HasEnumType(LHS)
-      << LHS->getSourceRange() << RHS->getSourceRange();
-  } else if (op == BO_GT && isNonBooleanUnsignedValue(RHS) && IsZero(S, LHS)) {
-    S.Diag(E->getOperatorLoc(), diag::warn_runsigned_always_true_comparison)
-      << "0 >" << "false" << HasEnumType(RHS)
-      << LHS->getSourceRange() << RHS->getSourceRange();
-  } else if (op == BO_LE && isNonBooleanUnsignedValue(RHS) && IsZero(S, LHS)) {
-    S.Diag(E->getOperatorLoc(), diag::warn_runsigned_always_true_comparison)
-      << "0 <=" << "true" << HasEnumType(RHS)
-      << LHS->getSourceRange() << RHS->getSourceRange();
+  if (Op == BO_LT && isNonBooleanUnsignedValue(LHS) && IsZero(S, RHS)) {
+    S.Diag(E->getOperatorLoc(),
+           HasEnumType(LHS) ? diag::warn_lunsigned_enum_always_true_comparison
+                            : diag::warn_lunsigned_always_true_comparison)
+        << "< 0" << false << LHS->getSourceRange() << RHS->getSourceRange();
+  } else if (Op == BO_GE && isNonBooleanUnsignedValue(LHS) && IsZero(S, RHS)) {
+    S.Diag(E->getOperatorLoc(),
+           HasEnumType(LHS) ? diag::warn_lunsigned_enum_always_true_comparison
+                            : diag::warn_lunsigned_always_true_comparison)
+        << ">= 0" << true << LHS->getSourceRange() << RHS->getSourceRange();
+  } else if (Op == BO_GT && isNonBooleanUnsignedValue(RHS) && IsZero(S, LHS)) {
+    S.Diag(E->getOperatorLoc(),
+           HasEnumType(RHS) ? diag::warn_runsigned_enum_always_true_comparison
+                            : diag::warn_runsigned_always_true_comparison)
+        << "0 >" << false << LHS->getSourceRange() << RHS->getSourceRange();
+  } else if (Op == BO_LE && isNonBooleanUnsignedValue(RHS) && IsZero(S, LHS)) {
+    S.Diag(E->getOperatorLoc(),
+           HasEnumType(RHS) ? diag::warn_runsigned_enum_always_true_comparison
+                            : diag::warn_runsigned_always_true_comparison)
+        << "0 <=" << true << LHS->getSourceRange() << RHS->getSourceRange();
   } else
     Match = false;
 

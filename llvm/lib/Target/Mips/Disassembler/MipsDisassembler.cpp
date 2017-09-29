@@ -2356,7 +2356,7 @@ static DecodeStatus DecodeBranchTarget7MM(MCInst &Inst,
                                           unsigned Offset,
                                           uint64_t Address,
                                           const void *Decoder) {
-  int32_t BranchOffset = SignExtend32<7>(Offset) << 1;
+  int32_t BranchOffset = SignExtend32<8>(Offset << 1);
   Inst.addOperand(MCOperand::createImm(BranchOffset));
   return MCDisassembler::Success;
 }
@@ -2365,7 +2365,7 @@ static DecodeStatus DecodeBranchTarget10MM(MCInst &Inst,
                                            unsigned Offset,
                                            uint64_t Address,
                                            const void *Decoder) {
-  int32_t BranchOffset = SignExtend32<10>(Offset) << 1;
+  int32_t BranchOffset = SignExtend32<11>(Offset << 1);
   Inst.addOperand(MCOperand::createImm(BranchOffset));
   return MCDisassembler::Success;
 }
@@ -2383,7 +2383,7 @@ static DecodeStatus DecodeBranchTarget26MM(MCInst &Inst,
   unsigned Offset,
   uint64_t Address,
   const void *Decoder) {
-  int32_t BranchOffset = SignExtend32<26>(Offset) << 1;
+  int32_t BranchOffset = SignExtend32<27>(Offset << 1);
 
   Inst.addOperand(MCOperand::createImm(BranchOffset));
   return MCDisassembler::Success;

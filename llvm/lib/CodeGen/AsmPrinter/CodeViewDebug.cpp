@@ -159,9 +159,13 @@ unsigned CodeViewDebug::maybeRecordFile(const DIFile *F) {
   if (Insertion.second) {
     // We have to compute the full filepath and emit a .cv_file directive.
     StringRef FullPath = getFullFilepath(F);
-    StringRef Checksum = F->getChecksum();
+    std::string Checksum = fromHex(F->getChecksum());
+    void *CKMem = OS.getContext().allocate(Checksum.size(), 1);
+    memcpy(CKMem, Checksum.data(), Checksum.size());
+    ArrayRef<uint8_t> ChecksumAsBytes(reinterpret_cast<const uint8_t *>(CKMem),
+                                      Checksum.size());
     DIFile::ChecksumKind ChecksumKind = F->getChecksumKind();
-    bool Success = OS.EmitCVFileDirective(NextId, FullPath, Checksum,
+    bool Success = OS.EmitCVFileDirective(NextId, FullPath, ChecksumAsBytes,
                                           static_cast<unsigned>(ChecksumKind));
     (void)Success;
     assert(Success && ".cv_file directive failed");

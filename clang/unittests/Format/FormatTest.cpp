@@ -10770,6 +10770,8 @@ TEST_F(FormatTest, FormatsLambdas) {
   verifyFormat("int c = [&a, &a, a] { [=, a, b, &c] { return b++; }(); }();\n");
   verifyFormat("auto c = {[&a, &a, a] { [=, a, b, &c] { return b++; }(); }}\n");
   verifyFormat("auto c = {[&a, &a, a] { [=, a, b, &c] {}(); }}\n");
+  verifyFormat("auto c = [a = [b = 42] {}] {};\n");
+  verifyFormat("auto c = [a = &i + 10, b = [] {}] {};\n");
   verifyFormat("int x = f(*+[] {});");
   verifyFormat("void f() {\n"
                "  other(x.begin(), x.end(), [&](int, int) { return 1; });\n"
@@ -11585,6 +11587,11 @@ TEST_F(FormatTest, StructuredBindings) {
   EXPECT_EQ("auto const volatile && [a, b] = f();",
             format("auto  const  volatile  &&[a, b] = f();"));
   EXPECT_EQ("auto && [a, b] = f();", format("auto  &&[a, b] = f();"));
+
+  // Make sure we don't mistake structured bindings for lambdas.
+  verifyFormat("auto [a, b]{A * i};");
+  verifyFormat("auto const [a, b]{A * i};");
+  verifyFormat("auto const && [a, b]{A * i};");
 
   format::FormatStyle Spaces = format::getLLVMStyle();
   Spaces.SpacesInSquareBrackets = true;

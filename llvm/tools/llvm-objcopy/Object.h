@@ -72,6 +72,7 @@ public:
   uint64_t VAddr;
 
   uint64_t OriginalOffset;
+  Segment *ParentSegment = nullptr;
 
   Segment(llvm::ArrayRef<uint8_t> Data) : Contents(Data) {}
   void finalize();
@@ -193,6 +194,34 @@ public:
   }
 };
 
+class SectionWithStrTab : public Section {
+private:
+  StringTableSection *StrTab;
+
+public:
+  SectionWithStrTab(llvm::ArrayRef<uint8_t> Data) : Section(Data) {}
+  void setStrTab(StringTableSection *StringTable) { StrTab = StringTable; }
+  void finalize() override;
+  static bool classof(const SectionBase *S);
+};
+
+class DynamicSymbolTableSection : public SectionWithStrTab {
+public:
+  DynamicSymbolTableSection(llvm::ArrayRef<uint8_t> Data)
+      : SectionWithStrTab(Data) {}
+  static bool classof(const SectionBase *S) {
+    return S->Type == llvm::ELF::SHT_DYNSYM;
+  }
+};
+
+class DynamicSection : public SectionWithStrTab {
+public:
+  DynamicSection(llvm::ArrayRef<uint8_t> Data) : SectionWithStrTab(Data) {}
+  static bool classof(const SectionBase *S) {
+    return S->Type == llvm::ELF::SHT_DYNAMIC;
+  }
+};
+
 template <class ELFT> class Object {
 private:
   typedef std::unique_ptr<SectionBase> SecPtr;
@@ -208,6 +237,12 @@ private:
                      const Elf_Shdr &Shdr);
   void readProgramHeaders(const llvm::object::ELFFile<ELFT> &ElfFile);
   void readSectionHeaders(const llvm::object::ELFFile<ELFT> &ElfFile);
+
+  SectionBase *getSection(uint16_t Index, llvm::Twine ErrMsg);
+
+  template <class T>
+  T *getSectionOfType(uint16_t Index, llvm::Twine IndexErrMsg,
+                      llvm::Twine TypeErrMsg);
 
 protected:
   StringTableSection *SectionNames;

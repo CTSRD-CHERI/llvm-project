@@ -719,36 +719,36 @@ Value *InstCombiner::SimplifyUsingDistributiveLaws(BinaryOperator &I) {
     }
   }
 
-  // (op (select (a, c, b)), (select (a, d, b))) -> (select (a, (op c, d), 0))
-  // (op (select (a, b, c)), (select (a, b, d))) -> (select (a, 0, (op c, d)))
-  if (auto *SI0 = dyn_cast<SelectInst>(LHS)) {
-    if (auto *SI1 = dyn_cast<SelectInst>(RHS)) {
-      if (SI0->getCondition() == SI1->getCondition()) {
-        Value *SI = nullptr;
-        if (Value *V =
-                SimplifyBinOp(TopLevelOpcode, SI0->getFalseValue(),
-                              SI1->getFalseValue(), SQ.getWithInstruction(&I)))
-          SI = Builder.CreateSelect(SI0->getCondition(),
-                                    Builder.CreateBinOp(TopLevelOpcode,
-                                                        SI0->getTrueValue(),
-                                                        SI1->getTrueValue()),
-                                    V);
-        if (Value *V =
-                SimplifyBinOp(TopLevelOpcode, SI0->getTrueValue(),
-                              SI1->getTrueValue(), SQ.getWithInstruction(&I)))
-          SI = Builder.CreateSelect(
-              SI0->getCondition(), V,
-              Builder.CreateBinOp(TopLevelOpcode, SI0->getFalseValue(),
-                                  SI1->getFalseValue()));
-        if (SI) {
-          SI->takeName(&I);
-          return SI;
-        }
-      }
-    }
+  return SimplifySelectsFeedingBinaryOp(I, LHS, RHS);
+}
+
+Value *InstCombiner::SimplifySelectsFeedingBinaryOp(BinaryOperator &I,
+                                                    Value *LHS, Value *RHS) {
+  Instruction::BinaryOps Opcode = I.getOpcode();
+  // (op (select (a, b, c)), (select (a, d, e))) -> (select (a, (op b, d), (op
+  // c, e)))
+  Value *A, *B, *C, *D, *E;
+  Value *SI = nullptr;
+  if (match(LHS, m_Select(m_Value(A), m_Value(B), m_Value(C))) &&
+      match(RHS, m_Select(m_Specific(A), m_Value(D), m_Value(E)))) {
+    BuilderTy::FastMathFlagGuard Guard(Builder);
+    if (isa<FPMathOperator>(&I))
+      Builder.setFastMathFlags(I.getFastMathFlags());
+
+    Value *V1 = SimplifyBinOp(Opcode, C, E, SQ.getWithInstruction(&I));
+    Value *V2 = SimplifyBinOp(Opcode, B, D, SQ.getWithInstruction(&I));
+    if (V1 && V2)
+      SI = Builder.CreateSelect(A, V2, V1);
+    else if (V2)
+      SI = Builder.CreateSelect(A, V2, Builder.CreateBinOp(Opcode, C, E));
+    else if (V1)
+      SI = Builder.CreateSelect(A, Builder.CreateBinOp(Opcode, B, D), V1);
+
+    if (SI)
+      SI->takeName(&I);
   }
 
-  return nullptr;
+  return SI;
 }
 
 /// Given a 'sub' instruction, return the RHS of the instruction if the LHS is a
@@ -2112,10 +2112,10 @@ Instruction *InstCombiner::visitAllocSite(Instruction &MI) {
 
   // If we are removing an alloca with a dbg.declare, insert dbg.value calls
   // before each store.
-  DbgDeclareInst *DDI = nullptr;
+  TinyPtrVector<DbgInfoIntrinsic *> DIIs;
   std::unique_ptr<DIBuilder> DIB;
   if (isa<AllocaInst>(MI)) {
-    DDI = FindAllocaDbgDeclare(&MI);
+    DIIs = FindDbgAddrUses(&MI);
     DIB.reset(new DIBuilder(*MI.getModule(), /*AllowUnresolved=*/false));
   }
 
@@ -2151,8 +2151,9 @@ Instruction *InstCombiner::visitAllocSite(Instruction &MI) {
       } else if (isa<BitCastInst>(I) || isa<GetElementPtrInst>(I) ||
                  isa<AddrSpaceCastInst>(I)) {
         replaceInstUsesWith(*I, UndefValue::get(I->getType()));
-      } else if (DDI && isa<StoreInst>(I)) {
-        ConvertDebugDeclareToDebugValue(DDI, cast<StoreInst>(I), *DIB);
+      } else if (auto *SI = dyn_cast<StoreInst>(I)) {
+        for (auto *DII : DIIs)
+          ConvertDebugDeclareToDebugValue(DII, SI, *DIB);
       }
       eraseInstFromFunction(*I);
     }
@@ -2165,8 +2166,8 @@ Instruction *InstCombiner::visitAllocSite(Instruction &MI) {
                          None, "", II->getParent());
     }
 
-    if (DDI)
-      eraseInstFromFunction(*DDI);
+    for (auto *DII : DIIs)
+      eraseInstFromFunction(*DII);
 
     return eraseInstFromFunction(MI);
   }

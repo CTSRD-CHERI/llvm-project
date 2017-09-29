@@ -222,7 +222,6 @@ void DWARFContext::dump(
 
   Optional<uint64_t> DumpOffset;
   uint64_t DumpType = DumpOpts.DumpType;
-  bool DumpEH = DumpOpts.DumpEH;
 
   StringRef Extension = sys::path::extension(DObj->getFileName());
   bool IsDWO = (Extension == ".dwo") || (Extension == ".dwp");
@@ -258,10 +257,11 @@ void DWARFContext::dump(
   auto dumpDebugInfo = [&](bool IsExplicit, const char *Name,
                            DWARFSection Section, cu_iterator_range CUs) {
     if (shouldDump(IsExplicit, Name, DIDT_ID_DebugInfo, Section.Data)) {
-      for (const auto &CU : CUs)
-        if (DumpOffset)
-        CU->getDIEForOffset(DumpOffset.getValue()).dump(OS, 0);
-        else
+      if (DumpOffset)
+        getDIEForOffset(DumpOffset.getValue())
+            .dump(OS, 0, DumpOpts.noImplicitRecursion());
+      else
+        for (const auto &CU : CUs)
           CU->dump(OS, DumpOpts);
     }
   };
@@ -270,19 +270,23 @@ void DWARFContext::dump(
   dumpDebugInfo(ExplicitDWO, ".debug_info.dwo", DObj->getInfoDWOSection(),
                 dwo_compile_units());
 
-  if ((DumpType & DIDT_DebugTypes)) {
-    if (Explicit || getNumTypeUnits()) {
-      OS << "\n.debug_types contents:\n";
-      for (const auto &TUS : type_unit_sections())
-        for (const auto &TU : TUS)
+  auto dumpDebugType = [&](const char *Name,
+                           tu_section_iterator_range TUSections) {
+    OS << '\n' << Name << " contents:\n";
+    DumpOffset = DumpOffsets[DIDT_ID_DebugTypes];
+    for (const auto &TUS : TUSections)
+      for (const auto &TU : TUS)
+        if (DumpOffset)
+          TU->getDIEForOffset(*DumpOffset)
+              .dump(OS, 0, DumpOpts.noImplicitRecursion());
+        else
           TU->dump(OS, DumpOpts);
-    }
-    if (ExplicitDWO || getNumDWOTypeUnits()) {
-      OS << "\n.debug_types.dwo contents:\n";
-      for (const auto &DWOTUS : dwo_type_unit_sections())
-        for (const auto &DWOTU : DWOTUS)
-          DWOTU->dump(OS, DumpOpts);
-    }
+  };
+  if ((DumpType & DIDT_DebugTypes)) {
+    if (Explicit || getNumTypeUnits())
+      dumpDebugType(".debug_types", type_unit_sections());
+    if (ExplicitDWO || getNumDWOTypeUnits())
+      dumpDebugType(".debug_types.dwo", dwo_type_unit_sections());
   }
 
   if (shouldDump(Explicit, ".debug_loc", DIDT_ID_DebugLoc,
@@ -294,14 +298,13 @@ void DWARFContext::dump(
     getDebugLocDWO()->dump(OS, getRegisterInfo());
   }
 
-  if (shouldDump(Explicit, ".debug_frame", DIDT_ID_DebugFrames,
-                 DObj->getDebugFrameSection())) {
-    getDebugFrame()->dump(OS);
-  }
-  if (DumpEH && !getEHFrame()->empty()) {
-    OS << "\n.eh_frame contents:\n";
-    getEHFrame()->dump(OS);
-  }
+  if (shouldDump(Explicit, ".debug_frame", DIDT_ID_DebugFrame,
+                 DObj->getDebugFrameSection()))
+    getDebugFrame()->dump(OS, DumpOffset);
+
+  if (shouldDump(Explicit, ".eh_frame", DIDT_ID_DebugFrame,
+                 DObj->getEHFrameSection()))
+    getEHFrame()->dump(OS, DumpOffset);
 
   if (DumpType & DIDT_DebugMacro) {
     if (Explicit || !getDebugMacro()->empty()) {
@@ -332,8 +335,14 @@ void DWARFContext::dump(
                                     isLittleEndian(), savedAddressByteSize);
         DWARFDebugLine::LineTable LineTable;
         uint32_t Offset = *StmtOffset;
-        LineTable.parse(lineData, &Offset);
-        LineTable.dump(OS);
+        // Verbose dumping is done during parsing and not on the intermediate
+        // representation.
+        if (DumpOpts.Verbose) {
+          LineTable.parse(lineData, &Offset, &OS);
+        } else {
+          LineTable.parse(lineData, &Offset);
+          LineTable.dump(OS);
+        }
       }
     }
   }
@@ -461,12 +470,11 @@ void DWARFContext::dump(
 }
 
 DWARFCompileUnit *DWARFContext::getDWOCompileUnitForHash(uint64_t Hash) {
-  parseDWOCompileUnits();
+  DWOCUs.parseDWO(*this, DObj->getInfoDWOSection(), true);
 
   if (const auto &CUI = getCUIndex()) {
     if (const auto *R = CUI.getFromHash(Hash))
-      if (auto CUOff = R->getOffset(DW_SECT_INFO))
-        return DWOCUs.getUnitForOffset(CUOff->Offset);
+      return DWOCUs.getUnitForIndexEntry(*R);
     return nullptr;
   }
 
@@ -487,15 +495,14 @@ DWARFDie DWARFContext::getDIEForOffset(uint32_t Offset) {
   return DWARFDie();
 }
 
-bool DWARFContext::verify(raw_ostream &OS, unsigned DumpType,
-                          DIDumpOptions DumpOpts) {
+bool DWARFContext::verify(raw_ostream &OS, DIDumpOptions DumpOpts) {
   bool Success = true;
   DWARFVerifier verifier(OS, *this, DumpOpts);
 
   Success &= verifier.handleDebugAbbrev();
-  if (DumpType & DIDT_DebugInfo)
+  if (DumpOpts.DumpType & DIDT_DebugInfo)
     Success &= verifier.handleDebugInfo();
-  if (DumpType & DIDT_DebugLine)
+  if (DumpOpts.DumpType & DIDT_DebugLine)
     Success &= verifier.handleDebugLine();
   Success &= verifier.handleAccelTables();
   return Success;

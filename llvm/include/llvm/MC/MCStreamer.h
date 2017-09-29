@@ -741,7 +741,8 @@ public:
   /// specify that file's checksum information.  This implements the '.cv_file 4
   /// "foo.c"' assembler directive. Returns true on success.
   virtual bool EmitCVFileDirective(unsigned FileNo, StringRef Filename,
-                                   StringRef Checksum, unsigned ChecksumKind);
+                                   ArrayRef<uint8_t> Checksum,
+                                   unsigned ChecksumKind);
 
   /// \brief Introduces a function id for use with .cv_loc.
   virtual bool EmitCVFuncIdDirective(unsigned FunctionId);

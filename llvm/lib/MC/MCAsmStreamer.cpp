@@ -226,7 +226,8 @@ public:
   MCSymbol *getDwarfLineTableSymbol(unsigned CUID) override;
 
   bool EmitCVFileDirective(unsigned FileNo, StringRef Filename,
-                           StringRef Checksum, unsigned ChecksumKind) override;
+                           ArrayRef<uint8_t> Checksum,
+                           unsigned ChecksumKind) override;
   bool EmitCVFuncIdDirective(unsigned FuncId) override;
   bool EmitCVInlineSiteIdDirective(unsigned FunctionId, unsigned IAFunc,
                                    unsigned IAFile, unsigned IALine,
@@ -1123,7 +1124,7 @@ MCSymbol *MCAsmStreamer::getDwarfLineTableSymbol(unsigned CUID) {
 }
 
 bool MCAsmStreamer::EmitCVFileDirective(unsigned FileNo, StringRef Filename,
-                                        StringRef Checksum,
+                                        ArrayRef<uint8_t> Checksum,
                                         unsigned ChecksumKind) {
   if (!getContext().getCVContext().addFile(*this, FileNo, Filename, Checksum,
                                            ChecksumKind))
@@ -1138,7 +1139,7 @@ bool MCAsmStreamer::EmitCVFileDirective(unsigned FileNo, StringRef Filename,
   }
 
   OS << ' ';
-  PrintQuotedString(Checksum, OS);
+  PrintQuotedString(toHex(Checksum), OS);
   OS << ' ' << ChecksumKind;
 
   EmitEOL();

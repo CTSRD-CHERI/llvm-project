@@ -18,6 +18,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
@@ -3487,7 +3488,13 @@ bool AsmParser::parseDirectiveCVFile() {
       return true;
   }
 
-  if (!getStreamer().EmitCVFileDirective(FileNumber, Filename, Checksum,
+  Checksum = fromHex(Checksum);
+  void *CKMem = Ctx.allocate(Checksum.size(), 1);
+  memcpy(CKMem, Checksum.data(), Checksum.size());
+  ArrayRef<uint8_t> ChecksumAsBytes(reinterpret_cast<const uint8_t *>(CKMem),
+                                    Checksum.size());
+
+  if (!getStreamer().EmitCVFileDirective(FileNumber, Filename, ChecksumAsBytes,
                                          static_cast<uint8_t>(ChecksumKind)))
     return Error(FileNumberLoc, "file number already allocated");
 

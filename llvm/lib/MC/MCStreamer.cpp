@@ -266,7 +266,7 @@ void MCStreamer::EnsureValidDwarfFrame() {
 }
 
 bool MCStreamer::EmitCVFileDirective(unsigned FileNo, StringRef Filename,
-                                     StringRef Checksum,
+                                     ArrayRef<uint8_t> Checksum,
                                      unsigned ChecksumKind) {
   return getContext().getCVContext().addFile(*this, FileNo, Filename, Checksum,
                                              ChecksumKind);

@@ -3827,7 +3827,7 @@ void Sema::MergeVarDecl(VarDecl *New, LookupResult &Previous) {
     }
   }
 
-  // If this redeclaration makes the function inline, we may need to add it to
+  // If this redeclaration makes the variable inline, we may need to add it to
   // UndefinedButUsed.
   if (!Old->isInline() && New->isInline() && Old->isUsed(false) &&
       !Old->getDefinition() && !New->isThisDeclarationADefinition())
@@ -12329,18 +12329,6 @@ Decl *Sema::ActOnFinishFunctionBody(Decl *dcl, Stmt *Body,
       }
     }
 
-    // The only way to be included in UndefinedButUsed is if there is an
-    // ODR use before the definition. Avoid the expensive map lookup if this
-    // is the first declaration.
-    if (!FD->isFirstDecl() && FD->getPreviousDecl()->isUsed()) {
-      if (!FD->isExternallyVisible())
-        UndefinedButUsed.erase(FD);
-      else if (FD->isInlined() &&
-               !LangOpts.GNUInline &&
-               (!FD->getPreviousDecl()->hasAttr<GNUInlineAttr>()))
-        UndefinedButUsed.erase(FD);
-    }
-
     // If the function implicitly returns zero (like 'main') or is naked,
     // don't complain about missing return statements.
     if (FD->hasImplicitReturnZero() || FD->hasAttr<NakedAttr>())
@@ -13928,7 +13916,8 @@ CreateNewDecl:
     Invalid = true;
   }
 
-  if (!Invalid && TUK == TUK_Definition && DC->getDeclKind() == Decl::Enum) {
+  if (!Invalid && getLangOpts().CPlusPlus && TUK == TUK_Definition &&
+      DC->getDeclKind() == Decl::Enum) {
     Diag(New->getLocation(), diag::err_type_defined_in_enum)
       << Context.getTagDeclType(New);
     Invalid = true;

@@ -13,6 +13,7 @@
 
 #include "llvm/MC/MCCodeView.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/BinaryFormat/COFF.h"
 #include "llvm/DebugInfo/CodeView/CodeView.h"
 #include "llvm/DebugInfo/CodeView/Line.h"
@@ -45,7 +46,8 @@ bool CodeViewContext::isValidFileNumber(unsigned FileNumber) const {
 }
 
 bool CodeViewContext::addFile(MCStreamer &OS, unsigned FileNumber,
-                              StringRef Filename, StringRef Checksum,
+                              StringRef Filename,
+                              ArrayRef<uint8_t> ChecksumBytes,
                               uint8_t ChecksumKind) {
   assert(FileNumber > 0);
   auto FilenameOffset = addToStringTable(Filename);
@@ -69,7 +71,7 @@ bool CodeViewContext::addFile(MCStreamer &OS, unsigned FileNumber,
   Files[Idx].StringTableOffset = Offset;
   Files[Idx].ChecksumTableOffset = ChecksumOffsetSymbol;
   Files[Idx].Assigned = true;
-  Files[Idx].Checksum = Checksum.str();
+  Files[Idx].Checksum = ChecksumBytes;
   Files[Idx].ChecksumKind = ChecksumKind;
 
   return true;
@@ -215,7 +217,7 @@ void CodeViewContext::emitFileChecksums(MCObjectStreamer &OS) {
     }
     OS.EmitIntValue(static_cast<uint8_t>(File.Checksum.size()), 1);
     OS.EmitIntValue(File.ChecksumKind, 1);
-    OS.EmitBytes(File.Checksum);
+    OS.EmitBytes(toStringRef(File.Checksum));
     OS.EmitValueToAlignment(4);
   }
 

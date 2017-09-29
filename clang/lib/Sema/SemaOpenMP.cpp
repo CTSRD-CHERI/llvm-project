@@ -1130,6 +1130,7 @@ bool Sema::IsOpenMPCapturedByRef(ValueDecl *D, unsigned Level) {
   bool IsByRef = true;
 
   // Find the directive that is associated with the provided scope.
+  D = cast<ValueDecl>(D->getCanonicalDecl());
   auto Ty = D->getType();
 
   if (DSAStack->hasExplicitDirective(isOpenMPTargetExecutionDirective, Level)) {
@@ -1787,6 +1788,7 @@ class DSAAttrChecker : public StmtVisitor<DSAAttrChecker, void> {
   CapturedStmt *CS;
   llvm::SmallVector<Expr *, 8> ImplicitFirstprivate;
   llvm::DenseMap<ValueDecl *, Expr *> VarsWithInheritedDSA;
+  llvm::DenseSet<ValueDecl *> ImplicitDeclarations;
 
 public:
   void VisitDeclRefExpr(DeclRefExpr *E) {
@@ -1794,13 +1796,14 @@ public:
         E->containsUnexpandedParameterPack() || E->isInstantiationDependent())
       return;
     if (auto *VD = dyn_cast<VarDecl>(E->getDecl())) {
+      VD = VD->getCanonicalDecl();
       // Skip internally declared variables.
       if (VD->isLocalVarDecl() && !CS->capturesVariable(VD))
         return;
 
       auto DVar = Stack->getTopDSA(VD, false);
       // Check if the variable has explicit DSA set and stop analysis if it so.
-      if (DVar.RefExpr)
+      if (DVar.RefExpr || !ImplicitDeclarations.insert(VD).second)
         return;
 
       auto ELoc = E->getExprLoc();
@@ -1850,7 +1853,7 @@ public:
         auto DVar = Stack->getTopDSA(FD, false);
         // Check if the variable has explicit DSA set and stop analysis if it
         // so.
-        if (DVar.RefExpr)
+        if (DVar.RefExpr || !ImplicitDeclarations.insert(FD).second)
           return;
 
         auto ELoc = E->getExprLoc();
@@ -2617,7 +2620,7 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
   llvm::DenseMap<ValueDecl *, Expr *> VarsWithInheritedDSA;
   bool ErrorFound = false;
   ClausesWithImplicit.append(Clauses.begin(), Clauses.end());
-  if (AStmt) {
+  if (AStmt && !CurContext->isDependentContext()) {
     assert(isa<CapturedStmt>(AStmt) && "Captured statement expected");
 
     // Check default data sharing attributes for referenced variables.
@@ -10510,9 +10513,14 @@ Sema::ActOnOpenMPDependClause(OpenMPDependClauseKind DepKind,
         if (!CurContext->isDependentContext() &&
             DSAStack->getParentOrderedRegionParam() &&
             DepCounter != DSAStack->isParentLoopControlVariable(D).first) {
-          Diag(ELoc, diag::err_omp_depend_sink_expected_loop_iteration)
-              << DSAStack->getParentLoopControlVariable(
-                     DepCounter.getZExtValue());
+          ValueDecl* VD = DSAStack->getParentLoopControlVariable(
+              DepCounter.getZExtValue());
+          if (VD) {
+            Diag(ELoc, diag::err_omp_depend_sink_expected_loop_iteration)
+                << 1 << VD;
+          } else {
+             Diag(ELoc, diag::err_omp_depend_sink_expected_loop_iteration) << 0;
+          }
           continue;
         }
         OpsOffs.push_back({RHS, OOK});
@@ -10545,8 +10553,9 @@ Sema::ActOnOpenMPDependClause(OpenMPDependClauseKind DepKind,
 
     if (!CurContext->isDependentContext() && DepKind == OMPC_DEPEND_sink &&
         TotalDepCount > VarList.size() &&
-        DSAStack->getParentOrderedRegionParam()) {
-      Diag(EndLoc, diag::err_omp_depend_sink_expected_loop_iteration)
+        DSAStack->getParentOrderedRegionParam() &&
+        DSAStack->getParentLoopControlVariable(VarList.size() + 1)) {
+      Diag(EndLoc, diag::err_omp_depend_sink_expected_loop_iteration) << 1
           << DSAStack->getParentLoopControlVariable(VarList.size() + 1);
     }
     if (DepKind != OMPC_DEPEND_source && DepKind != OMPC_DEPEND_sink &&

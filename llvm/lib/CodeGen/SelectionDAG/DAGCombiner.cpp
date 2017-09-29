@@ -3666,10 +3666,10 @@ SDValue DAGCombiner::visitANDLike(SDValue N0, SDValue N1, SDNode *N) {
 bool DAGCombiner::isAndLoadExtLoad(ConstantSDNode *AndC, LoadSDNode *LoadN,
                                    EVT LoadResultTy, EVT &ExtVT, EVT &LoadedVT,
                                    bool &NarrowLoad) {
-  uint32_t ActiveBits = AndC->getAPIntValue().getActiveBits();
-
-  if (ActiveBits == 0 || !AndC->getAPIntValue().isMask(ActiveBits))
+  if (!AndC->getAPIntValue().isMask())
     return false;
+
+  unsigned ActiveBits = AndC->getAPIntValue().countTrailingOnes();
 
   ExtVT = EVT::getIntegerVT(*DAG.getContext(), ActiveBits);
   LoadedVT = LoadN->getMemoryVT();
@@ -7553,20 +7553,6 @@ SDValue DAGCombiner::visitZERO_EXTEND(SDNode *N) {
       return DAG.getZExtOrTrunc(Op, SDLoc(N), VT);
   }
 
-  // fold (zext (truncate (load x))) -> (zext (smaller load x))
-  // fold (zext (truncate (srl (load x), c))) -> (zext (small load (x+c/n)))
-  if (N0.getOpcode() == ISD::TRUNCATE) {
-    if (SDValue NarrowLoad = ReduceLoadWidth(N0.getNode())) {
-      SDNode *oye = N0.getOperand(0).getNode();
-      if (NarrowLoad.getNode() != N0.getNode()) {
-        CombineTo(N0.getNode(), NarrowLoad);
-        // CombineTo deleted the truncate, if needed, but not what's under it.
-        AddToWorklist(oye);
-      }
-      return SDValue(N, 0);   // Return N so it doesn't get rechecked!
-    }
-  }
-
   // fold (zext (truncate x)) -> (and x, mask)
   if (N0.getOpcode() == ISD::TRUNCATE) {
     // fold (zext (truncate (load x))) -> (zext (smaller load x))
@@ -7965,15 +7951,38 @@ SDValue DAGCombiner::visitANY_EXTEND(SDNode *N) {
   return SDValue();
 }
 
+// TODO: These transforms should work with AssertSext too.
+// Change the function name, comments, opcode references, and caller.
 SDValue DAGCombiner::visitAssertZext(SDNode *N) {
   SDValue N0 = N->getOperand(0);
   SDValue N1 = N->getOperand(1);
-  EVT EVT = cast<VTSDNode>(N1)->getVT();
+  EVT AssertVT = cast<VTSDNode>(N1)->getVT();
 
   // fold (assertzext (assertzext x, vt), vt) -> (assertzext x, vt)
   if (N0.getOpcode() == ISD::AssertZext &&
-      EVT == cast<VTSDNode>(N0.getOperand(1))->getVT())
+      AssertVT == cast<VTSDNode>(N0.getOperand(1))->getVT())
     return N0;
+
+  if (N0.getOpcode() == ISD::TRUNCATE && N0.hasOneUse() &&
+      N0.getOperand(0).getOpcode() == ISD::AssertZext) {
+    // We have an assert, truncate, assert sandwich. Make one stronger assert
+    // by asserting on the smallest asserted type to the larger source type.
+    // This eliminates the later assert:
+    // assert (trunc (assert X, i8) to iN), i1 --> trunc (assert X, i1) to iN
+    // assert (trunc (assert X, i1) to iN), i8 --> trunc (assert X, i1) to iN
+    SDValue BigA = N0.getOperand(0);
+    EVT BigA_AssertVT = cast<VTSDNode>(BigA.getOperand(1))->getVT();
+    assert(BigA_AssertVT.bitsLE(N0.getValueType()) &&
+           "Asserting zero/sign-extended bits from a type larger than the "
+           "truncated destination does not provide information");
+
+    SDLoc DL(N);
+    EVT MinAssertVT = AssertVT.bitsLT(BigA_AssertVT) ? AssertVT : BigA_AssertVT;
+    SDValue MinAssertVTVal = DAG.getValueType(MinAssertVT);
+    SDValue NewAssert = DAG.getNode(ISD::AssertZext, DL, BigA.getValueType(),
+                                    BigA.getOperand(0), MinAssertVTVal);
+    return DAG.getNode(ISD::TRUNCATE, DL, N->getValueType(0), NewAssert);
+  }
 
   return SDValue();
 }
@@ -13561,10 +13570,10 @@ SDValue DAGCombiner::visitSTORE(SDNode *N) {
                              Ptr, ST->getMemoryVT(), ST->getMemOperand());
   }
 
-  // Only perform this optimization before the types are legal, because we
-  // don't want to perform this optimization on every DAGCombine invocation.
-  if ((TLI.mergeStoresAfterLegalization()) ? Level == AfterLegalizeDAG
-                                           : !LegalTypes) {
+  // Always perform this optimization before types are legal. If the target
+  // prefers, also try this after legalization to catch stores that were created
+  // by intrinsics or other nodes.
+  if (!LegalTypes || (TLI.mergeStoresAfterLegalization())) {
     for (;;) {
       // There can be multiple store sequences on the same chain.
       // Keep trying to merge store sequences until we are unable to do so
