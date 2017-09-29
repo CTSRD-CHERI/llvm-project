@@ -128,9 +128,8 @@ void TargetLoweringObjectFile::emitPersonalityValue(MCStreamer &Streamer,
 
 // TODO: these functions should move somewhere else
 static bool isCapabilityType(const Type* T, const DataLayout& DL) {
-  T->dump();
-  if (T->isPointerTy() && DL.isFatPointer(T))
-    return true;
+  if (T->isPointerTy())
+    return DL.isFatPointer(T);
   for (const Type* SubTy : T->subtypes()) {
     if (isCapabilityType(SubTy, DL))
       return true;
