@@ -40,12 +40,12 @@ using FunctionAnalysisManagerScopProxy =
 } // namespace polly
 
 namespace llvm {
-using polly::SPMUpdater;
 using polly::Scop;
 using polly::ScopAnalysisManager;
 using polly::ScopAnalysisManagerFunctionProxy;
 using polly::ScopInfo;
 using polly::ScopStandardAnalysisResults;
+using polly::SPMUpdater;
 
 template <>
 class InnerAnalysisManagerProxy<ScopAnalysisManager, Function>::Result {
@@ -191,7 +191,7 @@ public:
       InvalidateCurrentScop = true;
 
     Worklist.erase(&S.getRegion());
-    SAM.clear(S);
+    SAM.clear(S, S.getName());
   }
 
 private:

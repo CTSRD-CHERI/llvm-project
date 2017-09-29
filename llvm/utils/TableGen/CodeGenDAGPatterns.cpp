@@ -238,10 +238,16 @@ bool TypeSetByHwMode::operator==(const TypeSetByHwMode &VTS) const {
   return true;
 }
 
+namespace llvm {
+  raw_ostream &operator<<(raw_ostream &OS, const TypeSetByHwMode &T) {
+    T.writeToStream(OS);
+    return OS;
+  }
+}
+
 LLVM_DUMP_METHOD
 void TypeSetByHwMode::dump() const {
-  writeToStream(dbgs());
-  dbgs() << '\n';
+  dbgs() << *this << '\n';
 }
 
 bool TypeSetByHwMode::intersect(SetType &Out, const SetType &In) {
@@ -880,7 +886,7 @@ std::string TreePredicateFn::getCodeToRunOnSDNode() const {
       "    int64_t Imm = cast<ConstantSDNode>(Node)->getSExtValue();\n";
     return Result + ImmCode;
   }
-  
+
   // Handle arbitrary node predicates.
   assert(!getPredCode().empty() && "Don't have any predicate code!");
   std::string ClassName;
@@ -895,7 +901,7 @@ std::string TreePredicateFn::getCodeToRunOnSDNode() const {
     Result = "    SDNode *N = Node;\n";
   else
     Result = "    auto *N = cast<" + ClassName + ">(Node);\n";
-  
+
   return Result + getPredCode();
 }
 
@@ -914,10 +920,8 @@ static unsigned getPatternSize(const TreePatternNode *P,
   if (P->isLeaf() && isa<IntInit>(P->getLeafValue()))
     Size += 2;
 
-  const ComplexPattern *AM = P->getComplexPatternInfo(CGP);
-  if (AM) {
+  if (const ComplexPattern *AM = P->getComplexPatternInfo(CGP)) {
     Size += AM->getComplexity();
-
     // We don't want to count any children twice, so return early.
     return Size;
   }
@@ -929,7 +933,7 @@ static unsigned getPatternSize(const TreePatternNode *P,
 
   // Count children in the count if they are also nodes.
   for (unsigned i = 0, e = P->getNumChildren(); i != e; ++i) {
-    TreePatternNode *Child = P->getChild(i);
+    const TreePatternNode *Child = P->getChild(i);
     if (!Child->isLeaf() && Child->getNumTypes()) {
       const TypeSetByHwMode &T0 = Child->getType(0);
       // At this point, all variable type sets should be simple, i.e. only

@@ -814,7 +814,7 @@ public:
 
     // x86-64 has atomics up to 16 bytes.
     MaxAtomicPromoteWidth = 128;
-    MaxAtomicInlineWidth = 128;
+    MaxAtomicInlineWidth = 64;
   }
 
   BuiltinVaListKind getBuiltinVaListKind() const override {
@@ -872,6 +872,11 @@ public:
                                                          HasSizeMismatch);
   }
 
+  void setMaxAtomicWidth() override {
+    if (hasFeature("cx16"))
+      MaxAtomicInlineWidth = 128;
+  }
+
   ArrayRef<Builtin::Info> getTargetBuiltins() const override;
 };
 
@@ -910,6 +915,8 @@ public:
     case CC_C:
     case CC_X86VectorCall:
     case CC_IntelOclBicc:
+    case CC_PreserveMost:
+    case CC_PreserveAll:
     case CC_X86_64SysV:
     case CC_Swift:
     case CC_X86RegCall:

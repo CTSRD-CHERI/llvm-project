@@ -434,11 +434,11 @@ int main(int argc, char **argv) {
   if (PassRemarksHotnessThreshold)
     Context.setDiagnosticsHotnessThreshold(PassRemarksHotnessThreshold);
 
-  std::unique_ptr<tool_output_file> OptRemarkFile;
+  std::unique_ptr<ToolOutputFile> OptRemarkFile;
   if (RemarksFilename != "") {
     std::error_code EC;
-    OptRemarkFile = llvm::make_unique<tool_output_file>(RemarksFilename, EC,
-                                                        sys::fs::F_None);
+    OptRemarkFile =
+        llvm::make_unique<ToolOutputFile>(RemarksFilename, EC, sys::fs::F_None);
     if (EC) {
       errs() << EC.message() << '\n';
       return 1;
@@ -475,8 +475,8 @@ int main(int argc, char **argv) {
     M->setDataLayout(ClDataLayout);
 
   // Figure out what stream we are supposed to write to...
-  std::unique_ptr<tool_output_file> Out;
-  std::unique_ptr<tool_output_file> ThinLinkOut;
+  std::unique_ptr<ToolOutputFile> Out;
+  std::unique_ptr<ToolOutputFile> ThinLinkOut;
   if (NoOutput) {
     if (!OutputFilename.empty())
       errs() << "WARNING: The -o (output filename) option is ignored when\n"
@@ -487,7 +487,7 @@ int main(int argc, char **argv) {
       OutputFilename = "-";
 
     std::error_code EC;
-    Out.reset(new tool_output_file(OutputFilename, EC, sys::fs::F_None));
+    Out.reset(new ToolOutputFile(OutputFilename, EC, sys::fs::F_None));
     if (EC) {
       errs() << EC.message() << '\n';
       return 1;
@@ -495,7 +495,7 @@ int main(int argc, char **argv) {
 
     if (!ThinLinkBitcodeFile.empty()) {
       ThinLinkOut.reset(
-          new tool_output_file(ThinLinkBitcodeFile, EC, sys::fs::F_None));
+          new ToolOutputFile(ThinLinkBitcodeFile, EC, sys::fs::F_None));
       if (EC) {
         errs() << EC.message() << '\n';
         return 1;
@@ -584,8 +584,8 @@ int main(int argc, char **argv) {
         OutputFilename = "-";
 
       std::error_code EC;
-      Out = llvm::make_unique<tool_output_file>(OutputFilename, EC,
-                                                sys::fs::F_None);
+      Out = llvm::make_unique<ToolOutputFile>(OutputFilename, EC,
+                                              sys::fs::F_None);
       if (EC) {
         errs() << EC.message() << '\n';
         return 1;

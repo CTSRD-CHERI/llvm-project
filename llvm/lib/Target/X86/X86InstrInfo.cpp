@@ -2528,6 +2528,8 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::VPERMT2PDrr,           X86::VPERMT2PDrm,           0 },
     { X86::VPERMT2Qrr,            X86::VPERMT2Qrm,            0 },
     { X86::VPERMT2Wrr,            X86::VPERMT2Wrm,            0 },
+    { X86::VPMADD52HUQZr,         X86::VPMADD52HUQZm,         0 },
+    { X86::VPMADD52LUQZr,         X86::VPMADD52LUQZm,         0 },
     { X86::VPTERNLOGDZrri,        X86::VPTERNLOGDZrmi,        0 },
     { X86::VPTERNLOGQZrri,        X86::VPTERNLOGQZrmi,        0 },
 
@@ -2544,6 +2546,8 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::VPERMT2PS256rr,        X86::VPERMT2PS256rm,        0 },
     { X86::VPERMT2Q256rr,         X86::VPERMT2Q256rm,         0 },
     { X86::VPERMT2W256rr,         X86::VPERMT2W256rm,         0 },
+    { X86::VPMADD52HUQZ256r,      X86::VPMADD52HUQZ256m,      0 },
+    { X86::VPMADD52LUQZ256r,      X86::VPMADD52LUQZ256m,      0 },
     { X86::VPTERNLOGDZ256rri,     X86::VPTERNLOGDZ256rmi,     0 },
     { X86::VPTERNLOGQZ256rri,     X86::VPTERNLOGQZ256rmi,     0 },
 
@@ -2560,6 +2564,8 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::VPERMT2PS128rr,        X86::VPERMT2PS128rm,        0 },
     { X86::VPERMT2Q128rr,         X86::VPERMT2Q128rm,         0 },
     { X86::VPERMT2W128rr,         X86::VPERMT2W128rm,         0 },
+    { X86::VPMADD52HUQZ128r,      X86::VPMADD52HUQZ128m,      0 },
+    { X86::VPMADD52LUQZ128r,      X86::VPMADD52LUQZ128m,      0 },
     { X86::VPTERNLOGDZ128rri,     X86::VPTERNLOGDZ128rmi,     0 },
     { X86::VPTERNLOGQZ128rri,     X86::VPTERNLOGQZ128rmi,     0 },
 
@@ -3234,6 +3240,8 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::VPERMT2Qrrk,        X86::VPERMT2Qrmk,          0 },
     { X86::VPERMT2Wrrk,        X86::VPERMT2Wrmk,          0 },
     { X86::VPERMWZrrk,         X86::VPERMWZrmk,           0 },
+    { X86::VPMADD52HUQZrk,     X86::VPMADD52HUQZmk,       0 },
+    { X86::VPMADD52LUQZrk,     X86::VPMADD52LUQZmk,       0 },
     { X86::VPMADDUBSWZrrk,     X86::VPMADDUBSWZrmk,       0 },
     { X86::VPMADDWDZrrk,       X86::VPMADDWDZrmk,         0 },
     { X86::VPMAXSBZrrk,        X86::VPMAXSBZrmk,          0 },
@@ -3376,6 +3384,8 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::VPERMT2Q256rrk,     X86::VPERMT2Q256rmk,       0 },
     { X86::VPERMT2W256rrk,     X86::VPERMT2W256rmk,       0 },
     { X86::VPERMWZ256rrk,      X86::VPERMWZ256rmk,        0 },
+    { X86::VPMADD52HUQZ256rk,  X86::VPMADD52HUQZ256mk,    0 },
+    { X86::VPMADD52LUQZ256rk,  X86::VPMADD52LUQZ256mk,    0 },
     { X86::VPMADDUBSWZ256rrk,  X86::VPMADDUBSWZ256rmk,    0 },
     { X86::VPMADDWDZ256rrk,    X86::VPMADDWDZ256rmk,      0 },
     { X86::VPMAXSBZ256rrk,     X86::VPMAXSBZ256rmk,       0 },
@@ -3509,6 +3519,8 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::VPERMT2Q128rrk,     X86::VPERMT2Q128rmk,       0 },
     { X86::VPERMT2W128rrk,     X86::VPERMT2W128rmk,       0 },
     { X86::VPERMWZ128rrk,      X86::VPERMWZ128rmk,        0 },
+    { X86::VPMADD52HUQZ128rk,  X86::VPMADD52HUQZ128mk,    0 },
+    { X86::VPMADD52LUQZ128rk,  X86::VPMADD52LUQZ128mk,    0 },
     { X86::VPMADDUBSWZ128rrk,  X86::VPMADDUBSWZ128rmk,    0 },
     { X86::VPMADDWDZ128rrk,    X86::VPMADDWDZ128rmk,      0 },
     { X86::VPMAXSBZ128rrk,     X86::VPMAXSBZ128rmk,       0 },
@@ -3597,6 +3609,8 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::VPERMT2PDrrkz,      X86::VPERMT2PDrmkz,        0 },
     { X86::VPERMT2Qrrkz,       X86::VPERMT2Qrmkz,         0 },
     { X86::VPERMT2Wrrkz,       X86::VPERMT2Wrmkz,         0 },
+    { X86::VPMADD52HUQZrkz,    X86::VPMADD52HUQZmkz,      0 },
+    { X86::VPMADD52LUQZrkz,    X86::VPMADD52LUQZmkz,      0 },
     { X86::VPTERNLOGDZrrikz,   X86::VPTERNLOGDZrmikz,     0 },
     { X86::VPTERNLOGQZrrikz,   X86::VPTERNLOGQZrmikz,     0 },
 
@@ -3613,6 +3627,8 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::VPERMT2PS256rrkz,   X86::VPERMT2PS256rmkz,     0 },
     { X86::VPERMT2Q256rrkz,    X86::VPERMT2Q256rmkz,      0 },
     { X86::VPERMT2W256rrkz,    X86::VPERMT2W256rmkz,      0 },
+    { X86::VPMADD52HUQZ256rkz, X86::VPMADD52HUQZ256mkz,   0 },
+    { X86::VPMADD52LUQZ256rkz, X86::VPMADD52LUQZ256mkz,   0 },
     { X86::VPTERNLOGDZ256rrikz,X86::VPTERNLOGDZ256rmikz,  0 },
     { X86::VPTERNLOGQZ256rrikz,X86::VPTERNLOGQZ256rmikz,  0 },
 
@@ -3629,6 +3645,8 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::VPERMT2PS128rrkz,   X86::VPERMT2PS128rmkz,     0 },
     { X86::VPERMT2Q128rrkz,    X86::VPERMT2Q128rmkz,      0 },
     { X86::VPERMT2W128rrkz,    X86::VPERMT2W128rmkz,      0 },
+    { X86::VPMADD52HUQZ128rkz, X86::VPMADD52HUQZ128mkz,   0 },
+    { X86::VPMADD52LUQZ128rkz, X86::VPMADD52LUQZ128mkz,   0 },
     { X86::VPTERNLOGDZ128rrikz,X86::VPTERNLOGDZ128rmikz,  0 },
     { X86::VPTERNLOGQZ128rrikz,X86::VPTERNLOGQZ128rmikz,  0 },
   };
@@ -5631,6 +5649,41 @@ bool X86InstrInfo::findCommutedOpIndices(MachineInstr &MI, unsigned &SrcOpIdx1,
   case X86::VPTERNLOGQZ256rmbikz:
   case X86::VPTERNLOGQZrmbikz:
     return findThreeSrcCommutedOpIndices(MI, SrcOpIdx1, SrcOpIdx2);
+  case X86::VPMADD52HUQZ128r:
+  case X86::VPMADD52HUQZ128rk:
+  case X86::VPMADD52HUQZ128rkz:
+  case X86::VPMADD52HUQZ256r:
+  case X86::VPMADD52HUQZ256rk:
+  case X86::VPMADD52HUQZ256rkz:
+  case X86::VPMADD52HUQZr:
+  case X86::VPMADD52HUQZrk:
+  case X86::VPMADD52HUQZrkz:
+  case X86::VPMADD52LUQZ128r:
+  case X86::VPMADD52LUQZ128rk:
+  case X86::VPMADD52LUQZ128rkz:
+  case X86::VPMADD52LUQZ256r:
+  case X86::VPMADD52LUQZ256rk:
+  case X86::VPMADD52LUQZ256rkz:
+  case X86::VPMADD52LUQZr:
+  case X86::VPMADD52LUQZrk:
+  case X86::VPMADD52LUQZrkz: {
+    unsigned CommutableOpIdx1 = 2;
+    unsigned CommutableOpIdx2 = 3;
+    if (Desc.TSFlags & X86II::EVEX_K) {
+      // Skip the mask register.
+      ++CommutableOpIdx1;
+      ++CommutableOpIdx2;
+    }
+    if (!fixCommutedOpIndices(SrcOpIdx1, SrcOpIdx2,
+                              CommutableOpIdx1, CommutableOpIdx2))
+      return false;
+    if (!MI.getOperand(SrcOpIdx1).isReg() ||
+        !MI.getOperand(SrcOpIdx2).isReg())
+      // No idea.
+      return false;
+    return true;
+  }
+
   default:
     const X86InstrFMA3Group *FMA3Group =
         X86InstrFMA3Info::getFMA3Group(MI.getOpcode());
@@ -7731,7 +7784,9 @@ bool X86InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     unsigned SrcReg = MIB->getOperand(0).getReg();
     unsigned XReg = TRI->getSubReg(SrcReg, X86::sub_xmm);
     MIB->getOperand(0).setReg(XReg);
-    return Expand2AddrUndef(MIB, get(X86::VXORPSrr));
+    Expand2AddrUndef(MIB, get(X86::VXORPSrr));
+    MIB.addReg(SrcReg, RegState::ImplicitDefine);
+    return true;
   }
   case X86::AVX512_128_SET0:
   case X86::AVX512_FsFLD0SS:
@@ -7755,8 +7810,10 @@ bool X86InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     if (HasVLX || TRI->getEncodingValue(SrcReg) < 16) {
       unsigned XReg = TRI->getSubReg(SrcReg, X86::sub_xmm);
       MIB->getOperand(0).setReg(XReg);
-      return Expand2AddrUndef(MIB,
-                              get(HasVLX ? X86::VPXORDZ128rr : X86::VXORPSrr));
+      Expand2AddrUndef(MIB,
+                       get(HasVLX ? X86::VPXORDZ128rr : X86::VXORPSrr));
+      MIB.addReg(SrcReg, RegState::ImplicitDefine);
+      return true;
     }
     return Expand2AddrUndef(MIB, get(X86::VPXORDZrr));
   }
@@ -7766,7 +7823,9 @@ bool X86InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     if (TRI->getEncodingValue(SrcReg) < 16) {
       unsigned XReg = TRI->getSubReg(SrcReg, X86::sub_xmm);
       MIB->getOperand(0).setReg(XReg);
-      return Expand2AddrUndef(MIB, get(X86::VXORPSrr));
+      Expand2AddrUndef(MIB, get(X86::VXORPSrr));
+      MIB.addReg(SrcReg, RegState::ImplicitDefine);
+      return true;
     }
     return Expand2AddrUndef(MIB, get(X86::VPXORDZrr));
   }
@@ -10664,31 +10723,54 @@ char LDTLSCleanup::ID = 0;
 FunctionPass*
 llvm::createCleanupLocalDynamicTLSPass() { return new LDTLSCleanup(); }
 
-// Constants defining how certain sequences should be outlined.
-const unsigned MachineOutlinerDefaultFn = 0;
-const unsigned MachineOutlinerTailCallFn = 1;
+/// Constants defining how certain sequences should be outlined.
+///
+/// \p MachineOutlinerDefault implies that the function is called with a call
+/// instruction, and a return must be emitted for the outlined function frame.
+///
+/// That is,
+///
+/// I1                                 OUTLINED_FUNCTION:
+/// I2 --> call OUTLINED_FUNCTION       I1
+/// I3                                  I2
+///                                     I3
+///                                     ret
+///
+/// * Call construction overhead: 1 (call instruction)
+/// * Frame construction overhead: 1 (return instruction)
+/// 
+/// \p MachineOutlinerTailCall implies that the function is being tail called.
+/// A jump is emitted instead of a call, and the return is already present in
+/// the outlined sequence. That is,
+///
+/// I1                                 OUTLINED_FUNCTION:
+/// I2 --> jmp OUTLINED_FUNCTION       I1
+/// ret                                I2
+///                                    ret
+///
+/// * Call construction overhead: 1 (jump instruction)
+/// * Frame construction overhead: 0 (don't need to return)
+///
+enum MachineOutlinerClass {
+  MachineOutlinerDefault,
+  MachineOutlinerTailCall
+};
 
-std::pair<size_t, unsigned> X86InstrInfo::getOutliningCallOverhead(
-    MachineBasicBlock::iterator &StartIt,
-    MachineBasicBlock::iterator &EndIt) const {
+X86GenInstrInfo::MachineOutlinerInfo
+X86InstrInfo::getOutlininingCandidateInfo(
+  std::vector<
+      std::pair<MachineBasicBlock::iterator, MachineBasicBlock::iterator>>
+      &RepeatedSequenceLocs) const {
 
-  // Is this a tail call? If it is, make note of it.
-  if (EndIt->isTerminator())
-    return std::make_pair(1, MachineOutlinerTailCallFn);
-
-  return std::make_pair(1, MachineOutlinerDefaultFn);
-}
-
-std::pair<size_t, unsigned> X86InstrInfo::getOutliningFrameOverhead(
-  std::vector<std::pair<MachineBasicBlock::iterator, 
-                        MachineBasicBlock::iterator>> &CandidateClass) const {
-  // Is this a tail-call?
-  // Is the last instruction in this class a terminator?
-  if (CandidateClass[0].second->isTerminator())
-    return std::make_pair(0, MachineOutlinerTailCallFn);
-
-  // No, so we have to add a return to the end.
-  return std::make_pair(1, MachineOutlinerDefaultFn);
+  if (RepeatedSequenceLocs[0].second->isTerminator())
+    return MachineOutlinerInfo(1, // Number of instructions to emit call.
+                               0, // Number of instructions to emit frame.
+                               MachineOutlinerTailCall, // Type of call.
+                               MachineOutlinerTailCall // Type of frame.
+                              );
+  
+  return MachineOutlinerInfo(1, 1, MachineOutlinerDefault,
+                             MachineOutlinerDefault);
 }
 
 bool X86InstrInfo::isFunctionSafeToOutlineFrom(MachineFunction &MF) const {
@@ -10752,10 +10834,10 @@ X86InstrInfo::getOutliningType(MachineInstr &MI) const {
 
 void X86InstrInfo::insertOutlinerEpilogue(MachineBasicBlock &MBB,
                                           MachineFunction &MF,
-                                          unsigned FrameClass) const {
-
+                                          const MachineOutlinerInfo &MInfo)
+                                          const {
   // If we're a tail call, we already have a return, so don't do anything.
-  if (FrameClass == MachineOutlinerTailCallFn)
+  if (MInfo.FrameConstructionID == MachineOutlinerTailCall)
     return;
 
   // We're a normal call, so our sequence doesn't have a return instruction.
@@ -10766,15 +10848,16 @@ void X86InstrInfo::insertOutlinerEpilogue(MachineBasicBlock &MBB,
 
 void X86InstrInfo::insertOutlinerPrologue(MachineBasicBlock &MBB,
                                           MachineFunction &MF,
-                                          unsigned FrameClass) const {}
+                                          const MachineOutlinerInfo &MInfo)
+                                          const {}
 
 MachineBasicBlock::iterator
 X86InstrInfo::insertOutlinedCall(Module &M, MachineBasicBlock &MBB,
                                  MachineBasicBlock::iterator &It,
                                  MachineFunction &MF,
-                                 unsigned CallClass) const {
+                                 const MachineOutlinerInfo &MInfo) const {
   // Is it a tail call?
-  if (CallClass == MachineOutlinerTailCallFn) {
+  if (MInfo.CallConstructionID == MachineOutlinerTailCall) {
     // Yes, just insert a JMP.
     It = MBB.insert(It,
                   BuildMI(MF, DebugLoc(), get(X86::JMP_1))

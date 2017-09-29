@@ -1407,6 +1407,10 @@ def err_noexcept_needs_constant_expression : Error<
   "argument to noexcept specifier must be a constant expression">;
 def err_exception_spec_not_parsed : Error<
   "exception specification is not available until end of class definition">;
+def warn_nothrow_attr_disagrees_with_exception_specification
+    : ExtWarn<"attribute 'nothrow' ignored due to conflicting exception "
+              "specification">,
+      InGroup<IgnoredAttributes>;
 
 // C++ access checking
 def err_class_redeclared_with_different_access : Error<
@@ -1661,6 +1665,11 @@ def err_conflicting_overriding_cc_attributes : Error<
   "virtual function %0 has different calling convention attributes "
   "%diff{($) than the function it overrides (which has calling convention $)|"
   "than the function it overrides}1,2">;
+def warn_overriding_method_missing_noescape : Warning<
+  "parameter of overriding method should be annotated with "
+  "__attribute__((noescape))">, InGroup<MissingNoEscape>;
+def note_overridden_marked_noescape : Note<
+  "parameter of overridden method is annotated with __attribute__((noescape))">;
 
 def err_covariant_return_inaccessible_base : Error<
   "invalid covariant return for virtual function: %1 is a "
@@ -2615,6 +2624,8 @@ def err_attribute_section_invalid_for_target : Error<
   "argument to 'section' attribute is not valid for this target: %0">;
 def warn_mismatched_section : Warning<
   "section does not match previous declaration">, InGroup<Section>;
+def warn_attribute_section_on_redeclaration : Warning<
+  "section attribute is specified on redeclared variable">, InGroup<Section>;
 
 def err_anonymous_property: Error<
   "anonymous property is not supported">;
