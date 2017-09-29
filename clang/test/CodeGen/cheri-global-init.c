@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 %s "-target-abi" "purecap" -emit-llvm -triple cheri-unknown-freebsd -o - | FileCheck --check-prefix=CHECK-NO-LINKER %s
+// RUN: %clang_cc1 %s "-target-abi" "purecap" -emit-llvm -triple cheri-unknown-freebsd -o - -no-cheri-linker | FileCheck --check-prefix=CHECK-NO-LINKER %s
 // RUN: %clang_cc1 %s "-target-abi" "purecap" -emit-llvm -triple cheri-unknown-freebsd -o - -cheri-linker | FileCheck --check-prefix=CHECK-LINKER %s
 
 int a[5];

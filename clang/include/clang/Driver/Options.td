@@ -241,7 +241,7 @@ def internal_debug_Group :
 
 def cheri_linker : Flag<["-"], "cheri-linker">, Flags<[CC1Option]>,
   HelpText<"Assume the existence of a CHERI-aware linker">;
-def no_cheri_linker : Flag<["-"], "no-cheri-linker">, Flags<[HelpHidden]>,
+def no_cheri_linker : Flag<["-"], "no-cheri-linker">, Flags<[CC1Option, HelpHidden]>,
   HelpText<"Do not assume the existence of a CHERI-aware linker">;
 
 def no_capsizefix : Flag<["-"], "no-capsizefix">, Flags<[CC1Option]>,
