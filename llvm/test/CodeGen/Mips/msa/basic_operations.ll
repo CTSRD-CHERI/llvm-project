@@ -26,7 +26,11 @@
 @i32 = global i32 0
 @i64 = global i64 0
 
+define void @const_v16i8() nounwind {
+  ; ALL-LABEL: const_v16i8:
 
+  store volatile <16 x i8> <i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0>, <16 x i8>*@v16i8
+  ; ALL: ldi.b [[R1:\$w[0-9]+]], 0
 
   store volatile <16 x i8> <i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1, i8 1>, <16 x i8>*@v16i8
   ; ALL: ldi.b [[R1:\$w[0-9]+]], 1
