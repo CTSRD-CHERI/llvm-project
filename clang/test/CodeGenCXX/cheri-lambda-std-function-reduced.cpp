@@ -1,5 +1,6 @@
 // https://github.com/CTSRD-CHERI/clang/issues/148
-// RUN: %cheri_purecap_cc1 -emit-obj -std=c++11 -o /dev/null %s
+// It now fails to compile whereas before it would crash the compiler
+// RUN: not %cheri_purecap_cc1 -emit-llvm -std=c++11 -o /dev/null %s
 
 inline namespace a {
 template <class> struct d;

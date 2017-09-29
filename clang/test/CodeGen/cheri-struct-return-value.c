@@ -169,9 +169,9 @@ ThreeLongs three_longs() {
   return t;
   // CHECK-LABEL: define void @three_longs(%struct.ThreeLongs addrspace(200)* noalias nocapture sret %agg.result) local_unnamed_addr
   // ASM-LABEL: three_longs
-  // ASM: csd $1, $zero, 0($c3)
-  // ASM: csd $1, $zero, 8($c3)
-  // ASM: csd $1, $zero, 16($c3)
+  // Clang now uses a memcpy from a global
+  // ASM: ld      $1, %got_page(.Lthree_longs.t)($gp)
+  // ASM: ld      $1, %call16(memcpy_c)($gp)
 }
 
 typedef struct {

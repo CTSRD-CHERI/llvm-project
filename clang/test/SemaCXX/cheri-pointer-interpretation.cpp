@@ -31,13 +31,13 @@ _Static_assert(sizeof(int&&) == 4, "Reference size incorrect");
 // RUN: %cheri256_cc1 "-target-abi" "purecap" -fsyntax-only -triple cheri-unknown-freebsd %s -std=c++11 -ast-dump | FileCheck %s
 
 // CHECK:     |-CXXRecordDecl {{.*}} <{{.*}}/cheri-pointer-interpretation.cpp:4:1, line:8:1> line:4:8 referenced struct foo_cap definition
-// CHECK-NEXT:| |-PackedAttr {{.*}} <line:8:18>
+// CHECK:     | |-PackedAttr {{.*}} <line:8:18>
 // CHECK-NEXT:| |-CXXRecordDecl {{.*}} <line:4:1, col:8> col:8 implicit struct foo_cap
 // CHECK-NEXT:| |-FieldDecl {{.*}} <line:5:2, col:8> col:8 a 'void * __capability'
 // CHECK-NEXT:| |-FieldDecl {{.*}} <line:6:2, col:7> col:7 d 'long'
 // CHECK-NEXT:| `-FieldDecl {{.*}} <line:7:2, col:7> col:7 e 'long'
-// CHECK-NEXT:|-CXXRecordDecl {{.*}} <line:12:1, line:16:1> line:12:8 referenced struct foo_int definition
-// CHECK-NEXT:| |-CXXRecordDecl {{.*}} <col:1, col:8> col:8 implicit struct foo_int
+// CHECK:     |-CXXRecordDecl {{.*}} <line:12:1, line:16:1> line:12:8 referenced struct foo_int definition
+// CHECK:     | |-CXXRecordDecl {{.*}} <col:1, col:8> col:8 implicit struct foo_int
 // CHECK-NEXT:| |-FieldDecl {{.*}} <line:13:2, col:8> col:8 a 'long'
 // CHECK-NEXT:| |-FieldDecl {{.*}} <line:14:2, col:7> col:7 d 'long'
 // CHECK-NEXT:| `-FieldDecl {{.*}} <line:15:2, col:7> col:7 e 'long'
