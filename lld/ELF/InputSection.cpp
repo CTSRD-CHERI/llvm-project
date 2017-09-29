@@ -789,7 +789,7 @@ void InputSectionBase::relocateAlloc(uint8_t *Buf, uint8_t *BufEnd) {
 }
 
 template <class ELFT>
-void fillGlobalSizesSection(InputSection* IS, uint8_t* Buf, uint8_t* BufEnd) {
+static void fillGlobalSizesSection(InputSection* IS, uint8_t* Buf, uint8_t* BufEnd) {
   static std::mutex Mu;
   std::lock_guard<std::mutex> Lock(Mu);
   const endianness E = ELFT::TargetEndianness;

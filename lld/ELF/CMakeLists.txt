@@ -12,6 +12,7 @@ add_lld_library(lldELF
   Arch/ARM.cpp
   Arch/AVR.cpp
   Arch/Mips.cpp
+  Arch/Cheri.cpp
   Arch/MipsArchTree.cpp
   Arch/PPC.cpp
   Arch/PPC64.cpp
