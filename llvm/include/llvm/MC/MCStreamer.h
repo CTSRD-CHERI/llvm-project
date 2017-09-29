@@ -95,6 +95,9 @@ public:
                               const MCInst &Inst, const MCSubtargetInfo &STI);
 
   virtual void finish();
+
+  /// Whether to use the __cap_relocs hack (if the target supports capabilities)
+  virtual bool useLegacyCapRelocs() const;
 };
 
 // FIXME: declared here because it is used from

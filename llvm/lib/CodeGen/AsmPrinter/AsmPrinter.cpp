@@ -2409,7 +2409,8 @@ static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
   assert(CapWidth == 32 || CapWidth == 16);
   // Handle (void *)5 etc as an untagged capability with base/length/perms 0,
   // and offset 5.
-  if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(AP.lowerConstant(CV))) {
+  const MCExpr *Expr = AP.lowerConstant(CV);
+  if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Expr)) {
     AP.OutStreamer->EmitIntValue(0, 8);
     AP.OutStreamer->EmitIntValue(CE->getValue(), 8);
     if (CapWidth > 16) {
@@ -2422,8 +2423,11 @@ static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
   GlobalValue *GV;
   APInt Addend;
   if (IsConstantOffsetFromGlobal(const_cast<Constant *>(CV), GV, Addend, DL)) {
-    AP.OutStreamer->EmitCHERICapability(AP.getSymbol(GV), Addend.getSExtValue(),
-                                        CapWidth, SMLoc());
+    if (AP.OutStreamer->getTargetStreamer()->useLegacyCapRelocs())
+      AP.OutStreamer->EmitLegacyCHERICapability(Expr, CapWidth);
+    else
+      AP.OutStreamer->EmitCHERICapability(AP.getSymbol(GV),
+                                          Addend.getSExtValue(), CapWidth);
     return;
   }
   llvm_unreachable("Tried to emit a capability which is neither a constant nor a global+offset");

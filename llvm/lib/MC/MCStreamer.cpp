@@ -29,6 +29,7 @@
 #include "llvm/MC/MCWin64EH.h"
 #include "llvm/MC/MCWinEH.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/LEB128.h"
 #include "llvm/Support/MathExtras.h"
@@ -52,6 +53,14 @@ void MCTargetStreamer::emitLabel(MCSymbol *Symbol) {}
 void MCTargetStreamer::finish() {}
 
 void MCTargetStreamer::emitAssignment(MCSymbol *Symbol, const MCExpr *Value) {}
+
+static cl::opt<bool> LegacyCheriCapRelocs(
+  "legacy-cheri-cap-relocs", cl::init(false), cl::Hidden,
+  cl::desc("Use the legacy __cap_relocs hack when emitting capabilities"));
+
+bool MCTargetStreamer::useLegacyCapRelocs() const {
+  return LegacyCheriCapRelocs;
+}
 
 MCStreamer::MCStreamer(MCContext &Ctx)
     : Context(Ctx), CurrentWinFrameInfo(nullptr) {
@@ -166,7 +175,7 @@ void MCStreamer::EmitGPRel32Value(const MCExpr *Value) {
 
 void MCStreamer::EmitLegacyCHERICapability(const MCExpr *Value, unsigned CapSize,
                                      SMLoc Loc) {
-  assert(false && "Should not be called!");
+  assert(TargetStreamer->useLegacyCapRelocs());
   if (!this->getContext().getAsmInfo()->supportsCHERI())
     report_fatal_error("CHERI is not supported by this target!");
   // MCStreamers with proper capability support will emit real relocations
