@@ -334,7 +334,7 @@ public:
     return getPointerBaseSize(AS) != getPointerSize(AS);
   }
 
-  unsigned isFatPointer(Type *Ty) const {
+  unsigned isFatPointer(const Type *Ty) const {
     return isFatPointer(Ty->getPointerAddressSpace());
   }
 
