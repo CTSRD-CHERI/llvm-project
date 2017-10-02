@@ -652,7 +652,8 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->Pie = Args.hasFlag(OPT_pie, OPT_nopie, false);
   Config->PrintGcSections =
       Args.hasFlag(OPT_print_gc_sections, OPT_no_print_gc_sections, false);
-  Config->ProcessCapRelocs = Args.hasArg(OPT_process_cap_relocs);
+  Config->ProcessCapRelocs = Args.hasFlag(OPT_process_cap_relocs,
+                                          OPT_no_process_cap_relocs, true);
   Config->Rpath = getRpath(Args);
   Config->Relocatable = Args.hasArg(OPT_relocatable);
   Config->SaveTemps = Args.hasArg(OPT_save_temps);

@@ -19,12 +19,12 @@
 // RUN: llvm-readobj -r -s %t.so | FileCheck -check-prefixes DYNAMIC-RELOCS %s
 // RUN: llvm-objdump -C -t %t.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s
 
-// RUN: ld.lld %t.o -static -o %t-static-external-capsizefix.exe
+// RUN: ld.lld -no-process-cap-relocs %t.o -static -o %t-static-external-capsizefix.exe
 // RUN: %capsizefix %t-static-external-capsizefix.exe
 // RUN: llvm-objdump -C %t-static-external-capsizefix.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC-EXTERNAL-CAPSIZEFIX %s
 
 
-// RUN: ld.lld %t.o -shared -o %t-external-capsizefix.so
+// RUN: ld.lld -no-process-cap-relocs %t.o -shared -o %t-external-capsizefix.so
 // RUN: %capsizefix %t-external-capsizefix.so
 // RUN: llvm-objdump -C %t-external-capsizefix.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC-EXTERNAL-CAPSIZEFIX %s
 // RUN: llvm-readobj -r -s  %t-external-capsizefix.so | FileCheck -check-prefixes DYNAMIC-RELOCS %s

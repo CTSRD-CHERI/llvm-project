@@ -262,6 +262,8 @@ def print_map: F<"print-map">,
 
 def process_cap_relocs: F<"process-cap-relocs">,
   HelpText<"Enable special processing of __cap_relocs sections">;
+def no_process_cap_relocs: F<"no-process-cap-relocs">,
+  HelpText<"Don't do any special processing for the __cap_relocs section">;
 
 defm reproduce: Eq<"reproduce">,
   HelpText<"Dump linker invocation and input files for debugging">;

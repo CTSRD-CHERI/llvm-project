@@ -16,12 +16,12 @@
 
 
 // check external capsizefix (results in different addresses so only test the .global_sizes section contents)
-// RUN: ld.lld %t.o %t_external.o %t_bar.o -static -o %t-static-external-capsizefix.exe
+// RUN: ld.lld -no-process-cap-relocs %t.o %t_external.o %t_bar.o -static -o %t-static-external-capsizefix.exe
 // RUN: %capsizefix %t-static-external-capsizefix.exe
 // RUN: llvm-objdump -s -t -h %t-static-external-capsizefix.exe | FileCheck -check-prefixes GLOBAL_SIZES %s
 
 
-// RUN: ld.lld %t.o %t_external.o %t_bar.o -shared -o %t-external-capsizefix.so
+// RUN: ld.lld -no-process-cap-relocs %t.o %t_external.o %t_bar.o -shared -o %t-external-capsizefix.so
 // RUN: %capsizefix %t-external-capsizefix.so
 // RUN: llvm-objdump -s -t -h %t-external-capsizefix.so | FileCheck -check-prefixes GLOBAL_SIZES %s
 
