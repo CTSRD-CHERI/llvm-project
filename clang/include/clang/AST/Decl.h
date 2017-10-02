@@ -2634,7 +2634,7 @@ class TypedefNameDecl : public TypeDecl, public Redeclarable<TypedefNameDecl> {
   /// CHERICapTypeForDecl - This indicates the Type object that represents the
   /// memory capability version of this TypedefNameDecl. It is a cache
   /// maintained by ASTContext::getTypedefType.
-  mutable const Type *CHERICapTypeForDecl;
+  mutable const Type *CHERICapTypeForDecl = nullptr;
   void anchor() override;
   typedef std::pair<TypeSourceInfo*, QualType> ModedTInfo;
   llvm::PointerUnion<TypeSourceInfo*, ModedTInfo*> MaybeModedTInfo;

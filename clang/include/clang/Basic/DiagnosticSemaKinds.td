@@ -3181,6 +3181,8 @@ def warn_impcast_objective_c_literal_to_bool : Warning<
 def warn_cast_align : Warning<
   "cast from %0 to %1 increases required alignment from %2 to %3">,
   InGroup<CastAlign>, DefaultIgnore;
+def err_cheri_cast_align : Error<
+  "cast from %0 to %1 increases required alignment from %2 to %3">;
 def warn_old_style_cast : Warning<
   "use of old-style cast">, InGroup<OldStyleCast>, DefaultIgnore;
 

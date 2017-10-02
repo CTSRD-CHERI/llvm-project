@@ -1733,6 +1733,38 @@ static void DiagnoseCHERICallback(Sema &Self, SourceLocation Loc,
     Self.Diag(Loc, diag::err_cheri_invalid_callback_cast);
 }
 
+static void DiagnoseCHERICast(Sema &Self, Expr *SrcExpr, QualType DestType,
+                              CastKind &Kind, SourceRange &Range) {
+  if (Kind != CK_BitCast)
+    return;
+  
+  const PointerType *SrcPtr = SrcExpr->getType()->getAs<PointerType>();
+  const PointerType *DestPtr = DestType->getAs<PointerType>();
+  if (SrcPtr && DestPtr && !SrcPtr->isCHERICapability() && !DestPtr->isCHERICapability()) {
+    QualType SrcPointee = SrcPtr->getPointeeType();
+    QualType DestPointee = DestPtr->getPointeeType();
+    
+    // casts from char * and void * are implicitly allowed
+    if (SrcPointee->isCharType() || SrcPointee->isVoidType())
+      return;
+
+    if (!SrcPointee->isCHERICapabilityType(Self.Context)
+        && DestPointee->isCHERICapabilityType(Self.Context)) {
+      CharUnits SrcAlign = Self.Context.getTypeAlignInChars(SrcPointee);
+      CharUnits DestAlign = Self.Context.getTypeAlignInChars(DestPointee);
+
+      if (SrcAlign >= DestAlign)
+        return;
+
+      Self.Diag(Range.getBegin(), diag::err_cheri_cast_align)
+        << SrcExpr->getType() << DestType
+        << static_cast<unsigned>(SrcAlign.getQuantity())
+        << static_cast<unsigned>(DestAlign.getQuantity())
+        << Range << SrcExpr->getSourceRange();
+    }
+  }
+}
+
 static void DiagnoseCastOfObjCSEL(Sema &Self, const ExprResult &SrcExpr,
                                   QualType DestType) {
   QualType SrcType = SrcExpr.get()->getType();
@@ -2611,6 +2643,7 @@ void CastOperation::CheckCStyleCast() {
   DiagnoseCallingConvCast(Self, SrcExpr, DestType, OpRange);
   DiagnoseBadFunctionCast(Self, SrcExpr, DestType);
   Kind = Self.PrepareScalarCast(SrcExpr, DestType);
+  DiagnoseCHERICast(Self, SrcExpr.get(), DestType, Kind, OpRange);
   if (SrcExpr.isInvalid())
     return;
 
