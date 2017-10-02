@@ -26,6 +26,7 @@
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/InstVisitor.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/CHERICap.h"
 
 using namespace llvm;
@@ -34,6 +35,7 @@ namespace {
 class CHERICapDirectCalls : public FunctionPass,
                           public InstVisitor<CHERICapDirectCalls> {
   bool Modified = false;
+  SmallVector<Value*,32> DeadInstructions;
 
 public:
   static char ID;
@@ -54,13 +56,26 @@ public:
         dyn_cast<Function>(PtrToInt->getOperand(0)->stripPointerCasts());
     if (!Func)
       return;
+    auto *CalledValue = CS.getCalledValue();
     CS.setCalledFunction(Func);
-    CS.mutateFunctionType(
-        cast<FunctionType>(Func->getType()->getElementType()));
+    CS.mutateFunctionType(cast<FunctionType>(Func->getType()->getElementType()));
+    if (CalledValue->use_begin() == CalledValue->use_end()) {
+      DeadInstructions.push_back(CalledValue);
+    } else {
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+      llvm::errs() << "CALLEE: "; CalledValue->dump();
+      llvm::errs() << "Func: "; Func->dump();
+      llvm::errs() << "NUM USES: " << CalledValue->getNumUses() << "\n";
+#endif
+      assert(CalledValue->getNumUses() == 0 && "Unexpected uses");
+    }
   }
   bool runOnFunction(Function &F) override {
     Modified = false;
+    DeadInstructions.clear();
     visit(F);
+    for (auto *V : DeadInstructions)
+      RecursivelyDeleteTriviallyDeadInstructions(V);
     return Modified;
   }
   void getAnalysisUsage(AnalysisUsage &AU) const override {

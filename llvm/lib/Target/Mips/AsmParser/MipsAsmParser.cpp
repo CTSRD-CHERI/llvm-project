@@ -238,8 +238,6 @@ class MipsAsmParser : public MCTargetAsmParser {
                        MCStreamer &Out, const MCSubtargetInfo *STI);
   void expandCapStoreC1(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
                         MCStreamer &Out, const MCSubtargetInfo *STI);
-  void expandCapMove(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
-                     MCStreamer &Out, const MCSubtargetInfo *STI);
   void expandMemInst(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
                      const MCSubtargetInfo *STI, bool IsLoad, bool IsImmOpnd);
 
@@ -2366,9 +2364,6 @@ MipsAsmParser::tryExpandInstruction(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
   case Mips::CSDC1:
     expandCapStoreC1(Inst, IDLoc, is64Bit, Out, STI);
     return MER_Success;
-  case Mips::CMove:
-    expandCapMove(Inst, IDLoc, is64Bit, Out, STI);
-    return MER_Success;
   case Mips::LoadAddrReg32:
   case Mips::LoadAddrReg64:
     assert(Inst.getOperand(0).isReg() && "expected register operand kind");
@@ -2562,18 +2557,6 @@ MipsAsmParser::tryExpandInstruction(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
   case Mips::SEQIMacro:
     return expandSeqI(Inst, IDLoc, Out, STI) ? MER_Fail : MER_Success;
   }
-}
-
-void MipsAsmParser::expandCapMove(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
-                                  MCStreamer &Out, const MCSubtargetInfo *STI) {
-  auto MoveInst = Mips::CIncOffset;
-  MCInst tmpInst;
-  tmpInst.setOpcode(MoveInst);
-  tmpInst.addOperand(MCOperand::createReg(Inst.getOperand(0).getReg()));
-  tmpInst.addOperand(MCOperand::createReg(Inst.getOperand(1).getReg()));
-  tmpInst.addOperand(MCOperand::createReg(Mips::ZERO));
-  tmpInst.setLoc(IDLoc);
-  Out.EmitInstruction(tmpInst, *STI);
 }
 
 void MipsAsmParser::expandCapStoreC1(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
@@ -5950,7 +5933,8 @@ MipsAsmParser::parseInvNum(OperandVector &Operands) {
   if (getParser().parseExpression(IdVal))
     return MatchOperand_ParseFail;
   const MCConstantExpr *MCE = dyn_cast<MCConstantExpr>(IdVal);
-  assert(MCE && "Unexpected MCExpr type.");
+  if (!MCE)
+    return MatchOperand_ParseFail;
   int64_t Val = MCE->getValue();
   SMLoc E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer() - 1);
   Operands.push_back(MipsOperand::CreateImm(

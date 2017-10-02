@@ -69,7 +69,7 @@ entry:
   ; When calling from a variadic function to one that takes a va_list, we
   ; should simply move the va capability from $c13 to the relevant argument
   ; register.
-  ; CHECK: cincoffset	$c3, $c13, $zero
+  ; CHECK: cmove	$c3, $c13
   %v = alloca i8 addrspace(200)*, align 32, addrspace(200)
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*
   %1 = addrspacecast i8 addrspace(200)* %0 to i8*
@@ -95,11 +95,10 @@ declare i8 addrspace(200)* @llvm.mips.cap.offset.set(i8 addrspace(200)*, i64) #3
 define void @k(i32 addrspace(200)* %x, i32 addrspace(200)* %y) #0 {
 ; When calling a variadic function, we should set $c13 to the size of the arguments
 entry:
-; CHECK: daddiu	$1, $zero, [[$CAP_SIZE:32|16]]
 ; CHECK: cincoffset	$c3, $c11, $zero
-; CHECK: csetbounds	$c2, $c3, $1
-; CHECK: ori	$1, $zero, 65495
-; CHECK: candperm	$c13, $c2, $1
+; CHECK: csetbounds	$c2, $c3, [[$CAP_SIZE:32|16]]
+; CHECK: ori	$[[TMP:[0-9]+]], $zero, 65495
+; CHECK: candperm	$c13, $c2, $[[TMP]]
   %x.addr = alloca i32 addrspace(200)*, align 32, addrspace(200)
   %y.addr = alloca i32 addrspace(200)*, align 32, addrspace(200)
   store i32 addrspace(200)* %x, i32 addrspace(200)* addrspace(200)* %x.addr, align 32, !tbaa !1

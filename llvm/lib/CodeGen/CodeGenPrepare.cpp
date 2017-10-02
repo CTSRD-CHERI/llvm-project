@@ -4695,15 +4695,9 @@ bool CodeGenPrepare::optimizeSelectInst(SelectInst *SI) {
   else
     SelectKind = TargetLowering::ScalarValSelect;
   
-  int AS = -1;
-  if (PointerType *PT = dyn_cast<PointerType>(SI->getType()))
-    AS = PT->getAddressSpace();
-
-  // FIXME: Target-specific test for selects on pointers in specific address
-  // spaces
-  if ((AS == 200) || (TLI->isSelectSupported(SelectKind) &&
-      !isFormingBranchFromSelectProfitable(TTI, TLI, SI)))
-    return false;
+  if (TLI->isSelectSupported(SelectKind) &&
+      !isFormingBranchFromSelectProfitable(TTI, TLI, SI))
+      return false;
 
   ModifiedDT = true;
 

@@ -155,11 +155,9 @@ void MipsSEInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     else if (Mips::FGR64RegClass.contains(DestReg))
       Opc = Mips::DMTC1;
  } else if (Mips::CheriRegsRegClass.contains(SrcReg)) {
-   auto MoveInst = Mips::CIncOffset;
-   BuildMI(MBB, I, DL, get(MoveInst))
+   BuildMI(MBB, I, DL, get(Mips::CMove))
    .addReg(DestReg, RegState::Define)
-   .addReg(SrcReg, getKillRegState(KillSrc))
-   .addReg(Mips::ZERO_64);
+   .addReg(SrcReg, getKillRegState(KillSrc));
    return;
   }
   else if (Mips::MSA128BRegClass.contains(DestReg)) { // Copy to MSA reg
@@ -525,6 +523,8 @@ unsigned MipsSEInstrInfo::getOppositeBranchOpc(unsigned Opc) const {
   case Mips::BNEZC_MM: return Mips::BEQZC_MM;
   case Mips::CBTS:   return Mips::CBTU;
   case Mips::CBTU:   return Mips::CBTS;
+  case Mips::CBEZ:   return Mips::CBNZ;
+  case Mips::CBNZ:   return Mips::CBEZ;
   case Mips::BEQZC:  return Mips::BNEZC;
   case Mips::BNEZC:  return Mips::BEQZC;
   case Mips::BEQC:   return Mips::BNEC;
@@ -630,7 +630,8 @@ unsigned MipsSEInstrInfo::getAnalyzableBrOpc(unsigned Opc) const {
           Opc == Mips::BLTZ   || Opc == Mips::BLEZ   || Opc == Mips::BEQ64  ||
           Opc == Mips::BNE64  || Opc == Mips::BGTZ64 || Opc == Mips::BGEZ64 ||
           Opc == Mips::BLTZ64 || Opc == Mips::BLEZ64 || Opc == Mips::BC1T   ||
-          Opc == Mips::CBTS   || Opc == Mips::CBTU   ||
+          Opc == Mips::CBTS   || Opc == Mips::CBTU   || Opc == Mips::CBEZ   ||
+          Opc == Mips::CBNZ   ||
           Opc == Mips::BC1F   || Opc == Mips::B      || Opc == Mips::J      ||
           Opc == Mips::BEQZC_MM || Opc == Mips::BNEZC_MM || Opc == Mips::BEQC ||
           Opc == Mips::BNEC   || Opc == Mips::BLTC   || Opc == Mips::BGEC   ||

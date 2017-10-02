@@ -136,9 +136,6 @@ namespace llvm {
     /// comparison depending on the current mode.
     MachineBasicBlock *emitCapNotEqual(MachineInstr &MI,
                                        MachineBasicBlock *BB) const;
-    /// \brief Expand a capability move
-    MachineBasicBlock *emitCapMove(MachineInstr &MI,
-                                   MachineBasicBlock *BB) const;
 
     /// \brief Emit the FILL_FW pseudo instruction
     MachineBasicBlock *emitLD_F16_PSEUDO(MachineInstr &MI,

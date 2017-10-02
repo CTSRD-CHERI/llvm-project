@@ -324,7 +324,7 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
     setOperationAction(ISD::GlobalTLSAddress,   MVT::i64,   Custom);
     setOperationAction(ISD::JumpTable,          MVT::i64,   Custom);
     setOperationAction(ISD::ConstantPool,       MVT::i64,   Custom);
-    setOperationAction(ISD::SELECT,             MVT::i64,   Custom);
+    //setOperationAction(ISD::SELECT,             MVT::i64,   Custom);
     setOperationAction(ISD::LOAD,               MVT::i64,   Custom);
     setOperationAction(ISD::STORE,              MVT::i64,   Custom);
     setOperationAction(ISD::FP_TO_SINT,         MVT::i64,   Custom);
@@ -2001,8 +2001,9 @@ SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
     auto Ptr = DAG.getNode(ISD::INTTOPTR, DL, DstTy, Src);
     if (auto *N = dyn_cast<GlobalAddressSDNode>(Src)) {
       const GlobalValue *GV = N->getGlobal();
-      if (GV->hasInternalLinkage() || GV->hasLocalLinkage()) {
-        uint64_t SizeBytes = DAG.getDataLayout().getTypeAllocSize(GV->getValueType());
+      auto *Ty = GV->getValueType();
+      if (Ty->isSized() && (GV->hasInternalLinkage() || GV->hasLocalLinkage())){
+        uint64_t SizeBytes = DAG.getDataLayout().getTypeAllocSize(Ty);
         Ptr = setBounds(DAG, Ptr, SizeBytes);
       }
     }

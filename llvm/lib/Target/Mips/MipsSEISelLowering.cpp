@@ -1252,16 +1252,12 @@ MipsSETargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
     return emitCapFloat32Store(MI, BB);
   case Mips::CSDC1:
     return emitCapFloat64Store(MI, BB);
-  case Mips::CAP_SELECT:
-    return emitCapSelect(MI, BB);
   case Mips::CEQPseudo:
   case Mips::CEQPseudo32:
     return emitCapEqual(MI, BB);
   case Mips::CNEPseudo:
   case Mips::CNEPseudo32:
     return emitCapNotEqual(MI, BB);
-  case Mips::CMove:
-    return emitCapMove(MI, BB);
   case Mips::ST_F16:
     return emitST_F16_PSEUDO(MI, BB);
   case Mips::LD_F16:
@@ -3998,18 +3994,6 @@ MipsSETargetLowering::emitCapFloat64Load(MachineInstr &MI,
           Mips::GPR64RegClass, MI, BB);
 }
 MachineBasicBlock *
-MipsSETargetLowering::emitCapMove(MachineInstr &MI,
-                                  MachineBasicBlock *BB) const {
-  auto MoveInst = Mips::CIncOffset;
-  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
-  BuildMI(*BB, MI, MI.getDebugLoc(), TII->get(MoveInst))
-      .addReg(MI.getOperand(0).getReg())
-      .addImm(MI.getOperand(1).getImm())
-      .addReg(Mips::ZERO_64);
-  MI.eraseFromParent();
-  return BB;
-}
-MachineBasicBlock *
 MipsSETargetLowering::emitCapNotEqual(MachineInstr &MI,
                                     MachineBasicBlock *BB) const {
   bool is64 = (MI.getOpcode() == Mips::CNEPseudo);
@@ -4036,61 +4020,6 @@ MipsSETargetLowering::emitCapEqual(MachineInstr &MI,
       .add(MI.getOperand(2));
   MI.eraseFromParent();
   return BB;
-}
-MachineBasicBlock *
-MipsSETargetLowering::emitCapSelect(MachineInstr &MI,
-                                    MachineBasicBlock *BB) const {
-  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
-  const BasicBlock *LLVM_BB = BB->getBasicBlock();
-  MachineFunction *F = BB->getParent();
-  MachineFunction::iterator It(BB);
-  ++It;
-  // Splice the current basic block.  We intend to transform:
-  //   CAP_SELECT dst, cond, trueCap, falseCap
-  // into the following sequence:
-  // bne cond, $zero, cont
-  // cmove dst, trueCap # delay slot
-  // cmove dst, falseCap 
-  // cont:
-  MachineBasicBlock *falseMBB = F->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *sinkMBB = F->CreateMachineBasicBlock(LLVM_BB);
-  DebugLoc dl = MI.getDebugLoc();
-  F->insert(It, falseMBB);
-  F->insert(It, sinkMBB);
-
-  // Transfer the remainder of BB and its successor edges to sinkMBB.
-  sinkMBB->splice(sinkMBB->begin(), BB,
-                  std::next(MachineBasicBlock::iterator(MI)), BB->end());
-  sinkMBB->transferSuccessorsAndUpdatePHIs(BB);
-
-  // Next, add the true and fallthrough blocks as its successors.
-  BB->addSuccessor(falseMBB);
-  BB->addSuccessor(sinkMBB);
-
-  auto TRI = Subtarget.getRegisterInfo();
-  auto RC = MI.getRegClassConstraint(1, TII, TRI);
-  unsigned ZeroReg = -1;
-  unsigned BranchInst = -1;
-  if (TRI->isTypeLegalForClass(*RC, MVT::i64)) {
-    ZeroReg = Mips::ZERO_64;
-    BranchInst = Mips::BNE64;
-  } else if (TRI->isTypeLegalForClass(*RC, MVT::i32)) {
-    ZeroReg = Mips::ZERO;
-    BranchInst = Mips::BNE;
-  } else {
-    llvm_unreachable("Invalid register class for CAP_SELECT");
-  }
-  BuildMI(BB, dl, TII->get(BranchInst))
-    .addReg(MI.getOperand(1).getReg()).addReg(ZeroReg).addMBB(sinkMBB);
-  falseMBB->addSuccessor(sinkMBB);
-
-  BuildMI(*sinkMBB, sinkMBB->begin(), dl,
-          TII->get(Mips::PHI), MI.getOperand(0).getReg())
-    .addReg(MI.getOperand(2).getReg()).addMBB(BB)
-    .addReg(MI.getOperand(3).getReg()).addMBB(falseMBB);
-
-  MI.eraseFromParent();
-  return sinkMBB;
 }
 template<unsigned MFC1, unsigned CAPSTORE>
 static MachineBasicBlock *
