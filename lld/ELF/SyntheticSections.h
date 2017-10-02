@@ -919,6 +919,16 @@ public:
   size_t getSize() const override { return RelocsMap.size() * Entsize; }
   void finalizeContents() override;
   void writeTo(uint8_t *Buf) override;
+  bool addEntry(CheriCapRelocLocation Loc, CheriCapReloc Relocation) {
+    auto It = RelocsMap.insert(std::make_pair(Loc, Relocation));
+    if (!It.second) {
+      // Maybe happens with vtables?
+      error("Symbol already added to cap relocs");
+      return false;
+    }
+    return true;
+  }
+
 private:
   void processSection(InputSectionBase *S);
   // map or vector?

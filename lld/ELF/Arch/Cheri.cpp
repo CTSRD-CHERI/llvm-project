@@ -208,13 +208,9 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     TargetNeedsDynReloc = TargetNeedsDynReloc || Config->Pic || Config->Pie;
     uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
     assert(RawInput->size == 0 && "Clang should not have set size in __cap_relocs");
-    auto It = RelocsMap.insert(std::pair<CheriCapRelocLocation, CheriCapReloc>(
-        {LocationSym, LocationOffset, LocNeedsDynReloc},
-        {RealTarget, RawInput->offset, TargetNeedsDynReloc}));
-    if (!It.second) {
-      // Maybe happens with vtables?
-      error("Symbol already added to cap relocs");
-      continue;
+    if (!addEntry({LocationSym, LocationOffset, LocNeedsDynReloc},
+                  {RealTarget, RawInput->offset, TargetNeedsDynReloc})) {
+      continue; // Maybe happens with vtables?
     }
     if (LocNeedsDynReloc) {
       assert(LocationSym->isSection()); // Needed because local symbols cannot
