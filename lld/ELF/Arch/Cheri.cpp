@@ -207,9 +207,10 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     LocNeedsDynReloc = LocNeedsDynReloc || Config->Pic || Config->Pie;
     TargetNeedsDynReloc = TargetNeedsDynReloc || Config->Pic || Config->Pie;
     uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
+    assert(RawInput->size == 0 && "Clang should not have set size in __cap_relocs");
     auto It = RelocsMap.insert(std::pair<CheriCapRelocLocation, CheriCapReloc>(
         {LocationSym, LocationOffset, LocNeedsDynReloc},
-        {RealTarget, RawInput->offset, RawInput->size, TargetNeedsDynReloc}));
+        {RealTarget, RawInput->offset, TargetNeedsDynReloc}));
     if (!It.second) {
       // Maybe happens with vtables?
       error("Symbol already added to cap relocs");
@@ -275,7 +276,7 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
       // the addend
       TargetVA = Reloc.Target.Offset;
     }
-    uint64_t TargetOffset = Reloc.Offset;
+    uint64_t TargetOffset = Reloc.CapabilityOffset;
     uint64_t TargetSize = Reloc.Target.Symbol->getSize();
     if (TargetSize == 0) {
       bool WarnAboutUnknownSize = true;

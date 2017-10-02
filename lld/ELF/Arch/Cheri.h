@@ -48,8 +48,7 @@ struct CheriCapRelocLocation {
 struct CheriCapReloc {
   SymbolAndOffset Target; // symbol offset is if Target.Symbol is a section
                           // (e.g. .rodata.str + 0x90)
-  uint64_t Offset;
-  uint64_t Length;
+  uint64_t CapabilityOffset;
   bool NeedsDynReloc;
 };
 
