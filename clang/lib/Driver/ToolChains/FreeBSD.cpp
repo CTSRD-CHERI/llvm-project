@@ -331,9 +331,9 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   const char *Exec = Args.MakeArgString(getToolChain().GetLinkerPath());
   C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
-  if (!Args.hasArg(options::OPT_no_capsizefix) &&
-      Args.hasFlag(options::OPT_cheri_linker,
-                   options::OPT_no_cheri_linker,
+  if (Args.hasFlag(options::OPT_external_capsizefix, options::OPT_no_capsizefix,
+                   false) &&
+      Args.hasFlag(options::OPT_cheri_linker, options::OPT_no_cheri_linker,
                    ToolChain.getArch() == llvm::Triple::cheri)) {
     Exec = Args.MakeArgString(getToolChain().GetProgramPath("capsizefix"));
     ArgStringList SizeFixArgs;

@@ -244,6 +244,8 @@ def cheri_linker : Flag<["-"], "cheri-linker">, Flags<[CC1Option]>,
 def no_cheri_linker : Flag<["-"], "no-cheri-linker">, Flags<[CC1Option, HelpHidden]>,
   HelpText<"Do not assume the existence of a CHERI-aware linker">;
 
+def external_capsizefix : Flag<["-"], "external-capsizefix">, Flags<[CC1Option]>,
+  Group<Link_Group>, HelpText<"Use the external capsizefix tool instead of relying on the linker (deprecated)">;
 def no_capsizefix : Flag<["-"], "no-capsizefix">, Flags<[CC1Option]>,
   Group<Link_Group>, HelpText<"Assume that the linker handles capabilities (don't use capsizefix)">;
 def verbose_capsizefix: Flag<["-"], "verbose-capsizefix">, Flags<[CC1Option]>,
