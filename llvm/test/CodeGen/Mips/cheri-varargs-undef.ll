@@ -125,14 +125,11 @@ entry:
   %1 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %coerce.dive, align 16
   ; UNDEF128-LABEL: undef:
   ; UNDEF128: cincoffset $c24, $c11, $zero
-  ; UNDEF128: daddiu	$[[OFFSET:[0-9]+]], $zero, 144
-  ; UNDEF128: cincoffset [[TMPSP:\$c[0-9]+]], $c11, $[[OFFSET]]
-	; UNDEF128-NEXT: daddiu	[[SIZE:\$[0-9]+]], $zero, 16
-	; UNDEF128-NEXT: csetbounds	{{.*}}, [[TMPSP]], [[SIZE]]
+  ; UNDEF128: cincoffset [[TMPSP:\$c[0-9]+]], $c11, 144
+	; UNDEF128-NEXT: csetbounds	{{.*}}, [[TMPSP]], 16
   ; UNDEF256-LABEL: undef:
 	; UNDEF256: move [[TMP:\$[0-9]]], $sp
-	; UNDEF256-NEXT: daddiu	[[TMP]], [[TMP]], 32 
-	; UNDEF256-NEXT: cincoffset	{{.*}}, $c11, [[TMP]]
+	; UNDEF256-NEXT: cincoffset	{{.*}}, $c11, 32 
   call void (i32, ...) @a(i32 signext 99, i64 undef, i8 addrspace(200)* inreg %1)
   ret void
 }
@@ -149,10 +146,8 @@ entry:
   %coerce.dive = getelementptr inbounds %union.meh, %union.meh addrspace(200)* %meh, i32 0, i32 0
   %1 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %coerce.dive, align 16
   ; ALIGNED-ARG-LABEL: aligned_arg:
-  ; ALIGNED-ARG: daddiu	$[[OFFSET:[0-9]+]], $zero, 128
-  ; ALIGNED-ARG-NEXT: cincoffset	$c[[TMP:[0-9]+]], $c11, $[[OFFSET]]
-  ; ALIGNED-ARG-NEXT: daddiu	$[[SIZE:[0-9]+]], $zero, 32
-  ; ALIGNED-ARG-NEXT:csetbounds	$c{{[0-9]+}}, $c[[TMP]], $1
+  ; ALIGNED-ARG: cincoffset	$c[[TMP:[0-9]+]], $c11, 128
+  ; ALIGNED-ARG-NEXT:csetbounds	$c{{[0-9]+}}, $c[[TMP]], 32
 
   call void (i32, i32, ...) @b(i32 signext 13, i32 signext 37, i8 addrspace(200)* inreg %1)
   ret void
@@ -167,8 +162,7 @@ entry:
   %coerce.dive = getelementptr inbounds %union.meh, %union.meh addrspace(200)* %meh, i32 0, i32 0
   %1 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %coerce.dive, align 16
   ; ALIGNED-VARARG-LABEL: aligned_vararg:
-	; ALIGNED-VARARG: daddiu	[[TMP:\$[0-9]]], $zero, 12
-	; ALIGNED-VARARG-NEXT: cincoffset	{{.*}}, $c11, [[TMP]]
+  ; ALIGNED-VARARG: cincoffset	{{.*}}, $c11, 12
   call void (i32, ...) @c(i32 signext 99, i32 signext 37, i8 addrspace(200)* inreg %1)
   ret void
 }

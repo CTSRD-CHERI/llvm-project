@@ -20,13 +20,13 @@ for.cond.cleanup:                                 ; preds = %for.body, %entry
 
 for.body:                                         ; preds = %for.body, %for.body.lr.ph
   ; Save the old $csp
-  ; CHECK: cincoffset	$c[[SPSAVE:[0-9]+]], $c11, $zero
+  ; CHECK: cmove	$c[[SPSAVE:[0-9]+]], $c11
   ; Adjust $csp and allocate a new bounded stack object
   ; CHECK: cgetoffset	$[[SPOFFSET:[0-9]+]], $c11
   ; CHECK: dsubu	$[[NEWSPOFFSET:[0-9]+]], $[[SPOFFSET]], $[[SIZE:[0-9]+]]
   ; CHECK: csetoffset	$c[[TMPSP:[0-9]+]], $c11, $[[NEWSPOFFSET]]
   ; CHECK: csetbounds	$c{{[0-9]+}}, $c[[TMPSP]], $[[SIZE]]
-  ; CHECK: cincoffset	$c11, $c[[TMPSP]], $zero
+  ; CHECK: cmove	$c11, $c[[TMPSP]]
 
   %i.05 = phi i32 [ 0, %for.body.lr.ph ], [ %inc, %for.body ]
   %1 = call i8 addrspace(200)* @llvm.stacksave.p200i8()
@@ -37,7 +37,7 @@ for.body:                                         ; preds = %for.body, %for.body
   %exitcond = icmp eq i32 %inc, %x
   br i1 %exitcond, label %for.cond.cleanup, label %for.body
   ; Restore old $csp
-  ; CHECK: cincoffset	$c11, $c[[SPSAVE]], $zero
+  ; CHECK: cmove	$c11, $c[[SPSAVE]]
 }
 
 ; Function Attrs: nounwind

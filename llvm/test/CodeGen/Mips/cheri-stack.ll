@@ -34,8 +34,7 @@ entry:
 ; it from the frame capability
 ; CHECK-LABEL: has_alloca
 ; CHECK: cincoffset	$c[[ALLOCREG:([0-9]+|sp)]], $c24
-; CHECK-NEXT: daddiu	$[[SIZEREG:([0-9]+|sp)]], $zero, 4
-; CHECK-NEXT: csetbounds	$c3, $c[[ALLOCREG]], $[[SIZEREG]]
+; CHECK: csetbounds	$c3, $c[[ALLOCREG]], 4
 
   %var = alloca i32, align 4, addrspace(200)
   %0 = bitcast i32 addrspace(200)* %var to i8 addrspace(200)*
@@ -54,22 +53,19 @@ entry:
 ; that's never reloaded.
 ; CHECK-LABEL: has_spill
 ; 
-; CHECK: daddiu	$[[FRAMESIZEREG:([0-9]+|sp)]], $zero, -[[FRAMESIZE:([0-9]+|sp)]]
-; CHECK-NEXT: cincoffset	$c11, $c11, $[[FRAMESIZEREG]]
+; CHECK: cincoffset	$c11, $c11, -[[FRAMESIZE:([0-9]+)]]
 ; CHECK: csc	$c17, $zero, [[C17OFFSET:([0-9]+|sp)]]($c11)
 ; $cfp <- $csp
 ; CHECK: cincoffset	$c24, $c11, $zero
-; CHECK: cincoffset	$c[[ALLOCACAP:([0-9]+|sp)]], $c24, ${{([0-9]+|sp)}}
-; CHECK: daddiu	$[[SIZEREG:([0-9]+|sp)]], $zero, 4
-; CHECK: csetbounds	$c{{([0-9]+|sp)}}, $c[[ALLOCACAP]], $[[SIZEREG]]
+; CHECK: cincoffset	$c[[ALLOCACAP:([0-9]+|sp)]], $c24, 28
+; CHECK: csetbounds	$c{{([0-9]+|sp)}}, $c[[ALLOCACAP]], 4
 ; CHECK: csw	$1, $zero, [[ATOFFSET:([0-9]+|sp)]]($c24)
 ; CHECK: cjalr	$c12, $c17
 ; CHECK: clw	$1, $zero, [[ATOFFSET]]($c24)
 ; CHECK: addu	$2, ${{([0-9]+|sp)}}, $1
 ; CHECK: cincoffset	$c11, $c24, $zero
 ; CHECK: clc	$c17, $zero, [[C17OFFSET]]($c11)
-; CHECK: daddiu	$[[FRAMESIZEREG:([0-9]+|sp)]], $zero, [[FRAMESIZE]]
-; CHECK: cincoffset	$c11, $c11, $[[FRAMESIZEREG:([0-9]+|sp)]]
+; CHECK: cincoffset	$c11, $c11, [[FRAMESIZE]]
 
   %x.addr = alloca i32, align 4, addrspace(200)
   store i32 %x, i32 addrspace(200)* %x.addr, align 4, !tbaa !3
@@ -85,12 +81,12 @@ entry:
 ; Again, because we're at -O0, we get a load of redundant copies
 ; CHECK-LABEL: dynamic_alloca
 ; CHECK: cincoffset	$c24, $c11, $zero
-; CHECK: cincoffset	$c[[TEMPCAP:([0-9]+|sp)]], $c11, $zero
+; CHECK: cmove	$c[[TEMPCAP:([0-9]+|sp)]], $c11
 ; CHECK: cgetoffset	$[[OFFSET:([0-9]+|sp)]], $c[[TEMPCAP]]
 ; CHECK: dsubu	$[[OFFSET]], $[[OFFSET]], ${{([0-9]+|sp)}}
 ; CHECK: csetoffset	$c[[TEMPCAP]], $c[[TEMPCAP]], $[[OFFSET]]
 ; CHECK: csetbounds	$c[[TEMPCAP2:([0-9]+|sp)]], $c[[TEMPCAP]], $2
-; CHECK: cincoffset	$c11, $c[[TEMPCAP]], $zero
+; CHECK: cmove	$c11, $c[[TEMPCAP]]
 ; CHECK: cincoffset	$c[[TEMPCAP]], $c[[TEMPCAP2]], $zero
 ; CHECK: csetbounds	$c{{([0-9]+|sp)}}, $c[[TEMPCAP]]
   %0 = zext i32 %x to i64
