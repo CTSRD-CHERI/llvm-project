@@ -1,14 +1,13 @@
 // REQUIRES: clang
-// XFAIL: *
 
-// RUN: %clang_cheri_purecap %s -c -o %t.o
+// RUN: %clang_cheri_purecap_legacy_capreloc %s -c -o %t.o
 // RUN: llvm-objdump -C -r %t.o | FileCheck -check-prefix OBJ-CAPRELOCS %s
 
 // RUN: ld.lld -process-cap-relocs %t.o -static -o %t-static.exe -verbose 2>&1 | FileCheck -check-prefixes LINKING-EXE %s
 // RUN: llvm-objdump -C -t -s %t-static.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC %s
 
 // same again for statically dynamically linked exe:
-// RUN: %clang_cheri_purecap %S/Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
+// RUN: %clang_cheri_purecap_legacy_capreloc %S/../Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
 // RUN: ld.lld -process-cap-relocs -pie -Bdynamic %t.o -o %t-dynamic.exe -verbose 2>&1 | FileCheck -check-prefixes LINKING-DYNAMIC %s
 // RUN: llvm-objdump -C -t -s %t-dynamic.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s
 // RUN: llvm-readobj -r -s %t-dynamic.exe | FileCheck -check-prefixes DYNAMIC-RELOCS %s
@@ -21,6 +20,13 @@
 // RUN: ld.lld %t.o -static -o %t-static-external-capsizefix.exe
 // RUN: %capsizefix %t-static-external-capsizefix.exe
 // RUN: llvm-objdump -C -s -t %t-static-external-capsizefix.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC-EXTERNAL-CAPSIZEFIX %s
+
+
+// RUN: ld.lld %t.o -shared -o %t-external-capsizefix.so
+// RUN: %capsizefix %t-external-capsizefix.so
+// RUN: llvm-objdump -C -s -t %t-external-capsizefix.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC-EXTERNAL-CAPSIZEFIX %s
+// RUN: llvm-readobj -r -s %t-external-capsizefix.so | FileCheck -check-prefixes DYNAMIC-RELOCS %s
+
 
 
 // FIXME: it would be good if we could set bounds here instead of having it as -1
@@ -77,6 +83,7 @@ void __start(void) {}
 
 // The external capsizefix does okay for both cases:
 // STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x0000000120020000 Base: __error_unthreaded (0x000000012001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
+// DYNAMIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x0000000000020000 Base: __error_unthreaded (0x000000000001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
 
 // DUMP-CAPRELOCS-SAME:{{[[:space:]]$}}
 
