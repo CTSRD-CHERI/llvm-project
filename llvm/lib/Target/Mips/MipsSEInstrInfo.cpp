@@ -560,10 +560,14 @@ void MipsSEInstrInfo::adjustStackPtr(unsigned SP, int64_t Amount,
     return;
 
   if (ABI.IsCheriPureCap()) {
-    // FIXME: Use CIncOffset with an immediate operand when it exists.
-    unsigned Reg = loadImmediate(Amount, MBB, I, DL, nullptr);
-    BuildMI(MBB, I, DL, get(Mips::CIncOffset), SP)
-      .addReg(SP).addReg(Reg, RegState::Kill);
+    if (isInt<11>(Amount)) {
+      BuildMI(MBB, I, DL, get(Mips::CIncOffsetImm), SP)
+        .addReg(SP).addImm(Amount);
+    } else {
+      unsigned Reg = loadImmediate(Amount, MBB, I, DL, nullptr);
+      BuildMI(MBB, I, DL, get(Mips::CIncOffset), SP)
+        .addReg(SP).addReg(Reg, RegState::Kill);
+    }
   } else if (isInt<16>(Amount)) {
     // addi sp, sp, amount
     BuildMI(MBB, I, DL, get(ADDiu), SP).addReg(SP).addImm(Amount);
