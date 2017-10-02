@@ -271,9 +271,16 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
     DebugLoc DL = II->getDebugLoc();
 
     if (MI.getOpcode() == Mips::CIncOffset) {
+      MI.getOperand(1).ChangeToRegister(FrameReg, false);
+      // If this is an 11-bit offset, then replace the CIncOffset that takes a
+      // register with one that takes an immediate.
+      if (isInt<11>(Offset)) {
+        MI.setDesc(TII.get(Mips::CIncOffsetImm));
+        MI.getOperand(2).ChangeToImmediate(Offset);
+        return;
+      }
       MachineBasicBlock &MBB = *MI.getParent();
       unsigned Reg = TII.loadImmediate(Offset, MBB, II, DL, nullptr);
-      MI.getOperand(1).ChangeToRegister(FrameReg, false);
       MI.getOperand(2).ChangeToRegister(Reg, false, false, true);
       return;
     }
