@@ -184,6 +184,8 @@ RelExpr MIPS<ELFT>::getRelExpr(RelType Type, const Symbol &S,
     return R_MIPS_TLSLD;
   case R_MIPS_NONE:
     return R_NONE;
+  case R_MIPS_CHERI_CAPABILITY:
+    return R_CHERI_CAPABILITY;
   default:
     return R_INVALID;
   }

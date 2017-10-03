@@ -100,7 +100,7 @@ SymbolAndOffset SymbolAndOffset::findRealSymbol() const {
 }
 
 template <class ELFT>
-void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
+void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
   constexpr endianness E = ELFT::TargetEndianness;
   // TODO: sort by offset (or is that always true?
   const auto Rels = S->relas<ELFT>();
@@ -203,46 +203,55 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
             Twine(TargetSym.kind()));
       continue;
     }
+    addCapReloc(RelocLocation, LocNeedsDynReloc, RealTarget,
+                TargetNeedsDynReloc, TargetCapabilityOffset);
+  }
+}
 
-    LocNeedsDynReloc = LocNeedsDynReloc || Config->Pic || Config->Pie;
-    TargetNeedsDynReloc = TargetNeedsDynReloc || Config->Pic || Config->Pie;
-    uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
-    if (!addEntry({RealLocation, LocNeedsDynReloc},
-                  {RealTarget, TargetCapabilityOffset, TargetNeedsDynReloc})) {
-      // continue; // Maybe happens with vtables?
-    }
-    if (LocNeedsDynReloc) {
-      assert(LocationSym->isSection()); // Needed because local symbols cannot
-                                        // be used in dynamic relocations
-      // TODO: do this better
-      // message("Adding dyn reloc at " + toString(this) + "+0x" +
-      // utohexstr(CurrentEntryOffset));
-      assert(CurrentEntryOffset < getSize());
-      // Add a dynamic relocation so that RTLD fills in the right base address
-      // We only have the offset relative to the load address...
-      // Ideally RTLD/crt_init_globals would just add the load address to all
-      // cap_relocs entries that have a RELATIVE flag set instead of requiring a
-      // full Elf_Rel/Elf_Rela Can't use RealLocation here because that will
-      // usually refer to a local symbol
-      InX::RelaDyn->addReloc({Target->RelativeRel, this,
-                                   CurrentEntryOffset, true, RealLocation.Symbol,
-                                   static_cast<int64_t>(RealLocation.Offset)});
-    }
-    if (TargetNeedsDynReloc) {
-      // Capability target is the second field -> offset + 8
-      uint64_t OffsetInOutSec = CurrentEntryOffset + 8;
-      assert(OffsetInOutSec < getSize());
-      // message("Adding dyn reloc at " + toString(this) + "+0x" +
-      // utohexstr(OffsetInOutSec) + " against " + toString(TargetSym));
+template <class ELFT>
+void CheriCapRelocsSection<ELFT>::addCapReloc(const SymbolAndOffset &Location,
+                                              bool LocNeedsDynReloc,
+                                              const SymbolAndOffset &Target,
+                                              bool TargetNeedsDynReloc,
+                                              int64_t CapabilityOffset) {
+  LocNeedsDynReloc = LocNeedsDynReloc || Config->Pic || Config->Pie;
+  TargetNeedsDynReloc = TargetNeedsDynReloc || Config->Pic || Config->Pie;
+  uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
+  if (!addEntry({Location, LocNeedsDynReloc},
+                {Target, CapabilityOffset, TargetNeedsDynReloc})) {
+    return; // Maybe happens with vtables?
+  }
+  if (LocNeedsDynReloc) {
+    // Needed because local symbols cannot be used in dynamic relocations
+    assert(Location.Symbol->isSection());
+    // TODO: do this better
+    // message("Adding dyn reloc at " + toString(this) + "+0x" +
+    // utohexstr(CurrentEntryOffset));
+    assert(CurrentEntryOffset < getSize());
+    // Add a dynamic relocation so that RTLD fills in the right base address
+    // We only have the offset relative to the load address...
+    // Ideally RTLD/crt_init_globals would just add the load address to all
+    // cap_relocs entries that have a RELATIVE flag set instead of requiring a
+    // full Elf_Rel/Elf_Rela Can't use RealLocation here because that will
+    // usually refer to a local symbol
+    InX::RelaDyn->addReloc({elf::Target->RelativeRel, this,
+                                 CurrentEntryOffset, true, Location.Symbol,
+                                 static_cast<int64_t>(Location.Offset)});
+  }
+  if (TargetNeedsDynReloc) {
+    // Capability target is the second field -> offset + 8
+    uint64_t OffsetInOutSec = CurrentEntryOffset + 8;
+    assert(OffsetInOutSec < getSize());
+    // message("Adding dyn reloc at " + toString(this) + "+0x" +
+    // utohexstr(OffsetInOutSec) + " against " + toString(TargetSym));
 
-      // The addend is not used as the offset into the capability here, as we
-      // have the offset field in the __cap_relocs for that. The Addend
-      // will be zero unless we are targetting a string constant as these
-      // don't have a symbol and will be like .rodata.str+0x1234
-      int64_t Addend = static_cast<int64_t>(RealTarget.Offset);
-      InX::RelaDyn->addReloc({Target->RelativeRel, this, OffsetInOutSec,
-                                   false, RealTarget.Symbol, Addend});
-    }
+    // The addend is not used as the offset into the capability here, as we
+    // have the offset field in the __cap_relocs for that. The Addend
+    // will be zero unless we are targetting a string constant as these
+    // don't have a symbol and will be like .rodata.str+0x1234
+    InX::RelaDyn->addReloc({elf::Target->RelativeRel, this, OffsetInOutSec,
+                                 false, Target.Symbol,
+                                 static_cast<int64_t>(Target.Offset)});
   }
 }
 

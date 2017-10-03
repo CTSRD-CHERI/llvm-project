@@ -919,6 +919,14 @@ public:
   size_t getSize() const override { return RelocsMap.size() * Entsize; }
   void finalizeContents() override;
   void writeTo(uint8_t *Buf) override;
+  void addCapReloc(const SymbolAndOffset &Location, bool LocNeedsDynReloc,
+                   const SymbolAndOffset &Target, bool TargetNeedsDynReloc,
+                   int64_t CapabilityOffset);
+
+private:
+  void processSection(InputSectionBase *S);
+  // map or vector?
+  llvm::MapVector<CheriCapRelocLocation, CheriCapReloc> RelocsMap;
   bool addEntry(CheriCapRelocLocation Loc, CheriCapReloc Relocation) {
     auto It = RelocsMap.insert(std::make_pair(Loc, Relocation));
     if (!It.second) {
@@ -928,11 +936,6 @@ public:
     }
     return true;
   }
-
-private:
-  void processSection(InputSectionBase *S);
-  // map or vector?
-  llvm::MapVector<CheriCapRelocLocation, CheriCapReloc> RelocsMap;
   // TODO: list of added dynamic relocations?
 };
 

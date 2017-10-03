@@ -964,6 +964,31 @@ static void scanReloc(InputSectionBase &Sec, OffsetGetter &GetOffset, RelTy *&I,
     return;
   }
 
+  if (Expr == R_CHERI_CAPABILITY) {
+    assert(Config->ProcessCapRelocs);
+    bool NeedsDynReloc = Sym.IsPreemptible;
+    std::string SymbolHackName = ("__caprelocs_hack_" + Sec.Name).str();
+    auto LocationSym = Symtab->find(SymbolHackName);
+    if (!LocationSym) {
+      // XXXAR: we are modifying the symbol table in code that can run
+      // concurrently so we need a mutex here
+      static std::mutex Mu;
+      std::lock_guard<std::mutex> Lock(Mu);
+      LocationSym = Symtab->find(SymbolHackName);
+      if (!LocationSym) {
+        Symtab->addRegular(Saver.save(SymbolHackName), STV_DEFAULT, STT_SECTION,
+                           0, Sec.getOutputSection()->Size, STB_LOCAL, &Sec,
+                           Sec.File);
+        LocationSym = Symtab->find(SymbolHackName);
+        assert(LocationSym);
+      }
+    }
+    In<ELFT>::CapRelocs->addCapReloc({LocationSym, Offset}, Config->Pic,
+                                     {&Sym, 0u}, NeedsDynReloc, Addend);
+    // TODO: check if it needs a plt stub
+    return;
+  }
+
   Expr = processRelocAux<ELFT>(Sec, Expr, Type, Offset, Sym, Rel, Addend);
   // If a relocation needs PLT, we create PLT and GOTPLT slots for the symbol.
   if (needsPlt(Expr) && !Sym.isInPlt()) {
