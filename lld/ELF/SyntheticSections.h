@@ -916,6 +916,7 @@ public:
   static constexpr size_t RelocSize = 40;
   // Add a __cap_relocs section from in input object file
   void addSection(InputSectionBase *S);
+  bool empty() const override { return RelocsMap.empty(); }
   size_t getSize() const override { return RelocsMap.size() * Entsize; }
   void finalizeContents() override;
   void writeTo(uint8_t *Buf) override;
