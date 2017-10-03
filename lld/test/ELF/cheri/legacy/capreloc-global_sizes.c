@@ -64,9 +64,9 @@ void __start(void) {
 #endif
 
 // DUMP-EXE-LABEL: Sections:
-// DUMP-EXE: .global_sizes 00000030 0000000120000190 DATA
+// DUMP-EXE: .global_sizes 00000030 0000000120000158 DATA
 // DUMP-SHLIB-LABEL: Sections:
-// DUMP-SHLIB: .global_sizes 00000030 00000000000001c8 DATA
+// DUMP-SHLIB: .global_sizes 00000030 0000000000000190 DATA
 
 // GLOBAL_SIZES-LABEL: Contents of section .global_sizes:
 // .size.external_cap then .size.external_buffer (0x10 or 0x20)
@@ -78,15 +78,15 @@ void __start(void) {
 // GLOBAL_SIZES-NEXT: Contents of section .MIPS.abiflags:
 
 // DUMP-EXE-LABEL: SYMBOL TABLE:
-// DUMP-EXE: 00000001200001a0 gw      .global_sizes           00000008 .size.bar
-// DUMP-EXE: 0000000120000198 gw      .global_sizes           00000008 .size.external_buffer
-// DUMP-EXE: 0000000120000190 gw      .global_sizes           00000008 .size.external_cap
-// DUMP-EXE: 00000001200001a8 gw      .global_sizes           00000008 .size.foo
-// DUMP-EXE: 00000001200001b8 gw      .global_sizes           00000008 .size.other_var
+// DUMP-EXE: 0000000120000168 gw      .global_sizes           00000008 .size.bar
+// DUMP-EXE: 0000000120000160 gw      .global_sizes           00000008 .size.external_buffer
+// DUMP-EXE: 0000000120000158 gw      .global_sizes           00000008 .size.external_cap
+// DUMP-EXE: 0000000120000170 gw      .global_sizes           00000008 .size.foo
+// DUMP-EXE: 0000000120000180 gw      .global_sizes           00000008 .size.other_var
 
 // DUMP-SHLIB-LABEL: SYMBOL TABLE:
-// DUMP-SHLIB: 00000000000001d8 gw      .global_sizes           00000008 .size.bar
-// DUMP-SHLIB: 00000000000001d0 gw      .global_sizes           00000008 .size.external_buffer
-// DUMP-SHLIB: 00000000000001c8 gw      .global_sizes           00000008 .size.external_cap
-// DUMP-SHLIB: 00000000000001e0 gw      .global_sizes           00000008 .size.foo
-// DUMP-SHLIB: 00000000000001f0 gw      .global_sizes           00000008 .size.other_var
+// DUMP-SHLIB: 00000000000001a0 gw      .global_sizes           00000008 .size.bar
+// DUMP-SHLIB: 0000000000000198 gw      .global_sizes           00000008 .size.external_buffer
+// DUMP-SHLIB: 0000000000000190 gw      .global_sizes           00000008 .size.external_cap
+// DUMP-SHLIB: 00000000000001a8 gw      .global_sizes           00000008 .size.foo
+// DUMP-SHLIB: 00000000000001b8 gw      .global_sizes           00000008 .size.other_var
