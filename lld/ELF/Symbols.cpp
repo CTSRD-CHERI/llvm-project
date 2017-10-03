@@ -305,8 +305,10 @@ std::string lld::verboseToString(Symbol *B, uint64_t SymOffset) {
     Msg += "object ";
   else if (B->isFile())
     Msg += "object ";
+  else if (B->isUndefined())
+    Msg += "<undefined> ";
   else
-    Msg += "<unknown kind>";
+    Msg += "<unknown kind> ";
 
   if (B->isInGot())
     Msg += "(in GOT) ";
