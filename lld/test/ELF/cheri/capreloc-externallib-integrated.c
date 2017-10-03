@@ -1,5 +1,4 @@
 // REQUIRES: clang
-// XFAIL: *
 
 // RUN: %cheri256_purecap_cc1 -emit-obj %S/Inputs/external_lib_user.c -o %t.o
 // RUN: %cheri256_purecap_cc1 -emit-obj %S/Inputs/external_lib.c -o %t-externs.o
@@ -22,7 +21,7 @@
 // check that we get an undefined symbol error:
 // RUN: not ld.lld -process-cap-relocs %t.o -Bdynamic -o /dev/null -e entry 2>&1 | FileCheck %s -check-prefix UNDEFINED
 // RUN: not ld.lld -process-cap-relocs %t.o -static -o /dev/null -e entry 2>&1 | FileCheck %s -check-prefix UNDEFINED
-// RUN: not ld.lld -process-cap-relocs %t.o -shared -o /dev/null 2>&1 | FileCheck %s -check-prefix UNDEFINED
+// RUN: not ld.lld -process-cap-relocs %t.o -shared -no-undefined -o /dev/null 2>&1 | FileCheck %s -check-prefix UNDEFINED
 
 // STATIC: CAPABILITY RELOCATION RECORDS:
 // STATIC: 0x0000000120020000	Base: external_cap (0x0000000120041100)	Offset: 0x0000000000000000	Length: 0x00000000000000{{1|2}}0	Permissions: 0x00000000
@@ -43,8 +42,8 @@
 
 
 // DUMP-EXTERNALLIB: SYMBOL TABLE:
-// DUMP-EXTERNALLIB:  000000000030000 g       .bss		 000010e1 external_buffer
-// DUMP-EXTERNALLIB:  0000000000031100 g       .bss		 00000020 external_cap
+// DUMP-EXTERNALLIB:  000000000020020 g       .bss		 000010e1 external_buffer
+// DUMP-EXTERNALLIB:  0000000000021120 g       .bss		 00000020 external_cap
 // DUMP-EXTERNALLIB:  0000000000010000 g     F .text		 00000028 external_func
 
 
@@ -62,13 +61,13 @@
 // DUMP-SHLIB: 0x0000000000020020      Base:  (0x0000000000000000)     Offset: 0x0000000000000019      Length: 0x00000000000010e1      Permissions: 0x00000000
 // DUMP-SHLIB: 0x0000000000020040      Base:  (0x0000000000000000)     Offset: 0x0000000000000000      Length: 0x0000000000000028      Permissions: 0x8000000000000000 (Function)
 
-// UNDEFINED:      error: cap_reloc against undefined symbol: external_cap
-// UNDEFINED-NEXT: >>> referenced by local object cap_ptr
-// UNDEFINED-NEXT: >>> defined in {{.+}}/capreloc-externallib-integrated.c.tmp.o
-// UNDEFINED: error: cap_reloc against undefined symbol: external_buffer
-// UNDEFINED-NEXT: >>> referenced by local object buffer_ptr
-// UNDEFINED-NEXT: >>> defined in {{.+}}/capreloc-externallib-integrated.c.tmp.o
-// UNDEFINED: error: cap_reloc against undefined symbol: external_func
-// UNDEFINED-NEXT: >>> referenced by local object func_ptr
-// UNDEFINED-NEXT: >>> defined in {{.+}}/capreloc-externallib-integrated.c.tmp.o
+// UNDEFINED:      error: undefined symbol: external_cap
+// UNDEFINED-NEXT: >>> referenced by external_lib_user.c
+// UNDEFINED-NEXT: >>> {{.+}}/capreloc-externallib-integrated.c.tmp.o:(cap_ptr)
+// UNDEFINED:      error: undefined symbol: external_buffer
+// UNDEFINED-NEXT: >>> referenced by external_lib_user.c
+// UNDEFINED-NEXT: >>> {{.+}}/capreloc-externallib-integrated.c.tmp.o:(buffer_ptr)
+// UNDEFINED:      error: undefined symbol: external_func
+// UNDEFINED-NEXT: >>> referenced by external_lib_user.c
+// UNDEFINED-NEXT: >>> {{.+}}/capreloc-externallib-integrated.c.tmp.o:(func_ptr)
 
