@@ -420,7 +420,7 @@ template <class ELFT> void Writer<ELFT>::run() {
 
   if (!Config->Relocatable) {
     combineEhFrameSections<ELFT>();
-    if (Config->ProcessCapRelocs) {
+    if (Config->ProcessCapRelocs && In<ELFT>::CapRelocs) {
       combineCapRelocsSections();
       InputSections.push_back(In<ELFT>::CapRelocs);
     }
@@ -1430,7 +1430,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
 
   // Now handle __cap_relocs (must be before RelaDyn because it might
   // result in new dynamic relocations being added)
-  if (Config->ProcessCapRelocs) {
+  if (Config->ProcessCapRelocs && In<ELFT>::CapRelocs) {
     applySynthetic({In<ELFT>::CapRelocs},
                    [](SyntheticSection *SS) { SS->finalizeContents(); });
   }
