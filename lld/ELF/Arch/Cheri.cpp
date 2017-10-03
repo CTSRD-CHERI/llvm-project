@@ -313,9 +313,9 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
                  << " -> target size 0x" << utohexstr(TargetSize) << "\n";
 #endif
       } else {
-        warn("Could not find size for symbol '" +
+        warn("Could not find size for symbol " +
              verboseToString<ELFT>(Reloc.Target) +
-             "' and could not determine section size. Using UINT64_MAX.");
+             " and could not determine section size. Using UINT64_MAX.");
         TargetSize = std::numeric_limits<uint64_t>::max();
       }
     }
