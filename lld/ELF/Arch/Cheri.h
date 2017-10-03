@@ -36,19 +36,19 @@ struct SymbolAndOffset {
 };
 
 struct CheriCapRelocLocation {
-  Symbol *BaseSym;
-  uint64_t Offset;
+  SymbolAndOffset Loc;
   bool NeedsDynReloc;
   bool operator==(const CheriCapRelocLocation &Other) const {
-    return BaseSym == Other.BaseSym && Offset == Other.Offset &&
+    return Loc.Symbol == Other.Loc.Symbol && Loc.Offset == Other.Loc.Offset &&
            NeedsDynReloc == Other.NeedsDynReloc;
   }
 };
 
 struct CheriCapReloc {
-  SymbolAndOffset Target; // symbol offset is if Target.Symbol is a section
-                          // (e.g. .rodata.str + 0x90)
-  uint64_t CapabilityOffset;
+  // We can't use a plain Symbol* here as capabilities to string constants
+  // will be e.g. `.rodata.str + 0x90` -> need to store offset as well
+  SymbolAndOffset Target;
+  int64_t CapabilityOffset;
   bool NeedsDynReloc;
 };
 
@@ -58,13 +58,13 @@ struct CheriCapReloc {
 namespace llvm {
 template <> struct DenseMapInfo<lld::elf::CheriCapRelocLocation> {
   static inline lld::elf::CheriCapRelocLocation getEmptyKey() {
-    return {nullptr, 0, false};
+    return {{nullptr, 0}, false};
   }
   static inline lld::elf::CheriCapRelocLocation getTombstoneKey() {
-    return {nullptr, std::numeric_limits<uint64_t>::max(), false};
+    return {{nullptr, std::numeric_limits<uint64_t>::max()}, false};
   }
   static unsigned getHashValue(const lld::elf::CheriCapRelocLocation &Val) {
-    auto Pair = std::make_pair(Val.BaseSym, Val.Offset);
+    auto Pair = std::make_pair(Val.Loc.Symbol, Val.Loc.Offset);
     return DenseMapInfo<decltype(Pair)>::getHashValue(Pair);
   }
   static bool isEqual(const lld::elf::CheriCapRelocLocation &LHS,

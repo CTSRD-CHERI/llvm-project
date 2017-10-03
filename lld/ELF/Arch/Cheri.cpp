@@ -150,10 +150,10 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     //    errs() << "Adding cap reloc at " << toString(LocationSym) << " type "
     //           << Twine((int)LocationSym.Type) << " against "
     //           << toString(TargetSym) << "\n";
-    const uint64_t LocationOffset = LocationRel.r_addend;
-    const uint64_t TargetOffset = TargetRel.r_addend;
     auto *RawInput = reinterpret_cast<const InMemoryCapRelocEntry<E> *>(
         S->Data.begin() + CapRelocsOffset);
+    int64_t TargetCapabilityOffset = (int64_t)RawInput->offset;
+    assert(RawInput->size == 0 && "Clang should not have set size in __cap_relocs");
     bool LocNeedsDynReloc = false;
     if (!isa<Defined>(LocationSym)) {
       error("Unhandled symbol kind for cap_reloc: " +
@@ -161,8 +161,8 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
       continue;
     }
 
-    const SymbolAndOffset RelocLocation{LocationSym, LocationOffset};
-    const SymbolAndOffset RelocTarget{&TargetSym, TargetOffset};
+    const SymbolAndOffset RelocLocation{LocationSym, (uint64_t)LocationRel.r_addend};
+    const SymbolAndOffset RelocTarget{&TargetSym, (uint64_t)TargetRel.r_addend};
     SymbolAndOffset RealLocation = RelocLocation.findRealSymbol();
     SymbolAndOffset RealTarget = RelocTarget.findRealSymbol();
     if (Config->VerboseCapRelocs) {
@@ -207,10 +207,9 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     LocNeedsDynReloc = LocNeedsDynReloc || Config->Pic || Config->Pie;
     TargetNeedsDynReloc = TargetNeedsDynReloc || Config->Pic || Config->Pie;
     uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
-    assert(RawInput->size == 0 && "Clang should not have set size in __cap_relocs");
-    if (!addEntry({LocationSym, LocationOffset, LocNeedsDynReloc},
-                  {RealTarget, RawInput->offset, TargetNeedsDynReloc})) {
-      continue; // Maybe happens with vtables?
+    if (!addEntry({RealLocation, LocNeedsDynReloc},
+                  {RealTarget, TargetCapabilityOffset, TargetNeedsDynReloc})) {
+      // continue; // Maybe happens with vtables?
     }
     if (LocNeedsDynReloc) {
       assert(LocationSym->isSection()); // Needed because local symbols cannot
@@ -225,20 +224,24 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
       // cap_relocs entries that have a RELATIVE flag set instead of requiring a
       // full Elf_Rel/Elf_Rela Can't use RealLocation here because that will
       // usually refer to a local symbol
-      InX::RelaDyn->addReloc({Target->RelativeRel, this, CurrentEntryOffset,
-                              true, LocationSym,
-                              static_cast<int64_t>(LocationOffset)});
+      InX::RelaDyn->addReloc({Target->RelativeRel, this,
+                                   CurrentEntryOffset, true, RealLocation.Symbol,
+                                   static_cast<int64_t>(RealLocation.Offset)});
     }
     if (TargetNeedsDynReloc) {
       // Capability target is the second field -> offset + 8
       uint64_t OffsetInOutSec = CurrentEntryOffset + 8;
       assert(OffsetInOutSec < getSize());
       // message("Adding dyn reloc at " + toString(this) + "+0x" +
-      // utohexstr(OffsetInOutSec) + " against " + toString(TargetSym)); In the
-      // RELA case (not yet) addend is already written by writeTo() below
-      int64_t Addend = Config->IsRela ? TargetOffset : 0;
-      InX::RelaDyn->addReloc({Target->RelativeRel, this, OffsetInOutSec, false,
-                              &TargetSym, Addend});
+      // utohexstr(OffsetInOutSec) + " against " + toString(TargetSym));
+
+      // The addend is not used as the offset into the capability here, as we
+      // have the offset field in the __cap_relocs for that. The Addend
+      // will be zero unless we are targetting a string constant as these
+      // don't have a symbol and will be like .rodata.str+0x1234
+      int64_t Addend = static_cast<int64_t>(RealTarget.Offset);
+      InX::RelaDyn->addReloc({Target->RelativeRel, this, OffsetInOutSec,
+                                   false, RealTarget.Symbol, Addend});
     }
   }
 }
@@ -251,8 +254,8 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
   for (const auto &I : RelocsMap) {
     const CheriCapRelocLocation &Location = I.first;
     const CheriCapReloc &Reloc = I.second;
-    Symbol *LocationSym = Location.BaseSym;
-    int64_t LocationOffset = Location.Offset;
+    Symbol *LocationSym = Location.Loc.Symbol;
+    int64_t LocationOffset = Location.Loc.Offset;
     // If we don't need a dynamic relocation just write the VA
     // We always write the virtual address here:
     // In the shared library case this will be an address relative to the load
