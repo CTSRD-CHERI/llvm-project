@@ -6,7 +6,6 @@
 # RUN: ld.lld --version-script %t.script -shared %t.o -o %t.so
 # RUN: llvm-objdump --section=.got -s %t.so | FileCheck %s -check-prefix GOT
 # RUN: llvm-readobj -r %t.so | FileCheck %s -check-prefix RELOCS
-# RUN: not echo 1
 
 # GOT:        Contents of section .got:
 # GOT-NEXT:   20000 00000000 00000000 80000000 00000000
