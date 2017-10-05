@@ -618,6 +618,13 @@ void MipsAsmPrinter::printOperand(const MachineInstr *MI, int opNum,
   case MipsII::MO_GOT_DISP: O << "%got_disp("; break;
   case MipsII::MO_GOT_PAGE: O << "%got_page("; break;
   case MipsII::MO_GOT_OFST: O << "%got_ofst("; break;
+
+  case MipsII::MO_CAPTAB11:         O << "%captab(";    break;
+  case MipsII::MO_CAPTAB_HI16:      O << "%captab_hi("; break;
+  case MipsII::MO_CAPTAB_LO16:      O << "%captab_lo("; break;
+  case MipsII::MO_CAPTAB_CALL11:    O << "%capcall(";    break;
+  case MipsII::MO_CAPTAB_CALL_HI16: O << "%capcall_hi("; break;
+  case MipsII::MO_CAPTAB_CALL_LO16: O << "%capcall_lo("; break;
   }
 
   switch (MO.getType()) {
