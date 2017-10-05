@@ -875,6 +875,12 @@ public:
     FK_ConversionFailed,
     /// \brief Implicit conversion failed.
     FK_ConversionFromPropertyFailed,
+    /// \brief Implicit conversion failed.
+    FK_ConversionFromCapabilityFailed,
+    /// \brief Implicit conversion failed.
+    FK_ConversionToCapabilityFailed,
+    /// \brief Reference binding changes __capability qualifier.
+    FK_ReferenceInitChangesCapabilityQualifier,
     /// \brief Too many initializers for scalar
     FK_TooManyInitsForScalar,
     /// \brief Scalar initialized from a parenthesized initializer list.

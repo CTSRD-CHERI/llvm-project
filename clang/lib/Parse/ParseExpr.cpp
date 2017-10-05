@@ -2354,6 +2354,24 @@ Parser::ParseParenExpression(ParenParseOption &ExprType, bool stopIfCastExpr,
     return Actions.ActOnObjCBridgedCast(getCurScope(), OpenLoc, Kind,
                                         BridgeKeywordLoc, Ty.get(),
                                         RParenLoc, SubExpr.get());
+  } else if (Tok.is(tok::kw___cheri_cast)) {
+    // TODO: (__cheri_bounded_cast struct foo[42])?
+    // tok::TokenKind tokenKind = Tok.getKind();
+    SourceLocation CheriCastKeywordLoc = ConsumeToken();
+
+    // Parse a CHERI pointer cast
+    TypeResult Ty = ParseTypeName();
+    T.consumeClose();
+    ColonProtection.restore();
+    RParenLoc = T.getCloseLocation();
+    ExprResult SubExpr = ParseCastExpression(/*isUnaryExpression=*/false);
+
+    if (Ty.isInvalid() || SubExpr.isInvalid())
+      return ExprError();
+
+    return Actions.ActOnCheriCast(getCurScope(), OpenLoc,
+                                         CheriCastKeywordLoc, Ty.get(),
+                                         RParenLoc, SubExpr.get());
   } else if (ExprType >= CompoundLiteral &&
              isTypeIdInParens(isAmbiguousTypeId)) {
 

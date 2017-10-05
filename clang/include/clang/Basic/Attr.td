@@ -1641,6 +1641,10 @@ def CHERICapability : TypeAttr {
   let Spellings = [GNU<"cheri_capability">];
   let Documentation = [Undocumented];
 }
+def MemoryAddress : TypeAttr {
+  let Spellings = [GNU<"memory_address">, CXX11<"cheri","memory_address">];
+  let Documentation = [Undocumented];
+}
 
 def PointerInterpretationCaps : InheritableAttr {
   let Spellings = [GNU<"pointer_interpretation_capabilities">];

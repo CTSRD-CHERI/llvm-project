@@ -1223,11 +1223,11 @@ void test53(void) {
 // CHECK-LABEL: define void @test54(i32 %first, ...)
 void test54(int first, ...) {
   __builtin_va_list arglist;
-  // CHECK: call void @llvm.va_start
+  // CHECK: call void @llvm.va_start.p0i8
   __builtin_va_start(arglist, first);
   // CHECK: call i8* @objc_retain
   id obj = __builtin_va_arg(arglist, id);
-  // CHECK: call void @llvm.va_end
+  // CHECK: call void @llvm.va_end.p0i8
   __builtin_va_end(arglist);
   // CHECK: call void @objc_release
   // CHECK: ret void

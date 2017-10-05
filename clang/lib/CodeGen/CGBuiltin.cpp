@@ -397,13 +397,14 @@ EncompassingIntegerType(ArrayRef<struct WidthAndSignedness> Types) {
 }
 
 Value *CodeGenFunction::EmitVAStartEnd(Value *ArgValue, bool IsStart) {
-  llvm::Type *DestType = llvm::PointerType::get(Int8Ty, 0);
+  unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  llvm::Type *DestType = llvm::PointerType::get(Int8Ty, AS);
   if (ArgValue->getType() != DestType)
     ArgValue = Builder.CreatePointerBitCastOrAddrSpaceCast(ArgValue, DestType,
                                          ArgValue->getName().data());
 
   Intrinsic::ID inst = IsStart ? Intrinsic::vastart : Intrinsic::vaend;
-  return Builder.CreateCall(CGM.getIntrinsic(inst), ArgValue);
+  return Builder.CreateCall(CGM.getIntrinsic(inst, DestType), ArgValue);
 }
 
 /// Checks if using the result of __builtin_object_size(p, @p From) in place of
@@ -696,11 +697,13 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     Value *DstPtr = EmitVAListRef(E->getArg(0)).getPointer();
     Value *SrcPtr = EmitVAListRef(E->getArg(1)).getPointer();
 
-    llvm::Type *Type = Int8Ty->getPointerTo(0);
+    unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
+    llvm::Type *Type = Int8Ty->getPointerTo(AS);
 
     DstPtr = Builder.CreatePointerBitCastOrAddrSpaceCast(DstPtr, Type);
     SrcPtr = Builder.CreatePointerBitCastOrAddrSpaceCast(SrcPtr, Type);
-    return RValue::get(Builder.CreateCall(CGM.getIntrinsic(Intrinsic::vacopy),
+    return RValue::get(Builder.CreateCall(CGM.getIntrinsic(Intrinsic::vacopy,
+                                                           { Type, Type }),
                                           {DstPtr, SrcPtr}));
   }
   case Builtin::BI__builtin_abs:

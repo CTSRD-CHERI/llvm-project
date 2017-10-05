@@ -1441,6 +1441,9 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
   case AttributedType::attr_preserve_all:
     OS << "preserve_all";
     break;
+  case AttributedType::attr_memory_address:
+    OS << "memory_address";
+    break;
   }
   OS << "))";
 }

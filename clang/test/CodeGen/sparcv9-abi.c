@@ -122,7 +122,7 @@ void call_tiny() {
 
 // CHECK-LABEL: define signext i32 @f_variable(i8* %f, ...)
 // CHECK: %ap = alloca i8*
-// CHECK: call void @llvm.va_start
+// CHECK: call void @llvm.va_start.p0i8
 //
 int f_variable(char *f, ...) {
   int s = 0;

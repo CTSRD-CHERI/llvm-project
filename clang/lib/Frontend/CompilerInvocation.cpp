@@ -1027,11 +1027,18 @@ static bool parseShowColorsArgs(const ArgList &Args, bool DefaultColor) {
   // but default to off in cc1, needing an explicit OPT_fdiagnostics_color.
   // Support both clang's -f[no-]color-diagnostics and gcc's
   // -f[no-]diagnostics-colors[=never|always|auto].
-  enum {
+  enum ShowColorsEnum {
     Colors_On,
     Colors_Off,
     Colors_Auto
   } ShowColors = DefaultColor ? Colors_Auto : Colors_Off;
+  if (ShowColors == Colors_Auto) {
+    const char* ShowColorsEnv = std::getenv("CLANG_FORCE_COLOR_DIAGNOSTICS");
+    ShowColors = llvm::StringSwitch<ShowColorsEnum>(ShowColorsEnv)
+            .Cases("no", "0", Colors_Off)
+            .Cases("yes", "always", "1", Colors_On)
+            .Default(Colors_Auto);
+  }
   for (Arg *A : Args) {
     const Option &O = A->getOption();
     if (O.matches(options::OPT_fcolor_diagnostics) ||

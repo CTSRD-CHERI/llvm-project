@@ -1,11 +1,11 @@
-// RUN: %clang_cc1 %s -triple cheri-unknown-freebsd -fsyntax-only -verify
+// RUN: %cheri_cc1 %s -fsyntax-only -verify
 void f() {
   char * __capability x;
-  char *y = x; // expected-error {{initializing 'char *' with an expression of incompatible type 'char * __capability'}}
+  char *y = x; // expected-error {{converting capability type 'char * __capability' to non-capability type 'char *' without an explicit cast}}
 }
 void g() {
   char *x;
-  char * __capability y = x; // expected-error {{initializing 'char * __capability' with an expression of incompatible type 'char *'}}
+  char * __capability y = x; // expected-error {{converting non-capability type 'char *' to capability type 'char * __capability' without an explicit cast}}
 }
 void h() {
   char * __capability x;

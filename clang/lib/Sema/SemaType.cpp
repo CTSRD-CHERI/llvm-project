@@ -5071,6 +5071,8 @@ static AttributeList::Kind getAttrListKind(AttributedType::Kind kind) {
     return AttributeList::AT_ObjCKindOf;
   case AttributedType::attr_cheri_capability:
     return AttributeList::AT_CHERICapability;
+  case AttributedType::attr_memory_address:
+    return AttributeList::AT_MemoryAddress;
   case AttributedType::attr_ns_returns_retained:
     return AttributeList::AT_NSReturnsRetained;
   }
@@ -6874,6 +6876,16 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
   Declarator &declarator = state.getDeclarator();
   Sema& S = state.getSema();
 
+  if (TAL == TAL_DeclName) {
+    // TODO: we should use the spelling as written in the source
+    // StringRef Name = attr.getName()->getName();
+    StringRef Name = "__capability";
+    S.Diag(attr.getLoc(), diag::err_attr_wrong_position) << Name
+        << FixItHint::CreateRemoval(attr.getLoc())
+        << FixItHint::CreateInsertion(state.getDeclarator().getName().getLocStart(), Name);
+    return;
+  }
+
   if (TAL == TAL_DeclSpec) {
     // possible deprecated use; move to the outermost pointer declarator
     // unless this is a typedef'd pointer type
@@ -6974,6 +6986,49 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
 
   S.Diag(attr.getLoc(), diag::err_cheri_capability_attribute_pointers_only) << CurType;
 }
+
+
+static bool HandleMemoryAddressAttr(QualType &T, TypeProcessingState &State,
+                                    TypeAttrLocation TAL, AttributeList& Attr) {
+  Sema &S = State.getSema();
+
+  assert(Attr.getKind() == AttributeList::AT_MemoryAddress);
+  // XXXAR: FIXME: Why do I get an assertion later if I don't error out here?
+  if (TAL == TAL_DeclName) {
+    StringRef Name = Attr.getName()->getName();
+    S.Diag(Attr.getLoc(), diag::err_attr_wrong_position) << Name
+        << FixItHint::CreateRemoval(Attr.getLoc())
+        << FixItHint::CreateInsertion(State.getDeclarator().getDeclSpec().getLocStart(), Name);
+    return true;
+  }
+
+  if (!T->isIntegerType() || T->isCHERICapabilityType(S.Context)) {
+    S.Diag(Attr.getLoc(), diag::err_attribute_address_integers_only)
+      << Attr.getName() << T;
+    return true;
+  }
+
+  SplitQualType underlyingType = T.split();
+  const Type *prevTy = nullptr;
+  while (!prevTy || prevTy != underlyingType.Ty) {
+    prevTy = underlyingType.Ty;
+    if (const AttributedType *AT = dyn_cast<AttributedType>(prevTy)) {
+      AttributedType::Kind CurAttrKind = AT->getAttrKind();
+      // You cannot specify duplicate type attributes, so if the attribute has
+      // already been applied, flag it.
+      if (CurAttrKind == AttributedType::attr_memory_address) {
+        S.Diag(Attr.getLoc(), diag::warn_duplicate_attribute_exact)
+          << Attr.getName();
+        return true;
+      }
+    }
+    underlyingType = underlyingType.getSingleStepDesugaredType();
+  }
+  T = S.Context.getAttributedType(AttributedType::attr_memory_address, T, T);
+  // llvm::errs() << "Modified type: "; T.dump();
+  return false;
+}
+
 
 static void processTypeAttrs(TypeProcessingState &state, QualType &type,
                              TypeAttrLocation TAL, AttributeList *attrs) {
@@ -7118,7 +7173,7 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
       case TAL_DeclChunk:
       case TAL_DeclName:
         state.getSema().Diag(attr.getLoc(),
-                             diag::err_objc_kindof_wrong_position)
+                             diag::err_attr_wrong_position) << "__kindof"
           << FixItHint::CreateRemoval(attr.getLoc())
           << FixItHint::CreateInsertion(
                state.getDeclarator().getDeclSpec().getLocStart(), "__kindof ");
@@ -7147,6 +7202,12 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
     case AttributeList::AT_CHERICapability:
       attr.setUsedAsTypeAttr();
       HandleCHERICapabilityAttr(type, state, TAL, attr);
+      break;
+    case AttributeList::AT_MemoryAddress:
+      // llvm::errs() << "applying memory_address to "; type.dump();
+      if (!HandleMemoryAddressAttr(type, state, TAL, attr)) {
+          attr.setUsedAsTypeAttr();
+      }
       break;
     }
   }

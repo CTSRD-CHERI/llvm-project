@@ -459,6 +459,14 @@ public:
 
   uint64_t getPointerRangeForCHERICapability() const override { return 64; }
 
+  uint64_t getPointerWidthV(unsigned AddrSpace) const override {
+    return (AddrSpace == 200) ? CapSize : PointerWidth;
+  }
+
+  uint64_t getPointerAlignV(unsigned AddrSpace) const override {
+    return (AddrSpace == 200) ? CapSize : PointerAlign;
+  }
+
   bool SupportsCapabilities() const override { return IsCHERI; }
 
   bool hasBuiltinAtomic(uint64_t AtomicSizeInBits,
