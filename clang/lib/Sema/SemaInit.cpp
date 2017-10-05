@@ -22,6 +22,7 @@
 #include "clang/Sema/Lookup.h"
 #include "clang/Sema/SemaInternal.h"
 #include "llvm/ADT/APInt.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
@@ -358,6 +359,9 @@ class InitListChecker {
                               bool TopLevelObject);
   void CheckEmptyInitializable(const InitializedEntity &Entity,
                                SourceLocation Loc);
+
+  bool isCapNarrowing(Expr* expr, QualType DeclType, unsigned *Index,
+                      unsigned *StructuredIndex);
 
 public:
   InitListChecker(Sema &S, const InitializedEntity &Entity,
@@ -1237,6 +1241,10 @@ void InitListChecker::CheckSubElementType(const InitializedEntity &Entity,
     ExprRes.get();
     // Fall through for subaggregate initialization
   }
+  if (isCapNarrowing(expr, ElemType, &Index, &StructuredIndex)) {
+    hadError = true;
+    return;
+  }
 
   // C++ [dcl.init.aggr]p12:
   //
@@ -1299,6 +1307,24 @@ void InitListChecker::CheckComplexType(const InitializedEntity &Entity,
   }
 }
 
+bool InitListChecker::isCapNarrowing(Expr* expr, QualType DeclType,
+                                     unsigned *Index, unsigned *StructuredIndex) {
+  // XXXAR: expr->getType() will return int for int&!
+  QualType ExprType = expr->getRealReferenceType();
+  if (ExprType->isCHERICapabilityType(SemaRef.Context) &&
+     !DeclType->isCHERICapabilityType(SemaRef.Context)) {
+    // TODO: allow for nullptr, etc.
+    if (!VerifyOnly) {
+      SemaRef.Diag(expr->getLocStart(), diag::ext_init_list_type_narrowing)
+          << ExprType << DeclType << expr->getSourceRange();
+    }
+    ++(*Index);
+    ++(*StructuredIndex);
+    return true;
+  }
+  return false;
+}
+
 void InitListChecker::CheckScalarType(const InitializedEntity &Entity,
                                       InitListExpr *IList, QualType DeclType,
                                       unsigned &Index,
@@ -1318,6 +1344,10 @@ void InitListChecker::CheckScalarType(const InitializedEntity &Entity,
   }
 
   Expr *expr = IList->getInit(Index);
+  if (isCapNarrowing(expr, DeclType, &Index, &StructuredIndex)) {
+    hadError = true;
+    return;
+  }
   if (InitListExpr *SubIList = dyn_cast<InitListExpr>(expr)) {
     // FIXME: This is invalid, and accepting it causes overload resolution
     // to pick the wrong overload in some corner cases.
@@ -1417,6 +1447,12 @@ void InitListChecker::CheckReferenceType(const InitializedEntity &Entity,
     hadError = true;
 
   expr = Result.getAs<Expr>();
+  if (expr) {
+    if (isCapNarrowing(expr, DeclType, &Index, &StructuredIndex)) {
+      hadError = true;
+      return;
+    }
+  }
   IList->setInit(Index, expr);
 
   if (hadError)
@@ -3137,6 +3173,9 @@ bool InitializationSequence::isAmbiguous() const {
   case FK_ReferenceInitDropsQualifiers:
   case FK_ReferenceInitFailed:
   case FK_ConversionFailed:
+  case FK_ConversionFromCapabilityFailed:
+  case FK_ConversionToCapabilityFailed:
+  case FK_ReferenceInitChangesCapabilityQualifier:
   case FK_ConversionFromPropertyFailed:
   case FK_TooManyInitsForScalar:
   case FK_ParenthesizedListInitForScalar:
@@ -3999,7 +4038,7 @@ static void TryListInitialization(Sema &S,
       // source value is already of the destination type), and the first
       // case is handled by the general case for single-element lists below.
       ImplicitConversionSequence ICS;
-      ICS.setStandard();
+      ICS.setStandard(ImplicitConversionSequence::MemsetToZero);
       ICS.Standard.setAsIdentityConversion();
       if (!E->isRValue())
         ICS.Standard.First = ICK_Lvalue_To_Rvalue;
@@ -4216,8 +4255,7 @@ static OverloadingResult TryRefInitWithConversionFunction(
            "should not have conversion after constructor");
 
     ImplicitConversionSequence ICS;
-    ICS.setStandard();
-    ICS.Standard = Best->FinalConversion;
+    ICS.setStandard(Best->FinalConversion);
     Sequence.AddConversionSequenceStep(ICS, ICS.Standard.getToType(2));
 
     // Every implicit conversion results in a prvalue, except for a glvalue
@@ -4283,6 +4321,31 @@ static bool isNonReferenceableGLValue(Expr *E) {
   return E->refersToBitField() || E->refersToVectorElement();
 }
 
+
+static void CheckReferenceInitCHERI(Sema& S, const InitializedEntity &Entity,
+                                    Expr *Initializer,
+                                    InitializationSequence &Sequence) {
+  if (!Sequence)
+    return; // already failed so no need to diagnose
+
+  // Check that we aren't converting between capability and non-capability references
+  const bool PureCapABI = S.getASTContext().getTargetInfo().areAllPointersCapabilities();
+  // If we are in the purecap ABI we can't create non-capabality references so no need to check
+  if (!PureCapABI) {
+    bool DestIsCapRef = PureCapABI;
+    if (auto DestRef = Entity.getType()->getAs<ReferenceType>())
+      DestIsCapRef = DestRef->isCHERICapability();
+    QualType RealSrcType = Initializer->getRealReferenceType();
+    bool SrcIsCapRef = false;
+    if (auto SrcRef = RealSrcType->getAs<ReferenceType>())
+      SrcIsCapRef = SrcRef->isCHERICapability();
+    if (SrcIsCapRef != DestIsCapRef) {
+      Sequence.SetFailed(InitializationSequence::FK_ReferenceInitChangesCapabilityQualifier);
+      return;
+    }
+  }
+}
+
 /// \brief Reference initialization without resolving overloaded functions.
 static void TryReferenceInitializationCore(Sema &S,
                                            const InitializedEntity &Entity,
@@ -4305,6 +4368,11 @@ static void TryReferenceInitializationCore(Sema &S,
   Sema::ReferenceCompareResult RefRelationship
     = S.CompareReferenceRelationship(DeclLoc, cv1T1, cv2T2, DerivedToBase,
                                      ObjCConversion, ObjCLifetimeConversion);
+
+  // make sure to check that we aren't converting from capability to non-capability
+  auto CheckCheriCompatibility = llvm::make_scope_exit([&]() {
+    CheckReferenceInitCHERI(S, Entity, Initializer, Sequence);
+  });
 
   // C++0x [dcl.init.ref]p5:
   //   A reference to type "cv1 T1" is initialized by an expression of type
@@ -4838,8 +4906,7 @@ static void TryUserDefinedConversion(Sema &S,
   if (Best->FinalConversion.First || Best->FinalConversion.Second ||
       Best->FinalConversion.Third) {
     ImplicitConversionSequence ICS;
-    ICS.setStandard();
-    ICS.Standard = Best->FinalConversion;
+    ICS.setStandard(Best->FinalConversion);
     Sequence.AddConversionSequenceStep(ICS, DestType, TopLevelOfInitList);
   }
 }
@@ -4995,7 +5062,7 @@ static bool tryObjCWritebackConversion(Sema &S,
   // Do we need an lvalue conversion?
   if (ArrayDecay || Initializer->isGLValue()) {
     ImplicitConversionSequence ICS;
-    ICS.setStandard();
+    ICS.setStandard(ImplicitConversionSequence::MemsetToZero);
     ICS.Standard.setAsIdentityConversion();
 
     QualType ResultType;
@@ -5427,7 +5494,7 @@ void InitializationSequence::InitializeFrom(Sema &S,
     if (ICS.Standard.First == ICK_Array_To_Pointer ||
         ICS.Standard.First == ICK_Lvalue_To_Rvalue) {
       ImplicitConversionSequence LvalueICS;
-      LvalueICS.setStandard();
+      LvalueICS.setStandard(ImplicitConversionSequence::MemsetToZero);
       LvalueICS.Standard.setAsIdentityConversion();
       LvalueICS.Standard.setAllToTypes(ICS.Standard.getToType(0));
       LvalueICS.Standard.First = ICS.Standard.First;
@@ -5449,6 +5516,23 @@ void InitializationSequence::InitializeFrom(Sema &S,
     else
       SetFailed(InitializationSequence::FK_ConversionFailed);
   } else {
+    if (ICS.isStandard() && ICS.Standard.Third == ICK_Qualification) {
+      if (SourceType->isCHERICapabilityType(Context) &&
+        !DestType->isCHERICapabilityType(Context)) {
+          SetFailed(InitializationSequence::FK_ConversionFromCapabilityFailed);
+          return;
+      } else if (DestType->isCHERICapabilityType(Context) &&
+          !SourceType->isCHERICapabilityType(Context)) {
+        // don't warn on null -> capability conversion
+        // XXXAR: is this the correct NPC_ value?
+        bool SrcIsNull = (Initializer &&
+            Initializer->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNotNull));
+        if (!SrcIsNull && ICS.Standard.isInvalidCHERICapabilityConversion()) {
+          SetFailed(InitializationSequence::FK_ConversionToCapabilityFailed);
+          return;
+        }
+      }
+    }
     AddConversionSequenceStep(ICS, DestType, TopLevelOfInitList);
 
     MaybeProduceObjCObject(S, *this, Entity);
@@ -7620,6 +7704,24 @@ bool InitializationSequence::Diagnose(Sema &S,
     emitBadConversionNotes(S, Entity, Args[0]);
     break;
 
+  case FK_ReferenceInitChangesCapabilityQualifier:
+  case FK_ConversionFromCapabilityFailed:
+  case FK_ConversionToCapabilityFailed: {
+    QualType FromType = Args[0]->getRealReferenceType();
+    bool PrintRefInMessage = false;
+    // Failure == FK_ConversionFromCapabilityFailed
+    unsigned DiagID = DestType->isCHERICapabilityType(S.getASTContext())
+                      ? diag::err_typecheck_convert_ptr_to_cap
+                      : diag::err_typecheck_convert_cap_to_ptr;
+    if (Failure == FK_ReferenceInitChangesCapabilityQualifier) {
+      PrintRefInMessage = !FromType->isReferenceType();
+    }
+
+    S.Diag(Kind.getLocation(), DiagID) << FromType << DestType << PrintRefInMessage
+      << FixItHint::CreateInsertion(Kind.getLocation(), "(__cheri_cast " +
+                                    DestType.getAsString() + ")");
+    break;
+  }
   case FK_ConversionFailed: {
     QualType FromType = Args[0]->getType();
     PartialDiagnostic PDiag = S.PDiag(diag::err_init_conversion_failed)
@@ -7924,6 +8026,18 @@ void InitializationSequence::dump(raw_ostream &OS) const {
 
     case FK_ConversionFailed:
       OS << "conversion failed";
+      break;
+
+    case FK_ConversionFromCapabilityFailed:
+      OS << "conversion from capability failed";
+      break;
+
+    case FK_ConversionToCapabilityFailed:
+      OS << "conversion to capability failed";
+      break;
+
+    case FK_ReferenceInitChangesCapabilityQualifier:
+      OS << "reference initialization changes capability qualifier";
       break;
 
     case FK_ConversionFromPropertyFailed:

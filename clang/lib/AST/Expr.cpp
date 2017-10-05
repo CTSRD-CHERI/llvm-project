@@ -4015,3 +4015,24 @@ QualType OMPArraySectionExpr::getBaseOriginalType(const Expr *Base) {
   }
   return OriginalTy;
 }
+
+
+QualType Expr::getRealReferenceType() const {
+  const Expr* E = this;
+  // The type of an InitListExpr is void -> if it is a single element one get
+  // the type of that element
+  if (const InitListExpr* ILE = dyn_cast<const InitListExpr>(E)) {
+    if (ILE->getNumInits() == 1)
+      E = ILE->getInit(0);
+  }
+  if (const DeclRefExpr* DRE = dyn_cast<const DeclRefExpr>(E)) {
+    // XXXAR: or should this be getFoundDecl instead of getDecl?
+    if (const ValueDecl* V = dyn_cast_or_null<const ValueDecl>(DRE->getDecl())) {
+      QualType TargetType = V->getType();
+      if (TargetType->isReferenceType()) {
+        return TargetType;
+      }
+    }
+  }
+  return E->getType();
+}

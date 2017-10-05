@@ -7708,11 +7708,15 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
           Kind = CK_PointerToCHERICapability;
         else
           Kind = CK_BitCast;
-      } else if (LHSPointer->isCHERICapability() != RHSPointer->isCHERICapability())
-				// all other implicit casts to and from capabilities are not allowed
-        return Incompatible;
-		  else
-				Kind = CK_BitCast;
+      } else if (LHSPointer->isCHERICapability() != RHSPointer->isCHERICapability()) {
+        // all other implicit casts to and from capabilities are not allowed
+        Kind = RHSPointer->isCHERICapability() ? CK_CHERICapabilityToPointer :
+                                                 CK_PointerToCHERICapability;
+        return RHSPointer->isCHERICapability() ? CHERICapabilityToPointer :
+                                                 PointerToCHERICapability;
+      } else {
+        Kind = CK_BitCast;
+      }
       return checkPointerTypesForAssignment(*this, LHSType, RHSType);
     }
 
@@ -13229,6 +13233,21 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
     break;
   case IncompatibleObjCWeakRef:
     DiagKind = diag::err_arc_weak_unavailable_assign;
+    break;
+  case CHERICapabilityToPointer:
+  case PointerToCHERICapability:
+    if (isa<StringLiteral>(SrcExpr->IgnoreParens()->IgnoreImpCasts())) {
+      return false; // conversion from string to capability is fine
+    }
+    DiagKind = (ConvTy == CHERICapabilityToPointer)
+        ? diag::err_typecheck_convert_cap_to_ptr
+        : diag::err_typecheck_convert_ptr_to_cap;
+    MayHaveConvFixit = true;
+    isInvalid = true;
+    Hint = FixItHint::CreateInsertion(SrcExpr->getLocStart(), "(__cheri_cast " +
+                                      DstType.getAsString() + ")");
+    Diag(Loc, DiagKind) << SrcType << DstType << false << Hint;
+    return true;
     break;
   case Incompatible:
     if (maybeDiagnoseAssignmentToFunction(*this, DstType, SrcExpr)) {

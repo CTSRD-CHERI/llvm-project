@@ -563,6 +563,11 @@ KEYWORD(__bridge_transfer            , KEYARC)
 KEYWORD(__bridge_retained            , KEYARC)
 KEYWORD(__bridge_retain              , KEYARC)
 
+
+// CHERI casts to and from capabilities
+KEYWORD(__cheri_cast                 , KEYALL)
+
+
 // Objective-C keywords.
 KEYWORD(__covariant                  , KEYOBJC2)
 KEYWORD(__contravariant              , KEYOBJC2)

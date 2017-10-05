@@ -69,9 +69,13 @@ def ObjCLiteralConversion : DiagGroup<"objc-literal-conversion">;
 def MacroRedefined : DiagGroup<"macro-redefined">;
 def BuiltinMacroRedefined : DiagGroup<"builtin-macro-redefined">;
 def BuiltinRequiresHeader : DiagGroup<"builtin-requires-header">;
+
+def CHERICapabilityToIntegerCast : DiagGroup<"capability-to-integer-cast">;
+def CHERIPedantic : DiagGroup<"cheri-pedantic", [CHERICapabilityToIntegerCast]>;
 def CHERICaps : DiagGroup<"cheri-capability-misuse">;
 def MIPSCHERIPrototypes: DiagGroup<"mips-cheri-prototypes">;
 def MIPSCHERIBugs: DiagGroup<"mips-cheri-bugs">;
+
 def C99Compat : DiagGroup<"c99-compat">;
 def CXXCompat: DiagGroup<"c++-compat">;
 def ExternCCompat : DiagGroup<"extern-c-compat">;

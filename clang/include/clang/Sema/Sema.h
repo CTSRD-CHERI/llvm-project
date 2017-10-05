@@ -8068,6 +8068,14 @@ public:
                                   SourceLocation RParenLoc,
                                   Expr *SubExpr);
 
+  ExprResult BuildCheriCast(SourceLocation LParenLoc, SourceLocation KeywordLoc,
+                            QualType DestTy, TypeSourceInfo *TSInfo,
+                            SourceLocation RParenLoc, Expr *SubExpr);
+
+  ExprResult ActOnCheriCast(Scope *S, SourceLocation LParenLoc,
+                            SourceLocation CheriCastKeywordLoc, ParsedType Type,
+                            SourceLocation RParenLoc, Expr *SubExpr);
+
   void CheckTollFreeBridgeCast(QualType castType, Expr *castExpr);
 
   void CheckObjCBridgeRelatedCast(QualType castType, Expr *castExpr);
@@ -9203,6 +9211,13 @@ public:
     /// IntToPointer - The assignment converts an int to a pointer, which we
     /// accept as an extension.
     IntToPointer,
+
+    /// CHERICapabilityToPointer - The assignment converts a capability to a
+    /// pointer, which we reject (it needs an explicit __cheri_cast).
+    CHERICapabilityToPointer,
+    /// PointerToCHERICapability - The assignment converts a pointer to a
+    /// capability, which we reject (it needs an explicit __cheri_cast).
+    PointerToCHERICapability,
 
     /// FunctionVoidPointer - The assignment is between a function pointer and
     /// void*, which the standard doesn't allow, but we accept as an extension.

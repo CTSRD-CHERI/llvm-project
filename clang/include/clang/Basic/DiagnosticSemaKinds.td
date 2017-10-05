@@ -1206,8 +1206,8 @@ def warn_multiple_selectors: Warning<
 
 def err_objc_kindof_nonobject : Error<
   "'__kindof' specifier cannot be applied to non-object type %0">;
-def err_objc_kindof_wrong_position : Error<
-  "'__kindof' type specifier must precede the declarator">;
+def err_attr_wrong_position : Error<
+  "'%0' type specifier must precede the declarator">;
 
 def err_objc_method_unsupported_param_ret_type : Error<
   "%0 %select{parameter|return}1 type is unsupported; "
@@ -2453,6 +2453,9 @@ def err_attribute_pointers_only : Error<warn_attribute_pointers_only.Text>;
 def err_attribute_integers_only : Error<
   "%0 attribute argument may only refer to a function parameter of integer "
   "type">;
+def err_attribute_address_integers_only : Error<
+  "%0 attribute only applies to integer types that can store addresses "
+  "(%1 is invalid)">;
 def warn_attribute_return_pointers_only : Warning<
   "%0 attribute only applies to return values that are pointers">,
   InGroup<IgnoredAttributes>;
@@ -3183,6 +3186,10 @@ def warn_cast_align : Warning<
   InGroup<CastAlign>, DefaultIgnore;
 def err_cheri_cast_align : Error<
   "cast from %0 to %1 increases required alignment from %2 to %3">;
+// creating the right fixit replacement string is non-trivial, add a note instead
+def note_cheri_cast_align_fixit : Note<
+  "use __builtin_assume_aligned(..., sizeof(void* __capability)) if you know "
+  "that the source type is sufficiently aligned">;
 def warn_old_style_cast : Warning<
   "use of old-style cast">, InGroup<OldStyleCast>, DefaultIgnore;
 
@@ -5867,6 +5874,13 @@ def note_typecheck_assign_const : Note<
   "%select{non-|}1static data member %2 declared const here|"
   "member function %q1 is declared const here}0">;
 
+def err_typecheck_convert_cap_to_ptr: Error<"converting capability"
+  "%select{| reference to}2 type %0 to non-capability type %1 without "
+  "an explicit cast; if this is intended use __cheri_cast">;
+def err_typecheck_convert_ptr_to_cap: Error<"converting non-capability"
+  "%select{| reference to}2 type %0 to capability type %1 without "
+  "an explicit cast; if this is intended use __cheri_cast">;
+
 def warn_mixed_capability_binop : Warning<
   "binary expression on capability and non-capability types: %0 and %1.  "
   "Provenance will be inherited from left-hand side">,
@@ -5889,8 +5903,31 @@ def warn_capability_no_provenance : Warning<
   "cast from provenance-free integer type to pointer type will give pointer"
   " that can not be dereferenced.  ">,
   InGroup<CHERICaps>;
+def warn_capability_integer_cast : Warning<
+  "cast from capability type %0 to non-capability, non-address type %1 is most likely an error">,
+  // XXXAR: this is currently too noisy when building CHERIBSD, have if off for now
+  // InGroup<CHERICapabilityToIntegerCast>;
+  InGroup<CHERICapabilityToIntegerCast>, DefaultIgnore;
+def warn_capability_pointer_cast : Warning<
+  "cast from capability type %0 to non-capability type %1 is most likely an "
+   "error; use __cheri_cast to convert between pointers and capabilities">,
+  InGroup<CHERICaps>, DefaultError;
 def note_insert_intptr_fixit : Note<
   "insert cast to intptr_t to silence this warning">;
+def err_cheri_cast_unrelated_type : Error<
+  "invalid __cheri_cast from %0 to unrelated type %1">;
+def err_cheri_cast_invalid_target_type: Error<
+  "invalid target type %0 for __cheri_cast: target must be a capability or "
+  "a pointer">;
+def err_cheri_cast_invalid_source_type: Error<
+  "invalid source type %0 for __cheri_cast: source must be a capability or "
+  "a pointer">;
+def warn_cheri_cast_noop : Warning<
+  "__cheri_cast from %0 to %1 is a noop">,
+// XXXAR: not sure how to add a new CHERIPedantic group
+//  InGroup<CHERIPedantic>;
+  InGroup<Pedantic>, DefaultIgnore;
+
 def warn_mixed_sign_comparison : Warning<
   "comparison of integers of different signs: %0 and %1">,
   InGroup<SignCompare>, DefaultIgnore;
@@ -6199,6 +6236,9 @@ def err_bad_cxx_cast_bitfield : Error<
 def err_bad_cxx_cast_qualifiers_away : Error<
   "%select{const_cast|static_cast|reinterpret_cast|dynamic_cast|C-style cast|"
   "functional-style cast}0 from %1 to %2 casts away qualifiers">;
+def err_bad_cxx_reference_cast_capability_qualifier : Error<
+"%select{const_cast|static_cast|reinterpret_cast|dynamic_cast|C-style cast|"
+"functional-style cast}0 to reference type %2 changes __capability qualifier">;
 def err_bad_const_cast_dest : Error<
   "%select{const_cast||||C-style cast|functional-style cast}0 to %2, "
   "which is not a reference, pointer-to-object, or pointer-to-data-member">;

@@ -1268,6 +1268,7 @@ static bool HasFeature(const Preprocessor &PP, StringRef Feature) {
       .Case("underlying_type", LangOpts.CPlusPlus)
       .Case("capabilities", PP.getTargetInfo().SupportsCapabilities())
       .Case("pointer_interpretation", PP.getTargetInfo().SupportsCapabilities())
+      .Case("__cheri_cast", PP.getTargetInfo().SupportsCapabilities())
       .Default(false);
 }
 
