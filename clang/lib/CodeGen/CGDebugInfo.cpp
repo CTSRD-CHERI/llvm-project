@@ -820,7 +820,11 @@ llvm::DIType *CGDebugInfo::CreatePointerLikeType(llvm::dwarf::Tag Tag,
   // Bit size, align and offset of the type.
   // Size is always the size of a pointer. We can't use getTypeSize here
   // because that does not return the correct value for references.
-  unsigned AddressSpace = CGM.getAddressSpaceForType(PointeeTy);
+  unsigned AddressSpace;
+  if (Ty->isCHERICapabilityType(CGM.getContext()))
+    AddressSpace = CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
+  else
+    AddressSpace = CGM.getAddressSpaceForType(PointeeTy);
   uint64_t Size = CGM.getTarget().getPointerWidth(AddressSpace);
   auto Align = getTypeAlignIfRequired(Ty, CGM.getContext());
   Optional<unsigned> DWARFAddressSpace =
