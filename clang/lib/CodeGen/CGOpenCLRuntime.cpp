@@ -108,5 +108,5 @@ llvm::PointerType *CGOpenCLRuntime::getGenericVoidPointerType() {
   assert(CGM.getLangOpts().OpenCL);
   return llvm::IntegerType::getInt8PtrTy(
       CGM.getLLVMContext(),
-      CGM.getContext().getTargetAddressSpace(LangAS::opencl_generic));
+      CGM.getTargetAddressSpace(LangAS::opencl_generic));
 }

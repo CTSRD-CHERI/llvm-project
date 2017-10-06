@@ -310,14 +310,15 @@ static CharUnits getLowBit(CharUnits v) {
 
 static void initializeForBlockHeader(CodeGenModule &CGM, CGBlockInfo &info,
                              SmallVectorImpl<llvm::Type*> &elementTypes) {
+
   assert(elementTypes.empty());
   if (CGM.getLangOpts().OpenCL) {
     // The header is basically 'struct { int; int; generic void *;
     // custom_fields; }'. Assert that struct is packed.
     auto GenPtrAlign = CharUnits::fromQuantity(
-        CGM.getTarget().getPointerAlign(LangAS::opencl_generic) / 8);
+        CGM.getTarget().getPointerAlign(CGM.getTargetAddressSpace(LangAS::opencl_generic)) / 8);
     auto GenPtrSize = CharUnits::fromQuantity(
-        CGM.getTarget().getPointerWidth(LangAS::opencl_generic) / 8);
+        CGM.getTarget().getPointerWidth(CGM.getTargetAddressSpace(LangAS::opencl_generic)) / 8);
     assert(CGM.getIntSize() <= GenPtrSize);
     assert(CGM.getIntAlign() <= GenPtrAlign);
     assert((2 * CGM.getIntSize()).isMultipleOf(GenPtrAlign));
@@ -389,7 +390,7 @@ static void computeBlockInfo(CodeGenModule &CGM, CodeGenFunction *CGF,
         !OpenCLHelper->areAllCustomFieldValuesConstant(info);
   if (!block->hasCaptures() && !hasNonConstantCustomFields) {
     info.StructureType =
-      llvm::StructType::get(CGM.getLLVMContext(), elementTypes, pack);
+      llvm::StructType::get(CGM.getLLVMContext(), elementTypes, true);
     info.CanBeGlobal = true;
     return;
   }
@@ -507,7 +508,7 @@ static void computeBlockInfo(CodeGenModule &CGM, CodeGenFunction *CGF,
   // If that was everything, we're done here.
   if (layout.empty()) {
     info.StructureType =
-      llvm::StructType::get(CGM.getLLVMContext(), elementTypes, pack);
+      llvm::StructType::get(CGM.getLLVMContext(), elementTypes, true);
     info.CanBeGlobal = true;
     return;
   }
@@ -615,7 +616,7 @@ static void computeBlockInfo(CodeGenModule &CGM, CodeGenFunction *CGF,
   }
 
   info.StructureType =
-    llvm::StructType::get(CGM.getLLVMContext(), elementTypes, pack);
+    llvm::StructType::get(CGM.getLLVMContext(), elementTypes, true);
 }
 
 /// Enter the scope of a block.  This should be run at the entrance to
@@ -768,9 +769,9 @@ llvm::Value *CodeGenFunction::EmitBlockLiteral(const CGBlockInfo &blockInfo) {
   bool IsOpenCL = CGM.getContext().getLangOpts().OpenCL;
   auto GenVoidPtrTy =
       IsOpenCL ? CGM.getOpenCLRuntime().getGenericVoidPointerType() : VoidPtrTy;
-  unsigned GenVoidPtrAddr = IsOpenCL ? LangAS::opencl_generic : LangAS::Default;
+  LangAS::ID GenVoidPtrAddr = IsOpenCL ? LangAS::opencl_generic : LangAS::Default;
   auto GenVoidPtrSize = CharUnits::fromQuantity(
-      CGM.getTarget().getPointerWidth(GenVoidPtrAddr) / 8);
+      CGM.getTarget().getPointerWidth(CGM.getTargetAddressSpace(GenVoidPtrAddr)) / 8);
   // Using the computed layout, generate the actual block function.
   bool isLambdaConv = blockInfo.getBlockDecl()->isConversionFromLambda();
   llvm::Constant *blockFn = CodeGenFunction(CGM, true).GenerateBlockFunction(

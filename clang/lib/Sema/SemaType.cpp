@@ -5674,7 +5674,7 @@ QualType Sema::BuildAddressSpaceAttr(QualType &T, Expr *AddrSpace,
     // If this type is already address space qualified, reject it.
     // ISO/IEC TR 18037 S5.3 (amending C99 6.7.3): "No type shall be qualified
     // by qualifiers for two or more different address spaces."
-    if (T.getAddressSpace()) {
+    if (T.getAddressSpace(nullptr) != LangAS::Default) {
       Diag(AttrLoc, diag::err_attribute_address_multiple_qualifiers);
       return QualType();
     }
@@ -5698,14 +5698,14 @@ QualType Sema::BuildAddressSpaceAttr(QualType &T, Expr *AddrSpace,
     }
 
     llvm::APSInt max(addrSpace.getBitWidth());
-    max = Qualifiers::MaxAddressSpace - LangAS::FirstTargetAddressSpace;
+    max = Qualifiers::MaxAddressSpace - (unsigned)LangAS::FirstTargetAddressSpace;
     if (addrSpace > max) {
       Diag(AttrLoc, diag::err_attribute_address_space_too_high)
           << (unsigned)max.getZExtValue() << AddrSpace->getSourceRange();
       return QualType();
     }
 
-    unsigned ASIdx = static_cast<unsigned>(addrSpace.getZExtValue()) +
+    LangAS::ID ASIdx = static_cast<unsigned>(addrSpace.getZExtValue()) +
                      LangAS::FirstTargetAddressSpace;
 
     return Context.getAddrSpaceQualType(T, ASIdx);
