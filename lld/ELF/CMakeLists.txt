@@ -40,6 +40,7 @@ add_lld_library(lldELF
   Symbols.cpp
   SyntheticSections.cpp
   Target.cpp
+  Threads.cpp
   Thunks.cpp
   Writer.cpp
 
@@ -65,7 +66,7 @@ add_lld_library(lldELF
   TransformUtils
 
   LINK_LIBS
-  lldConfig
+  lldCommon
   lldCore
   ${LLVM_PTHREAD_LIB}
 

@@ -616,7 +616,8 @@ ArchiveFile::ArchiveFile(std::unique_ptr<Archive> &&File)
 template <class ELFT> void ArchiveFile::parse() {
   Symbols.reserve(File->getNumberOfSymbols());
   for (const Archive::Symbol &Sym : File->symbols())
-    Symbols.push_back(Symtab->addLazyArchive<ELFT>(this, Sym)->body());
+    Symbols.push_back(
+        Symtab->addLazyArchive<ELFT>(Sym.getName(), this, Sym)->body());
 }
 
 // Returns a buffer pointing to a member file containing a given symbol.
@@ -774,19 +775,26 @@ template <class ELFT> void SharedFile<ELFT>::parseRest() {
     // Ignore local symbols.
     if (Versym && VersymIndex == VER_NDX_LOCAL)
       continue;
-
-    const Elf_Verdef *V =
-        VersymIndex == VER_NDX_GLOBAL ? nullptr : Verdefs[VersymIndex];
+    const Elf_Verdef *V = nullptr;
+    if (VersymIndex != VER_NDX_GLOBAL) {
+      if (VersymIndex >= Verdefs.size()) {
+        error("corrupt input file: version definition index " +
+              Twine(VersymIndex) + " for symbol " + Name +
+              " is out of bounds\n>>> defined in " + toString(this));
+        continue;
+      }
+      V = Verdefs[VersymIndex];
+    }
 
     if (!Hidden)
-      Symtab->addShared(this, Name, Sym, V);
+      Symtab->addShared(Name, this, Sym, V);
 
     // Also add the symbol with the versioned name to handle undefined symbols
     // with explicit versions.
     if (V) {
       StringRef VerName = this->StringTable.data() + V->getAux()->vda_name;
       Name = Saver.save(Name + "@" + VerName);
-      Symtab->addShared(this, Name, Sym, V);
+      Symtab->addShared(Name, this, Sym, V);
     }
   }
 }
@@ -932,7 +940,7 @@ template <class ELFT> void BinaryFile::parse() {
   // characters in a filename are replaced with underscore.
   std::string S = "_binary_" + MB.getBufferIdentifier().str();
   for (size_t I = 0; I < S.size(); ++I)
-    if (!elf::isAlnum(S[I]))
+    if (!isAlnum(S[I]))
       S[I] = '_';
 
   Symtab->addRegular<ELFT>(Saver.save(S + "_start"), STV_DEFAULT, STT_OBJECT,

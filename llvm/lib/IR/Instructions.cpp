@@ -2299,7 +2299,14 @@ bool CastInst::isLosslessCast() const {
 bool CastInst::isNoopCast(Instruction::CastOps Opcode,
                           Type *SrcTy,
                           Type *DestTy,
-                          Type *IntPtrTy) {
+                          const DataLayout &DL) {
+  auto isNoopPtrIntCast = [](Type *PtrOpTy, const DataLayout &DL) {
+    if (DL.getPointerSize(PtrOpTy->getPointerAddressSpace()) !=
+        DL.getPointerBaseSize(PtrOpTy->getPointerAddressSpace()))
+      return false;
+    return true;
+  };
+  
   switch (Opcode) {
     default: llvm_unreachable("Invalid CastOp");
     case Instruction::Trunc:
@@ -2317,33 +2324,20 @@ bool CastInst::isNoopCast(Instruction::CastOps Opcode,
     case Instruction::BitCast:
       return true;  // BitCast never modifies bits.
     case Instruction::PtrToInt:
-      return IntPtrTy->getScalarSizeInBits() ==
+      if (!isNoopPtrIntCast(SrcTy, DL))
+        return false;
+      return DL.getIntPtrType(SrcTy)->getScalarSizeInBits() ==
              DestTy->getScalarSizeInBits();
     case Instruction::IntToPtr:
-      return IntPtrTy->getScalarSizeInBits() ==
+      if (!isNoopPtrIntCast(DestTy, DL))
+        return false;
+      return DL.getIntPtrType(DestTy)->getScalarSizeInBits() ==
              SrcTy->getScalarSizeInBits();
   }
 }
 
-/// @brief Determine if a cast is a no-op.
-bool CastInst::isNoopCast(Type *IntPtrTy) const {
-  return isNoopCast(getOpcode(), getOperand(0)->getType(), getType(), IntPtrTy);
-}
-
 bool CastInst::isNoopCast(const DataLayout &DL) const {
-  Type *PtrOpTy = nullptr;
-  if (getOpcode() == Instruction::PtrToInt)
-    PtrOpTy = getOperand(0)->getType();
-  else if (getOpcode() == Instruction::IntToPtr)
-    PtrOpTy = getType();
-  if (PtrOpTy && (DL.getPointerSize(PtrOpTy->getPointerAddressSpace()) !=
-       DL.getPointerBaseSize(PtrOpTy->getPointerAddressSpace())))
-    return false;
-
-  Type *IntPtrTy =
-      PtrOpTy ? DL.getIntPtrType(PtrOpTy) : DL.getIntPtrType(getContext(), 0);
-
-  return isNoopCast(getOpcode(), getOperand(0)->getType(), getType(), IntPtrTy);
+  return isNoopCast(getOpcode(), getOperand(0)->getType(), getType(), DL);
 }
 
 /// This function determines if a pair of casts can be eliminated and what

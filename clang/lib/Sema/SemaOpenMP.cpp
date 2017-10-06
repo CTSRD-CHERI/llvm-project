@@ -45,7 +45,13 @@ namespace {
 enum DefaultDataSharingAttributes {
   DSA_unspecified = 0, /// \brief Data sharing attribute not specified.
   DSA_none = 1 << 0,   /// \brief Default data sharing attribute 'none'.
-  DSA_shared = 1 << 1  /// \brief Default data sharing attribute 'shared'.
+  DSA_shared = 1 << 1, /// \brief Default data sharing attribute 'shared'.
+};
+
+/// Attributes of the defaultmap clause.
+enum DefaultMapAttributes {
+  DMA_unspecified,   /// Default mapping is not specified.
+  DMA_tofrom_scalar, /// Default mapping is 'tofrom:scalar'.
 };
 
 /// \brief Stack for tracking declarations used in OpenMP directives and
@@ -115,6 +121,8 @@ private:
     LoopControlVariablesMapTy LCVMap;
     DefaultDataSharingAttributes DefaultAttr = DSA_unspecified;
     SourceLocation DefaultAttrLoc;
+    DefaultMapAttributes DefaultMapAttr = DMA_unspecified;
+    SourceLocation DefaultMapAttrLoc;
     OpenMPDirectiveKind Directive = OMPD_unknown;
     DeclarationNameInfo DirectiveName;
     Scope *CurScope = nullptr;
@@ -341,6 +349,12 @@ public:
     Stack.back().first.back().DefaultAttr = DSA_shared;
     Stack.back().first.back().DefaultAttrLoc = Loc;
   }
+  /// Set default data mapping attribute to 'tofrom:scalar'.
+  void setDefaultDMAToFromScalar(SourceLocation Loc) {
+    assert(!isStackEmpty());
+    Stack.back().first.back().DefaultMapAttr = DMA_tofrom_scalar;
+    Stack.back().first.back().DefaultMapAttrLoc = Loc;
+  }
 
   DefaultDataSharingAttributes getDefaultDSA() const {
     return isStackEmpty() ? DSA_unspecified
@@ -349,6 +363,17 @@ public:
   SourceLocation getDefaultDSALocation() const {
     return isStackEmpty() ? SourceLocation()
                           : Stack.back().first.back().DefaultAttrLoc;
+  }
+  DefaultMapAttributes getDefaultDMA() const {
+    return isStackEmpty() ? DMA_unspecified
+                          : Stack.back().first.back().DefaultMapAttr;
+  }
+  DefaultMapAttributes getDefaultDMAAtLevel(unsigned Level) const {
+    return Stack.back().first[Level].DefaultMapAttr;
+  }
+  SourceLocation getDefaultDMALocation() const {
+    return isStackEmpty() ? SourceLocation()
+                          : Stack.back().first.back().DefaultMapAttrLoc;
   }
 
   /// \brief Checks if the specified variable is a threadprivate.
@@ -1242,7 +1267,8 @@ bool Sema::IsOpenMPCapturedByRef(ValueDecl *D, unsigned Level) {
       IsByRef = !(Ty->isPointerType() && IsVariableAssociatedWithSection);
     } else {
       // By default, all the data that has a scalar type is mapped by copy.
-      IsByRef = !Ty->isScalarType();
+      IsByRef = !Ty->isScalarType() ||
+                DSAStack->getDefaultDMAAtLevel(Level) == DMA_tofrom_scalar;
     }
   }
 
@@ -1804,7 +1830,7 @@ public:
     if (auto *VD = dyn_cast<VarDecl>(E->getDecl())) {
       VD = VD->getCanonicalDecl();
       // Skip internally declared variables.
-      if (VD->isLocalVarDecl() && !CS->capturesVariable(VD))
+      if (VD->hasLocalStorage() && !CS->capturesVariable(VD))
         return;
 
       auto DVar = Stack->getTopDSA(VD, false);
@@ -1848,20 +1874,16 @@ public:
                                            MC.getAssociatedExpression()));
                              });
                 })) {
-          bool CapturedByCopy = false;
+          bool IsFirstprivate = false;
           // By default lambdas are captured as firstprivates.
           if (const auto *RD =
                   VD->getType().getNonReferenceType()->getAsCXXRecordDecl())
-            if (RD->isLambda())
-              CapturedByCopy = true;
-          CapturedByCopy =
-              CapturedByCopy ||
-              llvm::any_of(
-                  CS->captures(), [VD](const CapturedStmt::Capture &I) {
-                    return I.capturesVariableByCopy() &&
-                           I.getCapturedVar()->getCanonicalDecl() == VD;
-                  });
-          if (CapturedByCopy)
+            IsFirstprivate = RD->isLambda();
+          IsFirstprivate =
+              IsFirstprivate ||
+              (VD->getType().getNonReferenceType()->isScalarType() &&
+               Stack->getDefaultDMA() != DMA_tofrom_scalar);
+          if (IsFirstprivate)
             ImplicitFirstprivate.emplace_back(E);
           else
             ImplicitMap.emplace_back(E);
@@ -2043,7 +2065,8 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
   case OMPD_parallel_for:
   case OMPD_parallel_for_simd:
   case OMPD_parallel_sections:
-  case OMPD_teams: {
+  case OMPD_teams:
+  case OMPD_teams_distribute: {
     QualType KmpInt32Ty = Context.getIntTypeForBitwidth(32, 1);
     QualType KmpInt32PtrTy =
         Context.getPointerType(KmpInt32Ty).withConst().withRestrict();
@@ -2166,7 +2189,6 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
   case OMPD_distribute_parallel_for_simd:
   case OMPD_distribute_simd:
   case OMPD_distribute_parallel_for:
-  case OMPD_teams_distribute:
   case OMPD_teams_distribute_simd:
   case OMPD_teams_distribute_parallel_for_simd:
   case OMPD_teams_distribute_parallel_for:
@@ -10708,6 +10730,7 @@ OMPClause *Sema::ActOnOpenMPDeviceClause(Expr *Device, SourceLocation StartLoc,
                                          SourceLocation LParenLoc,
                                          SourceLocation EndLoc) {
   Expr *ValExpr = Device;
+  Stmt *HelperValStmt = nullptr;
 
   // OpenMP [2.9.1, Restrictions]
   // The device expression must evaluate to a non-negative integer value.
@@ -10715,7 +10738,16 @@ OMPClause *Sema::ActOnOpenMPDeviceClause(Expr *Device, SourceLocation StartLoc,
                                  /*StrictlyPositive=*/false))
     return nullptr;
 
-  return new (Context) OMPDeviceClause(ValExpr, StartLoc, LParenLoc, EndLoc);
+  OpenMPDirectiveKind DKind = DSAStack->getCurrentDirective();
+  if (isOpenMPTargetExecutionDirective(DKind) &&
+      !CurContext->isDependentContext()) {
+    llvm::MapVector<Expr *, DeclRefExpr *> Captures;
+    ValExpr = tryBuildCapture(*this, ValExpr, Captures).get();
+    HelperValStmt = buildPreInits(Context, Captures);
+  }
+
+  return new (Context)
+      OMPDeviceClause(ValExpr, HelperValStmt, StartLoc, LParenLoc, EndLoc);
 }
 
 static bool CheckTypeMappable(SourceLocation SL, SourceRange SR, Sema &SemaRef,
@@ -11895,6 +11927,7 @@ OMPClause *Sema::ActOnOpenMPDefaultmapClause(
         << Value << getOpenMPClauseName(OMPC_defaultmap);
     return nullptr;
   }
+  DSAStack->setDefaultDMAToFromScalar(StartLoc);
 
   return new (Context)
       OMPDefaultmapClause(StartLoc, LParenLoc, MLoc, KindLoc, EndLoc, Kind, M);
@@ -11904,7 +11937,11 @@ bool Sema::ActOnStartOpenMPDeclareTargetDirective(SourceLocation Loc) {
   DeclContext *CurLexicalContext = getCurLexicalContext();
   if (!CurLexicalContext->isFileContext() &&
       !CurLexicalContext->isExternCContext() &&
-      !CurLexicalContext->isExternCXXContext()) {
+      !CurLexicalContext->isExternCXXContext() &&
+      !isa<CXXRecordDecl>(CurLexicalContext) &&
+      !isa<ClassTemplateDecl>(CurLexicalContext) &&
+      !isa<ClassTemplatePartialSpecializationDecl>(CurLexicalContext) &&
+      !isa<ClassTemplateSpecializationDecl>(CurLexicalContext)) {
     Diag(Loc, diag::err_omp_region_not_file_context);
     return false;
   }

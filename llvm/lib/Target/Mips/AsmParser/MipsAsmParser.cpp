@@ -6787,6 +6787,10 @@ bool MipsAsmParser::parseSetFeature(uint64_t Feature) {
     setFeatureBits(Mips::FeatureDSP, "dsp");
     getTargetStreamer().emitDirectiveSetDsp();
     break;
+  case Mips::FeatureDSPR2:
+    setFeatureBits(Mips::FeatureDSPR2, "dspr2");
+    getTargetStreamer().emitDirectiveSetDspr2();
+    break;
   case Mips::FeatureMicroMips:
     setFeatureBits(Mips::FeatureMicroMips, "micromips");
     getTargetStreamer().emitDirectiveSetMicroMips();
@@ -7131,6 +7135,8 @@ bool MipsAsmParser::parseDirectiveSet() {
     return parseSetFeature(Mips::FeatureMips64r6);
   } else if (Tok.getString() == "dsp") {
     return parseSetFeature(Mips::FeatureDSP);
+  } else if (Tok.getString() == "dspr2") {
+    return parseSetFeature(Mips::FeatureDSPR2);
   } else if (Tok.getString() == "nodsp") {
     return parseSetNoDspDirective();
   } else if (Tok.getString() == "msa") {
