@@ -677,6 +677,10 @@ class AsmOperandClass {
   // diagnostic. The target AsmParser maps these codes to text.
   string DiagnosticType = "";
 
+  /// A diagnostic message to emit when an invalid value is provided for this
+  /// operand.
+  string DiagnosticString = "";
+
   /// Set to 1 if this operand is optional and not always required. Typically,
   /// the AsmParser will emit an error when it finishes parsing an
   /// instruction if it hasn't matched all the operands yet.  However, this
@@ -1126,6 +1130,14 @@ class AsmParser {
   // HasMnemonicFirst - Set to false if target instructions don't always
   // start with a mnemonic as the first token.
   bit HasMnemonicFirst = 1;
+
+  // ReportMultipleNearMisses -
+  // When 0, the assembly matcher reports an error for one encoding or operand
+  // that did not match the parsed instruction.
+  // When 1, the assmebly matcher returns a list of encodings that were close
+  // to matching the parsed instruction, so to allow more detailed error
+  // messages.
+  bit ReportMultipleNearMisses = 0;
 }
 def DefaultAsmParser : AsmParser;
 

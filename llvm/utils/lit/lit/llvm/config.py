@@ -75,6 +75,9 @@ class LLVMConfig(object):
             features.add("long_tests")
 
         if target_triple:
+            if re.match(r'^x86_64.*-apple', target_triple):
+                if 'address' in sanitizers:
+                    self.with_environment('ASAN_OPTIONS', 'detect_leaks=1', append_path=True)
             if re.match(r'^x86_64.*-linux', target_triple):
                 features.add("x86_64-linux")
             if re.match(r'.*-win32$', target_triple):
@@ -104,9 +107,13 @@ class LLVMConfig(object):
             def norm(x):
                 return os.path.normcase(os.path.normpath(x))
 
-            current_paths = self.config.environment.get(variable, "")
-            current_paths = current_paths.split(os.path.pathsep)
-            paths = [norm(p) for p in current_paths]
+            current_paths = self.config.environment.get(variable, None)
+            if current_paths:
+                current_paths = current_paths.split(os.path.pathsep)
+                paths = [norm(p) for p in current_paths]
+            else:
+                paths = []
+
             # If we are passed a list [a b c], then iterating this list forwards
             # and adding each to the beginning would result in b c a.  So we
             # need to iterate in reverse to end up with the original ordering.

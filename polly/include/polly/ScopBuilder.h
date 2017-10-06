@@ -229,6 +229,18 @@ class ScopBuilder {
   /// @returns True if the instruction should be modeled.
   bool shouldModelInst(Instruction *Inst, Loop *L);
 
+  /// Create one or more ScopStmts for @p BB.
+  ///
+  /// Consecutive instructions are associated to the same statement until a
+  /// separator is found.
+  void buildSequentialBlockStmts(BasicBlock *BB);
+
+  /// Create one or more ScopStmts for @p BB using equivalence classes.
+  ///
+  /// Instructions of a basic block that belong to the same equivalence class
+  /// are added to the same statement.
+  void buildEqivClassBlockStmts(BasicBlock *BB);
+
   /// Create ScopStmt for all BBs and non-affine subregions of @p SR.
   ///
   /// @param SR A subregion of @p R.
@@ -243,10 +255,8 @@ class ScopBuilder {
   /// @param Stmt               Statement to add MemoryAccesses to.
   /// @param BB                 A basic block in @p R.
   /// @param NonAffineSubRegion The non affine sub-region @p BB is in.
-  /// @param IsExitBlock        Flag to indicate that @p BB is in the exit BB.
   void buildAccessFunctions(ScopStmt *Stmt, BasicBlock &BB,
-                            Region *NonAffineSubRegion = nullptr,
-                            bool IsExitBlock = false);
+                            Region *NonAffineSubRegion = nullptr);
 
   /// Create a new MemoryAccess object and add it to #AccFuncMap.
   ///
@@ -356,7 +366,7 @@ class ScopBuilder {
   /// base address and there are no other accesses which overlap with them. The
   /// base address check rules out impossible reductions candidates early. The
   /// overlap check, together with the "only one user" check in
-  /// collectCandiateReductionLoads, guarantees that none of the intermediate
+  /// collectCandidateReductionLoads, guarantees that none of the intermediate
   /// results will escape during execution of the loop nest. We basically check
   /// here that no other memory access can access the same memory as the
   /// potential reduction.
@@ -372,8 +382,8 @@ class ScopBuilder {
   ///
   /// Note: We allow only one use to ensure the load and binary operator cannot
   ///       escape this block or into any other store except @p StoreMA.
-  void collectCandiateReductionLoads(MemoryAccess *StoreMA,
-                                     SmallVectorImpl<MemoryAccess *> &Loads);
+  void collectCandidateReductionLoads(MemoryAccess *StoreMA,
+                                      SmallVectorImpl<MemoryAccess *> &Loads);
 
   /// Build the access relation of all memory accesses of @p Stmt.
   void buildAccessRelations(ScopStmt &Stmt);

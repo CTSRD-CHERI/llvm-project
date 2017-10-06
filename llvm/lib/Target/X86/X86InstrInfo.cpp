@@ -375,9 +375,13 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::TAILJMPr64,  X86::TAILJMPm64,    TB_FOLDED_LOAD },
     { X86::TAILJMPr64_REX, X86::TAILJMPm64_REX, TB_FOLDED_LOAD },
     { X86::TEST16ri,    X86::TEST16mi,      TB_FOLDED_LOAD },
+    { X86::TEST16rr,    X86::TEST16mr,      TB_FOLDED_LOAD },
     { X86::TEST32ri,    X86::TEST32mi,      TB_FOLDED_LOAD },
+    { X86::TEST32rr,    X86::TEST32mr,      TB_FOLDED_LOAD },
     { X86::TEST64ri32,  X86::TEST64mi32,    TB_FOLDED_LOAD },
+    { X86::TEST64rr,    X86::TEST64mr,      TB_FOLDED_LOAD },
     { X86::TEST8ri,     X86::TEST8mi,       TB_FOLDED_LOAD },
+    { X86::TEST8rr,     X86::TEST8mr,       TB_FOLDED_LOAD },
 
     // AVX 128-bit versions of foldable instructions
     { X86::VEXTRACTPSrr,X86::VEXTRACTPSmr,  TB_FOLDED_STORE  },
@@ -608,10 +612,6 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
     { X86::SQRTSDr_Int,     X86::SQRTSDm_Int,         TB_NO_REVERSE },
     { X86::SQRTSSr,         X86::SQRTSSm,             0 },
     { X86::SQRTSSr_Int,     X86::SQRTSSm_Int,         TB_NO_REVERSE },
-    { X86::TEST16rr,        X86::TEST16rm,            0 },
-    { X86::TEST32rr,        X86::TEST32rm,            0 },
-    { X86::TEST64rr,        X86::TEST64rm,            0 },
-    { X86::TEST8rr,         X86::TEST8rm,             0 },
     // FIXME: TEST*rr EAX,EAX ---> CMP [mem], 0
     { X86::UCOMISDrr,       X86::UCOMISDrm,           0 },
     { X86::UCOMISSrr,       X86::UCOMISSrm,           0 },
@@ -5189,18 +5189,8 @@ MachineInstr *X86InstrInfo::commuteInstructionImpl(MachineInstr &MI, bool NewMI,
     case X86::VMOVSSrr: Opc = X86::VBLENDPSrri; Mask = 0x0E; break;
     }
 
-    // MOVSD/MOVSS's 2nd operand is a FR64/FR32 reg class - we need to copy
-    // this over to a VR128 class like the 1st operand to use a BLENDPD/BLENDPS.
-    auto &MRI = MI.getParent()->getParent()->getRegInfo();
-    auto VR128RC = MRI.getRegClass(MI.getOperand(1).getReg());
-    unsigned VR128 = MRI.createVirtualRegister(VR128RC);
-    BuildMI(*MI.getParent(), MI, MI.getDebugLoc(), get(TargetOpcode::COPY),
-            VR128)
-        .addReg(MI.getOperand(2).getReg());
-
     auto &WorkingMI = cloneIfNew(MI);
     WorkingMI.setDesc(get(Opc));
-    WorkingMI.getOperand(2).setReg(VR128);
     WorkingMI.addOperand(MachineOperand::CreateImm(Mask));
     return TargetInstrInfo::commuteInstructionImpl(WorkingMI, /*NewMI=*/false,
                                                    OpIdx1, OpIdx2);

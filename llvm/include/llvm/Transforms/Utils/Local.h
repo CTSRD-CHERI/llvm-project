@@ -59,12 +59,15 @@ struct SimplifyCFGOptions {
   int BonusInstThreshold;
   bool ConvertSwitchToLookupTable;
   bool NeedCanonicalLoop;
+  AssumptionCache *AC;
 
   SimplifyCFGOptions(int BonusThreshold = 1, bool SwitchToLookup = false,
-                     bool CanonicalLoops = true)
+                     bool CanonicalLoops = true,
+                     AssumptionCache *AssumpCache = nullptr)
       : BonusInstThreshold(BonusThreshold),
         ConvertSwitchToLookupTable(SwitchToLookup),
-        NeedCanonicalLoop(CanonicalLoops) {}
+        NeedCanonicalLoop(CanonicalLoops),
+        AC(AssumpCache) {}
 };
 
 //===----------------------------------------------------------------------===//
@@ -79,8 +82,7 @@ struct SimplifyCFGOptions {
 /// conditions and indirectbr addresses this might make dead if
 /// DeleteDeadConditions is true.
 bool ConstantFoldTerminator(BasicBlock *BB, bool DeleteDeadConditions = false,
-                            const TargetLibraryInfo *TLI = nullptr,
-                            DominatorTree *DT = nullptr);
+                            const TargetLibraryInfo *TLI = nullptr);
 
 //===----------------------------------------------------------------------===//
 //  Local dead code elimination.
@@ -134,8 +136,7 @@ bool SimplifyInstructionsInBlock(BasicBlock *BB,
 ///
 /// .. and delete the predecessor corresponding to the '1', this will attempt to
 /// recursively fold the 'and' to 0.
-void RemovePredecessorAndSimplify(BasicBlock *BB, BasicBlock *Pred,
-                                  DominatorTree *DT = nullptr);
+void RemovePredecessorAndSimplify(BasicBlock *BB, BasicBlock *Pred);
 
 /// BB is a block with one predecessor and its predecessor is known to have one
 /// successor (BB!). Eliminate the edge between them, moving the instructions in
@@ -146,8 +147,7 @@ void MergeBasicBlockIntoOnlyPred(BasicBlock *BB, DominatorTree *DT = nullptr);
 /// other than PHI nodes, potential debug intrinsics and the branch. If
 /// possible, eliminate BB by rewriting all the predecessors to branch to the
 /// successor block and return true. If we can't transform, return false.
-bool TryToSimplifyUncondBranchFromEmptyBlock(BasicBlock *BB,
-                                             DominatorTree *DT = nullptr);
+bool TryToSimplifyUncondBranchFromEmptyBlock(BasicBlock *BB);
 
 /// Check for and eliminate duplicate PHI nodes in this block. This doesn't try
 /// to be clever about PHI nodes which differ only in the order of the incoming
@@ -160,8 +160,7 @@ bool EliminateDuplicatePHINodes(BasicBlock *BB);
 /// It returns true if a modification was made, possibly deleting the basic
 /// block that was pointed to. LoopHeaders is an optional input parameter
 /// providing the set of loop headers that SimplifyCFG should not eliminate.
-bool SimplifyCFG(BasicBlock *BB, const TargetTransformInfo &TTI,
-                 AssumptionCache *AC = nullptr,
+bool simplifyCFG(BasicBlock *BB, const TargetTransformInfo &TTI,
                  const SimplifyCFGOptions &Options = {},
                  SmallPtrSetImpl<BasicBlock *> *LoopHeaders = nullptr);
 
@@ -345,8 +344,7 @@ unsigned removeAllNonTerminatorAndEHPadInstructions(BasicBlock *BB);
 /// Insert an unreachable instruction before the specified
 /// instruction, making it and the rest of the code in the block dead.
 unsigned changeToUnreachable(Instruction *I, bool UseLLVMTrap,
-                             bool PreserveLCSSA = false,
-                             DominatorTree *DT = nullptr);
+                             bool PreserveLCSSA = false);
 
 /// Convert the CallInst to InvokeInst with the specified unwind edge basic
 /// block.  This also splits the basic block where CI is located, because
@@ -361,13 +359,12 @@ BasicBlock *changeToInvokeAndSplitBasicBlock(CallInst *CI,
 ///
 /// \param BB  Block whose terminator will be replaced.  Its terminator must
 ///            have an unwind successor.
-void removeUnwindEdge(BasicBlock *BB, DominatorTree *DT = nullptr);
+void removeUnwindEdge(BasicBlock *BB);
 
 /// Remove all blocks that can not be reached from the function's entry.
 ///
 /// Returns true if any basic block was removed.
-bool removeUnreachableBlocks(Function &F, LazyValueInfo *LVI = nullptr,
-                             DominatorTree *DT = nullptr);
+bool removeUnreachableBlocks(Function &F, LazyValueInfo *LVI = nullptr);
 
 /// Combine the metadata of two instructions so that K can replace J
 ///

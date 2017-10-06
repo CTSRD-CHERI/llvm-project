@@ -14,6 +14,7 @@
 #include "GlobalCompilationDatabase.h"
 #include "Path.h"
 #include "Protocol.h"
+#include "ProtocolHandlers.h"
 #include "clang/Tooling/Core/Replacement.h"
 #include "llvm/ADT/Optional.h"
 
@@ -24,11 +25,15 @@ class JSONOutput;
 
 /// This class provides implementation of an LSP server, glueing the JSON
 /// dispatch and ClangdServer together.
-class ClangdLSPServer {
+class ClangdLSPServer : private DiagnosticsConsumer, private ProtocolCallbacks {
 public:
+  /// If \p CompileCommandsDir has a value, compile_commands.json will be
+  /// loaded only from \p CompileCommandsDir. Otherwise, clangd will look
+  /// for compile_commands.json in all parent directories of each file.
   ClangdLSPServer(JSONOutput &Out, unsigned AsyncThreadsCount,
                   bool SnippetCompletions,
-                  llvm::Optional<StringRef> ResourceDir);
+                  llvm::Optional<StringRef> ResourceDir,
+                  llvm::Optional<Path> CompileCommandsDir);
 
   /// Run LSP server loop, receiving input for it from \p In. \p In must be
   /// opened in binary mode. Output will be written using Out variable passed to
@@ -37,18 +42,36 @@ public:
   void run(std::istream &In);
 
 private:
-  class LSPProtocolCallbacks;
-  class LSPDiagnosticsConsumer : public DiagnosticsConsumer {
-  public:
-    LSPDiagnosticsConsumer(ClangdLSPServer &Server);
+  // Implement DiagnosticsConsumer.
+  virtual void
+  onDiagnosticsReady(PathRef File,
+                     Tagged<std::vector<DiagWithFixIts>> Diagnostics) override;
 
-    virtual void
-    onDiagnosticsReady(PathRef File,
-                       Tagged<std::vector<DiagWithFixIts>> Diagnostics);
-
-  private:
-    ClangdLSPServer &Server;
-  };
+  // Implement ProtocolCallbacks.
+  void onInitialize(StringRef ID, InitializeParams IP,
+                    JSONOutput &Out) override;
+  void onShutdown(JSONOutput &Out) override;
+  void onDocumentDidOpen(DidOpenTextDocumentParams Params,
+                         JSONOutput &Out) override;
+  void onDocumentDidChange(DidChangeTextDocumentParams Params,
+                           JSONOutput &Out) override;
+  void onDocumentDidClose(DidCloseTextDocumentParams Params,
+                          JSONOutput &Out) override;
+  void onDocumentOnTypeFormatting(DocumentOnTypeFormattingParams Params,
+                                  StringRef ID, JSONOutput &Out) override;
+  void onDocumentRangeFormatting(DocumentRangeFormattingParams Params,
+                                 StringRef ID, JSONOutput &Out) override;
+  void onDocumentFormatting(DocumentFormattingParams Params, StringRef ID,
+                            JSONOutput &Out) override;
+  void onCodeAction(CodeActionParams Params, StringRef ID,
+                    JSONOutput &Out) override;
+  void onCompletion(TextDocumentPositionParams Params, StringRef ID,
+                    JSONOutput &Out) override;
+  void onGoToDefinition(TextDocumentPositionParams Params, StringRef ID,
+                        JSONOutput &Out) override;
+  void onSwitchSourceHeader(TextDocumentIdentifier Params, StringRef ID,
+                            JSONOutput &Out) override;
+  void onFileEvent(const DidChangeWatchedFilesParams &Params) override;
 
   std::vector<clang::tooling::Replacement>
   getFixIts(StringRef File, const clangd::Diagnostic &D);
@@ -74,7 +97,6 @@ private:
   // Various ClangdServer parameters go here. It's important they're created
   // before ClangdServer.
   DirectoryBasedGlobalCompilationDatabase CDB;
-  LSPDiagnosticsConsumer DiagConsumer;
   RealFileSystemProvider FSProvider;
 
   // Server must be the last member of the class to allow its destructor to exit
