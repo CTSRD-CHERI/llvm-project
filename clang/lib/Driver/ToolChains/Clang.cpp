@@ -273,21 +273,6 @@ static void ParseMRecip(const Driver &D, const ArgList &Args,
   OutStrings.push_back(Args.MakeArgString(Out));
 }
 
-static void getHexagonTargetFeatures(const ArgList &Args,
-                                     std::vector<StringRef> &Features) {
-  handleTargetFeaturesGroup(Args, Features,
-                            options::OPT_m_hexagon_Features_Group);
-
-  bool UseLongCalls = false;
-  if (Arg *A = Args.getLastArg(options::OPT_mlong_calls,
-                               options::OPT_mno_long_calls)) {
-    if (A->getOption().matches(options::OPT_mlong_calls))
-      UseLongCalls = true;
-  }
-
-  Features.push_back(UseLongCalls ? "+long-calls" : "-long-calls");
-}
-
 static void getWebAssemblyTargetFeatures(const ArgList &Args,
                                          std::vector<StringRef> &Features) {
   handleTargetFeaturesGroup(Args, Features, options::OPT_m_wasm_Features_Group);
@@ -350,7 +335,7 @@ static void getTargetFeatures(const ToolChain &TC, const llvm::Triple &Triple,
     x86::getX86TargetFeatures(D, Triple, Args, Features);
     break;
   case llvm::Triple::hexagon:
-    getHexagonTargetFeatures(Args, Features);
+    hexagon::getHexagonTargetFeatures(Args, Features);
     break;
   case llvm::Triple::wasm32:
   case llvm::Triple::wasm64:
@@ -2843,8 +2828,6 @@ static void RenderDebugOptions(const ToolChain &TC, const Driver &D,
                                ArgStringList &CmdArgs,
                                codegenoptions::DebugInfoKind &DebugInfoKind,
                                const Arg *&SplitDWARFArg) {
-  bool IsPS4CPU = T.isPS4CPU();
-
   if (Args.hasFlag(options::OPT_fdebug_info_for_profiling,
                    options::OPT_fno_debug_info_for_profiling, false))
     CmdArgs.push_back("-fdebug-info-for-profiling");
@@ -2927,13 +2910,14 @@ static void RenderDebugOptions(const ToolChain &TC, const Driver &D,
   // And we handle flag -grecord-gcc-switches later with DWARFDebugFlags.
   Args.ClaimAllArgs(options::OPT_g_flags_Group);
 
-  // Column info is included by default for everything except PS4 and CodeView.
+  // Column info is included by default for everything except SCE and CodeView.
   // Clang doesn't track end columns, just starting columns, which, in theory,
   // is fine for CodeView (and PDB).  In practice, however, the Microsoft
   // debuggers don't handle missing end columns well, so it's better not to
   // include any column info.
   if (Args.hasFlag(options::OPT_gcolumn_info, options::OPT_gno_column_info,
-                   /*Default=*/ !IsPS4CPU && !(IsWindowsMSVC && EmitCodeView)))
+                   /*Default=*/!(IsWindowsMSVC && EmitCodeView) &&
+                       DebuggerTuning != llvm::DebuggerKind::SCE))
     CmdArgs.push_back("-dwarf-column-info");
 
   // FIXME: Move backend command line options to the module.
@@ -2984,8 +2968,9 @@ static void RenderDebugOptions(const ToolChain &TC, const Driver &D,
 
   // -gdwarf-aranges turns on the emission of the aranges section in the
   // backend.
-  // Always enabled on the PS4.
-  if (Args.hasArg(options::OPT_gdwarf_aranges) || IsPS4CPU) {
+  // Always enabled for SCE tuning.
+  if (Args.hasArg(options::OPT_gdwarf_aranges) ||
+      DebuggerTuning == llvm::DebuggerKind::SCE) {
     CmdArgs.push_back("-backend-option");
     CmdArgs.push_back("-generate-arange-section");
   }
@@ -3000,6 +2985,10 @@ static void RenderDebugOptions(const ToolChain &TC, const Driver &D,
   // SCE wants full descriptions, others just get them in the name.
   if (DebuggerTuning == llvm::DebuggerKind::SCE)
     CmdArgs.push_back("-debug-forward-template-params");
+
+  // Do we need to explicitly import anonymous namespaces into the parent scope?
+  if (DebuggerTuning == llvm::DebuggerKind::SCE)
+    CmdArgs.push_back("-dwarf-explicit-import");
 
   RenderDebugInfoCompressionArgs(Args, CmdArgs, D);
 }

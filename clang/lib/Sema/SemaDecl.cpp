@@ -1604,7 +1604,24 @@ static bool ShouldDiagnoseUnusedDecl(const NamedDecl *D) {
   if (D->isInvalidDecl())
     return false;
 
-  if (D->isReferenced() || D->isUsed() || D->hasAttr<UnusedAttr>() ||
+  bool Referenced = false;
+  if (auto *DD = dyn_cast<DecompositionDecl>(D)) {
+    // For a decomposition declaration, warn if none of the bindings are
+    // referenced, instead of if the variable itself is referenced (which
+    // it is, by the bindings' expressions).
+    for (auto *BD : DD->bindings()) {
+      if (BD->isReferenced()) {
+        Referenced = true;
+        break;
+      }
+    }
+  } else if (!D->getDeclName()) {
+    return false;
+  } else if (D->isReferenced() || D->isUsed()) {
+    Referenced = true;
+  }
+
+  if (Referenced || D->hasAttr<UnusedAttr>() ||
       D->hasAttr<ObjCPreciseLifetimeAttr>())
     return false;
 
@@ -1727,7 +1744,7 @@ void Sema::DiagnoseUnusedDecl(const NamedDecl *D) {
   else
     DiagID = diag::warn_unused_variable;
 
-  Diag(D->getLocation(), DiagID) << D->getDeclName() << Hint;
+  Diag(D->getLocation(), DiagID) << D << Hint;
 }
 
 static void CheckPoppedLabel(LabelDecl *L, Sema &S) {
@@ -1757,14 +1774,14 @@ void Sema::ActOnPopScope(SourceLocation Loc, Scope *S) {
     assert(isa<NamedDecl>(TmpD) && "Decl isn't NamedDecl?");
     NamedDecl *D = cast<NamedDecl>(TmpD);
 
-    if (!D->getDeclName()) continue;
-
     // Diagnose unused variables in this scope.
     if (!S->hasUnrecoverableErrorOccurred()) {
       DiagnoseUnusedDecl(D);
       if (const auto *RD = dyn_cast<RecordDecl>(D))
         DiagnoseUnusedNestedTypedefs(RD);
     }
+
+    if (!D->getDeclName()) continue;
 
     // If this was a forward reference to a label, verify it was defined.
     if (LabelDecl *LD = dyn_cast<LabelDecl>(D))
@@ -2610,7 +2627,7 @@ void Sema::mergeDeclAttributes(NamedDecl *New, Decl *Old,
   // This redeclaration adds a section attribute.
   if (New->hasAttr<SectionAttr>() && !Old->hasAttr<SectionAttr>()) {
     if (auto *VD = dyn_cast<VarDecl>(New)) {
-      if (VD->isThisDeclarationADefinition() != VarDecl::Definition) {
+      if (VD->isThisDeclarationADefinition() == VarDecl::DeclarationOnly) {
         Diag(New->getLocation(), diag::warn_attribute_section_on_redeclaration);
         Diag(Old->getLocation(), diag::note_previous_declaration);
       }
@@ -6024,6 +6041,21 @@ static void checkDLLAttributeRedeclaration(Sema &S, NamedDecl *OldDecl,
            diag::warn_dllimport_dropped_from_inline_function)
         << NewDecl << OldImportAttr;
   }
+
+  // A specialization of a class template member function is processed here
+  // since it's a redeclaration. If the parent class is dllexport, the
+  // specialization inherits that attribute. This doesn't happen automatically
+  // since the parent class isn't instantiated until later.
+  if (IsSpecialization && isa<CXXMethodDecl>(NewDecl) && !NewImportAttr &&
+      !NewExportAttr) {
+    if (const DLLExportAttr *ParentExportAttr = cast<CXXMethodDecl>(NewDecl)
+                                             ->getParent()
+                                             ->getAttr<DLLExportAttr>()) {
+      DLLExportAttr *NewAttr = ParentExportAttr->clone(S.Context);
+      NewAttr->setInherited(true);
+      NewDecl->addAttr(NewAttr);
+    }
+  }
 }
 
 /// Given that we are within the definition of the given function,
@@ -6164,7 +6196,6 @@ NamedDecl *Sema::ActOnVariableDeclarator(
   IdentifierInfo *II = Name.getAsIdentifierInfo();
 
   if (D.isDecompositionDeclarator()) {
-    AddToScope = false;
     // Take the name of the first declarator as our name for diagnostic
     // purposes.
     auto &Decomp = D.getDecompositionDeclarator();
@@ -12676,28 +12707,50 @@ void Sema::ActOnFinishDelayedAttribute(Scope *S, Decl *D,
 /// call, forming a call to an implicitly defined function (per C99 6.5.1p2).
 NamedDecl *Sema::ImplicitlyDefineFunction(SourceLocation Loc,
                                           IdentifierInfo &II, Scope *S) {
+  Scope *BlockScope = S;
+  while (!BlockScope->isCompoundStmtScope() && BlockScope->getParent())
+    BlockScope = BlockScope->getParent();
+
   // Before we produce a declaration for an implicitly defined
   // function, see whether there was a locally-scoped declaration of
   // this name as a function or variable. If so, use that
   // (non-visible) declaration, and complain about it.
-  if (NamedDecl *ExternCPrev = findLocallyScopedExternCDecl(&II)) {
-    Diag(Loc, diag::warn_use_out_of_scope_declaration) << ExternCPrev;
-    Diag(ExternCPrev->getLocation(), diag::note_previous_declaration);
-    return ExternCPrev;
+  NamedDecl *ExternCPrev = findLocallyScopedExternCDecl(&II);
+  if (ExternCPrev) {
+    // We still need to inject the function into the enclosing block scope so
+    // that later (non-call) uses can see it.
+    PushOnScopeChains(ExternCPrev, BlockScope, /*AddToContext*/false);
+
+    // C89 footnote 38:
+    //   If in fact it is not defined as having type "function returning int",
+    //   the behavior is undefined.
+    if (!isa<FunctionDecl>(ExternCPrev) ||
+        !Context.typesAreCompatible(
+            cast<FunctionDecl>(ExternCPrev)->getType(),
+            Context.getFunctionNoProtoType(Context.IntTy))) {
+      Diag(Loc, diag::ext_use_out_of_scope_declaration)
+          << ExternCPrev << !getLangOpts().C99;
+      Diag(ExternCPrev->getLocation(), diag::note_previous_declaration);
+      return ExternCPrev;
+    }
   }
 
   // Extension in C99.  Legal in C90, but warn about it.
+  // OpenCL v2.0 s6.9.u - Implicit function declaration is not supported.
   unsigned diag_id;
   if (II.getName().startswith("__builtin_"))
     diag_id = diag::warn_builtin_unknown;
-  // OpenCL v2.0 s6.9.u - Implicit function declaration is not supported.
-  else if (getLangOpts().OpenCL)
-    diag_id = diag::err_opencl_implicit_function_decl;
-  else if (getLangOpts().C99)
+  else if (getLangOpts().C99 || getLangOpts().OpenCL)
     diag_id = diag::ext_implicit_function_decl;
   else
     diag_id = diag::warn_implicit_function_decl;
-  Diag(Loc, diag_id) << &II;
+  Diag(Loc, diag_id) << &II << getLangOpts().OpenCL;
+
+  // If we found a prior declaration of this function, don't bother building
+  // another one. We've already pushed that one into scope, so there's nothing
+  // more to do.
+  if (ExternCPrev)
+    return ExternCPrev;
 
   // Because typo correction is expensive, only do it if the implicit
   // function declaration is going to be treated as an error.
@@ -12750,18 +12803,8 @@ NamedDecl *Sema::ImplicitlyDefineFunction(SourceLocation Loc,
   D.SetIdentifier(&II, Loc);
 
   // Insert this function into the enclosing block scope.
-  while (S && !S->isCompoundStmtScope())
-    S = S->getParent();
-  if (S == nullptr)
-    S = TUScope;
-
-  DeclContext *PrevDC = CurContext;
-  CurContext = Context.getTranslationUnitDecl();
-
-  FunctionDecl *FD = cast<FunctionDecl>(ActOnDeclarator(S, D));
+  FunctionDecl *FD = cast<FunctionDecl>(ActOnDeclarator(BlockScope, D));
   FD->setImplicit();
-
-  CurContext = PrevDC;
 
   AddKnownFunctionAttributes(FD);
 
@@ -14424,7 +14467,9 @@ FieldDecl *Sema::HandleField(Scope *S, RecordDecl *Record,
   }
 
   // TR 18037 does not allow fields to be declared with address spaces.
-  if (T.getQualifiers().hasAddressSpace()) {
+  if (T.getQualifiers().hasAddressSpace() ||
+      T->isDependentAddressSpaceType() ||
+      T->getBaseElementTypeUnsafe()->isDependentAddressSpaceType()) {
     Diag(Loc, diag::err_field_with_address_space);
     D.setInvalidType();
   }

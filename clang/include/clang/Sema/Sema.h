@@ -64,7 +64,7 @@ namespace llvm {
   template <typename ValueT> struct DenseMapInfo;
   template <typename ValueT, typename ValueInfoT> class DenseSet;
   class SmallBitVector;
-  class InlineAsmIdentifierInfo;
+  struct InlineAsmIdentifierInfo;
 }
 
 namespace clang {
@@ -1378,6 +1378,8 @@ public:
                           SourceRange Brackets, DeclarationName Entity);
   QualType BuildExtVectorType(QualType T, Expr *ArraySize,
                               SourceLocation AttrLoc);
+  QualType BuildAddressSpaceAttr(QualType &T, Expr *AddrSpace,
+                                 SourceLocation AttrLoc);
 
   bool CheckFunctionReturnType(QualType T, SourceLocation Loc);
 
@@ -2912,12 +2914,13 @@ public:
   ExprResult CreateOverloadedUnaryOp(SourceLocation OpLoc,
                                      UnaryOperatorKind Opc,
                                      const UnresolvedSetImpl &Fns,
-                                     Expr *input);
+                                     Expr *input, bool RequiresADL = true);
 
   ExprResult CreateOverloadedBinOp(SourceLocation OpLoc,
                                    BinaryOperatorKind Opc,
                                    const UnresolvedSetImpl &Fns,
-                                   Expr *LHS, Expr *RHS);
+                                   Expr *LHS, Expr *RHS,
+                                   bool RequiresADL = true);
 
   ExprResult CreateOverloadedArraySubscriptExpr(SourceLocation LLoc,
                                                 SourceLocation RLoc,

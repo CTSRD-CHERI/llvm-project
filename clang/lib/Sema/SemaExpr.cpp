@@ -6066,9 +6066,9 @@ ExprResult Sema::CheckExtVectorCast(SourceRange R, QualType DestTy,
   // In OpenCL, casts between vectors of different types are not allowed.
   // (See OpenCL 6.2).
   if (SrcTy->isVectorType()) {
-    if (!areLaxCompatibleVectorTypes(SrcTy, DestTy)
-        || (getLangOpts().OpenCL &&
-            (DestTy.getCanonicalType() != SrcTy.getCanonicalType()))) {
+    if (!areLaxCompatibleVectorTypes(SrcTy, DestTy) ||
+        (getLangOpts().OpenCL &&
+         !Context.hasSameUnqualifiedType(DestTy, SrcTy))) {
       Diag(R.getBegin(),diag::err_invalid_conversion_between_ext_vectors)
         << DestTy << SrcTy << R;
       return ExprError();
@@ -15043,7 +15043,8 @@ static void DoMarkVarDeclReferenced(Sema &SemaRef, SourceLocation Loc,
       IsVariableAConstantExpression(Var, SemaRef.Context)) {
     // A reference initialized by a constant expression can never be
     // odr-used, so simply ignore it.
-    if (!Var->getType()->isReferenceType())
+    if (!Var->getType()->isReferenceType() ||
+        (SemaRef.LangOpts.OpenMP && SemaRef.IsOpenMPCapturedDecl(Var)))
       SemaRef.MaybeODRUseExprs.insert(E);
   } else if (OdrUseContext) {
     MarkVarDeclODRUsed(Var, Loc, SemaRef,

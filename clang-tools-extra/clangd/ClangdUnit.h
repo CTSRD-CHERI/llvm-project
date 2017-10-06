@@ -12,7 +12,7 @@
 
 #include "Path.h"
 #include "Protocol.h"
-#include "clang/Frontend/ASTUnit.h"
+#include "clang/Frontend/FrontendAction.h"
 #include "clang/Frontend/PrecompiledPreamble.h"
 #include "clang/Serialization/ASTBitCodes.h"
 #include "clang/Tooling/CompilationDatabase.h"
@@ -27,7 +27,6 @@ class raw_ostream;
 }
 
 namespace clang {
-class ASTUnit;
 class PCHContainerOperations;
 
 namespace vfs {
@@ -259,6 +258,14 @@ codeComplete(PathRef FileName, tooling::CompileCommand Command,
              Position Pos, IntrusiveRefCntPtr<vfs::FileSystem> VFS,
              std::shared_ptr<PCHContainerOperations> PCHs,
              bool SnippetCompletions, clangd::Logger &Logger);
+
+/// Get signature help at a specified \p Pos in \p FileName.
+SignatureHelp signatureHelp(PathRef FileName, tooling::CompileCommand Command,
+                            PrecompiledPreamble const *Preamble,
+                            StringRef Contents, Position Pos,
+                            IntrusiveRefCntPtr<vfs::FileSystem> VFS,
+                            std::shared_ptr<PCHContainerOperations> PCHs,
+                            clangd::Logger &Logger);
 
 /// Get definition of symbol at a specified \p Pos.
 std::vector<Location> findDefinitions(ParsedAST &AST, Position Pos,

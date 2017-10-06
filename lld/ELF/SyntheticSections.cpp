@@ -26,7 +26,7 @@
 #include "Target.h"
 #include "Threads.h"
 #include "Writer.h"
-#include "lld/Config/Version.h"
+#include "lld/Common/Version.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/DebugInfo/DWARF/DWARFDebugPubTable.h"
 #include "llvm/Object/Decompressor.h"
@@ -37,6 +37,7 @@
 #include "llvm/Support/SHA1.h"
 #include "llvm/Support/xxhash.h"
 #include <cstdlib>
+#include <thread>
 
 using namespace llvm;
 using namespace llvm::dwarf;
@@ -48,13 +49,15 @@ using namespace llvm::support::endian;
 using namespace lld;
 using namespace lld::elf;
 
+constexpr size_t MergeNoTailSection::NumShards;
+
 uint64_t SyntheticSection::getVA() const {
   if (OutputSection *Sec = getParent())
     return Sec->Addr + OutSecOff;
   return 0;
 }
 
-// Create a .bss section for each common section and replace the common symbol
+// Create a .bss section for each common symbol and replace the common symbol
 // with a DefinedRegular symbol.
 template <class ELFT> void elf::createCommonSections() {
   for (Symbol *S : Symtab->getSymbols()) {
@@ -64,10 +67,9 @@ template <class ELFT> void elf::createCommonSections() {
       continue;
 
     // Create a synthetic section for the common data.
-    auto *Section = make<BssSection>("COMMON");
+    auto *Section = make<BssSection>("COMMON", Sym->Size, Sym->Alignment);
     Section->File = Sym->getFile();
     Section->Live = !Config->GcSections;
-    Section->reserveSpace(Sym->Size, Sym->Alignment);
     InputSections.push_back(Section);
 
     // Replace all DefinedCommon symbols with DefinedRegular symbols so that we
@@ -148,7 +150,7 @@ MipsAbiFlagsSection<ELFT> *MipsAbiFlagsSection<ELFT>::create() {
       return nullptr;
     }
 
-    // LLD checks ISA compatibility in getMipsEFlags(). Here we just
+    // LLD checks ISA compatibility in calcMipsEFlags(). Here we just
     // select the highest number of ISA/Rev/Ext.
     Flags.isa_level = std::max(Flags.isa_level, S->isa_level);
     Flags.isa_rev = std::max(Flags.isa_rev, S->isa_rev);
@@ -358,15 +360,11 @@ void BuildIdSection::computeHash(
   HashFn(HashBuf, Hashes);
 }
 
-BssSection::BssSection(StringRef Name)
-    : SyntheticSection(SHF_ALLOC | SHF_WRITE, SHT_NOBITS, 0, Name) {}
-
-size_t BssSection::reserveSpace(uint64_t Size, uint32_t Alignment) {
+BssSection::BssSection(StringRef Name, uint64_t Size, uint32_t Alignment)
+    : SyntheticSection(SHF_ALLOC | SHF_WRITE, SHT_NOBITS, Alignment, Name) {
   if (OutputSection *Sec = getParent())
     Sec->updateAlignment(Alignment);
-  this->Size = alignTo(this->Size, Alignment) + Size;
-  this->Alignment = std::max(this->Alignment, Alignment);
-  return this->Size - Size;
+  this->Size = Size;
 }
 
 void BuildIdSection::writeBuildId(ArrayRef<uint8_t> Buf) {
@@ -1173,10 +1171,10 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
       add({DT_MIPS_RLD_MAP, InX::MipsRldMap});
   }
 
-  getParent()->Link = this->Link;
+  add({DT_NULL, (uint64_t)0});
 
-  // +1 for DT_NULL
-  this->Size = (Entries.size() + 1) * this->Entsize;
+  getParent()->Link = this->Link;
+  this->Size = Entries.size() * this->Entsize;
 }
 
 template <class ELFT> void DynamicSection<ELFT>::writeTo(uint8_t *Buf) {
@@ -1388,6 +1386,7 @@ SymbolTableSection<ELFT>::SymbolTableSection(StringTableSection &StrTabSec)
 // Write the internal symbol table contents to the output symbol table.
 template <class ELFT> void SymbolTableSection<ELFT>::writeTo(uint8_t *Buf) {
   // The first entry is a null entry as per the ELF spec.
+  memset(Buf, 0, sizeof(Elf_Sym));
   Buf += sizeof(Elf_Sym);
 
   auto *ESym = reinterpret_cast<Elf_Sym *>(Buf);
@@ -1396,6 +1395,7 @@ template <class ELFT> void SymbolTableSection<ELFT>::writeTo(uint8_t *Buf) {
     SymbolBody *Body = Ent.Symbol;
 
     // Set st_info and st_other.
+    ESym->st_other = 0;
     if (Body->isLocal()) {
       ESym->setBindingAndType(STB_LOCAL, Body->Type);
     } else {
@@ -1412,13 +1412,17 @@ template <class ELFT> void SymbolTableSection<ELFT>::writeTo(uint8_t *Buf) {
       ESym->st_shndx = SHN_ABS;
     else if (isa<DefinedCommon>(Body))
       ESym->st_shndx = SHN_COMMON;
+    else
+      ESym->st_shndx = SHN_UNDEF;
 
     // Copy symbol size if it is a defined symbol. st_size is not significant
     // for undefined symbols, so whether copying it or not is up to us if that's
     // the case. We'll leave it as zero because by not setting a value, we can
     // get the exact same outputs for two sets of input files that differ only
     // in undefined symbol size in DSOs.
-    if (ESym->st_shndx != SHN_UNDEF)
+    if (ESym->st_shndx == SHN_UNDEF)
+      ESym->st_size = 0;
+    else
       ESym->st_size = Body->getSize<ELFT>();
 
     // st_value is usually an address of a symbol, but that has a
@@ -2181,19 +2185,19 @@ template <class ELFT> bool VersionNeedSection<ELFT>::empty() const {
   return getNeedNum() == 0;
 }
 
-MergeSyntheticSection::MergeSyntheticSection(StringRef Name, uint32_t Type,
-                                             uint64_t Flags, uint32_t Alignment)
-    : SyntheticSection(Flags, Type, Alignment, Name),
-      Builder(StringTableBuilder::RAW, Alignment) {}
-
 void MergeSyntheticSection::addSection(MergeInputSection *MS) {
   MS->Parent = this;
   Sections.push_back(MS);
 }
 
-size_t MergeSyntheticSection::getSize() const { return Builder.getSize(); }
+MergeTailSection::MergeTailSection(StringRef Name, uint32_t Type,
+                                   uint64_t Flags, uint32_t Alignment)
+    : MergeSyntheticSection(Name, Type, Flags, Alignment),
+      Builder(StringTableBuilder::RAW, Alignment) {}
 
-void MergeSyntheticSection::writeTo(uint8_t *Buf) { Builder.write(Buf); }
+size_t MergeTailSection::getSize() const { return Builder.getSize(); }
+
+void MergeTailSection::writeTo(uint8_t *Buf) { Builder.write(Buf); }
 
 void MergeTailSection::finalizeContents() {
   // Add all string pieces to the string table builder to create section
@@ -2215,17 +2219,64 @@ void MergeTailSection::finalizeContents() {
         Sec->Pieces[I].OutputOff = Builder.getOffset(Sec->getData(I));
 }
 
+void MergeNoTailSection::writeTo(uint8_t *Buf) {
+  for (size_t I = 0; I < NumShards; ++I)
+    Shards[I].write(Buf + ShardOffsets[I]);
+}
+
+// This function is very hot (i.e. it can take several seconds to finish)
+// because sometimes the number of inputs is in an order of magnitude of
+// millions. So, we use multi-threading.
+//
+// For any strings S and T, we know S is not mergeable with T if S's hash
+// value is different from T's. If that's the case, we can safely put S and
+// T into different string builders without worrying about merge misses.
+// We do it in parallel.
 void MergeNoTailSection::finalizeContents() {
-  // Add all string pieces to the string table builder to create section
-  // contents. Because we are not tail-optimizing, offsets of strings are
-  // fixed when they are added to the builder (string table builder contains
-  // a hash table from strings to offsets).
-  for (MergeInputSection *Sec : Sections)
+  // Initializes string table builders.
+  for (size_t I = 0; I < NumShards; ++I)
+    Shards.emplace_back(StringTableBuilder::RAW, Alignment);
+
+  // Concurrency level. Must be a power of 2 to avoid expensive modulo
+  // operations in the following tight loop.
+  size_t Concurrency = 1;
+  if (Config->Threads)
+    Concurrency =
+        std::min<size_t>(PowerOf2Floor(hardware_concurrency()), NumShards);
+
+  // Add section pieces to the builders.
+  parallelForEachN(0, Concurrency, [&](size_t ThreadId) {
+    for (MergeInputSection *Sec : Sections) {
+      for (size_t I = 0, E = Sec->Pieces.size(); I != E; ++I) {
+        if (!Sec->Pieces[I].Live)
+          continue;
+        CachedHashStringRef Str = Sec->getData(I);
+        size_t ShardId = getShardId(Str.hash());
+        if ((ShardId & (Concurrency - 1)) == ThreadId)
+          Sec->Pieces[I].OutputOff = Shards[ShardId].add(Str);
+      }
+    }
+  });
+
+  // Compute an in-section offset for each shard.
+  size_t Off = 0;
+  for (size_t I = 0; I < NumShards; ++I) {
+    Shards[I].finalizeInOrder();
+    if (Shards[I].getSize() > 0)
+      Off = alignTo(Off, Alignment);
+    ShardOffsets[I] = Off;
+    Off += Shards[I].getSize();
+  }
+  Size = Off;
+
+  // So far, section pieces have offsets from beginning of shards, but
+  // we want offsets from beginning of the whole section. Fix them.
+  parallelForEach(Sections, [&](MergeInputSection *Sec) {
     for (size_t I = 0, E = Sec->Pieces.size(); I != E; ++I)
       if (Sec->Pieces[I].Live)
-        Sec->Pieces[I].OutputOff = Builder.add(Sec->getData(I));
-
-  Builder.finalizeInOrder();
+        Sec->Pieces[I].OutputOff +=
+            ShardOffsets[getShardId(Sec->getData(I).hash())];
+  });
 }
 
 static MergeSyntheticSection *createMergeSynthetic(StringRef Name,
@@ -2250,8 +2301,7 @@ void elf::decompressAndMergeSections() {
   parallelForEach(InputSections, [](InputSectionBase *S) {
     if (!S->Live)
       return;
-    if (Decompressor::isCompressedELFSection(S->Flags, S->Name))
-      S->uncompress();
+    S->maybeUncompress();
     if (auto *MS = dyn_cast<MergeInputSection>(S))
       MS->splitIntoPieces();
   });

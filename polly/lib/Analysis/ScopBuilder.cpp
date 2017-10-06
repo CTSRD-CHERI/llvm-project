@@ -25,6 +25,7 @@
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/EquivalenceClasses.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
@@ -101,6 +102,18 @@ static cl::opt<bool> DisableMultiplicativeReductions(
     "polly-disable-multiplicative-reductions",
     cl::desc("Disable multiplicative reductions"), cl::Hidden, cl::ZeroOrMore,
     cl::init(false), cl::cat(PollyCategory));
+
+enum class GranularityChoice { BasicBlocks, ScalarIndepependence };
+
+static cl::opt<GranularityChoice> StmtGranularity(
+    "polly-stmt-granularity",
+    cl::desc(
+        "Algorithm to use for splitting basic blocks into multiple statements"),
+    cl::values(clEnumValN(GranularityChoice::BasicBlocks, "bb",
+                          "One statement per basic block"),
+               clEnumValN(GranularityChoice::ScalarIndepependence,
+                          "scalar-indep", "Scalar independence heuristic")),
+    cl::init(GranularityChoice::BasicBlocks), cl::cat(PollyCategory));
 
 void ScopBuilder::buildPHIAccesses(ScopStmt *PHIStmt, PHINode *PHI,
                                    Region *NonAffineSubRegion,
@@ -657,11 +670,210 @@ void ScopBuilder::buildAccessFunctions() {
     for (BasicBlock *BB : R->blocks())
       buildAccessFunctions(&Stmt, *BB, R);
   }
+
+  // Build write accesses for values that are used after the SCoP.
+  // The instructions defining them might be synthesizable and therefore not
+  // contained in any statement, hence we iterate over the original instructions
+  // to identify all escaping values.
+  for (BasicBlock *BB : scop->getRegion().blocks()) {
+    for (Instruction &Inst : *BB)
+      buildEscapingDependences(&Inst);
+  }
 }
 
 bool ScopBuilder::shouldModelInst(Instruction *Inst, Loop *L) {
   return !isa<TerminatorInst>(Inst) && !isIgnoredIntrinsic(Inst) &&
          !canSynthesize(Inst, *scop, &SE, L);
+}
+
+void ScopBuilder::buildSequentialBlockStmts(BasicBlock *BB) {
+  Loop *SurroundingLoop = LI.getLoopFor(BB);
+
+  int Count = 0;
+  std::vector<Instruction *> Instructions;
+  for (Instruction &Inst : *BB) {
+    if (shouldModelInst(&Inst, SurroundingLoop))
+      Instructions.push_back(&Inst);
+    if (Inst.getMetadata("polly_split_after")) {
+      scop->addScopStmt(BB, SurroundingLoop, Instructions, Count);
+      Count++;
+      Instructions.clear();
+    }
+  }
+
+  scop->addScopStmt(BB, SurroundingLoop, Instructions, Count);
+}
+
+/// Is @p Inst an ordered instruction?
+///
+/// An unordered instruction is an instruction, such that a sequence of
+/// unordered instructions can be permuted without changing semantics. Any
+/// instruction for which this is not always the case is ordered.
+static bool isOrderedInstruction(Instruction *Inst) {
+  return Inst->mayHaveSideEffects() || Inst->mayReadOrWriteMemory();
+}
+
+/// Join instructions to the same statement if one uses the scalar result of the
+/// other.
+static void joinOperandTree(EquivalenceClasses<Instruction *> &UnionFind,
+                            ArrayRef<Instruction *> ModeledInsts) {
+  for (Instruction *Inst : ModeledInsts) {
+    if (isa<PHINode>(Inst))
+      continue;
+
+    for (Use &Op : Inst->operands()) {
+      Instruction *OpInst = dyn_cast<Instruction>(Op.get());
+      if (!OpInst)
+        continue;
+
+      // Check if OpInst is in the BB and is a modeled instruction.
+      auto OpVal = UnionFind.findValue(OpInst);
+      if (OpVal == UnionFind.end())
+        continue;
+
+      UnionFind.unionSets(Inst, OpInst);
+    }
+  }
+}
+
+/// Join instructions that are used as incoming value in successor PHIs into the
+/// epilogue.
+static void
+joinIncomingPHIValuesIntoEpilogue(EquivalenceClasses<Instruction *> &UnionFind,
+                                  ArrayRef<Instruction *> ModeledInsts,
+                                  BasicBlock *BB) {
+  for (BasicBlock *Succ : successors(BB)) {
+    for (Instruction &SuccInst : *Succ) {
+      PHINode *SuccPHI = dyn_cast<PHINode>(&SuccInst);
+      if (!SuccPHI)
+        break;
+
+      Value *IncomingVal = SuccPHI->getIncomingValueForBlock(BB);
+      Instruction *IncomingInst = dyn_cast<Instruction>(IncomingVal);
+      if (!IncomingInst)
+        continue;
+      if (IncomingInst->getParent() != BB)
+        continue;
+      if (UnionFind.findValue(IncomingInst) == UnionFind.end())
+        continue;
+
+      UnionFind.unionSets(nullptr, IncomingInst);
+    }
+  }
+}
+
+/// Ensure that the order of ordered instructions does not change.
+///
+/// If we encounter an ordered instruction enclosed in instructions belonging to
+/// a different statement (which might as well contain ordered instructions, but
+/// this is not tested here), join them.
+static void
+joinOrderedInstructions(EquivalenceClasses<Instruction *> &UnionFind,
+                        ArrayRef<Instruction *> ModeledInsts) {
+  SetVector<Instruction *> SeenLeaders;
+  for (Instruction *Inst : ModeledInsts) {
+    if (!isOrderedInstruction(Inst))
+      continue;
+
+    Instruction *Leader = UnionFind.getLeaderValue(Inst);
+    bool Inserted = SeenLeaders.insert(Leader);
+    if (Inserted)
+      continue;
+
+    // Merge statements to close holes. Say, we have already seen statements A
+    // and B, in this order. Then we see an instruction of A again and we would
+    // see the pattern "A B A". This function joins all statements until the
+    // only seen occurrence of A.
+    for (Instruction *Prev : reverse(SeenLeaders)) {
+      // Items added to 'SeenLeaders' are leaders, but may have lost their
+      // leadership status when merged into another statement.
+      Instruction *PrevLeader = UnionFind.getLeaderValue(SeenLeaders.back());
+      if (PrevLeader == Leader)
+        break;
+      UnionFind.unionSets(Prev, Leader);
+    }
+  }
+}
+
+/// Also ensure that the epilogue is the last statement relative to all ordered
+/// instructions.
+///
+/// This is basically joinOrderedInstructions() but using the epilogue as
+/// 'ordered instruction'.
+static void joinAllAfterEpilogue(EquivalenceClasses<Instruction *> &UnionFind,
+                                 ArrayRef<Instruction *> ModeledInsts) {
+  bool EpilogueSeen = false;
+  for (Instruction *Inst : ModeledInsts) {
+    auto PHIWritesLeader = UnionFind.findLeader(nullptr);
+    auto InstLeader = UnionFind.findLeader(Inst);
+
+    if (PHIWritesLeader == InstLeader)
+      EpilogueSeen = true;
+
+    if (!isOrderedInstruction(Inst))
+      continue;
+
+    if (EpilogueSeen)
+      UnionFind.unionSets(PHIWritesLeader, InstLeader);
+  }
+}
+
+void ScopBuilder::buildEqivClassBlockStmts(BasicBlock *BB) {
+  Loop *L = LI.getLoopFor(BB);
+
+  // Extracting out modeled instructions saves us from checking
+  // shouldModelInst() repeatedly.
+  SmallVector<Instruction *, 32> ModeledInsts;
+  EquivalenceClasses<Instruction *> UnionFind;
+  for (Instruction &Inst : *BB) {
+    if (!shouldModelInst(&Inst, L))
+      continue;
+    ModeledInsts.push_back(&Inst);
+    UnionFind.insert(&Inst);
+  }
+
+  // 'nullptr' represents the last statement for a basic block. It contains no
+  // instructions, but holds the PHI write accesses for successor basic blocks.
+  // If a PHI has an incoming value defined in this BB, it can also be merged
+  // with other statements.
+  // TODO: We wouldn't need this if we would add PHIWrites into the statement
+  // that defines the incoming value (if in the BB) instead of always the last,
+  // so we could unconditionally always add a last statement.
+  UnionFind.insert(nullptr);
+
+  joinOperandTree(UnionFind, ModeledInsts);
+  joinIncomingPHIValuesIntoEpilogue(UnionFind, ModeledInsts, BB);
+  joinOrderedInstructions(UnionFind, ModeledInsts);
+  joinAllAfterEpilogue(UnionFind, ModeledInsts);
+
+  // The list of instructions for statement (statement represented by the leader
+  // instruction). The order of statements instructions is reversed such that
+  // the epilogue is first. This makes it easier to ensure that the epilogue is
+  // the last statement.
+  MapVector<Instruction *, std::vector<Instruction *>> LeaderToInstList;
+
+  // Ensure that the epilogue is last.
+  LeaderToInstList[nullptr];
+
+  // Collect the instructions of all leaders. UnionFind's member iterator
+  // unfortunately are not in any specific order.
+  for (Instruction &Inst : reverse(*BB)) {
+    auto LeaderIt = UnionFind.findLeader(&Inst);
+    if (LeaderIt == UnionFind.member_end())
+      continue;
+
+    std::vector<Instruction *> &InstList = LeaderToInstList[*LeaderIt];
+    InstList.push_back(&Inst);
+  }
+
+  // Finally build the statements.
+  int Count = 0;
+  for (auto &Instructions : reverse(LeaderToInstList)) {
+    std::vector<Instruction *> &InstList = Instructions.second;
+    std::reverse(InstList.begin(), InstList.end());
+    scop->addScopStmt(BB, L, std::move(InstList), Count);
+    Count += 1;
+  }
 }
 
 void ScopBuilder::buildStmts(Region &SR) {
@@ -680,77 +892,67 @@ void ScopBuilder::buildStmts(Region &SR) {
     if (I->isSubRegion())
       buildStmts(*I->getNodeAs<Region>());
     else {
-      int Count = 0;
-      std::vector<Instruction *> Instructions;
-      for (Instruction &Inst : *I->getNodeAs<BasicBlock>()) {
-        Loop *L = LI.getLoopFor(Inst.getParent());
-        if (shouldModelInst(&Inst, L))
-          Instructions.push_back(&Inst);
-        if (Inst.getMetadata("polly_split_after")) {
-          Loop *SurroundingLoop = LI.getLoopFor(I->getNodeAs<BasicBlock>());
-          scop->addScopStmt(I->getNodeAs<BasicBlock>(), SurroundingLoop,
-                            Instructions, Count);
-          Count++;
-          Instructions.clear();
-        }
+      BasicBlock *BB = I->getNodeAs<BasicBlock>();
+      switch (StmtGranularity) {
+      case GranularityChoice::BasicBlocks:
+        buildSequentialBlockStmts(BB);
+        break;
+      case GranularityChoice::ScalarIndepependence:
+        buildEqivClassBlockStmts(BB);
+        break;
       }
-      Loop *SurroundingLoop = LI.getLoopFor(I->getNodeAs<BasicBlock>());
-      scop->addScopStmt(I->getNodeAs<BasicBlock>(), SurroundingLoop,
-                        Instructions, Count);
     }
 }
 
 void ScopBuilder::buildAccessFunctions(ScopStmt *Stmt, BasicBlock &BB,
-                                       Region *NonAffineSubRegion,
-                                       bool IsExitBlock) {
+                                       Region *NonAffineSubRegion) {
   assert(
-      !Stmt == IsExitBlock &&
+      Stmt &&
       "The exit BB is the only one that cannot be represented by a statement");
-  assert(IsExitBlock || Stmt->represents(&BB));
+  assert(Stmt->represents(&BB));
 
   // We do not build access functions for error blocks, as they may contain
   // instructions we can not model.
-  if (isErrorBlock(BB, scop->getRegion(), LI, DT) && !IsExitBlock)
+  if (isErrorBlock(BB, scop->getRegion(), LI, DT))
     return;
 
-  int Count = 0;
-  bool Split = false;
-  for (Instruction &Inst : BB) {
-    if (Split) {
-      Split = false;
-      Count++;
-    }
-    if (Inst.getMetadata("polly_split_after"))
-      Split = true;
-
-    if (Stmt && Stmt->isBlockStmt() && Stmt != scop->getStmtListFor(&BB)[Count])
-      continue;
-
-    PHINode *PHI = dyn_cast<PHINode>(&Inst);
+  auto BuildAccessesForInst = [this, Stmt,
+                               NonAffineSubRegion](Instruction *Inst) {
+    PHINode *PHI = dyn_cast<PHINode>(Inst);
     if (PHI)
-      buildPHIAccesses(Stmt, PHI, NonAffineSubRegion, IsExitBlock);
+      buildPHIAccesses(Stmt, PHI, NonAffineSubRegion, false);
 
-    // For the exit block we stop modeling after the last PHI node.
-    if (!PHI && IsExitBlock)
-      break;
-
-    if (auto MemInst = MemAccInst::dyn_cast(Inst)) {
+    if (auto MemInst = MemAccInst::dyn_cast(*Inst)) {
       assert(Stmt && "Cannot build access function in non-existing statement");
       buildMemoryAccess(MemInst, Stmt);
     }
-
-    if (isIgnoredIntrinsic(&Inst))
-      continue;
 
     // PHI nodes have already been modeled above and TerminatorInsts that are
     // not part of a non-affine subregion are fully modeled and regenerated
     // from the polyhedral domains. Hence, they do not need to be modeled as
     // explicit data dependences.
-    if (!PHI && (!isa<TerminatorInst>(&Inst) || NonAffineSubRegion))
-      buildScalarDependences(Stmt, &Inst);
+    if (!PHI)
+      buildScalarDependences(Stmt, Inst);
+  };
 
-    if (!IsExitBlock)
-      buildEscapingDependences(&Inst);
+  const InvariantLoadsSetTy &RIL = scop->getRequiredInvariantLoads();
+  bool IsEntryBlock = (Stmt->getEntryBlock() == &BB);
+  if (IsEntryBlock) {
+    for (Instruction *Inst : Stmt->getInstructions())
+      BuildAccessesForInst(Inst);
+    if (Stmt->isRegionStmt())
+      BuildAccessesForInst(BB.getTerminator());
+  } else {
+    for (Instruction &Inst : BB) {
+      if (isIgnoredIntrinsic(&Inst))
+        continue;
+
+      // Invariant loads already have been processed.
+      if (isa<LoadInst>(Inst) && RIL.count(cast<LoadInst>(&Inst)))
+        continue;
+
+      BuildAccessesForInst(&Inst);
+    }
   }
 }
 
@@ -984,7 +1186,7 @@ void ScopBuilder::checkForReductions(ScopStmt &Stmt) {
       continue;
 
     Loads.clear();
-    collectCandiateReductionLoads(StoreMA, Loads);
+    collectCandidateReductionLoads(StoreMA, Loads);
     for (MemoryAccess *LoadMA : Loads)
       Candidates.push_back(std::make_pair(LoadMA, StoreMA));
   }
@@ -1034,7 +1236,7 @@ void ScopBuilder::checkForReductions(ScopStmt &Stmt) {
   }
 }
 
-void ScopBuilder::collectCandiateReductionLoads(
+void ScopBuilder::collectCandidateReductionLoads(
     MemoryAccess *StoreMA, SmallVectorImpl<MemoryAccess *> &Loads) {
   ScopStmt *Stmt = StoreMA->getStatement();
 
@@ -1184,6 +1386,33 @@ void ScopBuilder::buildScop(Region &R, AssumptionCache &AC,
   scop.reset(new Scop(R, SE, LI, DT, *SD.getDetectionContext(&R), ORE));
 
   buildStmts(R);
+
+  // Create all invariant load instructions first. These are categorized as
+  // 'synthesizable', therefore are not part of any ScopStmt but need to be
+  // created somewhere.
+  const InvariantLoadsSetTy &RIL = scop->getRequiredInvariantLoads();
+  for (BasicBlock *BB : scop->getRegion().blocks()) {
+    if (isErrorBlock(*BB, scop->getRegion(), LI, DT))
+      continue;
+
+    for (Instruction &Inst : *BB) {
+      LoadInst *Load = dyn_cast<LoadInst>(&Inst);
+      if (!Load)
+        continue;
+
+      if (!RIL.count(Load))
+        continue;
+
+      // Invariant loads require a MemoryAccess to be created in some statement.
+      // It is not important to which statement the MemoryAccess is added
+      // because it will later be removed from the ScopStmt again. We chose the
+      // first statement of the basic block the LoadInst is in.
+      ArrayRef<ScopStmt *> List = scop->getStmtListFor(BB);
+      assert(!List.empty());
+      ScopStmt *RILStmt = List.front();
+      buildMemoryAccess(Load, RILStmt);
+    }
+  }
   buildAccessFunctions();
 
   // In case the region does not have an exiting block we will later (during
@@ -1193,9 +1422,15 @@ void ScopBuilder::buildScop(Region &R, AssumptionCache &AC,
   // To handle these PHI nodes later we will now model their operands as scalar
   // accesses. Note that we do not model anything in the exit block if we have
   // an exiting block in the region, as there will not be any splitting later.
-  if (!R.isTopLevelRegion() && !scop->hasSingleExitEdge())
-    buildAccessFunctions(nullptr, *R.getExit(), nullptr,
-                         /* IsExitBlock */ true);
+  if (!R.isTopLevelRegion() && !scop->hasSingleExitEdge()) {
+    for (Instruction &Inst : *R.getExit()) {
+      PHINode *PHI = dyn_cast<PHINode>(&Inst);
+      if (!PHI)
+        break;
+
+      buildPHIAccesses(nullptr, PHI, nullptr, true);
+    }
+  }
 
   // Create memory accesses for global reads since all arrays are now known.
   auto *AF = SE.getConstant(IntegerType::getInt64Ty(SE.getContext()), 0);

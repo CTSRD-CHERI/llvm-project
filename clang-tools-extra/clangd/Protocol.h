@@ -237,6 +237,33 @@ struct DidChangeTextDocumentParams {
   parse(llvm::yaml::MappingNode *Params, clangd::Logger &Logger);
 };
 
+enum class FileChangeType {
+  /// The file got created.
+  Created = 1,
+  /// The file got changed.
+  Changed = 2,
+  /// The file got deleted.
+  Deleted = 3
+};
+
+struct FileEvent {
+  /// The file's URI.
+  URI uri;
+  /// The change type.
+  FileChangeType type;
+
+  static llvm::Optional<FileEvent> parse(llvm::yaml::MappingNode *Params,
+                                         clangd::Logger &Logger);
+};
+
+struct DidChangeWatchedFilesParams {
+  /// The actual file events.
+  std::vector<FileEvent> changes;
+
+  static llvm::Optional<DidChangeWatchedFilesParams>
+  parse(llvm::yaml::MappingNode *Params, clangd::Logger &Logger);
+};
+
 struct FormattingOptions {
   /// Size of a tab in spaces.
   int tabSize;
@@ -451,6 +478,48 @@ struct CompletionItem {
   // data?: any - A data entry field that is preserved on a completion item
   //              between a completion and a completion resolve request.
   static std::string unparse(const CompletionItem &P);
+};
+
+/// A single parameter of a particular signature.
+struct ParameterInformation {
+
+  /// The label of this parameter. Mandatory.
+  std::string label;
+
+  /// The documentation of this parameter. Optional.
+  std::string documentation;
+
+  static std::string unparse(const ParameterInformation &);
+};
+
+/// Represents the signature of something callable.
+struct SignatureInformation {
+
+  /// The label of this signature. Mandatory.
+  std::string label;
+
+  /// The documentation of this signature. Optional.
+  std::string documentation;
+
+  /// The parameters of this signature.
+  std::vector<ParameterInformation> parameters;
+
+  static std::string unparse(const SignatureInformation &);
+};
+
+/// Represents the signature of a callable.
+struct SignatureHelp {
+
+  /// The resulting signatures.
+  std::vector<SignatureInformation> signatures;
+
+  /// The active signature.
+  int activeSignature = 0;
+
+  /// The active parameter of the active signature.
+  int activeParameter = 0;
+
+  static std::string unparse(const SignatureHelp &);
 };
 
 } // namespace clangd

@@ -77,6 +77,10 @@ class ObjCAtThrowStmt;
 class ObjCAtSynchronizedStmt;
 class ObjCAutoreleasePoolStmt;
 
+namespace analyze_os_log {
+class OSLogBufferLayout;
+}
+
 namespace CodeGen {
 class CodeGenTypes;
 class CGCallee;
@@ -1911,14 +1915,14 @@ public:
                         LValueBaseInfo BaseInfo =
                             LValueBaseInfo(AlignmentSource::Type)) {
     return LValue::MakeAddr(Addr, T, getContext(), BaseInfo,
-                            CGM.getTBAAInfo(T));
+                            CGM.getTBAAAccessInfo(T));
   }
 
   LValue MakeAddrLValue(llvm::Value *V, QualType T, CharUnits Alignment,
                         LValueBaseInfo BaseInfo =
                             LValueBaseInfo(AlignmentSource::Type)) {
     return LValue::MakeAddr(Address(V, Alignment), T, getContext(),
-                            BaseInfo, CGM.getTBAAInfo(T));
+                            BaseInfo, CGM.getTBAAAccessInfo(T));
   }
 
   LValue MakeNaturalAlignPointeeAddrLValue(llvm::Value *V, QualType T);
@@ -2368,6 +2372,12 @@ public:
     /// Checking the value assigned to a _Nonnull pointer. Must not be null.
     TCK_NonnullAssign
   };
+
+  /// Determine whether the pointer type check \p TCK permits null pointers.
+  static bool isNullPointerAllowed(TypeCheckKind TCK);
+
+  /// Determine whether the pointer type check \p TCK requires a vptr check.
+  static bool isVptrCheckRequired(TypeCheckKind TCK, QualType Ty);
 
   /// \brief Whether any type-checking sanitizers are enabled. If \c false,
   /// calls to EmitTypeCheck can be skipped.
@@ -3063,9 +3073,14 @@ public:
                                 SourceLocation Loc,
                                 LValueBaseInfo BaseInfo =
                                     LValueBaseInfo(AlignmentSource::Type),
-                                llvm::MDNode *TBAAInfo = nullptr,
-                                QualType TBAABaseTy = QualType(),
-                                uint64_t TBAAOffset = 0,
+                                bool isNontemporal = false) {
+    return EmitLoadOfScalar(Addr, Volatile, Ty, Loc, BaseInfo,
+                            CGM.getTBAAAccessInfo(Ty), isNontemporal);
+  }
+
+  llvm::Value *EmitLoadOfScalar(Address Addr, bool Volatile, QualType Ty,
+                                SourceLocation Loc, LValueBaseInfo BaseInfo,
+                                TBAAAccessInfo TBAAInfo,
                                 bool isNontemporal = false);
 
   /// EmitLoadOfScalar - Load a scalar value from an address, taking
@@ -3081,9 +3096,15 @@ public:
                          bool Volatile, QualType Ty,
                          LValueBaseInfo BaseInfo =
                              LValueBaseInfo(AlignmentSource::Type),
-                         llvm::MDNode *TBAAInfo = nullptr, bool isInit = false,
-                         QualType TBAABaseTy = QualType(),
-                         uint64_t TBAAOffset = 0, bool isNontemporal = false);
+                         bool isInit = false, bool isNontemporal = false) {
+    EmitStoreOfScalar(Value, Addr, Volatile, Ty, BaseInfo,
+                      CGM.getTBAAAccessInfo(Ty), isInit, isNontemporal);
+  }
+
+  void EmitStoreOfScalar(llvm::Value *Value, Address Addr,
+                         bool Volatile, QualType Ty,
+                         LValueBaseInfo BaseInfo, TBAAAccessInfo TBAAInfo,
+                         bool isInit = false, bool isNontemporal = false);
 
   /// EmitStoreOfScalar - Store a scalar value to an address, taking
   /// care to appropriately convert from the memory representation to
@@ -3316,6 +3337,13 @@ public:
   RValue EmitBuiltinExpr(const FunctionDecl *FD,
                          unsigned BuiltinID, const CallExpr *E,
                          ReturnValueSlot ReturnValue);
+
+  /// Emit IR for __builtin_os_log_format.
+  RValue emitBuiltinOSLogFormat(const CallExpr &E);
+
+  llvm::Function *generateBuiltinOSLogHelperFunction(
+      const analyze_os_log::OSLogBufferLayout &Layout,
+      CharUnits BufferAlignment);
 
   RValue EmitBlockCallExpr(const CallExpr *E, ReturnValueSlot ReturnValue);
 
@@ -3900,6 +3928,7 @@ private:
   llvm::Value *EmitX86CpuIs(StringRef CPUStr);
   llvm::Value *EmitX86CpuSupports(const CallExpr *E);
   llvm::Value *EmitX86CpuSupports(ArrayRef<StringRef> FeatureStrs);
+  llvm::Value *EmitX86CpuInit();
 };
 
 /// Helper class with most of the code for saving a value for a

@@ -25,6 +25,7 @@
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Threading.h"
+#include "llvm/Support/xxhash.h"
 #include <mutex>
 
 using namespace llvm;
@@ -209,9 +210,15 @@ OutputSection *SectionBase::getOutputSection() {
   return Sec ? Sec->getParent() : nullptr;
 }
 
-// Uncompress section contents. Note that this function is called
-// from parallelForEach, so it must be thread-safe.
-void InputSectionBase::uncompress() {
+// Uncompress section contents if required. Note that this function
+// is called from parallelForEach, so it must be thread-safe.
+void InputSectionBase::maybeUncompress() {
+  if (UncompressBuf)
+    return;
+
+  if (!Decompressor::isCompressedELFSection(Flags, Name))
+    return;
+
   Decompressor Dec = check(Decompressor::create(Name, toStringRef(Data),
                                                 Config->IsLE, Config->Is64));
 
@@ -345,10 +352,6 @@ InputSection::InputSection(ObjFile<ELFT> *F, const typename ELFT::Shdr *Header,
 bool InputSection::classof(const SectionBase *S) {
   return S->kind() == SectionBase::Regular ||
          S->kind() == SectionBase::Synthetic;
-}
-
-bool InputSectionBase::classof(const SectionBase *S) {
-  return S->kind() != Output;
 }
 
 OutputSection *InputSection::getParent() const {
@@ -820,10 +823,6 @@ SyntheticSection *EhInputSection::getParent() const {
   return cast_or_null<SyntheticSection>(Parent);
 }
 
-bool EhInputSection::classof(const SectionBase *S) {
-  return S->kind() == InputSectionBase::EHFrame;
-}
-
 // Returns the index of the first relocation that points to a region between
 // Begin and Begin+Size.
 template <class IntTy, class RelTy>
@@ -903,7 +902,7 @@ void MergeInputSection::splitStrings(ArrayRef<uint8_t> Data, size_t EntSize) {
       fatal(toString(this) + ": string is not null terminated");
     size_t Size = End + EntSize;
     Pieces.emplace_back(Off, !IsAlloc);
-    Hashes.push_back(hash_value(toStringRef(Data.slice(0, Size))));
+    Hashes.push_back(xxHash64(toStringRef(Data.slice(0, Size))));
     Data = Data.slice(Size);
     Off += Size;
   }
@@ -917,7 +916,7 @@ void MergeInputSection::splitNonStrings(ArrayRef<uint8_t> Data,
   assert((Size % EntSize) == 0);
   bool IsAlloc = this->Flags & SHF_ALLOC;
   for (unsigned I = 0, N = Size; I != N; I += EntSize) {
-    Hashes.push_back(hash_value(toStringRef(Data.slice(I, EntSize))));
+    Hashes.push_back(xxHash64(toStringRef(Data.slice(I, EntSize))));
     Pieces.emplace_back(I, !IsAlloc);
   }
 }
@@ -946,10 +945,6 @@ void MergeInputSection::splitIntoPieces() {
   if (Config->GcSections && (this->Flags & SHF_ALLOC))
     for (uint64_t Off : LiveOffsets)
       this->getSectionPiece(Off)->Live = true;
-}
-
-bool MergeInputSection::classof(const SectionBase *S) {
-  return S->kind() == InputSectionBase::Merge;
 }
 
 // Do binary search to get a section piece at a given input offset.
