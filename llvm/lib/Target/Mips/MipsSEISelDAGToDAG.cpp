@@ -162,24 +162,34 @@ void MipsSEDAGToDAGISel::initGlobalBaseReg(MachineFunction &MF) {
     if (ABI.IsCheriPureCap()) {
       MF.getRegInfo().addLiveIn(Mips::C12);
       MBB.addLiveIn(Mips::C12);
-      BuildMI(MBB, I, DL, TII.get(Mips::CGetOffset))
-        .addReg(Mips::T9_64, RegState::Define)
-        .addReg(Mips::C12);
+      if (Subtarget->useCheriCapTable()) {
+        auto GlobalsReg = Mips::C26;
+        MF.getRegInfo().addLiveIn(GlobalsReg);
+        MBB.addLiveIn(GlobalsReg);
+      } else {
+        BuildMI(MBB, I, DL, TII.get(Mips::CGetOffset))
+          .addReg(Mips::T9_64, RegState::Define)
+          .addReg(Mips::C12);
+      }
     } else {
       MF.getRegInfo().addLiveIn(Mips::T9_64);
       MBB.addLiveIn(Mips::T9_64);
     }
 
-    // lui $v0, %hi(%neg(%gp_rel(fname)))
-    // daddu $v1, $v0, $t9
-    // daddiu $globalbasereg, $v1, %lo(%neg(%gp_rel(fname)))
-    const GlobalValue *FName = MF.getFunction();
-    BuildMI(MBB, I, DL, TII.get(Mips::LUi64), V0)
-      .addGlobalAddress(FName, 0, MipsII::MO_GPOFF_HI);
-    BuildMI(MBB, I, DL, TII.get(Mips::DADDu), V1).addReg(V0)
-      .addReg(Mips::T9_64);
-    BuildMI(MBB, I, DL, TII.get(Mips::DADDiu), GlobalBaseReg).addReg(V1)
-      .addGlobalAddress(FName, 0, MipsII::MO_GPOFF_LO);
+    // We don't need to initialize gp if we are using the cap table in purecap
+    // ABI as there should not be any GOT loads in this ABI
+    if (!(ABI.IsCheriPureCap() && Subtarget->useCheriCapTable())) {
+      // lui $v0, %hi(%neg(%gp_rel(fname)))
+      // daddu $v1, $v0, $t9
+      // daddiu $globalbasereg, $v1, %lo(%neg(%gp_rel(fname)))
+      const GlobalValue *FName = MF.getFunction();
+      BuildMI(MBB, I, DL, TII.get(Mips::LUi64), V0)
+        .addGlobalAddress(FName, 0, MipsII::MO_GPOFF_HI);
+      BuildMI(MBB, I, DL, TII.get(Mips::DADDu), V1).addReg(V0)
+        .addReg(Mips::T9_64);
+      BuildMI(MBB, I, DL, TII.get(Mips::DADDiu), GlobalBaseReg).addReg(V1)
+        .addGlobalAddress(FName, 0, MipsII::MO_GPOFF_LO);
+    }
     return;
   }
 
@@ -236,8 +246,38 @@ void MipsSEDAGToDAGISel::initGlobalBaseReg(MachineFunction &MF) {
     .addReg(Mips::V0).addReg(Mips::T9);
 }
 
+void MipsSEDAGToDAGISel::initCapGlobalBaseReg(MachineFunction &MF) {
+  MipsFunctionInfo *MipsFI = MF.getInfo<MipsFunctionInfo>();
+
+  if (!MipsFI->capGlobalBaseRegSet())
+    return;
+  assert(Subtarget->useCheriCapTable());
+  assert(MF.getTarget().isPositionIndependent());
+
+  MachineBasicBlock &MBB = MF.front();
+  MachineBasicBlock::iterator I = MBB.begin();
+  const TargetInstrInfo &TII = *Subtarget->getInstrInfo();
+  DebugLoc DL;
+  unsigned CapGlobalBaseReg = MipsFI->getCapGlobalBaseReg();
+  const MipsABIInfo &ABI = static_cast<const MipsTargetMachine &>(TM).getABI();
+
+  assert(ABI.IsCheriPureCap());
+  // TODO: use an accessor in ABI
+  const unsigned GlobalCapReg = Mips::C26;
+
+  // For the purecap ABI, $cgp is required to point to the function's/DSOs
+  // capability table on function entry, so emit a single COPY
+  // (which may be optimised away):
+  // COPY $capglobalbasereg, $c26
+  MF.getRegInfo().addLiveIn(GlobalCapReg);
+  MBB.addLiveIn(GlobalCapReg);
+  BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), CapGlobalBaseReg)
+    .addReg(GlobalCapReg);
+}
+
 void MipsSEDAGToDAGISel::processFunctionAfterISel(MachineFunction &MF) {
   initGlobalBaseReg(MF);
+  initCapGlobalBaseReg(MF);
 
   MachineRegisterInfo *MRI = &MF.getRegInfo();
 

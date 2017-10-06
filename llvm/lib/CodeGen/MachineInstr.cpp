@@ -623,6 +623,10 @@ MachinePointerInfo MachinePointerInfo::getGOT(MachineFunction &MF) {
   return MachinePointerInfo(MF.getPSVManager().getGOT());
 }
 
+MachinePointerInfo MachinePointerInfo::getCapTable(MachineFunction &MF) {
+  return MachinePointerInfo(MF.getPSVManager().getCapTable());
+}
+
 MachinePointerInfo MachinePointerInfo::getStack(MachineFunction &MF,
                                                 int64_t Offset,
                                                 uint8_t ID) {

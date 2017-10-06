@@ -1111,6 +1111,9 @@ void MIPrinter::print(const LLVMContext &Context, const TargetInstrInfo &TII,
     case PseudoSourceValue::GOT:
       OS << "got";
       break;
+    case PseudoSourceValue::CapTable:
+      OS << "cap-table";
+      break;
     case PseudoSourceValue::JumpTable:
       OS << "jump-table";
       break;

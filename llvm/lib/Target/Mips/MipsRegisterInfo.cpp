@@ -252,6 +252,8 @@ getReservedRegs(const MachineFunction &MF) const {
         Reserved.set(ABI.GetFramePtr());
       if (FL->hasBP(MF))
         Reserved.set(ABI.GetBasePtr());
+      if (Subtarget.useCheriCapTable())
+        Reserved.set(ABI.GetGlobalCapability());
     }
     if (Cheri8)
       for (unsigned I = 0; I < array_lengthof(ReservedCheri8Regs); ++I)

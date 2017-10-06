@@ -35,6 +35,9 @@ public:
   bool globalBaseRegSet() const;
   unsigned getGlobalBaseReg();
 
+  bool capGlobalBaseRegSet() const;
+  unsigned getCapGlobalBaseReg();
+
   int getVarArgsFrameIndex() const { return VarArgsFrameIndex; }
   void setVarArgsFrameIndex(int Index) { VarArgsFrameIndex = Index; }
 
@@ -91,6 +94,11 @@ private:
   /// use as the global base register. This is used for PIC in some PIC
   /// relocation models.
   unsigned GlobalBaseReg = 0;
+
+  /// CapGlobalBaseReg - keeps track of the virtual register initialized for
+  /// use as the capability global base register. This is used for all global
+  /// accesses in the purecap ABI.
+  unsigned CapGlobalBaseReg = 0;
 
   /// VarArgsFrameIndex - FrameIndex for start of varargs area.
   int VarArgsFrameIndex = 0;

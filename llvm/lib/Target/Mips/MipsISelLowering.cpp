@@ -93,6 +93,11 @@ HugeGOT("mxmxgot", cl::Hidden,
          cl::ZeroOrMore);
 
 static cl::opt<bool>
+LargeCapTable("mxcaptable", cl::Hidden,
+              cl::desc("CHERI: Enable capability immediates larget than 11 bits"),
+              cl::init(true)); // FIXME: this should not be on by default
+
+static cl::opt<bool>
 NoZeroDivCheck("mno-check-zero-division", cl::Hidden,
                cl::desc("MIPS: Don't trap on integer division by zero."),
                cl::init(false));
@@ -170,6 +175,11 @@ SDValue MipsTargetLowering::getGlobalReg(SelectionDAG &DAG, EVT Ty) const {
   return DAG.getRegister(FI->getGlobalBaseReg(), Ty);
 }
 
+SDValue MipsTargetLowering::getCapGlobalReg(SelectionDAG &DAG, EVT Ty) const {
+  MipsFunctionInfo *FI = DAG.getMachineFunction().getInfo<MipsFunctionInfo>();
+  return DAG.getRegister(FI->getCapGlobalBaseReg(), Ty);
+}
+
 SDValue MipsTargetLowering::getTargetNode(GlobalAddressSDNode *N, EVT Ty,
                                           SelectionDAG &DAG,
                                           unsigned Flag) const {
@@ -239,6 +249,7 @@ const char *MipsTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case MipsISD::BuildPairF64:      return "MipsISD::BuildPairF64";
   case MipsISD::ExtractElementF64: return "MipsISD::ExtractElementF64";
   case MipsISD::Wrapper:           return "MipsISD::Wrapper";
+  case MipsISD::WrapperCapOp:      return "MipsISD::WrapperCapOp";
   case MipsISD::DynAlloc:          return "MipsISD::DynAlloc";
   case MipsISD::Sync:              return "MipsISD::Sync";
   case MipsISD::Ext:               return "MipsISD::Ext";
@@ -2220,6 +2231,31 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
   EVT Ty = Op.getValueType();
   GlobalAddressSDNode *N = cast<GlobalAddressSDNode>(Op);
   const GlobalValue *GV = N->getGlobal();
+  const Type* GVTy = GV->getType();
+
+  if (Subtarget.getABI().IsCheriPureCap() && Subtarget.useCheriCapTable()) {
+    // FIXME: shouldn't functions have a R_MIPS_CHERI_CAPCALL relocation?
+    bool CanUseCapTable = GVTy->isFunctionTy() ||  DAG.getDataLayout().isFatPointer(GVTy);
+
+    if (CanUseCapTable) {
+      if (LargeCapTable)
+        return getGlobalCapBigImmediate(N, SDLoc(N), Ty, DAG,
+                                        MipsII::MO_CAPTAB_HI16,
+                                        MipsII::MO_CAPTAB_LO16,
+                                        DAG.getEntryNode(),
+                                        MachinePointerInfo::getCapTable(
+                                          DAG.getMachineFunction()));
+      else
+        return getGlobalCap(N, SDLoc(N), Ty, DAG, MipsII::MO_CAPTAB11,
+                            DAG.getEntryNode(),
+                            MachinePointerInfo::getCapTable(
+                              DAG.getMachineFunction()));
+    } else {
+      llvm::errs() << "Not using capability table for " <<  GV->getName() << "\n";
+      GV->dump();
+      abort();
+    }
+  }
 
   EVT AddrTy = Ty;
   if (GV->getType()->getAddressSpace() == 200)
@@ -3492,6 +3528,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   EVT Ty = Callee.getValueType();
   bool GlobalOrExternal = false, IsCallReloc = false;
 
+  const bool CheriCapTable = Subtarget.useCheriCapTable();
   // Chain is the output chain of the last Load/Store or CopyToReg node.
   // ByValChain is the output chain of the last Memcpy node created for copying
   // byval arguments to the stack.
@@ -3532,24 +3569,38 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   }
 
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
-    if (IsPIC) {
-      const GlobalValue *Val = G->getGlobal();
-      InternalLinkage = Val->hasInternalLinkage();
+    const GlobalValue *GV = G->getGlobal();
+    if (CheriCapTable) {
+      InternalLinkage = GV->hasInternalLinkage();
+
+      if (LargeCapTable || !InternalLinkage) {
+        Callee = getGlobalCapBigImmediate(G, DL, MVT::iFATPTR, DAG,
+                                   MipsII::MO_CAPTAB_CALL_HI16,
+                                   MipsII::MO_CAPTAB_CALL_LO16,
+                                   Chain, FuncInfo->callPtrInfo(GV));
+      } else {
+        Callee = getGlobalCap(G, DL, MVT::iFATPTR, DAG, MipsII::MO_CAPTAB_CALL11,
+                           Chain, FuncInfo->callPtrInfo(GV));
+      }
+
+      IsCallReloc = true;
+    } else if (IsPIC) {
+      InternalLinkage = GV->hasInternalLinkage();
 
       if (LargeGOT) {
         Callee = getAddrGlobalLargeGOT(G, DL, Ty, DAG, MipsII::MO_CALL_HI16,
                                        MipsII::MO_CALL_LO16, Chain,
-                                       FuncInfo->callPtrInfo(Val));
+                                       FuncInfo->callPtrInfo(GV));
         IsCallReloc = true;
       } else if (InternalLinkage)
         Callee = getAddrLocal(G, DL, Ty, DAG, ABI.IsN32() || ABI.IsN64());
       else {
         Callee = getAddrGlobal(G, DL, Ty, DAG, MipsII::MO_GOT_CALL, Chain,
-                               FuncInfo->callPtrInfo(Val));
+                               FuncInfo->callPtrInfo(GV));
         IsCallReloc = true;
       }
     } else
-      Callee = DAG.getTargetGlobalAddress(G->getGlobal(), DL,
+      Callee = DAG.getTargetGlobalAddress(GV, DL,
                                           getPointerTy(DAG.getDataLayout()), 0,
                                           MipsII::MO_NO_FLAG);
     GlobalOrExternal = true;
@@ -3557,7 +3608,19 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
     const char *Sym = S->getSymbol();
 
-    if (!IsPIC) // static
+    if (CheriCapTable) {
+      if (LargeCapTable) {
+        Callee = getGlobalCapBigImmediate(S, DL, MVT::iFATPTR, DAG,
+                                   MipsII::MO_CAPTAB_CALL_HI16,
+                                   MipsII::MO_CAPTAB_CALL_LO16,
+                                   Chain, FuncInfo->callPtrInfo(Sym));
+      } else {
+        Callee = getGlobalCap(S, DL, MVT::iFATPTR, DAG, MipsII::MO_CAPTAB_CALL11,
+                           Chain, FuncInfo->callPtrInfo(Sym));
+      }
+
+      IsCallReloc = true;
+    } else if (!IsPIC) // static
       Callee = DAG.getTargetExternalSymbol(
           Sym, getPointerTy(DAG.getDataLayout()), MipsII::MO_NO_FLAG);
     else if (LargeGOT) {
@@ -3573,9 +3636,15 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
     GlobalOrExternal = true;
   }
+  if (CheriCapTable && !GlobalOrExternal) {
+    Callee.dump();
+    llvm_unreachable("Saw indirect function call");
+  }
   // If we're in the sandbox ABI, then we need to turn the address into a
   // PCC-derived capability.
   if (ABI.IsCheriPureCap() && (Callee.getValueType() != MVT::iFATPTR)) {
+    if (CheriCapTable)
+      llvm_unreachable("Should not derive address from PCC with cap table");
     auto GetPCC = DAG.getConstant(Intrinsic::cheri_pcc_get, DL, MVT::i64);
     auto SetOffset = DAG.getConstant(Intrinsic::cheri_cap_offset_set, DL, MVT::i64);
     auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR, GetPCC);

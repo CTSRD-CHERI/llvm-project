@@ -52,6 +52,19 @@ unsigned MipsFunctionInfo::getGlobalBaseReg() {
   return GlobalBaseReg = MF.getRegInfo().createVirtualRegister(RC);
 }
 
+bool MipsFunctionInfo::capGlobalBaseRegSet() const {
+  return CapGlobalBaseReg;
+}
+
+unsigned MipsFunctionInfo::getCapGlobalBaseReg() {
+  // Return if it has already been initialized.
+  if (CapGlobalBaseReg)
+    return CapGlobalBaseReg;
+
+  const TargetRegisterClass *RC = &Mips::CheriRegsRegClass;
+  return CapGlobalBaseReg = MF.getRegInfo().createVirtualRegister(RC);
+}
+
 void MipsFunctionInfo::createEhDataRegsFI() {
   const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();
   for (int I = 0; I < 4; ++I) {

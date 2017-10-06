@@ -144,6 +144,7 @@ class TargetRegisterClass;
       ExtractElementF64,
 
       Wrapper,
+      WrapperCapOp,  // Cheri cap table relocations
 
       DynAlloc,
 
@@ -390,6 +391,8 @@ class TargetRegisterClass;
   protected:
     SDValue getGlobalReg(SelectionDAG &DAG, EVT Ty) const;
 
+    SDValue getCapGlobalReg(SelectionDAG &DAG, EVT Ty) const;
+
     // This method creates the following nodes, which are necessary for
     // computing a local symbol's address:
     //
@@ -499,6 +502,41 @@ class TargetRegisterClass;
           ISD::ADD, DL, Ty,
           DAG.getRegister(IsN64 ? Mips::GP_64 : Mips::GP, Ty),
           DAG.getNode(MipsISD::GPRel, DL, DAG.getVTList(Ty), GPRel));
+    }
+
+    // This method creates the following nodes, which are necessary for
+    // computing a symbol's capability:
+    //
+    // (load (wrapper $cgp, %captab(sym)))
+    template <class NodeTy>
+    SDValue getGlobalCap(NodeTy *N, const SDLoc &DL, EVT Ty, SelectionDAG &DAG,
+                         unsigned Flag, SDValue Chain,
+                         const MachinePointerInfo &PtrInfo) const {
+      SDValue Off = getTargetNode(N, MVT::i64, DAG, Flag);
+      // FIXME: this needs lots of tablegen changes :( -> wait for nosp merge
+      llvm_unreachable("NOT IMPLEMENTED");
+      SDValue Tgt = DAG.getNode(MipsISD::Wrapper, DL, Ty,
+                                getCapGlobalReg(DAG, Ty), Off);
+      return DAG.getLoad(Ty, DL, Chain, Tgt, PtrInfo);
+    }
+
+    // This method creates the following nodes, which are necessary for
+    // computing a global symbol's address in large-GOT mode:
+    //
+    // (load (ptradd $cgp, (wrapper %captab_hi(sym), %mcaptab_lo(sym))))
+    template <class NodeTy>
+    SDValue getGlobalCapBigImmediate(NodeTy *N, const SDLoc &DL, EVT Ty,
+                                     SelectionDAG &DAG, unsigned HiFlag,
+                                     unsigned LoFlag, SDValue Chain,
+                                     const MachinePointerInfo &PtrInfo) const {
+      // (Ab)use GotHi since it already exists and does the right thing
+      SDValue Off = DAG.getNode(MipsISD::GotHi, DL, MVT::i64,
+                                getTargetNode(N, MVT::i64, DAG, HiFlag));
+      Off = DAG.getNode(MipsISD::Wrapper, DL, MVT::i64, Off,
+                        getTargetNode(N, MVT::i64, DAG, LoFlag));
+      SDValue Tgt = DAG.getNode(ISD::PTRADD, DL, Ty,
+                                getCapGlobalReg(DAG, Ty), Off);
+      return DAG.getLoad(Ty, DL, Chain, Tgt, PtrInfo);
     }
 
     /// This function fills Ops, which is the list of operands that will later

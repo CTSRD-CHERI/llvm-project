@@ -854,7 +854,7 @@ MachineLICM::calcRegisterCost(const MachineInstr *MI, bool ConsiderSeen,
 }
 
 /// Return true if this machine instruction loads from global offset table or
-/// constant pool.
+/// constant pool. The capability table is included as a GOT-like entity.
 static bool mayLoadFromGOTOrConstantPool(MachineInstr &MI) {
   assert(MI.mayLoad() && "Expected MI that loads!");
 
@@ -865,7 +865,7 @@ static bool mayLoadFromGOTOrConstantPool(MachineInstr &MI) {
 
   for (MachineMemOperand *MemOp : MI.memoperands())
     if (const PseudoSourceValue *PSV = MemOp->getPseudoValue())
-      if (PSV->isGOT() || PSV->isConstantPool())
+      if (PSV->isGOT() || PSV->isCapTable() || PSV->isConstantPool())
         return true;
 
   return false;

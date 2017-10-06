@@ -1,11 +1,13 @@
-; RUN: %cheri_llc -mtriple=cheri-unknown-freebsd -relocation-model=pic %s -o - | FileCheck -check-prefix=CHERI %s
-; RUN: %cheri_llc -mtriple=cheri-unknown-freebsd -cheri-no-global-bounds -relocation-model=pic %s -o - | FileCheck -check-prefix=MIPS %s
+; RUN: %cheri_llc -relocation-model=pic %s -o - | FileCheck -check-prefix=CHERI %s
+; RUN: %cheri_llc -cheri-no-global-bounds -relocation-model=pic %s -o - | FileCheck -check-prefix=MIPS %s
+; RUN: %cheri_llc -relocation-model=pic -target-abi purecap -cheri-cap-table %s -o - | FileCheck -check-prefix=CAP-TABLE %s
 
 ; ModuleID = 'global.c'
 target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
 
 @x = common addrspace(200) global i32 0, align 4
+
 
 ; Function Attrs: nounwind
 define void @foo(i32 signext %y) #0 {
@@ -14,6 +16,10 @@ entry:
   ; CHERI: cfromptr	$c1, $c0, $1
   ; CHERI: csetbounds	$c1, $c1, $2
   ; CHERI: csw	$4, $zero, 0($c1)
+
+  ; CAP-TABLE:      lui     $1, %captab_hi(x)
+  ; CAP-TABLE-NEXT: daddiu  $1, $1, %captab_lo(x)
+  ; CAP-TABLE-NEXT: clc     $c1, $1, 0($c26)
 
   store i32 %y, i32 addrspace(200)* @x, align 4, !tbaa !1
   ret void
