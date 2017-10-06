@@ -1228,13 +1228,13 @@ next:
   ret i8* inttoptr(i32 42 to i8*)
 }
 
-declare void @llvm.va_end(i8*)
+declare void @llvm.va_end.p0i8(i8*)
 define void @test_va_end(i8* %list) {
 ; CHECK-LABEL: name: test_va_end
 ; CHECK-NOT: va_end
 ; CHECK-NOT: INTRINSIC
 ; CHECK: RET_ReallyLR
-  call void @llvm.va_end(i8* %list)
+  call void @llvm.va_end.p0i8(i8* %list)
   ret void
 }
 

@@ -13,34 +13,34 @@ define void @cpy(i8 addrspace(200)* nocapture readnone %y, i32 signext %x, ...) 
 entry:
   %v = alloca i8 addrspace(200)*, align 32, addrspace(200)
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*
-  %1 = addrspacecast i8 addrspace(200)* %0 to i8*
   ; Load the address of va_cpy
   ; CHECK: 	ld	$1, %got_disp(va_cpy)($1)
-  ; CHECK: cfromptr $c1, $c0, $1
+  ; CHECK: cfromptr $c[[CPYADDR:[0-9]+]], $c0, $1
   ; Store the va_list (passed in $c13) in the global
-  ; CHECK: csc	$c13, $zero, 0($c1)
-  call void @llvm.lifetime.start.p0i8(i64 32, i8* %1) #1
-  call void @llvm.va_start(i8* %1)
-  call void @llvm.va_copy(i8* addrspacecast (i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @va_cpy to i8 addrspace(200)*) to i8*), i8* %1)
-  call void @llvm.va_end(i8* %1)
-  call void @llvm.lifetime.end.p0i8(i64 32, i8* %1) #1
+  ; CHECK: csc	$c13, $zero, 0($c[[CPYADDR]])
+  %1 = addrspacecast i8 addrspace(200)* %0 to i8*
+  call void @llvm.lifetime.start.p200i8(i64 32, i8 addrspace(200)* %0) #1
+  call void @llvm.va_start.p200i8(i8 addrspace(200)* %0)
+  call void @llvm.va_copy.p200i8.p200i8(i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @va_cpy to i8 addrspace(200)*), i8 addrspace(200)* %0)
+  call void @llvm.va_end.p200i8(i8 addrspace(200)* %0)
+  call void @llvm.lifetime.end.p200i8(i64 32, i8 addrspace(200)* %0) #1
   ret void
 }
 
 ; Function Attrs: nounwind
-declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) #1
+declare void @llvm.lifetime.start.p200i8(i64, i8 addrspace(200)* nocapture) #1
 
 ; Function Attrs: nounwind
-declare void @llvm.va_start(i8*) #1
+declare void @llvm.va_start.p200i8(i8 addrspace(200)*) #1
 
 ; Function Attrs: nounwind
-declare void @llvm.va_copy(i8*, i8*) #1
+declare void @llvm.va_copy.p200i8.p200i8(i8 addrspace(200)*, i8 addrspace(200)*) #1
 
 ; Function Attrs: nounwind
-declare void @llvm.va_end(i8*) #1
+declare void @llvm.va_end.p200i8(i8 addrspace(200)*) #1
 
 ; Function Attrs: nounwind
-declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) #1
+declare void @llvm.lifetime.end.p200i8(i64, i8 addrspace(200)* nocapture) #1
 
 ; Function Attrs: nounwind
 ; CHECK-LABEL: cpy1:
@@ -54,12 +54,11 @@ entry:
   ; Load the va_list into the return capability
   ; CHECK: clc	$c3, $zero, 0($c1)
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*
-  %1 = addrspacecast i8 addrspace(200)* %0 to i8*
-  call void @llvm.lifetime.start.p0i8(i64 32, i8* %1) #1
-  call void @llvm.va_copy(i8* %1, i8* addrspacecast (i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @va_cpy to i8 addrspace(200)*) to i8*))
-  %2 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %v, align 32, !tbaa !1
-  call void @llvm.lifetime.end.p0i8(i64 32, i8* %1) #1
-  ret i8 addrspace(200)* %2
+  call void @llvm.lifetime.start.p200i8(i64 32, i8 addrspace(200)* %0) #1
+  call void @llvm.va_copy.p200i8.p200i8(i8 addrspace(200)* %0, i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @va_cpy to i8 addrspace(200)*))
+  %1 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %v, align 32, !tbaa !1
+  call void @llvm.lifetime.end.p200i8(i64 32, i8 addrspace(200)* %0) #1
+  ret i8 addrspace(200)* %1
 }
 
 ; Function Attrs: nounwind
@@ -72,13 +71,12 @@ entry:
   ; CHECK: cincoffset	$c3, $c13, $zero
   %v = alloca i8 addrspace(200)*, align 32, addrspace(200)
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*
-  %1 = addrspacecast i8 addrspace(200)* %0 to i8*
-  call void @llvm.lifetime.start.p0i8(i64 32, i8* %1) #1
-  call void @llvm.va_start(i8* %1)
-  %2 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %v, align 32, !tbaa !1
-  %call = call i32 @g(i32 signext 1, i32 signext 2, i8 addrspace(200)* %2) #1
-  call void @llvm.va_end(i8* %1)
-  call void @llvm.lifetime.end.p0i8(i64 32, i8* %1) #1
+  call void @llvm.lifetime.start.p200i8(i64 32, i8 addrspace(200)* %0) #1
+  call void @llvm.va_start.p200i8(i8 addrspace(200)* %0)
+  %1 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %v, align 32, !tbaa !1
+  %call = call i32 @g(i32 signext 1, i32 signext 2, i8 addrspace(200)* %1) #1
+  call void @llvm.va_end.p200i8(i8 addrspace(200)* %0)
+  call void @llvm.lifetime.end.p200i8(i64 32, i8 addrspace(200)* %0) #1
   ret void
 }
 

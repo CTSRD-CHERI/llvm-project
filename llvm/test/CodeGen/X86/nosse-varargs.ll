@@ -11,7 +11,7 @@ define i32 @foo(float %a, i8* nocapture %fmt, ...) nounwind {
 entry:
 	%ap = alloca [1 x %struct.__va_list_tag], align 8		; <[1 x %struct.__va_list_tag]*> [#uses=4]
 	%ap12 = bitcast [1 x %struct.__va_list_tag]* %ap to i8*		; <i8*> [#uses=2]
-	call void @llvm.va_start(i8* %ap12)
+	call void @llvm.va_start.p0i8(i8* %ap12)
 	%0 = getelementptr [1 x %struct.__va_list_tag], [1 x %struct.__va_list_tag]* %ap, i64 0, i64 0, i32 0		; <i32*> [#uses=2]
 	%1 = load i32, i32* %0, align 8		; <i32> [#uses=3]
 	%2 = icmp ult i32 %1, 48		; <i1> [#uses=1]
@@ -38,10 +38,10 @@ bb4:		; preds = %bb3, %bb
 	%addr.0.0 = phi i8* [ %ctg2, %bb ], [ %9, %bb3 ]		; <i8*> [#uses=1]
 	%11 = bitcast i8* %addr.0.0 to i32*		; <i32*> [#uses=1]
 	%12 = load i32, i32* %11, align 4		; <i32> [#uses=1]
-	call void @llvm.va_end(i8* %ap12)
+	call void @llvm.va_end.p0i8(i8* %ap12)
 	ret i32 %12
 }
 
-declare void @llvm.va_start(i8*) nounwind
+declare void @llvm.va_start.p0i8(i8*) nounwind
 
-declare void @llvm.va_end(i8*) nounwind
+declare void @llvm.va_end.p0i8(i8*) nounwind

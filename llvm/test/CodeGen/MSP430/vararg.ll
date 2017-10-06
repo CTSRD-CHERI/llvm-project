@@ -3,9 +3,9 @@
 target datalayout = "e-p:16:16:16-i8:8:8-i16:16:16-i32:16:32-n8:16"
 target triple = "msp430---elf"
 
-declare void @llvm.va_start(i8*) nounwind
-declare void @llvm.va_end(i8*) nounwind
-declare void @llvm.va_copy(i8*, i8*) nounwind
+declare void @llvm.va_start.p0i8(i8*) nounwind
+declare void @llvm.va_end.p0i8(i8*) nounwind
+declare void @llvm.va_copy.p0i8.p0i8(i8*, i8*) nounwind
 
 define void @va_start(i16 %a, ...) nounwind {
 entry:
@@ -16,8 +16,8 @@ entry:
 ; CHECK-NEXT: mov.w r1, [[REG:r[0-9]+]]
 ; CHECK-NEXT: add.w #6, [[REG]]
 ; CHECK-NEXT: mov.w [[REG]], 0(r1)
-  call void @llvm.va_start(i8* %vl1)
-  call void @llvm.va_end(i8* %vl1)
+  call void @llvm.va_start.p0i8(i8* %vl1)
+  call void @llvm.va_end.p0i8(i8* %vl1)
   ret void
 }
 
@@ -44,6 +44,6 @@ entry:
   %0 = bitcast i8** %vl2 to i8*
   %1 = bitcast i8** %vl.addr to i8*
 ; CHECK-DAG: mov.w r12, 0(r1)
-  call void @llvm.va_copy(i8* %0, i8* %1)
+  call void @llvm.va_copy.p0i8.p0i8(i8* %0, i8* %1)
   ret void
 }

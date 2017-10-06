@@ -183,7 +183,7 @@ define void @test_varsize(...) minsize {
 ; CHECK: bx	lr
 
   %var = alloca i8, i32 8
-  call void @llvm.va_start(i8* %var)
+  call void @llvm.va_start.p0i8(i8* %var)
   call void @bar(i8* %var)
   ret void
 }
@@ -232,4 +232,4 @@ define void @test_fold_reuse() minsize {
   ret void
 }
 
-declare void @llvm.va_start(i8*) nounwind
+declare void @llvm.va_start.p0i8(i8*) nounwind

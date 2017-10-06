@@ -25,7 +25,7 @@ entry:
   %ap = alloca [1 x %struct.__va_list_tag], align 16
   %0 = bitcast [1 x %struct.__va_list_tag]* %ap to i8*
   call void @llvm.lifetime.start.p0i8(i64 16, i8* %0) #2
-  call void @llvm.va_start(i8* %0)
+  call void @llvm.va_start.p0i8(i8* %0)
 ; SSE: subl $72, %esp
 ; SSE: testb %al, %al
 ; SSE: je .[[NOFP:.*]]
@@ -78,7 +78,7 @@ vaarg.end:                                        ; preds = %vaarg.in_mem, %vaar
   %vaarg.addr.in = phi i8* [ %2, %vaarg.in_reg ], [ %overflow_arg_area, %vaarg.in_mem ]
   %vaarg.addr = bitcast i8* %vaarg.addr.in to i32*
   %4 = load i32, i32* %vaarg.addr, align 4
-  call void @llvm.va_end(i8* %0)
+  call void @llvm.va_end.p0i8(i8* %0)
   call void @llvm.lifetime.end.p0i8(i64 16, i8* %0) #2
   ret i32 %4
 ; SSE: movl ([[ADDR]]), %eax
@@ -89,10 +89,10 @@ vaarg.end:                                        ; preds = %vaarg.in_mem, %vaar
 declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) nounwind
 
 ; Function Attrs: nounwind
-declare void @llvm.va_start(i8*) nounwind
+declare void @llvm.va_start.p0i8(i8*) nounwind
 
 ; Function Attrs: nounwind
-declare void @llvm.va_end(i8*) nounwind
+declare void @llvm.va_end.p0i8(i8*) nounwind
 
 ; Function Attrs: nounwind argmemonly
 declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) nounwind

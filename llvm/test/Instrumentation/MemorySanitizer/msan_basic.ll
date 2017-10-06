@@ -668,10 +668,10 @@ define <8 x i8*> @VectorOfPointers(<8 x i8*>* %p) nounwind uwtable sanitize_memo
 
 ; Test handling of va_copy.
 
-declare void @llvm.va_copy(i8*, i8*) nounwind
+declare void @llvm.va_copy.p0i8.p0i8(i8*, i8*) nounwind
 
 define void @VACopy(i8* %p1, i8* %p2) nounwind uwtable sanitize_memory {
-  call void @llvm.va_copy(i8* %p1, i8* %p2) nounwind
+  call void @llvm.va_copy.p0i8.p0i8(i8* %p1, i8* %p2) nounwind
   ret void
 }
 
@@ -684,7 +684,7 @@ define void @VACopy(i8* %p1, i8* %p2) nounwind uwtable sanitize_memory {
 ; It should work with a local stack copy instead.
 
 %struct.__va_list_tag = type { i32, i32, i8*, i8* }
-declare void @llvm.va_start(i8*) nounwind
+declare void @llvm.va_start.p0i8(i8*) nounwind
 
 ; Function Attrs: nounwind uwtable
 define void @VAStart(i32 %x, ...) sanitize_memory {
@@ -694,12 +694,12 @@ entry:
   store i32 %x, i32* %x.addr, align 4
   %arraydecay = getelementptr inbounds [1 x %struct.__va_list_tag], [1 x %struct.__va_list_tag]* %va, i32 0, i32 0
   %arraydecay1 = bitcast %struct.__va_list_tag* %arraydecay to i8*
-  call void @llvm.va_start(i8* %arraydecay1)
+  call void @llvm.va_start.p0i8(i8* %arraydecay1)
   ret void
 }
 
 ; CHECK-LABEL: @VAStart
-; CHECK: call void @llvm.va_start
+; CHECK: call void @llvm.va_start.p0i8
 ; CHECK-NOT: @__msan_va_arg_tls
 ; CHECK-NOT: @__msan_va_arg_overflow_size_tls
 ; CHECK: ret void

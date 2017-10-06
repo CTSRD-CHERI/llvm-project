@@ -10,7 +10,7 @@ entry:
   %va = alloca [1 x %struct.__va_list_tag], align 16
   %arraydecay = getelementptr inbounds [1 x %struct.__va_list_tag], [1 x %struct.__va_list_tag]* %va, i64 0, i64 0
   %arraydecay1 = bitcast [1 x %struct.__va_list_tag]* %va to i8*
-  call void @llvm.va_start(i8* %arraydecay1)
+  call void @llvm.va_start.p0i8(i8* %arraydecay1)
   %overflow_arg_area_p = getelementptr inbounds [1 x %struct.__va_list_tag], [1 x %struct.__va_list_tag]* %va, i64 0, i64 0, i32 2
   %overflow_arg_area = load i8*, i8** %overflow_arg_area_p, align 8
   %overflow_arg_area.next = getelementptr i8, i8* %overflow_arg_area, i64 24
@@ -25,6 +25,6 @@ entry:
 }
 
 ; Function Attrs: nounwind
-declare void @llvm.va_start(i8*)
+declare void @llvm.va_start.p0i8(i8*)
 
 declare void @qux(%struct.__va_list_tag*)

@@ -13,13 +13,13 @@ entry:
 
   %ap = alloca i8*, align 8                       ; <i8**> [#uses=1]
   %ap.0 = bitcast i8** %ap to i8*
-  call void @llvm.va_start(i8* %ap.0)
+  call void @llvm.va_start.p0i8(i8* %ap.0)
   ret void
 }
 
-declare void @llvm.va_start(i8*) nounwind
-declare void @llvm.va_copy(i8*, i8*) nounwind
-declare void @llvm.va_end(i8*) nounwind
+declare void @llvm.va_start.p0i8(i8*) nounwind
+declare void @llvm.va_copy.p0i8.p0i8(i8*, i8*) nounwind
+declare void @llvm.va_end.p0i8(i8*) nounwind
 
 ; CHECK-LABEL: f5:
 ; CHECK: pushq
@@ -28,7 +28,7 @@ define win64cc i8** @f5(i64 %a0, i64 %a1, i64 %a2, i64 %a3, i64 %a4, ...) nounwi
 entry:
   %ap = alloca i8*, align 8
   %ap.0 = bitcast i8** %ap to i8*
-  call void @llvm.va_start(i8* %ap.0)
+  call void @llvm.va_start.p0i8(i8* %ap.0)
   ret i8** %ap
 }
 
@@ -39,7 +39,7 @@ define win64cc i8** @f4(i64 %a0, i64 %a1, i64 %a2, i64 %a3, ...) nounwind {
 entry:
   %ap = alloca i8*, align 8
   %ap.0 = bitcast i8** %ap to i8*
-  call void @llvm.va_start(i8* %ap.0)
+  call void @llvm.va_start.p0i8(i8* %ap.0)
   ret i8** %ap
 }
 
@@ -50,7 +50,7 @@ define win64cc i8** @f3(i64 %a0, i64 %a1, i64 %a2, ...) nounwind {
 entry:
   %ap = alloca i8*, align 8
   %ap.0 = bitcast i8** %ap to i8*
-  call void @llvm.va_start(i8* %ap.0)
+  call void @llvm.va_start.p0i8(i8* %ap.0)
   ret i8** %ap
 }
 
@@ -68,8 +68,8 @@ entry:
   %cp = alloca i8*, align 8
   %ap.0 = bitcast i8** %ap to i8*
   %cp.0 = bitcast i8** %cp to i8*
-  call void @llvm.va_start(i8* %ap.0)
-  call void @llvm.va_copy(i8* %cp.0, i8* %ap.0)
+  call void @llvm.va_start.p0i8(i8* %ap.0)
+  call void @llvm.va_copy.p0i8.p0i8(i8* %cp.0, i8* %ap.0)
   ret void
 }
 
@@ -84,8 +84,8 @@ entry:
   %cp = alloca i8*, align 8
   %ap.0 = bitcast i8** %ap to i8*
   %cp.0 = bitcast i8** %cp to i8*
-  call void @llvm.va_start(i8* %ap.0)
-  call void @llvm.va_copy(i8* %cp.0, i8* %ap.0)
+  call void @llvm.va_start.p0i8(i8* %ap.0)
+  call void @llvm.va_copy.p0i8.p0i8(i8* %cp.0, i8* %ap.0)
   ret void
 }
 
@@ -100,7 +100,7 @@ define win64cc i32 @arg4(i64 %a0, i64 %a1, i64 %a2, i64 %a3, ...) nounwind {
 entry:
   %ap = alloca i8*, align 8
   %ap.0 = bitcast i8** %ap to i8*
-  call void @llvm.va_start(i8* %ap.0)
+  call void @llvm.va_start.p0i8(i8* %ap.0)
   %tmp = va_arg i8** %ap, i32
   ret i32 %tmp
 }

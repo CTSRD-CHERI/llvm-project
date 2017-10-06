@@ -18,8 +18,8 @@ entry:
 }
 
 
-declare void @llvm.va_start(i8*) nounwind
-declare void @llvm.va_end(i8*) nounwind
+declare void @llvm.va_start.p0i8(i8*) nounwind
+declare void @llvm.va_end.p0i8(i8*) nounwind
 declare void @f(i32) nounwind
 define void @test_vararg(...) nounwind {
 entry:
@@ -34,7 +34,7 @@ entry:
 ; CHECK: stw r0, sp[2]
   %list = alloca i8*, align 4
   %list1 = bitcast i8** %list to i8*
-  call void @llvm.va_start(i8* %list1)
+  call void @llvm.va_start.p0i8(i8* %list1)
   br label %for.cond
 
 ; CHECK-LABEL: .LBB1_1
@@ -49,7 +49,7 @@ for.cond:
   call void @f(i32 %0)
   br label %for.cond
 
-  call void @llvm.va_end(i8* %list1)
+  call void @llvm.va_end.p0i8(i8* %list1)
   ret void
 }
 

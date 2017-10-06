@@ -571,6 +571,25 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
     }
     break;
 
+  case 'v': {
+    auto *ArgTy = F->arg_begin()->getType();
+    if (Name == "va_start") {
+      NewFn = Intrinsic::getDeclaration(F->getParent(), Intrinsic::vastart,
+                                        ArgTy);
+      return true;
+    }
+    if (Name == "va_end") {
+      NewFn = Intrinsic::getDeclaration(F->getParent(), Intrinsic::vaend,
+                                        ArgTy);
+      return true;
+    }
+    if (Name == "va_copy") {
+      NewFn = Intrinsic::getDeclaration(F->getParent(), Intrinsic::vacopy,
+                                        { ArgTy, ArgTy });
+      return true;
+    }
+  }
+
   case 'x':
     if (UpgradeX86IntrinsicFunction(F, Name, NewFn))
       return true;

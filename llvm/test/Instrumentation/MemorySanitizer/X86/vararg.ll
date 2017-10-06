@@ -8,8 +8,8 @@ define void @VaStart(i8* %s, ...) {
 entry:
   %vl = alloca i8*, align 4
   %vl1 = bitcast i8** %vl to i8*
-  call void @llvm.va_start(i8* %vl1)
+  call void @llvm.va_start.p0i8(i8* %vl1)
   ret void
 }
 
-declare void @llvm.va_start(i8*)
+declare void @llvm.va_start.p0i8(i8*)

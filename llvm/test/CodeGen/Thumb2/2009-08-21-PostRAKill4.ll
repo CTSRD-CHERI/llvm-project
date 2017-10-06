@@ -10,9 +10,9 @@ target triple = "armv7-apple-darwin9"
 
 declare i32 @getUnknown(i32, ...) nounwind
 
-declare void @llvm.va_start(i8*) nounwind
+declare void @llvm.va_start.p0i8(i8*) nounwind
 
-declare void @llvm.va_end(i8*) nounwind
+declare void @llvm.va_end.p0i8(i8*) nounwind
 
 declare i32 @printf(i8* nocapture, ...) nounwind
 

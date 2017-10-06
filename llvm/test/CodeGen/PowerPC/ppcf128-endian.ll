@@ -139,13 +139,13 @@ entry:
 ; CHECK: lfd 1, [[OFF]](1)
 ; CHECK: blr
 
-declare void @llvm.va_start(i8*)
+declare void @llvm.va_start.p0i8(i8*)
 
 define double @vararg(i32 %a, ...) {
 entry:
   %va = alloca i8*, align 8
   %va1 = bitcast i8** %va to i8*
-  call void @llvm.va_start(i8* %va1)
+  call void @llvm.va_start.p0i8(i8* %va1)
   %arg = va_arg i8** %va, ppc_fp128
   %conv = fptrunc ppc_fp128 %arg to double
   ret double %conv

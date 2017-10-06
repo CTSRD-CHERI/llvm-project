@@ -18,7 +18,7 @@ entry:
 	%"alloca point" = bitcast i32 0 to i32		; <i32> [#uses=0]
 	store i32 %x, i32* %x_addr
 	%ap1 = bitcast i8** %ap to i8*		; <i8*> [#uses=1]
-	call void @llvm.va_start( i8* %ap1 )
+	call void @llvm.va_start.p0i8( i8* %ap1 )
 	%tmp = load i8*, i8** %ap, align 4		; <i8*> [#uses=1]
 	store i8* %tmp, i8** %ap.0, align 4
 	%tmp2 = load i8*, i8** %ap.0, align 4		; <i8*> [#uses=1]
@@ -42,4 +42,4 @@ return:		; preds = %entry
 	ret void
 }
 
-declare void @llvm.va_start(i8*) nounwind 
+declare void @llvm.va_start.p0i8(i8*) nounwind 

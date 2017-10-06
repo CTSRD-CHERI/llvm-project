@@ -3,11 +3,11 @@
 ; This file contains TBAA metadata that is okay and should pass the verifier.
 
 declare void @callee()
-declare void @llvm.va_start(i8*) nounwind
+declare void @llvm.va_start.p0i8(i8*) nounwind
 
 define void @f_0(i8* %ptr, ...) {
   %args = alloca i8, align 8
-  call void @llvm.va_start(i8* %args)
+  call void @llvm.va_start.p0i8(i8* %args)
 
   %old = atomicrmw add i8* %ptr, i8 0 seq_cst,          !tbaa !{!1, !1, i64 0}
   %pair = cmpxchg i8* %ptr, i8 0, i8 1 acquire acquire, !tbaa !{!1, !1, i64 0}

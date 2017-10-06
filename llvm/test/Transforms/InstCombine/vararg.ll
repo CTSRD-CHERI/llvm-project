@@ -4,9 +4,9 @@
 
 declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture)
 declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture)
-declare void @llvm.va_start(i8*)
-declare void @llvm.va_end(i8*)
-declare void @llvm.va_copy(i8*, i8*)
+declare void @llvm.va_start.p0i8(i8*)
+declare void @llvm.va_end.p0i8(i8*)
+declare void @llvm.va_copy.p0i8.p0i8(i8*, i8*)
 
 define i32 @func(i8* nocapture readnone %fmt, ...) {
 ; CHECK-LABEL: @func(
@@ -18,12 +18,12 @@ entry:
   %0 = bitcast %struct.__va_list* %va0 to i8*
   %1 = bitcast %struct.__va_list* %va1 to i8*
   call void @llvm.lifetime.start.p0i8(i64 32, i8* %0)
-  call void @llvm.va_start(i8* %0)
+  call void @llvm.va_start.p0i8(i8* %0)
   call void @llvm.lifetime.start.p0i8(i64 32, i8* %1)
-  call void @llvm.va_copy(i8* %1, i8* %0)
-  call void @llvm.va_end(i8* %1)
+  call void @llvm.va_copy.p0i8.p0i8(i8* %1, i8* %0)
+  call void @llvm.va_end.p0i8(i8* %1)
   call void @llvm.lifetime.end.p0i8(i64 32, i8* %1)
-  call void @llvm.va_end(i8* %0)
+  call void @llvm.va_end.p0i8(i8* %0)
   call void @llvm.lifetime.end.p0i8(i64 32, i8* %0)
   ret i32 0
 }

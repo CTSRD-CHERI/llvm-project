@@ -116,9 +116,9 @@ define void @0() nounwind {
 }
 
 ; CHECK: va_start called in a non-varargs function
-declare void @llvm.va_start(i8*)
+declare void @llvm.va_start.p0i8(i8*)
 define void @not_vararg(i8* %p) nounwind {
-  call void @llvm.va_start(i8* %p)
+  call void @llvm.va_start.p0i8(i8* %p)
   ret void
 }
 

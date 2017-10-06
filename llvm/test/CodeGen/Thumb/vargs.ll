@@ -12,7 +12,7 @@ entry:
 ; CHECK: push
         %va = alloca i8*, align 4               ; <i8**> [#uses=4]
         %va.upgrd.1 = bitcast i8** %va to i8*           ; <i8*> [#uses=1]
-        call void @llvm.va_start( i8* %va.upgrd.1 )
+        call void @llvm.va_start.p0i8( i8* %va.upgrd.1 )
         br label %bb
 
 bb:             ; preds = %bb, %entry
@@ -29,7 +29,7 @@ bb7:            ; preds = %bb
         %tmp.upgrd.3 = load i32, i32* %tmp3          ; <i32> [#uses=1]
         %tmp10 = call i32 (i8*, ...) @printf( i8* getelementptr ([4 x i8], [4 x i8]* @str, i32 0, i64 0), i32 %tmp.upgrd.3 )                ; <i32> [#uses=0]
         %va.upgrd.4 = bitcast i8** %va to i8*           ; <i8*> [#uses=1]
-        call void @llvm.va_end( i8* %va.upgrd.4 )
+        call void @llvm.va_end.p0i8( i8* %va.upgrd.4 )
         ret void
 
 ; The return sequence should pop the lr to r0-3, recover the stack space used to
@@ -40,8 +40,8 @@ bb7:            ; preds = %bb
 ; CHECK: bx [[POP_REG]]
 }
 
-declare void @llvm.va_start(i8*)
+declare void @llvm.va_start.p0i8(i8*)
 
 declare i32 @printf(i8*, ...)
 
-declare void @llvm.va_end(i8*)
+declare void @llvm.va_end.p0i8(i8*)

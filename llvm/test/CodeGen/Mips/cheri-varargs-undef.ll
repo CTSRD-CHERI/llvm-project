@@ -20,7 +20,7 @@ entry:
   %meh = alloca %union.meh, align 16, addrspace(200)
   store i32 %cmd, i32 addrspace(200)* %cmd.addr, align 4
   %ap1 = addrspacecast i8 addrspace(200)* addrspace(200)* %ap to i8*
-  call void @llvm.va_start(i8* %ap1)
+  call void @llvm.va_start.p200i8(i8* %ap1)
   %argp.cur = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %ap, align 16
   %0 = call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* %argp.cur)
   %1 = add i64 %0, 15
@@ -33,12 +33,12 @@ entry:
   %6 = bitcast %union.meh addrspace(200)* %4 to i8 addrspace(200)*
   call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* %5, i8 addrspace(200)* %6, i64 16, i32 16, i1 false)
   %ap2 = addrspacecast i8 addrspace(200)* addrspace(200)* %ap to i8*
-  call void @llvm.va_end(i8* %ap2)
+  call void @llvm.va_end.p200i8(i8* %ap2)
   ret void
 }
 
 ; Function Attrs: nounwind
-declare void @llvm.va_start(i8*) #1
+declare void @llvm.va_start.p200i8(i8*) #1
 
 ; Function Attrs: nounwind readnone
 declare i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)*) #2
@@ -50,7 +50,7 @@ declare i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*, i64) #
 declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8 addrspace(200)* nocapture readonly, i64, i32, i1) #3
 
 ; Function Attrs: nounwind
-declare void @llvm.va_end(i8*) #1
+declare void @llvm.va_end.p200i8(i8*) #1
 
 ; Function Attrs: noinline nounwind optnone
 define void @b(i32 signext %cmd, i32 signext %x, ...) #0 {
@@ -62,7 +62,7 @@ entry:
   store i32 %cmd, i32 addrspace(200)* %cmd.addr, align 4
   store i32 %x, i32 addrspace(200)* %x.addr, align 4
   %ap1 = addrspacecast i8 addrspace(200)* addrspace(200)* %ap to i8*
-  call void @llvm.va_start(i8* %ap1)
+  call void @llvm.va_start.p200i8(i8* %ap1)
   %argp.cur = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %ap, align 16
   %0 = call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* %argp.cur)
   %1 = add i64 %0, 15
@@ -75,7 +75,7 @@ entry:
   %6 = bitcast %union.meh addrspace(200)* %4 to i8 addrspace(200)*
   call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* %5, i8 addrspace(200)* %6, i64 16, i32 16, i1 false)
   %ap2 = addrspacecast i8 addrspace(200)* addrspace(200)* %ap to i8*
-  call void @llvm.va_end(i8* %ap2)
+  call void @llvm.va_end.p200i8(i8* %ap2)
   ret void
 }
 
@@ -89,7 +89,7 @@ entry:
   %vaarg.promotion-temp = alloca i32, align 4, addrspace(200)
   store i32 %cmd, i32 addrspace(200)* %cmd.addr, align 4
   %ap1 = addrspacecast i8 addrspace(200)* addrspace(200)* %ap to i8*
-  call void @llvm.va_start(i8* %ap1)
+  call void @llvm.va_start.p200i8(i8* %ap1)
   %argp.cur = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %ap, align 16
   %argp.next = getelementptr inbounds i8, i8 addrspace(200)* %argp.cur, i64 8
   store i8 addrspace(200)* %argp.next, i8 addrspace(200)* addrspace(200)* %ap, align 16
@@ -111,7 +111,7 @@ entry:
   %10 = bitcast %union.meh addrspace(200)* %8 to i8 addrspace(200)*
   call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* %9, i8 addrspace(200)* %10, i64 16, i32 16, i1 false)
   %ap4 = addrspacecast i8 addrspace(200)* addrspace(200)* %ap to i8*
-  call void @llvm.va_end(i8* %ap4)
+  call void @llvm.va_end.p200i8(i8* %ap4)
   ret void
 }
 

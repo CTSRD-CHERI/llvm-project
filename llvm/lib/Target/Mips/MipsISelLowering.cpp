@@ -2462,11 +2462,6 @@ SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
     assert(SV->getType()->getPointerAddressSpace() == 200);
     SDValue Chain = Op.getOperand(0);
     SDValue CapAddr = Op.getOperand(1);
-    if (CapAddr->getOpcode() == ISD::ADDRSPACECAST)
-      CapAddr = CapAddr->getOperand(0);
-    else
-      CapAddr = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR,
-          CapAddr);
     FI = DAG.getCopyFromReg(DAG.getEntryNode(), DL, Reg, MVT::iFATPTR);
     return DAG.getStore(Chain, DL, FI, CapAddr, MachinePointerInfo(SV));
   }
@@ -2485,10 +2480,6 @@ SDValue MipsTargetLowering::lowerVACOPY(SDValue Op, SelectionDAG &DAG) const {
   SDValue Chain = Op->getOperand(0);
   SDValue Dest = Op->getOperand(1);
   SDValue Src = Op->getOperand(2);
-  if (Dest->getOpcode() == ISD::ADDRSPACECAST)
-    Dest = Dest->getOperand(0);
-  if (Src->getOpcode() == ISD::ADDRSPACECAST)
-    Src = Src->getOperand(0);
   SDLoc DL(Op);
   // The source is a pointer to the existing va_list
   Src = DAG.getLoad(MVT::iFATPTR, DL, Chain, Src, MachinePointerInfo());

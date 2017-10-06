@@ -8,7 +8,7 @@
 ; pack. Doing a normal call will clobber all argument registers, and we will
 ; spill around it. A simple adjustment should not require any XMM spills.
 
-declare void @llvm.va_start(i8*) nounwind
+declare void @llvm.va_start.p0i8(i8*) nounwind
 
 declare void(i8*, ...)* @get_f(i8* %this)
 
@@ -16,7 +16,7 @@ define void @f_thunk(i8* %this, ...) {
   ; Use va_start so that we exercise the combination.
   %ap = alloca [4 x i8*], align 16
   %ap_i8 = bitcast [4 x i8*]* %ap to i8*
-  call void @llvm.va_start(i8* %ap_i8)
+  call void @llvm.va_start.p0i8(i8* %ap_i8)
 
   %fptr = call void(i8*, ...)*(i8*) @get_f(i8* %this)
   musttail call void (i8*, ...) %fptr(i8* %this, ...)

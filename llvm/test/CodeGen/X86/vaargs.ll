@@ -23,7 +23,7 @@ define i32 @sum(i32 %count, ...) nounwind optsize ssp uwtable {
 
   %ap = alloca [1 x %struct.__va_list_tag], align 16
   %1 = bitcast [1 x %struct.__va_list_tag]* %ap to i8*
-  call void @llvm.va_start(i8* %1)
+  call void @llvm.va_start.p0i8(i8* %1)
   %2 = icmp sgt i32 %count, 0
   br i1 %2, label %.lr.ph, label %._crit_edge
 
@@ -58,10 +58,10 @@ define i32 @sum(i32 %count, ...) nounwind optsize ssp uwtable {
 
 ._crit_edge:                                      ; preds = %13, %0
   %.0.lcssa = phi i32 [ %count, %0 ], [ %15, %13 ]
-  call void @llvm.va_end(i8* %1)
+  call void @llvm.va_end.p0i8(i8* %1)
   ret i32 %.0.lcssa
 }
 
-declare void @llvm.va_start(i8*) nounwind
+declare void @llvm.va_start.p0i8(i8*) nounwind
 
-declare void @llvm.va_end(i8*) nounwind
+declare void @llvm.va_end.p0i8(i8*) nounwind
