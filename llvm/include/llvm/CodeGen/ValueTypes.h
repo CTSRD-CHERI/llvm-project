@@ -138,6 +138,11 @@ namespace llvm {
       return isSimple() ? V.isInteger() : isExtendedInteger();
     }
 
+    /// Return true if this is a fat pointer type.
+    bool isFatPointer() const {
+      return isSimple() ? V.isFatPointer() : false;
+    }
+
     /// Return true if this is an integer, but not a vector.
     bool isScalarInteger() const {
       return isSimple() ? V.isScalarInteger() : isExtendedScalarInteger();

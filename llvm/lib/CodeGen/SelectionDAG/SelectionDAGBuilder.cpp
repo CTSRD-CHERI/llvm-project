@@ -394,7 +394,7 @@ static void getCopyToParts(SelectionDAG &DAG, const SDLoc &DL, SDValue Val,
     if (PartVT.isFloatingPoint() && ValueVT.isFloatingPoint()) {
       assert(NumParts == 1 && "Do not know what to promote to!");
       Val = DAG.getNode(ISD::FP_EXTEND, DL, PartVT, Val);
-    } else if (PartVT.SimpleTy == MVT::iFATPTR) {
+    } else if (PartVT.isFatPointer()) {
       Val = DAG.getNode(ISD::INTTOPTR, DL, PartVT, Val);
     } else {
       if (ValueVT.isFloatingPoint()) {
@@ -2312,7 +2312,7 @@ void SelectionDAGBuilder::visitLandingPad(const LandingPadInst &LP) {
                            FuncInfo.ExceptionPointerVirtReg,
                            TLI.getPointerTy(DAG.getDataLayout(),
                                TLI.getExceptionPointerAS()));
-    Ops[0] = (EPtr.getValueType() == MVT::iFATPTR) ? EPtr :
+    Ops[0] = (EPtr.getValueType().isFatPointer()) ? EPtr :
         DAG.getZExtOrTrunc(EPtr, dl, ValueVTs[0]);
   } else {
     Ops[0] = DAG.getConstant(0, dl, TLI.getPointerTy(DAG.getDataLayout()));
@@ -2878,7 +2878,7 @@ void SelectionDAGBuilder::visitPtrToInt(const User &I) {
   SDValue N = getValue(I.getOperand(0));
   EVT DestVT = DAG.getTargetLoweringInfo().getValueType(DAG.getDataLayout(),
     I.getType());
-  if (N.getValueType() == MVT::iFATPTR) {
+  if (N.getValueType().isFatPointer()) {
     setValue(&I, DAG.getNode(ISD::PTRTOINT, getCurSDLoc(), DestVT, N));
     return;
   }
@@ -2891,7 +2891,7 @@ void SelectionDAGBuilder::visitIntToPtr(const User &I) {
   SDValue N = getValue(I.getOperand(0));
   EVT DestVT = DAG.getTargetLoweringInfo().getValueType(DAG.getDataLayout(),
     I.getType());
-  if (DestVT == MVT::iFATPTR) {
+  if (DestVT.isFatPointer()) {
     setValue(&I, DAG.getNode(ISD::INTTOPTR, getCurSDLoc(), DestVT, N));
     return;
   }
@@ -3238,7 +3238,7 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
 
   // FIXME: This does not work on GEPs with vectors and fat pointers, but CHERI
   // currently doesn't have a vector unit so that is probably not a problem.
-  bool FatPointer = N.getValueType() == MVT::iFATPTR;
+  bool FatPointer = N.getValueType().isFatPointer();
   SDValue OrigN = N;
 
   if (FatPointer) {

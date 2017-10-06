@@ -260,7 +260,7 @@ ISD::CondCode ISD::getSetCCInverse(ISD::CondCode Op, EVT VT) {
   bool IsInteger = VT.isInteger();
 
   unsigned Operation = Op;
-  if (IsInteger || VT == MVT::iFATPTR)
+  if (IsInteger || VT.isFatPointer())
     Operation ^= 7;   // Flip L, G, E bits, but not U.
   else
     Operation ^= 15;  // Flip all of the condition bits.
@@ -294,7 +294,7 @@ static int isSignedOp(ISD::CondCode Opcode) {
 ISD::CondCode ISD::getSetCCOrOperation(ISD::CondCode Op1, ISD::CondCode Op2,
                                        EVT VT) {
   // XXXAR: I don't think we can fold setcc or operations with fat pointers
-  if (VT == MVT::iFATPTR)
+  if (VT.isFatPointer())
     return ISD::SETCC_INVALID;
   bool IsInteger = VT.isInteger();
   if (IsInteger && (isSignedOp(Op1) | isSignedOp(Op2)) == 3)
@@ -318,7 +318,7 @@ ISD::CondCode ISD::getSetCCOrOperation(ISD::CondCode Op1, ISD::CondCode Op2,
 ISD::CondCode ISD::getSetCCAndOperation(ISD::CondCode Op1, ISD::CondCode Op2,
                                         EVT VT) {
   // XXXAR: I don't think we can fold setcc and operations with fat pointers
-  if (VT == MVT::iFATPTR)
+  if (VT.isFatPointer())
     return ISD::SETCC_INVALID;
   bool IsInteger = VT.isInteger();
   if (IsInteger && (isSignedOp(Op1) | isSignedOp(Op2)) == 3)
@@ -1088,7 +1088,7 @@ SDValue SelectionDAG::getConstant(const APInt &Val, const SDLoc &DL, EVT VT,
 
 SDValue SelectionDAG::getConstant(const ConstantInt &Val, const SDLoc &DL,
                                   EVT VT, bool isT, bool isO) {
-  if (VT == MVT::iFATPTR) {
+  if (VT.isFatPointer()) {
     const ConstantInt *V = ConstantInt::get(*Context, Val.getValue().trunc(64));
     SDValue IntVal = getConstant(*V, DL, MVT::i64, isT);
     return getNode(ISD::INTTOPTR, SDLoc(), VT, IntVal);
@@ -5203,7 +5203,7 @@ static SDValue getMemsetStores(SelectionDAG &DAG, const SDLoc &dl,
 SDValue SelectionDAG::getPointerAdd(const SDLoc dl, SDValue Ptr, int64_t Offset,
                                     const SDNodeFlags Flags) {
   EVT BasePtrVT = Ptr.getValueType();
-  if (BasePtrVT == MVT::iFATPTR) {
+  if (BasePtrVT.isFatPointer()) {
     if (Offset == 0)
       return Ptr;
     // Assume that address space 0 has the range of any pointer.
