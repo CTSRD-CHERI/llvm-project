@@ -150,7 +150,6 @@ tools = [
 cheri128_cc1_args = clang_cc1_args + ['-triple', 'cheri-unknown-freebsd', '-mllvm', '-cheri128', '-target-cpu', 'cheri128']
 cheri256_cc1_args = clang_cc1_args + ['-triple', 'cheri-unknown-freebsd', '-target-cpu', 'cheri']
 purecap_cc1_args = clang_cc1_args +  ['-triple', 'cheri-unknown-freebsd', '-target-abi', 'purecap']
-config.substitutions.append( (, '%cheri_cc1 ') )
 
 if config.cheri_is_128:
     config.available_features.add("cheri_is_128")
@@ -168,8 +167,6 @@ tools.extend([
     ToolSubst('%cheri256_cc1', command=config.clang, extra_args=cheri256_cc1_args),
     ToolSubst('%cheri_purecap_cc1', command=config.clang, extra_args=purecap_cc1_args),
 ])
-config.substitutions.append( ('', cheri128_cc1_substitution) )
-config.substitutions.append( ('%cheri256_cc1', cheri256_cc1_substitution) )
 
 if config.clang_examples:
     tools.append('clang-interpreter')
