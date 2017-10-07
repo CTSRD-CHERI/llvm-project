@@ -1375,9 +1375,6 @@ template <class ELFT> void DynamicSection<ELFT>::writeTo(uint8_t *Buf) {
     }
     ++P;
   }
-  // write out the trailing DT_NULL entry
-  P->d_tag = DT_NULL;
-  P->d_un.d_ptr = 0;
 }
 
 uint64_t DynamicReloc::getOffset() const {
