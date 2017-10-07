@@ -2905,7 +2905,8 @@ ExprResult Sema::BuildCheriCast(SourceLocation LParenLoc,
          diag::err_cheri_cast_invalid_target_type) << DestTy;
     return ExprError();
   }
-  QualType SrcTy = SubExpr->getType();
+  // XXXAR: SubExpr->getType() returns char for char&
+  QualType SrcTy = SubExpr->getRealReferenceType();
   bool SrcIsCap = SrcTy->isCHERICapabilityType(Context);
   if (!SrcTy->isPointerType() && !SrcIsCap) {
     Diag(SubExpr->getLocStart(), diag::err_cheri_cast_invalid_source_type)
