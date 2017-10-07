@@ -2877,7 +2877,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
   // from the type of the global (this happens with unions).
   if (!GV || GV->getType()->getElementType() != InitType ||
       GV->getType()->getAddressSpace() !=
-          getTargetAddressSpace((LangAS::ID)GetGlobalVarAddressSpace(D))) {
+          getTargetAddressSpace(GetGlobalVarAddressSpace(D))) {
 
     // Move the old entry aside so that we'll create a new one.
     Entry->setName(StringRef());
