@@ -2143,7 +2143,7 @@ void SelectionDAG::computeKnownBits(SDValue Op, KnownBits &Known,
       Known.Zero &= Known2.Zero;
 
       // If we don't know any bits, early out.
-      if (!Known.One && !Known.Zero)
+      if (Known.isUnknown())
         break;
     }
     break;
@@ -2181,7 +2181,7 @@ void SelectionDAG::computeKnownBits(SDValue Op, KnownBits &Known,
       Known.Zero &= Known2.Zero;
     }
     // If we don't know any bits, early out.
-    if (!Known.One && !Known.Zero)
+    if (Known.isUnknown())
       break;
     if (!!DemandedRHS) {
       SDValue RHS = Op.getOperand(1);
@@ -2207,7 +2207,7 @@ void SelectionDAG::computeKnownBits(SDValue Op, KnownBits &Known,
         Known.Zero &= Known2.Zero;
       }
       // If we don't know any bits, early out.
-      if (!Known.One && !Known.Zero)
+      if (Known.isUnknown())
         break;
     }
     break;
@@ -2291,7 +2291,7 @@ void SelectionDAG::computeKnownBits(SDValue Op, KnownBits &Known,
           Known.One &= Known2.One.lshr(Offset).trunc(BitWidth);
           Known.Zero &= Known2.Zero.lshr(Offset).trunc(BitWidth);
           // If we don't know any bits, early out.
-          if (!Known.One && !Known.Zero)
+          if (Known.isUnknown())
             break;
         }
     }
@@ -2364,7 +2364,7 @@ void SelectionDAG::computeKnownBits(SDValue Op, KnownBits &Known,
   case ISD::SELECT:
     computeKnownBits(Op.getOperand(2), Known, Depth+1);
     // If we don't know any bits, early out.
-    if (!Known.One && !Known.Zero)
+    if (Known.isUnknown())
       break;
     computeKnownBits(Op.getOperand(1), Known2, Depth+1);
 
@@ -2375,7 +2375,7 @@ void SelectionDAG::computeKnownBits(SDValue Op, KnownBits &Known,
   case ISD::SELECT_CC:
     computeKnownBits(Op.getOperand(3), Known, Depth+1);
     // If we don't know any bits, early out.
-    if (!Known.One && !Known.Zero)
+    if (Known.isUnknown())
       break;
     computeKnownBits(Op.getOperand(2), Known2, Depth+1);
 
@@ -2853,7 +2853,7 @@ void SelectionDAG::computeKnownBits(SDValue Op, KnownBits &Known,
     computeKnownBits(Op.getOperand(0), Known, DemandedElts,
                      Depth + 1);
     // If we don't know any bits, early out.
-    if (!Known.One && !Known.Zero)
+    if (Known.isUnknown())
       break;
     computeKnownBits(Op.getOperand(1), Known2, DemandedElts, Depth + 1);
     Known.Zero &= Known2.Zero;
@@ -2881,7 +2881,7 @@ void SelectionDAG::computeKnownBits(SDValue Op, KnownBits &Known,
     break;
   }
 
-  assert((Known.Zero & Known.One) == 0 && "Bits known to be one AND zero?");
+  assert(!Known.hasConflict() && "Bits known to be one AND zero?");
 }
 
 SelectionDAG::OverflowKind SelectionDAG::computeOverflowKind(SDValue N0,
