@@ -158,11 +158,11 @@ else:
 clang_path = lit.util.which('clang', config.llvm_tools_dir)
 if clang_path:
     config.available_features.add('clang')
-    config.substitutions.append(('%clang', clang_path))
     if config.cheri_is_128:
         config.substitutions.append((r"%cheri_clang_cc1\b", "%clang -cc1 -target-cpu cheri128"))
     else:
         config.substitutions.append((r"%cheri_clang_cc1\b", "%clang -cc1 -target-cpu cheri"))
+    config.substitutions.append(('%clang', clang_path))
 config.substitutions.append((r" clang\b", "*** Don't use clang directly,"
                                           " use %clang instead ***"))
 
