@@ -2858,12 +2858,21 @@ bool MipsAsmParser::loadImmediate(int64_t ImmValue, unsigned DstReg,
 bool MipsAsmParser::expandLoadImm(MCInst &Inst, bool Is32BitImm, SMLoc IDLoc,
                                   MCStreamer &Out, const MCSubtargetInfo *STI) {
   const MCOperand &ImmOp = Inst.getOperand(1);
-  assert(ImmOp.isImm() && "expected immediate operand kind");
+  int64_t Imm = 0;
+  if (ImmOp.isExpr()) {
+    const MCExpr *Expr = ImmOp.getExpr();
+    if (!Expr->evaluateAsAbsolute(Imm)) {
+      return Error(IDLoc, "could not evaluate operand as immediate");
+    }
+  } else {
+    assert(ImmOp.isImm() && "expected immediate operand kind");
+    Imm = ImmOp.getImm();
+  }
   const MCOperand &DstRegOp = Inst.getOperand(0);
   assert(DstRegOp.isReg() && "expected register operand kind");
 
-  if (loadImmediate(ImmOp.getImm(), DstRegOp.getReg(), Mips::NoRegister,
-                    Is32BitImm, false, IDLoc, Out, STI))
+  if (loadImmediate(Imm, DstRegOp.getReg(), Mips::NoRegister, Is32BitImm, false,
+                    IDLoc, Out, STI))
     return true;
 
   return false;
