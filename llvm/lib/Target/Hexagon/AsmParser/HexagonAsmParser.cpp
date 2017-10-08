@@ -794,7 +794,7 @@ bool HexagonAsmParser::ParseDirectiveComm(bool IsLocal, SMLoc Loc) {
                                    "alignment, can't be less than zero");
 
   if (!Sym->isUndefined())
-    return Error(Loc, "invalid symbol redefinition");
+    return Error(Loc, "invalid symbol redefinition of " + Sym->getName());
 
   HexagonMCELFStreamer &HexagonELFStreamer =
       static_cast<HexagonMCELFStreamer &>(getStreamer());

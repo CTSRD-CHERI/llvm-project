@@ -4692,7 +4692,7 @@ bool AsmParser::parseDirectiveComm(bool IsLocal) {
 
   Sym->redefineIfPossible();
   if (!Sym->isUndefined())
-    return Error(IDLoc, "invalid symbol redefinition");
+    return Error(IDLoc, "invalid symbol redefinition of " + Sym->getName());
 
   // Create the Symbol as a common or local common with Size and Pow2Alignment
   if (IsLocal) {

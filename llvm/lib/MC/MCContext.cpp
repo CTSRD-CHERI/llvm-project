@@ -324,7 +324,7 @@ MCSectionELF *MCContext::createELFSectionImpl(StringRef Section, unsigned Type,
   // sections with the same name, in which case the first such section wins.
   if (Sym && Sym->isDefined() &&
       (!Sym->isInSection() || Sym->getSection().getBeginSymbol() != Sym))
-    reportError(SMLoc(), "invalid symbol redefinition");
+    reportError(SMLoc(), "invalid symbol redefinition of " + Sym->getName());
   if (Sym && Sym->isUndefined()) {
     R = cast<MCSymbolELF>(Sym);
   } else {

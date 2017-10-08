@@ -6,4 +6,4 @@ define void @".dp.bss"() {
   ret void
 }
 
-; CHECK: LLVM ERROR: invalid symbol redefinition
+; CHECK: LLVM ERROR: invalid symbol redefinition of .dp.bss

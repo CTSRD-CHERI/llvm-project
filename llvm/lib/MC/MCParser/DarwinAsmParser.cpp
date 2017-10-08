@@ -844,7 +844,7 @@ bool DarwinAsmParser::parseDirectiveTBSS(StringRef, SMLoc) {
                  "than zero");
 
   if (!Sym->isUndefined())
-    return Error(IDLoc, "invalid symbol redefinition");
+    return Error(IDLoc, "invalid symbol redefinition of " + Sym->getName());
 
   getStreamer().EmitTBSSSymbol(getContext().getMachOSection(
                                  "__DATA", "__thread_bss",
@@ -929,7 +929,7 @@ bool DarwinAsmParser::parseDirectiveZerofill(StringRef, SMLoc) {
                  "can't be less than zero");
 
   if (!Sym->isUndefined())
-    return Error(IDLoc, "invalid symbol redefinition");
+    return Error(IDLoc, "invalid symbol redefinition of " + Sym->getName());
 
   // Create the zerofill Symbol with Size and Pow2Alignment
   //

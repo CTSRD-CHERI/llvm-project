@@ -3,4 +3,4 @@
 foo:
 .section foo
 
-// CHECK: error: invalid symbol redefinition
+// CHECK: error: invalid symbol redefinition of foo
