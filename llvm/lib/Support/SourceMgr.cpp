@@ -98,6 +98,8 @@ SourceMgr::getLineAndColumn(SMLoc Loc, unsigned BufferID) const {
   unsigned LineNo = 1;
 
   const char *BufStart = Buff->getBufferStart();
+  assert(Loc.getPointer() >= BufStart &&
+         Loc.getPointer() <= Buff->getBufferEnd() && "must be inside buffer!");
   const char *Ptr = BufStart;
 
   // If we have a line number cache, and if the query is to a later point in the
