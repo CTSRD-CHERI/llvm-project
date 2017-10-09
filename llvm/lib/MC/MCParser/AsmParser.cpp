@@ -2187,8 +2187,9 @@ bool AsmParser::parseStatement(ParseStatementInfo &Info,
       getContext().getGenDwarfSectionSyms().count(
           getStreamer().getCurrentSectionOnly())) {
     unsigned Line;
+    // XXXAR: CurBuffer is sometimes wrong!!
     if (ActiveMacros.empty())
-      Line = SrcMgr.FindLineNumber(IDLoc, CurBuffer);
+      Line = SrcMgr.FindLineNumber(IDLoc/*, CurBuffer */);
     else
       Line = SrcMgr.FindLineNumber(ActiveMacros.front()->InstantiationLoc,
                                    ActiveMacros.front()->ExitBuffer);
