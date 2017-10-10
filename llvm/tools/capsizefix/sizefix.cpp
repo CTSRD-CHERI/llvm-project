@@ -25,7 +25,7 @@ int main(int argc, char *argv[]) {
   // OF is an Expected<T> which requires mandatory checking for errors. This is
   // done by invoking the bool conversion operator.
   if (!OF) {
-    fprintf(stderr, "Cannot open %s\n", InFile);
+    fprintf(stderr, "Cannot open %s: %s\n", InFile, toString(OF.takeError()).c_str());
     return EXIT_FAILURE;
   }
 
