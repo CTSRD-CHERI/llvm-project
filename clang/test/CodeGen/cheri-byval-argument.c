@@ -1,14 +1,11 @@
 // RUN: %cheri_cc1 -target-abi n64 -emit-llvm -o - %s -DDATA_SIZE=64 | FileCheck %s -check-prefix N64-EXPANDED
 // RUN: %cheri_cc1 -target-abi n64 -emit-llvm -o - %s -DDATA_SIZE=72 | FileCheck %s -check-prefix N64-MEMCPY
-// CHERI 256 expands up to 2048 bytes!
-// RUN: %cheri256_cc1 -target-abi purecap -emit-llvm -o - %s -DDATA_SIZE=2048 | FileCheck %s -check-prefix EXPANDED
-// RUN: %cheri256_cc1 -target-abi purecap -emit-llvm -o - %s -DDATA_SIZE=2056 | FileCheck %s -check-prefix MEMCPY
-// 128 only expands up to 1024 bytes:
-// RUN: %cheri128_cc1 -target-abi purecap -emit-llvm -o - %s -DDATA_SIZE=1024 | FileCheck %s -check-prefix EXPANDED
-// RUN: %cheri128_cc1 -target-abi purecap -emit-llvm -o - %s -DDATA_SIZE=1032 | FileCheck %s -check-prefix MEMCPY
-
-// The code to pass arguments indirectly was reverted in 32ad8fc799f90f5f15b2f2be29b3e328deb1e7dc
-// XFAIL: *
+// CHERI 256 expands up to 256 bytes
+// RUN: %cheri256_cc1 -target-abi purecap -emit-llvm -o - %s -DDATA_SIZE=256 | FileCheck %s -check-prefix EXPANDED
+// RUN: %cheri256_cc1 -target-abi purecap -emit-llvm -o - %s -DDATA_SIZE=264 | FileCheck %s -check-prefix MEMCPY
+// 128 only expands up to 128 bytes:
+// RUN: %cheri128_cc1 -target-abi purecap -emit-llvm -o - %s -DDATA_SIZE=128 | FileCheck %s -check-prefix EXPANDED
+// RUN: %cheri128_cc1 -target-abi purecap -emit-llvm -o - %s -DDATA_SIZE=136 | FileCheck %s -check-prefix MEMCPY
 
 
 struct big {

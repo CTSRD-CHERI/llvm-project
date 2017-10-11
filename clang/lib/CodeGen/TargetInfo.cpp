@@ -7096,7 +7096,8 @@ MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset) const {
     unsigned Threshold = IsO32 ? 16 : 64;
     const TargetInfo &Target = getContext().getTargetInfo();
     if (Target.areAllPointersCapabilities()) {
-      Threshold = Target.getCHERICapabilityWidth() * 8;
+      // assume we can pass structs up to 8 capabilities in size directly
+      Threshold = 8 * (Target.getCHERICapabilityWidth() / 8);
     }
     bool PassIndirect = false;
     if (getContext().getTypeSizeInChars(Ty) > CharUnits::fromQuantity(Threshold))
