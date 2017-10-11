@@ -7089,18 +7089,25 @@ MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset) const {
       return getNaturalAlignIndirect(Ty, RAA == CGCXXABI::RAA_DirectInMemory);
     }
 
+    // XXXAR: this was reverted upstream, but without it our tests break
+
+    // Use indirect if the aggregate cannot fit into registers for
+    // passing arguments according to the ABI
+    unsigned Threshold = IsO32 ? 16 : 64;
     const TargetInfo &Target = getContext().getTargetInfo();
-
-    // if (Target.areAllPointersCapabilities()) {
-    //   Threshold = Target.getCHERICapabilityWidth() * 8;
-    // }
-
-
+    if (Target.areAllPointersCapabilities()) {
+      Threshold = Target.getCHERICapabilityWidth() * 8;
+    }
+    bool PassIndirect = false;
+    if (getContext().getTypeSizeInChars(Ty) > CharUnits::fromQuantity(Threshold))
+      PassIndirect = true;
     // For CHERI, also pass C++ classes and structs that contain capabilities
     // indirectly (for now).
     // XXXKG: We should revisit passing fields in registers.
-    if (Ty->isCXXStructureOrClassType() 
+    else if (Ty->isCXXStructureOrClassType()
         && containsCapabilities(Ty) && Target.SupportsCapabilities())
+      PassIndirect = true;
+    if (PassIndirect)
       return ABIArgInfo::getIndirect(CharUnits::fromQuantity(Align), true,
                                      getContext().getTypeAlign(Ty) / 8 > Align);
 
