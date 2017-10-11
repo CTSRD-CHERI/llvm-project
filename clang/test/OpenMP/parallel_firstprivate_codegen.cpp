@@ -488,7 +488,7 @@ void array_func(float a[3], St s[2], int n, long double vla1[n]) {
 // ARRAY-DAG: store x86_fp80* %{{.+}}, x86_fp80** [[PRIV_VLA1]],
 // ARRAY-DAG: store float* %{{.+}}, float** [[PRIV_A]],
 // ARRAY-DAG: store double* %{{.+}}, double** [[PRIV_VLA2]],
-// ARRAY: call i8* @llvm.stacksave()
+// ARRAY: call i8* @llvm.stacksave.p0i8()
 // ARRAY: [[SIZE:%.+]] = mul nuw i64 %{{.+}}, 8
 // ARRAY: call void @llvm.memcpy.p0i8.p0i8.i64(i8* %{{.+}}, i8* %{{.+}}, i64 [[SIZE]], i32 128, i1 false)
 #pragma omp parallel firstprivate(a, s, vla1, vla2)
@@ -504,7 +504,7 @@ void array_func(float a[3], St s[2], int n, long double vla1[n]) {
 // ARRAY-DAG: store %struct.St* %{{.+}}, %struct.St** [[PRIV_S]],
 // ARRAY-DAG: store x86_fp80* %{{.+}}, x86_fp80** [[PRIV_VLA1]],
 // ARRAY-DAG: store double* %{{.+}}, double** [[PRIV_VLA2]],
-// ARRAY: call i8* @llvm.stacksave()
+// ARRAY: call i8* @llvm.stacksave.p0i8()
 // ARRAY: [[SIZE:%.+]] = mul nuw i64 %{{.+}}, 8
 // ARRAY: call void @llvm.memcpy.p0i8.p0i8.i64(i8* %{{.+}}, i8* %{{.+}}, i64 [[SIZE]], i32 128, i1 false)
 #endif

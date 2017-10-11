@@ -16,14 +16,14 @@ void HasEHCleanup() {
 
 // With exceptions, we need to clean up at least one of these temporaries.
 // WIN32-LABEL: define void @"\01?HasEHCleanup@@YAXXZ"() {{.*}} {
-// WIN32:   %[[base:.*]] = call i8* @llvm.stacksave()
+// WIN32:   %[[base:.*]] = call i8* @llvm.stacksave.p0i8()
 //    If this call throws, we have to restore the stack.
 // WIN32:   call void @"\01?getA@@YA?AUA@@XZ"(%struct.A* sret %{{.*}})
 //    If this call throws, we have to cleanup the first temporary.
 // WIN32:   invoke void @"\01?getA@@YA?AUA@@XZ"(%struct.A* sret %{{.*}})
 //    If this call throws, we have to cleanup the stacksave.
 // WIN32:   call i32 @"\01?TakesTwo@@YAHUA@@0@Z"
-// WIN32:   call void @llvm.stackrestore
+// WIN32:   call void @llvm.stackrestore.p0i8
 // WIN32:   ret void
 //
 //    There should be one dtor call for unwinding from the second getA.
@@ -39,7 +39,7 @@ int HasDeactivatedCleanups() {
 
 // WIN32-LABEL: define i32 @"\01?HasDeactivatedCleanups@@YAHXZ"() {{.*}} {
 // WIN32:   %[[isactive:.*]] = alloca i1
-// WIN32:   call i8* @llvm.stacksave()
+// WIN32:   call i8* @llvm.stacksave.p0i8()
 // WIN32:   %[[argmem:.*]] = alloca inalloca [[argmem_ty:<{ %struct.A, %struct.A }>]]
 // WIN32:   %[[arg1:.*]] = getelementptr inbounds [[argmem_ty]], [[argmem_ty]]* %[[argmem]], i32 0, i32 1
 // WIN32:   call x86_thiscallcc %struct.A* @"\01??0A@@QAE@XZ"
@@ -75,13 +75,13 @@ int HasConditionalCleanup(bool cond) {
 // WIN32-LABEL: define i32 @"\01?HasConditionalCleanup@@YAH_N@Z"(i1 zeroext %{{.*}}) {{.*}} {
 // WIN32:   store i1 false
 // WIN32:   br i1
-// WIN32:   call i8* @llvm.stacksave()
+// WIN32:   call i8* @llvm.stacksave.p0i8()
 // WIN32:   call x86_thiscallcc %struct.A* @"\01??0A@@QAE@XZ"(%struct.A* %{{.*}})
 // WIN32:   store i1 true
 // WIN32:   invoke x86_thiscallcc %struct.A* @"\01??0A@@QAE@XZ"(%struct.A* %{{.*}})
 // WIN32:   call i32 @"\01?TakesTwo@@YAHUA@@0@Z"
 //
-// WIN32:   call void @llvm.stackrestore
+// WIN32:   call void @llvm.stackrestore.p0i8
 //
 // WIN32:   call i32 @"\01?CouldThrow@@YAHXZ"()
 //

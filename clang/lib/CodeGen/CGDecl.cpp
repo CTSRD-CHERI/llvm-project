@@ -515,7 +515,8 @@ namespace {
     CallStackRestore(Address Stack) : Stack(Stack) {}
     void Emit(CodeGenFunction &CGF, Flags flags) override {
       llvm::Value *V = CGF.Builder.CreateLoad(Stack);
-      llvm::Value *F = CGF.CGM.getIntrinsic(llvm::Intrinsic::stackrestore);
+      llvm::Value *F = CGF.CGM.getIntrinsic(llvm::Intrinsic::stackrestore,
+          { CGF.Int8PtrTy });
       CGF.Builder.CreateCall(F, V);
     }
   };
@@ -1103,11 +1104,11 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
 
     if (!DidCallStackSave) {
       // Save the stack.
-      // XXXAR: Should this really be address space 0?
-      Address Stack = CreateTempAlloca(Int8Ty->getPointerTo(0),
+      Address Stack = CreateTempAlloca(Int8PtrTy,
           getPointerAlign(), "saved_stack");
 
-      llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::stacksave);
+      llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::stacksave,
+          { Int8PtrTy });
       llvm::Value *V = Builder.CreateCall(F);
       Builder.CreateStore(V, Stack);
 

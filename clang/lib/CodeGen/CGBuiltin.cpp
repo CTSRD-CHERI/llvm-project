@@ -1660,7 +1660,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
 
     // Store the stack pointer to the setjmp buffer.
     Value *StackAddr =
-        Builder.CreateCall(CGM.getIntrinsic(Intrinsic::stacksave));
+        Builder.CreateCall(CGM.getIntrinsic(Intrinsic::stacksave,
+          { CGM.Int8PtrTy }));
     Address StackSaveSlot =
       Builder.CreateConstInBoundsGEP(Buf, 2, getPointerSize());
     Builder.CreateStore(StackAddr, StackSaveSlot);

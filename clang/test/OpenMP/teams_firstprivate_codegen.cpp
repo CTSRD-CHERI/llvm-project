@@ -258,7 +258,7 @@ void array_func(float a[3], St s[2], int n, long double vla1[n]) {
 // ARRAY-64-DAG: store ppc_fp128* %{{.+}}, ppc_fp128** [[PRIV_VLA1]],
 // ARRAY-32-DAG: store x86_fp80* %{{.+}}, x86_fp80** [[PRIV_VLA1]],
 // ARRAY-DAG: store double* %{{.+}}, double** [[PRIV_VLA2]],
-// ARRAY: call i8* @llvm.stacksave()
+// ARRAY: call i8* @llvm.stacksave.p0i8()
 // ARRAY: [[SIZE:%.+]] = mul nuw i{{[0-9]+}} %{{.+}}, 8
 // ARRAY: call void @llvm.memcpy.p0i8.p0i8.i{{[0-9]+}}(i8* %{{.+}}, i8* %{{.+}}, i{{[0-9]+}} [[SIZE]], i32 128, i1 false)
   #pragma omp target
@@ -276,7 +276,7 @@ void array_func(float a[3], St s[2], int n, long double vla1[n]) {
 // ARRAY-64-DAG: store ppc_fp128* %{{.+}}, ppc_fp128** [[PRIV_VLA1]],
 // ARRAY-32-DAG: store x86_fp80* %{{.+}}, x86_fp80** [[PRIV_VLA1]],
 // ARRAY-DAG: store double* %{{.+}}, double** [[PRIV_VLA2]],
-// ARRAY: call i8* @llvm.stacksave()
+// ARRAY: call i8* @llvm.stacksave.p0i8()
 // ARRAY: [[SIZE:%.+]] = mul nuw i{{[0-9]+}} %{{.+}}, 8
 // ARRAY: call void @llvm.memcpy.p0i8.p0i8.i{{[0-9]+}}(i8* %{{.+}}, i8* %{{.+}}, i{{[0-9]+}} [[SIZE]], i32 128, i1 false)
 #endif

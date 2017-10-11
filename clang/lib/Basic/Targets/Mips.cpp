@@ -187,8 +187,8 @@ void MipsTargetInfo::getTargetDefines(const LangOptions &Opts,
   if (IsCHERI) {
     Builder.defineMacro("__CHERI__", Twine(1));
     if (CapabilityABI) {
-      Builder.defineMacro("__CHERI_SANDBOX__", Twine(3));
-      Builder.defineMacro("__CHERI_PURE_CAPABILITY__", Twine(1));
+      Builder.defineMacro("__CHERI_SANDBOX__", Twine(4));
+      Builder.defineMacro("__CHERI_PURE_CAPABILITY__", Twine(2));
     }
 
     // Macros for use with the set and get permissions builtins.
