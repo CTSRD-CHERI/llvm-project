@@ -234,6 +234,8 @@ def NotInMicroMips :  Predicate<"!Subtarget->inMicroMipsMode()">,
                       AssemblerPredicate<"!FeatureMicroMips">;
 def IsCHERI        :  Predicate<"Subtarget->isCheri()">;
 def NotCHERI        :  Predicate<"!Subtarget->isCheri()">;
+def IsCHERIABI     :  Predicate<"Subtarget->isABI_CheriPureCap()">;
+def NotCHERIABI     :  Predicate<"!Subtarget->isABI_CheriPureCap()">;
 def IsLE           :  Predicate<"Subtarget->isLittle()">;
 def IsBE           :  Predicate<"!Subtarget->isLittle()">;
 def IsNotNaCl    :    Predicate<"!Subtarget->isTargetNaCl()">;
@@ -1780,7 +1782,7 @@ let isReturn=1, isTerminator=1, isBarrier=1, hasCtrlDep=1, isCTI=1 in {
   def ERet : PseudoSE<(outs), (ins), [(MipsERet)]>;
 }
 
-let Defs = [SP], Uses = [SP], hasSideEffects = 1 in {
+let Defs = [SP], Uses = [SP], hasSideEffects = 1, Predicates=[NotCHERIABI] in {
 def ADJCALLSTACKDOWN : MipsPseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
                                   [(callseq_start timm:$amt1, timm:$amt2)]>;
 def ADJCALLSTACKUP   : MipsPseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),

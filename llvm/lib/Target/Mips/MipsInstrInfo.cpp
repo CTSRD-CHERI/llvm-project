@@ -38,7 +38,10 @@ using namespace llvm;
 void MipsInstrInfo::anchor() {}
 
 MipsInstrInfo::MipsInstrInfo(const MipsSubtarget &STI, unsigned UncondBr)
-    : MipsGenInstrInfo(Mips::ADJCALLSTACKDOWN, Mips::ADJCALLSTACKUP),
+    : MipsGenInstrInfo(STI.isABI_CheriPureCap() ?
+          Mips::ADJCALLSTACKCAPDOWN : Mips::ADJCALLSTACKDOWN,
+        STI.isABI_CheriPureCap() ?
+          Mips::ADJCALLSTACKCAPUP: Mips::ADJCALLSTACKUP),
       Subtarget(STI), UncondBrOpc(UncondBr) {}
 
 const MipsInstrInfo *MipsInstrInfo::create(MipsSubtarget &STI) {

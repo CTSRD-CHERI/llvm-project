@@ -24,7 +24,6 @@ using std::pair;
 
 namespace {
 class CheriPureCapABI : public ModulePass, public InstVisitor<CheriPureCapABI> {
-  DataLayout *DL;
   Module *M;
   llvm::SmallVector<AllocaInst *, 16> Allocas;
   bool IsCheri128;
@@ -33,53 +32,17 @@ class CheriPureCapABI : public ModulePass, public InstVisitor<CheriPureCapABI> {
 
 public:
   static char ID;
-  CheriPureCapABI() : ModulePass(ID), DL(nullptr) {}
-  virtual ~CheriPureCapABI() {
-    if (DL)
-      delete DL;
-  }
+  CheriPureCapABI() : ModulePass(ID) {}
   void visitAllocaInst(AllocaInst &AI) { Allocas.push_back(&AI); }
   virtual bool runOnModule(Module &Mod) {
     M = &Mod;
-    DL = new DataLayout(M);
     // Early abort if we aren't using capabilities on the stack
-    if (DL->getAllocaAddrSpace() != 200)
+    if (Mod.getDataLayout().getAllocaAddrSpace() != 200)
       return false;
-    // We're going to replace all allocas (in address space 200) with ones in
-    // AS 0, followed by an intrinsic that expands to a
-    // stack-capability-relative access and setting the length.  Make sure
-    // that the AS for new allocas is 0.
-    DL->setAllocaAS(0);
-    M->setDataLayout(*DL);
-    IsCheri128 = DL->getPointerSizeInBits(200) == 128;
+    IsCheri128 = Mod.getDataLayout().getPointerSizeInBits(200) == 128;
     bool Modified = false;
     for (Function &F : Mod)
       Modified |= runOnFunction(F);
-    // Now we're going to fix up all va_start calls so that they have the
-    // address space cast of the alloca directly in front of them.  This
-    // makes the cast visible to SelectionDAG and allows it to look through
-    // and find the original.
-    if (Function *Fn = M->getFunction("llvm.va_start"))
-      for (Value *V : Fn->users()) {
-        CallInst *Call = cast<CallInst>(V->stripPointerCasts());
-        Value *Cast = Call->getOperand(0);
-        Value *CastArg;
-        bool Replace;
-        if (isa<ConstantExpr>(Cast)) {
-            ConstantExpr *CastExpr = cast<ConstantExpr>(Cast);
-            CastArg = Cast;
-            Replace = (CastExpr->getOpcode() != Instruction::AddrSpaceCast);
-        } else {
-            Instruction *CastInst = cast<Instruction>(Cast);
-            CastArg = CastInst->getOperand(0);
-            Replace = (CastInst->getParent() != Call->getParent());
-        }
-        if (Replace) {
-          AddrSpaceCastInst *NewCast = new llvm::AddrSpaceCastInst(
-              CastArg, Cast->getType(), "va_cast", Call);
-          Call->setOperand(0, NewCast);
-        }
-      }
     return Modified;
   }
   int RoundUpToPowerOfTwo(int v) {
@@ -101,15 +64,18 @@ public:
       return false;
 
     Intrinsic::ID SetLength = Intrinsic::cheri_cap_bounds_set;
-    Function *CastFn =
-        Intrinsic::getDeclaration(M, Intrinsic::mips_stack_to_cap);
     Function *SetLenFun = Intrinsic::getDeclaration(M, SetLength);
+    Intrinsic::ID StackToCap = Intrinsic::mips_stack_to_cap;
+    Function *StackToCapFn = Intrinsic::getDeclaration(M, StackToCap);
 
     IRBuilder<> B(C);
+    const DataLayout &DL = F.getParent()->getDataLayout();
 
     for (AllocaInst *AI : Allocas) {
       assert(AI->getType()->getPointerAddressSpace() == 200);
+      // Insert immediately after the alloca
       B.SetInsertPoint(AI);
+      B.SetInsertPoint(&*++B.GetInsertPoint());
       unsigned ForcedAlignment = 0;
 
       PointerType *AllocaTy = AI->getType();
@@ -117,12 +83,10 @@ public:
       Value *ArraySize = AI->getArraySize();
 
       // Create a new (AS 0) alloca
-      Value *Alloca = B.CreateAlloca(AllocationTy, ArraySize);
-      assert(Alloca->getType()->getPointerAddressSpace() == 0);
       // For imprecise capabilities, we need to increase the alignment for
       // on-stack allocations to ensure that we can create precise bounds.
       if (IsCheri128) {
-        uint64_t AllocaSize = DL->getTypeAllocSize(AllocationTy);
+        uint64_t AllocaSize = DL.getTypeAllocSize(AllocationTy);
         if (ConstantInt *CI = dyn_cast<ConstantInt>(ArraySize))
           AllocaSize *= CI->getValue().getLimitedValue();
         else
@@ -132,22 +96,22 @@ public:
         // MIPS doesn't support stack alignments greater than 2^16
         ForcedAlignment = std::min(ForcedAlignment, 0x4000U);
       }
-      cast<AllocaInst>(Alloca)
-          ->setAlignment(std::max(AI->getAlignment(), ForcedAlignment));
-
-      // Convert the new alloca into a stack-cap relative capability
-      Alloca = B.CreateBitCast(Alloca, Type::getInt8PtrTy(C, 0));
-      Alloca = B.CreateCall(CastFn, Alloca);
+      AI->setAlignment(std::max(AI->getAlignment(), ForcedAlignment));
+      Instruction *BitCast =
+          cast<Instruction>(B.CreateBitCast(AI, Type::getInt8PtrTy(C, 200)));
 
       // Get the size of the alloca
-      unsigned ElementSize = DL->getTypeAllocSize(AllocationTy);
+      unsigned ElementSize = DL.getTypeAllocSize(AllocationTy);
       Value *Size = ConstantInt::get(Type::getInt64Ty(C), ElementSize);
       if (AI->isArrayAllocation())
         Size = B.CreateMul(Size, AI->getArraySize());
+      Value *Alloca = B.CreateCall(StackToCapFn, BitCast);
+      if (BitCast == AI)
+        BitCast = cast<Instruction>(Alloca);
       Alloca = B.CreateCall(SetLenFun, {Alloca, Size});
       Alloca = B.CreateBitCast(Alloca, AllocaTy);
       AI->replaceAllUsesWith(Alloca);
-      AI->eraseFromParent();
+      BitCast->setOperand(0, AI);
     }
     return true;
   }

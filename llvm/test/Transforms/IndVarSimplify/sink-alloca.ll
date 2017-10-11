@@ -28,15 +28,15 @@ declare i32 @bar()
 ; Indvars shouldn't sink the first alloca between the stacksave and stackrestore
 ; intrinsics.
 declare i8* @a(...)
-declare i8* @llvm.stacksave() nounwind
-declare void @llvm.stackrestore(i8*) nounwind
+declare i8* @llvm.stacksave.p0i8() nounwind
+declare void @llvm.stackrestore.p0i8(i8*) nounwind
 define void @h(i64 %n) nounwind uwtable ssp {
 ; CHECK: entry:
 ; CHECK-NEXT: %vla = alloca i8*
-; CHECK-NEXT: %savedstack = call i8* @llvm.stacksave()
+; CHECK-NEXT: %savedstack = call i8* @llvm.stacksave.p0i8()
 entry:
   %vla = alloca i8*, i64 %n, align 16
-  %savedstack = call i8* @llvm.stacksave() nounwind
+  %savedstack = call i8* @llvm.stacksave.p0i8() nounwind
   %vla.i = alloca i8*, i64 %n, align 16
   br label %for.body.i
 
@@ -50,7 +50,7 @@ for.body.i:
   br i1 %exitcond5, label %g.exit, label %for.body.i
 
 g.exit:
-  call void @llvm.stackrestore(i8* %savedstack) nounwind
+  call void @llvm.stackrestore.p0i8(i8* %savedstack) nounwind
   %call1 = call i8* (...) @a(i8** %vla) nounwind
   ret void
 }

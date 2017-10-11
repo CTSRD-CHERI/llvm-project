@@ -305,6 +305,11 @@ namespace llvm {
                SimpleTy <= MVT::LAST_INTEGER_VECTOR_VALUETYPE));
     }
 
+    /// Return true if this is a fat pointer type.
+    bool isFatPointer() const {
+      return SimpleTy == MVT::iFATPTR;
+    }
+
     /// Return true if this is an integer, not including vectors.
     bool isScalarInteger() const {
       return (SimpleTy >= MVT::FIRST_INTEGER_VALUETYPE &&
@@ -821,6 +826,19 @@ namespace llvm {
         return MVT::i64;
       case 128:
         return MVT::i128;
+      }
+    }
+
+    static MVT getFatPointerVT(unsigned BitWidth) {
+      switch (BitWidth) {
+      default:
+        return (MVT::SimpleValueType)(MVT::INVALID_SIMPLE_VALUE_TYPE);
+      case 64:
+        return MVT::iFATPTR;
+      case 128:
+        return MVT::iFATPTR;
+      case 256:
+        return MVT::iFATPTR;
       }
     }
 

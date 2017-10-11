@@ -501,7 +501,7 @@ static void getCopyToParts(SelectionDAG &DAG, const SDLoc &DL, SDValue Val,
     if (PartVT.isFloatingPoint() && ValueVT.isFloatingPoint()) {
       assert(NumParts == 1 && "Do not know what to promote to!");
       Val = DAG.getNode(ISD::FP_EXTEND, DL, PartVT, Val);
-    } else if (PartVT.SimpleTy == MVT::iFATPTR) {
+    } else if (PartVT.isFatPointer()) {
       Val = DAG.getNode(ISD::INTTOPTR, DL, PartVT, Val);
     } else {
       if (ValueVT.isFloatingPoint()) {
@@ -2453,7 +2453,7 @@ void SelectionDAGBuilder::visitLandingPad(const LandingPadInst &LP) {
                            FuncInfo.ExceptionPointerVirtReg,
                            TLI.getPointerTy(DAG.getDataLayout(),
                                TLI.getExceptionPointerAS()));
-    Ops[0] = (EPtr.getValueType() == MVT::iFATPTR) ? EPtr :
+    Ops[0] = (EPtr.getValueType().isFatPointer()) ? EPtr :
         DAG.getZExtOrTrunc(EPtr, dl, ValueVTs[0]);
   } else {
     Ops[0] = DAG.getConstant(0, dl, TLI.getPointerTy(DAG.getDataLayout()));
@@ -3019,7 +3019,7 @@ void SelectionDAGBuilder::visitPtrToInt(const User &I) {
   SDValue N = getValue(I.getOperand(0));
   EVT DestVT = DAG.getTargetLoweringInfo().getValueType(DAG.getDataLayout(),
     I.getType());
-  if (N.getValueType() == MVT::iFATPTR) {
+  if (N.getValueType().isFatPointer()) {
     setValue(&I, DAG.getNode(ISD::PTRTOINT, getCurSDLoc(), DestVT, N));
     return;
   }
@@ -3032,7 +3032,7 @@ void SelectionDAGBuilder::visitIntToPtr(const User &I) {
   SDValue N = getValue(I.getOperand(0));
   EVT DestVT = DAG.getTargetLoweringInfo().getValueType(DAG.getDataLayout(),
     I.getType());
-  if (DestVT == MVT::iFATPTR) {
+  if (DestVT.isFatPointer()) {
     setValue(&I, DAG.getNode(ISD::INTTOPTR, getCurSDLoc(), DestVT, N));
     return;
   }
@@ -3391,7 +3391,7 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
 
   // FIXME: This does not work on GEPs with vectors and fat pointers, but CHERI
   // currently doesn't have a vector unit so that is probably not a problem.
-  bool FatPointer = N.getValueType() == MVT::iFATPTR;
+  bool FatPointer = N.getValueType().isFatPointer();
   SDValue OrigN = N;
 
   if (FatPointer) {
@@ -3514,6 +3514,8 @@ void SelectionDAGBuilder::visitAlloca(const AllocaInst &I) {
   SDValue AllocSize = getValue(I.getArraySize());
 
   EVT IntPtr = TLI.getPointerTy(DAG.getDataLayout());
+  EVT PtrTy = TLI.getPointerTy(DAG.getDataLayout(),
+      I.getType()->getPointerAddressSpace());
   if (AllocSize.getValueType() != IntPtr)
     AllocSize = DAG.getZExtOrTrunc(AllocSize, dl, IntPtr);
 
@@ -3545,7 +3547,7 @@ void SelectionDAGBuilder::visitAlloca(const AllocaInst &I) {
                                                 dl));
 
   SDValue Ops[] = { getRoot(), AllocSize, DAG.getIntPtrConstant(Align, dl) };
-  SDVTList VTs = DAG.getVTList(AllocSize.getValueType(), MVT::Other);
+  SDVTList VTs = DAG.getVTList(PtrTy, MVT::Other);
   SDValue DSA = DAG.getNode(ISD::DYNAMIC_STACKALLOC, dl, VTs, Ops);
   setValue(&I, DSA);
   DAG.setRoot(DSA.getValue(1));
@@ -5623,9 +5625,10 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
   }
   case Intrinsic::stacksave: {
     SDValue Op = getRoot();
+    unsigned AS = I.getType()->getPointerAddressSpace();
     Res = DAG.getNode(
         ISD::STACKSAVE, sdl,
-        DAG.getVTList(TLI.getPointerTy(DAG.getDataLayout()), MVT::Other), Op);
+        DAG.getVTList(TLI.getPointerTy(DAG.getDataLayout(), AS), MVT::Other), Op);
     setValue(&I, Res);
     DAG.setRoot(Res.getValue(1));
     return nullptr;

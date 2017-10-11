@@ -156,11 +156,9 @@ void MipsSEInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     else if (Mips::FGR64RegClass.contains(DestReg))
       Opc = Mips::DMTC1;
  } else if (Mips::CheriRegsRegClass.contains(SrcReg)) {
-   auto MoveInst = Mips::CIncOffset;
-   BuildMI(MBB, I, DL, get(MoveInst))
+   BuildMI(MBB, I, DL, get(Mips::CMove))
    .addReg(DestReg, RegState::Define)
-   .addReg(SrcReg, getKillRegState(KillSrc))
-   .addReg(Mips::ZERO_64);
+   .addReg(SrcReg, getKillRegState(KillSrc));
    return;
   }
   else if (Mips::MSA128BRegClass.contains(DestReg)) { // Copy to MSA reg
@@ -208,8 +206,7 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       BuildMI(MBB, I, DL, get(Mips::DMFC1), IntReg)
         .addReg(SrcReg);
       BuildMI(MBB, I, DL, get(Mips::CAPSTORE64)).addReg(IntReg, getKillRegState(true))
-        .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
-        .addReg(Mips::C11);
+        .addReg(Mips::ZERO_64).addFrameIndex(FI).addImm(Offset).addMemOperand(MMO);
       return;
     }
     else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
@@ -223,8 +220,7 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       llvm_unreachable("Unexpected register type for CHERI!");
     }
     BuildMI(MBB, I, DL, get(Opc)).addReg(SrcReg, getKillRegState(isKill))
-      .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
-      .addReg(Mips::C11);
+      .addReg(Mips::ZERO_64).addFrameIndex(FI).addImm(Offset).addMemOperand(MMO);
     return;
   }
   if (Mips::GPR32RegClass.hasSubClassEq(RC))
@@ -326,8 +322,8 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
       unsigned IntReg = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
       BuildMI(MBB, I, DL, get(Mips::CAPLOAD64), IntReg)
-        .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
-        .addReg(Mips::C11);
+        .addReg(Mips::ZERO_64).addFrameIndex(FI).addImm(Offset)
+        .addMemOperand(MMO);
       BuildMI(MBB, I, DL, get(Mips::DMTC1), DestReg)
         .addReg(IntReg, getKillRegState(true));
       return;
@@ -337,8 +333,8 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       llvm_unreachable("Unexpected register type for CHERI!");
     }
     BuildMI(MBB, I, DL, get(Opc), DestReg)
-      .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
-      .addReg(Mips::C11);
+      .addReg(Mips::ZERO_64).addFrameIndex(FI).addImm(Offset)
+      .addMemOperand(MMO);
     return;
   }
   const Function *Func = MBB.getParent()->getFunction();
@@ -532,6 +528,8 @@ unsigned MipsSEInstrInfo::getOppositeBranchOpc(unsigned Opc) const {
   case Mips::BNEZC_MM: return Mips::BEQZC_MM;
   case Mips::CBTS:   return Mips::CBTU;
   case Mips::CBTU:   return Mips::CBTS;
+  case Mips::CBEZ:   return Mips::CBNZ;
+  case Mips::CBNZ:   return Mips::CBEZ;
   case Mips::BEQZC:  return Mips::BNEZC;
   case Mips::BNEZC:  return Mips::BEQZC;
   case Mips::BEQC:   return Mips::BNEC;
@@ -570,7 +568,16 @@ void MipsSEInstrInfo::adjustStackPtr(unsigned SP, int64_t Amount,
   if (Amount == 0)
     return;
 
-  if (isInt<16>(Amount)) {
+  if (ABI.IsCheriPureCap()) {
+    if (isInt<11>(Amount)) {
+      BuildMI(MBB, I, DL, get(Mips::CIncOffsetImm), SP)
+        .addReg(SP).addImm(Amount);
+    } else {
+      unsigned Reg = loadImmediate(Amount, MBB, I, DL, nullptr);
+      BuildMI(MBB, I, DL, get(Mips::CIncOffset), SP)
+        .addReg(SP).addReg(Reg, RegState::Kill);
+    }
+  } else if (isInt<16>(Amount)) {
     // addi sp, sp, amount
     BuildMI(MBB, I, DL, get(ADDiu), SP).addReg(SP).addImm(Amount);
   } else {
@@ -636,7 +643,8 @@ unsigned MipsSEInstrInfo::getAnalyzableBrOpc(unsigned Opc) const {
           Opc == Mips::BLTZ   || Opc == Mips::BLEZ   || Opc == Mips::BEQ64  ||
           Opc == Mips::BNE64  || Opc == Mips::BGTZ64 || Opc == Mips::BGEZ64 ||
           Opc == Mips::BLTZ64 || Opc == Mips::BLEZ64 || Opc == Mips::BC1T   ||
-          Opc == Mips::CBTS   || Opc == Mips::CBTU   ||
+          Opc == Mips::CBTS   || Opc == Mips::CBTU   || Opc == Mips::CBEZ   ||
+          Opc == Mips::CBNZ   ||
           Opc == Mips::BC1F   || Opc == Mips::B      || Opc == Mips::J      ||
           Opc == Mips::BEQZC_MM || Opc == Mips::BNEZC_MM || Opc == Mips::BEQC ||
           Opc == Mips::BNEC   || Opc == Mips::BLTC   || Opc == Mips::BGEC   ||

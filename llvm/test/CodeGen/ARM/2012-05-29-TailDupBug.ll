@@ -123,7 +123,7 @@ __CFHyphenationGetHyphensForString.exit:          ; preds = %cleanup.i, %if.then
   br label %if.end68
 
 cleanup.thread:                                   ; preds = %if.end35, %land.lhs.true, %if.end20.i, %if.then4.i
-  call void @llvm.stackrestore(i8* null)
+  call void @llvm.stackrestore.p0i8(i8* null)
   br label %return
 
 if.end68:                                         ; preds = %__CFHyphenationGetHyphensForString.exit, %__CFHyphenationPullTokenizer.exit
@@ -137,4 +137,4 @@ return:                                           ; preds = %if.end68, %cleanup.
   ret i32 %retval.1
 }
 
-declare void @llvm.stackrestore(i8*) nounwind
+declare void @llvm.stackrestore.p0i8(i8*) nounwind

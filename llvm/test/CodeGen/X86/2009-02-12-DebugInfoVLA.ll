@@ -26,7 +26,7 @@ entry:
   call void @llvm.dbg.declare(metadata i8** %s1_addr, metadata !0, metadata !DIExpression()), !dbg !7
   store i8* %s1, i8** %s1_addr
   call void @llvm.dbg.declare(metadata [0 x i8]** %str.0, metadata !8, metadata !DIExpression()), !dbg !7
-  %4 = call i8* @llvm.stacksave(), !dbg !7        ; <i8*> [#uses=1]
+  %4 = call i8* @llvm.stacksave.p0i8(), !dbg !7        ; <i8*> [#uses=1]
   store i8* %4, i8** %saved_stack.1, align 8, !dbg !7
   %5 = load i8*, i8** %s1_addr, align 8, !dbg !13      ; <i8*> [#uses=1]
   %6 = call i64 @strlen(i8* %5) nounwind readonly, !dbg !13 ; <i64> [#uses=1]
@@ -56,7 +56,7 @@ entry:
   %25 = sext i8 %24 to i32, !dbg !16              ; <i32> [#uses=1]
   store i32 %25, i32* %0, align 4, !dbg !16
   %26 = load i8*, i8** %saved_stack.1, align 8, !dbg !16 ; <i8*> [#uses=1]
-  call void @llvm.stackrestore(i8* %26), !dbg !16
+  call void @llvm.stackrestore.p0i8(i8* %26), !dbg !16
   %27 = load i32, i32* %0, align 4, !dbg !16           ; <i32> [#uses=1]
   store i32 %27, i32* %retval, align 4, !dbg !16
   br label %return, !dbg !16
@@ -69,11 +69,11 @@ return:                                           ; preds = %entry
 
 declare void @llvm.dbg.declare(metadata, metadata, metadata) nounwind readnone
 
-declare i8* @llvm.stacksave() nounwind
+declare i8* @llvm.stacksave.p0i8() nounwind
 
 declare i64 @strlen(i8*) nounwind readonly
 
-declare void @llvm.stackrestore(i8*) nounwind
+declare void @llvm.stackrestore.p0i8(i8*) nounwind
 
 !llvm.dbg.cu = !{!2}
 !0 = !DILocalVariable(name: "s1", line: 2, arg: 1, scope: !1, file: !2, type: !6)

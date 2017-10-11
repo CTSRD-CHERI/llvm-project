@@ -76,15 +76,36 @@ MipsABIInfo MipsABIInfo::computeTargetABI(const Triple &TT, StringRef CPU,
 }
 
 unsigned MipsABIInfo::GetStackPtr() const {
-  return ArePtrs64bit() ? Mips::SP_64 : Mips::SP;
+  return IsCheriPureCap() ? 
+    Mips::C11 :
+    (ArePtrs64bit() ? Mips::SP_64 : Mips::SP);
 }
 
 unsigned MipsABIInfo::GetFramePtr() const {
-  return ArePtrs64bit() ? Mips::FP_64 : Mips::FP;
+  return IsCheriPureCap() ? 
+    Mips::C24 :
+    (ArePtrs64bit() ? Mips::FP_64 : Mips::FP);
 }
 
 unsigned MipsABIInfo::GetBasePtr() const {
-  return ArePtrs64bit() ? Mips::S7_64 : Mips::S7;
+  // FIXME: $c25 is probably not sensible here.
+  return IsCheriPureCap() ? 
+    Mips::C25 :
+    (ArePtrs64bit() ? Mips::S7_64 : Mips::S7);
+}
+
+unsigned MipsABIInfo::GetDefaultDataCapability() const {
+  return Mips::C0;
+}
+
+unsigned MipsABIInfo::GetGlobalCapability() const {
+  return Mips::C26;
+}
+
+unsigned MipsABIInfo::GetReturnAddress() const {
+  return IsCheriPureCap() ?
+    Mips::C17 :
+    (ArePtrs64bit() ? Mips::RA_64 : Mips::RA);
 }
 
 unsigned MipsABIInfo::GetGlobalPtr() const {
@@ -117,6 +138,12 @@ unsigned MipsABIInfo::GetPtrAndOp() const {
 
 unsigned MipsABIInfo::GetGPRMoveOp() const {
   return ArePtrs64bit() ? Mips::OR64 : Mips::OR;
+}
+
+unsigned MipsABIInfo::GetSPMoveOp() const {
+  return IsCheriPureCap() ?
+    Mips::CIncOffset :
+    (ArePtrs64bit() ? Mips::OR64 : Mips::OR);
 }
 
 unsigned MipsABIInfo::GetEhDataReg(unsigned I) const {

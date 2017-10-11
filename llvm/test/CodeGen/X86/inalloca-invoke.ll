@@ -5,8 +5,8 @@
 %frame.reverse = type { %Iter, %Iter }
 
 declare i32 @pers(...)
-declare void @llvm.stackrestore(i8*)
-declare i8* @llvm.stacksave()
+declare void @llvm.stackrestore.p0i8(i8*)
+declare i8* @llvm.stacksave.p0i8()
 declare void @begin(%Iter* sret)
 declare void @plus(%Iter* sret, %Iter*, i32)
 declare void @reverse(%frame.reverse* inalloca align 4)
@@ -16,7 +16,7 @@ define i32 @main() personality i32 (...)* @pers {
   br label %blah
 
 blah:
-  %inalloca.save = call i8* @llvm.stacksave()
+  %inalloca.save = call i8* @llvm.stacksave.p0i8()
   %rev_args = alloca inalloca %frame.reverse, align 4
   %beg = getelementptr %frame.reverse, %frame.reverse* %rev_args, i32 0, i32 0
   %end = getelementptr %frame.reverse, %frame.reverse* %rev_args, i32 0, i32 1
@@ -46,7 +46,7 @@ invoke.cont:
           to label %invoke.cont5 unwind label %lpad
 
 invoke.cont5:                                     ; preds = %invoke.cont
-  call void @llvm.stackrestore(i8* %inalloca.save)
+  call void @llvm.stackrestore.p0i8(i8* %inalloca.save)
   ret i32 0
 
 lpad:                                             ; preds = %invoke.cont, %entry

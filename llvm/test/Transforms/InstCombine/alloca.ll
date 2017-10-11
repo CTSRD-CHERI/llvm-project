@@ -136,13 +136,13 @@ define void @test8() {
 ; PR19569
 %struct_type = type { i32, i32 }
 declare void @test9_aux(<{ %struct_type }>* inalloca)
-declare i8* @llvm.stacksave()
-declare void @llvm.stackrestore(i8*)
+declare i8* @llvm.stacksave.p0i8()
+declare void @llvm.stackrestore.p0i8(i8*)
 
 define void @test9(%struct_type* %a) {
 ; CHECK-LABEL: @test9(
 entry:
-  %inalloca.save = call i8* @llvm.stacksave()
+  %inalloca.save = call i8* @llvm.stacksave.p0i8()
   %argmem = alloca inalloca <{ %struct_type }>
 ; CHECK: alloca inalloca i64, align 8
   %0 = getelementptr inbounds <{ %struct_type }>, <{ %struct_type }>* %argmem, i32 0, i32 0
@@ -150,7 +150,7 @@ entry:
   %2 = bitcast %struct_type* %a to i8*
   call void @llvm.memcpy.p0i8.p0i8.i32(i8* %1, i8* %2, i32 8, i32 4, i1 false)
   call void @test9_aux(<{ %struct_type }>* inalloca %argmem)
-  call void @llvm.stackrestore(i8* %inalloca.save)
+  call void @llvm.stackrestore.p0i8(i8* %inalloca.save)
   ret void
 }
 

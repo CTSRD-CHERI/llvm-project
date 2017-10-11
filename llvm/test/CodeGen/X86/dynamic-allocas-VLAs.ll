@@ -179,11 +179,11 @@ entry:
 ; CHECK:     popq %rbp
 }
 
-declare i8* @llvm.stacksave() nounwind
+declare i8* @llvm.stacksave.p0i8() nounwind
 
 declare void @bar(i32, i32*, %struct.struct_t* byval align 8)
 
-declare void @llvm.stackrestore(i8*) nounwind
+declare void @llvm.stackrestore.p0i8(i8*) nounwind
 
 
 ; Test when forcing stack alignment

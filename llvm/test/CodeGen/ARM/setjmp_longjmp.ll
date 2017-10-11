@@ -13,7 +13,7 @@ declare i8* @__cxa_begin_catch(i8*)
 declare void @__cxa_end_catch()
 declare i32 @llvm.eh.typeid.for(i8*)
 declare i8* @llvm.frameaddress(i32)
-declare i8* @llvm.stacksave()
+declare i8* @llvm.stacksave.p0i8()
 @_ZTIPKc = external constant i8*
 
 ; CHECK-LABEL: foobar
@@ -100,7 +100,7 @@ catch:
   %arraydecay = getelementptr inbounds [5 x i8*], [5 x i8*]* %buf, i64 0, i64 0
   %6 = tail call i8* @llvm.frameaddress(i32 0)
   store i8* %6, i8** %arraydecay, align 16
-  %7 = tail call i8* @llvm.stacksave()
+  %7 = tail call i8* @llvm.stacksave.p0i8()
   %8 = getelementptr [5 x i8*], [5 x i8*]* %buf, i64 0, i64 2
   store i8* %7, i8** %8, align 16
   %9 = call i32 @llvm.eh.sjlj.setjmp(i8* %5)

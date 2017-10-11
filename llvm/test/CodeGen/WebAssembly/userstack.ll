@@ -230,15 +230,15 @@ define void @dynamic_static_alloca(i32 %alloc) noredzone {
  ret void
 }
 
-declare i8* @llvm.stacksave()
-declare void @llvm.stackrestore(i8*)
+declare i8* @llvm.stacksave.p0i8()
+declare void @llvm.stackrestore.p0i8(i8*)
 
 ; CHECK-LABEL: llvm_stack_builtins:
 define void @llvm_stack_builtins(i32 %alloc) noredzone {
  ; CHECK: get_global $push[[L11:.+]]=, __stack_pointer{{$}}
  ; CHECK-NEXT: tee_local $push[[L10:.+]]=, {{.+}}, $pop[[L11]]
  ; CHECK-NEXT: set_local [[STACK:.+]], $pop[[L10]]
- %stack = call i8* @llvm.stacksave()
+ %stack = call i8* @llvm.stacksave.p0i8()
 
  ; Ensure we don't reassign the stacksave local
  ; CHECK-NOT: set_local [[STACK]],
@@ -246,7 +246,7 @@ define void @llvm_stack_builtins(i32 %alloc) noredzone {
 
  ; CHECK: get_local $push[[L12:.+]]=, [[STACK]]
  ; CHECK-NEXT: set_global __stack_pointer, $pop[[L12]]
- call void @llvm.stackrestore(i8* %stack)
+ call void @llvm.stackrestore.p0i8(i8* %stack)
 
  ret void
 }

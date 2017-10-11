@@ -2,8 +2,8 @@
 ;
 ; RUN: llc < %s -mtriple=s390x-linux-gnu | FileCheck %s
 
-declare i8 *@llvm.stacksave()
-declare void @llvm.stackrestore(i8 *)
+declare i8 *@llvm.stacksave.p0i8()
+declare void @llvm.stackrestore.p0i8(i8 *)
 declare void @g()
 
 ; nothing should happen if no stack frame is needed.
@@ -52,7 +52,7 @@ define void @f4(i32 %len) "backchain" {
   ret void
 }
 
-; check that llvm.stackrestore restores the backchain
+; check that llvm.stackrestore.p0i8 restores the backchain
 define void @f5(i32 %count1, i32 %count2) "backchain" {
 ; CHECK-LABEL: f5:
 ; CHECK: stmg %r11, %r15, 88(%r15)
@@ -74,10 +74,10 @@ define void @f5(i32 %count1, i32 %count2) "backchain" {
 ; CHECK-DAG: stg [[BC3]], 0([[NEWSP2]])
 ; CHECK: lmg %r11, %r15, 248(%r11)
 ; CHECK: br %r14
-  %src = call i8 *@llvm.stacksave()
+  %src = call i8 *@llvm.stacksave.p0i8()
   %array1 = alloca i8, i32 %count1
   store volatile i8 0, i8 *%array1
-  call void @llvm.stackrestore(i8 *%src)
+  call void @llvm.stackrestore.p0i8(i8 *%src)
   %array2 = alloca i8, i32 %count2
   store volatile i8 0, i8 *%array2
   ret void

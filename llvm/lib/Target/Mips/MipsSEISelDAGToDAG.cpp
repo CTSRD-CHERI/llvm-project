@@ -330,6 +330,16 @@ bool MipsSEDAGToDAGISel::selectAddrFrameIndex(SDValue Addr, SDValue &Base,
   return false;
 }
 
+bool MipsSEDAGToDAGISel::selectAddrFI(SDValue Addr, SDValue &Base) const {
+  if (FrameIndexSDNode *FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
+    EVT ValTy = Addr.getValueType();
+
+    Base   = CurDAG->getTargetFrameIndex(FIN->getIndex(), ValTy);
+    return true;
+  }
+  return false;
+}
+
 /// Match frameindex+offset and frameindex|offset
 bool MipsSEDAGToDAGISel::selectAddrFrameIndexOffset(
     SDValue Addr, SDValue &Base, SDValue &Offset, unsigned OffsetBits,

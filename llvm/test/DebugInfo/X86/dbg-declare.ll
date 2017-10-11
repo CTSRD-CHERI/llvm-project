@@ -23,21 +23,21 @@ entry:
   %0 = load i32*, i32** %x.addr, align 8, !dbg !16
   %1 = load i32, i32* %0, align 4, !dbg !16
   %2 = zext i32 %1 to i64, !dbg !16
-  %3 = call i8* @llvm.stacksave(), !dbg !16
+  %3 = call i8* @llvm.stacksave.p0i8(), !dbg !16
   store i8* %3, i8** %saved_stack, !dbg !16
   %vla = alloca i8, i64 %2, align 16, !dbg !16
   call void @llvm.dbg.declare(metadata i8* %vla, metadata !18, metadata !DIExpression()), !dbg !23
   store i32 1, i32* %cleanup.dest.slot
   %4 = load i8*, i8** %saved_stack, !dbg !24
-  call void @llvm.stackrestore(i8* %4), !dbg !24
+  call void @llvm.stackrestore.p0i8(i8* %4), !dbg !24
   ret i32 0, !dbg !25
 }
 
 declare void @llvm.dbg.declare(metadata, metadata, metadata) nounwind readnone
 
-declare i8* @llvm.stacksave() nounwind
+declare i8* @llvm.stacksave.p0i8() nounwind
 
-declare void @llvm.stackrestore(i8*) nounwind
+declare void @llvm.stackrestore.p0i8(i8*) nounwind
 
 !llvm.dbg.cu = !{!0}
 !llvm.module.flags = !{!27}

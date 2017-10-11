@@ -25,7 +25,7 @@ declare void @f(<{ %struct.S }>* inalloca)
 define void @test(i1 %b) {
 entry:
   %x = alloca i8
-  %inalloca.save = call i8* @llvm.stacksave()
+  %inalloca.save = call i8* @llvm.stacksave.p0i8()
   %argmem = alloca inalloca <{ %struct.S }>, align 4
   %0 = getelementptr inbounds <{ %struct.S }>, <{ %struct.S }>* %argmem, i32 0, i32 0
   br i1 %b, label %true, label %false
@@ -42,9 +42,9 @@ false:
 
 exit:
   call void @f(<{ %struct.S }>* inalloca %argmem)
-  call void @llvm.stackrestore(i8* %inalloca.save)
+  call void @llvm.stackrestore.p0i8(i8* %inalloca.save)
   ret void
 }
 
-declare i8* @llvm.stacksave()
-declare void @llvm.stackrestore(i8*)
+declare i8* @llvm.stacksave.p0i8()
+declare void @llvm.stackrestore.p0i8(i8*)

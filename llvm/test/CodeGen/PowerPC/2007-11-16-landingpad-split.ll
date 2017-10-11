@@ -21,7 +21,7 @@ target triple = "powerpc64-apple-darwin8"
 define void @Bork(i64 %range.0.0, i64 %range.0.1, i64 %size) personality i32 (...)* @__gxx_personality_v0 {
 entry:
 	%effectiveRange = alloca %struct.Range, align 8		; <%struct.Range*> [#uses=2]
-	%tmp4 = call i8* @llvm.stacksave()		; <i8*> [#uses=1]
+	%tmp4 = call i8* @llvm.stacksave.p0i8()		; <i8*> [#uses=1]
 	%size1 = trunc i64 %size to i32		; <i32> [#uses=1]
 	%tmp17 = alloca i8*, i32 %size1		; <i8**> [#uses=1]
 	invoke void @Foo(i8** %tmp17)
@@ -34,7 +34,7 @@ bb30.preheader:		; preds = %entry
 unwind:		; preds = %cond_true, %entry
         %exn = landingpad {i8*, i32}
                  catch i8* null
-	call void @llvm.stackrestore(i8* %tmp4)
+	call void @llvm.stackrestore.p0i8(i8* %tmp4)
         resume { i8*, i32 } %exn
 
 invcont23:		; preds = %cond_true
@@ -55,12 +55,12 @@ cleanup:		; preds = %bb30
 	ret void
 }
 
-declare i8* @llvm.stacksave() nounwind
+declare i8* @llvm.stacksave.p0i8() nounwind
 
 declare void @Foo(i8**)
 
 declare void @Bar(i64, %struct.Range*)
 
-declare void @llvm.stackrestore(i8*) nounwind
+declare void @llvm.stackrestore.p0i8(i8*) nounwind
 
 declare i32 @__gxx_personality_v0(...)

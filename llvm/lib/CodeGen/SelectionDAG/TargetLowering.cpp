@@ -2648,12 +2648,11 @@ TargetLowering::ParseConstraints(const DataLayout &DL,
         }
       } else if (PointerType *PT = dyn_cast<PointerType>(OpTy)) {
         unsigned AS = PT->getAddressSpace();
+        unsigned PtrSize = DL.getPointerSizeInBits(AS);
         if (DL.isFatPointer(AS))
-          OpInfo.ConstraintVT = MVT::iFATPTR;
-        else {
-          unsigned PtrSize = DL.getPointerSizeInBits(AS);
+          OpInfo.ConstraintVT = MVT::getFatPointerVT(PtrSize);
+        else
           OpInfo.ConstraintVT = MVT::getIntegerVT(PtrSize);
-        }
       } else {
         OpInfo.ConstraintVT = MVT::getVT(OpTy, true);
       }

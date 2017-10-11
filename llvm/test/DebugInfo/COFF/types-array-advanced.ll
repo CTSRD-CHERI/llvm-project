@@ -186,14 +186,14 @@ entry:
   store i32 %x, i32* %x.addr, align 4
   call void @llvm.dbg.declare(metadata i32* %x.addr, metadata !38, metadata !39), !dbg !40
   %0 = load i32, i32* %x.addr, align 4, !dbg !41
-  %1 = call i8* @llvm.stacksave(), !dbg !42
+  %1 = call i8* @llvm.stacksave.p0i8(), !dbg !42
   store i8* %1, i8** %saved_stack, align 4, !dbg !42
   %vla = alloca i32, i32 %0, align 4, !dbg !42
   call void @llvm.dbg.declare(metadata i32* %vla, metadata !43, metadata !47), !dbg !48
   %arrayidx = getelementptr inbounds i32, i32* %vla, i32 0, !dbg !49
   store i32 0, i32* %arrayidx, align 4, !dbg !50
   %2 = load i8*, i8** %saved_stack, align 4, !dbg !51
-  call void @llvm.stackrestore(i8* %2), !dbg !51
+  call void @llvm.stackrestore.p0i8(i8* %2), !dbg !51
   ret void, !dbg !51
 }
 
@@ -201,10 +201,10 @@ entry:
 declare void @llvm.dbg.declare(metadata, metadata, metadata) #1
 
 ; Function Attrs: nounwind
-declare i8* @llvm.stacksave() #0
+declare i8* @llvm.stacksave.p0i8() #0
 
 ; Function Attrs: nounwind
-declare void @llvm.stackrestore(i8*) #0
+declare void @llvm.stackrestore.p0i8(i8*) #0
 
 attributes #0 = { nounwind }
 attributes #1 = { nounwind readnone }

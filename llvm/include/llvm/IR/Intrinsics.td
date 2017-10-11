@@ -345,9 +345,9 @@ def int_localrecover : Intrinsic<[llvm_ptr_ty],
                                  [IntrNoMem]>;
 // Note: we treat stacksave/stackrestore as writemem because we don't otherwise
 // model their dependencies on allocas.
-def int_stacksave     : Intrinsic<[llvm_ptr_ty]>,
+def int_stacksave     : Intrinsic<[llvm_anyptr_ty]>,
                         GCCBuiltin<"__builtin_stack_save">;
-def int_stackrestore  : Intrinsic<[], [llvm_ptr_ty]>,
+def int_stackrestore  : Intrinsic<[], [llvm_anyptr_ty]>,
                         GCCBuiltin<"__builtin_stack_restore">;
 
 def int_get_dynamic_area_offset : Intrinsic<[llvm_anyint_ty]>;

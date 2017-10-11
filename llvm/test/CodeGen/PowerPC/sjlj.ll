@@ -36,7 +36,7 @@ entry:
   store i32 0, i32* %retval
   %0 = call i8* @llvm.frameaddress(i32 0)
   store i8* %0, i8** bitcast ([1 x %struct.__jmp_buf_tag]* @env_sigill to i8**)
-  %1 = call i8* @llvm.stacksave()
+  %1 = call i8* @llvm.stacksave.p0i8()
   store i8* %1, i8** getelementptr (i8*, i8** bitcast ([1 x %struct.__jmp_buf_tag]* @env_sigill to i8**), i32 2)
   %2 = call i32 @llvm.eh.sjlj.setjmp(i8* bitcast ([1 x %struct.__jmp_buf_tag]* @env_sigill to i8*))
   %tobool = icmp ne i32 %2, 0
@@ -109,7 +109,7 @@ entry:
   store i32 0, i32* %retval
   %0 = call i8* @llvm.frameaddress(i32 0)
   store i8* %0, i8** bitcast ([1 x %struct.__jmp_buf_tag]* @env_sigill to i8**)
-  %1 = call i8* @llvm.stacksave()
+  %1 = call i8* @llvm.stacksave.p0i8()
   store i8* %1, i8** getelementptr (i8*, i8** bitcast ([1 x %struct.__jmp_buf_tag]* @env_sigill to i8**), i32 2)
   %2 = call i32 @llvm.eh.sjlj.setjmp(i8* bitcast ([1 x %struct.__jmp_buf_tag]* @env_sigill to i8*))
   %tobool = icmp ne i32 %2, 0
@@ -149,7 +149,7 @@ declare void @bar(i8*) #3
 
 declare i8* @llvm.frameaddress(i32) #2
 
-declare i8* @llvm.stacksave() #3
+declare i8* @llvm.stacksave.p0i8() #3
 
 declare i32 @llvm.eh.sjlj.setjmp(i8*) #3
 

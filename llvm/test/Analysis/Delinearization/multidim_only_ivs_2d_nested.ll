@@ -35,7 +35,7 @@ for.cond1.preheader:                              ; preds = %for.inc17, %for.con
 
 for.end13.us:                                     ; preds = %for.inc11.us.us
   call void @bar(i64 %indvars.iv51, i64 %indvars.iv48, double* %vla.us) nounwind
-  call void @llvm.stackrestore(i8* %1)
+  call void @llvm.stackrestore.p0i8(i8* %1)
   %indvars.iv.next49 = add i64 %indvars.iv48, 1
   %exitcond54 = icmp eq i64 %indvars.iv.next49, %b
   br i1 %exitcond54, label %for.inc17, label %for.cond7.preheader.lr.ph.split.us.us
@@ -61,7 +61,7 @@ for.body9.us.us:                                  ; preds = %for.body9.us.us, %f
 
 for.cond7.preheader.lr.ph.split.us.us:            ; preds = %for.cond1.preheader, %for.end13.us
   %indvars.iv48 = phi i64 [ %indvars.iv.next49, %for.end13.us ], [ 1, %for.cond1.preheader ]
-  %1 = call i8* @llvm.stacksave()
+  %1 = call i8* @llvm.stacksave.p0i8()
   %2 = mul nuw i64 %indvars.iv48, %indvars.iv51
   %vla.us = alloca double, i64 %2, align 16
   br label %for.body9.lr.ph.us.us
@@ -75,6 +75,6 @@ for.end19:                                        ; preds = %for.inc17, %entry
   ret void
 }
 
-declare i8* @llvm.stacksave() nounwind
+declare i8* @llvm.stacksave.p0i8() nounwind
 declare void @bar(i64, i64, double*)
-declare void @llvm.stackrestore(i8*) nounwind
+declare void @llvm.stackrestore.p0i8(i8*) nounwind

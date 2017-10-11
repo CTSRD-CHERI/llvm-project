@@ -159,11 +159,11 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         // If the load is not currently at register-zero offset, we can't fix
         // it up to use relative addressing, but we may be able to modify it so
         // that it is...
+        int64_t offset = MI.getOperand(2).getImm();
         if (MI.getOperand(1).getReg() != Mips::ZERO_64) {
           // Don't try to fold in things that have relocations yet
           if (!MI.getOperand(2).isImm())
             continue;
-          int64_t offset = MI.getOperand(2).getImm();
           MachineInstr *AddInst;
           // If the register offset is a simple constant, then try to move it
           // into the memory operation
@@ -179,6 +179,9 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         // If the capability is formed by incrementing an offset, then try to
         // pull that calculation into the memory operation.
 
+        // If this is a frame index or other symbol, skip it.
+        if (!MI.getOperand(3).isReg())
+          continue;
         MachineInstr *IncOffset = RI.getUniqueVRegDef(MI.getOperand(3).getReg());
         if (!IncOffset)
           continue;
@@ -191,6 +194,20 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
             C0Ops.emplace_back(&MI, IncOffset);
           continue;
         }
+
+        // If this is a CIncOffset with an immediate then try to fold it into
+        // the operation.
+        if (IncOffset->getOpcode() == Mips::CIncOffsetImm) {
+          uint64_t offsetImm = IncOffset->getOperand(2).getImm();
+          if (IsValidOffset(Op, offset + offsetImm)) {
+            IncOffset->getOperand(1).setIsKill(false);
+            MI.getOperand(3).setReg(IncOffset->getOperand(1).getReg());
+            MI.getOperand(2).setImm(offset + offsetImm);
+            Adds.insert(IncOffset);
+          }
+          continue;
+        }
+
         // Ignore ones that are not based on a CIncOffset op
         if (IncOffset->getOpcode() != Mips::CIncOffset)
           continue;

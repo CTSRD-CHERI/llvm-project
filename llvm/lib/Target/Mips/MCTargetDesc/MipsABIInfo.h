@@ -46,6 +46,7 @@ public:
   bool IsN32() const { return ThisABI == ABI::N32; }
   bool IsN64() const { return ThisABI == ABI::N64; }
   bool IsCheriPureCap() const { return isCheriPureCap; }
+  unsigned StackAddrSpace() const { return isCheriPureCap ? 200 : 0; }
   ABI GetEnumValue() const { return ThisABI; }
 
   /// The registers to use for byval arguments.
@@ -65,10 +66,16 @@ public:
     return ThisABI < Other.GetEnumValue();
   }
 
+  unsigned GetDefaultDataCapability() const;
+  unsigned GetReturnAddress() const;
   unsigned GetStackPtr() const;
   unsigned GetFramePtr() const;
   unsigned GetBasePtr() const;
   unsigned GetGlobalPtr() const;
+  /// This method will eventually be replaced by GetGlobalPtr in
+  /// pure-capability mode, but until all of the new linker work is done we
+  /// need a separate $gp and $cgp as a transition step.
+  unsigned GetGlobalCapability() const;
   unsigned GetNullPtr() const;
   unsigned GetZeroReg() const;
   unsigned GetPtrAdduOp() const;
@@ -76,6 +83,7 @@ public:
   unsigned GetPtrSubuOp() const;
   unsigned GetPtrAndOp() const;
   unsigned GetGPRMoveOp() const;
+  unsigned GetSPMoveOp() const;
   inline bool ArePtrs64bit() const { return IsN64(); }
   inline bool AreGprs64bit() const { return IsN32() || IsN64(); }
 

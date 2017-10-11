@@ -404,7 +404,7 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
     setOperationAction(ISD::GlobalTLSAddress,   MVT::i64,   Custom);
     setOperationAction(ISD::JumpTable,          MVT::i64,   Custom);
     setOperationAction(ISD::ConstantPool,       MVT::i64,   Custom);
-    setOperationAction(ISD::SELECT,             MVT::i64,   Custom);
+    //setOperationAction(ISD::SELECT,             MVT::i64,   Custom);
     setOperationAction(ISD::LOAD,               MVT::i64,   Custom);
     setOperationAction(ISD::STORE,              MVT::i64,   Custom);
     setOperationAction(ISD::FP_TO_SINT,         MVT::i64,   Custom);
@@ -471,6 +471,7 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
   setOperationAction(ISD::ROTL,              MVT::i64,   Expand);
   setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i32,  Expand);
   setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i64,  Expand);
+  setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::iFATPTR,  Expand);
 
   if (!Subtarget.hasMips32r2())
     setOperationAction(ISD::ROTR, MVT::i32,   Expand);
@@ -568,7 +569,7 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
   // and 8-byte slots on N32/N64.
   setMinStackArgumentAlignment((ABI.IsN32() || ABI.IsN64()) ? 8 : 4);
 
-  setStackPointerRegisterToSaveRestore(ABI.IsN64() ? Mips::SP_64 : Mips::SP);
+  setStackPointerRegisterToSaveRestore(ABI.GetStackPtr());
 
   MaxStoresPerMemcpy = 16;
 
@@ -2450,7 +2451,8 @@ SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
 
   SDLoc DL(Op);
   SDValue FI = DAG.getFrameIndex(FuncInfo->getVarArgsFrameIndex(),
-                                 getPointerTy(MF.getDataLayout()));
+                                 getPointerTy(MF.getDataLayout(),
+                                     ABI.StackAddrSpace()));
 
   if (ABI.IsCheriPureCap()) {
     unsigned Reg = MF.addLiveIn(Mips::C13, getRegClassFor(MVT::iFATPTR));
@@ -3185,15 +3187,13 @@ SDValue MipsTargetLowering::passArgOnStack(SDValue StackPtr, unsigned Offset,
                                            SelectionDAG &DAG) const {
   if (!IsTailCall) {
     SDValue PtrOff = DAG.getPointerAdd(DL, StackPtr, Offset);
-    if (ABI.IsCheriPureCap()) {
-      PtrOff = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, PtrOff);
-    }
     return DAG.getStore(Chain, DL, Arg, PtrOff, MachinePointerInfo());
   }
 
   MachineFrameInfo &MFI = DAG.getMachineFunction().getFrameInfo();
   int FI = MFI.CreateFixedObject(Arg.getValueSizeInBits() / 8, Offset, false);
-  SDValue FIN = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+  SDValue FIN = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout(),
+              ABI.StackAddrSpace()));
   return DAG.getStore(Chain, DL, Arg, FIN, MachinePointerInfo(),
                       /* Alignment = */ 0, MachineMemOperand::MOVolatile);
 }
@@ -3320,8 +3320,9 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     ++NumTailCalls;
 
   SDValue StackPtr =
-      DAG.getCopyFromReg(Chain, DL, ABI.IsN64() ? Mips::SP_64 : Mips::SP,
-                         getPointerTy(DAG.getDataLayout()));
+      DAG.getCopyFromReg(Chain, DL, ABI.GetStackPtr(),
+                         getPointerTy(DAG.getDataLayout(),
+                           ABI.StackAddrSpace()));
 
   std::deque<std::pair<unsigned, SDValue>> RegsToPass;
   SmallVector<SDValue, 8> MemOpChains;
@@ -3443,17 +3444,20 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     MemOpChains.push_back(passArgOnStack(StackPtr, VA.getLocMemOffset(),
                                          Chain, Arg, DL, IsTailCall, DAG));
   }
-  if ((FirstOffset != -1) && ABI.IsCheriPureCap()) {
-    Intrinsic::ID SetBounds = Intrinsic::cheri_cap_bounds_set;
-    SDValue PtrOff = DAG.getPointerAdd(DL, StackPtr, FirstOffset);
-    PtrOff = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, PtrOff);
-    PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
-        DAG.getConstant(SetBounds, DL, MVT::i64), PtrOff,
-        DAG.getIntPtrConstant(LastOffset, DL));
-    PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
-        DAG.getConstant(Intrinsic::cheri_cap_perms_and, DL, MVT::i64), PtrOff,
-        DAG.getIntPtrConstant(0xFFD7, DL));
-    RegsToPass.push_back(std::make_pair(Mips::C13, PtrOff));
+  if (ABI.IsCheriPureCap()) {
+    if (FirstOffset != -1) {
+      Intrinsic::ID SetBounds = Intrinsic::cheri_cap_bounds_set;
+      SDValue PtrOff = DAG.getPointerAdd(DL, StackPtr, FirstOffset);
+      PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
+          DAG.getConstant(SetBounds, DL, MVT::i64), PtrOff,
+          DAG.getIntPtrConstant(LastOffset, DL));
+      PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
+          DAG.getConstant(Intrinsic::cheri_cap_perms_and, DL, MVT::i64), PtrOff,
+          DAG.getIntPtrConstant(0xFFD7, DL));
+      RegsToPass.push_back(std::make_pair(Mips::C13, PtrOff));
+    } else
+      RegsToPass.push_back(std::make_pair(Mips::C13,
+                                        DAG.getConstant(0, DL, MVT::iFATPTR)));
   }
   // If we're doing a CCall then any unused arg registers should be zero.
   if (!UseClearRegs && (CallConv == CallingConv::CHERI_CCall)) {
@@ -3788,6 +3792,7 @@ SDValue MipsTargetLowering::LowerFormalArguments(
 
   unsigned CurArgIdx = 0;
   CCInfo.rewindByValRegsInfo();
+  unsigned CapArgReg = -1U;
 
   for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
     CCValAssign &VA = ArgLocs[i];
@@ -3860,17 +3865,25 @@ SDValue MipsTargetLowering::LowerFormalArguments(
       // sanity check
       assert(VA.isMemLoc());
 
-      // The stack pointer offset is relative to the caller stack frame.
-      int FI = MFI.CreateFixedObject(LocVT.getSizeInBits() / 8,
-                                     VA.getLocMemOffset(), true);
 
       // Create load nodes to retrieve arguments from the stack
-      SDValue FIN = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
-      if (ABI.IsCheriPureCap())
-        FIN = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, FIN);
-      SDValue ArgValue = DAG.getLoad(
-          LocVT, DL, Chain, FIN,
-          MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI));
+      SDValue ArgValue;
+      if (ABI.IsCheriPureCap()) {
+        if (CapArgReg == -1U)
+          CapArgReg = MF.addLiveIn(Mips::C13, getRegClassFor(MVT::iFATPTR));
+        SDValue Addr = DAG.getPointerAdd(DL, DAG.getCopyFromReg(Chain, DL,
+              CapArgReg, MVT::iFATPTR), VA.getLocMemOffset());
+        ArgValue = DAG.getLoad(LocVT, DL, Chain, Addr, MachinePointerInfo());
+      } else {
+        // The stack pointer offset is relative to the caller stack frame.
+        int FI = MFI.CreateFixedObject(LocVT.getSizeInBits() / 8,
+                                       VA.getLocMemOffset(), true);
+        SDValue FIN = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout(),
+                    ABI.StackAddrSpace()));
+        ArgValue = DAG.getLoad(
+            LocVT, DL, Chain, FIN,
+            MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI));
+      }
       OutChains.push_back(ArgValue.getValue(1));
 
       ArgValue = UnpackFromArgumentSlot(ArgValue, VA, Ins[i].ArgVT, DL, DAG);
@@ -4057,7 +4070,7 @@ MipsTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   // a virtual register in the entry block, so now we copy the value out
   // and into $v0.
   if (MF.getFunction()->hasStructRetAttr()) {
-    EVT SRetTy = getPointerTy(DAG.getDataLayout());
+    EVT SRetTy = getPointerTy(DAG.getDataLayout(), ABI.StackAddrSpace());
     unsigned V0 = ABI.IsN64() ? Mips::V0_64 : Mips::V0;
     if (ABI.IsCheriPureCap()) {
       V0 = Mips::C3;
@@ -4457,6 +4470,16 @@ bool MipsTargetLowering::isLegalAddressingMode(const DataLayout &DL,
   if (AM.BaseGV)
     return false;
 
+  if (AS == 200) {
+    switch (AM.Scale) {
+    case 0: // "r+i" or just "i", depending on HasBaseReg.
+    case 1:
+      return true;
+    default:
+      return false;
+    }
+  }
+
   switch (AM.Scale) {
   case 0: // "r+i" or just "i", depending on HasBaseReg.
     break;
@@ -4553,7 +4576,7 @@ void MipsTargetLowering::copyByValRegs(
     FrameObjOffset = VA.getLocMemOffset();
 
   // Create frame object.
-  EVT PtrTy = getPointerTy(DAG.getDataLayout());
+  EVT PtrTy = getPointerTy(DAG.getDataLayout(), ABI.StackAddrSpace());
   int FI = MFI.CreateFixedObject(FrameObjSize, FrameObjOffset, true);
   SDValue FIN = DAG.getFrameIndex(FI, PtrTy);
   InVals.push_back(FIN);
@@ -4588,7 +4611,7 @@ SDValue MipsTargetLowering::passByValArg(
   unsigned OffsetInBytes = 0; // From beginning of struct
   unsigned RegSizeInBytes = Subtarget.getGPRSizeInBytes();
   unsigned Alignment = std::min(Flags.getByValAlign(), RegSizeInBytes);
-  EVT PtrTy = getPointerTy(DAG.getDataLayout()),
+  EVT PtrTy = getPointerTy(DAG.getDataLayout(), ABI.StackAddrSpace()),
       RegTy = MVT::getIntegerVT(RegSizeInBytes * 8);
   unsigned NumRegs = LastReg - FirstReg;
 
@@ -4663,9 +4686,6 @@ SDValue MipsTargetLowering::passByValArg(
   // Copy remainder of byval arg to it with memcpy.
   unsigned MemCpySize = ByValSizeInBytes - OffsetInBytes;
   SDValue Src = DAG.getPointerAdd(DL, Arg, OffsetInBytes);
-  if (ABI.IsCheriPureCap()) {
-    StackPtr = DAG.getNode(MipsISD::STACKTOCAP, DL, MVT::iFATPTR, StackPtr);
-  }
   SDValue Dst = DAG.getPointerAdd(DL, StackPtr, VA.getLocMemOffset());
   Chain = DAG.getMemcpy(
       Chain, DL, Dst, Src, DAG.getConstant(MemCpySize, DL, PtrTy), Alignment,
@@ -4720,7 +4740,8 @@ void MipsTargetLowering::writeVarArgRegs(std::vector<SDValue> &OutChains,
     unsigned Reg = addLiveIn(MF, ArgRegs[I], RC);
     SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, RegTy);
     FI = MFI.CreateFixedObject(RegSizeInBytes, VaArgOffset, true);
-    SDValue PtrOff = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+    SDValue PtrOff = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout(),
+                ABI.StackAddrSpace()));
     SDValue Store =
         DAG.getStore(Chain, DL, ArgValue, PtrOff, MachinePointerInfo());
     cast<StoreSDNode>(Store.getNode())->getMemOperand()->setValue(

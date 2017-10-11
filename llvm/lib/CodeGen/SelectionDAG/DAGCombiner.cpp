@@ -276,6 +276,7 @@ namespace {
     //
     SDValue visitTokenFactor(SDNode *N);
     SDValue visitMERGE_VALUES(SDNode *N);
+    SDValue visitPTRADD(SDNode *N);
     SDValue visitADD(SDNode *N);
     SDValue visitADDLike(SDValue N0, SDValue N1, SDNode *LocReference);
     SDValue visitSUB(SDNode *N);
@@ -1503,6 +1504,7 @@ SDValue DAGCombiner::visit(SDNode *N) {
   default: break;
   case ISD::TokenFactor:        return visitTokenFactor(N);
   case ISD::MERGE_VALUES:       return visitMERGE_VALUES(N);
+  case ISD::PTRADD:             return visitPTRADD(N);
   case ISD::ADD:                return visitADD(N);
   case ISD::SUB:                return visitSUB(N);
   case ISD::ADDC:               return visitADDC(N);
@@ -1921,6 +1923,17 @@ SDValue DAGCombiner::foldBinOpIntoSelect(SDNode *BO) {
          "Failed to constant fold a binop with constant operands");
 
   return DAG.getSelect(DL, VT, Sel.getOperand(0), NewCT, NewCF);
+}
+
+SDValue DAGCombiner::visitPTRADD(SDNode *N) {
+  SDValue N0 = N->getOperand(0);
+  SDValue N1 = N->getOperand(1);
+  // fold (ptradd x, 0) -> 0
+  // This needs to be done separately from normal addition, because pointer
+  // addition is not commutative.
+  if (isNullConstant(N1))
+    return N0;
+  return SDValue();
 }
 
 SDValue DAGCombiner::visitADD(SDNode *N) {
@@ -8127,7 +8140,7 @@ SDValue DAGCombiner::ReduceLoadWidth(SDNode *N) {
   // FIXME: We can do this with fat pointers, but we need to be more careful
   // about the arithmetic.
   if (PtrType == MVT::Untyped || PtrType.isExtended() ||
-      PtrType == MVT::iFATPTR)
+      PtrType.isFatPointer())
     // It's not possible to generate a constant of extended or untyped type.
     return SDValue();
 

@@ -15,11 +15,11 @@ target triple = "cheri-unknown-bsd"
 define void @fn1() #0 {
 entry:
   ; Load the address of a
-  ; CHECK: ld	$2, %got_disp(a)($gp)
-  ; CHECK: cfromptr $c1, $c0, $2
+  ; CHECK: ld	$[[AADDR:[0-9]+]], %got_disp(a)($gp)
+  ; CHECK: cfromptr $c1, $c0, $[[AADDR]]
+  ; CHECK: ld	$[[FN2ADDR:([0-9]+|sp)]], %call16(fn2)($gp)
   ; Call fn2
-  ; CHECK: ld	$1, %call16(fn2)($gp)
-  ; CHECK: cgetpccsetoffset	$c12, $1
+  ; CHECK: cgetpccsetoffset	$c12, $[[FN2ADDR]]
   ; CHECK: cjalr	$c12, $c17
   tail call void @fn2(%struct.ASN1_ITEM_st addrspace(200)* @a) #2
   ret void

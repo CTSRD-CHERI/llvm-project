@@ -416,7 +416,7 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
   unsigned SP = ABI.GetStackPtr();
   unsigned FP = ABI.GetFramePtr();
   unsigned ZERO = ABI.GetNullPtr();
-  unsigned MOVE = ABI.GetGPRMoveOp();
+  unsigned MOVE = ABI.GetSPMoveOp();
   unsigned ADDiu = ABI.GetPtrAddiuOp();
   unsigned AND = ABI.IsN64() ? Mips::AND64 : Mips::AND;
 
@@ -548,13 +548,23 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
       assert(isInt<16>(MFI.getMaxAlignment()) &&
              "Function's alignment size requirement is not supported.");
       int MaxAlign = -(int)MFI.getMaxAlignment();
+      unsigned IntSP = SP;
+      if (ABI.IsCheriPureCap()) {
+        IntSP = MF.getRegInfo().createVirtualRegister(RC);
+        BuildMI(MBB, MBBI, dl, TII.get(Mips::CGetOffset), IntSP).addReg(SP);
+      }
+
 
       BuildMI(MBB, MBBI, dl, TII.get(ADDiu), VR).addReg(ZERO) .addImm(MaxAlign);
-      BuildMI(MBB, MBBI, dl, TII.get(AND), SP).addReg(SP).addReg(VR);
+      BuildMI(MBB, MBBI, dl, TII.get(AND), IntSP).addReg(IntSP).addReg(VR);
+
+      if (ABI.IsCheriPureCap())
+        BuildMI(MBB, MBBI, dl, TII.get(Mips::CSetOffset), SP).addReg(SP)
+          .addReg(IntSP);
 
       if (hasBP(MF)) {
         // move $s7, $sp
-        unsigned BP = STI.isABI_N64() ? Mips::S7_64 : Mips::S7;
+        unsigned BP = ABI.GetBasePtr();
         BuildMI(MBB, MBBI, dl, TII.get(MOVE), BP)
           .addReg(SP)
           .addReg(ZERO);
@@ -721,7 +731,10 @@ void MipsSEFrameLowering::emitEpilogue(MachineFunction &MF,
   unsigned SP = ABI.GetStackPtr();
   unsigned FP = ABI.GetFramePtr();
   unsigned ZERO = ABI.GetNullPtr();
-  unsigned MOVE = ABI.GetGPRMoveOp();
+  unsigned MOVE = ABI.GetSPMoveOp();
+
+  // No need to clean up if we didn't allocate space on the stack.
+  if (MFI.getStackSize() == 0 && !MFI.adjustsStack()) return;
 
   // if framepointer enabled, restore the stack pointer.
   if (hasFP(MF)) {
@@ -917,7 +930,7 @@ void MipsSEFrameLowering::determineCalleeSaves(MachineFunction &MF,
   MipsFunctionInfo *MipsFI = MF.getInfo<MipsFunctionInfo>();
   MipsABIInfo ABI = STI.getABI();
   unsigned FP = ABI.GetFramePtr();
-  unsigned BP = ABI.IsN64() ? Mips::S7_64 : Mips::S7;
+  unsigned BP = ABI.GetBasePtr();
 
   // Mark $fp as used if function has dedicated frame pointer.
   if (hasFP(MF))
@@ -959,7 +972,7 @@ void MipsSEFrameLowering::determineCalleeSaves(MachineFunction &MF,
   // capability-stack ABI.
   if (STI.isCheri()) {
     if (STI.isABI_CheriPureCap()) {
-      if (isInt<11>(MaxSPOffset))
+      if (isInt<10>(MaxSPOffset))
         return;
     } else if (isInt<15>(MaxSPOffset))
       return;
