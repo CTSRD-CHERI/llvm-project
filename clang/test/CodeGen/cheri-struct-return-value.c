@@ -2,7 +2,6 @@
 // RUN: %cheri128_cc1 -target-abi purecap -std=c11 -O2 -emit-llvm -o - %s | FileCheck %s -enable-var-scope
 // RUN: %cheri256_cc1 -target-abi purecap -std=c11 -O2 -S -o - %s | FileCheck -check-prefix=ASM %s
 // RUN: %cheri128_cc1 -target-abi purecap -std=c11 -O2 -S -o - %s | FileCheck -check-prefix=ASM %s
-
 int global;
 
 unsigned long sizeof_cap(void) {
@@ -71,8 +70,7 @@ TwoCapsStruct two_caps_struct(TwoCapsStruct in) {
   // CHECK: store i8 addrspace(200)* %in.coerce1, i8 addrspace(200)* addrspace(200)* %t.sroa.4.0..sroa_idx4, align [[$CAP_SIZE]]
   // CHECK: ret void
   // ASM-LABEL: two_caps_struct
-  // ASM:       daddiu  $1, $zero, 1
-  // ASM-NEXT:  cincoffset      $c1, $c4, $1
+  // ASM:       cincoffset      $c1, $c4, 1
   // ASM-NEXT:  csc     $c1, $zero, 0($c3)
   // ASM-NEXT:  cjr     $c17
   // ASM-NEXT:  csc     $c5, $zero, [[$CAP_SIZE]]($c3)
@@ -93,12 +91,12 @@ IntCapSizeUnion intcap_size_union() {
   // CHECK-LABEL: define inreg i8 addrspace(200)* @intcap_size_union() local_unnamed_addr
   // CHECK: ret i8 addrspace(200)* bitcast (i32 addrspace(200)* @global to i8 addrspace(200)*)
   // ASM-LABEL: intcap_size_union
-  // ASM:       ld      $2, %got_disp(.size.global)($1)
-  // ASM-NEXT:  ld      $1, %got_disp(global)($1)
-  // ASM-NEXT:  ld      $2, 0($2)
-  // ASM-NEXT:  cfromptr        $c1, $c0, $1
+  // ASM:       ld      [[SIZE_PTR:\$[0-9]+]], %got_disp(.size.global)($1)
+  // ASM-NEXT:  ld      [[GLOBAL_PTR:\$[0-9]+]], %got_disp(global)($1)
+  // ASM-NEXT:  ld      [[LENGTH:\$[0-9]+]], 0([[SIZE_PTR]])
+  // ASM-NEXT:  cfromptr        $c1, $c0, [[GLOBAL_PTR]]
   // ASM-NEXT:  cjr     $c17
-  // ASM-NEXT:  csetbounds      $c3, $c1, $2
+  // ASM-NEXT:  csetbounds      $c3, $c1, [[LENGTH]]
 }
 
 // Check that a union with size > intcap_t is not returned as a value
@@ -170,8 +168,8 @@ ThreeLongs three_longs() {
   // CHECK-LABEL: define void @three_longs(%struct.ThreeLongs addrspace(200)* noalias nocapture sret %agg.result) local_unnamed_addr
   // ASM-LABEL: three_longs
   // Clang now uses a memcpy from a global
-  // ASM: ld      $1, %got_page(.Lthree_longs.t)($gp)
-  // ASM: ld      $1, %call16(memcpy_c)($gp)
+  // ASM: ld      ${{[0-9]+}}, %got_page(.Lthree_longs.t)($gp)
+  // ASM: ld      ${{[0-9]+}}, %call16(memcpy_c)($gp)
 }
 
 typedef struct {
@@ -192,4 +190,14 @@ IntAndLong int_and_long() {
   // ASM-NEXT:       daddiu  $3, $zero, 3
   IntAndLong t = { 2, 3 };
   return t;
+}
+
+IntAndLong int_and_long2(IntAndLong arg) {
+  // CHECK-LABEL: define inreg { i64, i64 } @int_and_long2(i64 inreg %arg.coerce0, i64 inreg %arg.coerce1) local_unnamed_addr
+  // TODO-ASM: daddiu  $2, $zero, 3
+  // ASM-LABEL: int_and_long2
+  // ASM:     move     $2, $4
+  // ASM-NEXT: cjr     $c17
+  // ASM-NEXT: move     $3, $5
+  return arg;
 }
