@@ -2844,7 +2844,8 @@ bool MipsAsmParser::expandLoadImm(MCInst &Inst, bool Is32BitImm, SMLoc IDLoc,
   int64_t Imm = 0;
   if (ImmOp.isExpr()) {
     const MCExpr *Expr = ImmOp.getExpr();
-    if (!Expr->evaluateAsAbsolute(Imm)) {
+    if (!Expr->evaluateAsAbsolute(Imm, Out)) {
+      Out.getTargetStreamer();
       return Error(IDLoc, "could not evaluate operand as immediate");
     }
   } else {
@@ -5833,7 +5834,7 @@ MipsAsmParser::parseMemOperand(OperandVector &Operands) {
   // Add the memory operand.
   if (const MCBinaryExpr *BE = dyn_cast<MCBinaryExpr>(IdVal)) {
     int64_t Imm;
-    if (IdVal->evaluateAsAbsolute(Imm))
+    if (IdVal->evaluateAsAbsolute(Imm, getStreamer()))
       IdVal = MCConstantExpr::create(Imm, getContext());
     else if (BE->getLHS()->getKind() != MCExpr::SymbolRef)
       IdVal = MCBinaryExpr::create(BE->getOpcode(), BE->getRHS(), BE->getLHS(),
@@ -6949,7 +6950,7 @@ bool MipsAsmParser::parseDirectiveCpRestore(SMLoc Loc) {
     return false;
   }
 
-  if (!StackOffset->evaluateAsAbsolute(StackOffsetVal)) {
+  if (!StackOffset->evaluateAsAbsolute(StackOffsetVal, getStreamer())) {
     reportParseError("stack offset is not an absolute expression");
     return false;
   }
@@ -7007,7 +7008,7 @@ bool MipsAsmParser::parseDirectiveCPSetup() {
     SMLoc ExprLoc = getLexer().getLoc();
 
     if (Parser.parseExpression(OffsetExpr) ||
-        !OffsetExpr->evaluateAsAbsolute(OffsetVal)) {
+        !OffsetExpr->evaluateAsAbsolute(OffsetVal, getStreamer())) {
       reportParseError(ExprLoc, "expected save register or stack offset");
       return false;
     }
@@ -7698,7 +7699,7 @@ bool MipsAsmParser::ParseDirective(AsmToken DirectiveID) {
         reportParseError("expected number after comma");
         return false;
       }
-      if (!DummyNumber->evaluateAsAbsolute(DummyNumberVal)) {
+      if (!DummyNumber->evaluateAsAbsolute(DummyNumberVal, getStreamer())) {
         reportParseError("expected an absolute expression after comma");
         return false;
       }
@@ -7780,7 +7781,7 @@ bool MipsAsmParser::ParseDirective(AsmToken DirectiveID) {
       return false;
     }
 
-    if (!FrameSize->evaluateAsAbsolute(FrameSizeVal)) {
+    if (!FrameSize->evaluateAsAbsolute(FrameSizeVal, getStreamer())) {
       reportParseError("frame size not an absolute expression");
       return false;
     }
@@ -7843,7 +7844,7 @@ bool MipsAsmParser::ParseDirective(AsmToken DirectiveID) {
       return false;
     }
 
-    if (!BitMask->evaluateAsAbsolute(BitMaskVal)) {
+    if (!BitMask->evaluateAsAbsolute(BitMaskVal, getStreamer())) {
       reportParseError("bitmask not an absolute expression");
       return false;
     }
@@ -7864,7 +7865,7 @@ bool MipsAsmParser::ParseDirective(AsmToken DirectiveID) {
       return false;
     }
 
-    if (!FrameOffset->evaluateAsAbsolute(FrameOffsetVal)) {
+    if (!FrameOffset->evaluateAsAbsolute(FrameOffsetVal, getStreamer())) {
       reportParseError("frame offset not an absolute expression");
       return false;
     }

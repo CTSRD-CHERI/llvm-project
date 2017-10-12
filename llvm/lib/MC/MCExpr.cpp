@@ -14,6 +14,7 @@
 #include "llvm/MC/MCAsmLayout.h"
 #include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCObjectStreamer.h"
 #include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCValue.h"
@@ -410,6 +411,16 @@ void MCTargetExpr::anchor() {}
 /* *** */
 
 bool MCExpr::evaluateAsAbsolute(int64_t &Res) const {
+    return evaluateAsAbsolute(Res, nullptr, nullptr, nullptr);
+}
+
+bool MCExpr::evaluateAsAbsolute(int64_t &Res, MCStreamer& Out) const {
+  // XXXAR: LLVM MCStreamer does not support RTTI so we can't cast :(
+#ifdef NOTYET
+  if (MCObjectStreamer *MC = dyn_cast<MCObjectStreamer>(&Out)) {
+    return evaluateAsAbsolute(Res, MCAsmLayout(MC->getAssembler()));
+  }
+#endif
   return evaluateAsAbsolute(Res, nullptr, nullptr, nullptr);
 }
 
