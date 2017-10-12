@@ -174,34 +174,34 @@ def : Pat<(setogt CheriOpnd: $cb, CheriOpnd:$ct), (CLT32 CheriOpnd: $ct, CheriOp
 def : Pat<(setoge CheriOpnd: $cb, CheriOpnd:$ct), (CLE32 CheriOpnd: $ct, CheriOpnd:$cb)>;
 def : Pat<(setolt CheriOpnd: $cb, CheriOpnd:$ct), (CLT32 CheriOpnd: $cb, CheriOpnd:$ct)>;
 def : Pat<(setole CheriOpnd: $cb, CheriOpnd:$ct), (CLE32 CheriOpnd: $cb, CheriOpnd:$ct)>;
-def CCMOVZ : CheriFmt3Op<0x1b, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR64Opnd:$r3, CheriOpnd:$S),
-                         "ccmovz\t$r1, $r2, $r3",
+def CMOVZ : CheriFmt3Op<0x1b, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR64Opnd:$r3, CheriOpnd:$S),
+                         "cmovz\t$r1, $r2, $r3",
                          []> {
   let Constraints = "$S = $r1";
 }
-def CCMOVN : CheriFmt3Op<0x1c, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR64Opnd:$r3, CheriOpnd:$S),
-                         "ccmovn\t$r1, $r2, $r3",
+def CMOVN : CheriFmt3Op<0x1c, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR64Opnd:$r3, CheriOpnd:$S),
+                         "cmovn\t$r1, $r2, $r3",
                          []> {
   let Constraints = "$S = $r1";
 }
 let isCodeGenOnly=1 in {
-def CCMOVZ32 : CheriFmt3Op<0x1b, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR32Opnd:$r3, CheriOpnd:$S),
-                           "ccmovz\t$r1, $r2, $r3",
+def CMOVZ32 : CheriFmt3Op<0x1b, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR32Opnd:$r3, CheriOpnd:$S),
+                           "cmovz\t$r1, $r2, $r3",
                            []> {
   let Constraints = "$S = $r1";
 }
-def CCMOVN32 : CheriFmt3Op<0x1c, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR32Opnd:$r3, CheriOpnd:$S),
-                           "ccmovn\t$r1, $r2, $r3",
+def CMOVN32 : CheriFmt3Op<0x1c, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR32Opnd:$r3, CheriOpnd:$S),
+                           "cmovn\t$r1, $r2, $r3",
                            []> {
   let Constraints = "$S = $r1";
 }
 }
-defm : MovnPats<GPR64, CheriRegs, CCMOVN, XOR64>;
-defm : MovnPats<GPR32, CheriRegs, CCMOVN32, XOR>;
-defm : MovzPats1<GPR64, CheriRegs, CCMOVZ, XOR64>;
-defm : MovzPats2<GPR64, CheriRegs, CCMOVZ, XORi64>;
-defm : MovzPats1<GPR32, CheriRegs, CCMOVZ32, XOR>;
-defm : MovzPats2<GPR32, CheriRegs, CCMOVZ32, XORi>;
+defm : MovnPats<GPR64, CheriRegs, CMOVN, XOR64>;
+defm : MovnPats<GPR32, CheriRegs, CMOVN32, XOR>;
+defm : MovzPats1<GPR64, CheriRegs, CMOVZ, XOR64>;
+defm : MovzPats2<GPR64, CheriRegs, CMOVZ, XORi64>;
+defm : MovzPats1<GPR32, CheriRegs, CMOVZ32, XOR>;
+defm : MovzPats2<GPR32, CheriRegs, CMOVZ32, XORi>;
 
 class CheriPseudo<dag outs, dag ins, string asmstr,
                 list<dag> pattern> :
