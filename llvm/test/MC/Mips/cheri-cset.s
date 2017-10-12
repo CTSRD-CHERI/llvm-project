@@ -19,6 +19,9 @@
 # CHECK: csetbounds	$c1, $c2, 64
 # CHECK: encoding: [0x4a,0x81,0x10,0x40]
 	csetbounds	$c1, $c2, 64
+# CHECK: csetboundsexact	$c1, $c2, $12
+# CHECK-SAME: encoding: [0x48,0x01,0x13,0x09]
+	csetboundsexact	$c1, $c2, $t0
 # CHECK: cincoffset	$c1, $c2, $12
 # CHECK: encoding: [0x48,0x01,0x13,0x11]
 	cincoffset	$c1, $c2, $t0

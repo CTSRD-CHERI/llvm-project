@@ -245,6 +245,10 @@ def CIncOffsetImm : CheriFmtCSetImm<0x13, simm11s0, simm11s0Pattern, "offset", "
 def CAndPerms  : CheriFmtCSet<0xd, "perm", "perms", "and">;
 def CSetOffset : CheriFmtCSet<0xf, "offset">;
 def CSetBounds : CheriFmtCSet<0x8, "bounds">;
+// XXXAR: not entirely sure this is correct but it seems to work
+def CSetBoundsExact : CheriFmt3Op<0x9, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR64Opnd:$r3),
+                              !strconcat("csetboundsexact", "\t$r1, $r2, $r3"),
+                              []>;
 def CIncOffset : CheriFmtCSet<0x11, "offset", "offset", "inc", "increment">;
 def CClearTag  : CheriFmt2Op<0xb, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2), 
                               "ccleartag\t$r1, $r2",
