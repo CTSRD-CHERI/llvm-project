@@ -69,11 +69,6 @@ template <class ELFT> class EhFrameSection final : public SyntheticSection {
   typedef typename ELFT::Rel Elf_Rel;
   typedef typename ELFT::Rela Elf_Rela;
 
-  void updateAlignment(uint64_t Val) {
-    if (Val > this->Alignment)
-      this->Alignment = Val;
-  }
-
 public:
   EhFrameSection();
   void writeTo(uint8_t *Buf) override;
@@ -912,7 +907,8 @@ private:
 template <class ELFT> void createCommonSections();
 InputSection *createInterpSection();
 template <class ELFT> MergeInputSection *createCommentSection();
-void decompressAndMergeSections();
+void decompressSections();
+void mergeSections();
 
 SymbolBody *addSyntheticLocal(StringRef Name, uint8_t Type, uint64_t Value,
                               uint64_t Size, InputSectionBase *Section);

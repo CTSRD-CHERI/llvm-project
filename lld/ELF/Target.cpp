@@ -40,7 +40,7 @@ using namespace lld::elf;
 
 TargetInfo *elf::Target;
 
-std::string lld::toString(uint32_t Type) {
+std::string lld::toString(RelType Type) {
   auto Machine = elf::Config->EMachine;
   if (Machine == EM_MIPS && Type > 0xff) {
     uint32_t Type1 = Type & 0xff;
@@ -131,19 +131,18 @@ std::string elf::getErrorLocation(const uint8_t *Loc) {
 
 TargetInfo::~TargetInfo() {}
 
-int64_t TargetInfo::getImplicitAddend(const uint8_t *Buf, uint32_t Type) const {
+int64_t TargetInfo::getImplicitAddend(const uint8_t *Buf, RelType Type) const {
   return 0;
 }
 
-bool TargetInfo::usesOnlyLowPageBits(uint32_t Type) const { return false; }
+bool TargetInfo::usesOnlyLowPageBits(RelType Type) const { return false; }
 
-bool TargetInfo::needsThunk(RelExpr Expr, uint32_t RelocType,
-                            const InputFile *File, const SymbolBody &S) const {
+bool TargetInfo::needsThunk(RelExpr Expr, RelType Type, const InputFile *File,
+                            const SymbolBody &S) const {
   return false;
 }
 
-bool TargetInfo::inBranchRange(uint32_t RelocType, uint64_t Src,
-                               uint64_t Dst) const {
+bool TargetInfo::inBranchRange(RelType Type, uint64_t Src, uint64_t Dst) const {
   return true;
 }
 
@@ -151,7 +150,7 @@ void TargetInfo::writeIgotPlt(uint8_t *Buf, const SymbolBody &S) const {
   writeGotPlt(Buf, S);
 }
 
-RelExpr TargetInfo::adjustRelaxExpr(uint32_t Type, const uint8_t *Data,
+RelExpr TargetInfo::adjustRelaxExpr(RelType Type, const uint8_t *Data,
                                     RelExpr Expr) const {
   return Expr;
 }
@@ -160,22 +159,29 @@ void TargetInfo::relaxGot(uint8_t *Loc, uint64_t Val) const {
   llvm_unreachable("Should not have claimed to be relaxable");
 }
 
-void TargetInfo::relaxTlsGdToLe(uint8_t *Loc, uint32_t Type,
+void TargetInfo::relaxTlsGdToLe(uint8_t *Loc, RelType Type,
                                 uint64_t Val) const {
   llvm_unreachable("Should not have claimed to be relaxable");
 }
 
-void TargetInfo::relaxTlsGdToIe(uint8_t *Loc, uint32_t Type,
+void TargetInfo::relaxTlsGdToIe(uint8_t *Loc, RelType Type,
                                 uint64_t Val) const {
   llvm_unreachable("Should not have claimed to be relaxable");
 }
 
-void TargetInfo::relaxTlsIeToLe(uint8_t *Loc, uint32_t Type,
+void TargetInfo::relaxTlsIeToLe(uint8_t *Loc, RelType Type,
                                 uint64_t Val) const {
   llvm_unreachable("Should not have claimed to be relaxable");
 }
 
-void TargetInfo::relaxTlsLdToLe(uint8_t *Loc, uint32_t Type,
+void TargetInfo::relaxTlsLdToLe(uint8_t *Loc, RelType Type,
                                 uint64_t Val) const {
   llvm_unreachable("Should not have claimed to be relaxable");
+}
+
+uint64_t TargetInfo::getImageBase() {
+  // Use -image-base if set. Fall back to the target default if not.
+  if (Config->ImageBase)
+    return *Config->ImageBase;
+  return Config->Pic ? 0 : DefaultImageBase;
 }

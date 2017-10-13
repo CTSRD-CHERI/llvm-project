@@ -76,7 +76,7 @@ template <class ELFT> void elf::createCommonSections() {
     // Replace all DefinedCommon symbols with DefinedRegular symbols so that we
     // don't have to care about DefinedCommon symbols beyond this point.
     replaceBody<DefinedRegular>(S, Sym->getFile(), Sym->getName(),
-                                static_cast<bool>(Sym->IsLocal), Sym->StOther,
+                                static_cast<bool>(Sym->isLocal()), Sym->StOther,
                                 Sym->Type, 0, Sym->getSize<ELFT>(), Section);
   }
 }
@@ -595,6 +595,8 @@ uint64_t EhFrameSection<ELFT>::getFdePc(uint8_t *Buf, size_t FdeOff,
 
 template <class ELFT> void EhFrameSection<ELFT>::writeTo(uint8_t *Buf) {
   const endianness E = ELFT::TargetEndianness;
+
+  // Write CIE and FDE records.
   for (CieRecord *Rec : CieRecords) {
     size_t CieOffset = Rec->Cie->OutputOff;
     writeCieFde<ELFT>(Buf + CieOffset, Rec->Cie->data());
@@ -609,6 +611,9 @@ template <class ELFT> void EhFrameSection<ELFT>::writeTo(uint8_t *Buf) {
     }
   }
 
+  // Apply relocations. .eh_frame section contents are not contiguous
+  // in the output buffer, but relocateAlloc() still works because
+  // getOffset() takes care of discontiguous section pieces.
   for (EhInputSection *S : Sections)
     S->relocateAlloc(Buf, nullptr);
 
@@ -690,9 +695,9 @@ void MipsGotSection::addEntry(InputFile &File, SymbolBody &Sym, int64_t Addend,
     G.PageIndexMap.insert({Sym.getOutputSection(), 0});
   else if (Sym.isTls())
     G.Tls.insert({&Sym, 0});
-  else if (Sym.isPreemptible() && Expr == R_ABS)
+  else if (Sym.IsPreemptible && Expr == R_ABS)
     G.Relocs.insert({&Sym, 0});
-  else if (Sym.isPreemptible())
+  else if (Sym.IsPreemptible)
     G.Global.insert({&Sym, 0});
   else if (Expr == R_MIPS_GOT_OFF32)
     G.Local32.insert({{&Sym, Addend}, 0});
@@ -768,7 +773,7 @@ uint64_t MipsGotSection::getBodyEntryOffset(const InputFile &F,
     assert(E != G.Tls.end());
     return E->second * Config->Wordsize;
   }
-  if (B.isPreemptible()) {
+  if (B.IsPreemptible) {
     auto E = G.Global.find(Body);
     assert(E != G.Global.end());
     return E->second * Config->Wordsize;
@@ -847,10 +852,10 @@ template <class ELFT> void MipsGotSection::build() {
   // one if, for example, it gets a related copy relocation.
   for (FileGot &Got : Gots) {
     for (auto &P: Got.Global)
-      if (!P.first->isPreemptible())
+      if (!P.first->IsPreemptible)
         Got.Local16.insert({{P.first, 0}, 0});
     Got.Global.remove_if([&](const std::pair<SymbolBody *, size_t> &P) {
-      return !P.first->isPreemptible();
+      return !P.first->IsPreemptible;
     });
   }
 
@@ -936,7 +941,7 @@ template <class ELFT> void MipsGotSection::build() {
     // Create dynamic relocations for TLS entries.
     for (std::pair<SymbolBody *, size_t> &P : Got.Tls) {
       uint64_t Offset = P.second * Config->Wordsize;
-      if (P.first->isPreemptible())
+      if (P.first->IsPreemptible)
         In<ELFT>::RelaDyn->addReloc(
             {Target->TlsGotRel, this, Offset, false, P.first, 0});
     }
@@ -950,15 +955,15 @@ template <class ELFT> void MipsGotSection::build() {
       } else {
         // When building a shared library we still need a dynamic relocation
         // for the module index. Therefore only checking for
-        // P.first->isPreemptible() is not sufficient (This happens e.g. for
+        // P.first->IsPreemptible is not sufficient (This happens e.g. for
         // thread-locals that have been marked as local through a linker script)
-        if (!P.first->isPreemptible() && !Config->Pic)
+        if (!P.first->IsPreemptible && !Config->Pic)
           continue;
         In<ELFT>::RelaDyn->addReloc(
             {Target->TlsModuleIndexRel, this, Offset, false, P.first, 0});
         // Even in shared libraries we can skip writing the TLS offset reloc
         // for non-preemptible symbols
-        if (!P.first->isPreemptible())
+        if (!P.first->IsPreemptible)
           continue;
         Offset += Config->Wordsize;
         In<ELFT>::RelaDyn->addReloc(
@@ -1072,14 +1077,14 @@ void MipsGotSection::writeTo(uint8_t *Buf) {
     for (const std::pair<SymbolBody *, size_t> &P : G.Tls) {
       uint8_t *Addr = Buf + P.second * Config->Wordsize;
       uint64_t VA = P.first->getVA();
-      writeUint(Addr, P.first->isPreemptible() ? VA : VA - 0x7000);
+      writeUint(Addr, P.first->IsPreemptible ? VA : VA - 0x7000);
     }
     for (const std::pair<SymbolBody *, size_t> &P : G.DynTlsSymbols) {
       if (P.first == nullptr) {
         if (!Config->Pic)
           writeUint(Buf + P.second * Config->Wordsize, 1);
       } else {
-        if (!P.first->isPreemptible()) {
+        if (!P.first->IsPreemptible) {
           uint8_t *Addr = Buf + P.second * Config->Wordsize;
           // If we are emitting PIC code with relocations we mustn't write
           // anything to the GOT here. When using Elf_Rel relocations the
@@ -1333,7 +1338,7 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
   if (Config->EMachine == EM_MIPS) {
     add({DT_MIPS_RLD_VERSION, 1});
     add({DT_MIPS_FLAGS, RHF_NOTPOT});
-    add({DT_MIPS_BASE_ADDRESS, Config->ImageBase});
+    add({DT_MIPS_BASE_ADDRESS, Target->getImageBase()});
     add({DT_MIPS_SYMTABNO, InX::DynSymTab->getNumSymbols()});
     add({DT_MIPS_LOCAL_GOTNO, InX::MipsGot->getLocalEntriesNum()});
     if (const SymbolBody *B = InX::MipsGot->getFirstGlobalEntry())
@@ -1454,8 +1459,10 @@ template <class ELFT> unsigned RelocationSection<ELFT>::getRelocOffset() {
 }
 
 template <class ELFT> void RelocationSection<ELFT>::finalizeContents() {
-  this->Link = InX::DynSymTab ? InX::DynSymTab->getParent()->SectionIndex
-                              : InX::SymTab->getParent()->SectionIndex;
+  // If all relocations are *RELATIVE they don't refer to any
+  // dynamic symbol and we don't need a dynamic symbol table. If that
+  // is the case, just use 0 as the link.
+  this->Link = InX::DynSymTab ? InX::DynSymTab->getParent()->SectionIndex : 0;
 
   // Set required output section properties.
   getParent()->Link = this->Link;
@@ -1999,6 +2006,7 @@ std::vector<std::vector<uint32_t>> GdbIndexSection::createCuVectors() {
 }
 
 template <class ELFT> GdbIndexSection *elf::createGdbIndex() {
+  // Gather debug info to create a .gdb_index section.
   std::vector<InputSection *> Sections = getDebugInfoSections();
   std::vector<GdbIndexChunk> Chunks(Sections.size());
 
@@ -2012,6 +2020,14 @@ template <class ELFT> GdbIndexSection *elf::createGdbIndex() {
     Chunks[I].NamesAndTypes = readPubNamesAndTypes(Dwarf);
   });
 
+  // .debug_gnu_pub{names,types} are useless in executables.
+  // They are present in input object files solely for creating
+  // a .gdb_index. So we can remove it from the output.
+  for (InputSectionBase *S : InputSections)
+    if (S->Name == ".debug_gnu_pubnames" || S->Name == ".debug_gnu_pubtypes")
+      S->Live = false;
+
+  // Create a .gdb_index and returns it.
   return make<GdbIndexSection>(std::move(Chunks));
 }
 
@@ -2464,21 +2480,28 @@ static MergeSyntheticSection *createMergeSynthetic(StringRef Name,
   return make<MergeNoTailSection>(Name, Type, Flags, Alignment);
 }
 
-// This function decompresses compressed sections and scans over the input
-// sections to create mergeable synthetic sections. It removes
-// MergeInputSections from the input section array and adds new synthetic
-// sections at the location of the first input section that it replaces. It then
-// finalizes each synthetic section in order to compute an output offset for
-// each piece of each input section.
-void elf::decompressAndMergeSections() {
-  // splitIntoPieces needs to be called on each MergeInputSection before calling
-  // finalizeContents(). Do that first.
-  parallelForEach(InputSections, [](InputSectionBase *S) {
-    if (!S->Live)
-      return;
-    S->maybeUncompress();
-    if (auto *MS = dyn_cast<MergeInputSection>(S))
-      MS->splitIntoPieces();
+// Debug sections may be compressed by zlib. Uncompress if exists.
+void elf::decompressSections() {
+  parallelForEach(InputSections, [](InputSectionBase *Sec) {
+    if (Sec->Live)
+      Sec->maybeUncompress();
+  });
+}
+
+// This function scans over the inputsections to create mergeable
+// synthetic sections.
+//
+// It removes MergeInputSections from the input section array and adds
+// new synthetic sections at the location of the first input section
+// that it replaces. It then finalizes each synthetic section in order
+// to compute an output offset for each piece of each input section.
+void elf::mergeSections() {
+  // splitIntoPieces needs to be called on each MergeInputSection
+  // before calling finalizeContents(). Do that first.
+  parallelForEach(InputSections, [](InputSectionBase *Sec) {
+    if (Sec->Live)
+      if (auto *S = dyn_cast<MergeInputSection>(Sec))
+        S->splitIntoPieces();
   });
 
   std::vector<MergeSyntheticSection *> MergeSections;
@@ -2537,10 +2560,11 @@ void ARMExidxSentinelSection::writeTo(uint8_t *Buf) {
   // sentinel. By construction the Sentinel is in the last
   // InputSectionDescription as the InputSection that precedes it.
   OutputSection *C = getParent();
-  auto ISD = std::find_if(C->Commands.rbegin(), C->Commands.rend(),
-                          [](const BaseCommand *Base) {
-                            return isa<InputSectionDescription>(Base);
-                          });
+  auto ISD =
+      std::find_if(C->SectionCommands.rbegin(), C->SectionCommands.rend(),
+                   [](const BaseCommand *Base) {
+                     return isa<InputSectionDescription>(Base);
+                   });
   auto L = cast<InputSectionDescription>(*ISD);
   InputSection *Highest = L->Sections[L->Sections.size() - 2];
   InputSection *LS = Highest->getLinkOrderDep();

@@ -184,7 +184,7 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
       continue;
     }
     bool TargetNeedsDynReloc = false;
-    if (TargetSym.isPreemptible()) {
+    if (TargetSym.IsPreemptible) {
       // Do we need this?
       // TargetNeedsDynReloc = true;
     }
@@ -275,7 +275,7 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     // Also this would make llvm-objdump -C more useful because it would
     // actually display the symbol that the relocation is against
     uint64_t TargetVA = Reloc.Target.Symbol->getVA(Reloc.Target.Offset);
-    if (Reloc.NeedsDynReloc && Reloc.Target.Symbol->isPreemptible()) {
+    if (Reloc.NeedsDynReloc && Reloc.Target.Symbol->IsPreemptible) {
       // If we have a relocation against a preemptible symbol (even in the
       // current DSO) we can't compute the virtual address here so we only write
       // the addend

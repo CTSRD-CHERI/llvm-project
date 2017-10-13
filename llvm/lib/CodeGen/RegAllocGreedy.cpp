@@ -30,7 +30,7 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Analysis/AliasAnalysis.h"
-#include "llvm/Analysis/OptimizationDiagnosticInfo.h"
+#include "llvm/Analysis/OptimizationRemarkEmitter.h"
 #include "llvm/CodeGen/CalcSpillWeights.h"
 #include "llvm/CodeGen/EdgeBundles.h"
 #include "llvm/CodeGen/LiveInterval.h"
@@ -2717,17 +2717,20 @@ void RAGreedy::reportNumberOfSplillsReloads(MachineLoop *L, unsigned &Reloads,
   if (Reloads || FoldedReloads || Spills || FoldedSpills) {
     using namespace ore;
 
-    MachineOptimizationRemarkMissed R(DEBUG_TYPE, "LoopSpillReload",
-                                      L->getStartLoc(), L->getHeader());
-    if (Spills)
-      R << NV("NumSpills", Spills) << " spills ";
-    if (FoldedSpills)
-      R << NV("NumFoldedSpills", FoldedSpills) << " folded spills ";
-    if (Reloads)
-      R << NV("NumReloads", Reloads) << " reloads ";
-    if (FoldedReloads)
-      R << NV("NumFoldedReloads", FoldedReloads) << " folded reloads ";
-    ORE->emit(R << "generated in loop");
+    ORE->emit([&]() {
+      MachineOptimizationRemarkMissed R(DEBUG_TYPE, "LoopSpillReload",
+                                        L->getStartLoc(), L->getHeader());
+      if (Spills)
+        R << NV("NumSpills", Spills) << " spills ";
+      if (FoldedSpills)
+        R << NV("NumFoldedSpills", FoldedSpills) << " folded spills ";
+      if (Reloads)
+        R << NV("NumReloads", Reloads) << " reloads ";
+      if (FoldedReloads)
+        R << NV("NumFoldedReloads", FoldedReloads) << " folded reloads ";
+      R << "generated in loop";
+      return R;
+    });
   }
 }
 
