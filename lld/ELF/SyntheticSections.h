@@ -380,38 +380,6 @@ private:
   std::vector<StringRef> Strings;
 };
 
-class DynamicReloc {
-public:
-  DynamicReloc(uint32_t Type, const InputSectionBase *InputSec,
-               uint64_t OffsetInSec, bool UseSymVA, SymbolBody *Sym,
-               int64_t Addend)
-      : Type(Type), Sym(Sym), InputSec(InputSec), OffsetInSec(OffsetInSec),
-        UseSymVA(UseSymVA), Addend(Addend), OutputSec(nullptr) {}
-  // This constructor records dynamic relocation settings used by MIPS
-  // multi-GOT implementation. It's to relocate addresses of 64kb pages
-  // lie inside the output section.
-  DynamicReloc(uint32_t Type, const InputSectionBase *InputSec,
-               uint64_t  OffsetInSec, const OutputSection *OutputSec,
-               int64_t Addend)
-      : Type(Type), Sym(nullptr), InputSec(InputSec), OffsetInSec(OffsetInSec),
-        UseSymVA(false), Addend(Addend), OutputSec(OutputSec) {}
-
-  uint64_t getOffset() const;
-  int64_t getAddend() const;
-  uint32_t getSymIndex() const;
-  const InputSectionBase *getInputSec() const { return InputSec; }
-
-  uint32_t Type;
-
-private:
-  SymbolBody *Sym;
-  const InputSectionBase *InputSec = nullptr;
-  uint64_t OffsetInSec;
-  bool UseSymVA;
-  int64_t Addend;
-  const OutputSection *OutputSec;
-};
-
 template <class ELFT> class DynamicSection final : public SyntheticSection {
   typedef typename ELFT::Dyn Elf_Dyn;
   typedef typename ELFT::Rel Elf_Rel;
