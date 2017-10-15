@@ -1954,7 +1954,7 @@ SDValue DAGTypeLegalizer::SplitVecOp_MSCATTER(MaskedScatterSDNode *N,
   else
     std::tie(IndexLo, IndexHi) = DAG.SplitVector(Index, DL);
 
-  SDValue Lo, Hi;
+  SDValue Lo;
   MachineMemOperand *MMO = DAG.getMachineFunction().
     getMachineMemOperand(N->getPointerInfo(),
                          MachineMemOperand::MOStore, LoMemVT.getStoreSize(),

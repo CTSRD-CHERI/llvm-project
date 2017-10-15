@@ -41,9 +41,10 @@ using namespace llvm;
 
 #define DEBUG_TYPE "WinCOFFStreamer"
 
-MCWinCOFFStreamer::MCWinCOFFStreamer(MCContext &Context, MCAsmBackend &MAB,
+MCWinCOFFStreamer::MCWinCOFFStreamer(MCContext &Context,
+                                     std::unique_ptr<MCAsmBackend> MAB,
                                      MCCodeEmitter &CE, raw_pwrite_stream &OS)
-    : MCObjectStreamer(Context, MAB, OS, &CE), CurSymbol(nullptr) {}
+    : MCObjectStreamer(Context, std::move(MAB), OS, &CE), CurSymbol(nullptr) {}
 
 void MCWinCOFFStreamer::EmitInstToData(const MCInst &Inst,
                                        const MCSubtargetInfo &STI) {
@@ -285,7 +286,7 @@ void MCWinCOFFStreamer::EmitIdent(StringRef IdentString) {
   llvm_unreachable("not implemented");
 }
 
-void MCWinCOFFStreamer::EmitWinEHHandlerData() {
+void MCWinCOFFStreamer::EmitWinEHHandlerData(SMLoc Loc) {
   llvm_unreachable("not implemented");
 }
 

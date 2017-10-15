@@ -329,7 +329,7 @@ namespace {
     SDValue visitSIGN_EXTEND(SDNode *N);
     SDValue visitZERO_EXTEND(SDNode *N);
     SDValue visitANY_EXTEND(SDNode *N);
-    SDValue visitAssertZext(SDNode *N);
+    SDValue visitAssertExt(SDNode *N);
     SDValue visitSIGN_EXTEND_INREG(SDNode *N);
     SDValue visitSIGN_EXTEND_VECTOR_INREG(SDNode *N);
     SDValue visitZERO_EXTEND_VECTOR_INREG(SDNode *N);
@@ -416,6 +416,7 @@ namespace {
     SDValue CombineConsecutiveLoads(SDNode *N, EVT VT);
     SDValue CombineExtLoad(SDNode *N);
     SDValue combineRepeatedFPDivisors(SDNode *N);
+    SDValue combineInsertEltToShuffle(SDNode *N, unsigned InsIndex);
     SDValue ConstantFoldBITCASTofBUILD_VECTOR(SDNode *, EVT);
     SDValue BuildSDIV(SDNode *N);
     SDValue BuildSDIVPow2(SDNode *N);
@@ -1555,7 +1556,8 @@ SDValue DAGCombiner::visit(SDNode *N) {
   case ISD::SIGN_EXTEND:        return visitSIGN_EXTEND(N);
   case ISD::ZERO_EXTEND:        return visitZERO_EXTEND(N);
   case ISD::ANY_EXTEND:         return visitANY_EXTEND(N);
-  case ISD::AssertZext:         return visitAssertZext(N);
+  case ISD::AssertSext:
+  case ISD::AssertZext:         return visitAssertExt(N);
   case ISD::SIGN_EXTEND_INREG:  return visitSIGN_EXTEND_INREG(N);
   case ISD::SIGN_EXTEND_VECTOR_INREG: return visitSIGN_EXTEND_VECTOR_INREG(N);
   case ISD::ZERO_EXTEND_VECTOR_INREG: return visitZERO_EXTEND_VECTOR_INREG(N);
@@ -7986,20 +7988,19 @@ SDValue DAGCombiner::visitANY_EXTEND(SDNode *N) {
   return SDValue();
 }
 
-// TODO: These transforms should work with AssertSext too.
-// Change the function name, comments, opcode references, and caller.
-SDValue DAGCombiner::visitAssertZext(SDNode *N) {
+SDValue DAGCombiner::visitAssertExt(SDNode *N) {
+  unsigned Opcode = N->getOpcode();
   SDValue N0 = N->getOperand(0);
   SDValue N1 = N->getOperand(1);
   EVT AssertVT = cast<VTSDNode>(N1)->getVT();
 
-  // fold (assertzext (assertzext x, vt), vt) -> (assertzext x, vt)
-  if (N0.getOpcode() == ISD::AssertZext &&
+  // fold (assert?ext (assert?ext x, vt), vt) -> (assert?ext x, vt)
+  if (N0.getOpcode() == Opcode &&
       AssertVT == cast<VTSDNode>(N0.getOperand(1))->getVT())
     return N0;
 
   if (N0.getOpcode() == ISD::TRUNCATE && N0.hasOneUse() &&
-      N0.getOperand(0).getOpcode() == ISD::AssertZext) {
+      N0.getOperand(0).getOpcode() == Opcode) {
     // We have an assert, truncate, assert sandwich. Make one stronger assert
     // by asserting on the smallest asserted type to the larger source type.
     // This eliminates the later assert:
@@ -8008,13 +8009,13 @@ SDValue DAGCombiner::visitAssertZext(SDNode *N) {
     SDValue BigA = N0.getOperand(0);
     EVT BigA_AssertVT = cast<VTSDNode>(BigA.getOperand(1))->getVT();
     assert(BigA_AssertVT.bitsLE(N0.getValueType()) &&
-           "Asserting zero/sign-extended bits from a type larger than the "
+           "Asserting zero/sign-extended bits to a type larger than the "
            "truncated destination does not provide information");
 
     SDLoc DL(N);
     EVT MinAssertVT = AssertVT.bitsLT(BigA_AssertVT) ? AssertVT : BigA_AssertVT;
     SDValue MinAssertVTVal = DAG.getValueType(MinAssertVT);
-    SDValue NewAssert = DAG.getNode(ISD::AssertZext, DL, BigA.getValueType(),
+    SDValue NewAssert = DAG.getNode(Opcode, DL, BigA.getValueType(),
                                     BigA.getOperand(0), MinAssertVTVal);
     return DAG.getNode(ISD::TRUNCATE, DL, N->getValueType(0), NewAssert);
   }
@@ -13756,6 +13757,60 @@ SDValue DAGCombiner::splitMergedValStore(StoreSDNode *ST) {
   return St1;
 }
 
+/// Convert a disguised subvector insertion into a shuffle:
+/// insert_vector_elt V, (bitcast X from vector type), IdxC -->
+/// bitcast(shuffle (bitcast V), (extended X), Mask)
+/// Note: We do not use an insert_subvector node because that requires a legal
+/// subvector type.
+SDValue DAGCombiner::combineInsertEltToShuffle(SDNode *N, unsigned InsIndex) {
+  SDValue InsertVal = N->getOperand(1);
+  if (InsertVal.getOpcode() != ISD::BITCAST || !InsertVal.hasOneUse() ||
+      !InsertVal.getOperand(0).getValueType().isVector())
+    return SDValue();
+
+  SDValue SubVec = InsertVal.getOperand(0);
+  SDValue DestVec = N->getOperand(0);
+  EVT SubVecVT = SubVec.getValueType();
+  EVT VT = DestVec.getValueType();
+  unsigned NumSrcElts = SubVecVT.getVectorNumElements();
+  unsigned ExtendRatio = VT.getSizeInBits() / SubVecVT.getSizeInBits();
+  unsigned NumMaskVals = ExtendRatio * NumSrcElts;
+
+  // Step 1: Create a shuffle mask that implements this insert operation. The
+  // vector that we are inserting into will be operand 0 of the shuffle, so
+  // those elements are just 'i'. The inserted subvector is in the first
+  // positions of operand 1 of the shuffle. Example:
+  // insert v4i32 V, (v2i16 X), 2 --> shuffle v8i16 V', X', {0,1,2,3,8,9,6,7}
+  SmallVector<int, 16> Mask(NumMaskVals);
+  for (unsigned i = 0; i != NumMaskVals; ++i) {
+    if (i / NumSrcElts == InsIndex)
+      Mask[i] = (i % NumSrcElts) + NumMaskVals;
+    else
+      Mask[i] = i;
+  }
+
+  // Bail out if the target can not handle the shuffle we want to create.
+  EVT SubVecEltVT = SubVecVT.getVectorElementType();
+  EVT ShufVT = EVT::getVectorVT(*DAG.getContext(), SubVecEltVT, NumMaskVals);
+  if (!TLI.isShuffleMaskLegal(Mask, ShufVT))
+    return SDValue();
+
+  // Step 2: Create a wide vector from the inserted source vector by appending
+  // undefined elements. This is the same size as our destination vector.
+  SDLoc DL(N);
+  SmallVector<SDValue, 8> ConcatOps(ExtendRatio, DAG.getUNDEF(SubVecVT));
+  ConcatOps[0] = SubVec;
+  SDValue PaddedSubV = DAG.getNode(ISD::CONCAT_VECTORS, DL, ShufVT, ConcatOps);
+
+  // Step 3: Shuffle in the padded subvector.
+  SDValue DestVecBC = DAG.getBitcast(ShufVT, DestVec);
+  SDValue Shuf = DAG.getVectorShuffle(ShufVT, DL, DestVecBC, PaddedSubV, Mask);
+  AddToWorklist(PaddedSubV.getNode());
+  AddToWorklist(DestVecBC.getNode());
+  AddToWorklist(Shuf.getNode());
+  return DAG.getBitcast(VT, Shuf);
+}
+
 SDValue DAGCombiner::visitINSERT_VECTOR_ELT(SDNode *N) {
   SDValue InVec = N->getOperand(0);
   SDValue InVal = N->getOperand(1);
@@ -13774,10 +13829,14 @@ SDValue DAGCombiner::visitINSERT_VECTOR_ELT(SDNode *N) {
       InVec == InVal.getOperand(0) && EltNo == InVal.getOperand(1))
     return InVec;
 
-  // Check that we know which element is being inserted
-  if (!isa<ConstantSDNode>(EltNo))
+  // We must know which element is being inserted for folds below here.
+  auto *IndexC = dyn_cast<ConstantSDNode>(EltNo);
+  if (!IndexC)
     return SDValue();
-  unsigned Elt = cast<ConstantSDNode>(EltNo)->getZExtValue();
+  unsigned Elt = IndexC->getZExtValue();
+
+  if (SDValue Shuf = combineInsertEltToShuffle(N, Elt))
+    return Shuf;
 
   // Canonicalize insert_vector_elt dag nodes.
   // Example:
@@ -15575,6 +15634,9 @@ static SDValue combineShuffleToVectorExtend(ShuffleVectorSDNode *SVN,
   // Attempt to match a '*_extend_vector_inreg' shuffle, we just search for
   // power-of-2 extensions as they are the most likely.
   for (unsigned Scale = 2; Scale < NumElts; Scale *= 2) {
+    // Check for non power of 2 vector sizes
+    if (NumElts % Scale != 0)
+      continue;
     if (!isAnyExtend(Scale))
       continue;
 

@@ -1131,7 +1131,7 @@ LValue CGOpenMPTaskOutlinedRegionInfo::getThreadIDVariableLValue(
     CodeGenFunction &CGF) {
   return CGF.MakeAddrLValue(CGF.GetAddrOfLocalVar(getThreadIDVariable()),
                             getThreadIDVariable()->getType(),
-                            LValueBaseInfo(AlignmentSource::Decl, false));
+                            AlignmentSource::Decl);
 }
 
 CGOpenMPRuntime::CGOpenMPRuntime(CodeGenModule &CGM)
@@ -6886,9 +6886,6 @@ void CGOpenMPRuntime::emitTargetCall(CodeGenFunction &CGF,
   for (CapturedStmt::const_capture_iterator CI = CS.capture_begin(),
                                             CE = CS.capture_end();
        CI != CE; ++CI, ++RI, ++CV) {
-    StringRef Name;
-    QualType Ty;
-
     CurBasePointers.clear();
     CurPointers.clear();
     CurSizes.clear();

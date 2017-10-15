@@ -227,8 +227,10 @@ class WasmObjectWriter : public MCObjectWriter {
   void endSection(SectionBookkeeping &Section);
 
 public:
-  WasmObjectWriter(MCWasmObjectTargetWriter *MOTW, raw_pwrite_stream &OS)
-      : MCObjectWriter(OS, /*IsLittleEndian=*/true), TargetObjectWriter(MOTW) {}
+  WasmObjectWriter(std::unique_ptr<MCWasmObjectTargetWriter> MOTW,
+                   raw_pwrite_stream &OS)
+      : MCObjectWriter(OS, /*IsLittleEndian=*/true),
+        TargetObjectWriter(std::move(MOTW)) {}
 
 private:
   ~WasmObjectWriter() override;
@@ -1315,7 +1317,11 @@ void WasmObjectWriter::writeObject(MCAssembler &Asm,
   // TODO: Translate debug sections to the output.
 }
 
-MCObjectWriter *llvm::createWasmObjectWriter(MCWasmObjectTargetWriter *MOTW,
-                                             raw_pwrite_stream &OS) {
-  return new WasmObjectWriter(MOTW, OS);
+std::unique_ptr<MCObjectWriter>
+llvm::createWasmObjectWriter(std::unique_ptr<MCWasmObjectTargetWriter> MOTW,
+                             raw_pwrite_stream &OS) {
+  // FIXME: Can't use make_unique<WasmObjectWriter>(...) as WasmObjectWriter's
+  //        destructor is private. Is that necessary?
+  return std::unique_ptr<MCObjectWriter>(
+      new WasmObjectWriter(std::move(MOTW), OS));
 }
