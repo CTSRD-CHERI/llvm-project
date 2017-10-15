@@ -205,7 +205,7 @@ void SymbolTable::applySymbolRenames() {
 
     Symbol *Real = &Origs[I];
     // If __real_foo was undefined, we don't want it in the symbol table.
-    if (Real->body()->isUndefined())
+    if (!Real->body()->isInCurrentDSO())
       continue;
 
     auto *NewSym = make<Symbol>();
@@ -509,8 +509,8 @@ void SymbolTable::addShared(StringRef Name, SharedFile<ELFT> *File,
   SymbolBody *Body = S->body();
   // An undefined symbol with non default visibility must be satisfied
   // in the same DSO.
-  if (WasInserted ||
-      (isa<Undefined>(Body) && Body->getVisibility() == STV_DEFAULT)) {
+  if (WasInserted || ((Body->isUndefined() || Body->isLazy()) &&
+                      Body->getVisibility() == STV_DEFAULT)) {
     replaceBody<SharedSymbol>(S, File, Name, Sym.st_other, Sym.getType(), &Sym,
                               Verdef);
     if (!S->isWeak())
@@ -659,7 +659,7 @@ StringMap<std::vector<SymbolBody *>> &SymbolTable::getDemangledSyms() {
     DemangledSyms.emplace();
     for (Symbol *Sym : SymVector) {
       SymbolBody *B = Sym->body();
-      if (B->isUndefined())
+      if (!B->isInCurrentDSO())
         continue;
       if (Optional<std::string> S = demangle(B->getName()))
         (*DemangledSyms)[*S].push_back(B);
@@ -674,7 +674,7 @@ std::vector<SymbolBody *> SymbolTable::findByVersion(SymbolVersion Ver) {
   if (Ver.IsExternCpp)
     return getDemangledSyms().lookup(Ver.Name);
   if (SymbolBody *B = find(Ver.Name))
-    if (!B->isUndefined())
+    if (B->isInCurrentDSO())
       return {B};
   return {};
 }
@@ -692,7 +692,7 @@ std::vector<SymbolBody *> SymbolTable::findAllByVersion(SymbolVersion Ver) {
 
   for (Symbol *Sym : SymVector) {
     SymbolBody *B = Sym->body();
-    if (!B->isUndefined() && M.match(B->getName()))
+    if (B->isInCurrentDSO() && M.match(B->getName()))
       Res.push_back(B);
   }
   return Res;

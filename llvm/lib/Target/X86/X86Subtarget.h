@@ -193,9 +193,6 @@ protected:
   /// Processor has Prefetch with intent to Write instruction
   bool HasPFPREFETCHWT1;
 
-  /// True if BT (bit test) of memory instructions are slow.
-  bool IsBTMemSlow;
-
   /// True if SHLD instructions are slow.
   bool IsSHLDSlow;
 
@@ -489,7 +486,6 @@ public:
   bool hasLAHFSAHF() const { return HasLAHFSAHF; }
   bool hasMWAITX() const { return HasMWAITX; }
   bool hasCLZERO() const { return HasCLZERO; }
-  bool isBTMemSlow() const { return IsBTMemSlow; }
   bool isSHLDSlow() const { return IsSHLDSlow; }
   bool isPMULLDSlow() const { return IsPMULLDSlow; }
   bool isUnalignedMem16Slow() const { return IsUAMem16Slow; }
@@ -592,13 +588,9 @@ public:
 
   bool isOSWindows() const { return TargetTriple.isOSWindows(); }
 
-  bool isTargetWin64() const {
-    return In64BitMode && TargetTriple.isOSWindows();
-  }
+  bool isTargetWin64() const { return In64BitMode && isOSWindows(); }
 
-  bool isTargetWin32() const {
-    return !In64BitMode && (isTargetCygMing() || isTargetKnownWindowsMSVC());
-  }
+  bool isTargetWin32() const { return !In64BitMode && isOSWindows(); }
 
   bool isPICStyleGOT() const { return PICStyle == PICStyles::GOT; }
   bool isPICStyleRIPRel() const { return PICStyle == PICStyles::RIPRel; }

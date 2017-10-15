@@ -6093,7 +6093,7 @@ bool LLParser::ParseCall(Instruction *&Inst, PerFunctionState &PFS,
 
 /// ParseAlloc
 ///   ::= 'alloca' 'inalloca'? 'swifterror'? Type (',' TypeAndValue)?
-///       (',' 'align' i32)?
+///       (',' 'align' i32)? (',', 'addrspace(n))?
 int LLParser::ParseAlloc(Instruction *&Inst, PerFunctionState &PFS) {
   Value *Size = nullptr;
   LocTy SizeLoc, TyLoc, ASLoc;
@@ -6123,10 +6123,22 @@ int LLParser::ParseAlloc(Instruction *&Inst, PerFunctionState &PFS) {
     } else if (Lex.getKind() == lltok::MetadataVar) {
       AteExtraComma = true;
     } else {
-      if (ParseTypeAndValue(Size, SizeLoc, PFS) ||
-          ParseOptionalCommaAlign(Alignment, AteExtraComma) ||
-          ParseOptionalCommaAddrSpace(AddrSpace, ASLoc, AteExtraComma))
+      if (ParseTypeAndValue(Size, SizeLoc, PFS))
         return true;
+      if (EatIfPresent(lltok::comma)) {
+        if (Lex.getKind() == lltok::kw_align) {
+          if (ParseOptionalAlignment(Alignment))
+            return true;
+          if (ParseOptionalCommaAddrSpace(AddrSpace, ASLoc, AteExtraComma))
+            return true;
+        } else if (Lex.getKind() == lltok::kw_addrspace) {
+          ASLoc = Lex.getLoc();
+          if (ParseOptionalAddrSpace(AddrSpace))
+            return true;
+        } else if (Lex.getKind() == lltok::MetadataVar) {
+          AteExtraComma = true;
+        }
+      }
     }
   }
 

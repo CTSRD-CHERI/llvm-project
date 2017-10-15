@@ -15,12 +15,10 @@
 
 #if !SCUDO_TSD_EXCLUSIVE
 
-#include <pthread.h>
-
 namespace __scudo {
 
 static pthread_once_t GlobalInitialized = PTHREAD_ONCE_INIT;
-static pthread_key_t PThreadKey;
+pthread_key_t PThreadKey;
 
 static atomic_uint32_t CurrentIndex;
 static ScudoTSD *TSDs;
@@ -34,10 +32,6 @@ static uptr getNumberOfCPUs() {
 }
 
 static void initOnce() {
-  // Hack: TLS_SLOT_TSAN was introduced in N. To be able to use it on M for
-  // testing, we create an unused key. Since the key_data array follows the tls
-  // array, it basically gives us the extra entry we need.
-  // TODO(kostyak): remove and restrict to N and above.
   CHECK_EQ(pthread_key_create(&PThreadKey, NULL), 0);
   initScudo();
   NumberOfTSDs = getNumberOfCPUs();
@@ -51,12 +45,19 @@ static void initOnce() {
     TSDs[i].init(/*Shared=*/true);
 }
 
+ALWAYS_INLINE void setCurrentTSD(ScudoTSD *TSD) {
+#if SANITIZER_ANDROID
+  *get_android_tls_ptr() = reinterpret_cast<uptr>(TSD);
+#else
+  CHECK_EQ(pthread_setspecific(PThreadKey, reinterpret_cast<void *>(TSD)), 0);
+#endif  // SANITIZER_ANDROID
+}
+
 void initThread(bool MinimalInit) {
   pthread_once(&GlobalInitialized, initOnce);
   // Initial context assignment is done in a plain round-robin fashion.
   u32 Index = atomic_fetch_add(&CurrentIndex, 1, memory_order_relaxed);
-  ScudoTSD *TSD = &TSDs[Index % NumberOfTSDs];
-  *get_android_tls_ptr() = reinterpret_cast<uptr>(TSD);
+  setCurrentTSD(&TSDs[Index % NumberOfTSDs]);
 }
 
 ScudoTSD *getTSDAndLockSlow() {
@@ -66,7 +67,7 @@ ScudoTSD *getTSDAndLockSlow() {
     for (u32 i = 0; i < NumberOfTSDs; i++) {
       TSD = &TSDs[i];
       if (TSD->tryLock()) {
-        *get_android_tls_ptr() = reinterpret_cast<uptr>(TSD);
+        setCurrentTSD(TSD);
         return TSD;
       }
     }
@@ -81,12 +82,12 @@ ScudoTSD *getTSDAndLockSlow() {
     }
     if (LIKELY(LowestPrecedence != UINT64_MAX)) {
       TSD->lock();
-      *get_android_tls_ptr() = reinterpret_cast<uptr>(TSD);
+      setCurrentTSD(TSD);
       return TSD;
     }
   }
   // Last resort, stick with the current one.
-  TSD = reinterpret_cast<ScudoTSD *>(*get_android_tls_ptr());
+  TSD = getCurrentTSD();
   TSD->lock();
   return TSD;
 }
