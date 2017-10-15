@@ -169,7 +169,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
           // into the memory operation
           if (tryToFoldAdd(Op, MI.getOperand(1).getReg(), RI, AddInst, offset)) {
             Adds.insert(AddInst);
-            MI.getOperand(1).setImm(offset);
+            MI.getOperand(2).setImm(offset);
             MI.getOperand(1).setReg(Mips::ZERO_64);
           } else
             continue;
