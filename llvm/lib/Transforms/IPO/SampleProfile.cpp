@@ -30,7 +30,7 @@
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/InlineCost.h"
 #include "llvm/Analysis/LoopInfo.h"
-#include "llvm/Analysis/OptimizationDiagnosticInfo.h"
+#include "llvm/Analysis/OptimizationRemarkEmitter.h"
 #include "llvm/Analysis/PostDominators.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/IR/Constants.h"
@@ -171,7 +171,7 @@ protected:
   ErrorOr<uint64_t> getBlockWeight(const BasicBlock *BB);
   const FunctionSamples *findCalleeFunctionSamples(const Instruction &I) const;
   std::vector<const FunctionSamples *>
-  findIndirectCallFunctionSamples(const Instruction &I) const;
+  findIndirectCallFunctionSamples(const Instruction &I, uint64_t &Sum) const;
   const FunctionSamples *findFunctionSamples(const Instruction &I) const;
   bool inlineCallInstruction(Instruction *I);
   bool inlineHotFunctions(Function &F,
@@ -528,17 +528,18 @@ ErrorOr<uint64_t> SampleProfileLoader::getInstWeight(const Instruction &Inst) {
     bool FirstMark =
         CoverageTracker.markSamplesUsed(FS, LineOffset, Discriminator, R.get());
     if (FirstMark) {
-      if (Discriminator)
-        ORE->emit(OptimizationRemarkAnalysis(DEBUG_TYPE, "AppliedSamples", &Inst)
-                  << "Applied " << ore::NV("NumSamples", *R)
-                  << " samples from profile (offset: "
-                  << ore::NV("LineOffset", LineOffset) << "."
-                  << ore::NV("Discriminator", Discriminator) << ")");
-      else
-        ORE->emit(OptimizationRemarkAnalysis(DEBUG_TYPE, "AppliedSamples", &Inst)
-                  << "Applied " << ore::NV("NumSamples", *R)
-                  << " samples from profile (offset: "
-                  << ore::NV("LineOffset", LineOffset) << ")");
+      ORE->emit([&]() {
+        OptimizationRemarkAnalysis Remark(DEBUG_TYPE, "AppliedSamples", &Inst);
+        Remark << "Applied " << ore::NV("NumSamples", *R);
+        Remark << " samples from profile (offset: ";
+        Remark << ore::NV("LineOffset", LineOffset);
+        if (Discriminator) {
+          Remark << ".";
+          Remark << ore::NV("Discriminator", Discriminator);
+        }
+        Remark << ")";
+        return Remark;
+      });
     }
     DEBUG(dbgs() << "    " << DLoc.getLine() << "."
                  << DIL->getBaseDiscriminator() << ":" << Inst
@@ -625,10 +626,11 @@ SampleProfileLoader::findCalleeFunctionSamples(const Instruction &Inst) const {
 }
 
 /// Returns a vector of FunctionSamples that are the indirect call targets
-/// of \p Inst. The vector is sorted by the total number of samples.
+/// of \p Inst. The vector is sorted by the total number of samples. Stores
+/// the total call count of the indirect call in \p Sum.
 std::vector<const FunctionSamples *>
 SampleProfileLoader::findIndirectCallFunctionSamples(
-    const Instruction &Inst) const {
+    const Instruction &Inst, uint64_t &Sum) const {
   const DILocation *DIL = Inst.getDebugLoc();
   std::vector<const FunctionSamples *> R;
 
@@ -640,16 +642,25 @@ SampleProfileLoader::findIndirectCallFunctionSamples(
   if (FS == nullptr)
     return R;
 
+  uint32_t LineOffset = getOffset(DIL);
+  uint32_t Discriminator = DIL->getBaseDiscriminator();
+
+  auto T = FS->findCallTargetMapAt(LineOffset, Discriminator);
+  Sum = 0;
+  if (T)
+    for (const auto &T_C : T.get())
+      Sum += T_C.second;
   if (const FunctionSamplesMap *M = FS->findFunctionSamplesMapAt(
           LineLocation(getOffset(DIL), DIL->getBaseDiscriminator()))) {
     if (M->size() == 0)
       return R;
     for (const auto &NameFS : *M) {
+      Sum += NameFS.second.getEntrySamples();
       R.push_back(&NameFS.second);
     }
     std::sort(R.begin(), R.end(),
               [](const FunctionSamples *L, const FunctionSamples *R) {
-                return L->getTotalSamples() > R->getTotalSamples();
+                return L->getEntrySamples() > R->getEntrySamples();
               });
   }
   return R;
@@ -764,7 +775,8 @@ bool SampleProfileLoader::inlineHotFunctions(
       if (CallSite(I).isIndirectCall()) {
         if (PromotedInsns.count(I))
           continue;
-        for (const auto *FS : findIndirectCallFunctionSamples(*I)) {
+        uint64_t Sum;
+        for (const auto *FS : findIndirectCallFunctionSamples(*I, Sum)) {
           if (IsThinLTOPreLink) {
             FS->findImportedFunctions(ImportGUIDs, F.getParent(),
                                       Samples->getTotalSamples() *
@@ -786,12 +798,10 @@ bool SampleProfileLoader::inlineHotFunctions(
               !R->getValue()->isDeclaration() &&
               R->getValue()->getSubprogram() &&
               isLegalToPromote(I, R->getValue(), &Reason)) {
-            // The indirect target was promoted and inlined in the profile,
-            // as a result, we do not have profile info for the branch
-            // probability. We set the probability to 80% taken to indicate
-            // that the static call is likely taken.
+            uint64_t C = FS->getEntrySamples();
             Instruction *DI = promoteIndirectCall(
-                I, R->getValue(), 80, 100, false, ORE);
+                I, R->getValue(), C, Sum, false, ORE);
+            Sum -= C;
             PromotedInsns.insert(I);
             // If profile mismatches, we should not attempt to inline DI.
             if ((isa<CallInst>(DI) || isa<InvokeInst>(DI)) &&
@@ -1315,9 +1325,11 @@ void SampleProfileLoader::propagateWeights(Function &F) {
       DEBUG(dbgs() << "SUCCESS. Found non-zero weights.\n");
       TI->setMetadata(llvm::LLVMContext::MD_prof,
                       MDB.createBranchWeights(Weights));
-      ORE->emit(OptimizationRemark(DEBUG_TYPE, "PopularDest", MaxDestInst)
-                << "most popular destination for conditional branches at "
-                << ore::NV("CondBranchesLoc", BranchLoc));
+      ORE->emit([&]() {
+        return OptimizationRemark(DEBUG_TYPE, "PopularDest", MaxDestInst)
+               << "most popular destination for conditional branches at "
+               << ore::NV("CondBranchesLoc", BranchLoc);
+      });
     } else {
       DEBUG(dbgs() << "SKIPPED. All branch weights are zero.\n");
     }

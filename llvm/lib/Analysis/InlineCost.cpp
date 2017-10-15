@@ -1440,10 +1440,12 @@ bool CallAnalyzer::analyzeBlock(BasicBlock *BB,
     if (IsRecursiveCall || ExposesReturnsTwice || HasDynamicAlloca ||
         HasIndirectBr || HasFrameEscape) {
       if (ORE)
-        ORE->emit(OptimizationRemarkMissed(DEBUG_TYPE, "NeverInline",
-                                           CandidateCS.getInstruction())
-                  << NV("Callee", &F)
-                  << " has uninlinable pattern and cost is not fully computed");
+        ORE->emit([&]() {
+          return OptimizationRemarkMissed(DEBUG_TYPE, "NeverInline",
+                                          CandidateCS.getInstruction())
+                 << NV("Callee", &F)
+                 << " has uninlinable pattern and cost is not fully computed";
+        });
       return false;
     }
 
@@ -1453,12 +1455,13 @@ bool CallAnalyzer::analyzeBlock(BasicBlock *BB,
     if (IsCallerRecursive &&
         AllocatedSize > InlineConstants::TotalAllocaSizeRecursiveCaller) {
       if (ORE)
-        ORE->emit(
-            OptimizationRemarkMissed(DEBUG_TYPE, "NeverInline",
-                                     CandidateCS.getInstruction())
-            << NV("Callee", &F)
-            << " is recursive and allocates too much stack space. Cost is "
-               "not fully computed");
+        ORE->emit([&]() {
+          return OptimizationRemarkMissed(DEBUG_TYPE, "NeverInline",
+                                          CandidateCS.getInstruction())
+                 << NV("Callee", &F)
+                 << " is recursive and allocates too much stack space. Cost is "
+                    "not fully computed";
+        });
       return false;
     }
 
@@ -1695,7 +1698,7 @@ bool CallAnalyzer::analyzeCall(CallSite CS) {
   return Cost < std::max(1, Threshold);
 }
 
-#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+#ifdef LLVM_ENABLE_DUMP
 /// \brief Dump stats about this call's analysis.
 LLVM_DUMP_METHOD void CallAnalyzer::dump() {
 #define DEBUG_PRINT_STAT(x) dbgs() << "      " #x ": " << x << "\n"
