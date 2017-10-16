@@ -1,6 +1,6 @@
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -std=c++11 -DINVALID_ATOMIC_CALL -fsyntax-only -verify %s
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -std=c++11 -o - %s | FileCheck %s -implicit-check-not i256
-// RUN: %cheri256_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -S -o - %s | FileCheck -check-prefix=ASM %s
+// RUN-TODO: %cheri256_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -S -o - %s | FileCheck -check-prefix=ASM %s
 // RUN-TODO: %cheri128_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -S -o - %s | FileCheck -check-prefix=ASM %s
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -ast-dump %s | FileCheck -check-prefix=AST %s
 // reduced testcase for libcxx exception_fallback.ipp/new_handler_fallback.ipp
