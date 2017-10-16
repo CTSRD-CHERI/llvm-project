@@ -24,13 +24,6 @@
 // RUN: llvm-objdump -C %t-static-external-capsizefix.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC-EXTERNAL-CAPSIZEFIX %s
 
 
-// RUN: ld.lld -no-process-cap-relocs %t.o -shared -o %t-external-capsizefix.so
-// RUN: %capsizefix %t-external-capsizefix.so
-// RUN: llvm-objdump -C %t-external-capsizefix.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC-EXTERNAL-CAPSIZEFIX %s
-// RUN: llvm-readobj -r -s  %t-external-capsizefix.so | FileCheck -check-prefixes DYNAMIC-RELOCS %s
-
-
-
 // FIXME: it would be good if we could set bounds here instead of having it as -1
 
 
@@ -73,11 +66,11 @@ struct option options_table[] = {
 // OBJ-CAPRELOCS-SAME:{{[[:space:]]$}}
 
 
-// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section (in current DSO) capreloc-string-constant.c:(.rodata.str1.1+0x0)
-// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section (in current DSO) capreloc-string-constant.c:(.rodata.str1.1+0x6)
-// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section (in current DSO) capreloc-string-constant.c:(.rodata.str1.1+0xD)
-// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section (in current DSO) capreloc-string-constant.c:(.rodata.str1.1+0xD)
-// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section (in current DSO) capreloc-string-constant.c:(.rodata.str1.1+0xD)
+// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section capreloc-string-constant.c:(.rodata.str1.1+0x0)
+// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section capreloc-string-constant.c:(.rodata.str1.1+0x6)
+// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section capreloc-string-constant.c:(.rodata.str1.1+0xD)
+// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section capreloc-string-constant.c:(.rodata.str1.1+0xD)
+// UNKNOWN_LENGTH_VERBOSE: warning: could not determine size of cap reloc against local section capreloc-string-constant.c:(.rodata.str1.1+0xD)
 // UNKNOWN_LENGTH: warning: cannot find entry symbol __start
 // UNKNOWN_LENGTH-NOT: warning
 
@@ -101,32 +94,24 @@ struct option options_table[] = {
 
 // DUMP-CAPRELOCS-LABEL: CAPABILITY RELOCATION RECORDS:
 // STATIC-NEXT: 0x00000001200100{{20|10}}      Base: <Unnamed symbol> (0x0000000120000190)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
-// STATIC-NEXT: 0x00000001200100{{60|30}}      Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000004      Length: 0x0000000000000011      Permissions: 0x00000000
-// STATIC-NEXT: 0x00000001200100{{a0|50}}      Base: <Unnamed symbol> (0x000000012000019d)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
-// STATIC-NEXT: 0x00000001200100{{e0|70}}      Base: <Unnamed symbol> (0x000000012000019d)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
-// STATIC-NEXT: 0x0000000120010{{120|090}}      Base: <Unnamed symbol> (0x000000012000019d)     Offset: 0x0000000000000001      Length: 0x000000000000000a      Permissions: 0x00000000{{$}}
+// STATIC-NEXT: 0x00000001200100{{60|30}}      Base: <Unnamed symbol> (0x00000001200001a0)     Offset: 0x0000000000000004      Length: 0x0000000000000007      Permissions: 0x00000000
+// STATIC-NEXT: 0x00000001200100{{a0|50}}      Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000000      Length: 0x0000000000000011      Permissions: 0x00000000
+// STATIC-NEXT: 0x00000001200100{{e0|70}}      Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000000      Length: 0x0000000000000011      Permissions: 0x00000000
+// STATIC-NEXT: 0x0000000120010{{120|090}}     Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000001      Length: 0x0000000000000011      Permissions: 0x00000000{{$}}
 
 // PIE exe amd shlib should have dynamic relocations and only the offset values
 // DYNAMIC-NEXT: 0x00000000000100{{20|10}}      Base: <Unnamed symbol> (0x00000000000001c8)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
-// DYNAMIC-NEXT: 0x00000000000100{{60|30}}      Base: <Unnamed symbol> (0x00000000000001ce)     Offset: 0x0000000000000004      Length: 0x0000000000000011      Permissions: 0x00000000
-// DYNAMIC-NEXT: 0x00000000000100{{a0|50}}      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
-// DYNAMIC-NEXT: 0x00000000000100{{e0|70}}      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
-// DYNAMIC-NEXT: 0x0000000000010{{120|090}}      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000001      Length: 0x000000000000000a      Permissions: 0x00000000{{$}}
+// DYNAMIC-NEXT: 0x00000000000100{{60|30}}      Base: <Unnamed symbol> (0x00000000000001d8)     Offset: 0x0000000000000004      Length: 0x0000000000000007      Permissions: 0x00000000
+// DYNAMIC-NEXT: 0x00000000000100{{a0|50}}      Base: <Unnamed symbol> (0x00000000000001ce)     Offset: 0x0000000000000000      Length: 0x0000000000000011      Permissions: 0x00000000
+// DYNAMIC-NEXT: 0x00000000000100{{e0|70}}      Base: <Unnamed symbol> (0x00000000000001ce)     Offset: 0x0000000000000000      Length: 0x0000000000000011      Permissions: 0x00000000
+// DYNAMIC-NEXT: 0x0000000000010{{120|090}}     Base: <Unnamed symbol> (0x00000000000001ce)     Offset: 0x0000000000000001      Length: 0x0000000000000011      Permissions: 0x00000000{{$}}
 
 
 // The external capsizefix doesn;t set the length correctly:
 // STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000001200100{{20|10}}      Base: <Unnamed symbol> (0x0000000120000190)     Offset: 0x0000000000000000      Length: 0x0000000000000000      Permissions: 0x00000000
-// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000001200100{{60|30}}      Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000004      Length: 0x0000000000000017      Permissions: 0x00000000
-// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000001200100{{a0|50}}      Base: <Unnamed symbol> (0x000000012000019d)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
-// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000001200100{{e0|70}}      Base: <Unnamed symbol> (0x000000012000019d)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
-// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x0000000120010{{120|090}}      Base: <Unnamed symbol> (0x000000012000019d)     Offset: 0x0000000000000001      Length: 0x0000000000000017      Permissions: 0x00000000{{$}}
-
-// and for dynamic it doesn't have any length information
-// DYNAMIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000000000100{{20|10}}      Base: <Unnamed symbol> (0x00000000000001c8)     Offset: 0x0000000000000000      Length: 0x0000000000000000      Permissions: 0x00000000
-// DYNAMIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000000000100{{60|30}}      Base: <Unnamed symbol> (0x00000000000001ce)     Offset: 0x0000000000000004      Length: 0x0000000000000017      Permissions: 0x00000000
-// DYNAMIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000000000100{{a0|50}}      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
-// DYNAMIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000000000100{{e0|70}}      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
-// DYNAMIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x0000000000010{{120|090}}      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000001      Length: 0x0000000000000017      Permissions: 0x00000000{{$}}
-
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000001200100{{60|30}}      Base: <Unnamed symbol> (0x00000001200001a0)     Offset: 0x0000000000000004      Length: 0x0000000000000017      Permissions: 0x00000000
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000001200100{{a0|50}}      Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000001200100{{e0|70}}      Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x0000000120010{{120|090}}      Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000001      Length: 0x0000000000000017      Permissions: 0x00000000{{$}}
 
 // DUMP-CAPRELOCS-SAME:{{[[:space:]]$}}

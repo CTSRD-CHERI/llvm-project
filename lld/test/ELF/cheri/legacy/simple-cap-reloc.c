@@ -15,12 +15,6 @@
 // RUN: %clang_link_purecap -external-capsizefix -Wl,-no-process-cap-relocs -L%T -ldummy_shlib %t.o -o %t-dynamic.exe
 // RUN: llvm-objdump -h -r -t -C %t-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %S/simple-cap-reloc-common.check
 
-// RUN: %clang_link_purecap -external-capsizefix -Wl,-no-process-cap-relocs %t.o -shared -o %t.so
-// RUN: llvm-readobj -r -s %t.so | FileCheck -check-prefixes SHLIB,SHLIB-CAPSIZEFIX %S/simple-cap-reloc-common.check
-// RUNNOT: llvm-objdump -C -t %t.so | FileCheck -check-prefixes DUMP-SHLIB,DUMP-SHLIB-EXTERNAL %S/simple-cap-reloc-common.check
-
-
-
 // now invoke lld directly and check whether it matches:
 // RUN: %cheri_lld_static -no-process-cap-relocs %t.o -o %t-direct-static.exe
 // RUN: %capsizefix %t-direct-static.exe
@@ -29,12 +23,6 @@
 // RUN: %cheri_lld_dynamic -no-process-cap-relocs %t.o -L%T -ldummy_shlib -o %t-direct-dynamic.exe
 // RUN: %capsizefix %t-direct-dynamic.exe
 // RUN: llvm-objdump -h -r -t -C %t-direct-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %S/simple-cap-reloc-common.check
-
-// RUN: %cheri_lld_shlib -no-process-cap-relocs %t.o -o %t.so2
-// RUN: %capsizefix %t.so2
-// RUN: llvm-readobj -r -s %t.so2 | FileCheck -check-prefixes SHLIB,SHLIB-CAPSIZEFIX %S/simple-cap-reloc-common.check
-// RUNNOT: llvm-objdump -C -t %t.so2 | FileCheck -check-prefixes DUMP-SHLIB,DUMP-SHLIB-EXTERNAL %S/simple-cap-reloc-common.check
-
 
 // now try linking with the new --process-cap-relocs flag and compare the output
 

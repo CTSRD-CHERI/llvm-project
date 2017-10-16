@@ -22,13 +22,6 @@
 // RUN: llvm-objdump -C -s -t %t-static-external-capsizefix.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC-EXTERNAL-CAPSIZEFIX %s
 
 
-// RUN: ld.lld -no-process-cap-relocs %t.o -shared -o %t-external-capsizefix.so
-// RUN: %capsizefix %t-external-capsizefix.so
-// RUN: llvm-objdump -C -s -t %t-external-capsizefix.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC-EXTERNAL-CAPSIZEFIX %s
-// RUN: llvm-readobj -r -s %t-external-capsizefix.so | FileCheck -check-prefixes DYNAMIC-RELOCS %s
-
-
-
 // FIXME: it would be good if we could set bounds here instead of having it as -1
 
 int errno;

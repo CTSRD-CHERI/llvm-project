@@ -17,7 +17,8 @@
 // RUN: llvm-readobj -r -s %t.so | FileCheck -check-prefixes DYNAMIC-RELOCS %s
 // RUN: llvm-objdump -C -t -s %t.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s
 
-// RUN: ld.lld %t.o -static -o %t-static-external-capsizefix.exe
+// RUN: %clang_cheri_purecap_legacy_capreloc %s -c -o %t-legacy.o
+// RUN: ld.lld %t-legacy.o -no-process-cap-relocs -static -o %t-static-external-capsizefix.exe
 // RUN: %capsizefix %t-static-external-capsizefix.exe
 // RUN: llvm-objdump -C -s -t %t-static-external-capsizefix.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC-EXTERNAL-CAPSIZEFIX %s
 
@@ -73,7 +74,6 @@ void __start(void) {}
 // STATIC-NEXT: 0x0000000120020000 Base: __error_unthreaded (0x000000012001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
 // PIE exe amd shlib should have dynamic relocations and only the offset values
 // DYNAMIC-NEXT:0x0000000000020000 Base: __error_unthreaded (0x000000000001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
-
 
 // The external capsizefix does okay for both cases:
 // STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x0000000120020000 Base: __error_unthreaded (0x000000012001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}

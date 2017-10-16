@@ -1,6 +1,6 @@
 // REQUIRES: clang
 
-// RUN: %clang_cheri_purecap %s -c -o %t.o
+// RUN: %cheri256_purecap_cc1 %s -emit-obj -o %t.o
 // RUN: llvm-readobj -r %t.o | FileCheck -check-prefix READOBJ %s
 
 // RUN: ld.lld -process-cap-relocs %t.o -static -o %t-static.exe 2>&1 | FileCheck -check-prefixes UNKNOWN_LENGTH %s
@@ -69,17 +69,17 @@ struct option options_table[] = {
 
 // DUMP-CAPRELOCS-LABEL: CAPABILITY RELOCATION RECORDS:
 // STATIC-NEXT: 0x00000001200100{{20|10}}      Base: <Unnamed symbol> (0x0000000120000190)     Offset: 0x0000000000000000      Length: 0x0000000000000006      Permissions: 0x00000000
-// STATIC-NEXT: 0x00000001200100{{60|30}}      Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000004      Length: 0x0000000000000007      Permissions: 0x00000000
-// STATIC-NEXT: 0x00000001200100{{a0|50}}      Base: <Unnamed symbol> (0x000000012000019d)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
-// STATIC-NEXT: 0x00000001200100{{e0|70}}      Base: <Unnamed symbol> (0x000000012000019d)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
-// STATIC-NEXT: 0x0000000120010{{120|090}}      Base: <Unnamed symbol> (0x000000012000019d)     Offset: 0x0000000000000001      Length: 0x000000000000000a      Permissions: 0x00000000{{$}}
+// STATIC-NEXT: 0x00000001200100{{60|30}}      Base: <Unnamed symbol> (0x00000001200001a0)     Offset: 0x0000000000000004      Length: 0x0000000000000007      Permissions: 0x00000000
+// STATIC-NEXT: 0x00000001200100{{a0|50}}      Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
+// STATIC-NEXT: 0x00000001200100{{e0|70}}      Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
+// STATIC-NEXT: 0x0000000120010{{120|090}}      Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000001      Length: 0x000000000000000a      Permissions: 0x00000000{{$}}
 
 // PIE exe amd shlib should have dynamic relocations and only the offset values
 // DYNAMIC-NEXT: 0x00000000000100{{20|10}}      Base: <Unnamed symbol> (0x00000000000001c8)     Offset: 0x0000000000000000      Length: 0x0000000000000006      Permissions: 0x00000000
-// DYNAMIC-NEXT: 0x00000000000100{{60|30}}      Base: <Unnamed symbol> (0x00000000000001ce)     Offset: 0x0000000000000004      Length: 0x0000000000000007      Permissions: 0x00000000
-// DYNAMIC-NEXT: 0x00000000000100{{a0|50}}      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
-// DYNAMIC-NEXT: 0x00000000000100{{e0|70}}      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
-// DYNAMIC-NEXT: 0x0000000000010{{120|090}}      Base: <Unnamed symbol> (0x00000000000001d5)     Offset: 0x0000000000000001      Length: 0x000000000000000a      Permissions: 0x00000000{{$}}
+// DYNAMIC-NEXT: 0x00000000000100{{60|30}}      Base: <Unnamed symbol> (0x00000000000001d8)     Offset: 0x0000000000000004      Length: 0x0000000000000007      Permissions: 0x00000000
+// DYNAMIC-NEXT: 0x00000000000100{{a0|50}}      Base: <Unnamed symbol> (0x00000000000001ce)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
+// DYNAMIC-NEXT: 0x00000000000100{{e0|70}}      Base: <Unnamed symbol> (0x00000000000001ce)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
+// DYNAMIC-NEXT: 0x0000000000010{{120|090}}      Base: <Unnamed symbol> (0x00000000000001ce)     Offset: 0x0000000000000001      Length: 0x000000000000000a      Permissions: 0x00000000{{$}}
 
 
 // DUMP-CAPRELOCS-SAME:{{[[:space:]]$}}
