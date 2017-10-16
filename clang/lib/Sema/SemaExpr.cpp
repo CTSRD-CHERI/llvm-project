@@ -6540,7 +6540,7 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
 
   // Get the cast kind to use for adding qualifiers
   // XXXAR: Three should probably be a CK_CHERICapabilityToPointer here?
-  CastKind NopCastKind = (lhptee.getAddressSpace(nullptr) == rhptee.getAddressSpace(nullptr))
+  CastKind NopCastKind = (lhptee.getAddressSpace() == rhptee.getAddressSpace())
     ?  CK_NoOp : CK_AddressSpaceConversion;
 
   // ignore qualifiers on void (C99 6.5.15p3, clause 6)
@@ -13451,8 +13451,8 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
 
     Qualifiers lhq = SrcType->getPointeeType().getQualifiers();
     Qualifiers rhq = DstType->getPointeeType().getQualifiers();
-    LangAS::ID LAS = lhq.getAddressSpace();
-    LangAS::ID RAS = rhq.getAddressSpace();
+    LangAS LAS = lhq.getAddressSpace();
+    LangAS RAS = rhq.getAddressSpace();
     if (LAS != RAS) {
       DiagKind = diag::err_typecheck_incompatible_address_space;
       break;

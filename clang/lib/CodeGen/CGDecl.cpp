@@ -172,7 +172,7 @@ void CodeGenFunction::EmitVarDecl(const VarDecl &D) {
     return EmitStaticVarDecl(D, Linkage);
   }
 
-  if (D.getType().isInAddressSpace(LangAS::opencl_local))
+  if (D.getType().getAddressSpace() == LangAS::opencl_local)
     return CGM.getOpenCLRuntime().EmitWorkGroupLocalVarDecl(*this, D);
 
   assert(D.hasLocalStorage());
@@ -227,7 +227,7 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
 
   // Local address space cannot have an initializer.
   llvm::Constant *Init = nullptr;
-  if (!Ty.isInAddressSpace(LangAS::opencl_local))
+  if (Ty.getAddressSpace() != LangAS::opencl_local)
     Init = EmitNullConstant(Ty);
   else
     Init = llvm::UndefValue::get(LTy);
@@ -257,7 +257,7 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
   if (AS != ExpectedAS) {
     Addr = getTargetCodeGenInfo().performAddrSpaceCast(
         *this, GV, AS, ExpectedAS,
-        LTy->getPointerTo(getTargetAddressSpace((LangAS::ID)ExpectedAS)));
+        LTy->getPointerTo(getTargetAddressSpace(ExpectedAS)));
   }
 
   setStaticLocalDeclAddress(&D, Addr);
@@ -1008,7 +1008,7 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
       // Exception is if a variable is located in non-constant address space
       // in OpenCL.
       if ((!getLangOpts().OpenCL ||
-           Ty.isInAddressSpace(LangAS::opencl_constant)) &&
+           Ty.getAddressSpace() == LangAS::opencl_constant) &&
           (CGM.getCodeGenOpts().MergeAllConstants && !NRVO && !isByRef &&
            CGM.isTypeConstant(Ty, true))) {
         EmitStaticVarDecl(D, llvm::GlobalValue::InternalLinkage);
@@ -1316,7 +1316,7 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
       // XXXAR: should we also change BP here? I guess not, because we still
       // want the TLS vars to end up as being AS200 and not AS0 in purecap mode
       // Dont move before if(OpenCL): GetGlobalVarAddressSpace() will assert
-      LangAS::ID AddrSpace = CGM.GetGlobalVarAddressSpace(&D);
+      LangAS AddrSpace = CGM.GetGlobalVarAddressSpace(&D);
       AS = CGM.getTargetAddressSpace(AddrSpace);
     }
     llvm::GlobalVariable *GV =

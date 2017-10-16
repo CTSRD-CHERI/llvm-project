@@ -1588,8 +1588,8 @@ bool CastExpr::CastConsistency() const {
     assert(getType()->isPointerType() || getType()->isBlockPointerType());
     assert(getSubExpr()->getType()->isPointerType() ||
            getSubExpr()->getType()->isBlockPointerType());
-    assert(getType()->getPointeeType().getAddressSpace(nullptr) !=
-           getSubExpr()->getType()->getPointeeType().getAddressSpace(nullptr));
+    assert(getType()->getPointeeType().getAddressSpace() !=
+           getSubExpr()->getType()->getPointeeType().getAddressSpace());
     LLVM_FALLTHROUGH;
   // These should not have an inheritance path.
   case CK_Dynamic:

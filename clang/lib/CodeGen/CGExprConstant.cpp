@@ -628,7 +628,7 @@ static ConstantAddress tryEmitGlobalCompoundLiteral(CodeGenModule &CGM,
                                      llvm::GlobalValue::InternalLinkage,
                                      C, ".compoundliteral", nullptr,
                                      llvm::GlobalVariable::NotThreadLocal,
-                    CGM.getTargetAddressSpace((LangAS::ID)addressSpace));
+                    CGM.getTargetAddressSpace(addressSpace));
   emitter.finalize(GV);
   GV->setAlignment(Align.getQuantity());
   CGM.setAddrOfConstantCompoundLiteral(E, GV);
@@ -1181,7 +1181,7 @@ ConstantEmitter::emitAbstract(SourceLocation loc, const APValue &value,
 }
 
 llvm::Constant *ConstantEmitter::tryEmitForInitializer(const VarDecl &D) {
-  initializeNonAbstract(D.getType().getAddressSpace(nullptr));
+  initializeNonAbstract(D.getType().getAddressSpace());
   return markIfFailed(tryEmitPrivateForVarInit(D));
 }
 
@@ -1214,7 +1214,7 @@ llvm::GlobalValue *ConstantEmitter::getCurrentAddrPrivate() {
                                          /*name*/ "",
                                          /*before*/ nullptr,
                                          llvm::GlobalVariable::NotThreadLocal,
-                                         CGM.getTargetAddressSpace((LangAS::ID)DestAddressSpace));
+                                         CGM.getTargetAddressSpace(DestAddressSpace));
 
   PlaceholderAddresses.push_back(std::make_pair(nullptr, global));
 

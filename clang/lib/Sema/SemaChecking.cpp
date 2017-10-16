@@ -794,7 +794,7 @@ static bool SemaOpenCLBuiltinToAddr(Sema &S, unsigned BuiltinID,
 
   auto RT = Call->getArg(0)->getType();
   if (!RT->isPointerType() ||
-      RT->getPointeeType().isInAddressSpace(LangAS::opencl_constant)) {
+      RT->getPointeeType().getAddressSpace() == LangAS::opencl_constant) {
     S.Diag(Call->getLocStart(), diag::err_opencl_builtin_to_addr_invalid_arg)
         << Call->getArg(0) << Call->getDirectCallee() << Call->getSourceRange();
     return true;
@@ -3063,7 +3063,7 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
       return ExprError();
     }
     if (AtomTy.isConstQualified() ||
-        AtomTy.isInAddressSpace(LangAS::opencl_constant)) {
+        AtomTy.getAddressSpace() == LangAS::opencl_constant) {
       Diag(DRE->getLocStart(), diag::err_atomic_op_needs_non_const_atomic)
           << (AtomTy.isConstQualified() ? 0 : 1) << Ptr->getType()
           << Ptr->getSourceRange();
@@ -3175,7 +3175,7 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
           // Keep address space of non-atomic pointer type.
           if (const PointerType *PtrTy =
                   ValArg->getType()->getAs<PointerType>()) {
-            AS = PtrTy->getPointeeType().getAddressSpace(nullptr);
+            AS = PtrTy->getPointeeType().getAddressSpace();
           }
           Ty = Context.getPointerType(
               Context.getAddrSpaceQualType(ValType.getUnqualifiedType(), AS));

@@ -1807,8 +1807,8 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     }
 
     return CGF.CGM.getTargetCodeGenInfo().performAddrSpaceCast(
-        CGF, Src, SrcPointeeTy.getAddressSpace(nullptr),
-        DstPointeeTy.getAddressSpace(nullptr), DestType);
+        CGF, Src, SrcPointeeTy.getAddressSpace(),
+        DstPointeeTy.getAddressSpace(), DestType);
   }
   case CK_AtomicToNonAtomic:
   case CK_NonAtomicToAtomic:

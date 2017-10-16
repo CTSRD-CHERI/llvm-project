@@ -958,7 +958,7 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
     auto CastToGenericAddrSpace = [&](llvm::Value *V, QualType PT) {
       if (!E->isOpenCL())
         return V;
-      auto AS = PT->getAs<PointerType>()->getPointeeType().getAddressSpace(nullptr);
+      auto AS = PT->getAs<PointerType>()->getPointeeType().getAddressSpace();
       if (AS == LangAS::opencl_generic)
         return V;
       auto DestAS = CGM.getTargetAddressSpace(LangAS::opencl_generic);

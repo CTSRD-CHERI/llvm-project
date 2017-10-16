@@ -3035,7 +3035,7 @@ static CompleteObject findCompleteObject(EvalInfo &Info, const Expr *E,
         // In OpenCL if a variable is in constant address space it is a const value.
         if (!(BaseType.isConstQualified() ||
               (Info.getLangOpts().OpenCL &&
-               BaseType.isInAddressSpace(LangAS::opencl_constant)))) {
+               BaseType.getAddressSpace() == LangAS::opencl_constant))) {
           if (Info.getLangOpts().CPlusPlus) {
             Info.FFDiag(E, diag::note_constexpr_ltor_non_const_int, 1) << VD;
             Info.Note(VD->getLocation(), diag::note_declared_at);
@@ -8621,10 +8621,8 @@ bool IntExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
       // The comparison here must be unsigned, and performed with the same
       // width as a pointer offset.
       auto &TI = Info.Ctx.getTargetInfo();
-      // XXXAR: not sure whehter getAddressSpace() or getTargetAddressSpace is
-      // correct here
       unsigned AS = Info.Ctx.getTargetAddressSpace(
-          LHSTy->getPointeeType().getAddressSpace(nullptr), nullptr);
+          LHSTy->getPointeeType().getAddressSpace(), nullptr);
       unsigned PtrSize = TI.getTypeWidth(TI.getPtrDiffType(AS));
       uint64_t CompareLHS = LHSOffset.getQuantity();
       uint64_t CompareRHS = RHSOffset.getQuantity();

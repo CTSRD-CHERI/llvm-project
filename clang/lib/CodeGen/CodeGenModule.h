@@ -639,10 +639,10 @@ public:
   
   unsigned getAddressSpaceForType(QualType T);
 
-  unsigned getTargetAddressSpace(LangAS::ID AddrSpace);
+  unsigned getTargetAddressSpace(LangAS AddrSpace);
 
   inline unsigned getTargetAddressSpace(Qualifiers Q) {
-    return getTargetAddressSpace(static_cast<LangAS::ID>(Q.getAddressSpace()));
+    return getTargetAddressSpace(Q.getAddressSpace());
   }
 
   CodeGenTypes &getTypes() { return Types; }

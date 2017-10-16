@@ -295,7 +295,7 @@ unsigned CodeGenModule::getAddressSpaceForType(QualType T) {
     return getTargetCodeGenInfo().getAddressSpaceForType(T, getContext());
 }
 
-unsigned CodeGenModule::getTargetAddressSpace(LangAS::ID AddrSpace) {
+unsigned CodeGenModule::getTargetAddressSpace(LangAS AddrSpace) {
   if (AddrSpace == LangAS::cheri_tls)
     return 0; // XXXAR: CHERI still needs rdhwr29 which is AS0
   unsigned Result = getContext().getTargetAddressSpace(AddrSpace, nullptr);
@@ -2409,7 +2409,7 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
       return llvm::ConstantExpr::getBitCast(Entry, Ty);
   }
 
-  LangAS::ID AddrSpace = GetGlobalVarAddressSpace(D);
+  LangAS AddrSpace = GetGlobalVarAddressSpace(D);
   auto TargetAddrSpace = getTargetAddressSpace(AddrSpace);
 
   auto *GV = new llvm::GlobalVariable(
@@ -2627,7 +2627,7 @@ llvm::Constant *CodeGenModule::GetAddrOfGlobalVar(const VarDecl *D,
   unsigned AS =
       getContext().getTargetInfo().areAllPointersCapabilities()
           ? getTargetCodeGenInfo().getCHERICapabilityAS()
-          : getTargetAddressSpace((LangAS::ID)ASTTy.getAddressSpace(nullptr));
+          : getTargetAddressSpace(ASTTy.getAddressSpace());
   llvm::PointerType *PTy = llvm::PointerType::get(Ty, AS);
 
   StringRef MangledName = getMangledName(D);
@@ -2701,8 +2701,9 @@ LangAS CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D) {
     if (Target.areAllPointersCapabilities()) { // Pure ABI
       // CHERI TLS currently relies on mips rdhwr 29 which is AS0
       return (D && (D->getTLSKind() != VarDecl::TLS_None))
-             ? LangAS::cheri_tls : (LangAS::ID)(CapAS + LangAS::FirstTargetAddressSpace);
-    } else if (D && getAddressSpaceForType(D->getType()) == CapAS) { // Hybrid ABI
+             ? LangAS::cheri_tls : getLangASFromTargetAS(CapAS);
+    } else if (D && getAddressSpaceForType(D->getType()) == CapAS) {
+      // In the hybrid ABI all globals are in AS 0 (even capabilities)
       return LangAS::Default; // XXXAR: FIXME: is this really  correct?
     }
   }

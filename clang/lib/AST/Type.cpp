@@ -72,7 +72,7 @@ bool QualType::isConstant(QualType T, const ASTContext &Ctx) {
   if (const ArrayType *AT = Ctx.getAsArrayType(T))
     return AT->getElementType().isConstant(Ctx);
 
-  return T.isInAddressSpace(LangAS::opencl_constant);
+  return T.getAddressSpace() == LangAS::opencl_constant;
 }
 
 unsigned ConstantArrayType::getNumAddressingBits(const ASTContext &Context,
@@ -2045,7 +2045,6 @@ bool Type::isIncompleteType(NamedDecl **Def) const {
   }
   }
 }
-
 
 bool QualType::isPODType(const ASTContext &Context) const {
   // C++11 has a more relaxed definition of POD.

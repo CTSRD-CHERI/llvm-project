@@ -2801,8 +2801,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     auto NewArgT = llvm::PointerType::get(Int8Ty,
       CGM.getTargetAddressSpace(LangAS::opencl_generic));
     auto NewRetT = llvm::PointerType::get(Int8Ty,
-      CGM.getTargetAddressSpace(
-          (LangAS::ID)E->getType()->getPointeeType().getAddressSpace(nullptr)));
+      CGM.getTargetAddressSpace(E->getType()->getPointeeType().getAddressSpace()));
     auto FTy = llvm::FunctionType::get(NewRetT, {NewArgT}, false);
     llvm::Value *NewArg;
     if (Arg0->getType()->getPointerAddressSpace() !=

@@ -2358,7 +2358,7 @@ ASTContext::getExtQualType(const Type *baseType, Qualifiers quals) const {
 QualType ASTContext::getAddrSpaceQualType(QualType T,
                                           LangAS AddressSpace) const {
   QualType CanT = getCanonicalType(T);
-  if (CanT.getAddressSpace(nullptr) == AddressSpace)
+  if (CanT.getAddressSpace() == AddressSpace)
     return T;
 
   // If we are composing extended qualifiers together, merge together

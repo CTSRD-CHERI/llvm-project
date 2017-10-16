@@ -363,7 +363,7 @@ static Address createReferenceTemporary(CodeGenFunction &CGF,
               CGF.CGM.getModule(), Init->getType(), /*isConstant=*/true,
               llvm::GlobalValue::PrivateLinkage, Init, ".ref.tmp", nullptr,
               llvm::GlobalValue::NotThreadLocal,
-              CGF.CGM.getTargetAddressSpace((LangAS::ID)AS));
+              CGF.CGM.getTargetAddressSpace(AS));
           CharUnits alignment = CGF.getContext().getTypeAlignInChars(Ty);
           GV->setAlignment(alignment.getQuantity());
           llvm::Constant *C = GV;
@@ -2474,7 +2474,7 @@ LValue CodeGenFunction::EmitUnaryOpLValue(const UnaryOperator *E) {
     LValueBaseInfo BaseInfo;
     Address Addr = EmitPointerWithAlignment(E->getSubExpr(), &BaseInfo);
     LValue LV = MakeAddrLValue(Addr, T, BaseInfo, CGM.getTBAAAccessInfo(T));
-    LV.getQuals().setAddressSpace(ExprTy.getAddressSpace(nullptr));
+    LV.getQuals().setAddressSpace(ExprTy.getAddressSpace());
 
     // We should not generate __weak write barrier on indirect reference
     // of a pointer to object; as in void foo (__weak id *param); *param = 0;
@@ -3100,14 +3100,14 @@ Address CodeGenFunction::EmitArrayToPointerDecay(const Expr *E,
 
   // FIXME-cheri-qual: should getTargetAddressSpace return 200? 
   unsigned AS =
-    CGM.getTargetAddressSpace((LangAS::ID)E->getType().getAddressSpace(nullptr));
+    CGM.getTargetAddressSpace(E->getType().getAddressSpace());
   llvm::PointerType *PtrTy = cast<llvm::PointerType>(Addr.getPointer()->getType());
   if (PtrTy->getPointerAddressSpace() != AS) {
     if (getContext().getTargetInfo().areAllPointersCapabilities()) {
       assert(PtrTy->getPointerAddressSpace() == 
                         CGM.getTargetCodeGenInfo().getCHERICapabilityAS() &&
              "Expected memory capability address space in pure capability ABI");
-      assert(E->getType().isInAddressSpace(LangAS::Default) &&
+      assert(E->getType().getAddressSpace() == LangAS::Default &&
              "non-zero address space in pure capability ABI");
       return Addr;
     } else

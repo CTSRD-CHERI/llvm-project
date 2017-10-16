@@ -2036,7 +2036,7 @@ static void checkIntToPointerCast(bool CStyle, SourceLocation Loc,
   QualType SrcType = SrcExpr->getType();
   ASTContext &Ctx = Self.getASTContext();
   unsigned TargetAS = Ctx.getTargetAddressSpace(
-      DestType->getPointeeType().getAddressSpace(nullptr), nullptr);
+      DestType->getPointeeType().getAddressSpace(), nullptr);
 
   if (DestType->isCHERICapabilityType(Ctx) &&
       !SrcType->isCHERICapabilityType(Ctx) &&

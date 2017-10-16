@@ -6305,8 +6305,8 @@ NamedDecl *Sema::ActOnVariableDeclarator(
       // OpenCL v1.2 s6.9.b p4:
       // The sampler type cannot be used with the __local and __global address
       // space qualifiers.
-      if (R.isInAddressSpace(LangAS::opencl_local) ||
-          R.isInAddressSpace(LangAS::opencl_global)) {
+      if (R.getAddressSpace() == LangAS::opencl_local ||
+          R.getAddressSpace() == LangAS::opencl_global) {
         Diag(D.getIdentifierLoc(), diag::err_wrong_sampler_addressspace);
       }
 
@@ -6314,7 +6314,7 @@ NamedDecl *Sema::ActOnVariableDeclarator(
       // A global sampler must be declared with either the constant address
       // space qualifier or with the const qualifier.
       if (DC->isTranslationUnit() &&
-          !(R.isInAddressSpace(LangAS::opencl_constant) ||
+          !(R.getAddressSpace() == LangAS::opencl_constant ||
           R.isConstQualified())) {
         Diag(D.getIdentifierLoc(), diag::err_opencl_nonconst_global_sampler);
         D.setInvalidType();
@@ -7379,8 +7379,8 @@ void Sema::CheckVariableDeclarationType(VarDecl *NewVD) {
     if (NewVD->isFileVarDecl() || NewVD->isStaticLocal() ||
         NewVD->hasExternalStorage()) {
       if (!T->isSamplerT() &&
-          !(T.isInAddressSpace(LangAS::opencl_constant) ||
-            (T.isInAddressSpace(LangAS::opencl_global) &&
+          !(T.getAddressSpace() == LangAS::opencl_constant ||
+            (T.getAddressSpace() == LangAS::opencl_global &&
              getLangOpts().OpenCLVersion == 200))) {
         int Scope = NewVD->isStaticLocal() | NewVD->hasExternalStorage() << 1;
         if (getLangOpts().OpenCLVersion == 200)
@@ -7393,19 +7393,19 @@ void Sema::CheckVariableDeclarationType(VarDecl *NewVD) {
         return;
       }
     } else {
-      if (T.isInAddressSpace(LangAS::opencl_global)) {
+      if (T.getAddressSpace() == LangAS::opencl_global) {
         Diag(NewVD->getLocation(), diag::err_opencl_function_variable)
             << 1 /*is any function*/ << "global";
         NewVD->setInvalidDecl();
         return;
       }
-      if (T.isInAddressSpace(LangAS::opencl_constant) ||
-          T.isInAddressSpace(LangAS::opencl_local)) {
+      if (T.getAddressSpace() == LangAS::opencl_constant ||
+          T.getAddressSpace() == LangAS::opencl_local) {
         FunctionDecl *FD = getCurFunctionDecl();
         // OpenCL v1.1 s6.5.2 and s6.5.3: no local or constant variables
         // in functions.
         if (FD && !FD->hasAttr<OpenCLKernelAttr>()) {
-          if (T.isInAddressSpace(LangAS::opencl_constant))
+          if (T.getAddressSpace() == LangAS::opencl_constant)
             Diag(NewVD->getLocation(), diag::err_opencl_function_variable)
                 << 0 /*non-kernel only*/ << "constant";
           else
@@ -7418,7 +7418,7 @@ void Sema::CheckVariableDeclarationType(VarDecl *NewVD) {
         // in the outermost scope of a kernel function.
         if (FD && FD->hasAttr<OpenCLKernelAttr>()) {
           if (!getCurScope()->isFunctionScope()) {
-            if (T.isInAddressSpace(LangAS::opencl_constant))
+            if (T.getAddressSpace() == LangAS::opencl_constant)
               Diag(NewVD->getLocation(), diag::err_opencl_addrspace_scope)
                   << "constant";
             else
@@ -8293,8 +8293,6 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
 
   DeclContext *OriginalDC = DC;
   bool IsLocalExternDecl = adjustContextForLocalExternDecl(DC);
-
-
 
   FunctionDecl *NewFD = CreateNewFunctionDecl(*this, D, DC, R, TInfo, SC,
                                               isVirtualOkay);
@@ -10514,7 +10512,7 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init, bool DirectInit) {
 
   // OpenCL 1.1 6.5.2: "Variables allocated in the __local address space inside
   // a kernel function cannot be initialized."
-  if (VDecl->getType().isInAddressSpace(LangAS::opencl_local)) {
+  if (VDecl->getType().getAddressSpace() == LangAS::opencl_local) {
     Diag(VDecl->getLocation(), diag::err_local_cant_init);
     VDecl->setInvalidDecl();
     return;
@@ -10641,7 +10639,7 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init, bool DirectInit) {
 
     // OpenCL v1.2 s6.5.3: __constant locals must be constant-initialized.
     // This is true even in OpenCL C++.
-    } else if (VDecl->getType().isInAddressSpace(LangAS::opencl_constant)) {
+    } else if (VDecl->getType().getAddressSpace() == LangAS::opencl_constant) {
       CheckForConstantInitializer(Init, DclT);
 
     // Otherwise, C++ does not restrict the initializer.
@@ -10910,7 +10908,7 @@ void Sema::ActOnUninitializedDecl(Decl *RealDecl) {
     // OpenCL v1.1 s6.5.3: variables declared in the constant address space must
     // be initialized.
     if (!Var->isInvalidDecl() &&
-        Var->getType().isInAddressSpace(LangAS::opencl_constant) &&
+        Var->getType().getAddressSpace() == LangAS::opencl_constant &&
         Var->getStorageClass() != SC_Extern && !Var->getInit()) {
       Diag(Var->getLocation(), diag::err_opencl_constant_no_init);
       Var->setInvalidDecl();

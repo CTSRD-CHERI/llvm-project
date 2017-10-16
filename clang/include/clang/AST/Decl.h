@@ -979,7 +979,7 @@ public:
       // used to describe variables allocated in global memory and which are
       // accessed inside a kernel(s) as read-only variables. As such, variables
       // in constant address space cannot have local storage.
-      if (getType().isInAddressSpace(LangAS::opencl_constant))
+      if (getType().getAddressSpace() == LangAS::opencl_constant)
         return false;
       // Second check is for C++11 [dcl.stc]p4.
       return !isFileVarDecl() && getTSCSpec() == TSCS_unspecified;
