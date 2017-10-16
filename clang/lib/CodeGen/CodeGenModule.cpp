@@ -298,10 +298,10 @@ unsigned CodeGenModule::getAddressSpaceForType(QualType T) {
 unsigned CodeGenModule::getTargetAddressSpace(LangAS AddrSpace) {
   if (AddrSpace == LangAS::cheri_tls)
     return 0; // XXXAR: CHERI still needs rdhwr29 which is AS0
-  unsigned Result = getContext().getTargetAddressSpace(AddrSpace, nullptr);
   // XXXAR: Hack for CHERI purecap ABI where we want default to mean AS200
-  if (Result == 0)
+  if (AddrSpace == LangAS::Default)
     return getTargetCodeGenInfo().getDefaultAS();
+  unsigned Result = getContext().getTargetAddressSpace(AddrSpace, nullptr);
   return Result;
 }
 
