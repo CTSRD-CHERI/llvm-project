@@ -22,6 +22,7 @@
 #include "Target.h"
 #include "lld/Common/Memory.h"
 #include "lld/Common/Threads.h"
+#include "Arch/Cheri.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSwitch.h"
 #include <climits>

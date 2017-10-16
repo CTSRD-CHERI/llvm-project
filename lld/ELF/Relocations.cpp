@@ -52,6 +52,7 @@
 #include "Target.h"
 #include "Thunks.h"
 #include "lld/Common/Memory.h"
+#include "Arch/Cheri.h"
 
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/Format.h"
