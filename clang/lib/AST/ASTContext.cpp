@@ -697,8 +697,8 @@ CXXABI *ASTContext::createCXXABI(const TargetInfo &T) {
   llvm_unreachable("Invalid CXXABI type!");
 }
 
-static const LangAS::Map *getAddressSpaceMap(const TargetInfo &T,
-                                             const LangOptions &LOpts) {
+static const LangASMap *getAddressSpaceMap(const TargetInfo &T,
+                                           const LangOptions &LOpts) {
   if (LOpts.FakeAddressSpaceMap) {
     // The fake address space map must have a distinct entry for each
     // language-specific address space.
@@ -707,6 +707,7 @@ static const LangAS::Map *getAddressSpaceMap(const TargetInfo &T,
       1, // opencl_global
       3, // opencl_local
       2, // opencl_constant
+      0, // opencl_private
       4, // opencl_generic
       5, // cuda_device
       6, // cuda_constant
@@ -2355,7 +2356,7 @@ ASTContext::getExtQualType(const Type *baseType, Qualifiers quals) const {
 }
 
 QualType ASTContext::getAddrSpaceQualType(QualType T,
-                                          LangAS::ID AddressSpace) const {
+                                          LangAS AddressSpace) const {
   QualType CanT = getCanonicalType(T);
   if (CanT.getAddressSpace(nullptr) == AddressSpace)
     return T;
@@ -9037,9 +9038,8 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
       char *End;
       unsigned AddrSpace = strtoul(Str, &End, 10);
       if (End != Str && AddrSpace != 0) {
-        Type = Context.getAddrSpaceQualType(
-            Type, static_cast<LangAS::ID>(
-                      AddrSpace + (unsigned)LangAS::FirstTargetAddressSpace));
+        Type = Context.getAddrSpaceQualType(Type,
+                                            getLangASFromTargetAS(AddrSpace));
         Str = End;
       }
       if (c == '*') {
@@ -9868,21 +9868,19 @@ ASTContext::ObjCMethodsAreEqual(const ObjCMethodDecl *MethodDecl,
 }
 
 uint64_t ASTContext::getTargetNullPointerValue(QualType QT) const {
-  LangAS::ID AS;
+  LangAS AS;
   if (QT->getUnqualifiedDesugaredType()->isNullPtrType())
     AS = LangAS::Default;
   else
-    AS = QT->getPointeeType().getAddressSpace(nullptr);
+    AS = QT->getPointeeType().getAddressSpace();
 
   return getTargetInfo().getNullPointerValue(AS);
 }
 
-unsigned ASTContext::getTargetAddressSpace(LangAS::ID AS, void *dummy) const {
+unsigned ASTContext::getTargetAddressSpace(LangAS AS, void *dummy) const {
   (void)dummy; // Dummy parameter needed to find all calls to getTargetAddressSpace()
-  // XXXAR: this will no longer be necessary if we can to use LangAS for CHERI
-  assert((unsigned)AS != 200 && "CHERI AS should not be used here!");
-  if (AS >= LangAS::FirstTargetAddressSpace)
-    return (unsigned)AS - (unsigned)LangAS::FirstTargetAddressSpace;
+  if (isTargetAddressSpace(AS))
+    return toTargetAddressSpace(AS);
   else
     return (*AddrSpaceMap)[(unsigned)AS];
 }

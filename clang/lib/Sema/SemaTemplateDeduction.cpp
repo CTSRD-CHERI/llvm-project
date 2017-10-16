@@ -1870,11 +1870,10 @@ DeduceTemplateArgumentsByTypeMatch(Sema &S,
             Deduced);
       }
 
-      if (Arg.getAddressSpace(nullptr) >= LangAS::FirstTargetAddressSpace) {
+      if (isTargetAddressSpace(Arg.getAddressSpace())) {
         llvm::APSInt ArgAddressSpace(S.Context.getTypeSize(S.Context.IntTy),
                                      false);
-        ArgAddressSpace =
-            ((unsigned)Arg.getAddressSpace(nullptr) - (unsigned)LangAS::FirstTargetAddressSpace);
+        ArgAddressSpace = toTargetAddressSpace(Arg.getAddressSpace());
 
         // Perform deduction on the pointer types.
         if (Sema::TemplateDeductionResult Result =

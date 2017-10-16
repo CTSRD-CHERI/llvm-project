@@ -23,7 +23,7 @@
 #include <cstdlib>
 using namespace clang;
 
-static const LangAS::Map DefaultAddrSpaceMap = { 0 };
+static const LangASMap DefaultAddrSpaceMap = {0};
 
 // TargetInfo Constructor.
 TargetInfo::TargetInfo(const llvm::Triple &T) : TargetOpts(), Triple(T) {
@@ -369,7 +369,7 @@ bool TargetInfo::initFeatureMap(
   return true;
 }
 
-LangAS::ID TargetInfo::getOpenCLTypeAddrSpace(const Type *T) const {
+LangAS TargetInfo::getOpenCLTypeAddrSpace(const Type *T) const {
   auto BT = dyn_cast<BuiltinType>(T);
 
   if (!BT) {

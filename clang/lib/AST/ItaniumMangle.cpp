@@ -2222,20 +2222,22 @@ void CXXNameMangler::mangleQualifiers(Qualifiers Quals, const DependentAddressSp
     //   <type> ::= U <CUDA-addrspace>
 
     SmallString<64> ASString;
-    LangAS::ID AS = Quals.getAddressSpace();
+    LangAS AS = Quals.getAddressSpace();
 
     if (Context.getASTContext().addressSpaceMapManglingFor(AS)) {
       //  <target-addrspace> ::= "AS" <address-space-number>
-      unsigned TargetAS = Context.getASTContext().getTargetAddressSpace(AS, nullptr);
-      ASString = "AS" + llvm::utostr(TargetAS);
+      unsigned TargetAS = Context.getASTContext().getTargetAddressSpace(AS);
+      if (TargetAS != 0)
+        ASString = "AS" + llvm::utostr(TargetAS);
     } else {
       switch (AS) {
       default: llvm_unreachable("Not a language specific address space");
-      //  <OpenCL-addrspace> ::= "CL" [ "global" | "local" | "constant |
-      //                                "generic" ]
+      //  <OpenCL-addrspace> ::= "CL" [ "global" | "local" | "constant" |
+      //                                "private"| "generic" ]
       case LangAS::opencl_global:   ASString = "CLglobal";   break;
       case LangAS::opencl_local:    ASString = "CLlocal";    break;
       case LangAS::opencl_constant: ASString = "CLconstant"; break;
+      case LangAS::opencl_private:  ASString = "CLprivate";  break;
       case LangAS::opencl_generic:  ASString = "CLgeneric";  break;
       //  <CUDA-addrspace> ::= "CU" [ "device" | "constant" | "shared" ]
       case LangAS::cuda_device:     ASString = "CUdevice";   break;
@@ -2243,7 +2245,8 @@ void CXXNameMangler::mangleQualifiers(Qualifiers Quals, const DependentAddressSp
       case LangAS::cuda_shared:     ASString = "CUshared";   break;
       }
     }
-    mangleVendorQualifier(ASString);
+    if (!ASString.empty())
+      mangleVendorQualifier(ASString);
   }
 
   // The ARC ownership qualifiers start with underscores.

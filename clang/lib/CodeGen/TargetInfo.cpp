@@ -14,6 +14,7 @@
 
 #include "TargetInfo.h"
 #include "ABIInfo.h"
+#include "CGBlocks.h"
 #include "CGCXXABI.h"
 #include "CGValue.h"
 #include "CodeGenFunction.h"
@@ -24,6 +25,7 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/ADT/Twine.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Type.h"
@@ -438,17 +440,17 @@ llvm::Constant *TargetCodeGenInfo::getNullPointer(const CodeGen::CodeGenModule &
   return llvm::ConstantPointerNull::get(T);
 }
 
-LangAS::ID TargetCodeGenInfo::getGlobalVarAddressSpace(CodeGenModule &CGM,
-                                                       const VarDecl *D) const {
+LangAS TargetCodeGenInfo::getGlobalVarAddressSpace(CodeGenModule &CGM,
+                                                   const VarDecl *D) const {
   assert(!CGM.getLangOpts().OpenCL &&
          !(CGM.getLangOpts().CUDA && CGM.getLangOpts().CUDAIsDevice) &&
          "Address space agnostic languages only");
-  return D ? D->getType().getAddressSpace(nullptr) : LangAS::Default;
+  return D ? D->getType().getAddressSpace() : LangAS::Default;
 }
 
 llvm::Value *TargetCodeGenInfo::performAddrSpaceCast(
-    CodeGen::CodeGenFunction &CGF, llvm::Value *Src, LangAS::ID SrcAddr,
-    LangAS::ID DestAddr, llvm::Type *DestTy, bool isNonNull) const {
+    CodeGen::CodeGenFunction &CGF, llvm::Value *Src, LangAS SrcAddr,
+    LangAS DestAddr, llvm::Type *DestTy, bool isNonNull) const {
   // Since target may map different address spaces in AST to the same address
   // space, an address space conversion may end up as a bitcast.
   if (auto *C = dyn_cast<llvm::Constant>(Src))
@@ -484,7 +486,7 @@ bool TargetCodeGenInfo::canMarkAsNonNull(QualType DestTy, ASTContext& Context) c
 
 llvm::Constant *
 TargetCodeGenInfo::performAddrSpaceCast(CodeGenModule &CGM, llvm::Constant *Src,
-                                        LangAS::ID SrcAddr, LangAS::ID DestAddr,
+                                        LangAS SrcAddr, LangAS DestAddr,
                                         llvm::Type *DestTy) const {
   // Since target may map different address spaces in AST to the same address
   // space, an address space conversion may end up as a bitcast.
@@ -7893,14 +7895,18 @@ public:
   llvm::Constant *getNullPointer(const CodeGen::CodeGenModule &CGM,
       llvm::PointerType *T, QualType QT) const override;
 
-  LangAS::ID getASTAllocaAddressSpace() const override {
-    return (LangAS::ID)(LangAS::FirstTargetAddressSpace +
-                        getABIInfo().getDataLayout().getAllocaAddrSpace());
+  LangAS getASTAllocaAddressSpace() const override {
+    return getLangASFromTargetAS(
+        getABIInfo().getDataLayout().getAllocaAddrSpace());
   }
-  LangAS::ID getGlobalVarAddressSpace(CodeGenModule &CGM,
-                                      const VarDecl *D) const override;
+  LangAS getGlobalVarAddressSpace(CodeGenModule &CGM,
+                                  const VarDecl *D) const override;
   llvm::SyncScope::ID getLLVMSyncScopeID(SyncScope S,
                                          llvm::LLVMContext &C) const override;
+  llvm::Function *
+  createEnqueuedBlockKernel(CodeGenFunction &CGF,
+                            llvm::Function *BlockInvokeFunc,
+                            llvm::Value *BlockLiteral) const override;
 };
 }
 
@@ -7984,27 +7990,25 @@ llvm::Constant *AMDGPUTargetCodeGenInfo::getNullPointer(
       llvm::ConstantPointerNull::get(NPT), PT);
 }
 
-LangAS::ID
+LangAS
 AMDGPUTargetCodeGenInfo::getGlobalVarAddressSpace(CodeGenModule &CGM,
                                                   const VarDecl *D) const {
   assert(!CGM.getLangOpts().OpenCL &&
          !(CGM.getLangOpts().CUDA && CGM.getLangOpts().CUDAIsDevice) &&
          "Address space agnostic languages only");
-  LangAS::ID DefaultGlobalAS =
-      (LangAS::ID)(LangAS::FirstTargetAddressSpace +
-                   CGM.getTargetAddressSpace(LangAS::opencl_global));
+  LangAS DefaultGlobalAS = getLangASFromTargetAS(
+      CGM.getTargetAddressSpace(LangAS::opencl_global));
   if (!D)
     return DefaultGlobalAS;
 
-  LangAS::ID AddrSpace = (LangAS::ID)D->getType().getAddressSpace(nullptr);
-  assert(AddrSpace == LangAS::Default ||
-         AddrSpace >= LangAS::FirstTargetAddressSpace);
+  LangAS AddrSpace = D->getType().getAddressSpace();
+  assert(AddrSpace == LangAS::Default || isTargetAddressSpace(AddrSpace));
   if (AddrSpace != LangAS::Default)
     return AddrSpace;
 
   if (CGM.isTypeConstant(D->getType(), false)) {
     if (auto ConstAS = CGM.getTarget().getConstantAddressSpace())
-      return (LangAS::ID)ConstAS.getValue();
+      return ConstAS.getValue();
   }
   return DefaultGlobalAS;
 }
@@ -9200,4 +9204,110 @@ const TargetCodeGenInfo &CodeGenModule::getTargetCodeGenInfo() {
   case llvm::Triple::spir64:
     return SetCGInfo(new SPIRTargetCodeGenInfo(Types));
   }
+}
+
+/// Create an OpenCL kernel for an enqueued block.
+///
+/// The kernel has the same function type as the block invoke function. Its
+/// name is the name of the block invoke function postfixed with "_kernel".
+/// It simply calls the block invoke function then returns.
+llvm::Function *
+TargetCodeGenInfo::createEnqueuedBlockKernel(CodeGenFunction &CGF,
+                                             llvm::Function *Invoke,
+                                             llvm::Value *BlockLiteral) const {
+  auto *InvokeFT = Invoke->getFunctionType();
+  llvm::SmallVector<llvm::Type *, 2> ArgTys;
+  for (auto &P : InvokeFT->params())
+    ArgTys.push_back(P);
+  auto &C = CGF.getLLVMContext();
+  std::string Name = Invoke->getName().str() + "_kernel";
+  auto *FT = llvm::FunctionType::get(llvm::Type::getVoidTy(C), ArgTys, false);
+  auto *F = llvm::Function::Create(FT, llvm::GlobalValue::InternalLinkage, Name,
+                                   &CGF.CGM.getModule());
+  auto IP = CGF.Builder.saveIP();
+  auto *BB = llvm::BasicBlock::Create(C, "entry", F);
+  auto &Builder = CGF.Builder;
+  Builder.SetInsertPoint(BB);
+  llvm::SmallVector<llvm::Value *, 2> Args;
+  for (auto &A : F->args())
+    Args.push_back(&A);
+  Builder.CreateCall(Invoke, Args);
+  Builder.CreateRetVoid();
+  Builder.restoreIP(IP);
+  return F;
+}
+
+/// Create an OpenCL kernel for an enqueued block.
+///
+/// The type of the first argument (the block literal) is the struct type
+/// of the block literal instead of a pointer type. The first argument
+/// (block literal) is passed directly by value to the kernel. The kernel
+/// allocates the same type of struct on stack and stores the block literal
+/// to it and passes its pointer to the block invoke function. The kernel
+/// has "enqueued-block" function attribute and kernel argument metadata.
+llvm::Function *AMDGPUTargetCodeGenInfo::createEnqueuedBlockKernel(
+    CodeGenFunction &CGF, llvm::Function *Invoke,
+    llvm::Value *BlockLiteral) const {
+  auto &Builder = CGF.Builder;
+  auto &C = CGF.getLLVMContext();
+
+  auto *BlockTy = BlockLiteral->getType()->getPointerElementType();
+  auto *InvokeFT = Invoke->getFunctionType();
+  llvm::SmallVector<llvm::Type *, 2> ArgTys;
+  llvm::SmallVector<llvm::Metadata *, 8> AddressQuals;
+  llvm::SmallVector<llvm::Metadata *, 8> AccessQuals;
+  llvm::SmallVector<llvm::Metadata *, 8> ArgTypeNames;
+  llvm::SmallVector<llvm::Metadata *, 8> ArgBaseTypeNames;
+  llvm::SmallVector<llvm::Metadata *, 8> ArgTypeQuals;
+  llvm::SmallVector<llvm::Metadata *, 8> ArgNames;
+
+  ArgTys.push_back(BlockTy);
+  ArgTypeNames.push_back(llvm::MDString::get(C, "__block_literal"));
+  AddressQuals.push_back(llvm::ConstantAsMetadata::get(Builder.getInt32(0)));
+  ArgBaseTypeNames.push_back(llvm::MDString::get(C, "__block_literal"));
+  ArgTypeQuals.push_back(llvm::MDString::get(C, ""));
+  AccessQuals.push_back(llvm::MDString::get(C, "none"));
+  ArgNames.push_back(llvm::MDString::get(C, "block_literal"));
+  for (unsigned I = 1, E = InvokeFT->getNumParams(); I < E; ++I) {
+    ArgTys.push_back(InvokeFT->getParamType(I));
+    ArgTys.push_back(BlockTy);
+    ArgTypeNames.push_back(llvm::MDString::get(C, "void*"));
+    AddressQuals.push_back(llvm::ConstantAsMetadata::get(Builder.getInt32(3)));
+    AccessQuals.push_back(llvm::MDString::get(C, "none"));
+    ArgBaseTypeNames.push_back(llvm::MDString::get(C, "void*"));
+    ArgTypeQuals.push_back(llvm::MDString::get(C, ""));
+    ArgNames.push_back(
+        llvm::MDString::get(C, (Twine("local_arg") + Twine(I)).str()));
+  }
+  std::string Name = Invoke->getName().str() + "_kernel";
+  auto *FT = llvm::FunctionType::get(llvm::Type::getVoidTy(C), ArgTys, false);
+  auto *F = llvm::Function::Create(FT, llvm::GlobalValue::InternalLinkage, Name,
+                                   &CGF.CGM.getModule());
+  F->addFnAttr("enqueued-block");
+  auto IP = CGF.Builder.saveIP();
+  auto *BB = llvm::BasicBlock::Create(C, "entry", F);
+  Builder.SetInsertPoint(BB);
+  unsigned BlockAlign = CGF.CGM.getDataLayout().getPrefTypeAlignment(BlockTy);
+  auto *BlockPtr = Builder.CreateAlloca(BlockTy, nullptr);
+  BlockPtr->setAlignment(BlockAlign);
+  Builder.CreateAlignedStore(F->arg_begin(), BlockPtr, BlockAlign);
+  auto *Cast = Builder.CreatePointerCast(BlockPtr, InvokeFT->getParamType(0));
+  llvm::SmallVector<llvm::Value *, 2> Args;
+  Args.push_back(Cast);
+  for (auto I = F->arg_begin() + 1, E = F->arg_end(); I != E; ++I)
+    Args.push_back(I);
+  Builder.CreateCall(Invoke, Args);
+  Builder.CreateRetVoid();
+  Builder.restoreIP(IP);
+
+  F->setMetadata("kernel_arg_addr_space", llvm::MDNode::get(C, AddressQuals));
+  F->setMetadata("kernel_arg_access_qual", llvm::MDNode::get(C, AccessQuals));
+  F->setMetadata("kernel_arg_type", llvm::MDNode::get(C, ArgTypeNames));
+  F->setMetadata("kernel_arg_base_type",
+                 llvm::MDNode::get(C, ArgBaseTypeNames));
+  F->setMetadata("kernel_arg_type_qual", llvm::MDNode::get(C, ArgTypeQuals));
+  if (CGF.CGM.getCodeGenOpts().EmitOpenCLArgMetadata)
+    F->setMetadata("kernel_arg_name", llvm::MDNode::get(C, ArgNames));
+
+  return F;
 }

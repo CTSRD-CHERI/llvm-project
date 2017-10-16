@@ -95,7 +95,7 @@ struct CodeGenTypeCache {
     unsigned char SizeAlignInBytes;
   };
 
-  LangAS::ID ASTAllocaAddressSpace;
+  LangAS ASTAllocaAddressSpace;
 
   CharUnits getSizeSize() const {
     return CharUnits::fromQuantity(SizeSizeInBytes);
@@ -115,7 +115,7 @@ struct CodeGenTypeCache {
   llvm::CallingConv::ID BuiltinCC;
   llvm::CallingConv::ID getBuiltinCC() const { return BuiltinCC; }
 
-  LangAS::ID getASTAllocaAddressSpace() const { return ASTAllocaAddressSpace; }
+  LangAS getASTAllocaAddressSpace() const { return ASTAllocaAddressSpace; }
 };
 
 }  // end namespace CodeGen

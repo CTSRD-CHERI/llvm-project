@@ -504,7 +504,7 @@ private:
   CXXABI *createCXXABI(const TargetInfo &T);
 
   /// \brief The logical -> physical address space map.
-  const LangAS::Map *AddrSpaceMap;
+  const LangASMap *AddrSpaceMap;
 
   /// \brief Address space map mangling must be used with language specific
   /// address spaces (e.g. OpenCL/CUDA)
@@ -1092,7 +1092,7 @@ public:
   /// The resulting type has a union of the qualifiers from T and the address
   /// space. If T already has an address space specifier, it is silently
   /// replaced.
-  QualType getAddrSpaceQualType(QualType T, LangAS::ID AddressSpace) const;
+  QualType getAddrSpaceQualType(QualType T, LangAS AddressSpace) const;
 
   /// \brief Remove any existing address space on the type and returns the type
   /// with qualifiers intact (or that's the idea anyway)
@@ -2407,14 +2407,14 @@ public:
     return getTargetAddressSpace(Q.getAddressSpace(), dummy);
   }
 
-  unsigned getTargetAddressSpace(LangAS::ID AS, void *dummy) const;
+  unsigned getTargetAddressSpace(LangAS AS, void *dummy) const;
 
   /// Get target-dependent integer value for null pointer which is used for
   /// constant folding.
   uint64_t getTargetNullPointerValue(QualType QT) const;
 
-  bool addressSpaceMapManglingFor(LangAS::ID AS) const {
-    return AddrSpaceMapMangling || AS >= LangAS::FirstTargetAddressSpace;
+  bool addressSpaceMapManglingFor(LangAS AS) const {
+    return AddrSpaceMapMangling || isTargetAddressSpace(AS);
   }
 
 private:

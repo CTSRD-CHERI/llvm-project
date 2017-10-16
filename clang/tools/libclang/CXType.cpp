@@ -403,7 +403,10 @@ unsigned clang_getAddressSpace(CXType CT) {
   if (T.getAddressSpace(nullptr) >= LangAS::FirstTargetAddressSpace) {
     return T.getQualifiers().getAddressSpaceAttributePrintValue();
   }
-  return (unsigned)T.getAddressSpace(nullptr);
+  // FIXME: this function returns either a LangAS or a target AS
+  // Those values can overlap which makes this function rather unpredictable
+  // for any caller
+  return (unsigned)T.getAddressSpace();
 }
 
 CXString clang_getTypedefName(CXType CT) {

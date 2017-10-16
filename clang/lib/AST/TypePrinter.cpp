@@ -1346,7 +1346,9 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
   default: llvm_unreachable("This attribute should have been handled already");
   case AttributedType::attr_address_space:
     OS << "address_space(";
-    OS << (unsigned)T->getEquivalentType().getAddressSpace(nullptr);
+    // FIXME: printing the raw LangAS value is wrong. This should probably
+    // use the same code as Qualifiers::print()
+    OS << (unsigned)T->getEquivalentType().getAddressSpace();
     OS << ')';
     break;
 
@@ -1708,17 +1710,20 @@ void Qualifiers::print(raw_ostream &OS, const PrintingPolicy& Policy,
     OS << "__unaligned";
     addSpace = true;
   }
-  LangAS::ID addrspace = getAddressSpace();
+  LangAS addrspace = getAddressSpace();
   if (addrspace != LangAS::Default) {
-    if (addSpace)
-      OS << ' ';
-    addSpace = true;
-    switch (addrspace) {
+    if (addrspace != LangAS::opencl_private) {
+      if (addSpace)
+        OS << ' ';
+      addSpace = true;
+      switch (addrspace) {
       case LangAS::opencl_global:
         OS << "__global";
         break;
       case LangAS::opencl_local:
         OS << "__local";
+        break;
+      case LangAS::opencl_private:
         break;
       case LangAS::opencl_constant:
       case LangAS::cuda_constant:
@@ -1734,10 +1739,10 @@ void Qualifiers::print(raw_ostream &OS, const PrintingPolicy& Policy,
         OS << "__shared";
         break;
       default:
-        assert(addrspace >= LangAS::FirstTargetAddressSpace);
         OS << "__attribute__((address_space(";
-        OS << (unsigned)addrspace - (unsigned)LangAS::FirstTargetAddressSpace;
+        OS << toTargetAddressSpace(addrspace);
         OS << ")))";
+      }
     }
   }
   if (Qualifiers::GC gc = getObjCGCAttr()) {

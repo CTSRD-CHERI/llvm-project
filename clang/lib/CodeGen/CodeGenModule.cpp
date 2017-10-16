@@ -2520,14 +2520,13 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
     }
   }
 
-  LangAS::ID ExpectedAS =
-      D ? D->getType().getAddressSpace(nullptr)
+  LangAS ExpectedAS =
+      D ? D->getType().getAddressSpace()
         : (LangOpts.OpenCL ? LangAS::opencl_global : LangAS::Default);
   // XXXAR: not quite sure if this is correct (actually I think it's not needed)
   if (getContext().getTargetInfo().areAllPointersCapabilities())
-    ExpectedAS = getTargetCodeGenInfo().getCHERICapabilityAS() +
-                 LangAS::FirstTargetAddressSpace;
-  assert(getTargetAddressSpace((LangAS::ID)ExpectedAS) == Ty->getPointerAddressSpace());
+    ExpectedAS = getLangASFromTargetAS(getTargetCodeGenInfo().getCHERICapabilityAS());
+  assert(getTargetAddressSpace(ExpectedAS) == Ty->getPointerAddressSpace());
   if (AddrSpace != ExpectedAS)
     return getTargetCodeGenInfo().performAddrSpaceCast(*this, GV, AddrSpace,
                                                        ExpectedAS, Ty);
@@ -2673,11 +2672,10 @@ CharUnits CodeGenModule::GetTargetTypeStoreSize(llvm::Type *Ty) const {
       getDataLayout().getTypeStoreSizeInBits(Ty));
 }
 
-LangAS::ID CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D) {
+LangAS CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D) {
+  LangAS AddrSpace = LangAS::Default;
   if (LangOpts.OpenCL) {
-    LangAS::ID AddrSpace =
-         D ? static_cast<LangAS::ID>(D->getType().getAddressSpace(nullptr))
-           : LangAS::opencl_global;
+    AddrSpace = D ? D->getType().getAddressSpace() : LangAS::opencl_global;
     assert(AddrSpace == LangAS::opencl_global ||
            AddrSpace == LangAS::opencl_constant ||
            AddrSpace == LangAS::opencl_local ||
@@ -3869,8 +3867,8 @@ ConstantAddress CodeGenModule::GetAddrOfGlobalTemporary(
       !EvalResult.hasSideEffects())
     Value = &EvalResult.Val;
 
-  LangAS::ID AddrSpace = VD ? GetGlobalVarAddressSpace(VD)
-                          : static_cast<LangAS::ID>(MaterializedType.getAddressSpace(nullptr));
+  LangAS AddrSpace =
+      VD ? GetGlobalVarAddressSpace(VD) : MaterializedType.getAddressSpace();
 
   Optional<ConstantEmitter> emitter;
   llvm::Constant *InitialValue = nullptr;

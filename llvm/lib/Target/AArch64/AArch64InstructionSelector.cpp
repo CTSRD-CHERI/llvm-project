@@ -705,6 +705,11 @@ bool AArch64InstructionSelector::select(MachineInstr &I) const {
                      << " constant on bank: " << RB << ", expected: FPR\n");
         return false;
       }
+
+      // The case when we have 0.0 is covered by tablegen. Reject it here so we
+      // can be sure tablegen works correctly and isn't rescued by this code.
+      if (I.getOperand(1).getFPImm()->getValueAPF().isExactlyValue(0.0))
+        return false;
     } else {
       // s32 and s64 are covered by tablegen.
       if (Ty != p0) {
@@ -1362,13 +1367,13 @@ AArch64InstructionSelector::selectArithImmed(MachineOperand &Root) const {
   else if (Root.isReg()) {
     MachineInstr *Def = MRI.getVRegDef(Root.getReg());
     if (Def->getOpcode() != TargetOpcode::G_CONSTANT)
-      return nullptr;
+      return None;
     MachineOperand &Op1 = Def->getOperand(1);
     if (!Op1.isCImm() || Op1.getCImm()->getBitWidth() > 64)
-      return nullptr;
+      return None;
     Immed = Op1.getCImm()->getZExtValue();
   } else
-    return nullptr;
+    return None;
 
   unsigned ShiftAmt;
 
@@ -1378,10 +1383,13 @@ AArch64InstructionSelector::selectArithImmed(MachineOperand &Root) const {
     ShiftAmt = 12;
     Immed = Immed >> 12;
   } else
-    return nullptr;
+    return None;
 
   unsigned ShVal = AArch64_AM::getShifterImm(AArch64_AM::LSL, ShiftAmt);
-  return [=](MachineInstrBuilder &MIB) { MIB.addImm(Immed).addImm(ShVal); };
+  return {{
+      [=](MachineInstrBuilder &MIB) { MIB.addImm(Immed); },
+      [=](MachineInstrBuilder &MIB) { MIB.addImm(ShVal); },
+  }};
 }
 
 namespace llvm {

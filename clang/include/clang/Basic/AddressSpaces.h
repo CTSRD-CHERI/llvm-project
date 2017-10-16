@@ -16,25 +16,26 @@
 #ifndef LLVM_CLANG_BASIC_ADDRESSSPACES_H
 #define LLVM_CLANG_BASIC_ADDRESSSPACES_H
 
-namespace clang {
+#include <assert.h>
 
-namespace LangAS {
+namespace clang {
 
 /// \brief Defines the address space values used by the address space qualifier
 /// of QualType.
 ///
-enum class ID {
+enum class LangAS : unsigned {
   // The default value 0 is the value used in QualType for the the situation
-  // where there is no address space qualifier. For most languages, this also
-  // corresponds to the situation where there is no address space qualifier in
-  // the source code, except for OpenCL, where the address space value 0 in
-  // QualType represents private address space in OpenCL source code.
+  // where there is no address space qualifier.
   Default = 0,
 
   // OpenCL specific address spaces.
+  // In OpenCL each l-value must have certain non-default address space, each
+  // r-value must have no address space (i.e. the default address space). The
+  // pointee of a pointer must have non-default address space.
   opencl_global,
   opencl_local,
   opencl_constant,
+  opencl_private,
   opencl_generic,
 
   // CUDA specific address spaces.
@@ -55,40 +56,26 @@ enum class ID {
   // cheri_capability = FirstTargetAddressSpace + 200,
 };
 
-constexpr ID Default = ID::Default;
-constexpr ID opencl_global = ID::opencl_global;
-constexpr ID opencl_local = ID::opencl_local;
-constexpr ID opencl_constant = ID::opencl_constant;
-constexpr ID opencl_generic = ID::opencl_generic;
-constexpr ID cuda_device = ID::cuda_device;
-constexpr ID cuda_constant = ID::cuda_constant;
-constexpr ID cuda_shared = ID::cuda_shared;
-constexpr ID FirstTargetAddressSpace = ID::FirstTargetAddressSpace;
-constexpr ID cheri_tls = ID::cheri_tls;
-
 /// The type of a lookup table which maps from language-specific address spaces
 /// to target-specific ones.
-typedef unsigned Map[(int)ID::FirstTargetAddressSpace];
-} // namespace LangAS
+typedef unsigned LangASMap[(unsigned)LangAS::FirstTargetAddressSpace];
+
+/// \return whether \p AS is a target-specific address space rather than a
+/// clang AST address space
+inline bool isTargetAddressSpace(LangAS AS) {
+  return (unsigned)AS >= (unsigned)LangAS::FirstTargetAddressSpace;
 }
 
-inline bool operator>=(clang::LangAS::ID LHS, clang::LangAS::ID RHS) {
-  return static_cast<unsigned>(LHS) >= static_cast<unsigned>(RHS);
+inline unsigned toTargetAddressSpace(LangAS AS) {
+  assert(isTargetAddressSpace(AS));
+  return (unsigned)AS - (unsigned)LangAS::FirstTargetAddressSpace;
 }
-inline bool operator==(clang::LangAS::ID LHS, clang::LangAS::ID RHS) {
-  return static_cast<unsigned>(LHS) == static_cast<unsigned>(RHS);
+
+inline LangAS getLangASFromTargetAS(unsigned TargetAS) {
+  return static_cast<LangAS>((TargetAS) +
+                             (unsigned)LangAS::FirstTargetAddressSpace);
 }
-inline bool operator!=(clang::LangAS::ID LHS, clang::LangAS::ID RHS) {
-  return static_cast<unsigned>(LHS) != static_cast<unsigned>(RHS);
-}
-inline bool operator<=(clang::LangAS::ID LHS, clang::LangAS::ID RHS) {
-  return static_cast<unsigned>(LHS) <= static_cast<unsigned>(RHS);
-}
-inline clang::LangAS::ID operator+(clang::LangAS::ID LHS, unsigned RHS) {
-  return static_cast<clang::LangAS::ID>(static_cast<unsigned>(LHS) + RHS);
-}
-inline clang::LangAS::ID operator+(unsigned LHS, clang::LangAS::ID RHS) {
-  return static_cast<clang::LangAS::ID>(LHS + static_cast<unsigned>(RHS));
-}
+
+} // namespace clang
 
 #endif

@@ -267,13 +267,11 @@ public:
   /// other than OpenCL and CUDA.
   /// If \p D is nullptr, returns the default target favored address space
   /// for global variable.
-  virtual LangAS::ID getGlobalVarAddressSpace(CodeGenModule &CGM,
-                                              const VarDecl *D) const;
+  virtual LangAS getGlobalVarAddressSpace(CodeGenModule &CGM,
+                                          const VarDecl *D) const;
 
   /// Get the AST address space for alloca.
-  virtual LangAS::ID getASTAllocaAddressSpace() const {
-    return LangAS::Default;
-  }
+  virtual LangAS getASTAllocaAddressSpace() const { return LangAS::Default; }
 
   /// Perform address space cast of an expression of pointer type.
   /// \param V is the LLVM value to be casted to another address space.
@@ -282,9 +280,8 @@ public:
   /// \param DestTy is the destination LLVM pointer type.
   /// \param IsNonNull is the flag indicating \p V is known to be non null.
   virtual llvm::Value *performAddrSpaceCast(CodeGen::CodeGenFunction &CGF,
-                                            llvm::Value *V, LangAS::ID SrcAddr,
-                                            LangAS::ID DestAddr,
-                                            llvm::Type *DestTy,
+                                            llvm::Value *V, LangAS SrcAddr,
+                                            LangAS DestAddr, llvm::Type *DestTy,
                                             bool IsNonNull = false) const;
 
   virtual unsigned getAddressSpaceForType(QualType DestTy,
@@ -297,8 +294,7 @@ public:
   /// \param DestTy is the destination LLVM pointer type.
   virtual llvm::Constant *performAddrSpaceCast(CodeGenModule &CGM,
                                                llvm::Constant *V,
-                                               LangAS::ID SrcAddr,
-                                               LangAS::ID DestAddr,
+                                               LangAS SrcAddr, LangAS DestAddr,
                                                llvm::Type *DestTy) const;
 
   /// Get the syncscope used in LLVM IR.
@@ -325,6 +321,16 @@ public:
   virtual TargetOpenCLBlockHelper *getTargetOpenCLBlockHelper() const {
     return nullptr;
   }
+
+  /// Create an OpenCL kernel for an enqueued block. The kernel function is
+  /// a wrapper for the block invoke function with target-specific calling
+  /// convention and ABI as an OpenCL kernel. The wrapper function accepts
+  /// block context and block arguments in target-specific way and calls
+  /// the original block invoke function.
+  virtual llvm::Function *
+  createEnqueuedBlockKernel(CodeGenFunction &CGF,
+                            llvm::Function *BlockInvokeFunc,
+                            llvm::Value *BlockLiteral) const;
 };
 
 } // namespace CodeGen
