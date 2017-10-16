@@ -80,6 +80,8 @@ llvm_config.with_system_environment(
 llvm_config.use_default_substitutions()
 
 # Discover the 'clang' and 'clangcc' to use.
+
+
 def inferClang(PATH):
     # Determine which clang to use.
     clang = os.getenv('CLANG')
@@ -121,14 +123,34 @@ if config.clang_examples:
     config.available_features.add('examples')
 
 builtin_include_dir = llvm_config.get_clang_builtin_include_dir(config.clang)
+# FIXME: move this to LLVM
+clang_cc1_args = ['-cc1', '-internal-isystem',
+                  llvm_config.get_clang_builtin_include_dir(config.clang), '-nostdsysteminc']
+cheri128_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-mllvm', '-cheri128', '-target-cpu', 'cheri128']
+cheri256_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu', 'cheri']
+purecap_cc1_args  = ['-triple', 'cheri-unknown-freebsd', '-target-abi', 'purecap']
+
+if config.cheri_is_128:
+    config.available_features.add("cheri_is_128")
+    purecap_cc1_args += ['-mllvm', '-cheri128']
+    clang_cc1_args += ['-mllvm', '-cheri128']  # force cheri128 for tests
+    cheri256_cc1_args += ['-mllvm', '-cheri256', '-mllvm', '-cheri-test-mode']
+    cheri_cc1_args = cheri128_cc1_args
+else:
+    config.available_features.add("cheri_is_256")
+    cheri128_cc1_args += ['-mllvm', '-cheri-test-mode']
+    cheri_cc1_args = cheri256_cc1_args
 
 tools = [
     # By specifying %clang_cc1 as part of the substitution, this substitution
     # relies on repeated substitution, so must come before %clang_cc1.
+    ToolSubst('%cheri_cc1',    command='%clang_cc1', extra_args=cheri_cc1_args),
+    ToolSubst('%cheri128_cc1', command='%clang_cc1', extra_args=cheri128_cc1_args),
+    ToolSubst('%cheri256_cc1', command='%clang_cc1', extra_args=cheri256_cc1_args),
+    ToolSubst('%cheri_purecap_cc1', command='%clang_cc1', extra_args=purecap_cc1_args),
     ToolSubst('%clang_analyze_cc1', command='%clang_cc1',
               extra_args=['-analyze', '%analyze']),
-    ToolSubst('%clang_cc1', command=config.clang, extra_args=[
-              '-cc1', '-internal-isystem', builtin_include_dir, '-nostdsysteminc']),
+    ToolSubst('%clang_cc1', command=config.clang, extra_args=clang_cc1_args),
     ToolSubst('%clang_cpp', command=config.clang,
               extra_args=['--driver-mode=cpp']),
     ToolSubst('%clang_cl', command=config.clang,
