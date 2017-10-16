@@ -973,7 +973,7 @@ private:
     unsigned ClassID = Mips::HWRegsRegClassID;
     return RegIdx.RegInfo->getRegClass(ClassID).getRegister(RegIdx.Index);
   }
-
+public:
   /// Coerce the register to Cheri capability register and return the real
   /// register for the current target.
   unsigned getCheriReg() const {
@@ -982,8 +982,6 @@ private:
     return RegIdx.RegInfo->getRegClass(ClassID).getRegister(RegIdx.Index);
   }
 
-
-public:
   void addExpr(MCInst &Inst, const MCExpr *Expr) const {
     // Add as immediate when possible.  Null MCExpr = 0.
     if (!Expr)
@@ -7764,12 +7762,14 @@ bool MipsAsmParser::ParseDirective(AsmToken DirectiveID) {
     }
 
     MipsOperand &StackRegOpnd = static_cast<MipsOperand &>(*TmpReg[0]);
-    if (!StackRegOpnd.isGPRAsmReg()) {
+    if (!StackRegOpnd.isGPRAsmReg() && !StackRegOpnd.isCheriAsmReg()) {
       reportParseError(StackRegOpnd.getStartLoc(),
                        "expected general purpose register");
       return false;
     }
-    unsigned StackReg = StackRegOpnd.getGPR32Reg();
+    unsigned StackReg = StackRegOpnd.isCheriAsmReg()
+                            ? StackRegOpnd.getCheriReg()
+                            : StackRegOpnd.getGPR32Reg();
 
     if (Parser.getTok().is(AsmToken::Comma))
       Parser.Lex();
