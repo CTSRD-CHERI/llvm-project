@@ -6,7 +6,8 @@
 ; FIXME: Why is LLVM generating an invalid cgetpccsetoffset
 ; CHECK-NOT: cgetpccsetoffset        $c12, test
 ; OBJ-NOT:   cgetpccsetoffset        $c12, $zero
-
+; llc without relocation-model pic generates invalid code
+; XFAIL: *
 ; See clang/test/CodeGen/cheri-vla.c
 source_filename = "cheri-vla.c"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
