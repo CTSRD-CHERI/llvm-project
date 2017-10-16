@@ -10060,9 +10060,7 @@ bool Expr::EvaluateAsRValue(EvalResult &Result, const ASTContext &Ctx) const {
     return IsConst;
   
   EvalInfo Info(Ctx, Result, EvalInfo::EM_IgnoreSideEffects);
-  bool Return = ::EvaluateAsRValue(Info, this, Result.Val);
-
-  return Return;
+  return ::EvaluateAsRValue(Info, this, Result.Val);
 }
 
 bool Expr::EvaluateAsBooleanCondition(bool &Result,
