@@ -221,7 +221,10 @@ public:
                                        llvm::StringRef Value,
                                        llvm::SmallString<32> &Opt) const {}
 
-  virtual unsigned getDefaultAS() const { return 0; }
+  virtual unsigned getDefaultAS() const {
+    // For e.g. AMDGPU this should not return 0 but instead whatever LangAS::Default maps to
+    return getABIInfo().getContext().getTargetAddressSpace(LangAS::Default, nullptr);
+  }
 
   virtual unsigned getStackAS() const;
   
