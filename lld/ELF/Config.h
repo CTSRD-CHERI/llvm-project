@@ -240,6 +240,9 @@ struct Configuration {
 
   // 4 for ELF32, 8 for ELF64.
   int Wordsize;
+
+  // Size of a CHERI capability
+  int CapabilitySize = -1;
 };
 
 // The only instance of Configuration struct.
