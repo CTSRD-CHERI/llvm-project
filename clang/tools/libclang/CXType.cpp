@@ -400,7 +400,7 @@ unsigned clang_getAddressSpace(CXType CT) {
   QualType T = GetQualType(CT);
 
   // For non language-specific address space, use separate helper function.
-  if (T.getAddressSpace(nullptr) >= LangAS::FirstTargetAddressSpace) {
+  if (T.getAddressSpace() >= LangAS::FirstTargetAddressSpace) {
     return T.getQualifiers().getAddressSpaceAttributePrintValue();
   }
   // FIXME: this function returns either a LangAS or a target AS
