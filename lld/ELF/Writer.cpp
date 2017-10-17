@@ -212,6 +212,19 @@ void elf::addReservedSymbols() {
   ElfSym::GlobalOffsetTable = addOptionalRegular(
       "_GLOBAL_OFFSET_TABLE_", Out::ElfHeader, Target->GotBaseSymOff);
 
+#if 0
+  // FIXME: we don't want to add this symbol if it is not being used
+  // for now I just moved this to relocations.cpp but that seems like it
+  // could cause threading issues
+  if (InX::CheriCapTable)
+    ElfSym::CheriCapabilityTable = cast<DefinedRegular>(
+        Symtab
+            ->addRegular<ELFT>("_CHERI_CAPABILITY_TABLE_", STV_HIDDEN,
+                               STT_SECTION, /*Value=*/0, /*Size=*/0, STB_LOCAL,
+                               InX::CheriCapTable, nullptr)
+            ->body());
+#endif
+
   // __ehdr_start is the location of ELF file headers. Note that we define
   // this symbol unconditionally even when using a linker script, which
   // differs from the behavior implemented by GNU linker which only define
@@ -305,6 +318,11 @@ template <class ELFT> static void createSyntheticSections() {
   if (Config->EMachine == EM_MIPS) {
     if (Config->ProcessCapRelocs) {
       In<ELFT>::CapRelocs = make<CheriCapRelocsSection<ELFT>>();
+    }
+    // We only need the capability table section if EF_MIPS_MACH_CHERI[128|256] is set
+    if (Config->CapabilitySize > 0) {
+      InX::CheriCapTable = make<CheriCapTableSection>();
+      Add(InX::CheriCapTable);
     }
     if (!Config->Shared && Config->HasDynSymTab) {
       InX::MipsRldMap = make<MipsRldMapSection>();
@@ -667,6 +685,11 @@ static bool isRelroSection(const OutputSection *Sec) {
   // disabled, which enables us to put it into RELRO.
   if (Sec == InX::GotPlt->getParent())
     return Config->ZNow;
+
+  // Similarly the CHERI capability table is also relro since the capabilities
+  // in the table need to be initialized at runtime to set the tag bits
+  if (InX::CheriCapTable && Sec == InX::CheriCapTable->getParent())
+    return true;
 
   // .dynamic section contains data for the dynamic linker, and
   // there's no need to write to it at runtime, so it's better to put

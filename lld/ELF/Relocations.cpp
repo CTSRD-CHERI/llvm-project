@@ -341,7 +341,7 @@ static bool isStaticLinkTimeConstant(RelExpr E, RelType Type, const Symbol &Sym,
                      R_MIPS_GOT_GP_PC, R_MIPS_TLSGD, R_GOT_PAGE_PC, R_GOT_PC,
                      R_GOTONLY_PC, R_GOTONLY_PC_FROM_END, R_PLT_PC, R_TLSGD_PC,
                      R_TLSGD, R_PPC_PLT_OPD, R_TLSDESC_CALL, R_TLSDESC_PAGE,
-                     R_HINT>(E))
+                     R_HINT, R_CHERI_CAPABILITY_TABLE_INDEX>(E))
     return true;
 
   // These never do, except if the entire file is position dependent or if
@@ -981,9 +981,9 @@ static void scanReloc(InputSectionBase &Sec, OffsetGetter &GetOffset, RelTy *&I,
       std::lock_guard<std::mutex> Lock(Mu);
       LocationSym = Symtab->find(SymbolHackName);
       if (!LocationSym) {
-        Symtab->addRegular(Saver.save(SymbolHackName), STV_DEFAULT, STT_SECTION,
-                           0, Sec.getOutputSection()->Size, STB_LOCAL, &Sec,
-                           Sec.File);
+        Symtab->addRegular<ELFT>(Saver.save(SymbolHackName), STV_DEFAULT,
+                                 STT_SECTION, 0, Sec.getOutputSection()->Size,
+                                 STB_LOCAL, &Sec, Sec.File);
         LocationSym = Symtab->find(SymbolHackName);
         assert(LocationSym);
       }
@@ -991,6 +991,22 @@ static void scanReloc(InputSectionBase &Sec, OffsetGetter &GetOffset, RelTy *&I,
     In<ELFT>::CapRelocs->addCapReloc({LocationSym, Offset}, Config->Pic,
                                      {&Sym, 0u}, NeedsDynReloc, Addend);
     // TODO: check if it needs a plt stub
+    return;
+  } else if (Expr == R_CHERI_CAPABILITY_TABLE_INDEX) {
+    assert(Config->ProcessCapRelocs);
+    uint32_t Index = InX::CheriCapTable->addEntry(Sym);
+    assert(Addend == 0);
+    // FIXME: locking?
+    if (!ElfSym::CheriCapabilityTable)
+      ElfSym::CheriCapabilityTable = cast<Defined>(Symtab->addRegular("_CHERI_CAPABILITY_TABLE_", STV_HIDDEN, STT_SECTION, /*Value=*/0, /*Size=*/0, STB_LOCAL, InX::CheriCapTable, nullptr));
+    In<ELFT>::CapRelocs->addCapReloc(
+      {ElfSym::CheriCapabilityTable, Index * Config->CapabilitySize}, Config->Pic,
+      {&Sym, 0u}, Sym.IsPreemptible, Addend);
+    if (Config->Pic) {
+      error("Cannot add capability table entries for PIC code yet!");
+    }
+    // Write out the index into the instruction
+    Sec.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
     return;
   }
 

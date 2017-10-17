@@ -343,6 +343,42 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
   assert(Offset == getSize() && "Not all data written?");
 }
 
+
+CheriCapTableSection::CheriCapTableSection()
+  : SyntheticSection(SHF_ALLOC | SHF_WRITE, /* XXX: actually RELRO */
+                     SHT_PROGBITS, Config->CapabilitySize, ".cap_table") {
+  assert(Config->CapabilitySize > 0);
+  this->Entsize = Config->CapabilitySize;
+}
+
+void CheriCapTableSection::writeTo(uint8_t* Buf) {
+  // Should be filled with all zeros and crt_init_globals fills it in
+  // TODO: fill in the raw bits and use csettag
+  (void)Buf;
+}
+
+uint32_t CheriCapTableSection::addEntry(const SymbolBody &Sym) {
+  uint32_t Index = Entries.size();
+  // FIXME: can this be called from multiple threads?
+  auto it = Entries.insert({&Sym, Index});
+  if (!it.second) {
+    return it.first->second;
+  }
+#ifdef DEBUG_CAP_TABLE
+  llvm::errs() << "Added symbol " << toString(Sym) << " to .cap_table with index "
+               << Index << "\n";
+#endif
+  return Index;
+}
+
+uint32_t CheriCapTableSection::getIndex(const SymbolBody &Sym) const {
+  auto it = Entries.find(&Sym);
+  assert(it != Entries.end());
+  return it->second;
+}
+
+CheriCapTableSection *InX::CheriCapTable;
+
 template class elf::CheriCapRelocsSection<ELF32LE>;
 template class elf::CheriCapRelocsSection<ELF32BE>;
 template class elf::CheriCapRelocsSection<ELF64LE>;

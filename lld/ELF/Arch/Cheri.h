@@ -52,6 +52,12 @@ struct CheriCapReloc {
   SymbolAndOffset Target;
   int64_t CapabilityOffset;
   bool NeedsDynReloc;
+  bool operator==(const CheriCapReloc &Other) const {
+    return Target.Symbol == Other.Target.Symbol &&
+           Target.Offset == Other.Target.Offset &&
+           CapabilityOffset == Other.CapabilityOffset &&
+           NeedsDynReloc == Other.NeedsDynReloc;
+  }
 };
 
 template <class ELFT> class CheriCapRelocsSection : public SyntheticSection {
@@ -73,16 +79,29 @@ private:
   // map or vector?
   llvm::MapVector<CheriCapRelocLocation, CheriCapReloc> RelocsMap;
   bool addEntry(CheriCapRelocLocation Loc, CheriCapReloc Relocation) {
-    auto It = RelocsMap.insert(std::make_pair(Loc, Relocation));
-    if (!It.second) {
-      // Maybe happens with vtables?
-      error("Symbol already added to cap relocs");
-      return false;
-    }
-    return true;
+    auto it = RelocsMap.insert(std::make_pair(Loc, Relocation));
+    assert(it.first->second == Relocation);
+    return it.second;
   }
   // TODO: list of added dynamic relocations?
 };
+
+class CheriCapTableSection : public SyntheticSection {
+public:
+  CheriCapTableSection();
+  uint32_t addEntry(const SymbolBody& Sym);
+  uint32_t getIndex(const SymbolBody& Sym) const;
+  bool empty() const override { return Entries.empty(); }
+  void writeTo(uint8_t *Buf) override;
+  size_t getSize() const override {
+    if (!Entries.empty())
+      assert(Config->CapabilitySize > 0);
+    return Entries.size() * Config->CapabilitySize;
+  }
+private:
+  llvm::MapVector<const SymbolBody *, uint32_t> Entries;
+};
+
 
 } // namespace elf
 } // namespace lld

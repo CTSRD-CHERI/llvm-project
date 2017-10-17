@@ -327,6 +327,10 @@ struct ElfSym {
   static Defined *MipsGp;
   static Defined *MipsGpDisp;
   static Defined *MipsLocalGp;
+
+  // The _CHERI_CAPABILITY_TABLE_ symbol points to the beginning of the
+  // .cap_table section
+  static Defined *CheriCapabilityTable;
 };
 
 // A buffer class that is large enough to hold any Symbol-derived
