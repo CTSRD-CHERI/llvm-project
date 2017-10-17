@@ -565,6 +565,8 @@ class Reducer(object):
                 llc_args.append("-mattr=" + command[i + 1])
             if arg == "-mrelocation-model":
                 llc_args.append("-relocation-model=" + command[i + 1])
+            if arg == "-mthread-model":
+                llc_args.append("-thread-model=" + command[i + 1])
             if arg == "-msoft-float":
                 llc_args.append("-float-abi=soft")
         print("Checking whether compiling IR file with llc crashes:", end="", flush=True)
