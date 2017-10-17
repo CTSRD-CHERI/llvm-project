@@ -479,6 +479,7 @@ class Reducer(object):
         if "-o" not in new_command:
             print("Adding '-o -' to the compiler invocation")
             new_command += ["-o", "-"]
+        full_cmd = new_command.copy()
         print("Checking whether reproducer crashes with ", self.options.clang_cmd, ":", sep="", end="", flush=True)
         if not self._check_crash(new_command, infile):
             die("Crash reproducer no longer crashes?")
@@ -513,7 +514,7 @@ class Reducer(object):
                 return self._simplify_frontend_crash_cmd(new_command, infile)
             else:
                 print("will try to use bugpoint.")
-                return self._simplify_backend_crash_cmd(new_command, infile)
+                return self._simplify_backend_crash_cmd(full_cmd, infile)
 
     def _simplify_frontend_crash_cmd(self, command: list, infile: Path):
         print("Checking whether compiling without warnings crashes:", end="", flush=True)
