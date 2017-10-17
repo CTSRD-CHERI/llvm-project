@@ -1146,8 +1146,10 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
       Config->CapabilitySize = 16;
     if ((Config->EFlags & EF_MIPS_MACH) == EF_MIPS_MACH_CHERI256)
       Config->CapabilitySize = 32;
+    if (ErrorCount)
+      return;
   }
-  // CapabilitySize must be set if we are targetting the purecap ABI
+  // CapabilitySize must be set if we are targeting the purecap ABI
   if (Config->MipsCheriAbi)
     assert(Config->CapabilitySize > 0);
 
