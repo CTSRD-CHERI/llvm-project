@@ -30,6 +30,12 @@ def verbose_print(*args, **kwargs):
         print(*args, **kwargs)
 
 
+def extremely_verbose_print(*args, **kwargs):
+    global options
+    if options.extremely_verbose:
+        print(*args, **kwargs)
+
+
 def die(*args):
     sys.exit(red(" ".join(map(str, args)), style="bold"))
 
@@ -227,8 +233,8 @@ class RunCreduce(ReduceTool):
         reduce_script = self._create_reduce_script(tempdir, input_file.absolute())
         creduce = ["time", str(self.tool), str(reduce_script), str(input_file), "--timing"] + extra_args
         # This is way too verbose
-        # if self.args.verbose:
-        #     creduce.append("--print-diff")
+        if self.args.extremely_verbose:
+            creduce.append("--print-diff")
         print("About to run", creduce)
         try:
             run(creduce, cwd=tempdir)
@@ -255,13 +261,13 @@ class RunCreduce(ReduceTool):
             skipped_rewrite_includes = 0
             for line in input_file.readlines():
                 if re.match(start_rewrite_includes, line):
-                    verbose_print("Starting -frewrite-includes-block:", line.rstrip())
+                    extremely_verbose_print("Starting -frewrite-includes-block:", line.rstrip())
                     assert not in_rewrite_includes
                     assert skipped_rewrite_includes == 0
                     in_rewrite_includes = True
                     continue
                 elif re.match(end_rewrite_includes, line):
-                    verbose_print("Ending -frewrite-includes-block, skipped", skipped_rewrite_includes, "lines")
+                    extremely_verbose_print("Ending -frewrite-includes-block, skipped", skipped_rewrite_includes, "lines")
                     assert in_rewrite_includes
                     in_rewrite_includes = False
                     skipped_rewrite_includes = 0
@@ -269,21 +275,21 @@ class RunCreduce(ReduceTool):
                 elif in_rewrite_includes:
                     if skipped_rewrite_includes > max_rewrite_includes_lines:
                         die("Error in initial reduction, rerun with --no-initial-reduce")
-                    verbose_print("Skipping line inside -frewrite-includes:", line.rstrip())
+                    extremely_verbose_print("Skipping line inside -frewrite-includes:", line.rstrip())
                     skipped_rewrite_includes += 1
                     continue
                 elif line.lstrip().startswith("//"):
                     continue  # skip line comments
                 # This appears to break creduce sometimes:
                 # elif re.match(line_regex, line):
-                #     verbose_print("Removing # line directive:", line.rstrip())
+                #     extremely_verbose_print("Removing # line directive:", line.rstrip())
                 #     continue
                 else:
                     out_file.write(line)
             out_file.flush()
-        if self.args.verbose:
-            # verbose_print("Initial reduction:")
-            # subprocess.call(["diff", "-u", str(input_path), out_file.name])
+        if self.args.extremely_verbose:
+            verbose_print("Initial reduction:")
+            subprocess.call(["diff", "-u", str(input_path), out_file.name])
             pass
 
     def is_reduce_script_interesting(self, reduce_script: Path, input_file: Path) -> bool:
@@ -303,6 +309,7 @@ class RunCreduce(ReduceTool):
 class Options(object):
     def __init__(self, args: argparse.Namespace):
         self.verbose = args.verbose
+        self.extremely_verbose = args.extremely_verbose
         self.bindir = Path(args.bindir)
         self.args = args
         self.no_initial_reduce = args.no_initial_reduce  # type: bool
@@ -350,6 +357,8 @@ class Options(object):
 class Reducer(object):
     def __init__(self, parser: argparse.ArgumentParser):
         self.args, self.reduce_args = parser.parse_known_args()
+        if self.args.extremely_verbose:
+            self.args.verbose = True
         global options
         options = Options(self.args)
         self.options = options
@@ -646,6 +655,7 @@ def main():
     parser.add_argument("--creduce-cmd", help="Path to `creduce` tool. Default is `creduce`")
     parser.add_argument("--output-file", help="The name of the output file")
     parser.add_argument("--verbose", action="store_true", help="Print more debug output")
+    parser.add_argument("--extremely-verbose", action="store_true", help="Print tons of debug output")
     parser.add_argument("--llvm-error", action="store_true", help="Reduce a LLVM ERROR: message instead of a crash")
     # TODO: infer this automatically from the crash reproducer?
     parser.add_argument("--crash-message", help="If set the crash must contain this message to be accepted for reduction."
