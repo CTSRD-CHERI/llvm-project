@@ -282,8 +282,9 @@ class RunCreduce(ReduceTool):
                     out_file.write(line)
             out_file.flush()
         if self.args.verbose:
-            verbose_print("Initial reduction:")
-            subprocess.call(["diff", "-u", str(input_path), out_file.name])
+            # verbose_print("Initial reduction:")
+            # subprocess.call(["diff", "-u", str(input_path), out_file.name])
+            pass
 
     def is_reduce_script_interesting(self, reduce_script: Path, input_file: Path) -> bool:
         if self.args.verbose:
@@ -548,27 +549,29 @@ class Reducer(object):
             return self._simplify_frontend_crash_cmd(original_command, infile)
         if not irfile.exists():
             die("IR file was not generated?")
-        llc_args = [str(self.options.llc_cmd), "-o", "/dev/null"]  # TODO: -o -?
+        llc_args = [str(self.options.llc_cmd), "-O3", "-o", "/dev/null"]  # TODO: -o -?
         for i, arg in enumerate(command):
             if arg == "-triple" or arg == "-target":
                 # assume well formed command line
                 llc_args.append("-mtriple=" + command[i + 1])
             # forward all the llvm args
-            if arg == "-mllvm":
+            elif arg == "-mllvm":
                 llc_args.append(command[i + 1])
-            if arg == "-target-abi":
+            elif arg == "-target-abi":
                 llc_args.append("-target-abi")
                 llc_args.append(command[i + 1])
-            if arg == "-target-cpu":
+            elif arg == "-target-cpu":
                 llc_args.append("-mcpu=" + command[i + 1])
-            if arg == "-target-feature":
+            elif arg == "-target-feature":
                 llc_args.append("-mattr=" + command[i + 1])
-            if arg == "-mrelocation-model":
+            elif arg == "-mrelocation-model":
                 llc_args.append("-relocation-model=" + command[i + 1])
-            if arg == "-mthread-model":
+            elif arg == "-mthread-model":
                 llc_args.append("-thread-model=" + command[i + 1])
-            if arg == "-msoft-float":
+            elif arg == "-msoft-float":
                 llc_args.append("-float-abi=soft")
+            elif arg.startswith("-vectorize"):
+                llc_args.append(arg)
         print("Checking whether compiling IR file with llc crashes:", end="", flush=True)
         if self._check_crash(llc_args, irfile):
             print("Crash found with LLC -> using bugpoint which is faster than creduce.")
