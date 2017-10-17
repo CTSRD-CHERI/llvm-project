@@ -119,8 +119,6 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
   /// IsCheri - Supports the CHERI capability extensions
   bool IsCheri;
 
-  // UseCheriCapTable - Use the new cheri capability table
-  bool UseCheriCapTable;
   // InMips16 -- can process Mips16 instructions
   bool InMips16Mode;
 
@@ -287,7 +285,7 @@ public:
   bool useSmallSection() const { return UseSmallSection; }
   bool isCheri() const { return IsCheri; }
   bool isCheri128() const { return IsCheri128; }
-  bool useCheriCapTable() const { return UseCheriCapTable; };
+  bool useCheriCapTable() const { return getABI().UsesCapabilityTable(); };
   /// This is a very ugly hack.  CodeGenPrepare can sink pointer arithmetic to
   /// appear closer to load and store operations (because SelectionDAG only
   /// looks at one basic block at a time).  Unfortunately, it defaults to using

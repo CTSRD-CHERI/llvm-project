@@ -378,6 +378,8 @@ class LLVMConfig(object):
 
         self.config.clang = self.use_llvm_tool(
             'clang', search_env='CLANG', required=required)
+        if not self.config.clang:
+            return
 
         self.config.substitutions.append(
             ('%llvmshlibdir', self.config.llvm_shlib_dir))

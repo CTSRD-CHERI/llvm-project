@@ -252,7 +252,7 @@ void MipsSEDAGToDAGISel::initCapGlobalBaseReg(MachineFunction &MF) {
   if (!MipsFI->capGlobalBaseRegSet())
     return;
   assert(Subtarget->useCheriCapTable());
-  assert(MF.getTarget().isPositionIndependent());
+  assert(MF.getTarget().isPositionIndependent() && "CHERI CODEGEN REQUIRES -fPIC");
 
   MachineBasicBlock &MBB = MF.front();
   MachineBasicBlock::iterator I = MBB.begin();
@@ -262,8 +262,7 @@ void MipsSEDAGToDAGISel::initCapGlobalBaseReg(MachineFunction &MF) {
   const MipsABIInfo &ABI = static_cast<const MipsTargetMachine &>(TM).getABI();
 
   assert(ABI.IsCheriPureCap());
-  // TODO: use an accessor in ABI
-  const unsigned GlobalCapReg = Mips::C26;
+  const unsigned GlobalCapReg = ABI.GetGlobalCapability();
 
   // For the purecap ABI, $cgp is required to point to the function's/DSOs
   // capability table on function entry, so emit a single COPY

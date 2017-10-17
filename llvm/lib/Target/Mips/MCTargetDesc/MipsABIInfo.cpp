@@ -15,6 +15,9 @@
 
 using namespace llvm;
 
+static cl::opt<bool> UseCheriCapTable("cheri-cap-table", cl::Hidden,
+                                         cl::desc("Use the new cheri cap table to load globals"));
+
 namespace {
 static const MCPhysReg O32IntRegs[4] = {Mips::A0, Mips::A1, Mips::A2, Mips::A3};
 
@@ -102,6 +105,10 @@ unsigned MipsABIInfo::GetGlobalCapability() const {
   return Mips::C26;
 }
 
+bool MipsABIInfo::UsesCapabilityTable() const {
+  return IsCheriPureCap() && UseCheriCapTable;
+}
+
 unsigned MipsABIInfo::GetReturnAddress() const {
   return IsCheriPureCap() ?
     Mips::C17 :
@@ -109,6 +116,7 @@ unsigned MipsABIInfo::GetReturnAddress() const {
 }
 
 unsigned MipsABIInfo::GetGlobalPtr() const {
+  assert(!UsesCapabilityTable());
   return ArePtrs64bit() ? Mips::GP_64 : Mips::GP;
 }
 
@@ -156,4 +164,3 @@ unsigned MipsABIInfo::GetEhDataReg(unsigned I) const {
 
   return IsN64() ? EhDataReg64[I] : EhDataReg[I];
 }
-
