@@ -157,7 +157,7 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
 
   // HasMT -- support MT ASE.
   bool HasMT;
-  
+
   // Disable use of the `jal` instruction.
   bool UseLongCalls = false;
 

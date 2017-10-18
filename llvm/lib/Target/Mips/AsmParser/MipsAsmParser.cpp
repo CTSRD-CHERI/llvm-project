@@ -1244,16 +1244,7 @@ public:
 
   bool isRegIdx() const { return Kind == k_RegisterIndex; }
   bool isImm() const override { return Kind == k_Immediate; }
-  template<int width, int shift>
-  bool isScaledImmediate() const {
-    if (Kind != k_Immediate)
-      return false;
-    if (const MCConstantExpr *MCE = dyn_cast<MCConstantExpr>(getImm())) {
-      int Val = MCE->getValue();
-      return isInt<width>(Val >> shift) && (((Val >> shift) << shift) == Val);
-    }
-    return false;
-  }
+
   bool isConstantImm() const {
     int64_t Res;
     return isImm() && getImm()->evaluateAsAbsolute(Res);
@@ -2150,8 +2141,7 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
             if (SR->getKind() == MCSymbolRefExpr::VK_None) {
               // Expand symbol.
               expandMemInst(Inst, IDLoc, Out, STI, MCID.mayLoad(), false);
-              if (getParser().hasPendingError())
-                return true;
+              return getParser().hasPendingError();
             }
           } else if (!isEvaluated(Expr)) {
             expandMemInst(Inst, IDLoc, Out, STI, MCID.mayLoad(), false);
