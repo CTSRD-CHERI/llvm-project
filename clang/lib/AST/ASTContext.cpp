@@ -8425,6 +8425,12 @@ QualType ASTContext::mergeTypes(QualType LHS, QualType RHS,
       LHSPointee = LHSPointee.getUnqualifiedType();
       RHSPointee = RHSPointee.getUnqualifiedType();
     }
+    // capability and non-capability pointers are not the same!
+    // See https://github.com/CTSRD-CHERI/clang/issues/160
+    if (LHS->getAs<PointerType>()->isCHERICapability() !=
+        RHS->getAs<PointerType>()->isCHERICapability())
+      return QualType();
+
     QualType ResultType = mergeTypes(LHSPointee, RHSPointee, false, 
                                      Unqualified);
     if (ResultType.isNull()) return QualType();
