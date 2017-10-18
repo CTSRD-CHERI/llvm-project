@@ -63,6 +63,10 @@ static SymbolAndOffset sectionWithOffsetToSymbol(InputSectionBase *IS,
                                                  Symbol *Src) {
   Symbol *FallbackResult = nullptr;
   uint64_t FallbackOffset = Offset;
+  // For internal symbols we don't have a matching InputFile, just return
+  auto* File = IS->File;
+  if (!File)
+    return {Src, Offset};
   for (Symbol *B : IS->File->getSymbols()) {
     if (auto *D = dyn_cast<Defined>(B)) {
       if (D->Section != IS)
@@ -311,7 +315,8 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
       if (OutputSection *OS = Reloc.Target.Symbol->getOutputSection()) {
         assert(TargetVA >= OS->Addr);
         uint64_t OffsetInOS = TargetVA - OS->Addr;
-        assert(OffsetInOS < OS->Size);
+        // Use less-or-equal here to account for __end_foo symbols which point 1 past the section
+        assert(OffsetInOS <= OS->Size);
         TargetSize = OS->Size - OffsetInOS;
 #if 0
         if (Config->VerboseCapRelocs)
@@ -357,7 +362,7 @@ void CheriCapTableSection::writeTo(uint8_t* Buf) {
   (void)Buf;
 }
 
-uint32_t CheriCapTableSection::addEntry(const SymbolBody &Sym) {
+uint32_t CheriCapTableSection::addEntry(const Symbol &Sym) {
   uint32_t Index = Entries.size();
   // FIXME: can this be called from multiple threads?
   auto it = Entries.insert({&Sym, Index});
@@ -371,7 +376,7 @@ uint32_t CheriCapTableSection::addEntry(const SymbolBody &Sym) {
   return Index;
 }
 
-uint32_t CheriCapTableSection::getIndex(const SymbolBody &Sym) const {
+uint32_t CheriCapTableSection::getIndex(const Symbol &Sym) const {
   auto it = Entries.find(&Sym);
   assert(it != Entries.end());
   return it->second;

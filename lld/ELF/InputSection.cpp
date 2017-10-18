@@ -652,7 +652,7 @@ static uint64_t getRelocTargetVA(const InputFile &File, RelType Type, int64_t A,
   case R_CHERI_CAPABILITY:
     llvm_unreachable("R_CHERI_CAPABILITY should not be handled here!");
   case R_CHERI_CAPABILITY_TABLE_INDEX:
-    return Config->CapabilitySize * InX::CheriCapTable->getIndex(Body) + A;
+    return Config->CapabilitySize * InX::CheriCapTable->getIndex(Sym) + A;
   }
   llvm_unreachable("Invalid expression");
 }

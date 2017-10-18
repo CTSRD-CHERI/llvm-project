@@ -89,8 +89,8 @@ private:
 class CheriCapTableSection : public SyntheticSection {
 public:
   CheriCapTableSection();
-  uint32_t addEntry(const SymbolBody& Sym);
-  uint32_t getIndex(const SymbolBody& Sym) const;
+  uint32_t addEntry(const Symbol& Sym);
+  uint32_t getIndex(const Symbol& Sym) const;
   bool empty() const override { return Entries.empty(); }
   void writeTo(uint8_t *Buf) override;
   size_t getSize() const override {
@@ -99,7 +99,7 @@ public:
     return Entries.size() * Config->CapabilitySize;
   }
 private:
-  llvm::MapVector<const SymbolBody *, uint32_t> Entries;
+  llvm::MapVector<const Symbol *, uint32_t> Entries;
 };
 
 
