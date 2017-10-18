@@ -981,9 +981,9 @@ static void scanReloc(InputSectionBase &Sec, OffsetGetter &GetOffset, RelTy *&I,
       std::lock_guard<std::mutex> Lock(Mu);
       LocationSym = Symtab->find(SymbolHackName);
       if (!LocationSym) {
-        Symtab->addRegular<ELFT>(Saver.save(SymbolHackName), STV_DEFAULT,
-                                 STT_SECTION, 0, Sec.getOutputSection()->Size,
-                                 STB_LOCAL, &Sec, Sec.File);
+        Symtab->addRegular(Saver.save(SymbolHackName), STV_DEFAULT, STT_SECTION,
+                           0, Sec.getOutputSection()->Size, STB_GLOBAL, &Sec,
+                           Sec.File);
         LocationSym = Symtab->find(SymbolHackName);
         assert(LocationSym);
       }
