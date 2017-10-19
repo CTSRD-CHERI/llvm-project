@@ -504,7 +504,7 @@ class Reducer(object):
         # try emitting llvm-ir (i.e. frontend bug):
         print("Checking whether -O0 -emit-llvm crashes:", end="", flush=True)
         if self._check_crash(new_command + ["-O0", "-emit-llvm"], infile):
-            new_command.append("-O0 -emit-llvm")
+            new_command.extend(["-O0", "-emit-llvm"])
             print("Must be a", blue("frontend crash", style="bold"), ",  will need to use creduce for test case reduction")
             return self._simplify_frontend_crash_cmd(new_command, infile)
         else:
