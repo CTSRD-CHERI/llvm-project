@@ -2172,8 +2172,7 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
             if (SR->getKind() == MCSymbolRefExpr::VK_None) {
               // Expand symbol.
               expandMemInst(Inst, IDLoc, Out, STI, MCID.mayLoad(), false);
-              if (getParser().hasPendingError())
-                return true;
+              return getParser().hasPendingError();
             }
           } else if (!isEvaluated(Expr)) {
             expandMemInst(Inst, IDLoc, Out, STI, MCID.mayLoad(), false);
