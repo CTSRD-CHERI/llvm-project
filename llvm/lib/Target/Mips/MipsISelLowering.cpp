@@ -2236,20 +2236,27 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
   if (Subtarget.getABI().IsCheriPureCap() && Subtarget.useCheriCapTable()) {
     // FIXME: shouldn't functions have a R_MIPS_CHERI_CAPCALL relocation?
     bool CanUseCapTable = GVTy->isFunctionTy() ||  DAG.getDataLayout().isFatPointer(GVTy);
-
     if (CanUseCapTable) {
-      if (LargeCapTable)
-        return getGlobalCapBigImmediate(N, SDLoc(N), Ty, DAG,
-                                        MipsII::MO_CAPTAB_HI16,
-                                        MipsII::MO_CAPTAB_LO16,
-                                        DAG.getEntryNode(),
-                                        MachinePointerInfo::getCapTable(
-                                          DAG.getMachineFunction()));
-      else
-        return getGlobalCap(N, SDLoc(N), Ty, DAG, MipsII::MO_CAPTAB11,
-                            DAG.getEntryNode(),
-                            MachinePointerInfo::getCapTable(
-                              DAG.getMachineFunction()));
+      bool IsFnPtr =
+          GVTy->isPointerTy() && GVTy->getPointerElementType()->isFunctionTy();
+      auto CapTable = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
+      // FIXME: in the future it would be good to inline local function pointers
+      // into the capability table directly (right now the value is a
+      // void () addrspace(200)* addrspace(200)* instead of a
+      // void () addrspace(200)*
+      // llvm::errs() << "is fn ptr: " << IsFnPtr << "\n";
+      if (LargeCapTable) {
+        auto HiReloc =
+            IsFnPtr ? MipsII::MO_CAPTAB_CALL_HI16 : MipsII::MO_CAPTAB_HI16;
+        auto LoReloc =
+            IsFnPtr ? MipsII::MO_CAPTAB_CALL_LO16 : MipsII::MO_CAPTAB_LO16;
+        return getGlobalCapBigImmediate(N, SDLoc(N), Ty, DAG, HiReloc, LoReloc,
+                                        DAG.getEntryNode(), CapTable);
+      } else {
+        auto Reloc = IsFnPtr ? MipsII::MO_CAPTAB_CALL11 : MipsII::MO_CAPTAB11;
+        return getGlobalCap(N, SDLoc(N), Ty, DAG, Reloc, DAG.getEntryNode(),
+                            CapTable);
+      }
     } else {
       llvm::errs() << "Not using capability table for " <<  GV->getName() << "\n";
       GV->dump();
@@ -3639,8 +3646,8 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     GlobalOrExternal = true;
   }
   if (CheriCapTable && !GlobalOrExternal) {
-    Callee.dump();
-    llvm_unreachable("Saw indirect function call");
+    // XXXAR: FIXME: calling function pointers may require some more changes for
+    // shared libs!
   }
   // If we're in the sandbox ABI, then we need to turn the address into a
   // PCC-derived capability.
