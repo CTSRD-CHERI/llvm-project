@@ -2921,10 +2921,10 @@ ExprResult Sema::BuildCheriCast(SourceLocation LParenLoc,
   //   if (getLangOpts().CPlusPlus)
   //     return hasSameType(LHS, RHS);
   //  return !mergeTypes(LHS, RHS, false, CompareUnqualified).isNull();
-  if (getLangOpts().CPlusPlus)
-    TypesCompatible = !Context.mergeTypes(SrcTy, DestTy, false, false).isNull();
-  else
-    TypesCompatible = Context.typesAreCompatible(SrcTy, DestTy, false);
+
+  // XXXAR: I had to modify mergeTypes() to add a IncludeCapabilityQualifier flag
+  // because here we want to compare everything but the __capability qualifier
+  TypesCompatible = !Context.mergeTypes(SrcTy, DestTy, false, false, false).isNull();
 
   if (!TypesCompatible) {
     Diag(SubExpr->getLocStart(), diag::err_cheri_cast_unrelated_type)
