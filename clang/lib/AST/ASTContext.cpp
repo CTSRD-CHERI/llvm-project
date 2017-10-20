@@ -8040,11 +8040,14 @@ bool ASTContext::canBindObjCObjectType(QualType To, QualType From) {
 /// C99 6.2.7p1: Two types have compatible types if their types are the
 /// same. See 6.7.[2,3,5] for additional rules.
 bool ASTContext::typesAreCompatible(QualType LHS, QualType RHS,
-                                    bool CompareUnqualified) {
+                                    bool CompareUnqualified,
+                                    bool CompareCapabilityQualifier) {
   if (getLangOpts().CPlusPlus)
     return hasSameType(LHS, RHS);
 
-  return !mergeTypes(LHS, RHS, false, CompareUnqualified).isNull();
+  return !mergeTypes(LHS, RHS, false, CompareUnqualified,
+                     CompareCapabilityQualifier)
+              .isNull();
 }
 
 bool ASTContext::propertyTypesAreCompatible(QualType LHS, QualType RHS) {
@@ -8291,9 +8294,9 @@ static QualType mergeEnumWithInteger(ASTContext &Context, const EnumType *ET,
   return QualType();
 }
 
-QualType ASTContext::mergeTypes(QualType LHS, QualType RHS, 
-                                bool OfBlockPointer,
-                                bool Unqualified, bool BlockReturnType) {
+QualType ASTContext::mergeTypes(QualType LHS, QualType RHS, bool OfBlockPointer,
+                                bool Unqualified, bool BlockReturnType,
+                                bool IncludeCapabilityQualifier) {
   // C++ [expr]: If an expression initially has the type "reference to T", the
   // type is adjusted to "T" prior to any further analysis, the expression
   // designates the object or function denoted by the reference, and the
@@ -8427,8 +8430,9 @@ QualType ASTContext::mergeTypes(QualType LHS, QualType RHS,
     }
     // capability and non-capability pointers are not the same!
     // See https://github.com/CTSRD-CHERI/clang/issues/160
-    if (LHS->getAs<PointerType>()->isCHERICapability() !=
-        RHS->getAs<PointerType>()->isCHERICapability())
+    if (IncludeCapabilityQualifier &&
+        (LHS->getAs<PointerType>()->isCHERICapability() !=
+         RHS->getAs<PointerType>()->isCHERICapability()))
       return QualType();
 
     QualType ResultType = mergeTypes(LHSPointee, RHSPointee, false, 
