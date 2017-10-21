@@ -2924,7 +2924,7 @@ ExprResult Sema::BuildCheriCast(SourceLocation LParenLoc,
 
   // XXXAR: I had to modify mergeTypes() to add a IncludeCapabilityQualifier flag
   // because here we want to compare everything but the __capability qualifier
-  TypesCompatible = !Context.mergeTypes(SrcTy, DestTy, false, false, false).isNull();
+  TypesCompatible = !Context.mergeTypes(SrcTy, DestTy, false, false, false, false).isNull();
 
   if (!TypesCompatible) {
     Diag(SubExpr->getLocStart(), diag::err_cheri_cast_unrelated_type)
