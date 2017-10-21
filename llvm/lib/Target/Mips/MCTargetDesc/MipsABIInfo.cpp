@@ -15,8 +15,9 @@
 
 using namespace llvm;
 
-static cl::opt<bool> UseCheriCapTable("cheri-cap-table", cl::Hidden,
-                                         cl::desc("Use the new cheri cap table to load globals"));
+// FIXME: use something better: triple suffix? -mabi=purecap2, -mattr=+cap-table?
+// This is exported so that clang can access it
+extern cl::opt<bool> UseCheriCapTable;
 
 namespace {
 static const MCPhysReg O32IntRegs[4] = {Mips::A0, Mips::A1, Mips::A2, Mips::A3};
