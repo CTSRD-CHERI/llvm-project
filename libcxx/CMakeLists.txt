@@ -493,6 +493,11 @@ else()
   add_compile_flags_if_supported(-fno-exceptions)
 endif()
 
+# Static build flags 
+if (LIBCXX_ENABLE_STATIC)
+  add_definitions(-D_LIBCPP_BUILD_STATIC)
+endif()
+
 # RTTI flags ==================================================================
 if (NOT LIBCXX_ENABLE_RTTI)
   add_definitions(-D_LIBCPP_NO_RTTI)
