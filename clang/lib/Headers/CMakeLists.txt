@@ -39,6 +39,7 @@ set(files
   __clang_cuda_runtime_wrapper.h
   cetintrin.h
   cheri.h
+  cheri_init_globals.h
   clzerointrin.h
   cpuid.h
   clflushoptintrin.h
