@@ -72,6 +72,9 @@ public:
   /// textual name of the ABI that we want the backend to use, e.g. o32, or
   /// aapcs-linux.
   StringRef getABIName() const;
+
+  // HACK to make the cheri cap table setting visible to clang:
+  static bool cheriUsesCapabilityTable();
 };
 
 } // end namespace llvm

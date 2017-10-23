@@ -15,9 +15,12 @@ using namespace llvm;
 
 
 // XXXAR: TODO: probably nicer to use feature-flags instead
-// This is exported so that clang and the MIPS backend can access it
-cl::opt<bool> UseCheriCapTable("cheri-cap-table", cl::Hidden,
+static cl::opt<bool> UseCheriCapTable("cheri-cap-table", cl::Hidden,
                                cl::desc("Use the new cheri cap table to load globals"));
+
+bool MCTargetOptions::cheriUsesCapabilityTable() {
+  return UseCheriCapTable;
+}
 
 MCTargetOptions::MCTargetOptions()
     : SanitizeAddress(false), MCRelaxAll(false), MCNoExecStack(false),

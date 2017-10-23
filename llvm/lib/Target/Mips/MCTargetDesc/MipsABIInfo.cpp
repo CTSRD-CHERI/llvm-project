@@ -15,10 +15,6 @@
 
 using namespace llvm;
 
-// FIXME: use something better: triple suffix? -mabi=purecap2, -mattr=+cap-table?
-// This is exported so that clang can access it
-extern cl::opt<bool> UseCheriCapTable;
-
 namespace {
 static const MCPhysReg O32IntRegs[4] = {Mips::A0, Mips::A1, Mips::A2, Mips::A3};
 
@@ -107,7 +103,7 @@ unsigned MipsABIInfo::GetGlobalCapability() const {
 }
 
 bool MipsABIInfo::UsesCapabilityTable() const {
-  return IsCheriPureCap() && UseCheriCapTable;
+  return IsCheriPureCap() && MCTargetOptions::cheriUsesCapabilityTable();
 }
 
 unsigned MipsABIInfo::GetReturnAddress() const {
