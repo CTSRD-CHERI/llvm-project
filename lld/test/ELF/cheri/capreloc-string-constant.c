@@ -26,7 +26,6 @@
 
 // RUN: ld.lld %t.o -shared -o %t-external-capsizefix.so
 // RUN: %capsizefix %t-external-capsizefix.so
-// RUN: llvm-objdump -C %t-external-capsizefix.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC-EXTERNAL-CAPSIZEFIX %s
 // RUN: llvm-readobj -r -s  %t-external-capsizefix.so | FileCheck -check-prefixes DYNAMIC-RELOCS %s
 
 

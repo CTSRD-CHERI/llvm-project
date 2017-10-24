@@ -22,13 +22,6 @@
 // RUN: llvm-objdump -C -s -t %t-static-external-capsizefix.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC-EXTERNAL-CAPSIZEFIX %s
 
 
-// RUN: ld.lld %t.o -shared -o %t-external-capsizefix.so
-// RUN: %capsizefix %t-external-capsizefix.so
-// RUN: llvm-objdump -C -s -t %t-external-capsizefix.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC-EXTERNAL-CAPSIZEFIX %s
-// RUN: llvm-readobj -r -s %t-external-capsizefix.so | FileCheck -check-prefixes DYNAMIC-RELOCS %s
-
-
-
 // FIXME: it would be good if we could set bounds here instead of having it as -1
 
 int errno;
@@ -83,7 +76,6 @@ void __start(void) {}
 
 // The external capsizefix does okay for both cases:
 // STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x0000000120020000 Base: __error_unthreaded (0x000000012001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
-// DYNAMIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x0000000000020000 Base: __error_unthreaded (0x000000000001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
 
 // DUMP-CAPRELOCS-SAME:{{[[:space:]]$}}
 

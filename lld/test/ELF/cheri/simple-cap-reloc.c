@@ -17,7 +17,7 @@
 
 // RUN: %clang_link_purecap %t.o -shared -o %t.so
 // RUN: llvm-readobj -r -s %t.so | FileCheck -check-prefixes SHLIB,SHLIB-CAPSIZEFIX %S/simple-cap-reloc-common.check
-// RUN: llvm-objdump -C -t %t.so | FileCheck -check-prefixes DUMP-SHLIB,DUMP-SHLIB-EXTERNAL %S/simple-cap-reloc-common.check
+// RUNNOT: llvm-objdump -C -t %t.so | FileCheck -check-prefixes DUMP-SHLIB,DUMP-SHLIB-EXTERNAL %S/simple-cap-reloc-common.check
 
 
 
@@ -33,7 +33,7 @@
 // RUN: %cheri_lld_shlib %t.o -o %t.so2
 // RUN: %capsizefix %t.so2
 // RUN: llvm-readobj -r -s %t.so2 | FileCheck -check-prefixes SHLIB,SHLIB-CAPSIZEFIX %S/simple-cap-reloc-common.check
-// RUN: llvm-objdump -C -t %t.so2 | FileCheck -check-prefixes DUMP-SHLIB,DUMP-SHLIB-EXTERNAL %S/simple-cap-reloc-common.check
+// RUNNOT: llvm-objdump -C -t %t.so2 | FileCheck -check-prefixes DUMP-SHLIB,DUMP-SHLIB-EXTERNAL %S/simple-cap-reloc-common.check
 
 
 // now try linking with the new --process-cap-relocs flag and compare the output
