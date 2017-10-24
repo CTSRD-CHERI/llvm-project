@@ -126,19 +126,18 @@ builtin_include_dir = llvm_config.get_clang_builtin_include_dir(config.clang)
 # FIXME: move this to LLVM
 clang_cc1_args = ['-cc1', '-internal-isystem',
                   llvm_config.get_clang_builtin_include_dir(config.clang), '-nostdsysteminc']
-cheri128_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-mllvm', '-cheri128', '-target-cpu', 'cheri128']
+cheri128_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu', 'cheri128']
 cheri256_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu', 'cheri']
 purecap_cc1_args  = ['-triple', 'cheri-unknown-freebsd', '-target-abi', 'purecap']
 
 if config.cheri_is_128:
     config.available_features.add("cheri_is_128")
-    purecap_cc1_args += ['-mllvm', '-cheri128']
     clang_cc1_args += ['-mllvm', '-cheri128']  # force cheri128 for tests
     cheri256_cc1_args += ['-mllvm', '-cheri256', '-mllvm', '-cheri-test-mode']
     cheri_cc1_args = cheri128_cc1_args
 else:
     config.available_features.add("cheri_is_256")
-    cheri128_cc1_args += ['-mllvm', '-cheri-test-mode']
+    cheri128_cc1_args += ['-mllvm', '-cheri128', '-mllvm', '-cheri-test-mode']
     cheri_cc1_args = cheri256_cc1_args
 
 tools = [
