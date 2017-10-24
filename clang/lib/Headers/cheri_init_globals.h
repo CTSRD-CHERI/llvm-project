@@ -56,19 +56,29 @@ __cap_table_start;
 __attribute__((weak)) extern void *__capability
 __cap_table_end;
 
-static __attribute__((always_inline)) void SETUP_GLOBAL_CAP_REGISTER(void) {
-  __UINT64_TYPE__ cap_table_start = 0;
-  __UINT64_TYPE__ cap_table_end = 0;
-  __asm__ volatile (".option pic0\n\t"
-      "dla %0, __cap_table_start\n\t"
-      "dla %1, __cap_table_end\n\t"
-      : "=r"(cap_table_start), "=r"(cap_table_end));
-  if (!cap_table_start)
-    return;
-  void* __capability cgp = __builtin_cheri_offset_set(__builtin_cheri_global_data_get(), cap_table_start);
-  cgp = __builtin_cheri_bounds_set(cgp, cap_table_end - cap_table_start);
-  __asm__ volatile ("cmove $cgp, %0"::"C"(cgp));
-}
+#define INIT_CGP_REGISTER_ASM                                                  \
+  ".option pic0\n\t.set noreorder\n\t"                                         \
+  "dla $2, __cap_table_start\n\t"                                              \
+  "beqz $2, .Lskip_cgp_setup\n\t"                                              \
+  "nop\n\t"                                                                    \
+  "dla $3, __cap_table_end\n\t"                                                \
+  "cgetdefault $cgp\n\t"                                                       \
+  "csetoffset $cgp, $cgp, $2\n\t"                                              \
+  "dsubu $1, $3, $2\n\t"                                                       \
+  "csetbounds $cgp, $cgp, $1\n\t"                                              \
+  ".Lskip_cgp_setup: \n\t"
+
+/*
+ * Defines a __start function that sets up $cgp and then branches to
+ * c_startup_fn which does the real startup
+ */
+#define DEFINE___START_FUNCTION(c_startup_fn)                                  \
+  __asm__(".text\n\t"                                                          \
+          ".global __start\n\t"                                                \
+          "__start:\n\t"                                                       \
+          INIT_CGP_REGISTER_ASM                                                \
+          "b " #c_startup_fn "\n\t"                                            \
+          "nop\n\t");
 
 static void crt_init_globals(void) {
   struct capreloc *start_relocs;
