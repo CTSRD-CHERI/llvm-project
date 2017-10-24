@@ -122,7 +122,7 @@
 
 // DUMP-SHLIB-INTERNAL-NEXT: 0x[[XPTR_ADDR:[0-9a-f]+]] Base: ([[ZERO:0x0+]]) Offset: [[ZERO]] Length: 0x0000000000000004 Permissions: 0x00000000
 // DUMP-SHLIB-INTERNAL-NEXT: 0x[[BUFPTR_ADDR:[0-9a-f]+]] Base: ([[ZERO]]) Offset: [[ZERO]] Length: 0x000000000000002a Permissions: 0x00000000
-// DUMP-SHLIB-INTERNAL-NEXT: 0x[[FN_PTR_ADDR:[0-9a-f]+]] Base: ([[ZERO]]) Offset: [[ZERO]] Length: 0x000000000000006c Permissions: 0x8000000000000000 (Function)
+// DUMP-SHLIB-INTERNAL-NEXT: 0x[[FN_PTR_ADDR:[0-9a-f]+]] Base: ([[ZERO]]) Offset: [[ZERO]] Length: 0x0000000000000060 Permissions: 0x8000000000000000 (Function)
 
 // DUMP-SHLIB-LABEL: SYMBOL TABLE:
 // DUMP-SHLIB-DAG: [[FN_PTR_ADDR]]   g       .data           [[CAP_SYMBOL_SIZE:000000(20|10)]] fn_ptr{{$}}
