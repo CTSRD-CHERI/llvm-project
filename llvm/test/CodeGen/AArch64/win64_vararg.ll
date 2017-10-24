@@ -15,7 +15,7 @@ entry:
 ; CHECK: ret
   %ap = alloca i8*, align 8
   %ap1 = bitcast i8** %ap to i8*
-  call void @llvm.va_start(i8* %ap1)
+  call void @llvm.va_start.p0i8(i8* %ap1)
   %ap2 = load i8*, i8** %ap, align 8
   call void @other_func(i8* %ap2)
   ret void
@@ -23,8 +23,8 @@ entry:
 
 declare void @other_func(i8*) local_unnamed_addr
 
-declare void @llvm.va_start(i8*) nounwind
-declare void @llvm.va_copy(i8*, i8*) nounwind
+declare void @llvm.va_start.p0i8(i8*) nounwind
+declare void @llvm.va_copy.p0i8.p0i8(i8*, i8*) nounwind
 
 ; CHECK-LABEL: f9:
 ; CHECK: sub     sp, sp, #16
@@ -37,7 +37,7 @@ define i8* @f9(i64 %a0, i64 %a1, i64 %a2, i64 %a3, i64 %a4, i64 %a5, i64 %a6, i6
 entry:
   %ap = alloca i8*, align 8
   %ap1 = bitcast i8** %ap to i8*
-  call void @llvm.va_start(i8* %ap1)
+  call void @llvm.va_start.p0i8(i8* %ap1)
   %ap2 = load i8*, i8** %ap, align 8
   ret i8* %ap2
 }
@@ -53,7 +53,7 @@ define i8* @f8(i64 %a0, i64 %a1, i64 %a2, i64 %a3, i64 %a4, i64 %a5, i64 %a6, i6
 entry:
   %ap = alloca i8*, align 8
   %ap1 = bitcast i8** %ap to i8*
-  call void @llvm.va_start(i8* %ap1)
+  call void @llvm.va_start.p0i8(i8* %ap1)
   %ap2 = load i8*, i8** %ap, align 8
   ret i8* %ap2
 }
@@ -70,7 +70,7 @@ define i8* @f7(i64 %a0, i64 %a1, i64 %a2, i64 %a3, i64 %a4, i64 %a5, i64 %a6, ..
 entry:
   %ap = alloca i8*, align 8
   %ap1 = bitcast i8** %ap to i8*
-  call void @llvm.va_start(i8* %ap1)
+  call void @llvm.va_start.p0i8(i8* %ap1)
   %ap2 = load i8*, i8** %ap, align 8
   ret i8* %ap2
 }
@@ -90,12 +90,12 @@ entry:
   %cp = alloca i8*, align 8
   %ap1 = bitcast i8** %ap to i8*
   %cp1 = bitcast i8** %cp to i8*
-  call void @llvm.va_start(i8* %ap1)
-  call void @llvm.va_copy(i8* %cp1, i8* %ap1)
+  call void @llvm.va_start.p0i8(i8* %ap1)
+  call void @llvm.va_copy.p0i8.p0i8(i8* %cp1, i8* %ap1)
   ret void
 }
 
-declare void @llvm.va_end(i8*)
+declare void @llvm.va_end.p0i8(i8*)
 declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) #1
 declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) #1
 
@@ -134,7 +134,7 @@ define i32 @fp(i8*, i64, i8*, ...) local_unnamed_addr #6 {
   %4 = alloca i8*, align 8
   %5 = bitcast i8** %4 to i8*
   call void @llvm.lifetime.start.p0i8(i64 8, i8* nonnull %5) #2
-  call void @llvm.va_start(i8* nonnull %5)
+  call void @llvm.va_start.p0i8(i8* nonnull %5)
   %6 = load i8*, i8** %4, align 8
   %7 = call i64* @__local_stdio_printf_options() #2
   %8 = load i64, i64* %7, align 8
@@ -142,7 +142,7 @@ define i32 @fp(i8*, i64, i8*, ...) local_unnamed_addr #6 {
   %10 = call i32 @__stdio_common_vsprintf(i64 %9, i8* %0, i64 %1, i8* %2, i8* null, i8* %6) #2
   %11 = icmp sgt i32 %10, -1
   %12 = select i1 %11, i32 %10, i32 -1
-  call void @llvm.va_end(i8* nonnull %5)
+  call void @llvm.va_end.p0i8(i8* nonnull %5)
   call void @llvm.lifetime.end.p0i8(i64 8, i8* nonnull %5) #2
   ret i32 %12
 }
@@ -190,9 +190,9 @@ define void @vla(i32, i8*, ...) local_unnamed_addr {
   %3 = alloca i8*, align 8
   %4 = bitcast i8** %3 to i8*
   call void @llvm.lifetime.start.p0i8(i64 8, i8* nonnull %4) #5
-  call void @llvm.va_start(i8* nonnull %4)
+  call void @llvm.va_start.p0i8(i8* nonnull %4)
   %5 = zext i32 %0 to i64
-  %6 = call i8* @llvm.stacksave()
+  %6 = call i8* @llvm.stacksave.p0i8()
   %7 = alloca i8, i64 %5, align 1
   %8 = load i8*, i8** %3, align 8
   %9 = sext i32 %0 to i64
@@ -200,14 +200,14 @@ define void @vla(i32, i8*, ...) local_unnamed_addr {
   %11 = load i64, i64* %10, align 8
   %12 = or i64 %11, 2
   %13 = call i32 @__stdio_common_vsprintf(i64 %12, i8* nonnull %7, i64 %9, i8* %1, i8* null, i8* %8)
-  call void @llvm.va_end(i8* nonnull %4)
-  call void @llvm.stackrestore(i8* %6)
+  call void @llvm.va_end.p0i8(i8* nonnull %4)
+  call void @llvm.stackrestore.p0i8(i8* %6)
   call void @llvm.lifetime.end.p0i8(i64 8, i8* nonnull %4) #5
   ret void
 }
 
-declare i8* @llvm.stacksave()
-declare void @llvm.stackrestore(i8*)
+declare i8* @llvm.stacksave.p0i8()
+declare void @llvm.stackrestore.p0i8(i8*)
 
 ; CHECK-LABEL: snprintf
 ; CHECK: sub     sp,  sp, #96
@@ -240,7 +240,7 @@ define i32 @snprintf(i8*, i64, i8*, ...) local_unnamed_addr #5 {
   %4 = alloca i8*, align 8
   %5 = bitcast i8** %4 to i8*
   call void @llvm.lifetime.start.p0i8(i64 8, i8* nonnull %5) #2
-  call void @llvm.va_start(i8* nonnull %5)
+  call void @llvm.va_start.p0i8(i8* nonnull %5)
   %6 = load i8*, i8** %4, align 8
   %7 = call i64* @__local_stdio_printf_options() #2
   %8 = load i64, i64* %7, align 8
@@ -248,7 +248,7 @@ define i32 @snprintf(i8*, i64, i8*, ...) local_unnamed_addr #5 {
   %10 = call i32 @__stdio_common_vsprintf(i64 %9, i8* %0, i64 %1, i8* %2, i8* null, i8* %6) #2
   %11 = icmp sgt i32 %10, -1
   %12 = select i1 %11, i32 %10, i32 -1
-  call void @llvm.va_end(i8* nonnull %5)
+  call void @llvm.va_end.p0i8(i8* nonnull %5)
   call void @llvm.lifetime.end.p0i8(i64 8, i8* nonnull %5) #2
   ret i32 %12
 }
