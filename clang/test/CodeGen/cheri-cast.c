@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd %s -Wno-error=cheri-capability-misuse -emit-llvm -o - -O2 | FileCheck %s -check-prefixes BOTH,HYBRID -enable-var-scope
+// RUNNOT: %clang_cc1 -triple cheri-unknown-freebsd %s -Wno-error=cheri-capability-misuse -emit-llvm -o - -O2 | FileCheck %s -check-prefixes BOTH,HYBRID -enable-var-scope
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -Wno-error=cheri-capability-misuse -target-abi purecap - %s -emit-llvm -o - -O2 | FileCheck %s -check-prefixes BOTH,PURECAP -enable-var-scope
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -DWITH_CHERI_CAST %s -emit-llvm -o - -O2 | FileCheck %s -check-prefixes BOTH,HYBRID -enable-var-scope
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -DWITH_CHERI_CAST -target-abi purecap %s -emit-llvm -o - -O2 | FileCheck %s -check-prefixes BOTH,PURECAP -enable-var-scope
@@ -23,7 +23,7 @@ void* __capability c_cast_add_cap(void) {
   // HYBRID-NEXT: ret i8 addrspace(200)* [[RETVAL]]
 
   // PURECAP-LABEL: define i8 addrspace(200)* @c_cast_add_cap()
-  // PURECAP: [[RETVAL:%.+]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @global_ptr, align 32
+  // PURECAP: [[RETVAL:%.+]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @global_ptr
   // PURECAP-NEXT: ret i8 addrspace(200)* [[RETVAL]]
 }
 
@@ -31,11 +31,11 @@ void* c_cast_remove_cap(void) {
   void* cap2ptr = (CHERI_CAST void*)global_cap;
   return cap2ptr;
   // HYBRID-LABEL: define i8* @c_cast_remove_cap()
-  // HYBRID: [[GLOBAL:%.+]] = load i8 addrspace(200)*, i8 addrspace(200)** @global_cap, align 32
+  // HYBRID: [[GLOBAL:%.+]] = load i8 addrspace(200)*, i8 addrspace(200)** @global_cap
   // HYBRID-NEXT: [[RETVAL:%.+]] = addrspacecast i8 addrspace(200)* [[GLOBAL]] to i8*
   // HYBRID-NEXT: ret i8* [[RETVAL]]
 
   // PURECAP-LABEL: define i8 addrspace(200)* @c_cast_remove_cap()
-  // PURECAP: [[RETVAL:%.+]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @global_cap, align 32
+  // PURECAP: [[RETVAL:%.+]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @global_cap
   // PURECAP-NEXT: ret i8 addrspace(200)* [[RETVAL]]
 }
