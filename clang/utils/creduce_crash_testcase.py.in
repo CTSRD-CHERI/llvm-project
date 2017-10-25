@@ -221,7 +221,7 @@ class RunCreduce(ReduceTool):
         with tempfile.NamedTemporaryFile() as tmp:
             shutil.copy(str(input_file), tmp.name)
             original_size = input_file.stat().st_size
-            with input_file.open("w") as reduced_file:
+            with input_file.open("w", encoding="utf-8") as reduced_file:
                 self._do_initial_reduce(Path(tmp.name), reduced_file)
             new_size = input_file.stat().st_size
             percent_reduction = 100 - 100.0 * (new_size / original_size)
