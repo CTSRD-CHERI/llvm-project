@@ -146,8 +146,8 @@ entry:
   %coerce.dive = getelementptr inbounds %union.meh, %union.meh addrspace(200)* %meh, i32 0, i32 0
   %1 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %coerce.dive, align 16
   ; ALIGNED-ARG-LABEL: aligned_arg:
-  ; ALIGNED-ARG: cincoffset	$c[[TMP:[0-9]+]], $c11, 128
-  ; ALIGNED-ARG-NEXT:csetbounds	$c{{[0-9]+}}, $c[[TMP]], 32
+  ; ALIGNED-ARG: cincoffset	$c[[TMP:[0-9]+]], $c11, {{112|128}}
+  ; ALIGNED-ARG-NEXT:csetbounds	$c{{[0-9]+}}, $c[[TMP]], {{32|16}}
 
   call void (i32, i32, ...) @b(i32 signext 13, i32 signext 37, i8 addrspace(200)* inreg %1)
   ret void

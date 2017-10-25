@@ -388,19 +388,18 @@ class LLVMConfig(object):
 
         builtin_include_dir = self.get_clang_builtin_include_dir(self.config.clang)
         clang_cc1_args = ['-cc1', '-internal-isystem', builtin_include_dir, '-nostdsysteminc']
-        cheri128_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-mllvm', '-cheri128', '-target-cpu', 'cheri128']
+        cheri128_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu', 'cheri128']
         cheri256_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu', 'cheri']
         purecap_cc1_args  = ['-triple', 'cheri-unknown-freebsd', '-target-abi', 'purecap']
 
         if self.config.cheri_is_128:
             self.config.available_features.add("cheri_is_128")
-            purecap_cc1_args += ['-mllvm', '-cheri128']
             clang_cc1_args += ['-mllvm', '-cheri128']  # force cheri128 for tests
             cheri256_cc1_args += ['-mllvm', '-cheri256', '-mllvm', '-cheri-test-mode']
             cheri_cc1_args = cheri128_cc1_args
         else:
             self.config.available_features.add("cheri_is_256")
-            cheri128_cc1_args += ['-mllvm', '-cheri-test-mode']
+            cheri128_cc1_args += ['-mllvm', '-cheri-test-mode', "-mllvm", "-cheri128"]
             cheri_cc1_args = cheri256_cc1_args
 
         tool_substitutions = [
