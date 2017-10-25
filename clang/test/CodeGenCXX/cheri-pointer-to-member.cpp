@@ -141,7 +141,7 @@ bool data_ptr_not_equal(int A::* ptr1, int A::* ptr2) {
 
 int data_ptr_dereferece(A* a, int A::* ptr) {
   return a->*ptr;
-  // CHECK-LABEL: define i32 @_Z19data_ptr_derefereceP1AMS_i(%class.A addrspace(200)*{{.*}}, i64{{.*}})
+  // CHECK-LABEL: define i32 @_Z19data_ptr_derefereceU3capP1AMS_i(%class.A addrspace(200)*{{.*}}, i64{{.*}})
   // CHECK: [[A_ADDR:%.+]] = alloca %class.A addrspace(200)*, align [[$CAP_SIZE]]
   // CHECK-NEXT: [[PTR_ADDR:%.+]] = alloca i64, align 8
   // CHECK-NEXT: store %class.A addrspace(200)* [[A:%.+]], %class.A addrspace(200)* addrspace(200)* [[A_ADDR]], align [[$CAP_SIZE]]
@@ -245,7 +245,7 @@ bool func_ptr_not_equal(AMemberFuncPtr ptr1, AMemberFuncPtr ptr2) {
 
 int func_ptr_dereference(A* a, AMemberFuncPtr ptr) {
   return (a->*ptr)();
-  // CHECK-LABEL: define i32 @_Z20func_ptr_dereferenceP1AMS_FivE(%class.A addrspace(200)*{{.*}}, i8 addrspace(200)* inreg{{.*}}, i64 inreg{{.*}})
+  // CHECK-LABEL: define i32 @_Z20func_ptr_dereferenceU3capP1AMS_FivE(%class.A addrspace(200)*{{.*}}, i8 addrspace(200)* inreg{{.*}}, i64 inreg{{.*}})
   // CHECK: [[PTR:%.+]] = alloca { i8 addrspace(200)*, i64 }, align [[$CAP_SIZE]]
   // CHECK-NEXT: [[A_ADDR:%.+]] = alloca %class.A addrspace(200)*, align [[$CAP_SIZE]]
   // CHECK-NEXT: [[PTR_ADDR:%.+]] = alloca { i8 addrspace(200)*, i64 }, align [[$CAP_SIZE]]
