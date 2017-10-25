@@ -72,13 +72,15 @@ __cap_table_end;
  * Defines a __start function that sets up $cgp and then branches to
  * c_startup_fn which does the real startup
  */
-#define DEFINE___START_FUNCTION(c_startup_fn)                                  \
+#define DEFINE_CHERI_START_FUNCTION(c_startup_fn)                              \
   __asm__(".text\n\t"                                                          \
           ".global __start\n\t"                                                \
+          ".ent __start\n\t"                                                   \
           "__start:\n\t"                                                       \
           INIT_CGP_REGISTER_ASM                                                \
           "b " #c_startup_fn "\n\t"                                            \
-          "nop\n\t");
+          "nop\n\t"                                                            \
+          ".end __start");
 
 static void crt_init_globals(void) {
   struct capreloc *start_relocs;
