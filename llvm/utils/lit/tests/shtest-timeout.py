@@ -1,7 +1,7 @@
 # REQUIRES: python-psutil
 
 # PR33944
-# XFAIL: windows
+# XFAIL: windows,freebsd
 
 # Test per test timeout using external shell
 # RUN: not %{lit} \
