@@ -93,6 +93,7 @@ public:
   uint32_t getIndex(const Symbol& Sym) const;
   bool empty() const override { return Entries.empty(); }
   void writeTo(uint8_t *Buf) override;
+  template <class ELFT> void addCapTableSymbols();
   size_t getSize() const override {
     if (!Entries.empty())
       assert(Config->CapabilitySize > 0);

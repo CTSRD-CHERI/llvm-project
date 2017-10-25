@@ -35,7 +35,9 @@
 // EXE256-NEXT: 0x0000000120030020      Base: global2 (0x0000000120020008)      Offset: 0x0000000000000000      Length: 0x0000000000000008    Permissions: 0x00000000
 
 // EXE: SYMBOL TABLE:
-
+// EXE-DAG: 0000000120030000       l    d  .cap_table		 00000000 .hidden .cap_table
+// EXE-DAG: 0000000120030000       l       .cap_table		 000000{{1|2}}0 .hidden global@CAPTABLE
+// EXE-DAG: 00000001200300{{1|2}}0 l       .cap_table		 000000{{1|2}}0 .hidden global2@CAPTABLE
 
 int global = 1;
 long global2 = 3;
