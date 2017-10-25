@@ -2248,8 +2248,8 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
   if (Subtarget.getABI().IsCheriPureCap() && Subtarget.useCheriCapTable()) {
     // FIXME: shouldn't functions have a R_MIPS_CHERI_CAPCALL relocation?
     bool CanUseCapTable = GVTy->isFunctionTy() ||  DAG.getDataLayout().isFatPointer(GVTy);
-    if (!Ty.isFatPointer())
-      Ty = MVT::iFATPTR; // FIXME: this is wrong once the tablegen changes get merged
+    // FIXME: should not use MVT::iFATPTR once the tablegen changes get merged
+    EVT GlobalTy = Ty.isFatPointer() ? Ty : MVT::iFATPTR;
     bool IsFnPtr =
       GVTy->isPointerTy() && GVTy->getPointerElementType()->isFunctionTy();
     if (CanUseCapTable || IsFnPtr) {
@@ -2264,12 +2264,12 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
             IsFnPtr ? MipsII::MO_CAPTAB_CALL_HI16 : MipsII::MO_CAPTAB_HI16;
         auto LoReloc =
             IsFnPtr ? MipsII::MO_CAPTAB_CALL_LO16 : MipsII::MO_CAPTAB_LO16;
-        return getGlobalCapBigImmediate(N, SDLoc(N), Ty, DAG, HiReloc, LoReloc,
-                                        DAG.getEntryNode(), CapTable);
+        return getGlobalCapBigImmediate(N, SDLoc(N), GlobalTy, DAG, HiReloc,
+                                        LoReloc, DAG.getEntryNode(), CapTable);
       } else {
         auto Reloc = IsFnPtr ? MipsII::MO_CAPTAB_CALL11 : MipsII::MO_CAPTAB11;
-        return getGlobalCap(N, SDLoc(N), Ty, DAG, Reloc, DAG.getEntryNode(),
-                            CapTable);
+        return getGlobalCap(N, SDLoc(N), GlobalTy, DAG, Reloc,
+                            DAG.getEntryNode(), CapTable);
       }
     } else {
       llvm::errs() << "Not using capability table for " <<  GV->getName() << "\n";
