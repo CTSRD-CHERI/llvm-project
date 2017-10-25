@@ -1620,6 +1620,9 @@ template <class ELFT> void Writer<ELFT>::addStartEndSymbols() {
   Define("__preinit_array_start", "__preinit_array_end", Out::PreinitArray);
   Define("__init_array_start", "__init_array_end", Out::InitArray);
   Define("__fini_array_start", "__fini_array_end", Out::FiniArray);
+  if (InX::CheriCapTable)
+    Define("__cap_table_start", "__cap_table_end",
+           InX::CheriCapTable->getOutputSection());
 
   if (OutputSection *Sec = findSection(".ARM.exidx"))
     Define("__exidx_start", "__exidx_end", Sec);
