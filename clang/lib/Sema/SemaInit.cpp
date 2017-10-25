@@ -4429,10 +4429,23 @@ static void CheckReferenceInitCHERI(Sema& S, const InitializedEntity &Entity,
     bool DestIsCapRef = PureCapABI;
     if (auto DestRef = Entity.getType()->getAs<ReferenceType>())
       DestIsCapRef = DestRef->isCHERICapability();
-    QualType RealSrcType = Initializer->getRealReferenceType();
     bool SrcIsCapRef = false;
-    if (auto SrcRef = RealSrcType->getAs<ReferenceType>())
-      SrcIsCapRef = SrcRef->isCHERICapability();
+    // Handle special case of when we assign a dereferenced capability. This
+    // will be represented by a UnaryOperator AST node and we then need to
+    // check the type of the variable being dereferenced.
+    if (auto SrcUniOp = dyn_cast<UnaryOperator>(Initializer)) {
+      if (SrcUniOp->getOpcode() == UO_Deref) {
+        if (auto SrcDeclRef = dyn_cast<DeclRefExpr>(SrcUniOp->getSubExpr()->IgnoreImpCasts())) {
+          if (auto SrcCap = SrcDeclRef->getDecl()->getType()->getAs<PointerType>())
+            SrcIsCapRef = SrcCap->isCHERICapability();
+        }
+      }
+    }
+    if (!SrcIsCapRef) {
+      QualType RealSrcType = Initializer->getRealReferenceType();
+      if (auto SrcRef = RealSrcType->getAs<ReferenceType>())
+        SrcIsCapRef = SrcRef->isCHERICapability();
+    }
     if (SrcIsCapRef != DestIsCapRef) {
       Sequence.SetFailed(InitializationSequence::FK_ReferenceInitChangesCapabilityQualifier);
       return;

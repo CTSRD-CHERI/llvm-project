@@ -3616,20 +3616,21 @@ ASTContext::getTypedefType(const TypedefNameDecl *Decl,
     Canonical = getCanonicalType(Decl->getUnderlyingType());
   if (IsCHERICap) {
     if (const PointerType *PT = Canonical->getAs<PointerType>()) {
-      // Create a copy of the typedef whose name is prefixed by "__cheri_" and
-      // whose underlying type is the cheri_capability qualified version of
+      // Create a copy of the typedef whose name is prefixed by "__chericap_"
+      // and whose underlying type is the cheri_capability qualified version of
       // the pointer type
       Canonical = getPointerType(PT->getPointeeType(), ASTContext::PIK_Capability);
       TypeSourceInfo *TInfo = getTrivialTypeSourceInfo(Canonical, Decl->getLocStart());
+      DeclContext *DC = const_cast<DeclContext *>(Decl->getDeclContext());
       std::string typedefName = "__chericap_" + Decl->getNameAsString();
       TypedefDecl *NewDecl = TypedefDecl::Create(
           const_cast<ASTContext &>(*this),
-          const_cast<DeclContext *>(Decl->getDeclContext()),
+          DC,
           Decl->getLocStart(),
           Decl->getLocation(),
           &Idents.get(typedefName), 
           TInfo);
-      TUDecl->addDecl(const_cast<TypedefDecl *>(NewDecl));
+      DC->addDecl(NewDecl);
       Decl = NewDecl;
     }
   }

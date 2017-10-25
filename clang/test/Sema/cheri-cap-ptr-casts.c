@@ -4,7 +4,7 @@
 #ifdef ALIGN
 void f() {
   unsigned long foo[8];
-  ((int * __capability *)foo)[0] = 0; // expected-error {{cast from 'unsigned long *' to 'int * __capability *' increases required alignment from 8 to 32}} expected-note{{use __builtin_assume_aligned(..., sizeof(void* __capability)) if you know that the source type is sufficiently aligned}}
+  ((int * __capability *)foo)[0] = 0; // expected-error-re {{cast from 'unsigned long *' to 'int * __capability *' increases required alignment from 8 to {{16|32}}}} expected-note{{use __builtin_assume_aligned(..., sizeof(void* __capability)) if you know that the source type is sufficiently aligned}}
 }
 #else
 void g() {

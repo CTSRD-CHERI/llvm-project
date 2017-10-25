@@ -2895,6 +2895,8 @@ void CXXNameMangler::mangleType(const SubstTemplateTypeParmPackType *T) {
 
 // <type> ::= P <type>   # pointer-to
 void CXXNameMangler::mangleType(const PointerType *T) {
+  if (T->isCHERICapability())
+    Out << "U3cap";
   Out << 'P';
   mangleType(T->getPointeeType());
 }
@@ -2905,12 +2907,16 @@ void CXXNameMangler::mangleType(const ObjCObjectPointerType *T) {
 
 // <type> ::= R <type>   # reference-to
 void CXXNameMangler::mangleType(const LValueReferenceType *T) {
+  if (T->isCHERICapability())
+    Out << "U3cap";
   Out << 'R';
   mangleType(T->getPointeeType());
 }
 
 // <type> ::= O <type>   # rvalue reference-to (C++0x)
 void CXXNameMangler::mangleType(const RValueReferenceType *T) {
+  if (T->isCHERICapability())
+    Out << "U3cap";
   Out << 'O';
   mangleType(T->getPointeeType());
 }

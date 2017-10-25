@@ -1,6 +1,8 @@
-// RUN: %cheri_cc1 -target-abi n64 -fsyntax-only %s
+// RUN: not %cheri_cc1 -target-abi n64 -fsyntax-only %s 2>&1 | FileCheck %s
 // Test case for https://github.com/CTSRD-CHERI/clang/issues/157
-// XFAIL: *
+// We only check if the compiler crashes
+
+// CHECK: *
 
 #define a(b)                                                                   \
   {                                                                            \
@@ -19,7 +21,7 @@ typedef unsigned char  Byte;
         typedef __typeof__(ptr) __ptr_type;             \
         typedef __capability __ptr_type __cap_type;     \
  z_stream;
-typedef __capability z_stream FAR *z_streamp;
+typedef z_stream FAR * __capability z_streamp;
 int ZEXPORT compress2 (dest, destLen, source, sourceLen, level)     Bytef *dest;
 {
   z_stream stream;
