@@ -512,6 +512,7 @@ class TargetRegisterClass;
     SDValue getGlobalCap(NodeTy *N, const SDLoc &DL, EVT Ty, SelectionDAG &DAG,
                          unsigned Flag, SDValue Chain,
                          const MachinePointerInfo &PtrInfo) const {
+      assert(Ty.isFatPointer());
       SDValue Off = getTargetNode(N, MVT::i64, DAG, Flag);
       // FIXME: this needs lots of tablegen changes :( -> wait for nosp merge
       llvm_unreachable("NOT IMPLEMENTED");
@@ -529,6 +530,7 @@ class TargetRegisterClass;
                                      SelectionDAG &DAG, unsigned HiFlag,
                                      unsigned LoFlag, SDValue Chain,
                                      const MachinePointerInfo &PtrInfo) const {
+      assert(Ty.isFatPointer());
       // (Ab)use GotHi since it already exists and does the right thing
       SDValue Off = DAG.getNode(MipsISD::GotHi, DL, MVT::i64,
                                 getTargetNode(N, MVT::i64, DAG, HiFlag));

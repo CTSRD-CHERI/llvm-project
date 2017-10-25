@@ -176,6 +176,7 @@ SDValue MipsTargetLowering::getGlobalReg(SelectionDAG &DAG, EVT Ty) const {
 }
 
 SDValue MipsTargetLowering::getCapGlobalReg(SelectionDAG &DAG, EVT Ty) const {
+  assert(Ty.isFatPointer());
   MipsFunctionInfo *FI = DAG.getMachineFunction().getInfo<MipsFunctionInfo>();
   return DAG.getRegister(FI->getCapGlobalBaseReg(), Ty);
 }
@@ -2156,6 +2157,17 @@ SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
   SDLoc DL(Op);
   SDValue Src = Op.getOperand(0);
   EVT DstTy = Op.getValueType();
+  // A noop addrspacecast can happend when using the cap table because functions
+  // can not yet be in AS200
+  if (Src.getValueType() == Op.getValueType())
+    return Src;
+  if (ABI.UsesCapabilityTable()) {
+    // XXXAR: HACK for the capability table (we turn this into an iFATPTR later
+    // so we can just return the value
+    if (GlobalAddressSDNode *GN = dyn_cast<GlobalAddressSDNode>(Src)) {
+      return Op;
+    }
+  }
   if (Src.getValueType() == MVT::i64) {
     assert(Op.getValueType() == MVT::iFATPTR);
     auto Ptr = DAG.getNode(ISD::INTTOPTR, DL, DstTy, Src);
@@ -2236,9 +2248,11 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
   if (Subtarget.getABI().IsCheriPureCap() && Subtarget.useCheriCapTable()) {
     // FIXME: shouldn't functions have a R_MIPS_CHERI_CAPCALL relocation?
     bool CanUseCapTable = GVTy->isFunctionTy() ||  DAG.getDataLayout().isFatPointer(GVTy);
-    if (CanUseCapTable) {
-      bool IsFnPtr =
-          GVTy->isPointerTy() && GVTy->getPointerElementType()->isFunctionTy();
+    if (!Ty.isFatPointer())
+      Ty = MVT::iFATPTR; // FIXME: this is wrong once the tablegen changes get merged
+    bool IsFnPtr =
+      GVTy->isPointerTy() && GVTy->getPointerElementType()->isFunctionTy();
+    if (CanUseCapTable || IsFnPtr) {
       auto CapTable = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
       // FIXME: in the future it would be good to inline local function pointers
       // into the capability table directly (right now the value is a
@@ -2260,7 +2274,7 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
     } else {
       llvm::errs() << "Not using capability table for " <<  GV->getName() << "\n";
       GV->dump();
-      abort();
+      assert(false && "SHOULD HAVE USED CAP TABLE");
     }
   }
 
@@ -2313,6 +2327,7 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
   }
 
   if (GV->getType()->getAddressSpace() == 200) {
+    assert(!ABI.UsesCapabilityTable());
     Global = DAG.getNode(ISD::INTTOPTR, SDLoc(N), AddrTy, Global);
     StringRef Name = GV->getName();
     if (!SkipGlobalBounds &&
