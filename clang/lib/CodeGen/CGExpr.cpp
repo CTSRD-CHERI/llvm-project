@@ -2212,8 +2212,17 @@ static LValue EmitGlobalVarDeclLValue(CodeGenFunction &CGF,
   return LV;
 }
 
-llvm::Value *CodeGenFunction::FunctionAddressToCapability(CodeGenFunction &CGF, llvm::Value
-    *Addr) {
+llvm::Value *CodeGenFunction::FunctionAddressToCapability(CodeGenFunction &CGF,
+                                                          llvm::Value *Addr) {
+  auto* VTy = cast<llvm::PointerType>(Addr->getType());
+  unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
+  if (VTy->getPointerAddressSpace() == CapAS)
+    return Addr;
+  llvm::Type *CapTy = VTy->getElementType()->getPointerTo(CapAS);
+  if (llvm::MCTargetOptions::cheriUsesCapabilityTable())
+    return CGF.Builder.CreateAddrSpaceCast(Addr, CapTy);
+
+  // Without a cap table we need to get the function address using $pcc
   llvm::Value *V = CGF.Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
   llvm::Value *PCC = CGF.Builder.CreateCall(
           CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_pcc_get), {});
@@ -2222,7 +2231,8 @@ llvm::Value *CodeGenFunction::FunctionAddressToCapability(CodeGenFunction &CGF, 
       return CGF.Builder.CreateCall(
         CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_from_pointer),
         {PCC, V});
-  return CGF.setPointerOffset(PCC, V);
+  V = CGF.setPointerOffset(PCC, V);
+  return CGF.Builder.CreateBitCast(V, CapTy);
 }
 
 static llvm::Value *EmitFunctionDeclPointer(CodeGenFunction &CGF,
@@ -2235,16 +2245,9 @@ static llvm::Value *EmitFunctionDeclPointer(CodeGenFunction &CGF,
 
   llvm::Value *V = CGM.GetAddrOfFunction(FD);
   auto &TI = CGF.getContext().getTargetInfo();
-  if (TI.areAllPointersCapabilities()) {
-    unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
-    llvm::Type *VTy = V->getType();
-    if (VTy->getPointerAddressSpace() != CapAS) {
-      llvm::Type *CapTy = cast<llvm::PointerType>(VTy)
-        ->getElementType()->getPointerTo(CapAS);
-      V = CodeGenFunction::FunctionAddressToCapability(CGF, V);
-      V = CGF.Builder.CreateBitCast(V, CapTy);
-    }
-  }
+  if (TI.areAllPointersCapabilities())
+    V = CodeGenFunction::FunctionAddressToCapability(CGF, V);
+
   if (!FD->hasPrototype()) {
     if (const FunctionProtoType *Proto =
             FD->getType()->getAs<FunctionProtoType>()) {
