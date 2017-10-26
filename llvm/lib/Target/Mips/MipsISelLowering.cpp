@@ -2347,10 +2347,12 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
         GlobalVariable *SizeGV = M.getGlobalVariable(Name);
         Type *I64 = Type::getInt64Ty(*DAG.getContext());
         if (!SizeGV) {
+          //XXXAR: creating this in AS0 is fine since it needs the GOT anyway
           SizeGV = new GlobalVariable(const_cast<Module&>(M),
               I64, /*isConstant*/true,
               GlobalValue::LinkOnceAnyLinkage, ConstantInt::get(I64, 0),
-              Twine(".size.")+GV->getName());
+              Twine(".size.")+GV->getName(), nullptr,
+              llvm::GlobalVariable::NotThreadLocal, /* AS=*/0);
           SizeGV->setSection(".global_sizes");
         }
         SDValue Size = DAG.getGlobalAddress(SizeGV, SDLoc(Global), MVT::i64);

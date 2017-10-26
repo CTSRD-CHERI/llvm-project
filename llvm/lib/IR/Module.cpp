@@ -199,14 +199,14 @@ GlobalVariable *Module::getGlobalVariable(StringRef Name,
 ///      with a constantexpr cast to the right type.
 ///   3. Finally, if the existing global is the correct declaration, return the
 ///      existing global.
-Constant *Module::getOrInsertGlobal(StringRef Name, Type *Ty) {
+Constant *Module::getOrInsertGlobal(StringRef Name, Type *Ty/* TODO:, unsigned AS*/) {
   // See if we have a definition for the specified global already.
   GlobalVariable *GV = dyn_cast_or_null<GlobalVariable>(getNamedValue(Name));
   if (!GV) {
     // Nope, add it
     GlobalVariable *New =
       new GlobalVariable(*this, Ty, false, GlobalVariable::ExternalLinkage,
-                         nullptr, Name);
+                         nullptr, Name/*TODO: , nullptr, GlobalVariable::NotThreadLocal, AS*/);
      return New;                    // Return the new declaration.
   }
 

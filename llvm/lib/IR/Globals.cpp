@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <llvm/MC/MCTargetOptions.h>
 #include "LLVMContextImpl.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Triple.h"
@@ -283,6 +284,18 @@ Optional<ConstantRange> GlobalValue::getAbsoluteSymbolRange() const {
 //===----------------------------------------------------------------------===//
 // GlobalVariable Implementation
 //===----------------------------------------------------------------------===//
+// XXXAR: the dummy forwarding ctors for non-addressspace overloads
+GlobalVariable::GlobalVariable(Type *Ty, bool constant, LinkageTypes Link,
+                               Constant *InitVal, const Twine &Name,
+                               ThreadLocalMode TLMode)
+  : GlobalVariable(Ty, constant, Link, InitVal, Name, TLMode, 0, false) {}
+
+GlobalVariable::GlobalVariable(Module &M, Type *Ty, bool constant,
+                               LinkageTypes Link, Constant *InitVal,
+                               const Twine &Name, GlobalVariable *Before,
+                               ThreadLocalMode TLMode)
+  : GlobalVariable(M, Ty, constant, Link, InitVal, Name, nullptr, TLMode, 0, false) {}
+
 
 GlobalVariable::GlobalVariable(Type *Ty, bool constant, LinkageTypes Link,
                                Constant *InitVal, const Twine &Name,
