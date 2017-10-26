@@ -323,7 +323,9 @@ llvm::Function *CGNVCUDARuntime::makeModuleCtorFunction() {
         CtorBuilder.CreateBitCast(FatbinWrapper, VoidPtrTy));
     llvm::GlobalVariable *GpuBinaryHandle = new llvm::GlobalVariable(
         TheModule, VoidPtrPtrTy, false, llvm::GlobalValue::InternalLinkage,
-        llvm::ConstantPointerNull::get(VoidPtrPtrTy), "__cuda_gpubin_handle");
+        llvm::ConstantPointerNull::get(VoidPtrPtrTy), "__cuda_gpubin_handle",
+        nullptr, llvm::GlobalVariable::NotThreadLocal,
+        CGM.getTargetCodeGenInfo().getDefaultAS());
     CtorBuilder.CreateAlignedStore(RegisterFatbinCall, GpuBinaryHandle,
                                    CGM.getPointerAlign());
 

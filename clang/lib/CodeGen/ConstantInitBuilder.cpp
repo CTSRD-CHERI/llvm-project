@@ -155,7 +155,9 @@ ConstantAggregateBuilderBase::getAddrOfCurrentPosition(llvm::Type *type) {
   auto dummy =
     new llvm::GlobalVariable(Builder.CGM.getModule(), type, true,
                              llvm::GlobalVariable::PrivateLinkage,
-                             nullptr, "");
+                             nullptr, "",
+                             nullptr, llvm::GlobalValue::NotThreadLocal,
+                             Builder.CGM.getTargetCodeGenInfo().getDefaultAS());
   Builder.SelfReferences.emplace_back(dummy);
   auto &entry = Builder.SelfReferences.back();
   (void) getGEPIndicesToCurrentPosition(entry.Indices);
