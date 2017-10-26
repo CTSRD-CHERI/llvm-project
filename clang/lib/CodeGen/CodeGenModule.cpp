@@ -1280,7 +1280,9 @@ static void emitUsed(CodeGenModule &CGM, StringRef Name,
 
   auto *GV = new llvm::GlobalVariable(
       CGM.getModule(), ATy, false, llvm::GlobalValue::AppendingLinkage,
-      llvm::ConstantArray::get(ATy, UsedArray), Name);
+      llvm::ConstantArray::get(ATy, UsedArray), Name, nullptr,
+      llvm::GlobalValue::NotThreadLocal,
+      CGM.getTargetCodeGenInfo().getDefaultAS());
 
   GV->setSection("llvm.metadata");
 }
@@ -1501,9 +1503,10 @@ void CodeGenModule::EmitGlobalAnnotations() {
   // Create a new global variable for the ConstantStruct in the Module.
   llvm::Constant *Array = llvm::ConstantArray::get(llvm::ArrayType::get(
     Annotations[0]->getType(), Annotations.size()), Annotations);
-  auto *gv = new llvm::GlobalVariable(getModule(), Array->getType(), false,
-                                      llvm::GlobalValue::AppendingLinkage,
-                                      Array, "llvm.global.annotations");
+  auto *gv = new llvm::GlobalVariable(
+      getModule(), Array->getType(), false, llvm::GlobalValue::AppendingLinkage,
+      Array, "llvm.global.annotations", nullptr,
+      llvm::GlobalValue::NotThreadLocal, getTargetCodeGenInfo().getDefaultAS());
   gv->setSection(AnnotationSection);
 }
 
@@ -1691,7 +1694,9 @@ ConstantAddress CodeGenModule::GetAddrOfUuidDescriptor(
 
   auto *GV = new llvm::GlobalVariable(
       getModule(), Init->getType(),
-      /*isConstant=*/true, llvm::GlobalValue::LinkOnceODRLinkage, Init, Name);
+      /*isConstant=*/true, llvm::GlobalValue::LinkOnceODRLinkage, Init, Name,
+      nullptr, llvm::GlobalValue::NotThreadLocal,
+      getTargetCodeGenInfo().getDefaultAS());
   if (supportsCOMDAT())
     GV->setComdat(TheModule.getOrInsertComdat(GV->getName()));
   return ConstantAddress(GV, Alignment);
@@ -4708,9 +4713,11 @@ llvm::Value *CodeGenModule::EmitSandboxRequiredMethod(StringRef Cls,
 
     auto *StructInit = llvm::ConstantStruct::get(StructTy, {Zero64,
         ClsName, MethodName, MethodNumVar, Zero64});
-    auto *MetadataGV = new llvm::GlobalVariable(getModule(), StructTy,
-        /*isConstant*/false, llvm::GlobalValue::ExternalLinkage, StructInit,
-        GlobalStructName);
+    auto *MetadataGV = new llvm::GlobalVariable(
+        getModule(), StructTy,
+        /*isConstant*/ false, llvm::GlobalValue::ExternalLinkage, StructInit,
+        GlobalStructName, nullptr, llvm::GlobalValue::NotThreadLocal,
+        getTargetCodeGenInfo().getDefaultAS());
     MetadataGV->setSection("__cheri_sandbox_required_methods");
     MetadataGV->setComdat(getModule().getOrInsertComdat(GlobalStructName));
     addUsedGlobal(MetadataGV);
@@ -4737,10 +4744,11 @@ void CodeGenModule::EmitSandboxDefinedMethod(StringRef Cls, StringRef
       Method).str();
   auto *MethodPtrVar = getModule().getNamedGlobal(GlobalName);
   if (!MethodPtrVar) {
-    MethodPtrVar = new llvm::GlobalVariable(getModule(),
-        Fn->getType(),
-        /*isConstant*/false, llvm::GlobalValue::ExternalLinkage,
-        Fn, GlobalName);
+    MethodPtrVar = new llvm::GlobalVariable(
+        getModule(), Fn->getType(),
+        /*isConstant*/ false, llvm::GlobalValue::ExternalLinkage, Fn,
+        GlobalName, nullptr, llvm::GlobalValue::NotThreadLocal,
+        getTargetCodeGenInfo().getDefaultAS());
     MethodPtrVar->setSection(".CHERI_CALLEE");
     addUsedGlobal(MethodPtrVar);
   }
@@ -4757,9 +4765,11 @@ void CodeGenModule::EmitSandboxDefinedMethod(StringRef Cls, StringRef
 
     auto *StructInit = llvm::ConstantStruct::get(StructTy, {Zero64,
         ClsName, MethodName, MethodPtrVar});
-    auto *MetadataGV = new llvm::GlobalVariable(getModule(), StructTy,
-        /*isConstant*/false, llvm::GlobalValue::ExternalLinkage, StructInit,
-        GlobalStructName);
+    auto *MetadataGV = new llvm::GlobalVariable(
+        getModule(), StructTy,
+        /*isConstant*/ false, llvm::GlobalValue::ExternalLinkage, StructInit,
+        GlobalStructName, nullptr, llvm::GlobalValue::NotThreadLocal,
+        getTargetCodeGenInfo().getDefaultAS());
     MetadataGV->setSection("__cheri_sandbox_provided_methods");
     MetadataGV->setComdat(getModule().getOrInsertComdat(StringRef(GlobalStructName)));
     addUsedGlobal(MetadataGV);
