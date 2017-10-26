@@ -1,4 +1,4 @@
-// RUN: %cheri_purecap_cc1 %s -emit-obj -mllvm -mxgot -mllvm -cheri-cap-table -x c -O3 -o %t.o
+// RUN: %cheri_purecap_cc1 -pedantic -Weverything %s -emit-obj -mllvm -mxgot -mllvm -cheri-cap-table -x c -O3 -o %t.o
 // RUN: ld.lld %t.o -o %t.exe
 // RUN: llvm-objdump -t -d -s %t.exe | FileCheck %s
 
@@ -11,7 +11,7 @@ long global2 = 3;
 int main();
 
 static int _start(void) __attribute__((used));
-DEFINE_CHERI_START_FUNCTION(_start);
+DEFINE_CHERI_START_FUNCTION(_start)
 
 static int _start(void) {
   return main();
