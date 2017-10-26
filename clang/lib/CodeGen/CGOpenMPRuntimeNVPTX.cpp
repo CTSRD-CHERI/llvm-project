@@ -472,7 +472,9 @@ static void setPropertyExecutionMode(CodeGenModule &CGM, StringRef Name,
   (void)new llvm::GlobalVariable(
       CGM.getModule(), CGM.Int8Ty, /*isConstant=*/true,
       llvm::GlobalValue::WeakAnyLinkage,
-      llvm::ConstantInt::get(CGM.Int8Ty, Mode), Name + Twine("_exec_mode"));
+      llvm::ConstantInt::get(CGM.Int8Ty, Mode), Name + Twine("_exec_mode"),
+      nullptr, llvm::GlobalValue::NotThreadLocal,
+      CGM.getTargetCodeGenInfo().getDefaultAS());
 }
 
 void CGOpenMPRuntimeNVPTX::emitWorkerFunction(WorkerFunctionState &WST) {

@@ -785,7 +785,9 @@ static void emitInitWithReductionInitializer(CodeGenFunction &CGF,
     llvm::Constant *Init = CGF.CGM.EmitNullConstant(Ty);
     auto *GV = new llvm::GlobalVariable(
         CGF.CGM.getModule(), Init->getType(), /*isConstant=*/true,
-        llvm::GlobalValue::PrivateLinkage, Init, ".init");
+        llvm::GlobalValue::PrivateLinkage, Init, ".init",
+        nullptr, llvm::GlobalValue::NotThreadLocal,
+        CGF.CGM.getTargetCodeGenInfo().getDefaultAS());
     LValue LV = CGF.MakeNaturalAlignAddrLValue(GV, Ty);
     RValue InitRVal;
     switch (CGF.getEvaluationKind(Ty)) {
@@ -1469,7 +1471,8 @@ llvm::Value *CGOpenMPRuntime::emitUpdateLocation(CodeGenFunction &CGF,
       OS2 << FD->getQualifiedNameAsString();
     }
     OS2 << ";" << PLoc.getLine() << ";" << PLoc.getColumn() << ";;";
-    OMPDebugLoc = CGF.Builder.CreateGlobalStringPtr(OS2.str());
+    OMPDebugLoc = CGF.Builder.CreateGlobalStringPtr(OS2.str(), "",
+                                                    CGM.getTargetCodeGenInfo().getDefaultAS());
     OpenMPDebugLocMap[Loc.getRawEncoding()] = OMPDebugLoc;
   }
   // *psource = ";<File>;<Function>;<Line>;<Column>;;";
@@ -2655,7 +2658,9 @@ CGOpenMPRuntime::getOrCreateInternalVariable(llvm::Type *Ty,
   return Elem.second = new llvm::GlobalVariable(
              CGM.getModule(), Ty, /*IsConstant*/ false,
              llvm::GlobalValue::CommonLinkage, llvm::Constant::getNullValue(Ty),
-             Elem.first());
+             Elem.first(),
+             nullptr, llvm::GlobalValue::NotThreadLocal,
+             CGM.getTargetCodeGenInfo().getDefaultAS());
 }
 
 llvm::Value *CGOpenMPRuntime::getCriticalRegionLock(StringRef CriticalName) {
@@ -3450,11 +3455,15 @@ CGOpenMPRuntime::createOffloadingBinaryDescriptorRegistration() {
   llvm::GlobalVariable *HostEntriesBegin = new llvm::GlobalVariable(
       M, OffloadEntryTy, /*isConstant=*/true,
       llvm::GlobalValue::ExternalLinkage, /*Initializer=*/nullptr,
-      ".omp_offloading.entries_begin");
+      ".omp_offloading.entries_begin",
+      nullptr, llvm::GlobalValue::NotThreadLocal,
+      CGM.getTargetCodeGenInfo().getDefaultAS());
   llvm::GlobalVariable *HostEntriesEnd = new llvm::GlobalVariable(
       M, OffloadEntryTy, /*isConstant=*/true,
       llvm::GlobalValue::ExternalLinkage, /*Initializer=*/nullptr,
-      ".omp_offloading.entries_end");
+      ".omp_offloading.entries_end",
+      nullptr, llvm::GlobalValue::NotThreadLocal,
+      CGM.getTargetCodeGenInfo().getDefaultAS());
 
   // Create all device images
   auto *DeviceImageTy = cast<llvm::StructType>(
@@ -3467,10 +3476,14 @@ CGOpenMPRuntime::createOffloadingBinaryDescriptorRegistration() {
     auto *ImgBegin = new llvm::GlobalVariable(
         M, CGM.Int8Ty, /*isConstant=*/true, llvm::GlobalValue::ExternalLinkage,
         /*Initializer=*/nullptr,
-        Twine(".omp_offloading.img_start.") + Twine(T));
+        Twine(".omp_offloading.img_start.") + Twine(T),
+        nullptr, llvm::GlobalValue::NotThreadLocal,
+        CGM.getTargetCodeGenInfo().getDefaultAS());
     auto *ImgEnd = new llvm::GlobalVariable(
         M, CGM.Int8Ty, /*isConstant=*/true, llvm::GlobalValue::ExternalLinkage,
-        /*Initializer=*/nullptr, Twine(".omp_offloading.img_end.") + Twine(T));
+        /*Initializer=*/nullptr, Twine(".omp_offloading.img_end.") + Twine(T),
+        nullptr, llvm::GlobalValue::NotThreadLocal,
+        CGM.getTargetCodeGenInfo().getDefaultAS());
 
     auto Dev = DeviceImagesEntries.beginStruct(DeviceImageTy);
     Dev.add(ImgBegin);
@@ -3563,7 +3576,9 @@ void CGOpenMPRuntime::createOffloadEntry(llvm::Constant *ID,
   llvm::GlobalVariable *Str =
       new llvm::GlobalVariable(M, StrPtrInit->getType(), /*isConstant=*/true,
                                llvm::GlobalValue::InternalLinkage, StrPtrInit,
-                               ".omp_offloading.entry_name");
+                               ".omp_offloading.entry_name",
+                               nullptr, llvm::GlobalValue::NotThreadLocal,
+                               CGM.getTargetCodeGenInfo().getDefaultAS());
   Str->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
   llvm::Constant *StrPtr = llvm::ConstantExpr::getBitCast(Str, CGM.Int8PtrTy);
 
@@ -5927,7 +5942,9 @@ void CGOpenMPRuntime::emitTargetOutlinedFunctionHelper(
     OutlinedFnID = new llvm::GlobalVariable(
         CGM.getModule(), CGM.Int8Ty, /*isConstant=*/true,
         llvm::GlobalValue::PrivateLinkage,
-        llvm::Constant::getNullValue(CGM.Int8Ty), ".omp_offload.region_id");
+        llvm::Constant::getNullValue(CGM.Int8Ty), ".omp_offload.region_id",
+        nullptr, llvm::GlobalValue::NotThreadLocal,CGM.
+        getTargetCodeGenInfo().getDefaultAS());
 
   // Register the information for the entry associated with this target region.
   OffloadEntriesInfoManager.registerTargetRegionEntryInfo(
@@ -6954,7 +6971,9 @@ emitOffloadingArrays(CodeGenFunction &CGF,
       auto *SizesArrayGbl = new llvm::GlobalVariable(
           CGM.getModule(), SizesArrayInit->getType(),
           /*isConstant=*/true, llvm::GlobalValue::PrivateLinkage,
-          SizesArrayInit, ".offload_sizes");
+          SizesArrayInit, ".offload_sizes",
+          nullptr, llvm::GlobalValue::NotThreadLocal,
+          CGM.getTargetCodeGenInfo().getDefaultAS());
       SizesArrayGbl->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
       Info.SizesArray = SizesArrayGbl;
     }
@@ -6966,7 +6985,8 @@ emitOffloadingArrays(CodeGenFunction &CGF,
     auto *MapTypesArrayGbl = new llvm::GlobalVariable(
         CGM.getModule(), MapTypesArrayInit->getType(),
         /*isConstant=*/true, llvm::GlobalValue::PrivateLinkage,
-        MapTypesArrayInit, ".offload_maptypes");
+        MapTypesArrayInit, ".offload_maptypes", nullptr,
+        llvm::GlobalValue::NotThreadLocal, CGM.getTargetCodeGenInfo().getDefaultAS());
     MapTypesArrayGbl->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
     Info.MapTypesArray = MapTypesArrayGbl;
 

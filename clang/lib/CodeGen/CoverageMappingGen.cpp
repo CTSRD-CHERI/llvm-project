@@ -1398,7 +1398,9 @@ void CoverageMappingModuleGen::emit() {
       llvm::ConstantStruct::get(CovDataTy, makeArrayRef(TUDataVals));
   auto CovData = new llvm::GlobalVariable(
       CGM.getModule(), CovDataTy, true, llvm::GlobalValue::InternalLinkage,
-      CovDataVal, llvm::getCoverageMappingVarName());
+      CovDataVal, llvm::getCoverageMappingVarName(),
+      nullptr, llvm::GlobalValue::NotThreadLocal,
+      CGM.getTargetCodeGenInfo().getDefaultAS());
 
   CovData->setSection(getCoverageSection(CGM));
   CovData->setAlignment(8);
@@ -1413,7 +1415,9 @@ void CoverageMappingModuleGen::emit() {
     // to pass the list of names referenced to codegen.
     new llvm::GlobalVariable(CGM.getModule(), NamesArrTy, true,
                              llvm::GlobalValue::InternalLinkage, NamesArrVal,
-                             llvm::getCoverageUnusedNamesVarName());
+                             llvm::getCoverageUnusedNamesVarName(),
+                             nullptr, llvm::GlobalValue::NotThreadLocal,
+                             CGM.getTargetCodeGenInfo().getDefaultAS());
   }
 }
 
