@@ -12,8 +12,8 @@
 //===----------------------------------------------------------------------===//
 
 
-def SDT_MipsCBT      : SDTypeProfile<0, 2, [SDTCisVT<0, iFATPTR>]>;
-def SDT_MipsPtrToCap     : SDTypeProfile<1, 1, [SDTCisVT<0, iFATPTR>,
+def SDT_MipsCBT      : SDTypeProfile<0, 2, [SDTCisVT<0, CapRegType>]>;
+def SDT_MipsPtrToCap     : SDTypeProfile<1, 1, [SDTCisVT<0, CapRegType>,
                                             SDTCisVT<1, i64>]>;
 def MipsSTC : SDNode<"MipsISD::STACKTOCAP", SDT_MipsPtrToCap,
                           []>;
@@ -65,7 +65,7 @@ def atomic_load_node      : SDNode<"ISD::ATOMIC_LOAD", SDTAtomicCapLoad,
 def atomic_load_cap :
   PatFrag<(ops node:$ptr),
           (atomic_load_node node:$ptr), [{
-  return cast<AtomicSDNode>(N)->getMemoryVT() == MVT::iFATPTR;
+  return cast<AtomicSDNode>(N)->getMemoryVT().isFatPointer();
 }]>;
 
 def atomic_store_node     : SDNode<"ISD::ATOMIC_STORE", SDTAtomicCapStore,
@@ -73,7 +73,7 @@ def atomic_store_node     : SDNode<"ISD::ATOMIC_STORE", SDTAtomicCapStore,
 
 def atomic_store_cap : PatFrag<(ops node:$ptr, node:$val),
                    (atomic_store_node node:$ptr, node:$val), [{
-    return cast<AtomicSDNode>(N)->getMemoryVT() == MVT::iFATPTR;
+    return cast<AtomicSDNode>(N)->getMemoryVT().isFatPointer();
 }]>;
 
 
@@ -262,8 +262,7 @@ def CGetPCC : CheriFmt1Op<0x0, (outs CheriOpnd:$r1), (ins),
 
 def CSetPCCOffset : CheriFmt2Op<7, (outs CheriOpnd:$r1), (ins GPR64Opnd:$r2),
                                 "cgetpccsetoffset\t${r1}, $r2",
-                                [(set CheriOpnd:$r1, (int_cheri_cap_offset_set (int_cheri_pcc_get), GPR64Opnd: $r2))]>;
-
+                                [(set CheriOpnd:$r1, (int_cheri_cap_offset_set (CapRegType (int_cheri_pcc_get)), GPR64Opnd: $r2))]>;
 
 // Sealing and unsealing
 def CSeal   : CheriFmt3Op<0xb, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3), 
@@ -354,7 +353,7 @@ multiclass LoadViaCapScaled<bits<2> t, bit sExt, string instr_asm, RegisterOpera
                              (outs RC:$rd),
                              (ins GPR64Opnd:$rt, simm:$offset, CheriOpnd:$cb),
                              !strconcat(instr_asm, "\t$rd, ${rt}, ${offset}(${cb})"),
-                           [(set RC:$rd, (loadType (iFATPTR (ptradd CheriOpnd:$cb, (add GPR64Opnd: $rt, (i64 immfrag:$offset))))))]>;
+                           [(set RC:$rd, (loadType (CapRegType (ptradd CheriOpnd:$cb, (add GPR64Opnd: $rt, (i64 immfrag:$offset))))))]>;
 }
 multiclass LoadViaCap<bits<2> t, bit e, string instr_asm, RegisterOperand RC, PatFrag storeType> :
   LoadViaCapScaled<t, e, instr_asm, RC, storeType, simm8, immSExt8>;
@@ -371,7 +370,7 @@ multiclass StoreViaCapScaled<bits<2> t, bit e, string instr_asm, RegisterOperand
                              (outs),
                              (ins RC:$rs, GPR64Opnd:$rt, simm:$offset, CheriOpnd:$cb),
                              !strconcat(instr_asm, "\t$rs, ${rt}, ${offset}(${cb})"),
-                           [(storeType (iFATPTR (ptradd CheriOpnd:$cb, (add GPR64Opnd: $rt, (i64 immfrag:$offset)))), RC:$rs)]>;
+                           [(storeType (CapRegType (ptradd CheriOpnd:$cb, (add GPR64Opnd: $rt, (i64 immfrag:$offset)))), RC:$rs)]>;
 }
 multiclass StoreViaCap<bits<2> t, bit e, string instr_asm, RegisterOperand RC, PatFrag storeType> :
   StoreViaCapScaled<t, e, instr_asm, RC, storeType, simm8, immSExt8>;
@@ -504,7 +503,7 @@ class CapAtomic2Ops<PatFrag Op, RegisterClass DRC> :
            [(set DRC:$dst, (Op CheriRegs:$ptr, DRC:$incr))]>;
 class CapAtomicCmpSwap<PatFrag Op, RegisterClass DRC> :
   PseudoSE<(outs DRC:$dst), (ins CheriRegs:$ptr, DRC:$cmp, DRC:$swap),
-           [(set DRC:$dst, (Op iFATPTR:$ptr, DRC:$cmp, DRC:$swap))]>;
+           [(set DRC:$dst, (Op CapRegType:$ptr, DRC:$cmp, DRC:$swap))]>;
 
 
 let usesCustomInserter = 1 in {
@@ -601,7 +600,7 @@ def  CCallPseudo : PseudoSE<(outs), (ins GPR64Opnd:$rs, uimm32: $mask),
 }
 
 
-def SDT_MipsCapJmpLink      : SDTypeProfile<0, 1, [SDTCisVT<0, iFATPTR>]>;
+def SDT_MipsCapJmpLink      : SDTypeProfile<0, 1, [SDTCisVT<0, CapRegType>]>;
 def CapJmpLink : SDNode<"MipsISD::CapJmpLink",SDT_MipsCapJmpLink,
                          [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue,
                           SDNPVariadic]>;
@@ -652,15 +651,33 @@ def CSCB  : CheriFmtCSC<0, (outs GPR64Opnd:$rd), (ins GPR64Opnd: $rs, CheriOpnd:
                         "cscb\t$rd, $rs, $cb">;
 }
 
-def AddrFI : ComplexPattern<iFATPTR, 1, "selectAddrFI", [frameindex], []>;
+def AddrFI64  : ComplexPattern<iFATPTR64, 1, "selectAddrFI", [frameindex], []>;
+def AddrFI128 : ComplexPattern<iFATPTR128, 1, "selectAddrFI", [frameindex], []>;
+def AddrFI256 : ComplexPattern<iFATPTR256, 1, "selectAddrFI", [frameindex], []>;
+
 def StackToCapPseudo : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd: $fi),
                             "#StackToCapPseudo $cd, $fi",
                             []>;
+
 def : Pat<(int_mips_stack_to_cap CheriOpnd:$addr), (CIncOffset $addr, ZERO_64)>;
-def : Pat<(int_mips_stack_to_cap AddrFI:$addr), (CIncOffset $addr, ZERO_64)>;
-def : Pat<(load AddrFI:$addr),
+
+// These patterns need duplicating for each of the capability sizes.  It's not
+// clear why: we should be able to pattern match a ComplexPattern with an
+// overloaded return type, but that appears to be broken.
+def : Pat<(int_mips_stack_to_cap AddrFI64:$addr), (CIncOffset $addr, ZERO_64)>;
+def : Pat<(load (CapRegType (AddrFI64:$addr))),
               (CAPLOAD64 ZERO_64, (i64 0), $addr)>;
-def : Pat<(load AddrFI:$addr),
+def : Pat<(load (CapRegType (AddrFI64:$addr))),
+              (LOADCAP ZERO_64, (i64 0), $addr)>;
+def : Pat<(int_mips_stack_to_cap AddrFI128:$addr), (CIncOffset $addr, ZERO_64)>;
+def : Pat<(load (CapRegType (AddrFI128:$addr))),
+              (CAPLOAD64 ZERO_64, (i64 0), $addr)>;
+def : Pat<(load (CapRegType (AddrFI128:$addr))),
+              (LOADCAP ZERO_64, (i64 0), $addr)>;
+def : Pat<(int_mips_stack_to_cap AddrFI256:$addr), (CIncOffset $addr, ZERO_64)>;
+def : Pat<(load (CapRegType (AddrFI256:$addr))),
+              (CAPLOAD64 ZERO_64, (i64 0), $addr)>;
+def : Pat<(load (CapRegType (AddrFI256:$addr))),
               (LOADCAP ZERO_64, (i64 0), $addr)>;
 
 let Defs = [C11], Uses = [C11], hasSideEffects = 1, Predicates=[IsCHERIABI] in {

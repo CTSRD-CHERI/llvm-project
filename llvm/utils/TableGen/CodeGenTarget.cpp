@@ -170,7 +170,11 @@ StringRef llvm::getEnumName(MVT::SimpleValueType T) {
   case MVT::token:    return "MVT::token";
   case MVT::Metadata: return "MVT::Metadata";
   case MVT::iPTR:     return "MVT::iPTR";
-  case MVT::iFATPTR:  return "MVT::iFATPTR";
+  case MVT::iFATPTR64:  return "MVT::iFATPTR64";
+  case MVT::iFATPTR128:  return "MVT::iFATPTR128";
+  case MVT::iFATPTR256:  return "MVT::iFATPTR256";
+  case MVT::iFATPTR512:  return "MVT::iFATPTR512";
+  case MVT::iFATPTRAny:  return "MVT::iFATPTRAny";
   case MVT::iPTRAny:  return "MVT::iPTRAny";
   case MVT::Untyped:  return "MVT::Untyped";
   default: llvm_unreachable("ILLEGAL VALUE TYPE!");
@@ -582,7 +586,11 @@ CodeGenIntrinsic::CodeGenIntrinsic(Record *R) {
     } else {
       VT = getValueType(TyEl->getValueAsDef("VT"));
     }
-    if (MVT(VT).isOverloaded()) {
+    // iFATPTRAny is overloaded from the perspective of the back end (it
+    // becomes one of the fixed-sized iFATPTR types), but it is not overloaded
+    // from the perspective of the IR, where it is (currently, at least) always
+    // an address-space-200 pointer.
+    if (MVT(VT).isOverloaded() && (MVT(VT) != MVT::iFATPTRAny)) {
       OverloadedVTs.push_back(VT);
       isOverloaded = true;
     }
@@ -617,7 +625,11 @@ CodeGenIntrinsic::CodeGenIntrinsic(Record *R) {
     } else
       VT = getValueType(TyEl->getValueAsDef("VT"));
 
-    if (MVT(VT).isOverloaded()) {
+    // iFATPTRAny is overloaded from the perspective of the back end (it
+    // becomes one of the fixed-sized iFATPTR types), but it is not overloaded
+    // from the perspective of the IR, where it is (currently, at least) always
+    // an address-space-200 pointer.
+    if (MVT(VT).isOverloaded() && (MVT(VT) != MVT::iFATPTRAny)) {
       OverloadedVTs.push_back(VT);
       isOverloaded = true;
     }

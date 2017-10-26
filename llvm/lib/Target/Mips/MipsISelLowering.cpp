@@ -330,7 +330,8 @@ const char *MipsTargetLowering::getTargetNodeName(unsigned Opcode) const {
 
 MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
                                        const MipsSubtarget &STI)
-    : TargetLowering(TM), Subtarget(STI), ABI(TM.getABI()) {
+    : TargetLowering(TM), CapType(STI.typeForCapabilities()), Subtarget(STI),
+      ABI(TM.getABI()) {
   // Mips does not have i1 type, so use i32 for
   // setcc operations results (slt, sgt, ...).
   setBooleanContents(ZeroOrOneBooleanContent);
@@ -376,12 +377,12 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
   // Trap is an invalid instruction sequence
   setOperationAction(ISD::TRAP,               MVT::Other, Legal);
   if (Subtarget.isCheri()) {
-    setOperationAction(ISD::ADDRSPACECAST,    MVT::iFATPTR, Custom);
+    setOperationAction(ISD::ADDRSPACECAST,    CapType, Custom);
     setOperationAction(ISD::ADDRSPACECAST,    MVT::i64, Custom);
   }
 
   // Mips Custom Operations
-  setOperationAction(ISD::GlobalAddress,      MVT::iFATPTR,Custom);
+  setOperationAction(ISD::GlobalAddress,      CapType,Custom);
   setOperationAction(ISD::BR_JT,              MVT::Other, Expand);
   setOperationAction(ISD::GlobalAddress,      MVT::i32,   Custom);
   setOperationAction(ISD::BlockAddress,       MVT::i32,   Custom);
@@ -471,7 +472,7 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
   setOperationAction(ISD::ROTL,              MVT::i64,   Expand);
   setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i32,  Expand);
   setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i64,  Expand);
-  setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::iFATPTR,  Expand);
+  setOperationAction(ISD::DYNAMIC_STACKALLOC, CapType,  Expand);
 
   if (!Subtarget.hasMips32r2())
     setOperationAction(ISD::ROTR, MVT::i32,   Expand);
@@ -2131,7 +2132,7 @@ MachineBasicBlock *MipsTargetLowering::emitAtomicCmpSwapPartword(
 static SDValue setBounds(SelectionDAG &DAG, SDValue Val, SDValue Length) {
   SDLoc DL(Val);
   Intrinsic::ID SetBounds = Intrinsic::cheri_cap_bounds_set;
-  return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
+  return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, Val.getValueType(),
         DAG.getConstant(SetBounds, DL, MVT::i64), Val,
         Length);
 }
@@ -2146,7 +2147,7 @@ SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
   SDValue Src = Op.getOperand(0);
   EVT DstTy = Op.getValueType();
   if (Src.getValueType() == MVT::i64) {
-    assert(Op.getValueType() == MVT::iFATPTR);
+    assert(Op.getValueType() == CapType);
     auto Ptr = DAG.getNode(ISD::INTTOPTR, DL, DstTy, Src);
     if (auto *N = dyn_cast<GlobalAddressSDNode>(Src)) {
       const GlobalValue *GV = N->getGlobal();
@@ -2158,7 +2159,7 @@ SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
     }
     return Ptr;
   }
-  assert(Src.getValueType() == MVT::iFATPTR);
+  assert(Src.getValueType() == CapType);
   assert(Op.getValueType() == MVT::i64);
   return DAG.getNode(ISD::PTRTOINT, DL, DstTy, Src);
 }
@@ -2455,7 +2456,7 @@ SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
                                      ABI.StackAddrSpace()));
 
   if (ABI.IsCheriPureCap()) {
-    unsigned Reg = MF.addLiveIn(Mips::C13, getRegClassFor(MVT::iFATPTR));
+    unsigned Reg = MF.addLiveIn(Mips::C13, getRegClassFor(CapType));
     // In the sandbox ABI, the va_start intrinsic will (to work around LLVM's
     // assumption that allocas are all in AS0) be an address space cast of the
     // alloca to AS 0.  We need to extract the original operands.
@@ -2464,7 +2465,7 @@ SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
     assert(SV->getType()->getPointerAddressSpace() == 200);
     SDValue Chain = Op.getOperand(0);
     SDValue CapAddr = Op.getOperand(1);
-    FI = DAG.getCopyFromReg(DAG.getEntryNode(), DL, Reg, MVT::iFATPTR);
+    FI = DAG.getCopyFromReg(DAG.getEntryNode(), DL, Reg, CapType);
     return DAG.getStore(Chain, DL, FI, CapAddr, MachinePointerInfo(SV));
   }
 
@@ -2484,7 +2485,7 @@ SDValue MipsTargetLowering::lowerVACOPY(SDValue Op, SelectionDAG &DAG) const {
   SDValue Src = Op->getOperand(2);
   SDLoc DL(Op);
   // The source is a pointer to the existing va_list
-  Src = DAG.getLoad(MVT::iFATPTR, DL, Chain, Src, MachinePointerInfo());
+  Src = DAG.getLoad(CapType, DL, Chain, Src, MachinePointerInfo());
   return DAG.getStore(Chain, DL, Src, Dest, MachinePointerInfo());
 }
 
@@ -2680,7 +2681,7 @@ SDValue MipsTargetLowering::lowerRETURNADDR(SDValue Op,
   MVT VT = Op.getSimpleValueType();
   unsigned RA = ABI.IsN64() ? Mips::RA_64 : Mips::RA;
   if (ABI.IsCheriPureCap()) {
-     assert(VT == MVT::iFATPTR);
+     assert(VT == CapType);
      RA = Mips::C17;
   }
   MFI.setReturnAddressIsTaken(true);
@@ -2824,7 +2825,7 @@ SDValue MipsTargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
 
   // We don't handle capability-releative loads here, so make sure that we
   // don't encounter them!
-  assert(MemVT != MVT::iFATPTR);
+  assert(MemVT != CapType);
 
   // Return if load is aligned or if MemVT is neither i32 nor i64.
   if ((LD->getAlignment() >= MemVT.getSizeInBits() / 8) ||
@@ -2907,7 +2908,7 @@ static SDValue lowerUnalignedIntStore(StoreSDNode *SD, SelectionDAG &DAG,
 
   // CHERI doesn't have a capability version of SDR / SDL, so we turn this into
   // a sequence of byte stores and shifts.
-  if (IsCHERI && (BasePtr->getValueType(0) == MVT::iFATPTR)) {
+  if (IsCHERI && (BasePtr->getValueType(0).isFatPointer())) {
     SDLoc DL(SD);
     EVT MemVT = SD->getMemoryVT();
     SDValue Store;
@@ -3419,7 +3420,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     // Arguments that can be passed on register must be kept at
     // RegsToPass vector
     if (VA.isRegLoc()) {
-      if (ValVT == MVT::iFATPTR)
+      if (ValVT.isFatPointer())
         CapArgs++;
       else if ((VA.getLocReg() >= Mips::A0_64) &&
                (VA.getLocReg() <= Mips::T3_64))
@@ -3448,16 +3449,16 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     if (FirstOffset != -1) {
       Intrinsic::ID SetBounds = Intrinsic::cheri_cap_bounds_set;
       SDValue PtrOff = DAG.getPointerAdd(DL, StackPtr, FirstOffset);
-      PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
+      PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType,
           DAG.getConstant(SetBounds, DL, MVT::i64), PtrOff,
           DAG.getIntPtrConstant(LastOffset, DL));
-      PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
+      PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType,
           DAG.getConstant(Intrinsic::cheri_cap_perms_and, DL, MVT::i64), PtrOff,
           DAG.getIntPtrConstant(0xFFD7, DL));
       RegsToPass.push_back(std::make_pair(Mips::C13, PtrOff));
     } else
       RegsToPass.push_back(std::make_pair(Mips::C13,
-                                        DAG.getConstant(0, DL, MVT::iFATPTR)));
+                                        DAG.getConstant(0, DL, CapType)));
   }
   // If we're doing a CCall then any unused arg registers should be zero.
   if (!UseClearRegs && (CallConv == CallingConv::CHERI_CCall)) {
@@ -3467,7 +3468,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     static const unsigned RegList[] = { Mips::C3, Mips::C4, Mips::C5, Mips::C6,
       Mips::C7, Mips::C8, Mips::C9, Mips::C10 };
     for (unsigned i=CapArgs ; i<8 ; i++) {
-      SDValue Zero = DAG.getNode(ISD::INTTOPTR, DL, MVT::iFATPTR,
+      SDValue Zero = DAG.getNode(ISD::INTTOPTR, DL, CapType,
           DAG.getConstant(0, DL, MVT::i64));
       RegsToPass.push_back(std::make_pair(RegList[i], Zero));
     }
@@ -3575,11 +3576,11 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   }
   // If we're in the sandbox ABI, then we need to turn the address into a
   // PCC-derived capability.
-  if (ABI.IsCheriPureCap() && (Callee.getValueType() != MVT::iFATPTR)) {
+  if (ABI.IsCheriPureCap() && (!Callee.getValueType().isFatPointer())) {
     auto GetPCC = DAG.getConstant(Intrinsic::cheri_pcc_get, DL, MVT::i64);
     auto SetOffset = DAG.getConstant(Intrinsic::cheri_cap_offset_set, DL, MVT::i64);
-    auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR, GetPCC);
-    Callee = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, MVT::iFATPTR,
+    auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType, GetPCC);
+    Callee = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType,
         SetOffset, PCC, Callee);
   }
 
@@ -3869,9 +3870,9 @@ SDValue MipsTargetLowering::LowerFormalArguments(
       SDValue ArgValue;
       if (ABI.IsCheriPureCap()) {
         if (CapArgReg == -1U)
-          CapArgReg = MF.addLiveIn(Mips::C13, getRegClassFor(MVT::iFATPTR));
+          CapArgReg = MF.addLiveIn(Mips::C13, getRegClassFor(CapType));
         SDValue Addr = DAG.getPointerAdd(DL, DAG.getCopyFromReg(Chain, DL,
-              CapArgReg, MVT::iFATPTR), VA.getLocMemOffset());
+              CapArgReg, CapType), VA.getLocMemOffset());
         ArgValue = DAG.getLoad(LocVT, DL, Chain, Addr, MachinePointerInfo());
       } else {
         // The stack pointer offset is relative to the caller stack frame.
@@ -3899,7 +3900,7 @@ SDValue MipsTargetLowering::LowerFormalArguments(
       unsigned Reg = MipsFI->getSRetReturnReg();
       if (!Reg) {
         Reg = MF.getRegInfo().createVirtualRegister(
-            getRegClassFor(ABI.IsCheriPureCap() ? MVT::iFATPTR :
+            getRegClassFor(ABI.IsCheriPureCap() ? CapType :
                              (ABI.IsN64() ? MVT::i64 : MVT::i32)));
         MipsFI->setSRetReturnReg(Reg);
       }
@@ -4058,9 +4059,9 @@ MipsTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     }
     if (zeroC3) {
       Chain = DAG.getCopyToReg(Chain, DL, Mips::C3,
-          DAG.getConstant(0, DL, MVT::iFATPTR), Flag);
+          DAG.getConstant(0, DL, CapType), Flag);
       Flag = Chain.getValue(1);
-      RetOps.push_back(DAG.getRegister(Mips::C3, MVT::iFATPTR));
+      RetOps.push_back(DAG.getRegister(Mips::C3, CapType));
     }
   }
 
@@ -4073,7 +4074,7 @@ MipsTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     unsigned V0 = ABI.IsN64() ? Mips::V0_64 : Mips::V0;
     if (ABI.IsCheriPureCap()) {
       V0 = Mips::C3;
-      SRetTy = MVT::iFATPTR;
+      SRetTy = CapType;
     }
     MipsFunctionInfo *MipsFI = MF.getInfo<MipsFunctionInfo>();
     unsigned Reg = MipsFI->getSRetReturnReg();
@@ -4288,7 +4289,7 @@ parseRegForInlineAsmConstraint(StringRef C, MVT VT) const {
   else if (Prefix == "$w") { // Parse $w0-$w31.
     RC = getRegClassFor((VT == MVT::Other) ? MVT::v16i8 : VT);
   } else if (Prefix == "$c") { // Parse $c0-$c31.
-    RC = getRegClassFor(MVT::iFATPTR);
+    RC = getRegClassFor(CapType);
   } else { // Parse $0-$31.
     assert(Prefix == "$");
     RC = getRegClassFor((VT == MVT::Other) ? MVT::i32 : VT);
@@ -4320,7 +4321,7 @@ MipsTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
       if (VT == MVT::i64 && Subtarget.isGP64bit())
         return std::make_pair(0U, &Mips::GPR64RegClass);
     case 'C':
-      if (VT == MVT::iFATPTR)
+      if (VT == CapType)
         return std::make_pair(0U, &Mips::CheriRegsRegClass);
       // This will generate an error message
       return std::make_pair(0U, nullptr);
@@ -4515,11 +4516,14 @@ EVT MipsTargetLowering::getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
   if (Subtarget.isCheri() && !IsMemset) {
     unsigned Align = std::min(SrcAlign, DstAlign);
     switch (Align) {
-      case 32: return MVT::iFATPTR;
+      case 32: return CapType;
       case 16:
         if (Subtarget.isCheri128())
-          return MVT::iFATPTR;
-      case 8: return MVT::i64;
+          return CapType;
+      case 8:
+        if (Subtarget.isCheri64())
+          return CapType;
+        return MVT::i64;
       case 4: return MVT::i32;
       default: return MVT::i8;
     }

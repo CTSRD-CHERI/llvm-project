@@ -51,6 +51,10 @@ class AdditionalRequires<list<Predicate> preds> {
   list<Predicate> AdditionalPredicates = preds;
 }
 
+def Cap64      : HwMode<"+cheri64,-cheri128,-cheri256">;
+def Cap128     : HwMode<"+cheri128,-cheri64,-cheri256">;
+def Cap256     : HwMode<"+cheri256,-cheri128,-cheri64">;
+
 //===----------------------------------------------------------------------===//
 // Register File, Calling Conv, Instruction Descriptions
 //===----------------------------------------------------------------------===//
@@ -162,8 +166,14 @@ def FeatureMips64r6    : SubtargetFeature<"mips64r6", "MipsArchVersion",
 def FeatureMipsCheri   : SubtargetFeature<"cheri", "IsCheri", "true",
                                 "Supports the CHERI capability coprocessor",
                                 [FeatureMips4]>;
+def FeatureMipsCheri64 : SubtargetFeature<"cheri64", "IsCheri64", "true",
+                                "Capabilities are 64 bits",
+                                [FeatureMipsCheri]>;
 def FeatureMipsCheri128 : SubtargetFeature<"cheri128", "IsCheri128", "true",
                                 "Capabilities are 128 bits",
+                                [FeatureMipsCheri]>;
+def FeatureMipsCheri256 : SubtargetFeature<"cheri256", "IsCheri256", "true",
+                                "Capabilities are 256 bits",
                                 [FeatureMipsCheri]>;
 def FeatureSym32       : SubtargetFeature<"sym32", "HasSym32", "true",
                                           "Symbols are 32 bit on Mips64">;
@@ -218,7 +228,7 @@ class Proc<string Name, list<SubtargetFeature> Features>
 def : ProcessorModel<"beri", BeriModel,
                      [FeatureMips4]>;
 def : ProcessorModel<"cheri", BeriModel,
-                     [FeatureMipsCheri, FeatureMips4]>;
+                     [FeatureMipsCheri256, FeatureMipsCheri, FeatureMips4]>;
 def : ProcessorModel<"cheri128", BeriModel,
                      [FeatureMipsCheri128, FeatureMipsCheri, FeatureMips4]>;
 def : Proc<"mips1", [FeatureMips1]>;

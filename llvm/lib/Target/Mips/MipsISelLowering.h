@@ -276,6 +276,9 @@ class TargetRegisterClass;
   class MipsTargetLowering : public TargetLowering  {
     bool isMicroMips;
 
+  protected:
+    MVT CapType;
+
   public:
     explicit MipsTargetLowering(const MipsTargetMachine &TM,
                                 const MipsSubtarget &STI);
@@ -420,7 +423,7 @@ class TargetRegisterClass;
       SDValue Tgt = DAG.getNode(MipsISD::Wrapper, DL, Ty, getGlobalReg(DAG, Ty),
                                 getTargetNode(N, Ty, DAG, Flag));
       if (ABI.IsCheriPureCap())
-        Tgt = DAG.getNode(ISD::INTTOPTR, DL, MVT::iFATPTR, Tgt);
+        Tgt = DAG.getNode(ISD::INTTOPTR, DL, CapType, Tgt);
       return DAG.getLoad(Ty, DL, Chain, Tgt, PtrInfo);
     }
 

@@ -68,7 +68,7 @@ MipsSubtarget::MipsSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
       IsNaN2008bit(false), IsGP64bit(false), HasVFPU(false), HasCnMips(false),
       HasMips3_32(false), HasMips3_32r2(false), HasMips4_32(false),
       HasMips4_32r2(false), HasMips5_32r2(false),
-      IsCheri128(false), IsCheri(false), 
+      IsCheri64(false), IsCheri128(false), IsCheri256(false), IsCheri(false),
       InMips16Mode(false),
       InMips16HardFloat(Mips16HardFloat), InMicroMipsMode(false), HasDSP(false),
       HasDSPR2(false), HasDSPR3(false), AllowMixed16_32(Mixed16_32 | Mips_Os16),
@@ -153,10 +153,17 @@ MipsSubtarget &
 MipsSubtarget::initializeSubtargetDependencies(StringRef CPU, StringRef FS,
                                                const TargetMachine &TM) {
   std::string CPUName = MIPS_MC::selectMipsCPU(TM.getTargetTriple(), CPU);
+  std::string CheriFeatures;
   // enable capabilties for all cheri-*-* triples even if CPUName != cheri
-  IsCheri = TM.getTargetTriple().getArch() == llvm::Triple::cheri;
-  // XXXAR: is this needed?
-  // if (IsCheri) CPUName = "cheri"
+  if (TM.getTargetTriple().getArch() == llvm::Triple::cheri) {
+    if (FS.empty())
+      FS = "+cheri,+cheri256";
+    else {
+      CheriFeatures = FS;
+      CheriFeatures += ",+cheri,+cheri256";
+      FS = CheriFeatures;
+    }
+  }
 
   // Parse features string.
   ParseSubtargetFeatures(CPUName, FS);

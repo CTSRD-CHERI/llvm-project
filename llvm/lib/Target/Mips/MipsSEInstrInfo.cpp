@@ -28,7 +28,7 @@ using namespace llvm;
 
 MipsSEInstrInfo::MipsSEInstrInfo(const MipsSubtarget &STI)
     : MipsInstrInfo(STI, STI.isPositionIndependent() ? Mips::B : Mips::J),
-      RI() {}
+      RI(STI.getHwMode()) {}
 
 const MipsRegisterInfo &MipsSEInstrInfo::getRegisterInfo() const {
   return RI;

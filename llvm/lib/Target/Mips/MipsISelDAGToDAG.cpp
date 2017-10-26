@@ -245,14 +245,8 @@ void MipsDAGToDAGISel::Select(SDNode *Node) {
 #ifndef NDEBUG
   case ISD::LOAD:
   case ISD::STORE:
-    // Currently, the size of iFATPTR is fixed at LLVM compile time.  When
-    // we're running tests for Cheri128 on a Cheri256 compiler, don't reject
-    // 16-byte-aligned capability loads and stores
-    unsigned size = cast<MemSDNode>(Node)->getMemoryVT().getSizeInBits() / 8;
-    if ((cast<MemSDNode>(Node)->getMemoryVT() == MVT::iFATPTR && Subtarget->isCheri128()))
-      size = 16;
     assert((Subtarget->systemSupportsUnalignedAccess(cast<MemSDNode>(Node)->getAddressSpace()) ||
-            size <=
+            (cast<MemSDNode>(Node)->getMemoryVT().getSizeInBits() / 8) <=
             cast<MemSDNode>(Node)->getAlignment()) &&
            "Unexpected unaligned loads/stores.");
     break;

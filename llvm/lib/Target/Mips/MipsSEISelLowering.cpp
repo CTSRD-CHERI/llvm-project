@@ -180,7 +180,7 @@ MipsSETargetLowering::MipsSETargetLowering(const MipsTargetMachine &TM,
   }
 
   if (Subtarget.isCheri()) {
-    addRegisterClass(MVT::iFATPTR, &Mips::CheriRegsRegClass);
+    addRegisterClass(CapType, &Mips::CheriRegsRegClass);
     setTruncStoreAction(MVT::i32, MVT::i8, Custom);
     setTruncStoreAction(MVT::i32, MVT::i16, Custom);
     setLoadExtAction(ISD::EXTLOAD, MVT::i8, MVT::i32, Custom);
@@ -195,10 +195,10 @@ MipsSETargetLowering::MipsSETargetLowering(const MipsTargetMachine &TM,
     setLoadExtAction(ISD::EXTLOAD, MVT::i16, MVT::i64, Custom);
     setLoadExtAction(ISD::SEXTLOAD, MVT::i16, MVT::i64, Custom);
     setLoadExtAction(ISD::ZEXTLOAD, MVT::i16, MVT::i64, Custom);
-    setOperationAction(ISD::SETCC, MVT::iFATPTR, Legal);
-    setOperationAction(ISD::SELECT, MVT::iFATPTR, Legal);
-    setOperationAction(ISD::SELECT_CC, MVT::iFATPTR, Expand);
-    setOperationAction(ISD::BR_CC, MVT::iFATPTR, Expand);
+    setOperationAction(ISD::SETCC, CapType, Legal);
+    setOperationAction(ISD::SELECT, CapType, Legal);
+    setOperationAction(ISD::SELECT_CC, CapType, Expand);
+    setOperationAction(ISD::BR_CC, CapType, Expand);
   }
 
   setOperationAction(ISD::SMUL_LOHI,          MVT::i32, Custom);

@@ -133,7 +133,7 @@ class LLVMAnyPointerType<LLVMType elty>
 }
 
 class LLVMFatPointerType<LLVMType elty>
-  : LLVMType<iFATPTR>{
+  : LLVMType<iFATPTRAny>{
   LLVMType ElTy = elty;
 }
 

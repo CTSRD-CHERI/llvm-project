@@ -191,10 +191,17 @@ namespace llvm {
                                // unspecified type.  The register class
                                // will be determined by the opcode.
 
-      iFATPTR        =  112,   // Fat pointer type
+      iFATPTR64      =  112,   // 64-bit fat pointer type
+      iFATPTR128     =  113,   // 128-bit fat pointer type
+      iFATPTR256     =  114,   // 256-bit fat pointer type
+      iFATPTR512     =  115,   // 512-bit fat pointer type
+      iFATPTRAny     =  116,   // Generic fat pointer type (must be legalised
+                               // to a sized  version)
+      FIRST_FAT_POINTER = iFATPTR64,
+      LAST_FAT_POINTER = iFATPTRAny,
 
       FIRST_VALUETYPE = 1,     // This is always the beginning of the list.
-      LAST_VALUETYPE =  113,   // This always remains at the end of the list.
+      LAST_VALUETYPE =  117,   // This always remains at the end of the list.
 
       // This is the current maximum for LAST_VALUETYPE.
       // MVT::MAX_ALLOWED_VALUETYPE is used for asserts and to size bit vectors
@@ -307,7 +314,8 @@ namespace llvm {
 
     /// Return true if this is a fat pointer type.
     bool isFatPointer() const {
-      return SimpleTy == MVT::iFATPTR;
+      return (SimpleTy >= MVT::FIRST_FAT_POINTER) &&
+             (SimpleTy <= MVT::LAST_FAT_POINTER);
     }
 
     /// Return true if this is an integer, not including vectors.
@@ -392,7 +400,8 @@ namespace llvm {
     bool isOverloaded() const {
       return (SimpleTy==MVT::Any  ||
               SimpleTy==MVT::iAny || SimpleTy==MVT::fAny ||
-              SimpleTy==MVT::vAny || SimpleTy==MVT::iPTRAny);
+              SimpleTy==MVT::vAny || SimpleTy==MVT::iPTRAny ||
+              SimpleTy==MVT::iFATPTRAny);
     }
 
     /// Returns true if the given vector is a power of 2.
@@ -631,11 +640,11 @@ namespace llvm {
         llvm_unreachable("Value type is non-standard value, Other.");
       case iPTR:
         llvm_unreachable("Value type size is target-dependent. Ask TLI.");
-#if CHERI_IS_128
-      case iFATPTR: return 128;
-#else
-      case iFATPTR: return 256;
-#endif
+      case iFATPTR64: return 64;
+      case iFATPTR128: return 128;
+      case iFATPTR256: return 256;
+      case iFATPTR512: return 512;
+      case iFATPTRAny:
       case iPTRAny:
       case iAny:
       case fAny:
@@ -834,11 +843,13 @@ namespace llvm {
       default:
         return (MVT::SimpleValueType)(MVT::INVALID_SIMPLE_VALUE_TYPE);
       case 64:
-        return MVT::iFATPTR;
+        return MVT::iFATPTR64;
       case 128:
-        return MVT::iFATPTR;
+        return MVT::iFATPTR128;
       case 256:
-        return MVT::iFATPTR;
+        return MVT::iFATPTR256;
+      case 512:
+        return MVT::iFATPTR512;
       }
     }
 

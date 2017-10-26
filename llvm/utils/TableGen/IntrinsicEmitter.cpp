@@ -172,7 +172,7 @@ void IntrinsicEmitter::EmitIntrinsicToOverloadTable(
 }
 
 
-// NOTE: This must be kept in synch with the copy in lib/VMCore/Function.cpp!
+// NOTE: This must be kept in synch with the copy in lib/IR/Function.cpp!
 enum IIT_Info {
   // Common values should be encoded with 0-15.
   IIT_Done = 0,
@@ -218,7 +218,11 @@ enum IIT_Info {
   IIT_STRUCT6 = 38,
   IIT_STRUCT7 = 39,
   IIT_STRUCT8 = 40,
-  IIT_IFATPTR = 41
+  IIT_IFATPTR64 = 41,
+  IIT_IFATPTR128 = 42,
+  IIT_IFATPTR256 = 43,
+  IIT_IFATPTR512 = 44,
+  IIT_IFATPTRAny = 45
 };
 
 static void EncodeFixedValueType(MVT::SimpleValueType VT,
@@ -238,8 +242,12 @@ static void EncodeFixedValueType(MVT::SimpleValueType VT,
 
   switch (VT) {
   default: PrintFatalError("unhandled MVT in intrinsic!");
+  case MVT::iFATPTR64: return Sig.push_back(IIT_IFATPTR64);
+  case MVT::iFATPTR128: return Sig.push_back(IIT_IFATPTR128);
+  case MVT::iFATPTR256: return Sig.push_back(IIT_IFATPTR256);
+  case MVT::iFATPTR512: return Sig.push_back(IIT_IFATPTR512);
+  case MVT::iFATPTRAny: return Sig.push_back(IIT_IFATPTRAny);
   case MVT::f16: return Sig.push_back(IIT_F16);
-  case MVT::iFATPTR: return Sig.push_back(IIT_IFATPTR);
   case MVT::f32: return Sig.push_back(IIT_F32);
   case MVT::f64: return Sig.push_back(IIT_F64);
   case MVT::token: return Sig.push_back(IIT_TOKEN);
@@ -329,8 +337,19 @@ static void EncodeFixedType(Record *R, std::vector<unsigned char> &ArgCodes,
     }
     return EncodeFixedType(R->getValueAsDef("ElTy"), ArgCodes, Sig);
   }
-  case MVT::iFATPTR: {
-    Sig.push_back(IIT_IFATPTR);
+  case MVT::iFATPTR64:
+  case MVT::iFATPTR128:
+  case MVT::iFATPTR256:
+  case MVT::iFATPTR512:
+  case MVT::iFATPTRAny: {
+    switch (VT) {
+    default: llvm_unreachable("VT already checked!");
+    case MVT::iFATPTR64: Sig.push_back(IIT_IFATPTR64); break;
+    case MVT::iFATPTR128: Sig.push_back(IIT_IFATPTR128); break;
+    case MVT::iFATPTR256: Sig.push_back(IIT_IFATPTR256); break;
+    case MVT::iFATPTR512: Sig.push_back(IIT_IFATPTR512); break;
+    case MVT::iFATPTRAny: Sig.push_back(IIT_IFATPTRAny); break;
+    }
     Sig.push_back(200);
     return EncodeFixedType(R->getValueAsDef("ElTy"), ArgCodes, Sig);
   }

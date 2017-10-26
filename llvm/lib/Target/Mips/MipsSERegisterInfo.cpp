@@ -40,7 +40,8 @@ using namespace llvm;
 
 #define DEBUG_TYPE "mips-reg-info"
 
-MipsSERegisterInfo::MipsSERegisterInfo() : MipsRegisterInfo() {}
+MipsSERegisterInfo::MipsSERegisterInfo(unsigned HwMode) :
+  MipsRegisterInfo(HwMode) {}
 
 bool MipsSERegisterInfo::
 requiresRegisterScavenging(const MachineFunction &MF) const {
