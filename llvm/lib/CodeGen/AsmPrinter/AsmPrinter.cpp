@@ -2508,7 +2508,7 @@ static void emitGlobalConstantImpl(const DataLayout &DL, const Constant *CV,
   if (const ConstantVector *V = dyn_cast<ConstantVector>(CV))
     return emitGlobalConstantVector(DL, V, AP);
 
-  if (DL.isFatPointer(CV->getType()))
+  if (CV->getType()->isPointerTy() && DL.isFatPointer(CV->getType()))
     return emitGlobalConstantCHERICap(DL, CV, AP);
 
   // Otherwise, it must be a ConstantExpr.  Lower it to an MCExpr, then emit it
