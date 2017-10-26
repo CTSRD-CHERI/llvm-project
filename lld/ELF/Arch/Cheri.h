@@ -37,6 +37,11 @@ struct SymbolAndOffset {
   SymbolAndOffset findRealSymbol() const;
 };
 
+template <typename ELFT>
+inline std::string verboseToString(SymbolAndOffset Sym) {
+  return ::lld::verboseToString<ELFT>(Sym.Symbol, Sym.Offset);
+}
+
 struct CheriCapRelocLocation {
   SymbolAndOffset Loc;
   bool NeedsDynReloc;
@@ -80,7 +85,17 @@ private:
   llvm::MapVector<CheriCapRelocLocation, CheriCapReloc> RelocsMap;
   bool addEntry(CheriCapRelocLocation Loc, CheriCapReloc Relocation) {
     auto it = RelocsMap.insert(std::make_pair(Loc, Relocation));
-    assert(it.first->second == Relocation);
+    // assert(it.first->second == Relocation);
+    if (!(it.first->second == Relocation)) {
+      warn("Newly inserted relocation at " + verboseToString<ELFT>(Loc.Loc) +
+           " does not match existing one:\n>   Existing: " +
+           verboseToString<ELFT>(it.first->second.Target) +
+           ", cap offset=" + Twine(it.first->second.CapabilityOffset) +
+           ", dyn=" + Twine(it.first->second.NeedsDynReloc) +
+           "\n>   New:     " + verboseToString<ELFT>(Relocation.Target) +
+           ", cap offset=" + Twine(Relocation.CapabilityOffset) +
+           ", dyn=" + Twine(Relocation.NeedsDynReloc));
+    }
     return it.second;
   }
   // TODO: list of added dynamic relocations?

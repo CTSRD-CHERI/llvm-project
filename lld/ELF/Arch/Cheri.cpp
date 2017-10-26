@@ -11,11 +11,6 @@ using namespace llvm::ELF;
 
 namespace lld {
 
-template <typename ELFT>
-static inline std::string verboseToString(elf::SymbolAndOffset Sym) {
-  return verboseToString<ELFT>(Sym.Symbol, Sym.Offset);
-}
-
 namespace elf {
 template <class ELFT>
 CheriCapRelocsSection<ELFT>::CheriCapRelocsSection()
