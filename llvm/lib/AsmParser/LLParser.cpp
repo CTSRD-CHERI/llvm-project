@@ -6038,7 +6038,17 @@ bool LLParser::ParseCall(Instruction *&Inst, PerFunctionState &PFS,
 
   // Look up the callee.
   Value *Callee;
-  if (ConvertValIDToValue(PointerType::getUnqual(Ty), CalleeID, Callee, &PFS))
+  // XXXAR: Hack to allow calls of as200 values in the IR
+  // This should be properly fixed by having a function AS
+  unsigned FnptrAS = 0;
+  if (CalleeID.Kind == ValID::t_Constant && CalleeID.ConstantVal) {
+    if (CalleeID.ConstantVal->getType()->isPointerTy()) {
+      unsigned PtrAS = CalleeID.ConstantVal->getType()->getPointerAddressSpace();
+      if (M->getDataLayout().isFatPointer(PtrAS))
+        FnptrAS = PtrAS;
+    }
+  }
+  if (ConvertValIDToValue(PointerType::get(Ty, FnptrAS), CalleeID, Callee, &PFS))
     return true;
 
   // Set up the Attribute for the function.
