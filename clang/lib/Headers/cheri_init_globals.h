@@ -82,7 +82,12 @@ __cap_table_end;
           "nop\n\t"                                                            \
           ".end __start");
 
-static void crt_init_globals(void) {
+
+#ifndef ADDITIONAL_CAPRELOC_PROCESSING
+#define ADDITIONAL_CAPRELOC_PROCESSING
+#endif
+
+static void cheri_init_globals(void) {
   struct capreloc *start_relocs;
   struct capreloc *stop_relocs;
 #ifndef __CHERI_CAPABILITY_TABLE__
@@ -93,13 +98,11 @@ static void crt_init_globals(void) {
   stop_relocs = &__stop___cap_relocs;
 #else
   __UINT64_TYPE__ start_addr, end_addr;
-  __UINT64_TYPE__ cap_table_length;
   __asm__ (".option pic0\n\t"
        "dla %0, __start___cap_relocs\n\t"
        "dla %1, __stop___cap_relocs\n\t"
        :"=r"(start_addr), "=r"(end_addr));
   long relocs_size = end_addr - start_addr;
-  void *ddc = __builtin_cheri_global_data_get();
   start_relocs = __builtin_cheri_offset_set(__builtin_cheri_global_data_get(), start_addr);
   start_relocs = __builtin_cheri_bounds_set(start_relocs, relocs_size);
   stop_relocs = __builtin_cheri_offset_set(start_relocs, relocs_size);
@@ -114,6 +117,8 @@ static void crt_init_globals(void) {
     void **dest = __builtin_cheri_offset_set(gdc, reloc->capability_location);
     void *base = isFunction ? pcc : gdc;
     void *src = __builtin_cheri_offset_set(base, reloc->object);
+    /* e.g. CheriBSD needs to set _int here */
+    ADDITIONAL_CAPRELOC_PROCESSING
     if (!isFunction && (reloc->size != 0)) {
       src = __builtin_cheri_bounds_set(src, reloc->size);
     }
