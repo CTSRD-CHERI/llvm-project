@@ -584,6 +584,8 @@ class Reducer(object):
                 llc_args.append("-float-abi=soft")
             elif arg.startswith("-vectorize"):
                 llc_args.append(arg)
+            elif arg == "-mxgot":
+                llc_args.append(arg) # some bugs only happend if mxgot is also passed
         print("Checking whether compiling IR file with llc crashes:", end="", flush=True)
         if self._check_crash(llc_args, irfile):
             print("Crash found with LLC -> using bugpoint which is faster than creduce.")
