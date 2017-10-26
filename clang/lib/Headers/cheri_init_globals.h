@@ -86,8 +86,7 @@ __cap_table_end;
 #ifndef ADDITIONAL_CAPRELOC_PROCESSING
 #define ADDITIONAL_CAPRELOC_PROCESSING
 #endif
-
-static void cheri_init_globals(void) {
+static __attribute__((always_inline)) void cheri_init_globals(void) {
   struct capreloc *start_relocs;
   struct capreloc *stop_relocs;
 #ifndef __CHERI_CAPABILITY_TABLE__
