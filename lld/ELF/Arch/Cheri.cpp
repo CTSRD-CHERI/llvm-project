@@ -384,12 +384,26 @@ template <class ELFT> void CheriCapTableSection::addCapTableSymbols() {
     StringRef Name = it.first->getName();
     if (Name.empty())
       continue;
+    // TODO: don't add for local symbols? or somehow rename?
+    // if (it.first->isLocal())
+    //   continue;s
+
+
     // Avoid duplicate symbol name errors for unnamed string constants:
     // XXXAR: maybe renumber them instead?
     if (Name.startswith(".L.str"))
       continue;
-    Symtab->addRegular(Saver.save(Name + "@CAPTABLE"), STV_HIDDEN,
-                       STT_OBJECT, it.second * Config->CapabilitySize,
+    // XXXAR: for some reason we sometimes create more than one cap table entry
+    // for a given global name, for now just rename the symbol
+    // Could possibly happen with local symbols?
+    std::string RefName = (Name + "@CAPTABLE").str();
+    while (Symtab->find(RefName)) {
+      RefName += ".duplicate-name";
+    }
+
+
+    Symtab->addRegular(Saver.save(RefName), STV_HIDDEN, STT_OBJECT,
+                       it.second * Config->CapabilitySize,
                        Config->CapabilitySize, STB_LOCAL, this, nullptr);
   }
 }
