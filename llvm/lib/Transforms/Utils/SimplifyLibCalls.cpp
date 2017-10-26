@@ -1734,7 +1734,8 @@ Value *LibCallSimplifier::optimizePrintFString(CallInst *CI, IRBuilder<> &B) {
     // pass to be run after this pass, to merge duplicate strings.
     FormatStr = FormatStr.drop_back();
     Type *Ty = CI->getArgOperand(0)->getType();
-    Value *GV = B.CreateGlobalString(FormatStr, "str");
+    Value *GV = B.CreateGlobalString(FormatStr, "str",
+                                     Ty->getPointerAddressSpace());
     GV = B.CreatePointerBitCastOrAddrSpaceCast(GV, Ty);
     return emitPutS(GV, B, TLI);
   }
