@@ -442,12 +442,12 @@ class Reducer(object):
             proc_info["stderr"] = proc.stderr
             proc_info["returncode"] = proc.returncode
         if proc.returncode == 0 or is_llvm_error:
-            if not self.args.crash_message or (self.args.crash_message in proc.stderr.decode("utf-8")):
+            if not self.options.crash_message or (self.options.crash_message in proc.stderr.decode("utf-8")):
                 print(green(" yes"))
                 return True
             else:
                 print(red(" yes, but with a different crash message!"))
-                verbose_print("Expected crash message '", bold(self.args.crash_message), "' not found in:\n",
+                verbose_print("Expected crash message '", bold(self.options.crash_message), "' not found in:\n",
                               proc.stderr.decode("utf-8"), sep="")
                 return False
         print(red(" no"))
@@ -618,7 +618,7 @@ class Reducer(object):
                 return self._simplify_frontend_crash_cmd(new_command, infile)
             else:
                 print("will try to use bugpoint.")
-                return self._simplify_backend_crash_cmd(full_cmd, infile)
+                return self._simplify_backend_crash_cmd(new_command, infile, full_cmd)
 
     def _simplify_frontend_crash_cmd(self, command: list, infile: Path):
         print("Checking whether compiling without warnings crashes:", end="", flush=True)
@@ -646,11 +646,11 @@ class Reducer(object):
             command[0] = "%clang_cc1"
         return command, infile
 
-    def _simplify_backend_crash_cmd(self, original_command: list, infile: Path):
+    def _simplify_backend_crash_cmd(self, new_command: list, infile: Path, full_cmd: list):
         # TODO: convert it to a llc commandline and use bugpoint
-        assert "-emit-llvm" not in original_command
-        assert "-o" in original_command
-        command = original_command.copy()
+        assert "-emit-llvm" not in full_cmd
+        assert "-o" in full_cmd
+        command = full_cmd.copy()
         irfile = infile.with_name(infile.name.partition(".")[0] + "-bugpoint.ll")
         command[command.index("-o") + 1] = str(irfile.absolute())
         if "-discard-value-names" in command:
@@ -662,7 +662,7 @@ class Reducer(object):
             subprocess.check_call(command + ["-O0", str(infile)])
         except subprocess.CalledProcessError:
             print("Failed to generate IR from", infile, "will have to reduce using creduce")
-            return self._simplify_frontend_crash_cmd(original_command, infile)
+            return self._simplify_frontend_crash_cmd(new_command, infile)
         if not irfile.exists():
             die("IR file was not generated?")
         llc_args = [str(self.options.llc_cmd), "-O3", "-o", "/dev/null"]  # TODO: -o -?
@@ -723,7 +723,7 @@ class Reducer(object):
             print("No crash found with llc or opt! Possibly needs some special argument passed or crash",
                   "only happens when invoking clang -> using creduce.")
             self.reduce_tool = RunCreduce(self.options)
-            return self._simplify_frontend_crash_cmd(original_command, infile)
+            return self._simplify_frontend_crash_cmd(new_command, infile)
 
     def _parse_test_case(self, f):
         # test case: just search for RUN: lines
