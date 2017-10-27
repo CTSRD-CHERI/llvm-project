@@ -8159,7 +8159,8 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
     Type *FinalType = Args[i].Ty;
     // Ignore byval attribute on CHERI capability arguments because we just
     // pass them in capability registers
-    bool isArgCHERICapability = FinalType->isPointerTy() && FinalType->getPointerAddressSpace() == 200;
+    bool isArgCHERICapability = FinalType->isPointerTy() &&
+      DL.isFatPointer(FinalType->getPointerAddressSpace());
     if (Args[i].IsByVal && !isArgCHERICapability)
       FinalType = cast<PointerType>(Args[i].Ty)->getElementType();
     bool NeedsRegBlock = functionArgumentNeedsConsecutiveRegisters(
