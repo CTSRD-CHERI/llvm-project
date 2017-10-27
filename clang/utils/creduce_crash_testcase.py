@@ -430,7 +430,6 @@ class Reducer(object):
     def _check_crash(self, command, infile, proc_info: dict=None):
         full_cmd = [str(self.options.not_cmd), "--crash"] + command + [str(infile)]
         verbose_print(blue("\nRunning" + " ".join(map(shlex.quote, full_cmd))))
-        print(self.args)
         if self.args.reduce_tool == "noop":
             if proc_info is not None:
                 proc_info["stderr"] = b"Assertion `noop' failed."
