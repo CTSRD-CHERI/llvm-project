@@ -160,7 +160,9 @@ MipsSubtarget::initializeSubtargetDependencies(StringRef CPU, StringRef FS,
       FS = "+cheri,+cheri256";
     else {
       CheriFeatures = FS;
-      CheriFeatures += ",+cheri,+cheri256";
+      CheriFeatures += ",+cheri";
+      if (!FS.contains("+cheri128") && !FS.contains("+cheri64"))
+        CheriFeatures += ",+cheri256";
       FS = CheriFeatures;
     }
   }
