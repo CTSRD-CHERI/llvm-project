@@ -621,18 +621,24 @@ class Reducer(object):
         if not irfile.exists():
             die("IR file was not generated?")
         llc_args = [str(self.options.llc_cmd), "-O3", "-o", "/dev/null"]  # TODO: -o -?
+        cpu_flag = None  # -mcpu= only allowed once!
         for i, arg in enumerate(command):
             if arg == "-triple" or arg == "-target":
                 # assume well formed command line
                 llc_args.append("-mtriple=" + command[i + 1])
             # forward all the llvm args
             elif arg == "-mllvm":
-                llc_args.append(command[i + 1])
+                llvm_flag = command[i + 1]
+                if llvm_flag == "-cheri128":
+                    cpu_flag = "-mcpu=cheri128"
+                    llc_args.append("-mattr=+cheri128")
+                else:
+                    llc_args.append(llvm_flag)
             elif arg == "-target-abi":
                 llc_args.append("-target-abi")
                 llc_args.append(command[i + 1])
             elif arg == "-target-cpu":
-                llc_args.append("-mcpu=" + command[i + 1])
+                cpu_flag = command[i + 1]
             elif arg == "-target-feature":
                 llc_args.append("-mattr=" + command[i + 1])
             elif arg == "-mrelocation-model":
@@ -645,24 +651,31 @@ class Reducer(object):
                 llc_args.append(arg)
             elif arg == "-mxgot":
                 llc_args.append(arg)  # some bugs only happen if mxgot is also passed
+        if cpu_flag:
+            llc_args.append(cpu_flag)
         print("Checking whether compiling IR file with llc crashes:", end="", flush=True)
-        if self._check_crash(llc_args, irfile):
-            print("Crash found with LLC -> using bugpoint which is faster than creduce.")
+        llc_info = dict()
+        if self._check_crash(llc_args, irfile, llc_info):
+            print("Crash found with llc -> using bugpoint which is faster than creduce.")
             self.reduce_tool = RunBugpoint(self.options)
             llc_args[0] = "llc"
             return llc_args, irfile
+        print("Compiling IR file with llc did not reproduce crash. Stderr was:", llc_info["stderr"])
         print("Checking whether compiling IR file with opt crashes:", end="", flush=True)
         opt_args = llc_args.copy()
         opt_args[0] = str(self.options.opt_cmd)
+        # -O flag can only be passed once and is already included in llc_args
+        assert "-O3" in opt_args, opt_args
         opt_args.append("-S")
-        opt_args.append("-O3")
-        if self._check_crash(opt_args, irfile):
+        opt_info = dict()
+        if self._check_crash(opt_args, irfile, opt_info):
             print("Crash found with LLC -> using bugpoint which is faster than creduce.")
             self.reduce_tool = RunBugpoint(self.options)
             opt_args[0] = "opt"
             return opt_args, irfile
         else:
-            print("No crash found with LLC! Possibly needs some special argument passed or crash",
+            print("Compiling IR file with opt did not reproduce crash. Stderr was:", opt_info["stderr"])
+            print("No crash found with llc or opt! Possibly needs some special argument passed or crash",
                   "only happens when invoking clang -> using creduce.")
             self.reduce_tool = RunCreduce(self.options)
             return self._simplify_frontend_crash_cmd(original_command, infile)
