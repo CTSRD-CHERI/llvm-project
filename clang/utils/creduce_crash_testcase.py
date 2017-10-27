@@ -504,7 +504,10 @@ class Reducer(object):
             match = re.search(r"Generating code for declaration '(.+)'", line)
             if match:
                 return match.group(0)
-            print(line)
+            match = re.search(r"fatal error: error in backend:(.+)", line)
+            if match:
+                return match.group(0)
+
         return None
 
     def _simplify_crash_command(self, command: list, infile: Path) -> tuple:
