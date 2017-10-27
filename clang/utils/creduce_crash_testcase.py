@@ -97,8 +97,10 @@ class ReduceTool(metaclass=ABCMeta):
 
     def create_test_case(self, input_text: str, test_case: Path):
         processed_run_lines = []
+        # TODO: try to remove more flags from the RUN: line!
         for run_line in self.run_lines:
             # convert %clang_cc1 -target-cpu cheri to %cheri_cc1 / %cheri_purecap_cc1
+            run_line = run_line.replace("-Werror=implicit-int", "")  # important for creduce but not for the test
             if "%clang_cc1" in run_line:
                 target_cpu_re = r"-target-cpu\s+cheri[^\s]*\s*"
                 triple_cheri_freebsd_re = r"-triple\s+cheri-unknown-freebsd\d*\s+"
@@ -106,9 +108,9 @@ class ReduceTool(metaclass=ABCMeta):
                     run_line = re.sub(target_cpu_re, "", run_line)  # remove
                     run_line = re.sub(triple_cheri_freebsd_re, "", run_line)  # remove
                     run_line = run_line.replace("%clang_cc1", "%cheri_cc1")
+                    run_line = run_line.replace("-mllvm -cheri128", "")
                     target_abi_re = r"-target-abi\s+purecap\s*"
                     if re.search(target_abi_re, run_line) is not None:
-                        compiler_cmd = "%cheri_purecap_cc1"
                         run_line = re.sub(target_abi_re, "", run_line)  # remove
                         assert "%cheri_cc1" in run_line
                         run_line = run_line.replace("%cheri_cc1", "%cheri_purecap_cc1")
@@ -428,6 +430,11 @@ class Reducer(object):
     def _check_crash(self, command, infile, proc_info: dict=None):
         full_cmd = [str(self.options.not_cmd), "--crash"] + command + [str(infile)]
         verbose_print(blue("\nRunning" + " ".join(map(shlex.quote, full_cmd))))
+        print(self.args)
+        if self.args.reduce_tool == "noop":
+            if proc_info is not None:
+                proc_info["stderr"] = b"Assertion `noop' failed."
+            return True
         proc = subprocess.run(full_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         # treat fatal llvm errors (cannot select, etc) as crashes too:
         is_llvm_error = b"LLVM ERROR:" in proc.stderr
@@ -543,10 +550,13 @@ class Reducer(object):
             if not input("Are you sure you want to continue? [y/N]").lower().startswith("y"):
                 sys.exit()
         new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling without -coverage-notes-file crashes:",
+            one_arg_opts_to_remove=["-coverage-notes-file"]
+        )
+        new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without debug info crashes:",
             noargs_opts_to_remove=["-dwarf-column-info"],
             noargs_opts_to_remove_startswith=["-debug-info-kind=", "-dwarf-version=", "-debugger-tuning="],
-            one_arg_opts_to_remove=["-coverage-notes-file"]
         )
         # check if floating point args are relevant
         new_command = self._try_remove_args(
@@ -555,6 +565,39 @@ class Reducer(object):
             one_arg_opts_to_remove=["-mfloat-abi"],
             one_arg_opts_to_remove_if={"-target-feature": lambda a: a == "+soft-float"}
         )
+
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling without PIC flags crashes:",
+            one_arg_opts_to_remove=["-mrelocation-model", "-pic-level"],
+        )
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling without thread model flags crashes:",
+            one_arg_opts_to_remove=["-mthread-model"],
+            noargs_opts_to_remove_startswith=["-ftls-model=initial-exec"],
+        )
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling without -target-feature flags crashes:",
+            one_arg_opts_to_remove=["-target-feature"],
+        )
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling without various MIPS flags crashes:",
+            noargs_opts_to_remove=["-mxgot", "-cheri-linker"],
+            one_arg_opts_to_remove_if={"-mllvm": lambda a: a.startswith("-mips-ssection-threshold=")}
+        )
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling without -mrelax-all crashes:",
+            noargs_opts_to_remove=["-mrelax-all"],
+        )
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling -D flags crashes:",
+            noargs_opts_to_remove=["-sys-header-deps"],
+            one_arg_opts_to_remove=["-D"]
+        )
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling without -x flag crashes:",
+            one_arg_opts_to_remove=["-x"]
+        )
+
         if "-disable-llvm-verifier" in new_command:
             new_command = self._try_remove_args(
                 new_command, infile, "Checking whether compiling without -disable-llvm-verifier crashes:",
@@ -562,9 +605,12 @@ class Reducer(object):
 
         # try emitting llvm-ir (i.e. frontend bug):
         print("Checking whether -O0 -emit-llvm crashes:", end="", flush=True)
-        if self._check_crash(new_command + ["-O0", "-emit-llvm"], infile):
-            new_command.extend(["-O0", "-emit-llvm"])
-            print("Must be a", blue("frontend crash", style="bold"), ",  will need to use creduce for test case reduction")
+        generate_ir_cmd = new_command + ["-O0", "-emit-llvm"]
+        if "-emit-obj" in generate_ir_cmd:
+            generate_ir_cmd.remove("-emit-obj")
+        if self._check_crash(generate_ir_cmd, infile):
+            new_command = generate_ir_cmd
+            print("Must be a", blue("frontend crash.", style="bold"), "Will need to use creduce for test case reduction")
             return self._simplify_frontend_crash_cmd(new_command, infile)
         else:
             print("Must be a ", blue("backend crash", style="bold"), ", ", end="", sep="")
