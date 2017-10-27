@@ -425,12 +425,16 @@ class Reducer(object):
             die("Could not compute input file for crash reproducer")
         return real_in_file
 
-    def _check_crash(self, command, infile):
+    def _check_crash(self, command, infile, proc_info: dict=None):
         full_cmd = [str(self.options.not_cmd), "--crash"] + command + [str(infile)]
         verbose_print(blue("\nRunning" + " ".join(map(shlex.quote, full_cmd))))
         proc = subprocess.run(full_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         # treat fatal llvm errors (cannot select, etc) as crashes too:
         is_llvm_error = b"LLVM ERROR:" in proc.stderr
+        if proc_info is not None:  # To get the initial error message:
+            proc_info["stdout"] = proc.stdout
+            proc_info["stderr"] = proc.stderr
+            proc_info["returncode"] = proc.returncode
         if proc.returncode == 0 or is_llvm_error:
             if not self.args.crash_message or (self.args.crash_message in proc.stderr.decode("utf-8")):
                 print(green(" yes"))
@@ -480,6 +484,29 @@ class Reducer(object):
             return new_command
         return command
 
+    @staticmethod
+    def _infer_crash_message(stderr: bytes):
+        if not stderr:
+            return None
+        for line in stderr.decode("utf-8").splitlines():
+            # Check for failed assertions:
+            match = re.search(r"Assertion `(.+)' failed.", line)
+            if match:
+                return match.group(1)
+            # check for llvm_unreachable
+            match = re.search(r"UNREACHABLE executed( at .+)?!", line)
+            if match:
+                return match.group(0)
+            # generic code gen crashes (at least creduce will keep the function name):
+            match = re.search(r"LLVM IR generation of declaration '(.+)'", line)
+            if match:
+                return match.group(0)
+            match = re.search(r"Generating code for declaration '(.+)'", line)
+            if match:
+                return match.group(0)
+            print(line)
+        return None
+
     def _simplify_crash_command(self, command: list, infile: Path) -> tuple:
         new_command = command.copy()
         new_command[0] = str(self.options.clang_cmd)
@@ -491,12 +518,25 @@ class Reducer(object):
             new_command += ["-o", "-"]
         full_cmd = new_command.copy()
         print("Checking whether reproducer crashes with ", self.options.clang_cmd, ":", sep="", end="", flush=True)
-        if not self._check_crash(new_command, infile):
+        crash_info = dict()
+        if not self._check_crash(new_command, infile, crash_info):
             die("Crash reproducer no longer crashes?")
+
+        if not self.options.crash_message:
+            print("Attempting to infer crash message from process output")
+            inferred_msg = self._infer_crash_message(crash_info["stderr"])
+            if inferred_msg:
+                print("Inferred crash message as '" + green(inferred_msg) + "'")
+                if not input("Use this message? [Y/n]").lower().startswith("n"):
+                    self.options.crash_message = inferred_msg
+            else:
+                print("Could not infer crash message, stderr was:\n\n")
+                print(crash_info["stderr"].decode("utf-8"))
+                print("\n\n")
         if not self.options.crash_message:
             print("Could not infer crash message from crash reproducer.")
             print(red("WARNING: Reducing without specifying the crash message will probably result"
-                " in the wrong test case being generated."))
+                      " in the wrong test case being generated."))
             if not input("Are you sure you want to continue? [y/N]").lower().startswith("y"):
                 sys.exit()
         new_command = self._try_remove_args(
