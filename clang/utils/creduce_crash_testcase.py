@@ -493,6 +493,12 @@ class Reducer(object):
         print("Checking whether reproducer crashes with ", self.options.clang_cmd, ":", sep="", end="", flush=True)
         if not self._check_crash(new_command, infile):
             die("Crash reproducer no longer crashes?")
+        if not self.options.crash_message:
+            print("Could not infer crash message from crash reproducer.")
+            print(red("WARNING: Reducing without specifying the crash message will probably result"
+                " in the wrong test case being generated."))
+            if not input("Are you sure you want to continue? [y/N]").lower().startswith("y"):
+                sys.exit()
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without debug info crashes:",
             noargs_opts_to_remove=["-dwarf-column-info"],
