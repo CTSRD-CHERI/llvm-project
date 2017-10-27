@@ -100,7 +100,7 @@ class ReduceTool(metaclass=ABCMeta):
         for run_line in self.run_lines:
             # convert %clang_cc1 -target-cpu cheri to %cheri_cc1 / %cheri_purecap_cc1
             if "%clang_cc1" in run_line:
-                target_cpu_re = r"-target-cpu\s+cheri\s*"
+                target_cpu_re = r"-target-cpu\s+cheri[^\s]*\s*"
                 triple_cheri_freebsd_re = r"-triple\s+cheri-unknown-freebsd\d*\s+"
                 if re.search(target_cpu_re, run_line) or re.search(triple_cheri_freebsd_re, run_line):
                     run_line = re.sub(target_cpu_re, "", run_line)  # remove
@@ -305,6 +305,16 @@ class RunCreduce(ReduceTool):
             proc = subprocess.run([str(reduce_script), str(input_file)], cwd=tmpdir)
             return proc.returncode == 0
 
+
+class SkipReducing(ReduceTool):
+    def __init__(self, args: "Options"):
+        super().__init__(args, "noop", tool=Path("/dev/null"))
+
+    def reduce(self, input_file, extra_args, tempdir):
+        self.create_test_case("Some strange reduced test case\n", input_file.with_suffix(".test" + input_file.suffix))
+
+    def input_file_arg(self, input_file: Path) -> str:
+        raise NotImplemented()
 
 class Options(object):
     def __init__(self, args: argparse.Namespace):
@@ -585,7 +595,7 @@ class Reducer(object):
             elif arg.startswith("-vectorize"):
                 llc_args.append(arg)
             elif arg == "-mxgot":
-                llc_args.append(arg) # some bugs only happend if mxgot is also passed
+                llc_args.append(arg)  # some bugs only happen if mxgot is also passed
         print("Checking whether compiling IR file with llc crashes:", end="", flush=True)
         if self._check_crash(llc_args, irfile):
             print("Crash found with LLC -> using bugpoint which is faster than creduce.")
@@ -628,6 +638,8 @@ class Reducer(object):
                 self.args.reduce_tool = "bugpoint" if infile.suffix in (".ll", ".bc") else "creduce"
             if self.args.reduce_tool == "bugpoint":
                 self.reduce_tool = RunBugpoint(self.options)
+            elif self.args.reduce_tool == "noop":  # for debugging purposes
+                self.reduce_tool = SkipReducing(self.options)
             else:
                 assert self.args.reduce_tool == "creduce"
                 self.reduce_tool = RunCreduce(self.options)
@@ -667,7 +679,7 @@ def main():
                                                 " This is useful if creduce ends up generating another crash bug that is not the one being debugged.")
     parser.add_argument("--reduce-tool", help="The tool to use for test case reduction. "
                                               "Defaults to `bugpoint` if input file is a .ll or .bc file and `creduce` otherwise.",
-                        choices=["bugpoint", "creduce"])
+                        choices=["bugpoint", "creduce", "noop"])
     parser.add_argument("--no-initial-reduce", help="Pass the original input file to creduce without "
                         "removing #if 0 regions. Generally this will speed up but in very rare corner "
                         "cases it might cause the test case to no longer crash.", action="store_true")
