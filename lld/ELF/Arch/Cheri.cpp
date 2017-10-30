@@ -351,6 +351,12 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     //     }
     Offset += RelocSize;
   }
+  // Sort the cap_relocs by target address for better cache and TLB locality
+  std::stable_sort(reinterpret_cast<InMemoryCapRelocEntry<E>*>(Buf),
+            reinterpret_cast<InMemoryCapRelocEntry<E>*>(Buf + Offset),
+            [](const InMemoryCapRelocEntry<E>& a, const InMemoryCapRelocEntry<E>& b) {
+                return a.capability_location < b.capability_location;
+            });
   assert(Offset == getSize() && "Not all data written?");
 }
 
