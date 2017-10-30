@@ -339,10 +339,12 @@ std::string lld::verboseToString(Symbol *B, uint64_t SymOffset) {
     Name = "<unknown symbol>";
   }
   Msg += Name;
-  std::string Src = IS ? IS->getSrcMsg(*B, SymOffset) : toString(B->File);
-  if (IS)
-    Src += " (" + IS->getObjMsg(SymOffset) + ")";
-  Msg += "\n>>> defined in " + Src;
+  if (!B->isUndefined()) {
+    std::string Src = IS ? IS->getSrcMsg(*B, SymOffset) : toString(B->File);
+    if (IS)
+      Src += " (" + IS->getObjMsg(SymOffset) + ")";
+    Msg += "\n>>> defined in " + Src;
+  }
   return Msg;
 }
 
