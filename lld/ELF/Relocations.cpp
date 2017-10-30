@@ -1003,7 +1003,11 @@ static void scanReloc(InputSectionBase &Sec, OffsetGetter &GetOffset, RelTy *&I,
       {ElfSym::CheriCapabilityTable, Index * Config->CapabilitySize}, Config->Pic,
       {&Sym, 0u}, Sym.IsPreemptible, Addend);
     if (Config->Pic) {
-      error("Cannot add capability table entries for PIC code yet!");
+      static bool HasWarned = false;
+      if (!HasWarned) {
+        HasWarned = true;
+        warn("Cannot add capability table entries for PIC code yet!");
+      }
     }
     // Write out the index into the instruction
     Sec.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
