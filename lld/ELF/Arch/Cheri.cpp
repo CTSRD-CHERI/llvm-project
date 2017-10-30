@@ -287,6 +287,9 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     }
     uint64_t TargetOffset = Reloc.CapabilityOffset;
     uint64_t TargetSize = Reloc.Target.Symbol->getSize();
+    if (TargetSize > INT_MAX)
+      error("Insanely large symbol size for " + verboseToString<ELFT>(Reloc.Target) +
+            "for cap_reloc at" + verboseToString<ELFT>(Location.Loc));
     if (TargetSize == 0) {
       bool WarnAboutUnknownSize = true;
       // currently clang doesn't emit the necessary symbol information for local
