@@ -298,7 +298,8 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     // Also this would make llvm-objdump -C more useful because it would
     // actually display the symbol that the relocation is against
     uint64_t TargetVA = Reloc.Target.Symbol->getVA(Reloc.Target.Offset);
-    if (Reloc.NeedsDynReloc && Reloc.Target.Symbol->IsPreemptible) {
+    bool PreemptibleDynReloc = Reloc.NeedsDynReloc && Reloc.Target.Symbol->IsPreemptible;
+    if (PreemptibleDynReloc) {
       // If we have a relocation against a preemptible symbol (even in the
       // current DSO) we can't compute the virtual address here so we only write
       // the addend
@@ -309,7 +310,7 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     if (TargetSize > INT_MAX)
       error("Insanely large symbol size for " + verboseToString<ELFT>(Reloc.Target) +
             "for cap_reloc at" + Location.toString());
-    if (TargetSize == 0 && !Reloc.Target.Symbol->isUndefined()) {
+    if (TargetSize == 0 && !Reloc.Target.Symbol->isUndefined() && !PreemptibleDynReloc) {
       bool WarnAboutUnknownSize = true;
       // currently clang doesn't emit the necessary symbol information for local
       // string constants such as: struct config_opt opts[] = { { ..., "foo" },
