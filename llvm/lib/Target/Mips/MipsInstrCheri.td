@@ -94,7 +94,7 @@ def uimm11_pat:  PatLeaf<(imm), [{ return isUInt<11>(N->getZExtValue()); }]>;
 // Flow control
 ////////////////////////////////////////////////////////////////////////////////
 let hasDelaySlot=1, isTerminator=1 in {
-let isBranch=1 in {
+let isBranch=1, Defs = [AT] in {
 def CBTS : CheriFmtCBT<0x0a, (outs), (ins CheriOpnd:$cb, brtarget:$offset),
                         "cbts\t$cb, $offset",
                         [(brcond (i32 (setne (int_cheri_cap_tag_get CheriOpnd:$cb), 0)), bb:$offset)]>;
