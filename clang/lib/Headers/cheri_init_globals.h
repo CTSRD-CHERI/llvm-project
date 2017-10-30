@@ -114,6 +114,12 @@ static __attribute__((always_inline)) void cheri_init_globals(void) {
   for (struct capreloc *reloc = start_relocs; reloc < stop_relocs; reloc++) {
     _Bool isFunction = (reloc->permissions & function_reloc_flag) == function_reloc_flag;
     void **dest = __builtin_cheri_offset_set(gdc, reloc->capability_location);
+    if (reloc->object == 0) {
+      /* XXXAR:clang fills uninitialized capabilities with 0xcacaca..., so we
+       * we need to explicitly write NULL here */
+      *dest = (void*)0;
+      continue;
+    }
     void *base = isFunction ? pcc : gdc;
     void *src = __builtin_cheri_offset_set(base, reloc->object);
     /* e.g. CheriBSD needs to set _int here */
