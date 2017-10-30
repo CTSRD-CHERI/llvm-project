@@ -44,10 +44,11 @@ inline std::string verboseToString(SymbolAndOffset Sym) {
 
 struct CheriCapRelocLocation {
   SymbolAndOffset Loc;
+  InputFile *File;
   bool NeedsDynReloc;
   bool operator==(const CheriCapRelocLocation &Other) const {
     return Loc.Symbol == Other.Loc.Symbol && Loc.Offset == Other.Loc.Offset &&
-           NeedsDynReloc == Other.NeedsDynReloc;
+           File == Other.File && NeedsDynReloc == Other.NeedsDynReloc;
   }
 };
 
@@ -75,9 +76,9 @@ public:
   size_t getSize() const override { return RelocsMap.size() * Entsize; }
   void finalizeContents() override;
   void writeTo(uint8_t *Buf) override;
-  void addCapReloc(const SymbolAndOffset &Location, bool LocNeedsDynReloc,
-                   const SymbolAndOffset &Target, bool TargetNeedsDynReloc,
-                   int64_t CapabilityOffset);
+  void addCapReloc(const SymbolAndOffset &Location, InputFile *LocFile,
+                   bool LocNeedsDynReloc, const SymbolAndOffset &Target,
+                   bool TargetNeedsDynReloc, int64_t CapabilityOffset);
 
 private:
   void processSection(InputSectionBase *S);
@@ -87,14 +88,14 @@ private:
     auto it = RelocsMap.insert(std::make_pair(Loc, Relocation));
     // assert(it.first->second == Relocation);
     if (!(it.first->second == Relocation)) {
-      warn("Newly inserted relocation at " + verboseToString<ELFT>(Loc.Loc) +
-           " does not match existing one:\n>   Existing: " +
-           verboseToString<ELFT>(it.first->second.Target) +
-           ", cap offset=" + Twine(it.first->second.CapabilityOffset) +
-           ", dyn=" + Twine(it.first->second.NeedsDynReloc) +
-           "\n>   New:     " + verboseToString<ELFT>(Relocation.Target) +
-           ", cap offset=" + Twine(Relocation.CapabilityOffset) +
-           ", dyn=" + Twine(Relocation.NeedsDynReloc));
+      error("Newly inserted relocation at " + verboseToString<ELFT>(Loc.Loc) +
+            " does not match existing one:\n>   Existing: " +
+            verboseToString<ELFT>(it.first->second.Target) +
+            ", cap offset=" + Twine(it.first->second.CapabilityOffset) +
+            ", dyn=" + Twine(it.first->second.NeedsDynReloc) +
+            "\n>   New:     " + verboseToString<ELFT>(Relocation.Target) +
+            ", cap offset=" + Twine(Relocation.CapabilityOffset) +
+            ", dyn=" + Twine(Relocation.NeedsDynReloc));
     }
     return it.second;
   }
@@ -125,10 +126,10 @@ private:
 namespace llvm {
 template <> struct DenseMapInfo<lld::elf::CheriCapRelocLocation> {
   static inline lld::elf::CheriCapRelocLocation getEmptyKey() {
-    return {{nullptr, 0}, false};
+    return {{nullptr, 0}, nullptr, false};
   }
   static inline lld::elf::CheriCapRelocLocation getTombstoneKey() {
-    return {{nullptr, std::numeric_limits<uint64_t>::max()}, false};
+    return {{nullptr, std::numeric_limits<uint64_t>::max()}, nullptr, false};
   }
   static unsigned getHashValue(const lld::elf::CheriCapRelocLocation &Val) {
     auto Pair = std::make_pair(Val.Loc.Symbol, Val.Loc.Offset);

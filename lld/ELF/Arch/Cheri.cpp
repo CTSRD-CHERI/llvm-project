@@ -204,13 +204,14 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
             Twine(TargetSym.kind()));
       continue;
     }
-    addCapReloc(RelocLocation, LocNeedsDynReloc, RealTarget,
+    addCapReloc(RelocLocation, S->File, LocNeedsDynReloc, RealTarget,
                 TargetNeedsDynReloc, TargetCapabilityOffset);
   }
 }
 
 template <class ELFT>
 void CheriCapRelocsSection<ELFT>::addCapReloc(const SymbolAndOffset &Location,
+                                              InputFile *LocFile,
                                               bool LocNeedsDynReloc,
                                               const SymbolAndOffset &Target,
                                               bool TargetNeedsDynReloc,
@@ -218,7 +219,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(const SymbolAndOffset &Location,
   LocNeedsDynReloc = LocNeedsDynReloc || Config->Pic || Config->Pie;
   TargetNeedsDynReloc = TargetNeedsDynReloc || Config->Pic || Config->Pie;
   uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
-  if (!addEntry({Location, LocNeedsDynReloc},
+  if (!addEntry({Location, LocFile, LocNeedsDynReloc},
                 {Target, CapabilityOffset, TargetNeedsDynReloc})) {
     return; // Maybe happens with vtables?
   }
