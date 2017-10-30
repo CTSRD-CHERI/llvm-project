@@ -1,7 +1,9 @@
 # REQUIRES: python-psutil
 
 # PR33944
-# XFAIL: windows,freebsd
+# XFAIL: windows
+# https://bugs.llvm.org/show_bug.cgi?id=35083
+# UNSUPPORTED: freebsd
 
 # Test per test timeout using external shell
 # RUN: not %{lit} \
