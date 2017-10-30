@@ -521,7 +521,7 @@ define amdgpu_kernel void @test_fold_canonicalize_load_nnan_value_f16(half addrs
 
 ; Avoid failing the test on FreeBSD11.0 which prints will match the GCN-NOT: 1.0
 ; in the .amd_amdgpu_isa "amdgcn-unknown-freebsd11.0--gfx802" directive
-; CHECK: .amd_amdgpu_isa
+; GCN: .amd_amdgpu_isa
 
 declare float @llvm.canonicalize.f32(float) #0
 declare double @llvm.canonicalize.f64(double) #0
