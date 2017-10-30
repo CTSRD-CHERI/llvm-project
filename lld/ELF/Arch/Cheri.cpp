@@ -4,6 +4,7 @@
 #include "../SyntheticSections.h"
 #include "../Target.h"
 #include "lld/Common/Memory.h"
+#include "llvm/Support/Path.h"
 
 using namespace llvm;
 using namespace llvm::object;
@@ -204,31 +205,47 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
             Twine(TargetSym.kind()));
       continue;
     }
-    addCapReloc(RelocLocation, S->File, LocNeedsDynReloc, RealTarget,
-                TargetNeedsDynReloc, TargetCapabilityOffset);
+    assert(LocationSym->isSection());
+    auto *LocationDef = cast<Defined>(LocationSym);
+    auto *LocationSec = cast<InputSectionBase>(LocationDef->Section);
+    addCapReloc({LocationSec, (uint64_t)LocationRel.r_addend, LocNeedsDynReloc},
+                RealTarget, TargetNeedsDynReloc, TargetCapabilityOffset);
   }
 }
 
 template <class ELFT>
-void CheriCapRelocsSection<ELFT>::addCapReloc(const SymbolAndOffset &Location,
-                                              InputFile *LocFile,
-                                              bool LocNeedsDynReloc,
+void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
                                               const SymbolAndOffset &Target,
                                               bool TargetNeedsDynReloc,
                                               int64_t CapabilityOffset) {
-  LocNeedsDynReloc = LocNeedsDynReloc || Config->Pic || Config->Pie;
+  Loc.NeedsDynReloc = Loc.NeedsDynReloc || Config->Pic || Config->Pie;
   TargetNeedsDynReloc = TargetNeedsDynReloc || Config->Pic || Config->Pie;
   uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
-  if (!addEntry({Location, LocFile, LocNeedsDynReloc},
-                {Target, CapabilityOffset, TargetNeedsDynReloc})) {
+  if (!addEntry(Loc, {Target, CapabilityOffset, TargetNeedsDynReloc})) {
     return; // Maybe happens with vtables?
   }
-  if (LocNeedsDynReloc) {
+  if (Loc.NeedsDynReloc) {
+    // XXXAR: We don't need to create a symbol here since if we pass nullptr
+    // to the dynamic reloc it will add a relocation against the load address
+#if 0
+    llvm::sys::path::filename(Loc.Section->File->getName());
+    StringRef Filename = llvm::sys::path::filename(Loc.Section->File->getName());
+    std::string SymbolHackName = ("__caprelocs_hack_" + Loc.Section->Name + "_" +
+                                  Filename).str();
+    auto LocationSym = Symtab->find(SymbolHackName);
+    if (!LocationSym) {
+        Symtab->addRegular<ELFT>(Saver.save(SymbolHackName), STV_DEFAULT,
+                                 STT_OBJECT, Loc.Offset, Config->CapabilitySize,
+                                 STB_GLOBAL, Loc.Section, Loc.Section->File);
+        LocationSym = Symtab->find(SymbolHackName);
+        assert(LocationSym);
+    }
+
     // Needed because local symbols cannot be used in dynamic relocations
-    assert(Location.Symbol->isSection());
     // TODO: do this better
     // message("Adding dyn reloc at " + toString(this) + "+0x" +
-    // utohexstr(CurrentEntryOffset));
+    // utohexstr(CurrentEntryOffset))
+#endif
     assert(CurrentEntryOffset < getSize());
     // Add a dynamic relocation so that RTLD fills in the right base address
     // We only have the offset relative to the load address...
@@ -236,9 +253,8 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(const SymbolAndOffset &Location,
     // cap_relocs entries that have a RELATIVE flag set instead of requiring a
     // full Elf_Rel/Elf_Rela Can't use RealLocation here because that will
     // usually refer to a local symbol
-    InX::RelaDyn->addReloc({elf::Target->RelativeRel, this,
-                                 CurrentEntryOffset, true, Location.Symbol,
-                                 static_cast<int64_t>(Location.Offset)});
+    InX::RelaDyn->addReloc({elf::Target->RelativeRel, this, CurrentEntryOffset,
+                            true, nullptr, static_cast<int64_t>(Loc.Offset)});
   }
   if (TargetNeedsDynReloc) {
     // Capability target is the second field -> offset + 8
@@ -265,14 +281,16 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
   for (const auto &I : RelocsMap) {
     const CheriCapRelocLocation &Location = I.first;
     const CheriCapReloc &Reloc = I.second;
-    Symbol *LocationSym = Location.Loc.Symbol;
-    int64_t LocationOffset = Location.Loc.Offset;
-    // If we don't need a dynamic relocation just write the VA
-    // We always write the virtual address here:
-    // In the shared library case this will be an address relative to the load
-    // address and will be handled by crt_init_globals. In the static case we
-    // can compute the final virtual address
-    uint64_t LocationVA = LocationSym->getVA(LocationOffset);
+    assert(Location.Offset <= Location.Section->getSize());
+    // We write the virtual address of the location in in both static and the
+    // shared library case:
+    // In the static case we can compute the final virtual address and write it
+    // In the dynamic case we write the virtual address relative to the load
+    // address and the runtime linker will add the load address to that
+    uint64_t OutSecOffset = Location.Section->getOffset(Location.Offset);
+    uint64_t LocationVA =
+        Location.Section->getOutputSection()->Addr + OutSecOffset;
+
     // For the target the virtual address the addend is always zero so
     // if we need a dynamic reloc we write zero
     // TODO: would it be more efficient for local symbols to write the DSO VA
@@ -289,8 +307,9 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     uint64_t TargetOffset = Reloc.CapabilityOffset;
     uint64_t TargetSize = Reloc.Target.Symbol->getSize();
     if (TargetSize > INT_MAX)
-      error("Insanely large symbol size for " + verboseToString<ELFT>(Reloc.Target) +
-            "for cap_reloc at" + verboseToString<ELFT>(Location.Loc));
+      error("Insanely large symbol size for " +
+            verboseToString<ELFT>(Reloc.Target) + "for cap_reloc at" +
+            Location.toString());
     if (Reloc.NeedsDynReloc && TargetSize == 0) {
       // XXXAR: Hack for capsizefix: We don't know the size, just don't set
       // the bounds. (In the future __cap_relocs won't be used by shlibs
@@ -312,11 +331,9 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
       // TODO: are there any other cases that can be ignored?
 
       if (WarnAboutUnknownSize || Config->Verbose) {
-        auto RealLocation =
-            SymbolAndOffset(LocationSym, LocationOffset).findRealSymbol();
         warn("could not determine size of cap reloc against " +
              verboseToString<ELFT>(Reloc.Target) + "\n>>> referenced by " +
-             verboseToString<ELFT>(RealLocation));
+             Location.toString());
       }
       if (OutputSection *OS = Reloc.Target.Symbol->getOutputSection()) {
         assert(TargetVA >= OS->Addr);

@@ -43,13 +43,13 @@ inline std::string verboseToString(SymbolAndOffset Sym) {
 }
 
 struct CheriCapRelocLocation {
-  SymbolAndOffset Loc;
-  InputFile *File;
+  InputSectionBase *Section;
+  uint64_t Offset;
   bool NeedsDynReloc;
   bool operator==(const CheriCapRelocLocation &Other) const {
-    return Loc.Symbol == Other.Loc.Symbol && Loc.Offset == Other.Loc.Offset &&
-           File == Other.File && NeedsDynReloc == Other.NeedsDynReloc;
+    return Section == Other.Section && Offset == Other.Offset;
   }
+  std::string toString() const { return Section->getObjMsg(Offset); }
 };
 
 struct CheriCapReloc {
@@ -76,8 +76,7 @@ public:
   size_t getSize() const override { return RelocsMap.size() * Entsize; }
   void finalizeContents() override;
   void writeTo(uint8_t *Buf) override;
-  void addCapReloc(const SymbolAndOffset &Location, InputFile *LocFile,
-                   bool LocNeedsDynReloc, const SymbolAndOffset &Target,
+  void addCapReloc(CheriCapRelocLocation Loc, const SymbolAndOffset &Target,
                    bool TargetNeedsDynReloc, int64_t CapabilityOffset);
 
 private:
@@ -88,7 +87,7 @@ private:
     auto it = RelocsMap.insert(std::make_pair(Loc, Relocation));
     // assert(it.first->second == Relocation);
     if (!(it.first->second == Relocation)) {
-      error("Newly inserted relocation at " + verboseToString<ELFT>(Loc.Loc) +
+      error("Newly inserted relocation at " + Loc.toString() +
             " does not match existing one:\n>   Existing: " +
             verboseToString<ELFT>(it.first->second.Target) +
             ", cap offset=" + Twine(it.first->second.CapabilityOffset) +
@@ -126,13 +125,13 @@ private:
 namespace llvm {
 template <> struct DenseMapInfo<lld::elf::CheriCapRelocLocation> {
   static inline lld::elf::CheriCapRelocLocation getEmptyKey() {
-    return {{nullptr, 0}, nullptr, false};
+    return {nullptr, 0, false};
   }
   static inline lld::elf::CheriCapRelocLocation getTombstoneKey() {
-    return {{nullptr, std::numeric_limits<uint64_t>::max()}, nullptr, false};
+    return {nullptr, std::numeric_limits<uint64_t>::max(), false};
   }
   static unsigned getHashValue(const lld::elf::CheriCapRelocLocation &Val) {
-    auto Pair = std::make_pair(Val.Loc.Symbol, Val.Loc.Offset);
+    auto Pair = std::make_pair(Val.Section, Val.Offset);
     return DenseMapInfo<decltype(Pair)>::getHashValue(Pair);
   }
   static bool isEqual(const lld::elf::CheriCapRelocLocation &LHS,
