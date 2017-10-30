@@ -173,12 +173,13 @@ template <class ELFT> void Writer<ELFT>::combineCapRelocsSections() {
 
 static Defined *addOptionalRegular(StringRef Name, SectionBase *Sec,
                                    uint64_t Val, uint8_t StOther = STV_HIDDEN,
-                                   uint8_t Binding = STB_GLOBAL) {
+                                   uint8_t Binding = STB_GLOBAL,
+                                   uint64_t Size = 0) {
   Symbol *S = Symtab->find(Name);
   if (!S || S->isDefined())
     return nullptr;
   Symbol *Sym = Symtab->addRegular(Name, StOther, STT_NOTYPE, Val,
-                                   /*Size=*/0, Binding, Sec,
+                                   /*Size=*/Size, Binding, Sec,
                                    /*File=*/nullptr);
   return cast<Defined>(Sym);
 }
@@ -1607,7 +1608,7 @@ template <class ELFT> void Writer<ELFT>::addStartEndSymbols() {
     // These symbols resolve to the image base if the section does not exist.
     // A special value -1 indicates end of the section.
     if (OS) {
-      addOptionalRegular(Start, OS, 0);
+      addOptionalRegular(Start, OS, 0, STV_HIDDEN, STB_GLOBAL, OS->Size);
       addOptionalRegular(End, OS, -1);
     } else {
       if (Config->Pic)
@@ -1620,6 +1621,10 @@ template <class ELFT> void Writer<ELFT>::addStartEndSymbols() {
   Define("__preinit_array_start", "__preinit_array_end", Out::PreinitArray);
   Define("__init_array_start", "__init_array_end", Out::InitArray);
   Define("__fini_array_start", "__fini_array_end", Out::FiniArray);
+  if (auto* CtorsSec = findSection(".ctors"))
+    Define("__ctors_start", "__ctors_end", CtorsSec);
+  if (auto* DtorsSec = findSection(".dtors"))
+    Define("__dtors_start", "__dtors_end", DtorsSec);
   if (InX::CheriCapTable)
     Define("__cap_table_start", "__cap_table_end",
            InX::CheriCapTable->getOutputSection());
