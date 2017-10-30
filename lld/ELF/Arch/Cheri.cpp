@@ -307,15 +307,9 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     uint64_t TargetOffset = Reloc.CapabilityOffset;
     uint64_t TargetSize = Reloc.Target.Symbol->getSize();
     if (TargetSize > INT_MAX)
-      error("Insanely large symbol size for " +
-            verboseToString<ELFT>(Reloc.Target) + "for cap_reloc at" +
-            Location.toString());
-    if (Reloc.NeedsDynReloc && TargetSize == 0) {
-      // XXXAR: Hack for capsizefix: We don't know the size, just don't set
-      // the bounds. (In the future __cap_relocs won't be used by shlibs
-      TargetSize = std::numeric_limits<uint64_t>::max();
-    }
-    if (TargetSize == 0) {
+      error("Insanely large symbol size for " + verboseToString<ELFT>(Reloc.Target) +
+            "for cap_reloc at" + Location.toString());
+    if (TargetSize == 0 && !Reloc.Target.Symbol->isUndefined()) {
       bool WarnAboutUnknownSize = true;
       // currently clang doesn't emit the necessary symbol information for local
       // string constants such as: struct config_opt opts[] = { { ..., "foo" },
