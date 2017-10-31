@@ -185,7 +185,11 @@ struct is_same<T, T> { enum {value = 1}; };
 #if defined(__GNUC__) || defined(__clang__)
 template <class Tp>
 inline void DoNotOptimize(Tp const& value) {
+#if defined(__CHERI_PURE_CAPABILITY__)
+  asm volatile("" : : "C"(value) : "memory");
+#else
   asm volatile("" : : "g"(value) : "memory");
+#endif
 }
 #else
 template <class Tp>
