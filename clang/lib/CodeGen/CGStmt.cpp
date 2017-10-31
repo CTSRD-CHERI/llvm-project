@@ -1864,9 +1864,19 @@ llvm::Value* CodeGenFunction::EmitAsmInput(
            "Required-immediate inlineasm arg isn't constant?");
   }
 
-  if (Info.allowsRegister() || !Info.allowsMemory())
-    if (CodeGenFunction::hasScalarEvaluationKind(InputExpr->getType()))
+  if (Info.allowsRegister() || !Info.allowsMemory()) {
+    // CHERI: For references, return a pointer to the referenced value
+    if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(InputExpr->IgnoreParenNoopCasts(getContext()))) {
+      if (const VarDecl *VD = dyn_cast<VarDecl>(DRE->getDecl())) {
+        if (const ReferenceType *RT = dyn_cast<ReferenceType>(VD->getType())) {
+          if (RT->isCHERICapability())
+            return EmitLValue(InputExpr).getPointer();
+        }
+      }
+    }
+    else if (CodeGenFunction::hasScalarEvaluationKind(InputExpr->getType()))
       return EmitScalarExpr(InputExpr);
+  }
   if (InputExpr->getStmtClass() == Expr::CXXThisExprClass)
     return EmitScalarExpr(InputExpr);
   InputExpr = InputExpr->IgnoreParenNoopCasts(getContext());
