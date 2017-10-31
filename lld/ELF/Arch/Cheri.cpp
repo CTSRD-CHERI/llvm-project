@@ -22,6 +22,8 @@ CheriCapRelocsSection<ELFT>::CheriCapRelocsSection()
 // TODO: copy MipsABIFlagsSection::create() instead of current impl?
 template <class ELFT>
 void CheriCapRelocsSection<ELFT>::addSection(InputSectionBase *S) {
+  // FIXME: can this happen with ld -r ?
+  // error("Compiler should not have generated __cap_relocs section for " + toString(S));
   assert(S->Name == "__cap_relocs");
   assert(S->AreRelocsRela && "__cap_relocs should be RELA");
   // make sure the section is no longer processed
@@ -60,11 +62,12 @@ static SymbolAndOffset sectionWithOffsetToSymbol(InputSectionBase *IS,
                                                  uint64_t Offset,
                                                  Symbol *Src) {
   Symbol *FallbackResult = nullptr;
+  assert((int64_t)Offset >= 0);
   uint64_t FallbackOffset = Offset;
   // For internal symbols we don't have a matching InputFile, just return
   auto* File = IS->File;
   if (!File)
-    return {Src, Offset};
+    return {Src, (int64_t)Offset};
   for (Symbol *B : IS->File->getSymbols()) {
     if (auto *D = dyn_cast<Defined>(B)) {
       if (D->Section != IS)
@@ -73,7 +76,7 @@ static SymbolAndOffset sectionWithOffsetToSymbol(InputSectionBase *IS,
         // XXXAR: should we accept any symbol that encloses or only exact
         // matches?
         if (D->Value == Offset && (D->isFunc() || D->isObject()))
-          return {D, D->Value - Offset}; // perfect match
+          return {D, 0}; // perfect match
         FallbackResult = D;
         FallbackOffset = Offset - D->Value;
       }
@@ -85,7 +88,7 @@ static SymbolAndOffset sectionWithOffsetToSymbol(InputSectionBase *IS,
   }
   // we should have found at least a section symbol
   assert(FallbackResult && "SHOULD HAVE FOUND A SYMBOL!");
-  return {FallbackResult, FallbackOffset};
+  return {FallbackResult, (int64_t)FallbackOffset};
 }
 
 SymbolAndOffset SymbolAndOffset::findRealSymbol() const {
@@ -163,8 +166,8 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
       continue;
     }
 
-    const SymbolAndOffset RelocLocation{LocationSym, (uint64_t)LocationRel.r_addend};
-    const SymbolAndOffset RelocTarget{&TargetSym, (uint64_t)TargetRel.r_addend};
+    const SymbolAndOffset RelocLocation{LocationSym, LocationRel.r_addend};
+    const SymbolAndOffset RelocTarget{&TargetSym, TargetRel.r_addend};
     SymbolAndOffset RealLocation = RelocLocation.findRealSymbol();
     SymbolAndOffset RealTarget = RelocTarget.findRealSymbol();
     if (Config->VerboseCapRelocs) {
@@ -221,6 +224,12 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
   Loc.NeedsDynReloc = Loc.NeedsDynReloc || Config->Pic || Config->Pie;
   TargetNeedsDynReloc = TargetNeedsDynReloc || Config->Pic || Config->Pie;
   uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
+
+  // assert(CapabilityOffset >= 0 && "Negative offsets not supported");
+  if (Config->Verbose)
+    message("global capability offset " + Twine(CapabilityOffset) +
+            " is less than 0:\n>>> Location: " + Loc.toString() +
+            "\n>>> Target: " + verboseToString<ELFT>(Target));
   if (!addEntry(Loc, {Target, CapabilityOffset, TargetNeedsDynReloc})) {
     return; // Maybe happens with vtables?
   }
@@ -273,6 +282,61 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
   }
 }
 
+template<typename ELFT>
+static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
+                              const CheriCapReloc &Reloc) {
+  uint64_t TargetSize = Reloc.Target.Symbol->getSize();
+  if (TargetSize > INT_MAX) {
+    error("Insanely large symbol size for " + verboseToString<ELFT>(Reloc.Target) +
+          "for cap_reloc at" + Location.toString());
+    return 0;
+  }
+  if (TargetSize == 0 && !Reloc.Target.Symbol->isUndefined() &&
+      !Reloc.Target.Symbol->IsPreemptible) {
+    bool WarnAboutUnknownSize = true;
+    // currently clang doesn't emit the necessary symbol information for local
+    // string constants such as: struct config_opt opts[] = { { ..., "foo" },
+    // { ..., "bar" } }; As this pattern is quite common don't warn if the
+    // target section is .rodata.str
+    if (Defined *DefinedSym =
+      dyn_cast<Defined>(Reloc.Target.Symbol)) {
+      if (DefinedSym->isSection() &&
+          DefinedSym->Section->Name.startswith(".rodata.str")) {
+        WarnAboutUnknownSize = false;
+      }
+    }
+    // TODO: are there any other cases that can be ignored?
+
+    if (WarnAboutUnknownSize || Config->Verbose) {
+      warn("could not determine size of cap reloc against " +
+           verboseToString<ELFT>(Reloc.Target) + "\n>>> referenced by " +
+           Location.toString());
+    }
+    if (OutputSection *OS = Reloc.Target.Symbol->getOutputSection()) {
+      // For negative offsets use 0 instead (we wan the range of the full symbol in that case)
+      int64_t Offset = std::max((int64_t)0, Reloc.Target.Offset);
+      uint64_t TargetVA = Reloc.Target.Symbol->getVA(Offset);
+      assert(TargetVA >= OS->Addr);
+      uint64_t OffsetInOS = TargetVA - OS->Addr;
+      // Use less-or-equal here to account for __end_foo symbols which point 1 past the section
+      assert(OffsetInOS <= OS->Size);
+      TargetSize = OS->Size - OffsetInOS;
+#if 0
+      if (Config->VerboseCapRelocs)
+          errs() << " OS OFFSET 0x" << utohexstr(OS->Addr) << "SYM OFFSET 0x"
+                 << utohexstr(OffsetInOS) << " SECLEN 0x" << utohexstr(OS->Size)
+                 << " -> target size 0x" << utohexstr(TargetSize) << "\n";
+#endif
+    } else {
+      warn("Could not find size for symbol " +
+           verboseToString<ELFT>(Reloc.Target) +
+           " and could not determine section size. Using UINT64_MAX.");
+      TargetSize = std::numeric_limits<uint64_t>::max();
+    }
+  }
+  return TargetSize;
+}
+
 template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
   constexpr endianness E = ELFT::TargetEndianness;
   static_assert(RelocSize == sizeof(InMemoryCapRelocEntry<E>),
@@ -306,51 +370,12 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
       TargetVA = Reloc.Target.Offset;
     }
     uint64_t TargetOffset = Reloc.CapabilityOffset;
-    uint64_t TargetSize = Reloc.Target.Symbol->getSize();
-    if (TargetSize > INT_MAX)
-      error("Insanely large symbol size for " + verboseToString<ELFT>(Reloc.Target) +
-            "for cap_reloc at" + Location.toString());
-    if (TargetSize == 0 && !Reloc.Target.Symbol->isUndefined() && !PreemptibleDynReloc) {
-      bool WarnAboutUnknownSize = true;
-      // currently clang doesn't emit the necessary symbol information for local
-      // string constants such as: struct config_opt opts[] = { { ..., "foo" },
-      // { ..., "bar" } }; As this pattern is quite common don't warn if the
-      // target section is .rodata.str
-      if (Defined *DefinedSym =
-              dyn_cast<Defined>(Reloc.Target.Symbol)) {
-        if (DefinedSym->isSection() &&
-            DefinedSym->Section->Name.startswith(".rodata.str")) {
-          WarnAboutUnknownSize = false;
-        }
-      }
-      // TODO: are there any other cases that can be ignored?
 
-      if (WarnAboutUnknownSize || Config->Verbose) {
-        warn("could not determine size of cap reloc against " +
-             verboseToString<ELFT>(Reloc.Target) + "\n>>> referenced by " +
-             Location.toString());
-      }
-      if (OutputSection *OS = Reloc.Target.Symbol->getOutputSection()) {
-        assert(TargetVA >= OS->Addr);
-        uint64_t OffsetInOS = TargetVA - OS->Addr;
-        // Use less-or-equal here to account for __end_foo symbols which point 1 past the section
-        assert(OffsetInOS <= OS->Size);
-        TargetSize = OS->Size - OffsetInOS;
-#if 0
-        if (Config->VerboseCapRelocs)
-          errs() << " OS OFFSET 0x" << utohexstr(OS->Addr) << "SYM OFFSET 0x"
-                 << utohexstr(OffsetInOS) << " SECLEN 0x" << utohexstr(OS->Size)
-                 << " -> target size 0x" << utohexstr(TargetSize) << "\n";
-#endif
-      } else {
-        warn("Could not find size for symbol " +
-             verboseToString<ELFT>(Reloc.Target) +
-             " and could not determine section size. Using UINT64_MAX.");
-        TargetSize = std::numeric_limits<uint64_t>::max();
-      }
-    }
-    assert(TargetOffset <= TargetSize);
     uint64_t Permissions = Reloc.Target.Symbol->isFunc() ? 1ULL << 63 : 0;
+    uint64_t TargetSize = getTargetSize<ELFT>(Location, Reloc);
+    // TODO: should we warn about symbols that are out-of-bounds?
+    // mandoc seems to do it so I guess we need it
+    // if (TargetOffset < 0 || TargetOffset > TargetSize) warn(...);
     InMemoryCapRelocEntry<E> Entry{LocationVA, TargetVA, TargetOffset,
                                    TargetSize, Permissions};
     memcpy(Buf + Offset, &Entry, sizeof(Entry));
@@ -364,6 +389,8 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     Offset += RelocSize;
   }
   // Sort the cap_relocs by target address for better cache and TLB locality
+  // It also makes it much easier to read the llvm-objdump -C output since it
+  // is sorted in a sensible order
   std::stable_sort(reinterpret_cast<InMemoryCapRelocEntry<E>*>(Buf),
             reinterpret_cast<InMemoryCapRelocEntry<E>*>(Buf + Offset),
             [](const InMemoryCapRelocEntry<E>& a, const InMemoryCapRelocEntry<E>& b) {
