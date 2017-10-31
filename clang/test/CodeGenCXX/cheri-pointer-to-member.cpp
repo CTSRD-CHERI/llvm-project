@@ -339,7 +339,7 @@ void take_func_ptr(AMemberFuncPtr ptr) {
 }
 
 AMemberFuncPtr passthrough_func_ptr(AMemberFuncPtr ptr) {
-  // CHECK-LABEL: define void @_Z20passthrough_func_ptrM1AFivE({ i8 addrspace(200)*, i64 } addrspace(200)* noalias sret{{.*}}, i64, i8 addrspace(200)* inreg{{.*}}, i64 inreg{{.*}})
+  // CHECK-LABEL: define void @_Z20passthrough_func_ptrM1AFivE({ i8 addrspace(200)*, i64 } addrspace(200)* noalias sret{{.*}}, {{.*}}, i8 addrspace(200)* inreg{{.*}}, i64 inreg{{.*}})
   // CHECK: [[RETVAL:%.+]] = alloca { i8 addrspace(200)*, i64 }, align [[$CAP_SIZE]]
   // CHECK-NEXT: [[PTR:%.+]] = alloca { i8 addrspace(200)*, i64 }, align [[$CAP_SIZE]]
   // CHECK-NEXT: [[PTR_ADDR:%.+]] = alloca { i8 addrspace(200)*, i64 }, align [[$CAP_SIZE]]
