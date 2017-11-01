@@ -39,7 +39,7 @@ struct SymbolAndOffset {
 
 template <typename ELFT>
 inline std::string verboseToString(SymbolAndOffset Sym) {
-  return ::lld::verboseToString<ELFT>(Sym.Symbol, Sym.Offset);
+  return lld::verboseToString<ELFT>(Sym.Symbol, Sym.Offset);
 }
 
 struct CheriCapRelocLocation {

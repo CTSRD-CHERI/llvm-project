@@ -289,7 +289,10 @@ std::string lld::verboseToString(Symbol *B, uint64_t SymOffset) {
 
   if (B->isLocal())
     Msg += "local ";
-  else if (B->isShared())
+  // ->symbol() cannot be called on local symbols
+  if (B->isWeak())
+      Msg += "weak ";
+  if (B->isShared())
     Msg += "shared ";
   else if (B->isDefined())
     Msg += "defined ";
@@ -306,7 +309,7 @@ std::string lld::verboseToString(Symbol *B, uint64_t SymOffset) {
   else if (B->isObject())
     Msg += "object ";
   else if (B->isFile())
-    Msg += "object ";
+    Msg += "file ";
   else if (B->isUndefined())
     Msg += "<undefined> ";
   else
