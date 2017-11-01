@@ -37,6 +37,10 @@ typedef struct {
       __attribute__((__aligned__(__alignof__(long long))));
   long double __clang_max_align_nonce2
       __attribute__((__aligned__(__alignof__(long double))));
+#if defined(__CHERI_PURE_CAPABILITY__)
+  void *__clang_max_align_nonce3
+      __attribute__((__aligned__(__alignof__(void *))));
+#endif
 } max_align_t;
 #endif
 
