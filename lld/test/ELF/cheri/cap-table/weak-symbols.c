@@ -5,8 +5,6 @@
 // RUNNOT: llvm-objdump -d -r %t.o | FileCheck %s -check-prefix OBJECT
 // RUN: ld.lld -o %t.exe %t.o
 // RUN: ld.lld -pie -o %t-pie.exe %t.o
-// RUN: llvm-objdump -d -h -r -C -t %t.exe
-// RUN: llvm-objdump -d -h -r -C -t %t-pie.exe
 // RUN: llvm-objdump -d -r -C -t %t.exe | FileCheck %s -check-prefixes EXE,STATIC-EXE
 // RUN: llvm-objdump -d -r -C -t %t-pie.exe | FileCheck %s -check-prefixes EXE,DYNAMIC-EXE
 
