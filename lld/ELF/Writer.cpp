@@ -1428,10 +1428,14 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   // It should be okay as no one seems to care about the type.
   // Even the author of gold doesn't remember why gold behaves that way.
   // https://sourceware.org/ml/binutils/2002-03/msg00360.html
-  if (InX::DynSymTab)
-    Symtab->addRegular("_DYNAMIC", STV_HIDDEN, STT_NOTYPE, 0 /*Value*/,
-                       /*Size=*/0, STB_WEAK, InX::Dynamic,
-                       /*File=*/nullptr);
+  if (InX::DynSymTab) {
+    auto *DynamicSym =
+        Symtab->addRegular("_DYNAMIC", STV_HIDDEN, STT_NOTYPE, 0 /*Value*/,
+                           /*Size=*/0, STB_WEAK, InX::Dynamic,
+                           /*File=*/nullptr);
+    SectionStartSymbols.push_back(
+        std::make_pair(cast<Defined>(DynamicSym), InX::Dynamic->getParent()));
+  }
 
   // Define __rel[a]_iplt_{start,end} symbols if needed.
   addRelIpltSymbols();
