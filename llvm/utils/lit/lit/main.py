@@ -265,6 +265,9 @@ def main_with_tmp(builtinParameters):
                      help="Run modified and failing tests first (updates "
                      "mtimes)",
                      action="store_true", default=False)
+    selection_group.add_argument("--skip-tests", dest="skipTests", metavar="N",
+                     help="Number of initial tests to skip",
+                     action="store", type=int, default=None)
     selection_group.add_argument("--filter", metavar="REGEX",
                      help=("Only run tests with paths matching the given "
                            "regular expression"),
@@ -448,6 +451,8 @@ def main_with_tmp(builtinParameters):
     # Finally limit the number of tests, if desired.
     if opts.maxTests is not None:
         run.tests = run.tests[:opts.maxTests]
+    if opts.skipTests is not None:
+        run.tests = run.tests[opts.skipTests:]
 
     # Don't create more threads than tests.
     opts.numThreads = min(len(run.tests), opts.numThreads)
