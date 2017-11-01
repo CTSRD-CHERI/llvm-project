@@ -6716,8 +6716,13 @@ class MipsABIInfo : public ABIInfo, CHERICapClassifier {
 public:
   MipsABIInfo(CodeGenTypes &CGT, bool _IsO32, CodeGenModule &_CGM) :
     ABIInfo(CGT), CHERICapClassifier(CGT.getContext()),
-    IsO32(_IsO32), CGM(_CGM), MinABIStackAlignInBytes(IsO32 ? 4 : 8),
-    StackAlignInBytes(IsO32 ? 8 : 16) {}
+    IsO32(_IsO32), CGM(_CGM), MinABIStackAlignInBytes(IsO32 ? 4 : 8) {
+      const TargetInfo& TI = _CGM.getTarget();
+      if (TI.areAllPointersCapabilities())
+        StackAlignInBytes = TI.getCHERICapabilityWidth();
+      else
+        StackAlignInBytes = (IsO32 ? 8 : 16);
+  }
 
   ABIArgInfo classifyReturnType(QualType RetTy) const;
   ABIArgInfo classifyArgumentType(QualType RetTy, uint64_t &Offset) const;

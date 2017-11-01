@@ -1743,7 +1743,7 @@ ConstantLValue
 ConstantLValueEmitter::VisitAddrLabelExpr(const AddrLabelExpr *E) {
   assert(Emitter.CGF && "Invalid address of label expression outside function");
   llvm::Constant *Ptr = Emitter.CGF->GetAddrOfLabel(E->getLabel());
-  Ptr = llvm::ConstantExpr::getBitCast(Ptr,
+  Ptr = llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(Ptr,
                                    CGM.getTypes().ConvertType(E->getType()));
   return Ptr;
 }

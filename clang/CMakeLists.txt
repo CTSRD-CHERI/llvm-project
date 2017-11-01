@@ -416,6 +416,8 @@ option(CLANG_INCLUDE_TESTS
        ${LLVM_INCLUDE_TESTS})
 
 add_subdirectory(utils/TableGen)
+
+set(CREDUCE_CRASH_TESTCASE_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/utils/creduce_crash_testcase.py)
 configure_file(
     utils/creduce_crash_testcase.py.in
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/creduce_crash_testcase.py
