@@ -223,7 +223,7 @@ class RunCreduce(ReduceTool):
         with tempfile.NamedTemporaryFile() as tmp:
             shutil.copy(str(input_file), tmp.name)
             original_size = input_file.stat().st_size
-            with input_file.open("w") as reduced_file:
+            with input_file.open("w", encoding="utf-8") as reduced_file:
                 self._do_initial_reduce(Path(tmp.name), reduced_file)
             new_size = input_file.stat().st_size
             percent_reduction = 100 - 100.0 * (new_size / original_size)
@@ -254,7 +254,7 @@ class RunCreduce(ReduceTool):
     def _do_initial_reduce(self, input_path, out_file):
         # The initial remove #includes pass takes a long time -> remove all the includes that are inside a #if 0
         # This is especially true for C++ because there are so many #included files in preprocessed input
-        with input_path.open("r", errors="replace") as input_file:
+        with input_path.open("r", errors="replace", encoding="utf-8") as input_file:
             # line_regex = re.compile(r'^#\s+\d+\s+".*".*')
             start_rewrite_includes = re.compile(r"^\s*#if\s+0\s+/\* expanded by -frewrite-includes \*/\s*")
             end_rewrite_includes = re.compile(r"^\s*#endif\s+/\* expanded by -frewrite-includes \*/\s*")
@@ -385,7 +385,7 @@ class Reducer(object):
         if is_crash_reproducer:
             verbose_print("Input file is a crash reproducer script")
         verbose_print("Finding test command(s) in", infile)
-        with infile.open("r", errors="replace") as f:
+        with infile.open("r", errors="replace", encoding="utf-8") as f:
             if is_crash_reproducer:
                 real_infile = self._parse_crash_reproducer(infile, f)
             else:
