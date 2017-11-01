@@ -7,7 +7,7 @@
 # CHECK: Idx Name          Size      Address          Type
 # CHECK:   2 .bss          00000004 0000000000201000 BSS
 # CHECK: SYMBOL TABLE:
-# CHECK: 0000000000201000  .bss 00000000 __bss_start
+# CHECK: 0000000000201000  .bss 00000004 __bss_start
 
 .global __bss_start
 .text

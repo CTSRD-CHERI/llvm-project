@@ -75,7 +75,7 @@ _start:
 // CHECK-NEXT: Symbol {
 // CHECK-NEXT:   Name: __fini_array_start
 // CHECK-NEXT:   Value: [[FINI_ADDR]]
-// CHECK-NEXT:   Size: 0
+// CHECK-NEXT:   Size: 10
 // CHECK-NEXT:   Binding: Local
 // CHECK-NEXT:   Type: None
 // CHECK-NEXT:   Other [
@@ -97,7 +97,7 @@ _start:
 // CHECK-NEXT: Symbol {
 // CHECK-NEXT:   Name: __init_array_start
 // CHECK-NEXT:   Value: [[INIT_ADDR]]
-// CHECK-NEXT:   Size: 0
+// CHECK-NEXT:   Size: 8
 // CHECK-NEXT:   Binding: Local
 // CHECK-NEXT:   Type: None
 // CHECK-NEXT:   Other [
@@ -119,7 +119,7 @@ _start:
 // CHECK-NEXT: Symbol {
 // CHECK-NEXT:   Name: __preinit_array_start
 // CHECK-NEXT:   Value: [[PREINIT_ADDR]]
-// CHECK-NEXT:   Size: 0
+// CHECK-NEXT:   Size: 9
 // CHECK-NEXT:   Binding: Local
 // CHECK-NEXT:   Type: None
 // CHECK-NEXT:   Other [

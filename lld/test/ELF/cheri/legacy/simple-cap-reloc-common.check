@@ -57,7 +57,7 @@
 
 // DUMP-EXE-LABEL: SYMBOL TABLE:
 // STATIC-NOT:   _DYNAMIC
-// DYNAMIC:      {{.*}} .dynamic 00000000 .hidden _DYNAMIC
+// DYNAMIC:      {{.*}} .dynamic 00000100 .hidden _DYNAMIC
 
 // DUMP-EXE-DAG: [[__START_ADDR]]  g    F  .text           [[__START_LEN]] __start{{$}}
 // DUMP-EXE-DAG: [[FN_PTR_ADDR]]   g       .data           [[CAP_SYMBOL_SIZE:000000(20|10)]] fn_ptr{{$}}
