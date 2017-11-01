@@ -7,6 +7,9 @@
 // Source Licenses. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+
+// UNSUPPORTED: libcpp-no-rtti
+
 #include "demangle.h"
 #include <typeinfo>
 #include <cassert>
