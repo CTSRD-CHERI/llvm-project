@@ -226,7 +226,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
   uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
 
   // assert(CapabilityOffset >= 0 && "Negative offsets not supported");
-  if (Config->Verbose)
+  if (Config->Verbose && CapabilityOffset < 0)
     message("global capability offset " + Twine(CapabilityOffset) +
             " is less than 0:\n>>> Location: " + Loc.toString() +
             "\n>>> Target: " + verboseToString<ELFT>(Target));
