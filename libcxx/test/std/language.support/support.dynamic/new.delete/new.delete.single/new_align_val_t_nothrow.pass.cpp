@@ -72,7 +72,7 @@ int main()
         A* ap = new(std::nothrow) A;
         assert(ap);
 #ifdef __CHERI_PURE_CAPABILITY__
-        assert((int)reinterpret_cast<std::uintptr_t>(ap) % OverAligned == 0);
+        assert((unsigned)reinterpret_cast<std::uintptr_t>(ap) % OverAligned == 0);
 #else
         assert(reinterpret_cast<std::uintptr_t>(ap) % OverAligned == 0);
 #endif
