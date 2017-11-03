@@ -433,6 +433,7 @@ class Reducer(object):
         if self.args.reduce_tool == "noop":
             if proc_info is not None:
                 proc_info["stderr"] = b"Assertion `noop' failed."
+            print(green(" yes"))
             return True
         proc = subprocess.run(full_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         # treat fatal llvm errors (cannot select, etc) as crashes too:
@@ -494,26 +495,22 @@ class Reducer(object):
     def _infer_crash_message(stderr: bytes):
         if not stderr:
             return None
+        regexes = [re.compile(s) for s in (
+            r"Assertion `(.+)' failed.",  # Linux assert()
+            r"Assertion failed: \(.+\),",  # FreeBSD/Mac assert()
+            r"UNREACHABLE executed( at .+)?!"  # llvm_unreachable()
+            # generic code gen crashes (at least creduce will keep the function name):
+            r"LLVM IR generation of declaration '(.+)'",
+            r"Generating code for declaration '(.+)'",
+            # error in backend:
+            r"fatal error: error in backend:(.+)"
+        )]
         for line in stderr.decode("utf-8").splitlines():
             # Check for failed assertions:
-            match = re.search(r"Assertion `(.+)' failed.", line)
-            if match:
-                return match.group(1)
-            # check for llvm_unreachable
-            match = re.search(r"UNREACHABLE executed( at .+)?!", line)
-            if match:
-                return match.group(0)
-            # generic code gen crashes (at least creduce will keep the function name):
-            match = re.search(r"LLVM IR generation of declaration '(.+)'", line)
-            if match:
-                return match.group(0)
-            match = re.search(r"Generating code for declaration '(.+)'", line)
-            if match:
-                return match.group(0)
-            match = re.search(r"fatal error: error in backend:(.+)", line)
-            if match:
-                return match.group(0)
-
+            for r in regexes:
+                match = r.search(line)
+                if match:
+                    return match.group(0)
         return None
 
     def _simplify_crash_command(self, command: list, infile: Path) -> tuple:
