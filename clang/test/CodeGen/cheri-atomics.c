@@ -1,7 +1,7 @@
-// RUN: %clang_cc1 %s -target-abi purecap -emit-llvm -triple cheri-unknown-freebsd -o - | FileCheck %s
+// RUN: %clang_cc1 %s -target-abi purecap -emit-llvm -triple cheri-unknown-freebsd -o - | %cheri_FileCheck %s
 int main(void) {
   _Atomic(int*) p;
-  // CHECK:  %p = alloca i32 addrspace(200)*, align [[$CAP_SIZE:16|32]], addrspace(200)
+  // CHECK:  %p = alloca i32 addrspace(200)*, align [[$CAP_SIZE]], addrspace(200)
   // CHECK:  [[ATOMIC_TMP1:%.*]] = alloca i64, align 8, addrspace(200)
   // CHECK:  [[ATOMIC_TMP2:%.*]] = alloca i32 addrspace(200)*, align [[$CAP_SIZE]]
   // CHECK:  [[ATOMIC_TMP3:%.*]] = alloca i32 addrspace(200)*, align [[$CAP_SIZE]]

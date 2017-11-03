@@ -1,8 +1,8 @@
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -std=c++11 -DINVALID_ATOMIC_CALL -fsyntax-only -verify %s
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -std=c++11 -o - %s | FileCheck %s -implicit-check-not i256
-// RUN-TODO: %cheri256_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -S -o - %s | FileCheck -check-prefix=ASM %s
-// RUN-TODO: %cheri128_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -S -o - %s | FileCheck -check-prefix=ASM %s
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -ast-dump %s | FileCheck -check-prefix=AST %s
+// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -std=c++11 -o - %s | %cheri_FileCheck %s -implicit-check-not i256
+// RUN-TODO: %cheri256_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -S -o - %s | %cheri_FileCheck -check-prefix=ASM %s
+// RUN-TODO: %cheri128_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -S -o - %s | %cheri_FileCheck -check-prefix=ASM %s
+// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -ast-dump %s | %cheri_FileCheck -check-prefix=AST %s
 // reduced testcase for libcxx exception_fallback.ipp/new_handler_fallback.ipp
 
 // Module ID and source_filename might contain i256 so we explicitly capture this line
@@ -27,7 +27,7 @@ handler get_handler_sync() noexcept {
 // CHECK-NOT: i256
 
 handler set_handler_atomic(handler func) noexcept {
-  // CHECK: %func.addr = alloca void () addrspace(200)*, align [[$CAP_SIZE:16|32]]
+  // CHECK: %func.addr = alloca void () addrspace(200)*, align [[$CAP_SIZE]]
   // CHECK: %.atomictmp = alloca void () addrspace(200)*, align [[$CAP_SIZE]]
   // CHECK: %atomic-temp = alloca void () addrspace(200)*, align [[$CAP_SIZE]]
   // CHECK: store void () addrspace(200)* %func, void () addrspace(200)* addrspace(200)* %func.addr, align [[$CAP_SIZE]]
