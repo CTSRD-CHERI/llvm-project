@@ -28,6 +28,8 @@ def triple : Separate<["-"], "triple">,
 def target_abi : Separate<["-"], "target-abi">,
   HelpText<"Target a particular ABI type">;
 
+def cheri_size : Separate<["-"], "cheri-size">,
+  HelpText<"CHERI capability size">;
 }
 
 def target_linker_version : Separate<["-"], "target-linker-version">,

@@ -130,16 +130,6 @@ cheri128_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu', 'cheri12
 cheri256_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu', 'cheri']
 purecap_cc1_args  = ['-triple', 'cheri-unknown-freebsd', '-target-abi', 'purecap']
 
-if config.cheri_is_128:
-    config.available_features.add("cheri_is_128")
-    clang_cc1_args += ['-mllvm', '-cheri128']  # force cheri128 for tests
-    cheri256_cc1_args += ['-mllvm', '-cheri256', '-mllvm', '-cheri-test-mode']
-    cheri_cc1_args = cheri128_cc1_args
-else:
-    config.available_features.add("cheri_is_256")
-    cheri128_cc1_args += ['-mllvm', '-cheri128', '-mllvm', '-cheri-test-mode']
-    cheri_cc1_args = cheri256_cc1_args
-
 tools = [
     # By specifying %clang_cc1 as part of the substitution, this substitution
     # relies on repeated substitution, so must come before %clang_cc1.

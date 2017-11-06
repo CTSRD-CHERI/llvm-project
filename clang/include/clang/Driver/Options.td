@@ -243,6 +243,10 @@ def cheri_linker : Flag<["-"], "cheri-linker">, Flags<[CC1Option]>,
   HelpText<"Assume the existence of a CHERI-aware linker">;
 def no_cheri_linker : Flag<["-"], "no-cheri-linker">, Flags<[CC1Option, HelpHidden]>,
   HelpText<"Do not assume the existence of a CHERI-aware linker">;
+def cheri_EQ : Joined<["-"], "cheri=">, Flags<[DriverOption]>,
+  HelpText<"Enable CHERI support, specifying the size (in bits) of CHERI capabilities">;
+def cheri : Flag<["-"], "cheri">, Flags<[DriverOption]>,
+  HelpText<"Enable CHERI support with the default capability size (128 bits)">;
 
 def no_capsizefix : Flag<["-"], "no-capsizefix">, Flags<[CC1Option]>,
   Group<Link_Group>, HelpText<"Assume that the linker handles capabilities (don't use capsizefix)">;

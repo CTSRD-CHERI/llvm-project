@@ -17,12 +17,10 @@
 #include "llvm/Config/config.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/TargetOptions.h"
+#include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
-
-extern llvm::cl::opt<bool> CHERI128;
-extern llvm::cl::opt<bool> ForceCHERI256;
 
 namespace clang {
 namespace targets {
@@ -37,7 +35,7 @@ class LLVM_LIBRARY_VISIBILITY MipsTargetInfo : public TargetInfo {
       Layout = "m:e-p:32:32-i8:8:32-i16:16:32-i64:64-n32:64-S128";
     else if (ABI == "n64") {
       if (IsCHERI) {
-        if (CHERI128)
+        if (CapSize == 128)
            Layout = "m:e-pf200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128";
          else
            Layout = "m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128";
@@ -69,7 +67,7 @@ class LLVM_LIBRARY_VISIBILITY MipsTargetInfo : public TargetInfo {
 protected:
   bool HasFP64;
   std::string ABI;
-  bool IsCHERI;
+  bool IsCHERI = false;
   int CapSize;
 
 public:
@@ -78,7 +76,6 @@ public:
         IsNan2008(false), IsAbs2008(false), IsSingleFloat(false),
         IsNoABICalls(false), CanUseBSDABICalls(false), FloatABI(HardFloat),
         DspRev(NoDSP), HasMSA(false), DisableMadd4(false), HasFP64(false),
-        IsCHERI(getTriple().getArch() == llvm::Triple::cheri),
         CapSize(-1) {
     TheCXXABI.set(TargetCXXABI::GenericMIPS);
 
@@ -88,18 +85,26 @@ public:
                : "n64");
 
     CPU = ABI == "o32" ? "mips32r2" : "mips64r2";
-    if (IsCHERI) {
-      if (Opts.CPU == "cheri128") {
-        CHERI128 = true;
-      }
-#if CHERI_IS_128
-      if (ForceCHERI256)
-        CHERI128 = false;
-#endif
-      CPU = CHERI128 ? "cheri128" : "cheri";
-      CapSize = CHERI128 ? 128 : 256;
-      SuitableAlign = CapSize;
+    // If we have a CHERI triple, or an explicit CHERI128 CPU, then assume
+    // CHERI128.
+    if ((getTriple().getArch() == llvm::Triple::cheri) ||
+        (Opts.CPU == "cheri128")) {
+      IsCHERI = true;
+      CapSize = 128;
     }
+    // If we have a CHERI CPU, default to assuming CHERI128.
+    if (Opts.CPU == "cheri") {
+      switch (CapSize) {
+        default:
+        case 128: CPU = "cheri128"; break;
+        case 64: CPU = "cheri64"; break;
+        case 256: CPU = "cheri256"; break;
+      }
+      IsCHERI = true;
+    }
+
+    if (IsCHERI)
+      SuitableAlign = CapSize;
 
     CanUseBSDABICalls = Triple.getOS() == llvm::Triple::FreeBSD ||
                         Triple.getOS() == llvm::Triple::OpenBSD;
@@ -213,10 +218,17 @@ public:
                  const std::vector<std::string> &FeaturesVec) const override {
     if (CPU.empty())
       CPU = getCPU();
+
+    assert(CPU != "cheri");
+    // cheri as a CPU type is now an alias for cheri128, so we should never see
+    // a raw cheri here.
     if (CPU == "octeon")
       Features["mips64r2"] = Features["cnmips"] = true;
     else
       Features[CPU] = true;
+
+    if (IsCHERI)
+      Features["chericap"] = true;
     return TargetInfo::initFeatureMap(Features, Diags, CPU, FeaturesVec);
   }
 
@@ -360,6 +372,7 @@ public:
     FloatABI = HardFloat;
     DspRev = NoDSP;
     HasFP64 = isFP64Default();
+    bool CapSizeFeatureFound = false;
 
     for (const auto &Feature : Features) {
       if (Feature == "+single-float")
@@ -384,9 +397,18 @@ public:
         HasFP64 = false;
       else if (Feature == "+nan2008")
         IsNan2008 = true;
-      else if (Feature == "+cheri" || Feature == "+cheri128")
+      else if (Feature == "+chericap")
         IsCHERI = true;
-      else if (Feature == "-nan2008")
+      else if (Feature == "+cheri64") {
+        CapSizeFeatureFound = true;
+        CapSize = 64;
+      } else if (Feature == "+cheri128") {
+        CapSizeFeatureFound = true;
+        CapSize = 128;
+      } else if (Feature == "+cheri256") {
+        CapSizeFeatureFound = true;
+        CapSize = 256;
+      } else if (Feature == "-nan2008")
         IsNan2008 = false;
       else if (Feature == "+abs2008")
         IsAbs2008 = true;
@@ -394,6 +416,15 @@ public:
         IsAbs2008 = false;
       else if (Feature == "+noabicalls")
         IsNoABICalls = true;
+    }
+
+    if (IsCHERI) {
+      // If we have an implicit size, assume cheri128
+      if (!CapSizeFeatureFound) {
+        Features.push_back("+cheri128");
+        CapSize = 128;
+      }
+      SuitableAlign = CapSize;
     }
 
     setDataLayout();
@@ -450,8 +481,8 @@ public:
            ABI == "n32" || ABI == "n64";
   }
 
-  unsigned getIntCapWidth() const override { return CHERI128 ? 128 : 256; }
-  unsigned getIntCapAlign() const override { return CHERI128 ? 128 : 256; }
+  unsigned getIntCapWidth() const override { return CapSize; }
+  unsigned getIntCapAlign() const override { return CapSize; }
 
   uint64_t getCHERICapabilityWidth() const override { return CapSize; }
 

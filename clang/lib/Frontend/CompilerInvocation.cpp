@@ -2675,6 +2675,22 @@ static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
     Opts.ABI = "purecap";
     Diags.Report(diag::warn_cheri_sandbox_abi_is_purecap);
   }
+  StringRef CheriCPUName;
+  if (const Arg *A = Args.getLastArg(OPT_cheri_size)) {
+    auto &F = Opts.Features;
+    F.push_back("chericap");
+    switch (std::stoi(A->getValue())) {
+      default: llvm_unreachable("Invalid -cheri= value");
+      case 64: CheriCPUName = "cheri64"; break;
+      case 128: CheriCPUName = "cheri128"; break;
+      case 256: CheriCPUName =  "cheri256"; break;
+    }
+    F.push_back(CheriCPUName);
+    A->claim();
+  }
+  // FIXME: This is for legacy compatibility and should be removed eventually
+  if (Opts.CPU == "cheri")
+    Opts.CPU = CheriCPUName.empty() ? "cheri128" : CheriCPUName;
 }
 
 bool CompilerInvocation::CreateFromArgs(CompilerInvocation &Res,
