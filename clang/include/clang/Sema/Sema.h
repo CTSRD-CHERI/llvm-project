@@ -8181,12 +8181,12 @@ public:
                                   SourceLocation RParenLoc,
                                   Expr *SubExpr);
 
-  ExprResult BuildCheriCast(SourceLocation LParenLoc, SourceLocation KeywordLoc,
+  ExprResult BuildCheriPtr(SourceLocation LParenLoc, SourceLocation KeywordLoc,
                             QualType DestTy, TypeSourceInfo *TSInfo,
                             SourceLocation RParenLoc, Expr *SubExpr);
 
-  ExprResult ActOnCheriCast(Scope *S, SourceLocation LParenLoc,
-                            SourceLocation CheriCastKeywordLoc, ParsedType Type,
+  ExprResult ActOnCheriPtr(Scope *S, SourceLocation LParenLoc,
+                            SourceLocation CheriPtrKeywordLoc, ParsedType Type,
                             SourceLocation RParenLoc, Expr *SubExpr);
 
   void CheckTollFreeBridgeCast(QualType castType, Expr *castExpr);
@@ -9366,10 +9366,10 @@ public:
     IntToPointer,
 
     /// CHERICapabilityToPointer - The assignment converts a capability to a
-    /// pointer, which we reject (it needs an explicit __cheri_cast).
+    /// pointer, which we reject (it needs an explicit __cheri_ptr).
     CHERICapabilityToPointer,
     /// PointerToCHERICapability - The assignment converts a pointer to a
-    /// capability, which we reject (it needs an explicit __cheri_cast).
+    /// capability, which we reject (it needs an explicit __cheri_ptr).
     PointerToCHERICapability,
 
     /// FunctionVoidPointer - The assignment is between a function pointer and

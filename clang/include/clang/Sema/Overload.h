@@ -194,7 +194,7 @@ namespace clang {
     /// Objective-C lifetime qualifier.
     unsigned ObjCLifetimeConversionBinding : 1;
 
-    /// \brief e.g. conversions from pointer -> capability without an explicit __cheri_cast
+    /// \brief e.g. conversions from pointer -> capability without an explicit __cheri_ptr
     unsigned IncompatibleCHERIConversion : 1;  // XXXAR: would be nice if we had a ctor to initialize this
 
     bool isInvalidCHERICapabilityConversion() const {

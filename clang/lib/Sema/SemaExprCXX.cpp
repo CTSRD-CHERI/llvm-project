@@ -4032,7 +4032,7 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
         unsigned DiagID = FromIsCap ? diag::err_typecheck_convert_cap_to_ptr :
                                       diag::err_typecheck_convert_ptr_to_cap;
         Diag(From->getLocStart(), DiagID) << FromType << ToType << false
-            << FixItHint::CreateInsertion(From->getLocStart(), "(__cheri_cast " +
+            << FixItHint::CreateInsertion(From->getLocStart(), "(__cheri_ptr " +
                                           ToType.getAsString() + ")");
         return ExprError();
       }

@@ -572,7 +572,7 @@ KEYWORD(__bridge_retain              , KEYARC)
 
 
 // CHERI casts to and from capabilities
-KEYWORD(__cheri_cast                 , KEYALL)
+KEYWORD(__cheri_ptr                 , KEYALL)
 
 
 // Objective-C keywords.

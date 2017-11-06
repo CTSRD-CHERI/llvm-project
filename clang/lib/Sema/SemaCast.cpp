@@ -1815,7 +1815,7 @@ static void DiagnoseCHERICallback(Sema &Self, SourceLocation Loc,
     Self.Diag(Loc, diag::err_cheri_invalid_callback_cast);
 }
 
-static void DiagnoseCHERICast(Sema &Self, Expr *SrcExpr, QualType DestType,
+static void DiagnoseCHERIPtr(Sema &Self, Expr *SrcExpr, QualType DestType,
                               CastKind &Kind, SourceRange &Range) {
   if (Kind != CK_BitCast)
     return;
@@ -1838,12 +1838,12 @@ static void DiagnoseCHERICast(Sema &Self, Expr *SrcExpr, QualType DestType,
       if (SrcAlign >= DestAlign)
         return;
 
-      Self.Diag(Range.getBegin(), diag::err_cheri_cast_align)
+      Self.Diag(Range.getBegin(), diag::err_cheri_ptr_align)
         << SrcExpr->getType() << DestType
         << static_cast<unsigned>(SrcAlign.getQuantity())
         << static_cast<unsigned>(DestAlign.getQuantity())
         << Range << SrcExpr->getSourceRange();
-      Self.Diag(Range.getEnd(), diag::note_cheri_cast_align_fixit);
+      Self.Diag(Range.getEnd(), diag::note_cheri_ptr_align_fixit);
     }
   }
 }
@@ -1912,7 +1912,7 @@ static CastKind DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
   if (DestType->isPointerType() || DestType->isReferenceType()) {
     Self.Diag(OpRange.getBegin(), diag::warn_capability_pointer_cast)
         << SrcType << DestType << OpRange
-        << FixItHint::CreateReplacement(OpRange, "__cheri_cast " +
+        << FixItHint::CreateReplacement(OpRange, "__cheri_ptr " +
                                                      DestType.getAsString());
     return CK_CHERICapabilityToPointer;
 
@@ -2799,7 +2799,7 @@ void CastOperation::CheckCStyleCast() {
   DiagnoseCallingConvCast(Self, SrcExpr, DestType, OpRange);
   DiagnoseBadFunctionCast(Self, SrcExpr, DestType);
   Kind = Self.PrepareScalarCast(SrcExpr, DestType);
-  DiagnoseCHERICast(Self, SrcExpr.get(), DestType, Kind, OpRange);
+  DiagnoseCHERIPtr(Self, SrcExpr.get(), DestType, Kind, OpRange);
 
   if (SrcExpr.isInvalid())
     return;
@@ -2895,21 +2895,21 @@ ExprResult Sema::BuildCXXFunctionalCastExpr(TypeSourceInfo *CastTypeInfo,
                          Op.SrcExpr.get(), &Op.BasePath, LPLoc, RPLoc));
 }
 
-ExprResult Sema::BuildCheriCast(SourceLocation LParenLoc,
+ExprResult Sema::BuildCheriPtr(SourceLocation LParenLoc,
                                 SourceLocation KeywordLoc, QualType DestTy,
                                 TypeSourceInfo *TSInfo,
                                 SourceLocation RParenLoc, Expr *SubExpr) {
   bool DestIsCap = DestTy->isCHERICapabilityType(Context);
   if (!DestTy->isPointerType() && !DestIsCap) {
     Diag(TSInfo->getTypeLoc().getLocStart(),
-         diag::err_cheri_cast_invalid_target_type) << DestTy;
+         diag::err_cheri_ptr_invalid_target_type) << DestTy;
     return ExprError();
   }
   // XXXAR: SubExpr->getType() returns char for char&
   QualType SrcTy = SubExpr->getRealReferenceType();
   bool SrcIsCap = SrcTy->isCHERICapabilityType(Context);
   if (!SrcTy->isPointerType() && !SrcIsCap) {
-    Diag(SubExpr->getLocStart(), diag::err_cheri_cast_invalid_source_type)
+    Diag(SubExpr->getLocStart(), diag::err_cheri_ptr_invalid_source_type)
       << SrcTy;
     return ExprError();
   }
@@ -2927,7 +2927,7 @@ ExprResult Sema::BuildCheriCast(SourceLocation LParenLoc,
   TypesCompatible = !Context.mergeTypes(SrcTy, DestTy, false, false, false, false).isNull();
 
   if (!TypesCompatible) {
-    Diag(SubExpr->getLocStart(), diag::err_cheri_cast_unrelated_type)
+    Diag(SubExpr->getLocStart(), diag::err_cheri_ptr_unrelated_type)
       << SrcTy << DestTy;
     return ExprError();
   }
@@ -2935,7 +2935,7 @@ ExprResult Sema::BuildCheriCast(SourceLocation LParenLoc,
   if (SrcIsCap && !DestIsCap) {
     Kind = CK_CHERICapabilityToPointer;
     assert(!Context.getTargetInfo().areAllPointersCapabilities() &&
-           "__cheri_cast to pointer should not be possible in purecap mode");
+           "__cheri_ptr to pointer should not be possible in purecap mode");
   } else if (DestIsCap && !SrcIsCap) {
     Kind = CK_PointerToCHERICapability;
   } else {
@@ -2945,7 +2945,7 @@ ExprResult Sema::BuildCheriCast(SourceLocation LParenLoc,
     if (Context.getTargetInfo().areAllPointersCapabilities()) {
       assert(SrcIsCap && DestIsCap);
     } else {
-      Diag(KeywordLoc, diag::warn_cheri_cast_noop) << SrcTy << DestTy
+      Diag(KeywordLoc, diag::warn_cheri_ptr_noop) << SrcTy << DestTy
         << FixItHint::CreateRemoval(SourceRange(LParenLoc, RParenLoc));
     }
   }
@@ -2953,12 +2953,12 @@ ExprResult Sema::BuildCheriCast(SourceLocation LParenLoc,
                                 nullptr, TSInfo, LParenLoc, RParenLoc);
 }
 
-ExprResult Sema::ActOnCheriCast(Scope *S, SourceLocation LParenLoc,
+ExprResult Sema::ActOnCheriPtr(Scope *S, SourceLocation LParenLoc,
                                 SourceLocation KeywordLoc, ParsedType Type,
                                 SourceLocation RParenLoc, Expr *SubExpr) {
   TypeSourceInfo *TSInfo = nullptr;
   QualType T = GetTypeFromParser(Type, &TSInfo);
   if (!TSInfo)
     TSInfo = Context.getTrivialTypeSourceInfo(T, LParenLoc);
-  return BuildCheriCast(LParenLoc, KeywordLoc, T, TSInfo, RParenLoc, SubExpr);
+  return BuildCheriPtr(LParenLoc, KeywordLoc, T, TSInfo, RParenLoc, SubExpr);
 }

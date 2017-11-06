@@ -3237,10 +3237,10 @@ def warn_impcast_objective_c_literal_to_bool : Warning<
 def warn_cast_align : Warning<
   "cast from %0 to %1 increases required alignment from %2 to %3">,
   InGroup<CastAlign>, DefaultIgnore;
-def err_cheri_cast_align : Error<
+def err_cheri_ptr_align : Error<
   "cast from %0 to %1 increases required alignment from %2 to %3">;
 // creating the right fixit replacement string is non-trivial, add a note instead
-def note_cheri_cast_align_fixit : Note<
+def note_cheri_ptr_align_fixit : Note<
   "use __builtin_assume_aligned(..., sizeof(void* __capability)) if you know "
   "that the source type is sufficiently aligned">;
 def warn_old_style_cast : Warning<
@@ -5987,10 +5987,10 @@ def warn_tautological_constant_compare : Warning<
 
 def err_typecheck_convert_cap_to_ptr: Error<"converting capability"
   "%select{| reference to}2 type %0 to non-capability type %1 without "
-  "an explicit cast; if this is intended use __cheri_cast">;
+  "an explicit cast; if this is intended use __cheri_ptr">;
 def err_typecheck_convert_ptr_to_cap: Error<"converting non-capability"
   "%select{| reference to}2 type %0 to capability type %1 without "
-  "an explicit cast; if this is intended use __cheri_cast">;
+  "an explicit cast; if this is intended use __cheri_ptr">;
 
 def warn_mixed_capability_binop : Warning<
   "binary expression on capability and non-capability types: %0 and %1.  "
@@ -6021,20 +6021,20 @@ def warn_capability_integer_cast : Warning<
   InGroup<CHERICapabilityToIntegerCast>, DefaultIgnore;
 def warn_capability_pointer_cast : Warning<
   "cast from capability type %0 to non-capability type %1 is most likely an "
-   "error; use __cheri_cast to convert between pointers and capabilities">,
+   "error; use __cheri_ptr to convert between pointers and capabilities">,
   InGroup<CHERICaps>, DefaultError;
 def note_insert_intptr_fixit : Note<
   "insert cast to intptr_t to silence this warning">;
-def err_cheri_cast_unrelated_type : Error<
-  "invalid __cheri_cast from %0 to unrelated type %1">;
-def err_cheri_cast_invalid_target_type: Error<
-  "invalid target type %0 for __cheri_cast: target must be a capability or "
+def err_cheri_ptr_unrelated_type : Error<
+  "invalid __cheri_ptr from %0 to unrelated type %1">;
+def err_cheri_ptr_invalid_target_type: Error<
+  "invalid target type %0 for __cheri_ptr: target must be a capability or "
   "a pointer">;
-def err_cheri_cast_invalid_source_type: Error<
-  "invalid source type %0 for __cheri_cast: source must be a capability or "
+def err_cheri_ptr_invalid_source_type: Error<
+  "invalid source type %0 for __cheri_ptr: source must be a capability or "
   "a pointer">;
-def warn_cheri_cast_noop : Warning<
-  "__cheri_cast from %0 to %1 is a noop">,
+def warn_cheri_ptr_noop : Warning<
+  "__cheri_ptr from %0 to %1 is a noop">,
 // XXXAR: not sure how to add a new CHERIPedantic group
 //  InGroup<CHERIPedantic>;
   InGroup<Pedantic>, DefaultIgnore;

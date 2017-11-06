@@ -9,8 +9,8 @@
 #error "memory_address attribute not supported"
 #endif
 
-#if !__has_extension(__cheri_cast)
-#error "__cheri_cast feature should exist"
+#if !__has_extension(__cheri_ptr)
+#error "__cheri_ptr feature should exist"
 #endif
 
 
@@ -122,29 +122,29 @@ void foo(void) {
 #endif
 }
 
-void test_cheri_cast(void) {
-  // __cheri_cast is a noop in pure ABI (but we still validate the parameter types)
+void test_cheri_ptr(void) {
+  // __cheri_ptr is a noop in pure ABI (but we still validate the parameter types)
   char c;
   struct test t;
   struct test *tptr;
   int * x = 0;
-  (__cheri_cast char*)x;
+  (__cheri_ptr char*)x;
 #ifndef __CHERI_PURE_CAPABILITY__
-  // expected-error@-2{{invalid __cheri_cast from 'int *' to unrelated type 'char *'}}
+  // expected-error@-2{{invalid __cheri_ptr from 'int *' to unrelated type 'char *'}}
 #else
-  // expected-error@-4{{invalid __cheri_cast from 'int * __capability' to unrelated type 'char * __capability'}}
+  // expected-error@-4{{invalid __cheri_ptr from 'int * __capability' to unrelated type 'char * __capability'}}
 #endif
-  (__cheri_cast struct test*)t; // expected-error{{invalid source type 'struct test' for __cheri_cast: source must be a capability or a pointer}}
-  (__cheri_cast struct test)tptr; // expected-error{{invalid target type 'struct test' for __cheri_cast: target must be a capability or a pointer}}
-  (void)(__cheri_cast struct test*)tptr;
+  (__cheri_ptr struct test*)t; // expected-error{{invalid source type 'struct test' for __cheri_ptr: source must be a capability or a pointer}}
+  (__cheri_ptr struct test)tptr; // expected-error{{invalid target type 'struct test' for __cheri_ptr: target must be a capability or a pointer}}
+  (void)(__cheri_ptr struct test*)tptr;
 #ifndef __CHERI_PURE_CAPABILITY__
-  // expected-warning@-2 {{__cheri_cast from 'struct test *' to 'struct test *' is a noop}}
+  // expected-warning@-2 {{__cheri_ptr from 'struct test *' to 'struct test *' is a noop}}
 #endif
 
-  int* __capability intptr_to_cap = (__cheri_cast int* __capability)x;
+  int* __capability intptr_to_cap = (__cheri_ptr int* __capability)x;
   // AST: CStyleCastExpr {{.+}} 'int * __capability' <PointerToCHERICapability>
-  const int* __capability const_intcap = (__cheri_cast int* __capability)x;
+  const int* __capability const_intcap = (__cheri_ptr int* __capability)x;
   // AST: ImplicitCastExpr {{.+}} 'const int * __capability' <BitCast>
   // AST-NEXT: CStyleCastExpr {{.+}} 'int * __capability' <PointerToCHERICapability>
-  (__cheri_cast int* __capability)const_intcap; // expected-error{{invalid __cheri_cast from 'const int * __capability' to unrelated type 'int * __capability'}}
+  (__cheri_ptr int* __capability)const_intcap; // expected-error{{invalid __cheri_ptr from 'const int * __capability' to unrelated type 'int * __capability'}}
 }

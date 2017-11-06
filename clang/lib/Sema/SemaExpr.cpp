@@ -13530,7 +13530,7 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
         : diag::err_typecheck_convert_ptr_to_cap;
     MayHaveConvFixit = true;
     isInvalid = true;
-    Hint = FixItHint::CreateInsertion(SrcExpr->getLocStart(), "(__cheri_cast " +
+    Hint = FixItHint::CreateInsertion(SrcExpr->getLocStart(), "(__cheri_ptr " +
                                       DstType.getAsString() + ")");
     Diag(Loc, DiagKind) << SrcType << DstType << false << Hint;
     return true;

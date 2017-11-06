@@ -7820,7 +7820,7 @@ bool InitializationSequence::Diagnose(Sema &S,
     }
 
     S.Diag(Kind.getLocation(), DiagID) << FromType << DestType << PrintRefInMessage
-      << FixItHint::CreateInsertion(Kind.getLocation(), "(__cheri_cast " +
+      << FixItHint::CreateInsertion(Kind.getLocation(), "(__cheri_ptr " +
                                     DestType.getAsString() + ")");
     break;
   }

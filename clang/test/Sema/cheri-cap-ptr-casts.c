@@ -10,12 +10,12 @@ void f() {
 void g() {
   char * __capability x;
   // CHECK: CStyleCastExpr {{.*}} {{.*}} 'char *' <CHERICapabilityToPointer>
-  char *y = (__cheri_cast char *)x;
+  char *y = (__cheri_ptr char *)x;
 }
 
 void h() {
   char *x;
   // CHECK: CStyleCastExpr {{.*}} {{.*}} 'char * __capability' <PointerToCHERICapability>
-  char * __capability y = (__cheri_cast char * __capability)x;
+  char * __capability y = (__cheri_ptr char * __capability)x;
 }
 #endif

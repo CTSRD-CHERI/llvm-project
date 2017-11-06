@@ -101,8 +101,8 @@ void test_cap_conversion_still_fails() {
       mut_back[ 0], mut_back[ 1], mut_back[ 2], mut_back[ 3]
   };
 #ifndef __CHERI_PURE_CAPABILITY__
-  // expected-error@-7 4 {{converting non-capability type '__libcpp_mutex_t *' (aka 'pthread_mutex **') to capability type 'void * __capability' without an explicit cast; if this is intended use __cheri_cast}}
+  // expected-error@-7 4 {{converting non-capability type '__libcpp_mutex_t *' (aka 'pthread_mutex **') to capability type 'void * __capability' without an explicit cast; if this is intended use __cheri_ptr}}
   // expected-note@-14 4 {{passing argument to parameter here}}
-  // expected-error@-5 4 {{converting non-capability type '__libcpp_mutex_t' (aka 'pthread_mutex *') to capability type 'pthread_mutex * __capability' without an explicit cast; if this is intended use __cheri_cast}}
+  // expected-error@-5 4 {{converting non-capability type '__libcpp_mutex_t' (aka 'pthread_mutex *') to capability type 'pthread_mutex * __capability' without an explicit cast; if this is intended use __cheri_ptr}}
 #endif
 }
