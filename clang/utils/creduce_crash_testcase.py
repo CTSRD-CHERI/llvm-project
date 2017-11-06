@@ -61,10 +61,32 @@ class ReduceTool(metaclass=ABCMeta):
         for cmd in self.run_cmds:
             # check for %s should have happened earlier
             assert "%s" in cmd, cmd
+            # Undo the lit substitutions
             compiler_cmd = cmd.replace("%clang_cc1 ", str(self.args.clang_cmd) + " -cc1 ")
             compiler_cmd = compiler_cmd.replace("%clang ", str(self.args.clang_cmd) + " ")
+            cheri_cc1_triple = " -cc1 -triple cheri-unknown-freebsd "
+            compiler_cmd = compiler_cmd.replace("%cheri_cc1 ", str(self.args.clang_cmd) + cheri_cc1_triple)
+            compiler_cmd = compiler_cmd.replace("%cheri128_cc1 ", str(self.args.clang_cmd) + cheri_cc1_triple +
+                                                "-target-cpu cheri128 ")
+            compiler_cmd = compiler_cmd.replace("%cheri256_cc1 ", str(self.args.clang_cmd) + cheri_cc1_triple +
+                                                "-target-cpu cheri256 ")
+            compiler_cmd = compiler_cmd.replace("%cheri_purecap_cc1 ", str(self.args.clang_cmd) + cheri_cc1_triple +
+                                                "-target-abi purecap ")
+            # llc substitutions:
             if "llc" in compiler_cmd:
                 compiler_cmd = re.sub(r"\bllc\b", " " + str(self.args.llc_cmd) + " ", compiler_cmd)
+            compiler_cmd = compiler_cmd.replace("%cheri128_llc ", str(self.args.llc_cmd) +
+                                                " -mtriple=cheri-unknown-freebsd -mcpu=cheri128")
+            compiler_cmd = compiler_cmd.replace("%cheri256_llc ", str(self.args.llc_cmd) +
+                                                " -mtriple=cheri-unknown-freebsd -mcpu=cheri256")
+            compiler_cmd = compiler_cmd.replace("%cheri_llc ", str(self.args.llc_cmd) +
+                                                " -mtriple=cheri-unknown-freebsd")
+            # opt substitutions
+            if "opt" in compiler_cmd:
+                compiler_cmd = re.sub(r"\opt\b", " " + str(self.args.opt_cmd) + " ", compiler_cmd)
+            compiler_cmd = compiler_cmd.replace("%cheri_opt ", str(self.args.opt_cmd) +
+                                                " -mtriple=cheri-unknown-freebsd")
+
             # ignore all the piping to FileCheck parts of the command
             if "|" in compiler_cmd:
                 compiler_cmd = compiler_cmd[0:compiler_cmd.find("|")]
