@@ -49,7 +49,7 @@ StringRef MIPS_MC::selectMipsCPU(const Triple &TT, StringRef CPU) {
     if (TT.getArch() == Triple::mips || TT.getArch() == Triple::mipsel)
       CPU = "mips32";
     else if (TT.getArch() == Triple::cheri)
-      CPU = "cheri";
+      CPU = "cheri128";
     else
       CPU = "mips64";
   }
