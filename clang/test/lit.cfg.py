@@ -129,6 +129,7 @@ clang_cc1_args = ['-cc1', '-internal-isystem',
 cheri128_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu', 'cheri128']
 cheri256_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu', 'cheri']
 purecap_cc1_args  = ['-triple', 'cheri-unknown-freebsd', '-target-abi', 'purecap']
+cheri_cc1_args = cheri128_cc1_args
 
 tools = [
     # By specifying %clang_cc1 as part of the substitution, this substitution
