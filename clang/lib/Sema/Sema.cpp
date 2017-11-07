@@ -517,6 +517,17 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
     }
   }
 
+  if (const PointerType *EPTy = dyn_cast<PointerType>(ExprTy)) {
+    if (const PointerType *TPTy = dyn_cast<PointerType>(TypeTy)) {
+      if (!EPTy->isCHERICapability() && TPTy->isCHERICapability()) {
+        return ExprError(Diag(E->getExprLoc(), diag::err_typecheck_convert_ptr_to_cap)
+          << ExprTy << TypeTy << false
+          << FixItHint::CreateInsertion(E->getExprLoc(), "(__cheri_cast " +
+                                        TypeTy.getAsString() + ")"));
+      }
+    }
+  }
+
   return ImplicitCastExpr::Create(Context, Ty, Kind, E, BasePath, VK);
 }
 
