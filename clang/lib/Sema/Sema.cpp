@@ -517,9 +517,12 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
     }
   }
 
+  // Disallow implicit casts from pointers to CHERI capabilities, 
+  // except if the pointer is a string literal.
   if (const PointerType *EPTy = dyn_cast<PointerType>(ExprTy)) {
     if (const PointerType *TPTy = dyn_cast<PointerType>(TypeTy)) {
-      if (!EPTy->isCHERICapability() && TPTy->isCHERICapability()) {
+      bool StrLit = dyn_cast<StringLiteral>(E->IgnoreImpCasts()) != nullptr;
+      if (!EPTy->isCHERICapability() && !StrLit && TPTy->isCHERICapability()) {
         return ExprError(Diag(E->getExprLoc(), diag::err_typecheck_convert_ptr_to_cap)
           << ExprTy << TypeTy << false
           << FixItHint::CreateInsertion(E->getExprLoc(), "(__cheri_cast " +
