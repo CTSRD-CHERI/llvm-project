@@ -17,7 +17,7 @@ void test_cap_to_ptr(void* __capability a) {
   struct foo f2;
   f2 = (struct foo){a, NULL}; // this is fine
   f2 = (struct foo){a, a}; // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
-  struct foo f3 = {NULL, NULL};
+  struct foo f3 = {NULL, NULL}; // expected-error {{converting non-capability type 'void *' to capability type 'void * __capability'}}
 
   // C99 designated initializer:
   struct foo f4 = { .cap = a, .ptr = NULL};
@@ -34,11 +34,12 @@ void test_arrays(void* __capability cap) {
   // TODO: this should probably warn about pointer -> cap conversion
 
   void* __capability cap_array[3] = { NULL, cap, ptr };  // expected-error {{converting non-capability type 'int *' to capability type 'void * __capability' without an explicit cast}}
+  // expected-error@-1 {{converting non-capability type 'void *' to capability type 'void * __capability'}}
 
   struct foo foo_array[5] = {
       {cap, NULL}, // no-error
       {cap, cap}, // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
-      {.cap = NULL, .ptr = NULL}, // no-error
+      {.cap = NULL, .ptr = NULL}, // expected-error {{converting non-capability type 'void *' to capability type 'void * __capability'}}
       [4] = {.cap = cap, .ptr = cap} // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
   };
 }
