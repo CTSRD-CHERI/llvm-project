@@ -2235,6 +2235,9 @@ bool Generic_GCC::IsIntegratedAssemblerDefault() const {
     if (getTriple().getEnvironment() == llvm::Triple::GNUABI64 ||
         getTriple().isAndroid())
       return true;
+    // Also use the integrated assembler when targetting FreeBSD
+    if (getTriple().getOS() == llvm::Triple::FreeBSD)
+      return true;
     return false;
   default:
     return false;

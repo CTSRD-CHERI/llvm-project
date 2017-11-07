@@ -1,7 +1,7 @@
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm \
 // RUN:  -fdump-record-layouts -verify %s -o /dev/null
 // RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm \
-// RUN:  -fdump-record-layouts %s -o /dev/null 2>&1 | FileCheck %s
+// RUN:  -fdump-record-layouts %s -o /dev/null 2>&1 | %cheri_FileCheck %s
 // expected-no-diagnostics
 
 // CHECK:     *** Dumping AST Record Layout
@@ -14,7 +14,7 @@
 // CHECK:     *** Dumping AST Record Layout
 // CHECK-NEXT:  0 | class Foo
 // CHECK-NEXT:  0 |   class A & __capability _a
-// CHECK-NEXT:    | [sizeof=[[$CAP_SIZE:16|32]],
+// CHECK-NEXT:    | [sizeof=[[$CAP_SIZE]],
 // CHECK-SAME:       dsize=[[$CAP_SIZE]], align=[[$CAP_SIZE]],
 // CHECK-NEXT:    |  nvsize=[[$CAP_SIZE]], nvalign=[[$CAP_SIZE]]]
 

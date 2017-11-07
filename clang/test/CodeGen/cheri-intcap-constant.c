@@ -1,6 +1,6 @@
-// RUN: %cheri_cc1 -emit-llvm -o - %s | FileCheck %s
-// RUN: %cheri_purecap_cc1 -emit-llvm -o - %s -no-cheri-linker | FileCheck -check-prefix PURECAP-NOLINKER %s
-// RUN: %cheri_purecap_cc1 -emit-llvm -o - %s | FileCheck -check-prefix PURECAP %s
+// RUN: %cheri_cc1 -emit-llvm -o - %s | %cheri_FileCheck %s
+// RUN: %cheri_purecap_cc1 -emit-llvm -o - %s -no-cheri-linker | %cheri_FileCheck -check-prefix PURECAP-NOLINKER %s
+// RUN: %cheri_purecap_cc1 -emit-llvm -o - %s | %cheri_FileCheck -check-prefix PURECAP %s
 
 
 
@@ -24,12 +24,12 @@ const void* foo4 = (void*)(long)&i;
 // CHECK: @foo4 = global i8* bitcast (i32* @i to i8*), align 8
 
 // PURECAP: @i = common addrspace(200) global i32 0, align 4
-// PURECAP: @foo  = addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), align [[$CAP_SIZE:16|32]]
+// PURECAP: @foo  = addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), align [[$CAP_SIZE]]
 // PURECAP: @foo1 = addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), align [[$CAP_SIZE]]
 // PURECAP: @foo2 = addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), align [[$CAP_SIZE]]
 // PURECAP: @foo3 = addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), align [[$CAP_SIZE]]
 
-// PURECAP-NOLINKER: store i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* @foo, align [[$CAP_SIZE:16|32]]
+// PURECAP-NOLINKER: store i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* @foo, align [[$CAP_SIZE]]
 // PURECAP-NOLINKER: store i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* @foo1, align [[$CAP_SIZE]]
 // PURECAP-NOLINKER: store i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* @foo2, align [[$CAP_SIZE]]
 // PURECAP-NOLINKER: store i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* @foo3, align [[$CAP_SIZE]]

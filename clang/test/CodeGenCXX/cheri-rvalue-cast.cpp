@@ -1,7 +1,7 @@
 // taken from temporaries.cpp (which crashed when run with target cheri)
 
 // RUN: %clang_cc1 -fno-rtti -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -DCHECK_ERROR -fsyntax-only -verify %s
-// RUN: %clang_cc1 -fno-rtti -emit-llvm %s -o - -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 | FileCheck %s
+// RUN: %clang_cc1 -fno-rtti -emit-llvm %s -o - -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 | %cheri_FileCheck %s
 
 
 namespace PR20227 {
@@ -10,7 +10,7 @@ namespace PR20227 {
   struct C : B {};
 
   A &&a = dynamic_cast<A&&>(A{});  // this is valid even with -fno-rtti as it only does lifetime extension
-  // CHECK: @_ZN7PR202271aE = addrspace(200) global %"struct.PR20227::A" addrspace(200)* null, align [[$CAP_SIZE:16|32]]
+  // CHECK: @_ZN7PR202271aE = addrspace(200) global %"struct.PR20227::A" addrspace(200)* null, align [[$CAP_SIZE]]
   // CHECK: @_ZGRN7PR202271aE_ = internal addrspace(200) global %"struct.PR20227::A" zeroinitializer, align 1
 
 #ifdef CHECK_ERROR

@@ -1,16 +1,16 @@
-// RUN: %cheri256_cc1 -target-abi purecap -std=c11 -O2 -emit-llvm -o - %s | FileCheck %s -enable-var-scope
-// RUN: %cheri128_cc1 -target-abi purecap -std=c11 -O2 -emit-llvm -o - %s | FileCheck %s -enable-var-scope
-// RUN: %cheri256_cc1 -target-abi purecap -std=c11 -O2 -S -o - %s | FileCheck -check-prefix=ASM %s
-// RUN: %cheri128_cc1 -target-abi purecap -std=c11 -O2 -S -o - %s | FileCheck -check-prefix=ASM %s
+// RUN: %cheri256_cc1 -target-abi purecap -std=c11 -O2 -emit-llvm -o - %s | FileCheck -D\$CAP_SIZE=32 %s -enable-var-scope
+// RUN: %cheri128_cc1 -target-abi purecap -std=c11 -O2 -emit-llvm -o - %s | FileCheck -D\$CAP_SIZE=16 %s -enable-var-scope
+// RUN: %cheri256_cc1 -target-abi purecap -std=c11 -O2 -S -o - %s | FileCheck -D\$CAP_SIZE=32 -check-prefix=ASM %s
+// RUN: %cheri128_cc1 -target-abi purecap -std=c11 -O2 -S -o - %s | FileCheck -D\$CAP_SIZE=16 -check-prefix=ASM %s
 int global;
 
 unsigned long sizeof_cap(void) {
   return sizeof(void* __capability);
   // CHECK-LABEL: define i64 @sizeof_cap() local_unnamed_addr
-  // CHECK: ret i64 [[$CAP_SIZE:16|32]]
+  // CHECK: ret i64 [[$CAP_SIZE]]
   // ASM-LABEL: sizeof_cap
   // ASM: cjr     $c17
-  // ASM: daddiu   $2, $zero, [[$CAP_SIZE:16|32]]
+  // ASM: daddiu   $2, $zero, [[$CAP_SIZE]]
 }
 
 typedef struct {

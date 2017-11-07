@@ -61,10 +61,32 @@ class ReduceTool(metaclass=ABCMeta):
         for cmd in self.run_cmds:
             # check for %s should have happened earlier
             assert "%s" in cmd, cmd
+            # Undo the lit substitutions
             compiler_cmd = cmd.replace("%clang_cc1 ", str(self.args.clang_cmd) + " -cc1 ")
             compiler_cmd = compiler_cmd.replace("%clang ", str(self.args.clang_cmd) + " ")
+            cheri_cc1_triple = " -cc1 -triple cheri-unknown-freebsd "
+            compiler_cmd = compiler_cmd.replace("%cheri_cc1 ", str(self.args.clang_cmd) + cheri_cc1_triple)
+            compiler_cmd = compiler_cmd.replace("%cheri128_cc1 ", str(self.args.clang_cmd) + cheri_cc1_triple +
+                                                "-target-cpu cheri128 ")
+            compiler_cmd = compiler_cmd.replace("%cheri256_cc1 ", str(self.args.clang_cmd) + cheri_cc1_triple +
+                                                "-target-cpu cheri256 ")
+            compiler_cmd = compiler_cmd.replace("%cheri_purecap_cc1 ", str(self.args.clang_cmd) + cheri_cc1_triple +
+                                                "-target-abi purecap ")
+            # llc substitutions:
             if "llc" in compiler_cmd:
                 compiler_cmd = re.sub(r"\bllc\b", " " + str(self.args.llc_cmd) + " ", compiler_cmd)
+            compiler_cmd = compiler_cmd.replace("%cheri128_llc ", str(self.args.llc_cmd) +
+                                                " -mtriple=cheri-unknown-freebsd -mcpu=cheri128")
+            compiler_cmd = compiler_cmd.replace("%cheri256_llc ", str(self.args.llc_cmd) +
+                                                " -mtriple=cheri-unknown-freebsd -mcpu=cheri256")
+            compiler_cmd = compiler_cmd.replace("%cheri_llc ", str(self.args.llc_cmd) +
+                                                " -mtriple=cheri-unknown-freebsd")
+            # opt substitutions
+            if "opt" in compiler_cmd:
+                compiler_cmd = re.sub(r"\opt\b", " " + str(self.args.opt_cmd) + " ", compiler_cmd)
+            compiler_cmd = compiler_cmd.replace("%cheri_opt ", str(self.args.opt_cmd) +
+                                                " -mtriple=cheri-unknown-freebsd")
+
             # ignore all the piping to FileCheck parts of the command
             if "|" in compiler_cmd:
                 compiler_cmd = compiler_cmd[0:compiler_cmd.find("|")]
@@ -433,6 +455,7 @@ class Reducer(object):
         if self.args.reduce_tool == "noop":
             if proc_info is not None:
                 proc_info["stderr"] = b"Assertion `noop' failed."
+            print(green(" yes"))
             return True
         proc = subprocess.run(full_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         # treat fatal llvm errors (cannot select, etc) as crashes too:
@@ -494,26 +517,22 @@ class Reducer(object):
     def _infer_crash_message(stderr: bytes):
         if not stderr:
             return None
+        regexes = [re.compile(s) for s in (
+            r"Assertion `(.+)' failed.",  # Linux assert()
+            r"Assertion failed: \(.+\),",  # FreeBSD/Mac assert()
+            r"UNREACHABLE executed( at .+)?!"  # llvm_unreachable()
+            # generic code gen crashes (at least creduce will keep the function name):
+            r"LLVM IR generation of declaration '(.+)'",
+            r"Generating code for declaration '(.+)'",
+            # error in backend:
+            r"fatal error: error in backend:(.+)"
+        )]
         for line in stderr.decode("utf-8").splitlines():
             # Check for failed assertions:
-            match = re.search(r"Assertion `(.+)' failed.", line)
-            if match:
-                return match.group(1)
-            # check for llvm_unreachable
-            match = re.search(r"UNREACHABLE executed( at .+)?!", line)
-            if match:
-                return match.group(0)
-            # generic code gen crashes (at least creduce will keep the function name):
-            match = re.search(r"LLVM IR generation of declaration '(.+)'", line)
-            if match:
-                return match.group(0)
-            match = re.search(r"Generating code for declaration '(.+)'", line)
-            if match:
-                return match.group(0)
-            match = re.search(r"fatal error: error in backend:(.+)", line)
-            if match:
-                return match.group(0)
-
+            for r in regexes:
+                match = r.search(line)
+                if match:
+                    return match.group(0)
         return None
 
     def _simplify_crash_command(self, command: list, infile: Path) -> tuple:
@@ -557,6 +576,34 @@ class Reducer(object):
             noargs_opts_to_remove=["-dwarf-column-info"],
             noargs_opts_to_remove_startswith=["-debug-info-kind=", "-dwarf-version=", "-debugger-tuning="],
         )
+        # try emitting llvm-ir (i.e. frontend bug):
+        print("Checking whether -O0 -emit-llvm crashes:", end="", flush=True)
+        generate_ir_cmd = new_command + ["-O0", "-emit-llvm"]
+        if "-emit-obj" in generate_ir_cmd:
+            generate_ir_cmd.remove("-emit-obj")
+        if False and self._check_crash(generate_ir_cmd, infile):
+            new_command = generate_ir_cmd
+            print("Must be a", blue("frontend crash.", style="bold"), "Will need to use creduce for test case reduction")
+            return self._simplify_frontend_crash_cmd(new_command, infile)
+        else:
+            print("Must be a ", blue("backend crash", style="bold"), ", ", end="", sep="")
+            if self.args.reduce_tool == "creduce":
+                print("but reducing with creduce requested. Will not try to convert to a bugpoint test case")
+                return self._simplify_frontend_crash_cmd(new_command, infile)
+            else:
+                print("will try to use bugpoint.")
+                return self._simplify_backend_crash_cmd(new_command, infile, full_cmd)
+
+    def _simplify_frontend_crash_cmd(self, new_command: list, infile: Path):
+        print("Checking whether compiling without warnings crashes:", end="", flush=True)
+        no_warnings_cmd = self._filter_args(new_command, noargs_opts_to_remove=["-w"],
+                                            noargs_opts_to_remove_startswith=["-W"])
+        no_warnings_cmd.append("-w")  # disable all warnigns
+        no_warnings_cmd.append("-Werror=implicit-int")
+        if self._check_crash(no_warnings_cmd, infile):
+            new_command = no_warnings_cmd[:-2]
+        new_command.append("-Werror=implicit-int")
+
         # check if floating point args are relevant
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without floating point arguments crashes:",
@@ -602,36 +649,9 @@ class Reducer(object):
                 new_command, infile, "Checking whether compiling without -disable-llvm-verifier crashes:",
                 noargs_opts_to_remove=["-disable-llvm-verifier"])
 
-        # try emitting llvm-ir (i.e. frontend bug):
-        print("Checking whether -O0 -emit-llvm crashes:", end="", flush=True)
-        generate_ir_cmd = new_command + ["-O0", "-emit-llvm"]
-        if "-emit-obj" in generate_ir_cmd:
-            generate_ir_cmd.remove("-emit-obj")
-        if self._check_crash(generate_ir_cmd, infile):
-            new_command = generate_ir_cmd
-            print("Must be a", blue("frontend crash.", style="bold"), "Will need to use creduce for test case reduction")
-            return self._simplify_frontend_crash_cmd(new_command, infile)
-        else:
-            print("Must be a ", blue("backend crash", style="bold"), ", ", end="", sep="")
-            if self.args.reduce_tool == "creduce":
-                print("but reducing with creduce requested. Will not try to convert to a bugpoint test case")
-                return self._simplify_frontend_crash_cmd(new_command, infile)
-            else:
-                print("will try to use bugpoint.")
-                return self._simplify_backend_crash_cmd(new_command, infile, full_cmd)
-
-    def _simplify_frontend_crash_cmd(self, command: list, infile: Path):
-        print("Checking whether compiling without warnings crashes:", end="", flush=True)
-        no_warnings_cmd = self._filter_args(command, noargs_opts_to_remove=["-w"],
-                                            noargs_opts_to_remove_startswith=["-W"])
-        no_warnings_cmd.append("-w")  # disable all warnigns
-        no_warnings_cmd.append("-Werror=implicit-int")
-        if self._check_crash(no_warnings_cmd, infile):
-            command = no_warnings_cmd[:-2]
-        command.append("-Werror=implicit-int")
         # try to remove some arguments that should not be needed
-        command = self._try_remove_args(
-            command, infile, "Checking whether misc diagnostic options can be removed:",
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether misc diagnostic options can be removed:",
             noargs_opts_to_remove=["-disable-free", "-discard-value-names", "-masm-verbose",
                                    "-mconstructor-aliases"],
             noargs_opts_to_remove_startswith=["-fdiagnostics-", "-fobjc-runtime="],
@@ -640,11 +660,11 @@ class Reducer(object):
 
         # TODO: try removing individual -mllvm options such as mxgot, etc.?
         # add the placeholders for the RUN: line
-        command[0] = "%clang"
-        if command[1] == "-cc1":
-            del command[1]
-            command[0] = "%clang_cc1"
-        return command, infile
+        new_command[0] = "%clang"
+        if new_command[1] == "-cc1":
+            del new_command[1]
+            new_command[0] = "%clang_cc1"
+        return new_command, infile
 
     def _simplify_backend_crash_cmd(self, new_command: list, infile: Path, full_cmd: list):
         # TODO: convert it to a llc commandline and use bugpoint
@@ -667,7 +687,12 @@ class Reducer(object):
             die("IR file was not generated?")
         llc_args = [str(self.options.llc_cmd), "-O3", "-o", "/dev/null"]  # TODO: -o -?
         cpu_flag = None  # -mcpu= only allowed once!
+        pass_once_flags = set()
+        skip_next = False
         for i, arg in enumerate(command):
+            if skip_next:
+                skip_next = False
+                continue
             if arg == "-triple" or arg == "-target":
                 # assume well formed command line
                 llc_args.append("-mtriple=" + command[i + 1])
@@ -678,26 +703,33 @@ class Reducer(object):
                     cpu_flag = "-mcpu=cheri128"
                     llc_args.append("-mattr=+cheri128")
                 else:
-                    llc_args.append(llvm_flag)
+                    pass_once_flags.add(llvm_flag)
+                skip_next = True
             elif arg == "-target-abi":
                 llc_args.append("-target-abi")
                 llc_args.append(command[i + 1])
+                skip_next = True
             elif arg == "-target-cpu":
-                cpu_flag = command[i + 1]
+                cpu_flag = "-mcpu=" + command[i + 1]
+                skip_next = True
             elif arg == "-target-feature":
                 llc_args.append("-mattr=" + command[i + 1])
+                skip_next = True
             elif arg == "-mrelocation-model":
                 llc_args.append("-relocation-model=" + command[i + 1])
+                skip_next = True
             elif arg == "-mthread-model":
                 llc_args.append("-thread-model=" + command[i + 1])
+                skip_next = True
             elif arg == "-msoft-float":
                 llc_args.append("-float-abi=soft")
             elif arg.startswith("-vectorize"):
                 llc_args.append(arg)
             elif arg == "-mxgot":
-                llc_args.append(arg)  # some bugs only happen if mxgot is also passed
+                pass_once_flags.add(arg)  # some bugs only happen if mxgot is also passed
         if cpu_flag:
             llc_args.append(cpu_flag)
+        llc_args.extend(pass_once_flags)
         print("Checking whether compiling IR file with llc crashes:", end="", flush=True)
         llc_info = dict()
         if self._check_crash(llc_args, irfile, llc_info):
@@ -705,7 +737,7 @@ class Reducer(object):
             self.reduce_tool = RunBugpoint(self.options)
             llc_args[0] = "llc"
             return llc_args, irfile
-        print("Compiling IR file with llc did not reproduce crash. Stderr was:", llc_info["stderr"])
+        print("Compiling IR file with llc did not reproduce crash. Stderr was:", llc_info["stderr"].decode("utf-8"))
         print("Checking whether compiling IR file with opt crashes:", end="", flush=True)
         opt_args = llc_args.copy()
         opt_args[0] = str(self.options.opt_cmd)
@@ -718,12 +750,22 @@ class Reducer(object):
             self.reduce_tool = RunBugpoint(self.options)
             opt_args[0] = "opt"
             return opt_args, irfile
-        else:
-            print("Compiling IR file with opt did not reproduce crash. Stderr was:", opt_info["stderr"])
-            print("No crash found with llc or opt! Possibly needs some special argument passed or crash",
-                  "only happens when invoking clang -> using creduce.")
-            self.reduce_tool = RunCreduce(self.options)
-            return self._simplify_frontend_crash_cmd(new_command, infile)
+        print("Compiling IR file with opt did not reproduce crash. Stderr was:", opt_info["stderr"].decode("utf-8"))
+
+        print("Checking whether compiling IR file with clang crashes:", end="", flush=True)
+        clang_info = dict()
+        bugpoint_clang_cmd = self._filter_args(full_cmd, noargs_opts_to_remove_startswith=["-xc", "-W", "-std="],
+                                               one_arg_opts_to_remove=["-D", "-x", "-main-file-name"])
+        bugpoint_clang_cmd.extend(["-x", "ir"])
+        if self._check_crash(bugpoint_clang_cmd, irfile, clang_info):
+            print("Crash found compiling IR with clang -> using bugpoint which is faster than creduce.")
+            self.reduce_tool = RunBugpoint(self.options)
+            full_cmd[0] = "%clang"
+            return bugpoint_clang_cmd, irfile
+        print("Compiling IR file with clang did not reproduce crash. Stderr was:", clang_info["stderr"].decode("utf-8"))
+        print(red("No crash found compiling the IR! Possibly crash only happens when invoking clang -> using creduce."))
+        self.reduce_tool = RunCreduce(self.options)
+        return self._simplify_frontend_crash_cmd(new_command, infile)
 
     def _parse_test_case(self, f):
         # test case: just search for RUN: lines
