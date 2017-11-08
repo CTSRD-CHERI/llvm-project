@@ -108,4 +108,9 @@ int main()
     test<__int128_t>();
     test<__uint128_t>();
 #endif
+
+#if defined(__CHERI__) && !defined(__CHERI_PURE_CAPABILITY__)
+  test<__intcap_t>();
+  test<__uintcap_t>();
+#endif
 }

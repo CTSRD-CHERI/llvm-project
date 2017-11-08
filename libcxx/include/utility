@@ -1559,6 +1559,28 @@ struct _LIBCPP_TEMPLATE_VIS hash<nullptr_t>
 };
 #endif
 
+#ifdef __CHERI__
+template <>
+struct hash<__intcap_t>
+	: public unary_function<__intcap_t, size_t>
+{
+	_LIBCPP_INLINE_VISIBILITY
+	size_t operator()(__intcap_t x) const _NOEXCEPT {
+		return hash<vaddr_t>()(static_cast<vaddr_t>(x));
+	}
+};
+
+template <>
+struct hash<__uintcap_t>
+	: public unary_function<__uintcap_t, size_t>
+{
+	_LIBCPP_INLINE_VISIBILITY
+	size_t operator()(__uintcap_t x) const _NOEXCEPT {
+		return hash<vaddr_t>()(static_cast<vaddr_t>(x));
+	}
+};
+#endif
+
 #ifndef _LIBCPP_CXX03_LANG
 template <class _Key, class _Hash>
 using __check_hash_requirements = integral_constant<bool,
