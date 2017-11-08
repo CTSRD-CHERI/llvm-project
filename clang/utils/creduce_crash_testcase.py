@@ -8,6 +8,7 @@ import shutil
 import shlex
 import subprocess
 import sys
+import resource
 from abc import ABCMeta, abstractmethod
 from enum import Enum
 from pathlib import Path
@@ -840,6 +841,8 @@ def main():
         argcomplete.autocomplete(parser)
     except ImportError:
         pass
+    # Disable coredumps to avoid filling up disk space:
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     Reducer(parser).run()
 
 
