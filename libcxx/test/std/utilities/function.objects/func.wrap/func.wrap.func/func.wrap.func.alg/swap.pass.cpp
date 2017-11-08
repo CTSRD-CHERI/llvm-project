@@ -69,13 +69,17 @@ int main()
 #endif
     assert(A::count == 2);
     assert(globalMemCounter.checkOutstandingNewEq(2));
+#ifndef _LIBCPP_NO_RTTI
     assert(f1.target<A>()->id() == 1);
     assert(f2.target<A>()->id() == 2);
+#endif
     swap(f1, f2);
     assert(A::count == 2);
     assert(globalMemCounter.checkOutstandingNewEq(2));
+#ifndef _LIBCPP_NO_RTTI
     assert(f1.target<A>()->id() == 2);
     assert(f2.target<A>()->id() == 1);
+#endif
     }
     assert(A::count == 0);
     assert(globalMemCounter.checkOutstandingNewEq(0));
@@ -87,13 +91,17 @@ int main()
 #endif
     assert(A::count == 1);
     assert(globalMemCounter.checkOutstandingNewEq(1));
+#ifndef _LIBCPP_NO_RTTI
     assert(f1.target<A>()->id() == 1);
     assert(*f2.target<int(*)(int)>() == g);
+#endif
     swap(f1, f2);
     assert(A::count == 1);
     assert(globalMemCounter.checkOutstandingNewEq(1));
+#ifndef _LIBCPP_NO_RTTI
     assert(*f1.target<int(*)(int)>() == g);
     assert(f2.target<A>()->id() == 1);
+#endif
     }
     assert(A::count == 0);
     assert(globalMemCounter.checkOutstandingNewEq(0));
@@ -105,13 +113,17 @@ int main()
 #endif
     assert(A::count == 1);
     assert(globalMemCounter.checkOutstandingNewEq(1));
+#ifndef _LIBCPP_NO_RTTI
     assert(*f1.target<int(*)(int)>() == g);
     assert(f2.target<A>()->id() == 1);
+#endif
     swap(f1, f2);
     assert(A::count == 1);
     assert(globalMemCounter.checkOutstandingNewEq(1));
+#ifndef _LIBCPP_NO_RTTI
     assert(f1.target<A>()->id() == 1);
     assert(*f2.target<int(*)(int)>() == g);
+#endif
     }
     assert(A::count == 0);
     assert(globalMemCounter.checkOutstandingNewEq(0));
@@ -123,13 +135,17 @@ int main()
 #endif
     assert(A::count == 0);
     assert(globalMemCounter.checkOutstandingNewEq(0));
+#ifndef _LIBCPP_NO_RTTI
     assert(*f1.target<int(*)(int)>() == g);
     assert(*f2.target<int(*)(int)>() == h);
+#endif
     swap(f1, f2);
     assert(A::count == 0);
     assert(globalMemCounter.checkOutstandingNewEq(0));
+#ifndef _LIBCPP_NO_RTTI
     assert(*f1.target<int(*)(int)>() == h);
     assert(*f2.target<int(*)(int)>() == g);
+#endif
     }
     assert(A::count == 0);
     assert(globalMemCounter.checkOutstandingNewEq(0));

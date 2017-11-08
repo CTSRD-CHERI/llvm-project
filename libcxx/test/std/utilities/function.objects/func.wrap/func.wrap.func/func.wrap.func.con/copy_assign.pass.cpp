@@ -55,67 +55,87 @@ int main() {
     std::function<int(int)> f = A();
     assert(A::count == 1);
     assert(globalMemCounter.checkOutstandingNewEq(1));
+#ifndef _LIBCPP_NO_RTTI
     assert(f.target<A>());
     assert(f.target<int (*)(int)>() == 0);
+#endif
     std::function<int(int)> f2;
     f2 = f;
     assert(A::count == 2);
     assert(globalMemCounter.checkOutstandingNewEq(2));
+#ifndef _LIBCPP_NO_RTTI
     assert(f2.target<A>());
     assert(f2.target<int (*)(int)>() == 0);
+#endif
   }
   assert(A::count == 0);
   assert(globalMemCounter.checkOutstandingNewEq(0));
   {
     std::function<int(int)> f = g;
     assert(globalMemCounter.checkOutstandingNewEq(0));
+#ifndef _LIBCPP_NO_RTTI
     assert(f.target<int (*)(int)>());
     assert(f.target<A>() == 0);
+#endif
     std::function<int(int)> f2;
     f2 = f;
     assert(globalMemCounter.checkOutstandingNewEq(0));
+#ifndef _LIBCPP_NO_RTTI
     assert(f2.target<int (*)(int)>());
     assert(f2.target<A>() == 0);
+#endif
   }
   assert(globalMemCounter.checkOutstandingNewEq(0));
   {
     std::function<int(int)> f;
     assert(globalMemCounter.checkOutstandingNewEq(0));
+#ifndef _LIBCPP_NO_RTTI
     assert(f.target<int (*)(int)>() == 0);
     assert(f.target<A>() == 0);
+#endif
     std::function<int(int)> f2;
     f2 = f;
     assert(globalMemCounter.checkOutstandingNewEq(0));
+#ifndef _LIBCPP_NO_RTTI
     assert(f2.target<int (*)(int)>() == 0);
     assert(f2.target<A>() == 0);
+#endif
   }
   {
     typedef std::function<int()> Func;
     Func f = g0;
     Func& fr = (f = f);
     assert(&fr == &f);
+#ifndef _LIBCPP_NO_RTTI
     assert(*f.target<int(*)()>() == g0);
+#endif
   }
   {
     typedef std::function<int(int)> Func;
     Func f = g;
     Func& fr = (f = f);
     assert(&fr == &f);
+#ifndef _LIBCPP_NO_RTTI
     assert(*f.target<int(*)(int)>() == g);
+#endif
   }
   {
     typedef std::function<int(int, int)> Func;
     Func f = g2;
     Func& fr = (f = f);
     assert(&fr == &f);
+#ifndef _LIBCPP_NO_RTTI
     assert(*f.target<int(*)(int, int)>() == g2);
+#endif
   }
   {
     typedef std::function<int(int, int, int)> Func;
     Func f = g3;
     Func& fr = (f = f);
     assert(&fr == &f);
+#ifndef _LIBCPP_NO_RTTI
     assert(*f.target<int(*)(int, int, int)>() == g3);
+#endif
   }
 #if TEST_STD_VER >= 11
   assert(globalMemCounter.checkOutstandingNewEq(0));
@@ -123,16 +143,20 @@ int main() {
     std::function<int(int)> f = A();
     assert(A::count == 1);
     assert(globalMemCounter.checkOutstandingNewEq(1));
+#ifndef _LIBCPP_NO_RTTI
     assert(f.target<A>());
     assert(f.target<int (*)(int)>() == 0);
+#endif
     std::function<int(int)> f2;
     f2 = std::move(f);
     assert(A::count == 1);
     assert(globalMemCounter.checkOutstandingNewEq(1));
+#ifndef _LIBCPP_NO_RTTI
     assert(f2.target<A>());
     assert(f2.target<int (*)(int)>() == 0);
     assert(f.target<A>() == 0);
     assert(f.target<int (*)(int)>() == 0);
+#endif
   }
 #endif
 }
