@@ -20,7 +20,7 @@ using namespace llvm;
 
 namespace {
 class CheriInvalidatePass : public MachineFunctionPass {
-  const MipsInstrInfo *InstrInfo;
+  const MipsInstrInfo *InstrInfo = nullptr;
   SmallVector<MachineInstr *, 16> StackStores;
   SmallVector<MachineInstr *, 4> Returns;
 
