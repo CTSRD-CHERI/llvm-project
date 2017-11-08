@@ -627,8 +627,8 @@ class Reducer(object):
         )
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without various MIPS flags crashes:",
-            noargs_opts_to_remove=["-mxgot", "-cheri-linker"],
-            one_arg_opts_to_remove_if={"-mllvm": lambda a: a.startswith("-mips-ssection-threshold=")}
+            noargs_opts_to_remove=["-cheri-linker"],
+            one_arg_opts_to_remove_if={"-mllvm": lambda a: a.startswith("-mips-ssection-threshold=") or a == "-mxgot"}
         )
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without -mrelax-all crashes:",
