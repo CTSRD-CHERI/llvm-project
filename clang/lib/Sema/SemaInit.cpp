@@ -1271,10 +1271,6 @@ void InitListChecker::CheckSubElementType(const InitializedEntity &Entity,
     ExprRes.get();
     // Fall through for subaggregate initialization
   }
-  if (isCapNarrowing(expr, ElemType, &Index, &StructuredIndex)) {
-    hadError = true;
-    return;
-  }
 
   // C++ [dcl.init.aggr]p12:
   //
