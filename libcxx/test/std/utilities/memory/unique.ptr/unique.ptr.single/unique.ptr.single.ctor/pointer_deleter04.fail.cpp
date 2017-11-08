@@ -25,6 +25,6 @@ struct Deleter {
 
 int main()
 {
-    // expected-error@memory:* {{static_assert failed "rvalue deleter bound to reference"}}
+    // expected-error-re@memory:* {{static_assert failed{{.*}} "rvalue deleter bound to reference"}}
     std::unique_ptr<int, const Deleter&> s((int*)nullptr, Deleter()); // expected-note {{requested here}}
 }

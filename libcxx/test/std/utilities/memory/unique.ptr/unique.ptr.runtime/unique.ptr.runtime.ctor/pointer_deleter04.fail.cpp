@@ -29,5 +29,5 @@ public:
 int main()
 {
     int* p = nullptr;
-    std::unique_ptr<int[], const Deleter&> s(p, Deleter()); // expected-error@memory:* {{static_assert failed "rvalue deleter bound to reference"}}
+    std::unique_ptr<int[], const Deleter&> s(p, Deleter()); // expected-error-re@memory:* {{static_assert failed{{.*}} "rvalue deleter bound to reference"}}
 }
