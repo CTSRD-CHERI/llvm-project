@@ -54,6 +54,8 @@ class MipsTargetMachine;
 class TargetLibraryInfo;
 class TargetRegisterClass;
 
+extern bool LargeCapTable;
+
   namespace MipsISD {
 
     enum NodeType : unsigned {
@@ -504,14 +506,38 @@ class TargetRegisterClass;
           DAG.getNode(MipsISD::GPRel, DL, DAG.getVTList(Ty), GPRel));
     }
 
+    template <class NodeTy>
+    SDValue getFromCapTable(bool IsFnPtr, NodeTy *N, const SDLoc &DL, EVT Ty,
+                            SelectionDAG &DAG, SDValue Chain) const {
+      auto CapTable = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
+      // FIXME: in the future it would be good to inline local function pointers
+      // into the capability table directly (right now the value is a
+      // void () addrspace(200)* addrspace(200)* instead of a
+      // void () addrspace(200)*
+      // llvm::errs() << "is fn ptr: " << IsFnPtr << "\n";
+      if (LargeCapTable) {
+        auto HiReloc =
+            IsFnPtr ? MipsII::MO_CAPTAB_CALL_HI16 : MipsII::MO_CAPTAB_HI16;
+        auto LoReloc =
+            IsFnPtr ? MipsII::MO_CAPTAB_CALL_LO16 : MipsII::MO_CAPTAB_LO16;
+        return _getGlobalCapBigImmediate(N, SDLoc(N), Ty, DAG, HiReloc, LoReloc,
+                                         Chain, CapTable);
+      } else {
+        auto Reloc = IsFnPtr ? MipsII::MO_CAPTAB_CALL11 : MipsII::MO_CAPTAB11;
+        return _getGlobalCapSmallImmediate(N, SDLoc(N), Ty, DAG, Reloc, Chain,
+                                           CapTable);
+      }
+    }
+
     // This method creates the following nodes, which are necessary for
     // computing a symbol's capability:
     //
     // (load (wrapper $cgp, %captab(sym)))
     template <class NodeTy>
-    SDValue getGlobalCap(NodeTy *N, const SDLoc &DL, EVT Ty, SelectionDAG &DAG,
-                         unsigned Flag, SDValue Chain,
-                         const MachinePointerInfo &PtrInfo) const {
+    SDValue
+    _getGlobalCapSmallImmediate(NodeTy *N, const SDLoc &DL, EVT Ty,
+                                SelectionDAG &DAG, unsigned Flag, SDValue Chain,
+                                const MachinePointerInfo &PtrInfo) const {
       assert(Ty.isFatPointer());
       SDValue Off = getTargetNode(N, MVT::i64, DAG, Flag);
       // FIXME: this needs lots of tablegen changes :( -> wait for nosp merge
@@ -526,10 +552,10 @@ class TargetRegisterClass;
     //
     // (load (ptradd $cgp, (wrapper %captab_hi(sym), %mcaptab_lo(sym))))
     template <class NodeTy>
-    SDValue getGlobalCapBigImmediate(NodeTy *N, const SDLoc &DL, EVT Ty,
-                                     SelectionDAG &DAG, unsigned HiFlag,
-                                     unsigned LoFlag, SDValue Chain,
-                                     const MachinePointerInfo &PtrInfo) const {
+    SDValue _getGlobalCapBigImmediate(NodeTy *N, const SDLoc &DL, EVT Ty,
+                                      SelectionDAG &DAG, unsigned HiFlag,
+                                      unsigned LoFlag, SDValue Chain,
+                                      const MachinePointerInfo &PtrInfo) const {
       assert(Ty.isFatPointer());
       // (Ab)use GotHi since it already exists and does the right thing
       SDValue Off = DAG.getNode(MipsISD::GotHi, DL, MVT::i64,

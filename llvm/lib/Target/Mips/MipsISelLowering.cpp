@@ -92,10 +92,12 @@ HugeGOT("mxmxgot", cl::Hidden,
          cl::desc("MIPS: Use large GOT relocations even for local symbols."), cl::init(false),
          cl::ZeroOrMore);
 
-static cl::opt<bool>
-LargeCapTable("mxcaptable", cl::Hidden,
-              cl::desc("CHERI: Enable capability immediates larget than 11 bits"),
-              cl::init(true)); // FIXME: this should not be on by default
+bool llvm::LargeCapTable = true;
+
+static cl::opt<bool, true> LargeCapTableOption(
+    "mxcaptable", cl::Hidden, cl::location(llvm::LargeCapTable),
+    cl::desc("CHERI: Enable capability immediates larget than 11 bits"),
+    cl::init(true)); // FIXME: this should not be on by default
 
 static cl::opt<bool>
 NoZeroDivCheck("mno-check-zero-division", cl::Hidden,
@@ -2253,24 +2255,8 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
     bool IsFnPtr =
       GVTy->isPointerTy() && GVTy->getPointerElementType()->isFunctionTy();
     if (CanUseCapTable || IsFnPtr) {
-      auto CapTable = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
-      // FIXME: in the future it would be good to inline local function pointers
-      // into the capability table directly (right now the value is a
-      // void () addrspace(200)* addrspace(200)* instead of a
-      // void () addrspace(200)*
-      // llvm::errs() << "is fn ptr: " << IsFnPtr << "\n";
-      if (LargeCapTable) {
-        auto HiReloc =
-            IsFnPtr ? MipsII::MO_CAPTAB_CALL_HI16 : MipsII::MO_CAPTAB_HI16;
-        auto LoReloc =
-            IsFnPtr ? MipsII::MO_CAPTAB_CALL_LO16 : MipsII::MO_CAPTAB_LO16;
-        return getGlobalCapBigImmediate(N, SDLoc(N), GlobalTy, DAG, HiReloc,
-                                        LoReloc, DAG.getEntryNode(), CapTable);
-      } else {
-        auto Reloc = IsFnPtr ? MipsII::MO_CAPTAB_CALL11 : MipsII::MO_CAPTAB11;
-        return getGlobalCap(N, SDLoc(N), GlobalTy, DAG, Reloc,
-                            DAG.getEntryNode(), CapTable);
-      }
+      return getFromCapTable(IsFnPtr, N, SDLoc(N), GlobalTy, DAG,
+                             DAG.getEntryNode());
     } else {
       llvm::errs() << "Not using capability table for " <<  GV->getName() << "\n";
       GV->dump();
@@ -2467,8 +2453,17 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
 SDValue MipsTargetLowering::
 lowerJumpTable(SDValue Op, SelectionDAG &DAG) const
 {
+
   JumpTableSDNode *N = cast<JumpTableSDNode>(Op);
   EVT Ty = Op.getValueType();
+
+  if (ABI.UsesCapabilityTable()) {
+    return getFromCapTable(false, N, SDLoc(N), MVT::iFATPTR, DAG, DAG.getEntryNode());
+#if 0
+    return DAG.getLoad(MVT::i64, SDLoc(Addr), DAG.getEntryNode(), Addr,
+                       MachinePointerInfo::getConstantPool(DAG.getMachineFunction()));
+#endif
+  }
 
   if (!isPositionIndependent())
     return Subtarget.hasSym32() ? getAddrNonPIC(N, SDLoc(N), Ty, DAG)
@@ -2487,6 +2482,8 @@ lowerConstantPool(SDValue Op, SelectionDAG &DAG) const
 {
   ConstantPoolSDNode *N = cast<ConstantPoolSDNode>(Op);
   EVT Ty = Op.getValueType();
+
+  assert(!ABI.UsesCapabilityTable());
 
   if (!isPositionIndependent()) {
     const MipsTargetObjectFile *TLOF =
@@ -3600,15 +3597,14 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       InternalLinkage = GV->hasInternalLinkage();
 
       if (LargeCapTable || !InternalLinkage) {
-        Callee = getGlobalCapBigImmediate(G, DL, MVT::iFATPTR, DAG,
-                                   MipsII::MO_CAPTAB_CALL_HI16,
-                                   MipsII::MO_CAPTAB_CALL_LO16,
-                                   Chain, FuncInfo->callPtrInfo(GV));
+        Callee = _getGlobalCapBigImmediate(
+            G, DL, MVT::iFATPTR, DAG, MipsII::MO_CAPTAB_CALL_HI16,
+            MipsII::MO_CAPTAB_CALL_LO16, Chain, FuncInfo->callPtrInfo(GV));
       } else {
-        Callee = getGlobalCap(G, DL, MVT::iFATPTR, DAG, MipsII::MO_CAPTAB_CALL11,
-                           Chain, FuncInfo->callPtrInfo(GV));
+        Callee = _getGlobalCapSmallImmediate(G, DL, MVT::iFATPTR, DAG,
+                                             MipsII::MO_CAPTAB_CALL11, Chain,
+                                             FuncInfo->callPtrInfo(GV));
       }
-
       IsCallReloc = true;
     } else if (IsPIC) {
       InternalLinkage = GV->hasInternalLinkage();
@@ -3636,13 +3632,13 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
     if (CheriCapTable) {
       if (LargeCapTable) {
-        Callee = getGlobalCapBigImmediate(S, DL, MVT::iFATPTR, DAG,
-                                   MipsII::MO_CAPTAB_CALL_HI16,
-                                   MipsII::MO_CAPTAB_CALL_LO16,
-                                   Chain, FuncInfo->callPtrInfo(Sym));
+        Callee = _getGlobalCapBigImmediate(
+            S, DL, MVT::iFATPTR, DAG, MipsII::MO_CAPTAB_CALL_HI16,
+            MipsII::MO_CAPTAB_CALL_LO16, Chain, FuncInfo->callPtrInfo(Sym));
       } else {
-        Callee = getGlobalCap(S, DL, MVT::iFATPTR, DAG, MipsII::MO_CAPTAB_CALL11,
-                           Chain, FuncInfo->callPtrInfo(Sym));
+        Callee = _getGlobalCapSmallImmediate(S, DL, MVT::iFATPTR, DAG,
+                                             MipsII::MO_CAPTAB_CALL11, Chain,
+                                             FuncInfo->callPtrInfo(Sym));
       }
 
       IsCallReloc = true;
