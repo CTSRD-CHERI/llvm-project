@@ -520,7 +520,7 @@ class Reducer(object):
         regexes = [re.compile(s) for s in (
             r"Assertion `(.+)' failed.",  # Linux assert()
             r"Assertion failed: \(.+\),",  # FreeBSD/Mac assert()
-            r"UNREACHABLE executed( at .+)?!"  # llvm_unreachable()
+            r"UNREACHABLE executed( at .+)?!",  # llvm_unreachable()
             # generic code gen crashes (at least creduce will keep the function name):
             r"LLVM IR generation of declaration '(.+)'",
             r"Generating code for declaration '(.+)'",
@@ -581,7 +581,7 @@ class Reducer(object):
         generate_ir_cmd = new_command + ["-O0", "-emit-llvm"]
         if "-emit-obj" in generate_ir_cmd:
             generate_ir_cmd.remove("-emit-obj")
-        if False and self._check_crash(generate_ir_cmd, infile):
+        if self._check_crash(generate_ir_cmd, infile):
             new_command = generate_ir_cmd
             print("Must be a", blue("frontend crash.", style="bold"), "Will need to use creduce for test case reduction")
             return self._simplify_frontend_crash_cmd(new_command, infile)
@@ -634,8 +634,9 @@ class Reducer(object):
             new_command, infile, "Checking whether compiling without -mrelax-all crashes:",
             noargs_opts_to_remove=["-mrelax-all"],
         )
+
         new_command = self._try_remove_args(
-            new_command, infile, "Checking whether compiling -D flags crashes:",
+            new_command, infile, "Checking whether compiling without -D flags crashes:",
             noargs_opts_to_remove=["-sys-header-deps"],
             one_arg_opts_to_remove=["-D"]
         )
