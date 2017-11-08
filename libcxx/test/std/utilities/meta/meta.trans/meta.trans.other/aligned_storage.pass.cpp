@@ -172,8 +172,10 @@ int main()
 #if TEST_STD_VER > 11
     static_assert(std::is_same<std::aligned_storage_t<16>, T1>::value, "" );
 #endif
+#ifndef __CHERI_PURE_CAPABILITY__
     static_assert(std::alignment_of<T1>::value == alignof(std::max_align_t),
                   "");
+#endif
     static_assert(sizeof(T1) == 16, "");
     }
     {
@@ -181,9 +183,11 @@ int main()
 #if TEST_STD_VER > 11
     static_assert(std::is_same<std::aligned_storage_t<17>, T1>::value, "" );
 #endif
+#ifndef __CHERI_PURE_CAPABILITY__
     static_assert(std::alignment_of<T1>::value == alignof(std::max_align_t),
                   "");
     static_assert(sizeof(T1) == 16 + alignof(std::max_align_t), "");
+#endif
     }
     {
     typedef std::aligned_storage<10>::type T1;
