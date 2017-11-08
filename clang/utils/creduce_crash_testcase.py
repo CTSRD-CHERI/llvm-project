@@ -510,6 +510,9 @@ class Reducer(object):
     def _try_remove_args(self, command: list, infile: Path, message: str, **kwargs):
         new_command = self._filter_args(command, **kwargs)
         print(message, end="", flush=True)
+        if new_command == command:
+            print(green("none of those flags are in the command line"))
+            return command
         if self._check_crash(new_command, infile):
             return new_command
         return command
@@ -604,6 +607,25 @@ class Reducer(object):
         if self._check_crash(no_warnings_cmd, infile):
             new_command = no_warnings_cmd[:-2]
         new_command.append("-Werror=implicit-int")
+
+        # Removing all the #ifdefs and #defines that get added by the #included headers can speed up reduction a lot
+        preprocessed = infile.with_suffix(infile.suffix + ".pp")
+        print("Generating preprocessed source")
+        try:
+            pp_command = self._filter_args(new_command, one_arg_opts_to_remove=["-o"],
+                                           noargs_opts_to_remove=["-S", "-emit-llvm"])
+            pp_command += ["-E", "-o", str(preprocessed), str(infile)]
+            verbose_print(pp_command)
+            subprocess.check_call(pp_command)
+            assert preprocessed.exists()
+            if not self._check_crash(new_command, preprocessed):
+                print(red("Compiling preprocessed source", preprocessed,
+                          "no longer crashes, not using it."))
+            else:
+                infile.rename(infile.with_suffix(infile.suffix + ".orig"))
+                preprocessed.rename(infile)
+        except subprocess.CalledProcessError:
+            print("Failed to preprocess", infile, "-> will use the unprocessed source ")
 
         # check if floating point args are relevant
         new_command = self._try_remove_args(
