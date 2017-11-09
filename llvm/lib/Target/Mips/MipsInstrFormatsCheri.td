@@ -23,6 +23,7 @@ class CheriFmtCBT<bits<5> op, dag outs, dag ins, string asmstr,
   let isBranch = 1;
   let isTerminator = 1;
   let hasDelaySlot = 1;
+  let hasSideEffects = 0;
 }
 
 class CheriFmtRegs<bits<5> op, bits<3> fmt, dag outs, dag ins, string asmstr,
@@ -41,6 +42,7 @@ class CheriFmtRegs<bits<5> op, bits<3> fmt, dag outs, dag ins, string asmstr,
   let Inst{10-6}  = r2;
   let Inst{5-3}  = 0; // Reserved
   let Inst{2-0}   = fmt;
+  let hasSideEffects = 0;
 }
 
 // CGet*
@@ -68,6 +70,7 @@ class CheriFmtSetCause<bits<5> op, dag outs, dag ins, string asmstr,
   let r0 = 0;
   let r1 = 0;
   let r2 = rs;
+  let hasSideEffects = 1;
 }
 
 
@@ -81,6 +84,7 @@ class CheriFmtSet<bits<3> op, dag outs, dag ins, string asmstr,
   let r0 = cd;
   let r1 = cb;
   let r2 = rt;
+  let hasSideEffects = 0;
 }
 
 // 
@@ -160,6 +164,7 @@ class CheriFmtCLS<bits<6> op, dag outs, dag ins, string asmstr,
   let Inst{20-16} = cb;
   let Inst{15-11} = rt;
   let Inst{10-0}  = offset;
+  let hasSideEffects = 0;
 }
 
 class CheriFmtCLX<bits<2> t, bits<1> e, dag outs, dag ins, string asmstr,
@@ -178,6 +183,7 @@ class CheriFmtCLX<bits<2> t, bits<1> e, dag outs, dag ins, string asmstr,
   let Inst{10-3}  = offset;
   let Inst{2}     = e;
   let Inst{1-0}   = t;
+  let hasSideEffects = 0;
 }
 
 class CheriFmtCSX<bits<2> t, bits<1> e, dag outs, dag ins, string asmstr,
@@ -196,6 +202,7 @@ class CheriFmtCSX<bits<2> t, bits<1> e, dag outs, dag ins, string asmstr,
   let Inst{10-3}  = offset;
   let Inst{2}     = e;
   let Inst{1-0}   = t;
+  let hasSideEffects = 0;
 }
 
 class CheriFmtClearRegs<bits<5> regset, dag outs, dag ins, string asmstr,
@@ -208,6 +215,7 @@ class CheriFmtClearRegs<bits<5> regset, dag outs, dag ins, string asmstr,
   let Inst{25-21} = 0xf;
   let Inst{20-16} = regset;
   let Inst{15-0}  = mask;
+  let hasSideEffects = 1;
 }
 
 class CheriFmtCLL<bit isSigned, bits<2> type, dag outs, dag ins, string asmstr> :
@@ -261,6 +269,7 @@ class CheriFmt3Op<bits<6> type, dag outs, dag ins, string asmstr, list<dag> patt
   let Inst{15-11} = r2;
   let Inst{10-6} = r3;
   let Inst{5-0}   = type;
+  let hasSideEffects = 0;
 }
 
 class CheriFmtCSetImm<bits<5> type, Operand immOp, PatFrag immPat, string op, string intr=op, string verb="set", string intr_verb=verb> :
@@ -280,6 +289,7 @@ class CheriFmtCSetImm<bits<5> type, Operand immOp, PatFrag immPat, string op, st
   let Inst{20-16} = cd;
   let Inst{15-11} = cb;
   let Inst{10-0} = imm;
+  let hasSideEffects = 0;
 }
 
 class CheriFmt2Op<bits<5> type, dag outs, dag ins, string asmstr, list<dag> pattern> :
@@ -317,5 +327,6 @@ class CheriFmtPtrCmp<bits<6> cmp, RegisterOperand RC, string instr_asm,
   let r1 = rd;
   let r2 = cb;
   let r3 = ct;
+  let hasSideEffects = 0;
 }
 

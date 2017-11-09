@@ -420,6 +420,7 @@ def CheriRegs : RegisterClass<"Mips", [CapRegType], 256, (add
   let RegInfos = RegInfoByHwMode<[Cap64, Cap128, Cap256, DefaultMode],
        [RegInfo<64,64,64>, RegInfo<128,128,128>, RegInfo<256,256,256>, RegInfo<128,128,128>]>;
 }
+def FakeCheriRegs : RegisterClass<"Mips", [iFATPTR256], 256, (add C0)>;
 
 // 64bit fp:
 // * FGR64  - 32 64-bit registers

@@ -291,7 +291,9 @@ def CMove : CheriFmt2Op<0xa, (outs CheriOpnd: $r1), (ins CheriOpnd:$r2),
   []>;
 
 
+
 // Cause register (privileged mode only)
+let hasSideEffects = 1 in {
 def CGetCause : CheriFmt1Op<1, (outs GPR64Opnd:$r1), (ins),
                           "cgetcause\t${r1}",
                           [(set GPR64Opnd:$r1, (int_mips_cap_cause_get))]>;
@@ -306,6 +308,7 @@ def CCheckPerm : CheriFmt2Op<0x8, (outs), (ins CheriOpnd:$r1, GPR64Opnd: $r2),
 def CCheckType : CheriFmt2Op<0x9, (outs), (ins CheriOpnd:$r1, CheriOpnd:$r2),
                               "cchecktype\t${r1}, ${r2}",
                               [(int_cheri_cap_type_check CheriOpnd:$r1,  CheriOpnd:$r2)]>;
+}
 
 // Cursors
 def : Pat<(ptradd CheriOpnd:$r2, GPR64Opnd:$r3),
