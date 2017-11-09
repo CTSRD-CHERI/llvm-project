@@ -402,6 +402,7 @@ extern bool LargeCapTable;
     template <class NodeTy>
     SDValue getAddrLocal(NodeTy *N, const SDLoc &DL, EVT Ty, SelectionDAG &DAG,
                          bool IsN32OrN64) const {
+      assert(!ABI.UsesCapabilityTable());
       unsigned GOTFlag = IsN32OrN64 ? MipsII::MO_GOT_PAGE : MipsII::MO_GOT;
       SDValue GOT = DAG.getNode(MipsISD::Wrapper, DL, Ty, getGlobalReg(DAG, Ty),
                                 getTargetNode(N, Ty, DAG, GOTFlag));
@@ -422,6 +423,7 @@ extern bool LargeCapTable;
     SDValue getAddrGlobal(NodeTy *N, const SDLoc &DL, EVT Ty, SelectionDAG &DAG,
                           unsigned Flag, SDValue Chain,
                           const MachinePointerInfo &PtrInfo) const {
+      assert(!ABI.UsesCapabilityTable());
       SDValue Tgt = DAG.getNode(MipsISD::Wrapper, DL, Ty, getGlobalReg(DAG, Ty),
                                 getTargetNode(N, Ty, DAG, Flag));
       if (ABI.IsCheriPureCap())
@@ -438,6 +440,7 @@ extern bool LargeCapTable;
                                   SelectionDAG &DAG, unsigned HiFlag,
                                   unsigned LoFlag, SDValue Chain,
                                   const MachinePointerInfo &PtrInfo) const {
+      assert(!ABI.UsesCapabilityTable());
       SDValue Hi = DAG.getNode(MipsISD::GotHi, DL, Ty,
                                getTargetNode(N, Ty, DAG, HiFlag));
       Hi = DAG.getNode(ISD::ADD, DL, Ty, Hi, getGlobalReg(DAG, Ty));
@@ -455,6 +458,7 @@ extern bool LargeCapTable;
     template <class NodeTy>
     SDValue getAddrNonPIC(NodeTy *N, const SDLoc &DL, EVT Ty,
                           SelectionDAG &DAG) const {
+      assert(!ABI.UsesCapabilityTable());
       SDValue Hi = getTargetNode(N, Ty, DAG, MipsII::MO_ABS_HI);
       SDValue Lo = getTargetNode(N, Ty, DAG, MipsII::MO_ABS_LO);
       return DAG.getNode(ISD::ADD, DL, Ty,
@@ -472,6 +476,7 @@ extern bool LargeCapTable;
    template <class NodeTy>
    SDValue getAddrNonPICSym64(NodeTy *N, const SDLoc &DL, EVT Ty,
                           SelectionDAG &DAG) const {
+     assert(!ABI.UsesCapabilityTable());
       SDValue Hi = getTargetNode(N, Ty, DAG, MipsII::MO_ABS_HI);
       SDValue Lo = getTargetNode(N, Ty, DAG, MipsII::MO_ABS_LO);
 
@@ -499,6 +504,7 @@ extern bool LargeCapTable;
     template <class NodeTy>
     SDValue getAddrGPRel(NodeTy *N, const SDLoc &DL, EVT Ty,
                          SelectionDAG &DAG, bool IsN64) const {
+      assert(!ABI.UsesCapabilityTable());
       SDValue GPRel = getTargetNode(N, Ty, DAG, MipsII::MO_GPREL);
       return DAG.getNode(
           ISD::ADD, DL, Ty,
