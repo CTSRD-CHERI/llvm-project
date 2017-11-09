@@ -221,6 +221,7 @@ void MipsAsmPrinter::EmitInstruction(const MachineInstr *MI) {
         I->getOpcode() == Mips::PseudoReturnCap ||
         I->getOpcode() == Mips::PseudoIndirectBranch ||
         I->getOpcode() == Mips::PseudoIndirectBranch64 ||
+        I->getOpcode() == Mips::PseudoIndirectBranchCap ||
         I->getOpcode() == Mips::TAILCALLREG ||
         I->getOpcode() == Mips::TAILCALLREG64) {
       emitPseudoIndirectBranch(*OutStreamer, &*I);
