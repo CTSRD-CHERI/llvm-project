@@ -45,6 +45,10 @@ sw.bb1:
 ; CHECK-NEXT:	dsll	$1, $4, 2
 ; CHECK-NEXT:	clw	$1, $1, 0($c1)
 ; CHECK-NEXT:	cincoffset	$c1, $c1, $1
+; TODO: this is not ideal but we need to derive an executable capability
+; CHECK-NEXT:	cgetpcc	$c2
+; CHECK-NEXT:	csub	$1, $c1, $c2
+; CHECK-NEXT:	cincoffset	$c1, $c2, $1
 ; CHECK-NEXT:	cjr	$c1
 ; CHECK-NEXT:	nop
 
@@ -96,6 +100,9 @@ sw.bb1:
 ; NO-OPT-NEXT:	clc	$c2, $3, 0($c1)
 ; NO-OPT-NEXT:	clw	$2, $2, 0($c2)
 ; NO-OPT-NEXT:	cincoffset	$c2, $c2, $2
+; NO-OPT-NEXT:	cgetpcc	$c3
+; NO-OPT-NEXT:	csub	$2, $c2, $c3
+; NO-OPT-NEXT:	cincoffset	$c2, $c3, $2
 ; NO-OPT-NEXT:	cjr	$c2
 ; NO-OPT-NEXT:	nop
 

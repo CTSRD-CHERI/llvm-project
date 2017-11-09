@@ -3108,26 +3108,19 @@ SDValue MipsTargetLowering::lowerBR_JT(SDValue Op,
   // Addr = DAG.getIndexedLoad(Addr, dl, JtAddr, Index, ISD::PRE_INC);
   assert(isJumpTableRelative());
 
-#if 0
-  auto GetPCC = DAG.getConstant(Intrinsic::cheri_pcc_get, dl, MVT::i64);
-  auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, PTy, GetPCC);
-  auto IncOffset = DAG.getConstant(Intrinsic::cheri_cap_offset_increment, dl, MVT::i64);
-  Addr = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, PTy, IncOffset, PCC, JtValue);
-  // Addr = DAG.getPointerAdd(dl, PCC, JtValue);
-  // FIXME: this hardcodes the return address, how do I generate a cjr with a different register?
-  return DAG.getNode(MipsISD::CapRet, dl, MVT::Other, Addr);
-#endif
-#if 0
-  // Fixme: how can we use cjr here?
-  // auto JtVaddr = DAG.getNode(ISD::PTRTOINT, dl, MVT::i64, JtAddr);
-  auto GetBase = DAG.getConstant(Intrinsic::cheri_cap_base_get, dl, MVT::i64);
-  auto GetOffset = DAG.getConstant(Intrinsic::cheri_cap_offset_get, dl, MVT::i64);
-  auto Base = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::i64, GetBase, JtAddr);
-  auto Offset = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::i64, GetOffset, JtAddr);
-  auto JtVaddr = DAG.getNode(ISD::ADD, dl, MVT::i64, Base, Offset);
-  Addr = DAG.getNode(ISD::ADD, dl, MVT::i64, Addr, JtVaddr);
-#endif
   Addr = DAG.getNode(ISD::PTRADD, dl, PTy, JtAddr, Addr);
+  // Addr is a data capability so won't have Permit_Execute so we have to derive
+  // a new capabiilty from PCC
+
+  // to get this we do a (add pcc, (csub target, pcc))
+  // This should work even if pcc and cgp have different base addreses
+
+  auto GetPCC = DAG.getConstant(Intrinsic::cheri_pcc_get, dl, MVT::i64);
+  auto CSub = DAG.getConstant(Intrinsic::cheri_cap_diff, dl, MVT::i64);
+  auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::iFATPTR, GetPCC);
+  auto Diff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::i64,
+                       CSub, Addr, PCC);
+  Addr = DAG.getNode(ISD::PTRADD, dl, PTy, PCC, Diff);
   return DAG.getNode(ISD::BRIND, dl, MVT::Other, Chain, Addr);
 }
 
@@ -4697,6 +4690,7 @@ unsigned MipsTargetLowering::getJumpTableEncoding() const {
   // XXXAR: should we emit capabilities instead?
   if (ABI.UsesCapabilityTable())
     return MachineJumpTableInfo::EK_LabelDifference32;
+  // TODO: use EK_Custom32 with function entry point - label address?
 
   // FIXME: For space reasons this should be: EK_GPRel32BlockAddress.
   if (ABI.IsN64() && isPositionIndependent())
