@@ -2331,7 +2331,31 @@ LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
         ConstantEmitter(*this).emitAbstract(E->getLocation(),
                                             *VD->evaluateValue(),
                                             VD->getType());
-      assert(Val && "failed to emit reference constant expression");
+
+      // If this is a CHERI reference to a function then convert the function
+      // address to a capability
+      const ReferenceType *RT = cast<ReferenceType>(VD->getType().getTypePtr());
+      llvm::Value* Result = Val; // use llvm::Value for
+                                 // CodeGenFunction::FunctionAddressToCapability
+      if (RT->isCHERICapability() && RT->getPointeeType()->isFunctionType()) {
+        // First strip the addrspacecast if the ConstantEmitter inserted it
+        if (const auto CE = dyn_cast<llvm::ConstantExpr>(Val)) {
+          if (CE->getOpcode() == llvm::Instruction::AddrSpaceCast) {
+            Result = CE->getOperand(0);
+          }
+        }
+
+        unsigned CapAS = CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
+        llvm::Type *ResTy = Result->getType();
+        if (ResTy->getPointerAddressSpace() != CapAS) {
+          llvm::Type *CapTy = cast<llvm::PointerType>(ResTy)
+            ->getElementType()->getPointerTo(CapAS);
+          Result = FunctionAddressToCapability(*this, Result);
+          Result = Builder.CreateBitCast(Result, CapTy);
+        }
+      }
+
+      assert(Result && "failed to emit reference constant expression");
       // FIXME: Eventually we will want to emit vector element references.
 
       // Should we be using the alignment of the constant pointer we emitted?
@@ -2339,7 +2363,7 @@ LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
                                                     /* BaseInfo= */ nullptr,
                                                     /* TBAAInfo= */ nullptr,
                                                     /* forPointeeType= */ true);
-      return MakeAddrLValue(Address(Val, Alignment), T, AlignmentSource::Decl);
+      return MakeAddrLValue(Address(Result, Alignment), T, AlignmentSource::Decl);
     }
 
     // Check for captured variables.
