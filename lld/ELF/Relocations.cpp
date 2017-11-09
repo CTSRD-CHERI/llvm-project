@@ -1117,6 +1117,8 @@ ThunkSection *ThunkCreator::getISThunkSec(InputSection *IS) {
   std::vector<InputSection *> *Range = nullptr;
   for (BaseCommand *BC : TOS->SectionCommands)
     if (auto *ISD = dyn_cast<InputSectionDescription>(BC)) {
+      if (ISD->Sections.size() == 0)
+	continue;
       InputSection *first = ISD->Sections.front();
       InputSection *last = ISD->Sections.back();
       if (IS->OutSecOff >= first->OutSecOff &&
