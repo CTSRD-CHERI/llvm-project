@@ -3681,7 +3681,7 @@ bool SelectionDAGLegalize::ExpandNode(SDNode *Node) {
 
     const DataLayout &TD = DAG.getDataLayout();
     EVT PTy = TLI.getPointerTy(TD);
-
+    // FIXME: this needs to be done in the mips backed
     unsigned EntrySize =
       DAG.getMachineFunction().getJumpTableInfo()->getEntrySize(TD);
 

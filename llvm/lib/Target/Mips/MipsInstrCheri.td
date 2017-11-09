@@ -670,3 +670,5 @@ def ADJCALLSTACKCAPUP   : MipsPseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
                                   [(callseq_end timm:$amt1, timm:$amt2)]>;
 }
 
+def PseudoIndirectBranchCap : PseudoIndirectBranchBase<CheriOpnd>;
+

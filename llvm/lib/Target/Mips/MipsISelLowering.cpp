@@ -396,7 +396,10 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
 
   // Mips Custom Operations
   setOperationAction(ISD::GlobalAddress,      MVT::iFATPTR,Custom);
-  setOperationAction(ISD::BR_JT,              MVT::Other, Expand);
+  if (ABI.UsesCapabilityTable())
+    setOperationAction(ISD::BR_JT,            MVT::Other, Custom);
+  else
+    setOperationAction(ISD::BR_JT,            MVT::Other, Expand);
   setOperationAction(ISD::GlobalAddress,      MVT::i32,   Custom);
   setOperationAction(ISD::BlockAddress,       MVT::i32,   Custom);
   setOperationAction(ISD::GlobalTLSAddress,   MVT::i32,   Custom);
@@ -1299,6 +1302,7 @@ LowerOperation(SDValue Op, SelectionDAG &DAG) const
   case ISD::STORE:              return lowerSTORE(Op, DAG);
   case ISD::EH_DWARF_CFA:       return lowerEH_DWARF_CFA(Op, DAG);
   case ISD::FP_TO_SINT:         return lowerFP_TO_SINT(Op, DAG);
+  case ISD::BR_JT:              return lowerBR_JT(Op, DAG);
   }
   return SDValue();
 }
@@ -3070,6 +3074,65 @@ SDValue MipsTargetLowering::lowerFP_TO_SINT(SDValue Op,
   return DAG.getNode(ISD::BITCAST, SDLoc(Op), Op.getValueType(), Trunc);
 }
 
+SDValue MipsTargetLowering::lowerBR_JT(SDValue Op,
+                                       SelectionDAG &DAG) const {
+  // FIXME: this is almost the same as the code in LegalizeDAG.cpp, can
+  // I just adjust that to work for capabilities too?
+
+  assert(ABI.UsesCapabilityTable());
+
+  SDLoc dl(Op);
+  SDValue Chain = Op->getOperand(0);
+  SDValue Table = Op->getOperand(1);
+  SDValue Index = Op->getOperand(2);
+
+  const DataLayout &TD = DAG.getDataLayout();
+  EVT PTy = getPointerTy(TD, 200);
+  unsigned EntrySize =
+    DAG.getMachineFunction().getJumpTableInfo()->getEntrySize(TD);
+  assert(EntrySize == 4);
+  assert(isPowerOf2_64(EntrySize));
+  SDValue JtAddr = getFromCapTable(false, cast<JumpTableSDNode>(Table.getNode()),
+                                 dl, PTy, DAG, Chain);
+  // TODO: use a mul here and let the code later on convert it to a shift?
+  Index = DAG.getNode(ISD::SHL, dl, MVT::i64, Index,
+                      DAG.getConstant(Log2_32(EntrySize), dl, MVT::i64));
+  EVT MemVT = EVT::getIntegerVT(*DAG.getContext(), EntrySize * 8);
+  auto LoadAddr = DAG.getNode(ISD::PTRADD, dl, PTy, JtAddr, Index);
+  SDValue Addr = DAG.getExtLoad(
+    ISD::SEXTLOAD, dl, MVT::i64, Chain, LoadAddr,
+    MachinePointerInfo::getJumpTable(DAG.getMachineFunction()), MemVT);
+  Chain = Addr.getValue(1);
+  // FIXME: why doesn't indexedLoad work?
+  // Hopefully the CheriAddressingModeFolder can optmized away the add
+  // Addr = DAG.getIndexedLoad(Addr, dl, JtAddr, Index, ISD::PRE_INC);
+  assert(isJumpTableRelative());
+
+#if 0
+  auto GetPCC = DAG.getConstant(Intrinsic::cheri_pcc_get, dl, MVT::i64);
+  auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, PTy, GetPCC);
+  auto IncOffset = DAG.getConstant(Intrinsic::cheri_cap_offset_increment, dl, MVT::i64);
+  Addr = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, PTy, IncOffset, PCC, JtValue);
+  // Addr = DAG.getPointerAdd(dl, PCC, JtValue);
+  // FIXME: this hardcodes the return address, how do I generate a cjr with a different register?
+  return DAG.getNode(MipsISD::CapRet, dl, MVT::Other, Addr);
+#endif
+#if 0
+  // Fixme: how can we use cjr here?
+  // auto JtVaddr = DAG.getNode(ISD::PTRTOINT, dl, MVT::i64, JtAddr);
+  auto GetBase = DAG.getConstant(Intrinsic::cheri_cap_base_get, dl, MVT::i64);
+  auto GetOffset = DAG.getConstant(Intrinsic::cheri_cap_offset_get, dl, MVT::i64);
+  auto Base = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::i64, GetBase, JtAddr);
+  auto Offset = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::i64, GetOffset, JtAddr);
+  auto JtVaddr = DAG.getNode(ISD::ADD, dl, MVT::i64, Base, Offset);
+  Addr = DAG.getNode(ISD::ADD, dl, MVT::i64, Addr, JtVaddr);
+#endif
+  Addr = DAG.getNode(ISD::PTRADD, dl, PTy, JtAddr, Addr);
+  return DAG.getNode(ISD::BRIND, dl, MVT::Other, Chain, Addr);
+}
+
+
+
 //===----------------------------------------------------------------------===//
 //                      Calling Convention Implementation
 //===----------------------------------------------------------------------===//
@@ -4631,6 +4694,9 @@ bool MipsTargetLowering::isFPImmLegal(const APFloat &Imm, EVT VT) const {
 }
 
 unsigned MipsTargetLowering::getJumpTableEncoding() const {
+  // XXXAR: should we emit capabilities instead?
+  if (ABI.UsesCapabilityTable())
+    return MachineJumpTableInfo::EK_LabelDifference32;
 
   // FIXME: For space reasons this should be: EK_GPRel32BlockAddress.
   if (ABI.IsN64() && isPositionIndependent())
