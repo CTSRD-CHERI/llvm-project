@@ -1,4 +1,4 @@
-; RUN: %cheri_llc %s -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model=pic -o - -O1 | FileCheck %s
+; RUN: %cheri_llc %s -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model=pic -o - -O1 | %cheri_FileCheck %s
 ; ModuleID = 'va.c'
 target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
@@ -93,7 +93,7 @@ declare i8 addrspace(200)* @llvm.mips.cap.offset.set(i8 addrspace(200)*, i64) #3
 define void @k(i32 addrspace(200)* %x, i32 addrspace(200)* %y) #0 {
 ; When calling a variadic function, we should set $c13 to the size of the arguments
 entry:
-; CHECK: csetbounds	$c2, $c11, [[$CAP_SIZE:32|16]]
+; CHECK: csetbounds	$c2, $c11, [[$CAP_SIZE]]
 ; CHECK: ori	$[[TMP:[0-9]+]], $zero, 65495
 ; CHECK: candperm	$c13, $c2, $[[TMP]]
   %x.addr = alloca i32 addrspace(200)*, align 32, addrspace(200)
