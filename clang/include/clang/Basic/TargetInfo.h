@@ -417,7 +417,10 @@ public:
   /// '::operator new(size_t)' is guaranteed to produce a correctly-aligned
   /// pointer.
   unsigned getNewAlign() const {
-    return NewAlign ? NewAlign : std::max(LongDoubleAlign, LongLongAlign);
+    return NewAlign ? NewAlign
+                    : (areAllPointersCapabilities()
+                              ? getCHERICapabilityAlign()
+                              : std::max(LongDoubleAlign, LongLongAlign));
   }
 
   /// getWCharWidth/Align - Return the size of 'wchar_t' for this target, in
