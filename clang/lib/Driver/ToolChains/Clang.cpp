@@ -1619,10 +1619,10 @@ void Clang::AddMIPSTargetArgs(const ArgList &Args,
       D.Diag(diag::warn_target_unsupported_compact_branches) << CPUName;
   }
   if (Arg *A = Args.getLastArg(options::OPT_cheri, options::OPT_cheri_EQ)) {
-    if (A->getOption().matches(options::OPT_cheri))
-      CmdArgs.push_back("-mcheri=128");
-    else {
       CmdArgs.push_back("-cheri-size");
+    if (A->getOption().matches(options::OPT_cheri))
+      CmdArgs.push_back("128");
+    else {
       CmdArgs.push_back(Args.MakeArgString(A->getValue()));
     }
   }
