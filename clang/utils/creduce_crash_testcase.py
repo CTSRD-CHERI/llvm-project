@@ -449,9 +449,11 @@ class Reducer(object):
             result.append(arg)
         return result
 
-    def _try_remove_args(self, command: list, infile: Path, message: str, **kwargs):
+    def _try_remove_args(self, command: list, infile: Path, message: str, *, extra_args: list=None, **kwargs):
         new_command = self._filter_args(command, **kwargs)
         print(message, end="", flush=True)
+        if extra_args:
+            new_command += extra_args
         if new_command == command:
             print(green("none of those flags are in the command line"))
             return command
@@ -513,6 +515,11 @@ class Reducer(object):
                       " in the wrong test case being generated."))
             if not input("Are you sure you want to continue? [y/N]").lower().startswith("y"):
                 sys.exit()
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling at -O0 crashes:",
+            noargs_opts_to_remove_startswith=["-O"],
+            extra_args=["-O0"]
+        )
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without -coverage-notes-file crashes:",
             one_arg_opts_to_remove=["-coverage-notes-file"]
@@ -715,10 +722,11 @@ class Reducer(object):
             return self._simplify_frontend_crash_cmd(new_command, infile)
         if not irfile.exists():
             die("IR file was not generated?")
-        llc_args = [str(self.options.llc_cmd), "-O3", "-o", "/dev/null"]  # TODO: -o -?
+        llc_args = [str(self.options.llc_cmd), "-o", "/dev/null"]  # TODO: -o -?
         cpu_flag = None  # -mcpu= only allowed once!
         pass_once_flags = set()
         skip_next = False
+        optimization_flag = "-O2"
         for i, arg in enumerate(command):
             if skip_next:
                 skip_next = False
@@ -757,8 +765,11 @@ class Reducer(object):
                 llc_args.append(arg)
             elif arg == "-mxgot":
                 pass_once_flags.add(arg)  # some bugs only happen if mxgot is also passed
+            elif arg.startswith("-O"):
+                optimization_flag = arg
         if cpu_flag:
             llc_args.append(cpu_flag)
+        llc_args.append(optimization_flag)
         llc_args.extend(pass_once_flags)
         print("Checking whether compiling IR file with llc crashes:", end="", flush=True)
         llc_info = dict()
