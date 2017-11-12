@@ -126,27 +126,19 @@ builtin_include_dir = llvm_config.get_clang_builtin_include_dir(config.clang)
 # FIXME: move this to LLVM
 clang_cc1_args = ['-cc1', '-internal-isystem',
                   llvm_config.get_clang_builtin_include_dir(config.clang), '-nostdsysteminc']
-cheri128_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu', 'cheri128']
-cheri256_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu', 'cheri']
+cheri128_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu', 'cheri128', '-cheri-size', '128']
+cheri256_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu', 'cheri256', '-cheri-size', '256']
 purecap_cc1_args  = ['-triple', 'cheri-unknown-freebsd', '-target-abi', 'purecap']
-
-if config.cheri_is_128:
-    config.available_features.add("cheri_is_128")
-    clang_cc1_args += ['-mllvm', '-cheri128']  # force cheri128 for tests
-    cheri256_cc1_args += ['-mllvm', '-cheri256', '-mllvm', '-cheri-test-mode']
-    cheri_cc1_args = cheri128_cc1_args
-else:
-    config.available_features.add("cheri_is_256")
-    cheri128_cc1_args += ['-mllvm', '-cheri128', '-mllvm', '-cheri-test-mode']
-    cheri_cc1_args = cheri256_cc1_args
+cheri_cc1_args = cheri128_cc1_args
 
 tools = [
     # By specifying %clang_cc1 as part of the substitution, this substitution
     # relies on repeated substitution, so must come before %clang_cc1.
     ToolSubst('%cheri_cc1',    command='%clang_cc1', extra_args=cheri_cc1_args),
     ToolSubst('%cheri128_cc1', command='%clang_cc1', extra_args=cheri128_cc1_args),
+    ToolSubst('%cheri_purecap_cc1', command='%cheri256_cc1', extra_args=purecap_cc1_args),
     ToolSubst('%cheri256_cc1', command='%clang_cc1', extra_args=cheri256_cc1_args),
-    ToolSubst('%cheri_purecap_cc1', command='%clang_cc1', extra_args=purecap_cc1_args),
+    ToolSubst('%cheri256_purecap_cc1', command='%cheri128_cc1', extra_args=purecap_cc1_args),
     ToolSubst('%clang_analyze_cc1', command='%clang_cc1',
               extra_args=['-analyze', '%analyze']),
     ToolSubst('%clang_cc1', command=config.clang, extra_args=clang_cc1_args),

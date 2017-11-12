@@ -32,11 +32,7 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
                             StringRef &CPUName, StringRef &ABIName) {
   const char *DefMips32CPU = "mips32r2";
   const char *DefMips64CPU = "mips64r2";
-#if CHERI_IS_128
   const char *CHERICPU = "cheri128";
-#else
-  const char *CHERICPU = "cheri";
-#endif
 
   // MIPS32r6 is the default for mips(el)?-img-linux-gnu and MIPS64r6 is the
   // default for mips64(el)?-img-linux-gnu.
@@ -46,6 +42,16 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
     DefMips64CPU = "mips64r6";
   }
   if (Triple.getArch() == llvm::Triple::cheri) {
+    if (Arg *A = Args.getLastArg(options::OPT_cheri, options::OPT_cheri_EQ)) {
+      if (A->getOption().matches(options::OPT_cheri))
+        CHERICPU = "cheri128";
+      else
+        CHERICPU = llvm::StringSwitch<const char*>(A->getValue())
+          .Case("64", "cheri64")
+          .Case("128", "cheri128")
+          .Case("256", "cheri256")
+          .Default("cheri128");
+    }
     DefMips32CPU = CHERICPU;
     DefMips64CPU = CHERICPU;
   }

@@ -23,7 +23,6 @@ llvm_canonicalize_cmake_booleans(
   CLANG_ENABLE_ARCMT
   CLANG_ENABLE_STATIC_ANALYZER
   ENABLE_BACKTRACES
-  LLVM_CHERI_IS_128
   HAVE_LIBZ)
 
 configure_lit_site_cfg(
