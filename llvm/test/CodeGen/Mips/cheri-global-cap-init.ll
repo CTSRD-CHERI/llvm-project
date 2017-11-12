@@ -1,5 +1,5 @@
-; RUN: %cheri_llc -mtriple=cheri-unknown-freebsd %s -o - -relocation-model=static | FileCheck %s
-; RUN: %cheri_llc -mtriple=cheri-unknown-freebsd %s -o - -relocation-model=pic | FileCheck %s
+; RUN: %cheri_llc -mtriple=cheri-unknown-freebsd %s -o - -relocation-model=static | %cheri_FileCheck %s
+; RUN: %cheri_llc -mtriple=cheri-unknown-freebsd %s -o - -relocation-model=pic | %cheri_FileCheck %s
 ; ModuleID = 'global_init.c'
 target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
@@ -21,7 +21,7 @@ target triple = "cheri-unknown-freebsd"
 ; CHECK-NEXT: .p2align        {{5|4}}
 ; CHECK-NEXT: b:
 ; CHECK-NEXT: .Ltmp0:
-; CHECK-NEXT: .space [[$CAP_SIZE:32|16]]
+; CHECK-NEXT: .space [[$CAP_SIZE]]
 ; CHECK-NEXT: .Ltmp1:
 ; CHECK-NEXT: .space [[$CAP_SIZE]]
 ; CHECK-NEXT: .Ltmp2:

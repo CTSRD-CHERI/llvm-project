@@ -1,4 +1,4 @@
-; RUN: %cheri128_llc -mtriple=cheri-unknown-freebsd -target-abi purecap -O0 %s -o - | FileCheck %s --check-prefix=UNDEF128
+; RUN: %cheri_llc -mtriple=cheri-unknown-freebsd -target-abi purecap -O0 %s -o - | FileCheck %s --check-prefixes=UNDEF
 ; RUN: %cheri_llc -mtriple=cheri-unknown-freebsd -target-abi purecap -O0 %s -o - | FileCheck %s --check-prefix=ALIGNED-ARG
 ; RUN: %cheri_llc -mtriple=cheri-unknown-freebsd -target-abi purecap -O0 %s -o - | FileCheck %s --check-prefix=ALIGNED-VARARG
 ; ModuleID = 'unions.c'
@@ -126,13 +126,10 @@ entry:
   call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* %0, i8 addrspace(200)* bitcast ({ i32, [12 x i8] } addrspace(200)* @undef.meh to i8 addrspace(200)*), i64 16, i32 16, i1 false)
   %coerce.dive = getelementptr inbounds %union.meh, %union.meh addrspace(200)* %meh, i32 0, i32 0
   %1 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %coerce.dive, align 16
-  ; UNDEF128-LABEL: undef:
-  ; UNDEF128: cincoffset $c24, $c11, $zero
-  ; UNDEF128: cincoffset [[TMPSP:\$c[0-9]+]], $c11, 144
-	; UNDEF128-NEXT: csetbounds	{{.*}}, [[TMPSP]], 16
-  ; UNDEF256-LABEL: undef:
-	; UNDEF256: move [[TMP:\$[0-9]]], $sp
-	; UNDEF256-NEXT: cincoffset	{{.*}}, $c11, 32 
+  ; UNDEF-LABEL: undef:
+  ; UNDEF: cincoffset $c24, $c11, $zero
+  ; UNDEF: cincoffset [[TMPSP:\$c[0-9]+]], $c11, {{128|80}}
+  ; UNDEF-NEXT: csetbounds	{{.*}}, [[TMPSP]], {{32|16}}
   call void (i32, ...) @a(i32 signext 99, i64 undef, i8 addrspace(200)* inreg %1)
   ret void
 }
@@ -149,7 +146,7 @@ entry:
   %coerce.dive = getelementptr inbounds %union.meh, %union.meh addrspace(200)* %meh, i32 0, i32 0
   %1 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %coerce.dive, align 16
   ; ALIGNED-ARG-LABEL: aligned_arg:
-  ; ALIGNED-ARG: cincoffset	$c[[TMP:[0-9]+]], $c11, {{112|128}}
+  ; ALIGNED-ARG: cincoffset	$c[[TMP:[0-9]+]], $c11, {{128|80}}
   ; ALIGNED-ARG-NEXT:csetbounds	$c{{[0-9]+}}, $c[[TMP]], {{32|16}}
 
   call void (i32, i32, ...) @b(i32 signext 13, i32 signext 37, i8 addrspace(200)* inreg %1)
