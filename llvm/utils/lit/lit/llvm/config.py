@@ -383,6 +383,8 @@ class LLVMConfig(object):
 
         self.config.clang = self.use_llvm_tool(
             'clang', search_env='CLANG', required=required)
+        if not self.config.clang:
+            return
 
         self.config.substitutions.append(
             ('%llvmshlibdir', self.config.llvm_shlib_dir))
@@ -391,26 +393,39 @@ class LLVMConfig(object):
 
         builtin_include_dir = self.get_clang_builtin_include_dir(self.config.clang)
         clang_cc1_args = ['-cc1', '-internal-isystem', builtin_include_dir, '-nostdsysteminc']
-        cheri128_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu', 'cheri128']
-        cheri256_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu', 'cheri']
-        purecap_cc1_args  = ['-triple', 'cheri-unknown-freebsd', '-target-abi', 'purecap']
+        cheri128_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu',
+                             'cheri128', '-cheri-size', '128']
+        cheri256_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu',
+                             'cheri256', '-cheri-size', '256']
 
-        if self.config.cheri_is_128:
+        default_cheri_size = self.lit_config.params['CHERI_CAP_SIZE']
+        if default_cheri_size == '16':
             self.config.available_features.add("cheri_is_128")
-            clang_cc1_args += ['-mllvm', '-cheri128']  # force cheri128 for tests
-            cheri256_cc1_args += ['-mllvm', '-cheri256', '-mllvm', '-cheri-test-mode']
             cheri_cc1_args = cheri128_cc1_args
+            default_cheri_cpu = 'cheri128'
+
         else:
+            assert default_cheri_size == '32', "Invalid -DCHERI_CAP_SIZE=" + default_cheri_size
             self.config.available_features.add("cheri_is_256")
-            cheri128_cc1_args += ['-mllvm', '-cheri-test-mode', "-mllvm", "-cheri128"]
+            default_cheri_cpu = 'cheri256'
             cheri_cc1_args = cheri256_cc1_args
 
+        cheri_clang_args = ['-target', 'cheri-unknown-freebsd', '-nostdinc',
+                            '-mcpu=' + default_cheri_cpu, '-msoft-float']
+
         tool_substitutions = [
-            ToolSubst('%clang', command=self.config.clang),
+            # CHERI substitutions (order is important due to repeated substitutions!)
+            ToolSubst('%cheri_purecap_cc1',    command='%cheri_cc1',    extra_args=['-target-abi', 'purecap']),
+            ToolSubst('%cheri128_purecap_cc1', command='%cheri128_cc1', extra_args=['-target-abi', 'purecap']),
+            ToolSubst('%cheri256_purecap_cc1', command='%cheri256_cc1', extra_args=['-target-abi', 'purecap']),
             ToolSubst('%cheri_cc1',    command='%clang_cc1', extra_args=cheri_cc1_args),
             ToolSubst('%cheri128_cc1', command='%clang_cc1', extra_args=cheri128_cc1_args),
             ToolSubst('%cheri256_cc1', command='%clang_cc1', extra_args=cheri256_cc1_args),
-            ToolSubst('%cheri_purecap_cc1', command='%clang_cc1', extra_args=purecap_cc1_args),
+            ToolSubst('%cheri_clang', command=self.config.clang, extra_args=cheri_clang_args),
+            ToolSubst('%cheri_purecap_clang', command=self.config.clang,
+                      extra_args=cheri_clang_args + ['-mabi=purecap']),
+
+            ToolSubst('%clang', command=self.config.clang),
             ToolSubst('%clang_analyze_cc1', command='%clang_cc1', extra_args=['-analyze']),
             ToolSubst('%clang_cc1', command=self.config.clang, extra_args=clang_cc1_args),
             ToolSubst('%clang_cpp', command=self.config.clang, extra_args=['--driver-mode=cpp']),
