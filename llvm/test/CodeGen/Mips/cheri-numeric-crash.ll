@@ -1,6 +1,6 @@
 ; This would previously crash attempting to optimize the constant multiplication by -10000
 ; TODO: check if this also crashes upstream and if it does submit the patch
-; RUN: %cheri_llc -mtriple=cheri-unknown-freebsd -o - %s
+; RUN: %cheri_llc -o - %s
 ; RUN: llc -mtriple=mips64-unknown-freebsd -o - %s
 ; ModuleID = 'numeric.creduce.ll-reduced-simplified.bc'
 source_filename = "numeric.creduce.ll-output-a9bb50e.bc"

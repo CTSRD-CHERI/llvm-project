@@ -298,16 +298,57 @@ class LLVMConfig(object):
                 'count'), verbatim=True, unresolved='fatal'),
             ToolSubst(r'\| \bnot\b', command=FindTool('not'), verbatim=True, unresolved='fatal')]
 
-        if hasattr(self.config, "cheri_is_128"):
-            if self.config.cheri_is_128:
-                tool_patterns.append(ToolSubst('%cheri_FileCheck', FindTool('FileCheck'),
-                                               extra_args=['-D\\$CAP_SIZE=16']))
-            else:
-                tool_patterns.append(ToolSubst('%cheri_FileCheck', FindTool('FileCheck'),
-                                               extra_args=['-D\\$CAP_SIZE=32']))
+        default_cheri_size = self.lit_config.params['CHERI_CAP_SIZE']
+        tool_patterns.append(ToolSubst('%cheri_FileCheck', FindTool('FileCheck'),
+                                       extra_args=['-D\\$CAP_SIZE=' + default_cheri_size]))
+        if not self.lit_config.quiet:
+            self.lit_config.note('Running tests for CHERI_CAP_SIZE=' + default_cheri_size)
         self.config.substitutions.append(('%python', sys.executable))
         self.add_tool_substitutions(
             tool_patterns, [self.config.llvm_tools_dir])
+
+    def _add_cheri_tool_substitution(self, tool):
+        assert tool in ('llc', 'opt', 'llvm-mc'), 'Invalid tool: ' + tool
+        default_cheri_size = self.lit_config.params['CHERI_CAP_SIZE']
+        self.config.substitutions.append((tool + r".+\-target-abi\s+purecap\b",
+              "\"---Don't use {tool} -target-abi purecap, "
+              "use %cheri[128/256]_purecap_{tool} instead ---\"".format(tool=tool)))
+        self.config.substitutions.append((tool + r".+\-mcpu=cheri.+",
+              "\"---Don't use {tool} -mcpu=cheri, "
+              "use %cheri[128/256]_{tool} instead ---\"".format(tool=tool)))
+
+        if tool == 'llvm-mc':
+            triple_arg = '-triple=cheri-unknown-freebsd'
+            purecap_args = ['-target-abi', 'purecap', '-position-independent']
+        else:
+            triple_arg = '-mtriple=cheri-unknown-freebsd'
+            purecap_args = ['-target-abi', 'purecap', '-relocation-model', 'pic']
+        cheri128_args = [triple_arg, '-mcpu=cheri128', '-mattr=+cheri128']
+        cheri256_args = [triple_arg, '-mcpu=cheri256', '-mattr=+cheri256']
+
+        if default_cheri_size == '16':
+            self.config.available_features.add("cheri_is_128")
+            default_args = cheri128_args
+        else:
+            assert default_cheri_size == '32', "Invalid -DCHERI_CAP_SIZE=" + default_cheri_size
+            self.config.available_features.add("cheri_is_256")
+            default_args = cheri256_args
+        tool_patterns = [
+            ToolSubst('%cheri_' + tool, FindTool(tool), extra_args=default_args),
+            ToolSubst('%cheri128_' + tool, FindTool(tool), extra_args=cheri128_args),
+            ToolSubst('%cheri256_' + tool, FindTool(tool), extra_args=cheri256_args),
+            ToolSubst('%cheri_purecap_' + tool, FindTool(tool),
+                      extra_args=default_args + purecap_args),
+            ToolSubst('%cheri128_purecap_' + tool, FindTool(tool),
+                      extra_args=cheri128_args + purecap_args),
+            ToolSubst('%cheri256_purecap_' + tool, FindTool(tool),
+                      extra_args=cheri256_args + purecap_args),
+        ]
+        self.add_tool_substitutions(tool_patterns, [self.config.llvm_tools_dir])
+
+    def add_cheri_tool_substitutions(self, tools):
+        for tool in tools:
+            self._add_cheri_tool_substitution(tool)
 
     def use_llvm_tool(self, name, search_env=None, required=False, quiet=False):
         """Find the executable program 'name', optionally using the specified
@@ -395,26 +436,39 @@ class LLVMConfig(object):
 
         builtin_include_dir = self.get_clang_builtin_include_dir(self.config.clang)
         clang_cc1_args = ['-cc1', '-internal-isystem', builtin_include_dir, '-nostdsysteminc']
-        cheri128_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu', 'cheri128']
-        cheri256_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu', 'cheri']
-        purecap_cc1_args  = ['-triple', 'cheri-unknown-freebsd', '-target-abi', 'purecap']
+        cheri128_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu',
+                             'cheri128', '-cheri-size', '128']
+        cheri256_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu',
+                             'cheri256', '-cheri-size', '256']
 
-        if self.config.cheri_is_128:
+        default_cheri_size = self.lit_config.params['CHERI_CAP_SIZE']
+        if default_cheri_size == '16':
             self.config.available_features.add("cheri_is_128")
-            clang_cc1_args += ['-mllvm', '-cheri128']  # force cheri128 for tests
-            cheri256_cc1_args += ['-mllvm', '-cheri256', '-mllvm', '-cheri-test-mode']
             cheri_cc1_args = cheri128_cc1_args
+            default_cheri_cpu = 'cheri128'
+
         else:
+            assert default_cheri_size == '32', "Invalid -DCHERI_CAP_SIZE=" + default_cheri_size
             self.config.available_features.add("cheri_is_256")
-            cheri128_cc1_args += ['-mllvm', '-cheri-test-mode', "-mllvm", "-cheri128"]
+            default_cheri_cpu = 'cheri256'
             cheri_cc1_args = cheri256_cc1_args
 
+        cheri_clang_args = ['-target', 'cheri-unknown-freebsd', '-nostdinc',
+                            '-mcpu=' + default_cheri_cpu, '-msoft-float']
+
         tool_substitutions = [
-            ToolSubst('%clang', command=self.config.clang),
+            # CHERI substitutions (order is important due to repeated substitutions!)
+            ToolSubst('%cheri_purecap_cc1',    command='%cheri_cc1',    extra_args=['-target-abi', 'purecap']),
+            ToolSubst('%cheri128_purecap_cc1', command='%cheri128_cc1', extra_args=['-target-abi', 'purecap']),
+            ToolSubst('%cheri256_purecap_cc1', command='%cheri256_cc1', extra_args=['-target-abi', 'purecap']),
             ToolSubst('%cheri_cc1',    command='%clang_cc1', extra_args=cheri_cc1_args),
             ToolSubst('%cheri128_cc1', command='%clang_cc1', extra_args=cheri128_cc1_args),
             ToolSubst('%cheri256_cc1', command='%clang_cc1', extra_args=cheri256_cc1_args),
-            ToolSubst('%cheri_purecap_cc1', command='%clang_cc1', extra_args=purecap_cc1_args),
+            ToolSubst('%cheri_clang', command=self.config.clang, extra_args=cheri_clang_args),
+            ToolSubst('%cheri_purecap_clang', command=self.config.clang,
+                      extra_args=cheri_clang_args + ['-mabi=purecap']),
+
+            ToolSubst('%clang', command=self.config.clang),
             ToolSubst('%clang_analyze_cc1', command='%clang_cc1', extra_args=['-analyze']),
             ToolSubst('%clang_cc1', command=self.config.clang, extra_args=clang_cc1_args),
             ToolSubst('%clang_cpp', command=self.config.clang, extra_args=['--driver-mode=cpp']),

@@ -1,4 +1,4 @@
-# RUN: llvm-mc %s -triple=cheri-unknown-freebsd -show-encoding -mcpu=cheri | FileCheck %s
+# RUN: %cheri_llvm-mc %s -show-encoding | FileCheck %s
 cldc1	$f7, $zero, 0($c2)
 # CHECK: cld	$fp, $zero, 0($c2)
 # CHECK: dmtc1	$fp, $f7

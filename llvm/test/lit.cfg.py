@@ -134,17 +134,7 @@ tools = [
     ToolSubst('%ocamlopt', ocamlopt_command, unresolved='ignore'),
 ]
 
-
-# purecap currently requires PIC codegen!
-purecap_args = ['-mtriple=cheri-unknown-freebsd', '-target-abi', 'purecap', '-relocation-model', 'pic']
-default_cheri_args = ['-mcpu=cheri128', '-mattr=+cheri128']
-tools.extend([
-    ToolSubst('%cheri128_llc', FindTool('llc'), extra_args=['-mcpu=cheri128', '-mattr=+cheri128']),
-    ToolSubst('%cheri256_llc', FindTool('llc'), extra_args=['-mcpu=cheri256' '-mattr=+cheri256']),
-    ToolSubst('%cheri_llc', FindTool('llc'), extra_args=default_cheri_args),
-    ToolSubst('%cheri_purecap_llc', FindTool('llc'), extra_args=purecap_args + default_cheri_args),
-    ToolSubst('%cheri_opt', FindTool('opt'), extra_args=['-mcpu=cheri128', '-mattr=+cheri128']),
-])
+llvm_config.add_cheri_tool_substitutions(['llc', 'opt', 'llvm-mc'])
 
 # FIXME: we shouldn't have any tests that depend on clang here
 llvm_config.use_clang(required=False)

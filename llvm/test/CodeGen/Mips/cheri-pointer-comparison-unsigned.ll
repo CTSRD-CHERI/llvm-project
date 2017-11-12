@@ -1,7 +1,7 @@
 ; check that pointer comparisons are unsigned:
 ; NGINX has a loop with (void*)-1 as a sentinel value which would previously never be entered
 
-; RUN: %cheri_llc -mtriple=cheri-unknown-freebsd %s -o - | FileCheck %s
+; RUN: %cheri_llc %s -o - | FileCheck %s
 ; ModuleID = 'test.c'
 source_filename = "test.c"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"

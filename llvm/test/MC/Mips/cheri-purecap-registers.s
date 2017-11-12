@@ -1,4 +1,4 @@
-# RUN: llvm-mc -triple=cheri-unknown-freebsd -show-encoding -mcpu=cheri %s -target-abi purecap | FileCheck %s
+# RUN: %cheri_purecap_llvm-mc -show-encoding %s | FileCheck %s
 # CHECK: cld	$1, $zero, 0($c0)
 cld $1, $zero, 0($ddc)
 # CHECK: cld	$1, $zero, 0($c11)

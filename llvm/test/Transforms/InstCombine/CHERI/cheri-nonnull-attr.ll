@@ -1,4 +1,4 @@
-; RUN: %cheri_opt -S -target-abi purecap -O3 %s | FileCheck %s
+; RUN: %cheri_purecap_opt -S -O3 %s | FileCheck %s
 
 
 ; ModuleID = '/Users/alex/cheri/llvm/tools/clang/test/CodeGen/cheri-vla.c'
