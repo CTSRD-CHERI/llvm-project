@@ -1,4 +1,4 @@
-// RUN: %cheri_purecap_cc1 -pedantic -Weverything %s -emit-obj -mllvm -mxgot -mllvm -cheri-cap-table -x c -O3 -o %t.o
+// RUN: %cheri128_purecap_cc1 -pedantic -Weverything %s -emit-obj -mllvm -mxgot -mllvm -cheri-cap-table -x c -O3 -o %t.o
 // RUN: ld.lld %t.o -o %t.exe
 // RUN: llvm-objdump -t -d -s %t.exe | FileCheck %s
 
@@ -25,7 +25,7 @@ int main() {
 // CHECK-DAG: 0000000120010050    l     F .text		 0000002c _start
 // CHECK-DAG: 0000000120010000    g     F .text		 00000050 __start
 // CHECK-DAG: 00000001200300{{2|4}}0         .cap_table		 00000000 .hidden __cap_table_end
-// CHECK-DAG: 0000000120030000         .cap_table		 00000040 .hidden __cap_table_start
+// CHECK-DAG: 0000000120030000         .cap_table		 00000020 .hidden __cap_table_start
 // CHECK-DAG: 0000000120030000 l    d  .cap_table		 00000000 .hidden .cap_table
-// CHECK-DAG: 0000000120030000 l       .cap_table		 00000020 .hidden global@CAPTABLE
-// CHECK-DAG: 00000001200300{{1|2}}0 l       .cap_table		 00000020 .hidden global2@CAPTABLE
+// CHECK-DAG: 0000000120030000 l       .cap_table		 00000010 .hidden global@CAPTABLE
+// CHECK-DAG: 00000001200300{{1|2}}0 l       .cap_table		 00000010 .hidden global2@CAPTABLE

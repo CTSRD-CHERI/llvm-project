@@ -1,8 +1,8 @@
 // REQUIRES: clang
 
-// RUN: %clang_cheri_purecap_legacy_capreloc %s -c -o %t.o
-// RUN: %clang_cheri_purecap_legacy_capreloc -DLIBBAR %s -c -o %t_bar.o
-// RUN: %clang_cheri_purecap_legacy_capreloc %S/../Inputs/external_lib.c -c -o %t_external.o
+// RUN: %cheri_purecap_clang %legacy_caprelocs_flag %s -c -o %t.o
+// RUN: %cheri_purecap_clang %legacy_caprelocs_flag -DLIBBAR %s -c -o %t_bar.o
+// RUN: %cheri_purecap_clang %legacy_caprelocs_flag %S/../Inputs/external_lib.c -c -o %t_external.o
 
 
 

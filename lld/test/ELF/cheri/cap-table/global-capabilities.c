@@ -1,8 +1,8 @@
 
 // REQUIRES: clang
 
-// RUN: %cheri128_cc1 -emit-obj -O2 -target-abi purecap -mllvm -cheri-cap-table %s -o %t-128.o
-// RUN: %cheri256_cc1 -emit-obj -O2 -target-abi purecap -mllvm -cheri-cap-table %s -o %t-256.o
+// RUN: %cheri128_purecap_cc1 -emit-obj -O2 -mllvm -cheri-cap-table %s -o %t-128.o
+// RUN: %cheri256_purecap_cc1 -emit-obj -O2 -mllvm -cheri-cap-table %s -o %t-256.o
 // RUN: llvm-readobj -r %t-128.o | FileCheck %s -check-prefix RELOCS
 // RUN: llvm-readobj -r %t-256.o | FileCheck %s -check-prefix RELOCS
 // RUN: ld.lld -o %t-128.exe %t-128.o
@@ -16,8 +16,8 @@
 // RELOCS-LABEL: Section (3) .rela.text {
 // RELOCS-NEXT:   0x28 R_MIPS_CHERI_CAPTAB_HI16/R_MIPS_NONE/R_MIPS_NONE functions 0x0
 // RELOCS-NEXT:   0x2C R_MIPS_CHERI_CAPTAB_LO16/R_MIPS_NONE/R_MIPS_NONE functions 0x0
-// RELOCS-NEXT:   0x60 R_MIPS_CHERI_CAPTAB_HI16/R_MIPS_NONE/R_MIPS_NONE string 0x0
-// RELOCS-NEXT:   0x64 R_MIPS_CHERI_CAPTAB_LO16/R_MIPS_NONE/R_MIPS_NONE string 0x0
+// RELOCS-NEXT:   0x58 R_MIPS_CHERI_CAPTAB_HI16/R_MIPS_NONE/R_MIPS_NONE string 0x0
+// RELOCS-NEXT:   0x5C R_MIPS_CHERI_CAPTAB_LO16/R_MIPS_NONE/R_MIPS_NONE string 0x0
 // RELOCS-NEXT:  }
 
 // RELOCS-LABEL: Section (8) .rela.data {

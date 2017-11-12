@@ -7,7 +7,7 @@
 // RUN: llvm-objdump -C %t-static.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC %s
 
 // same again for statically dynamically linked exe:
-// RUN: %clang_cheri_purecap %S/Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
+// RUN: %cheri_purecap_clang %S/Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
 // RUN: ld.lld -process-cap-relocs -pie -Bdynamic %t.o -o %t-dynamic.exe
 // RUN: llvm-objdump -C %t-dynamic.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s
 // RUN: llvm-readobj -r -s %t-dynamic.exe | FileCheck -check-prefixes DYNAMIC-RELOCS %s
@@ -38,11 +38,11 @@ struct option options_table[] = {
 
 // READOBJ:      Relocations [
 // READOBJ-NEXT:   Section (6) .rela.data {
-// READOBJ-NEXT:     0x20 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE .L.str 0x0
-// READOBJ-NEXT:     0x60 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE .L.str.1 0x4
-// READOBJ-NEXT:     0xA0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE .L.str.2 0x0
-// READOBJ-NEXT:     0xE0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE .L.str.2 0x0
-// READOBJ-NEXT:     0x120 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE .L.str.2 0x1
+// READOBJ-NEXT:     R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE .L.str 0x0
+// READOBJ-NEXT:     R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE .L.str.1 0x4
+// READOBJ-NEXT:     R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE .L.str.2 0x0
+// READOBJ-NEXT:     R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE .L.str.2 0x0
+// READOBJ-NEXT:     R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE .L.str.2 0x1
 // READOBJ-NEXT:   }
 // READOBJ-NEXT: ]
 

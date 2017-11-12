@@ -1,13 +1,13 @@
 // REQUIRES: clang
 
-// RUN: %clang_cheri_purecap_legacy_capreloc %s -c -o %t.o
+// RUN: %cheri_purecap_clang %legacy_caprelocs_flag %s -c -o %t.o
 // RUN: llvm-objdump -C -r %t.o | FileCheck -check-prefix OBJ-CAPRELOCS %s
 
 // RUN: ld.lld -process-cap-relocs %t.o -static -o %t-static.exe -verbose 2>&1 | FileCheck -check-prefixes LINKING-EXE %s
 // RUN: llvm-objdump -C -t -s %t-static.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC %s
 
 // same again for statically dynamically linked exe:
-// RUN: %clang_cheri_purecap_legacy_capreloc %S/../Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
+// RUN: %cheri_purecap_clang %legacy_caprelocs_flag %S/../Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
 // RUN: ld.lld -process-cap-relocs -pie -Bdynamic %t.o -o %t-dynamic.exe -verbose 2>&1 | FileCheck -check-prefixes LINKING-DYNAMIC %s
 // RUN: llvm-objdump -C -t -s %t-dynamic.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s
 // RUN: llvm-readobj -r -s %t-dynamic.exe | FileCheck -check-prefixes DYNAMIC-RELOCS %s

@@ -1,7 +1,7 @@
-// RUN: %cheri128_cc1 %S/Inputs/crt1.c -emit-obj -O2 -target-abi purecap -mllvm -cheri-cap-table -o %t-crt1.o
-// RUN: %cheri128_cc1 %S/Inputs/crtbeginC.c -emit-obj -O2 -target-abi purecap -mllvm -cheri-cap-table -o %t-crtbegin.o
-// RUN: %cheri128_cc1 %S/Inputs/crtendC.c -emit-obj -O2 -target-abi purecap -mllvm -cheri-cap-table -o %t-crtend.o
-// RUN: %cheri128_cc1 %s -emit-obj -O2 -target-abi purecap -mllvm -cheri-cap-table -o %t-main.o
+// RUN: %cheri128_purecap_cc1 %S/Inputs/crt1.c -emit-obj -O2 -mllvm -cheri-cap-table -o %t-crt1.o
+// RUN: %cheri128_purecap_cc1 %S/Inputs/crtbeginC.c -emit-obj -O2 -mllvm -cheri-cap-table -o %t-crtbegin.o
+// RUN: %cheri128_purecap_cc1 %S/Inputs/crtendC.c -emit-obj -O2 -mllvm -cheri-cap-table -o %t-crtend.o
+// RUN: %cheri128_purecap_cc1 %s -emit-obj -O2 -mllvm -cheri-cap-table -o %t-main.o
 // RUN: llvm-objdump -d -r -C -t %t-main.o
 // RUN: ld.lld --fatal-warnings -o %t.exe %t-crt1.o %t-crtbegin.o %t-main.o %t-crtend.o -verbose
 // RUN: llvm-objdump -d -r -C -t %t.exe | FileCheck %s
@@ -25,13 +25,13 @@ __attribute__((noreturn)) void exit(int code) {
 // CHECK-NEXT: 0x0000000120030030	Base: environ (0x0000000120040000)	Offset: 0x0000000000000000	Length: 0x0000000000000010	Permissions: 0x00000000
 // CHECK-NEXT: 0x0000000120030040	Base: __progname (0x0000000120020000)	Offset: 0x0000000000000000	Length: 0x0000000000000010	Permissions: 0x00000000
 // CHECK-NEXT: 0x0000000120030050	Base:  (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x00000000
-// CHECK-NEXT: 0x0000000120030060	Base: atexit (0x0000000120010738)	Offset: 0x0000000000000000	Length: 0x0000000000000008	Permissions: 0x8000000000000000 (Function)
-// CHECK-NEXT: 0x0000000120030070	Base: _init_tls (0x0000000120010740)	Offset: 0x0000000000000000	Length: 0x0000000000000008	Permissions: 0x8000000000000000 (Function)
-// CHECK-NEXT: 0x0000000120030080	Base: crt_call_constructors (0x00000001200105c0)	Offset: 0x0000000000000000	Length: 0x00000000000000a8	Permissions: 0x8000000000000000 (Function)
-// CHECK-NEXT: 0x0000000120030090	Base: handle_static_init (0x0000000120010318)	Offset: 0x0000000000000000	Length: 0x00000000000001d0	Permissions: 0x8000000000000000 (Function)
-// CHECK-NEXT: 0x00000001200300a0	Base: main (0x0000000120010730)	Offset: 0x0000000000000000	Length: 0x0000000000000008	Permissions: 0x8000000000000000 (Function)
-// CHECK-NEXT: 0x00000001200300b0	Base: exit (0x0000000120010748)	Offset: 0x0000000000000000	Length: 0x0000000000000004	Permissions: 0x8000000000000000 (Function)
-// CHECK-NEXT: 0x00000001200300c0	Base: finalizer (0x00000001200104e8)	Offset: 0x0000000000000000	Length: 0x00000000000000d0	Permissions: 0x8000000000000000 (Function)
+// CHECK-NEXT: 0x0000000120030060	Base: atexit (0x0000000120010708)	Offset: 0x0000000000000000	Length: 0x0000000000000008	Permissions: 0x8000000000000000 (Function)
+// CHECK-NEXT: 0x0000000120030070	Base: _init_tls (0x0000000120010710)	Offset: 0x0000000000000000	Length: 0x0000000000000008	Permissions: 0x8000000000000000 (Function)
+// CHECK-NEXT: 0x0000000120030080	Base: crt_call_constructors (0x0000000120010590)	Offset: 0x0000000000000000	Length: 0x00000000000000a4	Permissions: 0x8000000000000000 (Function)
+// CHECK-NEXT: 0x0000000120030090	Base: handle_static_init (0x00000001200102f8)	Offset: 0x0000000000000000	Length: 0x00000000000001c4	Permissions: 0x8000000000000000 (Function)
+// CHECK-NEXT: 0x00000001200300a0	Base: main (0x0000000120010700)	Offset: 0x0000000000000000	Length: 0x0000000000000008	Permissions: 0x8000000000000000 (Function)
+// CHECK-NEXT: 0x00000001200300b0	Base: exit (0x0000000120010718)	Offset: 0x0000000000000000	Length: 0x0000000000000004	Permissions: 0x8000000000000000 (Function)
+// CHECK-NEXT: 0x00000001200300c0	Base: finalizer (0x00000001200104c0)	Offset: 0x0000000000000000	Length: 0x00000000000000cc	Permissions: 0x8000000000000000 (Function)
 // CHECK-NEXT: 0x00000001200300d0	Base:  (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x00000000
 // CHECK-NEXT: 0x00000001200300e0	Base:  (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x00000000
 // CHECK-NEXT: 0x00000001200300f0	Base:  (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x00000000

@@ -3,7 +3,7 @@
 # RssUN: %clang -nostdinc -target cheri-unknown-freebsd -msoft-float -mabi=purecap -isystem /local/scratch/alr48/cheri/output/sdk256/sysroot/usr/include -I /local/scratch/alr48/cheri/libcxxrt/src -x c++ /local/scratch/alr48/cheri/llvm-master/tools/lld/test/ELF/cheri/libcxxrt-crash.test -c -o - | /local/scratch/alr48/cheri/build/llvm-256-build/./bin/ld.lld --full-shutdown --eh-frame-hdr --shared -z notext -o /local/scratch/alr48/cheri/build/llvm-256-build/tools/lld/test/ELF/cheri/Output/libcxxrt.so.1.full -m elf64btsmip_cheri_fbsd /dev/stdin
 # RsUN: ld.lld --eh-frame-hdr --shared -z notext -o %T/libcxxrt.so.1.full -m elf64btsmip_cheri_fbsd %S/Inputs/exception.pico
 
-# Generated from this source code and running %clang_cheri_purecap -isystem /local/scratch/alr48/cheri/output/sdk256/sysroot/usr/include -I /local/scratch/alr48/cheri/libcxxrt/src -x c++ %s -c -o %t.o
+# Generated from this source code and running %cheri_purecap_clang -isystem /local/scratch/alr48/cheri/output/sdk256/sysroot/usr/include -I /local/scratch/alr48/cheri/libcxxrt/src -x c++ %s -c -o %t.o
 # void a(int);
 # void b();
 # long c;

@@ -17,10 +17,10 @@
 // RUN: %clang -integrated-as -target cheri-unknown-freebsd -x c++ -fPIC -mabi=purecap %s -c -o %t.cheri-purecap.o
 // RUN: ld.lld --eh-frame-hdr --shared -z notext -o /dev/null -m elf64btsmip_cheri_fbsd %t.cheri-purecap.o
 
-// RUN: %clang_cheri_purecap -x c++ -fPIC %s -c -o %t.o
-// RUN: %clang_cheri_purecap -x c++ -fPIC %s -c -o %t.ll -S -emit-llvm
+// RUN: %cheri_purecap_clang -x c++ -fPIC %s -c -o %t.o
+// RUN: %cheri_purecap_clang -x c++ -fPIC %s -c -o %t.ll -S -emit-llvm
 // RUN: ld.lld --eh-frame-hdr --shared -z notext -o /dev/null -m elf64btsmip_cheri_fbsd %t.o
-// RUN: %clang_cheri_purecap -x c++ -fPIC %s -c -S -o %t.s
+// RUN: %cheri_purecap_clang -x c++ -fPIC %s -c -S -o %t.s
 // RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd %t.s -o %t.s.o
 // RUN: ld.lld --eh-frame-hdr --shared -z notext -o /dev/null -m elf64btsmip_cheri_fbsd %t.s.o
 
