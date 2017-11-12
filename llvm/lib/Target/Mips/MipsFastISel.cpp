@@ -263,7 +263,7 @@ public:
   unsigned fastMaterializeConstant(const Constant *C) override;
   bool fastSelectInstruction(const Instruction *I) override;
 
-#include "MipsGenFastISel.inc"
+//#include "MipsGenFastISel.inc"
 };
 
 } // end anonymous namespace

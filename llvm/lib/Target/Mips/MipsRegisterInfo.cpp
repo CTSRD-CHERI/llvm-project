@@ -50,7 +50,8 @@ Cheri8("cheri8", cl::NotHidden,
 #define GET_REGINFO_TARGET_DESC
 #include "MipsGenRegisterInfo.inc"
 
-MipsRegisterInfo::MipsRegisterInfo() : MipsGenRegisterInfo(Mips::RA) {}
+MipsRegisterInfo::MipsRegisterInfo(unsigned HwMode) :
+  MipsGenRegisterInfo(Mips::RA, 0, 0, 0, HwMode) {}
 
 unsigned MipsRegisterInfo::getPICCallReg() { return Mips::T9; }
 
@@ -261,7 +262,8 @@ getReservedRegs(const MachineFunction &MF) const {
     if (Cheri16)
       for (unsigned I = 0; I < array_lengthof(ReservedCheri16Regs); ++I)
         Reserved.set(ReservedCheri16Regs[I]);
-  }
+  } else
+    Reserved.set(Mips::C0);
 
   // Reserve FP if this function should have a dedicated frame pointer register.
   if (Subtarget.getFrameLowering()->hasFP(MF)) {

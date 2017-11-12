@@ -169,12 +169,12 @@ def CC_MipsN : CallingConv<[
   // All stack parameter slots become 64-bit doublewords and are 8-byte aligned.
   CCIfType<[f32], CCAssignToStack<4, 8>>,
   CCIfType<[i64, f64], CCAssignToStack<8, 8>>,
-  CCIfType<[iFATPTR], CCAssignToReg<[C3, C4, C5, C6, C7, C8, C9, C10]>>,
-  CCIfType<[iFATPTR], CCDelegateTo<CC_MipsCheriCapOnStack>>
+  CCIfType<[iFATPTR64, iFATPTR128, iFATPTR256, iFATPTR512], CCAssignToReg<[C3, C4, C5, C6, C7, C8, C9, C10]>>,
+  CCIfType<[iFATPTR64, iFATPTR128, iFATPTR256, iFATPTR512], CCDelegateTo<CC_MipsCheriCapOnStack>>
 ]>;
 
 def CC_CHERI_CCall : CallingConv<[
-  CCIfType<[iFATPTR], CCAssignToReg<[C1, C2, C3, C4, C5, C6, C7, C8, C9, C10]>>,
+  CCIfType<[iFATPTR64, iFATPTR128, iFATPTR256, iFATPTR512], CCAssignToReg<[C1, C2, C3, C4, C5, C6, C7, C8, C9, C10]>>,
   CCIfType<[i64], CCAssignToReg<[V0_64]>>,
   CCDelegateTo<CC_MipsN>
 ]>;
@@ -206,7 +206,7 @@ def CC_MipsCheriPureCap_VarArg : CallingConv<[
   // All stack parameter slots become 64-bit doublewords and are 8-byte aligned.
   CCIfType<[f32], CCAssignToStack<4, 8>>,
   CCIfType<[i64, f64], CCAssignToStack<8, 8>>,
-  CCIfType<[iFATPTR], CCDelegateTo<CC_MipsCheriCapOnStack>>
+  CCIfType<[iFATPTR64, iFATPTR128, iFATPTR256, iFATPTR512], CCDelegateTo<CC_MipsCheriCapOnStack>>
 ]>;
 
 def RetCC_MipsN : CallingConv<[
@@ -240,7 +240,7 @@ def RetCC_MipsN : CallingConv<[
   // f64 are returned in registers D0, D2
   CCIfType<[f64], CCAssignToReg<[D0_64, D2_64]>>,
   // Capabilities are returned in C3
-  CCIfType<[iFATPTR], CCAssignToReg<[C3]>>
+  CCIfType<[iFATPTR64, iFATPTR128, iFATPTR256, iFATPTR512], CCAssignToReg<[C3]>>
 ]>;
 
 //===----------------------------------------------------------------------===//
@@ -283,9 +283,9 @@ def CC_MipsN_FastCC : CallingConv<[
   // 8-byte aligned.
   CCIfType<[i64, f64], CCAssignToStack<8, 8>>,
 
-  CCIfType<[iFATPTR], CCAssignToReg<[C1, C2, C3, C4, C5, C6, C7, C8, C9, C10,
+  CCIfType<[iFATPTR64, iFATPTR128, iFATPTR256, iFATPTR512], CCAssignToReg<[C1, C2, C3, C4, C5, C6, C7, C8, C9, C10,
                                      C13, C14, C15, C16]>>,
-  CCIfType<[iFATPTR], CCDelegateTo<CC_MipsCheriCapOnStack>>
+  CCIfType<[iFATPTR64, iFATPTR128, iFATPTR256, iFATPTR512], CCDelegateTo<CC_MipsCheriCapOnStack>>
 ]>;
 
 def CC_Mips_FastCC : CallingConv<[

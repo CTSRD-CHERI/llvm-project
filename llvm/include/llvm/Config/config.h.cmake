@@ -431,7 +431,4 @@
 /* Define to a function implementing strdup */
 #cmakedefine strdup ${strdup}
 
-/* Define to 1 if CHERI should assume 128-bit capabilities */
-#cmakedefine01 CHERI_IS_128
-
 #endif

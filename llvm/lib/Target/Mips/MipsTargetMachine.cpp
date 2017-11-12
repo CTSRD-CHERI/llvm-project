@@ -76,25 +76,10 @@ static std::string computeDataLayout(const Triple &TT, StringRef CPU,
   else
     Ret += "-m:e";
 
+  // FIXME: Should check for +cheri256, +cheri64
   if (FS.find("+cheri128") != StringRef::npos) {
-#if !CHERI_IS_128
-    if (!UnsafeUsage) {
-      for (int i=0 ; i<10 ; i++) {
-        errs() << "Trying to compile CHERI128 code with a CHERI256 compiler!\n";
-      }
-      abort();
-    }
-#endif
     Ret += "-pf200:128:128";
   } else if (Triple(TT).getArch() == Triple::cheri) {
-#if CHERI_IS_128
-    if (!UnsafeUsage) {
-      for (int i=0 ; i<10 ; i++) {
-        errs() << "Trying to compile CHERI256 code with a CHERI128 compiler!\n";
-      }
-      abort();
-    }
-#endif
     Ret += "-pf200:256:256";
   }
 

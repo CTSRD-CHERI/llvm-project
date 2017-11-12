@@ -237,7 +237,7 @@ public:
   /// FIXME: The default needs to be removed once all the code is updated.
   MVT getPointerTy(const DataLayout &DL, uint32_t AS = 0) const {
     if (DL.isFatPointer(AS))
-      return MVT(MVT::iFATPTR);
+      return MVT::getFatPointerVT(DL.getPointerSizeInBits(AS));
     return MVT::getIntegerVT(DL.getPointerSizeInBits(AS));
   }
 

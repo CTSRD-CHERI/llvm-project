@@ -756,6 +756,12 @@ void TypeInfer::expandOverloads(TypeSetByHwMode::SetType &Out,
       case MVT::iPTRAny:
         Out.insert(MVT::iPTR);
         return;
+      case MVT::iFATPTRAny:
+        Out.insert(MVT::iFATPTR64);
+        Out.insert(MVT::iFATPTR128);
+        Out.insert(MVT::iFATPTR256);
+        Out.insert(MVT::iFATPTR512);
+        return;
       case MVT::iAny:
         for (MVT T : MVT::integer_valuetypes())
           if (Legal.count(T))
@@ -1302,7 +1308,7 @@ bool SDTypeConstraint::ApplyTypeConstraint(TreePatternNode *N,
       // two types, but for now just disable this constraint on architectures
       // with fat pointers.
       return false;
-      ArrayRef<ValueTypeByHwMode> PtrTys({ValueTypeByHwMode(MVT::iFATPTR),
+      ArrayRef<ValueTypeByHwMode> PtrTys({ValueTypeByHwMode(MVT::iFATPTRAny),
                                           ValueTypeByHwMode(MVT::iPTR)});
       return NodeToApply->UpdateNodeType(ResNo, PtrTys, TP);
     }

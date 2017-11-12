@@ -113,8 +113,14 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
   // HasMips5_32r2 - Has the subset of MIPS-V present in MIPS32r2
   bool HasMips5_32r2;
 
+  /// IsCheri64 - CHERI capabilities are 64 bits.
+  bool IsCheri64;
+
   /// IsCheri128 - CHERI capabilities are 128 bits.
   bool IsCheri128;
+
+  /// IsCheri256 - CHERI capabilities are 256 bits.
+  bool IsCheri256;
 
   /// IsCheri - Supports the CHERI capability extensions
   bool IsCheri;
@@ -284,8 +290,14 @@ public:
   bool hasMT() const { return HasMT; }
   bool useSmallSection() const { return UseSmallSection; }
   bool isCheri() const { return IsCheri; }
+  bool isCheri64() const { return IsCheri64; }
   bool isCheri128() const { return IsCheri128; }
   bool useCheriCapTable() const { return getABI().UsesCapabilityTable(); };
+  MVT typeForCapabilities() const {
+    return IsCheri64 ? MVT::iFATPTR64 :
+      (IsCheri128 ? MVT::iFATPTR128 : MVT::iFATPTR256);
+  }
+
   /// This is a very ugly hack.  CodeGenPrepare can sink pointer arithmetic to
   /// appear closer to load and store operations (because SelectionDAG only
   /// looks at one basic block at a time).  Unfortunately, it defaults to using

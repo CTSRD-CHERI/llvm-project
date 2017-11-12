@@ -155,7 +155,7 @@ static void setCallTargetReg(MachineBasicBlock *MBB,
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
   unsigned SrcReg = I->getOperand(0).getReg();
   unsigned DstReg = getRegTy(SrcReg, MF) == MVT::i32 ? Mips::T9 : Mips::T9_64;
-  if (getRegTy(SrcReg, MF) == MVT::iFATPTR)
+  if (MVT(getRegTy(SrcReg, MF)).isFatPointer())
     DstReg = Mips::C12;
   BuildMI(*MBB, I, I->getDebugLoc(), TII.get(TargetOpcode::COPY), DstReg)
       .addReg(SrcReg);

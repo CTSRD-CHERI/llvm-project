@@ -39,7 +39,7 @@ public:
     GlobalPointer = 3,
   };
 
-  MipsRegisterInfo();
+  MipsRegisterInfo(unsigned HwMode);
 
   /// Get PIC indirect call register
   static unsigned getPICCallReg();
