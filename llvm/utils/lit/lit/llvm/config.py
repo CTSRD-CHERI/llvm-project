@@ -298,13 +298,11 @@ class LLVMConfig(object):
                 'count'), verbatim=True, unresolved='fatal'),
             ToolSubst(r'\| \bnot\b', command=FindTool('not'), verbatim=True, unresolved='fatal')]
 
-        if hasattr(self.config, "cheri_is_128"):
-            if self.config.cheri_is_128:
-                tool_patterns.append(ToolSubst('%cheri_FileCheck', FindTool('FileCheck'),
-                                               extra_args=['-D\\$CAP_SIZE=16']))
-            else:
-                tool_patterns.append(ToolSubst('%cheri_FileCheck', FindTool('FileCheck'),
-                                               extra_args=['-D\\$CAP_SIZE=32']))
+        default_cheri_size = self.lit_config.params['CHERI_CAP_SIZE']
+        tool_patterns.append(ToolSubst('%cheri_FileCheck', FindTool('FileCheck'),
+                                       extra_args=['-D\\$CAP_SIZE=' + default_cheri_size]))
+        if not self.lit_config.quiet:
+            self.lit_config.note('Running tests for CHERI_CAP_SIZE=' + default_cheri_size)
         self.config.substitutions.append(('%python', sys.executable))
         self.add_tool_substitutions(
             tool_patterns, [self.config.llvm_tools_dir])

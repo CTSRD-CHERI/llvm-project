@@ -21,7 +21,8 @@ sys.path.insert(0, os.path.join(llvm_source_root, 'utils', 'lit'))
 
 # Set up some builtin parameters, so that by default the LLVM test suite
 # configuration file knows how to find the object tree.
-builtin_parameters = { 'build_mode' : "@BUILD_MODE@" }
+builtin_parameters = { 'build_mode' : "@BUILD_MODE@",
+                       'CHERI_CAP_SIZE': "@CHERI_CAP_SIZE@"}
 
 @LLVM_LIT_CONFIG_MAP@
 
