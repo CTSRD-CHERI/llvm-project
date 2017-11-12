@@ -1627,12 +1627,16 @@ bool CastExpr::CastConsistency() const {
     goto CheckNoBasePath;
 
   case CK_CHERICapabilityToOffset:
-  case CK_CHERICapabilityToAddress:
-    assert(getSubExpr()->getType()->isPointerType());
-    assert(getSubExpr()->getType()->getAs<PointerType>()->isCHERICapability());
+  case CK_CHERICapabilityToAddress: {
+    QualType SubType = getSubExpr()->getRealReferenceType();
+    assert((SubType->isPointerType()
+              && SubType->getAs<PointerType>()->isCHERICapability())
+           || (SubType->isReferenceType()
+                 && SubType->getAs<ReferenceType>()->isCHERICapability()));
     assert(getType()->isIntegerType());
     assert(!getType()->isEnumeralType());
     goto CheckNoBasePath;
+  }
 
   case CK_Dependent:
   case CK_LValueToRValue:

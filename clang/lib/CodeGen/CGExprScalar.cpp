@@ -1812,7 +1812,21 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
   }
   case CK_CHERICapabilityToOffset:
   case CK_CHERICapabilityToAddress: {
-    llvm::Value *Src = Visit(E);
+    llvm::Value *Src = nullptr;
+    // Special handling of CHERI C++ capability references. By default, clang
+    // emits a load of the referencee but that can lead to the Verifier being
+    // unhappy if the referencee type is incomplete. What we really want is
+    // just the pointer to the referencee, which is what we do here.
+    if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(E)) {
+      if (const VarDecl *VD = dyn_cast<VarDecl>(DRE->getDecl())) {
+        if (const ReferenceType *RT = dyn_cast<ReferenceType>(VD->getType())) {
+					// RT is guaranteed to be a capability
+          Src = EmitLValue(E).getPointer();
+        }
+      }
+		}
+		if (!Src)
+      Src = Visit(E); // The default case
     llvm::Type *ResultType = ConvertType(DestTy);
     Src = Kind == CK_CHERICapabilityToOffset
             ? CGF.getPointerOffset(Src)
