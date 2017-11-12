@@ -35,6 +35,9 @@ void addrof(void) {
     // XXXAR: currently C++ doesn't allow implicit conversions from function pointer to capability (and I'm not sure we should allow it without a cast)
     //expected-error@-4 {{converting non-capability type 'void ()' to capability type 'voidfn_cap' (aka 'void (* __capability)()') without an explicit cast}}
     //expected-error@-4 {{converting non-capability type 'void (*)()' to capability type 'voidfn_cap' (aka 'void (* __capability)()') without an explicit cast}}
+#else
+    // expected-error@-7 {{converting non-capability type 'void (*)(void)' to capability type 'void (* __capability)(void)' without an explicit cast}}
+    // expected-error@-7 {{converting non-capability type 'void (*)(void)' to capability type 'void (* __capability)(void)' without an explicit cast}}
 #endif
 }
 

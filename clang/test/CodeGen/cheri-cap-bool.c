@@ -20,7 +20,7 @@ __capability int *
 foo2bar(__capability int *afoo)
 {
 	       if (!afoo)
-			                  return((void*)0);
+			                  return((void * __capability)0);
 		          return afoo;
 }
 

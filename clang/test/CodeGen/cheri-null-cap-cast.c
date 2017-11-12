@@ -5,11 +5,11 @@ int main(void) {
   // CHECK: [[P:%.+]] = alloca i8 addrspace(200)*,
   // CHECK: [[VAR0:%.+]] = load i8 addrspace(200)*, i8 addrspace(200)** [[P]]
   // CHECK-NEXT: [[CMP:%.+]] = icmp eq i8 addrspace(200)* [[VAR0]], null
-  if (p == (void*)0) {
+  if (p == (void * __capability)0) {
   }
   // CHECK: [[VAR1:%.+]] = load i8 addrspace(200)*, i8 addrspace(200)** [[P]]
   // CHECK-NEXT: [[CMP1:%.+]] = icmp eq i8 addrspace(200)* null, [[VAR1]]
-  else if ((void*)0 == p) {
+  else if ((void * __capability)0 == p) {
   }
   return 0;
 }
