@@ -1,4 +1,4 @@
-; RUN: %cheri_llc -mtriple=cheri-unknown-freebsd -relocation-model=pic %s -o -
+; RUN: %cheri_llc -relocation-model=pic %s -o -
 ; ModuleID = '/home/alr48/cheri/sources/cheribsd/lib/csu/cheri/crtbeginC.c'
 source_filename = "/home/alr48/cheri/sources/cheribsd/lib/csu/cheri/crtbeginC.c"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"

@@ -307,19 +307,24 @@ class LLVMConfig(object):
         self.add_tool_substitutions(
             tool_patterns, [self.config.llvm_tools_dir])
 
-    def _add_cheri_tool_substitution(self, tool, purecap_args):
+    def _add_cheri_tool_substitution(self, tool):
         assert tool in ('llc', 'opt', 'llvm-mc'), 'Invalid tool: ' + tool
         default_cheri_size = self.lit_config.params['CHERI_CAP_SIZE']
-        cheri128_args = ['-mcpu=cheri128', '-mattr=+cheri128']
-        cheri256_args = ['-mcpu=cheri256', '-mattr=+cheri256']
-
-        # purecap currently requires PIC codegen!
         self.config.substitutions.append((tool + r".+\-target-abi\s+purecap\b",
-              "\"---Don't use {tool} -target-abi purecap,"
-              " use cheri_purecap_{tool} orllvm_purecap_flags instead ---\"".format(tool=tool)))
+              "\"---Don't use {tool} -target-abi purecap, "
+              "use %cheri[128/256]_purecap_{tool} instead ---\"".format(tool=tool)))
         self.config.substitutions.append((tool + r".+\-mcpu=cheri.+",
-              "\"---Don't use {tool} -mcpu=cheri, use cheri_{tool}/"
-              "cheri128_{tool}/cheri256_{tool} instead ---\"".format(tool=tool)))
+              "\"---Don't use {tool} -mcpu=cheri, "
+              "use %cheri[128/256]_{tool} instead ---\"".format(tool=tool)))
+
+        if tool == 'llvm-mc':
+            triple_arg = '-triple=cheri-unknown-freebsd'
+            purecap_args = ['-target-abi', 'purecap', '-position-independent']
+        else:
+            triple_arg = '-mtriple=cheri-unknown-freebsd'
+            purecap_args = ['-target-abi', 'purecap', '-relocation-model', 'pic']
+        cheri128_args = [triple_arg, '-mcpu=cheri128', '-mattr=+cheri128']
+        cheri256_args = [triple_arg, '-mcpu=cheri256', '-mattr=+cheri256']
 
         if default_cheri_size == '16':
             self.config.available_features.add("cheri_is_128")
@@ -329,22 +334,21 @@ class LLVMConfig(object):
             self.config.available_features.add("cheri_is_256")
             default_args = cheri256_args
         tool_patterns = [
+            ToolSubst('%cheri_' + tool, FindTool(tool), extra_args=default_args),
             ToolSubst('%cheri128_' + tool, FindTool(tool), extra_args=cheri128_args),
             ToolSubst('%cheri256_' + tool, FindTool(tool), extra_args=cheri256_args),
-            ToolSubst('%cheri_' + tool, FindTool(tool), extra_args=default_args),
             ToolSubst('%cheri_purecap_' + tool, FindTool(tool),
-                      extra_args=purecap_args + default_args),
+                      extra_args=default_args + purecap_args),
+            ToolSubst('%cheri128_purecap_' + tool, FindTool(tool),
+                      extra_args=cheri128_args + purecap_args),
+            ToolSubst('%cheri256_purecap_' + tool, FindTool(tool),
+                      extra_args=cheri256_args + purecap_args),
         ]
         self.add_tool_substitutions(tool_patterns, [self.config.llvm_tools_dir])
 
     def add_cheri_tool_substitutions(self, tools):
-        purecap_args = ['-mtriple=cheri-unknown-freebsd', '-target-abi',
-                        'purecap', '-relocation-model', 'pic']
         for tool in tools:
-            self._add_cheri_tool_substitution(tool, purecap_args)
-        self.config.substitutions.append(('%llvm_purecap_flags',
-                                          ' '.join(purecap_args)))
-
+            self._add_cheri_tool_substitution(tool)
 
     def use_llvm_tool(self, name, search_env=None, required=False, quiet=False):
         """Find the executable program 'name', optionally using the specified

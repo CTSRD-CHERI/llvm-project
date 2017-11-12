@@ -1,5 +1,5 @@
-; RUN: %cheri_llc -mtriple=cheri-unknown-freebsd -relocation-model=pic %s -o - | FileCheck -check-prefix=CHERI %s
-; RUN: %cheri_llc -mtriple=cheri-unknown-freebsd -cheri-no-global-bounds -relocation-model=pic %s -o - | FileCheck -check-prefix=MIPS %s
+; RUN: %cheri_llc -relocation-model=pic %s -o - | FileCheck -check-prefix=CHERI %s
+; RUN: %cheri_llc -cheri-no-global-bounds -relocation-model=pic %s -o - | FileCheck -check-prefix=MIPS %s
 
 ; ModuleID = 'global.c'
 target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"

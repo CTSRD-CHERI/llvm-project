@@ -134,7 +134,7 @@ tools = [
     ToolSubst('%ocamlopt', ocamlopt_command, unresolved='ignore'),
 ]
 
-llvm_config.add_cheri_tool_substitutions(['llc', 'opt'])
+llvm_config.add_cheri_tool_substitutions(['llc', 'opt', 'llvm-mc'])
 
 # FIXME: we shouldn't have any tests that depend on clang here
 llvm_config.use_clang(required=False)

@@ -1,4 +1,4 @@
-; RUN: %cheri256_llc %llvm_purecap_flags -O0 %s -o - | FileCheck --enable-var-scope %s
+; RUN: %cheri_purecap_llc -O0 %s -o - | FileCheck --enable-var-scope %s
 ; ModuleID = 'cheri-stack.c'
 source_filename = "cheri-stack.c"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"

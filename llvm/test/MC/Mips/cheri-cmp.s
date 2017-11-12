@@ -1,4 +1,4 @@
-# RUN: llvm-mc %s -triple=cheri-unknown-freebsd -show-encoding -mcpu=cheri | FileCheck %s
+# RUN: %cheri_llvm-mc %s -show-encoding | FileCheck %s
 #
 # Check that the assembler is able to handle capability get instructions.
 #
