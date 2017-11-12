@@ -2256,7 +2256,7 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
     // FIXME: shouldn't functions have a R_MIPS_CHERI_CAPCALL relocation?
     bool CanUseCapTable = GVTy->isFunctionTy() ||  DAG.getDataLayout().isFatPointer(GVTy);
     // FIXME: should not use MVT::iFATPTR once the tablegen changes get merged
-    EVT GlobalTy = Ty.isFatPointer() ? Ty : Subtarget.typeForCapabilities();
+    EVT GlobalTy = Ty.isFatPointer() ? Ty : CapType;
     bool IsFnPtr =
       GVTy->isPointerTy() && GVTy->getPointerElementType()->isFunctionTy();
     if (CanUseCapTable || IsFnPtr) {
@@ -2467,8 +2467,8 @@ lowerJumpTable(SDValue Op, SelectionDAG &DAG) const
   if (ABI.UsesCapabilityTable()) {
     // FIXME: or should this be something else? like in lowerCall?
     auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
-    return getFromCapTable(false, N, SDLoc(N), Subtarget.typeForCapabilities(),
-                           DAG, DAG.getEntryNode(), PtrInfo);
+    return getFromCapTable(false, N, SDLoc(N), CapType, DAG, DAG.getEntryNode(),
+                           PtrInfo);
   }
 
   if (!isPositionIndependent())
@@ -3090,7 +3090,7 @@ SDValue MipsTargetLowering::lowerBR_JT(SDValue Op,
 
   const DataLayout &TD = DAG.getDataLayout();
   EVT PTy = getPointerTy(TD, 200);
-  assert(PTy == Subtarget.typeForCapabilities());
+  assert(PTy == CapType);
   unsigned EntrySize =
     DAG.getMachineFunction().getJumpTableInfo()->getEntrySize(TD);
   assert(EntrySize == 4);
@@ -3655,8 +3655,8 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
     const GlobalValue *GV = G->getGlobal();
     if (CheriCapTable) {
-      Callee = getFromCapTable(true, G, DL, Subtarget.typeForCapabilities(),
-                               DAG, Chain, FuncInfo->callPtrInfo(GV));
+      Callee = getFromCapTable(true, G, DL, CapType, DAG, Chain,
+                               FuncInfo->callPtrInfo(GV));
       IsCallReloc = true;
     } else if (IsPIC) {
       InternalLinkage = GV->hasInternalLinkage();
@@ -3683,8 +3683,8 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     const char *Sym = S->getSymbol();
 
     if (CheriCapTable) {
-      Callee = getFromCapTable(true, S, DL, Subtarget.typeForCapabilities(),
-                               DAG, Chain, FuncInfo->callPtrInfo(Sym));
+      Callee = getFromCapTable(true, S, DL, CapType, DAG, Chain,
+                               FuncInfo->callPtrInfo(Sym));
       IsCallReloc = true;
     } else if (!IsPIC) // static
       Callee = DAG.getTargetExternalSymbol(
