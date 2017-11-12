@@ -38,7 +38,7 @@ void test_arrays(void* __capability cap) {
   struct foo foo_array[5] = {
       {cap, NULL}, // no-error
       {cap, cap}, // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
-      {.cap = NULL, .ptr = NULL}, // no-error
+      {.cap = NULL, .ptr = NULL},
       [4] = {.cap = cap, .ptr = cap} // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
   };
 }

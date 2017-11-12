@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -o - %s | FileCheck %s
+// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -o - %s | %cheri_FileCheck %s
 
 class A { };
 
@@ -6,7 +6,7 @@ void f() {
   A a1;
   // CHECK: %a1 = alloca %class.A, align 1
   A& a2 = a1;
-  // CHECK-NEXT: %a2 = alloca %class.A addrspace(200)*, align [[$CAP_SIZE:16|32]]
+  // CHECK-NEXT: %a2 = alloca %class.A addrspace(200)*, align [[$CAP_SIZE]]
   // CHECK-NEXT: %b = alloca i8, align 1
   // CHECK-NEXT: %b2 = alloca i8, align 1
   // CHECK-NEXT: store %class.A addrspace(200)* %a1, %class.A addrspace(200)* addrspace(200)* %a2, align [[$CAP_SIZE]]

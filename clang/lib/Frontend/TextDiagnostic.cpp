@@ -487,7 +487,7 @@ static void selectInterestingSourceRegion(std::string &SourceLine,
   unsigned ColumnsKept = CaretEnd-CaretStart;
 
   // We checked up front that the line needed truncation
-  assert(FrontColumnsRemoved+ColumnsKept+BackColumnsRemoved > Columns);
+  assert(FrontColumnsRemoved+ColumnsKept+BackColumnsRemoved >= Columns);
 
   // The line needs some truncation, and we'd prefer to keep the front
   //  if possible, so remove the back

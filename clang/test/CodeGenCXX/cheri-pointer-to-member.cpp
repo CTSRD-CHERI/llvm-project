@@ -1,6 +1,6 @@
-// RUN: %clang %s -mabi=purecap -fno-rtti -std=c++11 -target cheri-unknown-freebsd -o - -emit-llvm -S | FileCheck %s "-implicit-check-not=alloca { i64, i64 }" -enable-var-scope
-// RUN: %clang %s -mabi=n64 -fno-rtti -std=c++11 -target cheri-unknown-freebsd -o - -emit-llvm -S -O2 | FileCheck %s -check-prefix N64
-// RUN: %clang %s -mabi=n64 -fno-rtti -std=c++11 -target cheri-unknown-freebsd -o - -S -O2 | FileCheck %s -check-prefix N64-ASM
+// RUN: %clang %s -mabi=purecap -fno-rtti -std=c++11 -target cheri-unknown-freebsd -o - -emit-llvm -S | %cheri_FileCheck %s "-implicit-check-not=alloca { i64, i64 }" -enable-var-scope
+// RUN: %clang %s -mabi=n64 -fno-rtti -std=c++11 -target cheri-unknown-freebsd -o - -emit-llvm -S -O2 | %cheri_FileCheck %s -check-prefix N64
+// RUN: %clang %s -mabi=n64 -fno-rtti -std=c++11 -target cheri-unknown-freebsd -o - -S -O2 | %cheri_FileCheck %s -check-prefix N64-ASM
 
 class A {
 public:
@@ -20,7 +20,7 @@ struct mem_fn_ptr {
 void func(void) {}
 mem_fn_ptr virt = { (void*)32, 1 };
 mem_fn_ptr nonvirt = { (void*)&func, 1 };
-// CHECK: @virt = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 32 to i8 addrspace(200)*), i64 1 }, align [[$CAP_SIZE:16|32]]
+// CHECK: @virt = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 32 to i8 addrspace(200)*), i64 1 }, align [[$CAP_SIZE]]
 // CHECK: @nonvirt = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* addrspacecast (i8* bitcast (void ()* @_Z4funcv to i8*) to i8 addrspace(200)*), i64 1 }, align [[$CAP_SIZE]]
 
 // now the real thing
@@ -339,7 +339,7 @@ void take_func_ptr(AMemberFuncPtr ptr) {
 }
 
 AMemberFuncPtr passthrough_func_ptr(AMemberFuncPtr ptr) {
-  // CHECK-LABEL: define void @_Z20passthrough_func_ptrM1AFivE({ i8 addrspace(200)*, i64 } addrspace(200)* noalias sret{{.*}}, i64, i8 addrspace(200)* inreg{{.*}}, i64 inreg{{.*}})
+  // CHECK-LABEL: define void @_Z20passthrough_func_ptrM1AFivE({ i8 addrspace(200)*, i64 } addrspace(200)* noalias sret{{.*}}, {{.*}}, i8 addrspace(200)* inreg{{.*}}, i64 inreg{{.*}})
   // CHECK: [[RETVAL:%.+]] = alloca { i8 addrspace(200)*, i64 }, align [[$CAP_SIZE]]
   // CHECK-NEXT: [[PTR:%.+]] = alloca { i8 addrspace(200)*, i64 }, align [[$CAP_SIZE]]
   // CHECK-NEXT: [[PTR_ADDR:%.+]] = alloca { i8 addrspace(200)*, i64 }, align [[$CAP_SIZE]]

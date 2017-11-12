@@ -68,7 +68,7 @@ void test_cap_to_ptr(void* __capability a) {
   void* non_cap{a}; // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
   void* non_cap2 = {a}; // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
   // TODO: These should warn as well
-  foo f{a, a}; // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
+  foo f{a, a}; // expected-error {{converting capability type 'void * __capability' to non-capability type 'void *' without an explicit cast}}
   foo f2;
   f2 = {a, nullptr}; // this is fine
   // TODO: it would be nice if we could get a better error message here (see SemaOverload.cpp), it works fine for references
@@ -82,14 +82,14 @@ void test_cap_to_ptr(void* __capability a) {
 // check arrays:
 void test_arrays(void* __capability cap) {
   int* ptr = nullptr;
-  void* ptr_array[3] = { nullptr, cap, ptr }; // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
+  void* ptr_array[3] = { nullptr, cap, ptr }; // expected-error {{converting capability type 'void * __capability' to non-capability type 'void *' without an explicit cast}}
   void* __capability cap_array[3] = { nullptr, cap, ptr }; // expected-error {{converting non-capability type 'int *' to capability type 'void * __capability' without an explicit cast}}
 
     struct foo foo_array[5] = {
       {cap, nullptr}, // no-error
-      {cap, cap}, // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
+      {cap, cap}, // expected-error {{converting capability type 'void * __capability' to non-capability type 'void *' without an explicit cast}}
       {.cap = nullptr, .ptr = nullptr}, // no-error
-      [4] = {.cap = cap, .ptr = cap} // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
+      [4] = {.cap = cap, .ptr = cap} // expected-error {{converting capability type 'void * __capability' to non-capability type 'void *' without an explicit cast}}
   };
 }
 
@@ -99,7 +99,7 @@ union foo_union {
 };
 
 void test_union(void* __capability a) {
-  foo_union u{a}; // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
+  foo_union u{a}; // expected-error {{converting capability type 'void * __capability' to non-capability type 'void *' without an explicit cast}}
 }
 
 #endif

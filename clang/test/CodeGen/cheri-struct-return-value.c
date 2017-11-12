@@ -1,16 +1,16 @@
-// RUN: %cheri256_cc1 -target-abi purecap -std=c11 -O2 -emit-llvm -o - %s | FileCheck %s -enable-var-scope
-// RUN: %cheri128_cc1 -target-abi purecap -std=c11 -O2 -emit-llvm -o - %s | FileCheck %s -enable-var-scope
-// RUN: %cheri256_cc1 -target-abi purecap -std=c11 -O2 -S -o - %s | FileCheck -check-prefix=ASM %s
-// RUN: %cheri128_cc1 -target-abi purecap -std=c11 -O2 -S -o - %s | FileCheck -check-prefix=ASM %s
+// RUN: %cheri256_cc1 -target-abi purecap -std=c11 -O2 -emit-llvm -o - %s | FileCheck -D\$CAP_SIZE=32 %s -enable-var-scope
+// RUN: %cheri128_cc1 -target-abi purecap -std=c11 -O2 -emit-llvm -o - %s | FileCheck -D\$CAP_SIZE=16 %s -enable-var-scope
+// RUN: %cheri256_cc1 -target-abi purecap -std=c11 -O2 -S -o - %s | FileCheck -D\$CAP_SIZE=32 -check-prefix=ASM %s
+// RUN: %cheri128_cc1 -target-abi purecap -std=c11 -O2 -S -o - %s | FileCheck -D\$CAP_SIZE=16 -check-prefix=ASM %s
 int global;
 
 unsigned long sizeof_cap(void) {
   return sizeof(void* __capability);
   // CHECK-LABEL: define i64 @sizeof_cap() local_unnamed_addr
-  // CHECK: ret i64 [[$CAP_SIZE:16|32]]
+  // CHECK: ret i64 [[$CAP_SIZE]]
   // ASM-LABEL: sizeof_cap
   // ASM: cjr     $c17
-  // ASM: daddiu   $2, $zero, [[$CAP_SIZE:16|32]]
+  // ASM: daddiu   $2, $zero, [[$CAP_SIZE]]
 }
 
 typedef struct {
@@ -62,7 +62,7 @@ TwoCapsStruct two_caps_struct(TwoCapsStruct in) {
   t.ptr = in.ptr;
   return t;
   // argument is split up into two cap regs, but return value is indirect
-  // CHECK-LABEL: define void @two_caps_struct(%struct.TwoCapsStruct addrspace(200)* noalias nocapture sret %agg.result, i64, i8 addrspace(200)* inreg %in.coerce0, i8 addrspace(200)* inreg %in.coerce1) local_unnamed_addr
+  // CHECK-LABEL: define void @two_caps_struct(%struct.TwoCapsStruct addrspace(200)* noalias nocapture sret %agg.result, {{.*}}, i8 addrspace(200)* inreg %in.coerce0, i8 addrspace(200)* inreg %in.coerce1) local_unnamed_addr
   // CHECK: [[VAR1:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in.coerce0, i64 1)
   // CHECK: %t.sroa.0.0..sroa_idx = getelementptr inbounds %struct.TwoCapsStruct, %struct.TwoCapsStruct addrspace(200)* %agg.result, i64 0, i32 0
   // CHECK: store i8 addrspace(200)* [[VAR1]], i8 addrspace(200)* addrspace(200)* %t.sroa.0.0..sroa_idx, align [[$CAP_SIZE]]
