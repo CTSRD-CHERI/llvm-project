@@ -516,9 +516,9 @@ extern bool LargeCapTable;
     }
 
     template <class NodeTy>
-    SDValue getFromCapTable(bool IsFnPtr, NodeTy *N, const SDLoc &DL, EVT Ty,
-                            SelectionDAG &DAG, SDValue Chain) const {
-      auto CapTable = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
+    SDValue getFromCapTable(bool UseCallReloc, NodeTy *N, const SDLoc &DL,
+                            EVT Ty, SelectionDAG &DAG, SDValue Chain,
+                            const MachinePointerInfo &PtrInfo) const {
       // FIXME: in the future it would be good to inline local function pointers
       // into the capability table directly (right now the value is a
       // void () addrspace(200)* addrspace(200)* instead of a
@@ -526,15 +526,15 @@ extern bool LargeCapTable;
       // llvm::errs() << "is fn ptr: " << IsFnPtr << "\n";
       if (LargeCapTable) {
         auto HiReloc =
-            IsFnPtr ? MipsII::MO_CAPTAB_CALL_HI16 : MipsII::MO_CAPTAB_HI16;
+          UseCallReloc ? MipsII::MO_CAPTAB_CALL_HI16 : MipsII::MO_CAPTAB_HI16;
         auto LoReloc =
-            IsFnPtr ? MipsII::MO_CAPTAB_CALL_LO16 : MipsII::MO_CAPTAB_LO16;
+          UseCallReloc ? MipsII::MO_CAPTAB_CALL_LO16 : MipsII::MO_CAPTAB_LO16;
         return _getGlobalCapBigImmediate(N, SDLoc(N), Ty, DAG, HiReloc, LoReloc,
-                                         Chain, CapTable);
+                                         Chain, PtrInfo);
       } else {
-        auto Reloc = IsFnPtr ? MipsII::MO_CAPTAB_CALL11 : MipsII::MO_CAPTAB11;
+        auto Reloc = UseCallReloc ? MipsII::MO_CAPTAB_CALL11 : MipsII::MO_CAPTAB11;
         return _getGlobalCapSmallImmediate(N, SDLoc(N), Ty, DAG, Reloc, Chain,
-                                           CapTable);
+                                           PtrInfo);
       }
     }
 
