@@ -8185,7 +8185,12 @@ public:
                             QualType DestTy, TypeSourceInfo *TSInfo,
                             SourceLocation RParenLoc, Expr *SubExpr);
 
-  ExprResult ActOnCheriPtr(Scope *S, SourceLocation LParenLoc,
+  ExprResult BuildCheriOffsetOrAddress(SourceLocation LParenLoc, SourceLocation KeywordLoc,
+                                       tok::TokenKind Kind, QualType DestTy,
+                                       TypeSourceInfo *TSInfo, SourceLocation
+                                       RParenLoc, Expr *SubExpr);
+
+  ExprResult ActOnCheriCast(Scope *S, SourceLocation LParenLoc, tok::TokenKind Kind,
                             SourceLocation CheriPtrKeywordLoc, ParsedType Type,
                             SourceLocation RParenLoc, Expr *SubExpr);
 

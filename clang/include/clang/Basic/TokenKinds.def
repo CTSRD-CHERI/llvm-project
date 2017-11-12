@@ -571,8 +571,10 @@ KEYWORD(__bridge_retained            , KEYARC)
 KEYWORD(__bridge_retain              , KEYARC)
 
 
-// CHERI casts to and from capabilities
-KEYWORD(__cheri_ptr                 , KEYALL)
+// CHERI casts.
+KEYWORD(__cheri_ptr                 , KEYALL) // cast ptr <-> capability
+KEYWORD(__cheri_offset              , KEYALL) // get the capability offset field
+KEYWORD(__cheri_addr                , KEYALL) // convert capability to an address
 
 
 // Objective-C keywords.

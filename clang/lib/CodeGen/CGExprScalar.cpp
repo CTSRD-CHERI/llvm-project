@@ -1810,6 +1810,19 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
         CGF, Src, SrcPointeeTy.getAddressSpace(),
         DstPointeeTy.getAddressSpace(), DestType);
   }
+  case CK_CHERICapabilityToOffset:
+  case CK_CHERICapabilityToAddress: {
+    llvm::Value *Src = Visit(E);
+    llvm::Type *ResultType = ConvertType(DestTy);
+    Src = Kind == CK_CHERICapabilityToOffset
+            ? CGF.getPointerOffset(Src)
+            : CGF.getPointerAddress(Src);
+    bool DestSigned = DestTy->isSignedIntegerOrEnumerationType();
+    // Insert int cast incase size of result type and capability offset field
+    // are not the same. This will be a noop if the sizes are the same.
+    return Builder.CreateIntCast(Src, ResultType, DestSigned, "conv");
+  }
+
   case CK_AtomicToNonAtomic:
   case CK_NonAtomicToAtomic:
   case CK_NoOp:

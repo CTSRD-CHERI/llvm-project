@@ -6039,6 +6039,14 @@ def warn_cheri_ptr_noop : Warning<
 //  InGroup<CHERIPedantic>;
   InGroup<Pedantic>, DefaultIgnore;
 
+def err_cheri_offset_addr_invalid_source_type: Error<
+  "invalid source type %0 for __cheri_%select{addr|offset}1: source must be a capability">;
+def err_cheri_offset_addr_invalid_target_type: Error<
+  "invalid target type %0 for __cheri_%select{addr|offset}1: target must be an integer type">;
+def warn_cheri_offset_addr_smaller_target_type: Warning<
+  "target type %0 is smaller than the type '%1' of the "
+  "%select{address|capability offset field}2; truncation may occur">;
+
 def warn_mixed_sign_comparison : Warning<
   "comparison of integers of different signs: %0 and %1">,
   InGroup<SignCompare>, DefaultIgnore;

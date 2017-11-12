@@ -734,6 +734,10 @@ public:
                                                              destAS, destTy);
     }
 
+    case CK_CHERICapabilityToOffset:
+    case CK_CHERICapabilityToAddress:
+      llvm_unreachable("__cheri_offset and __cheri_addr are handled elsewhere");
+
     case CK_LValueToRValue:
     case CK_AtomicToNonAtomic:
     case CK_NonAtomicToAtomic:

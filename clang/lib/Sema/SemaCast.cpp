@@ -2953,12 +2953,67 @@ ExprResult Sema::BuildCheriPtr(SourceLocation LParenLoc,
                                 nullptr, TSInfo, LParenLoc, RParenLoc);
 }
 
-ExprResult Sema::ActOnCheriPtr(Scope *S, SourceLocation LParenLoc,
+ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
+                                           SourceLocation KeywordLoc,
+                                           tok::TokenKind Kind, QualType
+                                           DestTy, TypeSourceInfo *TSInfo,
+                                           SourceLocation RParenLoc, Expr
+                                           *SubExpr) {
+  // Use getRealReferenceType() because getType() returns T for T&
+  QualType SrcTy = SubExpr->getRealReferenceType();
+  bool SrcIsCap = SrcTy->isCHERICapabilityType(Context);
+  if (!SrcIsCap) {
+    // XXXKG: What about functions?
+    Diag(SubExpr->getLocStart(), diag::err_cheri_offset_addr_invalid_source_type)
+      << SrcTy << (Kind == tok::kw___cheri_offset);
+    return ExprError();
+  }
+
+  // XXXKG: Should pointer types also be allowed for __cheri_addr?
+  bool DestIsInt = DestTy->isIntegerType() && !DestTy->isEnumeralType();
+  if (!DestIsInt) {
+    Diag(SubExpr->getLocStart(), diag::err_cheri_offset_addr_invalid_target_type)
+      << DestTy << (Kind == tok::kw___cheri_offset);
+    return ExprError();
+  }
+
+  // Output warning about truncation if DestTy is smaller than CHERI cap pointer range
+  auto& TI = Context.getTargetInfo();
+  uint64_t PtrRange = TI.getPointerRangeForCHERICapability();
+  uint64_t DestRange = Context.getTypeSize(DestTy);
+  if (DestRange < PtrRange) {
+    bool DestIsSigned = DestTy->isSignedIntegerOrEnumerationType();
+    const char *minTy = TI.getTypeName(
+                          TI.getLeastIntTypeByWidth(PtrRange, DestIsSigned)
+                        );
+    Diag(SubExpr->getLocStart(), diag::warn_cheri_offset_addr_smaller_target_type)
+      << DestTy << minTy << (Kind == tok::kw___cheri_offset);
+  }
+
+  return CStyleCastExpr::Create(Context, DestTy, VK_RValue,
+                                Kind == tok::kw___cheri_offset
+                                  ? CK_CHERICapabilityToOffset
+                                  : CK_CHERICapabilityToAddress,
+                                SubExpr,
+                                nullptr, TSInfo, LParenLoc, RParenLoc);
+}
+
+ExprResult Sema::ActOnCheriCast(Scope *S, SourceLocation LParenLoc, tok::TokenKind Kind,
                                 SourceLocation KeywordLoc, ParsedType Type,
                                 SourceLocation RParenLoc, Expr *SubExpr) {
   TypeSourceInfo *TSInfo = nullptr;
   QualType T = GetTypeFromParser(Type, &TSInfo);
   if (!TSInfo)
     TSInfo = Context.getTrivialTypeSourceInfo(T, LParenLoc);
-  return BuildCheriPtr(LParenLoc, KeywordLoc, T, TSInfo, RParenLoc, SubExpr);
+  switch (Kind) {
+  case tok::kw___cheri_ptr:
+    return BuildCheriPtr(LParenLoc, KeywordLoc, T, TSInfo, RParenLoc, SubExpr);
+
+  case tok::kw___cheri_offset:
+  case tok::kw___cheri_addr:
+    return BuildCheriOffsetOrAddress(LParenLoc, KeywordLoc, Kind, T, TSInfo, RParenLoc, SubExpr);
+
+  default:
+    llvm_unreachable("Unknown CHERI cast!");
+  }
 }

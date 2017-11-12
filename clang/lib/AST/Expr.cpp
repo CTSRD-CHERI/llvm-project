@@ -1626,6 +1626,14 @@ bool CastExpr::CastConsistency() const {
     assert(!getType()->isBooleanType() && "unheralded conversion to bool");
     goto CheckNoBasePath;
 
+  case CK_CHERICapabilityToOffset:
+  case CK_CHERICapabilityToAddress:
+    assert(getSubExpr()->getType()->isPointerType());
+    assert(getSubExpr()->getType()->getAs<PointerType>()->isCHERICapability());
+    assert(getType()->isIntegerType());
+    assert(!getType()->isEnumeralType());
+    goto CheckNoBasePath;
+
   case CK_Dependent:
   case CK_LValueToRValue:
   case CK_NoOp:
