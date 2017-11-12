@@ -134,16 +134,7 @@ tools = [
     ToolSubst('%ocamlopt', ocamlopt_command, unresolved='ignore'),
 ]
 
-
-config.substitutions.append((r"llc.+\-mcpu=cheri\b", "\"---Don't use llc -mcpu=cheri directly,"
-                              " use %cheri_llc, %cheri128_llc or %cheri256_llc instead---\""))
-
-tools.extend([
-    ToolSubst('%cheri128_llc', FindTool('llc'), extra_args=[' -mcpu=cheri128 -mattr=+cheri128']),
-    ToolSubst('%cheri256_llc', FindTool('llc'), extra_args=[' -mcpu=cheri256 -mattr=+cheri256']),
-    ToolSubst('%cheri_llc', FindTool('llc'), extra_args=[' -mcpu=cheri128 -mattr=+cheri128']),
-    ToolSubst('%cheri_opt', FindTool('opt'), extra_args=[' -mcpu=cheri128 -mattr=+cheri128']),
-])
+llvm_config.add_cheri_tool_substitutions(['llc', 'opt'])
 
 # FIXME: we shouldn't have any tests that depend on clang here
 llvm_config.use_clang(required=False)

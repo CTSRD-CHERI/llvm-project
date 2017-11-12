@@ -1,4 +1,4 @@
-; RUN: %cheri_llc %s -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model=pic -o - | FileCheck %s
+; RUN: %cheri_purecap_llc %s -o - | FileCheck %s
 ; ModuleID = 'atomic.c'
 target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"

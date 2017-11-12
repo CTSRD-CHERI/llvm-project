@@ -1,4 +1,4 @@
-; RUN: %cheri_llc -target-abi purecap %s -o /dev/null
+; RUN: %cheri_purecap_llc %s -o /dev/null
 
 ; ModuleID = '/local/scratch/alr48/cheri/llvm-master/tools/clang/test/CodeGen/cheri-issue-244.c'
 source_filename = "/local/scratch/alr48/cheri/llvm-master/tools/clang/test/CodeGen/cheri-issue-244.c"
