@@ -94,7 +94,29 @@ class ReduceTool(metaclass=ABCMeta):
 
     def _reduce_script_text(self, input_file: Path):
         # Handling timeouts in a shell script is awful -> just generate a python script instead
-        result = "#!/usr/bin/env python3\nimport subprocess\nimport sys\n\n"
+        result = """#!/usr/bin/env python3
+import subprocess
+import os
+import signal
+import sys
+
+# https://stackoverflow.com/questions/4789837/how-to-terminate-a-python-subprocess-launched-with-shell-true/4791612#4791612
+def run_cmd(cmd, timeout):
+    with subprocess.Popen(cmd, shell=True, preexec_fn=os.setsid) as process:
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+            retcode = process.poll()
+            return subprocess.CompletedProcess(process.args, retcode, stdout, stderr)
+        except subprocess.TimeoutExpired:
+            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+            process.kill()
+            raise subprocess.TimeoutExpired(process.args, timeout)
+        except:
+            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+            process.kill()
+            process.wait()
+            raise
+"""
         timeout_arg = self.args.timeout if self.args.timeout else "None"
         for cmd in self.run_cmds:
             # check for %s should have happened earlier
@@ -116,16 +138,20 @@ class ReduceTool(metaclass=ABCMeta):
 try:
     command = r'''{not_cmd} {crash_flag} {command} {grep_msg} '''
     # print(command)
-    result = subprocess.run(command, shell=True, timeout={timeout_arg})
+    result = run_cmd(command, timeout={timeout_arg})
     if result.returncode != 0:
         sys.exit({not_interesting})
 except subprocess.TimeoutExpired:
     print("TIMED OUT", file=sys.stderr)
     sys.exit({not_interesting})
+except Exception as e:
+    print("SOME OTHER ERROR:", e)
+    sys.exit({not_interesting})
+
 """.format(timeout_arg=timeout_arg, not_interesting=self.not_interesting_exit_code,
            not_cmd=self.args.not_cmd, crash_flag=crash_flag, command=compiler_cmd, grep_msg=grep_msg)
 
-        return result + "\nsys.exit(" + str(self.interesting_exit_code) + ")"
+        return result + "sys.exit(" + str(self.interesting_exit_code) + ")"
 
     def _create_reduce_script(self, tmpdir: Path, input_file: Path):
         reduce_script = Path(tmpdir, "reduce_script.sh").absolute()
