@@ -1,4 +1,4 @@
-// RUN: %clang -target cheri-unknown-freebsd -mabi=purecap  %s -O0 -msoft-float -S -emit-llvm -o - | FileCheck %s
+// RUN: %cheri_purecap_cc1 %s -O0 -msoft-float -emit-llvm -o - | FileCheck %s
 // Ensure literals don't spontaneously switch address space during calls when
 // using the pure capability ABI. A regression test for #5.
 

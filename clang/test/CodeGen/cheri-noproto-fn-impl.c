@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -o - %s | FileCheck %s -check-prefix FOLDED
+// RUN: %cheri_purecap_cc1 -emit-llvm -o - %s | FileCheck %s -check-prefix FOLDED
 
 static void
 crt_init_globals()

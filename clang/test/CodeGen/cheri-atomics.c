@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 %s -target-abi purecap -emit-llvm -triple cheri-unknown-freebsd -o - | %cheri_FileCheck %s
+// RUN: %cheri_purecap_cc1 %s -emit-llvm -o - | %cheri_FileCheck %s
 int main(void) {
   _Atomic(int*) p;
   // CHECK:  %p = alloca i32 addrspace(200)*, align [[$CAP_SIZE]], addrspace(200)

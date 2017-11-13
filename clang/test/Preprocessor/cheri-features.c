@@ -1,4 +1,4 @@
-// RUN: %clang -fsyntax-only -target cheri-unknown-freebsd11 %s \
+// RUN: %cheri_clang -fsyntax-only -target cheri-unknown-freebsd11 %s \
 // RUN:   2>&1 | FileCheck --check-prefix=CHECK-CHERI %s
 
 // RUN: %clang -fsyntax-only -target mips64-unknown-freebsd11 %s \

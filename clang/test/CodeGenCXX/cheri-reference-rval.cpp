@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -emit-llvm -o - %s | FileCheck %s
+// RUN: %cheri_cc1 -emit-llvm -o - %s | FileCheck %s
 
 __intcap_t g();
 

@@ -1,4 +1,4 @@
-// RUN:  %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -std=c++11 -o - %s | FileCheck %s
+// RUN:  %cheri_purecap_cc1 -emit-llvm -std=c++11 -o - %s | FileCheck %s
 struct tuple_leaf {
   int& value;
   tuple_leaf(int& t) : value(t) {}

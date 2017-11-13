@@ -1,4 +1,4 @@
-// RUN: %clang %s -target cheri-unknown-freebsd  -S -o - -O0 -emit-llvm | FileCheck %s
+// RUN: %cheri_cc1 -o - -O0 -emit-llvm %s | FileCheck %s
 void * __capability results[12];
 
 long long testDeprecated(void * __capability foo)

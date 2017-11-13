@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++14 -emit-llvm -o - %s 2>&1 | FileCheck %s
+// RUN: %cheri_purecap_cc1 -std=c++14 -emit-llvm -o - %s 2>&1 | FileCheck %s
 
 
 struct __two {char __lx[2];};

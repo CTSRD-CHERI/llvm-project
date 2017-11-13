@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -fsyntax-only -ast-dump %s | FileCheck %s
+// RUN: %cheri_purecap_cc1 -fsyntax-only -ast-dump %s | FileCheck %s
 
 typedef unsigned long size_t;
 

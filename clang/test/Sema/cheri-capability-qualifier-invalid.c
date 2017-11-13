@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -DTYPEDEF -o - %s -fsyntax-only -verify
+// RUN: %cheri_cc1 -DTYPEDEF -o - %s -fsyntax-only -verify
 
 // __capability after the name crashes -> make it an error
 

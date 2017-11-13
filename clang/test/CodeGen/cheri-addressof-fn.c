@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 %s "-target-abi" "purecap" -emit-llvm -cheri-linker -triple cheri-unknown-freebsd -o - 
+// RUN: %cheri_cc1 %s "-target-abi" "purecap" -emit-llvm -cheri-linker  -o -
 typedef void (*foo)(void);
 void fn(void);
 

@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 %s -triple cheri-unknown-freebsd -DALIGN=1 -verify
-// RUN: %clang_cc1 %s -triple cheri-unknown-freebsd -fsyntax-only -ast-dump | FileCheck %s
+// RUN: %cheri_cc1 %s  -DALIGN=1 -verify
+// RUN: %cheri_cc1 %s  -fsyntax-only -ast-dump | FileCheck %s
 
 #ifdef ALIGN
 void f() {

@@ -1,4 +1,4 @@
-// RUN: %cheri_cc1 -target-abi purecap %s -verify
+// RUN: %cheri_purecap_cc1 %s -verify
 // previously this would assert because __uintcap_t was not seen as a valid builtin operator overload
 
 typedef __uintcap_t quintptr;

@@ -1,7 +1,7 @@
-// RUNNOT: %clang_cc1 -triple cheri-unknown-freebsd %s -Wno-error=cheri-capability-misuse -emit-llvm -o - -O2 | FileCheck %s -check-prefixes BOTH,HYBRID -enable-var-scope
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -Wno-error=cheri-capability-misuse -target-abi purecap - %s -emit-llvm -o - -O2 | FileCheck %s -check-prefixes BOTH,PURECAP -enable-var-scope
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -DWITH_CHERI_CAST %s -emit-llvm -o - -O2 | FileCheck %s -check-prefixes BOTH,HYBRID -enable-var-scope
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -DWITH_CHERI_CAST -target-abi purecap %s -emit-llvm -o - -O2 | FileCheck %s -check-prefixes BOTH,PURECAP -enable-var-scope
+// RUNNOT: %cheri_cc1 %s -Wno-error=cheri-capability-misuse -emit-llvm -o - -O2 | FileCheck %s -check-prefixes BOTH,HYBRID -enable-var-scope
+// RUN: %cheri_cc1 -Wno-error=cheri-capability-misuse -target-abi purecap - %s -emit-llvm -o - -O2 | FileCheck %s -check-prefixes BOTH,PURECAP -enable-var-scope
+// RUN: %cheri_cc1 -DWITH_CHERI_CAST %s -emit-llvm -o - -O2 | FileCheck %s -check-prefixes BOTH,HYBRID -enable-var-scope
+// RUN: %cheri_cc1 -DWITH_CHERI_CAST -target-abi purecap %s -emit-llvm -o - -O2 | FileCheck %s -check-prefixes BOTH,PURECAP -enable-var-scope
 
 
 extern void* global_ptr;

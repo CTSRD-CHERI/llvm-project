@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -std=c++11 -target-abi purecap -fsyntax-only -verify %s
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -std=c++11 -target-abi n64 -fsyntax-only -verify %s
+// RUN: %cheri_cc1 -std=c++11 -target-abi purecap -fsyntax-only -verify %s
+// RUN: %cheri_cc1 -std=c++11 -target-abi n64 -fsyntax-only -verify %s
 // RUN: %clang_cc1 -triple x86_64-unknown-freebsd -std=c++11 -fsyntax-only -verify %s
 
 // expected-no-diagnostics
