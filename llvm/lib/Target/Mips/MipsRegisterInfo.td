@@ -552,14 +552,29 @@ def AFGR64AsmOperand : MipsAsmRegOperand {
   let PredicateMethod = "isFGRAsmReg";
 }
 
+def StrictlyAFGR64AsmOperand : MipsAsmRegOperand {
+  let Name = "StrictlyAFGR64AsmReg";
+  let PredicateMethod = "isStrictlyFGRAsmReg";
+}
+
 def FGR64AsmOperand : MipsAsmRegOperand {
   let Name = "FGR64AsmReg";
   let PredicateMethod = "isFGRAsmReg";
 }
 
+def StrictlyFGR64AsmOperand : MipsAsmRegOperand {
+  let Name = "StrictlyFGR64AsmReg";
+  let PredicateMethod = "isStrictlyFGRAsmReg";
+}
+
 def FGR32AsmOperand : MipsAsmRegOperand {
   let Name = "FGR32AsmReg";
   let PredicateMethod = "isFGRAsmReg";
+}
+
+def StrictlyFGR32AsmOperand : MipsAsmRegOperand {
+  let Name = "StrictlyFGR32AsmReg";
+  let PredicateMethod = "isStrictlyFGRAsmReg";
 }
 
 def FGRH32AsmOperand : MipsAsmRegOperand {
@@ -601,6 +616,7 @@ def GPRMM16OpndZero : RegisterOperand<GPRMM16Zero> {
 
 def GPRMM16OpndMoveP : RegisterOperand<GPRMM16MoveP> {
   let ParserMatchClass = GPRMM16AsmOperandMoveP;
+  let EncoderMethod = "getMovePRegSingleOpValue";
 }
 
 def GPR64Opnd : RegisterOperand<GPR64> {
@@ -639,12 +655,24 @@ def AFGR64Opnd : RegisterOperand<AFGR64> {
   let ParserMatchClass = AFGR64AsmOperand;
 }
 
+def StrictlyAFGR64Opnd : RegisterOperand<AFGR64> {
+  let ParserMatchClass = StrictlyAFGR64AsmOperand;
+}
+
 def FGR64Opnd : RegisterOperand<FGR64> {
   let ParserMatchClass = FGR64AsmOperand;
 }
 
+def StrictlyFGR64Opnd : RegisterOperand<FGR64> {
+  let ParserMatchClass = StrictlyFGR64AsmOperand;
+}
+
 def FGR32Opnd : RegisterOperand<FGR32> {
   let ParserMatchClass = FGR32AsmOperand;
+}
+
+def StrictlyFGR32Opnd : RegisterOperand<FGR32> {
+  let ParserMatchClass = StrictlyFGR32AsmOperand;
 }
 
 def FGRCCOpnd : RegisterOperand<FGRCC> {

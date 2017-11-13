@@ -33,40 +33,50 @@
     VSTORE_VECTORIZE(__CLC_SCALAR___CLC_GENTYPE, __local) \
     VSTORE_VECTORIZE(__CLC_SCALAR___CLC_GENTYPE, __global) \
 
-#define VSTORE_TYPES() \
-    VSTORE_ADDR_SPACES(char) \
-    VSTORE_ADDR_SPACES(uchar) \
-    VSTORE_ADDR_SPACES(short) \
-    VSTORE_ADDR_SPACES(ushort) \
-    VSTORE_ADDR_SPACES(int) \
-    VSTORE_ADDR_SPACES(uint) \
-    VSTORE_ADDR_SPACES(long) \
-    VSTORE_ADDR_SPACES(ulong) \
-    VSTORE_ADDR_SPACES(float) \
+VSTORE_ADDR_SPACES(char)
+VSTORE_ADDR_SPACES(uchar)
+VSTORE_ADDR_SPACES(short)
+VSTORE_ADDR_SPACES(ushort)
+VSTORE_ADDR_SPACES(int)
+VSTORE_ADDR_SPACES(uint)
+VSTORE_ADDR_SPACES(long)
+VSTORE_ADDR_SPACES(ulong)
+VSTORE_ADDR_SPACES(float)
 
-VSTORE_TYPES()
 
 #ifdef cl_khr_fp64
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
     VSTORE_ADDR_SPACES(double)
 #endif
 
-/* vstore_half are legal even without cl_khr_fp16 */
-#define DECLARE_HELPER(STYPE, AS) void __clc_vstore_half_##STYPE##_helper##AS(STYPE, AS half *);
-
-DECLARE_HELPER(float, __private);
-DECLARE_HELPER(float, __global);
-DECLARE_HELPER(float, __local);
-
-#ifdef cl_khr_fp64
-#pragma OPENCL EXTENSION cl_khr_fp64 : enable
-DECLARE_HELPER(double, __private);
-DECLARE_HELPER(double, __global);
-DECLARE_HELPER(double, __local);
+#ifdef cl_khr_fp16
+#pragma OPENCL EXTENSION cl_khr_fp16 : enable
+    VSTORE_ADDR_SPACES(half)
 #endif
 
+/* vstore_half are legal even without cl_khr_fp16 */
+#if __clang_major__ < 6
+#define DECLARE_HELPER(STYPE, AS, builtin) void __clc_vstore_half_##STYPE##_helper##AS(STYPE, AS half *);
+#else
+#define DECLARE_HELPER(STYPE, AS, __builtin) \
+inline void __clc_vstore_half_##STYPE##_helper##AS(STYPE s, AS half *d) \
+{ \
+	__builtin(s, d); \
+}
+#endif
+
+DECLARE_HELPER(float, __private, __builtin_store_halff);
+DECLARE_HELPER(float, __global, __builtin_store_halff);
+DECLARE_HELPER(float, __local, __builtin_store_halff);
+
+#ifdef cl_khr_fp64
+DECLARE_HELPER(double, __private, __builtin_store_half);
+DECLARE_HELPER(double, __global, __builtin_store_half);
+DECLARE_HELPER(double, __local, __builtin_store_half);
+#endif
 
 #define VEC_STORE1(STYPE, AS, val) __clc_vstore_half_##STYPE##_helper##AS (val, &mem[offset++]);
+
 #define VEC_STORE2(STYPE, AS, val) \
 	VEC_STORE1(STYPE, AS, val.lo) \
 	VEC_STORE1(STYPE, AS, val.hi)
@@ -84,14 +94,29 @@ DECLARE_HELPER(double, __local);
 	VEC_STORE8(STYPE, AS, val.lo) \
 	VEC_STORE8(STYPE, AS, val.hi)
 
-#define __FUNC(SUFFIX, VEC_SIZE, TYPE, STYPE, AS) \
+#define __FUNC(SUFFIX, VEC_SIZE, OFFSET, TYPE, STYPE, AS) \
   _CLC_OVERLOAD _CLC_DEF void vstore_half##SUFFIX(TYPE vec, size_t offset, AS half *mem) { \
     offset *= VEC_SIZE; \
     VEC_STORE##VEC_SIZE(STYPE, AS, vec) \
+  } \
+  _CLC_OVERLOAD _CLC_DEF void vstorea_half##SUFFIX(TYPE vec, size_t offset, AS half *mem) { \
+    offset *= OFFSET; \
+    VEC_STORE##VEC_SIZE(STYPE, AS, vec) \
   }
 
-#define FUNC(SUFFIX, VEC_SIZE, TYPE, STYPE, AS) __FUNC(SUFFIX, VEC_SIZE, TYPE, STYPE, AS)
+#define FUNC(SUFFIX, VEC_SIZE, OFFSET, TYPE, STYPE, AS) __FUNC(SUFFIX, VEC_SIZE, OFFSET, TYPE, STYPE, AS)
 
 #define __CLC_BODY "vstore_half.inc"
 #include <clc/math/gentype.inc>
-
+#undef __CLC_BODY
+#undef FUNC
+#undef __FUNC
+#undef VEC_LOAD16
+#undef VEC_LOAD8
+#undef VEC_LOAD4
+#undef VEC_LOAD3
+#undef VEC_LOAD2
+#undef VEC_LOAD1
+#undef DECLARE_HELPER
+#undef VSTORE_ADDR_SPACES
+#undef VSTORE_VECTORIZE

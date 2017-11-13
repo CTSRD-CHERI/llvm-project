@@ -279,12 +279,13 @@ set(LIBOMP_USE_DEBUGGER FALSE CACHE BOOL
 set(LIBOMP_USE_STDCPPLIB FALSE CACHE BOOL
   "Should we link to C++ library?")
 
-# TSX (x86) based locks have __asm code which can be troublesome for some compilers.
+# Intel(R) Transactional Synchronization Extensions (Intel(R) TSX) based locks have
+# __asm code which can be troublesome for some compilers.  This feature is also x86 specific.
 # TODO: Make this a real feature check
 set(LIBOMP_USE_ADAPTIVE_LOCKS "${LIBOMP_HAVE_ADAPTIVE_LOCKS}" CACHE BOOL
-  "Should TSX-based lock be compiled (adaptive lock in kmp_lock.cpp).  These are x86 specific.")
+  "Should Intel(R) TSX lock be compiled (adaptive lock in kmp_lock.cpp).  These are x86 specific.")
 if(LIBOMP_USE_ADAPTIVE_LOCKS AND (NOT LIBOMP_HAVE_ADAPTIVE_LOCKS))
-  libomp_error_say("Adaptive locks (TSX) functionality requested but not available")
+  libomp_error_say("Adaptive locks (Intel(R) TSX) functionality is only supported on x86 Architecture")
 endif()
 
 # - stats-gathering enables OpenMP stats where things like the number of
@@ -307,17 +308,29 @@ if(WIN32 AND NOT LIBOMP_ENABLE_SHARED)
   libomp_error_say("Static libraries requested but not available on Windows")
 endif()
 
+if(LIBOMP_USE_ITT_NOTIFY AND NOT LIBOMP_ENABLE_SHARED)
+  message(STATUS "ITT Notify not supported for static libraries - forcing ITT Notify off")
+  set(LIBOMP_USE_ITT_NOTIFY FALSE)
+endif()
+
+if(LIBOMP_USE_VERSION_SYMBOLS AND (NOT LIBOMP_ENABLE_SHARED) )
+  message(STATUS "Version symbols not supported for static libraries - forcing Version symbols functionality off")
+  set (LIBOMP_USE_VERSION_SYMBOLS FALSE)
+endif()
+
 # OMPT-support
 set(LIBOMP_OMPT_DEBUG FALSE CACHE BOOL
   "Trace OMPT initialization?")
+#after testing: turn on ompt support by default for OpenMP 5.0 and higher
 set(LIBOMP_OMPT_SUPPORT FALSE CACHE BOOL
   "OMPT-support?")
-set(LIBOMP_OMPT_BLAME TRUE CACHE BOOL
-  "OMPT-blame?")
-set(LIBOMP_OMPT_TRACE TRUE CACHE BOOL
-  "OMPT-trace?")
+set(LIBOMP_OMPT_OPTIONAL TRUE CACHE BOOL
+  "OMPT-optional?")
 if(LIBOMP_OMPT_SUPPORT AND (NOT LIBOMP_HAVE_OMPT_SUPPORT))
-  libomp_error_say("OpenMP Tools Interface requested but not available")
+  libomp_error_say("OpenMP Tools Interface requested but not available in this implementation")
+endif()
+if(LIBOMP_OMPT_SUPPORT AND (${LIBOMP_OMP_VERSION} LESS 50))
+  libomp_error_say("OpenMP Tools Interface only available with OpenMP 5.0, LIBOMP_OMP_VERSION is ${LIBOMP_OMP_VERSION}")
 endif()
 
 # TSAN-support
@@ -382,8 +395,7 @@ if(${LIBOMP_STANDALONE_BUILD})
   libomp_say("Use ITT notify       -- ${LIBOMP_USE_ITT_NOTIFY}")
   libomp_say("Use OMPT-support     -- ${LIBOMP_OMPT_SUPPORT}")
   if(${LIBOMP_OMPT_SUPPORT})
-    libomp_say("Use OMPT-blame       -- ${LIBOMP_OMPT_BLAME}")
-    libomp_say("Use OMPT-trace       -- ${LIBOMP_OMPT_TRACE}")
+    libomp_say("Use OMPT-optional  -- ${LIBOMP_OMPT_OPTIONAL}")
   endif()
   libomp_say("Use Adaptive locks   -- ${LIBOMP_USE_ADAPTIVE_LOCKS}")
   libomp_say("Use quad precision   -- ${LIBOMP_USE_QUAD_PRECISION}")

@@ -15,6 +15,7 @@ class MiExecTestCase(lldbmi_testcase.MiTestCaseBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
     @expectedFailureAll(
@@ -37,6 +38,7 @@ class MiExecTestCase(lldbmi_testcase.MiTestCaseBase):
         # Test that lldb-mi is ready to execute next commands
         self.expect(self.child_prompt, exactly=True)
 
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_exec_abort(self):
@@ -87,6 +89,7 @@ class MiExecTestCase(lldbmi_testcase.MiTestCaseBase):
         self.expect("\^done")
         self.expect("\*stopped,reason=\"exited-normally\"")
 
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_exec_arguments_set(self):
@@ -131,6 +134,7 @@ class MiExecTestCase(lldbmi_testcase.MiTestCaseBase):
         self.runCmd("-interpreter-exec command \"print argv[4]\"")
         self.expect("\\\"fourth=\\\\\\\"4th arg\\\\\\\"\\\"", exactly=True)
 
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_exec_arguments_reset(self):
@@ -159,6 +163,7 @@ class MiExecTestCase(lldbmi_testcase.MiTestCaseBase):
         self.runCmd("-data-evaluate-expression argc")
         self.expect("\^done,value=\"1\"")
 
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_exec_next(self):
@@ -214,6 +219,7 @@ class MiExecTestCase(lldbmi_testcase.MiTestCaseBase):
         self.runCmd("-exec-next --frame 10")
         #self.expect("\^error: Frame index 10 is out of range")
 
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_exec_next_instruction(self):
@@ -273,6 +279,7 @@ class MiExecTestCase(lldbmi_testcase.MiTestCaseBase):
         self.runCmd("-exec-next-instruction --frame 10")
         #self.expect("\^error: Frame index 10 is out of range")
 
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_exec_step(self):
@@ -319,8 +326,16 @@ class MiExecTestCase(lldbmi_testcase.MiTestCaseBase):
         # -exec-step can keep us in the g_MyFunction for gcc
         self.runCmd("-exec-finish --frame 0")
         self.expect("\^running")
-        self.expect(
-            "\*stopped,reason=\"end-stepping-range\".+?main\.cpp\",line=\"30\"")
+        it = self.expect(["\*stopped,reason=\"end-stepping-range\".+?main\.cpp\",line=\"30\"",
+                         "\*stopped,reason=\"end-stepping-range\".+?main\.cpp\",line=\"29\""])
+
+        if it == 1:
+            # Call to s_MyFunction may not follow immediately after g_MyFunction.
+            # There might be some instructions in between to restore caller-saved registers.
+            # We need to get past these instructions with a next to reach call to s_MyFunction.
+            self.runCmd("-exec-next --thread 1")
+            self.expect("\^running")
+            self.expect("\*stopped,reason=\"end-stepping-range\".+?main\.cpp\",line=\"30\"")
 
         # Test that -exec-step steps into s_MyFunction
         # (and that --frame is optional)
@@ -347,6 +362,7 @@ class MiExecTestCase(lldbmi_testcase.MiTestCaseBase):
         self.runCmd("-exec-step --frame 10")
         #self.expect("\^error: Frame index 10 is out of range")
 
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_exec_step_instruction(self):
@@ -422,6 +438,7 @@ class MiExecTestCase(lldbmi_testcase.MiTestCaseBase):
         self.runCmd("-exec-step-instruction --frame 10")
         #self.expect("\^error: Frame index 10 is out of range")
 
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
     def test_lldbmi_exec_finish(self):

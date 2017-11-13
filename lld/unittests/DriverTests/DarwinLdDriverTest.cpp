@@ -12,9 +12,9 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#include "lld/Driver/Driver.h"
+#include "lld/Common/Driver.h"
 #include "lld/ReaderWriter/MachOLinkingContext.h"
-#include "llvm/Support/MachO.h"
+#include "llvm/BinaryFormat/MachO.h"
 #include "llvm/Support/raw_ostream.h"
 #include "gtest/gtest.h"
 

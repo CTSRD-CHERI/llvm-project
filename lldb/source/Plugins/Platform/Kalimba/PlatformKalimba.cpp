@@ -19,11 +19,11 @@
 #include "lldb/Core/ModuleList.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Host/FileSpec.h"
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
-#include "lldb/Utility/Error.h"
+#include "lldb/Utility/FileSpec.h"
+#include "lldb/Utility/Status.h"
 #include "lldb/Utility/StreamString.h"
 
 using namespace lldb;
@@ -125,8 +125,8 @@ PlatformKalimba::GetSoftwareBreakpointTrapOpcode(Target & /*target*/,
   return 0;
 }
 
-Error PlatformKalimba::LaunchProcess(ProcessLaunchInfo &launch_info) {
-  Error error;
+Status PlatformKalimba::LaunchProcess(ProcessLaunchInfo &launch_info) {
+  Status error;
 
   if (IsHost()) {
     error.SetErrorString("native execution is not possible");
@@ -138,7 +138,7 @@ Error PlatformKalimba::LaunchProcess(ProcessLaunchInfo &launch_info) {
 
 lldb::ProcessSP PlatformKalimba::Attach(ProcessAttachInfo &attach_info,
                                         Debugger &debugger, Target *target,
-                                        Error &error) {
+                                        Status &error) {
   lldb::ProcessSP process_sp;
   if (IsHost()) {
     error.SetErrorString("native execution is not possible");

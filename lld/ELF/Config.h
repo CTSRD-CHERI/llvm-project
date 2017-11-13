@@ -13,8 +13,10 @@
 #include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSet.h"
+#include "llvm/BinaryFormat/ELF.h"
+#include "llvm/Support/CachePruning.h"
 #include "llvm/Support/CodeGen.h"
-#include "llvm/Support/ELF.h"
+#include "llvm/Support/Endian.h"
 
 #include <vector>
 
@@ -22,7 +24,6 @@ namespace lld {
 namespace elf {
 
 class InputFile;
-struct Symbol;
 
 enum ELFKind {
   ELFNoneKind,
@@ -42,7 +43,10 @@ enum class DiscardPolicy { Default, All, Locals, None };
 enum class StripPolicy { None, All, Debug };
 
 // For --unresolved-symbols.
-enum class UnresolvedPolicy { ReportError, Warn, WarnAll, Ignore, IgnoreAll };
+enum class UnresolvedPolicy { ReportError, Warn, Ignore, IgnoreAll };
+
+// For --orphan-handling.
+enum class OrphanHandlingPolicy { Place, Warn, Error };
 
 // For --sort-section and linkerscript sorting rules.
 enum class SortSectionPolicy { Default, None, Alignment, Name, Priority };
@@ -59,11 +63,10 @@ struct SymbolVersion {
 // This struct contains symbols version definition that
 // can be found in version script if it is used for link.
 struct VersionDefinition {
-  VersionDefinition(llvm::StringRef Name, uint16_t Id) : Name(Name), Id(Id) {}
   llvm::StringRef Name;
-  uint16_t Id;
+  uint16_t Id = 0;
   std::vector<SymbolVersion> Globals;
-  size_t NameOff; // Offset in string table.
+  size_t NameOff = 0; // Offset in the string table
 };
 
 // This struct contains the global configuration for the linker.
@@ -71,9 +74,10 @@ struct VersionDefinition {
 // and such fields have the same name as the corresponding options.
 // Most fields are initialized by the driver.
 struct Configuration {
-  InputFile *FirstElf = nullptr;
   uint8_t OSABI = 0;
+  llvm::CachePruningPolicy ThinLTOCachePolicy;
   llvm::StringMap<uint64_t> SectionStartMap;
+  llvm::StringRef Chroot;
   llvm::StringRef DynamicLinker;
   llvm::StringRef Entry;
   llvm::StringRef Emulation;
@@ -87,20 +91,24 @@ struct Configuration {
   llvm::StringRef SoName;
   llvm::StringRef Sysroot;
   llvm::StringRef ThinLTOCacheDir;
-  std::string RPath;
+  std::string Rpath;
   std::vector<VersionDefinition> VersionDefinitions;
+  std::vector<llvm::StringRef> Argv;
   std::vector<llvm::StringRef> AuxiliaryList;
+  std::vector<llvm::StringRef> FilterList;
   std::vector<llvm::StringRef> SearchPaths;
   std::vector<llvm::StringRef> SymbolOrderingFile;
   std::vector<llvm::StringRef> Undefined;
+  std::vector<SymbolVersion> DynamicList;
   std::vector<SymbolVersion> VersionScriptGlobals;
   std::vector<SymbolVersion> VersionScriptLocals;
   std::vector<uint8_t> BuildIdVector;
   bool AllowMultipleDefinition;
+  bool AndroidPackDynRelocs = false;
   bool AsNeeded = false;
   bool Bsymbolic;
   bool BsymbolicFunctions;
-  bool ColorDiagnostics = false;
+  bool CompressDebugSections;
   bool DefineCommon;
   bool Demangle = true;
   bool DisableVerify;
@@ -108,29 +116,29 @@ struct Configuration {
   bool EmitRelocs;
   bool EnableNewDtags;
   bool ExportDynamic;
-  bool FatalWarnings;
   bool GcSections;
   bool GdbIndex;
-  bool GnuHash;
+  bool GnuHash = false;
+  bool HasDynamicList = false;
+  bool HasDynSymTab;
   bool ICF;
   bool MipsN32Abi = false;
   bool NoGnuUnique;
   bool NoUndefinedVersion;
+  bool NoinhibitExec;
   bool Nostdlib;
   bool OFormatBinary;
   bool Omagic;
   bool OptRemarksWithHotness;
   bool Pie;
   bool PrintGcSections;
-  bool Rela;
   bool Relocatable;
   bool SaveTemps;
   bool SingleRoRx;
   bool Shared;
   bool Static = false;
-  bool SysvHash;
+  bool SysvHash = false;
   bool Target1Rel;
-  bool Threads;
   bool Trace;
   bool Verbose;
   bool WarnCommon;
@@ -139,12 +147,16 @@ struct Configuration {
   bool ZExecstack;
   bool ZNocopyreloc;
   bool ZNodelete;
+  bool ZNodlopen;
   bool ZNow;
   bool ZOrigin;
   bool ZRelro;
+  bool ZRodynamic;
+  bool ZText;
   bool ExitEarly;
   bool ZWxneeded;
   DiscardPolicy Discard;
+  OrphanHandlingPolicy OrphanHandling;
   SortSectionPolicy SortSection;
   StripPolicy Strip;
   UnresolvedPolicy UnresolvedSymbols;
@@ -153,14 +165,46 @@ struct Configuration {
   ELFKind EKind = ELFNoneKind;
   uint16_t DefaultSymbolVersion = llvm::ELF::VER_NDX_GLOBAL;
   uint16_t EMachine = llvm::ELF::EM_NONE;
-  uint64_t ErrorLimit = 20;
-  uint64_t ImageBase;
+  llvm::Optional<uint64_t> ImageBase;
   uint64_t MaxPageSize;
   uint64_t ZStackSize;
   unsigned LTOPartitions;
   unsigned LTOO;
   unsigned Optimize;
   unsigned ThinLTOJobs;
+
+  // The following config options do not directly correspond to any
+  // particualr command line options.
+
+  // True if we need to pass through relocations in input files to the
+  // output file. Usually false because we consume relocations.
+  bool CopyRelocs;
+
+  // True if the target is ELF64. False if ELF32.
+  bool Is64;
+
+  // True if the target is little-endian. False if big-endian.
+  bool IsLE;
+
+  // endianness::little if IsLE is true. endianness::big otherwise.
+  llvm::support::endianness Endianness;
+
+  // True if the target is the little-endian MIPS64.
+  //
+  // The reason why we have this variable only for the MIPS is because
+  // we use this often.  Some ELF headers for MIPS64EL are in a
+  // mixed-endian (which is horrible and I'd say that's a serious spec
+  // bug), and we need to know whether we are reading MIPS ELF files or
+  // not in various places.
+  //
+  // (Note that MIPS64EL is not a typo for MIPS64LE. This is the official
+  // name whatever that means. A fun hypothesis is that "EL" is short for
+  // little-endian written in the little-endian order, but I don't know
+  // if that's true.)
+  bool IsMips64EL;
+
+  // Holds set of ELF header flags for the target.
+  uint32_t EFlags = 0;
 
   // The ELF spec defines two types of relocation table entries, RELA and
   // REL. RELA is a triplet of (offset, info, addend) while REL is a
@@ -173,37 +217,16 @@ struct Configuration {
   // been easier to write code to process relocations, but it's too late
   // to change the spec.)
   //
-  // Each ABI defines its relocation type. This function returns that.
-  // As far as we know, all 64-bit ABIs are using RELA. A few 32-bit ABIs
-  // are using RELA too.
-  bool isRela() const {
-    bool is64 = (EKind == ELF64LEKind || EKind == ELF64BEKind);
-    bool isX32Abi = (EKind == ELF32LEKind && EMachine == llvm::ELF::EM_X86_64);
-    return is64 || isX32Abi || MipsN32Abi;
-  }
+  // Each ABI defines its relocation type. IsRela is true if target
+  // uses RELA. As far as we know, all 64-bit ABIs are using RELA. A
+  // few 32-bit ABIs are using RELA too.
+  bool IsRela;
 
-  // Returns true if we need to pass through relocations in input
-  // files to the output file. Usually false because we consume
-  // relocations.
-  bool copyRelocs() const { return Relocatable || EmitRelocs; }
+  // True if we are creating position-independent code.
+  bool Pic;
 
-  // Returns true if we are creating position-independent code.
-  bool pic() const { return Pie || Shared; }
-
-  // Returns true if the target is the little-endian MIPS64. The reason
-  // why we have this function only for the MIPS is because we use this
-  // function often. Some ELF headers for MIPS64EL are in a mixed-endian
-  // (which is horrible and I'd say that's a serious spec bug), and we
-  // need to know whether we are reading MIPS ELF files or not in various
-  // places.
-  //
-  // (Note that MIPS64EL is not a typo for MIPS64LE. This is the official
-  // name whatever that means. A fun hypothesis is that "EL" is short for
-  // little-endian written in the little-endian order, but I don't know
-  // if that's true.)
-  bool isMips64EL() const {
-    return EMachine == llvm::ELF::EM_MIPS && EKind == ELF64LEKind;
-  }
+  // 4 for ELF32, 8 for ELF64.
+  int Wordsize;
 };
 
 // The only instance of Configuration struct.

@@ -7,10 +7,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-// FreeBSD9-STABLE requires this to know about size_t in cxxabi.h
-#include <cstddef>
+#include "lldb/Core/Mangled.h"
+
 #if defined(_WIN32)
 #include "lldb/Host/windows/windows.h"
+
 #include <dbghelp.h>
 #pragma comment(lib, "dbghelp.lib")
 #endif
@@ -21,24 +22,31 @@
 #include "lldb/Utility/FastDemangle.h"
 #include "llvm/Demangle/Demangle.h"
 #else
+// FreeBSD9-STABLE requires this to know about size_t in cxxabi.
+#include <cstddef>
 #include <cxxabi.h>
 #endif
 
-#include "llvm/ADT/DenseMap.h"
-
-#include "Plugins/Language/CPlusPlus/CPlusPlusLanguage.h"
-#include "Plugins/Language/ObjC/ObjCLanguage.h"
-#include "lldb/Core/Mangled.h"
-#include "lldb/Core/Timer.h"
 #include "lldb/Utility/ConstString.h"
 #include "lldb/Utility/Log.h"
 #include "lldb/Utility/Logging.h"
 #include "lldb/Utility/RegularExpression.h"
 #include "lldb/Utility/Stream.h"
-#include <ctype.h>
+#include "lldb/Utility/Timer.h"
+#include "lldb/lldb-enumerations.h" // for LanguageType
+
+#include "Plugins/Language/CPlusPlus/CPlusPlusLanguage.h"
+#include "Plugins/Language/ObjC/ObjCLanguage.h"
+
+#include "llvm/ADT/StringRef.h"    // for StringRef
+#include "llvm/Support/Compiler.h" // for LLVM_PRETT...
+
+#include <mutex>   // for mutex, loc...
+#include <string>  // for string
+#include <utility> // for pair
+
 #include <stdlib.h>
 #include <string.h>
-
 using namespace lldb_private;
 
 #if defined(_MSC_VER)
@@ -250,8 +258,8 @@ Mangled::GetDemangledName(lldb::LanguageType language) const {
   // haven't already decoded our mangled name.
   if (m_mangled && !m_demangled) {
     // We need to generate and cache the demangled name.
-    Timer scoped_timer(LLVM_PRETTY_FUNCTION,
-                       "Mangled::GetDemangledName (m_mangled = %s)",
+    static Timer::Category func_cat(LLVM_PRETTY_FUNCTION);
+    Timer scoped_timer(func_cat, "Mangled::GetDemangledName (m_mangled = %s)",
                        m_mangled.GetCString());
 
     Log *log = lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_DEMANGLE);
@@ -424,6 +432,14 @@ lldb::LanguageType Mangled::GuessLanguage() const {
       else if (ObjCLanguage::IsPossibleObjCMethodName(mangled_name))
         return lldb::eLanguageTypeObjC;
     }
+  } else {
+    // ObjC names aren't really mangled, so they won't necessarily be in the 
+    // mangled name slot.
+    ConstString demangled_name = GetDemangledName(lldb::eLanguageTypeUnknown);
+    if (demangled_name 
+        && ObjCLanguage::IsPossibleObjCMethodName(demangled_name.GetCString()))
+      return lldb::eLanguageTypeObjC;
+  
   }
   return lldb::eLanguageTypeUnknown;
 }

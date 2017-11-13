@@ -13,7 +13,6 @@
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/Section.h"
-#include "lldb/Core/Timer.h"
 #include "lldb/Symbol/ObjectContainer.h"
 #include "lldb/Symbol/SymbolFile.h"
 #include "lldb/Target/Process.h"
@@ -25,6 +24,7 @@
 #include "lldb/Utility/DataBufferLLVM.h"
 #include "lldb/Utility/Log.h"
 #include "lldb/Utility/RegularExpression.h"
+#include "lldb/Utility/Timer.h"
 #include "lldb/lldb-private.h"
 
 using namespace lldb;
@@ -37,8 +37,9 @@ ObjectFile::FindPlugin(const lldb::ModuleSP &module_sp, const FileSpec *file,
   ObjectFileSP object_file_sp;
 
   if (module_sp) {
+    static Timer::Category func_cat(LLVM_PRETTY_FUNCTION);
     Timer scoped_timer(
-        LLVM_PRETTY_FUNCTION,
+        func_cat,
         "ObjectFile::FindPlugin (module = %s, file = %p, file_offset = "
         "0x%8.8" PRIx64 ", file_size = 0x%8.8" PRIx64 ")",
         module_sp->GetFileSpec().GetPath().c_str(),
@@ -176,9 +177,11 @@ ObjectFileSP ObjectFile::FindPlugin(const lldb::ModuleSP &module_sp,
   ObjectFileSP object_file_sp;
 
   if (module_sp) {
-    Timer scoped_timer(LLVM_PRETTY_FUNCTION, "ObjectFile::FindPlugin (module = "
-                                             "%s, process = %p, header_addr = "
-                                             "0x%" PRIx64 ")",
+    static Timer::Category func_cat(LLVM_PRETTY_FUNCTION);
+    Timer scoped_timer(func_cat,
+                       "ObjectFile::FindPlugin (module = "
+                       "%s, process = %p, header_addr = "
+                       "0x%" PRIx64 ")",
                        module_sp->GetFileSpec().GetPath().c_str(),
                        static_cast<void *>(process_sp.get()), header_addr);
     uint32_t idx;
@@ -345,6 +348,7 @@ AddressClass ObjectFile::GetAddressClass(addr_t file_addr) {
           case eSectionTypeDWARFDebugAbbrev:
           case eSectionTypeDWARFDebugAddr:
           case eSectionTypeDWARFDebugAranges:
+          case eSectionTypeDWARFDebugCuIndex:
           case eSectionTypeDWARFDebugFrame:
           case eSectionTypeDWARFDebugInfo:
           case eSectionTypeDWARFDebugLine:
@@ -454,7 +458,7 @@ DataBufferSP ObjectFile::ReadMemory(const ProcessSP &process_sp,
   DataBufferSP data_sp;
   if (process_sp) {
     std::unique_ptr<DataBufferHeap> data_ap(new DataBufferHeap(byte_size, 0));
-    Error error;
+    Status error;
     const size_t bytes_read = process_sp->ReadMemory(
         addr, data_ap->GetBytes(), data_ap->GetByteSize(), error);
     if (bytes_read == byte_size)
@@ -479,9 +483,9 @@ size_t ObjectFile::CopyData(lldb::offset_t offset, size_t length,
   return m_data.CopyData(offset, length, dst);
 }
 
-size_t ObjectFile::ReadSectionData(const Section *section,
+size_t ObjectFile::ReadSectionData(Section *section,
                                    lldb::offset_t section_offset, void *dst,
-                                   size_t dst_len) const {
+                                   size_t dst_len) {
   assert(section);
   section_offset *= section->GetTargetByteSize();
 
@@ -493,7 +497,7 @@ size_t ObjectFile::ReadSectionData(const Section *section,
   if (IsInMemory()) {
     ProcessSP process_sp(m_process_wp.lock());
     if (process_sp) {
-      Error error;
+      Status error;
       const addr_t base_load_addr =
           section->GetLoadBaseAddress(&process_sp->GetTarget());
       if (base_load_addr != LLDB_INVALID_ADDRESS)
@@ -501,6 +505,9 @@ size_t ObjectFile::ReadSectionData(const Section *section,
                                       dst_len, error);
     }
   } else {
+    if (!section->IsRelocated())
+      RelocateSection(section);
+
     const lldb::offset_t section_file_size = section->GetFileSize();
     if (section_offset < section_file_size) {
       const size_t section_bytes_left = section_file_size - section_offset;
@@ -527,8 +534,8 @@ size_t ObjectFile::ReadSectionData(const Section *section,
 //----------------------------------------------------------------------
 // Get the section data the file on disk
 //----------------------------------------------------------------------
-size_t ObjectFile::ReadSectionData(const Section *section,
-                                   DataExtractor &section_data) const {
+size_t ObjectFile::ReadSectionData(Section *section,
+                                   DataExtractor &section_data) {
   // If some other objectfile owns this data, pass this to them.
   if (section->GetObjectFile() != this)
     return section->GetObjectFile()->ReadSectionData(section, section_data);
@@ -558,8 +565,8 @@ size_t ObjectFile::ReadSectionData(const Section *section,
   }
 }
 
-size_t ObjectFile::MemoryMapSectionData(const Section *section,
-                                        DataExtractor &section_data) const {
+size_t ObjectFile::MemoryMapSectionData(Section *section,
+                                        DataExtractor &section_data) {
   // If some other objectfile owns this data, pass this to them.
   if (section->GetObjectFile() != this)
     return section->GetObjectFile()->MemoryMapSectionData(section,
@@ -568,6 +575,9 @@ size_t ObjectFile::MemoryMapSectionData(const Section *section,
   if (IsInMemory()) {
     return ReadSectionData(section, section_data);
   } else {
+    if (!section->IsRelocated())
+      RelocateSection(section);
+
     // The object file now contains a full mmap'ed copy of the object file data,
     // so just use this
     return GetData(section->GetFileOffset(), section->GetFileSize(),
@@ -654,17 +664,17 @@ ConstString ObjectFile::GetNextSyntheticSymbolName() {
   return ConstString(ss.GetString());
 }
 
-Error ObjectFile::LoadInMemory(Target &target, bool set_pc) {
-  Error error;
+Status ObjectFile::LoadInMemory(Target &target, bool set_pc) {
+  Status error;
   ProcessSP process = target.CalculateProcess();
   if (!process)
-    return Error("No Process");
+    return Status("No Process");
   if (set_pc && !GetEntryPointAddress().IsValid())
-    return Error("No entry address in object file");
+    return Status("No entry address in object file");
 
   SectionList *section_list = GetSectionList();
   if (!section_list)
-      return Error("No section in object file");
+    return Status("No section in object file");
   size_t section_count = section_list->GetNumSections(0);
   for (size_t i = 0; i < section_count; ++i) {
     SectionSP section_sp = section_list->GetSectionAtIndex(i);
@@ -689,4 +699,8 @@ Error ObjectFile::LoadInMemory(Target &target, bool set_pc) {
     reg_context->SetPC(file_entry.GetLoadAddress(&target));
   }
   return error;
+}
+
+void ObjectFile::RelocateSection(lldb_private::Section *section)
+{
 }

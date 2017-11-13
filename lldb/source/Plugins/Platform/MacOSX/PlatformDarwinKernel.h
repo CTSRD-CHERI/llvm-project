@@ -18,7 +18,7 @@
 // C Includes
 // C++ Includes
 // Other libraries and framework includes
-#include "lldb/Host/FileSpec.h"
+#include "lldb/Utility/FileSpec.h"
 
 #include "llvm/Support/FileSystem.h"
 
@@ -66,7 +66,7 @@ public:
 
   void GetStatus(lldb_private::Stream &strm) override;
 
-  lldb_private::Error
+  lldb_private::Status
   GetSharedModule(const lldb_private::ModuleSpec &module_spec,
                   lldb_private::Process *process, lldb::ModuleSP &module_sp,
                   const lldb_private::FileSpecList *module_search_paths_ptr,
@@ -139,7 +139,7 @@ protected:
   static bool
   KernelHasdSYMSibling(const lldb_private::FileSpec &kext_bundle_filepath);
 
-  lldb_private::Error
+  lldb_private::Status
   ExamineKextForMatchingUUID(const lldb_private::FileSpec &kext_bundle_path,
                              const lldb_private::UUID &uuid,
                              const lldb_private::ArchSpec &arch,

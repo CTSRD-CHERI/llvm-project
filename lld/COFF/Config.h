@@ -12,6 +12,7 @@
 
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Object/COFF.h"
+#include "llvm/Support/CachePruning.h"
 #include <cstdint>
 #include <map>
 #include <set>
@@ -26,11 +27,11 @@ using llvm::StringRef;
 class DefinedAbsolute;
 class DefinedRelative;
 class StringChunk;
-struct Symbol;
-class SymbolBody;
+class Symbol;
 
 // Short aliases.
 static const auto AMD64 = llvm::COFF::IMAGE_FILE_MACHINE_AMD64;
+static const auto ARM64 = llvm::COFF::IMAGE_FILE_MACHINE_ARM64;
 static const auto ARMNT = llvm::COFF::IMAGE_FILE_MACHINE_ARMNT;
 static const auto I386 = llvm::COFF::IMAGE_FILE_MACHINE_I386;
 
@@ -38,11 +39,12 @@ static const auto I386 = llvm::COFF::IMAGE_FILE_MACHINE_I386;
 struct Export {
   StringRef Name;       // N in /export:N or /export:E=N
   StringRef ExtName;    // E in /export:E=N
-  SymbolBody *Sym = nullptr;
+  Symbol *Sym = nullptr;
   uint16_t Ordinal = 0;
   bool Noname = false;
   bool Data = false;
   bool Private = false;
+  bool Constant = false;
 
   // If an export is a form of /export:foo=dllname.bar, that means
   // that foo should be exported as an alias to bar in the DLL.
@@ -72,27 +74,27 @@ enum class DebugType {
 // Global configuration.
 struct Configuration {
   enum ManifestKind { SideBySide, Embed, No };
-  bool is64() { return Machine == AMD64; }
+  bool is64() { return Machine == AMD64 || Machine == ARM64; }
 
   llvm::COFF::MachineTypes Machine = IMAGE_FILE_MACHINE_UNKNOWN;
   bool Verbose = false;
   WindowsSubsystem Subsystem = llvm::COFF::IMAGE_SUBSYSTEM_UNKNOWN;
-  SymbolBody *Entry = nullptr;
+  Symbol *Entry = nullptr;
   bool NoEntry = false;
   std::string OutputFile;
-  bool ColorDiagnostics;
+  std::string ImportName;
   bool DoGC = true;
   bool DoICF = true;
-  uint64_t ErrorLimit = 20;
   bool Relocatable = true;
   bool Force = false;
   bool Debug = false;
   bool WriteSymtab = true;
   unsigned DebugTypes = static_cast<unsigned>(DebugType::None);
-  StringRef PDBPath;
+  llvm::SmallString<128> PDBPath;
+  std::vector<llvm::StringRef> Argv;
 
   // Symbols in this set are considered as live by the garbage collector.
-  std::set<SymbolBody *> GCRoot;
+  std::set<Symbol *> GCRoot;
 
   std::set<StringRef> NoDefaultLibs;
   bool NoDefaultLibAll = false;
@@ -103,7 +105,7 @@ struct Configuration {
   std::vector<Export> Exports;
   std::set<std::string> DelayLoads;
   std::map<std::string, int> DLLOrder;
-  SymbolBody *DelayLoadHelper = nullptr;
+  Symbol *DelayLoadHelper = nullptr;
 
   bool SaveTemps = false;
 
@@ -115,9 +117,14 @@ struct Configuration {
   unsigned LTOOptLevel = 2;
 
   // Used for /opt:lldltojobs=N
-  unsigned LTOJobs = 1;
+  unsigned LTOJobs = 0;
   // Used for /opt:lldltopartitions=N
   unsigned LTOPartitions = 1;
+
+  // Used for /opt:lldltocache=path
+  StringRef LTOCache;
+  // Used for /opt:lldltocachepolicy=policy
+  llvm::CachePruningPolicy LTOCachePolicy;
 
   // Used for /merge:from=to (e.g. /merge:.rdata=.text)
   std::map<StringRef, StringRef> Merge;
@@ -126,7 +133,7 @@ struct Configuration {
   std::map<StringRef, uint32_t> Section;
 
   // Options for manifest files.
-  ManifestKind Manifest = SideBySide;
+  ManifestKind Manifest = No;
   int ManifestID = 1;
   StringRef ManifestDependency;
   bool ManifestUAC = true;
@@ -134,6 +141,9 @@ struct Configuration {
   StringRef ManifestLevel = "'asInvoker'";
   StringRef ManifestUIAccess = "'false'";
   StringRef ManifestFile;
+
+  // Used for /aligncomm.
+  std::map<std::string, int> AlignComm;
 
   // Used for /failifmismatch.
   std::map<StringRef, StringRef> MustMatch;
@@ -153,6 +163,7 @@ struct Configuration {
   uint32_t MinorImageVersion = 0;
   uint32_t MajorOSVersion = 6;
   uint32_t MinorOSVersion = 0;
+  bool CanExitEarly = false;
   bool DynamicBase = true;
   bool AllowBind = true;
   bool NxCompat = true;
@@ -160,10 +171,8 @@ struct Configuration {
   bool TerminalServerAware = true;
   bool LargeAddressAware = false;
   bool HighEntropyVA = false;
-
-  // This is for debugging.
-  bool DebugPdb = false;
-  bool DumpPdb = false;
+  bool AppContainer = false;
+  bool MinGW = false;
 };
 
 extern Configuration *Config;

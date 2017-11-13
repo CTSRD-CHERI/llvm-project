@@ -1,7 +1,8 @@
-; RUN: llc -march=amdgcn -verify-machineinstrs < %s | FileCheck -check-prefix=CHECK %s
-; RUN: llc -march=amdgcn -mcpu=tonga -verify-machineinstrs < %s | FileCheck -check-prefix=CHECK %s
+; RUN: llc -march=amdgcn -verify-machineinstrs < %s | FileCheck %s
+; RUN: llc -march=amdgcn -mcpu=tonga -verify-machineinstrs < %s | FileCheck %s
 
 ; CHECK-LABEL: {{^}}test1:
+; CHECK-NOT: s_waitcnt
 ; CHECK: image_store
 ; CHECK-NEXT: s_waitcnt vmcnt(0) expcnt(0){{$}}
 ; CHECK-NEXT: image_store
@@ -17,9 +18,10 @@ define amdgpu_ps void @test1(<8 x i32> inreg %rsrc, <4 x float> %d0, <4 x float>
 ; emitted as late as possible.
 ;
 ; CHECK-LABEL: {{^}}test2:
+; CHECK-NOT: s_waitcnt
 ; CHECK: image_load
-; CHECK-NOT: s_waitcnt vmcnt(0){{$}}
-; CHECK: s_waitcnt
+; CHECK-NEXT: s_waitcnt
+; CHECK: s_waitcnt vmcnt(0){{$}}
 ; CHECK-NEXT: image_store
 define amdgpu_ps void @test2(<8 x i32> inreg %rsrc, i32 %c) {
   %t = call <4 x float> @llvm.amdgcn.image.load.v4f32.i32.v8i32(i32 %c, <8 x i32> %rsrc, i32 15, i1 0, i1 0, i1 0, i1 0)

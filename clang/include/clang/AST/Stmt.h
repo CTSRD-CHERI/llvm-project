@@ -127,13 +127,13 @@ protected:
     unsigned : NumStmtBits;
 
     unsigned ValueKind : 2;
-    unsigned ObjectKind : 2;
+    unsigned ObjectKind : 3;
     unsigned TypeDependent : 1;
     unsigned ValueDependent : 1;
     unsigned InstantiationDependent : 1;
     unsigned ContainsUnexpandedParameterPack : 1;
   };
-  enum { NumExprBits = 16 };
+  enum { NumExprBits = 17 };
 
   class CharacterLiteralBitfields {
     friend class CharacterLiteral;
@@ -350,6 +350,8 @@ protected:
 
 public:
   Stmt(StmtClass SC) {
+    static_assert(sizeof(*this) == sizeof(void *),
+                  "changing bitfields changed sizeof(Stmt)");
     static_assert(sizeof(*this) % alignof(void *) == 0,
                   "Insufficient alignment!");
     StmtBits.sClass = SC;
@@ -387,8 +389,8 @@ public:
   /// back to its original source language syntax.
   void dumpPretty(const ASTContext &Context) const;
   void printPretty(raw_ostream &OS, PrinterHelper *Helper,
-                   const PrintingPolicy &Policy,
-                   unsigned Indentation = 0) const;
+                   const PrintingPolicy &Policy, unsigned Indentation = 0,
+                   const ASTContext *Context = nullptr) const;
 
   /// viewAST - Visualize an AST rooted at this Stmt* using GraphViz.  Only
   ///   works on systems with GraphViz (Mac OS X) or dot+gv installed.
@@ -404,6 +406,9 @@ public:
   /// \brief Skip no-op (attributed, compound) container stmts and skip captured
   /// stmt at the top, if \a IgnoreCaptured is true.
   Stmt *IgnoreContainers(bool IgnoreCaptured = false);
+  const Stmt *IgnoreContainers(bool IgnoreCaptured = false) const {
+    return const_cast<Stmt *>(this)->IgnoreContainers(IgnoreCaptured);
+  }
 
   const Stmt *stripLabelLikeStatements() const;
   Stmt *stripLabelLikeStatements() {

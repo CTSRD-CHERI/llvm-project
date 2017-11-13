@@ -9,7 +9,12 @@
 
 #include "lldb/Core/DumpDataExtractor.h"
 
+#include "lldb/lldb-defines.h" // for LLDB_INVALID_ADDRESS
+#include "lldb/lldb-forward.h" // for TargetSP, DisassemblerSP
+
+#include "lldb/Core/Address.h" // for Address
 #include "lldb/Core/Disassembler.h"
+#include "lldb/Core/ModuleList.h" // for ModuleList
 #include "lldb/Symbol/ClangASTContext.h"
 #include "lldb/Target/ExecutionContext.h"
 #include "lldb/Target/ExecutionContextScope.h"
@@ -17,6 +22,23 @@
 #include "lldb/Target/Target.h"
 #include "lldb/Utility/DataExtractor.h"
 #include "lldb/Utility/Stream.h"
+
+#include "clang/AST/ASTContext.h"    // for ASTContext
+#include "clang/AST/CanonicalType.h" // for CanQualType
+
+#include "llvm/ADT/APFloat.h"     // for APFloat, APFloatBase:...
+#include "llvm/ADT/APInt.h"       // for APInt
+#include "llvm/ADT/ArrayRef.h"    // for ArrayRef
+#include "llvm/ADT/SmallVector.h" // for SmallVector
+
+#include <limits> // for numeric_limits, numer...
+#include <memory> // for shared_ptr
+#include <string> // for string, basic_string
+
+#include <assert.h>   // for assert
+#include <ctype.h>    // for isprint
+#include <inttypes.h> // for PRIu64, PRIx64, PRIX64
+#include <math.h>     // for ldexpf
 
 #include <bitset>
 #include <sstream>
@@ -132,7 +154,8 @@ lldb::offset_t lldb_private::DumpDataExtractor(
       target_sp = exe_scope->CalculateTarget();
     if (target_sp) {
       DisassemblerSP disassembler_sp(Disassembler::FindPlugin(
-          target_sp->GetArchitecture(), nullptr, nullptr));
+          target_sp->GetArchitecture(),
+          target_sp->GetDisassemblyFlavor(), nullptr));
       if (disassembler_sp) {
         lldb::addr_t addr = base_addr + start_offset;
         lldb_private::Address so_addr;
@@ -249,6 +272,13 @@ lldb::offset_t lldb_private::DumpDataExtractor(
     case eFormatChar:
     case eFormatCharPrintable:
     case eFormatCharArray: {
+      // Reject invalid item_byte_size.
+      if (item_byte_size > 8) {
+        s->Printf("error: unsupported byte size (%" PRIu64 ") for char format",
+                  (uint64_t)item_byte_size);
+        return offset;
+      }
+
       // If we are only printing one character surround it with single
       // quotes
       if (item_count == 1 && item_format == eFormatChar)

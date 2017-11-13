@@ -11,14 +11,17 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "MCTargetDesc/HexagonMCTargetDesc.h"
 #include "Hexagon.h"
 #include "HexagonTargetStreamer.h"
 #include "MCTargetDesc/HexagonInstPrinter.h"
 #include "MCTargetDesc/HexagonMCAsmInfo.h"
 #include "MCTargetDesc/HexagonMCELFStreamer.h"
 #include "MCTargetDesc/HexagonMCInstrInfo.h"
-#include "MCTargetDesc/HexagonMCTargetDesc.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/BinaryFormat/ELF.h"
+#include "llvm/MC/MCAsmBackend.h"
+#include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCDwarf.h"
 #include "llvm/MC/MCELFStreamer.h"
@@ -27,10 +30,9 @@
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
-#include "llvm/Support/ELF.h"
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/raw_ostream.h"
 #include <cassert>
 #include <cstdint>
 #include <new>
@@ -69,6 +71,9 @@ static cl::opt<bool> HexagonV60ArchVariant("mv60", cl::Hidden, cl::init(false),
 
 static cl::opt<bool> HexagonV62ArchVariant("mv62", cl::Hidden, cl::init(false),
   cl::desc("Build for Hexagon V62"));
+
+static cl::opt<bool> EnableHVX("mhvx", cl::Hidden, cl::init(false),
+  cl::desc("Enable Hexagon Vector Extension (HVX)"));
 
 static StringRef DefaultArch = "hexagonv60";
 
@@ -221,13 +226,13 @@ createMCAsmTargetStreamer(MCStreamer &S, formatted_raw_ostream &OS,
   return new HexagonTargetAsmStreamer(S, OS, IsVerboseAsm, *IP);
 }
 
-static MCStreamer *createMCStreamer(Triple const &T,
-                                    MCContext &Context,
-                                    MCAsmBackend &MAB,
+static MCStreamer *createMCStreamer(Triple const &T, MCContext &Context,
+                                    std::unique_ptr<MCAsmBackend> &&MAB,
                                     raw_pwrite_stream &OS,
-                                    MCCodeEmitter *Emitter,
+                                    std::unique_ptr<MCCodeEmitter> &&Emitter,
                                     bool RelaxAll) {
-  return createHexagonELFStreamer(T, Context, MAB, OS, Emitter);
+  return createHexagonELFStreamer(T, Context, std::move(MAB), OS,
+                                  std::move(Emitter));
 }
 
 static MCTargetStreamer *
@@ -249,8 +254,11 @@ static bool LLVM_ATTRIBUTE_UNUSED checkFeature(MCSubtargetInfo* STI, uint64_t F)
 StringRef Hexagon_MC::ParseHexagonTriple(const Triple &TT, StringRef CPU) {
   StringRef CPUName = Hexagon_MC::selectHexagonCPU(TT, CPU);
   StringRef FS = "";
-  if (CPUName.equals_lower("hexagonv60") || CPUName.equals_lower("hexagonv62"))
-    FS = "+hvx";
+  if (EnableHVX) {
+    if (CPUName.equals_lower("hexagonv60") ||
+        CPUName.equals_lower("hexagonv62"))
+      FS = "+hvx";
+  }
   return FS;
 }
 
@@ -280,7 +288,7 @@ MCSubtargetInfo *Hexagon_MC::createHexagonMCSubtargetInfo(const Triple &TT,
   }
 
   MCSubtargetInfo *X = createHexagonMCSubtargetInfoImpl(TT, CPUName, ArchFS);
-  if (X->getFeatureBits()[Hexagon::ExtensionHVXDbl]) {
+  if (X->getFeatureBits()[Hexagon::ExtensionHVX128B]) {
     llvm::FeatureBitset Features = X->getFeatureBits();
     X->setFeatureBits(Features.set(Hexagon::ExtensionHVX));
   }

@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/utsname.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <mutex> // std::once
@@ -40,8 +41,6 @@ void HostInfoLinux::Initialize() {
 
   g_fields = new HostInfoLinuxFields();
 }
-
-uint32_t HostInfoLinux::GetMaxThreadNameLength() { return 16; }
 
 bool HostInfoLinux::GetOSVersion(uint32_t &major, uint32_t &minor,
                                  uint32_t &update) {

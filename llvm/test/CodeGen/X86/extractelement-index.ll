@@ -11,8 +11,9 @@
 define i8 @extractelement_v16i8_1(<16 x i8> %a) nounwind {
 ; SSE2-LABEL: extractelement_v16i8_1:
 ; SSE2:       # BB#0:
-; SSE2-NEXT:    movaps %xmm0, -{{[0-9]+}}(%rsp)
-; SSE2-NEXT:    movb -{{[0-9]+}}(%rsp), %al
+; SSE2-NEXT:    movd %xmm0, %eax
+; SSE2-NEXT:    shrl $8, %eax
+; SSE2-NEXT:    # kill: %AL<def> %AL<kill> %EAX<kill>
 ; SSE2-NEXT:    retq
 ;
 ; SSE41-LABEL: extractelement_v16i8_1:
@@ -33,8 +34,9 @@ define i8 @extractelement_v16i8_1(<16 x i8> %a) nounwind {
 define i8 @extractelement_v16i8_11(<16 x i8> %a) nounwind {
 ; SSE2-LABEL: extractelement_v16i8_11:
 ; SSE2:       # BB#0:
-; SSE2-NEXT:    movaps %xmm0, -{{[0-9]+}}(%rsp)
-; SSE2-NEXT:    movb -{{[0-9]+}}(%rsp), %al
+; SSE2-NEXT:    pextrw $5, %xmm0, %eax
+; SSE2-NEXT:    shrl $8, %eax
+; SSE2-NEXT:    # kill: %AL<def> %AL<kill> %EAX<kill>
 ; SSE2-NEXT:    retq
 ;
 ; SSE41-LABEL: extractelement_v16i8_11:
@@ -55,8 +57,8 @@ define i8 @extractelement_v16i8_11(<16 x i8> %a) nounwind {
 define i8 @extractelement_v16i8_14(<16 x i8> %a) nounwind {
 ; SSE2-LABEL: extractelement_v16i8_14:
 ; SSE2:       # BB#0:
-; SSE2-NEXT:    movaps %xmm0, -{{[0-9]+}}(%rsp)
-; SSE2-NEXT:    movb -{{[0-9]+}}(%rsp), %al
+; SSE2-NEXT:    pextrw $7, %xmm0, %eax
+; SSE2-NEXT:    # kill: %AL<def> %AL<kill> %EAX<kill>
 ; SSE2-NEXT:    retq
 ;
 ; SSE41-LABEL: extractelement_v16i8_14:
@@ -77,8 +79,9 @@ define i8 @extractelement_v16i8_14(<16 x i8> %a) nounwind {
 define i8 @extractelement_v32i8_1(<32 x i8> %a) nounwind {
 ; SSE2-LABEL: extractelement_v32i8_1:
 ; SSE2:       # BB#0:
-; SSE2-NEXT:    movaps %xmm0, -{{[0-9]+}}(%rsp)
-; SSE2-NEXT:    movb -{{[0-9]+}}(%rsp), %al
+; SSE2-NEXT:    movd %xmm0, %eax
+; SSE2-NEXT:    shrl $8, %eax
+; SSE2-NEXT:    # kill: %AL<def> %AL<kill> %EAX<kill>
 ; SSE2-NEXT:    retq
 ;
 ; SSE41-LABEL: extractelement_v32i8_1:
@@ -100,8 +103,9 @@ define i8 @extractelement_v32i8_1(<32 x i8> %a) nounwind {
 define i8 @extractelement_v32i8_17(<32 x i8> %a) nounwind {
 ; SSE2-LABEL: extractelement_v32i8_17:
 ; SSE2:       # BB#0:
-; SSE2-NEXT:    movaps %xmm1, -{{[0-9]+}}(%rsp)
-; SSE2-NEXT:    movb -{{[0-9]+}}(%rsp), %al
+; SSE2-NEXT:    movd %xmm1, %eax
+; SSE2-NEXT:    shrl $8, %eax
+; SSE2-NEXT:    # kill: %AL<def> %AL<kill> %EAX<kill>
 ; SSE2-NEXT:    retq
 ;
 ; SSE41-LABEL: extractelement_v32i8_17:
@@ -227,12 +231,12 @@ define i32 @extractelement_v4i32_3(<4 x i32> %a) nounwind {
 ;
 ; SSE41-LABEL: extractelement_v4i32_3:
 ; SSE41:       # BB#0:
-; SSE41-NEXT:    pextrd $3, %xmm0, %eax
+; SSE41-NEXT:    extractps $3, %xmm0, %eax
 ; SSE41-NEXT:    retq
 ;
 ; AVX-LABEL: extractelement_v4i32_3:
 ; AVX:       # BB#0:
-; AVX-NEXT:    vpextrd $3, %xmm0, %eax
+; AVX-NEXT:    vextractps $3, %xmm0, %eax
 ; AVX-NEXT:    retq
   %b = extractelement <4 x i32> %a, i256 3
   ret i32 %b
@@ -293,22 +297,15 @@ define i32 @extractelement_v8i32_7(<8 x i32> %a) nounwind {
 ;
 ; SSE41-LABEL: extractelement_v8i32_7:
 ; SSE41:       # BB#0:
-; SSE41-NEXT:    pextrd $3, %xmm1, %eax
+; SSE41-NEXT:    extractps $3, %xmm1, %eax
 ; SSE41-NEXT:    retq
 ;
-; AVX1-LABEL: extractelement_v8i32_7:
-; AVX1:       # BB#0:
-; AVX1-NEXT:    vextractf128 $1, %ymm0, %xmm0
-; AVX1-NEXT:    vpextrd $3, %xmm0, %eax
-; AVX1-NEXT:    vzeroupper
-; AVX1-NEXT:    retq
-;
-; AVX2-LABEL: extractelement_v8i32_7:
-; AVX2:       # BB#0:
-; AVX2-NEXT:    vextracti128 $1, %ymm0, %xmm0
-; AVX2-NEXT:    vpextrd $3, %xmm0, %eax
-; AVX2-NEXT:    vzeroupper
-; AVX2-NEXT:    retq
+; AVX-LABEL: extractelement_v8i32_7:
+; AVX:       # BB#0:
+; AVX-NEXT:    vextractf128 $1, %ymm0, %xmm0
+; AVX-NEXT:    vextractps $3, %xmm0, %eax
+; AVX-NEXT:    vzeroupper
+; AVX-NEXT:    retq
   %b = extractelement <8 x i32> %a, i64 7
   ret i32 %b
 }
@@ -316,7 +313,7 @@ define i32 @extractelement_v8i32_7(<8 x i32> %a) nounwind {
 define i64 @extractelement_v2i64_0(<2 x i64> %a, i256 %i) nounwind {
 ; SSE-LABEL: extractelement_v2i64_0:
 ; SSE:       # BB#0:
-; SSE-NEXT:    movd %xmm0, %rax
+; SSE-NEXT:    movq %xmm0, %rax
 ; SSE-NEXT:    retq
 ;
 ; AVX-LABEL: extractelement_v2i64_0:
@@ -331,7 +328,7 @@ define i64 @extractelement_v2i64_1(<2 x i64> %a, i256 %i) nounwind {
 ; SSE2-LABEL: extractelement_v2i64_1:
 ; SSE2:       # BB#0:
 ; SSE2-NEXT:    pshufd {{.*#+}} xmm0 = xmm0[2,3,0,1]
-; SSE2-NEXT:    movd %xmm0, %rax
+; SSE2-NEXT:    movq %xmm0, %rax
 ; SSE2-NEXT:    retq
 ;
 ; SSE41-LABEL: extractelement_v2i64_1:
@@ -351,7 +348,7 @@ define i64 @extractelement_v4i64_1(<4 x i64> %a, i256 %i) nounwind {
 ; SSE2-LABEL: extractelement_v4i64_1:
 ; SSE2:       # BB#0:
 ; SSE2-NEXT:    pshufd {{.*#+}} xmm0 = xmm0[2,3,0,1]
-; SSE2-NEXT:    movd %xmm0, %rax
+; SSE2-NEXT:    movq %xmm0, %rax
 ; SSE2-NEXT:    retq
 ;
 ; SSE41-LABEL: extractelement_v4i64_1:
@@ -372,7 +369,7 @@ define i64 @extractelement_v4i64_3(<4 x i64> %a, i256 %i) nounwind {
 ; SSE2-LABEL: extractelement_v4i64_3:
 ; SSE2:       # BB#0:
 ; SSE2-NEXT:    pshufd {{.*#+}} xmm0 = xmm1[2,3,0,1]
-; SSE2-NEXT:    movd %xmm0, %rax
+; SSE2-NEXT:    movq %xmm0, %rax
 ; SSE2-NEXT:    retq
 ;
 ; SSE41-LABEL: extractelement_v4i64_3:

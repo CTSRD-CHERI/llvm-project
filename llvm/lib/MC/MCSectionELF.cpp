@@ -7,11 +7,12 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/MC/MCSectionELF.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCExpr.h"
-#include "llvm/MC/MCSectionELF.h"
-#include "llvm/Support/ELF.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cassert>
 
@@ -102,6 +103,8 @@ void MCSectionELF::PrintSwitchToSection(const MCAsmInfo &MAI, const Triple &T,
     OS << 'S';
   if (Flags & ELF::SHF_TLS)
     OS << 'T';
+  if (Flags & ELF::SHF_LINK_ORDER)
+    OS << 'o';
 
   // If there are target-specific flags, print them.
   Triple::ArchType Arch = T.getArch();
@@ -110,8 +113,7 @@ void MCSectionELF::PrintSwitchToSection(const MCAsmInfo &MAI, const Triple &T,
       OS << 'c';
     if (Flags & ELF::XCORE_SHF_DP_SECTION)
       OS << 'd';
-  } else if (Arch == Triple::arm || Arch == Triple::armeb ||
-             Arch == Triple::thumb || Arch == Triple::thumbeb) {
+  } else if (T.isARM() || T.isThumb()) {
     if (Flags & ELF::SHF_ARM_PURECODE)
       OS << 'y';
   }
@@ -140,6 +142,15 @@ void MCSectionELF::PrintSwitchToSection(const MCAsmInfo &MAI, const Triple &T,
     OS << "progbits";
   else if (Type == ELF::SHT_X86_64_UNWIND)
     OS << "unwind";
+  else if (Type == ELF::SHT_MIPS_DWARF)
+    // Print hex value of the flag while we do not have
+    // any standard symbolic representation of the flag.
+    OS << "0x7000001e";
+  else if (Type == ELF::SHT_LLVM_ODRTAB)
+    OS << "llvm_odrtab";
+  else
+    report_fatal_error("unsupported type 0x" + Twine::utohexstr(Type) +
+                       " for section " + getSectionName());
 
   if (EntrySize) {
     assert(Flags & ELF::SHF_MERGE);
@@ -150,6 +161,12 @@ void MCSectionELF::PrintSwitchToSection(const MCAsmInfo &MAI, const Triple &T,
     OS << ",";
     printName(OS, Group->getName());
     OS << ",comdat";
+  }
+
+  if (Flags & ELF::SHF_LINK_ORDER) {
+    assert(AssociatedSymbol);
+    OS << ",";
+    printName(OS, AssociatedSymbol->getName());
   }
 
   if (isUnique())

@@ -6,9 +6,9 @@ add_clang_library(clangTidyGoogleModule
   ExplicitConstructorCheck.cpp
   ExplicitMakePairCheck.cpp
   GlobalNamesInHeadersCheck.cpp
+  GlobalVariableDeclarationCheck.cpp
   GoogleTidyModule.cpp
   IntegerTypesCheck.cpp
-  MemsetZeroLengthCheck.cpp
   NonConstReferences.cpp
   OverloadedUnaryAndCheck.cpp
   StringReferenceMemberCheck.cpp

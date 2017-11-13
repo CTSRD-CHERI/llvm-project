@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03
+
 // <ostream>
 
 // template <class charT, class traits = char_traits<charT> >
@@ -19,7 +21,6 @@
 #include <ostream>
 #include <cassert>
 
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
 
 template <class CharT>
 class testbuf
@@ -38,26 +39,24 @@ public:
 protected:
 
     virtual typename base::int_type
-        overflow(typename base::int_type __c = base::traits_type::eof())
+        overflow(typename base::int_type ch = base::traits_type::eof())
         {
-            if (__c != base::traits_type::eof())
+            if (ch != base::traits_type::eof())
             {
                 int n = static_cast<int>(str_.size());
-                str_.push_back(static_cast<CharT>(__c));
+                str_.push_back(static_cast<CharT>(ch));
                 str_.resize(str_.capacity());
                 base::setp(const_cast<CharT*>(str_.data()),
                            const_cast<CharT*>(str_.data() + str_.size()));
                 base::pbump(n+1);
             }
-            return __c;
+            return ch;
         }
 };
 
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
 
 int main()
 {
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
     {
         testbuf<char> sb;
         std::ostream(&sb) << "testing...";
@@ -68,5 +67,4 @@ int main()
         std::wostream(&sb) << L"123";
         assert(sb.str() == L"123");
     }
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
 }

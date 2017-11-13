@@ -52,6 +52,19 @@
 #define TEST_HAS_BUILTIN_IDENTIFIER(X) 0
 #endif
 
+#if defined(__EDG__)
+# define TEST_COMPILER_EDG
+#elif defined(__clang__)
+# define TEST_COMPILER_CLANG
+# if defined(__apple_build_version__)
+#  define TEST_COMPILER_APPLE_CLANG
+# endif
+#elif defined(_MSC_VER)
+# define TEST_COMPILER_C1XX
+#elif defined(__GNUC__)
+# define TEST_COMPILER_GCC
+#endif
+
 #if defined(__apple_build_version__)
 #define TEST_APPLE_CLANG_VER (__clang_major__ * 100) + __clang_minor__
 #elif defined(__clang_major__)
@@ -68,8 +81,11 @@
 # define TEST_STD_VER 11
 #elif __cplusplus <= 201402L
 # define TEST_STD_VER 14
+#elif __cplusplus <= 201703L
+# define TEST_STD_VER 17
 #else
-# define TEST_STD_VER 16    // current year; greater than current standard
+# define TEST_STD_VER 99    // greater than current standard
+// This is deliberately different than _LIBCPP_STD_VER to discourage matching them up.
 #endif
 #endif
 
@@ -95,6 +111,7 @@
 #define TEST_ALIGNAS(...) alignas(__VA_ARGS__)
 #define TEST_CONSTEXPR constexpr
 #define TEST_NOEXCEPT noexcept
+#define TEST_NOEXCEPT_FALSE noexcept(false)
 #define TEST_NOEXCEPT_COND(...) noexcept(__VA_ARGS__)
 # if TEST_STD_VER >= 14
 #   define TEST_CONSTEXPR_CXX14 constexpr
@@ -112,6 +129,7 @@
 #define TEST_CONSTEXPR
 #define TEST_CONSTEXPR_CXX14
 #define TEST_NOEXCEPT throw()
+#define TEST_NOEXCEPT_FALSE
 #define TEST_NOEXCEPT_COND(...)
 #define TEST_THROW_SPEC(...) throw(__VA_ARGS__)
 #endif
@@ -139,11 +157,22 @@
 #define TEST_NORETURN [[noreturn]]
 #endif
 
+#if defined(_LIBCPP_SAFE_STATIC)
+#define TEST_SAFE_STATIC _LIBCPP_SAFE_STATIC
+#else
+#define TEST_SAFE_STATIC
+#endif
+
+#if TEST_STD_VER < 11
+#define ASSERT_NOEXCEPT(...)
+#define ASSERT_NOT_NOEXCEPT(...)
+#else
 #define ASSERT_NOEXCEPT(...) \
     static_assert(noexcept(__VA_ARGS__), "Operation must be noexcept")
 
 #define ASSERT_NOT_NOEXCEPT(...) \
     static_assert(!noexcept(__VA_ARGS__), "Operation must NOT be noexcept")
+#endif
 
 /* Macros for testing libc++ specific behavior and extensions */
 #if defined(_LIBCPP_VERSION)
@@ -168,8 +197,8 @@ struct is_same<T, T> { enum {value = 1}; };
 } // namespace test_macros_detail
 
 #define ASSERT_SAME_TYPE(...) \
-    static_assert(test_macros_detail::is_same<__VA_ARGS__>::value, \
-                 "Types differ uexpectedly")
+    static_assert((test_macros_detail::is_same<__VA_ARGS__>::value), \
+                 "Types differ unexpectedly")
 
 #ifndef TEST_HAS_NO_EXCEPTIONS
 #define TEST_THROW(...) throw __VA_ARGS__
@@ -192,9 +221,12 @@ inline void DoNotOptimize(Tp const& value) {
 #endif
 }
 #else
+#include <intrin.h>
 template <class Tp>
-inline void DoNotOptimize(Tp const&) {
-  // FIXME: Do something here...
+inline void DoNotOptimize(Tp const& value) {
+  const volatile void* volatile unused = __builtin_addressof(value);
+  static_cast<void>(unused);
+  _ReadWriteBarrier();
 }
 #endif
 

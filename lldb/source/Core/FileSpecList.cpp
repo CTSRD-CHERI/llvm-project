@@ -9,14 +9,12 @@
 
 #include "lldb/Core/FileSpecList.h"
 
-// C Includes
-// C++ Includes
-#include <algorithm>
-
-// Other libraries and framework includes
-// Project includes
+#include "lldb/Utility/ConstString.h" // for ConstString
 #include "lldb/Utility/Stream.h"
-#include "llvm/Support/FileSystem.h"
+
+#include <utility> // for find
+
+#include <stdint.h> // for UINT32_MAX
 
 using namespace lldb_private;
 using namespace std;
@@ -51,7 +49,7 @@ void FileSpecList::Append(const FileSpec &file_spec) {
 // contained a copy of "file_spec".
 //------------------------------------------------------------------
 bool FileSpecList::AppendIfUnique(const FileSpec &file_spec) {
-  collection::iterator pos, end = m_files.end();
+  collection::iterator end = m_files.end();
   if (find(m_files.begin(), end, file_spec) == end) {
     m_files.push_back(file_spec);
     return true;

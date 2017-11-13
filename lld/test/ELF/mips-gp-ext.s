@@ -12,6 +12,13 @@
 
 # RUN: echo "SECTIONS { \
 # RUN:          .text : { *(.text) } \
+# RUN:          _gp = 0x100 + ABSOLUTE(.); \
+# RUN:          .got  : { *(.got) } }" > %t.rel.script
+# RUN: ld.lld -shared -o %t.rel.so --script %t.rel.script %t.o
+# RUN: llvm-objdump -s -t %t.rel.so | FileCheck --check-prefix=REL %s
+
+# RUN: echo "SECTIONS { \
+# RUN:          .text : { *(.text) } \
 # RUN:          _gp = 0x200; \
 # RUN:          .got  : { *(.got) } }" > %t.abs.script
 # RUN: ld.lld -shared -o %t.abs.so --script %t.abs.script %t.o
@@ -36,7 +43,7 @@
 #                 ^-- 0-0x10c
 
 # REL: 00000000         .text           00000000 foo
-# REL: 0000010c         *ABS*           00000000 .hidden _gp_disp
+# REL: 00000000         *ABS*           00000000 .hidden _gp_disp
 # REL: 0000010c         *ABS*           00000000 .hidden _gp
 
 # ABS:      Contents of section .text:
@@ -56,7 +63,7 @@
 #                 ^-- 0-0x200
 
 # ABS: 00000000         .text           00000000 foo
-# ABS: 00000200         *ABS*           00000000 .hidden _gp_disp
+# ABS: 00000000         *ABS*           00000000 .hidden _gp_disp
 # ABS: 00000200         *ABS*           00000000 .hidden _gp
 
   .text

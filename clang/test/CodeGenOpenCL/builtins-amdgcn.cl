@@ -1,5 +1,6 @@
 // REQUIRES: amdgpu-registered-target
 // RUN: %clang_cc1 -triple amdgcn-unknown-unknown -S -emit-llvm -o - %s | FileCheck %s
+// RUN: %clang_cc1 -triple amdgcn-unknown-unknown-opencl -S -emit-llvm -o - %s | FileCheck %s
 
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
 
@@ -235,6 +236,34 @@ void test_ds_swizzle(global int* out, int a)
   *out = __builtin_amdgcn_ds_swizzle(a, 32);
 }
 
+// CHECK-LABEL: @test_ds_permute
+// CHECK: call i32 @llvm.amdgcn.ds.permute(i32 %a, i32 %b)
+void test_ds_permute(global int* out, int a, int b)
+{
+  out[0] = __builtin_amdgcn_ds_permute(a, b);
+}
+
+// CHECK-LABEL: @test_ds_bpermute
+// CHECK: call i32 @llvm.amdgcn.ds.bpermute(i32 %a, i32 %b)
+void test_ds_bpermute(global int* out, int a, int b)
+{
+  *out = __builtin_amdgcn_ds_bpermute(a, b);
+}
+
+// CHECK-LABEL: @test_readfirstlane
+// CHECK: call i32 @llvm.amdgcn.readfirstlane(i32 %a)
+void test_readfirstlane(global int* out, int a)
+{
+  *out = __builtin_amdgcn_readfirstlane(a);
+}
+
+// CHECK-LABEL: @test_readlane
+// CHECK: call i32 @llvm.amdgcn.readlane(i32 %a, i32 %b)
+void test_readlane(global int* out, int a, int b)
+{
+  *out = __builtin_amdgcn_readlane(a, b);
+}
+
 // CHECK-LABEL: @test_fcmp_f32
 // CHECK: call i64 @llvm.amdgcn.fcmp.f32(float %a, float %b, i32 5)
 void test_fcmp_f32(global ulong* out, float a, float b)
@@ -392,6 +421,25 @@ void test_read_exec(global ulong* out) {
 
 // CHECK: declare i64 @llvm.read_register.i64(metadata) #[[NOUNWIND_READONLY:[0-9]+]]
 
+// CHECK-LABEL: @test_read_exec_lo(
+// CHECK: call i32 @llvm.read_register.i32(metadata ![[EXEC_LO:[0-9]+]]) #[[READ_EXEC_ATTRS]]
+void test_read_exec_lo(global uint* out) {
+  *out = __builtin_amdgcn_read_exec_lo();
+}
+
+// CHECK-LABEL: @test_read_exec_hi(
+// CHECK: call i32 @llvm.read_register.i32(metadata ![[EXEC_HI:[0-9]+]]) #[[READ_EXEC_ATTRS]]
+void test_read_exec_hi(global uint* out) {
+  *out = __builtin_amdgcn_read_exec_hi();
+}
+
+// CHECK-LABEL: @test_dispatch_ptr
+// CHECK: call i8 addrspace(2)* @llvm.amdgcn.dispatch.ptr()
+void test_dispatch_ptr(__attribute__((address_space(2))) unsigned char ** out)
+{
+  *out = __builtin_amdgcn_dispatch_ptr();
+}
+
 // CHECK-LABEL: @test_kernarg_segment_ptr
 // CHECK: call i8 addrspace(2)* @llvm.amdgcn.kernarg.segment.ptr()
 void test_kernarg_segment_ptr(__attribute__((address_space(2))) unsigned char ** out)
@@ -452,7 +500,16 @@ void test_fmed3_f32(global float* out, float a, float b, float c)
   *out = __builtin_amdgcn_fmed3f(a, b, c);
 }
 
+// CHECK-LABEL: @test_s_getpc
+// CHECK: call i64 @llvm.amdgcn.s.getpc()
+void test_s_getpc(global ulong* out)
+{
+  *out = __builtin_amdgcn_s_getpc();
+}
+
 // CHECK-DAG: [[WI_RANGE]] = !{i32 0, i32 1024}
 // CHECK-DAG: attributes #[[NOUNWIND_READONLY:[0-9]+]] = { nounwind readonly }
 // CHECK-DAG: attributes #[[READ_EXEC_ATTRS]] = { convergent }
 // CHECK-DAG: ![[EXEC]] = !{!"exec"}
+// CHECK-DAG: ![[EXEC_LO]] = !{!"exec_lo"}
+// CHECK-DAG: ![[EXEC_HI]] = !{!"exec_hi"}

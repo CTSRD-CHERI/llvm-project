@@ -10,7 +10,10 @@
 #ifndef EMPLACEABLE_H
 #define EMPLACEABLE_H
 
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
+#include <utility>
+#include "test_macros.h"
+
+#if TEST_STD_VER >= 11
 
 class Emplaceable
 {
@@ -42,13 +45,14 @@ namespace std {
 
 template <>
 struct hash<Emplaceable>
-    : public std::unary_function<Emplaceable, std::size_t>
 {
+    typedef Emplaceable argument_type;
+    typedef std::size_t result_type;
+
     std::size_t operator()(const Emplaceable& x) const {return x.get();}
 };
 
 }
 
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
-
+#endif  // TEST_STD_VER >= 11
 #endif  // EMPLACEABLE_H

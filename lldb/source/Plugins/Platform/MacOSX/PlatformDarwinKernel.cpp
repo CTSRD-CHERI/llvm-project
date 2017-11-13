@@ -23,7 +23,6 @@
 #include "lldb/Core/ModuleList.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Host/FileSpec.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Interpreter/OptionValueFileSpecList.h"
 #include "lldb/Interpreter/OptionValueProperties.h"
@@ -32,8 +31,9 @@
 #include "lldb/Target/Platform.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
-#include "lldb/Utility/Error.h"
+#include "lldb/Utility/FileSpec.h"
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/Status.h"
 #include "lldb/Utility/StreamString.h"
 
 #include "llvm/Support/FileSystem.h"
@@ -508,9 +508,10 @@ PlatformDarwinKernel::GetKernelsAndKextsInDirectoryHelper(
   ConstString file_spec_extension = file_spec.GetFileNameExtension();
 
   Log *log(GetLogIfAllCategoriesSet(LIBLLDB_LOG_PLATFORM));
-  if (log)
-    log->Printf("PlatformDarwinKernel examining %s",
-                file_spec.GetPath().c_str());
+  Log *log_verbose(GetLogIfAllCategoriesSet(LIBLLDB_LOG_PLATFORM | LLDB_LOG_OPTION_VERBOSE));
+
+  if (log_verbose)
+      log_verbose->Printf ("PlatformDarwinKernel examining '%s'", file_spec.GetPath().c_str());
 
   PlatformDarwinKernel *thisp = (PlatformDarwinKernel *)baton;
   if (ft == llvm::sys::fs::file_type::regular_file ||
@@ -520,9 +521,21 @@ PlatformDarwinKernel::GetKernelsAndKextsInDirectoryHelper(
          strncmp(filename.GetCString(), "mach", 4) == 0) &&
         file_spec_extension != g_dsym_suffix) {
       if (KernelHasdSYMSibling(file_spec))
+      {
+        if (log)
+        {
+            log->Printf ("PlatformDarwinKernel registering kernel binary '%s' with dSYM sibling", file_spec.GetPath().c_str());
+        }
         thisp->m_kernel_binaries_with_dsyms.push_back(file_spec);
+      }
       else
+      {
+        if (log)
+        {
+            log->Printf ("PlatformDarwinKernel registering kernel binary '%s', no dSYM", file_spec.GetPath().c_str());
+        }
         thisp->m_kernel_binaries_without_dsyms.push_back(file_spec);
+      }
       return FileSpec::eEnumerateDirectoryResultNext;
     }
   } else if (ft == llvm::sys::fs::file_type::directory_file &&
@@ -556,6 +569,8 @@ PlatformDarwinKernel::GetKernelsAndKextsInDirectoryHelper(
   if (recurse && file_spec_extension != g_dsym_suffix &&
       file_spec_extension != g_kext_suffix &&
       file_spec_extension != g_bundle_suffix) {
+    if (log_verbose)
+        log_verbose->Printf ("PlatformDarwinKernel descending into directory '%s'", file_spec.GetPath().c_str());
     return FileSpec::eEnumerateDirectoryResultEnter;
   } else {
     return FileSpec::eEnumerateDirectoryResultNext;
@@ -564,6 +579,7 @@ PlatformDarwinKernel::GetKernelsAndKextsInDirectoryHelper(
 
 void PlatformDarwinKernel::AddKextToMap(PlatformDarwinKernel *thisp,
                                         const FileSpec &file_spec) {
+  Log *log(GetLogIfAllCategoriesSet(LIBLLDB_LOG_PLATFORM));
   CFCBundle bundle(file_spec.GetPath().c_str());
   CFStringRef bundle_id(bundle.GetIdentifier());
   if (bundle_id && CFGetTypeID(bundle_id) == CFStringGetTypeID()) {
@@ -572,11 +588,23 @@ void PlatformDarwinKernel::AddKextToMap(PlatformDarwinKernel *thisp,
                            kCFStringEncodingUTF8)) {
       ConstString bundle_conststr(bundle_id_buf);
       if (KextHasdSYMSibling(file_spec))
+      {
+        if (log)
+        {
+            log->Printf ("PlatformDarwinKernel registering kext binary '%s' with dSYM sibling", file_spec.GetPath().c_str());
+        }
         thisp->m_name_to_kext_path_map_with_dsyms.insert(
             std::pair<ConstString, FileSpec>(bundle_conststr, file_spec));
+      }
       else
+      {
+        if (log)
+        {
+            log->Printf ("PlatformDarwinKernel registering kext binary '%s', no dSYM", file_spec.GetPath().c_str());
+        }
         thisp->m_name_to_kext_path_map_without_dsyms.insert(
             std::pair<ConstString, FileSpec>(bundle_conststr, file_spec));
+      }
     }
   }
 }
@@ -636,11 +664,11 @@ bool PlatformDarwinKernel::KernelHasdSYMSibling(const FileSpec &kernel_binary) {
   return false;
 }
 
-Error PlatformDarwinKernel::GetSharedModule(
+Status PlatformDarwinKernel::GetSharedModule(
     const ModuleSpec &module_spec, Process *process, ModuleSP &module_sp,
     const FileSpecList *module_search_paths_ptr, ModuleSP *old_module_sp_ptr,
     bool *did_create_ptr) {
-  Error error;
+  Status error;
   module_sp.reset();
   const FileSpec &platform_file = module_spec.GetFileSpec();
 
@@ -746,10 +774,10 @@ Error PlatformDarwinKernel::GetSharedModule(
                                          old_module_sp_ptr, did_create_ptr);
 }
 
-Error PlatformDarwinKernel::ExamineKextForMatchingUUID(
+Status PlatformDarwinKernel::ExamineKextForMatchingUUID(
     const FileSpec &kext_bundle_path, const lldb_private::UUID &uuid,
     const ArchSpec &arch, ModuleSP &exe_module_sp) {
-  Error error;
+  Status error;
   FileSpec exe_file = kext_bundle_path;
   Host::ResolveExecutableInBundle(exe_file);
   if (exe_file.Exists()) {

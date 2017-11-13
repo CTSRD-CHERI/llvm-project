@@ -11,7 +11,6 @@
 //  
 //===----------------------------------------------------------------------===//
 
-#include "config.h"
 #include "cxxabi.h"
 
 #include <exception>        // for std::terminate
@@ -19,6 +18,10 @@
 #include "cxa_exception.hpp"
 #include "cxa_handlers.hpp"
 #include "fallback_malloc.h"
+
+#if __has_feature(address_sanitizer)
+extern "C" void __asan_handle_no_return(void);
+#endif
 
 // +---------------------------+-----------------------------+---------------+
 // | __cxa_exception           | _Unwind_Exception CLNGC++\0 | thrown object |
@@ -218,6 +221,12 @@ __cxa_throw(void *thrown_object, std::type_info *tinfo, void (*dest)(void *)) {
     globals->uncaughtExceptions += 1;   // Not atomically, since globals are thread-local
 
     exception_header->unwindHeader.exception_cleanup = exception_cleanup_func;
+
+#if __has_feature(address_sanitizer)
+    // Inform the ASan runtime that now might be a good time to clean stuff up.
+    __asan_handle_no_return();
+#endif
+
 #ifdef __USING_SJLJ_EXCEPTIONS__
     _Unwind_SjLj_RaiseException(&exception_header->unwindHeader);
 #else

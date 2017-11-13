@@ -22,12 +22,12 @@
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/State.h"
-#include "lldb/Host/FileSpec.h"
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
-#include "lldb/Utility/Error.h"
+#include "lldb/Utility/FileSpec.h"
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/Status.h"
 #include "lldb/Utility/StreamString.h"
 
 // Define these constants from Linux mman.h for use when targeting
@@ -278,7 +278,7 @@ lldb::ProcessSP
 PlatformLinux::DebugProcess(ProcessLaunchInfo &launch_info, Debugger &debugger,
                             Target *target, // Can be NULL, if NULL create a new
                                             // target, else use existing one
-                            Error &error) {
+                            Status &error) {
   Log *log(GetLogIfAllCategoriesSet(LIBLLDB_LOG_PLATFORM));
   LLDB_LOG(log, "target {0}", target);
 
@@ -390,8 +390,10 @@ void PlatformLinux::CalculateTrapHandlerSymbolNames() {
   m_trap_handlers.push_back(ConstString("_sigtramp"));
 }
 
-uint64_t PlatformLinux::ConvertMmapFlagsToPlatform(const ArchSpec &arch,
-                                                   unsigned flags) {
+MmapArgList PlatformLinux::GetMmapArgumentList(const ArchSpec &arch,
+                                               addr_t addr, addr_t length,
+                                               unsigned prot, unsigned flags,
+                                               addr_t fd, addr_t offset) {
   uint64_t flags_platform = 0;
   uint64_t map_anon = MAP_ANON;
 
@@ -406,6 +408,8 @@ uint64_t PlatformLinux::ConvertMmapFlagsToPlatform(const ArchSpec &arch,
     flags_platform |= MAP_PRIVATE;
   if (flags & eMmapFlagsAnon)
     flags_platform |= map_anon;
-  return flags_platform;
+
+  MmapArgList args({addr, length, prot, flags_platform, fd, offset});
+  return args;
 }
 

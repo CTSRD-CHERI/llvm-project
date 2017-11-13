@@ -21,6 +21,7 @@
 // SI+ only builtins.
 //===----------------------------------------------------------------------===//
 
+BUILTIN(__builtin_amdgcn_dispatch_ptr, "Uc*2", "nc")
 BUILTIN(__builtin_amdgcn_kernarg_segment_ptr, "Uc*2", "nc")
 BUILTIN(__builtin_amdgcn_implicitarg_ptr, "Uc*2", "nc")
 
@@ -36,6 +37,7 @@ BUILTIN(__builtin_amdgcn_workitem_id_z, "Ui", "nc")
 // Instruction builtins.
 //===----------------------------------------------------------------------===//
 BUILTIN(__builtin_amdgcn_s_getreg, "UiIi", "n")
+BUILTIN(__builtin_amdgcn_s_getpc, "LUi", "n")
 BUILTIN(__builtin_amdgcn_s_waitcnt, "vIi", "n")
 BUILTIN(__builtin_amdgcn_s_sendmsg, "vIiUi", "n")
 BUILTIN(__builtin_amdgcn_s_sendmsghalt, "vIiUi", "n")
@@ -86,6 +88,10 @@ BUILTIN(__builtin_amdgcn_sicmpl, "LUiLiLiIi", "nc")
 BUILTIN(__builtin_amdgcn_fcmp, "LUiddIi", "nc")
 BUILTIN(__builtin_amdgcn_fcmpf, "LUiffIi", "nc")
 BUILTIN(__builtin_amdgcn_ds_swizzle, "iiIi", "nc")
+BUILTIN(__builtin_amdgcn_ds_permute, "iii", "nc")
+BUILTIN(__builtin_amdgcn_ds_bpermute, "iii", "nc")
+BUILTIN(__builtin_amdgcn_readfirstlane, "ii", "nc")
+BUILTIN(__builtin_amdgcn_readlane, "iii", "nc")
 BUILTIN(__builtin_amdgcn_fmed3f, "ffff", "nc")
 
 //===----------------------------------------------------------------------===//
@@ -103,6 +109,7 @@ TARGET_BUILTIN(__builtin_amdgcn_frexp_exph, "sh", "nc", "16-bit-insts")
 TARGET_BUILTIN(__builtin_amdgcn_fracth, "hh", "nc", "16-bit-insts")
 TARGET_BUILTIN(__builtin_amdgcn_classh, "bhi", "nc", "16-bit-insts")
 TARGET_BUILTIN(__builtin_amdgcn_s_memrealtime, "LUi", "n", "s-memrealtime")
+TARGET_BUILTIN(__builtin_amdgcn_mov_dpp, "iiIiIiIiIb", "nc", "dpp")
 
 //===----------------------------------------------------------------------===//
 // GFX9+ only builtins.
@@ -114,6 +121,8 @@ TARGET_BUILTIN(__builtin_amdgcn_fmed3h, "hhhh", "nc", "gfx9-insts")
 // Special builtins.
 //===----------------------------------------------------------------------===//
 BUILTIN(__builtin_amdgcn_read_exec, "LUi", "nc")
+BUILTIN(__builtin_amdgcn_read_exec_lo, "Ui", "nc")
+BUILTIN(__builtin_amdgcn_read_exec_hi, "Ui", "nc")
 
 //===----------------------------------------------------------------------===//
 // R600-NI only builtins.

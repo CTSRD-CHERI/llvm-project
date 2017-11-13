@@ -10,8 +10,7 @@
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Symbol/SymbolContext.h"
 #include "lldb/Target/ModuleCache.h"
-
-extern const char *TestMainArgv0;
+#include "TestingSupport/TestUtilities.h"
 
 using namespace lldb_private;
 using namespace lldb;
@@ -26,7 +25,7 @@ public:
 
 protected:
   static FileSpec s_cache_dir;
-  static llvm::SmallString<128> s_test_executable;
+  static std::string s_test_executable;
 
   void TryGetAndPut(const FileSpec &cache_dir, const char *hostname,
                     bool expect_download);
@@ -34,7 +33,7 @@ protected:
 }
 
 FileSpec ModuleCacheTest::s_cache_dir;
-llvm::SmallString<128> ModuleCacheTest::s_test_executable;
+std::string ModuleCacheTest::s_test_executable;
 
 static const char dummy_hostname[] = "dummy_hostname";
 static const char dummy_remote_dir[] = "bin";
@@ -71,10 +70,7 @@ void ModuleCacheTest::SetUpTestCase() {
 
   FileSpec tmpdir_spec;
   HostInfo::GetLLDBPath(lldb::ePathTypeLLDBTempSystemDir, s_cache_dir);
-
-  llvm::StringRef exe_folder = llvm::sys::path::parent_path(TestMainArgv0);
-  s_test_executable = exe_folder;
-  llvm::sys::path::append(s_test_executable, "Inputs", module_name);
+  s_test_executable = GetInputFilePath(module_name);
 }
 
 void ModuleCacheTest::TearDownTestCase() {
@@ -104,7 +100,7 @@ void ModuleCacheTest::TryGetAndPut(const FileSpec &cache_dir,
   bool did_create;
   bool download_called = false;
 
-  Error error = mc.GetAndPut(
+  Status error = mc.GetAndPut(
       cache_dir, hostname, module_spec,
       [this, &download_called](const ModuleSpec &module_spec,
                                const FileSpec &tmp_download_file_spec) {
@@ -114,10 +110,10 @@ void ModuleCacheTest::TryGetAndPut(const FileSpec &cache_dir,
         std::error_code ec = llvm::sys::fs::copy_file(
             s_test_executable, tmp_download_file_spec.GetCString());
         EXPECT_FALSE(ec);
-        return Error();
+        return Status();
       },
       [](const ModuleSP &module_sp, const FileSpec &tmp_download_file_spec) {
-        return Error("Not supported.");
+        return Status("Not supported.");
       },
       module_sp, &did_create);
   EXPECT_EQ(expect_download, download_called);

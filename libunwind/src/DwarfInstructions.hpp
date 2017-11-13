@@ -18,7 +18,6 @@
 #include <stdlib.h>
 
 #include "dwarf2.h"
-#include "AddressSpace.hpp"
 #include "Registers.hpp"
 #include "DwarfParser.hpp"
 #include "config.h"
@@ -168,7 +167,7 @@ int DwarfInstructions<A, R>::stepWithDwarf(A &addressSpace, pint_t pc,
       R newRegisters = registers;
       pint_t returnAddress = 0;
       const int lastReg = R::lastDwarfRegNum();
-      assert((int)CFI_Parser<A>::kMaxRegisterNumber > lastReg &&
+      assert(static_cast<int>(CFI_Parser<A>::kMaxRegisterNumber) >= lastReg &&
              "register range too large");
       assert(lastReg >= (int)cieInfo.returnAddressRegister &&
              "register range does not contain return address register");

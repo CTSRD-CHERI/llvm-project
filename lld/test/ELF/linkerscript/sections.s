@@ -45,8 +45,9 @@
 # SEC-ORDER: 3 .shstrtab     0000003b {{[0-9a-f]*}}
 # SEC-ORDER: 4 .symtab       00000030 {{[0-9a-f]*}}
 # SEC-ORDER: 5 .strtab       00000008 {{[0-9a-f]*}}
-# SEC-ORDER: 6 .data         00000020 {{[0-9a-f]*}} DATA
-# SEC-ORDER: 7 .text         0000000e {{[0-9a-f]*}} TEXT DATA
+# SEC-ORDER: 6 .comment      00000008 {{[0-9a-f]*}}
+# SEC-ORDER: 7 .data         00000020 {{[0-9a-f]*}} DATA
+# SEC-ORDER: 8 .text         0000000e {{[0-9a-f]*}} TEXT DATA
 
 # .text and .data have swapped names but proper sizes and types.
 # RUN: echo "SECTIONS { \
@@ -66,12 +67,6 @@
 # SEC-SWAP-NAMES: 7 .shstrtab     0000003b {{[0-9a-f]*}}
 # SEC-SWAP-NAMES: 8 .strtab       00000008 {{[0-9a-f]*}}
 
-# Attemp to discard .shstrtab section.
-# RUN: echo "SECTIONS { /DISCARD/ : { *(.shstrtab) } }" > %t.script
-# RUN: not ld.lld -o %t5 --script %t.script %t 2>&1 | \
-# RUN:   FileCheck -check-prefix=SEC-DISCARD %s
-# SEC-DISCARD: discarding .shstrtab section is not allowed
-
 # Multiple SECTIONS command specifying additional input section descriptions
 # for the same output section description - input sections are merged into
 # one output section.
@@ -85,13 +80,14 @@
 # RUN:   FileCheck -check-prefix=SEC-MULTI %s
 
 #           Idx Name          Size
-# SEC-MULTI: 1 .text         0000000e {{[0-9a-f]*}} TEXT DATA
-# SEC-MULTI: 2 .data         00000023 {{[0-9a-f]*}} DATA
-# SEC-MULTI: 3 .bss          00000002 {{[0-9a-f]*}} BSS
-# SEC-MULTI: 4 .comment      00000008 {{[0-9a-f]*}}
-# SEC-MULTI: 5 .symtab       00000030 {{[0-9a-f]*}}
-# SEC-MULTI: 6 .shstrtab     00000035 {{[0-9a-f]*}}
-# SEC-MULTI: 7 .strtab       00000008 {{[0-9a-f]*}}
+# SEC-MULTI:      1 .text         0000000e {{[0-9a-f]*}} TEXT DATA
+# SEC-MULTI-NEXT:   .data         00000020 {{[0-9a-f]*}} DATA
+# SEC-MULTI-NEXT:   .data         00000003 {{[0-9a-f]*}} DATA
+# SEC-MULTI-NEXT:   .bss          00000002 {{[0-9a-f]*}} BSS
+# SEC-MULTI-NEXT:   .comment      00000008 {{[0-9a-f]*}}
+# SEC-MULTI-NEXT:   .symtab       00000030 {{[0-9a-f]*}}
+# SEC-MULTI-NEXT:   .shstrtab     00000035 {{[0-9a-f]*}}
+# SEC-MULTI-NEXT:   .strtab       00000008 {{[0-9a-f]*}}
 
 # Input section pattern contains additional semicolon.
 # Case found in linux kernel script. Check we are able to parse it.

@@ -25,6 +25,7 @@
 
 // Other libraries and framework includes
 #include "clang/AST/ASTContext.h"
+#include "clang/AST/ExternalASTMerger.h"
 #include "clang/AST/TemplateBase.h"
 #include "llvm/ADT/SmallVector.h"
 
@@ -275,17 +276,16 @@ public:
     bool IsValid() const {
       if (args.empty())
         return false;
-      return args.size() == names.size();
-    }
-
-    size_t GetSize() const {
-      if (IsValid())
-        return args.size();
-      return 0;
+      return args.size() == names.size() &&
+        ((bool)pack_name == (bool)packed_args) &&
+        (!packed_args || !packed_args->packed_args);
     }
 
     llvm::SmallVector<const char *, 2> names;
     llvm::SmallVector<clang::TemplateArgument, 2> args;
+    
+    const char * pack_name = nullptr;
+    std::unique_ptr<TemplateParameterInfos> packed_args;
   };
 
   clang::FunctionTemplateDecl *
@@ -397,7 +397,8 @@ public:
   CompilerType CreateEnumerationType(const char *name,
                                      clang::DeclContext *decl_ctx,
                                      const Declaration &decl,
-                                     const CompilerType &integer_qual_type);
+                                     const CompilerType &integer_qual_type,
+                                     bool is_scoped);
 
   //------------------------------------------------------------------
   // Integer type functions
@@ -965,7 +966,10 @@ public:
 
   clang::DeclarationName
   GetDeclarationName(const char *name, const CompilerType &function_clang_type);
-
+  
+  virtual const clang::ExternalASTMerger::OriginMap &GetOriginMap() {
+    return m_origins;
+  }
 protected:
   //------------------------------------------------------------------
   // Classes that inherit from ClangASTContext can see and modify these
@@ -991,6 +995,7 @@ protected:
     CompleteTagDeclCallback                         m_callback_tag_decl;
     CompleteObjCInterfaceDeclCallback               m_callback_objc_decl;
     void *                                          m_callback_baton;
+    clang::ExternalASTMerger::OriginMap             m_origins;
     uint32_t                                        m_pointer_byte_size;
     bool                                            m_ast_owned;
     bool                                            m_can_evaluate_expressions;
@@ -1024,7 +1029,12 @@ public:
                                       const char *name) override;
 
   PersistentExpressionState *GetPersistentExpressionState() override;
-
+  
+  clang::ExternalASTMerger &GetMergerUnchecked();
+  
+  const clang::ExternalASTMerger::OriginMap &GetOriginMap() override {
+    return GetMergerUnchecked().GetOrigins();
+  }
 private:
   lldb::TargetWP m_target_wp;
   lldb::ClangPersistentVariablesUP m_persistent_variables; ///< These are the

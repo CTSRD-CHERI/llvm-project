@@ -68,6 +68,7 @@ representation.
    CMakePrimer
    AdvancedBuilds
    HowToBuildOnARM
+   HowToCrossCompileBuiltinsOnArm
    HowToCrossCompileLLVM
    CommandGuide/index
    GettingStarted
@@ -90,6 +91,8 @@ representation.
    CodeOfConduct
    CompileCudaWithLLVM
    ReportingGuide
+   Benchmarking
+   Docker
 
 :doc:`GettingStarted`
    Discusses how to get up and running quickly with the LLVM infrastructure.
@@ -102,6 +105,9 @@ representation.
 
 :doc:`HowToBuildOnARM`
    Notes on building and testing LLVM/Clang on ARM.
+
+:doc:`HowToCrossCompileBuiltinsOnArm`
+   Notes on cross-building and testing the compiler-rt builtins for Arm.
 
 :doc:`HowToCrossCompileLLVM`
    Notes on cross-building and testing LLVM/Clang.
@@ -157,8 +163,11 @@ representation.
   misunderstood instruction.
 
 :doc:`Frontend/PerformanceTips`
-   A collection of tips for frontend authors on how to generate IR 
+   A collection of tips for frontend authors on how to generate IR
    which LLVM is able to effectively optimize.
+
+:doc:`Docker`
+   A reference for using Dockerfiles provided with LLVM.
 
 
 Programming Documentation
@@ -178,6 +187,7 @@ For developers of applications which use LLVM as a library.
    ProgrammersManual
    Extensions
    LibFuzzer
+   FuzzingLLVM
    ScudoHardenedAllocator
    OptBisect
 
@@ -211,7 +221,6 @@ For developers of applications which use LLVM as a library.
 
 `Doxygen generated documentation <http://llvm.org/doxygen/>`_
   (`classes <http://llvm.org/doxygen/inherits.html>`_)
-  (`tarball <http://llvm.org/doxygen/doxygen.tar.gz>`_)
 
 `Documentation for Go bindings <http://godoc.org/llvm.org/llvm/bindings/go/llvm>`_
 
@@ -223,6 +232,9 @@ For developers of applications which use LLVM as a library.
 
 :doc:`LibFuzzer`
   A library for writing in-process guided fuzzers.
+
+:doc:`FuzzingLLVM`
+  Information on writing and using Fuzzers to find bugs in LLVM.
 
 :doc:`ScudoHardenedAllocator`
   A library that implements a security-hardened `malloc()`.
@@ -274,7 +286,10 @@ For API clients and LLVM developers.
    Coroutines
    GlobalISel
    XRay
+   XRayExample
+   XRayFDRFormat
    PDB/index
+   CFIVerify
 
 :doc:`WritingAnLLVMPass`
    Information on how to write LLVM transformations and analyses.
@@ -358,10 +373,10 @@ For API clients and LLVM developers.
   Answers some questions about the new Attributes infrastructure.
 
 :doc:`NVPTXUsage`
-   This document describes using the NVPTX back-end to compile GPU kernels.
+   This document describes using the NVPTX backend to compile GPU kernels.
 
 :doc:`AMDGPUUsage`
-   This document describes how to use the AMDGPU back-end.
+   This document describes using the AMDGPU backend to compile GPU kernels.
 
 :doc:`StackMaps`
   LLVM support for mapping instruction addresses to the location of
@@ -399,8 +414,14 @@ For API clients and LLVM developers.
 :doc:`XRay`
   High-level documentation of how to use XRay in LLVM.
 
+:doc:`XRayExample`
+  An example of how to debug an application with XRay.
+
 :doc:`The Microsoft PDB File Format <PDB/index>`
   A detailed description of the Microsoft PDB (Program Database) file format.
+
+:doc:`CFIVerify`
+  A description of the verification tool for Control Flow Integrity.
 
 Development Process Documentation
 =================================
@@ -523,6 +544,7 @@ can be better.
 
    CodeOfConduct
    Proposals/GitHubMove
+   Proposals/VectorizationPlan
 
 :doc:`CodeOfConduct`
    Proposal to adopt a code of conduct on the LLVM social spaces (lists, events,
@@ -531,6 +553,8 @@ can be better.
 :doc:`Proposals/GitHubMove`
    Proposal to move from SVN/Git to GitHub.
 
+:doc:`Proposals/VectorizationPlan`
+   Proposal to model the process and upgrade the infrastructure of LLVM's Loop Vectorizer.
 
 Indices and tables
 ==================

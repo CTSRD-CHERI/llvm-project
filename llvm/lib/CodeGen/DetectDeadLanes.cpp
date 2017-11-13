@@ -34,12 +34,12 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
 #include "llvm/PassRegistry.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetInstrInfo.h"
 #include "llvm/Target/TargetRegisterInfo.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
 
@@ -132,8 +132,7 @@ private:
 char DetectDeadLanes::ID = 0;
 char &llvm::DetectDeadLanesID = DetectDeadLanes::ID;
 
-INITIALIZE_PASS(DetectDeadLanes, "detect-dead-lanes", "Detect Dead Lanes",
-                false, false)
+INITIALIZE_PASS(DetectDeadLanes, DEBUG_TYPE, "Detect Dead Lanes", false, false)
 
 /// Returns true if \p MI will get lowered to a series of COPY instructions.
 /// We call this a COPY-like instruction.
@@ -441,7 +440,7 @@ LaneBitmask DetectDeadLanes::determineInitialUsedLanes(unsigned Reg) {
           const TargetRegisterClass *DstRC = MRI->getRegClass(DefReg);
           CrossCopy = isCrossCopy(*MRI, UseMI, DstRC, MO);
           if (CrossCopy)
-            DEBUG(dbgs() << "Copy accross incompatible classes: " << UseMI);
+            DEBUG(dbgs() << "Copy across incompatible classes: " << UseMI);
         }
 
         if (!CrossCopy)

@@ -1,4 +1,4 @@
-; RUN: opt < %s -basicaa -memcpyopt -dse -S | FileCheck %s
+; RUN: opt < %s -basicaa -memcpyopt -dse -S | FileCheck -enable-var-scope %s
 
 target datalayout = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:32:64-v64:64:64-v128:128:128-a0:0:64-f80:128:128"
 target triple = "i686-apple-darwin9"
@@ -29,7 +29,7 @@ entry:
 ; CHECK: ret void
 }
 
-declare void @ccoshl(%0* nocapture sret, x86_fp80, x86_fp80) nounwind 
+declare void @ccoshl(%0* nocapture sret, x86_fp80, x86_fp80) nounwind
 
 
 ; The intermediate alloca and one of the memcpy's should be eliminated, the
@@ -40,7 +40,7 @@ define void @test2(i8* %P, i8* %Q) nounwind  {
   call void @llvm.memcpy.p0i8.p0i8.i32(i8* %R, i8* %P, i32 32, i32 16, i1 false)
   call void @llvm.memcpy.p0i8.p0i8.i32(i8* %Q, i8* %R, i32 32, i32 16, i1 false)
   ret void
-        
+
 ; CHECK-LABEL: @test2(
 ; CHECK-NEXT: call void @llvm.memmove{{.*}}(i8* %Q, i8* %P
 ; CHECK-NEXT: ret void
@@ -59,7 +59,7 @@ define void @test3(%0* noalias sret %agg.result) nounwind  {
   call void @llvm.memcpy.p0i8.p0i8.i32(i8* %agg.result2, i8* %x.01, i32 32, i32 16, i1 false)
   ret void
 ; CHECK-LABEL: @test3(
-; CHECK-NEXT: %agg.result1 = bitcast 
+; CHECK-NEXT: %agg.result1 = bitcast
 ; CHECK-NEXT: call void @llvm.memcpy
 ; CHECK-NEXT: ret void
 }
@@ -76,8 +76,21 @@ define void @test4(i8 *%P) {
 ; CHECK-NEXT: call void @test4a(
 }
 
+; Make sure we don't remove the memcpy if the source address space doesn't match the byval argument
+define void @test4_addrspace(i8 addrspace(1)* %P) {
+  %A = alloca %1
+  %a = bitcast %1* %A to i8*
+  call void @llvm.memcpy.p0i8.p1i8.i64(i8* %a, i8 addrspace(1)* %P, i64 8, i32 4, i1 false)
+  call void @test4a(i8* align 1 byval %a)
+  ret void
+; CHECK-LABEL: @test4_addrspace(
+; CHECK: call void @llvm.memcpy.p0i8.p1i8.i64(
+; CHECK-NEXT: call void @test4a(
+}
+
 declare void @test4a(i8* align 1 byval)
 declare void @llvm.memcpy.p0i8.p0i8.i64(i8* nocapture, i8* nocapture, i64, i32, i1) nounwind
+declare void @llvm.memcpy.p0i8.p1i8.i64(i8* nocapture, i8 addrspace(1)* nocapture, i64, i32, i1) nounwind
 declare void @llvm.memcpy.p1i8.p1i8.i64(i8 addrspace(1)* nocapture, i8 addrspace(1)* nocapture, i64, i32, i1) nounwind
 
 %struct.S = type { i128, [4 x i8]}
@@ -124,7 +137,7 @@ entry:
   %call = call i32 @g(%struct.p* align 8 byval %agg.tmp) nounwind
   ret i32 %call
 ; CHECK-LABEL: @test7(
-; CHECK: call i32 @g(%struct.p* byval align 8 %q) [[NUW:#[0-9]+]]
+; CHECK: call i32 @g(%struct.p* byval align 8 %q) [[$NUW:#[0-9]+]]
 }
 
 declare i32 @g(%struct.p* align 8 byval)
@@ -202,10 +215,25 @@ define void @test10(%opaque* noalias nocapture sret %x, i32 %y) {
   ret void
 }
 
+; don't create new addressspacecasts when we don't know they're safe for the target
+define void @test11([20 x i32] addrspace(1)* nocapture dereferenceable(80) %P) {
+  %A = alloca [20 x i32], align 4
+  %a = bitcast [20 x i32]* %A to i8*
+  %b = bitcast [20 x i32] addrspace(1)* %P to i8 addrspace(1)*
+  call void @llvm.memset.p0i8.i64(i8* %a, i8 0, i64 80, i32 4, i1 false)
+  call void @llvm.memcpy.p1i8.p0i8.i64(i8 addrspace(1)* %b, i8* %a, i64 80, i32 4, i1 false)
+  ret void
+; CHECK-LABEL: @test11(
+; CHECK-NOT: addrspacecast
+}
+
+declare void @llvm.memset.p0i8.i64(i8* nocapture, i8, i64, i32, i1) nounwind
+declare void @llvm.memcpy.p1i8.p0i8.i64(i8 addrspace(1)* nocapture, i8* nocapture, i64, i32, i1) nounwind
+
 declare void @f1(%struct.big* nocapture sret)
 declare void @f2(%struct.big*)
 
-; CHECK: attributes [[NUW]] = { nounwind }
+; CHECK: attributes [[$NUW]] = { nounwind }
 ; CHECK: attributes #1 = { argmemonly nounwind }
 ; CHECK: attributes #2 = { nounwind ssp }
 ; CHECK: attributes #3 = { nounwind ssp uwtable }

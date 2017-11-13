@@ -20,7 +20,7 @@ define void @zero256() nounwind ssp {
 ; CHECK-LABEL: zero256:
 ; CHECK:       ## BB#0:
 ; CHECK-NEXT:    movq _x@{{.*}}(%rip), %rax
-; CHECK-NEXT:    vxorps %ymm0, %ymm0, %ymm0
+; CHECK-NEXT:    vxorps %xmm0, %xmm0, %xmm0
 ; CHECK-NEXT:    vmovaps %ymm0, (%rax)
 ; CHECK-NEXT:    movq _y@{{.*}}(%rip), %rax
 ; CHECK-NEXT:    vmovaps %ymm0, (%rax)
@@ -34,8 +34,8 @@ define void @zero256() nounwind ssp {
 define void @ones([0 x float]* nocapture %RET, [0 x float]* nocapture %aFOO) nounwind {
 ; CHECK-LABEL: ones:
 ; CHECK:       ## BB#0: ## %allocas
-; CHECK-NEXT:    vpcmpeqd %xmm0, %xmm0, %xmm0
-; CHECK-NEXT:    vinsertf128 $1, %xmm0, %ymm0, %ymm0
+; CHECK-NEXT:    vxorps %xmm0, %xmm0, %xmm0
+; CHECK-NEXT:    vcmptrueps %ymm0, %ymm0, %ymm0
 ; CHECK-NEXT:    vmovaps %ymm0, (%rdi)
 ; CHECK-NEXT:    vzeroupper
 ; CHECK-NEXT:    retq
@@ -51,8 +51,8 @@ float>* %ptr2vec615, align 32
 define void @ones2([0 x i32]* nocapture %RET, [0 x i32]* nocapture %aFOO) nounwind {
 ; CHECK-LABEL: ones2:
 ; CHECK:       ## BB#0: ## %allocas
-; CHECK-NEXT:    vpcmpeqd %xmm0, %xmm0, %xmm0
-; CHECK-NEXT:    vinsertf128 $1, %xmm0, %ymm0, %ymm0
+; CHECK-NEXT:    vxorps %xmm0, %xmm0, %xmm0
+; CHECK-NEXT:    vcmptrueps %ymm0, %ymm0, %ymm0
 ; CHECK-NEXT:    vmovaps %ymm0, (%rdi)
 ; CHECK-NEXT:    vzeroupper
 ; CHECK-NEXT:    retq
@@ -76,8 +76,8 @@ define <4 x i64> @ISelCrash(<4 x i64> %a) nounwind uwtable readnone ssp {
 define <8 x i32> @VMOVZQI2PQI([0 x float]* nocapture %aFOO) nounwind {
 ; CHECK-LABEL: VMOVZQI2PQI:
 ; CHECK:       ## BB#0:
-; CHECK-NEXT:    vmovd {{.*#+}} xmm0 = mem[0],zero,zero,zero
-; CHECK-NEXT:    vpshufd {{.*#+}} xmm0 = xmm0[0,0,1,1]
+; CHECK-NEXT:    vmovss {{.*#+}} xmm0 = mem[0],zero,zero,zero
+; CHECK-NEXT:    vpermilps {{.*#+}} xmm0 = xmm0[0,0,1,1]
 ; CHECK-NEXT:    retq
   %ptrcast.i33.i = bitcast [0 x float]* %aFOO to i32*
   %val.i34.i = load i32, i32* %ptrcast.i33.i, align 4

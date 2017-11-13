@@ -7,6 +7,14 @@
 //
 //===----------------------------------------------------------------------===//
 
+// XFAIL: suse-linux-enterprise-server-11
+// XFAIL: with_system_cxx_lib=macosx10.12
+// XFAIL: with_system_cxx_lib=macosx10.11
+// XFAIL: with_system_cxx_lib=macosx10.10
+// XFAIL: with_system_cxx_lib=macosx10.9
+// XFAIL: with_system_cxx_lib=macosx10.7
+// XFAIL: with_system_cxx_lib=macosx10.8
+
 // <system_error>
 
 // class error_category
@@ -27,7 +35,7 @@ void test_message_for_bad_value() {
 #if defined(_LIBCPP_HAS_NO_THREADS) && defined(__FreeBSD__)
     LIBCPP_ASSERT(msg == "Unknown error: -1");
 #else
-    LIBCPP_ASSERT(msg == "Unknown error -1");
+    LIBCPP_ASSERT(msg == "Unknown error -1" || msg == "Unknown error");
     assert(errno == E2BIG);
 #endif
 }

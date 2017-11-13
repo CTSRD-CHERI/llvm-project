@@ -1,7 +1,7 @@
 // RUN: llvm-mc -filetype=obj -triple=armv7a-linux-gnueabihf %S/Inputs/arm-shared.s -o %t1.o
 // RUN: ld.lld %t1.o --shared -o %t.so
 // RUN: llvm-mc -filetype=obj -triple=armv7a-linux-gnueabihf %s -o %t.o
-// RUN: ld.lld %t.so %t.o -o %tout
+// RUN: ld.lld --hash-style=sysv %t.so %t.o -o %tout
 // RUN: llvm-objdump -triple=armv7a-linux-gnueabihf -d %tout | FileCheck %s --check-prefix=DISASM
 // RUN: llvm-objdump -s %tout | FileCheck %s --check-prefix=GOTPLT
 // RUN: llvm-readobj -r -dynamic-table %tout | FileCheck %s
@@ -61,9 +61,9 @@
 // DISASM: $d:
 // DISASM-NEXT:    11050:       c0 0f 00 00     .word   0x00000fc0
 // Alignment to 16 byte boundary not strictly necessary on ARM, but harmless
-// DISASM-NEXT:    11054:       00 00 00 00     .word   0x00000000
-// DISASM-NEXT:    11058:       00 00 00 00     .word   0x00000000
-// DISASM-NEXT:    1105c:       00 00 00 00     .word   0x00000000
+// DISASM-NEXT:    11054:       d4 d4 d4 d4     .word   0xd4d4d4d4
+// DISASM-NEXT:    11058:       d4 d4 d4 d4     .word   0xd4d4d4d4
+// DISASM-NEXT:    1105c:       d4 d4 d4 d4     .word   0xd4d4d4d4
 // DISASM: $a:
 // DISASM-NEXT:    11060:       04 c0 9f e5     ldr     r12, [pc, #4]
 // DISASM-NEXT:    11064:       0f c0 8c e0     add     r12, r12, pc

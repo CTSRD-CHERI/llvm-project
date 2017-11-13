@@ -12,7 +12,7 @@
 <body>
 <div id="menu">
   <div>
-    <a href="http://llvm.org/">LLVM Home</a>
+    <a href="https://llvm.org/">LLVM Home</a>
   </div>
 
   <div class="submenu">
@@ -22,21 +22,21 @@
 
   <div class="submenu">
     <label>Quick Links</label>
-    <a href="http://lists.llvm.org/mailman/listinfo/cfe-dev">cfe-dev</a>
-    <a href="http://lists.llvm.org/mailman/listinfo/cfe-commits">cfe-commits</a>
+    <a href="https://lists.llvm.org/mailman/listinfo/cfe-dev">cfe-dev</a>
+    <a href="https://lists.llvm.org/mailman/listinfo/cfe-commits">cfe-commits</a>
     <a href="https://bugs.llvm.org/">Bug Reports</a>
-    <a href="http://llvm.org/svn/llvm-project/libcxx/trunk/">Browse SVN</a>
-    <a href="http://llvm.org/viewvc/llvm-project/libcxx/trunk/">Browse ViewVC</a>
+    <a href="https://llvm.org/svn/llvm-project/libcxx/trunk/">Browse SVN</a>
+    <a href="https://llvm.org/viewvc/llvm-project/libcxx/trunk/">Browse ViewVC</a>
   </div>
 </div>
 
 <div id="content">
   <!--*********************************************************************-->
-  <h1>libc++ Issaquah Status</h1>
+  <h1>libc++ Upcoming Metting Status</h1>
   <!--*********************************************************************-->
 
-  <p>This is a temporary page; please check the c++1z status <a href="http://libcxx.llvm.org/cxx1z_status.html">here</a></p>
-  <p>This page shows the status of the papers and issues that are expected to be adopted in Issaquah.</p>
+  <p>This is a temporary page; please check the c++1z status <a href="cxx1z_status.html">here</a></p>
+  <p>This page shows the status of the papers and issues that are expected to be adopted in the next WG21 Meeting.</p>
 
   <p>The groups that have contributed papers:
   <ul>
@@ -45,12 +45,12 @@
     <li>SG1 - Study group #1 (Concurrency working group)</li>
   </ul>
   </p>
-  
+
   <h3>Paper Status</h3>
   <table id="papers" border="1">
 	<tr><th>Paper #</th><th>Group</th><th>Paper Name</th><th>Meeting</th><th>Status</th><th>First released version</th></tr>
 <!--
-	<tr><td><a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2012/n3346.pdf">3346</a></td><td>LWG</td><td>Terminology for Container Element Requirements - Rev 1</td><td>Kona</td><td>Complete</td><td>3.4</td></tr>
+	<tr><td><a href="https://wg21.link/LWGn3346">3346</a></td><td>LWG</td><td>Terminology for Container Element Requirements - Rev 1</td><td>Kona</td><td>Complete</td><td>3.4</td></tr>
 -->
 <!--  	<tr><td></td><td></td><td></td><td></td><td></td><td></td></tr> -->
   </table>
@@ -59,71 +59,64 @@
   <table id="issues" border="1">
 	<tr><th>Issue #</th><th>Issue Name</th><th>Meeting</th><th>Status</th></tr>
 
-	<tr><td><a href="http://wg21.link/LWG2260">2260</a></td><td>Missing requirement for Allocator::pointer</td><td>Kona</td><td></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2768">2768</a></td><td>any_cast and move semantics</td><td>Kona</td><td></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2769">2769</a></td><td>Redundant const in the return type of any_cast(const any&amp;)</td><td>Kona</td><td></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2781">2781</a></td><td>Contradictory requirements for std::function and std::reference_wrapper</td><td>Kona</td><td></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2782">2782</a></td><td>scoped_allocator_adaptor constructors must be constrained</td><td>Kona</td><td></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2784">2784</a></td><td>Resolution to LWG 2484 is missing "otherwise, no effects" and is hard to parse</td><td>Kona</td><td><i>Patch Ready</i></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2785">2785</a></td><td>quoted should work with basic_string_view</td><td>Kona</td><td><i>We do this already</i></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2786">2786</a></td><td>Annex C should mention shared_ptr changes for array support</td><td>Kona</td><td><i>Nothing to do</i></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2787">2787</a></td><td>&sect;[file_status.cons] doesn't match class definition</td><td>Kona</td><td></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2789">2789</a></td><td>Equivalence of contained objects</td><td>Kona</td><td></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2794">2794</a></td><td>Missing requirements for allocator pointers</td><td>Kona</td><td></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2795">2795</a></td><td>&sect;[global.functions] provides incorrect example of ADL use</td><td>Kona</td><td><i>Nothing to do</i></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2804">2804</a></td><td>Unconditional constexpr default constructor for istream_iterator</td><td>Kona</td><td><i>We do this already</i></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2812">2812</a></td><td>Range access is available with &lt;string_view&gt;</td><td>Kona</td><td><i>We do this already</i></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2824">2824</a></td><td>list::sort should say that the order of elements is unspecified if an exception is thrown</td><td>Kona</td><td></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2826">2826</a></td><td>string_view iterators use old wording</td><td>Kona</td><td><i>Nothing to do</i></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2834">2834</a></td><td>Resolution LWG 2223 is missing wording about end iterators</td><td>Kona</td><td><i>Nothing to do</i></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2835">2835</a></td><td>LWG 2536 seems to misspecify &lt;tgmath.h&gt;</td><td>Kona</td><td></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2837">2837</a></td><td>gcd and lcm should support a wider range of input values</td><td>Kona</td><td><i>We do this already</i></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2838">2838</a></td><td>is_literal_type specification needs a little cleanup</td><td>Kona</td><td><i>Nothing to do</i></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2842">2842</a></td><td>in_place_t check for optional::optional(U&amp;&amp;) should decay U</td><td>Kona</td><td></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2850">2850</a></td><td>std::function move constructor does unnecessary work</td><td>Kona</td><td></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2853">2853</a></td><td>Possible inconsistency in specification of erase in [vector.modifiers]</td><td>Kona</td><td></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2855">2855</a></td><td>std::throw_with_nested("string_literal")</td><td>Kona</td><td></td></tr>
-
-	<tr><td></td><td><center><b>Priority 1 Bugs</b></center></td><td></td><td></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2665">2665</a></td><td>remove_filename() post condition is incorrect</td><td>Kona</td><td>We do this already</td></tr>
-	<tr><td><a href="http://wg21.link/LWG2806">2806</a></td><td>Base class of bad_optional_access</td><td>Kona</td><td><i>We do this already</i></td></tr>
-	<tr><td><a href="http://wg21.link/LWG2857">2857</a></td><td>{variant,optional,any}::emplace should return the constructed value</td><td>Kona</td><td></td></tr>
+	<tr><td><a href="https://wg21.link/LWG2779">2779</a></td><td>[networking.ts] Relax requirements on buffer sequence iterators</td><td>Albuquerque</td><td></td></tr>
+	<tr><td><a href="https://wg21.link/LWG2870">2870</a></td><td>Default value of parameter theta of polar should be dependent</td><td>Albuquerque</td><td></td></tr>
+	<tr><td><a href="https://wg21.link/LWG2935">2935</a></td><td>What should create_directories do when p already exists but is not a directory?</td><td>Albuquerque</td><td></td></tr>
+	<tr><td><a href="https://wg21.link/LWG2941">2941</a></td><td>[thread.req.timing] wording should apply to both member and namespace-level functions</td><td>Albuquerque</td><td>Nothing to do</td></tr>
+	<tr><td><a href="https://wg21.link/LWG2944">2944</a></td><td>LWG 2905 accidentally removed requirement that construction of the deleter doesn't throw an exception</td><td>Albuquerque</td><td>Nothing to do</td></tr>
+	<tr><td><a href="https://wg21.link/LWG2945">2945</a></td><td>Order of template parameters in optional comparisons</td><td>Albuquerque</td><td>Complete</td></tr>
+	<tr><td><a href="https://wg21.link/LWG2948">2948</a></td><td>unique_ptr does not define operator<< for stream output</td><td>Albuquerque</td><td></td></tr>
+	<tr><td><a href="https://wg21.link/LWG2950">2950</a></td><td>std::byte operations are misspecified</td><td>Albuquerque</td><td>Patch Ready</td></tr>
+	<tr><td><a href="https://wg21.link/LWG2952">2952</a></td><td>iterator_traits should work for pointers to cv T</td><td>Albuquerque</td><td>Patch ready</td></tr>
+	<tr><td><a href="https://wg21.link/LWG2953">2953</a></td><td>LWG 2853 should apply to deque::erase too</td><td>Albuquerque</td><td></td></tr>
+	<tr><td><a href="https://wg21.link/LWG2964">2964</a></td><td>Apparently redundant requirement for dynamic_pointer_cast</td><td>Albuquerque</td><td></td></tr>
+	<tr><td><a href="https://wg21.link/LWG2965">2965</a></td><td>Non-existing path::native_string() in filesystem_error::what() specification</td><td>Albuquerque</td><td></td></tr>
+	<tr><td><a href="https://wg21.link/LWG2972">2972</a></td><td>What is is_trivially_destructible_v<int>?</td><td>Albuquerque</td><td>Complete</td></tr>
+	<tr><td><a href="https://wg21.link/LWG2976">2976</a></td><td>Dangling uses_allocator specialization for packaged_task</td><td>Albuquerque</td><td></td></tr>
+	<tr><td><a href="https://wg21.link/LWG2977">2977</a></td><td>unordered_meow::merge() has incorrect Throws: clause</td><td>Albuquerque</td><td></td></tr>
+	<tr><td><a href="https://wg21.link/LWG2978">2978</a></td><td>Hash support for pmr::string and friends</td><td>Albuquerque</td><td></td></tr>
+	<tr><td><a href="https://wg21.link/LWG2979">2979</a></td><td>aligned_union should require complete object types</td><td>Albuquerque</td><td>Complete</td></tr>
+	<tr><td><a href="https://wg21.link/LWG2980">2980</a></td><td>Cannot compare_exchange empty pointers</td><td>Albuquerque</td><td></td></tr>
+	<tr><td><a href="https://wg21.link/LWG2981">2981</a></td><td>Remove redundant deduction guides from standard library</td><td>Albuquerque</td><td></td></tr>
+	<tr><td><a href="https://wg21.link/LWG2982">2982</a></td><td>Making size_type consistent in associative container deduction guides</td><td>Albuquerque</td><td></td></tr>
+	<tr><td><a href="https://wg21.link/LWG2988">2988</a></td><td>Clause 32 cleanup missed one typename</td><td>Albuquerque</td><td></td></tr>
+	<tr><td><a href="https://wg21.link/LWG2993">2993</a></td><td>reference_wrapper<T> conversion from T&&</td><td>Albuquerque</td><td></td></tr>
+	<tr><td><a href="https://wg21.link/LWG2998">2998</a></td><td>Requirements on function objects passed to {forward_,}list-specific algorithms</td><td>Albuquerque</td><td>Nothing to do</td></tr>
+	<tr><td><a href="https://wg21.link/LWG3001">3001</a></td><td>weak_ptr::element_type needs remove_extent_t</td><td>Albuquerque</td><td></td></tr>
+	<tr><td><a href="https://wg21.link/LWG3024">3024</a></td><td>variant's copies must be deleted instead of disabled via SFINAE</td><td>Albuquerque</td><td></td></tr>
 
   </table>
 
 <h3>Comments about the issues</h3>
 <ul>
-<li>2260 - Check our current allocators to make sure we do this</li>
-<li>2768 - Resolution is "apply 2769"</li>
-<li>2769 - This should be easy; trick will be devising tests.</li>
-<li>2781 - </li>
-<li>2782 - Looks straightforward.</li>
-<li>2784 - Patch Ready</li>
-<li>2785 - We do this already.</li>
-<li>2786 - Nothing to do; just moving words around</li>
-<li>2787 - Eric? </li>
-<li>2789 - I don't think there are any code changes required here</li>
-<li>2794 - I don't think there are any code changes required here - maybe a static_assert.</li>
-<li>2795 - Nothing to do; just moving words around</li>
-<li>2804 - We do this already.</li>
-<li>2812 - We do this already.</li>
-<li>2824 - Nothing do to here, but we should add some throwing sort tests.</li>
-<li>2826 - Nothing to do; just moving words around</li>
-<li>2834 - Nothing to do; just moving words around</li>
-<li>2835 - I'm pretty sure we already do this.</li>
-<li>2837 - Added some tests to ensure we do this already.</li>
-<li>2838 - Nothing to do; just moving words around</li>
-<li>2842 - This should be easy; trick will be devising tests.</li>
-<li>2850 - I think we already do this.</li>
-<li>2853 - I think that this will be mostly adding tests.</li>
-<li>2855 - This should be easy; trick will be devising tests.</li></li>
-<li></li>
-<li>2665 - We do this already.</li>
-<li>2806 - We do this already.</li>
-<li>2857 - This is the subject of several NB comments.</li>
+<li>2779 - </li>
+<li>2870 - We already default to <tt>T(0)</tt>; but the PR says <tt>T()</tt>. Later - this makes no difference at all; since T has to be float/double/long double</li>
+<li>2935 - Eric? </li>
+<li>2941 - Wording cleanup; nothing to do.</li>
+<li>2944 - Wording cleanup; nothing to do. </li>
+<li>2945 - Synopsis was wrong; code was fine. <i>Fixed in r317063</i></li>
+<li>2948 - </li>
+<li>2950 - Patch ready</li>
+<li>2952 - Patch ready</li>
+<li>2953 - Probably just wording; check to be sure.</li>
+<li>2964 - At the very least, it needs a test.</li>
+<li>2965 - Eric? </li>
+<li>2972 - We already do this</li>
+<li>2976 - Looks simple. </li>
+<li>2977 - We haven't implemented p0083r3 yet (Splicing Maps and Sets), so we don't have <tt>merge</tt> for those containers yet</li>
+<li>2978 - Straightforward. </li>
+<li>2979 - <i>Test added in revision 316969</i></li>
+<li>2980 - Needs code changes and tests</li>
+<li>2981 - We need to finish the deduction guides before doing this</li>
+<li>2982 - We need to finish the deduction guides before doing this</li>
+<li>2988 - Simple; once we rewrite &lt;atomic&gt; </li>
+<li>2993 - </li>
+<li>2998 - Wording cleanup; nothing to do. </li>
+<li>3001 - Looks simple. </li>
+<li>3024 - </li>
 </ul>
 
-<p>Last Updated: 7-Feb-2017</p>
+<p>Last Updated: 28-Jun-2017</p>
 </div>
 </body>
 </html>

@@ -36,10 +36,12 @@ inline void regfree(llvm_regex_t *a) { llvm_regfree(a); }
 #endif
 #include <regex.h>
 #endif
-#include <stdint.h>
 
 #include <string>
 #include <vector>
+
+#include <stddef.h> // for size_t
+#include <stdint.h>
 
 namespace llvm {
 class StringRef;
@@ -208,7 +210,7 @@ private:
   // Member variables
   //------------------------------------------------------------------
   std::string m_re; ///< A copy of the original regular expression text
-  int m_comp_err;   ///< Error code for the regular expression compilation
+  int m_comp_err;   ///< Status code for the regular expression compilation
   regex_t m_preg;   ///< The compiled regular expression
 };
 

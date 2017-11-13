@@ -10,7 +10,7 @@
 #ifndef LLD_ELF_STRINGS_H
 #define LLD_ELF_STRINGS_H
 
-#include "lld/Core/LLVM.h"
+#include "lld/Common/LLVM.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/Optional.h"
@@ -21,11 +21,8 @@
 namespace lld {
 namespace elf {
 
-int getPriority(StringRef S);
-bool hasWildcard(StringRef S);
 std::vector<uint8_t> parseHex(StringRef S);
 bool isValidCIdentifier(StringRef S);
-StringRef unquote(StringRef S);
 
 // This is a lazy version of StringRef. String size is computed lazily
 // when it is needed. It is more efficient than StringRef to instantiate
@@ -73,10 +70,10 @@ private:
 // name, it returns Optional::None.
 llvm::Optional<std::string> demangle(StringRef Name);
 
-inline StringRef toStringRef(ArrayRef<uint8_t> Arr) {
-  return {(const char *)Arr.data(), Arr.size()};
+inline ArrayRef<uint8_t> toArrayRef(StringRef S) {
+  return {(const uint8_t *)S.data(), S.size()};
 }
-}
-}
+} // namespace elf
+} // namespace lld
 
 #endif

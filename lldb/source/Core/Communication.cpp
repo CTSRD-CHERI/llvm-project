@@ -7,21 +7,30 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-#include <cstring>
-
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Core/Communication.h"
-#include "lldb/Core/Connection.h"
+
 #include "lldb/Core/Event.h"
 #include "lldb/Core/Listener.h"
-#include "lldb/Core/Timer.h"
-#include "lldb/Host/Host.h"
 #include "lldb/Host/HostThread.h"
 #include "lldb/Host/ThreadLauncher.h"
+#include "lldb/Utility/Connection.h"
+#include "lldb/Utility/ConstString.h" // for ConstString
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/Logging.h" // for LogIfAnyCategoriesSet, LIBLLDB...
+#include "lldb/Utility/Status.h"  // for Status
+
+#include "llvm/ADT/None.h"         // for None
+#include "llvm/ADT/Optional.h"     // for Optional
+#include "llvm/Support/Compiler.h" // for LLVM_FALLTHROUGH
+
+#include <algorithm> // for min
+#include <chrono>    // for duration, seconds
+#include <cstring>
+#include <memory> // for shared_ptr
+
+#include <errno.h>    // for EIO
+#include <inttypes.h> // for PRIu64
+#include <stdio.h>    // for snprintf
 
 using namespace lldb;
 using namespace lldb_private;
@@ -66,7 +75,7 @@ void Communication::Clear() {
   StopReadThread(nullptr);
 }
 
-ConnectionStatus Communication::Connect(const char *url, Error *error_ptr) {
+ConnectionStatus Communication::Connect(const char *url, Status *error_ptr) {
   Clear();
 
   lldb_private::LogIfAnyCategoriesSet(LIBLLDB_LOG_COMMUNICATION,
@@ -81,7 +90,7 @@ ConnectionStatus Communication::Connect(const char *url, Error *error_ptr) {
   return eConnectionStatusNoConnection;
 }
 
-ConnectionStatus Communication::Disconnect(Error *error_ptr) {
+ConnectionStatus Communication::Disconnect(Status *error_ptr) {
   lldb_private::LogIfAnyCategoriesSet(LIBLLDB_LOG_COMMUNICATION,
                                       "%p Communication::Disconnect ()", this);
 
@@ -114,7 +123,7 @@ bool Communication::HasConnection() const {
 
 size_t Communication::Read(void *dst, size_t dst_len,
                            const Timeout<std::micro> &timeout,
-                           ConnectionStatus &status, Error *error_ptr) {
+                           ConnectionStatus &status, Status *error_ptr) {
   Log *log = GetLogIfAllCategoriesSet(LIBLLDB_LOG_COMMUNICATION);
   LLDB_LOG(
       log,
@@ -161,7 +170,7 @@ size_t Communication::Read(void *dst, size_t dst_len,
 }
 
 size_t Communication::Write(const void *src, size_t src_len,
-                            ConnectionStatus &status, Error *error_ptr) {
+                            ConnectionStatus &status, Status *error_ptr) {
   lldb::ConnectionSP connection_sp(m_connection_sp);
 
   std::lock_guard<std::mutex> guard(m_write_mutex);
@@ -180,7 +189,7 @@ size_t Communication::Write(const void *src, size_t src_len,
   return 0;
 }
 
-bool Communication::StartReadThread(Error *error_ptr) {
+bool Communication::StartReadThread(Status *error_ptr) {
   if (error_ptr)
     error_ptr->Clear();
 
@@ -203,7 +212,7 @@ bool Communication::StartReadThread(Error *error_ptr) {
   return m_read_thread_enabled;
 }
 
-bool Communication::StopReadThread(Error *error_ptr) {
+bool Communication::StopReadThread(Status *error_ptr) {
   if (!m_read_thread.IsJoinable())
     return true;
 
@@ -216,15 +225,15 @@ bool Communication::StopReadThread(Error *error_ptr) {
 
   // error = m_read_thread.Cancel();
 
-  Error error = m_read_thread.Join(nullptr);
+  Status error = m_read_thread.Join(nullptr);
   return error.Success();
 }
 
-bool Communication::JoinReadThread(Error *error_ptr) {
+bool Communication::JoinReadThread(Status *error_ptr) {
   if (!m_read_thread.IsJoinable())
     return true;
 
-  Error error = m_read_thread.Join(nullptr);
+  Status error = m_read_thread.Join(nullptr);
   return error.Success();
 }
 
@@ -271,7 +280,7 @@ void Communication::AppendBytesToCache(const uint8_t *bytes, size_t len,
 size_t Communication::ReadFromConnection(void *dst, size_t dst_len,
                                          const Timeout<std::micro> &timeout,
                                          ConnectionStatus &status,
-                                         Error *error_ptr) {
+                                         Status *error_ptr) {
   lldb::ConnectionSP connection_sp(m_connection_sp);
   if (connection_sp)
     return connection_sp->Read(dst, dst_len, timeout, status, error_ptr);
@@ -294,7 +303,7 @@ lldb::thread_result_t Communication::ReadThread(lldb::thread_arg_t p) {
 
   uint8_t buf[1024];
 
-  Error error;
+  Status error;
   ConnectionStatus status = eConnectionStatusSuccess;
   bool done = false;
   while (!done && comm->m_read_thread_enabled) {

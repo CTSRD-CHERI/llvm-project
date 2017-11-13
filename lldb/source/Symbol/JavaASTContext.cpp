@@ -134,10 +134,10 @@ public:
     obj_load_address.SetValueType(Value::eValueTypeLoadAddress);
 
     Value result;
-    if (m_dynamic_type_id.Evaluate(exe_ctx->GetBestExecutionContextScope(),
-                                   nullptr, nullptr, 0, &obj_load_address,
-                                   nullptr, result, nullptr)) {
-      Error error;
+    if (m_dynamic_type_id.Evaluate(exe_ctx->GetBestExecutionContextScope(), 0,
+                                   &obj_load_address, nullptr, result,
+                                   nullptr)) {
+      Status error;
 
       lldb::addr_t type_id_addr = result.GetScalar().UInt();
       lldb::ProcessSP process_sp = exe_ctx->GetProcessSP();
@@ -303,7 +303,7 @@ public:
     if (!m_length_expression.IsValid())
       return UINT32_MAX;
 
-    Error error;
+    Status error;
     ValueObjectSP address_obj = value_obj->AddressOf(error);
     if (error.Fail())
       return UINT32_MAX;
@@ -315,9 +315,8 @@ public:
     ExecutionContextScope *exec_ctx_scope = value_obj->GetExecutionContextRef()
                                                 .Lock(true)
                                                 .GetBestExecutionContextScope();
-    if (m_length_expression.Evaluate(exec_ctx_scope, nullptr, nullptr, 0,
-                                     nullptr, &obj_load_address, result,
-                                     nullptr))
+    if (m_length_expression.Evaluate(exec_ctx_scope, 0, nullptr,
+                                     &obj_load_address, result, nullptr))
       return result.GetScalar().UInt();
 
     return UINT32_MAX;

@@ -205,23 +205,11 @@ typedef enum MemoryModuleLoadLevel {
 enum class LineStatus {
   Success, // The line that was just edited if good and should be added to the
            // lines
-  Error, // There is an error with the current line and it needs to be re-edited
-         // before it can be accepted
-  Done   // Lines are complete
+  Status,  // There is an error with the current line and it needs to be
+           // re-edited
+           // before it can be accepted
+  Done     // Lines are complete
 };
-
-//----------------------------------------------------------------------
-// Exit Type for inferior processes
-//----------------------------------------------------------------------
-typedef enum ExitType {
-  eExitTypeInvalid,
-  eExitTypeExit,   // The exit status represents the return code from normal
-                   // program exit (i.e. WIFEXITED() was true)
-  eExitTypeSignal, // The exit status represents the signal number that caused
-                   // the program to exit (i.e. WIFSIGNALED() was true)
-  eExitTypeStop,   // The exit status represents the stop signal that caused the
-                   // program to exit (i.e. WIFSTOPPED() was true)
-} ExitType;
 
 //----------------------------------------------------------------------
 // Boolean result of running a Type Validator

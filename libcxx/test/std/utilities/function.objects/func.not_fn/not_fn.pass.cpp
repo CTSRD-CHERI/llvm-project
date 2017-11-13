@@ -416,7 +416,7 @@ void throws_in_constructor_test()
       ThrowsOnCopy() = default;
       bool operator()() const {
         assert(false);
-#if defined(_LIBCPP_MSVC)
+#if defined(TEST_COMPILER_C1XX)
         __assume(0);
 #else
         __builtin_unreachable();
@@ -587,7 +587,7 @@ void call_operator_noexcept_test()
 }
 
 void test_lwg2767() {
-    // See http://wg21.link/LWG2767
+    // See https://cplusplus.github.io/LWG/lwg-defects.html#2767
     struct Abstract { virtual void f() const = 0; };
     struct Derived : public Abstract { void f() const {} };
     struct F { bool operator()(Abstract&&) { return false; } };

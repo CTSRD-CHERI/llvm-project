@@ -2,7 +2,7 @@
 // RUN: llvm-mc -filetype=obj -triple=x86_64-unknown-linux %p/Inputs/shared.s -o %t2.o
 // RUN: llvm-mc -filetype=obj -triple=x86_64-unknown-linux %p/Inputs/dynamic-reloc.s -o %t3.o
 // RUN: ld.lld -shared %t2.o -o %t2.so
-// RUN: ld.lld %t.o %t3.o %t2.so -o %t
+// RUN: ld.lld --hash-style=sysv %t.o %t3.o %t2.so -o %t
 // RUN: llvm-readobj -dynamic-table -r --expand-relocs -s %t | FileCheck %s
 // REQUIRES: x86
 
@@ -43,7 +43,7 @@
 
 // CHECK: DynamicSection [
 // CHECK-NEXT:  Tag                Type                 Name/Value
-// CHECK-NEXT:  0x0000000000000001 NEEDED               SharedLibrary ({{.*}}2.so)
+// CHECK-NEXT:  0x0000000000000001 NEEDED               Shared library: [{{.*}}2.so]
 // CHECK-NEXT:  0x0000000000000015 DEBUG                0x0
 // CHECK-NEXT:  0x0000000000000017 JMPREL
 // CHECK-NEXT:  0x0000000000000002 PLTRELSZ             24 (bytes)

@@ -11,11 +11,17 @@
 
   .text
 
+#if !defined(__USING_SJLJ_EXCEPTIONS__)
+
 #if defined(__i386__)
 DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind13Registers_x866jumptoEv)
 #
 # void libunwind::Registers_x86::jumpto()
 #
+#if defined(_WIN32)
+# On windows, the 'this' pointer is passed in ecx instead of on the stack
+  movl   %ecx, %eax
+#else
 # On entry:
 #  +                       +
 #  +-----------------------+
@@ -25,6 +31,7 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind13Registers_x866jumptoEv)
 #  +-----------------------+   <-- SP
 #  +                       +
   movl   4(%esp), %eax
+#endif
   # set up eax and ret on new stack location
   movl  28(%eax), %edx # edx holds new stack pointer
   subl  $8,%edx
@@ -58,7 +65,16 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind16Registers_x86_646jumptoEv)
 #
 # void libunwind::Registers_x86_64::jumpto()
 #
+#if defined(_WIN64)
+# On entry, thread_state pointer is in rcx; move it into rdi
+# to share restore code below. Since this routine restores and
+# overwrites all registers, we can use the same registers for
+# pointers and temporaries as on unix even though win64 normally
+# mustn't clobber some of them.
+  movq  %rcx, %rdi
+#else
 # On entry, thread_state pointer is in rdi
+#endif
 
   movq  56(%rdi), %rax # rax holds new stack pointer
   subq  $16, %rax
@@ -88,6 +104,25 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind16Registers_x86_646jumptoEv)
   # skip cs
   # skip fs
   # skip gs
+
+#if defined(_WIN64)
+  movdqu 176(%rdi),%xmm0
+  movdqu 192(%rdi),%xmm1
+  movdqu 208(%rdi),%xmm2
+  movdqu 224(%rdi),%xmm3
+  movdqu 240(%rdi),%xmm4
+  movdqu 256(%rdi),%xmm5
+  movdqu 272(%rdi),%xmm6
+  movdqu 288(%rdi),%xmm7
+  movdqu 304(%rdi),%xmm8
+  movdqu 320(%rdi),%xmm9
+  movdqu 336(%rdi),%xmm10
+  movdqu 352(%rdi),%xmm11
+  movdqu 368(%rdi),%xmm12
+  movdqu 384(%rdi),%xmm13
+  movdqu 400(%rdi),%xmm14
+  movdqu 416(%rdi),%xmm15
+#endif
   movq  56(%rdi), %rsp  # cut back rsp to new location
   pop    %rdi      # rdi was saved here earlier
   ret            # rip was saved here
@@ -356,7 +391,9 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind13Registers_arm20restoreCoreAndJu
 @  values pointer is in r0
 @
   .p2align 2
+#if defined(__ELF__)
   .fpu vfpv3-d16
+#endif
 DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind13Registers_arm19restoreVFPWithFLDMDEPy)
   @ VFP and iwMMX instructions are only available when compiling with the flags
   @ that enable them. We do not want to do that in the library (because we do not
@@ -375,7 +412,9 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind13Registers_arm19restoreVFPWithFL
 @  values pointer is in r0
 @
   .p2align 2
+#if defined(__ELF__)
   .fpu vfpv3-d16
+#endif
 DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind13Registers_arm19restoreVFPWithFLDMXEPy)
   vldmia r0, {d0-d15} @ fldmiax is deprecated in ARMv7+ and now behaves like vldmia
   JMP(lr)
@@ -387,7 +426,9 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind13Registers_arm19restoreVFPWithFL
 @  values pointer is in r0
 @
   .p2align 2
+#if defined(__ELF__)
   .fpu vfpv3
+#endif
 DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind13Registers_arm12restoreVFPv3EPy)
   vldmia r0, {d16-d31}
   JMP(lr)
@@ -401,7 +442,9 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind13Registers_arm12restoreVFPv3EPy)
 @  values pointer is in r0
 @
   .p2align 2
+#if defined(__ELF__)
   .arch armv5te
+#endif
 DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind13Registers_arm12restoreiWMMXEPy)
   ldcl p1, cr0, [r0], #8  @ wldrd wR0, [r0], #8
   ldcl p1, cr1, [r0], #8  @ wldrd wR1, [r0], #8
@@ -428,7 +471,9 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind13Registers_arm12restoreiWMMXEPy)
 @  values pointer is in r0
 @
   .p2align 2
+#if defined(__ELF__)
   .arch armv5te
+#endif
 DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind13Registers_arm19restoreiWMMXControlEPj)
   ldc2 p1, cr8, [r0], #4  @ wldrw wCGR0, [r0], #4
   ldc2 p1, cr9, [r0], #4  @ wldrw wCGR1, [r0], #4
@@ -490,6 +535,8 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind14Registers_or1k6jumptoEv)
    l.nop
 
 #endif
+
+#endif /* !defined(__USING_SJLJ_EXCEPTIONS__) */
 
 NO_EXEC_STACK_DIRECTIVE
 

@@ -19,15 +19,15 @@
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/Section.h"
-#include "lldb/Core/Timer.h"
 #include "lldb/Symbol/DWARFCallFrameInfo.h"
 #include "lldb/Symbol/SymbolContext.h"
 #include "lldb/Target/SectionLoadList.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Utility/DataBufferLLVM.h"
-#include "lldb/Utility/Error.h"
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/Status.h"
 #include "lldb/Utility/Stream.h"
+#include "lldb/Utility/Timer.h"
 
 #include "llvm/ADT/PointerUnion.h"
 #include "llvm/ADT/StringRef.h"
@@ -52,6 +52,7 @@ namespace {
 const char *const LLDB_NT_OWNER_FREEBSD = "FreeBSD";
 const char *const LLDB_NT_OWNER_GNU = "GNU";
 const char *const LLDB_NT_OWNER_NETBSD = "NetBSD";
+const char *const LLDB_NT_OWNER_OPENBSD = "OpenBSD";
 const char *const LLDB_NT_OWNER_CSR = "csr";
 const char *const LLDB_NT_OWNER_ANDROID = "Android";
 const char *const LLDB_NT_OWNER_CORE = "CORE";
@@ -287,10 +288,26 @@ static uint32_t kalimbaVariantFromElfFlags(const elf::elf_word e_flags) {
   return kal_arch_variant;
 }
 
-static uint32_t mipsVariantFromElfFlags(const elf::elf_word e_flags,
-                                        uint32_t endian) {
-  const uint32_t mips_arch = e_flags & llvm::ELF::EF_MIPS_ARCH;
+static uint32_t mipsVariantFromElfFlags (const elf::ELFHeader &header) {
+  const uint32_t mips_arch = header.e_flags & llvm::ELF::EF_MIPS_ARCH;
+  uint32_t endian = header.e_ident[EI_DATA];
   uint32_t arch_variant = ArchSpec::eMIPSSubType_unknown;
+  uint32_t fileclass = header.e_ident[EI_CLASS];
+
+  // If there aren't any elf flags available (e.g core elf file) then return default 
+  // 32 or 64 bit arch (without any architecture revision) based on object file's class.
+  if (header.e_type == ET_CORE) {
+    switch (fileclass) {
+    case llvm::ELF::ELFCLASS32:
+      return (endian == ELFDATA2LSB) ? ArchSpec::eMIPSSubType_mips32el
+                                     : ArchSpec::eMIPSSubType_mips32;
+    case llvm::ELF::ELFCLASS64:
+      return (endian == ELFDATA2LSB) ? ArchSpec::eMIPSSubType_mips64el
+                                     : ArchSpec::eMIPSSubType_mips64;
+    default:
+      return arch_variant;
+    }
+  }
 
   switch (mips_arch) {
   case llvm::ELF::EF_MIPS_ARCH_1:
@@ -325,7 +342,7 @@ static uint32_t mipsVariantFromElfFlags(const elf::elf_word e_flags,
 
 static uint32_t subTypeFromElfHeader(const elf::ELFHeader &header) {
   if (header.e_machine == llvm::ELF::EM_MIPS)
-    return mipsVariantFromElfFlags(header.e_flags, header.e_ident[EI_DATA]);
+    return mipsVariantFromElfFlags(header);
 
   return llvm::ELF::EM_CSR_KALIMBA == header.e_machine
              ? kalimbaVariantFromElfFlags(header.e_flags)
@@ -388,7 +405,7 @@ ObjectFile *ObjectFileELF::CreateInstance(const lldb::ModuleSP &module_sp,
                                           lldb::offset_t length) {
   if (!data_sp) {
     data_sp =
-        DataBufferLLVM::CreateSliceFromPath(file->GetPath(), length, file_offset);
+        DataBufferLLVM::CreateSliceFromPath(file->GetPath(), length, file_offset, true);
     if (!data_sp)
       return nullptr;
     data_offset = 0;
@@ -406,7 +423,7 @@ ObjectFile *ObjectFileELF::CreateInstance(const lldb::ModuleSP &module_sp,
   // Update the data to contain the entire file if it doesn't already
   if (data_sp->GetByteSize() < length) {
     data_sp =
-        DataBufferLLVM::CreateSliceFromPath(file->GetPath(), length, file_offset);
+        DataBufferLLVM::CreateSliceFromPath(file->GetPath(), length, file_offset, true);
     if (!data_sp)
       return nullptr;
     data_offset = 0;
@@ -434,7 +451,7 @@ ObjectFile *ObjectFileELF::CreateMemoryInstance(
     if (ELFHeader::MagicBytesMatch(magic)) {
       unsigned address_size = ELFHeader::AddressSizeInBytes(magic);
       if (address_size == 4 || address_size == 8) {
-        std::auto_ptr<ObjectFileELF> objfile_ap(
+        std::unique_ptr<ObjectFileELF> objfile_ap(
             new ObjectFileELF(module_sp, data_sp, process_sp, header_addr));
         ArchSpec spec;
         if (objfile_ap->GetArchitecture(spec) &&
@@ -690,10 +707,7 @@ size_t ObjectFileELF::GetModuleSpecifications(
           SectionHeaderColl section_headers;
           lldb_private::UUID &uuid = spec.GetUUID();
 
-          using namespace std::placeholders;
-          const SetDataFunction set_data =
-              std::bind(&ObjectFileELF::SetData, std::cref(data), _1, _2, _3);
-          GetSectionHeaderInfo(section_headers, set_data, header, uuid,
+          GetSectionHeaderInfo(section_headers, data, header, uuid,
                                gnu_debuglink_file, gnu_debuglink_crc,
                                spec.GetArchitecture());
 
@@ -710,8 +724,9 @@ size_t ObjectFileELF::GetModuleSpecifications(
             uint32_t core_notes_crc = 0;
 
             if (!gnu_debuglink_crc) {
+              static Timer::Category func_cat(LLVM_PRETTY_FUNCTION);
               lldb_private::Timer scoped_timer(
-                  LLVM_PRETTY_FUNCTION,
+                  func_cat,
                   "Calculating module crc32 %s with size %" PRIu64 " KiB",
                   file.GetLastPathComponent().AsCString(),
                   (file.GetByteSize() - file_offset) / 1024);
@@ -730,7 +745,7 @@ size_t ObjectFileELF::GetModuleSpecifications(
                     data.SetData(data_sp);
                 }
                 ProgramHeaderColl program_headers;
-                GetProgramHeaderInfo(program_headers, set_data, header);
+                GetProgramHeaderInfo(program_headers, data, header);
 
                 size_t segment_data_end = 0;
                 for (ProgramHeaderCollConstIter I = program_headers.begin();
@@ -832,7 +847,7 @@ bool ObjectFileELF::SetLoadAddress(Target &target, lldb::addr_t value,
     if (section_list) {
       if (!value_is_offset) {
         bool found_offset = false;
-        for (size_t i = 0, count = GetProgramHeaderCount(); i < count; ++i) {
+        for (size_t i = 1, count = GetProgramHeaderCount(); i <= count; ++i) {
           const elf::ELFProgramHeader *header = GetProgramHeaderByIndex(i);
           if (header == nullptr)
             continue;
@@ -932,29 +947,7 @@ size_t ObjectFileELF::SectionIndex(const SectionHeaderCollConstIter &I) const {
 
 bool ObjectFileELF::ParseHeader() {
   lldb::offset_t offset = 0;
-  if (!m_header.Parse(m_data, &offset))
-    return false;
-
-  if (!IsInMemory())
-    return true;
-
-  // For in memory object files m_data might not contain the full object file.
-  // Try to load it
-  // until the end of the "Section header table" what is at the end of the ELF
-  // file.
-  addr_t file_size = m_header.e_shoff + m_header.e_shnum * m_header.e_shentsize;
-  if (m_data.GetByteSize() < file_size) {
-    ProcessSP process_sp(m_process_wp.lock());
-    if (!process_sp)
-      return false;
-
-    DataBufferSP data_sp = ReadMemory(process_sp, m_memory_addr, file_size);
-    if (!data_sp)
-      return false;
-    m_data.SetData(data_sp, 0, file_size);
-  }
-
-  return true;
+  return m_header.Parse(m_data, &offset);
 }
 
 bool ObjectFileELF::GetUUID(lldb_private::UUID *uuid) {
@@ -1062,7 +1055,7 @@ Address ObjectFileELF::GetImageInfoAddress(Target *target) {
       if (dyn_base == LLDB_INVALID_ADDRESS)
         return Address();
 
-      Error error;
+      Status error;
       if (symbol.d_tag == DT_MIPS_RLD_MAP) {
         // DT_MIPS_RLD_MAP tag stores an absolute address of the debug pointer.
         Address addr;
@@ -1170,7 +1163,7 @@ size_t ObjectFileELF::ParseDependentModules() {
 // GetProgramHeaderInfo
 //----------------------------------------------------------------------
 size_t ObjectFileELF::GetProgramHeaderInfo(ProgramHeaderColl &program_headers,
-                                           const SetDataFunction &set_data,
+                                           DataExtractor &object_data,
                                            const ELFHeader &header) {
   // We have already parsed the program headers
   if (!program_headers.empty())
@@ -1187,7 +1180,7 @@ size_t ObjectFileELF::GetProgramHeaderInfo(ProgramHeaderColl &program_headers,
   const size_t ph_size = header.e_phnum * header.e_phentsize;
   const elf_off ph_offset = header.e_phoff;
   DataExtractor data;
-  if (set_data(data, ph_offset, ph_size) != ph_size)
+  if (data.SetData(object_data, ph_offset, ph_size) != ph_size)
     return 0;
 
   uint32_t idx;
@@ -1207,20 +1200,15 @@ size_t ObjectFileELF::GetProgramHeaderInfo(ProgramHeaderColl &program_headers,
 // ParseProgramHeaders
 //----------------------------------------------------------------------
 size_t ObjectFileELF::ParseProgramHeaders() {
-  using namespace std::placeholders;
-  return GetProgramHeaderInfo(
-      m_program_headers,
-      std::bind(&ObjectFileELF::SetDataWithReadMemoryFallback, this, _1, _2,
-                _3),
-      m_header);
+  return GetProgramHeaderInfo(m_program_headers, m_data, m_header);
 }
 
-lldb_private::Error
+lldb_private::Status
 ObjectFileELF::RefineModuleDetailsFromNote(lldb_private::DataExtractor &data,
                                            lldb_private::ArchSpec &arch_spec,
                                            lldb_private::UUID &uuid) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_MODULES));
-  Error error;
+  Status error;
 
   lldb::offset_t offset = 0;
 
@@ -1348,6 +1336,10 @@ ObjectFileELF::RefineModuleDetailsFromNote(lldb_private::DataExtractor &data,
         }
         break;
       }
+      if (arch_spec.IsMIPS() &&
+          arch_spec.GetTriple().getOS() == llvm::Triple::OSType::UnknownOS)
+        // The note.n_name == LLDB_NT_OWNER_GNU is valid for Linux platform
+        arch_spec.GetTriple().setOS(llvm::Triple::OSType::Linux);
     }
     // Process NetBSD ELF notes.
     else if ((note.n_name == LLDB_NT_OWNER_NETBSD) &&
@@ -1368,6 +1360,12 @@ ObjectFileELF::RefineModuleDetailsFromNote(lldb_private::DataExtractor &data,
         log->Printf(
             "ObjectFileELF::%s detected NetBSD, min version constant %" PRIu32,
             __FUNCTION__, version_info);
+    }
+    // Process OpenBSD ELF notes.
+    else if (note.n_name == LLDB_NT_OWNER_OPENBSD) {
+      // Set the elf OS version to OpenBSD.  Also clear the vendor.
+      arch_spec.GetTriple().setOS(llvm::Triple::OSType::OpenBSD);
+      arch_spec.GetTriple().setVendor(llvm::Triple::VendorType::UnknownVendor);
     }
     // Process CSR kalimba notes
     else if ((note.n_type == LLDB_NT_GNU_ABI_TAG) &&
@@ -1443,6 +1441,12 @@ ObjectFileELF::RefineModuleDetailsFromNote(lldb_private::DataExtractor &data,
             break;
           }
         }
+        if (arch_spec.IsMIPS() &&
+            arch_spec.GetTriple().getOS() == llvm::Triple::OSType::UnknownOS)
+          // In case of MIPSR6, the LLDB_NT_OWNER_GNU note is missing
+          // for some cases (e.g. compile with -nostdlib)
+          // Hence set OS to Linux
+          arch_spec.GetTriple().setOS(llvm::Triple::OSType::Linux); 
       }
     }
 
@@ -1528,7 +1532,7 @@ void ObjectFileELF::ParseARMAttributes(DataExtractor &data, uint64_t length,
 // GetSectionHeaderInfo
 //----------------------------------------------------------------------
 size_t ObjectFileELF::GetSectionHeaderInfo(SectionHeaderColl &section_headers,
-                                           const SetDataFunction &set_data,
+                                           DataExtractor &object_data,
                                            const elf::ELFHeader &header,
                                            lldb_private::UUID &uuid,
                                            std::string &gnu_debuglink_file,
@@ -1600,7 +1604,7 @@ size_t ObjectFileELF::GetSectionHeaderInfo(SectionHeaderColl &section_headers,
   const size_t sh_size = header.e_shnum * header.e_shentsize;
   const elf_off sh_offset = header.e_shoff;
   DataExtractor sh_data;
-  if (set_data(sh_data, sh_offset, sh_size) != sh_size)
+  if (sh_data.SetData(object_data, sh_offset, sh_size) != sh_size)
     return 0;
 
   uint32_t idx;
@@ -1619,7 +1623,7 @@ size_t ObjectFileELF::GetSectionHeaderInfo(SectionHeaderColl &section_headers,
     const Elf64_Off offset = sheader.sh_offset;
     lldb_private::DataExtractor shstr_data;
 
-    if (set_data(shstr_data, offset, byte_size) == byte_size) {
+    if (shstr_data.SetData(object_data, offset, byte_size) == byte_size) {
       for (SectionHeaderCollIter I = section_headers.begin();
            I != section_headers.end(); ++I) {
         static ConstString g_sect_name_gnu_debuglink(".gnu_debuglink");
@@ -1635,8 +1639,8 @@ size_t ObjectFileELF::GetSectionHeaderInfo(SectionHeaderColl &section_headers,
           DataExtractor data;
           if (sheader.sh_type == SHT_MIPS_ABIFLAGS) {
 
-            if (section_size && (set_data(data, sheader.sh_offset,
-                                          section_size) == section_size)) {
+            if (section_size && (data.SetData(object_data, sheader.sh_offset,
+                                              section_size) == section_size)) {
               // MIPS ASE Mask is at offset 12 in MIPS.abiflags section
               lldb::offset_t offset = 12; // MIPS ABI Flags Version: 0
               arch_flags |= data.GetU32(&offset);
@@ -1689,7 +1693,7 @@ size_t ObjectFileELF::GetSectionHeaderInfo(SectionHeaderColl &section_headers,
             // ABI Mask doesn't cover N32 and N64 ABI.
             if (header.e_ident[EI_CLASS] == llvm::ELF::ELFCLASS64)
               arch_flags |= lldb_private::ArchSpec::eMIPSABI_N64;
-            else if (header.e_flags && llvm::ELF::EF_MIPS_ABI2)
+            else if (header.e_flags & llvm::ELF::EF_MIPS_ABI2)
               arch_flags |= lldb_private::ArchSpec::eMIPSABI_N32;
             break;
           }
@@ -1701,14 +1705,14 @@ size_t ObjectFileELF::GetSectionHeaderInfo(SectionHeaderColl &section_headers,
           DataExtractor data;
 
           if (sheader.sh_type == SHT_ARM_ATTRIBUTES && section_size != 0 &&
-              set_data(data, sheader.sh_offset, section_size) == section_size)
+              data.SetData(object_data, sheader.sh_offset, section_size) == section_size)
             ParseARMAttributes(data, section_size, arch_spec);
         }
 
         if (name == g_sect_name_gnu_debuglink) {
           DataExtractor data;
-          if (section_size && (set_data(data, sheader.sh_offset,
-                                        section_size) == section_size)) {
+          if (section_size && (data.SetData(object_data, sheader.sh_offset,
+                                            section_size) == section_size)) {
             lldb::offset_t gnu_debuglink_offset = 0;
             gnu_debuglink_file = data.GetCStr(&gnu_debuglink_offset);
             gnu_debuglink_offset = llvm::alignTo(gnu_debuglink_offset, 4);
@@ -1728,9 +1732,9 @@ size_t ObjectFileELF::GetSectionHeaderInfo(SectionHeaderColl &section_headers,
         if (is_note_header) {
           // Allow notes to refine module info.
           DataExtractor data;
-          if (section_size && (set_data(data, sheader.sh_offset,
-                                        section_size) == section_size)) {
-            Error error = RefineModuleDetailsFromNote(data, arch_spec, uuid);
+          if (section_size && (data.SetData(object_data, sheader.sh_offset,
+                                            section_size) == section_size)) {
+            Status error = RefineModuleDetailsFromNote(data, arch_spec, uuid);
             if (error.Fail()) {
               if (log)
                 log->Printf("ObjectFileELF::%s ELF note processing failed: %s",
@@ -1775,50 +1779,19 @@ DataExtractor ObjectFileELF::GetSegmentDataByIndex(lldb::user_id_t id) {
                        segment_header->p_filesz);
 }
 
-std::string
+llvm::StringRef
 ObjectFileELF::StripLinkerSymbolAnnotations(llvm::StringRef symbol_name) const {
   size_t pos = symbol_name.find('@');
-  return symbol_name.substr(0, pos).str();
+  return symbol_name.substr(0, pos);
 }
 
 //----------------------------------------------------------------------
 // ParseSectionHeaders
 //----------------------------------------------------------------------
 size_t ObjectFileELF::ParseSectionHeaders() {
-  using namespace std::placeholders;
-
-  return GetSectionHeaderInfo(
-      m_section_headers,
-      std::bind(&ObjectFileELF::SetDataWithReadMemoryFallback, this, _1, _2,
-                _3),
-      m_header, m_uuid, m_gnu_debuglink_file, m_gnu_debuglink_crc, m_arch_spec);
-}
-
-lldb::offset_t ObjectFileELF::SetData(const lldb_private::DataExtractor &src,
-                                      lldb_private::DataExtractor &dst,
-                                      lldb::offset_t offset,
-                                      lldb::offset_t length) {
-  return dst.SetData(src, offset, length);
-}
-
-lldb::offset_t
-ObjectFileELF::SetDataWithReadMemoryFallback(lldb_private::DataExtractor &dst,
-                                             lldb::offset_t offset,
-                                             lldb::offset_t length) {
-  if (offset + length <= m_data.GetByteSize())
-    return dst.SetData(m_data, offset, length);
-
-  const auto process_sp = m_process_wp.lock();
-  if (process_sp != nullptr) {
-    addr_t file_size = offset + length;
-
-    DataBufferSP data_sp = ReadMemory(process_sp, m_memory_addr, file_size);
-    if (!data_sp)
-      return false;
-    m_data.SetData(data_sp, 0, file_size);
-  }
-
-  return dst.SetData(m_data, offset, length);
+  return GetSectionHeaderInfo(m_section_headers, m_data, m_header, m_uuid,
+                              m_gnu_debuglink_file, m_gnu_debuglink_crc,
+                              m_arch_spec);
 }
 
 const ObjectFileELF::ELFSectionHeaderInfo *
@@ -1845,6 +1818,12 @@ void ObjectFileELF::CreateSections(SectionList &unified_section_list) {
   if (!m_sections_ap.get() && ParseSectionHeaders()) {
     m_sections_ap.reset(new SectionList());
 
+    // Object files frequently have 0 for every section address, meaning we
+    // need to compute synthetic addresses in order for "file addresses" from
+    // different sections to not overlap
+    bool synthaddrs = (CalculateType() == ObjectFile::Type::eTypeObjectFile);
+    uint64_t nextaddr = 0;
+
     for (SectionHeaderCollIter I = m_section_headers.begin();
          I != m_section_headers.end(); ++I) {
       const ELFSectionHeaderInfo &header = *I;
@@ -1862,6 +1841,7 @@ void ObjectFileELF::CreateSections(SectionList &unified_section_list) {
       static ConstString g_sect_name_dwarf_debug_abbrev(".debug_abbrev");
       static ConstString g_sect_name_dwarf_debug_addr(".debug_addr");
       static ConstString g_sect_name_dwarf_debug_aranges(".debug_aranges");
+      static ConstString g_sect_name_dwarf_debug_cu_index(".debug_cu_index");
       static ConstString g_sect_name_dwarf_debug_frame(".debug_frame");
       static ConstString g_sect_name_dwarf_debug_info(".debug_info");
       static ConstString g_sect_name_dwarf_debug_line(".debug_line");
@@ -1931,6 +1911,8 @@ void ObjectFileELF::CreateSections(SectionList &unified_section_list) {
         sect_type = eSectionTypeDWARFDebugAddr;
       else if (name == g_sect_name_dwarf_debug_aranges)
         sect_type = eSectionTypeDWARFDebugAranges;
+      else if (name == g_sect_name_dwarf_debug_cu_index)
+        sect_type = eSectionTypeDWARFDebugCuIndex;
       else if (name == g_sect_name_dwarf_debug_frame)
         sect_type = eSectionTypeDWARFDebugFrame;
       else if (name == g_sect_name_dwarf_debug_info)
@@ -2014,9 +1996,18 @@ void ObjectFileELF::CreateSections(SectionList &unified_section_list) {
               ? m_arch_spec.GetDataByteSize()
               : eSectionTypeCode == sect_type ? m_arch_spec.GetCodeByteSize()
                                               : 1;
-
       elf::elf_xword log2align =
           (header.sh_addralign == 0) ? 0 : llvm::Log2_64(header.sh_addralign);
+
+      uint64_t addr = header.sh_addr;
+
+      if ((header.sh_flags & SHF_ALLOC) && synthaddrs) {
+          nextaddr =
+              (nextaddr + header.sh_addralign - 1) & ~(header.sh_addralign - 1);
+          addr = nextaddr;
+          nextaddr += vm_size;
+      }
+
       SectionSP section_sp(new Section(
           GetModule(), // Module to which this section belongs.
           this, // ObjectFile to which this section belongs and should read
@@ -2024,7 +2015,7 @@ void ObjectFileELF::CreateSections(SectionList &unified_section_list) {
           SectionIndex(I),     // Section ID.
           name,                // Section name.
           sect_type,           // Section type.
-          header.sh_addr,      // VM address.
+          addr,                // VM address.
           vm_size,             // VM size in bytes of this section.
           header.sh_offset,    // Offset of this section in the file.
           file_size,           // Size of the section as found in the file.
@@ -2042,13 +2033,14 @@ void ObjectFileELF::CreateSections(SectionList &unified_section_list) {
   if (m_sections_ap.get()) {
     if (GetType() == eTypeDebugInfo) {
       static const SectionType g_sections[] = {
-          eSectionTypeDWARFDebugAbbrev,     eSectionTypeDWARFDebugAddr,
-          eSectionTypeDWARFDebugAranges,    eSectionTypeDWARFDebugFrame,
-          eSectionTypeDWARFDebugInfo,       eSectionTypeDWARFDebugLine,
-          eSectionTypeDWARFDebugLoc,        eSectionTypeDWARFDebugMacInfo,
-          eSectionTypeDWARFDebugPubNames,   eSectionTypeDWARFDebugPubTypes,
-          eSectionTypeDWARFDebugRanges,     eSectionTypeDWARFDebugStr,
-          eSectionTypeDWARFDebugStrOffsets, eSectionTypeELFSymbolTable,
+          eSectionTypeDWARFDebugAbbrev,   eSectionTypeDWARFDebugAddr,
+          eSectionTypeDWARFDebugAranges,  eSectionTypeDWARFDebugCuIndex,
+          eSectionTypeDWARFDebugFrame,    eSectionTypeDWARFDebugInfo,
+          eSectionTypeDWARFDebugLine,     eSectionTypeDWARFDebugLoc,
+          eSectionTypeDWARFDebugMacInfo,  eSectionTypeDWARFDebugPubNames,
+          eSectionTypeDWARFDebugPubTypes, eSectionTypeDWARFDebugRanges,
+          eSectionTypeDWARFDebugStr,      eSectionTypeDWARFDebugStrOffsets,
+          eSectionTypeELFSymbolTable,
       };
       SectionList *elf_section_list = m_sections_ap.get();
       for (size_t idx = 0; idx < sizeof(g_sections) / sizeof(g_sections[0]);
@@ -2385,7 +2377,7 @@ unsigned ObjectFileELF::ParseSymbols(Symtab *symtab, user_id_t start_id,
                 .emplace(sect_name.GetCString(),
                          module_section_list->FindSectionByName(sect_name))
                 .first;
-      if (section_it->second && section_it->second->GetFileSize())
+      if (section_it->second)
         symbol_section_sp = section_it->second;
     }
 
@@ -2741,7 +2733,7 @@ ObjectFileELF::ParseTrampolineSymbols(Symtab *symbol_table, user_id_t start_id,
                              rel_data, symtab_data, strtab_data);
 }
 
-unsigned ObjectFileELF::RelocateSection(
+unsigned ObjectFileELF::ApplyRelocations(
     Symtab *symtab, const ELFHeader *hdr, const ELFSectionHeader *rel_hdr,
     const ELFSectionHeader *symtab_hdr, const ELFSectionHeader *debug_hdr,
     DataExtractor &rel_data, DataExtractor &symtab_data,
@@ -2818,7 +2810,8 @@ unsigned ObjectFileELF::RelocateSection(
 }
 
 unsigned ObjectFileELF::RelocateDebugSections(const ELFSectionHeader *rel_hdr,
-                                              user_id_t rel_id) {
+                                              user_id_t rel_id,
+                                              lldb_private::Symtab *thetab) {
   assert(rel_hdr->sh_type == SHT_RELA || rel_hdr->sh_type == SHT_REL);
 
   // Parse in the section list if needed.
@@ -2854,10 +2847,11 @@ unsigned ObjectFileELF::RelocateDebugSections(const ELFSectionHeader *rel_hdr,
   DataExtractor symtab_data;
   DataExtractor debug_data;
 
-  if (ReadSectionData(rel, rel_data) && ReadSectionData(symtab, symtab_data) &&
-      ReadSectionData(debug, debug_data)) {
-    RelocateSection(m_symtab_ap.get(), &m_header, rel_hdr, symtab_hdr,
-                    debug_hdr, rel_data, symtab_data, debug_data, debug);
+  if (GetData(rel->GetFileOffset(), rel->GetFileSize(), rel_data) &&
+      GetData(symtab->GetFileOffset(), symtab->GetFileSize(), symtab_data) &&
+      GetData(debug->GetFileOffset(), debug->GetFileSize(), debug_data)) {
+    ApplyRelocations(thetab, &m_header, rel_hdr, symtab_hdr, debug_hdr,
+                     rel_data, symtab_data, debug_data, debug);
   }
 
   return 0;
@@ -2951,21 +2945,48 @@ Symtab *ObjectFileELF::GetSymtab() {
     m_symtab_ap->CalculateSymbolSizes();
   }
 
+  return m_symtab_ap.get();
+}
+
+void ObjectFileELF::RelocateSection(lldb_private::Section *section)
+{
+  static const char *debug_prefix = ".debug";
+
+  // Set relocated bit so we stop getting called, regardless of
+  // whether we actually relocate.
+  section->SetIsRelocated(true);
+
+  // We only relocate in ELF relocatable files
+  if (CalculateType() != eTypeObjectFile)
+    return;
+
+  const char *section_name = section->GetName().GetCString();
+  // Can't relocate that which can't be named
+  if (section_name == nullptr)
+    return;
+
+  // We don't relocate non-debug sections at the moment
+  if (strncmp(section_name, debug_prefix, strlen(debug_prefix)))
+    return;
+
+  // Relocation section names to look for
+  std::string needle = std::string(".rel") + section_name;
+  std::string needlea = std::string(".rela") + section_name;
+
   for (SectionHeaderCollIter I = m_section_headers.begin();
        I != m_section_headers.end(); ++I) {
     if (I->sh_type == SHT_RELA || I->sh_type == SHT_REL) {
-      if (CalculateType() == eTypeObjectFile) {
-        const char *section_name = I->section_name.AsCString("");
-        if (strstr(section_name, ".rela.debug") ||
-            strstr(section_name, ".rel.debug")) {
-          const ELFSectionHeader &reloc_header = *I;
-          user_id_t reloc_id = SectionIndex(I);
-          RelocateDebugSections(&reloc_header, reloc_id);
-        }
+      const char *hay_name = I->section_name.GetCString();
+      if (hay_name == nullptr)
+        continue;
+      if (needle == hay_name || needlea == hay_name) {
+        const ELFSectionHeader &reloc_header = *I;
+        user_id_t reloc_id = SectionIndex(I);
+        RelocateDebugSections(&reloc_header, reloc_id, GetSymtab());
+        break;
       }
     }
   }
-  return m_symtab_ap.get();
 }
 
 void ObjectFileELF::ParseUnwindSymbols(Symtab *symbol_table,
@@ -3349,7 +3370,7 @@ bool ObjectFileELF::GetArchitecture(ArchSpec &arch) {
     // headers
     // that might shed more light on the architecture
     if (ParseProgramHeaders()) {
-      for (size_t i = 0, count = GetProgramHeaderCount(); i < count; ++i) {
+      for (size_t i = 1, count = GetProgramHeaderCount(); i <= count; ++i) {
         const elf::ELFProgramHeader *header = GetProgramHeaderByIndex(i);
         if (header && header->p_type == PT_NOTE && header->p_offset != 0 &&
             header->p_filesz > 0) {

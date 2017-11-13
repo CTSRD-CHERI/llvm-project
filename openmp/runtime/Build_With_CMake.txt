@@ -127,9 +127,10 @@ Intel(R) MIC Architecture, can be knf or knc.
 Should the Fortran modules be created (requires Fortran compiler)
 
 -DLIBOMP_USE_ADAPTIVE_LOCKS=on|off
-Should adaptive (TSX-based) locks be included?
-These are x86 specific.  This feature is turned on by default
-for i386 and x86_64.  Otherwise, it is turned off.
+Should adaptive (Intel(R) Transactional Synchronization Extensions
+(Intel(R) TSX) based) locks be included?  These are x86 specific.
+This feature is turned on by default for IA-32 architecture and
+Intel(R) 64 architecture.  Otherwise, it is turned off.
 
 -DLIBOMP_USE_INTERNODE_ALIGNMENT=off|on
 Should 4096-byte alignment be used for certain data structures?
@@ -149,14 +150,11 @@ supported on Windows). If LIBOMP_ENABLE_SHARED is off, then static OpenMP
 libraries will be built instead of dynamic ones.
 
 -DLIBOMP_OMPT_SUPPORT=off|on
-Should OMPT support be included in the build? (Not supported on Windows)
-If LIBOMP_OMPT_SUPPORT is off, then both ompt_blame and ompt_trace are ignored.
+Should OMPT support be included in the build?
 
--DLIBOMP_OMPT_BLAME=on|off
-Should OMPT blame functionality be included in the build?
-
--DLIBOMP_OMPT_TRACE=on|off
-Should OMPT trace functionality be included in the build?
+-DLIBOMP_OMPT_OPTIONAL=on|off
+Should optional OMPT functionality be included in the build?
+Will be ignored if LIBOMP_OMPT_SUPPORT is off.
 
 -DLIBOMP_STATS=off|on
 Should include stats-gathering code be included in the build?

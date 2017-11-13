@@ -22,16 +22,27 @@
 struct A {};
 struct B {};
 
+namespace std {
+
 template <>
-struct std::hash<B> {
-  size_t operator()(B const&) { return 0; }
+struct hash<B> {
+  size_t operator()(B const&) TEST_NOEXCEPT_FALSE { return 0; }
 };
+
+}
 
 int main()
 {
     using std::optional;
     const std::size_t nullopt_hash =
         std::hash<optional<double>>{}(optional<double>{});
+
+
+    {
+        optional<B> opt;
+        ASSERT_NOT_NOEXCEPT(std::hash<optional<B>>()(opt));
+        ASSERT_NOT_NOEXCEPT(std::hash<optional<const B>>()(opt));
+    }
 
     {
         typedef int T;

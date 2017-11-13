@@ -14,6 +14,7 @@ class TestGdbRemoteHostInfo(GdbRemoteTestCaseBase):
     mydir = TestBase.compute_mydir(__file__)
 
     KNOWN_HOST_INFO_KEYS = set([
+        "arch",
         "cputype",
         "cpusubtype",
         "distribution_id",
@@ -97,12 +98,14 @@ class TestGdbRemoteHostInfo(GdbRemoteTestCaseBase):
                           "qHostInfo is missing the following required "
                           "keys: " + str(missing_keys))
 
+    @skipIfDarwinEmbedded # <rdar://problem/34539270> lldb-server tests not updated to work on ios etc yet
     @debugserver_test
     def test_qHostInfo_returns_at_least_one_key_val_pair_debugserver(self):
         self.init_debugserver_test()
         self.build()
         self.get_qHostInfo_response()
 
+    @skipIfDarwinEmbedded # <rdar://problem/34539270> lldb-server tests not updated to work on ios etc yet
     @llgs_test
     def test_qHostInfo_returns_at_least_one_key_val_pair_llgs(self):
         self.init_llgs_test()
@@ -110,6 +113,7 @@ class TestGdbRemoteHostInfo(GdbRemoteTestCaseBase):
         self.get_qHostInfo_response()
 
     @skipUnlessDarwin
+    @skipIfDarwinEmbedded # <rdar://problem/34539270> lldb-server tests not updated to work on ios etc yet
     @debugserver_test
     def test_qHostInfo_contains_darwin_required_keys_debugserver(self):
         self.init_debugserver_test()
@@ -118,6 +122,7 @@ class TestGdbRemoteHostInfo(GdbRemoteTestCaseBase):
         self.validate_darwin_minimum_host_info_keys(host_info_dict)
 
     @skipUnlessDarwin
+    @skipIfDarwinEmbedded # <rdar://problem/34539270> lldb-server tests not updated to work on ios etc yet
     @llgs_test
     def test_qHostInfo_contains_darwin_required_keys_llgs(self):
         self.init_llgs_test()

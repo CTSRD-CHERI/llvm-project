@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "FuzzySymbolIndex.h"
 #include "InMemorySymbolIndex.h"
 #include "IncludeFixer.h"
 #include "IncludeFixerContext.h"
@@ -27,7 +28,6 @@ using namespace llvm;
 using clang::include_fixer::IncludeFixerContext;
 
 LLVM_YAML_IS_DOCUMENT_LIST_VECTOR(IncludeFixerContext)
-LLVM_YAML_IS_FLOW_SEQUENCE_VECTOR(std::string)
 LLVM_YAML_IS_FLOW_SEQUENCE_VECTOR(IncludeFixerContext::HeaderInfo)
 LLVM_YAML_IS_FLOW_SEQUENCE_VECTOR(IncludeFixerContext::QuerySymbolInfo)
 
@@ -83,14 +83,16 @@ namespace {
 cl::OptionCategory IncludeFixerCategory("Tool options");
 
 enum DatabaseFormatTy {
-  fixed, ///< Hard-coded mapping.
-  yaml,  ///< Yaml database created by find-all-symbols.
+  fixed,     ///< Hard-coded mapping.
+  yaml,      ///< Yaml database created by find-all-symbols.
+  fuzzyYaml, ///< Yaml database with fuzzy-matched identifiers.
 };
 
 cl::opt<DatabaseFormatTy> DatabaseFormat(
     "db", cl::desc("Specify input format"),
     cl::values(clEnumVal(fixed, "Hard-coded mapping"),
-               clEnumVal(yaml, "Yaml database created by find-all-symbols")),
+               clEnumVal(yaml, "Yaml database created by find-all-symbols"),
+               clEnumVal(fuzzyYaml, "Yaml database, with fuzzy-matched names")),
     cl::init(yaml), cl::cat(IncludeFixerCategory));
 
 cl::opt<std::string> Input("input",
@@ -178,7 +180,7 @@ createSymbolIndexManager(StringRef FilePath) {
       for (size_t I = 0, E = CommaSplits.size(); I != E; ++I)
         Symbols.push_back(
             {SymbolInfo(Split.first.trim(), SymbolInfo::SymbolKind::Unknown,
-                        CommaSplits[I].trim(), 1, {}),
+                        CommaSplits[I].trim(), {}),
              // Use fake "seen" signal for tests, so first header wins.
              SymbolInfo::Signals(/*Seen=*/static_cast<unsigned>(E - I),
                                  /*Used=*/0)});
@@ -213,6 +215,21 @@ createSymbolIndexManager(StringRef FilePath) {
     };
 
     SymbolIndexMgr->addSymbolIndex(std::move(CreateYamlIdx));
+    break;
+  }
+  case fuzzyYaml: {
+    // This mode is not very useful, because we don't correct the identifier.
+    // It's main purpose is to expose FuzzySymbolIndex to tests.
+    SymbolIndexMgr->addSymbolIndex(
+        []() -> std::unique_ptr<include_fixer::SymbolIndex> {
+          auto DB = include_fixer::FuzzySymbolIndex::createFromYAML(Input);
+          if (!DB) {
+            llvm::errs() << "Couldn't load fuzzy YAML db: "
+                         << llvm::toString(DB.takeError()) << '\n';
+            return nullptr;
+          }
+          return std::move(*DB);
+        });
     break;
   }
   }

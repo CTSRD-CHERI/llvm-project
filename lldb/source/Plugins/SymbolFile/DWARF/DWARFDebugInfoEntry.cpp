@@ -161,9 +161,9 @@ bool DWARFDebugInfoEntry::FastExtract(
           case DW_FORM_strp:
           case DW_FORM_sec_offset:
             if (cu->IsDWARF64())
-              debug_info_data.GetU64(offset_ptr);
+              debug_info_data.GetU64(&offset);
             else
-              debug_info_data.GetU32(offset_ptr);
+              debug_info_data.GetU32(&offset);
             break;
 
           default:
@@ -202,7 +202,7 @@ bool DWARFDebugInfoEntry::Extract(SymbolFileDWARF *dwarf2Data,
   const uint32_t cu_end_offset = cu->GetNextCompileUnitOffset();
   lldb::offset_t offset = *offset_ptr;
   //  if (offset >= cu_end_offset)
-  //      Log::Error("DIE at offset 0x%8.8x is beyond the end of the current
+  //      Log::Status("DIE at offset 0x%8.8x is beyond the end of the current
   //      compile unit (0x%8.8x)", m_offset, cu_end_offset);
   if ((offset < cu_end_offset) && debug_info_data.ValidOffset(offset)) {
     m_offset = offset;
@@ -325,9 +325,9 @@ bool DWARFDebugInfoEntry::Extract(SymbolFileDWARF *dwarf2Data,
               case DW_FORM_strp:
               case DW_FORM_sec_offset:
                 if (cu->IsDWARF64())
-                  debug_info_data.GetU64(offset_ptr);
+                  debug_info_data.GetU64(&offset);
                 else
-                  debug_info_data.GetU32(offset_ptr);
+                  debug_info_data.GetU32(&offset);
                 break;
 
               default:
@@ -1646,6 +1646,8 @@ bool DWARFDebugInfoEntry::LookupAddress(const dw_addr_t address,
     case DW_TAG_template_type_parameter:
       break;
     case DW_TAG_template_value_parameter:
+      break;
+    case DW_TAG_GNU_template_parameter_pack:
       break;
     case DW_TAG_thrown_type:
       break;

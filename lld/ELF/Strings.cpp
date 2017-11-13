@@ -9,7 +9,7 @@
 
 #include "Strings.h"
 #include "Config.h"
-#include "Error.h"
+#include "lld/Common/ErrorHandler.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
@@ -38,29 +38,6 @@ bool StringMatcher::match(StringRef S) const {
   return false;
 }
 
-// If an input string is in the form of "foo.N" where N is a number,
-// return N. Otherwise, returns 65536, which is one greater than the
-// lowest priority.
-int elf::getPriority(StringRef S) {
-  size_t Pos = S.rfind('.');
-  if (Pos == StringRef::npos)
-    return 65536;
-  int V;
-  if (S.substr(Pos + 1).getAsInteger(10, V))
-    return 65536;
-  return V;
-}
-
-bool elf::hasWildcard(StringRef S) {
-  return S.find_first_of("?*[") != StringRef::npos;
-}
-
-StringRef elf::unquote(StringRef S) {
-  if (!S.startswith("\""))
-    return S;
-  return S.substr(1, S.size() - 2);
-}
-
 // Converts a hex string (e.g. "deadbeef") to a vector.
 std::vector<uint8_t> elf::parseHex(StringRef S) {
   std::vector<uint8_t> Hex;
@@ -68,7 +45,7 @@ std::vector<uint8_t> elf::parseHex(StringRef S) {
     StringRef B = S.substr(0, 2);
     S = S.substr(2);
     uint8_t H;
-    if (B.getAsInteger(16, H)) {
+    if (!to_integer(B, H, 16)) {
       error("not a hexadecimal value: " + B);
       return {};
     }
@@ -77,16 +54,11 @@ std::vector<uint8_t> elf::parseHex(StringRef S) {
   return Hex;
 }
 
-static bool isAlpha(char C) {
-  return ('a' <= C && C <= 'z') || ('A' <= C && C <= 'Z') || C == '_';
-}
-
-static bool isAlnum(char C) { return isAlpha(C) || ('0' <= C && C <= '9'); }
-
 // Returns true if S is valid as a C language identifier.
 bool elf::isValidCIdentifier(StringRef S) {
-  return !S.empty() && isAlpha(S[0]) &&
-         std::all_of(S.begin() + 1, S.end(), isAlnum);
+  return !S.empty() && (isAlpha(S[0]) || S[0] == '_') &&
+         std::all_of(S.begin() + 1, S.end(),
+                     [](char C) { return C == '_' || isAlnum(C); });
 }
 
 // Returns the demangled C++ symbol name for Name.

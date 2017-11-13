@@ -2,11 +2,6 @@
 # standalone project, using LLVM as an external library:
 if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   project(lldb)
-  cmake_minimum_required(VERSION 2.8.12.2)
-
-  if (POLICY CMP0022)
-    cmake_policy(SET CMP0022 NEW) # automatic when 2.8.12 is required
-  endif()
 
   option(LLVM_INSTALL_TOOLCHAIN_ONLY "Only include toolchain files in the 'install' target." OFF)
 
@@ -69,6 +64,7 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
   set(LLVMCONFIG_FILE "${LLVM_CMAKE_PATH}/LLVMConfig.cmake")
   if(EXISTS ${LLVMCONFIG_FILE})
+    file(TO_CMAKE_PATH "${LLVM_CMAKE_PATH}" LLVM_CMAKE_PATH)
     list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_PATH}")
     include(${LLVMCONFIG_FILE})
   else()

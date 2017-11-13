@@ -14,6 +14,7 @@
 #include <cassert>
 
 #include "test_macros.h"
+#include "test_workarounds.h"
 
 #if TEST_STD_VER < 11
 #error this header may only be used in C++11 or newer

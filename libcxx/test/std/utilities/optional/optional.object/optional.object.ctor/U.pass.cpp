@@ -9,6 +9,13 @@
 //
 // UNSUPPORTED: c++98, c++03, c++11, c++14
 
+// XFAIL: with_system_cxx_lib=macosx10.12
+// XFAIL: with_system_cxx_lib=macosx10.11
+// XFAIL: with_system_cxx_lib=macosx10.10
+// XFAIL: with_system_cxx_lib=macosx10.9
+// XFAIL: with_system_cxx_lib=macosx10.7
+// XFAIL: with_system_cxx_lib=macosx10.8
+
 // <optional>
 
 // template <class U>
@@ -33,6 +40,11 @@ struct ImplicitThrow
 struct ExplicitThrow
 {
     constexpr explicit ExplicitThrow(int x) { if (x != -1) TEST_THROW(6);}
+};
+
+struct ImplicitAny {
+  template <class U>
+  constexpr ImplicitAny(U&&) {}
 };
 
 
@@ -79,6 +91,15 @@ void test_implicit()
         using T = TestTypes::TestType;
         assert(implicit_conversion<T>(3, T(3)));
     }
+  {
+    using O = optional<ImplicitAny>;
+    static_assert(!test_convertible<O, std::in_place_t>(), "");
+    static_assert(!test_convertible<O, std::in_place_t&>(), "");
+    static_assert(!test_convertible<O, const std::in_place_t&>(), "");
+    static_assert(!test_convertible<O, std::in_place_t&&>(), "");
+    static_assert(!test_convertible<O, const std::in_place_t&&>(), "");
+
+  }
 #ifndef TEST_HAS_NO_EXCEPTIONS
     {
         try {

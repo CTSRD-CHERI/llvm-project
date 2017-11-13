@@ -1,4 +1,3 @@
-#include "gtest/gtest.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/CodeGen/LiveIntervalAnalysis.h"
 #include "llvm/CodeGen/MIRParser/MIRParser.h"
@@ -6,6 +5,7 @@
 #include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetRegistry.h"
@@ -13,7 +13,7 @@
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/IR/LegacyPassManager.h"
+#include "gtest/gtest.h"
 
 using namespace llvm;
 
@@ -45,9 +45,8 @@ std::unique_ptr<TargetMachine> createTargetMachine() {
     return nullptr;
 
   TargetOptions Options;
-  return std::unique_ptr<TargetMachine>(
-      T->createTargetMachine("AMDGPU", "", "", Options, None,
-                             CodeModel::Default, CodeGenOpt::Aggressive));
+  return std::unique_ptr<TargetMachine>(T->createTargetMachine(
+      "AMDGPU", "", "", Options, None, None, CodeGenOpt::Aggressive));
 }
 
 std::unique_ptr<Module> parseMIR(LLVMContext &Context,
@@ -59,18 +58,15 @@ std::unique_ptr<Module> parseMIR(LLVMContext &Context,
   if (!MIR)
     return nullptr;
 
-  std::unique_ptr<Module> M = MIR->parseLLVMModule();
+  std::unique_ptr<Module> M = MIR->parseIRModule();
   if (!M)
     return nullptr;
 
   M->setDataLayout(TM.createDataLayout());
 
-  Function *F = M->getFunction(FuncName);
-  if (!F)
-    return nullptr;
-
   MachineModuleInfo *MMI = new MachineModuleInfo(&TM);
-  MMI->setMachineFunctionInitializer(MIR.get());
+  if (MIR->parseMachineFunctions(*M, *MMI))
+    return nullptr;
   PM.add(MMI);
 
   return M;
@@ -154,6 +150,7 @@ body: |
   std::unique_ptr<MIRParser> MIR;
   std::unique_ptr<Module> M = parseMIR(Context, PM, MIR, *TM, MIRString,
                                        "func");
+  ASSERT_TRUE(M);
 
   PM.add(new TestPass(T));
 
@@ -379,6 +376,24 @@ TEST(LiveIntervalTest, SubRegMoveDown) {
     MachineInstr &MI = getMI(MF, 3, /*BlockNum=*/1);
     MI.getOperand(0).setIsUndef(false);
     testHandleMove(MF, LIS, 1, 4, /*BlockNum=*/1);
+  });
+}
+
+TEST(LiveIntervalTest, SubRegMoveUp) {
+  // handleMoveUp had a bug not updating valno of segment incoming to bb.2
+  // after swapping subreg definitions.
+  liveIntervalTest(R"MIR(
+    successors: %bb.1, %bb.2
+    undef %0.sub0 = IMPLICIT_DEF
+    %0.sub1 = IMPLICIT_DEF
+    S_CBRANCH_VCCNZ %bb.2, implicit undef %vcc
+    S_BRANCH %bb.1
+  bb.1:
+    S_NOP 0, implicit %0.sub1
+  bb.2:
+    S_NOP 0, implicit %0.sub1
+)MIR", [](MachineFunction &MF, LiveIntervals &LIS) {
+    testHandleMove(MF, LIS, 1, 0);
   });
 }
 

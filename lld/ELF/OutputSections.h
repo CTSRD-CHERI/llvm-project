@@ -12,9 +12,10 @@
 
 #include "Config.h"
 #include "InputSection.h"
+#include "LinkerScript.h"
 #include "Relocations.h"
 
-#include "lld/Core/LLVM.h"
+#include "lld/Common/LLVM.h"
 #include "llvm/MC/StringTableBuilder.h"
 #include "llvm/Object/ELF.h"
 
@@ -22,23 +23,23 @@ namespace lld {
 namespace elf {
 
 struct PhdrEntry;
-class SymbolBody;
+class Symbol;
 struct EhSectionPiece;
 class EhInputSection;
 class InputSection;
 class InputSectionBase;
 class MergeInputSection;
 class OutputSection;
-template <class ELFT> class ObjectFile;
+template <class ELFT> class ObjFile;
 template <class ELFT> class SharedFile;
 class SharedSymbol;
-class DefinedRegular;
+class Defined;
 
 // This represents a section in an output file.
 // It is composed of multiple InputSections.
 // The writer creates multiple OutputSections and assign them unique,
 // non-overlapping file offsets and VAs.
-class OutputSection final : public SectionBase {
+class OutputSection final : public BaseCommand, public SectionBase {
 public:
   OutputSection(StringRef Name, uint32_t Type, uint64_t Flags);
 
@@ -46,29 +47,29 @@ public:
     return S->kind() == SectionBase::Output;
   }
 
+  static bool classof(const BaseCommand *C);
+
   uint64_t getLMA() const { return Addr + LMAOffset; }
   template <typename ELFT> void writeHeaderTo(typename ELFT::Shdr *SHdr);
 
   unsigned SectionIndex;
+  unsigned SortRank;
 
   uint32_t getPhdrFlags() const;
 
-  void updateAlignment(uint32_t Val) {
-    if (Val > Alignment)
-      Alignment = Val;
-  }
+  // Pointer to the PT_LOAD segment, which this section resides in. This field
+  // is used to correctly compute file offset of a section. When two sections
+  // share the same load segment, difference between their file offsets should
+  // be equal to difference between their virtual addresses. To compute some
+  // section offset we use the following formula: Off = Off_first + VA -
+  // VA_first, where Off_first and VA_first is file offset and VA of first
+  // section in PT_LOAD.
+  PhdrEntry *PtLoad = nullptr;
 
-  // If true, this section will be page aligned on disk.
-  // Typically the first section of each PT_LOAD segment has this flag.
-  bool PageAlign = false;
-
-  // Pointer to the first section in PT_LOAD segment, which this section
-  // also resides in. This field is used to correctly compute file offset
-  // of a section. When two sections share the same load segment, difference
-  // between their file offsets should be equal to difference between their
-  // virtual addresses. To compute some section offset we use the following
-  // formula: Off = Off_first + VA - VA_first.
-  OutputSection *FirstInPtLoad = nullptr;
+  // Pointer to a relocation section for this section. Usually nullptr because
+  // we consume relocations, but if --emit-relocs is specified (which is rare),
+  // it may have a non-null value.
+  OutputSection *RelocationSection = nullptr;
 
   // The following fields correspond to Elf_Shdr members.
   uint64_t Size = 0;
@@ -77,26 +78,48 @@ public:
   uint64_t Addr = 0;
   uint32_t ShName = 0;
 
-  void addSection(InputSectionBase *C);
-  void sort(std::function<int(InputSectionBase *S)> Order);
-  void sortInitFini();
-  void sortCtorsDtors();
-  template <class ELFT> void writeTo(uint8_t *Buf);
-  template <class ELFT> void finalize();
-  template <class ELFT> void assignOffsets();
-  std::vector<InputSection *> Sections;
+  void addSection(InputSection *IS);
 
   // Location in the output buffer.
   uint8_t *Loc = nullptr;
+
+  // The following members are normally only used in linker scripts.
+  MemoryRegion *MemRegion = nullptr;
+  Expr AddrExpr;
+  Expr AlignExpr;
+  Expr LMAExpr;
+  Expr SubalignExpr;
+  std::vector<BaseCommand *> SectionCommands;
+  std::vector<StringRef> Phdrs;
+  llvm::Optional<uint32_t> Filler;
+  ConstraintKind Constraint = ConstraintKind::NoConstraint;
+  std::string Location;
+  std::string MemoryRegionName;
+  bool Noload = false;
+
+  template <class ELFT> void finalize();
+  template <class ELFT> void writeTo(uint8_t *Buf);
+  template <class ELFT> void maybeCompress();
+
+  void sort(std::function<int(InputSectionBase *S)> Order);
+  void sortInitFini();
+  void sortCtorsDtors();
+
+private:
+  // Used for implementation of --compress-debug-sections option.
+  std::vector<uint8_t> ZDebugHeader;
+  llvm::SmallVector<char, 1> CompressedData;
+
+  uint32_t getFiller();
 };
+
+int getPriority(StringRef S);
 
 // All output sections that are handled by the linker specially are
 // globally accessible. Writer initializes them, so don't use them
 // until Writer is initialized.
 struct Out {
   static uint8_t First;
-  static OutputSection *Bss;
-  static OutputSection *BssRelRo;
   static OutputSection *Opd;
   static uint8_t *OpdBuf;
   static PhdrEntry *TlsPhdr;
@@ -108,50 +131,32 @@ struct Out {
   static OutputSection *FiniArray;
 };
 
-struct SectionKey {
-  StringRef Name;
-  uint64_t Flags;
-  uint32_t Alignment;
-};
-}
-}
-namespace llvm {
-template <> struct DenseMapInfo<lld::elf::SectionKey> {
-  static lld::elf::SectionKey getEmptyKey();
-  static lld::elf::SectionKey getTombstoneKey();
-  static unsigned getHashValue(const lld::elf::SectionKey &Val);
-  static bool isEqual(const lld::elf::SectionKey &LHS,
-                      const lld::elf::SectionKey &RHS);
-};
-}
+} // namespace elf
+} // namespace lld
+
 namespace lld {
 namespace elf {
-
 // This class knows how to create an output section for a given
 // input section. Output section type is determined by various
 // factors, including input section's sh_flags, sh_type and
 // linker scripts.
 class OutputSectionFactory {
 public:
-  OutputSectionFactory(std::vector<OutputSection *> &OutputSections);
+  OutputSectionFactory();
   ~OutputSectionFactory();
 
-  template <class ELFT>
-  void addInputSec(InputSectionBase *IS, StringRef OutsecName);
+  OutputSection *addInputSec(InputSectionBase *IS, StringRef OutsecName);
 
 private:
-  llvm::SmallDenseMap<SectionKey, OutputSection *> Map;
-  std::vector<OutputSection *> &OutputSections;
+  llvm::StringMap<OutputSection *> Map;
 };
 
-template <class ELFT> uint64_t getHeaderSize() {
-  if (Config->OFormatBinary)
-    return 0;
-  return Out::ElfHeader->Size + Out::ProgramHeaders->Size;
-}
+uint64_t getHeaderSize();
+void sortByOrder(llvm::MutableArrayRef<InputSection *> In,
+                 std::function<int(InputSectionBase *S)> Order);
 
+extern std::vector<OutputSection *> OutputSections;
 } // namespace elf
 } // namespace lld
-
 
 #endif

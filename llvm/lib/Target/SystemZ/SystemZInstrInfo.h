@@ -19,7 +19,8 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunction.h"
-#include "llvm/Target/TargetInstrInfo.h"
+#include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
 #include <cstdint>
 
 #define GET_INSTRINFO_HEADER
@@ -160,10 +161,13 @@ class SystemZInstrInfo : public SystemZGenInstrInfo {
   void expandZExtPseudo(MachineInstr &MI, unsigned LowOpcode,
                         unsigned Size) const;
   void expandLoadStackGuard(MachineInstr *MI) const;
-  void emitGRX32Move(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
-                     const DebugLoc &DL, unsigned DestReg, unsigned SrcReg,
-                     unsigned LowLowOpcode, unsigned Size, bool KillSrc,
-                     bool UndefSrc) const;
+
+  MachineInstrBuilder
+  emitGRX32Move(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
+                const DebugLoc &DL, unsigned DestReg, unsigned SrcReg,
+                unsigned LowLowOpcode, unsigned Size, bool KillSrc,
+                bool UndefSrc) const;
+
   virtual void anchor();
 
 protected:

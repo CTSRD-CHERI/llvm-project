@@ -15,16 +15,14 @@
 // C++ Includes
 // Other libraries and framework includes
 // Project includes
-#include "lldb/Target/Process.h"
-#include "lldb/Utility/Error.h"
-#include "lldb/Utility/Log.h"
-
-#include "lldb/Core/StreamFile.h"
-#include "lldb/Core/StructuredData.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/HostInfo.h"
+#include "lldb/Target/Process.h"
 #include "lldb/Utility/DataBufferHeap.h"
 #include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/Status.h"
+#include "lldb/Utility/StructuredData.h"
 
 #include "llvm/Support/ConvertUTF.h"
 
@@ -50,7 +48,7 @@ bool GetTripleForProcess(const FileSpec &executable, llvm::Triple &triple) {
   imageBinary.SeekFromStart(peOffset);
   imageBinary.Read(&peHead, readSize);
   if (peHead != 0x00004550) // "PE\0\0", little-endian
-    return false;           // Error: Can't find PE header
+    return false;           // Status: Can't find PE header
   readSize = 2;
   imageBinary.Read(&machineType, readSize);
   triple.setVendor(llvm::Triple::PC);
@@ -97,25 +95,8 @@ void GetProcessExecutableAndTriple(const AutoHandle &handle,
 }
 }
 
-lldb::DataBufferSP Host::GetAuxvData(lldb_private::Process *process) {
-  return 0;
-}
-
 lldb::thread_t Host::GetCurrentThread() {
   return lldb::thread_t(::GetCurrentThread());
-}
-
-lldb::thread_key_t
-Host::ThreadLocalStorageCreate(ThreadLocalStorageCleanupCallback callback) {
-  return TlsAlloc();
-}
-
-void *Host::ThreadLocalStorageGet(lldb::thread_key_t key) {
-  return ::TlsGetValue(key);
-}
-
-void Host::ThreadLocalStorageSet(lldb::thread_key_t key, void *value) {
-  ::TlsSetValue(key, value);
 }
 
 void Host::Kill(lldb::pid_t pid, int signo) {
@@ -200,8 +181,8 @@ HostThread Host::StartMonitoringChildProcess(
   return HostThread();
 }
 
-Error Host::ShellExpandArguments(ProcessLaunchInfo &launch_info) {
-  Error error;
+Status Host::ShellExpandArguments(ProcessLaunchInfo &launch_info) {
+  Status error;
   if (launch_info.GetFlags().Test(eLaunchFlagShellExpandArguments)) {
     FileSpec expand_tool_spec;
     if (!HostInfo::GetLLDBPath(lldb::ePathTypeSupportExecutableDir,

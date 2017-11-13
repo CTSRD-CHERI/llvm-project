@@ -622,7 +622,7 @@ define i32 @test35() nounwind {
              i8* getelementptr (%t1, %t1* bitcast (%t0* @s to %t1*), i32 0, i32 1, i32 0)) nounwind
   ret i32 0
 ; CHECK-LABEL: @test35(
-; CHECK: call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([17 x i8], [17 x i8]* @"\01LC8", i64 0, i64 0), i8* getelementptr inbounds (%t0, %t0* @s, i64 0, i32 1, i64 0)) [[NUW:#[0-9]+]]
+; CHECK: call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([17 x i8], [17 x i8]* @"\01LC8", i64 0, i64 0), i8* getelementptr inbounds (%t0, %t0* @s, i64 0, i32 1, i64 0)) [[$NUW:#[0-9]+]]
 }
 
 ; Don't treat signed offsets as unsigned.
@@ -931,4 +931,15 @@ define i32 addrspace(1)* @ascast_0_0_gep([128 x i32]* %p) nounwind {
   ret i32 addrspace(1)* %x
 }
 
-; CHECK: attributes [[NUW]] = { nounwind }
+define <2 x i32*> @PR32414(i32** %ptr) {
+; CHECK-LABEL: @PR32414(
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32** %ptr to i32*
+; CHECK-NEXT:    [[TMP1:%.*]] = getelementptr inbounds i32, i32* [[TMP0]], <2 x i64> <i64 0, i64 1>
+; CHECK-NEXT:    ret <2 x i32*> [[TMP1]]
+;
+  %tmp0 = bitcast i32** %ptr to i32*
+  %tmp1 = getelementptr inbounds i32, i32* %tmp0, <2 x i64> <i64 0, i64 1>
+  ret <2 x i32*> %tmp1
+}
+
+; CHECK: attributes [[$NUW]] = { nounwind }

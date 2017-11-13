@@ -25,8 +25,10 @@
 #include <type_traits>
 #include <cassert>
 
-template <class _Tp>
-void where(const _Tp &) {}
+#include "test_macros.h"
+
+template <class T>
+void where(const T &) {}
 
 void
 test1()

@@ -11,45 +11,56 @@
 #define LLD_ELF_GDB_INDEX_H
 
 #include "InputFiles.h"
-#include "llvm/Object/ELF.h"
 #include "llvm/DebugInfo/DWARF/DWARFContext.h"
+#include "llvm/Object/ELF.h"
 
 namespace lld {
 namespace elf {
 
 class InputSection;
 
-// Struct represents single entry of address area of gdb index.
-struct AddressEntry {
-  InputSectionBase *Section;
-  uint64_t LowAddress;
-  uint64_t HighAddress;
-  size_t CuIndex;
+struct LLDDWARFSection final : public llvm::DWARFSection {
+  InputSectionBase *Sec = nullptr;
 };
 
-// Element of GdbHashTab hash table.
-struct GdbSymbol {
-  GdbSymbol(uint32_t Hash, size_t Offset)
-      : NameHash(Hash), NameOffset(Offset) {}
-  uint32_t NameHash;
-  size_t NameOffset;
-  size_t CuVectorIndex;
-};
+template <class ELFT> class LLDDwarfObj final : public llvm::DWARFObject {
+  LLDDWARFSection InfoSection;
+  LLDDWARFSection RangeSection;
+  LLDDWARFSection LineSection;
+  StringRef AbbrevSection;
+  StringRef GnuPubNamesSection;
+  StringRef GnuPubTypesSection;
 
-// This class manages the hashed symbol table for the .gdb_index section.
-// The hash value for a table entry is computed by applying an iterative hash
-// function to the symbol's name.
-class GdbHashTab final {
+  template <class RelTy>
+  llvm::Optional<llvm::RelocAddrEntry> findAux(const InputSectionBase &Sec,
+                                               uint64_t Pos,
+                                               ArrayRef<RelTy> Rels) const;
+
 public:
-  std::pair<bool, GdbSymbol *> add(uint32_t Hash, size_t Offset);
-
-  void finalizeContents();
-  size_t getCapacity() { return Table.size(); }
-  GdbSymbol *getSymbol(size_t I) { return Table[I]; }
-
-private:
-  llvm::DenseMap<size_t, GdbSymbol *> Map;
-  std::vector<GdbSymbol *> Table;
+  explicit LLDDwarfObj(ObjFile<ELFT> *Obj);
+  const llvm::DWARFSection &getInfoSection() const override {
+    return InfoSection;
+  }
+  const llvm::DWARFSection &getRangeSection() const override {
+    return RangeSection;
+  }
+  const llvm::DWARFSection &getLineSection() const override {
+    return LineSection;
+  }
+  StringRef getCUIndexSection() const override { return ""; }
+  StringRef getAbbrevSection() const override { return AbbrevSection; }
+  StringRef getStringSection() const override { return ""; }
+  StringRef getGnuPubNamesSection() const override {
+    return GnuPubNamesSection;
+  }
+  StringRef getGnuPubTypesSection() const override {
+    return GnuPubTypesSection;
+  }
+  bool isLittleEndian() const override {
+    return ELFT::TargetEndianness == llvm::support::little;
+  }
+  llvm::Optional<llvm::RelocAddrEntry> find(const llvm::DWARFSection &Sec,
+                                            uint64_t Pos) const override;
 };
 
 } // namespace elf

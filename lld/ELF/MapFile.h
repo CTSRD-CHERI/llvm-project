@@ -10,13 +10,10 @@
 #ifndef LLD_ELF_MAPFILE_H
 #define LLD_ELF_MAPFILE_H
 
-#include "OutputSections.h"
-
 namespace lld {
 namespace elf {
-template <class ELFT>
-void writeMapFile(llvm::ArrayRef<OutputSection *> OutputSections);
-}
-}
+void writeMapFile();
+} // namespace elf
+} // namespace lld
 
 #endif

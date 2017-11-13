@@ -23,15 +23,15 @@
 
 #include "Thunks.h"
 #include "Config.h"
-#include "Error.h"
 #include "InputSection.h"
 #include "Memory.h"
 #include "OutputSections.h"
 #include "Symbols.h"
 #include "SyntheticSections.h"
 #include "Target.h"
+#include "lld/Common/ErrorHandler.h"
+#include "llvm/BinaryFormat/ELF.h"
 #include "llvm/Support/Casting.h"
-#include "llvm/Support/ELF.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
@@ -50,193 +50,267 @@ namespace {
 
 // Specific ARM Thunk implementations. The naming convention is:
 // Source State, TargetState, Target Requirement, ABS or PI, Range
-template <class ELFT>
-class ARMToThumbV7ABSLongThunk final : public Thunk<ELFT> {
+class ARMV7ABSLongThunk final : public Thunk {
 public:
-  ARMToThumbV7ABSLongThunk(const SymbolBody &Dest) : Thunk<ELFT>(Dest) {}
+  ARMV7ABSLongThunk(Symbol &Dest) : Thunk(Dest) {}
 
   uint32_t size() const override { return 12; }
-  void writeTo(uint8_t *Buf, ThunkSection<ELFT> &IS) const override;
-  void addSymbols(ThunkSection<ELFT> &IS) override;
+  void writeTo(uint8_t *Buf, ThunkSection &IS) const override;
+  void addSymbols(ThunkSection &IS) override;
+  bool isCompatibleWith(RelType Type) const override;
 };
 
-template <class ELFT> class ARMToThumbV7PILongThunk final : public Thunk<ELFT> {
+class ARMV7PILongThunk final : public Thunk {
 public:
-  ARMToThumbV7PILongThunk(const SymbolBody &Dest) : Thunk<ELFT>(Dest) {}
+  ARMV7PILongThunk(Symbol &Dest) : Thunk(Dest) {}
 
   uint32_t size() const override { return 16; }
-  void writeTo(uint8_t *Buf, ThunkSection<ELFT> &IS) const override;
-  void addSymbols(ThunkSection<ELFT> &IS) override;
+  void writeTo(uint8_t *Buf, ThunkSection &IS) const override;
+  void addSymbols(ThunkSection &IS) override;
+  bool isCompatibleWith(RelType Type) const override;
 };
 
-template <class ELFT>
-class ThumbToARMV7ABSLongThunk final : public Thunk<ELFT> {
+class ThumbV7ABSLongThunk final : public Thunk {
 public:
-  ThumbToARMV7ABSLongThunk(const SymbolBody &Dest) : Thunk<ELFT>(Dest) {
-    this->alignment = 2;
-  }
+  ThumbV7ABSLongThunk(Symbol &Dest) : Thunk(Dest) { Alignment = 2; }
 
   uint32_t size() const override { return 10; }
-  void writeTo(uint8_t *Buf, ThunkSection<ELFT> &IS) const override;
-  void addSymbols(ThunkSection<ELFT> &IS) override;
+  void writeTo(uint8_t *Buf, ThunkSection &IS) const override;
+  void addSymbols(ThunkSection &IS) override;
+  bool isCompatibleWith(RelType Type) const override;
 };
 
-template <class ELFT> class ThumbToARMV7PILongThunk final : public Thunk<ELFT> {
+class ThumbV7PILongThunk final : public Thunk {
 public:
-  ThumbToARMV7PILongThunk(const SymbolBody &Dest) : Thunk<ELFT>(Dest) {
-    this->alignment = 2;
-  }
+  ThumbV7PILongThunk(Symbol &Dest) : Thunk(Dest) { Alignment = 2; }
 
   uint32_t size() const override { return 12; }
-  void writeTo(uint8_t *Buf, ThunkSection<ELFT> &IS) const override;
-  void addSymbols(ThunkSection<ELFT> &IS) override;
+  void writeTo(uint8_t *Buf, ThunkSection &IS) const override;
+  void addSymbols(ThunkSection &IS) override;
+  bool isCompatibleWith(RelType Type) const override;
 };
 
 // MIPS LA25 thunk
-template <class ELFT> class MipsThunk final : public Thunk<ELFT> {
+class MipsThunk final : public Thunk {
 public:
-  MipsThunk(const SymbolBody &Dest) : Thunk<ELFT>(Dest) {}
+  MipsThunk(Symbol &Dest) : Thunk(Dest) {}
 
   uint32_t size() const override { return 16; }
-  void writeTo(uint8_t *Buf, ThunkSection<ELFT> &IS) const override;
-  void addSymbols(ThunkSection<ELFT> &IS) override;
+  void writeTo(uint8_t *Buf, ThunkSection &IS) const override;
+  void addSymbols(ThunkSection &IS) override;
+  InputSection *getTargetInputSection() const override;
+};
+
+// microMIPS R2-R5 LA25 thunk
+class MicroMipsThunk final : public Thunk {
+public:
+  MicroMipsThunk(Symbol &Dest) : Thunk(Dest) {}
+
+  uint32_t size() const override { return 14; }
+  void writeTo(uint8_t *Buf, ThunkSection &IS) const override;
+  void addSymbols(ThunkSection &IS) override;
+  InputSection *getTargetInputSection() const override;
+};
+
+// microMIPS R6 LA25 thunk
+class MicroMipsR6Thunk final : public Thunk {
+public:
+  MicroMipsR6Thunk(Symbol &Dest) : Thunk(Dest) {}
+
+  uint32_t size() const override { return 12; }
+  void writeTo(uint8_t *Buf, ThunkSection &IS) const override;
+  void addSymbols(ThunkSection &IS) override;
   InputSection *getTargetInputSection() const override;
 };
 
 } // end anonymous namespace
 
 // ARM Target Thunks
-template <class ELFT> static uint64_t getARMThunkDestVA(const SymbolBody &S) {
-  uint64_t V = S.isInPlt() ? S.getPltVA<ELFT>() : S.getVA<ELFT>();
+static uint64_t getARMThunkDestVA(const Symbol &S) {
+  uint64_t V = S.isInPlt() ? S.getPltVA() : S.getVA();
   return SignExtend64<32>(V);
 }
 
-template <class ELFT>
-void ARMToThumbV7ABSLongThunk<ELFT>::writeTo(uint8_t *Buf,
-                                             ThunkSection<ELFT> &IS) const {
+void ARMV7ABSLongThunk::writeTo(uint8_t *Buf, ThunkSection &IS) const {
   const uint8_t Data[] = {
       0x00, 0xc0, 0x00, 0xe3, // movw         ip,:lower16:S
       0x00, 0xc0, 0x40, 0xe3, // movt         ip,:upper16:S
       0x1c, 0xff, 0x2f, 0xe1, // bx   ip
   };
-  uint64_t S = getARMThunkDestVA<ELFT>(this->Destination);
+  uint64_t S = getARMThunkDestVA(Destination);
   memcpy(Buf, Data, sizeof(Data));
   Target->relocateOne(Buf, R_ARM_MOVW_ABS_NC, S);
   Target->relocateOne(Buf + 4, R_ARM_MOVT_ABS, S);
 }
 
-template <class ELFT>
-void ARMToThumbV7ABSLongThunk<ELFT>::addSymbols(ThunkSection<ELFT> &IS) {
-  this->ThunkSym = addSyntheticLocal<ELFT>(
-      Saver.save("__ARMToThumbv7ABSLongThunk_" + this->Destination.getName()),
-      STT_FUNC, this->Offset, size(), &IS);
-  addSyntheticLocal<ELFT>("$a", STT_NOTYPE, this->Offset, 0, &IS);
+void ARMV7ABSLongThunk::addSymbols(ThunkSection &IS) {
+  ThunkSym = addSyntheticLocal(
+      Saver.save("__ARMv7ABSLongThunk_" + Destination.getName()), STT_FUNC,
+      Offset, size(), &IS);
+  addSyntheticLocal("$a", STT_NOTYPE, Offset, 0, &IS);
 }
 
-template <class ELFT>
-void ThumbToARMV7ABSLongThunk<ELFT>::writeTo(uint8_t *Buf,
-                                             ThunkSection<ELFT> &IS) const {
+bool ARMV7ABSLongThunk::isCompatibleWith(RelType Type) const {
+  // Thumb branch relocations can't use BLX
+  return Type != R_ARM_THM_JUMP19 && Type != R_ARM_THM_JUMP24;
+}
+
+void ThumbV7ABSLongThunk::writeTo(uint8_t *Buf, ThunkSection &IS) const {
   const uint8_t Data[] = {
       0x40, 0xf2, 0x00, 0x0c, // movw         ip, :lower16:S
       0xc0, 0xf2, 0x00, 0x0c, // movt         ip, :upper16:S
       0x60, 0x47,             // bx   ip
   };
-  uint64_t S = getARMThunkDestVA<ELFT>(this->Destination);
+  uint64_t S = getARMThunkDestVA(Destination);
   memcpy(Buf, Data, sizeof(Data));
   Target->relocateOne(Buf, R_ARM_THM_MOVW_ABS_NC, S);
   Target->relocateOne(Buf + 4, R_ARM_THM_MOVT_ABS, S);
 }
 
-template <class ELFT>
-void ThumbToARMV7ABSLongThunk<ELFT>::addSymbols(ThunkSection<ELFT> &IS) {
-  this->ThunkSym = addSyntheticLocal<ELFT>(
-      Saver.save("__ThumbToARMv7ABSLongThunk_" + this->Destination.getName()),
-      STT_FUNC, this->Offset, size(), &IS);
-  addSyntheticLocal<ELFT>("$t", STT_NOTYPE, this->Offset, 0, &IS);
+void ThumbV7ABSLongThunk::addSymbols(ThunkSection &IS) {
+  ThunkSym = addSyntheticLocal(
+      Saver.save("__Thumbv7ABSLongThunk_" + Destination.getName()), STT_FUNC,
+      Offset | 0x1, size(), &IS);
+  addSyntheticLocal("$t", STT_NOTYPE, Offset, 0, &IS);
 }
 
-template <class ELFT>
-void ARMToThumbV7PILongThunk<ELFT>::writeTo(uint8_t *Buf,
-                                            ThunkSection<ELFT> &IS) const {
+bool ThumbV7ABSLongThunk::isCompatibleWith(RelType Type) const {
+  // ARM branch relocations can't use BLX
+  return Type != R_ARM_JUMP24 && Type != R_ARM_PC24 && Type != R_ARM_PLT32;
+}
+
+void ARMV7PILongThunk::writeTo(uint8_t *Buf, ThunkSection &IS) const {
   const uint8_t Data[] = {
-      0xf0, 0xcf, 0x0f, 0xe3, // P:  movw ip,:lower16:S - (P + (L1-P) +8)
-      0x00, 0xc0, 0x40, 0xe3, //     movt ip,:upper16:S - (P + (L1-P+4) +8)
+      0xf0, 0xcf, 0x0f, 0xe3, // P:  movw ip,:lower16:S - (P + (L1-P) + 8)
+      0x00, 0xc0, 0x40, 0xe3, //     movt ip,:upper16:S - (P + (L1-P) + 8)
       0x0f, 0xc0, 0x8c, 0xe0, // L1: add ip, ip, pc
       0x1c, 0xff, 0x2f, 0xe1, //     bx r12
   };
-  uint64_t S = getARMThunkDestVA<ELFT>(this->Destination);
-  uint64_t P = this->ThunkSym->template getVA<ELFT>();
+  uint64_t S = getARMThunkDestVA(Destination);
+  uint64_t P = ThunkSym->getVA();
+  uint64_t Offset = S - P - 16;
   memcpy(Buf, Data, sizeof(Data));
-  Target->relocateOne(Buf, R_ARM_MOVW_PREL_NC, S - P - 16);
-  Target->relocateOne(Buf + 4, R_ARM_MOVT_PREL, S - P - 12);
+  Target->relocateOne(Buf, R_ARM_MOVW_PREL_NC, Offset);
+  Target->relocateOne(Buf + 4, R_ARM_MOVT_PREL, Offset);
 }
 
-template <class ELFT>
-void ARMToThumbV7PILongThunk<ELFT>::addSymbols(ThunkSection<ELFT> &IS) {
-  this->ThunkSym = addSyntheticLocal<ELFT>(
-      Saver.save("__ARMToThumbV7PILongThunk_" + this->Destination.getName()),
-      STT_FUNC, this->Offset, size(), &IS);
-  addSyntheticLocal<ELFT>("$a", STT_NOTYPE, this->Offset, 0, &IS);
+void ARMV7PILongThunk::addSymbols(ThunkSection &IS) {
+  ThunkSym = addSyntheticLocal(
+      Saver.save("__ARMV7PILongThunk_" + Destination.getName()), STT_FUNC,
+      Offset, size(), &IS);
+  addSyntheticLocal("$a", STT_NOTYPE, Offset, 0, &IS);
 }
 
-template <class ELFT>
-void ThumbToARMV7PILongThunk<ELFT>::writeTo(uint8_t *Buf,
-                                            ThunkSection<ELFT> &IS) const {
+bool ARMV7PILongThunk::isCompatibleWith(RelType Type) const {
+  // Thumb branch relocations can't use BLX
+  return Type != R_ARM_THM_JUMP19 && Type != R_ARM_THM_JUMP24;
+}
+
+void ThumbV7PILongThunk::writeTo(uint8_t *Buf, ThunkSection &IS) const {
   const uint8_t Data[] = {
       0x4f, 0xf6, 0xf4, 0x7c, // P:  movw ip,:lower16:S - (P + (L1-P) + 4)
-      0xc0, 0xf2, 0x00, 0x0c, //     movt ip,:upper16:S - (P + (L1-P+4) + 4)
+      0xc0, 0xf2, 0x00, 0x0c, //     movt ip,:upper16:S - (P + (L1-P) + 4)
       0xfc, 0x44,             // L1: add  r12, pc
       0x60, 0x47,             //     bx   r12
   };
-  uint64_t S = getARMThunkDestVA<ELFT>(this->Destination);
-  uint64_t P = this->ThunkSym->template getVA<ELFT>();
+  uint64_t S = getARMThunkDestVA(Destination);
+  uint64_t P = ThunkSym->getVA() & ~0x1;
+  uint64_t Offset = S - P - 12;
   memcpy(Buf, Data, sizeof(Data));
-  Target->relocateOne(Buf, R_ARM_THM_MOVW_PREL_NC, S - P - 12);
-  Target->relocateOne(Buf + 4, R_ARM_THM_MOVT_PREL, S - P - 8);
+  Target->relocateOne(Buf, R_ARM_THM_MOVW_PREL_NC, Offset);
+  Target->relocateOne(Buf + 4, R_ARM_THM_MOVT_PREL, Offset);
 }
 
-template <class ELFT>
-void ThumbToARMV7PILongThunk<ELFT>::addSymbols(ThunkSection<ELFT> &IS) {
-  this->ThunkSym = addSyntheticLocal<ELFT>(
-      Saver.save("__ThumbToARMV7PILongThunk_" + this->Destination.getName()),
-      STT_FUNC, this->Offset, size(), &IS);
-  addSyntheticLocal<ELFT>("$t", STT_NOTYPE, this->Offset, 0, &IS);
+void ThumbV7PILongThunk::addSymbols(ThunkSection &IS) {
+  ThunkSym = addSyntheticLocal(
+      Saver.save("__ThumbV7PILongThunk_" + Destination.getName()), STT_FUNC,
+      Offset | 0x1, size(), &IS);
+  addSyntheticLocal("$t", STT_NOTYPE, Offset, 0, &IS);
+}
+
+bool ThumbV7PILongThunk::isCompatibleWith(RelType Type) const {
+  // ARM branch relocations can't use BLX
+  return Type != R_ARM_JUMP24 && Type != R_ARM_PC24 && Type != R_ARM_PLT32;
 }
 
 // Write MIPS LA25 thunk code to call PIC function from the non-PIC one.
-template <class ELFT>
-void MipsThunk<ELFT>::writeTo(uint8_t *Buf, ThunkSection<ELFT> &) const {
-  const endianness E = ELFT::TargetEndianness;
-
-  uint64_t S = this->Destination.template getVA<ELFT>();
-  write32<E>(Buf, 0x3c190000);                // lui   $25, %hi(func)
-  write32<E>(Buf + 4, 0x08000000 | (S >> 2)); // j     func
-  write32<E>(Buf + 8, 0x27390000);            // addiu $25, $25, %lo(func)
-  write32<E>(Buf + 12, 0x00000000);           // nop
+void MipsThunk::writeTo(uint8_t *Buf, ThunkSection &) const {
+  uint64_t S = Destination.getVA();
+  write32(Buf, 0x3c190000, Config->Endianness); // lui   $25, %hi(func)
+  write32(Buf + 4, 0x08000000 | (S >> 2), Config->Endianness); // j     func
+  write32(Buf + 8, 0x27390000, Config->Endianness); // addiu $25, $25, %lo(func)
+  write32(Buf + 12, 0x00000000, Config->Endianness); // nop
   Target->relocateOne(Buf, R_MIPS_HI16, S);
   Target->relocateOne(Buf + 8, R_MIPS_LO16, S);
 }
 
-template <class ELFT> void MipsThunk<ELFT>::addSymbols(ThunkSection<ELFT> &IS) {
-  this->ThunkSym = addSyntheticLocal<ELFT>(
-      Saver.save("__LA25Thunk_" + this->Destination.getName()), STT_FUNC,
-      this->Offset, size(), &IS);
+void MipsThunk::addSymbols(ThunkSection &IS) {
+  ThunkSym =
+      addSyntheticLocal(Saver.save("__LA25Thunk_" + Destination.getName()),
+                        STT_FUNC, Offset, size(), &IS);
 }
 
-template <class ELFT>
-InputSection *MipsThunk<ELFT>::getTargetInputSection() const {
-  auto *DR = dyn_cast<DefinedRegular>(&this->Destination);
+InputSection *MipsThunk::getTargetInputSection() const {
+  auto *DR = dyn_cast<Defined>(&Destination);
   return dyn_cast<InputSection>(DR->Section);
 }
 
-template <class ELFT>
-Thunk<ELFT>::Thunk(const SymbolBody &D) : Destination(D), Offset(0) {}
+// Write microMIPS R2-R5 LA25 thunk code
+// to call PIC function from the non-PIC one.
+void MicroMipsThunk::writeTo(uint8_t *Buf, ThunkSection &) const {
+  uint64_t S = Destination.getVA() | 1;
+  write16(Buf, 0x41b9, Config->Endianness);       // lui   $25, %hi(func)
+  write16(Buf + 4, 0xd400, Config->Endianness);   // j     func
+  write16(Buf + 8, 0x3339, Config->Endianness);   // addiu $25, $25, %lo(func)
+  write16(Buf + 12, 0x0c00, Config->Endianness);  // nop
+  Target->relocateOne(Buf, R_MICROMIPS_HI16, S);
+  Target->relocateOne(Buf + 4, R_MICROMIPS_26_S1, S);
+  Target->relocateOne(Buf + 8, R_MICROMIPS_LO16, S);
+}
 
-template <class ELFT> Thunk<ELFT>::~Thunk() = default;
+void MicroMipsThunk::addSymbols(ThunkSection &IS) {
+  ThunkSym =
+      addSyntheticLocal(Saver.save("__microLA25Thunk_" + Destination.getName()),
+                        STT_FUNC, Offset, size(), &IS);
+  ThunkSym->StOther |= STO_MIPS_MICROMIPS;
+}
+
+InputSection *MicroMipsThunk::getTargetInputSection() const {
+  auto *DR = dyn_cast<Defined>(&Destination);
+  return dyn_cast<InputSection>(DR->Section);
+}
+
+// Write microMIPS R6 LA25 thunk code
+// to call PIC function from the non-PIC one.
+void MicroMipsR6Thunk::writeTo(uint8_t *Buf, ThunkSection &) const {
+  uint64_t S = Destination.getVA() | 1;
+  uint64_t P = ThunkSym->getVA();
+  write16(Buf, 0x1320, Config->Endianness);       // lui   $25, %hi(func)
+  write16(Buf + 4, 0x3339, Config->Endianness);   // addiu $25, $25, %lo(func)
+  write16(Buf + 8, 0x9400, Config->Endianness);   // bc    func
+  Target->relocateOne(Buf, R_MICROMIPS_HI16, S);
+  Target->relocateOne(Buf + 4, R_MICROMIPS_LO16, S);
+  Target->relocateOne(Buf + 8, R_MICROMIPS_PC26_S1, S - P - 12);
+}
+
+void MicroMipsR6Thunk::addSymbols(ThunkSection &IS) {
+  ThunkSym =
+      addSyntheticLocal(Saver.save("__microLA25Thunk_" + Destination.getName()),
+                        STT_FUNC, Offset, size(), &IS);
+  ThunkSym->StOther |= STO_MIPS_MICROMIPS;
+}
+
+InputSection *MicroMipsR6Thunk::getTargetInputSection() const {
+  auto *DR = dyn_cast<Defined>(&Destination);
+  return dyn_cast<InputSection>(DR->Section);
+}
+
+Thunk::Thunk(Symbol &D) : Destination(D), Offset(0) {}
+
+Thunk::~Thunk() = default;
 
 // Creates a thunk for Thumb-ARM interworking.
-template <class ELFT>
-static Thunk<ELFT> *addThunkArm(uint32_t Reloc, SymbolBody &S) {
+static Thunk *addThunkArm(RelType Reloc, Symbol &S) {
   // ARM relocations need ARM to Thumb interworking Thunks.
   // Thumb relocations need Thumb to ARM relocations.
   // Use position independent Thunks if we require position independent code.
@@ -244,40 +318,36 @@ static Thunk<ELFT> *addThunkArm(uint32_t Reloc, SymbolBody &S) {
   case R_ARM_PC24:
   case R_ARM_PLT32:
   case R_ARM_JUMP24:
-    if (Config->pic())
-      return make<ARMToThumbV7PILongThunk<ELFT>>(S);
-    return make<ARMToThumbV7ABSLongThunk<ELFT>>(S);
+  case R_ARM_CALL:
+    if (Config->Pic)
+      return make<ARMV7PILongThunk>(S);
+    return make<ARMV7ABSLongThunk>(S);
   case R_ARM_THM_JUMP19:
   case R_ARM_THM_JUMP24:
-    if (Config->pic())
-      return make<ThumbToARMV7PILongThunk<ELFT>>(S);
-    return make<ThumbToARMV7ABSLongThunk<ELFT>>(S);
+  case R_ARM_THM_CALL:
+    if (Config->Pic)
+      return make<ThumbV7PILongThunk>(S);
+    return make<ThumbV7ABSLongThunk>(S);
   }
   fatal("unrecognized relocation type");
 }
 
-template <class ELFT> static Thunk<ELFT> *addThunkMips(SymbolBody &S) {
-  return make<MipsThunk<ELFT>>(S);
+static Thunk *addThunkMips(RelType Type, Symbol &S) {
+  if ((S.StOther & STO_MIPS_MICROMIPS) && isMipsR6())
+    return make<MicroMipsR6Thunk>(S);
+  if (S.StOther & STO_MIPS_MICROMIPS)
+    return make<MicroMipsThunk>(S);
+  return make<MipsThunk>(S);
 }
 
-template <class ELFT> Thunk<ELFT> *addThunk(uint32_t RelocType, SymbolBody &S) {
+Thunk *addThunk(RelType Type, Symbol &S) {
   if (Config->EMachine == EM_ARM)
-    return addThunkArm<ELFT>(RelocType, S);
+    return addThunkArm(Type, S);
   else if (Config->EMachine == EM_MIPS)
-    return addThunkMips<ELFT>(S);
+    return addThunkMips(Type, S);
   llvm_unreachable("add Thunk only supported for ARM and Mips");
   return nullptr;
 }
-
-template Thunk<ELF32LE> *addThunk<ELF32LE>(uint32_t, SymbolBody &);
-template Thunk<ELF32BE> *addThunk<ELF32BE>(uint32_t, SymbolBody &);
-template Thunk<ELF64LE> *addThunk<ELF64LE>(uint32_t, SymbolBody &);
-template Thunk<ELF64BE> *addThunk<ELF64BE>(uint32_t, SymbolBody &);
-
-template class Thunk<ELF32LE>;
-template class Thunk<ELF32BE>;
-template class Thunk<ELF64LE>;
-template class Thunk<ELF64BE>;
 
 } // end namespace elf
 } // end namespace lld

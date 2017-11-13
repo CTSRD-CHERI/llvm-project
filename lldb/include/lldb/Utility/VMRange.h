@@ -10,8 +10,15 @@
 #ifndef liblldb_VMRange_h_
 #define liblldb_VMRange_h_
 
-#include "lldb/lldb-private.h"
+#include "lldb/lldb-types.h" // for addr_t
+
+#include <stddef.h> // for size_t
+#include <stdint.h> // for uint32_t
 #include <vector>
+
+namespace lldb_private {
+class Stream;
+}
 
 namespace lldb_private {
 
@@ -103,11 +110,6 @@ public:
 
   static bool ContainsRange(const VMRange::collection &coll,
                             const VMRange &range);
-
-  // Returns a valid index into coll when a match is found, else UINT32_MAX
-  // is returned
-  static size_t FindRangeIndexThatContainsValue(const VMRange::collection &coll,
-                                                lldb::addr_t value);
 
 protected:
   lldb::addr_t m_base_addr;

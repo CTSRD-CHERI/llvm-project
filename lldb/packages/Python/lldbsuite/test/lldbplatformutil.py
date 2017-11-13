@@ -8,6 +8,7 @@ import itertools
 import re
 import subprocess
 import sys
+import os
 
 # Third-party modules
 import six
@@ -24,9 +25,9 @@ def check_first_register_readable(test_case):
 
     if arch in ['x86_64', 'i386']:
         test_case.expect("register read eax", substrs=['eax = 0x'])
-    elif arch in ['arm']:
+    elif arch in ['arm', 'armv7', 'armv7k']:
         test_case.expect("register read r0", substrs=['r0 = 0x'])
-    elif arch in ['aarch64']:
+    elif arch in ['aarch64', 'arm64']:
         test_case.expect("register read x0", substrs=['x0 = 0x'])
     elif re.match("mips", arch):
         test_case.expect("register read zero", substrs=['zero = 0x'])
@@ -52,12 +53,12 @@ def _run_adb_command(cmd, device_id):
     return p.returncode, stdout, stderr
 
 
-def _target_is_android():
-    if not hasattr(_target_is_android, 'result'):
+def target_is_android():
+    if not hasattr(target_is_android, 'result'):
         triple = lldb.DBG.GetSelectedPlatform().GetTriple()
         match = re.match(".*-.*-.*-android", triple)
-        _target_is_android.result = match is not None
-    return _target_is_android.result
+        target_is_android.result = match is not None
+    return target_is_android.result
 
 
 def android_device_api():
@@ -84,7 +85,7 @@ def android_device_api():
 
 
 def match_android_device(device_arch, valid_archs=None, valid_api_levels=None):
-    if not _target_is_android():
+    if not target_is_android():
         return False
     if valid_archs is not None and device_arch not in valid_archs:
         return False
@@ -95,12 +96,11 @@ def match_android_device(device_arch, valid_archs=None, valid_api_levels=None):
 
 
 def finalize_build_dictionary(dictionary):
-    if _target_is_android():
+    if target_is_android():
         if dictionary is None:
             dictionary = {}
         dictionary["OS"] = "Android"
-        if android_device_api() >= 16:
-            dictionary["PIE"] = 1
+        dictionary["PIE"] = 1
     return dictionary
 
 
@@ -122,7 +122,7 @@ def getHostPlatform():
 
 
 def getDarwinOSTriples():
-    return ['darwin', 'macosx', 'ios']
+    return ['darwin', 'macosx', 'ios', 'watchos', 'tvos', 'bridgeos']
 
 
 def getPlatform():
@@ -138,6 +138,19 @@ def getPlatform():
 def platformIsDarwin():
     """Returns true if the OS triple for the selected platform is any valid apple OS"""
     return getPlatform() in getDarwinOSTriples()
+
+
+def findMainThreadCheckerDylib():
+    if not platformIsDarwin():
+        return ""
+
+    with os.popen('xcode-select -p') as output:
+        xcode_developer_path = output.read().strip()
+        mtc_dylib_path = '%s/usr/lib/libMainThreadChecker.dylib' % xcode_developer_path
+        if os.path.isfile(mtc_dylib_path):
+            return mtc_dylib_path
+
+    return ""
 
 
 class _PlatformContext(object):

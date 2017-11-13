@@ -146,6 +146,11 @@ thread safety annotations.
   build of libc++ which does not export any symbols, which can be useful when
   building statically for inclusion into another library.
 
+**_LIBCPP_DISABLE_EXTERN_TEMPLATE**:
+  This macro is used to disable extern template declarations in the libc++
+  headers. The intended use case is for clients who wish to use the libc++
+  headers without taking a dependency on the libc++ library itself.
+
 **_LIBCPP_ENABLE_TUPLE_IMPLICIT_REDUCED_ARITY_EXTENSION**:
   This macro is used to re-enable an extension in `std::tuple` which allowed
   it to be implicitly constructed from fewer initializers than contained
@@ -179,6 +184,26 @@ thread safety annotations.
 
     * Giving `set`, `map`, `multiset`, `multimap` a comparator which is not
       const callable.
+
+**_LIBCPP_NO_VCRUNTIME**:
+  Microsoft's C and C++ headers are fairly entangled, and some of their C++
+  headers are fairly hard to avoid. In particular, `vcruntime_new.h` gets pulled
+  in from a lot of other headers and provides definitions which clash with
+  libc++ headers, such as `nothrow_t` (note that `nothrow_t` is a struct, so
+  there's no way for libc++ to provide a compatible definition, since you can't
+  have multiple definitions).
+
+  By default, libc++ solves this problem by deferring to Microsoft's vcruntime
+  headers where needed. However, it may be undesirable to depend on vcruntime
+  headers, since they may not always be available in cross-compilation setups,
+  or they may clash with other headers. The `_LIBCPP_NO_VCRUNTIME` macro
+  prevents libc++ from depending on vcruntime headers. Consequently, it also
+  prevents libc++ headers from being interoperable with vcruntime headers (from
+  the aforementioned clashes), so users of this macro are promising to not
+  attempt to combine libc++ headers with the problematic vcruntime headers. This
+  macro also currently prevents certain `operator new`/`operator delete`
+  replacement scenarios from working, e.g. replacing `operator new` and
+  expecting a non-replaced `operator new[]` to call the replaced `operator new`.
 
 C++17 Specific Configuration Macros
 -----------------------------------

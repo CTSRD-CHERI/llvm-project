@@ -34,8 +34,7 @@ endmacro()
 
 pythonize_bool(LIBOMP_USE_HWLOC)
 pythonize_bool(LIBOMP_OMPT_SUPPORT)
-pythonize_bool(LIBOMP_OMPT_BLAME)
-pythonize_bool(LIBOMP_OMPT_TRACE)
+pythonize_bool(LIBOMP_OMPT_OPTIONAL)
 pythonize_bool(LIBOMP_HAVE_LIBM)
 pythonize_bool(LIBOMP_HAVE_LIBATOMIC)
 
@@ -50,6 +49,8 @@ if(${LIBOMP_STANDALONE_BUILD})
     set(cmake_3_2_USES_TERMINAL USES_TERMINAL)
   endif()
   set(LIBOMP_TEST_COMPILER ${CMAKE_C_COMPILER} CACHE STRING
+    "Compiler to use for testing OpenMP library")
+  set(LIBOMP_TEST_CXX_COMPILER ${CMAKE_CXX_COMPILER} CACHE STRING
     "Compiler to use for testing OpenMP library")
   set(LIBOMP_TEST_OPENMP_FLAG -fopenmp CACHE STRING
     "OpenMP compiler flag to use for testing OpenMP library")
@@ -90,8 +91,10 @@ else()
   # LLVM source tree build, test just-built clang
   if(NOT MSVC)
     set(LIBOMP_TEST_COMPILER ${LLVM_RUNTIME_OUTPUT_INTDIR}/clang)
+    set(LIBOMP_TEST_CXX_COMPILER ${LLVM_RUNTIME_OUTPUT_INTDIR}/clang++)
   else()
     set(LIBOMP_TEST_COMPILER ${LLVM_RUNTIME_OUTPUT_INTDIR}/clang.exe)
+    set(LIBOMP_TEST_CXX_COMPILER ${LLVM_RUNTIME_OUTPUT_INTDIR}/clang++.exe)
   endif()
   set(LIBOMP_TEST_OPENMP_FLAG -fopenmp=libomp)
   set(FILECHECK_EXECUTABLE ${LLVM_RUNTIME_OUTPUT_INTDIR}/FileCheck)

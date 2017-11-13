@@ -34,12 +34,12 @@
 #include "llvm/CodeGen/ScheduleDAGInstrs.h"
 #include "llvm/CodeGen/ScheduleHazardRecognizer.h"
 #include "llvm/CodeGen/SchedulerRegistry.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetInstrInfo.h"
 #include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetRegisterInfo.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
@@ -200,7 +200,7 @@ namespace {
 
 char &llvm::PostRASchedulerID = PostRAScheduler::ID;
 
-INITIALIZE_PASS(PostRAScheduler, "post-RA-sched",
+INITIALIZE_PASS(PostRAScheduler, DEBUG_TYPE,
                 "Post RA top-down list latency scheduler", false, false)
 
 SchedulePostRATDList::SchedulePostRATDList(
@@ -367,7 +367,7 @@ bool PostRAScheduler::runOnMachineFunction(MachineFunction &Fn) {
     Scheduler.finishBlock();
 
     // Update register kills
-    Scheduler.fixupKills(&MBB);
+    Scheduler.fixupKills(MBB);
   }
 
   return true;

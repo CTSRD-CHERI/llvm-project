@@ -11,7 +11,6 @@ class TestCppNsImport(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @expectedFailureAll(oslist=['freebsd'], bugnumber="llvm.org/pr25925")
     def test_with_run_command(self):
         """Tests imported namespaces in C++."""
         self.build()
@@ -111,8 +110,8 @@ class TestCppNsImport(TestBase):
 
         test_result = frame.EvaluateExpression("imported")
         self.assertTrue(
-            test_result.IsValid() and test_result.GetError().Fail(),
-            "imported is ambiguous")
+            test_result.IsValid() and test_result.GetValueAsSigned() == 99,
+            "imported = 99")
 
         test_result = frame.EvaluateExpression("single")
         self.assertTrue(

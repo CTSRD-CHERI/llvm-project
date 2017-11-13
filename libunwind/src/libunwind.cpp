@@ -24,6 +24,8 @@
 #include <stdlib.h>
 
 
+#if !defined(__USING_SJLJ_EXCEPTIONS__)
+#include "AddressSpace.hpp"
 #include "UnwindCursor.hpp"
 
 using namespace libunwind;
@@ -53,7 +55,7 @@ _LIBUNWIND_EXPORT int unw_init_local(unw_cursor_t *cursor,
 # define REGISTER_KIND Registers_ppc
 #elif defined(__aarch64__)
 # define REGISTER_KIND Registers_arm64
-#elif _LIBUNWIND_ARM_EHABI
+#elif defined(__arm__)
 # define REGISTER_KIND Registers_arm
 #elif defined(__or1k__)
 # define REGISTER_KIND Registers_or1k
@@ -172,8 +174,8 @@ _LIBUNWIND_EXPORT int unw_get_reg(unw_cursor_t *cursor, unw_regnum_t regNum,
 /// Set value of specified register at cursor position in stack frame.
 _LIBUNWIND_EXPORT int unw_set_reg(unw_cursor_t *cursor, unw_regnum_t regNum,
                                   unw_word_t value) {
-  _LIBUNWIND_TRACE_API("unw_set_reg(cursor=%p, regNum=%d, value=0x%llX)",
-                       static_cast<void *>(cursor), regNum, (long long)value);
+  _LIBUNWIND_TRACE_API("unw_set_reg(cursor=%p, regNum=%d, value=0x%" PRIxPTR ")",
+                       static_cast<void *>(cursor), regNum, value);
   typedef LocalAddressSpace::pint_t pint_t;
   AbstractUnwindCursor *co = (AbstractUnwindCursor *)cursor;
   if (co->validReg(regNum)) {
@@ -206,7 +208,7 @@ _LIBUNWIND_EXPORT int unw_get_fpreg(unw_cursor_t *cursor, unw_regnum_t regNum,
 /// Set value of specified float register at cursor position in stack frame.
 _LIBUNWIND_EXPORT int unw_set_fpreg(unw_cursor_t *cursor, unw_regnum_t regNum,
                                     unw_fpreg_t value) {
-#if _LIBUNWIND_ARM_EHABI
+#if defined(_LIBUNWIND_ARM_EHABI)
   _LIBUNWIND_TRACE_API("unw_set_fpreg(cursor=%p, regNum=%d, value=%llX)",
                        static_cast<void *>(cursor), regNum, value);
 #else
@@ -305,7 +307,7 @@ _LIBUNWIND_EXPORT void unw_save_vfp_as_X(unw_cursor_t *cursor) {
 #endif
 
 
-#if _LIBUNWIND_SUPPORT_DWARF_UNWIND
+#if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
 /// SPI: walks cached DWARF entries
 _LIBUNWIND_EXPORT void unw_iterate_dwarf_unwind_cache(void (*func)(
     unw_word_t ip_start, unw_word_t ip_end, unw_word_t fde, unw_word_t mh)) {
@@ -339,7 +341,8 @@ void _unw_remove_dynamic_fde(unw_word_t fde) {
   // fde is own mh_group
   DwarfFDECache<LocalAddressSpace>::removeAllIn((LocalAddressSpace::pint_t)fde);
 }
-#endif // _LIBUNWIND_SUPPORT_DWARF_UNWIND
+#endif // defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
+#endif // !defined(__USING_SJLJ_EXCEPTIONS__)
 
 
 

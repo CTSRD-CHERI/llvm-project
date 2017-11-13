@@ -64,6 +64,7 @@ int main()
 #ifndef _LIBCPP_NO_RTTI
     assert(f.target<A>());
     assert(f.target<int(*)(int)>() == 0);
+    assert(f.target<int>() == nullptr);
 #endif
     }
     assert(A::count == 0);
@@ -73,6 +74,7 @@ int main()
 #ifndef _LIBCPP_NO_RTTI
     assert(f.target<int(*)(int)>());
     assert(f.target<A>() == 0);
+    assert(f.target<int>() == nullptr);
 #endif
     }
     assert(A::count == 0);
@@ -82,6 +84,7 @@ int main()
 #ifndef _LIBCPP_NO_RTTI
     assert(f.target<A>());
     assert(f.target<int(*)(int)>() == 0);
+    assert(f.target<int>() == nullptr);
 #endif
     }
     assert(A::count == 0);
@@ -91,6 +94,7 @@ int main()
 #ifndef _LIBCPP_NO_RTTI
     assert(f.target<int(*)(int)>());
     assert(f.target<A>() == 0);
+    assert(f.target<int>() == nullptr);
 #endif
     }
     assert(A::count == 0);

@@ -46,7 +46,7 @@ set_terminate(terminate_handler func) _NOEXCEPT
 terminate_handler
 get_terminate() _NOEXCEPT
 {
-  return __c11_atomic_load(&__unexpected_handler, __ATOMIC_SEQ_CST);
+  return __c11_atomic_load(&__terminate_handler, __ATOMIC_SEQ_CST);
 }
 
 #ifndef __EMSCRIPTEN__ // We provide this in JS

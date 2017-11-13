@@ -40,6 +40,8 @@
 #include "MIUtilDebug.h"
 #include "Platform.h" // for PATH_MAX
 
+#include <algorithm>
+
 //++
 //------------------------------------------------------------------------------------
 // Details: CMICmnLLDBDebuggerHandleEvents constructor.
@@ -258,6 +260,10 @@ bool CMICmnLLDBDebuggerHandleEvents::HandleEventSBBreakPoint(
     break;
   case lldb::eBreakpointEventTypeIgnoreChanged:
     pEventType = "eBreakpointEventTypeIgnoreChanged";
+    bOk = HandleEventSBBreakpointCmn(vEvent);
+    break;
+  case lldb::eBreakpointEventTypeAutoContinueChanged:
+    pEventType = "eBreakpointEventTypeAutoContinueChanged";
     bOk = HandleEventSBBreakpointCmn(vEvent);
     break;
   }

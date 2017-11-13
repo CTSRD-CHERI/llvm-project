@@ -13,11 +13,6 @@ class TestStepOverWatchpoint(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    def getCategories(self):
-        return ['basic_process']
-
-    # Watchpoints not supported
-    @expectedFailureAndroid(archs=['arm', 'aarch64'])
     @expectedFailureAll(
         oslist=["linux"],
         archs=[
@@ -29,6 +24,8 @@ class TestStepOverWatchpoint(TestBase):
         bugnumber="llvm.org/pr24446: WINDOWS XFAIL TRIAGE - Watchpoints not supported on Windows")
     # Read-write watchpoints not supported on SystemZ
     @expectedFailureAll(archs=['s390x'])
+    @expectedFailureAll(oslist=["ios", "watchos", "tvos", "bridgeos"], bugnumber="<rdar://problem/34027183>")  # watchpoint tests aren't working on arm64
+    @add_test_categories(["basic_process"])
     def test(self):
         """Test stepping over watchpoints."""
         self.build()
@@ -89,7 +86,7 @@ class TestStepOverWatchpoint(TestBase):
 
         # resolve_location=True, read=False, write=True
         write_watchpoint = write_value.Watch(True, False, True, error)
-        self.assertTrue(read_watchpoint, "Failed to set write watchpoint.")
+        self.assertTrue(write_watchpoint, "Failed to set write watchpoint.")
         self.assertTrue(error.Success(),
                         "Error while setting watchpoint: %s" %
                         error.GetCString())

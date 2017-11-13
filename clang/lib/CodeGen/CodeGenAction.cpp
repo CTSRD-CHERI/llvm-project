@@ -28,6 +28,7 @@
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/DiagnosticPrinter.h"
+#include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IRReader/IRReader.h"
@@ -38,11 +39,45 @@
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Support/YAMLTraits.h"
+#include "llvm/Transforms/IPO/Internalize.h"
+
 #include <memory>
 using namespace clang;
 using namespace llvm;
 
 namespace clang {
+  class BackendConsumer;
+  class ClangDiagnosticHandler final : public DiagnosticHandler {
+  public:
+    ClangDiagnosticHandler(const CodeGenOptions &CGOpts, BackendConsumer *BCon)
+        : CodeGenOpts(CGOpts), BackendCon(BCon) {}
+  
+    bool handleDiagnostics(const DiagnosticInfo &DI) override;
+
+    bool isAnalysisRemarkEnabled(StringRef PassName) const override {
+      return (CodeGenOpts.OptimizationRemarkAnalysisPattern &&
+              CodeGenOpts.OptimizationRemarkAnalysisPattern->match(PassName));
+    }
+    bool isMissedOptRemarkEnabled(StringRef PassName) const override {
+      return (CodeGenOpts.OptimizationRemarkMissedPattern &&
+              CodeGenOpts.OptimizationRemarkMissedPattern->match(PassName));
+    }
+    bool isPassedOptRemarkEnabled(StringRef PassName) const override {
+      return (CodeGenOpts.OptimizationRemarkPattern &&
+              CodeGenOpts.OptimizationRemarkPattern->match(PassName));
+    }
+
+    bool isAnyRemarkEnabled() const override {
+      return (CodeGenOpts.OptimizationRemarkAnalysisPattern ||
+              CodeGenOpts.OptimizationRemarkMissedPattern ||
+              CodeGenOpts.OptimizationRemarkPattern);
+    }
+
+  private:
+    const CodeGenOptions &CodeGenOpts;
+    BackendConsumer *BackendCon;
+  };
+
   class BackendConsumer : public ASTConsumer {
     using LinkModule = CodeGenAction::LinkModule;
 
@@ -168,8 +203,22 @@ namespace clang {
             Gen->CGM().AddDefaultFnAttrs(F);
 
         CurLinkModule = LM.Module.get();
-        if (Linker::linkModules(*getModule(), std::move(LM.Module),
-                                LM.LinkFlags))
+
+        bool Err;
+        if (LM.Internalize) {
+          Err = Linker::linkModules(
+              *getModule(), std::move(LM.Module), LM.LinkFlags,
+              [](llvm::Module &M, const llvm::StringSet<> &GVS) {
+                internalizeModule(M, [&GVS](const llvm::GlobalValue &GV) {
+                  return !GV.hasName() || (GVS.count(GV.getName()) == 0);
+                });
+              });
+        } else {
+          Err = Linker::linkModules(*getModule(), std::move(LM.Module),
+                                    LM.LinkFlags);
+        }
+
+        if (Err)
           return true;
       }
       return false; // success
@@ -207,18 +256,20 @@ namespace clang {
       void *OldContext = Ctx.getInlineAsmDiagnosticContext();
       Ctx.setInlineAsmDiagnosticHandler(InlineAsmDiagHandler, this);
 
-      LLVMContext::DiagnosticHandlerTy OldDiagnosticHandler =
+      std::unique_ptr<DiagnosticHandler> OldDiagnosticHandler =
           Ctx.getDiagnosticHandler();
-      void *OldDiagnosticContext = Ctx.getDiagnosticContext();
-      Ctx.setDiagnosticHandler(DiagnosticHandler, this);
-      Ctx.setDiagnosticHotnessRequested(CodeGenOpts.DiagnosticsWithHotness);
+      Ctx.setDiagnosticHandler(llvm::make_unique<ClangDiagnosticHandler>(
+        CodeGenOpts, this));
+      Ctx.setDiagnosticsHotnessRequested(CodeGenOpts.DiagnosticsWithHotness);
+      if (CodeGenOpts.DiagnosticsHotnessThreshold != 0)
+        Ctx.setDiagnosticsHotnessThreshold(
+            CodeGenOpts.DiagnosticsHotnessThreshold);
 
-      std::unique_ptr<llvm::tool_output_file> OptRecordFile;
+      std::unique_ptr<llvm::ToolOutputFile> OptRecordFile;
       if (!CodeGenOpts.OptRecordFile.empty()) {
         std::error_code EC;
-        OptRecordFile =
-          llvm::make_unique<llvm::tool_output_file>(CodeGenOpts.OptRecordFile,
-                                                    EC, sys::fs::F_None);
+        OptRecordFile = llvm::make_unique<llvm::ToolOutputFile>(
+            CodeGenOpts.OptRecordFile, EC, sys::fs::F_None);
         if (EC) {
           Diags.Report(diag::err_cannot_open_file) <<
             CodeGenOpts.OptRecordFile << EC.message();
@@ -229,7 +280,7 @@ namespace clang {
             llvm::make_unique<yaml::Output>(OptRecordFile->os()));
 
         if (CodeGenOpts.getProfileUse() != CodeGenOptions::ProfileNone)
-          Ctx.setDiagnosticHotnessRequested(true);
+          Ctx.setDiagnosticsHotnessRequested(true);
       }
 
       // Link each LinkModule into our module.
@@ -244,7 +295,7 @@ namespace clang {
 
       Ctx.setInlineAsmDiagnosticHandler(OldHandler, OldContext);
 
-      Ctx.setDiagnosticHandler(OldDiagnosticHandler, OldDiagnosticContext);
+      Ctx.setDiagnosticHandler(std::move(OldDiagnosticHandler));
 
       if (OptRecordFile)
         OptRecordFile->keep();
@@ -277,11 +328,6 @@ namespace clang {
                                      unsigned LocCookie) {
       SourceLocation Loc = SourceLocation::getFromRawEncoding(LocCookie);
       ((BackendConsumer*)Context)->InlineAsmDiagHandler2(SM, Loc);
-    }
-
-    static void DiagnosticHandler(const llvm::DiagnosticInfo &DI,
-                                  void *Context) {
-      ((BackendConsumer *)Context)->DiagnosticHandlerImpl(DI);
     }
 
     /// Get the best possible source location to represent a diagnostic that
@@ -319,8 +365,13 @@ namespace clang {
     void OptimizationFailureHandler(
         const llvm::DiagnosticInfoOptimizationFailure &D);
   };
-  
+
   void BackendConsumer::anchor() {}
+}
+
+bool ClangDiagnosticHandler::handleDiagnostics(const DiagnosticInfo &DI) {
+  BackendCon->DiagnosticHandlerImpl(DI);
+  return true;
 }
 
 /// ConvertBackendLocation - Convert a location in a temporary llvm::SourceMgr
@@ -382,13 +433,15 @@ void BackendConsumer::InlineAsmDiagHandler2(const llvm::SMDiagnostic &D,
   case llvm::SourceMgr::DK_Note:
     DiagID = diag::note_fe_inline_asm;
     break;
+  case llvm::SourceMgr::DK_Remark:
+    llvm_unreachable("remarks unexpected");
   }
   // If this problem has clang-level source location information, report the
   // issue in the source with a note showing the instantiated
   // code.
   if (LocCookie.isValid()) {
     Diags.Report(LocCookie, DiagID).AddString(Message);
-    
+
     if (D.getLoc().isValid()) {
       DiagnosticBuilder B = Diags.Report(Loc, diag::note_fe_inline_asm_here);
       // Convert the SMDiagnostic ranges into SourceRange and attach them
@@ -401,7 +454,7 @@ void BackendConsumer::InlineAsmDiagHandler2(const llvm::SMDiagnostic &D,
     }
     return;
   }
-  
+
   // Otherwise, report the backend issue as occurring in the generated .s file.
   // If Loc is invalid, we still need to report the issue, it just gets no
   // location info.
@@ -531,9 +584,9 @@ void BackendConsumer::UnsupportedDiagHandler(
 
   StringRef Filename;
   unsigned Line, Column;
-  bool BadDebugInfo;
-  FullSourceLoc Loc = getBestLocationFromDebugLoc(D, BadDebugInfo, Filename,
-      Line, Column);
+  bool BadDebugInfo = false;
+  FullSourceLoc Loc =
+      getBestLocationFromDebugLoc(D, BadDebugInfo, Filename, Line, Column);
 
   Diags.Report(Loc, diag::err_fe_backend_unsupported) << D.getMessage().str();
 
@@ -555,8 +608,8 @@ void BackendConsumer::EmitOptimizationMessage(
   StringRef Filename;
   unsigned Line, Column;
   bool BadDebugInfo = false;
-  FullSourceLoc Loc = getBestLocationFromDebugLoc(D, BadDebugInfo, Filename,
-      Line, Column);
+  FullSourceLoc Loc =
+      getBestLocationFromDebugLoc(D, BadDebugInfo, Filename, Line, Column);
 
   std::string Msg;
   raw_string_ostream MsgStream(Msg);
@@ -580,6 +633,10 @@ void BackendConsumer::EmitOptimizationMessage(
 
 void BackendConsumer::OptimizationRemarkHandler(
     const llvm::DiagnosticInfoOptimizationBase &D) {
+  // Without hotness information, don't show noisy remarks.
+  if (D.isVerbose() && !D.getHotness())
+    return;
+
   if (D.isPassed()) {
     // Optimization remarks are active only if the -Rpass flag has a regular
     // expression that matches the name of the pass name in \p D.
@@ -815,8 +872,8 @@ CodeGenAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
         LinkModules.clear();
         return nullptr;
       }
-      LinkModules.push_back(
-          {std::move(ModuleOrErr.get()), F.PropagateAttrs, F.LinkFlags});
+      LinkModules.push_back({std::move(ModuleOrErr.get()), F.PropagateAttrs,
+                             F.Internalize, F.LinkFlags});
     }
 
   CoverageSourceInfo *CoverageInfo = nullptr;
@@ -864,6 +921,8 @@ static void BitcodeInlineAsmDiagHandler(const llvm::SMDiagnostic &SM,
   case llvm::SourceMgr::DK_Note:
     DiagID = diag::note_fe_inline_asm;
     break;
+  case llvm::SourceMgr::DK_Remark:
+    llvm_unreachable("remarks unexpected");
   }
 
   Diags->Report(DiagID).AddString("cannot compile inline asm");
@@ -927,7 +986,7 @@ std::unique_ptr<llvm::Module> CodeGenAction::loadModule(MemoryBufferRef MBRef) {
 
 void CodeGenAction::ExecuteAction() {
   // If this is an IR file, we have to treat it specially.
-  if (getCurrentFileKind() == IK_LLVM_IR) {
+  if (getCurrentFileKind().getLanguage() == InputKind::LLVM_IR) {
     BackendAction BA = static_cast<BackendAction>(Act);
     CompilerInstance &CI = getCompilerInstance();
     std::unique_ptr<raw_pwrite_stream> OS =

@@ -13,13 +13,13 @@
 #include "lldb/Core/DumpDataExtractor.h"
 #include "lldb/Core/Mangled.h"
 #include "lldb/Core/Module.h"
-#include "lldb/Core/Timer.h"
 #include "lldb/Host/StringConvert.h"
 #include "lldb/Symbol/CompileUnit.h"
 #include "lldb/Symbol/LineTable.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Utility/Stream.h"
 #include "lldb/Utility/StreamString.h"
+#include "lldb/Utility/Timer.h"
 
 #include "DWARFDIECollection.h"
 #include "DWARFDebugAbbrev.h"
@@ -135,8 +135,9 @@ size_t DWARFCompileUnit::ExtractDIEsIfNeeded(bool cu_die_only) {
   if ((cu_die_only && initial_die_array_size > 0) || initial_die_array_size > 1)
     return 0; // Already parsed
 
+  static Timer::Category func_cat(LLVM_PRETTY_FUNCTION);
   Timer scoped_timer(
-      LLVM_PRETTY_FUNCTION,
+      func_cat,
       "%8.8x: DWARFCompileUnit::ExtractDIEsIfNeeded( cu_die_only = %i )",
       m_offset, cu_die_only);
 

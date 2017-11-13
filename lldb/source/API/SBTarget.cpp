@@ -42,7 +42,6 @@
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/Core/ValueObjectList.h"
 #include "lldb/Core/ValueObjectVariable.h"
-#include "lldb/Host/FileSpec.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Interpreter/Args.h"
 #include "lldb/Symbol/ClangASTContext.h"
@@ -59,6 +58,7 @@
 #include "lldb/Target/StackFrame.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/TargetList.h"
+#include "lldb/Utility/FileSpec.h"
 #include "lldb/Utility/Log.h"
 #include "lldb/Utility/RegularExpression.h"
 
@@ -74,7 +74,7 @@ using namespace lldb_private;
 
 namespace {
 
-Error AttachToProcess(ProcessAttachInfo &attach_info, Target &target) {
+Status AttachToProcess(ProcessAttachInfo &attach_info, Target &target) {
   std::lock_guard<std::recursive_mutex> guard(target.GetAPIMutex());
 
   auto process_sp = target.GetProcessSP();
@@ -85,8 +85,8 @@ Error AttachToProcess(ProcessAttachInfo &attach_info, Target &target) {
       // listener, so if a valid listener is supplied, we need to error out
       // to let the client know.
       if (attach_info.GetListener())
-        return Error("process is connected and already has a listener, pass "
-                     "empty listener");
+        return Status("process is connected and already has a listener, pass "
+                      "empty listener");
     }
   }
 
@@ -413,16 +413,6 @@ lldb::SBProcess SBTarget::Attach(SBAttachInfo &sb_attach_info, SBError &error) {
 
   return sb_process;
 }
-
-#if defined(__APPLE__)
-
-lldb::SBProcess SBTarget::AttachToProcessWithID(SBListener &listener,
-                                                ::pid_t pid,
-                                                lldb::SBError &error) {
-  return AttachToProcessWithID(listener, (lldb::pid_t)pid, error);
-}
-
-#endif // #if defined(__APPLE__)
 
 lldb::SBProcess SBTarget::AttachToProcessWithID(
     SBListener &listener,
@@ -1097,11 +1087,35 @@ bool SBTarget::FindBreakpointsByName(const char *name,
   return true;
 }
 
+void SBTarget::GetBreakpointNames(SBStringList &names)
+{
+  names.Clear();
+
+  TargetSP target_sp(GetSP());
+  if (target_sp) {
+    std::lock_guard<std::recursive_mutex> guard(target_sp->GetAPIMutex());
+
+    std::vector<std::string> name_vec;
+    target_sp->GetBreakpointNames(name_vec);
+    for (auto name : name_vec)
+      names.AppendString(name.c_str());
+  }
+}
+
+void SBTarget::DeleteBreakpointName(const char *name)
+{
+  TargetSP target_sp(GetSP());
+  if (target_sp) {
+    std::lock_guard<std::recursive_mutex> guard(target_sp->GetAPIMutex());
+    target_sp->DeleteBreakpointName(ConstString(name));
+  }
+}
+
 bool SBTarget::EnableAllBreakpoints() {
   TargetSP target_sp(GetSP());
   if (target_sp) {
     std::lock_guard<std::recursive_mutex> guard(target_sp->GetAPIMutex());
-    target_sp->EnableAllBreakpoints();
+    target_sp->EnableAllowedBreakpoints();
     return true;
   }
   return false;
@@ -1111,7 +1125,7 @@ bool SBTarget::DisableAllBreakpoints() {
   TargetSP target_sp(GetSP());
   if (target_sp) {
     std::lock_guard<std::recursive_mutex> guard(target_sp->GetAPIMutex());
-    target_sp->DisableAllBreakpoints();
+    target_sp->DisableAllowedBreakpoints();
     return true;
   }
   return false;
@@ -1121,7 +1135,7 @@ bool SBTarget::DeleteAllBreakpoints() {
   TargetSP target_sp(GetSP());
   if (target_sp) {
     std::lock_guard<std::recursive_mutex> guard(target_sp->GetAPIMutex());
-    target_sp->RemoveAllBreakpoints();
+    target_sp->RemoveAllowedBreakpoints();
     return true;
   }
   return false;
@@ -1279,7 +1293,7 @@ lldb::SBWatchpoint SBTarget::WatchAddress(lldb::addr_t addr, size_t size,
     }
 
     // Target::CreateWatchpoint() is thread safe.
-    Error cw_error;
+    Status cw_error;
     // This API doesn't take in a type, so we can't figure out what it is.
     CompilerType *type = NULL;
     watchpoint_sp =
@@ -1428,8 +1442,8 @@ lldb::SBModule SBTarget::AddModule(const char *path, const char *triple,
       module_spec.GetUUID().SetFromCString(uuid_cstr);
 
     if (triple)
-      module_spec.GetArchitecture().SetTriple(triple,
-                                              target_sp->GetPlatform().get());
+      module_spec.GetArchitecture() = Platform::GetAugmentedArchSpec(
+          target_sp->GetPlatform().get(), triple);
     else
       module_spec.GetArchitecture() = target_sp->GetArchitecture();
 
@@ -1863,7 +1877,7 @@ lldb::SBInstructionList SBTarget::ReadInstructions(lldb::SBAddress base_addr,
       DataBufferHeap data(
           target_sp->GetArchitecture().GetMaximumOpcodeByteSize() * count, 0);
       bool prefer_file_cache = false;
-      lldb_private::Error error;
+      lldb_private::Status error;
       lldb::addr_t load_addr = LLDB_INVALID_ADDRESS;
       const size_t bytes_read =
           target_sp->ReadMemory(*addr_ptr, prefer_file_cache, data.GetBytes(),
@@ -2170,7 +2184,7 @@ lldb::addr_t SBTarget::GetStackRedZoneSize() {
     if (process_sp)
       abi_sp = process_sp->GetABI();
     else
-      abi_sp = ABI::FindPlugin(target_sp->GetArchitecture());
+      abi_sp = ABI::FindPlugin(ProcessSP(), target_sp->GetArchitecture());
     if (abi_sp)
       return abi_sp->GetRedZoneSize();
   }

@@ -25,14 +25,28 @@
 
 #ifdef __GNUC__
 #define _GNUC_VER (__GNUC__ * 100 + __GNUC_MINOR__)
+// The _GNUC_VER_NEW macro better represents the new GCC versioning scheme
+// introduced in GCC 5.0.
+#define _GNUC_VER_NEW (_GNUC_VER * 10 + __GNUC_PATCHLEVEL__)
 #else
 #define _GNUC_VER 0
+#define _GNUC_VER_NEW 0
 #endif
 
-#define _LIBCPP_VERSION 5000
+#define _LIBCPP_VERSION 6000
 
 #ifndef _LIBCPP_ABI_VERSION
 #define _LIBCPP_ABI_VERSION 1
+#endif
+
+#if defined(__ELF__)
+#define _LIBCPP_OBJECT_FORMAT_ELF   1
+#elif defined(__MACH__)
+#define _LIBCPP_OBJECT_FORMAT_MACHO 1
+#elif defined(_WIN32)
+#define _LIBCPP_OBJECT_FORMAT_COFF  1
+#else
+#error Unknown object file format
 #endif
 
 #if defined(_LIBCPP_ABI_UNSTABLE) || _LIBCPP_ABI_VERSION >= 2
@@ -41,15 +55,14 @@
 #define _LIBCPP_ABI_ALTERNATE_STRING_LAYOUT
 // Fix deque iterator type in order to support incomplete types.
 #define _LIBCPP_ABI_INCOMPLETE_TYPES_IN_DEQUE
-// Fix undefined behavior in how std::list stores it's linked nodes.
+// Fix undefined behavior in how std::list stores its linked nodes.
 #define _LIBCPP_ABI_LIST_REMOVE_NODE_POINTER_UB
 // Fix undefined behavior in  how __tree stores its end and parent nodes.
 #define _LIBCPP_ABI_TREE_REMOVE_NODE_POINTER_UB
-// Fix undefined behavior in how __hash_table stores it's pointer types
+// Fix undefined behavior in how __hash_table stores its pointer types.
 #define _LIBCPP_ABI_FIX_UNORDERED_NODE_POINTER_UB
 #define _LIBCPP_ABI_FORWARD_LIST_REMOVE_NODE_POINTER_UB
 #define _LIBCPP_ABI_FIX_UNORDERED_CONTAINER_SIZE_TYPE
-#define _LIBCPP_ABI_VARIADIC_LOCK_GUARD
 // Don't use a nullptr_t simulation type in C++03 instead using C++11 nullptr
 // provided under the alternate keyword __nullptr, which changes the mangling
 // of nullptr_t. This option is ABI incompatible with GCC in C++03 mode.
@@ -59,10 +72,20 @@
 // `pointer_safety` and `get_pointer_safety()` will no longer be available
 // in C++03.
 #define _LIBCPP_ABI_POINTER_SAFETY_ENUM_TYPE
+// Define a key function for `bad_function_call` in the library, to centralize
+// its vtable and typeinfo to libc++ rather than having all other libraries
+// using that class define their own copies.
+#define _LIBCPP_ABI_BAD_FUNCTION_CALL_KEY_FUNCTION
+
+// Enable optimized version of __do_get_(un)signed which avoids redundant copies.
+#define _LIBCPP_ABI_OPTIMIZED_LOCALE_NUM_GET
 #elif _LIBCPP_ABI_VERSION == 1
-#if !defined(_WIN32)
+#if !defined(_LIBCPP_OBJECT_FORMAT_COFF)
 // Enable compiling copies of now inline methods into the dylib to support
-// applications compiled against older libraries.
+// applications compiled against older libraries. This is unnecessary with
+// COFF dllexport semantics, since dllexport forces a non-inline definition
+// of inline functions to be emitted anyway. Our own non-inline copy would
+// conflict with the dllexport-emitted copy, so we disable it.
 #define _LIBCPP_DEPRECATED_ABI_LEGACY_LIBRARY_DEFINITIONS_FOR_INLINE_FUNCTIONS
 #endif
 // Feature macros for disabling pre ABI v1 features. All of these options
@@ -109,6 +132,12 @@
 
 #define __has_keyword(__x) !(__is_identifier(__x))
 
+#ifdef __has_include
+#define __libcpp_has_include(__x) __has_include(__x)
+#else
+#define __libcpp_has_include(__x) 0
+#endif
+
 #if defined(__clang__)
 #define _LIBCPP_COMPILER_CLANG
 # ifndef __apple_build_version__
@@ -128,11 +157,21 @@
 
 // FIXME: ABI detection should be done via compiler builtin macros. This
 // is just a placeholder until Clang implements such macros. For now assume
-// that Windows compilers pretending to be MSVC++ target the microsoft ABI.
-#if defined(_WIN32) && defined(_MSC_VER)
+// that Windows compilers pretending to be MSVC++ target the Microsoft ABI,
+// and allow the user to explicitly specify the ABI to handle cases where this
+// heuristic falls short.
+#if defined(_LIBCPP_ABI_FORCE_ITANIUM) && defined(_LIBCPP_ABI_FORCE_MICROSOFT)
+# error "Only one of _LIBCPP_ABI_FORCE_ITANIUM and _LIBCPP_ABI_FORCE_MICROSOFT can be defined"
+#elif defined(_LIBCPP_ABI_FORCE_ITANIUM)
+# define _LIBCPP_ABI_ITANIUM
+#elif defined(_LIBCPP_ABI_FORCE_MICROSOFT)
 # define _LIBCPP_ABI_MICROSOFT
 #else
-# define _LIBCPP_ABI_ITANIUM
+# if defined(_WIN32) && defined(_MSC_VER)
+#  define _LIBCPP_ABI_MICROSOFT
+# else
+#  define _LIBCPP_ABI_ITANIUM
+# endif
 #endif
 
 // Need to detect which libc we're using if we're on Linux.
@@ -145,36 +184,30 @@
 
 #ifdef __LITTLE_ENDIAN__
 #if __LITTLE_ENDIAN__
-#define _LIBCPP_LITTLE_ENDIAN 1
-#define _LIBCPP_BIG_ENDIAN    0
+#define _LIBCPP_LITTLE_ENDIAN
 #endif  // __LITTLE_ENDIAN__
 #endif  // __LITTLE_ENDIAN__
 
 #ifdef __BIG_ENDIAN__
 #if __BIG_ENDIAN__
-#define _LIBCPP_LITTLE_ENDIAN 0
-#define _LIBCPP_BIG_ENDIAN    1
+#define _LIBCPP_BIG_ENDIAN
 #endif  // __BIG_ENDIAN__
 #endif  // __BIG_ENDIAN__
 
 #ifdef __BYTE_ORDER__
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-#define _LIBCPP_LITTLE_ENDIAN 1
-#define _LIBCPP_BIG_ENDIAN 0
+#define _LIBCPP_LITTLE_ENDIAN
 #elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-#define _LIBCPP_LITTLE_ENDIAN 0
-#define _LIBCPP_BIG_ENDIAN 1
+#define _LIBCPP_BIG_ENDIAN
 #endif // __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 #endif // __BYTE_ORDER__
 
 #ifdef __FreeBSD__
 # include <sys/endian.h>
 #  if _BYTE_ORDER == _LITTLE_ENDIAN
-#   define _LIBCPP_LITTLE_ENDIAN 1
-#   define _LIBCPP_BIG_ENDIAN    0
+#   define _LIBCPP_LITTLE_ENDIAN
 # else  // _BYTE_ORDER == _LITTLE_ENDIAN
-#   define _LIBCPP_LITTLE_ENDIAN 0
-#   define _LIBCPP_BIG_ENDIAN    1
+#   define _LIBCPP_BIG_ENDIAN
 # endif  // _BYTE_ORDER == _LITTLE_ENDIAN
 # ifndef __LONG_LONG_SUPPORTED
 #  define _LIBCPP_HAS_NO_LONG_LONG
@@ -184,22 +217,22 @@
 #ifdef __NetBSD__
 # include <sys/endian.h>
 #  if _BYTE_ORDER == _LITTLE_ENDIAN
-#   define _LIBCPP_LITTLE_ENDIAN 1
-#   define _LIBCPP_BIG_ENDIAN    0
+#   define _LIBCPP_LITTLE_ENDIAN
 # else  // _BYTE_ORDER == _LITTLE_ENDIAN
-#   define _LIBCPP_LITTLE_ENDIAN 0
-#   define _LIBCPP_BIG_ENDIAN    1
+#   define _LIBCPP_BIG_ENDIAN
 # endif  // _BYTE_ORDER == _LITTLE_ENDIAN
 # define _LIBCPP_HAS_QUICK_EXIT
 #endif  // __NetBSD__
 
 #if defined(_WIN32)
-#  define _LIBCPP_WIN32API      1
-#  define _LIBCPP_LITTLE_ENDIAN 1
-#  define _LIBCPP_BIG_ENDIAN    0
+#  define _LIBCPP_WIN32API
+#  define _LIBCPP_LITTLE_ENDIAN
 #  define _LIBCPP_SHORT_WCHAR   1
-// If mingw not explicitly detected, assume using MS C runtime only.
-#  ifndef __MINGW32__
+// Both MinGW and native MSVC provide a "MSVC"-like enviroment
+#  define _LIBCPP_MSVCRT_LIKE
+// If mingw not explicitly detected, assume using MS C runtime only if
+// a MS compatibility version is specified.
+#  if defined(_MSC_VER) && !defined(__MINGW32__)
 #    define _LIBCPP_MSVCRT // Using Microsoft's C Runtime library
 #  endif
 #  if (defined(_M_AMD64) || defined(__x86_64__)) || (defined(_M_ARM) || defined(__arm__))
@@ -208,16 +241,24 @@
 # if defined(_LIBCPP_MSVCRT)
 #   define _LIBCPP_HAS_QUICK_EXIT
 # endif
+
+// Some CRT APIs are unavailable to store apps
+#if defined(WINAPI_FAMILY)
+#include <winapifamily.h>
+#if !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP) &&                      \
+    (!defined(WINAPI_PARTITION_SYSTEM) ||                                      \
+     !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_SYSTEM))
+#define _LIBCPP_WINDOWS_STORE_APP
+#endif
+#endif
 #endif // defined(_WIN32)
 
 #ifdef __sun__
 # include <sys/isa_defs.h>
 # ifdef _LITTLE_ENDIAN
-#   define _LIBCPP_LITTLE_ENDIAN 1
-#   define _LIBCPP_BIG_ENDIAN    0
+#   define _LIBCPP_LITTLE_ENDIAN
 # else
-#   define _LIBCPP_LITTLE_ENDIAN 0
-#   define _LIBCPP_BIG_ENDIAN    1
+#   define _LIBCPP_BIG_ENDIAN
 # endif
 #endif // __sun__
 
@@ -238,20 +279,18 @@
 # define _LIBCPP_USING_DEV_RANDOM
 #endif
 
-#if !defined(_LIBCPP_LITTLE_ENDIAN) || !defined(_LIBCPP_BIG_ENDIAN)
+#if !defined(_LIBCPP_LITTLE_ENDIAN) && !defined(_LIBCPP_BIG_ENDIAN)
 # include <endian.h>
 # if __BYTE_ORDER == __LITTLE_ENDIAN
-#  define _LIBCPP_LITTLE_ENDIAN 1
-#  define _LIBCPP_BIG_ENDIAN    0
+#  define _LIBCPP_LITTLE_ENDIAN
 # elif __BYTE_ORDER == __BIG_ENDIAN
-#  define _LIBCPP_LITTLE_ENDIAN 0
-#  define _LIBCPP_BIG_ENDIAN    1
+#  define _LIBCPP_BIG_ENDIAN
 # else  // __BYTE_ORDER == __BIG_ENDIAN
 #  error unable to determine endian
 # endif
-#endif  // !defined(_LIBCPP_LITTLE_ENDIAN) || !defined(_LIBCPP_BIG_ENDIAN)
+#endif  // !defined(_LIBCPP_LITTLE_ENDIAN) && !defined(_LIBCPP_BIG_ENDIAN)
 
-#if __has_attribute(__no_sanitize__)
+#if __has_attribute(__no_sanitize__) && !defined(_LIBCPP_COMPILER_GCC)
 #define _LIBCPP_NO_CFI __attribute__((__no_sanitize__("cfi")))
 #else
 #define _LIBCPP_NO_CFI
@@ -262,7 +301,7 @@
 // _LIBCPP_ALTERNATE_STRING_LAYOUT is an old name for
 // _LIBCPP_ABI_ALTERNATE_STRING_LAYOUT left here for backward compatibility.
 #if (defined(__APPLE__) && !defined(__i386__) && !defined(__x86_64__) &&       \
-     !defined(__arm__)) ||                                                     \
+     (!defined(__arm__) || __ARM_ARCH_7K__ >= 2)) ||                           \
     defined(_LIBCPP_ALTERNATE_STRING_LAYOUT)
 #define _LIBCPP_ABI_ALTERNATE_STRING_LAYOUT
 #endif
@@ -345,7 +384,6 @@ typedef __char32_t char32_t;
 
 #if __has_feature(objc_arc_weak)
 #define _LIBCPP_HAS_OBJC_ARC_WEAK
-#define _LIBCPP_HAS_NO_STRONG_ENUMS
 #endif
 
 #if !(__has_feature(cxx_constexpr))
@@ -560,14 +598,6 @@ namespace std {
 
 #endif // _LIBCPP_COMPILER_[CLANG|GCC|MSVC|IBM]
 
-#if defined(__ELF__)
-#define _LIBCPP_OBJECT_FORMAT_ELF   1
-#elif defined(__MACH__)
-#define _LIBCPP_OBJECT_FORMAT_MACHO 1
-#else
-#define _LIBCPP_OBJECT_FORMAT_COFF  1
-#endif
-
 #if defined(_LIBCPP_OBJECT_FORMAT_COFF)
 #if defined(_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS)
 # define _LIBCPP_DLL_VIS
@@ -593,7 +623,6 @@ namespace std {
 #define _LIBCPP_HIDDEN
 #define _LIBCPP_METHOD_TEMPLATE_IMPLICIT_INSTANTIATION_VIS
 #define _LIBCPP_TEMPLATE_VIS
-#define _LIBCPP_FUNC_VIS_ONLY
 #define _LIBCPP_ENUM_VIS
 
 #if defined(_LIBCPP_COMPILER_MSVC)
@@ -650,10 +679,6 @@ namespace std {
 #  else
 #    define _LIBCPP_TEMPLATE_VIS
 #  endif
-#endif
-
-#ifndef _LIBCPP_FUNC_VIS_ONLY
-# define _LIBCPP_FUNC_VIS_ONLY _LIBCPP_FUNC_VIS
 #endif
 
 #ifndef _LIBCPP_EXTERN_VIS
@@ -835,6 +860,11 @@ template <unsigned> struct __static_assert_check {};
 # endif
 #endif
 
+#ifdef _LIBCPP_DISABLE_EXTERN_TEMPLATE
+#define _LIBCPP_EXTERN_TEMPLATE(...)
+#define _LIBCPP_EXTERN_TEMPLATE2(...)
+#endif
+
 #ifndef _LIBCPP_EXTERN_TEMPLATE
 #define _LIBCPP_EXTERN_TEMPLATE(...) extern template __VA_ARGS__;
 #endif
@@ -888,8 +918,10 @@ template <unsigned> struct __static_assert_check {};
 #    define _LIBCPP_STD_VER 11
 #  elif __cplusplus <= 201402L
 #    define _LIBCPP_STD_VER 14
+#  elif __cplusplus <= 201703L
+#    define _LIBCPP_STD_VER 17
 #  else
-#    define _LIBCPP_STD_VER 16  // current year, or date of c++17 ratification
+#    define _LIBCPP_STD_VER 18  // current year, or date of c++2a ratification
 #  endif
 #endif  // _LIBCPP_STD_VER
 
@@ -942,7 +974,7 @@ _LIBCPP_FUNC_VIS extern "C" void __sanitizer_annotate_contiguous_container(
 #  if defined(__GNUC__) && ((__GNUC__ >= 5) || (__GNUC__ == 4 && \
    (__GNUC_MINOR__ >= 3 || __GNUC_PATCHLEVEL__ >= 2))) && !defined(__GXX_RTTI)
 #    define _LIBCPP_NO_RTTI
-#  elif defined(_LIBCPP_MSVC) && !defined(_CPPRTTI)
+#  elif defined(_LIBCPP_COMPILER_MSVC) && !defined(_CPPRTTI)
 #    define _LIBCPP_NO_RTTI
 #  endif
 #endif
@@ -954,6 +986,7 @@ _LIBCPP_FUNC_VIS extern "C" void __sanitizer_annotate_contiguous_container(
 // Thread API
 #if !defined(_LIBCPP_HAS_NO_THREADS) && \
     !defined(_LIBCPP_HAS_THREAD_API_PTHREAD) && \
+    !defined(_LIBCPP_HAS_THREAD_API_WIN32) && \
     !defined(_LIBCPP_HAS_THREAD_API_EXTERNAL)
 # if defined(__FreeBSD__) || \
     defined(__Fuchsia__) || \
@@ -961,7 +994,8 @@ _LIBCPP_FUNC_VIS extern "C" void __sanitizer_annotate_contiguous_container(
     defined(__linux__) || \
     defined(__APPLE__) || \
     defined(__CloudABI__) || \
-    defined(__sun__)
+    defined(__sun__) || \
+    (defined(__MINGW32__) && __libcpp_has_include(<pthread.h>))
 #   define _LIBCPP_HAS_THREAD_API_PTHREAD
 # elif defined(_LIBCPP_WIN32API)
 #  define _LIBCPP_HAS_THREAD_API_WIN32
@@ -1001,7 +1035,7 @@ _LIBCPP_FUNC_VIS extern "C" void __sanitizer_annotate_contiguous_container(
 #endif
 
 #if defined(__BIONIC__) || defined(__CloudABI__) ||                            \
-    defined(_LIBCPP_HAS_MUSL_LIBC)
+    defined(__Fuchsia__) || defined(_LIBCPP_HAS_MUSL_LIBC)
 #define _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE
 #endif
 
@@ -1044,7 +1078,7 @@ _LIBCPP_FUNC_VIS extern "C" void __sanitizer_annotate_contiguous_container(
 #endif
 
 #if !__has_builtin(__builtin_addressof) && _GNUC_VER < 700
-#define _LIBCPP_HAS_NO_BUILTIN_ADDRESSOF
+# define _LIBCPP_HAS_NO_BUILTIN_ADDRESSOF
 #endif
 
 #if !defined(_LIBCPP_HAS_NO_OFF_T_FUNCTIONS)
@@ -1063,6 +1097,13 @@ _LIBCPP_FUNC_VIS extern "C" void __sanitizer_annotate_contiguous_container(
 # define _LIBCPP_DIAGNOSE_ERROR(...)
 #endif
 
+#if __has_attribute(fallthough) || _GNUC_VER >= 700
+// Use a function like macro to imply that it must be followed by a semicolon
+#define _LIBCPP_FALLTHROUGH() __attribute__((__fallthrough__))
+#else
+#define _LIBCPP_FALLTHROUGH() ((void)0)
+#endif
+
 #if defined(_LIBCPP_ABI_MICROSOFT) && \
    (defined(_LIBCPP_COMPILER_MSVC) || __has_declspec_attribute(empty_bases))
 # define _LIBCPP_DECLSPEC_EMPTY_BASES __declspec(empty_bases)
@@ -1073,7 +1114,130 @@ _LIBCPP_FUNC_VIS extern "C" void __sanitizer_annotate_contiguous_container(
 #if defined(_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES)
 # define _LIBCPP_ENABLE_CXX17_REMOVED_AUTO_PTR
 # define _LIBCPP_ENABLE_CXX17_REMOVED_UNEXPECTED_FUNCTIONS
+# define _LIBCPP_ENABLE_CXX17_REMOVED_RANDOM_SHUFFLE
+# define _LIBCPP_ENABLE_CXX17_REMOVED_BINDERS
 #endif // _LIBCPP_ENABLE_CXX17_REMOVED_FEATURES
+
+#if !defined(__cpp_deduction_guides) || __cpp_deduction_guides < 201611
+# define _LIBCPP_HAS_NO_DEDUCTION_GUIDES
+#endif
+
+#if !__has_keyword(__is_aggregate) && (_GNUC_VER_NEW < 7001)
+# define _LIBCPP_HAS_NO_IS_AGGREGATE
+#endif
+
+#if !defined(__cpp_coroutines) || __cpp_coroutines < 201703L
+# define _LIBCPP_HAS_NO_COROUTINES
+#endif
+
+// Decide whether to use availability macros.
+#if !defined(_LIBCPP_BUILDING_LIBRARY) &&                                      \
+    !defined(_LIBCPP_DISABLE_AVAILABILITY) &&                                  \
+    __has_feature(attribute_availability_with_strict) &&                       \
+    __has_feature(attribute_availability_in_templates)
+#ifdef __APPLE__
+#define _LIBCPP_USE_AVAILABILITY_APPLE
+#endif
+#endif
+
+// Define availability macros.
+#if defined(_LIBCPP_USE_AVAILABILITY_APPLE)
+#define _LIBCPP_AVAILABILITY_SHARED_MUTEX                                      \
+  __attribute__((availability(macosx,strict,introduced=10.12)))                \
+  __attribute__((availability(ios,strict,introduced=10.0)))                    \
+  __attribute__((availability(tvos,strict,introduced=10.0)))                   \
+  __attribute__((availability(watchos,strict,introduced=3.0)))
+#define _LIBCPP_AVAILABILITY_BAD_OPTIONAL_ACCESS __attribute__((unavailable))
+#define _LIBCPP_AVAILABILITY_BAD_ARRAY_LENGTH __attribute__((unavailable))
+#define _LIBCPP_AVAILABILITY_BAD_ANY_CAST __attribute__((unavailable))
+#define _LIBCPP_AVAILABILITY_UNCAUGHT_EXCEPTIONS                               \
+  __attribute__((availability(macosx,strict,introduced=10.12)))                \
+  __attribute__((availability(ios,strict,introduced=10.0)))                    \
+  __attribute__((availability(tvos,strict,introduced=10.0)))                   \
+  __attribute__((availability(watchos,strict,introduced=3.0)))
+#define _LIBCPP_AVAILABILITY_SIZED_NEW_DELETE                                  \
+  __attribute__((availability(macosx,strict,introduced=10.12)))                \
+  __attribute__((availability(ios,strict,introduced=10.0)))                    \
+  __attribute__((availability(tvos,strict,introduced=10.0)))                   \
+  __attribute__((availability(watchos,strict,introduced=3.0)))
+#define _LIBCPP_AVAILABILITY_FUTURE_ERROR                                      \
+  __attribute__((availability(ios,strict,introduced=6.0)))
+#define _LIBCPP_AVAILABILITY_TYPEINFO_VTABLE                                   \
+  __attribute__((availability(macosx,strict,introduced=10.9)))                 \
+  __attribute__((availability(ios,strict,introduced=7.0)))
+#define _LIBCPP_AVAILABILITY_LOCALE_CATEGORY                                   \
+  __attribute__((availability(macosx,strict,introduced=10.9)))                 \
+  __attribute__((availability(ios,strict,introduced=7.0)))
+#define _LIBCPP_AVAILABILITY_ATOMIC_SHARED_PTR                                 \
+  __attribute__((availability(macosx,strict,introduced=10.9)))                 \
+  __attribute__((availability(ios,strict,introduced=7.0)))
+#else
+#define _LIBCPP_AVAILABILITY_SHARED_MUTEX
+#define _LIBCPP_AVAILABILITY_BAD_OPTIONAL_ACCESS
+#define _LIBCPP_AVAILABILITY_BAD_ARRAY_LENGTH
+#define _LIBCPP_AVAILABILITY_BAD_ANY_CAST
+#define _LIBCPP_AVAILABILITY_UNCAUGHT_EXCEPTIONS
+#define _LIBCPP_AVAILABILITY_SIZED_NEW_DELETE
+#define _LIBCPP_AVAILABILITY_FUTURE_ERROR
+#define _LIBCPP_AVAILABILITY_TYPEINFO_VTABLE
+#define _LIBCPP_AVAILABILITY_LOCALE_CATEGORY
+#define _LIBCPP_AVAILABILITY_ATOMIC_SHARED_PTR
+#endif
+
+// Define availability that depends on _LIBCPP_NO_EXCEPTIONS.
+#ifdef _LIBCPP_NO_EXCEPTIONS
+#define _LIBCPP_AVAILABILITY_DYNARRAY
+#define _LIBCPP_AVAILABILITY_FUTURE
+#define _LIBCPP_AVAILABILITY_THROW_BAD_ANY_CAST
+#else
+#define _LIBCPP_AVAILABILITY_DYNARRAY _LIBCPP_AVAILABILITY_BAD_ARRAY_LENGTH
+#define _LIBCPP_AVAILABILITY_FUTURE _LIBCPP_AVAILABILITY_FUTURE_ERROR
+#define _LIBCPP_AVAILABILITY_THROW_BAD_ANY_CAST                                \
+  _LIBCPP_AVAILABILITY_BAD_ANY_CAST
+#endif
+
+// Availability of stream API in the dylib got dropped and re-added.  The
+// extern template should effectively be available at:
+//    availability(macosx,introduced=10.9)
+//    availability(ios,introduced=7.0)
+#if defined(_LIBCPP_USE_AVAILABILITY_APPLE) &&                                 \
+    ((defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__) &&                \
+      __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ < 1090) ||                 \
+     (defined(__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__) &&               \
+      __ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__ < 70000))
+#define _LIBCPP_AVAILABILITY_NO_STREAMS_EXTERN_TEMPLATE
+#endif
+
+#if defined(_LIBCPP_COMPILER_IBM)
+#define _LIBCPP_HAS_NO_PRAGMA_PUSH_POP_MACRO
+#endif
+
+#if defined(_LIBCPP_HAS_NO_PRAGMA_PUSH_POP_MACRO)
+# define _LIBCPP_PUSH_MACROS
+# define _LIBCPP_POP_MACROS
+#else
+  // Don't warn about macro conflicts when we can restore them at the
+  // end of the header.
+# ifndef _LIBCPP_DISABLE_MACRO_CONFLICT_WARNINGS
+#   define _LIBCPP_DISABLE_MACRO_CONFLICT_WARNINGS
+# endif
+# if defined(_LIBCPP_COMPILER_MSVC)
+#   define _LIBCPP_PUSH_MACROS    \
+      __pragma(push_macro("min")) \
+      __pragma(push_macro("max"))
+#   define _LIBCPP_POP_MACROS     \
+      __pragma(pop_macro("min"))  \
+      __pragma(pop_macro("max"))
+# else
+#   define _LIBCPP_PUSH_MACROS        \
+      _Pragma("push_macro(\"min\")")  \
+      _Pragma("push_macro(\"max\")")
+#   define _LIBCPP_POP_MACROS         \
+      _Pragma("pop_macro(\"min\")")   \
+      _Pragma("pop_macro(\"max\")")
+# endif
+#endif // defined(_LIBCPP_HAS_NO_PRAGMA_PUSH_POP_MACRO)
+
 
 #endif // __cplusplus
 

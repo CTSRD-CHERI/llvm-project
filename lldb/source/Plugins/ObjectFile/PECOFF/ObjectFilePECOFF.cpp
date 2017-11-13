@@ -10,7 +10,7 @@
 #include "ObjectFilePECOFF.h"
 #include "WindowsMiniDump.h"
 
-#include "llvm/Support/COFF.h"
+#include "llvm/BinaryFormat/COFF.h"
 
 #include "lldb/Core/ArchSpec.h"
 #include "lldb/Core/FileSpecList.h"
@@ -19,15 +19,15 @@
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/Section.h"
 #include "lldb/Core/StreamFile.h"
-#include "lldb/Core/Timer.h"
-#include "lldb/Host/FileSpec.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/SectionLoadList.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Utility/DataBufferHeap.h"
 #include "lldb/Utility/DataBufferLLVM.h"
+#include "lldb/Utility/FileSpec.h"
 #include "lldb/Utility/StreamString.h"
+#include "lldb/Utility/Timer.h"
 #include "lldb/Utility/UUID.h"
 
 #include "llvm/Support/MemoryBuffer.h"
@@ -136,6 +136,11 @@ size_t ObjectFilePECOFF::GetModuleSpecifications(
           spec.SetTriple("i686-pc-windows");
           specs.Append(ModuleSpec(file, spec));
         }
+        else if (coff_header.machine == MachineArmNt)
+        {
+          spec.SetTriple("arm-pc-windows");
+          specs.Append(ModuleSpec(file, spec));
+        }
       }
     }
   }
@@ -145,7 +150,7 @@ size_t ObjectFilePECOFF::GetModuleSpecifications(
 
 bool ObjectFilePECOFF::SaveCore(const lldb::ProcessSP &process_sp,
                                 const lldb_private::FileSpec &outfile,
-                                lldb_private::Error &error) {
+                                lldb_private::Status &error) {
   return SaveMiniDump(process_sp, outfile, error);
 }
 
@@ -440,7 +445,7 @@ DataExtractor ObjectFilePECOFF::ReadImageData(uint32_t offset, size_t size) {
   DataExtractor data;
   if (process_sp) {
     auto data_ap = llvm::make_unique<DataBufferHeap>(size, 0);
-    Error readmem_error;
+    Status readmem_error;
     size_t bytes_read =
         process_sp->ReadMemory(m_image_base + offset, data_ap->GetBytes(),
                                data_ap->GetByteSize(), readmem_error);
@@ -537,7 +542,8 @@ Symtab *ObjectFilePECOFF::GetSymtab() {
 
           // First 4 bytes should be zeroed after strtab_size has been read,
           // because it is used as offset 0 to encode a NULL string.
-          uint32_t *strtab_data_start = (uint32_t *)strtab_data.GetDataStart();
+          uint32_t *strtab_data_start = const_cast<uint32_t *>(
+              reinterpret_cast<const uint32_t *>(strtab_data.GetDataStart()));
           strtab_data_start[0] = 0;
 
           offset = 0;

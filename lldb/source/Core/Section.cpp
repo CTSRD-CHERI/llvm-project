@@ -8,11 +8,22 @@
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Core/Section.h"
+#include "lldb/Core/Address.h" // for Address
 #include "lldb/Core/Module.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/SectionLoadList.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/FileSpec.h" // for FileSpec
+#include "lldb/Utility/Stream.h"   // for Stream
+#include "lldb/Utility/VMRange.h"  // for VMRange
 
+#include <inttypes.h> // for PRIx64
+#include <limits>     // for numeric_limits
+#include <utility>    // for distance
+
+namespace lldb_private {
+class DataExtractor;
+}
 using namespace lldb;
 using namespace lldb_private;
 
@@ -54,6 +65,8 @@ static const char *GetSectionTypeAsCString(lldb::SectionType sect_type) {
     return "dwarf-addr";
   case eSectionTypeDWARFDebugAranges:
     return "dwarf-aranges";
+  case eSectionTypeDWARFDebugCuIndex:
+    return "dwarf-cu-index";
   case eSectionTypeDWARFDebugFrame:
     return "dwarf-frame";
   case eSectionTypeDWARFDebugInfo:
@@ -122,7 +135,7 @@ Section::Section(const ModuleSP &module_sp, ObjectFile *obj_file,
       m_file_offset(file_offset), m_file_size(file_size),
       m_log2align(log2align), m_children(), m_fake(false), m_encrypted(false),
       m_thread_specific(false), m_readable(false), m_writable(false),
-      m_executable(false), m_target_byte_size(target_byte_size) {
+      m_executable(false), m_relocated(false), m_target_byte_size(target_byte_size) {
   //    printf ("Section::Section(%p): module=%p, sect_id = 0x%16.16" PRIx64 ",
   //    addr=[0x%16.16" PRIx64 " - 0x%16.16" PRIx64 "), file [0x%16.16" PRIx64 "
   //    - 0x%16.16" PRIx64 "), flags = 0x%8.8x, name = %s\n",
@@ -144,7 +157,7 @@ Section::Section(const lldb::SectionSP &parent_section_sp,
       m_file_offset(file_offset), m_file_size(file_size),
       m_log2align(log2align), m_children(), m_fake(false), m_encrypted(false),
       m_thread_specific(false), m_readable(false), m_writable(false),
-      m_executable(false), m_target_byte_size(target_byte_size) {
+      m_executable(false), m_relocated(false), m_target_byte_size(target_byte_size) {
   //    printf ("Section::Section(%p): module=%p, sect_id = 0x%16.16" PRIx64 ",
   //    addr=[0x%16.16" PRIx64 " - 0x%16.16" PRIx64 "), file [0x%16.16" PRIx64 "
   //    - 0x%16.16" PRIx64 "), flags = 0x%8.8x, name = %s.%s\n",
@@ -209,18 +222,18 @@ addr_t Section::GetLoadBaseAddress(Target *target) const {
   return load_base_addr;
 }
 
-bool Section::ResolveContainedAddress(addr_t offset, Address &so_addr) const {
+bool Section::ResolveContainedAddress(addr_t offset, Address &so_addr,
+                                      bool allow_section_end) const {
   const size_t num_children = m_children.GetSize();
-  if (num_children > 0) {
-    for (size_t i = 0; i < num_children; i++) {
-      Section *child_section = m_children.GetSectionAtIndex(i).get();
+  for (size_t i = 0; i < num_children; i++) {
+    Section *child_section = m_children.GetSectionAtIndex(i).get();
 
-      addr_t child_offset = child_section->GetOffset();
-      if (child_offset <= offset &&
-          offset - child_offset < child_section->GetByteSize())
-        return child_section->ResolveContainedAddress(offset - child_offset,
-                                                      so_addr);
-    }
+    addr_t child_offset = child_section->GetOffset();
+    if (child_offset <= offset &&
+        offset - child_offset <
+            child_section->GetByteSize() + (allow_section_end ? 1 : 0))
+      return child_section->ResolveContainedAddress(offset - child_offset,
+                                                    so_addr, allow_section_end);
   }
   so_addr.SetOffset(offset);
   so_addr.SetSection(const_cast<Section *>(this)->shared_from_this());
@@ -379,7 +392,7 @@ lldb::offset_t Section::GetSectionData(void *dst, lldb::offset_t dst_len,
   return 0;
 }
 
-lldb::offset_t Section::GetSectionData(DataExtractor &section_data) const {
+lldb::offset_t Section::GetSectionData(DataExtractor &section_data) {
   if (m_obj_file)
     return m_obj_file->ReadSectionData(this, section_data);
   return 0;

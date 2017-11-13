@@ -280,6 +280,7 @@ public:
   static const TST TST_half = clang::TST_half;
   static const TST TST_float = clang::TST_float;
   static const TST TST_double = clang::TST_double;
+  static const TST TST_float16 = clang::TST_Float16;
   static const TST TST_float128 = clang::TST_float128;
   static const TST TST_bool = clang::TST_bool;
   static const TST TST_decimal32 = clang::TST_decimal32;
@@ -819,7 +820,9 @@ public:
     : objcDeclQualifier(DQ_None), PropertyAttributes(DQ_PR_noattr),
       Nullability(0), GetterName(nullptr), SetterName(nullptr) { }
 
-  ObjCDeclQualifier getObjCDeclQualifier() const { return objcDeclQualifier; }
+  ObjCDeclQualifier getObjCDeclQualifier() const {
+    return (ObjCDeclQualifier)objcDeclQualifier;
+  }
   void setObjCDeclQualifier(ObjCDeclQualifier DQVal) {
     objcDeclQualifier = (ObjCDeclQualifier) (objcDeclQualifier | DQVal);
   }
@@ -859,17 +862,25 @@ public:
 
   const IdentifierInfo *getGetterName() const { return GetterName; }
   IdentifierInfo *getGetterName() { return GetterName; }
-  void setGetterName(IdentifierInfo *name) { GetterName = name; }
+  SourceLocation getGetterNameLoc() const { return GetterNameLoc; }
+  void setGetterName(IdentifierInfo *name, SourceLocation loc) {
+    GetterName = name;
+    GetterNameLoc = loc;
+  }
 
   const IdentifierInfo *getSetterName() const { return SetterName; }
   IdentifierInfo *getSetterName() { return SetterName; }
-  void setSetterName(IdentifierInfo *name) { SetterName = name; }
+  SourceLocation getSetterNameLoc() const { return SetterNameLoc; }
+  void setSetterName(IdentifierInfo *name, SourceLocation loc) {
+    SetterName = name;
+    SetterNameLoc = loc;
+  }
 
 private:
   // FIXME: These two are unrelated and mutually exclusive. So perhaps
   // we can put them in a union to reflect their mutual exclusivity
   // (space saving is negligible).
-  ObjCDeclQualifier objcDeclQualifier : 7;
+  unsigned objcDeclQualifier : 7;
 
   // NOTE: VC++ treats enums as signed, avoid using ObjCPropertyAttributeKind
   unsigned PropertyAttributes : 15;
@@ -880,6 +891,9 @@ private:
 
   IdentifierInfo *GetterName;    // getter name or NULL if no getter
   IdentifierInfo *SetterName;    // setter name or NULL if no setter
+  SourceLocation GetterNameLoc; // location of the getter attribute's value
+  SourceLocation SetterNameLoc; // location of the setter attribute's value
+
 };
 
 /// \brief Represents a C++ unqualified-id that has been parsed. 
@@ -1986,41 +2000,6 @@ public:
     llvm_unreachable("unknown context kind!");
   }
 
-  /// diagnoseIdentifier - Return true if the identifier is prohibited and
-  /// should be diagnosed (because it cannot be anything else).
-  bool diagnoseIdentifier() const {
-    switch (Context) {
-    case FileContext:
-    case KNRTypeListContext:
-    case MemberContext:
-    case BlockContext:
-    case ForContext:
-    case InitStmtContext:
-    case ConditionContext:
-    case PrototypeContext:
-    case LambdaExprParameterContext:
-    case TemplateParamContext:
-    case CXXCatchContext:
-    case ObjCCatchContext:
-    case TypeNameContext:
-    case FunctionalCastContext:
-    case ConversionIdContext:
-    case ObjCParameterContext:
-    case ObjCResultContext:
-    case BlockLiteralContext:
-    case CXXNewContext:
-    case LambdaExprContext:
-      return false;
-
-    case AliasDeclContext:
-    case AliasTemplateContext:
-    case TemplateTypeArgContext:
-    case TrailingReturnContext:
-      return true;
-    }
-    llvm_unreachable("unknown context kind!");
-  }
-
   /// Return true if the context permits a C++17 decomposition declarator.
   bool mayHaveDecompositionDeclarator() const {
     switch (Context) {
@@ -2320,6 +2299,42 @@ public:
     case TrailingReturnContext:
       return false;
     }
+    llvm_unreachable("unknown context kind!");
+  }
+
+  /// Determine whether this declaration appears in a context where an
+  /// expression could appear.
+  bool isExpressionContext() const {
+    switch (Context) {
+    case FileContext:
+    case KNRTypeListContext:
+    case MemberContext:
+    case TypeNameContext: // FIXME: sizeof(...) permits an expression.
+    case FunctionalCastContext:
+    case AliasDeclContext:
+    case AliasTemplateContext:
+    case PrototypeContext:
+    case LambdaExprParameterContext:
+    case ObjCParameterContext:
+    case ObjCResultContext:
+    case TemplateParamContext:
+    case CXXNewContext:
+    case CXXCatchContext:
+    case ObjCCatchContext:
+    case BlockLiteralContext:
+    case LambdaExprContext:
+    case ConversionIdContext:
+    case TrailingReturnContext:
+      return false;
+
+    case BlockContext:
+    case ForContext:
+    case InitStmtContext:
+    case ConditionContext:
+    case TemplateTypeArgContext:
+      return true;
+    }
+
     llvm_unreachable("unknown context kind!");
   }
   

@@ -25,20 +25,10 @@ VERSION {
         #
         # OMPT API
         #
-        ompt_tool;           # OMPT initialization interface
-        ompt_control;        # OMPT control interface
+        ompt_start_tool;     # OMPT start interface
 
         # icc drops weak attribute at linking step without the following line:
         Annotate*;           # TSAN annotation
-
-        #
-        # OMPT state placeholders
-        #
-        ompt_idle;
-        ompt_overhead;
-        ompt_barrier_wait;
-        ompt_task_wait;
-        ompt_mutex_wait;
 
         ompc_*;    # omp.h renames some standard functions to ompc_*.
         kmp_*;     # Intel extensions.
@@ -84,10 +74,7 @@ VERSION {
         __kmp_acquire_tas_lock;
         __kmp_acquire_ticket_lock;
         __kmp_fork_call;
-        __kmp_get_reduce_method;
         __kmp_invoke_microtask;
-        __kmp_itt_fini_ittlib;
-        __kmp_itt_init_ittlib;
 #if KMP_USE_MONITOR
         __kmp_launch_monitor;
         __kmp_reap_monitor;

@@ -18,6 +18,8 @@
 
 namespace llvm {
 
+class LiveIntervals;
+
 namespace SystemZ {
 // Return the subreg to use for referring to the even and odd registers
 // in a GR128 pair.  Is32Bit says whether we want a GR32 or GR64.
@@ -42,6 +44,13 @@ public:
     return &SystemZ::ADDR64BitRegClass;
   }
 
+  bool getRegAllocationHints(unsigned VirtReg,
+                             ArrayRef<MCPhysReg> Order,
+                             SmallVectorImpl<MCPhysReg> &Hints,
+                             const MachineFunction &MF,
+                             const VirtRegMap *VRM,
+                             const LiveRegMatrix *Matrix) const override;
+
   // Override TargetRegisterInfo.h.
   bool requiresRegisterScavenging(const MachineFunction &MF) const override {
     return true;
@@ -59,6 +68,16 @@ public:
   void eliminateFrameIndex(MachineBasicBlock::iterator MI,
                            int SPAdj, unsigned FIOperandNum,
                            RegScavenger *RS) const override;
+
+  /// \brief SrcRC and DstRC will be morphed into NewRC if this returns true.
+ bool shouldCoalesce(MachineInstr *MI,
+                      const TargetRegisterClass *SrcRC,
+                      unsigned SubReg,
+                      const TargetRegisterClass *DstRC,
+                      unsigned DstSubReg,
+                      const TargetRegisterClass *NewRC,
+                      LiveIntervals &LIS) const override;
+
   unsigned getFrameRegister(const MachineFunction &MF) const override;
 };
 

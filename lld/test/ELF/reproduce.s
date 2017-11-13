@@ -33,27 +33,32 @@
 # RUN: echo "{};" > dyn
 # RUN: echo > file
 # RUN: echo > file2
+# RUN: echo "_start" > order
 # RUN: llvm-mc -filetype=obj -triple=x86_64-unknown-linux %s -o 'foo bar'
 # RUN: ld.lld --reproduce repro2.tar 'foo bar' -L"foo bar" -Lfile -Tfile2 \
-# RUN:   --dynamic-list dyn -rpath file --script=file --version-script ver \
-# RUN:   --dynamic-linker "some unusual/path" -soname 'foo bar' -soname='foo bar'
+# RUN:   --dynamic-list dyn -rpath file --script=file --symbol-ordering-file order \
+# RUN:   --version-script ver --dynamic-linker "some unusual/path" -soname 'foo bar' \
+# RUN:   -soname='foo bar'
 # RUN: tar xf repro2.tar
 # RUN: FileCheck %s --check-prefix=RSP2 < repro2/response.txt
+# RSP2:      --chroot .
 # RSP2:      "{{.*}}foo bar"
-# RSP2-NEXT: -L "{{.*}}foo bar"
-# RSP2-NEXT: -L {{.+}}file
+# RSP2-NEXT: --library-path "{{.*}}foo bar"
+# RSP2-NEXT: --library-path {{.+}}file
 # RSP2-NEXT: --script {{.+}}file2
 # RSP2-NEXT: --dynamic-list {{.+}}dyn
 # RSP2-NEXT: -rpath {{.+}}file
 # RSP2-NEXT: --script {{.+}}file
-# RSP2-NEXT: --version-script [[PATH:.*]]ver
+# RSP2-NEXT: --symbol-ordering-file [[PATH:.+]]order
+# RSP2-NEXT: --version-script [[PATH]]ver
 # RSP2-NEXT: --dynamic-linker "some unusual/path"
-# RSP2-NEXT: -soname="foo bar"
-# RSP2-NEXT: -soname="foo bar"
+# RSP2-NEXT: -soname "foo bar"
+# RSP2-NEXT: -soname "foo bar"
 
 # RUN: tar tf repro2.tar | FileCheck %s
 # CHECK:      repro2/response.txt
 # CHECK-NEXT: repro2/version.txt
+# CHECK-NEXT: repro2/{{.*}}/order
 # CHECK-NEXT: repro2/{{.*}}/dyn
 # CHECK-NEXT: repro2/{{.*}}/ver
 # CHECK-NEXT: repro2/{{.*}}/foo bar
@@ -63,7 +68,7 @@
 ## Check that directory path is stripped from -o <file-path>
 # RUN: mkdir -p %t.dir/build3/a/b/c
 # RUN: cd %t.dir
-# RUN: ld.lld build1/foo.o -o build3/a/b/c/bar -shared --as-needed --reproduce repro3.tar
+# RUN: ld.lld build1/foo.o -o build3/a/b/c/bar -shared --as-needed --reproduce=repro3.tar
 # RUN: tar xf repro3.tar
 # RUN: FileCheck %s --check-prefix=RSP3 < repro3/response.txt
 # RSP3: -o bar

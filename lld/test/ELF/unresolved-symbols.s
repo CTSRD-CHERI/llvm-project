@@ -6,12 +6,16 @@
 ## Check that %t2.o contains undefined symbol undef.
 # RUN: not ld.lld %t1.o %t2.o -o %t 2>&1 | \
 # RUN:   FileCheck -check-prefix=UNDCHECK %s
-# UNDCHECK: error: {{.*}}2.o:(.text+0x1): undefined symbol 'undef'
+# UNDCHECK: error: undefined symbol: undef
+# UNDCHECK: >>> referenced by {{.*}}2.o:(.text+0x1)
 
 ## Error out if unknown option value was set.
 # RUN: not ld.lld %t1.o %t2.o -o %t --unresolved-symbols=xxx 2>&1 | \
 # RUN:   FileCheck -check-prefix=ERR1 %s
 # ERR1: unknown --unresolved-symbols value: xxx
+## Check alias.
+# RUN: not ld.lld %t1.o %t2.o -o %t --unresolved-symbols xxx 2>&1 | \
+# RUN:   FileCheck -check-prefix=ERR1 %s
 
 ## Ignore all should not produce error for symbols from object except
 ## case when --no-undefined specified.
@@ -19,7 +23,9 @@
 # RUN: llvm-readobj %t1_1 > /dev/null 2>&1
 # RUN: not ld.lld %t2.o -o %t1_2 --unresolved-symbols=ignore-all --no-undefined 2>&1 | \
 # RUN:   FileCheck -check-prefix=ERRUND %s
-# ERRUND: error: {{.*}}:(.text+0x1): undefined symbol 'undef'
+# ERRUND: error: undefined symbol: undef
+# ERRUND: >>> referenced by {{.*}}:(.text+0x1)
+
 ## Also ignore all should not produce error for symbols from DSOs.
 # RUN: ld.lld %t1.o %t.so -o %t1_3 --unresolved-symbols=ignore-all
 # RUN: llvm-readobj %t1_3 > /dev/null 2>&1
@@ -56,8 +62,7 @@
 # RUN: llvm-readobj %t6_1 > /dev/null 2>&1
 # RUN: not ld.lld %t2.o -o %t7 --unresolved-symbols=report-all 2>&1 | \
 # RUN:   FileCheck -check-prefix=ERRUND %s
-# RUN: not ld.lld %t2.o -o %t7_1 2>&1 | \
-# RUN:   FileCheck -check-prefix=ERRUND %s
+# RUN: not ld.lld %t2.o -o %t7_1 2>&1 | FileCheck -check-prefix=ERRUND %s
 
 .globl _start
 _start:

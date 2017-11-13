@@ -997,14 +997,14 @@ bool CompilerType::ReadFromMemory(lldb_private::ExecutionContext *exe_ctx,
       if (addr == 0)
         return false;
       // The address is an address in this process, so just copy it
-      memcpy(dst, (uint8_t *)nullptr + addr, byte_size);
+      memcpy(dst, reinterpret_cast<uint8_t *>(addr), byte_size);
       return true;
     } else {
       Process *process = nullptr;
       if (exe_ctx)
         process = exe_ctx->GetProcessPtr();
       if (process) {
-        Error error;
+        Status error;
         return process->ReadMemory(addr, dst, byte_size, error) == byte_size;
       }
     }
@@ -1039,7 +1039,7 @@ bool CompilerType::WriteToMemory(lldb_private::ExecutionContext *exe_ctx,
       if (exe_ctx)
         process = exe_ctx->GetProcessPtr();
       if (process) {
-        Error error;
+        Status error;
         return process->WriteMemory(addr, new_value.GetData(), byte_size,
                                     error) == byte_size;
       }

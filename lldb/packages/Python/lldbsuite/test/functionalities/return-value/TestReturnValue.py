@@ -18,6 +18,14 @@ class ReturnValueTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
+    def affected_by_pr33042(self):
+        return ("clang" in self.getCompiler() and self.getArchitecture() ==
+            "aarch64" and self.getPlatform() == "linux")
+
+    # ABIMacOSX_arm can't fetch simple values inside a structure
+    def affected_by_radar_34562999(self):
+        return (self.getArchitecture() == 'armv7' or self.getArchitecture() == 'armv7k') and self.platformIsDarwin()
+
     @expectedFailureAll(oslist=["freebsd"], archs=["i386"])
     @expectedFailureAll(oslist=["macosx"], archs=["i386"], bugnumber="<rdar://problem/28719652>")
     @expectedFailureAll(
@@ -27,12 +35,6 @@ class ReturnValueTestCase(TestBase):
             "<=",
             "3.6"],
         archs=["i386"])
-    @expectedFailureAll(
-        bugnumber="llvm.org/pr25785",
-        hostoslist=["windows"],
-        compiler="gcc",
-        archs=["i386"],
-        triple='.*-android')
     @expectedFailureAll(oslist=["windows"], bugnumber="llvm.org/pr24778")
     @add_test_categories(['pyapi'])
     def test_with_python(self):
@@ -144,44 +146,69 @@ class ReturnValueTestCase(TestBase):
 
         #self.assertTrue(in_float == return_float)
 
-        self.return_and_test_struct_value("return_one_int")
-        self.return_and_test_struct_value("return_two_int")
-        self.return_and_test_struct_value("return_three_int")
-        self.return_and_test_struct_value("return_four_int")
-        self.return_and_test_struct_value("return_five_int")
+        if not self.affected_by_radar_34562999():
+            self.return_and_test_struct_value("return_one_int")
+            self.return_and_test_struct_value("return_two_int")
+            self.return_and_test_struct_value("return_three_int")
+            self.return_and_test_struct_value("return_four_int")
+            if not self.affected_by_pr33042():
+                self.return_and_test_struct_value("return_five_int")
 
-        self.return_and_test_struct_value("return_two_double")
-        self.return_and_test_struct_value("return_one_double_two_float")
-        self.return_and_test_struct_value("return_one_int_one_float_one_int")
+            self.return_and_test_struct_value("return_two_double")
+            self.return_and_test_struct_value("return_one_double_two_float")
+            self.return_and_test_struct_value("return_one_int_one_float_one_int")
 
-        self.return_and_test_struct_value("return_one_pointer")
-        self.return_and_test_struct_value("return_two_pointer")
-        self.return_and_test_struct_value("return_one_float_one_pointer")
-        self.return_and_test_struct_value("return_one_int_one_pointer")
-        self.return_and_test_struct_value("return_three_short_one_float")
+            self.return_and_test_struct_value("return_one_pointer")
+            self.return_and_test_struct_value("return_two_pointer")
+            self.return_and_test_struct_value("return_one_float_one_pointer")
+            self.return_and_test_struct_value("return_one_int_one_pointer")
+            self.return_and_test_struct_value("return_three_short_one_float")
 
-        self.return_and_test_struct_value("return_one_int_one_double")
-        self.return_and_test_struct_value("return_one_int_one_double_one_int")
-        self.return_and_test_struct_value(
-            "return_one_short_one_double_one_short")
-        self.return_and_test_struct_value("return_one_float_one_int_one_float")
-        self.return_and_test_struct_value("return_two_float")
-        # I am leaving out the packed test until we have a way to tell CLANG
-        # about alignment when reading DWARF for packed types.
-        #self.return_and_test_struct_value ("return_one_int_one_double_packed")
-        self.return_and_test_struct_value("return_one_int_one_long")
-
-        # icc and gcc don't support this extension.
-        if self.getCompiler().endswith('clang'):
-            self.return_and_test_struct_value("return_vector_size_float32_8")
-            self.return_and_test_struct_value("return_vector_size_float32_16")
-            self.return_and_test_struct_value("return_vector_size_float32_32")
+            self.return_and_test_struct_value("return_one_int_one_double")
+            self.return_and_test_struct_value("return_one_int_one_double_one_int")
             self.return_and_test_struct_value(
-                "return_ext_vector_size_float32_2")
-            self.return_and_test_struct_value(
-                "return_ext_vector_size_float32_4")
-            self.return_and_test_struct_value(
-                "return_ext_vector_size_float32_8")
+                "return_one_short_one_double_one_short")
+            self.return_and_test_struct_value("return_one_float_one_int_one_float")
+            self.return_and_test_struct_value("return_two_float")
+            # I am leaving out the packed test until we have a way to tell CLANG
+            # about alignment when reading DWARF for packed types.
+            #self.return_and_test_struct_value ("return_one_int_one_double_packed")
+            self.return_and_test_struct_value("return_one_int_one_long")
+
+    @expectedFailureAll(oslist=["freebsd"], archs=["i386"])
+    @expectedFailureAll(oslist=["macosx"], archs=["i386"], bugnumber="<rdar://problem/28719652>")
+    @expectedFailureAll(
+        oslist=["linux"],
+        compiler="clang",
+        compiler_version=[
+            "<=",
+            "3.6"],
+        archs=["i386"])
+    @expectedFailureAll(compiler=["gcc"], archs=["x86_64", "i386"])
+    @expectedFailureAll(oslist=["windows"], bugnumber="llvm.org/pr24778")
+    @skipIfDarwinEmbedded # <rdar://problem/33976032> ABIMacOSX_arm64 doesn't get structs this big correctly
+    def test_vector_values(self):
+        self.build()
+        exe = os.path.join(os.getcwd(), "a.out")
+        error = lldb.SBError()
+
+        self.target = self.dbg.CreateTarget(exe)
+        self.assertTrue(self.target, VALID_TARGET)
+
+        main_bktp = self.target.BreakpointCreateByName("main", exe)
+        self.assertTrue(main_bktp, VALID_BREAKPOINT)
+
+        self.process = self.target.LaunchSimple(
+            None, None, self.get_process_working_directory())
+        self.assertEqual(len(lldbutil.get_threads_stopped_at_breakpoint(
+            self.process, main_bktp)), 1)
+
+        self.return_and_test_struct_value("return_vector_size_float32_8")
+        self.return_and_test_struct_value("return_vector_size_float32_16")
+        self.return_and_test_struct_value("return_vector_size_float32_32")
+        self.return_and_test_struct_value("return_ext_vector_size_float32_2")
+        self.return_and_test_struct_value("return_ext_vector_size_float32_4")
+        self.return_and_test_struct_value("return_ext_vector_size_float32_8")
 
     def return_and_test_struct_value(self, func_name):
         """Pass in the name of the function to return from - takes in value, returns value."""

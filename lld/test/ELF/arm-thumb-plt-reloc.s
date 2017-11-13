@@ -2,7 +2,7 @@
 // RUN: llvm-mc -filetype=obj -triple=thumbv7a-none-linux-gnueabi %s -o %t2
 // RUN: ld.lld %t1 %t2 -o %t
 // RUN: llvm-objdump -triple=thumbv7a-none-linux-gnueabi -d %t | FileCheck %s
-// RUN: ld.lld -shared %t1 %t2 -o %t3
+// RUN: ld.lld --hash-style=sysv -shared %t1 %t2 -o %t3
 // RUN: llvm-objdump -triple=thumbv7a-none-linux-gnueabi -d %t3 | FileCheck -check-prefix=DSOTHUMB %s
 // RUN: llvm-objdump -triple=armv7a-none-linux-gnueabi -d %t3 | FileCheck -check-prefix=DSOARM %s
 // RUN: llvm-readobj -s -r %t3 | FileCheck -check-prefix=DSOREL %s
@@ -30,7 +30,7 @@ _start:
 // CHECK-NEXT:   11002: 70 47   bx      lr
 // CHECK: func3:
 // CHECK-NEXT:   11004: 70 47   bx      lr
-// CHECK-NEXT:   11006: 00 00   movs    r0, r0
+// CHECK-NEXT:   11006: d4 d4
 // CHECK: _start:
 // 11008 + 4 -12 = 0x11000 = func1
 // CHECK-NEXT:   11008: ff f7 fa ff     bl      #-12
@@ -49,7 +49,7 @@ _start:
 // DSOTHUMB-NEXT:    1002:       70 47   bx      lr
 // DSOTHUMB: func3:
 // DSOTHUMB-NEXT:    1004:       70 47   bx      lr
-// DSOTHUMB-NEXT:    1006:       00 00   movs    r0, r0
+// DSOTHUMB-NEXT:    1006:       d4 d4
 // DSOTHUMB: _start:
 // 0x1008 + 0x28 + 4 = 0x1034 = PLT func1
 // DSOTHUMB-NEXT:    1008:       00 f0 14 e8     blx     #40

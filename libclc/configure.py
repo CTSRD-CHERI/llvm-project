@@ -1,4 +1,5 @@
 #!/usr/bin/python
+from __future__ import print_function
 
 def c_compiler_rule(b, name, description, compiler, flags):
   command = "%s -MMD -MF $out.d %s -c -o $out $in" % (compiler, flags)
@@ -58,19 +59,21 @@ if not pkgconfigdir:
 
 def llvm_config(args):
   try:
-    proc = Popen([llvm_config_exe] + args, stdout=PIPE)
+    # Universal newlines translate different newline formats to '\n'
+    # it also force the input to be string instead of bytes in python 3
+    proc = Popen([llvm_config_exe] + args, stdout=PIPE, universal_newlines=True)
     return proc.communicate()[0].rstrip().replace('\n', ' ')
   except OSError:
-    print "Error executing llvm-config."
-    print "Please ensure that llvm-config is in your $PATH, or use --with-llvm-config."
+    print("Error executing llvm-config.")
+    print("Please ensure that llvm-config is in your $PATH, or use --with-llvm-config.")
     sys.exit(1)
 
-llvm_version = string.split(string.replace(llvm_config(['--version']), 'svn', ''), '.')
+llvm_version = llvm_config(['--version']).replace('svn', '').split('.')
 llvm_int_version = int(llvm_version[0]) * 100 + int(llvm_version[1]) * 10
-llvm_string_version = 'LLVM' + llvm_version[0] + '.' + llvm_version[1]
+llvm_string_version = llvm_version[0] + '.' + llvm_version[1]
 
-if llvm_int_version < 400:
-    print "libclc requires LLVM >= 4.0"
+if llvm_int_version < 390:
+    print("libclc requires LLVM >= 3.9")
     sys.exit(1)
 
 llvm_system_libs = llvm_config(['--system-libs'])
@@ -78,7 +81,8 @@ llvm_bindir = llvm_config(['--bindir'])
 llvm_core_libs = llvm_config(['--libs', 'core', 'bitreader', 'bitwriter']) + ' ' + \
                  llvm_system_libs + ' ' + \
                  llvm_config(['--ldflags'])
-llvm_cxxflags = llvm_config(['--cxxflags']) + ' -fno-exceptions -fno-rtti'
+llvm_cxxflags = llvm_config(['--cxxflags']) + ' -fno-exceptions -fno-rtti ' + \
+                '-DHAVE_LLVM=0x{:0=4}'.format(llvm_int_version)
 llvm_libdir = llvm_config(['--libdir'])
 
 llvm_clang = os.path.join(llvm_bindir, 'clang')
@@ -105,9 +109,13 @@ available_targets = {
   'nvptx64--nvidiacl' : { 'devices' : [{'gpu' : '', 'aliases' : []} ]},
 }
 
-available_targets['amdgcn-mesa-mesa3d'] = available_targets['amdgcn--']
 
-default_targets = ['nvptx--nvidiacl', 'nvptx64--nvidiacl', 'r600--', 'amdgcn--', 'amdgcn--amdhsa', 'amdgcn-mesa-mesa3d']
+default_targets = ['nvptx--nvidiacl', 'nvptx64--nvidiacl', 'r600--', 'amdgcn--', 'amdgcn--amdhsa']
+
+#mesa is using amdgcn-mesa-mesa3d since llvm-4.0
+if llvm_int_version > 390:
+    available_targets['amdgcn-mesa-mesa3d'] = available_targets['amdgcn--']
+    default_targets.append('amdgcn-mesa-mesa3d')
 
 targets = args
 if not targets:
@@ -177,9 +185,14 @@ for target in targets:
 
   incdirs = filter(os.path.isdir,
                [os.path.join(srcdir, subdir, 'include') for subdir in subdirs])
-  libdirs = filter(lambda d: os.path.isfile(os.path.join(d, 'SOURCES')),
+  libdirs = filter(lambda d: os.path.isfile(os.path.join(d, 'SOURCES')) or
+                             os.path.isfile(os.path.join(d, 'SOURCES_' + llvm_string_version)),
                    [os.path.join(srcdir, subdir, 'lib') for subdir in subdirs])
 
+  # The above are iterables in python3 but we might use them multiple times
+  # if more then one device is supported.
+  incdirs = list(incdirs)
+  libdirs = list(libdirs)
   clang_cl_includes = ' '.join(["-I%s" % incdir for incdir in incdirs])
 
   for device in available_targets[target]['devices']:
@@ -195,7 +208,7 @@ for target in targets:
 
     objects = []
     sources_seen = set()
-    compats_seen = set()
+    compats = []
 
     if device['gpu'] == '':
       full_target_name = target
@@ -206,16 +219,26 @@ for target in targets:
 
     for libdir in libdirs:
       subdir_list_file = os.path.join(libdir, 'SOURCES')
-      manifest_deps.add(subdir_list_file)
+      if os.path.exists(subdir_list_file):
+        manifest_deps.add(subdir_list_file)
       override_list_file = os.path.join(libdir, 'OVERRIDES')
       compat_list_file = os.path.join(libdir,
         'SOURCES_' + llvm_string_version)
+      compat_list_override = os.path.join(libdir,
+        'OVERRIDES_' + llvm_string_version)
 
       # Build compat list
       if os.path.exists(compat_list_file):
+        manifest_deps.add(compat_list_file)
         for compat in open(compat_list_file).readlines():
           compat = compat.rstrip()
-          compats_seen.add(compat)
+          compats.append(compat)
+
+      # Add target compat overrides
+      if os.path.exists(compat_list_override):
+        for override in open(compat_list_override).readlines():
+          override = override.rstrip()
+          sources_seen.add(override)
 
       # Add target overrides
       if os.path.exists(override_list_file):
@@ -223,15 +246,14 @@ for target in targets:
           override = override.rstrip()
           sources_seen.add(override)
 
-      for src in open(subdir_list_file).readlines():
+      files = open(subdir_list_file).readlines() if os.path.exists(subdir_list_file) else []
+      for src in files + compats:
         src = src.rstrip()
         if src not in sources_seen:
           sources_seen.add(src)
           obj = os.path.join(target, 'lib', src + obj_suffix + '.bc')
           objects.append(obj)
           src_path = libdir
-          if src in compats_seen:
-            src_path = os.path.join(libdir, llvm_string_version)
           src_file = os.path.join(src_path, src)
           ext = os.path.splitext(src)[1]
           if ext == '.ll':

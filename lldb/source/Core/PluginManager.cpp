@@ -9,24 +9,35 @@
 
 #include "lldb/Core/PluginManager.h"
 
-// C Includes
-// C++ Includes
-#include <climits>
-#include <mutex>
-#include <string>
-#include <vector>
-
-// Other libraries and framework includes
-#include "llvm/ADT/StringRef.h"
-#include "llvm/Support/DynamicLibrary.h"
-
-// Project includes
 #include "lldb/Core/Debugger.h"
-#include "lldb/Host/FileSpec.h"
-#include "lldb/Host/Host.h"
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Interpreter/OptionValueProperties.h"
-#include "lldb/Utility/Error.h"
+#include "lldb/Utility/ConstString.h" // for ConstString
+#include "lldb/Utility/FileSpec.h"
+#include "lldb/Utility/Status.h"
+#include "lldb/Utility/StringList.h" // for StringList
+
+#if defined(LLVM_ON_WIN32)
+#include "lldb/Host/windows/PosixApi.h" // for PATH_MAX
+#endif
+
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Support/DynamicLibrary.h"
+#include "llvm/Support/FileSystem.h"  // for file_type, file_...
+#include "llvm/Support/raw_ostream.h" // for fs
+
+#include <map>    // for map<>::const_ite...
+#include <memory> // for shared_ptr
+#include <mutex>
+#include <string>
+#include <utility> // for pair
+#include <vector>
+
+#include <assert.h> // for assert
+
+namespace lldb_private {
+class CommandInterpreter;
+}
 
 using namespace lldb;
 using namespace lldb_private;
@@ -82,7 +93,7 @@ static FileSpec::EnumerateDirectoryResult
 LoadPluginCallback(void *baton, llvm::sys::fs::file_type ft,
                    const FileSpec &file_spec) {
   //    PluginManager *plugin_manager = (PluginManager *)baton;
-  Error error;
+  Status error;
 
   namespace fs = llvm::sys::fs;
   // If we have a regular file, a symbolic link or unknown file type, try
@@ -260,6 +271,54 @@ PluginManager::GetABICreateCallbackForPluginName(const ConstString &name) {
       if (name == pos->name)
         return pos->create_callback;
     }
+  }
+  return nullptr;
+}
+
+#pragma mark Architecture
+
+struct ArchitectureInstance {
+  ConstString name;
+  std::string description;
+  PluginManager::ArchitectureCreateInstance create_callback;
+};
+
+typedef std::vector<ArchitectureInstance> ArchitectureInstances;
+
+static std::mutex g_architecture_mutex;
+
+static ArchitectureInstances &GetArchitectureInstances() {
+  static ArchitectureInstances g_instances;
+  return g_instances;
+}
+
+void PluginManager::RegisterPlugin(const ConstString &name,
+                                   llvm::StringRef description,
+                                   ArchitectureCreateInstance create_callback) {
+  std::lock_guard<std::mutex> guard(g_architecture_mutex);
+  GetArchitectureInstances().push_back({name, description, create_callback});
+}
+
+void PluginManager::UnregisterPlugin(
+    ArchitectureCreateInstance create_callback) {
+  std::lock_guard<std::mutex> guard(g_architecture_mutex);
+  auto &instances = GetArchitectureInstances();
+
+  for (auto pos = instances.begin(), end = instances.end(); pos != end; ++pos) {
+    if (pos->create_callback == create_callback) {
+      instances.erase(pos);
+      return;
+    }
+  }
+  llvm_unreachable("Plugin not found");
+}
+
+std::unique_ptr<Architecture>
+PluginManager::CreateArchitectureInstance(const ArchSpec &arch) {
+  std::lock_guard<std::mutex> guard(g_architecture_mutex);
+  for (const auto &instances : GetArchitectureInstances()) {
+    if (auto plugin_up = instances.create_callback(arch))
+      return plugin_up;
   }
   return nullptr;
 }
@@ -1055,9 +1114,9 @@ PluginManager::GetObjectFileCreateMemoryCallbackForPluginName(
   return nullptr;
 }
 
-Error PluginManager::SaveCore(const lldb::ProcessSP &process_sp,
-                              const FileSpec &outfile) {
-  Error error;
+Status PluginManager::SaveCore(const lldb::ProcessSP &process_sp,
+                               const FileSpec &outfile) {
+  Status error;
   std::lock_guard<std::recursive_mutex> guard(GetObjectFileMutex());
   ObjectFileInstances &instances = GetObjectFileInstances();
 
@@ -2315,7 +2374,8 @@ static lldb::OptionValuePropertiesSP GetDebuggerPropertyForPlugins(
     OptionValuePropertiesSP plugin_properties_sp =
         parent_properties_sp->GetSubProperty(nullptr, g_property_name);
     if (!plugin_properties_sp && can_create) {
-      plugin_properties_sp.reset(new OptionValueProperties(g_property_name));
+      plugin_properties_sp =
+          std::make_shared<OptionValueProperties>(g_property_name);
       parent_properties_sp->AppendProperty(
           g_property_name, ConstString("Settings specify to plugins."), true,
           plugin_properties_sp);
@@ -2325,8 +2385,8 @@ static lldb::OptionValuePropertiesSP GetDebuggerPropertyForPlugins(
       lldb::OptionValuePropertiesSP plugin_type_properties_sp =
           plugin_properties_sp->GetSubProperty(nullptr, plugin_type_name);
       if (!plugin_type_properties_sp && can_create) {
-        plugin_type_properties_sp.reset(
-            new OptionValueProperties(plugin_type_name));
+        plugin_type_properties_sp =
+            std::make_shared<OptionValueProperties>(plugin_type_name);
         plugin_properties_sp->AppendProperty(plugin_type_name, plugin_type_desc,
                                              true, plugin_type_properties_sp);
       }
@@ -2349,7 +2409,8 @@ static lldb::OptionValuePropertiesSP GetDebuggerPropertyForPluginsOldStyle(
     OptionValuePropertiesSP plugin_properties_sp =
         parent_properties_sp->GetSubProperty(nullptr, plugin_type_name);
     if (!plugin_properties_sp && can_create) {
-      plugin_properties_sp.reset(new OptionValueProperties(plugin_type_name));
+      plugin_properties_sp =
+          std::make_shared<OptionValueProperties>(plugin_type_name);
       parent_properties_sp->AppendProperty(plugin_type_name, plugin_type_desc,
                                            true, plugin_properties_sp);
     }
@@ -2358,8 +2419,8 @@ static lldb::OptionValuePropertiesSP GetDebuggerPropertyForPluginsOldStyle(
       lldb::OptionValuePropertiesSP plugin_type_properties_sp =
           plugin_properties_sp->GetSubProperty(nullptr, g_property_name);
       if (!plugin_type_properties_sp && can_create) {
-        plugin_type_properties_sp.reset(
-            new OptionValueProperties(g_property_name));
+        plugin_type_properties_sp =
+            std::make_shared<OptionValueProperties>(g_property_name);
         plugin_properties_sp->AppendProperty(
             g_property_name, ConstString("Settings specific to plugins"), true,
             plugin_type_properties_sp);

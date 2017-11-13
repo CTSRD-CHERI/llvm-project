@@ -97,8 +97,8 @@ bool ProcessMachCore::CanDebug(lldb::TargetSP target_sp,
     // ModuleSpecList::FindMatchingModuleSpec
     // enforces a strict arch mach.
     ModuleSpec core_module_spec(m_core_file);
-    Error error(ModuleList::GetSharedModule(core_module_spec, m_core_module_sp,
-                                            NULL, NULL, NULL));
+    Status error(ModuleList::GetSharedModule(core_module_spec, m_core_module_sp,
+                                             NULL, NULL, NULL));
 
     if (m_core_module_sp) {
       ObjectFile *core_objfile = m_core_module_sp->GetObjectFile();
@@ -143,7 +143,7 @@ bool ProcessMachCore::GetDynamicLoaderAddress(lldb::addr_t addr) {
   Log *log(lldb_private::GetLogIfAnyCategoriesSet(LIBLLDB_LOG_DYNAMIC_LOADER |
                                                   LIBLLDB_LOG_PROCESS));
   llvm::MachO::mach_header header;
-  Error error;
+  Status error;
   if (DoReadMemory(addr, &header, sizeof(header), error) != sizeof(header))
     return false;
   if (header.magic == llvm::MachO::MH_CIGAM ||
@@ -200,10 +200,10 @@ bool ProcessMachCore::GetDynamicLoaderAddress(lldb::addr_t addr) {
 //----------------------------------------------------------------------
 // Process Control
 //----------------------------------------------------------------------
-Error ProcessMachCore::DoLoadCore() {
+Status ProcessMachCore::DoLoadCore() {
   Log *log(lldb_private::GetLogIfAnyCategoriesSet(LIBLLDB_LOG_DYNAMIC_LOADER |
                                                   LIBLLDB_LOG_PROCESS));
-  Error error;
+  Status error;
   if (!m_core_module_sp) {
     error.SetErrorString("invalid core module");
     return error;
@@ -291,8 +291,57 @@ Error ProcessMachCore::DoLoadCore() {
     m_core_range_infos.Sort();
   }
 
-  if (m_dyld_addr == LLDB_INVALID_ADDRESS ||
-      m_mach_kernel_addr == LLDB_INVALID_ADDRESS) {
+
+  bool found_main_binary_definitively = false;
+
+  addr_t objfile_binary_addr;
+  UUID objfile_binary_uuid;
+  if (core_objfile->GetCorefileMainBinaryInfo (objfile_binary_addr, objfile_binary_uuid))
+  {
+    if (objfile_binary_addr != LLDB_INVALID_ADDRESS)
+    {
+        m_mach_kernel_addr = objfile_binary_addr;
+        found_main_binary_definitively = true;
+        if (log)
+            log->Printf ("ProcessMachCore::DoLoadCore: using kernel address 0x%" PRIx64
+                         " from LC_NOTE 'main bin spec' load command.", m_mach_kernel_addr);
+    }
+  }
+  
+  // This checks for the presence of an LC_IDENT string in a core file;
+  // LC_IDENT is very obsolete and should not be used in new code, but
+  // if the load command is present, let's use the contents.
+  std::string corefile_identifier = core_objfile->GetIdentifierString();
+  if (found_main_binary_definitively == false 
+      && corefile_identifier.find("Darwin Kernel") != std::string::npos) {
+      UUID uuid;
+      addr_t addr = LLDB_INVALID_ADDRESS;
+      if (corefile_identifier.find("UUID=") != std::string::npos) {
+          size_t p = corefile_identifier.find("UUID=") + strlen("UUID=");
+          std::string uuid_str = corefile_identifier.substr(p, 36);
+          uuid.SetFromCString(uuid_str.c_str());
+      }
+      if (corefile_identifier.find("stext=") != std::string::npos) {
+          size_t p = corefile_identifier.find("stext=") + strlen("stext=");
+          if (corefile_identifier[p] == '0' && corefile_identifier[p + 1] == 'x') {
+              errno = 0;
+              addr = ::strtoul(corefile_identifier.c_str() + p, NULL, 16);
+              if (errno != 0 || addr == 0)
+                  addr = LLDB_INVALID_ADDRESS;
+          }
+      }
+      if (uuid.IsValid() && addr != LLDB_INVALID_ADDRESS) {
+          m_mach_kernel_addr = addr;
+          found_main_binary_definitively = true;
+          if (log)
+            log->Printf("ProcessMachCore::DoLoadCore: Using the kernel address 0x%" PRIx64
+                        " from LC_IDENT/LC_NOTE 'kern ver str' string: '%s'", addr, corefile_identifier.c_str());
+      }
+  }
+
+  if (found_main_binary_definitively == false
+      && (m_dyld_addr == LLDB_INVALID_ADDRESS
+          || m_mach_kernel_addr == LLDB_INVALID_ADDRESS)) {
     // We need to locate the main executable in the memory ranges
     // we have in the core file.  We need to search for both a user-process dyld
     // binary
@@ -317,7 +366,8 @@ Error ProcessMachCore::DoLoadCore() {
     }
   }
 
-  if (m_mach_kernel_addr != LLDB_INVALID_ADDRESS) {
+  if (found_main_binary_definitively == false 
+       && m_mach_kernel_addr != LLDB_INVALID_ADDRESS) {
     // In the case of multiple kernel images found in the core file via
     // exhaustive
     // search, we may not pick the correct one.  See if the
@@ -418,7 +468,7 @@ Error ProcessMachCore::DoLoadCore() {
   // it to match the core file which is always single arch.
   ArchSpec arch(m_core_module_sp->GetArchitecture());
   if (arch.GetCore() == ArchSpec::eCore_x86_32_i486) {
-    arch.SetTriple("i386", GetTarget().GetPlatform().get());
+    arch = Platform::GetAugmentedArchSpec(GetTarget().GetPlatform().get(), "i386");
   }
   if (arch.IsValid())
     GetTarget().SetArchitecture(arch);
@@ -464,7 +514,7 @@ void ProcessMachCore::RefreshStateAfterStop() {
   // SetThreadStopInfo (m_last_stop_packet);
 }
 
-Error ProcessMachCore::DoDestroy() { return Error(); }
+Status ProcessMachCore::DoDestroy() { return Status(); }
 
 //------------------------------------------------------------------
 // Process Queries
@@ -478,14 +528,14 @@ bool ProcessMachCore::WarnBeforeDetach() const { return false; }
 // Process Memory
 //------------------------------------------------------------------
 size_t ProcessMachCore::ReadMemory(addr_t addr, void *buf, size_t size,
-                                   Error &error) {
+                                   Status &error) {
   // Don't allow the caching that lldb_private::Process::ReadMemory does
   // since in core files we have it all cached our our core file anyway.
   return DoReadMemory(addr, buf, size, error);
 }
 
 size_t ProcessMachCore::DoReadMemory(addr_t addr, void *buf, size_t size,
-                                     Error &error) {
+                                     Status &error) {
   ObjectFile *core_objfile = m_core_module_sp->GetObjectFile();
   size_t bytes_read = 0;
 
@@ -539,8 +589,8 @@ size_t ProcessMachCore::DoReadMemory(addr_t addr, void *buf, size_t size,
   return bytes_read;
 }
 
-Error ProcessMachCore::GetMemoryRegionInfo(addr_t load_addr,
-                                           MemoryRegionInfo &region_info) {
+Status ProcessMachCore::GetMemoryRegionInfo(addr_t load_addr,
+                                            MemoryRegionInfo &region_info) {
   region_info.Clear();
   const VMRangeToPermissions::Entry *permission_entry =
       m_core_range_infos.FindEntryThatContainsOrFollows(load_addr);
@@ -567,7 +617,7 @@ Error ProcessMachCore::GetMemoryRegionInfo(addr_t load_addr,
       region_info.SetExecutable(MemoryRegionInfo::eNo);
       region_info.SetMapped(MemoryRegionInfo::eNo);
     }
-    return Error();
+    return Status();
   }
 
   region_info.GetRange().SetRangeBase(load_addr);
@@ -576,7 +626,7 @@ Error ProcessMachCore::GetMemoryRegionInfo(addr_t load_addr,
   region_info.SetWritable(MemoryRegionInfo::eNo);
   region_info.SetExecutable(MemoryRegionInfo::eNo);
   region_info.SetMapped(MemoryRegionInfo::eNo);
-  return Error();
+  return Status();
 }
 
 void ProcessMachCore::Clear() { m_thread_list.Clear(); }

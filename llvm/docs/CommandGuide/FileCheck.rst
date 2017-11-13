@@ -77,6 +77,20 @@ OPTIONS
   -verify``. With this option FileCheck will verify that input does not contain
   warnings not covered by any ``CHECK:`` patterns.
 
+.. option:: --enable-var-scope
+
+  Enables scope for regex variables.
+
+  Variables with names that start with ``$`` are considered global and
+  remain set throughout the file.
+
+  All other variables get undefined after each encountered ``CHECK-LABEL``.
+
+.. option:: -D<VAR=VALUE>
+
+  Sets a filecheck variable ``VAR`` with value ``VALUE`` that can be used in
+  ``CHECK:`` lines.
+
 .. option:: -version
 
  Show the version number of this program.
@@ -344,6 +358,9 @@ matched by the directive cannot also be matched by any other check present in
 other unique identifiers. Conceptually, the presence of ``CHECK-LABEL`` divides
 the input stream into separate blocks, each of which is processed independently,
 preventing a ``CHECK:`` directive in one block matching a line in another block.
+If ``--enable-var-scope`` is in effect, all local variables are cleared at the
+beginning of the block.
+
 For example,
 
 .. code-block:: llvm
@@ -385,10 +402,11 @@ All FileCheck directives take a pattern to match.
 For most uses of FileCheck, fixed string matching is perfectly sufficient.  For
 some things, a more flexible form of matching is desired.  To support this,
 FileCheck allows you to specify regular expressions in matching strings,
-surrounded by double braces: ``{{yourregex}}``.  Because we want to use fixed
-string matching for a majority of what we do, FileCheck has been designed to
-support mixing and matching fixed string matching with regular expressions.
-This allows you to write things like this:
+surrounded by double braces: ``{{yourregex}}``. FileCheck implements a POSIX
+regular expression matcher; it supports Extended POSIX regular expressions
+(ERE). Because we want to use fixed string matching for a majority of what we
+do, FileCheck has been designed to support mixing and matching fixed string
+matching with regular expressions.  This allows you to write things like this:
 
 .. code-block:: llvm
 
@@ -422,7 +440,7 @@ The first check line matches a regex ``%[a-z]+`` and captures it into the
 variable ``REGISTER``.  The second line verifies that whatever is in
 ``REGISTER`` occurs later in the file after an "``andw``".  :program:`FileCheck`
 variable references are always contained in ``[[ ]]`` pairs, and their names can
-be formed with the regex ``[a-zA-Z][a-zA-Z0-9]*``.  If a colon follows the name,
+be formed with the regex ``[a-zA-Z_][a-zA-Z0-9_]*``.  If a colon follows the name,
 then it is a definition of the variable; otherwise, it is a use.
 
 :program:`FileCheck` variables can be defined multiple times, and uses always
@@ -435,6 +453,13 @@ were defined on. For example:
 
 Can be useful if you want the operands of ``op`` to be the same register,
 and don't care exactly which register it is.
+
+If ``--enable-var-scope`` is in effect, variables with names that
+start with ``$`` are considered to be global. All others variables are
+local.  All local variables get undefined at the beginning of each
+CHECK-LABEL block. Global variables are not affected by CHECK-LABEL.
+This makes it easier to ensure that individual tests are not affected
+by variables set in preceding tests.
 
 FileCheck Expressions
 ~~~~~~~~~~~~~~~~~~~~~

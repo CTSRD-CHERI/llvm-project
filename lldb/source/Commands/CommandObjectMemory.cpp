@@ -23,7 +23,7 @@
 #include "lldb/Core/Section.h"
 #include "lldb/Core/ValueObjectMemory.h"
 #include "lldb/DataFormatters/ValueObjectPrinter.h"
-#include "lldb/Host/StringConvert.h"
+#include "lldb/Host/OptionParser.h"
 #include "lldb/Interpreter/Args.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Interpreter/CommandReturnObject.h"
@@ -74,9 +74,9 @@ public:
     return llvm::makeArrayRef(g_read_memory_options);
   }
 
-  Error SetOptionValue(uint32_t option_idx, llvm::StringRef option_value,
-                       ExecutionContext *execution_context) override {
-    Error error;
+  Status SetOptionValue(uint32_t option_idx, llvm::StringRef option_value,
+                        ExecutionContext *execution_context) override {
+    Status error;
     const int short_option = g_read_memory_options[option_idx].short_option;
 
     switch (short_option) {
@@ -120,8 +120,8 @@ public:
     m_offset.Clear();
   }
 
-  Error FinalizeSettings(Target *target, OptionGroupFormat &format_options) {
-    Error error;
+  Status FinalizeSettings(Target *target, OptionGroupFormat &format_options) {
+    Status error;
     OptionValueUInt64 &byte_size_value = format_options.GetByteSizeValue();
     OptionValueUInt64 &count_value = format_options.GetCountValue();
     const bool byte_size_option_set = byte_size_value.OptionWasSet();
@@ -378,7 +378,7 @@ protected:
     }
 
     CompilerType clang_ast_type;
-    Error error;
+    Status error;
 
     const char *view_as_type_cstr =
         m_memory_options.m_view_as_type.GetCurrentValue();
@@ -716,7 +716,7 @@ protected:
       while (item_count < count) {
         std::string buffer;
         buffer.resize(item_byte_size + 1, 0);
-        Error error;
+        Status error;
         size_t read = target->ReadCStringFromMemory(data_addr, &buffer[0],
                                                     item_byte_size + 1, error);
         if (error.Fail()) {
@@ -909,9 +909,9 @@ public:
       return llvm::makeArrayRef(g_memory_find_option_table);
     }
 
-    Error SetOptionValue(uint32_t option_idx, llvm::StringRef option_value,
-                         ExecutionContext *execution_context) override {
-      Error error;
+    Status SetOptionValue(uint32_t option_idx, llvm::StringRef option_value,
+                          ExecutionContext *execution_context) override {
+      Status error;
       const int short_option =
           g_memory_find_option_table[option_idx].short_option;
 
@@ -1008,7 +1008,7 @@ protected:
         return 0;
 
       uint8_t retval = 0;
-      Error error;
+      Status error;
       if (0 ==
           m_process_sp->ReadMemory(m_base_addr + offset, &retval, 1, error)) {
         m_is_valid = false;
@@ -1035,7 +1035,7 @@ protected:
       return false;
     }
 
-    Error error;
+    Status error;
     lldb::addr_t low_addr = Args::StringToAddress(&m_exe_ctx, command[0].ref,
                                                   LLDB_INVALID_ADDRESS, &error);
     if (low_addr == LLDB_INVALID_ADDRESS || error.Fail()) {
@@ -1202,9 +1202,9 @@ public:
       return llvm::makeArrayRef(g_memory_write_option_table);
     }
 
-    Error SetOptionValue(uint32_t option_idx, llvm::StringRef option_value,
-                         ExecutionContext *execution_context) override {
-      Error error;
+    Status SetOptionValue(uint32_t option_idx, llvm::StringRef option_value,
+                          ExecutionContext *execution_context) override {
+      Status error;
       const int short_option =
           g_memory_write_option_table[option_idx].short_option;
 
@@ -1344,7 +1344,7 @@ protected:
     OptionValueUInt64 &byte_size_value = m_format_options.GetByteSizeValue();
     size_t item_byte_size = byte_size_value.GetCurrentValue();
 
-    Error error;
+    Status error;
     lldb::addr_t addr = Args::StringToAddress(&m_exe_ctx, command[0].ref,
                                               LLDB_INVALID_ADDRESS, &error);
 
@@ -1365,7 +1365,7 @@ protected:
       if (data_sp) {
         length = data_sp->GetByteSize();
         if (length > 0) {
-          Error error;
+          Status error;
           size_t bytes_written =
               process->WriteMemory(addr, data_sp->GetBytes(), length, error);
 
@@ -1443,8 +1443,16 @@ protected:
       case eFormatHex:
       case eFormatHexUppercase:
       case eFormatPointer:
+      {
         // Decode hex bytes
-        if (entry.ref.getAsInteger(16, uval64)) {
+        // Be careful, getAsInteger with a radix of 16 rejects "0xab" so we
+        // have to special case that:
+        bool success = false;
+        if (entry.ref.startswith("0x"))
+          success = !entry.ref.getAsInteger(0, uval64);
+        if (!success)
+          success = !entry.ref.getAsInteger(16, uval64);
+        if (!success) {
           result.AppendErrorWithFormat(
               "'%s' is not a valid hex string value.\n", entry.c_str());
           result.SetStatus(eReturnStatusFailed);
@@ -1459,7 +1467,7 @@ protected:
         }
         buffer.PutMaxHex64(uval64, item_byte_size);
         break;
-
+      }
       case eFormatBoolean:
         uval64 = Args::StringToBoolean(entry.ref, false, &success);
         if (!success) {
@@ -1498,7 +1506,7 @@ protected:
         // Include the NULL for C strings...
         if (m_format_options.GetFormat() == eFormatCString)
           ++len;
-        Error error;
+        Status error;
         if (process->WriteMemory(addr, entry.c_str(), len, error) == len) {
           addr += len;
         } else {
@@ -1566,7 +1574,7 @@ protected:
     }
 
     if (!buffer.GetString().empty()) {
-      Error error;
+      Status error;
       if (process->WriteMemory(addr, buffer.GetString().data(),
                                buffer.GetString().size(),
                                error) == buffer.GetString().size())
@@ -1633,7 +1641,7 @@ protected:
       return false;
     }
 
-    Error error;
+    Status error;
     lldb::addr_t addr = Args::StringToAddress(&m_exe_ctx, command[0].ref,
                                               LLDB_INVALID_ADDRESS, &error);
 
@@ -1691,7 +1699,7 @@ protected:
   bool DoExecute(Args &command, CommandReturnObject &result) override {
     ProcessSP process_sp = m_exe_ctx.GetProcessSP();
     if (process_sp) {
-      Error error;
+      Status error;
       lldb::addr_t load_addr = m_prev_end_addr;
       m_prev_end_addr = LLDB_INVALID_ADDRESS;
 

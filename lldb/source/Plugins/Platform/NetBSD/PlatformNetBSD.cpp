@@ -22,12 +22,12 @@
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/State.h"
-#include "lldb/Host/FileSpec.h"
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
-#include "lldb/Utility/Error.h"
+#include "lldb/Utility/FileSpec.h"
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/Status.h"
 #include "lldb/Utility/StreamString.h"
 
 // Define these constants from NetBSD mman.h for use when targeting
@@ -262,11 +262,11 @@ bool PlatformNetBSD::CanDebugProcess() {
 // lldb-launch, llgs-attach.  This differs from current lldb-launch,
 // debugserver-attach
 // approach on MacOSX.
-lldb::ProcessSP
-PlatformNetBSD::DebugProcess(ProcessLaunchInfo &launch_info, Debugger &debugger,
-                            Target *target, // Can be NULL, if NULL create a new
-                                            // target, else use existing one
-                            Error &error) {
+lldb::ProcessSP PlatformNetBSD::DebugProcess(
+    ProcessLaunchInfo &launch_info, Debugger &debugger,
+    Target *target, // Can be NULL, if NULL create a new
+                    // target, else use existing one
+    Status &error) {
   Log *log(GetLogIfAllCategoriesSet(LIBLLDB_LOG_PLATFORM));
   if (log)
     log->Printf("PlatformNetBSD::%s entered (target %p)", __FUNCTION__,
@@ -420,13 +420,17 @@ void PlatformNetBSD::CalculateTrapHandlerSymbolNames() {
   m_trap_handlers.push_back(ConstString("_sigtramp"));
 }
 
-uint64_t PlatformNetBSD::ConvertMmapFlagsToPlatform(const ArchSpec &arch,
-                                                   unsigned flags) {
+MmapArgList PlatformNetBSD::GetMmapArgumentList(const ArchSpec &arch,
+                                                addr_t addr, addr_t length,
+                                                unsigned prot, unsigned flags,
+                                                addr_t fd, addr_t offset) {
   uint64_t flags_platform = 0;
 
   if (flags & eMmapFlagsPrivate)
     flags_platform |= MAP_PRIVATE;
   if (flags & eMmapFlagsAnon)
     flags_platform |= MAP_ANON;
-  return flags_platform;
+
+  MmapArgList args({addr, length, prot, flags_platform, fd, offset});
+  return args;
 }

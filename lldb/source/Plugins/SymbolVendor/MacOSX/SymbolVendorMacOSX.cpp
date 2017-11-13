@@ -15,12 +15,12 @@
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/Section.h"
-#include "lldb/Core/Timer.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/Symbols.h"
 #include "lldb/Host/XML.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Utility/StreamString.h"
+#include "lldb/Utility/Timer.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -113,7 +113,8 @@ SymbolVendorMacOSX::CreateInstance(const lldb::ModuleSP &module_sp,
   if (obj_name != obj_file_macho)
     return NULL;
 
-  Timer scoped_timer(LLVM_PRETTY_FUNCTION,
+  static Timer::Category func_cat(LLVM_PRETTY_FUNCTION);
+  Timer scoped_timer(func_cat,
                      "SymbolVendorMacOSX::CreateInstance (module = %s)",
                      module_sp->GetFileSpec().GetPath().c_str());
   SymbolVendorMacOSX *symbol_vendor = new SymbolVendorMacOSX(module_sp);
@@ -122,8 +123,10 @@ SymbolVendorMacOSX::CreateInstance(const lldb::ModuleSP &module_sp,
     path[0] = '\0';
 
     // Try and locate the dSYM file on Mac OS X
+    static Timer::Category func_cat2(
+        "SymbolVendorMacOSX::CreateInstance() locate dSYM");
     Timer scoped_timer2(
-        "SymbolVendorMacOSX::CreateInstance () locate dSYM",
+        func_cat2,
         "SymbolVendorMacOSX::CreateInstance (module = %s) locate dSYM",
         module_sp->GetFileSpec().GetPath().c_str());
 
@@ -217,6 +220,7 @@ SymbolVendorMacOSX::CreateInstance(const lldb::ModuleSP &module_sp,
                         // the original
                         // gloal DBGSourcePath string.
                         bool new_style_source_remapping_dictionary = false;
+                        bool do_truncate_remapping_names = false;
                         std::string original_DBGSourcePath_value =
                             DBGSourcePath;
                         if (plist_sp->GetAsDictionary()->HasKey("DBGVersion")) {
@@ -230,6 +234,9 @@ SymbolVendorMacOSX::CreateInstance(const lldb::ModuleSP &module_sp,
                             if (version_number > 1) {
                               new_style_source_remapping_dictionary = true;
                             }
+                            if (version_number == 2) {
+                                do_truncate_remapping_names = true;
+                            }
                           }
                         }
 
@@ -239,7 +246,7 @@ SymbolVendorMacOSX::CreateInstance(const lldb::ModuleSP &module_sp,
                                 ->GetAsDictionary();
                         remappings_dict->ForEach(
                             [&module_sp, new_style_source_remapping_dictionary,
-                             original_DBGSourcePath_value](
+                             original_DBGSourcePath_value, do_truncate_remapping_names](
                                 ConstString key,
                                 StructuredData::Object *object) -> bool {
                               if (object && object->GetAsString()) {
@@ -261,6 +268,21 @@ SymbolVendorMacOSX::CreateInstance(const lldb::ModuleSP &module_sp,
                                 }
                                 module_sp->GetSourceMappingList().Append(
                                     key, ConstString(DBGSourcePath), true);
+                                // With version 2 of DBGSourcePathRemapping, we can chop off the
+                                // last two filename parts from the source remapping and get a
+                                // more general source remapping that still works.  Add this as
+                                // another option in addition to the full source path remap.
+                                if (do_truncate_remapping_names) {
+                                  FileSpec build_path(key.AsCString(), false);
+                                  FileSpec source_path(DBGSourcePath.c_str(), false);
+                                  build_path.RemoveLastPathComponent();
+                                  build_path.RemoveLastPathComponent();
+                                  source_path.RemoveLastPathComponent();
+                                  source_path.RemoveLastPathComponent();
+                                  module_sp->GetSourceMappingList().Append(
+                                      ConstString(build_path.GetPath().c_str()),
+                                      ConstString(source_path.GetPath().c_str()), true);
+                                }
                               }
                               return true;
                             });

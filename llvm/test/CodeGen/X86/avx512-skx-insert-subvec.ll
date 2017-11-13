@@ -31,7 +31,7 @@ define <8 x i1> @test2(<2 x i1> %a) {
 ; CHECK-NEXT:    vpsllq $63, %xmm0, %xmm0
 ; CHECK-NEXT:    vptestmq %xmm0, %xmm0, %k0
 ; CHECK-NEXT:    vpmovm2q %k0, %zmm0
-; CHECK-NEXT:    vpxord %zmm1, %zmm1, %zmm1
+; CHECK-NEXT:    vpxor %xmm1, %xmm1, %xmm1
 ; CHECK-NEXT:    vinserti64x4 $1, %ymm0, %zmm1, %zmm0
 ; CHECK-NEXT:    vpmovq2m %zmm0, %k0
 ; CHECK-NEXT:    vpmovm2w %k0, %xmm0
@@ -46,8 +46,6 @@ define <8 x i1> @test3(<4 x i1> %a) {
 ; CHECK:       # BB#0:
 ; CHECK-NEXT:    vpslld $31, %xmm0, %xmm0
 ; CHECK-NEXT:    vptestmd %xmm0, %xmm0, %k0
-; CHECK-NEXT:    kshiftlb $4, %k0, %k0
-; CHECK-NEXT:    kshiftrb $4, %k0, %k0
 ; CHECK-NEXT:    vpmovm2w %k0, %xmm0
 ; CHECK-NEXT:    retq
 

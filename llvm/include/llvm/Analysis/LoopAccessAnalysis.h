@@ -163,7 +163,7 @@ public:
   };
 
   MemoryDepChecker(PredicatedScalarEvolution &PSE, const Loop *L)
-      : PSE(PSE), InnermostLoop(L), AccessIdx(0),
+      : PSE(PSE), InnermostLoop(L), AccessIdx(0), MaxSafeRegisterWidth(-1U),
         ShouldRetryWithRuntimeCheck(false), SafeForVectorization(true),
         RecordDependences(true) {}
 
@@ -198,6 +198,10 @@ public:
   /// \brief The maximum number of bytes of a vector register we can vectorize
   /// the accesses safely with.
   uint64_t getMaxSafeDepDistBytes() { return MaxSafeDepDistBytes; }
+
+  /// \brief Return the number of elements that are safe to operate on
+  /// simultaneously, multiplied by the size of the element in bits.
+  uint64_t getMaxSafeRegisterWidth() const { return MaxSafeRegisterWidth; }
 
   /// \brief In same cases when the dependency check fails we can still
   /// vectorize the loop with a dynamic array access check.
@@ -254,6 +258,12 @@ private:
 
   // We can access this many bytes in parallel safely.
   uint64_t MaxSafeDepDistBytes;
+
+  /// \brief Number of elements (from consecutive iterations) that are safe to
+  /// operate on simultaneously, multiplied by the size of the element in bits.
+  /// The size of the element is taken from the memory access that is most
+  /// restrictive.
+  uint64_t MaxSafeRegisterWidth;
 
   /// \brief If we see a non-constant dependence distance we can still try to
   /// vectorize this loop with runtime checks.
@@ -656,16 +666,6 @@ const SCEV *replaceSymbolicStrideSCEV(PredicatedScalarEvolution &PSE,
 int64_t getPtrStride(PredicatedScalarEvolution &PSE, Value *Ptr, const Loop *Lp,
                      const ValueToValueMap &StridesMap = ValueToValueMap(),
                      bool Assume = false, bool ShouldCheckWrap = true);
-
-/// \brief Try to sort an array of loads / stores.
-///
-/// An array of loads / stores can only be sorted if all pointer operands
-/// refer to the same object, and the differences between these pointers 
-/// are known to be constant. If that is the case, this returns true, and the
-/// sorted array is returned in \p Sorted. Otherwise, this returns false, and
-/// \p Sorted is invalid.
-bool sortMemAccesses(ArrayRef<Value *> VL, const DataLayout &DL,
-                     ScalarEvolution &SE, SmallVectorImpl<Value *> &Sorted);
 
 /// \brief Returns true if the memory operations \p A and \p B are consecutive.
 /// This is a simple API that does not depend on the analysis pass. 

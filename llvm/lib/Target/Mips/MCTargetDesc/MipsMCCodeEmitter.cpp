@@ -11,10 +11,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "MipsMCCodeEmitter.h"
 #include "MCTargetDesc/MipsFixupKinds.h"
 #include "MCTargetDesc/MipsMCExpr.h"
 #include "MCTargetDesc/MipsMCTargetDesc.h"
-#include "MipsMCCodeEmitter.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/SmallVector.h"
@@ -101,30 +101,6 @@ static void LowerLargeShift(MCInst& Inst) {
   }
 }
 
-// Pick a DINS instruction variant based on the pos and size operands
-static void LowerDins(MCInst& InstIn) {
-  assert(InstIn.getNumOperands() == 5 &&
-         "Invalid no. of machine operands for DINS!");
-
-  assert(InstIn.getOperand(2).isImm());
-  int64_t pos = InstIn.getOperand(2).getImm();
-  assert(InstIn.getOperand(3).isImm());
-  int64_t size = InstIn.getOperand(3).getImm();
-
-  if (size <= 32) {
-    if (pos < 32)  // DINS, do nothing
-      return;
-    // DINSU
-    InstIn.getOperand(2).setImm(pos - 32);
-    InstIn.setOpcode(Mips::DINSU);
-    return;
-  }
-  // DINSM
-  assert(pos < 32 && "DINS cannot have both size and pos > 32");
-  InstIn.getOperand(3).setImm(size - 32);
-  InstIn.setOpcode(Mips::DINSM);
-}
-
 // Fix a bad compact branch encoding for beqc/bnec.
 void MipsMCCodeEmitter::LowerCompactBranch(MCInst& Inst) const {
   // Encoding may be illegal !(rs < rt), but this situation is
@@ -207,10 +183,6 @@ encodeInstruction(const MCInst &MI, raw_ostream &OS,
   case Mips::DSRA_MM64R6:
   case Mips::DROTR_MM64R6:
     LowerLargeShift(TmpInst);
-    break;
-    // Double extract instruction is chosen by pos and size operands
-  case Mips::DINS:
-    LowerDins(TmpInst);
     break;
   // Compact branches, enforce encoding restrictions.
   case Mips::BEQC:
@@ -666,7 +638,8 @@ getExprOpValue(const MCExpr *Expr, SmallVectorImpl<MCFixup> &Fixups,
                                    : Mips::fixup_Mips_DTPREL_LO;
       break;
     case MipsMCExpr::MEK_GOTTPREL:
-      FixupKind = Mips::fixup_Mips_GOTTPREL;
+      FixupKind = isMicroMips(STI) ? Mips::fixup_MICROMIPS_GOTTPREL
+                                   : Mips::fixup_Mips_GOTTPREL;
       break;
     case MipsMCExpr::MEK_GOT:
       FixupKind = isMicroMips(STI) ? Mips::fixup_MICROMIPS_GOT16
@@ -1139,6 +1112,29 @@ MipsMCCodeEmitter::getMovePRegPairOpValue(const MCInst &MI, unsigned OpNo,
     res = 7;
 
   return res;
+}
+
+unsigned
+MipsMCCodeEmitter::getMovePRegSingleOpValue(const MCInst &MI, unsigned OpNo,
+                                            SmallVectorImpl<MCFixup> &Fixups,
+                                            const MCSubtargetInfo &STI) const {
+  assert(((OpNo == 2) || (OpNo == 3)) &&
+         "Unexpected OpNo for movep operand encoding!");
+
+  MCOperand Op = MI.getOperand(OpNo);
+  assert(Op.isReg() && "Operand of movep is not a register!");
+  switch (Op.getReg()) {
+  default:
+    llvm_unreachable("Unknown register for movep!");
+  case Mips::ZERO:  return 0;
+  case Mips::S1:    return 1;
+  case Mips::V0:    return 2;
+  case Mips::V1:    return 3;
+  case Mips::S0:    return 4;
+  case Mips::S2:    return 5;
+  case Mips::S3:    return 6;
+  case Mips::S4:    return 7;
+  }
 }
 
 unsigned

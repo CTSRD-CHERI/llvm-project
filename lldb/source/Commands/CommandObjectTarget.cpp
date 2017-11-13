@@ -16,9 +16,9 @@
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/Section.h"
 #include "lldb/Core/State.h"
-#include "lldb/Core/Timer.h"
 #include "lldb/Core/ValueObjectVariable.h"
 #include "lldb/DataFormatters/ValueObjectPrinter.h"
+#include "lldb/Host/OptionParser.h"
 #include "lldb/Host/StringConvert.h"
 #include "lldb/Host/Symbols.h"
 #include "lldb/Interpreter/Args.h"
@@ -49,6 +49,7 @@
 #include "lldb/Target/StackFrame.h"
 #include "lldb/Target/Thread.h"
 #include "lldb/Target/ThreadSpec.h"
+#include "lldb/Utility/Timer.h"
 
 #include "llvm/Support/FileSystem.h"
 
@@ -268,8 +269,8 @@ protected:
       }
 
       const char *file_path = command.GetArgumentAtIndex(0);
-      Timer scoped_timer(LLVM_PRETTY_FUNCTION, "(lldb) target create '%s'",
-                         file_path);
+      static Timer::Category func_cat(LLVM_PRETTY_FUNCTION);
+      Timer scoped_timer(func_cat, "(lldb) target create '%s'", file_path);
       FileSpec file_spec;
 
       if (file_path)
@@ -283,7 +284,7 @@ protected:
       llvm::StringRef arch_cstr = m_arch_option.GetArchitectureName();
       const bool get_dependent_files =
           m_add_dependents.GetOptionValue().GetCurrentValue();
-      Error error(debugger.GetTargetList().CreateTarget(
+      Status error(debugger.GetTargetList().CreateTarget(
           debugger, file_path, arch_cstr, get_dependent_files, nullptr,
           target_sp));
 
@@ -302,7 +303,7 @@ protected:
             if (file_spec && file_spec.Exists()) {
               // if the remote file does not exist, push it there
               if (!platform_sp->GetFileExists(remote_file)) {
-                Error err = platform_sp->PutFile(file_spec, remote_file);
+                Status err = platform_sp->PutFile(file_spec, remote_file);
                 if (err.Fail()) {
                   result.AppendError(err.AsCString());
                   result.SetStatus(eReturnStatusFailed);
@@ -323,7 +324,7 @@ protected:
               }
               if (file_path) {
                 // copy the remote file to the local file
-                Error err = platform_sp->GetFile(remote_file, file_spec);
+                Status err = platform_sp->GetFile(remote_file, file_spec);
                 if (err.Fail()) {
                   result.AppendError(err.AsCString());
                   result.SetStatus(eReturnStatusFailed);
@@ -838,7 +839,7 @@ protected:
           matches = target->GetImages().FindGlobalVariables(
               regex, true, UINT32_MAX, variable_list);
         } else {
-          Error error(Variable::GetValuesForVariableExpressionPath(
+          Status error(Variable::GetValuesForVariableExpressionPath(
               arg, m_exe_ctx.GetBestExecutionContextScope(),
               GetVariableCallback, target, variable_list, valobj_list));
           matches = variable_list.GetSize();
@@ -1992,9 +1993,9 @@ public:
 
     ~CommandOptions() override = default;
 
-    Error SetOptionValue(uint32_t option_idx, llvm::StringRef option_arg,
-                         ExecutionContext *execution_context) override {
-      Error error;
+    Status SetOptionValue(uint32_t option_idx, llvm::StringRef option_arg,
+                          ExecutionContext *execution_context) override {
+      Status error;
       const int short_option = m_getopt_table[option_idx].val;
 
       switch (short_option) {
@@ -2052,6 +2053,8 @@ protected:
               result.GetOutputStream().EOL();
               result.GetOutputStream().EOL();
             }
+            if (m_interpreter.WasInterrupted())
+              break;
             num_dumped++;
             DumpModuleSymtab(
                 m_interpreter, result.GetOutputStream(),
@@ -2080,6 +2083,8 @@ protected:
                   result.GetOutputStream().EOL();
                   result.GetOutputStream().EOL();
                 }
+                if (m_interpreter.WasInterrupted())
+                  break;
                 num_dumped++;
                 DumpModuleSymtab(m_interpreter, result.GetOutputStream(),
                                  module, m_options.m_sort_order);
@@ -2145,6 +2150,8 @@ protected:
                                           " modules.\n",
                                           (uint64_t)num_modules);
           for (size_t image_idx = 0; image_idx < num_modules; ++image_idx) {
+            if (m_interpreter.WasInterrupted())
+              break;
             num_dumped++;
             DumpModuleSections(
                 m_interpreter, result.GetOutputStream(),
@@ -2166,6 +2173,8 @@ protected:
               FindModulesByName(target, arg_cstr, module_list, true);
           if (num_matches > 0) {
             for (size_t i = 0; i < num_matches; ++i) {
+              if (m_interpreter.WasInterrupted())
+                break;
               Module *module = module_list.GetModulePointerAtIndex(i);
               if (module) {
                 num_dumped++;
@@ -2238,6 +2247,8 @@ protected:
                                           " modules.\n",
                                           (uint64_t)num_modules);
           for (uint32_t image_idx = 0; image_idx < num_modules; ++image_idx) {
+            if (m_interpreter.WasInterrupted())
+              break;
             if (DumpModuleSymbolVendor(
                     result.GetOutputStream(),
                     target_modules.GetModulePointerAtIndexUnlocked(image_idx)))
@@ -2259,6 +2270,8 @@ protected:
               FindModulesByName(target, arg_cstr, module_list, true);
           if (num_matches > 0) {
             for (size_t i = 0; i < num_matches; ++i) {
+              if (m_interpreter.WasInterrupted())
+                break;
               Module *module = module_list.GetModulePointerAtIndex(i);
               if (module) {
                 if (DumpModuleSymbolVendor(result.GetOutputStream(), module))
@@ -2326,6 +2339,8 @@ protected:
         if (num_modules > 0) {
           uint32_t num_dumped = 0;
           for (uint32_t i = 0; i < num_modules; ++i) {
+            if (m_interpreter.WasInterrupted())
+              break;
             if (DumpCompileUnitLineTable(
                     m_interpreter, result.GetOutputStream(),
                     target_modules.GetModulePointerAtIndexUnlocked(i),
@@ -2514,7 +2529,7 @@ protected:
                   m_symbol_file.GetOptionValue().GetCurrentValue();
             if (!module_spec.GetArchitecture().IsValid())
               module_spec.GetArchitecture() = target->GetArchitecture();
-            Error error;
+            Status error;
             ModuleSP module_sp(target->GetSharedModule(module_spec, &error));
             if (!module_sp) {
               const char *error_cstr = error.AsCString();
@@ -2749,7 +2764,7 @@ protected:
                     process->Flush();
                 }
                 if (load) {
-                  Error error = module->LoadInMemory(*target, set_pc);
+                  Status error = module->LoadInMemory(*target, set_pc);
                   if (error.Fail()) {
                     result.AppendError(error.AsCString());
                     return false;
@@ -2856,9 +2871,9 @@ public:
 
     ~CommandOptions() override = default;
 
-    Error SetOptionValue(uint32_t option_idx, llvm::StringRef option_arg,
-                         ExecutionContext *execution_context) override {
-      Error error;
+    Status SetOptionValue(uint32_t option_idx, llvm::StringRef option_arg,
+                          ExecutionContext *execution_context) override {
+      Status error;
 
       const int short_option = m_getopt_table[option_idx].val;
       if (short_option == 'g') {
@@ -3219,9 +3234,9 @@ public:
 
     ~CommandOptions() override = default;
 
-    Error SetOptionValue(uint32_t option_idx, llvm::StringRef option_arg,
-                         ExecutionContext *execution_context) override {
-      Error error;
+    Status SetOptionValue(uint32_t option_idx, llvm::StringRef option_arg,
+                          ExecutionContext *execution_context) override {
+      Status error;
 
       const int short_option = m_getopt_table[option_idx].val;
 
@@ -3425,6 +3440,23 @@ protected:
         result.GetOutputStream().Printf("\n");
       }
 
+      if (UnwindPlanSP plan_sp =
+              func_unwinders_sp->GetDebugFrameUnwindPlan(*target, 0)) {
+        result.GetOutputStream().Printf("debug_frame UnwindPlan:\n");
+        plan_sp->Dump(result.GetOutputStream(), thread.get(),
+                      LLDB_INVALID_ADDRESS);
+        result.GetOutputStream().Printf("\n");
+      }
+
+      if (UnwindPlanSP plan_sp =
+              func_unwinders_sp->GetDebugFrameAugmentedUnwindPlan(*target,
+                                                                  *thread, 0)) {
+        result.GetOutputStream().Printf("debug_frame augmented UnwindPlan:\n");
+        plan_sp->Dump(result.GetOutputStream(), thread.get(),
+                      LLDB_INVALID_ADDRESS);
+        result.GetOutputStream().Printf("\n");
+      }
+
       UnwindPlanSP arm_unwind_sp =
           func_unwinders_sp->GetArmUnwindUnwindPlan(*target, 0);
       if (arm_unwind_sp) {
@@ -3519,9 +3551,9 @@ public:
 
     ~CommandOptions() override = default;
 
-    Error SetOptionValue(uint32_t option_idx, llvm::StringRef option_arg,
-                         ExecutionContext *execution_context) override {
-      Error error;
+    Status SetOptionValue(uint32_t option_idx, llvm::StringRef option_arg,
+                          ExecutionContext *execution_context) override {
+      Status error;
 
       const int short_option = m_getopt_table[option_idx].val;
 
@@ -3951,7 +3983,8 @@ public:
             "Add a debug symbol file to one of the target's current modules by "
             "specifying a path to a debug symbols file, or using the options "
             "to specify a module to download symbols for.",
-            "target symbols add [<symfile>]", eCommandRequiresTarget),
+            "target symbols add <cmd-options> [<symfile>]",
+            eCommandRequiresTarget),
         m_option_group(),
         m_file_option(
             LLDB_OPT_SET_1, false, "shlib", 's',
@@ -4113,7 +4146,7 @@ protected:
 
               // Make sure we load any scripting resources that may be embedded
               // in the debug info files in case the platform supports that.
-              Error error;
+              Status error;
               StreamString feedback_stream;
               module_sp->LoadScriptingResourceInTarget(target, error,
                                                        &feedback_stream);
@@ -4271,18 +4304,22 @@ protected:
       if (uuid_option_set) {
         result.AppendError("specify either one or more paths to symbol files "
                            "or use the --uuid option without arguments");
-      } else if (file_option_set) {
-        result.AppendError("specify either one or more paths to symbol files "
-                           "or use the --file option without arguments");
       } else if (frame_option_set) {
         result.AppendError("specify either one or more paths to symbol files "
                            "or use the --frame option without arguments");
+      } else if (file_option_set && argc > 1) {
+        result.AppendError("specify at most one symbol file path when "
+                           "--shlib option is set");
       } else {
         PlatformSP platform_sp(target->GetPlatform());
 
         for (auto &entry : args.entries()) {
           if (!entry.ref.empty()) {
             module_spec.GetSymbolFileSpec().SetFile(entry.ref, true);
+            if (file_option_set) {
+              module_spec.GetFileSpec() =
+                  m_file_option.GetOptionValue().GetCurrentValue();
+            }
             if (platform_sp) {
               FileSpec symfile_spec;
               if (platform_sp
@@ -4397,9 +4434,9 @@ public:
       return llvm::makeArrayRef(g_target_stop_hook_add_options);
     }
 
-    Error SetOptionValue(uint32_t option_idx, llvm::StringRef option_arg,
-                         ExecutionContext *execution_context) override {
-      Error error;
+    Status SetOptionValue(uint32_t option_idx, llvm::StringRef option_arg,
+                          ExecutionContext *execution_context) override {
+      Status error;
       const int short_option = m_getopt_table[option_idx].val;
 
       switch (short_option) {

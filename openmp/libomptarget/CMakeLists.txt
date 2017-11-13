@@ -35,6 +35,9 @@ if(${LIBOMPTARGET_STANDALONE_BUILD})
   endif()
   set(LIBOMPTARGET_LIBDIR_SUFFIX "" CACHE STRING
     "suffix of lib installation directory, e.g. 64 => lib64")
+
+  # Build all libraries into a common place so that tests can find them.
+  set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 else()
   set(LIBOMPTARGET_ENABLE_WERROR ${LLVM_ENABLE_WERROR})
   # If building in tree, we honor the same install suffix LLVM uses.
@@ -95,7 +98,7 @@ if(LIBOMPTARGET_HAVE_STD_CPP11_FLAG)
   # Build libomptarget library with libdl dependency.
   add_library(omptarget SHARED ${src_files})
   target_link_libraries(omptarget
-    dl
+    ${CMAKE_DL_LIBS}
     "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/exports")
   
   # Install libomptarget under the lib destination folder.

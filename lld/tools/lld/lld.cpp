@@ -16,7 +16,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lld/Driver/Driver.h"
+#include "lld/Common/Driver.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/Twine.h"
@@ -43,10 +43,20 @@ LLVM_ATTRIBUTE_NORETURN static void die(const Twine &S) {
 
 static Flavor getFlavor(StringRef S) {
   return StringSwitch<Flavor>(S)
-      .Cases("ld", "ld.lld", "gnu", Gnu)
-      .Case("link", WinLink)
-      .Case("darwin", Darwin)
+      .CasesLower("ld", "ld.lld", "gnu", Gnu)
+      .CaseLower("link", WinLink)
+      .CasesLower("ld64", "ld64.lld", "darwin", Darwin)
       .Default(Invalid);
+}
+
+static bool isPETarget(const std::vector<const char *> &V) {
+  for (auto It = V.begin(); It + 1 != V.end(); ++It) {
+    if (StringRef(*It) != "-m")
+      continue;
+    StringRef S = *(It + 1);
+    return S == "i386pe" || S == "i386pep" || S == "thumb2pe" || S == "arm64pe";
+  }
+  return false;
 }
 
 static Flavor parseProgname(StringRef Progname) {
@@ -101,9 +111,11 @@ int main(int Argc, const char **Argv) {
   std::vector<const char *> Args(Argv, Argv + Argc);
   switch (parseFlavor(Args)) {
   case Gnu:
+    if (isPETarget(Args))
+      return !mingw::link(Args);
     return !elf::link(Args, true);
   case WinLink:
-    return !coff::link(Args);
+    return !coff::link(Args, true);
   case Darwin:
     return !mach_o::link(Args);
   default:

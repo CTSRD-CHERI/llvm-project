@@ -11,14 +11,12 @@ add_lld_library(lldCOFF
   DLL.cpp
   Driver.cpp
   DriverUtils.cpp
-  Error.cpp
   ICF.cpp
   InputFiles.cpp
-  Librarian.cpp
   LTO.cpp
   MapFile.cpp
   MarkLive.cpp
-  ModuleDef.cpp
+  MinGW.cpp
   PDB.cpp
   Strings.cpp
   SymbolTable.cpp
@@ -27,22 +25,21 @@ add_lld_library(lldCOFF
 
   LINK_COMPONENTS
   ${LLVM_TARGETS_TO_BUILD}
-  BitReader
+  BinaryFormat
   Core
   DebugInfoCodeView
   DebugInfoMSF
   DebugInfoPDB
-  LTO
   LibDriver
-  Object
+  LTO
   MC
-  MCDisassembler
-  Target
+  Object
   Option
   Support
+  WindowsManifest
 
   LINK_LIBS
-  lldCore
+  lldCommon
   ${LLVM_PTHREAD_LIB}
 
   DEPENDS

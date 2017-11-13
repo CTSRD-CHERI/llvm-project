@@ -10,6 +10,12 @@ endif()
 set(LIBOMPTARGET_TEST_CFLAGS "" CACHE STRING
   "Extra compiler flags to send to the test compiler")
 
+if(LIBOMPTARGET_CMAKE_BUILD_TYPE MATCHES debug)
+  set(LIBOMPTARGET_DEBUG True)
+else()
+  set(LIBOMPTARGET_DEBUG False)
+endif()
+
 if(${LIBOMPTARGET_STANDALONE_BUILD})
   # Make sure we can use the console pool for recent cmake and ninja > 1.5
   if(CMAKE_VERSION VERSION_LESS 3.1.20141117)
@@ -80,7 +86,6 @@ else()
   add_lit_testsuite(check-libomptarget
     "Running libomptarget tests"
     ${CMAKE_CURRENT_BINARY_DIR}
-    ARGS "-j 1"
     DEPENDS omptarget omp
   )
   

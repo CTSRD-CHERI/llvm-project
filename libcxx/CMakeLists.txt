@@ -23,7 +23,7 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   project(libcxx CXX C)
 
   set(PACKAGE_NAME libcxx)
-  set(PACKAGE_VERSION 4.0.0svn)
+  set(PACKAGE_VERSION 6.0.0svn)
   set(PACKAGE_STRING "${PACKAGE_NAME} ${PACKAGE_VERSION}")
   set(PACKAGE_BUGREPORT "llvm-bugs@lists.llvm.org")
 
@@ -57,14 +57,19 @@ endif()
 # Setup CMake Options
 #===============================================================================
 include(CMakeDependentOption)
+include(HandleCompilerRT)
 
 # Basic options ---------------------------------------------------------------
 option(LIBCXX_ENABLE_ASSERTIONS "Enable assertions independent of build mode." OFF)
 option(LIBCXX_ENABLE_SHARED "Build libc++ as a shared library." OFF)
 option(LIBCXX_ENABLE_STATIC "Build libc++ as a static library." ON)
 option(LIBCXX_ENABLE_EXPERIMENTAL_LIBRARY "Build libc++experimental.a" OFF)
-option(LIBCXX_ENABLE_FILESYSTEM
-        "Build filesystem as part of libc++experimental.a" ${LIBCXX_ENABLE_EXPERIMENTAL_LIBRARY})
+set(ENABLE_FILESYSTEM_DEFAULT ${LIBCXX_ENABLE_EXPERIMENTAL_LIBRARY})
+if (WIN32)
+  set(ENABLE_FILESYSTEM_DEFAULT OFF)
+endif()
+option(LIBCXX_ENABLE_FILESYSTEM "Build filesystem as part of libc++experimental.a"
+    ${ENABLE_FILESYSTEM_DEFAULT})
 option(LIBCXX_INCLUDE_TESTS "Build the libc++ tests." ${LLVM_INCLUDE_TESTS})
 
 # Benchmark options -----------------------------------------------------------
@@ -94,6 +99,9 @@ cmake_dependent_option(LIBCXX_INSTALL_EXPERIMENTAL_LIBRARY
         "LIBCXX_ENABLE_EXPERIMENTAL_LIBRARY;LIBCXX_INSTALL_LIBRARY" OFF)
 set(LIBCXX_ABI_VERSION 1 CACHE STRING "ABI version of libc++.")
 option(LIBCXX_ABI_UNSTABLE "Unstable ABI of libc++." OFF)
+option(LIBCXX_ABI_FORCE_ITANIUM "Ignore auto-detection and force use of the Itanium ABI.")
+option(LIBCXX_ABI_FORCE_MICROSOFT "Ignore auto-detection and force use of the Microsoft ABI.")
+set(LIBCXX_ABI_DEFINES "" CACHE STRING "A semicolon separated list of ABI macros to define in the site config header.")
 option(LIBCXX_USE_COMPILER_RT "Use compiler-rt instead of libgcc" OFF)
 
 if (NOT LIBCXX_ENABLE_SHARED AND NOT LIBCXX_ENABLE_STATIC)
@@ -113,23 +121,22 @@ if (LIBCXX_CXX_ABI STREQUAL "default")
     cxxabi.h
     PATHS ${LLVM_MAIN_SRC_DIR}/projects/libcxxabi/include
           ${LLVM_MAIN_SRC_DIR}/runtimes/libcxxabi/include
+          ${LLVM_MAIN_SRC_DIR}/../libcxxabi/include
     NO_DEFAULT_PATH
   )
-  if ((NOT LIBCXX_STANDALONE_BUILD OR HAVE_LIBCXXABI) AND
-      IS_DIRECTORY "${LIBCXX_LIBCXXABI_INCLUDES_INTERNAL}")
+  if (LIBCXX_TARGETING_MSVC)
+    # FIXME: Figure out how to configure the ABI library on Windows.
+    set(LIBCXX_CXX_ABI_LIBNAME "vcruntime")
+  elseif ((NOT LIBCXX_STANDALONE_BUILD OR HAVE_LIBCXXABI) AND
+          IS_DIRECTORY "${LIBCXX_LIBCXXABI_INCLUDES_INTERNAL}")
     set(LIBCXX_CXX_ABI_LIBNAME "libcxxabi")
     set(LIBCXX_CXX_ABI_INCLUDE_PATHS "${LIBCXX_LIBCXXABI_INCLUDES_INTERNAL}")
     set(LIBCXX_CXX_ABI_INTREE 1)
+  elseif (APPLE)
+    set(LIBCXX_CXX_ABI_LIBNAME "libcxxabi")
+    set(LIBCXX_CXX_ABI_SYSTEM 1)
   else()
-    if (LIBCXX_TARGETING_MSVC)
-      # FIXME: Figure out how to configure the ABI library on Windows.
-      set(LIBCXX_CXX_ABI_LIBNAME "vcruntime")
-    elseif(APPLE)
-      set(LIBCXX_CXX_ABI_LIBNAME "libcxxabi")
-      set(LIBCXX_CXX_ABI_SYSTEM 1)
-    else()
-      set(LIBCXX_CXX_ABI_LIBNAME "default")
-    endif()
+    set(LIBCXX_CXX_ABI_LIBNAME "default")
   endif()
 else()
   set(LIBCXX_CXX_ABI_LIBNAME "${LIBCXX_CXX_ABI}")
@@ -141,7 +148,7 @@ option(LIBCXX_ENABLE_STATIC_ABI_LIBRARY "Statically link the ABI library" ON)
 
 # Generate and install a linker script inplace of libc++.so. The linker script
 # will link libc++ to the correct ABI library. This option is on by default
-# On UNIX platforms other than Apple unless 'LIBCXX_ENABLE_STATIC_ABI_LIBRARY'
+# on UNIX platforms other than Apple unless 'LIBCXX_ENABLE_STATIC_ABI_LIBRARY'
 # is on. This option is also disabled when the ABI library is not specified
 # or is specified to be "none".
 set(ENABLE_LINKER_SCRIPT_DEFAULT_VALUE OFF)
@@ -160,7 +167,7 @@ option(LIBCXX_ENABLE_ABI_LINKER_SCRIPT
 set(ENABLE_NEW_DELETE_DEFAULT ON)
 if (LIBCXXABI_ENABLE_NEW_DELETE_DEFINITIONS)
 # FIXME: This option should default to off. Unfortunatly GCC 4.9 fails to link
-# programs to due undefined references to new/delete in libc++abi so to work
+# programs due to undefined references to new/delete in libc++abi so to work
 # around this libc++abi currently defaults LIBCXXABI_ENABLE_NEW_DELETE_DEFINITIONS
 # to ON. Once the GCC bug has been worked around this option should be changed
 # back to OFF.
@@ -333,6 +340,10 @@ if (LIBCXX_HAS_MUSL_LIBC AND NOT LIBCXX_INSTALL_SUPPORT_HEADERS)
                       "when building for Musl with LIBCXX_HAS_MUSL_LIBC.")
 endif()
 
+if (LIBCXX_ABI_FORCE_ITANIUM AND LIBCXX_ABI_FORCE_MICROSOFT)
+  message(FATAL_ERROR "Only one of LIBCXX_ABI_FORCE_ITANIUM and LIBCXX_ABI_FORCE_MICROSOFT can be specified.")
+endif ()
+
 #===============================================================================
 # Configure System
 #===============================================================================
@@ -341,11 +352,23 @@ set(LIBCXX_COMPILER    ${CMAKE_CXX_COMPILER})
 set(LIBCXX_SOURCE_DIR  ${CMAKE_CURRENT_SOURCE_DIR})
 set(LIBCXX_BINARY_DIR  ${CMAKE_CURRENT_BINARY_DIR})
 set(LIBCXX_BINARY_INCLUDE_DIR "${LIBCXX_BINARY_DIR}/include/c++build")
-set(LIBCXX_LIBRARY_DIR ${CMAKE_BINARY_DIR}/lib${LIBCXX_LIBDIR_SUFFIX})
+if (LLVM_LIBRARY_OUTPUT_INTDIR)
+  set(LIBCXX_LIBRARY_DIR ${LLVM_LIBRARY_OUTPUT_INTDIR})
+else()
+  set(LIBCXX_LIBRARY_DIR ${CMAKE_BINARY_DIR}/lib${LIBCXX_LIBDIR_SUFFIX})
+endif()
 file(MAKE_DIRECTORY "${LIBCXX_BINARY_INCLUDE_DIR}")
+
+set(LIBCXX_INSTALL_PREFIX "" CACHE STRING
+    "Define libc++ destination prefix.")
+
+if (NOT LIBCXX_INSTALL_PREFIX MATCHES "^$|.*/")
+  message(FATAL_ERROR "LIBCXX_INSTALL_PREFIX has to end with \"/\".")
+endif()
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${LIBCXX_LIBRARY_DIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${LIBCXX_LIBRARY_DIR})
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${LIBCXX_LIBRARY_DIR})
 
 # Declare libc++ configuration variables.
 # They are intended for use as follows:
@@ -368,9 +391,9 @@ include(HandleLibcxxFlags)
 # 'config-ix' use them during feature checks. It also adds them to both
 # 'LIBCXX_COMPILE_FLAGS' and 'LIBCXX_LINK_FLAGS'
 add_target_flags_if(LIBCXX_BUILD_32_BITS "-m32")
-add_target_flags_if(LIBCXX_TARGET_TRIPLE "-target ${LIBCXX_TARGET_TRIPLE}")
+add_target_flags_if(LIBCXX_TARGET_TRIPLE "--target=${LIBCXX_TARGET_TRIPLE}")
 add_target_flags_if(LIBCXX_SYSROOT "--sysroot=${LIBCXX_SYSROOT}")
-add_target_flags_if(LIBCXX_GCC_TOOLCHAIN "-gcc-toolchain ${LIBCXX_GCC_TOOLCHAIN}")
+add_target_flags_if(LIBCXX_GCC_TOOLCHAIN "--gcc-toolchain=${LIBCXX_GCC_TOOLCHAIN}")
 if (LIBCXX_TARGET_TRIPLE)
   set(TARGET_TRIPLE "${LIBCXX_TARGET_TRIPLE}")
 endif()
@@ -413,9 +436,9 @@ remove_flags(-stdlib=libc++ -stdlib=libstdc++)
 # non-debug DLLs
 remove_flags("/D_DEBUG" "/MTd" "/MDd" "/MT" "/Md")
 
-# FIXME(EricWF): See the FIXME on LIBCXX_ENABLE_PEqDANTIC.
+# FIXME(EricWF): See the FIXME on LIBCXX_ENABLE_PEDANTIC.
 # Remove the -pedantic flag and -Wno-pedantic and -pedantic-errors
-# so they don't get transformed into -Wno and -errors respectivly.
+# so they don't get transformed into -Wno and -errors respectively.
 remove_flags(-Wno-pedantic -pedantic-errors -pedantic)
 
 # Required flags ==============================================================
@@ -444,6 +467,11 @@ add_compile_flags_if_supported(-nostdinc++)
 # the dylib when get ODR used by another function.
 add_compile_flags_if_supported(-fvisibility-inlines-hidden)
 
+if (LIBCXX_CONFIGURE_IDE)
+  # This simply allows IDE to process <experimental/coroutine>
+  add_compile_flags_if_supported(-fcoroutines-ts)
+endif()
+
 # Let the library headers know they are currently being used to build the
 # library.
 add_definitions(-D_LIBCPP_BUILDING_LIBRARY)
@@ -465,7 +493,8 @@ if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
 elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
     add_compile_flags_if_supported(
         -Wno-literal-suffix
-        -Wno-c++14-compat)
+        -Wno-c++14-compat
+        -Wno-noexcept-type)
 endif()
 if (LIBCXX_ENABLE_WERROR)
   add_compile_flags_if_supported(-Werror)
@@ -577,6 +606,8 @@ if (NOT LIBCXX_ABI_VERSION EQUAL "1")
   config_define(${LIBCXX_ABI_VERSION} _LIBCPP_ABI_VERSION)
 endif()
 config_define_if(LIBCXX_ABI_UNSTABLE _LIBCPP_ABI_UNSTABLE)
+config_define_if(LIBCXX_ABI_FORCE_ITANIUM _LIBCPP_ABI_FORCE_ITANIUM)
+config_define_if(LIBCXX_ABI_FORCE_MICROSOFT _LIBCPP_ABI_FORCE_MICROSOFT)
 
 config_define_if_not(LIBCXX_ENABLE_GLOBAL_FILESYSTEM_NAMESPACE _LIBCPP_HAS_NO_GLOBAL_FILESYSTEM_NAMESPACE)
 config_define_if_not(LIBCXX_ENABLE_STDIN _LIBCPP_HAS_NO_STDIN)
@@ -589,6 +620,19 @@ config_define_if(LIBCXX_HAS_PTHREAD_API _LIBCPP_HAS_THREAD_API_PTHREAD)
 config_define_if(LIBCXX_HAS_EXTERNAL_THREAD_API _LIBCPP_HAS_THREAD_API_EXTERNAL)
 config_define_if(LIBCXX_BUILD_EXTERNAL_THREAD_LIBRARY _LIBCPP_HAS_THREAD_LIBRARY_EXTERNAL)
 config_define_if(LIBCXX_HAS_MUSL_LIBC _LIBCPP_HAS_MUSL_LIBC)
+config_define_if(LIBCXX_NO_VCRUNTIME _LIBCPP_NO_VCRUNTIME)
+
+if (LIBCXX_ABI_DEFINES)
+  set(abi_defines)
+  foreach (abi_define ${LIBCXX_ABI_DEFINES})
+    if (NOT abi_define MATCHES "^_LIBCPP_ABI_")
+      message(SEND_ERROR "Invalid ABI macro ${abi_define} in LIBCXX_ABI_DEFINES")
+    endif()
+    list(APPEND abi_defines "#define ${abi_define}")
+  endforeach()
+  string(REPLACE ";" "\n" abi_defines "${abi_defines}")
+  config_define(${abi_defines} _LIBCPP_ABI_DEFINES)
+endif()
 
 # By default libc++ on Windows expects to use a shared library, which requires
 # the headers to use DLL import/export semantics. However when building a
@@ -598,9 +642,10 @@ if (DEFINED WIN32 AND LIBCXX_ENABLE_STATIC AND NOT LIBCXX_ENABLE_SHARED)
   config_define(ON _LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS)
 endif()
 
+set(site_config_path "${LIBCXX_BINARY_DIR}/__config_site")
 if (LIBCXX_NEEDS_SITE_CONFIG)
   configure_file("include/__config_site.in"
-                 "${LIBCXX_BINARY_DIR}/__config_site"
+                 "${site_config_path}"
                  @ONLY)
 
   # Provide the config definitions by included the generated __config_site
@@ -609,6 +654,11 @@ if (LIBCXX_NEEDS_SITE_CONFIG)
     add_compile_flags("/FI\"${LIBCXX_BINARY_DIR}/__config_site\"")
   else()
     add_compile_flags("-include ${LIBCXX_BINARY_DIR}/__config_site")
+  endif()
+else()
+  if (EXISTS "${site_config_path}")
+    message(STATUS "Removing stale site configuration ${site_config_path}")
+    file(REMOVE "${site_config_path}")
   endif()
 endif()
 
@@ -627,9 +677,24 @@ endif()
 # Create the lit.site.cfg file even when LIBCXX_INCLUDE_TESTS is OFF or
 # LLVM_FOUND is OFF. This allows users to run the tests manually using
 # LIT without requiring a full LLVM checkout.
-add_subdirectory(test)
+#
+# However, since some submission systems strip test/ subdirectories, check for
+# it before adding it.
+
+if(IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/test")
+  add_subdirectory(test)
+endif()
 if (LIBCXX_INCLUDE_TESTS)
   add_subdirectory(lib/abi)
+endif()
+
+if (LIBCXX_STANDALONE_BUILD AND EXISTS "${LLVM_MAIN_SRC_DIR}/utils/llvm-lit")
+  # Make sure the llvm-lit script is generated into the bin directory, and do
+  # it after adding all tests, since the generated script will only work
+  # correctly discovered tests against test locations from the source tree that
+  # have already been discovered.
+  add_subdirectory(${LLVM_MAIN_SRC_DIR}/utils/llvm-lit
+                   ${CMAKE_CURRENT_BINARY_DIR}/llvm-lit)
 endif()
 
 if (LIBCXX_INCLUDE_DOCS)

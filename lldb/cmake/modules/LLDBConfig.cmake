@@ -10,15 +10,16 @@ if (LLVM_COMPILER_IS_GCC_COMPATIBLE AND NOT "${CMAKE_SYSTEM_NAME}" MATCHES "Darw
   set(LLDB_LINKER_SUPPORTS_GROUPS ON)
 endif()
 
+set(LLDB_DEFAULT_DISABLE_PYTHON 0)
+set(LLDB_DEFAULT_DISABLE_CURSES 0)
+
 if ( CMAKE_SYSTEM_NAME MATCHES "Windows" )
-  set(LLDB_DEFAULT_DISABLE_PYTHON 0)
   set(LLDB_DEFAULT_DISABLE_CURSES 1)
 elseif (CMAKE_SYSTEM_NAME MATCHES "Android" )
   set(LLDB_DEFAULT_DISABLE_PYTHON 1)
   set(LLDB_DEFAULT_DISABLE_CURSES 1)
-else()
-  set(LLDB_DEFAULT_DISABLE_PYTHON 0)
-  set(LLDB_DEFAULT_DISABLE_CURSES 0)
+elseif(IOS)
+  set(LLDB_DEFAULT_DISABLE_PYTHON 1)
 endif()
 
 set(LLDB_DISABLE_PYTHON ${LLDB_DEFAULT_DISABLE_PYTHON} CACHE BOOL
@@ -250,12 +251,6 @@ endif()
 set(LLDB_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(LLDB_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 
-# If building on a 32-bit system, make sure off_t can store offsets > 2GB
-if( CMAKE_SIZEOF_VOID_P EQUAL 4 )
-  add_definitions( -D_LARGEFILE_SOURCE )
-  add_definitions( -D_FILE_OFFSET_BITS=64 )
-endif()
-
 if (CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
   message(FATAL_ERROR "In-source builds are not allowed. CMake would overwrite "
 "the makefiles distributed with LLDB. Please create a directory and run cmake "
@@ -270,8 +265,8 @@ string(REGEX MATCH "[0-9]+\\.[0-9]+(\\.[0-9]+)?" LLDB_VERSION
 message(STATUS "LLDB version: ${LLDB_VERSION}")
 
 include_directories(BEFORE
-  ${CMAKE_CURRENT_BINARY_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_CURRENT_BINARY_DIR}/include
   )
 
 if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
@@ -281,6 +276,21 @@ if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
     FILES_MATCHING
     PATTERN "*.h"
     PATTERN ".svn" EXCLUDE
+    PATTERN ".cmake" EXCLUDE
+    PATTERN "Config.h" EXCLUDE
+    PATTERN "lldb-*.h" EXCLUDE
+    PATTERN "API/*.h" EXCLUDE
+    )
+
+  install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/
+    COMPONENT lldb_headers
+    DESTINATION include
+    FILES_MATCHING
+    PATTERN "*.h"
+    PATTERN ".svn" EXCLUDE
+    PATTERN ".cmake" EXCLUDE
+    PATTERN "lldb-*.h" EXCLUDE
+    PATTERN "API/*.h" EXCLUDE
     )
 endif()
 
@@ -293,13 +303,15 @@ if (NOT LIBXML2_FOUND AND NOT (CMAKE_SYSTEM_NAME MATCHES "Windows"))
 endif()
 
 # Find libraries or frameworks that may be needed
-if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
-  find_library(CARBON_LIBRARY Carbon)
+if (APPLE)
+  if(NOT IOS)
+    find_library(CARBON_LIBRARY Carbon)
+    find_library(CORE_SERVICES_LIBRARY CoreServices)
+    find_library(DEBUG_SYMBOLS_LIBRARY DebugSymbols PATHS "/System/Library/PrivateFrameworks")
+  endif()
   find_library(FOUNDATION_LIBRARY Foundation)
   find_library(CORE_FOUNDATION_LIBRARY CoreFoundation)
-  find_library(CORE_SERVICES_LIBRARY CoreServices)
   find_library(SECURITY_LIBRARY Security)
-  find_library(DEBUG_SYMBOLS_LIBRARY DebugSymbols PATHS "/System/Library/PrivateFrameworks")
 
   set(LLDB_FRAMEWORK_INSTALL_DIR Library/Frameworks CACHE STRING "Output directory for LLDB.framework")
   set(LLDB_FRAMEWORK_VERSION A CACHE STRING "LLDB.framework version (default is A)")
@@ -307,10 +319,13 @@ if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
     LLDB.framework/Versions/${LLDB_FRAMEWORK_VERSION}/Resources)
 
   add_definitions( -DLIBXML2_DEFINED )
-  list(APPEND system_libs xml2 ${CURSES_LIBRARIES})
-  list(APPEND system_libs ${CARBON_LIBRARY} ${FOUNDATION_LIBRARY}
-  ${CORE_FOUNDATION_LIBRARY} ${CORE_SERVICES_LIBRARY} ${SECURITY_LIBRARY}
-  ${DEBUG_SYMBOLS_LIBRARY})
+  list(APPEND system_libs xml2
+       ${CURSES_LIBRARIES}
+       ${FOUNDATION_LIBRARY}
+       ${CORE_FOUNDATION_LIBRARY}
+       ${CORE_SERVICES_LIBRARY}
+       ${SECURITY_LIBRARY}
+       ${DEBUG_SYMBOLS_LIBRARY})
 
 else()
   if (LIBXML2_FOUND)
@@ -327,30 +342,6 @@ endif(HAVE_LIBPTHREAD)
 
 if (HAVE_LIBDL)
   list(APPEND system_libs ${CMAKE_DL_LIBS})
-endif()
-
-if (CMAKE_SYSTEM_NAME MATCHES "Linux")
-    # Check for syscall used by lldb-server on linux.
-    # If these are not found, it will fall back to ptrace (slow) for memory reads.
-    check_cxx_source_compiles("
-        #include <sys/uio.h>
-        int main() { process_vm_readv(0, nullptr, 0, nullptr, 0, 0); return 0; }"
-        HAVE_PROCESS_VM_READV)
-
-    if (HAVE_PROCESS_VM_READV)
-        add_definitions(-DHAVE_PROCESS_VM_READV)
-    else()
-        # If we don't have the syscall wrapper function, but we know the syscall number, we can
-        # still issue the syscall manually
-        check_cxx_source_compiles("
-            #include <sys/syscall.h>
-            int main() { return __NR_process_vm_readv; }"
-            HAVE_NR_PROCESS_VM_READV)
-
-        if (HAVE_NR_PROCESS_VM_READV)
-            add_definitions(-DHAVE_NR_PROCESS_VM_READV)
-        endif()
-    endif()
 endif()
 
 # Figure out if lldb could use lldb-server.  If so, then we'll
@@ -421,3 +412,4 @@ if ((CMAKE_SYSTEM_NAME MATCHES "Android") AND LLVM_BUILD_STATIC AND
 endif()
 
 find_package(Backtrace)
+include(LLDBGenerateConfig)

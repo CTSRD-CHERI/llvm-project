@@ -13,10 +13,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "sanitizer_common/sanitizer_platform.h"
-#if SANITIZER_FREEBSD || SANITIZER_LINUX
+#if SANITIZER_FREEBSD || SANITIZER_LINUX || SANITIZER_NETBSD
 
 #include "asan_interceptors.h"
 #include "asan_internal.h"
+#include "asan_premap_shadow.h"
 #include "asan_thread.h"
 #include "sanitizer_common/sanitizer_flags.h"
 #include "sanitizer_common/sanitizer_freebsd.h"
@@ -42,6 +43,10 @@
 #if SANITIZER_ANDROID || SANITIZER_FREEBSD
 #include <ucontext.h>
 extern "C" void* _DYNAMIC;
+#elif SANITIZER_NETBSD
+#include <link_elf.h>
+#include <ucontext.h>
+extern Elf_Dyn _DYNAMIC;
 #else
 #include <sys/ucontext.h>
 #include <link.h>
@@ -77,6 +82,38 @@ void *AsanDoesNotSupportStaticLinkage() {
   return &_DYNAMIC;  // defined in link.h
 }
 
+#if ASAN_PREMAP_SHADOW
+uptr FindDynamicShadowStart() {
+  uptr granularity = GetMmapGranularity();
+  uptr shadow_start = reinterpret_cast<uptr>(&__asan_shadow);
+  uptr shadow_size = PremapShadowSize();
+  UnmapOrDie((void *)(shadow_start - granularity), shadow_size + granularity);
+  // MmapNoAccess does not touch TotalMmap, but UnmapOrDie decreases it.
+  // Compensate.
+  IncreaseTotalMmap(shadow_size + granularity);
+  return shadow_start;
+}
+#else
+uptr FindDynamicShadowStart() {
+  uptr granularity = GetMmapGranularity();
+  uptr alignment = granularity * 8;
+  uptr left_padding = granularity;
+  uptr shadow_size = kHighShadowEnd + left_padding;
+  uptr map_size = shadow_size + alignment;
+
+  uptr map_start = (uptr)MmapNoAccess(map_size);
+  CHECK_NE(map_start, ~(uptr)0);
+
+  uptr shadow_start = RoundUpTo(map_start, alignment);
+  UnmapOrDie((void *)map_start, map_size);
+  // MmapNoAccess does not touch TotalMmap, but UnmapOrDie decreases it.
+  // Compensate.
+  IncreaseTotalMmap(map_size);
+
+  return shadow_start;
+}
+#endif
+
 void AsanApplyToGlobals(globals_op_fptr op, const void *needle) {
   UNIMPLEMENTED();
 }
@@ -96,6 +133,15 @@ static int FindFirstDSOCallback(struct dl_phdr_info *info, size_t size,
   if (internal_strncmp(info->dlpi_name, "linux-", sizeof("linux-") - 1) == 0)
     return 0;
 
+#if SANITIZER_FREEBSD || SANITIZER_NETBSD
+  // Ignore first entry (the main program)
+  char **p = (char **)data;
+  if (!(*p)) {
+    *p = (char *)-1;
+    return 0;
+  }
+#endif
+
   *(const char **)data = info->dlpi_name;
   return 1;
 }
@@ -111,7 +157,7 @@ static void ReportIncompatibleRT() {
 }
 
 void AsanCheckDynamicRTPrereqs() {
-  if (!ASAN_DYNAMIC)
+  if (!ASAN_DYNAMIC || !flags()->verify_asan_link_order)
     return;
 
   // Ensure that dynamic RT is the first DSO in the list
@@ -140,9 +186,9 @@ void AsanCheckIncompatibleRT() {
       // system libraries, causing crashes later in ASan initialization.
       MemoryMappingLayout proc_maps(/*cache_enabled*/true);
       char filename[128];
-      while (proc_maps.Next(nullptr, nullptr, nullptr, filename,
-                            sizeof(filename), nullptr)) {
-        if (IsDynamicRTName(filename)) {
+      MemoryMappedSegment segment(filename, sizeof(filename));
+      while (proc_maps.Next(&segment)) {
+        if (IsDynamicRTName(segment.filename)) {
           Report("Your application is linked against "
                  "incompatible ASan runtimes.\n");
           Die();
@@ -174,4 +220,4 @@ void *AsanDlSymNext(const char *sym) {
 
 } // namespace __asan
 
-#endif // SANITIZER_FREEBSD || SANITIZER_LINUX
+#endif  // SANITIZER_FREEBSD || SANITIZER_LINUX || SANITIZER_NETBSD

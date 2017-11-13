@@ -20,17 +20,16 @@ namespace elf {
 class InputFile;
 class OutputSection;
 class InputSectionBase;
-template <class ELFT> class ObjectFile;
-template <class ELFT> class SymbolTable;
+template <class ELFT> class ObjFile;
+class SymbolTable;
 template <class ELFT> void writeResult();
 template <class ELFT> void markLive();
-template <class ELFT> bool isRelroSection(const OutputSection *Sec);
 
 // This describes a program header entry.
 // Each contains type, access flags and range of output sections that will be
 // placed in it.
 struct PhdrEntry {
-  PhdrEntry(unsigned Type, unsigned Flags);
+  PhdrEntry(unsigned Type, unsigned Flags) : p_type(Type), p_flags(Flags) {}
   void add(OutputSection *Sec);
 
   uint64_t p_paddr = 0;
@@ -42,24 +41,21 @@ struct PhdrEntry {
   uint32_t p_type = 0;
   uint32_t p_flags = 0;
 
-  OutputSection *First = nullptr;
-  OutputSection *Last = nullptr;
+  OutputSection *FirstSec = nullptr;
+  OutputSection *LastSec = nullptr;
   bool HasLMA = false;
 };
 
 llvm::StringRef getOutputSectionName(llvm::StringRef Name);
 
-template <class ELFT>
-bool allocateHeaders(std::vector<PhdrEntry> &, llvm::ArrayRef<OutputSection *>,
-                     uint64_t Min);
-
-template <class ELFT> uint32_t getMipsEFlags();
+template <class ELFT> uint32_t calcMipsEFlags();
 
 uint8_t getMipsFpAbiFlag(uint8_t OldFlag, uint8_t NewFlag,
                          llvm::StringRef FileName);
 
 bool isMipsN32Abi(const InputFile *F);
-}
-}
+bool isMipsR6();
+} // namespace elf
+} // namespace lld
 
 #endif

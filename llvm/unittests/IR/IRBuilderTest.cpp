@@ -9,8 +9,8 @@
 
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/BasicBlock.h"
-#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DIBuilder.h"
+#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/LLVMContext.h"
@@ -144,17 +144,40 @@ TEST_F(IRBuilderTest, FastMathFlags) {
   FastMathFlags FMF;
   Builder.setFastMathFlags(FMF);
 
+  // By default, no flags are set.
   F = Builder.CreateFAdd(F, F);
   EXPECT_FALSE(Builder.getFastMathFlags().any());
+  ASSERT_TRUE(isa<Instruction>(F));
+  FAdd = cast<Instruction>(F);
+  EXPECT_FALSE(FAdd->hasNoNaNs());
+  EXPECT_FALSE(FAdd->hasNoInfs());
+  EXPECT_FALSE(FAdd->hasNoSignedZeros());
+  EXPECT_FALSE(FAdd->hasAllowReciprocal());
+  EXPECT_FALSE(FAdd->hasAllowContract());
+  EXPECT_FALSE(FAdd->hasAllowReassoc());
+  EXPECT_FALSE(FAdd->hasApproxFunc());
 
-  FMF.setUnsafeAlgebra();
+  // Set all flags in the instruction.
+  FAdd->setFast(true);
+  EXPECT_TRUE(FAdd->hasNoNaNs());
+  EXPECT_TRUE(FAdd->hasNoInfs());
+  EXPECT_TRUE(FAdd->hasNoSignedZeros());
+  EXPECT_TRUE(FAdd->hasAllowReciprocal());
+  EXPECT_TRUE(FAdd->hasAllowContract());
+  EXPECT_TRUE(FAdd->hasAllowReassoc());
+  EXPECT_TRUE(FAdd->hasApproxFunc());
+
+  // All flags are set in the builder.
+  FMF.setFast();
   Builder.setFastMathFlags(FMF);
 
   F = Builder.CreateFAdd(F, F);
   EXPECT_TRUE(Builder.getFastMathFlags().any());
+  EXPECT_TRUE(Builder.getFastMathFlags().all());
   ASSERT_TRUE(isa<Instruction>(F));
   FAdd = cast<Instruction>(F);
   EXPECT_TRUE(FAdd->hasNoNaNs());
+  EXPECT_TRUE(FAdd->isFast());
 
   // Now, try it with CreateBinOp
   F = Builder.CreateBinOp(Instruction::FAdd, F, F);
@@ -162,21 +185,23 @@ TEST_F(IRBuilderTest, FastMathFlags) {
   ASSERT_TRUE(isa<Instruction>(F));
   FAdd = cast<Instruction>(F);
   EXPECT_TRUE(FAdd->hasNoNaNs());
+  EXPECT_TRUE(FAdd->isFast());
 
   F = Builder.CreateFDiv(F, F);
-  EXPECT_TRUE(Builder.getFastMathFlags().any());
-  EXPECT_TRUE(Builder.getFastMathFlags().UnsafeAlgebra);
+  EXPECT_TRUE(Builder.getFastMathFlags().all());
   ASSERT_TRUE(isa<Instruction>(F));
   FDiv = cast<Instruction>(F);
   EXPECT_TRUE(FDiv->hasAllowReciprocal());
 
+  // Clear all FMF in the builder.
   Builder.clearFastMathFlags();
 
   F = Builder.CreateFDiv(F, F);
   ASSERT_TRUE(isa<Instruction>(F));
   FDiv = cast<Instruction>(F);
   EXPECT_FALSE(FDiv->hasAllowReciprocal());
-
+ 
+  // Try individual flags.
   FMF.clear();
   FMF.setAllowReciprocal();
   Builder.setFastMathFlags(FMF);
@@ -207,7 +232,44 @@ TEST_F(IRBuilderTest, FastMathFlags) {
   EXPECT_TRUE(FCmp->hasAllowReciprocal());
 
   Builder.clearFastMathFlags();
- 
+
+  // Test FP-contract
+  FC = Builder.CreateFAdd(F, F);
+  ASSERT_TRUE(isa<Instruction>(FC));
+  FAdd = cast<Instruction>(FC);
+  EXPECT_FALSE(FAdd->hasAllowContract());
+
+  FMF.clear();
+  FMF.setAllowContract(true);
+  Builder.setFastMathFlags(FMF);
+
+  FC = Builder.CreateFAdd(F, F);
+  EXPECT_TRUE(Builder.getFastMathFlags().any());
+  EXPECT_TRUE(Builder.getFastMathFlags().AllowContract);
+  ASSERT_TRUE(isa<Instruction>(FC));
+  FAdd = cast<Instruction>(FC);
+  EXPECT_TRUE(FAdd->hasAllowContract());
+
+  FMF.setApproxFunc();
+  Builder.clearFastMathFlags();
+  Builder.setFastMathFlags(FMF);
+  // Now 'aml' and 'contract' are set.
+  F = Builder.CreateFMul(F, F);
+  FAdd = cast<Instruction>(F);
+  EXPECT_TRUE(FAdd->hasApproxFunc());
+  EXPECT_TRUE(FAdd->hasAllowContract());
+  EXPECT_FALSE(FAdd->hasAllowReassoc());
+  
+  FMF.setAllowReassoc();
+  Builder.clearFastMathFlags();
+  Builder.setFastMathFlags(FMF);
+  // Now 'aml' and 'contract' and 'reassoc' are set.
+  F = Builder.CreateFMul(F, F);
+  FAdd = cast<Instruction>(F);
+  EXPECT_TRUE(FAdd->hasApproxFunc());
+  EXPECT_TRUE(FAdd->hasAllowContract());
+  EXPECT_TRUE(FAdd->hasAllowReassoc());
+
   // Test a call with FMF.
   auto CalleeTy = FunctionType::get(Type::getFloatTy(Ctx),
                                     /*isVarArg=*/false);
@@ -245,6 +307,7 @@ TEST_F(IRBuilderTest, FastMathFlags) {
   EXPECT_FALSE(FDiv->getFastMathFlags().any());
   FDiv->setHasAllowReciprocal(true);
   FAdd->setHasAllowReciprocal(false);
+  FAdd->setHasNoNaNs(true);
   FDiv->copyFastMathFlags(FAdd);
   EXPECT_TRUE(FDiv->hasNoNaNs());
   EXPECT_FALSE(FDiv->hasAllowReciprocal());
@@ -336,6 +399,25 @@ TEST_F(IRBuilderTest, RAIIHelpersTest) {
   EXPECT_EQ(BB, Builder.GetInsertBlock());
 }
 
+TEST_F(IRBuilderTest, createFunction) {
+  IRBuilder<> Builder(BB);
+  DIBuilder DIB(*M);
+  auto File = DIB.createFile("error.swift", "/");
+  auto CU =
+      DIB.createCompileUnit(dwarf::DW_LANG_Swift, File, "swiftc", true, "", 0);
+  auto Type = DIB.createSubroutineType(DIB.getOrCreateTypeArray(None));
+  auto NoErr = DIB.createFunction(CU, "noerr", "", File, 1, Type, false, true, 1,
+                               DINode::FlagZero, true);
+  EXPECT_TRUE(!NoErr->getThrownTypes());
+  auto Int = DIB.createBasicType("Int", 64, dwarf::DW_ATE_signed);
+  auto Error = DIB.getOrCreateArray({Int});
+  auto Err =
+      DIB.createFunction(CU, "err", "", File, 1, Type, false, true, 1,
+      DINode::FlagZero, true, nullptr, nullptr, Error.get());
+  EXPECT_TRUE(Err->getThrownTypes().get() == Error.get());
+  DIB.finalize();
+}
+
 TEST_F(IRBuilderTest, DIBuilder) {
   IRBuilder<> Builder(BB);
   DIBuilder DIB(*M);
@@ -424,13 +506,14 @@ TEST_F(IRBuilderTest, DebugLoc) {
 TEST_F(IRBuilderTest, DIImportedEntity) {
   IRBuilder<> Builder(BB);
   DIBuilder DIB(*M);
+  auto F = DIB.createFile("F.CBL", "/");
   auto CU = DIB.createCompileUnit(dwarf::DW_LANG_Cobol74,
-                                  DIB.createFile("F.CBL", "/"), "llvm-cobol74",
+                                  F, "llvm-cobol74",
                                   true, "", 0);
-  DIB.createImportedDeclaration(CU, nullptr, 1);
-  DIB.createImportedDeclaration(CU, nullptr, 1);
-  DIB.createImportedModule(CU, (DIImportedEntity *)nullptr, 2);
-  DIB.createImportedModule(CU, (DIImportedEntity *)nullptr, 2);
+  DIB.createImportedDeclaration(CU, nullptr, F, 1);
+  DIB.createImportedDeclaration(CU, nullptr, F, 1);
+  DIB.createImportedModule(CU, (DIImportedEntity *)nullptr, F, 2);
+  DIB.createImportedModule(CU, (DIImportedEntity *)nullptr, F, 2);
   DIB.finalize();
   EXPECT_TRUE(verifyModule(*M));
   EXPECT_TRUE(CU->getImportedEntities().size() == 2);

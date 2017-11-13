@@ -216,6 +216,11 @@ libc++ specific options
   Extra suffix to append to the directory where libraries are to be installed.
   This option overrides `LLVM_LIBDIR_SUFFIX`.
 
+.. option:: LIBCXX_INSTALL_PREFIX:STRING
+
+  **Default**: ``""``
+
+  Define libc++ destination prefix.
 
 .. _libc++experimental options:
 
@@ -341,6 +346,13 @@ The following options allow building libc++ for a different ABI version.
 
   Build the "unstable" ABI version of libc++. Includes all ABI changing features
   on top of the current stable version.
+
+.. option:: LIBCXX_ABI_DEFINES:STRING
+
+  **Default**: ``""``
+
+  A semicolon-separated list of ABI macros to persist in the site config header.
+  See ``include/__config`` for the list of ABI macros.
 
 .. _LLVM-specific variables:
 

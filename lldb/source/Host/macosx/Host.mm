@@ -20,7 +20,7 @@
 #define __XPC_PRIVATE_H__
 #include <xpc/xpc.h>
 
-#define LaunchUsingXPCRightName "com.apple.dt.Xcode.RootDebuggingXPCService"
+#define LaunchUsingXPCRightName "com.apple.lldb.RootDebuggingXPCService"
 
 // These XPC messaging keys are used for communication between Host.mm and the
 // XPC service.
@@ -58,11 +58,7 @@
 #include "lldb/Core/Communication.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
-#include "lldb/Core/StreamFile.h"
-#include "lldb/Core/StructuredData.h"
 #include "lldb/Host/ConnectionFileDescriptor.h"
-#include "lldb/Host/FileSpec.h"
-#include "lldb/Host/FileSystem.h"
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Host/ThreadLauncher.h"
 #include "lldb/Target/Platform.h"
@@ -71,11 +67,14 @@
 #include "lldb/Utility/DataBufferHeap.h"
 #include "lldb/Utility/DataExtractor.h"
 #include "lldb/Utility/Endian.h"
+#include "lldb/Utility/FileSpec.h"
 #include "lldb/Utility/Log.h"
 #include "lldb/Utility/NameMatches.h"
 #include "lldb/Utility/StreamString.h"
+#include "lldb/Utility/StructuredData.h"
 
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Errno.h"
 
 #include "cfcpp/CFCBundle.h"
 #include "cfcpp/CFCMutableArray.h"
@@ -141,7 +140,7 @@ bool Host::ResolveExecutableInBundle(FileSpec &file) {
 static void *AcceptPIDFromInferior(void *arg) {
   const char *connect_url = (const char *)arg;
   ConnectionFileDescriptor file_conn;
-  Error error;
+  Status error;
   if (file_conn.Connect(connect_url, &error) == eConnectionStatusSuccess) {
     char pid_str[256];
     ::memset(pid_str, 0, sizeof(pid_str));
@@ -311,7 +310,7 @@ static bool WaitForProcessToSIGSTOP(const lldb::pid_t pid,
 //
 //    lldb::pid_t pid = LLDB_INVALID_PROCESS_ID;
 //
-//    Error lldb_error;
+//    Status lldb_error;
 //    // Sleep and wait a bit for debugserver to start to listen...
 //    char connect_url[128];
 //    ::snprintf (connect_url, sizeof(connect_url), "unix-accept://%s",
@@ -378,10 +377,10 @@ tell application \"Terminal\"\n\
 	do script the_shell_script\n\
 end tell\n";
 
-static Error
+static Status
 LaunchInNewTerminalWithAppleScript(const char *exe_path,
                                    ProcessLaunchInfo &launch_info) {
-  Error error;
+  Status error;
   char unix_socket_name[PATH_MAX] = "/tmp/XXXXXX";
   if (::mktemp(unix_socket_name) == NULL) {
     error.SetErrorString("failed to make temporary path for a unix socket");
@@ -501,7 +500,7 @@ LaunchInNewTerminalWithAppleScript(const char *exe_path,
 
   lldb::pid_t pid = LLDB_INVALID_PROCESS_ID;
 
-  Error lldb_error;
+  Status lldb_error;
   // Sleep and wait a bit for debugserver to start to listen...
   ConnectionFileDescriptor file_conn;
   char connect_url[128];
@@ -530,7 +529,7 @@ LaunchInNewTerminalWithAppleScript(const char *exe_path,
     WaitForProcessToSIGSTOP(pid, 5);
   }
 
-  FileSystem::Unlink(FileSpec{unix_socket_name, false});
+  llvm::sys::fs::remove(unix_socket_name);
   [applescript release];
   if (pid != LLDB_INVALID_PROCESS_ID)
     launch_info.SetProcessID(pid);
@@ -947,8 +946,8 @@ static void PackageXPCArguments(xpc_object_t message, const char *prefix,
  Once obtained, it will be valid for as long as the process lives.
  */
 static AuthorizationRef authorizationRef = NULL;
-static Error getXPCAuthorization(ProcessLaunchInfo &launch_info) {
-  Error error;
+static Status getXPCAuthorization(ProcessLaunchInfo &launch_info) {
+  Status error;
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_HOST |
                                                   LIBLLDB_LOG_PROCESS));
 
@@ -1025,11 +1024,52 @@ static Error getXPCAuthorization(ProcessLaunchInfo &launch_info) {
 }
 #endif
 
-static Error LaunchProcessXPC(const char *exe_path,
-                              ProcessLaunchInfo &launch_info,
-                              lldb::pid_t &pid) {
+static short GetPosixspawnFlags(const ProcessLaunchInfo &launch_info) {
+  short flags = POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK;
+
+  if (launch_info.GetFlags().Test(eLaunchFlagExec))
+    flags |= POSIX_SPAWN_SETEXEC; // Darwin specific posix_spawn flag
+
+  if (launch_info.GetFlags().Test(eLaunchFlagDebug))
+    flags |= POSIX_SPAWN_START_SUSPENDED; // Darwin specific posix_spawn flag
+
+  if (launch_info.GetFlags().Test(eLaunchFlagDisableASLR))
+    flags |= _POSIX_SPAWN_DISABLE_ASLR; // Darwin specific posix_spawn flag
+
+  if (launch_info.GetLaunchInSeparateProcessGroup())
+    flags |= POSIX_SPAWN_SETPGROUP;
+
+#ifdef POSIX_SPAWN_CLOEXEC_DEFAULT
+#if defined(__x86_64__) || defined(__i386__)
+  static LazyBool g_use_close_on_exec_flag = eLazyBoolCalculate;
+  if (g_use_close_on_exec_flag == eLazyBoolCalculate) {
+    g_use_close_on_exec_flag = eLazyBoolNo;
+
+    uint32_t major, minor, update;
+    if (HostInfo::GetOSVersion(major, minor, update)) {
+      // Kernel panic if we use the POSIX_SPAWN_CLOEXEC_DEFAULT on 10.7 or
+      // earlier
+      if (major > 10 || (major == 10 && minor > 7)) {
+        // Only enable for 10.8 and later OS versions
+        g_use_close_on_exec_flag = eLazyBoolYes;
+      }
+    }
+  }
+#else
+  static LazyBool g_use_close_on_exec_flag = eLazyBoolYes;
+#endif // defined(__x86_64__) || defined(__i386__)
+  // Close all files exception those with file actions if this is supported.
+  if (g_use_close_on_exec_flag == eLazyBoolYes)
+    flags |= POSIX_SPAWN_CLOEXEC_DEFAULT;
+#endif // ifdef POSIX_SPAWN_CLOEXEC_DEFAULT
+  return flags;
+}
+
+static Status LaunchProcessXPC(const char *exe_path,
+                               ProcessLaunchInfo &launch_info,
+                               lldb::pid_t &pid) {
 #if !NO_XPC_SERVICES
-  Error error = getXPCAuthorization(launch_info);
+  Status error = getXPCAuthorization(launch_info);
   if (error.Fail())
     return error;
 
@@ -1108,7 +1148,7 @@ static Error LaunchProcessXPC(const char *exe_path,
   xpc_dictionary_set_int64(message, LauncherXPCServiceCPUTypeKey,
                            launch_info.GetArchitecture().GetMachOCPUType());
   xpc_dictionary_set_int64(message, LauncherXPCServicePosixspawnFlagsKey,
-                           Host::GetPosixspawnFlags(launch_info));
+                           GetPosixspawnFlags(launch_info));
   const FileAction *file_action = launch_info.GetFileActionForFD(STDIN_FILENO);
   if (file_action && !file_action->GetPath().empty()) {
     xpc_dictionary_set_string(message, LauncherXPCServiceStdInPathKeyKey,
@@ -1157,9 +1197,265 @@ static Error LaunchProcessXPC(const char *exe_path,
 
   return error;
 #else
-  Error error;
+  Status error;
   return error;
 #endif
+}
+
+static bool AddPosixSpawnFileAction(void *_file_actions, const FileAction *info,
+                                    Log *log, Status &error) {
+  if (info == NULL)
+    return false;
+
+  posix_spawn_file_actions_t *file_actions =
+      reinterpret_cast<posix_spawn_file_actions_t *>(_file_actions);
+
+  switch (info->GetAction()) {
+  case FileAction::eFileActionNone:
+    error.Clear();
+    break;
+
+  case FileAction::eFileActionClose:
+    if (info->GetFD() == -1)
+      error.SetErrorString(
+          "invalid fd for posix_spawn_file_actions_addclose(...)");
+    else {
+      error.SetError(
+          ::posix_spawn_file_actions_addclose(file_actions, info->GetFD()),
+          eErrorTypePOSIX);
+      if (error.Fail())
+        LLDB_LOG(log,
+                 "error: {0}, posix_spawn_file_actions_addclose "
+                 "(action={1}, fd={2})",
+                 error, file_actions, info->GetFD());
+    }
+    break;
+
+  case FileAction::eFileActionDuplicate:
+    if (info->GetFD() == -1)
+      error.SetErrorString(
+          "invalid fd for posix_spawn_file_actions_adddup2(...)");
+    else if (info->GetActionArgument() == -1)
+      error.SetErrorString(
+          "invalid duplicate fd for posix_spawn_file_actions_adddup2(...)");
+    else {
+      error.SetError(
+          ::posix_spawn_file_actions_adddup2(file_actions, info->GetFD(),
+                                             info->GetActionArgument()),
+          eErrorTypePOSIX);
+      if (error.Fail())
+        LLDB_LOG(log,
+                 "error: {0}, posix_spawn_file_actions_adddup2 "
+                 "(action={1}, fd={2}, dup_fd={3})",
+                 error, file_actions, info->GetFD(), info->GetActionArgument());
+    }
+    break;
+
+  case FileAction::eFileActionOpen:
+    if (info->GetFD() == -1)
+      error.SetErrorString(
+          "invalid fd in posix_spawn_file_actions_addopen(...)");
+    else {
+      int oflag = info->GetActionArgument();
+
+      mode_t mode = 0;
+
+      if (oflag & O_CREAT)
+        mode = 0640;
+
+      error.SetError(::posix_spawn_file_actions_addopen(
+                         file_actions, info->GetFD(),
+                         info->GetPath().str().c_str(), oflag, mode),
+                     eErrorTypePOSIX);
+      if (error.Fail())
+        LLDB_LOG(log,
+                 "error: {0}, posix_spawn_file_actions_addopen (action={1}, "
+                 "fd={2}, path='{3}', oflag={4}, mode={5})",
+                 error, file_actions, info->GetFD(), info->GetPath(), oflag,
+                 mode);
+    }
+    break;
+  }
+  return error.Success();
+}
+
+static Status LaunchProcessPosixSpawn(const char *exe_path,
+                                      const ProcessLaunchInfo &launch_info,
+                                      lldb::pid_t &pid) {
+  Status error;
+  Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_HOST |
+                                                  LIBLLDB_LOG_PROCESS));
+
+  posix_spawnattr_t attr;
+  error.SetError(::posix_spawnattr_init(&attr), eErrorTypePOSIX);
+
+  if (error.Fail()) {
+    LLDB_LOG(log, "error: {0}, ::posix_spawnattr_init ( &attr )", error);
+    return error;
+  }
+
+  // Make a quick class that will cleanup the posix spawn attributes in case
+  // we return in the middle of this function.
+  lldb_utility::CleanUp<posix_spawnattr_t *, int> posix_spawnattr_cleanup(
+      &attr, posix_spawnattr_destroy);
+
+  sigset_t no_signals;
+  sigset_t all_signals;
+  sigemptyset(&no_signals);
+  sigfillset(&all_signals);
+  ::posix_spawnattr_setsigmask(&attr, &no_signals);
+  ::posix_spawnattr_setsigdefault(&attr, &all_signals);
+
+  short flags = GetPosixspawnFlags(launch_info);
+
+  error.SetError(::posix_spawnattr_setflags(&attr, flags), eErrorTypePOSIX);
+  if (error.Fail()) {
+    LLDB_LOG(log,
+             "error: {0}, ::posix_spawnattr_setflags ( &attr, flags={1:x} )",
+             error, flags);
+    return error;
+  }
+
+// posix_spawnattr_setbinpref_np appears to be an Apple extension per:
+// http://www.unix.com/man-page/OSX/3/posix_spawnattr_setbinpref_np/
+#if !defined(__arm__)
+
+  // Don't set the binpref if a shell was provided.  After all, that's only
+  // going to affect what version of the shell
+  // is launched, not what fork of the binary is launched.  We insert "arch
+  // --arch <ARCH> as part of the shell invocation
+  // to do that job on OSX.
+
+  if (launch_info.GetShell() == nullptr) {
+    // We don't need to do this for ARM, and we really shouldn't now that we
+    // have multiple CPU subtypes and no posix_spawnattr call that allows us
+    // to set which CPU subtype to launch...
+    const ArchSpec &arch_spec = launch_info.GetArchitecture();
+    cpu_type_t cpu = arch_spec.GetMachOCPUType();
+    cpu_type_t sub = arch_spec.GetMachOCPUSubType();
+    if (cpu != 0 && cpu != static_cast<cpu_type_t>(UINT32_MAX) &&
+        cpu != static_cast<cpu_type_t>(LLDB_INVALID_CPUTYPE) &&
+        !(cpu == 0x01000007 && sub == 8)) // If haswell is specified, don't try
+                                          // to set the CPU type or we will fail
+    {
+      size_t ocount = 0;
+      error.SetError(::posix_spawnattr_setbinpref_np(&attr, 1, &cpu, &ocount),
+                     eErrorTypePOSIX);
+      if (error.Fail())
+        LLDB_LOG(log,
+                 "error: {0}, ::posix_spawnattr_setbinpref_np ( &attr, 1, "
+                 "cpu_type = {1:x}, count => {2} )",
+                 error, cpu, ocount);
+
+      if (error.Fail() || ocount != 1)
+        return error;
+    }
+  }
+#endif // !defined(__arm__)
+
+  const char *tmp_argv[2];
+  char *const *argv = const_cast<char *const *>(
+      launch_info.GetArguments().GetConstArgumentVector());
+  char *const *envp = const_cast<char *const *>(
+      launch_info.GetEnvironmentEntries().GetConstArgumentVector());
+  if (argv == NULL) {
+    // posix_spawn gets very unhappy if it doesn't have at least the program
+    // name in argv[0]. One of the side affects I have noticed is the
+    // environment
+    // variables don't make it into the child process if "argv == NULL"!!!
+    tmp_argv[0] = exe_path;
+    tmp_argv[1] = NULL;
+    argv = const_cast<char *const *>(tmp_argv);
+  }
+
+  FileSpec working_dir{launch_info.GetWorkingDirectory()};
+  if (working_dir) {
+    // Set the working directory on this thread only
+    if (__pthread_chdir(working_dir.GetCString()) < 0) {
+      if (errno == ENOENT) {
+        error.SetErrorStringWithFormat("No such file or directory: %s",
+                                       working_dir.GetCString());
+      } else if (errno == ENOTDIR) {
+        error.SetErrorStringWithFormat("Path doesn't name a directory: %s",
+                                       working_dir.GetCString());
+      } else {
+        error.SetErrorStringWithFormat("An unknown error occurred when "
+                                       "changing directory for process "
+                                       "execution.");
+      }
+      return error;
+    }
+  }
+
+  ::pid_t result_pid = LLDB_INVALID_PROCESS_ID;
+  const size_t num_file_actions = launch_info.GetNumFileActions();
+  if (num_file_actions > 0) {
+    posix_spawn_file_actions_t file_actions;
+    error.SetError(::posix_spawn_file_actions_init(&file_actions),
+                   eErrorTypePOSIX);
+    if (error.Fail()) {
+      LLDB_LOG(log,
+               "error: {0}, ::posix_spawn_file_actions_init ( &file_actions )",
+               error);
+      return error;
+    }
+
+    // Make a quick class that will cleanup the posix spawn attributes in case
+    // we return in the middle of this function.
+    lldb_utility::CleanUp<posix_spawn_file_actions_t *, int>
+        posix_spawn_file_actions_cleanup(&file_actions,
+                                         posix_spawn_file_actions_destroy);
+
+    for (size_t i = 0; i < num_file_actions; ++i) {
+      const FileAction *launch_file_action =
+          launch_info.GetFileActionAtIndex(i);
+      if (launch_file_action) {
+        if (!AddPosixSpawnFileAction(&file_actions, launch_file_action, log,
+                                     error))
+          return error;
+      }
+    }
+
+    error.SetError(
+        ::posix_spawnp(&result_pid, exe_path, &file_actions, &attr, argv, envp),
+        eErrorTypePOSIX);
+
+    if (error.Fail()) {
+      LLDB_LOG(log,
+               "error: {0}, ::posix_spawnp(pid => {1}, path = '{2}', "
+               "file_actions = {3}, "
+               "attr = {4}, argv = {5}, envp = {6} )",
+               error, result_pid, exe_path, &file_actions, &attr, argv, envp);
+      if (log) {
+        for (int ii = 0; argv[ii]; ++ii)
+          LLDB_LOG(log, "argv[{0}] = '{1}'", ii, argv[ii]);
+      }
+    }
+
+  } else {
+    error.SetError(
+        ::posix_spawnp(&result_pid, exe_path, NULL, &attr, argv, envp),
+        eErrorTypePOSIX);
+
+    if (error.Fail()) {
+      LLDB_LOG(log,
+               "error: {0}, ::posix_spawnp ( pid => {1}, path = '{2}', "
+               "file_actions = NULL, attr = {3}, argv = {4}, envp = {5} )",
+               error, result_pid, exe_path, &attr, argv, envp);
+      if (log) {
+        for (int ii = 0; argv[ii]; ++ii)
+          LLDB_LOG(log, "argv[{0}] = '{1}'", ii, argv[ii]);
+      }
+    }
+  }
+  pid = result_pid;
+
+  if (working_dir) {
+    // No more thread specific current working directory
+    __pthread_fchdir(-1);
+  }
+
+  return error;
 }
 
 static bool ShouldLaunchUsingXPC(ProcessLaunchInfo &launch_info) {
@@ -1178,8 +1474,8 @@ static bool ShouldLaunchUsingXPC(ProcessLaunchInfo &launch_info) {
   return result;
 }
 
-Error Host::LaunchProcess(ProcessLaunchInfo &launch_info) {
-  Error error;
+Status Host::LaunchProcess(ProcessLaunchInfo &launch_info) {
+  Status error;
   char exe_path[PATH_MAX];
   PlatformSP host_platform_sp(Platform::GetHostPlatform());
 
@@ -1247,8 +1543,8 @@ Error Host::LaunchProcess(ProcessLaunchInfo &launch_info) {
   return error;
 }
 
-Error Host::ShellExpandArguments(ProcessLaunchInfo &launch_info) {
-  Error error;
+Status Host::ShellExpandArguments(ProcessLaunchInfo &launch_info) {
+  Status error;
   if (launch_info.GetFlags().Test(eLaunchFlagShellExpandArguments)) {
     FileSpec expand_tool_spec;
     if (!HostInfo::GetLLDBPath(lldb::ePathTypeSupportExecutableDir,
@@ -1329,8 +1625,7 @@ Error Host::ShellExpandArguments(ProcessLaunchInfo &launch_info) {
       if (!str_sp)
         continue;
 
-      launch_info.GetArguments().AppendArgument(
-          llvm::StringRef(str_sp->GetValue().c_str()));
+      launch_info.GetArguments().AppendArgument(str_sp->GetValue());
     }
   }
 
@@ -1369,10 +1664,7 @@ HostThread Host::StartMonitoringChildProcess(
       int wait_pid = 0;
       bool cancel = false;
       bool exited = false;
-      do {
-        wait_pid = ::waitpid(pid, &status, 0);
-      } while (wait_pid < 0 && errno == EINTR);
-
+      wait_pid = llvm::sys::RetryAfterSignal(-1, ::waitpid, pid, &status, 0);
       if (wait_pid >= 0) {
         int signal = 0;
         int exit_status = 0;
@@ -1447,8 +1739,4 @@ void Host::SystemLog(SystemLogType type, const char *format, va_list args) {
     // Log to ASL
     ::asl_vlog(NULL, g_aslmsg, asl_level, format, args);
   }
-}
-
-lldb::DataBufferSP Host::GetAuxvData(lldb_private::Process *process) {
-  return lldb::DataBufferSP();
 }

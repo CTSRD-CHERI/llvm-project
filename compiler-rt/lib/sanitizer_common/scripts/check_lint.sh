@@ -18,7 +18,7 @@ fi
 # Filters
 # TODO: remove some of these filters
 COMMON_LINT_FILTER=-build/include,-build/header_guard,-legal/copyright,-whitespace/comments,-readability/casting,\
--build/namespaces
+-build/namespaces,-readability/braces
 ASAN_RTL_LINT_FILTER=${COMMON_LINT_FILTER},-runtime/int
 ASAN_TEST_LINT_FILTER=${COMMON_LINT_FILTER},-runtime/sizeof,-runtime/int,-runtime/printf,-runtime/threadsafe_fn
 ASAN_LIT_TEST_LINT_FILTER=${ASAN_TEST_LINT_FILTER},-whitespace/line_length
@@ -29,6 +29,7 @@ MSAN_RTL_LINT_FILTER=${COMMON_LINT_FILTER}
 LSAN_RTL_LINT_FILTER=${COMMON_LINT_FILTER}
 LSAN_LIT_TEST_LINT_FILTER=${LSAN_RTL_LINT_FILTER},-whitespace/line_length
 DFSAN_RTL_LINT_FILTER=${COMMON_LINT_FILTER},-runtime/int,-runtime/printf,-runtime/references,-readability/function
+SCUDO_RTL_LINT_FILTER=${COMMON_LINT_FILTER}
 COMMON_RTL_INC_LINT_FILTER=${COMMON_LINT_FILTER},-runtime/int,-runtime/sizeof,-runtime/printf,-readability/fn_size
 SANITIZER_INCLUDES_LINT_FILTER=${COMMON_LINT_FILTER},-runtime/int
 
@@ -111,6 +112,11 @@ DFSAN_RTL=${COMPILER_RT}/lib/dfsan
 run_lint ${DFSAN_RTL_LINT_FILTER} ${DFSAN_RTL}/*.cc \
                                   ${DFSAN_RTL}/*.h &
 ${DFSAN_RTL}/scripts/check_custom_wrappers.sh >> $ERROR_LOG
+
+# Scudo
+SCUDO_RTL=${COMPILER_RT}/lib/scudo
+run_lint ${SCUDO_RTL_LINT_FILTER} ${SCUDO_RTL}/*.cpp \
+                                  ${SCUDO_RTL}/*.h &
 
 # Misc files
 FILES=${COMMON_RTL}/*.inc

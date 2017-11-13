@@ -22,7 +22,8 @@
 // Should not link because of undefined symbol _bar
 // RUN: not ld.lld -o %t3 %t.o %tbar.o 2>&1 \
 // RUN:   | FileCheck --check-prefix=UNDEFINED %s
-// UNDEFINED: error: {{.*}}:(.bar+0x0): undefined symbol '_bar'
+// UNDEFINED: error: undefined symbol: _bar
+// UNDEFINED: >>> referenced by {{.*}}:(.bar+0x0)
 
 // Should fail if cannot find specified library (without -L switch)
 // RUN: not ld.lld -o %t3 %t.o -lls 2>&1 \
@@ -59,6 +60,7 @@
 
 // Check long forms as well
 // RUN: ld.lld -o %t3 %t.o --library-path=%t.dir --library=ls
+// RUN: ld.lld -o %t3 %t.o --library-path %t.dir --library ls
 
 // Should not search for dynamic libraries if -Bstatic is specified
 // RUN: ld.lld -o %t3 %t.o -L%t.dir -Bstatic -lls

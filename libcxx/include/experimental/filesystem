@@ -81,10 +81,10 @@
     path canonical(const path& p, const path& base, error_code& ec);
 
     void copy(const path& from, const path& to);
-    void copy(const path& from, const path& to, error_code& ec) _NOEXCEPT;
+    void copy(const path& from, const path& to, error_code& ec);
     void copy(const path& from, const path& to, copy_options options);
     void copy(const path& from, const path& to, copy_options options,
-                   error_code& ec) _NOEXCEPT;
+                   error_code& ec);
 
     bool copy_file(const path& from, const path& to);
     bool copy_file(const path& from, const path& to, error_code& ec) _NOEXCEPT;
@@ -1097,10 +1097,13 @@ class _LIBCPP_TYPE_VIS path::iterator
 {
 public:
     typedef bidirectional_iterator_tag iterator_category;
+
     typedef path                       value_type;
     typedef std::ptrdiff_t             difference_type;
     typedef const path*                pointer;
     typedef const path&                reference;
+
+    typedef void __stashing_iterator_tag; // See reverse_iterator and __is_stashing_iterator
 public:
     _LIBCPP_INLINE_VISIBILITY
     iterator() : __stashed_elem_(), __path_ptr_(nullptr),
@@ -1354,7 +1357,7 @@ void copy(const path& __from, const path& __to) {
 }
 
 inline _LIBCPP_INLINE_VISIBILITY
-void copy(const path& __from, const path& __to, error_code& __ec) _NOEXCEPT {
+void copy(const path& __from, const path& __to, error_code& __ec) {
     __copy(__from, __to, copy_options::none, &__ec);
 }
 
@@ -1365,7 +1368,7 @@ void copy(const path& __from, const path& __to, copy_options __opt) {
 
 inline _LIBCPP_INLINE_VISIBILITY
 void copy(const path& __from, const path& __to,
-          copy_options __opt, error_code& __ec) _NOEXCEPT {
+          copy_options __opt, error_code& __ec) {
     __copy(__from, __to, __opt, &__ec);
 }
 
@@ -1564,7 +1567,7 @@ bool is_empty(const path& __p) {
 }
 
 inline _LIBCPP_INLINE_VISIBILITY
-bool is_empty(const path& __p, error_code& __ec) _NOEXCEPT {
+bool is_empty(const path& __p, error_code& __ec) {
     return __fs_is_empty(__p, &__ec);
 }
 
@@ -1906,12 +1909,12 @@ public:
         : directory_iterator(__p, nullptr, __opts)
     { }
 
-    directory_iterator(const path& __p, error_code& __ec) _NOEXCEPT
+    directory_iterator(const path& __p, error_code& __ec)
         : directory_iterator(__p, &__ec)
     { }
 
     directory_iterator(const path& __p, directory_options __opts,
-                       error_code& __ec) _NOEXCEPT
+                       error_code& __ec)
         : directory_iterator(__p, &__ec, __opts)
     { }
 
@@ -1946,7 +1949,7 @@ public:
         return __p;
     }
 
-    directory_iterator& increment(error_code& __ec) _NOEXCEPT
+    directory_iterator& increment(error_code& __ec)
     { return __increment(&__ec); }
 
 private:
@@ -2016,12 +2019,12 @@ public:
 
     _LIBCPP_INLINE_VISIBILITY
     recursive_directory_iterator(const path& __p,
-        directory_options __xoptions, error_code& __ec) _NOEXCEPT
+        directory_options __xoptions, error_code& __ec)
         : recursive_directory_iterator(__p, __xoptions, &__ec)
     { }
 
     _LIBCPP_INLINE_VISIBILITY
-    recursive_directory_iterator(const path& __p, error_code& __ec) _NOEXCEPT
+    recursive_directory_iterator(const path& __p, error_code& __ec)
         : recursive_directory_iterator(__p, directory_options::none,  &__ec)
     { }
 
@@ -2063,7 +2066,7 @@ public:
     }
 
     _LIBCPP_INLINE_VISIBILITY
-    recursive_directory_iterator& increment(error_code& __ec) _NOEXCEPT
+    recursive_directory_iterator& increment(error_code& __ec)
     { return __increment(&__ec); }
 
     _LIBCPP_FUNC_VIS directory_options options() const;

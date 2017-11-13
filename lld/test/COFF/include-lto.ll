@@ -1,3 +1,4 @@
+; REQUIRES: x86
 ; RUN: llvm-as -o %t.obj %s
 ; RUN: lld-link /dll /out:%t.dll %t.obj
 ; RUN: llvm-objdump -d %t.dll | FileCheck %s
@@ -17,8 +18,5 @@ define i32 @foo() {
   ret i32 0
 }
 
-!llvm.module.flags = !{!0}
-
-!0 = !{i32 6, !"Linker Options", !1}
-!1 = !{!2}
-!2 = !{!"/INCLUDE:foo"}
+!llvm.linker.options = !{!0}
+!0 = !{!"/INCLUDE:foo"}

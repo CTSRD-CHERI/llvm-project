@@ -61,6 +61,7 @@ class DWARFDIECollection;
 class DWARFFormValue;
 class SymbolFileDWARFDebugMap;
 class SymbolFileDWARFDwo;
+class SymbolFileDWARFDwp;
 
 #define DIE_IS_BEING_PARSED ((lldb_private::Type *)1)
 
@@ -225,6 +226,8 @@ public:
       const lldb_private::SymbolContext &sc,
       const lldb_private::ConstString &name,
       const lldb_private::CompilerDeclContext *parent_decl_ctx) override;
+
+  void PreloadSymbols() override;
 
   //------------------------------------------------------------------
   // PluginInterface protocol
@@ -393,10 +396,6 @@ protected:
       const DWARFDIE &die, const lldb_private::ConstString &type_name,
       bool must_be_implementation);
 
-  lldb::TypeSP
-  FindCompleteObjCDefinitionType(const lldb_private::ConstString &type_name,
-                                 bool header_definition_ok);
-
   lldb_private::Symbol *
   GetObjCClassSymbol(const lldb_private::ConstString &objc_class_name);
 
@@ -462,8 +461,14 @@ protected:
     return m_forward_decl_clang_type_to_die;
   }
 
+  SymbolFileDWARFDwp *GetDwpSymbolFile();
+
   lldb::ModuleWP m_debug_map_module_wp;
   SymbolFileDWARFDebugMap *m_debug_map_symfile;
+
+  llvm::once_flag m_dwp_symfile_once_flag;
+  std::unique_ptr<SymbolFileDWARFDwp> m_dwp_symfile;
+
   lldb_private::DWARFDataExtractor m_dwarf_data;
 
   DWARFDataSegment m_data_debug_abbrev;

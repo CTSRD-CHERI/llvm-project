@@ -1,10 +1,10 @@
 // RUN: llvm-mc -filetype=obj -triple=i686-unknown-linux %s -o %t.o
 // RUN: llvm-mc -filetype=obj -triple=i686-unknown-linux %p/Inputs/shared.s -o %t2.o
-// RUN: ld.lld -shared %t2.o -o %t2.so
+// RUN: ld.lld --hash-style=sysv -shared %t2.o -o %t2.so
 // RUN: llvm-readobj -s %t2.so | FileCheck --check-prefix=SO %s
-// RUN: ld.lld -dynamic-linker /lib64/ld-linux-x86-64.so.2 -rpath foo -rpath bar --export-dynamic %t.o %t2.so -o %t
+// RUN: ld.lld --hash-style=sysv -dynamic-linker /lib64/ld-linux-x86-64.so.2 -rpath foo -rpath bar --export-dynamic %t.o %t2.so -o %t
 // RUN: llvm-readobj --program-headers --dynamic-table -t -s -dyn-symbols -section-data -hash-table %t | FileCheck %s
-// RUN: ld.lld %t.o %t2.so %t2.so -o %t2
+// RUN: ld.lld --hash-style=sysv %t.o %t2.so %t2.so -o %t2
 // RUN: llvm-readobj -dyn-symbols %t2 | FileCheck --check-prefix=DONT_EXPORT %s
 // REQUIRES: x86
 
@@ -254,7 +254,7 @@
 // CHECK:      DynamicSection [
 // CHECK-NEXT:   Tag        Type                 Name/Value
 // CHECK-NEXT:   0x0000001D RUNPATH              foo:bar
-// CHECK-NEXT:   0x00000001 NEEDED               SharedLibrary ({{.*}}2.so)
+// CHECK-NEXT:   0x00000001 NEEDED               Shared library: [{{.*}}2.so]
 // CHECK-NEXT:   0x00000015 DEBUG                0x0
 // CHECK-NEXT:   0x00000011 REL                  [[RELADDR]]
 // CHECK-NEXT:   0x00000012 RELSZ                [[RELSIZE]] (bytes)

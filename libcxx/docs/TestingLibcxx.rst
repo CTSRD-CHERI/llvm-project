@@ -112,14 +112,14 @@ configuration. Passing the option on the command line will override the default.
 
 .. option:: std=<standard version>
 
-  **Values**: c++98, c++03, c++11, c++14, c++1z
+  **Values**: c++98, c++03, c++11, c++14, c++17, c++2a
 
   Change the standard version used when building the tests.
 
 .. option:: libcxx_site_config=<path/to/lit.site.cfg>
 
   Specify the site configuration to use when running the tests.  This option
-  overrides the enviroment variable LIBCXX_SITE_CONFIG.
+  overrides the environment variable LIBCXX_SITE_CONFIG.
 
 .. option:: cxx_headers=<path/to/headers>
 

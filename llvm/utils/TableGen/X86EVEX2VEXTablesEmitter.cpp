@@ -37,15 +37,10 @@ class X86EVEX2VEXTablesEmitter {
   std::vector<Entry> EVEX2VEX256;
 
   // Represents a manually added entry to the tables
-  class ManualEntry {
-  public:
-    std::string EVEXInstStr;
-    std::string VEXInstStr;
+  struct ManualEntry {
+    const char *EVEXInstStr;
+    const char *VEXInstStr;
     bool Is128Bit;
-
-    ManualEntry(std::string EVEXInstStr, std::string VEXInstStr, bool Is128Bit)
-        : EVEXInstStr(EVEXInstStr), VEXInstStr(VEXInstStr), Is128Bit(Is128Bit) {
-    }
   };
 
 public:
@@ -59,37 +54,55 @@ private:
   // X86EvexToVexCompressTableEntry
   void printTable(const std::vector<Entry> &Table, raw_ostream &OS);
 
-  // List of EVEX instructions that match VEX instructions by the encoding
-  // but do not perform the same operation.
-  const std::vector<std::string> ExceptionList = {
-      "VCVTQQ2PD",
-      "VCVTQQ2PS",
-      "VPMAXSQ",
-      "VPMAXUQ",
-      "VPMINSQ",
-      "VPMINUQ",
-      "VPMULLQ",
-      "VPSRAQ",
-      "VDBPSADBW",
-      "VRNDSCALE",
-      "VSCALEFPS"
-  };
-
   bool inExceptionList(const CodeGenInstruction *Inst) {
+    // List of EVEX instructions that match VEX instructions by the encoding
+    // but do not perform the same operation.
+    static constexpr const char *ExceptionList[] = {
+        "VCVTQQ2PD",
+        "VCVTQQ2PS",
+        "VPMAXSQ",
+        "VPMAXUQ",
+        "VPMINSQ",
+        "VPMINUQ",
+        "VPMULLQ",
+        "VPSRAQ",
+        "VDBPSADBW",
+        "VRNDSCALE",
+        "VSCALEFPS"
+    };
     // Instruction's name starts with one of the entries in the exception list
-    for (const std::string& InstStr : ExceptionList) {
+    for (StringRef InstStr : ExceptionList) {
       if (Inst->TheDef->getName().startswith(InstStr))
         return true;
     }
     return false;
   }
 
+};
+
+void X86EVEX2VEXTablesEmitter::printTable(const std::vector<Entry> &Table,
+                                          raw_ostream &OS) {
+  std::string Size = (Table == EVEX2VEX128) ? "128" : "256";
+
+  OS << "// X86 EVEX encoded instructions that have a VEX " << Size
+     << " encoding\n"
+     << "// (table format: <EVEX opcode, VEX-" << Size << " opcode>).\n"
+     << "static const X86EvexToVexCompressTableEntry X86EvexToVex" << Size
+     << "CompressTable[] = {\n"
+     << "  // EVEX scalar with corresponding VEX.\n";
+
+  // Print all entries added to the table
+  for (auto Pair : Table) {
+    OS << "  { X86::" << Pair.first->TheDef->getName()
+       << ", X86::" << Pair.second->TheDef->getName() << " },\n";
+  }
+
   // Some VEX instructions were duplicated to multiple EVEX versions due the
   // introduction of mask variants, and thus some of the EVEX versions have
   // different encoding than the VEX instruction. In order to maximize the
   // compression we add these entries manually.
-  const std::vector<ManualEntry> ManuallyAddedEntries = {
-    // EVEX-Inst              VEX-Inst           Is128-bit
+  static constexpr ManualEntry ManuallyAddedEntries[] = {
+      // EVEX-Inst            VEX-Inst           Is128-bit
       {"VMOVDQU8Z128mr",      "VMOVDQUmr",       true},
       {"VMOVDQU8Z128rm",      "VMOVDQUrm",       true},
       {"VMOVDQU8Z128rr",      "VMOVDQUrr",       true},
@@ -124,6 +137,9 @@ private:
       {"VBROADCASTSDZ256m",   "VBROADCASTSDYrm", false},
       {"VBROADCASTSDZ256r",   "VBROADCASTSDYrr", false},
 
+      {"VBROADCASTF64X2Z128rm", "VBROADCASTF128", false},
+      {"VBROADCASTI64X2Z128rm", "VBROADCASTI128", false},
+
       {"VEXTRACTF64x2Z256mr", "VEXTRACTF128mr",  false},
       {"VEXTRACTF64x2Z256rr", "VEXTRACTF128rr",  false},
       {"VEXTRACTI64x2Z256mr", "VEXTRACTI128mr",  false},
@@ -132,32 +148,28 @@ private:
       {"VINSERTF64x2Z256rm",  "VINSERTF128rm",   false},
       {"VINSERTF64x2Z256rr",  "VINSERTF128rr",   false},
       {"VINSERTI64x2Z256rm",  "VINSERTI128rm",   false},
-      {"VINSERTI64x2Z256rr",  "VINSERTI128rr",   false}
+      {"VINSERTI64x2Z256rr",  "VINSERTI128rr",   false},
+
+      // These will require some custom adjustment in the conversion pass.
+      {"VALIGNDZ128rri",      "VPALIGNRrri",     true},
+      {"VALIGNQZ128rri",      "VPALIGNRrri",     true},
+      {"VALIGNDZ128rmi",      "VPALIGNRrmi",     true},
+      {"VALIGNQZ128rmi",      "VPALIGNRrmi",     true},
+      {"VSHUFF32X4Z256rmi",   "VPERM2F128rm",    false},
+      {"VSHUFF32X4Z256rri",   "VPERM2F128rr",    false},
+      {"VSHUFF64X2Z256rmi",   "VPERM2F128rm",    false},
+      {"VSHUFF64X2Z256rri",   "VPERM2F128rr",    false},
+      {"VSHUFI32X4Z256rmi",   "VPERM2I128rm",    false},
+      {"VSHUFI32X4Z256rri",   "VPERM2I128rr",    false},
+      {"VSHUFI64X2Z256rmi",   "VPERM2I128rm",    false},
+      {"VSHUFI64X2Z256rri",   "VPERM2I128rr",    false},
   };
-};
-
-void X86EVEX2VEXTablesEmitter::printTable(const std::vector<Entry> &Table,
-                                          raw_ostream &OS) {
-  std::string Size = (Table == EVEX2VEX128) ? "128" : "256";
-
-  OS << "// X86 EVEX encoded instructions that have a VEX " << Size
-     << " encoding\n"
-     << "// (table format: <EVEX opcode, VEX-" << Size << " opcode>).\n"
-     << "static const X86EvexToVexCompressTableEntry X86EvexToVex" << Size
-     << "CompressTable[] = {\n"
-     << "  // EVEX scalar with corresponding VEX.\n";
-
-  // Print all entries added to the table
-  for (auto Pair : Table) {
-    OS << "{ X86::" << Pair.first->TheDef->getName()
-       << ", X86::" << Pair.second->TheDef->getName() << " },\n";
-  }
 
   // Print the manually added entries
   for (const ManualEntry &Entry : ManuallyAddedEntries) {
     if ((Table == EVEX2VEX128 && Entry.Is128Bit) ||
         (Table == EVEX2VEX256 && !Entry.Is128Bit)) {
-      OS << "{ X86::" << Entry.EVEXInstStr << ", X86::" << Entry.VEXInstStr
+      OS << "  { X86::" << Entry.EVEXInstStr << ", X86::" << Entry.VEXInstStr
          << " },\n";
     }
   }
@@ -242,7 +254,7 @@ public:
         if (getRegOperandSize(OpRec1) != getRegOperandSize(OpRec2))
           return false;
       } else if (isMemoryOperand(OpRec1) && isMemoryOperand(OpRec2)) {
-          return false;
+        return false;
       } else if (isImmediateOperand(OpRec1) && isImmediateOperand(OpRec2)) {
         if (OpRec1->getValueAsDef("Type") != OpRec2->getValueAsDef("Type"))
           return false;

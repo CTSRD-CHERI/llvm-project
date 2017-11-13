@@ -11,20 +11,22 @@
 // hierarchically the output sections, input sections, input files and
 // symbol:
 //
-// Address  Size     Align Out     In      File    Symbol
-// =================================================================
-// 00201000 00000015     4 .text
-// 00201000 0000000e     4         .text
-// 00201000 0000000e     4                 test.o
-// 0020100e 00000000     0                         local
-// 00201005 00000000     0                         f(int)
+//   Address  Size     Align Out     In      Symbol
+//   00201000 00000015     4 .text
+//   00201000 0000000e     4         test.o:(.text)
+//   0020100e 00000000     0                 local
+//   00201005 00000000     0                 f(int)
 //
 //===----------------------------------------------------------------------===//
 
 #include "MapFile.h"
 #include "InputFiles.h"
+#include "LinkerScript.h"
+#include "OutputSections.h"
 #include "Strings.h"
-
+#include "SymbolTable.h"
+#include "SyntheticSections.h"
+#include "lld/Common/Threads.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
@@ -33,99 +35,104 @@ using namespace llvm::object;
 using namespace lld;
 using namespace lld::elf;
 
-static void writeOutSecLine(raw_fd_ostream &OS, int Width, uint64_t Address,
-                            uint64_t Size, uint64_t Align, StringRef Name) {
-  OS << format("%0*llx %0*llx %5lld ", Width, Address, Width, Size, Align)
-     << left_justify(Name, 7);
+typedef DenseMap<const SectionBase *, SmallVector<Defined *, 4>> SymbolMapTy;
+
+// Print out the first three columns of a line.
+static void writeHeader(raw_ostream &OS, uint64_t Addr, uint64_t Size,
+                        uint64_t Align) {
+  int W = Config->Is64 ? 16 : 8;
+  OS << format("%0*llx %0*llx %5lld ", W, Addr, W, Size, Align);
 }
 
-static void writeInSecLine(raw_fd_ostream &OS, int Width, uint64_t Address,
-                           uint64_t Size, uint64_t Align, StringRef Name) {
-  // Pass an empty name to align the text to the correct column.
-  writeOutSecLine(OS, Width, Address, Size, Align, "");
-  OS << ' ' << left_justify(Name, 7);
+static std::string indent(int Depth) { return std::string(Depth * 8, ' '); }
+
+// Returns a list of all symbols that we want to print out.
+static std::vector<Defined *> getSymbols() {
+  std::vector<Defined *> V;
+  for (InputFile *File : ObjectFiles)
+    for (Symbol *B : File->getSymbols())
+      if (auto *DR = dyn_cast<Defined>(B))
+        if (DR->getFile() == File && !DR->isSection() && DR->Section &&
+            DR->Section->Live)
+          V.push_back(DR);
+  return V;
 }
 
-static void writeFileLine(raw_fd_ostream &OS, int Width, uint64_t Address,
-                          uint64_t Size, uint64_t Align, StringRef Name) {
-  // Pass an empty name to align the text to the correct column.
-  writeInSecLine(OS, Width, Address, Size, Align, "");
-  OS << ' ' << left_justify(Name, 7);
-}
+// Returns a map from sections to their symbols.
+static SymbolMapTy getSectionSyms(ArrayRef<Defined *> Syms) {
+  SymbolMapTy Ret;
+  for (Defined *S : Syms)
+    if (auto *DR = dyn_cast<Defined>(S))
+      Ret[DR->Section].push_back(S);
 
-static void writeSymbolLine(raw_fd_ostream &OS, int Width, uint64_t Address,
-                            uint64_t Size, StringRef Name) {
-  // Pass an empty name to align the text to the correct column.
-  writeFileLine(OS, Width, Address, Size, 0, "");
-  OS << ' ' << left_justify(Name, 7);
-}
-
-template <class ELFT>
-static void writeInputSection(raw_fd_ostream &OS, const InputSection *IS,
-                              StringRef &PrevName) {
-  int Width = ELFT::Is64Bits ? 16 : 8;
-  StringRef Name = IS->Name;
-  if (Name != PrevName) {
-    writeInSecLine(OS, Width, IS->OutSec->Addr + IS->OutSecOff, IS->getSize(),
-                   IS->Alignment, Name);
-    OS << '\n';
-    PrevName = Name;
+  // Sort symbols by address. We want to print out symbols in the
+  // order in the output file rather than the order they appeared
+  // in the input files.
+  for (auto &It : Ret) {
+    SmallVectorImpl<Defined *> &V = It.second;
+    std::sort(V.begin(), V.end(),
+              [](Defined *A, Defined *B) { return A->getVA() < B->getVA(); });
   }
-
-  elf::ObjectFile<ELFT> *File = IS->template getFile<ELFT>();
-  if (!File)
-    return;
-  writeFileLine(OS, Width, IS->OutSec->Addr + IS->OutSecOff, IS->getSize(),
-                IS->Alignment, toString(File));
-  OS << '\n';
-
-  for (SymbolBody *Sym : File->getSymbols()) {
-    auto *DR = dyn_cast<DefinedRegular>(Sym);
-    if (!DR)
-      continue;
-    if (DR->Section != IS)
-      continue;
-    if (DR->isSection())
-      continue;
-    writeSymbolLine(OS, Width, Sym->getVA<ELFT>(), Sym->getSize<ELFT>(),
-                    toString(*Sym));
-    OS << '\n';
-  }
+  return Ret;
 }
 
-template <class ELFT>
-static void writeMapFile2(raw_fd_ostream &OS,
-                          ArrayRef<OutputSection *> OutputSections) {
-  int Width = ELFT::Is64Bits ? 16 : 8;
+// Construct a map from symbols to their stringified representations.
+// Demangling symbols (which is what toString() does) is slow, so
+// we do that in batch using parallel-for.
+static DenseMap<Defined *, std::string>
+getSymbolStrings(ArrayRef<Defined *> Syms) {
+  std::vector<std::string> Str(Syms.size());
+  parallelForEachN(0, Syms.size(), [&](size_t I) {
+    raw_string_ostream OS(Str[I]);
+    writeHeader(OS, Syms[I]->getVA(), Syms[I]->getSize(), 0);
+    OS << indent(2) << toString(*Syms[I]);
+  });
 
-  OS << left_justify("Address", Width) << ' ' << left_justify("Size", Width)
-     << " Align Out     In      File    Symbol\n";
-
-  for (OutputSection *Sec : OutputSections) {
-    writeOutSecLine(OS, Width, Sec->Addr, Sec->Size, Sec->Alignment, Sec->Name);
-    OS << '\n';
-
-    StringRef PrevName = "";
-    for (InputSection *IS : Sec->Sections) {
-      writeInputSection<ELFT>(OS, IS, PrevName);
-    }
-  }
+  DenseMap<Defined *, std::string> Ret;
+  for (size_t I = 0, E = Syms.size(); I < E; ++I)
+    Ret[Syms[I]] = std::move(Str[I]);
+  return Ret;
 }
 
-template <class ELFT>
-void elf::writeMapFile(ArrayRef<OutputSection *> OutputSections) {
+void elf::writeMapFile() {
   if (Config->MapFile.empty())
     return;
 
+  // Open a map file for writing.
   std::error_code EC;
   raw_fd_ostream OS(Config->MapFile, EC, sys::fs::F_None);
-  if (EC)
+  if (EC) {
     error("cannot open " + Config->MapFile + ": " + EC.message());
-  else
-    writeMapFile2<ELFT>(OS, OutputSections);
-}
+    return;
+  }
 
-template void elf::writeMapFile<ELF32LE>(ArrayRef<OutputSection *>);
-template void elf::writeMapFile<ELF32BE>(ArrayRef<OutputSection *>);
-template void elf::writeMapFile<ELF64LE>(ArrayRef<OutputSection *>);
-template void elf::writeMapFile<ELF64BE>(ArrayRef<OutputSection *>);
+  // Collect symbol info that we want to print out.
+  std::vector<Defined *> Syms = getSymbols();
+  SymbolMapTy SectionSyms = getSectionSyms(Syms);
+  DenseMap<Defined *, std::string> SymStr = getSymbolStrings(Syms);
+
+  // Print out the header line.
+  int W = Config->Is64 ? 16 : 8;
+  OS << left_justify("Address", W) << ' ' << left_justify("Size", W)
+     << " Align Out     In      Symbol\n";
+
+  // Print out file contents.
+  for (OutputSection *OSec : OutputSections) {
+    writeHeader(OS, OSec->Addr, OSec->Size, OSec->Alignment);
+    OS << OSec->Name << '\n';
+
+    // Dump symbols for each input section.
+    for (BaseCommand *Base : OSec->SectionCommands) {
+      auto *ISD = dyn_cast<InputSectionDescription>(Base);
+      if (!ISD)
+        continue;
+      for (InputSection *IS : ISD->Sections) {
+        writeHeader(OS, OSec->Addr + IS->OutSecOff, IS->getSize(),
+                    IS->Alignment);
+        OS << indent(1) << toString(IS) << '\n';
+        for (Defined *Sym : SectionSyms[IS])
+          OS << SymStr[Sym] << '\n';
+      }
+    }
+  }
+}

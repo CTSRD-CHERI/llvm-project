@@ -6,47 +6,46 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-//
-// \file
-// \brief
-//
-// This file implements the PredicateInfo analysis, which creates an Extended
-// SSA form for operations used in branch comparisons and llvm.assume
-// comparisons.  Copies of these operations are inserted into the true/false
-// edge (and after assumes), and information attached to the copies.  All uses
-// of the original operation in blocks dominated by the true/false edge (and
-// assume), are replaced with uses of the copies.  This enables passes to easily
-// and sparsely propagate condition based info into the operations that may be
-// affected.
-//
-// Example:
-// %cmp = icmp eq i32 %x, 50
-// br i1 %cmp, label %true, label %false
-// true:
-// ret i32 %x
-// false:
-// ret i32 1
-//
-// will become
-//
-// %cmp = icmp eq i32, %x, 50
-// br i1 %cmp, label %true, label %false
-// true:
-// %x.0 = call @llvm.ssa_copy.i32(i32 %x)
-// ret i32 %x.0
-// false:
-// ret i32 1
-//
-// Using getPredicateInfoFor on x.0 will give you the comparison it is
-// dominated by (the icmp), and that you are located in the true edge of that
-// comparison, which tells you x.0 is 50.
-//
-// In order to reduce the number of copies inserted, predicateinfo is only
-// inserted where it would actually be live.  This means if there are no uses of
-// an operation dominated by the branch edges, or by an assume, the associated
-// predicate info is never inserted.
-//
-//
+///
+/// \file
+/// \brief  This file implements the PredicateInfo analysis, which creates an Extended
+/// SSA form for operations used in branch comparisons and llvm.assume
+/// comparisons.
+///
+/// Copies of these operations are inserted into the true/false edge (and after
+/// assumes), and information attached to the copies.  All uses of the original
+/// operation in blocks dominated by the true/false edge (and assume), are
+/// replaced with uses of the copies.  This enables passes to easily and sparsely
+/// propagate condition based info into the operations that may be affected.
+///
+/// Example:
+/// %cmp = icmp eq i32 %x, 50
+/// br i1 %cmp, label %true, label %false
+/// true:
+/// ret i32 %x
+/// false:
+/// ret i32 1
+///
+/// will become
+///
+/// %cmp = icmp eq i32, %x, 50
+/// br i1 %cmp, label %true, label %false
+/// true:
+/// %x.0 = call @llvm.ssa_copy.i32(i32 %x)
+/// ret i32 %x.0
+/// false:
+/// ret i32 1
+///
+/// Using getPredicateInfoFor on x.0 will give you the comparison it is
+/// dominated by (the icmp), and that you are located in the true edge of that
+/// comparison, which tells you x.0 is 50.
+///
+/// In order to reduce the number of copies inserted, predicateinfo is only
+/// inserted where it would actually be live.  This means if there are no uses of
+/// an operation dominated by the branch edges, or by an assume, the associated
+/// predicate info is never inserted.
+///
+///
 //===----------------------------------------------------------------------===//
 
 #ifndef LLVM_TRANSFORMS_UTILS_PREDICATEINFO_H
@@ -75,6 +74,7 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Transforms/Utils/OrderedInstructions.h"
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
@@ -90,7 +90,6 @@ class Instruction;
 class MemoryAccess;
 class LLVMContext;
 class raw_ostream;
-class OrderedBasicBlock;
 
 enum PredicateType { PT_Branch, PT_Assume, PT_Switch };
 
@@ -115,8 +114,9 @@ protected:
 class PredicateWithCondition : public PredicateBase {
 public:
   Value *Condition;
-  static inline bool classof(const PredicateBase *PB) {
-    return PB->Type == PT_Assume || PB->Type == PT_Branch || PB->Type == PT_Switch;
+  static bool classof(const PredicateBase *PB) {
+    return PB->Type == PT_Assume || PB->Type == PT_Branch ||
+           PB->Type == PT_Switch;
   }
 
 protected:
@@ -134,7 +134,7 @@ public:
       : PredicateWithCondition(PT_Assume, Op, Condition),
         AssumeInst(AssumeInst) {}
   PredicateAssume() = delete;
-  static inline bool classof(const PredicateBase *PB) {
+  static bool classof(const PredicateBase *PB) {
     return PB->Type == PT_Assume;
   }
 };
@@ -147,7 +147,7 @@ public:
   BasicBlock *From;
   BasicBlock *To;
   PredicateWithEdge() = delete;
-  static inline bool classof(const PredicateBase *PB) {
+  static bool classof(const PredicateBase *PB) {
     return PB->Type == PT_Branch || PB->Type == PT_Switch;
   }
 
@@ -167,7 +167,7 @@ public:
       : PredicateWithEdge(PT_Branch, Op, BranchBB, SplitBB, Condition),
         TrueEdge(TakenEdge) {}
   PredicateBranch() = delete;
-  static inline bool classof(const PredicateBase *PB) {
+  static bool classof(const PredicateBase *PB) {
     return PB->Type == PT_Branch;
   }
 };
@@ -183,7 +183,7 @@ public:
                           SI->getCondition()),
         CaseValue(CaseValue), Switch(SI) {}
   PredicateSwitch() = delete;
-  static inline bool classof(const PredicateBase *PB) {
+  static bool classof(const PredicateBase *PB) {
     return PB->Type == PT_Switch;
   }
 };
@@ -245,6 +245,7 @@ private:
   Function &F;
   DominatorTree &DT;
   AssumptionCache &AC;
+  OrderedInstructions OI;
   // This maps from copy operands to Predicate Info. Note that it does not own
   // the Predicate Info, they belong to the ValueInfo structs in the ValueInfos
   // vector.
@@ -257,8 +258,6 @@ private:
   // 0 is not a valid Value Info index, you can use DenseMap::lookup and tell
   // whether it returned a valid result.
   DenseMap<Value *, unsigned int> ValueInfoNums;
-  // OrderedBasicBlocks used during sorting uses
-  DenseMap<const BasicBlock *, std::unique_ptr<OrderedBasicBlock>> OBBMap;
   // The set of edges along which we can only handle phi uses, due to critical
   // edges.
   DenseSet<std::pair<BasicBlock *, BasicBlock *>> EdgeUsesOnly;

@@ -1,3 +1,12 @@
+set(LLDB_CURSES_LIBS)
+
+if (NOT LLDB_DISABLE_CURSES)
+  list(APPEND LLDB_CURSES_LIBS ${CURSES_LIBRARIES})
+  if(LLVM_ENABLE_TERMINFO AND HAVE_TERMINFO)
+    list(APPEND LLDB_CURSES_LIBS ${TERMINFO_LIBS})
+  endif()
+endif()
+
 add_lldb_library(lldbCore
   Address.cpp
   AddressRange.cpp
@@ -7,7 +16,6 @@ add_lldb_library(lldbCore
   ArchSpec.cpp
   Broadcaster.cpp
   Communication.cpp
-  Connection.cpp
   Debugger.cpp
   Disassembler.cpp
   DumpDataExtractor.cpp
@@ -33,9 +41,6 @@ add_lldb_library(lldbCore
   State.cpp
   StreamAsynchronousIO.cpp
   StreamFile.cpp
-  StringList.cpp
-  StructuredData.cpp
-  Timer.cpp
   UserSettingsController.cpp
   Value.cpp
   ValueObject.cpp
@@ -53,6 +58,7 @@ add_lldb_library(lldbCore
   ValueObjectVariable.cpp
 
   LINK_LIBS
+    clangAST
     lldbBreakpoint
     lldbDataFormatters
     lldbExpression
@@ -65,13 +71,14 @@ add_lldb_library(lldbCore
     lldbPluginCPlusPlusLanguage
     lldbPluginObjCLanguage
     lldbPluginObjectFileJIT
-    lldbPluginExpressionParserClang
+    ${LLDB_CURSES_LIBS}
 
   LINK_COMPONENTS
+    BinaryFormat
     Support
     Demangle
   )
 
 # Needed to properly resolve references in a debug build.
 # TODO: Remove once we have better layering
-set_target_properties(lldbCore PROPERTIES LINK_INTERFACE_MULTIPLICITY 3)
+set_target_properties(lldbCore PROPERTIES LINK_INTERFACE_MULTIPLICITY 4)

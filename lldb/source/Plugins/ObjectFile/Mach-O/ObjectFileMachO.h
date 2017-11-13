@@ -17,9 +17,10 @@
 #include "lldb/Core/Address.h"
 #include "lldb/Core/FileSpecList.h"
 #include "lldb/Core/RangeMap.h"
-#include "lldb/Host/FileSpec.h"
 #include "lldb/Symbol/ObjectFile.h"
+#include "lldb/Utility/FileSpec.h"
 #include "lldb/Utility/SafeMachO.h"
+#include "lldb/Utility/UUID.h"
 
 //----------------------------------------------------------------------
 // This class needs to be hidden as eventually belongs in a plugin that
@@ -66,7 +67,7 @@ public:
 
   static bool SaveCore(const lldb::ProcessSP &process_sp,
                        const lldb_private::FileSpec &outfile,
-                       lldb_private::Error &error);
+                       lldb_private::Status &error);
 
   static bool MagicBytesMatch(lldb::DataBufferSP &data_sp, lldb::addr_t offset,
                               lldb::addr_t length);
@@ -110,6 +111,10 @@ public:
   lldb_private::Address GetHeaderAddress() override;
 
   uint32_t GetNumThreadContexts() override;
+
+  std::string GetIdentifierString() override;
+
+  bool GetCorefileMainBinaryInfo (lldb::addr_t &address, lldb_private::UUID &uuid) override;
 
   lldb::RegisterContextSP
   GetThreadContextAtIndex(uint32_t idx, lldb_private::Thread &thread) override;

@@ -17,6 +17,7 @@
 #include "llvm/ADT/StringRef.h"
 #include <string>
 #include <vector>
+#include <map>
 
 namespace clang {
 
@@ -93,6 +94,9 @@ public:
 
   /// \brief The directory used for a user build.
   std::string ModuleUserBuildPath;
+
+  /// \brief The mapping of module names to prebuilt module files.
+  std::map<std::string, std::string> PrebuiltModuleFiles;
 
   /// \brief The directories used to load prebuilt module files.
   std::vector<std::string> PrebuiltModulePaths;
@@ -178,6 +182,8 @@ public:
 
   unsigned ModulesValidateDiagnosticOptions : 1;
 
+  unsigned ModulesHashContent : 1;
+
   HeaderSearchOptions(StringRef _Sysroot = "/")
       : Sysroot(_Sysroot), ModuleFormat("raw"), DisableModuleHash(0),
         ImplicitModuleMaps(0), ModuleMapFileHomeIsCwd(0),
@@ -186,8 +192,8 @@ public:
         UseBuiltinIncludes(true), UseStandardSystemIncludes(true),
         UseStandardCXXIncludes(true), UseLibcxx(false), Verbose(false),
         ModulesValidateOncePerBuildSession(false),
-        ModulesValidateSystemHeaders(false),
-        UseDebugInfo(false), ModulesValidateDiagnosticOptions(true) {}
+        ModulesValidateSystemHeaders(false), UseDebugInfo(false),
+        ModulesValidateDiagnosticOptions(true), ModulesHashContent(false) {}
 
   /// AddPath - Add the \p Path path to the specified \p Group list.
   void AddPath(StringRef Path, frontend::IncludeDirGroup Group,

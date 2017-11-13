@@ -23,8 +23,7 @@ class NativeProcessLinux;
 class NativeRegisterContextLinux_arm64 : public NativeRegisterContextLinux {
 public:
   NativeRegisterContextLinux_arm64(const ArchSpec &target_arch,
-                                   NativeThreadProtocol &native_thread,
-                                   uint32_t concrete_frame_idx);
+                                   NativeThreadProtocol &native_thread);
 
   uint32_t GetRegisterSetCount() const override;
 
@@ -32,15 +31,15 @@ public:
 
   const RegisterSet *GetRegisterSet(uint32_t set_index) const override;
 
-  Error ReadRegister(const RegisterInfo *reg_info,
-                     RegisterValue &reg_value) override;
+  Status ReadRegister(const RegisterInfo *reg_info,
+                      RegisterValue &reg_value) override;
 
-  Error WriteRegister(const RegisterInfo *reg_info,
-                      const RegisterValue &reg_value) override;
+  Status WriteRegister(const RegisterInfo *reg_info,
+                       const RegisterValue &reg_value) override;
 
-  Error ReadAllRegisterValues(lldb::DataBufferSP &data_sp) override;
+  Status ReadAllRegisterValues(lldb::DataBufferSP &data_sp) override;
 
-  Error WriteAllRegisterValues(const lldb::DataBufferSP &data_sp) override;
+  Status WriteAllRegisterValues(const lldb::DataBufferSP &data_sp) override;
 
   //------------------------------------------------------------------
   // Hardware breakpoints/watchpoint mangement functions
@@ -52,10 +51,10 @@ public:
 
   bool ClearHardwareBreakpoint(uint32_t hw_idx) override;
 
-  Error ClearAllHardwareBreakpoints() override;
+  Status ClearAllHardwareBreakpoints() override;
 
-  Error GetHardwareBreakHitIndex(uint32_t &bp_index,
-                                 lldb::addr_t trap_addr) override;
+  Status GetHardwareBreakHitIndex(uint32_t &bp_index,
+                                  lldb::addr_t trap_addr) override;
 
   uint32_t NumSupportedHardwareWatchpoints() override;
 
@@ -64,10 +63,10 @@ public:
 
   bool ClearHardwareWatchpoint(uint32_t hw_index) override;
 
-  Error ClearAllHardwareWatchpoints() override;
+  Status ClearAllHardwareWatchpoints() override;
 
-  Error GetWatchpointHitIndex(uint32_t &wp_index,
-                              lldb::addr_t trap_addr) override;
+  Status GetWatchpointHitIndex(uint32_t &wp_index,
+                               lldb::addr_t trap_addr) override;
 
   lldb::addr_t GetWatchpointHitAddress(uint32_t wp_index) override;
 
@@ -81,19 +80,19 @@ public:
   enum DREGType { eDREGTypeWATCH = 0, eDREGTypeBREAK };
 
 protected:
-  Error DoReadRegisterValue(uint32_t offset, const char *reg_name,
-                            uint32_t size, RegisterValue &value) override;
+  Status DoReadRegisterValue(uint32_t offset, const char *reg_name,
+                             uint32_t size, RegisterValue &value) override;
 
-  Error DoWriteRegisterValue(uint32_t offset, const char *reg_name,
-                             const RegisterValue &value) override;
+  Status DoWriteRegisterValue(uint32_t offset, const char *reg_name,
+                              const RegisterValue &value) override;
 
-  Error DoReadGPR(void *buf, size_t buf_size) override;
+  Status DoReadGPR(void *buf, size_t buf_size) override;
 
-  Error DoWriteGPR(void *buf, size_t buf_size) override;
+  Status DoWriteGPR(void *buf, size_t buf_size) override;
 
-  Error DoReadFPR(void *buf, size_t buf_size) override;
+  Status DoReadFPR(void *buf, size_t buf_size) override;
 
-  Error DoWriteFPR(void *buf, size_t buf_size) override;
+  Status DoWriteFPR(void *buf, size_t buf_size) override;
 
   void *GetGPRBuffer() override { return &m_gpr_arm64; }
 
@@ -155,9 +154,9 @@ private:
 
   bool IsFPR(unsigned reg) const;
 
-  Error ReadHardwareDebugInfo();
+  Status ReadHardwareDebugInfo();
 
-  Error WriteHardwareDebugRegs(int hwbType);
+  Status WriteHardwareDebugRegs(int hwbType);
 
   uint32_t CalculateFprOffset(const RegisterInfo *reg_info) const;
 };

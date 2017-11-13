@@ -35,9 +35,9 @@ define i16 @test1(float %f) nounwind {
 ; X32_AVX1-LABEL: test1:
 ; X32_AVX1:       ## BB#0:
 ; X32_AVX1-NEXT:    vmovss {{.*#+}} xmm0 = mem[0],zero,zero,zero
-; X32_AVX1-NEXT:    vxorps %xmm1, %xmm1, %xmm1
 ; X32_AVX1-NEXT:    vaddss LCPI0_0, %xmm0, %xmm0
 ; X32_AVX1-NEXT:    vmulss LCPI0_1, %xmm0, %xmm0
+; X32_AVX1-NEXT:    vxorps %xmm1, %xmm1, %xmm1
 ; X32_AVX1-NEXT:    vblendps {{.*#+}} xmm0 = xmm0[0],xmm1[1,2,3]
 ; X32_AVX1-NEXT:    vminss LCPI0_2, %xmm0, %xmm0
 ; X32_AVX1-NEXT:    vmaxss %xmm1, %xmm0, %xmm0
@@ -47,9 +47,9 @@ define i16 @test1(float %f) nounwind {
 ;
 ; X64_AVX1-LABEL: test1:
 ; X64_AVX1:       ## BB#0:
-; X64_AVX1-NEXT:    vxorps %xmm1, %xmm1, %xmm1
 ; X64_AVX1-NEXT:    vaddss {{.*}}(%rip), %xmm0, %xmm0
 ; X64_AVX1-NEXT:    vmulss {{.*}}(%rip), %xmm0, %xmm0
+; X64_AVX1-NEXT:    vxorps %xmm1, %xmm1, %xmm1
 ; X64_AVX1-NEXT:    vblendps {{.*#+}} xmm0 = xmm0[0],xmm1[1,2,3]
 ; X64_AVX1-NEXT:    vminss {{.*}}(%rip), %xmm0, %xmm0
 ; X64_AVX1-NEXT:    vmaxss %xmm1, %xmm0, %xmm0
@@ -60,9 +60,9 @@ define i16 @test1(float %f) nounwind {
 ; X32_AVX512-LABEL: test1:
 ; X32_AVX512:       ## BB#0:
 ; X32_AVX512-NEXT:    vmovss {{.*#+}} xmm0 = mem[0],zero,zero,zero
-; X32_AVX512-NEXT:    vxorps %xmm1, %xmm1, %xmm1
 ; X32_AVX512-NEXT:    vaddss LCPI0_0, %xmm0, %xmm0
 ; X32_AVX512-NEXT:    vmulss LCPI0_1, %xmm0, %xmm0
+; X32_AVX512-NEXT:    vxorps %xmm1, %xmm1, %xmm1
 ; X32_AVX512-NEXT:    vmovss {{.*#+}} xmm0 = xmm0[0],xmm1[1,2,3]
 ; X32_AVX512-NEXT:    vminss LCPI0_2, %xmm0, %xmm0
 ; X32_AVX512-NEXT:    vmaxss %xmm1, %xmm0, %xmm0
@@ -72,9 +72,9 @@ define i16 @test1(float %f) nounwind {
 ;
 ; X64_AVX512-LABEL: test1:
 ; X64_AVX512:       ## BB#0:
-; X64_AVX512-NEXT:    vxorps %xmm1, %xmm1, %xmm1
 ; X64_AVX512-NEXT:    vaddss {{.*}}(%rip), %xmm0, %xmm0
 ; X64_AVX512-NEXT:    vmulss {{.*}}(%rip), %xmm0, %xmm0
+; X64_AVX512-NEXT:    vxorps %xmm1, %xmm1, %xmm1
 ; X64_AVX512-NEXT:    vmovss {{.*#+}} xmm0 = xmm0[0],xmm1[1,2,3]
 ; X64_AVX512-NEXT:    vminss {{.*}}(%rip), %xmm0, %xmm0
 ; X64_AVX512-NEXT:    vmaxss %xmm1, %xmm0, %xmm0
@@ -176,16 +176,27 @@ define <4 x float> @test3(<4 x float> %A, float *%b, i32 %C) nounwind {
 ; X64-NEXT:    roundss $4, (%rdi), %xmm0
 ; X64-NEXT:    retq
 ;
-; X32_AVX-LABEL: test3:
-; X32_AVX:       ## BB#0:
-; X32_AVX-NEXT:    movl {{[0-9]+}}(%esp), %eax
-; X32_AVX-NEXT:    vroundss $4, (%eax), %xmm0, %xmm0
-; X32_AVX-NEXT:    retl
+; X32_AVX1-LABEL: test3:
+; X32_AVX1:       ## BB#0:
+; X32_AVX1-NEXT:    movl {{[0-9]+}}(%esp), %eax
+; X32_AVX1-NEXT:    vroundss $4, (%eax), %xmm0, %xmm0
+; X32_AVX1-NEXT:    retl
 ;
-; X64_AVX-LABEL: test3:
-; X64_AVX:       ## BB#0:
-; X64_AVX-NEXT:    vroundss $4, (%rdi), %xmm0, %xmm0
-; X64_AVX-NEXT:    retq
+; X64_AVX1-LABEL: test3:
+; X64_AVX1:       ## BB#0:
+; X64_AVX1-NEXT:    vroundss $4, (%rdi), %xmm0, %xmm0
+; X64_AVX1-NEXT:    retq
+;
+; X32_AVX512-LABEL: test3:
+; X32_AVX512:       ## BB#0:
+; X32_AVX512-NEXT:    movl {{[0-9]+}}(%esp), %eax
+; X32_AVX512-NEXT:    vrndscaless $4, (%eax), %xmm0, %xmm0
+; X32_AVX512-NEXT:    retl
+;
+; X64_AVX512-LABEL: test3:
+; X64_AVX512:       ## BB#0:
+; X64_AVX512-NEXT:    vrndscaless $4, (%rdi), %xmm0, %xmm0
+; X64_AVX512-NEXT:    retq
   %a = load float , float *%b
   %B = insertelement <4 x float> undef, float %a, i32 0
   %X = call <4 x float> @llvm.x86.sse41.round.ss(<4 x float> %A, <4 x float> %B, i32 4)
@@ -214,26 +225,49 @@ define <4 x float> @test4(<4 x float> %A, float *%b, i32 %C) nounwind {
 ; X64-NEXT:    addq $24, %rsp
 ; X64-NEXT:    retq
 ;
-; X32_AVX-LABEL: test4:
-; X32_AVX:       ## BB#0:
-; X32_AVX-NEXT:    subl $28, %esp
-; X32_AVX-NEXT:    movl {{[0-9]+}}(%esp), %eax
-; X32_AVX-NEXT:    vmovss {{.*#+}} xmm0 = mem[0],zero,zero,zero
-; X32_AVX-NEXT:    vmovaps %xmm0, (%esp) ## 16-byte Spill
-; X32_AVX-NEXT:    calll _f
-; X32_AVX-NEXT:    vroundss $4, (%esp), %xmm0, %xmm0 ## 16-byte Folded Reload
-; X32_AVX-NEXT:    addl $28, %esp
-; X32_AVX-NEXT:    retl
+; X32_AVX1-LABEL: test4:
+; X32_AVX1:       ## BB#0:
+; X32_AVX1-NEXT:    subl $28, %esp
+; X32_AVX1-NEXT:    movl {{[0-9]+}}(%esp), %eax
+; X32_AVX1-NEXT:    vmovss {{.*#+}} xmm0 = mem[0],zero,zero,zero
+; X32_AVX1-NEXT:    vmovaps %xmm0, (%esp) ## 16-byte Spill
+; X32_AVX1-NEXT:    calll _f
+; X32_AVX1-NEXT:    vroundss $4, (%esp), %xmm0, %xmm0 ## 16-byte Folded Reload
+; X32_AVX1-NEXT:    addl $28, %esp
+; X32_AVX1-NEXT:    retl
 ;
-; X64_AVX-LABEL: test4:
-; X64_AVX:       ## BB#0:
-; X64_AVX-NEXT:    subq $24, %rsp
-; X64_AVX-NEXT:    vmovss {{.*#+}} xmm0 = mem[0],zero,zero,zero
-; X64_AVX-NEXT:    vmovaps %xmm0, (%rsp) ## 16-byte Spill
-; X64_AVX-NEXT:    callq _f
-; X64_AVX-NEXT:    vroundss $4, (%rsp), %xmm0, %xmm0 ## 16-byte Folded Reload
-; X64_AVX-NEXT:    addq $24, %rsp
-; X64_AVX-NEXT:    retq
+; X64_AVX1-LABEL: test4:
+; X64_AVX1:       ## BB#0:
+; X64_AVX1-NEXT:    subq $24, %rsp
+; X64_AVX1-NEXT:    vmovss {{.*#+}} xmm0 = mem[0],zero,zero,zero
+; X64_AVX1-NEXT:    vmovaps %xmm0, (%rsp) ## 16-byte Spill
+; X64_AVX1-NEXT:    callq _f
+; X64_AVX1-NEXT:    vroundss $4, (%rsp), %xmm0, %xmm0 ## 16-byte Folded Reload
+; X64_AVX1-NEXT:    addq $24, %rsp
+; X64_AVX1-NEXT:    retq
+;
+; X32_AVX512-LABEL: test4:
+; X32_AVX512:       ## BB#0:
+; X32_AVX512-NEXT:    subl $28, %esp
+; X32_AVX512-NEXT:    movl {{[0-9]+}}(%esp), %eax
+; X32_AVX512-NEXT:    vmovss {{.*#+}} xmm0 = mem[0],zero,zero,zero
+; X32_AVX512-NEXT:    vmovaps %xmm0, (%esp) ## 16-byte Spill
+; X32_AVX512-NEXT:    calll _f
+; X32_AVX512-NEXT:    vmovaps (%esp), %xmm1 ## 16-byte Reload
+; X32_AVX512-NEXT:    vrndscaless $4, %xmm1, %xmm0, %xmm0
+; X32_AVX512-NEXT:    addl $28, %esp
+; X32_AVX512-NEXT:    retl
+;
+; X64_AVX512-LABEL: test4:
+; X64_AVX512:       ## BB#0:
+; X64_AVX512-NEXT:    subq $24, %rsp
+; X64_AVX512-NEXT:    vmovss {{.*#+}} xmm0 = mem[0],zero,zero,zero
+; X64_AVX512-NEXT:    vmovaps %xmm0, (%rsp) ## 16-byte Spill
+; X64_AVX512-NEXT:    callq _f
+; X64_AVX512-NEXT:    vmovaps (%rsp), %xmm1 ## 16-byte Reload
+; X64_AVX512-NEXT:    vrndscaless $4, %xmm1, %xmm0, %xmm0
+; X64_AVX512-NEXT:    addq $24, %rsp
+; X64_AVX512-NEXT:    retq
   %a = load float , float *%b
   %B = insertelement <4 x float> undef, float %a, i32 0
   %q = call <4 x float> @f()
