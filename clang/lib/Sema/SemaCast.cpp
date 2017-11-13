@@ -3006,6 +3006,11 @@ ExprResult Sema::ActOnCheriCast(Scope *S, SourceLocation LParenLoc, tok::TokenKi
   if (!TSInfo)
     TSInfo = Context.getTrivialTypeSourceInfo(T, LParenLoc);
   switch (Kind) {
+  case tok::kw___cheri_cast: {
+    Diag(KeywordLoc, diag::warn_cheri_cast)
+        << FixItHint::CreateReplacement(KeywordLoc, "__cheri_ptr");
+    // fallthrough to __cheri_ptr
+  }
   case tok::kw___cheri_ptr:
     return BuildCheriPtr(LParenLoc, KeywordLoc, T, TSInfo, RParenLoc, SubExpr);
 

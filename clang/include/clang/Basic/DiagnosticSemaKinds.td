@@ -6047,6 +6047,10 @@ def warn_cheri_offset_addr_smaller_target_type: Warning<
   "target type %0 is smaller than the type '%1' of the "
   "%select{address|capability offset field}2; truncation may occur">;
 
+def warn_cheri_cast : Warning<
+  "__cheri_cast is deprecated; use __cheri_ptr instead">,
+  InGroup<Deprecated>;
+
 def warn_mixed_sign_comparison : Warning<
   "comparison of integers of different signs: %0 and %1">,
   InGroup<SignCompare>, DefaultIgnore;

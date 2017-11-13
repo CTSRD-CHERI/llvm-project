@@ -575,6 +575,8 @@ KEYWORD(__bridge_retain              , KEYARC)
 KEYWORD(__cheri_ptr                 , KEYALL) // cast ptr <-> capability
 KEYWORD(__cheri_offset              , KEYALL) // get the capability offset field
 KEYWORD(__cheri_addr                , KEYALL) // convert capability to an address
+KEYWORD(__cheri_cast                , KEYALL) // old name for __cheri_ptr.
+                                              // Deprecated.
 
 
 // Objective-C keywords.

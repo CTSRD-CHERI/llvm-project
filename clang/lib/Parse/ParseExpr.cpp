@@ -2355,7 +2355,7 @@ Parser::ParseParenExpression(ParenParseOption &ExprType, bool stopIfCastExpr,
                                         BridgeKeywordLoc, Ty.get(),
                                         RParenLoc, SubExpr.get());
   } else if (Tok.is(tok::kw___cheri_ptr) || Tok.is(tok::kw___cheri_offset) ||
-             Tok.is(tok::kw___cheri_addr)) {
+             Tok.is(tok::kw___cheri_addr) || Tok.is(tok::kw___cheri_cast)) {
     // TODO: (__cheri_bounded_cast struct foo[42])?
     tok::TokenKind tokenKind = Tok.getKind();
     SourceLocation CheriKeywordLoc = ConsumeToken();
