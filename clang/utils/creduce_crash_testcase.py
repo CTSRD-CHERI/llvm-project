@@ -25,6 +25,7 @@ except ImportError:
 
 options = None  # type: Options
 
+
 def verbose_print(*args, **kwargs):
     global options
     if options.verbose:
@@ -55,42 +56,51 @@ class ReduceTool(metaclass=ABCMeta):
         self.run_lines = [] # RUN: lines from the test case
         self.run_cmds = []  # the lines without RUN: suitably quoted for passing to a shell
         self.infile_name = None
+
+        self.not_interesting_exit_code = None
+        self.interesting_exit_code = None
         print("Reducing test case using", name)
 
+    def _expand_lit_substitutions(self, cmd) -> str:
+        compiler_cmd = cmd.replace("%clang_cc1 ", str(self.args.clang_cmd) + " -cc1 ")
+        compiler_cmd = compiler_cmd.replace("%clang ", str(self.args.clang_cmd) + " ")
+        cheri_cc1_triple = " -cc1 -triple cheri-unknown-freebsd "
+        compiler_cmd = compiler_cmd.replace("%cheri_cc1 ", str(self.args.clang_cmd) + cheri_cc1_triple)
+        compiler_cmd = compiler_cmd.replace("%cheri128_cc1 ", str(self.args.clang_cmd) + cheri_cc1_triple +
+                                            "-target-cpu cheri128 ")
+        compiler_cmd = compiler_cmd.replace("%cheri256_cc1 ", str(self.args.clang_cmd) + cheri_cc1_triple +
+                                            "-target-cpu cheri256 ")
+        compiler_cmd = compiler_cmd.replace("%cheri_purecap_cc1 ", str(self.args.clang_cmd) + cheri_cc1_triple +
+                                            "-target-abi purecap ")
+        # llc substitutions:
+        if "llc" in compiler_cmd:
+            compiler_cmd = re.sub(r"\bllc\b", " " + str(self.args.llc_cmd) + " ", compiler_cmd)
+        compiler_cmd = compiler_cmd.replace("%cheri128_llc ", str(self.args.llc_cmd) +
+                                            " -mtriple=cheri-unknown-freebsd -mcpu=cheri128")
+        compiler_cmd = compiler_cmd.replace("%cheri256_llc ", str(self.args.llc_cmd) +
+                                            " -mtriple=cheri-unknown-freebsd -mcpu=cheri256")
+        compiler_cmd = compiler_cmd.replace("%cheri_llc ", str(self.args.llc_cmd) +
+                                            " -mtriple=cheri-unknown-freebsd")
+        # opt substitutions
+        if "opt" in compiler_cmd:
+            compiler_cmd = re.sub(r"\opt\b", " " + str(self.args.opt_cmd) + " ", compiler_cmd)
+        compiler_cmd = compiler_cmd.replace("%cheri_opt ", str(self.args.opt_cmd) +
+                                            " -mtriple=cheri-unknown-freebsd")
+
+        # ignore all the piping to FileCheck parts of the command
+        if "|" in compiler_cmd:
+            compiler_cmd = compiler_cmd[0:compiler_cmd.find("|")]
+        return compiler_cmd
+
     def _reduce_script_text(self, input_file: Path):
-        result = "#!/bin/sh\n"
+        # Handling timeouts in a shell script is awful -> just generate a python script instead
+        result = "#!/usr/bin/env python3\nimport subprocess\nimport sys\n\n"
+        timeout_arg = self.args.timeout if self.args.timeout else "None"
         for cmd in self.run_cmds:
             # check for %s should have happened earlier
             assert "%s" in cmd, cmd
             # Undo the lit substitutions
-            compiler_cmd = cmd.replace("%clang_cc1 ", str(self.args.clang_cmd) + " -cc1 ")
-            compiler_cmd = compiler_cmd.replace("%clang ", str(self.args.clang_cmd) + " ")
-            cheri_cc1_triple = " -cc1 -triple cheri-unknown-freebsd "
-            compiler_cmd = compiler_cmd.replace("%cheri_cc1 ", str(self.args.clang_cmd) + cheri_cc1_triple)
-            compiler_cmd = compiler_cmd.replace("%cheri128_cc1 ", str(self.args.clang_cmd) + cheri_cc1_triple +
-                                                "-target-cpu cheri128 ")
-            compiler_cmd = compiler_cmd.replace("%cheri256_cc1 ", str(self.args.clang_cmd) + cheri_cc1_triple +
-                                                "-target-cpu cheri256 ")
-            compiler_cmd = compiler_cmd.replace("%cheri_purecap_cc1 ", str(self.args.clang_cmd) + cheri_cc1_triple +
-                                                "-target-abi purecap ")
-            # llc substitutions:
-            if "llc" in compiler_cmd:
-                compiler_cmd = re.sub(r"\bllc\b", " " + str(self.args.llc_cmd) + " ", compiler_cmd)
-            compiler_cmd = compiler_cmd.replace("%cheri128_llc ", str(self.args.llc_cmd) +
-                                                " -mtriple=cheri-unknown-freebsd -mcpu=cheri128")
-            compiler_cmd = compiler_cmd.replace("%cheri256_llc ", str(self.args.llc_cmd) +
-                                                " -mtriple=cheri-unknown-freebsd -mcpu=cheri256")
-            compiler_cmd = compiler_cmd.replace("%cheri_llc ", str(self.args.llc_cmd) +
-                                                " -mtriple=cheri-unknown-freebsd")
-            # opt substitutions
-            if "opt" in compiler_cmd:
-                compiler_cmd = re.sub(r"\opt\b", " " + str(self.args.opt_cmd) + " ", compiler_cmd)
-            compiler_cmd = compiler_cmd.replace("%cheri_opt ", str(self.args.opt_cmd) +
-                                                " -mtriple=cheri-unknown-freebsd")
-
-            # ignore all the piping to FileCheck parts of the command
-            if "|" in compiler_cmd:
-                compiler_cmd = compiler_cmd[0:compiler_cmd.find("|")]
+            compiler_cmd = self._expand_lit_substitutions(cmd)
             compiler_cmd = compiler_cmd.replace("%s", self.input_file_arg(input_file))
             grep_msg = ""
             crash_flag = "--crash"
@@ -102,11 +112,20 @@ class ReduceTool(metaclass=ABCMeta):
             if self.args.crash_message:
                 grep_msg += "2>&1 | grep " + shlex.quote(self.args.crash_message)
             # exit once the first command crashes
-            result += "{not_cmd} {crash_flag} {command} {grep_msg} {exit_stmt}\n".format(
-                not_cmd=self.args.not_cmd, crash_flag=crash_flag,
-                command=compiler_cmd, grep_msg=grep_msg,
-                exit_stmt=self.exit_statement)
-        return result
+            result += """
+try:
+    command = r'''{not_cmd} {crash_flag} {command} {grep_msg} '''
+    # print(command)
+    result = subprocess.run(command, shell=True, timeout={timeout_arg})
+    if result.returncode != 0:
+        sys.exit({not_interesting})
+except subprocess.TimeoutExpired:
+    print("TIMED OUT", file=sys.stderr)
+    sys.exit({not_interesting})
+""".format(timeout_arg=timeout_arg, not_interesting=self.not_interesting_exit_code,
+           not_cmd=self.args.not_cmd, crash_flag=crash_flag, command=compiler_cmd, grep_msg=grep_msg)
+
+        return result + "\nsys.exit(" + str(self.interesting_exit_code) + ")"
 
     def _create_reduce_script(self, tmpdir: Path, input_file: Path):
         reduce_script = Path(tmpdir, "reduce_script.sh").absolute()
@@ -145,9 +164,6 @@ class ReduceTool(metaclass=ABCMeta):
         print("\nResulting test case ", test_case, sep="")
         verbose_print(result)
 
-    def preprocess(self, input_file: Path) -> Path:
-        return input_file
-
     def is_reduce_script_interesting(self, reduce_script: Path, input_file: Path) -> bool:
         return False
 
@@ -163,8 +179,9 @@ class ReduceTool(metaclass=ABCMeta):
 class RunBugpoint(ReduceTool):
     def __init__(self, args: "Options"):
         super().__init__(args, "bugpoint", tool=args.bugpoint_cmd)
-        # bugpoint wants a non-zero exit code on failure
-        self.exit_statement = "&& exit 1; exit 0"
+        # bugpoint wants a non-zero exit code on interesting exit code
+        self.interesting_exit_code = 1
+        self.not_interesting_exit_code = 0
 
     def reduce(self, input_file, extra_args, tempdir):
         bugpoint = [self.tool, "-opt-command=" + str(self.args.opt_cmd), "-output-prefix=" + input_file.name]
@@ -227,7 +244,7 @@ class RunBugpoint(ReduceTool):
 
     def input_file_arg(self, input_file: Path):
         # bugpoint expects a script that takes the input files as arguments:
-        return '"$@"'
+        return "''' + ' '.join(sys.argv[1:]) + '''"
 
     def is_reduce_script_interesting(self, reduce_script: Path, input_file: Path) -> bool:
         proc = subprocess.run([str(reduce_script), str(input_file)])
@@ -238,6 +255,9 @@ class RunCreduce(ReduceTool):
     def __init__(self, args: "Options"):
         super().__init__(args, "creduce", tool=args.creduce_cmd)
         self.exit_statement = "&& exit 0"
+        # creduce wants a zero exit code on interesting test cases
+        self.interesting_exit_code = 0
+        self.not_interesting_exit_code = 1
 
     def reduce(self, input_file: Path, extra_args, tempdir):
         reduce_script = self._create_reduce_script(tempdir, input_file.absolute())
@@ -283,10 +303,12 @@ class SkipReducing(ReduceTool):
     def input_file_arg(self, input_file: Path) -> str:
         raise NotImplemented()
 
+
 class Options(object):
     def __init__(self, args: argparse.Namespace):
-        self.verbose = args.verbose
-        self.extremely_verbose = args.extremely_verbose
+        self.verbose = args.verbose  # type: bool
+        self.timeout = args.timeout  # type: int
+        self.extremely_verbose = args.extremely_verbose  # type: bool
         self.bindir = Path(args.bindir)
         self.args = args
         self.no_initial_reduce = args.no_initial_reduce  # type: bool
@@ -516,7 +538,7 @@ class Reducer(object):
             if not input("Are you sure you want to continue? [y/N]").lower().startswith("y"):
                 sys.exit()
         new_command = self._try_remove_args(
-            new_command, infile, "Checking whether compiling at -O0 crashes:",
+            new_command, infile, "Checking whether replacing optimization level with -O0 crashes:",
             noargs_opts_to_remove_startswith=["-O"],
             extra_args=["-O0"]
         )
@@ -783,7 +805,6 @@ class Reducer(object):
         opt_args = llc_args.copy()
         opt_args[0] = str(self.options.opt_cmd)
         # -O flag can only be passed once and is already included in llc_args
-        assert "-O3" in opt_args, opt_args
         opt_args.append("-S")
         opt_info = dict()
         if self._check_crash(opt_args, irfile, opt_info):
@@ -843,7 +864,6 @@ class Reducer(object):
         else:
             reduce_input = infile.with_name(infile.stem + "-reduce" + infile.suffix).absolute()
         shutil.copy(str(infile), str(reduce_input))
-        reduce_input = self.reduce_tool.preprocess(reduce_input)
         with tempfile.TemporaryDirectory() as tmpdir:
             # run("ulimit -S -c 0".split())
             self.reduce_tool.reduce(input_file=reduce_input, extra_args=self.reduce_args, tempdir=tmpdir)
@@ -862,6 +882,8 @@ def main():
     parser.add_argument("--creduce-cmd", help="Path to `creduce` tool. Default is `creduce`")
     parser.add_argument("--output-file", help="The name of the output file")
     parser.add_argument("--verbose", action="store_true", help="Print more debug output")
+    parser.add_argument("--timeout", type=int,
+                        help="Treat the test case as not interesting if it runs longer than n seconds")
     parser.add_argument("--extremely-verbose", action="store_true", help="Print tons of debug output")
     parser.add_argument("--llvm-error", action="store_true", help="Reduce a LLVM ERROR: message instead of a crash")
     # TODO: infer this automatically from the crash reproducer?
@@ -873,7 +895,8 @@ def main():
     parser.add_argument("--no-initial-reduce", help="Pass the original input file to creduce without "
                         "removing #if 0 regions. Generally this will speed up but in very rare corner "
                         "cases it might cause the test case to no longer crash.", action="store_true")
-    parser.add_argument("testcase", help="The file to reduce (must be a testcase with a RUN: line that crashes or a .sh file from a clang crash")
+    parser.add_argument("testcase", help="The file to reduce (must be a testcase with a RUN: line that crashes "
+                                         "or a .sh file from a clang crash")
     # bash completion for arguments:
     try:
         import argcomplete
