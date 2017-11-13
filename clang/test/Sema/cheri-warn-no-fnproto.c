@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -DNO_WARNING=1 -triple cheri-unknown-freebsd -fsyntax-only %s -verify
+// RUN: %cheri_cc1 -DNO_WARNING=1  -fsyntax-only %s -verify
 // RUN: %cheri_cc1 -Wmips-cheri-prototypes -fsyntax-only %s -verify
 // RUN: %cheri_purecap_cc1 -Wmips-cheri-prototypes -fsyntax-only %s -verify
 

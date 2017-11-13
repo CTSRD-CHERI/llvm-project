@@ -1,51 +1,51 @@
 // CHERI triple without any flags should set 128 defines
-// RUN: %clang -target cheri-unknown-freebsd11  \
+// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11  \
 // RUN:  -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=CHERI128 %s
 // or with -cheri
-// RUN: %clang -target cheri-unknown-freebsd11 -cheri \
+// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11 -cheri \
 // RUN:   -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=CHERI128 %s
 // or with -cheri=128
-// RUN: %clang -target cheri-unknown-freebsd11 -cheri=128 \
+// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11 -cheri=128 \
 // RUN:   -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=CHERI128 %s
 // or with both
-// RUN: %clang -target cheri-unknown-freebsd11 -cheri=128 -mcpu=cheri128 \
+// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11 -cheri=128 -mcpu=cheri128 \
 // RUN:   -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=CHERI128 %s
 
 // now try -mcpu=256:
-// RUN: %clang -target cheri-unknown-freebsd11 -mcpu=cheri256 \
+// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11 -mcpu=cheri256 \
 // RUN:   -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=CHERI256 %s
-// RUN: %clang -target cheri-unknown-freebsd11 -mcpu=cheri256 -mabi=purecap \
+// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11 -mcpu=cheri256 -mabi=purecap \
 // RUN:   -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=CHERI256,CHERI256-PURECAP %s
 // or with -cheri=256
-// RUN: %clang -target cheri-unknown-freebsd11 -cheri=256 \
+// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11 -cheri=256 \
 // RUN:   -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=CHERI256 %s
 // or with both
-// RUN: %clang -target cheri-unknown-freebsd11 -cheri=256 -mcpu=cheri256 \
+// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11 -cheri=256 -mcpu=cheri256 \
 // RUN:   -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=CHERI256 %s
 
 // Try with -march=mips64
-// RUN: %clang -target cheri-unknown-freebsd11 -mcpu=mips4 -cheri=128 \
+// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11 -mcpu=mips4 -cheri=128 \
 // RUN:   -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=CHERI128 %s
-// RUN: %clang -target cheri-unknown-freebsd11 -mcpu=mips4 -cheri=256 \
+// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11 -mcpu=mips4 -cheri=256 \
 // RUN:   -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=CHERI256 %s
 // and -mcpu=mips4
-// RUN: %clang -target cheri-unknown-freebsd11 -march=mips64 -cheri=128 \
+// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11 -march=mips64 -cheri=128 \
 // RUN:   -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=CHERI128 %s
-// RUN: %clang -target cheri-unknown-freebsd11 -march=mips64 -cheri=256 \
+// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11 -march=mips64 -cheri=256 \
 // RUN:   -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=CHERI256 %s
 
 // now try a non-cheri triple but -mcpu=cheri{128,256}
-// RUN: %clang -target mips64-unknown-freebsd11 -mcpu=cheri128 \
+// RUN: %plain_clang_cheri_triple_allowed -target mips64-unknown-freebsd11 -mcpu=cheri128 \
 // RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS-CHERI128 -DARCHNAME=CHERI128 %s
-// RUN: %clang -target mips64-unknown-freebsd11 -mcpu=cheri256 \
+// RUN: %plain_clang_cheri_triple_allowed -target mips64-unknown-freebsd11 -mcpu=cheri256 \
 // RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS-CHERI256 -DARCHNAME=CHERI256 %s
 
 // now try a non-cheri triple with -cheri
-// RUN: %clang -target mips64-unknown-freebsd11 -cheri \
+// RUN: %plain_clang_cheri_triple_allowed -target mips64-unknown-freebsd11 -cheri \
 // RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS-CHERI128 -DARCHNAME=MIPS64R2 %s
-// RUN: %clang -target mips64-unknown-freebsd11 -cheri=128 \
+// RUN: %plain_clang_cheri_triple_allowed -target mips64-unknown-freebsd11 -cheri=128 \
 // RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS-CHERI128 -DARCHNAME=MIPS64R2 %s
-// RUN: %clang -target mips64-unknown-freebsd11 -cheri=256 \
+// RUN: %plain_clang_cheri_triple_allowed -target mips64-unknown-freebsd11 -cheri=256 \
 // RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS-CHERI256 -DARCHNAME=MIPS64R2 %s
 
 // CHERI128: #define _MIPS_SZCAP 128

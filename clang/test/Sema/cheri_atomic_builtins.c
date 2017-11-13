@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 "-target-abi" "purecap" -fsyntax-only -triple cheri-unknown-freebsd %s -verify
-// RUN: %clang_cc1 "-target-abi" "n64" -fsyntax-only -triple cheri-unknown-freebsd %s -verify
+// RUN: %cheri_cc1 "-target-abi" "purecap" -fsyntax-only  %s -verify
+// RUN: %cheri_cc1 "-target-abi" "n64" -fsyntax-only  %s -verify
 
 // check that we reject usage of the __sync atomic builtins with capabilites
 // as this would result in wrong code generation

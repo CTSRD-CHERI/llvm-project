@@ -1,13 +1,13 @@
 // RUN: %cheri_cc1 -dM -x c -E /dev/null | FileCheck -check-prefix=CHECK-MACRO %s
-// RUN: %clang_cc1 -DDEPRECATED=1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s
-// RUN: %clang_cc1 -DDEPRECATED=1 -triple cheri-unknown-freebsd -fsyntax-only -fdiagnostics-parseable-fixits -ast-dump %s 2>&1 | FileCheck -check-prefix=CHECK-DEPRECATED %s
-// RUN: %clang_cc1 -DAMBIGUOUS=1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s
-// RUN: %clang_cc1 -DNORMAL=1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s
-// RUN: %clang_cc1 -DNORMAL=1 -triple cheri-unknown-freebsd -fsyntax-only -ast-dump %s | FileCheck -check-prefix=CHECK-NORMAL %s
-// RUN: %clang_cc1 -DNOT_POINTER=1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s
-// RUN: %clang_cc1 -DTYPEDEF=1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s
-// RUN: %clang_cc1 -DTYPEDEF=1 -triple cheri-unknown-freebsd -fsyntax-only -ast-dump %s | FileCheck -check-prefix=CHECK-TYPEDEF %s
-// RUN: %clang_cc1 -DLIST=1 -triple cheri-unknown-freebsd -fsyntax-only -ast-dump %s | FileCheck -check-prefix=CHECK-LIST %s
+// RUN: %cheri_cc1 -DDEPRECATED=1  -fsyntax-only -verify %s
+// RUN: %cheri_cc1 -DDEPRECATED=1  -fsyntax-only -fdiagnostics-parseable-fixits -ast-dump %s 2>&1 | FileCheck -check-prefix=CHECK-DEPRECATED %s
+// RUN: %cheri_cc1 -DAMBIGUOUS=1  -fsyntax-only -verify %s
+// RUN: %cheri_cc1 -DNORMAL=1  -fsyntax-only -verify %s
+// RUN: %cheri_cc1 -DNORMAL=1  -fsyntax-only -ast-dump %s | FileCheck -check-prefix=CHECK-NORMAL %s
+// RUN: %cheri_cc1 -DNOT_POINTER=1  -fsyntax-only -verify %s
+// RUN: %cheri_cc1 -DTYPEDEF=1  -fsyntax-only -verify %s
+// RUN: %cheri_cc1 -DTYPEDEF=1  -fsyntax-only -ast-dump %s | FileCheck -check-prefix=CHECK-TYPEDEF %s
+// RUN: %cheri_cc1 -DLIST=1  -fsyntax-only -ast-dump %s | FileCheck -check-prefix=CHECK-LIST %s
 
 // Test expected compiler warnings/errors for the __capability qualifier 
 

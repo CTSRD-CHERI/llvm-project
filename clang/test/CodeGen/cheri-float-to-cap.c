@@ -1,5 +1,5 @@
-// RUN:  %clang_cc1 "-triple" "cheri-unknown-freebsd" "-target-abi" "purecap" -o - -O0 -emit-llvm %s | FileCheck %s -enable-var-scope
-// RUN:  %clang_cc1 "-triple" "cheri-unknown-freebsd" "-target-abi" "purecap" -o - -O2 -emit-llvm %s | FileCheck %s -check-prefix OPT
+// RUN:  %cheri_purecap_cc1 -o - -O0 -emit-llvm %s | FileCheck %s -enable-var-scope
+// RUN:  %cheri_purecap_cc1 -o - -O2 -emit-llvm %s | FileCheck %s -check-prefix OPT
 
 double test_long(void) {
   double d = 1234.5678;
