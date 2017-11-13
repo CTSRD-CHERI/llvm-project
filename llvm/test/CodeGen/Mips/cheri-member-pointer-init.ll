@@ -1,4 +1,4 @@
-; RUN: %cheri256_llc %s -target-abi sandbox -o - | FileCheck %s
+; RUN: %cheri256_purecap_llc %s -o - | FileCheck %s
 ; TODO: handle CHERI 128
 ; ModuleID = 'cheri-member-pointer-init.cpp'
 source_filename = "cheri-member-pointer-init.cpp"

@@ -1,6 +1,5 @@
-# RUN: llvm-mc %s -triple=cheri-unknown-freebsd -show-encoding -mcpu=cheri | FileCheck %s
-# RUN: llvm-mc %s -triple=cheri-unknown-freebsd -mcpu=cheri -filetype=obj -o %t.o
-# RUN: llvm-objdump -d -r %t.o | FileCheck %s -check-prefix DUMP
+# RUN: %cheri_llvm-mc %s -show-encoding | FileCheck %s
+# RUN: %cheri_llvm-mc %s -filetype=obj -o - | llvm-objdump -d -r - | FileCheck %s -check-prefix DUMP
 #
 # Check that the assembler is able to handle the new capability table relocations.
 #

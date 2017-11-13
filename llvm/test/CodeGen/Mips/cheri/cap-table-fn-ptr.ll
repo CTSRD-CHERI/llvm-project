@@ -1,4 +1,4 @@
-; RUN: %cheri_purecap_llc -cheri-cap-table %s -o - | FileCheck %s
+; RUN: %cheri_purecap_llc -cheri-cap-table %s -o - | %cheri_FileCheck %s
 source_filename = "/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-table-call-extern.c"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
@@ -23,7 +23,8 @@ entry:
   ; CHECK-NEXT: cjr	$c17
 
   ;	CHECK:        .type	fn,@object              # @fn
-  ; CHECK-NEXT: 	.comm	fn,{{(32,32)|(16,16)}}
+  ; FIXME: why is alignment always 32?
+  ; CHECK-NEXT: 	.comm	fn,[[$CAP_SIZE]],32
 }
 
 attributes #0 = { nounwind "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-features"="+cheri,-noabicalls" "unsafe-fp-math"="false" "use-soft-float"="false" }

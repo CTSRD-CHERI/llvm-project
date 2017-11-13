@@ -1,7 +1,8 @@
-; RUN: %cheri_llc -relocation-model pic -target-abi purecap %s -o - -disable-cheri-addressing-mode-folder | FileCheck %s -check-prefix CHECK-NOFOLD
-; RUN: %cheri_llc -relocation-model pic -target-abi purecap %s -o - | FileCheck %s -check-prefix CHECK-OPT
+; RUN: %cheri_purecap_llc %s -o - -disable-cheri-addressing-mode-folder | FileCheck %s -check-prefix CHECK-NOFOLD
+; RUN: %cheri_purecap_llc %s -o - | FileCheck %s -check-prefix CHECK-OPT
 
-; XFAIL: *
+; Can't fold the immediate in csetoffset on NULL
+; XFAIL:*
 ; https://github.com/CTSRD-CHERI/llvm/issues/251
 
 ; ModuleID = 'test.c'

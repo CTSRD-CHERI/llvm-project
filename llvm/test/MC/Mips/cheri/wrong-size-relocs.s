@@ -1,4 +1,4 @@
-# RUN: not llvm-mc %s -triple=cheri-unknown-freebsd -show-encoding -mcpu=cheri 2>&1 | FileCheck %s
+# RUN: not %cheri_llvm-mc %s -show-encoding 2>&1 | FileCheck %s
 
 .set noat
   # Error: 16 bit relocation in a 11 bit immediate:

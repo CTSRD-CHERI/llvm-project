@@ -1,4 +1,4 @@
-; RUN: %cheri_purecap_llc -cheri-cap-table %s -o - | FileCheck %s
+; RUN: %cheri_purecap_llc -cheri-cap-table %s -o - | %cheri_FileCheck %s
 ; ModuleID = '/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-table-call-extern.c'
 
 source_filename = "/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-table-call-extern.c"
@@ -11,16 +11,16 @@ entry:
   %call = tail call i32 (...) @b() #2
   ret void
 ; Make sure we don't use $gp
-; CHECK: 	    cincoffset	$c11, $c11, -32
-; CHECK-NEXT:	csc	$c17, $zero, 0($c11)    # 32-byte Folded Spill
+; CHECK: 	    cincoffset	$c11, $c11, -[[$CAP_SIZE]]
+; CHECK-NEXT:	csc	$c17, $zero, 0($c11)    # [[$CAP_SIZE]]-byte Folded Spill
 ; CHECK-NEXT:	lui	$1, %capcall_hi(b)
 ; CHECK-NEXT:	daddiu	$1, $1, %capcall_lo(b)
 ; CHECK-NEXT:	clc	$c12, $1, 0($c26)
 ; CHECK-NEXT:	cjalr	$c12, $c17
 ; CHECK-NEXT:	cfromptr	$c13, $c0, $zero
-; CHECK-NEXT:	clc	$c17, $zero, 0($c11)    # 32-byte Folded Reload
+; CHECK-NEXT:	clc	$c17, $zero, 0($c11)    # [[$CAP_SIZE]]-byte Folded Reload
 ; CHECK-NEXT:	cjr	$c17
-; CHECK-NEXT:	cincoffset	$c11, $c11, 32
+; CHECK-NEXT:	cincoffset	$c11, $c11, [[$CAP_SIZE]]
 }
 
 declare i32 @b(...) local_unnamed_addr #1
