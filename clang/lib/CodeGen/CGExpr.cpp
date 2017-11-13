@@ -4725,11 +4725,11 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
   if (CallCHERIInvoke && getLangOpts().CPlusPlus && getLangOpts().Exceptions &&
       TargetDecl && !TargetDecl->hasAttr<NoThrowAttr>()) {
     auto &M = CGM.getModule();
-    auto *CHERIErrno = M.getNamedGlobal("cherierrno");
+    auto *CHERIErrno = M.getNamedGlobal("cheri_errno");
     if (!CHERIErrno) {
       CHERIErrno = new llvm::GlobalVariable(M, IntTy,
           /*isConstant*/false, llvm::GlobalValue::ExternalLinkage,
-          nullptr, "cherierrno");
+          nullptr, "cheri_errno");
       CHERIErrno->setThreadLocal(true);
     }
     // FIXME: Don't hard code 4-byte alignment for int!
