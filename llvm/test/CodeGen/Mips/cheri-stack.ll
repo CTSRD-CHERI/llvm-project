@@ -59,10 +59,9 @@ entry:
 ; CHECK: cincoffset	$c24, $c11, $zero
 ; CHECK: cincoffset	$c[[ALLOCACAP:([0-9]+|sp)]], $c24, 28
 ; CHECK: csetbounds	$c{{([0-9]+|sp)}}, $c[[ALLOCACAP]], 4
-; CHECK: csw	$1, $zero, [[ATOFFSET:([0-9]+|sp)]]($c24)
+; CHECK: csw	${{([0-9]+)}}, $zero, 12($c24)
 ; CHECK: cjalr	$c12, $c17
-; CHECK: clw	$1, $zero, [[ATOFFSET]]($c24)
-; CHECK: addu	$2, ${{([0-9]+|sp)}}, $1
+; CHECK: clw	${{([0-9]+)}}, $zero, 12($c24)
 ; CHECK: cincoffset	$c11, $c24, $zero
 ; CHECK: clc	$c17, $zero, [[C17OFFSET]]($c11)
 ; CHECK: cincoffset	$c11, $c11, [[FRAMESIZE]]
@@ -81,14 +80,15 @@ entry:
 ; Again, because we're at -O0, we get a load of redundant copies
 ; CHECK-LABEL: dynamic_alloca
 ; CHECK: cincoffset	$c24, $c11, $zero
-; CHECK: cmove	$c[[TEMPCAP:([0-9]+|sp)]], $c11
+; CHECK: cmove	$c[[TEMPCAP:([0-9]+)]], $c11
 ; CHECK: cgetoffset	$[[OFFSET:([0-9]+|sp)]], $c[[TEMPCAP]]
 ; CHECK: dsubu	$[[OFFSET]], $[[OFFSET]], ${{([0-9]+|sp)}}
-; CHECK: csetoffset	$c[[TEMPCAP]], $c[[TEMPCAP]], $[[OFFSET]]
-; CHECK: csetbounds	$c[[TEMPCAP2:([0-9]+|sp)]], $c[[TEMPCAP]], $2
-; CHECK: cmove	$c11, $c[[TEMPCAP]]
-; CHECK: cincoffset	$c[[TEMPCAP]], $c[[TEMPCAP2]], $zero
-; CHECK: csetbounds	$c{{([0-9]+|sp)}}, $c[[TEMPCAP]]
+; CHECK: and	$[[OFFSET1:([0-9]+|sp)]], $[[OFFSET]], ${{([0-9]+|sp)}}
+; CHECK: csetoffset	$c[[TEMPCAP1:([0-9]+)]], $c[[TEMPCAP]], $[[OFFSET1]]
+; CHECK: csetbounds	$c[[TEMPCAP2:([0-9]+)]], $c[[TEMPCAP1]], ${{([0-9]+|sp)}}
+; CHECK: cmove	$c11, $c[[TEMPCAP1]]
+; CHECK: cincoffset	$c[[TEMPCAP3:([0-9]+)]], $c[[TEMPCAP2]], $zero
+; CHECK: csetbounds	$c{{([0-9]+|sp)}}, $c[[TEMPCAP3]]
   %0 = zext i32 %x to i64
   %vla = alloca i32, i64 %0, align 4, addrspace(200)
   %call = call i32 @use_arg(i32 addrspace(200)* nonnull %vla) #4

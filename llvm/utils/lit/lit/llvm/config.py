@@ -456,6 +456,12 @@ class LLVMConfig(object):
         cheri_clang_args = ['-target', 'cheri-unknown-freebsd', '-nostdinc',
                             '-mcpu=' + default_cheri_cpu, '-msoft-float']
 
+        # Only tests inside Driver/ should be using the %clang substitution with a cheri triple
+        self.config.substitutions.append(('%clang_cc1.+cheri-unknown-freebsd.+',
+            """false "*** Do not use 'clang_cc1' with cheri triple in tests, use 'cheri_cc1'. ***" """))
+        self.config.substitutions.append(('%clang.+cheri-unknown-freebsd.+',
+            """false "*** Do not use 'clang' with cheri triple in tests, use 'cheri_clang'. ***" """))
+
         tool_substitutions = [
             # CHERI substitutions (order is important due to repeated substitutions!)
             ToolSubst('%cheri_purecap_cc1',    command='%cheri_cc1',    extra_args=['-target-abi', 'purecap']),
@@ -467,6 +473,8 @@ class LLVMConfig(object):
             ToolSubst('%cheri_clang', command=self.config.clang, extra_args=cheri_clang_args),
             ToolSubst('%cheri_purecap_clang', command=self.config.clang,
                       extra_args=cheri_clang_args + ['-mabi=purecap']),
+            # For the tests in Driver that don't depend on the capability size
+            ToolSubst('%plain_clang_cheri_triple_allowed', command=self.config.clang),
 
             ToolSubst('%clang', command=self.config.clang),
             ToolSubst('%clang_analyze_cc1', command='%clang_cc1', extra_args=['-analyze']),
