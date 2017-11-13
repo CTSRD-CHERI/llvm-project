@@ -68,15 +68,14 @@ protected:
   bool HasFP64;
   std::string ABI;
   bool IsCHERI = false;
-  int CapSize;
+  int CapSize = -1;
 
 public:
   MipsTargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
       : TargetInfo(Triple), IsMips16(false), IsMicromips(false),
         IsNan2008(false), IsAbs2008(false), IsSingleFloat(false),
         IsNoABICalls(false), CanUseBSDABICalls(false), FloatABI(HardFloat),
-        DspRev(NoDSP), HasMSA(false), DisableMadd4(false), HasFP64(false),
-        CapSize(-1) {
+        DspRev(NoDSP), HasMSA(false), DisableMadd4(false), HasFP64(false) {
     TheCXXABI.set(TargetCXXABI::GenericMIPS);
 
     setABI((getTriple().getArch() == llvm::Triple::mips ||
@@ -87,25 +86,23 @@ public:
     CPU = ABI == "o32" ? "mips32r2" : "mips64r2";
     // If we have a CHERI triple, or an explicit CHERI128 CPU, then assume
     // CHERI128.
-    if ((getTriple().getArch() == llvm::Triple::cheri) ||
-        (Opts.CPU == "cheri128")) {
+    CapSize = llvm::StringSwitch<int>(Opts.CPU)
+      .Cases("cheri", "cheri128", 128) // If we have a CHERI CPU, default to assuming CHERI128.
+      .Case("cheri256", 256)
+      .Case("cheri64", 64)
+      .Default(-1);
+    if (CapSize > 0 || getTriple().getArch() == llvm::Triple::cheri) {
       IsCHERI = true;
-      CapSize = 128;
     }
-    // If we have a CHERI CPU, default to assuming CHERI128.
-    if (Opts.CPU == "cheri") {
+    if (IsCHERI) {
       switch (CapSize) {
         default:
         case 128: CPU = "cheri128"; break;
         case 64: CPU = "cheri64"; break;
         case 256: CPU = "cheri256"; break;
       }
-      IsCHERI = true;
-    }
-
-    if (IsCHERI)
       SuitableAlign = CapSize;
-
+    }
     CanUseBSDABICalls = Triple.getOS() == llvm::Triple::FreeBSD ||
                         Triple.getOS() == llvm::Triple::OpenBSD;
   }

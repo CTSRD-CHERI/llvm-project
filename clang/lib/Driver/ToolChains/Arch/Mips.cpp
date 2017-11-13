@@ -41,17 +41,17 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
     DefMips32CPU = "mips32r6";
     DefMips64CPU = "mips64r6";
   }
+  if (Arg *A = Args.getLastArg(options::OPT_cheri, options::OPT_cheri_EQ)) {
+    if (A->getOption().matches(options::OPT_cheri))
+      CHERICPU = "cheri128";
+    else
+      CHERICPU = llvm::StringSwitch<const char *>(A->getValue())
+                     .Case("64", "cheri64")
+                     .Case("128", "cheri128")
+                     .Case("256", "cheri256")
+                     .Default("cheri128");
+  }
   if (Triple.getArch() == llvm::Triple::cheri) {
-    if (Arg *A = Args.getLastArg(options::OPT_cheri, options::OPT_cheri_EQ)) {
-      if (A->getOption().matches(options::OPT_cheri))
-        CHERICPU = "cheri128";
-      else
-        CHERICPU = llvm::StringSwitch<const char*>(A->getValue())
-          .Case("64", "cheri64")
-          .Case("128", "cheri128")
-          .Case("256", "cheri256")
-          .Default("cheri128");
-    }
     DefMips32CPU = CHERICPU;
     DefMips64CPU = CHERICPU;
   }
@@ -373,6 +373,24 @@ void mips::getMIPSTargetFeatures(const Driver &D, const llvm::Triple &Triple,
   AddTargetFeature(Args, Features, options::OPT_mno_madd4, options::OPT_mmadd4,
                    "nomadd4");
   AddTargetFeature(Args, Features, options::OPT_mmt, options::OPT_mno_mt, "mt");
+
+  if (Arg *A = Args.getLastArg(options::OPT_cheri, options::OPT_cheri_EQ)) {
+    Features.push_back("+chericap");
+    if (A->getOption().matches(options::OPT_cheri))
+      Features.push_back("+cheri128");
+    else {
+      auto SizeFeature = llvm::StringSwitch<const char *>(A->getValue())
+                             .Case("64", "+cheri64")
+                             .Case("128", "+cheri128")
+                             .Case("256", "+cheri256")
+                             .Default(nullptr);
+      if (SizeFeature)
+        Features.push_back(SizeFeature);
+      else
+        D.Diag(diag::err_drv_unsupported_option_argument)
+            << A->getOption().getName() << A->getValue();
+    }
+  }
 }
 
 mips::IEEE754Standard mips::getIEEE754Standard(StringRef &CPU) {
