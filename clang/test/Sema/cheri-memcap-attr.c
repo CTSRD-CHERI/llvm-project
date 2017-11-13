@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -dM -x c -E /dev/null | FileCheck -check-prefix=CHECK-MACRO %s
+// RUN: %cheri_cc1 -dM -x c -E /dev/null | FileCheck -check-prefix=CHECK-MACRO %s
 // RUN: %clang_cc1 -DDEPRECATED=1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s
 // RUN: %clang_cc1 -DDEPRECATED=1 -triple cheri-unknown-freebsd -fsyntax-only -fdiagnostics-parseable-fixits -ast-dump %s 2>&1 | FileCheck -check-prefix=CHECK-DEPRECATED %s
 // RUN: %clang_cc1 -DAMBIGUOUS=1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s

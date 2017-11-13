@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -std=c++11 -o - %s -fsyntax-only -verify
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -std=c++11 -target-abi purecap -o - %s -fsyntax-only -verify
+// RUN: %cheri_cc1 -std=c++11 -o - %s -fsyntax-only -verify
+// RUN: %cheri_cc1 -std=c++11 -target-abi purecap -o - %s -fsyntax-only -verify
 
 #if !__has_attribute(memory_address)
 #error "memory_address attribute not supported"

@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s -target-abi purecap
+// RUN: %cheri_cc1 -fsyntax-only -verify %s -target-abi purecap
 // Ensure that we warn on structs packed structs with misaligned capabilities
 
 struct cap_struct {

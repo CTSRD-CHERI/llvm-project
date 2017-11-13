@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -o - %s -fsyntax-only
+// RUN: %cheri_cc1 -o - %s -fsyntax-only
 
 int move_clobber(__capability void * x)
 {

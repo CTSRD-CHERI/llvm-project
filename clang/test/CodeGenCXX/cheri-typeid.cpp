@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -o - %s | FileCheck %s
+// RUN: %cheri_purecap_cc1 -emit-llvm -o - %s | FileCheck %s
 
 // type_info type for 'typeid' to work.
 namespace std { class type_info; }

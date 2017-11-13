@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -o - %s -S -emit-llvm | FileCheck %s
+// RUN: %cheri_cc1 -o - %s -S -emit-llvm | FileCheck %s
 #define CHERI_CCALL(suffix, cls) \
 	__attribute__((cheri_ccall))\
 	__attribute__((cheri_method_suffix(suffix)))\

@@ -1,8 +1,8 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -std=c++11 -DINVALID_ATOMIC_CALL -fsyntax-only -verify %s
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -std=c++11 -o - %s | %cheri_FileCheck %s -implicit-check-not i256
+// RUN: %cheri_purecap_cc1 -emit-llvm -std=c++11 -DINVALID_ATOMIC_CALL -fsyntax-only -verify %s
+// RUN: %cheri_purecap_cc1 -emit-llvm -std=c++11 -o - %s | %cheri_FileCheck %s -implicit-check-not i256
 // RUN-TODO: %cheri256_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -S -o - %s | %cheri_FileCheck -check-prefix=ASM %s
 // RUN-TODO: %cheri128_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -S -o - %s | %cheri_FileCheck -check-prefix=ASM %s
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -ast-dump %s | %cheri_FileCheck -check-prefix=AST %s
+// RUN: %cheri_purecap_cc1 -std=c++11 -ast-dump %s | %cheri_FileCheck -check-prefix=AST %s
 // reduced testcase for libcxx exception_fallback.ipp/new_handler_fallback.ipp
 
 // Module ID and source_filename might contain i256 so we explicitly capture this line

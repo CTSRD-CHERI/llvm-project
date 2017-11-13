@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s -target-abi purecap
+// RUN: %cheri_cc1 -fsyntax-only -verify %s -target-abi purecap
 // Similar to Sema/packed-struct.c but also check dependent types
 
 template <typename T>

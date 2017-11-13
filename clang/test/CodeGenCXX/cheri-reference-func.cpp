@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -emit-llvm %s -o - | %cheri_FileCheck %s
+// RUN: %cheri_purecap_cc1 -std=c++11 -emit-llvm %s -o - | %cheri_FileCheck %s
 template <class Functor>
 void invoke(Functor&& f);
 
