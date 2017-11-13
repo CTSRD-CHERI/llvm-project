@@ -355,7 +355,12 @@ class Test:
             test_name + "'"
         xml += " time='%.2f'" % (self.result.elapsed,)
         if self.result.code.isFailure:
-            xml += ">\n\t<failure >\n" + escape(self.result.output)
+            # The Jenkins JUnit XML parser throws an exception if the output
+            # contains control characters like \x1b (e.g. if there is some
+            # -fcolor-diagnostics output). Wrap the output in a CDATA section
+            # instead because escape() only replaces &, >, <
+            escaped = self.result.output.replace(']]>', ']]]]><![CDATA[>')
+            xml += ">\n\t<failure >\n<![CDATA[" + escaped + ']]>'
             xml += "\n\t</failure>\n</testcase>"
         else:
             xml += "/>"
