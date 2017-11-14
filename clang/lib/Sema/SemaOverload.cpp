@@ -8108,11 +8108,12 @@ public:
   void addGenericBinaryArithmeticOverloads() {
     if (!HasArithmeticOrEnumeralCandidateType)
       return;
-
+    unsigned LastType = S.Context.getTargetInfo().SupportsCapabilities()
+                        ? LastCapabilityType : LastPromotedIntegralType;
     for (unsigned Left = FirstPromotedArithmeticType;
-         Left < LastCapabilityType; ++Left) {
+         Left < LastType; ++Left) {
       for (unsigned Right = FirstPromotedArithmeticType;
-           Right < LastCapabilityType; ++Right) {
+           Right < LastType; ++Right) {
         QualType LandR[2] = { getArithmeticType(Left),
                               getArithmeticType(Right) };
         S.AddBuiltinCandidate(LandR, Args, CandidateSet);
@@ -8153,11 +8154,13 @@ public:
     if (!HasArithmeticOrEnumeralCandidateType)
       return;
 
+    unsigned LastType = S.Context.getTargetInfo().SupportsCapabilities()
+                        ? LastCapabilityType : LastPromotedIntegralType;
     // XXXAR: allow any type as the RHS operand for a bitwise op with capabilities
     for (unsigned Left = FirstPromotedIntegralType;
-         Left < LastCapabilityType; ++Left) {
+         Left < LastType; ++Left) {
       for (unsigned Right = FirstPromotedIntegralType;
-           Right < LastCapabilityType; ++Right) {
+           Right < LastType; ++Right) {
         QualType LandR[2] = { getArithmeticType(Left),
                               getArithmeticType(Right) };
         S.AddBuiltinCandidate(LandR, Args, CandidateSet);
