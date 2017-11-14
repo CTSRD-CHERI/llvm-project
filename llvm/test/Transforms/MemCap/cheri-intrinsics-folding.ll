@@ -21,7 +21,7 @@ define i64 @null_get_length() #1 {
   %ret = tail call i64 @llvm.cheri.cap.length.get(i8 addrspace(200)* null)
   ret i64 %ret
   ; CHECK-LABEL: @null_get_length()
-  ; CHECK-NEXT: ret i64 0
+  ; CHECK-NEXT: ret i64 -1
 }
 
 define i64 @null_get_offset() #1 {
@@ -49,7 +49,7 @@ define i64 @null_get_type() #1 {
   %ret = tail call i64 @llvm.cheri.cap.type.get(i8 addrspace(200)* null)
   ret i64 %ret
   ; CHECK-LABEL: @null_get_type()
-  ; CHECK-NEXT: ret i64 0
+  ; CHECK-NEXT: ret i64 -1
 }
 
 define i64 @null_get_sealed() #1 {
@@ -76,7 +76,7 @@ define void @infer_values_from_null_set_offset() #1 {
 
   %length = tail call i64 @llvm.cheri.cap.length.get(i8 addrspace(200)* %with_offset)
   %length_check = tail call i64 @check_fold(i64 %length)
-  ; CHECK:  %length_check = tail call i64 @check_fold(i64 0)
+  ; CHECK:  %length_check = tail call i64 @check_fold(i64 -1)
 
   %offset = tail call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* %with_offset)
   %offset_check = tail call i64 @check_fold(i64 %offset)
@@ -84,7 +84,7 @@ define void @infer_values_from_null_set_offset() #1 {
 
   %type = tail call i64 @llvm.cheri.cap.type.get(i8 addrspace(200)* %with_offset)
   %type_check = tail call i64 @check_fold(i64 %type)
-  ; CHECK:  %type_check = tail call i64 @check_fold(i64 0)
+  ; CHECK:  %type_check = tail call i64 @check_fold(i64 -1)
 
   %sealed = tail call i64 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* %with_offset)
   %sealed_check = tail call i64 @check_fold(i64 %sealed)

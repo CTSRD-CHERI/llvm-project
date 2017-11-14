@@ -47,13 +47,13 @@ class CHERICapFoldIntrinsics : public ModulePass {
 
   bool Modified;
 
-  template <typename Infer> void foldGet(Function *Intrinsic, Infer infer) {
+  template <typename Infer> void foldGet(Function *Intrinsic, Infer infer, int NullValue = 0) {
     // Calling eraseFromParent() inside the following loop causes iterators
     // to be invalidated and crashes -> collect and erase instead
     std::vector<CallInst*> ToErase;
     for (Value *Use : Intrinsic->users()) {
       CallInst *CI = cast<CallInst>(Use);
-      if (Value *Replacement = infer(CI->getOperand(0), CI->getType())) {
+      if (Value *Replacement = infer(CI->getOperand(0), CI->getType(), NullValue)) {
         CI->replaceAllUsesWith(Replacement);
         // CI->eraseFromParent();
         ToErase.push_back(CI);
@@ -69,30 +69,33 @@ class CHERICapFoldIntrinsics : public ModulePass {
     foldGet(GetOffset, inferCapabilityOffset);
 
     foldGet(GetBase, inferCapabilityNonOffsetField);
-    foldGet(GetLength, inferCapabilityNonOffsetField);
     foldGet(GetPerms, inferCapabilityNonOffsetField);
     foldGet(GetTag, inferCapabilityNonOffsetField);
     foldGet(GetSealed, inferCapabilityNonOffsetField);
-    // XXXAR: could this change to -1?
-    foldGet(GetType, inferCapabilityNonOffsetField);
+    // CGetType and CGetLen on a null capability now return -1
+    foldGet(GetLength, inferCapabilityNonOffsetField, -1);
+    foldGet(GetType, inferCapabilityNonOffsetField, -1);
   }
 
-  static Value *inferCapabilityNonOffsetField(Value *V, Type *Ty) {
-    if (isa<ConstantPointerNull>(V))
-      return llvm::Constant::getNullValue(Ty);
+  static Value *inferCapabilityNonOffsetField(Value *V, Type *Ty,
+                                              int NullValue) {
+    if (isa<ConstantPointerNull>(V)) {
+      return NullValue == 0 ? llvm::Constant::getNullValue(Ty)
+                            : llvm::Constant::getAllOnesValue(Ty);
+    }
     Value *Arg = nullptr;
     // ignore all setoffset/incoffset operations:
     if (match(V, m_Intrinsic<Intrinsic::cheri_cap_offset_set>(m_Value(Arg)))) {
-      return inferCapabilityNonOffsetField(Arg, Ty);
+      return inferCapabilityNonOffsetField(Arg, Ty, NullValue);
     } else if (match(V, m_Intrinsic<Intrinsic::cheri_cap_offset_increment>(
                             m_Value(Arg)))) {
-      return inferCapabilityNonOffsetField(Arg, Ty);
+      return inferCapabilityNonOffsetField(Arg, Ty, NullValue);
     }
     // TODO: is there anything else we can infer?
     return nullptr;
   }
 
-  static Value *inferCapabilityOffset(Value *V, Type *Ty) {
+  static Value *inferCapabilityOffset(Value *V, Type *Ty, int NullValue) {
     if (isa<ConstantPointerNull>(V))
       return llvm::Constant::getNullValue(Ty);
     Value *Arg = nullptr;
@@ -102,7 +105,7 @@ class CHERICapFoldIntrinsics : public ModulePass {
       return Offset;
     } else if (match(V, m_Intrinsic<Intrinsic::cheri_cap_offset_increment>(
                             m_Value(Arg), m_Value(Offset)))) {
-      if (Value* LHS = inferCapabilityOffset(Arg, Ty)) {
+      if (Value* LHS = inferCapabilityOffset(Arg, Ty, NullValue)) {
         IRBuilder<> B(cast<Instruction>(V));
         return B.CreateAdd(LHS, Offset);
       }
