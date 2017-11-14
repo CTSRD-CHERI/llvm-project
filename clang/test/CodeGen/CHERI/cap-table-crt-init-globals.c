@@ -1,10 +1,11 @@
+// RUN: %cheri_purecap_cc1 %s -mllvm -mxgot -mllvm -cheri-cap-table -x c -S -O2 -o -
 // RUN: %cheri_purecap_cc1 %s -mllvm -mxgot -mllvm -cheri-cap-table -x c -S -O2 -o - | FileCheck %s
-// RUN: false
 
 #include <cheri_init_globals.h>
 
-void __start(void) {
-  SETUP_GLOBAL_CAP_REGISTER();
+DEFINE_CHERI_START_FUNCTION(_start)
+
+int _start(void) {
   // crt_init_globals();
 
   // CHECK:      lui	$2, %highest(__cap_table_start)
@@ -13,16 +14,22 @@ void __start(void) {
   // CHECK-NEXT: daddiu	$1, $1, %lo(__cap_table_start)
   // CHECK-NEXT: dsll32	$2, $2, 0
   // CHECK-NEXT: daddu	$2, $2, $1
+  // CHECK-NEXT: beqz	$2, .Lskip_cgp_setup
+  // CHECK-NEXT: nop
   // CHECK-NEXT: lui	$3, %highest(__cap_table_end)
   // CHECK-NEXT: lui	$1, %hi(__cap_table_end)
   // CHECK-NEXT: daddiu	$3, $3, %higher(__cap_table_end)
   // CHECK-NEXT: daddiu	$1, $1, %lo(__cap_table_end)
   // CHECK-NEXT: dsll32	$3, $3, 0
   // CHECK-NEXT: daddu	$3, $3, $1
-
-  // CHECK:      cgetdefault	 $c1
-  // CHECK-NEXT: csetoffset	$c1, $c1, $2
+  // CHECK-NEXT: cgetdefault	 $c26
+  // CHECK-NEXT: csetoffset	$c26, $c26, $2
   // CHECK-NEXT: dsubu	$1, $3, $2
-  // CHECK-NEXT: csetbounds	$c1, $c1, $1
-  // CHECK:      cmove	$c26,  $c1
+  // CHECK-NEXT: csetbounds	$c26, $c26, $1
+  // CHECK-NEXT: .Lskip_cgp_setup:
+  // CHECK-NEXT: b	_start
+  // CHECK-NEXT: nop
+  // CHECK-NEXT: .end	__start
+
+  return 0;
 }
