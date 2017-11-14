@@ -801,8 +801,17 @@ static void fillGlobalSizesSection(InputSection* IS, uint8_t* Buf, uint8_t* BufE
       uint8_t* Location = Buf + D->Value;
       assert(Location + 8 <= BufEnd); // Should use a span type instead
       assert(read64<E>(Location) == 0); // Value should be zero
-      if (ResolvedSize == 0)
-        warn("Could not find .global_size for " + verboseToString<ELFT>(Target));
+      if (ResolvedSize == 0) {
+        // HACK for environ and __progname (both are capabilities):
+        if (Config->Shared &&
+            (RealSymName == "__progname" || RealSymName == "environ")) {
+          message("Using .global_size for symbol " + RealSymName +
+                  " in shared lib (assuming size==sizeof(void* __capability)");
+          ResolvedSize = Config->CapabilitySize;
+        } else {
+          warn("Could not find .global_size for " + verboseToString<ELFT>(Target));
+        }
+      }
       write64<E>(Location, ResolvedSize);
       if (Config->VerboseCapRelocs)
         message("Writing size 0x" + utohexstr(ResolvedSize) + " for " + verboseToString<ELFT>(Target));
