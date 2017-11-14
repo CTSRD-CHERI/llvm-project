@@ -29,7 +29,17 @@ bool MipsFunctionInfo::globalBaseRegSet() const {
   return GlobalBaseReg;
 }
 
-unsigned MipsFunctionInfo::getGlobalBaseReg() {
+unsigned MipsFunctionInfo::getGlobalBaseRegUnchecked() const {
+  return GlobalBaseReg;
+}
+
+unsigned MipsFunctionInfo::getGlobalBaseReg(bool IsForTls) {
+  if (IsForTls)
+    UsesTlsViaGlobalReg = true;
+  else
+    assert(!static_cast<const MipsSubtarget &>(MF.getSubtarget()).useCheriCapTable() &&
+           "$gp should only be used for TLS in cap-table mode");
+
   // Return if it has already been initialized.
   if (GlobalBaseReg)
     return GlobalBaseReg;

@@ -150,7 +150,7 @@ void MipsSEDAGToDAGISel::initGlobalBaseReg(MachineFunction &MF) {
   MachineRegisterInfo &RegInfo = MF.getRegInfo();
   const TargetInstrInfo &TII = *Subtarget->getInstrInfo();
   DebugLoc DL;
-  unsigned V0, V1, GlobalBaseReg = MipsFI->getGlobalBaseReg();
+  unsigned V0, V1, GlobalBaseReg = MipsFI->getGlobalBaseRegUnchecked();
   const TargetRegisterClass *RC;
   const MipsABIInfo &ABI = static_cast<const MipsTargetMachine &>(TM).getABI();
   RC = (ABI.IsN64()) ? &Mips::GPR64RegClass : &Mips::GPR32RegClass;
@@ -158,38 +158,35 @@ void MipsSEDAGToDAGISel::initGlobalBaseReg(MachineFunction &MF) {
   V0 = RegInfo.createVirtualRegister(RC);
   V1 = RegInfo.createVirtualRegister(RC);
 
+  // We don't need to initialize gp if we are using the cap table in purecap
+  // ABI as there should not be any GOT loads in this ABI
+  // XXXAR: Well, for now we do but only for functions that do TLS stuff
+  // assert(!Subtarget->useCheriCapTable())
+
   if (ABI.IsN64()) {
     if (ABI.IsCheriPureCap()) {
       MF.getRegInfo().addLiveIn(Mips::C12);
       MBB.addLiveIn(Mips::C12);
-      if (Subtarget->useCheriCapTable()) {
-        auto GlobalsReg = Mips::C26;
-        MF.getRegInfo().addLiveIn(GlobalsReg);
-        MBB.addLiveIn(GlobalsReg);
-      } else {
-        BuildMI(MBB, I, DL, TII.get(Mips::CGetOffset))
-          .addReg(Mips::T9_64, RegState::Define)
-          .addReg(Mips::C12);
-      }
+      if (Subtarget->useCheriCapTable())
+        assert(MipsFI->usesTlsViaGlobalReg() && "$gp should only be used for TLS");
+      BuildMI(MBB, I, DL, TII.get(Mips::CGetOffset))
+        .addReg(Mips::T9_64, RegState::Define)
+        .addReg(Mips::C12);
     } else {
       MF.getRegInfo().addLiveIn(Mips::T9_64);
       MBB.addLiveIn(Mips::T9_64);
     }
 
-    // We don't need to initialize gp if we are using the cap table in purecap
-    // ABI as there should not be any GOT loads in this ABI
-    if (!(ABI.IsCheriPureCap() && Subtarget->useCheriCapTable())) {
-      // lui $v0, %hi(%neg(%gp_rel(fname)))
-      // daddu $v1, $v0, $t9
-      // daddiu $globalbasereg, $v1, %lo(%neg(%gp_rel(fname)))
-      const GlobalValue *FName = MF.getFunction();
-      BuildMI(MBB, I, DL, TII.get(Mips::LUi64), V0)
-        .addGlobalAddress(FName, 0, MipsII::MO_GPOFF_HI);
-      BuildMI(MBB, I, DL, TII.get(Mips::DADDu), V1).addReg(V0)
-        .addReg(Mips::T9_64);
-      BuildMI(MBB, I, DL, TII.get(Mips::DADDiu), GlobalBaseReg).addReg(V1)
-        .addGlobalAddress(FName, 0, MipsII::MO_GPOFF_LO);
-    }
+    // lui $v0, %hi(%neg(%gp_rel(fname)))
+    // daddu $v1, $v0, $t9
+    // daddiu $globalbasereg, $v1, %lo(%neg(%gp_rel(fname)))
+    const GlobalValue *FName = MF.getFunction();
+    BuildMI(MBB, I, DL, TII.get(Mips::LUi64), V0)
+      .addGlobalAddress(FName, 0, MipsII::MO_GPOFF_HI);
+    BuildMI(MBB, I, DL, TII.get(Mips::DADDu), V1).addReg(V0)
+      .addReg(Mips::T9_64);
+    BuildMI(MBB, I, DL, TII.get(Mips::DADDiu), GlobalBaseReg).addReg(V1)
+      .addGlobalAddress(FName, 0, MipsII::MO_GPOFF_LO);
     return;
   }
 

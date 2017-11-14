@@ -394,7 +394,7 @@ extern bool LargeCapTable;
     }
 
   protected:
-    SDValue getGlobalReg(SelectionDAG &DAG, EVT Ty) const;
+    SDValue getGlobalReg(SelectionDAG &DAG, EVT Ty, bool IsForTls) const;
 
     SDValue getCapGlobalReg(SelectionDAG &DAG, EVT Ty) const;
 
@@ -404,10 +404,10 @@ extern bool LargeCapTable;
     // (add (load (wrapper $gp, %got(sym)), %lo(sym))
     template <class NodeTy>
     SDValue getAddrLocal(NodeTy *N, const SDLoc &DL, EVT Ty, SelectionDAG &DAG,
-                         bool IsN32OrN64) const {
+                         bool IsN32OrN64, bool IsForTls) const {
       assert(!ABI.UsesCapabilityTable());
       unsigned GOTFlag = IsN32OrN64 ? MipsII::MO_GOT_PAGE : MipsII::MO_GOT;
-      SDValue GOT = DAG.getNode(MipsISD::Wrapper, DL, Ty, getGlobalReg(DAG, Ty),
+      SDValue GOT = DAG.getNode(MipsISD::Wrapper, DL, Ty, getGlobalReg(DAG, Ty, IsForTls),
                                 getTargetNode(N, Ty, DAG, GOTFlag));
       SDValue Load =
           DAG.getLoad(Ty, DL, DAG.getEntryNode(), GOT,
@@ -425,9 +425,10 @@ extern bool LargeCapTable;
     template <class NodeTy>
     SDValue getAddrGlobal(NodeTy *N, const SDLoc &DL, EVT Ty, SelectionDAG &DAG,
                           unsigned Flag, SDValue Chain,
-                          const MachinePointerInfo &PtrInfo) const {
+                          const MachinePointerInfo &PtrInfo,
+                          bool IsForTls) const {
       assert(!ABI.UsesCapabilityTable());
-      SDValue Tgt = DAG.getNode(MipsISD::Wrapper, DL, Ty, getGlobalReg(DAG, Ty),
+      SDValue Tgt = DAG.getNode(MipsISD::Wrapper, DL, Ty, getGlobalReg(DAG, Ty, IsForTls),
                                 getTargetNode(N, Ty, DAG, Flag));
       if (ABI.IsCheriPureCap())
         Tgt = DAG.getNode(ISD::INTTOPTR, DL, CapType, Tgt);
@@ -442,11 +443,12 @@ extern bool LargeCapTable;
     SDValue getAddrGlobalLargeGOT(NodeTy *N, const SDLoc &DL, EVT Ty,
                                   SelectionDAG &DAG, unsigned HiFlag,
                                   unsigned LoFlag, SDValue Chain,
-                                  const MachinePointerInfo &PtrInfo) const {
+                                  const MachinePointerInfo &PtrInfo,
+                                  bool IsForTls) const {
       assert(!ABI.UsesCapabilityTable());
       SDValue Hi = DAG.getNode(MipsISD::GotHi, DL, Ty,
                                getTargetNode(N, Ty, DAG, HiFlag));
-      Hi = DAG.getNode(ISD::ADD, DL, Ty, Hi, getGlobalReg(DAG, Ty));
+      Hi = DAG.getNode(ISD::ADD, DL, Ty, Hi, getGlobalReg(DAG, Ty, IsForTls));
       SDValue Wrapper = DAG.getNode(MipsISD::Wrapper, DL, Ty, Hi,
                                     getTargetNode(N, Ty, DAG, LoFlag));
       return DAG.getLoad(Ty, DL, Chain, Wrapper, PtrInfo);

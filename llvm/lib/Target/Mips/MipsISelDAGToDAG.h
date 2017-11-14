@@ -42,7 +42,7 @@ public:
   bool runOnMachineFunction(MachineFunction &MF) override;
 
 protected:
-  SDNode *getGlobalBaseReg();
+  SDNode *getGlobalBaseReg(bool IsForTls);
 
   /// Keep a pointer to the MipsSubtarget around so that we can make the right
   /// decision when generating code for different targets.

@@ -57,8 +57,8 @@ bool MipsDAGToDAGISel::runOnMachineFunction(MachineFunction &MF) {
 
 /// getGlobalBaseReg - Output the instructions required to put the
 /// GOT address into a register.
-SDNode *MipsDAGToDAGISel::getGlobalBaseReg() {
-  unsigned GlobalBaseReg = MF->getInfo<MipsFunctionInfo>()->getGlobalBaseReg();
+SDNode *MipsDAGToDAGISel::getGlobalBaseReg(bool IsForTls) {
+  unsigned GlobalBaseReg = MF->getInfo<MipsFunctionInfo>()->getGlobalBaseReg(IsForTls);
   return CurDAG->getRegister(GlobalBaseReg, getTargetLowering()->getPointerTy(
                                                 CurDAG->getDataLayout()))
       .getNode();
@@ -239,7 +239,7 @@ void MipsDAGToDAGISel::Select(SDNode *Node) {
 
   // Get target GOT address.
   case ISD::GLOBAL_OFFSET_TABLE:
-    ReplaceNode(Node, getGlobalBaseReg());
+    ReplaceNode(Node, getGlobalBaseReg(/*IsForTls=*/false));
     return;
 
 #ifndef NDEBUG

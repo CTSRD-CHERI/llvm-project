@@ -33,7 +33,8 @@ public:
   void setSRetReturnReg(unsigned Reg) { SRetReturnReg = Reg; }
 
   bool globalBaseRegSet() const;
-  unsigned getGlobalBaseReg();
+  unsigned getGlobalBaseReg(bool IsForTls);
+  unsigned getGlobalBaseRegUnchecked() const;
 
   bool capGlobalBaseRegSet() const;
   unsigned getCapGlobalBaseReg();
@@ -74,6 +75,8 @@ public:
 
   void setSaveS2() { SaveS2 = true; }
   bool hasSaveS2() const { return SaveS2; }
+
+  bool usesTlsViaGlobalReg() const { return UsesTlsViaGlobalReg; }
 
   int getMoveF64ViaSpillFI(const TargetRegisterClass *RC);
 
@@ -127,6 +130,8 @@ private:
   /// FrameIndex for expanding BuildPairF64 nodes to spill and reload when the
   /// O32 FPXX ABI is enabled. -1 is used to denote invalid index.
   int MoveF64ViaSpillFI = -1;
+
+  bool UsesTlsViaGlobalReg = false;
 };
 
 } // end namespace llvm

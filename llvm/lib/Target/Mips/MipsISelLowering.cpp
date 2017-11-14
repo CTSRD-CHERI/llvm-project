@@ -172,9 +172,10 @@ unsigned MipsTargetLowering::getVectorTypeBreakdownForCallingConv(
   return NumIntermediates;
 }
 
-SDValue MipsTargetLowering::getGlobalReg(SelectionDAG &DAG, EVT Ty) const {
+SDValue MipsTargetLowering::getGlobalReg(SelectionDAG &DAG, EVT Ty,
+                                         bool IsForTls) const {
   MipsFunctionInfo *FI = DAG.getMachineFunction().getInfo<MipsFunctionInfo>();
-  return DAG.getRegister(FI->getGlobalBaseReg(), Ty);
+  return DAG.getRegister(FI->getGlobalBaseReg(IsForTls), Ty);
 }
 
 SDValue MipsTargetLowering::getCapGlobalReg(SelectionDAG &DAG, EVT Ty) const {
@@ -2304,19 +2305,19 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
     //   the same symbol.
     // * Given all that, we have to use a full got entry for hidden symbols :-(
     if (GV->hasLocalLinkage() && !HugeGOT)
-      Global = getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64());
+      Global = getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64(), GV->isThreadLocal());
     else if (LargeGOT || HugeGOT)
       Global = getAddrGlobalLargeGOT(
           N, SDLoc(N), Ty, DAG, MipsII::MO_GOT_HI16, MipsII::MO_GOT_LO16,
           DAG.getEntryNode(),
-          MachinePointerInfo::getGOT(DAG.getMachineFunction()));
+          MachinePointerInfo::getGOT(DAG.getMachineFunction()), GV->isThreadLocal());
     else if (GV->hasInternalLinkage() || (GV->hasLocalLinkage() && !isa<Function>(GV)))
-      Global = getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64());
+      Global = getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64(), GV->isThreadLocal());
     else 
       Global = getAddrGlobal(
           N, SDLoc(N), Ty, DAG,
           (ABI.IsN32() || ABI.IsN64()) ? MipsII::MO_GOT_DISP : MipsII::MO_GOT,
-          DAG.getEntryNode(), MachinePointerInfo::getGOT(DAG.getMachineFunction()));
+          DAG.getEntryNode(), MachinePointerInfo::getGOT(DAG.getMachineFunction()), GV->isThreadLocal());
   }
 
   if (GV->getType()->getAddressSpace() == 200) {
@@ -2370,14 +2371,17 @@ SDValue MipsTargetLowering::lowerBlockAddress(SDValue Op,
   if (LargeGOT)
     return getAddrGlobalLargeGOT(N, SDLoc(N), Ty, DAG, MipsII::MO_GOT_HI16,
                                  MipsII::MO_GOT_LO16, DAG.getEntryNode(),
-                                 MachinePointerInfo::getGOT(DAG.getMachineFunction()));
+                                 MachinePointerInfo::getGOT(DAG.getMachineFunction()), /*IsForTls=*/false);
 
-  return getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64());
+  return getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64(), /*IsForTls=*/false);
 }
 
 SDValue MipsTargetLowering::
 lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
 {
+  // FIXME: this needs to be revisited for cap-table
+  // assert(!ABI.UsesCapabilityTable());
+
   // If the relocation model is PIC, use the General Dynamic TLS Model or
   // Local Dynamic TLS model, otherwise use the Initial Exec or
   // Local Exec TLS Model.
@@ -2399,7 +2403,7 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
 
     SDValue TGA = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0, Flag);
     SDValue Argument = DAG.getNode(MipsISD::Wrapper, DL, PtrVT,
-                                   getGlobalReg(DAG, PtrVT), TGA);
+                                   getGlobalReg(DAG, PtrVT, /*IsForTls=*/true), TGA);
     unsigned PtrSize = PtrVT.getSizeInBits();
     IntegerType *PtrTy = Type::getIntNTy(*DAG.getContext(), PtrSize);
 
@@ -2437,7 +2441,7 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
     // Initial Exec TLS Model
     SDValue TGA = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0,
                                              MipsII::MO_GOTTPREL);
-    TGA = DAG.getNode(MipsISD::Wrapper, DL, PtrVT, getGlobalReg(DAG, PtrVT),
+    TGA = DAG.getNode(MipsISD::Wrapper, DL, PtrVT, getGlobalReg(DAG, PtrVT, true),
                       TGA);
     Offset =
         DAG.getLoad(PtrVT, DL, DAG.getEntryNode(), TGA, MachinePointerInfo());
@@ -2478,9 +2482,9 @@ lowerJumpTable(SDValue Op, SelectionDAG &DAG) const
   if (LargeGOT)
     return getAddrGlobalLargeGOT(N, SDLoc(N), Ty, DAG, MipsII::MO_GOT_HI16,
                                  MipsII::MO_GOT_LO16, DAG.getEntryNode(),
-                                 MachinePointerInfo::getGOT(DAG.getMachineFunction()));
+                                 MachinePointerInfo::getGOT(DAG.getMachineFunction()), /*IsForTls=*/false);
 
-  return getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64());
+  return getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64(), /*IsForTls=*/false);
 }
 
 SDValue MipsTargetLowering::
@@ -2505,7 +2509,7 @@ lowerConstantPool(SDValue Op, SelectionDAG &DAG) const
                                 : getAddrNonPICSym64(N, SDLoc(N), Ty, DAG);
   }
 
- return getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64());
+ return getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64(), /*IsForTls=*/false);
 }
 
 SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
@@ -3337,7 +3341,7 @@ getOpndList(SmallVectorImpl<SDValue> &Ops,
   if (IsPICCall && !InternalLinkage && IsCallReloc && !ABI.UsesCapabilityTable()) {
     unsigned GPReg = ABI.IsN64() ? Mips::GP_64 : Mips::GP;
     EVT Ty = ABI.IsN64() ? MVT::i64 : MVT::i32;
-    RegsToPass.push_back(std::make_pair(GPReg, getGlobalReg(CLI.DAG, Ty)));
+    RegsToPass.push_back(std::make_pair(GPReg, getGlobalReg(CLI.DAG, Ty, /*IsForTls=*/false)));
   }
 
   // Build a sequence of copy-to-reg nodes chained together with token
@@ -3664,13 +3668,13 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       if (LargeGOT) {
         Callee = getAddrGlobalLargeGOT(G, DL, Ty, DAG, MipsII::MO_CALL_HI16,
                                        MipsII::MO_CALL_LO16, Chain,
-                                       FuncInfo->callPtrInfo(GV));
+                                       FuncInfo->callPtrInfo(GV), GV->isThreadLocal());
         IsCallReloc = true;
       } else if (InternalLinkage)
-        Callee = getAddrLocal(G, DL, Ty, DAG, ABI.IsN32() || ABI.IsN64());
+        Callee = getAddrLocal(G, DL, Ty, DAG, ABI.IsN32() || ABI.IsN64(), GV->isThreadLocal());
       else {
         Callee = getAddrGlobal(G, DL, Ty, DAG, MipsII::MO_GOT_CALL, Chain,
-                               FuncInfo->callPtrInfo(GV));
+                               FuncInfo->callPtrInfo(GV), GV->isThreadLocal());
         IsCallReloc = true;
       }
     } else
@@ -3692,11 +3696,11 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     else if (LargeGOT) {
       Callee = getAddrGlobalLargeGOT(S, DL, Ty, DAG, MipsII::MO_CALL_HI16,
                                      MipsII::MO_CALL_LO16, Chain,
-                                     FuncInfo->callPtrInfo(Sym));
+                                     FuncInfo->callPtrInfo(Sym), /*IsForTls=*/false);
       IsCallReloc = true;
     } else { // PIC
       Callee = getAddrGlobal(S, DL, Ty, DAG, MipsII::MO_GOT_CALL, Chain,
-                             FuncInfo->callPtrInfo(Sym));
+                             FuncInfo->callPtrInfo(Sym), /*IsForTls=*/false);
       IsCallReloc = true;
     }
 
