@@ -45,16 +45,7 @@ public:
       Modified |= runOnFunction(F);
     return Modified;
   }
-  int RoundUpToPowerOfTwo(int v) {
-    v--;
-    v |= v >> 1;
-    v |= v >> 2;
-    v |= v >> 4;
-    v |= v >> 8;
-    v |= v >> 16;
-    v++;
-    return v;
-  }
+
   bool runOnFunction(Function &F) {
     LLVMContext &C = M->getContext();
     Allocas.clear();
@@ -92,7 +83,7 @@ public:
         else
           AllocaSize *= 1048576;
         ForcedAlignment = AllocaSize / (1 << 13);
-        ForcedAlignment = RoundUpToPowerOfTwo(ForcedAlignment);
+        ForcedAlignment = PowerOf2Ceil(ForcedAlignment);
         // MIPS doesn't support stack alignments greater than 2^16
         ForcedAlignment = std::min(ForcedAlignment, 0x4000U);
       }
