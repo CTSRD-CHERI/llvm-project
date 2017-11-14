@@ -2,7 +2,6 @@
 // RUN: %cheri_purecap_cc1 -emit-llvm -mrelocation-model pic -pic-level 1 -O3 -std=gnu99 -mllvm -cheri-cap-table -x c -o - %s | FileCheck %s -check-prefix OPT
 // Check that it doesn't crash when compiling:
 // RUN: %cheri_purecap_cc1 -S -mrelocation-model pic -pic-level 1 -O2 -std=gnu99 -mllvm -cheri-cap-table -x c -o /dev/null %s
-// RUN: false
 
 
 // The optimize libcalls pass changes the global string from AS200 to AS0
