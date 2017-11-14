@@ -2959,6 +2959,7 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
                                            DestTy, TypeSourceInfo *TSInfo,
                                            SourceLocation RParenLoc, Expr
                                            *SubExpr) {
+  // Check the source type
   // Use getRealReferenceType() because getType() returns T for T&
   QualType SrcTy = SubExpr->getRealReferenceType();
   bool SrcIsCap = SrcTy->isCHERICapabilityType(Context);
@@ -2969,7 +2970,19 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
     return ExprError();
   }
 
-  // XXXKG: Should pointer types also be allowed for __cheri_addr?
+  // Check the destination type:
+  // For __cheri_addr, output a more specific error message if DestTy is an
+  // integral pointer type
+  if (Kind == tok::kw___cheri_addr) {
+    bool DestIsPtr = DestTy->isPointerType()
+                        && !DestTy->getAs<PointerType>()->isCHERICapability();
+    if (DestIsPtr) {
+      Diag(SubExpr->getLocStart(), diag::err_cheri_addr_ptr_type)
+        << DestTy;
+      return ExprError();
+    }
+  }
+  // Otherwise just check that it is a non-enum integer type
   bool DestIsInt = DestTy->isIntegerType() && !DestTy->isEnumeralType();
   if (!DestIsInt) {
     Diag(SubExpr->getLocStart(), diag::err_cheri_offset_addr_invalid_target_type)
