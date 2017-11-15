@@ -124,10 +124,12 @@ SubtargetFeatures ELFObjectFileBase::getMIPSFeatures() const {
     Features.AddFeature("cnmips");
     break;
   case ELF::EF_MIPS_MACH_CHERI128:
+    Features.AddFeature("chericap");
     Features.AddFeature("cheri128");
     break;
   case ELF::EF_MIPS_MACH_CHERI256:
-    Features.AddFeature("cheri");
+    Features.AddFeature("chericap");
+    Features.AddFeature("cheri256");
     break;
   default:
     llvm_unreachable("Unknown EF_MIPS_ARCH value");
