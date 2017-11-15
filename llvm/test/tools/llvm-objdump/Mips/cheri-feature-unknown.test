@@ -1,0 +1,10 @@
+# When building CheriBSD I was getting a bunch of warnings like this:
+# /home/alr48/cheri/output/sdk256/bin/llvm-objdump -r -s -p -S -d -h -l -t ld-cheri-elf.so.1.full > ld-cheri-elf.so.1.dump
+# '+cheri' is not a recognized feature for this target (ignoring feature)
+
+# RUN: %cheri_llvm-mc -filetype=obj %s -o %t.o
+# RUN: llvm-objdump -r -s -p -S -d -h -l -t %t.o 2>&1 | FileCheck %s -implicit-check-not "is not a recognized feature"
+__start:
+  cjr $c12
+# We should be able to disassemble CHERI instructions due to the ELF header:
+# CHECK: cjr	$c12
