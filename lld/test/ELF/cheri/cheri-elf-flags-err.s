@@ -1,20 +1,12 @@
 
-# RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi purecap \
-# RUN:          -mcpu=cheri %s -o %t-cheri256-main.o
-# RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi purecap \
-# RUN:          -mcpu=cheri128 %s -o %t-cheri128-main.o
-# RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi n64 \
-# RUN:          -mcpu=cheri %s -o %t-cheri256-hybrid-main.o
-# RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi n64 \
-# RUN:          -mcpu=cheri128 %s -o %t-cheri128-hybrid-main.o
-# RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi purecap \
-# RUN:          -mcpu=cheri %S/../Inputs/mips-dynamic.s -o %t-cheri256-lib.o
-# RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi purecap \
-# RUN:          -mcpu=cheri128 %S/../Inputs/mips-dynamic.s -o %t-cheri128-lib.o
-# RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi n64 \
-# RUN:          -mcpu=cheri %S/../Inputs/mips-dynamic.s -o %t-cheri256-hybrid-lib.o
-# RUN: llvm-mc -filetype=obj -triple=cheri-unknown-freebsd -target-abi n64 \
-# RUN:          -mcpu=cheri128 %S/../Inputs/mips-dynamic.s -o %t-cheri128-hybrid-lib.o
+# RUN: %cheri256_purecap_llvm-mc -filetype=obj %s -o %t-cheri256-main.o
+# RUN: %cheri128_purecap_llvm-mc -filetype=obj %s -o %t-cheri128-main.o
+# RUN: %cheri256_llvm-mc -filetype=obj -target-abi n64 %s -o %t-cheri256-hybrid-main.o
+# RUN: %cheri128_llvm-mc -filetype=obj -target-abi n64 %s -o %t-cheri128-hybrid-main.o
+# RUN: %cheri256_purecap_llvm-mc -filetype=obj %S/../Inputs/mips-dynamic.s -o %t-cheri256-lib.o
+# RUN: %cheri128_purecap_llvm-mc -filetype=obj %S/../Inputs/mips-dynamic.s -o %t-cheri128-lib.o
+# RUN: %cheri256_llvm-mc -filetype=obj -target-abi n64 %S/../Inputs/mips-dynamic.s -o %t-cheri256-hybrid-lib.o
+# RUN: %cheri128_llvm-mc -filetype=obj -target-abi n64 %S/../Inputs/mips-dynamic.s -o %t-cheri128-hybrid-lib.o
 # RUN: llvm-readobj -h %t-cheri128-main.o | FileCheck -check-prefix=CHERI128-FLAGS %s
 # RUN: llvm-readobj -h %t-cheri256-main.o | FileCheck -check-prefix=CHERI256-FLAGS %s
 # RUN: llvm-readobj -h %t-cheri128-hybrid-main.o | FileCheck -check-prefix=CHERI128-HYBRID-FLAGS %s
