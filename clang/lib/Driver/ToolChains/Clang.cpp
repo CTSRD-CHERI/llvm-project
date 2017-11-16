@@ -1651,6 +1651,15 @@ void Clang::AddMIPSTargetArgs(const ArgList &Args,
       CmdArgs.push_back(Args.MakeArgString(A->getValue()));
     }
   }
+#ifndef CHERI_CAP_TABLE_DEFAULT
+#define CHERI_CAP_TABLE_DEFAULT false
+#endif
+  bool EnableCapTable =
+      Args.hasFlag(options::OPT_cheri_cap_table,
+                   options::OPT_no_cheri_cap_table, CHERI_CAP_TABLE_DEFAULT);
+  CmdArgs.push_back("-mllvm");
+  CmdArgs.push_back(EnableCapTable ? "-cheri-cap-table=true"
+                                   : "-cheri-cap-table=false");
 }
 
 void Clang::AddPPCTargetArgs(const ArgList &Args,

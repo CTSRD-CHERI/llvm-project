@@ -243,21 +243,29 @@ def internal_debug_Group :
   OptionGroup<"<clang debug/development internal options>">,
   Group<internal_Group>, HelpText<"DEBUG/DEVELOPMENT OPTIONS">;
 
-def cheri_linker : Flag<["-"], "cheri-linker">, Flags<[CC1Option]>,
+def cheri_Group : OptionGroup<"<CHERI specific options>">, HelpText<"CHERI OPTIONS">;
+
+
+def cheri_linker : Flag<["-"], "cheri-linker">, Flags<[CC1Option]>, Group<cheri_Group>,
   HelpText<"Assume the existence of a CHERI-aware linker">;
 def no_cheri_linker : Flag<["-"], "no-cheri-linker">, Flags<[CC1Option, HelpHidden]>,
   HelpText<"Do not assume the existence of a CHERI-aware linker">;
-def cheri_EQ : Joined<["-"], "cheri=">, Flags<[DriverOption]>,
+def cheri_EQ : Joined<["-"], "cheri=">, Flags<[DriverOption]>, Group<cheri_Group>,
   HelpText<"Enable CHERI support, specifying the size (in bits) of CHERI capabilities">;
-def cheri : Flag<["-"], "cheri">, Flags<[DriverOption]>,
+def cheri : Flag<["-"], "cheri">, Flags<[DriverOption]>, Group<cheri_Group>,
   HelpText<"Enable CHERI support with the default capability size (128 bits)">;
 
+def cheri_cap_table : Flag<["-"], "cheri-cap-table">, Flags<[DriverOption]>, Group<cheri_Group>,
+  HelpText<"Enable support for loading globals via a capability table">;
+def no_cheri_cap_table : Flag<["-"], "no-cheri-cap-table">, Flags<[DriverOption]>, Group<cheri_Group>,
+  HelpText<"Disable support for the cheri cap table and emit legacy global loads">;
+
 def external_capsizefix : Flag<["-"], "external-capsizefix">, Flags<[CC1Option]>,
-  Group<Link_Group>, HelpText<"Use the external capsizefix tool instead of relying on the linker (deprecated)">;
+  Group<cheri_Group>, HelpText<"Use the external capsizefix tool instead of relying on the linker (deprecated)">;
 def no_capsizefix : Flag<["-"], "no-capsizefix">, Flags<[CC1Option]>,
-  Group<Link_Group>, HelpText<"Assume that the linker handles capabilities (don't use capsizefix)">;
+  Group<cheri_Group>, HelpText<"Assume that the linker handles capabilities (don't use capsizefix)">;
 def verbose_capsizefix: Flag<["-"], "verbose-capsizefix">, Flags<[CC1Option]>,
-  HelpText<"Run capsizefix tool in verbose mode if required">;
+  Group<cheri_Group>, HelpText<"Run capsizefix tool in verbose mode if required">;
 
 class InternalDriverOpt : Group<internal_driver_Group>,
   Flags<[DriverOption, HelpHidden]>;
