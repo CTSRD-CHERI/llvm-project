@@ -8,8 +8,8 @@
 #error "memory_address attribute not supported"
 #endif
 
-#if !__has_extension(__cheri_ptr)
-#error "__cheri_ptr feature should exist"
+#if !__has_extension(cheri_casts)
+#error "cheri_casts feature should exist"
 #endif
 
 void* __capability a;

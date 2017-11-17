@@ -8181,12 +8181,13 @@ public:
                                   SourceLocation RParenLoc,
                                   Expr *SubExpr);
 
-  ExprResult BuildCheriPtr(SourceLocation LParenLoc, SourceLocation KeywordLoc,
-                            QualType DestTy, TypeSourceInfo *TSInfo,
-                            SourceLocation RParenLoc, Expr *SubExpr);
+  ExprResult BuildCheriToOrFromCap(SourceLocation LParenLoc, SourceLocation KeywordLoc,
+                                   bool IsToCap, QualType DestTy,
+                                   TypeSourceInfo *TSInfo, SourceLocation
+                                   RParenLoc, Expr *SubExpr);
 
   ExprResult BuildCheriOffsetOrAddress(SourceLocation LParenLoc, SourceLocation KeywordLoc,
-                                       tok::TokenKind Kind, QualType DestTy,
+                                       bool IsOffsetCast, QualType DestTy,
                                        TypeSourceInfo *TSInfo, SourceLocation
                                        RParenLoc, Expr *SubExpr);
 
@@ -9371,10 +9372,10 @@ public:
     IntToPointer,
 
     /// CHERICapabilityToPointer - The assignment converts a capability to a
-    /// pointer, which we reject (it needs an explicit __cheri_ptr).
+    /// pointer, which we reject (it needs an explicit __cheri_fromcap).
     CHERICapabilityToPointer,
     /// PointerToCHERICapability - The assignment converts a pointer to a
-    /// capability, which we reject (it needs an explicit __cheri_ptr).
+    /// capability, which we reject (it needs an explicit __cheri_tocap).
     PointerToCHERICapability,
 
     /// FunctionVoidPointer - The assignment is between a function pointer and

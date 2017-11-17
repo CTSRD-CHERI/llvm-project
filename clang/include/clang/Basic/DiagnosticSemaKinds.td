@@ -5987,10 +5987,10 @@ def warn_tautological_constant_compare : Warning<
 
 def err_typecheck_convert_cap_to_ptr: Error<"converting capability"
   "%select{| reference to}2 type %0 to non-capability type %1 without "
-  "an explicit cast; if this is intended use __cheri_ptr">;
+  "an explicit cast; if this is intended use __cheri_fromcap">;
 def err_typecheck_convert_ptr_to_cap: Error<"converting non-capability"
   "%select{| reference to}2 type %0 to capability type %1 without "
-  "an explicit cast; if this is intended use __cheri_ptr">;
+  "an explicit cast; if this is intended use __cheri_tocap">;
 
 def warn_mixed_capability_binop : Warning<
   "binary expression on capability and non-capability types: %0 and %1.  "
@@ -6021,20 +6021,20 @@ def warn_capability_integer_cast : Warning<
   InGroup<CHERICapabilityToIntegerCast>, DefaultIgnore;
 def warn_capability_pointer_cast : Warning<
   "cast from capability type %0 to non-capability type %1 is most likely an "
-   "error; use __cheri_ptr to convert between pointers and capabilities">,
+   "error; use __cheri_fromcap to convert between pointers and capabilities">,
   InGroup<CHERICaps>, DefaultError;
 def note_insert_intptr_fixit : Note<
   "insert cast to intptr_t to silence this warning">;
-def err_cheri_ptr_unrelated_type : Error<
-  "invalid __cheri_ptr from %0 to unrelated type %1">;
-def err_cheri_ptr_invalid_target_type: Error<
-  "invalid target type %0 for __cheri_ptr: target must be a capability or "
-  "a pointer">;
-def err_cheri_ptr_invalid_source_type: Error<
-  "invalid source type %0 for __cheri_ptr: source must be a capability or "
-  "a pointer">;
-def warn_cheri_ptr_noop : Warning<
-  "__cheri_ptr from %0 to %1 is a noop">,
+def err_cheri_to_from_cap_unrelated_type : Error<
+  "invalid __cheri_%select{from|to}0cap from %1 to unrelated type %2">;
+def err_cheri_to_from_cap_invalid_target_type: Error<
+  "invalid target type %0 for __cheri_%select{from|to}1cap: target must be a "
+  "%select{pointer|capability}1">;
+def err_cheri_to_from_cap_invalid_source_type: Error<
+  "invalid source type %0 for __cheri_%select{from|to}1cap: source must be a "
+  "%select{capability|pointer}1">;
+def warn_cheri_to_from_cap_noop : Warning<
+  "__cheri_%select{from|to}0cap from %1 to %2 is a no-op">,
 // XXXAR: not sure how to add a new CHERIPedantic group
 //  InGroup<CHERIPedantic>;
   InGroup<Pedantic>, DefaultIgnore;
@@ -6048,11 +6048,11 @@ def err_cheri_addr_ptr_type: Error<
   "target must be an integer type">;
 def warn_cheri_offset_addr_smaller_target_type: Warning<
   "target type %0 is smaller than the type '%1' of the "
-  "%select{address|capability offset field}2; truncation may occur">;
+  "%select{address|capability offset field}2; truncation may occur">,
+  InGroup<CHERICapabilityToIntegerCast>;
 
-def warn_cheri_cast : Warning<
-  "__cheri_cast is deprecated; use __cheri_ptr instead">,
-  InGroup<Deprecated>;
+def err_cheri_cast : Error<
+  "Using __cheri_cast is no longer valid; use __cheri_tocap or __cheri_fromcap instead">;
 
 def warn_mixed_sign_comparison : Warning<
   "comparison of integers of different signs: %0 and %1">,

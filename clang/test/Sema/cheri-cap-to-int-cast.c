@@ -9,8 +9,8 @@
 #error "memory_address attribute not supported"
 #endif
 
-#if !__has_extension(__cheri_ptr)
-#error "__cheri_ptr feature should exist"
+#if !__has_extension(cheri_casts)
+#error "cheri_casts feature should exist"
 #endif
 
 
@@ -122,29 +122,43 @@ void foo(void) {
 #endif
 }
 
-void test_cheri_ptr(void) {
-  // __cheri_ptr is a noop in pure ABI (but we still validate the parameter types)
+void test_cheri_to_from_cap(void) {
+  // __cheri_tocap and __cheri_fromcap are no-ops if source and destination
+  // types are capabilities (but we still validate the types)
   char c;
   struct test t;
   struct test *tptr;
   int * x = 0;
-  (__cheri_ptr char*)x;
-#ifndef __CHERI_PURE_CAPABILITY__
-  // expected-error@-2{{invalid __cheri_ptr from 'int *' to unrelated type 'char *'}}
+  (__cheri_tocap char* __capability)x;
+#ifdef __CHERI_PURE_CAPABILITY__
+  // expected-error@-2{{invalid __cheri_tocap from 'int * __capability' to unrelated type 'char * __capability'}}
 #else
-  // expected-error@-4{{invalid __cheri_ptr from 'int * __capability' to unrelated type 'char * __capability'}}
+  // expected-error@-4{{invalid __cheri_tocap from 'int *' to unrelated type 'char * __capability'}}
 #endif
-  (__cheri_ptr struct test*)t; // expected-error{{invalid source type 'struct test' for __cheri_ptr: source must be a capability or a pointer}}
-  (__cheri_ptr struct test)tptr; // expected-error{{invalid target type 'struct test' for __cheri_ptr: target must be a capability or a pointer}}
-  (void)(__cheri_ptr struct test*)tptr;
-#ifndef __CHERI_PURE_CAPABILITY__
-  // expected-warning@-2 {{__cheri_ptr from 'struct test *' to 'struct test *' is a noop}}
-#endif
+  (__cheri_tocap struct test* __capability)t; // expected-error{{invalid source type 'struct test' for __cheri_tocap: source must be a pointer}}
+  (__cheri_tocap struct test)tptr; // expected-error{{invalid target type 'struct test' for __cheri_tocap: target must be a capability}}
+  (__cheri_fromcap struct test*)t; // expected-error{{invalid source type 'struct test' for __cheri_fromcap: source must be a capability}}
 
-  int* __capability intptr_to_cap = (__cheri_ptr int* __capability)x;
+#ifdef __CHERI_PURE_CAPABILITY__
+  // Check no-op warning when in purecap
+  (void)(__cheri_fromcap struct test*)tptr;
+  // expected-warning@-1 {{__cheri_fromcap from 'struct test * __capability' to 'struct test * __capability' is a no-op}}
+#endif
+  int* __capability intptr_to_cap = (__cheri_tocap int* __capability)x;
+#ifdef __CHERI_PURE_CAPABILITY__
+  // expected-warning@-2 {{__cheri_tocap from 'int * __capability' to 'int * __capability' is a no-op}}
+#else
+  // Check no-op warning when in hybrid ABI
+  int* __capability intptr_to_cap2 = (__cheri_tocap int* __capability)intptr_to_cap;
+  // expected-warning@-1 {{__cheri_tocap from 'int * __capability' to 'int * __capability' is a no-op}}
+#endif
   // AST: CStyleCastExpr {{.+}} 'int * __capability' <PointerToCHERICapability>
-  const int* __capability const_intcap = (__cheri_ptr int* __capability)x;
+  const int* __capability const_intcap = (__cheri_tocap int* __capability)x;
+#ifdef __CHERI_PURE_CAPABILITY__
+  // expected-warning@-2 {{__cheri_tocap from 'int * __capability' to 'int * __capability' is a no-op}}
+#endif
   // AST: ImplicitCastExpr {{.+}} 'const int * __capability' <BitCast>
   // AST-NEXT: CStyleCastExpr {{.+}} 'int * __capability' <PointerToCHERICapability>
-  (__cheri_ptr int* __capability)const_intcap; // expected-error{{invalid __cheri_ptr from 'const int * __capability' to unrelated type 'int * __capability'}}
+  (__cheri_tocap int* __capability)const_intcap; // expected-error{{invalid __cheri_tocap from 'const int * __capability' to unrelated type 'int * __capability'}}
+  (__cheri_fromcap int* __capability)const_intcap; // expected-error{{invalid __cheri_fromcap from 'const int * __capability' to unrelated type 'int * __capability'}}
 }

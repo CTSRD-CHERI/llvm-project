@@ -13521,20 +13521,23 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
     DiagKind = diag::err_arc_weak_unavailable_assign;
     break;
   case CHERICapabilityToPointer:
-  case PointerToCHERICapability:
+  case PointerToCHERICapability: {
     if (isa<StringLiteral>(SrcExpr->IgnoreParens()->IgnoreImpCasts())) {
       return false; // conversion from string to capability is fine
     }
-    DiagKind = (ConvTy == CHERICapabilityToPointer)
-        ? diag::err_typecheck_convert_cap_to_ptr
-        : diag::err_typecheck_convert_ptr_to_cap;
+
+    bool PtrToCap = ConvTy == PointerToCHERICapability;
+    DiagKind = PtrToCap ? diag::err_typecheck_convert_ptr_to_cap
+                        : diag::err_typecheck_convert_cap_to_ptr;
     MayHaveConvFixit = true;
     isInvalid = true;
-    Hint = FixItHint::CreateInsertion(SrcExpr->getLocStart(), "(__cheri_ptr " +
-                                      DstType.getAsString() + ")");
+    Hint = FixItHint::CreateInsertion(SrcExpr->getLocStart(), "(__cheri_" +
+                                      std::string(PtrToCap ? "to" : "from") +
+                                      "cap " + DstType.getAsString() + ")");
     Diag(Loc, DiagKind) << SrcType << DstType << false << Hint;
     return true;
     break;
+  }
   case Incompatible:
     if (maybeDiagnoseAssignmentToFunction(*this, DstType, SrcExpr)) {
       if (Complained)

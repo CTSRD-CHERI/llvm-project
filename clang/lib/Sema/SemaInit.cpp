@@ -7812,16 +7812,17 @@ bool InitializationSequence::Diagnose(Sema &S,
     QualType FromType = Args[0]->getRealReferenceType();
     bool PrintRefInMessage = false;
     // Failure == FK_ConversionFromCapabilityFailed
-    unsigned DiagID = DestType->isCHERICapabilityType(S.getASTContext())
-                      ? diag::err_typecheck_convert_ptr_to_cap
-                      : diag::err_typecheck_convert_cap_to_ptr;
+    bool PtrToCap = DestType->isCHERICapabilityType(S.getASTContext());
+    unsigned DiagID = PtrToCap ? diag::err_typecheck_convert_ptr_to_cap
+                               : diag::err_typecheck_convert_cap_to_ptr;
     if (Failure == FK_ReferenceInitChangesCapabilityQualifier) {
       PrintRefInMessage = !FromType->isReferenceType();
     }
 
     S.Diag(Kind.getLocation(), DiagID) << FromType << DestType << PrintRefInMessage
-      << FixItHint::CreateInsertion(Kind.getLocation(), "(__cheri_ptr " +
-                                    DestType.getAsString() + ")");
+      << FixItHint::CreateInsertion(Kind.getLocation(), "(__cheri_" + 
+                                    std::string(PtrToCap ? "to" : "from") +
+                                    "cap " + DestType.getAsString() + ")");
     break;
   }
   case FK_ConversionFailed: {

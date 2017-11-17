@@ -1,20 +1,22 @@
 // RUNNOT: %cheri_cc1 %s -Wno-error=cheri-capability-misuse -emit-llvm -o - -O2 | FileCheck %s -check-prefixes BOTH,HYBRID -enable-var-scope
 // RUN: %cheri_cc1 -Wno-error=cheri-capability-misuse -target-abi purecap - %s -emit-llvm -o - -O2 | FileCheck %s -check-prefixes BOTH,PURECAP -enable-var-scope
-// RUN: %cheri_cc1 -DWITH_CHERI_PTR %s -emit-llvm -o - -O2 | FileCheck %s -check-prefixes BOTH,HYBRID -enable-var-scope
-// RUN: %cheri_cc1 -DWITH_CHERI_PTR -target-abi purecap %s -emit-llvm -o - -O2 | FileCheck %s -check-prefixes BOTH,PURECAP -enable-var-scope
+// RUN: %cheri_cc1 -DWITH_CHERI_CASTS %s -emit-llvm -o - -O2 | FileCheck %s -check-prefixes BOTH,HYBRID -enable-var-scope
+// RUN: %cheri_cc1 -DWITH_CHERI_CASTS -target-abi purecap %s -emit-llvm -o - -O2 | FileCheck %s -check-prefixes BOTH,PURECAP -enable-var-scope
 
 
 extern void* global_ptr;
 extern void* __capability global_cap;
 
-#ifdef WITH_CHERI_PTR
-#define CHERI_PTR __cheri_ptr
+#ifdef WITH_CHERI_CASTS
+#define CHERI_TOCAP __cheri_tocap
+#define CHERI_FROMCAP __cheri_fromcap
 #else
-#define CHERI_PTR
+#define CHERI_TOCAP
+#define CHERI_FROMCAP
 #endif
 
 void* __capability c_cast_add_cap(void) {
-  void* __capability ptr2cap = (CHERI_PTR void* __capability)global_ptr;
+  void* __capability ptr2cap = (CHERI_TOCAP void* __capability)global_ptr;
   return ptr2cap;
 
   // HYBRID-LABEL: define i8 addrspace(200)* @c_cast_add_cap()
@@ -28,7 +30,7 @@ void* __capability c_cast_add_cap(void) {
 }
 
 void* c_cast_remove_cap(void) {
-  void* cap2ptr = (CHERI_PTR void*)global_cap;
+  void* cap2ptr = (CHERI_FROMCAP void*)global_cap;
   return cap2ptr;
   // HYBRID-LABEL: define i8* @c_cast_remove_cap()
   // HYBRID: [[GLOBAL:%.+]] = load i8 addrspace(200)*, i8 addrspace(200)** @global_cap

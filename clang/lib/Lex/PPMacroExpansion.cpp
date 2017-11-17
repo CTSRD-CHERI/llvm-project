@@ -1269,7 +1269,7 @@ static bool HasFeature(const Preprocessor &PP, StringRef Feature) {
       .Case("capabilities", PP.getTargetInfo().SupportsCapabilities())
       .Case("pointer_interpretation", PP.getTargetInfo().SupportsCapabilities())
       .Case("__cheri_cast", PP.getTargetInfo().SupportsCapabilities())
-      .Case("__cheri_ptr", PP.getTargetInfo().SupportsCapabilities())
+      .Case("cheri_casts", PP.getTargetInfo().SupportsCapabilities())
       .Default(false);
 }
 
