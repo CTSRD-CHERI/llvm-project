@@ -2224,7 +2224,7 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
                     diag::err_bad_reinterpret_cast_small_int;
       return TC_Failed;
     }
-    Kind = CK_PointerToIntegral;
+    Kind = IsCap ? CK_CHERICapabilityToAddress : CK_PointerToIntegral;
     return TC_Success;
   }
 
@@ -2305,7 +2305,7 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
                     diag::err_bad_reinterpret_cast_small_int;
       return TC_Failed;
     }
-    Kind = CK_PointerToIntegral;
+    Kind = IsCap ? CK_CHERICapabilityToAddress : CK_PointerToIntegral;
     return TC_Success;
   }
 

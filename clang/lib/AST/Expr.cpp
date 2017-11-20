@@ -1632,7 +1632,8 @@ bool CastExpr::CastConsistency() const {
     assert((SubType->isPointerType()
               && SubType->getAs<PointerType>()->isCHERICapability())
            || (SubType->isReferenceType()
-                 && SubType->getAs<ReferenceType>()->isCHERICapability()));
+                 && SubType->getAs<ReferenceType>()->isCHERICapability())
+           || SubType->isNullPtrType());
     assert(getType()->isIntegerType());
     assert(!getType()->isEnumeralType());
     goto CheckNoBasePath;
