@@ -551,9 +551,7 @@ extern bool LargeCapTable;
                                 const MachinePointerInfo &PtrInfo) const {
       assert(Ty.isFatPointer());
       SDValue Off = getTargetNode(N, MVT::i64, DAG, Flag);
-      // FIXME: this needs lots of tablegen changes :( -> wait for nosp merge
-      llvm_unreachable("NOT IMPLEMENTED");
-      SDValue Tgt = DAG.getNode(MipsISD::Wrapper, DL, Ty,
+      SDValue Tgt = DAG.getNode(MipsISD::WrapperCapOp, DL, Ty,
                                 getCapGlobalReg(DAG, Ty), Off);
       return DAG.getLoad(Ty, DL, Chain, Tgt, PtrInfo);
     }

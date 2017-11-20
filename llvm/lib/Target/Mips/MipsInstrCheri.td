@@ -344,11 +344,6 @@ def LOADCAP : CheriFmtCLS<0x36, (outs CheriOpnd:$cs), (ins GPR64Opnd:$rt, simm11
   let DecoderNamespace="CHERI";
 }
 
-def : Pat<(load GPR64Opnd:$rt),
-          (LOADCAP GPR64Opnd:$rt, (i64 0), C0)>;
-def : Pat<(load CheriOpnd:$cb),
-          (LOADCAP ZERO_64, (i64 0), CheriOpnd:$cb)>;
-
 // Load via a capability register
 let canFoldAsLoad = 1, DecoderNamespace="CHERI" in
 multiclass LoadViaCapScaled<bits<2> t, bit sExt, string instr_asm, RegisterOperand RC, PatFrag loadType, Operand simm, PatFrag immfrag> {
@@ -692,3 +687,17 @@ def ADJCALLSTACKCAPUP   : MipsPseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
 
 def PseudoIndirectBranchCap : PseudoIndirectBranchBase<CheriOpnd>;
 
+
+// This node is a hack to allow `clc	$c1, $zero, %captab(global)($c1)`
+def SDTCheriGlobal  : SDTypeProfile<1, 2, [SDTCisVT<0, CapRegType>,
+SDTCisVT<1, CapRegType>,
+                                           SDTCisVT<2, i64>]>;
+def WrapperCapOp : SDNode<"MipsISD::WrapperCapOp", SDTCheriGlobal>;
+
+def : Pat<(load (WrapperCapOp CheriOpnd:$cgp, tglobaladdr:$in)),
+          (LOADCAP ZERO_64, tglobaladdr:$in, CheriOpnd:$cgp)>;
+
+def : Pat<(load GPR64Opnd:$rt),
+          (LOADCAP GPR64Opnd:$rt, (i64 0), C0)>;
+def : Pat<(load CheriOpnd:$cb),
+          (LOADCAP ZERO_64, (i64 0), CheriOpnd:$cb)>;

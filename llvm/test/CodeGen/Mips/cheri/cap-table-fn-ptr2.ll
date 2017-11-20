@@ -1,4 +1,6 @@
-; RUN: %cheri_purecap_llc -cheri-cap-table %s -o - | %cheri_FileCheck %s
+; RUN: %cheri_purecap_llc -cheri-cap-table %s -mxcaptable=true  -o - | %cheri_FileCheck %s -check-prefixes CHECK,BIGTABLE
+; RUN: %cheri_purecap_llc -cheri-cap-table %s -mxcaptable=false -o - | %cheri_FileCheck %s -check-prefixes CHECK,SMALLTABLE
+
 ; ModuleID = '/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-table-call-extern.c'
 source_filename = "/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-table-call-extern.c"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
@@ -14,14 +16,16 @@ define void @test(void () addrspace(200)* %arg) local_unnamed_addr #1 {
 entry:
   %0 = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* @fn, align 32
   ; load address of fn:
-  ; CHECK:      lui	$1, %captab_hi(fn)
-  ; CHECK-NEXT: daddiu	$1, $1, %captab_lo(fn)
-  ; CHECK-NEXT: clc	$c1, $1, 0($c26)
+  ; BIGTABLE:      lui	$1, %captab_hi(fn)
+  ; BIGTABLE-NEXT: daddiu	$1, $1, %captab_lo(fn)
+  ; BIGTABLE-NEXT: clc	$c1, $1, 0($c26)
+  ; SMALLTABLE: clc	$c1, $zero, %captab(fn)($c26)
   store void () addrspace(200)* %arg, void () addrspace(200)* addrspace(200)* @fn2, align 32
   ; load address of fn2:
-  ; CHECK-NEXT: lui	$1, %captab_hi(fn2)
-  ; CHECK-NEXT: daddiu	$1, $1, %captab_lo(fn2)
-  ; CHECK-NEXT: clc	$c2, $1, 0($c26)
+  ; BIGTABLE-NEXT: lui	$1, %captab_hi(fn2)
+  ; BIGTABLE-NEXT: daddiu	$1, $1, %captab_lo(fn2)
+  ; BIGTABLE-NEXT: clc	$c2, $1, 0($c26)
+  ; SMALLTABLE-NEXT: clc	$c2, $zero, %captab(fn2)($c26)
   ; load fn for call:
   ; CHECK-NEXT: clc	$c12, $zero, 0($c1)
   ; save %arg to fn2
