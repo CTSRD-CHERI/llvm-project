@@ -436,10 +436,10 @@ class LLVMConfig(object):
 
         builtin_include_dir = self.get_clang_builtin_include_dir(self.config.clang)
         clang_cc1_args = ['-cc1', '-internal-isystem', builtin_include_dir, '-nostdsysteminc']
-        cheri128_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu',
-                             'cheri128', '-cheri-size', '128']
-        cheri256_cc1_args = ['-triple', 'cheri-unknown-freebsd', '-target-cpu',
-                             'cheri256', '-cheri-size', '256']
+        cheri128_cc1_args = clang_cc1_args + ['-triple', 'cheri-unknown-freebsd',
+                '-target-cpu', 'cheri128', '-cheri-size', '128']
+        cheri256_cc1_args = clang_cc1_args + ['-triple', 'cheri-unknown-freebsd',
+                '-target-cpu', 'cheri256', '-cheri-size', '256']
 
         default_cheri_size = self.lit_config.params['CHERI_CAP_SIZE']
         if default_cheri_size == '16':
@@ -456,20 +456,14 @@ class LLVMConfig(object):
         cheri_clang_args = ['-target', 'cheri-unknown-freebsd', '-nostdinc',
                             '-mcpu=' + default_cheri_cpu, '-msoft-float']
 
-        # Only tests inside Driver/ should be using the %clang substitution with a cheri triple
-        self.config.substitutions.append(('%clang_cc1.+cheri-unknown-freebsd.+',
-            """false "*** Do not use 'clang_cc1' with cheri triple in tests, use 'cheri_cc1'. ***" """))
-        self.config.substitutions.append(('%clang.+cheri-unknown-freebsd.+',
-            """false "*** Do not use 'clang' with cheri triple in tests, use 'cheri_clang'. ***" """))
-
         tool_substitutions = [
             # CHERI substitutions (order is important due to repeated substitutions!)
             ToolSubst('%cheri_purecap_cc1',    command='%cheri_cc1',    extra_args=['-target-abi', 'purecap']),
             ToolSubst('%cheri128_purecap_cc1', command='%cheri128_cc1', extra_args=['-target-abi', 'purecap']),
             ToolSubst('%cheri256_purecap_cc1', command='%cheri256_cc1', extra_args=['-target-abi', 'purecap']),
-            ToolSubst('%cheri_cc1',    command='%clang_cc1', extra_args=cheri_cc1_args),
-            ToolSubst('%cheri128_cc1', command='%clang_cc1', extra_args=cheri128_cc1_args),
-            ToolSubst('%cheri256_cc1', command='%clang_cc1', extra_args=cheri256_cc1_args),
+            ToolSubst('%cheri_cc1',    command=self.config.clang, extra_args=cheri_cc1_args),
+            ToolSubst('%cheri128_cc1', command=self.config.clang, extra_args=cheri128_cc1_args),
+            ToolSubst('%cheri256_cc1', command=self.config.clang, extra_args=cheri256_cc1_args),
             ToolSubst('%cheri_clang', command=self.config.clang, extra_args=cheri_clang_args),
             ToolSubst('%cheri_purecap_clang', command=self.config.clang,
                       extra_args=cheri_clang_args + ['-mabi=purecap']),
@@ -528,6 +522,14 @@ class LLVMConfig(object):
         self.config.substitutions.append(
             (' %clang-cl ',
              """*** invalid substitution, use '%clang_cl'. ***"""))
+
+        # Only tests inside Driver/ should be using the %clang substitution with a cheri triple
+        self.config.substitutions.append(('%clang_cc1.+cheri-unknown-freebsd.+',
+            """false "*** Do not use 'clang_cc1' with cheri triple in tests, use 'cheri_cc1'. ***" """))
+        self.config.substitutions.append(('%clang.+cheri-unknown-freebsd.+',
+            """false "*** Do not use 'clang' with cheri triple in tests, use 'cheri_clang'. ***" """))
+
+
 
     def use_lld(self, required=True):
         """Configure the test suite to be able to invoke lld.
