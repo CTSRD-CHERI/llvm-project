@@ -693,9 +693,16 @@ def SDTCheriGlobal  : SDTypeProfile<1, 2, [SDTCisVT<0, CapRegType>,
 SDTCisVT<1, CapRegType>,
                                            SDTCisVT<2, i64>]>;
 def WrapperCapOp : SDNode<"MipsISD::WrapperCapOp", SDTCheriGlobal>;
-
-def : Pat<(load (WrapperCapOp CheriOpnd:$cgp, tglobaladdr:$in)),
-          (LOADCAP ZERO_64, tglobaladdr:$in, CheriOpnd:$cgp)>;
+class CapTableWrapperPat<SDNode node>:
+      Pat<(load (WrapperCapOp CheriOpnd:$cgp, node:$in)),
+                (LOADCAP ZERO_64, node:$in, CheriOpnd:$cgp)>;
+def : CapTableWrapperPat<tglobaladdr>;
+def : CapTableWrapperPat<tjumptable>;
+// TODO: add test cases for these:
+def : CapTableWrapperPat<tconstpool>;
+def : CapTableWrapperPat<texternalsym>;
+def : CapTableWrapperPat<tblockaddress>;
+def : CapTableWrapperPat<tglobaltlsaddr>;
 
 def : Pat<(load GPR64Opnd:$rt),
           (LOADCAP GPR64Opnd:$rt, (i64 0), C0)>;
