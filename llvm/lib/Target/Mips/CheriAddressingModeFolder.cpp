@@ -156,6 +156,13 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
               Op == Mips::LOADCAP || Op == Mips::STORECAP ||
               Op == Mips::CAPSTORE32 || Op == Mips::CAPSTORE64))
           continue;
+
+        // If the operand is a relocation expression then skip this pass:
+        // Example: loading a global: clc $c1, $zero, %captab(global)($c26)
+        if (!MI.getOperand(2).isImm())
+          continue;
+
+
         // If the load is not currently at register-zero offset, we can't fix
         // it up to use relative addressing, but we may be able to modify it so
         // that it is...
