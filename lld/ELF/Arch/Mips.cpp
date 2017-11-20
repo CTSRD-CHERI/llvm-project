@@ -193,7 +193,7 @@ RelExpr MIPS<ELFT>::getRelExpr(RelType Type, const Symbol &S,
     return R_CHERI_CAPABILITY_TABLE_INDEX;
   case R_MIPS_CHERI_CAPCALL_CLC11:
   case R_MIPS_CHERI_CAPTAB_CLC11:
-    // Not implemented yet
+    return R_CHERI_CAPABILITY_TABLE_INDEX;
   default:
     return R_INVALID;
   }
@@ -586,6 +586,15 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   case R_MIPS_CHERI_CAPTAB_HI16:
   case R_MIPS_CHERI_CAPCALL_HI16:
     writeValue<E>(Loc, Val + 0x8000, 16, 16);
+    break;
+  case R_MIPS_CHERI_CAPTAB_CLC11:
+  case R_MIPS_CHERI_CAPCALL_CLC11:
+    // The clc relocations have a signed 15 bit range (11 bit immediate shifted
+    // by 4). This is the same for 128 and 256 even though they have different
+    // capability sizes
+    assert((Val & 15) == 0 && "Cap table index is not aligned!");
+    checkInt<11>(Loc, Val >> 4, Type);
+    writeValue<E>(Loc, Val, 11, 4);
     break;
   case R_MICROMIPS_CALL_HI16:
   case R_MICROMIPS_GOT_HI16:

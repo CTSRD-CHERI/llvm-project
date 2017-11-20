@@ -341,7 +341,8 @@ static bool isStaticLinkTimeConstant(RelExpr E, RelType Type, const Symbol &Sym,
                      R_MIPS_GOT_GP_PC, R_MIPS_TLSGD, R_GOT_PAGE_PC, R_GOT_PC,
                      R_GOTONLY_PC, R_GOTONLY_PC_FROM_END, R_PLT_PC, R_TLSGD_PC,
                      R_TLSGD, R_PPC_PLT_OPD, R_TLSDESC_CALL, R_TLSDESC_PAGE,
-                     R_HINT, R_CHERI_CAPABILITY_TABLE_INDEX>(E))
+                     R_HINT, R_CHERI_CAPABILITY_TABLE_INDEX,
+                     R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE>(E))
     return true;
 
   // These never do, except if the entire file is position dependent or if
