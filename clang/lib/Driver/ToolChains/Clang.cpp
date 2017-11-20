@@ -1651,12 +1651,22 @@ void Clang::AddMIPSTargetArgs(const ArgList &Args,
       CmdArgs.push_back(Args.MakeArgString(A->getValue()));
     }
   }
-#ifndef CHERI_CAP_TABLE_DEFAULT
-#define CHERI_CAP_TABLE_DEFAULT false
-#endif
+
+  // XXXAR: TODO change this default instead of using env var
+  StringRef CapTableEnv = getenv("CHERI_CAP_TABLE");
+  bool CapTableDefault = false;
+  if (!CapTableEnv.empty() && CapTableEnv != "0" && CapTableEnv != "false" &&
+      CapTableEnv != "no")
+    CapTableDefault = true;
+  // HACK to switch the default for a bunch of jenkins jobs without
+  // having to modify the cflags:
+  if (getenv("ISA") == StringRef("cap-table") ||
+      getenv("LLVM_BRANCH") == StringRef("cap-table"))
+    CapTableDefault = true;
+
   bool EnableCapTable =
       Args.hasFlag(options::OPT_cheri_cap_table,
-                   options::OPT_no_cheri_cap_table, CHERI_CAP_TABLE_DEFAULT);
+                   options::OPT_no_cheri_cap_table, CapTableDefault);
   CmdArgs.push_back("-mllvm");
   CmdArgs.push_back(EnableCapTable ? "-cheri-cap-table=true"
                                    : "-cheri-cap-table=false");
