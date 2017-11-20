@@ -97,7 +97,7 @@ bool llvm::LargeCapTable = true;
 static cl::opt<bool, true> LargeCapTableOption(
     "mxcaptable", cl::Hidden, cl::location(llvm::LargeCapTable),
     cl::desc("CHERI: Enable capability immediates larget than 11 bits"),
-    cl::init(true)); // FIXME: this should not be on by default
+    cl::init(false));
 
 static cl::opt<bool>
 NoZeroDivCheck("mno-check-zero-division", cl::Hidden,
