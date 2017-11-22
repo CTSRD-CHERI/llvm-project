@@ -542,7 +542,7 @@ class Reducer(object):
         def should_remove_arg(option, value):
             for a, predicate in one_arg_opts_to_remove_if.items():
                 if option == a:
-                    print("Testing predicate", predicate, "for arg", option, "on", value)
+                    verbose_print("Testing predicate", predicate, "for arg", option, "on", value)
                     if predicate(value):
                         return True
             return False
@@ -569,7 +569,7 @@ class Reducer(object):
         if extra_args:
             new_command += extra_args
         if new_command == command:
-            print(green("none of those flags are in the command line"))
+            print(green(" none of those flags are in the command line"))
             return command
         if self._check_crash(new_command, infile):
             return new_command
@@ -577,6 +577,7 @@ class Reducer(object):
 
     @staticmethod
     def _infer_crash_message(stderr: bytes):
+        print("Inferring crash message from", stderr)
         if not stderr:
             return None
         simple_regexes = [re.compile(s) for s in (
@@ -587,11 +588,16 @@ class Reducer(object):
             r"LLVM IR generation of declaration '(.+)'",
             r"Generating code for declaration '(.+)'",
             # error in backend:
+            r"fatal error: error in backend:(.+)",
+            # same with color diagnostics:
+            "\x1b\\[0m\x1b\\[0;1;31mfatal error: \x1b\\[0merror in backend:(.+)",
             r"error in backend:(.+)",
-            # TODO: add another grep for the program counter
+            # generic fatal error:
+            r"fatal error:(.+)",
         )]
         regexes = [(r, 0) for r in simple_regexes]
         # For this crash message we only want group 1
+        # TODO: add another grep for the program counter
         regexes.append((re.compile(r"ERROR: (AddressSanitizer: .+ on address) 0x[0-9a-fA-F]+ (at pc 0x[0-9a-fA-F]+)"), 1))
 
         for line in stderr.decode("utf-8").splitlines():
@@ -619,7 +625,8 @@ class Reducer(object):
             print("Adding '-o -' to the compiler invocation")
             new_command += ["-o", "-"]
         full_cmd = new_command.copy()
-        print("Checking whether reproducer crashes with ", self.options.clang_cmd, ":", sep="", end="", flush=True)
+        print("Checking whether reproducer crashes with ", self.options.clang_cmd,
+              ":", sep="", end="", flush=True)
         crash_info = subprocess.CompletedProcess(None, None)
         self.options.expected_error_kind = self._check_crash(new_command, infile, crash_info)
         if not self.options.expected_error_kind:
@@ -922,7 +929,6 @@ class Reducer(object):
         print("Checking whether compiling IR file with opt crashes:", end="", flush=True)
         opt_args = llc_args.copy()
         opt_args[0] = str(self.options.opt_cmd)
-        # -O flag can only be passed once and is already included in llc_args
         opt_args.append("-S")
         opt_info = subprocess.CompletedProcess(None, None)
         if self._check_crash(opt_args, irfile, opt_info):
