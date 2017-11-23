@@ -88,6 +88,9 @@ def int_cheri_cap_type_check :
   GCCBuiltinAlias<"__builtin_mips_cheri_check_type">,
   GCCBuiltin<"__builtin_cheri_type_check">,
   Intrinsic<[], [llvm_fatptr_ty, llvm_fatptr_ty], []>;
+def int_cheri_cap_test_subset:
+  GCCBuiltin<"__builtin_cheri_test_subset">,
+  Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty, llvm_fatptr_ty], [IntrNoMem]>;
 
 def int_cheri_stack_cap_get :
   GCCBuiltin<"__builtin_cheri_stack_get">,
