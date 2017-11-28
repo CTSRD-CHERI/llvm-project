@@ -2214,17 +2214,19 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
     //   type large enough to hold it. A value of std::nullptr_t can be
     //   converted to an integral type; the conversion has the same meaning
     //   and validity as a conversion of (void*)0 to the integral type.
-    bool IsCap = SrcType->isCHERICapabilityType(Self.Context);
+    bool SrcIsCap = SrcType->isCHERICapabilityType(Self.Context);
     // In purecap ABI casting to uint64_t is fine as we want the pointer range
-    uint64_t Size = IsCap
+    uint64_t Size = SrcIsCap
         ? Self.Context.getTargetInfo().getPointerRangeForCHERICapability()
         : Self.Context.getTypeSize(SrcType);
     if (Size > Self.Context.getTypeSize(DestType)) {
-      msg = IsCap ? diag::err_bad_cap_reinterpret_cast_small_int :
-                    diag::err_bad_reinterpret_cast_small_int;
+      msg = SrcIsCap ? diag::err_bad_cap_reinterpret_cast_small_int :
+                       diag::err_bad_reinterpret_cast_small_int;
       return TC_Failed;
     }
-    Kind = IsCap ? CK_CHERICapabilityToAddress : CK_PointerToIntegral;
+    bool DestIsIntCap = DestType->isSpecificBuiltinType(BuiltinType::UIntCap)
+                        || DestType->isSpecificBuiltinType(BuiltinType::IntCap);
+    Kind = SrcIsCap && !DestIsIntCap ? CK_CHERICapabilityToAddress : CK_PointerToIntegral;
     return TC_Success;
   }
 
@@ -2295,17 +2297,19 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
     //   integral type size doesn't matter (except we don't allow bool).
     bool MicrosoftException = Self.getLangOpts().MicrosoftExt &&
                               !DestType->isBooleanType();
-    bool IsCap = SrcType->isCHERICapabilityType(Self.Context);
+    bool SrcIsCap = SrcType->isCHERICapabilityType(Self.Context);
     // In purecap ABI casting to uint64_t is fine as we want the pointer range
-    uint64_t Size = IsCap
+    uint64_t Size = SrcIsCap
         ? Self.Context.getTargetInfo().getPointerRangeForCHERICapability()
         : Self.Context.getTypeSize(SrcType);
     if ((Size > Self.Context.getTypeSize(DestType)) && !MicrosoftException) {
-      msg = IsCap ? diag::err_bad_cap_reinterpret_cast_small_int :
-                    diag::err_bad_reinterpret_cast_small_int;
+      msg = SrcIsCap ? diag::err_bad_cap_reinterpret_cast_small_int :
+                       diag::err_bad_reinterpret_cast_small_int;
       return TC_Failed;
     }
-    Kind = IsCap ? CK_CHERICapabilityToAddress : CK_PointerToIntegral;
+    bool DestIsIntCap = DestType->isSpecificBuiltinType(BuiltinType::UIntCap)
+                        || DestType->isSpecificBuiltinType(BuiltinType::IntCap);
+    Kind = SrcIsCap && !DestIsIntCap ? CK_CHERICapabilityToAddress : CK_PointerToIntegral;
     return TC_Success;
   }
 
