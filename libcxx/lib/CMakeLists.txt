@@ -105,7 +105,7 @@ if (LIBCXXABI_USE_LLVM_UNWINDER)
 endif()
 
 # Setup flags.
-if (NOT WIN32)
+if (NOT WIN32 AND NOT LIBCXX_BUILD_POSITION_DEPENDENT)
   add_flags_if_supported(-fPIC)
 endif()
 
