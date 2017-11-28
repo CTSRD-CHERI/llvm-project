@@ -198,10 +198,8 @@ void BareMetal::AddCXXStdlibLibArgs(const ArgList &Args,
 
 void BareMetal::AddLinkRuntimeLib(const ArgList &Args,
                                   ArgStringList &CmdArgs) const {
-  // TODO we probably want to build this for MIPS as well
-  if (!isMIPSBareMetal(getTriple()))
-    CmdArgs.push_back(Args.MakeArgString("-lclang_rt.builtins-" +
-                                         getTriple().getArchName() + ".a"));
+  CmdArgs.push_back(Args.MakeArgString("-lclang_rt.builtins-" +
+                                       getTriple().getArchName() + ".a"));
 }
 
 void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
