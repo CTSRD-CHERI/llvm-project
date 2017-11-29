@@ -235,10 +235,6 @@ static StringRef getMachName(uint32_t Flags) {
 }
 
 static StringRef getArchName(uint32_t Flags) {
-  StringRef S = getMachName(Flags);
-  if (!S.empty())
-    return S;
-
   switch (Flags & EF_MIPS_ARCH) {
   case EF_MIPS_ARCH_1:
     return "mips1";
@@ -267,6 +263,14 @@ static StringRef getArchName(uint32_t Flags) {
   }
 }
 
+static std::string getFullArchName(uint32_t Flags) {
+  StringRef Arch = getArchName(Flags);
+  StringRef Mach = getMachName(Flags);
+  if (Mach.empty())
+    return Arch.str();
+  return (Arch + " (" + Mach + ")").str();
+}
+
 // There are (arguably too) many MIPS ISAs out there. Their relationships
 // can be represented as a forest. If all input files have ISAs which
 // reachable by repeated proceeding from the single child to the parent,
@@ -286,8 +290,9 @@ static uint32_t getArchFlags(ArrayRef<FileFlags> Files) {
     if (isArchMatched(New, Ret))
       continue;
     if (!isArchMatched(Ret, New)) {
-      error("target ISA '" + getArchName(Ret) + "' is incompatible with '" +
-            getArchName(New) + "': " + toString(F.File));
+      error("incompatible target ISA:\n>>> " + toString(Files[0].File) + ": " +
+            getFullArchName(Ret) + "\n>>> " + toString(F.File) + ": " +
+            getFullArchName(New));
       return 0;
     }
     Ret = New;
