@@ -163,6 +163,7 @@ static ArchTreeEdge ArchTree[] = {
 };
 
 static bool isArchMatched(uint32_t New, uint32_t Res) {
+  // llvm::errs() << __func__ << ": new=" << utohexstr(New) << " res=" << utohexstr(Res) << "\n";
   if (New == Res)
     return true;
   if (New == EF_MIPS_ARCH_32 && isArchMatched(EF_MIPS_ARCH_64, Res))
