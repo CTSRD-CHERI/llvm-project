@@ -123,12 +123,6 @@ static uint32_t getPicFlags(ArrayRef<FileFlags> Files) {
 static ArchTreeEdge ArchTree[] = {
     // MIPS32R6 and MIPS64R6 are not compatible with other extensions
     // MIPS64R2 extensions.
-    {EF_MIPS_ARCH_64R2 | EF_MIPS_MACH_CHERI128, EF_MIPS_ARCH_64R2},
-    {EF_MIPS_ARCH_64R2 | EF_MIPS_MACH_CHERI256, EF_MIPS_ARCH_64R2},
-    {EF_MIPS_ARCH_64R2 | EF_MIPS_MACH_CHERI128, EF_MIPS_ARCH_4 | EF_MIPS_MACH_CHERI128},
-    {EF_MIPS_ARCH_64R2 | EF_MIPS_MACH_CHERI256, EF_MIPS_ARCH_64R2 | EF_MIPS_MACH_CHERI256},
-    {EF_MIPS_ARCH_4 | EF_MIPS_MACH_CHERI128, EF_MIPS_ARCH_64R2},
-    {EF_MIPS_ARCH_4 | EF_MIPS_MACH_CHERI256, EF_MIPS_ARCH_64R2},
     {EF_MIPS_ARCH_64R2 | EF_MIPS_MACH_OCTEON3, EF_MIPS_ARCH_64R2},
     {EF_MIPS_ARCH_64R2 | EF_MIPS_MACH_OCTEON2, EF_MIPS_ARCH_64R2},
     {EF_MIPS_ARCH_64R2 | EF_MIPS_MACH_OCTEON, EF_MIPS_ARCH_64R2},
@@ -142,8 +136,6 @@ static ArchTreeEdge ArchTree[] = {
     // R5000 extensions.
     {EF_MIPS_ARCH_4 | EF_MIPS_MACH_5500, EF_MIPS_ARCH_4 | EF_MIPS_MACH_5400},
     // MIPS IV extensions.
-    {EF_MIPS_ARCH_4 | EF_MIPS_MACH_CHERI128, EF_MIPS_ARCH_4},
-    {EF_MIPS_ARCH_4 | EF_MIPS_MACH_CHERI256, EF_MIPS_ARCH_4},
     {EF_MIPS_ARCH_4 | EF_MIPS_MACH_5400, EF_MIPS_ARCH_4},
     {EF_MIPS_ARCH_4 | EF_MIPS_MACH_9000, EF_MIPS_ARCH_4},
     {EF_MIPS_ARCH_5, EF_MIPS_ARCH_4},
@@ -169,12 +161,28 @@ static ArchTreeEdge ArchTree[] = {
 };
 
 static bool isArchMatched(uint32_t New, uint32_t Res) {
+  // llvm::errs() << __func__ << ": new=" << utohexstr(New) << " res=" << utohexstr(Res) << "\n";
   if (New == Res)
     return true;
   if (New == EF_MIPS_ARCH_32 && isArchMatched(EF_MIPS_ARCH_64, Res))
     return true;
   if (New == EF_MIPS_ARCH_32R2 && isArchMatched(EF_MIPS_ARCH_64R2, Res))
     return true;
+
+  // check for cheri128 vs cheri256 and upgrade non-cheri to cheri
+  uint32_t NewMach = (New & EF_MIPS_MACH);
+  uint32_t ResMach = (Res & EF_MIPS_MACH);
+  if (ResMach == EF_MIPS_MACH_CHERI128) {
+    if (NewMach != 0 && NewMach != EF_MIPS_MACH_CHERI128)
+      return false;
+    return isArchMatched(New & ~EF_MIPS_MACH, Res & ~EF_MIPS_MACH);
+  }
+  if (ResMach == EF_MIPS_MACH_CHERI256) {
+    if (NewMach != 0 && NewMach != EF_MIPS_MACH_CHERI256)
+      return false;
+    return isArchMatched(New & ~EF_MIPS_MACH, Res & ~EF_MIPS_MACH);
+  }
+
   for (const auto &Edge : ArchTree) {
     if (Res == Edge.Child) {
       Res = Edge.Parent;
