@@ -24,7 +24,7 @@ void addrof(void) {
     void* vptr = &global_int; // okay
     struct test_struct s;
     s.ptr = &global_int; // okay
-    s.cap = &global_int; // expected-error  {{converting non-capability type 'int *' to capability type 'int * __capability' without an explicit cast; if this is intended use __cheri_cast}}
+    s.cap = &global_int; // expected-error  {{converting non-capability type 'int *' to capability type 'int * __capability' without an explicit cast; if this is intended use __cheri_tocap}}
 
     // but assigning function pointers always works
     voidfn_ptr fnptr = addrof;
@@ -75,8 +75,8 @@ int foo(int* __capability cap_arg_int, void* __capability cap_arg_void, int* ptr
 
   struct test_struct s;
   s.ptr = ptr_arg_int; // okay
-  s.cap = ptr_arg_int; // expected-error  {{converting non-capability type 'int *' to capability type 'int * __capability' without an explicit cast; if this is intended use __cheri_cast}}
-  s.ptr = cap_arg_int; // expected-error  {{converting capability type 'int * __capability' to non-capability type 'int *' without an explicit cast; if this is intended use __cheri_cast}}
+  s.cap = ptr_arg_int; // expected-error  {{converting non-capability type 'int *' to capability type 'int * __capability' without an explicit cast; if this is intended use __cheri_tocap}}
+  s.ptr = cap_arg_int; // expected-error  {{converting capability type 'int * __capability' to non-capability type 'int *' without an explicit cast; if this is intended use __cheri_fromcap}}
   s.cap = cap_arg_int; // okay
 
   return 0;
@@ -117,7 +117,7 @@ void str_to_ptr(void) {
   // CAST-NEXT: StringLiteral {{.+}} 'char [4]' lvalue "foo"
 }
 
-// make sure that we warn about const char[] -> char* instead of suggesting __cheri_cast
+// make sure that we warn about const char[] -> char* instead of suggesting __cheri_{to,from}cap
 char *flag2str[] = {
         "public ", "private ", "protected ", "static ",
 #ifdef __cplusplus

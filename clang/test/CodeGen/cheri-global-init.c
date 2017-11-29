@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 %s "-target-abi" "purecap" -emit-llvm -triple cheri-unknown-freebsd -o - -no-cheri-linker | %cheri_FileCheck --check-prefix=CHECK-NO-LINKER %s
-// RUN: %clang_cc1 %s "-target-abi" "purecap" -emit-llvm -triple cheri-unknown-freebsd -o - -cheri-linker | %cheri_FileCheck --check-prefix=CHECK-LINKER %s
+// RUN: %cheri_cc1 %s "-target-abi" "purecap" -emit-llvm  -o - -no-cheri-linker | %cheri_FileCheck --check-prefix=CHECK-NO-LINKER %s
+// RUN: %cheri_cc1 %s "-target-abi" "purecap" -emit-llvm  -o - -cheri-linker | %cheri_FileCheck --check-prefix=CHECK-LINKER %s
 
 int a[5];
 int *b[] = {&a[2], &a[1], a};

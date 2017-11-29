@@ -4686,8 +4686,8 @@
 // CHERI256: #define _ABI64 3
 // CHERI256: #define _LP64 1
 // CHERI256: #define _MIPSEB 1
-// CHERI256: #define _MIPS_ARCH "cheri"
-// CHERI256: #define _MIPS_ARCH_CHERI 1
+// CHERI256: #define _MIPS_ARCH "cheri256"
+// CHERI256: #define _MIPS_ARCH_CHERI256 1
 // CHERI256: #define _MIPS_CAP_ALIGN_MASK 0xffffffffffffffe0
 // CHERI256: #define _MIPS_FPSET 32
 // CHERI256: #define _MIPS_ISA _MIPS_ISA_MIPS64

@@ -12,6 +12,7 @@
 #include "CommonArgs.h"
 #include "InputInfo.h"
 #include "Gnu.h"
+#include "Arch/Mips.h"
 
 #include "clang/Basic/VirtualFileSystem.h"
 #include "clang/Driver/Compilation.h"
@@ -27,16 +28,6 @@ using namespace clang;
 using namespace clang::driver;
 using namespace clang::driver::tools;
 using namespace clang::driver::toolchains;
-
-BareMetal::BareMetal(const Driver &D, const llvm::Triple &Triple,
-                           const ArgList &Args)
-    : ToolChain(D, Triple, Args) {
-  getProgramPaths().push_back(getDriver().getInstalledDir());
-  if (getDriver().getInstalledDir() != getDriver().Dir)
-    getProgramPaths().push_back(getDriver().Dir);
-}
-
-BareMetal::~BareMetal() {}
 
 /// Is the triple {arm,thumb}-none-none-{eabi,eabihf} ?
 static bool isARMBareMetal(const llvm::Triple &Triple) {
@@ -57,8 +48,43 @@ static bool isARMBareMetal(const llvm::Triple &Triple) {
   return true;
 }
 
+/// Allow mips*-none-elf
+static bool isMIPSBareMetal(const llvm::Triple& Triple) {
+  switch(Triple.getArch()) {
+  case llvm::Triple::mips:
+  case llvm::Triple::mips64el:
+  case llvm::Triple::mips64:
+  case llvm::Triple::mipsel:
+  case llvm::Triple::cheri:
+    if (Triple.getVendor() != llvm::Triple::UnknownVendor)
+      return false;
+    if (Triple.getOS() != llvm::Triple::UnknownOS)
+      return false;
+    return Triple.isOSBinFormatELF();
+  default:
+    return false;
+  }
+}
+
+BareMetal::BareMetal(const Driver &D, const llvm::Triple &Triple,
+                           const ArgList &Args)
+    : ToolChain(D, Triple, Args) {
+  getProgramPaths().push_back(getDriver().getInstalledDir());
+  if (getDriver().getInstalledDir() != getDriver().Dir)
+    getProgramPaths().push_back(getDriver().Dir);
+  if (isARMBareMetal(Triple))
+    Target = BaremetalTarget::ARM;
+  else if (isMIPSBareMetal(Triple)) {
+    Target = BaremetalTarget::MIPS;
+    if (tools::mips::hasMipsAbiArg(Args, "purecap"))
+      IsCheriPurecap = true;
+  }
+}
+
+BareMetal::~BareMetal() {}
+
 bool BareMetal::handlesTarget(const llvm::Triple &Triple) {
-  return isARMBareMetal(Triple);
+  return isARMBareMetal(Triple) || isMIPSBareMetal(Triple);
 }
 
 Tool *BareMetal::buildLinker() const {
@@ -66,6 +92,17 @@ Tool *BareMetal::buildLinker() const {
 }
 
 std::string BareMetal::getRuntimesDir() const {
+  if (Target == BaremetalTarget::MIPS) {
+    SmallString<128> Dir(getDriver().SysRoot);
+    if (Dir.empty())
+      Dir = getDriver().ResourceDir;
+    if (IsCheriPurecap)
+      llvm::sys::path::append(Dir, "libcheri");
+    else
+      llvm::sys::path::append(Dir, "lib");
+    return Dir.str();
+  }
+  assert(Target == BaremetalTarget::ARM);
   SmallString<128> Dir(getDriver().ResourceDir);
   llvm::sys::path::append(Dir, "lib", "baremetal");
   return Dir.str();
@@ -149,7 +186,7 @@ void BareMetal::AddCXXStdlibLibArgs(const ArgList &Args,
   switch (GetCXXStdlibType(Args)) {
   case ToolChain::CST_Libcxx:
     CmdArgs.push_back("-lc++");
-    CmdArgs.push_back("-lc++abi");
+    CmdArgs.push_back(Target == BaremetalTarget::ARM ? "-lc++abi" : "-lcxxrt");
     break;
   case ToolChain::CST_Libstdcxx:
     CmdArgs.push_back("-lstdc++");
@@ -161,8 +198,10 @@ void BareMetal::AddCXXStdlibLibArgs(const ArgList &Args,
 
 void BareMetal::AddLinkRuntimeLib(const ArgList &Args,
                                   ArgStringList &CmdArgs) const {
-  CmdArgs.push_back(Args.MakeArgString("-lclang_rt.builtins-" +
-                                       getTriple().getArchName() + ".a"));
+  // TODO we probably want to build this for MIPS as well
+  if (!isMIPSBareMetal(getTriple()))
+    CmdArgs.push_back(Args.MakeArgString("-lclang_rt.builtins-" +
+                                         getTriple().getArchName() + ".a"));
 }
 
 void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,

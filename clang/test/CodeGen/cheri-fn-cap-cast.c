@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 %s -emit-llvm -triple cheri-unknown-freebsd -o - 
+// RUN: %cheri_cc1 %s -emit-llvm  -o -
 void (* __capability c)(void);
 typedef void(*fnptr)(void);
 void cheri_codeptr(const fnptr ptr)

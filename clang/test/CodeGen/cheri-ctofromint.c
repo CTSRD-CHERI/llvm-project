@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 %s "-target-abi" "purecap" -emit-llvm -triple cheri-unknown-freebsd -o - -cheri-linker | FileCheck --check-prefix=CHECK-PURECAP %s
-// RUN: %clang_cc1 %s -emit-llvm -triple cheri-unknown-freebsd -o - -cheri-linker | FileCheck --check-prefix=CHECK-HYBRID %s
+// RUN: %cheri_cc1 %s "-target-abi" "purecap" -emit-llvm  -o - -cheri-linker | FileCheck --check-prefix=CHECK-PURECAP %s
+// RUN: %cheri_cc1 %s -emit-llvm  -o - -cheri-linker | FileCheck --check-prefix=CHECK-HYBRID %s
 
 
 void* __capability foo(void *__capability x){

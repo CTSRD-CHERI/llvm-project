@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 "-triple" "cheri-unknown-freebsd" "-emit-llvm" "-target-abi" "purecap" "-o" "-" -no-cheri-linker %s | FileCheck %s
+// RUN: %cheri_purecap_cc1 -emit-llvm -o - -no-cheri-linker %s | FileCheck %s
 // CHECK: __cxx_global_var_init
 // Check that this generates an initialiser
 #define NULL (void*)0

@@ -1,5 +1,7 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -std=c++11 -o - %s -fsyntax-only -verify
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -std=c++11 -target-abi purecap -o - %s -fsyntax-only -verify
+// RUN: %cheri_cc1 -std=c++11 -o - %s -fsyntax-only -verify
+// RUN: not %cheri_cc1 -std=c++11 -o - %s -fsyntax-only -ast-dump 2>&1 | FileCheck -check-prefix=AST %s
+// RUN: not %cheri_purecap_cc1 -std=c++11 -o - %s -fsyntax-only -ast-dump 2>&1 | FileCheck -check-prefix=PURECAP-AST %s
+// RUN: %cheri_cc1 -std=c++11 -target-abi purecap -o - %s -fsyntax-only -verify
 
 #pragma clang diagnostic warning "-Wcapability-to-integer-cast"
 
@@ -8,8 +10,8 @@
 #error "memory_address attribute not supported"
 #endif
 
-#if !__has_extension(__cheri_cast)
-#error "__cheri_cast feature should exist"
+#if !__has_extension(cheri_casts)
+#error "cheri_casts feature should exist"
 #endif
 
 void* __capability a;
@@ -71,10 +73,26 @@ void cast_int() {
 
 void cast_uintcap() {
   __uintcap_t v = reinterpret_cast<__uintcap_t>(a);
+  // AST: CXXReinterpretCastExpr {{.*}} {{.*}} '__uintcap_t':'__uintcap_t' reinterpret_cast<__uintcap_t> <PointerToIntegral>
+  v = reinterpret_cast<__uintcap_t>(nullptr);
+  // AST: CXXReinterpretCastExpr {{.*}} {{.*}} '__uintcap_t':'__uintcap_t' reinterpret_cast<__uintcap_t> <PointerToIntegral>
+  // PURECAP-AST: CXXReinterpretCastExpr {{.*}} {{.*}} '__uintcap_t':'__uintcap_t' reinterpret_cast<__uintcap_t> <PointerToIntegral>
   // XXXAR: should we allow this static cast?
   v = static_cast<__uintcap_t>(a); // expected-error {{static_cast from 'void * __capability' to '__uintcap_t' is not allowed}}
   v = (__uintcap_t)a;
   v = __uintcap_t(a);
+  v = __uintcap_t{a}; // expected-error {{cannot initialize a value of type '__uintcap_t' with an lvalue of type 'void * __capability'}}
+}
+
+void cast_intcap() {
+  __intcap_t v = reinterpret_cast<__intcap_t>(a);
+  // AST: CXXReinterpretCastExpr {{.*}} {{.*}} '__intcap_t':'__intcap_t' reinterpret_cast<__intcap_t> <PointerToIntegral>
+  v = reinterpret_cast<__intcap_t>(nullptr);
+  // AST: CXXReinterpretCastExpr {{.*}} {{.*}} '__intcap_t':'__intcap_t' reinterpret_cast<__intcap_t> <PointerToIntegral>
+  // PURECAP-AST: CXXReinterpretCastExpr {{.*}} {{.*}} '__uintcap_t':'__uintcap_t' reinterpret_cast<__uintcap_t> <PointerToIntegral>
+  v = static_cast<__intcap_t>(a); // expected-error {{static_cast from 'void * __capability' to '__intcap_t' is not allowed}}
+  v = (__intcap_t)a;
+  v = __intcap_t(a);
   v = __uintcap_t{a}; // expected-error {{cannot initialize a value of type '__uintcap_t' with an lvalue of type 'void * __capability'}}
 }
 

@@ -1810,6 +1810,32 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
         CGF, Src, SrcPointeeTy.getAddressSpace(),
         DstPointeeTy.getAddressSpace(), DestType);
   }
+  case CK_CHERICapabilityToOffset:
+  case CK_CHERICapabilityToAddress: {
+    llvm::Value *Src = nullptr;
+    // Special handling of CHERI C++ capability references. By default, clang
+    // emits a load of the referencee but that can lead to the Verifier being
+    // unhappy if the referencee type is incomplete. What we really want is
+    // just the pointer to the referencee, which is what we do here.
+    if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(E))
+      if (const VarDecl *VD = dyn_cast<VarDecl>(DRE->getDecl()))
+        if (const ReferenceType *RT = dyn_cast<ReferenceType>(VD->getType())) {
+          // RT is guaranteed to be a capability
+          Src = EmitLValue(E).getPointer();
+        }
+
+    if (!Src)
+      Src = Visit(E); // The default case
+    llvm::Type *ResultType = ConvertType(DestTy);
+    Src = Kind == CK_CHERICapabilityToOffset
+            ? CGF.getPointerOffset(Src)
+            : CGF.getPointerAddress(Src);
+    bool DestSigned = DestTy->isSignedIntegerOrEnumerationType();
+    // Insert int cast in case size of result type and capability offset field
+    // are not the same. This will be a no-op if the sizes are the same.
+    return Builder.CreateIntCast(Src, ResultType, DestSigned, "conv");
+  }
+
   case CK_AtomicToNonAtomic:
   case CK_NonAtomicToAtomic:
   case CK_NoOp:

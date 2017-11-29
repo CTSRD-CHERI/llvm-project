@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 %s "-target-abi" "purecap" -emit-llvm -triple cheri-unknown-freebsd -o - -O2 | FileCheck %s
+// RUN: %cheri_cc1 %s "-target-abi" "purecap" -emit-llvm  -o - -O2 | FileCheck %s
 
 extern void test(const char*);
 

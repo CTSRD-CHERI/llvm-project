@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -o - %s -S -emit-llvm | FileCheck %s
+// RUN: %cheri_cc1 -o - %s -S -emit-llvm | FileCheck %s
 #define CHERI_CCALL(suffix, cls) \
 	__attribute__((cheri_ccall))\
 	__attribute__((cheri_method_suffix(suffix)))\
@@ -26,6 +26,6 @@ void *bar(void *a, void *b)
 	baz(a, b);
 	// CHECK: call chericcallcc i8 addrspace(200)* bitcast (i8* (i8 addrspace(200)*, i8 addrspace(200)*, i64, i8*, i8*)* @cheri_invoke to i8 addrspace(200)* (i8 addrspace(200)*, i8 addrspace(200)*, i64, i8 addrspace(200)*, i8 addrspace(200)*)*)(i8 addrspace(200)* inreg %{{.*}}, i8 addrspace(200)* inreg %{{.*}}, i64 zeroext %{{.*}}, i8 addrspace(200)* %{{.*}}, i8 addrspace(200)* %{{.*}})
 	// CHECK:  %{{.*}} = addrspacecast i8 addrspace(200)* %call2 to i8*
-	return (__cheri_cast void*)foo((__capability void*)a, (__capability void*)b);
+	return (__cheri_fromcap void*)foo((__capability void*)a, (__capability void*)b);
 }
 

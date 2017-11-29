@@ -1,6 +1,6 @@
-// RUN: %clang %s -mabi=purecap -fno-rtti -std=c++11 -target cheri-unknown-freebsd -o - -emit-llvm -S | %cheri_FileCheck %s "-implicit-check-not=alloca { i64, i64 }" -enable-var-scope
-// RUN: %clang %s -mabi=n64 -fno-rtti -std=c++11 -target cheri-unknown-freebsd -o - -emit-llvm -S -O2 | %cheri_FileCheck %s -check-prefix N64
-// RUN: %clang %s -mabi=n64 -fno-rtti -std=c++11 -target cheri-unknown-freebsd -o - -S -O2 | %cheri_FileCheck %s -check-prefix N64-ASM
+// RUN: %cheri_purecap_cc1 %s -fno-rtti -std=c++11 -o - -emit-llvm | %cheri_FileCheck %s "-implicit-check-not=alloca { i64, i64 }" -enable-var-scope
+// RUN: %cheri_cc1 %s -target-abi n64 -fno-rtti -std=c++11 -o - -emit-llvm -O2 | %cheri_FileCheck %s -check-prefix N64
+// RUN: %cheri_cc1 %s -target-abi n64 -fno-rtti -std=c++11 -o - -S -O2 | %cheri_FileCheck %s -check-prefix N64-ASM
 
 class A {
 public:

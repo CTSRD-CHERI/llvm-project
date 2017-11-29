@@ -8934,6 +8934,16 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
   case CK_NoOp:
     return ExprEvaluatorBaseTy::VisitCastExpr(E);
 
+  case CK_CHERICapabilityToOffset:
+  case CK_CHERICapabilityToAddress: {
+    // We only seem to get here if we are casting the result of the
+    // __cheri_{offset, addr} cast to an integer type different to what was
+    // specified as part of the CHERI cast.  We return true here to report
+    // that these casts have an integer value. Typechecking will have been
+    // performed earlier.
+    return true;
+  }
+
   case CK_MemberPointerToBoolean:
   case CK_PointerToBoolean:
   case CK_IntegralToBoolean:
@@ -9429,6 +9439,8 @@ bool ComplexExprEvaluator::VisitCastExpr(const CastExpr *E) {
   case CK_AddressSpaceConversion:
   case CK_CHERICapabilityToPointer:
   case CK_PointerToCHERICapability:
+  case CK_CHERICapabilityToOffset:
+  case CK_CHERICapabilityToAddress:
   case CK_IntToOCLSampler:
     llvm_unreachable("invalid cast kind for complex value");
 

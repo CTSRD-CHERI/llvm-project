@@ -1,4 +1,4 @@
-// RUN: %clang -target cheri-unknown-freebsd %s -O2 -msoft-float -S -emit-llvm -o - | FileCheck %s
+// RUN: %cheri_cc1 %s -O2 -msoft-float -emit-llvm -o - | FileCheck %s
 #pragma pointer_interpretation capability
 struct test
 {

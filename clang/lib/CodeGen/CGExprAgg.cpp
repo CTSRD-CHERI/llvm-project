@@ -753,6 +753,8 @@ void AggExprEmitter::VisitCastExpr(CastExpr *E) {
   case CK_AddressSpaceConversion:
   case CK_CHERICapabilityToPointer:
   case CK_PointerToCHERICapability:
+  case CK_CHERICapabilityToOffset:
+  case CK_CHERICapabilityToAddress:
   case CK_IntToOCLSampler:
     llvm_unreachable("cast kind invalid for aggregate types");
   }

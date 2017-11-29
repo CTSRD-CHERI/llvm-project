@@ -22,16 +22,6 @@ using namespace clang;
 using namespace clang::targets;
 
 
-llvm::cl::opt<bool>
-CHERI128("cheri128", llvm::cl::desc("CHERI capabilities are 128 bits"),
-    llvm::cl::NotHidden, llvm::cl::init(false));
-
-#if CHERI_IS_128
-llvm::cl::opt<bool>
-ForceCHERI256("cheri256", llvm::cl::desc("CHERI capabilities are 256 bits"),
-             llvm::cl::NotHidden, llvm::cl::init(false));
-#endif
-
 const Builtin::Info MipsTargetInfo::BuiltinInfo[] = {
 #define BUILTIN(ID, TYPE, ATTRS)                                               \
   {#ID, TYPE, ATTRS, nullptr, ALL_LANGUAGES, nullptr},
@@ -42,8 +32,8 @@ const Builtin::Info MipsTargetInfo::BuiltinInfo[] = {
 
 bool MipsTargetInfo::processorSupportsGPR64() const {
   return llvm::StringSwitch<bool>(CPU)
-      .Case("cheri", true)
       .Case("cheri128", true)
+      .Case("cheri256", true)
       .Case("mips3", true)
       .Case("mips4", true)
       .Case("mips5", true)
@@ -60,7 +50,8 @@ bool MipsTargetInfo::processorSupportsGPR64() const {
 bool MipsTargetInfo::isValidCPUName(StringRef Name) const {
   return llvm::StringSwitch<bool>(Name)
       .Case("cheri128", true)
-      .Case("cheri", true)
+      .Case("cheri256", true)
+      .Case("cheri64", true)
       .Case("mips1", true)
       .Case("mips2", true)
       .Case("mips3", true)
@@ -211,7 +202,7 @@ void MipsTargetInfo::getTargetDefines(const LangOptions &Opts,
     Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KR2C__", Twine(1<<14));
 
     Builder.defineMacro("_MIPS_SZCAP", Twine(getCHERICapabilityWidth()));
-    if (CHERI128)
+    if (getCHERICapabilityWidth() == 128)
         Builder.defineMacro("_MIPS_CAP_ALIGN_MASK", "0xfffffffffffffff0");
     else
         Builder.defineMacro("_MIPS_CAP_ALIGN_MASK", "0xffffffffffffffe0");

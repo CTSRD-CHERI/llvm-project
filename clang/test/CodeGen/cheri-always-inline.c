@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 "-triple" "cheri-unknown-freebsd" "-target-abi" "purecap" -o - -O0 -emit-llvm %s | FileCheck %s 
-// RUN: %clang_cc1 "-triple" "cheri-unknown-freebsd" "-target-abi" "purecap" -o - -O2 -emit-llvm %s | FileCheck %s 
+// RUN: %cheri_purecap_cc1 -o - -O0 -emit-llvm %s | FileCheck %s
+// RUN: %cheri_purecap_cc1 -o - -O2 -emit-llvm %s | FileCheck %s
 // Check that we haven't broken the inliner and that, even at -O0, we end up
 // with foo being eliminated and baz calling bar directly
 

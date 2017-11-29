@@ -1,8 +1,7 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -std=c++11 -DINVALID_ATOMIC_CALL -fsyntax-only -verify %s
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -std=c++11 -o - %s | %cheri_FileCheck %s -implicit-check-not i256
-// RUN-TODO: %cheri256_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -S -o - %s | %cheri_FileCheck -check-prefix=ASM %s
-// RUN-TODO: %cheri128_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -S -o - %s | %cheri_FileCheck -check-prefix=ASM %s
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 -ast-dump %s | %cheri_FileCheck -check-prefix=AST %s
+// RUN: %cheri_purecap_cc1 -emit-llvm -std=c++11 -DINVALID_ATOMIC_CALL -fsyntax-only -verify %s
+// RUN: %cheri_purecap_cc1 -emit-llvm -std=c++11 -o - %s | %cheri_FileCheck %s
+// RUNTODO: %cheri_purecap_cc1 -triple cheri-unknown-freebsd -std=c++11 -S -o - %s | %cheri_FileCheck -check-prefix=ASM -enable-var-scope %s
+// RUN: %cheri_purecap_cc1 -std=c++11 -ast-dump %s | %cheri_FileCheck -check-prefix=AST %s
 // reduced testcase for libcxx exception_fallback.ipp/new_handler_fallback.ipp
 
 // Module ID and source_filename might contain i256 so we explicitly capture this line
@@ -24,8 +23,6 @@ handler get_handler_sync() noexcept {
 }
 #endif
 
-// CHECK-NOT: i256
-
 handler set_handler_atomic(handler func) noexcept {
   // CHECK: %func.addr = alloca void () addrspace(200)*, align [[$CAP_SIZE]]
   // CHECK: %.atomictmp = alloca void () addrspace(200)*, align [[$CAP_SIZE]]
@@ -38,15 +35,14 @@ handler set_handler_atomic(handler func) noexcept {
   // CHECK: call void @__atomic_exchange(i64 zeroext [[$CAP_SIZE]], i8 addrspace(200)* bitcast (void () addrspace(200)* addrspace(200)* @_ZL9__handler to i8 addrspace(200)*), i8 addrspace(200)* [[VAR_1]], i8 addrspace(200)* [[VAR_2]], i32 signext 5)
   return __atomic_exchange_n(&__handler, func, __ATOMIC_SEQ_CST);
 
-  // ASM-LABEL: _Z18set_handler_atomicPFvvE:
-  // ASM: ld      $3, %got_page(_ZL9__handler)($1)
-  // ASM: daddiu  $3, $3, %got_ofst(_ZL9__handler)
-  // ASM: cfromptr        $c1, $c0, $3
-  // ASM: csetbounds      $c3, $c1, $25
-  // ASM: ld      $3, %call16(__atomic_exchange)($1)
-  // ASM: cgetpccsetoffset        $c1, $3
+  // ASM-LABEL: _Z18set_handler_atomicU3capPFvvE:
+  // ASM: ld      [[GLOBAL_ADDR:\$[0-9]+]], %got_page(_ZL9__handler)($1)
+  // ASM: daddiu  [[GLOBAL_ADDR]], [[GLOBAL_ADDR]], %got_ofst(_ZL9__handler)
+  // ASM: cfromptr        $c1, $c0, [[GLOBAL_ADDR]]
+  // ASM: csetbounds      $c3, $c1, 16
+  // ASM: ld      [[GLOBAL_ADDR:\$[0-9]+]], %call16(__atomic_exchange)($1)
+  // ASM: cgetpccsetoffset        $c1, [[GLOBAL_ADDR]]
   // ASM: daddiu  $5, $zero, 5
-  // ASM: move     $4, $25
   // ASM: csc     $c4, $zero, 64($c11)
   // ASM: cincoffset      $c4, $c2, $zero
   // ASM: clc     $c5, $zero, 64($c11)
@@ -96,12 +92,12 @@ handler set_handler_c11_atomic(handler func) noexcept {
   // CHECK: call void @__atomic_exchange(i64 zeroext [[$CAP_SIZE]], i8 addrspace(200)* bitcast (void () addrspace(200)* addrspace(200)* @_ZL16__atomic_handler to i8 addrspace(200)*), i8 addrspace(200)* [[VAR_1]], i8 addrspace(200)* [[VAR_2]], i32 signext 5)
   return __c11_atomic_exchange(&__atomic_handler, func, __ATOMIC_SEQ_CST);
   // ASM-LABEL: _Z22set_handler_c11_atomicPFvvE:
-  // ASM: ld      $3, %got_page(_ZL16__atomic_handler)($1)
-  // ASM: daddiu  $3, $3, %got_ofst(_ZL16__atomic_handler)
-  // ASM: cfromptr        $c1, $c0, $3
+  // ASM: ld      [[GLOBAL_ADDR:\$[0-9]+]], %got_page(_ZL16__atomic_handler)($1)
+  // ASM: daddiu  [[GLOBAL_ADDR]], [[GLOBAL_ADDR]], %got_ofst(_ZL16__atomic_handler)
+  // ASM: cfromptr        $c1, $c0, [[GLOBAL_ADDR]]
   // ASM: csetbounds      $c3, $c1, $25
-  // ASM: ld      $3, %call16(__atomic_exchange)($1)
-  // ASM: cgetpccsetoffset        $c1, $3
+  // ASM: ld      [[GLOBAL_ADDR:\$[0-9]+]], %call16(__atomic_exchange)($1)
+  // ASM: cgetpccsetoffset        $c1, [[GLOBAL_ADDR]]
   // ASM: daddiu  $5, $zero, 5
   // ASM: move     $4, $25
   // ASM: csc     $c4, $zero, 64($c11)
@@ -123,9 +119,9 @@ handler get_handler_c11_atomic() noexcept {
   // CHECK: ret void () addrspace(200)* [[VAR_1]]
   return __c11_atomic_load(&__atomic_handler, __ATOMIC_SEQ_CST);
   // ASM-LABEL: _Z22get_handler_c11_atomicv:
-  // ASM: ld      $2, %got_page(_ZL16__atomic_handler)($1)
-  // ASM: daddiu  $2, $2, %got_ofst(_ZL16__atomic_handler)
-  // ASM: cfromptr        $c1, $c0, $2
+  // ASM: ld      [[GLOBAL_ADDR:\$[0-9]+]], %got_page(_ZL16__atomic_handler)($1)
+  // ASM: daddiu  [[GLOBAL_ADDR]], [[GLOBAL_ADDR]], %got_ofst(_ZL16__atomic_handler)
+  // ASM: cfromptr        $c1, $c0, [[GLOBAL_ADDR]]
   // ASM: csetbounds      $c3, $c1, $25
   // ASM: ld      $2, %call16(__atomic_load)($1)
   // ASM: cgetpccsetoffset        $c1, $2

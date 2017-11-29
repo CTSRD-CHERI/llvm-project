@@ -1,4 +1,4 @@
-// RUN:  %clang_cc1 -triple cheri-unknown-freebsd -target-abi purecap -emit-llvm -std=c++11 -o - %s | FileCheck %s
+// RUN:  %cheri_purecap_cc1 -emit-llvm -std=c++11 -o - %s | FileCheck %s
 
 // CHECK-LABEL: define internal void @__cxx_global_var_init()
 // CHECK: [[TMP0:%[0-9]+]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()

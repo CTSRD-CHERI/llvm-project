@@ -1,5 +1,5 @@
-// RUN: %cheri256_cc1 "-emit-llvm" "-target-abi" "purecap" "-o" "-" %s -O2 | FileCheck %s -check-prefixes CHECK,CHERI256
-// RUN: %cheri256_cc1 "-emit-llvm" "-target-abi" "purecap" "-o" "-" %s -O2 | FileCheck %s -check-prefixes CHECK,CHERI256
+// RUN: %cheri128_purecap_cc1 -emit-llvm -o - %s -O2 | FileCheck %s -check-prefixes CHECK,CHERI128
+// RUN: %cheri256_purecap_cc1 -emit-llvm -o - %s -O2 | FileCheck %s -check-prefixes CHECK,CHERI256
 struct thingy {
 	unsigned long a;
 	unsigned int b[5];

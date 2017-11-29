@@ -529,7 +529,7 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
         if (!StrLit && !NullLit) {
           return ExprError(Diag(E->getExprLoc(), diag::err_typecheck_convert_ptr_to_cap)
             << ExprTy << TypeTy << false
-            << FixItHint::CreateInsertion(E->getExprLoc(), "(__cheri_cast " +
+            << FixItHint::CreateInsertion(E->getExprLoc(), "(__cheri_tocap " +
                                           TypeTy.getAsString() + ")"));
         }
       }

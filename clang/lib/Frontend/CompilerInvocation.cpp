@@ -2675,6 +2675,19 @@ static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
     Opts.ABI = "purecap";
     Diags.Report(diag::warn_cheri_sandbox_abi_is_purecap);
   }
+  if (const Arg *A = Args.getLastArg(OPT_cheri_size)) {
+    StringRef CheriCPUName;
+    auto &F = Opts.Features;
+    F.push_back("chericap");
+    switch (std::stoi(A->getValue())) {
+      default: llvm_unreachable("Invalid -cheri= value");
+      case 64: CheriCPUName = "cheri64"; break;
+      case 128: CheriCPUName = "cheri128"; break;
+      case 256: CheriCPUName =  "cheri256"; break;
+    }
+    F.push_back(CheriCPUName);
+    A->claim();
+  }
 }
 
 bool CompilerInvocation::CreateFromArgs(CompilerInvocation &Res,

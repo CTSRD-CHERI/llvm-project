@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only -triple cheri-unknown-freebsd %s -verify
+// RUN: %cheri_cc1 -fsyntax-only  %s -verify
 #define x(d) _Generic((d), float: 1, double: 2)
 
 // expected-no-diagnostics

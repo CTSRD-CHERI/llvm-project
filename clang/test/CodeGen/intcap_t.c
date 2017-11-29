@@ -1,6 +1,6 @@
-// RUN: %clang %s -O0 -target cheri-unknown-freebsd -o - -emit-llvm -S | FileCheck %s
+// RUN: %cheri_cc1 %s -O0 -o - -emit-llvm | FileCheck %s
 // Check that we can actually compile this file...
-// RUN: %clang %s -O0 -target cheri-unknown-freebsd -o /dev/null -c
+// RUN: %cheri_cc1 -emit-obj %s -O0 -o /dev/null
 
 // CHECK: c1
 int c1(__capability void* x, __capability void* y)

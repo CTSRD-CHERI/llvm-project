@@ -1,6 +1,6 @@
-// RUN: %clang %s -target cheri-unknown-freebsd  -S -o - -O0
-// RUN: %clang %s -target cheri-unknown-freebsd  -S -o - -O2
-// RUN: %clang %s -target cheri-unknown-freebsd  -S -o - -O3
+// RUN: %cheri_cc1 -o - -O0 %s
+// RUN: %cheri_cc1 -o - -O2 %s
+// RUN: %cheri_cc1 -o - -O3 %s
 // Check that this doesn't crash the compiler at any optimisation level.
 int foo(__capability void *a)
 {

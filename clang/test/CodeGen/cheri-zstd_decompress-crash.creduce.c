@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 "-triple" "cheri-unknown-freebsd" "-target-abi" "n64" -O0 -emit-llvm -o - %s | FileCheck %s -check-prefixes CHECK,N64
-// RUN: %clang_cc1 "-triple" "cheri-unknown-freebsd" "-target-abi" "purecap" -O0 -emit-llvm -o - %s | FileCheck %s -check-prefixes CHECK,PURECAP
+// RUN: %cheri_cc1 -target-abi n64 -O0 -emit-llvm -o - %s | FileCheck %s -check-prefixes CHECK,N64
+// RUN: %cheri_purecap_cc1 -O0 -emit-llvm -o - %s | FileCheck %s -check-prefixes CHECK,PURECAP
 #define ZSTD_PREFETCH() __builtin_prefetch(0)
 int fn1(void) {
   ZSTD_PREFETCH();

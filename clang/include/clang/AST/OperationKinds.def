@@ -333,6 +333,12 @@ CAST_OPERATION(CHERICapabilityToPointer)
 // Convert a pointer to a CHERI capability.
 CAST_OPERATION(PointerToCHERICapability)
 
+// Obtain the offset field of a CHERI capability
+CAST_OPERATION(CHERICapabilityToOffset)
+
+// Convert a CHERI capability to its address (i.e. base+offset)
+CAST_OPERATION(CHERICapabilityToAddress)
+
 // Convert an integer initializer to an OpenCL sampler.
 CAST_OPERATION(IntToOCLSampler)
 

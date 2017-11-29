@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -fsyntax-only -triple cheri-unknown-freebsd %s -verify
+// RUN: %cheri_cc1 -fsyntax-only  %s -verify
 int insecure();
 
 __attribute__((sensitive))

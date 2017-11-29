@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 "-target-abi" "purecap" -fsyntax-only -triple cheri-unknown-freebsd %s -verify
-// RUN: %clang_cc1 "-target-abi" "n64" -fsyntax-only -triple cheri-unknown-freebsd %s -verify
+// RUN: %cheri_cc1 "-target-abi" "purecap" -fsyntax-only  %s -verify
+// RUN: %cheri_cc1 "-target-abi" "n64" -fsyntax-only  %s -verify
 
 // check that we reject usage of the __sync atomic builtins with capabilites
 // as this would result in wrong code generation
@@ -38,7 +38,7 @@
 int capability_ptr() {
   void* __capability foo_cap;
   void* __capability result = 0;
-  void* __capability newval = (__cheri_cast void* __capability * __capability)&foo_cap;
+  void* __capability newval = (__cheri_tocap void* __capability * __capability)&foo_cap;
   do_atomic_ops(&foo_cap, result, newval); // expected-error 16 {{the __sync_* atomic builtins only work with integers and not capability type 'void * __capability'.}}
   // check that calling the size-suffixed functions fails too
   do_suffixed_atomic_ops(&foo_cap, result, newval); // expected-error 5 {{the __sync_* atomic builtins only work with integers and not capability type 'void * __capability'.}}

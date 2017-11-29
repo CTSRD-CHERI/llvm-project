@@ -1040,6 +1040,8 @@ static bool rewriteToNumericBoxedExpression(const ObjCMessageExpr *Msg,
     case CK_AddressSpaceConversion:
     case CK_CHERICapabilityToPointer:
     case CK_PointerToCHERICapability:
+    case CK_CHERICapabilityToOffset:
+    case CK_CHERICapabilityToAddress:
       needsCast = true;
       break;
 

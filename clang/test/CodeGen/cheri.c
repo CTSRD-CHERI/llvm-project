@@ -1,5 +1,5 @@
-// RUN: %clang %s -O1 -target cheri-unknown-freebsd -o - -emit-llvm -S | FileCheck %s --check-prefix=CAPS
-// RUN: %clang %s -O1 -target i386-unknown-freebsd -o - -emit-llvm -S | FileCheck %s --check-prefix=PTRS
+// RUN: %cheri_cc1 %s -O1 -o - -emit-llvm | FileCheck %s --check-prefix=CAPS
+// RUN: %clang_cc1 %s -O1 -triple i386-unknown-freebsd -o - -emit-llvm | FileCheck %s --check-prefix=PTRS
 
 // Remove the static from all of the function prototypes so that this really exists.
 #define static

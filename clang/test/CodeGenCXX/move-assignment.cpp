@@ -1,5 +1,5 @@
 // RUN: %clang_cc1 -emit-llvm -std=c++11 -o - %s -triple x86_64-pc-linux-gnu | FileCheck %s -check-prefixes=X86,BOTH
-// RUN: %clang_cc1 -emit-llvm -std=c++11 -o - %s -triple cheri-unknown-freebsd -target-abi purecap | FileCheck %s -check-prefixes=CHERI,BOTH
+// RUN: %cheri_cc1 -emit-llvm -std=c++11 -o - %s  -target-abi purecap | FileCheck %s -check-prefixes=CHERI,BOTH
 
 struct A {
   A &operator=(A&&);

@@ -2354,12 +2354,14 @@ Parser::ParseParenExpression(ParenParseOption &ExprType, bool stopIfCastExpr,
     return Actions.ActOnObjCBridgedCast(getCurScope(), OpenLoc, Kind,
                                         BridgeKeywordLoc, Ty.get(),
                                         RParenLoc, SubExpr.get());
-  } else if (Tok.is(tok::kw___cheri_cast)) {
+  } else if (Tok.isOneOf(tok::kw___cheri_fromcap, tok::kw___cheri_tocap,
+                         tok::kw___cheri_offset, tok::kw___cheri_addr,
+                         tok::kw___cheri_cast)) {
     // TODO: (__cheri_bounded_cast struct foo[42])?
-    // tok::TokenKind tokenKind = Tok.getKind();
-    SourceLocation CheriCastKeywordLoc = ConsumeToken();
+    tok::TokenKind tokenKind = Tok.getKind();
+    SourceLocation CheriKeywordLoc = ConsumeToken();
 
-    // Parse a CHERI pointer cast
+    // Parse a CHERI ptr, offset or address cast
     TypeResult Ty = ParseTypeName();
     T.consumeClose();
     ColonProtection.restore();
@@ -2369,9 +2371,9 @@ Parser::ParseParenExpression(ParenParseOption &ExprType, bool stopIfCastExpr,
     if (Ty.isInvalid() || SubExpr.isInvalid())
       return ExprError();
 
-    return Actions.ActOnCheriCast(getCurScope(), OpenLoc,
-                                         CheriCastKeywordLoc, Ty.get(),
-                                         RParenLoc, SubExpr.get());
+    return Actions.ActOnCheriCast(getCurScope(), OpenLoc, tokenKind,
+                                  CheriKeywordLoc, Ty.get(),
+                                  RParenLoc, SubExpr.get());
   } else if (ExprType >= CompoundLiteral &&
              isTypeIdInParens(isAmbiguousTypeId)) {
 

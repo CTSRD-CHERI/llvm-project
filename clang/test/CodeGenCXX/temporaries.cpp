@@ -1,5 +1,5 @@
 // RUN: %clang_cc1 -emit-llvm %s -o - -triple=x86_64-apple-darwin9 -std=c++11 | FileCheck %s
-// RUN: %clang_cc1 -fno-rtti -emit-llvm %s -o - -triple cheri-unknown-freebsd -target-abi purecap -std=c++11 | FileCheck %s -check-prefix=CHERI
+// RUN: %cheri_cc1 -fno-rtti -emit-llvm %s -o -  -target-abi purecap -std=c++11 | FileCheck %s -check-prefix=CHERI
 // Check that there are no pointers without addresspace(200)*
 // CHERI: @_ZTVN7PR202271CE {{.*}} i8 addrspace(200)* addrspacecast (i8* bitcast (void (%"struct.PR20227::C" addrspace(200)*)* @_ZN7PR202271CD1Ev to i8*) to i8 addrspace(200)*),
 // CHERI: i8 addrspace(200)* addrspacecast (i8* bitcast (void (%"struct.PR20227::C" addrspace(200)*)* @_ZN7PR202271CD0Ev to i8*) to i8 addrspace(200)*)] }, comdat, align {{16|32}}

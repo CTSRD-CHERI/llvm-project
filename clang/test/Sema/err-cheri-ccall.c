@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple cheri-unknown-freebsd -fsyntax-only -verify %s 
+// RUN: %cheri_cc1 -fsyntax-only -verify %s
 
 struct cheri_object_wrong
 {

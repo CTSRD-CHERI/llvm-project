@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 %s -triple cheri-unknown-freebsd -DALIGN=1 -verify
-// RUN: %clang_cc1 %s -triple cheri-unknown-freebsd -fsyntax-only -ast-dump | FileCheck %s
+// RUN: %cheri_cc1 %s  -DALIGN=1 -verify
+// RUN: %cheri_cc1 %s  -fsyntax-only -ast-dump | FileCheck %s
 
 #ifdef ALIGN
 void f() {
@@ -10,12 +10,12 @@ void f() {
 void g() {
   char * __capability x;
   // CHECK: CStyleCastExpr {{.*}} {{.*}} 'char *' <CHERICapabilityToPointer>
-  char *y = (__cheri_cast char *)x;
+  char *y = (__cheri_fromcap char *)x;
 }
 
 void h() {
   char *x;
   // CHECK: CStyleCastExpr {{.*}} {{.*}} 'char * __capability' <PointerToCHERICapability>
-  char * __capability y = (__cheri_cast char * __capability)x;
+  char * __capability y = (__cheri_tocap char * __capability)x;
 }
 #endif
