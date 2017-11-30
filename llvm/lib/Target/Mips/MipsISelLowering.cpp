@@ -1395,7 +1395,7 @@ MipsTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   case Mips::ATOMIC_LOAD_XOR_I8:
     return emitAtomicBinaryPartword(MI, BB, 1, Mips::XOR);
   case Mips::ATOMIC_LOAD_XOR_I16:
-    return emitAtomicBinaryPartword(MI, BB, 4, Mips::XOR);
+    return emitAtomicBinaryPartword(MI, BB, 2, Mips::XOR);
   case Mips::ATOMIC_LOAD_XOR_I32:
     return emitAtomicBinary(false, MI, BB, 4, Mips::XOR);
   case Mips::ATOMIC_LOAD_XOR_I64:
