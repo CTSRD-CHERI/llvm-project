@@ -48,6 +48,13 @@ class LocalExecutor(Executor):
         return (cmd, out, err, rc)
 
 
+class CompileOnlyExecutor(Executor):
+    def run(self, exe_path, cmd, local_cwd, file_deps=None, env=None):
+        cmd = cmd or [exe_path]
+        # just always return 0 to pretend that it ran successfully
+        return cmd, "", "", 0
+
+
 class CollectBinariesExecutor(Executor):
     """Prefix an executor with some other command wrapper.
 
