@@ -46,7 +46,7 @@ def test_locale(loc):
         locale.setlocale(locale.LC_ALL, default_locale)
 
 
-def add_common_locales(features, lit_config, is_windows=False):
+def add_common_locales(features, lit_config, is_windows=False, unchecked_add=False):
     # A list of locales needed by the test-suite.
     # The list uses the canonical name for the locale used in the test-suite
     # TODO: On Linux ISO8859 *may* needs to hyphenated.
@@ -60,7 +60,7 @@ def add_common_locales(features, lit_config, is_windows=False):
     ]
     for loc_id, windows_loc_name in locales:
         loc_name = windows_loc_name if is_windows else loc_id
-        if test_locale(loc_name):
+        if unchecked_add or test_locale(loc_name):
             features.add('locale.{0}'.format(loc_id))
         else:
             lit_config.warning('The locale {0} is not supported by '
@@ -277,6 +277,38 @@ class WindowsLocalTI(DefaultTargetInfo):
         # Default to the internal shell on Windows, as bash on Windows is
         # usually very slow.
         return True
+
+
+class BaremetalNewlibTI(DefaultTargetInfo):
+    def __init__(self, full_config):
+        super(BaremetalNewlibTI, self).__init__(full_config)
+
+    def platform(self):
+        return 'baremetal-' + self.full_config.config.target_triple
+
+    def add_locale_features(self, features):
+        add_common_locales(features, self.full_config.lit_config, unchecked_add=True)
+
+    def add_cxx_compile_flags(self, flags):
+        # flags += ['-D__STDC_FORMAT_MACROS', '-D__STDC_LIMIT_MACROS', '-D__STDC_CONSTANT_MACROS']
+        pass
+
+    def add_cxx_link_flags(self, flags):
+        llvm_unwinder = self.full_config.get_lit_bool('llvm_unwinder', False)
+        use_exceptions = self.full_config.get_lit_bool('enable_exceptions', False)
+        # shared_libcxx = self.full_config.get_lit_bool('enable_shared', False)
+        flags += ['-lm', '-lc']
+        enable_threads = ('libcpp-has-no-threads' not in self.full_config.config.available_features)
+        if enable_threads:
+            pass
+            # flags += ['-lpthread']
+            # if not shared_libcxx:
+            #  flags += ['-lrt']
+        if use_exceptions:
+            flags += ['-lunwind', '-ldl'] if llvm_unwinder else ['-lgcc_s']
+        use_libatomic = self.full_config.get_lit_bool('use_libatomic', False)
+        if use_libatomic:
+            flags += ['-latomic']
 
 
 def make_target_info(full_config):
