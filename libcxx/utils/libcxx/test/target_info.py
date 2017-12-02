@@ -291,6 +291,7 @@ class BaremetalNewlibTI(DefaultTargetInfo):
 
     def add_cxx_compile_flags(self, flags):
         # flags += ['-D__STDC_FORMAT_MACROS', '-D__STDC_LIMIT_MACROS', '-D__STDC_CONSTANT_MACROS']
+        flags += ['-D_GNU_SOURCE']
         pass
 
     def add_cxx_link_flags(self, flags):
