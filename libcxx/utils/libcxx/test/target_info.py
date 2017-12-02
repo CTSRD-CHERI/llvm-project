@@ -185,6 +185,9 @@ class CheriBSDRemoteTI(DefaultTargetInfo):
     def __init__(self, full_config):
         super(CheriBSDRemoteTI, self).__init__(full_config)
 
+    def platform(self):
+        return 'freebsd'
+
     def add_cxx_link_flags(self, flags):
         flags += ['-lc', '-lm', '-lpthread', '-lcompiler_rt', '-fuse-ld=lld',
                   '-static', '-B' + self.full_config.get_lit_conf('sysroot') + '/../bin']
