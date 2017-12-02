@@ -186,9 +186,12 @@ class CheriBSDRemoteTI(DefaultTargetInfo):
         super(CheriBSDRemoteTI, self).__init__(full_config)
 
     def add_cxx_link_flags(self, flags):
-        flags += ['-lc', '-lm', '-lpthread', '-lcompiler_rt', "-fuse-ld=lld",
-                  "-Wl,-melf64btsmip_cheri_fbsd", "-mabi=purecap", "-static",
-                  "-B" + self.full_config.get_lit_conf('sysroot') + "/../bin"]
+        flags += ['-lc', '-lm', '-lpthread', '-lcompiler_rt', '-fuse-ld=lld',
+                  '-static ', '-B' + self.full_config.get_lit_conf('sysroot') + '/../bin']
+        # For now assume that building with cheri triple implies purecap
+        # We may want to test hybrid in the future but for now we only build mips64 and cheri
+        if self.full_config.get_lit_conf('target_triple').startswith("cheri-"):
+            flags += ['-mabi=purecap']
 
     def add_cxx_compile_flags(self, flags):
         # we currently only support static linking so we need to add _LIBCPP_BUILD_STATIC
