@@ -297,15 +297,16 @@ class BaremetalNewlibTI(DefaultTargetInfo):
         add_common_locales(features, self.full_config.lit_config, unchecked_add=True)
 
     def add_cxx_compile_flags(self, flags):
-        # flags += ['-D__STDC_FORMAT_MACROS', '-D__STDC_LIMIT_MACROS', '-D__STDC_CONSTANT_MACROS']
-        flags += ['-D_GNU_SOURCE']
+        # I'm not sure the _LIBCPP_BUILD_STATIC should be passed when building
+        # against libcpp but it seems to be needed
+        flags += ['-D_GNU_SOURCE', '-D_LIBCPP_BUILD_STATIC']
         pass
 
     def add_cxx_link_flags(self, flags):
         llvm_unwinder = self.full_config.get_lit_bool('llvm_unwinder', False)
         use_exceptions = self.full_config.get_lit_bool('enable_exceptions', False)
         # shared_libcxx = self.full_config.get_lit_bool('enable_shared', False)
-        flags += ['-lm', '-lc']
+        flags += ['-static', '-lm', '-lc']
         enable_threads = ('libcpp-has-no-threads' not in self.full_config.config.available_features)
         if enable_threads:
             pass
