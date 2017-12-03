@@ -2465,7 +2465,8 @@ public:
   // Functions for calculating composite types
   QualType mergeTypes(QualType, QualType, bool OfBlockPointer = false,
                       bool Unqualified = false, bool BlockReturnType = false,
-                      bool IncludeCapabilityQualifier = true);
+                      bool IncludeCapabilityQualifier = true,
+                      bool MergeVoidPtr = false);
   QualType mergeFunctionTypes(QualType, QualType, bool OfBlockPointer=false,
                               bool Unqualified = false);
   QualType mergeFunctionParameterTypes(QualType, QualType,

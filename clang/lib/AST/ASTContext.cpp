@@ -8297,7 +8297,8 @@ static QualType mergeEnumWithInteger(ASTContext &Context, const EnumType *ET,
 
 QualType ASTContext::mergeTypes(QualType LHS, QualType RHS, bool OfBlockPointer,
                                 bool Unqualified, bool BlockReturnType,
-                                bool IncludeCapabilityQualifier) {
+                                bool IncludeCapabilityQualifier,
+                                bool MergeVoidPtr) {
   // C++ [expr]: If an expression initially has the type "reference to T", the
   // type is adjusted to "T" prior to any further analysis, the expression
   // designates the object or function denoted by the reference, and the
@@ -8436,8 +8437,15 @@ QualType ASTContext::mergeTypes(QualType LHS, QualType RHS, bool OfBlockPointer,
          RHS->getAs<PointerType>()->isCHERICapability()))
       return QualType();
 
+    // special-case merging with void*
+    if (MergeVoidPtr) {
+      if (LHS->isVoidPointerType()) return RHS;
+      if (RHS->isVoidPointerType()) return LHS;
+    }
+
     QualType ResultType = mergeTypes(LHSPointee, RHSPointee, false, 
-                                     Unqualified);
+                                     Unqualified, IncludeCapabilityQualifier,
+                                     MergeVoidPtr);
     if (ResultType.isNull()) return QualType();
     if (getCanonicalType(LHSPointee) == getCanonicalType(ResultType))
       return LHS;

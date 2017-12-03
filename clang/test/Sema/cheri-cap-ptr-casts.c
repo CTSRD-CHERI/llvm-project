@@ -11,11 +11,15 @@ void g() {
   char * __capability x;
   // CHECK: CStyleCastExpr {{.*}} {{.*}} 'char *' <CHERICapabilityToPointer>
   char *y = (__cheri_fromcap char *)x;
+  // CHECK: CStyleCastExpr {{.*}} {{.*}} 'void *' <CHERICapabilityToPointer>
+  void *z = (__cheri_fromcap void *)x;
 }
 
 void h() {
   char *x;
   // CHECK: CStyleCastExpr {{.*}} {{.*}} 'char * __capability' <PointerToCHERICapability>
   char * __capability y = (__cheri_tocap char * __capability)x;
+  // CHECK: CStyleCastExpr {{.*}} {{.*}} 'void * __capability' <PointerToCHERICapability>
+  void * __capability z = (__cheri_tocap void * __capability)x;
 }
 #endif

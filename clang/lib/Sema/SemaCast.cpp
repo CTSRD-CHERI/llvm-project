@@ -2953,7 +2953,9 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc,
 
   // XXXAR: I had to modify mergeTypes() to add a IncludeCapabilityQualifier flag
   // because here we want to compare everything but the __capability qualifier
-  bool TypesCompatible = !Context.mergeTypes(SrcTy, DestTy, false, false, false, false).isNull();
+  // XXXKG: I also extended mergeTypes() with a MergeVoidPtr flag to allow the
+  // <-> void* case (and still get the checkng of qualifiers).
+  bool TypesCompatible = !Context.mergeTypes(SrcTy, DestTy, false, false, false, false, true).isNull();
   if (!TypesCompatible) {
     Diag(SubExpr->getLocStart(), diag::err_cheri_to_from_cap_unrelated_type)
       << IsToCap << SrcTy << DestTy;
