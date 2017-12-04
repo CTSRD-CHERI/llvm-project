@@ -553,6 +553,8 @@ extern bool LargeCapTable;
       SDValue Off = getTargetNode(N, MVT::i64, DAG, Flag);
       SDValue Tgt = DAG.getNode(MipsISD::WrapperCapOp, DL, Ty,
                                 getCapGlobalReg(DAG, Ty), Off);
+      // Why can't I use the target node here directly?
+      // SDNode *Addr = DAG.getMachineNode(Mips::CapGlobalAddrPseudo, DL, Ty, getCapGlobalReg(DAG, Ty), Off);
       return DAG.getLoad(Ty, DL, Chain, Tgt, PtrInfo);
     }
 

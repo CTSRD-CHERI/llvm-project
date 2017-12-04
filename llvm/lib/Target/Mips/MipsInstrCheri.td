@@ -690,14 +690,30 @@ def ADJCALLSTACKCAPUP   : MipsPseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
 def PseudoIndirectBranchCap : PseudoIndirectBranchBase<CheriOpnd>;
 
 
+
 // This node is a hack to allow `clc	$c1, $zero, %captab(global)($c1)`
+def CapGlobalAddrPseudo : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd:$cgp, GPR64Opnd:$offs),
+                                      "#CapGlobalAddrPseudo $cd, $cgp, $offs",
+                                      []>;
 def SDTCheriGlobal  : SDTypeProfile<1, 2, [SDTCisVT<0, CapRegType>,
-SDTCisVT<1, CapRegType>,
+                                           SDTCisVT<1, CapRegType>,
                                            SDTCisVT<2, i64>]>;
 def WrapperCapOp : SDNode<"MipsISD::WrapperCapOp", SDTCheriGlobal>;
 class CapTableWrapperPat<SDNode node>:
       Pat<(load (WrapperCapOp CheriOpnd:$cgp, node:$in)),
                 (LOADCAP ZERO_64, node:$in, CheriOpnd:$cgp)>;
+
+// def : Pat<(WrapperCapOp CheriOpnd:$cgp, GPR64Opnd:$in),
+//           (CapGlobalAddrPseudo CheriOpnd:$cgp, GPR64Opnd:$in)>;
+
+// Can't use ptradd/shl in output patters
+// def : Pat<(WrapperCapOp CheriOpnd:$cgp, GPR64Opnd:$in),
+//          (ptradd $cgp, (shl imm:$in, 4))>;
+
+// This one seems to work but is really inefficient because stuff can't be folded
+def : Pat<(WrapperCapOp CheriOpnd:$cgp, GPR64Opnd:$in),
+          (CIncOffset $cgp, (DSLL (DADDiu ZERO_64, imm:$in), 4))>;
+
 def : CapTableWrapperPat<tglobaladdr>;
 def : CapTableWrapperPat<tjumptable>;
 // TODO: add test cases for these:
