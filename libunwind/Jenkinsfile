@@ -9,10 +9,10 @@ def doBuild(args) {
 }
 
 node('linux') {
-	doBuild([cpu: 'mips', skipScm: false]) // we can reuse artifacts from last build
+	doBuild([cpu: 'mips', skipScm: false])
+	doBuild([cpu: 'native', skipArtifacts: true]) // we can reuse artifacts from last build
 	doBuild([cpu: 'cheri128'])
 	doBuild([cpu: 'cheri256'])
-	doBuild([cpu: 'native'])
 	// TODO: libunwind baremetal
 	/* doBuild(target: 'libunwind-baremetal', cpu: 'mips', ,
 			artifactsToCopy: [[job: 'Newlib-baremetal-mips/master', filter: 'newlib-baremetal-mips.tar.xz']],
