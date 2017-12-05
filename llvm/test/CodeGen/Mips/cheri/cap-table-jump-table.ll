@@ -1,5 +1,6 @@
 ; MIPS is inefficient and generates a mul instruction....
-; RUN: %cheri_llc %s -O2 -mxgot -target-abi n64 -relocation-model=pic -cheri-cap-table -o -
+; RUNNOT: %cheri_llc %s -O2 -mxgot -target-abi n64 -relocation-model=pic -cheri-cap-table -o -
+; RUN: %cheri_purecap_llc %s -O2 -cheri-cap-table -o - -mxcaptable=false
 ; RUN: %cheri_purecap_llc %s -O2 -cheri-cap-table -o - -mxcaptable=true | %cheri_FileCheck %s
 ; RUN: %cheri_purecap_llc %s -O2 -cheri-cap-table -o - -mxcaptable=false | %cheri_FileCheck %s -check-prefix SMALLTABLE
 ; RUN: %cheri_purecap_llc %s -O0 -cheri-cap-table -o - | %cheri_FileCheck %s -check-prefixes NO-OPT

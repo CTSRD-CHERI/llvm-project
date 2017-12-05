@@ -1609,10 +1609,20 @@ void AsmPrinter::EmitJumpTableInfo() {
       // named and numbered 'l' label would work.  Simplify GetJTISymbol.
       OutStreamer->EmitLabel(GetJTISymbol(JTI, true));
 
-    OutStreamer->EmitLabel(GetJTISymbol(JTI));
+    auto JTSym = GetJTISymbol(JTI);
+    OutStreamer->EmitLabel(JTSym);
 
     for (unsigned ii = 0, ee = JTBBs.size(); ii != ee; ++ii)
       EmitJumpTableEntry(MJTI, JTBBs[ii], JTI);
+
+    if (MAI->hasDotTypeDotSizeDirective()) {
+      auto JTEnd = createTempSymbol(JTSym->getName() + "_end");
+      OutStreamer->EmitLabel(JTEnd);
+      const MCExpr *SizeExp = MCBinaryExpr::createSub(
+        MCSymbolRefExpr::create(JTEnd, OutContext),
+        MCSymbolRefExpr::create(JTSym, OutContext), OutContext);
+      OutStreamer->emitELFSize(JTSym, SizeExp);
+    }
   }
   if (!JTInDiffSection)
     OutStreamer->EmitDataRegion(MCDR_DataRegionEnd);
