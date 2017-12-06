@@ -710,9 +710,23 @@ class CapTableWrapperPat<SDNode node>:
 // def : Pat<(WrapperCapOp CheriOpnd:$cgp, GPR64Opnd:$in),
 //          (ptradd $cgp, (shl imm:$in, 4))>;
 
+
+def shift_imm_by_4 : OutPatFrag<(ops node:$in), (DSLL (DADDiu ZERO_64, $in), 4)>;
+
+//def : Pat<(select GPR64Opnd:$cond,
+//                  (WrapperCapOp CheriOpnd:$cgp, imm:$in),
+//                  (WrapperCapOp CheriOpnd:$cgp2, imm:$in2)),
+//          // We can assume that $cgp is the same register here (but tablegen won't let me ignore it)
+//          // TODO: How to add an assertion for this?
+//         (CIncOffset (CMOVN $cgp, $cgp2, $cond),
+//          (MOVN_I64_I64 (shift_imm_by_4 imm:$in), GPR64Opnd:$cond,
+//                                          (shift_imm_by_4 imm:$in2)))>;
+
+
+
 // This one seems to work but is really inefficient because stuff can't be folded
 def : Pat<(WrapperCapOp CheriOpnd:$cgp, GPR64Opnd:$in),
-          (CIncOffset $cgp, (DSLL (DADDiu ZERO_64, imm:$in), 4))>;
+          (CIncOffset $cgp, (shift_imm_by_4 imm:$in))>;
 
 def : CapTableWrapperPat<tglobaladdr>;
 def : CapTableWrapperPat<tjumptable>;
