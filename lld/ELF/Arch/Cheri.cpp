@@ -439,28 +439,73 @@ void CheriCapTableSection::writeTo(uint8_t* Buf) {
   (void)Buf;
 }
 
-uint32_t CheriCapTableSection::addEntry(const Symbol &Sym) {
-  uint32_t Index = Entries.size();
+void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm) {
   // FIXME: can this be called from multiple threads?
-  auto it = Entries.insert({&Sym, Index});
+  CapTableIndex Idx;
+  Idx.NeedsSmallImm = SmallImm;
+  auto it = Entries.insert(std::make_pair(&Sym, Idx));
   if (!it.second) {
-    return it.first->second;
+    // If it is references by a small immediate relocation we need to update
+    // the small immediate flag
+    if (SmallImm) {
+      it.first->second.NeedsSmallImm = true;
+    }
   }
 #ifdef DEBUG_CAP_TABLE
-  llvm::errs() << "Added symbol " << toString(Sym) << " to .cap_table with index "
-               << Index << "\n";
+  llvm::errs() << "Added symbol " << toString(Sym)
+               << " to .cap_table. Total count " << Entries.size() << "\n";
 #endif
-  return Index;
 }
 
 uint32_t CheriCapTableSection::getIndex(const Symbol &Sym) const {
-  auto it = Entries.find(&Sym);
+  assert(ValuesAssigned && "getIndex called before index assignment");
+  auto it = Entries.find(const_cast<Symbol *>(&Sym));
   assert(it != Entries.end());
-  return it->second;
+  return it->second.Index.getValue();
 }
 
-template <class ELFT> void CheriCapTableSection::addCapTableSymbols() {
+template <class ELFT>
+void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
+  if (!ElfSym::CheriCapabilityTable)
+    ElfSym::CheriCapabilityTable = cast<Defined>(Symtab->addRegular(
+        "_CHERI_CAPABILITY_TABLE_", STV_HIDDEN, STT_SECTION, /*Value=*/0,
+        /*Size=*/getSize(), STB_GLOBAL, InX::CheriCapTable, nullptr));
+
+  uint64_t SmallEntryCount = 0;
   for (auto &it : Entries) {
+    // TODO: looping twice is inefficient, we could keep track of the number of
+    // small entries during insertion
+    if (it.second.NeedsSmallImm) {
+      SmallEntryCount++;
+    }
+  }
+  uint32_t AssignedSmallIndexes = 0;
+  uint32_t AssignedLargeIndexes = 0;
+  for (auto &it : Entries) {
+    CapTableIndex &CTI = it.second;
+    if (CTI.NeedsSmallImm) {
+      assert(AssignedSmallIndexes < SmallEntryCount);
+      CTI.Index = AssignedSmallIndexes;
+      AssignedSmallIndexes++;
+    } else {
+      CTI.Index = SmallEntryCount + AssignedLargeIndexes;
+      AssignedLargeIndexes++;
+    }
+
+    uint32_t Index = *CTI.Index;
+    auto Body = it.first;
+    // FIXME: locking?
+    In<ELFT>::CapRelocs->addCapReloc(
+        {InX::CheriCapTable, Index * Config->CapabilitySize, Config->Pic},
+        {Body, 0u}, Body->IsPreemptible, 0);
+    if (Config->Pic) {
+      static bool HasWarned = false;
+      if (!HasWarned) {
+        HasWarned = true;
+        warn("Cannot add capability table entries for PIC code yet!");
+      }
+    }
+
     StringRef Name = it.first->getName();
     if (Name.empty())
       continue;
@@ -480,12 +525,12 @@ template <class ELFT> void CheriCapTableSection::addCapTableSymbols() {
     while (Symtab->find(RefName)) {
       RefName += ".duplicate-name";
     }
-
-
-    Symtab->addRegular(Saver.save(RefName), STV_HIDDEN, STT_OBJECT,
-                       it.second * Config->CapabilitySize,
+    uint64_t Off = Index * Config->CapabilitySize;
+    Symtab->addRegular(Saver.save(RefName), STV_HIDDEN, STT_OBJECT, Off,
                        Config->CapabilitySize, STB_LOCAL, this, nullptr);
   }
+  assert(AssignedSmallIndexes + AssignedLargeIndexes == Entries.size());
+  ValuesAssigned = true;
 }
 
 CheriCapTableSection *InX::CheriCapTable;
@@ -495,10 +540,14 @@ template class elf::CheriCapRelocsSection<ELF32BE>;
 template class elf::CheriCapRelocsSection<ELF64LE>;
 template class elf::CheriCapRelocsSection<ELF64BE>;
 
-template void CheriCapTableSection::addCapTableSymbols<ELF32LE>();
-template void CheriCapTableSection::addCapTableSymbols<ELF32BE>();
-template void CheriCapTableSection::addCapTableSymbols<ELF64LE>();
-template void CheriCapTableSection::addCapTableSymbols<ELF64BE>();
+template void
+CheriCapTableSection::assignValuesAndAddCapTableSymbols<ELF32LE>();
+template void
+CheriCapTableSection::assignValuesAndAddCapTableSymbols<ELF32BE>();
+template void
+CheriCapTableSection::assignValuesAndAddCapTableSymbols<ELF64LE>();
+template void
+CheriCapTableSection::assignValuesAndAddCapTableSymbols<ELF64BE>();
 
 } // namespace elf
 } // namespace lld

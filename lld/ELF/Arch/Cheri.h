@@ -104,18 +104,29 @@ private:
 class CheriCapTableSection : public SyntheticSection {
 public:
   CheriCapTableSection();
-  uint32_t addEntry(const Symbol& Sym);
-  uint32_t getIndex(const Symbol& Sym) const;
+  void addEntry(Symbol &Sym, bool NeedsSmallImm);
+  uint32_t getIndex(const Symbol &Sym) const;
   bool empty() const override { return Entries.empty(); }
   void writeTo(uint8_t *Buf) override;
-  template <class ELFT> void addCapTableSymbols();
+  template <class ELFT> void assignValuesAndAddCapTableSymbols();
   size_t getSize() const override {
-    if (!Entries.empty())
-      assert(Config->CapabilitySize > 0);
+    if (!Entries.empty() > 0)
+      assert(Config->CapabilitySize > 0 &&
+             "Cap table entries present but cap size unknown???");
     return Entries.size() * Config->CapabilitySize;
   }
 private:
-  llvm::MapVector<const Symbol *, uint32_t> Entries;
+  struct CapTableIndex {
+    // The index will be assigned once all symbols have been added
+    // We do this so that we can order all symbols that need a small
+    // immediate can be ordered before ones that are accessed using the
+    // longer sequence of instructions
+    // int64_t Index = -1;
+    llvm::Optional<uint32_t> Index;
+    bool NeedsSmallImm = false;
+  };
+  llvm::MapVector<Symbol *, CapTableIndex> Entries;
+  bool ValuesAssigned = false;
 };
 
 

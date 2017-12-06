@@ -193,7 +193,7 @@ RelExpr MIPS<ELFT>::getRelExpr(RelType Type, const Symbol &S,
     return R_CHERI_CAPABILITY_TABLE_INDEX;
   case R_MIPS_CHERI_CAPCALL_CLC11:
   case R_MIPS_CHERI_CAPTAB_CLC11:
-    return R_CHERI_CAPABILITY_TABLE_INDEX;
+    return R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE;
   default:
     return R_INVALID;
   }

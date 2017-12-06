@@ -977,23 +977,13 @@ static void scanReloc(InputSectionBase &Sec, OffsetGetter &GetOffset, RelTy *&I,
                                      NeedsDynReloc, Addend);
     // TODO: check if it needs a plt stub
     return;
-  } else if (Expr == R_CHERI_CAPABILITY_TABLE_INDEX) {
+  } else if (isRelExprOneOf<R_CHERI_CAPABILITY_TABLE_INDEX,
+                            R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE>(
+                 Expr)) {
     assert(Config->ProcessCapRelocs);
-    uint32_t Index = InX::CheriCapTable->addEntry(Sym);
-    assert(Addend == 0);
-    // FIXME: locking?
-    if (!ElfSym::CheriCapabilityTable)
-      ElfSym::CheriCapabilityTable = cast<Defined>(Symtab->addRegular("_CHERI_CAPABILITY_TABLE_", STV_HIDDEN, STT_SECTION, /*Value=*/0, /*Size=*/0, STB_LOCAL, InX::CheriCapTable, nullptr));
-    In<ELFT>::CapRelocs->addCapReloc(
-        {InX::CheriCapTable, Index * Config->CapabilitySize, Config->Pic},
-        {&Sym, 0u}, Sym.IsPreemptible, Addend);
-    if (Config->Pic) {
-      static bool HasWarned = false;
-      if (!HasWarned) {
-        HasWarned = true;
-        warn("Cannot add capability table entries for PIC code yet!");
-      }
-    }
+    bool SmallImmediate =
+        Expr == R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE;
+    InX::CheriCapTable->addEntry(Sym, SmallImmediate);
     // Write out the index into the instruction
     Sec.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
     return;

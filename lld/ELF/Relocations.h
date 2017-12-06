@@ -82,6 +82,7 @@ enum RelExpr {
   R_TLSLD_PC,
   R_CHERI_CAPABILITY,
   R_CHERI_CAPABILITY_TABLE_INDEX,
+  R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE,
 };
 
 // Build a bitmask with one bit set for each RelExpr.
