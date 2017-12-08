@@ -78,7 +78,9 @@ static SymbolAndOffset sectionWithOffsetToSymbol(InputSectionBase *IS,
     }
   }
   if (!FallbackResult) {
-    assert(IS->Name.startswith(".rodata.str"));
+    warn("capreloc local symbol not found, fallback: section=" +
+	 IS->Name + " symbol=" + Src->getName() +
+	 " file=" + ((Src->File != nullptr) ? Src->File->getName() : ""));
     FallbackResult = Src;
   }
   // we should have found at least a section symbol
