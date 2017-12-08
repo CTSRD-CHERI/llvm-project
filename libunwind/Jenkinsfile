@@ -2,7 +2,7 @@
 def doBuild(args) {
 	def commonArgs = [
 			target: 'libunwind',
-			allocateNode: false,
+			nodeLabel: null,
 			skipScm: true,  // only the first run handles the SCM
 			extraArgs: '--install-prefix=/']
 	cheribuildProject(commonArgs + args)
