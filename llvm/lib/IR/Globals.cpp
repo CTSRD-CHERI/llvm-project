@@ -328,6 +328,8 @@ GlobalVariable::GlobalVariable(Module &M, Type *Ty, bool constant,
       isExternallyInitializedConstant(isExternallyInitialized) {
   assert(!Ty->isFunctionTy() && PointerType::isValidElementType(Ty) &&
          "invalid type for global variable");
+  // XXXAR: uncomment this to find cap-table errors
+  // assert(AddressSpace == 200);
   setThreadLocalMode(TLMode);
   if (InitVal) {
     assert(InitVal->getType() == Ty &&

@@ -289,6 +289,7 @@ MipsSETargetLowering::MipsSETargetLowering(const MipsTargetMachine &TM,
   }
 
   if (Subtarget.hasMips64r6()) {
+    // FIXME: we should really do some smarter expanding
     // MIPS64r6 replaces the accumulator-based multiplies with a three register
     // instruction
     setOperationAction(ISD::SMUL_LOHI, MVT::i64, Expand);
