@@ -34,7 +34,7 @@ struct ArchTreeEdge {
 };
 
 struct FileFlags {
-  InputFile* File;
+  InputFile *File;
   uint32_t Flags;
 };
 } // namespace
@@ -104,9 +104,11 @@ static uint32_t getPicFlags(ArrayRef<FileFlags> Files) {
   for (const FileFlags &F : Files.slice(1)) {
     bool IsPic2 = F.Flags & (EF_MIPS_PIC | EF_MIPS_CPIC);
     if (IsPic && !IsPic2)
-      warn("linking abicalls code " + toString(Files[0].File) + " with non-abicalls file: " + toString(F.File));
+      warn("linking abicalls code " + toString(Files[0].File) +
+           " with non-abicalls file: " + toString(F.File));
     if (!IsPic && IsPic2)
-      warn("linking non-abicalls code " + toString(Files[0].File) + " with abicalls file: " + toString(F.File));
+      warn("linking non-abicalls code " + toString(Files[0].File) +
+           " with abicalls file: " + toString(F.File));
   }
 
   // Compute the result PIC/non-PIC flag.
@@ -311,8 +313,7 @@ static uint32_t getArchFlags(ArrayRef<FileFlags> Files) {
 template <class ELFT> uint32_t elf::calcMipsEFlags() {
   std::vector<FileFlags> V;
   for (InputFile *F : ObjectFiles)
-    V.push_back(
-        {F, cast<ObjFile<ELFT>>(F)->getObj().getHeader()->e_flags});
+    V.push_back({F, cast<ObjFile<ELFT>>(F)->getObj().getHeader()->e_flags});
   if (V.empty())
     return 0;
   checkFlags(V);
