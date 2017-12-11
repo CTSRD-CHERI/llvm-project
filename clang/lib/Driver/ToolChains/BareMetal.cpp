@@ -198,9 +198,20 @@ void BareMetal::AddCXXStdlibLibArgs(const ArgList &Args,
 
 void BareMetal::AddLinkRuntimeLib(const ArgList &Args,
                                   ArgStringList &CmdArgs) const {
+  SmallString<32> LibName("-lclang_rt.builtins-");
+  if (Target == BaremetalTarget::ARM) {
+    LibName += getTriple().getArchName();
+    LibName += ".a";
+  } else {
+    assert(Target == BaremetalTarget::MIPS);
+    if (getTriple().getArch() == llvm::Triple::cheri && !IsCheriPurecap) {
+      LibName += "mips64";
+    } else {
+      LibName += getTriple().getArchName();
+    }
+  }
   CmdArgs.push_back(
-      Args.MakeArgString("-lclang_rt.builtins-" + getTriple().getArchName() +
-                         (Target == BaremetalTarget::ARM ? ".a" : "")));
+      Args.MakeArgString(LibName));
 }
 
 void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
