@@ -814,6 +814,8 @@ class Reducer(object):
             elif arg == "-mxgot":
                 pass_once_flags.add(arg)  # some bugs only happen if mxgot is also passed
             elif arg.startswith("-O"):
+                if arg == "-Os":
+                    arg = "-O2" # llc doesn't understand -Os
                 optimization_flag = arg
         if cpu_flag:
             llc_args.append(cpu_flag)
