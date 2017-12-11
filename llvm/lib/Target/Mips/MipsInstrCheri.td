@@ -715,7 +715,7 @@ def SDTCheriGlobal  : SDTypeProfile<1, 2, [SDTCisVT<0, CapRegType>,
 def WrapperCapOp : SDNode<"MipsISD::WrapperCapOp", SDTCheriGlobal>;
 class CapTableWrapperPat<SDNode node>:
       Pat<(load (WrapperCapOp CheriOpnd:$cgp, node:$in)),
-                (LOADCAP ZERO_64, node:$in, CheriOpnd:$cgp)>;
+                (LOADCAP_BigImm node:$in, CheriOpnd:$cgp)>;
 
 // def : Pat<(WrapperCapOp CheriOpnd:$cgp, GPR64Opnd:$in),
 //           (CapGlobalAddrPseudo CheriOpnd:$cgp, GPR64Opnd:$in)>;

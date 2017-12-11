@@ -19,13 +19,13 @@ entry:
   ; BIGTABLE:      lui	$1, %captab_hi(fn)
   ; BIGTABLE-NEXT: daddiu	$1, $1, %captab_lo(fn)
   ; BIGTABLE-NEXT: clc	$c1, $1, 0($c26)
-  ; SMALLTABLE: clc	$c1, $zero, %captab(fn)($c26)
+  ; SMALLTABLE: clcbi $c1, %captab20(fn)($c26)
   store void () addrspace(200)* %arg, void () addrspace(200)* addrspace(200)* @fn2, align 32
   ; load address of fn2:
   ; BIGTABLE-NEXT: lui	$1, %captab_hi(fn2)
   ; BIGTABLE-NEXT: daddiu	$1, $1, %captab_lo(fn2)
   ; BIGTABLE-NEXT: clc	$c2, $1, 0($c26)
-  ; SMALLTABLE-NEXT: clc	$c2, $zero, %captab(fn2)($c26)
+  ; SMALLTABLE-NEXT: clcbi $c2, %captab20(fn2)($c26)
   ; load fn for call:
   ; CHECK-NEXT: clc	$c12, $zero, 0($c1)
   ; save %arg to fn2

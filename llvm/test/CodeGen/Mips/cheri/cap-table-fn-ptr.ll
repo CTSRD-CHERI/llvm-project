@@ -1,4 +1,5 @@
-; RUN: %cheri_purecap_llc -cheri-cap-table %s -o - | %cheri_FileCheck %s
+; RUN: %cheri_purecap_llc -cheri-cap-table %s -o - -mxcaptable=true | %cheri_FileCheck %s -check-prefixes CHECK,BIG
+; RUN: %cheri_purecap_llc -cheri-cap-table %s -o - -mxcaptable=false | %cheri_FileCheck %s -check-prefixes CHECK,SMALL
 source_filename = "/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-table-call-extern.c"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
@@ -13,9 +14,10 @@ entry:
   ret void
   ; TODO: it would be nice if we could have function pointers inlined into the GOT
   ; CHECK:      csc	$c17, $zero, 0($c11)
-  ; CHECK-NEXT: lui	$1, %captab_hi(fn)
-  ; CHECK-NEXT: daddiu	$1, $1, %captab_lo(fn)
-  ; CHECK-NEXT: clc	$c1, $1, 0($c26)
+  ; BIG-NEXT: lui	$1, %captab_hi(fn)
+  ; BIG-NEXT: daddiu	$1, $1, %captab_lo(fn)
+  ; BIG-NEXT: clc	$c1, $1, 0($c26)
+  ; SMALL-NEXT: clcbi $c1, %captab20(fn)($c26)
   ; CHECK-NEXT: clc	$c12, $zero, 0($c1)
   ; CHECK-NEXT: cjalr	$c12, $c17
   ; CHECK-NEXT: cfromptr	$c13, $c0, $zero

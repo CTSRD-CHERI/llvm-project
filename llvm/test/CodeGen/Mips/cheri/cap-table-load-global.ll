@@ -19,7 +19,7 @@ entry:
   ; BIGTABLE-NEXT:      lui  $1, %captab_hi(global)
   ; BIGTABLE-NEXT: daddiu $1, $1, %captab_lo(global)
   ; BIGTABLE-NEXT: clc $c1, $1, 0($c1)
-  ; SMALLTABLE-NEXT:    clc $c1, $zero, %captab(global)($c1)
+  ; SMALLTABLE-NEXT: clcbi $c1, %captab20(global)($c1)
   ; CHECK-NEXT:    cld $2, $zero, 0($c1)
   ; CHECK-NEXT:    cjr $c17
   ; CHECK-NEXT: nop

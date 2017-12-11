@@ -534,7 +534,7 @@ extern bool LargeCapTable;
         return _getGlobalCapBigImmediate(N, SDLoc(N), Ty, DAG, HiReloc, LoReloc,
                                          Chain, PtrInfo);
       } else {
-        auto Reloc = UseCallReloc ? MipsII::MO_CAPTAB_CALL11 : MipsII::MO_CAPTAB11;
+        auto Reloc = UseCallReloc ? MipsII::MO_CAPTAB_CALL20 : MipsII::MO_CAPTAB20;
         return _getGlobalCapSmallImmediate(N, SDLoc(N), Ty, DAG, Reloc, Chain,
                                            PtrInfo);
       }
@@ -543,7 +543,7 @@ extern bool LargeCapTable;
     // This method creates the following nodes, which are necessary for
     // computing a symbol's capability:
     //
-    // (load (wrapper $cgp, %captab(sym)))
+    // (load (wrapper $cgp, %captab20(sym)))
     template <class NodeTy>
     SDValue
     _getGlobalCapSmallImmediate(NodeTy *N, const SDLoc &DL, EVT Ty,

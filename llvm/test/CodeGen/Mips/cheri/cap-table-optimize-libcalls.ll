@@ -14,12 +14,8 @@ entry:
   %call = call i32 (i8 addrspace(200)*, ...) addrspacecast (i32 (i8 addrspace(200)*, ...)* @printf to i32 (i8 addrspace(200)*, ...) addrspace(200)*)(i8 addrspace(200)* getelementptr inbounds ([33 x i8], [33 x i8] addrspace(200)* @.str, i32 0, i32 0))
   ret void
 
-  ;CHECK:      lui	$1, %captab_hi(.L.str)
-  ;CHECK-NEXT: daddiu	$1, $1, %captab_lo(.L.str)
-  ;CHECK-NEXT: clc	$c3, $1, 0($c26)
-  ;CHECK-NEXT: lui	$1, %capcall_hi(printf)
-  ;CHECK-NEXT: daddiu	$1, $1, %capcall_lo(printf)
-  ;CHECK-NEXT: clc	$c12, $1, 0($c26)
+  ;CHECK:      clcbi $c3, %captab20(.L.str)($c26)
+  ;CHECK-NEXT: clcbi $c12, %capcall20(printf)($c26)
   ;CHECK-NEXT: daddiu	$1, $zero, 0
   ;CHECK-NEXT: cjalr	$c12, $c17
   ;CHECK-NEXT: cfromptr	$c13, $c0, $zero

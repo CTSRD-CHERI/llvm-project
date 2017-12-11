@@ -11,7 +11,7 @@ target triple = "cheri-unknown-freebsd"
 
 define %struct.state addrspace(200)* @standard_load(i1 %arg) #0 {
   ; CHECK-LABEL: .ent standard_load
-  ; CHECK: clc $c3, $zero, %captab(lclmem)($c26)
+  ; CHECK: clcbi $c3, %captab20(lclmem)($c26)
   ; CHECK-NEXT: cjr $c17
   ret %struct.state addrspace(200)* @lclmem
 }
@@ -24,10 +24,10 @@ define %struct.state addrspace(200)* @ternary(i1 %arg) #0 {
   ; CHECK-LABEL: .ent ternary
   ; CHECK: sll	$1, $4, 0
   ; CHECK-NEXT: andi	$1, $1, 1
-  ; CHECK-NEXT: daddiu	$2, $zero, %captab(gmtmem)
+  ; CHECK-NEXT: daddiu	$2, $zero, %captab20(gmtmem)
   ; CHECK-NEXT: dsll	$2, $2, 4
   ; CHECK-NEXT: cincoffset	$c1, $c26, $2
-  ; CHECK-NEXT: daddiu	$2, $zero, %captab(lclmem)
+  ; CHECK-NEXT: daddiu	$2, $zero, %captab20(lclmem)
   ; CHECK-NEXT: dsll	$2, $2, 4
   ; CHECK-NEXT: cincoffset	$c2, $c26, $2
   ; CHECK-NEXT: cmovn	$c1, $c2, $1

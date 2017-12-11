@@ -1,4 +1,4 @@
-; RUN: %cheri_purecap_llc -cheri-cap-table %s -o - | %cheri_FileCheck %s
+; RUN: %cheri_purecap_llc -cheri-cap-table %s -o - -mxcaptable | %cheri_FileCheck %s
 ; ModuleID = '/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-table-call-extern.c'
 
 source_filename = "/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-table-call-extern.c"

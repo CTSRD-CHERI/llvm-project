@@ -1,9 +1,8 @@
 ; MIPS is inefficient and generates a mul instruction....
 ; RUNNOT: %cheri_llc %s -O2 -mxgot -target-abi n64 -relocation-model=pic -cheri-cap-table -o -
-; RUN: %cheri_purecap_llc %s -O2 -cheri-cap-table -o - -mxcaptable=false
 ; RUN: %cheri_purecap_llc %s -O2 -cheri-cap-table -o - -mxcaptable=true | %cheri_FileCheck %s
 ; RUN: %cheri_purecap_llc %s -O2 -cheri-cap-table -o - -mxcaptable=false | %cheri_FileCheck %s -check-prefix SMALLTABLE
-; RUN: %cheri_purecap_llc %s -O0 -cheri-cap-table -o - | %cheri_FileCheck %s -check-prefixes NO-OPT
+; RUN: %cheri_purecap_llc %s -O0 -cheri-cap-table -o - -mxcaptable=true | %cheri_FileCheck %s -check-prefixes NO-OPT
 ; ModuleID = '/Users/alex/cheri/build/llvm-256-build/cap-table-jump-table-reduce.ll-reduced-simplified.bc'
 source_filename = "cap-table-jump-table-reduce.ll-output-7f90547.bc"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
@@ -38,7 +37,7 @@ sw.bb1:
 ; BIGTABLE:      lui     $1, %captab_hi(.LJTI0_0)
 ; BIGTABLE-NEXT: daddiu  $1, $1, %captab_lo(.LJTI0_0)
 ; BIGTABLE-NEXT: clc     $c1, $1, 0($c26)
-; SMALLTABLE:    clc     $c1, $zero, %captab(.LJTI0_0)($c26)
+; SMALLTABLE:    clcbi $c1, %captab20(.LJTI0_0)($c26)
 
 
 
