@@ -43,6 +43,7 @@ multiclass ShiftImmPattern<int Width, int Shift> {
 }
 
 // 11-bit immediate offset used by C[SL]CR
+defm simm16s4  : ShiftImmPattern<16, 4>;
 defm simm11s4  : ShiftImmPattern<11, 4>;
 // 8-bit immediate offset used by C[SL][DWHB]
 defm simm8s3  : ShiftImmPattern<8, 3>;
@@ -327,12 +328,18 @@ def : Pat<(ptrtoint CheriOpnd:$rt),
 def : Pat<(ptrtoint CheriOpnd:$rt),
           (CToPtr32 C0, $rt)>;
 
-
-let DecoderNamespace="CHERI" in
+let Predicates = [IsCHERI], DecoderNamespace="CHERI" in {
 def STORECAP : CheriFmtCLS<0x3e, (outs), (ins CheriOpnd:$cs, GPR64Opnd:$rt, simm11s4:$offset, CheriOpnd:$cb),
                          "csc\t$cs, ${rt}, ${offset}(${cb})",
                          [(store CheriOpnd:$cs, (add (add GPR64Opnd:$rt, (ptrtoint CheriOpnd:$cb)), (i64 simm11s4Pattern:$offset)))]>;
+// new experimental 16bit immediate CLC (not sure if needed but added for symmetry with clc)
+// Reuses the MDMX/MSA opcodes
+def STORECAP_BigImm : CheriFmtCLS_BigImm<0x1E, (outs), (ins CheriOpnd:$cs, simm16s4:$offset, CheriOpnd:$cb),
+                         "cscbi\t$cs, ${offset}(${cb})",
+                         [(store CheriOpnd:$cs, (add (ptrtoint CheriOpnd:$cb), (i64 simm16s4Pattern:$offset)))]
+                         >;
 
+}
 def : Pat<(store CheriOpnd:$cs, CheriOpnd:$cb),
           (STORECAP CheriOpnd:$cs, ZERO_64, (i64 0), $cb)>;
 def : Pat<(store CheriOpnd:$cs, GPR64Opnd:$rt),
@@ -343,6 +350,13 @@ let Predicates = [IsCHERI] in {
 def LOADCAP : CheriFmtCLS<0x36, (outs CheriOpnd:$cs), (ins GPR64Opnd:$rt, simm11s4:$offset, CheriOpnd:$cb),
                         "clc\t$cs, ${rt}, ${offset}(${cb})",
                         [(set CheriOpnd:$cs, (load (add (add GPR64Opnd:$rt, (ptrtoint CheriOpnd:$cb)), (i64 simm11s4Pattern:$offset))))]> {
+  let DecoderNamespace="CHERI";
+}
+// Experimental new CLC instruction using a 16 bit immediate and for now the JALX toplevel opcode
+def LOADCAP_BigImm : CheriFmtCLS_BigImm<0x1D, (outs CheriOpnd:$cs), (ins simm16s4:$offset, CheriOpnd:$cb),
+                        "clcbi\t$cs, ${offset}(${cb})", // different mnemonic for now to simplify testing
+                        [(set CheriOpnd:$cs, (load (add (ptrtoint CheriOpnd:$cb), (i64 simm16s4Pattern:$offset))))]
+                        > {
   let DecoderNamespace="CHERI";
 }
 
