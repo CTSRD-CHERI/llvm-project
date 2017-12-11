@@ -94,6 +94,9 @@ namespace MipsII {
     /// CHERI capability relocations:
     MO_CAPTAB11,       // offset into the capability table
     MO_CAPTAB_CALL11,  // same as above but only for calls
+    // same with 16-bit immediate shifted by 4 version using new clc/csc instructions:
+    MO_CAPTAB20,
+    MO_CAPTAB_CALL20,
     /// Same relocations with large offsets:
     MO_CAPTAB_LO16,
     MO_CAPTAB_HI16,

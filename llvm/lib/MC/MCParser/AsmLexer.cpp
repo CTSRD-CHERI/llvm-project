@@ -684,11 +684,14 @@ AsmToken AsmLexer::LexToken() {
               .StartsWith("tprel_hi", {AsmToken::PercentTprel_Hi, 9})
               .StartsWith("tprel_lo", {AsmToken::PercentTprel_Lo, 9})
               // CHERI extensions
+              // TODO: captab20 should probably captab in the future
               .StartsWith("captab_lo", {AsmToken::PercentCapTab_Lo, 10})
               .StartsWith("captab_hi", {AsmToken::PercentCapTab_Hi, 10})
+              .StartsWith("captab20", {AsmToken::PercentCapTab20, 9})
               .StartsWith("captab", {AsmToken::PercentCapTab11, 7})
               .StartsWith("capcall_hi", {AsmToken::PercentCapTabCall_Hi, 11})
               .StartsWith("capcall_lo", {AsmToken::PercentCapTabCall_Lo, 11})
+              .StartsWith("capcall20", {AsmToken::PercentCapTabCall20, 10})
               .StartsWith("capcall", {AsmToken::PercentCapTabCall11, 8})
             .Default({AsmToken::Percent, 1});
 

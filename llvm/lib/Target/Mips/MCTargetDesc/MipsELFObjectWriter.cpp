@@ -385,6 +385,8 @@ unsigned MipsELFObjectWriter::getRelocType(MCContext &Ctx,
 
   case Mips::fixup_CHERI_CAPTABLE11:
     return ELF::R_MIPS_CHERI_CAPTAB_CLC11;
+  case Mips::fixup_CHERI_CAPTABLE20:
+    return ELF::R_MIPS_CHERI_CAPTAB20;
   case Mips::fixup_CHERI_CAPTABLE_LO16:
     return ELF::R_MIPS_CHERI_CAPTAB_LO16;
   case Mips::fixup_CHERI_CAPTABLE_HI16:
@@ -392,6 +394,8 @@ unsigned MipsELFObjectWriter::getRelocType(MCContext &Ctx,
 
   case Mips::fixup_CHERI_CAPCALL11:
     return ELF::R_MIPS_CHERI_CAPCALL_CLC11;
+  case Mips::fixup_CHERI_CAPCALL20:
+    return ELF::R_MIPS_CHERI_CAPCALL20;
   case Mips::fixup_CHERI_CAPCALL_LO16:
     return ELF::R_MIPS_CHERI_CAPCALL_LO16;
   case Mips::fixup_CHERI_CAPCALL_HI16:
@@ -582,9 +586,11 @@ bool MipsELFObjectWriter::needsRelocateWithSymbol(const MCSymbol &Sym,
   case ELF::R_MIPS_CHERI_CAPTAB_LO16:
   case ELF::R_MIPS_CHERI_CAPTAB_HI16:
   case ELF::R_MIPS_CHERI_CAPTAB_CLC11:
+  case ELF::R_MIPS_CHERI_CAPTAB20:
   case ELF::R_MIPS_CHERI_CAPCALL_LO16:
   case ELF::R_MIPS_CHERI_CAPCALL_HI16:
   case ELF::R_MIPS_CHERI_CAPCALL_CLC11:
+  case ELF::R_MIPS_CHERI_CAPCALL20:
   case ELF::R_MIPS_CHERI_CAPABILITY:
     return true;
   case ELF::R_MIPS_CHERI_SETTAG:

@@ -118,6 +118,9 @@ void MipsMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
   case MEK_CAPCALL11:
     OS << "%capcall";
     break;
+  case MEK_CAPCALL20:
+    OS << "%capcall20";
+    break;
   case MEK_CAPCALL_HI16:
     OS << "%capcall_hi";
     break;
@@ -126,6 +129,9 @@ void MipsMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
     break;
   case MEK_CAPTABLE11:
     OS << "%captab";
+    break;
+  case MEK_CAPTABLE20:
+    OS << "%captab20";
     break;
   case MEK_CAPTABLE_HI16:
     OS << "%captab_hi";
@@ -199,9 +205,11 @@ MipsMCExpr::evaluateAsRelocatableImpl(MCValue &Res,
     case MEK_TPREL_HI:
     case MEK_TPREL_LO:
     case MEK_CAPCALL11:
+    case MEK_CAPCALL20:
     case MEK_CAPCALL_LO16:
     case MEK_CAPCALL_HI16:
     case MEK_CAPTABLE11:
+    case MEK_CAPTABLE20:
     case MEK_CAPTABLE_HI16:
     case MEK_CAPTABLE_LO16:
       return false;
@@ -298,9 +306,11 @@ void MipsMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {
   case MEK_PCREL_LO16:
   case MEK_TLSLDM:
   case MEK_CAPCALL11:
+  case MEK_CAPCALL20:
   case MEK_CAPCALL_LO16:
   case MEK_CAPCALL_HI16:
   case MEK_CAPTABLE11:
+  case MEK_CAPTABLE20:
   case MEK_CAPTABLE_HI16:
   case MEK_CAPTABLE_LO16:
     // If we do have nested target-specific expressions, they will be in

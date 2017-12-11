@@ -716,12 +716,16 @@ public:
       return MipsMCExpr::create(MipsMCExpr::MEK_TPREL_LO, E, Ctx);
     case AsmToken::PercentCapTab11:
       return MipsMCExpr::create(MipsMCExpr::MEK_CAPTABLE11, E, Ctx);
+    case AsmToken::PercentCapTab20:
+      return MipsMCExpr::create(MipsMCExpr::MEK_CAPTABLE20, E, Ctx);
     case AsmToken::PercentCapTab_Hi:
       return MipsMCExpr::create(MipsMCExpr::MEK_CAPTABLE_HI16, E, Ctx);
     case AsmToken::PercentCapTab_Lo:
       return MipsMCExpr::create(MipsMCExpr::MEK_CAPTABLE_LO16, E, Ctx);
     case AsmToken::PercentCapTabCall11:
       return MipsMCExpr::create(MipsMCExpr::MEK_CAPCALL11, E, Ctx);
+    case AsmToken::PercentCapTabCall20:
+      return MipsMCExpr::create(MipsMCExpr::MEK_CAPCALL20, E, Ctx);
     case AsmToken::PercentCapTabCall_Hi:
       return MipsMCExpr::create(MipsMCExpr::MEK_CAPCALL_HI16, E, Ctx);
     case AsmToken::PercentCapTabCall_Lo:
@@ -1372,10 +1376,16 @@ public:
     // FIXME: how can we get at the MCFixup object (to check size generically)?
     if (auto Expr = dyn_cast<MipsMCExpr>(getImm())) {
       // HACK: Check that only %captab and %capcall are allowed in clc / csc
-      if (Bits == 11) {
-        if (Expr->getKind() != MipsMCExpr::MEK_CAPTABLE11 &&
-            Expr->getKind() != MipsMCExpr::MEK_CAPCALL11)
-          return false;
+      if (ShiftLeftAmount == 4) {
+        if (Bits == 11) {
+          if (Expr->getKind() != MipsMCExpr::MEK_CAPTABLE11 &&
+              Expr->getKind() != MipsMCExpr::MEK_CAPCALL11)
+            return false;
+        } else if (Bits == 16) {
+          if (Expr->getKind() != MipsMCExpr::MEK_CAPTABLE20 &&
+              Expr->getKind() != MipsMCExpr::MEK_CAPCALL20)
+            return false;
+        }
       }
     }
     return Success && isShiftedInt<Bits, ShiftLeftAmount>(Res.getConstant());

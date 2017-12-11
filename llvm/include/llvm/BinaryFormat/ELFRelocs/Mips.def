@@ -75,6 +75,10 @@ ELF_RELOC(R_MIPS_CHERI_CAPCALL_LO16,  83)
 ELF_RELOC(R_MIPS_CHERI_CAPCALL_HI16,  84)
 ELF_RELOC(R_MIPS_CHERI_CAPCALL_CLC11, 85)
 
+// New relocations that are 16 bit immediates shifted by 4
+ELF_RELOC(R_MIPS_CHERI_CAPTAB20,   86)
+ELF_RELOC(R_MIPS_CHERI_CAPCALL20,  87)
+
 // RTLD should set the following to a capability pointing to symbol. This can be
 // preemptible and if not we can optimize it to a
 // R_MIPS_CHERI_SETTAG/R_MIPS_CHERI_SETTAG_LOADADDR

@@ -46,6 +46,21 @@
 # CHECK:      encoding: [0xf8,0x23,0b00000AAA,A]
 # CHECK-NEXT: fixup A - offset: 0, value: %capcall(foo), kind: fixup_CHERI_CAPCALL11
 
+
+# also check the new big immediate instructions:
+	clcbi	$c1, %captab20(foo)($c3)
+# CHECK:     encoding: [0x74,0x23,A,A]
+# CHECK-NEXT:  fixup A - offset: 0, value: %captab20(foo), kind: fixup_CHERI_CAPTABLE20
+	clcbi	$c1, %capcall20(foo)($c3)
+# CHECK:      encoding: [0x74,0x23,A,A]
+# CHECK-NEXT:   fixup A - offset: 0, value: %capcall20(foo), kind: fixup_CHERI_CAPCALL20
+	cscbi	$c1, %captab20(foo)($c3)
+# CHECK:      encoding: [0x78,0x23,A,A]
+# CHECK-NEXT:   fixup A - offset: 0, value: %captab20(foo), kind: fixup_CHERI_CAPTABLE20
+	cscbi	$c1, %capcall20(foo)($c3)
+# CHECK:      encoding: [0x78,0x23,A,A]
+# CHECK-NEXT: fixup A - offset: 0, value: %capcall20(foo), kind: fixup_CHERI_CAPCALL20
+
         .data
         .word 0
 foo:
@@ -77,3 +92,11 @@ foo:
 # DUMP-NEXT:           0000000000000028:  R_MIPS_CHERI_CAPTAB_CLC11/R_MIPS_NONE/R_MIPS_NONE    foo
 # DUMP-NEXT: 2c:       f8 23 00 00     csc     $c1, $zero, 0($c3)
 # DUMP-NEXT:           000000000000002c:  R_MIPS_CHERI_CAPCALL_CLC11/R_MIPS_NONE/R_MIPS_NONE   foo
+# DUMP-NEXT: 30:       74 23 00 00     clcbi   $c1, 0($c3)
+# DUMP-NEXT:           0000000000000030:  R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE        foo
+# DUMP-NEXT: 34:       74 23 00 00     clcbi   $c1, 0($c3)
+# DUMP-NEXT:           0000000000000034:  R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE       foo
+# DUMP-NEXT: 38:       78 23 00 00     cscbi   $c1, 0($c3)
+# DUMP-NEXT:           0000000000000038:  R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE        foo
+# DUMP-NEXT: 3c:       78 23 00 00     cscbi   $c1, 0($c3)
+# DUMP-NEXT:           000000000000003c:  R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE       foo

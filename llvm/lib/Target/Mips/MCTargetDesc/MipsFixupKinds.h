@@ -218,9 +218,11 @@ namespace Mips {
 
     // Fixups for load instructions (R_MIPS_CHERI_CAPTAB_*)
     fixup_CHERI_CAPTABLE11,
+    fixup_CHERI_CAPTABLE20,
     fixup_CHERI_CAPTABLE_HI16,
     fixup_CHERI_CAPTABLE_LO16,
     fixup_CHERI_CAPCALL11,
+    fixup_CHERI_CAPCALL20,
     fixup_CHERI_CAPCALL_HI16,
     fixup_CHERI_CAPCALL_LO16,
 
