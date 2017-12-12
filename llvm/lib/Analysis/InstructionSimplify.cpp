@@ -4320,7 +4320,7 @@ static Value *SimplifyRelativeLoad(Constant *Ptr, Constant *Offset,
                                    const DataLayout &DL) {
   GlobalValue *PtrSym;
   APInt PtrOffset;
-  if (!IsConstantOffsetFromGlobal(Ptr, PtrSym, PtrOffset, DL))
+  if (!IsConstantOffsetFromGlobal(Ptr, PtrSym, PtrOffset, DL, false))
     return nullptr;
 
   Type *Int8PtrTy = Type::getInt8PtrTy(Ptr->getContext());
@@ -4365,7 +4365,7 @@ static Value *SimplifyRelativeLoad(Constant *Ptr, Constant *Offset,
   GlobalValue *LoadedRHSSym;
   APInt LoadedRHSOffset;
   if (!IsConstantOffsetFromGlobal(LoadedRHS, LoadedRHSSym, LoadedRHSOffset,
-                                  DL) ||
+                                  DL, false) ||
       PtrSym != LoadedRHSSym || PtrOffset != LoadedRHSOffset)
     return nullptr;
 

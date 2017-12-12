@@ -283,7 +283,8 @@ Constant *FoldBitCast(Constant *C, Type *DestTy, const DataLayout &DL) {
 /// If this constant is a constant offset from a global, return the global and
 /// the constant. Because of constantexprs, this function is recursive.
 bool llvm::IsConstantOffsetFromGlobal(Constant *C, GlobalValue *&GV,
-                                      APInt &Offset, const DataLayout &DL) {
+                                      APInt &Offset, const DataLayout &DL,
+                                      bool LookThroughAddrSpaces) {
   // Trivial case, constant is the global.
   if ((GV = dyn_cast<GlobalValue>(C))) {
     unsigned BitWidth =
@@ -298,10 +299,11 @@ bool llvm::IsConstantOffsetFromGlobal(Constant *C, GlobalValue *&GV,
 
   // For CHERI we also need to look through AddrSpaceCasts
   // Look through ptr->int and ptr->ptr casts.
+  // FIXME: add boolean parameter
   if (CE->getOpcode() == Instruction::PtrToInt ||
       CE->getOpcode() == Instruction::BitCast ||
-      CE->getOpcode() == Instruction::AddrSpaceCast)
-    return IsConstantOffsetFromGlobal(CE->getOperand(0), GV, Offset, DL);
+      (LookThroughAddrSpaces && CE->getOpcode() == Instruction::AddrSpaceCast))
+    return IsConstantOffsetFromGlobal(CE->getOperand(0), GV, Offset, DL, LookThroughAddrSpaces);
 
   // i32* getelementptr ([5 x i32]* @a, i32 0, i32 5)
   auto *GEP = dyn_cast<GEPOperator>(CE);
@@ -313,7 +315,7 @@ bool llvm::IsConstantOffsetFromGlobal(Constant *C, GlobalValue *&GV,
   APInt TmpOffset(BitWidth, 0);
 
   // If the base isn't a global+constant, we aren't either.
-  if (!IsConstantOffsetFromGlobal(CE->getOperand(0), GV, TmpOffset, DL))
+  if (!IsConstantOffsetFromGlobal(CE->getOperand(0), GV, TmpOffset, DL, false))
     return false;
 
   // Otherwise, add any offset that our operands provide.
@@ -490,7 +492,7 @@ Constant *FoldReinterpretLoadFromConstPtr(Constant *C, Type *LoadTy,
 
   GlobalValue *GVal;
   APInt OffsetAI;
-  if (!IsConstantOffsetFromGlobal(C, GVal, OffsetAI, DL))
+  if (!IsConstantOffsetFromGlobal(C, GVal, OffsetAI, DL, false))
     return nullptr;
 
   auto *GV = dyn_cast<GlobalVariable>(GVal);
@@ -714,8 +716,8 @@ Constant *SymbolicallyEvaluateBinop(unsigned Opc, Constant *Op0, Constant *Op1,
     GlobalValue *GV1, *GV2;
     APInt Offs1, Offs2;
 
-    if (IsConstantOffsetFromGlobal(Op0, GV1, Offs1, DL))
-      if (IsConstantOffsetFromGlobal(Op1, GV2, Offs2, DL) && GV1 == GV2) {
+    if (IsConstantOffsetFromGlobal(Op0, GV1, Offs1, DL, false))
+      if (IsConstantOffsetFromGlobal(Op1, GV2, Offs2, DL, false) && GV1 == GV2) {
         unsigned OpSize = DL.getTypeSizeInBits(Op0->getType());
 
         // (&GV+C1) - (&GV+C2) -> C1-C2, pointer arithmetic cannot overflow.
