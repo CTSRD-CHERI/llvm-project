@@ -1,5 +1,5 @@
-; RUN: %cheri_llc %s -o - -relocation-model=static | %cheri_FileCheck %s %s
-; RUN: %cheri_llc %s -o - -relocation-model=pic | %cheri_FileCheck %s %s
+; RUN: %cheri_llc %s -o - -relocation-model=static | %cheri_FileCheck %s
+; RUN: %cheri_llc %s -o - -relocation-model=pic | %cheri_FileCheck %s
 ; RUN: %cheri_llc %s -o - -filetype=obj | llvm-readobj -r | %cheri_FileCheck -check-prefix=RELOCS %s
 ; ModuleID = 'global_init.c'
 target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
@@ -37,10 +37,10 @@ target triple = "cheri-unknown-freebsd"
 ; RELOCS:       Section (5) .rela.data {
 ; RELOCS-NEXT:    0x0         R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE a 0x8
 ; RELOCS-NEXT:    0x{{10|20}} R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE a 0x4
-; RELOCS-NEXT:    0x{{40|20}} R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE a 0x0
+; RELOCS-NEXT:    0x{{20|40}} R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE a 0x0
 ; RELOCS-NEXT:  }
 ; RELOCS-NEXT:  Section (7) .rela.data.rel.ro {
 ; RELOCS-NEXT:    0x0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE a 0x10
-; RELOCS-NEXT:    0x20 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE a 0xC
-; RELOCS-NEXT:    0x40 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE a 0x0
+; RELOCS-NEXT:    0x{{10|20}} R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE a 0xC
+; RELOCS-NEXT:    0x{{20|40}} R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE a 0x0
 ; RELOCS-NEXT:  }
