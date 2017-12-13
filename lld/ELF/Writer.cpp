@@ -1420,6 +1420,23 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   // createThunks may have added local symbols to the static symbol table
   applySynthetic({InX::SymTab, InX::ShStrTab, InX::StrTab},
                  [](SyntheticSection *SS) { SS->postThunkContents(); });
+
+  // If a synthetic section was removed from the output we have to manually
+  // change the start&stop symbols to be NULL since otherwise we create a
+  // corrupted symbol table
+  // XXXAR: I think this only affects __cap_relocs since the other potentially
+  // empty synthetic sections will not have start stop symbols
+  for (Symbol *S : Symtab->getSymbols()) {
+    DefinedRegular *Reg = dyn_cast<DefinedRegular>(S->body());
+    if (!Reg)
+      continue;
+    if (const OutputSection *OutSec = Reg->getOutputSection())
+      if (!OutSec->Live) {
+        Reg->Type = STT_NOTYPE;
+        Reg->Section = nullptr;
+        Reg->Value = 0;
+      }
+  }
 }
 
 template <class ELFT> void Writer<ELFT>::addPredefinedSections() {
