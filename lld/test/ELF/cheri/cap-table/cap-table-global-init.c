@@ -25,6 +25,6 @@ int main() {
 // CHECK-DAG: 0000000120010000    g     F .text		 00000050 __start
 // CHECK-DAG: 00000001200300{{2|4}}0         .cap_table		 00000000 .hidden __cap_table_end
 // CHECK-DAG: 0000000120030000         .cap_table		 00000020 .hidden __cap_table_start
-// CHECK-DAG: 0000000120030000 l    d  .cap_table		 00000000 .hidden .cap_table
+// CHECK-DAG: 0000000120030000 l    d  .cap_table		 00000020 .hidden .cap_table
 // CHECK-DAG: 0000000120030000 l       .cap_table		 00000010 .hidden global@CAPTABLE
 // CHECK-DAG: 00000001200300{{1|2}}0 l       .cap_table		 00000010 .hidden global2@CAPTABLE

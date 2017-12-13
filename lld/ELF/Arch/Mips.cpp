@@ -192,7 +192,9 @@ RelExpr MIPS<ELFT>::getRelExpr(RelType Type, const Symbol &S,
   case R_MIPS_CHERI_CAPCALL_HI16:
     return R_CHERI_CAPABILITY_TABLE_INDEX;
   case R_MIPS_CHERI_CAPCALL_CLC11:
+  case R_MIPS_CHERI_CAPCALL20:
   case R_MIPS_CHERI_CAPTAB_CLC11:
+  case R_MIPS_CHERI_CAPTAB20:
     return R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE;
   default:
     return R_INVALID;
@@ -595,6 +597,15 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
     assert((Val & 0xf) == 0 && "Bottom 4 bits should always be zero!");
     checkInt<11>(Loc, Val >> 4, Type);
     writeValue<E>(Loc, Val, 11, 4);
+    break;
+  case R_MIPS_CHERI_CAPTAB20:
+  case R_MIPS_CHERI_CAPCALL20:
+    // The new clc instruction has a 20 bit singned range (16 bit immediate
+    // shifted by 4). This is the same for 128 and 256 even though they have
+    // different capability sizes
+    assert((Val & 0xf) == 0 && "Bottom 4 bits should always be zero!");
+    checkInt<16>(Loc, Val >> 4, Type);
+    writeValue<E>(Loc, Val, 16, 4);
     break;
   case R_MICROMIPS_CALL_HI16:
   case R_MICROMIPS_GOT_HI16:
