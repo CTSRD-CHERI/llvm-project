@@ -30,6 +30,7 @@ bool MipsFunctionInfo::globalBaseRegSet() const {
 }
 
 unsigned MipsFunctionInfo::getGlobalBaseRegUnchecked() const {
+  assert(GlobalBaseReg);
   return GlobalBaseReg;
 }
 

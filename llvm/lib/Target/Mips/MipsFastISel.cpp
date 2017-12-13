@@ -417,7 +417,7 @@ unsigned MipsFastISel::materializeGV(const GlobalValue *GV, MVT VT) {
   if (IsThreadLocal)
     return 0;
   emitInst(Mips::LW, DestReg)
-      .addReg(MFI->getGlobalBaseRegUnchecked())
+      .addReg(MFI->getGlobalBaseReg(/*IsForTls=*/IsThreadLocal))
       .addGlobalAddress(GV, 0, MipsII::MO_GOT);
   if ((GV->hasInternalLinkage() ||
        (GV->hasLocalLinkage() && !isa<Function>(GV)))) {
@@ -433,8 +433,10 @@ unsigned MipsFastISel::materializeGV(const GlobalValue *GV, MVT VT) {
 unsigned MipsFastISel::materializeExternalCallSym(MCSymbol *Sym) {
   const TargetRegisterClass *RC = &Mips::GPR32RegClass;
   unsigned DestReg = createResultReg(RC);
+  // XXXAR: the IsForTls=false might be wrong but it only matters for CHERI
+  // anyway and there we don't have a working FastISel
   emitInst(Mips::LW, DestReg)
-      .addReg(MFI->getGlobalBaseRegUnchecked())
+      .addReg(MFI->getGlobalBaseReg(/*IsForTls=*/false))
       .addSym(Sym, MipsII::MO_GOT);
   return DestReg;
 }
