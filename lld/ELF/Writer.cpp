@@ -1618,6 +1618,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
         Reg->Type = STT_NOTYPE;
         Reg->Section = nullptr;
         Reg->Value = 0;
+        Reg->Size = 0;
       }
   }
 }
