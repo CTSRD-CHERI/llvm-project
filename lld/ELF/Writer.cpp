@@ -1431,7 +1431,13 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     if (!Reg)
       continue;
     if (const OutputSection *OutSec = Reg->getOutputSection())
-      if (!OutSec->Live) {
+      // XXXAR: Out::ElfHeader is a special output section and will never be
+      // marked as live. We still need keep symbols pointing there since they
+      // will then point to the first output section
+      // See assignment above:   Out::ElfHeader->SectionIndex = 1;
+
+      if (!OutSec->Live && OutSec != Out::ElfHeader) {
+        // errs() << "Symbol " << toString(*Reg) << " points to garbage collected output section " << OutSec->Name << "\n";
         Reg->Type = STT_NOTYPE;
         Reg->Section = nullptr;
         Reg->Value = 0;
