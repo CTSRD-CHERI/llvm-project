@@ -22,7 +22,7 @@ target triple = "cheri-unknown-freebsd"
 ; CHECK-NEXT:  .size   global_fn_ptr, 32
 
 ; CHECK:       .type   _ZTV1A,@object          # @_ZTV1A
-; CHECK-NEXT:  .section        .rodata,"a",@progbits
+; CHECK-NEXT:  .section .data.rel.ro,"aw",@progbits
 ; CHECK-NEXT:  .weak   _ZTV1A
 ; CHECK-NEXT:  .p2align        5
 ; CHECK-LABEL: _ZTV1A:
