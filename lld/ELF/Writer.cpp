@@ -216,8 +216,7 @@ void elf::addReservedSymbols() {
   ElfSym::GlobalOffsetTable = addOptionalRegular(
       "_GLOBAL_OFFSET_TABLE_", Out::ElfHeader, Target->GotBaseSymOff);
 
-  if (InX::CheriCapTable && !InX::CheriCapTable->empty() &&
-      !ElfSym::CheriCapabilityTable)
+  if (InX::CheriCapTable && !ElfSym::CheriCapabilityTable)
     ElfSym::CheriCapabilityTable =
         addOptionalRegular("_CHERI_CAPABILITY_TABLE_", InX::CheriCapTable, 0);
 
