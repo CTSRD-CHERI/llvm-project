@@ -8,7 +8,6 @@ llvm_canonicalize_cmake_booleans(
   HAVE_LIBXAR
   LLVM_ENABLE_DIA_SDK
   LLVM_ENABLE_FFI
-  LLVM_CHERI_IS_128
   BUILD_SHARED_LIBS)
 
 configure_lit_site_cfg(
