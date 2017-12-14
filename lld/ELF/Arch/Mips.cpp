@@ -600,7 +600,7 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
     break;
   case R_MIPS_CHERI_CAPTAB20:
   case R_MIPS_CHERI_CAPCALL20:
-    // The new clc instruction has a 20 bit singned range (16 bit immediate
+    // The new clc instruction has a 20 bit signed range (16 bit immediate
     // shifted by 4). This is the same for 128 and 256 even though they have
     // different capability sizes
     assert((Val & 0xf) == 0 && "Bottom 4 bits should always be zero!");
