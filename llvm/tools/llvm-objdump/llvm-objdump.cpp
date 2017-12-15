@@ -1243,6 +1243,8 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
       SectionRelocMap[*Sec2].push_back(Section);
   }
 
+  llvm::Optional<uint64_t> CheriCapTableAddress;
+
   // Create a mapping from virtual address to symbol name.  This is used to
   // pretty print the symbols while disassembling.
   std::map<SectionRef, SectionSymbolsTy> AllSymbols;
@@ -1271,6 +1273,10 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
 
     AllSymbols[*SecI].emplace_back(Address, *Name, SymbolType);
 
+    if (*Name == "_CHERI_CAPABILITY_TABLE_") {
+      // errs() << "FOUND CHERI CAP TABLE @" << utohexstr(Address);
+      CheriCapTableAddress = Address;
+    }
   }
   if (AllSymbols.empty() && Obj->isELF())
     addDynamicElfSymbols(Obj, AllSymbols);
@@ -1641,6 +1647,60 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
             }
           }
         }
+
+        // Add a comment which symbol is being loaded for cap-table loads
+        int64_t CapTableOffset = std::numeric_limits<int64_t>::min();
+        // In .o files we can just use -r to get useful results
+        if (!Obj->isRelocatableObject() && MIA && CheriCapTableAddress &&
+            MIA->isCapTableLoad(Inst, CapTableOffset)) {
+
+          uint64_t Target = *CheriCapTableAddress + CapTableOffset;
+          // TODO: share this code:
+
+          // In a relocatable object, the target's section must reside in
+          // the same section as the call instruction or it is accessed
+          // through a relocation.
+          //
+          // In a non-relocatable object, the target may be in any section.
+          //
+          // N.B. We don't walk the relocations in the relocatable case yet.
+          auto *TargetSectionSymbols = &Symbols;
+          if (!Obj->isRelocatableObject()) {
+            auto SectionAddress = std::upper_bound(
+                SectionAddresses.begin(), SectionAddresses.end(), Target,
+                [](uint64_t LHS, const std::pair<uint64_t, SectionRef> &RHS) {
+                  return LHS < RHS.first;
+                });
+            if (SectionAddress != SectionAddresses.begin()) {
+              --SectionAddress;
+              TargetSectionSymbols = &AllSymbols[SectionAddress->second];
+            } else {
+              TargetSectionSymbols = nullptr;
+            }
+          }
+
+          // Find the first symbol in the section whose offset is less than
+          // or equal to the target.
+          if (TargetSectionSymbols) {
+            auto TargetSym = std::upper_bound(
+                TargetSectionSymbols->begin(), TargetSectionSymbols->end(),
+                Target,
+                [](uint64_t LHS,
+                   const std::tuple<uint64_t, StringRef, uint8_t> &RHS) {
+                  return LHS < std::get<0>(RHS);
+                });
+            if (TargetSym != TargetSectionSymbols->begin()) {
+              --TargetSym;
+              uint64_t TargetAddress = std::get<0>(*TargetSym);
+              StringRef TargetName = std::get<1>(*TargetSym);
+              outs() << "\t# probably " << TargetName;
+              uint64_t Disp = Target - TargetAddress;
+              if (Disp)
+                outs() << "+0x" << utohexstr(Disp);
+            }
+          }
+        }
+
         outs() << "\n";
 
         // Print relocation for instruction.

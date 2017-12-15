@@ -60,6 +60,10 @@ public:
     return Info->get(Inst.getOpcode()).isTerminator();
   }
 
+  virtual bool isCapTableLoad(const MCInst &Inst, int64_t &Offset) const {
+    return false;
+  }
+
   /// \brief Given a branch instruction try to get the address the branch
   /// targets. Return true on success, and the address in Target.
   virtual bool

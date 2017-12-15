@@ -149,6 +149,25 @@ public:
       return false;
     }
   }
+
+  virtual bool isCapTableLoad(const MCInst &Inst,
+                              int64_t &Offset) const override {
+    // cap table loads have a zero register offset and are relative to $c26
+    if (Inst.getOpcode() == Mips::LOADCAP &&
+        (Inst.getOperand(1).getReg() == Mips::ZERO_64 ||
+         Inst.getOperand(1).getReg() == Mips::ZERO) &&
+        Inst.getOperand(3).getReg() == Mips::C26) {
+      // For classic clc it register has to be $zero (mxcaptable not handled yet)
+      // TODO: can I somehow handle the mxcaptable case by inferring the value of $at?
+      Offset = Inst.getOperand(2).getImm();
+      return true;
+    } else if (Inst.getOpcode() == Mips::LOADCAP_BigImm &&
+               Inst.getOperand(2).getReg() == Mips::C26) {
+      Offset = Inst.getOperand(1).getImm();
+      return true;
+    }
+    return false;
+  }
 };
 }
 
