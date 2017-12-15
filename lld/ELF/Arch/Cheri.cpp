@@ -466,10 +466,8 @@ uint32_t CheriCapTableSection::getIndex(const Symbol &Sym) const {
 
 template <class ELFT>
 void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
-  if (!ElfSym::CheriCapabilityTable)
-    ElfSym::CheriCapabilityTable = cast<Defined>(Symtab->addRegular(
-        "_CHERI_CAPABILITY_TABLE_", STV_HIDDEN, STT_SECTION, /*Value=*/0,
-        /*Size=*/getSize(), STB_GLOBAL, InX::CheriCapTable, nullptr));
+  if (ElfSym::CheriCapabilityTable && !Config->Relocatable)
+    ElfSym::CheriCapabilityTable->Size = getSize();
 
   uint64_t SmallEntryCount = 0;
   for (auto &it : Entries) {
