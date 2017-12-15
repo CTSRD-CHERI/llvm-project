@@ -2405,6 +2405,10 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
   case Builtin::BI__builtin_operator_delete:
     return EmitBuiltinNewDeleteCall(FD->getType()->castAs<FunctionProtoType>(),
                                     E->getArg(0), true);
+  case Builtin::BI__builtin_is_aligned:
+    return EmitBuiltinIsAligned(E, false);
+  case Builtin::BI__builtin_is_p2aligned:
+    return EmitBuiltinIsAligned(E, true);
   case Builtin::BI__noop:
     // __noop always evaluates to an integer literal zero.
     return RValue::get(ConstantInt::get(IntTy, 0));
@@ -10044,6 +10048,28 @@ Value *CodeGenFunction::EmitNVPTXBuiltinExpr(unsigned BuiltinID,
   default:
     return nullptr;
   }
+}
+
+RValue CodeGenFunction::EmitBuiltinIsAligned(const CallExpr *E,
+                                             bool PowerOfTwo) {
+  QualType AstType = E->getArg(0)->getType();
+  bool IsCheri = AstType->isCHERICapabilityType(CGM.getContext());
+  // TODO: handle CHERI types
+  assert(!IsCheri);
+  llvm::IntegerType *IntType =
+      IntegerType::get(getLLVMContext(), getContext().getIntRange(AstType));
+  auto *Src =
+      Builder.CreateBitOrPointerCast(EmitScalarExpr(E->getArg(0)), IntType);
+  auto *One = llvm::ConstantInt::get(IntType, 1);
+  llvm::Value *Alignment = EmitScalarExpr(E->getArg(1));
+  Alignment = Builder.CreateZExtOrBitCast(Alignment, IntType, PowerOfTwo ? "pow2" : "alignment");
+  if (PowerOfTwo) {
+    Alignment = Builder.CreateShl(One, Alignment, "alignment");
+  }
+  auto *Mask = Builder.CreateSub(Alignment, One, "mask");
+  auto *R = Builder.CreateAnd(Src, Mask, "set_bits");
+  return RValue::get(Builder.CreateICmpEQ(
+      R, llvm::Constant::getNullValue(IntType), "is_aligned"));
 }
 
 Value *CodeGenFunction::EmitWebAssemblyBuiltinExpr(unsigned BuiltinID,
