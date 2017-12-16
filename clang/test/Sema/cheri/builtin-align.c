@@ -161,7 +161,7 @@ void test_non_p2_values(char *ptr, void *__capability cap, size_t align) {
 #endif
 
 // check that it can be used in constant expressions
-void constant_expression(void) {
+void constant_expression(int x) {
   _Static_assert(__builtin_is_aligned(1024, 512), "");
   _Static_assert(!__builtin_is_aligned(256, 512ULL), "");
   _Static_assert(__builtin_align_up(33, 32) == 64, "");
@@ -172,4 +172,21 @@ void constant_expression(void) {
   _Static_assert(__builtin_is_p2aligned(8, 3), "");
   _Static_assert(__builtin_p2align_up(33, 5) == 64, "");
   _Static_assert(__builtin_p2align_down(33, 5) == 32, "");
+
+  // but not if one of the arguments isn't constant
+  _Static_assert(ALIGN_BUILTIN(33, x) != 100, "");
+#if POW2
+  // expected-error@-2 {{static_assert expression is not an integral constant expression}}
+#else
+  // expected-error@-4 {{expression is not an integer constant expression}}
+#endif
+  _Static_assert(ALIGN_BUILTIN(x, 4) != 100, ""); // expected-error {{static_assert expression is not an integral constant expression}}
 }
+
+int global1 = __builtin_align_down(33, 8);
+int global2 = __builtin_align_up(33, 8);
+_Bool global3 = __builtin_is_aligned(33, 8);
+
+int global4 = __builtin_p2align_down(33, 8);
+int global5 = __builtin_p2align_up(33, 8);
+_Bool global6 = __builtin_is_p2aligned(33, 8);

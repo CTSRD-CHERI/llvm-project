@@ -7623,9 +7623,9 @@ bool IntExprEvaluator::VisitCallExpr(const CallExpr *E) {
 static bool getBuiltinAlignArguments(const CallExpr *E, EvalInfo &Info,
                                      bool IsPowerOfTwo, APSInt &Val,
                                      APSInt &Alignment) {
-  if (!EvaluateInteger(E->getArg(0), Val, Info))
+  if (!E->getArg(0)->EvaluateAsInt(Val, Info.Ctx))
     return false;
-  if (!EvaluateInteger(E->getArg(1), Alignment, Info))
+  if (!E->getArg(1)->EvaluateAsInt(Alignment, Info.Ctx))
     return false;
   if (Alignment < 0)
     return false;
