@@ -5860,6 +5860,7 @@ bool PointerExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
         return false;
       }
     }
+    // TODO: can we handle __builtin_/align_down/aligned_up/is_aligned here?
 
     // The offset must also have the correct alignment.
     if (OffsetResult.Offset.alignTo(Align) != OffsetResult.Offset) {
@@ -7619,6 +7620,31 @@ bool IntExprEvaluator::VisitCallExpr(const CallExpr *E) {
   return ExprEvaluatorBaseTy::VisitCallExpr(E);
 }
 
+static bool getBuiltinAlignArguments(const CallExpr *E, EvalInfo &Info,
+                                     bool IsPowerOfTwo, APSInt &Val,
+                                     APSInt &Alignment) {
+  if (!EvaluateInteger(E->getArg(0), Val, Info))
+    return false;
+  if (!EvaluateInteger(E->getArg(1), Alignment, Info))
+    return false;
+  if (Alignment < 0)
+    return false;
+  if (IsPowerOfTwo) {
+    if (Alignment > 63)
+      return false; // can't evaluate this
+    unsigned SetBit = Alignment.getZExtValue();
+    Alignment = APSInt(llvm::APInt::getOneBitSet(SetBit + 1, SetBit));
+  }
+  // XXXAR: can this ever happen? Will end up here even if Sema causes an error?
+  // I guess this additional check doesn't do any harm
+  if (!Alignment.isPowerOf2())
+    return false;
+  // ensure both values have the same bit width so that we don't assert later
+  Val = Val.zextOrSelf(Alignment.getBitWidth());
+  Alignment = Alignment.zextOrSelf(Val.getBitWidth());
+  return true;
+}
+
 bool IntExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
                                             unsigned BuiltinOp) {
   switch (unsigned BuiltinOp = E->getBuiltinCallee()) {
@@ -7656,6 +7682,36 @@ bool IntExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
     }
 
     llvm_unreachable("unexpected EvalMode");
+  }
+
+  case Builtin::BI__builtin_is_aligned:
+  case Builtin::BI__builtin_is_p2aligned: {
+    APSInt Val;
+    APSInt Alignment;
+    bool Pow2 = BuiltinOp == Builtin::BI__builtin_is_p2aligned;
+    if (!getBuiltinAlignArguments(E, Info, Pow2, Val, Alignment))
+      return false;
+    return Success((Val & (Alignment - 1)) == 0 ? 1 : 0, E);
+  }
+  case Builtin::BI__builtin_align_up:
+  case Builtin::BI__builtin_p2align_up: {
+    APSInt Val;
+    APSInt Alignment;
+    bool Pow2 = BuiltinOp == Builtin::BI__builtin_p2align_up;
+    if (!getBuiltinAlignArguments(E, Info, Pow2, Val, Alignment))
+      return false;
+    // #define roundup2(x, y) (((x)+((y)-1))&(~((y)-1)))
+    return Success((Val + (Alignment - 1)) & ~(Alignment - 1), E);
+  }
+  case Builtin::BI__builtin_align_down:
+  case Builtin::BI__builtin_p2align_down: {
+    APSInt Val;
+    APSInt Alignment;
+    bool Pow2 = BuiltinOp == Builtin::BI__builtin_p2align_down;
+    if (!getBuiltinAlignArguments(E, Info, Pow2, Val, Alignment))
+      return false;
+    // #define rounddown2(x, y) ((x)&(~((y)-1)))
+    return Success(Val & ~(Alignment - 1), E);
   }
 
   case Builtin::BI__builtin_bswap16:

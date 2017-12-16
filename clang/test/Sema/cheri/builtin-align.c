@@ -159,3 +159,17 @@ void test_non_p2_values(char *ptr, void *__capability cap, size_t align) {
   (void)ALIGN_BUILTIN(intcap, align);  // expected-error {{expression is not an integer constant}}
 }
 #endif
+
+// check that it can be used in constant expressions
+void constant_expression(void) {
+  _Static_assert(__builtin_is_aligned(1024, 512), "");
+  _Static_assert(!__builtin_is_aligned(256, 512ULL), "");
+  _Static_assert(__builtin_align_up(33, 32) == 64, "");
+  _Static_assert(__builtin_align_down(33, 32) == 32, "");
+
+  _Static_assert(__builtin_is_p2aligned(1024, 9), "");
+  _Static_assert(!__builtin_is_p2aligned(3, 2), "");
+  _Static_assert(__builtin_is_p2aligned(8, 3), "");
+  _Static_assert(__builtin_p2align_up(33, 5) == 64, "");
+  _Static_assert(__builtin_p2align_down(33, 5) == 32, "");
+}
