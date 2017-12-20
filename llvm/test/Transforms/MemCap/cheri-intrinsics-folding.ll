@@ -169,5 +169,47 @@ define i64 @fold_set_and_multiple_inc_offset(i8 addrspace(200)* %arg) #1 {
   ; CHECK: ret i64 242
 }
 
+define i64 @fold_base_get_inttoptr() #1 {
+  %ret = tail call i64 @llvm.cheri.cap.base.get(i8 addrspace(200)* inttoptr (i64 100 to i8 addrspace(200)*))
+  ret i64 %ret
+  ; CHECK-LABEL: @fold_base_get_inttoptr()
+  ; CHECK: ret i64 0
+}
+
+define i64 @fold_length_get_inttoptr() #1 {
+  %ret = tail call i64 @llvm.cheri.cap.length.get(i8 addrspace(200)* inttoptr (i64 100 to i8 addrspace(200)*))
+  ret i64 %ret
+  ; CHECK-LABEL: @fold_length_get_inttoptr()
+  ; CHECK: ret i64 -1
+}
+
+define i64 @fold_tag_get_inttoptr() #1 {
+  %ret = tail call i64 @llvm.cheri.cap.tag.get(i8 addrspace(200)* inttoptr (i64 100 to i8 addrspace(200)*))
+  ret i64 %ret
+  ; CHECK-LABEL: @fold_tag_get_inttoptr()
+  ; CHECK: ret i64 0
+}
+
+define i64 @fold_type_get_inttoptr() #1 {
+  %ret = tail call i64 @llvm.cheri.cap.type.get(i8 addrspace(200)* inttoptr (i64 100 to i8 addrspace(200)*))
+  ret i64 %ret
+  ; CHECK-LABEL: @fold_type_get_inttoptr()
+  ; CHECK: ret i64 -1
+}
+
+define i64 @fold_offset_get_inttoptr() #1 {
+  %ret = tail call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* inttoptr (i64 100 to i8 addrspace(200)*))
+  ret i64 %ret
+  ; CHECK-LABEL: @fold_offset_get_inttoptr()
+  ; CHECK: ret i64 100
+}
+
+define i64 @fold_address_get_inttoptr() #1 {
+  %ret = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* inttoptr (i64 100 to i8 addrspace(200)*))
+  ret i64 %ret
+  ; CHECK-LABEL: @fold_address_get_inttoptr()
+  ; CHECK: ret i64 100
+}
+
 attributes #0 = { nounwind }
 attributes #1 = { nounwind readnone }

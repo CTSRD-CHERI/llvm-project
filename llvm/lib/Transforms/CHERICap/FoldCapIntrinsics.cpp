@@ -80,9 +80,23 @@ class CHERICapFoldIntrinsics : public ModulePass {
     foldGet(GetType, inferCapabilityNonOffsetField, -1);
   }
 
+  static Constant* getIntToPtrSourceValue(Value* V) {
+    if (ConstantExpr* CE = dyn_cast<ConstantExpr>(V)) {
+      if (CE->isCast() && CE->getOpcode() == Instruction::IntToPtr) {
+        assert(CE->getNumOperands() == 1);
+        Constant *Src = CE->getOperand(0);
+        return Src;
+      }
+    }
+    return nullptr;
+  }
+
   static Value *inferCapabilityNonOffsetField(Value *V, CallInst *Call,
                                               int NullValue) {
-    if (isa<ConstantPointerNull>(V)) {
+    // Calling an llv.cheri.cap.$INTRIN.get() on a null value or
+    // and integer stored in capability always returns 0 or -1 (for CGetLen and
+    // CGetType) unless $INTRIN is offset (in which case it returns the int value)
+    if (isa<ConstantPointerNull>(V) || getIntToPtrSourceValue(V)) {
       Type *Ty = Call->getType();
       return NullValue == 0 ? llvm::Constant::getNullValue(Ty)
                             : llvm::Constant::getAllOnesValue(Ty);
@@ -102,6 +116,8 @@ class CHERICapFoldIntrinsics : public ModulePass {
   static Value *inferCapabilityOffset(Value *V, CallInst *Call, int NullValue) {
     if (isa<ConstantPointerNull>(V))
       return llvm::Constant::getNullValue(Call->getType());
+    if (Constant* IntToPtr = getIntToPtrSourceValue(V))
+      return IntToPtr;
     Value *Arg = nullptr;
     Value *Offset = nullptr;
     if (match(V, m_Intrinsic<Intrinsic::cheri_cap_offset_set>(
