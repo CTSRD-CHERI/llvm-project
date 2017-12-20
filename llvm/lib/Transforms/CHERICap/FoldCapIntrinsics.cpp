@@ -39,6 +39,7 @@ class CHERICapFoldIntrinsics : public ModulePass {
   Function *SetOffset;
   Function *GetOffset;
   Function *GetBase;
+  Function *GetAddress;
   Function *GetLength;
   Function *GetType;
   Function *GetPerms;
@@ -47,26 +48,28 @@ class CHERICapFoldIntrinsics : public ModulePass {
 
   bool Modified;
 
-  template <typename Infer> void foldGet(Function *Intrinsic, Infer infer, int NullValue = 0) {
+  template <typename Infer>
+  void foldGet(Function *Intrinsic, Infer infer, int NullValue = 0) {
     // Calling eraseFromParent() inside the following loop causes iterators
     // to be invalidated and crashes -> collect and erase instead
-    std::vector<CallInst*> ToErase;
+    std::vector<CallInst *> ToErase;
     for (Value *Use : Intrinsic->users()) {
       CallInst *CI = cast<CallInst>(Use);
-      if (Value *Replacement = infer(CI->getOperand(0), CI->getType(), NullValue)) {
+      if (Value *Replacement = infer(CI->getOperand(0), CI, NullValue)) {
         CI->replaceAllUsesWith(Replacement);
         // CI->eraseFromParent();
         ToErase.push_back(CI);
         Modified = true;
       }
     }
-    for (CallInst* CI : ToErase) {
+    for (CallInst *CI : ToErase) {
       CI->eraseFromParent();
     }
   }
 
   void foldGetIntrinisics() {
     foldGet(GetOffset, inferCapabilityOffset);
+    foldGet(GetAddress, inferCapabilityAddress);
 
     foldGet(GetBase, inferCapabilityNonOffsetField);
     foldGet(GetPerms, inferCapabilityNonOffsetField);
@@ -77,27 +80,28 @@ class CHERICapFoldIntrinsics : public ModulePass {
     foldGet(GetType, inferCapabilityNonOffsetField, -1);
   }
 
-  static Value *inferCapabilityNonOffsetField(Value *V, Type *Ty,
+  static Value *inferCapabilityNonOffsetField(Value *V, CallInst *Call,
                                               int NullValue) {
     if (isa<ConstantPointerNull>(V)) {
+      Type *Ty = Call->getType();
       return NullValue == 0 ? llvm::Constant::getNullValue(Ty)
                             : llvm::Constant::getAllOnesValue(Ty);
     }
     Value *Arg = nullptr;
     // ignore all setoffset/incoffset operations:
     if (match(V, m_Intrinsic<Intrinsic::cheri_cap_offset_set>(m_Value(Arg)))) {
-      return inferCapabilityNonOffsetField(Arg, Ty, NullValue);
+      return inferCapabilityNonOffsetField(Arg, Call, NullValue);
     } else if (match(V, m_Intrinsic<Intrinsic::cheri_cap_offset_increment>(
                             m_Value(Arg)))) {
-      return inferCapabilityNonOffsetField(Arg, Ty, NullValue);
+      return inferCapabilityNonOffsetField(Arg, Call, NullValue);
     }
     // TODO: is there anything else we can infer?
     return nullptr;
   }
 
-  static Value *inferCapabilityOffset(Value *V, Type *Ty, int NullValue) {
+  static Value *inferCapabilityOffset(Value *V, CallInst *Call, int NullValue) {
     if (isa<ConstantPointerNull>(V))
-      return llvm::Constant::getNullValue(Ty);
+      return llvm::Constant::getNullValue(Call->getType());
     Value *Arg = nullptr;
     Value *Offset = nullptr;
     if (match(V, m_Intrinsic<Intrinsic::cheri_cap_offset_set>(
@@ -105,12 +109,23 @@ class CHERICapFoldIntrinsics : public ModulePass {
       return Offset;
     } else if (match(V, m_Intrinsic<Intrinsic::cheri_cap_offset_increment>(
                             m_Value(Arg), m_Value(Offset)))) {
-      if (Value* LHS = inferCapabilityOffset(Arg, Ty, NullValue)) {
+      if (Value *LHS = inferCapabilityOffset(Arg, Call, NullValue)) {
         IRBuilder<> B(cast<Instruction>(V));
         return B.CreateAdd(LHS, Offset);
       }
     }
     // TODO: is there anything else we can infer?
+    return nullptr;
+  }
+
+  static Value *inferCapabilityAddress(Value *V, CallInst *Call,
+                                       int NullValue) {
+    Value *Offset = inferCapabilityOffset(V, Call, 0);
+    Value *Base = inferCapabilityNonOffsetField(V, Call, 0);
+    if (Offset && Base) {
+      IRBuilder<> B(Call);
+      return B.CreateAdd(Base, Offset);
+    }
     return nullptr;
   }
 
@@ -153,6 +168,8 @@ public:
     SetOffset = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_offset_set);
     GetOffset = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_offset_get);
     GetBase = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_base_get);
+    GetAddress =
+        Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_address_get);
     GetLength = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_length_get);
     GetType = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_type_get);
     GetPerms = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_perms_get);
