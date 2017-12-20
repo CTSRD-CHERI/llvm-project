@@ -7,6 +7,7 @@ declare i64 @check_fold(i64) #1
 declare i64 @llvm.cheri.cap.base.get(i8 addrspace(200)*) #1
 declare i8 addrspace(200)* @llvm.cheri.cap.base.set(i8 addrspace(200)*, i64) #1
 declare i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)*) #1
+declare i64 @llvm.cheri.cap.address.get(i8 addrspace(200)*) #1
 declare i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*, i64) #1
 declare i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)*, i64) #1
 declare i64 @llvm.cheri.cap.length.get(i8 addrspace(200)*) #1
@@ -35,6 +36,13 @@ define i64 @null_get_base() #1 {
   %ret = tail call i64 @llvm.cheri.cap.base.get(i8 addrspace(200)* null)
   ret i64 %ret
   ; CHECK-LABEL: @null_get_base()
+  ; CHECK-NEXT: ret i64 0
+}
+
+define i64 @null_get_address() #1 {
+  %ret = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* null)
+  ret i64 %ret
+  ; CHECK-LABEL: @null_get_address()
   ; CHECK-NEXT: ret i64 0
 }
 
@@ -82,6 +90,10 @@ define void @infer_values_from_null_set_offset() #1 {
   %offset_check = tail call i64 @check_fold(i64 %offset)
   ; CHECK:  %offset_check = tail call i64 @check_fold(i64 123456)
 
+  %address = tail call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* %with_offset)
+  %address_check = tail call i64 @check_fold(i64 %address)
+  ; CHECK:  %address_check = tail call i64 @check_fold(i64 123456)
+
   %type = tail call i64 @llvm.cheri.cap.type.get(i8 addrspace(200)* %with_offset)
   %type_check = tail call i64 @check_fold(i64 %type)
   ; CHECK:  %type_check = tail call i64 @check_fold(i64 -1)
@@ -108,7 +120,18 @@ define i64 @fold_set_offset_arg(i8 addrspace(200)* %arg) #1 {
   ret i64 %ret
   ; CHECK-LABEL: @fold_set_offset_arg(i8 addrspace(200)* %arg)
   ; CHECK: ret i64 42
+}
 
+define i64 @no_fold_set_offset_get_address(i8 addrspace(200)* %arg) #1 {
+  %with_offset = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %arg, i64 42)
+  %ret = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %with_offset)
+  ret i64 %ret
+  ; Since the base is not know we shouldn't fold anything here:
+  ; CHECK-LABEL: @no_fold_set_offset_get_address(i8 addrspace(200)* %arg)
+  ; TODO: should we fold this to a cgetbase? probably not in case we add something like CFromInt/CToAddr
+  ; CHECK: %with_offset = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %arg, i64 42)
+  ; CHECK: %ret = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %with_offset)
+  ; CHECK: ret i64 %ret
 }
 
 define i64 @fold_null_inc_offset() #1 {
@@ -116,6 +139,14 @@ define i64 @fold_null_inc_offset() #1 {
   %ret = tail call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* %inc_offset)
   ret i64 %ret
   ; CHECK-LABEL: @fold_null_inc_offset()
+  ; CHECK: ret i64 100
+}
+
+define i64 @fold_null_inc_offset_get_address() #1 {
+  %inc_offset = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 100)
+  %ret = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %inc_offset)
+  ret i64 %ret
+  ; CHECK-LABEL: @fold_null_inc_offset_get_address()
   ; CHECK: ret i64 100
 }
 
@@ -137,7 +168,6 @@ define i64 @fold_set_and_multiple_inc_offset(i8 addrspace(200)* %arg) #1 {
   ; CHECK-LABEL: @fold_set_and_multiple_inc_offset(i8 addrspace(200)* %arg)
   ; CHECK: ret i64 242
 }
-
 
 attributes #0 = { nounwind }
 attributes #1 = { nounwind readnone }
