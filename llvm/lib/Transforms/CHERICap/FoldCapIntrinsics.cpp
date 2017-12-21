@@ -46,9 +46,6 @@ class CHERICapFoldIntrinsics : public ModulePass {
   Function *GetTag;
   Function *GetSealed;
 
-  Type* I8CapTy;
-  Type* CapOffsetTy;
-  const DataLayout *DL;
   bool Modified;
 
   template <typename Infer>
@@ -71,24 +68,18 @@ class CHERICapFoldIntrinsics : public ModulePass {
   }
 
   void foldGetIntrinisics() {
-    foldGet(GetOffset, [this](Value *V, CallInst *CI, int) {
-      return inferCapabilityOffset(V, CI, CI->getType());
+    foldGet(GetOffset, [](Value *V, CallInst *CI, int) {
+      return inferCapabilityOffset(V, CI, 0);
     });
-    foldGet(GetAddress, [this](Value *V, CallInst *CI, int) {
-      return inferCapabilityAddress(V, CI);
-    });
-    // For all other capability fields we can only infer a value when the
-    // argument is a null capability (potentially with an offset)
-    auto inferOther = [this](Value *V, CallInst *CI, int NullValue) {
-      return inferCapabilityNonOffsetField(V, CI, NullValue);
-    };
-    foldGet(GetBase, inferOther);
-    foldGet(GetPerms, inferOther);
-    foldGet(GetTag, inferOther);
-    foldGet(GetSealed, inferOther);
+    foldGet(GetAddress, inferCapabilityAddress);
+
+    foldGet(GetBase, inferCapabilityNonOffsetField);
+    foldGet(GetPerms, inferCapabilityNonOffsetField);
+    foldGet(GetTag, inferCapabilityNonOffsetField);
+    foldGet(GetSealed, inferCapabilityNonOffsetField);
     // CGetType and CGetLen on a null capability now return -1
-    foldGet(GetLength, inferOther, -1);
-    foldGet(GetType, inferOther, -1);
+    foldGet(GetLength, inferCapabilityNonOffsetField, -1);
+    foldGet(GetType, inferCapabilityNonOffsetField, -1);
   }
 
   static Constant* getIntToPtrSourceValue(Value* V) {
@@ -102,8 +93,8 @@ class CHERICapFoldIntrinsics : public ModulePass {
     return nullptr;
   }
 
-  Value *inferCapabilityNonOffsetField(Value *V, CallInst *Call,
-                                       int NullValue) {
+  static Value *inferCapabilityNonOffsetField(Value *V, CallInst *Call,
+                                              int NullValue) {
     // Calling an llv.cheri.cap.$INTRIN.get() on a null value or
     // and integer stored in capability always returns 0 or -1 (for CGetLen and
     // CGetType) unless $INTRIN is offset (in which case it returns the int value)
@@ -124,38 +115,13 @@ class CHERICapFoldIntrinsics : public ModulePass {
     return nullptr;
   }
 
-  // Returns the offset increment if V is a GEP instruction of
-  Value *getOffsetIncrement(Value *V, Value **Arg) {
-    Value *Offset = nullptr;
-    if (match(V, m_Intrinsic<Intrinsic::cheri_cap_offset_increment>(
-                     m_Value(*Arg), m_Value(Offset)))) {
-      return Offset;
-    } else if (GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(V)) {
-      *Arg = GEP->getOperand(0);
-
-      // XXXAR: do I need the inbounds check here?
-      if (GEP->isInBounds() && GEP->getType() == I8CapTy) {
-        APInt Offset(CapOffsetTy->getIntegerBitWidth(), 0, true);
-        if (GEP->accumulateConstantOffset(*DL, Offset)) {
-          return ConstantInt::get(CapOffsetTy, Offset);
-        } else if (GEP->getOperand(1)->getType() == CapOffsetTy) {
-          // also handle non-constant GEPs:
-          // %gep = getelementptr inbounds i8, i8 addrspace(200)* %0, i64 %inc
-          // FIXME: this doesn't work for some reason, it results in a
-          // Instruction does not dominate all uses!
-          // return GEP->getOperand(1);
-        }
-      }
-    }
-    return nullptr;
-  }
-
-  Value *inferCapabilityOffset(Value *V, CallInst *Call, Type *IntTy,
-                               Value **BaseCap = nullptr) {
+  static Value *inferCapabilityOffset(Value *V, CallInst *Call, int NullValue,
+                                      Type *ResultTy = nullptr, Value **BaseCap = nullptr) {
     if (isa<ConstantPointerNull>(V)) {
       if (BaseCap)
         *BaseCap = V;
-      return llvm::Constant::getNullValue(IntTy);
+      return llvm::Constant::getNullValue(ResultTy ? ResultTy
+                                                   : Call->getType());
     }
     if (Constant* IntToPtr = getIntToPtrSourceValue(V)) {
       if (BaseCap)
@@ -169,19 +135,20 @@ class CHERICapFoldIntrinsics : public ModulePass {
       if (BaseCap)
         *BaseCap = Arg;
       return Offset;
-    } else if (Value *Increment = getOffsetIncrement(V, &Arg)) {
-      if (Value *LHS = inferCapabilityOffset(Arg, Call, IntTy, BaseCap)) {
+    } else if (match(V, m_Intrinsic<Intrinsic::cheri_cap_offset_increment>(
+                            m_Value(Arg), m_Value(Offset)))) {
+      if (Value *LHS = inferCapabilityOffset(Arg, Call, NullValue, ResultTy, BaseCap)) {
         IRBuilder<> B(cast<Instruction>(V));
-        return B.CreateAdd(LHS, Increment);
+        return B.CreateAdd(LHS, Offset);
       }
     }
     // TODO: is there anything else we can infer?
     return nullptr;
   }
 
-  Value *inferCapabilityAddress(Value *V, CallInst *Call) {
-    Type* IntTy = Call->getType();
-    Value *Offset = inferCapabilityOffset(V, Call, IntTy);
+  static Value *inferCapabilityAddress(Value *V, CallInst *Call,
+                                       int NullValue) {
+    Value *Offset = inferCapabilityOffset(V, Call, 0);
     Value *Base = inferCapabilityNonOffsetField(V, Call, 0);
     if (Offset && Base) {
       IRBuilder<> B(Call);
@@ -190,43 +157,12 @@ class CHERICapFoldIntrinsics : public ModulePass {
     return nullptr;
   }
 
-  void foldIncOffsetSetOffsetOnlyUserIncrement(CallInst* CI) {
-    // errs() << __func__ << ": num users=" << CI->getNumUses() << ": "; CI->dump();
-    User* OnlyUser = CI->hasOneUse() ? *CI->user_begin() : nullptr;
-    while (OnlyUser) {
-      // If there is only a single use of the setoffset result, we might be
-      // able to fold it into a single setoffset (for a GEP or incoffset)
-      Value* Arg = nullptr;
-      // errs() << "OnlyUser: "; OnlyUser->dump();
-      if (Value *Increment = getOffsetIncrement(OnlyUser, &Arg)) {
-        // errs() << "Increment: "; OnlyUser->dump();
-        assert(Arg == CI);
-        IRBuilder<> B(CI);
-        Value *NewOffset = B.CreateAdd(CI->getOperand(1), Increment);
-        CI->setOperand(1, NewOffset);
-        OnlyUser->replaceAllUsesWith(CI);
-        // TODO: can erasing here cause a crash?
-        cast<Instruction>(OnlyUser)->eraseFromParent();
-        // Keep doing this transformation for incoffset chains with only a
-        // single user:
-        OnlyUser = CI->hasOneUse() ? *CI->user_begin() : nullptr;
-        Modified = true;
-      } else {
-        break;
-      }
-    }
-  }
-
   /// Replace get-offset, add, set-offset sequences with inc-offset
-  void foldSetOffset() {
+  void foldGetAddSetToInc() {
     std::vector<CallInst *> SetOffsets;
-    std::vector<Value *> ToErase;
     for (Value *V : SetOffset->users())
       SetOffsets.push_back(cast<CallInst>(V));
     for (CallInst *CI : SetOffsets) {
-      // fold chains of set-offset, (inc-offset/GEP)+ into a single set-offset
-      foldIncOffsetSetOffsetOnlyUserIncrement(CI);
-
       Value *LHS, *RHS;
       if (match(CI->getOperand(1), m_Add(m_Value(LHS), m_Value(RHS)))) {
         Value *BaseCap = CI->getOperand(0);
@@ -239,8 +175,7 @@ class CHERICapFoldIntrinsics : public ModulePass {
           Add = LHS;
         if (Add) {
           IRBuilder<> B(CI);
-          CallInst *Replacement = B.CreateCall(IncOffset, {BaseCap, Add});
-          Replacement->setTailCall(true);
+          Value *Replacement = B.CreateCall(IncOffset, {BaseCap, Add});
           CI->replaceAllUsesWith(Replacement);
           Modified = true;
         }
@@ -250,26 +185,19 @@ class CHERICapFoldIntrinsics : public ModulePass {
 
   /// Replace set-offset, inc-offset sequences with a single set-offset
   /// Also fold multiple inc-offsets into a single on if possible
-  void foldIncOffset() {
+  void foldSetOffsetIncOffset() {
     std::vector<CallInst *> IncOffsets;
     for (Value *V : IncOffset->users())
       IncOffsets.push_back(cast<CallInst>(V));
     for (CallInst *CI : IncOffsets) {
-      // fold chains of inc-offset, (inc-offset/GEP)+ into a single inc-offset
-      foldIncOffsetSetOffsetOnlyUserIncrement(CI);
-
       Value *Inc = CI->getOperand(1);
       Value *BaseCap = nullptr;
-      // TODO: how to delete any dead instructions?
-
-      // Also convert a incoffset on null to a setoffset on null
       if (Value *Offset =
-              inferCapabilityOffset(CI->getOperand(0), CI, Inc->getType(), &BaseCap)) {
+              inferCapabilityOffset(CI->getOperand(0), CI, 0, Inc->getType(), &BaseCap)) {
         assert(BaseCap);
         IRBuilder<> B(CI);
-        CallInst *Replacement = B.CreateCall(
+        Value *Replacement = B.CreateCall(
             SetOffset, {BaseCap, B.CreateAdd(Offset, Inc)});
-        Replacement->setTailCall(true);
         CI->replaceAllUsesWith(Replacement);
         Modified = true;
       }
@@ -284,7 +212,6 @@ public:
   }
   bool runOnModule(Module &M) override {
     Modified = false;
-    DL = &M.getDataLayout();
     IncOffset =
         Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_offset_increment);
     SetOffset = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_offset_set);
@@ -297,13 +224,9 @@ public:
     GetPerms = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_perms_get);
     GetSealed = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_sealed_get);
     GetTag = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_tag_get);
-    I8CapTy = IncOffset->getReturnType();
-    CapOffsetTy = GetOffset->getReturnType();
-
-    // TODO: does the order here matter?
-    foldIncOffset();
-    foldSetOffset();
+    foldGetAddSetToInc();
     foldGetIntrinisics();
+    foldSetOffsetIncOffset();
     return Modified;
   }
   void getAnalysisUsage(AnalysisUsage &AU) const override {
