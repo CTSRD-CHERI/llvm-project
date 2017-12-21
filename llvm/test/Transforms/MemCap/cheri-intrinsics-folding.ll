@@ -220,5 +220,88 @@ define i8 addrspace(200)* @fold_set_offset_inc_offset(i8 addrspace(200)* %arg) #
   ; CHECK: call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %arg, i64 242)
 }
 
+define i8 addrspace(200)* @fold_set_inc_gep_sequence() local_unnamed_addr #1 {
+entry:
+  %set = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 100)
+  %gep1 = getelementptr inbounds i8, i8 addrspace(200)* %set, i64 -4
+  %gep2 = getelementptr inbounds i8, i8 addrspace(200)* %gep1, i64 -4
+  %gep3 = getelementptr inbounds i8, i8 addrspace(200)* %gep2, i64 -2
+  %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %gep3, i64 -10)
+
+  ret i8 addrspace(200)* %inc
+  ; CHECK-LABEL: @fold_set_inc_gep_sequence()
+  ; CHECK: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 80)
+}
+
+define i8 addrspace(200)* @fold_set_inc_gep_sequence_arg(i8 addrspace(200)* %arg) local_unnamed_addr #1 {
+entry:
+  %set = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %arg, i64 100)
+  %gep1 = getelementptr inbounds i8, i8 addrspace(200)* %set, i64 -4
+  %gep2 = getelementptr inbounds i8, i8 addrspace(200)* %gep1, i64 -4
+  %gep3 = getelementptr inbounds i8, i8 addrspace(200)* %gep2, i64 -2
+  %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %gep3, i64 -10)
+
+  ret i8 addrspace(200)* %inc
+  ; CHECK-LABEL: @fold_set_inc_gep_sequence_arg(i8 addrspace(200)* %arg)
+  ; CHECK: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %arg, i64 80)
+}
+
+define i8 addrspace(200)* @fold_inc_gep_sequence_null() local_unnamed_addr #1 {
+  %src = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 100)
+  %gep1 = getelementptr inbounds i8, i8 addrspace(200)* %src, i64 -4
+  %gep2 = getelementptr inbounds i8, i8 addrspace(200)* %gep1, i64 -4
+  %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %gep2, i64 -10)
+  ret i8 addrspace(200)* %inc
+  ; CHECK-LABEL: @fold_inc_gep_sequence_null()
+  ; CHECK: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 82)
+}
+
+define i8 addrspace(200)* @fold_inc_gep_sequence_arg(i8 addrspace(200)* %arg) local_unnamed_addr #1 {
+entry:
+  %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %arg, i64 100)
+  %gep1 = getelementptr inbounds i8, i8 addrspace(200)* %0, i64 -4
+  %gep2 = getelementptr inbounds i8, i8 addrspace(200)* %gep1, i64 -4
+  %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %gep2, i64 -10)
+  ret i8 addrspace(200)* %inc
+  ; CHECK-LABEL: @fold_inc_gep_sequence_arg(i8 addrspace(200)* %arg)
+  ; CHECK: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %arg, i64 82)
+}
+
+define i8 addrspace(200)* @fold_gep_incoffset(i8 addrspace(200)* %arg) local_unnamed_addr #1 {
+entry:
+  ; CHECK-LABEL: @fold_gep_incoffset(i8 addrspace(200)* %arg)
+  ; CHECK: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %arg, i64 96)
+  %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %arg, i64 100)
+  %gep = getelementptr inbounds i8, i8 addrspace(200)* %inc, i64 -4
+  ret i8 addrspace(200)* %gep
+}
+
+; TODO: Order of GEP vs incoffset should not matter:
+define i8 addrspace(200)* @fold_gep_incoffset2(i8 addrspace(200)* %arg) local_unnamed_addr #1 {
+entry:
+  ; CHECK-LABEL: @fold_gep_incoffset2(i8 addrspace(200)* %arg)
+  ; CHECK-NOT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %arg, i64 96)
+  %gep = getelementptr inbounds i8, i8 addrspace(200)* %arg, i64 -4
+  %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %gep, i64 100)
+  ret i8 addrspace(200)* %inc
+}
+
+; TODO: this can't be folded into adds since it breaks the IR
+; I'm also not sure it makes sense anyway since CIncOffset and add are the same
+define i8 addrspace(200)* @fold_set_dynamic_gep_arg(i8 addrspace(200)* %arg, i64 %increment) local_unnamed_addr #1 {
+entry:
+  %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %arg, i64 100)
+  %gep1 = getelementptr inbounds i8, i8 addrspace(200)* %0, i64 %increment
+  %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %gep1, i64 -10)
+  ret i8 addrspace(200)* %inc
+  ; CHECK-LABEL: @fold_set_dynamic_gep_arg(i8 addrspace(200)* %arg, i64 %increment)
+  ; CHECK:      %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %arg, i64 100)
+  ; CHECK-NEXT: %gep1 = getelementptr inbounds i8, i8 addrspace(200)* %0, i64 %increment
+  ; CHECK-NEXT: %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %gep1, i64 -10)
+  ; CHECK-NEXT: ret i8 addrspace(200)* %inc
+}
+
+
+
 attributes #0 = { nounwind }
 attributes #1 = { nounwind readnone }
