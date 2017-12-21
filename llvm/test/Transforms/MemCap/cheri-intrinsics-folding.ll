@@ -1,4 +1,4 @@
-; RUN: %cheri_opt -S -cheri-fold-intrisics %s -o - < %s | FileCheck %s
+; RUN: %cheri_opt -S -cheri-fold-intrisics %s -o - | FileCheck %s
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
 
@@ -209,6 +209,15 @@ define i64 @fold_address_get_inttoptr() #1 {
   ret i64 %ret
   ; CHECK-LABEL: @fold_address_get_inttoptr()
   ; CHECK: ret i64 100
+}
+
+define i8 addrspace(200)* @fold_set_offset_inc_offset(i8 addrspace(200)* %arg) #1 {
+  %with_offset = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %arg, i64 42)
+  %inc_offset = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %with_offset, i64 100)
+  %inc_offset2 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %inc_offset, i64 100)
+  ret i8 addrspace(200)* %inc_offset2
+  ; CHECK-LABEL: @fold_set_offset_inc_offset(i8 addrspace(200)* %arg)
+  ; CHECK: call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %arg, i64 242)
 }
 
 attributes #0 = { nounwind }

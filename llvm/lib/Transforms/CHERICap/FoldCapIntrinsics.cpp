@@ -68,7 +68,9 @@ class CHERICapFoldIntrinsics : public ModulePass {
   }
 
   void foldGetIntrinisics() {
-    foldGet(GetOffset, inferCapabilityOffset);
+    foldGet(GetOffset, [](Value *V, CallInst *CI, int) {
+      return inferCapabilityOffset(V, CI, 0);
+    });
     foldGet(GetAddress, inferCapabilityAddress);
 
     foldGet(GetBase, inferCapabilityNonOffsetField);
@@ -113,19 +115,29 @@ class CHERICapFoldIntrinsics : public ModulePass {
     return nullptr;
   }
 
-  static Value *inferCapabilityOffset(Value *V, CallInst *Call, int NullValue) {
-    if (isa<ConstantPointerNull>(V))
-      return llvm::Constant::getNullValue(Call->getType());
-    if (Constant* IntToPtr = getIntToPtrSourceValue(V))
+  static Value *inferCapabilityOffset(Value *V, CallInst *Call, int NullValue,
+                                      Type *ResultTy = nullptr, Value **BaseCap = nullptr) {
+    if (isa<ConstantPointerNull>(V)) {
+      if (BaseCap)
+        *BaseCap = V;
+      return llvm::Constant::getNullValue(ResultTy ? ResultTy
+                                                   : Call->getType());
+    }
+    if (Constant* IntToPtr = getIntToPtrSourceValue(V)) {
+      if (BaseCap)
+        *BaseCap = V;
       return IntToPtr;
+    }
     Value *Arg = nullptr;
     Value *Offset = nullptr;
     if (match(V, m_Intrinsic<Intrinsic::cheri_cap_offset_set>(
-                     m_Value(), m_Value(Offset)))) {
+                     m_Value(Arg), m_Value(Offset)))) {
+      if (BaseCap)
+        *BaseCap = Arg;
       return Offset;
     } else if (match(V, m_Intrinsic<Intrinsic::cheri_cap_offset_increment>(
                             m_Value(Arg), m_Value(Offset)))) {
-      if (Value *LHS = inferCapabilityOffset(Arg, Call, NullValue)) {
+      if (Value *LHS = inferCapabilityOffset(Arg, Call, NullValue, ResultTy, BaseCap)) {
         IRBuilder<> B(cast<Instruction>(V));
         return B.CreateAdd(LHS, Offset);
       }
@@ -171,6 +183,27 @@ class CHERICapFoldIntrinsics : public ModulePass {
     }
   }
 
+  /// Replace set-offset, inc-offset sequences with a single set-offset
+  /// Also fold multiple inc-offsets into a single on if possible
+  void foldSetOffsetIncOffset() {
+    std::vector<CallInst *> IncOffsets;
+    for (Value *V : IncOffset->users())
+      IncOffsets.push_back(cast<CallInst>(V));
+    for (CallInst *CI : IncOffsets) {
+      Value *Inc = CI->getOperand(1);
+      Value *BaseCap = nullptr;
+      if (Value *Offset =
+              inferCapabilityOffset(CI->getOperand(0), CI, 0, Inc->getType(), &BaseCap)) {
+        assert(BaseCap);
+        IRBuilder<> B(CI);
+        Value *Replacement = B.CreateCall(
+            SetOffset, {BaseCap, B.CreateAdd(Offset, Inc)});
+        CI->replaceAllUsesWith(Replacement);
+        Modified = true;
+      }
+    }
+  }
+
 public:
   static char ID;
   CHERICapFoldIntrinsics() : ModulePass(ID) {}
@@ -193,6 +226,7 @@ public:
     GetTag = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_tag_get);
     foldGetAddSetToInc();
     foldGetIntrinisics();
+    foldSetOffsetIncOffset();
     return Modified;
   }
   void getAnalysisUsage(AnalysisUsage &AU) const override {
