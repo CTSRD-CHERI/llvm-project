@@ -540,6 +540,8 @@ void EmitAssemblyHelper::CreatePasses(legacy::PassManager &MPM,
                          addCHERICapFoldIntrinsicsPass);
   PMBuilder.addExtension(PassManagerBuilder::EP_ScalarOptimizerLate,
                          addCHERICapFoldIntrinsicsPass);
+  PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
+                         addCHERICapFoldIntrinsicsPass);
 
   if (LangOpts.Sanitize.has(SanitizerKind::LocalBounds)) {
     PMBuilder.addExtension(PassManagerBuilder::EP_ScalarOptimizerLate,

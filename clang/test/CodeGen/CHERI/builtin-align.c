@@ -5,8 +5,8 @@
 
 // RUN: %cheri_cc1 -DTEST_CAP -Wno-tautological-compare -o - -O0 -emit-llvm %s     | FileCheck %s -check-prefixes CHECK,CAP,SLOW -enable-var-scope
 // RUN: %cheri_cc1 -DTEST_CAP -Wno-tautological-compare -o - -O2 -emit-llvm %s     | FileCheck %s -check-prefixes CHECK,CAP,OPT,CAP-OPT  -enable-var-scope
-// RUNNOT: %cheri_cc1 -DTEST_UINTCAP -Wno-tautological-compare -o - -O0 -emit-llvm %s | FileCheck %s -check-prefixes CHECK,CAP,SLOW -enable-var-scope
-// RUNNOT: %cheri_cc1 -DTEST_UINTCAP -Wno-tautological-compare -o - -O2 -emit-llvm %s | FileCheck %s -check-prefixes CHECK,CAP,OPT,UINTCAP-OPT  -enable-var-scope
+// RUN: %cheri_cc1 -DTEST_UINTCAP -Wno-tautological-compare -o - -O0 -emit-llvm %s | FileCheck %s -check-prefixes CHECK,CAP,SLOW -enable-var-scope
+// RUN: %cheri_cc1 -DTEST_UINTCAP -Wno-tautological-compare -o - -O2 -emit-llvm %s | FileCheck %s -check-prefixes CHECK,CAP,OPT,UINTCAP-OPT  -enable-var-scope
 
 void *add(void *arg, __PTRDIFF_TYPE__ diff) {
   return (char *)arg + diff;
@@ -160,52 +160,56 @@ TYPE p2align_down(TYPE ptr, unsigned p2align) {
 // Check that the inliner removes these constant calls at -O2 but not -O0:
 _Bool inline_is_aligned(void) {
   // CHECK-LABEL: @inline_is_aligned(
-  // SLOW: call zeroext i1 @is_aligned([[$TYPE]]{{.+(100|%0).*}}, i32 signext 32)
+  // SLOW: call zeroext i1 @is_aligned([[$TYPE]]{{.+(100|%[0-9]).*}}, i32 signext 32)
   // OPT: ret i1 false
   return is_aligned((TYPE)100, 32);
 }
 
 _Bool inline_is_p2aligned(void) {
   // CHECK-LABEL: @inline_is_p2aligned(
-  // SLOW: call zeroext i1 @is_p2aligned([[$TYPE]]{{.+(128|%0).*}}, i32 signext 6)
+  // SLOW: call zeroext i1 @is_p2aligned([[$TYPE]]{{.+(128|%[0-9]).*}}, i32 signext 6)
   // OPT: ret i1 true
   return is_p2aligned((TYPE)128, 6);
 }
 
 TYPE inline_align_down(void) {
   // CHECK-LABEL: @inline_align_down(
-  // SLOW: call [[$TYPE]] @align_down({{.+(100|%0).*}}, i32 signext 32)
+  // SLOW: call [[$TYPE]] @align_down({{.+(100|%[0-9]).*}}, i32 signext 32)
   // LONG-OPT: ret i64 96
   // PTR-OPT: ret i8* inttoptr (i64 96 to i8*)
   // CAP-OPT: ret i8 addrspace(200)* inttoptr (i64 96 to i8 addrspace(200)*)
-  // UINTCAP-OPT: ret i8 addrspace(200)* inttoptr (i64 96 to i8 addrspace(200)*)
+  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 96)
   return align_down((TYPE)100, 32);
 }
 
 TYPE inline_p2align_down(void) {
   // CHECK-LABEL: @inline_p2align_down(
-  // SLOW: call [[$TYPE]] @p2align_down({{.+(100|%0).*}}, i32 signext 10)
+  // SLOW: call [[$TYPE]] @p2align_down({{.+(100|%[0-9]).*}}, i32 signext 10)
   // LONG-OPT: ret i64 0
   // PTR-OPT: ret i8* null
   // CAP-OPT: ret i8 addrspace(200)* null
+  // FIXME: this should be optimized to return null:
+  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 0)
   return p2align_down((TYPE)100, 10);
 }
 
 TYPE inline_align_up(void) {
   // CHECK-LABEL: @inline_align_up(
-  // SLOW: call [[$TYPE]] @align_up({{.+(100|%0).*}}, i32 signext 32)
+  // SLOW: call [[$TYPE]] @align_up({{.+(100|%[0-9]).*}}, i32 signext 32)
   // LONG-OPT: ret i64 128
   // PTR-OPT: ret i8* inttoptr (i64 128 to i8*)
   // CAP-OPT: ret i8 addrspace(200)* inttoptr (i64 128 to i8 addrspace(200)*)
+  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 128)
   return align_up((TYPE)100, 32);
 }
 
 TYPE inline_p2align_up(void) {
   // CHECK-LABEL: @inline_p2align_up(
-  // SLOW: call [[$TYPE]] @p2align_up({{.+(100|%0).*}}, i32 signext 10)
+  // SLOW: call [[$TYPE]] @p2align_up({{.+(100|%[0-9]).*}}, i32 signext 10)
   // LONG-OPT: ret i64 1024
   // PTR-OPT: ret i8* inttoptr (i64 1024 to i8*)
   // CAP-OPT: ret i8 addrspace(200)* inttoptr (i64 1024 to i8 addrspace(200)*)
+  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 1024)
   return p2align_up((TYPE)100, 10);
 }
 
