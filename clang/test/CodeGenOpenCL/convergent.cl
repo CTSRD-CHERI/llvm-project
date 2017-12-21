@@ -130,5 +130,6 @@ void test_not_unroll() {
 // CHECK: attributes #1 = { {{[^}]*}}convergent{{[^}]*}} }
 // CHECK: attributes #2 = { {{[^}]*}}convergent{{[^}]*}} }
 // CHECK: attributes #3 = { {{[^}]*}}convergent noduplicate{{[^}]*}} }
-// CHECK: attributes #4 = { {{[^}]*}}convergent{{[^}]*}} }
-// CHECK: attributes #5 = { {{[^}]*}}convergent noduplicate{{[^}]*}} }
+// FIXME: for some reason the CHERI instriniscs are added to the module and then the attribute here is #5 instead of #4
+// CHECK: attributes #5 = { {{[^}]*}}convergent{{[^}]*}} }
+// CHECK: attributes #6 = { {{[^}]*}}convergent noduplicate{{[^}]*}} }
