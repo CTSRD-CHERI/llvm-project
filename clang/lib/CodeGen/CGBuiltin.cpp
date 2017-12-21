@@ -2409,6 +2409,14 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     return EmitBuiltinIsAligned(E, false);
   case Builtin::BI__builtin_is_p2aligned:
     return EmitBuiltinIsAligned(E, true);
+  case Builtin::BI__builtin_align_up:
+    return EmitBuiltinAlignTo(E, false, true);
+  case Builtin::BI__builtin_p2align_up:
+    return EmitBuiltinAlignTo(E, true, true);
+  case Builtin::BI__builtin_align_down:
+    return EmitBuiltinAlignTo(E, false, false);
+  case Builtin::BI__builtin_p2align_down:
+    return EmitBuiltinAlignTo(E, true, false);
   case Builtin::BI__noop:
     // __noop always evaluates to an integer literal zero.
     return RValue::get(ConstantInt::get(IntTy, 0));
@@ -10050,26 +10058,62 @@ Value *CodeGenFunction::EmitNVPTXBuiltinExpr(unsigned BuiltinID,
   }
 }
 
-RValue CodeGenFunction::EmitBuiltinIsAligned(const CallExpr *E,
-                                             bool PowerOfTwo) {
+static std::pair<llvm::Value *, llvm::Value *>
+getBuiltinAlignSrcAndMask(const CallExpr *E, CodeGenFunction &CGF,
+                          bool PowerOfTwo, llvm::Type **SrcType = nullptr) {
   QualType AstType = E->getArg(0)->getType();
-  bool IsCheri = AstType->isCHERICapabilityType(CGM.getContext());
+  bool IsCheri = AstType->isCHERICapabilityType(CGF.CGM.getContext());
   // TODO: handle CHERI types
   assert(!IsCheri);
-  llvm::IntegerType *IntType =
-      IntegerType::get(getLLVMContext(), getContext().getIntRange(AstType));
-  auto *Src =
-      Builder.CreateBitOrPointerCast(EmitScalarExpr(E->getArg(0)), IntType);
+  llvm::IntegerType *IntType = IntegerType::get(
+      CGF.getLLVMContext(), CGF.getContext().getIntRange(AstType));
+  auto *Src = CGF.EmitScalarExpr(E->getArg(0));
+  if (SrcType)
+    *SrcType = Src->getType();
+  // We need to convert source to an integer in order to perform the masking
+  // FIXME: CHERI
+  Src = CGF.Builder.CreateBitOrPointerCast(Src, IntType);
   auto *One = llvm::ConstantInt::get(IntType, 1);
-  llvm::Value *Alignment = EmitScalarExpr(E->getArg(1));
-  Alignment = Builder.CreateZExtOrBitCast(Alignment, IntType, PowerOfTwo ? "pow2" : "alignment");
+  llvm::Value *Alignment = CGF.EmitScalarExpr(E->getArg(1));
+  Alignment = CGF.Builder.CreateZExtOrBitCast(
+      Alignment, IntType, PowerOfTwo ? "pow2" : "alignment");
   if (PowerOfTwo) {
-    Alignment = Builder.CreateShl(One, Alignment, "alignment");
+    Alignment = CGF.Builder.CreateShl(One, Alignment, "alignment");
   }
-  auto *Mask = Builder.CreateSub(Alignment, One, "mask");
-  auto *R = Builder.CreateAnd(Src, Mask, "set_bits");
+  auto *Mask = CGF.Builder.CreateSub(Alignment, One, "mask");
+  return {Src, Mask};
+};
+
+/// Generate (x & (y-1)) == 0
+RValue CodeGenFunction::EmitBuiltinIsAligned(const CallExpr *E,
+                                             bool PowerOfTwo) {
+  llvm::Value *Mask;
+  llvm::Value *Src;
+  std::tie(Src, Mask) = getBuiltinAlignSrcAndMask(E, *this, PowerOfTwo);
   return RValue::get(Builder.CreateICmpEQ(
-      R, llvm::Constant::getNullValue(IntType), "is_aligned"));
+    Builder.CreateAnd(Src, Mask, "set_bits"),
+    llvm::Constant::getNullValue(Src->getType()), "is_aligned"));
+}
+
+/// Generate (x & ~(y-1)) to align down or ((x + (y - 1)) & ~(y - 1)) to align
+/// up Note: for capability types we can't do the bitwise operations but instead
+/// need to add/subtract the difference to/from the pointer.
+RValue CodeGenFunction::EmitBuiltinAlignTo(const CallExpr *E, bool PowerOfTwo,
+                                           bool AlignUp) {
+  llvm::Value *Mask;
+  llvm::Value *Src;
+  llvm::Type *ReturnType;
+  // FIXME this needs to use minus/plus for CHERI and not masking!!!!
+  std::tie(Src, Mask) =
+      getBuiltinAlignSrcAndMask(E, *this, PowerOfTwo, &ReturnType);
+  if (AlignUp) {
+    // When aligning up we have to first add the mask to ensure we go over the
+    // next alignment value and then align it correctly
+    Src = Builder.CreateAdd(Src, Mask);
+  }
+  auto *Ret = Builder.CreateAnd(Src, Builder.CreateNot(Mask, "negated_mask"));
+  return RValue::get(
+      Builder.CreateBitOrPointerCast(Ret, ReturnType, "aligned_result"));
 }
 
 Value *CodeGenFunction::EmitWebAssemblyBuiltinExpr(unsigned BuiltinID,
