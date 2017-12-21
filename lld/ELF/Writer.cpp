@@ -1598,11 +1598,14 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   applySynthetic({InX::SymTab},
                  [](SyntheticSection *SS) { SS->postThunkContents(); });
 
-  // We know the size of the sections referenced by __start_foo symbols so we
-  // can set the size now.
-  for (auto &SectionSym : SectionStartSymbols)
-    if (SectionSym.first && SectionSym.second)
-      SectionSym.first->Size = SectionSym.second->Size;
+  // XXXAR: only set the size on the symbols for CheriABI
+  if (Config->MipsCheriAbi) {
+    // We know the size of the sections referenced by __start_foo symbols so we
+    // can set the size now.
+    for (auto &SectionSym : SectionStartSymbols)
+      if (SectionSym.first && SectionSym.second)
+        SectionSym.first->Size = SectionSym.second->Size;
+  }
 
   // If a synthetic section was removed from the output we have to manually
   // change the start&stop symbols to be NULL since otherwise we create a
