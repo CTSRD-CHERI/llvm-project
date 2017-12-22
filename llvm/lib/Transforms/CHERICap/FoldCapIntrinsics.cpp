@@ -25,6 +25,7 @@
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/IR/PatternMatch.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/raw_ostream.h"
@@ -201,12 +202,16 @@ class CHERICapFoldIntrinsics : public ModulePass {
       if (Value *Increment = getOffsetIncrement(OnlyUser, &Arg)) {
         // errs() << "Increment: "; OnlyUser->dump();
         assert(Arg == CI);
-        IRBuilder<> B(CI);
+        Instruction *ReplacedInstr = cast<Instruction>(OnlyUser);
+        IRBuilder<> B(ReplacedInstr);
         Value *NewOffset = B.CreateAdd(CI->getOperand(1), Increment);
         CI->setOperand(1, NewOffset);
-        OnlyUser->replaceAllUsesWith(CI);
+        // We have to move this instruction after the offset instruction
+        // because otherwise we use a value that has not yet been defined
+        CI->moveAfter(ReplacedInstr);
+        ReplacedInstr->replaceAllUsesWith(CI);
         // TODO: can erasing here cause a crash?
-        cast<Instruction>(OnlyUser)->eraseFromParent();
+        ReplacedInstr->eraseFromParent();
         // Keep doing this transformation for incoffset chains with only a
         // single user:
         OnlyUser = CI->hasOneUse() ? *CI->user_begin() : nullptr;
