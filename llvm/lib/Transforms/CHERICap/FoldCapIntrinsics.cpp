@@ -141,10 +141,9 @@ class CHERICapFoldIntrinsics : public ModulePass {
           return ConstantInt::get(CapOffsetTy, Offset);
         } else if (GEP->getOperand(1)->getType() == CapOffsetTy) {
           // also handle non-constant GEPs:
-          // %gep = getelementptr inbounds i8, i8 addrspace(200)* %0, i64 %inc
-          // FIXME: this doesn't work for some reason, it results in a
-          // Instruction does not dominate all uses!
-          // return GEP->getOperand(1);
+          // XXXAR: not sure this is always profitable, sometimes a CIncOffset
+          // might be is better
+          return GEP->getOperand(1);
         }
       }
     }
