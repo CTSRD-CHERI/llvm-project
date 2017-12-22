@@ -1,4 +1,8 @@
-; RUN: %cheri_opt -S -cheri-fold-intrisics %s -o - | FileCheck %s
+; RUN: %cheri_opt -S -cheri-fold-intrisics %s -o %t.ll
+; RUN: FileCheck %s < %t.ll
+; Check that the dynamic GEP is folded properly (but we need to run opt one more time)
+; RUN: %cheri_opt -S -O2 %t.ll -o %t1.ll
+; RUN: %cheri_llc -O2 %t1.ll -o - | FileCheck %s -check-prefix DYNAMIC-GEP-ASM
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
 
@@ -295,10 +299,19 @@ entry:
   %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %gep1, i64 -10)
   ret i8 addrspace(200)* %inc
   ; CHECK-LABEL: @fold_set_dynamic_gep_arg(i8 addrspace(200)* %arg, i64 %increment)
-  ; CHECK:      %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %arg, i64 100)
-  ; CHECK-NEXT: %gep1 = getelementptr inbounds i8, i8 addrspace(200)* %0, i64 %increment
-  ; CHECK-NEXT: %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %gep1, i64 -10)
-  ; CHECK-NEXT: ret i8 addrspace(200)* %inc
+  ; NOCHECK:      %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %arg, i64 100)
+  ; NOCHECK-NEXT: %gep1 = getelementptr inbounds i8, i8 addrspace(200)* %0, i64 %increment
+  ; NOCHECK-NEXT: %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %gep1, i64 -10)
+  ; NOCHECK-NEXT: ret i8 addrspace(200)* %inc
+  ; CHECK: [[ADD:%.+]] = add i64 100, %increment
+  ; CHECK: [[NEW_OFFSET:%.+]] = add i64 [[ADD]], -10
+  ; CHECK: [[RESULT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %arg, i64 [[NEW_OFFSET]])
+  ; CHECK: ret i8 addrspace(200)* [[RESULT]]
+  ; DYNAMIC-GEP-ASM-LABEL: fold_set_dynamic_gep_arg
+  ; DYNAMIC-GEP-ASM:       daddiu  $1, $4, 90
+  ; DYNAMIC-GEP-ASM-NEXT:  jr      $ra
+  ; DYNAMIC-GEP-ASM-NEXT:  csetoffset      $c3, $c3, $1
+
 }
 
 
