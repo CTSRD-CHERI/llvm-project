@@ -300,6 +300,8 @@ class BaremetalNewlibTI(DefaultTargetInfo):
         # I'm not sure the _LIBCPP_BUILD_STATIC should be passed when building
         # against libcpp but it seems to be needed
         flags += ['-D_GNU_SOURCE', '-D_LIBCPP_BUILD_STATIC']
+        # For now always build with debug info:
+        flags.append('-g')
         pass
 
     def add_cxx_link_flags(self, flags):
