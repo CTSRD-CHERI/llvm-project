@@ -46,7 +46,7 @@ public:
     T* allocate(std::size_t n)
     {
         allocate_called = true;
-        return (T*)n;
+        return (T*)(intptr_t)n;
     }
 
     void deallocate(T* p, std::size_t n)
