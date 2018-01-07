@@ -885,6 +885,8 @@ let AdditionalPredicates = [NotInMicroMips] in {
                       (DMTC0 COP0Opnd:$rd, GPR64Opnd:$rt, 0), 0>;
   def : MipsInstAlias<"dmfc0 $rt, $rd",
                       (DMFC0 GPR64Opnd:$rt, COP0Opnd:$rd, 0), 0>;
+  def : MipsInstAlias<"rdhwr\t$rt, $rd",
+      (RDHWR64 GPR64Opnd: $rt, HWRegsOpnd:$rd, 0), 0>, ISA_MIPS64_NOT_64R6;
 }
 def : MipsInstAlias<"dmfc2 $rt, $rd", (DMFC2 GPR64Opnd:$rt, COP2Opnd:$rd, 0), 0>;
 def : MipsInstAlias<"dmtc2 $rt, $rd", (DMTC2 COP2Opnd:$rd, GPR64Opnd:$rt, 0), 0>;
