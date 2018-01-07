@@ -2187,7 +2187,7 @@ let AdditionalPredicates = [NotInMicroMips] in {
 
 /// No operation.
 def NOP : PseudoSE<(outs), (ins), []>, PseudoInstExpansion<(SLL ZERO, ZERO, 0)>;
-
+def RI_TRAP : RI_TRAP_FM<"trap_ri">;
 // FrameIndexes are legalized when they are operands from load/store
 // instructions. The same not happens for stack address copies, so an
 // add op with mem ComplexPattern is used and the stack address copy
