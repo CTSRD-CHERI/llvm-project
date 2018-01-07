@@ -1421,7 +1421,10 @@ DecodeStatus CheriDisassembler::getInstruction(MCInst &Instr, uint64_t &Size,
                                                raw_ostream &VStream,
                                                raw_ostream &CStream) const {
   uint32_t Insn;
-  Size = 0;
+  // If we try deconding an unknown isntruction advance by 4 bytes
+  // Otherwise llvm-objdump will only advance by one byte and wrongly disassemble
+  // the rest of the function after it encounters an unknown instruction
+  Size = 4;
   DecodeStatus Result = readInstruction32(Bytes, Address, Size, Insn,
           /*IsBigEndian*/ true, /*IsMicroMips*/false);
   if (Result == MCDisassembler::Fail)
