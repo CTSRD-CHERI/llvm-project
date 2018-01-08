@@ -1919,8 +1919,7 @@ public:
 
   LValue MakeAddrLValue(Address Addr, QualType T,
                         AlignmentSource Source = AlignmentSource::Type) {
-    return LValue::MakeAddr(Addr, T, getContext(),
-                            LValueBaseInfo(Source, false),
+    return LValue::MakeAddr(Addr, T, getContext(), LValueBaseInfo(Source),
                             CGM.getTBAAAccessInfo(T));
   }
 
@@ -1932,8 +1931,7 @@ public:
   LValue MakeAddrLValue(llvm::Value *V, QualType T, CharUnits Alignment,
                         AlignmentSource Source = AlignmentSource::Type) {
     return LValue::MakeAddr(Address(V, Alignment), T, getContext(),
-                            LValueBaseInfo(Source, false),
-                            CGM.getTBAAAccessInfo(T));
+                            LValueBaseInfo(Source), CGM.getTBAAAccessInfo(T));
   }
 
   LValue MakeAddrLValue(llvm::Value *V, QualType T, CharUnits Alignment,
@@ -1952,10 +1950,17 @@ public:
                                            LValueBaseInfo *BaseInfo = nullptr,
                                            TBAAAccessInfo *TBAAInfo = nullptr);
 
-  Address EmitLoadOfReference(Address Ref, const ReferenceType *RefTy,
-                              LValueBaseInfo *BaseInfo = nullptr,
-                              TBAAAccessInfo *TBAAInfo = nullptr);
-  LValue EmitLoadOfReferenceLValue(Address Ref, const ReferenceType *RefTy);
+  Address EmitLoadOfReference(LValue RefLVal,
+                              LValueBaseInfo *PointeeBaseInfo = nullptr,
+                              TBAAAccessInfo *PointeeTBAAInfo = nullptr);
+  LValue EmitLoadOfReferenceLValue(LValue RefLVal);
+  LValue EmitLoadOfReferenceLValue(Address RefAddr, QualType RefTy,
+                                   AlignmentSource Source =
+                                       AlignmentSource::Type) {
+    LValue RefLVal = MakeAddrLValue(RefAddr, RefTy, LValueBaseInfo(Source),
+                                    CGM.getTBAAAccessInfo(RefTy));
+    return EmitLoadOfReferenceLValue(RefLVal);
+  }
 
   Address EmitLoadOfPointer(Address Ptr, const PointerType *PtrTy,
                             LValueBaseInfo *BaseInfo = nullptr,
@@ -3085,8 +3090,7 @@ public:
                                 SourceLocation Loc,
                                 AlignmentSource Source = AlignmentSource::Type,
                                 bool isNontemporal = false) {
-    return EmitLoadOfScalar(Addr, Volatile, Ty, Loc,
-                            LValueBaseInfo(Source, false),
+    return EmitLoadOfScalar(Addr, Volatile, Ty, Loc, LValueBaseInfo(Source),
                             CGM.getTBAAAccessInfo(Ty), isNontemporal);
   }
 
@@ -3108,7 +3112,7 @@ public:
                          bool Volatile, QualType Ty,
                          AlignmentSource Source = AlignmentSource::Type,
                          bool isInit = false, bool isNontemporal = false) {
-    EmitStoreOfScalar(Value, Addr, Volatile, Ty, LValueBaseInfo(Source, false),
+    EmitStoreOfScalar(Value, Addr, Volatile, Ty, LValueBaseInfo(Source),
                       CGM.getTBAAAccessInfo(Ty), isInit, isNontemporal);
   }
 

@@ -45,7 +45,7 @@ public:
   virtual void finalizeContents() {}
   // If the section has the SHF_ALLOC flag and the size may be changed if
   // thunks are added, update the section size.
-  virtual void updateAllocSize() {}
+  virtual bool updateAllocSize() { return false; }
   // If any additional finalization of contents are needed post thunk creation.
   virtual void postThunkContents() {}
   virtual bool empty() const { return false; }
@@ -62,11 +62,7 @@ struct CieRecord {
 };
 
 // Section for .eh_frame.
-template <class ELFT> class EhFrameSection final : public SyntheticSection {
-  typedef typename ELFT::Shdr Elf_Shdr;
-  typedef typename ELFT::Rel Elf_Rel;
-  typedef typename ELFT::Rela Elf_Rela;
-
+class EhFrameSection final : public SyntheticSection {
 public:
   EhFrameSection();
   void writeTo(uint8_t *Buf) override;
@@ -74,24 +70,31 @@ public:
   bool empty() const override { return Sections.empty(); }
   size_t getSize() const override { return Size; }
 
-  void addSection(InputSectionBase *S);
-
-  size_t NumFdes = 0;
+  template <class ELFT> void addSection(InputSectionBase *S);
 
   std::vector<EhInputSection *> Sections;
+  size_t NumFdes = 0;
+
+  struct FdeData {
+    uint32_t Pc;
+    uint32_t FdeVA;
+  };
+
+  std::vector<FdeData> getFdeData() const;
 
 private:
   uint64_t Size = 0;
-  template <class RelTy>
+
+  template <class ELFT, class RelTy>
   void addSectionAux(EhInputSection *S, llvm::ArrayRef<RelTy> Rels);
 
-  template <class RelTy>
+  template <class ELFT, class RelTy>
   CieRecord *addCie(EhSectionPiece &Piece, ArrayRef<RelTy> Rels);
 
-  template <class RelTy>
+  template <class ELFT, class RelTy>
   bool isFdeLive(EhSectionPiece &Piece, ArrayRef<RelTy> Rels);
 
-  uint64_t getFdePc(uint8_t *Buf, size_t Off, uint8_t Enc);
+  uint64_t getFdePc(uint8_t *Buf, size_t Off, uint8_t Enc) const;
 
   std::vector<CieRecord *> CieRecords;
 
@@ -166,7 +169,7 @@ public:
   MipsGotSection();
   void writeTo(uint8_t *Buf) override;
   size_t getSize() const override { return Size; }
-  void updateAllocSize() override;
+  bool updateAllocSize() override;
   void finalizeContents() override;
   bool empty() const override;
   void addEntry(SymbolBody &Sym, int64_t Addend, RelExpr Expr);
@@ -371,24 +374,52 @@ private:
   uint64_t Size = 0;
 };
 
-template <class ELFT> class RelocationSection final : public SyntheticSection {
+class RelocationBaseSection : public SyntheticSection {
+public:
+  RelocationBaseSection(StringRef Name, uint32_t Type, int32_t DynamicTag,
+                        int32_t SizeDynamicTag);
+  void addReloc(const DynamicReloc &Reloc);
+  bool empty() const override { return Relocs.empty(); }
+  size_t getSize() const override { return Relocs.size() * this->Entsize; }
+  size_t getRelativeRelocCount() const { return NumRelativeRelocs; }
+  void finalizeContents() override;
+  int32_t DynamicTag, SizeDynamicTag;
+
+protected:
+  std::vector<DynamicReloc> Relocs;
+  size_t NumRelativeRelocs = 0;
+};
+
+template <class ELFT>
+class RelocationSection final : public RelocationBaseSection {
   typedef typename ELFT::Rel Elf_Rel;
   typedef typename ELFT::Rela Elf_Rela;
 
 public:
   RelocationSection(StringRef Name, bool Sort);
-  void addReloc(const DynamicReloc &Reloc);
   unsigned getRelocOffset();
-  void finalizeContents() override;
   void writeTo(uint8_t *Buf) override;
-  bool empty() const override { return Relocs.empty(); }
-  size_t getSize() const override { return Relocs.size() * this->Entsize; }
-  size_t getRelativeRelocCount() const { return NumRelativeRelocs; }
 
 private:
   bool Sort;
-  size_t NumRelativeRelocs = 0;
-  std::vector<DynamicReloc> Relocs;
+};
+
+template <class ELFT>
+class AndroidPackedRelocationSection final : public RelocationBaseSection {
+  typedef typename ELFT::Rel Elf_Rel;
+  typedef typename ELFT::Rela Elf_Rela;
+
+public:
+  AndroidPackedRelocationSection(StringRef Name);
+
+  bool updateAllocSize() override;
+  size_t getSize() const override { return RelocData.size(); }
+  void writeTo(uint8_t *Buf) override {
+    memcpy(Buf, RelocData.data(), RelocData.size());
+  }
+
+private:
+  SmallVector<char, 0> RelocData;
 };
 
 struct SymbolTableEntry {
@@ -569,21 +600,12 @@ template <class ELFT> GdbIndexSection *createGdbIndex();
 // Detailed info about internals can be found in Ian Lance Taylor's blog:
 // http://www.airs.com/blog/archives/460 (".eh_frame")
 // http://www.airs.com/blog/archives/462 (".eh_frame_hdr")
-template <class ELFT> class EhFrameHeader final : public SyntheticSection {
+class EhFrameHeader final : public SyntheticSection {
 public:
   EhFrameHeader();
   void writeTo(uint8_t *Buf) override;
   size_t getSize() const override;
-  void addFde(uint32_t Pc, uint32_t FdeVA);
   bool empty() const override;
-
-private:
-  struct FdeData {
-    uint32_t Pc;
-    uint32_t FdeVA;
-  };
-
-  std::vector<FdeData> Fdes;
 };
 
 // For more information about .gnu.version and .gnu.version_r see:
@@ -817,6 +839,8 @@ struct InX {
   static BssSection *Bss;
   static BssSection *BssRelRo;
   static BuildIdSection *BuildId;
+  static EhFrameHeader *EhFrameHdr;
+  static EhFrameSection *EhFrame;
   static SyntheticSection *Dynamic;
   static StringTableSection *DynStrTab;
   static SymbolTableBaseSection *DynSymTab;
@@ -836,10 +860,8 @@ struct InX {
   static SymbolTableBaseSection *SymTab;
 };
 
-template <class ELFT> struct In : public InX {
-  static EhFrameHeader<ELFT> *EhFrameHdr;
-  static EhFrameSection<ELFT> *EhFrame;
-  static RelocationSection<ELFT> *RelaDyn;
+template <class ELFT> struct In {
+  static RelocationBaseSection *RelaDyn;
   static RelocationSection<ELFT> *RelaPlt;
   static RelocationSection<ELFT> *RelaIplt;
   static VersionDefinitionSection<ELFT> *VerDef;
@@ -847,9 +869,7 @@ template <class ELFT> struct In : public InX {
   static VersionNeedSection<ELFT> *VerNeed;
 };
 
-template <class ELFT> EhFrameHeader<ELFT> *In<ELFT>::EhFrameHdr;
-template <class ELFT> EhFrameSection<ELFT> *In<ELFT>::EhFrame;
-template <class ELFT> RelocationSection<ELFT> *In<ELFT>::RelaDyn;
+template <class ELFT> RelocationBaseSection *In<ELFT>::RelaDyn;
 template <class ELFT> RelocationSection<ELFT> *In<ELFT>::RelaPlt;
 template <class ELFT> RelocationSection<ELFT> *In<ELFT>::RelaIplt;
 template <class ELFT> VersionDefinitionSection<ELFT> *In<ELFT>::VerDef;

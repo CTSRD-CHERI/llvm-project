@@ -63,6 +63,7 @@
 #include "llvm/Transforms/GCOVProfiler.h"
 #include "llvm/Transforms/IPO/AlwaysInliner.h"
 #include "llvm/Transforms/IPO/ArgumentPromotion.h"
+#include "llvm/Transforms/IPO/CalledValuePropagation.h"
 #include "llvm/Transforms/IPO/ConstantMerge.h"
 #include "llvm/Transforms/IPO/CrossDSOCFI.h"
 #include "llvm/Transforms/IPO/DeadArgumentElimination.h"
@@ -580,6 +581,10 @@ PassBuilder::buildModuleSimplificationPipeline(OptimizationLevel Level,
   // years, it should be re-analyzed.
   MPM.addPass(IPSCCPPass());
 
+  // Attach metadata to indirect call sites indicating the set of functions
+  // they may target at run-time. This should follow IPSCCP.
+  MPM.addPass(CalledValuePropagationPass());
+
   // Optimize globals to try and fold them into constants.
   MPM.addPass(GlobalOptPass());
 
@@ -746,8 +751,13 @@ PassBuilder::buildModuleOptimizationPipeline(OptimizationLevel Level,
   // Optimize parallel scalar instruction chains into SIMD instructions.
   OptimizePM.addPass(SLPVectorizerPass());
 
-  // Cleanup after all of the vectorizers.
-  OptimizePM.addPass(SimplifyCFGPass());
+  // Cleanup after all of the vectorizers. Simplification passes like CVP and
+  // GVN, loop transforms, and others have already run, so it's now better to
+  // convert to more optimized IR using more aggressive simplify CFG options.
+  OptimizePM.addPass(SimplifyCFGPass(SimplifyCFGOptions().
+                                         forwardSwitchCondToPhi(true).
+                                         convertSwitchToLookupTable(true).
+                                         needCanonicalLoops(false)));
   OptimizePM.addPass(InstCombinePass());
 
   // Unroll small loops to hide loop backedge latency and saturate any parallel
@@ -921,6 +931,10 @@ ModulePassManager PassBuilder::buildLTODefaultPipeline(OptimizationLevel Level,
     // opens opportunities for globalopt (and inlining) by substituting function
     // pointers passed as arguments to direct uses of functions.
    MPM.addPass(IPSCCPPass());
+
+   // Attach metadata to indirect call sites indicating the set of functions
+   // they may target at run-time. This should follow IPSCCP.
+   MPM.addPass(CalledValuePropagationPass());
   }
 
   // Now deduce any function attributes based in the current code.

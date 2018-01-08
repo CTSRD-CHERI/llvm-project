@@ -142,13 +142,8 @@ struct UnwindInfoSections {
 /// making local unwinds fast.
 class __attribute__((visibility("hidden"))) LocalAddressSpace {
 public:
-#ifdef __LP64__
-  typedef uint64_t pint_t;
-  typedef int64_t  sint_t;
-#else
-  typedef uint32_t pint_t;
-  typedef int32_t  sint_t;
-#endif
+  typedef uintptr_t pint_t;
+  typedef intptr_t  sint_t;
   uint8_t         get8(pint_t addr) {
     uint8_t val;
     memcpy(&val, (void *)addr, sizeof(val));
@@ -194,7 +189,7 @@ public:
 };
 
 inline uintptr_t LocalAddressSpace::getP(pint_t addr) {
-#ifdef __LP64__
+#if __SIZEOF_POINTER__ == 8
   return get64(addr);
 #else
   return get32(addr);
@@ -398,6 +393,14 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
     }
   }
   return false;
+#elif defined(_LIBUNWIND_ARM_EHABI) && defined(__BIONIC__) &&                  \
+    (__ANDROID_API__ < 21)
+  int length = 0;
+  info.arm_section =
+      (uintptr_t)dl_unwind_find_exidx((_Unwind_Ptr)targetAddr, &length);
+  info.arm_section_length = (uintptr_t)length;
+  if (info.arm_section && info.arm_section_length)
+    return true;
 #elif defined(_LIBUNWIND_ARM_EHABI) || defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
   struct dl_iterate_cb_data {
     LocalAddressSpace *addressSpace;

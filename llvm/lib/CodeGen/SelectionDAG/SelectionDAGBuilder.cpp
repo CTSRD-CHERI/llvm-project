@@ -5070,8 +5070,7 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
     return nullptr;
   }
   case Intrinsic::memcpy_element_unordered_atomic: {
-    const ElementUnorderedAtomicMemCpyInst &MI =
-        cast<ElementUnorderedAtomicMemCpyInst>(I);
+    const AtomicMemCpyInst &MI = cast<AtomicMemCpyInst>(I);
     SDValue Dst = getValue(MI.getRawDest());
     SDValue Src = getValue(MI.getRawSource());
     SDValue Length = getValue(MI.getLength());
@@ -5109,7 +5108,7 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
     return nullptr;
   }
   case Intrinsic::memmove_element_unordered_atomic: {
-    auto &MI = cast<ElementUnorderedAtomicMemMoveInst>(I);
+    auto &MI = cast<AtomicMemMoveInst>(I);
     SDValue Dst = getValue(MI.getRawDest());
     SDValue Src = getValue(MI.getRawSource());
     SDValue Length = getValue(MI.getLength());
@@ -5147,7 +5146,7 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
     return nullptr;
   }
   case Intrinsic::memset_element_unordered_atomic: {
-    auto &MI = cast<ElementUnorderedAtomicMemSetInst>(I);
+    auto &MI = cast<AtomicMemSetInst>(I);
     SDValue Dst = getValue(MI.getRawDest());
     SDValue Val = getValue(MI.getValue());
     SDValue Length = getValue(MI.getLength());

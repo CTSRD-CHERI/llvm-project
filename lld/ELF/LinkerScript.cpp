@@ -127,7 +127,7 @@ void LinkerScript::addSymbol(SymbolAssignment *Cmd) {
     return;
 
   // Define a symbol.
-  Symbol *Sym;
+  SymbolBody *Sym;
   uint8_t Visibility = Cmd->Hidden ? STV_HIDDEN : STV_DEFAULT;
   std::tie(Sym, std::ignore) = Symtab->insert(Cmd->Name, /*Type*/ 0, Visibility,
                                               /*CanOmitFromDynSym*/ false,
@@ -151,7 +151,7 @@ void LinkerScript::addSymbol(SymbolAssignment *Cmd) {
 
   replaceBody<DefinedRegular>(Sym, nullptr, Cmd->Name, /*IsLocal=*/false,
                               Visibility, STT_NOTYPE, SymValue, 0, Sec);
-  Cmd->Sym = cast<DefinedRegular>(Sym->body());
+  Cmd->Sym = cast<DefinedRegular>(Sym);
 }
 
 // This function is called from assignAddresses, while we are
@@ -283,13 +283,8 @@ LinkerScript::computeInputSections(const InputSectionDescription *Cmd,
     size_t SizeBefore = Ret.size();
 
     for (InputSectionBase *Sec : InputSections) {
-      if (Sec->Assigned)
+      if (!Sec->Live || Sec->Assigned)
         continue;
-
-      if (!Sec->Live) {
-        reportDiscarded(Sec);
-        continue;
-      }
 
       // For -emit-relocs we have to ignore entries like
       //   .rela.dyn : { *(.rela.data) }
@@ -318,10 +313,12 @@ LinkerScript::computeInputSections(const InputSectionDescription *Cmd,
 
 void LinkerScript::discard(ArrayRef<InputSection *> V) {
   for (InputSection *S : V) {
-    S->Live = false;
     if (S == InX::ShStrTab || S == InX::Dynamic || S == InX::DynSymTab ||
         S == InX::DynStrTab)
       error("discarding " + S->Name + " section is not allowed");
+
+    S->Assigned = false;
+    S->Live = false;
     discard(S->DependentSections);
   }
 }
@@ -360,16 +357,17 @@ void LinkerScript::processSectionCommands() {
   Ctx = Deleter.get();
   Ctx->OutSec = Aether;
 
+  size_t I = 0;
   DenseMap<SectionBase *, int> Order = buildSectionOrder();
   // Add input sections to output sections.
-  for (size_t I = 0; I < SectionCommands.size(); ++I) {
+  for (BaseCommand *Base : SectionCommands) {
     // Handle symbol assignments outside of any output section.
-    if (auto *Cmd = dyn_cast<SymbolAssignment>(SectionCommands[I])) {
+    if (auto *Cmd = dyn_cast<SymbolAssignment>(Base)) {
       addSymbol(Cmd);
       continue;
     }
 
-    if (auto *Sec = dyn_cast<OutputSection>(SectionCommands[I])) {
+    if (auto *Sec = dyn_cast<OutputSection>(Base)) {
       std::vector<InputSection *> V = createInputSectionList(*Sec, Order);
 
       // The output section name `/DISCARD/' is special.
@@ -384,13 +382,12 @@ void LinkerScript::processSectionCommands() {
       // sections satisfy a given constraint. If not, a directive is handled
       // as if it wasn't present from the beginning.
       //
-      // Because we'll iterate over SectionCommands many more times, the easiest
-      // way to "make it as if it wasn't present" is to just remove it.
+      // Because we'll iterate over SectionCommands many more times, the easy
+      // way to "make it as if it wasn't present" is to make it empty.
       if (!matchConstraints(V, Sec->Constraint)) {
         for (InputSectionBase *S : V)
           S->Assigned = false;
-        SectionCommands.erase(SectionCommands.begin() + I);
-        --I;
+        Sec->SectionCommands.clear();
         continue;
       }
 
@@ -412,40 +409,13 @@ void LinkerScript::processSectionCommands() {
       // Add input sections to an output section.
       for (InputSection *S : V)
         Sec->addSection(S);
+
+      Sec->SectionIndex = I++;
+      if (Sec->Noload)
+        Sec->Type = SHT_NOBITS;
     }
   }
   Ctx = nullptr;
-
-  // Output sections are emitted in the exact same order as
-  // appeared in SECTIONS command, so we know their section indices.
-  for (size_t I = 0; I < SectionCommands.size(); ++I) {
-    auto *Sec = dyn_cast<OutputSection>(SectionCommands[I]);
-    if (!Sec)
-      continue;
-    assert(Sec->SectionIndex == INT_MAX);
-    Sec->SectionIndex = I;
-    if (Sec->Noload)
-      Sec->Type = SHT_NOBITS;
-  }
-}
-
-// If no SECTIONS command was given, we create simple SectionCommands
-// as if a minimum SECTIONS command were given. This function does that.
-void LinkerScript::fabricateDefaultCommands() {
-  // Define start address
-  uint64_t StartAddr = UINT64_MAX;
-
-  // The Sections with -T<section> have been sorted in order of ascending
-  // address. We must lower StartAddr if the lowest -T<section address> as
-  // calls to setDot() must be monotonically increasing.
-  for (auto &KV : Config->SectionStartMap)
-    StartAddr = std::min(StartAddr, KV.second);
-
-  auto Expr = [=] {
-    return std::min(StartAddr, Target->getImageBase() + elf::getHeaderSize());
-  };
-  SectionCommands.insert(SectionCommands.begin(),
-                         make<SymbolAssignment>(".", Expr, ""));
 }
 
 static OutputSection *findByName(ArrayRef<BaseCommand *> Vec,
@@ -457,16 +427,24 @@ static OutputSection *findByName(ArrayRef<BaseCommand *> Vec,
   return nullptr;
 }
 
+static void reportOrphan(InputSectionBase *IS, StringRef Name) {
+  if (Config->OrphanHandling == OrphanHandlingPolicy::Error)
+    error(toString(IS) + " is being placed in '" + Name + "'");
+  else if (Config->OrphanHandling == OrphanHandlingPolicy::Warn)
+    warn(toString(IS) + " is being placed in '" + Name + "'");
+}
+
 // Add sections that didn't match any sections command.
 void LinkerScript::addOrphanSections(OutputSectionFactory &Factory) {
   unsigned End = SectionCommands.size();
 
+  std::vector<OutputSection *> V;
   for (InputSectionBase *S : InputSections) {
     if (!S->Live || S->Parent)
       continue;
 
     StringRef Name = getOutputSectionName(S->Name);
-    log(toString(S) + " is being placed in '" + Name + "'");
+    reportOrphan(S, Name);
 
     if (OutputSection *Sec =
             findByName(makeArrayRef(SectionCommands).slice(0, End), Name)) {
@@ -475,9 +453,18 @@ void LinkerScript::addOrphanSections(OutputSectionFactory &Factory) {
     }
 
     if (OutputSection *OS = Factory.addInputSec(S, Name))
-      SectionCommands.push_back(OS);
+      V.push_back(OS);
     assert(S->getOutputSection()->SectionIndex == INT_MAX);
   }
+
+  // If no SECTIONS command was given, we should insert sections commands
+  // before others, so that we can handle scripts which refers them,
+  // for example: "foo = ABSOLUTE(ADDR(.text)));".
+  // When SECTIONS command is present we just add all orphans to the end.
+  if (HasSectionsCommand)
+    SectionCommands.insert(SectionCommands.end(), V.begin(), V.end());
+  else
+    SectionCommands.insert(SectionCommands.begin(), V.begin(), V.end());
 }
 
 uint64_t LinkerScript::advance(uint64_t Size, unsigned Alignment) {
@@ -798,11 +785,26 @@ LinkerScript::AddressState::AddressState() {
   }
 }
 
-// Assign addresses as instructed by linker script SECTIONS sub-commands.
+static uint64_t getInitialDot() {
+  // By default linker scripts use an initial value of 0 for '.',
+  // but prefer -image-base if set.
+  if (Script->HasSectionsCommand)
+    return Config->ImageBase ? *Config->ImageBase : 0;
+
+  uint64_t StartAddr = UINT64_MAX;
+  // The Sections with -T<section> have been sorted in order of ascending
+  // address. We must lower StartAddr if the lowest -T<section address> as
+  // calls to setDot() must be monotonically increasing.
+  for (auto &KV : Config->SectionStartMap)
+    StartAddr = std::min(StartAddr, KV.second);
+  return std::min(StartAddr, Target->getImageBase() + elf::getHeaderSize());
+}
+
+// Here we assign addresses as instructed by linker script SECTIONS
+// sub-commands. Doing that allows us to use final VA values, so here
+// we also handle rest commands like symbol assignments and ASSERTs.
 void LinkerScript::assignAddresses() {
-  // By default linker scripts use an initial value of 0 for '.', but prefer
-  // -image-base if set.
-  Dot = Config->ImageBase ? *Config->ImageBase : 0;
+  Dot = getInitialDot();
 
   auto Deleter = make_unique<AddressState>();
   Ctx = Deleter.get();

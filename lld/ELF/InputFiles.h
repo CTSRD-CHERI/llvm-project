@@ -11,9 +11,9 @@
 #define LLD_ELF_INPUT_FILES_H
 
 #include "Config.h"
-#include "Error.h"
 #include "InputSection.h"
 #include "Symbols.h"
+#include "lld/Common/ErrorHandler.h"
 
 #include "lld/Common/LLVM.h"
 #include "lld/Common/Reproduce.h"
@@ -167,7 +167,7 @@ public:
   ObjFile(MemoryBufferRef M, StringRef ArchiveName);
   void parse(llvm::DenseSet<llvm::CachedHashStringRef> &ComdatGroups);
 
-  InputSectionBase *getSection(const Elf_Sym &Sym) const;
+  InputSectionBase *getSection(uint32_t Index) const;
 
   SymbolBody &getSymbolBody(uint32_t SymbolIndex) const {
     if (SymbolIndex >= this->Symbols.size())
@@ -185,6 +185,7 @@ public:
   // If no information is available, returns "".
   std::string getLineInfo(InputSectionBase *S, uint64_t Offset);
   llvm::Optional<llvm::DILineInfo> getDILineInfo(InputSectionBase *, uint64_t);
+  llvm::Optional<std::pair<std::string, unsigned>> getVariableLoc(StringRef Name);
 
   // MIPS GP0 value defined by this file. This value represents the gp value
   // used to create the relocatable object and required to support
@@ -200,7 +201,7 @@ private:
   void
   initializeSections(llvm::DenseSet<llvm::CachedHashStringRef> &ComdatGroups);
   void initializeSymbols();
-  void initializeDwarfLine();
+  void initializeDwarf();
   InputSectionBase *getRelocTarget(const Elf_Shdr &Sec);
   InputSectionBase *createInputSection(const Elf_Shdr &Sec);
   StringRef getSectionName(const Elf_Shdr &Sec);
@@ -216,6 +217,7 @@ private:
   // single object file, so we cache debugging information in order to
   // parse it only once for each object file we link.
   std::unique_ptr<llvm::DWARFDebugLine> DwarfLine;
+  llvm::DenseMap<StringRef, std::pair<unsigned, unsigned>> VariableLoc;
   llvm::once_flag InitDwarfLine;
 };
 
@@ -294,7 +296,6 @@ template <class ELFT> class SharedFile : public ELFFileBase<ELFT> {
 public:
   std::string SoName;
 
-  const Elf_Shdr *getSection(const Elf_Sym &Sym) const;
   llvm::ArrayRef<StringRef> getUndefinedSymbols() { return Undefs; }
 
   static bool classof(const InputFile *F) {

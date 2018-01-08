@@ -156,6 +156,8 @@
 // CHECK_I686_M32: #define __i686__ 1
 // CHECK_I686_M32: #define __pentiumpro 1
 // CHECK_I686_M32: #define __pentiumpro__ 1
+// CHECK_I686_M32: #define __tune_i686__ 1
+// CHECK_I686_M32: #define __tune_pentiumpro__ 1
 // CHECK_I686_M32: #define i386 1
 // RUN: not %clang -march=i686 -m64 -E -dM %s -o - 2>&1 \
 // RUN:     -target i386-unknown-linux \
@@ -793,6 +795,7 @@
 // CHECK_KNM_M32: #define __AVX512ER__ 1
 // CHECK_KNM_M32: #define __AVX512F__ 1
 // CHECK_KNM_M32: #define __AVX512PF__ 1
+// CHECK_KNM_M32: #define __AVX512VPOPCNTDQ__ 1
 // CHECK_KNM_M32: #define __AVX__ 1
 // CHECK_KNM_M32: #define __BMI2__ 1
 // CHECK_KNM_M32: #define __BMI__ 1
@@ -826,6 +829,7 @@
 // CHECK_KNM_M64: #define __AVX512ER__ 1
 // CHECK_KNM_M64: #define __AVX512F__ 1
 // CHECK_KNM_M64: #define __AVX512PF__ 1
+// CHECK_KNM_M64: #define __AVX512VPOPCNTDQ__ 1
 // CHECK_KNM_M64: #define __AVX__ 1
 // CHECK_KNM_M64: #define __BMI2__ 1
 // CHECK_KNM_M64: #define __BMI__ 1
@@ -1154,15 +1158,19 @@
 //
 // RUN: %clang -march=lakemont -m32 -E -dM %s -o - 2>&1 \
 // RUN:     -target i386-unknown-linux \
-// RUN:   | FileCheck %s -check-prefix=CHECK_LMT_M32
-// CHECK_LMT_M32: #define __i386 1
-// CHECK_LMT_M32: #define __i386__ 1
-// CHECK_LMT_M32: #define __tune_lakemont__ 1
-// CHECK_LMT_M32: #define i386 1
+// RUN:   | FileCheck %s -check-prefix=CHECK_LAKEMONT_M32
+// CHECK_LAKEMONT_M32: #define __i386 1
+// CHECK_LAKEMONT_M32: #define __i386__ 1
+// CHECK_LAKEMONT_M32: #define __i586 1
+// CHECK_LAKEMONT_M32: #define __i586__ 1
+// CHECK_LAKEMONT_M32: #define __pentium 1
+// CHECK_LAKEMONT_M32: #define __pentium__ 1
+// CHECK_LAKEMONT_M32: #define __tune_lakemont__ 1
+// CHECK_LAKEMONT_M32: #define i386 1
 // RUN: not %clang -march=lakemont -m64 -E -dM %s -o - 2>&1 \
 // RUN:     -target i386-unknown-linux \
-// RUN:   | FileCheck %s -check-prefix=CHECK_LMT_M64
-// CHECK_LMT_M64: error:
+// RUN:   | FileCheck %s -check-prefix=CHECK_LAKEMONT_M64
+// CHECK_LAKEMONT_M64: error:
 //
 // RUN: %clang -march=geode -m32 -E -dM %s -o - 2>&1 \
 // RUN:     -target i386-unknown-linux \

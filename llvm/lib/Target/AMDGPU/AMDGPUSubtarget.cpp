@@ -138,6 +138,7 @@ AMDGPUSubtarget::AMDGPUSubtarget(const Triple &TT, StringRef GPU, StringRef FS,
     Has16BitInsts(false),
     HasIntClamp(false),
     HasVOP3PInsts(false),
+    HasMadMixInsts(false),
     HasMovrel(false),
     HasVGPRIndexMode(false),
     HasScalarStores(false),
@@ -543,6 +544,7 @@ unsigned SISubtarget::getMaxNumVGPRs(const MachineFunction &MF) const {
   return MaxNumVGPRs - getReservedNumVGPRs(MF);
 }
 
+namespace {
 struct MemOpClusterMutation : ScheduleDAGMutation {
   const SIInstrInfo *TII;
 
@@ -591,6 +593,7 @@ struct MemOpClusterMutation : ScheduleDAGMutation {
     }
   }
 };
+} // namespace
 
 void SISubtarget::getPostRAMutations(
     std::vector<std::unique_ptr<ScheduleDAGMutation>> &Mutations) const {

@@ -408,6 +408,8 @@ void ScalarEnumerationTraits<ELFYAML::ELF_SHT>::enumeration(
   ECase(SHT_GROUP);
   ECase(SHT_SYMTAB_SHNDX);
   ECase(SHT_LOOS);
+  ECase(SHT_ANDROID_REL);
+  ECase(SHT_ANDROID_RELA);
   ECase(SHT_LLVM_ODRTAB);
   ECase(SHT_GNU_ATTRIBUTES);
   ECase(SHT_GNU_HASH);
@@ -720,6 +722,7 @@ void MappingTraits<ELFYAML::ProgramHeader>::mapping(
   IO.mapOptional("Sections", Phdr.Sections);
   IO.mapOptional("VAddr", Phdr.VAddr, Hex64(0));
   IO.mapOptional("PAddr", Phdr.PAddr, Hex64(0));
+  IO.mapOptional("Align", Phdr.Align);
 }
 
 namespace {

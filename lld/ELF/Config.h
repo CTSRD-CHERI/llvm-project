@@ -24,7 +24,6 @@ namespace lld {
 namespace elf {
 
 class InputFile;
-struct Symbol;
 
 enum ELFKind {
   ELFNoneKind,
@@ -45,6 +44,9 @@ enum class StripPolicy { None, All, Debug };
 
 // For --unresolved-symbols.
 enum class UnresolvedPolicy { ReportError, Warn, Ignore, IgnoreAll };
+
+// For --orphan-handling.
+enum class OrphanHandlingPolicy { Place, Warn, Error };
 
 // For --sort-section and linkerscript sorting rules.
 enum class SortSectionPolicy { Default, None, Alignment, Name, Priority };
@@ -102,10 +104,10 @@ struct Configuration {
   std::vector<SymbolVersion> VersionScriptLocals;
   std::vector<uint8_t> BuildIdVector;
   bool AllowMultipleDefinition;
+  bool AndroidPackDynRelocs = false;
   bool AsNeeded = false;
   bool Bsymbolic;
   bool BsymbolicFunctions;
-  bool ColorDiagnostics = false;
   bool CompressDebugSections;
   bool DefineCommon;
   bool Demangle = true;
@@ -114,7 +116,6 @@ struct Configuration {
   bool EmitRelocs;
   bool EnableNewDtags;
   bool ExportDynamic;
-  bool FatalWarnings;
   bool GcSections;
   bool GdbIndex;
   bool GnuHash = false;
@@ -155,6 +156,7 @@ struct Configuration {
   bool ExitEarly;
   bool ZWxneeded;
   DiscardPolicy Discard;
+  OrphanHandlingPolicy OrphanHandling;
   SortSectionPolicy SortSection;
   StripPolicy Strip;
   UnresolvedPolicy UnresolvedSymbols;
@@ -163,7 +165,6 @@ struct Configuration {
   ELFKind EKind = ELFNoneKind;
   uint16_t DefaultSymbolVersion = llvm::ELF::VER_NDX_GLOBAL;
   uint16_t EMachine = llvm::ELF::EM_NONE;
-  uint64_t ErrorLimit = 20;
   llvm::Optional<uint64_t> ImageBase;
   uint64_t MaxPageSize;
   uint64_t ZStackSize;
