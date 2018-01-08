@@ -3842,7 +3842,7 @@ SDValue DAGTypeLegalizer::GenWidenVectorLoads(SmallVectorImpl<SDValue> &LdChain,
     }
 
     LdOps.push_back(L);
-
+    LdOp = L;
 
     LdWidth -= NewVTWidth;
   }

@@ -554,7 +554,7 @@ static DecodeStatus DecodeRegListOperand16(MCInst &Inst, unsigned Insn,
                                            uint64_t Address,
                                            const void *Decoder);
 
-static DecodeStatus DecodeMovePRegPair(MCInst &Inst, unsigned Insn,
+static DecodeStatus DecodeMovePRegPair(MCInst &Inst, unsigned RegPair,
                                        uint64_t Address,
                                        const void *Decoder);
 
@@ -2559,10 +2559,8 @@ static DecodeStatus DecodeRegListOperand16(MCInst &Inst, unsigned Insn,
   return MCDisassembler::Success;
 }
 
-static DecodeStatus DecodeMovePRegPair(MCInst &Inst, unsigned Insn,
+static DecodeStatus DecodeMovePRegPair(MCInst &Inst, unsigned RegPair,
                                        uint64_t Address, const void *Decoder) {
-  unsigned RegPair = fieldFromInstruction(Insn, 7, 3);
-
   switch (RegPair) {
   default:
     return MCDisassembler::Fail;

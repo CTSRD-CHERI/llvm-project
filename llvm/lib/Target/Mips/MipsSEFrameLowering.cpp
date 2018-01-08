@@ -29,6 +29,7 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/IR/Function.h"
 #include "llvm/MC/MCDwarf.h"
@@ -37,7 +38,6 @@
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
-#include "llvm/Target/TargetInstrInfo.h"
 #include "llvm/Target/TargetRegisterInfo.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
 #include <cassert>
@@ -964,8 +964,7 @@ void MipsSEFrameLowering::determineCalleeSaves(MachineFunction &MF,
   }
 
   // Set scavenging frame index if necessary.
-  uint64_t MaxSPOffset = MF.getInfo<MipsFunctionInfo>()->getIncomingArgSize() +
-    estimateStackSize(MF);
+  uint64_t MaxSPOffset = estimateStackSize(MF);
 
   // We will need the emergency spill slot if we have any stack offsets that
   // don't fit in an immediate.  In normal MIPS code, this means a 16-bit
@@ -973,13 +972,18 @@ void MipsSEFrameLowering::determineCalleeSaves(MachineFunction &MF,
   // csc / cld, but only 8-bit immediates (plus a 3-bit shift) for c[ls]x
   // instructions for other spills.  The latter only matters if we're using the
   // capability-stack ABI.
+  // XXXAR: no longer true if we have the big immediate CLC enabled
   if (STI.isCheri()) {
     if (STI.isABI_CheriPureCap()) {
       if (isInt<10>(MaxSPOffset))
         return;
     } else if (isInt<15>(MaxSPOffset))
       return;
-  } else if (isInt<16>(MaxSPOffset))
+  }
+  // MSA has a minimum offset of 10 bits signed. If there is a variable
+  // sized object on the stack, the estimation cannot account for it.
+  else if (isIntN(STI.hasMSA() ? 10 : 16, MaxSPOffset) &&
+      !MF.getFrameInfo().hasVarSizedObjects())
     return;
 
   const TargetRegisterClass &RC =

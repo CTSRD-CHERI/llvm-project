@@ -10,6 +10,7 @@
 #include "ClangdLSPServer.h"
 #include "JSONRPCDispatcher.h"
 #include "Path.h"
+#include "Trace.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
@@ -40,6 +41,10 @@ static llvm::cl::opt<bool> EnableSnippets(
         "Present snippet completions instead of plaintext completions"),
     llvm::cl::init(false));
 
+static llvm::cl::opt<bool>
+    PrettyPrint("pretty", llvm::cl::desc("Pretty-print JSON output"),
+                llvm::cl::init(false));
+
 static llvm::cl::opt<bool> RunSynchronously(
     "run-synchronously",
     llvm::cl::desc("Parse on main thread. If set, -j is ignored"),
@@ -54,6 +59,12 @@ static llvm::cl::opt<Path> InputMirrorFile(
     "input-mirror-file",
     llvm::cl::desc(
         "Mirror all LSP input to the specified file. Useful for debugging."),
+    llvm::cl::init(""), llvm::cl::Hidden);
+
+static llvm::cl::opt<Path> TraceFile(
+    "trace",
+    llvm::cl::desc(
+        "Trace internal events and timestamps in chrome://tracing JSON format"),
     llvm::cl::init(""), llvm::cl::Hidden);
 
 int main(int argc, char *argv[]) {
@@ -81,11 +92,24 @@ int main(int argc, char *argv[]) {
                    << EC.message();
     }
   }
+  llvm::Optional<llvm::raw_fd_ostream> TraceStream;
+  std::unique_ptr<trace::Session> TraceSession;
+  if (!TraceFile.empty()) {
+    std::error_code EC;
+    TraceStream.emplace(TraceFile, /*ref*/ EC, llvm::sys::fs::F_RW);
+    if (EC) {
+      TraceFile.reset();
+      llvm::errs() << "Error while opening trace file: " << EC.message();
+    } else {
+      TraceSession = trace::Session::create(*TraceStream);
+    }
+  }
 
   llvm::raw_ostream &Outs = llvm::outs();
   llvm::raw_ostream &Logs = llvm::errs();
   JSONOutput Out(Outs, Logs,
-                 InputMirrorStream ? InputMirrorStream.getPointer() : nullptr);
+                 InputMirrorStream ? InputMirrorStream.getPointer() : nullptr,
+                 PrettyPrint);
 
   // If --compile-commands-dir arg was invoked, check value and override default
   // path.
@@ -113,7 +137,7 @@ int main(int argc, char *argv[]) {
   // Initialize and run ClangdLSPServer.
   ClangdLSPServer LSPServer(Out, WorkerThreadsCount, EnableSnippets,
                             ResourceDirRef, CompileCommandsDirPath);
-
   constexpr int NoShutdownRequestErrorCode = 1;
+  llvm::set_thread_name("clangd.main");
   return LSPServer.run(std::cin) ? 0 : NoShutdownRequestErrorCode;
 }

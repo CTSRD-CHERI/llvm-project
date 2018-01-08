@@ -3715,7 +3715,7 @@ void LLVMStyle<ELFT>::printRelocations(const Elf_Shdr *Sec, const ELFO *Obj) {
   case ELF::SHT_ANDROID_REL:
   case ELF::SHT_ANDROID_RELA:
     for (const Elf_Rela &R : unwrapOrError(Obj->android_relas(Sec)))
-      printRelocation(Obj, R, SymTab);
+      printRelocation(Obj, R, SymTab, /*IsRela=*/true);
     break;
   }
 }
