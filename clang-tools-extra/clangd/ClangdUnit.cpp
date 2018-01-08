@@ -10,6 +10,7 @@
 #include "ClangdUnit.h"
 
 #include "Logger.h"
+#include "Trace.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/CompilerInvocation.h"
 #include "clang/Frontend/FrontendActions.h"
@@ -388,6 +389,7 @@ public:
       assert(CCS && "Expected the CodeCompletionString to be non-null");
       Items.push_back(ProcessCodeCompleteResult(Result, *CCS));
     }
+    std::sort(Items.begin(), Items.end());
   }
 
   GlobalCodeCompletionAllocator &getAllocator() override { return *Allocator; }
@@ -964,10 +966,15 @@ private:
     End.character = SourceMgr.getSpellingColumnNumber(LocEnd) - 1;
     Range R = {Begin, End};
     Location L;
-    L.uri = URI::fromFile(
-        SourceMgr.getFilename(SourceMgr.getSpellingLoc(LocStart)));
-    L.range = R;
-    DeclarationLocations.push_back(L);
+    if (const FileEntry *F =
+            SourceMgr.getFileEntryForID(SourceMgr.getFileID(LocStart))) {
+      StringRef FilePath = F->tryGetRealPathName();
+      if (FilePath.empty())
+        FilePath = F->getName();
+      L.uri = URI::fromFile(FilePath);
+      L.range = R;
+      DeclarationLocations.push_back(L);
+    }
   }
 
   void finish() override {
@@ -1285,6 +1292,7 @@ CppFile::deferRebuild(StringRef NewContents,
         return OldPreamble;
       }
 
+      trace::Span Tracer(llvm::Twine("Preamble: ") + That->FileName);
       std::vector<DiagWithFixIts> PreambleDiags;
       StoreDiagsConsumer PreambleDiagnosticsConsumer(/*ref*/ PreambleDiags);
       IntrusiveRefCntPtr<DiagnosticsEngine> PreambleDiagsEngine =
@@ -1330,9 +1338,13 @@ CppFile::deferRebuild(StringRef NewContents,
     }
 
     // Compute updated AST.
-    llvm::Optional<ParsedAST> NewAST =
-        ParsedAST::Build(std::move(CI), PreambleForAST, SerializedPreambleDecls,
-                         std::move(ContentsBuffer), PCHs, VFS, That->Logger);
+    llvm::Optional<ParsedAST> NewAST;
+    {
+      trace::Span Tracer(llvm::Twine("Build: ") + That->FileName);
+      NewAST = ParsedAST::Build(
+          std::move(CI), PreambleForAST, SerializedPreambleDecls,
+          std::move(ContentsBuffer), PCHs, VFS, That->Logger);
+    }
 
     if (NewAST) {
       Diagnostics.insert(Diagnostics.end(), NewAST->getDiagnostics().begin(),

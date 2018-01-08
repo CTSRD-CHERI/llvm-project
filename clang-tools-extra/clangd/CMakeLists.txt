@@ -10,9 +10,11 @@ add_clang_library(clangDaemon
   DraftStore.cpp
   GlobalCompilationDatabase.cpp
   JSONRPCDispatcher.cpp
+  JSONExpr.cpp
   Logger.cpp
   Protocol.cpp
   ProtocolHandlers.cpp
+  Trace.cpp
 
   LINK_LIBS
   clangAST

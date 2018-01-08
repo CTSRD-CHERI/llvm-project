@@ -3446,6 +3446,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-mpie-copy-relocations");
   }
 
+  if (Args.hasFlag(options::OPT_fno_plt, options::OPT_fplt, false)) {
+    CmdArgs.push_back("-fno-plt");
+  }
+
   // -fhosted is default.
   // TODO: Audit uses of KernelOrKext and see where it'd be more appropriate to
   // use Freestanding.
@@ -4998,7 +5002,8 @@ void Clang::AddClangCLArgs(const ArgList &Args, types::ID InputType,
   // Parse the default calling convention options.
   if (Arg *CCArg =
           Args.getLastArg(options::OPT__SLASH_Gd, options::OPT__SLASH_Gr,
-                          options::OPT__SLASH_Gz, options::OPT__SLASH_Gv)) {
+                          options::OPT__SLASH_Gz, options::OPT__SLASH_Gv,
+                          options::OPT__SLASH_Gregcall)) {
     unsigned DCCOptId = CCArg->getOption().getID();
     const char *DCCFlag = nullptr;
     bool ArchSupported = true;
@@ -5018,6 +5023,10 @@ void Clang::AddClangCLArgs(const ArgList &Args, types::ID InputType,
     case options::OPT__SLASH_Gv:
       ArchSupported = Arch == llvm::Triple::x86 || Arch == llvm::Triple::x86_64;
       DCCFlag = "-fdefault-calling-conv=vectorcall";
+      break;
+    case options::OPT__SLASH_Gregcall:
+      ArchSupported = Arch == llvm::Triple::x86 || Arch == llvm::Triple::x86_64;
+      DCCFlag = "-fdefault-calling-conv=regcall";
       break;
     }
 

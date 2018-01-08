@@ -66,8 +66,8 @@ LLDDwarfObj<ELFT>::findAux(const InputSectionBase &Sec, uint64_t Pos,
   uint32_t SymIndex = Rel.getSymbol(Config->IsMips64EL);
   const typename ELFT::Sym &Sym = File->getELFSyms()[SymIndex];
   uint32_t SecIndex = File->getSectionIndex(Sym);
-  SymbolBody &B = File->getRelocTargetSym(Rel);
-  auto &DR = cast<DefinedRegular>(B);
+  Symbol &B = File->getRelocTargetSym(Rel);
+  auto &DR = cast<Defined>(B);
   uint64_t Val = DR.Value + getAddend<ELFT>(Rel);
 
   // FIXME: We should be consistent about always adding the file

@@ -567,7 +567,6 @@ collectSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
       if (!Args.hasArg(options::OPT_shared) && !TC.getTriple().isAndroid())
         HelperStaticRuntimes.push_back("asan-preinit");
     }
-
     if (SanArgs.needsUbsanRt()) {
       if (SanArgs.requiresMinimalRuntime()) {
         SharedRuntimes.push_back("ubsan_minimal");
@@ -575,6 +574,8 @@ collectSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
         SharedRuntimes.push_back("ubsan_standalone");
       }
     }
+    if (SanArgs.needsScudoRt())
+      SharedRuntimes.push_back("scudo");
   }
 
   // The stats_client library is also statically linked into DSOs.
@@ -631,6 +632,11 @@ collectSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
   }
   if (SanArgs.needsEsanRt())
     StaticRuntimes.push_back("esan");
+  if (SanArgs.needsScudoRt()) {
+    StaticRuntimes.push_back("scudo");
+    if (SanArgs.linkCXXRuntimes())
+      StaticRuntimes.push_back("scudo_cxx");
+  }
 }
 
 // Should be called before we add system libraries (C++ ABI, libstdc++/libc++,

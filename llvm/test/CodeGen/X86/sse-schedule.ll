@@ -1942,7 +1942,7 @@ define i32 @test_movmskps(<4 x float> %a0) {
 ;
 ; BTVER2-LABEL: test_movmskps:
 ; BTVER2:       # BB#0:
-; BTVER2-NEXT:    vmovmskps %xmm0, %eax # sched: [1:0.50]
+; BTVER2-NEXT:    vmovmskps %xmm0, %eax # sched: [3:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
 ;
 ; ZNVER1-LABEL: test_movmskps:
@@ -2547,8 +2547,8 @@ define <4 x float> @test_rcpps(<4 x float> %a0, <4 x float> *%a1) {
 ;
 ; SKX-LABEL: test_rcpps:
 ; SKX:       # BB#0:
-; SKX-NEXT:    vrcp14ps %xmm0, %xmm0 # sched: [4:1.00]
-; SKX-NEXT:    vrcp14ps (%rdi), %xmm1 # sched: [10:1.00]
+; SKX-NEXT:    vrcpps %xmm0, %xmm0 # sched: [4:1.00]
+; SKX-NEXT:    vrcpps (%rdi), %xmm1 # sched: [10:1.00]
 ; SKX-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -2719,8 +2719,8 @@ define <4 x float> @test_rsqrtps(<4 x float> %a0, <4 x float> *%a1) {
 ;
 ; SKX-LABEL: test_rsqrtps:
 ; SKX:       # BB#0:
-; SKX-NEXT:    vrsqrt14ps %xmm0, %xmm0 # sched: [4:1.00]
-; SKX-NEXT:    vrsqrt14ps (%rdi), %xmm1 # sched: [10:1.00]
+; SKX-NEXT:    vrsqrtps %xmm0, %xmm0 # sched: [4:1.00]
+; SKX-NEXT:    vrsqrtps (%rdi), %xmm1 # sched: [10:1.00]
 ; SKX-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;

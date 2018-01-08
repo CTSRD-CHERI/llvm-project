@@ -17,6 +17,7 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include <cstddef>
@@ -28,8 +29,8 @@
 namespace lld {
 namespace elf {
 
-class DefinedRegular;
-class SymbolBody;
+class Defined;
+class Symbol;
 class InputSectionBase;
 class InputSection;
 class OutputSection;
@@ -95,7 +96,7 @@ struct SymbolAssignment : BaseCommand {
 
   // The LHS of an expression. Name is either a symbol name or ".".
   StringRef Name;
-  DefinedRegular *Sym = nullptr;
+  Defined *Sym = nullptr;
 
   // The RHS of an expression.
   Expr Expression;
@@ -250,7 +251,7 @@ public:
 
   ExprValue getSymbolValue(StringRef Name, const Twine &Loc);
 
-  void addOrphanSections(OutputSectionFactory &Factory);
+  void addOrphanSections();
   void removeEmptyCommands();
   void adjustSectionsBeforeSorting();
   void adjustSectionsAfterSorting();
@@ -277,7 +278,7 @@ public:
   std::vector<InputSectionDescription *> KeptSections;
 
   // A map from memory region name to a memory region descriptor.
-  llvm::DenseMap<llvm::StringRef, MemoryRegion *> MemoryRegions;
+  llvm::MapVector<llvm::StringRef, MemoryRegion *> MemoryRegions;
 
   // A list of symbols referenced by the script.
   std::vector<llvm::StringRef> ReferencedSymbols;

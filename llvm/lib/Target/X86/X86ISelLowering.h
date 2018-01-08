@@ -254,7 +254,9 @@ namespace llvm {
       /// Note that these typically require refinement
       /// in order to obtain suitable precision.
       FRSQRT, FRCP,
-      FRSQRTS, FRCPS,
+
+      // AVX-512 reciprocal approximations with a little more precision.
+      RSQRT14, RSQRT14S, RCP14, RCP14S,
 
       // Thread Local Storage.
       TLSADDR,
@@ -487,6 +489,12 @@ namespace llvm {
       FMADDSUB_RND,
       FMSUBADD_RND,
 
+      // Scalar intrinsic FMA.
+      FMADDS1, FMADDS3,
+      FNMADDS1, FNMADDS3,
+      FMSUBS1, FMSUBS3,
+      FNMSUBS1, FNMSUBS3,
+
       // Scalar intrinsic FMA with rounding mode.
       // Two versions, passthru bits on op1 or op3.
       FMADDS1_RND, FMADDS3_RND,
@@ -555,7 +563,7 @@ namespace llvm {
       RSQRT28, RSQRT28S, RCP28, RCP28S, EXP2,
 
       // Conversions between float and half-float.
-      CVTPS2PH, CVTPH2PS,
+      CVTPS2PH, CVTPH2PS, CVTPH2PS_RND,
 
       // LWP insert record.
       LWPINS,
@@ -1396,13 +1404,21 @@ namespace llvm {
   };
 
   // X86 specific Gather node.
-  class X86MaskedGatherSDNode : public MaskedGatherScatterSDNode {
+  // The class has the same order of operands as MaskedGatherSDNode for
+  // convenience.
+  class X86MaskedGatherSDNode : public MemSDNode {
   public:
     X86MaskedGatherSDNode(unsigned Order,
                           const DebugLoc &dl, SDVTList VTs, EVT MemVT,
                           MachineMemOperand *MMO)
-      : MaskedGatherScatterSDNode(X86ISD::MGATHER, Order, dl, VTs, MemVT, MMO)
+      : MemSDNode(X86ISD::MGATHER, Order, dl, VTs, MemVT, MMO)
     {}
+
+    const SDValue &getBasePtr() const { return getOperand(3); }
+    const SDValue &getIndex()   const { return getOperand(4); }
+    const SDValue &getMask()    const { return getOperand(2); }
+    const SDValue &getValue()   const { return getOperand(1); }
+
     static bool classof(const SDNode *N) {
       return N->getOpcode() == X86ISD::MGATHER;
     }

@@ -368,6 +368,8 @@ static const ArchDefinitionEntry g_macho_arch_entries[] = {
      SUBTYPE_MASK},
     {ArchSpec::eCore_ppc64_generic, llvm::MachO::CPU_TYPE_POWERPC64, 0,
      UINT32_MAX, SUBTYPE_MASK},
+    {ArchSpec::eCore_ppc64le_generic, llvm::MachO::CPU_TYPE_POWERPC64, CPU_ANY,
+     UINT32_MAX, SUBTYPE_MASK},
     {ArchSpec::eCore_ppc64_ppc970_64, llvm::MachO::CPU_TYPE_POWERPC64, 100,
      UINT32_MAX, SUBTYPE_MASK},
     {ArchSpec::eCore_x86_32_i386, llvm::MachO::CPU_TYPE_I386, 3, UINT32_MAX,
@@ -516,7 +518,7 @@ static const CoreDefinition *FindCoreDefinition(llvm::StringRef name) {
 }
 
 static inline const CoreDefinition *FindCoreDefinition(ArchSpec::Core core) {
-  if (core >= 0 && core < llvm::array_lengthof(g_core_definitions))
+  if (core < llvm::array_lengthof(g_core_definitions))
     return &g_core_definitions[core];
   return nullptr;
 }
@@ -918,6 +920,9 @@ void ArchSpec::MergeFrom(const ArchSpec &other) {
       other.GetCore() != ArchSpec::eCore_arm_generic) {
     m_core = other.GetCore();
     CoreUpdated(true);
+  }
+  if (GetFlags() == 0) {
+    SetFlags(other.GetFlags());
   }
 }
 
