@@ -6357,24 +6357,36 @@ void Sema::AddFunctionCandidates(const UnresolvedSetImpl &Fns,
                                  OverloadCandidateSet& CandidateSet,
                                  TemplateArgumentListInfo *ExplicitTemplateArgs,
                                  bool SuppressUserConversions,
-                                 bool PartialOverloading) {
+                                 bool PartialOverloading,
+                                 bool FirstArgumentIsBase) {
   for (UnresolvedSetIterator F = Fns.begin(), E = Fns.end(); F != E; ++F) {
     NamedDecl *D = F.getDecl()->getUnderlyingDecl();
     if (FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
+      ArrayRef<Expr *> FunctionArgs = Args;
       if (isa<CXXMethodDecl>(FD) && !cast<CXXMethodDecl>(FD)->isStatic()) {
         QualType ObjectType;
         Expr::Classification ObjectClassification;
-        if (Expr *E = Args[0]) {
-          // Use the explit base to restrict the lookup:
-          ObjectType = E->getType();
-          ObjectClassification = E->Classify(Context);
-        } // .. else there is an implit base.
+        if (Args.size() > 0) {
+          if (Expr *E = Args[0]) {
+            // Use the explit base to restrict the lookup:
+            ObjectType = E->getType();
+            ObjectClassification = E->Classify(Context);
+          } // .. else there is an implit base.
+          FunctionArgs = Args.slice(1);
+        }
         AddMethodCandidate(cast<CXXMethodDecl>(FD), F.getPair(),
                            cast<CXXMethodDecl>(FD)->getParent(), ObjectType,
-                           ObjectClassification, Args.slice(1), CandidateSet,
+                           ObjectClassification, FunctionArgs, CandidateSet,
                            SuppressUserConversions, PartialOverloading);
       } else {
-        AddOverloadCandidate(FD, F.getPair(), Args, CandidateSet,
+        // Slice the first argument (which is the base) when we access
+        // static method as non-static
+        if (Args.size() > 0 && (!Args[0] || (FirstArgumentIsBase && isa<CXXMethodDecl>(FD) &&
+                                             !isa<CXXConstructorDecl>(FD)))) {
+          assert(cast<CXXMethodDecl>(FD)->isStatic());
+          FunctionArgs = Args.slice(1);
+        }
+        AddOverloadCandidate(FD, F.getPair(), FunctionArgs, CandidateSet,
                              SuppressUserConversions, PartialOverloading);
       }
     } else {
@@ -8996,6 +9008,18 @@ bool clang::isBetterOverloadCandidate(
     // C++14 [over.match.best]p1 section 2 bullet 3.
   }
 
+  // FIXME: Work around a defect in the C++17 guaranteed copy elision wording,
+  // as combined with the resolution to CWG issue 243.
+  //
+  // When the context is initialization by constructor ([over.match.ctor] or
+  // either phase of [over.match.list]), a constructor is preferred over
+  // a conversion function.
+  if (Kind == OverloadCandidateSet::CSK_InitByConstructor && NumArgs == 1 &&
+      Cand1.Function && Cand2.Function &&
+      isa<CXXConstructorDecl>(Cand1.Function) !=
+          isa<CXXConstructorDecl>(Cand2.Function))
+    return isa<CXXConstructorDecl>(Cand1.Function);
+
   //    -- F1 is a non-template function and F2 is a function template
   //       specialization, or, if not that,
   bool Cand1IsSpecialization = Cand1.Function &&
@@ -9054,20 +9078,6 @@ bool clang::isBetterOverloadCandidate(
         return true;
     }
   }
-  
-
-
-  // FIXME: Work around a defect in the C++17 guaranteed copy elision wording,
-  // as combined with the resolution to CWG issue 243.
-  //
-  // When the context is initialization by constructor ([over.match.ctor] or
-  // either phase of [over.match.list]), a constructor is preferred over
-  // a conversion function.
-  if (Kind == OverloadCandidateSet::CSK_InitByConstructor && NumArgs == 1 &&
-      Cand1.Function && Cand2.Function &&
-      isa<CXXConstructorDecl>(Cand1.Function) !=
-          isa<CXXConstructorDecl>(Cand2.Function))
-    return isa<CXXConstructorDecl>(Cand1.Function);
 
   // Check for enable_if value-based overload resolution.
   if (Cand1.Function && Cand2.Function) {

@@ -501,6 +501,8 @@ public:
     return getOS() == Triple::ELFIAMCU;
   }
 
+  bool isOSUnknown() const { return getOS() == Triple::UnknownOS; }
+
   bool isGNUEnvironment() const {
     EnvironmentType Env = getEnvironment();
     return Env == Triple::GNU || Env == Triple::GNUABIN32 ||
@@ -651,6 +653,11 @@ public:
   /// Tests whether the target is ARM (little and big endian).
   bool isARM() const {
     return getArch() == Triple::arm || getArch() == Triple::armeb;
+  }
+
+  /// Tests whether the target is AArch64 (little and big endian).
+  bool isAArch64() const {
+    return getArch() == Triple::aarch64 || getArch() == Triple::aarch64_be;
   }
 
   /// Tests wether the target supports comdat

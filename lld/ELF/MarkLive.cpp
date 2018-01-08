@@ -74,7 +74,7 @@ static void resolveReloc(InputSectionBase &Sec, RelT &Rel,
     return;
   }
 
-  if (!B.isInCurrentDSO())
+  if (!B.isInCurrentOutput())
     for (InputSectionBase *Sec : CNamedSections.lookup(B.getName()))
       Fn(Sec, 0);
 }
@@ -228,9 +228,9 @@ template <class ELFT> static void doGcSections() {
 
   // Preserve externally-visible symbols if the symbols defined by this
   // file can interrupt other ELF file's symbols at runtime.
-  for (Symbol *S : Symtab->getSymbols())
+  for (SymbolBody *S : Symtab->getSymbols())
     if (S->includeInDynsym())
-      MarkSymbol(S->body());
+      MarkSymbol(S);
 
   // Preserve special sections and those which are specified in linker
   // script KEEP command.
@@ -289,6 +289,13 @@ template <class ELFT> void elf::markLive() {
 
   // Follow the graph to mark all live sections.
   doGcSections<ELFT>();
+
+  // Report garbage-collected sections.
+  if (Config->PrintGcSections)
+    for (InputSectionBase *Sec : InputSections)
+      if (!Sec->Live)
+        message("removing unused section from '" + Sec->Name + "' in file '" +
+                Sec->File->getName() + "'");
 }
 
 template void elf::markLive<ELF32LE>();

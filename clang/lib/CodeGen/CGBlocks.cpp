@@ -1198,8 +1198,8 @@ Address CodeGenFunction::GetAddrOfBlockDecl(const VarDecl *variable,
                                  variable->getName());
   }
 
-  if (auto refType = capture.fieldType()->getAs<ReferenceType>())
-    addr = EmitLoadOfReference(addr, refType);
+  if (capture.fieldType()->isReferenceType())
+    addr = EmitLoadOfReference(MakeAddrLValue(addr, capture.fieldType()));
 
   return addr;
 }
@@ -1302,20 +1302,17 @@ void CodeGenFunction::setBlockContextParameter(const ImplicitParamDecl *D,
                                                llvm::Value *arg) {
   assert(BlockInfo && "not emitting prologue of block invocation function?!");
 
-  llvm::Value *localAddr = nullptr;
-  if (CGM.getCodeGenOpts().OptimizationLevel == 0) {
-    // Allocate a stack slot to let the debug info survive the RA.
-    Address alloc = CreateMemTemp(D->getType(), D->getName() + ".addr");
-    Builder.CreateStore(arg, alloc);
-    localAddr = Builder.CreateLoad(alloc);
-  }
-
+  // Allocate a stack slot like for any local variable to guarantee optimal
+  // debug info at -O0. The mem2reg pass will eliminate it when optimizing.
+  Address alloc = CreateMemTemp(D->getType(), D->getName() + ".addr");
+  Builder.CreateStore(arg, alloc);
   if (CGDebugInfo *DI = getDebugInfo()) {
     if (CGM.getCodeGenOpts().getDebugInfo() >=
         codegenoptions::LimitedDebugInfo) {
       DI->setLocation(D->getLocation());
-      DI->EmitDeclareOfBlockLiteralArgVariable(*BlockInfo, arg, argNum,
-                                               localAddr, Builder);
+      DI->EmitDeclareOfBlockLiteralArgVariable(
+          *BlockInfo, D->getName(), argNum,
+          cast<llvm::AllocaInst>(alloc.getPointer()), Builder);
     }
   }
 
@@ -1657,13 +1654,9 @@ CodeGenFunction::GenerateCopyHelperFunction(const CGBlockInfo &blockInfo) {
 
   CGM.SetInternalFunctionAttributes(nullptr, Fn, FI);
 
-  auto NL = ApplyDebugLocation::CreateEmpty(*this);
   StartFunction(FD, C.VoidTy, Fn, FI, args);
-  // Create a scope with an artificial location for the body of this function.
-  auto AL = ApplyDebugLocation::CreateArtificial(*this);
-  llvm::Type *structPtrTy =
-      blockInfo.StructureType->getPointerTo(
-                                  CGM.getTargetCodeGenInfo().getDefaultAS());
+  ApplyDebugLocation NL{*this, blockInfo.getBlockExpr()->getLocStart()};
+  llvm::Type *structPtrTy = blockInfo.StructureType->getPointerTo(CGM.getTargetCodeGenInfo().getDefaultAS());
 
   Address src = GetAddrOfLocalVar(&SrcDecl);
   src = Address(Builder.CreateLoad(src), blockInfo.BlockAlign);
@@ -1831,10 +1824,8 @@ CodeGenFunction::GenerateDestroyHelperFunction(const CGBlockInfo &blockInfo) {
 
   CGM.SetInternalFunctionAttributes(nullptr, Fn, FI);
 
-  // Create a scope with an artificial location for the body of this function.
-  auto NL = ApplyDebugLocation::CreateEmpty(*this);
   StartFunction(FD, C.VoidTy, Fn, FI, args);
-  auto AL = ApplyDebugLocation::CreateArtificial(*this);
+  ApplyDebugLocation NL{*this, blockInfo.getBlockExpr()->getLocStart()};
 
   llvm::Type *structPtrTy =
       blockInfo.StructureType->getPointerTo(

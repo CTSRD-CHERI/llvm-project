@@ -1760,7 +1760,7 @@ void CodeGenModule::ConstructDefaultFnAttrList(StringRef Name, bool HasOptnone,
     std::vector<std::string> &Recips = getTarget().getTargetOpts().Reciprocals;
     if (!Recips.empty())
       FuncAttrs.addAttribute("reciprocal-estimates",
-                             llvm::join(Recips.begin(), Recips.end(), ","));
+                             llvm::join(Recips, ","));
 
     if (CodeGenOpts.StackRealignment)
       FuncAttrs.addAttribute("stackrealign");
@@ -1903,15 +1903,16 @@ void CodeGenModule::ConstructAttributeList(
       // the function.
       const auto *TD = FD->getAttr<TargetAttr>();
       TargetAttr::ParsedTargetAttr ParsedAttr = TD->parse();
-      if (ParsedAttr.Architecture != "")
+      if (ParsedAttr.Architecture != "" &&
+          getTarget().isValidCPUName(ParsedAttr.Architecture))
         TargetCPU = ParsedAttr.Architecture;
       if (TargetCPU != "")
-        FuncAttrs.addAttribute("target-cpu", TargetCPU);
+         FuncAttrs.addAttribute("target-cpu", TargetCPU);
       if (!Features.empty()) {
         std::sort(Features.begin(), Features.end());
         FuncAttrs.addAttribute(
             "target-features",
-            llvm::join(Features.begin(), Features.end(), ","));
+            llvm::join(Features, ","));
       }
     } else {
       // Otherwise just add the existing target cpu and target features to the
@@ -1923,7 +1924,7 @@ void CodeGenModule::ConstructAttributeList(
         std::sort(Features.begin(), Features.end());
         FuncAttrs.addAttribute(
             "target-features",
-            llvm::join(Features.begin(), Features.end(), ","));
+            llvm::join(Features, ","));
       }
     }
   }

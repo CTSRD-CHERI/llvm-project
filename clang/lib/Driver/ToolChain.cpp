@@ -311,8 +311,12 @@ static StringRef getArchNameForCompilerRTLib(const ToolChain &TC,
 
 std::string ToolChain::getCompilerRTPath() const {
   SmallString<128> Path(getDriver().ResourceDir);
-  StringRef OSLibName = Triple.isOSFreeBSD() ? "freebsd" : getOS();
-  llvm::sys::path::append(Path, "lib", OSLibName);
+  if (Triple.isOSUnknown()) {
+    llvm::sys::path::append(Path, "lib");
+  } else {
+    StringRef OSLibName = Triple.isOSFreeBSD() ? "freebsd" : getOS();
+    llvm::sys::path::append(Path, "lib", OSLibName);
+  }
   return Path.str();
 }
 
