@@ -10,7 +10,6 @@
 #include "InputSection.h"
 #include "Config.h"
 #include "EhFrame.h"
-#include "Error.h"
 #include "InputFiles.h"
 #include "LinkerScript.h"
 #include "Memory.h"
@@ -20,6 +19,7 @@
 #include "SyntheticSections.h"
 #include "Target.h"
 #include "Thunks.h"
+#include "lld/Common/ErrorHandler.h"
 #include "llvm/Object/Decompressor.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Compression.h"
@@ -252,47 +252,55 @@ std::string InputSectionBase::getLocation(uint64_t Offset) {
     SrcFile = toString(File);
 
   // Find a function symbol that encloses a given location.
-  for (SymbolBody *B : getFile<ELFT>()->getSymbols())
+  for (SymbolBody *B : File->getSymbols()) {
     if (auto *D = dyn_cast<DefinedRegular>(B)) {
-      if (D->Section == this) {
-        if (D->Value <= Offset && Offset < D->Value + D->Size) {
-          if (D->Type == STT_FUNC)
-            return SrcFile + ":(function " + toString(*D) + ")";
-          else if (D->Type == STT_OBJECT)
+      if (D->Section == this && D->Type == STT_FUNC) {
+        if (D->Value <= Offset && Offset < D->Value + D->Size)
+          return SrcFile + ":(function " + toString(*D) + ")";
+        else if (D->Type == STT_OBJECT)
             return SrcFile + ":(object " + toString(*D) + ")";
-        }
       }
     }
-
+  }
   // If there's no symbol, print out the offset in the section.
   return (SrcFile + ":(" + Name + "+0x" + utohexstr(Offset) + ")").str();
 }
 
-// Returns a source location string. This function is intended to be
-// used for constructing an error message. The returned message looks
-// like this:
+// Concatenates arguments to construct a string representing an error location.
+static std::string createFileLineMsg(StringRef Path, unsigned Line) {
+  std::string Filename = path::filename(Path);
+  std::string Lineno = ":" + std::to_string(Line);
+  if (Filename == Path)
+    return Filename + Lineno;
+  return Filename + Lineno + " (" + Path.str() + Lineno + ")";
+}
+
+// This function is intended to be used for constructing an error message.
+// The returned message looks like this:
 //
 //   foo.c:42 (/home/alice/possibly/very/long/path/foo.c:42)
 //
-// Returns an empty string if there's no way to get line info.
-template <class ELFT> std::string InputSectionBase::getSrcMsg(uint64_t Offset) {
+//  Returns an empty string if there's no way to get line info.
+template <class ELFT>
+std::string InputSectionBase::getSrcMsg(const SymbolBody &Sym,
+                                        uint64_t Offset) {
   // Synthetic sections don't have input files.
   ObjFile<ELFT> *File = getFile<ELFT>();
   if (!File)
     return "";
 
-  Optional<DILineInfo> Info = File->getDILineInfo(this, Offset);
+  // In DWARF, functions and variables are stored to different places.
+  // First, lookup a function for a given offset.
+  if (Optional<DILineInfo> Info = File->getDILineInfo(this, Offset))
+    return createFileLineMsg(Info->FileName, Info->Line);
+
+  // If it failed, lookup again as a variable.
+  if (Optional<std::pair<std::string, unsigned>> FileLine =
+          File->getVariableLoc(Sym.getName()))
+    return createFileLineMsg(FileLine->first, FileLine->second);
 
   // File->SourceFile contains STT_FILE symbol, and that is a last resort.
-  if (!Info)
-    return File->SourceFile;
-
-  std::string Path = Info->FileName;
-  std::string Filename = path::filename(Path);
-  std::string Lineno = ":" + std::to_string(Info->Line);
-  if (Filename == Path)
-    return Filename + Lineno;
-  return Filename + Lineno + " (" + Path + Lineno + ")";
+  return File->SourceFile;
 }
 
 // Returns a filename string along with an optional section name. This
@@ -304,9 +312,8 @@ template <class ELFT> std::string InputSectionBase::getSrcMsg(uint64_t Offset) {
 // or
 //
 //   path/to/foo.o:(function bar) in archive path/to/bar.a
-template <class ELFT> std::string InputSectionBase::getObjMsg(uint64_t Off) {
+std::string InputSectionBase::getObjMsg(uint64_t Off) {
   // Synthetic sections don't have input files.
-  ObjFile<ELFT> *File = getFile<ELFT>();
   if (!File)
     return ("(internal):(" + Name + "+0x" + utohexstr(Off) + ")").str();
   std::string Filename = File->getName();
@@ -316,7 +323,7 @@ template <class ELFT> std::string InputSectionBase::getObjMsg(uint64_t Off) {
     Archive = (" in archive " + File->ArchiveName).str();
 
   // Find a symbol that encloses a given location.
-  for (SymbolBody *B : getFile<ELFT>()->getSymbols())
+  for (SymbolBody *B : File->getSymbols())
     if (auto *D = dyn_cast<DefinedRegular>(B))
       if (D->Section == this && D->Value <= Off && Off < D->Value + D->Size)
         return Filename + ":(" + toString(*D) + ")" + Archive;
@@ -680,6 +687,13 @@ void InputSection::relocateNonAlloc(uint8_t *Buf, ArrayRef<RelTy> Rels) {
     if (Expr == R_NONE)
       continue;
     if (Expr != R_ABS) {
+      // GCC 8.0 or earlier have a bug that it emits R_386_GOTPC relocations
+      // against _GLOBAL_OFFSET_TABLE for .debug_info. The bug seems to have
+      // been fixed in 2017: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=82630,
+      // but we need to keep this bug-compatible code for a while.
+      if (Config->EMachine == EM_386 && Type == R_386_GOTPC)
+        continue;
+
       error(this->getLocation<ELFT>(Offset) + ": has non-ABS relocation " +
             toString(Type) + " against symbol '" + toString(Sym) + "'");
       return;
@@ -889,14 +903,10 @@ template <class ELFT> void EhInputSection::split() {
   if (!this->Pieces.empty())
     return;
 
-  if (this->NumRelocations) {
-    if (this->AreRelocsRela)
-      split<ELFT>(this->relas<ELFT>());
-    else
-      split<ELFT>(this->rels<ELFT>());
-    return;
-  }
-  split<ELFT>(makeArrayRef<typename ELFT::Rela>(nullptr, nullptr));
+  if (this->AreRelocsRela)
+    split<ELFT>(this->relas<ELFT>());
+  else
+    split<ELFT>(this->rels<ELFT>());
 }
 
 template <class ELFT, class RelTy>
@@ -904,7 +914,7 @@ void EhInputSection::split(ArrayRef<RelTy> Rels) {
   ArrayRef<uint8_t> Data = this->Data;
   unsigned RelI = 0;
   for (size_t Off = 0, End = Data.size(); Off != End;) {
-    size_t Size = readEhRecordSize<ELFT>(this, Off);
+    size_t Size = readEhRecordSize(this, Off);
     this->Pieces.emplace_back(Off, this, Size, getReloc(Off, Size, Rels, RelI));
     // The empty record is the end marker.
     if (Size == 4)
@@ -1031,9 +1041,24 @@ uint64_t MergeInputSection::getOffset(uint64_t Offset) const {
   if (!Live)
     return 0;
 
-  const SectionPiece &Piece = *getSectionPiece(Offset);
+  // Initialize OffsetMap lazily.
+  llvm::call_once(InitOffsetMap, [&] {
+    OffsetMap.reserve(Pieces.size());
+    for (size_t I = 0; I < Pieces.size(); ++I)
+      OffsetMap[Pieces[I].InputOff] = I;
+  });
+
+  // Find a string starting at a given offset.
+  auto It = OffsetMap.find(Offset);
+  if (It != OffsetMap.end())
+    return Pieces[It->second].OutputOff;
+
+  // If Offset is not at beginning of a section piece, it is not in the map.
+  // In that case we need to search from the original section piece vector.
+  const SectionPiece &Piece = *this->getSectionPiece(Offset);
   if (!Piece.Live)
     return 0;
+
   uint64_t Addend = Offset - Piece.InputOff;
   return Piece.OutputOff + Addend;
 }
@@ -1052,15 +1077,14 @@ template std::string InputSectionBase::getLocation<ELF32BE>(uint64_t);
 template std::string InputSectionBase::getLocation<ELF64LE>(uint64_t);
 template std::string InputSectionBase::getLocation<ELF64BE>(uint64_t);
 
-template std::string InputSectionBase::getSrcMsg<ELF32LE>(uint64_t);
-template std::string InputSectionBase::getSrcMsg<ELF32BE>(uint64_t);
-template std::string InputSectionBase::getSrcMsg<ELF64LE>(uint64_t);
-template std::string InputSectionBase::getSrcMsg<ELF64BE>(uint64_t);
-
-template std::string InputSectionBase::getObjMsg<ELF32LE>(uint64_t);
-template std::string InputSectionBase::getObjMsg<ELF32BE>(uint64_t);
-template std::string InputSectionBase::getObjMsg<ELF64LE>(uint64_t);
-template std::string InputSectionBase::getObjMsg<ELF64BE>(uint64_t);
+template std::string InputSectionBase::getSrcMsg<ELF32LE>(const SymbolBody &,
+                                                          uint64_t);
+template std::string InputSectionBase::getSrcMsg<ELF32BE>(const SymbolBody &,
+                                                          uint64_t);
+template std::string InputSectionBase::getSrcMsg<ELF64LE>(const SymbolBody &,
+                                                          uint64_t);
+template std::string InputSectionBase::getSrcMsg<ELF64BE>(const SymbolBody &,
+                                                          uint64_t);
 
 template void InputSection::writeTo<ELF32LE>(uint8_t *);
 template void InputSection::writeTo<ELF32BE>(uint8_t *);

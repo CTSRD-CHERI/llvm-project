@@ -89,11 +89,6 @@ static bool canMergeToProgbits(unsigned Type) {
 }
 
 void OutputSection::addSection(InputSection *IS) {
-  if (!IS->Live) {
-    reportDiscarded(IS);
-    return;
-  }
-
   if (!Live) {
     // If IS is the first section to be added to this section,
     // initialize Type by IS->Type.
@@ -218,17 +213,8 @@ void elf::sortByOrder(MutableArrayRef<InputSection *> In,
     In[I] = V[I].second;
 }
 
-void elf::reportDiscarded(InputSectionBase *IS) {
-  if (!Config->PrintGcSections)
-    return;
-  message("removing unused section from '" + IS->Name + "' in file '" +
-          IS->File->getName() + "'");
-}
-
 static OutputSection *createSection(InputSectionBase *IS, StringRef OutsecName) {
   OutputSection *Sec = Script->createOutputSection(OutsecName, "<internal>");
-  Sec->Type = IS->Type;
-  Sec->Flags = IS->Flags;
   // XXXAR: HACK: for now we have to mark __cap_relocs as writable and not
   // RELRO because otherwise rtld will crash
   if (OutsecName == "__cap_relocs") {
@@ -240,10 +226,6 @@ static OutputSection *createSection(InputSectionBase *IS, StringRef OutsecName) 
 
 OutputSection *OutputSectionFactory::addInputSec(InputSectionBase *IS,
                                                  StringRef OutsecName) {
-  if (!IS->Live) {
-    reportDiscarded(IS);
-    return nullptr;
-  }
 
   // Sections with SHT_GROUP or SHF_GROUP attributes reach here only when the -r
   // option is given. A section with SHT_GROUP defines a "section group", and
@@ -317,6 +299,7 @@ bool OutputSection::classof(const BaseCommand *C) {
 }
 
 void OutputSection::sort(std::function<int(InputSectionBase *S)> Order) {
+  assert(Live);
   assert(SectionCommands.size() == 1);
   sortByOrder(cast<InputSectionDescription>(SectionCommands[0])->Sections,
               Order);

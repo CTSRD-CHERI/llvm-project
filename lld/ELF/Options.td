@@ -207,6 +207,12 @@ def noinhibit_exec: F<"noinhibit-exec">,
 
 def nopie: F<"nopie">, HelpText<"Do not create a position independent executable">;
 
+def no_omagic: Flag<["--"], "no-omagic">, MetaVarName<"<magic>">,
+  HelpText<"Do not set the text data sections to be writable">;
+
+def no_print_gc_sections: F<"no-print-gc-sections">,
+  HelpText<"Do not list removed unused sections">;
+
 def no_rosegment: F<"no-rosegment">,
   HelpText<"Do not put read-only non-executable sections in their own segment">;
 
@@ -224,6 +230,12 @@ def oformat: Separate<["--"], "oformat">, MetaVarName<"<format>">,
 
 def omagic: Flag<["--"], "omagic">, MetaVarName<"<magic>">,
   HelpText<"Set the text and data sections to be readable and writable">;
+
+defm orphan_handling: Eq<"orphan-handling">, 
+  HelpText<"Control how orphan sections are handled when linker script used">;
+
+def pack_dyn_relocs_eq: J<"pack-dyn-relocs=">, MetaVarName<"<format>">,
+  HelpText<"Pack dynamic relocations in the given format (none or android)">;
 
 def pie: F<"pie">, HelpText<"Create a position independent executable">;
 

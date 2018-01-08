@@ -22,7 +22,6 @@ add_lld_library(lldELF
   Driver.cpp
   DriverUtils.cpp
   EhFrame.cpp
-  Error.cpp
   Filesystem.cpp
   GdbIndex.cpp
   ICF.cpp

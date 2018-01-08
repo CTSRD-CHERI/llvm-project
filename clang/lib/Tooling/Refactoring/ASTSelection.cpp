@@ -279,11 +279,23 @@ static void findDeepestWithKind(
     llvm::SmallVectorImpl<SelectedNodeWithParents> &MatchingNodes,
     SourceSelectionKind Kind,
     llvm::SmallVectorImpl<SelectedASTNode::ReferenceType> &ParentStack) {
-  if (!hasAnyDirectChildrenWithKind(ASTSelection, Kind)) {
-    // This node is the bottom-most.
-    MatchingNodes.push_back(SelectedNodeWithParents{
-        std::cref(ASTSelection), {ParentStack.begin(), ParentStack.end()}});
-    return;
+  if (ASTSelection.Node.get<DeclStmt>()) {
+    // Select the entire decl stmt when any of its child declarations is the
+    // bottom-most.
+    for (const auto &Child : ASTSelection.Children) {
+      if (!hasAnyDirectChildrenWithKind(Child, Kind)) {
+        MatchingNodes.push_back(SelectedNodeWithParents{
+            std::cref(ASTSelection), {ParentStack.begin(), ParentStack.end()}});
+        return;
+      }
+    }
+  } else {
+    if (!hasAnyDirectChildrenWithKind(ASTSelection, Kind)) {
+      // This node is the bottom-most.
+      MatchingNodes.push_back(SelectedNodeWithParents{
+          std::cref(ASTSelection), {ParentStack.begin(), ParentStack.end()}});
+      return;
+    }
   }
   // Search in the children.
   ParentStack.push_back(std::cref(ASTSelection));
@@ -335,6 +347,11 @@ CodeRangeASTSelection::create(SourceRange SelectionRange,
                                /*AreChildrenSelected=*/true);
 }
 
+static bool isFunctionLikeDeclaration(const Decl *D) {
+  // FIXME (Alex L): Test for BlockDecl.
+  return isa<FunctionDecl>(D) || isa<ObjCMethodDecl>(D);
+}
+
 bool CodeRangeASTSelection::isInFunctionLikeBodyOfCode() const {
   bool IsPrevCompound = false;
   // Scan through the parents (bottom-to-top) and check if the selection is
@@ -343,8 +360,7 @@ bool CodeRangeASTSelection::isInFunctionLikeBodyOfCode() const {
   for (const auto &Parent : llvm::reverse(Parents)) {
     const DynTypedNode &Node = Parent.get().Node;
     if (const auto *D = Node.get<Decl>()) {
-      // FIXME (Alex L): Test for BlockDecl && ObjCMethodDecl.
-      if (isa<FunctionDecl>(D))
+      if (isFunctionLikeDeclaration(D))
         return IsPrevCompound;
       // FIXME (Alex L): We should return false on top-level decls in functions
       // e.g. we don't want to extract:
@@ -360,8 +376,7 @@ const Decl *CodeRangeASTSelection::getFunctionLikeNearestParent() const {
   for (const auto &Parent : llvm::reverse(Parents)) {
     const DynTypedNode &Node = Parent.get().Node;
     if (const auto *D = Node.get<Decl>()) {
-      // FIXME (Alex L): Test for BlockDecl && ObjCMethodDecl.
-      if (isa<FunctionDecl>(D))
+      if (isFunctionLikeDeclaration(D))
         return D;
     }
   }

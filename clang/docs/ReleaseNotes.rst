@@ -91,6 +91,9 @@ Improvements to Clang's diagnostics
   offset is nonzero. It also now warns about arithmetic on a null pointer
   treated as a cast from integer to pointer (GNU extension).
 
+- ``-Wzero-as-null-pointer-constant`` was adjusted not to warn on null pointer
+  constants that originate from system macros, except ``NULL`` macro.
+
 Non-comprehensive list of changes in this release
 -------------------------------------------------
 
@@ -101,6 +104,10 @@ Non-comprehensive list of changes in this release
   compatible with the Visual Studio 2015 and 2017 C++ standard library headers.
   Users should generally expect this to be regularly raised to match the most
   recently released version of the Visual C++ compiler.
+
+- clang now defaults to ``.init_array`` if no gcc installation can be found.
+  If a gcc installation is found, it still prefers ``.ctors`` if the found
+  gcc is older than 4.7.0.
 
 New Compiler Flags
 ------------------

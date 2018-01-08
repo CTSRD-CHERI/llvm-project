@@ -7,13 +7,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Error.h"
 #include "InputFiles.h"
 #include "OutputSections.h"
 #include "Symbols.h"
 #include "SyntheticSections.h"
 #include "Target.h"
 #include "Thunks.h"
+#include "lld/Common/ErrorHandler.h"
 #include "llvm/Object/ELF.h"
 #include "llvm/Support/Endian.h"
 
@@ -39,7 +39,7 @@ public:
   void writePlt(uint8_t *Buf, uint64_t GotPltEntryAddr, uint64_t PltEntryAddr,
                 int32_t Index, unsigned RelOff) const override;
   bool needsThunk(RelExpr Expr, RelType Type, const InputFile *File,
-                  const SymbolBody &S) const override;
+                  uint64_t BranchAddr, const SymbolBody &S) const override;
   void relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const override;
   bool usesOnlyLowPageBits(RelType Type) const override;
 };
@@ -252,8 +252,8 @@ static bool isMicroMips() { return Config->EFlags & EF_MIPS_MICROMIPS; }
 template <class ELFT> void MIPS<ELFT>::writePltHeader(uint8_t *Buf) const {
   const endianness E = ELFT::TargetEndianness;
   if (isMicroMips()) {
-    uint64_t GotPlt = In<ELFT>::GotPlt->getVA();
-    uint64_t Plt = In<ELFT>::Plt->getVA();
+    uint64_t GotPlt = InX::GotPlt->getVA();
+    uint64_t Plt = InX::Plt->getVA();
     // Overwrite trap instructions written by Writer::writeTrapInstr.
     memset(Buf, 0, PltHeaderSize);
 
@@ -337,7 +337,7 @@ void MIPS<ELFT>::writePlt(uint8_t *Buf, uint64_t GotPltEntryAddr,
 
 template <class ELFT>
 bool MIPS<ELFT>::needsThunk(RelExpr Expr, RelType Type, const InputFile *File,
-                            const SymbolBody &S) const {
+                            uint64_t BranchAddr, const SymbolBody &S) const {
   // Any MIPS PIC code function is invoked with its address in register $t9.
   // So if we have a branch instruction from non-PIC code to the PIC one
   // we cannot make the jump directly and need to create a small stubs

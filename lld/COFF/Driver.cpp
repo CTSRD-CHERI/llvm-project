@@ -9,7 +9,6 @@
 
 #include "Driver.h"
 #include "Config.h"
-#include "Error.h"
 #include "InputFiles.h"
 #include "Memory.h"
 #include "MinGW.h"
@@ -17,6 +16,7 @@
 #include "Symbols.h"
 #include "Writer.h"
 #include "lld/Common/Driver.h"
+#include "lld/Common/ErrorHandler.h"
 #include "lld/Common/Version.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringSwitch.h"
@@ -55,12 +55,14 @@ StringSaver Saver{BAlloc};
 std::vector<SpecificAllocBase *> SpecificAllocBase::Instances;
 
 bool link(ArrayRef<const char *> Args, bool CanExitEarly, raw_ostream &Diag) {
-  ErrorCount = 0;
-  ErrorOS = &Diag;
-
+  errorHandler().LogName = Args[0];
+  errorHandler().ErrorOS = &Diag;
+  errorHandler().ColorDiagnostics = Diag.has_colors();
+  errorHandler().ErrorLimitExceededMsg =
+      "too many errors emitted, stopping now"
+      " (use /ERRORLIMIT:0 to see all errors)";
   Config = make<Configuration>();
   Config->Argv = {Args.begin(), Args.end()};
-  Config->ColorDiagnostics = ErrorOS->has_colors();
   Config->CanExitEarly = CanExitEarly;
 
   Symtab = make<SymbolTable>();
@@ -70,10 +72,10 @@ bool link(ArrayRef<const char *> Args, bool CanExitEarly, raw_ostream &Diag) {
 
   // Call exit() if we can to avoid calling destructors.
   if (CanExitEarly)
-    exitLld(ErrorCount ? 1 : 0);
+    exitLld(errorCount() ? 1 : 0);
 
   freeArena();
-  return !ErrorCount;
+  return !errorCount();
 }
 
 // Drop directory components and replace extension with ".exe" or ".dll".
@@ -212,8 +214,8 @@ void LinkerDriver::enqueueArchiveMember(const Archive::Child &C,
   enqueueTask([=]() {
     auto MBOrErr = Future->get();
     if (MBOrErr.second)
-      fatal(MBOrErr.second,
-            "could not get the buffer for the member defining " + SymName);
+      fatal("could not get the buffer for the member defining " + SymName +
+            ": " + MBOrErr.second.message());
     Driver->addArchiveBuffer(takeBuffer(std::move(MBOrErr.first)), SymName,
                              ParentName);
   });
@@ -376,7 +378,7 @@ StringRef LinkerDriver::findDefaultEntry() {
   };
   for (auto E : Entries) {
     StringRef Entry = Symtab->findMangle(mangle(E[0]));
-    if (!Entry.empty() && !isa<Undefined>(Symtab->find(Entry)->body()))
+    if (!Entry.empty() && !isa<Undefined>(Symtab->find(Entry)))
       return mangle(E[1]);
   }
   return "";
@@ -410,6 +412,12 @@ static std::string createResponseFile(const opt::InputArgList &Args,
     case OPT_INPUT:
     case OPT_defaultlib:
     case OPT_libpath:
+    case OPT_manifest:
+    case OPT_manifest_colon:
+    case OPT_manifestdependency:
+    case OPT_manifestfile:
+    case OPT_manifestinput:
+    case OPT_manifestuac:
       break;
     default:
       OS << toString(Arg) << "\n";
@@ -613,7 +621,7 @@ filterBitcodeFiles(StringRef Path, std::vector<std::string> &TemporaryFiles) {
   SmallString<128> S;
   if (auto EC = sys::fs::createTemporaryFile("lld-" + sys::path::stem(Path),
                                              ".lib", S))
-    fatal(EC, "cannot create a temporary file");
+    fatal("cannot create a temporary file: " + EC.message());
   std::string Temp = S.str();
   TemporaryFiles.push_back(Temp);
 
@@ -642,7 +650,7 @@ void LinkerDriver::invokeMSVC(opt::InputArgList &Args) {
     int Fd;
     if (auto EC = sys::fs::createTemporaryFile(
             "lld-" + sys::path::filename(Obj->ParentName), ".obj", Fd, S))
-      fatal(EC, "cannot create a temporary file");
+      fatal("cannot create a temporary file: " + EC.message());
     raw_fd_ostream OS(Fd, /*shouldClose*/ true);
     OS << Obj->MB.getBuffer();
     Temps.push_back(S.str());
@@ -730,7 +738,7 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     StringRef S = Arg->getValue();
     if (S.getAsInteger(10, N))
       error(Arg->getSpelling() + " number expected, but got " + S);
-    Config->ErrorLimit = N;
+    errorHandler().ErrorLimit = N;
   }
 
   // Handle /help
@@ -786,6 +794,7 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   // Handle /verbose
   if (Args.hasArg(OPT_verbose))
     Config->Verbose = true;
+  errorHandler().Verbose = Config->Verbose;
 
   // Handle /force or /force:unresolved
   if (Args.hasArg(OPT_force) || Args.hasArg(OPT_force_unresolved))
@@ -1004,7 +1013,7 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
 
   Config->MapFile = getMapFile(Args);
 
-  if (ErrorCount)
+  if (errorCount())
     return;
 
   bool WholeArchiveFlag = Args.hasArg(OPT_wholearchive_flag);
@@ -1172,10 +1181,10 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     for (auto Pair : Config->AlternateNames) {
       StringRef From = Pair.first;
       StringRef To = Pair.second;
-      Symbol *Sym = Symtab->find(From);
+      SymbolBody *Sym = Symtab->find(From);
       if (!Sym)
         continue;
-      if (auto *U = dyn_cast<Undefined>(Sym->body()))
+      if (auto *U = dyn_cast<Undefined>(Sym))
         if (!U->WeakAlias)
           U->WeakAlias = Symtab->addUndefined(To);
     }
@@ -1185,7 +1194,7 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
       addUndefined(mangle("_load_config_used"));
   } while (run());
 
-  if (ErrorCount)
+  if (errorCount())
     return;
 
   // If /msvclto is given, we use the MSVC linker to link LTO output files.
@@ -1202,7 +1211,7 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
 
   // Make sure we have resolved all symbols.
   Symtab->reportRemainingUndefines();
-  if (ErrorCount)
+  if (errorCount())
     return;
 
   // Windows specific -- if no /subsystem is given, we need to infer
@@ -1218,7 +1227,7 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     for (ObjFile *File : ObjFile::Instances)
       if (!File->SEHCompat)
         error("/safeseh: " + File->getName() + " is not compatible with SEH");
-    if (ErrorCount)
+    if (errorCount())
       return;
   }
 
@@ -1228,8 +1237,8 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
                       Args.hasArg(OPT_export_all_symbols))) {
     AutoExporter Exporter;
 
-    Symtab->forEachSymbol([=](Symbol *S) {
-      auto *Def = dyn_cast<Defined>(S->body());
+    Symtab->forEachSymbol([=](SymbolBody *S) {
+      auto *Def = dyn_cast<Defined>(S);
       if (!Exporter.shouldExport(Def))
         return;
       Export E;
@@ -1256,13 +1265,13 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     StringRef Name = Pair.first;
     uint32_t Alignment = Pair.second;
 
-    Symbol *Sym = Symtab->find(Name);
+    SymbolBody *Sym = Symtab->find(Name);
     if (!Sym) {
       warn("/aligncomm symbol " + Name + " not found");
       continue;
     }
 
-    auto *DC = dyn_cast<DefinedCommon>(Sym->body());
+    auto *DC = dyn_cast<DefinedCommon>(Sym);
     if (!DC) {
       warn("/aligncomm symbol " + Name + " of wrong kind");
       continue;
