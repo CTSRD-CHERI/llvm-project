@@ -263,6 +263,9 @@ def err_analyzer_config_no_value : Error<
 def err_analyzer_config_multiple_values : Error<
   "analyzer-config option '%0' should contain only one '='">;
 
+def err_drv_invalid_hvx_length : Error<
+  "-mhvx-length is not supported without a -mhvx/-mhvx= flag">;
+
 def err_drv_modules_validate_once_requires_timestamp : Error<
   "option '-fmodules-validate-once-per-build-session' requires "
   "'-fbuild-session-timestamp=<seconds since Epoch>' or '-fbuild-session-file=<file>'">;
@@ -330,4 +333,8 @@ def warn_drv_msvc_not_found : Warning<
   "unable to find a Visual Studio installation; "
   "try running Clang from a developer command prompt">,
   InGroup<DiagGroup<"msvc-not-found">>;
+
+def warn_drv_fine_grained_bitfield_accesses_ignored : Warning<
+  "option '-ffine-grained-bitfield-accesses' cannot be enabled together with a sanitizer; flag ignored">,
+  InGroup<OptionIgnored>;
 }

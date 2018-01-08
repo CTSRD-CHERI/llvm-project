@@ -1489,10 +1489,6 @@ static bool sortMipsSymbols(const SymbolTableEntry &L,
   return L.Symbol->GotIndex < R.Symbol->GotIndex;
 }
 
-// Finalize a symbol table. The ELF spec requires that all local
-// symbols precede global symbols, so we sort symbol entries in this
-// function. (For .dynsym, we don't do that because symbols for
-// dynamic linking are inherently all globals.)
 void SymbolTableBaseSection::finalizeContents() {
   getParent()->Link = StrTabSec.getParent()->SectionIndex;
 
@@ -1517,6 +1513,9 @@ void SymbolTableBaseSection::finalizeContents() {
   }
 }
 
+// The ELF spec requires that all local symbols precede global symbols, so we
+// sort symbol entries in this function. (For .dynsym, we don't do that because
+// symbols for dynamic linking are inherently all globals.)
 void SymbolTableBaseSection::postThunkContents() {
   if (this->Type == SHT_DYNSYM)
     return;
@@ -1781,7 +1780,11 @@ void GnuHashTableSection::addSymbols(std::vector<SymbolTableEntry> &V) {
   // its type correctly.
   std::vector<SymbolTableEntry>::iterator Mid =
       std::stable_partition(V.begin(), V.end(), [](const SymbolTableEntry &S) {
-        return S.Symbol->isUndefined();
+        // Shared symbols that this executable preempts are special. The dynamic
+        // linker has to look them up, so they have to be in the hash table.
+        if (auto *SS = dyn_cast<SharedSymbol>(S.Symbol))
+          return SS->CopyRelSec == nullptr && !SS->NeedsPltAddr;
+        return !S.Symbol->isInCurrentDSO();
       });
   if (Mid == V.end())
     return;
@@ -1814,8 +1817,6 @@ void HashTableSection::finalizeContents() {
   NumEntries += InX::DynSymTab->getNumSymbols(); // The chain entries.
 
   // Create as many buckets as there are symbols.
-  // FIXME: This is simplistic. We can try to optimize it, but implementing
-  // support for SHT_GNU_HASH is probably even more profitable.
   NumEntries += InX::DynSymTab->getNumSymbols();
   this->Size = NumEntries * 4;
 }
@@ -2441,10 +2442,9 @@ void MergeNoTailSection::finalizeContents() {
       for (size_t I = 0, E = Sec->Pieces.size(); I != E; ++I) {
         if (!Sec->Pieces[I].Live)
           continue;
-        CachedHashStringRef Str = Sec->getData(I);
-        size_t ShardId = getShardId(Str.hash());
+        size_t ShardId = getShardId(Sec->Pieces[I].Hash);
         if ((ShardId & (Concurrency - 1)) == ThreadId)
-          Sec->Pieces[I].OutputOff = Shards[ShardId].add(Str);
+          Sec->Pieces[I].OutputOff = Shards[ShardId].add(Sec->getData(I));
       }
     }
   });
@@ -2466,7 +2466,7 @@ void MergeNoTailSection::finalizeContents() {
     for (size_t I = 0, E = Sec->Pieces.size(); I != E; ++I)
       if (Sec->Pieces[I].Live)
         Sec->Pieces[I].OutputOff +=
-            ShardOffsets[getShardId(Sec->getData(I).hash())];
+            ShardOffsets[getShardId(Sec->Pieces[I].Hash)];
   });
 }
 

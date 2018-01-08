@@ -32,7 +32,7 @@ namespace coff {
 uint64_t ErrorCount;
 raw_ostream *ErrorOS;
 
-static LLVM_ATTRIBUTE_NORETURN void exitLld(int Val) {
+LLVM_ATTRIBUTE_NORETURN void exitLld(int Val) {
   // Dealloc/destroy ManagedStatic variables before calling
   // _exit(). In a non-LTO build, this is a nop. In an LTO
   // build allows us to get the output of -time-passes.
@@ -78,7 +78,8 @@ void error(const Twine &Msg) {
     print("error: ", raw_ostream::RED);
     *ErrorOS << "too many errors emitted, stopping now"
              << " (use /ERRORLIMIT:0 to see all errors)\n";
-    exitLld(1);
+    if (Config->CanExitEarly)
+      exitLld(1);
   }
 
   ++ErrorCount;
@@ -105,6 +106,11 @@ void fatal(llvm::Error &Err, const Twine &Msg) {
 }
 
 void warn(const Twine &Msg) {
+  if (Config->FatalWarnings) {
+    error(Msg);
+    return;
+  }
+
   std::lock_guard<std::mutex> Lock(Mu);
   print("warning: ", raw_ostream::MAGENTA);
   *ErrorOS << Msg << "\n";

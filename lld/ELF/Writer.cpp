@@ -181,7 +181,7 @@ template <class ELFT> void Writer<ELFT>::run() {
   // Create output sections.
   if (Script->HasSectionsCommand) {
     // If linker script contains SECTIONS commands, let it create sections.
-    Script->processSectionCommands(Factory);
+    Script->processSectionCommands();
 
     // Linker scripts may have left some input sections unassigned.
     // Assign such sections using the default rule.
@@ -191,7 +191,7 @@ template <class ELFT> void Writer<ELFT>::run() {
     // output sections by default rules. We still need to give the
     // linker script a chance to run, because it might contain
     // non-SECTIONS commands such as ASSERT.
-    Script->processSectionCommands(Factory);
+    Script->processSectionCommands();
     createSections();
   }
 
@@ -747,27 +747,16 @@ void PhdrEntry::add(OutputSection *Sec) {
 }
 
 template <class ELFT>
-static Symbol *addRegular(StringRef Name, SectionBase *Sec, uint64_t Value,
-                          uint8_t StOther = STV_HIDDEN,
-                          uint8_t Binding = STB_WEAK) {
-  // The linker generated symbols are added as STB_WEAK to allow user defined
-  // ones to override them.
-  return Symtab->addRegular<ELFT>(Name, StOther, STT_NOTYPE, Value,
-                                  /*Size=*/0, Binding, Sec,
-                                  /*File=*/nullptr);
-}
-
-template <class ELFT>
 static DefinedRegular *
 addOptionalRegular(StringRef Name, SectionBase *Sec, uint64_t Val,
                    uint8_t StOther = STV_HIDDEN, uint8_t Binding = STB_GLOBAL) {
   SymbolBody *S = Symtab->find(Name);
-  if (!S)
+  if (!S || S->isInCurrentDSO())
     return nullptr;
-  if (S->isInCurrentDSO())
-    return nullptr;
-  return cast<DefinedRegular>(
-      addRegular<ELFT>(Name, Sec, Val, StOther, Binding)->body());
+  Symbol *Sym = Symtab->addRegular<ELFT>(Name, StOther, STT_NOTYPE, Val,
+                                         /*Size=*/0, Binding, Sec,
+                                         /*File=*/nullptr);
+  return cast<DefinedRegular>(Sym->body());
 }
 
 // The beginning and the ending of .rel[a].plt section are marked
@@ -951,11 +940,10 @@ template <class ELFT> void Writer<ELFT>::setReservedSymbolSections() {
       if (OutputSections[I] == LastRW->FirstSec)
         break;
 
-    for (; I < OutputSections.size(); ++I) {
-      if (OutputSections[I]->Type != SHT_NOBITS)
-        continue;
-      break;
-    }
+    for (; I < OutputSections.size(); ++I)
+      if (OutputSections[I]->Type == SHT_NOBITS)
+        break;
+
     if (ElfSym::Edata1)
       ElfSym::Edata1->Section = OutputSections[I - 1];
     if (ElfSym::Edata2)
@@ -1043,11 +1031,14 @@ findOrphanPos(std::vector<BaseCommand *>::iterator B,
         Sec->SortRank < CurSec->SortRank)
       break;
   }
+
+  auto IsLiveSection = [](BaseCommand *Cmd) {
+    auto *OS = dyn_cast<OutputSection>(Cmd);
+    return OS && OS->Live;
+  };
+
   auto J = std::find_if(llvm::make_reverse_iterator(I),
-                        llvm::make_reverse_iterator(B), [](BaseCommand *Cmd) {
-                          auto *OS = dyn_cast<OutputSection>(Cmd);
-                          return OS && OS->Live;
-                        });
+                        llvm::make_reverse_iterator(B), IsLiveSection);
   I = J.base();
 
   // As a special case, if the orphan section is the last section, put
@@ -1055,8 +1046,7 @@ findOrphanPos(std::vector<BaseCommand *>::iterator B,
   // This matches bfd's behavior and is convenient when the linker script fully
   // specifies the start of the file, but doesn't care about the end (the non
   // alloc sections for example).
-  auto NextSec = std::find_if(
-      I, E, [](BaseCommand *Cmd) { return isa<OutputSection>(Cmd); });
+  auto NextSec = std::find_if(I, E, IsLiveSection);
   if (NextSec == E)
     return E;
 
@@ -1273,7 +1263,9 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   // Even the author of gold doesn't remember why gold behaves that way.
   // https://sourceware.org/ml/binutils/2002-03/msg00360.html
   if (InX::DynSymTab)
-    addRegular<ELFT>("_DYNAMIC", InX::Dynamic, 0);
+    Symtab->addRegular<ELFT>("_DYNAMIC", STV_HIDDEN, STT_NOTYPE, 0 /*Value*/,
+                             /*Size=*/0, STB_WEAK, InX::Dynamic,
+                             /*File=*/nullptr);
 
   // Define __rel[a]_iplt_{start,end} symbols if needed.
   addRelIpltSymbols();
@@ -1791,18 +1783,20 @@ template <class ELFT> void Writer<ELFT>::setPhdrs() {
 // 1. the '-e' entry command-line option;
 // 2. the ENTRY(symbol) command in a linker control script;
 // 3. the value of the symbol start, if present;
-// 4. the address of the first byte of the .text section, if present;
-// 5. the address 0.
+// 4. the number represented by the entry symbol, if it is a number;
+// 5. the address of the first byte of the .text section, if present;
+// 6. the address 0.
 template <class ELFT> uint64_t Writer<ELFT>::getEntryAddr() {
-  // Case 1, 2 or 3. As a special case, if the symbol is actually
-  // a number, we'll use that number as an address.
+  // Case 1, 2 or 3
   if (SymbolBody *B = Symtab->find(Config->Entry))
     return B->getVA();
+
+  // Case 4
   uint64_t Addr;
   if (to_integer(Config->Entry, Addr))
     return Addr;
 
-  // Case 4
+  // Case 5
   if (OutputSection *Sec = findSection(".text")) {
     if (Config->WarnMissingEntry)
       warn("cannot find entry symbol " + Config->Entry + "; defaulting to 0x" +
@@ -1810,7 +1804,7 @@ template <class ELFT> uint64_t Writer<ELFT>::getEntryAddr() {
     return Sec->Addr;
   }
 
-  // Case 5
+  // Case 6
   if (Config->WarnMissingEntry)
     warn("cannot find entry symbol " + Config->Entry +
          "; not setting start address");
@@ -1840,19 +1834,12 @@ template <class ELFT> void Writer<ELFT>::writeHeader() {
   EHdr->e_version = EV_CURRENT;
   EHdr->e_entry = getEntryAddr();
   EHdr->e_shoff = SectionHeaderOff;
+  EHdr->e_flags = Config->EFlags;
   EHdr->e_ehsize = sizeof(Elf_Ehdr);
   EHdr->e_phnum = Phdrs.size();
   EHdr->e_shentsize = sizeof(Elf_Shdr);
   EHdr->e_shnum = OutputSections.size() + 1;
   EHdr->e_shstrndx = InX::ShStrTab->getParent()->SectionIndex;
-
-  if (Config->EMachine == EM_ARM)
-    // We don't currently use any features incompatible with EF_ARM_EABI_VER5,
-    // but we don't have any firm guarantees of conformance. Linux AArch64
-    // kernels (as of 2016) require an EABI version to be set.
-    EHdr->e_flags = EF_ARM_EABI_VER5;
-  else if (Config->EMachine == EM_MIPS)
-    EHdr->e_flags = Config->MipsEFlags;
 
   if (!Config->Relocatable) {
     EHdr->e_phoff = sizeof(Elf_Ehdr);
