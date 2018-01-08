@@ -90,6 +90,7 @@ struct Configuration {
   uint64_t ErrorLimit = 20;
   bool Relocatable = true;
   bool Force = false;
+  bool FatalWarnings = false;
   bool Debug = false;
   bool WriteSymtab = true;
   unsigned DebugTypes = static_cast<unsigned>(DebugType::None);
@@ -166,6 +167,7 @@ struct Configuration {
   uint32_t MinorImageVersion = 0;
   uint32_t MajorOSVersion = 6;
   uint32_t MinorOSVersion = 0;
+  bool CanExitEarly = false;
   bool DynamicBase = true;
   bool AllowBind = true;
   bool NxCompat = true;

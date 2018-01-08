@@ -139,6 +139,10 @@ def m_arm_Features_Group : OptionGroup<"<arm features group>">,
                            Group<m_Group>, DocName<"ARM">;
 def m_hexagon_Features_Group : OptionGroup<"<hexagon features group>">,
                                Group<m_Group>, DocName<"Hexagon">;
+// The features added by this group will not be added to target features.
+// These are explicitly handled.
+def m_hexagon_Features_HVX_Group : OptionGroup<"<hexagon features group>">,
+                                   Group<m_Group>, DocName<"Hexagon">;
 def m_ppc_Features_Group : OptionGroup<"<ppc features group>">,
                            Group<m_Group>, DocName<"PowerPC">;
 def m_wasm_Features_Group : OptionGroup<"<wasm features group>">,
@@ -623,8 +627,8 @@ def fasynchronous_unwind_tables : Flag<["-"], "fasynchronous-unwind-tables">, Gr
 def fdouble_square_bracket_attributes : Flag<[ "-" ], "fdouble-square-bracket-attributes">,
   Group<f_Group>, Flags<[DriverOption, CC1Option]>,
   HelpText<"Enable '[[]]' attributes in all C and C++ language modes">;
-def fno_double_square_bracket_attributes : Flag<[ "-" ], "fno-fdouble-square-bracket-attributes">,
-  Group<f_Group>, Flags<[DriverOption]>,
+def fno_double_square_bracket_attributes : Flag<[ "-" ], "fno-double-square-bracket-attributes">,
+  Group<f_Group>, Flags<[DriverOption, CC1Option]>,
   HelpText<"Disable '[[]]' attributes in all C and C++ language modes">;
 
 def fautolink : Flag <["-"], "fautolink">, Group<f_Group>;
@@ -1058,6 +1062,13 @@ def fxray_never_instrument :
   JoinedOrSeparate<["-"], "fxray-never-instrument=">,
   Group<f_Group>, Flags<[CC1Option]>,
   HelpText<"Filename defining the whitelist for imbuing the 'never instrument' XRay attribute.">;
+
+def ffine_grained_bitfield_accesses : Flag<["-"],
+  "ffine-grained-bitfield-accesses">, Group<f_clang_Group>, Flags<[CC1Option]>,
+  HelpText<"Use separate accesses for bitfields with legal widths and alignments.">;
+def fno_fine_grained_bitfield_accesses : Flag<["-"],
+  "fno-fine-grained-bitfield-accesses">, Group<f_clang_Group>, Flags<[CC1Option]>,
+  HelpText<"Use large-integer access for consecutive bitfield runs.">;
 
 def flat__namespace : Flag<["-"], "flat_namespace">;
 def flax_vector_conversions : Flag<["-"], "flax-vector-conversions">, Group<f_Group>;
@@ -2472,7 +2483,8 @@ def _rtlib : Separate<["--"], "rtlib">, Alias<rtlib_EQ>;
 def _serialize_diags : Separate<["-", "--"], "serialize-diagnostics">, Flags<[DriverOption]>,
   HelpText<"Serialize compiler diagnostics to a file">;
 // We give --version different semantics from -version.
-def _version : Flag<["--"], "version">,  Flags<[CC1Option]>;
+def _version : Flag<["--"], "version">, Flags<[CoreOption, CC1Option]>,
+  HelpText<"Print version information">;
 def _signed_char : Flag<["--"], "signed-char">, Alias<fsigned_char>;
 def _std : Separate<["--"], "std">, Alias<std_EQ>;
 def _stdlib : Separate<["--"], "stdlib">, Alias<stdlib_EQ>;
@@ -2502,14 +2514,26 @@ def mv60 : Flag<["-"], "mv60">, Group<m_hexagon_Features_Group>,
            Alias<mcpu_EQ>, AliasArgs<["hexagonv60"]>;
 def mv62 : Flag<["-"], "mv62">, Group<m_hexagon_Features_Group>,
            Alias<mcpu_EQ>, AliasArgs<["hexagonv62"]>;
-def mhexagon_hvx : Flag<["-"], "mhvx">, Group<m_hexagon_Features_Group>,
-    Flags<[CC1Option]>, HelpText<"Enable Hexagon Vector eXtensions">;
-def mno_hexagon_hvx : Flag<["-"], "mno-hvx">, Group<m_hexagon_Features_Group>,
-    Flags<[CC1Option]>, HelpText<"Disable Hexagon Vector eXtensions">;
-def mhexagon_hvx_double : Flag<["-"], "mhvx-double">, Group<m_hexagon_Features_Group>,
-    Flags<[CC1Option]>, HelpText<"Enable Hexagon Double Vector eXtensions">;
-def mno_hexagon_hvx_double : Flag<["-"], "mno-hvx-double">, Group<m_hexagon_Features_Group>,
-    Flags<[CC1Option]>, HelpText<"Disable Hexagon Double Vector eXtensions">;
+def mhexagon_hvx : Flag<[ "-" ], "mhvx">,
+                   Group<m_hexagon_Features_HVX_Group>,
+                   HelpText<"Enable Hexagon Vector eXtensions">;
+def mhexagon_hvx_EQ : Joined<[ "-" ], "mhvx=">,
+                     Group<m_hexagon_Features_HVX_Group>,
+                     HelpText<"Enable Hexagon Vector eXtensions">;
+def mno_hexagon_hvx : Flag<[ "-" ], "mno-hvx">,
+                      Group<m_hexagon_Features_HVX_Group>,
+                      HelpText<"Disable Hexagon Vector eXtensions">;
+def mhexagon_hvx_length_EQ : Joined<[ "-" ], "mhvx-length=">,
+                        Group<m_hexagon_Features_HVX_Group>,
+                        HelpText<"Set Hexagon Vector Length">, Values<"64B,128B">;
+// hvx-double deprecrated flag.
+def mhexagon_hvx_double : Flag<[ "-" ], "mhvx-double">,
+                          Group<m_hexagon_Features_HVX_Group>,
+                          HelpText<"Enable Hexagon Double Vector eXtensions">;
+def mno_hexagon_hvx_double
+    : Flag<[ "-" ], "mno-hvx-double">,
+      Group<m_hexagon_Features_HVX_Group>,
+      HelpText<"Disable Hexagon Double Vector eXtensions">;
 
 // These are legacy user-facing driver-level option spellings. They are always
 // aliases for options that are spelled using the more common Unix / GNU flag

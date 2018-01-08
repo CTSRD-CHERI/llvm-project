@@ -297,7 +297,7 @@ bool InstructionSelector::executeMatchTable(
                    << "), ComplexPredicateID=" << ComplexPredicateID << ")\n");
       assert(State.MIs[InsnID] != nullptr && "Used insn before defined");
       // FIXME: Use std::invoke() when it's available.
-      ComplexRendererFn Renderer =
+      ComplexRendererFns Renderer =
           (ISel.*MatcherInfo.ComplexPredicates[ComplexPredicateID])(
               State.MIs[InsnID]->getOperand(OpIdx));
       if (Renderer.hasValue())
@@ -437,6 +437,23 @@ bool InstructionSelector::executeMatchTable(
       OutMIs[NewInsnID].add(State.MIs[OldInsnID]->getOperand(OpIdx));
       DEBUG(dbgs() << CurrentIdx << ": GIR_Copy(OutMIs[" << NewInsnID
                    << "], MIs[" << OldInsnID << "], " << OpIdx << ")\n");
+      break;
+    }
+
+    case GIR_CopyOrAddZeroReg: {
+      int64_t NewInsnID = MatchTable[CurrentIdx++];
+      int64_t OldInsnID = MatchTable[CurrentIdx++];
+      int64_t OpIdx = MatchTable[CurrentIdx++];
+      int64_t ZeroReg = MatchTable[CurrentIdx++];
+      assert(OutMIs[NewInsnID] && "Attempted to add to undefined instruction");
+      MachineOperand &MO = State.MIs[OldInsnID]->getOperand(OpIdx);
+      if (isOperandImmEqual(MO, 0, MRI))
+        OutMIs[NewInsnID].addReg(ZeroReg);
+      else
+        OutMIs[NewInsnID].add(MO);
+      DEBUG(dbgs() << CurrentIdx << ": GIR_CopyOrAddZeroReg(OutMIs["
+                   << NewInsnID << "], MIs[" << OldInsnID << "], " << OpIdx
+                   << ", " << ZeroReg << ")\n");
       break;
     }
 

@@ -10,6 +10,7 @@
 #include "PDB.h"
 #include "Chunks.h"
 #include "Config.h"
+#include "Driver.h"
 #include "Error.h"
 #include "SymbolTable.h"
 #include "Symbols.h"
@@ -218,9 +219,16 @@ const CVIndexMap &PDBLinker::mergeDebugT(ObjFile *File,
 
 static Expected<std::unique_ptr<pdb::NativeSession>>
 tryToLoadPDB(const GUID &GuidFromObj, StringRef TSPath) {
+  ErrorOr<std::unique_ptr<MemoryBuffer>> MBOrErr = MemoryBuffer::getFile(
+      TSPath, /*FileSize=*/-1, /*RequiresNullTerminator=*/false);
+  if (!MBOrErr)
+    return errorCodeToError(MBOrErr.getError());
+
   std::unique_ptr<pdb::IPDBSession> ThisSession;
-  if (auto EC =
-          pdb::loadDataForPDB(pdb::PDB_ReaderType::Native, TSPath, ThisSession))
+  if (auto EC = pdb::NativeSession::createFromPdb(
+          MemoryBuffer::getMemBuffer(Driver->takeBuffer(std::move(*MBOrErr)),
+                                     /*RequiresNullTerminator=*/false),
+          ThisSession))
     return std::move(EC);
 
   std::unique_ptr<pdb::NativeSession> NS(
@@ -297,7 +305,7 @@ static bool remapTypeIndex(TypeIndex &TI, ArrayRef<TypeIndex> TypeIndexMap) {
   return true;
 }
 
-static void remapTypesInSymbolRecord(ObjFile *File,
+static void remapTypesInSymbolRecord(ObjFile *File, SymbolKind SymKind,
                                      MutableArrayRef<uint8_t> Contents,
                                      const CVIndexMap &IndexMap,
                                      const TypeTableBuilder &IDTable,
@@ -309,16 +317,18 @@ static void remapTypesInSymbolRecord(ObjFile *File,
 
     // This can be an item index or a type index. Choose the appropriate map.
     ArrayRef<TypeIndex> TypeOrItemMap = IndexMap.TPIMap;
-    if (Ref.Kind == TiRefKind::IndexRef && IndexMap.IsTypeServerMap)
+    bool IsItemIndex = Ref.Kind == TiRefKind::IndexRef;
+    if (IsItemIndex && IndexMap.IsTypeServerMap)
       TypeOrItemMap = IndexMap.IPIMap;
 
     MutableArrayRef<TypeIndex> TIs(
         reinterpret_cast<TypeIndex *>(Contents.data() + Ref.Offset), Ref.Count);
     for (TypeIndex &TI : TIs) {
       if (!remapTypeIndex(TI, TypeOrItemMap)) {
+        log("ignoring symbol record of kind 0x" + utohexstr(SymKind) + " in " +
+            File->getName() + " with bad " + (IsItemIndex ? "item" : "type") +
+            " index 0x" + utohexstr(TI.getIndex()));
         TI = TypeIndex(SimpleTypeKind::NotTranslated);
-        log("ignoring symbol record in " + File->getName() +
-            " with bad type index 0x" + utohexstr(TI.getIndex()));
         continue;
       }
     }
@@ -563,7 +573,8 @@ static void mergeSymbolRecords(BumpPtrAllocator &Alloc, ObjFile *File,
     // Re-map all the type index references.
     MutableArrayRef<uint8_t> Contents =
         NewData.drop_front(sizeof(RecordPrefix));
-    remapTypesInSymbolRecord(File, Contents, IndexMap, IDTable, TypeRefs);
+    remapTypesInSymbolRecord(File, Sym.kind(), Contents, IndexMap, IDTable,
+                             TypeRefs);
 
     // An object file may have S_xxx_ID symbols, but these get converted to
     // "real" symbols in a PDB.

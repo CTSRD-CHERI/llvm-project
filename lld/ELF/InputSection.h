@@ -212,17 +212,19 @@ private:
 // SectionPiece represents a piece of splittable section contents.
 // We allocate a lot of these and binary search on them. This means that they
 // have to be as compact as possible, which is why we don't store the size (can
-// be found by looking at the next one) and put the hash in a side table.
+// be found by looking at the next one).
 struct SectionPiece {
-  SectionPiece(size_t Off, bool Live)
-      : InputOff(Off), Live(Live || !Config->GcSections), OutputOff(-1) {}
+  SectionPiece(size_t Off, uint32_t Hash, bool Live)
+      : InputOff(Off), Hash(Hash), OutputOff(-1),
+        Live(Live || !Config->GcSections) {}
 
-  size_t InputOff : 8 * sizeof(ssize_t) - 1;
-  size_t Live : 1;
-  ssize_t OutputOff;
+  uint32_t InputOff;
+  uint32_t Hash;
+  int64_t OutputOff : 63;
+  uint64_t Live : 1;
 };
-static_assert(sizeof(SectionPiece) == 2 * sizeof(size_t),
-              "SectionPiece is too big");
+
+static_assert(sizeof(SectionPiece) == 16, "SectionPiece is too big");
 
 // This corresponds to a SHF_MERGE section of an input file.
 class MergeInputSection : public InputSectionBase {
@@ -235,8 +237,8 @@ public:
 
   // Mark the piece at a given offset live. Used by GC.
   void markLiveAt(uint64_t Offset) {
-    assert(this->Flags & llvm::ELF::SHF_ALLOC);
-    LiveOffsets.insert(Offset);
+    if (this->Flags & llvm::ELF::SHF_ALLOC)
+      LiveOffsets.insert(Offset);
   }
 
   // Translate an offset in the input section to an offset
@@ -252,14 +254,9 @@ public:
   LLVM_ATTRIBUTE_ALWAYS_INLINE
   llvm::CachedHashStringRef getData(size_t I) const {
     size_t Begin = Pieces[I].InputOff;
-    size_t End;
-    if (Pieces.size() - 1 == I)
-      End = this->Data.size();
-    else
-      End = Pieces[I + 1].InputOff;
-
-    StringRef S = {(const char *)(this->Data.data() + Begin), End - Begin};
-    return {S, Hashes[I]};
+    size_t End =
+        (Pieces.size() - 1 == I) ? Data.size() : Pieces[I + 1].InputOff;
+    return {toStringRef(Data.slice(Begin, End - Begin)), Pieces[I].Hash};
   }
 
   // Returns the SectionPiece at a given input section offset.
@@ -271,11 +268,6 @@ public:
 private:
   void splitStrings(ArrayRef<uint8_t> A, size_t Size);
   void splitNonStrings(ArrayRef<uint8_t> A, size_t Size);
-
-  std::vector<uint32_t> Hashes;
-
-  mutable llvm::DenseMap<uint64_t, uint64_t> OffsetMap;
-  mutable llvm::once_flag InitOffsetMap;
 
   llvm::DenseSet<uint64_t> LiveOffsets;
 };

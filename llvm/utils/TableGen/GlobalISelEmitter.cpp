@@ -246,6 +246,13 @@ static Error isTrivialOperatorNode(const TreePatternNode *N) {
 
     if (Predicate.isNonExtLoad())
       continue;
+
+    if (Predicate.isStore() && Predicate.isUnindexed())
+      continue;
+
+    if (Predicate.isNonTruncStore())
+      continue;
+
     HasUnsupportedPredicate = true;
     Explanation = Separator + "Has a predicate (" + explainPredicates(N) + ")";
     Separator = ", ";
@@ -672,7 +679,7 @@ public:
   /// but OPM_Int must have priority over OPM_RegBank since constant integers
   /// are represented by a virtual register defined by a G_CONSTANT instruction.
   enum PredicateKind {
-    OPM_Tie,
+    OPM_SameOperand,
     OPM_ComplexPattern,
     OPM_IntrinsicID,
     OPM_Instruction,
@@ -724,14 +731,14 @@ PredicateListMatcher<OperandPredicateMatcher>::getNoPredicateComment() const {
 /// Generates code to check that a register operand is defined by the same exact
 /// one as another.
 class SameOperandMatcher : public OperandPredicateMatcher {
-  std::string TiedTo;
+  std::string MatchingName;
 
 public:
-  SameOperandMatcher(StringRef TiedTo)
-      : OperandPredicateMatcher(OPM_Tie), TiedTo(TiedTo) {}
+  SameOperandMatcher(StringRef MatchingName)
+      : OperandPredicateMatcher(OPM_SameOperand), MatchingName(MatchingName) {}
 
   static bool classof(const OperandPredicateMatcher *P) {
-    return P->getKind() == OPM_Tie;
+    return P->getKind() == OPM_SameOperand;
   }
 
   void emitPredicateOpcodes(MatchTable &Table, RuleMatcher &Rule,
@@ -978,26 +985,7 @@ public:
   InstructionMatcher &getInstructionMatcher() const { return Insn; }
 
   Error addTypeCheckPredicate(const TypeSetByHwMode &VTy,
-                              bool OperandIsAPointer) {
-    if (!VTy.isMachineValueType())
-      return failedImport("unsupported typeset");
-
-    if (VTy.getMachineValueType() == MVT::iPTR && OperandIsAPointer) {
-      addPredicate<PointerToAnyOperandMatcher>(0);
-      return Error::success();
-    }
-
-    auto OpTyOrNone = MVTToLLT(VTy.getMachineValueType().SimpleTy);
-    if (!OpTyOrNone)
-      return failedImport("unsupported type");
-
-    if (OperandIsAPointer)
-      addPredicate<PointerToAnyOperandMatcher>(
-          OpTyOrNone->get().getSizeInBits());
-    else
-      addPredicate<LLTOperandMatcher>(*OpTyOrNone);
-    return Error::success();
-  }
+                              bool OperandIsAPointer);
 
   /// Emit MatchTable opcodes to capture instructions into the MIs table.
   void emitCaptureOpcodes(MatchTable &Table, RuleMatcher &Rule,
@@ -1076,6 +1064,27 @@ PredicateListMatcher<OperandPredicateMatcher>::addPredicate(Args &&... args) {
     return None;
   Predicates.emplace_back(llvm::make_unique<Kind>(std::forward<Args>(args)...));
   return static_cast<Kind *>(Predicates.back().get());
+}
+
+Error OperandMatcher::addTypeCheckPredicate(const TypeSetByHwMode &VTy,
+                                                     bool OperandIsAPointer) {
+  if (!VTy.isMachineValueType())
+    return failedImport("unsupported typeset");
+
+  if (VTy.getMachineValueType() == MVT::iPTR && OperandIsAPointer) {
+    addPredicate<PointerToAnyOperandMatcher>(0);
+    return Error::success();
+  }
+
+  auto OpTyOrNone = MVTToLLT(VTy.getMachineValueType().SimpleTy);
+  if (!OpTyOrNone)
+    return failedImport("unsupported type");
+
+  if (OperandIsAPointer)
+    addPredicate<PointerToAnyOperandMatcher>(OpTyOrNone->get().getSizeInBits());
+  else
+    addPredicate<LLTOperandMatcher>(*OpTyOrNone);
+  return Error::success();
 }
 
 unsigned ComplexPatternOperandMatcher::getAllocatedTemporariesBaseID() const {
@@ -1417,6 +1426,7 @@ class OperandRenderer {
 public:
   enum RendererKind {
     OR_Copy,
+    OR_CopyOrAddZeroReg,
     OR_CopySubReg,
     OR_CopyConstantAsImm,
     OR_CopyFConstantAsFPImm,
@@ -1443,17 +1453,12 @@ public:
 class CopyRenderer : public OperandRenderer {
 protected:
   unsigned NewInsnID;
-  /// The matcher for the instruction that this operand is copied from.
-  /// This provides the facility for looking up an a operand by it's name so
-  /// that it can be used as a source for the instruction being built.
-  const InstructionMatcher &Matched;
   /// The name of the operand.
   const StringRef SymbolicName;
 
 public:
-  CopyRenderer(unsigned NewInsnID, const InstructionMatcher &Matched,
-               StringRef SymbolicName)
-      : OperandRenderer(OR_Copy), NewInsnID(NewInsnID), Matched(Matched),
+  CopyRenderer(unsigned NewInsnID, StringRef SymbolicName)
+      : OperandRenderer(OR_Copy), NewInsnID(NewInsnID),
         SymbolicName(SymbolicName) {
     assert(!SymbolicName.empty() && "Cannot copy from an unspecified source");
   }
@@ -1471,6 +1476,47 @@ public:
           << MatchTable::IntValue(NewInsnID) << MatchTable::Comment("OldInsnID")
           << MatchTable::IntValue(OldInsnVarID) << MatchTable::Comment("OpIdx")
           << MatchTable::IntValue(Operand.getOperandIndex())
+          << MatchTable::Comment(SymbolicName) << MatchTable::LineBreak;
+  }
+};
+
+/// A CopyOrAddZeroRegRenderer emits code to copy a single operand from an
+/// existing instruction to the one being built. If the operand turns out to be
+/// a 'G_CONSTANT 0' then it replaces the operand with a zero register.
+class CopyOrAddZeroRegRenderer : public OperandRenderer {
+protected:
+  unsigned NewInsnID;
+  /// The name of the operand.
+  const StringRef SymbolicName;
+  const Record *ZeroRegisterDef;
+
+public:
+  CopyOrAddZeroRegRenderer(unsigned NewInsnID,
+                           StringRef SymbolicName, Record *ZeroRegisterDef)
+      : OperandRenderer(OR_CopyOrAddZeroReg), NewInsnID(NewInsnID),
+        SymbolicName(SymbolicName), ZeroRegisterDef(ZeroRegisterDef) {
+    assert(!SymbolicName.empty() && "Cannot copy from an unspecified source");
+  }
+
+  static bool classof(const OperandRenderer *R) {
+    return R->getKind() == OR_CopyOrAddZeroReg;
+  }
+
+  const StringRef getSymbolicName() const { return SymbolicName; }
+
+  void emitRenderOpcodes(MatchTable &Table, RuleMatcher &Rule) const override {
+    const OperandMatcher &Operand = Rule.getOperandMatcher(SymbolicName);
+    unsigned OldInsnVarID = Rule.getInsnVarID(Operand.getInstructionMatcher());
+    Table << MatchTable::Opcode("GIR_CopyOrAddZeroReg")
+          << MatchTable::Comment("NewInsnID") << MatchTable::IntValue(NewInsnID)
+          << MatchTable::Comment("OldInsnID")
+          << MatchTable::IntValue(OldInsnVarID) << MatchTable::Comment("OpIdx")
+          << MatchTable::IntValue(Operand.getOperandIndex())
+          << MatchTable::NamedValue(
+                 (ZeroRegisterDef->getValue("Namespace")
+                      ? ZeroRegisterDef->getValueAsString("Namespace")
+                      : ""),
+                 ZeroRegisterDef->getName())
           << MatchTable::Comment(SymbolicName) << MatchTable::LineBreak;
   }
 };
@@ -1543,19 +1589,15 @@ public:
 class CopySubRegRenderer : public OperandRenderer {
 protected:
   unsigned NewInsnID;
-  /// The matcher for the instruction that this operand is copied from.
-  /// This provides the facility for looking up an a operand by it's name so
-  /// that it can be used as a source for the instruction being built.
-  const InstructionMatcher &Matched;
   /// The name of the operand.
   const StringRef SymbolicName;
   /// The subregister to extract.
   const CodeGenSubRegIndex *SubReg;
 
 public:
-  CopySubRegRenderer(unsigned NewInsnID, const InstructionMatcher &Matched,
-                     StringRef SymbolicName, const CodeGenSubRegIndex *SubReg)
-      : OperandRenderer(OR_CopySubReg), NewInsnID(NewInsnID), Matched(Matched),
+  CopySubRegRenderer(unsigned NewInsnID, StringRef SymbolicName,
+                     const CodeGenSubRegIndex *SubReg)
+      : OperandRenderer(OR_CopySubReg), NewInsnID(NewInsnID),
         SymbolicName(SymbolicName), SubReg(SubReg) {}
 
   static bool classof(const OperandRenderer *R) {
@@ -1711,18 +1753,21 @@ class BuildMIAction : public MatchAction {
 private:
   unsigned InsnID;
   const CodeGenInstruction *I;
-  const InstructionMatcher &Matched;
+  const InstructionMatcher *Matched;
   std::vector<std::unique_ptr<OperandRenderer>> OperandRenderers;
 
   /// True if the instruction can be built solely by mutating the opcode.
   bool canMutate(RuleMatcher &Rule) const {
-    if (OperandRenderers.size() != Matched.getNumOperands())
+    if (!Matched)
+      return false;
+
+    if (OperandRenderers.size() != Matched->getNumOperands())
       return false;
 
     for (const auto &Renderer : enumerate(OperandRenderers)) {
       if (const auto *Copy = dyn_cast<CopyRenderer>(&*Renderer.value())) {
         const OperandMatcher &OM = Rule.getOperandMatcher(Copy->getSymbolicName());
-        if (&Matched != &OM.getInstructionMatcher() ||
+        if (Matched != &OM.getInstructionMatcher() ||
             OM.getOperandIndex() != Renderer.index())
           return false;
       } else
@@ -1734,7 +1779,7 @@ private:
 
 public:
   BuildMIAction(unsigned InsnID, const CodeGenInstruction *I,
-                const InstructionMatcher &Matched)
+                const InstructionMatcher *Matched)
       : InsnID(InsnID), I(I), Matched(Matched) {}
 
   template <class Kind, class... Args>
@@ -2092,7 +2137,7 @@ void SameOperandMatcher::emitPredicateOpcodes(MatchTable &Table,
                                               RuleMatcher &Rule,
                                               unsigned InsnVarID,
                                               unsigned OpIdx) const {
-  const OperandMatcher &OtherOM = Rule.getOperandMatcher(TiedTo);
+  const OperandMatcher &OtherOM = Rule.getOperandMatcher(MatchingName);
   unsigned OtherInsnVarID = Rule.getInsnVarID(OtherOM.getInstructionMatcher());
 
   Table << MatchTable::Opcode("GIM_CheckIsSameOperand")
@@ -2273,6 +2318,25 @@ Expected<InstructionMatcher &> GlobalISelEmitter::createAndImportSelDAGMatcher(
       continue;
     }
 
+    // No check required. A G_STORE is an unindexed store.
+    if (Predicate.isStore() && Predicate.isUnindexed())
+      continue;
+
+    // No check required. G_STORE by itself is a non-extending store.
+    if (Predicate.isNonTruncStore())
+      continue;
+
+    if (Predicate.isStore() && Predicate.getMemoryVT() != nullptr) {
+      Optional<LLTCodeGen> MemTyOrNone =
+          MVTToLLT(getValueType(Predicate.getMemoryVT()));
+
+      if (!MemTyOrNone)
+        return failedImport("MemVT could not be converted to LLT");
+
+      InsnMatcher.getOperand(0).addPredicate<LLTOperandMatcher>(MemTyOrNone.getValue());
+      continue;
+    }
+
     return failedImport("Src pattern child has predicate (" +
                         explainPredicates(Src) + ")");
   }
@@ -2309,7 +2373,8 @@ Expected<InstructionMatcher &> GlobalISelEmitter::createAndImportSelDAGMatcher(
       // Coerce integers to pointers to address space 0 if the context indicates a pointer.
       // TODO: Find a better way to do this, SDTCisPtrTy?
       bool OperandIsAPointer =
-          SrcGIOrNull->TheDef->getName() == "G_LOAD" && i == 0;
+          (SrcGIOrNull->TheDef->getName() == "G_LOAD" && i == 0) ||
+          (SrcGIOrNull->TheDef->getName() == "G_STORE" && i == 1);
 
       // For G_INTRINSIC/G_INTRINSIC_W_SIDE_EFFECTS, the operand immediately
       // following the defs is an intrinsic ID.
@@ -2483,8 +2548,7 @@ Error GlobalISelEmitter::importExplicitUseRenderer(
     if (DstChild->getOperator()->isSubClassOf("SDNode")) {
       auto &ChildSDNI = CGP.getSDNodeInfo(DstChild->getOperator());
       if (ChildSDNI.getSDClassName() == "BasicBlockSDNode") {
-        DstMIBuilder.addRenderer<CopyRenderer>(0, InsnMatcher,
-                                               DstChild->getName());
+        DstMIBuilder.addRenderer<CopyRenderer>(0, DstChild->getName());
         return Error::success();
       }
     }
@@ -2528,8 +2592,14 @@ Error GlobalISelEmitter::importExplicitUseRenderer(
     if (ChildRec->isSubClassOf("RegisterClass") ||
         ChildRec->isSubClassOf("RegisterOperand") ||
         ChildRec->isSubClassOf("ValueType")) {
-      DstMIBuilder.addRenderer<CopyRenderer>(0, InsnMatcher,
-                                             DstChild->getName());
+      if (ChildRec->isSubClassOf("RegisterOperand") &&
+          !ChildRec->isValueUnset("GIZeroRegister")) {
+        DstMIBuilder.addRenderer<CopyOrAddZeroRegRenderer>(
+            0, DstChild->getName(), ChildRec->getValueAsDef("GIZeroRegister"));
+        return Error::success();
+      }
+
+      DstMIBuilder.addRenderer<CopyRenderer>(0, DstChild->getName());
       return Error::success();
     }
 
@@ -2584,12 +2654,12 @@ Expected<BuildMIAction &> GlobalISelEmitter::createAndImportInstructionRenderer(
     IsExtractSubReg = true;
   }
 
-  auto &DstMIBuilder = M.addAction<BuildMIAction>(0, DstI, InsnMatcher);
+  auto &DstMIBuilder = M.addAction<BuildMIAction>(0, DstI, &InsnMatcher);
 
   // Render the explicit defs.
   for (unsigned I = 0; I < DstI->Operands.NumDefs; ++I) {
     const CGIOperandList::OperandInfo &DstIOperand = DstI->Operands[I];
-    DstMIBuilder.addRenderer<CopyRenderer>(0, InsnMatcher, DstIOperand.Name);
+    DstMIBuilder.addRenderer<CopyRenderer>(0, DstIOperand.Name);
   }
 
   // EXTRACT_SUBREG needs to use a subregister COPY.
@@ -2612,7 +2682,7 @@ Expected<BuildMIAction &> GlobalISelEmitter::createAndImportInstructionRenderer(
       }
 
       DstMIBuilder.addRenderer<CopySubRegRenderer>(
-          0, InsnMatcher, Dst->getChild(0)->getName(), SubIdx);
+          0, Dst->getChild(0)->getName(), SubIdx);
       return DstMIBuilder;
     }
 
@@ -2735,9 +2805,9 @@ Expected<RuleMatcher> GlobalISelEmitter::runOnPattern(const PatternToMatch &P) {
       M.defineOperand(OM0.getSymbolicName(), OM0);
       OM0.addPredicate<RegisterBankOperandMatcher>(RC);
 
-      auto &DstMIBuilder = M.addAction<BuildMIAction>(0, &DstI, InsnMatcher);
-      DstMIBuilder.addRenderer<CopyRenderer>(0, InsnMatcher, DstIOperand.Name);
-      DstMIBuilder.addRenderer<CopyRenderer>(0, InsnMatcher, Dst->getName());
+      auto &DstMIBuilder = M.addAction<BuildMIAction>(0, &DstI, &InsnMatcher);
+      DstMIBuilder.addRenderer<CopyRenderer>(0, DstIOperand.Name);
+      DstMIBuilder.addRenderer<CopyRenderer>(0, Dst->getName());
       M.addAction<ConstrainOperandToRegClassAction>(0, 0, RC);
 
       // We're done with this pattern!  It's eligible for GISel emission; return
@@ -2980,7 +3050,7 @@ void GlobalISelEmitter::run(raw_ostream &OS) {
   OS << "#ifdef GET_GLOBALISEL_TEMPORARIES_DECL\n"
      << "  mutable MatcherState State;\n"
      << "  typedef "
-        "ComplexRendererFn("
+        "ComplexRendererFns("
      << Target.getName()
      << "InstructionSelector::*ComplexMatcherMemFn)(MachineOperand &) const;\n"
      << "  const MatcherInfoTy<PredicateBitset, ComplexMatcherMemFn> "
