@@ -50,26 +50,15 @@ define i16 @v16i16(<16 x i16> %a, <16 x i16> %b) {
 }
 
 define i8 @v8i32(<8 x i32> %a, <8 x i32> %b) {
-; SSE2-LABEL: v8i32:
-; SSE2:       # BB#0:
-; SSE2-NEXT:    pcmpgtd %xmm3, %xmm1
-; SSE2-NEXT:    pcmpgtd %xmm2, %xmm0
-; SSE2-NEXT:    packsswb %xmm1, %xmm0
-; SSE2-NEXT:    pand {{.*}}(%rip), %xmm0
-; SSE2-NEXT:    packuswb %xmm0, %xmm0
-; SSE2-NEXT:    pmovmskb %xmm0, %eax
-; SSE2-NEXT:    # kill: %AL<def> %AL<kill> %EAX<kill>
-; SSE2-NEXT:    retq
-;
-; SSSE3-LABEL: v8i32:
-; SSSE3:       # BB#0:
-; SSSE3-NEXT:    pcmpgtd %xmm3, %xmm1
-; SSSE3-NEXT:    pcmpgtd %xmm2, %xmm0
-; SSSE3-NEXT:    packsswb %xmm1, %xmm0
-; SSSE3-NEXT:    pshufb {{.*#+}} xmm0 = xmm0[0,2,4,6,8,10,12,14,u,u,u,u,u,u,u,u]
-; SSSE3-NEXT:    pmovmskb %xmm0, %eax
-; SSSE3-NEXT:    # kill: %AL<def> %AL<kill> %EAX<kill>
-; SSSE3-NEXT:    retq
+; SSE2-SSSE3-LABEL: v8i32:
+; SSE2-SSSE3:       # BB#0:
+; SSE2-SSSE3-NEXT:    pcmpgtd %xmm3, %xmm1
+; SSE2-SSSE3-NEXT:    pcmpgtd %xmm2, %xmm0
+; SSE2-SSSE3-NEXT:    packssdw %xmm1, %xmm0
+; SSE2-SSSE3-NEXT:    packsswb %xmm0, %xmm0
+; SSE2-SSSE3-NEXT:    pmovmskb %xmm0, %eax
+; SSE2-SSSE3-NEXT:    # kill: %AL<def> %AL<kill> %EAX<kill>
+; SSE2-SSSE3-NEXT:    retq
 ;
 ; AVX1-LABEL: v8i32:
 ; AVX1:       # BB#0:
@@ -104,26 +93,15 @@ define i8 @v8i32(<8 x i32> %a, <8 x i32> %b) {
 }
 
 define i8 @v8f32(<8 x float> %a, <8 x float> %b) {
-; SSE2-LABEL: v8f32:
-; SSE2:       # BB#0:
-; SSE2-NEXT:    cmpltps %xmm1, %xmm3
-; SSE2-NEXT:    cmpltps %xmm0, %xmm2
-; SSE2-NEXT:    packsswb %xmm3, %xmm2
-; SSE2-NEXT:    pand {{.*}}(%rip), %xmm2
-; SSE2-NEXT:    packuswb %xmm2, %xmm2
-; SSE2-NEXT:    pmovmskb %xmm2, %eax
-; SSE2-NEXT:    # kill: %AL<def> %AL<kill> %EAX<kill>
-; SSE2-NEXT:    retq
-;
-; SSSE3-LABEL: v8f32:
-; SSSE3:       # BB#0:
-; SSSE3-NEXT:    cmpltps %xmm1, %xmm3
-; SSSE3-NEXT:    cmpltps %xmm0, %xmm2
-; SSSE3-NEXT:    packsswb %xmm3, %xmm2
-; SSSE3-NEXT:    pshufb {{.*#+}} xmm2 = xmm2[0,2,4,6,8,10,12,14,u,u,u,u,u,u,u,u]
-; SSSE3-NEXT:    pmovmskb %xmm2, %eax
-; SSSE3-NEXT:    # kill: %AL<def> %AL<kill> %EAX<kill>
-; SSSE3-NEXT:    retq
+; SSE2-SSSE3-LABEL: v8f32:
+; SSE2-SSSE3:       # BB#0:
+; SSE2-SSSE3-NEXT:    cmpltps %xmm1, %xmm3
+; SSE2-SSSE3-NEXT:    cmpltps %xmm0, %xmm2
+; SSE2-SSSE3-NEXT:    packssdw %xmm3, %xmm2
+; SSE2-SSSE3-NEXT:    packsswb %xmm0, %xmm2
+; SSE2-SSSE3-NEXT:    pmovmskb %xmm2, %eax
+; SSE2-SSSE3-NEXT:    # kill: %AL<def> %AL<kill> %EAX<kill>
+; SSE2-SSSE3-NEXT:    retq
 ;
 ; AVX12-LABEL: v8f32:
 ; AVX12:       # BB#0:
@@ -211,7 +189,7 @@ define i4 @v4i64(<4 x i64> %a, <4 x i64> %b) {
 ; SSE2-SSSE3-NEXT:    pand %xmm4, %xmm0
 ; SSE2-SSSE3-NEXT:    pshufd {{.*#+}} xmm1 = xmm1[1,1,3,3]
 ; SSE2-SSSE3-NEXT:    por %xmm0, %xmm1
-; SSE2-SSSE3-NEXT:    packsswb %xmm3, %xmm1
+; SSE2-SSSE3-NEXT:    packssdw %xmm3, %xmm1
 ; SSE2-SSSE3-NEXT:    movmskps %xmm1, %eax
 ; SSE2-SSSE3-NEXT:    # kill: %AL<def> %AL<kill> %EAX<kill>
 ; SSE2-SSSE3-NEXT:    retq
@@ -254,7 +232,7 @@ define i4 @v4f64(<4 x double> %a, <4 x double> %b) {
 ; SSE2-SSSE3:       # BB#0:
 ; SSE2-SSSE3-NEXT:    cmpltpd %xmm1, %xmm3
 ; SSE2-SSSE3-NEXT:    cmpltpd %xmm0, %xmm2
-; SSE2-SSSE3-NEXT:    packsswb %xmm3, %xmm2
+; SSE2-SSSE3-NEXT:    packssdw %xmm3, %xmm2
 ; SSE2-SSSE3-NEXT:    movmskps %xmm2, %eax
 ; SSE2-SSSE3-NEXT:    # kill: %AL<def> %AL<kill> %EAX<kill>
 ; SSE2-SSSE3-NEXT:    retq

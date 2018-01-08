@@ -405,6 +405,7 @@ int main(int argc, char **argv) {
   initializeCountingFunctionInserterPass(Registry);
   initializeUnreachableBlockElimLegacyPassPass(Registry);
   initializeExpandReductionsPass(Registry);
+  initializeWriteBitcodePassPass(Registry);
 
   // Add the Cheri IR -> IR passes
   initializeCHERICapFoldIntrinsicsPass(Registry);

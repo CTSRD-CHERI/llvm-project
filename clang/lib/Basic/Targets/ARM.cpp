@@ -236,6 +236,11 @@ ARMTargetInfo::ARMTargetInfo(const llvm::Triple &Triple,
     break;
   }
 
+  bool IsOpenBSD = Triple.getOS() == llvm::Triple::OpenBSD;
+  bool IsNetBSD = Triple.getOS() == llvm::Triple::NetBSD;
+  IntPtrType =
+      (Triple.isOSDarwin() || IsOpenBSD || IsNetBSD) ? SignedLong : SignedInt;
+
   // Cache arch related info.
   setArchInfo();
 

@@ -1501,7 +1501,8 @@ SDValue SelectionDAG::getVectorShuffle(EVT VT, const SDLoc &dl, SDValue N1,
   // Validate that all indices in Mask are within the range of the elements
   // input to the shuffle.
   int NElts = Mask.size();
-  assert(llvm::all_of(Mask, [&](int M) { return M < (NElts * 2); }) &&
+  assert(llvm::all_of(Mask,
+                      [&](int M) { return M < (NElts * 2) && M >= -1; }) &&
          "Index out of range");
 
   // Copy the mask so we can do any needed cleanup.
@@ -2103,6 +2104,14 @@ void SelectionDAG::computeKnownBits(SDValue Op, KnownBits &Known,
   unsigned BitWidth = Op.getScalarValueSizeInBits();
 
   Known = KnownBits(BitWidth);   // Don't know anything.
+
+  if (auto *C = dyn_cast<ConstantSDNode>(Op)) {
+    // We know all of the bits for a constant!
+    Known.One = C->getAPIntValue();
+    Known.Zero = ~Known.One;
+    return;
+  }
+
   if (Depth == 6)
     return;  // Limit search depth.
 
@@ -2114,11 +2123,6 @@ void SelectionDAG::computeKnownBits(SDValue Op, KnownBits &Known,
 
   unsigned Opcode = Op.getOpcode();
   switch (Opcode) {
-  case ISD::Constant:
-    // We know all of the bits for a constant!
-    Known.One = cast<ConstantSDNode>(Op)->getAPIntValue();
-    Known.Zero = ~Known.One;
-    break;
   case ISD::BUILD_VECTOR:
     // Collect the known bits that are shared by every demanded vector element.
     assert(NumElts == Op.getValueType().getVectorNumElements() &&
@@ -2977,6 +2981,11 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
   unsigned Tmp, Tmp2;
   unsigned FirstAnswer = 1;
 
+  if (auto *C = dyn_cast<ConstantSDNode>(Op)) {
+    const APInt &Val = C->getAPIntValue();
+    return Val.getNumSignBits();
+  }
+
   if (Depth == 6)
     return 1;  // Limit search depth.
 
@@ -2991,11 +3000,6 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
   case ISD::AssertZext:
     Tmp = cast<VTSDNode>(Op.getOperand(1))->getVT().getSizeInBits();
     return VTBits-Tmp;
-
-  case ISD::Constant: {
-    const APInt &Val = cast<ConstantSDNode>(Op)->getAPIntValue();
-    return Val.getNumSignBits();
-  }
 
   case ISD::BUILD_VECTOR:
     Tmp = VTBits;
@@ -3120,6 +3124,7 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
     break;
 
   case ISD::SELECT:
+  case ISD::VSELECT:
     Tmp = ComputeNumSignBits(Op.getOperand(1), Depth+1);
     if (Tmp == 1) return 1;  // Early out.
     Tmp2 = ComputeNumSignBits(Op.getOperand(2), Depth+1);
@@ -7018,6 +7023,40 @@ SDDbgValue *SelectionDAG::getFrameIndexDbgValue(DIVariable *Var,
   return new (DbgInfo->getAlloc()) SDDbgValue(Var, Expr, FI, DL, O);
 }
 
+void SelectionDAG::salvageDebugInfo(SDNode &N) {
+  if (!N.getHasDebugValue())
+    return;
+  for (auto DV : GetDbgValues(&N)) {
+    if (DV->isInvalidated())
+      continue;
+    switch (N.getOpcode()) {
+    default:
+      break;
+    case ISD::ADD:
+      SDValue N0 = N.getOperand(0);
+      SDValue N1 = N.getOperand(1);
+      if (!isConstantIntBuildVectorOrConstantInt(N0) &&
+          isConstantIntBuildVectorOrConstantInt(N1)) {
+        uint64_t Offset = N.getConstantOperandVal(1);
+        // Rewrite an ADD constant node into a DIExpression. Since we are
+        // performing arithmetic to compute the variable's *value* in the
+        // DIExpression, we need to mark the expression with a
+        // DW_OP_stack_value.
+        auto *DIExpr = DV->getExpression();
+        DIExpr = DIExpression::prepend(DIExpr, DIExpression::NoDeref, Offset,
+                                       DIExpression::WithStackValue);
+        SDDbgValue *Clone =
+            getDbgValue(DV->getVariable(), DIExpr, N0.getNode(), N0.getResNo(),
+                        DV->isIndirect(), DV->getDebugLoc(), DV->getOrder());
+        DV->setIsInvalidated();
+        AddDbgValue(Clone, N0.getNode(), false);
+        DEBUG(dbgs() << "SALVAGE: Rewriting"; N0.getNode()->dumprFull(this);
+              dbgs() << " into " << *DIExpr << '\n');
+      }
+    }
+  }
+}
+
 namespace {
 
 /// RAUWUpdateListener - Helper for ReplaceAllUsesWith - When the node
@@ -7432,17 +7471,14 @@ void SelectionDAG::AddDbgValue(SDDbgValue *DB, SDNode *SD, bool isParameter) {
   DbgInfo->add(DB, SD, isParameter);
 }
 
-/// TransferDbgValues - Transfer SDDbgValues. Called in replace nodes.
+/// Transfer SDDbgValues. Called in replace nodes.
 void SelectionDAG::TransferDbgValues(SDValue From, SDValue To) {
   if (From == To || !From.getNode()->getHasDebugValue())
     return;
   SDNode *FromNode = From.getNode();
   SDNode *ToNode = To.getNode();
-  ArrayRef<SDDbgValue *> DVs = GetDbgValues(FromNode);
   SmallVector<SDDbgValue *, 2> ClonedDVs;
-  for (ArrayRef<SDDbgValue *>::iterator I = DVs.begin(), E = DVs.end();
-       I != E; ++I) {
-    SDDbgValue *Dbg = *I;
+  for (auto *Dbg : GetDbgValues(FromNode)) {
     // Only add Dbgvalues attached to same ResNo.
     if (Dbg->getKind() == SDDbgValue::SDNODE &&
         Dbg->getSDNode() == From.getNode() &&

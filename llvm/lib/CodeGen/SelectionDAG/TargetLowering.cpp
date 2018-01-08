@@ -471,7 +471,7 @@ TargetLowering::SimplifyDemandedBits(SDNode *User, unsigned OpIdx,
     }
     NewOps.push_back(User->getOperand(i));
   }
-  TLO.DAG.UpdateNodeOperands(User, NewOps);
+  User = TLO.DAG.UpdateNodeOperands(User, NewOps);
   // Op has less users now, so we may be able to perform additional combines
   // with it.
   DCI.AddToWorklist(Op.getNode());
@@ -518,6 +518,13 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
   // Don't know anything.
   Known = KnownBits(BitWidth);
 
+  if (Op.getOpcode() == ISD::Constant) {
+    // We know all of the bits for a constant!
+    Known.One = cast<ConstantSDNode>(Op)->getAPIntValue();
+    Known.Zero = ~Known.One;
+    return false;
+  }
+
   // Other users may use these bits.
   if (!Op.getNode()->hasOneUse() && !AssumeSingleUse) {
     if (Depth != 0) {
@@ -540,11 +547,6 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
 
   KnownBits Known2, KnownOut;
   switch (Op.getOpcode()) {
-  case ISD::Constant:
-    // We know all of the bits for a constant!
-    Known.One = cast<ConstantSDNode>(Op)->getAPIntValue();
-    Known.Zero = ~Known.One;
-    return false;   // Don't fall through, will infinitely loop.
   case ISD::BUILD_VECTOR:
     // Collect the known bits that are shared by every constant vector element.
     Known.Zero.setAllBits(); Known.One.setAllBits();
