@@ -46,7 +46,6 @@ ErrorHandler &lld::errorHandler() {
 }
 
 void lld::exitLld(int Val) {
-  waitForBackgroundThreads();
   // Dealloc/destroy ManagedStatic variables before calling
   // _exit(). In a non-LTO build, this is a nop. In an LTO
   // build allows us to get the output of -time-passes.
@@ -90,13 +89,12 @@ void ErrorHandler::warn(const Twine &Msg) {
   static uint64_t WarningCount = 0;
   std::lock_guard<std::mutex> Lock(Mu);
   newline(ErrorOS, Msg);
-  if (Config->WarningLimit == 0 || WarningCount < Config->WarningLimit) {
+  if (WarningLimit == 0 || WarningCount < WarningLimit) {
     print("warning: ", raw_ostream::MAGENTA);
     *ErrorOS << Msg << "\n";
-  } else if (WarningCount == Config->WarningLimit) {
+  } else if (WarningCount == WarningLimit) {
     print("warning: ", raw_ostream::MAGENTA);
-    *ErrorOS << "too many warnings emitted, stopping now"
-             << " (use -warning-limit=0 to see all warnings)\n";
+    *ErrorOS << WarningLimitExceededMsg << "\n";
   }
   ++WarningCount;
 }

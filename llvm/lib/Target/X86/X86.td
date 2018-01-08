@@ -116,9 +116,15 @@ def FeatureAVX     : SubtargetFeature<"avx", "X86SSELevel", "AVX",
 def FeatureAVX2    : SubtargetFeature<"avx2", "X86SSELevel", "AVX2",
                                       "Enable AVX2 instructions",
                                       [FeatureAVX]>;
+def FeatureFMA     : SubtargetFeature<"fma", "HasFMA", "true",
+                                      "Enable three-operand fused multiple-add",
+                                      [FeatureAVX]>;
+def FeatureF16C    : SubtargetFeature<"f16c", "HasF16C", "true",
+                       "Support 16-bit floating point conversion instructions",
+                       [FeatureAVX]>;
 def FeatureAVX512   : SubtargetFeature<"avx512f", "X86SSELevel", "AVX512F",
                                       "Enable AVX-512 instructions",
-                                      [FeatureAVX2]>;
+                                      [FeatureAVX2, FeatureFMA, FeatureF16C]>;
 def FeatureERI      : SubtargetFeature<"avx512er", "HasERI", "true",
                       "Enable AVX-512 Exponential and Reciprocal Instructions",
                                       [FeatureAVX512]>;
@@ -154,9 +160,6 @@ def FeaturePKU   : SubtargetFeature<"pku", "HasPKU", "true",
 def FeaturePCLMUL  : SubtargetFeature<"pclmul", "HasPCLMUL", "true",
                          "Enable packed carry-less multiplication instructions",
                                [FeatureSSE2]>;
-def FeatureFMA     : SubtargetFeature<"fma", "HasFMA", "true",
-                                      "Enable three-operand fused multiple-add",
-                                      [FeatureAVX]>;
 def FeatureFMA4    : SubtargetFeature<"fma4", "HasFMA4", "true",
                                       "Enable four-operand fused multiple-add",
                                       [FeatureAVX, FeatureSSE4A]>;
@@ -177,9 +180,6 @@ def FeatureMOVBE   : SubtargetFeature<"movbe", "HasMOVBE", "true",
                                       "Support MOVBE instruction">;
 def FeatureRDRAND  : SubtargetFeature<"rdrnd", "HasRDRAND", "true",
                                       "Support RDRAND instruction">;
-def FeatureF16C    : SubtargetFeature<"f16c", "HasF16C", "true",
-                       "Support 16-bit floating point conversion instructions",
-                       [FeatureAVX]>;
 def FeatureFSGSBase : SubtargetFeature<"fsgsbase", "HasFSGSBase", "true",
                                        "Support FS/GS Base instructions">;
 def FeatureLZCNT   : SubtargetFeature<"lzcnt", "HasLZCNT", "true",
@@ -327,14 +327,18 @@ def : Proc<"i486",            [FeatureX87, FeatureSlowUAMem16]>;
 def : Proc<"i586",            [FeatureX87, FeatureSlowUAMem16]>;
 def : Proc<"pentium",         [FeatureX87, FeatureSlowUAMem16]>;
 def : Proc<"pentium-mmx",     [FeatureX87, FeatureSlowUAMem16, FeatureMMX]>;
-def : Proc<"i686",            [FeatureX87, FeatureSlowUAMem16]>;
-def : Proc<"pentiumpro",      [FeatureX87, FeatureSlowUAMem16, FeatureCMOV]>;
+
+foreach P = ["i686", "pentiumpro"] in {
+  def : Proc<P, [FeatureX87, FeatureSlowUAMem16, FeatureCMOV]>;
+}
+
 def : Proc<"pentium2",        [FeatureX87, FeatureSlowUAMem16, FeatureMMX,
                                FeatureCMOV, FeatureFXSR]>;
-def : Proc<"pentium3",        [FeatureX87, FeatureSlowUAMem16, FeatureMMX,
-                               FeatureSSE1, FeatureFXSR]>;
-def : Proc<"pentium3m",       [FeatureX87, FeatureSlowUAMem16, FeatureMMX,
-                               FeatureSSE1, FeatureFXSR]>;
+
+foreach P = ["pentium3", "pentium3m"] in {
+  def : Proc<P, [FeatureX87, FeatureSlowUAMem16, FeatureMMX, FeatureSSE1,
+                 FeatureFXSR]>;
+}
 
 // Enable the PostRAScheduler for SSE2 and SSE3 class cpus.
 // The intent is to enable it for pentium4 which is the current default
@@ -350,13 +354,11 @@ def : ProcessorModel<"pentium-m", GenericPostRAModel,
                      [FeatureX87, FeatureSlowUAMem16, FeatureMMX,
                       FeatureSSE2, FeatureFXSR]>;
 
-def : ProcessorModel<"pentium4", GenericPostRAModel,
-                     [FeatureX87, FeatureSlowUAMem16, FeatureMMX,
-                      FeatureSSE2, FeatureFXSR]>;
-
-def : ProcessorModel<"pentium4m", GenericPostRAModel,
-                     [FeatureX87, FeatureSlowUAMem16, FeatureMMX,
-                      FeatureSSE2, FeatureFXSR]>;
+foreach P = ["pentium4", "pentium4m"] in {
+  def : ProcessorModel<P, GenericPostRAModel,
+                       [FeatureX87, FeatureSlowUAMem16, FeatureMMX,
+                        FeatureSSE2, FeatureFXSR]>;
+}
 
 // Intel Quark.
 def : Proc<"lakemont",        []>;
@@ -665,45 +667,31 @@ def : CannonlakeProc<"cannonlake">;
 def : Proc<"k6",              [FeatureX87, FeatureSlowUAMem16, FeatureMMX]>;
 def : Proc<"k6-2",            [FeatureX87, FeatureSlowUAMem16, Feature3DNow]>;
 def : Proc<"k6-3",            [FeatureX87, FeatureSlowUAMem16, Feature3DNow]>;
-def : Proc<"athlon",          [FeatureX87, FeatureSlowUAMem16, Feature3DNowA,
-                               FeatureSlowSHLD]>;
-def : Proc<"athlon-tbird",    [FeatureX87, FeatureSlowUAMem16, Feature3DNowA,
-                               FeatureSlowSHLD]>;
-def : Proc<"athlon-4",        [FeatureX87, FeatureSlowUAMem16, FeatureSSE1,
-                               Feature3DNowA, FeatureFXSR, FeatureSlowSHLD]>;
-def : Proc<"athlon-xp",       [FeatureX87, FeatureSlowUAMem16, FeatureSSE1,
-                               Feature3DNowA, FeatureFXSR, FeatureSlowSHLD]>;
-def : Proc<"athlon-mp",       [FeatureX87, FeatureSlowUAMem16, FeatureSSE1,
-                               Feature3DNowA, FeatureFXSR, FeatureSlowSHLD]>;
-def : Proc<"k8",              [FeatureX87, FeatureSlowUAMem16, FeatureSSE2,
-                               Feature3DNowA, FeatureFXSR, Feature64Bit,
-                               FeatureSlowSHLD]>;
-def : Proc<"opteron",         [FeatureX87, FeatureSlowUAMem16, FeatureSSE2,
-                               Feature3DNowA, FeatureFXSR, Feature64Bit,
-                               FeatureSlowSHLD]>;
-def : Proc<"athlon64",        [FeatureX87, FeatureSlowUAMem16, FeatureSSE2,
-                               Feature3DNowA, FeatureFXSR, Feature64Bit,
-                               FeatureSlowSHLD]>;
-def : Proc<"athlon-fx",       [FeatureX87, FeatureSlowUAMem16, FeatureSSE2,
-                               Feature3DNowA, FeatureFXSR, Feature64Bit,
-                               FeatureSlowSHLD]>;
-def : Proc<"k8-sse3",         [FeatureX87, FeatureSlowUAMem16, FeatureSSE3,
-                               Feature3DNowA, FeatureFXSR, FeatureCMPXCHG16B,
-                               FeatureSlowSHLD]>;
-def : Proc<"opteron-sse3",    [FeatureX87, FeatureSlowUAMem16, FeatureSSE3,
-                               Feature3DNowA, FeatureFXSR, FeatureCMPXCHG16B,
-                               FeatureSlowSHLD]>;
-def : Proc<"athlon64-sse3",   [FeatureX87, FeatureSlowUAMem16, FeatureSSE3,
-                               Feature3DNowA, FeatureFXSR, FeatureCMPXCHG16B,
-                               FeatureSlowSHLD]>;
-def : Proc<"amdfam10",        [FeatureX87, FeatureSSE4A, Feature3DNowA,
-                               FeatureFXSR, FeatureCMPXCHG16B, FeatureLZCNT,
-                               FeaturePOPCNT, FeatureSlowSHLD,
-                               FeatureLAHFSAHF]>;
-def : Proc<"barcelona",       [FeatureX87, FeatureSSE4A, Feature3DNowA,
-                               FeatureFXSR, FeatureCMPXCHG16B, FeatureLZCNT,
-                               FeaturePOPCNT, FeatureSlowSHLD,
-                               FeatureLAHFSAHF]>;
+
+foreach P = ["athlon", "athlon-tbird"] in {
+  def : Proc<P, [FeatureX87, FeatureSlowUAMem16, Feature3DNowA, FeatureSlowSHLD]>;
+}
+
+foreach P = ["athlon-4", "athlon-xp", "athlon-mp"] in {
+  def : Proc<P, [FeatureX87, FeatureSlowUAMem16, FeatureSSE1,
+                 Feature3DNowA, FeatureFXSR, FeatureSlowSHLD]>;
+}
+
+foreach P = ["k8", "opteron", "athlon64", "athlon-fx"] in {
+  def : Proc<P, [FeatureX87, FeatureSlowUAMem16, FeatureSSE2, Feature3DNowA,
+                 FeatureFXSR, Feature64Bit, FeatureSlowSHLD]>;
+}
+
+foreach P = ["k8-sse3", "opteron-sse3", "athlon64-sse3"] in {
+  def : Proc<P, [FeatureX87, FeatureSlowUAMem16, FeatureSSE3, Feature3DNowA,
+                 FeatureFXSR, FeatureCMPXCHG16B, FeatureSlowSHLD]>;
+}
+
+foreach P = ["amdfam10", "barcelona"] in {
+  def : Proc<P, [FeatureX87, FeatureSSE4A, Feature3DNowA, FeatureFXSR,
+                 FeatureCMPXCHG16B, FeatureLZCNT, FeaturePOPCNT,
+                 FeatureSlowSHLD, FeatureLAHFSAHF]>;
+}
 
 // Bobcat
 def : Proc<"btver1", [

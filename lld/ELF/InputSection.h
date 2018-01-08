@@ -24,12 +24,11 @@
 namespace lld {
 namespace elf {
 
-class DefinedCommon;
-class SymbolBody;
+class Symbol;
 struct SectionPiece;
 class DynamicReloc;
 
-class DefinedRegular;
+class Defined;
 class SyntheticSection;
 class MergeSyntheticSection;
 template <class ELFT> class ObjFile;
@@ -56,6 +55,8 @@ public:
   // If GC is disabled, all sections are considered live by default.
   unsigned Live : 1;
 
+  unsigned Bss : 1;
+
   // These corresponds to the fields in Elf_Shdr.
   uint32_t Alignment;
   uint64_t Flags;
@@ -73,13 +74,13 @@ public:
   // section.
   uint64_t getOffset(uint64_t Offset) const;
 
-  uint64_t getOffset(const DefinedRegular &Sym) const;
+  uint64_t getOffset(const Defined &Sym) const;
 
 protected:
   SectionBase(Kind SectionKind, StringRef Name, uint64_t Flags,
               uint64_t Entsize, uint64_t Alignment, uint32_t Type,
               uint32_t Info, uint32_t Link)
-      : Name(Name), SectionKind(SectionKind), Live(false),
+      : Name(Name), SectionKind(SectionKind), Live(false), Bss(false),
         Alignment(Alignment), Flags(Flags), Entsize(Entsize), Type(Type),
         Link(Link), Info(Info) {}
 };
@@ -178,7 +179,8 @@ public:
 
   // Returns a source location string. Used to construct an error message.
   template <class ELFT> std::string getLocation(uint64_t Offset);
-  template <class ELFT> std::string getSrcMsg(const SymbolBody &Sym, uint64_t Offset);
+  template <class ELFT>
+  std::string getSrcMsg(const Symbol &Sym, uint64_t Offset);
   std::string getObjMsg(uint64_t Offset);
 
   // Each section knows how to relocate itself. These functions apply

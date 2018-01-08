@@ -77,8 +77,10 @@ template <class ELFT> void ObjFile<ELFT>::initializeDwarf() {
   // The second parameter is offset in .debug_line section
   // for compilation unit (CU) of interest. We have only one
   // CU (object file), so offset is always 0.
+  // FIXME: Provide the associated DWARFUnit if there is one.  DWARF v5
+  // needs it in order to find indirect strings.
   const DWARFDebugLine::LineTable *LT =
-      DwarfLine->getOrParseLineTable(LineData, 0);
+      DwarfLine->getOrParseLineTable(LineData, 0, nullptr);
 
   // Return if there is no debug information about CU available.
   if (!Dwarf.getNumCompileUnits())
@@ -228,7 +230,7 @@ ObjFile<ELFT>::ObjFile(MemoryBufferRef M, StringRef ArchiveName)
   this->ArchiveName = ArchiveName;
 }
 
-template <class ELFT> ArrayRef<SymbolBody *> ObjFile<ELFT>::getLocalSymbols() {
+template <class ELFT> ArrayRef<Symbol *> ObjFile<ELFT>::getLocalSymbols() {
   if (this->Symbols.empty())
     return {};
   return makeArrayRef(this->Symbols).slice(1, this->FirstNonLocal - 1);
@@ -545,9 +547,6 @@ InputSectionBase *ObjFile<ELFT>::createInputSection(const Elf_Shdr &Sec) {
     return &InputSection::Discarded;
   }
 
-  if (Config->Strip != StripPolicy::None && Name.startswith(".debug"))
-    return &InputSection::Discarded;
-
   // The linkonce feature is a sort of proto-comdat. Some glibc i386 object
   // files contain definitions of symbol "__x86.get_pc_thunk.bx" in linkonce
   // sections. Drop those sections to avoid duplicate symbol errors.
@@ -576,7 +575,7 @@ StringRef ObjFile<ELFT>::getSectionName(const Elf_Shdr &Sec) {
 template <class ELFT> void ObjFile<ELFT>::initializeSymbols() {
   this->Symbols.reserve(this->ELFSyms.size());
   for (const Elf_Sym &Sym : this->ELFSyms)
-    this->Symbols.push_back(createSymbolBody(&Sym));
+    this->Symbols.push_back(createSymbol(&Sym));
 }
 
 template <class ELFT>
@@ -591,8 +590,7 @@ InputSectionBase *ObjFile<ELFT>::getSection(uint32_t Index) const {
   return nullptr;
 }
 
-template <class ELFT>
-SymbolBody *ObjFile<ELFT>::createSymbolBody(const Elf_Sym *Sym) {
+template <class ELFT> Symbol *ObjFile<ELFT>::createSymbol(const Elf_Sym *Sym) {
   int Binding = Sym->getBinding();
   InputSectionBase *Sec = getSection(this->getSectionIndex(*Sym));
 
@@ -612,8 +610,8 @@ SymbolBody *ObjFile<ELFT>::createSymbolBody(const Elf_Sym *Sym) {
     if (Sym->st_shndx == SHN_UNDEF)
       return make<Undefined>(Name, /*IsLocal=*/true, StOther, Type);
 
-    return make<DefinedRegular>(Name, /*IsLocal=*/true, StOther, Type, Value,
-                                Size, Sec);
+    return make<Defined>(Name, /*IsLocal=*/true, StOther, Type, Value, Size,
+                         Sec);
   }
 
   StringRef Name = check(Sym->getName(this->StringTable), toString(this));
@@ -821,13 +819,15 @@ template <class ELFT> void SharedFile<ELFT>::parseRest() {
     // files because the loader takes care of it. However, if we promote a
     // DSO symbol to point to .bss due to copy relocation, we need to keep
     // the original alignment requirements. We infer it here.
-    uint32_t Alignment = 1;
+    uint64_t Alignment = 1;
     if (Sym.st_value)
       Alignment = 1ULL << countTrailingZeros((uint64_t)Sym.st_value);
     if (0 < Sym.st_shndx && Sym.st_shndx < Sections.size()) {
-      uint32_t SecAlign = Sections[Sym.st_shndx].sh_addralign;
+      uint64_t SecAlign = Sections[Sym.st_shndx].sh_addralign;
       Alignment = std::min(Alignment, SecAlign);
     }
+    if (Alignment > UINT32_MAX)
+      error(toString(this) + ": alignment too large: " + Name);
 
     if (!Hidden)
       Symtab->addShared(Name, this, Sym, Alignment, Ver);
@@ -912,9 +912,9 @@ static uint8_t mapVisibility(GlobalValue::VisibilityTypes GvVisibility) {
 }
 
 template <class ELFT>
-static SymbolBody *createBitcodeSymbol(const std::vector<bool> &KeptComdats,
-                                       const lto::InputFile::Symbol &ObjSym,
-                                       BitcodeFile *F) {
+static Symbol *createBitcodeSymbol(const std::vector<bool> &KeptComdats,
+                                   const lto::InputFile::Symbol &ObjSym,
+                                   BitcodeFile *F) {
   StringRef NameRef = Saver.save(ObjSym.getName());
   uint32_t Binding = ObjSym.isWeak() ? STB_WEAK : STB_GLOBAL;
 

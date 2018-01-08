@@ -200,6 +200,10 @@ Values for bit flags used in the ident_t to describe the fields.
 #define KMP_IDENT_BARRIER_IMPL_SINGLE 0x0140
 #define KMP_IDENT_BARRIER_IMPL_WORKSHARE 0x01C0
 
+#define KMP_IDENT_WORK_LOOP 0x200 // static loop
+#define KMP_IDENT_WORK_SECTIONS 0x400 // sections
+#define KMP_IDENT_WORK_DISTRIBUTE 0x800 // distribute
+
 /*!
  * The ident structure that describes a source location.
  */
@@ -797,6 +801,10 @@ extern kmp_hws_item_t __kmp_hws_core;
 extern kmp_hws_item_t __kmp_hws_proc;
 extern int __kmp_hws_requested;
 extern int __kmp_hws_abs_flag; // absolute or per-item number requested
+
+#if OMP_50_ENABLED && LIBOMP_OMPT_SUPPORT
+extern char const *__kmp_tool_libraries;
+#endif // OMP_50_ENABLED && LIBOMP_OMPT_SUPPORT
 
 /* ------------------------------------------------------------------------ */
 
@@ -2888,13 +2896,7 @@ extern int __kmp_gtid_mode; /* Method of getting gtid, values:
 extern int
     __kmp_adjust_gtid_mode; /* If true, adjust method based on #threads */
 #ifdef KMP_TDATA_GTID
-#if KMP_OS_WINDOWS
-extern __declspec(
-    thread) int __kmp_gtid; /* This thread's gtid, if __kmp_gtid_mode == 3 */
-#else
-extern __thread int __kmp_gtid;
-#endif /* KMP_OS_WINDOWS - workaround because Intel(R) Many Integrated Core    \
-          compiler 20110316 doesn't accept __declspec */
+extern KMP_THREAD_LOCAL int __kmp_gtid;
 #endif
 extern int __kmp_tls_gtid_min; /* #threads below which use sp search for gtid */
 extern int __kmp_foreign_tp; // If true, separate TP var for each foreign thread
@@ -3314,7 +3316,7 @@ extern kmp_info_t *__kmp_allocate_thread(kmp_root_t *root, kmp_team_t *team,
 extern kmp_team_t *
 __kmp_allocate_team(kmp_root_t *root, int new_nproc, int max_nproc,
 #if OMPT_SUPPORT
-                    ompt_parallel_id_t ompt_parallel_id,
+                    ompt_data_t ompt_parallel_data,
 #endif
                     kmp_proc_bind_t proc_bind, kmp_internal_control_t *new_icvs,
                     int argc USE_NESTED_HOT_ARG(kmp_info_t *thr));
@@ -3322,7 +3324,7 @@ __kmp_allocate_team(kmp_root_t *root, int new_nproc, int max_nproc,
 extern kmp_team_t *
 __kmp_allocate_team(kmp_root_t *root, int new_nproc, int max_nproc,
 #if OMPT_SUPPORT
-                    ompt_parallel_id_t ompt_parallel_id,
+                    ompt_id_t ompt_parallel_id,
 #endif
                     kmp_internal_control_t *new_icvs,
                     int argc USE_NESTED_HOT_ARG(kmp_info_t *thr));
@@ -3362,9 +3364,6 @@ enum fork_context_e {
 };
 extern int __kmp_fork_call(ident_t *loc, int gtid,
                            enum fork_context_e fork_context, kmp_int32 argc,
-#if OMPT_SUPPORT
-                           void *unwrapped_task,
-#endif
                            microtask_t microtask, launch_t invoker,
 /* TODO: revert workaround for Intel(R) 64 tracker #96 */
 #if (KMP_ARCH_ARM || KMP_ARCH_X86_64 || KMP_ARCH_AARCH64) && KMP_OS_LINUX

@@ -52,7 +52,7 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::finalizeContents() {
   //   for (const auto &I : RelocsMap) {
   //     // TODO: unresolved symbols -> add dynamic reloc
   //     const CheriCapReloc& Reloc = I.second;
-  //     SymbolBody *LocationSym = I.first.first;
+  //     Symbol *LocationSym = I.first.first;
   //     uint64_t LocationOffset = I.first.second;
   //
   //   }
@@ -61,11 +61,11 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::finalizeContents() {
 template <typename ELFT>
 static SymbolAndOffset sectionWithOffsetToSymbol(InputSectionBase *IS,
                                                  uint64_t Offset,
-                                                 SymbolBody *Src) {
-  SymbolBody *FallbackResult = nullptr;
+                                                 Symbol *Src) {
+  Symbol *FallbackResult = nullptr;
   uint64_t FallbackOffset = Offset;
-  for (SymbolBody *B : IS->getFile<ELFT>()->getSymbols()) {
-    if (auto *D = dyn_cast<DefinedRegular>(B)) {
+  for (Symbol *B : IS->getFile<ELFT>()->getSymbols()) {
+    if (auto *D = dyn_cast<Defined>(B)) {
       if (D->Section != IS)
         continue;
       if (D->Value <= Offset && Offset < D->Value + D->Size) {
@@ -92,7 +92,7 @@ SymbolAndOffset SymbolAndOffset::findRealSymbol() const {
   if (!Symbol->isSection())
     return *this;
 
-  if (DefinedRegular *DefinedSym = dyn_cast<DefinedRegular>(Symbol)) {
+  if (Defined *DefinedSym = dyn_cast<Defined>(Symbol)) {
     if (InputSectionBase *IS =
             dyn_cast<InputSectionBase>(DefinedSym->Section)) {
       return sectionWithOffsetToSymbol<ELFT>(IS, Offset, Symbol);
@@ -140,9 +140,9 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
             toString(LocationRel.getType(Config->IsMips64EL)));
       continue;
     }
-    SymbolBody *LocationSym =
+    Symbol *LocationSym =
         &S->getFile<ELFT>()->getRelocTargetSym(LocationRel);
-    SymbolBody &TargetSym = S->getFile<ELFT>()->getRelocTargetSym(TargetRel);
+    Symbol &TargetSym = S->getFile<ELFT>()->getRelocTargetSym(TargetRel);
 
     if (LocationSym->getFile() != S->File) {
       error("Expected capability relocation to point to " + toString(S->File) +
@@ -157,7 +157,7 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     auto *RawInput = reinterpret_cast<const InMemoryCapRelocEntry<E> *>(
         S->Data.begin() + CapRelocsOffset);
     bool LocNeedsDynReloc = false;
-    if (!isa<DefinedRegular>(LocationSym)) {
+    if (!isa<Defined>(LocationSym)) {
       error("Unhandled symbol kind for cap_reloc: " +
             Twine(LocationSym->kind()));
       continue;
@@ -189,13 +189,9 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
       // TargetNeedsDynReloc = true;
     }
     switch (TargetSym.kind()) {
-    case SymbolBody::DefinedRegularKind:
+    case Symbol::DefinedKind:
       break;
-    case SymbolBody::DefinedCommonKind:
-      // TODO: do I need to do anything special here?
-      // message("Common symbol: " + toString(TargetSym));
-      break;
-    case SymbolBody::SharedKind:
+    case Symbol::SharedKind:
       if (Config->Static) {
         error("cannot create a capability relocation against a shared symbol"
               " when linking statically");
@@ -260,7 +256,7 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
   for (const auto &I : RelocsMap) {
     const CheriCapRelocLocation &Location = I.first;
     const CheriCapReloc &Reloc = I.second;
-    SymbolBody *LocationSym = Location.BaseSym;
+    Symbol *LocationSym = Location.BaseSym;
     int64_t LocationOffset = Location.Offset;
     // If we don't need a dynamic relocation just write the VA
     // We always write the virtual address here:
@@ -282,15 +278,15 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
       TargetVA = Reloc.Target.Offset;
     }
     uint64_t TargetOffset = Reloc.Offset;
-    uint64_t TargetSize = Reloc.Target.Symbol->template getSize<ELFT>();
+    uint64_t TargetSize = Reloc.Target.Symbol->getSize();
     if (TargetSize == 0) {
       bool WarnAboutUnknownSize = true;
       // currently clang doesn't emit the necessary symbol information for local
       // string constants such as: struct config_opt opts[] = { { ..., "foo" },
       // { ..., "bar" } }; As this pattern is quite common don't warn if the
       // target section is .rodata.str
-      if (DefinedRegular *DefinedSym =
-              dyn_cast<DefinedRegular>(Reloc.Target.Symbol)) {
+      if (Defined *DefinedSym =
+              dyn_cast<Defined>(Reloc.Target.Symbol)) {
         if (DefinedSym->isSection() &&
             DefinedSym->Section->Name.startswith(".rodata.str")) {
           WarnAboutUnknownSize = false;

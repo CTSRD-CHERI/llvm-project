@@ -13,10 +13,8 @@ class ConcurrentNWatchNBreak(ConcurrentEventsBase):
     mydir = ConcurrentEventsBase.compute_mydir(__file__)
 
     @skipIfFreeBSD  # timing out on buildbot
-    @skipIfRemoteDueToDeadlock
     # Atomic sequences are not supported yet for MIPS in LLDB.
     @skipIf(triple='^mips')
-    @expectedFailureAll(oslist=["linux"]) # Very flakey
     @add_test_categories(["watchpoint"])
     def test(self):
         """Test with 5 watchpoint and breakpoint threads."""

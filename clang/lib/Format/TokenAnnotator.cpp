@@ -696,7 +696,8 @@ private:
           CurrentToken->Type = TT_PointerOrReference;
         consumeToken();
         if (CurrentToken &&
-            CurrentToken->Previous->isOneOf(TT_BinaryOperator, tok::comma))
+            CurrentToken->Previous->isOneOf(TT_BinaryOperator, TT_UnaryOperator,
+                                            tok::comma))
           CurrentToken->Previous->Type = TT_OverloadedOperator;
       }
       if (CurrentToken) {
@@ -1662,17 +1663,15 @@ private:
   /// \brief Parse unary operator expressions and surround them with fake
   /// parentheses if appropriate.
   void parseUnaryOperator() {
-    if (!Current || Current->isNot(TT_UnaryOperator)) {
-      parse(PrecedenceArrowAndPeriod);
-      return;
+    llvm::SmallVector<FormatToken *, 2> Tokens;
+    while (Current && Current->is(TT_UnaryOperator)) {
+      Tokens.push_back(Current);
+      next();
     }
-
-    FormatToken *Start = Current;
-    next();
-    parseUnaryOperator();
-
-    // The actual precedence doesn't matter.
-    addFakeParenthesis(Start, prec::Unknown);
+    parse(PrecedenceArrowAndPeriod);
+    for (FormatToken *Token : llvm::reverse(Tokens))
+      // The actual precedence doesn't matter.
+      addFakeParenthesis(Token, prec::Unknown);
   }
 
   void parseConditionalExpr() {

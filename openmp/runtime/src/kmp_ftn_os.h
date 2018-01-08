@@ -133,6 +133,10 @@
 #endif
 #endif
 
+#if OMP_50_ENABLED
+#define FTN_CONTROL_TOOL omp_control_tool
+#endif
+
 #endif /* KMP_FTN_PLAIN */
 
 /* ------------------------------------------------------------------------ */
@@ -249,6 +253,10 @@
 #define FTN_TARGET_ASSOCIATE_PTR omp_target_associate_ptr_
 #define FTN_TARGET_DISASSOCIATE_PTR omp_target_disassociate_ptr_
 #endif
+#endif
+
+#if OMP_50_ENABLED
+#define FTN_CONTROL_TOOL OMP_CONTROL_TOOL
 #endif
 
 #endif /* KMP_FTN_APPEND */
@@ -369,6 +377,10 @@
 #endif
 #endif
 
+#if OMP_50_ENABLED
+#define FTN_CONTROL_TOOL OMP_CONTROL_TOOL
+#endif
+
 #endif /* KMP_FTN_UPPER */
 
 /* ------------------------------------------------------------------------ */
@@ -487,6 +499,10 @@
 #endif
 #endif
 
+#if OMP_50_ENABLED
+#define FTN_CONTROL_TOOL OMP_CONTROL_TOOL_
+#endif
+
 #endif /* KMP_FTN_UAPPEND */
 
 /* -------------------------- GOMP API NAMES ------------------------ */
@@ -596,44 +612,5 @@
 #define KMP_API_NAME_GOMP_TARGET_END_DATA GOMP_target_end_data
 #define KMP_API_NAME_GOMP_TARGET_UPDATE GOMP_target_update
 #define KMP_API_NAME_GOMP_TEAMS GOMP_teams
-
-#ifdef KMP_USE_VERSION_SYMBOLS
-#define xstr(x) str(x)
-#define str(x) #x
-
-// If Linux, xexpand prepends __kmp_api_ to the real API name
-#define xexpand(api_name) expand(api_name)
-#define expand(api_name) __kmp_api_##api_name
-
-#define xaliasify(api_name, ver) aliasify(api_name, ver)
-#define aliasify(api_name, ver)                                                \
-  __typeof__(__kmp_api_##api_name) __kmp_api_##api_name##_##ver##_alias        \
-      __attribute__((alias(xstr(__kmp_api_##api_name))))
-
-#define xversionify(api_name, version_num, version_str)                        \
-  versionify(api_name, version_num, version_str, "VERSION")
-#define versionify(api_name, version_num, version_str, default_ver)            \
-  __asm__(                                                                     \
-      ".symver " xstr(__kmp_api_##api_name##_##version_num##_alias) "," xstr(  \
-          api_name) "@" version_str "\n\t");                                   \
-  __asm__(".symver " xstr(__kmp_api_##api_name) "," xstr(                      \
-      api_name) "@@" default_ver "\n\t")
-
-#else // KMP_USE_VERSION_SYMBOLS
-#define xstr(x) /* Nothing */
-#define str(x) /* Nothing */
-
-// if Windows or Mac, xexpand does no name transformation
-#define xexpand(api_name) expand(api_name)
-#define expand(api_name) api_name
-
-#define xaliasify(api_name, ver) /* Nothing */
-#define aliasify(api_name, ver) /* Nothing */
-
-#define xversionify(api_name, version_num, version_str) /* Nothing */
-#define versionify(api_name, version_num, version_str,                         \
-                   default_ver) /* Nothing */
-
-#endif // KMP_USE_VERSION_SYMBOLS
 
 #endif /* KMP_FTN_OS_H */

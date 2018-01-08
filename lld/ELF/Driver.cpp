@@ -76,6 +76,9 @@ bool elf::link(ArrayRef<const char *> Args, bool CanExitEarly,
   errorHandler().ErrorLimitExceededMsg =
       "too many errors emitted, stopping now (use "
       "-error-limit=0 to see all errors)";
+  errorHandler().WarningLimitExceededMsg =
+      "too many warnings emitted, stopping now (use "
+      "-warning-limit=0 to see all warnings)\n";
   errorHandler().ErrorOS = &Error;
   errorHandler().ColorDiagnostics = Error.has_colors();
   InputSections.clear();
@@ -93,7 +96,6 @@ bool elf::link(ArrayRef<const char *> Args, bool CanExitEarly,
   Config->Argv = {Args.begin(), Args.end()};
 
   Driver->main(Args, CanExitEarly);
-  waitForBackgroundThreads();
 
   // Exit immediately if we don't need to return to the caller.
   // This saves time because the overhead of calling destructors
@@ -965,21 +967,6 @@ static Optional<uint64_t> getImageBase(opt::InputArgList &Args) {
   return V;
 }
 
-// Parses --defsym=alias option.
-static std::vector<std::pair<StringRef, StringRef>>
-getDefsym(opt::InputArgList &Args) {
-  std::vector<std::pair<StringRef, StringRef>> Ret;
-  for (auto *Arg : Args.filtered(OPT_defsym)) {
-    StringRef From;
-    StringRef To;
-    std::tie(From, To) = StringRef(Arg->getValue()).split('=');
-    if (!isValidCIdentifier(To))
-      error("--defsym: symbol name expected, but got " + To);
-    Ret.push_back({From, To});
-  }
-  return Ret;
-}
-
 // Parses `--exclude-libs=lib,lib,...`.
 // The library names may be delimited by commas or colons.
 static DenseSet<StringRef> getExcludeLibs(opt::InputArgList &Args) {
@@ -1020,7 +1007,7 @@ static void excludeLibs(opt::InputArgList &Args, ArrayRef<InputFile *> Files) {
   for (InputFile *File : Files)
     if (Optional<StringRef> Archive = getArchiveName(File))
       if (All || Libs.count(path::filename(*Archive)))
-        for (SymbolBody *Sym : File->getSymbols())
+        for (Symbol *Sym : File->getSymbols())
           if (!Sym->isLocal())
             Sym->VersionId = VER_NDX_LOCAL;
 }
@@ -1082,6 +1069,15 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
       };
     }
   }
+
+  // Process -defsym option.
+  for (auto *Arg : Args.filtered(OPT_defsym)) {
+    StringRef From;
+    StringRef To;
+    std::tie(From, To) = StringRef(Arg->getValue()).split('=');
+    readDefsym(From, MemoryBufferRef(To, "-defsym"));
+  }
+
   // Now that we have every file, we can decide if we will need a
   // dynamic symbol table.
   // We need one if we were asked to export dynamic symbols or if we are
@@ -1123,16 +1119,12 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   for (auto *Arg : Args.filtered(OPT_wrap))
     Symtab->addSymbolWrap<ELFT>(Arg->getValue());
 
-  // Create alias symbols for -defsym option.
-  for (std::pair<StringRef, StringRef> &Def : getDefsym(Args))
-    Symtab->addSymbolAlias<ELFT>(Def.first, Def.second);
-
   Symtab->addCombinedLTOObject<ELFT>();
   if (errorCount())
     return;
 
-  // Apply symbol renames for -wrap and -defsym
-  Symtab->applySymbolRenames();
+  // Apply symbol renames for -wrap.
+  Symtab->applySymbolWrap();
 
   // Now that we have a complete list of input files.
   // Beyond this point, no new files are added.
@@ -1145,6 +1137,13 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
     for (InputSectionBase *S : F->getSections())
       InputSections.push_back(cast<InputSection>(S));
 
+  // We do not want to emit debug sections if --strip-all
+  // or -strip-debug are given.
+  if (Config->Strip != StripPolicy::None)
+    llvm::erase_if(InputSections, [](InputSectionBase *S) {
+      return S->Name.startswith(".debug") || S->Name.startswith(".zdebug");
+    });
+
   Config->EFlags = Target->calcEFlags();
 
   // This adds a .comment section containing a version string. We have to add it
@@ -1152,14 +1151,6 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   // mergeable section.
   if (!Config->Relocatable)
     InputSections.push_back(createCommentSection<ELFT>());
-
-  // Create a .bss section for each common symbol and then replace the common
-  // symbol with a DefinedRegular symbol. As a result, all common symbols are
-  // "instantiated" as regular defined symbols, so that we don't need to care
-  // about common symbols beyond this point. Note that if -r is given, we just
-  // need to pass through common symbols as-is.
-  if (Config->DefineCommon)
-    createCommonSections<ELFT>();
 
   // Do size optimizations: garbage collection, merging of SHF_MERGE sections
   // and identical code folding.

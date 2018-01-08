@@ -213,8 +213,6 @@ const int SIG_SETMASK = 2;
 #define COMMON_INTERCEPTOR_NOTHING_IS_INITIALIZED \
   (!cur_thread()->is_inited)
 
-static sigaction_t sigactions[kSigCount];
-
 namespace __tsan {
 struct SignalDesc {
   bool armed;
@@ -233,11 +231,41 @@ struct ThreadSignalContext {
   __sanitizer_sigset_t oldset;
 };
 
-// The object is 64-byte aligned, because we want hot data to be located in
-// a single cache line if possible (it's accessed in every interceptor).
-static ALIGNED(64) char libignore_placeholder[sizeof(LibIgnore)];
+// The sole reason tsan wraps atexit callbacks is to establish synchronization
+// between callback setup and callback execution.
+struct AtExitCtx {
+  void (*f)();
+  void *arg;
+};
+
+// InterceptorContext holds all global data required for interceptors.
+// It's explicitly constructed in InitializeInterceptors with placement new
+// and is never destroyed. This allows usage of members with non-trivial
+// constructors and destructors.
+struct InterceptorContext {
+  // The object is 64-byte aligned, because we want hot data to be located
+  // in a single cache line if possible (it's accessed in every interceptor).
+  ALIGNED(64) LibIgnore libignore;
+  sigaction_t sigactions[kSigCount];
+#if !SANITIZER_MAC && !SANITIZER_NETBSD
+  unsigned finalize_key;
+#endif
+
+  BlockingMutex atexit_mu;
+  Vector<struct AtExitCtx *> AtExitStack;
+
+  InterceptorContext()
+      : libignore(LINKER_INITIALIZED), AtExitStack(MBlockAtExit) {
+  }
+};
+
+static ALIGNED(64) char interceptor_placeholder[sizeof(InterceptorContext)];
+InterceptorContext *interceptor_ctx() {
+  return reinterpret_cast<InterceptorContext*>(&interceptor_placeholder[0]);
+}
+
 LibIgnore *libignore() {
-  return reinterpret_cast<LibIgnore*>(&libignore_placeholder[0]);
+  return &interceptor_ctx()->libignore;
 }
 
 void InitializeLibIgnore() {
@@ -264,10 +292,6 @@ static ThreadSignalContext *SigCtx(ThreadState *thr) {
   }
   return ctx;
 }
-
-#if !SANITIZER_MAC
-static unsigned g_thread_finalize_key;
-#endif
 
 ScopedInterceptor::ScopedInterceptor(ThreadState *thr, const char *fname,
                                      uptr pc)
@@ -384,17 +408,25 @@ TSAN_INTERCEPTOR(int, pause, int fake) {
   return BLOCK_REAL(pause)(fake);
 }
 
-// The sole reason tsan wraps atexit callbacks is to establish synchronization
-// between callback setup and callback execution.
-struct AtExitCtx {
-  void (*f)();
-  void *arg;
-};
+static void at_exit_wrapper() {
+  AtExitCtx *ctx;
+  {
+    // Ensure thread-safety.
+    BlockingMutexLock l(&interceptor_ctx()->atexit_mu);
 
-static void at_exit_wrapper(void *arg) {
-  ThreadState *thr = cur_thread();
-  uptr pc = 0;
-  Acquire(thr, pc, (uptr)arg);
+    // Pop AtExitCtx from the top of the stack of callback functions
+    uptr element = interceptor_ctx()->AtExitStack.Size() - 1;
+    ctx = interceptor_ctx()->AtExitStack[element];
+    interceptor_ctx()->AtExitStack.PopBack();
+  }
+
+  Acquire(cur_thread(), (uptr)0, (uptr)ctx);
+  ((void(*)())ctx->f)();
+  InternalFree(ctx);
+}
+
+static void cxa_at_exit_wrapper(void *arg) {
+  Acquire(cur_thread(), 0, (uptr)arg);
   AtExitCtx *ctx = (AtExitCtx*)arg;
   ((void(*)(void *arg))ctx->f)(ctx->arg);
   InternalFree(ctx);
@@ -430,12 +462,27 @@ static int setup_at_exit_wrapper(ThreadState *thr, uptr pc, void(*f)(),
   // Memory allocation in __cxa_atexit will race with free during exit,
   // because we do not see synchronization around atexit callback list.
   ThreadIgnoreBegin(thr, pc);
-  int res = REAL(__cxa_atexit)(at_exit_wrapper, ctx, dso);
+  int res;
+  if (!dso) {
+    // NetBSD does not preserve the 2nd argument if dso is equal to 0
+    // Store ctx in a local stack-like structure
+
+    // Ensure thread-safety.
+    BlockingMutexLock l(&interceptor_ctx()->atexit_mu);
+
+    res = REAL(__cxa_atexit)((void (*)(void *a))at_exit_wrapper, 0, 0);
+    // Push AtExitCtx on the top of the stack of callback functions
+    if (!res) {
+      interceptor_ctx()->AtExitStack.PushBack(ctx);
+    }
+  } else {
+    res = REAL(__cxa_atexit)(cxa_at_exit_wrapper, ctx, dso);
+  }
   ThreadIgnoreEnd(thr, pc);
   return res;
 }
 
-#if !SANITIZER_MAC
+#if !SANITIZER_MAC && !SANITIZER_NETBSD
 static void on_exit_wrapper(int status, void *arg) {
   ThreadState *thr = cur_thread();
   uptr pc = 0;
@@ -460,6 +507,9 @@ TSAN_INTERCEPTOR(int, on_exit, void(*f)(int, void*), void *arg) {
   ThreadIgnoreEnd(thr, pc);
   return res;
 }
+#define TSAN_MAYBE_INTERCEPT_ON_EXIT TSAN_INTERCEPT(on_exit)
+#else
+#define TSAN_MAYBE_INTERCEPT_ON_EXIT
 #endif
 
 // Cleanup old bufs.
@@ -866,11 +916,12 @@ void DestroyThreadState() {
 }
 }  // namespace __tsan
 
-#if !SANITIZER_MAC
+#if !SANITIZER_MAC && !SANITIZER_NETBSD
 static void thread_finalize(void *v) {
   uptr iter = (uptr)v;
   if (iter > 1) {
-    if (pthread_setspecific(g_thread_finalize_key, (void*)(iter - 1))) {
+    if (pthread_setspecific(interceptor_ctx()->finalize_key,
+        (void*)(iter - 1))) {
       Printf("ThreadSanitizer: failed to set thread key\n");
       Die();
     }
@@ -896,9 +947,9 @@ extern "C" void *__tsan_thread_start_func(void *arg) {
     ThreadState *thr = cur_thread();
     // Thread-local state is not initialized yet.
     ScopedIgnoreInterceptors ignore;
-#if !SANITIZER_MAC
+#if !SANITIZER_MAC && !SANITIZER_NETBSD
     ThreadIgnoreBegin(thr, 0);
-    if (pthread_setspecific(g_thread_finalize_key,
+    if (pthread_setspecific(interceptor_ctx()->finalize_key,
                             (void *)GetPthreadDestructorIterations())) {
       Printf("ThreadSanitizer: failed to set thread key\n");
       Die();
@@ -1799,6 +1850,7 @@ namespace __tsan {
 
 static void CallUserSignalHandler(ThreadState *thr, bool sync, bool acquire,
     bool sigact, int sig, my_siginfo_t *info, void *uctx) {
+  sigaction_t *sigactions = interceptor_ctx()->sigactions;
   if (acquire)
     Acquire(thr, 0, (uptr)&sigactions[sig]);
   // Signals are generally asynchronous, so if we receive a signals when
@@ -1950,6 +2002,7 @@ TSAN_INTERCEPTOR(int, sigaction, int sig, sigaction_t *act, sigaction_t *old) {
   // the signal handler through rtl_sigaction, very bad things will happen.
   // The handler will run synchronously and corrupt tsan per-thread state.
   SCOPED_INTERCEPTOR_RAW(sigaction, sig, act, old);
+  sigaction_t *sigactions = interceptor_ctx()->sigactions;
   if (old)
     internal_memcpy(old, &sigactions[sig], sizeof(*old));
   if (act == 0)
@@ -2445,6 +2498,17 @@ TSAN_INTERCEPTOR(void *, __tls_get_addr, void *arg) {
 }
 #endif
 
+#if SANITIZER_NETBSD
+TSAN_INTERCEPTOR(void, _lwp_exit) {
+  SCOPED_TSAN_INTERCEPTOR(_lwp_exit);
+  DestroyThreadState();
+  REAL(_lwp_exit)();
+}
+#define TSAN_MAYBE_INTERCEPT__LWP_EXIT TSAN_INTERCEPT(_lwp_exit)
+#else
+#define TSAN_MAYBE_INTERCEPT__LWP_EXIT
+#endif
+
 namespace __tsan {
 
 static void finalize(void *arg) {
@@ -2475,6 +2539,8 @@ void InitializeInterceptors() {
   mallopt(1, 0);  // M_MXFAST
   mallopt(-3, 32*1024);  // M_MMAP_THRESHOLD
 #endif
+
+  new(interceptor_ctx()) InterceptorContext();
 
   InitializeCommonInterceptors();
 
@@ -2605,13 +2671,15 @@ void InitializeInterceptors() {
 #if !SANITIZER_ANDROID
   TSAN_INTERCEPT(dl_iterate_phdr);
 #endif
-  TSAN_INTERCEPT(on_exit);
+  TSAN_MAYBE_INTERCEPT_ON_EXIT;
   TSAN_INTERCEPT(__cxa_atexit);
   TSAN_INTERCEPT(_exit);
 
 #ifdef NEED_TLS_GET_ADDR
   TSAN_INTERCEPT(__tls_get_addr);
 #endif
+
+  TSAN_MAYBE_INTERCEPT__LWP_EXIT;
 
 #if !SANITIZER_MAC && !SANITIZER_ANDROID
   // Need to setup it, because interceptors check that the function is resolved.
@@ -2624,8 +2692,8 @@ void InitializeInterceptors() {
     Die();
   }
 
-#if !SANITIZER_MAC
-  if (pthread_key_create(&g_thread_finalize_key, &thread_finalize)) {
+#if !SANITIZER_MAC && !SANITIZER_NETBSD
+  if (pthread_key_create(&interceptor_ctx()->finalize_key, &thread_finalize)) {
     Printf("ThreadSanitizer: failed to create thread key\n");
     Die();
   }

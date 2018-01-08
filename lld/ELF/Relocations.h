@@ -17,7 +17,7 @@
 
 namespace lld {
 namespace elf {
-class SymbolBody;
+class Symbol;
 class InputSection;
 class InputSectionBase;
 class OutputSection;
@@ -118,7 +118,7 @@ struct Relocation {
   RelType Type;
   uint64_t Offset;
   int64_t Addend;
-  SymbolBody *Sym;
+  Symbol *Sym;
 };
 
 template <class ELFT> void scanRelocations(InputSectionBase &);
@@ -152,8 +152,7 @@ private:
       ArrayRef<OutputSection *> OutputSections,
       std::function<void(OutputSection *, InputSectionDescription *)> Fn);
 
-  std::pair<Thunk *, bool> getThunk(SymbolBody &Body, RelType Type,
-                                    uint64_t Src);
+  std::pair<Thunk *, bool> getThunk(Symbol &Sym, RelType Type, uint64_t Src);
 
   ThunkSection *addThunkSection(OutputSection *OS, InputSectionDescription *,
                                 uint64_t Off);
@@ -161,11 +160,11 @@ private:
   bool normalizeExistingThunk(Relocation &Rel, uint64_t Src);
 
   // Record all the available Thunks for a Symbol
-  llvm::DenseMap<SymbolBody *, std::vector<Thunk *>> ThunkedSymbols;
+  llvm::DenseMap<Symbol *, std::vector<Thunk *>> ThunkedSymbols;
 
   // Find a Thunk from the Thunks symbol definition, we can use this to find
   // the Thunk from a relocation to the Thunks symbol definition.
-  llvm::DenseMap<SymbolBody *, Thunk *> Thunks;
+  llvm::DenseMap<Symbol *, Thunk *> Thunks;
 
   // Track InputSections that have an inline ThunkSection placed in front
   // an inline ThunkSection may have control fall through to the section below
@@ -188,7 +187,7 @@ static inline int64_t getAddend(const typename ELFT::Rela &Rel) {
 class DynamicReloc {
 public:
   DynamicReloc(uint32_t Type, const InputSectionBase *InputSec,
-               uint64_t OffsetInSec, bool UseSymVA, SymbolBody *Sym,
+               uint64_t OffsetInSec, bool UseSymVA, Symbol *Sym,
                int64_t Addend)
     : Type(Type), Sym(Sym), InputSec(InputSec), OffsetInSec(OffsetInSec),
       UseSymVA(UseSymVA), Addend(Addend), OutputSec(nullptr) {}
@@ -208,7 +207,7 @@ public:
 
   uint32_t Type;
 private:
-  SymbolBody *Sym;
+  Symbol *Sym;
   const InputSectionBase *InputSec = nullptr;
   uint64_t OffsetInSec;
   bool UseSymVA;
