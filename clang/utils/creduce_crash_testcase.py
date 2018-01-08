@@ -132,7 +132,7 @@ def run_cmd(cmd, timeout):
                 if not self.args.crash_message:
                     self.args.crash_message = "Cannot select"
             if self.args.crash_message:
-                grep_msg += "2>&1 | grep " + shlex.quote(self.args.crash_message)
+                grep_msg += "2>&1 | grep -F " + shlex.quote(self.args.crash_message)
             # exit once the first command crashes
             result += """
 try:
@@ -521,14 +521,20 @@ class Reducer(object):
             r"LLVM IR generation of declaration '(.+)'",
             r"Generating code for declaration '(.+)'",
             # error in backend:
-            r"fatal error: error in backend:(.+)"
+            r"error in backend:(.+)"
         )]
         for line in stderr.decode("utf-8").splitlines():
             # Check for failed assertions:
             for r in regexes:
                 match = r.search(line)
                 if match:
-                    return match.group(0)
+                    print("Inferred crash message bytes: ", match.group(0).encode("utf-8"))
+                    message = match.group(0)
+                    # if "\x1b" in message:
+                    #     message = message[:message.find("\x1b")]
+                    # print("Inferred crash message bytes (ANSI escape sequences might break grep): ",
+                    #       message.encode("utf-8"))
+                    return message
         return None
 
     def _simplify_crash_command(self, command: list, infile: Path) -> tuple:
