@@ -1,5 +1,5 @@
 ; Checks that the cheri-direct-calls pass does not remove callees that are bitcasts
-; RUN: %cheri_opt -S -cheri-direct-calls %s -o - | FileCheck %s
+; RUN: %cheri_purecap_opt -S -cheri-direct-calls %s -o - | FileCheck %s
 target datalayout = "E-m:e-pf200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
 
