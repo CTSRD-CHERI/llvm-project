@@ -714,6 +714,8 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.VectorizeLoop = Args.hasArg(OPT_vectorize_loops);
   Opts.VectorizeSLP = Args.hasArg(OPT_vectorize_slp);
 
+  Opts.PreferVectorWidth = Args.getLastArgValue(OPT_mprefer_vector_width_EQ);
+
   Opts.MainFileName = Args.getLastArgValue(OPT_main_file_name);
   Opts.VerifyModule = !Args.hasArg(OPT_disable_llvm_verifier);
 
@@ -1737,11 +1739,7 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
       break;
     case InputKind::CXX:
     case InputKind::ObjCXX:
-      // The PS4 uses C++11 as the default C++ standard.
-      if (T.isPS4())
-        LangStd = LangStandard::lang_gnucxx11;
-      else
-        LangStd = LangStandard::lang_gnucxx98;
+      LangStd = LangStandard::lang_gnucxx14;
       break;
     case InputKind::RenderScript:
       LangStd = LangStandard::lang_c99;
