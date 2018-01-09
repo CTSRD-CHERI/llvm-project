@@ -909,7 +909,7 @@ void SelectionDAG::init(MachineFunction &NewMF,
   ORE = &NewORE;
   TLI = getSubtarget().getTargetLowering();
   TSI = getSubtarget().getSelectionDAGInfo();
-  Context = &MF->getFunction()->getContext();
+  Context = &MF->getFunction().getContext();
 }
 
 SelectionDAG::~SelectionDAG() {
@@ -1167,7 +1167,6 @@ SDValue SelectionDAG::getConstant(const ConstantInt &Val, const SDLoc &DL,
       Ops.insert(Ops.end(), EltParts.begin(), EltParts.end());
 
     SDValue V = getNode(ISD::BITCAST, DL, VT, getBuildVector(ViaVecVT, DL, Ops));
-    NewSDValueDbgMsg(V, "Creating constant: ", this);
     return V;
   }
 
@@ -1188,13 +1187,13 @@ SDValue SelectionDAG::getConstant(const ConstantInt &Val, const SDLoc &DL,
     N = newSDNode<ConstantSDNode>(isT, isO, Elt, DL.getDebugLoc(), EltVT);
     CSEMap.InsertNode(N, IP);
     InsertNode(N);
+    NewSDValueDbgMsg(SDValue(N, 0), "Creating constant: ", this);
   }
 
   SDValue Result(N, 0);
   if (VT.isVector())
     Result = getSplatBuildVector(VT, DL, Result);
 
-  NewSDValueDbgMsg(Result, "Creating constant: ", this);
   return Result;
 }
 
@@ -1332,7 +1331,7 @@ SDValue SelectionDAG::getConstantPool(const Constant *C, EVT VT,
   assert((TargetFlags == 0 || isTarget) &&
          "Cannot set target flags on target-independent globals");
   if (Alignment == 0)
-    Alignment = MF->getFunction()->optForSize()
+    Alignment = MF->getFunction().optForSize()
                     ? getDataLayout().getABITypeAlignment(C->getType())
                     : getDataLayout().getPrefTypeAlignment(C->getType());
   unsigned Opc = isTarget ? ISD::TargetConstantPool : ISD::ConstantPool;
@@ -5101,8 +5100,8 @@ static bool shouldLowerMemFuncForSize(const MachineFunction &MF) {
   // On Darwin, -Os means optimize for size without hurting performance, so
   // only really optimize for size when -Oz (MinSize) is used.
   if (MF.getTarget().getTargetTriple().isOSDarwin())
-    return MF.getFunction()->optForMinSize();
-  return MF.getFunction()->optForSize();
+    return MF.getFunction().optForMinSize();
+  return MF.getFunction().optForSize();
 }
 
 static SDValue getMemcpyLoadsAndStores(SelectionDAG &DAG, const SDLoc &dl,
@@ -5777,21 +5776,15 @@ SDValue SelectionDAG::getMergeValues(ArrayRef<SDValue> Ops, const SDLoc &dl) {
 
 SDValue SelectionDAG::getMemIntrinsicNode(
     unsigned Opcode, const SDLoc &dl, SDVTList VTList, ArrayRef<SDValue> Ops,
-    EVT MemVT, MachinePointerInfo PtrInfo, unsigned Align, bool Vol,
-    bool ReadMem, bool WriteMem, unsigned Size) {
+    EVT MemVT, MachinePointerInfo PtrInfo, unsigned Align,
+    MachineMemOperand::Flags Flags, unsigned Size) {
   if (Align == 0)  // Ensure that codegen never sees alignment 0
     Align = getEVTAlignment(MemVT);
 
-  MachineFunction &MF = getMachineFunction();
-  auto Flags = MachineMemOperand::MONone;
-  if (WriteMem)
-    Flags |= MachineMemOperand::MOStore;
-  if (ReadMem)
-    Flags |= MachineMemOperand::MOLoad;
-  if (Vol)
-    Flags |= MachineMemOperand::MOVolatile;
   if (!Size)
     Size = MemVT.getStoreSize();
+
+  MachineFunction &MF = getMachineFunction();
   MachineMemOperand *MMO =
     MF.getMachineMemOperand(PtrInfo, Flags, Size, Align);
 
@@ -6341,7 +6334,9 @@ SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL, EVT VT,
   }
 
   InsertNode(N);
-  return SDValue(N, 0);
+  SDValue V(N, 0);
+  NewSDValueDbgMsg(V, "Creating new node: ", this);
+  return V;
 }
 
 SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL,
@@ -6394,7 +6389,9 @@ SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL, SDVTList VTList,
     createOperands(N, Ops);
   }
   InsertNode(N);
-  return SDValue(N, 0);
+  SDValue V(N, 0);
+  NewSDValueDbgMsg(V, "Creating new node: ", this);
+  return V;
 }
 
 SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL,

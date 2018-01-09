@@ -12,7 +12,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "Protocol.h"
-
 #include "clang/Basic/LLVM.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/Format.h"
@@ -357,6 +356,13 @@ bool fromJSON(const json::Expr &Params, RenameParams &R) {
   json::ObjectMapper O(Params);
   return O && O.map("textDocument", R.textDocument) &&
          O.map("position", R.position) && O.map("newName", R.newName);
+}
+
+json::Expr toJSON(const DocumentHighlight &DH) {
+  return json::obj{
+      {"range", toJSON(DH.range)},
+      {"kind", static_cast<int>(DH.kind)},
+  };
 }
 
 } // namespace clangd

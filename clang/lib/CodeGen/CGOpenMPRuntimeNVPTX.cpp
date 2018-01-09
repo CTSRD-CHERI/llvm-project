@@ -943,6 +943,8 @@ void CGOpenMPRuntimeNVPTX::emitGenericParallelCall(
     llvm::Value *ID = Bld.CreateBitOrPointerCast(WFn, CGM.Int8PtrTy);
 
     if (!CapturedVars.empty()) {
+      // There's somehting to share, add the attribute
+      CGF.CurFn->addFnAttr("has-nvptx-shared-depot");
       // Prepare for parallel region. Indicate the outlined function.
       Address SharedArgs =
           CGF.CreateDefaultAlignTempAlloca(CGF.VoidPtrPtrTy,

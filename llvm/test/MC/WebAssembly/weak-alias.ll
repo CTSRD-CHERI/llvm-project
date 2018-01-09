@@ -29,16 +29,22 @@ entry:
 ; CHECK-NEXT:       - Index:           0
 ; CHECK-NEXT:         ReturnType:      I32
 ; CHECK-NEXT:         ParamTypes:      
+; CHECK-NEXT:   - Type:            IMPORT
+; CHECK-NEXT:     Imports:
+; CHECK-NEXT:       - Module:          env
+; CHECK-NEXT:         Field:           __linear_memory
+; CHECK-NEXT:         Kind:            MEMORY
+; CHECK-NEXT:         Memory:
+; CHECK-NEXT:           Initial:         0x00000001
+; CHECK-NEXT:       - Module:          env
+; CHECK-NEXT:         Field:           __indirect_function_table
+; CHECK-NEXT:         Kind:            TABLE
+; CHECK-NEXT:         Table:
+; CHECK-NEXT:           ElemType:        ANYFUNC
+; CHECK-NEXT:           Limits:
+; CHECK-NEXT:             Initial:         0x00000000
 ; CHECK-NEXT:   - Type:            FUNCTION
 ; CHECK-NEXT:     FunctionTypes:   [ 0, 0 ]
-; CHECK-NEXT:   - Type:            TABLE
-; CHECK-NEXT:     Tables:          
-; CHECK-NEXT:       - ElemType:        ANYFUNC
-; CHECK-NEXT:         Limits:          
-; CHECK-NEXT:           Initial:         0x00000000
-; CHECK-NEXT:   - Type:            MEMORY
-; CHECK-NEXT:     Memories:        
-; CHECK-NEXT:       - Initial:         0x00000001
 ; CHECK-NEXT:   - Type:            GLOBAL
 ; CHECK-NEXT:     Globals:         
 ; CHECK-NEXT:       - Type:            I32
@@ -103,22 +109,22 @@ entry:
 ; CHECK-NEXT:     DataSize:        12
 ; CHECK-NEXT:     SymbolInfo:      
 ; CHECK-NEXT:       - Name:            call_alias
-; CHECK-NEXT:         Flags:           4
+; CHECK-NEXT:         Flags:           [ VISIBILITY_HIDDEN ]
 ; CHECK-NEXT:       - Name:            foo
-; CHECK-NEXT:         Flags:           4
+; CHECK-NEXT:         Flags:           [ VISIBILITY_HIDDEN ]
 ; CHECK-NEXT:       - Name:            foo_alias
-; CHECK-NEXT:         Flags:           5
+; CHECK-NEXT:         Flags:           [ BINDING_WEAK, VISIBILITY_HIDDEN ]
 ; CHECK-NEXT:       - Name:            bar_alias
-; CHECK-NEXT:         Flags:           5
+; CHECK-NEXT:         Flags:           [ BINDING_WEAK, VISIBILITY_HIDDEN ]
 ; CHECK-NEXT:     SegmentInfo:    
 ; CHECK-NEXT:       - Index:           0
 ; CHECK-NEXT:         Name:            .data.bar
 ; CHECK-NEXT:         Alignment:       8
-; CHECK-NEXT:         Flags:           0
+; CHECK-NEXT:         Flags:           [ ]
 ; CHECK-NEXT:       - Index:           1
 ; CHECK-NEXT:         Name:            .data.bar_alias_address
 ; CHECK-NEXT:         Alignment:       8
-; CHECK-NEXT:         Flags:           0
+; CHECK-NEXT:         Flags:           [ ]
 ; CHECK-NEXT: ...
 
 ; CHECK-SYMS: SYMBOL TABLE:

@@ -103,6 +103,9 @@ CodeGenFunction::CodeGenFunction(CodeGenModule &cgm, bool suppressNewContext)
   if (CGM.getCodeGenOpts().ReciprocalMath) {
     FMF.setAllowReciprocal();
   }
+  if (CGM.getCodeGenOpts().Reassociate) {
+    FMF.setAllowReassoc();
+  }
   Builder.setFastMathFlags(FMF);
 }
 
@@ -906,8 +909,6 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
       if (auto *ClsAttr = FD->getAttr<CHERIMethodClassAttr>())
         CGM.EmitSandboxDefinedMethod(ClsAttr->getDefaultClass()->getName(),
                                      FD->getName(), Fn);
-    if (CGM.getLangOpts().OpenMP && FD->hasAttr<OMPDeclareSimdDeclAttr>())
-      CGM.getOpenMPRuntime().emitDeclareSimdFunction(FD, Fn);
   }
   // Add no-jump-tables value.
   Fn->addFnAttr("no-jump-tables",

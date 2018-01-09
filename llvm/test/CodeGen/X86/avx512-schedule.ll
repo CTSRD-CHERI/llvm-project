@@ -6948,8 +6948,7 @@ define i32 @zext_test1(<16 x i32> %a, <16 x i32> %b) {
 ; GENERIC-LABEL: zext_test1:
 ; GENERIC:       # %bb.0:
 ; GENERIC-NEXT:    vpcmpnleud %zmm1, %zmm0, %k0 # sched: [3:1.00]
-; GENERIC-NEXT:    kshiftlw $10, %k0, %k0 # sched: [1:1.00]
-; GENERIC-NEXT:    kshiftrw $15, %k0, %k0 # sched: [1:1.00]
+; GENERIC-NEXT:    kshiftrw $5, %k0, %k0 # sched: [1:1.00]
 ; GENERIC-NEXT:    kmovd %k0, %eax # sched: [1:0.33]
 ; GENERIC-NEXT:    andl $1, %eax # sched: [1:0.33]
 ; GENERIC-NEXT:    vzeroupper # sched: [100:0.33]
@@ -6958,8 +6957,7 @@ define i32 @zext_test1(<16 x i32> %a, <16 x i32> %b) {
 ; SKX-LABEL: zext_test1:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vpcmpnleud %zmm1, %zmm0, %k0 # sched: [3:1.00]
-; SKX-NEXT:    kshiftlw $10, %k0, %k0 # sched: [3:1.00]
-; SKX-NEXT:    kshiftrw $15, %k0, %k0 # sched: [3:1.00]
+; SKX-NEXT:    kshiftrw $5, %k0, %k0 # sched: [3:1.00]
 ; SKX-NEXT:    kmovd %k0, %eax # sched: [3:1.00]
 ; SKX-NEXT:    andl $1, %eax # sched: [1:0.25]
 ; SKX-NEXT:    vzeroupper # sched: [4:1.00]
@@ -6974,8 +6972,7 @@ define i16 @zext_test2(<16 x i32> %a, <16 x i32> %b) {
 ; GENERIC-LABEL: zext_test2:
 ; GENERIC:       # %bb.0:
 ; GENERIC-NEXT:    vpcmpnleud %zmm1, %zmm0, %k0 # sched: [3:1.00]
-; GENERIC-NEXT:    kshiftlw $10, %k0, %k0 # sched: [1:1.00]
-; GENERIC-NEXT:    kshiftrw $15, %k0, %k0 # sched: [1:1.00]
+; GENERIC-NEXT:    kshiftrw $5, %k0, %k0 # sched: [1:1.00]
 ; GENERIC-NEXT:    kmovd %k0, %eax # sched: [1:0.33]
 ; GENERIC-NEXT:    andl $1, %eax # sched: [1:0.33]
 ; GENERIC-NEXT:    # kill: def %ax killed %ax killed %eax
@@ -6985,8 +6982,7 @@ define i16 @zext_test2(<16 x i32> %a, <16 x i32> %b) {
 ; SKX-LABEL: zext_test2:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vpcmpnleud %zmm1, %zmm0, %k0 # sched: [3:1.00]
-; SKX-NEXT:    kshiftlw $10, %k0, %k0 # sched: [3:1.00]
-; SKX-NEXT:    kshiftrw $15, %k0, %k0 # sched: [3:1.00]
+; SKX-NEXT:    kshiftrw $5, %k0, %k0 # sched: [3:1.00]
 ; SKX-NEXT:    kmovd %k0, %eax # sched: [3:1.00]
 ; SKX-NEXT:    andl $1, %eax # sched: [1:0.25]
 ; SKX-NEXT:    # kill: def %ax killed %ax killed %eax
@@ -7002,8 +6998,7 @@ define i8 @zext_test3(<16 x i32> %a, <16 x i32> %b) {
 ; GENERIC-LABEL: zext_test3:
 ; GENERIC:       # %bb.0:
 ; GENERIC-NEXT:    vpcmpnleud %zmm1, %zmm0, %k0 # sched: [3:1.00]
-; GENERIC-NEXT:    kshiftlw $10, %k0, %k0 # sched: [1:1.00]
-; GENERIC-NEXT:    kshiftrw $15, %k0, %k0 # sched: [1:1.00]
+; GENERIC-NEXT:    kshiftrw $5, %k0, %k0 # sched: [1:1.00]
 ; GENERIC-NEXT:    kmovd %k0, %eax # sched: [1:0.33]
 ; GENERIC-NEXT:    andb $1, %al # sched: [1:0.33]
 ; GENERIC-NEXT:    # kill: def %al killed %al killed %eax
@@ -7013,8 +7008,7 @@ define i8 @zext_test3(<16 x i32> %a, <16 x i32> %b) {
 ; SKX-LABEL: zext_test3:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vpcmpnleud %zmm1, %zmm0, %k0 # sched: [3:1.00]
-; SKX-NEXT:    kshiftlw $10, %k0, %k0 # sched: [3:1.00]
-; SKX-NEXT:    kshiftrw $15, %k0, %k0 # sched: [3:1.00]
+; SKX-NEXT:    kshiftrw $5, %k0, %k0 # sched: [3:1.00]
 ; SKX-NEXT:    kmovd %k0, %eax # sched: [3:1.00]
 ; SKX-NEXT:    andb $1, %al # sched: [1:0.25]
 ; SKX-NEXT:    # kill: def %al killed %al killed %eax
@@ -7392,10 +7386,8 @@ define <8 x i1> @vmov_test18(i8 %a, i16 %y) {
 ; GENERIC:       # %bb.0:
 ; GENERIC-NEXT:    kmovd %edi, %k0 # sched: [1:0.33]
 ; GENERIC-NEXT:    kmovd %esi, %k1 # sched: [1:0.33]
-; GENERIC-NEXT:    kshiftlw $7, %k1, %k2 # sched: [1:1.00]
-; GENERIC-NEXT:    kshiftrw $15, %k2, %k2 # sched: [1:1.00]
-; GENERIC-NEXT:    kshiftlw $6, %k1, %k1 # sched: [1:1.00]
-; GENERIC-NEXT:    kshiftrw $15, %k1, %k1 # sched: [1:1.00]
+; GENERIC-NEXT:    kshiftrw $8, %k1, %k2 # sched: [1:1.00]
+; GENERIC-NEXT:    kshiftrw $9, %k1, %k1 # sched: [1:1.00]
 ; GENERIC-NEXT:    kshiftrb $6, %k0, %k3 # sched: [1:1.00]
 ; GENERIC-NEXT:    kxorb %k1, %k3, %k1 # sched: [1:1.00]
 ; GENERIC-NEXT:    kshiftlb $7, %k1, %k1 # sched: [1:1.00]
@@ -7412,10 +7404,8 @@ define <8 x i1> @vmov_test18(i8 %a, i16 %y) {
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    kmovd %edi, %k0 # sched: [1:1.00]
 ; SKX-NEXT:    kmovd %esi, %k1 # sched: [1:1.00]
-; SKX-NEXT:    kshiftlw $7, %k1, %k2 # sched: [3:1.00]
-; SKX-NEXT:    kshiftrw $15, %k2, %k2 # sched: [3:1.00]
-; SKX-NEXT:    kshiftlw $6, %k1, %k1 # sched: [3:1.00]
-; SKX-NEXT:    kshiftrw $15, %k1, %k1 # sched: [3:1.00]
+; SKX-NEXT:    kshiftrw $8, %k1, %k2 # sched: [3:1.00]
+; SKX-NEXT:    kshiftrw $9, %k1, %k1 # sched: [3:1.00]
 ; SKX-NEXT:    kshiftrb $6, %k0, %k3 # sched: [3:1.00]
 ; SKX-NEXT:    kxorb %k1, %k3, %k1 # sched: [1:1.00]
 ; SKX-NEXT:    kshiftlb $7, %k1, %k1 # sched: [3:1.00]
@@ -8821,10 +8811,8 @@ define <16 x float> @broadcast_ss_spill(float %x) {
 ; GENERIC-NEXT:    .cfi_def_cfa_offset 32
 ; GENERIC-NEXT:    vaddss %xmm0, %xmm0, %xmm0 # sched: [3:1.00]
 ; GENERIC-NEXT:    vmovaps %xmm0, (%rsp) # 16-byte Spill sched: [5:1.00]
-; GENERIC-NEXT:    # sched: [5:1.00]
 ; GENERIC-NEXT:    callq func_f32
 ; GENERIC-NEXT:    vbroadcastss (%rsp), %zmm0 # 16-byte Folded Reload sched: [5:1.00]
-; GENERIC-NEXT:    # sched: [5:1.00]
 ; GENERIC-NEXT:    addq $24, %rsp # sched: [1:0.33]
 ; GENERIC-NEXT:    retq # sched: [1:1.00]
 ;
@@ -8834,10 +8822,8 @@ define <16 x float> @broadcast_ss_spill(float %x) {
 ; SKX-NEXT:    .cfi_def_cfa_offset 32
 ; SKX-NEXT:    vaddss %xmm0, %xmm0, %xmm0 # sched: [4:0.33]
 ; SKX-NEXT:    vmovaps %xmm0, (%rsp) # 16-byte Spill sched: [1:1.00]
-; SKX-NEXT:    # sched: [1:1.00]
 ; SKX-NEXT:    callq func_f32
 ; SKX-NEXT:    vbroadcastss (%rsp), %zmm0 # 16-byte Folded Reload sched: [8:0.50]
-; SKX-NEXT:    # sched: [8:0.50]
 ; SKX-NEXT:    addq $24, %rsp # sched: [1:0.25]
 ; SKX-NEXT:    retq # sched: [7:1.00]
   %a  = fadd float %x, %x
@@ -8855,10 +8841,8 @@ define <8 x double> @broadcast_sd_spill(double %x) {
 ; GENERIC-NEXT:    .cfi_def_cfa_offset 32
 ; GENERIC-NEXT:    vaddsd %xmm0, %xmm0, %xmm0 # sched: [3:1.00]
 ; GENERIC-NEXT:    vmovapd %xmm0, (%rsp) # 16-byte Spill sched: [5:1.00]
-; GENERIC-NEXT:    # sched: [5:1.00]
 ; GENERIC-NEXT:    callq func_f64
 ; GENERIC-NEXT:    vbroadcastsd (%rsp), %zmm0 # 16-byte Folded Reload sched: [5:1.00]
-; GENERIC-NEXT:    # sched: [5:1.00]
 ; GENERIC-NEXT:    addq $24, %rsp # sched: [1:0.33]
 ; GENERIC-NEXT:    retq # sched: [1:1.00]
 ;
@@ -8868,10 +8852,8 @@ define <8 x double> @broadcast_sd_spill(double %x) {
 ; SKX-NEXT:    .cfi_def_cfa_offset 32
 ; SKX-NEXT:    vaddsd %xmm0, %xmm0, %xmm0 # sched: [4:0.33]
 ; SKX-NEXT:    vmovapd %xmm0, (%rsp) # 16-byte Spill sched: [1:1.00]
-; SKX-NEXT:    # sched: [1:1.00]
 ; SKX-NEXT:    callq func_f64
 ; SKX-NEXT:    vbroadcastsd (%rsp), %zmm0 # 16-byte Folded Reload sched: [8:0.50]
-; SKX-NEXT:    # sched: [8:0.50]
 ; SKX-NEXT:    addq $24, %rsp # sched: [1:0.25]
 ; SKX-NEXT:    retq # sched: [7:1.00]
   %a  = fadd double %x, %x

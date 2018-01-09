@@ -265,6 +265,8 @@ def menable_no_nans : Flag<["-"], "menable-no-nans">,
 def menable_unsafe_fp_math : Flag<["-"], "menable-unsafe-fp-math">,
   HelpText<"Allow unsafe floating-point math optimizations which may decrease "
            "precision">;
+def mreassociate : Flag<["-"], "mreassociate">,
+  HelpText<"Allow reassociation transformations for floating-point instructions">;
 def mfloat_abi : Separate<["-"], "mfloat-abi">,
   HelpText<"The float ABI to use">;
 def mtp : Separate<["-"], "mtp">,
@@ -402,8 +404,12 @@ def fcaret_diagnostics_max_lines :
   HelpText<"Set the maximum number of source lines to show in a caret diagnostic">;
 def fmessage_length : Separate<["-"], "fmessage-length">, MetaVarName<"<N>">,
   HelpText<"Format message diagnostics so that they fit within N columns or fewer, when possible.">;
+def verify_EQ : CommaJoined<["-"], "verify=">,
+  MetaVarName<"<prefixes>">,
+  HelpText<"Verify diagnostic output using comment directives that start with"
+           " prefixes in the comma-separated sequence <prefixes>">;
 def verify : Flag<["-"], "verify">,
-  HelpText<"Verify diagnostic output using comment directives">;
+  HelpText<"Equivalent to -verify=expected">;
 def verify_ignore_unexpected : Flag<["-"], "verify-ignore-unexpected">,
   HelpText<"Ignore unexpected diagnostic messages">;
 def verify_ignore_unexpected_EQ : CommaJoined<["-"], "verify-ignore-unexpected=">,
@@ -439,6 +445,8 @@ def code_completion_patterns : Flag<["-"], "code-completion-patterns">,
   HelpText<"Include code patterns in code-completion results">;
 def no_code_completion_globals : Flag<["-"], "no-code-completion-globals">,
   HelpText<"Do not include global declarations in code-completion results.">;
+def no_code_completion_ns_level_decls : Flag<["-"], "no-code-completion-ns-level-decls">,
+  HelpText<"Do not include declarations inside namespaces (incl. global namespace) in the code-completion results.">;
 def code_completion_brief_comments : Flag<["-"], "code-completion-brief-comments">,
   HelpText<"Include brief documentation comments in code-completion results.">;
 def disable_free : Flag<["-"], "disable-free">,

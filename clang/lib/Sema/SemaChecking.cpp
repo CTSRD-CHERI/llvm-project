@@ -7338,8 +7338,8 @@ static bool CheckMemorySizeofForComparison(Sema &S, const Expr *E,
   if (!Size)
     return false;
 
-  // if E is binop and op is >, <, >=, <=, ==, &&, ||:
-  if (!Size->isComparisonOp() && !Size->isEqualityOp() && !Size->isLogicalOp())
+  // if E is binop and op is <=>, >, <, >=, <=, ==, &&, ||:
+  if (!Size->isComparisonOp() && !Size->isLogicalOp())
     return false;
 
   SourceRange SizeRange = Size->getSourceRange();
@@ -8498,6 +8498,8 @@ static IntRange GetExprRange(ASTContext &C, const Expr *E, unsigned MaxWidth) {
 
   if (const auto *BO = dyn_cast<BinaryOperator>(E)) {
     switch (BO->getOpcode()) {
+    case BO_Cmp:
+      llvm_unreachable("builtin <=> should have class type");
 
     // Boolean-valued operations are single-bit and positive.
     case BO_LAnd:
@@ -8819,9 +8821,18 @@ struct PromotedRange {
     llvm_unreachable("impossible compare result");
   }
 
-  static llvm::Optional<bool> constantValue(BinaryOperatorKind Op,
-                                            ComparisonResult R,
-                                            bool ConstantOnRHS) {
+  static llvm::Optional<StringRef>
+  constantValue(BinaryOperatorKind Op, ComparisonResult R, bool ConstantOnRHS) {
+    if (Op == BO_Cmp) {
+      ComparisonResult LTFlag = LT, GTFlag = GT;
+      if (ConstantOnRHS) std::swap(LTFlag, GTFlag);
+
+      if (R & EQ) return StringRef("'std::strong_ordering::equal'");
+      if (R & LTFlag) return StringRef("'std::strong_ordering::less'");
+      if (R & GTFlag) return StringRef("'std::strong_ordering::greater'");
+      return llvm::None;
+    }
+
     ComparisonResult TrueFlag, FalseFlag;
     if (Op == BO_EQ) {
       TrueFlag = EQ;
@@ -8841,9 +8852,9 @@ struct PromotedRange {
         std::swap(TrueFlag, FalseFlag);
     }
     if (R & TrueFlag)
-      return true;
+      return StringRef("true");
     if (R & FalseFlag)
-      return false;
+      return StringRef("false");
     return llvm::None;
   }
 };

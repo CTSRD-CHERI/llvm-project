@@ -395,6 +395,10 @@ public:
 
   void emitCXXStructor(const CXXMethodDecl *MD, StructorType Type) override;
 
+  std::pair<llvm::Value *, const CXXRecordDecl *>
+  LoadVTablePtr(CodeGenFunction &CGF, Address This,
+                const CXXRecordDecl *RD) override;
+
  private:
    bool hasAnyUnusedVirtualInlineFunction(const CXXRecordDecl *RD) const {
      const auto &VtableLayout =
@@ -4181,4 +4185,10 @@ ItaniumCXXABI::emitTerminateForUnexpectedException(CodeGenFunction &CGF,
     return CGF.EmitNounwindRuntimeCall(getClangCallTerminateFn(CGF.CGM), Exn);
   }
   return CGF.EmitNounwindRuntimeCall(CGF.CGM.getTerminateFn());
+}
+
+std::pair<llvm::Value *, const CXXRecordDecl *>
+ItaniumCXXABI::LoadVTablePtr(CodeGenFunction &CGF, Address This,
+                             const CXXRecordDecl *RD) {
+  return {CGF.GetVTablePtr(This, CGM.Int8PtrTy, RD), RD};
 }

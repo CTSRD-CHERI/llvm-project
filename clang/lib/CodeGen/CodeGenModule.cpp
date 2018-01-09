@@ -1260,6 +1260,9 @@ void CodeGenModule::SetFunctionAttributes(GlobalDecl GD, llvm::Function *F,
   // is handled with better precision by the receiving DSO.
   if (!CodeGenOpts.SanitizeCfiCrossDso)
     CreateFunctionTypeMetadata(FD, F);
+
+  if (getLangOpts().OpenMP && FD->hasAttr<OMPDeclareSimdDeclAttr>())
+    getOpenMPRuntime().emitDeclareSimdFunction(FD, F);
 }
 
 void CodeGenModule::addUsedGlobal(llvm::GlobalValue *GV) {
@@ -4356,20 +4359,10 @@ void CodeGenModule::ClearUnusedCoverageMapping(const Decl *D) {
 }
 
 void CodeGenModule::EmitDeferredUnusedCoverageMappings() {
-  std::vector<const Decl *> DeferredDecls;
-  for (const auto &I : DeferredEmptyCoverageMappingDecls) {
-    if (!I.second)
+  for (const auto &Entry : DeferredEmptyCoverageMappingDecls) {
+    if (!Entry.second)
       continue;
-    DeferredDecls.push_back(I.first);
-  }
-  // Sort the declarations by their location to make sure that the tests get a
-  // predictable order for the coverage mapping for the unused declarations.
-  if (CodeGenOpts.DumpCoverageMapping)
-    std::sort(DeferredDecls.begin(), DeferredDecls.end(),
-              [] (const Decl *LHS, const Decl *RHS) {
-      return LHS->getLocStart() < RHS->getLocStart();
-    });
-  for (const auto *D : DeferredDecls) {
+    const Decl *D = Entry.first;
     switch (D->getKind()) {
     case Decl::CXXConversion:
     case Decl::CXXMethod:

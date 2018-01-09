@@ -581,7 +581,7 @@ private:
     return GetVBaseOffsetFromVBPtr(CGF, Base, VBPOffset, VBTOffset, VBPtr);
   }
 
-  std::pair<Address, llvm::Value *>
+  std::tuple<Address, llvm::Value *, const CXXRecordDecl *>
   performBaseAdjustment(CodeGenFunction &CGF, Address Value,
                         QualType SrcRecordTy);
 
@@ -757,6 +757,10 @@ public:
   llvm::GlobalVariable *getCatchableTypeArray(QualType T);
 
   llvm::GlobalVariable *getThrowInfo(QualType T) override;
+
+  std::pair<llvm::Value *, const CXXRecordDecl *>
+  LoadVTablePtr(CodeGenFunction &CGF, Address This,
+                const CXXRecordDecl *RD) override;
 
 private:
   typedef std::pair<const CXXRecordDecl *, CharUnits> VFTableIdTy;
@@ -940,7 +944,7 @@ void MicrosoftCXXABI::emitBeginCatch(CodeGenFunction &CGF,
 /// We need to perform a generic polymorphic operation (like a typeid
 /// or a cast), which requires an object with a vfptr.  Adjust the
 /// address to point to an object with a vfptr.
-std::pair<Address, llvm::Value *>
+std::tuple<Address, llvm::Value *, const CXXRecordDecl *>
 MicrosoftCXXABI::performBaseAdjustment(CodeGenFunction &CGF, Address Value,
                                        QualType SrcRecordTy) {
   Value = CGF.Builder.CreateBitCast(Value, CGF.Int8PtrTy);
@@ -951,7 +955,8 @@ MicrosoftCXXABI::performBaseAdjustment(CodeGenFunction &CGF, Address Value,
   // covers non-virtual base subobjects: a class with its own virtual
   // functions would be a candidate to be a primary base.
   if (Context.getASTRecordLayout(SrcDecl).hasExtendableVFPtr())
-    return std::make_pair(Value, llvm::ConstantInt::get(CGF.Int32Ty, 0));
+    return std::make_tuple(Value, llvm::ConstantInt::get(CGF.Int32Ty, 0),
+                           SrcDecl);
 
   // Okay, one of the vbases must have a vfptr, or else this isn't
   // actually a polymorphic class.
@@ -970,7 +975,7 @@ MicrosoftCXXABI::performBaseAdjustment(CodeGenFunction &CGF, Address Value,
   llvm::Value *Ptr = CGF.Builder.CreateInBoundsGEP(Value.getPointer(), Offset);
   CharUnits VBaseAlign =
     CGF.CGM.getVBaseAlignment(Value.getAlignment(), SrcDecl, PolymorphicBase);
-  return std::make_pair(Address(Ptr, VBaseAlign), Offset);
+  return std::make_tuple(Address(Ptr, VBaseAlign), Offset, PolymorphicBase);
 }
 
 bool MicrosoftCXXABI::shouldTypeidBeNullChecked(bool IsDeref,
@@ -1001,7 +1006,7 @@ llvm::Value *MicrosoftCXXABI::EmitTypeid(CodeGenFunction &CGF,
                                          QualType SrcRecordTy,
                                          Address ThisPtr,
                                          llvm::Type *StdTypeInfoPtrTy) {
-  std::tie(ThisPtr, std::ignore) =
+  std::tie(ThisPtr, std::ignore, std::ignore) =
       performBaseAdjustment(CGF, ThisPtr, SrcRecordTy);
   auto Typeid = emitRTtypeidCall(CGF, ThisPtr.getPointer()).getInstruction();
   return CGF.Builder.CreateBitCast(Typeid, StdTypeInfoPtrTy);
@@ -1025,7 +1030,8 @@ llvm::Value *MicrosoftCXXABI::EmitDynamicCastCall(
       CGF.CGM.GetAddrOfRTTIDescriptor(DestRecordTy.getUnqualifiedType());
 
   llvm::Value *Offset;
-  std::tie(This, Offset) = performBaseAdjustment(CGF, This, SrcRecordTy);
+  std::tie(This, Offset, std::ignore) =
+      performBaseAdjustment(CGF, This, SrcRecordTy);
   llvm::Value *ThisPtr = This.getPointer();
   Offset = CGF.Builder.CreateTrunc(Offset, CGF.Int32Ty);
 
@@ -1051,7 +1057,8 @@ llvm::Value *
 MicrosoftCXXABI::EmitDynamicCastToVoid(CodeGenFunction &CGF, Address Value,
                                        QualType SrcRecordTy,
                                        QualType DestTy) {
-  std::tie(Value, std::ignore) = performBaseAdjustment(CGF, Value, SrcRecordTy);
+  std::tie(Value, std::ignore, std::ignore) =
+      performBaseAdjustment(CGF, Value, SrcRecordTy);
 
   // PVOID __RTCastToVoid(
   //   PVOID inptr)
@@ -4273,4 +4280,12 @@ void MicrosoftCXXABI::emitThrow(CodeGenFunction &CGF, const CXXThrowExpr *E) {
     TI
   };
   CGF.EmitNoreturnRuntimeCallOrInvoke(getThrowFn(), Args);
+}
+
+std::pair<llvm::Value *, const CXXRecordDecl *>
+MicrosoftCXXABI::LoadVTablePtr(CodeGenFunction &CGF, Address This,
+                               const CXXRecordDecl *RD) {
+  std::tie(This, std::ignore, RD) =
+      performBaseAdjustment(CGF, This, QualType(RD->getTypeForDecl(), 0));
+  return {CGF.GetVTablePtr(This, CGM.Int8PtrTy, RD), RD};
 }

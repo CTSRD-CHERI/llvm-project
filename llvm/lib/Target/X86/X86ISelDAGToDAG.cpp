@@ -13,7 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "X86.h"
-#include "X86InstrBuilder.h"
 #include "X86MachineFunctionInfo.h"
 #include "X86RegisterInfo.h"
 #include "X86Subtarget.h"
@@ -21,8 +20,6 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
-#include "llvm/CodeGen/MachineInstrBuilder.h"
-#include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
 #include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/Function.h"
@@ -622,8 +619,8 @@ static bool isCalleeLoad(SDValue Callee, SDValue &Chain, bool HasCallSeq) {
 
 void X86DAGToDAGISel::PreprocessISelDAG() {
   // OptFor[Min]Size are used in pattern predicates that isel is matching.
-  OptForSize = MF->getFunction()->optForSize();
-  OptForMinSize = MF->getFunction()->optForMinSize();
+  OptForSize = MF->getFunction().optForSize();
+  OptForMinSize = MF->getFunction().optForMinSize();
   assert((!OptForMinSize || OptForSize) && "OptForMinSize implies OptForSize");
 
   for (SelectionDAG::allnodes_iterator I = CurDAG->allnodes_begin(),
@@ -756,9 +753,9 @@ void X86DAGToDAGISel::emitSpecialCodeForMain() {
 
 void X86DAGToDAGISel::EmitFunctionEntryCode() {
   // If this is main, emit special code for main.
-  if (const Function *Fn = MF->getFunction())
-    if (Fn->hasExternalLinkage() && Fn->getName() == "main")
-      emitSpecialCodeForMain();
+  const Function &F = MF->getFunction();
+  if (F.hasExternalLinkage() && F.getName() == "main")
+    emitSpecialCodeForMain();
 }
 
 static bool isDispSafeForFrameIndex(int64_t Val) {
