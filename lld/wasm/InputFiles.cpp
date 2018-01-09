@@ -11,7 +11,6 @@
 
 #include "Config.h"
 #include "InputSegment.h"
-#include "Strings.h"
 #include "SymbolTable.h"
 #include "lld/Common/ErrorHandler.h"
 #include "lld/Common/Memory.h"
@@ -48,7 +47,6 @@ void ObjFile::dumpInfo() const {
       "        FunctionIndexOffset : " + Twine(FunctionIndexOffset) + "\n" +
       "         NumFunctionImports : " + Twine(NumFunctionImports()) + "\n" +
       "           TableIndexOffset : " + Twine(TableIndexOffset) + "\n" +
-      "          GlobalIndexOffset : " + Twine(GlobalIndexOffset) + "\n" +
       "           NumGlobalImports : " + Twine(NumGlobalImports()) + "\n");
 }
 
@@ -69,15 +67,10 @@ uint32_t ObjFile::getRelocatedAddress(uint32_t Index) const {
 }
 
 uint32_t ObjFile::relocateFunctionIndex(uint32_t Original) const {
-  DEBUG(dbgs() << "relocateFunctionIndex: " << Original);
   const Symbol *Sym = getFunctionSymbol(Original);
-  uint32_t Index;
-  if (Sym)
-    Index = Sym->getOutputIndex();
-  else
-    Index = Original + FunctionIndexOffset;
-
-  DEBUG(dbgs() << " -> " << Index << "\n");
+  uint32_t Index = Sym->getOutputIndex();
+  DEBUG(dbgs() << "relocateFunctionIndex: " << toString(*Sym) << ": "
+               << Original << " -> " << Index << "\n");
   return Index;
 }
 
@@ -90,22 +83,17 @@ uint32_t ObjFile::relocateTableIndex(uint32_t Original) const {
 }
 
 uint32_t ObjFile::relocateGlobalIndex(uint32_t Original) const {
-  DEBUG(dbgs() << "relocateGlobalIndex: " << Original);
-  uint32_t Index;
   const Symbol *Sym = getGlobalSymbol(Original);
-  if (Sym)
-    Index = Sym->getOutputIndex();
-  else
-    Index = Original + GlobalIndexOffset;
-
-  DEBUG(dbgs() << " -> " << Index << "\n");
+  uint32_t Index = Sym->getOutputIndex();
+  DEBUG(dbgs() << "relocateGlobalIndex: " << toString(*Sym) << ": " << Original
+               << " -> " << Index << "\n");
   return Index;
 }
 
 void ObjFile::parse() {
   // Parse a memory buffer as a wasm file.
   DEBUG(dbgs() << "Parsing object: " << toString(this) << "\n");
-  std::unique_ptr<Binary> Bin = check(createBinary(MB), toString(this));
+  std::unique_ptr<Binary> Bin = CHECK(createBinary(MB), toString(this));
 
   auto *Obj = dyn_cast<WasmObjectFile>(Bin.get());
   if (!Obj)
@@ -224,7 +212,7 @@ Symbol *ObjFile::createDefined(const WasmSymbol &Sym,
 void ArchiveFile::parse() {
   // Parse a MemoryBufferRef as an archive file.
   DEBUG(dbgs() << "Parsing library: " << toString(this) << "\n");
-  File = check(Archive::create(MB), toString(this));
+  File = CHECK(Archive::create(MB), toString(this));
 
   // Read the symbol table to construct Lazy symbols.
   int Count = 0;
@@ -237,7 +225,7 @@ void ArchiveFile::parse() {
 
 void ArchiveFile::addMember(const Archive::Symbol *Sym) {
   const Archive::Child &C =
-      check(Sym->getMember(),
+      CHECK(Sym->getMember(),
             "could not get the member for symbol " + Sym->getName());
 
   // Don't try to load the same member twice (this can happen when members
@@ -245,11 +233,11 @@ void ArchiveFile::addMember(const Archive::Symbol *Sym) {
   if (!Seen.insert(C.getChildOffset()).second)
     return;
 
-  DEBUG(dbgs() << "loading lazy: " << displayName(Sym->getName()) << "\n");
+  DEBUG(dbgs() << "loading lazy: " << Sym->getName() << "\n");
   DEBUG(dbgs() << "from archive: " << toString(this) << "\n");
 
   MemoryBufferRef MB =
-      check(C.getMemoryBufferRef(),
+      CHECK(C.getMemoryBufferRef(),
             "could not get the buffer for the member defining symbol " +
                 Sym->getName());
 
@@ -264,7 +252,7 @@ void ArchiveFile::addMember(const Archive::Symbol *Sym) {
 }
 
 // Returns a string in the format of "foo.o" or "foo.a(bar.o)".
-std::string lld::toString(wasm::InputFile *File) {
+std::string lld::toString(const wasm::InputFile *File) {
   if (!File)
     return "<internal>";
 

@@ -136,7 +136,7 @@ static std::tuple<ELFKind, uint16_t, uint8_t> parseEmulation(StringRef Emul) {
 std::vector<std::pair<MemoryBufferRef, uint64_t>> static getArchiveMembers(
     MemoryBufferRef MB) {
   std::unique_ptr<Archive> File =
-      check(Archive::create(MB),
+      CHECK(Archive::create(MB),
             MB.getBufferIdentifier() + ": failed to parse archive");
 
   std::vector<std::pair<MemoryBufferRef, uint64_t>> V;
@@ -144,10 +144,10 @@ std::vector<std::pair<MemoryBufferRef, uint64_t>> static getArchiveMembers(
   bool AddToTar = File->isThin() && Tar;
   for (const ErrorOr<Archive::Child> &COrErr : File->children(Err)) {
     Archive::Child C =
-        check(COrErr, MB.getBufferIdentifier() +
+        CHECK(COrErr, MB.getBufferIdentifier() +
                           ": could not get the child of the archive");
     MemoryBufferRef MBRef =
-        check(C.getMemoryBufferRef(),
+        CHECK(C.getMemoryBufferRef(),
               MB.getBufferIdentifier() +
                   ": could not get the buffer for a child of the archive");
     if (AddToTar)
@@ -192,7 +192,7 @@ void LinkerDriver::addFile(StringRef Path, bool WithLOption) {
     }
 
     std::unique_ptr<Archive> File =
-        check(Archive::create(MBRef), Path + ": failed to parse archive");
+        CHECK(Archive::create(MBRef), Path + ": failed to parse archive");
 
     // If an archive file has no symbol table, it is likely that a user
     // is attempting LTO and using a default ar command that doesn't
@@ -269,6 +269,9 @@ static void checkOptions(opt::InputArgList &Args) {
   if (Config->EMachine == EM_MIPS && Config->GnuHash)
     error("the .gnu.hash section is not compatible with the MIPS target.");
 
+  if (Config->FixCortexA53Errata843419 && Config->EMachine != EM_AARCH64)
+    error("--fix-cortex-a53-843419 is only supported on AArch64 targets.");
+
   if (Config->Pie && Config->Shared)
     error("-shared and -pie may not be used together");
 
@@ -337,9 +340,10 @@ void LinkerDriver::main(ArrayRef<const char *> ArgsArr, bool CanExitEarly) {
   if (Args.hasArg(OPT_v) || Args.hasArg(OPT_version))
     message(getLLDVersion() + " (compatible with GNU linkers)");
 
-  // ld.bfd always exits after printing out the version string.
-  // ld.gold proceeds if a given option is -v. Because gold's behavior
-  // is more permissive than ld.bfd, we chose what gold does here.
+  // The behavior of -v or --version is a bit strange, but this is
+  // needed for compatibility with GNU linkers.
+  if (Args.hasArg(OPT_v) && !Args.hasArg(OPT_INPUT))
+    return;
   if (Args.hasArg(OPT_version))
     return;
 
@@ -489,7 +493,7 @@ static StripPolicy getStrip(opt::InputArgList &Args) {
   return StripPolicy::Debug;
 }
 
-static uint64_t parseSectionAddress(StringRef S, opt::Arg *Arg) {
+static uint64_t parseSectionAddress(StringRef S, const opt::Arg &Arg) {
   uint64_t VA = 0;
   if (S.startswith("0x"))
     S = S.drop_front(2);
@@ -504,15 +508,15 @@ static StringMap<uint64_t> getSectionStartMap(opt::InputArgList &Args) {
     StringRef Name;
     StringRef Addr;
     std::tie(Name, Addr) = StringRef(Arg->getValue()).split('=');
-    Ret[Name] = parseSectionAddress(Addr, Arg);
+    Ret[Name] = parseSectionAddress(Addr, *Arg);
   }
 
   if (auto *Arg = Args.getLastArg(OPT_Ttext))
-    Ret[".text"] = parseSectionAddress(Arg->getValue(), Arg);
+    Ret[".text"] = parseSectionAddress(Arg->getValue(), *Arg);
   if (auto *Arg = Args.getLastArg(OPT_Tdata))
-    Ret[".data"] = parseSectionAddress(Arg->getValue(), Arg);
+    Ret[".data"] = parseSectionAddress(Arg->getValue(), *Arg);
   if (auto *Arg = Args.getLastArg(OPT_Tbss))
-    Ret[".bss"] = parseSectionAddress(Arg->getValue(), Arg);
+    Ret[".bss"] = parseSectionAddress(Arg->getValue(), *Arg);
   return Ret;
 }
 
@@ -609,6 +613,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
       Args.hasFlag(OPT_fatal_warnings, OPT_no_fatal_warnings, false);
   Config->FilterList = args::getStrings(Args, OPT_filter);
   Config->Fini = Args.getLastArgValue(OPT_fini, "_fini");
+  Config->FixCortexA53Errata843419 = Args.hasArg(OPT_fix_cortex_a53_843419);
   Config->GcSections = Args.hasFlag(OPT_gc_sections, OPT_no_gc_sections, false);
   Config->GdbIndex = Args.hasFlag(OPT_gdb_index, OPT_no_gdb_index, false);
   Config->ICF = Args.hasFlag(OPT_icf_all, OPT_icf_none, false);
@@ -646,7 +651,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->Target1Rel = Args.hasFlag(OPT_target1_rel, OPT_target1_abs, false);
   Config->Target2 = getTarget2(Args);
   Config->ThinLTOCacheDir = Args.getLastArgValue(OPT_thinlto_cache_dir);
-  Config->ThinLTOCachePolicy = check(
+  Config->ThinLTOCachePolicy = CHECK(
       parseCachePruningPolicy(Args.getLastArgValue(OPT_thinlto_cache_policy)),
       "--thinlto-cache-policy: invalid cache policy");
   Config->ThinLTOJobs = args::getInteger(Args, OPT_thinlto_jobs, -1u);
@@ -769,7 +774,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
           {Arg->getValue(), /*IsExternCpp*/ false, /*HasWildcard*/ false});
   }
 
-  if (auto *Arg = Args.getLastArg(OPT_version_script))
+  for (auto *Arg : Args.filtered(OPT_version_script))
     if (Optional<MemoryBufferRef> Buffer = readFile(Arg->getValue()))
       readVersionScript(*Buffer);
 }

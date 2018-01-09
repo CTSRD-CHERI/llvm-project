@@ -6,6 +6,11 @@ class F<string name>: Flag<["--", "-"], name>;
 class J<string name>: Joined<["--", "-"], name>;
 class S<string name>: Separate<["--", "-"], name>;
 
+multiclass Eq<string name> {
+  def "": Separate<["--", "-"], name>;
+  def _eq: Joined<["--", "-"], name # "=">, Alias<!cast<Separate>(NAME)>;
+}
+
 def L: JoinedOrSeparate<["-"], "L">, MetaVarName<"<dir>">,
   HelpText<"Add a directory to the library search path">;
 
@@ -52,13 +57,17 @@ def strip_all: F<"strip-all">, HelpText<"Strip all symbols">;
 
 def strip_debug: F<"strip-debug">, HelpText<"Strip debugging information">;
 
-def sysroot: J<"sysroot=">, HelpText<"Set the system root">;
+defm undefined: Eq<"undefined">,
+  HelpText<"Force undefined symbol during linking">;
 
 def z: JoinedOrSeparate<["-"], "z">, MetaVarName<"<option>">,
   HelpText<"Linker option extensions">;
 
 def entry: S<"entry">, MetaVarName<"<entry>">,
   HelpText<"Name of entry point symbol">;
+
+def no_entry: F<"no-entry">,
+  HelpText<"Do not output any entry point">;
 
 def error_limit: J<"error-limit=">,
   HelpText<"Maximum number of errors to emit before stopping (0 = no limit)">;
@@ -91,3 +100,4 @@ def alias_max_memory_m: Flag<["-"], "m">, Alias<max_memory>;
 def alias_relocatable_r: Flag<["-"], "r">, Alias<relocatable>;
 def alias_entry_e: JoinedOrSeparate<["-"], "e">, Alias<entry>;
 def alias_entry_entry: J<"entry=">, Alias<entry>;
+def alias_undefined_u: JoinedOrSeparate<["-"], "u">, Alias<undefined>;

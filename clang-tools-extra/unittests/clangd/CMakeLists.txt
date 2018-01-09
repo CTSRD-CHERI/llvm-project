@@ -10,12 +10,15 @@ include_directories(
 
 add_extra_unittest(ClangdTests
   ClangdTests.cpp
+  CodeCompleteTests.cpp
   FuzzyMatchTests.cpp
   JSONExprTests.cpp
+  TestFS.cpp
   TraceTests.cpp
   )
 
 target_link_libraries(ClangdTests
+  PRIVATE
   clangBasic
   clangDaemon
   clangFormat

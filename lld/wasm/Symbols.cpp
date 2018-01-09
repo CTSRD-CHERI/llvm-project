@@ -12,8 +12,8 @@
 #include "Config.h"
 #include "InputFiles.h"
 #include "InputSegment.h"
-#include "Strings.h"
 #include "lld/Common/ErrorHandler.h"
+#include "lld/Common/Strings.h"
 
 #define DEBUG_TYPE "lld"
 
@@ -41,6 +41,8 @@ uint32_t Symbol::getVirtualAddress() const {
   DEBUG(dbgs() << "getVirtualAddress: " << getName() << "\n");
   if (isUndefined())
     return UINT32_MAX;
+  if (VirtualAddress.hasValue())
+    return VirtualAddress.getValue();
 
   assert(Sym != nullptr);
   ObjFile *Obj = cast<ObjFile>(File);
@@ -55,6 +57,12 @@ uint32_t Symbol::getOutputIndex() const {
   if (isUndefined() && isWeak())
     return 0;
   return OutputIndex.getValue();
+}
+
+void Symbol::setVirtualAddress(uint32_t Value) {
+  DEBUG(dbgs() << "setVirtualAddress " << Name << " -> " << Value << "\n");
+  assert(!VirtualAddress.hasValue());
+  VirtualAddress = Value;
 }
 
 void Symbol::setOutputIndex(uint32_t Index) {
@@ -74,11 +82,16 @@ void Symbol::update(Kind K, InputFile *F, const WasmSymbol *WasmSym,
 
 bool Symbol::isWeak() const { return Sym && Sym->isWeak(); }
 
-std::string lld::toString(wasm::Symbol &Sym) {
-  return wasm::displayName(Sym.getName());
+bool Symbol::isHidden() const { return Sym && Sym->isHidden(); }
+
+std::string lld::toString(const wasm::Symbol &Sym) {
+  if (Config->Demangle)
+    if (Optional<std::string> S = demangleItanium(Sym.getName()))
+      return "`" + *S + "'";
+  return Sym.getName();
 }
 
-std::string lld::toString(wasm::Symbol::Kind &Kind) {
+std::string lld::toString(wasm::Symbol::Kind Kind) {
   switch (Kind) {
   case wasm::Symbol::DefinedFunctionKind:
     return "DefinedFunction";

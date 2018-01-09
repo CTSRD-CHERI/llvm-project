@@ -134,23 +134,6 @@ static Optional<std::string> findFile(StringRef Path1, const Twine &Path2) {
   return None;
 }
 
-// Inject a new wasm global into the output binary with the given value.
-// Wasm global are used in relocatable object files to model symbol imports
-// and exports.  In the final executable the only use of wasm globals is
-// for the exlicit stack pointer (__stack_pointer).
-static void addSyntheticGlobal(StringRef Name, int32_t Value) {
-  log("injecting global: " + Name);
-  Symbol *S = Symtab->addDefinedGlobal(Name);
-  S->setOutputIndex(Config->SyntheticGlobals.size());
-
-  WasmGlobal Global;
-  Global.Mutable = true;
-  Global.Type = WASM_TYPE_I32;
-  Global.InitExpr.Opcode = WASM_OPCODE_I32_CONST;
-  Global.InitExpr.Value.Int32 = Value;
-  Config->SyntheticGlobals.emplace_back(S, Global);
-}
-
 // Inject a new undefined symbol into the link.  This will cause the link to
 // fail unless this symbol can be found.
 static void addSyntheticUndefinedFunction(StringRef Name,
@@ -219,6 +202,15 @@ void LinkerDriver::createFiles(opt::InputArgList &Args) {
     error("no input files");
 }
 
+static const char *getEntry(opt::InputArgList &Args, const char *def) {
+  auto *Arg = Args.getLastArg(OPT_entry, OPT_no_entry);
+  if (!Arg)
+    return def;
+  if (Arg->getOption().getID() == OPT_no_entry)
+    return "";
+  return Arg->getValue();
+}
+
 void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   WasmOptTable Parser;
   opt::InputArgList Args = Parser.parse(ArgsArr.slice(1));
@@ -247,16 +239,17 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   Config->CheckSignatures =
       Args.hasFlag(OPT_check_signatures, OPT_no_check_signatures, false);
   Config->EmitRelocs = Args.hasArg(OPT_emit_relocs);
-  Config->Entry = Args.getLastArgValue(OPT_entry);
+  Config->Relocatable = Args.hasArg(OPT_relocatable);
+  Config->Entry = getEntry(Args, Config->Relocatable ? "" : "_start");
   Config->ImportMemory = Args.hasArg(OPT_import_memory);
   Config->OutputFile = Args.getLastArgValue(OPT_o);
-  Config->Relocatable = Args.hasArg(OPT_relocatable);
   Config->SearchPaths = args::getStrings(Args, OPT_L);
   Config->StripAll = Args.hasArg(OPT_strip_all);
   Config->StripDebug = Args.hasArg(OPT_strip_debug);
-  Config->Sysroot = Args.getLastArgValue(OPT_sysroot);
   errorHandler().Verbose = Args.hasArg(OPT_verbose);
   ThreadsEnabled = Args.hasFlag(OPT_threads, OPT_no_threads, true);
+  if (Config->Relocatable)
+    Config->EmitRelocs = true;
 
   Config->InitialMemory = args::getInteger(Args, OPT_initial_memory, 0);
   Config->GlobalBase = args::getInteger(Args, OPT_global_base, 1024);
@@ -277,14 +270,20 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
 
   if (Config->Relocatable && !Config->Entry.empty())
     error("entry point specified for relocatable output file");
+  if (Config->Relocatable && Args.hasArg(OPT_undefined))
+    error("undefined symbols specified for relocatable output file");
 
   if (!Config->Relocatable) {
-    if (Config->Entry.empty())
-      Config->Entry = "_start";
-    static WasmSignature Signature = {{}, WASM_TYPE_NORESULT};
-    addSyntheticUndefinedFunction(Config->Entry, &Signature);
+    if (!Config->Entry.empty()) {
+      static WasmSignature Signature = {{}, WASM_TYPE_NORESULT};
+      addSyntheticUndefinedFunction(Config->Entry, &Signature);
+    }
 
-    addSyntheticGlobal("__stack_pointer", 0);
+    // Handle the `--undefined <sym>` options.
+    for (StringRef S : args::getStrings(Args, OPT_undefined))
+      addSyntheticUndefinedFunction(S, nullptr);
+
+    Config->StackPointerSymbol = Symtab->addDefinedGlobal("__stack_pointer");
   }
 
   createFiles(Args);
@@ -301,13 +300,22 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     Symtab->reportRemainingUndefines();
     if (errorCount())
       return;
+  } else {
+    // When we allow undefined symbols we cannot include those defined in
+    // -u/--undefined since these undefined symbols have only names and no
+    // function signature, which means they cannot be written to the final
+    // output.
+    for (StringRef S : args::getStrings(Args, OPT_undefined)) {
+      Symbol *Sym = Symtab->find(S);
+      if (!Sym->isDefined())
+        error("function forced with --undefined not found: " + Sym->getName());
+    }
   }
 
-  if (!Config->Entry.empty()) {
-    Symbol *Sym = Symtab->find(Config->Entry);
-    if (!Sym->isFunction())
-      fatal("entry point is not a function: " + Sym->getName());
-  }
+  if (!Config->Entry.empty() && !Symtab->find(Config->Entry)->isDefined())
+    error("entry point not found: " + Config->Entry);
+  if (errorCount())
+    return;
 
   // Write the result to the file.
   writeResult();

@@ -110,6 +110,10 @@ class TwoAddressInstructionPass : public MachineFunctionPass {
   // Set of already processed instructions in the current block.
   SmallPtrSet<MachineInstr*, 8> Processed;
 
+  // Set of instructions converted to three-address by target and then sunk
+  // down current basic block.
+  SmallPtrSet<MachineInstr*, 8> SunkInstrs;
+
   // A map from virtual registers to physical registers which are likely targets
   // to be coalesced to due to copies from physical registers to virtual
   // registers. e.g. v1024 = move r0.
@@ -454,8 +458,8 @@ static bool isPlainlyKilled(MachineInstr *MI, unsigned Reg,
 /// For example, in this code:
 ///
 ///   %reg1034 = copy %reg1024
-///   %reg1035 = copy %reg1025<kill>
-///   %reg1036 = add %reg1034<kill>, %reg1035<kill>
+///   %reg1035 = copy killed %reg1025
+///   %reg1036 = add killed %reg1034, killed %reg1035
 ///
 /// %reg1034 is not considered to be killed, since it is copied from a
 /// register which is not killed. Treating it as not killed lets the
@@ -587,31 +591,31 @@ isProfitableToCommute(unsigned regA, unsigned regB, unsigned regC,
   // general, we want no uses between this instruction and the definition of
   // the two-address register.
   // e.g.
-  // %reg1028<def> = EXTRACT_SUBREG %reg1027<kill>, 1
-  // %reg1029<def> = MOV8rr %reg1028
-  // %reg1029<def> = SHR8ri %reg1029, 7, %eflags<imp-def,dead>
-  // insert => %reg1030<def> = MOV8rr %reg1028
-  // %reg1030<def> = ADD8rr %reg1028<kill>, %reg1029<kill>, %eflags<imp-def,dead>
+  // %reg1028 = EXTRACT_SUBREG killed %reg1027, 1
+  // %reg1029 = MOV8rr %reg1028
+  // %reg1029 = SHR8ri %reg1029, 7, implicit dead %eflags
+  // insert => %reg1030 = MOV8rr %reg1028
+  // %reg1030 = ADD8rr killed %reg1028, killed %reg1029, implicit dead %eflags
   // In this case, it might not be possible to coalesce the second MOV8rr
   // instruction if the first one is coalesced. So it would be profitable to
   // commute it:
-  // %reg1028<def> = EXTRACT_SUBREG %reg1027<kill>, 1
-  // %reg1029<def> = MOV8rr %reg1028
-  // %reg1029<def> = SHR8ri %reg1029, 7, %eflags<imp-def,dead>
-  // insert => %reg1030<def> = MOV8rr %reg1029
-  // %reg1030<def> = ADD8rr %reg1029<kill>, %reg1028<kill>, %eflags<imp-def,dead>
+  // %reg1028 = EXTRACT_SUBREG killed %reg1027, 1
+  // %reg1029 = MOV8rr %reg1028
+  // %reg1029 = SHR8ri %reg1029, 7, implicit dead %eflags
+  // insert => %reg1030 = MOV8rr %reg1029
+  // %reg1030 = ADD8rr killed %reg1029, killed %reg1028, implicit dead %eflags
 
   if (!isPlainlyKilled(MI, regC, LIS))
     return false;
 
   // Ok, we have something like:
-  // %reg1030<def> = ADD8rr %reg1028<kill>, %reg1029<kill>, %eflags<imp-def,dead>
+  // %reg1030 = ADD8rr killed %reg1028, killed %reg1029, implicit dead %eflags
   // let's see if it's worth commuting it.
 
   // Look for situations like this:
-  // %reg1024<def> = MOV r1
-  // %reg1025<def> = MOV r0
-  // %reg1026<def> = ADD %reg1024, %reg1025
+  // %reg1024 = MOV r1
+  // %reg1025 = MOV r0
+  // %reg1026 = ADD %reg1024, %reg1025
   // r0            = MOV %reg1026
   // Commute the ADD to hopefully eliminate an otherwise unavoidable copy.
   unsigned ToRegA = getMappedReg(regA, DstRegMap);
@@ -709,9 +713,9 @@ bool TwoAddressInstructionPass::commuteInstruction(MachineInstr *MI,
 bool
 TwoAddressInstructionPass::isProfitableToConv3Addr(unsigned RegA,unsigned RegB){
   // Look for situations like this:
-  // %reg1024<def> = MOV r1
-  // %reg1025<def> = MOV r0
-  // %reg1026<def> = ADD %reg1024, %reg1025
+  // %reg1024 = MOV r1
+  // %reg1025 = MOV r0
+  // %reg1026 = ADD %reg1024, %reg1025
   // r2            = MOV %reg1026
   // Turn ADD into a 3-address instruction to avoid a copy.
   unsigned FromRegB = getMappedReg(RegB, SrcRegMap);
@@ -756,6 +760,8 @@ TwoAddressInstructionPass::convertInstTo3Addr(MachineBasicBlock::iterator &mi,
     mi = NewMI;
     nmi = std::next(mi);
   }
+  else
+    SunkInstrs.insert(NewMI);
 
   // Update source and destination register maps.
   SrcRegMap.erase(RegA);
@@ -1460,7 +1466,7 @@ collectTiedOperands(MachineInstr *MI, TiedOperandMap &TiedOperands) {
 
     assert(SrcReg && SrcMO.isUse() && "two address instruction invalid");
 
-    // Deal with <undef> uses immediately - simply rewrite the src operand.
+    // Deal with undef uses immediately - simply rewrite the src operand.
     if (SrcMO.isUndef() && !DstMO.getSubReg()) {
       // Constrain the DstReg register class if required.
       if (TargetRegisterInfo::isVirtualRegister(DstReg))
@@ -1655,6 +1661,10 @@ bool TwoAddressInstructionPass::runOnMachineFunction(MachineFunction &Func) {
   else
     AA = nullptr;
   OptLevel = TM.getOptLevel();
+  // Disable optimizations if requested. We cannot skip the whole pass as some
+  // fixups are necessary for correctness.
+  if (skipFunction(*Func.getFunction()))
+    OptLevel = CodeGenOpt::None;
 
   bool MadeChange = false;
 
@@ -1674,10 +1684,13 @@ bool TwoAddressInstructionPass::runOnMachineFunction(MachineFunction &Func) {
     SrcRegMap.clear();
     DstRegMap.clear();
     Processed.clear();
+    SunkInstrs.clear();
     for (MachineBasicBlock::iterator mi = MBB->begin(), me = MBB->end();
          mi != me; ) {
       MachineBasicBlock::iterator nmi = std::next(mi);
-      if (mi->isDebugValue()) {
+      // Don't revisit an instruction previously converted by target. It may
+      // contain undef register operands (%noreg), which are not handled.
+      if (mi->isDebugValue() || SunkInstrs.count(&*mi)) {
         mi = nmi;
         continue;
       }
@@ -1765,8 +1778,8 @@ bool TwoAddressInstructionPass::runOnMachineFunction(MachineFunction &Func) {
 ///
 /// Becomes:
 ///
-///   %dst:ssub0<def,undef> = COPY %v1
-///   %dst:ssub1<def> = COPY %v2
+///   undef %dst:ssub0 = COPY %v1
+///   %dst:ssub1 = COPY %v2
 void TwoAddressInstructionPass::
 eliminateRegSequence(MachineBasicBlock::iterator &MBBI) {
   MachineInstr &MI = *MBBI;
@@ -1790,7 +1803,7 @@ eliminateRegSequence(MachineBasicBlock::iterator &MBBI) {
     MachineOperand &UseMO = MI.getOperand(i);
     unsigned SrcReg = UseMO.getReg();
     unsigned SubIdx = MI.getOperand(i+1).getImm();
-    // Nothing needs to be inserted for <undef> operands.
+    // Nothing needs to be inserted for undef operands.
     if (UseMO.isUndef())
       continue;
 
@@ -1812,7 +1825,7 @@ eliminateRegSequence(MachineBasicBlock::iterator &MBBI) {
                                .addReg(DstReg, RegState::Define, SubIdx)
                                .add(UseMO);
 
-    // The first def needs an <undef> flag because there is no live register
+    // The first def needs an undef flag because there is no live register
     // before it.
     if (!DefEmitted) {
       CopyMI->getOperand(0).setIsUndef(true);

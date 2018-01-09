@@ -9,7 +9,7 @@
 
 define void @foo() {
 ; X640-LABEL: foo:
-; X640:       # BB#0: # %bb
+; X640:       # %bb.0: # %bb
 ; X640-NEXT:    # implicit-def: %rax
 ; X640-NEXT:    movzwl var_22, %ecx
 ; X640-NEXT:    movzwl var_27, %edx
@@ -27,15 +27,15 @@ define void @foo() {
 ; X640-NEXT:    movzwl var_27, %ecx
 ; X640-NEXT:    subl $16610, %ecx # imm = 0x40E2
 ; X640-NEXT:    movl %ecx, %ecx
-; X640-NEXT:    # kill: %rcx<def> %ecx<kill>
-; X640-NEXT:    # kill: %cl<def> %rcx<kill>
+; X640-NEXT:    # kill: def %rcx killed %ecx
+; X640-NEXT:    # kill: def %cl killed %rcx
 ; X640-NEXT:    sarq %cl, %rsi
 ; X640-NEXT:    movb %sil, %cl
 ; X640-NEXT:    movb %cl, (%rax)
 ; X640-NEXT:    retq
 ;
 ; 6860-LABEL: foo:
-; 6860:       # BB#0: # %bb
+; 6860:       # %bb.0: # %bb
 ; 6860-NEXT:    pushl %ebp
 ; 6860-NEXT:    .cfi_def_cfa_offset 8
 ; 6860-NEXT:    .cfi_offset %ebp, -8
@@ -80,7 +80,7 @@ define void @foo() {
 ; 6860-NEXT:    movl %edi, {{[0-9]+}}(%esp) # 4-byte Spill
 ; 6860-NEXT:    movl %edx, {{[0-9]+}}(%esp) # 4-byte Spill
 ; 6860-NEXT:    jne .LBB0_2
-; 6860-NEXT:  # BB#1: # %bb
+; 6860-NEXT:  # %bb.1: # %bb
 ; 6860-NEXT:    movl {{[0-9]+}}(%esp), %eax # 4-byte Reload
 ; 6860-NEXT:    movl %eax, {{[0-9]+}}(%esp) # 4-byte Spill
 ; 6860-NEXT:  .LBB0_2: # %bb
@@ -96,7 +96,7 @@ define void @foo() {
 ; 6860-NEXT:    retl
 ;
 ; X64-LABEL: foo:
-; X64:       # BB#0: # %bb
+; X64:       # %bb.0: # %bb
 ; X64-NEXT:    movzwl {{.*}}(%rip), %ecx
 ; X64-NEXT:    movzwl {{.*}}(%rip), %eax
 ; X64-NEXT:    xorw %cx, %ax
@@ -104,13 +104,13 @@ define void @foo() {
 ; X64-NEXT:    movzwl %ax, %eax
 ; X64-NEXT:    movq %rax, -{{[0-9]+}}(%rsp)
 ; X64-NEXT:    addl $-16610, %ecx # imm = 0xBF1E
-; X64-NEXT:    # kill: %cl<def> %cl<kill> %ecx<kill>
+; X64-NEXT:    # kill: def %cl killed %cl killed %ecx
 ; X64-NEXT:    shrq %cl, %rax
 ; X64-NEXT:    movb %al, (%rax)
 ; X64-NEXT:    retq
 ;
 ; 686-LABEL: foo:
-; 686:       # BB#0: # %bb
+; 686:       # %bb.0: # %bb
 ; 686-NEXT:    pushl %ebp
 ; 686-NEXT:    .cfi_def_cfa_offset 8
 ; 686-NEXT:    .cfi_offset %ebp, -8
@@ -130,7 +130,7 @@ define void @foo() {
 ; 686-NEXT:    shrdl %cl, %edx, %eax
 ; 686-NEXT:    testb $32, %cl
 ; 686-NEXT:    jne .LBB0_2
-; 686-NEXT:  # BB#1: # %bb
+; 686-NEXT:  # %bb.1: # %bb
 ; 686-NEXT:    movl %eax, %edx
 ; 686-NEXT:  .LBB0_2: # %bb
 ; 686-NEXT:    movb %dl, (%eax)

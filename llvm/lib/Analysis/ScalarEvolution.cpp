@@ -549,10 +549,10 @@ bool SCEVUnknown::isOffsetOf(Type *&CTy, Constant *&FieldNo) const {
 /// Since we do not continue running this routine on expression trees once we
 /// have seen unequal values, there is no need to track them in the cache.
 static int
-CompareValueComplexity(EquivalenceClasses<Value *> &EqCache,
+CompareValueComplexity(EquivalenceClasses<const Value *> &EqCacheValue,
                        const LoopInfo *const LI, Value *LV, Value *RV,
                        unsigned Depth) {
-  if (Depth > MaxValueCompareDepth || EqCache.isEquivalent(LV, RV))
+  if (Depth > MaxValueCompareDepth || EqCacheValue.isEquivalent(LV, RV))
     return 0;
 
   // Order pointer values after integer values. This helps SCEVExpander form
@@ -612,14 +612,14 @@ CompareValueComplexity(EquivalenceClasses<Value *> &EqCache,
 
     for (unsigned Idx : seq(0u, LNumOps)) {
       int Result =
-          CompareValueComplexity(EqCache, LI, LInst->getOperand(Idx),
+          CompareValueComplexity(EqCacheValue, LI, LInst->getOperand(Idx),
                                  RInst->getOperand(Idx), Depth + 1);
       if (Result != 0)
         return Result;
     }
   }
 
-  EqCache.unionSets(LV, RV);
+  EqCacheValue.unionSets(LV, RV);
   return 0;
 }
 
@@ -628,6 +628,7 @@ CompareValueComplexity(EquivalenceClasses<Value *> &EqCache,
 // more efficient.
 static int CompareSCEVComplexity(
     EquivalenceClasses<const SCEV *> &EqCacheSCEV,
+    EquivalenceClasses<const Value *> &EqCacheValue,
     const LoopInfo *const LI, const SCEV *LHS, const SCEV *RHS,
     DominatorTree &DT, unsigned Depth = 0) {
   // Fast-path: SCEVs are uniqued so we can do a quick equality check.
@@ -649,9 +650,8 @@ static int CompareSCEVComplexity(
     const SCEVUnknown *LU = cast<SCEVUnknown>(LHS);
     const SCEVUnknown *RU = cast<SCEVUnknown>(RHS);
 
-    EquivalenceClasses<Value *> EqCache;
-    int X = CompareValueComplexity(EqCache, LI, LU->getValue(), RU->getValue(),
-                                   Depth + 1);
+    int X = CompareValueComplexity(EqCacheValue, LI, LU->getValue(),
+                                   RU->getValue(), Depth + 1);
     if (X == 0)
       EqCacheSCEV.unionSets(LHS, RHS);
     return X;
@@ -694,10 +694,15 @@ static int CompareSCEVComplexity(
     if (LNumOps != RNumOps)
       return (int)LNumOps - (int)RNumOps;
 
+    // Compare NoWrap flags.
+    if (LA->getNoWrapFlags() != RA->getNoWrapFlags())
+      return (int)LA->getNoWrapFlags() - (int)RA->getNoWrapFlags();
+
     // Lexicographically compare.
     for (unsigned i = 0; i != LNumOps; ++i) {
-      int X = CompareSCEVComplexity(EqCacheSCEV, LI, LA->getOperand(i),
-                                    RA->getOperand(i), DT,  Depth + 1);
+      int X = CompareSCEVComplexity(EqCacheSCEV, EqCacheValue, LI,
+                                    LA->getOperand(i), RA->getOperand(i), DT,
+                                    Depth + 1);
       if (X != 0)
         return X;
     }
@@ -717,9 +722,14 @@ static int CompareSCEVComplexity(
     if (LNumOps != RNumOps)
       return (int)LNumOps - (int)RNumOps;
 
+    // Compare NoWrap flags.
+    if (LC->getNoWrapFlags() != RC->getNoWrapFlags())
+      return (int)LC->getNoWrapFlags() - (int)RC->getNoWrapFlags();
+
     for (unsigned i = 0; i != LNumOps; ++i) {
-      int X = CompareSCEVComplexity(EqCacheSCEV, LI, LC->getOperand(i),
-                                    RC->getOperand(i), DT, Depth + 1);
+      int X = CompareSCEVComplexity(EqCacheSCEV, EqCacheValue, LI,
+                                    LC->getOperand(i), RC->getOperand(i), DT,
+                                    Depth + 1);
       if (X != 0)
         return X;
     }
@@ -732,12 +742,12 @@ static int CompareSCEVComplexity(
     const SCEVUDivExpr *RC = cast<SCEVUDivExpr>(RHS);
 
     // Lexicographically compare udiv expressions.
-    int X = CompareSCEVComplexity(EqCacheSCEV, LI, LC->getLHS(), RC->getLHS(),
-                                  DT, Depth + 1);
+    int X = CompareSCEVComplexity(EqCacheSCEV, EqCacheValue, LI, LC->getLHS(),
+                                  RC->getLHS(), DT, Depth + 1);
     if (X != 0)
       return X;
-    X = CompareSCEVComplexity(EqCacheSCEV, LI, LC->getRHS(), RC->getRHS(), DT,
-                              Depth + 1);
+    X = CompareSCEVComplexity(EqCacheSCEV, EqCacheValue, LI, LC->getRHS(),
+                              RC->getRHS(), DT, Depth + 1);
     if (X == 0)
       EqCacheSCEV.unionSets(LHS, RHS);
     return X;
@@ -750,8 +760,9 @@ static int CompareSCEVComplexity(
     const SCEVCastExpr *RC = cast<SCEVCastExpr>(RHS);
 
     // Compare cast expressions by operand.
-    int X = CompareSCEVComplexity(EqCacheSCEV, LI, LC->getOperand(),
-                                  RC->getOperand(), DT, Depth + 1);
+    int X = CompareSCEVComplexity(EqCacheSCEV, EqCacheValue, LI,
+                                  LC->getOperand(), RC->getOperand(), DT,
+                                  Depth + 1);
     if (X == 0)
       EqCacheSCEV.unionSets(LHS, RHS);
     return X;
@@ -776,21 +787,22 @@ static void GroupByComplexity(SmallVectorImpl<const SCEV *> &Ops,
                               LoopInfo *LI, DominatorTree &DT) {
   if (Ops.size() < 2) return;  // Noop
 
-  EquivalenceClasses<const SCEV *> EqCache;
+  EquivalenceClasses<const SCEV *> EqCacheSCEV;
+  EquivalenceClasses<const Value *> EqCacheValue;
   if (Ops.size() == 2) {
     // This is the common case, which also happens to be trivially simple.
     // Special case it.
     const SCEV *&LHS = Ops[0], *&RHS = Ops[1];
-    if (CompareSCEVComplexity(EqCache, LI, RHS, LHS, DT) < 0)
+    if (CompareSCEVComplexity(EqCacheSCEV, EqCacheValue, LI, RHS, LHS, DT) < 0)
       std::swap(LHS, RHS);
     return;
   }
 
   // Do the rough sort by complexity.
   std::stable_sort(Ops.begin(), Ops.end(),
-                   [&EqCache, LI, &DT](const SCEV *LHS, const SCEV *RHS) {
-                     return
-                         CompareSCEVComplexity(EqCache, LI, LHS, RHS, DT) < 0;
+                   [&](const SCEV *LHS, const SCEV *RHS) {
+                     return CompareSCEVComplexity(EqCacheSCEV, EqCacheValue, LI,
+                                                  LHS, RHS, DT) < 0;
                    });
 
   // Now that we are sorted by complexity, group elements of the same
@@ -6422,11 +6434,9 @@ ScalarEvolution::getBackedgeTakenInfo(const Loop *L) {
     SmallVector<Instruction *, 16> Worklist;
     PushLoopPHIs(L, Worklist);
 
-    SmallPtrSet<Instruction *, 8> Visited;
+    SmallPtrSet<Instruction *, 8> Discovered;
     while (!Worklist.empty()) {
       Instruction *I = Worklist.pop_back_val();
-      if (!Visited.insert(I).second)
-        continue;
 
       ValueExprMapType::iterator It =
         ValueExprMap.find_as(static_cast<Value *>(I));
@@ -6441,13 +6451,37 @@ ScalarEvolution::getBackedgeTakenInfo(const Loop *L) {
         // own when it gets to that point.
         if (!isa<PHINode>(I) || !isa<SCEVUnknown>(Old)) {
           eraseValueFromMap(It->first);
-          forgetMemoizedResults(Old, false);
+          forgetMemoizedResults(Old);
         }
         if (PHINode *PN = dyn_cast<PHINode>(I))
           ConstantEvolutionLoopExitValue.erase(PN);
       }
 
-      PushDefUseChildren(I, Worklist);
+      // Since we don't need to invalidate anything for correctness and we're
+      // only invalidating to make SCEV's results more precise, we get to stop
+      // early to avoid invalidating too much.  This is especially important in
+      // cases like:
+      //
+      //   %v = f(pn0, pn1) // pn0 and pn1 used through some other phi node
+      // loop0:
+      //   %pn0 = phi
+      //   ...
+      // loop1:
+      //   %pn1 = phi
+      //   ...
+      //
+      // where both loop0 and loop1's backedge taken count uses the SCEV
+      // expression for %v.  If we don't have the early stop below then in cases
+      // like the above, getBackedgeTakenInfo(loop1) will clear out the trip
+      // count for loop0 and getBackedgeTakenInfo(loop0) will clear out the trip
+      // count for loop1, effectively nullifying SCEV's trip count cache.
+      for (auto *U : I->users())
+        if (auto *I = dyn_cast<Instruction>(U)) {
+          auto *LoopForUser = LI.getLoopFor(I->getParent());
+          if (LoopForUser && L->contains(LoopForUser) &&
+              Discovered.insert(I).second)
+            Worklist.push_back(I);
+        }
     }
   }
 
@@ -6516,12 +6550,6 @@ void ScalarEvolution::forgetLoop(const Loop *L) {
       }
 
       PushDefUseChildren(I, Worklist);
-    }
-
-    for (auto I = ExitLimits.begin(); I != ExitLimits.end(); ++I) {
-      auto &Query = I->first;
-      if (Query.L == CurrL)
-        ExitLimits.erase(I);
     }
 
     LoopPropertiesCache.erase(CurrL);
@@ -6785,18 +6813,6 @@ ScalarEvolution::computeBackedgeTakenCount(const Loop *L,
 
 ScalarEvolution::ExitLimit
 ScalarEvolution::computeExitLimit(const Loop *L, BasicBlock *ExitingBlock,
-                                  bool AllowPredicates) {
-  ExitLimitQuery Query(L, ExitingBlock, AllowPredicates);
-  auto MaybeEL = ExitLimits.find(Query);
-  if (MaybeEL != ExitLimits.end())
-    return MaybeEL->second;
-  ExitLimit EL = computeExitLimitImpl(L, ExitingBlock, AllowPredicates);
-  ExitLimits.insert({Query, EL});
-  return EL;
-}
-
-ScalarEvolution::ExitLimit
-ScalarEvolution::computeExitLimitImpl(const Loop *L, BasicBlock *ExitingBlock,
                                       bool AllowPredicates) {
   // Okay, we've chosen an exiting block.  See what condition causes us to exit
   // at this block and remember the exit block and whether all other targets
@@ -7061,17 +7077,18 @@ ScalarEvolution::computeExitLimitFromICmp(const Loop *L,
                                           bool ControlsExit,
                                           bool AllowPredicates) {
   // If the condition was exit on true, convert the condition to exit on false
-  ICmpInst::Predicate Cond;
+  ICmpInst::Predicate Pred;
   if (!L->contains(FBB))
-    Cond = ExitCond->getPredicate();
+    Pred = ExitCond->getPredicate();
   else
-    Cond = ExitCond->getInversePredicate();
+    Pred = ExitCond->getInversePredicate();
+  const ICmpInst::Predicate OriginalPred = Pred;
 
   // Handle common loops like: for (X = "string"; *X; ++X)
   if (LoadInst *LI = dyn_cast<LoadInst>(ExitCond->getOperand(0)))
     if (Constant *RHS = dyn_cast<Constant>(ExitCond->getOperand(1))) {
       ExitLimit ItCnt =
-        computeLoadConstantCompareExitLimit(LI, RHS, L, Cond);
+        computeLoadConstantCompareExitLimit(LI, RHS, L, Pred);
       if (ItCnt.hasAnyInfo())
         return ItCnt;
     }
@@ -7088,11 +7105,11 @@ ScalarEvolution::computeExitLimitFromICmp(const Loop *L,
   if (isLoopInvariant(LHS, L) && !isLoopInvariant(RHS, L)) {
     // If there is a loop-invariant, force it into the RHS.
     std::swap(LHS, RHS);
-    Cond = ICmpInst::getSwappedPredicate(Cond);
+    Pred = ICmpInst::getSwappedPredicate(Pred);
   }
 
   // Simplify the operands before analyzing them.
-  (void)SimplifyICmpOperands(Cond, LHS, RHS);
+  (void)SimplifyICmpOperands(Pred, LHS, RHS);
 
   // If we have a comparison of a chrec against a constant, try to use value
   // ranges to answer this query.
@@ -7101,13 +7118,13 @@ ScalarEvolution::computeExitLimitFromICmp(const Loop *L,
       if (AddRec->getLoop() == L) {
         // Form the constant range.
         ConstantRange CompRange =
-            ConstantRange::makeExactICmpRegion(Cond, RHSC->getAPInt());
+            ConstantRange::makeExactICmpRegion(Pred, RHSC->getAPInt());
 
         const SCEV *Ret = AddRec->getNumIterationsInRange(CompRange, *this);
         if (!isa<SCEVCouldNotCompute>(Ret)) return Ret;
       }
 
-  switch (Cond) {
+  switch (Pred) {
   case ICmpInst::ICMP_NE: {                     // while (X != Y)
     // Convert to: while (X-Y != 0)
     ExitLimit EL = howFarToZero(getMinusSCEV(LHS, RHS), L, ControlsExit,
@@ -7123,7 +7140,7 @@ ScalarEvolution::computeExitLimitFromICmp(const Loop *L,
   }
   case ICmpInst::ICMP_SLT:
   case ICmpInst::ICMP_ULT: {                    // while (X < Y)
-    bool IsSigned = Cond == ICmpInst::ICMP_SLT;
+    bool IsSigned = Pred == ICmpInst::ICMP_SLT;
     ExitLimit EL = howManyLessThans(LHS, RHS, L, IsSigned, ControlsExit,
                                     AllowPredicates);
     if (EL.hasAnyInfo()) return EL;
@@ -7131,7 +7148,7 @@ ScalarEvolution::computeExitLimitFromICmp(const Loop *L,
   }
   case ICmpInst::ICMP_SGT:
   case ICmpInst::ICMP_UGT: {                    // while (X > Y)
-    bool IsSigned = Cond == ICmpInst::ICMP_SGT;
+    bool IsSigned = Pred == ICmpInst::ICMP_SGT;
     ExitLimit EL =
         howManyGreaterThans(LHS, RHS, L, IsSigned, ControlsExit,
                             AllowPredicates);
@@ -7149,7 +7166,7 @@ ScalarEvolution::computeExitLimitFromICmp(const Loop *L,
     return ExhaustiveCount;
 
   return computeShiftCompareExitLimit(ExitCond->getOperand(0),
-                                      ExitCond->getOperand(1), L, Cond);
+                                      ExitCond->getOperand(1), L, OriginalPred);
 }
 
 ScalarEvolution::ExitLimit
@@ -10690,7 +10707,6 @@ ScalarEvolution::ScalarEvolution(ScalarEvolution &&Arg)
       BackedgeTakenCounts(std::move(Arg.BackedgeTakenCounts)),
       PredicatedBackedgeTakenCounts(
           std::move(Arg.PredicatedBackedgeTakenCounts)),
-      ExitLimits(std::move(Arg.ExitLimits)),
       ConstantEvolutionLoopExitValue(
           std::move(Arg.ConstantEvolutionLoopExitValue)),
       ValuesAtScopes(std::move(Arg.ValuesAtScopes)),
@@ -11105,7 +11121,7 @@ bool ScalarEvolution::ExitLimit::hasOperand(const SCEV *S) const {
 }
 
 void
-ScalarEvolution::forgetMemoizedResults(const SCEV *S, bool EraseExitLimit) {
+ScalarEvolution::forgetMemoizedResults(const SCEV *S) {
   ValuesAtScopes.erase(S);
   LoopDispositions.erase(S);
   BlockDispositions.erase(S);
@@ -11138,13 +11154,6 @@ ScalarEvolution::forgetMemoizedResults(const SCEV *S, bool EraseExitLimit) {
 
   RemoveSCEVFromBackedgeMap(BackedgeTakenCounts);
   RemoveSCEVFromBackedgeMap(PredicatedBackedgeTakenCounts);
-
-  // TODO: There is a suspicion that we only need to do it when there is a
-  // SCEVUnknown somewhere inside S. Need to check this.
-  if (EraseExitLimit)
-    for (auto I = ExitLimits.begin(), E = ExitLimits.end(); I != E; ++I)
-      if (I->second.hasOperand(S))
-        ExitLimits.erase(I);
 }
 
 void ScalarEvolution::addToLoopUseLists(const SCEV *S) {
