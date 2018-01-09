@@ -646,6 +646,9 @@ public:
   /// \brief Additional properties of an operand's values.
   enum OperandValueProperties { OP_None = 0, OP_PowerOf2 = 1 };
 
+  /// \return True if target can execute instructions out of order.
+  bool isOutOfOrder() const;
+
   /// \return The number of scalar or vector registers that the target has.
   /// If 'Vectors' is true, it returns the number of vector registers. If it is
   /// set to false, it returns the number of scalar registers.
@@ -862,12 +865,6 @@ public:
                                          unsigned SrcAlign,
                                          unsigned DestAlign) const;
 
-  /// \returns True if we want to test the new memcpy lowering functionality in
-  /// Transform/Utils.
-  /// Temporary. Will be removed once we move to the new functionality and
-  /// remove the old.
-  bool useWideIRMemcpyLoopLowering() const;
-
   /// \returns True if the two functions have compatible attributes for inlining
   /// purposes.
   bool areInlineCompatible(const Function *Caller,
@@ -1024,6 +1021,7 @@ public:
                             Type *Ty) = 0;
   virtual int getIntImmCost(Intrinsic::ID IID, unsigned Idx, const APInt &Imm,
                             Type *Ty) = 0;
+  virtual bool isOutOfOrder() const = 0;
   virtual unsigned getNumberOfRegisters(bool Vector) = 0;
   virtual unsigned getRegisterBitWidth(bool Vector) const = 0;
   virtual unsigned getMinVectorRegisterBitWidth() = 0;
@@ -1300,6 +1298,9 @@ public:
   int getIntImmCost(Intrinsic::ID IID, unsigned Idx, const APInt &Imm,
                     Type *Ty) override {
     return Impl.getIntImmCost(IID, Idx, Imm, Ty);
+  }
+  bool isOutOfOrder() const override {
+    return Impl.isOutOfOrder();
   }
   unsigned getNumberOfRegisters(bool Vector) override {
     return Impl.getNumberOfRegisters(Vector);

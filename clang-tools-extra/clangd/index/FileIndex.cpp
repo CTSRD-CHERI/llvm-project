@@ -54,7 +54,7 @@ std::shared_ptr<std::vector<const Symbol *>> FileSymbols::allSymbols() {
     for (const auto &FileAndSlab : FileToSlabs) {
       Snap->KeepAlive.push_back(FileAndSlab.second);
       for (const auto &Iter : *FileAndSlab.second)
-        Snap->Pointers.push_back(&Iter.second);
+        Snap->Pointers.push_back(&Iter);
     }
   }
   auto *Pointers = &Snap->Pointers;
@@ -63,7 +63,7 @@ std::shared_ptr<std::vector<const Symbol *>> FileSymbols::allSymbols() {
   return {std::move(Snap), Pointers};
 }
 
-void FileIndex::update(Context &Ctx, PathRef Path, ParsedAST *AST) {
+void FileIndex::update(const Context &Ctx, PathRef Path, ParsedAST *AST) {
   if (!AST) {
     FSymbols.update(Path, nullptr);
   } else {
@@ -74,7 +74,7 @@ void FileIndex::update(Context &Ctx, PathRef Path, ParsedAST *AST) {
   Index.build(std::move(Symbols));
 }
 
-bool FileIndex::fuzzyFind(Context &Ctx, const FuzzyFindRequest &Req,
+bool FileIndex::fuzzyFind(const Context &Ctx, const FuzzyFindRequest &Req,
                           std::function<void(const Symbol &)> Callback) const {
   return Index.fuzzyFind(Ctx, Req, std::move(Callback));
 }

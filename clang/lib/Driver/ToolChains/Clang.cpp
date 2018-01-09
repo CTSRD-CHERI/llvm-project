@@ -2170,6 +2170,9 @@ static void RenderFloatingPointOptions(const ToolChain &TC, const Driver &D,
   if (!SignedZeros)
     CmdArgs.push_back("-fno-signed-zeros");
 
+  if (AssociativeMath && !SignedZeros && !TrappingMath)
+    CmdArgs.push_back("-mreassociate");
+
   if (ReciprocalMath)
     CmdArgs.push_back("-freciprocal-math");
 
@@ -4386,6 +4389,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-fapple-pragma-pack");
 
   if (Args.hasFlag(options::OPT_fsave_optimization_record,
+                   options::OPT_foptimization_record_file_EQ,
                    options::OPT_fno_save_optimization_record, false)) {
     CmdArgs.push_back("-opt-record-file");
 

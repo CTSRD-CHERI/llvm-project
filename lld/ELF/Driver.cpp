@@ -1084,7 +1084,7 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
 
   // We need to create some reserved symbols such as _end. Create them.
   if (!Config->Relocatable)
-    addReservedSymbols<ELFT>();
+    addReservedSymbols();
 
   // Apply version scripts.
   Symtab->scanVersionScript();
@@ -1139,7 +1139,7 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   // before decompressAndMergeSections because the .comment section is a
   // mergeable section.
   if (!Config->Relocatable)
-    InputSections.push_back(createCommentSection<ELFT>());
+    InputSections.push_back(createCommentSection());
 
   // Do size optimizations: garbage collection, merging of SHF_MERGE sections
   // and identical code folding.
