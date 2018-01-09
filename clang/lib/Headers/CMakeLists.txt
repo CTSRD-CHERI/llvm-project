@@ -30,6 +30,7 @@ set(files
   __clang_cuda_intrinsics.h
   __clang_cuda_math_forward_declares.h
   __clang_cuda_runtime_wrapper.h
+  cetintrin.h
   cheri.h
   clzerointrin.h
   cpuid.h
@@ -141,9 +142,7 @@ install(
   DESTINATION lib${LLVM_LIBDIR_SUFFIX}/clang/${CLANG_VERSION}/include/cuda_wrappers)
 
 if (NOT CMAKE_CONFIGURATION_TYPES) # don't add this for IDE's.
-  add_custom_target(install-clang-headers
-    DEPENDS clang-headers
-    COMMAND "${CMAKE_COMMAND}"
-            -DCMAKE_INSTALL_COMPONENT=clang-headers
-            -P "${CMAKE_BINARY_DIR}/cmake_install.cmake")
+  add_llvm_install_targets(install-clang-headers
+                           DEPENDS clang-headers
+                           COMPONENT clang-headers)
 endif()

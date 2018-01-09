@@ -288,8 +288,8 @@ bool RegScavenger::isRegUsed(unsigned Reg, bool includeReserved) const {
 unsigned RegScavenger::FindUnusedReg(const TargetRegisterClass *RC) const {
   for (unsigned Reg : *RC) {
     if (!isRegUsed(Reg)) {
-      DEBUG(dbgs() << "Scavenger found unused reg: " << TRI->getName(Reg) <<
-            "\n");
+      DEBUG(dbgs() << "Scavenger found unused reg: " << printReg(Reg, TRI)
+                   << "\n");
       return Reg;
     }
   }
@@ -561,15 +561,15 @@ unsigned RegScavenger::scavengeRegister(const TargetRegisterClass *RC,
 
   // If we found an unused register there is no reason to spill it.
   if (!isRegUsed(SReg)) {
-    DEBUG(dbgs() << "Scavenged register: " << TRI->getName(SReg) << "\n");
+    DEBUG(dbgs() << "Scavenged register: " << printReg(SReg, TRI) << "\n");
     return SReg;
   }
 
   ScavengedInfo &Scavenged = spill(SReg, *RC, SPAdj, I, UseMI);
   Scavenged.Restore = &*std::prev(UseMI);
 
-  DEBUG(dbgs() << "Scavenged register (with spill): " << TRI->getName(SReg) <<
-        "\n");
+  DEBUG(dbgs() << "Scavenged register (with spill): " << printReg(SReg, TRI)
+               << "\n");
 
   return SReg;
 }
@@ -598,10 +598,10 @@ unsigned RegScavenger::scavengeRegisterBackwards(const TargetRegisterClass &RC,
     ScavengedInfo &Scavenged = spill(Reg, RC, SPAdj, SpillBefore, ReloadBefore);
     Scavenged.Restore = &*std::prev(SpillBefore);
     LiveUnits.removeReg(Reg);
-    DEBUG(dbgs() << "Scavenged register with spill: " << PrintReg(Reg, TRI)
-          << " until " << *SpillBefore);
+    DEBUG(dbgs() << "Scavenged register with spill: " << printReg(Reg, TRI)
+                 << " until " << *SpillBefore);
   } else {
-    DEBUG(dbgs() << "Scavenged free register: " << PrintReg(Reg, TRI) << '\n');
+    DEBUG(dbgs() << "Scavenged free register: " << printReg(Reg, TRI) << '\n');
   }
   return Reg;
 }

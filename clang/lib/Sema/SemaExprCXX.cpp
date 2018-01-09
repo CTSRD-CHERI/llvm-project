@@ -4630,7 +4630,7 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
     //   function call.
     return !T->isIncompleteType();
   case UTT_HasUniqueObjectRepresentations:
-    return T.hasUniqueObjectRepresentations(C);
+    return C.hasUniqueObjectRepresentations(T);
   }
 }
 

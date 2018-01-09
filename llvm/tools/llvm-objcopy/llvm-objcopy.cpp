@@ -82,8 +82,20 @@ static cl::list<std::string> ToRemove("remove-section",
                                       cl::value_desc("section"));
 static cl::alias ToRemoveA("R", cl::desc("Alias for remove-section"),
                            cl::aliasopt(ToRemove));
-static cl::opt<bool> StripAll("strip-all",
-                              cl::desc("Removes symbol, relocation, and debug information"));
+static cl::opt<bool> StripAll(
+    "strip-all",
+    cl::desc(
+        "Removes non-allocated sections other than .gnu.warning* sections"));
+static cl::opt<bool>
+    StripAllGNU("strip-all-gnu",
+                cl::desc("Removes symbol, relocation, and debug information"));
+static cl::list<std::string> Keep("keep", cl::desc("Keep <section>"),
+                                  cl::value_desc("section"));
+static cl::list<std::string> OnlyKeep("only-keep",
+                                      cl::desc("Remove all but <section>"),
+                                      cl::value_desc("section"));
+static cl::alias OnlyKeepA("j", cl::desc("Alias for only-keep"),
+                           cl::aliasopt(OnlyKeep));
 static cl::opt<bool> StripDebug("strip-debug",
                                 cl::desc("Removes all debug information"));
 static cl::opt<bool> StripSections("strip-sections",
@@ -145,6 +157,13 @@ void SplitDWOToFile(const ELFObjectFile<ELFT> &ObjFile, StringRef File) {
   WriteObjectFile(DWOFile, File);
 }
 
+// This function handles the high level operations of GNU objcopy including
+// handling command line options. It's important to outline certain properties
+// we expect to hold of the command line operations. Any operation that "keeps"
+// should keep regardless of a remove. Additionally any removal should respect
+// any previous removals. Lastly whether or not something is removed shouldn't
+// depend a) on the order the options occur in or b) on some opaque priority
+// system. The only priority is that keeps/copies overrule removes.
 template <class ELFT>
 void CopyBinary(const ELFObjectFile<ELFT> &ObjFile) {
   std::unique_ptr<Object<ELFT>> Obj;
@@ -160,6 +179,8 @@ void CopyBinary(const ELFObjectFile<ELFT> &ObjFile) {
     SplitDWOToFile<ELFT>(ObjFile, SplitDWO.getValue());
 
   SectionPred RemovePred = [](const SectionBase &) { return false; };
+
+  // Removes:
 
   if (!ToRemove.empty()) {
     RemovePred = [&](const SectionBase &Sec) {
@@ -178,7 +199,7 @@ void CopyBinary(const ELFObjectFile<ELFT> &ObjFile) {
       return OnlyKeepDWOPred(*Obj, Sec) || RemovePred(Sec);
     };
 
-  if (StripAll)
+  if (StripAllGNU)
     RemovePred = [RemovePred, &Obj](const SectionBase &Sec) {
       if (RemovePred(Sec))
         return true;
@@ -217,6 +238,54 @@ void CopyBinary(const ELFObjectFile<ELFT> &ObjFile) {
         return false;
       return (Sec.Flags & SHF_ALLOC) == 0;
     };
+
+  if (StripAll)
+    RemovePred = [RemovePred, &Obj](const SectionBase &Sec) {
+      if (RemovePred(Sec))
+        return true;
+      if (&Sec == Obj->getSectionHeaderStrTab())
+        return false;
+      if (Sec.Name.startswith(".gnu.warning"))
+        return false;
+      return (Sec.Flags & SHF_ALLOC) == 0;
+    };
+
+  // Explicit copies:
+
+  if (!OnlyKeep.empty()) {
+    RemovePred = [RemovePred, &Obj](const SectionBase &Sec) {
+      // Explicitly keep these sections regardless of previous removes.
+      if (std::find(std::begin(OnlyKeep), std::end(OnlyKeep), Sec.Name) !=
+          std::end(OnlyKeep))
+        return false;
+
+      // Allow all implicit removes.
+      if (RemovePred(Sec)) {
+        return true;
+      }
+
+      // Keep special sections.
+      if (Obj->getSectionHeaderStrTab() == &Sec) {
+        return false;
+      }
+      if (Obj->getSymTab() == &Sec || Obj->getSymTab()->getStrTab() == &Sec) {
+        return false;
+      }
+      // Remove everything else.
+      return true;
+    };
+  }
+
+  if (!Keep.empty()) {
+    RemovePred = [RemovePred](const SectionBase &Sec) {
+      // Explicitly keep these sections regardless of previous removes.
+      if (std::find(std::begin(Keep), std::end(Keep), Sec.Name) !=
+          std::end(Keep))
+        return false;
+      // Otherwise defer to RemovePred.
+      return RemovePred(Sec);
+    };
+  }
 
   Obj->removeSections(RemovePred);
   Obj->finalize();

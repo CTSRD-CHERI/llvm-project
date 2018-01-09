@@ -2518,9 +2518,11 @@ bool X86TTIImpl::isLegalMaskedGather(Type *DataTy) {
   int DataWidth = isa<PointerType>(ScalarTy) ?
     DL.getPointerSizeInBits() : ScalarTy->getPrimitiveSizeInBits();
 
-  // AVX-512 and Skylake AVX2 allows gather and scatter
-  return (DataWidth == 32 || DataWidth == 64) && (ST->hasAVX512() ||
-      ST->getProcFamily() == X86Subtarget::IntelSkylake);
+  // Some CPUs have better gather performance than others.
+  // TODO: Remove the explicit ST->hasAVX512()?, That would mean we would only
+  // enable gather with a -march.
+  return (DataWidth == 32 || DataWidth == 64) &&
+    (ST->hasAVX512() || (ST->hasFastGather() && ST->hasAVX2()));
 }
 
 bool X86TTIImpl::isLegalMaskedScatter(Type *DataType) {
@@ -2533,6 +2535,10 @@ bool X86TTIImpl::isLegalMaskedScatter(Type *DataType) {
 bool X86TTIImpl::hasDivRemOp(Type *DataType, bool IsSigned) {
   EVT VT = TLI->getValueType(DL, DataType);
   return TLI->isOperationLegal(IsSigned ? ISD::SDIVREM : ISD::UDIVREM, VT);
+}
+
+bool X86TTIImpl::isFCmpOrdCheaperThanFCmpZero(Type *Ty) {
+  return false;
 }
 
 bool X86TTIImpl::areInlineCompatible(const Function *Caller,

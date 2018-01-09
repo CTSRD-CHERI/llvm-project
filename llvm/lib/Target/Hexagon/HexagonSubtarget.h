@@ -53,6 +53,7 @@ class HexagonSubtarget : public HexagonGenSubtargetInfo {
 public:
   Hexagon::ArchEnum HexagonArchVersion;
   Hexagon::ArchEnum HexagonHVXVersion = Hexagon::ArchEnum::V4;
+  CodeGenOpt::Level OptLevel;
   /// True if the target should use Back-Skip-Back scheduling. This is the
   /// default for V60.
   bool UseBSBScheduling;
@@ -177,6 +178,10 @@ public:
       std::vector<std::unique_ptr<ScheduleDAGMutation>> &Mutations)
       const override;
 
+  /// \brief Enable use of alias analysis during code generation (during MI
+  /// scheduling, DAGCombine, etc.).
+  bool useAA() const override;
+
   /// \brief Perform target specific adjustments to the latency of a schedule
   /// dependency.
   void adjustSchedDependency(SUnit *def, SUnit *use, SDep& dep) const override;
@@ -188,6 +193,16 @@ public:
     if (useHVX128BOps())
       return 128;
     llvm_unreachable("Invalid HVX vector length settings");
+  }
+
+  bool isHVXVectorType(MVT VecTy) const {
+    if (!VecTy.isVector() || !useHVXOps())
+      return false;
+    unsigned ElemWidth = VecTy.getVectorElementType().getSizeInBits();
+    if (ElemWidth < 8 || ElemWidth > 64)
+      return false;
+    unsigned VecWidth = VecTy.getSizeInBits();
+    return VecWidth == 8*getVectorLength() || VecWidth == 16*getVectorLength();
   }
 
   unsigned getL1CacheLineSize() const;

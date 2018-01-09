@@ -414,6 +414,12 @@ public:
     return FlatForGlobal;
   }
 
+  /// \returns If MUBUF instructions always perform range checking, even for
+  /// buffer resources used for private memory access.
+  bool privateMemoryResourceIsRangeChecked() const {
+    return getGeneration() < AMDGPUSubtarget::GFX9;
+  }
+
   bool hasAutoWaitcntBeforeBarrier() const {
     return AutoWaitcntBeforeBarrier;
   }
@@ -460,6 +466,12 @@ public:
 
   bool hasD16LoadStore() const {
     return getGeneration() >= GFX9;
+  }
+
+  /// Return if most LDS instructions have an m0 use that require m0 to be
+  /// iniitalized.
+  bool ldsRequiresM0Init() const {
+    return getGeneration() < GFX9;
   }
 
   bool hasAddNoCarry() const {

@@ -1025,8 +1025,9 @@ bool CursorVisitor::VisitObjCContainerDecl(ObjCContainerDecl *D) {
             [&SM](Decl *A, Decl *B) {
     SourceLocation L_A = A->getLocStart();
     SourceLocation L_B = B->getLocStart();
-    assert(L_A.isValid() && L_B.isValid());
-    return SM.isBeforeInTranslationUnit(L_A, L_B);
+    return L_A != L_B ?
+           SM.isBeforeInTranslationUnit(L_A, L_B) :
+           SM.isBeforeInTranslationUnit(A->getLocEnd(), B->getLocEnd());
   });
 
   // Now visit the decls.
@@ -4718,12 +4719,12 @@ CXString clang_getCursorDisplayName(CXCursor C) {
     // If the type was explicitly written, use that.
     if (TypeSourceInfo *TSInfo = ClassSpec->getTypeAsWritten())
       return cxstring::createDup(TSInfo->getType().getAsString(Policy));
-    
+
     SmallString<128> Str;
     llvm::raw_svector_ostream OS(Str);
     OS << *ClassSpec;
-    TemplateSpecializationType::PrintTemplateArgumentList(
-        OS, ClassSpec->getTemplateArgs().asArray(), Policy);
+    printTemplateArgumentList(OS, ClassSpec->getTemplateArgs().asArray(),
+                              Policy);
     return cxstring::createDup(OS.str());
   }
   

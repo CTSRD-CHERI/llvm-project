@@ -1040,11 +1040,14 @@ void WasmObjectWriter::writeObject(MCAssembler &Asm,
   for (const MCSymbol &S : Asm.symbols()) {
     const auto &WS = static_cast<const MCSymbolWasm &>(S);
 
-    if (WS.isTemporary())
-      continue;
-
+    // Register types for all functions, including those with private linkage
+    // (making them
+    // because wasm always needs a type signature.
     if (WS.isFunction())
       registerFunctionType(WS);
+
+    if (WS.isTemporary())
+      continue;
 
     // If the symbol is not defined in this translation unit, import it.
     if (!WS.isDefined(/*SetUsed=*/false)) {
@@ -1177,10 +1180,14 @@ void WasmObjectWriter::writeObject(MCAssembler &Asm,
                  << S.isExternal() << " isTemporary=" << S.isTemporary()
                  << " isFunction=" << WS.isFunction()
                  << " isWeak=" << WS.isWeak()
+                 << " isHidden=" << WS.isHidden()
                  << " isVariable=" << WS.isVariable() << "\n");
 
-    if (WS.isWeak())
-      SymbolFlags.emplace_back(WS.getName(), wasm::WASM_SYMBOL_BINDING_WEAK);
+    if (WS.isWeak() || WS.isHidden()) {
+      uint32_t Flags = (WS.isWeak() ? wasm::WASM_SYMBOL_BINDING_WEAK : 0) |
+          (WS.isHidden() ? wasm::WASM_SYMBOL_VISIBILITY_HIDDEN : 0);
+      SymbolFlags.emplace_back(WS.getName(), Flags);
+    }
 
     if (WS.isVariable())
       continue;

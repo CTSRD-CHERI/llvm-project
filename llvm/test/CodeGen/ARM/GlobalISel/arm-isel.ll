@@ -35,7 +35,7 @@ entry:
 
 define zeroext i8 @test_ext_i8(i8 %x) {
 ; CHECK-LABEL: test_ext_i8:
-; CHECK: and r0, r0, #255
+; CHECK: uxtb r0, r0
 ; CHECK: bx lr
 
 entry:
@@ -442,7 +442,7 @@ define arm_aapcscc void @test_brcond(i32 %n) {
 ; CHECK: cmp r0
 ; CHECK-NEXT: movgt [[RCMP:r[0-9]+]], #1
 ; CHECK: tst [[RCMP]], #1
-; CHECK-NEXT: bne [[FALSE:.L[[:alnum:]_]+]]
+; CHECK-NEXT: beq [[FALSE:.L[[:alnum:]_]+]]
 ; CHECK: bl brcond1
 ; CHECK: [[FALSE]]:
 ; CHECK: bl brcond2

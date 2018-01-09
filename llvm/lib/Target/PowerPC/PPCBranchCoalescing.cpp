@@ -60,13 +60,13 @@ namespace llvm {
 /// expands to the following machine code:
 ///
 /// BB#0: derived from LLVM BB %entry
-///    Live Ins: %F1 %F3 %X6
+///    Live Ins: %f1 %f3 %x6
 ///        <SNIP1>
-///        %vreg0<def> = COPY %F1; F8RC:%vreg0
-///        %vreg5<def> = CMPLWI %vreg4<kill>, 0; CRRC:%vreg5 GPRC:%vreg4
-///        %vreg8<def> = LXSDX %ZERO8, %vreg7<kill>, %RM<imp-use>;
-///                    mem:LD8[ConstantPool] F8RC:%vreg8 G8RC:%vreg7
-///        BCC 76, %vreg5, <BB#2>; CRRC:%vreg5
+///        %0<def> = COPY %f1; F8RC:%0
+///        %5<def> = CMPLWI %4<kill>, 0; CRRC:%5 GPRC:%4
+///        %8<def> = LXSDX %zero8, %7<kill>, %rm<imp-use>;
+///                    mem:LD8[ConstantPool] F8RC:%8 G8RC:%7
+///        BCC 76, %5, <BB#2>; CRRC:%5
 ///    Successors according to CFG: BB#1(?%) BB#2(?%)
 ///
 /// BB#1: derived from LLVM BB %entry
@@ -75,10 +75,10 @@ namespace llvm {
 ///
 /// BB#2: derived from LLVM BB %entry
 ///    Predecessors according to CFG: BB#0 BB#1
-///        %vreg9<def> = PHI %vreg8, <BB#1>, %vreg0, <BB#0>;
-///                    F8RC:%vreg9,%vreg8,%vreg0
+///        %9<def> = PHI %8, <BB#1>, %0, <BB#0>;
+///                    F8RC:%9,%8,%0
 ///        <SNIP2>
-///        BCC 76, %vreg5, <BB#4>; CRRC:%vreg5
+///        BCC 76, %5, <BB#4>; CRRC:%5
 ///    Successors according to CFG: BB#3(?%) BB#4(?%)
 ///
 /// BB#3: derived from LLVM BB %entry
@@ -87,10 +87,10 @@ namespace llvm {
 ///
 /// BB#4: derived from LLVM BB %entry
 ///    Predecessors according to CFG: BB#2 BB#3
-///        %vreg13<def> = PHI %vreg12, <BB#3>, %vreg2, <BB#2>;
-///                     F8RC:%vreg13,%vreg12,%vreg2
+///        %13<def> = PHI %12, <BB#3>, %2, <BB#2>;
+///                     F8RC:%13,%12,%2
 ///        <SNIP3>
-///        BLR8 %LR8<imp-use>, %RM<imp-use>, %F1<imp-use>
+///        BLR8 %lr8<imp-use>, %rm<imp-use>, %f1<imp-use>
 ///
 /// When this pattern is detected, branch coalescing will try to collapse
 /// it by moving code in BB#2 to BB#0 and/or BB#4 and removing BB#3.
@@ -98,14 +98,14 @@ namespace llvm {
 /// If all conditions are meet, IR should collapse to:
 ///
 /// BB#0: derived from LLVM BB %entry
-///    Live Ins: %F1 %F3 %X6
+///    Live Ins: %f1 %f3 %x6
 ///        <SNIP1>
-///        %vreg0<def> = COPY %F1; F8RC:%vreg0
-///        %vreg5<def> = CMPLWI %vreg4<kill>, 0; CRRC:%vreg5 GPRC:%vreg4
-///        %vreg8<def> = LXSDX %ZERO8, %vreg7<kill>, %RM<imp-use>;
-///                     mem:LD8[ConstantPool] F8RC:%vreg8 G8RC:%vreg7
+///        %0<def> = COPY %f1; F8RC:%0
+///        %5<def> = CMPLWI %4<kill>, 0; CRRC:%5 GPRC:%4
+///        %8<def> = LXSDX %zero8, %7<kill>, %rm<imp-use>;
+///                     mem:LD8[ConstantPool] F8RC:%8 G8RC:%7
 ///        <SNIP2>
-///        BCC 76, %vreg5, <BB#4>; CRRC:%vreg5
+///        BCC 76, %5, <BB#4>; CRRC:%5
 ///    Successors according to CFG: BB#1(0x2aaaaaaa / 0x80000000 = 33.33%)
 ///      BB#4(0x55555554 / 0x80000000 = 66.67%)
 ///
@@ -115,12 +115,12 @@ namespace llvm {
 ///
 /// BB#4: derived from LLVM BB %entry
 ///    Predecessors according to CFG: BB#0 BB#1
-///        %vreg9<def> = PHI %vreg8, <BB#1>, %vreg0, <BB#0>;
-///                    F8RC:%vreg9,%vreg8,%vreg0
-///        %vreg13<def> = PHI %vreg12, <BB#1>, %vreg2, <BB#0>;
-///                     F8RC:%vreg13,%vreg12,%vreg2
+///        %9<def> = PHI %8, <BB#1>, %0, <BB#0>;
+///                    F8RC:%9,%8,%0
+///        %13<def> = PHI %12, <BB#1>, %2, <BB#0>;
+///                     F8RC:%13,%12,%2
 ///        <SNIP3>
-///        BLR8 %LR8<imp-use>, %RM<imp-use>, %F1<imp-use>
+///        BLR8 %lr8<imp-use>, %rm<imp-use>, %f1<imp-use>
 ///
 /// Branch Coalescing does not split blocks, it moves everything in the same
 /// direction ensuring it does not break use/definition semantics.

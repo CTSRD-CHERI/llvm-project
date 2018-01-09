@@ -101,21 +101,23 @@ protected:
 public:
   ItaniumCXXABI(ASTContext &Ctx) : Context(Ctx) { }
 
-  std::pair<uint64_t, unsigned>
-  getMemberPointerWidthAndAlign(const MemberPointerType *MPT) const override {
+  MemberPointerInfo
+  getMemberPointerInfo(const MemberPointerType *MPT) const override {
     const TargetInfo &Target = Context.getTargetInfo();
     TargetInfo::IntType PtrDiff = Target.getPtrDiffType(0);
-    uint64_t Width = Target.getTypeWidth(PtrDiff);
-    unsigned Align = Target.getTypeAlign(PtrDiff);
+    MemberPointerInfo MPI;
+    MPI.Width = Target.getTypeWidth(PtrDiff);
+    MPI.Align = Target.getTypeAlign(PtrDiff);
+    MPI.HasPadding = false;
     if (MPT->isMemberFunctionPointer()) {
       if (Context.getTargetInfo().areAllPointersCapabilities()) {
-        Width = 2 * Context.getTargetInfo().getCHERICapabilityWidth();
-        Align = Context.getTargetInfo().getCHERICapabilityAlign();
+        MPI.Width = 2 * Context.getTargetInfo().getCHERICapabilityWidth();
+        MPI.Align = Context.getTargetInfo().getCHERICapabilityAlign();
       } else {
-        Width = 2 * Width;
+        MPI.Width *= 2;
       }
     }
-    return std::make_pair(Width, Align);
+    return MPI;
   }
 
   CallingConv getDefaultMethodCallConv(bool isVariadic) const override {

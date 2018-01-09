@@ -44,13 +44,13 @@
 #include "Relocations.h"
 #include "Config.h"
 #include "LinkerScript.h"
-#include "Memory.h"
 #include "OutputSections.h"
 #include "Strings.h"
 #include "SymbolTable.h"
 #include "SyntheticSections.h"
 #include "Target.h"
 #include "Thunks.h"
+#include "lld/Common/Memory.h"
 
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/raw_ostream.h"
@@ -73,7 +73,7 @@ template <class ELFT>
 static std::string getLocation(InputSectionBase &S, const Symbol &Sym,
                                uint64_t Off) {
   std::string Msg =
-      "\n>>> defined in " + toString(Sym.getFile()) + "\n>>> referenced by ";
+      "\n>>> defined in " + toString(Sym.File) + "\n>>> referenced by ";
   std::string Src = S.getSrcMsg<ELFT>(Sym, Off);
   if (!Src.empty())
     Msg += Src + "\n>>>               ";
@@ -541,6 +541,7 @@ template <class ELFT> static void addCopyRelSymbol(SharedSymbol *SS) {
     Sym->CopyRelSec = Sec;
     Sym->IsPreemptible = false;
     Sym->IsUsedInRegularObj = true;
+    Sym->Used = true;
   }
 
   In<ELFT>::RelaDyn->addReloc({Target->CopyRel, Sec, 0, false, SS, 0});
@@ -640,7 +641,7 @@ static RelExpr adjustExpr(Symbol &Sym, RelExpr Expr, RelType Type,
   }
 
   errorOrWarn("symbol '" + toString(Sym) + "' defined in " +
-              toString(Sym.getFile()) + " has no type");
+              toString(Sym.File) + " has no type");
   return Expr;
 }
 

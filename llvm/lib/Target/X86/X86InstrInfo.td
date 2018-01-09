@@ -848,8 +848,10 @@ def HasPCLMUL    : Predicate<"Subtarget->hasPCLMUL()">;
 def NoVLX_Or_NoVPCLMULQDQ :
                     Predicate<"!Subtarget->hasVLX() || !Subtarget->hasVPCLMULQDQ()">;
 def HasVPCLMULQDQ : Predicate<"Subtarget->hasVPCLMULQDQ()">;
+def HasGFNI      : Predicate<"Subtarget->hasGFNI()">;
 def HasFMA       : Predicate<"Subtarget->hasFMA()">;
 def HasFMA4      : Predicate<"Subtarget->hasFMA4()">;
+def NoFMA4       : Predicate<"!Subtarget->hasFMA4()">;
 def HasXOP       : Predicate<"Subtarget->hasXOP()">;
 def HasTBM       : Predicate<"Subtarget->hasTBM()">;
 def NoTBM        : Predicate<"!Subtarget->hasTBM()">;
@@ -879,6 +881,8 @@ def HasCLZERO    : Predicate<"Subtarget->hasCLZERO()">;
 def FPStackf32   : Predicate<"!Subtarget->hasSSE1()">;
 def FPStackf64   : Predicate<"!Subtarget->hasSSE2()">;
 def HasMPX       : Predicate<"Subtarget->hasMPX()">;
+def HasSHSTK     : Predicate<"Subtarget->hasSHSTK()">;
+def HasIBT       : Predicate<"Subtarget->hasIBT()">;
 def HasCLFLUSHOPT : Predicate<"Subtarget->hasCLFLUSHOPT()">;
 def HasCLWB      : Predicate<"Subtarget->hasCLWB()">;
 def HasCmpxchg16b: Predicate<"Subtarget->hasCmpxchg16b()">;
@@ -2704,9 +2708,10 @@ let Predicates = [HasTBM] in {
 // Memory Instructions
 //
 
-let Predicates = [HasCLFLUSHOPT] in
+let Predicates = [HasCLFLUSHOPT], SchedRW = [WriteLoad] in
 def CLFLUSHOPT : I<0xAE, MRM7m, (outs), (ins i8mem:$src),
-                   "clflushopt\t$src", [(int_x86_clflushopt addr:$src)]>, PD;
+                   "clflushopt\t$src", [(int_x86_clflushopt addr:$src)],
+                   IIC_SSE_PREFETCH>, PD;
 
 let Predicates = [HasCLWB] in
 def CLWB       : I<0xAE, MRM6m, (outs), (ins i8mem:$src), "clwb\t$src",
