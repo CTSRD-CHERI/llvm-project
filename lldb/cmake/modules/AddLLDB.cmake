@@ -66,11 +66,9 @@ function(add_lldb_library name)
           ARCHIVE DESTINATION lib${LLVM_LIBDIR_SUFFIX})
       endif()
       if (NOT CMAKE_CONFIGURATION_TYPES)
-        add_custom_target(install-${name}
-                          DEPENDS ${name}
-                          COMMAND "${CMAKE_COMMAND}"
-                                  -DCMAKE_INSTALL_COMPONENT=${name}
-                                  -P "${CMAKE_BINARY_DIR}/cmake_install.cmake")
+        add_llvm_install_targets(install-${name}
+                                 DEPENDS ${name}
+                                 COMPONENT ${name})
       endif()
     endif()
   endif()
@@ -121,6 +119,8 @@ function(add_lldb_executable name)
       if(ARG_GENERATE_INSTALL)
         add_custom_target(install-${name} DEPENDS ${name})
         add_dependencies(install-liblldb ${name})
+        add_custom_target(install-${name}-stripped DEPENDS ${name})
+        add_dependencies(install-liblldb-stripped ${name})
       endif()
     else()
       set_target_properties(${name} PROPERTIES
@@ -134,11 +134,9 @@ function(add_lldb_executable name)
           COMPONENT ${name}
           RUNTIME DESTINATION bin)
     if (NOT CMAKE_CONFIGURATION_TYPES)
-      add_custom_target(install-${name}
-                        DEPENDS ${name}
-                        COMMAND "${CMAKE_COMMAND}"
-                                -DCMAKE_INSTALL_COMPONENT=${name}
-                                -P "${CMAKE_BINARY_DIR}/cmake_install.cmake")
+      add_llvm_install_targets(install-${name}
+                               DEPENDS ${name}
+                               COMPONENT ${name})
     endif()
   endif()
 

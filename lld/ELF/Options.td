@@ -149,6 +149,9 @@ def help: F<"help">, HelpText<"Print option help">;
 
 def icf_all: F<"icf=all">, HelpText<"Enable identical code folding">;
 
+def icf_data: F<"icf-data">,
+  HelpText<"Enable ICF to also fold identical read only data">;
+
 def icf_none: F<"icf=none">, HelpText<"Disable identical code folding">;
 
 defm image_base : Eq<"image-base">, HelpText<"Set the base address">;
@@ -165,6 +168,9 @@ def lto_O: J<"lto-O">, MetaVarName<"<opt-level>">,
 def m: JoinedOrSeparate<["-"], "m">, HelpText<"Set target emulation">;
 
 defm Map: Eq<"Map">, HelpText<"Print a link map to the specified file">;
+
+def merge_exidx_entries: F<"merge-exidx-entries">,
+  HelpText<"Enable merging .ARM.exidx entries">;
 
 def nostdlib: F<"nostdlib">,
   HelpText<"Only search directories specified on the command line">;
@@ -198,6 +204,9 @@ def no_gdb_index: F<"no-gdb-index">,
 
 def no_gnu_unique: F<"no-gnu-unique">,
   HelpText<"Disable STB_GNU_UNIQUE symbol binding">;
+
+def no_merge_exidx_entries: F<"no-merge-exidx-entries">,
+  HelpText<"Disable merging .ARM.exidx entries">;
 
 def no_threads: F<"no-threads">,
   HelpText<"Do not run the linker multi-threaded">;
@@ -234,7 +243,7 @@ def oformat: Separate<["--"], "oformat">, MetaVarName<"<format>">,
 def omagic: Flag<["--"], "omagic">, MetaVarName<"<magic>">,
   HelpText<"Set the text and data sections to be readable and writable">;
 
-defm orphan_handling: Eq<"orphan-handling">, 
+defm orphan_handling: Eq<"orphan-handling">,
   HelpText<"Control how orphan sections are handled when linker script used">;
 
 def pack_dyn_relocs_eq: J<"pack-dyn-relocs=">, MetaVarName<"<format>">,

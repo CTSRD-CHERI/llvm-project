@@ -117,9 +117,9 @@ def help : F<"help">;
 def help_q : Flag<["/?", "-?"], "">, Alias<help>;
 
 // LLD extensions
+def debug_ghash : F<"debug:ghash">;
 def debug_dwarf : F<"debug:dwarf">;
 def export_all_symbols : F<"export-all-symbols">;
-def nopdb : F<"nopdb">, HelpText<"Disable PDB generation for DWARF users">;
 def lldmingw : F<"lldmingw">;
 def msvclto : F<"msvclto">;
 def output_def : Joined<["/", "-"], "output-def:">;

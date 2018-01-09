@@ -134,7 +134,12 @@ Improvements to clang-tidy
   <http://clang.llvm.org/extra/clang-tidy/checks/fuchsia-default-arguments.html>`_ check
 
   Warns if a function or method is declared or called with default arguments.
+  
+- New `fuchsia-virtual-inheritance
+  <http://clang.llvm.org/extra/clang-tidy/checks/fuchsia-virtual-inheritance.html>`_ check
 
+  Warns if classes are defined with virtual inheritance.
+    
 - New `google-objc-avoid-throwing-exception
   <http://clang.llvm.org/extra/clang-tidy/checks/google-objc-avoid-throwing-exception.html>`_ check
 
@@ -260,6 +265,8 @@ Improvements to clang-tidy
   - `hicpp-use-noexcept <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-use-noexcept.html>`_
   - `hicpp-use-nullptr <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-use-nullptr.html>`_
   - `hicpp-vararg <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-vararg.html>`_
+
+- Added the ability to suppress specific checks (or all checks) in a ``NOLINT`` or ``NOLINTNEXTLINE`` comment.
 
 Improvements to include-fixer
 -----------------------------

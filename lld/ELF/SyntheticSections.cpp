@@ -436,8 +436,8 @@ bool EhFrameSection::isFdeLive(EhSectionPiece &Fde, ArrayRef<RelTy> Rels) {
 
   // FDEs for garbage-collected or merged-by-ICF sections are dead.
   if (auto *D = dyn_cast<Defined>(&B))
-    if (auto *Sec = cast_or_null<InputSectionBase>(D->Section))
-      return Sec->Live && (Sec == Sec->Repl);
+    if (SectionBase *Sec = D->Section)
+      return Sec->Live;
   return false;
 }
 
@@ -1145,7 +1145,24 @@ DynamicSection<ELFT>::DynamicSection()
   if (Config->EMachine == EM_MIPS || Config->ZRodynamic)
     this->Flags = SHF_ALLOC;
 
-  addEntries();
+  // Add strings to .dynstr early so that .dynstr's size will be
+  // fixed early.
+  for (StringRef S : Config->FilterList)
+    addInt(DT_FILTER, InX::DynStrTab->addString(S));
+  for (StringRef S : Config->AuxiliaryList)
+    addInt(DT_AUXILIARY, InX::DynStrTab->addString(S));
+
+  if (!Config->Rpath.empty())
+    addInt(Config->EnableNewDtags ? DT_RUNPATH : DT_RPATH,
+           InX::DynStrTab->addString(Config->Rpath));
+
+  for (InputFile *File : SharedFiles) {
+    SharedFile<ELFT> *F = cast<SharedFile<ELFT>>(File);
+    if (F->IsNeeded)
+      addInt(DT_NEEDED, InX::DynStrTab->addString(F->SoName));
+  }
+  if (!Config->SoName.empty())
+    addInt(DT_SONAME, InX::DynStrTab->addString(Config->SoName));
 }
 
 template <class ELFT>
@@ -1179,27 +1196,10 @@ void DynamicSection<ELFT>::addSym(int32_t Tag, Symbol *Sym) {
   Entries.push_back({Tag, [=] { return Sym->getVA(); }});
 }
 
-// There are some dynamic entries that don't depend on other sections.
-// Such entries can be set early.
-template <class ELFT> void DynamicSection<ELFT>::addEntries() {
-  // Add strings to .dynstr early so that .dynstr's size will be
-  // fixed early.
-  for (StringRef S : Config->FilterList)
-    addInt(DT_FILTER, InX::DynStrTab->addString(S));
-  for (StringRef S : Config->AuxiliaryList)
-    addInt(DT_AUXILIARY, InX::DynStrTab->addString(S));
-
-  if (!Config->Rpath.empty())
-    addInt(Config->EnableNewDtags ? DT_RUNPATH : DT_RPATH,
-           InX::DynStrTab->addString(Config->Rpath));
-
-  for (InputFile *File : SharedFiles) {
-    SharedFile<ELFT> *F = cast<SharedFile<ELFT>>(File);
-    if (F->IsNeeded)
-      addInt(DT_NEEDED, InX::DynStrTab->addString(F->SoName));
-  }
-  if (!Config->SoName.empty())
-    addInt(DT_SONAME, InX::DynStrTab->addString(Config->SoName));
+// Add remaining entries to complete .dynamic contents.
+template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
+  if (this->Size)
+    return; // Already finalized.
 
   // Set DT_FLAGS and DT_FLAGS_1.
   uint32_t DtFlags = 0;
@@ -1234,12 +1234,6 @@ template <class ELFT> void DynamicSection<ELFT>::addEntries() {
   // If the target is such a system (used -z rodynamic) don't write DT_DEBUG.
   if (!Config->Shared && !Config->Relocatable && !Config->ZRodynamic)
     addInt(DT_DEBUG, 0);
-}
-
-// Add remaining entries to complete .dynamic contents.
-template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
-  if (this->Size)
-    return; // Already finalized.
 
   this->Link = InX::DynStrTab->getParent()->SectionIndex;
   if (InX::RelaDyn->getParent() && !InX::RelaDyn->empty()) {
@@ -2464,13 +2458,12 @@ VersionNeedSection<ELFT>::VersionNeedSection()
 
 template <class ELFT>
 void VersionNeedSection<ELFT>::addSymbol(SharedSymbol *SS) {
-  auto *Ver = reinterpret_cast<const typename ELFT::Verdef *>(SS->Verdef);
+  SharedFile<ELFT> *File = SS->getFile<ELFT>();
+  const typename ELFT::Verdef *Ver = File->Verdefs[SS->VerdefIndex];
   if (!Ver) {
     SS->VersionId = VER_NDX_GLOBAL;
     return;
   }
-
-  SharedFile<ELFT> *File = SS->getFile<ELFT>();
 
   // If we don't already know that we need an Elf_Verneed for this DSO, prepare
   // to create one by adding it to our needed list and creating a dynstr entry
@@ -2729,16 +2722,22 @@ ARMExidxSentinelSection::ARMExidxSentinelSection()
 void ARMExidxSentinelSection::writeTo(uint8_t *Buf) {
   // The Sections are sorted in order of ascending PREL31 address with the
   // sentinel last. We need to find the InputSection that precedes the
-  // sentinel. By construction the Sentinel is in the last
-  // InputSectionDescription as the InputSection that precedes it.
+  // sentinel.
   OutputSection *C = getParent();
-  auto ISD =
-      std::find_if(C->SectionCommands.rbegin(), C->SectionCommands.rend(),
-                   [](const BaseCommand *Base) {
-                     return isa<InputSectionDescription>(Base);
-                   });
-  auto L = cast<InputSectionDescription>(*ISD);
-  InputSection *Highest = L->Sections[L->Sections.size() - 2];
+  InputSection *Highest = nullptr;
+  unsigned Skip = 1;
+  for (const BaseCommand *Base : llvm::reverse(C->SectionCommands)) {
+    if (!isa<InputSectionDescription>(Base))
+      continue;
+    auto L = cast<InputSectionDescription>(Base);
+    if (Skip >= L->Sections.size()) {
+      Skip -= L->Sections.size();
+      continue;
+    }
+    Highest = L->Sections[L->Sections.size() - Skip - 1];
+    break;
+  }
+  assert(Highest);
   InputSection *LS = Highest->getLinkOrderDep();
   uint64_t S = LS->getParent()->Addr + LS->getOffset(LS->getSize());
   uint64_t P = getVA();

@@ -2074,6 +2074,7 @@ LangOptions getFormattingLangOpts(const FormatStyle &Style) {
   LangOpts.CPlusPlus11 = Style.Standard == FormatStyle::LS_Cpp03 ? 0 : 1;
   LangOpts.CPlusPlus14 = Style.Standard == FormatStyle::LS_Cpp03 ? 0 : 1;
   LangOpts.CPlusPlus17 = Style.Standard == FormatStyle::LS_Cpp03 ? 0 : 1;
+  LangOpts.CPlusPlus2a = Style.Standard == FormatStyle::LS_Cpp03 ? 0 : 1;
   LangOpts.LineComment = 1;
   bool AlternativeOperators = Style.isCpp();
   LangOpts.CXXOperatorNames = AlternativeOperators ? 1 : 0;
@@ -2129,7 +2130,9 @@ llvm::Expected<FormatStyle> getStyle(StringRef StyleName, StringRef FileName,
   // should be improved over time and probably be done on tokens, not one the
   // bare content of the file.
   if (Style.Language == FormatStyle::LK_Cpp && FileName.endswith(".h") &&
-      (Code.contains("\n- (") || Code.contains("\n+ (")))
+      (Code.contains("\n- (") || Code.contains("\n+ (") ||
+       Code.contains("\n@end\n") || Code.contains("\n@end ") ||
+       Code.endswith("@end")))
     Style.Language = FormatStyle::LK_ObjC;
 
   FormatStyle FallbackStyle = getNoStyle();

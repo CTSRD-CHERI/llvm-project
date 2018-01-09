@@ -607,22 +607,14 @@ template <class ELFT> void ObjFile<ELFT>::initializeSymbols() {
     this->Symbols.push_back(createSymbol(&Sym));
 }
 
-template <class ELFT>
-InputSectionBase *ObjFile<ELFT>::getSection(uint32_t Index) const {
-  if (Index == 0)
-    return nullptr;
-  if (Index >= this->Sections.size())
-    fatal(toString(this) + ": invalid section index: " + Twine(Index));
-
-  if (InputSectionBase *Sec = this->Sections[Index])
-    return Sec->Repl;
-  return nullptr;
-}
-
 template <class ELFT> Symbol *ObjFile<ELFT>::createSymbol(const Elf_Sym *Sym) {
   int Binding = Sym->getBinding();
-  InputSectionBase *Sec = getSection(this->getSectionIndex(*Sym));
 
+  uint32_t SecIdx = this->getSectionIndex(*Sym);
+  if (SecIdx >= this->Sections.size())
+    fatal(toString(this) + ": invalid section index: " + Twine(SecIdx));
+
+  InputSectionBase *Sec = this->Sections[SecIdx];
   uint8_t StOther = Sym->st_other;
   uint8_t Type = Sym->getType();
   uint64_t Value = Sym->st_value;
@@ -802,14 +794,14 @@ SharedFile<ELFT>::parseVerdefs(const Elf_Versym *&Versym) {
 template <class ELFT> void SharedFile<ELFT>::parseRest() {
   // Create mapping from version identifiers to Elf_Verdef entries.
   const Elf_Versym *Versym = nullptr;
-  std::vector<const Elf_Verdef *> Verdefs = parseVerdefs(Versym);
+  Verdefs = parseVerdefs(Versym);
 
   ArrayRef<Elf_Shdr> Sections = CHECK(this->getObj().sections(), this);
 
   // Add symbols to the symbol table.
   Elf_Sym_Range Syms = this->getGlobalELFSyms();
   for (const Elf_Sym &Sym : Syms) {
-    unsigned VersymIndex = 0;
+    unsigned VersymIndex = VER_NDX_GLOBAL;
     if (Versym) {
       VersymIndex = Versym->vs_index;
       ++Versym;
@@ -823,18 +815,23 @@ template <class ELFT> void SharedFile<ELFT>::parseRest() {
       continue;
     }
 
-    // Ignore local symbols.
-    if (Versym && VersymIndex == VER_NDX_LOCAL)
+    if (Sym.getBinding() == STB_LOCAL) {
+      warn("found local symbol '" + Name +
+           "' in global part of symbol table in file " + toString(this));
       continue;
+    }
+
     const Elf_Verdef *Ver = nullptr;
     if (VersymIndex != VER_NDX_GLOBAL) {
-      if (VersymIndex >= Verdefs.size()) {
+      if (VersymIndex >= Verdefs.size() || VersymIndex == VER_NDX_LOCAL) {
         error("corrupt input file: version definition index " +
               Twine(VersymIndex) + " for symbol " + Name +
               " is out of bounds\n>>> defined in " + toString(this));
         continue;
       }
       Ver = Verdefs[VersymIndex];
+    } else {
+      VersymIndex = 0;
     }
 
     // We do not usually care about alignments of data in shared object
@@ -852,14 +849,14 @@ template <class ELFT> void SharedFile<ELFT>::parseRest() {
       error(toString(this) + ": alignment too large: " + Name);
 
     if (!Hidden)
-      Symtab->addShared(Name, this, Sym, Alignment, Ver);
+      Symtab->addShared(Name, this, Sym, Alignment, VersymIndex);
 
     // Also add the symbol with the versioned name to handle undefined symbols
     // with explicit versions.
     if (Ver) {
       StringRef VerName = this->StringTable.data() + Ver->getAux()->vda_name;
       Name = Saver.save(Name + "@" + VerName);
-      Symtab->addShared(Name, this, Sym, Alignment, Ver);
+      Symtab->addShared(Name, this, Sym, Alignment, VersymIndex);
     }
   }
 }
