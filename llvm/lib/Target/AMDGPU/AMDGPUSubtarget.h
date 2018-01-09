@@ -130,6 +130,7 @@ protected:
   bool DebuggerEmitPrologue;
 
   // Used as options.
+  bool EnableHugePrivateBuffer;
   bool EnableVGPRSpilling;
   bool EnablePromoteAlloca;
   bool EnableLoadStoreOpt;
@@ -228,6 +229,10 @@ public:
     return WavefrontSize;
   }
 
+  unsigned getWavefrontSizeLog2() const {
+    return Log2_32(WavefrontSize);
+  }
+
   int getLocalMemorySize() const {
     return LocalMemorySize;
   }
@@ -323,6 +328,14 @@ public:
     return HasMadMixInsts;
   }
 
+  bool hasSBufferLoadStoreAtomicDwordxN() const {
+    // Only use the "x1" variants on GFX9 or don't use the buffer variants.
+    // For x2 and higher variants, if the accessed region spans 2 VM pages and
+    // the second page is unmapped, the hw hangs.
+    // TODO: There is one future GFX9 chip that doesn't have this bug.
+    return getGeneration() != GFX9;
+  }
+
   bool hasCARRY() const {
     return (getGeneration() >= EVERGREEN);
   }
@@ -337,6 +350,10 @@ public:
 
   TrapHandlerAbi getTrapHandlerAbi() const {
     return isAmdHsaOS() ? TrapHandlerAbiHsa : TrapHandlerAbiNone;
+  }
+
+  bool enableHugePrivateBuffer() const {
+    return EnableHugePrivateBuffer;
   }
 
   bool isPromoteAllocaEnabled() const {

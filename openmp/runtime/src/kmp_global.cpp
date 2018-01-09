@@ -271,7 +271,7 @@ char *__kmp_affinity_proclist = NULL;
 kmp_affin_mask_t *__kmp_affinity_masks = NULL;
 unsigned __kmp_affinity_num_masks = 0;
 
-char const *__kmp_cpuinfo_file = NULL;
+char *__kmp_cpuinfo_file = NULL;
 
 #endif /* KMP_AFFINITY_SUPPORTED */
 
@@ -298,10 +298,6 @@ kmp_int32 __kmp_max_task_priority = 0;
 kmp_uint64 __kmp_taskloop_min_tasks = 0;
 #endif
 
-#if OMP_50_ENABLED && OMPT_SUPPORT
-char const *__kmp_tool_libraries = NULL;
-#endif
-
 /* This check ensures that the compiler is passing the correct data type for the
    flags formal parameter of the function kmpc_omp_task_alloc(). If the type is
    not a 4-byte type, then give an error message about a non-positive length
@@ -309,8 +305,7 @@ char const *__kmp_tool_libraries = NULL;
    be redefined to have exactly 32 bits. */
 KMP_BUILD_ASSERT(sizeof(kmp_tasking_flags_t) == 4);
 
-kmp_int32 __kmp_task_stealing_constraint =
-    1; /* Constrain task stealing by default */
+int __kmp_task_stealing_constraint = 1; /* Constrain task stealing by default */
 
 #ifdef DEBUG_SUSPEND
 int __kmp_suspend_count = 0;

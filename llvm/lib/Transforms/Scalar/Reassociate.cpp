@@ -143,20 +143,20 @@ XorOpnd::XorOpnd(Value *V) {
 /// Return true if V is an instruction of the specified opcode and if it
 /// only has one use.
 static BinaryOperator *isReassociableOp(Value *V, unsigned Opcode) {
-  if (V->hasOneUse() && isa<Instruction>(V) &&
-      cast<Instruction>(V)->getOpcode() == Opcode &&
-      (!isa<FPMathOperator>(V) || cast<Instruction>(V)->isFast()))
-    return cast<BinaryOperator>(V);
+  auto *I = dyn_cast<Instruction>(V);
+  if (I && I->hasOneUse() && I->getOpcode() == Opcode)
+    if (!isa<FPMathOperator>(I) || I->isFast())
+      return cast<BinaryOperator>(I);
   return nullptr;
 }
 
 static BinaryOperator *isReassociableOp(Value *V, unsigned Opcode1,
                                         unsigned Opcode2) {
-  if (V->hasOneUse() && isa<Instruction>(V) &&
-      (cast<Instruction>(V)->getOpcode() == Opcode1 ||
-       cast<Instruction>(V)->getOpcode() == Opcode2) &&
-      (!isa<FPMathOperator>(V) || cast<Instruction>(V)->isFast()))
-    return cast<BinaryOperator>(V);
+  auto *I = dyn_cast<Instruction>(V);
+  if (I && I->hasOneUse() &&
+      (I->getOpcode() == Opcode1 || I->getOpcode() == Opcode2))
+    if (!isa<FPMathOperator>(I) || I->isFast())
+      return cast<BinaryOperator>(I);
   return nullptr;
 }
 
@@ -798,12 +798,9 @@ void ReassociatePass::RewriteExprTree(BinaryOperator *I,
 /// additional opportunities have been exposed.
 static Value *NegateValue(Value *V, Instruction *BI,
                           SetVector<AssertingVH<Instruction>> &ToRedo) {
-  if (Constant *C = dyn_cast<Constant>(V)) {
-    if (C->getType()->isFPOrFPVectorTy()) {
-      return ConstantExpr::getFNeg(C);
-    }
-    return ConstantExpr::getNeg(C);
-  }
+  if (auto *C = dyn_cast<Constant>(V))
+    return C->getType()->isFPOrFPVectorTy() ? ConstantExpr::getFNeg(C) :
+                                              ConstantExpr::getNeg(C);
 
   // We are trying to expose opportunity for reassociation.  One of the things
   // that we want to do to achieve this is to push a negation as deep into an
@@ -997,7 +994,7 @@ static Value *EmitAddTreeOfValues(Instruction *I,
   Value *V1 = Ops.back();
   Ops.pop_back();
   Value *V2 = EmitAddTreeOfValues(I, Ops);
-  return CreateAdd(V2, V1, "tmp", I, I);
+  return CreateAdd(V2, V1, "reass.add", I, I);
 }
 
 /// If V is an expression tree that is a multiplication sequence,
@@ -1604,7 +1601,7 @@ Value *ReassociatePass::OptimizeAdd(Instruction *I,
       RedoInsts.insert(VI);
 
     // Create the multiply.
-    Instruction *V2 = CreateMul(V, MaxOccVal, "tmp", I, I);
+    Instruction *V2 = CreateMul(V, MaxOccVal, "reass.mul", I, I);
 
     // Rerun associate on the multiply in case the inner expression turned into
     // a multiply.  We want to make sure that we keep things in canonical form.

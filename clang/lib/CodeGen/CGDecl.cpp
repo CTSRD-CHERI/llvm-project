@@ -162,6 +162,10 @@ void CodeGenFunction::EmitVarDecl(const VarDecl &D) {
   // needs to be emitted like a static variable, e.g. a function-scope
   // variable in constant address space in OpenCL.
   if (D.getStorageDuration() != SD_Automatic) {
+    // Static sampler variables translated to function calls.
+    if (D.getType()->isSamplerT())
+      return;
+
     llvm::GlobalValue::LinkageTypes Linkage =
         CGM.getLLVMLinkageVarDefinition(&D, /*isConstant=*/false);
 
@@ -1819,24 +1823,6 @@ void CodeGenFunction::EmitParmDecl(const VarDecl &D, ParamValue Arg,
     if (BlockInfo) {
       setBlockContextParameter(IPD, ArgNo, Arg.getDirectValue());
       return;
-    }
-
-    // Apply any prologue 'this' adjustments required by the ABI. Be careful to
-    // handle the case where 'this' is passed indirectly as part of an inalloca
-    // struct.
-    if (const CXXMethodDecl *MD =
-            dyn_cast_or_null<CXXMethodDecl>(CurCodeDecl)) {
-      if (MD->isVirtual() && IPD == CXXABIThisDecl) {
-        llvm::Value *This = Arg.isIndirect()
-                                ? Builder.CreateLoad(Arg.getIndirectAddress())
-                                : Arg.getDirectValue();
-        This = CGM.getCXXABI().adjustThisParameterInVirtualFunctionPrologue(
-            *this, CurGD, This);
-        if (Arg.isIndirect())
-          Builder.CreateStore(This, Arg.getIndirectAddress());
-        else
-          Arg = ParamValue::forDirect(This);
-      }
     }
   }
 

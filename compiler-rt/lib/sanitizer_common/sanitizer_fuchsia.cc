@@ -191,6 +191,10 @@ uptr GetMaxUserVirtualAddress() {
   return ShadowBounds.memory_limit - 1;
 }
 
+uptr GetMaxVirtualAddress() {
+  return GetMaxUserVirtualAddress();
+}
+
 static void *DoAnonymousMmapOrDie(uptr size, const char *mem_type,
                                   bool raw_report, bool die_for_nomem) {
   size = RoundUpTo(size, PAGE_SIZE);
@@ -262,6 +266,10 @@ void ReservedAddressRange::Unmap(uptr addr, uptr size) {
   CHECK((addr_as_void == base_) || (addr + size == base_as_uptr + size_));
   CHECK_LE(size, size_);
   UnmapOrDie(reinterpret_cast<void*>(addr), size);
+  if (addr_as_void == base_) {
+    base_ = reinterpret_cast<void*>(addr + size);
+  }
+  size_ = size_ - size;
 }
 
 // MmapNoAccess and MmapFixedOrDie are used only by sanitizer_allocator.

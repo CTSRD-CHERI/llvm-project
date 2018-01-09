@@ -12,6 +12,8 @@
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/CompilerInvocation.h"
 #include "clang/Tooling/CompilationDatabase.h"
+#include "clang/Tooling/Refactoring/RefactoringResultConsumer.h"
+#include "clang/Tooling/Refactoring/Rename/RenamingAction.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Support/Errc.h"
 #include "llvm/Support/FileSystem.h"
@@ -50,6 +52,28 @@ std::string getStandardResourceDir() {
   static int Dummy; // Just an address in this process.
   return CompilerInvocation::GetResourcesPath("clangd", (void *)&Dummy);
 }
+
+class RefactoringResultCollector final
+    : public tooling::RefactoringResultConsumer {
+public:
+  void handleError(llvm::Error Err) override {
+    assert(!Result.hasValue());
+    // FIXME: figure out a way to return better message for DiagnosticError.
+    // clangd uses llvm::toString to convert the Err to string, however, for
+    // DiagnosticError, only "clang diagnostic" will be generated.
+    Result = std::move(Err);
+  }
+
+  // Using the handle(SymbolOccurrences) from parent class.
+  using tooling::RefactoringResultConsumer::handle;
+
+  void handle(tooling::AtomicChanges SourceReplacements) override {
+    assert(!Result.hasValue());
+    Result = std::move(SourceReplacements);
+  }
+
+  Optional<Expected<tooling::AtomicChanges>> Result;
+};
 
 } // namespace
 
@@ -145,17 +169,16 @@ ClangdScheduler::~ClangdScheduler() {
     Worker.join();
 }
 
-ClangdServer::ClangdServer(GlobalCompilationDatabase &CDB,
-                           DiagnosticsConsumer &DiagConsumer,
-                           FileSystemProvider &FSProvider,
-                           unsigned AsyncThreadsCount,
-                           clangd::CodeCompleteOptions CodeCompleteOpts,
-                           clangd::Logger &Logger,
-                           llvm::Optional<StringRef> ResourceDir)
+ClangdServer::ClangdServer(
+    GlobalCompilationDatabase &CDB, DiagnosticsConsumer &DiagConsumer,
+    FileSystemProvider &FSProvider, unsigned AsyncThreadsCount,
+    bool StorePreamblesInMemory, clangd::CodeCompleteOptions CodeCompleteOpts,
+    clangd::Logger &Logger, llvm::Optional<StringRef> ResourceDir)
     : Logger(Logger), CDB(CDB), DiagConsumer(DiagConsumer),
       FSProvider(FSProvider),
       ResourceDir(ResourceDir ? ResourceDir->str() : getStandardResourceDir()),
       PCHs(std::make_shared<PCHContainerOperations>()),
+      StorePreamblesInMemory(StorePreamblesInMemory),
       CodeCompleteOpts(CodeCompleteOpts), WorkScheduler(AsyncThreadsCount) {}
 
 void ClangdServer::setRootPath(PathRef RootPath) {
@@ -169,8 +192,8 @@ std::future<void> ClangdServer::addDocument(PathRef File, StringRef Contents) {
   DocVersion Version = DraftMgr.updateDraft(File, Contents);
 
   auto TaggedFS = FSProvider.getTaggedFileSystem(File);
-  std::shared_ptr<CppFile> Resources =
-      Units.getOrCreateFile(File, ResourceDir, CDB, PCHs, Logger);
+  std::shared_ptr<CppFile> Resources = Units.getOrCreateFile(
+      File, ResourceDir, CDB, StorePreamblesInMemory, PCHs, Logger);
   return scheduleReparseAndDiags(File, VersionedDraft{Version, Contents.str()},
                                  std::move(Resources), std::move(TaggedFS));
 }
@@ -187,8 +210,8 @@ std::future<void> ClangdServer::forceReparse(PathRef File) {
          "forceReparse() was called for non-added document");
 
   auto TaggedFS = FSProvider.getTaggedFileSystem(File);
-  auto Recreated = Units.recreateFileIfCompileCommandChanged(File, ResourceDir,
-                                                             CDB, PCHs, Logger);
+  auto Recreated = Units.recreateFileIfCompileCommandChanged(
+      File, ResourceDir, CDB, StorePreamblesInMemory, PCHs, Logger);
 
   // Note that std::future from this cleanup action is ignored.
   scheduleCancelRebuild(std::move(Recreated.RemovedFile));
@@ -198,11 +221,11 @@ std::future<void> ClangdServer::forceReparse(PathRef File) {
                                  std::move(TaggedFS));
 }
 
-std::future<Tagged<std::vector<CompletionItem>>>
+std::future<Tagged<CompletionList>>
 ClangdServer::codeComplete(PathRef File, Position Pos,
                            llvm::Optional<StringRef> OverridenContents,
                            IntrusiveRefCntPtr<vfs::FileSystem> *UsedFS) {
-  using ResultType = Tagged<std::vector<CompletionItem>>;
+  using ResultType = Tagged<CompletionList>;
 
   std::promise<ResultType> ResultPromise;
 
@@ -218,11 +241,10 @@ ClangdServer::codeComplete(PathRef File, Position Pos,
 }
 
 void ClangdServer::codeComplete(
-    UniqueFunction<void(Tagged<std::vector<CompletionItem>>)> Callback,
-    PathRef File, Position Pos, llvm::Optional<StringRef> OverridenContents,
+    UniqueFunction<void(Tagged<CompletionList>)> Callback, PathRef File,
+    Position Pos, llvm::Optional<StringRef> OverridenContents,
     IntrusiveRefCntPtr<vfs::FileSystem> *UsedFS) {
-  using CallbackType =
-      UniqueFunction<void(Tagged<std::vector<CompletionItem>>)>;
+  using CallbackType = UniqueFunction<void(Tagged<CompletionList>)>;
 
   std::string Contents;
   if (OverridenContents) {
@@ -259,7 +281,7 @@ void ClangdServer::codeComplete(
         // FIXME(ibiryukov): even if Preamble is non-null, we may want to check
         // both the old and the new version in case only one of them matches.
 
-        std::vector<CompletionItem> Result = clangd::codeComplete(
+        CompletionList Result = clangd::codeComplete(
             File, Resources->getCompileCommand(),
             Preamble ? &Preamble->Preamble : nullptr, Contents, Pos,
             TaggedFS.Value, PCHs, CodeCompleteOpts, Logger);
@@ -331,6 +353,54 @@ std::vector<tooling::Replacement> ClangdServer::formatOnType(PathRef File,
   size_t Len = 1 + CursorPos - PreviousLBracePos;
 
   return formatCode(Code, File, {tooling::Range(PreviousLBracePos, Len)});
+}
+
+Expected<std::vector<tooling::Replacement>>
+ClangdServer::rename(PathRef File, Position Pos, llvm::StringRef NewName) {
+  std::string Code = getDocument(File);
+  std::shared_ptr<CppFile> Resources = Units.getFile(File);
+  RefactoringResultCollector ResultCollector;
+  Resources->getAST().get()->runUnderLock([&](ParsedAST *AST) {
+    const SourceManager &SourceMgr = AST->getASTContext().getSourceManager();
+    const FileEntry *FE =
+        SourceMgr.getFileEntryForID(SourceMgr.getMainFileID());
+    if (!FE)
+      return;
+    SourceLocation SourceLocationBeg =
+        clangd::getBeginningOfIdentifier(*AST, Pos, FE);
+    tooling::RefactoringRuleContext Context(
+        AST->getASTContext().getSourceManager());
+    Context.setASTContext(AST->getASTContext());
+    auto Rename = clang::tooling::RenameOccurrences::initiate(
+        Context, SourceRange(SourceLocationBeg), NewName.str());
+    if (!Rename) {
+      ResultCollector.Result = Rename.takeError();
+      return;
+    }
+    Rename->invoke(ResultCollector, Context);
+  });
+  assert(ResultCollector.Result.hasValue());
+  if (!ResultCollector.Result.getValue())
+    return ResultCollector.Result->takeError();
+
+  std::vector<tooling::Replacement> Replacements;
+  for (const tooling::AtomicChange &Change : ResultCollector.Result->get()) {
+    tooling::Replacements ChangeReps = Change.getReplacements();
+    for (const auto &Rep : ChangeReps) {
+      // FIXME: Right now we only support renaming the main file, so we drop
+      // replacements not for the main file. In the future, we might consider to
+      // support:
+      //   * rename in any included header
+      //   * rename only in the "main" header
+      //   * provide an error if there are symbols we won't rename (e.g.
+      //     std::vector)
+      //   * rename globally in project
+      //   * rename in open files
+      if (Rep.getFilePath() == File)
+        Replacements.push_back(Rep);
+    }
+  }
+  return Replacements;
 }
 
 std::string ClangdServer::getDocument(PathRef File) {

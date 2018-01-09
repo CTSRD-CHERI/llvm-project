@@ -185,7 +185,7 @@ uptr internal_getpid() {
 
 int internal_sigaction(int signum, const void *act, void *oldact) {
   return sigaction(signum,
-                   (struct sigaction *)act, (struct sigaction *)oldact);
+                   (const struct sigaction *)act, (struct sigaction *)oldact);
 }
 
 void internal_sigfillset(__sanitizer_sigset_t *set) { sigfillset(set); }
@@ -862,6 +862,10 @@ uptr GetMaxUserVirtualAddress() {
 #else  // SANITIZER_WORDSIZE == 32
   return (1ULL << 32) - 1;  // 0xffffffff;
 #endif  // SANITIZER_WORDSIZE
+}
+
+uptr GetMaxVirtualAddress() {
+  return GetMaxUserVirtualAddress();
 }
 
 uptr FindAvailableMemoryRange(uptr shadow_size,

@@ -36,6 +36,7 @@
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineValueType.h"
+#include "llvm/Support/CodeGenCoverage.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/LowLevelTypeImpl.h"
@@ -43,8 +44,8 @@
 #include "llvm/TableGen/Error.h"
 #include "llvm/TableGen/Record.h"
 #include "llvm/TableGen/TableGenBackend.h"
-#include <string>
 #include <numeric>
+#include <string>
 using namespace llvm;
 
 #define DEBUG_TYPE "gisel-emitter"
@@ -52,6 +53,7 @@ using namespace llvm;
 STATISTIC(NumPatternTotal, "Total number of patterns");
 STATISTIC(NumPatternImported, "Number of patterns imported from SelectionDAG");
 STATISTIC(NumPatternImportsSkipped, "Number of SelectionDAG imports skipped");
+STATISTIC(NumPatternsTested, "Number of patterns executed according to coverage information");
 STATISTIC(NumPatternEmitted, "Number of patterns emitted");
 
 cl::OptionCategory GlobalISelEmitterCat("Options for -gen-global-isel");
@@ -61,6 +63,16 @@ static cl::opt<bool> WarnOnSkippedPatterns(
     cl::desc("Explain why a pattern was skipped for inclusion "
              "in the GlobalISel selector"),
     cl::init(false), cl::cat(GlobalISelEmitterCat));
+
+static cl::opt<bool> GenerateCoverage(
+    "instrument-gisel-coverage",
+    cl::desc("Generate coverage instrumentation for GlobalISel"),
+    cl::init(false), cl::cat(GlobalISelEmitterCat));
+
+static cl::opt<std::string> UseCoverageFile(
+    "gisel-coverage-file", cl::init(""),
+    cl::desc("Specify file to retrieve coverage information from"),
+    cl::cat(GlobalISelEmitterCat));
 
 namespace {
 //===- Helper functions ---------------------------------------------------===//
@@ -569,13 +581,19 @@ protected:
   /// A map of Symbolic Names to ComplexPattern sub-operands.
   DefinedComplexPatternSubOperandMap ComplexSubOperands;
 
+  uint64_t RuleID;
+  static uint64_t NextRuleID;
+
 public:
   RuleMatcher(ArrayRef<SMLoc> SrcLoc)
       : Matchers(), Actions(), InsnVariableIDs(), MutatableInsns(),
         DefinedOperands(), NextInsnVarID(0), NextOutputInsnID(0),
-        NextTempRegID(0), SrcLoc(SrcLoc), ComplexSubOperands() {}
+        NextTempRegID(0), SrcLoc(SrcLoc), ComplexSubOperands(),
+        RuleID(NextRuleID++) {}
   RuleMatcher(RuleMatcher &&Other) = default;
   RuleMatcher &operator=(RuleMatcher &&Other) = default;
+
+  uint64_t getRuleID() const { return RuleID; }
 
   InstructionMatcher &addInstructionMatcher(StringRef SymbolicName);
   void addRequiredFeature(Record *Feature);
@@ -663,6 +681,8 @@ public:
   unsigned allocateOutputInsnID() { return NextOutputInsnID++; }
   unsigned allocateTempRegID() { return NextTempRegID++; }
 };
+
+uint64_t RuleMatcher::NextRuleID = 0;
 
 using action_iterator = RuleMatcher::action_iterator;
 
@@ -2204,6 +2224,11 @@ void RuleMatcher::emit(MatchTable &Table) {
 
   for (const auto &MA : Actions)
     MA->emitActionOpcodes(Table, *this);
+
+  if (GenerateCoverage)
+    Table << MatchTable::Opcode("GIR_Coverage") << MatchTable::IntValue(RuleID)
+          << MatchTable::LineBreak;
+
   Table << MatchTable::Opcode("GIR_Done", -1) << MatchTable::LineBreak
         << MatchTable::Label(LabelID);
 }
@@ -2309,6 +2334,9 @@ private:
   // Map of predicates to their subtarget features.
   SubtargetFeatureInfoMap SubtargetFeatures;
 
+  // Rule coverage information.
+  Optional<CodeGenCoverage> RuleCoverage;
+
   void gatherNodeEquivs();
   Record *findNodeEquiv(Record *N) const;
 
@@ -2356,6 +2384,9 @@ private:
   Expected<RuleMatcher> runOnPattern(const PatternToMatch &P);
 
   void declareSubtargetFeature(Record *Predicate);
+
+  TreePatternNode *fixupPatternNode(TreePatternNode *N);
+  void fixupPatternTrees(TreePattern *P);
 };
 
 void GlobalISelEmitter::gatherNodeEquivs() {
@@ -2377,8 +2408,8 @@ Record *GlobalISelEmitter::findNodeEquiv(Record *N) const {
 }
 
 GlobalISelEmitter::GlobalISelEmitter(RecordKeeper &RK)
-    : RK(RK), CGP(RK), Target(CGP.getTargetInfo()),
-      CGRegs(RK, Target.getHwModes()) {}
+    : RK(RK), CGP(RK, [&](TreePattern *P) { fixupPatternTrees(P); }),
+      Target(CGP.getTargetInfo()), CGRegs(RK, Target.getHwModes()) {}
 
 //===- Emitter ------------------------------------------------------------===//
 
@@ -3224,6 +3255,20 @@ void GlobalISelEmitter::emitImmPredicates(
 }
 
 void GlobalISelEmitter::run(raw_ostream &OS) {
+  if (!UseCoverageFile.empty()) {
+    RuleCoverage = CodeGenCoverage();
+    auto RuleCoverageBufOrErr = MemoryBuffer::getFile(UseCoverageFile);
+    if (!RuleCoverageBufOrErr) {
+      PrintWarning(SMLoc(), "Missing rule coverage data");
+      RuleCoverage = None;
+    } else {
+      if (!RuleCoverage->parse(*RuleCoverageBufOrErr.get(), Target.getName())) {
+        PrintWarning(SMLoc(), "Ignoring invalid or missing rule coverage data");
+        RuleCoverage = None;
+      }
+    }
+  }
+
   // Track the GINodeEquiv definitions.
   gatherNodeEquivs();
 
@@ -3233,6 +3278,7 @@ void GlobalISelEmitter::run(raw_ostream &OS) {
   // Look through the SelectionDAG patterns we found, possibly emitting some.
   for (const PatternToMatch &Pat : CGP.ptms()) {
     ++NumPatternTotal;
+
     auto MatcherOrErr = runOnPattern(Pat);
 
     // The pattern analysis can fail, indicating an unsupported pattern.
@@ -3248,6 +3294,13 @@ void GlobalISelEmitter::run(raw_ostream &OS) {
       continue;
     }
 
+    if (RuleCoverage) {
+      if (RuleCoverage->isCovered(MatcherOrErr->getRuleID()))
+        ++NumPatternsTested;
+      else
+        PrintWarning(Pat.getSrcRecord()->getLoc(),
+                     "Pattern is not covered by a test");
+    }
     Rules.push_back(std::move(MatcherOrErr.get()));
   }
 
@@ -3427,7 +3480,8 @@ void GlobalISelEmitter::run(raw_ostream &OS) {
   OS << "};\n\n";
 
   OS << "bool " << Target.getName()
-     << "InstructionSelector::selectImpl(MachineInstr &I) const {\n"
+     << "InstructionSelector::selectImpl(MachineInstr &I, CodeGenCoverage "
+        "&CoverageInfo) const {\n"
      << "  MachineFunction &MF = *I.getParent()->getParent();\n"
      << "  MachineRegisterInfo &MRI = MF.getRegInfo();\n"
      << "  // FIXME: This should be computed on a per-function basis rather "
@@ -3448,7 +3502,7 @@ void GlobalISelEmitter::run(raw_ostream &OS) {
   Table.emitDeclaration(OS);
   OS << "  if (executeMatchTable(*this, OutMIs, State, MatcherInfo, ";
   Table.emitUse(OS);
-  OS << ", TII, MRI, TRI, RBI, AvailableFeatures)) {\n"
+  OS << ", TII, MRI, TRI, RBI, AvailableFeatures, CoverageInfo)) {\n"
      << "    return true;\n"
      << "  }\n\n";
 
@@ -3481,6 +3535,81 @@ void GlobalISelEmitter::declareSubtargetFeature(Record *Predicate) {
   if (SubtargetFeatures.count(Predicate) == 0)
     SubtargetFeatures.emplace(
         Predicate, SubtargetFeatureInfo(Predicate, SubtargetFeatures.size()));
+}
+
+TreePatternNode *GlobalISelEmitter::fixupPatternNode(TreePatternNode *N) {
+  if (!N->isLeaf()) {
+    for (unsigned I = 0, E = N->getNumChildren(); I < E; ++I) {
+      TreePatternNode *OrigChild = N->getChild(I);
+      TreePatternNode *NewChild = fixupPatternNode(OrigChild);
+      if (OrigChild != NewChild)
+        N->setChild(I, NewChild);
+    }
+
+    if (N->getOperator()->getName() == "ld") {
+      // If it's a signext-load we need to adapt the pattern slightly. We need
+      // to split the node into (sext (ld ...)), remove the <<signext>> predicate,
+      // and then apply the <<signextTY>> predicate by updating the result type
+      // of the load.
+      //
+      // For example:
+      //   (ld:[i32] [iPTR])<<unindexed>><<signext>><<signexti16>>
+      // must be transformed into:
+      //   (sext:[i32] (ld:[i16] [iPTR])<<unindexed>>)
+      //
+      // Likewise for zeroext-load and anyext-load.
+
+      std::vector<TreePredicateFn> Predicates;
+      bool IsSignExtLoad = false;
+      bool IsZeroExtLoad = false;
+      bool IsAnyExtLoad = false;
+      Record *MemVT = nullptr;
+      for (const auto &P : N->getPredicateFns()) {
+        if (P.isLoad() && P.isSignExtLoad()) {
+          IsSignExtLoad = true;
+          continue;
+        }
+        if (P.isLoad() && P.isZeroExtLoad()) {
+          IsZeroExtLoad = true;
+          continue;
+        }
+        if (P.isLoad() && P.isAnyExtLoad()) {
+          IsAnyExtLoad = true;
+          continue;
+        }
+        if (P.isLoad() && P.getMemoryVT()) {
+          MemVT = P.getMemoryVT();
+          continue;
+        }
+        Predicates.push_back(P);
+      }
+
+      if ((IsSignExtLoad || IsZeroExtLoad || IsAnyExtLoad) && MemVT) {
+        assert((IsSignExtLoad + IsZeroExtLoad + IsAnyExtLoad) == 1 &&
+               "IsSignExtLoad, IsZeroExtLoad, IsAnyExtLoad are mutually exclusive");
+        TreePatternNode *Ext = new TreePatternNode(
+            RK.getDef(IsSignExtLoad ? "sext"
+                                    : IsZeroExtLoad ? "zext" : "anyext"),
+            {N}, 1);
+        Ext->setType(0, N->getType(0));
+        N->clearPredicateFns();
+        N->setPredicateFns(Predicates);
+        N->setType(0, getValueType(MemVT));
+        return Ext;
+      }
+    }
+  }
+
+  return N;
+}
+
+void GlobalISelEmitter::fixupPatternTrees(TreePattern *P) {
+  for (unsigned I = 0, E = P->getNumTrees(); I < E; ++I) {
+    TreePatternNode *OrigTree = P->getTree(I);
+    TreePatternNode *NewTree = fixupPatternNode(OrigTree);
+    if (OrigTree != NewTree)
+      P->setTree(I, NewTree);
+  }
 }
 
 } // end anonymous namespace

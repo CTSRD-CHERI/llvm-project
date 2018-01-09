@@ -22,7 +22,6 @@
 #include "lld/Common/Threads.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSwitch.h"
-#include "llvm/Support/FileOutputBuffer.h"
 #include <climits>
 
 using namespace llvm;
@@ -38,6 +37,7 @@ namespace {
 // The writer writes a SymbolTable result to a file.
 template <class ELFT> class Writer {
 public:
+  Writer() : Buffer(errorHandler().OutputBuffer) {}
   typedef typename ELFT::Shdr Elf_Shdr;
   typedef typename ELFT::Ehdr Elf_Ehdr;
   typedef typename ELFT::Phdr Elf_Phdr;
@@ -70,7 +70,7 @@ private:
   void writeSectionsBinary();
   void writeBuildId();
 
-  std::unique_ptr<FileOutputBuffer> Buffer;
+  std::unique_ptr<FileOutputBuffer> &Buffer;
 
   void addRelIpltSymbols();
   void addStartEndSymbols();
@@ -473,8 +473,10 @@ template <class ELFT> void Writer<ELFT>::copyLocalSymbols() {
 }
 
 template <class ELFT> void Writer<ELFT>::addSectionSymbols() {
-  // Create one STT_SECTION symbol for each output section we might
-  // have a relocation with.
+  // Create a section symbol for each output section so that we can represent
+  // relocations that point to the section. If we know that no relocation is
+  // referring to a section (that happens if the section is a synthetic one), we
+  // don't create a section symbol for that section.
   for (BaseCommand *Base : Script->SectionCommands) {
     auto *Sec = dyn_cast<OutputSection>(Base);
     if (!Sec)
@@ -487,8 +489,15 @@ template <class ELFT> void Writer<ELFT>::addSectionSymbols() {
     if (I == Sec->SectionCommands.end())
       continue;
     InputSection *IS = cast<InputSectionDescription>(*I)->Sections[0];
-    if (isa<SyntheticSection>(IS) || IS->Type == SHT_REL ||
-        IS->Type == SHT_RELA)
+
+    // Relocations are not using REL[A] section symbols.
+    if (IS->Type == SHT_REL || IS->Type == SHT_RELA)
+      continue;
+
+    // Unlike other synthetic sections, mergeable output sections contain data
+    // copied from input sections, and there may be a relocation pointing to its
+    // contents if -emit-reloc is given.
+    if (isa<SyntheticSection>(IS) && !(IS->Flags & SHF_MERGE))
       continue;
 
     auto *Sym = make<Defined>("", /*IsLocal=*/true, /*StOther=*/0, STT_SECTION,

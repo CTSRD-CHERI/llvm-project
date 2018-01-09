@@ -10,7 +10,6 @@
 #include "lldb/Core/Value.h"
 
 #include "lldb/Core/Address.h"  // for Address
-#include "lldb/Core/ArchSpec.h" // for ArchSpec
 #include "lldb/Core/Module.h"
 #include "lldb/Core/State.h"
 #include "lldb/Symbol/CompilerType.h"
@@ -143,6 +142,9 @@ Type *Value::GetType() {
 }
 
 size_t Value::AppendDataToHostBuffer(const Value &rhs) {
+  if (this == &rhs)
+    return 0;
+
   size_t curr_size = m_data_buffer.GetByteSize();
   Status error;
   switch (rhs.GetValueType()) {

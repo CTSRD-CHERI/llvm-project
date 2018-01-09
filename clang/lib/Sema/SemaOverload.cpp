@@ -7629,61 +7629,73 @@ class BuiltinOperatorOverloadBuilder {
   SmallVectorImpl<BuiltinCandidateTypeSet> &CandidateTypes;
   OverloadCandidateSet &CandidateSet;
 
-  // Define some constants used to index and iterate over the arithemetic types
-  // provided via the getArithmeticType() method below.
-  // The "promoted arithmetic types" are the arithmetic
+  static constexpr int ArithmeticTypesCap = 24;
+  SmallVector<CanQualType, ArithmeticTypesCap> ArithmeticTypes;
+
+  // Define some indices used to iterate over the arithemetic types in
+  // ArithmeticTypes.  The "promoted arithmetic types" are the arithmetic
   // types are that preserved by promotion (C++ [over.built]p2).
-  static const unsigned FirstIntegralType = 4;
-  static const unsigned LastIntegralType = 23;
-  static const unsigned FirstPromotedIntegralType = 4,
-                        LastPromotedIntegralType = 12;
-  static const unsigned FirstCapabilityType = 12;
-  static const unsigned LastCapabilityType = 14;
-  static const unsigned FirstPromotedArithmeticType = 0,
-                        LastPromotedArithmeticType = 12;
-  static const unsigned NumArithmeticTypes = 23;
+  unsigned FirstIntegralType,
+           LastIntegralType;
+  unsigned FirstPromotedIntegralType,
+           LastPromotedIntegralType;
+  unsigned FirstPromotedArithmeticType,
+           LastPromotedArithmeticType;
+  unsigned FirstCapabilityType,
+           LastCapabilityType;
+  unsigned NumArithmeticTypes;
 
-  /// \brief Get the canonical type for a given arithmetic type index.
-  CanQualType getArithmeticType(unsigned index) {
-    assert(index < NumArithmeticTypes);
-    static CanQualType ASTContext::* const
-      ArithmeticTypes[NumArithmeticTypes] = {
-      // Start of promoted types.
-      &ASTContext::FloatTy,
-      &ASTContext::DoubleTy,
-      &ASTContext::LongDoubleTy,
-      &ASTContext::Float128Ty,
+  void InitArithmeticTypes() {
+    // Start of promoted types.
+    FirstPromotedArithmeticType = 0;
+    ArithmeticTypes.push_back(S.Context.FloatTy);
+    ArithmeticTypes.push_back(S.Context.DoubleTy);
+    ArithmeticTypes.push_back(S.Context.LongDoubleTy);
+    if (S.Context.getTargetInfo().hasFloat128Type())
+      ArithmeticTypes.push_back(S.Context.Float128Ty);
 
-      // Start of integral types.
-      &ASTContext::IntTy,
-      &ASTContext::LongTy,
-      &ASTContext::LongLongTy,
-      &ASTContext::Int128Ty,
-      &ASTContext::UnsignedIntTy,
-      &ASTContext::UnsignedLongTy,
-      &ASTContext::UnsignedLongLongTy,
-      &ASTContext::UnsignedInt128Ty,
-      // End of promoted types.
+    // Start of integral types.
+    FirstIntegralType = ArithmeticTypes.size();
+    FirstPromotedIntegralType = ArithmeticTypes.size();
+    ArithmeticTypes.push_back(S.Context.IntTy);
+    ArithmeticTypes.push_back(S.Context.LongTy);
+    ArithmeticTypes.push_back(S.Context.LongLongTy);
+    if (S.Context.getTargetInfo().hasInt128Type())
+      ArithmeticTypes.push_back(S.Context.Int128Ty);
+    ArithmeticTypes.push_back(S.Context.UnsignedIntTy);
+    ArithmeticTypes.push_back(S.Context.UnsignedLongTy);
+    ArithmeticTypes.push_back(S.Context.UnsignedLongLongTy);
+    if (S.Context.getTargetInfo().hasInt128Type())
+      ArithmeticTypes.push_back(S.Context.UnsignedInt128Ty);
 
-      // XXXAR: not entirely sure this is right but it fixes
-      // bitwise ops between enums and __(u)intcap_t
-      &ASTContext::IntCapTy,
-      &ASTContext::UnsignedIntCapTy,
-      // Last capability type
+    // Capability types
+    FirstCapabilityType = ArithmeticTypes.size();
+    if (S.Context.getTargetInfo().SupportsCapabilities()) {
+      ArithmeticTypes.push_back(S.Context.IntCapTy);
+      ArithmeticTypes.push_back(S.Context.UnsignedIntCapTy);
+    }
+    LastCapabilityType = ArithmeticTypes.size();
 
-      &ASTContext::BoolTy,
-      &ASTContext::CharTy,
-      &ASTContext::WCharTy,
-      &ASTContext::Char16Ty,
-      &ASTContext::Char32Ty,
-      &ASTContext::SignedCharTy,
-      &ASTContext::ShortTy,
-      &ASTContext::UnsignedCharTy,
-      &ASTContext::UnsignedShortTy,
-      // End of integral types.
-      // FIXME: What about complex? What about half?
-    };
-    return S.Context.*ArithmeticTypes[index];
+    LastPromotedIntegralType = ArithmeticTypes.size();
+    LastPromotedArithmeticType = ArithmeticTypes.size();
+    // End of promoted types.
+
+    ArithmeticTypes.push_back(S.Context.BoolTy);
+    ArithmeticTypes.push_back(S.Context.CharTy);
+    ArithmeticTypes.push_back(S.Context.WCharTy);
+    ArithmeticTypes.push_back(S.Context.Char16Ty);
+    ArithmeticTypes.push_back(S.Context.Char32Ty);
+    ArithmeticTypes.push_back(S.Context.SignedCharTy);
+    ArithmeticTypes.push_back(S.Context.ShortTy);
+    ArithmeticTypes.push_back(S.Context.UnsignedCharTy);
+    ArithmeticTypes.push_back(S.Context.UnsignedShortTy);
+    LastIntegralType = ArithmeticTypes.size();
+    NumArithmeticTypes = ArithmeticTypes.size();
+    // End of integral types.
+    // FIXME: What about complex? What about half?
+
+    assert(ArithmeticTypes.size() <= ArithmeticTypesCap &&
+           "Enough inline storage for all arithmetic types.");
   }
 
   /// \brief Helper method to factor out the common pattern of adding overloads
@@ -7742,22 +7754,8 @@ public:
         HasArithmeticOrEnumeralCandidateType),
       CandidateTypes(CandidateTypes),
       CandidateSet(CandidateSet) {
-    // Validate some of our static helper constants in debug builds.
-    assert(getArithmeticType(FirstPromotedIntegralType) == S.Context.IntTy &&
-           "Invalid first promoted integral type");
-    assert(getArithmeticType(LastPromotedIntegralType - 1)
-             == S.Context.UnsignedInt128Ty &&
-           "Invalid last promoted integral type");
-    assert(getArithmeticType(FirstPromotedArithmeticType)
-             == S.Context.FloatTy &&
-           "Invalid first promoted arithmetic type");
-    assert(getArithmeticType(LastPromotedArithmeticType - 1)
-             == S.Context.UnsignedInt128Ty &&
-           "Invalid last promoted arithmetic type");
-    static_assert(FirstCapabilityType == LastPromotedIntegralType, "");
-    static_assert(LastCapabilityType == LastPromotedIntegralType + 2, "");
-    assert(getArithmeticType(FirstCapabilityType) == S.Context.IntCapTy);
-    assert(getArithmeticType(LastCapabilityType - 1) == S.Context.UnsignedIntCapTy);
+
+    InitArithmeticTypes();
   }
 
   // C++ [over.built]p3:
@@ -7784,7 +7782,7 @@ public:
     for (unsigned Arith = (Op == OO_PlusPlus? 0 : 1);
          Arith < NumArithmeticTypes; ++Arith) {
       addPlusPlusMinusMinusStyleOverloads(
-        getArithmeticType(Arith),
+        ArithmeticTypes[Arith],
         VisibleTypeConversionsQuals.hasVolatile(),
         VisibleTypeConversionsQuals.hasRestrict());
     }
@@ -7857,7 +7855,7 @@ public:
 
     for (unsigned Arith = FirstPromotedArithmeticType;
          Arith < LastPromotedArithmeticType; ++Arith) {
-      QualType ArithTy = getArithmeticType(Arith);
+      QualType ArithTy = ArithmeticTypes[Arith];
       S.AddBuiltinCandidate(&ArithTy, Args, CandidateSet);
     }
 
@@ -7897,7 +7895,7 @@ public:
 
     for (unsigned Int = FirstPromotedIntegralType;
          Int < LastPromotedIntegralType; ++Int) {
-      QualType IntTy = getArithmeticType(Int);
+      QualType IntTy = ArithmeticTypes[Int];
       S.AddBuiltinCandidate(&IntTy, Args, CandidateSet);
     }
 
@@ -8120,14 +8118,12 @@ public:
   void addGenericBinaryArithmeticOverloads() {
     if (!HasArithmeticOrEnumeralCandidateType)
       return;
-    unsigned LastType = S.Context.getTargetInfo().SupportsCapabilities()
-                        ? LastCapabilityType : LastPromotedIntegralType;
     for (unsigned Left = FirstPromotedArithmeticType;
-         Left < LastType; ++Left) {
+         Left < LastPromotedArithmeticType; ++Left) {
       for (unsigned Right = FirstPromotedArithmeticType;
-           Right < LastType; ++Right) {
-        QualType LandR[2] = { getArithmeticType(Left),
-                              getArithmeticType(Right) };
+           Right < LastPromotedArithmeticType; ++Right) {
+        QualType LandR[2] = { ArithmeticTypes[Left],
+                              ArithmeticTypes[Right] };
         S.AddBuiltinCandidate(LandR, Args, CandidateSet);
       }
     }
@@ -8172,9 +8168,9 @@ public:
     for (unsigned Left = FirstPromotedIntegralType;
          Left < LastType; ++Left) {
       for (unsigned Right = FirstPromotedIntegralType;
-           Right < LastType; ++Right) {
-        QualType LandR[2] = { getArithmeticType(Left),
-                              getArithmeticType(Right) };
+           Right < LastPromotedIntegralType; ++Right) {
+        QualType LandR[2] = { ArithmeticTypes[Left],
+                              ArithmeticTypes[Right] };
         S.AddBuiltinCandidate(LandR, Args, CandidateSet);
       }
     }
@@ -8355,18 +8351,18 @@ public:
       for (unsigned Right = FirstPromotedArithmeticType;
            Right < LastPromotedArithmeticType; ++Right) {
         QualType ParamTypes[2];
-        ParamTypes[1] = getArithmeticType(Right);
+        ParamTypes[1] = ArithmeticTypes[Right];
 
         // Add this built-in operator as a candidate (VQ is empty).
         ParamTypes[0] =
-          S.Context.getLValueReferenceType(getArithmeticType(Left));
+          S.Context.getLValueReferenceType(ArithmeticTypes[Left]);
         S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet,
                               /*IsAssigmentOperator=*/isEqualOp);
 
         // Add this built-in operator as a candidate (VQ is 'volatile').
         if (VisibleTypeConversionsQuals.hasVolatile()) {
           ParamTypes[0] =
-            S.Context.getVolatileType(getArithmeticType(Left));
+            S.Context.getVolatileType(ArithmeticTypes[Left]);
           ParamTypes[0] = S.Context.getLValueReferenceType(ParamTypes[0]);
           S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet,
                                 /*IsAssigmentOperator=*/isEqualOp);
@@ -8421,15 +8417,15 @@ public:
       for (unsigned Right = FirstPromotedIntegralType;
            Right < LastPromotedIntegralType; ++Right) {
         QualType ParamTypes[2];
-        ParamTypes[1] = getArithmeticType(Right);
+        ParamTypes[1] = ArithmeticTypes[Right];
 
         // Add this built-in operator as a candidate (VQ is empty).
         ParamTypes[0] =
-          S.Context.getLValueReferenceType(getArithmeticType(Left));
+          S.Context.getLValueReferenceType(ArithmeticTypes[Left]);
         S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet);
         if (VisibleTypeConversionsQuals.hasVolatile()) {
           // Add this built-in operator as a candidate (VQ is 'volatile').
-          ParamTypes[0] = getArithmeticType(Left);
+          ParamTypes[0] = ArithmeticTypes[Left];
           ParamTypes[0] = S.Context.getVolatileType(ParamTypes[0]);
           ParamTypes[0] = S.Context.getLValueReferenceType(ParamTypes[0]);
           S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet);
@@ -10549,7 +10545,7 @@ void OverloadCandidateSet::NoteCandidates(
     }
   }
 
-  std::sort(Cands.begin(), Cands.end(),
+  std::stable_sort(Cands.begin(), Cands.end(),
             CompareOverloadCandidatesForDisplay(S, OpLoc, Args.size(), Kind));
 
   bool ReportedAmbiguousConversions = false;

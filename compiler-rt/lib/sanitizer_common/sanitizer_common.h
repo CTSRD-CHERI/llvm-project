@@ -73,6 +73,7 @@ INLINE uptr GetPageSizeCached() {
   return PageSizeCached;
 }
 uptr GetMmapGranularity();
+uptr GetMaxVirtualAddress();
 uptr GetMaxUserVirtualAddress();
 // Threads
 tid_t GetTid();
@@ -226,10 +227,6 @@ void SetPrintfAndReportCallback(void (*callback)(const char *));
   do {                                                                   \
     if ((uptr)Verbosity() >= (level)) Printf(__VA_ARGS__); \
   } while (0)
-
-// Can be used to prevent mixing error reports from different sanitizers.
-// FIXME: Replace with ScopedErrorReportLock and hide.
-extern StaticSpinMutex CommonSanitizerReportMutex;
 
 // Lock sanitizer error reporting and protects against nested errors.
 class ScopedErrorReportLock {

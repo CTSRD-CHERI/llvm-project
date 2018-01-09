@@ -547,6 +547,18 @@ struct CompletionItem {
 
 bool operator<(const CompletionItem &, const CompletionItem &);
 
+/// Represents a collection of completion items to be presented in the editor.
+struct CompletionList {
+  /// The list is not complete. Further typing should result in recomputing the
+  /// list.
+  bool isIncomplete = false;
+
+  /// The completion items.
+  std::vector<CompletionItem> items;
+
+  static json::Expr unparse(const CompletionList &);
+};
+
 /// A single parameter of a particular signature.
 struct ParameterInformation {
 
@@ -587,6 +599,20 @@ struct SignatureHelp {
   int activeParameter = 0;
 
   static json::Expr unparse(const SignatureHelp &);
+};
+
+struct RenameParams {
+  /// The document that was opened.
+  TextDocumentIdentifier textDocument;
+
+  /// The position at which this request was sent.
+  Position position;
+
+  /// The new name of the symbol.
+  std::string newName;
+
+  static llvm::Optional<RenameParams> parse(llvm::yaml::MappingNode *Params,
+                                            clangd::Logger &Logger);
 };
 
 } // namespace clangd

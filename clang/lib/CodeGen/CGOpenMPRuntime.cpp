@@ -1294,6 +1294,8 @@ static llvm::Value *emitParallelOrTeamsOutlinedFunction(
     HasCancel = OPSD->hasCancel();
   else if (auto *OPFD = dyn_cast<OMPParallelForDirective>(&D))
     HasCancel = OPFD->hasCancel();
+  else if (auto *OPFD = dyn_cast<OMPTargetParallelForDirective>(&D))
+    HasCancel = OPFD->hasCancel();
   CGOpenMPOutlinedRegionInfo CGInfo(*CS, ThreadIDVar, CodeGen, InnermostKind,
                                     HasCancel, OutlinedHelperName);
   CodeGenFunction::CGCapturedStmtRAII CapInfoRAII(CGF, &CGInfo);
@@ -7133,6 +7135,10 @@ void CGOpenMPRuntime::scanForTargetRegionsFunctions(const Stmt *S,
     case Stmt::OMPTargetParallelForDirectiveClass:
       CodeGenFunction::EmitOMPTargetParallelForDeviceFunction(
           CGM, ParentName, cast<OMPTargetParallelForDirective>(*S));
+      break;
+    case Stmt::OMPTargetParallelForSimdDirectiveClass:
+      CodeGenFunction::EmitOMPTargetParallelForSimdDeviceFunction(
+          CGM, ParentName, cast<OMPTargetParallelForSimdDirective>(*S));
       break;
     default:
       llvm_unreachable("Unknown target directive for OpenMP device codegen.");
