@@ -166,8 +166,6 @@ public:
   ObjFile(MemoryBufferRef M, StringRef ArchiveName);
   void parse(llvm::DenseSet<llvm::CachedHashStringRef> &ComdatGroups);
 
-  InputSectionBase *getSection(uint32_t Index) const;
-
   Symbol &getSymbol(uint32_t SymbolIndex) const {
     if (SymbolIndex >= this->Symbols.size())
       fatal(toString(this) + ": invalid symbol index");
@@ -292,6 +290,7 @@ template <class ELFT> class SharedFile : public ELFFileBase<ELFT> {
   const Elf_Shdr *VerdefSec = nullptr;
 
 public:
+  std::vector<const Elf_Verdef *> Verdefs;
   std::string SoName;
 
   llvm::ArrayRef<StringRef> getUndefinedSymbols() { return Undefs; }

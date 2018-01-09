@@ -266,7 +266,7 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
         getLoadStoreOffsetSizeInBits(MI.getOpcode(), MI.getOperand(OpNo - 1));
     unsigned OffsetAlign = getLoadStoreOffsetAlign(MI.getOpcode());
 
-    auto *STI = TM.getSubtargetImpl(*MF.getFunction());
+    auto *STI = TM.getSubtargetImpl(MF.getFunction());
     const MipsSEInstrInfo &TII = *static_cast<const MipsSEInstrInfo *>(
           STI->getInstrInfo());
     DebugLoc DL = II->getDebugLoc();

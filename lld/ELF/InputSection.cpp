@@ -87,7 +87,7 @@ InputSectionBase::InputSectionBase(InputFile *File, uint64_t Flags,
                                    StringRef Name, Kind SectionKind)
     : SectionBase(SectionKind, Name, Flags, Entsize, Alignment, Type, Info,
                   Link),
-      File(File), Data(Data), Repl(this) {
+      File(File), Data(Data) {
   NumRelocations = 0;
   AreRelocsRela = false;
 
@@ -186,7 +186,7 @@ uint64_t SectionBase::getOffset(uint64_t Offset) const {
 OutputSection *SectionBase::getOutputSection() {
   InputSection *Sec;
   if (auto *IS = dyn_cast<InputSection>(this))
-    Sec = cast<InputSection>(IS->Repl);
+    return IS->getParent();
   else if (auto *MS = dyn_cast<MergeInputSection>(this))
     Sec = MS->getParent();
   else if (auto *EH = dyn_cast<EhInputSection>(this))
@@ -323,7 +323,7 @@ std::string InputSectionBase::getObjMsg(uint64_t Off) {
       .str();
 }
 
-InputSectionBase InputSectionBase::Discarded;
+InputSection InputSection::Discarded(0, 0, 0, ArrayRef<uint8_t>(), "");
 
 InputSection::InputSection(uint64_t Flags, uint32_t Type, uint32_t Alignment,
                            ArrayRef<uint8_t> Data, StringRef Name, Kind K)

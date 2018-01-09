@@ -558,6 +558,7 @@ bool SITargetLowering::isShuffleMaskLegal(ArrayRef<int>, EVT) const {
 
 bool SITargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
                                           const CallInst &CI,
+                                          MachineFunction &MF,
                                           unsigned IntrID) const {
   switch (IntrID) {
   case Intrinsic::amdgcn_atomic_inc:
@@ -566,11 +567,12 @@ bool SITargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
     Info.memVT = MVT::getVT(CI.getType());
     Info.ptrVal = CI.getOperand(0);
     Info.align = 0;
+    Info.flags = MachineMemOperand::MOLoad | MachineMemOperand::MOStore;
 
     const ConstantInt *Vol = dyn_cast<ConstantInt>(CI.getOperand(4));
-    Info.vol = !Vol || !Vol->isZero();
-    Info.readMem = true;
-    Info.writeMem = true;
+    if (!Vol || !Vol->isZero())
+      Info.flags |= MachineMemOperand::MOVolatile;
+
     return true;
   }
   default:
@@ -1458,14 +1460,14 @@ SDValue SITargetLowering::LowerFormalArguments(
   const SIRegisterInfo *TRI = getSubtarget()->getRegisterInfo();
 
   MachineFunction &MF = DAG.getMachineFunction();
-  FunctionType *FType = MF.getFunction()->getFunctionType();
+  FunctionType *FType = MF.getFunction().getFunctionType();
   SIMachineFunctionInfo *Info = MF.getInfo<SIMachineFunctionInfo>();
   const SISubtarget &ST = MF.getSubtarget<SISubtarget>();
 
   if (Subtarget->isAmdHsaOS() && AMDGPU::isShader(CallConv)) {
-    const Function *Fn = MF.getFunction();
+    const Function &Fn = MF.getFunction();
     DiagnosticInfoUnsupported NoGraphicsHSA(
-        *Fn, "unsupported non-compute shaders with HSA", DL.getDebugLoc());
+        Fn, "unsupported non-compute shaders with HSA", DL.getDebugLoc());
     DAG.getContext()->diagnose(NoGraphicsHSA);
     return DAG.getEntryNode();
   }
@@ -1694,7 +1696,7 @@ SDValue SITargetLowering::LowerFormalArguments(
 
   auto &ArgUsageInfo =
     DAG.getPass()->getAnalysis<AMDGPUArgumentUsageInfo>();
-  ArgUsageInfo.setFuncArgInfo(*MF.getFunction(), Info->getArgInfo());
+  ArgUsageInfo.setFuncArgInfo(MF.getFunction(), Info->getArgInfo());
 
   unsigned StackArgSize = CCInfo.getNextStackOffset();
   Info->setBytesInStackArgArea(StackArgSize);
@@ -2030,8 +2032,8 @@ bool SITargetLowering::isEligibleForTailCallOptimization(
     return false;
 
   MachineFunction &MF = DAG.getMachineFunction();
-  const Function *CallerF = MF.getFunction();
-  CallingConv::ID CallerCC = CallerF->getCallingConv();
+  const Function &CallerF = MF.getFunction();
+  CallingConv::ID CallerCC = CallerF.getCallingConv();
   const SIRegisterInfo *TRI = getSubtarget()->getRegisterInfo();
   const uint32_t *CallerPreserved = TRI->getCallPreservedMask(MF, CallerCC);
 
@@ -2052,7 +2054,7 @@ bool SITargetLowering::isEligibleForTailCallOptimization(
   if (IsVarArg)
     return false;
 
-  for (const Argument &Arg : CallerF->args()) {
+  for (const Argument &Arg : CallerF.args()) {
     if (Arg.hasByValAttr())
       return false;
   }
@@ -3592,11 +3594,11 @@ SDValue SITargetLowering::lowerTRAP(SDValue Op, SelectionDAG &DAG) const {
   case SISubtarget::TrapIDLLVMTrap:
     return DAG.getNode(AMDGPUISD::ENDPGM, SL, MVT::Other, Chain);
   case SISubtarget::TrapIDLLVMDebugTrap: {
-    DiagnosticInfoUnsupported NoTrap(*MF.getFunction(),
+    DiagnosticInfoUnsupported NoTrap(MF.getFunction(),
                                      "debugtrap handler not supported",
                                      Op.getDebugLoc(),
                                      DS_Warning);
-    LLVMContext &Ctx = MF.getFunction()->getContext();
+    LLVMContext &Ctx = MF.getFunction().getContext();
     Ctx.diagnose(NoTrap);
     return Chain;
   }
@@ -3709,7 +3711,7 @@ SDValue SITargetLowering::lowerADDRSPACECAST(SDValue Op,
 
   const MachineFunction &MF = DAG.getMachineFunction();
   DiagnosticInfoUnsupported InvalidAddrSpaceCast(
-    *MF.getFunction(), "invalid addrspacecast", SL.getDebugLoc());
+    MF.getFunction(), "invalid addrspacecast", SL.getDebugLoc());
   DAG.getContext()->diagnose(InvalidAddrSpaceCast);
 
   return DAG.getUNDEF(ASC->getValueType(0));
@@ -3911,7 +3913,7 @@ SDValue SITargetLowering::lowerImplicitZextParam(SelectionDAG &DAG,
 
 static SDValue emitNonHSAIntrinsicError(SelectionDAG &DAG, const SDLoc &DL,
                                         EVT VT) {
-  DiagnosticInfoUnsupported BadIntrin(*DAG.getMachineFunction().getFunction(),
+  DiagnosticInfoUnsupported BadIntrin(DAG.getMachineFunction().getFunction(),
                                       "non-hsa intrinsic with hsa target",
                                       DL.getDebugLoc());
   DAG.getContext()->diagnose(BadIntrin);
@@ -3920,7 +3922,7 @@ static SDValue emitNonHSAIntrinsicError(SelectionDAG &DAG, const SDLoc &DL,
 
 static SDValue emitRemovedIntrinsicError(SelectionDAG &DAG, const SDLoc &DL,
                                          EVT VT) {
-  DiagnosticInfoUnsupported BadIntrin(*DAG.getMachineFunction().getFunction(),
+  DiagnosticInfoUnsupported BadIntrin(DAG.getMachineFunction().getFunction(),
                                       "intrinsic not supported on subtarget",
                                       DL.getDebugLoc());
   DAG.getContext()->diagnose(BadIntrin);
@@ -3949,7 +3951,7 @@ SDValue SITargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
   case Intrinsic::amdgcn_queue_ptr: {
     if (!Subtarget->isAmdCodeObjectV2(MF)) {
       DiagnosticInfoUnsupported BadIntrin(
-          *MF.getFunction(), "unsupported hsa intrinsic without hsa target",
+          MF.getFunction(), "unsupported hsa intrinsic without hsa target",
           DL.getDebugLoc());
       DAG.getContext()->diagnose(BadIntrin);
       return DAG.getUNDEF(VT);
@@ -4127,7 +4129,7 @@ SDValue SITargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
       return SDValue();
 
     DiagnosticInfoUnsupported BadIntrin(
-      *MF.getFunction(), "intrinsic not supported on subtarget",
+      MF.getFunction(), "intrinsic not supported on subtarget",
       DL.getDebugLoc());
       DAG.getContext()->diagnose(BadIntrin);
       return DAG.getUNDEF(VT);
@@ -4557,7 +4559,7 @@ SDValue SITargetLowering::LowerINTRINSIC_VOID(SDValue Op,
   case Intrinsic::amdgcn_s_barrier: {
     if (getTargetMachine().getOptLevel() > CodeGenOpt::None) {
       const SISubtarget &ST = MF.getSubtarget<SISubtarget>();
-      unsigned WGSize = ST.getFlatWorkGroupSizes(*MF.getFunction()).second;
+      unsigned WGSize = ST.getFlatWorkGroupSizes(MF.getFunction()).second;
       if (WGSize <= ST.getWavefrontSize())
         return SDValue(DAG.getMachineNode(AMDGPU::WAVE_BARRIER, DL, MVT::Other,
                                           Op.getOperand(0)), 0);
@@ -6652,7 +6654,8 @@ SDNode *SITargetLowering::adjustWritemask(MachineSDNode *&Node,
   unsigned BitsSet = countPopulation(NewDmask);
 
   const SIInstrInfo *TII = getSubtarget()->getInstrInfo();
-  int NewOpcode = TII->getMaskedMIMGOp(Node->getMachineOpcode(), BitsSet);
+  int NewOpcode = AMDGPU::getMaskedMIMGOp(*TII,
+                                          Node->getMachineOpcode(), BitsSet);
   assert(NewOpcode != -1 &&
          NewOpcode != static_cast<int>(Node->getMachineOpcode()) &&
          "failed to find equivalent MIMG op");

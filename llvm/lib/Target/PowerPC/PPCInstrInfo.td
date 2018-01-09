@@ -1590,6 +1590,11 @@ def : Pat<(prefetch xoaddr:$dst, (i32 0), imm, (i32 0)),
           (ICBT 0, xoaddr:$dst)>, Requires<[HasICBT]>; // inst prefetch (for read)
 
 // Atomic operations
+// FIXME: some of these might be used with constant operands. This will result
+// in constant materialization instructions that may be redundant. We currently
+// clean this up in PPCMIPeephole with calls to
+// PPCInstrInfo::convertToImmediateForm() but we should probably not emit them
+// in the first place.
 let usesCustomInserter = 1 in {
   let Defs = [CR0] in {
     def ATOMIC_LOAD_ADD_I8 : Pseudo<
@@ -4336,7 +4341,7 @@ def RLWNMobm : PPCAsmPseudo<"rlwnm. $rA, $rS, $n, $b",
 
 // These generic branch instruction forms are used for the assembler parser only.
 // Defs and Uses are conservative, since we don't know the BO value.
-let PPC970_Unit = 7 in {
+let PPC970_Unit = 7, isBranch = 1 in {
   let Defs = [CTR], Uses = [CTR, RM] in {
     def gBC : BForm_3<16, 0, 0, (outs),
                       (ins u5imm:$bo, crbitrc:$bi, condbrtarget:$dst),

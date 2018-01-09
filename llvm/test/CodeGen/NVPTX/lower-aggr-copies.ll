@@ -36,9 +36,7 @@ entry:
 
 ; WIR-LABEL:   @memcpy_caller
 ; WIR:         entry:
-; WIR:         [[LoopCount:%[0-9]+]] = udiv i64 %n, 1
-; WIR:         [[ResidualSize:%[0-9]+]] = urem i64 %n, 1
-; WIR:         [[Cond:%[0-9]+]] = icmp ne i64 [[LoopCount]], 0
+; WIR:         [[Cond:%[0-9]+]] = icmp ne i64 %n, 0
 ; WIR:         br i1 [[Cond]], label %loop-memcpy-expansion, label %post-loop-memcpy-expansion
 
 ; WIR:         loop-memcpy-expansion:
@@ -48,8 +46,11 @@ entry:
 ; WIR:         [[DstGep:%[0-9]+]] = getelementptr inbounds i8, i8* %dst, i64 %loop-index
 ; WIR:         store i8 [[Load]], i8* [[DstGep]]
 ; WIR:         [[IndexInc]] = add i64 %loop-index, 1
-; WIR:         [[Cond2:%[0-9]+]] = icmp ult i64 [[IndexInc]], [[LoopCount]]
+; WIR:         [[Cond2:%[0-9]+]] = icmp ult i64 [[IndexInc]], %n
 ; WIR:         br i1 [[Cond2]], label %loop-memcpy-expansion, label %post-loop-memcpy-expansion
+
+; WIR-LABEL:   post-loop-memcpy-expansion:
+; WIR:         ret i8* %dst
 }
 
 define i8* @memcpy_volatile_caller(i8* %dst, i8* %src, i64 %n) #0 {
@@ -71,9 +72,7 @@ entry:
 
 ; WIR-LABEL:   @memcpy_volatile_caller
 ; WIR:         entry:
-; WIR:         [[LoopCount:%[0-9]+]] = udiv i64 %n, 1
-; WIR:         [[ResidualSize:%[0-9]+]] = urem i64 %n, 1
-; WIR:         [[Cond:%[0-9]+]] = icmp ne i64 [[LoopCount]], 0
+; WIR:         [[Cond:%[0-9]+]] = icmp ne i64 %n, 0
 ; WIR:         br i1 [[Cond]], label %loop-memcpy-expansion, label %post-loop-memcpy-expansion
 
 ; WIR:         loop-memcpy-expansion:
@@ -83,8 +82,11 @@ entry:
 ; WIR:         [[DstGep:%[0-9]+]] = getelementptr inbounds i8, i8* %dst, i64 %loop-index
 ; WIR:         store volatile i8 [[Load]], i8* [[DstGep]]
 ; WIR:         [[IndexInc]] = add i64 %loop-index, 1
-; WIR:         [[Cond2:%[0-9]+]] = icmp ult i64 [[IndexInc]], [[LoopCount]]
+; WIR:         [[Cond2:%[0-9]+]] = icmp ult i64 [[IndexInc]], %n
 ; WIR:         br i1 [[Cond2]], label %loop-memcpy-expansion, label %post-loop-memcpy-expansion
+
+; WIR-LABEL:   post-loop-memcpy-expansion:
+; WIR:         ret i8* %dst
 }
 
 define i8* @memcpy_casting_caller(i32* %dst, i32* %src, i64 %n) #0 {

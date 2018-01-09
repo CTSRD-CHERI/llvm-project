@@ -45,6 +45,13 @@ public:
 
   StringRef Name;
 
+  // This pointer points to the "real" instance of this instance.
+  // Usually Repl == this. However, if ICF merges two sections,
+  // Repl pointer of one section points to another section. So,
+  // if you need to get a pointer to this instance, do not use
+  // this but instead this->Repl.
+  SectionBase *Repl;
+
   unsigned SectionKind : 3;
 
   // The next two bit fields are only used by InputSectionBase, but we
@@ -77,20 +84,14 @@ protected:
   SectionBase(Kind SectionKind, StringRef Name, uint64_t Flags,
               uint64_t Entsize, uint64_t Alignment, uint32_t Type,
               uint32_t Info, uint32_t Link)
-      : Name(Name), SectionKind(SectionKind), Live(false), Bss(false),
-        Alignment(Alignment), Flags(Flags), Entsize(Entsize), Type(Type),
-        Link(Link), Info(Info) {}
+      : Name(Name), Repl(this), SectionKind(SectionKind), Live(false),
+        Bss(false), Alignment(Alignment), Flags(Flags), Entsize(Entsize),
+        Type(Type), Link(Link), Info(Info) {}
 };
 
 // This corresponds to a section of an input file.
 class InputSectionBase : public SectionBase {
 public:
-  InputSectionBase()
-      : SectionBase(Regular, "", /*Flags*/ 0, /*Entsize*/ 0, /*Alignment*/ 0,
-                    /*Type*/ 0,
-                    /*Info*/ 0, /*Link*/ 0),
-        NumRelocations(0), AreRelocsRela(false), Repl(this) {}
-
   template <class ELFT>
   InputSectionBase(ObjFile<ELFT> *File, const typename ELFT::Shdr *Header,
                    StringRef Name, Kind SectionKind);
@@ -113,8 +114,6 @@ public:
 
   ArrayRef<uint8_t> Data;
   uint64_t getOffsetInFile() const;
-
-  static InputSectionBase Discarded;
 
   // True if this section has already been placed to a linker script
   // output section. This is needed because, in a linker script, you
@@ -153,13 +152,6 @@ public:
         static_cast<const typename ELFT::Rela *>(FirstRelocation),
         NumRelocations);
   }
-
-  // This pointer points to the "real" instance of this instance.
-  // Usually Repl == this. However, if ICF merges two sections,
-  // Repl pointer of one section points to another section. So,
-  // if you need to get a pointer to this instance, do not use
-  // this but instead this->Repl.
-  InputSectionBase *Repl;
 
   // InputSections that are dependent on us (reverse dependency for GC)
   llvm::TinyPtrVector<InputSection *> DependentSections;
@@ -318,8 +310,10 @@ public:
 
   OutputSection *getParent() const;
 
-  // The offset from beginning of the output sections this section was assigned
-  // to. The writer sets a value.
+  // This variable has two usages. Initially, it represents an index in the
+  // OutputSection's InputSection list, and is used when ordering SHF_LINK_ORDER
+  // sections. After assignAddresses is called, it represents the offset from
+  // the beginning of the output section this section was assigned to.
   uint64_t OutSecOff = 0;
 
   static bool classof(const SectionBase *S);
@@ -334,6 +328,8 @@ public:
 
   // Called by ICF to merge two input sections.
   void replace(InputSection *Other);
+
+  static InputSection Discarded;
 
 private:
   template <class ELFT, class RelTy>

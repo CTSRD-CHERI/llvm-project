@@ -14,9 +14,13 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/Analysis/Loads.h"
 #include "llvm/CodeGen/MIRPrinter.h"
+#include "llvm/CodeGen/MachineFrameInfo.h"
+#include "llvm/CodeGen/MachineJumpTableInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/ModuleSlotTracker.h"
 #include "llvm/Target/TargetIntrinsicInfo.h"
 #include "llvm/Target/TargetMachine.h"
@@ -90,6 +94,7 @@ void MachineOperand::setIsDef(bool Val) {
   assert((!Val || !isDebug()) && "Marking a debug operation as def");
   if (IsDef == Val)
     return;
+  assert(!IsDeadOrKill && "Changing def/use with dead/kill set not supported");
   // MRI may keep uses and defs in different list positions.
   if (MachineFunction *MF = getMFIfAvailable(*this)) {
     MachineRegisterInfo &MRI = MF->getRegInfo();
@@ -99,6 +104,34 @@ void MachineOperand::setIsDef(bool Val) {
     return;
   }
   IsDef = Val;
+}
+
+bool MachineOperand::isRenamable() const {
+  assert(isReg() && "Wrong MachineOperand accessor");
+  assert(TargetRegisterInfo::isPhysicalRegister(getReg()) &&
+         "isRenamable should only be checked on physical registers");
+  return IsRenamable;
+}
+
+void MachineOperand::setIsRenamable(bool Val) {
+  assert(isReg() && "Wrong MachineOperand accessor");
+  assert(TargetRegisterInfo::isPhysicalRegister(getReg()) &&
+         "setIsRenamable should only be called on physical registers");
+  if (const MachineInstr *MI = getParent())
+    if ((isDef() && MI->hasExtraDefRegAllocReq()) ||
+        (isUse() && MI->hasExtraSrcRegAllocReq()))
+      assert(!Val && "isRenamable should be false for "
+                     "hasExtraDefRegAllocReq/hasExtraSrcRegAllocReq opcodes");
+  IsRenamable = Val;
+}
+
+void MachineOperand::setIsRenamableIfNoExtraRegAllocReq() {
+  if (const MachineInstr *MI = getParent())
+    if ((isDef() && MI->hasExtraDefRegAllocReq()) ||
+        (isUse() && MI->hasExtraSrcRegAllocReq()))
+      return;
+
+  setIsRenamable(true);
 }
 
 // If this operand is currently a register operand, and if this is in a
@@ -194,13 +227,15 @@ void MachineOperand::ChangeToRegister(unsigned Reg, bool isDef, bool isImp,
     RegInfo->removeRegOperandFromUseList(this);
 
   // Change this to a register and set the reg#.
+  assert(!(isDead && !isDef) && "Dead flag on non-def");
+  assert(!(isKill && isDef) && "Kill flag on def");
   OpKind = MO_Register;
   SmallContents.RegNo = Reg;
   SubReg_TargetFlags = 0;
   IsDef = isDef;
   IsImp = isImp;
-  IsKill = isKill;
-  IsDead = isDead;
+  IsDeadOrKill = isKill | isDead;
+  IsRenamable = false;
   IsUndef = isUndef;
   IsInternalRead = false;
   IsEarlyClobber = false;
@@ -345,6 +380,38 @@ static void tryToGetTargetInfo(const MachineOperand &MO,
   }
 }
 
+static void printOffset(raw_ostream &OS, int64_t Offset) {
+  if (Offset == 0)
+    return;
+  if (Offset < 0) {
+    OS << " - " << -Offset;
+    return;
+  }
+  OS << " + " << Offset;
+}
+
+static const char *getTargetIndexName(const MachineFunction &MF, int Index) {
+  const auto *TII = MF.getSubtarget().getInstrInfo();
+  assert(TII && "expected instruction info");
+  auto Indices = TII->getSerializableTargetIndices();
+  auto Found = find_if(Indices, [&](const std::pair<int, const char *> &I) {
+    return I.first == Index;
+  });
+  if (Found != Indices.end())
+    return Found->second;
+  return nullptr;
+}
+
+static const char *getTargetFlagName(const TargetInstrInfo *TII, unsigned TF) {
+  auto Flags = TII->getSerializableDirectMachineOperandTargetFlags();
+  for (const auto &I : Flags) {
+    if (I.first == TF) {
+      return I.second;
+    }
+  }
+  return nullptr;
+}
+
 void MachineOperand::printSubregIdx(raw_ostream &OS, uint64_t Index,
                                     const TargetRegisterInfo *TRI) {
   OS << "%subreg.";
@@ -352,6 +419,75 @@ void MachineOperand::printSubregIdx(raw_ostream &OS, uint64_t Index,
     OS << TRI->getSubRegIndexName(Index);
   else
     OS << Index;
+}
+
+void MachineOperand::printTargetFlags(raw_ostream &OS,
+                                      const MachineOperand &Op) {
+  if (!Op.getTargetFlags())
+    return;
+  const MachineFunction *MF = getMFIfAvailable(Op);
+  if (!MF)
+    return;
+
+  const auto *TII = MF->getSubtarget().getInstrInfo();
+  assert(TII && "expected instruction info");
+  auto Flags = TII->decomposeMachineOperandsTargetFlags(Op.getTargetFlags());
+  OS << "target-flags(";
+  const bool HasDirectFlags = Flags.first;
+  const bool HasBitmaskFlags = Flags.second;
+  if (!HasDirectFlags && !HasBitmaskFlags) {
+    OS << "<unknown>) ";
+    return;
+  }
+  if (HasDirectFlags) {
+    if (const auto *Name = getTargetFlagName(TII, Flags.first))
+      OS << Name;
+    else
+      OS << "<unknown target flag>";
+  }
+  if (!HasBitmaskFlags) {
+    OS << ") ";
+    return;
+  }
+  bool IsCommaNeeded = HasDirectFlags;
+  unsigned BitMask = Flags.second;
+  auto BitMasks = TII->getSerializableBitmaskMachineOperandTargetFlags();
+  for (const auto &Mask : BitMasks) {
+    // Check if the flag's bitmask has the bits of the current mask set.
+    if ((BitMask & Mask.first) == Mask.first) {
+      if (IsCommaNeeded)
+        OS << ", ";
+      IsCommaNeeded = true;
+      OS << Mask.second;
+      // Clear the bits which were serialized from the flag's bitmask.
+      BitMask &= ~(Mask.first);
+    }
+  }
+  if (BitMask) {
+    // When the resulting flag's bitmask isn't zero, we know that we didn't
+    // serialize all of the bit flags.
+    if (IsCommaNeeded)
+      OS << ", ";
+    OS << "<unknown bitmask target flag>";
+  }
+  OS << ") ";
+}
+
+void MachineOperand::printSymbol(raw_ostream &OS, MCSymbol &Sym) {
+  OS << "<mcsymbol " << Sym << ">";
+}
+
+void MachineOperand::printStackObjectReference(raw_ostream &OS,
+                                               unsigned FrameIndex,
+                                               bool IsFixed, StringRef Name) {
+  if (IsFixed) {
+    OS << "%fixed-stack." << FrameIndex;
+    return;
+  }
+
+  OS << "%stack." << FrameIndex;
+  if (!Name.empty())
+    OS << '.' << Name;
 }
 
 void MachineOperand::print(raw_ostream &OS, const TargetRegisterInfo *TRI,
@@ -369,6 +505,7 @@ void MachineOperand::print(raw_ostream &OS, ModuleSlotTracker &MST,
                            unsigned TiedOperandIdx,
                            const TargetRegisterInfo *TRI,
                            const TargetIntrinsicInfo *IntrinsicInfo) const {
+  printTargetFlags(OS, *this);
   switch (getType()) {
   case MachineOperand::MO_Register: {
     unsigned Reg = getReg();
@@ -389,6 +526,8 @@ void MachineOperand::print(raw_ostream &OS, ModuleSlotTracker &MST,
       OS << "early-clobber ";
     if (isDebug())
       OS << "debug-use ";
+    if (TargetRegisterInfo::isPhysicalRegister(getReg()) && isRenamable())
+      OS << "renamable ";
     OS << printReg(Reg, TRI);
     // Print the sub register.
     if (unsigned SubReg = getSubReg()) {
@@ -449,37 +588,54 @@ void MachineOperand::print(raw_ostream &OS, ModuleSlotTracker &MST,
   case MachineOperand::MO_MachineBasicBlock:
     OS << printMBBReference(*getMBB());
     break;
-  case MachineOperand::MO_FrameIndex:
-    OS << "<fi#" << getIndex() << '>';
+  case MachineOperand::MO_FrameIndex: {
+    int FrameIndex = getIndex();
+    bool IsFixed = false;
+    StringRef Name;
+    if (const MachineFunction *MF = getMFIfAvailable(*this)) {
+      const MachineFrameInfo &MFI = MF->getFrameInfo();
+      IsFixed = MFI.isFixedObjectIndex(FrameIndex);
+      if (const AllocaInst *Alloca = MFI.getObjectAllocation(FrameIndex))
+        if (Alloca->hasName())
+          Name = Alloca->getName();
+      if (IsFixed)
+        FrameIndex -= MFI.getObjectIndexBegin();
+    }
+    printStackObjectReference(OS, FrameIndex, IsFixed, Name);
     break;
+  }
   case MachineOperand::MO_ConstantPoolIndex:
-    OS << "<cp#" << getIndex();
-    if (getOffset())
-      OS << "+" << getOffset();
-    OS << '>';
+    OS << "%const." << getIndex();
+    printOffset(OS, getOffset());
     break;
-  case MachineOperand::MO_TargetIndex:
-    OS << "<ti#" << getIndex();
-    if (getOffset())
-      OS << "+" << getOffset();
-    OS << '>';
+  case MachineOperand::MO_TargetIndex: {
+    OS << "target-index(";
+    const char *Name = "<unknown>";
+    if (const MachineFunction *MF = getMFIfAvailable(*this))
+      if (const auto *TargetIndexName = getTargetIndexName(*MF, getIndex()))
+        Name = TargetIndexName;
+    OS << Name << ')';
+    printOffset(OS, getOffset());
     break;
+  }
   case MachineOperand::MO_JumpTableIndex:
-    OS << "<jt#" << getIndex() << '>';
+    OS << printJumpTableEntryReference(getIndex());
     break;
   case MachineOperand::MO_GlobalAddress:
-    OS << "<ga:";
     getGlobal()->printAsOperand(OS, /*PrintType=*/false, MST);
-    if (getOffset())
-      OS << "+" << getOffset();
-    OS << '>';
+    printOffset(OS, getOffset());
     break;
-  case MachineOperand::MO_ExternalSymbol:
-    OS << "<es:" << getSymbolName();
-    if (getOffset())
-      OS << "+" << getOffset();
-    OS << '>';
+  case MachineOperand::MO_ExternalSymbol: {
+    StringRef Name = getSymbolName();
+    OS << '$';
+    if (Name.empty()) {
+      OS << "\"\"";
+    } else {
+      printLLVMNameWithoutPrefix(OS, Name);
+    }
+    printOffset(OS, getOffset());
     break;
+  }
   case MachineOperand::MO_BlockAddress:
     OS << '<';
     getBlockAddress()->printAsOperand(OS, /*PrintType=*/false, MST);
@@ -512,16 +668,30 @@ void MachineOperand::print(raw_ostream &OS, ModuleSlotTracker &MST,
     OS << ">";
     break;
   }
-  case MachineOperand::MO_RegisterLiveOut:
-    OS << "<regliveout>";
+  case MachineOperand::MO_RegisterLiveOut: {
+    const uint32_t *RegMask = getRegLiveOut();
+    OS << "liveout(";
+    if (!TRI) {
+      OS << "<unknown>";
+    } else {
+      bool IsCommaNeeded = false;
+      for (unsigned Reg = 0, E = TRI->getNumRegs(); Reg < E; ++Reg) {
+        if (RegMask[Reg / 32] & (1U << (Reg % 32))) {
+          if (IsCommaNeeded)
+            OS << ", ";
+          OS << printReg(Reg, TRI);
+          IsCommaNeeded = true;
+        }
+      }
+    }
+    OS << ")";
     break;
+  }
   case MachineOperand::MO_Metadata:
-    OS << '<';
     getMetadata()->printAsOperand(OS, MST);
-    OS << '>';
     break;
   case MachineOperand::MO_MCSymbol:
-    OS << "<MCSym=" << *getMCSymbol() << '>';
+    printSymbol(OS, *getMCSymbol());
     break;
   case MachineOperand::MO_CFIIndex:
     OS << "<call frame instruction>";
@@ -543,8 +713,6 @@ void MachineOperand::print(raw_ostream &OS, ModuleSlotTracker &MST,
     break;
   }
   }
-  if (unsigned TF = getTargetFlags())
-    OS << "[TF=" << TF << ']';
 }
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
