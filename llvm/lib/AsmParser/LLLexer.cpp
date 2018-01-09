@@ -666,6 +666,7 @@ lltok::Kind LLLexer::LexIdentifier() {
   KEYWORD(strictfp);
   KEYWORD(safestack);
   KEYWORD(sanitize_address);
+  KEYWORD(sanitize_hwaddress);
   KEYWORD(sanitize_thread);
   KEYWORD(sanitize_memory);
   KEYWORD(swifterror);

@@ -17,6 +17,7 @@
 #include "Relocations.h"
 #include "Strings.h"
 #include "SymbolTable.h"
+#include "Symbols.h"
 #include "SyntheticSections.h"
 #include "Target.h"
 #include "lld/Common/Memory.h"
@@ -170,7 +171,7 @@ static Defined *addOptionalRegular(StringRef Name, SectionBase *Sec,
 
 // The linker is expected to define some symbols depending on
 // the linking result. This function defines such symbols.
-template <class ELFT> static void addReservedSymbols() {
+template <class ELFT> void elf::addReservedSymbols() {
   if (Config->EMachine == EM_MIPS) {
     // Define _gp for MIPS. st_value of _gp symbol will be updated by Writer
     // so that it points to an absolute address which by default is relative
@@ -194,13 +195,8 @@ template <class ELFT> static void addReservedSymbols() {
           Symtab->addAbsolute<ELFT>("__gnu_local_gp", STV_HIDDEN, STB_GLOBAL);
   }
 
-  // The _GLOBAL_OFFSET_TABLE_ symbol is defined by target convention to
-  // be at some offset from the base of the .got section, usually 0 or the end
-  // of the .got
-  InputSection *GotSection = InX::MipsGot ? cast<InputSection>(InX::MipsGot)
-                                          : cast<InputSection>(InX::Got);
   ElfSym::GlobalOffsetTable = addOptionalRegular<ELFT>(
-      "_GLOBAL_OFFSET_TABLE_", GotSection, Target->GotBaseSymOff);
+      "_GLOBAL_OFFSET_TABLE_", Out::ElfHeader, Target->GotBaseSymOff);
 
   // __ehdr_start is the location of ELF file headers. Note that we define
   // this symbol unconditionally even when using a linker script, which
@@ -251,16 +247,14 @@ template <class ELFT> static void createSyntheticSections() {
   InX::DynStrTab = make<StringTableSection>(".dynstr", true);
   InX::Dynamic = make<DynamicSection<ELFT>>();
   if (Config->AndroidPackDynRelocs) {
-    In<ELFT>::RelaDyn = make<AndroidPackedRelocationSection<ELFT>>(
+    InX::RelaDyn = make<AndroidPackedRelocationSection<ELFT>>(
         Config->IsRela ? ".rela.dyn" : ".rel.dyn");
   } else {
-    In<ELFT>::RelaDyn = make<RelocationSection<ELFT>>(
+    InX::RelaDyn = make<RelocationSection<ELFT>>(
         Config->IsRela ? ".rela.dyn" : ".rel.dyn", Config->ZCombreloc);
   }
   InX::ShStrTab = make<StringTableSection>(".shstrtab", false);
 
-  Out::ElfHeader = make<OutputSection>("", 0, SHF_ALLOC);
-  Out::ElfHeader->Size = sizeof(typename ELFT::Ehdr);
   Out::ProgramHeaders = make<OutputSection>("", 0, SHF_ALLOC);
   Out::ProgramHeaders->Alignment = Config->Wordsize;
 
@@ -334,7 +328,7 @@ template <class ELFT> static void createSyntheticSections() {
 
     Add(InX::Dynamic);
     Add(InX::DynStrTab);
-    Add(In<ELFT>::RelaDyn);
+    Add(InX::RelaDyn);
   }
 
   // Add .got. MIPS' .got is so different from the other archs,
@@ -359,9 +353,9 @@ template <class ELFT> static void createSyntheticSections() {
 
   // We always need to add rel[a].plt to output if it has entries.
   // Even for static linking it can contain R_[*]_IRELATIVE relocations.
-  In<ELFT>::RelaPlt = make<RelocationSection<ELFT>>(
+  InX::RelaPlt = make<RelocationSection<ELFT>>(
       Config->IsRela ? ".rela.plt" : ".rel.plt", false /*Sort*/);
-  Add(In<ELFT>::RelaPlt);
+  Add(InX::RelaPlt);
 
   // The RelaIplt immediately follows .rel.plt (.rel.dyn for ARM) to ensure
   // that the IRelative relocations are processed last by the dynamic loader.
@@ -369,12 +363,12 @@ template <class ELFT> static void createSyntheticSections() {
   // packing is enabled because that would cause a section type mismatch.
   // However, because the Android dynamic loader reads .rel.plt after .rel.dyn,
   // we can get the desired behaviour by placing the iplt section in .rel.plt.
-  In<ELFT>::RelaIplt = make<RelocationSection<ELFT>>(
+  InX::RelaIplt = make<RelocationSection<ELFT>>(
       (Config->EMachine == EM_ARM && !Config->AndroidPackDynRelocs)
           ? ".rel.dyn"
-          : In<ELFT>::RelaPlt->Name,
+          : InX::RelaPlt->Name,
       false /*Sort*/);
-  Add(In<ELFT>::RelaIplt);
+  Add(InX::RelaIplt);
 
   InX::Plt = make<PltSection>(Target->PltHeaderSize);
   Add(InX::Plt);
@@ -405,10 +399,6 @@ template <class ELFT> void Writer<ELFT>::run() {
 
   if (!Config->Relocatable)
     combineEhFrameSections<ELFT>();
-
-  // We need to create some reserved symbols such as _end. Create them.
-  if (!Config->Relocatable)
-    addReservedSymbols<ELFT>();
 
   // We want to process linker script commands. When SECTIONS command
   // is given we let it create sections.
@@ -842,10 +832,10 @@ template <class ELFT> void Writer<ELFT>::addRelIpltSymbols() {
   if (!Config->Static)
     return;
   StringRef S = Config->IsRela ? "__rela_iplt_start" : "__rel_iplt_start";
-  addOptionalRegular<ELFT>(S, In<ELFT>::RelaIplt, 0, STV_HIDDEN, STB_WEAK);
+  addOptionalRegular<ELFT>(S, InX::RelaIplt, 0, STV_HIDDEN, STB_WEAK);
 
   S = Config->IsRela ? "__rela_iplt_end" : "__rel_iplt_end";
-  addOptionalRegular<ELFT>(S, In<ELFT>::RelaIplt, -1, STV_HIDDEN, STB_WEAK);
+  addOptionalRegular<ELFT>(S, InX::RelaIplt, -1, STV_HIDDEN, STB_WEAK);
 }
 
 template <class ELFT>
@@ -868,6 +858,15 @@ void Writer<ELFT>::forEachRelSec(std::function<void(InputSectionBase &)> Fn) {
 // time any references to these symbols are processed and is equivalent to
 // defining these symbols explicitly in the linker script.
 template <class ELFT> void Writer<ELFT>::setReservedSymbolSections() {
+  if (ElfSym::GlobalOffsetTable) {
+    // The _GLOBAL_OFFSET_TABLE_ symbol is defined by target convention to
+    // be at some offset from the base of the .got section, usually 0 or the end
+    // of the .got
+    InputSection *GotSection = InX::MipsGot ? cast<InputSection>(InX::MipsGot)
+                                            : cast<InputSection>(InX::Got);
+    ElfSym::GlobalOffsetTable->Section = GotSection;
+  }
+
   PhdrEntry *Last = nullptr;
   PhdrEntry *LastRO = nullptr;
 
@@ -1342,15 +1341,14 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
 
   // Dynamic section must be the last one in this list and dynamic
   // symbol table section (DynSymTab) must be the first one.
-  applySynthetic({InX::DynSymTab,     InX::Bss,          InX::BssRelRo,
-                  InX::GnuHashTab,    InX::HashTab,      InX::SymTab,
-                  InX::ShStrTab,      InX::StrTab,       In<ELFT>::VerDef,
-                  InX::DynStrTab,     InX::Got,          InX::MipsGot,
-                  InX::IgotPlt,       InX::GotPlt,       In<ELFT>::RelaDyn,
-                  In<ELFT>::RelaIplt, In<ELFT>::RelaPlt, InX::Plt,
-                  InX::Iplt,          InX::EhFrameHdr,   In<ELFT>::VerSym,
-                  In<ELFT>::VerNeed,  InX::Dynamic},
-                 [](SyntheticSection *SS) { SS->finalizeContents(); });
+  applySynthetic(
+      {InX::DynSymTab,   InX::Bss,          InX::BssRelRo, InX::GnuHashTab,
+       InX::HashTab,     InX::SymTab,       InX::ShStrTab, InX::StrTab,
+       In<ELFT>::VerDef, InX::DynStrTab,    InX::Got,      InX::MipsGot,
+       InX::IgotPlt,     InX::GotPlt,       InX::RelaDyn,  InX::RelaIplt,
+       InX::RelaPlt,     InX::Plt,          InX::Iplt,     InX::EhFrameHdr,
+       In<ELFT>::VerSym, In<ELFT>::VerNeed, InX::Dynamic},
+      [](SyntheticSection *SS) { SS->finalizeContents(); });
 
   if (!Script->HasSectionsCommand && !Config->Relocatable)
     fixSectionAlignments();
@@ -1375,7 +1373,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
       }
       if (InX::MipsGot)
         InX::MipsGot->updateAllocSize();
-      Changed |= In<ELFT>::RelaDyn->updateAllocSize();
+      Changed |= InX::RelaDyn->updateAllocSize();
     } while (Changed);
   }
 
@@ -1835,9 +1833,11 @@ template <class ELFT> void Writer<ELFT>::openFile() {
   }
 
   unlinkAsync(Config->OutputFile);
+  unsigned Flags = 0;
+  if (!Config->Relocatable)
+    Flags = FileOutputBuffer::F_executable;
   Expected<std::unique_ptr<FileOutputBuffer>> BufferOrErr =
-      FileOutputBuffer::create(Config->OutputFile, FileSize,
-                               FileOutputBuffer::F_executable);
+      FileOutputBuffer::create(Config->OutputFile, FileSize, Flags);
 
   if (!BufferOrErr)
     error("failed to open " + Config->OutputFile + ": " +
@@ -1935,3 +1935,8 @@ template void elf::writeResult<ELF32LE>();
 template void elf::writeResult<ELF32BE>();
 template void elf::writeResult<ELF64LE>();
 template void elf::writeResult<ELF64BE>();
+
+template void elf::addReservedSymbols<ELF32LE>();
+template void elf::addReservedSymbols<ELF32BE>();
+template void elf::addReservedSymbols<ELF64LE>();
+template void elf::addReservedSymbols<ELF64BE>();

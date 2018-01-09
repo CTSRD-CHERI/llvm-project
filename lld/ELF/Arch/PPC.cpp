@@ -34,6 +34,8 @@ RelExpr PPC::getRelExpr(RelType Type, const Symbol &S,
   case R_PPC_REL24:
   case R_PPC_REL32:
     return R_PC;
+  case R_PPC_PLTREL24:
+    return R_PLT_PC;
   default:
     return R_ABS;
   }
@@ -54,6 +56,7 @@ void PPC::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   case R_PPC_REL32:
     write32be(Loc, Val);
     break;
+  case R_PPC_PLTREL24:
   case R_PPC_REL24:
     write32be(Loc, read32be(Loc) | (Val & 0x3FFFFFC));
     break;
