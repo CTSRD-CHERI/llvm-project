@@ -29,7 +29,6 @@
 #include <sstream>
 
 #include "lldb/Breakpoint/Watchpoint.h"
-#include "lldb/Core/ArchSpec.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
@@ -818,7 +817,7 @@ Status ProcessGDBRemote::DoLaunch(Module *exe_module,
   if (object_file) {
     error = EstablishConnectionIfNeeded(launch_info);
     if (error.Success()) {
-      lldb_utility::PseudoTerminal pty;
+      PseudoTerminal pty;
       const bool disable_stdio = (launch_flags & eLaunchFlagDisableSTDIO) != 0;
 
       PlatformSP platform_sp(GetTarget().GetPlatform());
@@ -947,8 +946,7 @@ Status ProcessGDBRemote::DoLaunch(Module *exe_module,
         SetPrivateState(SetThreadStopInfo(response));
 
         if (!disable_stdio) {
-          if (pty.GetMasterFileDescriptor() !=
-              lldb_utility::PseudoTerminal::invalid_fd)
+          if (pty.GetMasterFileDescriptor() != PseudoTerminal::invalid_fd)
             SetSTDIOFileDescriptor(pty.ReleaseMasterFileDescriptor());
         }
       }

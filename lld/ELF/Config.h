@@ -106,6 +106,9 @@ struct Configuration {
   bool AllowMultipleDefinition;
   bool AllowUndefinedCapRelocs = false;
   bool AndroidPackDynRelocs = false;
+  bool ARMHasBlx = false;
+  bool ARMHasMovtMovw = false;
+  bool ARMJ1J2BranchEncoding = false;
   bool AsNeeded = false;
   bool Bsymbolic;
   bool BsymbolicFunctions;
@@ -117,6 +120,7 @@ struct Configuration {
   bool EmitRelocs;
   bool EnableNewDtags;
   bool ExportDynamic;
+  bool FixCortexA53Errata843419;
   bool GcSections;
   bool GdbIndex;
   bool GnuHash = false;

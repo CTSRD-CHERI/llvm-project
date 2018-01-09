@@ -1977,29 +1977,13 @@ PPCInstrInfo::getSerializableBitmaskMachineOperandTargetFlags() const {
   return makeArrayRef(TargetFlags);
 }
 
-bool PPCInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
-  auto &MBB = *MI.getParent();
-  auto DL = MI.getDebugLoc();
-  switch (MI.getOpcode()) {
-  case TargetOpcode::LOAD_STACK_GUARD: {
-    assert(Subtarget.isTargetLinux() &&
-           "Only Linux target is expected to contain LOAD_STACK_GUARD");
-    const int64_t Offset = Subtarget.isPPC64() ? -0x7010 : -0x7008;
-    const unsigned Reg = Subtarget.isPPC64() ? PPC::X13 : PPC::R2;
-    MI.setDesc(get(Subtarget.isPPC64() ? PPC::LD : PPC::LWZ));
-    MachineInstrBuilder(*MI.getParent()->getParent(), MI)
-        .addImm(Offset)
-        .addReg(Reg);
-    return true;
-  }
-  case PPC::DFLOADf32:
-  case PPC::DFLOADf64:
-  case PPC::DFSTOREf32:
-  case PPC::DFSTOREf64: {
-    assert(Subtarget.hasP9Vector() &&
-           "Invalid D-Form Pseudo-ops on non-P9 target.");
-    assert(MI.getOperand(2).isReg() && MI.getOperand(1).isImm() &&
-           "D-form op must have register and immediate operands");
+// Expand VSX Memory Pseudo instruction to either a VSX or a FP instruction.
+// The VSX versions have the advantage of a full 64-register target whereas
+// the FP ones have the advantage of lower latency and higher throughput. So
+// what we are after is using the faster instructions in low register pressure
+// situations and using the larger register file in high register pressure
+// situations.
+bool PPCInstrInfo::expandVSXMemPseudo(MachineInstr &MI) const {
     unsigned UpperOpcode, LowerOpcode;
     switch (MI.getOpcode()) {
     case PPC::DFLOADf32:
@@ -2018,7 +2002,38 @@ bool PPCInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
       UpperOpcode = PPC::STXSD;
       LowerOpcode = PPC::STFD;
       break;
+    case PPC::XFLOADf32:
+      UpperOpcode = PPC::LXSSPX;
+      LowerOpcode = PPC::LFSX;
+      break;
+    case PPC::XFLOADf64:
+      UpperOpcode = PPC::LXSDX;
+      LowerOpcode = PPC::LFDX;
+      break;
+    case PPC::XFSTOREf32:
+      UpperOpcode = PPC::STXSSPX;
+      LowerOpcode = PPC::STFSX;
+      break;
+    case PPC::XFSTOREf64:
+      UpperOpcode = PPC::STXSDX;
+      LowerOpcode = PPC::STFDX;
+      break;
+    case PPC::LIWAX:
+      UpperOpcode = PPC::LXSIWAX;
+      LowerOpcode = PPC::LFIWAX;
+      break;
+    case PPC::LIWZX:
+      UpperOpcode = PPC::LXSIWZX;
+      LowerOpcode = PPC::LFIWZX;
+      break;
+    case PPC::STIWX:
+      UpperOpcode = PPC::STXSIWX;
+      LowerOpcode = PPC::STFIWX;
+      break;
+    default:
+      llvm_unreachable("Unknown Operation!");
     }
+
     unsigned TargetReg = MI.getOperand(0).getReg();
     unsigned Opcode;
     if ((TargetReg >= PPC::F0 && TargetReg <= PPC::F31) ||
@@ -2028,6 +2043,52 @@ bool PPCInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
       Opcode = UpperOpcode;
     MI.setDesc(get(Opcode));
     return true;
+}
+
+bool PPCInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
+  auto &MBB = *MI.getParent();
+  auto DL = MI.getDebugLoc();
+
+  switch (MI.getOpcode()) {
+  case TargetOpcode::LOAD_STACK_GUARD: {
+    assert(Subtarget.isTargetLinux() &&
+           "Only Linux target is expected to contain LOAD_STACK_GUARD");
+    const int64_t Offset = Subtarget.isPPC64() ? -0x7010 : -0x7008;
+    const unsigned Reg = Subtarget.isPPC64() ? PPC::X13 : PPC::R2;
+    MI.setDesc(get(Subtarget.isPPC64() ? PPC::LD : PPC::LWZ));
+    MachineInstrBuilder(*MI.getParent()->getParent(), MI)
+        .addImm(Offset)
+        .addReg(Reg);
+    return true;
+  }
+  case PPC::DFLOADf32:
+  case PPC::DFLOADf64:
+  case PPC::DFSTOREf32:
+  case PPC::DFSTOREf64: {
+    assert(Subtarget.hasP9Vector() &&
+           "Invalid D-Form Pseudo-ops on Pre-P9 target.");
+    assert(MI.getOperand(2).isReg() && MI.getOperand(1).isImm() &&
+           "D-form op must have register and immediate operands");
+    return expandVSXMemPseudo(MI);
+  }
+  case PPC::XFLOADf32:
+  case PPC::XFSTOREf32:
+  case PPC::LIWAX:
+  case PPC::LIWZX:
+  case PPC::STIWX: {
+    assert(Subtarget.hasP8Vector() &&
+           "Invalid X-Form Pseudo-ops on Pre-P8 target.");
+    assert(MI.getOperand(2).isReg() && MI.getOperand(1).isReg() &&
+           "X-form op must have register and register operands");
+    return expandVSXMemPseudo(MI);
+  }
+  case PPC::XFLOADf64:
+  case PPC::XFSTOREf64: {
+    assert(Subtarget.hasVSX() &&
+           "Invalid X-Form Pseudo-ops on target that has no VSX.");
+    assert(MI.getOperand(2).isReg() && MI.getOperand(1).isReg() &&
+           "X-form op must have register and register operands");
+    return expandVSXMemPseudo(MI);
   }
   case PPC::SPILLTOVSR_LD: {
     unsigned TargetReg = MI.getOperand(0).getReg();
@@ -2205,6 +2266,20 @@ static bool isZeroExtendingOp(const MachineInstr &MI) {
   return false;
 }
 
+// This function returns true if the input MachineInstr is a TOC save
+// instruction.
+bool PPCInstrInfo::isTOCSaveMI(const MachineInstr &MI) const {
+  if (!MI.getOperand(1).isImm() || !MI.getOperand(2).isReg())
+    return false;
+  unsigned TOCSaveOffset = Subtarget.getFrameLowering()->getTOCSaveOffset();
+  unsigned StackOffset = MI.getOperand(1).getImm();
+  unsigned StackReg = MI.getOperand(2).getReg();
+  if (StackReg == PPC::X1 && StackOffset == TOCSaveOffset)
+    return true;
+
+  return false;
+}
+
 // We limit the max depth to track incoming values of PHIs or binary ops
 // (e.g. AND) to avoid exsessive cost.
 const unsigned MAX_DEPTH = 1;
@@ -2240,10 +2315,10 @@ PPCInstrInfo::isSignOrZeroExtended(const MachineInstr &MI, bool SignExt,
 
       // For a method return value, we check the ZExt/SExt flags in attribute.
       // We assume the following code sequence for method call.
-      //   ADJCALLSTACKDOWN 32, %R1<imp-def,dead>, %R1<imp-use>
+      //   ADJCALLSTACKDOWN 32, implicit dead %r1, implicit %r1
       //   BL8_NOP <ga:@func>,...
-      //   ADJCALLSTACKUP 32, 0, %R1<imp-def,dead>, %R1<imp-use>
-      //   %vreg5<def> = COPY %X3; G8RC:%vreg5
+      //   ADJCALLSTACKUP 32, 0, implicit dead %r1, implicit %r1
+      //   %5 = COPY %x3; G8RC:%5
       if (SrcReg == PPC::X3) {
         const MachineBasicBlock *MBB = MI.getParent();
         MachineBasicBlock::const_instr_iterator II =
@@ -2303,9 +2378,7 @@ PPCInstrInfo::isSignOrZeroExtended(const MachineInstr &MI, bool SignExt,
   }
 
   // If all incoming values are sign-/zero-extended,
-  // the output of AND, OR, ISEL or PHI is also sign-/zero-extended.
-  case PPC::AND:
-  case PPC::AND8:
+  // the output of OR, ISEL or PHI is also sign-/zero-extended.
   case PPC::OR:
   case PPC::OR8:
   case PPC::ISEL:
@@ -2334,6 +2407,36 @@ PPCInstrInfo::isSignOrZeroExtended(const MachineInstr &MI, bool SignExt,
         return false;
     }
     return true;
+  }
+
+  // If at least one of the incoming values of an AND is zero extended
+  // then the output is also zero-extended. If both of the incoming values
+  // are sign-extended then the output is also sign extended.
+  case PPC::AND:
+  case PPC::AND8: {
+    if (Depth >= MAX_DEPTH)
+       return false;
+
+    assert(MI.getOperand(1).isReg() && MI.getOperand(2).isReg());
+
+    unsigned SrcReg1 = MI.getOperand(1).getReg();
+    unsigned SrcReg2 = MI.getOperand(2).getReg();
+
+    if (!TargetRegisterInfo::isVirtualRegister(SrcReg1) ||
+        !TargetRegisterInfo::isVirtualRegister(SrcReg2))
+       return false;
+
+    const MachineInstr *MISrc1 = MRI->getVRegDef(SrcReg1);
+    const MachineInstr *MISrc2 = MRI->getVRegDef(SrcReg2);
+    if (!MISrc1 || !MISrc2)
+        return false;
+
+    if(SignExt)
+        return isSignOrZeroExtended(*MISrc1, SignExt, Depth+1) &&
+               isSignOrZeroExtended(*MISrc2, SignExt, Depth+1);
+    else
+        return isSignOrZeroExtended(*MISrc1, SignExt, Depth+1) ||
+               isSignOrZeroExtended(*MISrc2, SignExt, Depth+1);
   }
 
   default:

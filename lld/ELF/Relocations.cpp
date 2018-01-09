@@ -44,13 +44,14 @@
 #include "Relocations.h"
 #include "Config.h"
 #include "LinkerScript.h"
-#include "Memory.h"
 #include "OutputSections.h"
 #include "Strings.h"
 #include "SymbolTable.h"
+#include "Symbols.h"
 #include "SyntheticSections.h"
 #include "Target.h"
 #include "Thunks.h"
+#include "lld/Common/Memory.h"
 
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/Format.h"
@@ -74,7 +75,7 @@ template <class ELFT>
 static std::string getLocation(InputSectionBase &S, const Symbol &Sym,
                                uint64_t Off) {
   std::string Msg =
-      "\n>>> defined in " + toString(Sym.getFile()) + "\n>>> referenced by ";
+      "\n>>> defined in " + toString(Sym.File) + "\n>>> referenced by ";
   std::string Src = S.getSrcMsg<ELFT>(Sym, Off);
   if (!Src.empty())
     Msg += Src + "\n>>>               ";
@@ -150,7 +151,7 @@ static unsigned handleARMTlsRelocation(RelType Type, Symbol &Sym,
 
   auto AddTlsReloc = [&](uint64_t Off, RelType Type, Symbol *Dest, bool Dyn) {
     if (Dyn)
-      In<ELFT>::RelaDyn->addReloc({Type, InX::Got, Off, false, Dest, 0});
+      InX::RelaDyn->addReloc({Type, InX::Got, Off, false, Dest, 0});
     else
       InX::Got->Relocations.push_back({R_ABS, Type, Off, 0, Dest});
   };
@@ -202,7 +203,7 @@ handleTlsRelocation(RelType Type, Symbol &Sym, InputSectionBase &C,
       Config->Shared) {
     if (InX::Got->addDynTlsEntry(Sym)) {
       uint64_t Off = InX::Got->getGlobalDynOffset(Sym);
-      In<ELFT>::RelaDyn->addReloc(
+      InX::RelaDyn->addReloc(
           {Target->TlsDescRel, InX::Got, Off, !Sym.IsPreemptible, &Sym, 0});
     }
     if (Expr != R_TLSDESC_CALL)
@@ -218,9 +219,8 @@ handleTlsRelocation(RelType Type, Symbol &Sym, InputSectionBase &C,
       return 2;
     }
     if (InX::Got->addTlsIndex())
-      In<ELFT>::RelaDyn->addReloc({Target->TlsModuleIndexRel, InX::Got,
-                                   InX::Got->getTlsIndexOff(), false, nullptr,
-                                   0});
+      InX::RelaDyn->addReloc({Target->TlsModuleIndexRel, InX::Got,
+                              InX::Got->getTlsIndexOff(), false, nullptr, 0});
     C.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
     return 1;
   }
@@ -236,14 +236,14 @@ handleTlsRelocation(RelType Type, Symbol &Sym, InputSectionBase &C,
     if (Config->Shared) {
       if (InX::Got->addDynTlsEntry(Sym)) {
         uint64_t Off = InX::Got->getGlobalDynOffset(Sym);
-        In<ELFT>::RelaDyn->addReloc(
+        InX::RelaDyn->addReloc(
             {Target->TlsModuleIndexRel, InX::Got, Off, false, &Sym, 0});
 
         // If the symbol is preemptible we need the dynamic linker to write
         // the offset too.
         uint64_t OffsetOff = Off + Config->Wordsize;
         if (Sym.IsPreemptible)
-          In<ELFT>::RelaDyn->addReloc(
+          InX::RelaDyn->addReloc(
               {Target->TlsOffsetRel, InX::Got, OffsetOff, false, &Sym, 0});
         else
           InX::Got->Relocations.push_back(
@@ -261,7 +261,7 @@ handleTlsRelocation(RelType Type, Symbol &Sym, InputSectionBase &C,
            Offset, Addend, &Sym});
       if (!Sym.isInGot()) {
         InX::Got->addEntry(Sym);
-        In<ELFT>::RelaDyn->addReloc(
+        InX::RelaDyn->addReloc(
             {Target->TlsGotRel, InX::Got, Sym.getGotOffset(), false, &Sym, 0});
       }
     } else {
@@ -539,9 +539,10 @@ template <class ELFT> static void addCopyRelSymbol(SharedSymbol *SS) {
     Sym->CopyRelSec = Sec;
     Sym->IsPreemptible = false;
     Sym->IsUsedInRegularObj = true;
+    Sym->Used = true;
   }
 
-  In<ELFT>::RelaDyn->addReloc({Target->CopyRel, Sec, 0, false, SS, 0});
+  InX::RelaDyn->addReloc({Target->CopyRel, Sec, 0, false, SS, 0});
 }
 
 static void errorOrWarn(const Twine &Msg) {
@@ -603,8 +604,8 @@ static RelExpr adjustExpr(Symbol &Sym, RelExpr Expr, RelType Type,
 
   if (Sym.isObject()) {
     // Produce a copy relocation.
-    auto *B = cast<SharedSymbol>(&Sym);
-    if (!B->CopyRelSec) {
+    auto *B = dyn_cast<SharedSymbol>(&Sym);
+    if (B && !B->CopyRelSec) {
       if (Config->ZNocopyreloc)
         error("unresolvable relocation " + toString(Type) +
               " against symbol '" + toString(*B) +
@@ -643,7 +644,7 @@ static RelExpr adjustExpr(Symbol &Sym, RelExpr Expr, RelType Type,
   }
 
   errorOrWarn("symbol '" + toString(Sym) + "' defined in " +
-              toString(Sym.getFile()) + " has no type");
+              toString(Sym.File) + " has no type");
   return Expr;
 }
 
@@ -805,7 +806,7 @@ private:
 
 template <class ELFT, class GotPltSection>
 static void addPltEntry(PltSection *Plt, GotPltSection *GotPlt,
-                        RelocationSection<ELFT> *Rel, RelType Type, Symbol &Sym,
+                        RelocationBaseSection *Rel, RelType Type, Symbol &Sym,
                         bool UseSymVA) {
   Plt->addEntry<ELFT>(Sym);
   GotPlt->addEntry(Sym);
@@ -840,7 +841,7 @@ template <class ELFT> static void addGotEntry(Symbol &Sym, bool Preemptible) {
     Type = Target->RelativeRel;
   else
     Type = Target->GotRel;
-  In<ELFT>::RelaDyn->addReloc({Type, InX::Got, Off, !Preemptible, &Sym, 0});
+  InX::RelaDyn->addReloc({Type, InX::Got, Off, !Preemptible, &Sym, 0});
 
   // REL type relocations don't have addend fields unlike RELAs, and
   // their addends are stored to the section to which they are applied.
@@ -868,6 +869,9 @@ template <class ELFT> static void addGotEntry(Symbol &Sym, bool Preemptible) {
 template <class ELFT, class RelTy>
 static void scanRelocs(InputSectionBase &Sec, ArrayRef<RelTy> Rels) {
   OffsetGetter GetOffset(Sec);
+
+  // Not all relocations end up in Sec.Relocations, but a lot do.
+  Sec.Relocations.reserve(Rels.size());
 
   for (auto I = Rels.begin(), End = Rels.end(); I != End; ++I) {
     const RelTy &Rel = *I;
@@ -946,11 +950,11 @@ static void scanRelocs(InputSectionBase &Sec, ArrayRef<RelTy> Rels) {
     // If a relocation needs PLT, we create PLT and GOTPLT slots for the symbol.
     if (needsPlt(Expr) && !Sym.isInPlt()) {
       if (Sym.isGnuIFunc() && !Preemptible)
-        addPltEntry(InX::Iplt, InX::IgotPlt, In<ELFT>::RelaIplt,
-                    Target->IRelativeRel, Sym, true);
+        addPltEntry<ELFT>(InX::Iplt, InX::IgotPlt, InX::RelaIplt,
+                          Target->IRelativeRel, Sym, true);
       else
-        addPltEntry(InX::Plt, InX::GotPlt, In<ELFT>::RelaPlt, Target->PltRel,
-                    Sym, !Preemptible);
+        addPltEntry<ELFT>(InX::Plt, InX::GotPlt, InX::RelaPlt, Target->PltRel,
+                          Sym, !Preemptible);
     }
 
     // Create a GOT slot if a relocation needs GOT.
@@ -986,7 +990,7 @@ static void scanRelocs(InputSectionBase &Sec, ArrayRef<RelTy> Rels) {
             " cannot be used against shared object; recompile with -fPIC" +
             getLocation<ELFT>(Sec, Sym, Offset));
 
-      In<ELFT>::RelaDyn->addReloc(
+      InX::RelaDyn->addReloc(
           {Target->getDynRel(Type), &Sec, Offset, false, &Sym, Addend});
 
       // MIPS ABI turns using of GOT and dynamic relocations inside out.
@@ -1031,11 +1035,11 @@ static void scanRelocs(InputSectionBase &Sec, ArrayRef<RelTy> Rels) {
     // relocation. We can process some of it and and just ask the dynamic
     // linker to add the load address.
     if (Config->IsRela) {
-      In<ELFT>::RelaDyn->addReloc(
+      InX::RelaDyn->addReloc(
           {Target->RelativeRel, &Sec, Offset, true, &Sym, Addend});
     } else {
       // In REL, addends are stored to the target section.
-      In<ELFT>::RelaDyn->addReloc(
+      InX::RelaDyn->addReloc(
           {Target->RelativeRel, &Sec, Offset, true, &Sym, 0});
       Sec.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
     }

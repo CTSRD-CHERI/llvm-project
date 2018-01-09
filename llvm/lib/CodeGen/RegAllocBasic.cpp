@@ -29,11 +29,11 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/RegAllocRegistry.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/VirtRegMap.h"
 #include "llvm/PassAnalysisSupport.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetRegisterInfo.h"
 #include <cstdlib>
 #include <queue>
 
@@ -219,8 +219,8 @@ bool RABasic::spillInterferences(LiveInterval &VirtReg, unsigned PhysReg,
       Intfs.push_back(Intf);
     }
   }
-  DEBUG(dbgs() << "spilling " << TRI->getName(PhysReg) <<
-        " interferences with " << VirtReg << "\n");
+  DEBUG(dbgs() << "spilling " << printReg(PhysReg, TRI)
+               << " interferences with " << VirtReg << "\n");
   assert(!Intfs.empty() && "expected interference");
 
   // Spill each interfering vreg allocated to PhysReg or an alias.

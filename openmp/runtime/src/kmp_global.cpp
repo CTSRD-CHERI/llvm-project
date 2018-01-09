@@ -76,25 +76,16 @@ size_t __kmp_malloc_pool_incr = KMP_DEFAULT_MALLOC_POOL_INCR;
 
 // Barrier method defaults, settings, and strings.
 // branch factor = 2^branch_bits (only relevant for tree & hyper barrier types)
-#if KMP_ARCH_X86_64
 kmp_uint32 __kmp_barrier_gather_bb_dflt = 2;
 /* branch_factor = 4 */ /* hyper2: C78980 */
 kmp_uint32 __kmp_barrier_release_bb_dflt = 2;
 /* branch_factor = 4 */ /* hyper2: C78980 */
-#else
-kmp_uint32 __kmp_barrier_gather_bb_dflt = 2;
-/* branch_factor = 4 */ /* communication in core for MIC */
-kmp_uint32 __kmp_barrier_release_bb_dflt = 2;
-/* branch_factor = 4 */ /* communication in core for MIC */
-#endif // KMP_ARCH_X86_64
-#if KMP_ARCH_X86_64
-kmp_bar_pat_e __kmp_barrier_gather_pat_dflt = bp_hyper_bar; /* hyper2: C78980 */
-kmp_bar_pat_e __kmp_barrier_release_pat_dflt =
-    bp_hyper_bar; /* hyper2: C78980 */
-#else
-kmp_bar_pat_e __kmp_barrier_gather_pat_dflt = bp_linear_bar;
-kmp_bar_pat_e __kmp_barrier_release_pat_dflt = bp_linear_bar;
-#endif
+
+kmp_bar_pat_e __kmp_barrier_gather_pat_dflt = bp_hyper_bar;
+/* hyper2: C78980 */
+kmp_bar_pat_e __kmp_barrier_release_pat_dflt = bp_hyper_bar;
+/* hyper2: C78980 */
+
 kmp_uint32 __kmp_barrier_gather_branch_bits[bs_last_barrier] = {0};
 kmp_uint32 __kmp_barrier_release_branch_bits[bs_last_barrier] = {0};
 kmp_bar_pat_e __kmp_barrier_gather_pattern[bs_last_barrier] = {bp_linear_bar};
@@ -243,6 +234,8 @@ KMPAffinity *__kmp_affinity_dispatch = NULL;
 #if KMP_USE_HWLOC
 int __kmp_hwloc_error = FALSE;
 hwloc_topology_t __kmp_hwloc_topology = NULL;
+int __kmp_numa_detected = FALSE;
+int __kmp_tile_depth = 0;
 #endif
 
 #if KMP_OS_WINDOWS
@@ -271,7 +264,7 @@ char *__kmp_affinity_proclist = NULL;
 kmp_affin_mask_t *__kmp_affinity_masks = NULL;
 unsigned __kmp_affinity_num_masks = 0;
 
-char const *__kmp_cpuinfo_file = NULL;
+char *__kmp_cpuinfo_file = NULL;
 
 #endif /* KMP_AFFINITY_SUPPORTED */
 
@@ -298,10 +291,6 @@ kmp_int32 __kmp_max_task_priority = 0;
 kmp_uint64 __kmp_taskloop_min_tasks = 0;
 #endif
 
-#if OMP_50_ENABLED && OMPT_SUPPORT
-char const *__kmp_tool_libraries = NULL;
-#endif
-
 /* This check ensures that the compiler is passing the correct data type for the
    flags formal parameter of the function kmpc_omp_task_alloc(). If the type is
    not a 4-byte type, then give an error message about a non-positive length
@@ -309,8 +298,7 @@ char const *__kmp_tool_libraries = NULL;
    be redefined to have exactly 32 bits. */
 KMP_BUILD_ASSERT(sizeof(kmp_tasking_flags_t) == 4);
 
-kmp_int32 __kmp_task_stealing_constraint =
-    1; /* Constrain task stealing by default */
+int __kmp_task_stealing_constraint = 1; /* Constrain task stealing by default */
 
 #ifdef DEBUG_SUSPEND
 int __kmp_suspend_count = 0;

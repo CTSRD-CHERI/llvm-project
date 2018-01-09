@@ -1748,13 +1748,17 @@ Sema::BuildCXXNew(SourceRange Range, bool UseGlobal,
     if (AllocType.isNull())
       return ExprError();
   } else if (Deduced) {
+    bool Braced = (initStyle == CXXNewExpr::ListInit);
+    if (NumInits == 1) {
+      if (auto p = dyn_cast_or_null<InitListExpr>(Inits[0])) {
+        Inits = p->getInits();
+        NumInits = p->getNumInits();
+        Braced = true;
+      }
+    }
+
     if (initStyle == CXXNewExpr::NoInit || NumInits == 0)
       return ExprError(Diag(StartLoc, diag::err_auto_new_requires_ctor_arg)
-                       << AllocType << TypeRange);
-    if (initStyle == CXXNewExpr::ListInit ||
-        (NumInits == 1 && isa<InitListExpr>(Inits[0])))
-      return ExprError(Diag(Inits[0]->getLocStart(),
-                            diag::err_auto_new_list_init)
                        << AllocType << TypeRange);
     if (NumInits > 1) {
       Expr *FirstBad = Inits[1];
@@ -1762,6 +1766,9 @@ Sema::BuildCXXNew(SourceRange Range, bool UseGlobal,
                             diag::err_auto_new_ctor_multiple_expressions)
                        << AllocType << TypeRange);
     }
+    if (Braced && !getLangOpts().CPlusPlus17)
+      Diag(Initializer->getLocStart(), diag::ext_auto_new_list_init)
+          << AllocType << TypeRange;
     Expr *Deduce = Inits[0];
     QualType DeducedType;
     if (DeduceAutoType(AllocTypeInfo, Deduce, DeducedType) == DAR_Failed)
@@ -3293,6 +3300,15 @@ Sema::ActOnCXXDelete(SourceLocation StartLoc, bool UseGlobal,
     // is trivial and left to AST consumers to handle.
     QualType ParamType = OperatorDelete->getParamDecl(0)->getType();
     if (!IsVirtualDelete && !ParamType->getPointeeType()->isVoidType()) {
+      Qualifiers Qs = Pointee.getQualifiers();
+      if (Qs.hasCVRQualifiers()) {
+        // Qualifiers are irrelevant to this conversion; we're only looking
+        // for access and ambiguity.
+        Qs.removeCVRQualifiers();
+        QualType Unqual = Context.getPointerType(
+            Context.getQualifiedType(Pointee.getUnqualifiedType(), Qs));
+        Ex = ImpCastExprToType(Ex.get(), Unqual, CK_NoOp);
+      }
       Ex = PerformImplicitConversion(Ex.get(), ParamType, AA_Passing);
       if (Ex.isInvalid())
         return ExprError();
@@ -3831,7 +3847,7 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
           << From->getSourceRange();
     }
 
-    CastKind Kind = CK_Invalid;
+    CastKind Kind;
     CXXCastPath BasePath;
     if (CheckPointerConversion(From, ToType, Kind, BasePath, CStyle))
       return ExprError();
@@ -3851,7 +3867,7 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
   }
 
   case ICK_Pointer_Member: {
-    CastKind Kind = CK_Invalid;
+    CastKind Kind;
     CXXCastPath BasePath;
     if (CheckMemberPointerConversion(From, ToType, Kind, BasePath, CStyle))
       return ExprError();
@@ -4616,7 +4632,7 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
     //   function call.
     return !T->isIncompleteType();
   case UTT_HasUniqueObjectRepresentations:
-    return T.hasUniqueObjectRepresentations(C);
+    return C.hasUniqueObjectRepresentations(T);
   }
 }
 
@@ -5750,7 +5766,7 @@ mergeExceptionSpecs(Sema &S, FunctionProtoType::ExceptionSpecInfo ESI1,
   // happen in C++17, because it would mean we were computing the composite
   // pointer type of dependent types, which should never happen.
   if (EST1 == EST_ComputedNoexcept || EST2 == EST_ComputedNoexcept) {
-    assert(!S.getLangOpts().CPlusPlus1z &&
+    assert(!S.getLangOpts().CPlusPlus17 &&
            "computing composite pointer type of dependent types");
     return FunctionProtoType::ExceptionSpecInfo();
   }

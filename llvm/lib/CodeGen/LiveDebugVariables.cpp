@@ -40,6 +40,9 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SlotIndexes.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetOpcodes.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/CodeGen/VirtRegMap.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/DebugLoc.h"
@@ -52,9 +55,6 @@
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetOpcodes.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <algorithm>
 #include <cassert>
 #include <iterator>
@@ -1174,7 +1174,7 @@ void UserValue::emitDebugValues(VirtRegMap *VRM, LiveIntervals &LIS,
     MachineFunction::iterator MBB = LIS.getMBBFromIndex(Start)->getIterator();
     SlotIndex MBBEnd = LIS.getMBBEndIdx(&*MBB);
 
-    DEBUG(dbgs() << " BB#" << MBB->getNumber() << '-' << MBBEnd);
+    DEBUG(dbgs() << ' ' << printMBBReference(*MBB) << '-' << MBBEnd);
     insertDebugValue(&*MBB, Start, Stop, Loc, Spilled, LIS, TII, TRI);
     // This interval may span multiple basic blocks.
     // Insert a DBG_VALUE into each one.
@@ -1184,7 +1184,7 @@ void UserValue::emitDebugValues(VirtRegMap *VRM, LiveIntervals &LIS,
       if (++MBB == MFEnd)
         break;
       MBBEnd = LIS.getMBBEndIdx(&*MBB);
-      DEBUG(dbgs() << " BB#" << MBB->getNumber() << '-' << MBBEnd);
+      DEBUG(dbgs() << ' ' << printMBBReference(*MBB) << '-' << MBBEnd);
       insertDebugValue(&*MBB, Start, Stop, Loc, Spilled, LIS, TII, TRI);
     }
     DEBUG(dbgs() << '\n');

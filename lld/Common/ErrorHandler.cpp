@@ -46,6 +46,9 @@ ErrorHandler &lld::errorHandler() {
 }
 
 void lld::exitLld(int Val) {
+  // Delete the output buffer so that any tempory file is deleted.
+  errorHandler().OutputBuffer.reset();
+
   // Dealloc/destroy ManagedStatic variables before calling
   // _exit(). In a non-LTO build, this is a nop. In an LTO
   // build allows us to get the output of -time-passes.
@@ -70,8 +73,7 @@ void ErrorHandler::print(StringRef S, raw_ostream::Colors C) {
 void ErrorHandler::log(const Twine &Msg) {
   if (Verbose) {
     std::lock_guard<std::mutex> Lock(Mu);
-    outs() << LogName << ": " << Msg << "\n";
-    outs().flush();
+    *ErrorOS << LogName << ": " << Msg << "\n";
   }
 }
 

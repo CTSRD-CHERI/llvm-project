@@ -369,6 +369,7 @@ void Preprocessor::RegisterBuiltinMacros() {
   Ident__has_extension    = RegisterBuiltinMacro(*this, "__has_extension");
   Ident__has_builtin      = RegisterBuiltinMacro(*this, "__has_builtin");
   Ident__has_attribute    = RegisterBuiltinMacro(*this, "__has_attribute");
+  Ident__has_c_attribute  = RegisterBuiltinMacro(*this, "__has_c_attribute");
   Ident__has_declspec = RegisterBuiltinMacro(*this, "__has_declspec_attribute");
   Ident__has_include      = RegisterBuiltinMacro(*this, "__has_include");
   Ident__has_include_next = RegisterBuiltinMacro(*this, "__has_include_next");
@@ -1098,6 +1099,8 @@ static bool HasFeature(const Preprocessor &PP, StringRef Feature) {
       .Case("address_sanitizer",
             LangOpts.Sanitize.hasOneOf(SanitizerKind::Address |
                                        SanitizerKind::KernelAddress))
+      .Case("hwaddress_sanitizer",
+            LangOpts.Sanitize.hasOneOf(SanitizerKind::HWAddress))
       .Case("assume_nonnull", true)
       .Case("attribute_analyzer_noreturn", true)
       .Case("attribute_availability", true)
@@ -1135,7 +1138,8 @@ static bool HasFeature(const Preprocessor &PP, StringRef Feature) {
       .Case("nullability_on_arrays", true)
       .Case("memory_sanitizer", LangOpts.Sanitize.has(SanitizerKind::Memory))
       .Case("thread_sanitizer", LangOpts.Sanitize.has(SanitizerKind::Thread))
-      .Case("dataflow_sanitizer", LangOpts.Sanitize.has(SanitizerKind::DataFlow))
+      .Case("dataflow_sanitizer",
+            LangOpts.Sanitize.has(SanitizerKind::DataFlow))
       .Case("efficiency_sanitizer",
             LangOpts.Sanitize.hasOneOf(SanitizerKind::Efficiency))
       .Case("scudo", LangOpts.Sanitize.hasOneOf(SanitizerKind::Scudo))
@@ -1775,30 +1779,34 @@ void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
         return II ? hasAttribute(AttrSyntax::Declspec, nullptr, II,
                                  getTargetInfo(), getLangOpts()) : 0;
       });
-  } else if (II == Ident__has_cpp_attribute) {
-    EvaluateFeatureLikeBuiltinMacro(OS, Tok, II, *this,
-      [this](Token &Tok, bool &HasLexedNextToken) -> int {
-        IdentifierInfo *ScopeII = nullptr;
-        IdentifierInfo *II = ExpectFeatureIdentifierInfo(Tok, *this,
-                                           diag::err_feature_check_malformed);
-        if (!II)
-          return false;
+  } else if (II == Ident__has_cpp_attribute ||
+             II == Ident__has_c_attribute) {
+    bool IsCXX = II == Ident__has_cpp_attribute;
+    EvaluateFeatureLikeBuiltinMacro(
+        OS, Tok, II, *this, [&](Token &Tok, bool &HasLexedNextToken) -> int {
+          IdentifierInfo *ScopeII = nullptr;
+          IdentifierInfo *II = ExpectFeatureIdentifierInfo(
+              Tok, *this, diag::err_feature_check_malformed);
+          if (!II)
+            return false;
 
-        // It is possible to receive a scope token.  Read the "::", if it is
-        // available, and the subsequent identifier.
-        LexUnexpandedToken(Tok);
-        if (Tok.isNot(tok::coloncolon))
-          HasLexedNextToken = true;
-        else {
-          ScopeII = II;
+          // It is possible to receive a scope token.  Read the "::", if it is
+          // available, and the subsequent identifier.
           LexUnexpandedToken(Tok);
-          II = ExpectFeatureIdentifierInfo(Tok, *this,
-                                           diag::err_feature_check_malformed);
-        }
+          if (Tok.isNot(tok::coloncolon))
+            HasLexedNextToken = true;
+          else {
+            ScopeII = II;
+            LexUnexpandedToken(Tok);
+            II = ExpectFeatureIdentifierInfo(Tok, *this,
+                                             diag::err_feature_check_malformed);
+          }
 
-        return II ? hasAttribute(AttrSyntax::CXX, ScopeII, II,
-                                 getTargetInfo(), getLangOpts()) : 0;
-      });
+          AttrSyntax Syntax = IsCXX ? AttrSyntax::CXX : AttrSyntax::C;
+          return II ? hasAttribute(Syntax, ScopeII, II, getTargetInfo(),
+                                   getLangOpts())
+                    : 0;
+        });
   } else if (II == Ident__has_include ||
              II == Ident__has_include_next) {
     // The argument to these two builtins should be a parenthesized

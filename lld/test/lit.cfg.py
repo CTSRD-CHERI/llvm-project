@@ -39,7 +39,7 @@ llvm_config.use_default_substitutions()
 llvm_config.use_lld()
 
 tool_patterns = [
-    'llvm-as', 'llvm-mc', 'llvm-nm',
+    'llc', 'llvm-as', 'llvm-mc', 'llvm-nm',
     'llvm-objdump', 'llvm-pdbutil', 'llvm-readobj', 'obj2yaml', 'yaml2obj']
 
 llvm_config.add_tool_substitutions(tool_patterns)
@@ -67,6 +67,7 @@ llvm_config.feature_config(
                           'Mips': 'mips',
                           'PowerPC': 'ppc',
                           'Sparc': 'sparc',
+                          'WebAssembly': 'wasm',
                           'X86': 'x86'})
      ])
 
@@ -90,3 +91,11 @@ if tar_executable:
     if 'GNU tar' in tar_version.stdout.read().decode():
         config.available_features.add('gnutar')
     tar_version.wait()
+
+stat_executable = lit.util.which('stat', config.environment['PATH'])
+if stat_executable:
+    stat_version = subprocess.Popen(
+        [stat_executable, '--version'], stdout=subprocess.PIPE, env={'LANG': 'C'})
+    if 'GNU coreutils' in stat_version.stdout.read().decode():
+        config.available_features.add('gnustat')
+    stat_version.wait()

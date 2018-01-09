@@ -7,8 +7,10 @@
 # RUN: llvm-readobj %t.lib | FileCheck -check-prefix=IMPLIB %s
 
 # CHECK-NOT: Name: DllMainCRTStartup
+# CHECK-NOT: Name: _imp__unexported
 # CHECK: Name: dataSym
 # CHECK: Name: foobar
+# CHECK-NOT: Name: unexported
 
 # IMPLIB: Symbol: __imp__dataSym
 # IMPLIB-NOT: Symbol: _dataSym
@@ -18,14 +20,20 @@
 .global _foobar
 .global _DllMainCRTStartup@12
 .global _dataSym
+.global _unexported
+.global __imp__unexported
 .text
 _DllMainCRTStartup@12:
   ret
 _foobar:
   ret
+_unexported:
+  ret
 .data
 _dataSym:
   .int 4
+__imp__unexported:
+  .int _unexported
 
 # Test specifying -export-all-symbols, on an object file that contains
 # dllexport directive for some of the symbols.
@@ -65,3 +73,14 @@ _dataSym:
 # CHECK-EXCLUDE: EXPORTS
 # CHECK-EXCLUDE-NEXT: foobar @1
 # CHECK-EXCLUDE-NEXT: EOF
+
+# Test that we handle import libraries together with -opt:noref.
+
+# RUN: yaml2obj < %p/Inputs/hello32.yaml > %t.obj
+# RUN: lld-link -lldmingw -dll -out:%t.dll -entry:main@0 %t.obj -implib:%t.lib -opt:noref %p/Inputs/std32.lib -output-def:%t.def
+# RUN: echo "EOF" >> %t.def
+# RUN: cat %t.def | FileCheck -check-prefix=CHECK-IMPLIB %s
+
+# CHECK-IMPLIB: EXPORTS
+# CHECK-IMPLIB-NEXT: main@0 @1
+# CHECK-IMPLIB-NEXT: EOF

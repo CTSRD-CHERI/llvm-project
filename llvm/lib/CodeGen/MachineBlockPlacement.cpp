@@ -44,7 +44,9 @@
 #include "llvm/CodeGen/MachinePostDominators.h"
 #include "llvm/CodeGen/TailDuplicator.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Pass.h"
@@ -56,9 +58,7 @@
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -546,7 +546,7 @@ INITIALIZE_PASS_END(MachineBlockPlacement, DEBUG_TYPE,
 static std::string getBlockName(const MachineBasicBlock *BB) {
   std::string Result;
   raw_string_ostream OS(Result);
-  OS << "BB#" << BB->getNumber();
+  OS << printMBBReference(*BB);
   OS << " ('" << BB->getName() << "')";
   OS.flush();
   return Result;

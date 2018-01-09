@@ -13,7 +13,6 @@
 #include <cassert>
 #include <unordered_map>
 
-#include "lldb/Core/ArchSpec.h"
 #include "lldb/Core/FileSpecList.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
@@ -23,6 +22,7 @@
 #include "lldb/Symbol/SymbolContext.h"
 #include "lldb/Target/SectionLoadList.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/ArchSpec.h"
 #include "lldb/Utility/DataBufferLLVM.h"
 #include "lldb/Utility/Log.h"
 #include "lldb/Utility/Status.h"
@@ -2764,6 +2764,14 @@ unsigned ObjectFileELF::ApplyRelocations(
       case R_386_32:
       case R_386_PC32:
       default:
+        // FIXME: This asserts with this input:
+        //
+        // foo.cpp
+        // int main(int argc, char **argv) { return 0; }
+        //
+        // clang++.exe --target=i686-unknown-linux-gnu -g -c foo.cpp -o foo.o
+        //
+        // and running this on the foo.o module.
         assert(false && "unexpected relocation type");
       }
     } else {

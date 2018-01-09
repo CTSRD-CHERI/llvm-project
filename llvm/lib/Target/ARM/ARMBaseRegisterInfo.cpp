@@ -32,6 +32,7 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/VirtRegMap.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/Constants.h"
@@ -44,7 +45,6 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
-#include "llvm/Target/TargetRegisterInfo.h"
 #include <cassert>
 #include <utility>
 
@@ -280,7 +280,7 @@ static unsigned getPairedGPR(unsigned Reg, bool Odd, const MCRegisterInfo *RI) {
 }
 
 // Resolve the RegPairEven / RegPairOdd register allocator hints.
-void
+bool
 ARMBaseRegisterInfo::getRegAllocationHints(unsigned VirtReg,
                                            ArrayRef<MCPhysReg> Order,
                                            SmallVectorImpl<MCPhysReg> &Hints,
@@ -300,7 +300,7 @@ ARMBaseRegisterInfo::getRegAllocationHints(unsigned VirtReg,
     break;
   default:
     TargetRegisterInfo::getRegAllocationHints(VirtReg, Order, Hints, MF, VRM);
-    return;
+    return false;
   }
 
   // This register should preferably be even (Odd == 0) or odd (Odd == 1).
@@ -308,7 +308,7 @@ ARMBaseRegisterInfo::getRegAllocationHints(unsigned VirtReg,
   // the paired register as the first hint.
   unsigned Paired = Hint.second;
   if (Paired == 0)
-    return;
+    return false;
 
   unsigned PairedPhys = 0;
   if (TargetRegisterInfo::isPhysicalRegister(Paired)) {
@@ -331,6 +331,7 @@ ARMBaseRegisterInfo::getRegAllocationHints(unsigned VirtReg,
       continue;
     Hints.push_back(Reg);
   }
+  return false;
 }
 
 void

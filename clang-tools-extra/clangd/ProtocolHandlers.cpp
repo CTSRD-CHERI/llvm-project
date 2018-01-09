@@ -21,7 +21,7 @@ namespace {
 // Helper for attaching ProtocolCallbacks methods to a JSONRPCDispatcher.
 // Invoke like: Registerer("foo", &ProtocolCallbacks::onFoo)
 // onFoo should be: void onFoo(Ctx &C, FooParams &Params)
-// FooParams should have a static factory method: parse(yaml::MappingNode*).
+// FooParams should have a fromJSON function.
 struct HandlerRegisterer {
   template <typename Param>
   void operator()(StringRef Method,
@@ -30,14 +30,12 @@ struct HandlerRegisterer {
     auto *Out = this->Out;
     auto *Callbacks = this->Callbacks;
     Dispatcher.registerHandler(
-        Method, [=](RequestContext C, llvm::yaml::MappingNode *RawParams) {
-          if (auto P = [&] {
-                trace::Span Tracer("Parse");
-                return std::decay<Param>::type::parse(RawParams, *Out);
-              }()) {
-            (Callbacks->*Handler)(std::move(C), *P);
+        Method, [=](RequestContext C, const json::Expr &RawParams) {
+          typename std::remove_reference<Param>::type P;
+          if (fromJSON(RawParams, P)) {
+            (Callbacks->*Handler)(std::move(C), P);
           } else {
-            Out->log("Failed to decode " + Method + " request.\n");
+            Out->log("Failed to decode " + Method + " request.");
           }
         });
   }
@@ -71,6 +69,7 @@ void clangd::registerCallbackHandlers(JSONRPCDispatcher &Dispatcher,
   Register("textDocument/definition", &ProtocolCallbacks::onGoToDefinition);
   Register("textDocument/switchSourceHeader",
            &ProtocolCallbacks::onSwitchSourceHeader);
+  Register("textDocument/rename", &ProtocolCallbacks::onRename);
   Register("workspace/didChangeWatchedFiles", &ProtocolCallbacks::onFileEvent);
   Register("workspace/executeCommand", &ProtocolCallbacks::onCommand);
 }

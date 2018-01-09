@@ -7,10 +7,13 @@ add_clang_library(clangDaemon
   ClangdServer.cpp
   ClangdUnit.cpp
   ClangdUnitStore.cpp
+  CodeComplete.cpp
+  Compiler.cpp
   DraftStore.cpp
+  FuzzyMatch.cpp
   GlobalCompilationDatabase.cpp
-  JSONRPCDispatcher.cpp
   JSONExpr.cpp
+  JSONRPCDispatcher.cpp
   Logger.cpp
   Protocol.cpp
   ProtocolHandlers.cpp
@@ -27,6 +30,7 @@ add_clang_library(clangDaemon
   clangSerialization
   clangTooling
   clangToolingCore
+  clangToolingRefactor
   ${LLVM_PTHREAD_LIB}
   )
 

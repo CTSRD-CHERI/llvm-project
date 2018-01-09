@@ -976,6 +976,9 @@ ArchSpec Platform::GetAugmentedArchSpec(llvm::StringRef triple) {
   if (!ArchSpec::ContainsOnlyArch(normalized_triple))
     return ArchSpec(triple);
 
+  if (auto kind = HostInfo::ParseArchitectureKind(triple))
+    return HostInfo::GetArchitecture(*kind);
+
   ArchSpec compatible_arch;
   ArchSpec raw_arch(triple);
   if (!IsCompatibleArchitecture(raw_arch, false, &compatible_arch))
@@ -1193,7 +1196,7 @@ Platform::DebugProcess(ProcessLaunchInfo &launch_info, Debugger &debugger,
         // open for stdin/out/err after we have already opened the master
         // so we can read/write stdin/out/err.
         int pty_fd = launch_info.GetPTY().ReleaseMasterFileDescriptor();
-        if (pty_fd != lldb_utility::PseudoTerminal::invalid_fd) {
+        if (pty_fd != PseudoTerminal::invalid_fd) {
           process_sp->SetSTDIOFileDescriptor(pty_fd);
         }
       } else {

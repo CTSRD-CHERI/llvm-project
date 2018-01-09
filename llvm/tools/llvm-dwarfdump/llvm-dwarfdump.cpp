@@ -136,6 +136,10 @@ static list<std::string>
                      "name or by number. This option can be specified "
                      "multiple times, once for each desired architecture."),
                 cat(DwarfDumpCategory));
+static opt<bool>
+    Diff("diff",
+         desc("Emit diff-friendly output by omitting offsets and addresses."),
+         cat(DwarfDumpCategory));
 static list<std::string>
     Find("find",
          desc("Search for the exact match for <name> in the accelerator tables "
@@ -237,6 +241,7 @@ static DIDumpOptions getDumpOpts() {
   DIDumpOptions DumpOpts;
   DumpOpts.DumpType = DumpType;
   DumpOpts.RecurseDepth = RecurseDepth;
+  DumpOpts.ShowAddresses = !Diff;
   DumpOpts.ShowChildren = ShowChildren;
   DumpOpts.ShowParents = ShowParents;
   DumpOpts.ShowForm = ShowForm;
@@ -536,14 +541,17 @@ int main(int argc, char **argv) {
   }
 
   raw_ostream &OS = OutputFile ? OutputFile->os() : outs();
+  bool OffsetRequested = false;
 
   // Defaults to dumping all sections, unless brief mode is specified in which
   // case only the .debug_info section in dumped.
 #define HANDLE_DWARF_SECTION(ENUM_NAME, ELF_NAME, CMDLINE_NAME)                \
   if (Dump##ENUM_NAME.IsRequested) {                                           \
     DumpType |= DIDT_##ENUM_NAME;                                              \
-    if (Dump##ENUM_NAME.HasValue)                                              \
+    if (Dump##ENUM_NAME.HasValue) {                                            \
       DumpOffsets[DIDT_ID_##ENUM_NAME] = Dump##ENUM_NAME.Val;                  \
+      OffsetRequested = true;                                                  \
+    }                                                                          \
   }
 #include "llvm/BinaryFormat/Dwarf.def"
 #undef HANDLE_DWARF_SECTION
@@ -557,6 +565,10 @@ int main(int argc, char **argv) {
     else
       DumpType = DIDT_DebugInfo;
   }
+
+  // Unless dumping a specific DIE, default to --show-children.
+  if (!ShowChildren && !Verify && !OffsetRequested && Name.empty() && Find.empty())
+    ShowChildren = true;
 
   // Defaults to a.out if no filenames specified.
   if (InputFilenames.size() == 0)

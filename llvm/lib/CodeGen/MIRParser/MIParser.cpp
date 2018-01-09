@@ -37,6 +37,8 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
@@ -67,8 +69,6 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetIntrinsicInfo.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <algorithm>
 #include <cassert>
 #include <cctype>
@@ -1344,6 +1344,8 @@ bool MIParser::parseMBBReference(MachineBasicBlock *&MBB) {
     return error(Twine("use of undefined machine basic block #") +
                  Twine(Number));
   MBB = MBBInfo->second;
+  // TODO: Only parse the name if it's a MachineBasicBlockLabel. Deprecate once
+  // we drop the <irname> from the bb.<id>.<irname> format.
   if (!Token.stringValue().empty() && Token.stringValue() != MBB->getName())
     return error(Twine("the name of machine basic block #") + Twine(Number) +
                  " isn't '" + Token.stringValue() + "'");
@@ -2280,6 +2282,12 @@ bool MIParser::parseMachineMemoryOperand(MachineMemOperand *&Dest) {
     Flags |= MachineMemOperand::MOStore;
   lex();
 
+  // Optional 'store' for operands that both load and store.
+  if (Token.is(MIToken::Identifier) && Token.stringValue() == "store") {
+    Flags |= MachineMemOperand::MOStore;
+    lex();
+  }
+
   // Optional synchronization scope.
   SyncScope::ID SSID;
   if (parseOptionalScope(MF.getFunction()->getContext(), SSID))
@@ -2302,7 +2310,11 @@ bool MIParser::parseMachineMemoryOperand(MachineMemOperand *&Dest) {
 
   MachinePointerInfo Ptr = MachinePointerInfo();
   if (Token.is(MIToken::Identifier)) {
-    const char *Word = Flags & MachineMemOperand::MOLoad ? "from" : "into";
+    const char *Word =
+        ((Flags & MachineMemOperand::MOLoad) &&
+         (Flags & MachineMemOperand::MOStore))
+            ? "on"
+            : Flags & MachineMemOperand::MOLoad ? "from" : "into";
     if (Token.stringValue() != Word)
       return error(Twine("expected '") + Word + "'");
     lex();

@@ -13,10 +13,10 @@
 #include "JSONExpr.h"
 #include "Logger.h"
 #include "Protocol.h"
+#include "Trace.h"
 #include "clang/Basic/LLVM.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringMap.h"
-#include "llvm/Support/YAMLParser.h"
 #include <iosfwd>
 #include <mutex>
 
@@ -29,13 +29,12 @@ class JSONOutput : public Logger {
 public:
   JSONOutput(llvm::raw_ostream &Outs, llvm::raw_ostream &Logs,
              llvm::raw_ostream *InputMirror = nullptr, bool Pretty = false)
-      : Outs(Outs), Logs(Logs), InputMirror(InputMirror), Pretty(Pretty) {}
+      : Pretty(Pretty), Outs(Outs), Logs(Logs), InputMirror(InputMirror) {}
 
   /// Emit a JSONRPC message.
   void writeMessage(const json::Expr &Result);
 
-  /// Write to the logging stream.
-  /// No newline is implicitly added. (TODO: we should fix this!)
+  /// Write a line to the logging stream.
   void log(const Twine &Message) override;
 
   /// Mirror \p Message into InputMirror stream. Does nothing if InputMirror is
@@ -43,11 +42,13 @@ public:
   /// Unlike other methods of JSONOutput, mirrorInput is not thread-safe.
   void mirrorInput(const Twine &Message);
 
+  // Whether output should be pretty-printed.
+  const bool Pretty;
+
 private:
   llvm::raw_ostream &Outs;
   llvm::raw_ostream &Logs;
   llvm::raw_ostream *InputMirror;
-  bool Pretty;
 
   std::mutex StreamMutex;
 };
@@ -55,8 +56,13 @@ private:
 /// Context object passed to handlers to allow replies.
 class RequestContext {
 public:
-  RequestContext(JSONOutput &Out, llvm::Optional<json::Expr> ID)
-      : Out(Out), ID(std::move(ID)) {}
+  RequestContext(JSONOutput &Out, StringRef Method,
+                 llvm::Optional<json::Expr> ID)
+      : Out(Out), ID(std::move(ID)),
+        Tracer(llvm::make_unique<trace::Span>(Method)) {
+    if (this->ID)
+      SPAN_ATTACH(tracer(), "ID", *this->ID);
+  }
 
   /// Sends a successful reply.
   void reply(json::Expr &&Result);
@@ -65,9 +71,12 @@ public:
   /// Sends a request to the client.
   void call(llvm::StringRef Method, json::Expr &&Params);
 
+  trace::Span &tracer() { return *Tracer; }
+
 private:
   JSONOutput &Out;
   llvm::Optional<json::Expr> ID;
+  std::unique_ptr<trace::Span> Tracer;
 };
 
 /// Main JSONRPC entry point. This parses the JSONRPC "header" and calls the
@@ -75,8 +84,7 @@ private:
 class JSONRPCDispatcher {
 public:
   // A handler responds to requests for a particular method name.
-  using Handler =
-      std::function<void(RequestContext, llvm::yaml::MappingNode *)>;
+  using Handler = std::function<void(RequestContext, const json::Expr &)>;
 
   /// Create a new JSONRPCDispatcher. UnknownHandler is called when an unknown
   /// method is received.
@@ -87,7 +95,7 @@ public:
   void registerHandler(StringRef Method, Handler H);
 
   /// Parses a JSONRPC message and calls the Handler for it.
-  bool call(StringRef Content, JSONOutput &Out) const;
+  bool call(const json::Expr &Message, JSONOutput &Out) const;
 
 private:
   llvm::StringMap<Handler> Handlers;

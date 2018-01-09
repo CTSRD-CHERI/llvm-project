@@ -800,8 +800,12 @@ def fencoding_EQ : Joined<["-"], "fencoding=">, Group<f_Group>;
 def ferror_limit_EQ : Joined<["-"], "ferror-limit=">, Group<f_Group>, Flags<[CoreOption]>;
 def fexceptions : Flag<["-"], "fexceptions">, Group<f_Group>, Flags<[CC1Option]>,
   HelpText<"Enable support for exception handling">;
+def fdwarf_exceptions : Flag<["-"], "fdwarf-exceptions">, Group<f_Group>,
+  Flags<[CC1Option]>, HelpText<"Use DWARF style exceptions">;
 def fsjlj_exceptions : Flag<["-"], "fsjlj-exceptions">, Group<f_Group>,
   Flags<[CC1Option]>, HelpText<"Use SjLj style exceptions">;
+def fseh_exceptions : Flag<["-"], "fseh-exceptions">, Group<f_Group>,
+  Flags<[CC1Option]>, HelpText<"Use SEH style exceptions">;
 def fexcess_precision_EQ : Joined<["-"], "fexcess-precision=">,
     Group<clang_ignored_gcc_optimization_f_Group>;
 def : Flag<["-"], "fexpensive-optimizations">, Group<clang_ignored_gcc_optimization_f_Group>;
@@ -1028,6 +1032,10 @@ def finput_charset_EQ : Joined<["-"], "finput-charset=">, Group<f_Group>;
 def fexec_charset_EQ : Joined<["-"], "fexec-charset=">, Group<f_Group>;
 def finstrument_functions : Flag<["-"], "finstrument-functions">, Group<f_Group>, Flags<[CC1Option]>,
   HelpText<"Generate calls to instrument function entry and exit">;
+def finstrument_functions_after_inlining : Flag<["-"], "finstrument-functions-after-inlining">, Group<f_Group>, Flags<[CC1Option]>,
+  HelpText<"Like -finstrument-functions, but insert the calls after inlining">;
+def finstrument_function_entry_bare : Flag<["-"], "finstrument-function-entry-bare">, Group<f_Group>, Flags<[CC1Option]>,
+  HelpText<"Instrument function entry only, after inlining, without arguments to the instrumentation call">;
 
 def fxray_instrument : Flag<["-"], "fxray-instrument">, Group<f_Group>,
   Flags<[CC1Option]>,
@@ -1051,6 +1059,12 @@ def fxray_never_instrument :
   JoinedOrSeparate<["-"], "fxray-never-instrument=">,
   Group<f_Group>, Flags<[CC1Option]>,
   HelpText<"Filename defining the whitelist for imbuing the 'never instrument' XRay attribute.">;
+
+def fxray_always_emit_customevents : Flag<["-"], "fxray-always-emit-customevents">, Group<f_Group>,
+  Flags<[CC1Option]>,
+  HelpText<"Determine whether to always emit __xray_customevent(...) calls even if the function it appears in is not always instrumented.">;
+def fnoxray_always_emit_customevents : Flag<["-"], "fno-xray-always-emit-customevents">, Group<f_Group>,
+  Flags<[CC1Option]>;
 
 def ffine_grained_bitfield_accesses : Flag<["-"],
   "ffine-grained-bitfield-accesses">, Group<f_clang_Group>, Flags<[CC1Option]>,
@@ -1822,7 +1836,6 @@ def mno_neg_immediates: Flag<["-"], "mno-neg-immediates">, Group<m_arm_Features_
 
 def mgeneral_regs_only : Flag<["-"], "mgeneral-regs-only">, Group<m_aarch64_Features_Group>,
   HelpText<"Generate code which only uses the general purpose registers (AArch64 only)">;
-
 def mfix_cortex_a53_835769 : Flag<["-"], "mfix-cortex-a53-835769">,
   Group<m_aarch64_Features_Group>,
   HelpText<"Workaround Cortex-A53 erratum 835769 (AArch64 only)">;
@@ -1834,12 +1847,18 @@ def ffixed_x18 : Flag<["-"], "ffixed-x18">, Group<m_aarch64_Features_Group>,
 
 def msimd128 : Flag<["-"], "msimd128">, Group<m_wasm_Features_Group>;
 def mno_simd128 : Flag<["-"], "mno-simd128">, Group<m_wasm_Features_Group>;
+def mnontrapping_fptoint : Flag<["-"], "mnontrapping-fptoint">, Group<m_wasm_Features_Group>;
+def mno_nontrapping_fptoint : Flag<["-"], "mno-nontrapping-fptoint">, Group<m_wasm_Features_Group>;
 
 def mamdgpu_debugger_abi : Joined<["-"], "mamdgpu-debugger-abi=">,
   Flags<[HelpHidden]>,
   Group<m_Group>,
   HelpText<"Generate additional code for specified <version> of debugger ABI (AMDGPU only)">,
   MetaVarName<"<version>">;
+def mxnack : Flag<["-"], "mxnack">, Group<m_amdgpu_Features_Group>,
+  HelpText<"Enable XNACK (AMDGPU only)">;
+def mno_xnack : Flag<["-"], "mno-xnack">, Group<m_amdgpu_Features_Group>,
+  HelpText<"Disable XNACK (AMDGPU only)">;
 
 def faltivec : Flag<["-"], "faltivec">, Group<f_Group>, Flags<[DriverOption]>;
 def fno_altivec : Flag<["-"], "fno-altivec">, Group<f_Group>, Flags<[DriverOption]>;
@@ -1935,6 +1954,8 @@ def mno_implicit_float : Flag<["-"], "mno-implicit-float">, Group<m_Group>,
 def mimplicit_float : Flag<["-"], "mimplicit-float">, Group<m_Group>;
 def mrecip : Flag<["-"], "mrecip">, Group<m_Group>;
 def mrecip_EQ : CommaJoined<["-"], "mrecip=">, Group<m_Group>, Flags<[CC1Option]>;
+def mprefer_vector_width_EQ : Joined<["-"], "mprefer-vector-width=">, Group<m_Group>, Flags<[CC1Option]>,
+  HelpText<"Specifies preferred vector width for auto-vectorization. Defaults to 'none' which allows target specific decisions.">;
 def mpie_copy_relocations : Flag<["-"], "mpie-copy-relocations">, Group<m_Group>,
   Flags<[CC1Option]>,
   HelpText<"Use copy relocations support for PIE builds">;
@@ -2530,7 +2551,10 @@ def mxsaveopt : Flag<["-"], "mxsaveopt">, Group<m_x86_Features_Group>;
 def mno_xsaveopt : Flag<["-"], "mno-xsaveopt">, Group<m_x86_Features_Group>;
 def mxsaves : Flag<["-"], "mxsaves">, Group<m_x86_Features_Group>;
 def mno_xsaves : Flag<["-"], "mno-xsaves">, Group<m_x86_Features_Group>;
-
+def mshstk : Flag<["-"], "mshstk">, Group<m_x86_Features_Group>;
+def mno_shstk : Flag<["-"], "mno-shstk">, Group<m_x86_Features_Group>;
+def mibt : Flag<["-"], "mibt">, Group<m_x86_Features_Group>;
+def mno_ibt : Flag<["-"], "mno-ibt">, Group<m_x86_Features_Group>;
 
 // These are legacy user-facing driver-level option spellings. They are always
 // aliases for options that are spelled using the more common Unix / GNU flag

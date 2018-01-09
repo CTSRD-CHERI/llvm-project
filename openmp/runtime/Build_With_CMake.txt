@@ -51,7 +51,7 @@ How to call cmake initially, then repeatedly
 =====================
 Instructions to Build
 =====================
- $ cd libomp_top_level/ [ directory with src/ , exports/ , tools/ , etc. ]
+ $ cd openmp_top_level/ [ directory with runtime/, etc. ]
  $ mkdir build
  $ cd build
 
@@ -150,14 +150,11 @@ supported on Windows). If LIBOMP_ENABLE_SHARED is off, then static OpenMP
 libraries will be built instead of dynamic ones.
 
 -DLIBOMP_OMPT_SUPPORT=off|on
-Should OMPT support be included in the build? (Not supported on Windows)
-If LIBOMP_OMPT_SUPPORT is off, then both ompt_blame and ompt_trace are ignored.
+Should OMPT support be included in the build?
 
--DLIBOMP_OMPT_BLAME=on|off
-Should OMPT blame functionality be included in the build?
-
--DLIBOMP_OMPT_TRACE=on|off
-Should OMPT trace functionality be included in the build?
+-DLIBOMP_OMPT_OPTIONAL=on|off
+Should optional OMPT functionality be included in the build?
+Will be ignored if LIBOMP_OMPT_SUPPORT is off.
 
 -DLIBOMP_STATS=off|on
 Should include stats-gathering code be included in the build?
@@ -177,7 +174,7 @@ Specifies install location of Hwloc. The configuration system will look for
 hwloc.h in ${LIBOMP_HWLOC_INSTALL_DIR}/include and the library in
 ${LIBOMP_HWLOC_INSTALL_DIR}/lib.
 
--DLIBOMP_LLVM_LIT_EXECUTABLE=/path/to/llvm-lit
+-DOPENMP_LLVM_LIT_EXECUTABLE=/path/to/llvm-lit
 Default: search in PATH
 Specifiy full path to llvm-lit executable for running tests.
 

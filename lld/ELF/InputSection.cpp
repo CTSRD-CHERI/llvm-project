@@ -12,14 +12,14 @@
 #include "EhFrame.h"
 #include "InputFiles.h"
 #include "LinkerScript.h"
-#include "Memory.h"
 #include "OutputSections.h"
 #include "Relocations.h"
-#include "SymbolTable.h"
+#include "Symbols.h"
 #include "SyntheticSections.h"
 #include "Target.h"
 #include "Thunks.h"
 #include "lld/Common/ErrorHandler.h"
+#include "lld/Common/Memory.h"
 #include "llvm/Object/Decompressor.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Compression.h"
@@ -215,10 +215,6 @@ void InputSectionBase::maybeUncompress() {
   this->Flags &= ~(uint64_t)SHF_COMPRESSED;
 }
 
-uint64_t SectionBase::getOffset(const Defined &Sym) const {
-  return getOffset(Sym.Value);
-}
-
 InputSection *InputSectionBase::getLinkOrderDep() const {
   if ((Flags & SHF_LINK_ORDER) && Link != 0) {
     InputSectionBase *L = File->getSections()[Link];
@@ -313,7 +309,7 @@ std::string InputSectionBase::getSrcMsg(const Symbol &Sym, uint64_t Offset) {
 std::string InputSectionBase::getObjMsg(uint64_t Off) {
   // Synthetic sections don't have input files.
   if (!File)
-    return ("(internal):(" + Name + "+0x" + utohexstr(Off) + ")").str();
+    return ("<internal>:(" + Name + "+0x" + utohexstr(Off) + ")").str();
   std::string Filename = File->getName();
 
   std::string Archive;
@@ -409,14 +405,20 @@ void InputSection::copyRelocations(uint8_t *Buf, ArrayRef<RelTy> Rels) {
       // avoid having to parse and recreate .eh_frame, we just replace any
       // relocation in it pointing to discarded sections with R_*_NONE, which
       // hopefully creates a frame that is ignored at runtime.
-      SectionBase *Section = cast<Defined>(Sym).Section;
+      auto *D = dyn_cast<Defined>(&Sym);
+      if (!D) {
+        error("STT_SECTION symbol should be defined");
+        continue;
+      }
+      SectionBase *Section = D->Section;
       if (Section == &InputSection::Discarded) {
         P->setSymbolAndType(0, 0, false);
         continue;
       }
 
       if (Config->IsRela) {
-        P->r_addend += Sym.getVA() - Section->getOutputSection()->Addr;
+        P->r_addend =
+            Sym.getVA(getAddend<ELFT>(Rel)) - Section->getOutputSection()->Addr;
       } else if (Config->Relocatable) {
         const uint8_t *BufLoc = Sec->Data.begin() + Rel.r_offset;
         Sec->Relocations.push_back({R_ABS, Type, Rel.r_offset,
@@ -500,9 +502,8 @@ static uint64_t getARMStaticBase(const Symbol &Sym) {
   return OS->PtLoad->FirstSec->Addr;
 }
 
-static uint64_t getRelocTargetVA(const InputFile &File, RelType Type,
-                                 int64_t A, uint64_t P, const Symbol &Sym,
-                                 RelExpr Expr) {
+static uint64_t getRelocTargetVA(const InputFile &File, RelType Type, int64_t A,
+                                 uint64_t P, const Symbol &Sym, RelExpr Expr) {
   switch (Expr) {
   case R_INVALID:
     return 0;
@@ -546,9 +547,14 @@ static uint64_t getRelocTargetVA(const InputFile &File, RelType Type,
     // is _gp_disp symbol. In that case we should use the following
     // formula for calculation "AHL + GP - P + 4". For details see p. 4-19 at
     // ftp://www.linux-mips.org/pub/linux/mips/doc/ABI/mipsabi.pdf
+    // microMIPS variants of these relocations use slightly different
+    // expressions: AHL + GP - P + 3 for %lo() and AHL + GP - P - 1 for %hi()
+    // to correctly handle less-sugnificant bit of the microMIPS symbol.
     uint64_t V = InX::MipsGot->getGp(&File) + A - P;
     if (Type == R_MIPS_LO16 || Type == R_MICROMIPS_LO16)
       V += 4;
+    if (Type == R_MICROMIPS_LO16 || Type == R_MICROMIPS_HI16)
+      V -= 1;
     return V;
   }
   case R_MIPS_GOT_LOCAL_PAGE:
@@ -862,12 +868,7 @@ template <class ELFT>
 EhInputSection::EhInputSection(ObjFile<ELFT> *F,
                                const typename ELFT::Shdr *Header,
                                StringRef Name)
-    : InputSectionBase(F, Header, Name, InputSectionBase::EHFrame) {
-  // Mark .eh_frame sections as live by default because there are
-  // usually no relocations that point to .eh_frames. Otherwise,
-  // the garbage collector would drop all .eh_frame sections.
-  this->Live = true;
-}
+    : InputSectionBase(F, Header, Name, InputSectionBase::EHFrame) {}
 
 SyntheticSection *EhInputSection::getParent() const {
   return cast_or_null<SyntheticSection>(Parent);

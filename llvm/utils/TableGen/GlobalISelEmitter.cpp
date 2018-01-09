@@ -36,6 +36,7 @@
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineValueType.h"
+#include "llvm/Support/CodeGenCoverage.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/LowLevelTypeImpl.h"
@@ -43,8 +44,8 @@
 #include "llvm/TableGen/Error.h"
 #include "llvm/TableGen/Record.h"
 #include "llvm/TableGen/TableGenBackend.h"
-#include <string>
 #include <numeric>
+#include <string>
 using namespace llvm;
 
 #define DEBUG_TYPE "gisel-emitter"
@@ -52,6 +53,7 @@ using namespace llvm;
 STATISTIC(NumPatternTotal, "Total number of patterns");
 STATISTIC(NumPatternImported, "Number of patterns imported from SelectionDAG");
 STATISTIC(NumPatternImportsSkipped, "Number of SelectionDAG imports skipped");
+STATISTIC(NumPatternsTested, "Number of patterns executed according to coverage information");
 STATISTIC(NumPatternEmitted, "Number of patterns emitted");
 
 cl::OptionCategory GlobalISelEmitterCat("Options for -gen-global-isel");
@@ -61,6 +63,16 @@ static cl::opt<bool> WarnOnSkippedPatterns(
     cl::desc("Explain why a pattern was skipped for inclusion "
              "in the GlobalISel selector"),
     cl::init(false), cl::cat(GlobalISelEmitterCat));
+
+static cl::opt<bool> GenerateCoverage(
+    "instrument-gisel-coverage",
+    cl::desc("Generate coverage instrumentation for GlobalISel"),
+    cl::init(false), cl::cat(GlobalISelEmitterCat));
+
+static cl::opt<std::string> UseCoverageFile(
+    "gisel-coverage-file", cl::init(""),
+    cl::desc("Specify file to retrieve coverage information from"),
+    cl::cat(GlobalISelEmitterCat));
 
 namespace {
 //===- Helper functions ---------------------------------------------------===//
@@ -179,6 +191,8 @@ static std::string explainPredicates(const TreePatternNode *N) {
   for (const auto &P : N->getPredicateFns()) {
     Explanation +=
         (Separator + P.getOrigPatFragRecord()->getRecord()->getName()).str();
+    Separator = ", ";
+
     if (P.isAlwaysTrue())
       Explanation += " always-true";
     if (P.isImmediatePattern())
@@ -205,6 +219,25 @@ static std::string explainPredicates(const TreePatternNode *N) {
       Explanation += (" MemVT=" + VT->getName()).str();
     if (Record *VT = P.getScalarMemoryVT())
       Explanation += (" ScalarVT(MemVT)=" + VT->getName()).str();
+
+    if (P.isAtomicOrderingMonotonic())
+      Explanation += " monotonic";
+    if (P.isAtomicOrderingAcquire())
+      Explanation += " acquire";
+    if (P.isAtomicOrderingRelease())
+      Explanation += " release";
+    if (P.isAtomicOrderingAcquireRelease())
+      Explanation += " acq_rel";
+    if (P.isAtomicOrderingSequentiallyConsistent())
+      Explanation += " seq_cst";
+    if (P.isAtomicOrderingAcquireOrStronger())
+      Explanation += " >=acquire";
+    if (P.isAtomicOrderingWeakerThanAcquire())
+      Explanation += " <acquire";
+    if (P.isAtomicOrderingReleaseOrStronger())
+      Explanation += " >=release";
+    if (P.isAtomicOrderingWeakerThanRelease())
+      Explanation += " <release";
   }
   return Explanation;
 }
@@ -241,16 +274,30 @@ static Error isTrivialOperatorNode(const TreePatternNode *N) {
     if (Predicate.isImmediatePattern())
       continue;
 
-    if (Predicate.isLoad() && Predicate.isUnindexed())
-      continue;
-
     if (Predicate.isNonExtLoad())
       continue;
 
-    if (Predicate.isStore() && Predicate.isUnindexed())
+    if (Predicate.isNonTruncStore())
       continue;
 
-    if (Predicate.isNonTruncStore())
+    if (Predicate.isLoad() || Predicate.isStore()) {
+      if (Predicate.isUnindexed())
+        continue;
+    }
+
+    if (Predicate.isAtomic() && Predicate.getMemoryVT())
+      continue;
+
+    if (Predicate.isAtomic() &&
+        (Predicate.isAtomicOrderingMonotonic() ||
+         Predicate.isAtomicOrderingAcquire() ||
+         Predicate.isAtomicOrderingRelease() ||
+         Predicate.isAtomicOrderingAcquireRelease() ||
+         Predicate.isAtomicOrderingSequentiallyConsistent() ||
+         Predicate.isAtomicOrderingAcquireOrStronger() ||
+         Predicate.isAtomicOrderingWeakerThanAcquire() ||
+         Predicate.isAtomicOrderingReleaseOrStronger() ||
+         Predicate.isAtomicOrderingWeakerThanRelease()))
       continue;
 
     HasUnsupportedPredicate = true;
@@ -569,13 +616,19 @@ protected:
   /// A map of Symbolic Names to ComplexPattern sub-operands.
   DefinedComplexPatternSubOperandMap ComplexSubOperands;
 
+  uint64_t RuleID;
+  static uint64_t NextRuleID;
+
 public:
   RuleMatcher(ArrayRef<SMLoc> SrcLoc)
       : Matchers(), Actions(), InsnVariableIDs(), MutatableInsns(),
         DefinedOperands(), NextInsnVarID(0), NextOutputInsnID(0),
-        NextTempRegID(0), SrcLoc(SrcLoc), ComplexSubOperands() {}
+        NextTempRegID(0), SrcLoc(SrcLoc), ComplexSubOperands(),
+        RuleID(NextRuleID++) {}
   RuleMatcher(RuleMatcher &&Other) = default;
   RuleMatcher &operator=(RuleMatcher &&Other) = default;
+
+  uint64_t getRuleID() const { return RuleID; }
 
   InstructionMatcher &addInstructionMatcher(StringRef SymbolicName);
   void addRequiredFeature(Record *Feature);
@@ -663,6 +716,8 @@ public:
   unsigned allocateOutputInsnID() { return NextOutputInsnID++; }
   unsigned allocateTempRegID() { return NextTempRegID++; }
 };
+
+uint64_t RuleMatcher::NextRuleID = 0;
 
 using action_iterator = RuleMatcher::action_iterator;
 
@@ -1152,7 +1207,7 @@ protected:
   enum PredicateKind {
     IPM_Opcode,
     IPM_ImmPredicate,
-    IPM_NonAtomicMMO,
+    IPM_AtomicOrderingMMO,
   };
 
   PredicateKind Kind;
@@ -1281,20 +1336,42 @@ public:
   }
 };
 
-/// Generates code to check that a memory instruction has a non-atomic MachineMemoryOperand.
-class NonAtomicMMOPredicateMatcher : public InstructionPredicateMatcher {
+/// Generates code to check that a memory instruction has a atomic ordering
+/// MachineMemoryOperand.
+class AtomicOrderingMMOPredicateMatcher : public InstructionPredicateMatcher {
 public:
-  NonAtomicMMOPredicateMatcher()
-      : InstructionPredicateMatcher(IPM_NonAtomicMMO) {}
+  enum AOComparator {
+    AO_Exactly,
+    AO_OrStronger,
+    AO_WeakerThan,
+  };
+
+protected:
+  StringRef Order;
+  AOComparator Comparator;
+
+public:
+  AtomicOrderingMMOPredicateMatcher(StringRef Order,
+                                    AOComparator Comparator = AO_Exactly)
+      : InstructionPredicateMatcher(IPM_AtomicOrderingMMO), Order(Order),
+        Comparator(Comparator) {}
 
   static bool classof(const InstructionPredicateMatcher *P) {
-    return P->getKind() == IPM_NonAtomicMMO;
+    return P->getKind() == IPM_AtomicOrderingMMO;
   }
 
   void emitPredicateOpcodes(MatchTable &Table, RuleMatcher &Rule,
                             unsigned InsnVarID) const override {
-    Table << MatchTable::Opcode("GIM_CheckNonAtomic")
-          << MatchTable::Comment("MI") << MatchTable::IntValue(InsnVarID)
+    StringRef Opcode = "GIM_CheckAtomicOrdering";
+
+    if (Comparator == AO_OrStronger)
+      Opcode = "GIM_CheckAtomicOrderingOrStrongerThan";
+    if (Comparator == AO_WeakerThan)
+      Opcode = "GIM_CheckAtomicOrderingWeakerThan";
+
+    Table << MatchTable::Opcode(Opcode) << MatchTable::Comment("MI")
+          << MatchTable::IntValue(InsnVarID) << MatchTable::Comment("Order")
+          << MatchTable::NamedValue(("(int64_t)AtomicOrdering::" + Order).str())
           << MatchTable::LineBreak;
   }
 };
@@ -2204,6 +2281,11 @@ void RuleMatcher::emit(MatchTable &Table) {
 
   for (const auto &MA : Actions)
     MA->emitActionOpcodes(Table, *this);
+
+  if (GenerateCoverage)
+    Table << MatchTable::Opcode("GIR_Coverage") << MatchTable::IntValue(RuleID)
+          << MatchTable::LineBreak;
+
   Table << MatchTable::Opcode("GIR_Done", -1) << MatchTable::LineBreak
         << MatchTable::Label(LabelID);
 }
@@ -2309,6 +2391,9 @@ private:
   // Map of predicates to their subtarget features.
   SubtargetFeatureInfoMap SubtargetFeatures;
 
+  // Rule coverage information.
+  Optional<CodeGenCoverage> RuleCoverage;
+
   void gatherNodeEquivs();
   Record *findNodeEquiv(Record *N) const;
 
@@ -2356,6 +2441,9 @@ private:
   Expected<RuleMatcher> runOnPattern(const PatternToMatch &P);
 
   void declareSubtargetFeature(Record *Predicate);
+
+  TreePatternNode *fixupPatternNode(TreePatternNode *N);
+  void fixupPatternTrees(TreePattern *P);
 };
 
 void GlobalISelEmitter::gatherNodeEquivs() {
@@ -2377,8 +2465,8 @@ Record *GlobalISelEmitter::findNodeEquiv(Record *N) const {
 }
 
 GlobalISelEmitter::GlobalISelEmitter(RecordKeeper &RK)
-    : RK(RK), CGP(RK), Target(CGP.getTargetInfo()),
-      CGRegs(RK, Target.getHwModes()) {}
+    : RK(RK), CGP(RK, [&](TreePattern *P) { fixupPatternTrees(P); }),
+      Target(CGP.getTargetInfo()), CGRegs(RK, Target.getHwModes()) {}
 
 //===- Emitter ------------------------------------------------------------===//
 
@@ -2443,49 +2531,87 @@ Expected<InstructionMatcher &> GlobalISelEmitter::createAndImportSelDAGMatcher(
       continue;
     }
 
-    // No check required. A G_LOAD is an unindexed load.
-    if (Predicate.isLoad() && Predicate.isUnindexed())
-      continue;
-
     // No check required. G_LOAD by itself is a non-extending load.
     if (Predicate.isNonExtLoad())
-      continue;
-
-    if (Predicate.isLoad() && Predicate.getMemoryVT() != nullptr) {
-      Optional<LLTCodeGen> MemTyOrNone =
-          MVTToLLT(getValueType(Predicate.getMemoryVT()));
-
-      if (!MemTyOrNone)
-        return failedImport("MemVT could not be converted to LLT");
-
-      InsnMatcher.getOperand(0).addPredicate<LLTOperandMatcher>(MemTyOrNone.getValue());
-      continue;
-    }
-
-    // No check required. A G_STORE is an unindexed store.
-    if (Predicate.isStore() && Predicate.isUnindexed())
       continue;
 
     // No check required. G_STORE by itself is a non-extending store.
     if (Predicate.isNonTruncStore())
       continue;
 
-    if (Predicate.isStore() && Predicate.getMemoryVT() != nullptr) {
-      Optional<LLTCodeGen> MemTyOrNone =
-          MVTToLLT(getValueType(Predicate.getMemoryVT()));
+    if (Predicate.isLoad() || Predicate.isStore() || Predicate.isAtomic()) {
+      if (Predicate.getMemoryVT() != nullptr) {
+        Optional<LLTCodeGen> MemTyOrNone =
+            MVTToLLT(getValueType(Predicate.getMemoryVT()));
 
-      if (!MemTyOrNone)
-        return failedImport("MemVT could not be converted to LLT");
+        if (!MemTyOrNone)
+          return failedImport("MemVT could not be converted to LLT");
 
-      InsnMatcher.getOperand(0).addPredicate<LLTOperandMatcher>(MemTyOrNone.getValue());
-      continue;
+        InsnMatcher.getOperand(0).addPredicate<LLTOperandMatcher>(
+            MemTyOrNone.getValue());
+        continue;
+      }
+    }
+
+    if (Predicate.isLoad() || Predicate.isStore()) {
+      // No check required. A G_LOAD/G_STORE is an unindexed load.
+      if (Predicate.isUnindexed())
+        continue;
+    }
+
+    if (Predicate.isAtomic()) {
+      if (Predicate.isAtomicOrderingMonotonic()) {
+        InsnMatcher.addPredicate<AtomicOrderingMMOPredicateMatcher>(
+            "Monotonic");
+        continue;
+      }
+      if (Predicate.isAtomicOrderingAcquire()) {
+        InsnMatcher.addPredicate<AtomicOrderingMMOPredicateMatcher>("Acquire");
+        continue;
+      }
+      if (Predicate.isAtomicOrderingRelease()) {
+        InsnMatcher.addPredicate<AtomicOrderingMMOPredicateMatcher>("Release");
+        continue;
+      }
+      if (Predicate.isAtomicOrderingAcquireRelease()) {
+        InsnMatcher.addPredicate<AtomicOrderingMMOPredicateMatcher>(
+            "AcquireRelease");
+        continue;
+      }
+      if (Predicate.isAtomicOrderingSequentiallyConsistent()) {
+        InsnMatcher.addPredicate<AtomicOrderingMMOPredicateMatcher>(
+            "SequentiallyConsistent");
+        continue;
+      }
+
+      if (Predicate.isAtomicOrderingAcquireOrStronger()) {
+        InsnMatcher.addPredicate<AtomicOrderingMMOPredicateMatcher>(
+            "Acquire", AtomicOrderingMMOPredicateMatcher::AO_OrStronger);
+        continue;
+      }
+      if (Predicate.isAtomicOrderingWeakerThanAcquire()) {
+        InsnMatcher.addPredicate<AtomicOrderingMMOPredicateMatcher>(
+            "Acquire", AtomicOrderingMMOPredicateMatcher::AO_WeakerThan);
+        continue;
+      }
+
+      if (Predicate.isAtomicOrderingReleaseOrStronger()) {
+        InsnMatcher.addPredicate<AtomicOrderingMMOPredicateMatcher>(
+            "Release", AtomicOrderingMMOPredicateMatcher::AO_OrStronger);
+        continue;
+      }
+      if (Predicate.isAtomicOrderingWeakerThanRelease()) {
+        InsnMatcher.addPredicate<AtomicOrderingMMOPredicateMatcher>(
+            "Release", AtomicOrderingMMOPredicateMatcher::AO_WeakerThan);
+        continue;
+      }
     }
 
     return failedImport("Src pattern child has predicate (" +
                         explainPredicates(Src) + ")");
   }
   if (SrcGIEquivOrNull && SrcGIEquivOrNull->getValueAsBit("CheckMMOIsNonAtomic"))
-    InsnMatcher.addPredicate<NonAtomicMMOPredicateMatcher>();
+    InsnMatcher.addPredicate<AtomicOrderingMMOPredicateMatcher>("NotAtomic");
 
   if (Src->isLeaf()) {
     Init *SrcInit = Src->getLeafValue();
@@ -2515,10 +2641,7 @@ Expected<InstructionMatcher &> GlobalISelEmitter::createAndImportSelDAGMatcher(
       // SelectionDAG allows pointers to be represented with iN since it doesn't
       // distinguish between pointers and integers but they are different types in GlobalISel.
       // Coerce integers to pointers to address space 0 if the context indicates a pointer.
-      // TODO: Find a better way to do this, SDTCisPtrTy?
-      bool OperandIsAPointer =
-          (SrcGIOrNull->TheDef->getName() == "G_LOAD" && i == 0) ||
-          (SrcGIOrNull->TheDef->getName() == "G_STORE" && i == 1);
+      bool OperandIsAPointer = SrcGIOrNull->isOperandAPointer(i);
 
       // For G_INTRINSIC/G_INTRINSIC_W_SIDE_EFFECTS, the operand immediately
       // following the defs is an intrinsic ID.
@@ -2738,6 +2861,14 @@ Expected<action_iterator> GlobalISelEmitter::importExplicitUseRenderer(
     }
 
     return failedImport("Dst pattern child isn't a leaf node or an MBB" + llvm::to_string(*DstChild));
+  }
+
+  // It could be a specific immediate in which case we should just check for
+  // that immediate.
+  if (const IntInit *ChildIntInit =
+          dyn_cast<IntInit>(DstChild->getLeafValue())) {
+    DstMIBuilder.addRenderer<ImmRenderer>(ChildIntInit->getValue());
+    return InsertPt;
   }
 
   // Otherwise, we're looking for a bog-standard RegisterClass operand.
@@ -3224,6 +3355,20 @@ void GlobalISelEmitter::emitImmPredicates(
 }
 
 void GlobalISelEmitter::run(raw_ostream &OS) {
+  if (!UseCoverageFile.empty()) {
+    RuleCoverage = CodeGenCoverage();
+    auto RuleCoverageBufOrErr = MemoryBuffer::getFile(UseCoverageFile);
+    if (!RuleCoverageBufOrErr) {
+      PrintWarning(SMLoc(), "Missing rule coverage data");
+      RuleCoverage = None;
+    } else {
+      if (!RuleCoverage->parse(*RuleCoverageBufOrErr.get(), Target.getName())) {
+        PrintWarning(SMLoc(), "Ignoring invalid or missing rule coverage data");
+        RuleCoverage = None;
+      }
+    }
+  }
+
   // Track the GINodeEquiv definitions.
   gatherNodeEquivs();
 
@@ -3233,6 +3378,7 @@ void GlobalISelEmitter::run(raw_ostream &OS) {
   // Look through the SelectionDAG patterns we found, possibly emitting some.
   for (const PatternToMatch &Pat : CGP.ptms()) {
     ++NumPatternTotal;
+
     auto MatcherOrErr = runOnPattern(Pat);
 
     // The pattern analysis can fail, indicating an unsupported pattern.
@@ -3248,6 +3394,13 @@ void GlobalISelEmitter::run(raw_ostream &OS) {
       continue;
     }
 
+    if (RuleCoverage) {
+      if (RuleCoverage->isCovered(MatcherOrErr->getRuleID()))
+        ++NumPatternsTested;
+      else
+        PrintWarning(Pat.getSrcRecord()->getLoc(),
+                     "Pattern is not covered by a test");
+    }
     Rules.push_back(std::move(MatcherOrErr.get()));
   }
 
@@ -3427,7 +3580,8 @@ void GlobalISelEmitter::run(raw_ostream &OS) {
   OS << "};\n\n";
 
   OS << "bool " << Target.getName()
-     << "InstructionSelector::selectImpl(MachineInstr &I) const {\n"
+     << "InstructionSelector::selectImpl(MachineInstr &I, CodeGenCoverage "
+        "&CoverageInfo) const {\n"
      << "  MachineFunction &MF = *I.getParent()->getParent();\n"
      << "  MachineRegisterInfo &MRI = MF.getRegInfo();\n"
      << "  // FIXME: This should be computed on a per-function basis rather "
@@ -3448,7 +3602,7 @@ void GlobalISelEmitter::run(raw_ostream &OS) {
   Table.emitDeclaration(OS);
   OS << "  if (executeMatchTable(*this, OutMIs, State, MatcherInfo, ";
   Table.emitUse(OS);
-  OS << ", TII, MRI, TRI, RBI, AvailableFeatures)) {\n"
+  OS << ", TII, MRI, TRI, RBI, AvailableFeatures, CoverageInfo)) {\n"
      << "    return true;\n"
      << "  }\n\n";
 
@@ -3481,6 +3635,81 @@ void GlobalISelEmitter::declareSubtargetFeature(Record *Predicate) {
   if (SubtargetFeatures.count(Predicate) == 0)
     SubtargetFeatures.emplace(
         Predicate, SubtargetFeatureInfo(Predicate, SubtargetFeatures.size()));
+}
+
+TreePatternNode *GlobalISelEmitter::fixupPatternNode(TreePatternNode *N) {
+  if (!N->isLeaf()) {
+    for (unsigned I = 0, E = N->getNumChildren(); I < E; ++I) {
+      TreePatternNode *OrigChild = N->getChild(I);
+      TreePatternNode *NewChild = fixupPatternNode(OrigChild);
+      if (OrigChild != NewChild)
+        N->setChild(I, NewChild);
+    }
+
+    if (N->getOperator()->getName() == "ld") {
+      // If it's a signext-load we need to adapt the pattern slightly. We need
+      // to split the node into (sext (ld ...)), remove the <<signext>> predicate,
+      // and then apply the <<signextTY>> predicate by updating the result type
+      // of the load.
+      //
+      // For example:
+      //   (ld:[i32] [iPTR])<<unindexed>><<signext>><<signexti16>>
+      // must be transformed into:
+      //   (sext:[i32] (ld:[i16] [iPTR])<<unindexed>>)
+      //
+      // Likewise for zeroext-load and anyext-load.
+
+      std::vector<TreePredicateFn> Predicates;
+      bool IsSignExtLoad = false;
+      bool IsZeroExtLoad = false;
+      bool IsAnyExtLoad = false;
+      Record *MemVT = nullptr;
+      for (const auto &P : N->getPredicateFns()) {
+        if (P.isLoad() && P.isSignExtLoad()) {
+          IsSignExtLoad = true;
+          continue;
+        }
+        if (P.isLoad() && P.isZeroExtLoad()) {
+          IsZeroExtLoad = true;
+          continue;
+        }
+        if (P.isLoad() && P.isAnyExtLoad()) {
+          IsAnyExtLoad = true;
+          continue;
+        }
+        if (P.isLoad() && P.getMemoryVT()) {
+          MemVT = P.getMemoryVT();
+          continue;
+        }
+        Predicates.push_back(P);
+      }
+
+      if ((IsSignExtLoad || IsZeroExtLoad || IsAnyExtLoad) && MemVT) {
+        assert((IsSignExtLoad + IsZeroExtLoad + IsAnyExtLoad) == 1 &&
+               "IsSignExtLoad, IsZeroExtLoad, IsAnyExtLoad are mutually exclusive");
+        TreePatternNode *Ext = new TreePatternNode(
+            RK.getDef(IsSignExtLoad ? "sext"
+                                    : IsZeroExtLoad ? "zext" : "anyext"),
+            {N}, 1);
+        Ext->setType(0, N->getType(0));
+        N->clearPredicateFns();
+        N->setPredicateFns(Predicates);
+        N->setType(0, getValueType(MemVT));
+        return Ext;
+      }
+    }
+  }
+
+  return N;
+}
+
+void GlobalISelEmitter::fixupPatternTrees(TreePattern *P) {
+  for (unsigned I = 0, E = P->getNumTrees(); I < E; ++I) {
+    TreePatternNode *OrigTree = P->getTree(I);
+    TreePatternNode *NewTree = fixupPatternNode(OrigTree);
+    if (OrigTree != NewTree)
+      P->setTree(I, NewTree);
+  }
 }
 
 } // end anonymous namespace

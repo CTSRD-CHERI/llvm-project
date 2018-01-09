@@ -27,10 +27,11 @@
 #include "InputSection.h"
 #include "llvm/ADT/MapVector.h"
 #include "llvm/MC/StringTableBuilder.h"
-#include "llvm/Support/Endian.h"
+#include <functional>
 
 namespace lld {
 namespace elf {
+class SharedSymbol;
 
 class SyntheticSection : public InputSection {
 public:
@@ -176,18 +177,17 @@ public:
 
   // Join separate GOTs built for each input file to generate
   // primary and optional multiple secondary GOTs.
-  template <class ELFT>
-  void build();
+  template <class ELFT> void build();
 
   void addEntry(InputFile &File, Symbol &Sym, int64_t Addend, RelExpr Expr);
   void addDynTlsEntry(InputFile &File, Symbol &Sym);
   void addTlsIndex(InputFile &File);
 
-  uint64_t getPageEntryOffset(const InputFile &F, const Symbol &B,
+  uint64_t getPageEntryOffset(const InputFile &F, const Symbol &S,
                               int64_t Addend) const;
-  uint64_t getSymEntryOffset(const InputFile &F, const Symbol &B,
-                              int64_t Addend) const;
-  uint64_t getGlobalDynOffset(const InputFile &F, const Symbol &B) const;
+  uint64_t getSymEntryOffset(const InputFile &F, const Symbol &S,
+                             int64_t Addend) const;
+  uint64_t getGlobalDynOffset(const InputFile &F, const Symbol &S) const;
   uint64_t getTlsIndexOffset(const InputFile &F) const;
 
   // Returns the symbol which corresponds to the first entry of the global part
@@ -382,6 +382,37 @@ private:
   std::vector<StringRef> Strings;
 };
 
+class DynamicReloc {
+public:
+  DynamicReloc(uint32_t Type, const InputSectionBase *InputSec,
+               uint64_t OffsetInSec, bool UseSymVA, Symbol *Sym, int64_t Addend)
+      : Type(Type), Sym(Sym), InputSec(InputSec), OffsetInSec(OffsetInSec),
+        UseSymVA(UseSymVA), Addend(Addend), OutputSec(nullptr) {}
+  // This constructor records dynamic relocation settings used by MIPS
+  // multi-GOT implementation. It's to relocate addresses of 64kb pages
+  // lie inside the output section.
+  DynamicReloc(uint32_t Type, const InputSectionBase *InputSec,
+               uint64_t  OffsetInSec, const OutputSection *OutputSec,
+               int64_t Addend)
+      : Type(Type), Sym(nullptr), InputSec(InputSec), OffsetInSec(OffsetInSec),
+        UseSymVA(false), Addend(Addend), OutputSec(OutputSec) {}
+
+  uint64_t getOffset() const;
+  int64_t getAddend() const;
+  uint32_t getSymIndex() const;
+  const InputSectionBase *getInputSec() const { return InputSec; }
+
+  uint32_t Type;
+
+private:
+  Symbol *Sym;
+  const InputSectionBase *InputSec = nullptr;
+  uint64_t OffsetInSec;
+  bool UseSymVA;
+  int64_t Addend;
+  const OutputSection *OutputSec;
+};
+
 template <class ELFT> class DynamicSection final : public SyntheticSection {
   typedef typename ELFT::Dyn Elf_Dyn;
   typedef typename ELFT::Rel Elf_Rel;
@@ -389,29 +420,8 @@ template <class ELFT> class DynamicSection final : public SyntheticSection {
   typedef typename ELFT::Shdr Elf_Shdr;
   typedef typename ELFT::Sym Elf_Sym;
 
-  // The .dynamic section contains information for the dynamic linker.
-  // The section consists of fixed size entries, which consist of
-  // type and value fields. Value are one of plain integers, symbol
-  // addresses, or section addresses. This struct represents the entry.
-  struct Entry {
-    int32_t Tag;
-    union {
-      OutputSection *OutSec;
-      InputSection *InSec;
-      uint64_t Val;
-      const Symbol *Sym;
-    };
-    enum KindT { SecAddr, SecSize, SymAddr, PlainInt, InSecAddr } Kind;
-    Entry(int32_t Tag, OutputSection *OutSec, KindT Kind = SecAddr)
-        : Tag(Tag), OutSec(OutSec), Kind(Kind) {}
-    Entry(int32_t Tag, InputSection *Sec)
-        : Tag(Tag), InSec(Sec), Kind(InSecAddr) {}
-    Entry(int32_t Tag, uint64_t Val) : Tag(Tag), Val(Val), Kind(PlainInt) {}
-    Entry(int32_t Tag, const Symbol *Sym) : Tag(Tag), Sym(Sym), Kind(SymAddr) {}
-  };
-
   // finalizeContents() fills this vector with the section contents.
-  std::vector<Entry> Entries;
+  std::vector<std::pair<int32_t, std::function<uint64_t()>>> Entries;
 
 public:
   DynamicSection();
@@ -421,7 +431,14 @@ public:
 
 private:
   void addEntries();
-  void add(Entry E) { Entries.push_back(E); }
+
+  void add(int32_t Tag, std::function<uint64_t()> Fn);
+  void addInt(int32_t Tag, uint64_t Val);
+  void addInSec(int32_t Tag, InputSection *Sec);
+  void addOutSec(int32_t Tag, OutputSection *Sec);
+  void addSize(int32_t Tag, OutputSection *Sec);
+  void addSym(int32_t Tag, Symbol *Sym);
+
   uint64_t Size = 0;
 };
 
@@ -532,6 +549,7 @@ private:
     Symbol *Sym;
     size_t StrTabOffset;
     uint32_t Hash;
+    uint32_t BucketIdx;
   };
 
   std::vector<Entry> Symbols;
@@ -922,6 +940,9 @@ struct InX {
   static MipsRldMapSection *MipsRldMap;
   static PltSection *Plt;
   static PltSection *Iplt;
+  static RelocationBaseSection *RelaDyn;
+  static RelocationBaseSection *RelaPlt;
+  static RelocationBaseSection *RelaIplt;
   static StringTableSection *ShStrTab;
   static StringTableSection *StrTab;
   static SymbolTableBaseSection *SymTab;
@@ -930,18 +951,13 @@ struct InX {
 template <class ELFT> struct In {
   // XXXAR: needs to be templated because Symbol->getSize() needs ELFT
   static CheriCapRelocsSection <ELFT> *CapRelocs;
-  static RelocationBaseSection *RelaDyn;
-  static RelocationSection<ELFT> *RelaPlt;
-  static RelocationSection<ELFT> *RelaIplt;
+#warning "no longer true"
   static VersionDefinitionSection<ELFT> *VerDef;
   static VersionTableSection<ELFT> *VerSym;
   static VersionNeedSection<ELFT> *VerNeed;
 };
 
 template <class ELFT> CheriCapRelocsSection<ELFT> *In<ELFT>::CapRelocs;
-template <class ELFT> RelocationBaseSection *In<ELFT>::RelaDyn;
-template <class ELFT> RelocationSection<ELFT> *In<ELFT>::RelaPlt;
-template <class ELFT> RelocationSection<ELFT> *In<ELFT>::RelaIplt;
 template <class ELFT> VersionDefinitionSection<ELFT> *In<ELFT>::VerDef;
 template <class ELFT> VersionTableSection<ELFT> *In<ELFT>::VerSym;
 template <class ELFT> VersionNeedSection<ELFT> *In<ELFT>::VerNeed;

@@ -18,6 +18,8 @@
 
 namespace lld {
 namespace elf {
+class Defined;
+class SectionBase;
 
 // SymbolTable is a bucket of all known symbols, including defined,
 // undefined, or lazy symbols (the last one is symbols in archive
@@ -47,9 +49,8 @@ public:
 
   template <class ELFT> Symbol *addUndefined(StringRef Name);
   template <class ELFT>
-  Symbol *addUndefined(StringRef Name, bool IsLocal, uint8_t Binding,
-                       uint8_t StOther, uint8_t Type, bool CanOmitFromDynSym,
-                       InputFile *File);
+  Symbol *addUndefined(StringRef Name, uint8_t Binding, uint8_t StOther,
+                       uint8_t Type, bool CanOmitFromDynSym, InputFile *File);
   template <class ELFT>
   Symbol *addRegular(StringRef Name, uint8_t StOther, uint8_t Type,
                      uint64_t Value, uint64_t Size, uint8_t Binding,
@@ -106,7 +107,7 @@ private:
   // but a bit inefficient.
   // FIXME: Experiment with passing in a custom hashing or sorting the symbols
   // once symbol resolution is finished.
-  llvm::DenseMap<llvm::CachedHashStringRef, int> Symtab;
+  llvm::DenseMap<llvm::CachedHashStringRef, int> SymMap;
   std::vector<Symbol *> SymVector;
 
   // Comdat groups define "link once" sections. If two comdat groups have the
@@ -127,8 +128,6 @@ private:
     Symbol *Sym;
     Symbol *Real;
     Symbol *Wrap;
-    uint8_t SymBinding;
-    uint8_t RealBinding;
   };
 
   // For -wrap.

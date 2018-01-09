@@ -11,7 +11,6 @@ add_llvm_library(LLVMCodeGen
   CallingConvLower.cpp
   CodeGen.cpp
   CodeGenPrepare.cpp
-  CountingFunctionInserter.cpp
   CriticalAntiDepBreaker.cpp
   DeadMachineInstructionElim.cpp
   DetectDeadLanes.cpp
@@ -77,6 +76,7 @@ add_llvm_library(LLVMCodeGen
   MachineLoopInfo.cpp
   MachineModuleInfo.cpp
   MachineModuleInfoImpls.cpp
+  MachineOperand.cpp
   MachineOptimizationRemarkEmitter.cpp
   MachineOutliner.cpp
   MachinePassRegistry.cpp

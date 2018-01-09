@@ -29,6 +29,8 @@
 #include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
+#include "llvm/CodeGen/TargetCallingConv.h"
+#include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Attributes.h"
@@ -49,8 +51,6 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetCallingConv.h"
-#include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 #include <algorithm>
@@ -3321,6 +3321,16 @@ bool NVPTXTargetLowering::getTgtMemIntrinsic(
   switch (Intrinsic) {
   default:
     return false;
+  case Intrinsic::nvvm_match_all_sync_i32p:
+  case Intrinsic::nvvm_match_all_sync_i64p:
+    Info.opc = ISD::INTRINSIC_W_CHAIN;
+    // memVT is bogus. These intrinsics have IntrInaccessibleMemOnly attribute
+    // in order to model data exchange with other threads, but perform no real
+    // memory accesses.
+    Info.memVT = MVT::i1;
+    Info.readMem = true;   // Our result depends on other thread's arguments.
+    Info.writeMem = true;  // Other threads depend on our thread's argument.
+    return true;
   case Intrinsic::nvvm_wmma_load_a_f16_col:
   case Intrinsic::nvvm_wmma_load_a_f16_row:
   case Intrinsic::nvvm_wmma_load_a_f16_col_stride:

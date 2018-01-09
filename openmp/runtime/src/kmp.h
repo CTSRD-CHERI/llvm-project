@@ -314,7 +314,7 @@ typedef enum kmp_sched {
  @ingroup WORK_SHARING
  * Describes the loop schedule to be used for a parallel for loop.
  */
-enum sched_type {
+enum sched_type : kmp_int32 {
   kmp_sch_lower = 32, /**< lower bound for unordered values */
   kmp_sch_static_chunked = 33,
   kmp_sch_static = 34, /**< static unspecialized */
@@ -341,7 +341,7 @@ enum sched_type {
 #endif
 
   /* accessible only through KMP_SCHEDULE environment variable */
-  kmp_sch_upper = 48, /**< upper bound for unordered values */
+  kmp_sch_upper, /**< upper bound for unordered values */
 
   kmp_ord_lower = 64, /**< lower bound for ordered values, must be power of 2 */
   kmp_ord_static_chunked = 65,
@@ -351,7 +351,7 @@ enum sched_type {
   kmp_ord_runtime = 69,
   kmp_ord_auto = 70, /**< ordered auto */
   kmp_ord_trapezoidal = 71,
-  kmp_ord_upper = 72, /**< upper bound for ordered values */
+  kmp_ord_upper, /**< upper bound for ordered values */
 
 #if OMP_40_ENABLED
   /* Schedules for Distribute construct */
@@ -390,7 +390,7 @@ enum sched_type {
   kmp_nm_ord_runtime = 197,
   kmp_nm_ord_auto = 198, /**< auto */
   kmp_nm_ord_trapezoidal = 199,
-  kmp_nm_upper = 200, /**< upper bound for nomerge values */
+  kmp_nm_upper, /**< upper bound for nomerge values */
 
 #if OMP_45_ENABLED
   /* Support for OpenMP 4.5 monotonic and nonmonotonic schedule modifiers. Since
@@ -433,9 +433,12 @@ enum sched_type {
 };
 
 /* Type to keep runtime schedule set via OMP_SCHEDULE or omp_set_schedule() */
-typedef struct kmp_r_sched {
-  enum sched_type r_sched_type;
-  int chunk;
+typedef union kmp_r_sched {
+  struct {
+    enum sched_type r_sched_type;
+    int chunk;
+  };
+  kmp_int64 sched;
 } kmp_r_sched_t;
 
 extern enum sched_type __kmp_sch_map[]; // map OMP 3.0 schedule types with our
@@ -571,6 +574,8 @@ extern kmp_SetThreadGroupAffinity_t __kmp_SetThreadGroupAffinity;
 #if KMP_USE_HWLOC
 extern hwloc_topology_t __kmp_hwloc_topology;
 extern int __kmp_hwloc_error;
+extern int __kmp_numa_detected;
+extern int __kmp_tile_depth;
 #endif
 
 extern size_t __kmp_affin_mask_size;
@@ -699,6 +704,8 @@ enum affinity_gran {
   affinity_gran_fine = 0,
   affinity_gran_thread,
   affinity_gran_core,
+  affinity_gran_tile,
+  affinity_gran_numa,
   affinity_gran_package,
   affinity_gran_node,
 #if KMP_GROUP_AFFINITY
@@ -744,7 +751,7 @@ extern unsigned __kmp_affinity_num_masks;
 extern void __kmp_affinity_bind_thread(int which);
 
 extern kmp_affin_mask_t *__kmp_affin_fullMask;
-extern char const *__kmp_cpuinfo_file;
+extern char *__kmp_cpuinfo_file;
 
 #endif /* KMP_AFFINITY_SUPPORTED */
 
@@ -801,10 +808,6 @@ extern kmp_hws_item_t __kmp_hws_core;
 extern kmp_hws_item_t __kmp_hws_proc;
 extern int __kmp_hws_requested;
 extern int __kmp_hws_abs_flag; // absolute or per-item number requested
-
-#if OMP_50_ENABLED && LIBOMP_OMPT_SUPPORT
-extern char const *__kmp_tool_libraries;
-#endif // OMP_50_ENABLED && LIBOMP_OMPT_SUPPORT
 
 /* ------------------------------------------------------------------------ */
 
@@ -1756,7 +1759,7 @@ typedef enum kmp_bar_pat { /* Barrier communication patterns */
                                2, /* Hypercube-embedded tree with min branching
                                      factor 2^n */
                            bp_hierarchical_bar = 3, /* Machine hierarchy tree */
-                           bp_last_bar = 4 /* Placeholder to mark the end */
+                           bp_last_bar /* Placeholder to mark the end */
 } kmp_bar_pat_e;
 
 #define KMP_BARRIER_ICV_PUSH 1
@@ -2032,7 +2035,7 @@ typedef enum kmp_tasking_mode {
 
 extern kmp_tasking_mode_t
     __kmp_tasking_mode; /* determines how/when to execute tasks */
-extern kmp_int32 __kmp_task_stealing_constraint;
+extern int __kmp_task_stealing_constraint;
 #if OMP_40_ENABLED
 extern kmp_int32 __kmp_default_device; // Set via OMP_DEFAULT_DEVICE if
 // specified, defaults to 0 otherwise
@@ -2252,13 +2255,14 @@ struct kmp_taskdata { /* aligned during dynamic allocation       */
       *td_dephash; // Dependencies for children tasks are tracked from here
   kmp_depnode_t
       *td_depnode; // Pointer to graph node if this task has dependencies
-#endif
-#if OMPT_SUPPORT
-  ompt_task_info_t ompt_task_info;
-#endif
+#endif // OMP_40_ENABLED
 #if OMP_45_ENABLED
   kmp_task_team_t *td_task_team;
   kmp_int32 td_size_alloc; // The size of task structure, including shareds etc.
+#endif // OMP_45_ENABLED
+  kmp_taskdata_t *td_last_tied; // keep tied task for task scheduling constraint
+#if OMPT_SUPPORT
+  ompt_task_info_t ompt_task_info;
 #endif
 }; // struct kmp_taskdata
 
@@ -2316,6 +2320,7 @@ typedef struct kmp_base_task_team {
   kmp_int32
       tt_found_proxy_tasks; /* Have we found proxy tasks since last barrier */
 #endif
+  kmp_int32 tt_untied_task_encountered;
 
   KMP_ALIGN_CACHE
   volatile kmp_int32 tt_unfinished_threads; /* #threads still active      */

@@ -796,6 +796,24 @@ public:
   /// \brief Create a logical NOT operation as (XOR Val, BooleanOne).
   SDValue getLogicalNOT(const SDLoc &DL, SDValue Val, EVT VT);
 
+  /// \brief Create an add instruction with appropriate flags when used for
+  /// addressing some offset of an object. i.e. if a load is split into multiple
+  /// components, create an add nuw from the base pointer to the offset.
+  SDValue getObjectPtrOffset(const SDLoc &SL, SDValue Op, int64_t Offset) {
+    EVT VT = Op.getValueType();
+    return getObjectPtrOffset(SL, Op, getConstant(Offset, SL, VT));
+  }
+
+  SDValue getObjectPtrOffset(const SDLoc &SL, SDValue Op, SDValue Offset) {
+    EVT VT = Op.getValueType();
+
+    // The object itself can't wrap around the address space, so it shouldn't be
+    // possible for the adds of the offsets to the split parts to overflow.
+    SDNodeFlags Flags;
+    Flags.setNoUnsignedWrap(true);
+    return getNode(ISD::ADD, SL, VT, Op, Offset, Flags);
+  }
+
   /// Return a new CALLSEQ_START node, that starts new call frame, in which
   /// InSize bytes are set up inside CALLSEQ_START..CALLSEQ_END sequence and
   /// OutSize specifies part of the frame set up prior to the sequence.
@@ -1184,15 +1202,21 @@ public:
                           unsigned R, bool IsIndirect, const DebugLoc &DL,
                           unsigned O);
 
-  /// Constant
+  /// Creates a constant SDDbgValue node.
   SDDbgValue *getConstantDbgValue(DIVariable *Var, DIExpression *Expr,
                                   const Value *C, const DebugLoc &DL,
                                   unsigned O);
 
-  /// FrameIndex
+  /// Creates a FrameIndex SDDbgValue node.
   SDDbgValue *getFrameIndexDbgValue(DIVariable *Var, DIExpression *Expr,
                                     unsigned FI, const DebugLoc &DL,
                                     unsigned O);
+
+  /// Transfer debug values from one node to another, while optionally
+  /// generating fragment expressions for split-up values. If \p InvalidateDbg
+  /// is set, debug values are invalidated after they are transferred.
+  void transferDbgValues(SDValue From, SDValue To, unsigned OffsetInBits = 0,
+                         unsigned SizeInBits = 0, bool InvalidateDbg = true);
 
   /// Remove the specified node from the system. If any of its
   /// operands then becomes dead, remove them as well. Inform UpdateListener
@@ -1223,7 +1247,7 @@ public:
   void ReplaceAllUsesWith(SDNode *From, const SDValue *To);
 
   /// Replace any uses of From with To, leaving
-  /// uses of other values produced by From.Val alone.
+  /// uses of other values produced by From.getNode() alone.
   void ReplaceAllUsesOfValueWith(SDValue From, SDValue To);
 
   /// Like ReplaceAllUsesOfValueWith, but for multiple values at once.
@@ -1273,10 +1297,6 @@ public:
   ArrayRef<SDDbgValue*> GetDbgValues(const SDNode* SD) {
     return DbgInfo->getSDDbgValues(SD);
   }
-
-private:
-  /// Transfer SDDbgValues. Called via ReplaceAllUses{OfValue}?With
-  void TransferDbgValues(SDValue From, SDValue To);
 
 public:
   /// Return true if there are any SDDbgValue nodes associated

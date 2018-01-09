@@ -126,6 +126,9 @@ defm filter: Eq<"filter">,
 defm fini: Eq<"fini">,
   HelpText<"Specify a finalizer function">, MetaVarName<"<symbol>">;
 
+def fix_cortex_a53_843419: F<"fix-cortex-a53-843419">,
+  HelpText<"Apply fixes for AArch64 Cortex-A53 erratum 843419">;
+
 def full_shutdown : F<"full-shutdown">,
   HelpText<"Perform a full shutdown instead of calling _exit">;
 
@@ -414,9 +417,11 @@ def allow_shlib_undefined: F<"allow-shlib-undefined">;
 def cref: F<"cref">;
 def detect_odr_violations: F<"detect-odr-violations">;
 def g: Flag<["-"], "g">;
+def long_plt: F<"long-plt">;
 def no_add_needed: F<"no-add-needed">;
 def no_allow_shlib_undefined: F<"no-allow-shlib-undefined">;
 def no_copy_dt_needed_entries: F<"no-copy-dt-needed-entries">;
+def no_ctors_in_init_array: F<"no-ctors-in-init-array">;
 def no_keep_memory: F<"no-keep-memory">;
 def no_mmap_output_file: F<"no-mmap-output-file">;
 def no_warn_common: F<"no-warn-common">;

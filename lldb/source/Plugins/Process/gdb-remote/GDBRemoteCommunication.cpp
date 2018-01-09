@@ -600,10 +600,9 @@ bool GDBRemoteCommunication::DecompressPacket() {
 #if defined(HAVE_LIBCOMPRESSION)
   // libcompression is weak linked so check that compression_decode_buffer() is
   // available
-  if (compression_decode_buffer != NULL &&
-      (m_compression_type == CompressionType::ZlibDeflate ||
-       m_compression_type == CompressionType::LZFSE ||
-       m_compression_type == CompressionType::LZ4)) {
+  if (m_compression_type == CompressionType::ZlibDeflate ||
+      m_compression_type == CompressionType::LZFSE ||
+      m_compression_type == CompressionType::LZ4) {
     compression_algorithm compression_type;
     if (m_compression_type == CompressionType::LZFSE)
       compression_type = COMPRESSION_LZFSE;
@@ -1374,5 +1373,41 @@ void GDBRemoteCommunication::AppendBytesToCache(const uint8_t *bytes,
       BroadcastEvent(eBroadcastBitGdbReadThreadGotNotify,
                      new EventDataBytes(pdata));
     }
+  }
+}
+
+void llvm::format_provider<GDBRemoteCommunication::PacketResult>::format(
+    const GDBRemoteCommunication::PacketResult &result, raw_ostream &Stream,
+    StringRef Style) {
+  using PacketResult = GDBRemoteCommunication::PacketResult;
+
+  switch (result) {
+  case PacketResult::Success:
+    Stream << "Success";
+    break;
+  case PacketResult::ErrorSendFailed:
+    Stream << "ErrorSendFailed";
+    break;
+  case PacketResult::ErrorSendAck:
+    Stream << "ErrorSendAck";
+    break;
+  case PacketResult::ErrorReplyFailed:
+    Stream << "ErrorReplyFailed";
+    break;
+  case PacketResult::ErrorReplyTimeout:
+    Stream << "ErrorReplyTimeout";
+    break;
+  case PacketResult::ErrorReplyInvalid:
+    Stream << "ErrorReplyInvalid";
+    break;
+  case PacketResult::ErrorReplyAck:
+    Stream << "ErrorReplyAck";
+    break;
+  case PacketResult::ErrorDisconnected:
+    Stream << "ErrorDisconnected";
+    break;
+  case PacketResult::ErrorNoSequenceLock:
+    Stream << "ErrorNoSequenceLock";
+    break;
   }
 }

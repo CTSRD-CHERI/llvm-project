@@ -18,16 +18,16 @@
 // A "ref" value is associated with a BitRef structure, which indicates
 // which virtual register, and which bit in that register is the origin
 // of the value. For example, given an instruction
-//   vreg2 = ASL vreg1, 1
-// assuming that nothing is known about bits of vreg1, bit 1 of vreg2
-// will be a "ref" to (vreg1, 0). If there is a subsequent instruction
-//   vreg3 = ASL vreg2, 2
-// then bit 3 of vreg3 will be a "ref" to (vreg1, 0) as well.
+//   %2 = ASL %1, 1
+// assuming that nothing is known about bits of %1, bit 1 of %2
+// will be a "ref" to (%1, 0). If there is a subsequent instruction
+//   %3 = ASL %2, 2
+// then bit 3 of %3 will be a "ref" to (%1, 0) as well.
 // The "bottom" case means that the bit's value cannot be determined,
 // and that this virtual register actually defines it. The "bottom" case
 // is discussed in detail in BitTracker.h. In fact, "bottom" is a "ref
-// to self", so for the vreg1 above, the bit 0 of it will be a "ref" to
-// (vreg1, 0), bit 1 will be a "ref" to (vreg1, 1), etc.
+// to self", so for the %1 above, the bit 0 of it will be a "ref" to
+// (%1, 0), bit 1 will be a "ref" to (%1, 1), etc.
 //
 // The tracker implements the Wegman-Zadeck algorithm, originally developed
 // for SSA-based constant propagation. Each register is represented as
@@ -61,10 +61,10 @@
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetRegisterInfo.h"
 #include <cassert>
 #include <cstdint>
 #include <iterator>
@@ -75,7 +75,7 @@ using BT = BitTracker;
 
 namespace {
 
-  // Local trickery to pretty print a register (without the whole "%vreg"
+  // Local trickery to pretty print a register (without the whole "%number"
   // business).
   struct printv {
     printv(unsigned r) : R(r) {}
@@ -182,7 +182,7 @@ namespace llvm {
 
 void BitTracker::print_cells(raw_ostream &OS) const {
   for (const std::pair<unsigned, RegisterCell> P : Map)
-    dbgs() << PrintReg(P.first, &ME.TRI) << " -> " << P.second << "\n";
+    dbgs() << printReg(P.first, &ME.TRI) << " -> " << P.second << "\n";
 }
 
 BitTracker::BitTracker(const MachineEvaluator &E, MachineFunction &F)
@@ -767,7 +767,7 @@ bool BT::MachineEvaluator::evaluate(const MachineInstr &MI,
 void BT::visitPHI(const MachineInstr &PI) {
   int ThisN = PI.getParent()->getNumber();
   if (Trace)
-    dbgs() << "Visit FI(BB#" << ThisN << "): " << PI;
+    dbgs() << "Visit FI(" << printMBBReference(*PI.getParent()) << "): " << PI;
 
   const MachineOperand &MD = PI.getOperand(0);
   assert(MD.getSubReg() == 0 && "Unexpected sub-register in definition");
@@ -784,7 +784,8 @@ void BT::visitPHI(const MachineInstr &PI) {
     const MachineBasicBlock *PB = PI.getOperand(i + 1).getMBB();
     int PredN = PB->getNumber();
     if (Trace)
-      dbgs() << "  edge BB#" << PredN << "->BB#" << ThisN;
+      dbgs() << "  edge " << printMBBReference(*PB) << "->"
+             << printMBBReference(*PI.getParent());
     if (!EdgeExec.count(CFGEdge(PredN, ThisN))) {
       if (Trace)
         dbgs() << " not executable\n";
@@ -794,14 +795,14 @@ void BT::visitPHI(const MachineInstr &PI) {
     RegisterRef RU = PI.getOperand(i);
     RegisterCell ResC = ME.getCell(RU, Map);
     if (Trace)
-      dbgs() << " input reg: " << PrintReg(RU.Reg, &ME.TRI, RU.Sub)
+      dbgs() << " input reg: " << printReg(RU.Reg, &ME.TRI, RU.Sub)
              << " cell: " << ResC << "\n";
     Changed |= DefC.meet(ResC, DefRR.Reg);
   }
 
   if (Changed) {
     if (Trace)
-      dbgs() << "Output: " << PrintReg(DefRR.Reg, &ME.TRI, DefRR.Sub)
+      dbgs() << "Output: " << printReg(DefRR.Reg, &ME.TRI, DefRR.Sub)
              << " cell: " << DefC << "\n";
     ME.putCell(DefRR, DefC, Map);
     visitUsesOf(DefRR.Reg);
@@ -809,10 +810,8 @@ void BT::visitPHI(const MachineInstr &PI) {
 }
 
 void BT::visitNonBranch(const MachineInstr &MI) {
-  if (Trace) {
-    int ThisN = MI.getParent()->getNumber();
-    dbgs() << "Visit MI(BB#" << ThisN << "): " << MI;
-  }
+  if (Trace)
+    dbgs() << "Visit MI(" << printMBBReference(*MI.getParent()) << "): " << MI;
   if (MI.isDebugValue())
     return;
   assert(!MI.isBranch() && "Unexpected branch instruction");
@@ -826,13 +825,13 @@ void BT::visitNonBranch(const MachineInstr &MI) {
       if (!MO.isReg() || !MO.isUse())
         continue;
       RegisterRef RU(MO);
-      dbgs() << "  input reg: " << PrintReg(RU.Reg, &ME.TRI, RU.Sub)
+      dbgs() << "  input reg: " << printReg(RU.Reg, &ME.TRI, RU.Sub)
              << " cell: " << ME.getCell(RU, Map) << "\n";
     }
     dbgs() << "Outputs:\n";
     for (const std::pair<unsigned, RegisterCell> &P : ResMap) {
       RegisterRef RD(P.first);
-      dbgs() << "  " << PrintReg(P.first, &ME.TRI) << " cell: "
+      dbgs() << "  " << printReg(P.first, &ME.TRI) << " cell: "
              << ME.getCell(RD, ResMap) << "\n";
     }
   }
@@ -897,7 +896,7 @@ void BT::visitBranchesFrom(const MachineInstr &BI) {
     BTs.clear();
     const MachineInstr &MI = *It;
     if (Trace)
-      dbgs() << "Visit BR(BB#" << ThisN << "): " << MI;
+      dbgs() << "Visit BR(" << printMBBReference(B) << "): " << MI;
     assert(MI.isBranch() && "Expecting branch instruction");
     InstrExec.insert(&MI);
     bool Eval = ME.evaluate(MI, Map, BTs, FallsThrough);
@@ -913,7 +912,7 @@ void BT::visitBranchesFrom(const MachineInstr &BI) {
       if (Trace) {
         dbgs() << "  adding targets:";
         for (unsigned i = 0, n = BTs.size(); i < n; ++i)
-          dbgs() << " BB#" << BTs[i]->getNumber();
+          dbgs() << " " << printMBBReference(*BTs[i]);
         if (FallsThrough)
           dbgs() << "\n  falls through\n";
         else
@@ -949,7 +948,7 @@ void BT::visitBranchesFrom(const MachineInstr &BI) {
 
 void BT::visitUsesOf(unsigned Reg) {
   if (Trace)
-    dbgs() << "visiting uses of " << PrintReg(Reg, &ME.TRI) << "\n";
+    dbgs() << "visiting uses of " << printReg(Reg, &ME.TRI) << "\n";
 
   for (const MachineInstr &UseI : MRI.use_nodbg_instructions(Reg)) {
     if (!InstrExec.count(&UseI))

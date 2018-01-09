@@ -15,9 +15,9 @@
 
 #include "Config.h"
 #include "Driver.h"
-#include "Memory.h"
 #include "Symbols.h"
 #include "lld/Common/ErrorHandler.h"
+#include "lld/Common/Memory.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/BinaryFormat/COFF.h"
@@ -317,7 +317,7 @@ public:
   // is called (you cannot remove an opened file on Windows.)
   std::unique_ptr<MemoryBuffer> getMemoryBuffer() {
     // IsVolatileSize=true forces MemoryBuffer to not use mmap().
-    return check(MemoryBuffer::getFile(Path, /*FileSize=*/-1,
+    return CHECK(MemoryBuffer::getFile(Path, /*FileSize=*/-1,
                                        /*RequiresNullTerminator=*/false,
                                        /*IsVolatileSize=*/true),
                  "could not open " + Path);
@@ -402,7 +402,7 @@ static std::string createManifestXmlWithExternalMt(StringRef DefaultXml) {
   E.add("/out:" + StringRef(User.Path));
   E.run();
 
-  return check(MemoryBuffer::getFile(User.Path), "could not open " + User.Path)
+  return CHECK(MemoryBuffer::getFile(User.Path), "could not open " + User.Path)
       .get()
       ->getBuffer();
 }
@@ -594,7 +594,7 @@ void fixupExports() {
   }
 
   // Uniquefy by name.
-  std::map<StringRef, Export *> Map;
+  DenseMap<StringRef, Export *> Map(Config->Exports.size());
   std::vector<Export> V;
   for (Export &E : Config->Exports) {
     auto Pair = Map.insert(std::make_pair(E.ExportName, &E));
@@ -642,7 +642,7 @@ void checkFailIfMismatch(StringRef Arg) {
 }
 
 // Convert Windows resource files (.res files) to a .obj file.
-MemoryBufferRef convertResToCOFF(const std::vector<MemoryBufferRef> &MBs) {
+MemoryBufferRef convertResToCOFF(ArrayRef<MemoryBufferRef> MBs) {
   object::WindowsResourceParser Parser;
 
   for (MemoryBufferRef MB : MBs) {
@@ -773,8 +773,7 @@ std::vector<const char *> ArgParser::tokenize(StringRef S) {
 }
 
 void printHelp(const char *Argv0) {
-  COFFOptTable Table;
-  Table.PrintHelp(outs(), Argv0, "LLVM Linker", false);
+  COFFOptTable().PrintHelp(outs(), Argv0, "LLVM Linker", false);
 }
 
 } // namespace coff

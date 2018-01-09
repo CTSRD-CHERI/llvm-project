@@ -612,7 +612,7 @@ void ASTDeclWriter::VisitFunctionDecl(FunctionDecl *D) {
 
 void ASTDeclWriter::VisitCXXDeductionGuideDecl(CXXDeductionGuideDecl *D) {
   VisitFunctionDecl(D);
-  Record.push_back(D->isCopyDeductionCandidate());
+  Record.push_back(D->IsCopyDeductionCandidate);
   Code = serialization::DECL_CXX_DEDUCTION_GUIDE;
 }
 
@@ -1494,6 +1494,7 @@ void ASTDeclWriter::VisitVarTemplateSpecializationDecl(
   Record.AddTemplateArgumentList(&D->getTemplateArgs());
   Record.AddSourceLocation(D->getPointOfInstantiation());
   Record.push_back(D->getSpecializationKind());
+  Record.push_back(D->IsCompleteDefinition);
   Record.push_back(D->isCanonicalDecl());
 
   if (D->isCanonicalDecl()) {

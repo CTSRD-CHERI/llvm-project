@@ -82,12 +82,13 @@ class SITargetLowering final : public AMDGPUTargetLowering {
   SDValue lowerEXTRACT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerTRAP(SDValue Op, SelectionDAG &DAG) const;
 
-  void adjustWritemask(MachineSDNode *&N, SelectionDAG &DAG) const;
+  SDNode *adjustWritemask(MachineSDNode *&N, SelectionDAG &DAG) const;
 
   SDValue performUCharToFloatCombine(SDNode *N,
                                      DAGCombinerInfo &DCI) const;
   SDValue performSHLPtrCombine(SDNode *N,
                                unsigned AS,
+                               EVT MemVT,
                                DAGCombinerInfo &DCI) const;
 
   SDValue performMemSDNodeCombine(MemSDNode *N, DAGCombinerInfo &DCI) const;
@@ -276,6 +277,12 @@ public:
                    SDValue V) const;
 
   void finalizeLowering(MachineFunction &MF) const override;
+
+  void computeKnownBitsForFrameIndex(const SDValue Op,
+                                     KnownBits &Known,
+                                     const APInt &DemandedElts,
+                                     const SelectionDAG &DAG,
+                                     unsigned Depth = 0) const override;
 };
 
 } // End namespace llvm

@@ -27,6 +27,7 @@
 #include "llvm/CodeGen/GlobalISel/RegBankSelect.h"
 #include "llvm/CodeGen/MachineScheduler.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/TargetLoweringObjectFile.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/Function.h"
@@ -35,7 +36,6 @@
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/TargetRegistry.h"
-#include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Transforms/Scalar.h"
 #include <memory>
@@ -157,7 +157,7 @@ extern "C" void LLVMInitializeAArch64Target() {
   initializeAArch64DeadRegisterDefinitionsPass(*PR);
   initializeAArch64ExpandPseudoPass(*PR);
   initializeAArch64LoadStoreOptPass(*PR);
-  initializeAArch64VectorByElementOptPass(*PR);
+  initializeAArch64SIMDInstrOptPass(*PR);
   initializeAArch64PromoteConstantPass(*PR);
   initializeAArch64RedundantCopyEliminationPass(*PR);
   initializeAArch64StorePairSuppressPass(*PR);
@@ -473,7 +473,7 @@ bool AArch64PassConfig::addILPOpts() {
     addPass(&EarlyIfConverterID);
   if (EnableStPairSuppress)
     addPass(createAArch64StorePairSuppressPass());
-  addPass(createAArch64VectorByElementOptPass());
+  addPass(createAArch64SIMDInstrOptPass());
   return true;
 }
 

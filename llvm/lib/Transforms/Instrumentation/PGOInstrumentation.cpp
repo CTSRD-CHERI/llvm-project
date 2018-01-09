@@ -462,7 +462,7 @@ struct PGOEdge {
   bool Removed = false;
   bool IsCritical = false;
 
-  PGOEdge(const BasicBlock *Src, const BasicBlock *Dest, unsigned W = 1)
+  PGOEdge(const BasicBlock *Src, const BasicBlock *Dest, uint64_t W = 1)
       : SrcBB(Src), DestBB(Dest), Weight(W) {}
 
   // Return the information string of an edge.
@@ -776,7 +776,7 @@ struct PGOUseEdge : public PGOEdge {
   bool CountValid = false;
   uint64_t CountValue = 0;
 
-  PGOUseEdge(const BasicBlock *Src, const BasicBlock *Dest, unsigned W = 1)
+  PGOUseEdge(const BasicBlock *Src, const BasicBlock *Dest, uint64_t W = 1)
       : PGOEdge(Src, Dest, W) {}
 
   // Set edge count value
@@ -1188,11 +1188,22 @@ void PGOUseFunc::setBranchWeights() {
   }
 }
 
+static bool isIndirectBrTarget(BasicBlock *BB) {
+  for (pred_iterator PI = pred_begin(BB), E = pred_end(BB); PI != E; ++PI) {
+    if (isa<IndirectBrInst>((*PI)->getTerminator()))
+      return true;
+  }
+  return false;
+}
+
 void PGOUseFunc::annotateIrrLoopHeaderWeights() {
   DEBUG(dbgs() << "\nAnnotating irreducible loop header weights.\n");
   // Find irr loop headers
   for (auto &BB : F) {
-    if (BFI->isIrrLoopHeader(&BB)) {
+    // As a heuristic also annotate indrectbr targets as they have a high chance
+    // to become an irreducible loop header after the indirectbr tail
+    // duplication.
+    if (BFI->isIrrLoopHeader(&BB) || isIndirectBrTarget(&BB)) {
       TerminatorInst *TI = BB.getTerminator();
       const UseBBInfo &BBCountInfo = getBBInfo(&BB);
       setIrrLoopHeaderMetadata(M, TI, BBCountInfo.CountValue);

@@ -544,7 +544,7 @@ void tools::linkSanitizerRuntimeDeps(const ToolChain &TC,
     CmdArgs.push_back("-lrt");
   }
   CmdArgs.push_back("-lm");
-  // There's no libdl on FreeBSD or RTEMS.
+  // There's no libdl on all OSes.
   if (TC.getTriple().getOS() != llvm::Triple::FreeBSD &&
       TC.getTriple().getOS() != llvm::Triple::NetBSD &&
       TC.getTriple().getOS() != llvm::Triple::RTEMS)
@@ -575,6 +575,8 @@ collectSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
     }
     if (SanArgs.needsScudoRt())
       SharedRuntimes.push_back("scudo");
+    if (SanArgs.needsHwasanRt())
+      SharedRuntimes.push_back("hwasan");
   }
 
   // The stats_client library is also statically linked into DSOs.
@@ -590,6 +592,12 @@ collectSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
     StaticRuntimes.push_back("asan");
     if (SanArgs.linkCXXRuntimes())
       StaticRuntimes.push_back("asan_cxx");
+  }
+
+  if (SanArgs.needsHwasanRt()) {
+    StaticRuntimes.push_back("hwasan");
+    if (SanArgs.linkCXXRuntimes())
+      StaticRuntimes.push_back("hwasan_cxx");
   }
   if (SanArgs.needsDfsanRt())
     StaticRuntimes.push_back("dfsan");
@@ -725,7 +733,8 @@ void tools::SplitDebugInfo(const ToolChain &TC, Compilation &C, const Tool &T,
   ExtractArgs.push_back(Output.getFilename());
   ExtractArgs.push_back(OutFile);
 
-  const char *Exec = Args.MakeArgString(TC.GetProgramPath("objcopy"));
+  const char *Exec =
+      Args.MakeArgString(TC.GetProgramPath(CLANG_DEFAULT_OBJCOPY));
   InputInfo II(types::TY_Object, Output.getFilename(), Output.getFilename());
 
   // First extract the dwo sections.

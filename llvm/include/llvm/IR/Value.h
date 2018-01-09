@@ -651,12 +651,6 @@ private:
     return Merged;
   }
 
-  /// \brief Tail-recursive helper for \a mergeUseLists().
-  ///
-  /// \param[out] Next the first element in the list.
-  template <class Compare>
-  static void mergeUseListsImpl(Use *L, Use *R, Use **Next, Compare Cmp);
-
 protected:
   unsigned short getSubclassDataFromValue() const { return SubclassData; }
   void setValueSubclassData(unsigned short D) { SubclassData = D; }
@@ -762,8 +756,8 @@ template <class Compare> void Value::sortUseList(Compare Cmp) {
 //
 template <> struct isa_impl<Constant, Value> {
   static inline bool doit(const Value &Val) {
-    return Val.getValueID() >= Value::ConstantFirstVal &&
-      Val.getValueID() <= Value::ConstantLastVal;
+    static_assert(Value::ConstantFirstVal == 0, "Val.getValueID() >= Value::ConstantFirstVal");
+    return Val.getValueID() <= Value::ConstantLastVal;
   }
 };
 

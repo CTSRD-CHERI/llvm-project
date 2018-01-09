@@ -23,16 +23,11 @@ def SLMModel : SchedMachineModel {
 
   // For small loops, expand by a small factor to hide the backedge cost.
   let LoopMicroOpBufferSize = 10;
-
-  // FIXME: SSE4 is unimplemented. This flag is set to allow
-  // the scheduler to assign a default model to unrecognized opcodes.
-  let CompleteModel = 0;
 }
 
 let SchedModel = SLMModel in {
 
 // Silvermont has 5 reservation stations for micro-ops
-
 def IEC_RSV0 : ProcResource<1>;
 def IEC_RSV1 : ProcResource<1>;
 def FPC_RSV0 : ProcResource<1> { let BufferSize = 1; }
@@ -77,6 +72,9 @@ def : WriteRes<WriteStore, [IEC_RSV01, MEC_RSV]>;
 def : WriteRes<WriteLoad,  [MEC_RSV]> { let Latency = 3; }
 def : WriteRes<WriteMove,  [IEC_RSV01]>;
 def : WriteRes<WriteZero,  []>;
+
+// Treat misc copies as a move.
+def : InstRW<[WriteMove], (instrs COPY)>;
 
 defm : SMWriteResPair<WriteALU,   IEC_RSV01, 1>;
 defm : SMWriteResPair<WriteIMul,  IEC_RSV1,  3>;
@@ -249,7 +247,7 @@ def : WriteRes<WriteMicrocoded, [FPC_RSV0]> { let Latency = 100; }
 def : WriteRes<WriteFence, [MEC_RSV]>;
 def : WriteRes<WriteNop, []>;
 
-// AVX is not supported on that architecture, but we should define the basic
+// AVX/FMA is not supported on that architecture, but we should define the basic
 // scheduling resources anyway.
 def  : WriteRes<WriteIMulH, [FPC_RSV0]>;
 defm : SMWriteResPair<WriteVarBlend, FPC_RSV0, 1>;
@@ -257,4 +255,5 @@ defm : SMWriteResPair<WriteFVarBlend, FPC_RSV0, 1>;
 defm : SMWriteResPair<WriteFShuffle256, FPC_RSV0,  1>;
 defm : SMWriteResPair<WriteShuffle256, FPC_RSV0,  1>;
 defm : SMWriteResPair<WriteVarVecShift, FPC_RSV0,  1>;
+defm : SMWriteResPair<WriteFMA, FPC_RSV0,  1>;
 } // SchedModel

@@ -34,6 +34,8 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/SlotIndexes.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/CodeGen/VirtRegMap.h"
 #include "llvm/MC/LaneBitmask.h"
 #include "llvm/MC/MCRegisterInfo.h"
@@ -44,8 +46,6 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -157,7 +157,7 @@ void LiveIntervals::print(raw_ostream &OS, const Module* ) const {
   // Dump the regunits.
   for (unsigned Unit = 0, UnitE = RegUnitRanges.size(); Unit != UnitE; ++Unit)
     if (LiveRange *LR = RegUnitRanges[Unit])
-      OS << PrintRegUnit(Unit, TRI) << ' ' << *LR << '\n';
+      OS << printRegUnit(Unit, TRI) << ' ' << *LR << '\n';
 
   // Dump the virtregs.
   for (unsigned i = 0, e = MRI->getNumVirtRegs(); i != e; ++i) {
@@ -323,7 +323,7 @@ void LiveIntervals::computeLiveInRegUnits() {
 
     // Create phi-defs at Begin for all live-in registers.
     SlotIndex Begin = Indexes->getMBBStartIdx(&MBB);
-    DEBUG(dbgs() << Begin << "\tBB#" << MBB.getNumber());
+    DEBUG(dbgs() << Begin << "\t" << printMBBReference(MBB));
     for (const auto &LI : MBB.liveins()) {
       for (MCRegUnitIterator Units(LI.PhysReg, TRI); Units.isValid(); ++Units) {
         unsigned Unit = *Units;
@@ -335,7 +335,7 @@ void LiveIntervals::computeLiveInRegUnits() {
         }
         VNInfo *VNI = LR->createDeadDef(Begin, getVNInfoAllocator());
         (void)VNI;
-        DEBUG(dbgs() << ' ' << PrintRegUnit(Unit, TRI) << '#' << VNI->id);
+        DEBUG(dbgs() << ' ' << printRegUnit(Unit, TRI) << '#' << VNI->id);
       }
     }
     DEBUG(dbgs() << '\n');
@@ -698,11 +698,11 @@ void LiveIntervals::addKillFlags(const VirtRegMap *VRM) {
       // Check if any of the regunits are live beyond the end of RI. That could
       // happen when a physreg is defined as a copy of a virtreg:
       //
-      //   %EAX = COPY %vreg5
-      //   FOO %vreg5         <--- MI, cancel kill because %EAX is live.
-      //   BAR %EAX<kill>
+      //   %eax = COPY %5
+      //   FOO %5             <--- MI, cancel kill because %eax is live.
+      //   BAR killed %eax
       //
-      // There should be no kill flag on FOO when %vreg5 is rewritten as %EAX.
+      // There should be no kill flag on FOO when %5 is rewritten as %eax.
       for (auto &RUP : RU) {
         const LiveRange &RURange = *RUP.first;
         LiveRange::const_iterator &I = RUP.second;
@@ -719,13 +719,13 @@ void LiveIntervals::addKillFlags(const VirtRegMap *VRM) {
         // When reading a partial undefined value we must not add a kill flag.
         // The regalloc might have used the undef lane for something else.
         // Example:
-        //     %vreg1 = ...              ; R32: %vreg1
-        //     %vreg2:high16 = ...       ; R64: %vreg2
-        //        = read %vreg2<kill>    ; R64: %vreg2
-        //        = read %vreg1          ; R32: %vreg1
-        // The <kill> flag is correct for %vreg2, but the register allocator may
-        // assign R0L to %vreg1, and R0 to %vreg2 because the low 32bits of R0
-        // are actually never written by %vreg2. After assignment the <kill>
+        //     %1 = ...                  ; R32: %1
+        //     %2:high16 = ...           ; R64: %2
+        //        = read killed %2        ; R64: %2
+        //        = read %1              ; R32: %1
+        // The <kill> flag is correct for %2, but the register allocator may
+        // assign R0L to %1, and R0 to %2 because the low 32bits of R0
+        // are actually never written by %2. After assignment the <kill>
         // flag at the read instruction is invalid.
         LaneBitmask DefinedLanesMask;
         if (!SRs.empty()) {
@@ -995,11 +995,11 @@ private:
     DEBUG({
       dbgs() << "     ";
       if (TargetRegisterInfo::isVirtualRegister(Reg)) {
-        dbgs() << PrintReg(Reg);
+        dbgs() << printReg(Reg);
         if (LaneMask.any())
           dbgs() << " L" << PrintLaneMask(LaneMask);
       } else {
-        dbgs() << PrintRegUnit(Reg, &TRI);
+        dbgs() << printRegUnit(Reg, &TRI);
       }
       dbgs() << ":\t" << LR << '\n';
     });

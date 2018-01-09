@@ -29,6 +29,7 @@
 #include "llvm/CodeGen/MachineModuleInfoImpls.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/StackMaps.h"
+#include "llvm/CodeGen/TargetLoweringObjectFile.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/Mangler.h"
@@ -46,7 +47,6 @@
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCSymbolELF.h"
 #include "llvm/Support/TargetRegistry.h"
-#include "llvm/Target/TargetLoweringObjectFile.h"
 
 using namespace llvm;
 
@@ -961,7 +961,7 @@ void X86AsmPrinter::LowerPATCHABLE_OP(const MachineInstr &MI,
       // This is an optimization that lets us get away without emitting a nop in
       // many cases.
       //
-      // NB! In some cases the encoding for PUSH64r (e.g. PUSH64r %R9) takes two
+      // NB! In some cases the encoding for PUSH64r (e.g. PUSH64r %r9) takes two
       // bytes too, so the check on MinSize is important.
       MCI.setOpcode(X86::PUSH64rmr);
     } else {

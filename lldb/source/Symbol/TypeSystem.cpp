@@ -23,6 +23,7 @@
 #include "lldb/Symbol/CompilerType.h"
 
 using namespace lldb_private;
+using namespace lldb;
 
 TypeSystem::TypeSystem(LLVMCastKind kind) : m_kind(kind), m_sym_file(nullptr) {}
 
@@ -98,6 +99,22 @@ CompilerType TypeSystem::GetBuiltinTypeByName(const ConstString &name) {
 
 CompilerType TypeSystem::GetTypeForFormatters(void *type) {
   return CompilerType(this, type);
+}
+
+TemplateArgumentKind
+TypeSystem::GetTemplateArgumentKind(opaque_compiler_type_t type, size_t idx) {
+  return eTemplateArgumentKindNull;
+}
+
+CompilerType TypeSystem::GetTypeTemplateArgument(opaque_compiler_type_t type,
+                                                 size_t idx) {
+  return CompilerType();
+}
+
+llvm::Optional<CompilerType::IntegralTemplateArgument>
+TypeSystem::GetIntegralTemplateArgument(opaque_compiler_type_t type,
+                                        size_t idx) {
+  return llvm::None;
 }
 
 LazyBool TypeSystem::ShouldPrintAsOneLiner(void *type, ValueObject *valobj) {

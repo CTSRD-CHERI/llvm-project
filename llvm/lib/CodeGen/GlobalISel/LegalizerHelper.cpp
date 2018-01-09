@@ -17,10 +17,10 @@
 #include "llvm/CodeGen/GlobalISel/CallLowering.h"
 #include "llvm/CodeGen/GlobalISel/LegalizerInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetLowering.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 
 #include <sstream>
 
@@ -94,6 +94,12 @@ static RTLIB::Libcall getRTLibDesc(unsigned Opcode, unsigned Size) {
   case TargetOpcode::G_FSUB:
     assert((Size == 32 || Size == 64) && "Unsupported size");
     return Size == 64 ? RTLIB::SUB_F64 : RTLIB::SUB_F32;
+  case TargetOpcode::G_FMUL:
+    assert((Size == 32 || Size == 64) && "Unsupported size");
+    return Size == 64 ? RTLIB::MUL_F64 : RTLIB::MUL_F32;
+  case TargetOpcode::G_FDIV:
+    assert((Size == 32 || Size == 64) && "Unsupported size");
+    return Size == 64 ? RTLIB::DIV_F64 : RTLIB::DIV_F32;
   case TargetOpcode::G_FREM:
     return Size == 64 ? RTLIB::REM_F64 : RTLIB::REM_F32;
   case TargetOpcode::G_FPOW:
@@ -150,6 +156,8 @@ LegalizerHelper::libcall(MachineInstr &MI) {
   }
   case TargetOpcode::G_FADD:
   case TargetOpcode::G_FSUB:
+  case TargetOpcode::G_FMUL:
+  case TargetOpcode::G_FDIV:
   case TargetOpcode::G_FPOW:
   case TargetOpcode::G_FREM: {
     Type *HLTy = Size == 64 ? Type::getDoubleTy(Ctx) : Type::getFloatTy(Ctx);
@@ -857,6 +865,18 @@ LegalizerHelper::lower(MachineInstr &MI, unsigned TypeIdx, LLT Ty) {
         .addDef(Res)
         .addUse(LHS)
         .addUse(Neg);
+    MI.eraseFromParent();
+    return Legalized;
+  }
+  case TargetOpcode::G_ATOMIC_CMPXCHG_WITH_SUCCESS: {
+    unsigned OldValRes = MI.getOperand(0).getReg();
+    unsigned SuccessRes = MI.getOperand(1).getReg();
+    unsigned Addr = MI.getOperand(2).getReg();
+    unsigned CmpVal = MI.getOperand(3).getReg();
+    unsigned NewVal = MI.getOperand(4).getReg();
+    MIRBuilder.buildAtomicCmpXchg(OldValRes, Addr, CmpVal, NewVal,
+                                  **MI.memoperands_begin());
+    MIRBuilder.buildICmp(CmpInst::ICMP_EQ, SuccessRes, OldValRes, CmpVal);
     MI.eraseFromParent();
     return Legalized;
   }

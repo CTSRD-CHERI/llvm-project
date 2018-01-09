@@ -182,20 +182,20 @@ enum class ValType {
 
 // Linking metadata kinds.
 enum : unsigned {
-  WASM_STACK_POINTER  = 0x1,
   WASM_SYMBOL_INFO    = 0x2,
   WASM_DATA_SIZE      = 0x3,
   WASM_DATA_ALIGNMENT = 0x4,
   WASM_SEGMENT_INFO   = 0x5,
 };
 
-const unsigned WASM_SYMBOL_BINDING_MASK = 0x3;
+const unsigned WASM_SYMBOL_BINDING_MASK       = 0x3;
+const unsigned WASM_SYMBOL_VISIBILITY_MASK    = 0x4;
 
-enum : unsigned {
-  WASM_SYMBOL_BINDING_GLOBAL = 0x0,
-  WASM_SYMBOL_BINDING_WEAK   = 0x1,
-  WASM_SYMBOL_BINDING_LOCAL  = 0x2,
-};
+const unsigned WASM_SYMBOL_BINDING_GLOBAL     = 0x0;
+const unsigned WASM_SYMBOL_BINDING_WEAK       = 0x1;
+const unsigned WASM_SYMBOL_BINDING_LOCAL      = 0x2;
+const unsigned WASM_SYMBOL_VISIBILITY_DEFAULT = 0x0;
+const unsigned WASM_SYMBOL_VISIBILITY_HIDDEN  = 0x4;
 
 #define WASM_RELOC(name, value) name = value,
 

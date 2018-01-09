@@ -18,7 +18,7 @@
 
 #include "AMDGPU.h"
 #include "llvm/CodeGen/CallingConvLower.h"
-#include "llvm/Target/TargetLowering.h"
+#include "llvm/CodeGen/TargetLowering.h"
 
 namespace llvm {
 
@@ -57,6 +57,8 @@ protected:
   SDValue LowerFROUND64(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerFROUND(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerFFLOOR(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerFLOG(SDValue Op, SelectionDAG &Dag,
+                    double Log2BaseInverted) const;
 
   SDValue LowerCTLZ_CTTZ(SDValue Op, SelectionDAG &DAG) const;
 
@@ -445,6 +447,19 @@ enum NodeType : unsigned {
   ATOMIC_DEC,
   BUFFER_LOAD,
   BUFFER_LOAD_FORMAT,
+  BUFFER_STORE,
+  BUFFER_STORE_FORMAT,
+  BUFFER_ATOMIC_SWAP,
+  BUFFER_ATOMIC_ADD,
+  BUFFER_ATOMIC_SUB,
+  BUFFER_ATOMIC_SMIN,
+  BUFFER_ATOMIC_UMIN,
+  BUFFER_ATOMIC_SMAX,
+  BUFFER_ATOMIC_UMAX,
+  BUFFER_ATOMIC_AND,
+  BUFFER_ATOMIC_OR,
+  BUFFER_ATOMIC_XOR,
+  BUFFER_ATOMIC_CMPSWAP,
   LAST_AMDGPU_ISD_NUMBER
 };
 

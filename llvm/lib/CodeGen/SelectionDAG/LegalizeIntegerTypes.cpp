@@ -570,10 +570,7 @@ SDValue DAGTypeLegalizer::PromoteIntRes_SELECT(SDNode *N) {
 
 SDValue DAGTypeLegalizer::PromoteIntRes_VSELECT(SDNode *N) {
   SDValue Mask = N->getOperand(0);
-  EVT OpTy = N->getOperand(1).getValueType();
 
-  // Promote all the way up to the canonical SetCC type.
-  Mask = PromoteTargetBoolean(Mask, OpTy);
   SDValue LHS = GetPromotedInteger(N->getOperand(1));
   SDValue RHS = GetPromotedInteger(N->getOperand(2));
   return DAG.getNode(ISD::VSELECT, SDLoc(N),
@@ -1210,24 +1207,23 @@ SDValue DAGTypeLegalizer::PromoteIntOp_MSTORE(MaskedStoreSDNode *N,
     // When the data operand has illegal type, we should legalize the data
     // operand first. The mask will be promoted/splitted/widened according to
     // the data operand type.
-    if (TLI.isTypeLegal(DataVT))
+    if (TLI.isTypeLegal(DataVT)) {
       Mask = PromoteTargetBoolean(Mask, DataVT);
-    else {
-      if (getTypeAction(DataVT) == TargetLowering::TypePromoteInteger)
-        return PromoteIntOp_MSTORE(N, 3);
-
-      else if (getTypeAction(DataVT) == TargetLowering::TypeWidenVector)
-        return WidenVecOp_MSTORE(N, 3);
-
-      else {
-        assert (getTypeAction(DataVT) == TargetLowering::TypeSplitVector);
-        return SplitVecOp_MSTORE(N, 3);
-      }
+      // Update in place.
+      SmallVector<SDValue, 4> NewOps(N->op_begin(), N->op_end());
+      NewOps[2] = Mask;
+      return SDValue(DAG.UpdateNodeOperands(N, NewOps), 0);
     }
+
+    if (getTypeAction(DataVT) == TargetLowering::TypePromoteInteger)
+      return PromoteIntOp_MSTORE(N, 3);
+    if (getTypeAction(DataVT) == TargetLowering::TypeWidenVector)
+      return WidenVecOp_MSTORE(N, 3);
+    assert (getTypeAction(DataVT) == TargetLowering::TypeSplitVector);
+    return SplitVecOp_MSTORE(N, 3);
   } else { // Data operand
     assert(OpNo == 3 && "Unexpected operand for promotion");
     DataOp = GetPromotedInteger(DataOp);
-    Mask = PromoteTargetBoolean(Mask, DataOp.getValueType());
     TruncateStore = true;
   }
 
@@ -1254,6 +1250,9 @@ SDValue DAGTypeLegalizer::PromoteIntOp_MGATHER(MaskedGatherSDNode *N,
     // The Mask
     EVT DataVT = N->getValueType(0);
     NewOps[OpNo] = PromoteTargetBoolean(N->getOperand(OpNo), DataVT);
+  } else if (OpNo == 4) {
+    // Need to sign extend the index since the bits will likely be used.
+    NewOps[OpNo] = SExtPromotedInteger(N->getOperand(OpNo));
   } else
     NewOps[OpNo] = GetPromotedInteger(N->getOperand(OpNo));
 
@@ -1274,6 +1273,9 @@ SDValue DAGTypeLegalizer::PromoteIntOp_MSCATTER(MaskedScatterSDNode *N,
     // The Mask
     EVT DataVT = N->getValue().getValueType();
     NewOps[OpNo] = PromoteTargetBoolean(N->getOperand(OpNo), DataVT);
+  } else if (OpNo == 4) {
+    // Need to sign extend the index since the bits will likely be used.
+    NewOps[OpNo] = SExtPromotedInteger(N->getOperand(OpNo));
   } else
     NewOps[OpNo] = GetPromotedInteger(N->getOperand(OpNo));
   return SDValue(DAG.UpdateNodeOperands(N, NewOps), 0);
@@ -3228,8 +3230,7 @@ SDValue DAGTypeLegalizer::ExpandIntOp_STORE(StoreSDNode *N, unsigned OpNo) {
 
     // Increment the pointer to the other half.
     unsigned IncrementSize = NVT.getSizeInBits()/8;
-    Ptr = DAG.getNode(ISD::ADD, dl, Ptr.getValueType(), Ptr,
-                      DAG.getConstant(IncrementSize, dl, Ptr.getValueType()));
+    Ptr = DAG.getObjectPtrOffset(dl, Ptr, IncrementSize);
     Hi = DAG.getTruncStore(
         Ch, dl, Hi, Ptr, N->getPointerInfo().getWithOffset(IncrementSize), NEVT,
         MinAlign(Alignment, IncrementSize), MMOFlags, AAInfo);
@@ -3264,8 +3265,7 @@ SDValue DAGTypeLegalizer::ExpandIntOp_STORE(StoreSDNode *N, unsigned OpNo) {
                          MMOFlags, AAInfo);
 
   // Increment the pointer to the other half.
-  Ptr = DAG.getNode(ISD::ADD, dl, Ptr.getValueType(), Ptr,
-                    DAG.getConstant(IncrementSize, dl, Ptr.getValueType()));
+  Ptr = DAG.getObjectPtrOffset(dl, Ptr, IncrementSize);
   // Store the lowest ExcessBits bits in the second half.
   Lo = DAG.getTruncStore(Ch, dl, Lo, Ptr,
                          N->getPointerInfo().getWithOffset(IncrementSize),

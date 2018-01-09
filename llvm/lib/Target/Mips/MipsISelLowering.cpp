@@ -47,6 +47,7 @@
 #include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/Constants.h"
@@ -66,7 +67,6 @@
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
-#include "llvm/Target/TargetRegisterInfo.h"
 #include <algorithm>
 #include <cassert>
 #include <cctype>
@@ -1395,11 +1395,6 @@ MipsTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   case Mips::DMOD:
   case Mips::DMODU:
     return insertDivByZeroTrap(MI, *BB, *Subtarget.getInstrInfo(), true, false);
-  case Mips::DDIV_MM64R6:
-  case Mips::DDIVU_MM64R6:
-  case Mips::DMOD_MM64R6:
-  case Mips::DMODU_MM64R6:
-    return insertDivByZeroTrap(MI, *BB, *Subtarget.getInstrInfo(), true, true);
 
   case Mips::PseudoSELECT_I:
   case Mips::PseudoSELECT_I64:
@@ -2812,8 +2807,7 @@ static bool CC_MipsO32(unsigned ValNo, MVT ValVT, MVT LocVT,
     llvm_unreachable("Cannot handle this ValVT.");
 
   if (!Reg) {
-    unsigned Offset = State.AllocateStack(ValVT.getSizeInBits() >> 3,
-                                          OrigAlign);
+    unsigned Offset = State.AllocateStack(ValVT.getStoreSize(), OrigAlign);
     State.addLoc(CCValAssign::getMem(ValNo, ValVT, Offset, LocVT, LocInfo));
   } else
     State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, LocVT, LocInfo));

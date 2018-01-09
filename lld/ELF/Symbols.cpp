@@ -11,12 +11,12 @@
 #include "InputFiles.h"
 #include "InputSection.h"
 #include "OutputSections.h"
-#include "Strings.h"
 #include "SyntheticSections.h"
 #include "Target.h"
 #include "Writer.h"
 
 #include "lld/Common/ErrorHandler.h"
+#include "lld/Common/Strings.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/Path.h"
 #include <cstring>
@@ -93,7 +93,7 @@ static uint64_t getSymVA(const Symbol &Sym, int64_t &Addend) {
 
     if (D.isTls() && !Config->Relocatable) {
       if (!Out::TlsPhdr)
-        fatal(toString(D.getFile()) +
+        fatal(toString(D.File) +
               " has an STT_TLS symbol but doesn't have an SHF_TLS section");
       return VA - Out::TlsPhdr->p_vaddr;
     }
@@ -120,35 +120,7 @@ static uint64_t getSymVA(const Symbol &Sym, int64_t &Addend) {
 // Returns true if this is a weak undefined symbol.
 bool Symbol::isUndefWeak() const {
   // See comment on Lazy in Symbols.h for the details.
-  return !isLocal() && isWeak() && (isUndefined() || isLazy());
-}
-
-InputFile *Symbol::getFile() const {
-  if (isLocal()) {
-    const SectionBase *Sec = cast<Defined>(this)->Section;
-    // Local absolute symbols actually have a file, but that is not currently
-    // used. We could support that by having a mostly redundant InputFile in
-    // Symbol, or having a special absolute section if needed.
-    return Sec ? cast<InputSectionBase>(Sec)->File : nullptr;
-  }
-  return File;
-}
-
-// Overwrites all attributes with Other's so that this symbol becomes
-// an alias to Other. This is useful for handling some options such as
-// --wrap.
-void Symbol::copyFrom(Symbol *Other) {
-  Symbol Sym = *this;
-  memcpy(this, Other, sizeof(SymbolUnion));
-
-  Binding = Sym.Binding;
-  VersionId = Sym.VersionId;
-  Visibility = Sym.Visibility;
-  IsUsedInRegularObj = Sym.IsUsedInRegularObj;
-  ExportDynamic = Sym.ExportDynamic;
-  CanInline = Sym.CanInline;
-  Traced = Sym.Traced;
-  InVersionScript = Sym.InVersionScript;
+  return isWeak() && (isUndefined() || isLazy());
 }
 
 uint64_t Symbol::getVA(int64_t Addend) const {
@@ -243,7 +215,7 @@ void Symbol::parseSymbolVersion() {
   // but we may still want to override a versioned symbol from DSO,
   // so we do not report error in this case.
   if (Config->Shared)
-    error(toString(getFile()) + ": symbol " + S + " has undefined version " +
+    error(toString(File) + ": symbol " + S + " has undefined version " +
           Verstr);
 }
 
@@ -253,9 +225,7 @@ InputFile *Lazy::fetch() {
   return cast<LazyObject>(this)->fetch();
 }
 
-ArchiveFile *LazyArchive::getFile() {
-  return cast<ArchiveFile>(Symbol::getFile());
-}
+ArchiveFile *LazyArchive::getFile() { return cast<ArchiveFile>(File); }
 
 InputFile *LazyArchive::fetch() {
   std::pair<MemoryBufferRef, uint64_t> MBInfo = getFile()->getMember(&Sym);
@@ -267,9 +237,7 @@ InputFile *LazyArchive::fetch() {
   return createObjectFile(MBInfo.first, getFile()->getName(), MBInfo.second);
 }
 
-LazyObjFile *LazyObject::getFile() {
-  return cast<LazyObjFile>(Symbol::getFile());
-}
+LazyObjFile *LazyObject::getFile() { return cast<LazyObjFile>(File); }
 
 InputFile *LazyObject::fetch() { return getFile()->fetch(); }
 
@@ -315,7 +283,7 @@ void elf::printTraceSymbol(Symbol *Sym) {
 // Returns a symbol for an error message.
 std::string lld::toString(const Symbol &B) {
   if (Config->Demangle)
-    if (Optional<std::string> S = demangle(B.getName()))
+    if (Optional<std::string> S = demangleItanium(B.getName()))
       return *S;
   return B.getName();
 }

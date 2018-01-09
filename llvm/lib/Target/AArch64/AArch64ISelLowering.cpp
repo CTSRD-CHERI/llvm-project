@@ -42,6 +42,7 @@
 #include "llvm/CodeGen/RuntimeLibcalls.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
+#include "llvm/CodeGen/TargetCallingConv.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/Attributes.h"
@@ -71,7 +72,6 @@
 #include "llvm/Support/KnownBits.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetCallingConv.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 #include <algorithm>
@@ -3795,7 +3795,8 @@ SDValue AArch64TargetLowering::LowerGlobalAddress(SDValue Op,
 SDValue
 AArch64TargetLowering::LowerDarwinGlobalTLSAddress(SDValue Op,
                                                    SelectionDAG &DAG) const {
-  assert(Subtarget->isTargetDarwin() && "TLS only supported on Darwin");
+  assert(Subtarget->isTargetDarwin() &&
+         "This function expects a Darwin target");
 
   SDLoc DL(Op);
   MVT PtrVT = getPointerTy(DAG.getDataLayout());
@@ -3884,9 +3885,6 @@ AArch64TargetLowering::LowerELFGlobalTLSAddress(SDValue Op,
 
   TLSModel::Model Model = getTargetMachine().getTLSModel(GA->getGlobal());
 
-  if (DAG.getTarget().Options.EmulatedTLS)
-    return LowerToTLSEmulatedModel(GA, DAG);
-
   if (!EnableAArch64ELFLocalDynamicTLSGeneration) {
     if (Model == TLSModel::LocalDynamic)
       Model = TLSModel::GeneralDynamic;
@@ -3972,6 +3970,10 @@ AArch64TargetLowering::LowerELFGlobalTLSAddress(SDValue Op,
 
 SDValue AArch64TargetLowering::LowerGlobalTLSAddress(SDValue Op,
                                                      SelectionDAG &DAG) const {
+  const GlobalAddressSDNode *GA = cast<GlobalAddressSDNode>(Op);
+  if (DAG.getTarget().Options.EmulatedTLS)
+    return LowerToTLSEmulatedModel(GA, DAG);
+
   if (Subtarget->isTargetDarwin())
     return LowerDarwinGlobalTLSAddress(Op, DAG);
   if (Subtarget->isTargetELF())
@@ -4004,9 +4006,8 @@ SDValue AArch64TargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
 
   // Optimize {s|u}{add|sub|mul}.with.overflow feeding into a branch
   // instruction.
-  if (isOverflowIntrOpRes(LHS) && isOneConstant(RHS)) {
-    assert((CC == ISD::SETEQ || CC == ISD::SETNE) &&
-           "Unexpected condition code.");
+  if (isOverflowIntrOpRes(LHS) && isOneConstant(RHS) &&
+      (CC == ISD::SETEQ || CC == ISD::SETNE)) {
     // Only lower legal XALUO ops.
     if (!DAG.getTargetLoweringInfo().isTypeLegal(LHS->getValueType(0)))
       return SDValue();
@@ -9561,8 +9562,6 @@ static SDValue replaceSplatVectorStore(SelectionDAG &DAG, StoreSDNode &St) {
 static SDValue splitStores(SDNode *N, TargetLowering::DAGCombinerInfo &DCI,
                            SelectionDAG &DAG,
                            const AArch64Subtarget *Subtarget) {
-  if (!DCI.isBeforeLegalize())
-    return SDValue();
 
   StoreSDNode *S = cast<StoreSDNode>(N);
   if (S->isVolatile() || S->isIndexed())

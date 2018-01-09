@@ -53,6 +53,11 @@
 #include "llvm/CodeGen/MachineOptimizationRemarkEmitter.h"
 #include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/CodeGen/TargetLoweringObjectFile.h"
+#include "llvm/CodeGen/TargetOpcodes.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Comdat.h"
 #include "llvm/IR/Constant.h"
@@ -102,13 +107,8 @@
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetLowering.h"
-#include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetOpcodes.h"
 #include "llvm/Target/TargetOptions.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <algorithm>
 #include <cassert>
 #include <cinttypes>
@@ -802,7 +802,7 @@ void AsmPrinter::emitImplicitDef(const MachineInstr *MI) const {
   SmallString<128> Str;
   raw_svector_ostream OS(Str);
   OS << "implicit-def: "
-     << PrintReg(RegNo, MF->getSubtarget().getRegisterInfo());
+     << printReg(RegNo, MF->getSubtarget().getRegisterInfo());
 
   OutStreamer->AddComment(OS.str());
   OutStreamer->AddBlankLine();
@@ -815,10 +815,8 @@ static void emitKill(const MachineInstr *MI, AsmPrinter &AP) {
   for (unsigned i = 0, e = MI->getNumOperands(); i != e; ++i) {
     const MachineOperand &Op = MI->getOperand(i);
     assert(Op.isReg() && "KILL instruction must have only register operands");
-    OS << ' '
-       << PrintReg(Op.getReg(),
-                   AP.MF->getSubtarget().getRegisterInfo())
-       << (Op.isDef() ? "<def>" : "<kill>");
+    OS << ' ' << (Op.isDef() ? "def " : "killed ")
+       << printReg(Op.getReg(), AP.MF->getSubtarget().getRegisterInfo());
   }
   AP.OutStreamer->AddComment(OS.str());
   AP.OutStreamer->AddBlankLine();
@@ -903,7 +901,7 @@ static bool emitDebugValueComment(const MachineInstr *MI, AsmPrinter &AP) {
     }
     if (MemLoc)
       OS << '[';
-    OS << PrintReg(Reg, AP.MF->getSubtarget().getRegisterInfo());
+    OS << printReg(Reg, AP.MF->getSubtarget().getRegisterInfo());
   }
 
   if (MemLoc)
@@ -962,6 +960,31 @@ void AsmPrinter::emitFrameAlloc(const MachineInstr &MI) {
   // Emit a symbol assignment.
   OutStreamer->EmitAssignment(FrameAllocSym,
                              MCConstantExpr::create(FrameOffset, OutContext));
+}
+
+void AsmPrinter::emitStackSizeSection(const MachineFunction &MF) {
+  if (!MF.getTarget().Options.EmitStackSizeSection)
+    return;
+
+  MCSection *StackSizeSection = getObjFileLowering().getStackSizesSection();
+  if (!StackSizeSection)
+    return;
+
+  const MachineFrameInfo &FrameInfo = MF.getFrameInfo();
+  // Don't emit functions with dynamic stack allocations.
+  if (FrameInfo.hasVarSizedObjects())
+    return;
+
+  OutStreamer->PushSection();
+  OutStreamer->SwitchSection(StackSizeSection);
+
+  const MCSymbol *FunctionSymbol = getSymbol(MF.getFunction());
+  uint64_t StackSize = FrameInfo.getStackSize();
+  OutStreamer->EmitValue(MCSymbolRefExpr::create(FunctionSymbol, OutContext),
+                         /* size = */ 8);
+  OutStreamer->EmitULEB128IntValue(StackSize);
+
+  OutStreamer->PopSection();
 }
 
 static bool needFuncLabelsForEHOrDebugInfo(const MachineFunction &MF,
@@ -1134,6 +1157,9 @@ void AsmPrinter::EmitFunctionBody() {
                        HI.TimerGroupDescription, TimePassesIsEnabled);
     HI.Handler->endFunction(MF);
   }
+
+  // Emit section containing stack size metadata.
+  emitStackSizeSection(*MF);
 
   if (isVerbose())
     OutStreamer->GetCommentOS() << "-- End function\n";
@@ -2682,7 +2708,8 @@ void AsmPrinter::EmitBasicBlockStart(const MachineBasicBlock &MBB) const {
       (isBlockOnlyReachableByFallthrough(&MBB) && !MBB.isEHFuncletEntry())) {
     if (isVerbose()) {
       // NOTE: Want this comment at start of line, don't emit with AddComment.
-      OutStreamer->emitRawComment(" BB#" + Twine(MBB.getNumber()) + ":", false);
+      OutStreamer->emitRawComment(" %bb." + Twine(MBB.getNumber()) + ":",
+                                  false);
     }
   } else {
     OutStreamer->EmitLabel(MBB.getSymbol());

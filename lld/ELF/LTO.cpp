@@ -119,8 +119,8 @@ BitcodeCompiler::BitcodeCompiler() : LTOObj(createLTO()) {
 BitcodeCompiler::~BitcodeCompiler() = default;
 
 static void undefine(Symbol *S) {
-  replaceSymbol<Undefined>(S, nullptr, S->getName(), /*IsLocal=*/false,
-                           STV_DEFAULT, S->Type);
+  replaceSymbol<Undefined>(S, nullptr, S->getName(), STB_GLOBAL, STV_DEFAULT,
+                           S->Type);
 }
 
 void BitcodeCompiler::add(BitcodeFile &F) {
@@ -145,7 +145,7 @@ void BitcodeCompiler::add(BitcodeFile &F) {
     // flags an undefined in IR with a definition in ASM as prevailing.
     // Once IRObjectFile is fixed to report only one symbol this hack can
     // be removed.
-    R.Prevailing = !ObjSym.isUndefined() && Sym->getFile() == &F;
+    R.Prevailing = !ObjSym.isUndefined() && Sym->File == &F;
 
     // We ask LTO to preserve following global symbols:
     // 1) All symbols when doing relocatable link, so that them can be used

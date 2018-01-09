@@ -36,7 +36,7 @@ namespace coff {
 
 class ICF {
 public:
-  void run(const std::vector<Chunk *> &V);
+  void run(ArrayRef<Chunk *> V);
 
 private:
   void segregate(size_t Begin, size_t End, bool Constant);
@@ -73,12 +73,21 @@ uint32_t ICF::getHash(SectionChunk *C) {
 // 2017) says that /opt:icf folds both functions and read-only data.
 // Despite that, the MSVC linker folds only functions. We found
 // a few instances of programs that are not safe for data merging.
-// Therefore, we merge only functions just like the MSVC tool.
+// Therefore, we merge only functions just like the MSVC tool. However, we merge
+// identical .xdata sections, because the address of unwind information is
+// insignificant to the user program and the Visual C++ linker does this.
 bool ICF::isEligible(SectionChunk *C) {
-  bool Global = C->Sym && C->Sym->isExternal();
-  bool Executable = C->getPermissions() & llvm::COFF::IMAGE_SCN_MEM_EXECUTE;
+  // Non-comdat chunks, dead chunks, and writable chunks are not elegible.
   bool Writable = C->getPermissions() & llvm::COFF::IMAGE_SCN_MEM_WRITE;
-  return C->isCOMDAT() && C->isLive() && Global && Executable && !Writable;
+  if (!C->isCOMDAT() || !C->isLive() || Writable)
+    return false;
+
+  // Code sections are eligible.
+  if (C->getPermissions() & llvm::COFF::IMAGE_SCN_MEM_EXECUTE)
+    return true;
+
+  // .xdata unwind info sections are eligble.
+  return C->getSectionName().split('$').first == ".xdata";
 }
 
 // Split an equivalence class into smaller classes.
@@ -197,7 +206,7 @@ void ICF::forEachClass(std::function<void(size_t, size_t)> Fn) {
 // Merge identical COMDAT sections.
 // Two sections are considered the same if their section headers,
 // contents and relocations are all the same.
-void ICF::run(const std::vector<Chunk *> &Vec) {
+void ICF::run(ArrayRef<Chunk *> Vec) {
   // Collect only mergeable sections and group by hash value.
   uint32_t NextId = 1;
   for (Chunk *C : Vec) {
@@ -248,7 +257,7 @@ void ICF::run(const std::vector<Chunk *> &Vec) {
 }
 
 // Entry point to ICF.
-void doICF(const std::vector<Chunk *> &Chunks) { ICF().run(Chunks); }
+void doICF(ArrayRef<Chunk *> Chunks) { ICF().run(Chunks); }
 
 } // namespace coff
 } // namespace lld

@@ -21,12 +21,6 @@ def Znver1Model : SchedMachineModel {
   let MispredictPenalty = 17;
   let HighLatency = 25;
   let PostRAScheduler = 1;
-
-  // FIXME: This variable is required for incomplete model.
-  // We haven't catered all instructions.
-  // So, we reset the value of this variable so as to
-  // say that the model is incomplete.
-  let CompleteModel = 0;
 }
 
 let SchedModel = Znver1Model in {
@@ -140,6 +134,9 @@ defm : ZnWriteResPair<WriteALU,   ZnALU, 1>;
 defm : ZnWriteResPair<WriteShift, ZnALU, 1>;
 defm : ZnWriteResPair<WriteJump,  ZnALU, 1>;
 
+// Treat misc copies as a move.
+def : InstRW<[WriteMove], (instrs COPY)>;
+
 // IDIV
 def : WriteRes<WriteIDiv, [ZnALU2, ZnDivider]> {
   let Latency = 41;
@@ -175,6 +172,7 @@ defm : ZnWriteResFpuPair<WriteCvtF2I,    ZnFPU3,  5>;
 defm : ZnWriteResFpuPair<WriteFDiv,      ZnFPU3, 15>;
 defm : ZnWriteResFpuPair<WriteFShuffle,  ZnFPU12, 1>;
 defm : ZnWriteResFpuPair<WriteFMul,      ZnFPU0,  5>;
+defm : ZnWriteResFpuPair<WriteFMA,       ZnFPU03, 5>;
 defm : ZnWriteResFpuPair<WriteFRcp,      ZnFPU01, 5>;
 defm : ZnWriteResFpuPair<WriteFRsqrt,    ZnFPU01, 5>;
 defm : ZnWriteResFpuPair<WriteFSqrt,     ZnFPU3, 20>;
@@ -741,7 +739,7 @@ def : InstRW<[ZnWriteFILD], (instregex "ILD_F(16|32|64)m")>;
 def ZnWriteFIST : SchedWriteRes<[ZnAGU, ZnFPU23]> {
   let Latency = 12;
 }
-def : InstRW<[ZnWriteFIST], (instregex "IST_(F|FP)(16|32)m")>;
+def : InstRW<[ZnWriteFIST], (instregex "IS(T|TT)_(F|FP)(16|32|64)m")>;
 
 def ZnWriteFPU13 : SchedWriteRes<[ZnAGU, ZnFPU13]> {
   let Latency = 8;
@@ -760,7 +758,7 @@ def : InstRW<[ZnWriteFPU3], (instregex "LD_F1")>;
 // FLDPI FLDL2E etc.
 def : InstRW<[ZnWriteFPU3], (instregex "FLDPI", "FLDL2(T|E)" "FLDL(G|N)2")>;
 
-def : InstRW<[WriteMicrocoded], (instregex "CMOV(B|BE|P|NB|NBE|NE|NP)_F")>;
+def : InstRW<[WriteMicrocoded], (instregex "CMOV(B|BE|E|P|NB|NBE|NE|NP)_F")>;
 
 // FNSTSW.
 // AX.

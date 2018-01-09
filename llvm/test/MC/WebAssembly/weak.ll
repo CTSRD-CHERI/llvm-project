@@ -12,7 +12,11 @@ entry:
 
 ; CHECK:        - Type:            IMPORT
 ; CHECK-NEXT:     Imports:         
-; CHECK-NEXT:       - Module:          env
+; CHECK:            - Module:          env
+; CHECK-NEXT:         Field:           __linear_memory
+; CHECK:            - Module:          env
+; CHECK-NEXT:         Field:           __indirect_function_table
+; CHECK:            - Module:          env
 ; CHECK-NEXT:         Field:           weak_external_data
 ; CHECK-NEXT:         Kind:            GLOBAL
 ; CHECK-NEXT:         GlobalType:      I32
@@ -31,5 +35,5 @@ entry:
 ; CHECK-NEXT:       - Name:            weak_external_data
 ; CHECK-NEXT:         Flags:           1
 ; CHECK-NEXT:       - Name:            weak_function
-; CHECK-NEXT:         Flags:           1
+; CHECK-NEXT:         Flags:           5
 ; CHECK-NEXT: ...

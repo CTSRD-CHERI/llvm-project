@@ -1758,7 +1758,7 @@ void __kmpc_for_static_fini(ident_t *loc, kmp_int32 global_tid) {
 
 #if OMPT_SUPPORT && OMPT_OPTIONAL
   if (ompt_enabled.ompt_callback_work) {
-    ompt_work_type_t ompt_work_type;
+    ompt_work_type_t ompt_work_type = ompt_work_loop;
     ompt_team_info_t *team_info = __ompt_get_teaminfo(0, NULL);
     ompt_task_info_t *task_info = __ompt_get_task_info_object(0);
     // Determine workshare type
@@ -1770,8 +1770,8 @@ void __kmpc_for_static_fini(ident_t *loc, kmp_int32 global_tid) {
       } else if ((loc->flags & KMP_IDENT_WORK_DISTRIBUTE) != 0) {
         ompt_work_type = ompt_work_distribute;
       } else {
-        KMP_ASSERT2(0,
-                    "__kmpc_for_static_fini: can't determine workshare type");
+        // use default set above.
+        // a warning about this case is provided in __kmpc_for_static_init
       }
       KMP_DEBUG_ASSERT(ompt_work_type);
     }
@@ -3202,6 +3202,43 @@ __kmp_end_critical_section_reduce_block(ident_t *loc, kmp_int32 global_tid,
 #endif // KMP_USE_DYNAMIC_LOCK
 } // __kmp_end_critical_section_reduce_block
 
+#if OMP_40_ENABLED
+static __forceinline int
+__kmp_swap_teams_for_teams_reduction(kmp_info_t *th, kmp_team_t **team_p,
+                                     int *task_state) {
+  kmp_team_t *team;
+
+  // Check if we are inside the teams construct?
+  if (th->th.th_teams_microtask) {
+    *team_p = team = th->th.th_team;
+    if (team->t.t_level == th->th.th_teams_level) {
+      // This is reduction at teams construct.
+      KMP_DEBUG_ASSERT(!th->th.th_info.ds.ds_tid); // AC: check that tid == 0
+      // Let's swap teams temporarily for the reduction.
+      th->th.th_info.ds.ds_tid = team->t.t_master_tid;
+      th->th.th_team = team->t.t_parent;
+      th->th.th_team_nproc = th->th.th_team->t.t_nproc;
+      th->th.th_task_team = th->th.th_team->t.t_task_team[0];
+      *task_state = th->th.th_task_state;
+      th->th.th_task_state = 0;
+
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static __forceinline void
+__kmp_restore_swapped_teams(kmp_info_t *th, kmp_team_t *team, int task_state) {
+  // Restore thread structure swapped in __kmp_swap_teams_for_teams_reduction.
+  th->th.th_info.ds.ds_tid = 0;
+  th->th.th_team = team;
+  th->th.th_team_nproc = team->t.t_nproc;
+  th->th.th_task_team = team->t.t_task_team[task_state];
+  th->th.th_task_state = task_state;
+}
+#endif
+
 /* 2.a.i. Reduce Block without a terminating barrier */
 /*!
 @ingroup SYNCHRONIZATION
@@ -3228,8 +3265,8 @@ __kmpc_reduce_nowait(ident_t *loc, kmp_int32 global_tid, kmp_int32 num_vars,
   int retval = 0;
   PACKED_REDUCTION_METHOD_T packed_reduction_method;
 #if OMP_40_ENABLED
-  kmp_team_t *team;
   kmp_info_t *th;
+  kmp_team_t *team;
   int teams_swapped = 0, task_state;
 #endif
   KA_TRACE(10, ("__kmpc_reduce_nowait() enter: called T#%d\n", global_tid));
@@ -3254,22 +3291,7 @@ __kmpc_reduce_nowait(ident_t *loc, kmp_int32 global_tid, kmp_int32 num_vars,
 
 #if OMP_40_ENABLED
   th = __kmp_thread_from_gtid(global_tid);
-  if (th->th.th_teams_microtask) { // AC: check if we are inside the teams
-    // construct?
-    team = th->th.th_team;
-    if (team->t.t_level == th->th.th_teams_level) {
-      // this is reduction at teams construct
-      KMP_DEBUG_ASSERT(!th->th.th_info.ds.ds_tid); // AC: check that tid == 0
-      // Let's swap teams temporarily for the reduction barrier
-      teams_swapped = 1;
-      th->th.th_info.ds.ds_tid = team->t.t_master_tid;
-      th->th.th_team = team->t.t_parent;
-      th->th.th_team_nproc = th->th.th_team->t.t_nproc;
-      th->th.th_task_team = th->th.th_team->t.t_task_team[0];
-      task_state = th->th.th_task_state;
-      th->th.th_task_state = 0;
-    }
-  }
+  teams_swapped = __kmp_swap_teams_for_teams_reduction(th, &team, &task_state);
 #endif // OMP_40_ENABLED
 
   // packed_reduction_method value will be reused by __kmp_end_reduce* function,
@@ -3373,12 +3395,7 @@ __kmpc_reduce_nowait(ident_t *loc, kmp_int32 global_tid, kmp_int32 num_vars,
   }
 #if OMP_40_ENABLED
   if (teams_swapped) {
-    // Restore thread structure
-    th->th.th_info.ds.ds_tid = 0;
-    th->th.th_team = team;
-    th->th.th_team_nproc = team->t.t_nproc;
-    th->th.th_task_team = team->t.t_task_team[task_state];
-    th->th.th_task_state = task_state;
+    __kmp_restore_swapped_teams(th, team, task_state);
   }
 #endif
   KA_TRACE(
@@ -3466,6 +3483,11 @@ kmp_int32 __kmpc_reduce(ident_t *loc, kmp_int32 global_tid, kmp_int32 num_vars,
   KMP_COUNT_BLOCK(REDUCE_wait);
   int retval = 0;
   PACKED_REDUCTION_METHOD_T packed_reduction_method;
+#if OMP_40_ENABLED
+  kmp_info_t *th;
+  kmp_team_t *team;
+  int teams_swapped = 0, task_state;
+#endif
 
   KA_TRACE(10, ("__kmpc_reduce() enter: called T#%d\n", global_tid));
 
@@ -3486,6 +3508,11 @@ kmp_int32 __kmpc_reduce(ident_t *loc, kmp_int32 global_tid, kmp_int32 num_vars,
   if (__kmp_env_consistency_check)
     __kmp_push_sync(global_tid, ct_reduce, loc, NULL);
 #endif
+
+#if OMP_40_ENABLED
+  th = __kmp_thread_from_gtid(global_tid);
+  teams_swapped = __kmp_swap_teams_for_teams_reduction(th, &team, &task_state);
+#endif // OMP_40_ENABLED
 
   packed_reduction_method = __kmp_determine_reduction_method(
       loc, global_tid, num_vars, reduce_size, reduce_data, reduce_func, lck);
@@ -3548,6 +3575,11 @@ kmp_int32 __kmpc_reduce(ident_t *loc, kmp_int32 global_tid, kmp_int32 num_vars,
     // should never reach this block
     KMP_ASSERT(0); // "unexpected method"
   }
+#if OMP_40_ENABLED
+  if (teams_swapped) {
+    __kmp_restore_swapped_teams(th, team, task_state);
+  }
+#endif
 
   KA_TRACE(10,
            ("__kmpc_reduce() exit: called T#%d: method %08x, returns %08x\n",
@@ -3570,8 +3602,18 @@ void __kmpc_end_reduce(ident_t *loc, kmp_int32 global_tid,
                        kmp_critical_name *lck) {
 
   PACKED_REDUCTION_METHOD_T packed_reduction_method;
+#if OMP_40_ENABLED
+  kmp_info_t *th;
+  kmp_team_t *team;
+  int teams_swapped = 0, task_state;
+#endif
 
   KA_TRACE(10, ("__kmpc_end_reduce() enter: called T#%d\n", global_tid));
+
+#if OMP_40_ENABLED
+  th = __kmp_thread_from_gtid(global_tid);
+  teams_swapped = __kmp_swap_teams_for_teams_reduction(th, &team, &task_state);
+#endif // OMP_40_ENABLED
 
   packed_reduction_method = __KMP_GET_REDUCTION_METHOD(global_tid);
 
@@ -3660,6 +3702,11 @@ void __kmpc_end_reduce(ident_t *loc, kmp_int32 global_tid,
     // should never reach this block
     KMP_ASSERT(0); // "unexpected method"
   }
+#if OMP_40_ENABLED
+  if (teams_swapped) {
+    __kmp_restore_swapped_teams(th, team, task_state);
+  }
+#endif
 
   if (__kmp_env_consistency_check)
     __kmp_pop_sync(global_tid, ct_reduce, loc);
@@ -3802,23 +3849,35 @@ void __kmpc_doacross_init(ident_t *loc, int gtid, int num_dims,
     __kmp_wait_yield_4((volatile kmp_uint32 *)&sh_buf->doacross_buf_idx, idx,
                        __kmp_eq_4, NULL);
   }
+#if KMP_32_BIT_ARCH
   // Check if we are the first thread. After the CAS the first thread gets 0,
   // others get 1 if initialization is in progress, allocated pointer otherwise.
+  // Treat pointer as volatile integer (value 0 or 1) until memory is allocated.
+  flags = (kmp_uint32 *)KMP_COMPARE_AND_STORE_RET32(
+      (volatile kmp_int32 *)&sh_buf->doacross_flags, NULL, 1);
+#else
   flags = (kmp_uint32 *)KMP_COMPARE_AND_STORE_RET64(
-      (kmp_int64 *)&sh_buf->doacross_flags, NULL, (kmp_int64)1);
+      (volatile kmp_int64 *)&sh_buf->doacross_flags, NULL, 1LL);
+#endif
   if (flags == NULL) {
     // we are the first thread, allocate the array of flags
-    kmp_int64 size =
-        trace_count / 8 + 8; // in bytes, use single bit per iteration
-    sh_buf->doacross_flags = (kmp_uint32 *)__kmp_thread_calloc(th, size, 1);
-  } else if ((kmp_int64)flags == 1) {
+    size_t size = trace_count / 8 + 8; // in bytes, use single bit per iteration
+    flags = (kmp_uint32 *)__kmp_thread_calloc(th, size, 1);
+    KMP_MB();
+    sh_buf->doacross_flags = flags;
+  } else if (flags == (kmp_uint32 *)1) {
+#if KMP_32_BIT_ARCH
     // initialization is still in progress, need to wait
-    while ((volatile kmp_int64)sh_buf->doacross_flags == 1) {
+    while (*(volatile kmp_int32 *)&sh_buf->doacross_flags == 1)
+#else
+    while (*(volatile kmp_int64 *)&sh_buf->doacross_flags == 1LL)
+#endif
       KMP_YIELD(TRUE);
-    }
+    KMP_MB();
+  } else {
+    KMP_MB();
   }
-  KMP_DEBUG_ASSERT((kmp_int64)sh_buf->doacross_flags >
-                   1); // check value of pointer
+  KMP_DEBUG_ASSERT(sh_buf->doacross_flags > (kmp_uint32 *)1); // check ptr value
   pr_buf->th_doacross_flags =
       sh_buf->doacross_flags; // save private copy in order to not
   // touch shared buffer on each iteration
@@ -3912,6 +3971,7 @@ void __kmpc_doacross_wait(ident_t *loc, int gtid, long long *vec) {
   while ((flag & pr_buf->th_doacross_flags[iter_number]) == 0) {
     KMP_YIELD(TRUE);
   }
+  KMP_MB();
   KA_TRACE(20,
            ("__kmpc_doacross_wait() exit: T#%d wait for iter %lld completed\n",
             gtid, (iter_number << 5) + shft));
@@ -3964,6 +4024,7 @@ void __kmpc_doacross_post(ident_t *loc, int gtid, long long *vec) {
   shft = iter_number % 32; // use 32-bit granularity
   iter_number >>= 5; // divided by 32
   flag = 1 << shft;
+  KMP_MB();
   if ((flag & pr_buf->th_doacross_flags[iter_number]) == 0)
     KMP_TEST_THEN_OR32(&pr_buf->th_doacross_flags[iter_number], flag);
   KA_TRACE(20, ("__kmpc_doacross_post() exit: T#%d iter %lld posted\n", gtid,

@@ -88,13 +88,13 @@ struct Configuration {
   bool Relocatable = true;
   bool Force = false;
   bool Debug = false;
-  bool WriteSymtab = true;
+  bool DebugDwarf = false;
   unsigned DebugTypes = static_cast<unsigned>(DebugType::None);
   llvm::SmallString<128> PDBPath;
   std::vector<llvm::StringRef> Argv;
 
   // Symbols in this set are considered as live by the garbage collector.
-  std::set<Symbol *> GCRoot;
+  std::vector<Symbol *> GCRoot;
 
   std::set<StringRef> NoDefaultLibs;
   bool NoDefaultLibAll = false;

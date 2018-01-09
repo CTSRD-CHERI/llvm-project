@@ -38,9 +38,6 @@ SectionChunk::SectionChunk(ObjFile *F, const coff_section *H)
 
   Alignment = Header->getAlignment();
 
-  // Chunks may be discarded during comdat merging.
-  Discarded = false;
-
   // If linker GC is disabled, every chunk starts out alive.  If linker GC is
   // enabled, treat non-comdat sections as roots. Generally optimized object
   // files will be built with -ffunction-sections or /Gy, so most things worth
@@ -252,7 +249,19 @@ void SectionChunk::writeTo(uint8_t *Buf) const {
     // Get the output section of the symbol for this relocation.  The output
     // section is needed to compute SECREL and SECTION relocations used in debug
     // info.
-    Defined *Sym = cast<Defined>(File->getSymbol(Rel.SymbolTableIndex));
+    auto *Sym =
+        dyn_cast_or_null<Defined>(File->getSymbol(Rel.SymbolTableIndex));
+    if (!Sym) {
+      if (isCodeView() || isDWARF())
+        continue;
+      // Symbols in early discarded sections are represented using null pointers,
+      // so we need to retrieve the name from the object file.
+      COFFSymbolRef Sym =
+          check(File->getCOFFObj()->getSymbol(Rel.SymbolTableIndex));
+      StringRef Name;
+      File->getCOFFObj()->getSymbolName(Sym, Name);
+      fatal("relocation against symbol in discarded section: " + Name);
+    }
     Chunk *C = Sym->getChunk();
     OutputSection *OS = C ? C->getOutputSection() : nullptr;
 
@@ -328,7 +337,8 @@ void SectionChunk::getBaserels(std::vector<Baserel> *Res) {
     uint8_t Ty = getBaserelType(Rel);
     if (Ty == IMAGE_REL_BASED_ABSOLUTE)
       continue;
-    if (isa<DefinedAbsolute>(File->getSymbol(Rel.SymbolTableIndex)))
+    Symbol *Target = File->getSymbol(Rel.SymbolTableIndex);
+    if (!Target || isa<DefinedAbsolute>(Target))
       continue;
     Res->emplace_back(RVA + Rel.VirtualAddress, Ty);
   }
@@ -349,12 +359,8 @@ bool SectionChunk::isCOMDAT() const {
 void SectionChunk::printDiscardedMessage() const {
   // Removed by dead-stripping. If it's removed by ICF, ICF already
   // printed out the name, so don't repeat that here.
-  if (Sym && this == Repl) {
-    if (Discarded)
-      message("Discarded comdat symbol " + Sym->getName());
-    else if (!Live)
-      message("Discarded " + Sym->getName());
-  }
+  if (Sym && this == Repl)
+    message("Discarded " + Sym->getName());
 }
 
 StringRef SectionChunk::getDebugName() {

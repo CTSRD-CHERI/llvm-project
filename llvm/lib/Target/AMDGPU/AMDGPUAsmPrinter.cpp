@@ -32,6 +32,7 @@
 #include "Utils/AMDGPUBaseInfo.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
+#include "llvm/CodeGen/TargetLoweringObjectFile.h"
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCSectionELF.h"
@@ -39,7 +40,6 @@
 #include "llvm/Support/AMDGPUMetadata.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/TargetRegistry.h"
-#include "llvm/Target/TargetLoweringObjectFile.h"
 
 using namespace llvm;
 using namespace llvm::AMDGPU;
@@ -219,8 +219,28 @@ void AMDGPUAsmPrinter::EmitFunctionEntryLabel() {
     getTargetStreamer()->EmitAMDGPUSymbolType(
         SymbolName, ELF::STT_AMDGPU_HSA_KERNEL);
   }
+  const AMDGPUSubtarget &STI = MF->getSubtarget<AMDGPUSubtarget>();
+  if (STI.dumpCode()) {
+    // Disassemble function name label to text.
+    DisasmLines.push_back(MF->getFunction()->getName().str() + ":");
+    DisasmLineMaxLen = std::max(DisasmLineMaxLen, DisasmLines.back().size());
+    HexLines.push_back("");
+  }
 
   AsmPrinter::EmitFunctionEntryLabel();
+}
+
+void AMDGPUAsmPrinter::EmitBasicBlockStart(const MachineBasicBlock &MBB) const {
+  const AMDGPUSubtarget &STI = MBB.getParent()->getSubtarget<AMDGPUSubtarget>();
+  if (STI.dumpCode() && !isBlockOnlyReachableByFallthrough(&MBB)) {
+    // Write a line for the basic block label if it is not only fallthrough.
+    DisasmLines.push_back(
+        (Twine("BB") + Twine(getFunctionNumber())
+         + "_" + Twine(MBB.getNumber()) + ":").str());
+    DisasmLineMaxLen = std::max(DisasmLineMaxLen, DisasmLines.back().size());
+    HexLines.push_back("");
+  }
+  AsmPrinter::EmitBasicBlockStart(MBB);
 }
 
 void AMDGPUAsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
@@ -262,7 +282,7 @@ void AMDGPUAsmPrinter::readPALMetadata(Module &M) {
 void AMDGPUAsmPrinter::emitCommonFunctionComments(
   uint32_t NumVGPR,
   uint32_t NumSGPR,
-  uint32_t ScratchSize,
+  uint64_t ScratchSize,
   uint64_t CodeSize) {
   OutStreamer->emitRawComment(" codeLenInByte = " + Twine(CodeSize), false);
   OutStreamer->emitRawComment(" NumSgprs: " + Twine(NumSGPR), false);
@@ -406,8 +426,11 @@ bool AMDGPUAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
         Context.getELFSection(".AMDGPU.disasm", ELF::SHT_NOTE, 0));
 
     for (size_t i = 0; i < DisasmLines.size(); ++i) {
-      std::string Comment(DisasmLineMaxLen - DisasmLines[i].size(), ' ');
-      Comment += " ; " + HexLines[i] + "\n";
+      std::string Comment = "\n";
+      if (!HexLines[i].empty()) {
+        Comment = std::string(DisasmLineMaxLen - DisasmLines[i].size(), ' ');
+        Comment += " ; " + HexLines[i] + "\n";
+      }
 
       OutStreamer->EmitBytes(StringRef(DisasmLines[i]));
       OutStreamer->EmitBytes(StringRef(Comment));
@@ -600,7 +623,7 @@ AMDGPUAsmPrinter::SIFunctionResourceInfo AMDGPUAsmPrinter::analyzeResourceUsage(
 
   int32_t MaxVGPR = -1;
   int32_t MaxSGPR = -1;
-  uint32_t CalleeFrameSize = 0;
+  uint64_t CalleeFrameSize = 0;
 
   for (const MachineBasicBlock &MBB : MF) {
     for (const MachineInstr &MI : MBB) {
@@ -718,7 +741,7 @@ AMDGPUAsmPrinter::SIFunctionResourceInfo AMDGPUAsmPrinter::analyzeResourceUsage(
           MaxSGPR = std::max(MaxSGPR, MaxSGPRGuess);
           MaxVGPR = std::max(MaxVGPR, 23);
 
-          CalleeFrameSize = std::max(CalleeFrameSize, 16384u);
+          CalleeFrameSize = std::max(CalleeFrameSize, UINT64_C(16384));
           Info.UsesVCC = true;
           Info.UsesFlatScratch = ST.hasFlatAddressSpace();
           Info.HasDynamicallySizedStack = true;
@@ -762,6 +785,12 @@ void AMDGPUAsmPrinter::getSIProgramInfo(SIProgramInfo &ProgInfo,
   ProgInfo.VCCUsed = Info.UsesVCC;
   ProgInfo.FlatUsed = Info.UsesFlatScratch;
   ProgInfo.DynamicCallStack = Info.HasDynamicallySizedStack || Info.HasRecursion;
+
+  if (!isUInt<32>(ProgInfo.ScratchSize)) {
+    DiagnosticInfoStackSize DiagStackSize(*MF.getFunction(),
+                                          ProgInfo.ScratchSize, DS_Error);
+    MF.getFunction()->getContext().diagnose(DiagStackSize);
+  }
 
   const SISubtarget &STM = MF.getSubtarget<SISubtarget>();
   const SIMachineFunctionInfo *MFI = MF.getInfo<SIMachineFunctionInfo>();
@@ -1182,6 +1211,8 @@ AMDGPU::HSAMD::Kernel::CodeProps::Metadata AMDGPUAsmPrinter::getHSACodeProps(
   HSACodeProps.mMaxFlatWorkGroupSize = MFI.getMaxFlatWorkGroupSize();
   HSACodeProps.mIsDynamicCallStack = ProgramInfo.DynamicCallStack;
   HSACodeProps.mIsXNACKEnabled = STM.isXNACKEnabled();
+  HSACodeProps.mNumSpilledSGPRs = MFI.getNumSpilledSGPRs();
+  HSACodeProps.mNumSpilledVGPRs = MFI.getNumSpilledVGPRs();
 
   return HSACodeProps;
 }

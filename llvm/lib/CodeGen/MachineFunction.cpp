@@ -33,6 +33,10 @@
 #include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/PseudoSourceValue.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
+#include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/CodeGen/WinEHFuncInfo.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
@@ -58,11 +62,7 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/GraphWriter.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/CodeGen/TargetFrameLowering.h"
-#include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
@@ -510,9 +510,9 @@ void MachineFunction::print(raw_ostream &OS, const SlotIndexes *Indexes) const {
     OS << "Function Live Ins: ";
     for (MachineRegisterInfo::livein_iterator
          I = RegInfo->livein_begin(), E = RegInfo->livein_end(); I != E; ++I) {
-      OS << PrintReg(I->first, TRI);
+      OS << printReg(I->first, TRI);
       if (I->second)
-        OS << " in " << PrintReg(I->second, TRI);
+        OS << " in " << printReg(I->second, TRI);
       if (std::next(I) != E)
         OS << ", ";
     }
@@ -546,7 +546,7 @@ namespace llvm {
         raw_string_ostream OSS(OutStr);
 
         if (isSimple()) {
-          OSS << "BB#" << Node->getNumber();
+          OSS << printMBBReference(*Node);
           if (const BasicBlock *BB = Node->getBasicBlock())
             OSS << ": " << BB->getName();
         } else
@@ -852,7 +852,7 @@ unsigned MachineJumpTableInfo::getEntryAlignment(const DataLayout &TD) const {
   // alignment.
   switch (getEntryKind()) {
   case MachineJumpTableInfo::EK_BlockAddress:
-    return TD.getPointerABIAlignment();
+    return TD.getPointerABIAlignment(0);
   case MachineJumpTableInfo::EK_GPRel64BlockAddress:
     return TD.getABIIntegerTypeAlignment(64);
   case MachineJumpTableInfo::EK_GPRel32BlockAddress:
@@ -908,7 +908,7 @@ void MachineJumpTableInfo::print(raw_ostream &OS) const {
   for (unsigned i = 0, e = JumpTables.size(); i != e; ++i) {
     OS << "  jt#" << i << ": ";
     for (unsigned j = 0, f = JumpTables[i].MBBs.size(); j != f; ++j)
-      OS << " BB#" << JumpTables[i].MBBs[j]->getNumber();
+      OS << ' ' << printMBBReference(*JumpTables[i].MBBs[j]);
   }
 
   OS << '\n';

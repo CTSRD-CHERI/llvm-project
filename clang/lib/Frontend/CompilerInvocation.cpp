@@ -546,6 +546,8 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
     OPT_fuse_register_sized_bitfield_access);
   Opts.RelaxedAliasing = Args.hasArg(OPT_relaxed_aliasing);
   Opts.StructPathTBAA = !Args.hasArg(OPT_no_struct_path_tbaa);
+  Opts.NewStructPathTBAA = !Args.hasArg(OPT_no_struct_path_tbaa) &&
+                           Args.hasArg(OPT_new_struct_path_tbaa);
   Opts.FineGrainedBitfieldAccesses =
       Args.hasFlag(OPT_ffine_grained_bitfield_accesses,
                    OPT_fno_fine_grained_bitfield_accesses, false);
@@ -640,6 +642,7 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.FlushDenorm = Args.hasArg(OPT_cl_denorms_are_zero);
   Opts.CorrectlyRoundedDivSqrt =
       Args.hasArg(OPT_cl_fp32_correctly_rounded_divide_sqrt);
+  Opts.Reciprocals = Args.getAllArgValues(OPT_mrecip_EQ);
   Opts.ReciprocalMath = Args.hasArg(OPT_freciprocal_math);
   Opts.NoTrappingMath = Args.hasArg(OPT_fno_trapping_math);
   Opts.NoZeroInitializedInBSS = Args.hasArg(OPT_mno_zero_initialized_in_bss);
@@ -710,6 +713,8 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.VectorizeLoop = Args.hasArg(OPT_vectorize_loops);
   Opts.VectorizeSLP = Args.hasArg(OPT_vectorize_slp);
 
+  Opts.PreferVectorWidth = Args.getLastArgValue(OPT_mprefer_vector_width_EQ);
+
   Opts.MainFileName = Args.getLastArgValue(OPT_main_file_name);
   Opts.VerifyModule = !Args.hasArg(OPT_disable_llvm_verifier);
 
@@ -777,7 +782,13 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
 
   Opts.PreserveVec3Type = Args.hasArg(OPT_fpreserve_vec3_type);
   Opts.InstrumentFunctions = Args.hasArg(OPT_finstrument_functions);
+  Opts.InstrumentFunctionsAfterInlining =
+      Args.hasArg(OPT_finstrument_functions_after_inlining);
+  Opts.InstrumentFunctionEntryBare =
+      Args.hasArg(OPT_finstrument_function_entry_bare);
   Opts.XRayInstrumentFunctions = Args.hasArg(OPT_fxray_instrument);
+  Opts.XRayAlwaysEmitCustomEvents =
+      Args.hasArg(OPT_fxray_always_emit_customevents);
   Opts.XRayInstructionThreshold =
       getLastArgIntValue(Args, OPT_fxray_instruction_threshold_EQ, 200, Diags);
   Opts.InstrumentForProfiling = Args.hasArg(OPT_pg);
@@ -1720,11 +1731,7 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
       break;
     case InputKind::CXX:
     case InputKind::ObjCXX:
-      // The PS4 uses C++11 as the default C++ standard.
-      if (T.isPS4())
-        LangStd = LangStandard::lang_gnucxx11;
-      else
-        LangStd = LangStandard::lang_gnucxx98;
+      LangStd = LangStandard::lang_gnucxx14;
       break;
     case InputKind::RenderScript:
       LangStd = LangStandard::lang_c99;
@@ -1736,10 +1743,11 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
   Opts.LineComment = Std.hasLineComments();
   Opts.C99 = Std.isC99();
   Opts.C11 = Std.isC11();
+  Opts.C17 = Std.isC17();
   Opts.CPlusPlus = Std.isCPlusPlus();
   Opts.CPlusPlus11 = Std.isCPlusPlus11();
   Opts.CPlusPlus14 = Std.isCPlusPlus14();
-  Opts.CPlusPlus1z = Std.isCPlusPlus1z();
+  Opts.CPlusPlus17 = Std.isCPlusPlus17();
   Opts.CPlusPlus2a = Std.isCPlusPlus2a();
   Opts.Digraphs = Std.hasDigraphs();
   Opts.GNUMode = Std.isGNUMode();
@@ -1795,7 +1803,7 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
   Opts.GNUKeywords = Opts.GNUMode;
   Opts.CXXOperatorNames = Opts.CPlusPlus;
 
-  Opts.AlignedAllocation = Opts.CPlusPlus1z;
+  Opts.AlignedAllocation = Opts.CPlusPlus17;
 
   Opts.DollarIdents = !Opts.AsmPreprocessor;
 }
@@ -2114,7 +2122,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   // Mimicing gcc's behavior, trigraphs are only enabled if -trigraphs
   // is specified, or -std is set to a conforming mode.
   // Trigraphs are disabled by default in c++1z onwards.
-  Opts.Trigraphs = !Opts.GNUMode && !Opts.MSVCCompat && !Opts.CPlusPlus1z;
+  Opts.Trigraphs = !Opts.GNUMode && !Opts.MSVCCompat && !Opts.CPlusPlus17;
   Opts.Trigraphs =
       Args.hasFlag(OPT_ftrigraphs, OPT_fno_trigraphs, Opts.Trigraphs);
 
@@ -2134,7 +2142,18 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.Exceptions = Args.hasArg(OPT_fexceptions);
   Opts.ObjCExceptions = Args.hasArg(OPT_fobjc_exceptions);
   Opts.CXXExceptions = Args.hasArg(OPT_fcxx_exceptions);
-  Opts.SjLjExceptions = Args.hasArg(OPT_fsjlj_exceptions);
+
+  // Handle exception personalities
+  Arg *A = Args.getLastArg(options::OPT_fsjlj_exceptions,
+                           options::OPT_fseh_exceptions,
+                           options::OPT_fdwarf_exceptions);
+  if (A) {
+    const Option &Opt = A->getOption();
+    Opts.SjLjExceptions = Opt.matches(options::OPT_fsjlj_exceptions);
+    Opts.SEHExceptions = Opt.matches(options::OPT_fseh_exceptions);
+    Opts.DWARFExceptions = Opt.matches(options::OPT_fdwarf_exceptions);
+  }
+
   Opts.ExternCNoUnwind = Args.hasArg(OPT_fexternc_nounwind);
   Opts.TraditionalCPP = Args.hasArg(OPT_traditional_cpp);
 
@@ -2144,7 +2163,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
     && Opts.OpenCLVersion >= 200);
   Opts.BlocksRuntimeOptional = Args.hasArg(OPT_fblocks_runtime_optional);
   Opts.CoroutinesTS = Args.hasArg(OPT_fcoroutines_ts);
-  
+
   // Enable [[]] attributes in C++11 by default.
   Opts.DoubleSquareBracketAttributes =
       Args.hasFlag(OPT_fdouble_square_bracket_attributes,
@@ -2485,6 +2504,11 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.XRayInstrument =
       Args.hasFlag(OPT_fxray_instrument, OPT_fnoxray_instrument, false);
 
+  // -fxray-always-emit-customevents
+  Opts.XRayAlwaysEmitCustomEvents =
+      Args.hasFlag(OPT_fxray_always_emit_customevents,
+                   OPT_fnoxray_always_emit_customevents, false);
+
   // -fxray-{always,never}-instrument= filenames.
   Opts.XRayAlwaysInstrumentFiles =
       Args.getAllArgValues(OPT_fxray_always_instrument);
@@ -2663,7 +2687,6 @@ static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
   Opts.FeaturesAsWritten = Args.getAllArgValues(OPT_target_feature);
   Opts.LinkerVersion = Args.getLastArgValue(OPT_target_linker_version);
   Opts.Triple = llvm::Triple::normalize(Args.getLastArgValue(OPT_triple));
-  Opts.Reciprocals = Args.getAllArgValues(OPT_mrecip_EQ);
   // Use the default target triple if unspecified.
   if (Opts.Triple.empty())
     Opts.Triple = llvm::sys::getDefaultTargetTriple();
