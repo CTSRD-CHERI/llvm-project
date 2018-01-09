@@ -127,16 +127,6 @@ static cl::opt<unsigned> MaxSpeculationDepth(
     cl::desc("Limit maximum recursion depth when calculating costs of "
              "speculatively executed instructions"));
 
-static cl::opt<unsigned> DependenceChainLatency(
-    "dependence-chain-latency", cl::Hidden, cl::init(8),
-    cl::desc("Limit the maximum latency of dependence chain containing cmp "
-             "for if conversion"));
-
-static cl::opt<unsigned> SmallBBSize(
-    "small-bb-size", cl::Hidden, cl::init(40),
-    cl::desc("Check dependence chain latency only in basic block smaller than "
-             "this number"));
-
 STATISTIC(NumBitMaps, "Number of switch instructions turned into bitmaps");
 STATISTIC(NumLinearMaps,
           "Number of switch instructions turned into linear mapping");
@@ -293,12 +283,8 @@ isProfitableToFoldUnconditional(BranchInst *SI1, BranchInst *SI2,
 /// of Succ.
 static void AddPredecessorToBlock(BasicBlock *Succ, BasicBlock *NewPred,
                                   BasicBlock *ExistPred) {
-  if (!isa<PHINode>(Succ->begin()))
-    return; // Quick exit if nothing to do
-
-  PHINode *PN;
-  for (BasicBlock::iterator I = Succ->begin(); (PN = dyn_cast<PHINode>(I)); ++I)
-    PN->addIncoming(PN->getIncomingValueForBlock(ExistPred), NewPred);
+  for (PHINode &PN : Succ->phis())
+    PN.addIncoming(PN.getIncomingValueForBlock(ExistPred), NewPred);
 }
 
 /// Compute an abstract "cost" of speculating the given instruction,
@@ -403,166 +389,6 @@ static bool DominatesMergePoint(Value *V, BasicBlock *BB,
   // Okay, it's safe to do this!  Remember this instruction.
   AggressiveInsts->insert(I);
   return true;
-}
-
-/// Estimate the code size of the specified BB.
-static unsigned CountBBCodeSize(BasicBlock *BB,
-                                const TargetTransformInfo &TTI) {
-  unsigned Size = 0;
-  for (auto II = BB->begin(); !isa<TerminatorInst>(II); ++II)
-    Size += TTI.getInstructionCost(&(*II), TargetTransformInfo::TCK_CodeSize);
-  return Size;
-}
-
-/// Find out the latency of the longest dependence chain in the BB if
-/// LongestChain is true, or the dependence chain containing the compare
-/// instruction feeding the block's conditional branch.
-static unsigned FindDependenceChainLatency(BasicBlock *BB,
-                            DenseMap<Instruction *, unsigned> &Instructions,
-                            const TargetTransformInfo &TTI,
-                            bool LongestChain) {
-  unsigned MaxLatency = 0;
-
-  BasicBlock::iterator II;
-  for (II = BB->begin(); !isa<TerminatorInst>(II); ++II) {
-    unsigned Latency = 0;
-    for (unsigned O = 0, E = II->getNumOperands(); O != E; ++O) {
-      Instruction *Op = dyn_cast<Instruction>(II->getOperand(O));
-      if (Op && Instructions.count(Op)) {
-        auto OpLatency = Instructions[Op];
-        if (OpLatency > Latency)
-          Latency = OpLatency;
-      }
-    }
-    Latency += TTI.getInstructionCost(&(*II), TargetTransformInfo::TCK_Latency);
-    Instructions[&(*II)] = Latency;
-
-    if (Latency > MaxLatency)
-      MaxLatency = Latency;
-  }
-
-  if (LongestChain)
-    return MaxLatency;
-
-  // The length of the dependence chain containing the compare instruction is
-  // wanted, so the terminator must be a BranchInst.
-  assert(isa<BranchInst>(II));
-  BranchInst* Br = cast<BranchInst>(II);
-  Instruction *Cmp = dyn_cast<Instruction>(Br->getCondition());
-  if (Cmp && Instructions.count(Cmp))
-    return Instructions[Cmp];
-  else
-    return 0;
-}
-
-/// Instructions in BB2 may depend on instructions in BB1, and instructions
-/// in BB1 may have users in BB2. If the last (in terms of latency) such kind
-/// of instruction in BB1 is I, then the instructions after I can be executed
-/// in parallel with instructions in BB2.
-/// This function returns the latency of I.
-static unsigned LatencyAdjustment(BasicBlock *BB1, BasicBlock *BB2,
-                        BasicBlock *IfBlock1, BasicBlock *IfBlock2,
-                        DenseMap<Instruction *, unsigned> &BB1Instructions) {
-  unsigned LastLatency = 0;
-  SmallVector<Instruction *, 16> Worklist;
-  BasicBlock::iterator II;
-  for (II = BB2->begin(); !isa<TerminatorInst>(II); ++II) {
-    if (PHINode *PN = dyn_cast<PHINode>(II)) {
-      // Look for users in BB2.
-      bool InBBUser = false;
-      for (User *U : PN->users()) {
-        if (cast<Instruction>(U)->getParent() == BB2) {
-          InBBUser = true;
-          break;
-        }
-      }
-      // No such user, we don't care about this instruction and its operands.
-      if (!InBBUser)
-        break;
-    }
-    Worklist.push_back(&(*II));
-  }
-
-  while (!Worklist.empty()) {
-    Instruction *I = Worklist.pop_back_val();
-    for (unsigned O = 0, E = I->getNumOperands(); O != E; ++O) {
-      if (Instruction *Op = dyn_cast<Instruction>(I->getOperand(O))) {
-        if (Op->getParent() == IfBlock1 || Op->getParent() == IfBlock2)
-          Worklist.push_back(Op);
-        else if (Op->getParent() == BB1 && BB1Instructions.count(Op)) {
-          if (BB1Instructions[Op] > LastLatency)
-            LastLatency = BB1Instructions[Op];
-        }
-      }
-    }
-  }
-
-  return LastLatency;
-}
-
-/// If after if conversion, most of the instructions in this new BB construct a
-/// long and slow dependence chain, it may be slower than cmp/branch, even
-/// if the branch has a high miss rate, because the control dependence is
-/// transformed into data dependence, and control dependence can be speculated,
-/// and thus, the second part can execute in parallel with the first part on
-/// modern OOO processor.
-///
-/// To check this condition, this function finds the length of the dependence
-/// chain in BB1 (only the part that can be executed in parallel with code after
-/// branch in BB2) containing cmp, and if the length is longer than a threshold,
-/// don't perform if conversion.
-///
-/// BB1, BB2, IfBlock1 and IfBlock2 are candidate BBs for if conversion.
-/// SpeculationSize contains the code size of IfBlock1 and IfBlock2.
-static bool FindLongDependenceChain(BasicBlock *BB1, BasicBlock *BB2,
-                             BasicBlock *IfBlock1, BasicBlock *IfBlock2,
-                             unsigned SpeculationSize,
-                             const TargetTransformInfo &TTI) {
-  // Accumulated latency of each instruction in their BBs.
-  DenseMap<Instruction *, unsigned> BB1Instructions;
-  DenseMap<Instruction *, unsigned> BB2Instructions;
-
-  if (!TTI.isOutOfOrder())
-    return false;
-
-  unsigned NewBBSize = CountBBCodeSize(BB1, TTI) + CountBBCodeSize(BB2, TTI)
-                         + SpeculationSize;
-
-  // We check small BB only since it is more difficult to find unrelated
-  // instructions to fill functional units in a small BB.
-  if (NewBBSize > SmallBBSize)
-    return false;
-
-  auto BB1Chain =
-         FindDependenceChainLatency(BB1, BB1Instructions, TTI, false);
-  auto BB2Chain =
-         FindDependenceChainLatency(BB2, BB2Instructions, TTI, true);
-
-  // If there are many unrelated instructions in the new BB, there will be
-  // other instructions for the processor to issue regardless of the length
-  // of this new dependence chain.
-  // Modern processors can issue 3 or more instructions in each cycle. But in
-  // real world applications, an IPC of 2 is already very good for non-loop
-  // code with small basic blocks. Higher IPC is usually found in programs with
-  // small kernel. So IPC of 2 is more reasonable for most applications.
-  if ((BB1Chain + BB2Chain) * 2 <= NewBBSize)
-    return false;
-
-  // We only care about part of the dependence chain in BB1 that can be
-  // executed in parallel with BB2, so adjust the latency.
-  BB1Chain -=
-      LatencyAdjustment(BB1, BB2, IfBlock1, IfBlock2, BB1Instructions);
-
-  // Correctly predicted branch instruction can skip the dependence chain in
-  // BB1, but misprediction has a penalty, so only when the dependence chain is
-  // longer than DependenceChainLatency, then branch is better than select.
-  // Besides misprediction penalty, the threshold value DependenceChainLatency
-  // also depends on branch misprediction rate, taken branch latency and cmov
-  // latency.
-  if (BB1Chain >= DependenceChainLatency)
-    return true;
-
-  return false;
 }
 
 /// Extract ConstantInt from value, looking through IntToPtr
@@ -1398,11 +1224,9 @@ bool SimplifyCFGOpt::FoldValueComparisonIntoPredecessors(TerminatorInst *TI,
 static bool isSafeToHoistInvoke(BasicBlock *BB1, BasicBlock *BB2,
                                 Instruction *I1, Instruction *I2) {
   for (BasicBlock *Succ : successors(BB1)) {
-    PHINode *PN;
-    for (BasicBlock::iterator BBI = Succ->begin();
-         (PN = dyn_cast<PHINode>(BBI)); ++BBI) {
-      Value *BB1V = PN->getIncomingValueForBlock(BB1);
-      Value *BB2V = PN->getIncomingValueForBlock(BB2);
+    for (const PHINode &PN : Succ->phis()) {
+      Value *BB1V = PN.getIncomingValueForBlock(BB1);
+      Value *BB2V = PN.getIncomingValueForBlock(BB2);
       if (BB1V != BB2V && (BB1V == I1 || BB2V == I2)) {
         return false;
       }
@@ -1451,6 +1275,17 @@ static bool HoistThenElseCodeToIf(BranchInst *BI,
     // broken BB), instead clone it, and remove BI.
     if (isa<TerminatorInst>(I1))
       goto HoistTerminator;
+
+    // If we're going to hoist a call, make sure that the two instructions we're
+    // commoning/hoisting are both marked with musttail, or neither of them is
+    // marked as such. Otherwise, we might end up in a situation where we hoist
+    // from a block where the terminator is a `ret` to a block where the terminator
+    // is a `br`, and `musttail` calls expect to be followed by a return.
+    auto *C1 = dyn_cast<CallInst>(I1);
+    auto *C2 = dyn_cast<CallInst>(I2);
+    if (C1 && C2)
+      if (C1->isMustTailCall() != C2->isMustTailCall())
+        return Changed;
 
     if (!TTI.isProfitableToHoist(I1) || !TTI.isProfitableToHoist(I2))
       return Changed;
@@ -1502,18 +1337,16 @@ HoistTerminator:
     return Changed;
 
   for (BasicBlock *Succ : successors(BB1)) {
-    PHINode *PN;
-    for (BasicBlock::iterator BBI = Succ->begin();
-         (PN = dyn_cast<PHINode>(BBI)); ++BBI) {
-      Value *BB1V = PN->getIncomingValueForBlock(BB1);
-      Value *BB2V = PN->getIncomingValueForBlock(BB2);
+    for (PHINode &PN : Succ->phis()) {
+      Value *BB1V = PN.getIncomingValueForBlock(BB1);
+      Value *BB2V = PN.getIncomingValueForBlock(BB2);
       if (BB1V == BB2V)
         continue;
 
       // Check for passingValueIsAlwaysUndefined here because we would rather
       // eliminate undefined control flow then converting it to a select.
-      if (passingValueIsAlwaysUndefined(BB1V, PN) ||
-          passingValueIsAlwaysUndefined(BB2V, PN))
+      if (passingValueIsAlwaysUndefined(BB1V, &PN) ||
+          passingValueIsAlwaysUndefined(BB2V, &PN))
         return Changed;
 
       if (isa<ConstantExpr>(BB1V) && !isSafeToSpeculativelyExecute(BB1V))
@@ -1539,11 +1372,9 @@ HoistTerminator:
   // nodes, so we insert select instruction to compute the final result.
   std::map<std::pair<Value *, Value *>, SelectInst *> InsertedSelects;
   for (BasicBlock *Succ : successors(BB1)) {
-    PHINode *PN;
-    for (BasicBlock::iterator BBI = Succ->begin();
-         (PN = dyn_cast<PHINode>(BBI)); ++BBI) {
-      Value *BB1V = PN->getIncomingValueForBlock(BB1);
-      Value *BB2V = PN->getIncomingValueForBlock(BB2);
+    for (PHINode &PN : Succ->phis()) {
+      Value *BB1V = PN.getIncomingValueForBlock(BB1);
+      Value *BB2V = PN.getIncomingValueForBlock(BB2);
       if (BB1V == BB2V)
         continue;
 
@@ -1556,9 +1387,9 @@ HoistTerminator:
                                  BB1V->getName() + "." + BB2V->getName(), BI));
 
       // Make the PHI node use the select for all incoming values for BB1/BB2
-      for (unsigned i = 0, e = PN->getNumIncomingValues(); i != e; ++i)
-        if (PN->getIncomingBlock(i) == BB1 || PN->getIncomingBlock(i) == BB2)
-          PN->setIncomingValue(i, SI);
+      for (unsigned i = 0, e = PN.getNumIncomingValues(); i != e; ++i)
+        if (PN.getIncomingBlock(i) == BB1 || PN.getIncomingBlock(i) == BB2)
+          PN.setIncomingValue(i, SI);
     }
   }
 
@@ -2169,10 +2000,9 @@ static bool SpeculativelyExecuteBB(BranchInst *BI, BasicBlock *ThenBB,
 
   // Check that the PHI nodes can be converted to selects.
   bool HaveRewritablePHIs = false;
-  for (BasicBlock::iterator I = EndBB->begin();
-       PHINode *PN = dyn_cast<PHINode>(I); ++I) {
-    Value *OrigV = PN->getIncomingValueForBlock(BB);
-    Value *ThenV = PN->getIncomingValueForBlock(ThenBB);
+  for (PHINode &PN : EndBB->phis()) {
+    Value *OrigV = PN.getIncomingValueForBlock(BB);
+    Value *ThenV = PN.getIncomingValueForBlock(ThenBB);
 
     // FIXME: Try to remove some of the duplication with HoistThenElseCodeToIf.
     // Skip PHIs which are trivial.
@@ -2180,8 +2010,8 @@ static bool SpeculativelyExecuteBB(BranchInst *BI, BasicBlock *ThenBB,
       continue;
 
     // Don't convert to selects if we could remove undefined behavior instead.
-    if (passingValueIsAlwaysUndefined(OrigV, PN) ||
-        passingValueIsAlwaysUndefined(ThenV, PN))
+    if (passingValueIsAlwaysUndefined(OrigV, &PN) ||
+        passingValueIsAlwaysUndefined(ThenV, &PN))
       return false;
 
     HaveRewritablePHIs = true;
@@ -2214,11 +2044,6 @@ static bool SpeculativelyExecuteBB(BranchInst *BI, BasicBlock *ThenBB,
   if (!HaveRewritablePHIs && !(HoistCondStores && SpeculatedStoreValue))
     return false;
 
-  // Don't do if conversion for long dependence chain.
-  if (FindLongDependenceChain(BB, EndBB, ThenBB, nullptr,
-                              CountBBCodeSize(ThenBB, TTI), TTI))
-    return false;
-
   // If we get here, we can hoist the instruction and if-convert.
   DEBUG(dbgs() << "SPECULATIVELY EXECUTING BB" << *ThenBB << "\n";);
 
@@ -2247,12 +2072,11 @@ static bool SpeculativelyExecuteBB(BranchInst *BI, BasicBlock *ThenBB,
 
   // Insert selects and rewrite the PHI operands.
   IRBuilder<NoFolder> Builder(BI);
-  for (BasicBlock::iterator I = EndBB->begin();
-       PHINode *PN = dyn_cast<PHINode>(I); ++I) {
-    unsigned OrigI = PN->getBasicBlockIndex(BB);
-    unsigned ThenI = PN->getBasicBlockIndex(ThenBB);
-    Value *OrigV = PN->getIncomingValue(OrigI);
-    Value *ThenV = PN->getIncomingValue(ThenI);
+  for (PHINode &PN : EndBB->phis()) {
+    unsigned OrigI = PN.getBasicBlockIndex(BB);
+    unsigned ThenI = PN.getBasicBlockIndex(ThenBB);
+    Value *OrigV = PN.getIncomingValue(OrigI);
+    Value *ThenV = PN.getIncomingValue(ThenI);
 
     // Skip PHIs which are trivial.
     if (OrigV == ThenV)
@@ -2266,8 +2090,8 @@ static bool SpeculativelyExecuteBB(BranchInst *BI, BasicBlock *ThenBB,
       std::swap(TrueV, FalseV);
     Value *V = Builder.CreateSelect(
         BrCond, TrueV, FalseV, "spec.select", BI);
-    PN->setIncomingValue(OrigI, V);
-    PN->setIncomingValue(ThenI, V);
+    PN.setIncomingValue(OrigI, V);
+    PN.setIncomingValue(ThenI, V);
   }
 
   // Remove speculated dbg intrinsics.
@@ -2525,10 +2349,6 @@ static bool FoldTwoEntryPHINode(PHINode *PN, const TargetTransformInfo &TTI,
         return false;
       }
   }
-
-  if (FindLongDependenceChain(DomBlock, BB, IfBlock1, IfBlock2,
-                              AggressiveInsts.size(), TTI))
-    return false;
 
   DEBUG(dbgs() << "FOUND IF CONDITION!  " << *IfCond << "  T: "
                << IfTrue->getName() << "  F: " << IfFalse->getName() << "\n");
@@ -3514,17 +3334,15 @@ static bool SimplifyCondBranchToCondBranch(BranchInst *PBI, BranchInst *BI,
   // it.  If it has PHIs though, the PHIs may have different
   // entries for BB and PBI's BB.  If so, insert a select to make
   // them agree.
-  PHINode *PN;
-  for (BasicBlock::iterator II = CommonDest->begin();
-       (PN = dyn_cast<PHINode>(II)); ++II) {
-    Value *BIV = PN->getIncomingValueForBlock(BB);
-    unsigned PBBIdx = PN->getBasicBlockIndex(PBI->getParent());
-    Value *PBIV = PN->getIncomingValue(PBBIdx);
+  for (PHINode &PN : CommonDest->phis()) {
+    Value *BIV = PN.getIncomingValueForBlock(BB);
+    unsigned PBBIdx = PN.getBasicBlockIndex(PBI->getParent());
+    Value *PBIV = PN.getIncomingValue(PBBIdx);
     if (BIV != PBIV) {
       // Insert a select in PBI to pick the right value.
       SelectInst *NV = cast<SelectInst>(
           Builder.CreateSelect(PBICond, PBIV, BIV, PBIV->getName() + ".mux"));
-      PN->setIncomingValue(PBBIdx, NV);
+      PN.setIncomingValue(PBBIdx, NV);
       // Although the select has the same condition as PBI, the original branch
       // weights for PBI do not apply to the new select because the select's
       // 'logical' edges are incoming edges of the phi that is eliminated, not
@@ -4630,17 +4448,16 @@ static PHINode *FindPHIForConditionForwarding(ConstantInt *CaseValue,
 
   BasicBlock *Succ = Branch->getSuccessor(0);
 
-  BasicBlock::iterator I = Succ->begin();
-  while (PHINode *PHI = dyn_cast<PHINode>(I++)) {
-    int Idx = PHI->getBasicBlockIndex(BB);
+  for (PHINode &PHI : Succ->phis()) {
+    int Idx = PHI.getBasicBlockIndex(BB);
     assert(Idx >= 0 && "PHI has no entry for predecessor?");
 
-    Value *InValue = PHI->getIncomingValue(Idx);
+    Value *InValue = PHI.getIncomingValue(Idx);
     if (InValue != CaseValue)
       continue;
 
     *PhiIndex = Idx;
-    return PHI;
+    return &PHI;
   }
 
   return nullptr;
@@ -4670,19 +4487,16 @@ static bool ForwardSwitchConditionToPHI(SwitchInst *SI) {
     // -->
     //     %r = phi i32 ... [ %x, %switchbb ] ...
 
-    for (Instruction &InstInCaseDest : *CaseDest) {
-      auto *Phi = dyn_cast<PHINode>(&InstInCaseDest);
-      if (!Phi) break;
-
+    for (PHINode &Phi : CaseDest->phis()) {
       // This only works if there is exactly 1 incoming edge from the switch to
       // a phi. If there is >1, that means multiple cases of the switch map to 1
       // value in the phi, and that phi value is not the switch condition. Thus,
       // this transform would not make sense (the phi would be invalid because
       // a phi can't have different incoming values from the same block).
-      int SwitchBBIdx = Phi->getBasicBlockIndex(SwitchBlock);
-      if (Phi->getIncomingValue(SwitchBBIdx) == CaseValue &&
-          count(Phi->blocks(), SwitchBlock) == 1) {
-        Phi->setIncomingValue(SwitchBBIdx, SI->getCondition());
+      int SwitchBBIdx = Phi.getBasicBlockIndex(SwitchBlock);
+      if (Phi.getIncomingValue(SwitchBBIdx) == CaseValue &&
+          count(Phi.blocks(), SwitchBlock) == 1) {
+        Phi.setIncomingValue(SwitchBBIdx, SI->getCondition());
         Changed = true;
       }
     }
@@ -4835,14 +4649,13 @@ GetCaseResults(SwitchInst *SI, ConstantInt *CaseVal, BasicBlock *CaseDest,
     return false;
 
   // Get the values for this case from phi nodes in the destination block.
-  BasicBlock::iterator I = (*CommonDest)->begin();
-  while (PHINode *PHI = dyn_cast<PHINode>(I++)) {
-    int Idx = PHI->getBasicBlockIndex(Pred);
+  for (PHINode &PHI : (*CommonDest)->phis()) {
+    int Idx = PHI.getBasicBlockIndex(Pred);
     if (Idx == -1)
       continue;
 
     Constant *ConstVal =
-        LookupConstant(PHI->getIncomingValue(Idx), ConstantPool);
+        LookupConstant(PHI.getIncomingValue(Idx), ConstantPool);
     if (!ConstVal)
       return false;
 
@@ -4850,7 +4663,7 @@ GetCaseResults(SwitchInst *SI, ConstantInt *CaseVal, BasicBlock *CaseDest,
     if (!ValidLookupTableConstant(ConstVal, TTI))
       return false;
 
-    Res.push_back(std::make_pair(PHI, ConstVal));
+    Res.push_back(std::make_pair(&PHI, ConstVal));
   }
 
   return Res.size() > 0;
@@ -6125,14 +5938,13 @@ static bool passingValueIsAlwaysUndefined(Value *V, Instruction *I) {
 /// If BB has an incoming value that will always trigger undefined behavior
 /// (eg. null pointer dereference), remove the branch leading here.
 static bool removeUndefIntroducingPredecessor(BasicBlock *BB) {
-  for (BasicBlock::iterator i = BB->begin();
-       PHINode *PHI = dyn_cast<PHINode>(i); ++i)
-    for (unsigned i = 0, e = PHI->getNumIncomingValues(); i != e; ++i)
-      if (passingValueIsAlwaysUndefined(PHI->getIncomingValue(i), PHI)) {
-        TerminatorInst *T = PHI->getIncomingBlock(i)->getTerminator();
+  for (PHINode &PHI : BB->phis())
+    for (unsigned i = 0, e = PHI.getNumIncomingValues(); i != e; ++i)
+      if (passingValueIsAlwaysUndefined(PHI.getIncomingValue(i), &PHI)) {
+        TerminatorInst *T = PHI.getIncomingBlock(i)->getTerminator();
         IRBuilder<> Builder(T);
         if (BranchInst *BI = dyn_cast<BranchInst>(T)) {
-          BB->removePredecessor(PHI->getIncomingBlock(i));
+          BB->removePredecessor(PHI.getIncomingBlock(i));
           // Turn uncoditional branches into unreachables and remove the dead
           // destination from conditional branches.
           if (BI->isUnconditional())
