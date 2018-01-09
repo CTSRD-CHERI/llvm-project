@@ -2273,9 +2273,9 @@ static unsigned ComputeNumSignBitsImpl(const Value *V, unsigned Depth,
     // ashr X, C   -> adds C sign bits.  Vectors too.
     const APInt *ShAmt;
     if (match(U->getOperand(1), m_APInt(ShAmt))) {
-      unsigned ShAmtLimited = ShAmt->getZExtValue();
-      if (ShAmtLimited >= TyBits)
+      if (ShAmt->uge(TyBits))
         break;  // Bad shift.
+      unsigned ShAmtLimited = ShAmt->getZExtValue();
       Tmp += ShAmtLimited;
       if (Tmp > TyBits) Tmp = TyBits;
     }
@@ -2286,9 +2286,9 @@ static unsigned ComputeNumSignBitsImpl(const Value *V, unsigned Depth,
     if (match(U->getOperand(1), m_APInt(ShAmt))) {
       // shl destroys sign bits.
       Tmp = ComputeNumSignBits(U->getOperand(0), Depth + 1, Q);
+      if (ShAmt->uge(TyBits) ||      // Bad shift.
+          ShAmt->uge(Tmp)) break;    // Shifted all sign bits out.
       Tmp2 = ShAmt->getZExtValue();
-      if (Tmp2 >= TyBits ||      // Bad shift.
-          Tmp2 >= Tmp) break;    // Shifted all sign bits out.
       return Tmp - Tmp2;
     }
     break;
@@ -4247,14 +4247,14 @@ static SelectPatternResult matchSelectPattern(CmpInst::Predicate Pred,
   LHS = CmpLHS;
   RHS = CmpRHS;
 
-  // If the predicate is an "or-equal"  (FP) predicate, then signed zeroes may
-  // return inconsistent results between implementations.
-  //   (0.0 <= -0.0) ? 0.0 : -0.0 // Returns 0.0
-  //   minNum(0.0, -0.0)          // May return -0.0 or 0.0 (IEEE 754-2008 5.3.1)
-  // Therefore we behave conservatively and only proceed if at least one of the
-  // operands is known to not be zero, or if we don't care about signed zeroes.
+  // Signed zero may return inconsistent results between implementations.
+  //  (0.0 <= -0.0) ? 0.0 : -0.0 // Returns 0.0
+  //  minNum(0.0, -0.0)          // May return -0.0 or 0.0 (IEEE 754-2008 5.3.1)
+  // Therefore, we behave conservatively and only proceed if at least one of the
+  // operands is known to not be zero or if we don't care about signed zero.
   switch (Pred) {
   default: break;
+  // FIXME: Include OGT/OLT/UGT/ULT.
   case CmpInst::FCMP_OGE: case CmpInst::FCMP_OLE:
   case CmpInst::FCMP_UGE: case CmpInst::FCMP_ULE:
     if (!FMF.noSignedZeros() && !isKnownNonZero(CmpLHS) &&
@@ -4502,14 +4502,24 @@ SelectPatternResult llvm::matchSelectPattern(Value *V, Value *&LHS, Value *&RHS,
 
   // Deal with type mismatches.
   if (CastOp && CmpLHS->getType() != TrueVal->getType()) {
-    if (Value *C = lookThroughCast(CmpI, TrueVal, FalseVal, CastOp))
+    if (Value *C = lookThroughCast(CmpI, TrueVal, FalseVal, CastOp)) {
+      // If this is a potential fmin/fmax with a cast to integer, then ignore
+      // -0.0 because there is no corresponding integer value.
+      if (*CastOp == Instruction::FPToSI || *CastOp == Instruction::FPToUI)
+        FMF.setNoSignedZeros();
       return ::matchSelectPattern(Pred, FMF, CmpLHS, CmpRHS,
                                   cast<CastInst>(TrueVal)->getOperand(0), C,
                                   LHS, RHS);
-    if (Value *C = lookThroughCast(CmpI, FalseVal, TrueVal, CastOp))
+    }
+    if (Value *C = lookThroughCast(CmpI, FalseVal, TrueVal, CastOp)) {
+      // If this is a potential fmin/fmax with a cast to integer, then ignore
+      // -0.0 because there is no corresponding integer value.
+      if (*CastOp == Instruction::FPToSI || *CastOp == Instruction::FPToUI)
+        FMF.setNoSignedZeros();
       return ::matchSelectPattern(Pred, FMF, CmpLHS, CmpRHS,
                                   C, cast<CastInst>(FalseVal)->getOperand(0),
                                   LHS, RHS);
+    }
   }
   return ::matchSelectPattern(Pred, FMF, CmpLHS, CmpRHS, TrueVal, FalseVal,
                               LHS, RHS);

@@ -404,10 +404,6 @@ public:
     return BaseT::getInstructionLatency(I);
   }
 
-  bool isOutOfOrder() const {
-    return getST()->getSchedModel().isOutOfOrder();
-  }
-
   /// @}
 
   /// \name Vector TTI Implementations
