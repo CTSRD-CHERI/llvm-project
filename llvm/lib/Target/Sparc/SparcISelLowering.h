@@ -16,7 +16,7 @@
 #define LLVM_LIB_TARGET_SPARC_SPARCISELLOWERING_H
 
 #include "Sparc.h"
-#include "llvm/Target/TargetLowering.h"
+#include "llvm/CodeGen/TargetLowering.h"
 
 namespace llvm {
   class SparcSubtarget;
@@ -191,6 +191,10 @@ namespace llvm {
                              const SDLoc &DL, SelectionDAG &DAG) const;
 
     SDValue LowerINTRINSIC_WO_CHAIN(SDValue Op, SelectionDAG &DAG) const;
+
+    SDValue LowerBITCAST(SDValue Op, SelectionDAG &DAG) const;
+
+    SDValue LowerUINT_TO_FP(SDValue Op, SelectionDAG &DAG) const;
 
     bool ShouldShrinkFPConstant(EVT VT) const override {
       // Do not shrink FP constpool if VT == MVT::f128.

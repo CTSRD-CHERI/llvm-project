@@ -830,10 +830,9 @@ struct MemorySanitizerVisitor : public InstVisitor<MemorySanitizerVisitor> {
       StoreInst *NewSI =
           IRB.CreateAlignedStore(Shadow, ShadowPtr, SI->getAlignment());
       DEBUG(dbgs() << "  STORE: " << *NewSI << "\n");
-      (void)NewSI;
 
       if (ClCheckAccessAddress)
-        insertShadowCheck(Addr, SI);
+        insertShadowCheck(Addr, NewSI);
 
       if (SI->isAtomic())
         SI->setOrdering(addReleaseOrdering(SI->getOrdering()));
@@ -1077,9 +1076,9 @@ struct MemorySanitizerVisitor : public InstVisitor<MemorySanitizerVisitor> {
 
   /// \brief Compute the shadow address for a retval.
   Value *getShadowPtrForRetval(Value *A, IRBuilder<> &IRB) {
-    Value *Base = IRB.CreatePointerCast(MS.RetvalTLS, MS.IntptrTy);
-    return IRB.CreateIntToPtr(Base, PointerType::get(getShadowTy(A), 0),
-                              "_msret");
+    return IRB.CreatePointerCast(MS.RetvalTLS,
+                                 PointerType::get(getShadowTy(A), 0),
+                                 "_msret");
   }
 
   /// \brief Compute the origin address for a retval.
@@ -1156,6 +1155,8 @@ struct MemorySanitizerVisitor : public InstVisitor<MemorySanitizerVisitor> {
   Value *getShadow(Value *V) {
     if (!PropagateShadow) return getCleanShadow(V);
     if (Instruction *I = dyn_cast<Instruction>(V)) {
+      if (I->getMetadata("nosanitize"))
+        return getCleanShadow(V);
       // For instructions the shadow is already stored in the map.
       Value *Shadow = ShadowMap[V];
       if (!Shadow) {
@@ -1255,6 +1256,10 @@ struct MemorySanitizerVisitor : public InstVisitor<MemorySanitizerVisitor> {
     if (isa<Constant>(V)) return getCleanOrigin();
     assert((isa<Instruction>(V) || isa<Argument>(V)) &&
            "Unexpected value type in getOrigin()");
+    if (Instruction *I = dyn_cast<Instruction>(V)) {
+      if (I->getMetadata("nosanitize"))
+        return getCleanOrigin();
+    }
     Value *Origin = OriginMap[V];
     assert(Origin && "Missing origin");
     return Origin;
@@ -1335,6 +1340,11 @@ struct MemorySanitizerVisitor : public InstVisitor<MemorySanitizerVisitor> {
   }
 
   // ------------------- Visitors.
+  using InstVisitor<MemorySanitizerVisitor>::visit;
+  void visit(Instruction &I) {
+    if (!I.getMetadata("nosanitize"))
+      InstVisitor<MemorySanitizerVisitor>::visit(I);
+  }
 
   /// \brief Instrument LoadInst
   ///
@@ -1342,10 +1352,11 @@ struct MemorySanitizerVisitor : public InstVisitor<MemorySanitizerVisitor> {
   /// Optionally, checks that the load address is fully defined.
   void visitLoadInst(LoadInst &I) {
     assert(I.getType()->isSized() && "Load type must have size");
+    assert(!I.getMetadata("nosanitize"));
     IRBuilder<> IRB(I.getNextNode());
     Type *ShadowTy = getShadowTy(&I);
     Value *Addr = I.getPointerOperand();
-    if (PropagateShadow && !I.getMetadata("nosanitize")) {
+    if (PropagateShadow) {
       Value *ShadowPtr = getShadowPtr(Addr, ShadowTy, IRB);
       setShadow(&I,
                 IRB.CreateAlignedLoad(ShadowPtr, I.getAlignment(), "_msld"));
@@ -2653,7 +2664,7 @@ struct MemorySanitizerVisitor : public InstVisitor<MemorySanitizerVisitor> {
 
   void visitCallSite(CallSite CS) {
     Instruction &I = *CS.getInstruction();
-    if (I.getMetadata("nosanitize")) return;
+    assert(!I.getMetadata("nosanitize"));
     assert((CS.isCall() || CS.isInvoke()) && "Unknown type of CallSite");
     if (CS.isCall()) {
       CallInst *Call = cast<CallInst>(&I);

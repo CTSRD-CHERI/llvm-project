@@ -4803,9 +4803,9 @@ AST_MATCHER(Type, realFloatingPointType) {
 ///   matches "int b[7]"
 ///
 /// Usable as: Matcher<ArrayType>, Matcher<ComplexType>
-AST_TYPELOC_TRAVERSE_MATCHER(hasElementType, getElement,
-                             AST_POLYMORPHIC_SUPPORTED_TYPES(ArrayType,
-                                                             ComplexType));
+AST_TYPELOC_TRAVERSE_MATCHER_DECL(hasElementType, getElement,
+                                  AST_POLYMORPHIC_SUPPORTED_TYPES(ArrayType,
+                                                                  ComplexType));
 
 /// \brief Matches C arrays with a specified constant size.
 ///
@@ -4921,8 +4921,8 @@ extern const AstTypeMatcher<AtomicType> atomicType;
 ///  matches "_Atomic(int) i"
 ///
 /// Usable as: Matcher<AtomicType>
-AST_TYPELOC_TRAVERSE_MATCHER(hasValueType, getValue,
-                             AST_POLYMORPHIC_SUPPORTED_TYPES(AtomicType));
+AST_TYPELOC_TRAVERSE_MATCHER_DECL(hasValueType, getValue,
+                                  AST_POLYMORPHIC_SUPPORTED_TYPES(AtomicType));
 
 /// \brief Matches types nodes representing C++11 auto types.
 ///
@@ -5115,11 +5115,10 @@ extern const AstTypeMatcher<RValueReferenceType> rValueReferenceType;
 ///
 /// Usable as: Matcher<BlockPointerType>, Matcher<MemberPointerType>,
 ///   Matcher<PointerType>, Matcher<ReferenceType>
-AST_TYPELOC_TRAVERSE_MATCHER(pointee, getPointee,
-                             AST_POLYMORPHIC_SUPPORTED_TYPES(BlockPointerType,
-                                                             MemberPointerType,
-                                                             PointerType,
-                                                             ReferenceType));
+AST_TYPELOC_TRAVERSE_MATCHER_DECL(
+    pointee, getPointee,
+    AST_POLYMORPHIC_SUPPORTED_TYPES(BlockPointerType, MemberPointerType,
+                                    PointerType, ReferenceType));
 
 /// \brief Matches typedef types.
 ///
@@ -5816,6 +5815,42 @@ AST_MATCHER_P(Stmt, forFunction, internal::Matcher<FunctionDecl>,
 /// \endcode
 AST_MATCHER(NamedDecl, hasExternalFormalLinkage) {
   return Node.hasExternalFormalLinkage();
+}
+
+/// \brief Matches a declaration that has default arguments.
+///
+/// Example matches y (matcher = parmVarDecl(hasDefaultArgument()))
+/// \code
+/// void x(int val) {}
+/// void y(int val = 0) {}
+/// \endcode
+AST_MATCHER(ParmVarDecl, hasDefaultArgument) { 
+  return Node.hasDefaultArg(); 
+}
+
+/// \brief Matches array new expressions.
+///
+/// Given:
+/// \code
+///   MyClass *p1 = new MyClass[10];
+/// \endcode
+/// cxxNewExpr(isArray())
+///   matches the expression 'new MyClass[10]'.
+AST_MATCHER(CXXNewExpr, isArray) {
+  return Node.isArray();
+}
+
+/// \brief Matches array new expressions with a given array size.
+///
+/// Given:
+/// \code
+///   MyClass *p1 = new MyClass[10];
+/// \endcode
+/// cxxNewExpr(hasArraySize(intgerLiteral(equals(10))))
+///   matches the expression 'new MyClass[10]'.
+AST_MATCHER_P(CXXNewExpr, hasArraySize, internal::Matcher<Expr>, InnerMatcher) {
+  return Node.isArray() &&
+    InnerMatcher.matches(*Node.getArraySize(), Finder, Builder);
 }
 
 } // namespace ast_matchers

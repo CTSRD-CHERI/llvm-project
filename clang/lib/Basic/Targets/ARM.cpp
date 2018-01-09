@@ -999,10 +999,8 @@ MinGWARMTargetInfo::MinGWARMTargetInfo(const llvm::Triple &Triple,
 void MinGWARMTargetInfo::getTargetDefines(const LangOptions &Opts,
                                           MacroBuilder &Builder) const {
   WindowsARMTargetInfo::getTargetDefines(Opts, Builder);
-  DefineStd(Builder, "WIN32", Opts);
-  DefineStd(Builder, "WINNT", Opts);
   Builder.defineMacro("_ARM_");
-  addMinGWDefines(Opts, Builder);
+  Builder.defineMacro("__ARM_DWARF_EH__");
 }
 
 CygwinARMTargetInfo::CygwinARMTargetInfo(const llvm::Triple &Triple,

@@ -31,6 +31,7 @@ TargetInfo::TargetInfo(const llvm::Triple &T) : TargetOpts(), Triple(T) {
   // SPARC.  These should be overridden by concrete targets as needed.
   BigEndian = !T.isLittleEndian();
   TLSSupported = true;
+  VLASupported = true;
   NoAsmVariants = false;
   HasFloat128 = false;
   PointerWidth = PointerAlign = 32;
@@ -44,7 +45,7 @@ TargetInfo::TargetInfo(const llvm::Triple &T) : TargetOpts(), Triple(T) {
   // From the glibc documentation, on GNU systems, malloc guarantees 16-byte
   // alignment on 64-bit systems and 8-byte alignment on 32-bit systems. See
   // https://www.gnu.org/software/libc/manual/html_node/Malloc-Examples.html
-  if (T.isGNUEnvironment())
+  if (T.isGNUEnvironment() || T.isWindowsMSVCEnvironment())
     NewAlign = Triple.isArch64Bit() ? 128 : Triple.isArch32Bit() ? 64 : 0;
   else
     NewAlign = 0; // Infer from basic type alignment.

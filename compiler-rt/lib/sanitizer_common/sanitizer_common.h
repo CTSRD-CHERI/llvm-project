@@ -206,6 +206,8 @@ class LowLevelAllocator {
   char *allocated_end_;
   char *allocated_current_;
 };
+// Set the min alignment of LowLevelAllocator to at least alignment.
+void SetLowLevelAllocateMinAlignment(uptr alignment);
 typedef void (*LowLevelAllocateCallback)(uptr ptr, uptr size);
 // Allows to register tool-specific callbacks for LowLevelAllocator.
 // Passing NULL removes the callback.
@@ -929,6 +931,15 @@ void CheckNoDeepBind(const char *filename, int flag);
 // Returns the requested amount of random data (up to 256 bytes) that can then
 // be used to seed a PRNG. Defaults to blocking like the underlying syscall.
 bool GetRandom(void *buffer, uptr length, bool blocking = true);
+
+// Returns the number of logical processors on the system.
+u32 GetNumberOfCPUs();
+extern u32 NumberOfCPUsCached;
+INLINE u32 GetNumberOfCPUsCached() {
+  if (!NumberOfCPUsCached)
+    NumberOfCPUsCached = GetNumberOfCPUs();
+  return NumberOfCPUsCached;
+}
 
 }  // namespace __sanitizer
 

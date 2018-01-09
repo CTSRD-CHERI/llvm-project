@@ -76,9 +76,11 @@
 // its vtable and typeinfo to libc++ rather than having all other libraries
 // using that class define their own copies.
 #define _LIBCPP_ABI_BAD_FUNCTION_CALL_KEY_FUNCTION
-
 // Enable optimized version of __do_get_(un)signed which avoids redundant copies.
 #define _LIBCPP_ABI_OPTIMIZED_LOCALE_NUM_GET
+// Use the smallest possible integer type to represent the index of the variant.
+// Previously libc++ used "unsigned int" exclusivly.
+#define _LIBCPP_ABI_VARIANT_INDEX_TYPE_OPTIMIZATION
 #elif _LIBCPP_ABI_VERSION == 1
 #if !defined(_LIBCPP_OBJECT_FORMAT_COFF)
 // Enable compiling copies of now inline methods into the dylib to support
@@ -454,6 +456,10 @@ namespace std {
 #define _LIBCPP_DISABLE_UBSAN_UNSIGNED_INTEGER_CHECK __attribute__((__no_sanitize__("unsigned-integer-overflow")))
 #endif 
 
+#if __has_builtin(__builtin_launder)
+#define	_LIBCPP_COMPILER_HAS_BUILTIN_LAUNDER
+#endif
+
 #elif defined(_LIBCPP_COMPILER_GCC)
 
 #define _ALIGNAS(x) __attribute__((__aligned__(x)))
@@ -534,6 +540,10 @@ namespace std {
 
 #if !defined(_LIBCPP_HAS_NO_ASAN) && !defined(__SANITIZE_ADDRESS__)
 #define _LIBCPP_HAS_NO_ASAN
+#endif
+
+#if _GNUC_VER >= 700
+#define	_LIBCPP_COMPILER_HAS_BUILTIN_LAUNDER
 #endif
 
 #elif defined(_LIBCPP_COMPILER_MSVC)
@@ -880,7 +890,7 @@ template <unsigned> struct __static_assert_check {};
 #define _LIBCPP_NONUNIQUE_RTTI_BIT (1ULL << 63)
 #endif
 
-#if defined(__APPLE__) || defined(__FreeBSD__) || defined(_LIBCPP_MSVCRT) ||   \
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(_LIBCPP_MSVCRT_LIKE) || \
     defined(__sun__) || defined(__NetBSD__) || defined(__CloudABI__)
 #define _LIBCPP_LOCALE__L_EXTENSIONS 1
 #endif

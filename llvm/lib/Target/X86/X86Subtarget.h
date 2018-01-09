@@ -24,10 +24,10 @@
 #include "llvm/CodeGen/GlobalISel/InstructionSelector.h"
 #include "llvm/CodeGen/GlobalISel/LegalizerInfo.h"
 #include "llvm/CodeGen/GlobalISel/RegisterBankInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/MC/MCInstrItineraries.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <memory>
 
 #define GET_SUBTARGETINFO_HEADER
@@ -51,17 +51,9 @@ enum Style {
 } // end namespace PICStyles
 
 class X86Subtarget final : public X86GenSubtargetInfo {
-protected:
-  enum X86SSEEnum {
-    NoSSE, SSE1, SSE2, SSE3, SSSE3, SSE41, SSE42, AVX, AVX2, AVX512F
-  };
-
-  enum X863DNowEnum {
-    NoThreeDNow, MMX, ThreeDNow, ThreeDNowA
-  };
-
+public:  
   enum X86ProcFamilyEnum {
-    Others, 
+    Others,
     IntelAtom,
     IntelSLM,
     IntelGLM,
@@ -70,7 +62,17 @@ protected:
     IntelSkylake,
     IntelKNL,
     IntelSKX,
-    IntelCannonlake
+    IntelCannonlake,
+    IntelIcelake,
+  };
+
+protected:
+  enum X86SSEEnum {
+    NoSSE, SSE1, SSE2, SSE3, SSSE3, SSE41, SSE42, AVX, AVX2, AVX512F
+  };
+
+  enum X863DNowEnum {
+    NoThreeDNow, MMX, ThreeDNow, ThreeDNowA
   };
 
   /// X86 processor family: Intel Atom, and others
@@ -105,6 +107,7 @@ protected:
 
   /// Target has AES instructions
   bool HasAES;
+  bool HasVAES;
 
   /// Target has FXSAVE/FXRESTOR instructions
   bool HasFXSR;
@@ -123,6 +126,7 @@ protected:
 
   /// Target has carry-less multiplication
   bool HasPCLMUL;
+  bool HasVPCLMULQDQ;
 
   /// Target has 3-operand fused multiply-add
   bool HasFMA;
@@ -162,6 +166,9 @@ protected:
 
   /// Processor has VBMI instructions.
   bool HasVBMI;
+
+  /// Processor has VBMI2 instructions.
+  bool HasVBMI2;
 
   /// Processor has Integer Fused Multiply Add
   bool HasIFMA;
@@ -296,6 +303,12 @@ protected:
 
   /// Processor has PKU extenstions
   bool HasPKU;
+
+  /// Processor has AVX-512 Vector Neural Network Instructions
+  bool HasVNNI;
+
+  /// Processor has AVX-512 Bit Algorithms instructions
+  bool HasBITALG;
 
   /// Processor supports MPX - Memory Protection Extensions
   bool HasMPX;
@@ -455,12 +468,14 @@ public:
   bool has3DNowA() const { return X863DNowLevel >= ThreeDNowA; }
   bool hasPOPCNT() const { return HasPOPCNT; }
   bool hasAES() const { return HasAES; }
+  bool hasVAES() const { return HasVAES; }
   bool hasFXSR() const { return HasFXSR; }
   bool hasXSAVE() const { return HasXSAVE; }
   bool hasXSAVEOPT() const { return HasXSAVEOPT; }
   bool hasXSAVEC() const { return HasXSAVEC; }
   bool hasXSAVES() const { return HasXSAVES; }
   bool hasPCLMUL() const { return HasPCLMUL; }
+  bool hasVPCLMULQDQ() const { return HasVPCLMULQDQ; }
   // Prefer FMA4 to FMA - its better for commutation/memory folding and
   // has equal or better performance on all supported targets.
   bool hasFMA() const { return HasFMA && !HasFMA4; }
@@ -477,6 +492,7 @@ public:
   bool hasBMI() const { return HasBMI; }
   bool hasBMI2() const { return HasBMI2; }
   bool hasVBMI() const { return HasVBMI; }
+  bool hasVBMI2() const { return HasVBMI2; }
   bool hasIFMA() const { return HasIFMA; }
   bool hasRTM() const { return HasRTM; }
   bool hasADX() const { return HasADX; }
@@ -520,6 +536,8 @@ public:
   bool hasBWI() const { return HasBWI; }
   bool hasVLX() const { return HasVLX; }
   bool hasPKU() const { return HasPKU; }
+  bool hasVNNI() const { return HasVNNI; }
+  bool hasBITALG() const { return HasBITALG; }
   bool hasMPX() const { return HasMPX; }
   bool hasCLFLUSHOPT() const { return HasCLFLUSHOPT; }
   bool hasCLWB() const { return HasCLWB; }
