@@ -4371,6 +4371,7 @@ static Optional<BinaryOp> MatchBinaryOp(Value *V, DominatorTree &DT) {
       default:
         break;
       }
+    break;
   }
 
   default:

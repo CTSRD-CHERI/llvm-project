@@ -829,8 +829,8 @@ public:
   /// also combined within this function. Currently, the minimum size check is
   /// performed in findJumpTable() in SelectionDAGBuiler and
   /// getEstimatedNumberOfCaseClusters() in BasicTTIImpl.
-  bool isSuitableForJumpTable(const SwitchInst *SI, uint64_t NumCases,
-                              uint64_t Range) const {
+  virtual bool isSuitableForJumpTable(const SwitchInst *SI, uint64_t NumCases,
+                                      uint64_t Range) const {
     const bool OptForSize = SI->getParent()->getParent()->optForSize();
     const unsigned MinDensity = getMinimumJumpTableDensity(OptForSize);
     const unsigned MaxJumpTableSize =
@@ -1281,7 +1281,7 @@ public:
   }
 
   /// Return lower limit for number of blocks in a jump table.
-  unsigned getMinimumJumpTableEntries() const;
+  virtual unsigned getMinimumJumpTableEntries() const;
 
   /// Return lower limit of the density in a jump table.
   unsigned getMinimumJumpTableDensity(bool OptForSize) const;
@@ -2434,7 +2434,7 @@ private:
     PromoteToType;
 
   /// Stores the name each libcall.
-  const char *LibcallRoutineNames[RTLIB::UNKNOWN_LIBCALL];
+  const char *LibcallRoutineNames[RTLIB::UNKNOWN_LIBCALL + 1];
 
   /// The ISD::CondCode that should be used to test the result of each of the
   /// comparison libcall against zero.
@@ -2442,6 +2442,9 @@ private:
 
   /// Stores the CallingConv that should be used for each libcall.
   CallingConv::ID LibcallCallingConvs[RTLIB::UNKNOWN_LIBCALL];
+
+  /// Set default libcall names and calling conventions.
+  void InitLibcalls(const Triple &TT);
 
 protected:
   /// Return true if the extension represented by \p I is free.

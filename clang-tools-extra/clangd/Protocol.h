@@ -16,6 +16,9 @@
 // Each struct has a toJSON and fromJSON function, that converts between
 // the struct and a JSON representation. (See JSONExpr.h)
 //
+// Some structs also have operator<< serialization. This is for debugging and
+// tests, and is not generally machine-readable.
+//
 //===----------------------------------------------------------------------===//
 
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_PROTOCOL_H
@@ -65,6 +68,7 @@ struct URI {
 };
 json::Expr toJSON(const URI &U);
 bool fromJSON(const json::Expr &, URI &);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &, const URI &);
 
 struct TextDocumentIdentifier {
   /// The text document's URI.
@@ -90,6 +94,7 @@ struct Position {
 };
 bool fromJSON(const json::Expr &, Position &);
 json::Expr toJSON(const Position &);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &, const Position &);
 
 struct Range {
   /// The range's start position.
@@ -107,6 +112,7 @@ struct Range {
 };
 bool fromJSON(const json::Expr &, Range &);
 json::Expr toJSON(const Range &);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &, const Range &);
 
 struct Location {
   /// The text document's URI.
@@ -126,6 +132,7 @@ struct Location {
   }
 };
 json::Expr toJSON(const Location &);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &, const Location &);
 
 struct Metadata {
   std::vector<std::string> extraFlags;
@@ -322,14 +329,15 @@ struct Diagnostic {
 
   /// The diagnostic's message.
   std::string message;
-
-  friend bool operator==(const Diagnostic &LHS, const Diagnostic &RHS) {
-    return std::tie(LHS.range, LHS.severity, LHS.message) ==
-           std::tie(RHS.range, RHS.severity, RHS.message);
-  }
-  friend bool operator<(const Diagnostic &LHS, const Diagnostic &RHS) {
-    return std::tie(LHS.range, LHS.severity, LHS.message) <
-           std::tie(RHS.range, RHS.severity, RHS.message);
+};
+/// A LSP-specific comparator used to find diagnostic in a container like
+/// std:map.
+/// We only use the required fields of Diagnostic to do the comparsion to avoid
+/// any regression issues from LSP clients (e.g. VScode), see
+/// https://git.io/vbr29
+struct LSPDiagnosticCompare {
+  bool operator()(const Diagnostic& LHS, const Diagnostic& RHS) const {
+    return std::tie(LHS.range, LHS.message) < std::tie(RHS.range, RHS.message);
   }
 };
 bool fromJSON(const json::Expr &, Diagnostic &);

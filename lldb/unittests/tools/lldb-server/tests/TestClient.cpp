@@ -27,11 +27,6 @@ using namespace lldb_private;
 using namespace llvm;
 
 namespace llgs_tests {
-bool TestClient::IsDebugServer() {
-  return sys::path::filename(LLDB_SERVER).contains("debugserver");
-}
-
-bool TestClient::IsLldbServer() { return !IsDebugServer(); }
 
 TestClient::TestClient(std::unique_ptr<Connection> Conn) {
   SetConnection(Conn.release());
@@ -40,6 +35,9 @@ TestClient::TestClient(std::unique_ptr<Connection> Conn) {
 }
 
 TestClient::~TestClient() {
+  if (!IsConnected())
+    return;
+
   std::string response;
   // Debugserver (non-conformingly?) sends a reply to the k packet instead of
   // simply closing the connection.
@@ -53,6 +51,10 @@ Expected<std::unique_ptr<TestClient>> TestClient::launch(StringRef Log) {
 }
 
 Expected<std::unique_ptr<TestClient>> TestClient::launch(StringRef Log, ArrayRef<StringRef> InferiorArgs) {
+  return launchCustom(Log, {}, InferiorArgs);
+}
+
+Expected<std::unique_ptr<TestClient>> TestClient::launchCustom(StringRef Log, ArrayRef<StringRef> ServerArgs, ArrayRef<StringRef> InferiorArgs) {
   const ArchSpec &arch_spec = HostInfo::GetArchitecture();
   Args args;
   args.AppendArgument(LLDB_SERVER);
@@ -77,6 +79,9 @@ Expected<std::unique_ptr<TestClient>> TestClient::launch(StringRef Log, ArrayRef
   args.AppendArgument(
       ("localhost:" + Twine(listen_socket.GetLocalPortNumber())).str());
 
+  for (StringRef arg : ServerArgs)
+    args.AppendArgument(arg);
+
   if (!InferiorArgs.empty()) {
     args.AppendArgument("--");
     for (StringRef arg : InferiorArgs)
@@ -86,6 +91,11 @@ Expected<std::unique_ptr<TestClient>> TestClient::launch(StringRef Log, ArrayRef
   ProcessLaunchInfo Info;
   Info.SetArchitecture(arch_spec);
   Info.SetArguments(args, true);
+
+  StringList Env;
+  Host::GetEnvironment(Env);
+  Info.GetEnvironmentEntries() = Args(Env);
+
   status = Host::LaunchProcess(Info);
   if (status.Fail())
     return status.ToError();
@@ -93,7 +103,14 @@ Expected<std::unique_ptr<TestClient>> TestClient::launch(StringRef Log, ArrayRef
   Socket *accept_socket;
   listen_socket.Accept(accept_socket);
   auto Conn = llvm::make_unique<ConnectionFileDescriptor>(accept_socket);
-  return std::unique_ptr<TestClient>(new TestClient(std::move(Conn)));
+  auto Client = std::unique_ptr<TestClient>(new TestClient(std::move(Conn)));
+
+  if (!InferiorArgs.empty()) {
+    if (Error E = Client->QueryProcessInfo())
+      return std::move(E);
+  }
+
+  return std::move(Client);
 }
 
 Error TestClient::SetInferior(llvm::ArrayRef<std::string> inferior_args) {
@@ -242,6 +259,18 @@ Error TestClient::Continue(StringRef message) {
     return E;
 
   m_stop_reply = std::move(*creation);
+  if (!isa<StopReplyStop>(m_stop_reply)) {
+    StringExtractorGDBRemote R;
+    PacketResult result = ReadPacket(R, GetPacketTimeout(), false);
+    if (result != PacketResult::ErrorDisconnected) {
+      return make_error<StringError>(
+          formatv("Expected connection close after receiving {0}. Got {1}/{2} "
+                  "instead.",
+                  response, result, R.GetStringRef())
+              .str(),
+          inconvertibleErrorCode());
+    }
+  }
   return Error::success();
 }
 

@@ -538,6 +538,8 @@ void ASTDeclWriter::VisitFunctionDecl(FunctionDecl *D) {
   Record.push_back(D->getLinkageInternal());
   Record.AddSourceLocation(D->getLocEnd());
 
+  Record.push_back(D->getODRHash());
+
   Record.push_back(D->getTemplatedKind());
   switch (D->getTemplatedKind()) {
   case FunctionDecl::TK_NonTemplate:
@@ -1267,10 +1269,8 @@ void ASTDeclWriter::VisitCXXMethodDecl(CXXMethodDecl *D) {
   VisitFunctionDecl(D);
   if (D->isCanonicalDecl()) {
     Record.push_back(D->size_overridden_methods());
-    for (CXXMethodDecl::method_iterator
-           I = D->begin_overridden_methods(), E = D->end_overridden_methods();
-           I != E; ++I)
-      Record.AddDeclRef(*I);
+    for (const CXXMethodDecl *MD : D->overridden_methods())
+      Record.AddDeclRef(MD);
   } else {
     // We only need to record overridden methods once for the canonical decl.
     Record.push_back(0);
@@ -2074,6 +2074,7 @@ void ASTWriter::WriteDeclAbbrevs() {
   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // LateParsed
   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 3)); // Linkage
   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6));   // LocEnd
+  Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 32)); // ODRHash
   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 3)); // TemplateKind
   // This Array slurps the rest of the record. Fortunately we want to encode
   // (nearly) all the remaining (variable number of) fields in the same way.
