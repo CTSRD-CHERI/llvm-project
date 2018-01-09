@@ -950,9 +950,9 @@ struct InX {
 };
 
 template <class ELFT> struct In {
-  // XXXAR: needs to be templated because Symbol->getSize() needs ELFT
+  // XXXAR: needs to be templated because writing depends on endianess
+  // TODO: use the non-templated version
   static CheriCapRelocsSection <ELFT> *CapRelocs;
-#warning "no longer true"
   static VersionDefinitionSection<ELFT> *VerDef;
   static VersionTableSection<ELFT> *VerSym;
   static VersionNeedSection<ELFT> *VerNeed;

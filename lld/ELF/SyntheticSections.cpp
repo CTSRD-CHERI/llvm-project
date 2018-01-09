@@ -2796,11 +2796,6 @@ template GdbIndexSection *elf::createGdbIndex<ELF32BE>();
 template GdbIndexSection *elf::createGdbIndex<ELF64LE>();
 template GdbIndexSection *elf::createGdbIndex<ELF64BE>();
 
-template void MipsGotSection::build<ELF32LE>();
-template void MipsGotSection::build<ELF32BE>();
-template void MipsGotSection::build<ELF64LE>();
-template void MipsGotSection::build<ELF64BE>();
-
 template void EhFrameSection::addSection<ELF32LE>(InputSectionBase *);
 template void EhFrameSection::addSection<ELF32BE>(InputSectionBase *);
 template void EhFrameSection::addSection<ELF64LE>(InputSectionBase *);

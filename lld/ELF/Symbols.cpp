@@ -317,7 +317,7 @@ std::string lld::verboseToString(Symbol *B, uint64_t SymOffset) {
   InputSectionBase* IS = nullptr;
   if (DR && DR->Section) {
     IS = dyn_cast<InputSectionBase>(DR->Section);
-    SymOffset = DR->isSection() ? SymOffset : DR->Section->getOffset(*DR);
+    SymOffset = DR->isSection() ? SymOffset : IS->getOffset(DR->Value);
   }
   std::string Name = toString(*B);
   if (Name.empty()) {
@@ -335,7 +335,7 @@ std::string lld::verboseToString(Symbol *B, uint64_t SymOffset) {
     Name = "<unknown symbol>";
   }
   Msg += Name;
-  std::string Src = IS ? IS->getSrcMsg<ELFT>(*B, SymOffset) : toString(B->getFile());
+  std::string Src = IS ? IS->getSrcMsg(*B, SymOffset) : toString(B->File);
   if (IS)
     Src += " (" + IS->getObjMsg(SymOffset) + ")";
   Msg += "\n>>> defined in " + Src;

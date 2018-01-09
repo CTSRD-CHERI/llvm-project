@@ -58,13 +58,12 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::finalizeContents() {
   //   }
 }
 
-template <typename ELFT>
 static SymbolAndOffset sectionWithOffsetToSymbol(InputSectionBase *IS,
                                                  uint64_t Offset,
                                                  Symbol *Src) {
   Symbol *FallbackResult = nullptr;
   uint64_t FallbackOffset = Offset;
-  for (Symbol *B : IS->getFile<ELFT>()->getSymbols()) {
+  for (Symbol *B : IS->File->getSymbols()) {
     if (auto *D = dyn_cast<Defined>(B)) {
       if (D->Section != IS)
         continue;
@@ -87,7 +86,6 @@ static SymbolAndOffset sectionWithOffsetToSymbol(InputSectionBase *IS,
   return {FallbackResult, FallbackOffset};
 }
 
-template <typename ELFT>
 SymbolAndOffset SymbolAndOffset::findRealSymbol() const {
   if (!Symbol->isSection())
     return *this;
@@ -95,7 +93,7 @@ SymbolAndOffset SymbolAndOffset::findRealSymbol() const {
   if (Defined *DefinedSym = dyn_cast<Defined>(Symbol)) {
     if (InputSectionBase *IS =
             dyn_cast<InputSectionBase>(DefinedSym->Section)) {
-      return sectionWithOffsetToSymbol<ELFT>(IS, Offset, Symbol);
+      return sectionWithOffsetToSymbol(IS, Offset, Symbol);
     }
   }
   return *this;
@@ -144,9 +142,9 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
         &S->getFile<ELFT>()->getRelocTargetSym(LocationRel);
     Symbol &TargetSym = S->getFile<ELFT>()->getRelocTargetSym(TargetRel);
 
-    if (LocationSym->getFile() != S->File) {
+    if (LocationSym->File != S->File) {
       error("Expected capability relocation to point to " + toString(S->File) +
-            " but got " + toString(LocationSym->getFile()));
+            " but got " + toString(LocationSym->File));
       continue;
     }
     //    errs() << "Adding cap reloc at " << toString(LocationSym) << " type "
@@ -165,8 +163,8 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
 
     const SymbolAndOffset RelocLocation{LocationSym, LocationOffset};
     const SymbolAndOffset RelocTarget{&TargetSym, TargetOffset};
-    SymbolAndOffset RealLocation = RelocLocation.findRealSymbol<ELFT>();
-    SymbolAndOffset RealTarget = RelocTarget.findRealSymbol<ELFT>();
+    SymbolAndOffset RealLocation = RelocLocation.findRealSymbol();
+    SymbolAndOffset RealTarget = RelocTarget.findRealSymbol();
     if (Config->VerboseCapRelocs) {
       message("Adding capability relocation at " +
               verboseToString<ELFT>(RealLocation) + "\nagainst " +
@@ -230,9 +228,9 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
       // cap_relocs entries that have a RELATIVE flag set instead of requiring a
       // full Elf_Rel/Elf_Rela Can't use RealLocation here because that will
       // usually refer to a local symbol
-      In<ELFT>::RelaDyn->addReloc({Target->RelativeRel, this,
-                                   CurrentEntryOffset, true, LocationSym,
-                                   static_cast<int64_t>(LocationOffset)});
+      InX::RelaDyn->addReloc({Target->RelativeRel, this, CurrentEntryOffset,
+                              true, LocationSym,
+                              static_cast<int64_t>(LocationOffset)});
     }
     if (TargetNeedsDynReloc) {
       // Capability target is the second field -> offset + 8
@@ -242,8 +240,8 @@ void elf::CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
       // utohexstr(OffsetInOutSec) + " against " + toString(TargetSym)); In the
       // RELA case (not yet) addend is already written by writeTo() below
       int64_t Addend = Config->IsRela ? TargetOffset : 0;
-      In<ELFT>::RelaDyn->addReloc({Target->RelativeRel, this, OffsetInOutSec,
-                                   false, &TargetSym, Addend});
+      InX::RelaDyn->addReloc({Target->RelativeRel, this, OffsetInOutSec, false,
+                              &TargetSym, Addend});
     }
   }
 }
@@ -296,7 +294,7 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
 
       if (WarnAboutUnknownSize || Config->Verbose) {
         auto RealLocation =
-            SymbolAndOffset(LocationSym, LocationOffset).findRealSymbol<ELFT>();
+            SymbolAndOffset(LocationSym, LocationOffset).findRealSymbol();
         warn("could not determine size of cap reloc against " +
              verboseToString<ELFT>(Reloc.Target) + "\n>>> referenced by " +
              verboseToString<ELFT>(RealLocation));

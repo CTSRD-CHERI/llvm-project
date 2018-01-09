@@ -32,7 +32,7 @@ struct SymbolAndOffset {
   // for __cap_relocs against local symbols clang emits section+offset instead
   // of the local symbol so that it still works even if the local symbol table
   // is stripped. This function tries to find the local symbol to a better match
-  template <typename ELFT> SymbolAndOffset findRealSymbol() const;
+  SymbolAndOffset findRealSymbol() const;
 };
 
 struct CheriCapRelocLocation {
