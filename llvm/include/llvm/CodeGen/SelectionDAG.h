@@ -800,11 +800,14 @@ public:
   SDValue getPointerAdd(SDLoc dl, SDValue Ptr, int64_t Offset,
                         const SDNodeFlags Flags = SDNodeFlags()) {
     EVT BasePtrVT = Ptr.getValueType();
-    if (BasePtrVT.isFatPointer() && Offset == 0)
-      return Ptr;
-    // Assume that address space 0 has the range of any pointer.
-    MVT IntPtrTy = MVT::getIntegerVT(getDataLayout().getPointerSizeInBits(0));
-    return getPointerAdd(dl, Ptr, getConstant(Offset, dl, IntPtrTy), Flags);
+    EVT OffsetVT = BasePtrVT;
+    if (BasePtrVT.isFatPointer()) {
+      if (Offset == 0)
+        return Ptr;
+      // Assume that address space 0 has the range of any pointer.
+      OffsetVT = MVT::getIntegerVT(getDataLayout().getPointerSizeInBits(0));
+    }
+    return getPointerAdd(dl, Ptr, getConstant(Offset, dl, OffsetVT), Flags);
   }
 
   // Unlike getObjectPtrOffset this does not set NoUnsignedWrap by default
