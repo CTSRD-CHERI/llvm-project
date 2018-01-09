@@ -49,6 +49,9 @@
 #include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/StackProtector.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
@@ -82,11 +85,8 @@
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetIntrinsicInfo.h"
-#include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include <algorithm>
 #include <cassert>
@@ -2775,6 +2775,12 @@ static unsigned IsPredicateKnownToFail(const unsigned char *Table,
     Result = !::CheckType(Table, Index, N, SDISel.TLI,
                           SDISel.CurDAG->getDataLayout());
     return Index;
+  case SelectionDAGISel::OPC_CheckTypeRes: {
+    unsigned Res = Table[Index++];
+    Result = !::CheckType(Table, Index, N.getValue(Res), SDISel.TLI,
+                          SDISel.CurDAG->getDataLayout());
+    return Index;
+  }
   case SelectionDAGISel::OPC_CheckChild0Type:
   case SelectionDAGISel::OPC_CheckChild1Type:
   case SelectionDAGISel::OPC_CheckChild2Type:
@@ -3176,6 +3182,14 @@ void SelectionDAGISel::SelectCodeCommon(SDNode *NodeToMatch,
                        CurDAG->getDataLayout()))
         break;
       continue;
+
+    case OPC_CheckTypeRes: {
+      unsigned Res = MatcherTable[MatcherIndex++];
+      if (!::CheckType(MatcherTable, MatcherIndex, N.getValue(Res), TLI,
+                       CurDAG->getDataLayout()))
+        break;
+      continue;
+    }
 
     case OPC_SwitchOpcode: {
       unsigned CurNodeOpcode = N.getOpcode();

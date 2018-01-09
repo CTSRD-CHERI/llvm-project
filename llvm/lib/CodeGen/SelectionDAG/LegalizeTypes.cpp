@@ -845,13 +845,14 @@ void DAGTypeLegalizer::SetExpandedInteger(SDValue Op, SDValue Lo,
   AnalyzeNewValue(Lo);
   AnalyzeNewValue(Hi);
 
-  // Transfer debug values.
+  // Transfer debug values. Don't invalidate the source debug value until it's
+  // been transferred to the high and low bits.
   if (DAG.getDataLayout().isBigEndian()) {
-    DAG.transferDbgValues(Op, Hi, 0, Hi.getValueSizeInBits());
+    DAG.transferDbgValues(Op, Hi, 0, Hi.getValueSizeInBits(), false);
     DAG.transferDbgValues(Op, Lo, Hi.getValueSizeInBits(),
                           Lo.getValueSizeInBits());
   } else {
-    DAG.transferDbgValues(Op, Lo, 0, Lo.getValueSizeInBits());
+    DAG.transferDbgValues(Op, Lo, 0, Lo.getValueSizeInBits(), false);
     DAG.transferDbgValues(Op, Hi, Lo.getValueSizeInBits(),
                           Hi.getValueSizeInBits());
   }
@@ -1026,8 +1027,13 @@ bool DAGTypeLegalizer::CustomWidenLowerNode(SDNode *N, EVT VT) {
   // Update the widening map.
   assert(Results.size() == N->getNumValues() &&
          "Custom lowering returned the wrong number of results!");
-  for (unsigned i = 0, e = Results.size(); i != e; ++i)
-    SetWidenedVector(SDValue(N, i), Results[i]);
+  for (unsigned i = 0, e = Results.size(); i != e; ++i) {
+    // If this is a chain output just replace it.
+    if (Results[i].getValueType() == MVT::Other)
+      ReplaceValueWith(SDValue(N, i), Results[i]);
+    else
+      SetWidenedVector(SDValue(N, i), Results[i]);
+  }
   return true;
 }
 
@@ -1166,9 +1172,14 @@ void DAGTypeLegalizer::SplitInteger(SDValue Op,
   assert(LoVT.getSizeInBits() + HiVT.getSizeInBits() ==
          Op.getValueSizeInBits() && "Invalid integer splitting!");
   Lo = DAG.getNode(ISD::TRUNCATE, dl, LoVT, Op);
+  unsigned ReqShiftAmountInBits =
+      Log2_32_Ceil(Op.getValueType().getSizeInBits());
+  MVT ShiftAmountTy =
+      TLI.getScalarShiftAmountTy(DAG.getDataLayout(), Op.getValueType());
+  if (ReqShiftAmountInBits > ShiftAmountTy.getSizeInBits())
+    ShiftAmountTy = MVT::getIntegerVT(NextPowerOf2(ReqShiftAmountInBits));
   Hi = DAG.getNode(ISD::SRL, dl, Op.getValueType(), Op,
-                   DAG.getConstant(LoVT.getSizeInBits(), dl,
-                                   TLI.getPointerTy(DAG.getDataLayout())));
+                   DAG.getConstant(LoVT.getSizeInBits(), dl, ShiftAmountTy));
   Hi = DAG.getNode(ISD::TRUNCATE, dl, HiVT, Hi);
 }
 

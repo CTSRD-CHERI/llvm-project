@@ -533,9 +533,6 @@ Optional<coff_symbol16> Writer::createSymbol(Defined *Def) {
 }
 
 void Writer::createSymbolAndStringTable() {
-  if (!Config->Debug || !Config->WriteSymtab)
-    return;
-
   // Name field in the section table is 8 byte long. Longer names need
   // to be written to the string table. First, construct string table.
   for (OutputSection *Sec : OutputSections) {
@@ -552,27 +549,30 @@ void Writer::createSymbolAndStringTable() {
     Sec->setStringTableOff(addEntryToStringTable(Name));
   }
 
-  for (ObjFile *File : ObjFile::Instances) {
-    for (Symbol *B : File->getSymbols()) {
-      auto *D = dyn_cast<Defined>(B);
-      if (!D || D->WrittenToSymtab)
-        continue;
-      D->WrittenToSymtab = true;
+  if (Config->DebugDwarf) {
+    for (ObjFile *File : ObjFile::Instances) {
+      for (Symbol *B : File->getSymbols()) {
+        auto *D = dyn_cast_or_null<Defined>(B);
+        if (!D || D->WrittenToSymtab)
+          continue;
+        D->WrittenToSymtab = true;
 
-      if (Optional<coff_symbol16> Sym = createSymbol(D))
-        OutputSymtab.push_back(*Sym);
+        if (Optional<coff_symbol16> Sym = createSymbol(D))
+          OutputSymtab.push_back(*Sym);
+      }
     }
   }
+
+  if (OutputSymtab.empty() && Strtab.empty())
+    return;
 
   OutputSection *LastSection = OutputSections.back();
   // We position the symbol table to be adjacent to the end of the last section.
   uint64_t FileOff = LastSection->getFileOff() +
                      alignTo(LastSection->getRawSize(), SectorSize);
-  if (!OutputSymtab.empty()) {
-    PointerToSymbolTable = FileOff;
-    FileOff += OutputSymtab.size() * sizeof(coff_symbol16);
-  }
-  FileOff += Strtab.size() + 4;
+  PointerToSymbolTable = FileOff;
+  FileOff += OutputSymtab.size() * sizeof(coff_symbol16);
+  FileOff += 4 + Strtab.size();
   FileSize = alignTo(FileOff, SectorSize);
 }
 
@@ -760,7 +760,7 @@ template <typename PEHeaderTy> void Writer::writeHeader() {
   SectionTable = ArrayRef<uint8_t>(
       Buf - OutputSections.size() * sizeof(coff_section), Buf);
 
-  if (OutputSymtab.empty())
+  if (OutputSymtab.empty() && Strtab.empty())
     return;
 
   COFF->PointerToSymbolTable = PointerToSymbolTable;

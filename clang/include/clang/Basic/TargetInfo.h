@@ -60,6 +60,7 @@ protected:
   // values are specified by the TargetInfo constructor.
   bool BigEndian;
   bool TLSSupported;
+  bool VLASupported;
   bool NoAsmVariants;  // True if {|} are normal characters.
   bool CapabilityABI = false;
   bool HasFloat128;
@@ -976,6 +977,9 @@ public:
   unsigned short getMaxTLSAlign() const {
     return MaxTLSAlign;
   }
+
+  /// \brief Whether target supports variable-length arrays.
+  bool isVLASupported() const { return VLASupported; }
 
   /// \brief Whether the target supports SEH __try.
   bool isSEHTrySupported() const {

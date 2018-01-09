@@ -2,6 +2,8 @@
 ; RUN: llc < %s -mtriple=x86_64-unknown-unknown -mattr=+avx | FileCheck %s --check-prefix=ALL --check-prefix=AVX --check-prefix=AVX1
 ; RUN: llc < %s -mtriple=x86_64-unknown-unknown -mattr=+avx2 | FileCheck %s --check-prefix=ALL --check-prefix=AVX --check-prefix=AVX2
 ; RUN: llc < %s -mtriple=x86_64-unknown-unknown -mattr=+avx512vpopcntdq | FileCheck %s --check-prefix=ALL --check-prefix=AVX --check-prefix=AVX512VPOPCNTDQ
+; RUN: llc < %s -mtriple=x86_64-unknown-unknown -mattr=+avx512bitalg | FileCheck %s --check-prefix=ALL --check-prefix=AVX --check-prefix=BITALG_NOVLX
+; RUN: llc < %s -mtriple=x86_64-unknown-unknown -mattr=+avx512bitalg,+avx512vl | FileCheck %s --check-prefix=ALL --check-prefix=BITALG
 
 define <4 x i64> @testv4i64(<4 x i64> %in) nounwind {
 ; AVX1-LABEL: testv4i64:
@@ -47,6 +49,34 @@ define <4 x i64> @testv4i64(<4 x i64> %in) nounwind {
 ; AVX512VPOPCNTDQ-NEXT:    vpopcntq %zmm0, %zmm0
 ; AVX512VPOPCNTDQ-NEXT:    # kill: %YMM0<def> %YMM0<kill> %ZMM0<kill>
 ; AVX512VPOPCNTDQ-NEXT:    retq
+;
+; BITALG_NOVLX-LABEL: testv4i64:
+; BITALG_NOVLX:       # BB#0:
+; BITALG_NOVLX-NEXT:    vmovdqa {{.*#+}} ymm1 = [15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15]
+; BITALG_NOVLX-NEXT:    vpand %ymm1, %ymm0, %ymm2
+; BITALG_NOVLX-NEXT:    vmovdqa {{.*#+}} ymm3 = [0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4,0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4]
+; BITALG_NOVLX-NEXT:    vpshufb %ymm2, %ymm3, %ymm2
+; BITALG_NOVLX-NEXT:    vpsrlw $4, %ymm0, %ymm0
+; BITALG_NOVLX-NEXT:    vpand %ymm1, %ymm0, %ymm0
+; BITALG_NOVLX-NEXT:    vpshufb %ymm0, %ymm3, %ymm0
+; BITALG_NOVLX-NEXT:    vpaddb %ymm2, %ymm0, %ymm0
+; BITALG_NOVLX-NEXT:    vpxor %xmm1, %xmm1, %xmm1
+; BITALG_NOVLX-NEXT:    vpsadbw %ymm1, %ymm0, %ymm0
+; BITALG_NOVLX-NEXT:    retq
+;
+; BITALG-LABEL: testv4i64:
+; BITALG:       # BB#0:
+; BITALG-NEXT:    vmovdqa {{.*#+}} ymm1 = [15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15]
+; BITALG-NEXT:    vpand %ymm1, %ymm0, %ymm2
+; BITALG-NEXT:    vmovdqa {{.*#+}} ymm3 = [0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4,0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4]
+; BITALG-NEXT:    vpshufb %ymm2, %ymm3, %ymm2
+; BITALG-NEXT:    vpsrlw $4, %ymm0, %ymm0
+; BITALG-NEXT:    vpand %ymm1, %ymm0, %ymm0
+; BITALG-NEXT:    vpshufb %ymm0, %ymm3, %ymm0
+; BITALG-NEXT:    vpaddb %ymm2, %ymm0, %ymm0
+; BITALG-NEXT:    vpxor %xmm1, %xmm1, %xmm1
+; BITALG-NEXT:    vpsadbw %ymm1, %ymm0, %ymm0
+; BITALG-NEXT:    retq
   %out = call <4 x i64> @llvm.ctpop.v4i64(<4 x i64> %in)
   ret <4 x i64> %out
 }
@@ -107,6 +137,42 @@ define <8 x i32> @testv8i32(<8 x i32> %in) nounwind {
 ; AVX512VPOPCNTDQ-NEXT:    vpopcntd %zmm0, %zmm0
 ; AVX512VPOPCNTDQ-NEXT:    # kill: %YMM0<def> %YMM0<kill> %ZMM0<kill>
 ; AVX512VPOPCNTDQ-NEXT:    retq
+;
+; BITALG_NOVLX-LABEL: testv8i32:
+; BITALG_NOVLX:       # BB#0:
+; BITALG_NOVLX-NEXT:    vmovdqa {{.*#+}} ymm1 = [15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15]
+; BITALG_NOVLX-NEXT:    vpand %ymm1, %ymm0, %ymm2
+; BITALG_NOVLX-NEXT:    vmovdqa {{.*#+}} ymm3 = [0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4,0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4]
+; BITALG_NOVLX-NEXT:    vpshufb %ymm2, %ymm3, %ymm2
+; BITALG_NOVLX-NEXT:    vpsrlw $4, %ymm0, %ymm0
+; BITALG_NOVLX-NEXT:    vpand %ymm1, %ymm0, %ymm0
+; BITALG_NOVLX-NEXT:    vpshufb %ymm0, %ymm3, %ymm0
+; BITALG_NOVLX-NEXT:    vpaddb %ymm2, %ymm0, %ymm0
+; BITALG_NOVLX-NEXT:    vpxor %xmm1, %xmm1, %xmm1
+; BITALG_NOVLX-NEXT:    vpunpckhdq {{.*#+}} ymm2 = ymm0[2],ymm1[2],ymm0[3],ymm1[3],ymm0[6],ymm1[6],ymm0[7],ymm1[7]
+; BITALG_NOVLX-NEXT:    vpsadbw %ymm1, %ymm2, %ymm2
+; BITALG_NOVLX-NEXT:    vpunpckldq {{.*#+}} ymm0 = ymm0[0],ymm1[0],ymm0[1],ymm1[1],ymm0[4],ymm1[4],ymm0[5],ymm1[5]
+; BITALG_NOVLX-NEXT:    vpsadbw %ymm1, %ymm0, %ymm0
+; BITALG_NOVLX-NEXT:    vpackuswb %ymm2, %ymm0, %ymm0
+; BITALG_NOVLX-NEXT:    retq
+;
+; BITALG-LABEL: testv8i32:
+; BITALG:       # BB#0:
+; BITALG-NEXT:    vmovdqa {{.*#+}} ymm1 = [15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15]
+; BITALG-NEXT:    vpand %ymm1, %ymm0, %ymm2
+; BITALG-NEXT:    vmovdqa {{.*#+}} ymm3 = [0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4,0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4]
+; BITALG-NEXT:    vpshufb %ymm2, %ymm3, %ymm2
+; BITALG-NEXT:    vpsrlw $4, %ymm0, %ymm0
+; BITALG-NEXT:    vpand %ymm1, %ymm0, %ymm0
+; BITALG-NEXT:    vpshufb %ymm0, %ymm3, %ymm0
+; BITALG-NEXT:    vpaddb %ymm2, %ymm0, %ymm0
+; BITALG-NEXT:    vpxor %xmm1, %xmm1, %xmm1
+; BITALG-NEXT:    vpunpckhdq {{.*#+}} ymm2 = ymm0[2],ymm1[2],ymm0[3],ymm1[3],ymm0[6],ymm1[6],ymm0[7],ymm1[7]
+; BITALG-NEXT:    vpsadbw %ymm1, %ymm2, %ymm2
+; BITALG-NEXT:    vpunpckldq {{.*#+}} ymm0 = ymm0[0],ymm1[0],ymm0[1],ymm1[1],ymm0[4],ymm1[4],ymm0[5],ymm1[5]
+; BITALG-NEXT:    vpsadbw %ymm1, %ymm0, %ymm0
+; BITALG-NEXT:    vpackuswb %ymm2, %ymm0, %ymm0
+; BITALG-NEXT:    retq
   %out = call <8 x i32> @llvm.ctpop.v8i32(<8 x i32> %in)
   ret <8 x i32> %out
 }
@@ -159,6 +225,18 @@ define <16 x i16> @testv16i16(<16 x i16> %in) nounwind {
 ; AVX512VPOPCNTDQ-NEXT:    vpopcntd %zmm0, %zmm0
 ; AVX512VPOPCNTDQ-NEXT:    vpmovdw %zmm0, %ymm0
 ; AVX512VPOPCNTDQ-NEXT:    retq
+;
+; BITALG_NOVLX-LABEL: testv16i16:
+; BITALG_NOVLX:       # BB#0:
+; BITALG_NOVLX-NEXT:    # kill: %YMM0<def> %YMM0<kill> %ZMM0<def>
+; BITALG_NOVLX-NEXT:    vpopcntw %zmm0, %zmm0
+; BITALG_NOVLX-NEXT:    # kill: %YMM0<def> %YMM0<kill> %ZMM0<kill>
+; BITALG_NOVLX-NEXT:    retq
+;
+; BITALG-LABEL: testv16i16:
+; BITALG:       # BB#0:
+; BITALG-NEXT:    vpopcntw %ymm0, %ymm0
+; BITALG-NEXT:    retq
   %out = call <16 x i16> @llvm.ctpop.v16i16(<16 x i16> %in)
   ret <16 x i16> %out
 }
@@ -207,6 +285,18 @@ define <32 x i8> @testv32i8(<32 x i8> %in) nounwind {
 ; AVX512VPOPCNTDQ-NEXT:    vpshufb %ymm0, %ymm3, %ymm0
 ; AVX512VPOPCNTDQ-NEXT:    vpaddb %ymm2, %ymm0, %ymm0
 ; AVX512VPOPCNTDQ-NEXT:    retq
+;
+; BITALG_NOVLX-LABEL: testv32i8:
+; BITALG_NOVLX:       # BB#0:
+; BITALG_NOVLX-NEXT:    # kill: %YMM0<def> %YMM0<kill> %ZMM0<def>
+; BITALG_NOVLX-NEXT:    vpopcntb %zmm0, %zmm0
+; BITALG_NOVLX-NEXT:    # kill: %YMM0<def> %YMM0<kill> %ZMM0<kill>
+; BITALG_NOVLX-NEXT:    retq
+;
+; BITALG-LABEL: testv32i8:
+; BITALG:       # BB#0:
+; BITALG-NEXT:    vpopcntb %ymm0, %ymm0
+; BITALG-NEXT:    retq
   %out = call <32 x i8> @llvm.ctpop.v32i8(<32 x i8> %in)
   ret <32 x i8> %out
 }

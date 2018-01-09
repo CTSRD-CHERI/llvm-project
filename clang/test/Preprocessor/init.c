@@ -1438,6 +1438,11 @@
 // AARCH64-DARWIN: #define __WINT_WIDTH__ 32
 // AARCH64-DARWIN: #define __aarch64__ 1
 
+// RUN: %clang_cc1 -E -dM -ffreestanding -triple=thumbv7-windows-msvc < /dev/null | FileCheck -match-full-lines -check-prefix ARM-MSVC %s
+//
+// ARM-MSVC: #define _M_ARM_NT 1
+// ARM-MSVC: #define _WIN32 1
+
 // RUN: %clang_cc1 -E -dM -ffreestanding -triple=aarch64-windows-msvc < /dev/null | FileCheck -match-full-lines -check-prefix AARCH64-MSVC %s
 //
 // AARCH64-MSVC: #define _INTEGRAL_MAX_BITS 64
@@ -2644,6 +2649,10 @@
 // RUN: %clang_cc1 -E -dM -ffreestanding -triple=thumbebv7 < /dev/null | FileCheck -match-full-lines -check-prefix Thumbebv7 %s
 // Thumbebv7: #define __THUMB_INTERWORK__ 1
 // Thumbebv7: #define __thumb2__ 1
+
+// RUN: %clang -E -dM -ffreestanding -target thumbv7-pc-mingw32 %s -o - | FileCheck -match-full-lines -check-prefix THUMB-MINGW %s
+
+// THUMB-MINGW:#define __ARM_DWARF_EH__ 1
 
 //
 // RUN: %clang_cc1 -E -dM -ffreestanding -triple=i386-none-none < /dev/null | FileCheck -match-full-lines -check-prefix I386 %s
@@ -10589,11 +10598,11 @@
 
 
 // RUN: %clang_cc1 -E -dM -ffreestanding \
-// RUN:    -triple i686-windows-msvc -fms-compatibility < /dev/null \
+// RUN:    -triple i686-windows-msvc -fms-compatibility -x c++ < /dev/null \
 // RUN:  | FileCheck -match-full-lines -check-prefix MSVC-X32 %s
 
 // RUN: %clang_cc1 -E -dM -ffreestanding \
-// RUN:    -triple x86_64-windows-msvc -fms-compatibility < /dev/null \
+// RUN:    -triple x86_64-windows-msvc -fms-compatibility -x c++ < /dev/null \
 // RUN:  | FileCheck -match-full-lines -check-prefix MSVC-X64 %s
 
 // MSVC-X32:#define __CLANG_ATOMIC_BOOL_LOCK_FREE 2
@@ -10607,6 +10616,7 @@
 // MSVC-X32-NEXT:#define __CLANG_ATOMIC_SHORT_LOCK_FREE 2
 // MSVC-X32-NEXT:#define __CLANG_ATOMIC_WCHAR_T_LOCK_FREE 2
 // MSVC-X32-NOT:#define __GCC_ATOMIC{{.*}}
+// MSVC-X32:#define __STDCPP_DEFAULT_NEW_ALIGNMENT__ 8U
 
 // MSVC-X64:#define __CLANG_ATOMIC_BOOL_LOCK_FREE 2
 // MSVC-X64-NEXT:#define __CLANG_ATOMIC_CHAR16_T_LOCK_FREE 2
@@ -10618,7 +10628,8 @@
 // MSVC-X64-NEXT:#define __CLANG_ATOMIC_POINTER_LOCK_FREE 2
 // MSVC-X64-NEXT:#define __CLANG_ATOMIC_SHORT_LOCK_FREE 2
 // MSVC-X64-NEXT:#define __CLANG_ATOMIC_WCHAR_T_LOCK_FREE 2
-// MSVC-X86-NOT:#define __GCC_ATOMIC{{.*}}
+// MSVC-X64-NOT:#define __GCC_ATOMIC{{.*}}
+// MSVC-X64:#define __STDCPP_DEFAULT_NEW_ALIGNMENT__ 16ULL
 
 // RUN: %clang_cc1 -E -dM -ffreestanding                \
 // RUN:   -triple=aarch64-apple-ios9 < /dev/null        \

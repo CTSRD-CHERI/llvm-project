@@ -60,6 +60,7 @@ static const char *const GCCRegNames[] = {
     "k2",    "k3",    "k4",    "k5",    "k6",      "k7",
     "cr0",   "cr2",   "cr3",   "cr4",   "cr8",
     "dr0",   "dr1",   "dr2",   "dr3",   "dr6",     "dr7",
+    "bnd0",  "bnd1",  "bnd2",  "bnd3",
 };
 
 const TargetInfo::AddlRegName AddlRegNames[] = {
@@ -130,6 +131,9 @@ bool X86TargetInfo::initFeatureMap(
     setFeatureEnabledImpl(Features, "mmx", true);
     break;
 
+  case CK_Icelake:
+    // TODO: Add icelake features here.
+    LLVM_FALLTHROUGH;
   case CK_Cannonlake:
     setFeatureEnabledImpl(Features, "avx512ifma", true);
     setFeatureEnabledImpl(Features, "avx512vbmi", true);
@@ -836,15 +840,13 @@ void X86TargetInfo::getTargetDefines(const LangOptions &Opts,
   case CK_Haswell:
   case CK_Broadwell:
   case CK_SkylakeClient:
+  case CK_SkylakeServer:
+  case CK_Cannonlake:
+  case CK_Icelake:
     // FIXME: Historically, we defined this legacy name, it would be nice to
     // remove it at some point. We've never exposed fine-grained names for
     // recent primary x86 CPUs, and we should keep it that way.
     defineCPUMacros(Builder, "corei7");
-    break;
-  case CK_SkylakeServer:
-    defineCPUMacros(Builder, "skx");
-    break;
-  case CK_Cannonlake:
     break;
   case CK_KNL:
     defineCPUMacros(Builder, "knl");
@@ -1149,8 +1151,6 @@ bool X86TargetInfo::isValidFeatureName(StringRef Name) const {
       .Case("fxsr", true)
       .Case("lwp", true)
       .Case("lzcnt", true)
-      .Case("mm3dnow", true)
-      .Case("mm3dnowa", true)
       .Case("mmx", true)
       .Case("movbe", true)
       .Case("mpx", true)
@@ -1251,37 +1251,8 @@ bool X86TargetInfo::hasFeature(StringRef Feature) const {
 // X86TargetInfo::hasFeature for a somewhat comprehensive list).
 bool X86TargetInfo::validateCpuSupports(StringRef FeatureStr) const {
   return llvm::StringSwitch<bool>(FeatureStr)
-      .Case("cmov", true)
-      .Case("mmx", true)
-      .Case("popcnt", true)
-      .Case("sse", true)
-      .Case("sse2", true)
-      .Case("sse3", true)
-      .Case("ssse3", true)
-      .Case("sse4.1", true)
-      .Case("sse4.2", true)
-      .Case("avx", true)
-      .Case("avx2", true)
-      .Case("sse4a", true)
-      .Case("fma4", true)
-      .Case("xop", true)
-      .Case("fma", true)
-      .Case("avx512f", true)
-      .Case("bmi", true)
-      .Case("bmi2", true)
-      .Case("aes", true)
-      .Case("pclmul", true)
-      .Case("avx512vl", true)
-      .Case("avx512bw", true)
-      .Case("avx512dq", true)
-      .Case("avx512cd", true)
-      .Case("avx512er", true)
-      .Case("avx512pf", true)
-      .Case("avx512vbmi", true)
-      .Case("avx512ifma", true)
-      .Case("avx5124vnniw", true)
-      .Case("avx5124fmaps", true)
-      .Case("avx512vpopcntdq", true)
+#define X86_FEATURE_COMPAT(VAL, ENUM, STR) .Case(STR, true)
+#include "llvm/Support/X86TargetParser.def"
       .Default(false);
 }
 

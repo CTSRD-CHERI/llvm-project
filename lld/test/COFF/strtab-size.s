@@ -1,4 +1,4 @@
-# REQEUIRES: x86
+# REQUIRES: x86
 
 # Test that the strtab size is included in the allocation even if the
 # strtab itself is empty. To achieve this, we need a number of symbols N
@@ -6,7 +6,7 @@
 # positive N fulfilling that is 199.
 
 # RUN: llvm-mc -triple=x86_64-windows-msvc %s -filetype=obj -o %t.obj
-# RUN: lld-link -out:%t.exe -entry:main %t.obj -debug
+# RUN: lld-link -out:%t.exe -entry:main %t.obj -debug:dwarf
 
 # If the size of the strtab isn't allocated for, llvm-readobj would
 # output SymbolCount: 0 (and dumpbin.exe would error out with "invalid file

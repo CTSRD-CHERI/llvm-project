@@ -12,8 +12,10 @@
 
 #include "llvm/Support/CodeGenCoverage.h"
 
+#include "llvm/Config/config.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Mutex.h"
 #include "llvm/Support/ScopedPrinter.h"
 #include "llvm/Support/ToolOutputFile.h"

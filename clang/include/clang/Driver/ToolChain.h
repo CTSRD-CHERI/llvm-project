@@ -40,6 +40,7 @@ namespace driver {
   class Compilation;
   class CudaInstallationDetector;
   class Driver;
+  class InputInfo;
   class JobAction;
   class RegisterEffectiveTriple;
   class SanitizerArgs;
@@ -171,6 +172,11 @@ public:
   /// example when compiling CUDA code for the GPU, the triple might be NVPTX,
   /// while the aux triple is the host (CPU) toolchain, e.g. x86-linux-gnu.
   virtual const llvm::Triple *getAuxTriple() const { return nullptr; }
+
+  /// Some toolchains need to modify the file name, for example to replace the
+  /// extension for object files with .cubin for OpenMP offloading to Nvidia
+  /// GPUs.
+  virtual std::string getInputFilename(const InputInfo &Input) const;
 
   llvm::Triple::ArchType getArch() const { return Triple.getArch(); }
   StringRef getArchName() const { return Triple.getArchName(); }
@@ -310,6 +316,9 @@ public:
   /// mixed dispatch method be used?
   virtual bool UseObjCMixedDispatch() const { return false; }
 
+  /// \brief Check whether to enable x86 relax relocations by default.
+  virtual bool useRelaxRelocations() const;
+
   /// GetDefaultStackProtectorLevel - Get the default stack protector level for
   /// this tool chain (0=off, 1=on, 2=strong, 3=all).
   virtual unsigned GetDefaultStackProtectorLevel(bool KernelOrKext) const {
@@ -365,9 +374,6 @@ public:
 
   /// SupportsProfiling - Does this tool chain support -pg.
   virtual bool SupportsProfiling() const { return true; }
-
-  /// Does this tool chain support Objective-C garbage collection.
-  virtual bool SupportsObjCGC() const { return true; }
 
   /// Complain if this tool chain doesn't support Objective-C ARC.
   virtual void CheckObjCARC() const {}

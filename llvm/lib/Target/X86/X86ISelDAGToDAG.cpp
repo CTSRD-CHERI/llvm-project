@@ -456,7 +456,8 @@ static bool isLegalMaskCompare(SDNode *N, const X86Subtarget *Subtarget) {
   unsigned Opcode = N->getOpcode();
   if (Opcode == X86ISD::PCMPEQM || Opcode == X86ISD::PCMPGTM ||
       Opcode == X86ISD::CMPM || Opcode == X86ISD::TESTM ||
-      Opcode == X86ISD::TESTNM || Opcode == X86ISD::CMPMU) {
+      Opcode == X86ISD::TESTNM || Opcode == X86ISD::CMPMU ||
+      Opcode == X86ISD::CMPM_RND) {
     // We can get 256-bit 8 element types here without VLX being enabled. When
     // this happens we will use 512-bit operations and the mask will not be
     // zero extended.
@@ -1522,14 +1523,9 @@ bool X86DAGToDAGISel::selectVectorAddr(SDNode *Parent, SDValue N, SDValue &Base,
                                        SDValue &Scale, SDValue &Index,
                                        SDValue &Disp, SDValue &Segment) {
   X86ISelAddressMode AM;
-  if (auto Mgs = dyn_cast<MaskedGatherScatterSDNode>(Parent)) {
-    AM.IndexReg = Mgs->getIndex();
-    AM.Scale = Mgs->getValue().getScalarValueSizeInBits() / 8;
-  } else {
-    auto X86Gather = cast<X86MaskedGatherSDNode>(Parent);
-    AM.IndexReg = X86Gather->getIndex();
-    AM.Scale = X86Gather->getValue().getScalarValueSizeInBits() / 8;
-  }
+  auto *Mgs = cast<X86MaskedGatherScatterSDNode>(Parent);
+  AM.IndexReg = Mgs->getIndex();
+  AM.Scale = Mgs->getValue().getScalarValueSizeInBits() / 8;
 
   unsigned AddrSpace = cast<MemSDNode>(Parent)->getPointerInfo().getAddrSpace();
   // AddrSpace 256 -> GS, 257 -> FS, 258 -> SS.

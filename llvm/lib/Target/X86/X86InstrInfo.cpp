@@ -5255,7 +5255,11 @@ MachineInstr *X86InstrInfo::commuteInstructionImpl(MachineInstr &MI, bool NewMI,
                                                    OpIdx1, OpIdx2);
   }
   case X86::PCLMULQDQrr:
-  case X86::VPCLMULQDQrr:{
+  case X86::VPCLMULQDQrr:
+  case X86::VPCLMULQDQYrr:
+  case X86::VPCLMULQDQZrr:
+  case X86::VPCLMULQDQZ128rr:
+  case X86::VPCLMULQDQZ256rr: {
     // SRC1 64bits = Imm[0] ? SRC1[127:64] : SRC1[63:0]
     // SRC2 64bits = Imm[4] ? SRC2[127:64] : SRC2[63:0]
     unsigned Imm = MI.getOperand(3).getImm();
@@ -7471,6 +7475,7 @@ bool X86InstrInfo::optimizeCompareInstr(MachineInstr &CmpInstr, unsigned SrcReg,
       }
       if (OldCC == X86::COND_INVALID) return false;
     }
+    X86::CondCode ReplacementCC = X86::COND_INVALID;
     if (IsCmpZero) {
       switch (OldCC) {
       default: break;
@@ -7490,31 +7495,32 @@ bool X86InstrInfo::optimizeCompareInstr(MachineInstr &CmpInstr, unsigned SrcReg,
         default:
           return false;
         case X86::COND_E:
+          ReplacementCC = NewCC;
           break;
         case X86::COND_NE:
-          NewCC = GetOppositeBranchCondition(NewCC);
+          ReplacementCC = GetOppositeBranchCondition(NewCC);
           break;
         }
     } else if (IsSwapped) {
       // If we have SUB(r1, r2) and CMP(r2, r1), the condition code needs
       // to be changed from r2 > r1 to r1 < r2, from r2 < r1 to r1 > r2, etc.
       // We swap the condition code and synthesize the new opcode.
-      NewCC = getSwappedCondition(OldCC);
-      if (NewCC == X86::COND_INVALID) return false;
+      ReplacementCC = getSwappedCondition(OldCC);
+      if (ReplacementCC == X86::COND_INVALID) return false;
     }
 
-    if ((ShouldUpdateCC || IsSwapped) && NewCC != OldCC) {
+    if ((ShouldUpdateCC || IsSwapped) && ReplacementCC != OldCC) {
       // Synthesize the new opcode.
       bool HasMemoryOperand = Instr.hasOneMemOperand();
       unsigned NewOpc;
       if (Instr.isBranch())
-        NewOpc = GetCondBranchFromCond(NewCC);
+        NewOpc = GetCondBranchFromCond(ReplacementCC);
       else if(OpcIsSET)
-        NewOpc = getSETFromCond(NewCC, HasMemoryOperand);
+        NewOpc = getSETFromCond(ReplacementCC, HasMemoryOperand);
       else {
         unsigned DstReg = Instr.getOperand(0).getReg();
         const TargetRegisterClass *DstRC = MRI->getRegClass(DstReg);
-        NewOpc = getCMovFromCond(NewCC, TRI->getRegSizeInBits(*DstRC)/8,
+        NewOpc = getCMovFromCond(ReplacementCC, TRI->getRegSizeInBits(*DstRC)/8,
                                  HasMemoryOperand);
       }
 

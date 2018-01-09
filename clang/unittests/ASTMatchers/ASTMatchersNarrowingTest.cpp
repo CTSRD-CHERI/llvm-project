@@ -1991,5 +1991,22 @@ TEST(HasExternalFormalLinkage, Basic) {
                       namedDecl(hasExternalFormalLinkage())));
 }
 
+TEST(HasDefaultArgument, Basic) {
+  EXPECT_TRUE(matches("void x(int val = 0) {}", 
+                      parmVarDecl(hasDefaultArgument())));
+  EXPECT_TRUE(notMatches("void x(int val) {}",
+                      parmVarDecl(hasDefaultArgument())));
+}
+
+TEST(IsArray, Basic) {
+  EXPECT_TRUE(matches("struct MyClass {}; MyClass *p1 = new MyClass[10];",
+                      cxxNewExpr(isArray())));
+}
+
+TEST(HasArraySize, Basic) {
+  EXPECT_TRUE(matches("struct MyClass {}; MyClass *p1 = new MyClass[10];",
+                      cxxNewExpr(hasArraySize(integerLiteral(equals(10))))));
+}
+
 } // namespace ast_matchers
 } // namespace clang
