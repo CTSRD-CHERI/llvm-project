@@ -6,7 +6,7 @@ target triple = "x86_64-unknown-linux-gnu"
 
 define void @f_fu(float* %ret, float*  %aa, float %b) {
 ; CHECK-LABEL: f_fu:
-; CHECK:       ## BB#0: ## %allocas
+; CHECK:       ## %bb.0: ## %allocas
 ; CHECK-NEXT:    vcvttss2si %xmm0, %eax
 ; CHECK-NEXT:    vpbroadcastd %eax, %zmm0
 ; CHECK-NEXT:    vcvttps2dq (%rsi), %zmm1
@@ -16,8 +16,8 @@ define void @f_fu(float* %ret, float*  %aa, float %b) {
 ; CHECK-NEXT:    movw $-21846, %ax ## imm = 0xAAAA
 ; CHECK-NEXT:    kmovw %eax, %k1
 ; CHECK-NEXT:    vmovdqa32 {{.*}}(%rip), %zmm1 {%k1}
-; CHECK-NEXT:    vpaddd %zmm1, %zmm0, %zmm0
 ; CHECK-NEXT:    vpaddd %zmm0, %zmm2, %zmm0
+; CHECK-NEXT:    vpaddd %zmm1, %zmm0, %zmm0
 ; CHECK-NEXT:    vcvtdq2ps %zmm0, %zmm0
 ; CHECK-NEXT:    vmovups %zmm0, (%rdi)
 ; CHECK-NEXT:    retq

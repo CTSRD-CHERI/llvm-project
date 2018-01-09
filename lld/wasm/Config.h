@@ -36,11 +36,10 @@ struct Configuration {
   uint32_t ZStackSize;
   llvm::StringRef Entry;
   llvm::StringRef OutputFile;
-  llvm::StringRef Sysroot;
 
   llvm::StringSet<> AllowUndefinedSymbols;
   std::vector<llvm::StringRef> SearchPaths;
-  std::vector<std::pair<Symbol *, WasmGlobal>> SyntheticGlobals;
+  Symbol *StackPointerSymbol = nullptr;
 };
 
 // The only instance of Configuration struct.

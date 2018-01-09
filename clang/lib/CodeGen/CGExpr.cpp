@@ -814,6 +814,45 @@ static bool isFlexibleArrayMemberExpr(const Expr *E) {
   return false;
 }
 
+llvm::Value *CodeGenFunction::LoadPassedObjectSize(const Expr *E,
+                                                   QualType EltTy) {
+  ASTContext &C = getContext();
+  uint64_t EltSize = C.getTypeSizeInChars(EltTy).getQuantity();
+  if (!EltSize)
+    return nullptr;
+
+  auto *ArrayDeclRef = dyn_cast<DeclRefExpr>(E->IgnoreParenImpCasts());
+  if (!ArrayDeclRef)
+    return nullptr;
+
+  auto *ParamDecl = dyn_cast<ParmVarDecl>(ArrayDeclRef->getDecl());
+  if (!ParamDecl)
+    return nullptr;
+
+  auto *POSAttr = ParamDecl->getAttr<PassObjectSizeAttr>();
+  if (!POSAttr)
+    return nullptr;
+
+  // Don't load the size if it's a lower bound.
+  int POSType = POSAttr->getType();
+  if (POSType != 0 && POSType != 1)
+    return nullptr;
+
+  // Find the implicit size parameter.
+  auto PassedSizeIt = SizeArguments.find(ParamDecl);
+  if (PassedSizeIt == SizeArguments.end())
+    return nullptr;
+
+  const ImplicitParamDecl *PassedSizeDecl = PassedSizeIt->second;
+  assert(LocalDeclMap.count(PassedSizeDecl) && "Passed size not loadable");
+  Address AddrOfSize = LocalDeclMap.find(PassedSizeDecl)->second;
+  llvm::Value *SizeInBytes = EmitLoadOfScalar(AddrOfSize, /*Volatile=*/false,
+                                              C.getSizeType(), E->getExprLoc());
+  llvm::Value *SizeOfElement =
+      llvm::ConstantInt::get(SizeInBytes->getType(), EltSize);
+  return Builder.CreateUDiv(SizeInBytes, SizeOfElement);
+}
+
 /// If Base is known to point to the start of an array, return the length of
 /// that array. Return 0 if the length cannot be determined.
 static llvm::Value *getArrayIndexingBound(
@@ -835,7 +874,14 @@ static llvm::Value *getArrayIndexingBound(
         return CGF.Builder.getInt(CAT->getSize());
       else if (const auto *VAT = dyn_cast<VariableArrayType>(AT))
         return CGF.getVLASize(VAT).first;
+      // Ignore pass_object_size here. It's not applicable on decayed pointers.
     }
+  }
+
+  QualType EltTy{Base->getType()->getPointeeOrArrayElementType(), 0};
+  if (llvm::Value *POS = CGF.LoadPassedObjectSize(Base, EltTy)) {
+    IndexedType = Base->getType();
+    return POS;
   }
 
   return nullptr;
@@ -3793,6 +3839,9 @@ LValue CodeGenFunction::EmitLValueForField(LValue base,
   if (base.getTBAAInfo().isMayAlias() ||
           rec->hasAttr<MayAliasAttr>() || FieldType->isVectorType()) {
     FieldTBAAInfo = TBAAAccessInfo::getMayAliasInfo();
+  } else if (rec->isUnion()) {
+    // TODO: Support TBAA for unions.
+    FieldTBAAInfo = TBAAAccessInfo::getMayAliasInfo();
   } else {
     // If no base type been assigned for the base access, then try to generate
     // one for this base lvalue.
@@ -3803,26 +3852,16 @@ LValue CodeGenFunction::EmitLValueForField(LValue base,
                "Nonzero offset for an access with no base type!");
     }
 
-    // All union members are encoded to be of the same special type.
-    if (FieldTBAAInfo.BaseType && rec->isUnion())
-      FieldTBAAInfo = TBAAAccessInfo::getUnionMemberInfo(FieldTBAAInfo.BaseType,
-                                                         FieldTBAAInfo.Offset,
-                                                         FieldTBAAInfo.Size);
+    // Adjust offset to be relative to the base type.
+    const ASTRecordLayout &Layout =
+        getContext().getASTRecordLayout(field->getParent());
+    unsigned CharWidth = getContext().getCharWidth();
+    if (FieldTBAAInfo.BaseType)
+      FieldTBAAInfo.Offset +=
+          Layout.getFieldOffset(field->getFieldIndex()) / CharWidth;
 
-    // For now we describe accesses to direct and indirect union members as if
-    // they were at the offset of their outermost enclosing union.
-    if (!FieldTBAAInfo.isUnionMember()) {
-      // Adjust offset to be relative to the base type.
-      const ASTRecordLayout &Layout =
-          getContext().getASTRecordLayout(field->getParent());
-      unsigned CharWidth = getContext().getCharWidth();
-      if (FieldTBAAInfo.BaseType)
-        FieldTBAAInfo.Offset +=
-            Layout.getFieldOffset(field->getFieldIndex()) / CharWidth;
-
-      // Update the final access type.
-      FieldTBAAInfo.AccessType = CGM.getTBAATypeInfo(FieldType);
-    }
+    // Update the final access type.
+    FieldTBAAInfo.AccessType = CGM.getTBAATypeInfo(FieldType);
   }
 
   Address addr = base.getAddress();

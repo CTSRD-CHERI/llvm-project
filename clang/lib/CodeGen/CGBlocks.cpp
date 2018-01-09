@@ -315,8 +315,7 @@ static void initializeForBlockHeader(CodeGenModule &CGM, CGBlockInfo &info,
   if (CGM.getLangOpts().OpenCL) {
     // The header is basically 'struct { int; int; generic void *;
     // custom_fields; }'. Assert that struct is packed.
-    auto GenericAS =
-        CGM.getContext().getTargetAddressSpace(LangAS::opencl_generic, nullptr);
+    auto GenericAS = CGM.getTargetAddressSpace(LangAS::opencl_generic);
     auto GenPtrAlign =
         CharUnits::fromQuantity(CGM.getTarget().getPointerAlign(GenericAS) / 8);
     auto GenPtrSize =
@@ -789,7 +788,9 @@ llvm::Value *CodeGenFunction::EmitBlockLiteral(const CGBlockInfo &blockInfo,
           CGM.getTargetAddressSpace(GenVoidPtrAddr)) / 8);
   // Using the computed layout, generate the actual block function.
   bool isLambdaConv = blockInfo.getBlockDecl()->isConversionFromLambda();
-  auto *InvokeFn = CodeGenFunction(CGM, true).GenerateBlockFunction(
+  CodeGenFunction BlockCGF{CGM, true};
+  BlockCGF.SanOpts = SanOpts;
+  auto *InvokeFn = BlockCGF.GenerateBlockFunction(
       CurGD, blockInfo, LocalDeclMap, isLambdaConv, blockInfo.CanBeGlobal);
   if (InvokeF)
     *InvokeF = InvokeFn;

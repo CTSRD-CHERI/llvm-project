@@ -1,10 +1,7 @@
-; RUN: llc -filetype=obj %p/Inputs/hello.ll -o %t.hello.o
-; RUN: llc -filetype=obj %s -o %t.o
+; RUN: llc -filetype=obj -mtriple=wasm32-unknown-uknown-wasm %p/Inputs/hello.ll -o %t.hello.o
+; RUN: llc -filetype=obj -mtriple=wasm32-unknown-uknown-wasm %s -o %t.o
 ; RUN: lld -flavor wasm -r -o %t.wasm %t.hello.o %t.o
 ; RUN: obj2yaml %t.wasm | FileCheck %s
-
-target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128"
-target triple = "wasm32-unknown-unknown-wasm"
 
 ; Function Attrs: nounwind
 define hidden i32 @my_func() local_unnamed_addr {
@@ -93,6 +90,18 @@ declare i32 @foo_import() local_unnamed_addr
 ; CHECK-NEXT:       - Name:            my_func
 ; CHECK-NEXT:         Kind:            FUNCTION
 ; CHECK-NEXT:         Index:           3
+; CHECK-NEXT:       - Name:            hello_str
+; CHECK-NEXT:         Kind:            GLOBAL
+; CHECK-NEXT:         Index:           1
+; CHECK-NEXT:       - Name:            func_addr1
+; CHECK-NEXT:         Kind:            GLOBAL
+; CHECK-NEXT:         Index:           2
+; CHECK-NEXT:       - Name:            func_addr2
+; CHECK-NEXT:         Kind:            GLOBAL
+; CHECK-NEXT:         Index:           3
+; CHECK-NEXT:       - Name:            data_addr1
+; CHECK-NEXT:         Kind:            GLOBAL
+; CHECK-NEXT:         Index:           4
 ; CHECK-NEXT:   - Type:            ELEM
 ; CHECK-NEXT:     Segments:        
 ; CHECK-NEXT:       - Offset:          

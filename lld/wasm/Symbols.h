@@ -69,6 +69,7 @@ public:
   uint32_t getGlobalIndex() const;
   uint32_t getFunctionIndex() const;
 
+  bool hasFunctionType() const { return FunctionType != nullptr; }
   const WasmSignature &getFunctionType() const;
   uint32_t getOutputIndex() const;
 
@@ -77,11 +78,13 @@ public:
   uint32_t getVirtualAddress() const;
 
   // Returns true if an output index has been set for this symbol
-  bool hasOutputIndex() { return OutputIndex.hasValue(); }
+  bool hasOutputIndex() const { return OutputIndex.hasValue(); }
 
   // Set the output index of the symbol (in the function or global index
   // space of the output object.
   void setOutputIndex(uint32_t Index);
+
+  void setVirtualAddress(uint32_t VA);
 
   void update(Kind K, InputFile *F = nullptr, const WasmSymbol *Sym = nullptr,
               const InputSegment *Segment = nullptr,
@@ -105,14 +108,15 @@ protected:
   const WasmSymbol *Sym = nullptr;
   const InputSegment *Segment = nullptr;
   llvm::Optional<uint32_t> OutputIndex;
+  llvm::Optional<uint32_t> VirtualAddress;
   const WasmSignature *FunctionType;
 };
 
 } // namespace wasm
 
 // Returns a symbol name for an error message.
-std::string toString(wasm::Symbol &Sym);
-std::string toString(wasm::Symbol::Kind &Kind);
+std::string toString(const wasm::Symbol &Sym);
+std::string toString(wasm::Symbol::Kind Kind);
 
 } // namespace lld
 

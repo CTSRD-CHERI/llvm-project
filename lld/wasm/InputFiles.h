@@ -103,7 +103,6 @@ public:
   size_t NumGlobalImports() const { return GlobalImports; }
 
   int32_t FunctionIndexOffset = 0;
-  int32_t GlobalIndexOffset = 0;
   int32_t TableIndexOffset = 0;
   const WasmSection *CodeSection = nullptr;
   std::vector<OutputRelocation> CodeRelocations;
@@ -113,7 +112,7 @@ public:
   std::vector<uint32_t> TypeMap;
   std::vector<InputSegment *> Segments;
 
-  const std::vector<Symbol *> &getSymbols() { return Symbols; }
+  ArrayRef<Symbol *> getSymbols() { return Symbols; }
 
 private:
   Symbol *createDefined(const WasmSymbol &Sym,
@@ -143,7 +142,7 @@ llvm::Optional<MemoryBufferRef> readFile(StringRef Path);
 
 } // namespace wasm
 
-std::string toString(wasm::InputFile *File);
+std::string toString(const wasm::InputFile *File);
 
 } // namespace lld
 

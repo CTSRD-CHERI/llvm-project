@@ -8,9 +8,9 @@
 ; MUL_HiLo PhysReg use copies should be just above the mul.
 ; MUL_HiLo PhysReg def copies should be just below the mul.
 ;
-; CHECK: *** Final schedule for BB#1 ***
-; CHECK:      %eax<def> = COPY
-; CHECK-NEXT: MUL32r %{{[0-9]+}}, %eax<imp-def>, %edx<imp-def>, %eflags<imp-def,dead>, %eax<imp-use>;
+; CHECK: *** Final schedule for %bb.1 ***
+; CHECK:      %eax = COPY
+; CHECK-NEXT: MUL32r %{{[0-9]+}}, implicit-def %eax, implicit-def %edx, implicit-def dead %eflags, implicit %eax;
 ; CHECK-NEXT: COPY %e{{[ad]}}x
 ; CHECK-NEXT: COPY %e{{[ad]}}x
 ; CHECK:      DIVSSrm

@@ -1347,12 +1347,13 @@ bool AndroidPackedRelocationSection<ELFT>::updateAllocSize() {
 
   RelocData = {'A', 'P', 'S', '2'};
   raw_svector_ostream OS(RelocData);
+  auto Add = [&](int64_t V) { encodeSLEB128(V, OS); };
 
   // The format header includes the number of relocations and the initial
   // offset (we set this to zero because the first relocation group will
   // perform the initial adjustment).
-  encodeSLEB128(Relocs.size(), OS);
-  encodeSLEB128(0, OS);
+  Add(Relocs.size());
+  Add(0);
 
   std::vector<Elf_Rela> Relatives, NonRelatives;
 
@@ -1405,27 +1406,25 @@ bool AndroidPackedRelocationSection<ELFT>::updateAllocSize() {
   // remaining relocations.
   for (std::vector<Elf_Rela> &G : RelativeGroups) {
     // The first relocation in the group.
-    encodeSLEB128(1, OS);
-    encodeSLEB128(RELOCATION_GROUPED_BY_OFFSET_DELTA_FLAG |
-                      RELOCATION_GROUPED_BY_INFO_FLAG | HasAddendIfRela,
-                  OS);
-    encodeSLEB128(G[0].r_offset - Offset, OS);
-    encodeSLEB128(Target->RelativeRel, OS);
+    Add(1);
+    Add(RELOCATION_GROUPED_BY_OFFSET_DELTA_FLAG |
+        RELOCATION_GROUPED_BY_INFO_FLAG | HasAddendIfRela);
+    Add(G[0].r_offset - Offset);
+    Add(Target->RelativeRel);
     if (Config->IsRela) {
-      encodeSLEB128(G[0].r_addend - Addend, OS);
+      Add(G[0].r_addend - Addend);
       Addend = G[0].r_addend;
     }
 
     // The remaining relocations.
-    encodeSLEB128(G.size() - 1, OS);
-    encodeSLEB128(RELOCATION_GROUPED_BY_OFFSET_DELTA_FLAG |
-                      RELOCATION_GROUPED_BY_INFO_FLAG | HasAddendIfRela,
-                  OS);
-    encodeSLEB128(Config->Wordsize, OS);
-    encodeSLEB128(Target->RelativeRel, OS);
+    Add(G.size() - 1);
+    Add(RELOCATION_GROUPED_BY_OFFSET_DELTA_FLAG |
+        RELOCATION_GROUPED_BY_INFO_FLAG | HasAddendIfRela);
+    Add(Config->Wordsize);
+    Add(Target->RelativeRel);
     if (Config->IsRela) {
       for (auto I = G.begin() + 1, E = G.end(); I != E; ++I) {
-        encodeSLEB128(I->r_addend - Addend, OS);
+        Add(I->r_addend - Addend);
         Addend = I->r_addend;
       }
     }
@@ -1435,14 +1434,14 @@ bool AndroidPackedRelocationSection<ELFT>::updateAllocSize() {
 
   // Now the ungrouped relatives.
   if (!UngroupedRelatives.empty()) {
-    encodeSLEB128(UngroupedRelatives.size(), OS);
-    encodeSLEB128(RELOCATION_GROUPED_BY_INFO_FLAG | HasAddendIfRela, OS);
-    encodeSLEB128(Target->RelativeRel, OS);
+    Add(UngroupedRelatives.size());
+    Add(RELOCATION_GROUPED_BY_INFO_FLAG | HasAddendIfRela);
+    Add(Target->RelativeRel);
     for (Elf_Rela &R : UngroupedRelatives) {
-      encodeSLEB128(R.r_offset - Offset, OS);
+      Add(R.r_offset - Offset);
       Offset = R.r_offset;
       if (Config->IsRela) {
-        encodeSLEB128(R.r_addend - Addend, OS);
+        Add(R.r_addend - Addend);
         Addend = R.r_addend;
       }
     }
@@ -1454,14 +1453,14 @@ bool AndroidPackedRelocationSection<ELFT>::updateAllocSize() {
               return A.r_offset < B.r_offset;
             });
   if (!NonRelatives.empty()) {
-    encodeSLEB128(NonRelatives.size(), OS);
-    encodeSLEB128(HasAddendIfRela, OS);
+    Add(NonRelatives.size());
+    Add(HasAddendIfRela);
     for (Elf_Rela &R : NonRelatives) {
-      encodeSLEB128(R.r_offset - Offset, OS);
+      Add(R.r_offset - Offset);
       Offset = R.r_offset;
-      encodeSLEB128(R.r_info, OS);
+      Add(R.r_info);
       if (Config->IsRela) {
-        encodeSLEB128(R.r_addend - Addend, OS);
+        Add(R.r_addend - Addend);
         Addend = R.r_addend;
       }
     }
@@ -1710,6 +1709,11 @@ void GnuHashTableSection::finalizeContents() {
 }
 
 void GnuHashTableSection::writeTo(uint8_t *Buf) {
+  // The output buffer is not guaranteed to be zero-cleared because we pre-
+  // fill executable sections with trap instructions. This is a precaution
+  // for that case, which happens only when -no-rosegment is given.
+  memset(Buf, 0, Size);
+
   // Write a header.
   write32(Buf, NBuckets);
   write32(Buf + 4, InX::DynSymTab->getNumSymbols() - Symbols.size());
@@ -1742,29 +1746,24 @@ void GnuHashTableSection::writeBloomFilter(uint8_t *Buf) {
 }
 
 void GnuHashTableSection::writeHashTable(uint8_t *Buf) {
-  // Group symbols by hash value.
-  std::vector<std::vector<Entry>> Syms(NBuckets);
-  for (const Entry &Ent : Symbols)
-    Syms[Ent.Hash % NBuckets].push_back(Ent);
-
-  // Write hash buckets. Hash buckets contain indices in the following
-  // hash value table.
   uint32_t *Buckets = reinterpret_cast<uint32_t *>(Buf);
-  for (size_t I = 0; I < NBuckets; ++I)
-    if (!Syms[I].empty())
-      write32(Buckets + I, Syms[I][0].Sym->DynsymIndex);
-
-  // Write a hash value table. It represents a sequence of chains that
-  // share the same hash modulo value. The last element of each chain
-  // is terminated by LSB 1.
+  uint32_t OldBucket = -1;
   uint32_t *Values = Buckets + NBuckets;
-  size_t I = 0;
-  for (std::vector<Entry> &Vec : Syms) {
-    if (Vec.empty())
+  for (auto I = Symbols.begin(), E = Symbols.end(); I != E; ++I) {
+    // Write a hash value. It represents a sequence of chains that share the
+    // same hash modulo value. The last element of each chain is terminated by
+    // LSB 1.
+    uint32_t Hash = I->Hash;
+    bool IsLastInChain = (I + 1) == E || I->BucketIdx != (I + 1)->BucketIdx;
+    Hash = IsLastInChain ? Hash | 1 : Hash & ~1;
+    write32(Values++, Hash);
+
+    if (I->BucketIdx == OldBucket)
       continue;
-    for (const Entry &Ent : makeArrayRef(Vec).drop_back())
-      write32(Values + I++, Ent.Hash & ~1);
-    write32(Values + I++, Vec.back().Hash | 1);
+    // Write a hash bucket. Hash buckets contain indices in the following hash
+    // value table.
+    write32(Buckets + I->BucketIdx, I->Sym->DynsymIndex);
+    OldBucket = I->BucketIdx;
   }
 }
 
@@ -1792,21 +1791,22 @@ void GnuHashTableSection::addSymbols(std::vector<SymbolTableEntry> &V) {
   if (Mid == V.end())
     return;
 
-  for (SymbolTableEntry &Ent : llvm::make_range(Mid, V.end())) {
-    Symbol *B = Ent.Sym;
-    Symbols.push_back({B, Ent.StrTabOffset, hashGnu(B->getName())});
-  }
-
   // We chose load factor 4 for the on-disk hash table. For each hash
   // collision, the dynamic linker will compare a uint32_t hash value.
   // Since the integer comparison is quite fast, we believe we can make
   // the load factor even larger. 4 is just a conservative choice.
-  NBuckets = std::max<size_t>(Symbols.size() / 4, 1);
+  NBuckets = std::max<size_t>((V.end() - Mid) / 4, 1);
 
-  std::stable_sort(Symbols.begin(), Symbols.end(),
-                   [&](const Entry &L, const Entry &R) {
-                     return L.Hash % NBuckets < R.Hash % NBuckets;
-                   });
+  for (SymbolTableEntry &Ent : llvm::make_range(Mid, V.end())) {
+    Symbol *B = Ent.Sym;
+    uint32_t Hash = hashGnu(B->getName());
+    uint32_t BucketIdx = Hash % NBuckets;
+    Symbols.push_back({B, Ent.StrTabOffset, Hash, BucketIdx});
+  }
+
+  std::stable_sort(
+      Symbols.begin(), Symbols.end(),
+      [](const Entry &L, const Entry &R) { return L.BucketIdx < R.BucketIdx; });
 
   V.erase(Mid, V.end());
   for (const Entry &Ent : Symbols)

@@ -601,8 +601,8 @@ static RelExpr adjustExpr(Symbol &Sym, RelExpr Expr, RelType Type,
 
   if (Sym.isObject()) {
     // Produce a copy relocation.
-    auto *B = cast<SharedSymbol>(&Sym);
-    if (!B->CopyRelSec) {
+    auto *B = dyn_cast<SharedSymbol>(&Sym);
+    if (B && !B->CopyRelSec) {
       if (Config->ZNocopyreloc)
         error("unresolvable relocation " + toString(Type) +
               " against symbol '" + toString(*B) +
@@ -866,6 +866,9 @@ template <class ELFT> static void addGotEntry(Symbol &Sym, bool Preemptible) {
 template <class ELFT, class RelTy>
 static void scanRelocs(InputSectionBase &Sec, ArrayRef<RelTy> Rels) {
   OffsetGetter GetOffset(Sec);
+
+  // Not all relocations end up in Sec.Relocations, but a lot do.
+  Sec.Relocations.reserve(Rels.size());
 
   for (auto I = Rels.begin(), End = Rels.end(); I != End; ++I) {
     const RelTy &Rel = *I;
