@@ -49,8 +49,8 @@ bool InstructionSelector::executeMatchTable(
     const MatcherInfoTy<PredicateBitset, ComplexMatcherMemFn> &MatcherInfo,
     const int64_t *MatchTable, const TargetInstrInfo &TII,
     MachineRegisterInfo &MRI, const TargetRegisterInfo &TRI,
-    const RegisterBankInfo &RBI,
-    const PredicateBitset &AvailableFeatures) const {
+    const RegisterBankInfo &RBI, const PredicateBitset &AvailableFeatures,
+    CodeGenCoverage &CoverageInfo) const {
   uint64_t CurrentIdx = 0;
   SmallVector<uint64_t, 8> OnFailResumeAt;
 
@@ -401,7 +401,7 @@ bool InstructionSelector::executeMatchTable(
                       dbgs() << CurrentIdx << ": GIM_CheckIsSafeToFold(MIs["
                              << InsnID << "])\n");
       assert(State.MIs[InsnID] != nullptr && "Used insn before defined");
-      if (!isObviouslySafeToFold(*State.MIs[InsnID])) {
+      if (!isObviouslySafeToFold(*State.MIs[InsnID], *State.MIs[0])) {
         if (handleReject() == RejectAndGiveUp)
           return false;
       }
@@ -674,6 +674,16 @@ bool InstructionSelector::executeMatchTable(
       DEBUG_WITH_TYPE(TgtInstructionSelector::getName(),
                       dbgs() << CurrentIdx << ": TempRegs[" << TempRegID
                              << "] = GIR_MakeTempReg(" << TypeID << ")\n");
+      break;
+    }
+
+    case GIR_Coverage: {
+      int64_t RuleID = MatchTable[CurrentIdx++];
+      CoverageInfo.setCovered(RuleID);
+
+      DEBUG_WITH_TYPE(TgtInstructionSelector::getName(),
+                      dbgs()
+                          << CurrentIdx << ": GIR_Coverage(" << RuleID << ")");
       break;
     }
 

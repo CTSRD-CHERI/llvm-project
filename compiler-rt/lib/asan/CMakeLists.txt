@@ -21,6 +21,7 @@ set(ASAN_SOURCES
   asan_memory_profile.cc
   asan_poisoning.cc
   asan_posix.cc
+  asan_premap_shadow.cc
   asan_report.cc
   asan_rtl.cc
   asan_shadow_setup.cc
@@ -39,6 +40,7 @@ set(ASAN_PREINIT_SOURCES
 include_directories(..)
 
 set(ASAN_CFLAGS ${SANITIZER_COMMON_CFLAGS})
+set(ASAN_COMMON_DEFINITIONS ${COMPILER_RT_ASAN_SHADOW_SCALE_DEFINITION})
 
 append_rtti_flag(OFF ASAN_CFLAGS)
 

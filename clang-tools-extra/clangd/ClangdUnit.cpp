@@ -235,7 +235,7 @@ prepareCompilerInstance(std::unique_ptr<clang::CompilerInvocation> CI,
   // NOTE: we use Buffer.get() when adding remapped files, so we have to make
   // sure it will be released if no error is emitted.
   if (Preamble) {
-    Preamble->AddImplicitPreamble(*CI, Buffer.get());
+    Preamble->AddImplicitPreamble(*CI, VFS, Buffer.get());
   } else {
     CI->getPreprocessorOpts().addRemappedFile(
         CI->getFrontendOpts().Inputs[0].getFile(), Buffer.get());
@@ -368,69 +368,42 @@ std::string getDocumentation(const CodeCompletionString &CCS) {
   return Result;
 }
 
-class CompletionItemsCollector : public CodeCompleteConsumer {
-public:
-  CompletionItemsCollector(const clang::CodeCompleteOptions &CodeCompleteOpts,
-                           std::vector<CompletionItem> &Items)
-      : CodeCompleteConsumer(CodeCompleteOpts, /*OutputIsBinary=*/false),
-        Items(Items),
-        Allocator(std::make_shared<clang::GlobalCodeCompletionAllocator>()),
-        CCTUInfo(Allocator) {}
+/// A scored code completion result.
+/// It may be promoted to a CompletionItem if it's among the top-ranked results.
+struct CompletionCandidate {
+  CompletionCandidate(CodeCompletionResult &Result)
+      : Result(&Result), Score(score(Result)) {}
 
-  void ProcessCodeCompleteResults(Sema &S, CodeCompletionContext Context,
-                                  CodeCompletionResult *Results,
-                                  unsigned NumResults) override final {
-    Items.reserve(NumResults);
-    for (unsigned I = 0; I < NumResults; ++I) {
-      auto &Result = Results[I];
-      const auto *CCS = Result.CreateCodeCompletionString(
-          S, Context, *Allocator, CCTUInfo,
-          CodeCompleteOpts.IncludeBriefComments);
-      assert(CCS && "Expected the CodeCompletionString to be non-null");
-      Items.push_back(ProcessCodeCompleteResult(Result, *CCS));
-    }
-    std::sort(Items.begin(), Items.end());
+  CodeCompletionResult *Result;
+  // Higher score is worse. FIXME: use a more natural scale!
+  int Score;
+
+  // Comparison reflects rank: better candidates are smaller.
+  bool operator<(const CompletionCandidate &C) const {
+    if (Score != C.Score)
+      return Score < C.Score;
+    return *Result < *C.Result;
   }
 
-  GlobalCodeCompletionAllocator &getAllocator() override { return *Allocator; }
-
-  CodeCompletionTUInfo &getCodeCompletionTUInfo() override { return CCTUInfo; }
+  std::string sortText() const {
+    // Fill in the sortText of the CompletionItem.
+    assert(Score <= 999999 && "Expecting score to have at most 6-digits");
+    std::string S, NameStorage;
+    StringRef Name = Result->getOrderedName(NameStorage);
+    llvm::raw_string_ostream(S)
+        << llvm::format("%06d%.*s", Score, Name.size(), Name.data());
+    return S;
+  }
 
 private:
-  CompletionItem
-  ProcessCodeCompleteResult(const CodeCompletionResult &Result,
-                            const CodeCompletionString &CCS) const {
-
-    // Adjust this to InsertTextFormat::Snippet iff we encounter a
-    // CK_Placeholder chunk in SnippetCompletionItemsCollector.
-    CompletionItem Item;
-    Item.insertTextFormat = InsertTextFormat::PlainText;
-
-    Item.documentation = getDocumentation(CCS);
-
-    // Fill in the label, detail, insertText and filterText fields of the
-    // CompletionItem.
-    ProcessChunks(CCS, Item);
-
-    // Fill in the kind field of the CompletionItem.
-    Item.kind = getKind(Result.Kind, Result.CursorKind);
-
-    FillSortText(CCS, Item);
-
-    return Item;
-  }
-
-  virtual void ProcessChunks(const CodeCompletionString &CCS,
-                             CompletionItem &Item) const = 0;
-
-  static int GetSortPriority(const CodeCompletionString &CCS) {
-    int Score = CCS.getPriority();
+  static int score(const CodeCompletionResult &Result) {
+    int Score = Result.Priority;
     // Fill in the sortText of the CompletionItem.
     assert(Score <= 99999 && "Expecting code completion result "
                              "priority to have at most 5-digits");
 
     const int Penalty = 100000;
-    switch (static_cast<CXAvailabilityKind>(CCS.getAvailability())) {
+    switch (static_cast<CXAvailabilityKind>(Result.Availability)) {
     case CXAvailability_Available:
       // No penalty.
       break;
@@ -444,21 +417,75 @@ private:
       Score += 3 * Penalty;
       break;
     }
-
     return Score;
   }
+};
 
-  static void FillSortText(const CodeCompletionString &CCS,
-                           CompletionItem &Item) {
-    int Priority = GetSortPriority(CCS);
-    // Fill in the sortText of the CompletionItem.
-    assert(Priority <= 999999 &&
-           "Expecting sort priority to have at most 6-digits");
-    llvm::raw_string_ostream(Item.sortText)
-        << llvm::format("%06d%s", Priority, Item.filterText.c_str());
+class CompletionItemsCollector : public CodeCompleteConsumer {
+public:
+  CompletionItemsCollector(const clangd::CodeCompleteOptions &CodeCompleteOpts,
+                           CompletionList &Items)
+      : CodeCompleteConsumer(CodeCompleteOpts.getClangCompleteOpts(),
+                             /*OutputIsBinary=*/false),
+        ClangdOpts(CodeCompleteOpts), Items(Items),
+        Allocator(std::make_shared<clang::GlobalCodeCompletionAllocator>()),
+        CCTUInfo(Allocator) {}
+
+  void ProcessCodeCompleteResults(Sema &S, CodeCompletionContext Context,
+                                  CodeCompletionResult *Results,
+                                  unsigned NumResults) override final {
+    std::priority_queue<CompletionCandidate> Candidates;
+    for (unsigned I = 0; I < NumResults; ++I) {
+      Candidates.emplace(Results[I]);
+      if (ClangdOpts.Limit && Candidates.size() > ClangdOpts.Limit) {
+        Candidates.pop();
+        Items.isIncomplete = true;
+      }
+    }
+    while (!Candidates.empty()) {
+      auto &Candidate = Candidates.top();
+      const auto *CCS = Candidate.Result->CreateCodeCompletionString(
+          S, Context, *Allocator, CCTUInfo,
+          CodeCompleteOpts.IncludeBriefComments);
+      assert(CCS && "Expected the CodeCompletionString to be non-null");
+      Items.items.push_back(ProcessCodeCompleteResult(Candidate, *CCS));
+      Candidates.pop();
+    }
+    std::reverse(Items.items.begin(), Items.items.end());
   }
 
-  std::vector<CompletionItem> &Items;
+  GlobalCodeCompletionAllocator &getAllocator() override { return *Allocator; }
+
+  CodeCompletionTUInfo &getCodeCompletionTUInfo() override { return CCTUInfo; }
+
+private:
+  CompletionItem
+  ProcessCodeCompleteResult(const CompletionCandidate &Candidate,
+                            const CodeCompletionString &CCS) const {
+
+    // Adjust this to InsertTextFormat::Snippet iff we encounter a
+    // CK_Placeholder chunk in SnippetCompletionItemsCollector.
+    CompletionItem Item;
+    Item.insertTextFormat = InsertTextFormat::PlainText;
+
+    Item.documentation = getDocumentation(CCS);
+    Item.sortText = Candidate.sortText();
+
+    // Fill in the label, detail, insertText and filterText fields of the
+    // CompletionItem.
+    ProcessChunks(CCS, Item);
+
+    // Fill in the kind field of the CompletionItem.
+    Item.kind = getKind(Candidate.Result->Kind, Candidate.Result->CursorKind);
+
+    return Item;
+  }
+
+  virtual void ProcessChunks(const CodeCompletionString &CCS,
+                             CompletionItem &Item) const = 0;
+
+  clangd::CodeCompleteOptions ClangdOpts;
+  CompletionList &Items;
   std::shared_ptr<clang::GlobalCodeCompletionAllocator> Allocator;
   CodeCompletionTUInfo CCTUInfo;
 
@@ -474,8 +501,8 @@ class PlainTextCompletionItemsCollector final
 
 public:
   PlainTextCompletionItemsCollector(
-      const clang::CodeCompleteOptions &CodeCompleteOpts,
-      std::vector<CompletionItem> &Items)
+      const clangd::CodeCompleteOptions &CodeCompleteOpts,
+      CompletionList &Items)
       : CompletionItemsCollector(CodeCompleteOpts, Items) {}
 
 private:
@@ -511,8 +538,8 @@ class SnippetCompletionItemsCollector final : public CompletionItemsCollector {
 
 public:
   SnippetCompletionItemsCollector(
-      const clang::CodeCompleteOptions &CodeCompleteOpts,
-      std::vector<CompletionItem> &Items)
+      const clangd::CodeCompleteOptions &CodeCompleteOpts,
+      CompletionList &Items)
       : CompletionItemsCollector(CodeCompleteOpts, Items) {}
 
 private:
@@ -795,7 +822,8 @@ clangd::CodeCompleteOptions::CodeCompleteOptions(bool EnableSnippets,
       IncludeMacros(IncludeMacros), IncludeGlobals(IncludeGlobals),
       IncludeBriefComments(IncludeBriefComments) {}
 
-clang::CodeCompleteOptions clangd::CodeCompleteOptions::getClangCompleteOpts() {
+clang::CodeCompleteOptions
+clangd::CodeCompleteOptions::getClangCompleteOpts() const {
   clang::CodeCompleteOptions Result;
   Result.IncludeCodePatterns = EnableSnippets && IncludeCodePatterns;
   Result.IncludeMacros = IncludeMacros;
@@ -805,25 +833,24 @@ clang::CodeCompleteOptions clangd::CodeCompleteOptions::getClangCompleteOpts() {
   return Result;
 }
 
-std::vector<CompletionItem>
+CompletionList
 clangd::codeComplete(PathRef FileName, const tooling::CompileCommand &Command,
                      PrecompiledPreamble const *Preamble, StringRef Contents,
                      Position Pos, IntrusiveRefCntPtr<vfs::FileSystem> VFS,
                      std::shared_ptr<PCHContainerOperations> PCHs,
                      clangd::CodeCompleteOptions Opts, clangd::Logger &Logger) {
-  std::vector<CompletionItem> Results;
+  CompletionList Results;
   std::unique_ptr<CodeCompleteConsumer> Consumer;
-  clang::CodeCompleteOptions ClangCompleteOpts = Opts.getClangCompleteOpts();
   if (Opts.EnableSnippets) {
-    Consumer = llvm::make_unique<SnippetCompletionItemsCollector>(
-        ClangCompleteOpts, Results);
+    Consumer =
+        llvm::make_unique<SnippetCompletionItemsCollector>(Opts, Results);
   } else {
-    Consumer = llvm::make_unique<PlainTextCompletionItemsCollector>(
-        ClangCompleteOpts, Results);
+    Consumer =
+        llvm::make_unique<PlainTextCompletionItemsCollector>(Opts, Results);
   }
-  invokeCodeComplete(std::move(Consumer), ClangCompleteOpts, FileName, Command,
-                     Preamble, Contents, Pos, std::move(VFS), std::move(PCHs),
-                     Logger);
+  invokeCodeComplete(std::move(Consumer), Opts.getClangCompleteOpts(), FileName,
+                     Command, Preamble, Contents, Pos, std::move(VFS),
+                     std::move(PCHs), Logger);
   return Results;
 }
 
@@ -1007,44 +1034,6 @@ private:
   }
 };
 
-SourceLocation getBeginningOfIdentifier(ParsedAST &Unit, const Position &Pos,
-                                        const FileEntry *FE) {
-  // The language server protocol uses zero-based line and column numbers.
-  // Clang uses one-based numbers.
-
-  const ASTContext &AST = Unit.getASTContext();
-  const SourceManager &SourceMgr = AST.getSourceManager();
-
-  SourceLocation InputLocation =
-      getMacroArgExpandedLocation(SourceMgr, FE, Pos);
-  if (Pos.character == 0) {
-    return InputLocation;
-  }
-
-  // This handle cases where the position is in the middle of a token or right
-  // after the end of a token. In theory we could just use GetBeginningOfToken
-  // to find the start of the token at the input position, but this doesn't
-  // work when right after the end, i.e. foo|.
-  // So try to go back by one and see if we're still inside the an identifier
-  // token. If so, Take the beginning of this token.
-  // (It should be the same identifier because you can't have two adjacent
-  // identifiers without another token in between.)
-  SourceLocation PeekBeforeLocation = getMacroArgExpandedLocation(
-      SourceMgr, FE, Position{Pos.line, Pos.character - 1});
-  Token Result;
-  if (Lexer::getRawToken(PeekBeforeLocation, Result, SourceMgr,
-                         AST.getLangOpts(), false)) {
-    // getRawToken failed, just use InputLocation.
-    return InputLocation;
-  }
-
-  if (Result.is(tok::raw_identifier)) {
-    return Lexer::GetBeginningOfToken(PeekBeforeLocation, SourceMgr,
-                                      AST.getLangOpts());
-  }
-
-  return InputLocation;
-}
 } // namespace
 
 std::vector<Location> clangd::findDefinitions(ParsedAST &AST, Position Pos,
@@ -1148,16 +1137,20 @@ PreambleData::PreambleData(PrecompiledPreamble Preamble,
 
 std::shared_ptr<CppFile>
 CppFile::Create(PathRef FileName, tooling::CompileCommand Command,
+                bool StorePreamblesInMemory,
                 std::shared_ptr<PCHContainerOperations> PCHs,
                 clangd::Logger &Logger) {
-  return std::shared_ptr<CppFile>(
-      new CppFile(FileName, std::move(Command), std::move(PCHs), Logger));
+  return std::shared_ptr<CppFile>(new CppFile(FileName, std::move(Command),
+                                              StorePreamblesInMemory,
+                                              std::move(PCHs), Logger));
 }
 
 CppFile::CppFile(PathRef FileName, tooling::CompileCommand Command,
+                 bool StorePreamblesInMemory,
                  std::shared_ptr<PCHContainerOperations> PCHs,
                  clangd::Logger &Logger)
-    : FileName(FileName), Command(std::move(Command)), RebuildCounter(0),
+    : FileName(FileName), Command(std::move(Command)),
+      StorePreamblesInMemory(StorePreamblesInMemory), RebuildCounter(0),
       RebuildInProgress(false), PCHs(std::move(PCHs)), Logger(Logger) {
 
   std::lock_guard<std::mutex> Lock(Mutex);
@@ -1301,6 +1294,7 @@ CppFile::deferRebuild(StringRef NewContents,
       CppFilePreambleCallbacks SerializedDeclsCollector;
       auto BuiltPreamble = PrecompiledPreamble::Build(
           *CI, ContentsBuffer.get(), Bounds, *PreambleDiagsEngine, VFS, PCHs,
+          /*StoreInMemory=*/That->StorePreamblesInMemory,
           SerializedDeclsCollector);
 
       if (BuiltPreamble) {
@@ -1435,4 +1429,44 @@ CppFile::RebuildGuard::~RebuildGuard() {
 
   Lock.unlock();
   File.RebuildCond.notify_all();
+}
+
+SourceLocation clangd::getBeginningOfIdentifier(ParsedAST &Unit,
+                                                const Position &Pos,
+                                                const FileEntry *FE) {
+  // The language server protocol uses zero-based line and column numbers.
+  // Clang uses one-based numbers.
+
+  const ASTContext &AST = Unit.getASTContext();
+  const SourceManager &SourceMgr = AST.getSourceManager();
+
+  SourceLocation InputLocation =
+      getMacroArgExpandedLocation(SourceMgr, FE, Pos);
+  if (Pos.character == 0) {
+    return InputLocation;
+  }
+
+  // This handle cases where the position is in the middle of a token or right
+  // after the end of a token. In theory we could just use GetBeginningOfToken
+  // to find the start of the token at the input position, but this doesn't
+  // work when right after the end, i.e. foo|.
+  // So try to go back by one and see if we're still inside the an identifier
+  // token. If so, Take the beginning of this token.
+  // (It should be the same identifier because you can't have two adjacent
+  // identifiers without another token in between.)
+  SourceLocation PeekBeforeLocation = getMacroArgExpandedLocation(
+      SourceMgr, FE, Position{Pos.line, Pos.character - 1});
+  Token Result;
+  if (Lexer::getRawToken(PeekBeforeLocation, Result, SourceMgr,
+                         AST.getLangOpts(), false)) {
+    // getRawToken failed, just use InputLocation.
+    return InputLocation;
+  }
+
+  if (Result.is(tok::raw_identifier)) {
+    return Lexer::GetBeginningOfToken(PeekBeforeLocation, SourceMgr,
+                                      AST.getLangOpts());
+  }
+
+  return InputLocation;
 }

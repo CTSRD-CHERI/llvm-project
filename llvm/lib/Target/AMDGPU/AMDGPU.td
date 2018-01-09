@@ -346,6 +346,13 @@ def FeatureMaxPrivateElementSize4 : FeatureMaxPrivateElementSize<4>;
 def FeatureMaxPrivateElementSize8 : FeatureMaxPrivateElementSize<8>;
 def FeatureMaxPrivateElementSize16 : FeatureMaxPrivateElementSize<16>;
 
+def FeatureEnableHugePrivateBuffer : SubtargetFeature<
+  "huge-private-buffer",
+  "EnableHugePrivateBuffer",
+  "true",
+  "Enable private/scratch buffer sizes greater than 128 GB"
+>;
+
 def FeatureVGPRSpilling : SubtargetFeature<"vgpr-spilling",
   "EnableVGPRSpilling",
   "true",
@@ -769,8 +776,9 @@ class AMDGPUPat<dag pattern, dag result> : Pat<pattern, result>,
 
 // Include AMDGPU TD files
 include "R600Schedule.td"
+include "R600Processors.td"
 include "SISchedule.td"
-include "Processors.td"
+include "GCNProcessors.td"
 include "AMDGPUInstrInfo.td"
 include "AMDGPUIntrinsics.td"
 include "AMDGPURegisterInfo.td"

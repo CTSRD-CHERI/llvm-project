@@ -314,9 +314,7 @@ public:
   }
 
   /// Layout pointer alignment
-  /// FIXME: The defaults need to be removed once all of
-  /// the backends/clients are updated.
-  unsigned getPointerABIAlignment(LLVM_DEFAULT_AS_PARAM(AS)) const;
+  unsigned getPointerABIAlignment(unsigned AS) const;
 
   /// Return target's alignment for stack-based pointers
   /// FIXME: The defaults need to be removed once all of

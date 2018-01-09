@@ -734,8 +734,8 @@ std::error_code mapped_file_region::init(int FD, uint64_t Offset,
 
   HANDLE FileMappingHandle =
       ::CreateFileMappingW(FileHandle, 0, flprotect,
-                           (Offset + Size) >> 32,
-                           (Offset + Size) & 0xffffffff,
+                           Hi_32(Size),
+                           Lo_32(Size),
                            0);
   if (FileMappingHandle == NULL) {
     std::error_code ec = mapWindowsError(GetLastError());

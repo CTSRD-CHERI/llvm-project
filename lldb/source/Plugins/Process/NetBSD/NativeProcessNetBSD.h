@@ -10,12 +10,8 @@
 #ifndef liblldb_NativeProcessNetBSD_H_
 #define liblldb_NativeProcessNetBSD_H_
 
-// C++ Includes
-
-// Other libraries and framework includes
-
-#include "lldb/Core/ArchSpec.h"
 #include "lldb/Target/MemoryRegionInfo.h"
+#include "lldb/Utility/ArchSpec.h"
 #include "lldb/Utility/FileSpec.h"
 
 #include "NativeThreadNetBSD.h"
@@ -77,7 +73,7 @@ public:
 
   size_t UpdateThreads() override;
 
-  bool GetArchitecture(ArchSpec &arch) const override;
+  const ArchSpec &GetArchitecture() const override { return m_arch; }
 
   Status SetBreakpoint(lldb::addr_t addr, uint32_t size,
                        bool hardware) override;

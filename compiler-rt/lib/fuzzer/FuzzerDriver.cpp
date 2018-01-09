@@ -639,6 +639,8 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
   Options.HandleSegv = Flags.handle_segv;
   Options.HandleTerm = Flags.handle_term;
   Options.HandleXfsz = Flags.handle_xfsz;
+  Options.HandleUsr1 = Flags.handle_usr1;
+  Options.HandleUsr2 = Flags.handle_usr2;
   SetSignalHandler(Options);
 
   std::atexit(Fuzzer::StaticExitCallback);
@@ -701,19 +703,21 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
   }
 
   if (Flags.merge) {
-    const size_t kDefaultMaxMergeLen = 1 << 20;
-    if (Options.MaxLen == 0)
-      F->SetMaxInputLen(kDefaultMaxMergeLen);
-
-    if (Flags.merge_control_file)
-      F->CrashResistantMergeInternalStep(Flags.merge_control_file);
-    else
-      F->CrashResistantMerge(Args, *Inputs,
-                             Flags.load_coverage_summary,
-                             Flags.save_coverage_summary);
+    F->CrashResistantMerge(Args, *Inputs,
+                           Flags.load_coverage_summary,
+                           Flags.save_coverage_summary,
+                           Flags.merge_control_file);
     exit(0);
   }
 
+  if (Flags.merge_inner) {
+    const size_t kDefaultMaxMergeLen = 1 << 20;
+    if (Options.MaxLen == 0)
+      F->SetMaxInputLen(kDefaultMaxMergeLen);
+    assert(Flags.merge_control_file);
+    F->CrashResistantMergeInternalStep(Flags.merge_control_file);
+    exit(0);
+  }
 
   if (Flags.analyze_dict) {
     size_t MaxLen = INT_MAX;  // Large max length.

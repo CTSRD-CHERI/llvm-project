@@ -214,7 +214,7 @@ static void BackgroundThread(void *arg) {
                              memory_order_relaxed);
       if (last != 0 && last + flags()->flush_symbolizer_ms * kMs2Ns < now) {
         Lock l(&ctx->report_mtx);
-        SpinMutexLock l2(&CommonSanitizerReportMutex);
+        ScopedErrorReportLock l2;
         SymbolizeFlush();
         atomic_store(&ctx->last_symbolize_time_ns, 0, memory_order_relaxed);
       }
@@ -324,6 +324,21 @@ static void CheckShadowMapping() {
   }
 }
 
+#if !SANITIZER_GO
+static void OnStackUnwind(const SignalContext &sig, const void *,
+                          BufferedStackTrace *stack) {
+  uptr top = 0;
+  uptr bottom = 0;
+  bool fast = common_flags()->fast_unwind_on_fatal;
+  if (fast) GetThreadStackTopAndBottom(false, &top, &bottom);
+  stack->Unwind(kStackTraceMax, sig.pc, sig.bp, sig.context, top, bottom, fast);
+}
+
+static void TsanOnDeadlySignal(int signo, void *siginfo, void *context) {
+  HandleDeadlySignal(siginfo, context, GetTid(), &OnStackUnwind, nullptr);
+}
+#endif
+
 void Initialize(ThreadState *thr) {
   // Thread safe because done before all threads exist.
   static bool is_initialized = false;
@@ -361,6 +376,7 @@ void Initialize(ThreadState *thr) {
 #if !SANITIZER_GO
   InitializeShadowMemory();
   InitializeAllocatorLate();
+  InstallDeadlySignalHandlers(TsanOnDeadlySignal);
 #endif
   // Setup correct file descriptor for error reports.
   __sanitizer_set_report_path(common_flags()->log_path);
@@ -413,8 +429,7 @@ int Finalize(ThreadState *thr) {
 
   // Wait for pending reports.
   ctx->report_mtx.Lock();
-  CommonSanitizerReportMutex.Lock();
-  CommonSanitizerReportMutex.Unlock();
+  { ScopedErrorReportLock l; }
   ctx->report_mtx.Unlock();
 
 #if !SANITIZER_GO

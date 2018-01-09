@@ -83,10 +83,6 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_SOURCE_DIR})
     endif()
   endif()
 
-  # Handle common options used by all runtimes.
-  include(AddLLVM)
-  include(HandleLLVMOptions)
-
   set(CMAKE_REQUIRED_FLAGS ${SAFE_CMAKE_REQUIRED_FLAGS})
   set(CMAKE_REQUIRED_LIBRARIES ${SAFE_CMAKE_REQUIRED_LIBRARIES})
 
@@ -216,6 +212,8 @@ else() # if this is included from LLVM's CMake
                                         -DLLVM_RUNTIME_OUTPUT_INTDIR=${LLVM_TOOLS_BINARY_DIR}
                                         -DCMAKE_C_COMPILER_TARGET=${TARGET_TRIPLE}
                                         -DCMAKE_ASM_COMPILER_TARGET=${TARGET_TRIPLE}
+                                        -DCMAKE_C_COMPILER_WORKS=ON
+                                        -DCMAKE_ASM_COMPILER_WORKS=ON
                              PASSTHROUGH_PREFIXES COMPILER_RT
                              USE_TOOLCHAIN
                              ${EXTRA_ARGS})
@@ -244,9 +242,9 @@ else() # if this is included from LLVM's CMake
                                         -DLLVM_RUNTIME_OUTPUT_INTDIR=${LLVM_TOOLS_BINARY_DIR}
                                         -DCMAKE_C_COMPILER_TARGET=${target}
                                         -DCMAKE_ASM_COMPILER_TARGET=${target}
-                                        -DCMAKE_C_COMPILER_WORKS=On
-                                        -DCMAKE_ASM_COMPILER_WORKS=On
-                                        -DCOMPILER_RT_DEFAULT_TARGET_ONLY=On
+                                        -DCMAKE_C_COMPILER_WORKS=ON
+                                        -DCMAKE_ASM_COMPILER_WORKS=ON
+                                        -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON
                                         ${${target}_extra_args}
                              TOOLCHAIN_TOOLS clang lld llvm-ar llvm-ranlib
                              PASSTHROUGH_PREFIXES COMPILER_RT
@@ -300,7 +298,9 @@ else() # if this is included from LLVM's CMake
     list(APPEND runtime_names ${projName})
   endforeach()
 
-  function(runtime_default_target deps prefixes)
+  function(runtime_default_target)
+    cmake_parse_arguments(ARG "" "" "DEPS;PREFIXES" ${ARGN})
+
     include(${LLVM_BINARY_DIR}/runtimes/Components.cmake OPTIONAL)
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${LLVM_BINARY_DIR}/runtimes/Components.cmake)
 
@@ -319,12 +319,15 @@ else() # if this is included from LLVM's CMake
 
     llvm_ExternalProject_Add(runtimes
                              ${CMAKE_CURRENT_SOURCE_DIR}
-                             DEPENDS ${deps}
+                             DEPENDS ${ARG_DEPS}
                              # Builtins were built separately above
                              CMAKE_ARGS -DCOMPILER_RT_BUILD_BUILTINS=Off
                                         -DLLVM_INCLUDE_TESTS=${LLVM_INCLUDE_TESTS}
                                         -DLLVM_LIBRARY_DIR=${LLVM_LIBRARY_DIR}
-                             PASSTHROUGH_PREFIXES ${prefixes}
+                                        -DCMAKE_C_COMPILER_WORKS=ON
+                                        -DCMAKE_CXX_COMPILER_WORKS=ON
+                                        -DCMAKE_ASM_COMPILER_WORKS=ON
+                             PASSTHROUGH_PREFIXES ${ARG_PREFIXES}
                              EXTRA_TARGETS ${extra_targets}
                                            ${test_targets}
                                            ${SUB_COMPONENTS}
@@ -336,11 +339,12 @@ else() # if this is included from LLVM's CMake
 
   # runtime_register_target(target)
   #   Utility function to register external runtime target.
-  function(runtime_register_target name target deps prefixes)
+  function(runtime_register_target name target)
+    cmake_parse_arguments(ARG "" "" "DEPS" ${ARGN})
     include(${LLVM_BINARY_DIR}/runtimes/${name}/Components.cmake OPTIONAL)
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${LLVM_BINARY_DIR}/runtimes/${name}/Components.cmake)
 
-    set(${name}_deps ${deps})
+    set(${name}_deps ${ARG_DEPS})
     if(NOT name STREQUAL target)
       list(APPEND ${name}_deps runtimes-${target})
     endif()
@@ -397,7 +401,6 @@ else() # if this is included from LLVM's CMake
                                         -DLLVM_RUNTIMES_TARGET=${name}
                                         ${${name}_extra_args}
                              TOOLCHAIN_TOOLS clang lld llvm-ar llvm-ranlib
-                             PASSTHROUGH_PREFIXES ${prefixes}
                              EXTRA_TARGETS ${${name}_extra_targets}
                                            ${${name}_test_targets}
                              USE_TOOLCHAIN
@@ -409,10 +412,15 @@ else() # if this is included from LLVM's CMake
     # The runtimes target is a configuration of all the runtime libraries
     # together in a single CMake invocaiton.
     if(NOT LLVM_RUNTIME_TARGETS)
-      runtime_default_target(${deps} ${prefixes})
+      runtime_default_target(
+        DEPS ${deps}
+        PREFIXES ${prefixes}
+        )
     else()
       if("default" IN_LIST LLVM_RUNTIME_TARGETS)
-        runtime_default_target(${deps} ${prefixes})
+        runtime_default_target(
+          DEPS ${deps}
+          PREFIXES ${prefixes})
         list(REMOVE_ITEM LLVM_RUNTIME_TARGETS "default")
       else()
         add_custom_target(runtimes)
@@ -434,7 +442,9 @@ else() # if this is included from LLVM's CMake
           list(GET target_list 1 target)
         endif()
 
-        runtime_register_target(${name} ${target} ${deps} ${prefixes})
+        runtime_register_target(${name} ${target}
+          DEPS ${deps}
+          )
 
         add_dependencies(runtimes runtimes-${name})
         add_dependencies(runtimes-configure runtimes-${name}-configure)

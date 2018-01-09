@@ -564,7 +564,8 @@ void ARMConstantIslands::doInitialJumpTablePlacement(
     case ARM::BR_JTadd:
     case ARM::BR_JTr:
     case ARM::tBR_JTr:
-    case ARM::BR_JTm:
+    case ARM::BR_JTm_i12:
+    case ARM::BR_JTm_rs:
       JTOpcode = ARM::JUMPTABLE_ADDRS;
       break;
     case ARM::t2BR_JT:
@@ -1689,6 +1690,12 @@ ARMConstantIslands::fixupConditionalBr(ImmBranch &Br) {
     int delta = TII->getInstSizeInBytes(MBB->back());
     BBInfo[MBB->getNumber()].Size -= delta;
     MBB->back().eraseFromParent();
+
+    // The conditional successor will be swapped between the BBs after this, so
+    // update CFG.
+    MBB->addSuccessor(DestBB);
+    std::next(MBB->getIterator())->removeSuccessor(DestBB);
+
     // BBInfo[SplitBB].Offset is wrong temporarily, fixed below
   }
   MachineBasicBlock *NextBB = &*++MBB->getIterator();
@@ -2124,7 +2131,7 @@ bool ARMConstantIslands::optimizeThumb2JumpTables() {
       // We're in thumb-1 mode, so we must have something like:
       //   %idx = tLSLri %idx, 2
       //   %base = tLEApcrelJT
-      //   %t = tLDRr %idx, %base
+      //   %t = tLDRr %base, %idx
       unsigned BaseReg = User.MI->getOperand(0).getReg();
 
       if (User.MI->getIterator() == User.MI->getParent()->begin())
@@ -2146,9 +2153,9 @@ bool ARMConstantIslands::optimizeThumb2JumpTables() {
       MachineInstr *Load = User.MI->getNextNode();
       if (Load->getOpcode() != ARM::tLDRr)
         continue;
-      if (Load->getOperand(1).getReg() != ShiftedIdxReg ||
-          Load->getOperand(2).getReg() != BaseReg ||
-          !Load->getOperand(1).isKill())
+      if (Load->getOperand(1).getReg() != BaseReg ||
+          Load->getOperand(2).getReg() != ShiftedIdxReg ||
+          !Load->getOperand(2).isKill())
         continue;
 
       // If we're in PIC mode, there should be another ADD following.
@@ -2165,9 +2172,9 @@ bool ARMConstantIslands::optimizeThumb2JumpTables() {
       if (isPositionIndependentOrROPI) {
         MachineInstr *Add = Load->getNextNode();
         if (Add->getOpcode() != ARM::tADDrr ||
-            Add->getOperand(2).getReg() != Load->getOperand(0).getReg() ||
-            Add->getOperand(3).getReg() != BaseReg ||
-            !Add->getOperand(2).isKill())
+            Add->getOperand(2).getReg() != BaseReg ||
+            Add->getOperand(3).getReg() != Load->getOperand(0).getReg() ||
+            !Add->getOperand(3).isKill())
           continue;
         if (Add->getOperand(0).getReg() != MI->getOperand(0).getReg())
           continue;

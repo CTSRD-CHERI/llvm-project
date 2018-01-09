@@ -36,6 +36,7 @@
 #include <string>
 #include <system_error>
 
+using namespace llvm;
 using namespace llvm::cl;
 using namespace llvm::dsymutil;
 
@@ -249,7 +250,9 @@ static std::string getOutputFileName(llvm::StringRef InputFile,
   return BundleDir.str();
 }
 
-void llvm::dsymutil::exitDsymutil(int ExitStatus) {
+/// Exit the dsymutil process, cleaning up every temporary files that we
+/// created.
+static LLVM_ATTRIBUTE_NORETURN void exitDsymutil(int ExitStatus) {
   // Cleanup temporary files.
   llvm::sys::RunInterruptHandlers();
   exit(ExitStatus);
@@ -358,7 +361,15 @@ int main(int argc, char **argv) {
       std::string OutputFile = getOutputFileName(InputFile, NeedsTempFiles);
 
       auto LinkLambda = [OutputFile, Options, &Map]() {
-        if (OutputFile.empty() || !linkDwarf(OutputFile, *Map, Options))
+        if (OutputFile.empty())
+          exitDsymutil(1);
+        std::error_code EC;
+        raw_fd_ostream OS(NoOutput ? "-" : OutputFile, EC, sys::fs::F_None);
+        if (EC) {
+          errs() << OutputFile << ": " << EC.message();
+          exitDsymutil(1);
+        }
+        if (!linkDwarf(OS, *Map, Options))
           exitDsymutil(1);
       };
 

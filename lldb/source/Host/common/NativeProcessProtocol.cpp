@@ -8,8 +8,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Host/common/NativeProcessProtocol.h"
-
-#include "lldb/Core/ArchSpec.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/State.h"
 #include "lldb/Host/Host.h"
@@ -116,14 +114,6 @@ bool NativeProcessProtocol::IsAlive() const {
          m_state != eStateInvalid && m_state != eStateUnloaded;
 }
 
-bool NativeProcessProtocol::GetByteOrder(lldb::ByteOrder &byte_order) const {
-  ArchSpec process_arch;
-  if (!GetArchitecture(process_arch))
-    return false;
-  byte_order = process_arch.GetByteOrder();
-  return true;
-}
-
 const NativeWatchpointList::WatchpointMap &
 NativeProcessProtocol::GetWatchpointMap() const {
   return m_watchpoint_list.GetWatchpointMap();
@@ -141,16 +131,9 @@ NativeProcessProtocol::GetHardwareDebugSupportInfo() const {
     return llvm::None;
   }
 
-  NativeRegisterContextSP reg_ctx_sp(thread->GetRegisterContext());
-  if (!reg_ctx_sp) {
-    LLDB_LOG(
-        log,
-        "failed to get a RegisterContextNativeProcess from the first thread!");
-    return llvm::None;
-  }
-
-  return std::make_pair(reg_ctx_sp->NumSupportedHardwareBreakpoints(),
-                        reg_ctx_sp->NumSupportedHardwareWatchpoints());
+  NativeRegisterContext &reg_ctx = thread->GetRegisterContext();
+  return std::make_pair(reg_ctx.NumSupportedHardwareBreakpoints(),
+                        reg_ctx.NumSupportedHardwareWatchpoints());
 }
 
 Status NativeProcessProtocol::SetWatchpoint(lldb::addr_t addr, size_t size,

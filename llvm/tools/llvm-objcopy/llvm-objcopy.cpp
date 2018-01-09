@@ -75,22 +75,29 @@ static cl::opt<std::string> InputFilename(cl::Positional, cl::desc("<input>"));
 static cl::opt<std::string> OutputFilename(cl::Positional, cl::desc("<output>"),
                                     cl::init("-"));
 static cl::opt<std::string>
-    OutputFormat("O", cl::desc("set output format to one of the following:"
+    OutputFormat("O", cl::desc("Set output format to one of the following:"
                                "\n\tbinary"));
 static cl::list<std::string> ToRemove("remove-section",
-                                      cl::desc("Remove a specific section"));
+                                      cl::desc("Remove <section>"),
+                                      cl::value_desc("section"));
 static cl::alias ToRemoveA("R", cl::desc("Alias for remove-section"),
                            cl::aliasopt(ToRemove));
+static cl::opt<bool> StripAll("strip-all",
+                              cl::desc("Removes symbol, relocation, and debug information"));
+static cl::opt<bool> StripDebug("strip-debug",
+                                cl::desc("Removes all debug information"));
 static cl::opt<bool> StripSections("strip-sections",
                                    cl::desc("Remove all section headers"));
+static cl::opt<bool> StripNonAlloc("strip-non-alloc",
+                                   cl::desc("Remove all non-allocated sections"));
 static cl::opt<bool>
-    StripDWO("strip-dwo", cl::desc("remove all DWARF .dwo sections from file"));
+    StripDWO("strip-dwo", cl::desc("Remove all DWARF .dwo sections from file"));
 static cl::opt<bool> ExtractDWO(
     "extract-dwo",
-    cl::desc("remove all sections that are not DWARF .dwo sections from file"));
+    cl::desc("Remove all sections that are not DWARF .dwo sections from file"));
 static cl::opt<std::string>
     SplitDWO("split-dwo",
-             cl::desc("equivalent to extract-dwo on the input file to "
+             cl::desc("Equivalent to extract-dwo on the input file to "
                       "<dwo-file>, then strip-dwo on the input file"),
              cl::value_desc("dwo-file"));
 
@@ -138,18 +145,19 @@ void SplitDWOToFile(const ELFObjectFile<ELFT> &ObjFile, StringRef File) {
   WriteObjectFile(DWOFile, File);
 }
 
-void CopyBinary(const ELFObjectFile<ELF64LE> &ObjFile) {
-  std::unique_ptr<Object<ELF64LE>> Obj;
+template <class ELFT>
+void CopyBinary(const ELFObjectFile<ELFT> &ObjFile) {
+  std::unique_ptr<Object<ELFT>> Obj;
 
   if (!OutputFormat.empty() && OutputFormat != "binary")
     error("invalid output format '" + OutputFormat + "'");
   if (!OutputFormat.empty() && OutputFormat == "binary")
-    Obj = llvm::make_unique<BinaryObject<ELF64LE>>(ObjFile);
+    Obj = llvm::make_unique<BinaryObject<ELFT>>(ObjFile);
   else
-    Obj = llvm::make_unique<ELFObject<ELF64LE>>(ObjFile);
+    Obj = llvm::make_unique<ELFObject<ELFT>>(ObjFile);
 
   if (!SplitDWO.empty())
-    SplitDWOToFile<ELF64LE>(ObjFile, SplitDWO.getValue());
+    SplitDWOToFile<ELFT>(ObjFile, SplitDWO.getValue());
 
   SectionPred RemovePred = [](const SectionBase &) { return false; };
 
@@ -170,12 +178,45 @@ void CopyBinary(const ELFObjectFile<ELF64LE> &ObjFile) {
       return OnlyKeepDWOPred(*Obj, Sec) || RemovePred(Sec);
     };
 
+  if (StripAll)
+    RemovePred = [RemovePred, &Obj](const SectionBase &Sec) {
+      if (RemovePred(Sec))
+        return true;
+      if ((Sec.Flags & SHF_ALLOC) != 0)
+        return false;
+      if (&Sec == Obj->getSectionHeaderStrTab())
+        return false;
+      switch(Sec.Type) {
+      case SHT_SYMTAB:
+      case SHT_REL:
+      case SHT_RELA:
+      case SHT_STRTAB:
+        return true;
+      }
+      return Sec.Name.startswith(".debug");
+    };
+
   if (StripSections) {
     RemovePred = [RemovePred](const SectionBase &Sec) {
       return RemovePred(Sec) || (Sec.Flags & SHF_ALLOC) == 0;
     };
     Obj->WriteSectionHeaders = false;
   }
+
+  if (StripDebug) {
+    RemovePred = [RemovePred](const SectionBase &Sec) {
+      return RemovePred(Sec) || Sec.Name.startswith(".debug");
+    };
+  }
+
+  if (StripNonAlloc)
+    RemovePred = [RemovePred, &Obj](const SectionBase &Sec) {
+      if (RemovePred(Sec))
+        return true;
+      if (&Sec == Obj->getSectionHeaderStrTab())
+        return false;
+      return (Sec.Flags & SHF_ALLOC) == 0;
+    };
 
   Obj->removeSections(RemovePred);
   Obj->finalize();
@@ -197,7 +238,19 @@ int main(int argc, char **argv) {
   if (!BinaryOrErr)
     reportError(InputFilename, BinaryOrErr.takeError());
   Binary &Binary = *BinaryOrErr.get().getBinary();
-  if (ELFObjectFile<ELF64LE> *o = dyn_cast<ELFObjectFile<ELF64LE>>(&Binary)) {
+  if (auto *o = dyn_cast<ELFObjectFile<ELF64LE>>(&Binary)) {
+    CopyBinary(*o);
+    return 0;
+  }
+  if (auto *o = dyn_cast<ELFObjectFile<ELF32LE>>(&Binary)) {
+    CopyBinary(*o);
+    return 0;
+  }
+  if (auto *o = dyn_cast<ELFObjectFile<ELF64BE>>(&Binary)) {
+    CopyBinary(*o);
+    return 0;
+  }
+  if (auto *o = dyn_cast<ELFObjectFile<ELF32BE>>(&Binary)) {
     CopyBinary(*o);
     return 0;
   }

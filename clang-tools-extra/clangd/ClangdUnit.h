@@ -143,10 +143,12 @@ public:
   // deferRebuild will hold references to it.
   static std::shared_ptr<CppFile>
   Create(PathRef FileName, tooling::CompileCommand Command,
+         bool StorePreamblesInMemory,
          std::shared_ptr<PCHContainerOperations> PCHs, clangd::Logger &Logger);
 
 private:
   CppFile(PathRef FileName, tooling::CompileCommand Command,
+          bool StorePreamblesInMemory,
           std::shared_ptr<PCHContainerOperations> PCHs, clangd::Logger &Logger);
 
 public:
@@ -222,6 +224,7 @@ private:
 
   Path FileName;
   tooling::CompileCommand Command;
+  bool StorePreamblesInMemory;
 
   /// Mutex protects all fields, declared below it, FileName and Command are not
   /// mutated.
@@ -263,7 +266,7 @@ struct CodeCompleteOptions {
                       bool IncludeBriefComments);
 
   /// Returns options that can be passed to clang's completion engine.
-  clang::CodeCompleteOptions getClangCompleteOpts();
+  clang::CodeCompleteOptions getClangCompleteOpts() const;
 
   /// When true, completion items will contain expandable code snippets in
   /// completion (e.g.  `return ${1:expression}` or `foo(${1:int a}, ${2:int
@@ -285,10 +288,14 @@ struct CodeCompleteOptions {
   /// FIXME(ibiryukov): it looks like turning this option on significantly slows
   /// down completion, investigate if it can be made faster.
   bool IncludeBriefComments = true;
+
+  /// Limit the number of results returned (0 means no limit).
+  /// If more results are available, we set CompletionList.isIncomplete.
+  size_t Limit = 0;
 };
 
 /// Get code completions at a specified \p Pos in \p FileName.
-std::vector<CompletionItem>
+CompletionList
 codeComplete(PathRef FileName, const tooling::CompileCommand &Command,
              PrecompiledPreamble const *Preamble, StringRef Contents,
              Position Pos, IntrusiveRefCntPtr<vfs::FileSystem> VFS,
@@ -303,6 +310,10 @@ SignatureHelp signatureHelp(PathRef FileName,
                             IntrusiveRefCntPtr<vfs::FileSystem> VFS,
                             std::shared_ptr<PCHContainerOperations> PCHs,
                             clangd::Logger &Logger);
+
+/// Get the beginning SourceLocation at a specified \p Pos.
+SourceLocation getBeginningOfIdentifier(ParsedAST &Unit, const Position &Pos,
+                                        const FileEntry *FE);
 
 /// Get definition of symbol at a specified \p Pos.
 std::vector<Location> findDefinitions(ParsedAST &AST, Position Pos,

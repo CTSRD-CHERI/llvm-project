@@ -60,6 +60,7 @@ Clang-Tidy Checks
    google-default-arguments
    google-explicit-constructor
    google-global-names-in-headers
+   google-objc-avoid-throwing-exception
    google-objc-global-variable-declaration
    google-readability-braces-around-statements (redirects to readability-braces-around-statements) <google-readability-braces-around-statements>
    google-readability-casting
@@ -173,6 +174,8 @@ Clang-Tidy Checks
    modernize-use-using
    mpi-buffer-deref
    mpi-type-mismatch
+   objc-forbidden-subclassing
+   objc-property-declaration
    performance-faster-string-find
    performance-for-range-copy
    performance-implicit-conversion-in-loop
@@ -181,7 +184,6 @@ Clang-Tidy Checks
    performance-type-promotion-in-math-fn
    performance-unnecessary-copy-initialization
    performance-unnecessary-value-param
-   objc-forbidden-subclassing
    readability-avoid-const-params-in-decls
    readability-braces-around-statements
    readability-container-size-empty

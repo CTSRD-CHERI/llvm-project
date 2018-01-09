@@ -57,6 +57,7 @@ void ClangdLSPServer::onInitialize(Ctx C, InitializeParams &Params) {
                  {"triggerCharacters", {"(", ","}},
              }},
             {"definitionProvider", true},
+            {"renameProvider", true},
             {"executeCommandProvider",
              json::obj{
                  {"commands", {ExecuteCommandParams::CLANGD_APPLY_FIX_COMMAND}},
@@ -127,6 +128,21 @@ void ClangdLSPServer::onCommand(Ctx C, ExecuteCommandParams &Params) {
   }
 }
 
+void ClangdLSPServer::onRename(Ctx C, RenameParams &Params) {
+  auto File = Params.textDocument.uri.file;
+  auto Replacements = Server.rename(File, Params.position, Params.newName);
+  if (!Replacements) {
+    C.replyError(ErrorCode::InternalError,
+                 llvm::toString(Replacements.takeError()));
+    return;
+  }
+  std::string Code = Server.getDocument(File);
+  std::vector<TextEdit> Edits = replacementsToEdits(Code, *Replacements);
+  WorkspaceEdit WE;
+  WE.changes = {{llvm::yaml::escape(Params.textDocument.uri.uri), Edits}};
+  C.reply(WorkspaceEdit::unparse(WE));
+}
+
 void ClangdLSPServer::onDocumentDidClose(Ctx C,
                                          DidCloseTextDocumentParams &Params) {
   Server.removeDocument(Params.textDocument.uri.file);
@@ -178,15 +194,15 @@ void ClangdLSPServer::onCodeAction(Ctx C, CodeActionParams &Params) {
 }
 
 void ClangdLSPServer::onCompletion(Ctx C, TextDocumentPositionParams &Params) {
-  auto Items = Server
-                   .codeComplete(Params.textDocument.uri.file,
-                                 Position{Params.position.line,
-                                          Params.position.character})
-                   .get() // FIXME(ibiryukov): This could be made async if we
-                          // had an API that would allow to attach callbacks to
-                          // futures returned by ClangdServer.
-                   .Value;
-  C.reply(json::ary(Items));
+  auto List = Server
+                  .codeComplete(
+                      Params.textDocument.uri.file,
+                      Position{Params.position.line, Params.position.character})
+                  .get() // FIXME(ibiryukov): This could be made async if we
+                         // had an API that would allow to attach callbacks to
+                         // futures returned by ClangdServer.
+                  .Value;
+  C.reply(List);
 }
 
 void ClangdLSPServer::onSignatureHelp(Ctx C,
@@ -219,11 +235,13 @@ void ClangdLSPServer::onSwitchSourceHeader(Ctx C,
 }
 
 ClangdLSPServer::ClangdLSPServer(JSONOutput &Out, unsigned AsyncThreadsCount,
+                                 bool StorePreamblesInMemory,
                                  bool SnippetCompletions,
                                  llvm::Optional<StringRef> ResourceDir,
                                  llvm::Optional<Path> CompileCommandsDir)
     : Out(Out), CDB(/*Logger=*/Out, std::move(CompileCommandsDir)),
       Server(CDB, /*DiagConsumer=*/*this, FSProvider, AsyncThreadsCount,
+             StorePreamblesInMemory,
              clangd::CodeCompleteOptions(
                  /*EnableSnippetsAndCodePatterns=*/SnippetCompletions),
              /*Logger=*/Out, ResourceDir) {}

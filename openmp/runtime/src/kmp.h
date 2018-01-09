@@ -744,7 +744,7 @@ extern unsigned __kmp_affinity_num_masks;
 extern void __kmp_affinity_bind_thread(int which);
 
 extern kmp_affin_mask_t *__kmp_affin_fullMask;
-extern char const *__kmp_cpuinfo_file;
+extern char *__kmp_cpuinfo_file;
 
 #endif /* KMP_AFFINITY_SUPPORTED */
 
@@ -801,10 +801,6 @@ extern kmp_hws_item_t __kmp_hws_core;
 extern kmp_hws_item_t __kmp_hws_proc;
 extern int __kmp_hws_requested;
 extern int __kmp_hws_abs_flag; // absolute or per-item number requested
-
-#if OMP_50_ENABLED && LIBOMP_OMPT_SUPPORT
-extern char const *__kmp_tool_libraries;
-#endif // OMP_50_ENABLED && LIBOMP_OMPT_SUPPORT
 
 /* ------------------------------------------------------------------------ */
 
@@ -2032,7 +2028,7 @@ typedef enum kmp_tasking_mode {
 
 extern kmp_tasking_mode_t
     __kmp_tasking_mode; /* determines how/when to execute tasks */
-extern kmp_int32 __kmp_task_stealing_constraint;
+extern int __kmp_task_stealing_constraint;
 #if OMP_40_ENABLED
 extern kmp_int32 __kmp_default_device; // Set via OMP_DEFAULT_DEVICE if
 // specified, defaults to 0 otherwise
@@ -2252,13 +2248,14 @@ struct kmp_taskdata { /* aligned during dynamic allocation       */
       *td_dephash; // Dependencies for children tasks are tracked from here
   kmp_depnode_t
       *td_depnode; // Pointer to graph node if this task has dependencies
-#endif
-#if OMPT_SUPPORT
-  ompt_task_info_t ompt_task_info;
-#endif
+#endif // OMP_40_ENABLED
 #if OMP_45_ENABLED
   kmp_task_team_t *td_task_team;
   kmp_int32 td_size_alloc; // The size of task structure, including shareds etc.
+#endif // OMP_45_ENABLED
+  kmp_taskdata_t *td_last_tied; // keep tied task for task scheduling constraint
+#if OMPT_SUPPORT
+  ompt_task_info_t ompt_task_info;
 #endif
 }; // struct kmp_taskdata
 
@@ -2316,6 +2313,7 @@ typedef struct kmp_base_task_team {
   kmp_int32
       tt_found_proxy_tasks; /* Have we found proxy tasks since last barrier */
 #endif
+  kmp_int32 tt_untied_task_encountered;
 
   KMP_ALIGN_CACHE
   volatile kmp_int32 tt_unfinished_threads; /* #threads still active      */
