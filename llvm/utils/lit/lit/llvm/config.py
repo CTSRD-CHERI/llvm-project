@@ -496,9 +496,9 @@ class LLVMConfig(object):
         else:
             self.config.substitutions.append(
                 ('%target_itanium_abi_host_triple', ''))
-
-        self.config.substitutions.append(
-            ('%src_include_dir', self.config.clang_src_dir + '/include'))
+        if hasattr(self.config, "clang_src_dir"):
+            self.config.substitutions.append(
+                ('%src_include_dir', self.config.clang_src_dir + '/include'))
 
         # FIXME: Find nicer way to prohibit this.
         self.config.substitutions.append(
