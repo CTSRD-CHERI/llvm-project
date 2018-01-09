@@ -15,6 +15,7 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
@@ -68,8 +69,8 @@ bool TargetRegisterInfo::checkAllSuperRegsMarked(const BitVector &RegisterSet,
       continue;
     for (MCSuperRegIterator SR(Reg, this); SR.isValid(); ++SR) {
       if (!RegisterSet[*SR] && !is_contained(Exceptions, Reg)) {
-        dbgs() << "Error: Super register " << PrintReg(*SR, this)
-               << " of reserved register " << PrintReg(Reg, this)
+        dbgs() << "Error: Super register " << printReg(*SR, this)
+               << " of reserved register " << printReg(Reg, this)
                << " is not reserved.\n";
         return false;
       }
@@ -84,7 +85,7 @@ bool TargetRegisterInfo::checkAllSuperRegsMarked(const BitVector &RegisterSet,
 
 namespace llvm {
 
-Printable PrintReg(unsigned Reg, const TargetRegisterInfo *TRI,
+Printable printReg(unsigned Reg, const TargetRegisterInfo *TRI,
                    unsigned SubIdx) {
   return Printable([Reg, TRI, SubIdx](raw_ostream &OS) {
     if (!Reg)
@@ -92,11 +93,15 @@ Printable PrintReg(unsigned Reg, const TargetRegisterInfo *TRI,
     else if (TargetRegisterInfo::isStackSlot(Reg))
       OS << "SS#" << TargetRegisterInfo::stackSlot2Index(Reg);
     else if (TargetRegisterInfo::isVirtualRegister(Reg))
-      OS << "%vreg" << TargetRegisterInfo::virtReg2Index(Reg);
-    else if (TRI && Reg < TRI->getNumRegs())
-      OS << '%' << TRI->getName(Reg);
-    else
-      OS << "%physreg" << Reg;
+      OS << '%' << TargetRegisterInfo::virtReg2Index(Reg);
+    else if (!TRI)
+      OS << '%' << "physreg" << Reg;
+    else if (Reg < TRI->getNumRegs()) {
+      OS << '%';
+      printLowerCase(TRI->getName(Reg), OS);
+    } else
+      llvm_unreachable("Register kind is unsupported.");
+
     if (SubIdx) {
       if (TRI)
         OS << ':' << TRI->getSubRegIndexName(SubIdx);
@@ -106,7 +111,7 @@ Printable PrintReg(unsigned Reg, const TargetRegisterInfo *TRI,
   });
 }
 
-Printable PrintRegUnit(unsigned Unit, const TargetRegisterInfo *TRI) {
+Printable printRegUnit(unsigned Unit, const TargetRegisterInfo *TRI) {
   return Printable([Unit, TRI](raw_ostream &OS) {
     // Generic printout when TRI is missing.
     if (!TRI) {
@@ -129,12 +134,12 @@ Printable PrintRegUnit(unsigned Unit, const TargetRegisterInfo *TRI) {
   });
 }
 
-Printable PrintVRegOrUnit(unsigned Unit, const TargetRegisterInfo *TRI) {
+Printable printVRegOrUnit(unsigned Unit, const TargetRegisterInfo *TRI) {
   return Printable([Unit, TRI](raw_ostream &OS) {
     if (TRI && TRI->isVirtualRegister(Unit)) {
-      OS << "%vreg" << TargetRegisterInfo::virtReg2Index(Unit);
+      OS << '%' << TargetRegisterInfo::virtReg2Index(Unit);
     } else {
-      OS << PrintRegUnit(Unit, TRI);
+      OS << printRegUnit(Unit, TRI);
     }
   });
 }
@@ -429,6 +434,6 @@ bool TargetRegisterInfo::regmaskSubsetEqual(const uint32_t *mask0,
 LLVM_DUMP_METHOD
 void TargetRegisterInfo::dumpReg(unsigned Reg, unsigned SubRegIndex,
                                  const TargetRegisterInfo *TRI) {
-  dbgs() << PrintReg(Reg, TRI, SubRegIndex) << "\n";
+  dbgs() << printReg(Reg, TRI, SubRegIndex) << "\n";
 }
 #endif

@@ -664,7 +664,7 @@ public:
 
   /// getTBAAVTablePtrAccessInfo - Get the TBAA information that describes an
   /// access to a virtual table pointer.
-  TBAAAccessInfo getTBAAVTablePtrAccessInfo();
+  TBAAAccessInfo getTBAAVTablePtrAccessInfo(llvm::Type *VTablePtrType);
 
   llvm::MDNode *getTBAAStructInfo(QualType QTy);
 
@@ -688,8 +688,9 @@ public:
   /// getTBAAInfoForSubobject - Get TBAA information for an access with a given
   /// base lvalue.
   TBAAAccessInfo getTBAAInfoForSubobject(LValue Base, QualType AccessType) {
-    if (Base.getTBAAInfo().isMayAlias())
-      return TBAAAccessInfo::getMayAliasInfo();
+    TBAAAccessInfo TBAAInfo = Base.getTBAAInfo();
+    if (TBAAInfo.isMayAlias() || TBAAInfo.isUnionMember())
+      return TBAAInfo;
     return getTBAAAccessInfo(AccessType);
   }
 
@@ -710,7 +711,8 @@ public:
   llvm::ConstantInt *getSize(CharUnits numChars);
 
   /// Set the visibility for the given LLVM GlobalValue.
-  void setGlobalVisibility(llvm::GlobalValue *GV, const NamedDecl *D) const;
+  void setGlobalVisibility(llvm::GlobalValue *GV, const NamedDecl *D,
+                           ForDefinition_t IsForDefinition) const;
 
   /// Set the TLS mode for the given LLVM GlobalValue for the thread-local
   /// variable declaration D.

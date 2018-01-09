@@ -9565,8 +9565,6 @@ static SDValue replaceSplatVectorStore(SelectionDAG &DAG, StoreSDNode &St) {
 static SDValue splitStores(SDNode *N, TargetLowering::DAGCombinerInfo &DCI,
                            SelectionDAG &DAG,
                            const AArch64Subtarget *Subtarget) {
-  if (!DCI.isBeforeLegalize())
-    return SDValue();
 
   StoreSDNode *S = cast<StoreSDNode>(N);
   if (S->isVolatile() || S->isIndexed())

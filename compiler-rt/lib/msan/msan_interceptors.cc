@@ -86,22 +86,21 @@ static void *AllocateFromLocalPool(uptr size_in_bytes) {
 } while (0)
 
 // Check that [x, x+n) range is unpoisoned.
-#define CHECK_UNPOISONED_0(x, n)                                               \
-  do {                                                                         \
-    sptr offset = __msan_test_shadow(x, n);                                    \
-    if (__msan::IsInSymbolizer())                                              \
-      break;                                                                   \
-    if (offset >= 0 && __msan::flags()->report_umrs) {                         \
-      GET_CALLER_PC_BP_SP;                                                     \
-      (void) sp;                                                               \
-      ReportUMRInsideAddressRange(__func__, x, n, offset);                     \
-      __msan::PrintWarningWithOrigin(                                          \
-          pc, bp, __msan_get_origin((const char *)x + offset));                \
-      if (__msan::flags()->halt_on_error) {                                    \
-        Printf("Exiting\n");                                                   \
-        Die();                                                                 \
-      }                                                                        \
-    }                                                                          \
+#define CHECK_UNPOISONED_0(x, n)                                  \
+  do {                                                            \
+    sptr __offset = __msan_test_shadow(x, n);                     \
+    if (__msan::IsInSymbolizer()) break;                          \
+    if (__offset >= 0 && __msan::flags()->report_umrs) {          \
+      GET_CALLER_PC_BP_SP;                                        \
+      (void)sp;                                                   \
+      ReportUMRInsideAddressRange(__func__, x, n, __offset);      \
+      __msan::PrintWarningWithOrigin(                             \
+          pc, bp, __msan_get_origin((const char *)x + __offset)); \
+      if (__msan::flags()->halt_on_error) {                       \
+        Printf("Exiting\n");                                      \
+        Die();                                                    \
+      }                                                           \
+    }                                                             \
   } while (0)
 
 // Check that [x, x+n) range is unpoisoned unless we are in a nested
@@ -527,7 +526,8 @@ INTERCEPTOR(int, mbtowc, wchar_t *dest, const char *src, SIZE_T n) {
   return res;
 }
 
-INTERCEPTOR(int, mbrtowc, wchar_t *dest, const char *src, SIZE_T n, void *ps) {
+INTERCEPTOR(SIZE_T, mbrtowc, wchar_t *dest, const char *src, SIZE_T n,
+            void *ps) {
   ENSURE_MSAN_INITED();
   SIZE_T res = REAL(mbrtowc)(dest, src, n, ps);
   if (res != (SIZE_T)-1 && dest) __msan_unpoison(dest, sizeof(wchar_t));

@@ -167,7 +167,6 @@ TEST(JSONTest, ParseErrors) {
   ExpectErr("Unexpected EOF", "");
   ExpectErr("Unexpected EOF", "[");
   ExpectErr("Text after end of document", "[][]");
-  ExpectErr("Text after end of document", "[][]");
   ExpectErr("Invalid bareword", "fuzzy");
   ExpectErr("Expected , or ]", "[2?]");
   ExpectErr("Expected object key", "{a:2}");
@@ -183,6 +182,109 @@ TEST(JSONTest, ParseErrors) {
   "valid": 1,
   invalid: 2
 })");
+}
+
+TEST(JSONTest, Inspection) {
+  llvm::Expected<Expr> Doc = parse(R"(
+    {
+      "null": null,
+      "boolean": false,
+      "number": 2.78,
+      "string": "json",
+      "array": [null, true, 3.14, "hello", [1,2,3], {"time": "arrow"}],
+      "object": {"fruit": "banana"}
+    }
+  )");
+  EXPECT_TRUE(!!Doc);
+
+  obj *O = Doc->asObject();
+  ASSERT_TRUE(O);
+
+  EXPECT_FALSE(O->getNull("missing"));
+  EXPECT_FALSE(O->getNull("boolean"));
+  EXPECT_TRUE(O->getNull("null"));
+
+  EXPECT_EQ(O->getNumber("number"), llvm::Optional<double>(2.78));
+  EXPECT_FALSE(O->getInteger("number"));
+  EXPECT_EQ(O->getString("string"), llvm::Optional<llvm::StringRef>("json"));
+  ASSERT_FALSE(O->getObject("missing"));
+  ASSERT_FALSE(O->getObject("array"));
+  ASSERT_TRUE(O->getObject("object"));
+  EXPECT_EQ(*O->getObject("object"), (obj{{"fruit", "banana"}}));
+
+  ary *A = O->getArray("array");
+  ASSERT_TRUE(A);
+  EXPECT_EQ(A->getBoolean(1), llvm::Optional<bool>(true));
+  ASSERT_TRUE(A->getArray(4));
+  EXPECT_EQ(*A->getArray(4), (ary{1, 2, 3}));
+  EXPECT_EQ(A->getArray(4)->getInteger(1), llvm::Optional<int64_t>(2));
+  int I = 0;
+  for (Expr &E : *A) {
+    if (I++ == 5) {
+      ASSERT_TRUE(E.asObject());
+      EXPECT_EQ(E.asObject()->getString("time"),
+                llvm::Optional<llvm::StringRef>("arrow"));
+    } else
+      EXPECT_FALSE(E.asObject());
+  }
+}
+
+// Sample struct with typical JSON-mapping rules.
+struct CustomStruct {
+  CustomStruct() : B(false) {}
+  CustomStruct(std::string S, llvm::Optional<int> I, bool B)
+      : S(S), I(I), B(B) {}
+  std::string S;
+  llvm::Optional<int> I;
+  bool B;
+};
+inline bool operator==(const CustomStruct &L, const CustomStruct &R) {
+  return L.S == R.S && L.I == R.I && L.B == R.B;
+}
+inline std::ostream &operator<<(std::ostream &OS, const CustomStruct &S) {
+  return OS << "(" << S.S << ", " << (S.I ? std::to_string(*S.I) : "None")
+            << ", " << S.B << ")";
+}
+bool fromJSON(const json::Expr &E, CustomStruct &R) {
+  ObjectMapper O(E);
+  if (!O || !O.map("str", R.S) || !O.map("int", R.I))
+    return false;
+  O.map("bool", R.B);
+  return true;
+}
+
+TEST(JSONTest, Deserialize) {
+  std::map<std::string, std::vector<CustomStruct>> R;
+  CustomStruct ExpectedStruct = {"foo", 42, true};
+  std::map<std::string, std::vector<CustomStruct>> Expected;
+  Expr J = obj{{"foo", ary{
+                           obj{
+                               {"str", "foo"},
+                               {"int", 42},
+                               {"bool", true},
+                               {"unknown", "ignored"},
+                           },
+                           obj{{"str", "bar"}},
+                           obj{
+                               {"str", "baz"},
+                               {"bool", "string"}, // OK, deserialize ignores.
+                           },
+                       }}};
+  Expected["foo"] = {
+      CustomStruct("foo", 42, true),
+      CustomStruct("bar", llvm::None, false),
+      CustomStruct("baz", llvm::None, false),
+  };
+  ASSERT_TRUE(fromJSON(J, R));
+  EXPECT_EQ(R, Expected);
+
+  CustomStruct V;
+  EXPECT_FALSE(fromJSON(nullptr, V)) << "Not an object " << V;
+  EXPECT_FALSE(fromJSON(obj{}, V)) << "Missing required field " << V;
+  EXPECT_FALSE(fromJSON(obj{{"str", 1}}, V)) << "Wrong type " << V;
+  // Optional<T> must parse as the correct type if present.
+  EXPECT_FALSE(fromJSON(obj{{"str", 1}, {"int", "string"}}, V))
+      << "Wrong type for Optional<T> " << V;
 }
 
 } // namespace

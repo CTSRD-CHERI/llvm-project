@@ -25,16 +25,18 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Metadata.h"
+#include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 using namespace clang;
 using namespace CodeGen;
 
-CodeGenTBAA::CodeGenTBAA(ASTContext &Ctx, llvm::LLVMContext& VMContext,
+CodeGenTBAA::CodeGenTBAA(ASTContext &Ctx, llvm::Module &M,
                          const CodeGenOptions &CGO,
                          const LangOptions &Features, MangleContext &MContext)
-  : Context(Ctx), CodeGenOpts(CGO), Features(Features), MContext(MContext),
-    MDHelper(VMContext), Root(nullptr), Char(nullptr) {
-}
+  : Context(Ctx), Module(M), CodeGenOpts(CGO),
+    Features(Features), MContext(MContext), MDHelper(M.getContext()),
+    Root(nullptr), Char(nullptr)
+{}
 
 CodeGenTBAA::~CodeGenTBAA() {
 }
@@ -54,10 +56,10 @@ llvm::MDNode *CodeGenTBAA::getRoot() {
   return Root;
 }
 
-// For both scalar TBAA and struct-path aware TBAA, the scalar type has the
-// same format: name, parent node, and offset.
-llvm::MDNode *CodeGenTBAA::createTBAAScalarType(StringRef Name,
-                                                llvm::MDNode *Parent) {
+llvm::MDNode *CodeGenTBAA::createScalarTypeNode(StringRef Name,
+                                                llvm::MDNode *Parent,
+                                                uint64_t Size) {
+  (void)Size; // TODO: Support generation of size-aware type nodes.
   return MDHelper.createTBAAScalarTypeNode(Name, Parent);
 }
 
@@ -67,9 +69,13 @@ llvm::MDNode *CodeGenTBAA::getChar() {
   // these special powers only cover user-accessible memory, and doesn't
   // include things like vtables.
   if (!Char)
-    Char = createTBAAScalarType("omnipotent char", getRoot());
+    Char = createScalarTypeNode("omnipotent char", getRoot(), /* Size= */ 1);
 
   return Char;
+}
+
+llvm::MDNode *CodeGenTBAA::getUnionMemberType(uint64_t Size) {
+  return createScalarTypeNode("union member", getChar(), Size);
 }
 
 static bool TypeHasMayAlias(QualType QTy) {
@@ -99,15 +105,16 @@ static bool isValidBaseType(QualType QTy) {
       return false;
     if (RD->hasFlexibleArrayMember())
       return false;
-    // RD can be struct, union, class, interface or enum.
-    // For now, we only handle struct and class.
-    if (RD->isStruct() || RD->isClass())
+    // For now, we do not allow interface classes to be base access types.
+    if (RD->isStruct() || RD->isClass() || RD->isUnion())
       return true;
   }
   return false;
 }
 
 llvm::MDNode *CodeGenTBAA::getTypeInfoHelper(const Type *Ty) {
+  uint64_t Size = Context.getTypeSizeInChars(Ty).getQuantity();
+
   // Handle builtin types.
   if (const BuiltinType *BTy = dyn_cast<BuiltinType>(Ty)) {
     switch (BTy->getKind()) {
@@ -138,7 +145,7 @@ llvm::MDNode *CodeGenTBAA::getTypeInfoHelper(const Type *Ty) {
     // treating wchar_t, char16_t, and char32_t as distinct from their
     // "underlying types".
     default:
-      return createTBAAScalarType(BTy->getName(Features), getChar());
+      return createScalarTypeNode(BTy->getName(Features), getChar(), Size);
     }
   }
 
@@ -152,7 +159,7 @@ llvm::MDNode *CodeGenTBAA::getTypeInfoHelper(const Type *Ty) {
   // TODO: Implement C++'s type "similarity" and consider dis-"similar"
   // pointers distinct.
   if (Ty->isPointerType() || Ty->isReferenceType())
-    return createTBAAScalarType("any pointer", getChar());
+    return createScalarTypeNode("any pointer", getChar(), Size);
 
   // Enum types are distinct types. In C++ they have "underlying types",
   // however they aren't related for TBAA.
@@ -167,7 +174,7 @@ llvm::MDNode *CodeGenTBAA::getTypeInfoHelper(const Type *Ty) {
     SmallString<256> OutName;
     llvm::raw_svector_ostream Out(OutName);
     MContext.mangleTypeName(QualType(ETy, 0), Out);
-    return createTBAAScalarType(OutName, getChar());
+    return createScalarTypeNode(OutName, getChar(), Size);
   }
 
   // For now, handle any other kind of type conservatively.
@@ -204,8 +211,11 @@ llvm::MDNode *CodeGenTBAA::getTypeInfo(QualType QTy) {
   return MetadataCache[Ty] = TypeNode;
 }
 
-TBAAAccessInfo CodeGenTBAA::getVTablePtrAccessInfo() {
-  return TBAAAccessInfo(createTBAAScalarType("vtable pointer", getRoot()));
+TBAAAccessInfo CodeGenTBAA::getVTablePtrAccessInfo(llvm::Type *VTablePtrType) {
+  llvm::DataLayout DL(&Module);
+  unsigned Size = DL.getPointerTypeSize(VTablePtrType);
+  return TBAAAccessInfo(createScalarTypeNode("vtable pointer", getRoot(), Size),
+                        Size);
 }
 
 bool
@@ -245,7 +255,7 @@ CodeGenTBAA::CollectFields(uint64_t BaseOffset,
   uint64_t Offset = BaseOffset;
   uint64_t Size = Context.getTypeSizeInChars(QTy).getQuantity();
   llvm::MDNode *TBAAType = MayAlias ? getChar() : getTypeInfo(QTy);
-  llvm::MDNode *TBAATag = getAccessTagInfo(TBAAAccessInfo(TBAAType));
+  llvm::MDNode *TBAATag = getAccessTagInfo(TBAAAccessInfo(TBAAType, Size));
   Fields.push_back(llvm::MDBuilder::TBAAStructField(Offset, Size, TBAATag));
   return true;
 }
@@ -268,19 +278,29 @@ CodeGenTBAA::getTBAAStructInfo(QualType QTy) {
 llvm::MDNode *CodeGenTBAA::getBaseTypeInfoHelper(const Type *Ty) {
   if (auto *TTy = dyn_cast<RecordType>(Ty)) {
     const RecordDecl *RD = TTy->getDecl()->getDefinition();
-
     const ASTRecordLayout &Layout = Context.getASTRecordLayout(RD);
-    SmallVector <std::pair<llvm::MDNode*, uint64_t>, 4> Fields;
-    unsigned idx = 0;
-    for (RecordDecl::field_iterator i = RD->field_begin(),
-         e = RD->field_end(); i != e; ++i, ++idx) {
-      QualType FieldQTy = i->getType();
-      llvm::MDNode *FieldNode = isValidBaseType(FieldQTy) ?
-          getBaseTypeInfo(FieldQTy) : getTypeInfo(FieldQTy);
-      if (!FieldNode)
-        return BaseTypeMetadataCache[Ty] = nullptr;
-      Fields.push_back(std::make_pair(
-          FieldNode, Layout.getFieldOffset(idx) / Context.getCharWidth()));
+    SmallVector<llvm::MDBuilder::TBAAStructField, 4> Fields;
+    if (RD->isUnion()) {
+      // Unions are represented as structures with a single member that has a
+      // special type and occupies the whole object.
+      uint64_t Size = Context.getTypeSizeInChars(Ty).getQuantity();
+      llvm::MDNode *TypeNode = getUnionMemberType(Size);
+      Fields.push_back(llvm::MDBuilder::TBAAStructField(/* Offset= */ 0, Size,
+                                                        TypeNode));
+    } else {
+      for (FieldDecl *Field : RD->fields()) {
+        QualType FieldQTy = Field->getType();
+        llvm::MDNode *TypeNode = isValidBaseType(FieldQTy) ?
+            getBaseTypeInfo(FieldQTy) : getTypeInfo(FieldQTy);
+        if (!TypeNode)
+          return nullptr;
+
+        uint64_t BitOffset = Layout.getFieldOffset(Field->getFieldIndex());
+        uint64_t Offset = Context.toCharUnitsFromBits(BitOffset).getQuantity();
+        uint64_t Size = Context.getTypeSizeInChars(FieldQTy).getQuantity();
+        Fields.push_back(llvm::MDBuilder::TBAAStructField(Offset, Size,
+                                                          TypeNode));
+      }
     }
 
     SmallString<256> OutName;
@@ -291,8 +311,15 @@ llvm::MDNode *CodeGenTBAA::getBaseTypeInfoHelper(const Type *Ty) {
     } else {
       OutName = RD->getName();
     }
+
+    // TODO: Support size-aware type nodes and create one here for the
+    // given aggregate type.
+
     // Create the struct type node with a vector of pairs (offset, type).
-    return MDHelper.createTBAAStructTypeNode(OutName, Fields);
+    SmallVector<std::pair<llvm::MDNode*, uint64_t>, 4> OffsetsAndTypes;
+    for (const auto &Field : Fields)
+        OffsetsAndTypes.push_back(std::make_pair(Field.TBAA, Field.Offset));
+    return MDHelper.createTBAAStructTypeNode(OutName, OffsetsAndTypes);
   }
 
   return nullptr;
@@ -314,14 +341,18 @@ llvm::MDNode *CodeGenTBAA::getBaseTypeInfo(QualType QTy) {
 }
 
 llvm::MDNode *CodeGenTBAA::getAccessTagInfo(TBAAAccessInfo Info) {
+  assert(!Info.isIncomplete() && "Access to an object of an incomplete type!");
+
   if (Info.isMayAlias())
-    Info = TBAAAccessInfo(getChar());
+    Info = TBAAAccessInfo(getChar(), Info.Size);
+  else if (Info.isUnionMember())
+    Info.AccessType = getUnionMemberType(Info.Size);
 
   if (!Info.AccessType)
     return nullptr;
 
   if (!CodeGenOpts.StructPathTBAA)
-    Info = TBAAAccessInfo(Info.AccessType);
+    Info = TBAAAccessInfo(Info.AccessType, Info.Size);
 
   llvm::MDNode *&N = AccessTagMetadataCache[Info];
   if (N)

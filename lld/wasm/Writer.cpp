@@ -10,12 +10,12 @@
 #include "Writer.h"
 
 #include "Config.h"
-#include "Memory.h"
 #include "OutputSections.h"
 #include "OutputSegment.h"
 #include "SymbolTable.h"
 #include "WriterUtils.h"
 #include "lld/Common/ErrorHandler.h"
+#include "lld/Common/Memory.h"
 #include "lld/Common/Threads.h"
 #include "llvm/Support/FileOutputBuffer.h"
 #include "llvm/Support/Format.h"
@@ -34,11 +34,6 @@ using namespace lld::wasm;
 static constexpr int kStackAlignment = 16;
 
 namespace {
-
-// Needed for WasmSignatureDenseMapInfo
-bool operator==(const WasmSignature &LHS, const WasmSignature &RHS) {
-  return LHS.ReturnType == RHS.ReturnType && LHS.ParamTypes == RHS.ParamTypes;
-}
 
 // Traits for using WasmSignature in a DenseMap.
 struct WasmSignatureDenseMapInfo {
@@ -72,6 +67,7 @@ public:
 private:
   void openFile();
 
+  uint32_t getTypeIndex(const WasmSignature &Sig);
   void assignSymbolIndexes();
   void calculateImports();
   void calculateOffsets();
@@ -158,8 +154,8 @@ void Writer::createImportSection() {
     Import.Module = "env";
     Import.Field = Sym->getName();
     Import.Kind = WASM_EXTERNAL_FUNCTION;
-    auto *Obj = cast<ObjFile>(Sym->getFile());
-    Import.SigIndex = Obj->relocateTypeIndex(Sym->getFunctionTypeIndex());
+    assert(TypeIndices.count(Sym->getFunctionType()) > 0);
+    Import.SigIndex = TypeIndices.lookup(Sym->getFunctionType());
     writeImport(OS, Import);
   }
 
@@ -179,9 +175,6 @@ void Writer::createImportSection() {
     Import.Field = Sym->getName();
     Import.Kind = WASM_EXTERNAL_GLOBAL;
     Import.Global.Mutable = false;
-    assert(isa<ObjFile>(Sym->getFile()));
-    // TODO(sbc): Set type of this import
-    // ObjFile* Obj = dyn_cast<ObjFile>(Sym->getFile());
     Import.Global.Type = WASM_TYPE_I32; // Sym->getGlobalType();
     writeImport(OS, Import);
   }
@@ -416,7 +409,7 @@ void Writer::createRelocSections() {
   }
 }
 
-// Create the custome "linking" section containing linker metadata.
+// Create the custom "linking" section containing linker metadata.
 // This is only created when relocatable output is requested.
 void Writer::createLinkingSection() {
   SyntheticSection *Section =
@@ -487,7 +480,7 @@ void Writer::writeSections() {
 }
 
 // Fix the memory layout of the output binary.  This assigns memory offsets
-// to each of the intput data sections as well as the explicit stack region.
+// to each of the input data sections as well as the explicit stack region.
 void Writer::layoutMemory() {
   uint32_t MemoryPtr = 0;
   if (!Config->Relocatable) {
@@ -602,17 +595,15 @@ void Writer::calculateOffsets() {
     // Elem
     uint32_t SegmentCount = WasmFile->elements().size();
     if (SegmentCount) {
-      if (SegmentCount > 1) {
+      if (SegmentCount > 1)
         fatal(File->getName() + ": contains more than element segment");
-      } else {
-        const WasmElemSegment &Segment = WasmFile->elements()[0];
-        if (Segment.TableIndex != 0)
-          fatal(File->getName() + ": unsupported table index");
-        else if (Segment.Offset.Value.Int32 != 0)
-          fatal(File->getName() + ": unsupported segment offset");
-        else
-          NumElements += Segment.Functions.size();
-      }
+
+      const WasmElemSegment &Segment = WasmFile->elements()[0];
+      if (Segment.TableIndex != 0)
+        fatal(File->getName() + ": unsupported table index");
+      if (Segment.Offset.Value.Int32 != 0)
+        fatal(File->getName() + ": unsupported segment offset");
+      NumElements += Segment.Functions.size();
     }
   }
 }
@@ -634,17 +625,18 @@ void Writer::calculateImports() {
   }
 }
 
+uint32_t Writer::getTypeIndex(const WasmSignature &Sig) {
+  auto Pair = TypeIndices.insert(std::make_pair(Sig, Types.size()));
+  if (Pair.second)
+    Types.push_back(&Sig);
+  return Pair.first->second;
+}
+
 void Writer::calculateTypes() {
   for (ObjFile *File : Symtab->ObjectFiles) {
     File->TypeMap.reserve(File->getWasmObj()->types().size());
-    for (const WasmSignature &Sig : File->getWasmObj()->types()) {
-      auto Pair = TypeIndices.insert(std::make_pair(Sig, Types.size()));
-      if (Pair.second)
-        Types.push_back(&Sig);
-
-      // Now we map the input files index to the index in the linked output
-      File->TypeMap.push_back(Pair.first->second);
-    }
+    for (const WasmSignature &Sig : File->getWasmObj()->types())
+      File->TypeMap.push_back(getTypeIndex(Sig));
   }
 }
 

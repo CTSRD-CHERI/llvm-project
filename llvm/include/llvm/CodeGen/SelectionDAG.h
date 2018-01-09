@@ -796,6 +796,38 @@ public:
   /// \brief Create a logical NOT operation as (XOR Val, BooleanOne).
   SDValue getLogicalNOT(const SDLoc &DL, SDValue Val, EVT VT);
 
+  // Unlike getObjectPtrOffset this does not set NoUnsignedWrap by default
+  SDValue getPointerAdd(SDLoc dl, SDValue Ptr, int64_t Offset,
+                        const SDNodeFlags Flags = SDNodeFlags()) {
+    EVT BasePtrVT = Ptr.getValueType();
+    if (BasePtrVT.isFatPointer() && Offset == 0)
+      return Ptr;
+    // Assume that address space 0 has the range of any pointer.
+    MVT IntPtrTy = MVT::getIntegerVT(getDataLayout().getPointerSizeInBits(0));
+    return getPointerAdd(dl, Ptr, getConstant(Offset, dl, IntPtrTy), Flags);
+  }
+
+  // Unlike getObjectPtrOffset this does not set NoUnsignedWrap by default
+  SDValue getPointerAdd(SDLoc dl, SDValue Ptr, SDValue Offset,
+                        const SDNodeFlags Flags = SDNodeFlags());
+
+  /// \brief Create an add instruction with appropriate flags when used for
+  /// addressing some offset of an object. i.e. if a load is split into multiple
+  /// components, create an add nuw from the base pointer to the offset.
+  SDValue getObjectPtrOffset(const SDLoc &SL, SDValue Ptr, int64_t Offset) {
+    SDNodeFlags Flags;
+    Flags.setNoUnsignedWrap(true);
+    return getPointerAdd(SL, Ptr, Offset, Flags);
+  }
+
+  SDValue getObjectPtrOffset(const SDLoc &SL, SDValue Ptr, SDValue Offset) {
+    // The object itself can't wrap around the address space, so it shouldn't be
+    // possible for the adds of the offsets to the split parts to overflow.
+    SDNodeFlags Flags;
+    Flags.setNoUnsignedWrap(true);
+    return getPointerAdd(SL, Ptr, Offset, Flags);
+  }
+
   /// Return a new CALLSEQ_START node, that starts new call frame, in which
   /// InSize bytes are set up inside CALLSEQ_START..CALLSEQ_END sequence and
   /// OutSize specifies part of the frame set up prior to the sequence.
@@ -891,9 +923,6 @@ public:
   SDValue getMemset(SDValue Chain, const SDLoc &dl, SDValue Dst, SDValue Src,
                     SDValue Size, unsigned Align, bool isVol, bool isTailCall,
                     MachinePointerInfo DstPtrInfo);
-
-  SDValue getPointerAdd(SDLoc dl, SDValue Ptr, int64_t Offset,
-                        const SDNodeFlags Flags = SDNodeFlags());
 
   /// Helper function to make it easier to build SetCC's if you just
   /// have an ISD::CondCode instead of an SDValue.
@@ -1233,7 +1262,7 @@ public:
   void ReplaceAllUsesWith(SDNode *From, const SDValue *To);
 
   /// Replace any uses of From with To, leaving
-  /// uses of other values produced by From.Val alone.
+  /// uses of other values produced by From.getNode() alone.
   void ReplaceAllUsesOfValueWith(SDValue From, SDValue To);
 
   /// Like ReplaceAllUsesOfValueWith, but for multiple values at once.

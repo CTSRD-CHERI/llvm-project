@@ -184,19 +184,28 @@ def main():
                       help='Old check name.')
   parser.add_argument('new_check_name', type=str,
                       help='New check name.')
+  parser.add_argument('--check_class_name', type=str,
+                      help='Old name of the class implementing the check.')
   args = parser.parse_args()
 
   old_module = args.old_check_name.split('-')[0]
   new_module = args.new_check_name.split('-')[0]
-  check_name_camel = ''.join(map(lambda elem: elem.capitalize(),
-                                 args.old_check_name.split('-')[1:])) + 'Check'
+  if args.check_class_name:
+    check_name_camel = args.check_class_name
+  else:
+    check_name_camel = (''.join(map(lambda elem: elem.capitalize(),
+                                    args.old_check_name.split('-')[1:])) +
+                        'Check')
+
   new_check_name_camel = (''.join(map(lambda elem: elem.capitalize(),
                                       args.new_check_name.split('-')[1:])) +
                           'Check')
 
   clang_tidy_path = os.path.dirname(__file__)
 
-  header_guard_old = (old_module + '_' + check_name_camel).upper()
+  header_guard_variants = [
+      (old_module + '_' + new_check_name_camel).upper(),
+      args.old_check_name.replace('-', '_').upper()]
   header_guard_new = (new_module + '_' + new_check_name_camel).upper()
 
   old_module_path = os.path.join(clang_tidy_path, old_module)
@@ -225,7 +234,8 @@ def main():
                   generateCommentLineHeader(filename))
     replaceInFile(filename, generateCommentLineSource(originalName),
                   generateCommentLineSource(filename))
-    replaceInFile(filename, header_guard_old, header_guard_new)
+    for header_guard in header_guard_variants:
+      replaceInFile(filename, header_guard, header_guard_new)
 
     if args.new_check_name + '.rst' in filename:
       replaceInFile(
@@ -234,6 +244,10 @@ def main():
           args.new_check_name + '\n' + '=' * len(args.new_check_name) + '\n')
 
     replaceInFile(filename, args.old_check_name, args.new_check_name)
+    replaceInFile(filename, old_module + '::' + check_name_camel,
+                  new_module + '::' + new_check_name_camel)
+    replaceInFile(filename, old_module + '/' + check_name_camel,
+                  new_module + '/' + new_check_name_camel)
     replaceInFile(filename, check_name_camel, new_check_name_camel)
 
   if old_module != new_module:

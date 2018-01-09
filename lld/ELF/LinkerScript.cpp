@@ -14,7 +14,6 @@
 #include "LinkerScript.h"
 #include "Config.h"
 #include "InputSection.h"
-#include "Memory.h"
 #include "OutputSections.h"
 #include "Strings.h"
 #include "SymbolTable.h"
@@ -22,6 +21,7 @@
 #include "SyntheticSections.h"
 #include "Target.h"
 #include "Writer.h"
+#include "lld/Common/Memory.h"
 #include "lld/Common/Threads.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
@@ -533,7 +533,7 @@ void LinkerScript::addOrphanSections() {
     if (!S->Live || S->Parent)
       continue;
 
-    StringRef Name = getOutputSectionName(S->Name);
+    StringRef Name = getOutputSectionName(S);
 
     if (Config->OrphanHandling == OrphanHandlingPolicy::Error)
       error(toString(S) + " is being placed in '" + Name + "'");
@@ -976,8 +976,13 @@ ExprValue LinkerScript::getSymbolValue(StringRef Name, const Twine &Loc) {
     return 0;
   }
 
-  if (auto *Sym = dyn_cast_or_null<Defined>(Symtab->find(Name)))
-    return {Sym->Section, false, Sym->Value, Loc};
+  if (Symbol *Sym = Symtab->find(Name)) {
+    if (auto *DS = dyn_cast<Defined>(Sym))
+      return {DS->Section, false, DS->Value, Loc};
+    if (auto *SS = dyn_cast<SharedSymbol>(Sym))
+      if (!ErrorOnMissingSection || SS->CopyRelSec)
+        return {SS->CopyRelSec, false, 0, Loc};
+  }
 
   error(Loc + ": symbol not found: " + Name);
   return 0;

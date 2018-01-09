@@ -74,6 +74,8 @@ class LLVM_LIBRARY_VISIBILITY X86TargetInfo : public TargetInfo {
   bool HasAVX512IFMA = false;
   bool HasSHA = false;
   bool HasMPX = false;
+  bool HasSHSTK = false;
+  bool HasIBT = false;
   bool HasSGX = false;
   bool HasCX16 = false;
   bool HasFXSR = false;
@@ -708,15 +710,6 @@ public:
     LongDoubleFormat = &llvm::APFloat::x87DoubleExtended();
     HasFloat128 = true;
   }
-
-  void getTargetDefines(const LangOptions &Opts,
-                        MacroBuilder &Builder) const override {
-    WindowsX86_64TargetInfo::getTargetDefines(Opts, Builder);
-
-    // GCC defines this macro when it is using __gxx_personality_seh0.
-    if (!Opts.SjLjExceptions)
-      Builder.defineMacro("__SEH__");
-  }
 };
 
 // x86-64 Cygwin target
@@ -738,10 +731,6 @@ public:
     DefineStd(Builder, "unix", Opts);
     if (Opts.CPlusPlus)
       Builder.defineMacro("_GNU_SOURCE");
-
-    // GCC defines this macro when it is using __gxx_personality_seh0.
-    if (!Opts.SjLjExceptions)
-      Builder.defineMacro("__SEH__");
   }
 };
 

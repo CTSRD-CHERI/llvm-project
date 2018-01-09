@@ -1140,7 +1140,7 @@ bool SplitEditor::transferValues() {
 
       // The interval [Start;End) is continuously mapped to RegIdx, ParentVNI.
       DEBUG(dbgs() << " [" << Start << ';' << End << ")=" << RegIdx
-                   << '(' << PrintReg(Edit->get(RegIdx)) << ')');
+                   << '(' << printReg(Edit->get(RegIdx)) << ')');
       LiveInterval &LI = LIS.getInterval(Edit->get(RegIdx));
 
       // Check for a simply defined value that can be blitted directly.
@@ -1375,9 +1375,9 @@ void SplitEditor::rewriteAssigned(bool ExtendRanges) {
         continue;
       // The problem here can be that the new register may have been created
       // for a partially defined original register. For example:
-      //   %vreg827:subreg_hireg<def,read-undef> = ...
+      //   %0:subreg_hireg<def,read-undef> = ...
       //   ...
-      //   %vreg828<def> = COPY %vreg827
+      //   %1<def> = COPY %0
       if (S.empty())
         continue;
       SubLRC.reset(&VRM.getMachineFunction(), LIS.getSlotIndexes(), &MDT,

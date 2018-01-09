@@ -117,7 +117,7 @@ void ClangdLSPServer::onCommand(Ctx C, ExecuteCommandParams &Params) {
     // We don't need the response so id == 1 is OK.
     // Ideally, we would wait for the response and if there is no error, we
     // would reply success/failure to the original RPC.
-    C.call("workspace/applyEdit", ApplyWorkspaceEditParams::unparse(ApplyEdit));
+    C.call("workspace/applyEdit", ApplyEdit);
   } else {
     // We should not get here because ExecuteCommandParams would not have
     // parsed in the first place and this handler should not be called. But if
@@ -139,8 +139,8 @@ void ClangdLSPServer::onRename(Ctx C, RenameParams &Params) {
   std::string Code = Server.getDocument(File);
   std::vector<TextEdit> Edits = replacementsToEdits(Code, *Replacements);
   WorkspaceEdit WE;
-  WE.changes = {{llvm::yaml::escape(Params.textDocument.uri.uri), Edits}};
-  C.reply(WorkspaceEdit::unparse(WE));
+  WE.changes = {{Params.textDocument.uri.uri, Edits}};
+  C.reply(WE);
 }
 
 void ClangdLSPServer::onDocumentDidClose(Ctx C,
@@ -249,7 +249,7 @@ bool ClangdLSPServer::run(std::istream &In) {
 
   // Set up JSONRPCDispatcher.
   JSONRPCDispatcher Dispatcher(
-      [](RequestContext Ctx, llvm::yaml::MappingNode *Params) {
+      [](RequestContext Ctx, const json::Expr &Params) {
         Ctx.replyError(ErrorCode::MethodNotFound, "method not found");
       });
   registerCallbackHandlers(Dispatcher, Out, /*Callbacks=*/*this);

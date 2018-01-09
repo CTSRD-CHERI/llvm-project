@@ -246,6 +246,10 @@ The most important command line options are:
   the process is treated as a failure case.
   The limit is checked in a separate thread every second.
   If running w/o ASAN/MSAN, you may use 'ulimit -v' instead.
+``-malloc_limit_mb``
+  If non-zero, the fuzzer will exit if the target tries to allocate this
+  number of Mb with one malloc call.
+  If zero (default) same limit as rss_limit_mb is applied.
 ``-timeout_exitcode``
   Exit code (default 77) used if libFuzzer reports a timeout.
 ``-error_exitcode``
@@ -706,6 +710,8 @@ Trophies
   <https://bugzilla.gnome.org/buglist.cgi?bug_status=__all__&content=libFuzzer&list_id=68957&order=Importance&product=libxml2&query_format=specific>`_ and `[HT206167] <https://support.apple.com/en-gb/HT206167>`_ (CVE-2015-5312, CVE-2015-7500, CVE-2015-7942)
 
 * `Linux Kernel's BPF verifier <https://github.com/iovisor/bpf-fuzzer>`_
+
+* `Linux Kernel's Crypto code <https://www.spinics.net/lists/stable/msg199712.html>`_
 
 * Capstone: `[1] <https://github.com/aquynh/capstone/issues/600>`__ `[2] <https://github.com/aquynh/capstone/commit/6b88d1d51eadf7175a8f8a11b690684443b11359>`__
 

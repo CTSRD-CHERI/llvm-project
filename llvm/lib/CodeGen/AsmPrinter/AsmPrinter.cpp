@@ -802,7 +802,7 @@ void AsmPrinter::emitImplicitDef(const MachineInstr *MI) const {
   SmallString<128> Str;
   raw_svector_ostream OS(Str);
   OS << "implicit-def: "
-     << PrintReg(RegNo, MF->getSubtarget().getRegisterInfo());
+     << printReg(RegNo, MF->getSubtarget().getRegisterInfo());
 
   OutStreamer->AddComment(OS.str());
   OutStreamer->AddBlankLine();
@@ -816,7 +816,7 @@ static void emitKill(const MachineInstr *MI, AsmPrinter &AP) {
     const MachineOperand &Op = MI->getOperand(i);
     assert(Op.isReg() && "KILL instruction must have only register operands");
     OS << ' '
-       << PrintReg(Op.getReg(),
+       << printReg(Op.getReg(),
                    AP.MF->getSubtarget().getRegisterInfo())
        << (Op.isDef() ? "<def>" : "<kill>");
   }
@@ -903,7 +903,7 @@ static bool emitDebugValueComment(const MachineInstr *MI, AsmPrinter &AP) {
     }
     if (MemLoc)
       OS << '[';
-    OS << PrintReg(Reg, AP.MF->getSubtarget().getRegisterInfo());
+    OS << printReg(Reg, AP.MF->getSubtarget().getRegisterInfo());
   }
 
   if (MemLoc)
@@ -962,6 +962,31 @@ void AsmPrinter::emitFrameAlloc(const MachineInstr &MI) {
   // Emit a symbol assignment.
   OutStreamer->EmitAssignment(FrameAllocSym,
                              MCConstantExpr::create(FrameOffset, OutContext));
+}
+
+void AsmPrinter::emitStackSizeSection(const MachineFunction &MF) {
+  if (!MF.getTarget().Options.EmitStackSizeSection)
+    return;
+
+  MCSection *StackSizeSection = getObjFileLowering().getStackSizesSection();
+  if (!StackSizeSection)
+    return;
+
+  const MachineFrameInfo &FrameInfo = MF.getFrameInfo();
+  // Don't emit functions with dynamic stack allocations.
+  if (FrameInfo.hasVarSizedObjects())
+    return;
+
+  OutStreamer->PushSection();
+  OutStreamer->SwitchSection(StackSizeSection);
+
+  const MCSymbol *FunctionSymbol = getSymbol(MF.getFunction());
+  uint64_t StackSize = FrameInfo.getStackSize();
+  OutStreamer->EmitValue(MCSymbolRefExpr::create(FunctionSymbol, OutContext),
+                         /* size = */ 8);
+  OutStreamer->EmitULEB128IntValue(StackSize);
+
+  OutStreamer->PopSection();
 }
 
 static bool needFuncLabelsForEHOrDebugInfo(const MachineFunction &MF,
@@ -1134,6 +1159,9 @@ void AsmPrinter::EmitFunctionBody() {
                        HI.TimerGroupDescription, TimePassesIsEnabled);
     HI.Handler->endFunction(MF);
   }
+
+  // Emit section containing stack size metadata.
+  emitStackSizeSection(*MF);
 
   if (isVerbose())
     OutStreamer->GetCommentOS() << "-- End function\n";

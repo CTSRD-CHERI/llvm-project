@@ -190,7 +190,7 @@ EnableTypePromotionMerge("cgp-type-promotion-merge", cl::Hidden,
     " the other."), cl::init(true));
 
 static cl::opt<bool> DisableComplexAddrModes(
-    "disable-complex-addr-modes", cl::Hidden, cl::init(true),
+    "disable-complex-addr-modes", cl::Hidden, cl::init(false),
     cl::desc("Disables combining addressing modes with different parts "
              "in optimizeMemoryInst."));
 
@@ -2080,16 +2080,14 @@ struct ExtAddrMode : public TargetLowering::AddrMode {
       return static_cast<FieldName>(Result);
   }
 
-  // AddrModes with a baseReg or gv where the reg/gv is
-  // the only populated field are trivial.
+  // An AddrMode is trivial if it involves no calculation i.e. it is just a base
+  // with no offset.
   bool isTrivial() {
-    if (BaseGV && !BaseOffs && !Scale && !BaseReg)
-      return true;
-
-    if (!BaseGV && !BaseOffs && !Scale && BaseReg)
-      return true;
-
-    return false;
+    // An AddrMode is (BaseGV + BaseReg + BaseOffs + ScaleReg * Scale) so it is
+    // trivial if at most one of these terms is nonzero, except that BaseGV and
+    // BaseReg both being zero actually means a null pointer value, which we
+    // consider to be 'non-zero' here.
+    return !BaseOffs && !Scale && !(BaseGV && BaseReg);
   }
 
   Value *GetFieldAsValue(FieldName Field, Type *IntPtrTy) {
@@ -2911,8 +2909,10 @@ public:
 
     // Build a map between <original value, basic block where we saw it> to
     // value of base register.
+    // Bail out if there is no common type.
     FoldAddrToValueMapping Map;
-    initializeMap(Map);
+    if (!initializeMap(Map))
+      return false;
 
     Value *CommonValue = findCommon(Map);
     if (CommonValue)
@@ -2926,7 +2926,8 @@ private:
   /// If address is not an instruction than basic block is set to null.
   /// At the same time we find a common type for different field we will
   /// use to create new Phi/Select nodes. Keep it in CommonType field.
-  void initializeMap(FoldAddrToValueMapping &Map) {
+  /// Return false if there is no common type found.
+  bool initializeMap(FoldAddrToValueMapping &Map) {
     // Keep track of keys where the value is null. We will need to replace it
     // with constant null when we know the common type.
     SmallVector<ValueInBB, 2> NullValue;
@@ -2938,10 +2939,10 @@ private:
 
       Value *DV = AM.GetFieldAsValue(DifferentField, IntPtrTy);
       if (DV) {
-        if (CommonType)
-          assert(CommonType == DV->getType() && "Different types detected!");
-        else
-          CommonType = DV->getType();
+        auto *Type = DV->getType();
+        if (CommonType && CommonType != Type)
+          return false;
+        CommonType = Type;
         Map[{ AM.OriginalValue, BB }] = DV;
       } else {
         NullValue.push_back({ AM.OriginalValue, BB });
@@ -2950,6 +2951,7 @@ private:
     assert(CommonType && "At least one non-null value must be!");
     for (auto VIBB : NullValue)
       Map[VIBB] = Constant::getNullValue(CommonType);
+    return true;
   }
 
   /// \brief We have mapping between value A and basic block where value A

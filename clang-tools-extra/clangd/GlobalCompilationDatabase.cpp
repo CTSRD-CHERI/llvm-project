@@ -31,7 +31,7 @@ static void addExtraFlags(tooling::CompileCommand &Command,
 }
 
 tooling::CompileCommand getDefaultCompileCommand(PathRef File) {
-  std::vector<std::string> CommandLine{"clang", "-fsyntax-only", File.str()};
+  std::vector<std::string> CommandLine{"clang", File.str()};
   return tooling::CompileCommand(llvm::sys::path::parent_path(File),
                                  llvm::sys::path::filename(File), CommandLine,
                                  /*Output=*/"");
@@ -100,8 +100,7 @@ DirectoryBasedGlobalCompilationDatabase::getCompilationDatabase(PathRef File) {
         tryLoadDatabaseFromPath(CompileCommandsDir.getValue());
     if (ReturnValue == nullptr)
       Logger.log("Failed to find compilation database for " + Twine(File) +
-                 "in overriden directory " + CompileCommandsDir.getValue() +
-                 "\n");
+                 "in overriden directory " + CompileCommandsDir.getValue());
     return ReturnValue;
   }
 
@@ -114,7 +113,7 @@ DirectoryBasedGlobalCompilationDatabase::getCompilationDatabase(PathRef File) {
     return CDB;
   }
 
-  Logger.log("Failed to find compilation database for " + Twine(File) + "\n");
+  Logger.log("Failed to find compilation database for " + Twine(File));
   return nullptr;
 }
 

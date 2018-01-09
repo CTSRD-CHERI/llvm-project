@@ -283,6 +283,7 @@ namespace clang {
     Expr *VisitExprWithCleanups(ExprWithCleanups *EWC);
     Expr *VisitCXXThisExpr(CXXThisExpr *E);
     Expr *VisitCXXBoolLiteralExpr(CXXBoolLiteralExpr *E);
+    Expr *VisitCXXPseudoDestructorExpr(CXXPseudoDestructorExpr *E);
     Expr *VisitMemberExpr(MemberExpr *E);
     Expr *VisitCallExpr(CallExpr *E);
     Expr *VisitInitListExpr(InitListExpr *E);
@@ -291,6 +292,7 @@ namespace clang {
     Expr *VisitCXXDefaultInitExpr(CXXDefaultInitExpr *E);
     Expr *VisitCXXNamedCastExpr(CXXNamedCastExpr *E);
     Expr *VisitSubstNonTypeTemplateParmExpr(SubstNonTypeTemplateParmExpr *E);
+    Expr *VisitTypeTraitExpr(TypeTraitExpr *E);
 
 
     template<typename IIter, typename OIter>
@@ -5724,6 +5726,39 @@ Expr *ASTNodeImporter::VisitMemberExpr(MemberExpr *E) {
                             E->getObjectKind());
 }
 
+Expr *ASTNodeImporter::VisitCXXPseudoDestructorExpr(
+    CXXPseudoDestructorExpr *E) {
+
+  Expr *BaseE = Importer.Import(E->getBase());
+  if (!BaseE)
+    return nullptr;
+
+  TypeSourceInfo *ScopeInfo = Importer.Import(E->getScopeTypeInfo());
+  if (!ScopeInfo && E->getScopeTypeInfo())
+    return nullptr;
+
+  PseudoDestructorTypeStorage Storage;
+  if (IdentifierInfo *FromII = E->getDestroyedTypeIdentifier()) {
+    IdentifierInfo *ToII = Importer.Import(FromII);
+    if (!ToII)
+      return nullptr;
+    Storage = PseudoDestructorTypeStorage(
+          ToII, Importer.Import(E->getDestroyedTypeLoc()));
+  } else {
+    TypeSourceInfo *TI = Importer.Import(E->getDestroyedTypeInfo());
+    if (!TI)
+      return nullptr;
+    Storage = PseudoDestructorTypeStorage(TI);
+  }
+
+  return new (Importer.getToContext()) CXXPseudoDestructorExpr(
+        Importer.getToContext(), BaseE, E->isArrow(),
+        Importer.Import(E->getOperatorLoc()),
+        Importer.Import(E->getQualifierLoc()),
+        ScopeInfo, Importer.Import(E->getColonColonLoc()),
+        Importer.Import(E->getTildeLoc()), Storage);
+}
+
 Expr *ASTNodeImporter::VisitCallExpr(CallExpr *E) {
   QualType T = Importer.Import(E->getType());
   if (T.isNull())
@@ -5888,6 +5923,26 @@ Expr *ASTNodeImporter::VisitSubstNonTypeTemplateParmExpr(
   return new (Importer.getToContext()) SubstNonTypeTemplateParmExpr(
         T, E->getValueKind(), Importer.Import(E->getExprLoc()), Param,
         Replacement);
+}
+
+Expr *ASTNodeImporter::VisitTypeTraitExpr(TypeTraitExpr *E) {
+  QualType ToType = Importer.Import(E->getType());
+  if (ToType.isNull())
+    return nullptr;
+
+  SmallVector<TypeSourceInfo *, 4> ToArgs(E->getNumArgs());
+  if (ImportContainerChecked(E->getArgs(), ToArgs))
+    return nullptr;
+
+  // According to Sema::BuildTypeTrait(), if E is value-dependent,
+  // Value is always false.
+  bool ToValue = false;
+  if (!E->isValueDependent())
+    ToValue = E->getValue();
+
+  return TypeTraitExpr::Create(
+      Importer.getToContext(), ToType, Importer.Import(E->getLocStart()),
+      E->getTrait(), ToArgs, Importer.Import(E->getLocEnd()), ToValue);
 }
 
 void ASTNodeImporter::ImportOverrides(CXXMethodDecl *ToMethod,

@@ -129,8 +129,6 @@ namespace {
 
 // Implement calling convention for Hexagon.
 
-static bool isHvxVectorType(MVT ty);
-
 static bool
 CC_Hexagon(unsigned ValNo, MVT ValVT,
            MVT LocVT, CCValAssign::LocInfo LocInfo,
@@ -291,7 +289,8 @@ static bool CC_Hexagon (unsigned ValNo, MVT ValVT, MVT LocVT,
     return false;
   }
 
-  if (isHvxVectorType(LocVT)) {
+  auto &HST = State.getMachineFunction().getSubtarget<HexagonSubtarget>();
+  if (HST.isHVXVectorType(LocVT)) {
     if (!CC_HexagonVector(ValNo, ValVT, LocVT, LocInfo, ArgFlags, State))
       return false;
   }
@@ -553,28 +552,6 @@ static SDValue CreateCopyOfByValArgument(SDValue Src, SDValue Dst,
                        MachinePointerInfo(), MachinePointerInfo());
 }
 
-static bool isHvxVectorType(MVT Ty) {
-  switch (Ty.SimpleTy) {
-  case MVT::v8i64:
-  case MVT::v16i32:
-  case MVT::v32i16:
-  case MVT::v64i8:
-  case MVT::v16i64:
-  case MVT::v32i32:
-  case MVT::v64i16:
-  case MVT::v128i8:
-  case MVT::v32i64:
-  case MVT::v64i32:
-  case MVT::v128i16:
-  case MVT::v256i8:
-  case MVT::v512i1:
-  case MVT::v1024i1:
-    return true;
-  default:
-    return false;
-  }
-}
-
 bool
 HexagonTargetLowering::CanLowerReturn(
     CallingConv::ID CallConv, MachineFunction &MF, bool isVarArg,
@@ -774,7 +751,7 @@ HexagonTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     SDValue Arg = OutVals[i];
     ISD::ArgFlagsTy Flags = Outs[i].Flags;
     // Record if we need > 8 byte alignment on an argument.
-    bool ArgAlign = isHvxVectorType(VA.getValVT());
+    bool ArgAlign = Subtarget.isHVXVectorType(VA.getValVT());
     NeedsArgAlign |= ArgAlign;
 
     // Promote the value if needed.
@@ -2239,7 +2216,6 @@ const char* HexagonTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case HexagonISD::INSERT:        return "HexagonISD::INSERT";
   case HexagonISD::INSERTRP:      return "HexagonISD::INSERTRP";
   case HexagonISD::JT:            return "HexagonISD::JT";
-  case HexagonISD::PACKHL:        return "HexagonISD::PACKHL";
   case HexagonISD::RET_FLAG:      return "HexagonISD::RET_FLAG";
   case HexagonISD::TC_RETURN:     return "HexagonISD::TC_RETURN";
   case HexagonISD::VCOMBINE:      return "HexagonISD::VCOMBINE";
@@ -2522,16 +2498,18 @@ HexagonTargetLowering::buildVector32(ArrayRef<SDValue> Elem, const SDLoc &dl,
   //   (zxtb(Elem[0]) | (zxtb(Elem[1]) << 8)) |
   //   (zxtb(Elem[2]) | (zxtb(Elem[3]) << 8)) << 16
   SDValue S8 = DAG.getConstant(8, dl, MVT::i32);
-  SDValue S16 = DAG.getConstant(16, dl, MVT::i32);
-  SDValue V0 = DAG.getZExtOrTrunc(Elem[0], dl, MVT::i32);
-  SDValue V1 = DAG.getZExtOrTrunc(Elem[2], dl, MVT::i32);
-  SDValue V2 = DAG.getNode(ISD::SHL, dl, MVT::i32, {Elem[1], S8});
-  SDValue V3 = DAG.getNode(ISD::SHL, dl, MVT::i32, {Elem[3], S8});
-  SDValue V4 = DAG.getNode(ISD::OR, dl, MVT::i32, {V0, V2});
-  SDValue V5 = DAG.getNode(ISD::OR, dl, MVT::i32, {V1, V3});
-  SDValue V6 = DAG.getNode(ISD::SHL, dl, MVT::i32, {V5, S16});
-  SDValue V7 = DAG.getNode(ISD::OR, dl, MVT::i32, {V4, V6});
-  return DAG.getBitcast(MVT::v4i8, V7);
+  SDValue V0 = DAG.getZeroExtendInReg(Elem[0], dl, MVT::i8);
+  SDValue V1 = DAG.getZeroExtendInReg(Elem[1], dl, MVT::i8);
+  SDValue V2 = DAG.getZeroExtendInReg(Elem[2], dl, MVT::i8);
+  SDValue V3 = DAG.getZeroExtendInReg(Elem[3], dl, MVT::i8);
+
+  SDValue V4 = DAG.getNode(ISD::SHL, dl, MVT::i32, {V1, S8});
+  SDValue V5 = DAG.getNode(ISD::SHL, dl, MVT::i32, {V3, S8});
+  SDValue V6 = DAG.getNode(ISD::OR, dl, MVT::i32, {V0, V4});
+  SDValue V7 = DAG.getNode(ISD::OR, dl, MVT::i32, {V2, V5});
+  SDNode *T0 = DAG.getMachineNode(Hexagon::A2_combine_ll, dl, MVT::i32,
+                                  {V7, V6});
+  return DAG.getBitcast(MVT::v4i8, SDValue(T0,0));
 }
 
 SDValue
@@ -2598,6 +2576,101 @@ HexagonTargetLowering::buildVector64(ArrayRef<SDValue> Elem, const SDLoc &dl,
                   L, DAG.getTargetConstant(Hexagon::isub_lo, dl, MVT::i32),
                   H, DAG.getTargetConstant(Hexagon::isub_hi, dl, MVT::i32) });
   return SDValue(N, 0);
+}
+
+SDValue
+HexagonTargetLowering::extractVector(SDValue VecV, SDValue IdxV,
+                                     const SDLoc &dl, MVT ValTy, MVT ResTy,
+                                     SelectionDAG &DAG) const {
+  MVT VecTy = ty(VecV);
+  assert(!ValTy.isVector() ||
+         VecTy.getVectorElementType() == ValTy.getVectorElementType());
+  unsigned VecWidth = VecTy.getSizeInBits();
+  unsigned ValWidth = ValTy.getSizeInBits();
+  unsigned ElemWidth = VecTy.getVectorElementType().getSizeInBits();
+  assert(VecWidth == 32 || VecWidth == 64);
+  assert((VecWidth % ElemWidth) == 0);
+
+  // Cast everything to scalar integer types.
+  MVT ScalarTy = tyScalar(VecTy);
+  VecV = DAG.getBitcast(ScalarTy, VecV);
+
+  SDValue WidthV = DAG.getConstant(ValWidth, dl, MVT::i32);
+  SDValue ExtV;
+
+  if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(IdxV)) {
+    unsigned Off = C->getZExtValue() * ElemWidth;
+    if (VecWidth == 64 && ValWidth == 32) {
+      assert(Off == 0 || Off == 32);
+      unsigned SubIdx = Off == 0 ? Hexagon::isub_lo : Hexagon::isub_hi;
+      ExtV = DAG.getTargetExtractSubreg(SubIdx, dl, MVT::i32, VecV);
+    } else if (Off == 0 && (ValWidth % 8) == 0) {
+      ExtV = DAG.getZeroExtendInReg(VecV, dl, tyScalar(ValTy));
+    } else {
+      SDValue OffV = DAG.getConstant(Off, dl, MVT::i32);
+      // The return type of EXTRACTU must be the same as the type of the
+      // input vector.
+      ExtV = DAG.getNode(HexagonISD::EXTRACTU, dl, ScalarTy,
+                         {VecV, WidthV, OffV});
+    }
+  } else {
+    if (ty(IdxV) != MVT::i32)
+      IdxV = DAG.getZExtOrTrunc(IdxV, dl, MVT::i32);
+    SDValue OffV = DAG.getNode(ISD::MUL, dl, MVT::i32, IdxV,
+                               DAG.getConstant(ElemWidth, dl, MVT::i32));
+    // EXTRACTURP takes width/offset in a 64-bit pair.
+    SDValue CombV = DAG.getNode(HexagonISD::COMBINE, dl, MVT::i64,
+                                  {WidthV, OffV});
+    ExtV = DAG.getNode(HexagonISD::EXTRACTURP, dl, ScalarTy,
+                       {VecV, CombV});
+  }
+
+  // Cast ExtV to the requested result type.
+  ExtV = DAG.getZExtOrTrunc(ExtV, dl, tyScalar(ResTy));
+  ExtV = DAG.getBitcast(ResTy, ExtV);
+  return ExtV;
+}
+
+SDValue
+HexagonTargetLowering::insertVector(SDValue VecV, SDValue ValV, SDValue IdxV,
+                                    const SDLoc &dl, MVT ValTy,
+                                    SelectionDAG &DAG) const {
+  MVT VecTy = ty(VecV);
+  unsigned VecWidth = VecTy.getSizeInBits();
+  unsigned ValWidth = ValTy.getSizeInBits();
+  assert(VecWidth == 32 || VecWidth == 64);
+  assert((VecWidth % ValWidth) == 0);
+
+  // Cast everything to scalar integer types.
+  MVT ScalarTy = MVT::getIntegerVT(VecWidth);
+  // The actual type of ValV may be different than ValTy (which is related
+  // to the vector type).
+  unsigned VW = ty(ValV).getSizeInBits();
+  ValV = DAG.getBitcast(MVT::getIntegerVT(VW), ValV);
+  VecV = DAG.getBitcast(ScalarTy, VecV);
+  if (VW != VecWidth)
+    ValV = DAG.getAnyExtOrTrunc(ValV, dl, ScalarTy);
+
+  SDValue WidthV = DAG.getConstant(ValWidth, dl, MVT::i32);
+  SDValue InsV;
+
+  if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(IdxV)) {
+    unsigned W = C->getZExtValue() * ValWidth;
+    SDValue OffV = DAG.getConstant(W, dl, MVT::i32);
+    InsV = DAG.getNode(HexagonISD::INSERT, dl, ScalarTy,
+                       {VecV, ValV, WidthV, OffV});
+  } else {
+    if (ty(IdxV) != MVT::i32)
+      IdxV = DAG.getZExtOrTrunc(IdxV, dl, MVT::i32);
+    SDValue OffV = DAG.getNode(ISD::MUL, dl, MVT::i32, IdxV, WidthV);
+    // INSERTRP takes width/offset in a 64-bit pair.
+    SDValue CombV = DAG.getNode(HexagonISD::COMBINE, dl, MVT::i64,
+                                  {WidthV, OffV});
+    InsV = DAG.getNode(HexagonISD::INSERTRP, dl, ScalarTy,
+                       {VecV, ValV, CombV});
+  }
+
+  return DAG.getNode(ISD::BITCAST, dl, VecTy, InsV);
 }
 
 SDValue
@@ -2722,145 +2795,38 @@ HexagonTargetLowering::LowerEXTRACT_SUBVECTOR_HVX(SDValue Op,
 }
 
 SDValue
-HexagonTargetLowering::LowerEXTRACT_VECTOR(SDValue Op,
-                                           SelectionDAG &DAG) const {
-  // If we are dealing with EXTRACT_SUBVECTOR on a HVX type, we may
-  // be able to simplify it to an EXTRACT_SUBREG.
-  if (Op.getOpcode() == ISD::EXTRACT_SUBVECTOR && Subtarget.useHVXOps() &&
-      isHvxVectorType(Op.getValueType().getSimpleVT()))
-    return LowerEXTRACT_SUBVECTOR_HVX(Op, DAG);
-
-  EVT VT = Op.getValueType();
-  int VTN = VT.isVector() ? VT.getVectorNumElements() : 1;
-  SDLoc dl(Op);
-  SDValue Idx = Op.getOperand(1);
+HexagonTargetLowering::LowerEXTRACT_VECTOR_ELT(SDValue Op,
+                                               SelectionDAG &DAG) const {
   SDValue Vec = Op.getOperand(0);
-  EVT VecVT = Vec.getValueType();
-  EVT EltVT = VecVT.getVectorElementType();
-  int EltSize = EltVT.getSizeInBits();
-  SDValue Width = DAG.getConstant(Op.getOpcode() == ISD::EXTRACT_VECTOR_ELT ?
-                                  EltSize : VTN * EltSize, dl, MVT::i64);
-
-  // Constant element number.
-  if (ConstantSDNode *CI = dyn_cast<ConstantSDNode>(Idx)) {
-    uint64_t X = CI->getZExtValue();
-    SDValue Offset = DAG.getConstant(X * EltSize, dl, MVT::i32);
-    const SDValue Ops[] = {Vec, Width, Offset};
-
-    ConstantSDNode *CW = dyn_cast<ConstantSDNode>(Width);
-    assert(CW && "Non constant width in LowerEXTRACT_VECTOR");
-
-    SDValue N;
-    MVT SVT = VecVT.getSimpleVT();
-    uint64_t W = CW->getZExtValue();
-
-    if (W == 1) {
-      MVT LocVT = MVT::getIntegerVT(SVT.getSizeInBits());
-      SDValue VecCast = DAG.getNode(ISD::BITCAST, dl, LocVT, Vec);
-      SDValue Shifted = DAG.getNode(ISD::SRA, dl, LocVT, VecCast, Offset);
-      return DAG.getNode(ISD::AND, dl, LocVT, Shifted,
-                         DAG.getConstant(1, dl, LocVT));
-    } else if (W == 32) {
-      // Translate this node into EXTRACT_SUBREG.
-      unsigned Subreg = (X == 0) ? Hexagon::isub_lo : 0;
-
-      if (X == 0)
-        Subreg = Hexagon::isub_lo;
-      else if (SVT == MVT::v2i32 && X == 1)
-        Subreg = Hexagon::isub_hi;
-      else if (SVT == MVT::v4i16 && X == 2)
-        Subreg = Hexagon::isub_hi;
-      else if (SVT == MVT::v8i8 && X == 4)
-        Subreg = Hexagon::isub_hi;
-      else
-        llvm_unreachable("Bad offset");
-      N = DAG.getTargetExtractSubreg(Subreg, dl, MVT::i32, Vec);
-
-    } else if (SVT.getSizeInBits() == 32) {
-      N = DAG.getNode(HexagonISD::EXTRACTU, dl, MVT::i32, Ops);
-    } else if (SVT.getSizeInBits() == 64) {
-      N = DAG.getNode(HexagonISD::EXTRACTU, dl, MVT::i64, Ops);
-      if (VT.getSizeInBits() == 32)
-        N = DAG.getTargetExtractSubreg(Hexagon::isub_lo, dl, MVT::i32, N);
-    } else
-      return SDValue();
-
-    return DAG.getNode(ISD::BITCAST, dl, VT, N);
-  }
-
-  // Variable element number.
-  SDValue Offset = DAG.getNode(ISD::MUL, dl, MVT::i32, Idx,
-                               DAG.getConstant(EltSize, dl, MVT::i32));
-  SDValue Shifted = DAG.getNode(ISD::SHL, dl, MVT::i64, Width,
-                                DAG.getConstant(32, dl, MVT::i64));
-  SDValue Combined = DAG.getNode(ISD::OR, dl, MVT::i64, Shifted, Offset);
-
-  const SDValue Ops[] = {Vec, Combined};
-
-  SDValue N;
-  if (VecVT.getSizeInBits() == 32) {
-    N = DAG.getNode(HexagonISD::EXTRACTURP, dl, MVT::i32, Ops);
-  } else {
-    N = DAG.getNode(HexagonISD::EXTRACTURP, dl, MVT::i64, Ops);
-    if (VT.getSizeInBits() == 32)
-      N = DAG.getTargetExtractSubreg(Hexagon::isub_lo, dl, MVT::i32, N);
-  }
-  return DAG.getNode(ISD::BITCAST, dl, VT, N);
+  MVT ElemTy = ty(Vec).getVectorElementType();
+  return extractVector(Vec, Op.getOperand(1), SDLoc(Op), ElemTy, ty(Op), DAG);
 }
 
 SDValue
-HexagonTargetLowering::LowerINSERT_VECTOR(SDValue Op,
-                                          SelectionDAG &DAG) const {
-  EVT VT = Op.getValueType();
-  int VTN = VT.isVector() ? VT.getVectorNumElements() : 1;
-  SDLoc dl(Op);
+HexagonTargetLowering::LowerEXTRACT_SUBVECTOR(SDValue Op,
+                                              SelectionDAG &DAG) const {
   SDValue Vec = Op.getOperand(0);
-  SDValue Val = Op.getOperand(1);
-  SDValue Idx = Op.getOperand(2);
-  EVT VecVT = Vec.getValueType();
-  EVT EltVT = VecVT.getVectorElementType();
-  int EltSize = EltVT.getSizeInBits();
-  SDValue Width = DAG.getConstant(Op.getOpcode() == ISD::INSERT_VECTOR_ELT ?
-                                  EltSize : VTN * EltSize, dl, MVT::i64);
+  MVT VecTy = ty(Vec);
+  if (Subtarget.useHVXOps() && Subtarget.isHVXVectorType(VecTy))
+    return LowerEXTRACT_SUBVECTOR_HVX(Op, DAG);
 
-  if (ConstantSDNode *C = cast<ConstantSDNode>(Idx)) {
-    SDValue Offset = DAG.getConstant(C->getSExtValue() * EltSize, dl, MVT::i32);
-    const SDValue Ops[] = {Vec, Val, Width, Offset};
+  return extractVector(Vec, Op.getOperand(1), SDLoc(Op), ty(Op), ty(Op), DAG);
+}
 
-    SDValue N;
-    if (VT.getSizeInBits() == 32)
-      N = DAG.getNode(HexagonISD::INSERT, dl, MVT::i32, Ops);
-    else if (VT.getSizeInBits() == 64)
-      N = DAG.getNode(HexagonISD::INSERT, dl, MVT::i64, Ops);
-    else
-      return SDValue();
+SDValue
+HexagonTargetLowering::LowerINSERT_VECTOR_ELT(SDValue Op,
+                                              SelectionDAG &DAG) const {
+  MVT VecTy = ty(Op);
+  return insertVector(Op.getOperand(0), Op.getOperand(1), Op.getOperand(2),
+                      SDLoc(Op), VecTy.getVectorElementType(), DAG);
+}
 
-    return DAG.getNode(ISD::BITCAST, dl, VT, N);
-  }
-
-  // Variable element number.
-  SDValue Offset = DAG.getNode(ISD::MUL, dl, MVT::i32, Idx,
-                               DAG.getConstant(EltSize, dl, MVT::i32));
-  SDValue Shifted = DAG.getNode(ISD::SHL, dl, MVT::i64, Width,
-                                DAG.getConstant(32, dl, MVT::i64));
-  SDValue Combined = DAG.getNode(ISD::OR, dl, MVT::i64, Shifted, Offset);
-
-  if (VT.getSizeInBits() == 64 && Val.getValueSizeInBits() == 32) {
-    SDValue C = DAG.getConstant(0, dl, MVT::i32);
-    Val = DAG.getNode(HexagonISD::COMBINE, dl, VT, C, Val);
-  }
-
-  const SDValue Ops[] = {Vec, Val, Combined};
-
-  SDValue N;
-  if (VT.getSizeInBits() == 32)
-    N = DAG.getNode(HexagonISD::INSERTRP, dl, MVT::i32, Ops);
-  else if (VT.getSizeInBits() == 64)
-    N = DAG.getNode(HexagonISD::INSERTRP, dl, MVT::i64, Ops);
-  else
-    return SDValue();
-
-  return DAG.getNode(ISD::BITCAST, dl, VT, N);
+SDValue
+HexagonTargetLowering::LowerINSERT_SUBVECTOR(SDValue Op,
+                                             SelectionDAG &DAG) const {
+  SDValue ValV = Op.getOperand(1);
+  return insertVector(Op.getOperand(0), ValV, Op.getOperand(2),
+                      SDLoc(Op), ty(ValV), DAG);
 }
 
 bool
@@ -2915,10 +2881,10 @@ HexagonTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
 #endif
       llvm_unreachable("Should not custom lower this!");
     case ISD::CONCAT_VECTORS:       return LowerCONCAT_VECTORS(Op, DAG);
-    case ISD::INSERT_SUBVECTOR:     return LowerINSERT_VECTOR(Op, DAG);
-    case ISD::INSERT_VECTOR_ELT:    return LowerINSERT_VECTOR(Op, DAG);
-    case ISD::EXTRACT_SUBVECTOR:    return LowerEXTRACT_VECTOR(Op, DAG);
-    case ISD::EXTRACT_VECTOR_ELT:   return LowerEXTRACT_VECTOR(Op, DAG);
+    case ISD::INSERT_SUBVECTOR:     return LowerINSERT_SUBVECTOR(Op, DAG);
+    case ISD::INSERT_VECTOR_ELT:    return LowerINSERT_VECTOR_ELT(Op, DAG);
+    case ISD::EXTRACT_SUBVECTOR:    return LowerEXTRACT_SUBVECTOR(Op, DAG);
+    case ISD::EXTRACT_VECTOR_ELT:   return LowerEXTRACT_VECTOR_ELT(Op, DAG);
     case ISD::BUILD_VECTOR:         return LowerBUILD_VECTOR(Op, DAG);
     case ISD::VECTOR_SHUFFLE:       return LowerVECTOR_SHUFFLE(Op, DAG);
     case ISD::SRA:

@@ -36,7 +36,7 @@ namespace json {
 //   - booleans
 //   - null: nullptr
 //   - arrays: {"foo", 42.0, false}
-//   - serializable things: any T with a T::unparse(const T&) -> Expr
+//   - serializable things: types with toJSON(const T&)->Expr, found by ADL
 //
 // They can also be constructed from object/array helpers:
 //   - json::obj is a type like map<StringExpr, Expr>
@@ -55,15 +55,37 @@ namespace json {
 //   object  (json::obj)
 //
 // The kind can be queried directly, or implicitly via the typed accessors:
-//   if (Optional<StringRef> S = E.string())
+//   if (Optional<StringRef> S = E.asString()
 //     assert(E.kind() == Expr::String);
 //
 // Array and Object also have typed indexing accessors for easy traversal:
 //   Expected<Expr> E = parse(R"( {"options": {"font": "sans-serif"}} )");
-//   if (json::obj* O = E->object())
-//     if (json::obj* Opts = O->object("options"))
-//       if (Optional<StringRef> Font = Opts->string("font"))
+//   if (json::obj* O = E->asObject())
+//     if (json::obj* Opts = O->getObject("options"))
+//       if (Optional<StringRef> Font = Opts->getString("font"))
 //         assert(Opts->at("font").kind() == Expr::String);
+//
+// === Converting expressions to objects ===
+//
+// The convention is to have a deserializer function findable via ADL:
+//     fromJSON(const json::Expr&, T&)->bool
+// Deserializers are provided for:
+//   - bool
+//   - int
+//   - double
+//   - std::string
+//   - vector<T>, where T is deserializable
+//   - map<string, T>, where T is deserializable
+//   - Optional<T>, where T is deserializable
+//
+// ObjectMapper can help writing fromJSON() functions for object types:
+//   bool fromJSON(const Expr &E, MyStruct &R) {
+//     ObjectMapper O(E);
+//     if (!O || !O.map("mandatory_field", R.MandatoryField))
+//       return false;
+//     O.map("optional_field", R.OptionalField);
+//     return true;
+//   }
 //
 // === Serialization ===
 //
@@ -127,12 +149,11 @@ public:
   Expr(T D) : Type(T_Number) {
     create<double>(D);
   }
-  // Types with a static T::unparse function returning an Expr.
-  // FIXME: should this be a free unparse() function found by ADL?
+  // Types with a toJSON(const T&)->Expr function, found by ADL.
   template <typename T,
             typename = typename std::enable_if<std::is_same<
-                Expr, decltype(T::unparse(*(const T *)nullptr))>::value>>
-  Expr(const T &V) : Expr(T::unparse(V)) {}
+                Expr, decltype(toJSON(*(const T *)nullptr))>::value>>
+  Expr(const T &V) : Expr(toJSON(V)) {}
 
   Expr &operator=(const Expr &M) {
     destroy();
@@ -166,38 +187,48 @@ public:
   }
 
   // Typed accessors return None/nullptr if the Expr is not of this type.
-  llvm::Optional<std::nullptr_t> null() const {
+  llvm::Optional<std::nullptr_t> asNull() const {
     if (LLVM_LIKELY(Type == T_Null))
       return nullptr;
     return llvm::None;
   }
-  llvm::Optional<bool> boolean() const {
-    if (LLVM_LIKELY(Type == T_Null))
+  llvm::Optional<bool> asBoolean() const {
+    if (LLVM_LIKELY(Type == T_Boolean))
       return as<bool>();
     return llvm::None;
   }
-  llvm::Optional<double> number() const {
+  llvm::Optional<double> asNumber() const {
     if (LLVM_LIKELY(Type == T_Number))
       return as<double>();
     return llvm::None;
   }
-  llvm::Optional<llvm::StringRef> string() const {
+  llvm::Optional<int64_t> asInteger() const {
+    if (LLVM_LIKELY(Type == T_Number)) {
+      double D = as<double>();
+      if (LLVM_LIKELY(std::modf(D, &D) == 0 &&
+                      D >= std::numeric_limits<int64_t>::min() &&
+                      D <= std::numeric_limits<int64_t>::max()))
+        return D;
+    }
+    return llvm::None;
+  }
+  llvm::Optional<llvm::StringRef> asString() const {
     if (Type == T_String)
       return llvm::StringRef(as<std::string>());
     if (LLVM_LIKELY(Type == T_StringRef))
       return as<llvm::StringRef>();
     return llvm::None;
   }
-  const ObjectExpr *object() const {
+  const ObjectExpr *asObject() const {
     return LLVM_LIKELY(Type == T_Object) ? &as<ObjectExpr>() : nullptr;
   }
-  ObjectExpr *object() {
+  ObjectExpr *asObject() {
     return LLVM_LIKELY(Type == T_Object) ? &as<ObjectExpr>() : nullptr;
   }
-  const ArrayExpr *array() const {
+  const ArrayExpr *asArray() const {
     return LLVM_LIKELY(Type == T_Array) ? &as<ArrayExpr>() : nullptr;
   }
-  ArrayExpr *array() {
+  ArrayExpr *asArray() {
     return LLVM_LIKELY(Type == T_Array) ? &as<ArrayExpr>() : nullptr;
   }
 
@@ -292,6 +323,68 @@ public:
     Expr &operator[](ObjectKey &&K) {
       return emplace(std::move(K), Expr(nullptr)).first->second;
     }
+
+    // Look up a property, returning nullptr if it doesn't exist.
+    json::Expr *get(const ObjectKey &K) {
+      auto I = find(K);
+      if (I == end())
+        return nullptr;
+      return &I->second;
+    }
+    const json::Expr *get(const ObjectKey &K) const {
+      auto I = find(K);
+      if (I == end())
+        return nullptr;
+      return &I->second;
+    }
+    // Typed accessors return None/nullptr if
+    //   - the property doesn't exist
+    //   - or it has the wrong type
+    llvm::Optional<std::nullptr_t> getNull(const ObjectKey &K) const {
+      if (auto *V = get(K))
+        return V->asNull();
+      return llvm::None;
+    }
+    llvm::Optional<bool> getBoolean(const ObjectKey &K) const {
+      if (auto *V = get(K))
+        return V->asBoolean();
+      return llvm::None;
+    }
+    llvm::Optional<double> getNumber(const ObjectKey &K) const {
+      if (auto *V = get(K))
+        return V->asNumber();
+      return llvm::None;
+    }
+    llvm::Optional<int64_t> getInteger(const ObjectKey &K) const {
+      if (auto *V = get(K))
+        return V->asInteger();
+      return llvm::None;
+    }
+    llvm::Optional<llvm::StringRef> getString(const ObjectKey &K) const {
+      if (auto *V = get(K))
+        return V->asString();
+      return llvm::None;
+    }
+    const ObjectExpr *getObject(const ObjectKey &K) const {
+      if (auto *V = get(K))
+        return V->asObject();
+      return nullptr;
+    }
+    ObjectExpr *getObject(const ObjectKey &K) {
+      if (auto *V = get(K))
+        return V->asObject();
+      return nullptr;
+    }
+    const ArrayExpr *getArray(const ObjectKey &K) const {
+      if (auto *V = get(K))
+        return V->asArray();
+      return nullptr;
+    }
+    ArrayExpr *getArray(const ObjectKey &K) {
+      if (auto *V = get(K))
+        return V->asArray();
+      return nullptr;
+    }
   };
 
   class ArrayExpr : public std::vector<Expr> {
@@ -306,6 +399,29 @@ public:
       for (const auto &V : C)
         emplace_back(V);
     }
+
+    // Typed accessors return None/nullptr if the element has the wrong type.
+    llvm::Optional<std::nullptr_t> getNull(size_t I) const {
+      return (*this)[I].asNull();
+    }
+    llvm::Optional<bool> getBoolean(size_t I) const {
+      return (*this)[I].asBoolean();
+    }
+    llvm::Optional<double> getNumber(size_t I) const {
+      return (*this)[I].asNumber();
+    }
+    llvm::Optional<int64_t> getInteger(size_t I) const {
+      return (*this)[I].asInteger();
+    }
+    llvm::Optional<llvm::StringRef> getString(size_t I) const {
+      return (*this)[I].asString();
+    }
+    const ObjectExpr *getObject(size_t I) const {
+      return (*this)[I].asObject();
+    }
+    ObjectExpr *getObject(size_t I) { return (*this)[I].asObject(); }
+    const ArrayExpr *getArray(size_t I) const { return (*this)[I].asArray(); }
+    ArrayExpr *getArray(size_t I) { return (*this)[I].asArray(); }
   };
 
 private:
@@ -336,6 +452,101 @@ inline Expr::ObjectExpr::ObjectExpr(std::initializer_list<KV> Properties) {
 // Give Expr::{Object,Array} more convenient names for literal use.
 using obj = Expr::ObjectExpr;
 using ary = Expr::ArrayExpr;
+
+// Standard deserializers.
+inline bool fromJSON(const json::Expr &E, std::string &Out) {
+  if (auto S = E.asString()) {
+    Out = *S;
+    return true;
+  }
+  return false;
+}
+inline bool fromJSON(const json::Expr &E, int &Out) {
+  if (auto S = E.asInteger()) {
+    Out = *S;
+    return true;
+  }
+  return false;
+}
+inline bool fromJSON(const json::Expr &E, double &Out) {
+  if (auto S = E.asNumber()) {
+    Out = *S;
+    return true;
+  }
+  return false;
+}
+inline bool fromJSON(const json::Expr &E, bool &Out) {
+  if (auto S = E.asBoolean()) {
+    Out = *S;
+    return true;
+  }
+  return false;
+}
+template <typename T>
+bool fromJSON(const json::Expr &E, llvm::Optional<T> &Out) {
+  if (E.asNull()) {
+    Out = llvm::None;
+    return true;
+  }
+  T Result;
+  if (!fromJSON(E, Result))
+    return false;
+  Out = std::move(Result);
+  return true;
+}
+template <typename T> bool fromJSON(const json::Expr &E, std::vector<T> &Out) {
+  if (auto *A = E.asArray()) {
+    Out.clear();
+    Out.resize(A->size());
+    for (size_t I = 0; I < A->size(); ++I)
+      if (!fromJSON((*A)[I], Out[I]))
+        return false;
+    return true;
+  }
+  return false;
+}
+template <typename T>
+bool fromJSON(const json::Expr &E, std::map<std::string, T> &Out) {
+  if (auto *O = E.asObject()) {
+    Out.clear();
+    for (const auto &KV : *O)
+      if (!fromJSON(KV.second, Out[llvm::StringRef(KV.first)]))
+        return false;
+    return true;
+  }
+  return false;
+}
+
+// Helper for mapping JSON objects onto protocol structs.
+// See file header for example.
+class ObjectMapper {
+public:
+  ObjectMapper(const json::Expr &E) : O(E.asObject()) {}
+
+  // True if the expression is an object.
+  // Must be checked before calling map().
+  operator bool() { return O; }
+
+  // Maps a property to a field, if it exists.
+  template <typename T> bool map(const char *Prop, T &Out) {
+    assert(*this && "Must check this is an object before calling map()");
+    if (const json::Expr *E = O->get(Prop))
+      return fromJSON(*E, Out);
+    return false;
+  }
+
+  // Optional requires special handling, because missing keys are OK.
+  template <typename T> bool map(const char *Prop, llvm::Optional<T> &Out) {
+    assert(*this && "Must check this is an object before calling map()");
+    if (const json::Expr *E = O->get(Prop))
+      return fromJSON(*E, Out);
+    Out = llvm::None;
+    return true;
+  }
+
+private:
+  const json::obj *O;
+};
 
 llvm::Expected<Expr> parse(llvm::StringRef JSON);
 

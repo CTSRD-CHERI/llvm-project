@@ -9,10 +9,11 @@
 
 #include "lld/Common/Driver.h"
 #include "Config.h"
-#include "Memory.h"
 #include "SymbolTable.h"
 #include "Writer.h"
+#include "lld/Common/Args.h"
 #include "lld/Common/ErrorHandler.h"
+#include "lld/Common/Memory.h"
 #include "lld/Common/Threads.h"
 #include "lld/Common/Version.h"
 #include "llvm/ADT/Twine.h"
@@ -25,7 +26,6 @@
 using namespace llvm;
 using namespace llvm::sys;
 using namespace llvm::wasm;
-using llvm::sys::Process;
 
 using namespace lld;
 using namespace lld::wasm;
@@ -60,9 +60,7 @@ private:
 
 } // anonymous namespace
 
-std::vector<SpecificAllocBase *> lld::wasm::SpecificAllocBase::Instances;
 Configuration *lld::wasm::Config;
-BumpPtrAllocator lld::wasm::BAlloc;
 
 bool lld::wasm::link(ArrayRef<const char *> Args, bool CanExitEarly,
                      raw_ostream &Error) {
@@ -104,52 +102,6 @@ static const opt::OptTable::Info OptInfo[] = {
 #undef OPTION
 };
 
-static std::vector<StringRef> getArgs(opt::InputArgList &Args, int Id) {
-  std::vector<StringRef> V;
-  for (auto *Arg : Args.filtered(Id))
-    V.push_back(Arg->getValue());
-  return V;
-}
-
-static int getInteger(opt::InputArgList &Args, unsigned Key, int Default) {
-  int V = Default;
-  if (auto *Arg = Args.getLastArg(Key)) {
-    StringRef S = Arg->getValue();
-    if (S.getAsInteger(10, V))
-      error(Arg->getSpelling() + ": number expected, but got " + S);
-  }
-  return V;
-}
-
-static uint64_t getZOptionValue(opt::InputArgList &Args, StringRef Key,
-                                uint64_t Default) {
-  for (auto *Arg : Args.filtered(OPT_z)) {
-    StringRef Value = Arg->getValue();
-    size_t Pos = Value.find("=");
-    if (Pos != StringRef::npos && Key == Value.substr(0, Pos)) {
-      Value = Value.substr(Pos + 1);
-      uint64_t Res;
-      if (Value.getAsInteger(0, Res))
-        error("invalid " + Key + ": " + Value);
-      return Res;
-    }
-  }
-  return Default;
-}
-
-static std::vector<StringRef> getLines(MemoryBufferRef MB) {
-  SmallVector<StringRef, 0> Arr;
-  MB.getBuffer().split(Arr, '\n');
-
-  std::vector<StringRef> Ret;
-  for (StringRef S : Arr) {
-    S = S.trim();
-    if (!S.empty() && S[0] != '#')
-      Ret.push_back(S);
-  }
-  return Ret;
-}
-
 // Set color diagnostics according to -color-diagnostics={auto,always,never}
 // or -no-color-diagnostics flags.
 static void handleColorDiagnostics(opt::InputArgList &Args) {
@@ -184,7 +136,7 @@ static Optional<std::string> findFile(StringRef Path1, const Twine &Path2) {
 
 // Inject a new wasm global into the output binary with the given value.
 // Wasm global are used in relocatable object files to model symbol imports
-// and exports.  In the final exectuable the only use of wasm globals is the
+// and exports.  In the final executable the only use of wasm globals is
 // for the exlicit stack pointer (__stack_pointer).
 static void addSyntheticGlobal(StringRef Name, int32_t Value) {
   log("injecting global: " + Name);
@@ -201,9 +153,10 @@ static void addSyntheticGlobal(StringRef Name, int32_t Value) {
 
 // Inject a new undefined symbol into the link.  This will cause the link to
 // fail unless this symbol can be found.
-static void addSyntheticUndefinedFunction(StringRef Name) {
+static void addSyntheticUndefinedFunction(StringRef Name,
+                                          const WasmSignature *Type) {
   log("injecting undefined func: " + Name);
-  Symtab->addUndefinedFunction(Name);
+  Symtab->addUndefinedFunction(Name, Type);
 }
 
 static void printHelp(const char *Argv0) {
@@ -278,12 +231,12 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
 
   // Parse and evaluate -mllvm options.
   std::vector<const char *> V;
-  V.push_back("lld-link (LLVM option parsing)");
+  V.push_back("wasm-ld (LLVM option parsing)");
   for (auto *Arg : Args.filtered(OPT_mllvm))
     V.push_back(Arg->getValue());
   cl::ParseCommandLineOptions(V.size(), V.data());
 
-  errorHandler().ErrorLimit = getInteger(Args, OPT_error_limit, 20);
+  errorHandler().ErrorLimit = args::getInteger(Args, OPT_error_limit, 20);
 
   if (Args.hasArg(OPT_version) || Args.hasArg(OPT_v)) {
     outs() << getLLDVersion() << "\n";
@@ -291,26 +244,29 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   }
 
   Config->AllowUndefined = Args.hasArg(OPT_allow_undefined);
+  Config->CheckSignatures =
+      Args.hasFlag(OPT_check_signatures, OPT_no_check_signatures, false);
   Config->EmitRelocs = Args.hasArg(OPT_emit_relocs);
   Config->Entry = Args.getLastArgValue(OPT_entry);
   Config->ImportMemory = Args.hasArg(OPT_import_memory);
   Config->OutputFile = Args.getLastArgValue(OPT_o);
   Config->Relocatable = Args.hasArg(OPT_relocatable);
-  Config->SearchPaths = getArgs(Args, OPT_L);
+  Config->SearchPaths = args::getStrings(Args, OPT_L);
   Config->StripAll = Args.hasArg(OPT_strip_all);
   Config->StripDebug = Args.hasArg(OPT_strip_debug);
   Config->Sysroot = Args.getLastArgValue(OPT_sysroot);
   errorHandler().Verbose = Args.hasArg(OPT_verbose);
   ThreadsEnabled = Args.hasFlag(OPT_threads, OPT_no_threads, true);
 
-  Config->InitialMemory = getInteger(Args, OPT_initial_memory, 0);
-  Config->GlobalBase = getInteger(Args, OPT_global_base, 1024);
-  Config->MaxMemory = getInteger(Args, OPT_max_memory, 0);
-  Config->ZStackSize = getZOptionValue(Args, "stack-size", WasmPageSize);
+  Config->InitialMemory = args::getInteger(Args, OPT_initial_memory, 0);
+  Config->GlobalBase = args::getInteger(Args, OPT_global_base, 1024);
+  Config->MaxMemory = args::getInteger(Args, OPT_max_memory, 0);
+  Config->ZStackSize =
+      args::getZOptionValue(Args, OPT_z, "stack-size", WasmPageSize);
 
   if (auto *Arg = Args.getLastArg(OPT_allow_undefined_file))
     if (Optional<MemoryBufferRef> Buf = readFile(Arg->getValue()))
-      for (StringRef Sym : getLines(*Buf))
+      for (StringRef Sym : args::getLines(*Buf))
         Config->AllowUndefinedSymbols.insert(Sym);
 
   if (Config->OutputFile.empty())
@@ -325,7 +281,8 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   if (!Config->Relocatable) {
     if (Config->Entry.empty())
       Config->Entry = "_start";
-    addSyntheticUndefinedFunction(Config->Entry);
+    static WasmSignature Signature = {{}, WASM_TYPE_NORESULT};
+    addSyntheticUndefinedFunction(Config->Entry, &Signature);
 
     addSyntheticGlobal("__stack_pointer", 0);
   }

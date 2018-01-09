@@ -1653,7 +1653,9 @@ SDValue SelectionDAG::getVectorShuffle(EVT VT, const SDLoc &dl, SDValue N1,
 
   CSEMap.InsertNode(N, IP);
   InsertNode(N);
-  return SDValue(N, 0);
+  SDValue V = SDValue(N, 0);
+  NewSDValueDbgMsg(V, "Creating new node: ", this);
+  return V;
 }
 
 SDValue SelectionDAG::getCommutedVectorShuffle(const ShuffleVectorSDNode &SV) {
@@ -5433,20 +5435,18 @@ static SDValue getMemsetStores(SelectionDAG &DAG, const SDLoc &dl,
   return DAG.getNode(ISD::TokenFactor, dl, MVT::Other, OutChains);
 }
 
-SDValue SelectionDAG::getPointerAdd(const SDLoc dl, SDValue Ptr, int64_t Offset,
+SDValue SelectionDAG::getPointerAdd(const SDLoc dl, SDValue Ptr, SDValue Offset,
                                     const SDNodeFlags Flags) {
+  assert(Offset.getValueType().isInteger());
   EVT BasePtrVT = Ptr.getValueType();
   if (BasePtrVT.isFatPointer()) {
-    if (Offset == 0)
-      return Ptr;
-    // Assume that address space 0 has the range of any pointer.
-    MVT IntPtrTy = MVT::getIntegerVT(
-        getDataLayout().getPointerSizeInBits(0));
-    return getNode(ISD::PTRADD, dl, BasePtrVT, Ptr, getConstant(Offset,
-          dl, IntPtrTy), Flags);
+    if (auto *Constant = dyn_cast<ConstantSDNode>(Offset.getNode())) {
+      if (Constant->isNullValue())
+        return Ptr;
+    }
+    return getNode(ISD::PTRADD, dl, BasePtrVT, Ptr, Offset, Flags);
   }
-  return getNode(ISD::ADD, dl, BasePtrVT, Ptr,
-                 getConstant(Offset, dl, BasePtrVT), Flags);
+  return getNode(ISD::ADD, dl, BasePtrVT, Ptr, Offset, Flags);
 }
 
 static void checkAddrSpaceIsValidForLibcall(const TargetLowering *TLI,

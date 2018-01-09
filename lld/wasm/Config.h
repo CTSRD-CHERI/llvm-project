@@ -11,35 +11,35 @@
 #define LLD_WASM_CONFIG_H
 
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/StringSet.h"
 #include "llvm/BinaryFormat/Wasm.h"
 
 #include "Symbols.h"
 
 using llvm::wasm::WasmGlobal;
 
-#include <set>
-
 namespace lld {
 namespace wasm {
 
 struct Configuration {
-  bool AllowUndefined = false;
-  bool Demangle = true;
-  bool EmitRelocs = false;
-  bool ImportMemory = false;
-  bool Relocatable = false;
-  bool StripDebug = false;
-  bool StripAll = false;
-  uint32_t ZStackSize = 0;
-  uint32_t MaxMemory = 0;
-  uint32_t GlobalBase = 0;
-  uint32_t InitialMemory = 0;
+  bool AllowUndefined;
+  bool CheckSignatures;
+  bool Demangle;
+  bool EmitRelocs;
+  bool ImportMemory;
+  bool Relocatable;
+  bool StripAll;
+  bool StripDebug;
+  uint32_t GlobalBase;
+  uint32_t InitialMemory;
+  uint32_t MaxMemory;
+  uint32_t ZStackSize;
   llvm::StringRef Entry;
-  llvm::StringRef Sysroot;
   llvm::StringRef OutputFile;
+  llvm::StringRef Sysroot;
 
+  llvm::StringSet<> AllowUndefinedSymbols;
   std::vector<llvm::StringRef> SearchPaths;
-  std::set<llvm::StringRef> AllowUndefinedSymbols;
   std::vector<std::pair<Symbol *, WasmGlobal>> SyntheticGlobals;
 };
 
