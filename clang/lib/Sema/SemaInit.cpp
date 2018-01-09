@@ -6305,7 +6305,7 @@ static const InitializedEntity *getEntityForTemporaryLifetimeExtension(
     if (Entity->getParent())
       return getEntityForTemporaryLifetimeExtension(Entity->getParent(),
                                                     Entity);
-    // Fall through.
+    LLVM_FALLTHROUGH;
   case InitializedEntity::EK_Delegating:
     // We can reach this case for aggregate initialization in a constructor:
     //   struct A { int &&r; };
@@ -7749,7 +7749,7 @@ bool InitializationSequence::Diagnose(Sema &S,
       << Args[0]->getSourceRange();
       break;
     }
-    // Intentional fallthrough
+    LLVM_FALLTHROUGH;
 
   case FK_NonConstLValueReferenceBindingToUnrelated:
     S.Diag(Kind.getLocation(),

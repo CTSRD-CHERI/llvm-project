@@ -134,7 +134,12 @@ Improvements to clang-tidy
   <http://clang.llvm.org/extra/clang-tidy/checks/fuchsia-default-arguments.html>`_ check
 
   Warns if a function or method is declared or called with default arguments.
-  
+
+- New `fuchsia-overloaded-operator
+  <http://clang.llvm.org/extra/clang-tidy/checks/fuchsia-overloaded-operator.html>`_ check
+
+  Warns if an operator is overloaded, except for the assignment (copy and move) operators.
+
 - New `fuchsia-virtual-inheritance
   <http://clang.llvm.org/extra/clang-tidy/checks/fuchsia-virtual-inheritance.html>`_ check
 
@@ -267,6 +272,15 @@ Improvements to clang-tidy
   - `hicpp-vararg <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-vararg.html>`_
 
 - Added the ability to suppress specific checks (or all checks) in a ``NOLINT`` or ``NOLINTNEXTLINE`` comment.
+
+- Added new functionality to `misc-redundant-expression
+  <http://clang.llvm.org/extra/clang-tidy/checks/misc-redundant-expression.html>`_ check
+
+  Finds redundant binary operator expressions where the operators are overloaded,
+  and ones that contain the same macros twice.
+  Also checks for assignment expressions that do not change the value of the
+  assigned variable, and expressions that always evaluate to the same value
+  because of possible operator confusion.
 
 Improvements to include-fixer
 -----------------------------

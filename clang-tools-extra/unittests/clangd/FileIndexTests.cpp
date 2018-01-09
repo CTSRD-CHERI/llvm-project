@@ -24,20 +24,22 @@ namespace {
 Symbol symbol(llvm::StringRef ID) {
   Symbol Sym;
   Sym.ID = SymbolID(ID);
-  Sym.QualifiedName = ID;
+  Sym.Name = ID;
   return Sym;
 }
 
-void addNumSymbolsToSlab(int Begin, int End, SymbolSlab *Slab) {
+std::unique_ptr<SymbolSlab> numSlab(int Begin, int End) {
+  SymbolSlab::Builder Slab;
   for (int i = Begin; i <= End; i++)
-    Slab->insert(symbol(std::to_string(i)));
+    Slab.insert(symbol(std::to_string(i)));
+  return llvm::make_unique<SymbolSlab>(std::move(Slab).build());
 }
 
 std::vector<std::string>
 getSymbolNames(const std::vector<const Symbol *> &Symbols) {
   std::vector<std::string> Names;
   for (const Symbol *Sym : Symbols)
-    Names.push_back(Sym->QualifiedName);
+    Names.push_back(Sym->Name);
   return Names;
 }
 
@@ -45,28 +47,15 @@ TEST(FileSymbolsTest, UpdateAndGet) {
   FileSymbols FS;
   EXPECT_THAT(getSymbolNames(*FS.allSymbols()), UnorderedElementsAre());
 
-  auto Slab = llvm::make_unique<SymbolSlab>();
-  addNumSymbolsToSlab(1, 3, Slab.get());
-
-  FS.update("f1", std::move(Slab));
-
+  FS.update("f1", numSlab(1, 3));
   EXPECT_THAT(getSymbolNames(*FS.allSymbols()),
               UnorderedElementsAre("1", "2", "3"));
 }
 
 TEST(FileSymbolsTest, Overlap) {
   FileSymbols FS;
-
-  auto Slab = llvm::make_unique<SymbolSlab>();
-  addNumSymbolsToSlab(1, 3, Slab.get());
-
-  FS.update("f1", std::move(Slab));
-
-  Slab = llvm::make_unique<SymbolSlab>();
-  addNumSymbolsToSlab(3, 5, Slab.get());
-
-  FS.update("f2", std::move(Slab));
-
+  FS.update("f1", numSlab(1, 3));
+  FS.update("f2", numSlab(3, 5));
   EXPECT_THAT(getSymbolNames(*FS.allSymbols()),
               UnorderedElementsAre("1", "2", "3", "3", "4", "5"));
 }
@@ -74,17 +63,13 @@ TEST(FileSymbolsTest, Overlap) {
 TEST(FileSymbolsTest, SnapshotAliveAfterRemove) {
   FileSymbols FS;
 
-  auto Slab = llvm::make_unique<SymbolSlab>();
-  addNumSymbolsToSlab(1, 3, Slab.get());
-
-  FS.update("f1", std::move(Slab));
+  FS.update("f1", numSlab(1, 3));
 
   auto Symbols = FS.allSymbols();
   EXPECT_THAT(getSymbolNames(*Symbols), UnorderedElementsAre("1", "2", "3"));
 
   FS.update("f1", nullptr);
   EXPECT_THAT(getSymbolNames(*FS.allSymbols()), UnorderedElementsAre());
-
   EXPECT_THAT(getSymbolNames(*Symbols), UnorderedElementsAre("1", "2", "3"));
 }
 
@@ -92,8 +77,10 @@ std::vector<std::string> match(const SymbolIndex &I,
                                const FuzzyFindRequest &Req) {
   std::vector<std::string> Matches;
   auto Ctx = Context::empty();
-  I.fuzzyFind(Ctx, Req,
-              [&](const Symbol &Sym) { Matches.push_back(Sym.QualifiedName); });
+  I.fuzzyFind(Ctx, Req, [&](const Symbol &Sym) {
+    Matches.push_back(
+        (Sym.Scope + (Sym.Scope.empty() ? "" : "::") + Sym.Name).str());
+  });
   return Matches;
 }
 
@@ -122,7 +109,8 @@ TEST(FileIndexTest, IndexAST) {
       build("f1", "namespace ns { void f() {} class X {}; }").getPointer());
 
   FuzzyFindRequest Req;
-  Req.Query = "ns::";
+  Req.Query = "";
+  Req.Scopes = {"ns"};
   EXPECT_THAT(match(M, Req), UnorderedElementsAre("ns::f", "ns::X"));
 }
 
@@ -150,9 +138,9 @@ TEST(FileIndexTest, IndexMultiASTAndDeduplicate) {
       build("f2", "namespace ns { void ff() {} class X {}; }").getPointer());
 
   FuzzyFindRequest Req;
-  Req.Query = "ns::";
-  EXPECT_THAT(match(M, Req),
-              UnorderedElementsAre("ns::f", "ns::X", "ns::ff"));
+  Req.Query = "";
+  Req.Scopes = {"ns"};
+  EXPECT_THAT(match(M, Req), UnorderedElementsAre("ns::f", "ns::X", "ns::ff"));
 }
 
 TEST(FileIndexTest, RemoveAST) {
@@ -163,7 +151,8 @@ TEST(FileIndexTest, RemoveAST) {
       build("f1", "namespace ns { void f() {} class X {}; }").getPointer());
 
   FuzzyFindRequest Req;
-  Req.Query = "ns::";
+  Req.Query = "";
+  Req.Scopes = {"ns"};
   EXPECT_THAT(match(M, Req), UnorderedElementsAre("ns::f", "ns::X"));
 
   M.update(Ctx, "f1", nullptr);
