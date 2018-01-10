@@ -4181,10 +4181,10 @@ bool CodeGenPrepare::optimizeMemoryInst(Instruction *MemoryInst, Value *Addr,
   SmallPtrSet<Value*, 16> Visited;
   worklist.push_back(Addr);
 
-  // Use a worklist to iteratively look through PHI nodes, and ensure that
-  // the addressing mode obtained from the non-PHI roots of the graph
-  // are equivalent.
-  bool PhiSeen = false;
+  // Use a worklist to iteratively look through PHI and select nodes, and
+  // ensure that the addressing mode obtained from the non-PHI/select roots of
+  // the graph are compatible.
+  bool PhiOrSelectSeen = false;
   SmallVector<Instruction*, 16> AddrModeInsts;
   const SimplifyQuery SQ(*DL, TLInfo);
   AddressingModeCombiner AddrModes(SQ, { Addr, MemoryInst->getParent() });
@@ -4211,7 +4211,14 @@ bool CodeGenPrepare::optimizeMemoryInst(Instruction *MemoryInst, Value *Addr,
     if (PHINode *P = dyn_cast<PHINode>(V)) {
       for (Value *IncValue : P->incoming_values())
         worklist.push_back(IncValue);
-      PhiSeen = true;
+      PhiOrSelectSeen = true;
+      continue;
+    }
+    // Similar for select.
+    if (SelectInst *SI = dyn_cast<SelectInst>(V)) {
+      worklist.push_back(SI->getFalseValue());
+      worklist.push_back(SI->getTrueValue());
+      PhiOrSelectSeen = true;
       continue;
     }
 
@@ -4241,8 +4248,10 @@ bool CodeGenPrepare::optimizeMemoryInst(Instruction *MemoryInst, Value *Addr,
   ExtAddrMode AddrMode = AddrModes.getAddrMode();
 
   // If all the instructions matched are already in this BB, don't do anything.
-  // If we saw Phi node then it is not local definitely.
-  if (!PhiSeen && none_of(AddrModeInsts, [&](Value *V) {
+  // If we saw a Phi node then it is not local definitely, and if we saw a select
+  // then we want to push the address calculation past it even if it's already
+  // in this BB.
+  if (!PhiOrSelectSeen && none_of(AddrModeInsts, [&](Value *V) {
         return IsNonLocalValue(V, MemoryInst->getParent());
                   })) {
     DEBUG(dbgs() << "CGP: Found      local addrmode: " << AddrMode << "\n");
