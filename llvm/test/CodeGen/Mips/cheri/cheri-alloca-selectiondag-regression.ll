@@ -1,6 +1,5 @@
 ; RUN: %cheri_purecap_llc -O0 %s -o -
-; XFAIL: *
-
+; This was crashing after https://reviews.llvm.org/D40095 was merged
 source_filename = "/Users/alex/cheri/llvm/test/CodeGen/Mips/cheri-stack-reduce.test.ll"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 
