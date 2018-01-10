@@ -577,8 +577,9 @@ defm : MipsHiLoRelocs<LUi64, DADDiu, ZERO_64, GPR64Opnd>, SYM_32;
 def : MipsPat<(MipsGotHi tglobaladdr:$in), (LUi64 tglobaladdr:$in)>;
 def : MipsPat<(MipsGotHi texternalsym:$in), (LUi64 texternalsym:$in)>;
 
-// XXXAR: these two patterns were here before the merge, not sure they are needed
-// def : MipsPat<(MipsGotHi tjumptable:$in), (LUi64 tjumptable:$in)>;
+// XXXAR: For CHERI we also access jumptables with GotHi/GotLo if -mxgot is set
+// This will go away once we use cap-table
+def : MipsPat<(MipsGotHi tjumptable:$in), (LUi64 tjumptable:$in)>;
 // def : MipsPat<(MipsLo tjumptable:$in), (DADDiu ZERO_64, tjumptable:$in)>;
 
 // highest/higher/hi/lo relocs
