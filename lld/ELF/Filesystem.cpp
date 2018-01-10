@@ -78,7 +78,7 @@ void elf::unlinkAsync(StringRef Path) {
 // is called. We use that class without calling commit() to predict
 // if the given file is writable.
 std::error_code elf::tryCreateFile(StringRef Path) {
-  if (Path.empty() || Path == "-")
+  if (Path.empty())
     return std::error_code();
   if (Path == "-")
     return std::error_code();
