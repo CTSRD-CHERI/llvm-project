@@ -651,7 +651,7 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
     writeMicroRelocation32<E>(Loc, Val, 23, 2);
     break;
   default:
-    llvm_unreachable("unexpected relocation");
+    error(getErrorLocation(Loc) + "unrecognized reloc " + Twine(Type));
   }
 }
 

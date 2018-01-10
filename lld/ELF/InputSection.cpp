@@ -660,6 +660,8 @@ static uint64_t getRelocTargetVA(const InputFile &File, RelType Type, int64_t A,
 // function as a performance optimization.
 template <class ELFT, class RelTy>
 void InputSection::relocateNonAlloc(uint8_t *Buf, ArrayRef<RelTy> Rels) {
+  const unsigned Bits = sizeof(typename ELFT::uint) * 8;
+
   for (const RelTy &Rel : Rels) {
     RelType Type = Rel.getType(Config->IsMips64EL);
     uint64_t Offset = getOffset(Rel.r_offset);
@@ -685,12 +687,10 @@ void InputSection::relocateNonAlloc(uint8_t *Buf, ArrayRef<RelTy> Rels) {
       return;
     }
 
-    uint64_t AddrLoc = getParent()->Addr + Offset;
-    uint64_t SymVA = 0;
-    if (!Sym.isTls() || Out::TlsPhdr)
-      SymVA = SignExtend64<sizeof(typename ELFT::uint) * 8>(
-          getRelocTargetVA(*File, Type, Addend, AddrLoc, Sym, R_ABS));
-    Target->relocateOne(BufLoc, Type, SymVA);
+    if (Sym.isTls() && !Out::TlsPhdr)
+      Target->relocateOne(BufLoc, Type, 0);
+    else
+      Target->relocateOne(BufLoc, Type, SignExtend64<Bits>(Sym.getVA(Addend)));
   }
 }
 
