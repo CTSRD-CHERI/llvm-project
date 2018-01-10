@@ -16,6 +16,9 @@
 // Each struct has a toJSON and fromJSON function, that converts between
 // the struct and a JSON representation. (See JSONExpr.h)
 //
+// Some structs also have operator<< serialization. This is for debugging and
+// tests, and is not generally machine-readable.
+//
 //===----------------------------------------------------------------------===//
 
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_PROTOCOL_H
@@ -65,6 +68,7 @@ struct URI {
 };
 json::Expr toJSON(const URI &U);
 bool fromJSON(const json::Expr &, URI &);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &, const URI &);
 
 struct TextDocumentIdentifier {
   /// The text document's URI.
@@ -90,6 +94,7 @@ struct Position {
 };
 bool fromJSON(const json::Expr &, Position &);
 json::Expr toJSON(const Position &);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &, const Position &);
 
 struct Range {
   /// The range's start position.
@@ -107,6 +112,7 @@ struct Range {
 };
 bool fromJSON(const json::Expr &, Range &);
 json::Expr toJSON(const Range &);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &, const Range &);
 
 struct Location {
   /// The text document's URI.
@@ -126,6 +132,7 @@ struct Location {
   }
 };
 json::Expr toJSON(const Location &);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &, const Location &);
 
 struct Metadata {
   std::vector<std::string> extraFlags;
@@ -322,14 +329,15 @@ struct Diagnostic {
 
   /// The diagnostic's message.
   std::string message;
-
-  friend bool operator==(const Diagnostic &LHS, const Diagnostic &RHS) {
-    return std::tie(LHS.range, LHS.severity, LHS.message) ==
-           std::tie(RHS.range, RHS.severity, RHS.message);
-  }
-  friend bool operator<(const Diagnostic &LHS, const Diagnostic &RHS) {
-    return std::tie(LHS.range, LHS.severity, LHS.message) <
-           std::tie(RHS.range, RHS.severity, RHS.message);
+};
+/// A LSP-specific comparator used to find diagnostic in a container like
+/// std:map.
+/// We only use the required fields of Diagnostic to do the comparsion to avoid
+/// any regression issues from LSP clients (e.g. VScode), see
+/// https://git.io/vbr29
+struct LSPDiagnosticCompare {
+  bool operator()(const Diagnostic& LHS, const Diagnostic& RHS) const {
+    return std::tie(LHS.range, LHS.message) < std::tie(RHS.range, RHS.message);
   }
 };
 bool fromJSON(const json::Expr &, Diagnostic &);
@@ -372,7 +380,7 @@ json::Expr toJSON(const WorkspaceEdit &WE);
 /// one argument type will be parsed and set.
 struct ExecuteCommandParams {
   // Command to apply fix-its. Uses WorkspaceEdit as argument.
-  const static std::string CLANGD_APPLY_FIX_COMMAND;
+  const static llvm::StringLiteral CLANGD_APPLY_FIX_COMMAND;
 
   /// The command identifier, e.g. CLANGD_APPLY_FIX_COMMAND
   std::string command;
@@ -556,6 +564,36 @@ struct RenameParams {
   std::string newName;
 };
 bool fromJSON(const json::Expr &, RenameParams &);
+
+enum class DocumentHighlightKind { Text = 1, Read = 2, Write = 3 };
+
+/// A document highlight is a range inside a text document which deserves
+/// special attention. Usually a document highlight is visualized by changing
+/// the background color of its range.
+
+struct DocumentHighlight {
+
+  /// The range this highlight applies to.
+
+  Range range;
+
+  /// The highlight kind, default is DocumentHighlightKind.Text.
+
+  DocumentHighlightKind kind = DocumentHighlightKind::Text;
+
+  friend bool operator<(const DocumentHighlight &LHS,
+                        const DocumentHighlight &RHS) {
+    int LHSKind = static_cast<int>(LHS.kind);
+    int RHSKind = static_cast<int>(RHS.kind);
+    return std::tie(LHS.range, LHSKind) < std::tie(RHS.range, RHSKind);
+  }
+
+  friend bool operator==(const DocumentHighlight &LHS,
+                         const DocumentHighlight &RHS) {
+    return LHS.kind == RHS.kind && LHS.range == RHS.range;
+  }
+};
+json::Expr toJSON(const DocumentHighlight &DH);
 
 } // namespace clangd
 } // namespace clang

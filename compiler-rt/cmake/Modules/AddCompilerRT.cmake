@@ -465,11 +465,11 @@ endmacro(add_compiler_rt_script src name)
 #                   DEPS <list of build deps>
 #                   CFLAGS <list of compile flags>)
 macro(add_custom_libcxx name prefix)
-  if(NOT COMPILER_RT_HAS_LIBCXX_SOURCES)
+  if(NOT COMPILER_RT_LIBCXX_PATH)
     message(FATAL_ERROR "libcxx not found!")
   endif()
 
-  cmake_parse_arguments(LIBCXX "" "" "DEPS;CFLAGS" ${ARGN})
+  cmake_parse_arguments(LIBCXX "" "" "DEPS;CFLAGS;CMAKE_ARGS" ${ARGN})
   foreach(flag ${LIBCXX_CFLAGS})
     set(flagstr "${flagstr} ${flag}")
   endforeach()
@@ -491,6 +491,7 @@ macro(add_custom_libcxx name prefix)
                -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
                -DLLVM_PATH=${LLVM_MAIN_SRC_DIR}
                -DLIBCXX_STANDALONE_BUILD=On
+               ${LIBCXX_CMAKE_ARGS}
     LOG_BUILD 1
     LOG_CONFIGURE 1
     LOG_INSTALL 1

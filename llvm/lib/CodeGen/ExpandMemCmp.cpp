@@ -7,9 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This pass tries to partially inline the fast path of well-known library
-// functions, such as using square-root instructions for cases where sqrt()
-// does not need to set errno.
+// This pass tries to expand memcmp() calls into optimally-sized loads and
+// compares for the target.
 //
 //===----------------------------------------------------------------------===//
 
@@ -22,8 +21,6 @@
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/IRBuilder.h"
-#include "llvm/Transforms/Scalar.h"
-#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
 using namespace llvm;
 

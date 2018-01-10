@@ -15,7 +15,10 @@
 //===---------------------------------------------------------------------===//
 
 #include "CodeComplete.h"
+#include "CodeCompletionStrings.h"
 #include "Compiler.h"
+#include "Logger.h"
+#include "index/Index.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/Sema/CodeCompleteConsumer.h"
@@ -26,26 +29,28 @@ namespace clang {
 namespace clangd {
 namespace {
 
-CompletionItemKind getKindOfDecl(CXCursorKind CursorKind) {
+CompletionItemKind toCompletionItemKind(CXCursorKind CursorKind) {
   switch (CursorKind) {
   case CXCursor_MacroInstantiation:
   case CXCursor_MacroDefinition:
     return CompletionItemKind::Text;
   case CXCursor_CXXMethod:
+  case CXCursor_Destructor:
     return CompletionItemKind::Method;
   case CXCursor_FunctionDecl:
   case CXCursor_FunctionTemplate:
     return CompletionItemKind::Function;
   case CXCursor_Constructor:
-  case CXCursor_Destructor:
     return CompletionItemKind::Constructor;
   case CXCursor_FieldDecl:
     return CompletionItemKind::Field;
   case CXCursor_VarDecl:
   case CXCursor_ParmDecl:
     return CompletionItemKind::Variable;
-  case CXCursor_ClassDecl:
+  // FIXME(ioeric): use LSP struct instead of class when it is suppoted in the
+  // protocol.
   case CXCursor_StructDecl:
+  case CXCursor_ClassDecl:
   case CXCursor_UnionDecl:
   case CXCursor_ClassTemplate:
   case CXCursor_ClassTemplatePartialSpecialization:
@@ -58,6 +63,7 @@ CompletionItemKind getKindOfDecl(CXCursorKind CursorKind) {
     return CompletionItemKind::Value;
   case CXCursor_EnumDecl:
     return CompletionItemKind::Enum;
+  // FIXME(ioeric): figure out whether reference is the right type for aliases.
   case CXCursor_TypeAliasDecl:
   case CXCursor_TypeAliasTemplateDecl:
   case CXCursor_TypedefDecl:
@@ -69,11 +75,12 @@ CompletionItemKind getKindOfDecl(CXCursorKind CursorKind) {
   }
 }
 
-CompletionItemKind getKind(CodeCompletionResult::ResultKind ResKind,
-                           CXCursorKind CursorKind) {
+CompletionItemKind
+toCompletionItemKind(CodeCompletionResult::ResultKind ResKind,
+                     CXCursorKind CursorKind) {
   switch (ResKind) {
   case CodeCompletionResult::RK_Declaration:
-    return getKindOfDecl(CursorKind);
+    return toCompletionItemKind(CursorKind);
   case CodeCompletionResult::RK_Keyword:
     return CompletionItemKind::Keyword;
   case CodeCompletionResult::RK_Macro:
@@ -85,44 +92,57 @@ CompletionItemKind getKind(CodeCompletionResult::ResultKind ResKind,
   llvm_unreachable("Unhandled CodeCompletionResult::ResultKind.");
 }
 
-std::string escapeSnippet(const llvm::StringRef Text) {
-  std::string Result;
-  Result.reserve(Text.size()); // Assume '$', '}' and '\\' are rare.
-  for (const auto Character : Text) {
-    if (Character == '$' || Character == '}' || Character == '\\')
-      Result.push_back('\\');
-    Result.push_back(Character);
+CompletionItemKind toCompletionItemKind(index::SymbolKind Kind) {
+  using SK = index::SymbolKind;
+  switch (Kind) {
+  case SK::Unknown:
+    return CompletionItemKind::Missing;
+  case SK::Module:
+  case SK::Namespace:
+  case SK::NamespaceAlias:
+    return CompletionItemKind::Module;
+  case SK::Macro:
+    return CompletionItemKind::Text;
+  case SK::Enum:
+    return CompletionItemKind::Enum;
+  // FIXME(ioeric): use LSP struct instead of class when it is suppoted in the
+  // protocol.
+  case SK::Struct:
+  case SK::Class:
+  case SK::Protocol:
+  case SK::Extension:
+  case SK::Union:
+    return CompletionItemKind::Class;
+  // FIXME(ioeric): figure out whether reference is the right type for aliases.
+  case SK::TypeAlias:
+  case SK::Using:
+    return CompletionItemKind::Reference;
+  case SK::Function:
+  // FIXME(ioeric): this should probably be an operator. This should be fixed
+  // when `Operator` is support type in the protocol.
+  case SK::ConversionFunction:
+    return CompletionItemKind::Function;
+  case SK::Variable:
+  case SK::Parameter:
+    return CompletionItemKind::Variable;
+  case SK::Field:
+    return CompletionItemKind::Field;
+  // FIXME(ioeric): use LSP enum constant when it is supported in the protocol.
+  case SK::EnumConstant:
+    return CompletionItemKind::Value;
+  case SK::InstanceMethod:
+  case SK::ClassMethod:
+  case SK::StaticMethod:
+  case SK::Destructor:
+    return CompletionItemKind::Method;
+  case SK::InstanceProperty:
+  case SK::ClassProperty:
+  case SK::StaticProperty:
+    return CompletionItemKind::Property;
+  case SK::Constructor:
+    return CompletionItemKind::Constructor;
   }
-  return Result;
-}
-
-std::string getDocumentation(const CodeCompletionString &CCS) {
-  // Things like __attribute__((nonnull(1,3))) and [[noreturn]]. Present this
-  // information in the documentation field.
-  std::string Result;
-  const unsigned AnnotationCount = CCS.getAnnotationCount();
-  if (AnnotationCount > 0) {
-    Result += "Annotation";
-    if (AnnotationCount == 1) {
-      Result += ": ";
-    } else /* AnnotationCount > 1 */ {
-      Result += "s: ";
-    }
-    for (unsigned I = 0; I < AnnotationCount; ++I) {
-      Result += CCS.getAnnotation(I);
-      Result.push_back(I == AnnotationCount - 1 ? '\n' : ' ');
-    }
-  }
-  // Add brief documentation (if there is any).
-  if (CCS.getBriefComment() != nullptr) {
-    if (!Result.empty()) {
-      // This means we previously added annotations. Add an extra newline
-      // character to make the annotations stand out.
-      Result.push_back('\n');
-    }
-    Result += CCS.getBriefComment();
-  }
-  return Result;
+  llvm_unreachable("Unhandled clang::index::SymbolKind.");
 }
 
 /// Get the optional chunk as a string. This function is possibly recursive.
@@ -228,20 +248,49 @@ private:
   }
 };
 
+/// \brief Information about the scope specifier in the qualified-id code
+/// completion (e.g. "ns::ab?").
+struct SpecifiedScope {
+  /// The scope specifier as written. For example, for completion "ns::ab?", the
+  /// written scope specifier is "ns".
+  std::string Written;
+  // If this scope specifier is recognized in Sema (e.g. as a namespace
+  // context), this will be set to the fully qualfied name of the corresponding
+  // context.
+  std::string Resolved;
+};
+
+/// \brief Information from sema about (parital) symbol names to be completed.
+/// For example, for completion "ns::ab^", this stores the scope specifier
+/// "ns::" and the completion filter text "ab".
+struct NameToComplete {
+  // The partial identifier being completed, without qualifier.
+  std::string Filter;
+
+  /// This is set if the completion is for qualified IDs, e.g. "abc::x^".
+  llvm::Optional<SpecifiedScope> SSInfo;
+};
+
+SpecifiedScope extraCompletionScope(Sema &S, const CXXScopeSpec &SS);
+
 class CompletionItemsCollector : public CodeCompleteConsumer {
 public:
   CompletionItemsCollector(const CodeCompleteOptions &CodeCompleteOpts,
-                           CompletionList &Items)
+                           CompletionList &Items, NameToComplete &CompletedName)
       : CodeCompleteConsumer(CodeCompleteOpts.getClangCompleteOpts(),
                              /*OutputIsBinary=*/false),
         ClangdOpts(CodeCompleteOpts), Items(Items),
         Allocator(std::make_shared<clang::GlobalCodeCompletionAllocator>()),
-        CCTUInfo(Allocator) {}
+        CCTUInfo(Allocator), CompletedName(CompletedName),
+        EnableSnippets(CodeCompleteOpts.EnableSnippets) {}
 
   void ProcessCodeCompleteResults(Sema &S, CodeCompletionContext Context,
                                   CodeCompletionResult *Results,
                                   unsigned NumResults) override final {
-    StringRef Filter = S.getPreprocessor().getCodeCompletionFilter();
+    if (auto SS = Context.getCXXScopeSpecifier())
+      CompletedName.SSInfo = extraCompletionScope(S, **SS);
+
+    CompletedName.Filter = S.getPreprocessor().getCodeCompletionFilter();
     std::priority_queue<CompletionCandidate> Candidates;
     for (unsigned I = 0; I < NumResults; ++I) {
       auto &Result = Results[I];
@@ -249,7 +298,8 @@ public:
           (Result.Availability == CXAvailability_NotAvailable ||
            Result.Availability == CXAvailability_NotAccessible))
         continue;
-      if (!Filter.empty() && !fuzzyMatch(S, Context, Filter, Result))
+      if (!CompletedName.Filter.empty() &&
+          !fuzzyMatch(S, Context, CompletedName.Filter, Result))
         continue;
       Candidates.emplace(Result);
       if (ClangdOpts.Limit && Candidates.size() > ClangdOpts.Limit) {
@@ -314,182 +364,31 @@ private:
     // Adjust this to InsertTextFormat::Snippet iff we encounter a
     // CK_Placeholder chunk in SnippetCompletionItemsCollector.
     CompletionItem Item;
-    Item.insertTextFormat = InsertTextFormat::PlainText;
 
     Item.documentation = getDocumentation(CCS);
     Item.sortText = Candidate.sortText();
 
-    // Fill in the label, detail, insertText and filterText fields of the
-    // CompletionItem.
-    ProcessChunks(CCS, Item);
+    Item.detail = getDetail(CCS);
+    Item.filterText = getFilterText(CCS);
+    getLabelAndInsertText(CCS, &Item.label, &Item.insertText, EnableSnippets);
+
+    Item.insertTextFormat = EnableSnippets ? InsertTextFormat::Snippet
+                                           : InsertTextFormat::PlainText;
 
     // Fill in the kind field of the CompletionItem.
-    Item.kind = getKind(Candidate.Result->Kind, Candidate.Result->CursorKind);
+    Item.kind = toCompletionItemKind(Candidate.Result->Kind,
+                                     Candidate.Result->CursorKind);
 
     return Item;
   }
-
-  virtual void ProcessChunks(const CodeCompletionString &CCS,
-                             CompletionItem &Item) const = 0;
 
   CodeCompleteOptions ClangdOpts;
   CompletionList &Items;
   std::shared_ptr<clang::GlobalCodeCompletionAllocator> Allocator;
   CodeCompletionTUInfo CCTUInfo;
-
+  NameToComplete &CompletedName;
+  bool EnableSnippets;
 }; // CompletionItemsCollector
-
-bool isInformativeQualifierChunk(CodeCompletionString::Chunk const &Chunk) {
-  return Chunk.Kind == CodeCompletionString::CK_Informative &&
-         StringRef(Chunk.Text).endswith("::");
-}
-
-class PlainTextCompletionItemsCollector final
-    : public CompletionItemsCollector {
-
-public:
-  PlainTextCompletionItemsCollector(const CodeCompleteOptions &CodeCompleteOpts,
-                                    CompletionList &Items)
-      : CompletionItemsCollector(CodeCompleteOpts, Items) {}
-
-private:
-  void ProcessChunks(const CodeCompletionString &CCS,
-                     CompletionItem &Item) const override {
-    for (const auto &Chunk : CCS) {
-      // Informative qualifier chunks only clutter completion results, skip
-      // them.
-      if (isInformativeQualifierChunk(Chunk))
-        continue;
-
-      switch (Chunk.Kind) {
-      case CodeCompletionString::CK_TypedText:
-        // There's always exactly one CK_TypedText chunk.
-        Item.insertText = Item.filterText = Chunk.Text;
-        Item.label += Chunk.Text;
-        break;
-      case CodeCompletionString::CK_ResultType:
-        assert(Item.detail.empty() && "Unexpected extraneous CK_ResultType");
-        Item.detail = Chunk.Text;
-        break;
-      case CodeCompletionString::CK_Optional:
-        break;
-      default:
-        Item.label += Chunk.Text;
-        break;
-      }
-    }
-  }
-}; // PlainTextCompletionItemsCollector
-
-class SnippetCompletionItemsCollector final : public CompletionItemsCollector {
-
-public:
-  SnippetCompletionItemsCollector(const CodeCompleteOptions &CodeCompleteOpts,
-                                  CompletionList &Items)
-      : CompletionItemsCollector(CodeCompleteOpts, Items) {}
-
-private:
-  void ProcessChunks(const CodeCompletionString &CCS,
-                     CompletionItem &Item) const override {
-    unsigned ArgCount = 0;
-    for (const auto &Chunk : CCS) {
-      // Informative qualifier chunks only clutter completion results, skip
-      // them.
-      if (isInformativeQualifierChunk(Chunk))
-        continue;
-
-      switch (Chunk.Kind) {
-      case CodeCompletionString::CK_TypedText:
-        // The piece of text that the user is expected to type to match
-        // the code-completion string, typically a keyword or the name of
-        // a declarator or macro.
-        Item.filterText = Chunk.Text;
-        LLVM_FALLTHROUGH;
-      case CodeCompletionString::CK_Text:
-        // A piece of text that should be placed in the buffer,
-        // e.g., parentheses or a comma in a function call.
-        Item.label += Chunk.Text;
-        Item.insertText += Chunk.Text;
-        break;
-      case CodeCompletionString::CK_Optional:
-        // A code completion string that is entirely optional.
-        // For example, an optional code completion string that
-        // describes the default arguments in a function call.
-
-        // FIXME: Maybe add an option to allow presenting the optional chunks?
-        break;
-      case CodeCompletionString::CK_Placeholder:
-        // A string that acts as a placeholder for, e.g., a function call
-        // argument.
-        ++ArgCount;
-        Item.insertText += "${" + std::to_string(ArgCount) + ':' +
-                           escapeSnippet(Chunk.Text) + '}';
-        Item.label += Chunk.Text;
-        Item.insertTextFormat = InsertTextFormat::Snippet;
-        break;
-      case CodeCompletionString::CK_Informative:
-        // A piece of text that describes something about the result
-        // but should not be inserted into the buffer.
-        // For example, the word "const" for a const method, or the name of
-        // the base class for methods that are part of the base class.
-        Item.label += Chunk.Text;
-        // Don't put the informative chunks in the insertText.
-        break;
-      case CodeCompletionString::CK_ResultType:
-        // A piece of text that describes the type of an entity or,
-        // for functions and methods, the return type.
-        assert(Item.detail.empty() && "Unexpected extraneous CK_ResultType");
-        Item.detail = Chunk.Text;
-        break;
-      case CodeCompletionString::CK_CurrentParameter:
-        // A piece of text that describes the parameter that corresponds to
-        // the code-completion location within a function call, message send,
-        // macro invocation, etc.
-        //
-        // This should never be present while collecting completion items,
-        // only while collecting overload candidates.
-        llvm_unreachable("Unexpected CK_CurrentParameter while collecting "
-                         "CompletionItems");
-        break;
-      case CodeCompletionString::CK_LeftParen:
-        // A left parenthesis ('(').
-      case CodeCompletionString::CK_RightParen:
-        // A right parenthesis (')').
-      case CodeCompletionString::CK_LeftBracket:
-        // A left bracket ('[').
-      case CodeCompletionString::CK_RightBracket:
-        // A right bracket (']').
-      case CodeCompletionString::CK_LeftBrace:
-        // A left brace ('{').
-      case CodeCompletionString::CK_RightBrace:
-        // A right brace ('}').
-      case CodeCompletionString::CK_LeftAngle:
-        // A left angle bracket ('<').
-      case CodeCompletionString::CK_RightAngle:
-        // A right angle bracket ('>').
-      case CodeCompletionString::CK_Comma:
-        // A comma separator (',').
-      case CodeCompletionString::CK_Colon:
-        // A colon (':').
-      case CodeCompletionString::CK_SemiColon:
-        // A semicolon (';').
-      case CodeCompletionString::CK_Equal:
-        // An '=' sign.
-      case CodeCompletionString::CK_HorizontalSpace:
-        // Horizontal whitespace (' ').
-        Item.insertText += Chunk.Text;
-        Item.label += Chunk.Text;
-        break;
-      case CodeCompletionString::CK_VerticalSpace:
-        // Vertical whitespace ('\n' or '\r\n', depending on the
-        // platform).
-        Item.insertText += Chunk.Text;
-        // Don't even add a space to the label.
-        break;
-      }
-    }
-  }
-}; // SnippetCompletionItemsCollector
 
 class SignatureHelpCollector final : public CodeCompleteConsumer {
 
@@ -526,6 +425,8 @@ public:
   CodeCompletionTUInfo &getCodeCompletionTUInfo() override { return CCTUInfo; }
 
 private:
+  // FIXME(ioeric): consider moving CodeCompletionString logic here to
+  // CompletionString.h.
   SignatureInformation
   ProcessOverloadCandidate(const OverloadCandidate &Candidate,
                            const CodeCompletionString &CCS) const {
@@ -584,14 +485,14 @@ private:
 
 }; // SignatureHelpCollector
 
-bool invokeCodeComplete(std::unique_ptr<CodeCompleteConsumer> Consumer,
+bool invokeCodeComplete(const Context &Ctx,
+                        std::unique_ptr<CodeCompleteConsumer> Consumer,
                         const clang::CodeCompleteOptions &Options,
                         PathRef FileName,
                         const tooling::CompileCommand &Command,
                         PrecompiledPreamble const *Preamble, StringRef Contents,
                         Position Pos, IntrusiveRefCntPtr<vfs::FileSystem> VFS,
-                        std::shared_ptr<PCHContainerOperations> PCHs,
-                        Logger &Logger) {
+                        std::shared_ptr<PCHContainerOperations> PCHs) {
   std::vector<const char *> ArgStrs;
   for (const auto &S : Command.CommandLine)
     ArgStrs.push_back(S.c_str());
@@ -634,18 +535,73 @@ bool invokeCodeComplete(std::unique_ptr<CodeCompleteConsumer> Consumer,
 
   SyntaxOnlyAction Action;
   if (!Action.BeginSourceFile(*Clang, Clang->getFrontendOpts().Inputs[0])) {
-    Logger.log("BeginSourceFile() failed when running codeComplete for " +
-               FileName);
+    log(Ctx,
+        "BeginSourceFile() failed when running codeComplete for " + FileName);
     return false;
   }
   if (!Action.Execute()) {
-    Logger.log("Execute() failed when running codeComplete for " + FileName);
+    log(Ctx, "Execute() failed when running codeComplete for " + FileName);
     return false;
   }
 
   Action.EndSourceFile();
 
   return true;
+}
+
+CompletionItem indexCompletionItem(const Symbol &Sym, llvm::StringRef Filter,
+                                   const SpecifiedScope &SSInfo) {
+  CompletionItem Item;
+  Item.kind = toCompletionItemKind(Sym.SymInfo.Kind);
+  Item.label = Sym.Name;
+  // FIXME(ioeric): support inserting/replacing scope qualifiers.
+  Item.insertText = Sym.Name;
+  // FIXME(ioeric): support snippets.
+  Item.insertTextFormat = InsertTextFormat::PlainText;
+  Item.filterText = Sym.Name;
+
+  // FIXME(ioeric): sort symbols appropriately.
+  Item.sortText = "";
+
+  // FIXME(ioeric): use more symbol information (e.g. documentation, label) to
+  // populate the completion item.
+
+  return Item;
+}
+
+void completeWithIndex(const Context &Ctx, const SymbolIndex &Index,
+                       llvm::StringRef Code, const SpecifiedScope &SSInfo,
+                       llvm::StringRef Filter, CompletionList *Items) {
+  FuzzyFindRequest Req;
+  Req.Query = Filter;
+  // FIXME(ioeric): add more possible scopes based on using namespaces and
+  // containing namespaces.
+  StringRef Scope = SSInfo.Resolved.empty() ? SSInfo.Written : SSInfo.Resolved;
+  Req.Scopes = {Scope.trim(':').str()};
+
+  Items->isIncomplete = !Index.fuzzyFind(Ctx, Req, [&](const Symbol &Sym) {
+    Items->items.push_back(indexCompletionItem(Sym, Filter, SSInfo));
+  });
+}
+
+SpecifiedScope extraCompletionScope(Sema &S, const CXXScopeSpec &SS) {
+  SpecifiedScope Info;
+  auto &SM = S.getSourceManager();
+  auto SpecifierRange = SS.getRange();
+  Info.Written = Lexer::getSourceText(
+      CharSourceRange::getCharRange(SpecifierRange), SM, clang::LangOptions());
+  if (SS.isValid()) {
+    DeclContext *DC = S.computeDeclContext(SS);
+    if (auto *NS = llvm::dyn_cast<NamespaceDecl>(DC)) {
+      Info.Resolved = NS->getQualifiedNameAsString();
+    } else if (llvm::dyn_cast<TranslationUnitDecl>(DC) != nullptr) {
+      Info.Resolved = "::";
+      // Sema does not include the suffix "::" in the range of SS, so we add
+      // it back here.
+      Info.Written = "::";
+    }
+  }
+  return Info;
 }
 
 } // namespace
@@ -657,45 +613,53 @@ clang::CodeCompleteOptions CodeCompleteOptions::getClangCompleteOpts() const {
   Result.IncludeGlobals = IncludeGlobals;
   Result.IncludeBriefComments = IncludeBriefComments;
 
+  // Enable index-based code completion when Index is provided.
+  Result.IncludeNamespaceLevelDecls = !Index;
+
   return Result;
 }
 
-CompletionList codeComplete(PathRef FileName,
+CompletionList codeComplete(const Context &Ctx, PathRef FileName,
                             const tooling::CompileCommand &Command,
                             PrecompiledPreamble const *Preamble,
                             StringRef Contents, Position Pos,
                             IntrusiveRefCntPtr<vfs::FileSystem> VFS,
                             std::shared_ptr<PCHContainerOperations> PCHs,
-                            CodeCompleteOptions Opts, Logger &Logger) {
+                            CodeCompleteOptions Opts) {
   CompletionList Results;
-  std::unique_ptr<CodeCompleteConsumer> Consumer;
-  if (Opts.EnableSnippets) {
-    Consumer =
-        llvm::make_unique<SnippetCompletionItemsCollector>(Opts, Results);
-  } else {
-    Consumer =
-        llvm::make_unique<PlainTextCompletionItemsCollector>(Opts, Results);
+  NameToComplete CompletedName;
+  auto Consumer =
+      llvm::make_unique<CompletionItemsCollector>(Opts, Results, CompletedName);
+  invokeCodeComplete(Ctx, std::move(Consumer), Opts.getClangCompleteOpts(),
+                     FileName, Command, Preamble, Contents, Pos, std::move(VFS),
+                     std::move(PCHs));
+  if (Opts.Index && CompletedName.SSInfo) {
+    if (!Results.items.empty())
+      log(Ctx, "WARNING: Got completion results from sema for completion on "
+               "qualified ID while symbol index is provided.");
+    Results.items.clear();
+    completeWithIndex(Ctx, *Opts.Index, Contents, *CompletedName.SSInfo,
+                      CompletedName.Filter, &Results);
   }
-  invokeCodeComplete(std::move(Consumer), Opts.getClangCompleteOpts(), FileName,
-                     Command, Preamble, Contents, Pos, std::move(VFS),
-                     std::move(PCHs), Logger);
   return Results;
 }
 
-SignatureHelp
-signatureHelp(PathRef FileName, const tooling::CompileCommand &Command,
-              PrecompiledPreamble const *Preamble, StringRef Contents,
-              Position Pos, IntrusiveRefCntPtr<vfs::FileSystem> VFS,
-              std::shared_ptr<PCHContainerOperations> PCHs, Logger &Logger) {
+SignatureHelp signatureHelp(const Context &Ctx, PathRef FileName,
+                            const tooling::CompileCommand &Command,
+                            PrecompiledPreamble const *Preamble,
+                            StringRef Contents, Position Pos,
+                            IntrusiveRefCntPtr<vfs::FileSystem> VFS,
+                            std::shared_ptr<PCHContainerOperations> PCHs) {
   SignatureHelp Result;
   clang::CodeCompleteOptions Options;
   Options.IncludeGlobals = false;
   Options.IncludeMacros = false;
   Options.IncludeCodePatterns = false;
   Options.IncludeBriefComments = true;
-  invokeCodeComplete(llvm::make_unique<SignatureHelpCollector>(Options, Result),
+  invokeCodeComplete(Ctx,
+                     llvm::make_unique<SignatureHelpCollector>(Options, Result),
                      Options, FileName, Command, Preamble, Contents, Pos,
-                     std::move(VFS), std::move(PCHs), Logger);
+                     std::move(VFS), std::move(PCHs));
   return Result;
 }
 

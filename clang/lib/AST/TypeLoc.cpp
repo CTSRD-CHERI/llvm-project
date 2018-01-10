@@ -201,7 +201,7 @@ SourceLocation TypeLoc::getBeginLoc() const {
         LeftMost = Cur;
         break;
       }
-      /* Fall through */
+      LLVM_FALLTHROUGH;
     case FunctionNoProto:
     case ConstantArray:
     case DependentSizedArray:
@@ -442,6 +442,15 @@ void TypeOfTypeLoc::initializeLocal(ASTContext &Context,
       ::initializeLocal(Context, Loc);
   this->getLocalData()->UnderlyingTInfo = Context.getTrivialTypeSourceInfo(
       getUnderlyingType(), Loc);
+}
+
+void UnaryTransformTypeLoc::initializeLocal(ASTContext &Context,
+                                       SourceLocation Loc) {
+    setKWLoc(Loc);
+    setRParenLoc(Loc);
+    setLParenLoc(Loc);
+    this->setUnderlyingTInfo(
+        Context.getTrivialTypeSourceInfo(getTypePtr()->getBaseType(), Loc));
 }
 
 void ElaboratedTypeLoc::initializeLocal(ASTContext &Context, 

@@ -90,6 +90,13 @@ static llvm::cl::opt<Path> TraceFile(
         "Trace internal events and timestamps in chrome://tracing JSON format"),
     llvm::cl::init(""), llvm::cl::Hidden);
 
+static llvm::cl::opt<bool> EnableIndexBasedCompletion(
+    "enable-index-based-completion",
+    llvm::cl::desc(
+        "Enable index-based global code completion (experimental). Clangd will "
+        "use index built from symbols in opened files"),
+    llvm::cl::init(false), llvm::cl::Hidden);
+
 int main(int argc, char *argv[]) {
   llvm::cl::ParseCommandLineOptions(argc, argv, "clangd");
 
@@ -115,8 +122,10 @@ int main(int argc, char *argv[]) {
                    << EC.message();
     }
   }
+
+  // Setup tracing facilities.
   llvm::Optional<llvm::raw_fd_ostream> TraceStream;
-  std::unique_ptr<trace::Session> TraceSession;
+  std::unique_ptr<trace::EventTracer> Tracer;
   if (!TraceFile.empty()) {
     std::error_code EC;
     TraceStream.emplace(TraceFile, /*ref*/ EC, llvm::sys::fs::F_RW);
@@ -124,15 +133,21 @@ int main(int argc, char *argv[]) {
       TraceFile.reset();
       llvm::errs() << "Error while opening trace file: " << EC.message();
     } else {
-      TraceSession = trace::Session::create(*TraceStream, PrettyPrint);
+      Tracer = trace::createJSONTracer(*TraceStream, PrettyPrint);
     }
   }
+
+  llvm::Optional<trace::Session> TracingSession;
+  if (Tracer)
+    TracingSession.emplace(*Tracer);
 
   llvm::raw_ostream &Outs = llvm::outs();
   llvm::raw_ostream &Logs = llvm::errs();
   JSONOutput Out(Outs, Logs,
                  InputMirrorStream ? InputMirrorStream.getPointer() : nullptr,
                  PrettyPrint);
+
+  clangd::LoggingSession LoggingSession(Out);
 
   // If --compile-commands-dir arg was invoked, check value and override default
   // path.
@@ -172,8 +187,8 @@ int main(int argc, char *argv[]) {
   CCOpts.IncludeIneligibleResults = IncludeIneligibleResults;
   // Initialize and run ClangdLSPServer.
   ClangdLSPServer LSPServer(Out, WorkerThreadsCount, StorePreamblesInMemory,
-                            CCOpts, ResourceDirRef,
-                            CompileCommandsDirPath);
+                            CCOpts, ResourceDirRef, CompileCommandsDirPath,
+                            EnableIndexBasedCompletion);
   constexpr int NoShutdownRequestErrorCode = 1;
   llvm::set_thread_name("clangd.main");
   return LSPServer.run(std::cin) ? 0 : NoShutdownRequestErrorCode;

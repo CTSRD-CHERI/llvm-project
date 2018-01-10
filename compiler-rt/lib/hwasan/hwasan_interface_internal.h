@@ -32,14 +32,6 @@ using __sanitizer::u16;
 using __sanitizer::u8;
 
 SANITIZER_INTERFACE_ATTRIBUTE
-extern uptr __hwasan_shadow_memory_dynamic_address;
-
-// Hidden alias for internal access.
-__attribute__((visibility("hidden")))
-extern uptr __hwasan_shadow_memory_dynamic_address_internal;
-
-
-SANITIZER_INTERFACE_ATTRIBUTE
 void __hwasan_load(uptr, uptr);
 SANITIZER_INTERFACE_ATTRIBUTE
 void __hwasan_load1(uptr);
@@ -53,6 +45,19 @@ SANITIZER_INTERFACE_ATTRIBUTE
 void __hwasan_load16(uptr);
 
 SANITIZER_INTERFACE_ATTRIBUTE
+void __hwasan_load_noabort(uptr, uptr);
+SANITIZER_INTERFACE_ATTRIBUTE
+void __hwasan_load1_noabort(uptr);
+SANITIZER_INTERFACE_ATTRIBUTE
+void __hwasan_load2_noabort(uptr);
+SANITIZER_INTERFACE_ATTRIBUTE
+void __hwasan_load4_noabort(uptr);
+SANITIZER_INTERFACE_ATTRIBUTE
+void __hwasan_load8_noabort(uptr);
+SANITIZER_INTERFACE_ATTRIBUTE
+void __hwasan_load16_noabort(uptr);
+
+SANITIZER_INTERFACE_ATTRIBUTE
 void __hwasan_store(uptr, uptr);
 SANITIZER_INTERFACE_ATTRIBUTE
 void __hwasan_store1(uptr);
@@ -64,6 +69,19 @@ SANITIZER_INTERFACE_ATTRIBUTE
 void __hwasan_store8(uptr);
 SANITIZER_INTERFACE_ATTRIBUTE
 void __hwasan_store16(uptr);
+
+SANITIZER_INTERFACE_ATTRIBUTE
+void __hwasan_store_noabort(uptr, uptr);
+SANITIZER_INTERFACE_ATTRIBUTE
+void __hwasan_store1_noabort(uptr);
+SANITIZER_INTERFACE_ATTRIBUTE
+void __hwasan_store2_noabort(uptr);
+SANITIZER_INTERFACE_ATTRIBUTE
+void __hwasan_store4_noabort(uptr);
+SANITIZER_INTERFACE_ATTRIBUTE
+void __hwasan_store8_noabort(uptr);
+SANITIZER_INTERFACE_ATTRIBUTE
+void __hwasan_store16_noabort(uptr);
 
 // Returns the offset of the first tag mismatch or -1 if the whole range is
 // good.

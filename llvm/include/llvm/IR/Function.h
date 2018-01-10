@@ -131,7 +131,7 @@ public:
   // This is here to help easily convert from FunctionT * (Function * or
   // MachineFunction *) in BlockFrequencyInfoImpl to Function * by calling
   // FunctionT->getFunction().
-  const Function *getFunction() const { return this; }
+  const Function &getFunction() const { return *this; }
 
   static Function *Create(FunctionType *Ty, LinkageTypes Linkage,
                           const Twine &N = "", Module *M = nullptr) {
@@ -247,6 +247,12 @@ public:
   /// Entry count is the number of times the function was executed based on
   /// pgo data.
   Optional<uint64_t> getEntryCount() const;
+
+  /// Return true if the function is annotated with profile data.
+  ///
+  /// Presence of entry counts from a profile run implies the function has
+  /// profile annotations.
+  bool hasProfileData() const { return getEntryCount().hasValue(); }
 
   /// Returns the set of GUIDs that needs to be imported to the function for
   /// sample PGO, to enable the same inlines as the profiled optimized binary.
@@ -422,7 +428,7 @@ public:
   }
   void setOnlyAccessesArgMemory() { addFnAttr(Attribute::ArgMemOnly); }
 
-  /// @brief Determine if the function may only access memory that is 
+  /// @brief Determine if the function may only access memory that is
   ///  inaccessible from the IR.
   bool onlyAccessesInaccessibleMemory() const {
     return hasFnAttribute(Attribute::InaccessibleMemOnly);
@@ -490,7 +496,7 @@ public:
   }
   void setDoesNotRecurse() {
     addFnAttr(Attribute::NoRecurse);
-  }  
+  }
 
   /// @brief True if the ABI mandates (or the user requested) that this
   /// function be in a unwind table.

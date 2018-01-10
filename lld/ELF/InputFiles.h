@@ -72,6 +72,11 @@ public:
 
   Kind kind() const { return FileKind; }
 
+  bool isElf() const {
+    Kind K = kind();
+    return K == ObjKind || K == SharedKind;
+  }
+
   StringRef getName() const { return MB.getBufferIdentifier(); }
   MemoryBufferRef MB;
 
@@ -107,6 +112,9 @@ public:
   // Index of MIPS GOT built for this file.
   size_t MipsGotIndex = -1;
 
+  std::string getSrcMsg(const Symbol &Sym, InputSectionBase &Sec,
+                        uint64_t Offset);
+
 protected:
   InputFile(Kind K, MemoryBufferRef M);
   std::vector<InputSectionBase *> Sections;
@@ -124,10 +132,7 @@ public:
   typedef typename ELFT::SymRange Elf_Sym_Range;
 
   ELFFileBase(Kind K, MemoryBufferRef M);
-  static bool classof(const InputFile *F) {
-    Kind K = F->kind();
-    return K == ObjKind || K == SharedKind;
-  }
+  static bool classof(const InputFile *F) { return F->isElf(); }
 
   llvm::object::ELFFile<ELFT> getObj() const {
     return check(llvm::object::ELFFile<ELFT>::create(MB.getBuffer()));
@@ -168,8 +173,6 @@ public:
 
   ObjFile(MemoryBufferRef M, StringRef ArchiveName);
   void parse(llvm::DenseSet<llvm::CachedHashStringRef> &ComdatGroups);
-
-  InputSectionBase *getSection(uint32_t Index) const;
 
   Symbol &getSymbol(uint32_t SymbolIndex) const {
     if (SymbolIndex >= this->Symbols.size())
@@ -295,6 +298,7 @@ template <class ELFT> class SharedFile : public ELFFileBase<ELFT> {
   const Elf_Shdr *VerdefSec = nullptr;
 
 public:
+  std::vector<const Elf_Verdef *> Verdefs;
   std::string SoName;
 
   llvm::ArrayRef<StringRef> getUndefinedSymbols() { return Undefs; }
@@ -329,7 +333,7 @@ class BinaryFile : public InputFile {
 public:
   explicit BinaryFile(MemoryBufferRef M) : InputFile(BinaryKind, M) {}
   static bool classof(const InputFile *F) { return F->kind() == BinaryKind; }
-  template <class ELFT> void parse();
+  void parse();
 };
 
 InputFile *createObjectFile(MemoryBufferRef MB, StringRef ArchiveName = "",

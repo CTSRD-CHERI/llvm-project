@@ -419,8 +419,8 @@ void tools::AddGoldPlugin(const ToolChain &ToolChain, const ArgList &Args,
     CmdArgs.push_back("-plugin-opt=thinlto");
 
   if (unsigned Parallelism = getLTOParallelism(Args, D))
-    CmdArgs.push_back(Args.MakeArgString(Twine("-plugin-opt=jobs=") +
-                                         llvm::to_string(Parallelism)));
+    CmdArgs.push_back(
+        Args.MakeArgString("-plugin-opt=jobs=" + Twine(Parallelism)));
 
   // If an explicit debugger tuning argument appeared, pass it along.
   if (Arg *A = Args.getLastArg(options::OPT_gTune_Group,
@@ -549,6 +549,12 @@ void tools::linkSanitizerRuntimeDeps(const ToolChain &TC,
       TC.getTriple().getOS() != llvm::Triple::NetBSD &&
       TC.getTriple().getOS() != llvm::Triple::RTEMS)
     CmdArgs.push_back("-ldl");
+  // Required for forkpty on some OSes
+  if (TC.getTriple().getOS() == llvm::Triple::NetBSD)
+    CmdArgs.push_back("-lutil");
+  // Required for backtrace on some OSes
+  if (TC.getTriple().getOS() == llvm::Triple::NetBSD)
+    CmdArgs.push_back("-lexecinfo");
 }
 
 static void

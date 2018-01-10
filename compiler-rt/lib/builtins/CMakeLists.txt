@@ -232,8 +232,6 @@ set(x86_ARCH_SOURCES
 
 if (NOT MSVC)
   set(x86_64_SOURCES
-      x86_64/chkstk.S
-      x86_64/chkstk2.S
       x86_64/floatdidf.c
       x86_64/floatdisf.c
       x86_64/floatdixf.c
@@ -253,8 +251,6 @@ if (NOT MSVC)
   set(i386_SOURCES
       i386/ashldi3.S
       i386/ashrdi3.S
-      i386/chkstk.S
-      i386/chkstk2.S
       i386/divdi3.S
       i386/floatdidf.S
       i386/floatdisf.S
@@ -445,6 +441,12 @@ endif()
 set(aarch64_SOURCES
   ${GENERIC_TF_SOURCES}
   ${GENERIC_SOURCES})
+
+if (MINGW)
+  set(aarch64_SOURCES
+      ${aarch64_SOURCES}
+      aarch64/chkstk.S)
+endif()
 
 set(armhf_SOURCES ${arm_SOURCES})
 set(armv7_SOURCES ${arm_SOURCES})

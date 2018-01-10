@@ -1,4 +1,4 @@
-; RUN: llc -mtriple wasm32-unknown-unknown-wasm -filetype=obj -o %t.o %s
+; RUN: llc -mtriple=wasm32-unknown-unknown-wasm -filetype=obj -o %t.o %s
 ; RUN: lld -flavor wasm -strip-debug %t.o -o %t.wasm
 ; RUN: obj2yaml %t.wasm | FileCheck %s
 
@@ -36,10 +36,10 @@ entry:
 ; CHECK-NEXT:   - Type:            FUNCTION
 ; CHECK-NEXT:     FunctionTypes:   [ 0, 0, 0 ]
 ; CHECK-NEXT:   - Type:            TABLE
-; CHECK-NEXT:     Tables:          
+; CHECK-NEXT:     Tables:
 ; CHECK-NEXT:       - ElemType:        ANYFUNC
-; CHECK-NEXT:         Limits:          
-; CHECK-NEXT:           Flags:           0x00000001
+; CHECK-NEXT:         Limits:
+; CHECK-NEXT:           Flags:           [ HAS_MAX ]
 ; CHECK-NEXT:           Initial:         0x00000002
 ; CHECK-NEXT:           Maximum:         0x00000002
 ; CHECK-NEXT:   - Type:            MEMORY
@@ -67,8 +67,8 @@ entry:
 ; CHECK-NEXT:         Kind:            FUNCTION
 ; CHECK-NEXT:         Index:           1
 ; CHECK-NEXT:   - Type:            ELEM
-; CHECK-NEXT:     Segments:        
-; CHECK-NEXT:       - Offset:          
+; CHECK-NEXT:     Segments:
+; CHECK-NEXT:       - Offset:
 ; CHECK-NEXT:           Opcode:          I32_CONST
 ; CHECK-NEXT:           Value:           1
 ; CHECK-NEXT:         Functions:       [ 0 ]

@@ -8,6 +8,8 @@ add_clang_library(clangDaemon
   ClangdUnit.cpp
   ClangdUnitStore.cpp
   CodeComplete.cpp
+  CodeCompletionStrings.cpp
+  Context.cpp
   Compiler.cpp
   DraftStore.cpp
   FuzzyMatch.cpp
@@ -17,7 +19,14 @@ add_clang_library(clangDaemon
   Logger.cpp
   Protocol.cpp
   ProtocolHandlers.cpp
+  SourceCode.cpp
   Trace.cpp
+  XRefs.cpp
+  index/FileIndex.cpp
+  index/Index.cpp
+  index/MemIndex.cpp
+  index/SymbolCollector.cpp
+  index/SymbolYAML.cpp
 
   LINK_LIBS
   clangAST
@@ -38,3 +47,4 @@ if( LLVM_LIB_FUZZING_ENGINE OR LLVM_USE_SANITIZE_COVERAGE )
   add_subdirectory(fuzzer)
 endif()
 add_subdirectory(tool)
+add_subdirectory(global-symbol-builder)

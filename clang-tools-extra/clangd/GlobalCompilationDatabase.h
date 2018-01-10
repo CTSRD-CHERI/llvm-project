@@ -51,7 +51,7 @@ class DirectoryBasedGlobalCompilationDatabase
     : public GlobalCompilationDatabase {
 public:
   DirectoryBasedGlobalCompilationDatabase(
-      clangd::Logger &Logger, llvm::Optional<Path> CompileCommandsDir);
+      llvm::Optional<Path> CompileCommandsDir);
 
   /// Scans File's parents looking for compilation databases.
   /// Any extra flags will be added.
@@ -65,8 +65,8 @@ public:
   void setExtraFlagsForFile(PathRef File, std::vector<std::string> ExtraFlags);
 
 private:
-  tooling::CompilationDatabase *getCompilationDatabase(PathRef File) const;
-  tooling::CompilationDatabase *tryLoadDatabaseFromPath(PathRef File) const;
+  tooling::CompilationDatabase *getCDBForFile(PathRef File) const;
+  tooling::CompilationDatabase *getCDBInDirLocked(PathRef File) const;
   void addExtraFlags(PathRef File, tooling::CompileCommand &C) const;
 
   mutable std::mutex Mutex;
@@ -77,8 +77,6 @@ private:
 
   /// Stores extra flags per file.
   llvm::StringMap<std::vector<std::string>> ExtraFlagsForFile;
-  /// Used for logging.
-  clangd::Logger &Logger;
   /// Used for command argument pointing to folder where compile_commands.json
   /// is located.
   llvm::Optional<Path> CompileCommandsDir;

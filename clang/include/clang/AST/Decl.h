@@ -305,8 +305,7 @@ public:
   // FIXME: Remove string version.
   std::string getQualifiedNameAsString() const;
 
-  /// getNameForDiagnostic - Appends a human-readable name for this
-  /// declaration into the given stream.
+  /// Appends a human-readable name for this declaration into the given stream.
   ///
   /// This is the method invoked by Sema when displaying a NamedDecl
   /// in a diagnostic.  It does not necessarily produce the same
@@ -1684,8 +1683,8 @@ private:
   unsigned getParameterIndexLarge() const;
 };
 
-/// FunctionDecl - An instance of this class is created to represent a
-/// function declaration or definition.
+/// An instance of this class is created to represent a function declaration or
+/// definition.
 ///
 /// Since a given function can be declared several times in a program,
 /// there may be several FunctionDecls that correspond to that
@@ -1760,6 +1759,11 @@ protected:
   unsigned IsCopyDeductionCandidate : 1;
 
 private:
+
+  /// Store the ODRHash after first calculation.
+  unsigned HasODRHash : 1;
+  unsigned ODRHash;
+
   /// \brief End part of this FunctionDecl's source range.
   ///
   /// We could compute the full range in getSourceRange(). However, when we're
@@ -1787,8 +1791,8 @@ private:
                       DependentFunctionTemplateSpecializationInfo *>
     TemplateOrSpecialization;
 
-  /// DNLoc - Provides source/type location info for the
-  /// declaration name embedded in the DeclaratorDecl base class.
+  /// Provides source/type location info for the declaration name embedded in
+  /// the DeclaratorDecl base class.
   DeclarationNameLoc DNLoc;
 
   /// \brief Specify that this function declaration is actually a function
@@ -1842,8 +1846,9 @@ protected:
         IsExplicitlyDefaulted(false), HasImplicitReturnZero(false),
         IsLateTemplateParsed(false), IsConstexpr(isConstexprSpecified),
         InstantiationIsPending(false), UsesSEHTry(false), HasSkippedBody(false),
-        WillHaveBody(false), IsCopyDeductionCandidate(false),
-        EndRangeLoc(NameInfo.getEndLoc()), DNLoc(NameInfo.getInfo()) {}
+        WillHaveBody(false), IsCopyDeductionCandidate(false), HasODRHash(false),
+        ODRHash(0), EndRangeLoc(NameInfo.getEndLoc()),
+        DNLoc(NameInfo.getInfo()) {}
 
   using redeclarable_base = Redeclarable<FunctionDecl>;
 
@@ -1922,13 +1927,13 @@ public:
     return hasBody(Definition);
   }
 
-  /// hasTrivialBody - Returns whether the function has a trivial body that does
-  /// not require any specific codegen.
+  /// Returns whether the function has a trivial body that does not require any
+  /// specific codegen.
   bool hasTrivialBody() const;
 
-  /// isDefined - Returns true if the function is defined at all, including
-  /// a deleted definition. Except for the behavior when the function is
-  /// deleted, behaves like hasBody.
+  /// Returns true if the function is defined at all, including a deleted
+  /// definition. Except for the behavior when the function is deleted, behaves
+  /// like hasBody.
   bool isDefined(const FunctionDecl *&Definition) const;
 
   virtual bool isDefined() const {
@@ -1947,11 +1952,10 @@ public:
     return const_cast<FunctionDecl *>(this)->getDefinition();
   }
 
-  /// getBody - Retrieve the body (definition) of the function. The
-  /// function body might be in any of the (re-)declarations of this
-  /// function. The variant that accepts a FunctionDecl pointer will
-  /// set that function declaration to the actual declaration
-  /// containing the body (if there is one).
+  /// Retrieve the body (definition) of the function. The function body might be
+  /// in any of the (re-)declarations of this function. The variant that accepts
+  /// a FunctionDecl pointer will set that function declaration to the actual
+  /// declaration containing the body (if there is one).
   /// NOTE: For checking if there is a body, use hasBody() instead, to avoid
   /// unnecessary AST de-serialization of the body.
   Stmt *getBody(const FunctionDecl *&Definition) const;
@@ -1967,13 +1971,12 @@ public:
   /// This does not determine whether the function has been defined (e.g., in a
   /// previous definition); for that information, use isDefined.
   bool isThisDeclarationADefinition() const {
-    return IsDeleted || IsDefaulted || Body || IsLateTemplateParsed ||
-      WillHaveBody || hasDefiningAttr();
+    return IsDeleted || IsDefaulted || Body || HasSkippedBody ||
+           IsLateTemplateParsed || WillHaveBody || hasDefiningAttr();
   }
 
-  /// doesThisDeclarationHaveABody - Returns whether this specific
-  /// declaration of the function has a body - that is, if it is a non-
-  /// deleted definition.
+  /// Returns whether this specific declaration of the function has a body -
+  /// that is, if it is a non-deleted definition.
   bool doesThisDeclarationHaveABody() const {
     return Body || IsLateTemplateParsed;
   }
@@ -2179,9 +2182,9 @@ public:
   param_const_iterator param_end() const { return parameters().end(); }
   size_t param_size() const { return parameters().size(); }
 
-  /// getNumParams - Return the number of parameters this function must have
-  /// based on its FunctionType.  This is the length of the ParamInfo array
-  /// after it has been created.
+  /// Return the number of parameters this function must have based on its
+  /// FunctionType.  This is the length of the ParamInfo array after it has been
+  /// created.
   unsigned getNumParams() const;
 
   const ParmVarDecl *getParamDecl(unsigned i) const {
@@ -2196,10 +2199,9 @@ public:
     setParams(getASTContext(), NewParamInfo);
   }
 
-  /// getMinRequiredArguments - Returns the minimum number of arguments
-  /// needed to call this function. This may be fewer than the number of
-  /// function parameters, if some of the parameters have default
-  /// arguments (in C++).
+  /// Returns the minimum number of arguments needed to call this function. This
+  /// may be fewer than the number of function parameters, if some of the
+  /// parameters have default arguments (in C++).
   unsigned getMinRequiredArguments() const;
 
   QualType getReturnType() const {
@@ -2442,6 +2444,10 @@ public:
   /// the corresponding Builtin ID. If the function is not a memory function,
   /// returns 0.
   unsigned getMemoryFunctionKind() const;
+
+  /// \brief Returns ODRHash of the function.  This value is calculated and
+  /// stored on first call, then the stored value returned on the other calls.
+  unsigned getODRHash();
 
   // Implement isa/cast/dyncast/etc.
   static bool classof(const Decl *D) { return classofKind(D->getKind()); }

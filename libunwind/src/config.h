@@ -71,7 +71,7 @@
     defined(__ppc__) || defined(__ppc64__) ||                                  \
     (!defined(__APPLE__) && defined(__arm__)) ||                               \
     (defined(__arm64__) || defined(__aarch64__)) ||                            \
-    (defined(__APPLE__) && defined(__mips__))
+    defined(__mips__)
 #define _LIBUNWIND_BUILD_ZERO_COST_APIS
 #endif
 
@@ -91,8 +91,11 @@
 #endif
 
 #if defined(NDEBUG) && defined(_LIBUNWIND_IS_BAREMETAL)
+#define _LIBUNWIND_LOG0(msg)
 #define _LIBUNWIND_LOG(msg, ...)
 #else
+#define _LIBUNWIND_LOG0(msg)                                               \
+  fprintf(stderr, "libunwind: " msg "\n")
 #define _LIBUNWIND_LOG(msg, ...)                                               \
   fprintf(stderr, "libunwind: " msg "\n", __VA_ARGS__)
 #endif

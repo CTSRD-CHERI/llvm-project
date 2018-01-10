@@ -19,7 +19,8 @@
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
-#include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/Analysis/BlockFrequencyInfo.h"
+#include "llvm/Analysis/BranchProbabilityInfo.h"
 #include "llvm/Analysis/CFG.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/CFG.h"
@@ -105,10 +106,9 @@ static void createPHIsForSplitLoopExit(ArrayRef<BasicBlock *> Preds,
           SplitBB->isLandingPad()) && "SplitBB has non-PHI nodes!");
 
   // For each PHI in the destination block.
-  for (BasicBlock::iterator I = DestBB->begin();
-       PHINode *PN = dyn_cast<PHINode>(I); ++I) {
-    unsigned Idx = PN->getBasicBlockIndex(SplitBB);
-    Value *V = PN->getIncomingValue(Idx);
+  for (PHINode &PN : DestBB->phis()) {
+    unsigned Idx = PN.getBasicBlockIndex(SplitBB);
+    Value *V = PN.getIncomingValue(Idx);
 
     // If the input is a PHI which already satisfies LCSSA, don't create
     // a new one.
@@ -118,13 +118,13 @@ static void createPHIsForSplitLoopExit(ArrayRef<BasicBlock *> Preds,
 
     // Otherwise a new PHI is needed. Create one and populate it.
     PHINode *NewPN = PHINode::Create(
-        PN->getType(), Preds.size(), "split",
+        PN.getType(), Preds.size(), "split",
         SplitBB->isLandingPad() ? &SplitBB->front() : SplitBB->getTerminator());
     for (unsigned i = 0, e = Preds.size(); i != e; ++i)
       NewPN->addIncoming(V, Preds[i]);
 
     // Update the original PHI.
-    PN->setIncomingValue(Idx, NewPN);
+    PN.setIncomingValue(Idx, NewPN);
   }
 }
 
@@ -331,7 +331,9 @@ findIBRPredecessor(BasicBlock *BB, SmallVectorImpl<BasicBlock *> &OtherPreds) {
   return IBB;
 }
 
-bool llvm::SplitIndirectBrCriticalEdges(Function &F) {
+bool llvm::SplitIndirectBrCriticalEdges(Function &F,
+                                        BranchProbabilityInfo *BPI,
+                                        BlockFrequencyInfo *BFI) {
   // Check whether the function has any indirectbrs, and collect which blocks
   // they may jump to. Since most functions don't have indirect branches,
   // this lowers the common case's overhead to O(Blocks) instead of O(Edges).
@@ -348,6 +350,7 @@ bool llvm::SplitIndirectBrCriticalEdges(Function &F) {
   if (Targets.empty())
     return false;
 
+  bool ShouldUpdateAnalysis = BPI && BFI;
   bool Changed = false;
   for (BasicBlock *Target : Targets) {
     SmallVector<BasicBlock *, 16> OtherPreds;
@@ -363,6 +366,14 @@ bool llvm::SplitIndirectBrCriticalEdges(Function &F) {
       continue;
 
     BasicBlock *BodyBlock = Target->splitBasicBlock(FirstNonPHI, ".split");
+    if (ShouldUpdateAnalysis) {
+      // Copy the BFI/BPI from Target to BodyBlock.
+      for (unsigned I = 0, E = BodyBlock->getTerminator()->getNumSuccessors();
+           I < E; ++I)
+        BPI->setEdgeProbability(BodyBlock, I,
+                                BPI->getEdgeProbability(Target, I));
+      BFI->setBlockFreq(BodyBlock, BFI->getBlockFreq(Target).getFrequency());
+    }
     // It's possible Target was its own successor through an indirectbr.
     // In this case, the indirectbr now comes from BodyBlock.
     if (IBRPred == Target)
@@ -374,13 +385,22 @@ bool llvm::SplitIndirectBrCriticalEdges(Function &F) {
     ValueToValueMapTy VMap;
     BasicBlock *DirectSucc = CloneBasicBlock(Target, VMap, ".clone", &F);
 
+    BlockFrequency BlockFreqForDirectSucc;
     for (BasicBlock *Pred : OtherPreds) {
       // If the target is a loop to itself, then the terminator of the split
-      // block needs to be updated.
-      if (Pred == Target)
-        BodyBlock->getTerminator()->replaceUsesOfWith(Target, DirectSucc);
-      else
-        Pred->getTerminator()->replaceUsesOfWith(Target, DirectSucc);
+      // block (BodyBlock) needs to be updated.
+      BasicBlock *Src = Pred != Target ? Pred : BodyBlock;
+      Src->getTerminator()->replaceUsesOfWith(Target, DirectSucc);
+      if (ShouldUpdateAnalysis)
+        BlockFreqForDirectSucc += BFI->getBlockFreq(Src) *
+            BPI->getEdgeProbability(Src, DirectSucc);
+    }
+    if (ShouldUpdateAnalysis) {
+      BFI->setBlockFreq(DirectSucc, BlockFreqForDirectSucc.getFrequency());
+      BlockFrequency NewBlockFreqForTarget =
+          BFI->getBlockFreq(Target) - BlockFreqForDirectSucc;
+      BFI->setBlockFreq(Target, NewBlockFreqForTarget.getFrequency());
+      BPI->eraseBlock(Target);
     }
 
     // Ok, now fix up the PHIs. We know the two blocks only have PHIs, and that

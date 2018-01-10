@@ -18,6 +18,7 @@
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSymbol.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FormattedStream.h"
 using namespace llvm;
@@ -28,9 +29,15 @@ using namespace llvm;
 #define PRINT_ALIAS_INSTR
 #include "RISCVGenAsmWriter.inc"
 
+static cl::opt<bool>
+NoAliases("riscv-no-aliases",
+            cl::desc("Disable the emission of assembler pseudo instructions"),
+            cl::init(false),
+            cl::Hidden);
+
 void RISCVInstPrinter::printInst(const MCInst *MI, raw_ostream &O,
                                  StringRef Annot, const MCSubtargetInfo &STI) {
-  if (!printAliasInstr(MI, O))
+  if (NoAliases || !printAliasInstr(MI, O))
     printInstruction(MI, O);
   printAnnotation(O, Annot);
 }

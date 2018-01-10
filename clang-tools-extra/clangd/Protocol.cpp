@@ -12,7 +12,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "Protocol.h"
-
 #include "clang/Basic/LLVM.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/Format.h"
@@ -60,6 +59,10 @@ bool fromJSON(const json::Expr &E, URI &R) {
 
 json::Expr toJSON(const URI &U) { return U.uri; }
 
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, const URI &U) {
+  return OS << U.uri;
+}
+
 bool fromJSON(const json::Expr &Params, TextDocumentIdentifier &R) {
   json::ObjectMapper O(Params);
   return O && O.map("uri", R.uri);
@@ -77,6 +80,10 @@ json::Expr toJSON(const Position &P) {
   };
 }
 
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, const Position &P) {
+  return OS << P.line << ':' << P.character;
+}
+
 bool fromJSON(const json::Expr &Params, Range &R) {
   json::ObjectMapper O(Params);
   return O && O.map("start", R.start) && O.map("end", R.end);
@@ -89,11 +96,19 @@ json::Expr toJSON(const Range &P) {
   };
 }
 
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, const Range &R) {
+  return OS << R.start << '-' << R.end;
+}
+
 json::Expr toJSON(const Location &P) {
   return json::obj{
       {"uri", P.uri},
       {"range", P.range},
   };
+}
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, const Location &L) {
+  return OS << L.range << '@' << L.uri;
 }
 
 bool fromJSON(const json::Expr &Params, TextDocumentItem &R) {
@@ -251,7 +266,7 @@ bool fromJSON(const json::Expr &Params, WorkspaceEdit &R) {
   return O && O.map("changes", R.changes);
 }
 
-const std::string ExecuteCommandParams::CLANGD_APPLY_FIX_COMMAND =
+const llvm::StringLiteral ExecuteCommandParams::CLANGD_APPLY_FIX_COMMAND =
     "clangd.applyFix";
 
 bool fromJSON(const json::Expr &Params, ExecuteCommandParams &R) {
@@ -357,6 +372,13 @@ bool fromJSON(const json::Expr &Params, RenameParams &R) {
   json::ObjectMapper O(Params);
   return O && O.map("textDocument", R.textDocument) &&
          O.map("position", R.position) && O.map("newName", R.newName);
+}
+
+json::Expr toJSON(const DocumentHighlight &DH) {
+  return json::obj{
+      {"range", toJSON(DH.range)},
+      {"kind", static_cast<int>(DH.kind)},
+  };
 }
 
 } // namespace clangd

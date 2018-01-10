@@ -702,15 +702,16 @@ public:
   struct IntrinsicInfo {
     unsigned     opc = 0;          // target opcode
     EVT          memVT;            // memory VT
-    const Value* ptrVal = nullptr; // value representing memory location
+
+    // value representing memory location
+    PointerUnion<const Value *, const PseudoSourceValue *> ptrVal;
+
     int          offset = 0;       // offset off of ptrVal
     unsigned     size = 0;         // the size of the memory location
                                    // (taken from memVT if zero)
     unsigned     align = 1;        // alignment
-    bool         vol = false;      // is volatile?
-    bool         readMem = false;  // reads memory?
-    bool         writeMem = false; // writes memory?
 
+    MachineMemOperand::Flags flags = MachineMemOperand::MONone;
     IntrinsicInfo() = default;
   };
 
@@ -719,6 +720,7 @@ public:
   /// true and store the intrinsic information into the IntrinsicInfo that was
   /// passed to the function.
   virtual bool getTgtMemIntrinsic(IntrinsicInfo &, const CallInst &,
+                                  MachineFunction &,
                                   unsigned /*Intrinsic*/) const {
     return false;
   }
@@ -822,8 +824,8 @@ public:
   /// also combined within this function. Currently, the minimum size check is
   /// performed in findJumpTable() in SelectionDAGBuiler and
   /// getEstimatedNumberOfCaseClusters() in BasicTTIImpl.
-  bool isSuitableForJumpTable(const SwitchInst *SI, uint64_t NumCases,
-                              uint64_t Range) const {
+  virtual bool isSuitableForJumpTable(const SwitchInst *SI, uint64_t NumCases,
+                                      uint64_t Range) const {
     const bool OptForSize = SI->getParent()->getParent()->optForSize();
     const unsigned MinDensity = getMinimumJumpTableDensity(OptForSize);
     const unsigned MaxJumpTableSize =
@@ -1274,7 +1276,7 @@ public:
   }
 
   /// Return lower limit for number of blocks in a jump table.
-  unsigned getMinimumJumpTableEntries() const;
+  virtual unsigned getMinimumJumpTableEntries() const;
 
   /// Return lower limit of the density in a jump table.
   unsigned getMinimumJumpTableDensity(bool OptForSize) const;
@@ -2427,7 +2429,7 @@ private:
     PromoteToType;
 
   /// Stores the name each libcall.
-  const char *LibcallRoutineNames[RTLIB::UNKNOWN_LIBCALL];
+  const char *LibcallRoutineNames[RTLIB::UNKNOWN_LIBCALL + 1];
 
   /// The ISD::CondCode that should be used to test the result of each of the
   /// comparison libcall against zero.
@@ -2435,6 +2437,9 @@ private:
 
   /// Stores the CallingConv that should be used for each libcall.
   CallingConv::ID LibcallCallingConvs[RTLIB::UNKNOWN_LIBCALL];
+
+  /// Set default libcall names and calling conventions.
+  void InitLibcalls(const Triple &TT);
 
 protected:
   /// Return true if the extension represented by \p I is free.

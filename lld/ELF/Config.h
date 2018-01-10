@@ -126,6 +126,8 @@ struct Configuration {
   bool HasDynamicList = false;
   bool HasDynSymTab;
   bool ICF;
+  bool ICFData;
+  bool MergeArmExidx;
   bool MipsN32Abi = false;
   bool NoGnuUnique;
   bool NoUndefinedVersion;

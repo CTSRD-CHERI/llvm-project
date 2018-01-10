@@ -102,7 +102,10 @@ public:
 
   // True is this is an undefined weak symbol. This only works once
   // all input files have been added.
-  bool isUndefWeak() const;
+  bool isUndefWeak() const {
+    // See comment on Lazy the details.
+    return isWeak() && (isUndefined() || isLazy());
+  }
 
   StringRef getName() const { return Name; }
   uint8_t getVisibility() const { return StOther & 0x3; }
@@ -202,14 +205,14 @@ class SharedSymbol : public Symbol {
 public:
   static bool classof(const Symbol *S) { return S->kind() == SharedKind; }
 
-  SharedSymbol(InputFile *File, StringRef Name, uint8_t Binding,
+  SharedSymbol(InputFile &File, StringRef Name, uint8_t Binding,
                uint8_t StOther, uint8_t Type, uint64_t Value, uint64_t Size,
-               uint32_t Alignment, const void *Verdef)
-      : Symbol(SharedKind, File, Name, Binding, StOther, Type), Verdef(Verdef),
-        Value(Value), Size(Size), Alignment(Alignment) {
+               uint32_t Alignment, uint32_t VerdefIndex)
+      : Symbol(SharedKind, &File, Name, Binding, StOther, Type), Value(Value),
+        Size(Size), VerdefIndex(VerdefIndex), Alignment(Alignment) {
     // GNU ifunc is a mechanism to allow user-supplied functions to
     // resolve PLT slot values at load-time. This is contrary to the
-    // regualr symbol resolution scheme in which symbols are resolved just
+    // regular symbol resolution scheme in which symbols are resolved just
     // by name. Using this hook, you can program how symbols are solved
     // for you program. For example, you can make "memcpy" to be resolved
     // to a SSE-enabled version of memcpy only when a machine running the
@@ -227,18 +230,19 @@ public:
       this->Type = llvm::ELF::STT_FUNC;
   }
 
-  template <class ELFT> SharedFile<ELFT> *getFile() const {
-    return cast<SharedFile<ELFT>>(File);
+  template <class ELFT> SharedFile<ELFT> &getFile() const {
+    return *cast<SharedFile<ELFT>>(File);
   }
-
-  // This field is a pointer to the symbol's version definition.
-  const void *Verdef;
 
   // If not null, there is a copy relocation to this section.
   InputSection *CopyRelSec = nullptr;
 
   uint64_t Value; // st_value
   uint64_t Size;  // st_size
+
+  // This field is a index to the symbol's version definition.
+  uint32_t VerdefIndex;
+
   uint32_t Alignment;
 };
 
@@ -260,8 +264,8 @@ public:
   InputFile *fetch();
 
 protected:
-  Lazy(Kind K, InputFile *File, StringRef Name, uint8_t Type)
-      : Symbol(K, File, Name, llvm::ELF::STB_GLOBAL, llvm::ELF::STV_DEFAULT,
+  Lazy(Kind K, InputFile &File, StringRef Name, uint8_t Type)
+      : Symbol(K, &File, Name, llvm::ELF::STB_GLOBAL, llvm::ELF::STV_DEFAULT,
                Type) {}
 };
 
@@ -271,13 +275,13 @@ protected:
 // symbol.
 class LazyArchive : public Lazy {
 public:
-  LazyArchive(InputFile *File, const llvm::object::Archive::Symbol S,
+  LazyArchive(InputFile &File, const llvm::object::Archive::Symbol S,
               uint8_t Type)
       : Lazy(LazyArchiveKind, File, S.getName(), Type), Sym(S) {}
 
   static bool classof(const Symbol *S) { return S->kind() == LazyArchiveKind; }
 
-  ArchiveFile *getFile();
+  ArchiveFile &getFile();
   InputFile *fetch();
 
 private:
@@ -288,12 +292,12 @@ private:
 // --start-lib and --end-lib options.
 class LazyObject : public Lazy {
 public:
-  LazyObject(InputFile *File, StringRef Name, uint8_t Type)
+  LazyObject(InputFile &File, StringRef Name, uint8_t Type)
       : Lazy(LazyObjectKind, File, Name, Type) {}
 
   static bool classof(const Symbol *S) { return S->kind() == LazyObjectKind; }
 
-  LazyObjFile *getFile();
+  LazyObjFile &getFile();
   InputFile *fetch();
 };
 

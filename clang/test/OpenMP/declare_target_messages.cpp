@@ -1,5 +1,7 @@
 // RUN: %clang_cc1 -triple x86_64-apple-macos10.7.0 -verify -fopenmp -fnoopenmp-use-tls -ferror-limit 100 -o - %s
 
+// RUN: %clang_cc1 -triple x86_64-apple-macos10.7.0 -verify -fopenmp-simd -fnoopenmp-use-tls -ferror-limit 100 -o - %s
+
 #pragma omp end declare target // expected-error {{unexpected OpenMP directive '#pragma omp end declare target'}}
 
 int a, b; // expected-warning {{declaration is not declared in any declare target region}}
@@ -18,6 +20,10 @@ void f();
 #pragma omp declare target link(foo2) // expected-error {{use of undeclared identifier 'foo2'}}
 
 void c(); // expected-warning {{declaration is not declared in any declare target region}}
+
+void func() {} // expected-note {{'func' defined here}}
+
+#pragma omp declare target link(func) // expected-error {{function name is not allowed in 'link' clause}}
 
 extern int b;
 

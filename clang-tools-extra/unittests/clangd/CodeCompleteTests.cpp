@@ -6,17 +6,23 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+
+#include "Annotations.h"
 #include "ClangdServer.h"
+#include "CodeComplete.h"
 #include "Compiler.h"
+#include "Context.h"
 #include "Matchers.h"
 #include "Protocol.h"
+#include "SourceCode.h"
 #include "TestFS.h"
+#include "index/MemIndex.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 namespace clang {
 namespace clangd {
-// Let GMock print completion items.
+// Let GMock print completion items and signature help.
 void PrintTo(const CompletionItem &I, std::ostream *O) {
   llvm::raw_os_ostream OS(*O);
   OS << I.label << " - " << toJSON(I);
@@ -30,11 +36,25 @@ void PrintTo(const std::vector<CompletionItem> &V, std::ostream *O) {
   }
   *O << "}";
 }
+void PrintTo(const SignatureInformation &I, std::ostream *O) {
+  llvm::raw_os_ostream OS(*O);
+  OS << I.label << " - " << toJSON(I);
+}
+void PrintTo(const std::vector<SignatureInformation> &V, std::ostream *O) {
+  *O << "{\n";
+  for (const auto &I : V) {
+    *O << "\t";
+    PrintTo(I, O);
+    *O << "\n";
+  }
+  *O << "}";
+}
 
 namespace {
 using namespace llvm;
 using ::testing::AllOf;
 using ::testing::Contains;
+using ::testing::Each;
 using ::testing::ElementsAre;
 using ::testing::Not;
 
@@ -43,31 +63,11 @@ class IgnoreDiagnostics : public DiagnosticsConsumer {
       PathRef File, Tagged<std::vector<DiagWithFixIts>> Diagnostics) override {}
 };
 
-struct StringWithPos {
-  std::string Text;
-  clangd::Position MarkerPos;
-};
-
-/// Accepts a source file with a cursor marker ^.
-/// Returns the source file with the marker removed, and the marker position.
-StringWithPos parseTextMarker(StringRef Text) {
-  std::size_t MarkerOffset = Text.find('^');
-  assert(MarkerOffset != StringRef::npos && "^ wasn't found in Text.");
-
-  std::string WithoutMarker;
-  WithoutMarker += Text.take_front(MarkerOffset);
-  WithoutMarker += Text.drop_front(MarkerOffset + 1);
-  assert(StringRef(WithoutMarker).find('^') == StringRef::npos &&
-         "There were multiple occurences of ^ inside Text");
-
-  auto MarkerPos = offsetToPosition(WithoutMarker, MarkerOffset);
-  return {std::move(WithoutMarker), MarkerPos};
-}
-
 // GMock helpers for matching completion items.
 MATCHER_P(Named, Name, "") { return arg.insertText == Name; }
 MATCHER_P(Labeled, Label, "") { return arg.label == Label; }
 MATCHER_P(Kind, K, "") { return arg.kind == K; }
+MATCHER_P(Filter, F, "") { return arg.filterText == F; }
 MATCHER_P(PlainText, Text, "") {
   return arg.insertTextFormat == clangd::InsertTextFormat::PlainText &&
          arg.insertText == Text;
@@ -75,6 +75,11 @@ MATCHER_P(PlainText, Text, "") {
 MATCHER_P(Snippet, Text, "") {
   return arg.insertTextFormat == clangd::InsertTextFormat::Snippet &&
          arg.insertText == Text;
+}
+MATCHER(FilterContainsName, "") {
+  if (arg.filterText.empty())
+    return true;
+  return llvm::StringRef(arg.insertText).contains(arg.filterText);
 }
 // Shorthand for Contains(Named(Name)).
 Matcher<const std::vector<CompletionItem> &> Has(std::string Name) {
@@ -92,12 +97,17 @@ CompletionList completions(StringRef Text,
   MockCompilationDatabase CDB;
   IgnoreDiagnostics DiagConsumer;
   ClangdServer Server(CDB, DiagConsumer, FS, getDefaultAsyncThreadsCount(),
-                      /*StorePreamblesInMemory=*/true,
-                      EmptyLogger::getInstance());
+                      /*StorePreamblesInMemory=*/true);
   auto File = getVirtualTestFilePath("foo.cpp");
-  auto Test = parseTextMarker(Text);
-  Server.addDocument(File, Test.Text);
-  return Server.codeComplete(File, Test.MarkerPos, Opts).get().Value;
+  Annotations Test(Text);
+  Server.addDocument(Context::empty(), File, Test.code());
+  auto CompletionList =
+      Server.codeComplete(Context::empty(), File, Test.point(), Opts)
+          .get()
+          .second.Value;
+  // Sanity-check that filterText is valid.
+  EXPECT_THAT(CompletionList.items, Each(FilterContainsName()));
+  return CompletionList;
 }
 
 TEST(CompletionTest, Limit) {
@@ -127,7 +137,6 @@ TEST(CompletionTest, Filter) {
       int Qux;
     };
   )cpp";
-
   EXPECT_THAT(completions(Body + "int main() { S().Foba^ }").items,
               AllOf(Has("FooBar"), Has("FooBaz"), Not(Has("Qux"))));
 
@@ -231,8 +240,9 @@ void TestGlobalScopeCompletion(clangd::CodeCompleteOptions Opts) {
   // A macro.
   EXPECT_IFF(Opts.IncludeMacros, Results.items, Has("MACRO"));
   // Local items. Must be present always.
-  EXPECT_THAT(Results.items, AllOf(Has("local_var"), Has("LocalClass"),
-                             Contains(Kind(CompletionItemKind::Snippet))));
+  EXPECT_THAT(Results.items,
+              AllOf(Has("local_var"), Has("LocalClass"),
+                    Contains(Kind(CompletionItemKind::Snippet))));
   // Check documentation.
   EXPECT_IFF(Opts.IncludeBriefComments, Results.items,
              Contains(IsDocumented()));
@@ -268,18 +278,17 @@ TEST(CompletionTest, CheckContentsOverride) {
   IgnoreDiagnostics DiagConsumer;
   MockCompilationDatabase CDB;
   ClangdServer Server(CDB, DiagConsumer, FS, getDefaultAsyncThreadsCount(),
-                      /*StorePreamblesInMemory=*/true,
-                      EmptyLogger::getInstance());
+                      /*StorePreamblesInMemory=*/true);
   auto File = getVirtualTestFilePath("foo.cpp");
-  Server.addDocument(File, "ignored text!");
+  Server.addDocument(Context::empty(), File, "ignored text!");
 
-  auto Example = parseTextMarker("int cbc; int b = ^;");
-  auto Results =
-      Server
-          .codeComplete(File, Example.MarkerPos, clangd::CodeCompleteOptions(),
-                        StringRef(Example.Text))
-          .get()
-          .Value;
+  Annotations Example("int cbc; int b = ^;");
+  auto Results = Server
+                     .codeComplete(Context::empty(), File, Example.point(),
+                                   clangd::CodeCompleteOptions(),
+                                   StringRef(Example.code()))
+                     .get()
+                     .second.Value;
   EXPECT_THAT(Results.items, Contains(Named("cbc")));
 }
 
@@ -342,7 +351,7 @@ TEST(CompletionTest, Snippets) {
       )cpp",
       Opts);
   EXPECT_THAT(Results.items,
-              HasSubsequence(PlainText("a"),
+              HasSubsequence(Snippet("a"),
                              Snippet("f(${1:int i}, ${2:const float f})")));
 }
 
@@ -365,6 +374,213 @@ TEST(CompletionTest, Kinds) {
 
   Results = completions("nam^");
   EXPECT_THAT(Results.items, Has("namespace", CompletionItemKind::Snippet));
+}
+
+SignatureHelp signatures(StringRef Text) {
+  MockFSProvider FS;
+  MockCompilationDatabase CDB;
+  IgnoreDiagnostics DiagConsumer;
+  ClangdServer Server(CDB, DiagConsumer, FS, getDefaultAsyncThreadsCount(),
+                      /*StorePreamblesInMemory=*/true);
+  auto File = getVirtualTestFilePath("foo.cpp");
+  Annotations Test(Text);
+  Server.addDocument(Context::empty(), File, Test.code());
+  auto R = Server.signatureHelp(Context::empty(), File, Test.point());
+  assert(R);
+  return R.get().Value;
+}
+
+MATCHER_P(ParamsAre, P, "") {
+  if (P.size() != arg.parameters.size())
+    return false;
+  for (unsigned I = 0; I < P.size(); ++I)
+    if (P[I] != arg.parameters[I].label)
+      return false;
+  return true;
+}
+
+Matcher<SignatureInformation> Sig(std::string Label,
+                                  std::vector<std::string> Params) {
+  return AllOf(Labeled(Label), ParamsAre(Params));
+}
+
+TEST(SignatureHelpTest, Overloads) {
+  auto Results = signatures(R"cpp(
+    void foo(int x, int y);
+    void foo(int x, float y);
+    void foo(float x, int y);
+    void foo(float x, float y);
+    void bar(int x, int y = 0);
+    int main() { foo(^); }
+  )cpp");
+  EXPECT_THAT(Results.signatures,
+              UnorderedElementsAre(
+                  Sig("foo(float x, float y) -> void", {"float x", "float y"}),
+                  Sig("foo(float x, int y) -> void", {"float x", "int y"}),
+                  Sig("foo(int x, float y) -> void", {"int x", "float y"}),
+                  Sig("foo(int x, int y) -> void", {"int x", "int y"})));
+  // We always prefer the first signature.
+  EXPECT_EQ(0, Results.activeSignature);
+  EXPECT_EQ(0, Results.activeParameter);
+}
+
+TEST(SignatureHelpTest, DefaultArgs) {
+  auto Results = signatures(R"cpp(
+    void bar(int x, int y = 0);
+    void bar(float x = 0, int y = 42);
+    int main() { bar(^
+  )cpp");
+  EXPECT_THAT(Results.signatures,
+              UnorderedElementsAre(
+                  Sig("bar(int x, int y = 0) -> void", {"int x", "int y = 0"}),
+                  Sig("bar(float x = 0, int y = 42) -> void",
+                      {"float x = 0", "int y = 42"})));
+  EXPECT_EQ(0, Results.activeSignature);
+  EXPECT_EQ(0, Results.activeParameter);
+}
+
+TEST(SignatureHelpTest, ActiveArg) {
+  auto Results = signatures(R"cpp(
+    int baz(int a, int b, int c);
+    int main() { baz(baz(1,2,3), ^); }
+  )cpp");
+  EXPECT_THAT(Results.signatures,
+              ElementsAre(Sig("baz(int a, int b, int c) -> int",
+                              {"int a", "int b", "int c"})));
+  EXPECT_EQ(0, Results.activeSignature);
+  EXPECT_EQ(1, Results.activeParameter);
+}
+
+std::unique_ptr<SymbolIndex> simpleIndexFromSymbols(
+    std::vector<std::pair<std::string, index::SymbolKind>> Symbols) {
+  auto I = llvm::make_unique<MemIndex>();
+  struct Snapshot {
+    SymbolSlab Slab;
+    std::vector<const Symbol *> Pointers;
+  };
+  auto Snap = std::make_shared<Snapshot>();
+  SymbolSlab::Builder Slab;
+  for (const auto &Pair : Symbols) {
+    Symbol Sym;
+    Sym.ID = SymbolID(Pair.first);
+    llvm::StringRef QName = Pair.first;
+    size_t Pos = QName.rfind("::");
+    if (Pos == llvm::StringRef::npos) {
+      Sym.Name = QName;
+      Sym.Scope = "";
+    } else {
+      Sym.Name = QName.substr(Pos + 2);
+      Sym.Scope = QName.substr(0, Pos);
+    }
+    Sym.SymInfo.Kind = Pair.second;
+    Slab.insert(Sym);
+  }
+  Snap->Slab = std::move(Slab).build();
+  for (auto &Iter : Snap->Slab)
+    Snap->Pointers.push_back(&Iter);
+  auto S = std::shared_ptr<std::vector<const Symbol *>>(std::move(Snap),
+                                                        &Snap->Pointers);
+  I->build(std::move(S));
+  return std::move(I);
+}
+
+TEST(CompletionTest, NoIndex) {
+  clangd::CodeCompleteOptions Opts;
+  Opts.Index = nullptr;
+
+  auto Results = completions(R"cpp(
+      namespace ns { class No {}; }
+      void f() { ns::^ }
+  )cpp",
+                             Opts);
+  EXPECT_THAT(Results.items, Has("No"));
+}
+
+TEST(CompletionTest, SimpleIndexBased) {
+  clangd::CodeCompleteOptions Opts;
+  auto I = simpleIndexFromSymbols({{"ns::XYZ", index::SymbolKind::Class},
+                                   {"nx::XYZ", index::SymbolKind::Class},
+                                   {"ns::foo", index::SymbolKind::Function}});
+  Opts.Index = I.get();
+
+  auto Results = completions(R"cpp(
+      namespace ns { class No {}; }
+      void f() { ns::^ }
+  )cpp",
+                             Opts);
+  EXPECT_THAT(Results.items, Has("XYZ", CompletionItemKind::Class));
+  EXPECT_THAT(Results.items, Has("foo", CompletionItemKind::Function));
+  EXPECT_THAT(Results.items, Not(Has("No")));
+}
+
+TEST(CompletionTest, IndexBasedWithFilter) {
+  clangd::CodeCompleteOptions Opts;
+  auto I = simpleIndexFromSymbols({{"ns::XYZ", index::SymbolKind::Class},
+                                   {"ns::foo", index::SymbolKind::Function}});
+  Opts.Index = I.get();
+
+  auto Results = completions(R"cpp(
+      void f() { ns::x^ }
+  )cpp",
+                             Opts);
+  EXPECT_THAT(Results.items, Contains(AllOf(Named("XYZ"), Filter("XYZ"))));
+  EXPECT_THAT(Results.items, Not(Has("foo")));
+}
+
+TEST(CompletionTest, GlobalQualified) {
+  clangd::CodeCompleteOptions Opts;
+  auto I = simpleIndexFromSymbols({{"XYZ", index::SymbolKind::Class}});
+  Opts.Index = I.get();
+
+  auto Results = completions(R"cpp(
+      void f() { ::^ }
+  )cpp",
+                             Opts);
+  EXPECT_THAT(Results.items, Has("XYZ", CompletionItemKind::Class));
+}
+
+TEST(CompletionTest, FullyQualifiedScope) {
+  clangd::CodeCompleteOptions Opts;
+  auto I = simpleIndexFromSymbols({{"ns::XYZ", index::SymbolKind::Class}});
+  Opts.Index = I.get();
+
+  auto Results = completions(R"cpp(
+      void f() { ::ns::^ }
+  )cpp",
+                             Opts);
+  EXPECT_THAT(Results.items, Has("XYZ", CompletionItemKind::Class));
+}
+
+TEST(CompletionTest, ASTIndexMultiFile) {
+  MockFSProvider FS;
+  MockCompilationDatabase CDB;
+  IgnoreDiagnostics DiagConsumer;
+  ClangdServer Server(CDB, DiagConsumer, FS, getDefaultAsyncThreadsCount(),
+                      /*StorePreamblesInMemory=*/true,
+                      /*BuildDynamicSymbolIndex=*/true);
+
+  Server
+      .addDocument(Context::empty(), getVirtualTestFilePath("foo.cpp"), R"cpp(
+      namespace ns { class XYZ {}; void foo() {} }
+  )cpp")
+      .wait();
+
+  auto File = getVirtualTestFilePath("bar.cpp");
+  Annotations Test(R"cpp(
+      namespace ns { class XXX {}; void fooooo() {} }
+      void f() { ns::^ }
+  )cpp");
+  Server.addDocument(Context::empty(), File, Test.code()).wait();
+
+  auto Results = Server.codeComplete(Context::empty(), File, Test.point(), {})
+                     .get()
+                     .second.Value;
+  // "XYZ" and "foo" are not included in the file being completed but are still
+  // visible through the index.
+  EXPECT_THAT(Results.items, Has("XYZ", CompletionItemKind::Class));
+  EXPECT_THAT(Results.items, Has("foo", CompletionItemKind::Function));
+  EXPECT_THAT(Results.items, Has("XXX", CompletionItemKind::Class));
+  EXPECT_THAT(Results.items, Has("fooooo", CompletionItemKind::Function));
 }
 
 } // namespace

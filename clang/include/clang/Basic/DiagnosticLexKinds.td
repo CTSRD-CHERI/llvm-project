@@ -119,6 +119,9 @@ def err_non_ascii : Error<
 def ext_unicode_whitespace : ExtWarn<
   "treating Unicode character as whitespace">,
   InGroup<DiagGroup<"unicode-whitespace">>;
+def warn_utf8_symbol_homoglyph : Warning<
+  "treating Unicode character <U+%0> as identifier character rather than "
+  "as '%1' symbol">, InGroup<DiagGroup<"unicode-homoglyph">>;
 
 def err_hex_escape_no_digits : Error<
   "\\%0 used with no following hex digits">;
@@ -688,11 +691,15 @@ def err_mmap_expected_feature : Error<"expected a feature name">;
 def err_mmap_expected_attribute : Error<"expected an attribute name">;
 def warn_mmap_unknown_attribute : Warning<"unknown attribute '%0'">,
   InGroup<IgnoredAttributes>;
-def warn_mmap_mismatched_top_level_private : Warning<
-  "top-level module '%0' in private module map, expected a submodule of '%1'">,
+def warn_mmap_mismatched_private_submodule : Warning<
+  "private submodule '%0' in private module map, expected top-level module">,
   InGroup<PrivateModule>;
-def note_mmap_rename_top_level_private_as_submodule : Note<
-  "make '%0' a submodule of '%1' to ensure it can be found by name">;
+def warn_mmap_mismatched_private_module_name : Warning<
+  "expected canonical name for private module '%0'">,
+  InGroup<PrivateModule>;
+def note_mmap_rename_top_level_private_module : Note<
+  "rename '%0' to ensure it can be found by name">;
+
 def err_mmap_duplicate_header_attribute : Error<
   "header attribute '%0' specified multiple times">;
 def err_mmap_invalid_header_attribute_value : Error<
