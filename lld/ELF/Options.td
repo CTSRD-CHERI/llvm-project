@@ -102,7 +102,7 @@ defm entry: Eq<"entry">, HelpText<"Name of entry point symbol">,
 defm error_limit: Eq<"error-limit">,
   HelpText<"Maximum number of errors to emit before stopping (0 = no limit)">;
 
-def warning_limit: S<"warning-limit">,
+defm warning_limit: Eq<"warning-limit">,
   HelpText<"Maximum number of warnings to emit before stopping (0 = no limit)">;
 
 def error_unresolved_symbols: F<"error-unresolved-symbols">,
