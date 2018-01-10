@@ -3650,8 +3650,7 @@ void SelectionDAGBuilder::visitLoad(const LoadInst &I) {
       Root = Chain;
       ChainI = 0;
     }
-    SDValue A = Offsets[i] ? DAG.getPointerAdd(getCurSDLoc(), Ptr, Offsets[i],
-                                               Flags) : Ptr;
+    SDValue A = Offsets[i] ? DAG.getPointerAdd(dl, Ptr, Offsets[i], Flags) : Ptr;
     auto MMOFlags = MachineMemOperand::MONone;
     if (isVolatile)
       MMOFlags |= MachineMemOperand::MOVolatile;
