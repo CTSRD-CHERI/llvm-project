@@ -631,6 +631,16 @@ MipsInstrInfo::decomposeMachineOperandsTargetFlags(unsigned TF) const {
   return std::make_pair(TF, 0u);
 }
 
+bool MipsInstrInfo::isReallyTriviallyReMaterializable(const MachineInstr &MI,
+                                                      AliasAnalysis *AA) const {
+  if ((MI.getOpcode() == Mips::CFromPtr) &&
+      (MI.getOperand(2).getReg() == Mips::ZERO_64)) {
+    return true;
+  }
+  return false;
+}
+
+
 ArrayRef<std::pair<unsigned, const char*>>
 MipsInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
  using namespace MipsII;

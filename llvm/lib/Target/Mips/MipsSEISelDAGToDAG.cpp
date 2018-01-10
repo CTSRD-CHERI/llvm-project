@@ -90,6 +90,36 @@ unsigned MipsSEDAGToDAGISel::getMSACtrlReg(const SDValue RegIdx) const {
   }
 }
 
+static inline bool IsZeroCap(const MachineInstr &MI) {
+  return ((MI.getOpcode() == Mips::CFromPtr) &&
+    (MI.getOperand(1).getReg() == Mips::C0) &&
+    (MI.getOperand(2).getReg() == Mips::ZERO_64));
+};
+
+
+bool MipsSEDAGToDAGISel::replaceUsesWithZeroCapReg(MachineRegisterInfo *MRI,
+                                                   MachineInstr& MI) {
+  const MipsFunctionInfo *MipsFI =
+    MI.getParent()->getParent()->getInfo<MipsFunctionInfo>();
+
+  unsigned ZeroCapReg = MipsFI->getIncomingZeroReg();
+  if (ZeroCapReg == 0)
+    return false;
+
+  unsigned DstReg = 0;
+  if (IsZeroCap(MI))
+    DstReg = MI.getOperand(0).getReg();
+
+  if (DstReg == 0)
+    return false;
+
+  // Replace uses with ZeroReg.
+  for (MachineRegisterInfo::use_iterator U = MRI->use_begin(DstReg),
+       E = MRI->use_end(); U != E;)
+    U->setReg(ZeroCapReg);
+  return true;
+}
+
 bool MipsSEDAGToDAGISel::replaceUsesWithZeroReg(MachineRegisterInfo *MRI,
                                                 const MachineInstr& MI) {
   unsigned DstReg = 0, ZeroReg = 0;
@@ -250,10 +280,35 @@ void MipsSEDAGToDAGISel::processFunctionAfterISel(MachineFunction &MF) {
       case Mips::WRDSP:
         addDSPCtrlRegOperands(true, MI, MF);
         break;
+      case Mips::CFromPtr:
+      case TargetOpcode::COPY:
+        replaceUsesWithZeroCapReg(MRI, MI);
+        break;
       default:
         replaceUsesWithZeroReg(MRI, MI);
       }
     }
+  }
+
+  const TargetInstrInfo &TII = *Subtarget->getInstrInfo();
+  for (auto &MBB: MF) {
+    SmallVector<MachineInstr*, 8> Copies;
+    for (auto &MI: MBB)
+      if (MI.getOpcode() == TargetOpcode::COPY) {
+        unsigned SrcReg = MI.getOperand(1).getReg();
+        if (auto *Def = MRI->getUniqueVRegDef(SrcReg))
+          if (IsZeroCap(*Def))
+            Copies.push_back(&MI);
+      }
+    if (!Copies.empty())
+      for (auto *Copy : Copies) {
+        BuildMI(*Copy->getParent(), *Copy, Copy->getDebugLoc(),
+          TII.get(Mips::CFromPtr))
+          .addReg(Copy->getOperand(0).getReg(), RegState::Define)
+          .addReg(Mips::C0)
+          .addReg(Mips::ZERO_64);
+        Copy->eraseFromParent();
+      }
   }
 }
 

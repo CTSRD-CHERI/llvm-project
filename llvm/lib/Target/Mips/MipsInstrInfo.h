@@ -158,6 +158,9 @@ public:
   ArrayRef<std::pair<unsigned, const char *>>
   getSerializableDirectMachineOperandTargetFlags() const override;
 
+  bool isReallyTriviallyReMaterializable(const MachineInstr &MI,
+                                         AliasAnalysis *AA) const override;
+
 protected:
   bool isZeroImm(const MachineOperand &op) const;
 
