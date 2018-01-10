@@ -287,8 +287,10 @@ std::string lld::verboseToString(Symbol *B, uint64_t SymOffset) {
 
   if (B->isLocal())
     Msg += "local ";
-  if (B->isShared())
+  else if (B->isShared())
     Msg += "shared ";
+  else if (B->isDefined())
+    Msg += "defined ";
   if (B->Type == STT_COMMON)
     Msg += "common ";
   if (B->isSection())
@@ -306,8 +308,6 @@ std::string lld::verboseToString(Symbol *B, uint64_t SymOffset) {
   else
     Msg += "<unknown kind>";
 
-  if (B->isDefined())
-    Msg += "(defined) ";
   if (B->isInGot())
     Msg += "(in GOT) ";
   if (B->isInPlt())
