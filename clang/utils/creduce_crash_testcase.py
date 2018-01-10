@@ -79,8 +79,10 @@ class ReduceTool(metaclass=ABCMeta):
                                             " -mtriple=cheri-unknown-freebsd -mcpu=cheri128")
         compiler_cmd = compiler_cmd.replace("%cheri256_llc ", str(self.args.llc_cmd) +
                                             " -mtriple=cheri-unknown-freebsd -mcpu=cheri256")
-        compiler_cmd = compiler_cmd.replace("%cheri_llc ", str(self.args.llc_cmd) +
-                                            " -mtriple=cheri-unknown-freebsd")
+        compiler_cmd = compiler_cmd.replace("%cheri_purecap_llc ",
+                                            "%cheri_llc -target-abi purecap -relocation-model pic ")
+        compiler_cmd = compiler_cmd.replace("%cheri_llc ", str(self.args.llc_cmd) + " -mtriple=cheri-unknown-freebsd ")
+
         # opt substitutions
         if "opt" in compiler_cmd:
             compiler_cmd = re.sub(r"\opt\b", " " + str(self.args.opt_cmd) + " ", compiler_cmd)
@@ -177,6 +179,7 @@ except Exception as e:
                     run_line = re.sub(triple_cheri_freebsd_re, "", run_line)  # remove
                     run_line = run_line.replace("%clang_cc1", "%cheri_cc1")
                     run_line = run_line.replace("-mllvm -cheri128", "")
+                    run_line = re.sub(r"-cheri-size \d+", "", run_line)  # remove
                     target_abi_re = r"-target-abi\s+purecap\s*"
                     if re.search(target_abi_re, run_line) is not None:
                         run_line = re.sub(target_abi_re, "", run_line)  # remove
