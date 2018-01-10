@@ -1068,7 +1068,7 @@ SDValue DAGTypeLegalizer::JoinIntegers(SDValue Lo, SDValue Hi) {
   Hi = DAG.getNode(ISD::ANY_EXTEND, dlHi, NVT, Hi);
   Hi = DAG.getNode(ISD::SHL, dlHi, NVT, Hi,
                    DAG.getConstant(LVT.getSizeInBits(), dlHi,
-                                   TLI.getPointerTy(DAG.getDataLayout())));
+                                   TLI.getPointerRangeTy(DAG.getDataLayout())));
   return DAG.getNode(ISD::OR, dlHi, NVT, Lo, Hi);
 }
 

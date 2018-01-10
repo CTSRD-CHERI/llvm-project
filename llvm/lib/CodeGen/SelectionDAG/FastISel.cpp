@@ -255,7 +255,7 @@ unsigned FastISel::materializeConstant(const Value *V, MVT VT) {
     if (!Reg) {
       // Try to emit the constant by using an integer constant with a cast.
       const APFloat &Flt = CF->getValueAPF();
-      EVT IntVT = TLI.getPointerTy(DL);
+      EVT IntVT = TLI.getPointerRangeTy(DL);
       uint32_t IntBitWidth = IntVT.getSizeInBits();
       APSInt SIntVal(IntBitWidth, /*isUnsigned=*/false);
       bool isExact;
@@ -507,7 +507,7 @@ bool FastISel::selectGetElementPtr(const User *I) {
   uint64_t TotalOffs = 0;
   // FIXME: What's a good SWAG number for MaxOffs?
   uint64_t MaxOffs = 2048;
-  MVT VT = TLI.getPointerTy(DL);
+  MVT VT = TLI.getPointerRangeTy(DL);
   for (gep_type_iterator GTI = gep_type_begin(I), E = gep_type_end(I);
        GTI != E; ++GTI) {
     const Value *Idx = GTI.getOperand();

@@ -569,7 +569,7 @@ namespace {
         return LHSTy;
       auto &DL = DAG.getDataLayout();
       return LegalTypes ? TLI.getScalarShiftAmountTy(DL, LHSTy)
-                        : TLI.getPointerTy(DL);
+                        : TLI.getPointerRangeTy(DL);
     }
 
     /// This method returns true if we are running before type legalization or
@@ -16948,7 +16948,7 @@ SDValue DAGCombiner::SimplifySelectCC(const SDLoc &DL, SDValue N0, SDValue N1,
         // Create a ConstantArray of the two constants.
         Constant *CA = ConstantArray::get(ArrayType::get(FPTy, 2), Elts);
         SDValue CPIdx =
-            DAG.getConstantPool(CA, TLI.getPointerTy(DAG.getDataLayout()),
+            DAG.getConstantPool(CA, TLI.getPointerRangeTy(DAG.getDataLayout()),
                                 TD.getPrefTypeAlignment(FPTy));
         unsigned Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlignment();
 
