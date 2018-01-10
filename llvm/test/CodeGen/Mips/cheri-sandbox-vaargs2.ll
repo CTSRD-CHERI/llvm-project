@@ -1,8 +1,8 @@
 ; REQUIRES: clang
-; RUN: %cheri_cc1 -target-cpu cheri256 -cheri-linker -target-abi purecap -O2 -S -o - %s | FileCheck %s
+; RUN: %cheri256_purecap_cc1 -O2 -S -o - %s | FileCheck %s
 ; ModuleID = 'libxo.i'
 target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
-target triple = "cheri-unknown-bsd"
+target triple = "cheri-unknown-freebsd"
 
 %struct.xo_handle_s = type { i8 addrspace(200)* }
 
@@ -35,7 +35,7 @@ entry:
 ; Function Attrs: nounwind
 declare void @llvm.va_start.p200i8(i8*) #1
 
-attributes #0 = { nounwind "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "target-features"="+cheri" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #0 = { nounwind "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8"}
 attributes #1 = { nounwind }
 
 !llvm.ident = !{!0}

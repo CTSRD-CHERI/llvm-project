@@ -58,7 +58,7 @@ br i1 %cmp, label %if.then, label %if.end
 ; CHECK-NEXT: cleu    $1, [[UINT64_MAX_CAP]], [[RANDOM_POINTER_VALUE_CAP]]
 ; CHECK-NEXT: bnez    $1, .LBB1_2
 
-; CHECK: # BB#1:  # %if.then
+; CHECK: # %bb.1:  # %if.then
 ; CHECK: jal     puts
 ; CHECK: j       .LBB1_3
 ; CHECK: .LBB1_2:  # %if.end

@@ -1,8 +1,8 @@
 ; REQUIRES: clang
-; RUN: %cheri_cc1 -target-cpu cheri256 -cheri-linker -target-abi purecap -O2 -S -o - %s | FileCheck %s
+; RUN: %cheri_purecap_cc1 -O2 -S -o - %s | FileCheck %s
 ; ModuleID = 'ocsp_cl.i'
 target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
-target triple = "cheri-unknown-bsd"
+target triple = "cheri-unknown-freebsd"
 
 %struct.ASN1_ITEM_st = type opaque
 
@@ -27,8 +27,8 @@ entry:
 
 declare void @fn2(%struct.ASN1_ITEM_st addrspace(200)*) #1
 
-attributes #0 = { nounwind "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "target-features"="+cheri" "unsafe-fp-math"="false" "use-soft-float"="false" }
-attributes #1 = { "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "target-features"="+cheri" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #0 = { nounwind "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #1 = { "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
 attributes #2 = { nounwind }
 
 !llvm.ident = !{!0}
