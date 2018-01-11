@@ -457,6 +457,10 @@ void CodeGenModule::Release() {
     // Indicate that we want CodeView in the metadata.
     getModule().addModuleFlag(llvm::Module::Warning, "CodeView", 1);
   }
+  if (CodeGenOpts.ControlFlowGuard) {
+    // We want function ID tables for Control Flow Guard.
+    getModule().addModuleFlag(llvm::Module::Warning, "cfguard", 1);
+  }
   if (CodeGenOpts.OptimizationLevel > 0 && CodeGenOpts.StrictVTablePointers) {
     // We don't support LTO with 2 with different StrictVTablePointers
     // FIXME: we could support it by stripping all the information introduced
@@ -500,6 +504,20 @@ void CodeGenModule::Release() {
   if (CodeGenOpts.SanitizeCfiCrossDso) {
     // Indicate that we want cross-DSO control flow integrity checks.
     getModule().addModuleFlag(llvm::Module::Override, "Cross-DSO CFI", 1);
+  }
+
+  if (CodeGenOpts.CFProtectionReturn &&
+      Target.checkCFProtectionReturnSupported(getDiags())) {
+    // Indicate that we want to instrument return control flow protection.
+    getModule().addModuleFlag(llvm::Module::Override, "cf-protection-return",
+                              1);
+  }
+
+  if (CodeGenOpts.CFProtectionBranch &&
+      Target.checkCFProtectionBranchSupported(getDiags())) {
+    // Indicate that we want to instrument branch control flow protection.
+    getModule().addModuleFlag(llvm::Module::Override, "cf-protection-branch",
+                              1);
   }
 
   if (LangOpts.CUDAIsDevice && getTriple().isNVPTX()) {
@@ -813,7 +831,11 @@ void CodeGenModule::UpdateMultiVersionNames(GlobalDecl GD,
     // This is so that if the initial version was already the 'default'
     // version, we don't try to update it.
     if (OtherName != NonTargetName) {
-      Manglings.erase(NonTargetName);
+      // Remove instead of erase, since others may have stored the StringRef
+      // to this.
+      const auto ExistingRecord = Manglings.find(NonTargetName);
+      if (ExistingRecord != std::end(Manglings))
+        Manglings.remove(&(*ExistingRecord));
       auto Result = Manglings.insert(std::make_pair(OtherName, OtherGD));
       MangledDeclNames[OtherGD.getCanonicalDecl()] = Result.first->first();
       if (llvm::GlobalValue *Entry = GetGlobalValue(NonTargetName))
