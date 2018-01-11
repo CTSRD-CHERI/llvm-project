@@ -190,7 +190,7 @@ class CHERICapFoldIntrinsics : public ModulePass {
     return nullptr;
   }
 
-  void foldIncOffsetSetOffsetOnlyUserIncrement(CallInst* CI) {
+  void foldIncOffsetSetOffsetOnlyUserIncrement(CallInst* CI, SmallPtrSet<Instruction*, 8> &ToErase) {
     // errs() << __func__ << ": num users=" << CI->getNumUses() << ": "; CI->dump();
     User* OnlyUser = CI->hasOneUse() ? *CI->user_begin() : nullptr;
     while (OnlyUser) {
@@ -209,8 +209,9 @@ class CHERICapFoldIntrinsics : public ModulePass {
         // because otherwise we use a value that has not yet been defined
         CI->moveAfter(ReplacedInstr);
         ReplacedInstr->replaceAllUsesWith(CI);
-        // TODO: can erasing here cause a crash?
-        ReplacedInstr->eraseFromParent();
+        // erasing here can cause a crash
+        // ReplacedInstr->eraseFromParent();
+        ToErase.insert(ReplacedInstr);
         // Keep doing this transformation for incoffset chains with only a
         // single user:
         OnlyUser = CI->hasOneUse() ? *CI->user_begin() : nullptr;
@@ -224,12 +225,14 @@ class CHERICapFoldIntrinsics : public ModulePass {
   /// Replace get-offset, add, set-offset sequences with inc-offset
   void foldSetOffset() {
     std::vector<CallInst *> SetOffsets;
-    std::vector<Value *> ToErase;
+    SmallPtrSet<Instruction*, 8> ToErase;
     for (Value *V : SetOffset->users())
       SetOffsets.push_back(cast<CallInst>(V));
     for (CallInst *CI : SetOffsets) {
+      if (ToErase.count(CI))
+        continue;
       // fold chains of set-offset, (inc-offset/GEP)+ into a single set-offset
-      foldIncOffsetSetOffsetOnlyUserIncrement(CI);
+      foldIncOffsetSetOffsetOnlyUserIncrement(CI, ToErase);
 
       Value *LHS, *RHS;
       if (match(CI->getOperand(1), m_Add(m_Value(LHS), m_Value(RHS)))) {
@@ -250,17 +253,22 @@ class CHERICapFoldIntrinsics : public ModulePass {
         }
       }
     }
+    for (Instruction *I : ToErase)
+      I->eraseFromParent();
   }
 
   /// Replace set-offset, inc-offset sequences with a single set-offset
   /// Also fold multiple inc-offsets into a single on if possible
   void foldIncOffset() {
     std::vector<CallInst *> IncOffsets;
+    SmallPtrSet<Instruction*, 8> ToErase;
     for (Value *V : IncOffset->users())
       IncOffsets.push_back(cast<CallInst>(V));
     for (CallInst *CI : IncOffsets) {
+      if (ToErase.count(CI))
+        continue;
       // fold chains of inc-offset, (inc-offset/GEP)+ into a single inc-offset
-      foldIncOffsetSetOffsetOnlyUserIncrement(CI);
+      foldIncOffsetSetOffsetOnlyUserIncrement(CI, ToErase);
 
       Value *Inc = CI->getOperand(1);
       Value *BaseCap = nullptr;
@@ -278,6 +286,8 @@ class CHERICapFoldIntrinsics : public ModulePass {
         Modified = true;
       }
     }
+    for (Instruction *I : ToErase)
+      I->eraseFromParent();
   }
 
 public:
