@@ -3,6 +3,6 @@
 class A { };
 
 void f() {
-  // CHECK: CXXNewExpr {{.*}} {{.*}} 'class A * __capability' Function
+  // CHECK: CXXNewExpr {{.*}} {{.*}} 'A * __capability' Function
   A *a = new A;
 }

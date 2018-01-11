@@ -1,7 +1,8 @@
 // RUN: %cheri_cc1 -x c++ %s -target-abi n64 -std=c++11 -o - -ast-dump | FileCheck %s
-// RUN: %clang_cc1 -x c++ %s -triple mips64-unknown-freebsd12.0 -target-cpu mips4 -target-abi n64 -std=c++11 -o - -ast-dump
 // This used to crash the compiler when targeting a non-cheri triple because the
 // overloaded builtin operators for __(u)intcap_t were added unconditionally
+// RUN: %clang_cc1 -x c++ %s -triple mips64-unknown-freebsd12.0 -target-cpu mips4 -target-abi n64 -std=c++11 -o - -ast-dump > /dev/null
+
 enum dwarf_data_relative
 {
     /// Value is omitted
@@ -23,12 +24,12 @@ enum dwarf_data_relative
 static int is_indirect(unsigned char x)
 {
   // CHECK-LABEL: `-FunctionDecl {{.+}} is_indirect 'int (unsigned char)' static
-  // CHECK: `-BinaryOperator {{.+}} <col:11, col:38> '_Bool' '=='
+  // CHECK: `-BinaryOperator {{.+}} <col:11, col:38> 'bool' '=='
   // CHECK:     `-BinaryOperator {{.+}} <col:12, col:16> 'int' '&'
   // CHECK:        `-ImplicitCastExpr {{.+}} <col:16> 'int' <IntegralCast>
-  // CHECK-NEXT:    `-DeclRefExpr {{.+}} <col:16> 'enum dwarf_data_relative' EnumConstant {{.+}} 'DW_EH_PE_indirect' 'enum dwarf_data_relative'
+  // CHECK-NEXT:    `-DeclRefExpr {{.+}} <col:16> 'dwarf_data_relative' EnumConstant {{.+}} 'DW_EH_PE_indirect' 'dwarf_data_relative'
   // CHECK:      `-ImplicitCastExpr {{.+}} <col:38> 'int' <IntegralCast>
-  // CHECK-NEXT:  `-DeclRefExpr {{.+}} <col:38> 'enum dwarf_data_relative' EnumConstant {{.+}} 'DW_EH_PE_indirect' 'enum dwarf_data_relative'
+  // CHECK-NEXT:  `-DeclRefExpr {{.+}} <col:38> 'dwarf_data_relative' EnumConstant {{.+}} 'DW_EH_PE_indirect' 'dwarf_data_relative'
 
 
   return ((x & DW_EH_PE_indirect) == DW_EH_PE_indirect);

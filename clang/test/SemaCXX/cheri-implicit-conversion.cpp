@@ -104,7 +104,7 @@ void str_to_ptr(void) {
   // expected-warning@-3 {{ISO C++11 does not allow conversion from string literal to 'char *'}}
   // expected-warning@-3 {{ISO C++11 does not allow conversion from string literal to 'char * __capability'}}
 #endif
-  // CXXAST: FunctionDecl {{.+}} str_to_ptr 'void (void)'
+  // CXXAST: FunctionDecl {{.+}} str_to_ptr 'void ()'
   // CXXAST: VarDecl {{.+}} cap 'const char * __capability' cinit
   // CXXAST-NEXT: ImplicitCastExpr {{.+}} 'const char * __capability' <PointerToCHERICapability>
   // CXXAST-NEXT: ImplicitCastExpr {{.+}} 'const char *' <ArrayToPointerDecay>
