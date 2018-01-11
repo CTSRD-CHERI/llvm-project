@@ -127,7 +127,8 @@ struct Configuration {
   bool HasDynamicList = false;
   bool HasDynSymTab;
   bool ICF;
-  bool ICFData;
+  bool IgnoreDataAddressEquality;
+  bool IgnoreFunctionAddressEquality;
   bool MergeArmExidx;
   bool MipsN32Abi = false;
   bool MipsCheriAbi = false;
