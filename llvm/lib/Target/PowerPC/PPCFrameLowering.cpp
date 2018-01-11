@@ -844,7 +844,7 @@ void PPCFrameLowering::emitPrologue(MachineFunction &MF,
   if (FrameSize && !FI->hasFastCall() && !FI->usesPICBase() && !HasFP &&
       !HasBP && isInt<16>(FrameSize)) {
     const std::vector<CalleeSavedInfo> &Info = MFI.getCalleeSavedInfo();
-    for (int i=0; i<Info.size(); i++) {
+    for (unsigned i=0; i<Info.size(); i++) {
       int FrIdx = Info[i].getFrameIdx();
       if (FrIdx < 0) {
         if (MFI.isFixedObjectIndex(FrIdx) && MFI.getObjectOffset(FrIdx) < 0) {
@@ -1383,17 +1383,14 @@ void PPCFrameLowering::emitEpilogue(MachineFunction &MF,
   //  to be executed before the restores of the callee saves which means
   //  that the callee saves can hide the latency from the MTLR instrcution.
   MachineBasicBlock::iterator StackUpdateLoc = MBBI;
-  bool MovingStackUpdateUp = false;
   if (FrameSize && !FI->hasFastCall() && !FI->usesPICBase() && !HasFP &&
       !HasBP && !isLargeFrame) {
     const std::vector< CalleeSavedInfo > & Info = MFI.getCalleeSavedInfo();
-    for (int i=0; i<Info.size(); i++) {
+    for (unsigned i=0; i<Info.size(); i++) {
       int FrIdx = Info[i].getFrameIdx();
       if (FrIdx < 0) {
-        if (MFI.isFixedObjectIndex(FrIdx) && MFI.getObjectOffset(FrIdx) < 0) {
+        if (MFI.isFixedObjectIndex(FrIdx) && MFI.getObjectOffset(FrIdx) < 0)
           StackUpdateLoc--;
-          MovingStackUpdateUp = true;
-        }
       }
     }
   }

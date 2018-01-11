@@ -2700,8 +2700,13 @@ public:
     // we still need to collect it due to original value is different.
     // And later we will need all original values as anchors during
     // finding the common Phi node.
+    // We also must reject the case when base offset is different and
+    // scale reg is not null, we cannot handle this case due to merge of
+    // different offsets will be used as ScaleReg.
     if (DifferentField != ExtAddrMode::MultipleFields &&
-        DifferentField != ExtAddrMode::ScaleField) {
+        DifferentField != ExtAddrMode::ScaleField &&
+        (DifferentField != ExtAddrMode::BaseOffsField ||
+         !NewAddrMode.ScaledReg)) {
       AddrModes.emplace_back(NewAddrMode);
       return true;
     }
@@ -2804,11 +2809,11 @@ private:
   //   <p, BB3> -> ?
   // The function tries to find or build phi [b1, BB1], [b2, BB2] in BB3
   Value *findCommon(FoldAddrToValueMapping &Map) {
-    // Tracks of new created Phi nodes.
+    // Tracks newly created Phi nodes.
     SmallPtrSet<PHINode *, 32> NewPhiNodes;
-    // Tracks of new created Select nodes.
+    // Tracks newly created Select nodes.
     SmallPtrSet<SelectInst *, 32> NewSelectNodes;
-    // Tracks the simplification of new created phi nodes. The reason we use
+    // Tracks the simplification of newly created phi nodes. The reason we use
     // this mapping is because we will add new created Phi nodes in AddrToBase.
     // Simplification of Phi nodes is recursive, so some Phi node may
     // be simplified after we added it to AddrToBase.

@@ -17,8 +17,12 @@ namespace {
 
 /// Retrieves namespace and class level symbols in \p Decls.
 std::unique_ptr<SymbolSlab> indexAST(ASTContext &Ctx,
+                                     std::shared_ptr<Preprocessor> PP,
                                      llvm::ArrayRef<const Decl *> Decls) {
-  auto Collector = std::make_shared<SymbolCollector>();
+  SymbolCollector::Options CollectorOpts;
+  CollectorOpts.IndexMainFiles = true;
+  auto Collector = std::make_shared<SymbolCollector>(std::move(CollectorOpts));
+  Collector->setPreprocessor(std::move(PP));
   index::IndexingOptions IndexOpts;
   IndexOpts.SystemSymbolFilter =
       index::IndexingOptions::SystemSymbolFilterKind::All;
@@ -67,7 +71,8 @@ void FileIndex::update(const Context &Ctx, PathRef Path, ParsedAST *AST) {
   if (!AST) {
     FSymbols.update(Path, nullptr);
   } else {
-    auto Slab = indexAST(AST->getASTContext(), AST->getTopLevelDecls());
+    auto Slab = indexAST(AST->getASTContext(), AST->getPreprocessorPtr(),
+                         AST->getTopLevelDecls());
     FSymbols.update(Path, std::move(Slab));
   }
   auto Symbols = FSymbols.allSymbols();

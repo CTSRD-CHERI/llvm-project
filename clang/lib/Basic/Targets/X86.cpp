@@ -101,6 +101,26 @@ bool X86TargetInfo::setFPMath(StringRef Name) {
   return false;
 }
 
+bool X86TargetInfo::checkCFProtectionReturnSupported(
+    DiagnosticsEngine &Diags) const {
+  if (HasSHSTK)
+    return true;
+
+  Diags.Report(diag::err_opt_not_valid_without_opt) << "cf-protection=return"
+                                                    << "-mshstk";
+  return false;
+}
+
+bool X86TargetInfo::checkCFProtectionBranchSupported(
+    DiagnosticsEngine &Diags) const {
+  if (HasIBT)
+    return true;
+
+  Diags.Report(diag::err_opt_not_valid_without_opt) << "cf-protection=branch"
+                                                    << "-mibt";
+  return false;
+}
+
 bool X86TargetInfo::initFeatureMap(
     llvm::StringMap<bool> &Features, DiagnosticsEngine &Diags, StringRef CPU,
     const std::vector<std::string> &FeaturesVec) const {
@@ -410,7 +430,7 @@ void X86TargetInfo::setSSELevel(llvm::StringMap<bool> &Features,
   if (Enabled) {
     switch (Level) {
     case AVX512F:
-      Features["avx512f"] = true;
+      Features["avx512f"] = Features["fma"] = Features["f16c"] = true;
       LLVM_FALLTHROUGH;
     case AVX2:
       Features["avx2"] = true;
@@ -624,6 +644,8 @@ void X86TargetInfo::setFeatureEnabledImpl(llvm::StringMap<bool> &Features,
   } else if (Name == "fma") {
     if (Enabled)
       setSSELevel(Features, AVX, Enabled);
+    else
+      setSSELevel(Features, AVX512F, Enabled);
   } else if (Name == "fma4") {
     setXOPLevel(Features, FMA4, Enabled);
   } else if (Name == "xop") {
@@ -633,6 +655,8 @@ void X86TargetInfo::setFeatureEnabledImpl(llvm::StringMap<bool> &Features,
   } else if (Name == "f16c") {
     if (Enabled)
       setSSELevel(Features, AVX, Enabled);
+    else
+      setSSELevel(Features, AVX512F, Enabled);
   } else if (Name == "sha") {
     if (Enabled)
       setSSELevel(Features, SSE2, Enabled);

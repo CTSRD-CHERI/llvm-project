@@ -2684,8 +2684,6 @@ def : Pat<(i32 (anyext (i16 (bitconvert (v16i1 VK16:$src))))),
           (COPY_TO_REGCLASS VK16:$src, GR32)>;
 
 def : Pat<(i32 (zext (i8 (bitconvert (v8i1 VK8:$src))))),
-          (MOVZX32rr8 (EXTRACT_SUBREG (i32 (COPY_TO_REGCLASS VK8:$src, GR32)), sub_8bit))>, Requires<[NoDQI]>;
-def : Pat<(i32 (zext (i8 (bitconvert (v8i1 VK8:$src))))),
           (KMOVBrk VK8:$src)>, Requires<[HasDQI]>;
 def : Pat<(i32 (anyext (i8 (bitconvert (v8i1 VK8:$src))))),
           (COPY_TO_REGCLASS VK8:$src, GR32)>;
@@ -8612,16 +8610,17 @@ defm VPGATHER : avx512_gather_q_pd<0x90, 0x91, avx512vl_i64_info, "vpgather", "Q
                 avx512_gather_d_ps<0x90, 0x91, avx512vl_i32_info, "vpgather", "D">;
 
 multiclass avx512_scatter<bits<8> opc, string OpcodeStr, X86VectorVTInfo _,
-                          X86MemOperand memop, PatFrag ScatterNode> {
+                          X86MemOperand memop, PatFrag ScatterNode,
+                          RegisterClass MaskRC = _.KRCWM> {
 
 let mayStore = 1, Constraints = "$mask = $mask_wb", ExeDomain = _.ExeDomain in
 
-  def mr  : AVX5128I<opc, MRMDestMem, (outs _.KRCWM:$mask_wb),
-            (ins memop:$dst, _.KRCWM:$mask, _.RC:$src),
+  def mr  : AVX5128I<opc, MRMDestMem, (outs MaskRC:$mask_wb),
+            (ins memop:$dst, MaskRC:$mask, _.RC:$src),
             !strconcat(OpcodeStr#_.Suffix,
             "\t{$src, ${dst} {${mask}}|${dst} {${mask}}, $src}"),
-            [(set _.KRCWM:$mask_wb, (ScatterNode (_.VT _.RC:$src),
-                                     _.KRCWM:$mask,  vectoraddr:$dst))]>,
+            [(set MaskRC:$mask_wb, (ScatterNode (_.VT _.RC:$src),
+                                    MaskRC:$mask,  vectoraddr:$dst))]>,
             EVEX, EVEX_K, EVEX_CD8<_.EltSize, CD8VT1>,
             Sched<[WriteStore]>;
 }
@@ -8658,7 +8657,8 @@ let Predicates = [HasVLX] in {
   defm NAME##D##SUFF##Z128: avx512_scatter<dopc, OpcodeStr##"d", _.info128,
                                           vx128xmem, mscatterv4i32>, EVEX_V128;
   defm NAME##Q##SUFF##Z128: avx512_scatter<qopc, OpcodeStr##"q", _.info128,
-                                          vx64xmem, mscatterv2i64>, EVEX_V128;
+                                          vx64xmem, mscatterv2i64, VK2WM>,
+                                          EVEX_V128;
 }
 }
 
