@@ -68,7 +68,7 @@ entry:
   ; When calling from a variadic function to one that takes a va_list, we
   ; should simply move the va capability from $c13 to the relevant argument
   ; register.
-  ; CHECK: cmove	$c3, $c13
+  ; CHECK: cmove	$c1, $c13
   %v = alloca i8 addrspace(200)*, align 32, addrspace(200)
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*
   call void @llvm.lifetime.start.p200i8(i64 32, i8 addrspace(200)* %0) #1

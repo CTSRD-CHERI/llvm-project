@@ -43,6 +43,7 @@ class CheriFmtRegs<bits<5> op, bits<3> fmt, dag outs, dag ins, string asmstr,
   let Inst{5-3}  = 0; // Reserved
   let Inst{2-0}   = fmt;
   let hasSideEffects = 0;
+  let isReMaterializable = 1;
 }
 
 // CGet*
@@ -85,6 +86,7 @@ class CheriFmtSet<bits<3> op, dag outs, dag ins, string asmstr,
   let r1 = cb;
   let r2 = rt;
   let hasSideEffects = 0;
+  let isReMaterializable = 1;
 }
 
 // 
@@ -270,6 +272,7 @@ class CheriFmt3Op<bits<6> type, dag outs, dag ins, string asmstr, list<dag> patt
   let Inst{10-6} = r3;
   let Inst{5-0}   = type;
   let hasSideEffects = 0;
+  let isReMaterializable = 1;
 }
 
 class CheriFmtCSetImm<bits<5> type, Operand immOp, PatFrag immPat, string op, string intr=op, string verb="set", string intr_verb=verb> :
@@ -290,6 +293,7 @@ class CheriFmtCSetImm<bits<5> type, Operand immOp, PatFrag immPat, string op, st
   let Inst{15-11} = cb;
   let Inst{10-0} = imm;
   let hasSideEffects = 0;
+  let isReMaterializable = 1;
 }
 
 class CheriFmt2Op<bits<5> type, dag outs, dag ins, string asmstr, list<dag> pattern> :
@@ -328,5 +332,6 @@ class CheriFmtPtrCmp<bits<6> cmp, RegisterOperand RC, string instr_asm,
   let r2 = cb;
   let r3 = ct;
   let hasSideEffects = 0;
+  let isReMaterializable = 1;
 }
 

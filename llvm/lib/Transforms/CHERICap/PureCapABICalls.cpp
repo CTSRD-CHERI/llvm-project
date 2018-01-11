@@ -57,8 +57,18 @@ public:
     if (!Func)
       return;
     auto *CalledValue = CS.getCalledValue();
-    CS.setCalledFunction(Func);
-    CS.mutateFunctionType(cast<FunctionType>(Func->getType()->getElementType()));
+    // insert a bitcast if the type of CalledValue and Func are different
+    if (CalledValue->getType() != Func->getType()) {
+      if (auto *CalledValPtrTy = dyn_cast<PointerType>(CalledValue->getType())) {
+        IRBuilder<> B(CS.getInstruction());
+        auto *NewCalledValue = B.CreateBitCast(Func, PointerType::get(CalledValPtrTy->getElementType(), 0));
+        CS.setCalledFunction(NewCalledValue);
+      }
+    }
+    else {
+      CS.setCalledFunction(Func);
+      CS.mutateFunctionType(cast<FunctionType>(Func->getType()->getElementType()));
+    }
     if (CalledValue->use_begin() == CalledValue->use_end()) {
       DeadInstructions.push_back(CalledValue);
     } else {
