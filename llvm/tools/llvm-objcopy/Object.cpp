@@ -141,7 +141,8 @@ uint16_t Symbol::getShndx() const {
 
 void SymbolTableSection::addSymbol(StringRef Name, uint8_t Bind, uint8_t Type,
                                    SectionBase *DefinedIn, uint64_t Value,
-                                   uint16_t Shndx, uint64_t Sz) {
+                                   uint8_t Visibility, uint16_t Shndx,
+                                   uint64_t Sz) {
   Symbol Sym;
   Sym.Name = Name;
   Sym.Binding = Bind;
@@ -154,6 +155,7 @@ void SymbolTableSection::addSymbol(StringRef Name, uint8_t Bind, uint8_t Type,
       Sym.ShndxType = SYMBOL_SIMPLE_INDEX;
   }
   Sym.Value = Value;
+  Sym.Visibility = Visibility;
   Sym.Size = Sz;
   Sym.Index = Symbols.size();
   Symbols.emplace_back(llvm::make_unique<Symbol>(Sym));
@@ -171,6 +173,25 @@ void SymbolTableSection::removeSectionReferences(const SectionBase *Sec) {
                      [=](const SymPtr &Sym) { return Sym->DefinedIn == Sec; });
   Size -= (std::end(Symbols) - Iter) * this->EntrySize;
   Symbols.erase(Iter, std::end(Symbols));
+}
+
+void SymbolTableSection::localize(
+    std::function<bool(const Symbol &)> ToLocalize) {
+  for (const auto &Sym : Symbols) {
+    if (ToLocalize(*Sym))
+      Sym->Binding = STB_LOCAL;
+  }
+
+  // Now that the local symbols aren't grouped at the start we have to reorder
+  // the symbols to respect this property.
+  std::stable_partition(
+      std::begin(Symbols), std::end(Symbols),
+      [](const SymPtr &Sym) { return Sym->Binding == STB_LOCAL; });
+
+  // Lastly we fix the symbol indexes.
+  uint32_t Index = 0;
+  for (auto &Sym : Symbols)
+    Sym->Index = Index++;
 }
 
 void SymbolTableSection::initialize(SectionTableRef SecTable) {
@@ -221,6 +242,7 @@ void SymbolTableSectionImpl<ELFT>::writeSection(FileOutputBuffer &Out) const {
     Sym->st_name = Symbol->NameIndex;
     Sym->st_value = Symbol->Value;
     Sym->st_size = Symbol->Size;
+    Sym->st_other = Symbol->Visibility;
     Sym->setBinding(Symbol->Binding);
     Sym->setType(Symbol->Type);
     Sym->st_shndx = Symbol->getShndx();
@@ -425,7 +447,7 @@ void Object<ELFT>::initSymbolTable(const object::ELFFile<ELFT> &ElfFile,
     }
 
     SymTab->addSymbol(Name, Sym.getBinding(), Sym.getType(), DefSection,
-                      Sym.getValue(), Sym.st_shndx, Sym.st_size);
+                      Sym.getValue(), Sym.st_other, Sym.st_shndx, Sym.st_size);
   }
 }
 

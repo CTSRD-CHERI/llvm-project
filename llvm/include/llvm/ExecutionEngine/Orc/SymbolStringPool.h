@@ -36,7 +36,7 @@ public:
   /// @brief Returns true if the pool is empty.
   bool empty() const;
 private:
-  using RefCountType = std::atomic<uint64_t>;
+  using RefCountType = std::atomic<size_t>;
   using PoolMap = StringMap<RefCountType>;
   using PoolMapEntry = StringMapEntry<RefCountType>;
   mutable std::mutex PoolMutex;
@@ -89,8 +89,10 @@ public:
   }
 
   bool operator<(const SymbolStringPtr &Other) const {
-    return S->getValue() < Other.S->getValue();
+    return S < Other.S;
   }
+
+  StringRef operator*() const { return S->first(); }
 
 private:
 

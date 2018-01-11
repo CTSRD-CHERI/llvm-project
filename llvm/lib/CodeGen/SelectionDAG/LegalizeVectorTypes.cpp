@@ -3374,11 +3374,9 @@ SDValue DAGTypeLegalizer::WidenVecOp_EXTEND(SDNode *N) {
   EVT VT = N->getValueType(0);
 
   SDValue InOp = N->getOperand(0);
-  // If some legalization strategy other than widening is used on the operand,
-  // we can't safely assume that just extending the low lanes is the correct
-  // transformation.
-  if (getTypeAction(InOp.getValueType()) != TargetLowering::TypeWidenVector)
-    return WidenVecOp_Convert(N);
+  assert(getTypeAction(InOp.getValueType()) ==
+             TargetLowering::TypeWidenVector &&
+         "Unexpected type action");
   InOp = GetWidenedVector(InOp);
   assert(VT.getVectorNumElements() <
              InOp.getValueType().getVectorNumElements() &&
@@ -3440,20 +3438,31 @@ SDValue DAGTypeLegalizer::WidenVecOp_FCOPYSIGN(SDNode *N) {
 }
 
 SDValue DAGTypeLegalizer::WidenVecOp_Convert(SDNode *N) {
-  // Since the result is legal and the input is illegal, it is unlikely that we
-  // can fix the input to a legal type so unroll the convert into some scalar
-  // code and create a nasty build vector.
+  // Since the result is legal and the input is illegal.
   EVT VT = N->getValueType(0);
   EVT EltVT = VT.getVectorElementType();
   SDLoc dl(N);
   unsigned NumElts = VT.getVectorNumElements();
   SDValue InOp = N->getOperand(0);
-  if (getTypeAction(InOp.getValueType()) == TargetLowering::TypeWidenVector)
-    InOp = GetWidenedVector(InOp);
+  assert(getTypeAction(InOp.getValueType()) ==
+             TargetLowering::TypeWidenVector &&
+         "Unexpected type action");
+  InOp = GetWidenedVector(InOp);
   EVT InVT = InOp.getValueType();
+  unsigned Opcode = N->getOpcode();
+
+  // See if a widened result type would be legal, if so widen the node.
+  EVT WideVT = EVT::getVectorVT(*DAG.getContext(), EltVT,
+                                InVT.getVectorNumElements());
+  if (TLI.isTypeLegal(WideVT)) {
+    SDValue Res = DAG.getNode(Opcode, dl, WideVT, InOp);
+    return DAG.getNode(ISD::EXTRACT_SUBVECTOR, dl, VT, Res,
+                       DAG.getIntPtrConstant(0, dl));
+  }
+
   EVT InEltVT = InVT.getVectorElementType();
 
-  unsigned Opcode = N->getOpcode();
+  // Unroll the convert into some scalar code and create a nasty build vector.
   SmallVector<SDValue, 16> Ops(NumElts);
   for (unsigned i=0; i < NumElts; ++i)
     Ops[i] = DAG.getNode(
@@ -3506,8 +3515,10 @@ SDValue DAGTypeLegalizer::WidenVecOp_CONCAT_VECTORS(SDNode *N) {
   unsigned NumOperands = N->getNumOperands();
   for (unsigned i=0; i < NumOperands; ++i) {
     SDValue InOp = N->getOperand(i);
-    if (getTypeAction(InOp.getValueType()) == TargetLowering::TypeWidenVector)
-      InOp = GetWidenedVector(InOp);
+    assert(getTypeAction(InOp.getValueType()) ==
+               TargetLowering::TypeWidenVector &&
+           "Unexpected type action");
+    InOp = GetWidenedVector(InOp);
     for (unsigned j=0; j < NumInElts; ++j)
       Ops[Idx++] = DAG.getNode(
           ISD::EXTRACT_VECTOR_ELT, dl, EltVT, InOp,
@@ -3605,6 +3616,7 @@ SDValue DAGTypeLegalizer::WidenVecOp_SETCC(SDNode *N) {
   SDValue InOp0 = GetWidenedVector(N->getOperand(0));
   SDValue InOp1 = GetWidenedVector(N->getOperand(1));
   SDLoc dl(N);
+  EVT VT = N->getValueType(0);
 
   // WARNING: In this code we widen the compare instruction with garbage.
   // This garbage may contain denormal floats which may be slow. Is this a real
@@ -3614,18 +3626,23 @@ SDValue DAGTypeLegalizer::WidenVecOp_SETCC(SDNode *N) {
   // Only some of the compared elements are legal.
   EVT SVT = TLI.getSetCCResultType(DAG.getDataLayout(), *DAG.getContext(),
                                    InOp0.getValueType());
+  // The result type is legal, if its vXi1, keep vXi1 for the new SETCC.
+  if (VT.getScalarType() == MVT::i1)
+    SVT = EVT::getVectorVT(*DAG.getContext(), MVT::i1,
+                           SVT.getVectorNumElements());
+
   SDValue WideSETCC = DAG.getNode(ISD::SETCC, SDLoc(N),
-                     SVT, InOp0, InOp1, N->getOperand(2));
+                                  SVT, InOp0, InOp1, N->getOperand(2));
 
   // Extract the needed results from the result vector.
   EVT ResVT = EVT::getVectorVT(*DAG.getContext(),
                                SVT.getVectorElementType(),
-                               N->getValueType(0).getVectorNumElements());
+                               VT.getVectorNumElements());
   SDValue CC = DAG.getNode(
       ISD::EXTRACT_SUBVECTOR, dl, ResVT, WideSETCC,
       DAG.getConstant(0, dl, TLI.getVectorIdxTy(DAG.getDataLayout())));
 
-  return PromoteTargetBoolean(CC, N->getValueType(0));
+  return PromoteTargetBoolean(CC, VT);
 }
 
 
