@@ -51,6 +51,7 @@ def run(cmd: list, **kwargs):
 class ErrorKind(Enum):
     CRASH = None
     LLVM_ERROR = b"LLVM ERROR:"
+    FATAL_ERROR = b"fatal error:"
     AddressSanitizer_ERROR = b"ERROR: AddressSanitizer:"
 
 
