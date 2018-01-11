@@ -372,7 +372,7 @@ void CallAnalyzer::disableLoadElimination() {
 /// Returns false if unable to compute the offset for any reason. Respects any
 /// simplified values known during the analysis of this callsite.
 bool CallAnalyzer::accumulateGEPOffset(GEPOperator &GEP, APInt &Offset) {
-  unsigned IntPtrWidth = DL.getPointerTypeSizeInBits(GEP.getType());
+  unsigned IntPtrWidth = DL.getTypeIntegerRangeInBits(GEP.getType());
   assert(IntPtrWidth == Offset.getBitWidth());
 
   for (gep_type_iterator GTI = gep_type_begin(GEP), GTE = gep_type_end(GEP);
@@ -456,7 +456,7 @@ bool CallAnalyzer::visitPHI(PHINode &I) {
   // Or could we skip the getPointerSizeInBits call completely? As far as I can
   // see the ZeroOffset is used as a dummy value, so we can probably use any
   // bit width for the ZeroOffset?
-  APInt ZeroOffset = APInt::getNullValue(DL.getPointerSizeInBits(0));
+  APInt ZeroOffset = APInt::getNullValue(DL.getPointerBaseSizeInBits(0u));
   bool CheckSROA = I.getType()->isPointerTy();
 
   // Track the constant or pointer with constant offset we've seen so far.
@@ -647,7 +647,7 @@ bool CallAnalyzer::visitPtrToInt(PtrToIntInst &I) {
   // integer is large enough to represent the pointer.
   unsigned IntegerSize = I.getType()->getScalarSizeInBits();
   unsigned AS = I.getOperand(0)->getType()->getPointerAddressSpace();
-  if (IntegerSize >= DL.getPointerSizeInBits(AS)) {
+  if (IntegerSize >= DL.getPointerBaseSizeInBits(AS)) {
     std::pair<Value *, APInt> BaseAndOffset =
         ConstantOffsetPtrs.lookup(I.getOperand(0));
     if (BaseAndOffset.first)
@@ -680,7 +680,7 @@ bool CallAnalyzer::visitIntToPtr(IntToPtrInst &I) {
   // modifications provided the integer is not too large.
   Value *Op = I.getOperand(0);
   unsigned IntegerSize = Op->getType()->getScalarSizeInBits();
-  if (IntegerSize <= DL.getPointerTypeSizeInBits(I.getType())) {
+  if (IntegerSize <= DL.getPointerBaseSizeInBits(I.getType())) {
     std::pair<Value *, APInt> BaseAndOffset = ConstantOffsetPtrs.lookup(Op);
     if (BaseAndOffset.first)
       ConstantOffsetPtrs[&I] = BaseAndOffset;
@@ -1619,7 +1619,7 @@ ConstantInt *CallAnalyzer::stripAndComputeInBoundsConstantOffsets(Value *&V) {
     return nullptr;
 
   unsigned AS = V->getType()->getPointerAddressSpace();
-  unsigned IntPtrWidth = DL.getPointerSizeInBits(AS);
+  unsigned IntPtrWidth = DL.getPointerBaseSizeInBits(AS);
   APInt Offset = APInt::getNullValue(IntPtrWidth);
 
   // Even though we don't look through PHI nodes, we could be called on an
@@ -1916,7 +1916,7 @@ int llvm::getCallsiteCost(CallSite CS, const DataLayout &DL) {
       PointerType *PTy = cast<PointerType>(CS.getArgument(I)->getType());
       unsigned TypeSize = DL.getTypeSizeInBits(PTy->getElementType());
       unsigned AS = PTy->getAddressSpace();
-      unsigned PointerSize = DL.getPointerSizeInBits(AS);
+      unsigned PointerSize = DL.getPointerBaseSizeInBits(AS);
       // Ceiling division.
       unsigned NumStores = (TypeSize + PointerSize - 1) / PointerSize;
 
