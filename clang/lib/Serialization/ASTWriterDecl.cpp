@@ -534,6 +534,7 @@ void ASTDeclWriter::VisitFunctionDecl(FunctionDecl *D) {
   Record.push_back(D->IsConstexpr);
   Record.push_back(D->UsesSEHTry);
   Record.push_back(D->HasSkippedBody);
+  Record.push_back(D->IsMultiVersion);
   Record.push_back(D->IsLateTemplateParsed);
   Record.push_back(D->getLinkageInternal());
   Record.AddSourceLocation(D->getLocEnd());
@@ -1192,6 +1193,7 @@ void ASTDeclWriter::VisitUsingShadowDecl(UsingShadowDecl *D) {
   VisitRedeclarable(D);
   VisitNamedDecl(D);
   Record.AddDeclRef(D->getTargetDecl());
+  Record.push_back(D->getIdentifierNamespace());
   Record.AddDeclRef(D->UsingOrNextShadow);
   Record.AddDeclRef(Context.getInstantiatedFromUsingShadowDecl(D));
   Code = serialization::DECL_USING_SHADOW;
@@ -2071,6 +2073,7 @@ void ASTWriter::WriteDeclAbbrevs() {
   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // Constexpr
   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // UsesSEHTry
   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // SkippedBody
+  Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // MultiVersion
   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 1)); // LateParsed
   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::Fixed, 3)); // Linkage
   Abv->Add(BitCodeAbbrevOp(BitCodeAbbrevOp::VBR, 6));   // LocEnd

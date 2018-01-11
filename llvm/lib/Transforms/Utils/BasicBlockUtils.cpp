@@ -316,6 +316,7 @@ static void UpdateAnalysisInformation(BasicBlock *OldBB, BasicBlock *NewBB,
   if (!LI)
     return;
 
+  assert(DT && "DT should be available to update LoopInfo!");
   Loop *L = LI->getLoopFor(OldBB);
 
   // If we need to preserve loop analyses, collect some information about how
@@ -323,6 +324,12 @@ static void UpdateAnalysisInformation(BasicBlock *OldBB, BasicBlock *NewBB,
   bool IsLoopEntry = !!L;
   bool SplitMakesNewLoopHeader = false;
   for (BasicBlock *Pred : Preds) {
+    // Preds that are not reachable from entry should not be used to identify if
+    // OldBB is a loop entry or if SplitMakesNewLoopHeader. Unreachable blocks
+    // are not within any loops, so we incorrectly mark SplitMakesNewLoopHeader
+    // as true and make the NewBB the header of some loop. This breaks LI.
+    if (!DT->isReachableFromEntry(Pred))
+      continue;
     // If we need to preserve LCSSA, determine if any of the preds is a loop
     // exit.
     if (PreserveLCSSA)

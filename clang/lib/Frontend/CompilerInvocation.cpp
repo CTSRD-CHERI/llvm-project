@@ -682,6 +682,8 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
                                        OPT_fno_function_sections, false);
   Opts.DataSections = Args.hasFlag(OPT_fdata_sections,
                                    OPT_fno_data_sections, false);
+  Opts.StackSizeSection =
+      Args.hasFlag(OPT_fstack_size_section, OPT_fno_stack_size_section, false);
   Opts.UniqueSectionNames = Args.hasFlag(OPT_funique_section_names,
                                          OPT_fno_unique_section_names, true);
 
@@ -2757,7 +2759,13 @@ bool CompilerInvocation::CreateFromArgs(CompilerInvocation &Res,
 
   // Issue errors on unknown arguments.
   for (const Arg *A : Args.filtered(OPT_UNKNOWN)) {
-    Diags.Report(diag::err_drv_unknown_argument) << A->getAsString(Args);
+    auto ArgString = A->getAsString(Args);
+    std::string Nearest;
+    if (Opts->findNearest(ArgString, Nearest, IncludedFlagsBitmask) > 1)
+      Diags.Report(diag::err_drv_unknown_argument) << ArgString;
+    else
+      Diags.Report(diag::err_drv_unknown_argument_with_suggestion)
+          << ArgString << Nearest;
     Success = false;
   }
 
