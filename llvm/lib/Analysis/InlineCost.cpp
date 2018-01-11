@@ -136,6 +136,7 @@ class CallAnalyzer : public InstVisitor<CallAnalyzer, bool> {
   bool HasReturn;
   bool HasIndirectBr;
   bool HasFrameEscape;
+  bool UsesVarArgs;
 
   /// Number of bytes allocated statically by the callee.
   uint64_t AllocatedSize;
@@ -280,7 +281,7 @@ public:
         IsCallerRecursive(false), IsRecursiveCall(false),
         ExposesReturnsTwice(false), HasDynamicAlloca(false),
         ContainsNoDuplicateCall(false), HasReturn(false), HasIndirectBr(false),
-        HasFrameEscape(false), AllocatedSize(0), NumInstructions(0),
+        HasFrameEscape(false), UsesVarArgs(false), AllocatedSize(0), NumInstructions(0),
         NumVectorInstructions(0), VectorBonus(0), SingleBBBonus(0),
         EnableLoadElimination(true), LoadEliminationCost(0), NumConstantArgs(0),
         NumConstantOffsetPtrArgs(0), NumAllocaArgs(0), NumConstantPtrCmps(0),
@@ -371,7 +372,7 @@ void CallAnalyzer::disableLoadElimination() {
 /// Returns false if unable to compute the offset for any reason. Respects any
 /// simplified values known during the analysis of this callsite.
 bool CallAnalyzer::accumulateGEPOffset(GEPOperator &GEP, APInt &Offset) {
-  unsigned IntPtrWidth = DL.getPointerSizeInBits();
+  unsigned IntPtrWidth = DL.getPointerTypeSizeInBits(GEP.getType());
   assert(IntPtrWidth == Offset.getBitWidth());
 
   for (gep_type_iterator GTI = gep_type_begin(GEP), GTE = gep_type_end(GEP);
@@ -450,8 +451,12 @@ bool CallAnalyzer::visitPHI(PHINode &I) {
   // SROA if it *might* be used in an inappropriate manner.
 
   // Phi nodes are always zero-cost.
-
-  APInt ZeroOffset = APInt::getNullValue(DL.getPointerSizeInBits());
+  // FIXME: Pointer sizes may differ between different address spaces, so do we
+  // need to use correct address space in the call to getPointerSizeInBits here?
+  // Or could we skip the getPointerSizeInBits call completely? As far as I can
+  // see the ZeroOffset is used as a dummy value, so we can probably use any
+  // bit width for the ZeroOffset?
+  APInt ZeroOffset = APInt::getNullValue(DL.getPointerSizeInBits(0));
   bool CheckSROA = I.getType()->isPointerTy();
 
   // Track the constant or pointer with constant offset we've seen so far.
@@ -641,7 +646,8 @@ bool CallAnalyzer::visitPtrToInt(PtrToIntInst &I) {
   // Track base/offset pairs when converted to a plain integer provided the
   // integer is large enough to represent the pointer.
   unsigned IntegerSize = I.getType()->getScalarSizeInBits();
-  if (IntegerSize >= DL.getPointerSizeInBits()) {
+  unsigned AS = I.getOperand(0)->getType()->getPointerAddressSpace();
+  if (IntegerSize >= DL.getPointerSizeInBits(AS)) {
     std::pair<Value *, APInt> BaseAndOffset =
         ConstantOffsetPtrs.lookup(I.getOperand(0));
     if (BaseAndOffset.first)
@@ -674,7 +680,7 @@ bool CallAnalyzer::visitIntToPtr(IntToPtrInst &I) {
   // modifications provided the integer is not too large.
   Value *Op = I.getOperand(0);
   unsigned IntegerSize = Op->getType()->getScalarSizeInBits();
-  if (IntegerSize <= DL.getPointerSizeInBits()) {
+  if (IntegerSize <= DL.getPointerTypeSizeInBits(I.getType())) {
     std::pair<Value *, APInt> BaseAndOffset = ConstantOffsetPtrs.lookup(Op);
     if (BaseAndOffset.first)
       ConstantOffsetPtrs[&I] = BaseAndOffset;
@@ -1228,6 +1234,10 @@ bool CallAnalyzer::visitCallSite(CallSite CS) {
       case Intrinsic::localescape:
         HasFrameEscape = true;
         return false;
+      case Intrinsic::vastart:
+      case Intrinsic::vaend:
+        UsesVarArgs = true;
+        return false;
       }
     }
 
@@ -1562,7 +1572,7 @@ bool CallAnalyzer::analyzeBlock(BasicBlock *BB,
     using namespace ore;
     // If the visit this instruction detected an uninlinable pattern, abort.
     if (IsRecursiveCall || ExposesReturnsTwice || HasDynamicAlloca ||
-        HasIndirectBr || HasFrameEscape) {
+        HasIndirectBr || HasFrameEscape || UsesVarArgs) {
       if (ORE)
         ORE->emit([&]() {
           return OptimizationRemarkMissed(DEBUG_TYPE, "NeverInline",
@@ -1608,7 +1618,8 @@ ConstantInt *CallAnalyzer::stripAndComputeInBoundsConstantOffsets(Value *&V) {
   if (!V->getType()->isPointerTy())
     return nullptr;
 
-  unsigned IntPtrWidth = DL.getPointerSizeInBits();
+  unsigned AS = V->getType()->getPointerAddressSpace();
+  unsigned IntPtrWidth = DL.getPointerSizeInBits(AS);
   APInt Offset = APInt::getNullValue(IntPtrWidth);
 
   // Even though we don't look through PHI nodes, we could be called on an
@@ -1632,7 +1643,7 @@ ConstantInt *CallAnalyzer::stripAndComputeInBoundsConstantOffsets(Value *&V) {
     assert(V->getType()->isPointerTy() && "Unexpected operand type!");
   } while (Visited.insert(V).second);
 
-  Type *IntPtrTy = DL.getIntPtrType(V->getContext());
+  Type *IntPtrTy = DL.getIntPtrType(V->getContext(), AS);
   return cast<ConstantInt>(ConstantInt::get(IntPtrTy, Offset));
 }
 
@@ -1904,7 +1915,8 @@ int llvm::getCallsiteCost(CallSite CS, const DataLayout &DL) {
       // size of the byval type by the target's pointer size.
       PointerType *PTy = cast<PointerType>(CS.getArgument(I)->getType());
       unsigned TypeSize = DL.getTypeSizeInBits(PTy->getElementType());
-      unsigned PointerSize = DL.getPointerSizeInBits();
+      unsigned AS = PTy->getAddressSpace();
+      unsigned PointerSize = DL.getPointerSizeInBits(AS);
       // Ceiling division.
       unsigned NumStores = (TypeSize + PointerSize - 1) / PointerSize;
 

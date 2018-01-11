@@ -519,6 +519,12 @@ def cl_fp32_correctly_rounded_divide_sqrt : Flag<["-"], "cl-fp32-correctly-round
 def client__name : JoinedOrSeparate<["-"], "client_name">;
 def combine : Flag<["-", "--"], "combine">, Flags<[DriverOption, Unsupported]>;
 def compatibility__version : JoinedOrSeparate<["-"], "compatibility_version">;
+def config : Separate<["--"], "config">, Flags<[DriverOption]>,
+  HelpText<"Specifies configuration file">;
+def config_system_dir_EQ : Joined<["--"], "config-system-dir=">, Flags<[DriverOption, HelpHidden]>,
+  HelpText<"System directory for configuration files">;
+def config_user_dir_EQ : Joined<["--"], "config-user-dir=">, Flags<[DriverOption, HelpHidden]>,
+  HelpText<"User directory for configuration files">;
 def coverage : Flag<["-", "--"], "coverage">, Flags<[CoreOption]>;
 def cpp_precomp : Flag<["-"], "cpp-precomp">, Group<clang_ignored_f_Group>;
 def current__version : JoinedOrSeparate<["-"], "current_version">;
@@ -1568,6 +1574,10 @@ def fdata_sections : Flag <["-"], "fdata-sections">, Group<f_Group>,
  Flags<[CC1Option]>, HelpText<"Place each data in its own section (ELF Only)">;
 def fno_data_sections : Flag <["-"], "fno-data-sections">, Group<f_Group>,
   Flags<[CC1Option]>;
+def fstack_size_section : Flag<["-"], "fstack-size-section">, Group<f_Group>, Flags<[CC1Option]>,
+  HelpText<"Emit section containing metadata on function stack sizes">;
+def fno_stack_size_section : Flag<["-"], "fno-stack-size-section">, Group<f_Group>, Flags<[CC1Option]>,
+  HelpText<"Don't emit section containing metadata on function stack sizes">;
 
 def funique_section_names : Flag <["-"], "funique-section-names">,
   Group<f_Group>, Flags<[CC1Option]>,
