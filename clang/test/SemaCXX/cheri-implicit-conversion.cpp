@@ -86,7 +86,7 @@ void fn_taking_const_char_ptr(const char* s);
 void fn_taking_const_char_cap(const char* __capability s);
 
 void str_to_ptr(void) {
-  // conversion from string literal to const char* is fine:
+  // ISO C++11 does not allow conversion from string literal to const char* is fine:
   const char* ptr = "foo";
   const char* __capability cap = "foo";
 
@@ -101,8 +101,8 @@ void str_to_ptr(void) {
   char* nonconst_ptr = "foo";
   char* __capability nonconst_cap = "foo";
 #ifdef __cplusplus
-  // expected-warning@-3 {{conversion from string literal to 'char *' is deprecated}}
-  // expected-warning@-3 {{conversion from string literal to 'char * __capability' is deprecated}}
+  // expected-warning@-3 {{ISO C++11 does not allow conversion from string literal to 'char *'}}
+  // expected-warning@-3 {{ISO C++11 does not allow conversion from string literal to 'char * __capability'}}
 #endif
   // CXXAST: FunctionDecl {{.+}} str_to_ptr 'void (void)'
   // CXXAST: VarDecl {{.+}} cap 'const char * __capability' cinit
@@ -121,6 +121,6 @@ void str_to_ptr(void) {
 char *flag2str[] = {
         "public ", "private ", "protected ", "static ",
 #ifdef __cplusplus
-// expected-warning@-2 4 {{conversion from string literal to 'char *' is deprecated}}
+// expected-warning@-2 4 {{ISO C++11 does not allow conversion from string literal to 'char *'}}
 #endif
 };
