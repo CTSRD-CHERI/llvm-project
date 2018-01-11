@@ -8972,8 +8972,16 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
       // what they are doing.)
       if (Result.isAddrLabelDiff())
         return Info.Ctx.getTypeSize(DestType) <= Info.Ctx.getTypeSize(SrcType);
-      // Only allow casts of lvalues if they are lossless.
-      return Info.Ctx.getTypeSize(DestType) == Info.Ctx.getTypeSize(SrcType);
+      // CHERI: If we are doing an integer cast from a capability, then extract
+      // the int value
+      if (SrcType->isCHERICapabilityType(Info.Ctx)) {
+        APSInt IntValue;
+        if (!SubExpr->EvaluateAsInt(IntValue, Info.Ctx))
+          return false;
+        Result = APValue(IntValue);
+      } else
+        // Only allow casts of lvalues if they are lossless.
+        return Info.Ctx.getTypeSize(DestType) == Info.Ctx.getTypeSize(SrcType);
     }
 
     return Success(HandleIntToIntCast(Info, E, DestType, SrcType,
