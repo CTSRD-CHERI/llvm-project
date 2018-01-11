@@ -281,6 +281,8 @@ ModuleMap::ModuleMap(SourceManager &SourceMgr, DiagnosticsEngine &Diags,
 ModuleMap::~ModuleMap() {
   for (auto &M : Modules)
     delete M.getValue();
+  for (auto *M : ShadowModules)
+    delete M;
 }
 
 void ModuleMap::setTarget(const TargetInfo &Target) {
@@ -751,7 +753,7 @@ std::pair<Module *, bool> ModuleMap::findOrCreateModule(StringRef Name,
   // Try to find an existing module with this name.
   if (Module *Sub = lookupModuleQualified(Name, Parent))
     return std::make_pair(Sub, false);
-  
+
   // Create a new module with this name.
   Module *Result = new Module(Name, SourceLocation(), Parent, IsFramework,
                               IsExplicit, NumCreatedModules++);
@@ -759,6 +761,7 @@ std::pair<Module *, bool> ModuleMap::findOrCreateModule(StringRef Name,
     if (LangOpts.CurrentModule == Name)
       SourceModule = Result;
     Modules[Name] = Result;
+    ModuleScopeIDs[Result] = CurrentModuleScopeID;
   }
   return std::make_pair(Result, true);
 }
@@ -927,6 +930,7 @@ Module *ModuleMap::inferFrameworkModule(const DirectoryEntry *FrameworkDir,
     if (LangOpts.CurrentModule == ModuleName)
       SourceModule = Result;
     Modules[ModuleName] = Result;
+    ModuleScopeIDs[Result] = CurrentModuleScopeID;
   }
 
   Result->IsSystem |= Attrs.IsSystem;
@@ -995,6 +999,21 @@ Module *ModuleMap::inferFrameworkModule(const DirectoryEntry *FrameworkDir,
   if (!Result->isSubFramework()) {
     inferFrameworkLink(Result, FrameworkDir, FileMgr);
   }
+
+  return Result;
+}
+
+Module *ModuleMap::createShadowedModule(StringRef Name, bool IsFramework,
+                                        Module *ShadowingModule) {
+
+  // Create a new module with this name.
+  Module *Result =
+      new Module(Name, SourceLocation(), /*Parent=*/nullptr, IsFramework,
+                 /*IsExplicit=*/false, NumCreatedModules++);
+  Result->ShadowingModule = ShadowingModule;
+  Result->IsAvailable = false;
+  ModuleScopeIDs[Result] = CurrentModuleScopeID;
+  ShadowModules.push_back(Result);
 
   return Result;
 }
@@ -1319,7 +1338,7 @@ namespace clang {
 
     /// \brief Consume the current token and return its location.
     SourceLocation consumeToken();
-    
+
     /// \brief Skip tokens until we reach the a token with the given kind
     /// (or the end of the file).
     void skipUntil(MMToken::TokenKind K);
@@ -1345,20 +1364,17 @@ namespace clang {
     bool parseOptionalAttributes(Attributes &Attrs);
     
   public:
-    explicit ModuleMapParser(Lexer &L, SourceManager &SourceMgr, 
-                             const TargetInfo *Target,
-                             DiagnosticsEngine &Diags,
-                             ModuleMap &Map,
-                             const FileEntry *ModuleMapFile,
-                             const DirectoryEntry *Directory,
-                             bool IsSystem)
+    explicit ModuleMapParser(Lexer &L, SourceManager &SourceMgr,
+                             const TargetInfo *Target, DiagnosticsEngine &Diags,
+                             ModuleMap &Map, const FileEntry *ModuleMapFile,
+                             const DirectoryEntry *Directory, bool IsSystem)
         : L(L), SourceMgr(SourceMgr), Target(Target), Diags(Diags), Map(Map),
           ModuleMapFile(ModuleMapFile), Directory(Directory),
           IsSystem(IsSystem) {
       Tok.clear();
       consumeToken();
     }
-    
+
     bool parseModuleMapFile();
 
     bool terminatedByDirective() { return false; }
@@ -1787,6 +1803,7 @@ void ModuleMapParser::parseModuleDecl() {
   SourceLocation LBraceLoc = consumeToken();
   
   // Determine whether this (sub)module has already been defined.
+  Module *ShadowingModule = nullptr;
   if (Module *Existing = Map.lookupModuleQualified(ModuleName, ActiveModule)) {
     // We might see a (re)definition of a module that we already have a
     // definition for in two cases:
@@ -1812,23 +1829,35 @@ void ModuleMapParser::parseModuleDecl() {
       }
       return;
     }
-    
-    Diags.Report(ModuleNameLoc, diag::err_mmap_module_redefinition)
-      << ModuleName;
-    Diags.Report(Existing->DefinitionLoc, diag::note_mmap_prev_definition);
-    
-    // Skip the module definition.
-    skipUntil(MMToken::RBrace);
-    if (Tok.is(MMToken::RBrace))
-      consumeToken();
-    
-    HadError = true;
-    return;
+
+    if (!Existing->Parent && Map.mayShadowNewModule(Existing)) {
+      ShadowingModule = Existing;
+    } else {
+      // This is not a shawdowed module decl, it is an illegal redefinition.
+      Diags.Report(ModuleNameLoc, diag::err_mmap_module_redefinition)
+          << ModuleName;
+      Diags.Report(Existing->DefinitionLoc, diag::note_mmap_prev_definition);
+
+      // Skip the module definition.
+      skipUntil(MMToken::RBrace);
+      if (Tok.is(MMToken::RBrace))
+        consumeToken();
+
+      HadError = true;
+      return;
+    }
   }
 
   // Start defining this module.
-  ActiveModule = Map.findOrCreateModule(ModuleName, ActiveModule, Framework,
-                                        Explicit).first;
+  if (ShadowingModule) {
+    ActiveModule =
+        Map.createShadowedModule(ModuleName, Framework, ShadowingModule);
+  } else {
+    ActiveModule =
+        Map.findOrCreateModule(ModuleName, ActiveModule, Framework, Explicit)
+            .first;
+  }
+
   ActiveModule->DefinitionLoc = ModuleNameLoc;
   if (Attrs.IsSystem || IsSystem)
     ActiveModule->IsSystem = true;
@@ -2854,5 +2883,6 @@ bool ModuleMap::parseModuleMapFile(const FileEntry *File, bool IsSystem,
   // Notify callbacks that we parsed it.
   for (const auto &Cb : Callbacks)
     Cb->moduleMapFileRead(Start, *File, IsSystem);
+
   return Result;
 }

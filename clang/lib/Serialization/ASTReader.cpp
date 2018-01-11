@@ -10666,6 +10666,7 @@ void ASTReader::diagnoseOdrViolations() {
       Diagnosed = true;
       break;
     }
+    (void)Diagnosed;
     assert(Diagnosed && "Unable to emit ODR diagnostic.");
   }
 }

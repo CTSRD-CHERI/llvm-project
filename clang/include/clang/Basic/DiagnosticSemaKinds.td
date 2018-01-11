@@ -5980,15 +5980,15 @@ def note_typecheck_assign_const : Note<
 def warn_unsigned_always_true_comparison : Warning<
   "result of comparison of %select{%3|unsigned expression}0 %2 "
   "%select{unsigned expression|%3}0 is always %4">,
-  InGroup<TautologicalUnsignedZeroCompare>;
+  InGroup<TautologicalUnsignedZeroCompare>, DefaultIgnore;
 def warn_unsigned_enum_always_true_comparison : Warning<
   "result of comparison of %select{%3|unsigned enum expression}0 %2 "
   "%select{unsigned enum expression|%3}0 is always %4">,
-  InGroup<TautologicalUnsignedEnumZeroCompare>;
+  InGroup<TautologicalUnsignedEnumZeroCompare>, DefaultIgnore;
 def warn_tautological_constant_compare : Warning<
   "result of comparison %select{%3|%1}0 %2 "
   "%select{%1|%3}0 is always %4">,
-  InGroup<TautologicalConstantCompare>;
+  InGroup<TautologicalTypeLimitCompare>, DefaultIgnore;
 
 def err_typecheck_convert_cap_to_ptr: Error<"converting capability"
   "%select{| reference to}2 type %0 to non-capability type %1 without "
@@ -8021,7 +8021,7 @@ def note_ref_subobject_of_member_declared_here : Note<
 // should result in a warning, since these always evaluate to a constant.
 // Array comparisons have similar warnings
 def warn_comparison_always : Warning<
-  "%select{self-|array }0comparison always evaluates to %select{false|true|a constant}1">,
+  "%select{self-|array }0comparison always evaluates to %select{a constant|%2}1">,
   InGroup<TautologicalCompare>;
 def warn_comparison_bitwise_always : Warning<
   "bitwise comparison always evaluates to %select{false|true}0">,
@@ -8415,12 +8415,16 @@ def err_c99_array_usage_cxx : Error<
   "feature, not permitted in C++">;
 def err_type_unsupported : Error<
   "%0 is not supported on this target">;
-def warn_nsconsumed_attribute_mismatch : Warning<
+def err_nsconsumed_attribute_mismatch : Error<
   "overriding method has mismatched ns_consumed attribute on its"
-  " parameter">, InGroup<NSConsumedMismatch>;
-def warn_nsreturns_retained_attribute_mismatch : Warning<
+  " parameter">;
+def err_nsreturns_retained_attribute_mismatch : Error<
   "overriding method has mismatched ns_returns_%select{not_retained|retained}0"
-  " attributes">, InGroup<NSReturnsMismatch>;
+  " attributes">;
+def warn_nsconsumed_attribute_mismatch : Warning<
+  err_nsconsumed_attribute_mismatch.Text>, InGroup<NSConsumedMismatch>;
+def warn_nsreturns_retained_attribute_mismatch : Warning<
+  err_nsreturns_retained_attribute_mismatch.Text>, InGroup<NSReturnsMismatch>;
   
 def note_getter_unavailable : Note<
   "or because setter is declared here, but no getter method %0 is found">;
@@ -9442,5 +9446,36 @@ def warn_shadow_field :
   Warning<"non-static data member '%0' of '%1' shadows member inherited from type '%2'">,
   InGroup<ShadowField>, DefaultIgnore;
 def note_shadow_field : Note<"declared here">;
+
+def err_target_required_in_redecl : Error<
+  "function declaration is missing 'target' attribute in a multiversioned "
+  "function">;
+def note_multiversioning_caused_here : Note<
+  "function multiversioning caused by this declaration">;
+def err_multiversion_after_used : Error<
+  "function declaration cannot become a multiversioned function after first "
+  "usage">;
+def err_bad_multiversion_option : Error<
+  "function multiversioning doesn't support %select{feature|architecture}0 "
+  "'%1'">;
+def err_multiversion_duplicate : Error<
+  "multiversioned function redeclarations require identical target attributes">;
+def err_multiversion_noproto : Error<
+  "multiversioned function must have a prototype">;
+def err_multiversion_no_other_attrs : Error<
+  "attribute 'target' multiversioning cannot be combined with other "
+  "attributes">;
+def err_multiversion_diff : Error<
+  "multiversioned function declaration has a different %select{calling convention"
+  "|return type|constexpr specification|inline specification|storage class|"
+  "linkage}0">;
+def err_multiversion_doesnt_support : Error<
+  "multiversioned functions do not yet support %select{function templates|"
+  "virtual functions|deduced return types|constructors|destructors|"
+  "deleted functions|defaulted functions}0">;
+def err_multiversion_not_allowed_on_main : Error<
+  "'main' cannot be a multiversioned function">;
+def err_multiversion_not_supported : Error<
+ "function multiversioning is not supported on the current target">;
 
 } // end of sema component.

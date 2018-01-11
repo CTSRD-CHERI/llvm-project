@@ -35,6 +35,7 @@
 #include "clang/Frontend/CodeGenOptions.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/ValueHandle.h"
 #include "llvm/Support/Debug.h"
@@ -1421,6 +1422,9 @@ private:
   llvm::BasicBlock *TerminateHandler;
   llvm::BasicBlock *TrapBB;
 
+  /// Terminate funclets keyed by parent funclet pad.
+  llvm::MapVector<llvm::Value *, llvm::BasicBlock *> TerminateFunclets;
+
   /// True if we need emit the life-time markers.
   const bool ShouldEmitLifetimeMarkers;
 
@@ -1808,6 +1812,10 @@ public:
 
   /// getTerminateLandingPad - Return a landing pad that just calls terminate.
   llvm::BasicBlock *getTerminateLandingPad();
+
+  /// getTerminateLandingPad - Return a cleanup funclet that just calls
+  /// terminate.
+  llvm::BasicBlock *getTerminateFunclet();
 
   /// getTerminateHandler - Return a handler (not a landing pad, just
   /// a catch handler) that just calls terminate.  This is used when
@@ -2946,6 +2954,10 @@ public:
   static void EmitOMPTargetSimdDeviceFunction(CodeGenModule &CGM,
                                               StringRef ParentName,
                                               const OMPTargetSimdDirective &S);
+
+  static void EmitOMPTargetTeamsDistributeParallelForDeviceFunction(
+      CodeGenModule &CGM, StringRef ParentName,
+      const OMPTargetTeamsDistributeParallelForDirective &S);
   /// \brief Emit inner loop of the worksharing/simd construct.
   ///
   /// \param S Directive, for which the inner loop must be emitted.
@@ -4003,6 +4015,29 @@ public:
 
   void EmitSanitizerStatReport(llvm::SanitizerStatKind SSK);
 
+  struct MultiVersionResolverOption {
+    llvm::Function *Function;
+    TargetAttr::ParsedTargetAttr ParsedAttribute;
+    unsigned Priority;
+    MultiVersionResolverOption(const TargetInfo &TargInfo, llvm::Function *F,
+                               const clang::TargetAttr::ParsedTargetAttr &PT)
+        : Function(F), ParsedAttribute(PT), Priority(0u) {
+      for (StringRef Feat : PT.Features)
+        Priority = std::max(Priority,
+                            TargInfo.multiVersionSortPriority(Feat.substr(1)));
+
+      if (!PT.Architecture.empty())
+        Priority = std::max(Priority,
+                            TargInfo.multiVersionSortPriority(PT.Architecture));
+    }
+
+    bool operator>(const MultiVersionResolverOption &Other) const {
+      return Priority > Other.Priority;
+    }
+  };
+  void EmitMultiVersionResolver(llvm::Function *Resolver,
+                                ArrayRef<MultiVersionResolverOption> Options);
+
 private:
   QualType getVarArgType(const Expr *Arg);
 
@@ -4019,6 +4054,7 @@ private:
   llvm::Value *EmitX86CpuSupports(const CallExpr *E);
   llvm::Value *EmitX86CpuSupports(ArrayRef<StringRef> FeatureStrs);
   llvm::Value *EmitX86CpuInit();
+  llvm::Value *FormResolverCondition(const MultiVersionResolverOption &RO);
 };
 
 /// Helper class with most of the code for saving a value for a

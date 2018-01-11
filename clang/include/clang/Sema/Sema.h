@@ -5547,6 +5547,11 @@ public:
   ExprResult BuildLambdaExpr(SourceLocation StartLoc, SourceLocation EndLoc,
                              sema::LambdaScopeInfo *LSI);
 
+  /// Get the return type to use for a lambda's conversion function(s) to
+  /// function pointer type, given the type of the call operator.
+  QualType
+  getLambdaConversionFunctionResultType(const FunctionProtoType *CallOpType);
+
   /// \brief Define the "body" of the conversion from a lambda object to a
   /// function pointer.
   ///
@@ -7760,6 +7765,9 @@ public:
 
   void InstantiateExceptionSpec(SourceLocation PointOfInstantiation,
                                 FunctionDecl *Function);
+  FunctionDecl *InstantiateFunctionDeclaration(FunctionTemplateDecl *FTD,
+                                               const TemplateArgumentList *Args,
+                                               SourceLocation Loc);
   void InstantiateFunctionDefinition(SourceLocation PointOfInstantiation,
                                      FunctionDecl *Function,
                                      bool Recursive = false,
@@ -9611,7 +9619,8 @@ public:
                                bool AllowBothBool, bool AllowBoolConversion);
   QualType GetSignedVectorType(QualType V);
   QualType CheckVectorCompareOperands(ExprResult &LHS, ExprResult &RHS,
-                                      SourceLocation Loc, bool isRelational);
+                                      SourceLocation Loc,
+                                      BinaryOperatorKind Opc);
   QualType CheckVectorLogicalOperands(ExprResult &LHS, ExprResult &RHS,
                                       SourceLocation Loc);
 
@@ -10435,7 +10444,10 @@ private:
                           const AttrVec *Attrs = nullptr,
                           const FunctionDecl *FD = nullptr);
 
-  void CheckFloatComparison(SourceLocation Loc, Expr* LHS, Expr* RHS);
+public:
+  void CheckFloatComparison(SourceLocation Loc, Expr *LHS, Expr *RHS);
+
+private:
   void CheckImplicitConversions(Expr *E, SourceLocation CC = SourceLocation());
   void CheckBoolLikeConversion(Expr *E, SourceLocation CC);
   void CheckForIntOverflow(Expr *E);
