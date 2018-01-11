@@ -40,14 +40,15 @@ entry:
 ; CHECK-NEXT:       - ElemType:        ANYFUNC
 ; CHECK-NEXT:         Limits:
 ; CHECK-NEXT:           Flags:           [ HAS_MAX ]
-; CHECK-NEXT:           Initial:         0x00000002
-; CHECK-NEXT:           Maximum:         0x00000002
+; CHECK-NEXT:           Initial:         0x00000001
+; CHECK-NEXT:           Maximum:         0x00000001
 ; CHECK-NEXT:   - Type:            MEMORY
 ; CHECK-NEXT:     Memories:
 ; CHECK-NEXT:       - Initial:         0x00000002
 ; CHECK-NEXT:   - Type:            GLOBAL
 ; CHECK-NEXT:     Globals:
-; CHECK-NEXT:       - Type:            I32
+; CHECK-NEXT:       - Index:           0
+; CHECK-NEXT:         Type:            I32
 ; CHECK-NEXT:         Mutable:         true
 ; CHECK-NEXT:         InitExpr:
 ; CHECK-NEXT:           Opcode:          I32_CONST
@@ -66,20 +67,17 @@ entry:
 ; CHECK-NEXT:       - Name:            get_address_of_global_var
 ; CHECK-NEXT:         Kind:            FUNCTION
 ; CHECK-NEXT:         Index:           1
-; CHECK-NEXT:   - Type:            ELEM
-; CHECK-NEXT:     Segments:
-; CHECK-NEXT:       - Offset:
-; CHECK-NEXT:           Opcode:          I32_CONST
-; CHECK-NEXT:           Value:           1
-; CHECK-NEXT:         Functions:       [ 0 ]
 ; CHECK-NEXT:   - Type:            CODE
 ; CHECK-NEXT:     Functions:
-; CHECK-NEXT:       - Locals:
-; CHECK-NEXT:         Body:            4181808080000B
-; CHECK-NEXT:       - Locals:
-; CHECK-NEXT:         Body:            41FFFFFFFF7F0B
-; CHECK-NEXT:       - Locals:
-; CHECK-NEXT:         Body:            41002802FFFFFFFF0F0B
+; CHECK-NEXT:       - Index:           0
+; CHECK-NEXT:         Locals:
+; CHECK-NEXT:         Body:            4180808080000B
+; CHECK-NEXT:       - Index:           1
+; CHECK-NEXT:         Locals:
+; CHECK-NEXT:         Body:            4180808080000B
+; CHECK-NEXT:       - Index:           2
+; CHECK-NEXT:         Locals:
+; CHECK-NEXT:         Body:            4100280280808080000B
 ; CHECK-NEXT:   - Type:            CUSTOM
 ; CHECK-NEXT:     Name:            linking
 ; CHECK-NEXT:     DataSize:        0

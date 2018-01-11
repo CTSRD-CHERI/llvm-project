@@ -134,10 +134,11 @@ ClangdServer::ClangdServer(GlobalCompilationDatabase &CDB,
                            FileSystemProvider &FSProvider,
                            unsigned AsyncThreadsCount,
                            bool StorePreamblesInMemory,
-                           bool BuildDynamicSymbolIndex,
+                           bool BuildDynamicSymbolIndex, SymbolIndex *StaticIdx,
                            llvm::Optional<StringRef> ResourceDir)
     : CDB(CDB), DiagConsumer(DiagConsumer), FSProvider(FSProvider),
       FileIdx(BuildDynamicSymbolIndex ? new FileIndex() : nullptr),
+      StaticIdx(StaticIdx),
       // Pass a callback into `Units` to extract symbols from a newly parsed
       // file and rebuild the file index synchronously each time an AST is
       // parsed.
@@ -251,10 +252,19 @@ void ClangdServer::codeComplete(
   auto CodeCompleteOpts = Opts;
   if (FileIdx)
     CodeCompleteOpts.Index = FileIdx.get();
+  if (StaticIdx)
+    CodeCompleteOpts.StaticIndex = StaticIdx;
+
+  // Copy File, as it is a PathRef that will go out of scope before Task is
+  // executed.
+  Path FileStr = File;
+  // Copy PCHs to avoid accessing this->PCHs concurrently
+  std::shared_ptr<PCHContainerOperations> PCHs = this->PCHs;
   // A task that will be run asynchronously.
   auto Task =
       // 'mutable' to reassign Preamble variable.
-      [=](Context Ctx, CallbackType Callback) mutable {
+      [FileStr, Preamble, Resources, Contents, Pos, CodeCompleteOpts, TaggedFS,
+       PCHs](Context Ctx, CallbackType Callback) mutable {
         if (!Preamble) {
           // Maybe we built some preamble before processing this request.
           Preamble = Resources->getPossiblyStalePreamble();
@@ -263,7 +273,7 @@ void ClangdServer::codeComplete(
         // both the old and the new version in case only one of them matches.
 
         CompletionList Result = clangd::codeComplete(
-            Ctx, File, Resources->getCompileCommand(),
+            Ctx, FileStr, Resources->getCompileCommand(),
             Preamble ? &Preamble->Preamble : nullptr, Contents, Pos,
             TaggedFS.Value, PCHs, CodeCompleteOpts);
 
@@ -576,7 +586,7 @@ std::future<Context> ClangdServer::scheduleReparseAndDiags(
       return;
     LastReportedDiagsVersion = Version;
 
-    DiagConsumer.onDiagnosticsReady(FileStr,
+    DiagConsumer.onDiagnosticsReady(Ctx, FileStr,
                                     make_tagged(std::move(*Diags), Tag));
   };
 
