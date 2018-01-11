@@ -9,6 +9,7 @@ import shlex
 import subprocess
 import sys
 import resource
+import typing
 from abc import ABCMeta, abstractmethod
 from enum import Enum
 from pathlib import Path
@@ -47,6 +48,12 @@ def run(cmd: list, **kwargs):
     subprocess.check_call(list(map(str, cmd)), **kwargs)
 
 
+class ErrorKind(Enum):
+    CRASH = None
+    LLVM_ERROR = b"LLVM ERROR:"
+    AddressSanitizer_ERROR = b"ERROR: AddressSanitizer:"
+
+
 class ReduceTool(metaclass=ABCMeta):
     def __init__(self, args: "Options", name: str, tool: Path):
         self.tool = tool
@@ -56,7 +63,6 @@ class ReduceTool(metaclass=ABCMeta):
         self.run_lines = [] # RUN: lines from the test case
         self.run_cmds = []  # the lines without RUN: suitably quoted for passing to a shell
         self.infile_name = None
-
         self.not_interesting_exit_code = None
         self.interesting_exit_code = None
         print("Reducing test case using", name)
@@ -127,12 +133,7 @@ def run_cmd(cmd, timeout):
             compiler_cmd = self._expand_lit_substitutions(cmd)
             compiler_cmd = compiler_cmd.replace("%s", self.input_file_arg(input_file))
             grep_msg = ""
-            crash_flag = "--crash"
-            if self.args.llvm_error:
-                grep_msg += "2>&1 | grep 'LLVM ERROR:' "
-                crash_flag = ""  # it doesn't actually crash now but returns 1
-                if not self.args.crash_message:
-                    self.args.crash_message = "Cannot select"
+            crash_flag = "--crash" if self.args.expected_error_kind in (None, ErrorKind.CRASH) else ""
             if self.args.crash_message:
                 grep_msg += "2>&1 | grep -F " + shlex.quote(self.args.crash_message)
             # exit once the first command crashes
@@ -343,6 +344,10 @@ class Options(object):
         self.no_initial_reduce = args.no_initial_reduce  # type: bool
         self.crash_message = args.crash_message  # type: str
         self.llvm_error = args.llvm_error  # type: bool
+        # could also be an LLVM error or Address Sanitizer error that returns a non-crash exit code
+        self.expected_error_kind = None  # type: ErrorKind
+        if self.llvm_error:
+            self.expected_error_kind = ErrorKind.LLVM_ERROR
 
     @property
     def clang_cmd(self):
@@ -443,32 +448,49 @@ class Reducer(object):
             die("Could not compute input file for crash reproducer")
         return real_in_file
 
-    def _check_crash(self, command, infile, proc_info: dict=None):
-        full_cmd = [str(self.options.not_cmd), "--crash"] + command + [str(infile)]
+    def _check_crash(self, command, infile, proc_info: dict=None) -> typing.Optional[ErrorKind]:
+        # command = ["/tmp/crash"]
+        full_cmd = command + [str(infile)]
         verbose_print(blue("\nRunning" + " ".join(map(shlex.quote, full_cmd))))
         if self.args.reduce_tool == "noop":
             if proc_info is not None:
                 proc_info["stderr"] = b"Assertion `noop' failed."
             print(green(" yes"))
-            return True
+            return ErrorKind.CRASH
         proc = subprocess.run(full_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        # treat fatal llvm errors (cannot select, etc) as crashes too:
-        is_llvm_error = b"LLVM ERROR:" in proc.stderr
+        error_kind = None
+        if proc.returncode < 0:
+            error_kind = ErrorKind.CRASH
+        else:
+            verbose_print("Exit code", proc.returncode, "was not a crash, checking stderr for known error.")
+            verbose_print("stderr:", proc.stderr)
+            # treat fatal llvm errors (cannot select, etc)as crashes too
+            # Also ASAN errors just return 1 instead of a negative exit code so we have to grep the message
+            for kind in ErrorKind:
+                if kind.value:
+                    verbose_print("Checking for", kind.value)
+                    if kind.value in proc.stderr:
+                        verbose_print("Crash was", kind)
+                        error_kind = kind
+                        break
         if proc_info is not None:  # To get the initial error message:
             proc_info["stdout"] = proc.stdout
             proc_info["stderr"] = proc.stderr
             proc_info["returncode"] = proc.returncode
-        if proc.returncode == 0 or is_llvm_error:
+        if error_kind:
+            if self.options.expected_error_kind and self.options.expected_error_kind != error_kind:
+                print(red(" yes, but got " + error_kind.name + " instead of " + self.options.expected_error_kind.name))
+                return None
             if not self.options.crash_message or (self.options.crash_message in proc.stderr.decode("utf-8")):
                 print(green(" yes"))
-                return True
+                return error_kind
             else:
                 print(red(" yes, but with a different crash message!"))
                 print("Note: Expected crash message '", bold(self.options.crash_message), "' not found in:\n",
                       proc.stderr.decode("utf-8"), sep="")
-                return False
+                return None
         print(red(" no"))
-        return False
+        return None
 
     @staticmethod
     def _filter_args(args, *, noargs_opts_to_remove=list(), noargs_opts_to_remove_startswith=list(),
@@ -524,15 +546,21 @@ class Reducer(object):
             r"LLVM IR generation of declaration '(.+)'",
             r"Generating code for declaration '(.+)'",
             # error in backend:
-            r"error in backend:(.+)"
+            r"error in backend:(.+)",
+            # TODO: add another grep for the program counter
         )]
+        regexes = [(r, 0) for r in regexes]
+        # For this crash message we only want group 1
+        regexes.append((re.compile(r"ERROR: (AddressSanitizer: .+ on address) 0x[0-9a-fA-F]+ (at pc 0x[0-9a-fA-F]+)"), 1))
+
         for line in stderr.decode("utf-8").splitlines():
             # Check for failed assertions:
-            for r in regexes:
+            for r, index in regexes:
                 match = r.search(line)
                 if match:
-                    print("Inferred crash message bytes: ", match.group(0).encode("utf-8"))
-                    message = match.group(0)
+                    print("Inferred crash message bytes: ", match.group(index).encode("utf-8"))
+                    print(len(match.groups()))
+                    message = match.group(index)
                     # if "\x1b" in message:
                     #     message = message[:message.find("\x1b")]
                     # print("Inferred crash message bytes (ANSI escape sequences might break grep): ",
@@ -552,7 +580,8 @@ class Reducer(object):
         full_cmd = new_command.copy()
         print("Checking whether reproducer crashes with ", self.options.clang_cmd, ":", sep="", end="", flush=True)
         crash_info = dict()
-        if not self._check_crash(new_command, infile, crash_info):
+        self.options.expected_error_kind = self._check_crash(new_command, infile, crash_info)
+        if not self.options.expected_error_kind:
             die("Crash reproducer no longer crashes?")
 
         if not self.options.crash_message:
@@ -923,7 +952,6 @@ def main():
                         help="Treat the test case as not interesting if it runs longer than n seconds")
     parser.add_argument("--extremely-verbose", action="store_true", help="Print tons of debug output")
     parser.add_argument("--llvm-error", action="store_true", help="Reduce a LLVM ERROR: message instead of a crash")
-    # TODO: infer this automatically from the crash reproducer?
     parser.add_argument("--crash-message", help="If set the crash must contain this message to be accepted for reduction."
                                                 " This is useful if creduce ends up generating another crash bug that is not the one being debugged.")
     parser.add_argument("--reduce-tool", help="The tool to use for test case reduction. "

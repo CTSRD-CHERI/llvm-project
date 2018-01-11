@@ -1853,7 +1853,10 @@ CodeGenFunction::EmitAsmInputLValue(const TargetInfo::ConstraintInfo &Info,
     }
   } else {
     Arg = InputValue.getPointer();
-    ConstraintStr += '*';
+    // An 'm' constraint will have been rewritten to 'C' if the input expr is a
+    // CHERI capability type. However, don't make an indirect input.
+    if (!InputType->isCHERICapabilityType(getContext()))
+      ConstraintStr += '*';
   }
 
   return Arg;
@@ -2098,6 +2101,21 @@ void CodeGenFunction::EmitAsmStmt(const AsmStmt &S) {
     InputConstraint = AddVariableConstraints(
         InputConstraint, *InputExpr->IgnoreParenNoopCasts(getContext()),
         getTarget(), CGM, S, false /* No EarlyClobber */);
+
+    // CHERI: Rewrite 'r' and 'm' constraints to C if the input expr is a capability
+    if (Info.allowsRegister() || Info.allowsMemory()) {
+      if(InputExpr->getType()->isCHERICapabilityType(getContext())) {
+        std::size_t rfound = InputConstraint.find("r");
+        std::size_t mfound = InputConstraint.find("m");
+        if (rfound != std::string::npos && mfound != std::string::npos) {
+          InputConstraint.replace(rfound, 1, "C");
+          InputConstraint.erase(mfound, 1);
+        } else if (rfound != std::string::npos)
+          InputConstraint.replace(rfound, 1, "C");
+        else if (mfound != std::string::npos)
+          InputConstraint.replace(mfound, 1, "C");
+      }
+    }
 
     llvm::Value *Arg = EmitAsmInput(Info, InputExpr, Constraints);
 
