@@ -492,10 +492,25 @@ def : InstAlias<"cgetdefault $dst",
 def : InstAlias<"csetdefault $src",
                 (CIncOffset C0, CheriOpnd:$src, ZERO_64), 1>;
 
+def : InstAlias<"cgetkr1c $dst",
+                (CIncOffset CheriOpnd:$dst, C27, ZERO_64), 1>;
+def : InstAlias<"csetkr1c $src",
+                (CIncOffset C27, CheriOpnd:$src, ZERO_64), 1>;
+
+def : InstAlias<"cgetkr2c $dst",
+                (CIncOffset CheriOpnd:$dst, C28, ZERO_64), 1>;
+def : InstAlias<"csetkr2c $src",
+                (CIncOffset C28, CheriOpnd:$src, ZERO_64), 1>;
+
 def : InstAlias<"cgetkcc $dst",
                 (CIncOffset CheriOpnd:$dst, C29, ZERO_64), 1>;
 def : InstAlias<"csetkcc $src",
                 (CIncOffset C29, CheriOpnd:$src, ZERO_64), 1>;
+
+def : InstAlias<"cgetkdc $dst",
+                (CIncOffset CheriOpnd:$dst, C30, ZERO_64), 1>;
+def : InstAlias<"csetkdc $src",
+                (CIncOffset C30, CheriOpnd:$src, ZERO_64), 1>;
 
 def : InstAlias<"cgetepcc $dst",
                 (CIncOffset CheriOpnd:$dst, C31, ZERO_64), 1>;

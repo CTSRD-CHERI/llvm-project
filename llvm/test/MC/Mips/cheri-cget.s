@@ -47,6 +47,25 @@
 # CHECK:  encoding: [0x48,0x1d,0x20,0x11]
 	CSetKCC $c4
 
+# CHECK: cgetkdc	 $c4
+# CHECK:  encoding: [0x48,0x04,0xf0,0x11]
+	CGetKDC $c4
+# CHECK: csetkdc	 $c4
+# CHECK:  encoding: [0x48,0x1e,0x20,0x11]
+	CSetKDC $c4
+# CHECK: cgetk1rc	 $c4
+# CHECK:  encoding: [0x48,0x04,0xd8,0x11]
+	CGetK1RC $c4
+# CHECK: csetk1rc	 $c4
+# CHECK:  encoding: [0x48,0x1b,0x20,0x11]
+	CSetK1RC $c4
+# CHECK: cgetk2rc	 $c4
+# CHECK:  encoding: [0x48,0x04,0xe0,0x11]
+	CGetK2RC $c4
+# CHECK: csetk2rc	 $c4
+# CHECK:  encoding: [0x48,0x1c,0x20,0x11]
+	CSetK2RC $c4
+
 # CHECK: csub	 $1, $c2, $c3
 # CHECK:  encoding: [0x48,0x01,0x10,0xca]
 	csub	$1, $c2, $c3
