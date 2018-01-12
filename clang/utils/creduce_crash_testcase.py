@@ -50,6 +50,7 @@ def run(cmd: list, **kwargs):
 
 class ErrorKind(Enum):
     CRASH = None
+    INFINITE_LOOP = None
     LLVM_ERROR = b"LLVM ERROR:"
     FATAL_ERROR = b"fatal error:"
     AddressSanitizer_ERROR = b"ERROR: AddressSanitizer:"
@@ -138,7 +139,10 @@ def run_cmd(cmd, timeout):
             if self.args.crash_message:
                 grep_msg += "2>&1 | grep -F " + shlex.quote(self.args.crash_message)
             # exit once the first command crashes
-            result += """
+            timeout_exitcode = self.not_interesting_exit_code
+            if self.args.expected_error_kind == ErrorKind.INFINITE_LOOP:
+                timeout_exitcode = self.interesting_exit_code
+        result += """
 try:
     command = r'''{not_cmd} {crash_flag} {command} {grep_msg} '''
     # print(command)
@@ -147,12 +151,12 @@ try:
         sys.exit({not_interesting})
 except subprocess.TimeoutExpired:
     print("TIMED OUT", file=sys.stderr)
-    sys.exit({not_interesting})
+    sys.exit({timeout_exitcode})
 except Exception as e:
     print("SOME OTHER ERROR:", e)
     sys.exit({not_interesting})
 
-""".format(timeout_arg=timeout_arg, not_interesting=self.not_interesting_exit_code,
+""".format(timeout_arg=timeout_arg, not_interesting=self.not_interesting_exit_code, timeout_exitcode=timeout_exitcode,
            not_cmd=self.args.not_cmd, crash_flag=crash_flag, command=compiler_cmd, grep_msg=grep_msg)
 
         return result + "sys.exit(" + str(self.interesting_exit_code) + ")"
@@ -349,6 +353,10 @@ class Options(object):
         self.expected_error_kind = None  # type: ErrorKind
         if self.llvm_error:
             self.expected_error_kind = ErrorKind.LLVM_ERROR
+        if args.infinite_loop:
+            if not self.timeout:
+                self.timeout = 30
+            self.expected_error_kind = ErrorKind.INFINITE_LOOP
 
     @property
     def clang_cmd(self):
@@ -458,22 +466,29 @@ class Reducer(object):
                 proc_info["stderr"] = b"Assertion `noop' failed."
             print(green(" yes"))
             return ErrorKind.CRASH
-        proc = subprocess.run(full_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        error_kind = None
-        if proc.returncode < 0:
-            error_kind = ErrorKind.CRASH
-        else:
-            verbose_print("Exit code", proc.returncode, "was not a crash, checking stderr for known error.")
-            verbose_print("stderr:", proc.stderr)
-            # treat fatal llvm errors (cannot select, etc)as crashes too
-            # Also ASAN errors just return 1 instead of a negative exit code so we have to grep the message
-            for kind in ErrorKind:
-                if kind.value:
-                    verbose_print("Checking for", kind.value)
-                    if kind.value in proc.stderr:
-                        verbose_print("Crash was", kind)
-                        error_kind = kind
-                        break
+        try:
+            infinite_loop_timeout = self.options.timeout if self.options.timeout else 30
+            proc = subprocess.run(full_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=infinite_loop_timeout)
+            error_kind = None
+            if proc.returncode < 0:
+                error_kind = ErrorKind.CRASH
+            else:
+                verbose_print("Exit code", proc.returncode, "was not a crash, checking stderr for known error.")
+                verbose_print("stderr:", proc.stderr)
+                # treat fatal llvm errors (cannot select, etc)as crashes too
+                # Also ASAN errors just return 1 instead of a negative exit code so we have to grep the message
+                for kind in ErrorKind:
+                    if kind.value:
+                        verbose_print("Checking for", kind.value)
+                        if kind.value in proc.stderr:
+                            verbose_print("Crash was", kind)
+                            error_kind = kind
+                            break
+        except subprocess.TimeoutExpired as e:
+            proc = subprocess.CompletedProcess(e.args, -1, e.stdout, e.stderr)
+            error_kind = ErrorKind.INFINITE_LOOP
+            verbose_print("Running took longer than", infinite_loop_timeout, "seconds -> assuming infinite loop")
+
         if proc_info is not None:  # To get the initial error message:
             proc_info["stdout"] = proc.stdout
             proc_info["stderr"] = proc.stderr
@@ -585,7 +600,7 @@ class Reducer(object):
         if not self.options.expected_error_kind:
             die("Crash reproducer no longer crashes?")
 
-        if not self.options.crash_message:
+        if not self.options.crash_message and self.options.expected_error_kind != ErrorKind.INFINITE_LOOP:
             print("Attempting to infer crash message from process output")
             inferred_msg = self._infer_crash_message(crash_info["stderr"])
             if inferred_msg:
@@ -953,6 +968,8 @@ def main():
                         help="Treat the test case as not interesting if it runs longer than n seconds")
     parser.add_argument("--extremely-verbose", action="store_true", help="Print tons of debug output")
     parser.add_argument("--llvm-error", action="store_true", help="Reduce a LLVM ERROR: message instead of a crash")
+    parser.add_argument("--infinite-loop", action="store_true", help="Try debugging an infinite loop (-> timed out testcases are interesting)."
+                                                                     "If timeout is not set this will set it to 30 seconds")
     parser.add_argument("--crash-message", help="If set the crash must contain this message to be accepted for reduction."
                                                 " This is useful if creduce ends up generating another crash bug that is not the one being debugged.")
     parser.add_argument("--reduce-tool", help="The tool to use for test case reduction. "
