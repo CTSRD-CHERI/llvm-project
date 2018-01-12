@@ -254,6 +254,12 @@ def CClearTag  : CheriFmt2Op<0xb, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2),
                               "ccleartag\t$r1, $r2",
                               [(set CheriOpnd:$r1, (int_cheri_cap_tag_clear CheriOpnd:$r2))]>;
 
+def CReadHwr : CheriFmt2Op<0xd, (outs CheriOpnd:$cd), (ins CheriHWRegsOpnd:$chwr),
+                              "creadhwr\t$cd, $chwr",
+                              []>;
+def CWriteHwr : CheriFmt2Op<0xe, (outs), (ins CheriOpnd:$cs, CheriHWRegsOpnd:$chwr),
+                              "cwritehwr\t$cs, $chwr",
+                              []>;
 
 // PCC access
 def CGetPCC : CheriFmt1Op<0x0, (outs CheriOpnd:$r1), (ins),

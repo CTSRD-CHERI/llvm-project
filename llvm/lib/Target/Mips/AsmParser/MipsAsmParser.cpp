@@ -736,11 +736,12 @@ public:
     RegKind_COP3 = 512,   /// COP3
     RegKind_COP0 = 1024,  /// COP0
     RegKind_Cheri = 2048,
+    RegKind_CheriHWRegs = 4096,
     /// Potentially any (e.g. $1)
     RegKind_Numeric = RegKind_GPR | RegKind_FGR | RegKind_FCC | RegKind_MSA128 |
                       RegKind_MSACtrl | RegKind_COP2 | RegKind_ACC |
                       RegKind_CCR | RegKind_HWRegs | RegKind_COP3 | RegKind_COP0
-                      | RegKind_Cheri
+                      | RegKind_Cheri | RegKind_CheriHWRegs
   };
 
 private:
@@ -979,6 +980,13 @@ private:
     unsigned ClassID = Mips::HWRegsRegClassID;
     return RegIdx.RegInfo->getRegClass(ClassID).getRegister(RegIdx.Index);
   }
+  /// Coerce the register to CheriHWRegs and return the real register for the
+  /// current target.
+  unsigned getCheriHWRegsReg() const {
+    assert(isRegIdx() && (RegIdx.Kind & RegKind_CheriHWRegs) && "Invalid access!");
+    unsigned ClassID = Mips::CheriHWRegsRegClassID;
+    return RegIdx.RegInfo->getRegClass(ClassID).getRegister(RegIdx.Index);
+  }
 public:
   /// Coerce the register to Cheri capability register and return the real
   /// register for the current target.
@@ -1141,6 +1149,11 @@ public:
   void addHWRegsAsmRegOperands(MCInst &Inst, unsigned N) const {
     assert(N == 1 && "Invalid number of operands!");
     Inst.addOperand(MCOperand::createReg(getHWRegsReg()));
+  }
+
+  void addCheriHWRegsAsmRegOperands(MCInst &Inst, unsigned N) const {
+    assert(N == 1 && "Invalid number of operands!");
+    Inst.addOperand(MCOperand::createReg(getCheriHWRegsReg()));
   }
 
   void addCheriAsmRegOperands(MCInst &Inst, unsigned N) const {
@@ -1519,6 +1532,12 @@ public:
     return CreateReg(Index, Str, RegKind_HWRegs, RegInfo, S, E, Parser);
   }
 
+  static std::unique_ptr<MipsOperand>
+  CreateCheriHWRegsReg(unsigned Index, StringRef Str, const MCRegisterInfo *RegInfo,
+                       SMLoc S, SMLoc E, MipsAsmParser &Parser) {
+    return CreateReg(Index, Str, RegKind_CheriHWRegs, RegInfo, S, E, Parser);
+  }
+
   /// Create a register that is definitely an FCC.
   /// This is typically only used for named registers such as $fcc0.
   static std::unique_ptr<MipsOperand>
@@ -1651,6 +1670,10 @@ public:
 
   bool isHWRegsAsmReg() const {
     return isRegIdx() && RegIdx.Kind & RegKind_HWRegs && RegIdx.Index <= 31;
+  }
+
+  bool isCheriHWRegsAsmReg() const {
+    return isRegIdx() && RegIdx.Kind & RegKind_CheriHWRegs && RegIdx.Index <= 31;
   }
 
   bool isCCRAsmReg() const {
