@@ -1,9 +1,8 @@
 # RUN: %cheri_llvm-mc %s -show-encoding | FileCheck %s
-# RUN: %cheri_llvm-mc %s -show-encoding 2>&1 | FileCheck %s -check-prefix=WARN
+# RUN: %cheri_llvm-mc %s -show-encoding 2>&1 -defsym=BAD=1| FileCheck %s -check-prefix=WARN
 #
 # Check that the assembler is able to handle capability get instructions.
 #
-
 # CHECK: cseal	$c1, $c2, $c3
 # CHECK-SAME: encoding: [0x48,0x01,0x10,0xcb]
 	cseal	$c1, $c2, $c3
@@ -50,10 +49,82 @@
 # CHECK: cgetdefault	$c1
 # CHECK-SAME: encoding: [0x48,0x01,0x00,0x11]
 	CGetDefault	$c1
-# WARN: warning: Direct access to c0 is deprecated.
-# WARN-NEXT: CIncOffset $c0, $c1, $0
-# WARN-NEXT:           ^
-# CHECK: csetdefault	 $c1
-# CHECK-SAME: encoding: [0x48,0x00,0x08,0x11]
-	CIncOffset	$c0, $c1, $0
 
+.ifdef BAD
+# WARN: warning: Direct access to DDC is deprecated. Use C(Get/Set)Default instead.
+# WARN-NEXT: CMove $c1, $c0
+	CMove	$c1, $c0
+# WARN: warning: Direct access to DDC is deprecated. Use C(Get/Set)Default instead.
+# WARN-NEXT: CMove $c0, $c1
+	CMove	$c0, $c1
+
+# WARN: warning: Direct access to KR1C is deprecated. Use C(Get/Set)KR1C instead.
+# WARN-NEXT:	CMove	$c1, $kr1c
+	CMove	$c1, $kr1c
+# WARN: warning: Direct access to KR1C is deprecated. Use C(Get/Set)KR1C instead.
+# WARN-NEXT:	CMove	$kr1c, $c1
+	CMove	$kr1c, $c1
+# WARN: warning: Direct access to KR1C is deprecated. Use C(Get/Set)KR1C instead.
+# WARN-NEXT:	CMove	$c27, $c1
+	CMove	$c27, $c1
+# WARN: warning: Direct access to KR1C is deprecated. Use C(Get/Set)KR1C instead.
+# WARN-NEXT:	CMove	$c1, $c27
+	CMove	$c1, $c27
+
+# WARN: warning: Direct access to KR2C is deprecated. Use C(Get/Set)KR2C instead.
+# WARN-NEXT:	CMove	$c1, $kr2c
+	CMove	$c1, $kr2c
+# WARN: warning: Direct access to KR2C is deprecated. Use C(Get/Set)KR2C instead.
+# WARN-NEXT:	CMove	$kr2c, $c1
+	CMove	$kr2c, $c1
+# WARN: warning: Direct access to KR2C is deprecated. Use C(Get/Set)KR2C instead.
+# WARN-NEXT:	CMove	$c28, $c1
+	CMove	$c28, $c1
+# WARN: warning: Direct access to KR2C is deprecated. Use C(Get/Set)KR2C instead.
+# WARN-NEXT:	CMove	$c1, $c28
+	CMove	$c1, $c28
+
+
+# WARN: warning: Direct access to KCC is deprecated. Use C(Get/Set)KCC instead.
+# WARN-NEXT:	CMove	$c1, $kcc
+	CMove	$c1, $kcc
+# WARN: warning: Direct access to KCC is deprecated. Use C(Get/Set)KCC instead.
+# WARN-NEXT:	CMove	$kcc, $c1
+	CMove	$kcc, $c1
+# WARN: warning: Direct access to KCC is deprecated. Use C(Get/Set)KCC instead.
+# WARN-NEXT:	CMove	$c29, $c1
+	CMove	$c29, $c1
+# WARN: warning: Direct access to KCC is deprecated. Use C(Get/Set)KCC instead.
+# WARN-NEXT:	CMove	$c1, $c29
+	CMove	$c1, $c29
+
+# WARN: warning: Direct access to KDC is deprecated. Use C(Get/Set)KDC instead.
+# WARN-NEXT:	CMove	$c1, $kdc
+	CMove	$c1, $kdc
+# WARN: warning: Direct access to KDC is deprecated. Use C(Get/Set)KDC instead.
+# WARN-NEXT:	CMove	$kdc, $c1
+	CMove	$kdc, $c1
+# WARN: warning: Direct access to KDC is deprecated. Use C(Get/Set)KDC instead.
+# WARN-NEXT:	CMove	$c30, $c1
+	CMove	$c30, $c1
+# WARN: warning: Direct access to KDC is deprecated. Use C(Get/Set)KDC instead.
+# WARN-NEXT:	CMove	$c1, $c30
+	CMove	$c1, $c30
+
+# WARN: warning: Direct access to EPCC is deprecated. Use C(Get/Set)EPCC instead.
+# WARN-NEXT:	CMove	$c1, $epcc
+	CMove	$c1, $epcc
+# WARN: warning: Direct access to EPCC is deprecated. Use C(Get/Set)EPCC instead.
+# WARN-NEXT:	CMove	$epcc, $c1
+	CMove	$epcc, $c1
+# WARN: warning: Direct access to EPCC is deprecated. Use C(Get/Set)EPCC instead.
+# WARN-NEXT:	CMove	$c31, $c1
+	CMove	$c31, $c1
+# WARN: warning: Direct access to EPCC is deprecated. Use C(Get/Set)EPCC instead.
+# WARN-NEXT:	CMove	$c1, $c31
+	CMove	$c1, $c31
+.endif
+
+# FIXME: should this be an error since it bypasses the warnings?
+# but it uses createNumericReg(27, ...)
+#	CMove	$c1, $27
