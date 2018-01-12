@@ -5684,8 +5684,9 @@ int MipsAsmParser::matchFPURegisterName(StringRef Name) {
 int MipsAsmParser::matchCheriRegisterName(StringRef Name) {
   MCAsmParser &Parser = getParser();
 
+  int CC = -1;
   if (ABI.IsCheriPureCap()) {
-    int CC = StringSwitch<unsigned>(Name)
+    CC = StringSwitch<unsigned>(Name)
            .Case("cbp", ABI.GetBasePtr() - Mips::C0)
            .Case("cfp", ABI.GetFramePtr() - Mips::C0)
            .Case("cgp", ABI.GetGlobalCapability() - Mips::C0)
@@ -5693,29 +5694,44 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name) {
            .Case("csp", ABI.GetStackPtr() - Mips::C0)
            .Case("ddc", 0/*ABI.GetDefaultDataCapability() - Mips::C0 */)
            .Default(-1);
-    if (CC != -1)
+  }
+  if (CC == -1) {
+    if (Name[0] == 'c') {
+      StringRef NumString = Name.substr(1);
+      int IntVal;
+      if (NumString.getAsInteger(10, IntVal))
+        return -1; // This is not an integer.
+      if (IntVal < 0 || IntVal > 31) // Maximum index for CHERI register.
+        return -1;
+      CC = IntVal;
+    } else {
+      CC = StringSwitch<unsigned>(Name)
+        .Case("ddc", 0)
+        .Case("idc", 26)
+        .Case("kr1c", 27)
+        .Case("kr2c", 28)
+        .Case("kcc", 29)
+        .Case("kdc", 30)
+        .Case("epcc", 31)
+        .Default(-1);
+    }
+  }
+  auto BadReg = [&](const Twine & Reg, const char* Replacement = nullptr) {
+      Warning(Parser.getTok().getLoc(), "Direct access to " + Reg +
+        " is deprecated. Use C(Get/Set)" + (Replacement ? Replacement : Reg) +
+        " instead.");
+      // TODO: turn this into an error and return -2
       return CC;
+  };
+  switch (CC) {
+    case 0: return BadReg("DDC", "Default");
+    case 27: return BadReg("KR1C");
+    case 28: return BadReg("KR2C");
+    case 29: return BadReg("KCC");
+    case 30: return BadReg("KDC");
+    case 31: return BadReg("EPCC");
+    default: break;
   }
-
-  if (Name[0] == 'c') {
-    StringRef NumString = Name.substr(1);
-    unsigned IntVal;
-    if (NumString.getAsInteger(10, IntVal))
-      return -1; // This is not an integer.
-    if (IntVal == 0)
-      Warning(Parser.getTok().getLoc(), "Direct access to c0 is deprecated.");
-    if (IntVal > 31) // Maximum index for CHERI register.
-      return -1;
-    return IntVal;
-  }
-  int CC = StringSwitch<unsigned>(Name)
-           .Case("idc", 26)
-           .Case("kr1c", 27)
-           .Case("kr2c", 28)
-           .Case("kcc", 29)
-           .Case("kdc", 30)
-           .Case("epcc", 31)
-           .Default(-1);
   return CC;
 }
 
@@ -6136,6 +6152,8 @@ MipsAsmParser::matchAnyRegisterNameWithoutDollar(OperandVector &Operands,
 
   Index = matchCheriRegisterName(Identifier);
   if (Index != -1) {
+    if (Index == -2)
+      return MatchOperand_ParseFail;
     Operands.push_back(MipsOperand::CreateCheriReg(
         Index, Identifier, getContext().getRegisterInfo(), S, getLexer().getLoc(), *this));
     return MatchOperand_Success;

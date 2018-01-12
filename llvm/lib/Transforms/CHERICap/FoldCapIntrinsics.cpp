@@ -127,6 +127,8 @@ class CHERICapFoldIntrinsics : public ModulePass {
 
   // Returns the offset increment if V is a GEP instruction of
   Value *getOffsetIncrement(Value *V, Value **Arg) {
+    if (!V)
+      return nullptr;
     Value *Offset = nullptr;
     if (match(V, m_Intrinsic<Intrinsic::cheri_cap_offset_increment>(
                      m_Value(*Arg), m_Value(Offset)))) {
@@ -197,9 +199,13 @@ class CHERICapFoldIntrinsics : public ModulePass {
       // If there is only a single use of the setoffset result, we might be
       // able to fold it into a single setoffset (for a GEP or incoffset)
       Value* Arg = nullptr;
-      // errs() << "OnlyUser: "; OnlyUser->dump();
       if (Value *Increment = getOffsetIncrement(OnlyUser, &Arg)) {
-        // errs() << "Increment: "; OnlyUser->dump();
+#if 0
+        errs() << "CI before folding: "; CI->dump();
+        errs() << "Block before folding: "; CI->getParent()->dump();
+        errs() << "OnlyUser: "; OnlyUser->dump();
+        errs() << "Increment: "; Increment->dump();
+#endif
         assert(Arg == CI);
         Instruction *ReplacedInstr = cast<Instruction>(OnlyUser);
         IRBuilder<> B(ReplacedInstr);
@@ -208,14 +214,24 @@ class CHERICapFoldIntrinsics : public ModulePass {
         // We have to move this instruction after the offset instruction
         // because otherwise we use a value that has not yet been defined
         CI->moveAfter(ReplacedInstr);
-        ReplacedInstr->replaceAllUsesWith(CI);
-        // erasing here can cause a crash
-        // ReplacedInstr->eraseFromParent();
-        ToErase.insert(ReplacedInstr);
         // Keep doing this transformation for incoffset chains with only a
         // single user:
-        OnlyUser = CI->hasOneUse() ? *CI->user_begin() : nullptr;
+        OnlyUser = ReplacedInstr->hasOneUse() ? *ReplacedInstr->user_begin() : nullptr;
+        ReplacedInstr->replaceAllUsesWith(CI);
+#if 0
+        errs() << "ReplacedInstr (" << ReplacedInstr->getNumUses() << " uses): "; ReplacedInstr->dump();
+        errs() << "ReplacedInstr: "; ReplacedInstr->dump();
+        errs() << "New OnlyUser: "; if (OnlyUser) OnlyUser->dump(); else errs() << "nullptr\n";
+        errs() << "New CI (" << CI->getNumUses() << " uses): "; CI->dump();
+        errs() << "New Block: "; CI->getParent()->dump();
+#endif
+        // erasing here can cause a crash -> add to list so that caller can remove it
+        // ReplacedInstr->eraseFromParent();
+        ToErase.insert(ReplacedInstr);
+        assert(OnlyUser != ReplacedInstr && "Should not cause an infinite loop!");
         Modified = true;
+        if (!OnlyUser)
+          break;
       } else {
         break;
       }
@@ -229,8 +245,10 @@ class CHERICapFoldIntrinsics : public ModulePass {
     for (Value *V : SetOffset->users())
       SetOffsets.push_back(cast<CallInst>(V));
     for (CallInst *CI : SetOffsets) {
-      if (ToErase.count(CI))
+      if (ToErase.count(CI)) {
+        assert(CI->hasNUses(0));
         continue;
+      }
       // fold chains of set-offset, (inc-offset/GEP)+ into a single set-offset
       foldIncOffsetSetOffsetOnlyUserIncrement(CI, ToErase);
 
@@ -265,8 +283,10 @@ class CHERICapFoldIntrinsics : public ModulePass {
     for (Value *V : IncOffset->users())
       IncOffsets.push_back(cast<CallInst>(V));
     for (CallInst *CI : IncOffsets) {
-      if (ToErase.count(CI))
+      if (ToErase.count(CI)) {
+        assert(CI->hasNUses(0));
         continue;
+      }
       // fold chains of inc-offset, (inc-offset/GEP)+ into a single inc-offset
       foldIncOffsetSetOffsetOnlyUserIncrement(CI, ToErase);
 
