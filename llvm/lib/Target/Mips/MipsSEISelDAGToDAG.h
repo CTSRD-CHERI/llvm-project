@@ -37,8 +37,6 @@ private:
 
   bool replaceUsesWithZeroReg(MachineRegisterInfo *MRI, const MachineInstr&);
 
-  bool replaceUsesWithZeroCapReg(MachineRegisterInfo *MRI, MachineInstr&);
-
   std::pair<SDNode *, SDNode *> selectMULT(SDNode *N, unsigned Opc,
                                            const SDLoc &dl, EVT Ty, bool HasLo,
                                            bool HasHi);

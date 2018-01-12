@@ -72,9 +72,6 @@ public:
   void setSaveS2() { SaveS2 = true; }
   bool hasSaveS2() const { return SaveS2; }
 
-  void setIncomingZeroReg(unsigned Reg) { IncomingZeroReg = Reg; }
-  unsigned getIncomingZeroReg() const { return IncomingZeroReg; }
-
   int getMoveF64ViaSpillFI(const TargetRegisterClass *RC);
 
   std::map<const char *, const Mips16HardFloatInfo::FuncSignature *>
@@ -84,10 +81,6 @@ private:
   virtual void anchor();
 
   MachineFunction& MF;
-
-  /// Register containing an incoming zero value.  This may be cheaper to use
-  /// than using an instruction for a zero.
-  unsigned IncomingZeroReg = 0;
 
   /// SRetReturnReg - Some subtargets require that sret lowering includes
   /// returning the value of the returned struct in a register. This field
