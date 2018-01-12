@@ -3863,11 +3863,8 @@ SDValue MipsTargetLowering::LowerFormalArguments(
       // Create load nodes to retrieve arguments from the stack
       SDValue ArgValue;
       if (ABI.IsCheriPureCap()) {
-        if (CapArgReg == -1U) {
+        if (CapArgReg == -1U)
           CapArgReg = MF.addLiveIn(Mips::C13, getRegClassFor(CapType));
-          if (!IsVarArg)
-            MipsFI->setIncomingZeroReg(Mips::C13);
-        }
         SDValue Addr = DAG.getPointerAdd(DL, DAG.getCopyFromReg(Chain, DL,
               CapArgReg, CapType), VA.getLocMemOffset());
         ArgValue = DAG.getLoad(LocVT, DL, Chain, Addr, MachinePointerInfo());
