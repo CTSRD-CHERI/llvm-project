@@ -231,7 +231,8 @@ class RunBugpoint(ReduceTool):
                 expected_output_file.unlink()
 
         # use a custom script to check for matching crash message:
-        if self.args.crash_message:
+        # This is also needed when reducing infinite loops since otherwise bugpoint will just freeze
+        if self.args.crash_message or self.args.expected_error_kind == ErrorKind.INFINITE_LOOP:
             # check that the reduce script is interesting:
             # http://blog.llvm.org/2015/11/reduce-your-testcases-with-bugpoint-and.html
             # ./bin/bugpoint -compile-custom -compile-command=./check.sh -opt-command=./bin/opt my_test_case.ll
@@ -497,7 +498,8 @@ class Reducer(object):
             if self.options.expected_error_kind and self.options.expected_error_kind != error_kind:
                 print(red(" yes, but got " + error_kind.name + " instead of " + self.options.expected_error_kind.name))
                 return None
-            if not self.options.crash_message or (self.options.crash_message in proc.stderr.decode("utf-8")):
+            crash_message_found = not self.options.crash_message or (self.options.crash_message in proc.stderr.decode("utf-8"))
+            if error_kind == ErrorKind.INFINITE_LOOP or crash_message_found:
                 print(green(" yes"))
                 return error_kind
             else:
@@ -600,17 +602,20 @@ class Reducer(object):
         if not self.options.expected_error_kind:
             die("Crash reproducer no longer crashes?")
 
-        if not self.options.crash_message and self.options.expected_error_kind != ErrorKind.INFINITE_LOOP:
-            print("Attempting to infer crash message from process output")
-            inferred_msg = self._infer_crash_message(crash_info["stderr"])
-            if inferred_msg:
-                print("Inferred crash message as '" + green(inferred_msg) + "'")
-                if not input("Use this message? [Y/n]").lower().startswith("n"):
-                    self.options.crash_message = inferred_msg
+        if not self.options.crash_message:
+            if self.options.expected_error_kind == ErrorKind.INFINITE_LOOP:
+                self.options.crash_message = "INFINITE LOOP WHILE RUNNING, THIS GREP SHOULD NEVER MATCH!"
             else:
-                print("Could not infer crash message, stderr was:\n\n")
-                print(crash_info["stderr"].decode("utf-8"))
-                print("\n\n")
+                print("Attempting to infer crash message from process output")
+                inferred_msg = self._infer_crash_message(crash_info["stderr"])
+                if inferred_msg:
+                    print("Inferred crash message as '" + green(inferred_msg) + "'")
+                    if not input("Use this message? [Y/n]").lower().startswith("n"):
+                        self.options.crash_message = inferred_msg
+                else:
+                    print("Could not infer crash message, stderr was:\n\n")
+                    print(crash_info["stderr"].decode("utf-8"))
+                    print("\n\n")
         if not self.options.crash_message:
             print("Could not infer crash message from crash reproducer.")
             print(red("WARNING: Reducing without specifying the crash message will probably result"
