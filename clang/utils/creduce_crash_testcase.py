@@ -50,7 +50,7 @@ def run(cmd: list, **kwargs):
 
 class ErrorKind(Enum):
     CRASH = None
-    INFINITE_LOOP = None
+    INFINITE_LOOP = b"INFINITE LOOP:"
     LLVM_ERROR = b"LLVM ERROR:"
     FATAL_ERROR = b"fatal error:"
     AddressSanitizer_ERROR = b"ERROR: AddressSanitizer:"
@@ -603,6 +603,8 @@ class Reducer(object):
         if not self.options.expected_error_kind:
             die("Crash reproducer no longer crashes?")
 
+        verbose_print("Reducing a", self.options.expected_error_kind, "with message =", self.options.crash_message)
+        verbose_print("Stderr was", crash_info["stderr"])
         if not self.options.crash_message:
             if self.options.expected_error_kind == ErrorKind.INFINITE_LOOP:
                 self.options.crash_message = "INFINITE LOOP WHILE RUNNING, THIS GREP SHOULD NEVER MATCH!"
