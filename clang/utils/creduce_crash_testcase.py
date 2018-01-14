@@ -467,9 +467,10 @@ class Reducer(object):
                 proc_info["stderr"] = b"Assertion `noop' failed."
             print(green(" yes"))
             return ErrorKind.CRASH
+        infinite_loop_timeout = self.options.timeout if self.options.timeout else 30
         try:
-            infinite_loop_timeout = self.options.timeout if self.options.timeout else 30
-            proc = subprocess.run(full_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=infinite_loop_timeout)
+            proc = subprocess.run(full_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                  timeout=infinite_loop_timeout)
             error_kind = None
             if proc.returncode < 0:
                 error_kind = ErrorKind.CRASH
