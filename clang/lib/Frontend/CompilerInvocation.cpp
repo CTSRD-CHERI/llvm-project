@@ -547,8 +547,10 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
     OPT_fuse_register_sized_bitfield_access);
   Opts.RelaxedAliasing = Args.hasArg(OPT_relaxed_aliasing);
   Opts.StructPathTBAA = !Args.hasArg(OPT_no_struct_path_tbaa);
+  // XXXAR: If we don't enable new struct path TBAA we get LLVM verifier issues
+  // when compiling files containing recursive cheri ccall
   Opts.NewStructPathTBAA = !Args.hasArg(OPT_no_struct_path_tbaa) &&
-                           Args.hasArg(OPT_new_struct_path_tbaa);
+    (Args.hasArg(OPT_new_struct_path_tbaa) || Triple.getArch() == llvm::Triple::cheri);
   Opts.FineGrainedBitfieldAccesses =
       Args.hasFlag(OPT_ffine_grained_bitfield_accesses,
                    OPT_fno_fine_grained_bitfield_accesses, false);
