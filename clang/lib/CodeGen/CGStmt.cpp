@@ -1166,10 +1166,10 @@ void CodeGenFunction::EmitCaseStmtRange(const CaseStmt &S) {
 
   llvm::APSInt LHS = S.getLHS()->EvaluateKnownConstInt(getContext());
   if (S.getLHS()->getType()->isCHERICapabilityType(getContext()))
-    LHS = LHS.trunc(64);  // XXXAR: will this always be correct???
+    LHS = LHS.extOrTrunc(Target.getPointerRangeForCHERICapability());
   llvm::APSInt RHS = S.getRHS()->EvaluateKnownConstInt(getContext());
   if (S.getRHS()->getType()->isCHERICapabilityType(getContext()))
-    RHS = RHS.trunc(64);  // XXXAR: will this always be correct???
+    RHS = RHS.extOrTrunc(Target.getPointerRangeForCHERICapability());
 
   // Emit the code for this case. We do this first to make sure it is
   // properly chained from our predecessor before generating the
