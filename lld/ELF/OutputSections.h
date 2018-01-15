@@ -71,12 +71,8 @@ public:
   // it may have a non-null value.
   OutputSection *RelocationSection = nullptr;
 
-  // Initially this field is the number of InputSections that have been added to
-  // the OutputSection so far. Later on, after a call to assignAddresses, it
-  // corresponds to the Elf_Shdr member.
-  uint64_t Size = 0;
-
   // The following fields correspond to Elf_Shdr members.
+  uint64_t Size = 0;
   uint64_t Offset = 0;
   uint64_t LMAOffset = 0;
   uint64_t Addr = 0;
