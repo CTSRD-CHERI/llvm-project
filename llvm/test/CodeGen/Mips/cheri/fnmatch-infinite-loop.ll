@@ -27,13 +27,13 @@ entry:
   unreachable
 }
 ; CHECK-LABEL: fnmatch1:
-; CHECK-LABEL: # BB#0:
+; CHECK-LABEL: # %bb.0:
 ; CHECK-NEXT:         cincoffset      $c11, $c11, -[[@EXPR 2*$CAP_SIZE]]
 ; CHECK-NEXT:         csc     $c24, $zero, [[$CAP_SIZE]]($c11)
 ; CHECK-NEXT:         cincoffset      $c24, $c11, $zero
 ; CHECK-NEXT:         daddiu  $1, $zero, 0
 ; CHECK-NEXT:         cfromptr        $c1, $c0, $zero
-; CHECK-NEXT:                                         # implicit-def: %C2
+; CHECK-NEXT:                                         # implicit-def: %c2
 ; CHECK-NEXT:         csc     $c1, $zero, 0($c2)
 ; CHECK-NEXT:         csd     $1, $zero, [[@EXPR $CAP_SIZE - 8]]($c24)      # 8-byte Folded Spill
 
