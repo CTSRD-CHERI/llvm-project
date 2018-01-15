@@ -776,11 +776,7 @@ class Reducer(object):
             # check if floating point args are relevant
             new_command = self._try_remove_args(
                 new_command + ["-S"], infile, "Checking whether emitting ASM instead of object crashes:",
-                noargs_opts_to_remove=["-mdisable-fp-elim", "-msoft-float"],
-                one_arg_opts_to_remove=["-mfloat-abi"],
-                one_arg_opts_to_remove_if={"-target-feature": lambda a: a == "+soft-float"}
-            )
-
+                noargs_opts_to_remove=["-emit-obj"])
 
         # check if floating point args are relevant
         new_command = self._try_remove_args(
@@ -956,7 +952,6 @@ class Reducer(object):
         for line in f.readlines():
             match = re.match(r".*\s+RUN: (.+)", line)
             if match:
-                self.run_lines.append(line)
                 command = match.group(1).strip()
                 if "%s" not in command:
                     die("RUN: line does not contain %s -> cannot create replacement invocation")
@@ -967,6 +962,7 @@ class Reducer(object):
                 command.append("%s")
                 verbose_print("Final command:", command)
                 self.run_cmds.append(command)
+                self.run_lines.append(line[0:line.find(match.group(1))] + quote_cmd(command))
 
     def run(self):
         # scan test case for RUN: lines
