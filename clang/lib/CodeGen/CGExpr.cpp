@@ -4750,10 +4750,18 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
       V = EmitBitCastOfLValueToProperType(*this, V, RealVarTy);
       CharUnits Alignment = getContext().getDeclAlign(Cls);
       LValue LV = MakeAddrLValue(V, ClsTy, Alignment);
-      RValue RV = EmitLoadOfLValue(LV, E->getLocStart());
-      CallArg Arg(RV, ClsTy, false);
+      Address A1 = Builder.CreateStructGEP(LV.getAddress(), 0, CharUnits::Zero(), "arg1");
+      Address A2 = Builder.CreateStructGEP(LV.getAddress(), 1, CharUnits::Zero(), "arg2");
+      auto Fields = ClsTy->getAs<RecordType>()->getDecl()->fields();
+      auto FieldsIt = Fields.begin();
+      assert(std::distance(Fields.begin(), Fields.end()) == 2);
+      QualType Ty1 = FieldsIt->getType();
+      QualType Ty2 = (++FieldsIt)->getType();
+      CallArg Arg1(RValue::get(Builder.CreateLoad(A1)), Ty1, false);
+      CallArg Arg2(RValue::get(Builder.CreateLoad(A2)), Ty2, false);
       Args.insert(Args.begin(), MethodNumArg);
-      Args.insert(Args.begin(), Arg);
+      Args.insert(Args.begin(), Arg2);
+      Args.insert(Args.begin(), Arg1);
       NewParams.push_back(ClsTy);
     } else {
       Args.insert(Args.begin()+1, MethodNumArg);
