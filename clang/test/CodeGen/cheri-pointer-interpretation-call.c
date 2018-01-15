@@ -6,7 +6,8 @@
 
 struct cheri_class
 {
-	__capability void *a, *b;
+  void * __capability a;
+  void * __capability b;
 };
 
 struct cheri_class def;
@@ -22,10 +23,10 @@ void *baz(void*, void*);
 
 void *bar(void *a, void *b)
 {
-	// CHECK: call chericcallcc i8* @cheri_invoke(i8 addrspace(200)* inreg %{{.*}}, i8 addrspace(200)* inreg %{{.*}}, i64 zeroext %{{.*}}, i8* %{{.*}}, i8* %{{.*}})
+	// CHECK: call chericcallcc i8* @cheri_invoke(i8 addrspace(200)* %{{.*}}, i8 addrspace(200)* %{{.*}}, i64 zeroext %{{.*}}, i8* %{{.*}}, i8* %{{.*}})
 	baz(a, b);
-	// CHECK: call chericcallcc i8 addrspace(200)* bitcast (i8* (i8 addrspace(200)*, i8 addrspace(200)*, i64, i8*, i8*)* @cheri_invoke to i8 addrspace(200)* (i8 addrspace(200)*, i8 addrspace(200)*, i64, i8 addrspace(200)*, i8 addrspace(200)*)*)(i8 addrspace(200)* inreg %{{.*}}, i8 addrspace(200)* inreg %{{.*}}, i64 zeroext %{{.*}}, i8 addrspace(200)* %{{.*}}, i8 addrspace(200)* %{{.*}})
-	// CHECK:  %{{.*}} = addrspacecast i8 addrspace(200)* %call2 to i8*
-	return (__cheri_fromcap void*)foo((__capability void*)a, (__capability void*)b);
+	// CHECK: [[CALL:%.+]] = call chericcallcc i8 addrspace(200)* bitcast (i8* (i8 addrspace(200)*, i8 addrspace(200)*, i64, i8*, i8*)* @cheri_invoke to i8 addrspace(200)* (i8 addrspace(200)*, i8 addrspace(200)*, i64, i8 addrspace(200)*, i8 addrspace(200)*)*)(i8 addrspace(200)* %{{.*}}, i8 addrspace(200)* %{{.*}}, i64 zeroext %{{.*}}, i8 addrspace(200)* %{{.*}}, i8 addrspace(200)* %{{.*}})
+	// CHECK:  %{{.*}} = addrspacecast i8 addrspace(200)* [[CALL]] to i8*
+	return (__cheri_fromcap void*)foo((__cheri_tocap void * __capability)a, (__cheri_tocap void * __capability)b);
 }
 

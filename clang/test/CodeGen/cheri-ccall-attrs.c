@@ -6,7 +6,8 @@
 
 struct cheri_object
 {
-	__capability void *a, *b;
+  void * __capability a;
+  void * __capability b;
 };
 
 struct cheri_object cls;
@@ -31,10 +32,11 @@ void foo(int, int);
 
 void bar(int a, int b)
 {
-	// CHECK: load i64, i64* @__cheri_method.cls.foo, align 8, [[$INVARIANT_LOAD:!invariant.load ![0-9]+]]
+  // CHECK-LABEL: define void @bar(i32
+  // CHECK: load i64, i64* @__cheri_method.cls.foo, align 8, [[$INVARIANT_LOAD:!invariant.load ![0-9]+]]
 	// CHECK: call chericcallcc void @cheri_invoke(i8 addrspace(200)* inreg %{{.*}}, i8 addrspace(200)* inreg %{{.*}}, i64 zeroext %{{.*}}, i32 signext %{{.*}}, i32 signext %{{.*}})
 	foo_cap(other, a, b);
-	// CHECK: call chericcallcc void @cheri_invoke(i8 addrspace(200)* inreg %{{.*}}, i8 addrspace(200)* inreg %{{.*}}, i64 zeroext %{{.*}}, i32 signext %{{.*}}, i32 signext %{{.*}})
+	// CHECK: call chericcallcc void @cheri_invoke(i8 addrspace(200)* %{{.*}}, i8 addrspace(200)* %{{.*}}, i64 zeroext %{{.*}}, i32 signext %{{.*}}, i32 signext %{{.*}})
 	foo(a,b);
 }
 
@@ -43,17 +45,17 @@ __attribute__((cheri_method_class(cls)))
 __attribute__((cheri_method_suffix("_cap")))
 void fish(void)
 {
-	// CHECK: define chericcallcce void @fish
+	// CHECK-LABEL: define chericcallcce void @fish()
 }
 
 __attribute__((cheri_method_suffix("_cap")))
 __attribute__((cheri_method_class(cls)))
 void flibble(void);
 
-// CHECK: define void @call()
+// CHECK-LABEL: define void @call()
 void call(void)
 {
-	// CHECK: call chericcallcce void @fish()
+  // CHECK: call chericcallcce void @fish()
 	fish();
 	// Check that we get a ccall to cheri_invoke with the correct method number
 	// CHECK: load i64, i64* @__cheri_method.cls.fish, align 8, [[$INVARIANT_LOAD]]
