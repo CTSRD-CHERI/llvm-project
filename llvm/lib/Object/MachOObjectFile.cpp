@@ -477,8 +477,8 @@ static Error checkDysymtabCommand(const MachOObjectFile &Obj,
                           "the file");
   if (Error Err = checkOverlappingElement(Elements, Dysymtab.tocoff,
                                           Dysymtab.ntoc * sizeof(struct
-					  MachO::dylib_table_of_contents),
-					  "table of contents"))
+                                          MachO::dylib_table_of_contents),
+                                          "table of contents"))
     return Err;
   if (Dysymtab.modtaboff > FileSize)
     return malformedError("modtaboff field of LC_DYSYMTAB command " +
@@ -537,7 +537,7 @@ static Error checkDysymtabCommand(const MachOObjectFile &Obj,
   if (Error Err = checkOverlappingElement(Elements, Dysymtab.indirectsymoff,
                                           Dysymtab.nindirectsyms *
                                           sizeof(uint32_t),
-					  "indirect table"))
+                                          "indirect table"))
     return Err;
   if (Dysymtab.extreloff > FileSize)
     return malformedError("extreloff field of LC_DYSYMTAB command " +
@@ -1115,7 +1115,7 @@ static Error checkTwoLevelHintsCommand(const MachOObjectFile &Obj,
                           Twine(LoadCommandIndex) + " extends past the end of "
                           "the file");
   uint64_t BigSize = Hints.nhints;
-  BigSize *= Hints.nhints * sizeof(MachO::twolevel_hint);
+  BigSize *= sizeof(MachO::twolevel_hint);
   BigSize += Hints.offset;
   if (BigSize > FileSize)
     return malformedError("offset field plus nhints times sizeof(struct "
@@ -1659,6 +1659,10 @@ void MachOObjectFile::moveSymbolNext(DataRefImpl &Symb) const {
 Expected<StringRef> MachOObjectFile::getSymbolName(DataRefImpl Symb) const {
   StringRef StringTable = getStringTableData();
   MachO::nlist_base Entry = getSymbolTableEntryBase(*this, Symb);
+  if (Entry.n_strx == 0)
+    // A n_strx value of 0 indicates that no name is associated with a
+    // particular symbol table entry.
+    return StringRef();
   const char *Start = &StringTable.data()[Entry.n_strx];
   if (Start < getData().begin() || Start >= getData().end()) {
     return malformedError("bad string index: " + Twine(Entry.n_strx) +
@@ -1960,6 +1964,7 @@ MachOObjectFile::section_rel_end(DataRefImpl Sec) const {
 
 relocation_iterator MachOObjectFile::extrel_begin() const {
   DataRefImpl Ret;
+  // for DYSYMTAB symbols, Ret.d.a == 0 for external relocations
   Ret.d.a = 0; // Would normally be a section index.
   Ret.d.b = 0; // Index into the external relocations
   return relocation_iterator(RelocationRef(Ret, this));
@@ -1968,8 +1973,26 @@ relocation_iterator MachOObjectFile::extrel_begin() const {
 relocation_iterator MachOObjectFile::extrel_end() const {
   MachO::dysymtab_command DysymtabLoadCmd = getDysymtabLoadCommand();
   DataRefImpl Ret;
+  // for DYSYMTAB symbols, Ret.d.a == 0 for external relocations
   Ret.d.a = 0; // Would normally be a section index.
   Ret.d.b = DysymtabLoadCmd.nextrel; // Index into the external relocations
+  return relocation_iterator(RelocationRef(Ret, this));
+}
+
+relocation_iterator MachOObjectFile::locrel_begin() const {
+  DataRefImpl Ret;
+  // for DYSYMTAB symbols, Ret.d.a == 1 for local relocations
+  Ret.d.a = 1; // Would normally be a section index.
+  Ret.d.b = 0; // Index into the local relocations
+  return relocation_iterator(RelocationRef(Ret, this));
+}
+
+relocation_iterator MachOObjectFile::locrel_end() const {
+  MachO::dysymtab_command DysymtabLoadCmd = getDysymtabLoadCommand();
+  DataRefImpl Ret;
+  // for DYSYMTAB symbols, Ret.d.a == 1 for local relocations
+  Ret.d.a = 1; // Would normally be a section index.
+  Ret.d.b = DysymtabLoadCmd.nlocrel; // Index into the local relocations
   return relocation_iterator(RelocationRef(Ret, this));
 }
 
@@ -2573,7 +2596,7 @@ bool MachOObjectFile::isValidArch(StringRef ArchFlag) {
       .Default(false);
 }
 
-unsigned MachOObjectFile::getArch() const {
+Triple::ArchType MachOObjectFile::getArch() const {
   return getArch(getCPUType(*this));
 }
 
@@ -4301,7 +4324,10 @@ MachOObjectFile::getRelocation(DataRefImpl Rel) const {
     }
   } else {
     MachO::dysymtab_command DysymtabLoadCmd = getDysymtabLoadCommand();
-    Offset = DysymtabLoadCmd.extreloff; // Offset to the external relocations
+    if (Rel.d.a == 0)
+      Offset = DysymtabLoadCmd.extreloff; // Offset to the external relocations
+    else
+      Offset = DysymtabLoadCmd.locreloff; // Offset to the local relocations
   }
 
   auto P = reinterpret_cast<const MachO::any_relocation_info *>(

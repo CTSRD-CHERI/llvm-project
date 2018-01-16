@@ -849,6 +849,23 @@ TEST(APFloatTest, fromDecimalString) {
   EXPECT_EQ(2.71828, convertToDoubleFromString("2.71828"));
 }
 
+TEST(APFloatTest, fromToStringSpecials) {
+  auto expects = [] (const char *first, const char *second) {
+    std::string roundtrip = convertToString(convertToDoubleFromString(second), 0, 3);
+    EXPECT_STREQ(first, roundtrip.c_str());
+  };
+  expects("+Inf", "+Inf");
+  expects("+Inf", "INFINITY");
+  expects("+Inf", "inf");
+  expects("-Inf", "-Inf");
+  expects("-Inf", "-INFINITY");
+  expects("-Inf", "-inf");
+  expects("NaN", "NaN");
+  expects("NaN", "nan");
+  expects("NaN", "-NaN");
+  expects("NaN", "-nan");
+}
+
 TEST(APFloatTest, fromHexadecimalString) {
   EXPECT_EQ( 1.0, APFloat(APFloat::IEEEdouble(),  "0x1p0").convertToDouble());
   EXPECT_EQ(+1.0, APFloat(APFloat::IEEEdouble(), "+0x1p0").convertToDouble());
@@ -1455,10 +1472,10 @@ TEST(APFloatTest, getZero) {
   const unsigned NumGetZeroTests = 12;
   for (unsigned i = 0; i < NumGetZeroTests; ++i) {
     APFloat test = APFloat::getZero(*GetZeroTest[i].semantics,
-				    GetZeroTest[i].sign);
+                                    GetZeroTest[i].sign);
     const char *pattern = GetZeroTest[i].sign? "-0x0p+0" : "0x0p+0";
     APFloat expected = APFloat(*GetZeroTest[i].semantics,
-			       pattern);
+                               pattern);
     EXPECT_TRUE(test.isZero());
     EXPECT_TRUE(GetZeroTest[i].sign? test.isNegative() : !test.isNegative());
     EXPECT_TRUE(test.bitwiseIsEqual(expected));
@@ -3288,6 +3305,20 @@ TEST(APFloatTest, mod) {
     APFloat f2(APFloat::IEEEdouble(), "1.0");
     EXPECT_EQ(f1.mod(f2), APFloat::opInvalidOp);
     EXPECT_TRUE(f1.isNaN());
+  }
+  {
+    APFloat f1(APFloat::IEEEdouble(), "-4.0");
+    APFloat f2(APFloat::IEEEdouble(), "-2.0");
+    APFloat expected(APFloat::IEEEdouble(), "-0.0");
+    EXPECT_EQ(f1.mod(f2), APFloat::opOK);
+    EXPECT_TRUE(f1.bitwiseIsEqual(expected));
+  }
+  {
+    APFloat f1(APFloat::IEEEdouble(), "-4.0");
+    APFloat f2(APFloat::IEEEdouble(), "2.0");
+    APFloat expected(APFloat::IEEEdouble(), "-0.0");
+    EXPECT_EQ(f1.mod(f2), APFloat::opOK);
+    EXPECT_TRUE(f1.bitwiseIsEqual(expected));
   }
 }
 

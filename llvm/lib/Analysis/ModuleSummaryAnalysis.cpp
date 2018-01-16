@@ -243,6 +243,11 @@ computeFunctionSummary(ModuleSummaryIndex &Index, const Module &M,
 
       auto *CalledValue = CS.getCalledValue();
       auto *CalledFunction = CS.getCalledFunction();
+      if (CalledValue && !CalledFunction) {
+        CalledValue = CalledValue->stripPointerCastsNoFollowAliases();
+        // Stripping pointer casts can reveal a called function.
+        CalledFunction = dyn_cast<Function>(CalledValue);
+      }
       // Check if this is an alias to a function. If so, get the
       // called aliasee for the checks below.
       if (auto *GA = dyn_cast<GlobalAlias>(CalledValue)) {
@@ -276,7 +281,7 @@ computeFunctionSummary(ModuleSummaryIndex &Index, const Module &M,
         if (CI && CI->isInlineAsm())
           continue;
         // Skip direct calls.
-        if (!CS.getCalledValue() || isa<Constant>(CS.getCalledValue()))
+        if (!CalledValue || isa<Constant>(CalledValue))
           continue;
 
         uint32_t NumVals, NumCandidates;
@@ -301,9 +306,11 @@ computeFunctionSummary(ModuleSummaryIndex &Index, const Module &M,
       NonRenamableLocal || HasInlineAsmMaybeReferencingInternal ||
       // Inliner doesn't handle variadic functions.
       // FIXME: refactor this to use the same code that inliner is using.
-      F.isVarArg();
+      F.isVarArg() ||
+      // Don't try to import functions with noinline attribute.
+      F.getAttributes().hasFnAttribute(Attribute::NoInline);
   GlobalValueSummary::GVFlags Flags(F.getLinkage(), NotEligibleForImport,
-                                    /* Live = */ false);
+                                    /* Live = */ false, F.isDSOLocal());
   FunctionSummary::FFlags FunFlags{
       F.hasFnAttribute(Attribute::ReadNone),
       F.hasFnAttribute(Attribute::ReadOnly),
@@ -329,7 +336,7 @@ computeVariableSummary(ModuleSummaryIndex &Index, const GlobalVariable &V,
   findRefEdges(Index, &V, RefEdges, Visited);
   bool NonRenamableLocal = isNonRenamableLocal(V);
   GlobalValueSummary::GVFlags Flags(V.getLinkage(), NonRenamableLocal,
-                                    /* Live = */ false);
+                                    /* Live = */ false, V.isDSOLocal());
   auto GVarSummary =
       llvm::make_unique<GlobalVarSummary>(Flags, RefEdges.takeVector());
   if (NonRenamableLocal)
@@ -342,7 +349,7 @@ computeAliasSummary(ModuleSummaryIndex &Index, const GlobalAlias &A,
                     DenseSet<GlobalValue::GUID> &CantBePromoted) {
   bool NonRenamableLocal = isNonRenamableLocal(A);
   GlobalValueSummary::GVFlags Flags(A.getLinkage(), NonRenamableLocal,
-                                    /* Live = */ false);
+                                    /* Live = */ false, A.isDSOLocal());
   auto AS = llvm::make_unique<AliasSummary>(Flags);
   auto *Aliasee = A.getBaseObject();
   auto *AliaseeSummary = Index.getGlobalValueSummary(*Aliasee);
@@ -410,7 +417,8 @@ ModuleSummaryIndex llvm::buildModuleSummaryIndex(
           assert(GV->isDeclaration() && "Def in module asm already has definition");
           GlobalValueSummary::GVFlags GVFlags(GlobalValue::InternalLinkage,
                                               /* NotEligibleToImport = */ true,
-                                              /* Live = */ true);
+                                              /* Live = */ true,
+                                              /* Local */ GV->isDSOLocal());
           CantBePromoted.insert(GlobalValue::getGUID(Name));
           // Create the appropriate summary type.
           if (Function *F = dyn_cast<Function>(GV)) {
@@ -448,7 +456,7 @@ ModuleSummaryIndex llvm::buildModuleSummaryIndex(
     std::unique_ptr<BlockFrequencyInfo> BFIPtr;
     if (GetBFICallback)
       BFI = GetBFICallback(F);
-    else if (F.getEntryCount().hasValue()) {
+    else if (F.hasProfileData()) {
       LoopInfo LI{DominatorTree(const_cast<Function &>(F))};
       BranchProbabilityInfo BPI{F, LI};
       BFIPtr = llvm::make_unique<BlockFrequencyInfo>(F, BPI, LI);

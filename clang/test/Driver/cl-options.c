@@ -197,7 +197,11 @@
 
 // RUN: %clang_cl /E /showIncludes -### -- %s 2>&1 | FileCheck -check-prefix=showIncludes_E %s
 // RUN: %clang_cl /EP /showIncludes -### -- %s 2>&1 | FileCheck -check-prefix=showIncludes_E %s
+// RUN: %clang_cl /E /EP /showIncludes -### -- %s 2>&1 | FileCheck -check-prefix=showIncludes_E %s
 // showIncludes_E: warning: argument unused during compilation: '--show-includes'
+
+// RUN: %clang_cl /EP /P /showIncludes -### -- %s 2>&1 | FileCheck -check-prefix=showIncludes_E_And_P %s
+// showIncludes_E_And_P-NOT: warning: argument unused during compilation: '--show-includes'
 
 // /source-charset: should warn on everything except UTF-8.
 // RUN: %clang_cl /source-charset:utf-16 -### -- %s 2>&1 | FileCheck -check-prefix=source-charset-utf-16 %s
@@ -251,9 +255,10 @@
 // RUN: %clang_cl /W2 -### -- %s 2>&1 | FileCheck -check-prefix=W1 %s
 // RUN: %clang_cl /W3 -### -- %s 2>&1 | FileCheck -check-prefix=W1 %s
 // RUN: %clang_cl /W4 -### -- %s 2>&1 | FileCheck -check-prefix=W4 %s
-// RUN: %clang_cl /Wall -### -- %s 2>&1 | FileCheck -check-prefix=W4 %s
+// RUN: %clang_cl /Wall -### -- %s 2>&1 | FileCheck -check-prefix=Weverything %s
 // W1: -Wall
 // W4: -WCL4
+// Weverything: -Weverything
 
 // RUN: %clang_cl /WX -### -- %s 2>&1 | FileCheck -check-prefix=WX %s
 // WX: -Werror
@@ -570,6 +575,7 @@
 // RUN:     -fstandalone-debug \
 // RUN:     -flimit-debug-info \
 // RUN:     -flto \
+// RUN:     --version \
 // RUN:     -Werror /Zs -- %s 2>&1
 
 

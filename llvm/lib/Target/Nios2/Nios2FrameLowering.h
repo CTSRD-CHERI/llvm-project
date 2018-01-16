@@ -14,7 +14,7 @@
 #define LLVM_LIB_TARGET_NIOS2_NIOS2FRAMELOWERING_H
 
 #include "Nios2.h"
-#include "llvm/Target/TargetFrameLowering.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
 
 namespace llvm {
 class Nios2Subtarget;
@@ -24,11 +24,10 @@ protected:
   const Nios2Subtarget &STI;
 
 public:
-  explicit Nios2FrameLowering(const Nios2Subtarget &sti, unsigned Alignment)
-      : TargetFrameLowering(StackGrowsDown, Alignment, 0, Alignment), STI(sti) {
-  }
+  explicit Nios2FrameLowering(const Nios2Subtarget &sti)
+      : TargetFrameLowering(TargetFrameLowering::StackGrowsDown, 4, 0, 4),
+        STI(sti) {}
 
-  static const Nios2FrameLowering *create(const Nios2Subtarget &ST);
   bool hasFP(const MachineFunction &MF) const override;
   /// emitProlog/emitEpilog - These methods insert prolog and epilog code into
   /// the function.

@@ -890,7 +890,7 @@ bool CXIndexDataConsumer::handleReference(const NamedDecl *D, SourceLocation Loc
                                       const DeclContext *DC,
                                       const Expr *E,
                                       CXIdxEntityRefKind Kind) {
-  if (!D)
+  if (!D || !DC)
     return false;
 
   CXCursor Cursor = E ? MakeCXCursor(E, cast<Decl>(DC), CXTU)
@@ -907,7 +907,7 @@ bool CXIndexDataConsumer::handleReference(const NamedDecl *D, SourceLocation Loc
   if (!CB.indexEntityReference)
     return false;
 
-  if (!D)
+  if (!D || !DC)
     return false;
   if (Loc.isInvalid())
     return false;
@@ -1304,11 +1304,11 @@ static CXIdxEntityKind getEntityKindFromSymbolKind(SymbolKind K, SymbolLanguage 
 
 static CXIdxEntityCXXTemplateKind
 getEntityKindFromSymbolProperties(SymbolPropertySet K) {
-  if (K & (unsigned)SymbolProperty::TemplatePartialSpecialization)
+  if (K & (SymbolPropertySet)SymbolProperty::TemplatePartialSpecialization)
     return CXIdxEntity_TemplatePartialSpecialization;
-  if (K & (unsigned)SymbolProperty::TemplateSpecialization)
+  if (K & (SymbolPropertySet)SymbolProperty::TemplateSpecialization)
     return CXIdxEntity_TemplateSpecialization;
-  if (K & (unsigned)SymbolProperty::Generic)
+  if (K & (SymbolPropertySet)SymbolProperty::Generic)
     return CXIdxEntity_Template;
   return CXIdxEntity_NonTemplate;
 }

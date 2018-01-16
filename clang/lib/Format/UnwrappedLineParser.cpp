@@ -18,6 +18,8 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include <algorithm>
+
 #define DEBUG_TYPE "format-parser"
 
 namespace clang {
@@ -56,7 +58,7 @@ private:
 };
 
 static bool isLineComment(const FormatToken &FormatTok) {
-  return FormatTok.is(tok::comment) && FormatTok.TokenText.startswith("//");
+  return FormatTok.is(tok::comment) && !FormatTok.TokenText.startswith("/*");
 }
 
 // Checks if \p FormatTok is a line comment that continues the line comment
@@ -225,6 +227,7 @@ private:
 
 UnwrappedLineParser::UnwrappedLineParser(const FormatStyle &Style,
                                          const AdditionalKeywords &Keywords,
+                                         unsigned FirstStartColumn,
                                          ArrayRef<FormatToken *> Tokens,
                                          UnwrappedLineConsumer &Callback)
     : Line(new UnwrappedLine), MustBreakBeforeNextToken(false),
@@ -232,7 +235,7 @@ UnwrappedLineParser::UnwrappedLineParser(const FormatStyle &Style,
       CommentPragmasRegex(Style.CommentPragmas), Tokens(nullptr),
       Callback(Callback), AllTokens(Tokens), PPBranchLevel(-1),
       IfNdefCondition(nullptr), FoundIncludeGuardStart(false),
-      IncludeGuardRejected(false) {}
+      IncludeGuardRejected(false), FirstStartColumn(FirstStartColumn) {}
 
 void UnwrappedLineParser::reset() {
   PPBranchLevel = -1;
@@ -247,10 +250,12 @@ void UnwrappedLineParser::reset() {
   CurrentLines = &Lines;
   DeclarationScopeStack.clear();
   PPStack.clear();
+  Line->FirstStartColumn = FirstStartColumn;
 }
 
 void UnwrappedLineParser::parse() {
   IndexedTokenSource TokenSource(AllTokens);
+  Line->FirstStartColumn = FirstStartColumn;
   do {
     DEBUG(llvm::dbgs() << "----\n");
     reset();
@@ -374,13 +379,16 @@ void UnwrappedLineParser::calculateBraceTypes(bool ExpectClassBody) {
     switch (Tok->Tok.getKind()) {
     case tok::l_brace:
       if (Style.Language == FormatStyle::LK_JavaScript && PrevTok) {
-        if (PrevTok->is(tok::colon))
-          // A colon indicates this code is in a type, or a braced list
-          // following a label in an object literal ({a: {b: 1}}). The code
-          // below could be confused by semicolons between the individual
-          // members in a type member list, which would normally trigger
-          // BK_Block. In both cases, this must be parsed as an inline braced
-          // init.
+        if (PrevTok->isOneOf(tok::colon, tok::less))
+          // A ':' indicates this code is in a type, or a braced list
+          // following a label in an object literal ({a: {b: 1}}).
+          // A '<' could be an object used in a comparison, but that is nonsense
+          // code (can never return true), so more likely it is a generic type
+          // argument (`X<{a: string; b: number}>`).
+          // The code below could be confused by semicolons between the
+          // individual members in a type member list, which would normally
+          // trigger BK_Block. In both cases, this must be parsed as an inline
+          // braced init.
           Tok->BlockKind = BK_BracedInit;
         else if (PrevTok->is(tok::r_paren))
           // `) { }` can only occur in function or method declarations in JS.
@@ -888,11 +896,14 @@ void UnwrappedLineParser::readTokenWithJavaScriptASI() {
   bool PreviousMustBeValue = mustBeJSIdentOrValue(Keywords, Previous);
   bool PreviousStartsTemplateExpr =
       Previous->is(TT_TemplateString) && Previous->TokenText.endswith("${");
-  if (PreviousMustBeValue && Line && Line->Tokens.size() > 1) {
-    // If the token before the previous one is an '@', the previous token is an
-    // annotation and can precede another identifier/value.
-    const FormatToken *PrePrevious = std::prev(Line->Tokens.end(), 2)->Tok;
-    if (PrePrevious->is(tok::at))
+  if (PreviousMustBeValue || Previous->is(tok::r_paren)) {
+    // If the line contains an '@' sign, the previous token might be an
+    // annotation, which can precede another identifier/value.
+    bool HasAt = std::find_if(Line->Tokens.begin(), Line->Tokens.end(),
+                              [](UnwrappedLineNode &LineNode) {
+                                return LineNode.Tok->is(tok::at);
+                              }) != Line->Tokens.end();
+    if (HasAt)
       return;
   }
   if (Next->is(tok::exclaim) && PreviousMustBeValue)
@@ -2176,7 +2187,7 @@ void UnwrappedLineParser::parseJavaScriptEs6ImportExport() {
   while (!eof()) {
     if (FormatTok->is(tok::semi))
       return;
-    if (Line->Tokens.size() == 0) {
+    if (Line->Tokens.empty()) {
       // Common issue: Automatic Semicolon Insertion wrapped the line, so the
       // import statement should terminate.
       return;
@@ -2193,7 +2204,8 @@ void UnwrappedLineParser::parseJavaScriptEs6ImportExport() {
 
 LLVM_ATTRIBUTE_UNUSED static void printDebugInfo(const UnwrappedLine &Line,
                                                  StringRef Prefix = "") {
-  llvm::dbgs() << Prefix << "Line(" << Line.Level << ")"
+  llvm::dbgs() << Prefix << "Line(" << Line.Level
+               << ", FSC=" << Line.FirstStartColumn << ")"
                << (Line.InPPDirective ? " MACRO" : "") << ": ";
   for (std::list<UnwrappedLineNode>::const_iterator I = Line.Tokens.begin(),
                                                     E = Line.Tokens.end();
@@ -2226,6 +2238,7 @@ void UnwrappedLineParser::addUnwrappedLine() {
   CurrentLines->push_back(std::move(*Line));
   Line->Tokens.clear();
   Line->MatchingOpeningBlockLineIndex = UnwrappedLine::kInvalidIndex;
+  Line->FirstStartColumn = 0;
   if (CurrentLines == &Lines && !PreprocessorDirectives.empty()) {
     CurrentLines->append(
         std::make_move_iterator(PreprocessorDirectives.begin()),

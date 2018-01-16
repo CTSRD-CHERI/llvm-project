@@ -50,9 +50,9 @@ static bool hasSinCosPiStret(const Triple &T) {
   return true;
 }
 
-/// initialize - Initialize the set of available library functions based on the
-/// specified target triple.  This should be carefully written so that a missing
-/// target triple gets a sane set of defaults.
+/// Initialize the set of available library functions based on the specified
+/// target triple. This should be carefully written so that a missing target
+/// triple gets a sane set of defaults.
 static void initialize(TargetLibraryInfoImpl &TLI, const Triple &T,
                        ArrayRef<StringRef> StandardNames) {
   // Verify that the StandardNames array is in alphabetical order.
@@ -182,6 +182,9 @@ static void initialize(TargetLibraryInfoImpl &TLI, const Triple &T,
     TLI.setUnavailable(LibFunc_atanh);
     TLI.setUnavailable(LibFunc_atanhf);
     TLI.setUnavailable(LibFunc_atanhl);
+    TLI.setUnavailable(LibFunc_cabs);
+    TLI.setUnavailable(LibFunc_cabsf);
+    TLI.setUnavailable(LibFunc_cabsl);
     TLI.setUnavailable(LibFunc_cbrt);
     TLI.setUnavailable(LibFunc_cbrtf);
     TLI.setUnavailable(LibFunc_cbrtl);
@@ -241,50 +244,6 @@ static void initialize(TargetLibraryInfoImpl &TLI, const Triple &T,
       TLI.setUnavailable(LibFunc_tanf);
       TLI.setUnavailable(LibFunc_tanhf);
     }
-
-    // These definitions are due to math-finite.h header on Linux
-    TLI.setUnavailable(LibFunc_acos_finite);
-    TLI.setUnavailable(LibFunc_acosf_finite);
-    TLI.setUnavailable(LibFunc_acosl_finite);
-    TLI.setUnavailable(LibFunc_acosh_finite);
-    TLI.setUnavailable(LibFunc_acoshf_finite);
-    TLI.setUnavailable(LibFunc_acoshl_finite);
-    TLI.setUnavailable(LibFunc_asin_finite);
-    TLI.setUnavailable(LibFunc_asinf_finite);
-    TLI.setUnavailable(LibFunc_asinl_finite);
-    TLI.setUnavailable(LibFunc_atan2_finite);
-    TLI.setUnavailable(LibFunc_atan2f_finite);
-    TLI.setUnavailable(LibFunc_atan2l_finite);
-    TLI.setUnavailable(LibFunc_atanh_finite);
-    TLI.setUnavailable(LibFunc_atanhf_finite);
-    TLI.setUnavailable(LibFunc_atanhl_finite);
-    TLI.setUnavailable(LibFunc_cosh_finite);
-    TLI.setUnavailable(LibFunc_coshf_finite);
-    TLI.setUnavailable(LibFunc_coshl_finite);
-    TLI.setUnavailable(LibFunc_exp10_finite);
-    TLI.setUnavailable(LibFunc_exp10f_finite);
-    TLI.setUnavailable(LibFunc_exp10l_finite);
-    TLI.setUnavailable(LibFunc_exp2_finite);
-    TLI.setUnavailable(LibFunc_exp2f_finite);
-    TLI.setUnavailable(LibFunc_exp2l_finite);
-    TLI.setUnavailable(LibFunc_exp_finite);
-    TLI.setUnavailable(LibFunc_expf_finite);
-    TLI.setUnavailable(LibFunc_expl_finite);
-    TLI.setUnavailable(LibFunc_log10_finite);
-    TLI.setUnavailable(LibFunc_log10f_finite);
-    TLI.setUnavailable(LibFunc_log10l_finite);
-    TLI.setUnavailable(LibFunc_log2_finite);
-    TLI.setUnavailable(LibFunc_log2f_finite);
-    TLI.setUnavailable(LibFunc_log2l_finite);
-    TLI.setUnavailable(LibFunc_log_finite);
-    TLI.setUnavailable(LibFunc_logf_finite);
-    TLI.setUnavailable(LibFunc_logl_finite);
-    TLI.setUnavailable(LibFunc_pow_finite);
-    TLI.setUnavailable(LibFunc_powf_finite);
-    TLI.setUnavailable(LibFunc_powl_finite);
-    TLI.setUnavailable(LibFunc_sinh_finite);
-    TLI.setUnavailable(LibFunc_sinhf_finite);
-    TLI.setUnavailable(LibFunc_sinhl_finite);
 
     // Win32 does *not* provide provide these functions, but they are
     // generally available on POSIX-compliant systems:
@@ -457,6 +416,50 @@ static void initialize(TargetLibraryInfoImpl &TLI, const Triple &T,
     TLI.setUnavailable(LibFunc_stat64);
     TLI.setUnavailable(LibFunc_statvfs64);
     TLI.setUnavailable(LibFunc_tmpfile64);
+
+    // Relaxed math functions are included in math-finite.h on Linux (GLIBC).
+    TLI.setUnavailable(LibFunc_acos_finite);
+    TLI.setUnavailable(LibFunc_acosf_finite);
+    TLI.setUnavailable(LibFunc_acosl_finite);
+    TLI.setUnavailable(LibFunc_acosh_finite);
+    TLI.setUnavailable(LibFunc_acoshf_finite);
+    TLI.setUnavailable(LibFunc_acoshl_finite);
+    TLI.setUnavailable(LibFunc_asin_finite);
+    TLI.setUnavailable(LibFunc_asinf_finite);
+    TLI.setUnavailable(LibFunc_asinl_finite);
+    TLI.setUnavailable(LibFunc_atan2_finite);
+    TLI.setUnavailable(LibFunc_atan2f_finite);
+    TLI.setUnavailable(LibFunc_atan2l_finite);
+    TLI.setUnavailable(LibFunc_atanh_finite);
+    TLI.setUnavailable(LibFunc_atanhf_finite);
+    TLI.setUnavailable(LibFunc_atanhl_finite);
+    TLI.setUnavailable(LibFunc_cosh_finite);
+    TLI.setUnavailable(LibFunc_coshf_finite);
+    TLI.setUnavailable(LibFunc_coshl_finite);
+    TLI.setUnavailable(LibFunc_exp10_finite);
+    TLI.setUnavailable(LibFunc_exp10f_finite);
+    TLI.setUnavailable(LibFunc_exp10l_finite);
+    TLI.setUnavailable(LibFunc_exp2_finite);
+    TLI.setUnavailable(LibFunc_exp2f_finite);
+    TLI.setUnavailable(LibFunc_exp2l_finite);
+    TLI.setUnavailable(LibFunc_exp_finite);
+    TLI.setUnavailable(LibFunc_expf_finite);
+    TLI.setUnavailable(LibFunc_expl_finite);
+    TLI.setUnavailable(LibFunc_log10_finite);
+    TLI.setUnavailable(LibFunc_log10f_finite);
+    TLI.setUnavailable(LibFunc_log10l_finite);
+    TLI.setUnavailable(LibFunc_log2_finite);
+    TLI.setUnavailable(LibFunc_log2f_finite);
+    TLI.setUnavailable(LibFunc_log2l_finite);
+    TLI.setUnavailable(LibFunc_log_finite);
+    TLI.setUnavailable(LibFunc_logf_finite);
+    TLI.setUnavailable(LibFunc_logl_finite);
+    TLI.setUnavailable(LibFunc_pow_finite);
+    TLI.setUnavailable(LibFunc_powf_finite);
+    TLI.setUnavailable(LibFunc_powl_finite);
+    TLI.setUnavailable(LibFunc_sinh_finite);
+    TLI.setUnavailable(LibFunc_sinhf_finite);
+    TLI.setUnavailable(LibFunc_sinhl_finite);
   }
 
   // As currently implemented in clang, NVPTX code has no standard library to
@@ -605,7 +608,7 @@ bool TargetLibraryInfoImpl::isValidProtoForLibFunc(const FunctionType &FTy,
     return (NumParams == 3 && FTy.getReturnType()->isPointerTy() &&
             FTy.getParamType(0) == FTy.getReturnType() &&
             FTy.getParamType(1) == FTy.getReturnType() &&
-            FTy.getParamType(2)->isIntegerTy());
+            IsSizeTTy(FTy.getParamType(2)));
 
   case LibFunc_strcpy_chk:
   case LibFunc_stpcpy_chk:
@@ -630,7 +633,7 @@ bool TargetLibraryInfoImpl::isValidProtoForLibFunc(const FunctionType &FTy,
     return (NumParams == 3 && FTy.getReturnType() == FTy.getParamType(0) &&
             FTy.getParamType(0) == FTy.getParamType(1) &&
             FTy.getParamType(0) == PCharTy &&
-            FTy.getParamType(2)->isIntegerTy());
+            IsSizeTTy(FTy.getParamType(2)));
 
   case LibFunc_strxfrm:
     return (NumParams == 3 && FTy.getParamType(0)->isPointerTy() &&
@@ -645,7 +648,7 @@ bool TargetLibraryInfoImpl::isValidProtoForLibFunc(const FunctionType &FTy,
     return (NumParams == 3 && FTy.getReturnType()->isIntegerTy(32) &&
             FTy.getParamType(0)->isPointerTy() &&
             FTy.getParamType(0) == FTy.getParamType(1) &&
-            FTy.getParamType(2)->isIntegerTy());
+            IsSizeTTy(FTy.getParamType(2)));
 
   case LibFunc_strspn:
   case LibFunc_strcspn:
@@ -1267,6 +1270,25 @@ bool TargetLibraryInfoImpl::isValidProtoForLibFunc(const FunctionType &FTy,
     return (NumParams == 1 && FTy.getParamType(0)->isPointerTy() &&
             FTy.getReturnType()->isIntegerTy());
 
+  case LibFunc_cabs:
+  case LibFunc_cabsf:
+  case LibFunc_cabsl: {
+    Type* RetTy = FTy.getReturnType();
+    if (!RetTy->isFloatingPointTy())
+      return false;
+
+    // NOTE: These prototypes are target specific and currently support
+    // "complex" passed as an array or discrete real & imaginary parameters.
+    // Add other calling conventions to enable libcall optimizations.
+    if (NumParams == 1)
+      return (FTy.getParamType(0)->isArrayTy() &&
+              FTy.getParamType(0)->getArrayNumElements() == 2 &&
+              FTy.getParamType(0)->getArrayElementType() == RetTy);
+    else if (NumParams == 2)
+      return (FTy.getParamType(0) == RetTy && FTy.getParamType(1) == RetTy);
+    else
+      return false;
+  }
   case LibFunc::NumLibFuncs:
     break;
   }

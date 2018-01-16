@@ -14,8 +14,8 @@
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/PseudoSourceValue.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Target/TargetRegisterInfo.h"
 
 using namespace llvm;
 
@@ -52,9 +52,7 @@ unsigned MipsFunctionInfo::getGlobalBaseReg(bool IsForTls) {
       STI.inMips16Mode()
           ? &Mips::CPU16RegsRegClass
           : STI.inMicroMipsMode()
-                ? STI.hasMips64()
-                      ? &Mips::GPRMM16_64RegClass
-                      : &Mips::GPRMM16RegClass
+                ? &Mips::GPRMM16RegClass
                 : static_cast<const MipsTargetMachine &>(MF.getTarget())
                           .getABI()
                           .IsN64()

@@ -10,13 +10,13 @@
 #include "Writer.h"
 #include "Config.h"
 #include "DLL.h"
-#include "Error.h"
 #include "InputFiles.h"
 #include "MapFile.h"
-#include "Memory.h"
 #include "PDB.h"
 #include "SymbolTable.h"
 #include "Symbols.h"
+#include "lld/Common/ErrorHandler.h"
+#include "lld/Common/Memory.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringSwitch.h"
@@ -108,6 +108,7 @@ public:
 // The writer writes a SymbolTable result to a file.
 class Writer {
 public:
+  Writer() : Buffer(errorHandler().OutputBuffer) {}
   void run();
 
 private:
@@ -120,7 +121,7 @@ private:
   void createSymbolAndStringTable();
   void openFile(StringRef OutputPath);
   template <typename PEHeaderTy> void writeHeader();
-  void fixSafeSEHSymbols();
+  void createSEHTable(OutputSection *RData);
   void setSectionPermissions();
   void writeSections();
   void writeBuildId();
@@ -137,7 +138,7 @@ private:
   uint32_t getSizeOfInitializedData();
   std::map<StringRef, std::vector<DefinedImportData *>> binImports();
 
-  std::unique_ptr<FileOutputBuffer> Buffer;
+  std::unique_ptr<FileOutputBuffer> &Buffer;
   std::vector<OutputSection *> OutputSections;
   std::vector<char> Strtab;
   std::vector<llvm::object::coff_symbol16> OutputSymtab;
@@ -210,7 +211,8 @@ void OutputSection::writeHeaderTo(uint8_t *Buf) {
     // If name is too long, write offset into the string table as a name.
     sprintf(Hdr->Name, "/%d", StringTableOff);
   } else {
-    assert(!Config->Debug || Name.size() <= COFF::NameSize);
+    assert(!Config->Debug || Name.size() <= COFF::NameSize ||
+           (Hdr->Characteristics & IMAGE_SCN_MEM_DISCARDABLE) == 0);
     strncpy(Hdr->Name, Name.data(),
             std::min(Name.size(), (size_t)COFF::NameSize));
   }
@@ -302,7 +304,6 @@ void Writer::run() {
   } else {
     writeHeader<pe32_header>();
   }
-  fixSafeSEHSymbols();
   writeSections();
   sortExceptionTable();
   writeBuildId();
@@ -315,12 +316,17 @@ void Writer::run() {
 
   writeMapFile(OutputSections);
 
-  if (auto EC = Buffer->commit())
-    fatal(EC, "failed to write the output file");
+  if (auto E = Buffer->commit())
+    fatal("failed to write the output file: " + toString(std::move(E)));
 }
 
 static StringRef getOutputSection(StringRef Name) {
   StringRef S = Name.split('$').first;
+
+  // Treat a later period as a separator for MinGW, for sections like
+  // ".ctors.01234".
+  S = S.substr(0, S.find('.', 1));
+
   auto It = Config->Merge.find(S);
   if (It == Config->Merge.end())
     return S;
@@ -387,28 +393,7 @@ void Writer::createMiscChunks() {
       RData->addChunk(C);
   }
 
-  // Create SEH table. x86-only.
-  if (Config->Machine != I386)
-    return;
-
-  std::set<Defined *> Handlers;
-
-  for (ObjFile *File : ObjFile::Instances) {
-    if (!File->SEHCompat)
-      return;
-    for (SymbolBody *B : File->SEHandlers) {
-      // Make sure the handler is still live. Assume all handlers are regular
-      // symbols.
-      auto *D = dyn_cast<DefinedRegular>(B);
-      if (D && D->getChunk()->isLive())
-        Handlers.insert(D);
-    }
-  }
-
-  if (!Handlers.empty()) {
-    SEHTable = make<SEHTableChunk>(Handlers);
-    RData->addChunk(SEHTable);
-  }
+  createSEHTable(RData);
 }
 
 // Create .idata section for the DLL-imported symbol table.
@@ -532,7 +517,7 @@ Optional<coff_symbol16> Writer::createSymbol(Defined *Def) {
   Sym.NumberOfAuxSymbols = 0;
 
   switch (Def->kind()) {
-  case SymbolBody::DefinedAbsoluteKind:
+  case Symbol::DefinedAbsoluteKind:
     Sym.Value = Def->getRVA();
     Sym.SectionNumber = IMAGE_SYM_ABSOLUTE;
     break;
@@ -553,40 +538,46 @@ Optional<coff_symbol16> Writer::createSymbol(Defined *Def) {
 }
 
 void Writer::createSymbolAndStringTable() {
-  if (!Config->Debug || !Config->WriteSymtab)
-    return;
-
   // Name field in the section table is 8 byte long. Longer names need
   // to be written to the string table. First, construct string table.
   for (OutputSection *Sec : OutputSections) {
     StringRef Name = Sec->getName();
     if (Name.size() <= COFF::NameSize)
       continue;
+    // If a section isn't discardable (i.e. will be mapped at runtime),
+    // prefer a truncated section name over a long section name in
+    // the string table that is unavailable at runtime. This is different from
+    // what link.exe does, but finding ".eh_fram" instead of "/4" is useful
+    // to libunwind.
+    if ((Sec->getPermissions() & IMAGE_SCN_MEM_DISCARDABLE) == 0)
+      continue;
     Sec->setStringTableOff(addEntryToStringTable(Name));
   }
 
-  for (ObjFile *File : ObjFile::Instances) {
-    for (SymbolBody *B : File->getSymbols()) {
-      auto *D = dyn_cast<Defined>(B);
-      if (!D || D->WrittenToSymtab)
-        continue;
-      D->WrittenToSymtab = true;
+  if (Config->DebugDwarf) {
+    for (ObjFile *File : ObjFile::Instances) {
+      for (Symbol *B : File->getSymbols()) {
+        auto *D = dyn_cast_or_null<Defined>(B);
+        if (!D || D->WrittenToSymtab)
+          continue;
+        D->WrittenToSymtab = true;
 
-      if (Optional<coff_symbol16> Sym = createSymbol(D))
-        OutputSymtab.push_back(*Sym);
+        if (Optional<coff_symbol16> Sym = createSymbol(D))
+          OutputSymtab.push_back(*Sym);
+      }
     }
   }
+
+  if (OutputSymtab.empty() && Strtab.empty())
+    return;
 
   OutputSection *LastSection = OutputSections.back();
   // We position the symbol table to be adjacent to the end of the last section.
   uint64_t FileOff = LastSection->getFileOff() +
                      alignTo(LastSection->getRawSize(), SectorSize);
-  if (!OutputSymtab.empty()) {
-    PointerToSymbolTable = FileOff;
-    FileOff += OutputSymtab.size() * sizeof(coff_symbol16);
-  }
-  if (!Strtab.empty())
-    FileOff += Strtab.size() + 4;
+  PointerToSymbolTable = FileOff;
+  FileOff += OutputSymtab.size() * sizeof(coff_symbol16);
+  FileOff += 4 + Strtab.size();
   FileSize = alignTo(FileOff, SectorSize);
 }
 
@@ -615,7 +606,7 @@ void Writer::assignAddresses() {
     RVA += alignTo(Sec->getVirtualSize(), PageSize);
     FileSize += alignTo(Sec->getRawSize(), SectorSize);
   }
-  SizeOfImage = SizeOfHeaders + alignTo(RVA - 0x1000, PageSize);
+  SizeOfImage = alignTo(RVA, PageSize);
 }
 
 template <typename PEHeaderTy> void Writer::writeHeader() {
@@ -697,6 +688,9 @@ template <typename PEHeaderTy> void Writer::writeHeader() {
     PE->DLLCharacteristics |= IMAGE_DLL_CHARACTERISTICS_NX_COMPAT;
   if (!Config->AllowIsolation)
     PE->DLLCharacteristics |= IMAGE_DLL_CHARACTERISTICS_NO_ISOLATION;
+  if (Config->Machine == I386 && !SEHTable &&
+      !Symtab->findUnderscore("_load_config_used"))
+    PE->DLLCharacteristics |= IMAGE_DLL_CHARACTERISTICS_NO_SEH;
   if (Config->TerminalServerAware)
     PE->DLLCharacteristics |= IMAGE_DLL_CHARACTERISTICS_TERMINAL_SERVER_AWARE;
   PE->NumberOfRvaAndSize = NumberfOfDataDirectory;
@@ -732,7 +726,7 @@ template <typename PEHeaderTy> void Writer::writeHeader() {
     Dir[BASE_RELOCATION_TABLE].Size = Sec->getVirtualSize();
   }
   if (Symbol *Sym = Symtab->findUnderscore("_tls_used")) {
-    if (Defined *B = dyn_cast<Defined>(Sym->body())) {
+    if (Defined *B = dyn_cast<Defined>(Sym)) {
       Dir[TLS_TABLE].RelativeVirtualAddress = B->getRVA();
       Dir[TLS_TABLE].Size = Config->is64()
                                 ? sizeof(object::coff_tls_directory64)
@@ -744,7 +738,7 @@ template <typename PEHeaderTy> void Writer::writeHeader() {
     Dir[DEBUG_DIRECTORY].Size = DebugDirectory->getSize();
   }
   if (Symbol *Sym = Symtab->findUnderscore("_load_config_used")) {
-    if (auto *B = dyn_cast<DefinedRegular>(Sym->body())) {
+    if (auto *B = dyn_cast<DefinedRegular>(Sym)) {
       SectionChunk *SC = B->getChunk();
       assert(B->getRVA() >= SC->getRVA());
       uint64_t OffsetInChunk = B->getRVA() - SC->getRVA();
@@ -774,7 +768,7 @@ template <typename PEHeaderTy> void Writer::writeHeader() {
   SectionTable = ArrayRef<uint8_t>(
       Buf - OutputSections.size() * sizeof(coff_section), Buf);
 
-  if (OutputSymtab.empty())
+  if (OutputSymtab.empty() && Strtab.empty())
     return;
 
   COFF->PointerToSymbolTable = PointerToSymbolTable;
@@ -793,21 +787,40 @@ template <typename PEHeaderTy> void Writer::writeHeader() {
 }
 
 void Writer::openFile(StringRef Path) {
-  Buffer = check(
+  Buffer = CHECK(
       FileOutputBuffer::create(Path, FileSize, FileOutputBuffer::F_executable),
       "failed to open " + Path);
 }
 
-void Writer::fixSafeSEHSymbols() {
-  if (!SEHTable)
+void Writer::createSEHTable(OutputSection *RData) {
+  // Create SEH table. x86-only.
+  if (Config->Machine != I386)
     return;
+
+  std::set<Defined *> Handlers;
+
+  for (ObjFile *File : ObjFile::Instances) {
+    if (!File->SEHCompat)
+      return;
+    for (uint32_t I : File->SXData)
+      if (Symbol *B = File->getSymbol(I))
+        if (B->isLive())
+          Handlers.insert(cast<Defined>(B));
+  }
+
+  if (Handlers.empty())
+    return;
+
+  SEHTable = make<SEHTableChunk>(Handlers);
+  RData->addChunk(SEHTable);
+
   // Replace the absolute table symbol with a synthetic symbol pointing to the
   // SEHTable chunk so that we can emit base relocations for it and resolve
   // section relative relocations.
   Symbol *T = Symtab->find("___safe_se_handler_table");
   Symbol *C = Symtab->find("___safe_se_handler_count");
-  replaceBody<DefinedSynthetic>(T, T->body()->getName(), SEHTable);
-  cast<DefinedAbsolute>(C->body())->setVA(SEHTable->getSize() / 4);
+  replaceSymbol<DefinedSynthetic>(T, T->getName(), SEHTable);
+  cast<DefinedAbsolute>(C)->setVA(SEHTable->getSize() / 4);
 }
 
 // Handles /section options to allow users to overwrite
@@ -873,7 +886,7 @@ void Writer::sortExceptionTable() {
          [](const Entry &A, const Entry &B) { return A.Begin < B.Begin; });
     return;
   }
-  if (Config->Machine == ARMNT) {
+  if (Config->Machine == ARMNT || Config->Machine == ARM64) {
     struct Entry { ulittle32_t Begin, Unwind; };
     sort(parallel::par, (Entry *)Begin, (Entry *)End,
          [](const Entry &A, const Entry &B) { return A.Begin < B.Begin; });

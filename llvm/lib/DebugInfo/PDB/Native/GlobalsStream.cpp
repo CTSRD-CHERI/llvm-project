@@ -1,4 +1,4 @@
-//===- GlobalsStream.cpp - PDB Index of Symbols by Name ---- ----*- C++ -*-===//
+//===- GlobalsStream.cpp - PDB Index of Symbols by Name ---------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -117,7 +117,8 @@ Error GSIHashTable::read(BinaryStreamReader &Reader) {
     return EC;
   if (auto EC = readGSIHashRecords(HashRecords, HashHdr, Reader))
     return EC;
-  if (auto EC = readGSIHashBuckets(HashBuckets, HashBitmap, HashHdr, Reader))
-    return EC;
+  if (HashHdr->HrSize > 0)
+    if (auto EC = readGSIHashBuckets(HashBuckets, HashBitmap, HashHdr, Reader))
+      return EC;
   return Error::success();
 }

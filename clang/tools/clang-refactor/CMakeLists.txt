@@ -3,12 +3,13 @@ set(LLVM_LINK_COMPONENTS
   Support
   )
 
-add_clang_executable(clang-refactor
+add_clang_tool(clang-refactor
   ClangRefactor.cpp
   TestSupport.cpp
   )
 
 target_link_libraries(clang-refactor
+  PRIVATE
   clangAST
   clangBasic
   clangFormat
@@ -19,5 +20,3 @@ target_link_libraries(clang-refactor
   clangToolingCore
   clangToolingRefactor
   )
-
-install(TARGETS clang-refactor RUNTIME DESTINATION bin)

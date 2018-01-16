@@ -403,15 +403,16 @@ bool PPCCTRLoops::mightUseCTR(BasicBlock *BB) {
         }
 
         if (Opcode) {
-          MVT VTy = TLI->getSimpleValueType(
-              *DL, CI->getArgOperand(0)->getType(), true);
-          if (VTy == MVT::Other)
+          EVT EVTy =
+              TLI->getValueType(*DL, CI->getArgOperand(0)->getType(), true);
+
+          if (EVTy == MVT::Other)
             return true;
 
-          if (TLI->isOperationLegalOrCustom(Opcode, VTy))
+          if (TLI->isOperationLegalOrCustom(Opcode, EVTy))
             continue;
-          else if (VTy.isVector() &&
-                   TLI->isOperationLegalOrCustom(Opcode, VTy.getScalarType()))
+          else if (EVTy.isVector() &&
+                   TLI->isOperationLegalOrCustom(Opcode, EVTy.getScalarType()))
             continue;
 
           return true;
@@ -690,12 +691,11 @@ check_block:
     }
 
     if (I != BI && clobbersCTR(*I)) {
-      DEBUG(dbgs() << "BB#" << MBB->getNumber() << " (" <<
-                      MBB->getFullName() << ") instruction " << *I <<
-                      " clobbers CTR, invalidating " << "BB#" <<
-                      BI->getParent()->getNumber() << " (" <<
-                      BI->getParent()->getFullName() << ") instruction " <<
-                      *BI << "\n");
+      DEBUG(dbgs() << printMBBReference(*MBB) << " (" << MBB->getFullName()
+                   << ") instruction " << *I << " clobbers CTR, invalidating "
+                   << printMBBReference(*BI->getParent()) << " ("
+                   << BI->getParent()->getFullName() << ") instruction " << *BI
+                   << "\n");
       return false;
     }
 
@@ -709,10 +709,10 @@ check_block:
   if (CheckPreds) {
 queue_preds:
     if (MachineFunction::iterator(MBB) == MBB->getParent()->begin()) {
-      DEBUG(dbgs() << "Unable to find a MTCTR instruction for BB#" <<
-                      BI->getParent()->getNumber() << " (" <<
-                      BI->getParent()->getFullName() << ") instruction " <<
-                      *BI << "\n");
+      DEBUG(dbgs() << "Unable to find a MTCTR instruction for "
+                   << printMBBReference(*BI->getParent()) << " ("
+                   << BI->getParent()->getFullName() << ") instruction " << *BI
+                   << "\n");
       return false;
     }
 

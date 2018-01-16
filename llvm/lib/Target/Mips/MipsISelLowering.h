@@ -24,11 +24,11 @@
 #include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
+#include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Type.h"
-#include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetMachine.h"
 #include <algorithm>
 #include <cassert>
@@ -671,13 +671,13 @@ extern bool LargeCapTable;
                        MipsCCState &State) const;
 
     /// passByValArg - Pass a byval argument in registers or on stack.
-    SDValue passByValArg(SDValue Chain, const SDLoc &DL,
-                         std::deque<std::pair<unsigned, SDValue>> &RegsToPass,
-                         SmallVectorImpl<SDValue> &MemOpChains,
-                         SDValue StackPtr, MachineFrameInfo &MFI,
-                         SelectionDAG &DAG, SDValue Arg, unsigned FirstReg,
-                         unsigned LastReg, const ISD::ArgFlagsTy &Flags,
-                         bool isLittle, const CCValAssign &VA) const;
+    void passByValArg(SDValue Chain, const SDLoc &DL,
+                      std::deque<std::pair<unsigned, SDValue>> &RegsToPass,
+                      SmallVectorImpl<SDValue> &MemOpChains, SDValue StackPtr,
+                      MachineFrameInfo &MFI, SelectionDAG &DAG, SDValue Arg,
+                      unsigned FirstReg, unsigned LastReg,
+                      const ISD::ArgFlagsTy &Flags, bool isLittle,
+                      const CCValAssign &VA) const;
 
     /// writeVarArgRegs - Write variable function arguments passed in registers
     /// to the stack. Also create a stack frame object for the first variable

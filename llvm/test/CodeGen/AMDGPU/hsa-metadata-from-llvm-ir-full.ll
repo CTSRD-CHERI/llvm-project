@@ -28,7 +28,8 @@
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      char
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      char
 ; CHECK-NEXT:       Size:          1
 ; CHECK-NEXT:       Align:         1
 ; CHECK-NEXT:       ValueKind:     ByValue
@@ -51,6 +52,8 @@
 ; CHECK-NEXT:       ValueKind:     HiddenPrintfBuffer
 ; CHECK-NEXT:       ValueType:     I8
 ; CHECK-NEXT:       AddrSpaceQual: Global
+; CHECK-NOT:        ValueKind:     HiddenDefaultQueue
+; CHECK-NOT:        ValueKind:     HiddenCompletionAction
 define amdgpu_kernel void @test_char(i8 %a)
     !kernel_arg_addr_space !1 !kernel_arg_access_qual !2 !kernel_arg_type !9
     !kernel_arg_base_type !9 !kernel_arg_type_qual !4 {
@@ -62,7 +65,8 @@ define amdgpu_kernel void @test_char(i8 %a)
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      ushort2
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      ushort2
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     ByValue
@@ -96,7 +100,8 @@ define amdgpu_kernel void @test_ushort2(<2 x i16> %a)
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      int3
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      int3
 ; CHECK-NEXT:       Size:          16
 ; CHECK-NEXT:       Align:         16
 ; CHECK-NEXT:       ValueKind:     ByValue
@@ -130,7 +135,8 @@ define amdgpu_kernel void @test_int3(<3 x i32> %a)
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      ulong4
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      ulong4
 ; CHECK-NEXT:       Size:          32
 ; CHECK-NEXT:       Align:         32
 ; CHECK-NEXT:       ValueKind:     ByValue
@@ -164,7 +170,8 @@ define amdgpu_kernel void @test_ulong4(<4 x i64> %a)
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      half8
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      half8
 ; CHECK-NEXT:       Size:          16
 ; CHECK-NEXT:       Align:         16
 ; CHECK-NEXT:       ValueKind:     ByValue
@@ -198,7 +205,8 @@ define amdgpu_kernel void @test_half8(<8 x half> %a)
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      float16
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      float16
 ; CHECK-NEXT:       Size:          64
 ; CHECK-NEXT:       Align:         64
 ; CHECK-NEXT:       ValueKind:     ByValue
@@ -232,7 +240,8 @@ define amdgpu_kernel void @test_float16(<16 x float> %a)
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      double16
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      double16
 ; CHECK-NEXT:       Size:          128
 ; CHECK-NEXT:       Align:         128
 ; CHECK-NEXT:       ValueKind:     ByValue
@@ -266,7 +275,8 @@ define amdgpu_kernel void @test_double16(<16 x double> %a)
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      'int *'
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      'int *'
 ; CHECK-NEXT:       Size:          8
 ; CHECK-NEXT:       Align:         8
 ; CHECK-NEXT:       ValueKind:     GlobalBuffer
@@ -301,7 +311,8 @@ define amdgpu_kernel void @test_pointer(i32 addrspace(1)* %a)
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      image2d_t
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      image2d_t
 ; CHECK-NEXT:       Size:          8
 ; CHECK-NEXT:       Align:         8
 ; CHECK-NEXT:       ValueKind:     Image
@@ -336,7 +347,8 @@ define amdgpu_kernel void @test_image(%opencl.image2d_t addrspace(1)* %a)
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      sampler_t
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      sampler_t
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     Sampler
@@ -370,7 +382,8 @@ define amdgpu_kernel void @test_sampler(i32 %a)
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      queue_t
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      queue_t
 ; CHECK-NEXT:       Size:          8
 ; CHECK-NEXT:       Align:         8
 ; CHECK-NEXT:       ValueKind:     Queue
@@ -405,7 +418,8 @@ define amdgpu_kernel void @test_queue(%opencl.queue_t addrspace(1)* %a)
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      struct A
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      struct A
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     GlobalBuffer
@@ -440,7 +454,8 @@ define amdgpu_kernel void @test_struct(%struct.A* byval %a)
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      i128
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      i128
 ; CHECK-NEXT:       Size:          16
 ; CHECK-NEXT:       Align:         8
 ; CHECK-NEXT:       ValueKind:     ByValue
@@ -474,19 +489,22 @@ define amdgpu_kernel void @test_i128(i128 %a)
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      int
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      int
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     ByValue
 ; CHECK-NEXT:       ValueType:     I32
 ; CHECK-NEXT:       AccQual:       Default
-; CHECK-NEXT:     - TypeName:      short2
+; CHECK-NEXT:     - Name:          b
+; CHECK-NEXT:       TypeName:      short2
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     ByValue
 ; CHECK-NEXT:       ValueType:     I16
 ; CHECK-NEXT:       AccQual:       Default
-; CHECK-NEXT:     - TypeName:      char3
+; CHECK-NEXT:     - Name:          c
+; CHECK-NEXT:       TypeName:      char3
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     ByValue
@@ -520,21 +538,24 @@ define amdgpu_kernel void @test_multi_arg(i32 %a, <2 x i16> %b, <3 x i8> %c)
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      'int *'
+; CHECK-NEXT:     - Name:          g
+; CHECK-NEXT:       TypeName:      'int *'
 ; CHECK-NEXT:       Size:          8
 ; CHECK-NEXT:       Align:         8
 ; CHECK-NEXT:       ValueKind:     GlobalBuffer
 ; CHECK-NEXT:       ValueType:     I32
 ; CHECK-NEXT:       AddrSpaceQual: Global
 ; CHECK-NEXT:       AccQual:       Default
-; CHECK-NEXT:     - TypeName:      'int *'
+; CHECK-NEXT:     - Name:          c
+; CHECK-NEXT:       TypeName:      'int *'
 ; CHECK-NEXT:       Size:          8
 ; CHECK-NEXT:       Align:         8
 ; CHECK-NEXT:       ValueKind:     GlobalBuffer
 ; CHECK-NEXT:       ValueType:     I32
 ; CHECK-NEXT:       AddrSpaceQual: Constant
 ; CHECK-NEXT:       AccQual:       Default
-; CHECK-NEXT:     - TypeName:      'int *'
+; CHECK-NEXT:     - Name:          l
+; CHECK-NEXT:       TypeName:      'int *'
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     DynamicSharedPointer
@@ -572,7 +593,8 @@ define amdgpu_kernel void @test_addr_space(i32 addrspace(1)* %g,
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      'int *'
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      'int *'
 ; CHECK-NEXT:       Size:          8
 ; CHECK-NEXT:       Align:         8
 ; CHECK-NEXT:       ValueKind:     GlobalBuffer
@@ -580,7 +602,8 @@ define amdgpu_kernel void @test_addr_space(i32 addrspace(1)* %g,
 ; CHECK-NEXT:       AddrSpaceQual: Global
 ; CHECK-NEXT:       AccQual:       Default
 ; CHECK-NEXT:       IsVolatile:    true
-; CHECK-NEXT:     - TypeName:      'int *'
+; CHECK-NEXT:     - Name:          b
+; CHECK-NEXT:       TypeName:      'int *'
 ; CHECK-NEXT:       Size:          8
 ; CHECK-NEXT:       Align:         8
 ; CHECK-NEXT:       ValueKind:     GlobalBuffer
@@ -589,7 +612,8 @@ define amdgpu_kernel void @test_addr_space(i32 addrspace(1)* %g,
 ; CHECK-NEXT:       AccQual:       Default
 ; CHECK-NEXT:       IsConst:       true
 ; CHECK-NEXT:       IsRestrict:    true
-; CHECK-NEXT:     - TypeName:      'int *'
+; CHECK-NEXT:     - Name:          c
+; CHECK-NEXT:       TypeName:      'int *'
 ; CHECK-NEXT:       Size:          8
 ; CHECK-NEXT:       Align:         8
 ; CHECK-NEXT:       ValueKind:     Pipe
@@ -627,21 +651,24 @@ define amdgpu_kernel void @test_type_qual(i32 addrspace(1)* %a,
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      image1d_t
+; CHECK-NEXT:     - Name:          ro
+; CHECK-NEXT:       TypeName:      image1d_t
 ; CHECK-NEXT:       Size:          8
 ; CHECK-NEXT:       Align:         8
 ; CHECK-NEXT:       ValueKind:     Image
 ; CHECK-NEXT:       ValueType:     Struct
 ; CHECK-NEXT:       AddrSpaceQual: Global
 ; CHECK-NEXT:       AccQual:       ReadOnly
-; CHECK-NEXT:     - TypeName:      image2d_t
+; CHECK-NEXT:     - Name:          wo
+; CHECK-NEXT:       TypeName:      image2d_t
 ; CHECK-NEXT:       Size:          8
 ; CHECK-NEXT:       Align:         8
 ; CHECK-NEXT:       ValueKind:     Image
 ; CHECK-NEXT:       ValueType:     Struct
 ; CHECK-NEXT:       AddrSpaceQual: Global
 ; CHECK-NEXT:       AccQual:       WriteOnly
-; CHECK-NEXT:     - TypeName:      image3d_t
+; CHECK-NEXT:     - Name:          rw
+; CHECK-NEXT:       TypeName:      image3d_t
 ; CHECK-NEXT:       Size:          8
 ; CHECK-NEXT:       Align:         8
 ; CHECK-NEXT:       ValueKind:     Image
@@ -680,7 +707,8 @@ define amdgpu_kernel void @test_access_qual(%opencl.image1d_t addrspace(1)* %ro,
 ; CHECK-NEXT:   Attrs:
 ; CHECK-NEXT:       VecTypeHint:   half
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      int
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      int
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     ByValue
@@ -716,7 +744,8 @@ define amdgpu_kernel void @test_vec_type_hint_half(i32 %a)
 ; CHECK-NEXT:   Attrs:
 ; CHECK-NEXT:       VecTypeHint:   float
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      int
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      int
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     ByValue
@@ -752,7 +781,8 @@ define amdgpu_kernel void @test_vec_type_hint_float(i32 %a)
 ; CHECK-NEXT:   Attrs:
 ; CHECK-NEXT:       VecTypeHint:   double
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      int
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      int
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     ByValue
@@ -788,7 +818,8 @@ define amdgpu_kernel void @test_vec_type_hint_double(i32 %a)
 ; CHECK-NEXT:   Attrs:
 ; CHECK-NEXT:       VecTypeHint:   char
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      int
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      int
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     ByValue
@@ -824,7 +855,8 @@ define amdgpu_kernel void @test_vec_type_hint_char(i32 %a)
 ; CHECK-NEXT:   Attrs:
 ; CHECK-NEXT:       VecTypeHint:   short
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      int
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      int
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     ByValue
@@ -860,7 +892,8 @@ define amdgpu_kernel void @test_vec_type_hint_short(i32 %a)
 ; CHECK-NEXT:   Attrs:
 ; CHECK-NEXT:       VecTypeHint:   long
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      int
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      int
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     ByValue
@@ -896,7 +929,8 @@ define amdgpu_kernel void @test_vec_type_hint_long(i32 %a)
 ; CHECK-NEXT:   Attrs:
 ; CHECK-NEXT:       VecTypeHint:   unknown
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      int
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      int
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     ByValue
@@ -933,7 +967,8 @@ define amdgpu_kernel void @test_vec_type_hint_unknown(i32 %a)
 ; CHECK-NEXT:       ReqdWorkGroupSize: [ 1, 2, 4 ]
 ; CHECK-NEXT:       VecTypeHint:       int
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:          int
+; CHECK-NEXT:     - Name:              a
+; CHECK-NEXT:       TypeName:          int
 ; CHECK-NEXT:       Size:              4
 ; CHECK-NEXT:       Align:             4
 ; CHECK-NEXT:       ValueKind:         ByValue
@@ -971,7 +1006,8 @@ define amdgpu_kernel void @test_reqd_wgs_vec_type_hint(i32 %a)
 ; CHECK-NEXT:       WorkGroupSizeHint: [ 8, 16, 32 ]
 ; CHECK-NEXT:       VecTypeHint:       uint4
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:          int
+; CHECK-NEXT:     - Name:              a
+; CHECK-NEXT:       TypeName:          int
 ; CHECK-NEXT:       Size:              4
 ; CHECK-NEXT:       Align:             4
 ; CHECK-NEXT:       ValueKind:         ByValue
@@ -1006,7 +1042,8 @@ define amdgpu_kernel void @test_wgs_hint_vec_type_hint(i32 %a)
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      'int **'
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      'int **'
 ; CHECK-NEXT:       Size:          8
 ; CHECK-NEXT:       Align:         8
 ; CHECK-NEXT:       ValueKind:     GlobalBuffer
@@ -1041,7 +1078,8 @@ define amdgpu_kernel void @test_arg_ptr_to_ptr(i32* addrspace(1)* %a)
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      struct B
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      struct B
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     GlobalBuffer
@@ -1076,7 +1114,8 @@ define amdgpu_kernel void @test_arg_struct_contains_ptr(%struct.B* byval %a)
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      'global int* __attribute__((ext_vector_type(2)))'
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      'global int* __attribute__((ext_vector_type(2)))'
 ; CHECK-NEXT:       Size:          16
 ; CHECK-NEXT:       Align:         16
 ; CHECK-NEXT:       ValueKind:     ByValue
@@ -1110,7 +1149,8 @@ define amdgpu_kernel void @test_arg_vector_of_ptr(<2 x i32 addrspace(1)*> %a)
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      clk_event_t
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      clk_event_t
 ; CHECK-NEXT:       Size:          8
 ; CHECK-NEXT:       Align:         8
 ; CHECK-NEXT:       ValueKind:     GlobalBuffer
@@ -1146,14 +1186,16 @@ define amdgpu_kernel void @test_arg_unknown_builtin_type(
 ; CHECK-NEXT:   Language:        OpenCL C
 ; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      'long *'
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      'long *'
 ; CHECK-NEXT:       Size:          8
 ; CHECK-NEXT:       Align:         8
 ; CHECK-NEXT:       ValueKind:     GlobalBuffer
 ; CHECK-NEXT:       ValueType:     I64
 ; CHECK-NEXT:       AddrSpaceQual: Global
 ; CHECK-NEXT:       AccQual:       Default
-; CHECK-NEXT:     - TypeName:      'char *'
+; CHECK-NEXT:     - Name:          b
+; CHECK-NEXT:       TypeName:      'char *'
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     DynamicSharedPointer
@@ -1161,7 +1203,8 @@ define amdgpu_kernel void @test_arg_unknown_builtin_type(
 ; CHECK-NEXT:       PointeeAlign:  1
 ; CHECK-NEXT:       AddrSpaceQual: Local
 ; CHECK-NEXT:       AccQual:       Default
-; CHECK-NEXT:     - TypeName:      'char2 *'
+; CHECK-NEXT:     - Name:          c
+; CHECK-NEXT:       TypeName:      'char2 *'
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     DynamicSharedPointer
@@ -1169,7 +1212,8 @@ define amdgpu_kernel void @test_arg_unknown_builtin_type(
 ; CHECK-NEXT:       PointeeAlign:  2
 ; CHECK-NEXT:       AddrSpaceQual: Local
 ; CHECK-NEXT:       AccQual:       Default
-; CHECK-NEXT:     - TypeName:      'char3 *'
+; CHECK-NEXT:     - Name:          d
+; CHECK-NEXT:       TypeName:      'char3 *'
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     DynamicSharedPointer
@@ -1177,7 +1221,8 @@ define amdgpu_kernel void @test_arg_unknown_builtin_type(
 ; CHECK-NEXT:       PointeeAlign:  4
 ; CHECK-NEXT:       AddrSpaceQual: Local
 ; CHECK-NEXT:       AccQual:       Default
-; CHECK-NEXT:     - TypeName:      'char4 *'
+; CHECK-NEXT:     - Name:          e
+; CHECK-NEXT:       TypeName:      'char4 *'
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     DynamicSharedPointer
@@ -1185,7 +1230,8 @@ define amdgpu_kernel void @test_arg_unknown_builtin_type(
 ; CHECK-NEXT:       PointeeAlign:  4
 ; CHECK-NEXT:       AddrSpaceQual: Local
 ; CHECK-NEXT:       AccQual:       Default
-; CHECK-NEXT:     - TypeName:      'char8 *'
+; CHECK-NEXT:     - Name:          f
+; CHECK-NEXT:       TypeName:      'char8 *'
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     DynamicSharedPointer
@@ -1193,7 +1239,8 @@ define amdgpu_kernel void @test_arg_unknown_builtin_type(
 ; CHECK-NEXT:       PointeeAlign:  8
 ; CHECK-NEXT:       AddrSpaceQual: Local
 ; CHECK-NEXT:       AccQual:       Default
-; CHECK-NEXT:     - TypeName:      'char16 *'
+; CHECK-NEXT:     - Name:          g
+; CHECK-NEXT:       TypeName:      'char16 *'
 ; CHECK-NEXT:       Size:          4
 ; CHECK-NEXT:       Align:         4
 ; CHECK-NEXT:       ValueKind:     DynamicSharedPointer
@@ -1237,7 +1284,8 @@ define amdgpu_kernel void @test_pointee_align(i64 addrspace(1)* %a,
 ; CHECK-NEXT:   Attrs:
 ; CHECK-NEXT:       RuntimeHandle: __test_block_invoke_kernel_runtime_handle
 ; CHECK-NEXT:   Args:
-; CHECK-NEXT:     - TypeName:      __block_literal
+; CHECK-NEXT:     - Name:          arg
+; CHECK-NEXT:       TypeName:      __block_literal
 ; CHECK-NEXT:       Size:          25
 ; CHECK-NEXT:       Align:         1
 ; CHECK-NEXT:       ValueKind:     ByValue
@@ -1267,7 +1315,53 @@ define amdgpu_kernel void @__test_block_invoke_kernel(
   ret void
 }
 
+; CHECK:      - Name:            test_enqueue_kernel_caller
+; CHECK-NEXT:   SymbolName:      'test_enqueue_kernel_caller@kd'
+; CHECK-NEXT:   Language:        OpenCL C
+; CHECK-NEXT:   LanguageVersion: [ 2, 0 ]
+; CHECK-NEXT:   Args:
+; CHECK-NEXT:     - Name:          a
+; CHECK-NEXT:       TypeName:      char
+; CHECK-NEXT:       Size:          1
+; CHECK-NEXT:       Align:         1
+; CHECK-NEXT:       ValueKind:     ByValue
+; CHECK-NEXT:       ValueType:     I8
+; CHECK-NEXT:       AccQual:       Default
+; CHECK-NEXT:     - Size:          8
+; CHECK-NEXT:       Align:         8
+; CHECK-NEXT:       ValueKind:     HiddenGlobalOffsetX
+; CHECK-NEXT:       ValueType:     I64
+; CHECK-NEXT:     - Size:          8
+; CHECK-NEXT:       Align:         8
+; CHECK-NEXT:       ValueKind:     HiddenGlobalOffsetY
+; CHECK-NEXT:       ValueType:     I64
+; CHECK-NEXT:     - Size:          8
+; CHECK-NEXT:       Align:         8
+; CHECK-NEXT:       ValueKind:     HiddenGlobalOffsetZ
+; CHECK-NEXT:       ValueType:     I64
+; CHECK-NEXT:     - Size:          8
+; CHECK-NEXT:       Align:         8
+; CHECK-NEXT:       ValueKind:     HiddenPrintfBuffer
+; CHECK-NEXT:       ValueType:     I8
+; CHECK-NEXT:       AddrSpaceQual: Global
+; CHECK-NEXT:     - Size:          8
+; CHECK-NEXT:       Align:         8
+; CHECK-NEXT:       ValueKind:     HiddenDefaultQueue
+; CHECK-NEXT:       ValueType:     I8
+; CHECK-NEXT:       AddrSpaceQual: Global
+; CHECK-NEXT:     - Size:          8
+; CHECK-NEXT:       Align:         8
+; CHECK-NEXT:       ValueKind:     HiddenCompletionAction
+; CHECK-NEXT:       ValueType:     I8
+; CHECK-NEXT:       AddrSpaceQual: Global
+define amdgpu_kernel void @test_enqueue_kernel_caller(i8 %a) #1
+    !kernel_arg_addr_space !1 !kernel_arg_access_qual !2 !kernel_arg_type !9
+    !kernel_arg_base_type !9 !kernel_arg_type_qual !4 {
+  ret void
+}
+
 attributes #0 = { "runtime-handle"="__test_block_invoke_kernel_runtime_handle" }
+attributes #1 = { "calls-enqueue-kernel" }
 
 !llvm.printf.fmts = !{!100, !101}
 

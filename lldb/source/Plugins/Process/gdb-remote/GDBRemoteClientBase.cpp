@@ -60,6 +60,7 @@ StateType GDBRemoteClientBase::SendContinuePacketAndWaitForResponse(
         continue;
       if (steady_clock::now() >= m_interrupt_time + kInterruptTimeout)
         return eStateInvalid;
+      break;
     }
     case PacketResult::Success:
       break;
@@ -173,6 +174,30 @@ GDBRemoteClientBase::SendPacketAndWaitForResponse(
   }
 
   return SendPacketAndWaitForResponseNoLock(payload, response);
+}
+
+GDBRemoteCommunication::PacketResult
+GDBRemoteClientBase::SendPacketAndReceiveResponseWithOutputSupport(
+    llvm::StringRef payload, StringExtractorGDBRemote &response,
+    bool send_async,
+    llvm::function_ref<void(llvm::StringRef)> output_callback) {
+  Lock lock(*this, send_async);
+  if (!lock) {
+    if (Log *log =
+            ProcessGDBRemoteLog::GetLogIfAllCategoriesSet(GDBR_LOG_PROCESS))
+      log->Printf("GDBRemoteClientBase::%s failed to get mutex, not sending "
+                  "packet '%.*s' (send_async=%d)",
+                  __FUNCTION__, int(payload.size()), payload.data(),
+                  send_async);
+    return PacketResult::ErrorSendFailed;
+  }
+
+  PacketResult packet_result = SendPacketNoLock(payload);
+  if (packet_result != PacketResult::Success)
+    return packet_result;
+
+  return ReadPacketWithOutputSupport(response, GetPacketTimeout(), true,
+                                     output_callback);
 }
 
 GDBRemoteCommunication::PacketResult

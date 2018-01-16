@@ -1229,8 +1229,7 @@ bool GVN::PerformLoadPRE(LoadInst *LI, AvailValInBlkVect &ValuesPerBlock,
   if (!CanDoPRE) {
     while (!NewInsts.empty()) {
       Instruction *I = NewInsts.pop_back_val();
-      if (MD) MD->removeInstruction(I);
-      I->eraseFromParent();
+      markInstructionForDeletion(I);
     }
     // HINT: Don't revert the edge-splitting as following transformation may
     // also need to split these critical edges.
@@ -1333,7 +1332,10 @@ static void reportLoadElim(LoadInst *LI, Value *AvailableValue,
 /// non-local by performing PHI construction.
 bool GVN::processNonLocalLoad(LoadInst *LI) {
   // non-local speculations are not allowed under asan.
-  if (LI->getParent()->getParent()->hasFnAttribute(Attribute::SanitizeAddress))
+  if (LI->getParent()->getParent()->hasFnAttribute(
+          Attribute::SanitizeAddress) ||
+      LI->getParent()->getParent()->hasFnAttribute(
+          Attribute::SanitizeHWAddress))
     return false;
 
   // Step 1: Find the non-local dependencies of the load.
@@ -2133,17 +2135,26 @@ bool GVN::processBlock(BasicBlock *BB) {
     if (!AtStart)
       --BI;
 
-    for (SmallVectorImpl<Instruction *>::iterator I = InstrsToErase.begin(),
-         E = InstrsToErase.end(); I != E; ++I) {
-      DEBUG(dbgs() << "GVN removed: " << **I << '\n');
-      if (MD) MD->removeInstruction(*I);
-      DEBUG(verifyRemoved(*I));
-      (*I)->eraseFromParent();
+    bool InvalidateImplicitCF = false;
+    const Instruction *MaybeFirstICF = FirstImplicitControlFlowInsts.lookup(BB);
+    for (auto *I : InstrsToErase) {
+      assert(I->getParent() == BB && "Removing instruction from wrong block?");
+      DEBUG(dbgs() << "GVN removed: " << *I << '\n');
+      if (MD) MD->removeInstruction(I);
+      DEBUG(verifyRemoved(I));
+      if (MaybeFirstICF == I) {
+        // We have erased the first ICF in block. The map needs to be updated.
+        InvalidateImplicitCF = true;
+        // Do not keep dangling pointer on the erased instruction.
+        MaybeFirstICF = nullptr;
+      }
+      I->eraseFromParent();
     }
 
-    if (!InstrsToErase.empty())
-      OI->invalidateBlock(BB);
+    OI->invalidateBlock(BB);
     InstrsToErase.clear();
+    if (InvalidateImplicitCF)
+      fillImplicitControlFlowInfo(BB);
 
     if (AtStart)
       BI = BB->begin();
@@ -2282,6 +2293,20 @@ bool GVN::performScalarPRE(Instruction *CurInst) {
   Instruction *PREInstr = nullptr;
 
   if (NumWithout != 0) {
+    if (!isSafeToSpeculativelyExecute(CurInst)) {
+      // It is only valid to insert a new instruction if the current instruction
+      // is always executed. An instruction with implicit control flow could
+      // prevent us from doing it. If we cannot speculate the execution, then
+      // PRE should be prohibited.
+      auto It = FirstImplicitControlFlowInsts.find(CurrentBlock);
+      if (It != FirstImplicitControlFlowInsts.end()) {
+        assert(It->second->getParent() == CurrentBlock &&
+               "Implicit control flow map broken?");
+        if (OI->dominates(It->second, CurInst))
+          return false;
+      }
+    }
+
     // Don't do PRE across indirect branch.
     if (isa<IndirectBrInst>(PREPred->getTerminator()))
       return false;
@@ -2315,9 +2340,12 @@ bool GVN::performScalarPRE(Instruction *CurInst) {
       PHINode::Create(CurInst->getType(), predMap.size(),
                       CurInst->getName() + ".pre-phi", &CurrentBlock->front());
   for (unsigned i = 0, e = predMap.size(); i != e; ++i) {
-    if (Value *V = predMap[i].first)
+    if (Value *V = predMap[i].first) {
+      // If we use an existing value in this phi, we have to patch the original
+      // value because the phi will be used to replace a later value.
+      patchReplacementInstruction(CurInst, V);
       Phi->addIncoming(V, predMap[i].second);
-    else
+    } else
       Phi->addIncoming(PREInstr, PREPred);
   }
 
@@ -2337,8 +2365,14 @@ bool GVN::performScalarPRE(Instruction *CurInst) {
   if (MD)
     MD->removeInstruction(CurInst);
   DEBUG(verifyRemoved(CurInst));
-  CurInst->eraseFromParent();
+  bool InvalidateImplicitCF =
+      FirstImplicitControlFlowInsts.lookup(CurInst->getParent()) == CurInst;
+  // FIXME: Intended to be markInstructionForDeletion(CurInst), but it causes
+  // some assertion failures.
   OI->invalidateBlock(CurrentBlock);
+  CurInst->eraseFromParent();
+  if (InvalidateImplicitCF)
+    fillImplicitControlFlowInfo(CurrentBlock);
   ++NumGVNInstr;
 
   return true;
@@ -2405,7 +2439,9 @@ bool GVN::iterateOnFunction(Function &F) {
   // RPOT walks the graph in its constructor and will not be invalidated during
   // processBlock.
   ReversePostOrderTraversal<Function *> RPOT(&F);
-  fillImplicitControlFlowInfo(RPOT);
+
+  for (BasicBlock *BB : RPOT)
+    fillImplicitControlFlowInfo(BB);
   for (BasicBlock *BB : RPOT)
     Changed |= processBlock(BB);
 
@@ -2421,7 +2457,10 @@ void GVN::cleanupGlobalSets() {
 }
 
 void
-GVN::fillImplicitControlFlowInfo(ReversePostOrderTraversal<Function *> &RPOT) {
+GVN::fillImplicitControlFlowInfo(BasicBlock *BB) {
+  // Make sure that all marked instructions are actually deleted by this point,
+  // so that we don't need to care about omitting them.
+  assert(InstrsToErase.empty() && "Filling before removed all marked insns?");
   auto MayNotTransferExecutionToSuccessor = [&](const Instruction *I) {
     // If a block's instruction doesn't always pass the control to its successor
     // instruction, mark the block as having implicit control flow. We use them
@@ -2449,13 +2488,13 @@ GVN::fillImplicitControlFlowInfo(ReversePostOrderTraversal<Function *> &RPOT) {
     }
     return true;
   };
+  FirstImplicitControlFlowInsts.erase(BB);
 
-  for (BasicBlock *BB : RPOT)
-    for (auto &I : *BB)
-      if (MayNotTransferExecutionToSuccessor(&I)) {
-        FirstImplicitControlFlowInsts[BB] = &I;
-        break;
-      }
+  for (auto &I : *BB)
+    if (MayNotTransferExecutionToSuccessor(&I)) {
+      FirstImplicitControlFlowInsts[BB] = &I;
+      break;
+    }
 }
 
 /// Verify that the specified instruction does not occur in our

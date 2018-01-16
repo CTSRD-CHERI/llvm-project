@@ -23,7 +23,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/CodeGen/MachineScheduler.h"
 #include "llvm/IR/MDBuilder.h"
-#include "llvm/Target/TargetFrameLowering.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
 #include <algorithm>
 
 using namespace llvm;
@@ -48,27 +48,32 @@ AMDGPUSubtarget::initializeSubtargetDependencies(const Triple &TT,
   // for SI has the unhelpful behavior that it unsets everything else if you
   // disable it.
 
-  SmallString<256> FullFS("+promote-alloca,+fp64-fp16-denormals,+dx10-clamp,+load-store-opt,");
+  SmallString<256> FullFS("+promote-alloca,+dx10-clamp,+load-store-opt,");
+
   if (isAmdHsaOS()) // Turn on FlatForGlobal for HSA.
     FullFS += "+flat-address-space,+flat-for-global,+unaligned-buffer-access,+trap-handler,";
+
+  // FIXME: I don't think think Evergreen has any useful support for
+  // denormals, but should be checked. Should we issue a warning somewhere
+  // if someone tries to enable these?
+  if (getGeneration() >= AMDGPUSubtarget::SOUTHERN_ISLANDS) {
+    FullFS += "+fp64-fp16-denormals,";
+  } else {
+    FullFS += "-fp32-denormals,";
+  }
 
   FullFS += FS;
 
   ParseSubtargetFeatures(GPU, FullFS);
+
+  // We don't support FP64 for EG/NI atm.
+  assert(!hasFP64() || (getGeneration() >= AMDGPUSubtarget::SOUTHERN_ISLANDS));
 
   // Unless +-flat-for-global is specified, turn on FlatForGlobal for all OS-es
   // on VI and newer hardware to avoid assertion failures due to missing ADDR64
   // variants of MUBUF instructions.
   if (!hasAddr64() && !FS.contains("flat-for-global")) {
     FlatForGlobal = true;
-  }
-
-  // FIXME: I don't think think Evergreen has any useful support for
-  // denormals, but should be checked. Should we issue a warning somewhere
-  // if someone tries to enable these?
-  if (getGeneration() <= AMDGPUSubtarget::NORTHERN_ISLANDS) {
-    FP64FP16Denormals = false;
-    FP32Denormals = false;
   }
 
   // Set defaults if needed.
@@ -96,7 +101,7 @@ AMDGPUSubtarget::AMDGPUSubtarget(const Triple &TT, StringRef GPU, StringRef FS,
     TargetTriple(TT),
     Gen(TT.getArch() == Triple::amdgcn ? SOUTHERN_ISLANDS : R600),
     IsaVersion(ISAVersion0_0_0),
-    WavefrontSize(64),
+    WavefrontSize(0),
     LocalMemorySize(0),
     LDSBankCount(0),
     MaxPrivateElementSize(0),
@@ -121,6 +126,7 @@ AMDGPUSubtarget::AMDGPUSubtarget(const Triple &TT, StringRef GPU, StringRef FS,
     DebuggerReserveRegs(false),
     DebuggerEmitPrologue(false),
 
+    EnableHugePrivateBuffer(false),
     EnableVGPRSpilling(false),
     EnablePromoteAlloca(false),
     EnableLoadStoreOpt(false),
@@ -129,6 +135,7 @@ AMDGPUSubtarget::AMDGPUSubtarget(const Triple &TT, StringRef GPU, StringRef FS,
     DumpCode(false),
 
     FP64(false),
+    FMA(false),
     IsGCN(false),
     GCN3Encoding(false),
     CIInsts(false),
@@ -138,6 +145,7 @@ AMDGPUSubtarget::AMDGPUSubtarget(const Triple &TT, StringRef GPU, StringRef FS,
     Has16BitInsts(false),
     HasIntClamp(false),
     HasVOP3PInsts(false),
+    HasMadMixInsts(false),
     HasMovrel(false),
     HasVGPRIndexMode(false),
     HasScalarStores(false),
@@ -190,14 +198,31 @@ unsigned AMDGPUSubtarget::getOccupancyWithLocalMemSize(uint32_t Bytes,
   return NumWaves;
 }
 
+std::pair<unsigned, unsigned>
+AMDGPUSubtarget::getDefaultFlatWorkGroupSize(CallingConv::ID CC) const {
+  switch (CC) {
+  case CallingConv::AMDGPU_CS:
+  case CallingConv::AMDGPU_KERNEL:
+  case CallingConv::SPIR_KERNEL:
+    return std::make_pair(getWavefrontSize() * 2, getWavefrontSize() * 4);
+  case CallingConv::AMDGPU_VS:
+  case CallingConv::AMDGPU_LS:
+  case CallingConv::AMDGPU_HS:
+  case CallingConv::AMDGPU_ES:
+  case CallingConv::AMDGPU_GS:
+  case CallingConv::AMDGPU_PS:
+    return std::make_pair(1, getWavefrontSize());
+  default:
+    return std::make_pair(1, 16 * getWavefrontSize());
+  }
+}
+
 std::pair<unsigned, unsigned> AMDGPUSubtarget::getFlatWorkGroupSizes(
   const Function &F) const {
+  // FIXME: 1024 if function.
   // Default minimum/maximum flat work group sizes.
   std::pair<unsigned, unsigned> Default =
-    AMDGPU::isCompute(F.getCallingConv()) ?
-      std::pair<unsigned, unsigned>(getWavefrontSize() * 2,
-                                    getWavefrontSize() * 4) :
-      std::pair<unsigned, unsigned>(1, getWavefrontSize());
+    getDefaultFlatWorkGroupSize(F.getCallingConv());
 
   // TODO: Do not process "amdgpu-max-work-group-size" attribute once mesa
   // starts using "amdgpu-flat-work-group-size" attribute.
@@ -443,7 +468,7 @@ unsigned SISubtarget::getReservedNumSGPRs(const MachineFunction &MF) const {
 }
 
 unsigned SISubtarget::getMaxNumSGPRs(const MachineFunction &MF) const {
-  const Function &F = *MF.getFunction();
+  const Function &F = MF.getFunction();
   const SIMachineFunctionInfo &MFI = *MF.getInfo<SIMachineFunctionInfo>();
 
   // Compute maximum number of SGPRs function can use using default/requested
@@ -493,7 +518,7 @@ unsigned SISubtarget::getMaxNumSGPRs(const MachineFunction &MF) const {
 }
 
 unsigned SISubtarget::getMaxNumVGPRs(const MachineFunction &MF) const {
-  const Function &F = *MF.getFunction();
+  const Function &F = MF.getFunction();
   const SIMachineFunctionInfo &MFI = *MF.getInfo<SIMachineFunctionInfo>();
 
   // Compute maximum number of VGPRs function can use using default/requested
@@ -526,6 +551,7 @@ unsigned SISubtarget::getMaxNumVGPRs(const MachineFunction &MF) const {
   return MaxNumVGPRs - getReservedNumVGPRs(MF);
 }
 
+namespace {
 struct MemOpClusterMutation : ScheduleDAGMutation {
   const SIInstrInfo *TII;
 
@@ -574,6 +600,7 @@ struct MemOpClusterMutation : ScheduleDAGMutation {
     }
   }
 };
+} // namespace
 
 void SISubtarget::getPostRAMutations(
     std::vector<std::unique_ptr<ScheduleDAGMutation>> &Mutations) const {

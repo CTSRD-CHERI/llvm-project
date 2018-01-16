@@ -155,7 +155,7 @@ namespace {
       while (true) {
         for (auto UD : DC->using_directives()) {
           DeclContext *NS = UD->getNominatedNamespace();
-          if (visited.insert(NS).second && SemaRef.isVisible(UD)) {
+          if (SemaRef.isVisible(UD) && visited.insert(NS).second) {
             addUsingDirective(UD, EffectiveDC);
             queue.push_back(NS);
           }
@@ -1374,7 +1374,7 @@ static Module *getDefiningModule(Sema &S, Decl *Entity) {
 
   // Walk up to the containing context. That might also have been instantiated
   // from a template.
-  DeclContext *Context = Entity->getDeclContext();
+  DeclContext *Context = Entity->getLexicalDeclContext();
   if (Context->isFileContext())
     return S.getOwningModule(Entity);
   return getDefiningModule(S, cast<Decl>(Context));
@@ -1589,7 +1589,7 @@ bool LookupResult::isVisibleSlow(Sema &SemaRef, NamedDecl *D) {
     return false;
 
   // Find the extra places where we need to look.
-  llvm::DenseSet<Module*> &LookupModules = SemaRef.getLookupModules();
+  const auto &LookupModules = SemaRef.getLookupModules();
   if (LookupModules.empty())
     return false;
 
@@ -1604,7 +1604,8 @@ bool LookupResult::isVisibleSlow(Sema &SemaRef, NamedDecl *D) {
   // Check whether DeclModule is transitively exported to an import of
   // the lookup set.
   return std::any_of(LookupModules.begin(), LookupModules.end(),
-                     [&](Module *M) { return M->isModuleVisible(DeclModule); });
+                     [&](const Module *M) {
+                       return M->isModuleVisible(DeclModule); });
 }
 
 bool Sema::isVisibleSlow(const NamedDecl *D) {
@@ -1655,7 +1656,8 @@ bool Sema::shouldLinkPossiblyHiddenDecl(LookupResult &R, const NamedDecl *New) {
 ///
 /// \returns D, or a visible previous declaration of D, whichever is more recent
 /// and visible. If no declaration of D is visible, returns null.
-static NamedDecl *findAcceptableDecl(Sema &SemaRef, NamedDecl *D) {
+static NamedDecl *findAcceptableDecl(Sema &SemaRef, NamedDecl *D,
+                                     unsigned IDNS) {
   assert(!LookupResult::isVisible(SemaRef, D) && "not in slow case");
 
   for (auto RD : D->redecls()) {
@@ -1667,7 +1669,8 @@ static NamedDecl *findAcceptableDecl(Sema &SemaRef, NamedDecl *D) {
     // FIXME: This is wrong in the case where the previous declaration is not
     // visible in the same scope as D. This needs to be done much more
     // carefully.
-    if (LookupResult::isVisible(SemaRef, ND))
+    if (ND->isInIdentifierNamespace(IDNS) &&
+        LookupResult::isVisible(SemaRef, ND))
       return ND;
   }
 
@@ -1692,14 +1695,15 @@ NamedDecl *LookupResult::getAcceptableDeclSlow(NamedDecl *D) const {
     auto *Key = ND->getCanonicalDecl();
     if (auto *Acceptable = getSema().VisibleNamespaceCache.lookup(Key))
       return Acceptable;
-    auto *Acceptable =
-        isVisible(getSema(), Key) ? Key : findAcceptableDecl(getSema(), Key);
+    auto *Acceptable = isVisible(getSema(), Key)
+                           ? Key
+                           : findAcceptableDecl(getSema(), Key, IDNS);
     if (Acceptable)
       getSema().VisibleNamespaceCache.insert(std::make_pair(Key, Acceptable));
     return Acceptable;
   }
 
-  return findAcceptableDecl(getSema(), D);
+  return findAcceptableDecl(getSema(), D, IDNS);
 }
 
 /// @brief Perform unqualified name lookup starting from a given
@@ -1883,7 +1887,7 @@ static bool LookupQualifiedNameInUsingDirectives(Sema &S, LookupResult &R,
   // with its using-children.
   for (auto *I : StartDC->using_directives()) {
     NamespaceDecl *ND = I->getNominatedNamespace()->getOriginalNamespace();
-    if (Visited.insert(ND).second && S.isVisible(I))
+    if (S.isVisible(I) && Visited.insert(ND).second)
       Queue.push_back(ND);
   }
 
@@ -1931,7 +1935,7 @@ static bool LookupQualifiedNameInUsingDirectives(Sema &S, LookupResult &R,
 
     for (auto I : ND->using_directives()) {
       NamespaceDecl *Nom = I->getNominatedNamespace();
-      if (Visited.insert(Nom).second && S.isVisible(I))
+      if (S.isVisible(I) && Visited.insert(Nom).second)
         Queue.push_back(Nom);
     }
   }
@@ -3328,6 +3332,23 @@ void Sema::ArgumentDependentLookup(DeclarationName Name, SourceLocation Loc,
     //        lookup (11.4).
     DeclContext::lookup_result R = NS->lookup(Name);
     for (auto *D : R) {
+      auto *Underlying = D;
+      if (auto *USD = dyn_cast<UsingShadowDecl>(D))
+        Underlying = USD->getTargetDecl();
+
+      if (!isa<FunctionDecl>(Underlying) &&
+          !isa<FunctionTemplateDecl>(Underlying))
+        continue;
+
+      if (!isVisible(D)) {
+        D = findAcceptableDecl(
+            *this, D, (Decl::IDNS_Ordinary | Decl::IDNS_OrdinaryFriend));
+        if (!D)
+          continue;
+        if (auto *USD = dyn_cast<UsingShadowDecl>(D))
+          Underlying = USD->getTargetDecl();
+      }
+
       // If the only declaration here is an ordinary friend, consider
       // it only if it was declared in an associated classes.
       if ((D->getIdentifierNamespace() & Decl::IDNS_Ordinary) == 0) {
@@ -3347,22 +3368,6 @@ void Sema::ArgumentDependentLookup(DeclarationName Name, SourceLocation Loc,
         }
         if (!DeclaredInAssociatedClass)
           continue;
-      }
-
-      auto *Underlying = D;
-      if (auto *USD = dyn_cast<UsingShadowDecl>(D))
-        Underlying = USD->getTargetDecl();
-
-      if (!isa<FunctionDecl>(Underlying) &&
-          !isa<FunctionTemplateDecl>(Underlying))
-        continue;
-
-      if (!isVisible(D)) {
-        D = findAcceptableDecl(*this, D);
-        if (!D)
-          continue;
-        if (auto *USD = dyn_cast<UsingShadowDecl>(D))
-          Underlying = USD->getTargetDecl();
       }
 
       // FIXME: Preserve D as the FoundDecl.
@@ -3864,17 +3869,13 @@ static void checkCorrectionVisibility(Sema &SemaRef, TypoCorrection &TC) {
   bool AnyVisibleDecls = !NewDecls.empty();
 
   for (/**/; DI != DE; ++DI) {
-    NamedDecl *VisibleDecl = *DI;
-    if (!LookupResult::isVisible(SemaRef, *DI))
-      VisibleDecl = findAcceptableDecl(SemaRef, *DI);
-
-    if (VisibleDecl) {
+    if (LookupResult::isVisible(SemaRef, *DI)) {
       if (!AnyVisibleDecls) {
         // Found a visible decl, discard all hidden ones.
         AnyVisibleDecls = true;
         NewDecls.clear();
       }
-      NewDecls.push_back(VisibleDecl);
+      NewDecls.push_back(*DI);
     } else if (!AnyVisibleDecls && !(*DI)->isModulePrivate())
       NewDecls.push_back(*DI);
   }
@@ -3944,8 +3945,7 @@ void TypoCorrectionConsumer::FoundDecl(NamedDecl *ND, NamedDecl *Hiding,
 
   // Only consider visible declarations and declarations from modules with
   // names that exactly match.
-  if (!LookupResult::isVisible(SemaRef, ND) && Name != Typo &&
-      !findAcceptableDecl(SemaRef, ND))
+  if (!LookupResult::isVisible(SemaRef, ND) && Name != Typo)
     return;
 
   FoundName(Name->getName());

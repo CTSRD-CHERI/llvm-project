@@ -15,9 +15,9 @@
 
 #include "Config.h"
 #include "Driver.h"
-#include "Error.h"
-#include "Memory.h"
 #include "Symbols.h"
+#include "lld/Common/ErrorHandler.h"
+#include "lld/Common/Memory.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/BinaryFormat/COFF.h"
@@ -57,7 +57,7 @@ public:
   void run() {
     ErrorOr<std::string> ExeOrErr = sys::findProgramByName(Prog);
     if (auto EC = ExeOrErr.getError())
-      fatal(EC, "unable to find " + Prog + " in PATH");
+      fatal("unable to find " + Prog + " in PATH: " + EC.message());
     StringRef Exe = Saver.save(*ExeOrErr);
     Args.insert(Args.begin(), Exe);
 
@@ -288,14 +288,14 @@ public:
   TemporaryFile(StringRef Prefix, StringRef Extn, StringRef Contents = "") {
     SmallString<128> S;
     if (auto EC = sys::fs::createTemporaryFile("lld-" + Prefix, Extn, S))
-      fatal(EC, "cannot create a temporary file");
+      fatal("cannot create a temporary file: " + EC.message());
     Path = S.str();
 
     if (!Contents.empty()) {
       std::error_code EC;
       raw_fd_ostream OS(Path, EC, sys::fs::F_None);
       if (EC)
-        fatal(EC, "failed to open " + Path);
+        fatal("failed to open " + Path + ": " + EC.message());
       OS << Contents;
     }
   }
@@ -317,7 +317,7 @@ public:
   // is called (you cannot remove an opened file on Windows.)
   std::unique_ptr<MemoryBuffer> getMemoryBuffer() {
     // IsVolatileSize=true forces MemoryBuffer to not use mmap().
-    return check(MemoryBuffer::getFile(Path, /*FileSize=*/-1,
+    return CHECK(MemoryBuffer::getFile(Path, /*FileSize=*/-1,
                                        /*RequiresNullTerminator=*/false,
                                        /*IsVolatileSize=*/true),
                  "could not open " + Path);
@@ -363,13 +363,15 @@ static std::string createManifestXmlWithInternalMt(StringRef DefaultXml) {
 
   windows_manifest::WindowsManifestMerger Merger;
   if (auto E = Merger.merge(*DefaultXmlCopy.get()))
-    fatal(E, "internal manifest tool failed on default xml");
+    fatal("internal manifest tool failed on default xml: " +
+          toString(std::move(E)));
 
   for (StringRef Filename : Config->ManifestInput) {
     std::unique_ptr<MemoryBuffer> Manifest =
         check(MemoryBuffer::getFile(Filename));
     if (auto E = Merger.merge(*Manifest.get()))
-      fatal(E, "internal manifest tool failed on file " + Filename);
+      fatal("internal manifest tool failed on file " + Filename + ": " +
+            toString(std::move(E)));
   }
 
   return Merger.getMergedManifest().get()->getBuffer();
@@ -381,7 +383,7 @@ static std::string createManifestXmlWithExternalMt(StringRef DefaultXml) {
   std::error_code EC;
   raw_fd_ostream OS(Default.Path, EC, sys::fs::F_Text);
   if (EC)
-    fatal(EC, "failed to open " + Default.Path);
+    fatal("failed to open " + Default.Path + ": " + EC.message());
   OS << DefaultXml;
   OS.close();
 
@@ -400,7 +402,7 @@ static std::string createManifestXmlWithExternalMt(StringRef DefaultXml) {
   E.add("/out:" + StringRef(User.Path));
   E.run();
 
-  return check(MemoryBuffer::getFile(User.Path), "could not open " + User.Path)
+  return CHECK(MemoryBuffer::getFile(User.Path), "could not open " + User.Path)
       .get()
       ->getBuffer();
 }
@@ -423,7 +425,8 @@ createMemoryBufferForManifestRes(size_t ManifestSize) {
           sizeof(object::WinResHeaderPrefix) + sizeof(object::WinResIDs) +
           sizeof(object::WinResHeaderSuffix) + ManifestSize,
       object::WIN_RES_DATA_ALIGNMENT);
-  return MemoryBuffer::getNewMemBuffer(ResSize);
+  return MemoryBuffer::getNewMemBuffer(ResSize,
+                                       Config->OutputFile + ".manifest.res");
 }
 
 static void writeResFileHeader(char *&Buf) {
@@ -481,7 +484,7 @@ void createSideBySideManifest() {
   std::error_code EC;
   raw_fd_ostream Out(Path, EC, sys::fs::F_Text);
   if (EC)
-    fatal(EC, "failed to create manifest");
+    fatal("failed to create manifest: " + EC.message());
   Out << createManifestXml();
 }
 
@@ -571,7 +574,7 @@ void fixupExports() {
   }
 
   for (Export &E : Config->Exports) {
-    SymbolBody *Sym = E.Sym;
+    Symbol *Sym = E.Sym;
     if (!E.ForwardTo.empty() || !Sym) {
       E.SymbolName = E.Name;
     } else {
@@ -591,7 +594,7 @@ void fixupExports() {
   }
 
   // Uniquefy by name.
-  std::map<StringRef, Export *> Map;
+  DenseMap<StringRef, Export *> Map(Config->Exports.size());
   std::vector<Export> V;
   for (Export &E : Config->Exports) {
     auto Pair = Map.insert(std::make_pair(E.ExportName, &E));
@@ -638,10 +641,8 @@ void checkFailIfMismatch(StringRef Arg) {
   Config->MustMatch[K] = V;
 }
 
-// Convert Windows resource files (.res files) to a .obj file
-// using cvtres.exe.
-std::unique_ptr<MemoryBuffer>
-convertResToCOFF(const std::vector<MemoryBufferRef> &MBs) {
+// Convert Windows resource files (.res files) to a .obj file.
+MemoryBufferRef convertResToCOFF(ArrayRef<MemoryBufferRef> MBs) {
   object::WindowsResourceParser Parser;
 
   for (MemoryBufferRef MB : MBs) {
@@ -650,14 +651,17 @@ convertResToCOFF(const std::vector<MemoryBufferRef> &MBs) {
     if (!RF)
       fatal("cannot compile non-resource file as resource");
     if (auto EC = Parser.parse(RF))
-      fatal(EC, "failed to parse .res file");
+      fatal("failed to parse .res file: " + toString(std::move(EC)));
   }
 
   Expected<std::unique_ptr<MemoryBuffer>> E =
       llvm::object::writeWindowsResourceCOFF(Config->Machine, Parser);
   if (!E)
-    fatal(errorToErrorCode(E.takeError()), "failed to write .res to COFF");
-  return std::move(E.get());
+    fatal("failed to write .res to COFF: " + toString(E.takeError()));
+
+  MemoryBufferRef MBRef = **E;
+  make<std::unique_ptr<MemoryBuffer>>(std::move(*E)); // take ownership
+  return MBRef;
 }
 
 // Run MSVC link.exe for given in-memory object files.
@@ -736,11 +740,41 @@ opt::InputArgList ArgParser::parse(ArrayRef<const char *> Argv) {
     message(Msg);
   }
 
+  // Handle /WX early since it converts missing argument warnings to errors.
+  errorHandler().FatalWarnings = Args.hasFlag(OPT_WX, OPT_WX_no, false);
+
   if (MissingCount)
     fatal(Twine(Args.getArgString(MissingIndex)) + ": missing argument");
   for (auto *Arg : Args.filtered(OPT_UNKNOWN))
     warn("ignoring unknown argument: " + Arg->getSpelling());
   return Args;
+}
+
+// Tokenizes and parses a given string as command line in .drective section.
+// /EXPORT options are processed in fastpath.
+std::pair<opt::InputArgList, std::vector<StringRef>>
+ArgParser::parseDirectives(StringRef S) {
+  std::vector<StringRef> Exports;
+  SmallVector<const char *, 16> Rest;
+
+  for (StringRef Tok : tokenize(S)) {
+    if (Tok.startswith_lower("/export:") || Tok.startswith_lower("-export:"))
+      Exports.push_back(Tok.substr(strlen("/export:")));
+    else
+      Rest.push_back(Tok.data());
+  }
+
+  // Make InputArgList from unparsed string vectors.
+  unsigned MissingIndex;
+  unsigned MissingCount;
+
+  opt::InputArgList Args = Table.ParseArgs(Rest, MissingIndex, MissingCount);
+
+  if (MissingCount)
+    fatal(Twine(Args.getArgString(MissingIndex)) + ": missing argument");
+  for (auto *Arg : Args.filtered(OPT_UNKNOWN))
+    warn("ignoring unknown argument: " + Arg->getSpelling());
+  return {std::move(Args), std::move(Exports)};
 }
 
 // link.exe has an interesting feature. If LINK or _LINK_ environment
@@ -766,8 +800,7 @@ std::vector<const char *> ArgParser::tokenize(StringRef S) {
 }
 
 void printHelp(const char *Argv0) {
-  COFFOptTable Table;
-  Table.PrintHelp(outs(), Argv0, "LLVM Linker", false);
+  COFFOptTable().PrintHelp(outs(), Argv0, "LLVM Linker", false);
 }
 
 } // namespace coff

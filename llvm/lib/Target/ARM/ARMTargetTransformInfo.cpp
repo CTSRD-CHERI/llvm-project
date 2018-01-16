@@ -13,6 +13,7 @@
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/CodeGen/CostTable.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/ValueTypes.h"
@@ -25,7 +26,6 @@
 #include "llvm/IR/Type.h"
 #include "llvm/MC/SubtargetFeature.h"
 #include "llvm/Support/Casting.h"
-#include "llvm/Target/CostTable.h"
 #include "llvm/Target/TargetMachine.h"
 #include <algorithm>
 #include <cassert>
@@ -394,25 +394,6 @@ int ARMTTIImpl::getAddressComputationCost(Type *Ty, ScalarEvolution *SE,
   return 1;
 }
 
-int ARMTTIImpl::getFPOpCost(Type *Ty) {
-  // Use similar logic that's in ARMISelLowering:
-  // Any ARM CPU with VFP2 has floating point, but Thumb1 didn't have access
-  // to VFP.
-
-  if (ST->hasVFP2() && !ST->isThumb1Only()) {
-    if (Ty->isFloatTy()) {
-      return TargetTransformInfo::TCC_Basic;
-    }
-
-    if (Ty->isDoubleTy()) {
-      return ST->isFPOnlySP() ? TargetTransformInfo::TCC_Expensive :
-        TargetTransformInfo::TCC_Basic;
-    }
-  }
-
-  return TargetTransformInfo::TCC_Expensive;
-}
-
 int ARMTTIImpl::getShuffleCost(TTI::ShuffleKind Kind, Type *Tp, int Index,
                                Type *SubTp) {
   // We only handle costs of reverse and alternate shuffles for now.
@@ -586,33 +567,52 @@ void ARMTTIImpl::getUnrollingPreferences(Loop *L, ScalarEvolution &SE,
   if (!ST->isMClass())
     return BasicTTIImplBase::getUnrollingPreferences(L, SE, UP);
 
-  // Only enable on Thumb-2 targets for simple loops.
-  if (!ST->isThumb2() || L->getNumBlocks() != 1)
-    return;
-
   // Disable loop unrolling for Oz and Os.
   UP.OptSizeThreshold = 0;
   UP.PartialOptSizeThreshold = 0;
-  BasicBlock *BB = L->getLoopLatch();
-  if (BB->getParent()->optForSize())
+  if (L->getHeader()->getParent()->optForSize())
+    return;
+
+  // Only enable on Thumb-2 targets.
+  if (!ST->isThumb2())
+    return;
+
+  SmallVector<BasicBlock*, 4> ExitingBlocks;
+  L->getExitingBlocks(ExitingBlocks);
+  DEBUG(dbgs() << "Loop has:\n"
+      << "Blocks: " << L->getNumBlocks() << "\n"
+      << "Exit blocks: " << ExitingBlocks.size() << "\n");
+
+  // Only allow another exit other than the latch. This acts as an early exit
+  // as it mirrors the profitability calculation of the runtime unroller.
+  if (ExitingBlocks.size() > 2)
+    return;
+
+  // Limit the CFG of the loop body for targets with a branch predictor.
+  // Allowing 4 blocks permits if-then-else diamonds in the body.
+  if (ST->hasBranchPredictor() && L->getNumBlocks() > 4)
     return;
 
   // Scan the loop: don't unroll loops with calls as this could prevent
   // inlining.
   unsigned Cost = 0;
-  for (auto &I : *BB) {
-    if (isa<CallInst>(I) || isa<InvokeInst>(I)) {
-      ImmutableCallSite CS(&I);
-      if (const Function *F = CS.getCalledFunction()) {
-        if (!isLoweredToCall(F))
-          continue;
+  for (auto *BB : L->getBlocks()) {
+    for (auto &I : *BB) {
+      if (isa<CallInst>(I) || isa<InvokeInst>(I)) {
+        ImmutableCallSite CS(&I);
+        if (const Function *F = CS.getCalledFunction()) {
+          if (!isLoweredToCall(F))
+            continue;
+        }
+        return;
       }
-      return;
+      SmallVector<const Value*, 4> Operands(I.value_op_begin(),
+                                            I.value_op_end());
+      Cost += getUserCost(&I, Operands);
     }
-    SmallVector<const Value*, 4> Operands(I.value_op_begin(),
-                                          I.value_op_end());
-    Cost += getUserCost(&I, Operands);
   }
+
+  DEBUG(dbgs() << "Cost of loop: " << Cost << "\n");
 
   UP.Partial = true;
   UP.Runtime = true;

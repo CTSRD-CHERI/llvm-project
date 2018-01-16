@@ -156,12 +156,18 @@ unsigned getMaxNumVGPRs(const FeatureBitset &Features, unsigned WavesPerEU);
 LLVM_READONLY
 int16_t getNamedOperandIdx(uint16_t Opcode, uint16_t NamedIdx);
 
+LLVM_READONLY
+int getMaskedMIMGOp(const MCInstrInfo &MII,
+                    unsigned Opc, unsigned NewChannels);
+LLVM_READONLY
+int getMCOpcode(uint16_t Opcode, unsigned Gen);
+
 void initDefaultAMDKernelCodeT(amd_kernel_code_t &Header,
                                const FeatureBitset &Features);
 
-bool isGroupSegment(const GlobalValue *GV, AMDGPUAS AS);
-bool isGlobalSegment(const GlobalValue *GV, AMDGPUAS AS);
-bool isReadOnlySegment(const GlobalValue *GV, AMDGPUAS AS);
+bool isGroupSegment(const GlobalValue *GV);
+bool isGlobalSegment(const GlobalValue *GV);
+bool isReadOnlySegment(const GlobalValue *GV);
 
 /// \returns True if constants should be emitted to .text section for given
 /// target triple \p TT, false otherwise.
@@ -271,6 +277,8 @@ inline bool isKernel(CallingConv::ID CC) {
     return false;
   }
 }
+
+bool hasXNACK(const MCSubtargetInfo &STI);
 
 bool isSI(const MCSubtargetInfo &STI);
 bool isCI(const MCSubtargetInfo &STI);

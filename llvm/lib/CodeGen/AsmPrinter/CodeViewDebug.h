@@ -23,8 +23,8 @@
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/DebugInfo/CodeView/CodeView.h"
+#include "llvm/DebugInfo/CodeView/GlobalTypeTableBuilder.h"
 #include "llvm/DebugInfo/CodeView/TypeIndex.h"
-#include "llvm/DebugInfo/CodeView/TypeTableBuilder.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/Compiler.h"
@@ -52,7 +52,7 @@ class MachineFunction;
 class LLVM_LIBRARY_VISIBILITY CodeViewDebug : public DebugHandlerBase {
   MCStreamer &OS;
   BumpPtrAllocator Allocator;
-  codeview::TypeTableBuilder TypeTable;
+  codeview::GlobalTypeTableBuilder TypeTable;
 
   /// Represents the most general definition range.
   struct LocalVarDefRange {
@@ -161,8 +161,9 @@ class LLVM_LIBRARY_VISIBILITY CodeViewDebug : public DebugHandlerBase {
   /// emit at the end of the TU.
   MapVector<const Function *, FunctionInfo> FnDebugInfo;
 
-  /// Map from DIFile to .cv_file id.
-  DenseMap<const DIFile *, unsigned> FileIdMap;
+  /// Map from full file path to .cv_file id. Full paths are built from DIFiles
+  /// and are stored in FileToFilepathMap;
+  DenseMap<StringRef, unsigned> FileIdMap;
 
   /// All inlined subprograms in the order they should be emitted.
   SmallSetVector<const DISubprogram *, 4> InlinedSubprograms;
@@ -217,6 +218,8 @@ class LLVM_LIBRARY_VISIBILITY CodeViewDebug : public DebugHandlerBase {
   void emitCodeViewMagicVersion();
 
   void emitTypeInformation();
+
+  void emitTypeGlobalHashes();
 
   void emitCompilerInformation();
 

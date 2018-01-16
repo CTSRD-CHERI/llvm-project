@@ -1555,7 +1555,7 @@ public:
   /// visible at the specified location.
   void makeMergedDefinitionVisible(NamedDecl *ND);
 
-  bool isModuleVisible(Module *M) { return VisibleModules.isVisible(M); }
+  bool isModuleVisible(const Module *M) { return VisibleModules.isVisible(M); }
 
   /// Determine whether a declaration is visible to name lookup.
   bool isVisible(const NamedDecl *D) {
@@ -1724,7 +1724,6 @@ public:
     ExprResult Expr;
     TemplateName Template;
     ParsedType Type;
-    const IdentifierInfo *Keyword;
 
     explicit NameClassification(NameClassificationKind Kind) : Kind(Kind) {}
 
@@ -1733,8 +1732,7 @@ public:
 
     NameClassification(ParsedType Type) : Kind(NC_Type), Type(Type) {}
 
-    NameClassification(const IdentifierInfo *Keyword)
-      : Kind(NC_Keyword), Keyword(Keyword) { }
+    NameClassification(const IdentifierInfo *Keyword) : Kind(NC_Keyword) {}
 
     static NameClassification Error() {
       return NameClassification(NC_Error);
@@ -2707,7 +2705,8 @@ public:
                       OverloadCandidateSet &CandidateSet,
                       TemplateArgumentListInfo *ExplicitTemplateArgs = nullptr,
                       bool SuppressUserConversions = false,
-                      bool PartialOverloading = false);
+                      bool PartialOverloading = false,
+                      bool FirstArgumentIsBase = false);
   void AddMethodCandidate(DeclAccessPair FoundDecl,
                           QualType ObjectType,
                           Expr::Classification ObjectClassification,
@@ -5548,6 +5547,11 @@ public:
   ExprResult BuildLambdaExpr(SourceLocation StartLoc, SourceLocation EndLoc,
                              sema::LambdaScopeInfo *LSI);
 
+  /// Get the return type to use for a lambda's conversion function(s) to
+  /// function pointer type, given the type of the call operator.
+  QualType
+  getLambdaConversionFunctionResultType(const FunctionProtoType *CallOpType);
+
   /// \brief Define the "body" of the conversion from a lambda object to a
   /// function pointer.
   ///
@@ -6065,7 +6069,7 @@ public:
   void DiagnoseTemplateParameterShadow(SourceLocation Loc, Decl *PrevDecl);
   TemplateDecl *AdjustDeclIfTemplate(Decl *&Decl);
 
-  Decl *ActOnTypeParameter(Scope *S, bool Typename,
+  NamedDecl *ActOnTypeParameter(Scope *S, bool Typename,
                            SourceLocation EllipsisLoc,
                            SourceLocation KeyLoc,
                            IdentifierInfo *ParamName,
@@ -6078,12 +6082,12 @@ public:
                                              SourceLocation Loc);
   QualType CheckNonTypeTemplateParameterType(QualType T, SourceLocation Loc);
 
-  Decl *ActOnNonTypeTemplateParameter(Scope *S, Declarator &D,
+  NamedDecl *ActOnNonTypeTemplateParameter(Scope *S, Declarator &D,
                                       unsigned Depth,
                                       unsigned Position,
                                       SourceLocation EqualLoc,
                                       Expr *DefaultArg);
-  Decl *ActOnTemplateTemplateParameter(Scope *S,
+  NamedDecl *ActOnTemplateTemplateParameter(Scope *S,
                                        SourceLocation TmpLoc,
                                        TemplateParameterList *Params,
                                        SourceLocation EllipsisLoc,
@@ -7429,13 +7433,16 @@ public:
     unsigned PrevSFINAEErrors;
     bool PrevInNonInstantiationSFINAEContext;
     bool PrevAccessCheckingSFINAE;
+    bool PrevLastDiagnosticIgnored;
 
   public:
     explicit SFINAETrap(Sema &SemaRef, bool AccessCheckingSFINAE = false)
       : SemaRef(SemaRef), PrevSFINAEErrors(SemaRef.NumSFINAEErrors),
         PrevInNonInstantiationSFINAEContext(
                                       SemaRef.InNonInstantiationSFINAEContext),
-        PrevAccessCheckingSFINAE(SemaRef.AccessCheckingSFINAE)
+        PrevAccessCheckingSFINAE(SemaRef.AccessCheckingSFINAE),
+        PrevLastDiagnosticIgnored(
+            SemaRef.getDiagnostics().isLastDiagnosticIgnored())
     {
       if (!SemaRef.isSFINAEContext())
         SemaRef.InNonInstantiationSFINAEContext = true;
@@ -7447,6 +7454,8 @@ public:
       SemaRef.InNonInstantiationSFINAEContext
         = PrevInNonInstantiationSFINAEContext;
       SemaRef.AccessCheckingSFINAE = PrevAccessCheckingSFINAE;
+      SemaRef.getDiagnostics().setLastDiagnosticIgnored(
+          PrevLastDiagnosticIgnored);
     }
 
     /// \brief Determine whether any SFINAE errors have been trapped.
@@ -7756,6 +7765,9 @@ public:
 
   void InstantiateExceptionSpec(SourceLocation PointOfInstantiation,
                                 FunctionDecl *Function);
+  FunctionDecl *InstantiateFunctionDeclaration(FunctionTemplateDecl *FTD,
+                                               const TemplateArgumentList *Args,
+                                               SourceLocation Loc);
   void InstantiateFunctionDefinition(SourceLocation PointOfInstantiation,
                                      FunctionDecl *Function,
                                      bool Recursive = false,
@@ -7786,11 +7798,6 @@ public:
                                      VarDecl *Var, bool Recursive = false,
                                      bool DefinitionRequired = false,
                                      bool AtEndOfTU = false);
-  void InstantiateStaticDataMemberDefinition(
-                                     SourceLocation PointOfInstantiation,
-                                     VarDecl *Var,
-                                     bool Recursive = false,
-                                     bool DefinitionRequired = false);
 
   void InstantiateMemInitializers(CXXConstructorDecl *New,
                                   const CXXConstructorDecl *Tmpl,
@@ -8537,6 +8544,10 @@ private:
   /// Returns OpenMP nesting level for current directive.
   unsigned getOpenMPNestingLevel() const;
 
+  /// Adjusts the function scopes index for the target-based regions.
+  void adjustOpenMPTargetScopeIndex(unsigned &FunctionScopesIndex,
+                                    unsigned Level) const;
+
   /// Push new OpenMP function region for non-capturing function.
   void pushOpenMPFunctionRegion();
 
@@ -8653,10 +8664,19 @@ public:
                                     OMPDeclareTargetDeclAttr::MapTypeTy MT,
                                     NamedDeclSetType &SameDirectiveDecls);
   /// Check declaration inside target region.
-  void checkDeclIsAllowedInOpenMPTarget(Expr *E, Decl *D);
-  /// Return true inside OpenMP target region.
+  void checkDeclIsAllowedInOpenMPTarget(Expr *E, Decl *D,
+                                        SourceLocation IdLoc = SourceLocation());
+  /// Return true inside OpenMP declare target region.
   bool isInOpenMPDeclareTargetContext() const {
     return IsInOpenMPDeclareTargetContext;
+  }
+  /// Return true inside OpenMP target region.
+  bool isInOpenMPTargetExecutionDirective() const;
+  /// Return true if (un)supported features for the current target should be
+  /// diagnosed if OpenMP (offloading) is enabled.
+  bool shouldDiagnoseTargetSupportFromOpenMP() const {
+    return !getLangOpts().OpenMPIsDevice || isInOpenMPDeclareTargetContext() ||
+      isInOpenMPTargetExecutionDirective();
   }
 
   /// Return the number of captured regions created for an OpenMP directive.
@@ -8787,12 +8807,14 @@ public:
   /// parsing of the associated statement.
   StmtResult ActOnOpenMPTargetEnterDataDirective(ArrayRef<OMPClause *> Clauses,
                                                  SourceLocation StartLoc,
-                                                 SourceLocation EndLoc);
+                                                 SourceLocation EndLoc,
+                                                 Stmt *AStmt);
   /// \brief Called on well-formed '\#pragma omp target exit data' after
   /// parsing of the associated statement.
   StmtResult ActOnOpenMPTargetExitDataDirective(ArrayRef<OMPClause *> Clauses,
                                                 SourceLocation StartLoc,
-                                                SourceLocation EndLoc);
+                                                SourceLocation EndLoc,
+                                                Stmt *AStmt);
   /// \brief Called on well-formed '\#pragma omp target parallel' after
   /// parsing of the associated statement.
   StmtResult ActOnOpenMPTargetParallelDirective(ArrayRef<OMPClause *> Clauses,
@@ -8841,7 +8863,8 @@ public:
   /// \brief Called on well-formed '\#pragma omp target update'.
   StmtResult ActOnOpenMPTargetUpdateDirective(ArrayRef<OMPClause *> Clauses,
                                               SourceLocation StartLoc,
-                                              SourceLocation EndLoc);
+                                              SourceLocation EndLoc,
+                                              Stmt *AStmt);
   /// \brief Called on well-formed '\#pragma omp distribute parallel for' after
   /// parsing of the associated statement.
   StmtResult ActOnOpenMPDistributeParallelForDirective(
@@ -9557,7 +9580,8 @@ public:
                                bool AllowBothBool, bool AllowBoolConversion);
   QualType GetSignedVectorType(QualType V);
   QualType CheckVectorCompareOperands(ExprResult &LHS, ExprResult &RHS,
-                                      SourceLocation Loc, bool isRelational);
+                                      SourceLocation Loc,
+                                      BinaryOperatorKind Opc);
   QualType CheckVectorLogicalOperands(ExprResult &LHS, ExprResult &RHS,
                                       SourceLocation Loc);
 
@@ -10210,8 +10234,7 @@ public:
   void CodeCompleteObjCPropertyDefinition(Scope *S);
   void CodeCompleteObjCPropertySynthesizeIvar(Scope *S,
                                               IdentifierInfo *PropertyName);
-  void CodeCompleteObjCMethodDecl(Scope *S,
-                                  bool IsInstanceMethod,
+  void CodeCompleteObjCMethodDecl(Scope *S, Optional<bool> IsInstanceMethod,
                                   ParsedType ReturnType);
   void CodeCompleteObjCMethodDeclSelector(Scope *S,
                                           bool IsInstanceMethod,
@@ -10382,7 +10405,10 @@ private:
                           const AttrVec *Attrs = nullptr,
                           const FunctionDecl *FD = nullptr);
 
-  void CheckFloatComparison(SourceLocation Loc, Expr* LHS, Expr* RHS);
+public:
+  void CheckFloatComparison(SourceLocation Loc, Expr *LHS, Expr *RHS);
+
+private:
   void CheckImplicitConversions(Expr *E, SourceLocation CC = SourceLocation());
   void CheckBoolLikeConversion(Expr *E, SourceLocation CC);
   void CheckForIntOverflow(Expr *E);
@@ -10446,7 +10472,8 @@ private:
   /// \brief Peform checks on a call of a function with argument_with_type_tag
   /// or pointer_with_type_tag attributes.
   void CheckArgumentWithTypeTag(const ArgumentWithTypeTagAttr *Attr,
-                                const Expr * const *ExprArgs);
+                                const ArrayRef<const Expr *> ExprArgs,
+                                SourceLocation CallSiteLoc);
 
   /// \brief Check if we are taking the address of a packed field
   /// as this may be a problem if the pointer value is dereferenced.

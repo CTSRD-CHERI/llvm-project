@@ -25,10 +25,9 @@
 #include "OutputSections.h"
 #include "Strings.h"
 #include "SymbolTable.h"
+#include "Symbols.h"
 #include "SyntheticSections.h"
-
 #include "lld/Common/Threads.h"
-
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
@@ -37,7 +36,7 @@ using namespace llvm::object;
 using namespace lld;
 using namespace lld::elf;
 
-typedef DenseMap<const SectionBase *, SmallVector<Defined *, 4>> SymbolMapTy;
+typedef DenseMap<const SectionBase *, SmallVector<Symbol *, 4>> SymbolMapTy;
 
 // Print out the first three columns of a line.
 static void writeHeader(raw_ostream &OS, uint64_t Addr, uint64_t Size,
@@ -49,40 +48,45 @@ static void writeHeader(raw_ostream &OS, uint64_t Addr, uint64_t Size,
 static std::string indent(int Depth) { return std::string(Depth * 8, ' '); }
 
 // Returns a list of all symbols that we want to print out.
-template <class ELFT> static std::vector<Defined *> getSymbols() {
-  std::vector<Defined *> V;
+static std::vector<Symbol *> getSymbols() {
+  std::vector<Symbol *> V;
   for (InputFile *File : ObjectFiles) {
-    for (SymbolBody *B : File->getSymbols()) {
-      if (auto *DR = dyn_cast<DefinedRegular>(B)) {
-        if (DR->getFile() == File && !DR->isSection() && DR->Section &&
+    for (Symbol *B : File->getSymbols()) {
+      if (auto *SS = dyn_cast<SharedSymbol>(B))
+        if (SS->CopyRelSec || SS->NeedsPltAddr)
+          V.push_back(SS);
+      if (auto *DR = dyn_cast<Defined>(B))
+        if (DR->File == File && !DR->isSection() && DR->Section &&
             DR->Section->Live)
           V.push_back(DR);
-      } else if (auto *DC = dyn_cast<DefinedCommon>(B)) {
-        if (DC->Section)
-          V.push_back(DC);
-      }
     }
   }
   return V;
 }
 
 // Returns a map from sections to their symbols.
-static SymbolMapTy getSectionSyms(ArrayRef<Defined *> Syms) {
+static SymbolMapTy getSectionSyms(ArrayRef<Symbol *> Syms) {
   SymbolMapTy Ret;
-  for (Defined *S : Syms) {
-    if (auto *DR = dyn_cast<DefinedRegular>(S))
+  for (Symbol *S : Syms) {
+    if (auto *DR = dyn_cast<Defined>(S)) {
       Ret[DR->Section].push_back(S);
-    else if (auto *DC = dyn_cast<DefinedCommon>(S))
-      Ret[DC->Section].push_back(S);
+      continue;
+    }
+
+    SharedSymbol *SS = cast<SharedSymbol>(S);
+    if (SS->CopyRelSec)
+      Ret[SS->CopyRelSec].push_back(S);
+    else
+      Ret[InX::Plt].push_back(S);
   }
 
   // Sort symbols by address. We want to print out symbols in the
   // order in the output file rather than the order they appeared
   // in the input files.
   for (auto &It : Ret) {
-    SmallVectorImpl<Defined *> &V = It.second;
+    SmallVectorImpl<Symbol *> &V = It.second;
     std::sort(V.begin(), V.end(),
-              [](Defined *A, Defined *B) { return A->getVA() < B->getVA(); });
+              [](Symbol *A, Symbol *B) { return A->getVA() < B->getVA(); });
   }
   return Ret;
 }
@@ -90,23 +94,22 @@ static SymbolMapTy getSectionSyms(ArrayRef<Defined *> Syms) {
 // Construct a map from symbols to their stringified representations.
 // Demangling symbols (which is what toString() does) is slow, so
 // we do that in batch using parallel-for.
-template <class ELFT>
-static DenseMap<Defined *, std::string>
-getSymbolStrings(ArrayRef<Defined *> Syms) {
+static DenseMap<Symbol *, std::string>
+getSymbolStrings(ArrayRef<Symbol *> Syms) {
   std::vector<std::string> Str(Syms.size());
   parallelForEachN(0, Syms.size(), [&](size_t I) {
     raw_string_ostream OS(Str[I]);
-    writeHeader(OS, Syms[I]->getVA(), Syms[I]->template getSize<ELFT>(), 0);
+    writeHeader(OS, Syms[I]->getVA(), Syms[I]->getSize(), 0);
     OS << indent(2) << toString(*Syms[I]);
   });
 
-  DenseMap<Defined *, std::string> Ret;
+  DenseMap<Symbol *, std::string> Ret;
   for (size_t I = 0, E = Syms.size(); I < E; ++I)
     Ret[Syms[I]] = std::move(Str[I]);
   return Ret;
 }
 
-template <class ELFT> void elf::writeMapFile() {
+void elf::writeMapFile() {
   if (Config->MapFile.empty())
     return;
 
@@ -119,12 +122,12 @@ template <class ELFT> void elf::writeMapFile() {
   }
 
   // Collect symbol info that we want to print out.
-  std::vector<Defined *> Syms = getSymbols<ELFT>();
+  std::vector<Symbol *> Syms = getSymbols();
   SymbolMapTy SectionSyms = getSectionSyms(Syms);
-  DenseMap<Defined *, std::string> SymStr = getSymbolStrings<ELFT>(Syms);
+  DenseMap<Symbol *, std::string> SymStr = getSymbolStrings(Syms);
 
   // Print out the header line.
-  int W = ELFT::Is64Bits ? 16 : 8;
+  int W = Config->Is64 ? 16 : 8;
   OS << left_justify("Address", W) << ' ' << left_justify("Size", W)
      << " Align Out     In      Symbol\n";
 
@@ -142,14 +145,9 @@ template <class ELFT> void elf::writeMapFile() {
         writeHeader(OS, OSec->Addr + IS->OutSecOff, IS->getSize(),
                     IS->Alignment);
         OS << indent(1) << toString(IS) << '\n';
-        for (Defined *Sym : SectionSyms[IS])
+        for (Symbol *Sym : SectionSyms[IS])
           OS << SymStr[Sym] << '\n';
       }
     }
   }
 }
-
-template void elf::writeMapFile<ELF32LE>();
-template void elf::writeMapFile<ELF32BE>();
-template void elf::writeMapFile<ELF64LE>();
-template void elf::writeMapFile<ELF64BE>();

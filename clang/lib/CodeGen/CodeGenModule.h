@@ -324,6 +324,10 @@ private:
   /// is defined once we get to the end of the of the translation unit.
   std::vector<GlobalDecl> Aliases;
 
+  /// List of multiversion functions that have to be emitted.  Used to make sure
+  /// we properly emit the iFunc.
+  std::vector<GlobalDecl> MultiVersionFuncs;
+
   typedef llvm::StringMap<llvm::TrackingVH<llvm::Constant> > ReplacementsTy;
   ReplacementsTy Replacements;
 
@@ -490,14 +494,16 @@ private:
 
   /// @}
 
-  llvm::DenseMap<const Decl *, bool> DeferredEmptyCoverageMappingDecls;
+  llvm::MapVector<const Decl *, bool> DeferredEmptyCoverageMappingDecls;
 
   std::unique_ptr<CoverageMappingModuleGen> CoverageMapping;
 
   /// Mapping from canonical types to their metadata identifiers. We need to
   /// maintain this mapping because identifiers may be formed from distinct
   /// MDNodes.
-  llvm::DenseMap<QualType, llvm::Metadata *> MetadataIdMap;
+  typedef llvm::DenseMap<QualType, llvm::Metadata *> MetadataTypeMap;
+  MetadataTypeMap MetadataIdMap;
+  MetadataTypeMap GeneralizedMetadataIdMap;
 
 public:
   CodeGenModule(ASTContext &C, const HeaderSearchOptions &headersearchopts,
@@ -662,7 +668,7 @@ public:
 
   /// getTBAAVTablePtrAccessInfo - Get the TBAA information that describes an
   /// access to a virtual table pointer.
-  TBAAAccessInfo getTBAAVTablePtrAccessInfo();
+  TBAAAccessInfo getTBAAVTablePtrAccessInfo(llvm::Type *VTablePtrType);
 
   llvm::MDNode *getTBAAStructInfo(QualType QTy);
 
@@ -673,9 +679,23 @@ public:
   /// getTBAAAccessTagInfo - Get TBAA tag for a given memory access.
   llvm::MDNode *getTBAAAccessTagInfo(TBAAAccessInfo Info);
 
-  /// getTBAAMayAliasAccessInfo - Get TBAA information that represents
-  /// may-alias accesses.
-  TBAAAccessInfo getTBAAMayAliasAccessInfo();
+  /// mergeTBAAInfoForCast - Get merged TBAA information for the purposes of
+  /// type casts.
+  TBAAAccessInfo mergeTBAAInfoForCast(TBAAAccessInfo SourceInfo,
+                                      TBAAAccessInfo TargetInfo);
+
+  /// mergeTBAAInfoForConditionalOperator - Get merged TBAA information for the
+  /// purposes of conditional operator.
+  TBAAAccessInfo mergeTBAAInfoForConditionalOperator(TBAAAccessInfo InfoA,
+                                                     TBAAAccessInfo InfoB);
+
+  /// getTBAAInfoForSubobject - Get TBAA information for an access with a given
+  /// base lvalue.
+  TBAAAccessInfo getTBAAInfoForSubobject(LValue Base, QualType AccessType) {
+    if (Base.getTBAAInfo().isMayAlias())
+      return TBAAAccessInfo::getMayAliasInfo();
+    return getTBAAAccessInfo(AccessType);
+  }
 
   bool isTypeConstant(QualType QTy, bool ExcludeCtorDtor);
 
@@ -694,7 +714,8 @@ public:
   llvm::ConstantInt *getSize(CharUnits numChars);
 
   /// Set the visibility for the given LLVM GlobalValue.
-  void setGlobalVisibility(llvm::GlobalValue *GV, const NamedDecl *D) const;
+  void setGlobalVisibility(llvm::GlobalValue *GV, const NamedDecl *D,
+                           ForDefinition_t IsForDefinition) const;
 
   /// Set the TLS mode for the given LLVM GlobalValue for the thread-local
   /// variable declaration D.
@@ -1195,6 +1216,11 @@ public:
   /// internal identifiers).
   llvm::Metadata *CreateMetadataIdentifierForType(QualType T);
 
+  /// Create a metadata identifier for the generalization of the given type.
+  /// This may either be an MDString (for external identifiers) or a distinct
+  /// unnamed MDNode (for internal identifiers).
+  llvm::Metadata *CreateMetadataIdentifierGeneralized(QualType T);
+
   /// Create and attach type metadata to the given function.
   void CreateFunctionTypeMetadata(const FunctionDecl *FD, llvm::Function *F);
 
@@ -1224,6 +1250,12 @@ private:
       bool DontDefer = false, bool IsThunk = false,
       llvm::AttributeList ExtraAttrs = llvm::AttributeList(),
       ForDefinition_t IsForDefinition = NotForDefinition);
+
+  llvm::Constant *GetOrCreateMultiVersionIFunc(GlobalDecl GD,
+                                               llvm::Type *DeclTy,
+                                               StringRef MangledName,
+                                               const FunctionDecl *FD);
+  void UpdateMultiVersionNames(GlobalDecl GD, const FunctionDecl *FD);
 
   llvm::Constant *GetOrCreateLLVMGlobal(StringRef MangledName,
                                         llvm::PointerType *PTy,
@@ -1296,6 +1328,8 @@ private:
   void applyGlobalValReplacements();
 
   void checkAliases();
+
+  void emitMultiVersionFunctions();
 
   /// Emit any vtables which we deferred and still have a use for.
   void EmitDeferredVTables();

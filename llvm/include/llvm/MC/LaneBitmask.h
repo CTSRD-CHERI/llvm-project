@@ -80,9 +80,9 @@ namespace llvm {
       return Log2_32(Mask);
     }
 
-    static LaneBitmask getNone() { return LaneBitmask(0); }
-    static LaneBitmask getAll()  { return ~LaneBitmask(0); }
-    static LaneBitmask getLane(unsigned Lane) {
+    static constexpr LaneBitmask getNone() { return LaneBitmask(0); }
+    static constexpr LaneBitmask getAll() { return ~LaneBitmask(0); }
+    static constexpr LaneBitmask getLane(unsigned Lane) {
       return LaneBitmask(Type(1) << Lane);
     }
 
@@ -91,7 +91,7 @@ namespace llvm {
   };
 
   /// Create Printable object to print LaneBitmasks on a \ref raw_ostream.
-  static LLVM_ATTRIBUTE_UNUSED Printable PrintLaneMask(LaneBitmask LaneMask) {
+  inline Printable PrintLaneMask(LaneBitmask LaneMask) {
     return Printable([LaneMask](raw_ostream &OS) {
       OS << format(LaneBitmask::FormatStr, LaneMask.getAsInteger());
     });

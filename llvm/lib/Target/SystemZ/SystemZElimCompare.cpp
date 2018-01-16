@@ -25,9 +25,9 @@
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineOperand.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/MC/MCInstrDesc.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <cassert>
 #include <cstdint>
 
@@ -434,11 +434,8 @@ bool SystemZElimCompare::optimizeCompareZero(
   }
 
   // Also do a forward search to handle cases where an instruction after the
-  // compare can be converted like
-  //
-  // LTEBRCompare %F0S, %F0S, %CC<imp-def> LTEBRCompare %F0S, %F0S, %CC<imp-def>
-  // %F2S<def> = LER %F0S
-  //
+  // compare can be converted, like
+  // LTEBRCompare %f0s, %f0s; %f2s = LER %f0s  =>  LTEBRCompare %f2s, %f0s
   MBBI = Compare, MBBE = MBB.end();
   while (++MBBI != MBBE) {
     MachineInstr &MI = *MBBI;
@@ -593,7 +590,7 @@ bool SystemZElimCompare::processBlock(MachineBasicBlock &MBB) {
 }
 
 bool SystemZElimCompare::runOnMachineFunction(MachineFunction &F) {
-  if (skipFunction(*F.getFunction()))
+  if (skipFunction(F.getFunction()))
     return false;
 
   TII = static_cast<const SystemZInstrInfo *>(F.getSubtarget().getInstrInfo());

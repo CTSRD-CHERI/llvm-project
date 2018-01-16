@@ -15,6 +15,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "CodeGenTarget.h"
+#include "CodeGenDAGPatterns.h"
 #include "CodeGenIntrinsics.h"
 #include "CodeGenSchedule.h"
 #include "llvm/ADT/STLExtras.h"
@@ -82,6 +83,7 @@ StringRef llvm::getEnumName(MVT::SimpleValueType T) {
   case MVT::v16i1:    return "MVT::v16i1";
   case MVT::v32i1:    return "MVT::v32i1";
   case MVT::v64i1:    return "MVT::v64i1";
+  case MVT::v128i1:   return "MVT::v128i1";
   case MVT::v512i1:   return "MVT::v512i1";
   case MVT::v1024i1:  return "MVT::v1024i1";
   case MVT::v1i8:     return "MVT::v1i8";
@@ -353,7 +355,7 @@ GetInstByName(const char *Name,
 void CodeGenTarget::ComputeInstrsByEnum() const {
   static const char *const FixedInstrs[] = {
 #define HANDLE_TARGET_OPCODE(OPC) #OPC,
-#include "llvm/Target/TargetOpcodes.def"
+#include "llvm/CodeGen/TargetOpcodes.def"
       nullptr};
   const auto &Insts = getInstructions();
   for (const char *const *p = FixedInstrs; *p; ++p) {
@@ -454,6 +456,7 @@ ComplexPattern::ComplexPattern(Record *R) {
   else
     Complexity = RawComplexity;
 
+  // FIXME: Why is this different from parseSDPatternOperatorProperties?
   // Parse the properties.
   Properties = 0;
   std::vector<Record*> PropList = R->getValueAsListOfDefs("Properties");
@@ -516,6 +519,7 @@ CodeGenIntrinsic::CodeGenIntrinsic(Record *R) {
   TheDef = R;
   std::string DefName = R->getName();
   ModRef = ReadWriteMem;
+  Properties = 0;
   isOverloaded = false;
   isCommutative = false;
   canThrow = false;
@@ -695,6 +699,10 @@ CodeGenIntrinsic::CodeGenIntrinsic(Record *R) {
       llvm_unreachable("Unknown property!");
   }
 
+  // Also record the SDPatternOperator Properties.
+  Properties = parseSDPatternOperatorProperties(R);
+
   // Sort the argument attributes for later benefit.
   std::sort(ArgumentAttributes.begin(), ArgumentAttributes.end());
 }
+

@@ -32,6 +32,8 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/MachineValueType.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/DataLayout.h"
@@ -41,8 +43,6 @@
 #include "llvm/IR/Value.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/LowLevelTypeImpl.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -190,7 +190,7 @@ void ARMCallLowering::splitToValueTypes(
   LLVMContext &Ctx = OrigArg.Ty->getContext();
   const DataLayout &DL = MF.getDataLayout();
   MachineRegisterInfo &MRI = MF.getRegInfo();
-  const Function *F = MF.getFunction();
+  const Function &F = MF.getFunction();
 
   SmallVector<EVT, 4> SplitVTs;
   SmallVector<uint64_t, 4> Offsets;
@@ -218,7 +218,7 @@ void ARMCallLowering::splitToValueTypes(
 
     bool NeedsConsecutiveRegisters =
         TLI.functionArgumentNeedsConsecutiveRegisters(
-            SplitTy, F->getCallingConv(), F->isVarArg());
+            SplitTy, F.getCallingConv(), F.isVarArg());
     if (NeedsConsecutiveRegisters) {
       Flags.setInConsecutiveRegs();
       if (i == e - 1)
@@ -244,7 +244,7 @@ bool ARMCallLowering::lowerReturnVal(MachineIRBuilder &MIRBuilder,
     return true;
 
   auto &MF = MIRBuilder.getMF();
-  const auto &F = *MF.getFunction();
+  const auto &F = MF.getFunction();
 
   auto DL = MF.getDataLayout();
   auto &TLI = *getTLI<ARMTargetLowering>();
@@ -417,6 +417,12 @@ struct FormalArgHandler : public IncomingValueHandler {
 bool ARMCallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
                                            const Function &F,
                                            ArrayRef<unsigned> VRegs) const {
+  auto &TLI = *getTLI<ARMTargetLowering>();
+  auto Subtarget = TLI.getSubtarget();
+
+  if (Subtarget->isThumb())
+    return false;
+
   // Quick exit if there aren't any args
   if (F.arg_empty())
     return true;
@@ -427,16 +433,13 @@ bool ARMCallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
   auto &MF = MIRBuilder.getMF();
   auto &MBB = MIRBuilder.getMBB();
   auto DL = MF.getDataLayout();
-  auto &TLI = *getTLI<ARMTargetLowering>();
 
-  auto Subtarget = TLI.getSubtarget();
-
-  if (Subtarget->isThumb())
-    return false;
-
-  for (auto &Arg : F.args())
+  for (auto &Arg : F.args()) {
     if (!isSupportedType(DL, TLI, Arg.getType()))
       return false;
+    if (Arg.hasByValOrInAllocaAttr())
+      return false;
+  }
 
   CCAssignFn *AssignFn =
       TLI.CCAssignFnForCall(F.getCallingConv(), F.isVarArg());
@@ -493,19 +496,26 @@ bool ARMCallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
   MachineFunction &MF = MIRBuilder.getMF();
   const auto &TLI = *getTLI<ARMTargetLowering>();
   const auto &DL = MF.getDataLayout();
-  const auto &STI = MF.getSubtarget();
+  const auto &STI = MF.getSubtarget<ARMSubtarget>();
   const TargetRegisterInfo *TRI = STI.getRegisterInfo();
   MachineRegisterInfo &MRI = MF.getRegInfo();
 
-  if (MF.getSubtarget<ARMSubtarget>().genLongCalls())
+  if (STI.genLongCalls())
     return false;
 
   auto CallSeqStart = MIRBuilder.buildInstr(ARM::ADJCALLSTACKDOWN);
 
   // Create the call instruction so we can add the implicit uses of arg
   // registers, but don't insert it yet.
-  auto MIB = MIRBuilder.buildInstrNoInsert(ARM::BLX).add(Callee).addRegMask(
-      TRI->getCallPreservedMask(MF, CallConv));
+  bool isDirect = !Callee.isReg();
+  auto CallOpcode =
+      isDirect ? ARM::BL
+               : STI.hasV5TOps()
+                     ? ARM::BLX
+                     : STI.hasV4TOps() ? ARM::BX_CALL : ARM::BMOVPCRX_CALL;
+  auto MIB = MIRBuilder.buildInstrNoInsert(CallOpcode)
+                 .add(Callee)
+                 .addRegMask(TRI->getCallPreservedMask(MF, CallConv));
   if (Callee.isReg()) {
     auto CalleeReg = Callee.getReg();
     if (CalleeReg && !TRI->isPhysicalRegister(CalleeReg))
@@ -520,6 +530,9 @@ bool ARMCallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
       return false;
 
     if (!Arg.IsFixed)
+      return false;
+
+    if (Arg.Flags.isByVal())
       return false;
 
     SmallVector<unsigned, 8> Regs;

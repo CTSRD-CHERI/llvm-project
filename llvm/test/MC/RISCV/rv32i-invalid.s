@@ -111,17 +111,29 @@ slti a10, a2, 0x20 # CHECK: :[[@LINE]]:6: error: invalid operand for instruction
 slt x32, s0, s0 # CHECK: :[[@LINE]]:5: error: invalid operand for instruction
 
 # RV64I mnemonics
-addiw a0, sp, 100 # CHECK: :[[@LINE]]:1: error: unrecognized instruction mnemonic
-sraw t0, s2, zero # CHECK: :[[@LINE]]:1: error: unrecognized instruction mnemonic
+addiw a0, sp, 100 # CHECK: :[[@LINE]]:1: error: instruction use requires an option to be enabled
+sraw t0, s2, zero # CHECK: :[[@LINE]]:1: error: instruction use requires an option to be enabled
 
 # Invalid operand types
 xori sp, 22, 220 # CHECK: :[[@LINE]]:10: error: invalid operand for instruction
 sub t0, t2, 1 # CHECK: :[[@LINE]]:13: error: invalid operand for instruction
+add a1, a2, (a3) # CHECK: :[[@LINE]]:13: error: invalid operand for instruction
 
 # Too many operands
 add ra, zero, zero, zero # CHECK: :[[@LINE]]:21: error: invalid operand for instruction
 sltiu s2, s3, 0x50, 0x60 # CHECK: :[[@LINE]]:21: error: invalid operand for instruction
 
+# Memory operand not formatted correctly
+lw a4, a5, 111 # CHECK: :[[@LINE]]:8: error: immediate must be an integer in the range [-2048, 2047]
+
 # Too few operands
 ori a0, a1 # CHECK: :[[@LINE]]:1: error: too few operands for instruction
 xor s2, s2 # CHECK: :[[@LINE]]:1: error: too few operands for instruction
+
+# Instruction not in the base ISA
+mul a4, ra, s0 # CHECK: :[[@LINE]]:1: error: instruction use requires an option to be enabled
+amomaxu.w s5, s4, (s3) # CHECK: :[[@LINE]]:1: error: instruction use requires an option to be enabled
+fadd.s ft0, ft1, ft2 # CHECK: :[[@LINE]]:1: error: instruction use requires an option to be enabled
+
+# Using floating point registers when integer registers are expected
+addi a2, ft0, 24 # CHECK: :[[@LINE]]:10: error: invalid operand for instruction

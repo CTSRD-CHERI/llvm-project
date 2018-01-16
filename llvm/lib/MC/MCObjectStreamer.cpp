@@ -10,7 +10,6 @@
 #include "llvm/MC/MCObjectStreamer.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/MC/MCAsmBackend.h"
-#include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCCodeView.h"
@@ -22,7 +21,6 @@
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/TargetRegistry.h"
 using namespace llvm;
 
 MCObjectStreamer::MCObjectStreamer(MCContext &Context,
@@ -103,6 +101,16 @@ MCDataFragment *MCObjectStreamer::getOrCreateDataFragment() {
   if (!F || (Assembler->isBundlingEnabled() && !Assembler->getRelaxAll() &&
              F->hasInstructions())) {
     F = new MCDataFragment();
+    insert(F);
+  }
+  return F;
+}
+
+MCPaddingFragment *MCObjectStreamer::getOrCreatePaddingFragment() {
+  MCPaddingFragment *F =
+      dyn_cast_or_null<MCPaddingFragment>(getCurrentFragment());
+  if (!F) {
+    F = new MCPaddingFragment();
     insert(F);
   }
   return F;
@@ -247,6 +255,13 @@ bool MCObjectStreamer::mayHaveInstructions(MCSection &Sec) const {
 
 void MCObjectStreamer::EmitInstruction(const MCInst &Inst,
                                        const MCSubtargetInfo &STI, bool) {
+  getAssembler().getBackend().handleCodePaddingInstructionBegin(Inst);
+  EmitInstructionImpl(Inst, STI);
+  getAssembler().getBackend().handleCodePaddingInstructionEnd(Inst);
+}
+
+void MCObjectStreamer::EmitInstructionImpl(const MCInst &Inst,
+                                           const MCSubtargetInfo &STI) {
   MCStreamer::EmitInstruction(Inst, STI);
 
   MCSection *Sec = getCurrentSectionOnly();
@@ -467,6 +482,16 @@ void MCObjectStreamer::emitValueToOffset(const MCExpr *Offset,
   insert(new MCOrgFragment(*Offset, Value, Loc));
 }
 
+void MCObjectStreamer::EmitCodePaddingBasicBlockStart(
+    const MCCodePaddingContext &Context) {
+  getAssembler().getBackend().handleCodePaddingBasicBlockStart(this, Context);
+}
+
+void MCObjectStreamer::EmitCodePaddingBasicBlockEnd(
+    const MCCodePaddingContext &Context) {
+  getAssembler().getBackend().handleCodePaddingBasicBlockEnd(Context);
+}
+
 // Associate DTPRel32 fixup with data and resize data area
 void MCObjectStreamer::EmitDTPRel32Value(const MCExpr *Value) {
   MCDataFragment *DF = getOrCreateDataFragment();
@@ -552,28 +577,13 @@ bool MCObjectStreamer::EmitRelocDirective(const MCExpr &Offset, StringRef Name,
   return false;
 }
 
-void MCObjectStreamer::emitFill(uint64_t NumBytes, uint8_t FillValue) {
-  assert(getCurrentSectionOnly() && "need a section");
-  insert(new MCFillFragment(FillValue, NumBytes));
-}
-
 void MCObjectStreamer::emitFill(const MCExpr &NumBytes, uint64_t FillValue,
                                 SMLoc Loc) {
   MCDataFragment *DF = getOrCreateDataFragment();
   flushPendingLabels(DF, DF->getContents().size());
 
-  int64_t IntNumBytes;
-  if (!NumBytes.evaluateAsAbsolute(IntNumBytes, getAssembler())) {
-    getContext().reportError(Loc, "expected absolute expression");
-    return;
-  }
-
-  if (IntNumBytes <= 0) {
-    getContext().reportError(Loc, "invalid number of bytes");
-    return;
-  }
-
-  emitFill(IntNumBytes, FillValue);
+  assert(getCurrentSectionOnly() && "need a section");
+  insert(new MCFillFragment(FillValue, NumBytes, Loc));
 }
 
 void MCObjectStreamer::emitFill(const MCExpr &NumValues, int64_t Size,
@@ -591,7 +601,13 @@ void MCObjectStreamer::emitFill(const MCExpr &NumValues, int64_t Size,
     return;
   }
 
-  MCStreamer::emitFill(IntNumValues, Size, Expr);
+  int64_t NonZeroSize = Size > 4 ? 4 : Size;
+  Expr &= ~0ULL >> (64 - NonZeroSize * 8);
+  for (uint64_t i = 0, e = IntNumValues; i != e; ++i) {
+    EmitIntValue(Expr, NonZeroSize);
+    if (NonZeroSize < Size)
+      EmitIntValue(0, Size - NonZeroSize);
+  }
 }
 
 void MCObjectStreamer::EmitFileDirective(StringRef Filename) {

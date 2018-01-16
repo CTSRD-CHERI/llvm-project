@@ -20,11 +20,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "MapFile.h"
-#include "Error.h"
 #include "SymbolTable.h"
 #include "Symbols.h"
 #include "Writer.h"
 
+#include "lld/Common/ErrorHandler.h"
 #include "llvm/Support/Parallel.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -49,8 +49,8 @@ static std::string indent(int Depth) { return std::string(Depth * 8, ' '); }
 static std::vector<DefinedRegular *> getSymbols() {
   std::vector<DefinedRegular *> V;
   for (ObjFile *File : ObjFile::Instances)
-    for (SymbolBody *B : File->getSymbols())
-      if (auto *Sym = dyn_cast<DefinedRegular>(B))
+    for (Symbol *B : File->getSymbols())
+      if (auto *Sym = dyn_cast_or_null<DefinedRegular>(B))
         if (Sym && !Sym->getCOFFSymbol().isSectionDefinition())
           V.push_back(Sym);
   return V;

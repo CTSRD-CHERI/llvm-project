@@ -25,7 +25,7 @@
 #include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Target/TargetFrameLowering.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 
@@ -66,8 +66,8 @@ static void ReplaceFrameIndex(MachineBasicBlock::iterator II,
           MBB.getParent()->getSubtarget().getRegisterInfo();
       BaseReg = RS->scavengeRegister(&ARC::GPR32RegClass, II, SPAdj);
       assert(BaseReg && "Register scavenging failed.");
-      DEBUG(dbgs() << "Scavenged register " << PrintReg(BaseReg, TRI)
-                   << " for FrameReg=" << PrintReg(FrameReg, TRI)
+      DEBUG(dbgs() << "Scavenged register " << printReg(BaseReg, TRI)
+                   << " for FrameReg=" << printReg(FrameReg, TRI)
                    << "+Offset=" << Offset << "\n");
       (void)TRI;
       RS->setRegUsed(BaseReg);
@@ -125,8 +125,7 @@ static void ReplaceFrameIndex(MachineBasicBlock::iterator II,
 ARCRegisterInfo::ARCRegisterInfo() : ARCGenRegisterInfo(ARC::BLINK) {}
 
 bool ARCRegisterInfo::needsFrameMoves(const MachineFunction &MF) {
-  return MF.getMMI().hasDebugInfo() ||
-         MF.getFunction()->needsUnwindTableEntry();
+  return MF.getMMI().hasDebugInfo() || MF.getFunction().needsUnwindTableEntry();
 }
 
 const MCPhysReg *

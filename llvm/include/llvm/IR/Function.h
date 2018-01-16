@@ -131,7 +131,7 @@ public:
   // This is here to help easily convert from FunctionT * (Function * or
   // MachineFunction *) in BlockFrequencyInfoImpl to Function * by calling
   // FunctionT->getFunction().
-  const Function *getFunction() const { return this; }
+  const Function &getFunction() const { return *this; }
 
   static Function *Create(FunctionType *Ty, LinkageTypes Linkage,
                           const Twine &N = "", Module *M = nullptr) {
@@ -218,6 +218,7 @@ public:
                  Attribute::get(getContext(), Kind, Val));
   }
 
+  /// @brief Add function attributes to this function.
   void addFnAttr(Attribute Attr) {
     addAttribute(AttributeList::FunctionIndex, Attr);
   }
@@ -236,10 +237,11 @@ public:
   /// \brief Set the entry count for this function.
   ///
   /// Entry count is the number of times this function was executed based on
-  /// pgo data. \p Imports points to a set of GUIDs that needs to be imported
-  /// by the function for sample PGO, to enable the same inlines as the
-  /// profiled optimized binary.
-  void setEntryCount(uint64_t Count,
+  /// pgo data. \p Synthetic indicates the count is synthesized by analysis and
+  /// not from a profile run. \p Imports points to a set of GUIDs that needs to
+  /// be imported by the function for sample PGO, to enable the same inlines as
+  /// the profiled optimized binary.
+  void setEntryCount(uint64_t Count, bool Synthetic = false,
                      const DenseSet<GlobalValue::GUID> *Imports = nullptr);
 
   /// \brief Get the entry count for this function.
@@ -247,6 +249,12 @@ public:
   /// Entry count is the number of times the function was executed based on
   /// pgo data.
   Optional<uint64_t> getEntryCount() const;
+
+  /// Return true if the function is annotated with profile data.
+  ///
+  /// Presence of entry counts from a profile run implies the function has
+  /// profile annotations.
+  bool hasProfileData() const { return getEntryCount().hasValue(); }
 
   /// Returns the set of GUIDs that needs to be imported to the function for
   /// sample PGO, to enable the same inlines as the profiled optimized binary.
@@ -262,6 +270,8 @@ public:
   bool hasFnAttribute(Attribute::AttrKind Kind) const {
     return AttributeSets.hasFnAttribute(Kind);
   }
+
+  /// @brief Return true if the function has the attribute.
   bool hasFnAttribute(StringRef Kind) const {
     return AttributeSets.hasFnAttribute(Kind);
   }
@@ -270,6 +280,8 @@ public:
   Attribute getFnAttribute(Attribute::AttrKind Kind) const {
     return getAttribute(AttributeList::FunctionIndex, Kind);
   }
+
+  /// @brief Return the attribute for the given attribute kind.
   Attribute getFnAttribute(StringRef Kind) const {
     return getAttribute(AttributeList::FunctionIndex, Kind);
   }
@@ -336,10 +348,12 @@ public:
     return getAttributes().hasParamAttribute(ArgNo, Kind);
   }
 
+  /// @brief gets the attribute from the list of attributes.
   Attribute getAttribute(unsigned i, Attribute::AttrKind Kind) const {
     return AttributeSets.getAttribute(i, Kind);
   }
 
+  /// @brief gets the attribute from the list of attributes.
   Attribute getAttribute(unsigned i, StringRef Kind) const {
     return AttributeSets.getAttribute(i, Kind);
   }
@@ -422,7 +436,7 @@ public:
   }
   void setOnlyAccessesArgMemory() { addFnAttr(Attribute::ArgMemOnly); }
 
-  /// @brief Determine if the function may only access memory that is 
+  /// @brief Determine if the function may only access memory that is
   ///  inaccessible from the IR.
   bool onlyAccessesInaccessibleMemory() const {
     return hasFnAttribute(Attribute::InaccessibleMemOnly);
@@ -490,7 +504,7 @@ public:
   }
   void setDoesNotRecurse() {
     addFnAttr(Attribute::NoRecurse);
-  }  
+  }
 
   /// @brief True if the ABI mandates (or the user requested) that this
   /// function be in a unwind table.

@@ -10,13 +10,16 @@
 #include "PDB.h"
 #include "Chunks.h"
 #include "Config.h"
-#include "Error.h"
+#include "Driver.h"
 #include "SymbolTable.h"
 #include "Symbols.h"
 #include "Writer.h"
+#include "lld/Common/ErrorHandler.h"
 #include "llvm/DebugInfo/CodeView/CVDebugRecord.h"
 #include "llvm/DebugInfo/CodeView/DebugSubsectionRecord.h"
+#include "llvm/DebugInfo/CodeView/GlobalTypeTableBuilder.h"
 #include "llvm/DebugInfo/CodeView/LazyRandomTypeCollection.h"
+#include "llvm/DebugInfo/CodeView/MergingTypeTableBuilder.h"
 #include "llvm/DebugInfo/CodeView/RecordName.h"
 #include "llvm/DebugInfo/CodeView/SymbolDeserializer.h"
 #include "llvm/DebugInfo/CodeView/SymbolSerializer.h"
@@ -24,7 +27,6 @@
 #include "llvm/DebugInfo/CodeView/TypeDumpVisitor.h"
 #include "llvm/DebugInfo/CodeView/TypeIndexDiscovery.h"
 #include "llvm/DebugInfo/CodeView/TypeStreamMerger.h"
-#include "llvm/DebugInfo/CodeView/TypeTableBuilder.h"
 #include "llvm/DebugInfo/MSF/MSFBuilder.h"
 #include "llvm/DebugInfo/MSF/MSFCommon.h"
 #include "llvm/DebugInfo/PDB/GenericError.h"
@@ -45,7 +47,7 @@
 #include "llvm/Object/COFF.h"
 #include "llvm/Support/BinaryByteStream.h"
 #include "llvm/Support/Endian.h"
-#include "llvm/Support/FileOutputBuffer.h"
+#include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/JamCRC.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/ScopedPrinter.h"
@@ -73,7 +75,7 @@ class PDBLinker {
 public:
   PDBLinker(SymbolTable *Symtab)
       : Alloc(), Symtab(Symtab), Builder(Alloc), TypeTable(Alloc),
-        IDTable(Alloc) {}
+        IDTable(Alloc), GlobalTypeTable(Alloc), GlobalIDTable(Alloc) {}
 
   /// Emit the basic PDB structure: initial streams, headers, etc.
   void initialize(const llvm::codeview::DebugInfo &BuildId);
@@ -118,10 +120,16 @@ private:
   pdb::PDBFileBuilder Builder;
 
   /// Type records that will go into the PDB TPI stream.
-  TypeTableBuilder TypeTable;
+  MergingTypeTableBuilder TypeTable;
 
   /// Item records that will go into the PDB IPI stream.
-  TypeTableBuilder IDTable;
+  MergingTypeTableBuilder IDTable;
+
+  /// Type records that will go into the PDB TPI stream (for /DEBUG:GHASH)
+  GlobalTypeTableBuilder GlobalTypeTable;
+
+  /// Item records that will go into the PDB IPI stream (for /DEBUG:GHASH)
+  GlobalTypeTableBuilder GlobalIDTable;
 
   /// PDBs use a single global string table for filenames in the file checksum
   /// table.
@@ -136,7 +144,7 @@ private:
 };
 }
 
-static SectionChunk *findByName(std::vector<SectionChunk *> &Sections,
+static SectionChunk *findByName(ArrayRef<SectionChunk *> Sections,
                                 StringRef Name) {
   for (SectionChunk *C : Sections)
     if (C->getSectionName() == Name)
@@ -160,20 +168,52 @@ static ArrayRef<uint8_t> getDebugSection(ObjFile *File, StringRef SecName) {
   return {};
 }
 
+// A COFF .debug$H section is currently a clang extension.  This function checks
+// if a .debug$H section is in a format that we expect / understand, so that we
+// can ignore any sections which are coincidentally also named .debug$H but do
+// not contain a format we recognize.
+static bool canUseDebugH(ArrayRef<uint8_t> DebugH) {
+  if (DebugH.size() < sizeof(object::debug_h_header))
+    return false;
+  auto *Header =
+      reinterpret_cast<const object::debug_h_header *>(DebugH.data());
+  DebugH = DebugH.drop_front(sizeof(object::debug_h_header));
+  return Header->Magic == COFF::DEBUG_HASHES_SECTION_MAGIC &&
+         Header->Version == 0 &&
+         Header->HashAlgorithm == uint16_t(GlobalTypeHashAlg::SHA1) &&
+         (DebugH.size() % 20 == 0);
+}
+
+static Optional<ArrayRef<uint8_t>> getDebugH(ObjFile *File) {
+  SectionChunk *Sec = findByName(File->getDebugChunks(), ".debug$H");
+  if (!Sec)
+    return llvm::None;
+  ArrayRef<uint8_t> Contents = Sec->getContents();
+  if (!canUseDebugH(Contents))
+    return None;
+  return Contents;
+}
+
+static ArrayRef<GloballyHashedType>
+getHashesFromDebugH(ArrayRef<uint8_t> DebugH) {
+  assert(canUseDebugH(DebugH));
+
+  DebugH = DebugH.drop_front(sizeof(object::debug_h_header));
+  uint32_t Count = DebugH.size() / sizeof(GloballyHashedType);
+  return {reinterpret_cast<const GloballyHashedType *>(DebugH.data()), Count};
+}
+
 static void addTypeInfo(pdb::TpiStreamBuilder &TpiBuilder,
-                        TypeTableBuilder &TypeTable) {
+                        TypeCollection &TypeTable) {
   // Start the TPI or IPI stream header.
   TpiBuilder.setVersionHeader(pdb::PdbTpiV80);
 
   // Flatten the in memory type table and hash each type.
-  TypeTable.ForEachRecord([&](TypeIndex TI, ArrayRef<uint8_t> Rec) {
-    assert(Rec.size() >= sizeof(RecordPrefix));
-    const RecordPrefix *P = reinterpret_cast<const RecordPrefix *>(Rec.data());
-    CVType Type(static_cast<TypeLeafKind>(unsigned(P->RecordKind)), Rec);
+  TypeTable.ForEachRecord([&](TypeIndex TI, const CVType &Type) {
     auto Hash = pdb::hashTypeRecord(Type);
     if (auto E = Hash.takeError())
       fatal("type hashing error");
-    TpiBuilder.addTypeRecord(Rec, *Hash);
+    TpiBuilder.addTypeRecord(Type.RecordData, *Hash);
   });
 }
 
@@ -187,7 +227,7 @@ maybeReadTypeServerRecord(CVTypeArray &Types) {
     return None;
   TypeServer2Record TS;
   if (auto EC = TypeDeserializer::deserializeAs(const_cast<CVType &>(Type), TS))
-    fatal(EC, "error reading type server record");
+    fatal("error reading type server record: " + toString(std::move(EC)));
   return std::move(TS);
 }
 
@@ -201,7 +241,7 @@ const CVIndexMap &PDBLinker::mergeDebugT(ObjFile *File,
   CVTypeArray Types;
   BinaryStreamReader Reader(Stream);
   if (auto EC = Reader.readArray(Types, Reader.getLength()))
-    fatal(EC, "Reader::readArray failed");
+    fatal("Reader::readArray failed: " + toString(std::move(EC)));
 
   // Look through type servers. If we've already seen this type server, don't
   // merge any type information.
@@ -210,17 +250,41 @@ const CVIndexMap &PDBLinker::mergeDebugT(ObjFile *File,
 
   // This is a /Z7 object. Fill in the temporary, caller-provided
   // ObjectIndexMap.
-  if (auto Err = mergeTypeAndIdRecords(IDTable, TypeTable,
-                                       ObjectIndexMap.TPIMap, Types))
-    fatal(Err, "codeview::mergeTypeAndIdRecords failed");
+  if (Config->DebugGHashes) {
+    ArrayRef<GloballyHashedType> Hashes;
+    std::vector<GloballyHashedType> OwnedHashes;
+    if (Optional<ArrayRef<uint8_t>> DebugH = getDebugH(File))
+      Hashes = getHashesFromDebugH(*DebugH);
+    else {
+      OwnedHashes = GloballyHashedType::hashTypes(Types);
+      Hashes = OwnedHashes;
+    }
+
+    if (auto Err = mergeTypeAndIdRecords(GlobalIDTable, GlobalTypeTable,
+                                         ObjectIndexMap.TPIMap, Types, Hashes))
+      fatal("codeview::mergeTypeAndIdRecords failed: " +
+            toString(std::move(Err)));
+  } else {
+    if (auto Err = mergeTypeAndIdRecords(IDTable, TypeTable,
+                                         ObjectIndexMap.TPIMap, Types))
+      fatal("codeview::mergeTypeAndIdRecords failed: " +
+            toString(std::move(Err)));
+  }
   return ObjectIndexMap;
 }
 
 static Expected<std::unique_ptr<pdb::NativeSession>>
 tryToLoadPDB(const GUID &GuidFromObj, StringRef TSPath) {
+  ErrorOr<std::unique_ptr<MemoryBuffer>> MBOrErr = MemoryBuffer::getFile(
+      TSPath, /*FileSize=*/-1, /*RequiresNullTerminator=*/false);
+  if (!MBOrErr)
+    return errorCodeToError(MBOrErr.getError());
+
   std::unique_ptr<pdb::IPDBSession> ThisSession;
-  if (auto EC =
-          pdb::loadDataForPDB(pdb::PDB_ReaderType::Native, TSPath, ThisSession))
+  if (auto EC = pdb::NativeSession::createFromPdb(
+          MemoryBuffer::getMemBuffer(Driver->takeBuffer(std::move(*MBOrErr)),
+                                     /*RequiresNullTerminator=*/false),
+          ThisSession))
     return std::move(EC);
 
   std::unique_ptr<pdb::NativeSession> NS(
@@ -267,23 +331,46 @@ const CVIndexMap &PDBLinker::maybeMergeTypeServerPDB(ObjFile *File,
     ExpectedSession = tryToLoadPDB(TS.getGuid(), Path);
   }
   if (auto E = ExpectedSession.takeError())
-    fatal(E, "Type server PDB was not found");
+    fatal("Type server PDB was not found: " + toString(std::move(E)));
 
-  // Merge TPI first, because the IPI stream will reference type indices.
   auto ExpectedTpi = (*ExpectedSession)->getPDBFile().getPDBTpiStream();
   if (auto E = ExpectedTpi.takeError())
-    fatal(E, "Type server does not have TPI stream");
-  if (auto Err = mergeTypeRecords(TypeTable, IndexMap.TPIMap,
-                                  ExpectedTpi->typeArray()))
-    fatal(Err, "codeview::mergeTypeRecords failed");
-
-  // Merge IPI.
+    fatal("Type server does not have TPI stream: " + toString(std::move(E)));
   auto ExpectedIpi = (*ExpectedSession)->getPDBFile().getPDBIpiStream();
   if (auto E = ExpectedIpi.takeError())
-    fatal(E, "Type server does not have TPI stream");
-  if (auto Err = mergeIdRecords(IDTable, IndexMap.TPIMap, IndexMap.IPIMap,
-                                ExpectedIpi->typeArray()))
-    fatal(Err, "codeview::mergeIdRecords failed");
+    fatal("Type server does not have TPI stream: " + toString(std::move(E)));
+
+  if (Config->DebugGHashes) {
+    // PDBs do not actually store global hashes, so when merging a type server
+    // PDB we have to synthesize global hashes.  To do this, we first synthesize
+    // global hashes for the TPI stream, since it is independent, then we
+    // synthesize hashes for the IPI stream, using the hashes for the TPI stream
+    // as inputs.
+    auto TpiHashes = GloballyHashedType::hashTypes(ExpectedTpi->typeArray());
+    auto IpiHashes =
+        GloballyHashedType::hashIds(ExpectedIpi->typeArray(), TpiHashes);
+
+    // Merge TPI first, because the IPI stream will reference type indices.
+    if (auto Err = mergeTypeRecords(GlobalTypeTable, IndexMap.TPIMap,
+                                    ExpectedTpi->typeArray(), TpiHashes))
+      fatal("codeview::mergeTypeRecords failed: " + toString(std::move(Err)));
+
+    // Merge IPI.
+    if (auto Err =
+            mergeIdRecords(GlobalIDTable, IndexMap.TPIMap, IndexMap.IPIMap,
+                           ExpectedIpi->typeArray(), IpiHashes))
+      fatal("codeview::mergeIdRecords failed: " + toString(std::move(Err)));
+  } else {
+    // Merge TPI first, because the IPI stream will reference type indices.
+    if (auto Err = mergeTypeRecords(TypeTable, IndexMap.TPIMap,
+                                    ExpectedTpi->typeArray()))
+      fatal("codeview::mergeTypeRecords failed: " + toString(std::move(Err)));
+
+    // Merge IPI.
+    if (auto Err = mergeIdRecords(IDTable, IndexMap.TPIMap, IndexMap.IPIMap,
+                                  ExpectedIpi->typeArray()))
+      fatal("codeview::mergeIdRecords failed: " + toString(std::move(Err)));
+  }
 
   return IndexMap;
 }
@@ -297,10 +384,9 @@ static bool remapTypeIndex(TypeIndex &TI, ArrayRef<TypeIndex> TypeIndexMap) {
   return true;
 }
 
-static void remapTypesInSymbolRecord(ObjFile *File,
+static void remapTypesInSymbolRecord(ObjFile *File, SymbolKind SymKind,
                                      MutableArrayRef<uint8_t> Contents,
                                      const CVIndexMap &IndexMap,
-                                     const TypeTableBuilder &IDTable,
                                      ArrayRef<TiReference> TypeRefs) {
   for (const TiReference &Ref : TypeRefs) {
     unsigned ByteSize = Ref.Count * sizeof(TypeIndex);
@@ -309,19 +395,53 @@ static void remapTypesInSymbolRecord(ObjFile *File,
 
     // This can be an item index or a type index. Choose the appropriate map.
     ArrayRef<TypeIndex> TypeOrItemMap = IndexMap.TPIMap;
-    if (Ref.Kind == TiRefKind::IndexRef && IndexMap.IsTypeServerMap)
+    bool IsItemIndex = Ref.Kind == TiRefKind::IndexRef;
+    if (IsItemIndex && IndexMap.IsTypeServerMap)
       TypeOrItemMap = IndexMap.IPIMap;
 
     MutableArrayRef<TypeIndex> TIs(
         reinterpret_cast<TypeIndex *>(Contents.data() + Ref.Offset), Ref.Count);
     for (TypeIndex &TI : TIs) {
       if (!remapTypeIndex(TI, TypeOrItemMap)) {
+        log("ignoring symbol record of kind 0x" + utohexstr(SymKind) + " in " +
+            File->getName() + " with bad " + (IsItemIndex ? "item" : "type") +
+            " index 0x" + utohexstr(TI.getIndex()));
         TI = TypeIndex(SimpleTypeKind::NotTranslated);
-        log("ignoring symbol record in " + File->getName() +
-            " with bad type index 0x" + utohexstr(TI.getIndex()));
         continue;
       }
     }
+  }
+}
+
+static void
+recordStringTableReferenceAtOffset(MutableArrayRef<uint8_t> Contents,
+                                   uint32_t Offset,
+                                   std::vector<ulittle32_t *> &StrTableRefs) {
+  Contents =
+      Contents.drop_front(Offset).take_front(sizeof(support::ulittle32_t));
+  ulittle32_t *Index = reinterpret_cast<ulittle32_t *>(Contents.data());
+  StrTableRefs.push_back(Index);
+}
+
+static void
+recordStringTableReferences(SymbolKind Kind, MutableArrayRef<uint8_t> Contents,
+                            std::vector<ulittle32_t *> &StrTableRefs) {
+  // For now we only handle S_FILESTATIC, but we may need the same logic for
+  // S_DEFRANGE and S_DEFRANGE_SUBFIELD.  However, I cannot seem to generate any
+  // PDBs that contain these types of records, so because of the uncertainty
+  // they are omitted here until we can prove that it's necessary.
+  switch (Kind) {
+  case SymbolKind::S_FILESTATIC:
+    // FileStaticSym::ModFileOffset
+    recordStringTableReferenceAtOffset(Contents, 4, StrTableRefs);
+    break;
+  case SymbolKind::S_DEFRANGE:
+  case SymbolKind::S_DEFRANGE_SUBFIELD:
+    log("Not fixing up string table reference in S_DEFRANGE / "
+        "S_DEFRANGE_SUBFIELD record");
+    break;
+  default:
+    break;
   }
 }
 
@@ -333,7 +453,7 @@ static SymbolKind symbolKind(ArrayRef<uint8_t> RecordData) {
 
 /// MSVC translates S_PROC_ID_END to S_END, and S_[LG]PROC32_ID to S_[LG]PROC32
 static void translateIdSymbols(MutableArrayRef<uint8_t> &RecordData,
-                               const TypeTableBuilder &IDTable) {
+                               TypeCollection &IDTable) {
   RecordPrefix *Prefix = reinterpret_cast<RecordPrefix *>(RecordData.data());
 
   SymbolKind Kind = symbolKind(RecordData);
@@ -363,7 +483,7 @@ static void translateIdSymbols(MutableArrayRef<uint8_t> &RecordData,
     // Note that LF_FUNC_ID and LF_MEMFUNC_ID have the same record layout, and
     // in both cases we just need the second type index.
     if (!TI->isSimple() && !TI->isNoneType()) {
-      ArrayRef<uint8_t> FuncIdData = IDTable.records()[TI->toArrayIndex()];
+      CVType FuncIdData = IDTable.getType(*TI);
       SmallVector<TypeIndex, 2> Indices;
       discoverTypeIndices(FuncIdData, Indices);
       assert(Indices.size() == 2);
@@ -540,7 +660,8 @@ static void addGlobalSymbol(pdb::GSIStreamBuilder &Builder, ObjFile &File,
 static void mergeSymbolRecords(BumpPtrAllocator &Alloc, ObjFile *File,
                                pdb::GSIStreamBuilder &GsiBuilder,
                                const CVIndexMap &IndexMap,
-                               const TypeTableBuilder &IDTable,
+                               TypeCollection &IDTable,
+                               std::vector<ulittle32_t *> &StringTableRefs,
                                BinaryStreamRef SymData) {
   // FIXME: Improve error recovery by warning and skipping records when
   // possible.
@@ -563,11 +684,15 @@ static void mergeSymbolRecords(BumpPtrAllocator &Alloc, ObjFile *File,
     // Re-map all the type index references.
     MutableArrayRef<uint8_t> Contents =
         NewData.drop_front(sizeof(RecordPrefix));
-    remapTypesInSymbolRecord(File, Contents, IndexMap, IDTable, TypeRefs);
+    remapTypesInSymbolRecord(File, Sym.kind(), Contents, IndexMap, TypeRefs);
 
     // An object file may have S_xxx_ID symbols, but these get converted to
     // "real" symbols in a PDB.
     translateIdSymbols(NewData, IDTable);
+
+    // If this record refers to an offset in the object file's string table,
+    // add that item to the global PDB string table and re-write the index.
+    recordStringTableReferences(Sym.kind(), Contents, StringTableRefs);
 
     SymbolKind NewKind = symbolKind(NewData);
 
@@ -623,6 +748,9 @@ void PDBLinker::addObjFile(ObjFile *File) {
   const CVIndexMap &IndexMap = mergeDebugT(File, ObjectIndexMap);
 
   // Now do all live .debug$S sections.
+  DebugStringTableSubsectionRef CVStrTab;
+  DebugChecksumsSubsectionRef Checksums;
+  std::vector<ulittle32_t *> StringTableReferences;
   for (SectionChunk *DebugChunk : File->getDebugChunks()) {
     if (!DebugChunk->isLive() || DebugChunk->getSectionName() != ".debug$S")
       continue;
@@ -636,14 +764,20 @@ void PDBLinker::addObjFile(ObjFile *File) {
     BinaryStreamReader Reader(RelocatedDebugContents, support::little);
     ExitOnErr(Reader.readArray(Subsections, RelocatedDebugContents.size()));
 
-    DebugStringTableSubsectionRef CVStrTab;
-    DebugChecksumsSubsectionRef Checksums;
     for (const DebugSubsectionRecord &SS : Subsections) {
       switch (SS.kind()) {
-      case DebugSubsectionKind::StringTable:
+      case DebugSubsectionKind::StringTable: {
+        auto Data = SS.getRecordData();
+        ArrayRef<uint8_t> Buffer;
+        cantFail(Data.readLongestContiguousChunk(0, Buffer));
+        assert(!CVStrTab.valid() &&
+               "Encountered multiple string table subsections!");
         ExitOnErr(CVStrTab.initialize(SS.getRecordData()));
         break;
+      }
       case DebugSubsectionKind::FileChecksums:
+        assert(!Checksums.valid() &&
+               "Encountered multiple checksum subsections!");
         ExitOnErr(Checksums.initialize(SS.getRecordData()));
         break;
       case DebugSubsectionKind::Lines:
@@ -652,33 +786,62 @@ void PDBLinker::addObjFile(ObjFile *File) {
         File->ModuleDBI->addDebugSubsection(SS);
         break;
       case DebugSubsectionKind::Symbols:
-        mergeSymbolRecords(Alloc, File, Builder.getGsiBuilder(), IndexMap,
-                           IDTable, SS.getRecordData());
+        if (Config->DebugGHashes) {
+          mergeSymbolRecords(Alloc, File, Builder.getGsiBuilder(), IndexMap,
+                             GlobalIDTable, StringTableReferences,
+                             SS.getRecordData());
+        } else {
+          mergeSymbolRecords(Alloc, File, Builder.getGsiBuilder(), IndexMap,
+                             IDTable, StringTableReferences,
+                             SS.getRecordData());
+        }
         break;
       default:
         // FIXME: Process the rest of the subsections.
         break;
       }
     }
-
-    if (Checksums.valid()) {
-      // Make a new file checksum table that refers to offsets in the PDB-wide
-      // string table. Generally the string table subsection appears after the
-      // checksum table, so we have to do this after looping over all the
-      // subsections.
-      if (!CVStrTab.valid())
-        fatal(".debug$S sections must have both a string table subsection "
-              "and a checksum subsection table or neither");
-      auto NewChecksums = make_unique<DebugChecksumsSubsection>(PDBStrTab);
-      for (FileChecksumEntry &FC : Checksums) {
-        StringRef FileName = ExitOnErr(CVStrTab.getString(FC.FileNameOffset));
-        ExitOnErr(Builder.getDbiBuilder().addModuleSourceFile(*File->ModuleDBI,
-                                                              FileName));
-        NewChecksums->addChecksum(FileName, FC.Kind, FC.Checksum);
-      }
-      File->ModuleDBI->addDebugSubsection(std::move(NewChecksums));
-    }
   }
+
+  // We should have seen all debug subsections across the entire object file now
+  // which means that if a StringTable subsection and Checksums subsection were
+  // present, now is the time to handle them.
+  if (!CVStrTab.valid()) {
+    if (Checksums.valid())
+      fatal(".debug$S sections with a checksums subsection must also contain a "
+            "string table subsection");
+
+    if (!StringTableReferences.empty())
+      warn("No StringTable subsection was encountered, but there are string "
+           "table references");
+    return;
+  }
+
+  // Rewrite each string table reference based on the value that the string
+  // assumes in the final PDB.
+  for (ulittle32_t *Ref : StringTableReferences) {
+    auto ExpectedString = CVStrTab.getString(*Ref);
+    if (!ExpectedString) {
+      warn("Invalid string table reference");
+      consumeError(ExpectedString.takeError());
+      continue;
+    }
+
+    *Ref = PDBStrTab.insert(*ExpectedString);
+  }
+
+  // Make a new file checksum table that refers to offsets in the PDB-wide
+  // string table. Generally the string table subsection appears after the
+  // checksum table, so we have to do this after looping over all the
+  // subsections.
+  auto NewChecksums = make_unique<DebugChecksumsSubsection>(PDBStrTab);
+  for (FileChecksumEntry &FC : Checksums) {
+    StringRef FileName = ExitOnErr(CVStrTab.getString(FC.FileNameOffset));
+    ExitOnErr(Builder.getDbiBuilder().addModuleSourceFile(*File->ModuleDBI,
+                                                          FileName));
+    NewChecksums->addChecksum(FileName, FC.Kind, FC.Checksum);
+  }
+  File->ModuleDBI->addDebugSubsection(std::move(NewChecksums));
 }
 
 static PublicSym32 createPublic(Defined *Def) {
@@ -706,18 +869,21 @@ void PDBLinker::addObjectsToPDB() {
 
   Builder.getStringTableBuilder().setStrings(PDBStrTab);
 
-  // Construct TPI stream contents.
-  addTypeInfo(Builder.getTpiBuilder(), TypeTable);
-
-  // Construct IPI stream contents.
-  addTypeInfo(Builder.getIpiBuilder(), IDTable);
+  // Construct TPI and IPI stream contents.
+  if (Config->DebugGHashes) {
+    addTypeInfo(Builder.getTpiBuilder(), GlobalTypeTable);
+    addTypeInfo(Builder.getIpiBuilder(), GlobalIDTable);
+  } else {
+    addTypeInfo(Builder.getTpiBuilder(), TypeTable);
+    addTypeInfo(Builder.getIpiBuilder(), IDTable);
+  }
 
   // Compute the public and global symbols.
   auto &GsiBuilder = Builder.getGsiBuilder();
   std::vector<PublicSym32> Publics;
   Symtab->forEachSymbol([&Publics](Symbol *S) {
     // Only emit defined, live symbols that have a chunk.
-    auto *Def = dyn_cast<Defined>(S->body());
+    auto *Def = dyn_cast<Defined>(S);
     if (Def && Def->isLive() && Def->getChunk())
       Publics.push_back(createPublic(Def));
   });

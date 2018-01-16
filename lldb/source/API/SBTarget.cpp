@@ -31,7 +31,6 @@
 #include "lldb/Core/Address.h"
 #include "lldb/Core/AddressResolver.h"
 #include "lldb/Core/AddressResolverName.h"
-#include "lldb/Core/ArchSpec.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/Disassembler.h"
 #include "lldb/Core/Module.h"
@@ -58,6 +57,7 @@
 #include "lldb/Target/StackFrame.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/TargetList.h"
+#include "lldb/Utility/ArchSpec.h"
 #include "lldb/Utility/FileSpec.h"
 #include "lldb/Utility/Log.h"
 #include "lldb/Utility/RegularExpression.h"
@@ -290,7 +290,7 @@ SBProcess SBTarget::Launch(SBListener &listener, char const **argv,
     if (argv)
       launch_info.GetArguments().AppendArguments(argv);
     if (envp)
-      launch_info.GetEnvironmentEntries().SetArguments(envp);
+      launch_info.GetEnvironment() = Environment(envp);
 
     if (listener.IsValid())
       launch_info.SetListener(listener.GetSP());
@@ -340,7 +340,7 @@ SBProcess SBTarget::Launch(SBLaunchInfo &sb_launch_info, SBError &error) {
       }
     }
 
-    lldb_private::ProcessLaunchInfo &launch_info = sb_launch_info.ref();
+    lldb_private::ProcessLaunchInfo launch_info = sb_launch_info.ref();
 
     if (!launch_info.GetExecutableFile()) {
       Module *exe_module = target_sp->GetExecutableModulePointer();
@@ -353,6 +353,7 @@ SBProcess SBTarget::Launch(SBLaunchInfo &sb_launch_info, SBError &error) {
       launch_info.GetArchitecture() = arch_spec;
 
     error.SetError(target_sp->Launch(launch_info, NULL));
+    sb_launch_info.set_ref(launch_info);
     sb_process.SetSP(target_sp->GetProcessSP());
   } else {
     error.SetErrorString("SBTarget is invalid");
@@ -1442,8 +1443,8 @@ lldb::SBModule SBTarget::AddModule(const char *path, const char *triple,
       module_spec.GetUUID().SetFromCString(uuid_cstr);
 
     if (triple)
-      module_spec.GetArchitecture().SetTriple(triple,
-                                              target_sp->GetPlatform().get());
+      module_spec.GetArchitecture() = Platform::GetAugmentedArchSpec(
+          target_sp->GetPlatform().get(), triple);
     else
       module_spec.GetArchitecture() = target_sp->GetArchitecture();
 
@@ -2195,7 +2196,7 @@ lldb::SBLaunchInfo SBTarget::GetLaunchInfo() const {
   lldb::SBLaunchInfo launch_info(NULL);
   TargetSP target_sp(GetSP());
   if (target_sp)
-    launch_info.ref() = m_opaque_sp->GetProcessLaunchInfo();
+    launch_info.set_ref(m_opaque_sp->GetProcessLaunchInfo());
   return launch_info;
 }
 

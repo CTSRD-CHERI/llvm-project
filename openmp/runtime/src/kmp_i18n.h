@@ -2,7 +2,6 @@
  * kmp_i18n.h
  */
 
-
 //===----------------------------------------------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
@@ -11,7 +10,6 @@
 // Source Licenses. See LICENSE.txt for details.
 //
 //===----------------------------------------------------------------------===//
-
 
 #ifndef KMP_I18N_H
 #define KMP_I18N_H
@@ -105,16 +103,13 @@ typedef enum kmp_msg_type kmp_msg_type_t;
 struct kmp_msg {
   kmp_msg_type_t type;
   int num;
-  char const *str;
+  char *str;
   int len;
 }; // struct kmp_message
 typedef struct kmp_msg kmp_msg_t;
 
-// Two special messages.
-extern kmp_msg_t __kmp_msg_empty; // Can be used in place where message is
-// required syntactically.
-extern kmp_msg_t
-    __kmp_msg_null; // Denotes the end of variadic list of arguments.
+// Special message to denote the end of variadic list of arguments.
+extern kmp_msg_t __kmp_msg_null;
 
 // Helper functions. Creates messages either from message catalog or from
 // system. Note: these functions allocate memory. You should pass created

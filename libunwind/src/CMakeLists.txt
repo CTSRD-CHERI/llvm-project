@@ -30,6 +30,7 @@ set(LIBUNWIND_HEADERS
     DwarfParser.hpp
     libunwind_ext.h
     Registers.hpp
+    RWMutex.hpp
     UnwindCursor.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../include/libunwind.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../include/unwind.h)
@@ -131,7 +132,22 @@ endif()
 # Add a meta-target for both libraries.
 add_custom_target(unwind DEPENDS ${LIBUNWIND_TARGETS})
 
-install(TARGETS ${LIBUNWIND_TARGETS}
-  LIBRARY DESTINATION ${LIBUNWIND_INSTALL_PREFIX}lib${LIBUNWIND_LIBDIR_SUFFIX}
-  ARCHIVE DESTINATION ${LIBUNWIND_INSTALL_PREFIX}lib${LIBUNWIND_LIBDIR_SUFFIX})
+if (LIBUNWIND_INSTALL_LIBRARY)
+  install(TARGETS ${LIBUNWIND_TARGETS}
+    LIBRARY DESTINATION ${LIBUNWIND_INSTALL_PREFIX}lib${LIBUNWIND_LIBDIR_SUFFIX} COMPONENT unwind
+    ARCHIVE DESTINATION ${LIBUNWIND_INSTALL_PREFIX}lib${LIBUNWIND_LIBDIR_SUFFIX} COMPONENT unwind)
+endif()
 
+if (NOT CMAKE_CONFIGURATION_TYPES AND LIBUNWIND_INSTALL_LIBRARY)
+  add_custom_target(install-unwind
+    DEPENDS unwind
+    COMMAND "${CMAKE_COMMAND}"
+            -DCMAKE_INSTALL_COMPONENT=unwind
+            -P "${LIBUNWIND_BINARY_DIR}/cmake_install.cmake")
+  add_custom_target(install-unwind-stripped
+    DEPENDS unwind
+    COMMAND "${CMAKE_COMMAND}"
+            -DCMAKE_INSTALL_COMPONENT=unwind
+            -DCMAKE_INSTALL_DO_STRIP=1
+            -P "${LIBUNWIND_BINARY_DIR}/cmake_install.cmake")
+endif()

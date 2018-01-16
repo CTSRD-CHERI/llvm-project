@@ -20,10 +20,7 @@
 #include "llvm/BinaryFormat/COFF.h"
 #include "llvm/Demangle/Demangle.h"
 #include "llvm/IR/Function.h"
-#include "llvm/IR/GlobalAlias.h"
-#include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Module.h"
 #include "llvm/Object/Archive.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Object/COFFImportFile.h"
@@ -43,13 +40,7 @@
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
-#include <algorithm>
-#include <cctype>
-#include <cerrno>
-#include <cstring>
-#include <system_error>
 #include <vector>
-#include <string.h>
 
 using namespace llvm;
 using namespace object;
@@ -85,9 +76,11 @@ cl::alias DefinedOnly2("U", cl::desc("Alias for --defined-only"),
                        cl::aliasopt(DefinedOnly), cl::Grouping);
 
 cl::opt<bool> ExternalOnly("extern-only",
-                           cl::desc("Show only external symbols"));
+                           cl::desc("Show only external symbols"),
+                           cl::ZeroOrMore);
 cl::alias ExternalOnly2("g", cl::desc("Alias for --extern-only"),
-                        cl::aliasopt(ExternalOnly), cl::Grouping);
+                        cl::aliasopt(ExternalOnly), cl::Grouping,
+                        cl::ZeroOrMore);
 
 cl::opt<bool> BSDFormat("B", cl::desc("Alias for --format=bsd"),
                         cl::Grouping);
@@ -946,6 +939,10 @@ static char getSymbolNMTypeChar(COFFObjectFile &Obj, symbol_iterator I) {
     section_iterator SecI = *SecIOrErr;
     const coff_section *Section = Obj.getCOFFSection(*SecI);
     Characteristics = Section->Characteristics;
+    StringRef SectionName;
+    Obj.getSectionName(Section, SectionName);
+    if (SectionName.startswith(".idata"))
+      return 'i';
   }
 
   switch (Symb.getSectionNumber()) {
@@ -1971,8 +1968,7 @@ int main(int argc, char **argv) {
   if (NoDyldInfo && (AddDyldInfo || DyldInfoOnly))
     error("-no-dyldinfo can't be used with -add-dyldinfo or -dyldinfo-only");
 
-  std::for_each(InputFilenames.begin(), InputFilenames.end(),
-                dumpSymbolNamesFromFile);
+  llvm::for_each(InputFilenames, dumpSymbolNamesFromFile);
 
   if (HadError)
     return 1;

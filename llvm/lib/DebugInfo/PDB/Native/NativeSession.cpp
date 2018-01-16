@@ -68,15 +68,9 @@ NativeSession::NativeSession(std::unique_ptr<PDBFile> PdbFile,
 
 NativeSession::~NativeSession() = default;
 
-Error NativeSession::createFromPdb(StringRef Path,
+Error NativeSession::createFromPdb(std::unique_ptr<MemoryBuffer> Buffer,
                                    std::unique_ptr<IPDBSession> &Session) {
-  ErrorOr<std::unique_ptr<MemoryBuffer>> ErrorOrBuffer =
-      MemoryBuffer::getFileOrSTDIN(Path, /*FileSize=*/-1,
-                                   /*RequiresNullTerminator=*/false);
-  if (!ErrorOrBuffer)
-    return make_error<GenericError>(generic_error_code::invalid_path);
-
-  std::unique_ptr<MemoryBuffer> Buffer = std::move(*ErrorOrBuffer);
+  StringRef Path = Buffer->getBufferIdentifier();
   auto Stream = llvm::make_unique<MemoryBufferByteStream>(
       std::move(Buffer), llvm::support::little);
 
@@ -249,5 +243,9 @@ NativeSession::getSourceFileById(uint32_t FileId) const {
 }
 
 std::unique_ptr<IPDBEnumDataStreams> NativeSession::getDebugStreams() const {
+  return nullptr;
+}
+
+std::unique_ptr<IPDBEnumTables> NativeSession::getEnumTables() const {
   return nullptr;
 }

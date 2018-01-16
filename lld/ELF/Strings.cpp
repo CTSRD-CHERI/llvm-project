@@ -9,7 +9,7 @@
 
 #include "Strings.h"
 #include "Config.h"
-#include "Error.h"
+#include "lld/Common/ErrorHandler.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
@@ -59,22 +59,4 @@ bool elf::isValidCIdentifier(StringRef S) {
   return !S.empty() && (isAlpha(S[0]) || S[0] == '_') &&
          std::all_of(S.begin() + 1, S.end(),
                      [](char C) { return C == '_' || isAlnum(C); });
-}
-
-// Returns the demangled C++ symbol name for Name.
-Optional<std::string> elf::demangle(StringRef Name) {
-  // itaniumDemangle can be used to demangle strings other than symbol
-  // names which do not necessarily start with "_Z". Name can be
-  // either a C or C++ symbol. Don't call itaniumDemangle if the name
-  // does not look like a C++ symbol name to avoid getting unexpected
-  // result for a C symbol that happens to match a mangled type name.
-  if (!Name.startswith("_Z"))
-    return None;
-
-  char *Buf = itaniumDemangle(Name.str().c_str(), nullptr, nullptr, nullptr);
-  if (!Buf)
-    return None;
-  std::string S(Buf);
-  free(Buf);
-  return S;
 }

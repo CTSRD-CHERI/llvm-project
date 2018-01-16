@@ -517,8 +517,13 @@ private:
       } else if (Limit != 0 && !Line.startsWith(tok::kw_namespace) &&
                  !startsExternCBlock(Line)) {
         // We don't merge short records.
-        FormatToken *RecordTok =
-            Line.First->is(tok::kw_typedef) ? Line.First->Next : Line.First;
+        FormatToken *RecordTok = Line.First;
+        // Skip record modifiers.
+        while (RecordTok->Next &&
+               RecordTok->isOneOf(tok::kw_typedef, tok::kw_export,
+                                  Keywords.kw_declare, Keywords.kw_abstract,
+                                  tok::kw_default))
+          RecordTok = RecordTok->Next;
         if (RecordTok &&
             RecordTok->isOneOf(tok::kw_class, tok::kw_union, tok::kw_struct,
                                Keywords.kw_interface))
@@ -659,7 +664,9 @@ public:
   /// \brief Formats an \c AnnotatedLine and returns the penalty.
   ///
   /// If \p DryRun is \c false, directly applies the changes.
-  virtual unsigned formatLine(const AnnotatedLine &Line, unsigned FirstIndent,
+  virtual unsigned formatLine(const AnnotatedLine &Line,
+                              unsigned FirstIndent,
+                              unsigned FirstStartColumn,
                               bool DryRun) = 0;
 
 protected:
@@ -730,7 +737,8 @@ protected:
           *Child->First, /*Newlines=*/0, /*Spaces=*/1,
           /*StartOfTokenColumn=*/State.Column, State.Line->InPPDirective);
     }
-    Penalty += formatLine(*Child, State.Column + 1, DryRun);
+    Penalty +=
+        formatLine(*Child, State.Column + 1, /*FirstStartColumn=*/0, DryRun);
 
     State.Column += 1 + Child->Last->TotalLength;
     return true;
@@ -756,10 +764,10 @@ public:
   /// \brief Formats the line, simply keeping all of the input's line breaking
   /// decisions.
   unsigned formatLine(const AnnotatedLine &Line, unsigned FirstIndent,
-                      bool DryRun) override {
+                      unsigned FirstStartColumn, bool DryRun) override {
     assert(!DryRun);
-    LineState State =
-        Indenter->getInitialState(FirstIndent, &Line, /*DryRun=*/false);
+    LineState State = Indenter->getInitialState(FirstIndent, FirstStartColumn,
+                                                &Line, /*DryRun=*/false);
     while (State.NextToken) {
       bool Newline =
           Indenter->mustBreak(State) ||
@@ -782,9 +790,10 @@ public:
 
   /// \brief Puts all tokens into a single line.
   unsigned formatLine(const AnnotatedLine &Line, unsigned FirstIndent,
-                      bool DryRun) override {
+                      unsigned FirstStartColumn, bool DryRun) override {
     unsigned Penalty = 0;
-    LineState State = Indenter->getInitialState(FirstIndent, &Line, DryRun);
+    LineState State =
+        Indenter->getInitialState(FirstIndent, FirstStartColumn, &Line, DryRun);
     while (State.NextToken) {
       formatChildren(State, /*Newline=*/false, DryRun, Penalty);
       Indenter->addTokenToState(
@@ -806,8 +815,9 @@ public:
   /// \brief Formats the line by finding the best line breaks with line lengths
   /// below the column limit.
   unsigned formatLine(const AnnotatedLine &Line, unsigned FirstIndent,
-                      bool DryRun) override {
-    LineState State = Indenter->getInitialState(FirstIndent, &Line, DryRun);
+                      unsigned FirstStartColumn, bool DryRun) override {
+    LineState State =
+        Indenter->getInitialState(FirstIndent, FirstStartColumn, &Line, DryRun);
 
     // If the ObjC method declaration does not fit on a line, we should format
     // it with one arg per line.
@@ -974,7 +984,10 @@ private:
 unsigned
 UnwrappedLineFormatter::format(const SmallVectorImpl<AnnotatedLine *> &Lines,
                                bool DryRun, int AdditionalIndent,
-                               bool FixBadIndentation) {
+                               bool FixBadIndentation,
+                               unsigned FirstStartColumn,
+                               unsigned NextStartColumn,
+                               unsigned LastStartColumn) {
   LineJoiner Joiner(Style, Keywords, Lines);
 
   // Try to look up already computed penalty in DryRun-mode.
@@ -994,9 +1007,10 @@ UnwrappedLineFormatter::format(const SmallVectorImpl<AnnotatedLine *> &Lines,
   // The minimum level of consecutive lines that have been formatted.
   unsigned RangeMinLevel = UINT_MAX;
 
+  bool FirstLine = true;
   for (const AnnotatedLine *Line =
            Joiner.getNextMergedLine(DryRun, IndentTracker);
-       Line; Line = NextLine) {
+       Line; Line = NextLine, FirstLine = false) {
     const AnnotatedLine &TheLine = *Line;
     unsigned Indent = IndentTracker.getIndent();
 
@@ -1020,8 +1034,12 @@ UnwrappedLineFormatter::format(const SmallVectorImpl<AnnotatedLine *> &Lines,
     }
 
     if (ShouldFormat && TheLine.Type != LT_Invalid) {
-      if (!DryRun)
-        formatFirstToken(TheLine, PreviousLine, Indent);
+      if (!DryRun) {
+        bool LastLine = Line->First->is(tok::eof);
+        formatFirstToken(TheLine, PreviousLine,
+                         Indent,
+                         LastLine ? LastStartColumn : NextStartColumn + Indent);
+      }
 
       NextLine = Joiner.getNextMergedLine(DryRun, IndentTracker);
       unsigned ColumnLimit = getColumnLimit(TheLine.InPPDirective, NextLine);
@@ -1030,16 +1048,18 @@ UnwrappedLineFormatter::format(const SmallVectorImpl<AnnotatedLine *> &Lines,
           (TheLine.Type == LT_ImportStatement &&
            (Style.Language != FormatStyle::LK_JavaScript ||
             !Style.JavaScriptWrapImports));
-
       if (Style.ColumnLimit == 0)
         NoColumnLimitLineFormatter(Indenter, Whitespaces, Style, this)
-            .formatLine(TheLine, Indent, DryRun);
+            .formatLine(TheLine, NextStartColumn + Indent,
+                        FirstLine ? FirstStartColumn : 0, DryRun);
       else if (FitsIntoOneLine)
         Penalty += NoLineBreakFormatter(Indenter, Whitespaces, Style, this)
-                       .formatLine(TheLine, Indent, DryRun);
+                       .formatLine(TheLine, NextStartColumn + Indent,
+                                   FirstLine ? FirstStartColumn : 0, DryRun);
       else
         Penalty += OptimizingLineFormatter(Indenter, Whitespaces, Style, this)
-                       .formatLine(TheLine, Indent, DryRun);
+                       .formatLine(TheLine, NextStartColumn + Indent,
+                                   FirstLine ? FirstStartColumn : 0, DryRun);
       RangeMinLevel = std::min(RangeMinLevel, TheLine.Level);
     } else {
       // If no token in the current line is affected, we still need to format
@@ -1062,6 +1082,7 @@ UnwrappedLineFormatter::format(const SmallVectorImpl<AnnotatedLine *> &Lines,
         // Format the first token.
         if (ReformatLeadingWhitespace)
           formatFirstToken(TheLine, PreviousLine,
+                           TheLine.First->OriginalColumn,
                            TheLine.First->OriginalColumn);
         else
           Whitespaces->addUntouchableToken(*TheLine.First,
@@ -1084,12 +1105,14 @@ UnwrappedLineFormatter::format(const SmallVectorImpl<AnnotatedLine *> &Lines,
 
 void UnwrappedLineFormatter::formatFirstToken(const AnnotatedLine &Line,
                                               const AnnotatedLine *PreviousLine,
-                                              unsigned Indent) {
+                                              unsigned Indent,
+                                              unsigned NewlineIndent) {
   FormatToken &RootToken = *Line.First;
   if (RootToken.is(tok::eof)) {
     unsigned Newlines = std::min(RootToken.NewlinesBefore, 1u);
-    Whitespaces->replaceWhitespace(RootToken, Newlines, /*Spaces=*/0,
-                                   /*StartOfTokenColumn=*/0);
+    unsigned TokenIndent = Newlines ? NewlineIndent : 0;
+    Whitespaces->replaceWhitespace(RootToken, Newlines, TokenIndent,
+                                   TokenIndent);
     return;
   }
   unsigned Newlines =
@@ -1099,14 +1122,13 @@ void UnwrappedLineFormatter::formatFirstToken(const AnnotatedLine &Line,
       (!RootToken.Next ||
        (RootToken.Next->is(tok::semi) && !RootToken.Next->Next)))
     Newlines = std::min(Newlines, 1u);
+  // Remove empty lines at the start of nested blocks (lambdas/arrow functions)
+  if (PreviousLine == nullptr && Line.Level > 0)
+    Newlines = std::min(Newlines, 1u);
   if (Newlines == 0 && !RootToken.IsFirst)
     Newlines = 1;
   if (RootToken.IsFirst && !RootToken.HasUnescapedNewline)
     Newlines = 0;
-
-  // Preprocessor directives get indented after the hash, if indented.
-  if (Line.Type == LT_PreprocessorDirective || Line.Type == LT_ImportStatement)
-    Indent = 0;
 
   // Remove empty lines after "{".
   if (!Style.KeepEmptyLinesAtTheStartOfBlocks && PreviousLine &&
@@ -1124,6 +1146,13 @@ void UnwrappedLineFormatter::formatFirstToken(const AnnotatedLine &Line,
   if (PreviousLine && PreviousLine->First->isAccessSpecifier() &&
       (!PreviousLine->InPPDirective || !RootToken.HasUnescapedNewline))
     Newlines = std::min(1u, Newlines);
+
+  if (Newlines)
+    Indent = NewlineIndent;
+
+  // Preprocessor directives get indented after the hash, if indented.
+  if (Line.Type == LT_PreprocessorDirective || Line.Type == LT_ImportStatement)
+    Indent = 0;
 
   Whitespaces->replaceWhitespace(RootToken, Newlines, Indent, Indent,
                                  Line.InPPDirective &&

@@ -1028,8 +1028,7 @@ public:
       IsMCUABI(CGT.getTarget().getTriple().isOSIAMCU()),
       DefaultNumRegisterParameters(NumRegisterParameters) {}
 
-  bool shouldPassIndirectlyForSwift(CharUnits totalSize,
-                                    ArrayRef<llvm::Type*> scalars,
+  bool shouldPassIndirectlyForSwift(ArrayRef<llvm::Type*> scalars,
                                     bool asReturnValue) const override {
     // LLVM's x86-32 lowering currently only assigns up to three
     // integer registers and three fp registers.  Oddly, it'll use up to
@@ -2168,8 +2167,7 @@ public:
     return Has64BitPointers;
   }
 
-  bool shouldPassIndirectlyForSwift(CharUnits totalSize,
-                                    ArrayRef<llvm::Type*> scalars,
+  bool shouldPassIndirectlyForSwift(ArrayRef<llvm::Type*> scalars,
                                     bool asReturnValue) const override {
     return occupiesMoreThan(CGT, scalars, /*total*/ 4);
   }  
@@ -2201,8 +2199,7 @@ public:
     return isX86VectorCallAggregateSmallEnough(NumMembers);
   }
 
-  bool shouldPassIndirectlyForSwift(CharUnits totalSize,
-                                    ArrayRef<llvm::Type *> scalars,
+  bool shouldPassIndirectlyForSwift(ArrayRef<llvm::Type *> scalars,
                                     bool asReturnValue) const override {
     return occupiesMoreThan(CGT, scalars, /*total*/ 4);
   }
@@ -4036,7 +4033,10 @@ Address WinX86_64ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
 namespace {
 /// PPC32_SVR4_ABIInfo - The 32-bit PowerPC ELF (SVR4) ABI information.
 class PPC32_SVR4_ABIInfo : public DefaultABIInfo {
-bool IsSoftFloatABI;
+  bool IsSoftFloatABI;
+
+  CharUnits getParamTypeAlignment(QualType Ty) const;
+
 public:
   PPC32_SVR4_ABIInfo(CodeGen::CodeGenTypes &CGT, bool SoftFloatABI)
       : DefaultABIInfo(CGT), IsSoftFloatABI(SoftFloatABI) {}
@@ -4058,13 +4058,46 @@ public:
   bool initDwarfEHRegSizeTable(CodeGen::CodeGenFunction &CGF,
                                llvm::Value *Address) const override;
 };
+}
 
+CharUnits PPC32_SVR4_ABIInfo::getParamTypeAlignment(QualType Ty) const {
+  // Complex types are passed just like their elements
+  if (const ComplexType *CTy = Ty->getAs<ComplexType>())
+    Ty = CTy->getElementType();
+
+  if (Ty->isVectorType())
+    return CharUnits::fromQuantity(getContext().getTypeSize(Ty) == 128 ? 16
+                                                                       : 4);
+
+  // For single-element float/vector structs, we consider the whole type
+  // to have the same alignment requirements as its single element.
+  const Type *AlignTy = nullptr;
+  if (const Type *EltType = isSingleElementStruct(Ty, getContext())) {
+    const BuiltinType *BT = EltType->getAs<BuiltinType>();
+    if ((EltType->isVectorType() && getContext().getTypeSize(EltType) == 128) ||
+        (BT && BT->isFloatingPoint()))
+      AlignTy = EltType;
+  }
+
+  if (AlignTy)
+    return CharUnits::fromQuantity(AlignTy->isVectorType() ? 16 : 4);
+  return CharUnits::fromQuantity(4);
 }
 
 // TODO: this implementation is now likely redundant with
 // DefaultABIInfo::EmitVAArg.
 Address PPC32_SVR4_ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAList,
                                       QualType Ty) const {
+  if (getTarget().getTriple().isOSDarwin()) {
+    auto TI = getContext().getTypeInfoInChars(Ty);
+    TI.second = getParamTypeAlignment(Ty);
+
+    CharUnits SlotSize = CharUnits::fromQuantity(4);
+    return emitVoidPtrVAArg(CGF, VAList, Ty,
+                            classifyArgumentType(Ty).isIndirect(), TI, SlotSize,
+                            /*AllowHigherAlign=*/true);
+  }
+
   const unsigned OverflowLimit = 8;
   if (const ComplexType *CTy = Ty->getAs<ComplexType>()) {
     // TODO: Implement this. For now ignore.
@@ -4886,8 +4919,7 @@ private:
   Address EmitMSVAArg(CodeGenFunction &CGF, Address VAListAddr,
                       QualType Ty) const override;
 
-  bool shouldPassIndirectlyForSwift(CharUnits totalSize,
-                                    ArrayRef<llvm::Type*> scalars,
+  bool shouldPassIndirectlyForSwift(ArrayRef<llvm::Type*> scalars,
                                     bool asReturnValue) const override {
     return occupiesMoreThan(CGT, scalars, /*total*/ 4);
   }
@@ -5485,8 +5517,7 @@ private:
   llvm::CallingConv::ID getABIDefaultCC() const;
   void setCCs();
 
-  bool shouldPassIndirectlyForSwift(CharUnits totalSize,
-                                    ArrayRef<llvm::Type*> scalars,
+  bool shouldPassIndirectlyForSwift(ArrayRef<llvm::Type*> scalars,
                                     bool asReturnValue) const override {
     return occupiesMoreThan(CGT, scalars, /*total*/ 4);
   }
@@ -6277,13 +6308,12 @@ public:
   Address EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
                     QualType Ty) const override;
 
-  bool shouldPassIndirectlyForSwift(CharUnits totalSize,
-                                    ArrayRef<llvm::Type*> scalars,
+  bool shouldPassIndirectlyForSwift(ArrayRef<llvm::Type*> scalars,
                                     bool asReturnValue) const override {
     return occupiesMoreThan(CGT, scalars, /*total*/ 4);
   }
   bool isSwiftErrorInRegister() const override {
-    return true;
+    return false;
   }
 };
 
@@ -8985,7 +9015,6 @@ llvm::Function *AMDGPUTargetCodeGenInfo::createEnqueuedBlockKernel(
   ArgNames.push_back(llvm::MDString::get(C, "block_literal"));
   for (unsigned I = 1, E = InvokeFT->getNumParams(); I < E; ++I) {
     ArgTys.push_back(InvokeFT->getParamType(I));
-    ArgTys.push_back(BlockTy);
     ArgTypeNames.push_back(llvm::MDString::get(C, "void*"));
     AddressQuals.push_back(llvm::ConstantAsMetadata::get(Builder.getInt32(3)));
     AccessQuals.push_back(llvm::MDString::get(C, "none"));

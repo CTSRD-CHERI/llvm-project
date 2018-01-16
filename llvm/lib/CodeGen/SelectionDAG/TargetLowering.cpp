@@ -11,7 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Target/TargetLowering.h"
+#include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/CodeGen/CallingConvLower.h"
@@ -20,6 +20,9 @@
 #include "llvm/CodeGen/MachineJumpTableInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAG.h"
+#include "llvm/CodeGen/TargetLoweringObjectFile.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/GlobalVariable.h"
@@ -29,10 +32,7 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/KnownBits.h"
 #include "llvm/Support/MathExtras.h"
-#include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <cctype>
 using namespace llvm;
 
@@ -52,11 +52,11 @@ bool TargetLowering::isPositionIndependent() const {
 /// so, it sets Chain to the input chain of the tail call.
 bool TargetLowering::isInTailCallPosition(SelectionDAG &DAG, SDNode *Node,
                                           SDValue &Chain) const {
-  const Function *F = DAG.getMachineFunction().getFunction();
+  const Function &F = DAG.getMachineFunction().getFunction();
 
   // Conservatively require the attributes of the call to match those of
   // the return. Ignore noalias because it doesn't affect the call sequence.
-  AttributeList CallerAttrs = F->getAttributes();
+  AttributeList CallerAttrs = F.getAttributes();
   if (AttrBuilder(CallerAttrs, AttributeList::ReturnIndex)
           .removeAttribute(Attribute::NoAlias)
           .hasAttributes())
@@ -471,7 +471,7 @@ TargetLowering::SimplifyDemandedBits(SDNode *User, unsigned OpIdx,
     }
     NewOps.push_back(User->getOperand(i));
   }
-  TLO.DAG.UpdateNodeOperands(User, NewOps);
+  User = TLO.DAG.UpdateNodeOperands(User, NewOps);
   // Op has less users now, so we may be able to perform additional combines
   // with it.
   DCI.AddToWorklist(Op.getNode());
@@ -518,6 +518,13 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
   // Don't know anything.
   Known = KnownBits(BitWidth);
 
+  if (Op.getOpcode() == ISD::Constant) {
+    // We know all of the bits for a constant!
+    Known.One = cast<ConstantSDNode>(Op)->getAPIntValue();
+    Known.Zero = ~Known.One;
+    return false;
+  }
+
   // Other users may use these bits.
   if (!Op.getNode()->hasOneUse() && !AssumeSingleUse) {
     if (Depth != 0) {
@@ -540,11 +547,6 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
 
   KnownBits Known2, KnownOut;
   switch (Op.getOpcode()) {
-  case ISD::Constant:
-    // We know all of the bits for a constant!
-    Known.One = cast<ConstantSDNode>(Op)->getAPIntValue();
-    Known.Zero = ~Known.One;
-    return false;   // Don't fall through, will infinitely loop.
   case ISD::BUILD_VECTOR:
     // Collect the known bits that are shared by every constant vector element.
     Known.Zero.setAllBits(); Known.One.setAllBits();
@@ -1220,6 +1222,12 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
                                                  Sign, ShAmt));
       }
     }
+    // If this is a bitcast, let computeKnownBits handle it.  Only do this on a
+    // recursive call where Known may be useful to the caller.
+    if (Depth > 0) {
+      TLO.DAG.computeKnownBits(Op, Known, Depth);
+      return false;
+    }
     break;
   case ISD::ADD:
   case ISD::MUL:
@@ -1286,6 +1294,19 @@ void TargetLowering::computeKnownBitsForTargetNode(const SDValue Op,
          "Should use MaskedValueIsZero if you don't know whether Op"
          " is a target node!");
   Known.resetAll();
+}
+
+void TargetLowering::computeKnownBitsForFrameIndex(const SDValue Op,
+                                                   KnownBits &Known,
+                                                   const APInt &DemandedElts,
+                                                   const SelectionDAG &DAG,
+                                                   unsigned Depth) const {
+  assert(isa<FrameIndexSDNode>(Op) && "expected FrameIndex");
+
+  if (unsigned Align = DAG.InferPtrAlignment(Op)) {
+    // The low bits are known zero if the pointer is aligned.
+    Known.Zero.setLowBits(Log2_32(Align));
+  }
 }
 
 /// This method can be implemented by targets that want to expose additional
@@ -2952,7 +2973,7 @@ static SDValue BuildExactSDIV(const TargetLowering &TLI, SDValue Op1, APInt d,
 SDValue TargetLowering::BuildSDIVPow2(SDNode *N, const APInt &Divisor,
                                       SelectionDAG &DAG,
                                       std::vector<SDNode *> *Created) const {
-  AttributeList Attr = DAG.getMachineFunction().getFunction()->getAttributes();
+  AttributeList Attr = DAG.getMachineFunction().getFunction().getAttributes();
   const TargetLowering &TLI = DAG.getTargetLoweringInfo();
   if (TLI.isIntDivCheap(N->getValueType(0), Attr))
     return SDValue(N,0); // Lower SDIV as SDIV
@@ -3421,8 +3442,6 @@ SDValue TargetLowering::scalarizeVectorStore(StoreSDNode *ST,
   // The type of data as saved in memory.
   EVT MemSclVT = StVT.getScalarType();
 
-  EVT PtrVT = BasePtr.getValueType();
-
   // Store Stride in bytes
   unsigned Stride = MemSclVT.getSizeInBits() / 8;
   EVT IdxVT = getVectorIdxTy(DAG.getDataLayout());
@@ -3435,8 +3454,7 @@ SDValue TargetLowering::scalarizeVectorStore(StoreSDNode *ST,
     SDValue Elt = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, SL, RegSclVT, Value,
                               DAG.getConstant(Idx, SL, IdxVT));
 
-    SDValue Ptr = DAG.getNode(ISD::ADD, SL, PtrVT, BasePtr,
-                              DAG.getConstant(Idx * Stride, SL, PtrVT));
+    SDValue Ptr = DAG.getObjectPtrOffset(SL, BasePtr, Idx * Stride);
 
     // This scalar TruncStore may be illegal, but we legalize it later.
     SDValue Store = DAG.getTruncStore(
@@ -3460,6 +3478,7 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
   EVT LoadedVT = LD->getMemoryVT();
   SDLoc dl(LD);
   auto &MF = DAG.getMachineFunction();
+
   if (VT.isFloatingPoint() || VT.isVector()) {
     EVT intVT = EVT::getIntegerVT(*DAG.getContext(), LoadedVT.getSizeInBits());
     if (isTypeLegal(intVT) && isTypeLegal(LoadedVT)) {
@@ -3484,7 +3503,7 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
     // Copy the value to a (aligned) stack slot using (unaligned) integer
     // loads and stores, then do a (aligned) load from the stack slot.
     MVT RegVT = getRegisterType(*DAG.getContext(), intVT);
-    unsigned LoadedBytes = LoadedVT.getSizeInBits() / 8;
+    unsigned LoadedBytes = LoadedVT.getStoreSize();
     unsigned RegBytes = RegVT.getSizeInBits() / 8;
     unsigned NumRegs = (LoadedBytes + RegBytes - 1) / RegBytes;
 
@@ -3514,9 +3533,9 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
           MachinePointerInfo::getFixedStack(MF, FrameIndex, Offset)));
       // Increment the pointers.
       Offset += RegBytes;
-      Ptr = DAG.getNode(ISD::ADD, dl, PtrVT, Ptr, PtrIncrement);
-      StackPtr = DAG.getNode(ISD::ADD, dl, StackPtrVT, StackPtr,
-                             StackPtrIncrement);
+
+      Ptr = DAG.getObjectPtrOffset(dl, Ptr, PtrIncrement);
+      StackPtr = DAG.getObjectPtrOffset(dl, StackPtr, StackPtrIncrement);
     }
 
     // The last copy may be partial.  Do an extending load.
@@ -3570,8 +3589,8 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
     Lo = DAG.getExtLoad(ISD::ZEXTLOAD, dl, VT, Chain, Ptr, LD->getPointerInfo(),
                         NewLoadedVT, Alignment, LD->getMemOperand()->getFlags(),
                         LD->getAAInfo());
-    Ptr = DAG.getNode(ISD::ADD, dl, Ptr.getValueType(), Ptr,
-                      DAG.getConstant(IncrementSize, dl, Ptr.getValueType()));
+
+    Ptr = DAG.getObjectPtrOffset(dl, Ptr, IncrementSize);
     Hi = DAG.getExtLoad(HiExtType, dl, VT, Chain, Ptr,
                         LD->getPointerInfo().getWithOffset(IncrementSize),
                         NewLoadedVT, MinAlign(Alignment, IncrementSize),
@@ -3580,8 +3599,8 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
     Hi = DAG.getExtLoad(HiExtType, dl, VT, Chain, Ptr, LD->getPointerInfo(),
                         NewLoadedVT, Alignment, LD->getMemOperand()->getFlags(),
                         LD->getAAInfo());
-    Ptr = DAG.getNode(ISD::ADD, dl, Ptr.getValueType(), Ptr,
-                      DAG.getConstant(IncrementSize, dl, Ptr.getValueType()));
+
+    Ptr = DAG.getObjectPtrOffset(dl, Ptr, IncrementSize);
     Lo = DAG.getExtLoad(ISD::ZEXTLOAD, dl, VT, Chain, Ptr,
                         LD->getPointerInfo().getWithOffset(IncrementSize),
                         NewLoadedVT, MinAlign(Alignment, IncrementSize),
@@ -3639,7 +3658,7 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
                       EVT::getIntegerVT(*DAG.getContext(),
                                         StoredVT.getSizeInBits()));
     EVT PtrVT = Ptr.getValueType();
-    unsigned StoredBytes = StoredVT.getSizeInBits() / 8;
+    unsigned StoredBytes = StoredVT.getStoreSize();
     unsigned RegBytes = RegVT.getSizeInBits() / 8;
     unsigned NumRegs = (StoredBytes + RegBytes - 1) / RegBytes;
 
@@ -3672,9 +3691,8 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
                                     ST->getMemOperand()->getFlags()));
       // Increment the pointers.
       Offset += RegBytes;
-      StackPtr = DAG.getNode(ISD::ADD, dl, StackPtrVT,
-                             StackPtr, StackPtrIncrement);
-      Ptr = DAG.getNode(ISD::ADD, dl, PtrVT, Ptr, PtrIncrement);
+      StackPtr = DAG.getObjectPtrOffset(dl, StackPtr, StackPtrIncrement);
+      Ptr = DAG.getObjectPtrOffset(dl, Ptr, PtrIncrement);
     }
 
     // The last store may be partial.  Do a truncating store.  On big-endian
@@ -3720,9 +3738,7 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
                              Ptr, ST->getPointerInfo(), NewStoredVT, Alignment,
                              ST->getMemOperand()->getFlags());
 
-  EVT PtrVT = Ptr.getValueType();
-  Ptr = DAG.getNode(ISD::ADD, dl, PtrVT, Ptr,
-                    DAG.getConstant(IncrementSize, dl, PtrVT));
+  Ptr = DAG.getObjectPtrOffset(dl, Ptr, IncrementSize);
   Alignment = MinAlign(Alignment, IncrementSize);
   Store2 = DAG.getTruncStore(
       Chain, dl, DAG.getDataLayout().isLittleEndian() ? Hi : Lo, Ptr,
@@ -3761,7 +3777,7 @@ TargetLowering::IncrementMemoryAddress(SDValue Addr, SDValue Mask,
                                     AddrVT);
     Increment = DAG.getNode(ISD::MUL, DL, AddrVT, Increment, Scale);
   } else
-    Increment = DAG.getConstant(DataVT.getSizeInBits() / 8, DL, AddrVT);
+    Increment = DAG.getConstant(DataVT.getStoreSize(), DL, AddrVT);
 
   return DAG.getNode(ISD::ADD, DL, AddrVT, Addr, Increment);
 }
@@ -3791,7 +3807,7 @@ SDValue TargetLowering::getVectorElementPointer(SelectionDAG &DAG,
                                                 SDValue Index) const {
   SDLoc dl(Index);
   // Make sure the index type is big enough to compute in.
-  Index = DAG.getZExtOrTrunc(Index, dl, getPointerTy(DAG.getDataLayout()));
+  Index = DAG.getZExtOrTrunc(Index, dl, VecPtr.getValueType());
 
   EVT EltVT = VecVT.getVectorElementType();
 
@@ -3806,7 +3822,7 @@ SDValue TargetLowering::getVectorElementPointer(SelectionDAG &DAG,
 
   Index = DAG.getNode(ISD::MUL, dl, IdxVT, Index,
                       DAG.getConstant(EltSize, dl, IdxVT));
-  return DAG.getNode(ISD::ADD, dl, IdxVT, Index, VecPtr);
+  return DAG.getNode(ISD::ADD, dl, IdxVT, VecPtr, Index);
 }
 
 //===----------------------------------------------------------------------===//

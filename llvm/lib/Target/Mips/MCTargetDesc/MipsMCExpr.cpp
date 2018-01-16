@@ -287,8 +287,6 @@ void MipsMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {
     break;
   case MEK_CALL_HI16:
   case MEK_CALL_LO16:
-  case MEK_DTPREL_HI:
-  case MEK_DTPREL_LO:
   case MEK_GOT:
   case MEK_GOT_CALL:
   case MEK_GOT_DISP:
@@ -304,7 +302,6 @@ void MipsMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {
   case MEK_NEG:
   case MEK_PCREL_HI16:
   case MEK_PCREL_LO16:
-  case MEK_TLSLDM:
   case MEK_CAPCALL11:
   case MEK_CAPCALL20:
   case MEK_CAPCALL_LO16:
@@ -318,8 +315,11 @@ void MipsMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {
     if (const MipsMCExpr *E = dyn_cast<const MipsMCExpr>(getSubExpr()))
       E->fixELFSymbolsInTLSFixups(Asm);
     break;
-  case MEK_GOTTPREL:
+  case MEK_DTPREL_HI:
+  case MEK_DTPREL_LO:
+  case MEK_TLSLDM:
   case MEK_TLSGD:
+  case MEK_GOTTPREL:
   case MEK_TPREL_HI:
   case MEK_TPREL_LO:
     fixELFSymbolsInTLSFixupsImpl(getSubExpr(), Asm);

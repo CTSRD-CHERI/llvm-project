@@ -38,7 +38,7 @@ class MipsRegWithSubRegs<bits<16> Enc, string n, list<Register> subregs>
   let Namespace = "Mips";
 }
 
-// Mips CPU Registers
+// Mips CPU Registers.
 class MipsGPRReg<bits<16> Enc, string n> : MipsReg<Enc, n>;
 
 // Mips 64-bit CPU Registers
@@ -78,6 +78,9 @@ class ACCReg<bits<16> Enc, string n, list<Register> subregs>
 
 // Mips Hardware Registers
 class HWR<bits<16> Enc, string n> : MipsReg<Enc, n>;
+
+// CHERI Hardware Registers
+class CheriHWR<bits<16> Enc, string n> : MipsReg<Enc, n>;
 
 // CHERI capability registers
 class CAP<bits<16> Enc, string n> : MipsReg<Enc, n>;
@@ -227,6 +230,9 @@ let Namespace = "Mips" in {
 
   foreach I = 4-31 in
   def HWR#I : MipsReg<#I, ""#I>;
+
+  foreach I = 0-31 in
+  def CAPHWR#I : MipsReg<#I, ""#I>;
 
   // Accum registers
   foreach I = 0-3 in
@@ -386,12 +392,6 @@ def GPR64 : RegisterClass<"Mips", [i64], 64, (add
   // Reserved
   K0_64, K1_64, GP_64, SP_64, FP_64, RA_64)>;
 
-def GPRMM16_64 : RegisterClass<"Mips", [i64], 64, (add
-  // Callee save
-  S0_64, S1_64,
-  // Return Values and Arguments
-  V0_64, V1_64, A0_64, A1_64, A2_64, A3_64)>;
-
 def CPU16Regs : RegisterClass<"Mips", [i32], 32, (add
   // Return Values and Arguments
   V0, V1, A0, A1, A2, A3,
@@ -421,6 +421,11 @@ def CheriRegs : RegisterClass<"Mips", [CapRegType], 256, (add
        [RegInfo<64,64,64>, RegInfo<128,128,128>, RegInfo<256,256,256>, RegInfo<128,128,128>]>;
 }
 def FakeCheriRegs : RegisterClass<"Mips", [iFATPTR256], 256, (add C0)>;
+
+def CheriHWRegs : RegisterClass<"Mips", [CapRegType], 256, (sequence "CAPHWR%u", 0, 31)>, Unallocatable {
+  let RegInfos = RegInfoByHwMode<[Cap64, Cap128, Cap256, DefaultMode],
+         [RegInfo<64,64,64>, RegInfo<128,128,128>, RegInfo<256,256,256>, RegInfo<128,128,128>]>;
+}
 
 // 64bit fp:
 // * FGR64  - 32 64-bit registers
@@ -671,6 +676,7 @@ def GPRMM16OpndZero : RegisterOperand<GPRMM16Zero> {
 
 def GPRMM16OpndMoveP : RegisterOperand<GPRMM16MoveP> {
   let ParserMatchClass = GPRMM16AsmOperandMoveP;
+  let EncoderMethod = "getMovePRegSingleOpValue";
 }
 
 def GPR64Opnd : RegisterOperand<GPR64> {
@@ -687,6 +693,10 @@ def CCROpnd : RegisterOperand<CCR> {
 
 def HWRegsAsmOperand : MipsAsmRegOperand {
   let Name = "HWRegsAsmReg";
+}
+
+def CheriHWRegsAsmOperand : MipsAsmRegOperand {
+  let Name = "CheriHWRegsAsmReg";
 }
 
 def COP0AsmOperand : MipsAsmRegOperand {
@@ -708,6 +718,10 @@ def COP3AsmOperand : MipsAsmRegOperand {
 
 def HWRegsOpnd : RegisterOperand<HWRegs> {
   let ParserMatchClass = HWRegsAsmOperand;
+}
+
+def CheriHWRegsOpnd : RegisterOperand<CheriHWRegs> {
+  let ParserMatchClass = CheriHWRegsAsmOperand;
 }
 
 def AFGR64Opnd : RegisterOperand<AFGR64> {

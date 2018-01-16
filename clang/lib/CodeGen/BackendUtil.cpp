@@ -26,6 +26,7 @@
 #include "llvm/Bitcode/BitcodeWriterPass.h"
 #include "llvm/CodeGen/RegAllocRegistry.h"
 #include "llvm/CodeGen/SchedulerRegistry.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/LegacyPassManager.h"
@@ -44,13 +45,14 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include "llvm/Transforms/Coroutines.h"
+#include "llvm/Transforms/GCOVProfiler.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/IPO/AlwaysInliner.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/IPO/ThinLTOBitcodeWriter.h"
 #include "llvm/Transforms/Instrumentation.h"
+#include "llvm/Transforms/Instrumentation/BoundsChecking.h"
 #include "llvm/Transforms/ObjCARC.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/GVN.h"
@@ -168,7 +170,7 @@ static void addAddDiscriminatorsPass(const PassManagerBuilder &Builder,
 
 static void addBoundsCheckingPass(const PassManagerBuilder &Builder,
                                   legacy::PassManagerBase &PM) {
-  PM.add(createBoundsCheckingPass());
+  PM.add(createBoundsCheckingLegacyPass());
 }
 
 static void addSanitizerCoveragePass(const PassManagerBuilder &Builder,
@@ -234,6 +236,15 @@ static void addKernelAddressSanitizerPasses(const PassManagerBuilder &Builder,
       /*Recover*/ true, /*UseAfterScope*/ false));
   PM.add(createAddressSanitizerModulePass(/*CompileKernel*/true,
                                           /*Recover*/true));
+}
+
+static void addHWAddressSanitizerPasses(const PassManagerBuilder &Builder,
+                                            legacy::PassManagerBase &PM) {
+  const PassManagerBuilderWrapper &BuilderWrapper =
+      static_cast<const PassManagerBuilderWrapper &>(Builder);
+  const CodeGenOptions &CGOpts = BuilderWrapper.getCGOpts();
+  bool Recover = CGOpts.SanitizeRecover.has(SanitizerKind::HWAddress);
+  PM.add(createHWAddressSanitizerPass(Recover));
 }
 
 static void addMemorySanitizerPass(const PassManagerBuilder &Builder,
@@ -423,6 +434,10 @@ static void initTargetOptions(llvm::TargetOptions &Options,
 
   if (LangOpts.SjLjExceptions)
     Options.ExceptionModel = llvm::ExceptionHandling::SjLj;
+  if (LangOpts.SEHExceptions)
+    Options.ExceptionModel = llvm::ExceptionHandling::WinEH;
+  if (LangOpts.DWARFExceptions)
+    Options.ExceptionModel = llvm::ExceptionHandling::DwarfCFI;
 
   Options.NoInfsFPMath = CodeGenOpts.NoInfsFPMath;
   Options.NoNaNsFPMath = CodeGenOpts.NoNaNsFPMath;
@@ -434,6 +449,7 @@ static void initTargetOptions(llvm::TargetOptions &Options,
   Options.UniqueSectionNames = CodeGenOpts.UniqueSectionNames;
   Options.EmulatedTLS = CodeGenOpts.EmulatedTLS;
   Options.DebuggerTuning = CodeGenOpts.getDebuggerTuning();
+  Options.EmitStackSizeSection = CodeGenOpts.StackSizeSection;
 
   if (CodeGenOpts.EnableSplitDwarf)
     Options.MCOptions.SplitDwarfFile = CodeGenOpts.SplitDwarfFile;
@@ -455,6 +471,23 @@ static void initTargetOptions(llvm::TargetOptions &Options,
          Entry.Group == frontend::IncludeDirGroup::System))
       Options.MCOptions.IASSearchPaths.push_back(
           Entry.IgnoreSysRoot ? Entry.Path : HSOpts.Sysroot + Entry.Path);
+}
+static Optional<GCOVOptions> getGCOVOptions(const CodeGenOptions &CodeGenOpts) {
+  if (CodeGenOpts.DisableGCov)
+    return None;
+  if (!CodeGenOpts.EmitGcovArcs && !CodeGenOpts.EmitGcovNotes)
+    return None;
+  // Not using 'GCOVOptions::getDefault' allows us to avoid exiting if
+  // LLVM's -default-gcov-version flag is set to something invalid.
+  GCOVOptions Options;
+  Options.EmitNotes = CodeGenOpts.EmitGcovNotes;
+  Options.EmitData = CodeGenOpts.EmitGcovArcs;
+  llvm::copy(CodeGenOpts.CoverageVersion, std::begin(Options.Version));
+  Options.UseCfgChecksum = CodeGenOpts.CoverageExtraChecksum;
+  Options.NoRedZone = CodeGenOpts.DisableRedZone;
+  Options.FunctionNamesInData = !CodeGenOpts.CoverageNoFunctionNamesInData;
+  Options.ExitBlockBeforeBody = CodeGenOpts.CoverageExitBlockBeforeBody;
+  return Options;
 }
 
 void EmitAssemblyHelper::CreatePasses(legacy::PassManager &MPM,
@@ -551,6 +584,13 @@ void EmitAssemblyHelper::CreatePasses(legacy::PassManager &MPM,
                            addKernelAddressSanitizerPasses);
   }
 
+  if (LangOpts.Sanitize.has(SanitizerKind::HWAddress)) {
+    PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
+                           addHWAddressSanitizerPasses);
+    PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
+                           addHWAddressSanitizerPasses);
+  }
+
   if (LangOpts.Sanitize.has(SanitizerKind::Memory)) {
     PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
                            addMemorySanitizerPass);
@@ -591,20 +631,8 @@ void EmitAssemblyHelper::CreatePasses(legacy::PassManager &MPM,
   if (!CodeGenOpts.RewriteMapFiles.empty())
     addSymbolRewriterPass(CodeGenOpts, &MPM);
 
-  if (!CodeGenOpts.DisableGCov &&
-      (CodeGenOpts.EmitGcovArcs || CodeGenOpts.EmitGcovNotes)) {
-    // Not using 'GCOVOptions::getDefault' allows us to avoid exiting if
-    // LLVM's -default-gcov-version flag is set to something invalid.
-    GCOVOptions Options;
-    Options.EmitNotes = CodeGenOpts.EmitGcovNotes;
-    Options.EmitData = CodeGenOpts.EmitGcovArcs;
-    memcpy(Options.Version, CodeGenOpts.CoverageVersion, 4);
-    Options.UseCfgChecksum = CodeGenOpts.CoverageExtraChecksum;
-    Options.NoRedZone = CodeGenOpts.DisableRedZone;
-    Options.FunctionNamesInData =
-        !CodeGenOpts.CoverageNoFunctionNamesInData;
-    Options.ExitBlockBeforeBody = CodeGenOpts.CoverageExitBlockBeforeBody;
-    MPM.add(createGCOVProfilerPass(Options));
+  if (Optional<GCOVOptions> Options = getGCOVOptions(CodeGenOpts)) {
+    MPM.add(createGCOVProfilerPass(*Options));
     if (CodeGenOpts.getDebugInfo() == codegenoptions::NoDebugInfo)
       MPM.add(createStripSymbolsPass(true));
   }
@@ -866,10 +894,10 @@ void EmitAssemblyHelper::EmitAssemblyWithNewPassManager(
 
   PassBuilder PB(TM.get(), PGOOpt);
 
-  LoopAnalysisManager LAM;
-  FunctionAnalysisManager FAM;
-  CGSCCAnalysisManager CGAM;
-  ModuleAnalysisManager MAM;
+  LoopAnalysisManager LAM(CodeGenOpts.DebugPassManager);
+  FunctionAnalysisManager FAM(CodeGenOpts.DebugPassManager);
+  CGSCCAnalysisManager CGAM(CodeGenOpts.DebugPassManager);
+  ModuleAnalysisManager MAM(CodeGenOpts.DebugPassManager);
 
   // Register the AA manager first so that our version is the one used.
   FAM.registerPass([&] { return PB.buildDefaultAAPipeline(); });
@@ -899,12 +927,26 @@ void EmitAssemblyHelper::EmitAssemblyWithNewPassManager(
       // Build a minimal pipeline based on the semantics required by Clang,
       // which is just that always inlining occurs.
       MPM.addPass(AlwaysInlinerPass());
+
+      // At -O0 we directly run necessary sanitizer passes.
+      if (LangOpts.Sanitize.has(SanitizerKind::LocalBounds))
+        MPM.addPass(createModuleToFunctionPassAdaptor(BoundsCheckingPass()));
+
+      // Lastly, add a semantically necessary pass for ThinLTO.
       if (IsThinLTO)
         MPM.addPass(NameAnonGlobalPass());
     } else {
       // Map our optimization levels into one of the distinct levels used to
       // configure the pipeline.
       PassBuilder::OptimizationLevel Level = mapToLevel(CodeGenOpts);
+
+      // Register callbacks to schedule sanitizer passes at the appropriate part of
+      // the pipeline.
+      if (LangOpts.Sanitize.has(SanitizerKind::LocalBounds))
+        PB.registerScalarOptimizerLateEPCallback(
+            [](FunctionPassManager &FPM, PassBuilder::OptimizationLevel Level) {
+              FPM.addPass(BoundsCheckingPass());
+            });
 
       if (IsThinLTO) {
         MPM = PB.buildThinLTOPreLinkDefaultPipeline(
@@ -917,6 +959,9 @@ void EmitAssemblyHelper::EmitAssemblyWithNewPassManager(
         MPM = PB.buildPerModuleDefaultPipeline(Level,
                                                CodeGenOpts.DebugPassManager);
       }
+    }
+    if (Optional<GCOVOptions> Options = getGCOVOptions(CodeGenOpts)) {
+      MPM.addPass(GCOVProfilerPass(*Options));
     }
   }
 
@@ -1073,6 +1118,7 @@ static void runThinLTOBackend(ModuleSummaryIndex *CombinedIndex, Module *M,
   initTargetOptions(Conf.Options, CGOpts, TOpts, LOpts, HeaderOpts);
   Conf.SampleProfile = std::move(SampleProfile);
   Conf.UseNewPM = CGOpts.ExperimentalNewPassManager;
+  Conf.DebugPassManager = CGOpts.DebugPassManager;
   switch (Action) {
   case Backend_EmitNothing:
     Conf.PreCodeGenModuleHook = [](size_t Task, const Module &Mod) {

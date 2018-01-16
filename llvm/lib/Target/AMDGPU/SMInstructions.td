@@ -129,11 +129,8 @@ class SM_Time_Pseudo<string opName, SDPatternOperator node> : SM_Pseudo<
   opName, (outs SReg_64_XEXEC:$sdst), (ins),
   " $sdst", [(set i64:$sdst, (node))]> {
   let hasSideEffects = 1;
-  // FIXME: mayStore = ? is a workaround for tablegen bug for different
-  // inferred mayStore flags for the instruction pattern vs. standalone
-  // Pat. Each considers the other contradictory.
-  let mayStore = ?;
-  let mayLoad = ?;
+  let mayStore = 0;
+  let mayLoad = 1;
   let has_sbase = 0;
   let has_offset = 0;
 }
@@ -239,7 +236,6 @@ def SMRDImm32       : ComplexPattern<i64, 2, "SelectSMRDImm32">;
 def SMRDSgpr        : ComplexPattern<i64, 2, "SelectSMRDSgpr">;
 def SMRDBufferImm   : ComplexPattern<i32, 1, "SelectSMRDBufferImm">;
 def SMRDBufferImm32 : ComplexPattern<i32, 1, "SelectSMRDBufferImm32">;
-def SMRDBufferSgpr  : ComplexPattern<i32, 1, "SelectSMRDBufferSgpr">;
 
 multiclass SMRD_Pattern <string Instr, ValueType vt> {
 
@@ -282,7 +278,7 @@ def SM_LOAD_PATTERN : GCNPat <  // name this pattern to reuse AddedComplexity on
 
 // 2. Offset loaded in an 32bit SGPR
 def : GCNPat <
-  (SIload_constant v4i32:$sbase, (SMRDBufferSgpr i32:$offset)),
+  (SIload_constant v4i32:$sbase, i32:$offset),
   (S_BUFFER_LOAD_DWORD_SGPR $sbase, $offset, 0)
 >;
 

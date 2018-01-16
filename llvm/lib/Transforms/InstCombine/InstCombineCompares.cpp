@@ -17,9 +17,7 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Analysis/InstructionSimplify.h"
-#include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
-#include "llvm/Analysis/VectorUtils.h"
 #include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
@@ -426,8 +424,7 @@ Instruction *InstCombiner::foldCmpLoadFromIndexedGlobal(GetElementPtrInst *GEP,
 
     // Look for an appropriate type:
     // - The type of Idx if the magic fits
-    // - The smallest fitting legal type if we have a DataLayout
-    // - Default to i32
+    // - The smallest fitting legal type
     if (ArrayElementCount <= Idx->getType()->getIntegerBitWidth())
       Ty = Idx->getType();
     else
@@ -1896,11 +1893,8 @@ Instruction *InstCombiner::foldICmpShlConstant(ICmpInst &Cmp,
       APInt ShiftedC = C.ashr(*ShiftAmt);
       return new ICmpInst(Pred, X, ConstantInt::get(ShType, ShiftedC));
     }
-    if (Pred == ICmpInst::ICMP_EQ || Pred == ICmpInst::ICMP_NE) {
-      // This is the same code as the SGT case, but assert the pre-condition
-      // that is needed for this to work with equality predicates.
-      assert(C.ashr(*ShiftAmt).shl(*ShiftAmt) == C &&
-             "Compare known true or false was not folded");
+    if ((Pred == ICmpInst::ICMP_EQ || Pred == ICmpInst::ICMP_NE) &&
+        C.ashr(*ShiftAmt).shl(*ShiftAmt) == C) {
       APInt ShiftedC = C.ashr(*ShiftAmt);
       return new ICmpInst(Pred, X, ConstantInt::get(ShType, ShiftedC));
     }
@@ -1929,11 +1923,8 @@ Instruction *InstCombiner::foldICmpShlConstant(ICmpInst &Cmp,
       APInt ShiftedC = C.lshr(*ShiftAmt);
       return new ICmpInst(Pred, X, ConstantInt::get(ShType, ShiftedC));
     }
-    if (Pred == ICmpInst::ICMP_EQ || Pred == ICmpInst::ICMP_NE) {
-      // This is the same code as the UGT case, but assert the pre-condition
-      // that is needed for this to work with equality predicates.
-      assert(C.lshr(*ShiftAmt).shl(*ShiftAmt) == C &&
-             "Compare known true or false was not folded");
+    if ((Pred == ICmpInst::ICMP_EQ || Pred == ICmpInst::ICMP_NE) &&
+        C.lshr(*ShiftAmt).shl(*ShiftAmt) == C) {
       APInt ShiftedC = C.lshr(*ShiftAmt);
       return new ICmpInst(Pred, X, ConstantInt::get(ShType, ShiftedC));
     }
@@ -2069,9 +2060,8 @@ Instruction *InstCombiner::foldICmpShrConstant(ICmpInst &Cmp,
 
   // If the bits shifted out are known zero, compare the unshifted value:
   //  (X & 4) >> 1 == 2  --> (X & 4) == 4.
-  Constant *ShiftedCmpRHS = ConstantInt::get(ShrTy, C << ShAmtVal);
   if (Shr->isExact())
-    return new ICmpInst(Pred, X, ShiftedCmpRHS);
+    return new ICmpInst(Pred, X, ConstantInt::get(ShrTy, C << ShAmtVal));
 
   if (Shr->hasOneUse()) {
     // Canonicalize the shift into an 'and':
@@ -2079,7 +2069,7 @@ Instruction *InstCombiner::foldICmpShrConstant(ICmpInst &Cmp,
     APInt Val(APInt::getHighBitsSet(TypeBits, TypeBits - ShAmtVal));
     Constant *Mask = ConstantInt::get(ShrTy, Val);
     Value *And = Builder.CreateAnd(X, Mask, Shr->getName() + ".mask");
-    return new ICmpInst(Pred, And, ShiftedCmpRHS);
+    return new ICmpInst(Pred, And, ConstantInt::get(ShrTy, C << ShAmtVal));
   }
 
   return nullptr;
@@ -4086,13 +4076,13 @@ Instruction *InstCombiner::foldICmpUsingKnownBits(ICmpInst &I) {
     computeUnsignedMinMaxValuesFromKnownBits(Op1Known, Op1Min, Op1Max);
   }
 
-  // If Min and Max are known to be the same, then SimplifyDemandedBits
-  // figured out that the LHS is a constant. Constant fold this now, so that
+  // If Min and Max are known to be the same, then SimplifyDemandedBits figured
+  // out that the LHS or RHS is a constant. Constant fold this now, so that
   // code below can assume that Min != Max.
   if (!isa<Constant>(Op0) && Op0Min == Op0Max)
-    return new ICmpInst(Pred, ConstantInt::get(Op0->getType(), Op0Min), Op1);
+    return new ICmpInst(Pred, ConstantExpr::getIntegerValue(Ty, Op0Min), Op1);
   if (!isa<Constant>(Op1) && Op1Min == Op1Max)
-    return new ICmpInst(Pred, Op0, ConstantInt::get(Op1->getType(), Op1Min));
+    return new ICmpInst(Pred, Op0, ConstantExpr::getIntegerValue(Ty, Op1Min));
 
   // Based on the range information we know about the LHS, see if we can
   // simplify this comparison.  For example, (x&4) < 8 is always true.
@@ -4463,11 +4453,15 @@ Instruction *InstCombiner::visitICmpInst(ICmpInst &I) {
   // and CodeGen. And in this case, at least one of the comparison
   // operands has at least one user besides the compare (the select),
   // which would often largely negate the benefit of folding anyway.
+  //
+  // Do the same for the other patterns recognized by matchSelectPattern.
   if (I.hasOneUse())
-    if (SelectInst *SI = dyn_cast<SelectInst>(*I.user_begin()))
-      if ((SI->getOperand(1) == Op0 && SI->getOperand(2) == Op1) ||
-          (SI->getOperand(2) == Op0 && SI->getOperand(1) == Op1))
+    if (SelectInst *SI = dyn_cast<SelectInst>(I.user_back())) {
+      Value *A, *B;
+      SelectPatternResult SPR = matchSelectPattern(SI, A, B);
+      if (SPR.Flavor != SPF_UNKNOWN)
         return nullptr;
+    }
 
   // Do this after checking for min/max to prevent infinite looping.
   if (Instruction *Res = foldICmpWithZero(I))
@@ -4946,10 +4940,12 @@ Instruction *InstCombiner::visitFCmpInst(FCmpInst &I) {
   // operands has at least one user besides the compare (the select),
   // which would often largely negate the benefit of folding anyway.
   if (I.hasOneUse())
-    if (SelectInst *SI = dyn_cast<SelectInst>(*I.user_begin()))
-      if ((SI->getOperand(1) == Op0 && SI->getOperand(2) == Op1) ||
-          (SI->getOperand(2) == Op0 && SI->getOperand(1) == Op1))
+    if (SelectInst *SI = dyn_cast<SelectInst>(I.user_back())) {
+      Value *A, *B;
+      SelectPatternResult SPR = matchSelectPattern(SI, A, B);
+      if (SPR.Flavor != SPF_UNKNOWN)
         return nullptr;
+    }
 
   // Handle fcmp with constant RHS
   if (Constant *RHSC = dyn_cast<Constant>(Op1)) {

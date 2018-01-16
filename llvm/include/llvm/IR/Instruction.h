@@ -34,6 +34,7 @@ namespace llvm {
 class BasicBlock;
 class FastMathFlags;
 class MDNode;
+class Module;
 struct AAMDNodes;
 
 template <> struct ilist_alloc_traits<Instruction> {
@@ -308,10 +309,15 @@ public:
   /// Determine whether the exact flag is set.
   bool isExact() const;
 
-  /// Set or clear the unsafe-algebra flag on this instruction, which must be an
+  /// Set or clear all fast-math-flags on this instruction, which must be an
   /// operator which supports this flag. See LangRef.html for the meaning of
   /// this flag.
-  void setHasUnsafeAlgebra(bool B);
+  void setFast(bool B);
+
+  /// Set or clear the reassociation flag on this instruction, which must be
+  /// an operator which supports this flag. See LangRef.html for the meaning of
+  /// this flag.
+  void setHasAllowReassoc(bool B);
 
   /// Set or clear the no-nans flag on this instruction, which must be an
   /// operator which supports this flag. See LangRef.html for the meaning of
@@ -333,6 +339,11 @@ public:
   /// this flag.
   void setHasAllowReciprocal(bool B);
 
+  /// Set or clear the approximate-math-functions flag on this instruction,
+  /// which must be an operator which supports this flag. See LangRef.html for
+  /// the meaning of this flag.
+  void setHasApproxFunc(bool B);
+
   /// Convenience function for setting multiple fast-math flags on this
   /// instruction, which must be an operator which supports these flags. See
   /// LangRef.html for the meaning of these flags.
@@ -343,8 +354,11 @@ public:
   /// LangRef.html for the meaning of these flags.
   void copyFastMathFlags(FastMathFlags FMF);
 
-  /// Determine whether the unsafe-algebra flag is set.
-  bool hasUnsafeAlgebra() const;
+  /// Determine whether all fast-math-flags are set.
+  bool isFast() const;
+
+  /// Determine whether the allow-reassociation flag is set.
+  bool hasAllowReassoc() const;
 
   /// Determine whether the no-NaNs flag is set.
   bool hasNoNaNs() const;
@@ -360,6 +374,9 @@ public:
 
   /// Determine whether the allow-contract flag is set.
   bool hasAllowContract() const;
+
+  /// Determine whether the approximate-math-functions flag is set.
+  bool hasApproxFunc() const;
 
   /// Convenience function for getting all the fast-math flags, which must be an
   /// operator which supports these flags. See LangRef.html for the meaning of
@@ -518,6 +535,14 @@ public:
   /// matters, isSafeToSpeculativelyExecute may be more appropriate.
   bool mayHaveSideEffects() const { return mayWriteToMemory() || mayThrow(); }
 
+  /// Return true if the instruction can be removed if the result is unused.
+  ///
+  /// When constant folding some instructions cannot be removed even if their
+  /// results are unused. Specifically terminator instructions and calls that
+  /// may have side effects cannot be removed without semantically changing the
+  /// generated program.
+  bool isSafeToRemove() const;
+  
   /// Return true if the instruction is a variety of EH-block.
   bool isEHPad() const {
     switch (getOpcode()) {

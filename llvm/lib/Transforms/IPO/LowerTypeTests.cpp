@@ -1,4 +1,4 @@
-//===-- LowerTypeTests.cpp - type metadata lowering pass ------------------===//
+//===- LowerTypeTests.cpp - type metadata lowering pass -------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -13,32 +13,70 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/IPO/LowerTypeTests.h"
+#include "llvm/ADT/APInt.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/EquivalenceClasses.h"
+#include "llvm/ADT/PointerUnion.h"
 #include "llvm/ADT/SetVector.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/TinyPtrVector.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/Analysis/TypeMetadataUtils.h"
+#include "llvm/IR/Attributes.h"
+#include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/DataLayout.h"
+#include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalAlias.h"
 #include "llvm/IR/GlobalObject.h"
+#include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InlineAsm.h"
+#include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Intrinsics.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/ModuleSummaryIndex.h"
 #include "llvm/IR/ModuleSummaryIndexYAML.h"
 #include "llvm/IR/Operator.h"
+#include "llvm/IR/PassManager.h"
+#include "llvm/IR/Type.h"
+#include "llvm/IR/Use.h"
+#include "llvm/IR/User.h"
+#include "llvm/IR/Value.h"
 #include "llvm/Pass.h"
+#include "llvm/Support/Allocator.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Error.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/MathExtras.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/TrailingObjects.h"
+#include "llvm/Support/YAMLTraits.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
+#include <memory>
+#include <set>
+#include <string>
+#include <system_error>
+#include <utility>
+#include <vector>
 
 using namespace llvm;
 using namespace lowertypetests;
@@ -206,16 +244,19 @@ struct ByteArrayInfo {
 /// operation involving a map lookup; this data structure helps to reduce the
 /// number of times we need to do this lookup.
 class GlobalTypeMember final : TrailingObjects<GlobalTypeMember, MDNode *> {
+  friend TrailingObjects;
+
   GlobalObject *GO;
   size_t NTypes;
+
   // For functions: true if this is a definition (either in the merged module or
   // in one of the thinlto modules).
   bool IsDefinition;
+
   // For functions: true if this function is either defined or used in a thinlto
   // module and its jumptable entry needs to be exported to thinlto backends.
   bool IsExported;
 
-  friend TrailingObjects;
   size_t numTrailingObjects(OverloadToken<MDNode *>) const { return NTypes; }
 
 public:
@@ -232,15 +273,19 @@ public:
                             GTM->getTrailingObjects<MDNode *>());
     return GTM;
   }
+
   GlobalObject *getGlobal() const {
     return GO;
   }
+
   bool isDefinition() const {
     return IsDefinition;
   }
+
   bool isExported() const {
     return IsExported;
   }
+
   ArrayRef<MDNode *> types() const {
     return makeArrayRef(getTrailingObjects<MDNode *>(), NTypes);
   }
@@ -354,6 +399,7 @@ class LowerTypeTestsModule {
 public:
   LowerTypeTestsModule(Module &M, ModuleSummaryIndex *ExportSummary,
                        const ModuleSummaryIndex *ImportSummary);
+
   bool lower();
 
   // Lower the module using the action and summary passed as command line
@@ -389,11 +435,12 @@ struct LowerTypeTests : public ModulePass {
   }
 };
 
-} // anonymous namespace
+} // end anonymous namespace
+
+char LowerTypeTests::ID = 0;
 
 INITIALIZE_PASS(LowerTypeTests, "lowertypetests", "Lower type metadata", false,
                 false)
-char LowerTypeTests::ID = 0;
 
 ModulePass *
 llvm::createLowerTypeTestsPass(ModuleSummaryIndex *ExportSummary,
@@ -909,6 +956,21 @@ void LowerTypeTestsModule::importFunction(Function *F, bool isDefinition) {
     FDecl = Function::Create(F->getFunctionType(), GlobalValue::ExternalLinkage,
                              Name, &M);
     FDecl->setVisibility(Visibility);
+
+    // Delete aliases pointing to this function, they'll be re-created in the
+    // merged output
+    SmallVector<GlobalAlias*, 4> ToErase;
+    for (auto &U : F->uses()) {
+      if (auto *A = dyn_cast<GlobalAlias>(U.getUser())) {
+        Function *AliasDecl = Function::Create(
+            F->getFunctionType(), GlobalValue::ExternalLinkage, "", &M);
+        AliasDecl->takeName(A);
+        A->replaceAllUsesWith(AliasDecl);
+        ToErase.push_back(A);
+      }
+    }
+    for (auto *A : ToErase)
+      A->eraseFromParent();
   } else {
     // Function definition without type metadata, where some other translation
     // unit contained a declaration with type metadata. This normally happens
@@ -1192,7 +1254,7 @@ void LowerTypeTestsModule::createJumpTable(
   // Luckily, this function does not get any prologue even without the
   // attribute.
   if (OS != Triple::Win32)
-    F->addFnAttr(llvm::Attribute::Naked);
+    F->addFnAttr(Attribute::Naked);
   if (JumpTableArch == Triple::arm)
     F->addFnAttr("target-features", "-thumb-mode");
   if (JumpTableArch == Triple::thumb) {
@@ -1354,7 +1416,7 @@ void LowerTypeTestsModule::buildBitSetsFromFunctionsNative(
       FAlias->takeName(F);
       if (FAlias->hasName())
         F->setName(FAlias->getName() + ".cfi");
-      F->replaceAllUsesWith(FAlias);
+      F->replaceUsesExceptBlockAddr(FAlias);
     }
     if (!F->isDeclarationForLinker())
       F->setLinkage(GlobalValue::InternalLinkage);
@@ -1401,7 +1463,7 @@ void LowerTypeTestsModule::buildBitSetsFromFunctionsWASM(
 
 void LowerTypeTestsModule::buildBitSetsFromDisjointSet(
     ArrayRef<Metadata *> TypeIds, ArrayRef<GlobalTypeMember *> Globals) {
-  llvm::DenseMap<Metadata *, uint64_t> TypeIdIndices;
+  DenseMap<Metadata *, uint64_t> TypeIdIndices;
   for (unsigned I = 0; I != TypeIds.size(); ++I)
     TypeIdIndices[TypeIds[I]] = I;
 
@@ -1433,38 +1495,25 @@ void LowerTypeTestsModule::buildBitSetsFromDisjointSet(
   for (auto &&MemSet : TypeMembers)
     GLB.addFragment(MemSet);
 
-  // Build the bitsets from this disjoint set.
-  if (Globals.empty() || isa<GlobalVariable>(Globals[0]->getGlobal())) {
-    // Build a vector of global variables with the computed layout.
-    std::vector<GlobalTypeMember *> OrderedGVs(Globals.size());
-    auto OGI = OrderedGVs.begin();
-    for (auto &&F : GLB.Fragments) {
-      for (auto &&Offset : F) {
-        auto GV = dyn_cast<GlobalVariable>(Globals[Offset]->getGlobal());
-        if (!GV)
-          report_fatal_error("Type identifier may not contain both global "
-                             "variables and functions");
-        *OGI++ = Globals[Offset];
-      }
+  // Build a vector of globals with the computed layout.
+  bool IsGlobalSet =
+      Globals.empty() || isa<GlobalVariable>(Globals[0]->getGlobal());
+  std::vector<GlobalTypeMember *> OrderedGTMs(Globals.size());
+  auto OGTMI = OrderedGTMs.begin();
+  for (auto &&F : GLB.Fragments) {
+    for (auto &&Offset : F) {
+      if (IsGlobalSet != isa<GlobalVariable>(Globals[Offset]->getGlobal()))
+        report_fatal_error("Type identifier may not contain both global "
+                           "variables and functions");
+      *OGTMI++ = Globals[Offset];
     }
-
-    buildBitSetsFromGlobalVariables(TypeIds, OrderedGVs);
-  } else {
-    // Build a vector of functions with the computed layout.
-    std::vector<GlobalTypeMember *> OrderedFns(Globals.size());
-    auto OFI = OrderedFns.begin();
-    for (auto &&F : GLB.Fragments) {
-      for (auto &&Offset : F) {
-        auto Fn = dyn_cast<Function>(Globals[Offset]->getGlobal());
-        if (!Fn)
-          report_fatal_error("Type identifier may not contain both global "
-                             "variables and functions");
-        *OFI++ = Globals[Offset];
-      }
-    }
-
-    buildBitSetsFromFunctions(TypeIds, OrderedFns);
   }
+
+  // Build the bitsets from this disjoint set.
+  if (IsGlobalSet)
+    buildBitSetsFromGlobalVariables(TypeIds, OrderedGTMs);
+  else
+    buildBitSetsFromFunctions(TypeIds, OrderedGTMs);
 }
 
 /// Lower all type tests in this module.
@@ -1555,8 +1604,8 @@ bool LowerTypeTestsModule::lower() {
   // Equivalence class set containing type identifiers and the globals that
   // reference them. This is used to partition the set of type identifiers in
   // the module into disjoint sets.
-  typedef EquivalenceClasses<PointerUnion<GlobalTypeMember *, Metadata *>>
-      GlobalClassesTy;
+  using GlobalClassesTy =
+      EquivalenceClasses<PointerUnion<GlobalTypeMember *, Metadata *>>;
   GlobalClassesTy GlobalClasses;
 
   // Verify the type metadata and build a few data structures to let us
@@ -1571,7 +1620,7 @@ bool LowerTypeTestsModule::lower() {
     unsigned Index;
     std::vector<GlobalTypeMember *> RefGlobals;
   };
-  llvm::DenseMap<Metadata *, TIInfo> TypeIdInfo;
+  DenseMap<Metadata *, TIInfo> TypeIdInfo;
   unsigned I = 0;
   SmallVector<MDNode *, 2> Types;
 
@@ -1659,7 +1708,7 @@ bool LowerTypeTestsModule::lower() {
         GlobalTypeMember::create(Alloc, &GO, IsDefinition, IsExported, Types);
     for (MDNode *Type : Types) {
       verifyTypeMDNode(&GO, Type);
-      auto &Info = TypeIdInfo[cast<MDNode>(Type)->getOperand(1)];
+      auto &Info = TypeIdInfo[Type->getOperand(1)];
       Info.Index = ++I;
       Info.RefGlobals.push_back(GTM);
     }
@@ -1769,6 +1818,49 @@ bool LowerTypeTestsModule::lower() {
   }
 
   allocateByteArrays();
+
+  // Parse alias data to replace stand-in function declarations for aliases
+  // with an alias to the intended target.
+  if (ExportSummary) {
+    if (NamedMDNode *AliasesMD = M.getNamedMetadata("aliases")) {
+      for (auto AliasMD : AliasesMD->operands()) {
+        assert(AliasMD->getNumOperands() >= 4);
+        StringRef AliasName =
+            cast<MDString>(AliasMD->getOperand(0))->getString();
+        StringRef Aliasee = cast<MDString>(AliasMD->getOperand(1))->getString();
+
+        if (!ExportedFunctions.count(Aliasee) ||
+            ExportedFunctions[Aliasee].Linkage != CFL_Definition ||
+            !M.getNamedAlias(Aliasee))
+          continue;
+
+        GlobalValue::VisibilityTypes Visibility =
+            static_cast<GlobalValue::VisibilityTypes>(
+                cast<ConstantAsMetadata>(AliasMD->getOperand(2))
+                    ->getValue()
+                    ->getUniqueInteger()
+                    .getZExtValue());
+        bool Weak =
+            static_cast<bool>(cast<ConstantAsMetadata>(AliasMD->getOperand(3))
+                                  ->getValue()
+                                  ->getUniqueInteger()
+                                  .getZExtValue());
+
+        auto *Alias = GlobalAlias::create("", M.getNamedAlias(Aliasee));
+        Alias->setVisibility(Visibility);
+        if (Weak)
+          Alias->setLinkage(GlobalValue::WeakAnyLinkage);
+
+        if (auto *F = M.getFunction(AliasName)) {
+          Alias->takeName(F);
+          F->replaceAllUsesWith(Alias);
+          F->eraseFromParent();
+        } else {
+          Alias->setName(AliasName);
+        }
+      }
+    }
+  }
 
   return true;
 }

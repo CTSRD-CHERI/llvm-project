@@ -413,7 +413,7 @@ public:
     // in writing out the call graph edges. Save the mapping from GUID
     // to the new global value id to use when writing those edges, which
     // are currently saved in the index in terms of GUID.
-    forEachSummary([&](GVInfo I) {
+    forEachSummary([&](GVInfo I, bool) {
       GUIDToValueIdMap[I.first] = ++GlobalValueId;
     });
   }
@@ -428,12 +428,18 @@ public:
   void forEachSummary(Functor Callback) {
     if (ModuleToSummariesForIndex) {
       for (auto &M : *ModuleToSummariesForIndex)
-        for (auto &Summary : M.second)
-          Callback(Summary);
+        for (auto &Summary : M.second) {
+          Callback(Summary, false);
+          // Ensure aliasee is handled, e.g. for assigning a valueId,
+          // even if we are not importing the aliasee directly (the
+          // imported alias will contain a copy of aliasee).
+          if (auto *AS = dyn_cast<AliasSummary>(Summary.getSecond()))
+            Callback({AS->getAliaseeGUID(), &AS->getAliasee()}, true);
+        }
     } else {
       for (auto &Summaries : Index)
         for (auto &Summary : Summaries.second.SummaryList)
-          Callback({Summaries.first, Summary.get()});
+          Callback({Summaries.first, Summary.get()}, false);
     }
   }
 
@@ -663,6 +669,8 @@ static uint64_t getAttrKindEncoding(Attribute::AttrKind Kind) {
     return bitc::ATTR_KIND_STRUCT_RET;
   case Attribute::SanitizeAddress:
     return bitc::ATTR_KIND_SANITIZE_ADDRESS;
+  case Attribute::SanitizeHWAddress:
+    return bitc::ATTR_KIND_SANITIZE_HWADDRESS;
   case Attribute::SanitizeThread:
     return bitc::ATTR_KIND_SANITIZE_THREAD;
   case Attribute::SanitizeMemory:
@@ -955,6 +963,8 @@ static uint64_t getEncodedGVSummaryFlags(GlobalValueSummary::GVFlags Flags) {
 
   RawFlags |= Flags.NotEligibleToImport; // bool
   RawFlags |= (Flags.Live << 1);
+  RawFlags |= (Flags.DSOLocal << 2);
+
   // Linkage don't need to be remapped at that time for the summary. Any future
   // change to the getEncodedLinkage() function will need to be taken into
   // account here as well.
@@ -1197,7 +1207,7 @@ void ModuleBitcodeWriter::writeModuleInfo() {
     // GLOBALVAR: [strtab offset, strtab size, type, isconst, initid,
     //             linkage, alignment, section, visibility, threadlocal,
     //             unnamed_addr, externally_initialized, dllstorageclass,
-    //             comdat, attributes]
+    //             comdat, attributes, DSO_Local]
     Vals.push_back(addToStrtab(GV.getName()));
     Vals.push_back(GV.getName().size());
     Vals.push_back(VE.getTypeID(GV.getValueType()));
@@ -1213,7 +1223,8 @@ void ModuleBitcodeWriter::writeModuleInfo() {
         GV.isExternallyInitialized() ||
         GV.getDLLStorageClass() != GlobalValue::DefaultStorageClass ||
         GV.hasComdat() ||
-        GV.hasAttributes()) {
+        GV.hasAttributes() ||
+        GV.isDSOLocal()) {
       Vals.push_back(getEncodedVisibility(GV));
       Vals.push_back(getEncodedThreadLocalMode(GV));
       Vals.push_back(getEncodedUnnamedAddr(GV));
@@ -1223,6 +1234,8 @@ void ModuleBitcodeWriter::writeModuleInfo() {
 
       auto AL = GV.getAttributesAsList(AttributeList::FunctionIndex);
       Vals.push_back(VE.getAttributeListID(AL));
+
+      Vals.push_back(GV.isDSOLocal());
     } else {
       AbbrevToUse = SimpleGVarAbbrev;
     }
@@ -1236,7 +1249,7 @@ void ModuleBitcodeWriter::writeModuleInfo() {
     // FUNCTION:  [strtab offset, strtab size, type, callingconv, isproto,
     //             linkage, paramattrs, alignment, section, visibility, gc,
     //             unnamed_addr, prologuedata, dllstorageclass, comdat,
-    //             prefixdata, personalityfn]
+    //             prefixdata, personalityfn, DSO_Local]
     Vals.push_back(addToStrtab(F.getName()));
     Vals.push_back(F.getName().size());
     Vals.push_back(VE.getTypeID(F.getFunctionType()));
@@ -1258,6 +1271,7 @@ void ModuleBitcodeWriter::writeModuleInfo() {
     Vals.push_back(
         F.hasPersonalityFn() ? (VE.getValueID(F.getPersonalityFn()) + 1) : 0);
 
+    Vals.push_back(F.isDSOLocal());
     unsigned AbbrevToUse = 0;
     Stream.EmitRecord(bitc::MODULE_CODE_FUNCTION, Vals, AbbrevToUse);
     Vals.clear();
@@ -1266,7 +1280,8 @@ void ModuleBitcodeWriter::writeModuleInfo() {
   // Emit the alias information.
   for (const GlobalAlias &A : M.aliases()) {
     // ALIAS: [strtab offset, strtab size, alias type, aliasee val#, linkage,
-    //         visibility, dllstorageclass, threadlocal, unnamed_addr]
+    //         visibility, dllstorageclass, threadlocal, unnamed_addr,
+    //         DSO_Local]
     Vals.push_back(addToStrtab(A.getName()));
     Vals.push_back(A.getName().size());
     Vals.push_back(VE.getTypeID(A.getValueType()));
@@ -1277,6 +1292,8 @@ void ModuleBitcodeWriter::writeModuleInfo() {
     Vals.push_back(getEncodedDLLStorageClass(A));
     Vals.push_back(getEncodedThreadLocalMode(A));
     Vals.push_back(getEncodedUnnamedAddr(A));
+    Vals.push_back(A.isDSOLocal());
+
     unsigned AbbrevToUse = 0;
     Stream.EmitRecord(bitc::MODULE_CODE_ALIAS, Vals, AbbrevToUse);
     Vals.clear();
@@ -1312,8 +1329,8 @@ static uint64_t getOptimizationFlags(const Value *V) {
     if (PEO->isExact())
       Flags |= 1 << bitc::PEO_EXACT;
   } else if (const auto *FPMO = dyn_cast<FPMathOperator>(V)) {
-    if (FPMO->hasUnsafeAlgebra())
-      Flags |= FastMathFlags::UnsafeAlgebra;
+    if (FPMO->hasAllowReassoc())
+      Flags |= FastMathFlags::AllowReassoc;
     if (FPMO->hasNoNaNs())
       Flags |= FastMathFlags::NoNaNs;
     if (FPMO->hasNoInfs())
@@ -1324,6 +1341,8 @@ static uint64_t getOptimizationFlags(const Value *V) {
       Flags |= FastMathFlags::AllowReciprocal;
     if (FPMO->hasAllowContract())
       Flags |= FastMathFlags::AllowContract;
+    if (FPMO->hasApproxFunc())
+      Flags |= FastMathFlags::ApproxFunc;
   }
 
   return Flags;
@@ -3352,7 +3371,7 @@ void ModuleBitcodeWriterBase::writePerModuleFunctionSummaryRecord(
   for (auto &RI : FS->refs())
     NameVals.push_back(VE.getValueID(RI.getValue()));
 
-  bool HasProfileData = F.getEntryCount().hasValue();
+  bool HasProfileData = F.hasProfileData();
   for (auto &ECI : FS->calls()) {
     NameVals.push_back(getValueId(ECI.first));
     if (HasProfileData)
@@ -3591,13 +3610,19 @@ void IndexBitcodeWriter::writeCombinedGlobalValueSummary() {
     NameVals.clear();
   };
 
-  forEachSummary([&](GVInfo I) {
+  forEachSummary([&](GVInfo I, bool IsAliasee) {
     GlobalValueSummary *S = I.second;
     assert(S);
 
     auto ValueId = getValueId(I.first);
     assert(ValueId);
     SummaryToValueIdMap[S] = *ValueId;
+
+    // If this is invoked for an aliasee, we want to record the above
+    // mapping, but then not emit a summary entry (if the aliasee is
+    // to be imported, we will invoke this separately with IsAliasee=false).
+    if (IsAliasee)
+      return;
 
     if (auto *AS = dyn_cast<AliasSummary>(S)) {
       // Will process aliases as a post-pass because the reader wants all

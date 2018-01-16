@@ -16,10 +16,8 @@
 // C++ Includes
 #include <vector>
 
-// Other libraries and framework includes
-// Project includes
-#include "lldb/Core/ArchSpec.h"
 #include "lldb/Symbol/ObjectFile.h"
+#include "lldb/Utility/ArchSpec.h"
 #include "lldb/Utility/FileSpec.h"
 #include "lldb/Utility/UUID.h"
 #include "lldb/lldb-private.h"
@@ -141,6 +139,13 @@ public:
   ObjectFile::Type CalculateType() override;
 
   ObjectFile::Strata CalculateStrata() override;
+
+  size_t ReadSectionData(lldb_private::Section *section,
+                         lldb::offset_t section_offset, void *dst,
+                         size_t dst_len) override;
+
+  size_t ReadSectionData(lldb_private::Section *section,
+                         lldb_private::DataExtractor &section_data) override;
 
   // Returns number of program headers found in the ELF file.
   size_t GetProgramHeaderCount();

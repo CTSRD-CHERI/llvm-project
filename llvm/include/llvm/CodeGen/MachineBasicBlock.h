@@ -25,6 +25,7 @@
 #include "llvm/MC/LaneBitmask.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/Support/BranchProbability.h"
+#include "llvm/Support/Printable.h"
 #include <cassert>
 #include <cstdint>
 #include <functional>
@@ -96,6 +97,8 @@ private:
   using probability_iterator = std::vector<BranchProbability>::iterator;
   using const_probability_iterator =
       std::vector<BranchProbability>::const_iterator;
+
+  Optional<uint64_t> IrrLoopHeaderWeight;
 
   /// Keep track of the physical registers that are livein of the basicblock.
   using LiveInVector = std::vector<RegisterMaskPair>;
@@ -220,6 +223,14 @@ public:
   }
   inline iterator_range<const_iterator> terminators() const {
     return make_range(getFirstTerminator(), end());
+  }
+
+  /// Returns a range that iterates over the phis in the basic block.
+  inline iterator_range<iterator> phis() {
+    return make_range(begin(), getFirstNonPHI());
+  }
+  inline iterator_range<const_iterator> phis() const {
+    return const_cast<MachineBasicBlock *>(this)->phis();
   }
 
   // Machine-CFG iterators
@@ -699,8 +710,8 @@ public:
     LQR_Unknown ///< Register liveness not decidable from local neighborhood.
   };
 
-  /// Return whether (physical) register \p Reg has been <def>ined and not
-  /// <kill>ed as of just before \p Before.
+  /// Return whether (physical) register \p Reg has been defined and not
+  /// killed as of just before \p Before.
   ///
   /// Search is localised to a neighborhood of \p Neighborhood instructions
   /// before (searching for defs or kills) and \p Neighborhood instructions
@@ -728,6 +739,14 @@ public:
 
   /// Return the MCSymbol for this basic block.
   MCSymbol *getSymbol() const;
+
+  Optional<uint64_t> getIrrLoopHeaderWeight() const {
+    return IrrLoopHeaderWeight;
+  }
+
+  void setIrrLoopHeaderWeight(uint64_t Weight) {
+    IrrLoopHeaderWeight = Weight;
+  }
 
 private:
   /// Return probability iterator corresponding to the I successor iterator.
@@ -760,6 +779,14 @@ private:
 };
 
 raw_ostream& operator<<(raw_ostream &OS, const MachineBasicBlock &MBB);
+
+/// Prints a machine basic block reference.
+///
+/// The format is:
+///   %bb.5           - a machine basic block with MBB.getNumber() == 5.
+///
+/// Usage: OS << printMBBReference(MBB) << '\n';
+Printable printMBBReference(const MachineBasicBlock &MBB);
 
 // This is useful when building IndexedMaps keyed on basic block pointers.
 struct MBB2NumberFunctor {

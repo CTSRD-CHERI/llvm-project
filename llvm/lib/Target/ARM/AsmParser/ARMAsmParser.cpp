@@ -64,6 +64,8 @@
 #include <utility>
 #include <vector>
 
+#define DEBUG_TYPE "asm-parser"
+
 using namespace llvm;
 
 namespace {
@@ -84,11 +86,6 @@ static cl::opt<ImplicitItModeTy> ImplicitItMode(
 
 static cl::opt<bool> AddBuildAttributes("arm-add-build-attributes",
                                         cl::init(false));
-
-cl::opt<bool>
-DevDiags("arm-asm-parser-dev-diags", cl::init(false),
-         cl::desc("Use extended diagnostics, which include implementation "
-                  "details useful for development"));
 
 enum VectorLaneTy { NoLanes, AllLanes, IndexedLane };
 
@@ -1153,10 +1150,30 @@ public:
   bool isToken() const override { return Kind == k_Token; }
   bool isMemBarrierOpt() const { return Kind == k_MemBarrierOpt; }
   bool isInstSyncBarrierOpt() const { return Kind == k_InstSyncBarrierOpt; }
-  bool isMem() const override { return Kind == k_Memory; }
+  bool isMem() const override {
+    if (Kind != k_Memory)
+      return false;
+    if (Memory.BaseRegNum &&
+        !ARMMCRegisterClasses[ARM::GPRRegClassID].contains(Memory.BaseRegNum))
+      return false;
+    if (Memory.OffsetRegNum &&
+        !ARMMCRegisterClasses[ARM::GPRRegClassID].contains(Memory.OffsetRegNum))
+      return false;
+    return true;
+  }
   bool isShifterImm() const { return Kind == k_ShifterImmediate; }
-  bool isRegShiftedReg() const { return Kind == k_ShiftedRegister; }
-  bool isRegShiftedImm() const { return Kind == k_ShiftedImmediate; }
+  bool isRegShiftedReg() const {
+    return Kind == k_ShiftedRegister &&
+           ARMMCRegisterClasses[ARM::GPRRegClassID].contains(
+               RegShiftedReg.SrcReg) &&
+           ARMMCRegisterClasses[ARM::GPRRegClassID].contains(
+               RegShiftedReg.ShiftReg);
+  }
+  bool isRegShiftedImm() const {
+    return Kind == k_ShiftedImmediate &&
+           ARMMCRegisterClasses[ARM::GPRRegClassID].contains(
+               RegShiftedImm.SrcReg);
+  }
   bool isRotImm() const { return Kind == k_RotateImmediate; }
   bool isModImm() const { return Kind == k_ModifiedImmediate; }
 
@@ -1195,9 +1212,12 @@ public:
 
   bool isConstantPoolImm() const { return Kind == k_ConstantPoolImmediate; }
   bool isBitfield() const { return Kind == k_BitfieldDescriptor; }
-  bool isPostIdxRegShifted() const { return Kind == k_PostIndexRegister; }
+  bool isPostIdxRegShifted() const {
+    return Kind == k_PostIndexRegister &&
+           ARMMCRegisterClasses[ARM::GPRRegClassID].contains(PostIdxReg.RegNum);
+  }
   bool isPostIdxReg() const {
-    return Kind == k_PostIndexRegister && PostIdxReg.ShiftTy ==ARM_AM::no_shift;
+    return isPostIdxRegShifted() && PostIdxReg.ShiftTy == ARM_AM::no_shift;
   }
   bool isMemNoOffset(bool alignOK = false, unsigned Alignment = 0) const {
     if (!isMem())
@@ -1334,10 +1354,10 @@ public:
   }
 
   bool isAM3Offset() const {
-    if (Kind != k_Immediate && Kind != k_PostIndexRegister)
+    if (isPostIdxReg())
+      return true;
+    if (!isImm())
       return false;
-    if (Kind == k_PostIndexRegister)
-      return PostIdxReg.ShiftTy == ARM_AM::no_shift;
     // Immediate offset in range [-255, 255].
     const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(getImm());
     if (!CE) return false;
@@ -5100,7 +5120,7 @@ bool ARMAsmParser::parseMemRegOffsetShift(ARM_AM::ShiftOpc &St,
   SMLoc Loc = Parser.getTok().getLoc();
   const AsmToken &Tok = Parser.getTok();
   if (Tok.isNot(AsmToken::Identifier))
-    return true;
+    return Error(Loc, "illegal shift operator");
   StringRef ShiftName = Tok.getString();
   if (ShiftName == "lsl" || ShiftName == "LSL" ||
       ShiftName == "asl" || ShiftName == "ASL")
@@ -5584,11 +5604,11 @@ void ARMAsmParser::getMnemonicAcceptInfo(StringRef Mnemonic, StringRef FullInst,
     CanAcceptPredicationCode =
         Mnemonic != "cdp2" && Mnemonic != "clrex" && Mnemonic != "mcr2" &&
         Mnemonic != "mcrr2" && Mnemonic != "mrc2" && Mnemonic != "mrrc2" &&
-        Mnemonic != "dmb" && Mnemonic != "dsb" && Mnemonic != "isb" &&
-        Mnemonic != "pld" && Mnemonic != "pli" && Mnemonic != "pldw" &&
-        Mnemonic != "ldc2" && Mnemonic != "ldc2l" && Mnemonic != "stc2" &&
-        Mnemonic != "stc2l" && !Mnemonic.startswith("rfe") &&
-        !Mnemonic.startswith("srs");
+        Mnemonic != "dmb" && Mnemonic != "dfb" && Mnemonic != "dsb" &&
+        Mnemonic != "isb" && Mnemonic != "pld" && Mnemonic != "pli" &&
+        Mnemonic != "pldw" && Mnemonic != "ldc2" && Mnemonic != "ldc2l" &&
+        Mnemonic != "stc2" && Mnemonic != "stc2l" &&
+        !Mnemonic.startswith("rfe") && !Mnemonic.startswith("srs");
   } else if (isThumbOne()) {
     if (hasV6MOps())
       CanAcceptPredicationCode = Mnemonic != "movs";
@@ -5807,9 +5827,9 @@ bool ARMAsmParser::shouldOmitCCOutOperand(StringRef Mnemonic,
 
 bool ARMAsmParser::shouldOmitPredicateOperand(StringRef Mnemonic,
                                               OperandVector &Operands) {
-  // VRINT{Z, R, X} have a predicate operand in VFP, but not in NEON
+  // VRINT{Z, X} have a predicate operand in VFP, but not in NEON
   unsigned RegIdx = 3;
-  if ((Mnemonic == "vrintz" || Mnemonic == "vrintx" || Mnemonic == "vrintr") &&
+  if ((Mnemonic == "vrintz" || Mnemonic == "vrintx") &&
       (static_cast<ARMOperand &>(*Operands[2]).getToken() == ".f32" ||
        static_cast<ARMOperand &>(*Operands[2]).getToken() == ".f16")) {
     if (static_cast<ARMOperand &>(*Operands[3]).isToken() &&
@@ -5845,25 +5865,6 @@ static bool doesIgnoreDataTypeSuffix(StringRef Mnemonic, StringRef DT) {
 
 static void applyMnemonicAliases(StringRef &Mnemonic, uint64_t Features,
                                  unsigned VariantID);
-
-static bool RequiresVFPRegListValidation(StringRef Inst,
-                                         bool &AcceptSinglePrecisionOnly,
-                                         bool &AcceptDoublePrecisionOnly) {
-  if (Inst.size() < 7)
-    return false;
-
-  if (Inst.startswith("fldm") || Inst.startswith("fstm")) {
-    StringRef AddressingMode = Inst.substr(4, 2);
-    if (AddressingMode == "ia" || AddressingMode == "db" ||
-        AddressingMode == "ea" || AddressingMode == "fd") {
-      AcceptSinglePrecisionOnly = Inst[6] == 's';
-      AcceptDoublePrecisionOnly = Inst[6] == 'd' || Inst[6] == 'x';
-      return true;
-    }
-  }
-
-  return false;
-}
 
 // The GNU assembler has aliases of ldrd and strd with the second register
 // omitted. We don't have a way to do that in tablegen, so fix it up here.
@@ -5908,20 +5909,12 @@ void ARMAsmParser::fixupGNULDRDAlias(StringRef Mnemonic,
   Operands.insert(
       Operands.begin() + 3,
       ARMOperand::CreateReg(PairedReg, Op2.getStartLoc(), Op2.getEndLoc()));
-  return;
 }
 
 /// Parse an arm instruction mnemonic followed by its operands.
 bool ARMAsmParser::ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
                                     SMLoc NameLoc, OperandVector &Operands) {
   MCAsmParser &Parser = getParser();
-  // FIXME: Can this be done via tablegen in some fashion?
-  bool RequireVFPRegisterListCheck;
-  bool AcceptSinglePrecisionOnly;
-  bool AcceptDoublePrecisionOnly;
-  RequireVFPRegisterListCheck =
-    RequiresVFPRegListValidation(Name, AcceptSinglePrecisionOnly,
-                                 AcceptDoublePrecisionOnly);
 
   // Apply mnemonic aliases before doing anything else, as the destination
   // mnemonic may include suffices and we want to handle them normally.
@@ -6079,16 +6072,6 @@ bool ARMAsmParser::ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
   if (parseToken(AsmToken::EndOfStatement, "unexpected token in argument list"))
     return true;
 
-  if (RequireVFPRegisterListCheck) {
-    ARMOperand &Op = static_cast<ARMOperand &>(*Operands.back());
-    if (AcceptSinglePrecisionOnly && !Op.isSPRRegList())
-      return Error(Op.getStartLoc(),
-                   "VFP/Neon single precision register expected");
-    if (AcceptDoublePrecisionOnly && !Op.isDPRRegList())
-      return Error(Op.getStartLoc(),
-                   "VFP/Neon double precision register expected");
-  }
-
   tryConvertingToTwoOperandForm(Mnemonic, CarrySetting, Operands);
 
   // Some instructions, mostly Thumb, have forms for the same mnemonic that
@@ -6104,7 +6087,8 @@ bool ARMAsmParser::ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
   // Some instructions have the same mnemonic, but don't always
   // have a predicate. Distinguish them here and delete the
   // predicate if needed.
-  if (shouldOmitPredicateOperand(Mnemonic, Operands))
+  if (PredicationCode == ARMCC::AL &&
+      shouldOmitPredicateOperand(Mnemonic, Operands))
     Operands.erase(Operands.begin() + 1);
 
   // ARM mode 'blx' need special handling, as the register operand version
@@ -6266,7 +6250,8 @@ bool ARMAsmParser::validateInstruction(MCInst &Inst,
     // The instruction must be predicable.
     if (!MCID.isPredicable())
       return Error(Loc, "instructions in IT block must be predicable");
-    unsigned Cond = Inst.getOperand(MCID.findFirstPredOperandIdx()).getImm();
+    ARMCC::CondCodes Cond = ARMCC::CondCodes(
+        Inst.getOperand(MCID.findFirstPredOperandIdx()).getImm());
     if (Cond != currentITCond()) {
       // Find the condition code Operand to get its SMLoc information.
       SMLoc CondLoc;
@@ -6274,9 +6259,9 @@ bool ARMAsmParser::validateInstruction(MCInst &Inst,
         if (static_cast<ARMOperand &>(*Operands[I]).isCondCode())
           CondLoc = Operands[I]->getStartLoc();
       return Error(CondLoc, "incorrect condition in IT block; got '" +
-                   StringRef(ARMCondCodeToString(ARMCC::CondCodes(Cond))) +
-                   "', but expected '" +
-                   ARMCondCodeToString(ARMCC::CondCodes(currentITCond())) + "'");
+                                StringRef(ARMCondCodeToString(Cond)) +
+                                "', but expected '" +
+                                ARMCondCodeToString(currentITCond()) + "'");
     }
   // Check for non-'al' condition codes outside of the IT block.
   } else if (isThumbTwo() && MCID.isPredicable() &&
@@ -9043,7 +9028,8 @@ unsigned ARMAsmParser::MatchInstruction(OperandVector &Operands, MCInst &Inst,
   return PlainMatchResult;
 }
 
-std::string ARMMnemonicSpellCheck(StringRef S, uint64_t FBS);
+static std::string ARMMnemonicSpellCheck(StringRef S, uint64_t FBS,
+                                         unsigned VariantID = 0);
 
 static const char *getSubtargetFeatureName(uint64_t Val);
 bool ARMAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
@@ -10123,6 +10109,7 @@ extern "C" void LLVMInitializeARMAsmParser() {
 #define GET_REGISTER_MATCHER
 #define GET_SUBTARGET_FEATURE_NAME
 #define GET_MATCHER_IMPLEMENTATION
+#define GET_MNEMONIC_SPELL_CHECKER
 #include "ARMGenAsmMatcher.inc"
 
 // Some diagnostics need to vary with subtarget features, so they are handled
@@ -10139,6 +10126,9 @@ ARMAsmParser::getCustomOperandDiag(ARMMatchResultTy MatchError) {
   case Match_DPR:
     return hasD16() ? "operand must be a register in range [d0, d15]"
                     : "operand must be a register in range [d0, d31]";
+  case Match_DPR_RegList:
+    return hasD16() ? "operand must be a list of registers in range [d0, d15]"
+                    : "operand must be a list of registers in range [d0, d31]";
 
   // For all other diags, use the static string from tablegen.
   default:
@@ -10167,6 +10157,7 @@ ARMAsmParser::FilterNearMisses(SmallVectorImpl<NearMissInfo> &NearMissesIn,
   // to only report the widest one.
   std::multimap<unsigned, unsigned> OperandMissesSeen;
   SmallSet<uint64_t, 4> FeatureMissesSeen;
+  bool ReportedTooFewOperands = false;
 
   // Process the near-misses in reverse order, so that we see more general ones
   // first, and so can avoid emitting more specific ones.
@@ -10200,18 +10191,16 @@ ARMAsmParser::FilterNearMisses(SmallVectorImpl<NearMissInfo> &NearMissesIn,
 
       NearMissMessage Message;
       Message.Loc = OperandLoc;
-      raw_svector_ostream OS(Message.Message);
       if (OperandDiag) {
-        OS << OperandDiag;
+        Message.Message = OperandDiag;
       } else if (I.getOperandClass() == InvalidMatchClass) {
-        OS << "too many operands for instruction";
+        Message.Message = "too many operands for instruction";
       } else {
-        OS << "invalid operand for instruction";
-        if (DevDiags) {
-          OS << " class" << I.getOperandClass() << ", error "
-             << I.getOperandError() << ", opcode "
-             << MII.getName(I.getOpcode());
-        }
+        Message.Message = "invalid operand for instruction";
+        DEBUG(dbgs() << "Missing diagnostic string for operand class " <<
+              getMatchClassName((MatchClassKind)I.getOperandClass())
+              << I.getOperandClass() << ", error " << I.getOperandError()
+              << ", opcode " << MII.getName(I.getOpcode()) << "\n");
       }
       NearMissesOut.emplace_back(Message);
       break;
@@ -10289,9 +10278,12 @@ ARMAsmParser::FilterNearMisses(SmallVectorImpl<NearMissInfo> &NearMissesIn,
       break;
     }
     case NearMissInfo::NearMissTooFewOperands: {
-      SMLoc EndLoc = ((ARMOperand &)*Operands.back()).getEndLoc();
-      NearMissesOut.emplace_back(
-          NearMissMessage{ EndLoc, StringRef("too few operands for instruction") });
+      if (!ReportedTooFewOperands) {
+        SMLoc EndLoc = ((ARMOperand &)*Operands.back()).getEndLoc();
+        NearMissesOut.emplace_back(NearMissMessage{
+            EndLoc, StringRef("too few operands for instruction")});
+        ReportedTooFewOperands = true;
+      }
       break;
     }
     case NearMissInfo::NoNearMiss:

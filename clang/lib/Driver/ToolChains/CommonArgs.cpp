@@ -419,8 +419,8 @@ void tools::AddGoldPlugin(const ToolChain &ToolChain, const ArgList &Args,
     CmdArgs.push_back("-plugin-opt=thinlto");
 
   if (unsigned Parallelism = getLTOParallelism(Args, D))
-    CmdArgs.push_back(Args.MakeArgString(Twine("-plugin-opt=jobs=") +
-                                         llvm::to_string(Parallelism)));
+    CmdArgs.push_back(
+        Args.MakeArgString("-plugin-opt=jobs=" + Twine(Parallelism)));
 
   // If an explicit debugger tuning argument appeared, pass it along.
   if (Arg *A = Args.getLastArg(options::OPT_gTune_Group,
@@ -544,11 +544,17 @@ void tools::linkSanitizerRuntimeDeps(const ToolChain &TC,
     CmdArgs.push_back("-lrt");
   }
   CmdArgs.push_back("-lm");
-  // There's no libdl on FreeBSD or RTEMS.
+  // There's no libdl on all OSes.
   if (TC.getTriple().getOS() != llvm::Triple::FreeBSD &&
       TC.getTriple().getOS() != llvm::Triple::NetBSD &&
       TC.getTriple().getOS() != llvm::Triple::RTEMS)
     CmdArgs.push_back("-ldl");
+  // Required for forkpty on some OSes
+  if (TC.getTriple().getOS() == llvm::Triple::NetBSD)
+    CmdArgs.push_back("-lutil");
+  // Required for backtrace on some OSes
+  if (TC.getTriple().getOS() == llvm::Triple::NetBSD)
+    CmdArgs.push_back("-lexecinfo");
 }
 
 static void
@@ -566,7 +572,6 @@ collectSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
       if (!Args.hasArg(options::OPT_shared) && !TC.getTriple().isAndroid())
         HelperStaticRuntimes.push_back("asan-preinit");
     }
-
     if (SanArgs.needsUbsanRt()) {
       if (SanArgs.requiresMinimalRuntime()) {
         SharedRuntimes.push_back("ubsan_minimal");
@@ -574,6 +579,10 @@ collectSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
         SharedRuntimes.push_back("ubsan_standalone");
       }
     }
+    if (SanArgs.needsScudoRt())
+      SharedRuntimes.push_back("scudo");
+    if (SanArgs.needsHwasanRt())
+      SharedRuntimes.push_back("hwasan");
   }
 
   // The stats_client library is also statically linked into DSOs.
@@ -589,6 +598,12 @@ collectSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
     StaticRuntimes.push_back("asan");
     if (SanArgs.linkCXXRuntimes())
       StaticRuntimes.push_back("asan_cxx");
+  }
+
+  if (SanArgs.needsHwasanRt()) {
+    StaticRuntimes.push_back("hwasan");
+    if (SanArgs.linkCXXRuntimes())
+      StaticRuntimes.push_back("hwasan_cxx");
   }
   if (SanArgs.needsDfsanRt())
     StaticRuntimes.push_back("dfsan");
@@ -630,6 +645,11 @@ collectSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
   }
   if (SanArgs.needsEsanRt())
     StaticRuntimes.push_back("esan");
+  if (SanArgs.needsScudoRt()) {
+    StaticRuntimes.push_back("scudo");
+    if (SanArgs.linkCXXRuntimes())
+      StaticRuntimes.push_back("scudo_cxx");
+  }
 }
 
 // Should be called before we add system libraries (C++ ABI, libstdc++/libc++,
@@ -719,7 +739,8 @@ void tools::SplitDebugInfo(const ToolChain &TC, Compilation &C, const Tool &T,
   ExtractArgs.push_back(Output.getFilename());
   ExtractArgs.push_back(OutFile);
 
-  const char *Exec = Args.MakeArgString(TC.GetProgramPath("objcopy"));
+  const char *Exec =
+      Args.MakeArgString(TC.GetProgramPath(CLANG_DEFAULT_OBJCOPY));
   InputInfo II(types::TY_Object, Output.getFilename(), Output.getFilename());
 
   // First extract the dwo sections.
@@ -1027,15 +1048,7 @@ void tools::AddRunTimeLibs(const ToolChain &TC, const Driver &D,
 
   switch (RLT) {
   case ToolChain::RLT_CompilerRT:
-    switch (TC.getTriple().getOS()) {
-    default:
-      llvm_unreachable("unsupported OS");
-    case llvm::Triple::Win32:
-    case llvm::Triple::Linux:
-    case llvm::Triple::Fuchsia:
-      CmdArgs.push_back(TC.getCompilerRTArgString(Args, "builtins"));
-      break;
-    }
+    CmdArgs.push_back(TC.getCompilerRTArgString(Args, "builtins"));
     break;
   case ToolChain::RLT_Libgcc:
     // Make sure libgcc is not used under MSVC environment by default

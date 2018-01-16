@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "RISCV.h"
 #include "RISCVTargetMachine.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/CodeGen/Passes.h"
@@ -29,7 +30,7 @@ extern "C" void LLVMInitializeRISCVTarget() {
 
 static std::string computeDataLayout(const Triple &TT) {
   if (TT.isArch64Bit()) {
-    return "e-m:e-i64:64-n32:64-S128";
+    return "e-m:e-p:64:64-i64:64-i128:128-n64-S128";
   } else {
     assert(TT.isArch32Bit() && "only RV32 and RV64 are currently supported");
     return "e-m:e-p:32:32-i64:64-n32-S128";
@@ -58,10 +59,34 @@ RISCVTargetMachine::RISCVTargetMachine(const Target &T, const Triple &TT,
     : LLVMTargetMachine(T, computeDataLayout(TT), TT, CPU, FS, Options,
                         getEffectiveRelocModel(TT, RM),
                         getEffectiveCodeModel(CM), OL),
-      TLOF(make_unique<TargetLoweringObjectFileELF>()) {
+      TLOF(make_unique<TargetLoweringObjectFileELF>()),
+      Subtarget(TT, CPU, FS, *this) {
   initAsmInfo();
 }
 
-TargetPassConfig *RISCVTargetMachine::createPassConfig(PassManagerBase &PM) {
-  return new TargetPassConfig(*this, PM);
+namespace {
+class RISCVPassConfig : public TargetPassConfig {
+public:
+  RISCVPassConfig(RISCVTargetMachine &TM, PassManagerBase &PM)
+      : TargetPassConfig(TM, PM) {}
+
+  RISCVTargetMachine &getRISCVTargetMachine() const {
+    return getTM<RISCVTargetMachine>();
+  }
+
+  bool addInstSelector() override;
+  void addPreEmitPass() override;
+};
 }
+
+TargetPassConfig *RISCVTargetMachine::createPassConfig(PassManagerBase &PM) {
+  return new RISCVPassConfig(*this, PM);
+}
+
+bool RISCVPassConfig::addInstSelector() {
+  addPass(createRISCVISelDag(getRISCVTargetMachine()));
+
+  return false;
+}
+
+void RISCVPassConfig::addPreEmitPass() { addPass(&BranchRelaxationPassID); }

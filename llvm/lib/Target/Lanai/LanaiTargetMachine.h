@@ -19,7 +19,7 @@
 #include "LanaiInstrInfo.h"
 #include "LanaiSelectionDAGInfo.h"
 #include "LanaiSubtarget.h"
-#include "llvm/Target/TargetFrameLowering.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/Target/TargetMachine.h"
 
 namespace llvm {
@@ -42,7 +42,7 @@ public:
     return &Subtarget;
   }
 
-  TargetIRAnalysis getTargetIRAnalysis() override;
+  TargetTransformInfo getTargetTransformInfo(const Function &F) override;
 
   // Pass Pipeline Configuration
   TargetPassConfig *createPassConfig(PassManagerBase &pass_manager) override;

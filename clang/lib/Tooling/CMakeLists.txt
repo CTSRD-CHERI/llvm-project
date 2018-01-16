@@ -8,14 +8,17 @@ add_subdirectory(Refactoring)
 add_subdirectory(ASTDiff)
 
 add_clang_library(clangTooling
+  AllTUsExecution.cpp
   ArgumentsAdjusters.cpp
   CommonOptionsParser.cpp
   CompilationDatabase.cpp
+  Execution.cpp
   FileMatchTrie.cpp
   FixIt.cpp
   JSONCompilationDatabase.cpp
   Refactoring.cpp
   RefactoringCallbacks.cpp
+  StandaloneExecution.cpp
   Tooling.cpp
 
   DEPENDS

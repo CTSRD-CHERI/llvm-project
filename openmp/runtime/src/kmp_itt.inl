@@ -3,7 +3,6 @@
  * kmp_itt.inl -- Inline functions of ITT Notify.
  */
 
-
 //===----------------------------------------------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
@@ -12,7 +11,6 @@
 // Source Licenses. See LICENSE.txt for details.
 //
 //===----------------------------------------------------------------------===//
-
 
 // Inline function definitions. This file should be included into kmp_itt.h file
 // for production build (to let compliler inline functions) or into kmp_itt.c
@@ -117,7 +115,7 @@ LINKAGE void __kmp_itt_region_forking(int gtid, int team_size, int barriers) {
         // Transform compiler-generated region location into the format
         // that the tools more or less standardized on:
         //   "<func>$omp$parallel@[file:]<line>[:<col>]"
-        const char *buff = NULL;
+        char *buff = NULL;
         kmp_str_loc_t str_loc = __kmp_str_loc_init(loc->psource, 1);
         buff = __kmp_str_format("%s$omp$parallel:%d@%s:%d:%d", str_loc.func,
                                 team_size, str_loc.file, str_loc.line,
@@ -137,7 +135,7 @@ LINKAGE void __kmp_itt_region_forking(int gtid, int team_size, int barriers) {
                   &__kmp_barrier_domain_count); // revert the count
               return; // loc->reserved_2 is still 0
             }
-            const char *buff = NULL;
+            char *buff = NULL;
             buff = __kmp_str_format("%s$omp$barrier@%s:%d", str_loc.func,
                                     str_loc.file, str_loc.col);
             __itt_suppress_push(__itt_suppress_memory_errors);
@@ -157,7 +155,7 @@ LINKAGE void __kmp_itt_region_forking(int gtid, int team_size, int barriers) {
       unsigned int frm = (loc->reserved_2 & 0x0000FFFF) - 1;
       if ((frm < KMP_MAX_FRAME_DOMAINS) &&
           (__kmp_itt_region_team_size[frm] != team_size)) {
-        const char *buff = NULL;
+        char *buff = NULL;
         kmp_str_loc_t str_loc = __kmp_str_loc_init(loc->psource, 1);
         buff = __kmp_str_format("%s$omp$parallel:%d@%s:%d:%d", str_loc.func,
                                 team_size, str_loc.file, str_loc.line,
@@ -214,7 +212,7 @@ LINKAGE void __kmp_itt_frame_submit(int gtid, __itt_timestamp begin,
         // Transform compiler-generated region location into the format
         // that the tools more or less standardized on:
         //   "<func>$omp$parallel:team_size@[file:]<line>[:<col>]"
-        const char *buff = NULL;
+        char *buff = NULL;
         kmp_str_loc_t str_loc = __kmp_str_loc_init(loc->psource, 1);
         buff = __kmp_str_format("%s$omp$parallel:%d@%s:%d:%d", str_loc.func,
                                 team_size, str_loc.file, str_loc.line,
@@ -235,7 +233,7 @@ LINKAGE void __kmp_itt_frame_submit(int gtid, __itt_timestamp begin,
       unsigned int frm = (loc->reserved_2 & 0x0000FFFF) - 1;
       if ((frm < KMP_MAX_FRAME_DOMAINS) &&
           (__kmp_itt_region_team_size[frm] != team_size)) {
-        const char *buff = NULL;
+        char *buff = NULL;
         kmp_str_loc_t str_loc = __kmp_str_loc_init(loc->psource, 1);
         buff = __kmp_str_format("%s$omp$parallel:%d@%s:%d:%d", str_loc.func,
                                 team_size, str_loc.file, str_loc.line,
@@ -277,7 +275,7 @@ LINKAGE void __kmp_itt_frame_submit(int gtid, __itt_timestamp begin,
           //   "<func>$omp$frame@[file:]<line>[:<col>]"
           kmp_str_loc_t str_loc = __kmp_str_loc_init(loc->psource, 1);
           if (imbalance) {
-            const char *buff_imb = NULL;
+            char *buff_imb = NULL;
             buff_imb = __kmp_str_format("%s$omp$barrier-imbalance:%d@%s:%d",
                                         str_loc.func, team_size, str_loc.file,
                                         str_loc.col);
@@ -288,7 +286,7 @@ LINKAGE void __kmp_itt_frame_submit(int gtid, __itt_timestamp begin,
                                   end);
             __kmp_str_free(&buff_imb);
           } else {
-            const char *buff = NULL;
+            char *buff = NULL;
             buff = __kmp_str_format("%s$omp$barrier@%s:%d", str_loc.func,
                                     str_loc.file, str_loc.col);
             __itt_suppress_push(__itt_suppress_memory_errors);

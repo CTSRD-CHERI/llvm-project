@@ -8,10 +8,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "Chunks.h"
-#include "Error.h"
 #include "InputFiles.h"
 #include "Symbols.h"
 #include "Writer.h"
+#include "lld/Common/ErrorHandler.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/BinaryFormat/COFF.h"
 #include "llvm/Object/COFF.h"
@@ -37,9 +37,6 @@ SectionChunk::SectionChunk(ObjFile *F, const coff_section *H)
   File->getCOFFObj()->getSectionName(Header, SectionName);
 
   Alignment = Header->getAlignment();
-
-  // Chunks may be discarded during comdat merging.
-  Discarded = false;
 
   // If linker GC is disabled, every chunk starts out alive.  If linker GC is
   // enabled, treat non-comdat sections as roots. Generally optimized object
@@ -132,6 +129,8 @@ void applyMOV32T(uint8_t *Off, uint32_t V) {
 }
 
 static void applyBranch20T(uint8_t *Off, int32_t V) {
+  if (!isInt<21>(V))
+    fatal("relocation out of range");
   uint32_t S = V < 0 ? 1 : 0;
   uint32_t J1 = (V >> 19) & 1;
   uint32_t J2 = (V >> 18) & 1;
@@ -224,6 +223,7 @@ void SectionChunk::applyRelARM64(uint8_t *Off, uint16_t Type, OutputSection *OS,
   case IMAGE_REL_ARM64_ADDR32:         add32(Off, S + Config->ImageBase); break;
   case IMAGE_REL_ARM64_ADDR32NB:       add32(Off, S); break;
   case IMAGE_REL_ARM64_ADDR64:         add64(Off, S + Config->ImageBase); break;
+  case IMAGE_REL_ARM64_SECREL:         applySecRel(this, Off, OS, S); break;
   default:
     fatal("unsupported relocation type 0x" + Twine::utohexstr(Type));
   }
@@ -251,8 +251,19 @@ void SectionChunk::writeTo(uint8_t *Buf) const {
     // Get the output section of the symbol for this relocation.  The output
     // section is needed to compute SECREL and SECTION relocations used in debug
     // info.
-    SymbolBody *Body = File->getSymbolBody(Rel.SymbolTableIndex);
-    Defined *Sym = cast<Defined>(Body);
+    auto *Sym =
+        dyn_cast_or_null<Defined>(File->getSymbol(Rel.SymbolTableIndex));
+    if (!Sym) {
+      if (isCodeView() || isDWARF())
+        continue;
+      // Symbols in early discarded sections are represented using null pointers,
+      // so we need to retrieve the name from the object file.
+      COFFSymbolRef Sym =
+          check(File->getCOFFObj()->getSymbol(Rel.SymbolTableIndex));
+      StringRef Name;
+      File->getCOFFObj()->getSymbolName(Sym, Name);
+      fatal("relocation against symbol in discarded section: " + Name);
+    }
     Chunk *C = Sym->getChunk();
     OutputSection *OS = C ? C->getOutputSection() : nullptr;
 
@@ -328,8 +339,8 @@ void SectionChunk::getBaserels(std::vector<Baserel> *Res) {
     uint8_t Ty = getBaserelType(Rel);
     if (Ty == IMAGE_REL_BASED_ABSOLUTE)
       continue;
-    SymbolBody *Body = File->getSymbolBody(Rel.SymbolTableIndex);
-    if (isa<DefinedAbsolute>(Body))
+    Symbol *Target = File->getSymbol(Rel.SymbolTableIndex);
+    if (!Target || isa<DefinedAbsolute>(Target))
       continue;
     Res->emplace_back(RVA + Rel.VirtualAddress, Ty);
   }
@@ -350,12 +361,8 @@ bool SectionChunk::isCOMDAT() const {
 void SectionChunk::printDiscardedMessage() const {
   // Removed by dead-stripping. If it's removed by ICF, ICF already
   // printed out the name, so don't repeat that here.
-  if (Sym && this == Repl) {
-    if (Discarded)
-      message("Discarded comdat symbol " + Sym->getName());
-    else if (!Live)
-      message("Discarded " + Sym->getName());
-  }
+  if (Sym && this == Repl)
+    message("Discarded " + Sym->getName());
 }
 
 StringRef SectionChunk::getDebugName() {
@@ -514,6 +521,7 @@ void BaserelChunk::writeTo(uint8_t *Buf) const {
 uint8_t Baserel::getDefaultType() {
   switch (Config->Machine) {
   case AMD64:
+  case ARM64:
     return IMAGE_REL_BASED_DIR64;
   case I386:
   case ARMNT:

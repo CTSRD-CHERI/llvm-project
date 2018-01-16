@@ -7,6 +7,7 @@ if(NOT LLD_BUILT_STANDALONE)
 endif()
 
 add_lld_library(lldELF
+  AArch64ErrataFix.cpp
   Arch/AArch64.cpp
   Arch/AMDGPU.cpp
   Arch/ARM.cpp
@@ -21,7 +22,6 @@ add_lld_library(lldELF
   Driver.cpp
   DriverUtils.cpp
   EhFrame.cpp
-  Error.cpp
   Filesystem.cpp
   GdbIndex.cpp
   ICF.cpp
@@ -48,7 +48,6 @@ add_lld_library(lldELF
   BinaryFormat
   Core
   DebugInfoDWARF
-  Demangle
   LTO
   MC
   Object

@@ -13,10 +13,33 @@
 //===----------------------------------------------------------------------===//
 
 #include "InstCombineInternal.h"
+#include "llvm/ADT/APInt.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/VectorUtils.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Constant.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/Operator.h"
 #include "llvm/IR/PatternMatch.h"
+#include "llvm/IR/Type.h"
+#include "llvm/IR/User.h"
+#include "llvm/IR/Value.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Transforms/InstCombine/InstCombineWorklist.h"
+#include <cassert>
+#include <cstdint>
+#include <iterator>
+#include <utility>
+
 using namespace llvm;
 using namespace PatternMatch;
 
@@ -90,7 +113,7 @@ Instruction *InstCombiner::scalarizePHI(ExtractElementInst &EI, PHINode *PN) {
 
   // Verify that this PHI user has one use, which is the PHI itself,
   // and that it is a binary operation which is cheap to scalarize.
-  // otherwise return NULL.
+  // otherwise return nullptr.
   if (!PHIUser->hasOneUse() || !(PHIUser->user_back() == PN) ||
       !(isa<BinaryOperator>(PHIUser)) || !cheapToScalarize(PHIUser, true))
     return nullptr;
@@ -158,11 +181,13 @@ Instruction *InstCombiner::visitExtractElementInst(ExtractElementInst &EI) {
   // If extracting a specified index from the vector, see if we can recursively
   // find a previously computed scalar that was inserted into the vector.
   if (ConstantInt *IdxC = dyn_cast<ConstantInt>(EI.getOperand(1))) {
-    unsigned IndexVal = IdxC->getZExtValue();
     unsigned VectorWidth = EI.getVectorOperandType()->getNumElements();
 
-    // InstSimplify handles cases where the index is invalid.
-    assert(IndexVal < VectorWidth);
+    // InstSimplify should handle cases where the index is invalid.
+    if (!IdxC->getValue().ule(VectorWidth))
+      return nullptr;
+
+    unsigned IndexVal = IdxC->getZExtValue();
 
     // This instruction only demands the single element from the input vector.
     // If the input vector has a single use, simplify it based on this use
@@ -421,7 +446,7 @@ static void replaceExtractElements(InsertElementInst *InsElt,
 ///
 /// Note: we intentionally don't try to fold earlier shuffles since they have
 /// often been chosen carefully to be efficiently implementable on the target.
-typedef std::pair<Value *, Value *> ShuffleOps;
+using ShuffleOps = std::pair<Value *, Value *>;
 
 static ShuffleOps collectShuffleElements(Value *V,
                                          SmallVectorImpl<Constant *> &Mask,
@@ -587,12 +612,11 @@ static Instruction *foldInsSequenceIntoBroadcast(InsertElementInst &InsElt) {
   // Walk the chain backwards, keeping track of which indices we inserted into,
   // until we hit something that isn't an insert of the splatted value.
   while (CurrIE) {
-    ConstantInt *Idx = dyn_cast<ConstantInt>(CurrIE->getOperand(2));
+    auto *Idx = dyn_cast<ConstantInt>(CurrIE->getOperand(2));
     if (!Idx || CurrIE->getOperand(1) != SplatVal)
       return nullptr;
 
-    InsertElementInst *NextIE =
-      dyn_cast<InsertElementInst>(CurrIE->getOperand(0));
+    auto *NextIE = dyn_cast<InsertElementInst>(CurrIE->getOperand(0));
     // Check none of the intermediate steps have any additional uses, except
     // for the root insertelement instruction, which can be re-used, if it
     // inserts at position 0.
@@ -758,6 +782,10 @@ Instruction *InstCombiner::visitInsertElementInst(InsertElementInst &IE) {
   Value *VecOp    = IE.getOperand(0);
   Value *ScalarOp = IE.getOperand(1);
   Value *IdxOp    = IE.getOperand(2);
+
+  if (auto *V = SimplifyInsertElementInst(
+          VecOp, ScalarOp, IdxOp, SQ.getWithInstruction(&IE)))
+    return replaceInstUsesWith(IE, V);
 
   // Inserting an undef or into an undefined place, remove this.
   if (isa<UndefValue>(ScalarOp) || isa<UndefValue>(IdxOp))
@@ -1421,7 +1449,7 @@ Instruction *InstCombiner::visitShuffleVectorInst(ShuffleVectorInst &SVI) {
         eltMask = Mask[i]-LHSWidth;
 
       // If LHS's width is changed, shift the mask value accordingly.
-      // If newRHS == NULL, i.e. LHSOp0 == RHSOp0, we want to remap any
+      // If newRHS == nullptr, i.e. LHSOp0 == RHSOp0, we want to remap any
       // references from RHSOp0 to LHSOp0, so we don't need to shift the mask.
       // If newRHS == newLHS, we want to remap any references from newRHS to
       // newLHS so that we can properly identify splats that may occur due to

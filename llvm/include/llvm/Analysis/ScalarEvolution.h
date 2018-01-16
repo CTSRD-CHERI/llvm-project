@@ -29,7 +29,6 @@
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/PointerIntPair.h"
-#include "llvm/ADT/PointerUnion.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
@@ -1263,10 +1262,6 @@ private:
 
     /// Invalidate this result and free associated memory.
     void clear();
-
-    /// Insert all loops referred to by this BackedgeTakenCount into \p Result.
-    void findUsedLoops(ScalarEvolution &SE,
-                       SmallPtrSetImpl<const Loop *> &Result) const;
   };
 
   /// Cache the backedge-taken count of the loops for this function as they
@@ -1276,9 +1271,6 @@ private:
   /// Cache the predicated backedge-taken count of the loops for this
   /// function as they are computed.
   DenseMap<const Loop *, BackedgeTakenInfo> PredicatedBackedgeTakenCounts;
-
-  // Cache the calculated exit limits for the loops.
-  DenseMap<ExitLimitQuery, ExitLimit> ExitLimits;
 
   /// This map contains entries for all of the PHI instructions that we
   /// attempt to compute constant evolutions for.  This allows us to avoid
@@ -1430,9 +1422,6 @@ private:
   /// return an exact answer.
   ExitLimit computeExitLimit(const Loop *L, BasicBlock *ExitingBlock,
                              bool AllowPredicates = false);
-
-  ExitLimit computeExitLimitImpl(const Loop *L, BasicBlock *ExitingBlock,
-                                 bool AllowPredicates = false);
 
   /// Compute the number of times the backedge of the specified loop will
   /// execute if its exit condition were a conditional branch of ExitCond,
@@ -1673,9 +1662,8 @@ private:
   /// to be a constant.
   Optional<APInt> computeConstantDifference(const SCEV *LHS, const SCEV *RHS);
 
-  /// Drop memoized information computed for S. Only erase Exit Limits info if
-  /// we expect that the operation we have made is going to change it.
-  void forgetMemoizedResults(const SCEV *S, bool EraseExitLimit = true);
+  /// Drop memoized information computed for S.
+  void forgetMemoizedResults(const SCEV *S);
 
   /// Return an existing SCEV for V if there is one, otherwise return nullptr.
   const SCEV *getExistingSCEV(Value *V);
@@ -1746,11 +1734,15 @@ private:
   const SCEV *computeBECount(const SCEV *Delta, const SCEV *Stride,
                              bool Equality);
 
-  // Compute the maximum backedge count based on the range of values
-  // permitted by Start, End, and Stride.
-  const SCEV *computeMaxBECount(const SCEV *Start, const SCEV *Stride,
-                                const SCEV *End, unsigned BitWidth,
-                                bool IsSigned);
+  /// Compute the maximum backedge count based on the range of values
+  /// permitted by Start, End, and Stride. This is for loops of the form
+  /// {Start, +, Stride} LT End.
+  ///
+  /// Precondition: the induction variable is known to be positive.  We *don't*
+  /// assert these preconditions so please be careful.
+  const SCEV *computeMaxBECountForLT(const SCEV *Start, const SCEV *Stride,
+                                     const SCEV *End, unsigned BitWidth,
+                                     bool IsSigned);
 
   /// Verify if an linear IV with positive stride can overflow when in a
   /// less-than comparison, knowing the invariant term of the comparison,
@@ -1775,20 +1767,14 @@ private:
   /// Find all of the loops transitively used in \p S, and update \c LoopUsers
   /// accordingly.
   void addToLoopUseLists(const SCEV *S);
-  void addToLoopUseLists(const BackedgeTakenInfo &BTI, const Loop *L);
 
   FoldingSet<SCEV> UniqueSCEVs;
   FoldingSet<SCEVPredicate> UniquePreds;
   BumpPtrAllocator SCEVAllocator;
 
-  /// This maps loops to a list of entities that (transitively) use said loop.
-  /// A SCEV expression in the vector corresponding to a loop denotes that the
-  /// SCEV expression transitively uses said loop.  A loop (LA) in the vector
-  /// corresponding to another loop (LB) denotes that LB is used in one of the
-  /// cached trip counts for LA.
-  DenseMap<const Loop *,
-           SmallVector<PointerUnion<const SCEV *, const Loop *>, 4>>
-      LoopUsers;
+  /// This maps loops to a list of SCEV expressions that (transitively) use said
+  /// loop.
+  DenseMap<const Loop *, SmallVector<const SCEV *, 4>> LoopUsers;
 
   /// Cache tentative mappings from UnknownSCEVs in a Loop, to a SCEV expression
   /// they can be rewritten into under certain predicates.
@@ -1897,6 +1883,11 @@ public:
   /// Print the SCEV mappings done by the Predicated Scalar Evolution.
   /// The printed text is indented by \p Depth.
   void print(raw_ostream &OS, unsigned Depth) const;
+
+  /// Check if \p AR1 and \p AR2 are equal, while taking into account
+  /// Equal predicates in Preds.
+  bool areAddRecsEqualWithPreds(const SCEVAddRecExpr *AR1,
+                                const SCEVAddRecExpr *AR2) const;
 
 private:
   /// Increments the version number of the predicate.  This needs to be called

@@ -43,6 +43,7 @@ public:
   bool HasNativeLLVMSupport() const override { return true; }
   bool IsIntegratedAssemblerDefault() const override { return true; }
   bool IsMathErrnoDefault() const override { return false; }
+  bool useRelaxRelocations() const override { return true; };
   RuntimeLibType GetDefaultRuntimeLibType() const override {
     return ToolChain::RLT_CompilerRT;
   }
@@ -82,7 +83,7 @@ public:
                            llvm::opt::ArgStringList &CmdArgs) const override;
 
   const char *getDefaultLinker() const override {
-    return "lld";
+    return "ld.lld";
   }
 
 protected:

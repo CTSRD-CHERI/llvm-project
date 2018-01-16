@@ -20,6 +20,7 @@
 #include "sanitizer_flags.h"
 #include "sanitizer_platform_limits_netbsd.h"
 #include "sanitizer_platform_limits_posix.h"
+#include "sanitizer_platform_limits_solaris.h"
 #include "sanitizer_posix.h"
 #include "sanitizer_procmaps.h"
 #include "sanitizer_stacktrace.h"
@@ -62,7 +63,11 @@ void ReleaseMemoryPagesToOS(uptr beg, uptr end) {
   uptr beg_aligned = RoundUpTo(beg, page_size);
   uptr end_aligned = RoundDownTo(end, page_size);
   if (beg_aligned < end_aligned)
-    madvise((void*)beg_aligned, end_aligned - beg_aligned, MADV_DONTNEED);
+    // In the default Solaris compilation environment, madvise() is declared
+    // to take a caddr_t arg; casting it to void * results in an invalid
+    // conversion error, so use char * instead.
+    madvise((char *)beg_aligned, end_aligned - beg_aligned,
+            SANITIZER_MADVISE_DONTNEED);
 }
 
 void NoHugePagesInRegion(uptr addr, uptr size) {
@@ -335,6 +340,46 @@ void *MmapFixedNoReserve(uptr fixed_addr, uptr size, const char *name) {
            SanitizerToolName, size, size, fixed_addr, reserrno);
   IncreaseTotalMmap(size);
   return (void *)p;
+}
+
+uptr ReservedAddressRange::Init(uptr size, const char *name, uptr fixed_addr) {
+  // We don't pass `name` along because, when you enable `decorate_proc_maps`
+  // AND actually use a named mapping AND are using a sanitizer intercepting
+  // `open` (e.g. TSAN, ESAN), then you'll get a failure during initialization.
+  // TODO(flowerhack): Fix the implementation of GetNamedMappingFd to solve
+  // this problem.
+  if (fixed_addr) {
+    base_ = MmapFixedNoAccess(fixed_addr, size);
+  } else {
+    base_ = MmapNoAccess(size);
+  }
+  size_ = size;
+  name_ = name;
+  (void)os_handle_;  // unsupported
+  return reinterpret_cast<uptr>(base_);
+}
+
+// Uses fixed_addr for now.
+// Will use offset instead once we've implemented this function for real.
+uptr ReservedAddressRange::Map(uptr fixed_addr, uptr size) {
+  return reinterpret_cast<uptr>(MmapFixedOrDieOnFatalError(fixed_addr, size));
+}
+
+uptr ReservedAddressRange::MapOrDie(uptr fixed_addr, uptr size) {
+  return reinterpret_cast<uptr>(MmapFixedOrDie(fixed_addr, size));
+}
+
+void ReservedAddressRange::Unmap(uptr addr, uptr size) {
+  void* addr_as_void = reinterpret_cast<void*>(addr);
+  uptr base_as_uptr = reinterpret_cast<uptr>(base_);
+  // Only unmap at the beginning or end of the range.
+  CHECK((addr_as_void == base_) || (addr + size == base_as_uptr + size_));
+  CHECK_LE(size, size_);
+  UnmapOrDie(reinterpret_cast<void*>(addr), size);
+  if (addr_as_void == base_) {
+    base_ = reinterpret_cast<void*>(addr + size);
+  }
+  size_ = size_ - size;
 }
 
 void *MmapFixedNoAccess(uptr fixed_addr, uptr size, const char *name) {

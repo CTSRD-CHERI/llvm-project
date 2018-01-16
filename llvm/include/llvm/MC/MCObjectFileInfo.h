@@ -128,6 +128,7 @@ protected:
 
   MCSection *COFFDebugSymbolsSection;
   MCSection *COFFDebugTypesSection;
+  MCSection *COFFGlobalTypeHashesSection;
 
   /// Extra TLS Variable Data section.
   ///
@@ -153,6 +154,9 @@ protected:
   ///
   /// It is initialized on demand so it can be overwritten (with uniquing).
   MCSection *EHFrameSection;
+
+  /// Section containing metadata on function stack sizes.
+  MCSection *StackSizesSection;
 
   // ELF specific sections.
   MCSection *DataRelROSection;
@@ -192,6 +196,7 @@ protected:
   MCSection *PDataSection;
   MCSection *XDataSection;
   MCSection *SXDataSection;
+  MCSection *GFIDsSection;
 
 public:
   void InitMCObjectFileInfo(const Triple &TT, bool PIC, MCContext &ctx,
@@ -278,7 +283,9 @@ public:
   MCSection *getCOFFDebugTypesSection() const {
     return COFFDebugTypesSection;
   }
-
+  MCSection *getCOFFGlobalTypeHashesSection() const {
+    return COFFGlobalTypeHashesSection;
+  }
 
   MCSection *getTLSExtraDataSection() const { return TLSExtraDataSection; }
   const MCSection *getTLSDataSection() const { return TLSDataSection; }
@@ -286,6 +293,8 @@ public:
 
   MCSection *getStackMapSection() const { return StackMapSection; }
   MCSection *getFaultMapSection() const { return FaultMapSection; }
+
+  MCSection *getStackSizesSection() const { return StackSizesSection; }
 
   // ELF specific sections.
   MCSection *getDataRelROSection() const { return DataRelROSection; }
@@ -341,6 +350,7 @@ public:
   MCSection *getPDataSection() const { return PDataSection; }
   MCSection *getXDataSection() const { return XDataSection; }
   MCSection *getSXDataSection() const { return SXDataSection; }
+  MCSection *getGFIDsSection() const { return GFIDsSection; }
 
   MCSection *getEHFrameSection() {
     return EHFrameSection;

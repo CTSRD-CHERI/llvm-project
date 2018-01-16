@@ -15,7 +15,6 @@
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Module.h"
 #include "llvm/ToolDrivers/llvm-dlltool/DlltoolDriver.h"
 #include "llvm/ToolDrivers/llvm-lib/LibDriver.h"
 #include "llvm/Object/Archive.h"
@@ -36,9 +35,6 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Support/raw_ostream.h"
-#include <algorithm>
-#include <cstdlib>
-#include <memory>
 
 #if !defined(_MSC_VER) && !defined(__MINGW32__)
 #include <unistd.h>
@@ -126,6 +122,8 @@ static cl::extrahelp MoreHelp(
   "  [c] - do not warn if the library had to be created\n"
   "  [v] - be verbose about actions taken\n"
 );
+
+static const char OptionChars[] = "dmpqrtxabiosSTucv";
 
 // This enumeration delineates the kinds of operations on an archive
 // that are permitted.
@@ -863,6 +861,24 @@ int main(int argc, char **argv) {
   if (Stem.find("ranlib") == StringRef::npos &&
       Stem.find("lib") != StringRef::npos)
     return libDriverMain(makeArrayRef(argv, argc));
+
+  for (int i = 1; i < argc; i++) {
+    // If an argument starts with a dash and only contains chars
+    // that belong to the options chars set, remove the dash.
+    // We can't handle it after the command line options parsing
+    // is done, since it will error out on an unrecognized string
+    // starting with a dash.
+    // Make sure this doesn't match the actual llvm-ar specific options
+    // that start with a dash.
+    StringRef S = argv[i];
+    if (S.startswith("-") &&
+        S.find_first_not_of(OptionChars, 1) == StringRef::npos) {
+      argv[i]++;
+      break;
+    }
+    if (S == "--")
+      break;
+  }
 
   // Have the command line options parsed and handle things
   // like --help and --version.

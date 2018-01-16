@@ -38,17 +38,12 @@
 using namespace lldb;
 using namespace lldb_private;
 
-static void FixupEnvironment(Args &env) {
+static void FixupEnvironment(Environment &env) {
 #ifdef __ANDROID__
   // If there is no PATH variable specified inside the environment then set the
   // path to /system/bin. It is required because the default path used by
   // execve() is wrong on android.
-  static const char *path = "PATH=";
-  for (auto &entry : env.entries()) {
-    if (entry.ref.startswith(path))
-      return;
-  }
-  env.AppendArgument(llvm::StringRef("PATH=/system/bin"));
+  env.try_emplace("PATH", "/system/bin");
 #endif
 }
 
@@ -95,10 +90,6 @@ static void DupDescriptor(int error_fd, const FileSpec &file_spec, int fd,
 
 static void LLVM_ATTRIBUTE_NORETURN ChildFunc(int error_fd,
                                               const ProcessLaunchInfo &info) {
-  // First, make sure we disable all logging. If we are logging to stdout, our
-  // logs can be mistaken for inferior output.
-  Log::DisableAllLogChannels();
-
   // Do not inherit setgid powers.
   if (setgid(getgid()) != 0)
     ExitWithError(error_fd, "setgid");
@@ -136,9 +127,9 @@ static void LLVM_ATTRIBUTE_NORETURN ChildFunc(int error_fd,
     ExitWithError(error_fd, "chdir");
 
   DisableASLRIfRequested(error_fd, info);
-  Args env = info.GetEnvironmentEntries();
+  Environment env = info.GetEnvironment();
   FixupEnvironment(env);
-  const char **envp = env.GetConstArgumentVector();
+  Environment::Envp envp = env.getEnvp();
 
   // Clear the signal mask to prevent the child from being affected by
   // any masking done by the parent.
@@ -163,8 +154,7 @@ static void LLVM_ATTRIBUTE_NORETURN ChildFunc(int error_fd,
   }
 
   // Execute.  We should never return...
-  execve(argv[0], const_cast<char *const *>(argv),
-         const_cast<char *const *>(envp));
+  execve(argv[0], const_cast<char *const *>(argv), envp);
 
 #if defined(__linux__)
   if (errno == ETXTBSY) {
@@ -181,8 +171,7 @@ static void LLVM_ATTRIBUTE_NORETURN ChildFunc(int error_fd,
     // this state should clear up quickly, wait a while and then give it one
     // more go.
     usleep(50000);
-    execve(argv[0], const_cast<char *const *>(argv),
-           const_cast<char *const *>(envp));
+    execve(argv[0], const_cast<char *const *>(argv), envp);
   }
 #endif
 

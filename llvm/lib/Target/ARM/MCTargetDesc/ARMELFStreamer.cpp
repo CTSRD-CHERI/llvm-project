@@ -512,9 +512,11 @@ public:
 
       assert(IsThumb);
       EmitThumbMappingSymbol();
+      // Thumb wide instructions are emitted as a pair of 16-bit words of the
+      // appropriate endianness.
       for (unsigned II = 0, IE = Size; II != IE; II = II + 2) {
-        const unsigned I0 = LittleEndian ? II + 0 : (Size - II - 1);
-        const unsigned I1 = LittleEndian ? II + 1 : (Size - II - 2);
+        const unsigned I0 = LittleEndian ? II + 0 : II + 1;
+        const unsigned I1 = LittleEndian ? II + 1 : II + 0;
         Buffer[Size - II - 2] = uint8_t(Inst >> I0 * CHAR_BIT);
         Buffer[Size - II - 1] = uint8_t(Inst >> I1 * CHAR_BIT);
       }
@@ -847,6 +849,7 @@ void ARMTargetELFStreamer::emitArchDefaultAttributes() {
     setAttributeItem(THUMB_ISA_use, AllowThumb32, false);
     break;
 
+  case ARM::ArchKind::ARMV7EM:
   case ARM::ArchKind::ARMV7M:
     setAttributeItem(CPU_arch_profile, MicroControllerProfile, false);
     setAttributeItem(THUMB_ISA_use, AllowThumb32, false);
@@ -1171,6 +1174,8 @@ void ARMELFStreamer::reset() {
   ATS.reset();
   MappingSymbolCounter = 0;
   MCELFStreamer::reset();
+  LastMappingSymbols.clear();
+  LastEMSInfo.reset();
   // MCELFStreamer clear's the assembler's e_flags. However, for
   // arm we manually set the ABI version on streamer creation, so
   // do the same here

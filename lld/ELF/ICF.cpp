@@ -76,6 +76,7 @@
 #include "ICF.h"
 #include "Config.h"
 #include "SymbolTable.h"
+#include "Symbols.h"
 #include "lld/Common/Threads.h"
 #include "llvm/ADT/Hashing.h"
 #include "llvm/BinaryFormat/ELF.h"
@@ -160,11 +161,16 @@ template <class ELFT> static uint32_t getHash(InputSection *S) {
 
 // Returns true if section S is subject of ICF.
 static bool isEligible(InputSection *S) {
+  // Don't merge read only data sections unless
+  // --ignore-data-address-equality was passed.
+  if (!(S->Flags & SHF_EXECINSTR) && !Config->IgnoreDataAddressEquality)
+    return false;
+
   // .init and .fini contains instructions that must be executed to
   // initialize and finalize the process. They cannot and should not
   // be merged.
-  return S->Live && (S->Flags & SHF_ALLOC) && (S->Flags & SHF_EXECINSTR) &&
-         !(S->Flags & SHF_WRITE) && S->Name != ".init" && S->Name != ".fini";
+  return S->Live && (S->Flags & SHF_ALLOC) && !(S->Flags & SHF_WRITE) &&
+         S->Name != ".init" && S->Name != ".fini";
 }
 
 // Split an equivalence class into smaller classes.
@@ -220,16 +226,16 @@ bool ICF<ELFT>::constantEq(const InputSection *SecA, ArrayRef<RelTy> RA,
     uint64_t AddA = getAddend<ELFT>(RA[I]);
     uint64_t AddB = getAddend<ELFT>(RB[I]);
 
-    SymbolBody &SA = SecA->template getFile<ELFT>()->getRelocTargetSym(RA[I]);
-    SymbolBody &SB = SecB->template getFile<ELFT>()->getRelocTargetSym(RB[I]);
+    Symbol &SA = SecA->template getFile<ELFT>()->getRelocTargetSym(RA[I]);
+    Symbol &SB = SecB->template getFile<ELFT>()->getRelocTargetSym(RB[I]);
     if (&SA == &SB) {
       if (AddA == AddB)
         continue;
       return false;
     }
 
-    auto *DA = dyn_cast<DefinedRegular>(&SA);
-    auto *DB = dyn_cast<DefinedRegular>(&SB);
+    auto *DA = dyn_cast<Defined>(&SA);
+    auto *DB = dyn_cast<Defined>(&SB);
     if (!DA || !DB)
       return false;
 
@@ -295,13 +301,13 @@ bool ICF<ELFT>::variableEq(const InputSection *SecA, ArrayRef<RelTy> RA,
 
   for (size_t I = 0; I < RA.size(); ++I) {
     // The two sections must be identical.
-    SymbolBody &SA = SecA->template getFile<ELFT>()->getRelocTargetSym(RA[I]);
-    SymbolBody &SB = SecB->template getFile<ELFT>()->getRelocTargetSym(RB[I]);
+    Symbol &SA = SecA->template getFile<ELFT>()->getRelocTargetSym(RA[I]);
+    Symbol &SB = SecB->template getFile<ELFT>()->getRelocTargetSym(RB[I]);
     if (&SA == &SB)
       continue;
 
-    auto *DA = cast<DefinedRegular>(&SA);
-    auto *DB = cast<DefinedRegular>(&SB);
+    auto *DA = cast<Defined>(&SA);
+    auto *DB = cast<Defined>(&SB);
 
     // We already dealt with absolute and non-InputSection symbols in
     // constantEq, and for InputSections we have already checked everything

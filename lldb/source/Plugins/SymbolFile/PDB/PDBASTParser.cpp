@@ -109,7 +109,7 @@ lldb::TypeSP PDBASTParser::CreateLLDBTypeFromPDBType(const PDBSymbol &type) {
         m_ast.GetBuiltinTypeForEncodingAndBitSize(encoding, bytes * 8);
 
     CompilerType ast_enum = m_ast.CreateEnumerationType(
-        name.c_str(), tu_decl_ctx, decl, builtin_type);
+        name.c_str(), tu_decl_ctx, decl, builtin_type, false);
     auto enum_values = enum_type->findAllChildren<PDBSymbolData>();
     while (auto enum_value = enum_values->getNext()) {
       if (enum_value->getDataKind() != PDB_DataKind::Constant)
@@ -124,6 +124,8 @@ lldb::TypeSP PDBASTParser::CreateLLDBTypeFromPDBType(const PDBSymbol &type) {
   } else if (auto type_def = llvm::dyn_cast<PDBSymbolTypeTypedef>(&type)) {
     lldb_private::Type *target_type =
         m_ast.GetSymbolFile()->ResolveTypeUID(type_def->getTypeId());
+    if (!target_type)
+      return nullptr;
     std::string name = type_def->getName();
     uint64_t bytes = type_def->getLength();
     if (!target_type)
@@ -179,6 +181,8 @@ lldb::TypeSP PDBASTParser::CreateLLDBTypeFromPDBType(const PDBSymbol &type) {
 
     lldb_private::Type *element_type =
         m_ast.GetSymbolFile()->ResolveTypeUID(element_uid);
+    if (!element_type)
+      return nullptr;
     CompilerType element_ast_type = element_type->GetFullCompilerType();
     CompilerType array_ast_type =
         m_ast.CreateArrayType(element_ast_type, num_elements, false);

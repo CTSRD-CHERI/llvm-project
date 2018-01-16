@@ -58,6 +58,7 @@ class MachineModuleInfo;
 class MachineOptimizationRemarkEmitter;
 class MCAsmInfo;
 class MCCFIInstruction;
+struct MCCodePaddingContext;
 class MCContext;
 class MCExpr;
 class MCInst;
@@ -113,7 +114,7 @@ public:
   using GOTEquivUsePair = std::pair<const GlobalVariable *, unsigned>;
   MapVector<const MCSymbol *, GOTEquivUsePair> GlobalGOTEquivs;
 
-  /// Enable print [latency:throughput] in output
+  /// Enable print [latency:throughput] in output.
   bool EnablePrintSchedInfo = false;
 
 private:
@@ -294,6 +295,8 @@ public:
 
   void emitFrameAlloc(const MachineInstr &MI);
 
+  void emitStackSizeSection(const MachineFunction &MF);
+
   enum CFIMoveType { CFI_M_None, CFI_M_EH, CFI_M_Debug };
   CFIMoveType needsCFIMoves() const;
 
@@ -377,7 +380,7 @@ public:
   virtual void EmitBasicBlockStart(const MachineBasicBlock &MBB) const;
 
   /// Targets can override this to emit stuff at the end of a basic block.
-  virtual void EmitBasicBlockEnd(const MachineBasicBlock &MBB) {}
+  virtual void EmitBasicBlockEnd(const MachineBasicBlock &MBB);
 
   /// Targets should implement this to emit instructions.
   virtual void EmitInstruction(const MachineInstr *) {
@@ -505,7 +508,12 @@ public:
   /// When possible, emit a DwarfStringPool section offset without any
   /// relocations, and without using the symbol.  Otherwise, defers to \a
   /// emitDwarfSymbolReference().
-  void emitDwarfStringOffset(DwarfStringPoolEntryRef S) const;
+  void emitDwarfStringOffset(DwarfStringPoolEntry S) const;
+
+  /// Emit the 4-byte offset of a string from the start of its section.
+  void emitDwarfStringOffset(DwarfStringPoolEntryRef S) const {
+    emitDwarfStringOffset(S.getEntry());
+  }
 
   /// Get the value for DW_AT_APPLE_isa. Zero if no isa encoding specified.
   virtual unsigned getISAEncoding() { return 0; }
@@ -626,6 +634,8 @@ private:
   /// Emit GlobalAlias or GlobalIFunc.
   void emitGlobalIndirectSymbol(Module &M,
                                 const GlobalIndirectSymbol& GIS);
+  void setupCodePaddingContext(const MachineBasicBlock &MBB,
+                               MCCodePaddingContext &Context) const;
 };
 
 } // end namespace llvm

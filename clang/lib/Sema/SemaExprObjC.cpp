@@ -564,6 +564,13 @@ ExprResult Sema::BuildObjCBoxedExpr(SourceRange SR, Expr *ValueExpr) {
       
       BoxingMethod = StringWithUTF8StringMethod;
       BoxedType = NSStringPointer;
+      // Transfer the nullability from method's return type.
+      Optional<NullabilityKind> Nullability =
+          BoxingMethod->getReturnType()->getNullability(Context);
+      if (Nullability)
+        BoxedType = Context.getAttributedType(
+            AttributedType::getNullabilityAttrKind(*Nullability), BoxedType,
+            BoxedType);
     }
   } else if (ValueType->isBuiltinType()) {
     // The other types we support are numeric, char and BOOL/bool. We could also
@@ -2974,6 +2981,7 @@ ExprResult Sema::BuildInstanceMessage(Expr *Receiver,
     case OMF_init:
       if (Method)
         checkInitMethod(Method, ReceiverType);
+      break;
 
     case OMF_None:
     case OMF_alloc:
@@ -4268,9 +4276,9 @@ Expr *Sema::stripARCUnbridgedCast(Expr *e) {
   } else if (UnaryOperator *uo = dyn_cast<UnaryOperator>(e)) {
     assert(uo->getOpcode() == UO_Extension);
     Expr *sub = stripARCUnbridgedCast(uo->getSubExpr());
-    return new (Context) UnaryOperator(sub, UO_Extension, sub->getType(),
-                                   sub->getValueKind(), sub->getObjectKind(),
-                                       uo->getOperatorLoc());
+    return new (Context)
+        UnaryOperator(sub, UO_Extension, sub->getType(), sub->getValueKind(),
+                      sub->getObjectKind(), uo->getOperatorLoc(), false);
   } else if (GenericSelectionExpr *gse = dyn_cast<GenericSelectionExpr>(e)) {
     assert(!gse->isResultDependent());
 

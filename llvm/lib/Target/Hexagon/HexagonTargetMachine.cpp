@@ -126,11 +126,13 @@ namespace llvm {
   void initializeHexagonEarlyIfConversionPass(PassRegistry&);
   void initializeHexagonExpandCondsetsPass(PassRegistry&);
   void initializeHexagonGenMuxPass(PassRegistry&);
+  void initializeHexagonHardwareLoopsPass(PassRegistry&);
   void initializeHexagonLoopIdiomRecognizePass(PassRegistry&);
   void initializeHexagonVectorLoopCarriedReusePass(PassRegistry&);
   void initializeHexagonNewValueJumpPass(PassRegistry&);
   void initializeHexagonOptAddrModePass(PassRegistry&);
   void initializeHexagonPacketizerPass(PassRegistry&);
+  void initializeHexagonRDFOptPass(PassRegistry&);
   Pass *createHexagonLoopIdiomPass();
   Pass *createHexagonVectorLoopCarriedReusePass();
 
@@ -144,6 +146,7 @@ namespace llvm {
   FunctionPass *createHexagonCopyToCombine();
   FunctionPass *createHexagonEarlyIfConversion();
   FunctionPass *createHexagonFixupHwLoops();
+  FunctionPass *createHexagonGatherPacketize();
   FunctionPass *createHexagonGenExtract();
   FunctionPass *createHexagonGenInsert();
   FunctionPass *createHexagonGenMux();
@@ -184,11 +187,13 @@ extern "C" void LLVMInitializeHexagonTarget() {
   initializeHexagonConstExtendersPass(PR);
   initializeHexagonEarlyIfConversionPass(PR);
   initializeHexagonGenMuxPass(PR);
+  initializeHexagonHardwareLoopsPass(PR);
   initializeHexagonLoopIdiomRecognizePass(PR);
   initializeHexagonVectorLoopCarriedReusePass(PR);
   initializeHexagonNewValueJumpPass(PR);
   initializeHexagonOptAddrModePass(PR);
   initializeHexagonPacketizerPass(PR);
+  initializeHexagonRDFOptPass(PR);
 }
 
 HexagonTargetMachine::HexagonTargetMachine(const Target &T, const Triple &TT,
@@ -253,10 +258,9 @@ void HexagonTargetMachine::adjustPassManager(PassManagerBuilder &PMB) {
     });
 }
 
-TargetIRAnalysis HexagonTargetMachine::getTargetIRAnalysis() {
-  return TargetIRAnalysis([this](const Function &F) {
-    return TargetTransformInfo(HexagonTTIImpl(this, F));
-  });
+TargetTransformInfo
+HexagonTargetMachine::getTargetTransformInfo(const Function &F) {
+  return TargetTransformInfo(HexagonTTIImpl(this, F));
 }
 
 
@@ -392,9 +396,15 @@ void HexagonPassConfig::addPreEmitPass() {
     // Generate MUX from pairs of conditional transfers.
     if (EnableGenMux)
       addPass(createHexagonGenMux());
-
-    addPass(createHexagonPacketizer(), false);
   }
+
+  // Create packets for 2 instructions that consitute a gather instruction.
+  // Do this regardless of the opt level.
+  addPass(createHexagonGatherPacketize(), false);
+
+  if (!NoOpt)
+    addPass(createHexagonPacketizer(), false);
+
   if (EnableVectorPrint)
     addPass(createHexagonVectorPrint(), false);
 

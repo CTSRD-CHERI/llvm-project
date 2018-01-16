@@ -57,12 +57,12 @@ void RegisterLsanFlags(FlagParser *parser, Flags *f) {
 #define LOG_POINTERS(...)                           \
   do {                                              \
     if (flags()->log_pointers) Report(__VA_ARGS__); \
-  } while (0);
+  } while (0)
 
 #define LOG_THREADS(...)                           \
   do {                                             \
     if (flags()->log_threads) Report(__VA_ARGS__); \
-  } while (0);
+  } while (0)
 
 ALIGNED(64) static char suppression_placeholder[sizeof(SuppressionContext)];
 static SuppressionContext *suppression_ctx = nullptr;
@@ -411,8 +411,9 @@ static void MarkInvalidPCCb(uptr chunk, void *arg) {
   }
 }
 
-// On Linux, handles dynamically allocated TLS blocks by treating all chunks
-// allocated from ld-linux.so as reachable.
+// On Linux, treats all chunks allocated from ld-linux.so as reachable, which
+// covers dynamically allocated TLS blocks, internal dynamic loader's loaded
+// modules accounting etc.
 // Dynamic TLS blocks contain the TLS variables of dynamically loaded modules.
 // They are allocated with a __libc_memalign() call in allocate_and_init()
 // (elf/dl-tls.c). Glibc won't tell us the address ranges occupied by those

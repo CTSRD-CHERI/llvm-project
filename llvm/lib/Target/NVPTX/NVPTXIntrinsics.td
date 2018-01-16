@@ -979,6 +979,33 @@ def INT_NVVM_BITCAST_LL2D : F_MATH_1<"mov.b64 \t$dst, $src0;", Float64Regs,
 def INT_NVVM_BITCAST_D2LL : F_MATH_1<"mov.b64 \t$dst, $src0;", Int64Regs,
   Float64Regs, int_nvvm_bitcast_d2ll>;
 
+//
+// FNS
+//
+
+class INT_FNS_MBO<dag ins, dag Operands>
+  : NVPTXInst<(outs Int32Regs:$dst), ins,
+               "fns.b32 \t$dst, $mask, $base, $offset;",
+               [(set Int32Regs:$dst, Operands )]>,
+    Requires<[hasPTX60, hasSM30]>;
+
+def INT_FNS_rrr : INT_FNS_MBO<(ins Int32Regs:$mask, Int32Regs:$base, Int32Regs:$offset),
+                     (int_nvvm_fns Int32Regs:$mask, Int32Regs:$base, Int32Regs:$offset)>;
+def INT_FNS_rri : INT_FNS_MBO<(ins Int32Regs:$mask, Int32Regs:$base,    i32imm:$offset),
+                     (int_nvvm_fns Int32Regs:$mask, Int32Regs:$base,       imm:$offset)>;
+def INT_FNS_rir : INT_FNS_MBO<(ins Int32Regs:$mask,    i32imm:$base, Int32Regs:$offset),
+                     (int_nvvm_fns Int32Regs:$mask,       imm:$base, Int32Regs:$offset)>;
+def INT_FNS_rii : INT_FNS_MBO<(ins Int32Regs:$mask,    i32imm:$base,    i32imm:$offset),
+                     (int_nvvm_fns Int32Regs:$mask,       imm:$base,       imm:$offset)>;
+def INT_FNS_irr : INT_FNS_MBO<(ins    i32imm:$mask, Int32Regs:$base, Int32Regs:$offset),
+                     (int_nvvm_fns       imm:$mask, Int32Regs:$base, Int32Regs:$offset)>;
+def INT_FNS_iri : INT_FNS_MBO<(ins    i32imm:$mask, Int32Regs:$base,    i32imm:$offset),
+                     (int_nvvm_fns       imm:$mask, Int32Regs:$base,       imm:$offset)>;
+def INT_FNS_iir : INT_FNS_MBO<(ins    i32imm:$mask,    i32imm:$base, Int32Regs:$offset),
+                     (int_nvvm_fns       imm:$mask,       imm:$base, Int32Regs:$offset)>;
+def INT_FNS_iii : INT_FNS_MBO<(ins    i32imm:$mask,    i32imm:$base,    i32imm:$offset),
+                     (int_nvvm_fns       imm:$mask,       imm:$base,       imm:$offset)>;
+
 //-----------------------------------
 // Atomic Functions
 //-----------------------------------
@@ -1095,6 +1122,12 @@ def atomic_load_add_f32_s: ATOMIC_SHARED_CHK<(ops node:$a, node:$b),
   (int_nvvm_atomic_load_add_f32 node:$a, node:$b)>;
 def atomic_load_add_f32_gen: ATOMIC_GENERIC_CHK<(ops node:$a, node:$b),
   (int_nvvm_atomic_load_add_f32 node:$a, node:$b)>;
+def atomic_load_add_f64_g: ATOMIC_GLOBAL_CHK<(ops node:$a, node:$b),
+  (int_nvvm_atomic_load_add_f64 node:$a, node:$b)>;
+def atomic_load_add_f64_s: ATOMIC_SHARED_CHK<(ops node:$a, node:$b),
+  (int_nvvm_atomic_load_add_f64 node:$a, node:$b)>;
+def atomic_load_add_f64_gen: ATOMIC_GENERIC_CHK<(ops node:$a, node:$b),
+  (int_nvvm_atomic_load_add_f64 node:$a, node:$b)>;
 
 defm INT_PTX_ATOM_ADD_G_32 : F_ATOMIC_2<Int32Regs, ".global", ".u32", ".add",
   atomic_load_add_32_g, i32imm, imm, hasAtomRedG32>;
@@ -1120,6 +1153,13 @@ defm INT_PTX_ATOM_ADD_S_F32 : F_ATOMIC_2<Float32Regs, ".shared", ".f32", ".add",
   atomic_load_add_f32_s, f32imm, fpimm, hasAtomAddF32>;
 defm INT_PTX_ATOM_ADD_GEN_F32 : F_ATOMIC_2<Float32Regs, "", ".f32", ".add",
   atomic_load_add_f32_gen, f32imm, fpimm, hasAtomAddF32>;
+
+defm INT_PTX_ATOM_ADD_G_F64 : F_ATOMIC_2<Float64Regs, ".global", ".f64", ".add",
+  atomic_load_add_f64_g, f64imm, fpimm, hasAtomAddF64>;
+defm INT_PTX_ATOM_ADD_S_F64 : F_ATOMIC_2<Float64Regs, ".shared", ".f64", ".add",
+  atomic_load_add_f64_s, f64imm, fpimm, hasAtomAddF64>;
+defm INT_PTX_ATOM_ADD_GEN_F64 : F_ATOMIC_2<Float64Regs, "", ".f64", ".add",
+  atomic_load_add_f64_gen, f64imm, fpimm, hasAtomAddF64>;
 
 // atom_sub
 

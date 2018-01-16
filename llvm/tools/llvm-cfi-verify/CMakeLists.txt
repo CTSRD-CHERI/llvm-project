@@ -8,11 +8,11 @@ set(LLVM_LINK_COMPONENTS
   MCParser
   Object
   Support
+  Symbolize
   )
 
 add_llvm_tool(llvm-cfi-verify
-  llvm-cfi-verify.cpp
-  lib/FileAnalysis.cpp
-  )
+  llvm-cfi-verify.cpp)
 
 add_subdirectory(lib)
+target_link_libraries(llvm-cfi-verify PRIVATE LLVMCFIVerify)

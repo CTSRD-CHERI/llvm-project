@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "CodeGenDAGPatterns.h"
 #include "CodeGenTarget.h"
 #include "X86RecognizableInstr.h"
 #include "llvm/TableGen/Error.h"
@@ -317,11 +316,10 @@ getAltRegInst(const CodeGenInstruction *I, const RecordKeeper &Records,
 // matches the EVEX instruction of this object.
 class IsMatch {
   const CodeGenInstruction *MemInst;
-  const RecordKeeper &Records;
 
 public:
   IsMatch(const CodeGenInstruction *Inst, const RecordKeeper &Records)
-      : MemInst(Inst), Records(Records) {}
+      : MemInst(Inst) {}
 
   bool operator()(const CodeGenInstruction *RegInst) {
     Record *MemRec = MemInst->TheDef;
@@ -343,8 +341,9 @@ public:
             MemRec->getValueAsBit("hasEVEX_K") ||
         RegRec->getValueAsBit("hasEVEX_Z") !=
             MemRec->getValueAsBit("hasEVEX_Z") ||
-        RegRec->getValueAsBit("hasEVEX_B") !=
-            MemRec->getValueAsBit("hasEVEX_B") ||
+        // EVEX_B means different things for memory and register forms.
+        RegRec->getValueAsBit("hasEVEX_B") != 0 ||
+        MemRec->getValueAsBit("hasEVEX_B") != 0 ||
         RegRec->getValueAsBit("hasEVEX_RC") !=
             MemRec->getValueAsBit("hasEVEX_RC") ||
         RegRec->getValueAsBit("hasREX_WPrefix") !=

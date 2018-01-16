@@ -4,12 +4,10 @@
 ; annotation, and that the annotation is identical to the one on e.g.,
 ; the jmp to bb4.
 ;
-; CHECK: JMP{{.*}}%bb.4.entry, debug-location ![[JUMPLOC:[0-9]+]]
+; CHECK: JMP{{.*}}%bb.4, debug-location ![[JUMPLOC:[0-9]+]]
 ; CHECK: bb.4.entry:
 ; CHECK: successors:
-; CHECK-NOT: :
 ; CHECK: JE{{.*}}debug-location ![[JUMPLOC]]
-; CHECK-NOT: :
 ; CHECK: JMP{{.*}}debug-location ![[JUMPLOC]]
 
 define i32 @main() !dbg !12 {

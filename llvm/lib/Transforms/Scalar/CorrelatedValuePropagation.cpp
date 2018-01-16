@@ -14,6 +14,7 @@
 #include "llvm/Transforms/Scalar/CorrelatedValuePropagation.h"
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/ADT/Optional.h"
+#include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/GlobalsModRef.h"
@@ -31,6 +32,8 @@
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Operator.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/IR/Type.h"
@@ -58,6 +61,7 @@ STATISTIC(NumDeadCases, "Number of switch cases removed");
 STATISTIC(NumSDivs,     "Number of sdiv converted to udiv");
 STATISTIC(NumAShrs,     "Number of ashr converted to lshr");
 STATISTIC(NumSRems,     "Number of srem converted to urem");
+STATISTIC(NumOverflows, "Number of overflow checks removed");
 
 static cl::opt<bool> DontProcessAdds("cvp-dont-process-adds", cl::init(true));
 
@@ -117,8 +121,8 @@ static bool processSelect(SelectInst *S, LazyValueInfo *LVI) {
   return true;
 }
 
-static bool processPHI(PHINode *P, LazyValueInfo *LVI,
-                       const SimplifyQuery &SQ) {
+static bool processPHI(PHINode *P, LazyValueInfo *LVI, const SimplifyQuery &SQ,
+                       DenseSet<BasicBlock *> &ReachableBlocks) {
   bool Changed = false;
 
   BasicBlock *BB = P->getParent();
@@ -126,7 +130,18 @@ static bool processPHI(PHINode *P, LazyValueInfo *LVI,
     Value *Incoming = P->getIncomingValue(i);
     if (isa<Constant>(Incoming)) continue;
 
-    Value *V = LVI->getConstantOnEdge(Incoming, P->getIncomingBlock(i), BB, P);
+    // If the incoming value is coming from an unreachable block, replace
+    // it with undef and go on. This is good for two reasons:
+    // 1) We skip an LVI query for an unreachable block
+    // 2) We transform the incoming value so that the code below doesn't
+    //    mess around with IR in unreachable blocks.
+    BasicBlock *IncomingBB = P->getIncomingBlock(i);
+    if (!ReachableBlocks.count(IncomingBB)) {
+      P->setIncomingValue(i, UndefValue::get(P->getType()));
+      continue;
+    }
+
+    Value *V = LVI->getConstantOnEdge(Incoming, IncomingBB, BB, P);
 
     // Look if the incoming value is a select with a scalar condition for which
     // LVI can tells us the value. In that case replace the incoming value with
@@ -323,10 +338,71 @@ static bool processSwitch(SwitchInst *SI, LazyValueInfo *LVI) {
   return Changed;
 }
 
+// See if we can prove that the given overflow intrinsic will not overflow.
+static bool willNotOverflow(IntrinsicInst *II, LazyValueInfo *LVI) {
+  using OBO = OverflowingBinaryOperator;
+  auto NoWrap = [&] (Instruction::BinaryOps BinOp, unsigned NoWrapKind) {
+    Value *RHS = II->getOperand(1);
+    ConstantRange RRange = LVI->getConstantRange(RHS, II->getParent(), II);
+    ConstantRange NWRegion = ConstantRange::makeGuaranteedNoWrapRegion(
+        BinOp, RRange, NoWrapKind);
+    // As an optimization, do not compute LRange if we do not need it.
+    if (NWRegion.isEmptySet())
+      return false;
+    Value *LHS = II->getOperand(0);
+    ConstantRange LRange = LVI->getConstantRange(LHS, II->getParent(), II);
+    return NWRegion.contains(LRange);
+  };
+  switch (II->getIntrinsicID()) {
+  default:
+    break;
+  case Intrinsic::uadd_with_overflow:
+    return NoWrap(Instruction::Add, OBO::NoUnsignedWrap);
+  case Intrinsic::sadd_with_overflow:
+    return NoWrap(Instruction::Add, OBO::NoSignedWrap);
+  case Intrinsic::usub_with_overflow:
+    return NoWrap(Instruction::Sub, OBO::NoUnsignedWrap);
+  case Intrinsic::ssub_with_overflow:
+    return NoWrap(Instruction::Sub, OBO::NoSignedWrap);
+  }
+  return false;
+}
+
+static void processOverflowIntrinsic(IntrinsicInst *II) {
+  Value *NewOp = nullptr;
+  switch (II->getIntrinsicID()) {
+  default:
+    llvm_unreachable("Unexpected instruction.");
+  case Intrinsic::uadd_with_overflow:
+  case Intrinsic::sadd_with_overflow:
+    NewOp = BinaryOperator::CreateAdd(II->getOperand(0), II->getOperand(1),
+                                      II->getName(), II);
+    break;
+  case Intrinsic::usub_with_overflow:
+  case Intrinsic::ssub_with_overflow:
+    NewOp = BinaryOperator::CreateSub(II->getOperand(0), II->getOperand(1),
+                                      II->getName(), II);
+    break;
+  }
+  ++NumOverflows;
+  IRBuilder<> B(II);
+  Value *NewI = B.CreateInsertValue(UndefValue::get(II->getType()), NewOp, 0);
+  NewI = B.CreateInsertValue(NewI, ConstantInt::getFalse(II->getContext()), 1);
+  II->replaceAllUsesWith(NewI);
+  II->eraseFromParent();
+}
+
 /// Infer nonnull attributes for the arguments at the specified callsite.
 static bool processCallSite(CallSite CS, LazyValueInfo *LVI) {
   SmallVector<unsigned, 4> ArgNos;
   unsigned ArgNo = 0;
+
+  if (auto *II = dyn_cast<IntrinsicInst>(CS.getInstruction())) {
+    if (willNotOverflow(II, LVI)) {
+      processOverflowIntrinsic(II);
+      return true;
+    }
+  }
 
   for (Value *V : CS.args()) {
     PointerType *Type = dyn_cast<PointerType>(V->getType());
@@ -497,11 +573,19 @@ static Constant *getConstantAt(Value *V, Instruction *At, LazyValueInfo *LVI) {
 
 static bool runImpl(Function &F, LazyValueInfo *LVI, const SimplifyQuery &SQ) {
   bool FnChanged = false;
+
+  // Compute reachability from the entry block of this function via an RPO
+  // walk. We use this information when processing PHIs.
+  DenseSet<BasicBlock *> ReachableBlocks;
+  ReversePostOrderTraversal<Function *> RPOT(&F);
+  for (BasicBlock *BB : RPOT)
+    ReachableBlocks.insert(BB);
+
   // Visiting in a pre-order depth-first traversal causes us to simplify early
   // blocks before querying later blocks (which require us to analyze early
   // blocks).  Eagerly simplifying shallow blocks means there is strictly less
   // work to do for deep blocks.  This also means we don't visit unreachable
-  // blocks. 
+  // blocks.
   for (BasicBlock *BB : depth_first(&F.getEntryBlock())) {
     bool BBChanged = false;
     for (BasicBlock::iterator BI = BB->begin(), BE = BB->end(); BI != BE;) {
@@ -511,7 +595,7 @@ static bool runImpl(Function &F, LazyValueInfo *LVI, const SimplifyQuery &SQ) {
         BBChanged |= processSelect(cast<SelectInst>(II), LVI);
         break;
       case Instruction::PHI:
-        BBChanged |= processPHI(cast<PHINode>(II), LVI, SQ);
+        BBChanged |= processPHI(cast<PHINode>(II), LVI, SQ, ReachableBlocks);
         break;
       case Instruction::ICmp:
       case Instruction::FCmp:

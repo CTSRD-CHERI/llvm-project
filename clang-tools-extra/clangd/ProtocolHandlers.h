@@ -29,11 +29,13 @@ namespace clangd {
 // The interface implemented by ClangLSPServer to handle incoming requests.
 class ProtocolCallbacks {
 public:
-  using Ctx = RequestContext;
+  // FIXME(ibiryukov): remove this typedef, inline its usages.
+  using Ctx = Context;
   virtual ~ProtocolCallbacks() = default;
 
   virtual void onInitialize(Ctx C, InitializeParams &Params) = 0;
   virtual void onShutdown(Ctx C, ShutdownParams &Params) = 0;
+  virtual void onExit(Ctx C, ExitParams &Params) = 0;
   virtual void onDocumentDidOpen(Ctx C, DidOpenTextDocumentParams &Params) = 0;
   virtual void onDocumentDidChange(Ctx C,
                                    DidChangeTextDocumentParams &Params) = 0;
@@ -51,6 +53,10 @@ public:
   virtual void onGoToDefinition(Ctx C, TextDocumentPositionParams &Params) = 0;
   virtual void onSwitchSourceHeader(Ctx C, TextDocumentIdentifier &Params) = 0;
   virtual void onFileEvent(Ctx C, DidChangeWatchedFilesParams &Params) = 0;
+  virtual void onCommand(Ctx C, ExecuteCommandParams &Params) = 0;
+  virtual void onRename(Ctx C, RenameParams &Parames) = 0;
+  virtual void onDocumentHighlight(Ctx C,
+                                   TextDocumentPositionParams &Params) = 0;
 };
 
 void registerCallbackHandlers(JSONRPCDispatcher &Dispatcher, JSONOutput &Out,

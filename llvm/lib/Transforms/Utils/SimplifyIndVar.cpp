@@ -18,13 +18,11 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/LoopInfo.h"
-#include "llvm/Analysis/LoopPass.h"
 #include "llvm/Analysis/ScalarEvolutionExpander.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
-#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/PatternMatch.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
@@ -83,6 +81,7 @@ namespace {
 
     bool eliminateOverflowIntrinsic(CallInst *CI);
     bool eliminateIVUser(Instruction *UseInst, Instruction *IVOperand);
+    bool makeIVComparisonInvariant(ICmpInst *ICmp, Value *IVOperand);
     void eliminateIVComparison(ICmpInst *ICmp, Value *IVOperand);
     void simplifyIVRemainder(BinaryOperator *Rem, Value *IVOperand,
                              bool IsSigned);
@@ -161,6 +160,74 @@ Value *SimplifyIndvar::foldIVUser(Instruction *UseInst, Instruction *IVOperand) 
   return IVSrc;
 }
 
+bool SimplifyIndvar::makeIVComparisonInvariant(ICmpInst *ICmp,
+                                               Value *IVOperand) {
+  unsigned IVOperIdx = 0;
+  ICmpInst::Predicate Pred = ICmp->getPredicate();
+  if (IVOperand != ICmp->getOperand(0)) {
+    // Swapped
+    assert(IVOperand == ICmp->getOperand(1) && "Can't find IVOperand");
+    IVOperIdx = 1;
+    Pred = ICmpInst::getSwappedPredicate(Pred);
+  }
+
+  // Get the SCEVs for the ICmp operands (in the specific context of the
+  // current loop)
+  const Loop *ICmpLoop = LI->getLoopFor(ICmp->getParent());
+  const SCEV *S = SE->getSCEVAtScope(ICmp->getOperand(IVOperIdx), ICmpLoop);
+  const SCEV *X = SE->getSCEVAtScope(ICmp->getOperand(1 - IVOperIdx), ICmpLoop);
+
+  ICmpInst::Predicate InvariantPredicate;
+  const SCEV *InvariantLHS, *InvariantRHS;
+
+  auto *PN = dyn_cast<PHINode>(IVOperand);
+  if (!PN)
+    return false;
+  if (!SE->isLoopInvariantPredicate(Pred, S, X, L, InvariantPredicate,
+                                    InvariantLHS, InvariantRHS))
+    return false;
+
+  // Rewrite the comparison to a loop invariant comparison if it can be done
+  // cheaply, where cheaply means "we don't need to emit any new
+  // instructions".
+
+  SmallDenseMap<const SCEV*, Value*> CheapExpansions;
+  CheapExpansions[S] = ICmp->getOperand(IVOperIdx);
+  CheapExpansions[X] = ICmp->getOperand(1 - IVOperIdx);
+  
+  // TODO: Support multiple entry loops?  (We currently bail out of these in
+  // the IndVarSimplify pass)
+  if (auto *BB = L->getLoopPredecessor()) {
+    const int Idx = PN->getBasicBlockIndex(BB);
+    if (Idx >= 0) {
+      Value *Incoming = PN->getIncomingValue(Idx);
+      const SCEV *IncomingS = SE->getSCEV(Incoming);
+      CheapExpansions[IncomingS] = Incoming;
+    }
+  }
+  Value *NewLHS = CheapExpansions[InvariantLHS];
+  Value *NewRHS = CheapExpansions[InvariantRHS];
+
+  if (!NewLHS)
+    if (auto *ConstLHS = dyn_cast<SCEVConstant>(InvariantLHS))
+      NewLHS = ConstLHS->getValue();
+  if (!NewRHS)
+    if (auto *ConstRHS = dyn_cast<SCEVConstant>(InvariantRHS))
+      NewRHS = ConstRHS->getValue();
+
+  if (!NewLHS || !NewRHS)
+    // We could not find an existing value to replace either LHS or RHS.
+    // Generating new instructions has subtler tradeoffs, so avoid doing that
+    // for now.
+    return false;
+
+  DEBUG(dbgs() << "INDVARS: Simplified comparison: " << *ICmp << '\n');
+  ICmp->setPredicate(InvariantPredicate);
+  ICmp->setOperand(0, NewLHS);
+  ICmp->setOperand(1, NewRHS);
+  return true;
+}
+
 /// SimplifyIVUsers helper for eliminating useless
 /// comparisons against an induction variable.
 void SimplifyIndvar::eliminateIVComparison(ICmpInst *ICmp, Value *IVOperand) {
@@ -174,17 +241,11 @@ void SimplifyIndvar::eliminateIVComparison(ICmpInst *ICmp, Value *IVOperand) {
     Pred = ICmpInst::getSwappedPredicate(Pred);
   }
 
-  // Get the SCEVs for the ICmp operands.
-  const SCEV *S = SE->getSCEV(ICmp->getOperand(IVOperIdx));
-  const SCEV *X = SE->getSCEV(ICmp->getOperand(1 - IVOperIdx));
-
-  // Simplify unnecessary loops away.
+  // Get the SCEVs for the ICmp operands (in the specific context of the
+  // current loop)
   const Loop *ICmpLoop = LI->getLoopFor(ICmp->getParent());
-  S = SE->getSCEVAtScope(S, ICmpLoop);
-  X = SE->getSCEVAtScope(X, ICmpLoop);
-
-  ICmpInst::Predicate InvariantPredicate;
-  const SCEV *InvariantLHS, *InvariantRHS;
+  const SCEV *S = SE->getSCEVAtScope(ICmp->getOperand(IVOperIdx), ICmpLoop);
+  const SCEV *X = SE->getSCEVAtScope(ICmp->getOperand(1 - IVOperIdx), ICmpLoop);
 
   // If the condition is always true or always false, replace it with
   // a constant value.
@@ -196,85 +257,8 @@ void SimplifyIndvar::eliminateIVComparison(ICmpInst *ICmp, Value *IVOperand) {
     ICmp->replaceAllUsesWith(ConstantInt::getFalse(ICmp->getContext()));
     DeadInsts.emplace_back(ICmp);
     DEBUG(dbgs() << "INDVARS: Eliminated comparison: " << *ICmp << '\n');
-  } else if (isa<PHINode>(IVOperand) &&
-             SE->isLoopInvariantPredicate(Pred, S, X, L, InvariantPredicate,
-                                          InvariantLHS, InvariantRHS)) {
-
-    // Rewrite the comparison to a loop invariant comparison if it can be done
-    // cheaply, where cheaply means "we don't need to emit any new
-    // instructions".
-
-    Value *NewLHS = nullptr, *NewRHS = nullptr;
-
-    if (S == InvariantLHS || X == InvariantLHS)
-      NewLHS =
-          ICmp->getOperand(S == InvariantLHS ? IVOperIdx : (1 - IVOperIdx));
-
-    if (S == InvariantRHS || X == InvariantRHS)
-      NewRHS =
-          ICmp->getOperand(S == InvariantRHS ? IVOperIdx : (1 - IVOperIdx));
-
-    auto *PN = cast<PHINode>(IVOperand);
-    for (unsigned i = 0, e = PN->getNumIncomingValues();
-         i != e && (!NewLHS || !NewRHS);
-         ++i) {
-
-      // If this is a value incoming from the backedge, then it cannot be a loop
-      // invariant value (since we know that IVOperand is an induction variable).
-      if (L->contains(PN->getIncomingBlock(i)))
-        continue;
-
-      // NB! This following assert does not fundamentally have to be true, but
-      // it is true today given how SCEV analyzes induction variables.
-      // Specifically, today SCEV will *not* recognize %iv as an induction
-      // variable in the following case:
-      //
-      // define void @f(i32 %k) {
-      // entry:
-      //   br i1 undef, label %r, label %l
-      //
-      // l:
-      //   %k.inc.l = add i32 %k, 1
-      //   br label %loop
-      //
-      // r:
-      //   %k.inc.r = add i32 %k, 1
-      //   br label %loop
-      //
-      // loop:
-      //   %iv = phi i32 [ %k.inc.l, %l ], [ %k.inc.r, %r ], [ %iv.inc, %loop ]
-      //   %iv.inc = add i32 %iv, 1
-      //   br label %loop
-      // }
-      //
-      // but if it starts to, at some point, then the assertion below will have
-      // to be changed to a runtime check.
-
-      Value *Incoming = PN->getIncomingValue(i);
-
-#ifndef NDEBUG
-      if (auto *I = dyn_cast<Instruction>(Incoming))
-        assert(DT->dominates(I, ICmp) && "Should be a unique loop dominating value!");
-#endif
-
-      const SCEV *IncomingS = SE->getSCEV(Incoming);
-
-      if (!NewLHS && IncomingS == InvariantLHS)
-        NewLHS = Incoming;
-      if (!NewRHS && IncomingS == InvariantRHS)
-        NewRHS = Incoming;
-    }
-
-    if (!NewLHS || !NewRHS)
-      // We could not find an existing value to replace either LHS or RHS.
-      // Generating new instructions has subtler tradeoffs, so avoid doing that
-      // for now.
-      return;
-
-    DEBUG(dbgs() << "INDVARS: Simplified comparison: " << *ICmp << '\n');
-    ICmp->setPredicate(InvariantPredicate);
-    ICmp->setOperand(0, NewLHS);
-    ICmp->setOperand(1, NewRHS);
+  } else if (makeIVComparisonInvariant(ICmp, IVOperand)) {
+    // fallthrough to end of function
   } else if (ICmpInst::isSigned(OriginalPred) &&
              SE->isKnownNonNegative(S) && SE->isKnownNonNegative(X)) {
     // If we were unable to make anything above, all we can is to canonicalize

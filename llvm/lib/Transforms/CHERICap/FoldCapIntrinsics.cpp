@@ -127,6 +127,8 @@ class CHERICapFoldIntrinsics : public ModulePass {
 
   // Returns the offset increment if V is a GEP instruction of
   Value *getOffsetIncrement(Value *V, Value **Arg) {
+    if (!V)
+      return nullptr;
     Value *Offset = nullptr;
     if (match(V, m_Intrinsic<Intrinsic::cheri_cap_offset_increment>(
                      m_Value(*Arg), m_Value(Offset)))) {
@@ -190,16 +192,20 @@ class CHERICapFoldIntrinsics : public ModulePass {
     return nullptr;
   }
 
-  void foldIncOffsetSetOffsetOnlyUserIncrement(CallInst* CI) {
+  void foldIncOffsetSetOffsetOnlyUserIncrement(CallInst* CI, SmallPtrSet<Instruction*, 8> &ToErase) {
     // errs() << __func__ << ": num users=" << CI->getNumUses() << ": "; CI->dump();
     User* OnlyUser = CI->hasOneUse() ? *CI->user_begin() : nullptr;
     while (OnlyUser) {
       // If there is only a single use of the setoffset result, we might be
       // able to fold it into a single setoffset (for a GEP or incoffset)
       Value* Arg = nullptr;
-      // errs() << "OnlyUser: "; OnlyUser->dump();
       if (Value *Increment = getOffsetIncrement(OnlyUser, &Arg)) {
-        // errs() << "Increment: "; OnlyUser->dump();
+#if 0
+        errs() << "CI before folding: "; CI->dump();
+        errs() << "Block before folding: "; CI->getParent()->dump();
+        errs() << "OnlyUser: "; OnlyUser->dump();
+        errs() << "Increment: "; Increment->dump();
+#endif
         assert(Arg == CI);
         Instruction *ReplacedInstr = cast<Instruction>(OnlyUser);
         IRBuilder<> B(ReplacedInstr);
@@ -208,13 +214,24 @@ class CHERICapFoldIntrinsics : public ModulePass {
         // We have to move this instruction after the offset instruction
         // because otherwise we use a value that has not yet been defined
         CI->moveAfter(ReplacedInstr);
-        ReplacedInstr->replaceAllUsesWith(CI);
-        // TODO: can erasing here cause a crash?
-        ReplacedInstr->eraseFromParent();
         // Keep doing this transformation for incoffset chains with only a
         // single user:
-        OnlyUser = CI->hasOneUse() ? *CI->user_begin() : nullptr;
+        OnlyUser = ReplacedInstr->hasOneUse() ? *ReplacedInstr->user_begin() : nullptr;
+        ReplacedInstr->replaceAllUsesWith(CI);
+#if 0
+        errs() << "ReplacedInstr (" << ReplacedInstr->getNumUses() << " uses): "; ReplacedInstr->dump();
+        errs() << "ReplacedInstr: "; ReplacedInstr->dump();
+        errs() << "New OnlyUser: "; if (OnlyUser) OnlyUser->dump(); else errs() << "nullptr\n";
+        errs() << "New CI (" << CI->getNumUses() << " uses): "; CI->dump();
+        errs() << "New Block: "; CI->getParent()->dump();
+#endif
+        // erasing here can cause a crash -> add to list so that caller can remove it
+        // ReplacedInstr->eraseFromParent();
+        ToErase.insert(ReplacedInstr);
+        assert(OnlyUser != ReplacedInstr && "Should not cause an infinite loop!");
         Modified = true;
+        if (!OnlyUser)
+          break;
       } else {
         break;
       }
@@ -224,12 +241,16 @@ class CHERICapFoldIntrinsics : public ModulePass {
   /// Replace get-offset, add, set-offset sequences with inc-offset
   void foldSetOffset() {
     std::vector<CallInst *> SetOffsets;
-    std::vector<Value *> ToErase;
+    SmallPtrSet<Instruction*, 8> ToErase;
     for (Value *V : SetOffset->users())
       SetOffsets.push_back(cast<CallInst>(V));
     for (CallInst *CI : SetOffsets) {
+      if (ToErase.count(CI)) {
+        assert(CI->hasNUses(0));
+        continue;
+      }
       // fold chains of set-offset, (inc-offset/GEP)+ into a single set-offset
-      foldIncOffsetSetOffsetOnlyUserIncrement(CI);
+      foldIncOffsetSetOffsetOnlyUserIncrement(CI, ToErase);
 
       Value *LHS, *RHS;
       if (match(CI->getOperand(1), m_Add(m_Value(LHS), m_Value(RHS)))) {
@@ -250,6 +271,43 @@ class CHERICapFoldIntrinsics : public ModulePass {
         }
       }
     }
+    for (Instruction *I : ToErase)
+      I->eraseFromParent();
+  }
+
+  /// Replace set-offset, inc-offset sequences with a single set-offset
+  /// Also fold multiple inc-offsets into a single on if possible
+  void foldIncOffset() {
+    std::vector<CallInst *> IncOffsets;
+    SmallPtrSet<Instruction*, 8> ToErase;
+    for (Value *V : IncOffset->users())
+      IncOffsets.push_back(cast<CallInst>(V));
+    for (CallInst *CI : IncOffsets) {
+      if (ToErase.count(CI)) {
+        assert(CI->hasNUses(0));
+        continue;
+      }
+      // fold chains of inc-offset, (inc-offset/GEP)+ into a single inc-offset
+      foldIncOffsetSetOffsetOnlyUserIncrement(CI, ToErase);
+
+      Value *Inc = CI->getOperand(1);
+      Value *BaseCap = nullptr;
+      // TODO: how to delete any dead instructions?
+
+      // Also convert a incoffset on null to a setoffset on null
+      if (Value *Offset =
+              inferCapabilityOffset(CI->getOperand(0), CI, Inc->getType(), &BaseCap)) {
+        assert(BaseCap);
+        IRBuilder<> B(CI);
+        CallInst *Replacement = B.CreateCall(
+            SetOffset, {BaseCap, B.CreateAdd(Offset, Inc)});
+        Replacement->setTailCall(true);
+        CI->replaceAllUsesWith(Replacement);
+        Modified = true;
+      }
+    }
+    for (Instruction *I : ToErase)
+      I->eraseFromParent();
   }
 
   /// Replace set-offset, inc-offset sequences with a single set-offset

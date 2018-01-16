@@ -720,6 +720,12 @@ static void PrintPreprocessedTokens(Preprocessor &PP, Token &Tok,
       // -traditional-cpp the lexer keeps /all/ whitespace, including comments.
       SourceLocation StartLoc = Tok.getLocation();
       Callbacks->MoveToLine(StartLoc.getLocWithOffset(Tok.getLength()));
+    } else if (Tok.is(tok::eod)) {
+      // Don't print end of directive tokens, since they are typically newlines
+      // that mess up our line tracking. These come from unknown pre-processor
+      // directives or hash-prefixed comments in standalone assembly files.
+      PP.Lex(Tok);
+      continue;
     } else if (Tok.is(tok::annot_module_include)) {
       // PrintPPOutputPPCallbacks::InclusionDirective handles producing
       // appropriate output here. Ignore this token entirely.
@@ -746,7 +752,7 @@ static void PrintPreprocessedTokens(Preprocessor &PP, Token &Tok,
     } else if (Tok.isLiteral() && !Tok.needsCleaning() &&
                Tok.getLiteralData()) {
       OS.write(Tok.getLiteralData(), Tok.getLength());
-    } else if (Tok.getLength() < 256) {
+    } else if (Tok.getLength() < llvm::array_lengthof(Buffer)) {
       const char *TokPtr = Buffer;
       unsigned Len = PP.getSpelling(Tok, TokPtr);
       OS.write(TokPtr, Len);

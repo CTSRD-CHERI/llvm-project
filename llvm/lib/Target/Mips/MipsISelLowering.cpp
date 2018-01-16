@@ -27,8 +27,8 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
-#include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/StringSwitch.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/FunctionLoweringInfo.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
@@ -45,6 +45,9 @@
 #include "llvm/CodeGen/RuntimeLibcalls.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/Constants.h"
@@ -63,11 +66,8 @@
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
-#include "llvm/Target/TargetFrameLowering.h"
-#include "llvm/Target/TargetInstrInfo.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
-#include "llvm/Target/TargetRegisterInfo.h"
 #include <algorithm>
 #include <cassert>
 #include <cctype>
@@ -1519,11 +1519,6 @@ MipsTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   case Mips::DMOD:
   case Mips::DMODU:
     return insertDivByZeroTrap(MI, *BB, *Subtarget.getInstrInfo(), true, false);
-  case Mips::DDIV_MM64R6:
-  case Mips::DDIVU_MM64R6:
-  case Mips::DMOD_MM64R6:
-  case Mips::DMODU_MM64R6:
-    return insertDivByZeroTrap(MI, *BB, *Subtarget.getInstrInfo(), true, true);
 
   case Mips::PseudoSELECT_I:
   case Mips::PseudoSELECT_I64:
@@ -3262,8 +3257,7 @@ static bool CC_MipsO32(unsigned ValNo, MVT ValVT, MVT LocVT,
     llvm_unreachable("Cannot handle this ValVT.");
 
   if (!Reg) {
-    unsigned Offset = State.AllocateStack(ValVT.getSizeInBits() >> 3,
-                                          OrigAlign);
+    unsigned Offset = State.AllocateStack(ValVT.getStoreSize(), OrigAlign);
     State.addLoc(CCValAssign::getMem(ValNo, ValVT, Offset, LocVT, LocInfo));
   } else
     State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, LocVT, LocInfo));
@@ -3443,6 +3437,16 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   if (IsTailCall)
     ++NumTailCalls;
 
+  // Chain is the output chain of the last Load/Store or CopyToReg node.
+  // ByValChain is the output chain of the last Memcpy node created for copying
+  // byval arguments to the stack.
+  unsigned StackAlignment = TFL->getStackAlignment();
+  NextStackOffset = alignTo(NextStackOffset, StackAlignment);
+  SDValue NextStackOffsetVal = DAG.getIntPtrConstant(NextStackOffset, DL, true);
+
+  if (!IsTailCall)
+    Chain = DAG.getCALLSEQ_START(Chain, NextStackOffset, 0, DL);
+
   SDValue StackPtr =
       DAG.getCopyFromReg(Chain, DL, ABI.GetStackPtr(),
                          getPointerTy(DAG.getDataLayout(),
@@ -3477,7 +3481,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       assert(ByValIdx < CCInfo.getInRegsParamsCount());
       assert(!IsTailCall &&
              "Do not tail-call optimize if there is a byval argument.");
-      Chain = passByValArg(Chain, DL, RegsToPass, MemOpChains, StackPtr, MFI, DAG, Arg,
+      passByValArg(Chain, DL, RegsToPass, MemOpChains, StackPtr, MFI, DAG, Arg,
                    FirstByValReg, LastByValReg, Flags, Subtarget.isLittle(),
                    VA);
       CCInfo.nextInRegsParam();
@@ -3617,16 +3621,6 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   bool GlobalOrExternal = false, IsCallReloc = false;
 
   const bool CheriCapTable = Subtarget.useCheriCapTable();
-  // Chain is the output chain of the last Load/Store or CopyToReg node.
-  // ByValChain is the output chain of the last Memcpy node created for copying
-  // byval arguments to the stack.
-  unsigned StackAlignment = TFL->getStackAlignment();
-  NextStackOffset = alignTo(NextStackOffset, StackAlignment);
-  SDValue NextStackOffsetVal = DAG.getIntPtrConstant(NextStackOffset, DL, true);
-
-  if (!IsTailCall)
-    Chain = DAG.getCALLSEQ_START(Chain, NextStackOffset, 0, DL);
-
   // The long-calls feature is ignored in case of PIC.
   // While we do not support -mshared / -mno-shared properly,
   // ignore long-calls in case of -mabicalls too.
@@ -3917,10 +3911,10 @@ SDValue MipsTargetLowering::LowerFormalArguments(
   MipsCCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(), ArgLocs,
                      *DAG.getContext());
   CCInfo.AllocateStack(ABI.GetCalleeAllocdArgSizeInBytes(CallConv), 1);
-  const Function *Func = DAG.getMachineFunction().getFunction();
-  Function::const_arg_iterator FuncArg = Func->arg_begin();
+  const Function &Func = DAG.getMachineFunction().getFunction();
+  Function::const_arg_iterator FuncArg = Func.arg_begin();
 
-  if (Func->hasFnAttribute("interrupt") && !Func->arg_empty())
+  if (Func.hasFnAttribute("interrupt") && !Func.arg_empty())
     report_fatal_error(
         "Functions with the interrupt attribute cannot have arguments!");
 
@@ -4207,7 +4201,7 @@ MipsTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   // the sret argument into $v0 for the return. We saved the argument into
   // a virtual register in the entry block, so now we copy the value out
   // and into $v0.
-  if (MF.getFunction()->hasStructRetAttr()) {
+  if (MF.getFunction().hasStructRetAttr()) {
     EVT SRetTy = getPointerTy(DAG.getDataLayout(), ABI.StackAddrSpace());
     unsigned V0 = ABI.IsN64() ? Mips::V0_64 : Mips::V0;
     if (ABI.IsCheriPureCap()) {
@@ -4236,7 +4230,7 @@ MipsTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     return DAG.getNode(MipsISD::CapRet, DL, MVT::Other, RetOps);
 
   // ISRs must use "eret".
-  if (DAG.getMachineFunction().getFunction()->hasFnAttribute("interrupt"))
+  if (DAG.getMachineFunction().getFunction().hasFnAttribute("interrupt"))
     return LowerInterruptReturn(RetOps, DL, DAG);
 
   // Standard return on Mips is a "jr $ra"
@@ -4483,13 +4477,17 @@ MipsTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
     case 'c': // register suitable for indirect jump
       if (VT == MVT::i32)
         return std::make_pair((unsigned)Mips::T9, &Mips::GPR32RegClass);
-      assert(VT == MVT::i64 && "Unexpected type.");
-      return std::make_pair((unsigned)Mips::T9_64, &Mips::GPR64RegClass);
-    case 'l': // register suitable for indirect jump
+      if (VT == MVT::i64)
+        return std::make_pair((unsigned)Mips::T9_64, &Mips::GPR64RegClass);
+      // This will generate an error message
+      return std::make_pair(0U, nullptr);
+    case 'l': // use the `lo` register to store values
+              // that are no bigger than a word
       if (VT == MVT::i32)
         return std::make_pair((unsigned)Mips::LO0, &Mips::LO32RegClass);
       return std::make_pair((unsigned)Mips::LO0_64, &Mips::LO64RegClass);
-    case 'x': // register suitable for indirect jump
+    case 'x': // use the concatenated `hi` and `lo` registers
+              // to store doubleword values
       // Fixme: Not triggering the use of both hi and low
       // This will generate an error message
       return std::make_pair(0U, nullptr);
@@ -4745,7 +4743,7 @@ void MipsTargetLowering::copyByValRegs(
 }
 
 // Copy byVal arg to registers and stack.
-SDValue MipsTargetLowering::passByValArg(
+void MipsTargetLowering::passByValArg(
     SDValue Chain, const SDLoc &DL,
     std::deque<std::pair<unsigned, SDValue>> &RegsToPass,
     SmallVectorImpl<SDValue> &MemOpChains, SDValue StackPtr,
@@ -4779,7 +4777,7 @@ SDValue MipsTargetLowering::passByValArg(
 
     // Return if the struct has been fully copied.
     if (ByValSizeInBytes == OffsetInBytes)
-      return Chain;
+      return;
 
     // Copy the remainder of the byval argument with sub-word loads and shifts.
     if (LeftoverBytes) {
@@ -4824,7 +4822,7 @@ SDValue MipsTargetLowering::passByValArg(
 
       unsigned ArgReg = ArgRegs[FirstReg + I];
       RegsToPass.push_back(std::make_pair(ArgReg, Val));
-      return Chain;
+      return;
     }
   }
 
@@ -4832,13 +4830,12 @@ SDValue MipsTargetLowering::passByValArg(
   unsigned MemCpySize = ByValSizeInBytes - OffsetInBytes;
   SDValue Src = DAG.getPointerAdd(DL, Arg, OffsetInBytes);
   SDValue Dst = DAG.getPointerAdd(DL, StackPtr, VA.getLocMemOffset());
-  Chain = DAG.getMemcpy(
-      Chain, DL, Dst, Src, DAG.getConstant(MemCpySize, DL, PtrTy), Alignment,
-      /*isVolatile=*/false, /*AlwaysInline=*/false,
-      /*isTailCall=*/false, MachinePointerInfo(), MachinePointerInfo());
+  Chain = DAG.getMemcpy(Chain, DL, Dst, Src,
+                        DAG.getConstant(MemCpySize, DL, PtrTy),
+                        Alignment, /*isVolatile=*/false, /*AlwaysInline=*/false,
+                        /*isTailCall=*/false,
+                        MachinePointerInfo(), MachinePointerInfo());
   MemOpChains.push_back(Chain);
-
-  return Chain;
 }
 
 void MipsTargetLowering::writeVarArgRegs(std::vector<SDValue> &OutChains,

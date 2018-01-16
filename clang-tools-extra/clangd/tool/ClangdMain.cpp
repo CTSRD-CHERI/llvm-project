@@ -10,6 +10,8 @@
 #include "ClangdLSPServer.h"
 #include "JSONRPCDispatcher.h"
 #include "Path.h"
+#include "Trace.h"
+#include "index/SymbolYAML.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
@@ -22,6 +24,27 @@
 
 using namespace clang;
 using namespace clang::clangd;
+
+namespace {
+enum class PCHStorageFlag { Disk, Memory };
+
+// Build an in-memory static index for global symbols from a YAML-format file.
+// The size of global symbols should be relatively small, so that all symbols
+// can be managed in memory.
+std::unique_ptr<SymbolIndex> BuildStaticIndex(llvm::StringRef YamlSymbolFile) {
+  auto Buffer = llvm::MemoryBuffer::getFile(YamlSymbolFile);
+  if (!Buffer) {
+    llvm::errs() << "Can't open " << YamlSymbolFile << "\n";
+    return nullptr;
+  }
+  auto Slab = SymbolFromYAML(Buffer.get()->getBuffer());
+  SymbolSlab::Builder SymsBuilder;
+  for (auto Sym : Slab)
+    SymsBuilder.insert(Sym);
+
+  return MemIndex::build(std::move(SymsBuilder).build());
+}
+} // namespace
 
 static llvm::cl::opt<Path> CompileCommandsDir(
     "compile-commands-dir",
@@ -37,8 +60,31 @@ static llvm::cl::opt<unsigned>
 static llvm::cl::opt<bool> EnableSnippets(
     "enable-snippets",
     llvm::cl::desc(
-        "Present snippet completions instead of plaintext completions"),
-    llvm::cl::init(false));
+        "Present snippet completions instead of plaintext completions. "
+        "This also enables code pattern results." /* FIXME: should it? */),
+    llvm::cl::init(clangd::CodeCompleteOptions().EnableSnippets));
+
+// FIXME: Flags are the wrong mechanism for user preferences.
+// We should probably read a dotfile or similar.
+static llvm::cl::opt<bool> IncludeIneligibleResults(
+    "include-ineligible-results",
+    llvm::cl::desc(
+        "Include ineligible completion results (e.g. private members)"),
+    llvm::cl::init(clangd::CodeCompleteOptions().IncludeIneligibleResults),
+    llvm::cl::Hidden);
+
+static llvm::cl::opt<bool>
+    PrettyPrint("pretty", llvm::cl::desc("Pretty-print JSON output"),
+                llvm::cl::init(false));
+
+static llvm::cl::opt<PCHStorageFlag> PCHStorage(
+    "pch-storage",
+    llvm::cl::desc("Storing PCHs in memory increases memory usages, but may "
+                   "improve performance"),
+    llvm::cl::values(
+        clEnumValN(PCHStorageFlag::Disk, "disk", "store PCHs on disk"),
+        clEnumValN(PCHStorageFlag::Memory, "memory", "store PCHs in memory")),
+    llvm::cl::init(PCHStorageFlag::Disk));
 
 static llvm::cl::opt<bool> RunSynchronously(
     "run-synchronously",
@@ -56,6 +102,28 @@ static llvm::cl::opt<Path> InputMirrorFile(
         "Mirror all LSP input to the specified file. Useful for debugging."),
     llvm::cl::init(""), llvm::cl::Hidden);
 
+static llvm::cl::opt<Path> TraceFile(
+    "trace",
+    llvm::cl::desc(
+        "Trace internal events and timestamps in chrome://tracing JSON format"),
+    llvm::cl::init(""), llvm::cl::Hidden);
+
+static llvm::cl::opt<bool> EnableIndexBasedCompletion(
+    "enable-index-based-completion",
+    llvm::cl::desc(
+        "Enable index-based global code completion (experimental). Clangd will "
+        "use index built from symbols in opened files"),
+    llvm::cl::init(false), llvm::cl::Hidden);
+
+static llvm::cl::opt<Path> YamlSymbolFile(
+    "yaml-symbol-file",
+    llvm::cl::desc(
+        "YAML-format global symbol file to build the static index. Clangd will "
+        "use the static index for global code completion.\n"
+        "WARNING: This option is experimental only, and will be removed "
+        "eventually. Don't rely on it."),
+    llvm::cl::init(""), llvm::cl::Hidden);
+
 int main(int argc, char *argv[]) {
   llvm::cl::ParseCommandLineOptions(argc, argv, "clangd");
 
@@ -70,7 +138,7 @@ int main(int argc, char *argv[]) {
   if (RunSynchronously)
     WorkerThreadsCount = 0;
 
-  /// Validate command line arguments.
+  // Validate command line arguments.
   llvm::Optional<llvm::raw_fd_ostream> InputMirrorStream;
   if (!InputMirrorFile.empty()) {
     std::error_code EC;
@@ -82,14 +150,34 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  // Setup tracing facilities.
+  llvm::Optional<llvm::raw_fd_ostream> TraceStream;
+  std::unique_ptr<trace::EventTracer> Tracer;
+  if (!TraceFile.empty()) {
+    std::error_code EC;
+    TraceStream.emplace(TraceFile, /*ref*/ EC, llvm::sys::fs::F_RW);
+    if (EC) {
+      TraceFile.reset();
+      llvm::errs() << "Error while opening trace file: " << EC.message();
+    } else {
+      Tracer = trace::createJSONTracer(*TraceStream, PrettyPrint);
+    }
+  }
+
+  llvm::Optional<trace::Session> TracingSession;
+  if (Tracer)
+    TracingSession.emplace(*Tracer);
+
   llvm::raw_ostream &Outs = llvm::outs();
   llvm::raw_ostream &Logs = llvm::errs();
   JSONOutput Out(Outs, Logs,
-                 InputMirrorStream ? InputMirrorStream.getPointer() : nullptr);
+                 InputMirrorStream ? InputMirrorStream.getPointer() : nullptr,
+                 PrettyPrint);
+
+  clangd::LoggingSession LoggingSession(Out);
 
   // If --compile-commands-dir arg was invoked, check value and override default
   // path.
-  namespace path = llvm::sys::path;
   llvm::Optional<Path> CompileCommandsDirPath;
 
   if (CompileCommandsDir.empty()) {
@@ -104,15 +192,34 @@ int main(int argc, char *argv[]) {
     CompileCommandsDirPath = CompileCommandsDir;
   }
 
+  bool StorePreamblesInMemory;
+  switch (PCHStorage) {
+  case PCHStorageFlag::Memory:
+    StorePreamblesInMemory = true;
+    break;
+  case PCHStorageFlag::Disk:
+    StorePreamblesInMemory = false;
+    break;
+  }
+
   llvm::Optional<StringRef> ResourceDirRef = None;
   if (!ResourceDir.empty())
     ResourceDirRef = ResourceDir;
 
-  /// Change stdin to binary to not lose \r\n on windows.
+  // Change stdin to binary to not lose \r\n on windows.
   llvm::sys::ChangeStdinToBinary();
 
-  /// Initialize and run ClangdLSPServer.
-  ClangdLSPServer LSPServer(Out, WorkerThreadsCount, EnableSnippets,
-                            ResourceDirRef, CompileCommandsDirPath);
-  LSPServer.run(std::cin);
+  std::unique_ptr<SymbolIndex> StaticIdx;
+  if (EnableIndexBasedCompletion && !YamlSymbolFile.empty())
+    StaticIdx = BuildStaticIndex(YamlSymbolFile);
+  clangd::CodeCompleteOptions CCOpts;
+  CCOpts.EnableSnippets = EnableSnippets;
+  CCOpts.IncludeIneligibleResults = IncludeIneligibleResults;
+  // Initialize and run ClangdLSPServer.
+  ClangdLSPServer LSPServer(Out, WorkerThreadsCount, StorePreamblesInMemory,
+                            CCOpts, ResourceDirRef, CompileCommandsDirPath,
+                            EnableIndexBasedCompletion, StaticIdx.get());
+  constexpr int NoShutdownRequestErrorCode = 1;
+  llvm::set_thread_name("clangd.main");
+  return LSPServer.run(std::cin) ? 0 : NoShutdownRequestErrorCode;
 }

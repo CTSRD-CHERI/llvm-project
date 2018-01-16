@@ -11,13 +11,13 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "X86TargetMachine.h"
 #include "MCTargetDesc/X86MCTargetDesc.h"
 #include "X86.h"
 #include "X86CallLowering.h"
 #include "X86LegalizerInfo.h"
 #include "X86MacroFusion.h"
 #include "X86Subtarget.h"
-#include "X86TargetMachine.h"
 #include "X86TargetObjectFile.h"
 #include "X86TargetTransformInfo.h"
 #include "llvm/ADT/Optional.h"
@@ -34,6 +34,7 @@
 #include "llvm/CodeGen/GlobalISel/RegBankSelect.h"
 #include "llvm/CodeGen/MachineScheduler.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/TargetLoweringObjectFile.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/DataLayout.h"
@@ -43,7 +44,6 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/TargetRegistry.h"
-#include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Target/TargetOptions.h"
 #include <memory>
 #include <string>
@@ -58,8 +58,10 @@ namespace llvm {
 
 void initializeWinEHStatePassPass(PassRegistry &);
 void initializeFixupLEAPassPass(PassRegistry &);
+void initializeX86CallFrameOptimizationPass(PassRegistry &);
 void initializeX86CmovConverterPassPass(PassRegistry &);
 void initializeX86ExecutionDepsFixPass(PassRegistry &);
+void initializeX86DomainReassignmentPass(PassRegistry &);
 
 } // end namespace llvm
 
@@ -74,8 +76,10 @@ extern "C" void LLVMInitializeX86Target() {
   initializeFixupBWInstPassPass(PR);
   initializeEvexToVexInstPassPass(PR);
   initializeFixupLEAPassPass(PR);
+  initializeX86CallFrameOptimizationPass(PR);
   initializeX86CmovConverterPassPass(PR);
   initializeX86ExecutionDepsFixPass(PR);
+  initializeX86DomainReassignmentPass(PR);
 }
 
 static std::unique_ptr<TargetLoweringObjectFile> createTLOF(const Triple &TT) {
@@ -277,10 +281,9 @@ UseVZeroUpper("x86-use-vzeroupper", cl::Hidden,
 // X86 TTI query.
 //===----------------------------------------------------------------------===//
 
-TargetIRAnalysis X86TargetMachine::getTargetIRAnalysis() {
-  return TargetIRAnalysis([this](const Function &F) {
-    return TargetTransformInfo(X86TTIImpl(this, F));
-  });
+TargetTransformInfo
+X86TargetMachine::getTargetTransformInfo(const Function &F) {
+  return TargetTransformInfo(X86TTIImpl(this, F));
 }
 
 //===----------------------------------------------------------------------===//
@@ -314,6 +317,7 @@ public:
   bool addGlobalInstructionSelect() override;
   bool addILPOpts() override;
   bool addPreISel() override;
+  void addMachineSSAOptimization() override;
   void addPreRegAlloc() override;
   void addPostRegAlloc() override;
   void addPreEmitPass() override;
@@ -407,6 +411,10 @@ void X86PassConfig::addPreRegAlloc() {
 
   addPass(createX86WinAllocaExpander());
 }
+void X86PassConfig::addMachineSSAOptimization() {
+  addPass(createX86DomainReassignmentPass());
+  TargetPassConfig::addMachineSSAOptimization();
+}
 
 void X86PassConfig::addPostRegAlloc() {
   addPass(createX86FloatingPointStackifierPass());
@@ -417,6 +425,8 @@ void X86PassConfig::addPreSched2() { addPass(createX86ExpandPseudoPass()); }
 void X86PassConfig::addPreEmitPass() {
   if (getOptLevel() != CodeGenOpt::None)
     addPass(new X86ExecutionDepsFix());
+
+  addPass(createX86IndirectBranchTrackingPass());
 
   if (UseVZeroUpper)
     addPass(createX86IssueVZeroUpperPass());

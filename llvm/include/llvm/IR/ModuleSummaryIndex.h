@@ -148,11 +148,15 @@ public:
     /// In combined summary, indicate that the global value is live.
     unsigned Live : 1;
 
+    /// Indicates that the linker resolved the symbol to a definition from
+    /// within the same linkage unit.
+    unsigned DSOLocal : 1;
+
     /// Convenience Constructors
     explicit GVFlags(GlobalValue::LinkageTypes Linkage,
-                     bool NotEligibleToImport, bool Live)
+                     bool NotEligibleToImport, bool Live, bool IsLocal)
         : Linkage(Linkage), NotEligibleToImport(NotEligibleToImport),
-          Live(Live) {}
+          Live(Live), DSOLocal(IsLocal) {}
   };
 
 private:
@@ -229,6 +233,10 @@ public:
 
   void setLive(bool Live) { Flags.Live = Live; }
 
+  void setDSOLocal(bool Local) { Flags.DSOLocal = Local; }
+
+  bool isDSOLocal() const { return Flags.DSOLocal; }
+
   /// Flag that this global value cannot be imported.
   void setNotEligibleToImport() { Flags.NotEligibleToImport = true; }
 
@@ -238,6 +246,7 @@ public:
   /// If this is an alias summary, returns the summary of the aliased object (a
   /// global variable or function), otherwise returns itself.
   GlobalValueSummary *getBaseObject();
+  const GlobalValueSummary *getBaseObject() const;
 
   friend class ModuleSummaryIndex;
   friend void computeDeadSymbols(class ModuleSummaryIndex &,
@@ -247,10 +256,14 @@ public:
 /// \brief Alias summary information.
 class AliasSummary : public GlobalValueSummary {
   GlobalValueSummary *AliaseeSummary;
+  // AliaseeGUID is only set and accessed when we are building a combined index
+  // via the BitcodeReader.
+  GlobalValue::GUID AliaseeGUID;
 
 public:
   AliasSummary(GVFlags Flags)
-      : GlobalValueSummary(AliasKind, Flags, ArrayRef<ValueInfo>{}) {}
+      : GlobalValueSummary(AliasKind, Flags, ArrayRef<ValueInfo>{}),
+        AliaseeSummary(nullptr), AliaseeGUID(0) {}
 
   /// Check if this is an alias summary.
   static bool classof(const GlobalValueSummary *GVS) {
@@ -258,6 +271,7 @@ public:
   }
 
   void setAliasee(GlobalValueSummary *Aliasee) { AliaseeSummary = Aliasee; }
+  void setAliaseeGUID(GlobalValue::GUID GUID) { AliaseeGUID = GUID; }
 
   const GlobalValueSummary &getAliasee() const {
     assert(AliaseeSummary && "Unexpected missing aliasee summary");
@@ -268,7 +282,17 @@ public:
     return const_cast<GlobalValueSummary &>(
                          static_cast<const AliasSummary *>(this)->getAliasee());
   }
+  const GlobalValue::GUID &getAliaseeGUID() const {
+    assert(AliaseeGUID && "Unexpected missing aliasee GUID");
+    return AliaseeGUID;
+  }
 };
+
+const inline GlobalValueSummary *GlobalValueSummary::getBaseObject() const {
+  if (auto *AS = dyn_cast<AliasSummary>(this))
+    return &AS->getAliasee();
+  return this;
+}
 
 inline GlobalValueSummary *GlobalValueSummary::getBaseObject() {
   if (auto *AS = dyn_cast<AliasSummary>(this))
@@ -743,7 +767,8 @@ public:
   static std::string getGlobalNameForLocal(StringRef Name, ModuleHash ModHash) {
     SmallString<256> NewName(Name);
     NewName += ".llvm.";
-    NewName += utostr(ModHash[0]); // Take the first 32 bits
+    NewName += utostr((uint64_t(ModHash[0]) << 32) |
+                      ModHash[1]); // Take the first 64 bits
     return NewName.str();
   }
 

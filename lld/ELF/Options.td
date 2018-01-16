@@ -5,7 +5,6 @@ include "llvm/Option/OptParser.td"
 class F<string name>: Flag<["--", "-"], name>;
 class J<string name>: Joined<["--", "-"], name>;
 class S<string name>: Separate<["--", "-"], name>;
-class JS<string name>: JoinedOrSeparate<["--", "-"], name>;
 
 multiclass Eq<string name> {
   def "": Separate<["--", "-"], name>;
@@ -121,6 +120,9 @@ defm filter: Eq<"filter">,
 defm fini: Eq<"fini">,
   HelpText<"Specify a finalizer function">, MetaVarName<"<symbol>">;
 
+def fix_cortex_a53_843419: F<"fix-cortex-a53-843419">,
+  HelpText<"Apply fixes for AArch64 Cortex-A53 erratum 843419">;
+
 def full_shutdown : F<"full-shutdown">,
   HelpText<"Perform a full shutdown instead of calling _exit">;
 
@@ -143,6 +145,12 @@ def icf_all: F<"icf=all">, HelpText<"Enable identical code folding">;
 
 def icf_none: F<"icf=none">, HelpText<"Disable identical code folding">;
 
+def ignore_function_address_equality: F<"ignore-function-address-equality">,
+  HelpText<"lld can break the address equality of functions">;
+
+def ignore_data_address_equality: F<"ignore-data-address-equality">,
+  HelpText<"lld can break the address equality of data">;
+
 defm image_base : Eq<"image-base">, HelpText<"Set the base address">;
 
 defm init: Eq<"init">, HelpText<"Specify an initializer function">,
@@ -157,6 +165,9 @@ def lto_O: J<"lto-O">, MetaVarName<"<opt-level>">,
 def m: JoinedOrSeparate<["-"], "m">, HelpText<"Set target emulation">;
 
 defm Map: Eq<"Map">, HelpText<"Print a link map to the specified file">;
+
+def merge_exidx_entries: F<"merge-exidx-entries">,
+  HelpText<"Enable merging .ARM.exidx entries">;
 
 def nostdlib: F<"nostdlib">,
   HelpText<"Only search directories specified on the command line">;
@@ -191,6 +202,9 @@ def no_gdb_index: F<"no-gdb-index">,
 def no_gnu_unique: F<"no-gnu-unique">,
   HelpText<"Disable STB_GNU_UNIQUE symbol binding">;
 
+def no_merge_exidx_entries: F<"no-merge-exidx-entries">,
+  HelpText<"Disable merging .ARM.exidx entries">;
+
 def no_threads: F<"no-threads">,
   HelpText<"Do not run the linker multi-threaded">;
 
@@ -201,6 +215,12 @@ def noinhibit_exec: F<"noinhibit-exec">,
   HelpText<"Retain the executable output file whenever it is still usable">;
 
 def nopie: F<"nopie">, HelpText<"Do not create a position independent executable">;
+
+def no_omagic: Flag<["--"], "no-omagic">, MetaVarName<"<magic>">,
+  HelpText<"Do not set the text data sections to be writable">;
+
+def no_print_gc_sections: F<"no-print-gc-sections">,
+  HelpText<"Do not list removed unused sections">;
 
 def no_rosegment: F<"no-rosegment">,
   HelpText<"Do not put read-only non-executable sections in their own segment">;
@@ -219,6 +239,12 @@ def oformat: Separate<["--"], "oformat">, MetaVarName<"<format>">,
 
 def omagic: Flag<["--"], "omagic">, MetaVarName<"<magic>">,
   HelpText<"Set the text and data sections to be readable and writable">;
+
+defm orphan_handling: Eq<"orphan-handling">,
+  HelpText<"Control how orphan sections are handled when linker script used">;
+
+def pack_dyn_relocs_eq: J<"pack-dyn-relocs=">, MetaVarName<"<format>">,
+  HelpText<"Pack dynamic relocations in the given format (none or android)">;
 
 def pie: F<"pie">, HelpText<"Create a position independent executable">;
 
@@ -367,7 +393,7 @@ def mllvm: S<"mllvm">;
 def opt_remarks_filename: Separate<["--"], "opt-remarks-filename">,
   HelpText<"YAML output file for optimization remarks">;
 def opt_remarks_with_hotness: Flag<["--"], "opt-remarks-with-hotness">,
-  HelpText<"Include hotness informations in the optimization remarks file">;
+  HelpText<"Include hotness information in the optimization remarks file">;
 defm plugin_opt: Eq<"plugin-opt">,
   HelpText<"specifies LTO options for compatibility with GNU linkers">;
 def save_temps: F<"save-temps">;
@@ -392,9 +418,11 @@ def allow_shlib_undefined: F<"allow-shlib-undefined">;
 def cref: F<"cref">;
 def detect_odr_violations: F<"detect-odr-violations">;
 def g: Flag<["-"], "g">;
+def long_plt: F<"long-plt">;
 def no_add_needed: F<"no-add-needed">;
 def no_allow_shlib_undefined: F<"no-allow-shlib-undefined">;
 def no_copy_dt_needed_entries: F<"no-copy-dt-needed-entries">;
+def no_ctors_in_init_array: F<"no-ctors-in-init-array">;
 def no_keep_memory: F<"no-keep-memory">;
 def no_mmap_output_file: F<"no-mmap-output-file">;
 def no_warn_common: F<"no-warn-common">;

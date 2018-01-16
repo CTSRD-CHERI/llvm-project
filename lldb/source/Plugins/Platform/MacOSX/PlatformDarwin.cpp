@@ -1132,28 +1132,33 @@ bool PlatformDarwin::ARMGetSupportedArchitectureAtIndex(uint32_t idx,
   return false;
 }
 
+// Return a directory path like /Applications/Xcode.app/Contents/Developer
 const char *PlatformDarwin::GetDeveloperDirectory() {
   std::lock_guard<std::mutex> guard(m_mutex);
   if (m_developer_directory.empty()) {
     bool developer_dir_path_valid = false;
     char developer_dir_path[PATH_MAX];
     FileSpec temp_file_spec;
+
+    // Get the lldb framework's file path, and if it exists, truncate some
+    // components to only the developer directory path.
     if (HostInfo::GetLLDBPath(ePathTypeLLDBShlibDir, temp_file_spec)) {
       if (temp_file_spec.GetPath(developer_dir_path,
                                  sizeof(developer_dir_path))) {
+        // e.g. /Applications/Xcode.app/Contents/SharedFrameworks/LLDB.framework
         char *shared_frameworks =
             strstr(developer_dir_path, "/SharedFrameworks/LLDB.framework");
         if (shared_frameworks) {
-          ::snprintf(shared_frameworks,
-                     sizeof(developer_dir_path) -
-                         (shared_frameworks - developer_dir_path),
-                     "/Developer");
+          shared_frameworks[0] = '\0';  // truncate developer_dir_path at this point
+          strncat (developer_dir_path, "/Developer", sizeof (developer_dir_path) - 1); // add /Developer on
           developer_dir_path_valid = true;
         } else {
-          char *lib_priv_frameworks = strstr(
-              developer_dir_path, "/Library/PrivateFrameworks/LLDB.framework");
-          if (lib_priv_frameworks) {
-            *lib_priv_frameworks = '\0';
+          // e.g. /Applications/Xcode.app/Contents/Developer/Toolchains/iOS11.2.xctoolchain/System/Library/PrivateFrameworks/LLDB.framework
+          char *developer_toolchains =
+            strstr(developer_dir_path, "/Contents/Developer/Toolchains/");
+          if (developer_toolchains) {
+            developer_toolchains += sizeof ("/Contents/Developer") - 1;
+            developer_toolchains[0] = '\0'; // truncate developer_dir_path at this point
             developer_dir_path_valid = true;
           }
         }
@@ -1168,7 +1173,7 @@ const char *PlatformDarwin::GetDeveloperDirectory() {
       xcode_dir_path.append("/usr/share/xcode-select/xcode_dir_path");
       temp_file_spec.SetFile(xcode_dir_path, false);
       auto dir_buffer =
-          DataBufferLLVM::CreateFromPath(temp_file_spec.GetPath(), true);
+          DataBufferLLVM::CreateFromPath(temp_file_spec.GetPath());
       if (dir_buffer && dir_buffer->GetByteSize() > 0) {
         llvm::StringRef path_ref(dir_buffer->GetChars());
         // Trim tailing newlines and make sure there is enough room for a null
@@ -1277,14 +1282,8 @@ PlatformDarwin::GetResumeCountForLaunchInfo(ProcessLaunchInfo &launch_info) {
     // /bin/sh re-exec's itself as /bin/bash requiring another resume.
     // But it only does this if the COMMAND_MODE environment variable
     // is set to "legacy".
-    const char **envp =
-        launch_info.GetEnvironmentEntries().GetConstArgumentVector();
-    if (envp != NULL) {
-      for (int i = 0; envp[i] != NULL; i++) {
-        if (strcmp(envp[i], "COMMAND_MODE=legacy") == 0)
-          return 2;
-      }
-    }
+    if (launch_info.GetEnvironment().lookup("COMMAND_MODE") == "legacy")
+      return 2;
     return 1;
   } else if (strcmp(shell_name, "csh") == 0 ||
              strcmp(shell_name, "tcsh") == 0 ||
@@ -1662,25 +1661,13 @@ bool PlatformDarwin::GetOSVersion(uint32_t &major, uint32_t &minor,
   if (process && strstr(GetPluginName().GetCString(), "-simulator")) {
     lldb_private::ProcessInstanceInfo proc_info;
     if (Host::GetProcessInfo(process->GetID(), proc_info)) {
-      Args &env = proc_info.GetEnvironmentEntries();
-      const size_t n = env.GetArgumentCount();
-      const llvm::StringRef k_runtime_version("SIMULATOR_RUNTIME_VERSION=");
-      const llvm::StringRef k_dyld_root_path("DYLD_ROOT_PATH=");
-      std::string dyld_root_path;
+      const Environment &env = proc_info.GetEnvironment();
 
-      for (size_t i = 0; i < n; ++i) {
-        const char *env_cstr = env.GetArgumentAtIndex(i);
-        if (env_cstr) {
-          llvm::StringRef env_str(env_cstr);
-          if (env_str.consume_front(k_runtime_version)) {
-            if (Args::StringToVersion(env_str, major, minor, update))
-              return true;
-          } else if (env_str.consume_front(k_dyld_root_path)) {
-            dyld_root_path = env_str;
-          }
-        }
-      }
+      if (Args::StringToVersion(env.lookup("SIMULATOR_RUNTIME_VERSION"), major,
+                                minor, update))
+        return true;
 
+      std::string dyld_root_path = env.lookup("DYLD_ROOT_PATH");
       if (!dyld_root_path.empty()) {
         dyld_root_path += "/System/Library/CoreServices/SystemVersion.plist";
         ApplePropertyList system_version_plist(dyld_root_path.c_str());
@@ -1751,14 +1738,12 @@ PlatformDarwin::LaunchProcess(lldb_private::ProcessLaunchInfo &launch_info) {
   // LLDB *not* to muck with the OS_ACTIVITY_DT_MODE flag when they
   // specifically want it unset.
   const char *disable_env_var = "IDE_DISABLED_OS_ACTIVITY_DT_MODE";
-  auto &env_vars = launch_info.GetEnvironmentEntries();
-  if (!env_vars.ContainsEnvironmentVariable(llvm::StringRef(disable_env_var))) {
+  auto &env_vars = launch_info.GetEnvironment();
+  if (!env_vars.count(disable_env_var)) {
     // We want to make sure that OS_ACTIVITY_DT_MODE is set so that
     // we get os_log and NSLog messages mirrored to the target process
     // stderr.
-    if (!env_vars.ContainsEnvironmentVariable(
-            llvm::StringRef("OS_ACTIVITY_DT_MODE")))
-      env_vars.AppendArgument(llvm::StringRef("OS_ACTIVITY_DT_MODE=enable"));
+    env_vars.try_emplace("OS_ACTIVITY_DT_MODE", "enable");
   }
 
   // Let our parent class do the real launching.

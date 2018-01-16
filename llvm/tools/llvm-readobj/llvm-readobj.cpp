@@ -23,10 +23,9 @@
 #include "Error.h"
 #include "ObjDumper.h"
 #include "WindowsResourceDumper.h"
-#include "llvm/DebugInfo/CodeView/TypeTableBuilder.h"
+#include "llvm/DebugInfo/CodeView/MergingTypeTableBuilder.h"
 #include "llvm/Object/Archive.h"
 #include "llvm/Object/COFFImportFile.h"
-#include "llvm/Object/ELFObjectFile.h"
 #include "llvm/Object/MachOUniversal.h"
 #include "llvm/Object/ObjectFile.h"
 #include "llvm/Object/WindowsResource.h"
@@ -35,15 +34,13 @@
 #include "llvm/Support/DataTypes.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/ScopedPrinter.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/TargetRegistry.h"
-#include "llvm/Support/TargetSelect.h"
-#include <string>
-#include <system_error>
 
 using namespace llvm;
 using namespace llvm::object;
@@ -354,8 +351,8 @@ struct ReadObjTypeTableBuilder {
       : Allocator(), IDTable(Allocator), TypeTable(Allocator) {}
 
   llvm::BumpPtrAllocator Allocator;
-  llvm::codeview::TypeTableBuilder IDTable;
-  llvm::codeview::TypeTableBuilder TypeTable;
+  llvm::codeview::MergingTypeTableBuilder IDTable;
+  llvm::codeview::MergingTypeTableBuilder TypeTable;
 };
 }
 static ReadObjTypeTableBuilder CVTypes;
@@ -380,19 +377,19 @@ static std::error_code createDumper(const ObjectFile *Obj,
 }
 
 /// @brief Dumps the specified object file.
-static void dumpObject(const ObjectFile *Obj) {
-  ScopedPrinter Writer(outs());
+static void dumpObject(const ObjectFile *Obj, ScopedPrinter &Writer) {
   std::unique_ptr<ObjDumper> Dumper;
   if (std::error_code EC = createDumper(Obj, Writer, Dumper))
     reportError(Obj->getFileName(), EC);
 
   if (opts::Output == opts::LLVM) {
-    outs() << '\n';
-    outs() << "File: " << Obj->getFileName() << "\n";
-    outs() << "Format: " << Obj->getFileFormatName() << "\n";
-    outs() << "Arch: " << Triple::getArchTypeName(
-                              (llvm::Triple::ArchType)Obj->getArch()) << "\n";
-    outs() << "AddressSize: " << (8 * Obj->getBytesInAddress()) << "bit\n";
+    Writer.startLine() << "\n";
+    Writer.printString("File", Obj->getFileName());
+    Writer.printString("Format", Obj->getFileFormatName());
+    Writer.printString("Arch", Triple::getArchTypeName(
+                                   (llvm::Triple::ArchType)Obj->getArch()));
+    Writer.printString("AddressSize",
+                       formatv("{0}bit", 8 * Obj->getBytesInAddress()));
     Dumper->printLoadName();
   }
 
@@ -482,7 +479,7 @@ static void dumpObject(const ObjectFile *Obj) {
 }
 
 /// @brief Dumps each object file in \a Arc;
-static void dumpArchive(const Archive *Arc) {
+static void dumpArchive(const Archive *Arc, ScopedPrinter &Writer) {
   Error Err = Error::success();
   for (auto &Child : Arc->children(Err)) {
     Expected<std::unique_ptr<Binary>> ChildOrErr = Child.getAsBinary();
@@ -493,9 +490,9 @@ static void dumpArchive(const Archive *Arc) {
       continue;
     }
     if (ObjectFile *Obj = dyn_cast<ObjectFile>(&*ChildOrErr.get()))
-      dumpObject(Obj);
+      dumpObject(Obj, Writer);
     else if (COFFImportFile *Imp = dyn_cast<COFFImportFile>(&*ChildOrErr.get()))
-      dumpCOFFImportFile(Imp);
+      dumpCOFFImportFile(Imp, Writer);
     else
       reportError(Arc->getFileName(), readobj_error::unrecognized_file_format);
   }
@@ -504,16 +501,17 @@ static void dumpArchive(const Archive *Arc) {
 }
 
 /// @brief Dumps each object file in \a MachO Universal Binary;
-static void dumpMachOUniversalBinary(const MachOUniversalBinary *UBinary) {
+static void dumpMachOUniversalBinary(const MachOUniversalBinary *UBinary,
+                                     ScopedPrinter &Writer) {
   for (const MachOUniversalBinary::ObjectForArch &Obj : UBinary->objects()) {
     Expected<std::unique_ptr<MachOObjectFile>> ObjOrErr = Obj.getAsObjectFile();
     if (ObjOrErr)
-      dumpObject(&*ObjOrErr.get());
+      dumpObject(&*ObjOrErr.get(), Writer);
     else if (auto E = isNotObjectErrorInvalidFileType(ObjOrErr.takeError())) {
       reportError(UBinary->getFileName(), ObjOrErr.takeError());
     }
     else if (Expected<std::unique_ptr<Archive>> AOrErr = Obj.getAsArchive())
-      dumpArchive(&*AOrErr.get());
+      dumpArchive(&*AOrErr.get(), Writer);
   }
 }
 
@@ -528,6 +526,7 @@ static void dumpWindowsResourceFile(WindowsResource *WinRes) {
 
 /// @brief Opens \a File and dumps it.
 static void dumpInput(StringRef File) {
+  ScopedPrinter Writer(outs());
 
   // Attempt to open the binary.
   Expected<OwningBinary<Binary>> BinaryOrErr = createBinary(File);
@@ -536,14 +535,14 @@ static void dumpInput(StringRef File) {
   Binary &Binary = *BinaryOrErr.get().getBinary();
 
   if (Archive *Arc = dyn_cast<Archive>(&Binary))
-    dumpArchive(Arc);
+    dumpArchive(Arc, Writer);
   else if (MachOUniversalBinary *UBinary =
                dyn_cast<MachOUniversalBinary>(&Binary))
-    dumpMachOUniversalBinary(UBinary);
+    dumpMachOUniversalBinary(UBinary, Writer);
   else if (ObjectFile *Obj = dyn_cast<ObjectFile>(&Binary))
-    dumpObject(Obj);
+    dumpObject(Obj, Writer);
   else if (COFFImportFile *Import = dyn_cast<COFFImportFile>(&Binary))
-    dumpCOFFImportFile(Import);
+    dumpCOFFImportFile(Import, Writer);
   else if (WindowsResource *WinRes = dyn_cast<WindowsResource>(&Binary))
     dumpWindowsResourceFile(WinRes);
   else
@@ -570,8 +569,7 @@ int main(int argc, const char *argv[]) {
   if (opts::InputFilenames.size() == 0)
     opts::InputFilenames.push_back("-");
 
-  std::for_each(opts::InputFilenames.begin(), opts::InputFilenames.end(),
-                dumpInput);
+  llvm::for_each(opts::InputFilenames, dumpInput);
 
   if (opts::CodeViewMergedTypes) {
     ScopedPrinter W(outs());

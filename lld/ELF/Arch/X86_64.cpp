@@ -7,11 +7,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Error.h"
 #include "InputFiles.h"
 #include "Symbols.h"
 #include "SyntheticSections.h"
 #include "Target.h"
+#include "lld/Common/ErrorHandler.h"
 #include "llvm/Object/ELF.h"
 #include "llvm/Support/Endian.h"
 
@@ -26,11 +26,11 @@ namespace {
 template <class ELFT> class X86_64 final : public TargetInfo {
 public:
   X86_64();
-  RelExpr getRelExpr(RelType Type, const SymbolBody &S,
+  RelExpr getRelExpr(RelType Type, const Symbol &S,
                      const uint8_t *Loc) const override;
   bool isPicRel(RelType Type) const override;
   void writeGotPltHeader(uint8_t *Buf) const override;
-  void writeGotPlt(uint8_t *Buf, const SymbolBody &S) const override;
+  void writeGotPlt(uint8_t *Buf, const Symbol &S) const override;
   void writePltHeader(uint8_t *Buf) const override;
   void writePlt(uint8_t *Buf, uint64_t GotPltEntryAddr, uint64_t PltEntryAddr,
                 int32_t Index, unsigned RelOff) const override;
@@ -73,7 +73,7 @@ template <class ELFT> X86_64<ELFT>::X86_64() {
 }
 
 template <class ELFT>
-RelExpr X86_64<ELFT>::getRelExpr(RelType Type, const SymbolBody &S,
+RelExpr X86_64<ELFT>::getRelExpr(RelType Type, const Symbol &S,
                                  const uint8_t *Loc) const {
   switch (Type) {
   case R_X86_64_8:
@@ -122,16 +122,16 @@ template <class ELFT> void X86_64<ELFT>::writeGotPltHeader(uint8_t *Buf) const {
 }
 
 template <class ELFT>
-void X86_64<ELFT>::writeGotPlt(uint8_t *Buf, const SymbolBody &S) const {
+void X86_64<ELFT>::writeGotPlt(uint8_t *Buf, const Symbol &S) const {
   // See comments in X86::writeGotPlt.
   write32le(Buf, S.getPltVA() + 6);
 }
 
 template <class ELFT> void X86_64<ELFT>::writePltHeader(uint8_t *Buf) const {
   const uint8_t PltData[] = {
-      0xff, 0x35, 0x00, 0x00, 0x00, 0x00, // pushq GOTPLT+8(%rip)
-      0xff, 0x25, 0x00, 0x00, 0x00, 0x00, // jmp *GOTPLT+16(%rip)
-      0x0f, 0x1f, 0x40, 0x00              // nop
+      0xff, 0x35, 0, 0, 0, 0, // pushq GOTPLT+8(%rip)
+      0xff, 0x25, 0, 0, 0, 0, // jmp *GOTPLT+16(%rip)
+      0x0f, 0x1f, 0x40, 0x00, // nop
   };
   memcpy(Buf, PltData, sizeof(PltData));
   uint64_t GotPlt = InX::GotPlt->getVA();
@@ -145,9 +145,9 @@ void X86_64<ELFT>::writePlt(uint8_t *Buf, uint64_t GotPltEntryAddr,
                             uint64_t PltEntryAddr, int32_t Index,
                             unsigned RelOff) const {
   const uint8_t Inst[] = {
-      0xff, 0x25, 0x00, 0x00, 0x00, 0x00, // jmpq *got(%rip)
-      0x68, 0x00, 0x00, 0x00, 0x00,       // pushq <relocation index>
-      0xe9, 0x00, 0x00, 0x00, 0x00        // jmpq plt[0]
+      0xff, 0x25, 0, 0, 0, 0, // jmpq *got(%rip)
+      0x68, 0, 0, 0, 0,       // pushq <relocation index>
+      0xe9, 0, 0, 0, 0,       // jmpq plt[0]
   };
   memcpy(Buf, Inst, sizeof(Inst));
 
@@ -175,7 +175,7 @@ void X86_64<ELFT>::relaxTlsGdToLe(uint8_t *Loc, RelType Type,
   //   lea x@tpoff,%rax
   const uint8_t Inst[] = {
       0x64, 0x48, 0x8b, 0x04, 0x25, 0x00, 0x00, 0x00, 0x00, // mov %fs:0x0,%rax
-      0x48, 0x8d, 0x80, 0x00, 0x00, 0x00, 0x00              // lea x@tpoff,%rax
+      0x48, 0x8d, 0x80, 0, 0, 0, 0,                         // lea x@tpoff,%rax
   };
   memcpy(Loc - 4, Inst, sizeof(Inst));
 
@@ -198,7 +198,7 @@ void X86_64<ELFT>::relaxTlsGdToIe(uint8_t *Loc, RelType Type,
   //   addq x@tpoff,%rax
   const uint8_t Inst[] = {
       0x64, 0x48, 0x8b, 0x04, 0x25, 0x00, 0x00, 0x00, 0x00, // mov %fs:0x0,%rax
-      0x48, 0x03, 0x05, 0x00, 0x00, 0x00, 0x00              // addq x@tpoff,%rax
+      0x48, 0x03, 0x05, 0, 0, 0, 0,                         // addq x@tpoff,%rax
   };
   memcpy(Loc - 4, Inst, sizeof(Inst));
 
@@ -274,9 +274,9 @@ void X86_64<ELFT>::relaxTlsLdToLe(uint8_t *Loc, RelType Type,
   }
 
   const uint8_t Inst[] = {
-      0x66, 0x66,                                          // .word 0x6666
-      0x66,                                                // .byte 0x66
-      0x64, 0x48, 0x8b, 0x04, 0x25, 0x00, 0x00, 0x00, 0x00 // mov %fs:0,%rax
+      0x66, 0x66,                                           // .word 0x6666
+      0x66,                                                 // .byte 0x66
+      0x64, 0x48, 0x8b, 0x04, 0x25, 0x00, 0x00, 0x00, 0x00, // mov %fs:0,%rax
   };
   memcpy(Loc - 3, Inst, sizeof(Inst));
 }

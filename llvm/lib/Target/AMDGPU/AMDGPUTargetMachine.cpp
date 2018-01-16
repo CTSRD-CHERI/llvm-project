@@ -31,6 +31,7 @@
 #include "llvm/CodeGen/GlobalISel/Legalizer.h"
 #include "llvm/CodeGen/GlobalISel/RegBankSelect.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/TargetLoweringObjectFile.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/Function.h"
@@ -39,7 +40,6 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/TargetRegistry.h"
-#include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/IPO/AlwaysInliner.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
@@ -219,6 +219,16 @@ static ScheduleDAGInstrs *createMinRegScheduler(MachineSchedContext *C) {
     GCNIterativeScheduler::SCHEDULE_MINREGFORCED);
 }
 
+static ScheduleDAGInstrs *
+createIterativeILPMachineScheduler(MachineSchedContext *C) {
+  auto DAG = new GCNIterativeScheduler(C,
+    GCNIterativeScheduler::SCHEDULE_ILP);
+  DAG->addMutation(createLoadClusterDAGMutation(DAG->TII, DAG->TRI));
+  DAG->addMutation(createStoreClusterDAGMutation(DAG->TII, DAG->TRI));
+  DAG->addMutation(createAMDGPUMacroFusionDAGMutation());
+  return DAG;
+}
+
 static MachineSchedRegistry
 R600SchedRegistry("r600", "Run R600's custom scheduler",
                    createR600MachineScheduler);
@@ -242,9 +252,18 @@ GCNMinRegSchedRegistry("gcn-minreg",
   "Run GCN iterative scheduler for minimal register usage (experimental)",
   createMinRegScheduler);
 
+static MachineSchedRegistry
+GCNILPSchedRegistry("gcn-ilp",
+  "Run GCN iterative scheduler for ILP scheduling (experimental)",
+  createIterativeILPMachineScheduler);
+
 static StringRef computeDataLayout(const Triple &TT) {
   if (TT.getArch() == Triple::r600) {
     // 32-bit pointers.
+    if (TT.getEnvironmentName() == "amdgiz" ||
+        TT.getEnvironmentName() == "amdgizcl")
+      return "e-p:32:32-i64:64-v16:16-v24:32-v32:32-v48:64-v96:128"
+             "-v192:256-v256:256-v512:512-v1024:1024-v2048:2048-n32:64-A5";
     return "e-p:32:32-i64:64-v16:16-v24:32-v32:32-v48:64-v96:128"
             "-v192:256-v256:256-v512:512-v1024:1024-v2048:2048-n32:64";
   }
@@ -324,7 +343,7 @@ static ImmutablePass *createAMDGPUExternalAAWrapperPass() {
 }
 
 /// Predicate for Internalize pass.
-bool mustPreserveGV(const GlobalValue &GV) {
+static bool mustPreserveGV(const GlobalValue &GV) {
   if (const Function *F = dyn_cast<Function>(&GV))
     return F->isDeclaration() || AMDGPU::isEntryFunctionCC(F->getCallingConv());
 
@@ -552,10 +571,9 @@ public:
 
 } // end anonymous namespace
 
-TargetIRAnalysis AMDGPUTargetMachine::getTargetIRAnalysis() {
-  return TargetIRAnalysis([this](const Function &F) {
-    return TargetTransformInfo(AMDGPUTTIImpl(this, F));
-  });
+TargetTransformInfo
+AMDGPUTargetMachine::getTargetTransformInfo(const Function &F) {
+  return TargetTransformInfo(AMDGPUTTIImpl(this, F));
 }
 
 void AMDGPUPassConfig::addEarlyCSEOrGVNPass() {
@@ -879,4 +897,3 @@ void GCNPassConfig::addPreEmitPass() {
 TargetPassConfig *GCNTargetMachine::createPassConfig(PassManagerBase &PM) {
   return new GCNPassConfig(*this, PM);
 }
-

@@ -42,6 +42,22 @@ static bool forwardToGCC(const Option &O) {
          !O.hasFlag(options::DriverOption) && !O.hasFlag(options::LinkerInput);
 }
 
+// Switch CPU names not recognized by GNU assembler to a close CPU that it does
+// recognize, instead of a lower march from being picked in the absence of a cpu
+// flag.
+static void normalizeCPUNamesForAssembler(const ArgList &Args,
+                                          ArgStringList &CmdArgs) {
+  if (Arg *A = Args.getLastArg(options::OPT_mcpu_EQ)) {
+    StringRef CPUArg(A->getValue());
+    if (CPUArg.equals_lower("krait"))
+      CmdArgs.push_back("-mcpu=cortex-a15");
+    else if(CPUArg.equals_lower("kryo"))
+      CmdArgs.push_back("-mcpu=cortex-a57");
+    else
+      Args.AddLastArg(CmdArgs, options::OPT_mcpu_EQ);
+  }
+}
+
 void tools::gcc::Common::ConstructJob(Compilation &C, const JobAction &JA,
                                       const InputInfo &Output,
                                       const InputInfoList &Inputs,
@@ -228,7 +244,8 @@ static void linkXRayRuntimeDeps(const ToolChain &TC, const ArgList &Args,
   CmdArgs.push_back("-lrt");
   CmdArgs.push_back("-lm");
 
-  if (TC.getTriple().getOS() != llvm::Triple::FreeBSD)
+  if (TC.getTriple().getOS() != llvm::Triple::FreeBSD &&
+      TC.getTriple().getOS() != llvm::Triple::NetBSD)
     CmdArgs.push_back("-ldl");
 }
 
@@ -282,6 +299,17 @@ static const char *getLDMOption(const llvm::Triple &T, const ArgList &Args) {
   }
 }
 
+static bool getPIE(const ArgList &Args, const toolchains::Linux &ToolChain) {
+  if (Args.hasArg(options::OPT_shared) || Args.hasArg(options::OPT_static))
+    return false;
+
+  Arg *A = Args.getLastArg(options::OPT_pie, options::OPT_no_pie,
+                           options::OPT_nopie);
+  if (!A)
+    return ToolChain.isPIEDefault();
+  return A->getOption().matches(options::OPT_pie);
+}
+
 void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
                                            const InputInfo &Output,
                                            const InputInfoList &Inputs,
@@ -296,9 +324,7 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   const llvm::Triple::ArchType Arch = ToolChain.getArch();
   const bool isAndroid = ToolChain.getTriple().isAndroid();
   const bool IsIAMCU = ToolChain.getTriple().isOSIAMCU();
-  const bool IsPIE =
-      !Args.hasArg(options::OPT_shared) && !Args.hasArg(options::OPT_static) &&
-      (Args.hasArg(options::OPT_pie) || ToolChain.isPIEDefault());
+  const bool IsPIE = getPIE(Args, ToolChain);
   const bool HasCRTBeginEndFiles =
       ToolChain.getTriple().hasEnvironment() ||
       (ToolChain.getTriple().getVendor() != llvm::Triple::MipsTechnologies);
@@ -643,23 +669,16 @@ void tools::gnutools::Assembler::ConstructJob(Compilation &C,
     }
 
     Args.AddLastArg(CmdArgs, options::OPT_march_EQ);
+    normalizeCPUNamesForAssembler(Args, CmdArgs);
 
-    // FIXME: remove krait check when GNU tools support krait cpu
-    // for now replace it with -mcpu=cortex-a15 to avoid a lower
-    // march from being picked in the absence of a cpu flag.
-    Arg *A;
-    if ((A = Args.getLastArg(options::OPT_mcpu_EQ)) &&
-        StringRef(A->getValue()).equals_lower("krait"))
-      CmdArgs.push_back("-mcpu=cortex-a15");
-    else
-      Args.AddLastArg(CmdArgs, options::OPT_mcpu_EQ);
     Args.AddLastArg(CmdArgs, options::OPT_mfpu_EQ);
     break;
   }
   case llvm::Triple::aarch64:
   case llvm::Triple::aarch64_be: {
     Args.AddLastArg(CmdArgs, options::OPT_march_EQ);
-    Args.AddLastArg(CmdArgs, options::OPT_mcpu_EQ);
+    normalizeCPUNamesForAssembler(Args, CmdArgs);
+
     break;
   }
   case llvm::Triple::mips:
@@ -2357,7 +2376,8 @@ void Generic_ELF::addClangTargetOptions(const ArgList &DriverArgs,
       getTriple().getArch() == llvm::Triple::aarch64 ||
       getTriple().getArch() == llvm::Triple::aarch64_be ||
       (getTriple().getOS() == llvm::Triple::Linux &&
-       (!V.isOlderThan(4, 7, 0) || getTriple().isAndroid())) ||
+       ((!GCCInstallation.isValid() || !V.isOlderThan(4, 7, 0)) ||
+        getTriple().isAndroid())) ||
       getTriple().getOS() == llvm::Triple::NaCl ||
       (getTriple().getVendor() == llvm::Triple::MipsTechnologies &&
        !getTriple().hasEnvironment()) ||

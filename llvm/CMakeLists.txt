@@ -2,25 +2,23 @@
 
 cmake_minimum_required(VERSION 3.4.3)
 
-if(POLICY CMP0022)
-  cmake_policy(SET CMP0022 NEW) # automatic when 2.8.12 is required
-endif()
+cmake_policy(SET CMP0022 NEW)
 
-if (POLICY CMP0051)
-  # CMake 3.1 and higher include generator expressions of the form
-  # $<TARGETLIB:obj> in the SOURCES property.  These need to be
-  # stripped everywhere that access the SOURCES property, so we just
-  # defer to the OLD behavior of not including generator expressions
-  # in the output for now.
-  cmake_policy(SET CMP0051 OLD)
-endif()
+cmake_policy(SET CMP0048 NEW)
 
-if(POLICY CMP0057)
-  cmake_policy(SET CMP0057 NEW)
-endif()
+# CMake 3.1 and higher include generator expressions of the form
+# $<TARGETLIB:obj> in the SOURCES property.  These need to be
+# stripped everywhere that access the SOURCES property, so we just
+# defer to the OLD behavior of not including generator expressions
+# in the output for now.
+cmake_policy(SET CMP0051 OLD)
+
+cmake_policy(SET CMP0056 NEW)
+
+cmake_policy(SET CMP0057 NEW)
 
 if(NOT DEFINED LLVM_VERSION_MAJOR)
-  set(LLVM_VERSION_MAJOR 6)
+  set(LLVM_VERSION_MAJOR 7)
 endif()
 if(NOT DEFINED LLVM_VERSION_MINOR)
   set(LLVM_VERSION_MINOR 0)
@@ -30,13 +28,6 @@ if(NOT DEFINED LLVM_VERSION_PATCH)
 endif()
 if(NOT DEFINED LLVM_VERSION_SUFFIX)
   set(LLVM_VERSION_SUFFIX svn)
-endif()
-
-if (POLICY CMP0048)
-  cmake_policy(SET CMP0048 NEW)
-  set(cmake_3_0_PROJ_VERSION
-    VERSION ${LLVM_VERSION_MAJOR}.${LLVM_VERSION_MINOR}.${LLVM_VERSION_PATCH})
-  set(cmake_3_0_LANGUAGES LANGUAGES)
 endif()
 
 if (NOT PACKAGE_VERSION)
@@ -52,9 +43,8 @@ if ((CMAKE_GENERATOR MATCHES "Visual Studio") AND (CMAKE_GENERATOR_TOOLSET STREQ
 endif()
 
 project(LLVM
-  ${cmake_3_0_PROJ_VERSION}
-  ${cmake_3_0_LANGUAGES}
-  C CXX ASM)
+  VERSION ${LLVM_VERSION_MAJOR}.${LLVM_VERSION_MINOR}.${LLVM_VERSION_PATCH}
+  LANGUAGES C CXX ASM)
 
 if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   message(STATUS "No build type selected, default to Debug")
@@ -120,7 +110,7 @@ endif()
 # LLVM_EXTERNAL_${project}_SOURCE_DIR using LLVM_ALL_PROJECTS
 # This allows an easy way of setting up a build directory for llvm and another
 # one for llvm+clang+... using the same sources.
-set(LLVM_ALL_PROJECTS "clang;libcxx;libcxxabi;lldb;compiler-rt;lld;polly")
+set(LLVM_ALL_PROJECTS "clang;libcxx;libcxxabi;lldb;compiler-rt;lld;polly;debuginfo-tests")
 set(LLVM_ENABLE_PROJECTS "" CACHE STRING
 	"Semicolon-separated list of projects to build (${LLVM_ALL_PROJECTS}), or \"all\".")
 if( LLVM_ENABLE_PROJECTS STREQUAL "all" )
@@ -177,6 +167,10 @@ if(LLVM_DEPENDENCY_DEBUGGING)
 endif()
 
 option(LLVM_ENABLE_DAGISEL_COV "Debug: Prints tablegen patterns that were used for selecting" OFF)
+option(LLVM_ENABLE_GISEL_COV "Enable collection of GlobalISel rule coverage" OFF)
+if(LLVM_ENABLE_GISEL_COV)
+  set(LLVM_GISEL_COV_PREFIX "${CMAKE_BINARY_DIR}/gisel-coverage-" CACHE STRING "Provide a filename prefix to collect the GlobalISel rule coverage")
+endif()
 
 # Add path for custom modules
 set(CMAKE_MODULE_PATH
@@ -188,6 +182,9 @@ set(CMAKE_MODULE_PATH
 # Generate a CompilationDatabase (compile_commands.json file) for our build,
 # for use by clang_complete, YouCompleteMe, etc.
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
+
+option(LLVM_INSTALL_BINUTILS_SYMLINKS
+  "Install symlinks from the binutils tool names to the corresponding LLVM tools." OFF)
 
 option(LLVM_INSTALL_UTILS "Include utility binaries in the 'install' target." OFF)
 
@@ -241,7 +238,7 @@ include(CPack)
 # sure that we don't have any stray generated files lying around in the tree
 # (which would end up getting picked up by header search, instead of the correct
 # versions).
-if( CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR AND NOT MSVC_IDE )
+if( CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_CURRENT_BINARY_DIR AND NOT MSVC_IDE )
   message(FATAL_ERROR "In-source builds are not allowed.
 CMake would overwrite the makefiles distributed with LLVM.
 Please create a directory and run cmake from there, passing the path
@@ -354,7 +351,7 @@ set(LLVM_TARGET_ARCH "host"
 
 option(LLVM_ENABLE_TERMINFO "Use terminfo database if available." ON)
 
-option(LLVM_ENABLE_LIBXML2 "Use libxml2 if available." ON)
+set(LLVM_ENABLE_LIBXML2 "ON" CACHE STRING "Use libxml2 if available. Can be ON, OFF, or FORCE_ON")
 
 option(LLVM_ENABLE_LIBEDIT "Use libedit if available." ON)
 
@@ -388,16 +385,12 @@ option(LLVM_ENABLE_LLD "Use lld as C and C++ linker." OFF)
 option(LLVM_ENABLE_PEDANTIC "Compile with pedantic enabled." ON)
 option(LLVM_ENABLE_WERROR "Fail and stop if a warning is triggered." OFF)
 
-option(LLVM_ENABLE_DUMP "Enable dump functions in release builds" OFF)
+option(LLVM_ENABLE_DUMP "Enable dump functions even when assertions are disabled" OFF)
 
 if( NOT uppercase_CMAKE_BUILD_TYPE STREQUAL "DEBUG" )
   option(LLVM_ENABLE_ASSERTIONS "Enable assertions" OFF)
 else()
   option(LLVM_ENABLE_ASSERTIONS "Enable assertions" ON)
-endif()
-
-if( LLVM_ENABLE_ASSERTIONS )
-  set(LLVM_ENABLE_DUMP ON)
 endif()
 
 option(LLVM_ENABLE_EXPENSIVE_CHECKS "Enable expensive checks" OFF)
@@ -685,9 +678,13 @@ foreach(t ${LLVM_TARGETS_TO_BUILD})
 
   list(FIND LLVM_ALL_TARGETS ${t} idx)
   list(FIND LLVM_EXPERIMENTAL_TARGETS_TO_BUILD ${t} idy)
+  # At this point, LLVMBUILDTOOL already checked all the targets passed in
+  # LLVM_TARGETS_TO_BUILD and LLVM_EXPERIMENTAL_TARGETS_TO_BUILD, so
+  # this test just makes sure that any experimental targets were passed via
+  # LLVM_EXPERIMENTAL_TARGETS_TO_BUILD, not LLVM_TARGETS_TO_BUILD.
   if( idx LESS 0 AND idy LESS 0 )
-    message(FATAL_ERROR "The target `${t}' does not exist.
-    It should be one of\n${LLVM_ALL_TARGETS}")
+    message(FATAL_ERROR "The target `${t}' is experimental and must be passed "
+      "via LLVM_EXPERIMENTAL_TARGETS_TO_BUILD.")
   else()
     set(LLVM_ENUM_TARGETS "${LLVM_ENUM_TARGETS}LLVM_TARGET(${t})\n")
   endif()
@@ -762,6 +759,7 @@ configure_file(
 add_custom_target(srpm
   COMMAND cpack -G TGZ --config CPackSourceConfig.cmake -B ${LLVM_SRPM_DIR}/SOURCES
   COMMAND rpmbuild -bs --define '_topdir ${LLVM_SRPM_DIR}' ${LLVM_SRPM_BINARY_SPECFILE})
+set_target_properties(srpm PROPERTIES FOLDER "Misc")
 
 
 # They are not referenced. See set_output_directory().
@@ -804,7 +802,7 @@ endif()
 if(${CMAKE_SYSTEM_NAME} MATCHES "(FreeBSD|DragonFly)")
   # On FreeBSD, /usr/local/* is not used by default. In order to build LLVM
   # with libxml2, iconv.h, etc., we must add /usr/local paths.
-  include_directories("/usr/local/include")
+  include_directories(SYSTEM "/usr/local/include")
   link_directories("/usr/local/lib")
 endif(${CMAKE_SYSTEM_NAME} MATCHES "(FreeBSD|DragonFly)")
 
@@ -990,13 +988,11 @@ if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
   # Installing the headers needs to depend on generating any public
   # tablegen'd headers.
   add_custom_target(llvm-headers DEPENDS intrinsics_gen)
+  set_target_properties(llvm-headers PROPERTIES FOLDER "Misc")
 
   if (NOT CMAKE_CONFIGURATION_TYPES)
-    add_custom_target(install-llvm-headers
-                      DEPENDS llvm-headers
-                      COMMAND "${CMAKE_COMMAND}"
-                              -DCMAKE_INSTALL_COMPONENT=llvm-headers
-                              -P "${CMAKE_BINARY_DIR}/cmake_install.cmake")
+    add_llvm_install_targets(install-llvm-headers
+                             COMPONENT llvm-headers)
   endif()
 endif()
 
@@ -1009,23 +1005,32 @@ if(LLVM_DISTRIBUTION_COMPONENTS)
 
   add_custom_target(distribution)
   add_custom_target(install-distribution)
+  add_custom_target(install-distribution-stripped)
   foreach(target ${LLVM_DISTRIBUTION_COMPONENTS})
     if(TARGET ${target})
       add_dependencies(distribution ${target})
     else()
-      message(FATAL_ERROR "Specified distribution component '${target}' doesn't have a target")
+      message(SEND_ERROR "Specified distribution component '${target}' doesn't have a target")
     endif()
 
     if(TARGET install-${target})
       add_dependencies(install-distribution install-${target})
     else()
-      message(FATAL_ERROR "Specified distribution component '${target}' doesn't have an install target")
+      message(SEND_ERROR "Specified distribution component '${target}' doesn't have an install target")
+    endif()
+
+    if(TARGET install-${target}-stripped)
+      add_dependencies(install-distribution-stripped install-${target}-stripped)
+    else()
+      message(SEND_ERROR "Specified distribution component '${target}' doesn't have an install-stripped target."
+                         " Its installation target creation should be changed to use add_llvm_install_targets,"
+                         " or you should manually create the 'install-${target}-stripped' target.")
     endif()
   endforeach()
 endif()
 
 # This allows us to deploy the Universal CRT DLLs by passing -DCMAKE_INSTALL_UCRT_LIBRARIES=ON to CMake
-if (MSVC)
+if (MSVC AND CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
   include(InstallRequiredSystemLibraries)
 endif()
 

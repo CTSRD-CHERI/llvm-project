@@ -251,7 +251,7 @@ Sema::BuildPossibleImplicitMemberExpr(const CXXScopeSpec &SS,
   case IMA_Field_Uneval_Context:
     Diag(R.getNameLoc(), diag::warn_cxx98_compat_non_static_member_use)
       << R.getLookupNameInfo().getName();
-    // Fall through.
+    LLVM_FALLTHROUGH;
   case IMA_Static:
   case IMA_Abstract:
   case IMA_Mixed_StaticContext:
@@ -384,7 +384,9 @@ CheckExtVectorComponent(Sema &S, QualType baseType, ExprValueKind &VK,
     }
   }
 
-  if (!HalvingSwizzle) {
+  // OpenCL mode requires swizzle length to be in accordance with accepted
+  // sizes. Clang however supports arbitrary lengths for other languages.
+  if (S.getLangOpts().OpenCL && !HalvingSwizzle) {
     unsigned SwizzleLength = CompName->getLength();
 
     if (HexSwizzle)
@@ -1705,7 +1707,7 @@ ExprResult Sema::ActOnMemberAccessExpr(Scope *S, Expr *Base,
 
   // Warn about the explicit constructor calls Microsoft extension.
   if (getLangOpts().MicrosoftExt &&
-      Id.getKind() == UnqualifiedId::IK_ConstructorName)
+      Id.getKind() == UnqualifiedIdKind::IK_ConstructorName)
     Diag(Id.getSourceRange().getBegin(),
          diag::ext_ms_explicit_constructor_call);
 
@@ -1789,7 +1791,9 @@ Sema::BuildFieldReferenceExpr(Expr *BaseExpr, bool IsArrow,
       MemberType = Context.getQualifiedType(MemberType, Combined);
   }
 
-  UnusedPrivateFields.remove(Field);
+  auto *CurMethod = dyn_cast<CXXMethodDecl>(CurContext);
+  if (!(CurMethod && CurMethod->isDefaulted()))
+    UnusedPrivateFields.remove(Field);
 
   ExprResult Base = PerformObjectMemberConversion(BaseExpr, SS.getScopeRep(),
                                                   FoundDecl, Field);

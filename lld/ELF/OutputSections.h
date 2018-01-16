@@ -23,7 +23,7 @@ namespace lld {
 namespace elf {
 
 struct PhdrEntry;
-class SymbolBody;
+class Symbol;
 struct EhSectionPiece;
 class EhInputSection;
 class InputSection;
@@ -33,7 +33,7 @@ class OutputSection;
 template <class ELFT> class ObjFile;
 template <class ELFT> class SharedFile;
 class SharedSymbol;
-class DefinedRegular;
+class Defined;
 
 // This represents a section in an output file.
 // It is composed of multiple InputSections.
@@ -71,8 +71,12 @@ public:
   // it may have a non-null value.
   OutputSection *RelocationSection = nullptr;
 
-  // The following fields correspond to Elf_Shdr members.
+  // Initially this field is the number of InputSections that have been added to
+  // the OutputSection so far. Later on, after a call to assignAddresses, it
+  // corresponds to the Elf_Shdr member.
   uint64_t Size = 0;
+
+  // The following fields correspond to Elf_Shdr members.
   uint64_t Offset = 0;
   uint64_t LMAOffset = 0;
   uint64_t Addr = 0;
@@ -131,43 +135,13 @@ struct Out {
   static OutputSection *FiniArray;
 };
 
-struct SectionKey {
-  StringRef Name;
-  uint64_t Flags;
-  uint32_t Alignment;
-};
 } // namespace elf
 } // namespace lld
 
-namespace llvm {
-template <> struct DenseMapInfo<lld::elf::SectionKey> {
-  static lld::elf::SectionKey getEmptyKey();
-  static lld::elf::SectionKey getTombstoneKey();
-  static unsigned getHashValue(const lld::elf::SectionKey &Val);
-  static bool isEqual(const lld::elf::SectionKey &LHS,
-                      const lld::elf::SectionKey &RHS);
-};
-} // namespace llvm
-
 namespace lld {
 namespace elf {
-// This class knows how to create an output section for a given
-// input section. Output section type is determined by various
-// factors, including input section's sh_flags, sh_type and
-// linker scripts.
-class OutputSectionFactory {
-public:
-  OutputSectionFactory();
-  ~OutputSectionFactory();
-
-  OutputSection *addInputSec(InputSectionBase *IS, StringRef OutsecName);
-
-private:
-  llvm::SmallDenseMap<SectionKey, OutputSection *> Map;
-};
 
 uint64_t getHeaderSize();
-void reportDiscarded(InputSectionBase *IS);
 void sortByOrder(llvm::MutableArrayRef<InputSection *> In,
                  std::function<int(InputSectionBase *S)> Order);
 

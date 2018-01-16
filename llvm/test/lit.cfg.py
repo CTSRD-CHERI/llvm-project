@@ -123,6 +123,7 @@ if config.have_ocamlopt:
     ocamlopt_command = '%s ocamlopt -cclib -L%s -cclib -Wl,-rpath,%s %s' % (
         config.ocamlfind_executable, config.llvm_lib_dir, config.llvm_lib_dir, config.ocaml_flags)
 
+opt_viewer_cmd = '%s %s/tools/opt-viewer/opt-viewer.py' % (sys.executable, config.llvm_src_root)
 
 tools = [
     ToolSubst('%lli', FindTool('lli'), post='.', extra_args=lli_args),
@@ -132,6 +133,7 @@ tools = [
     ToolSubst('%ld64', ld64_cmd, unresolved='ignore'),
     ToolSubst('%ocamlc', ocamlc_command, unresolved='ignore'),
     ToolSubst('%ocamlopt', ocamlopt_command, unresolved='ignore'),
+    ToolSubst('%opt-viewer', opt_viewer_cmd),
 ]
 
 llvm_config.add_cheri_tool_substitutions(['llc', 'opt', 'llvm-mc'])
@@ -145,7 +147,7 @@ if config.clang:
 tools.extend([
     'lli', 'lli-child-target', 'llvm-ar', 'llvm-as', 'llvm-bcanalyzer', 'llvm-config', 'llvm-cov',
     'llvm-cxxdump', 'llvm-cvtres', 'llvm-diff', 'llvm-dis', 'llvm-dsymutil',
-    'llvm-dwarfdump', 'llvm-extract', 'llvm-isel-fuzzer', 'llvm-lib',
+    'llvm-dwarfdump', 'llvm-extract', 'llvm-isel-fuzzer', 'llvm-opt-fuzzer', 'llvm-lib',
     'llvm-link', 'llvm-lto', 'llvm-lto2', 'llvm-mc', 'llvm-mcmarkup',
     'llvm-modextract', 'llvm-nm', 'llvm-objcopy', 'llvm-objdump',
     'llvm-pdbutil', 'llvm-profdata', 'llvm-ranlib', 'llvm-readobj',
@@ -175,6 +177,10 @@ for arch in config.targets_to_build.split():
     config.available_features.add(arch.lower() + '-registered-target')
 
 # Features
+known_arches = ["x86_64", "mips64", "ppc64", "aarch64"]
+if (config.host_ldflags.find("-m32") < 0
+    and any(config.llvm_host_triple.startswith(x) for x in known_arches)):
+  config.available_features.add("llvm-64-bits")
 
 # Others/can-execute.txt
 if sys.platform not in ['win32']:
@@ -192,8 +198,38 @@ if loadable_module:
     config.available_features.add('loadable_module')
 
 # Static libraries are not built if BUILD_SHARED_LIBS is ON.
-if not config.build_shared_libs:
+if not config.build_shared_libs and not config.link_llvm_dylib:
     config.available_features.add('static-libs')
+
+def have_cxx_shared_library():
+    readobj_exe = lit.util.which('llvm-readobj', config.llvm_tools_dir)
+    if not readobj_exe:
+        print('llvm-readobj not found')
+        return False
+
+    try:
+        readobj_cmd = subprocess.Popen(
+            [readobj_exe, '-needed-libs', readobj_exe], stdout=subprocess.PIPE)
+    except OSError:
+        print('could not exec llvm-readobj')
+        return False
+
+    readobj_out = readobj_cmd.stdout.read().decode('ascii')
+    readobj_cmd.wait()
+
+    regex = re.compile(r'(libc\+\+|libstdc\+\+|msvcp).*\.(so|dylib|dll)')
+    needed_libs = False
+    for line in readobj_out.splitlines():
+        if 'NeededLibraries [' in line:
+            needed_libs = True
+        if ']' in line:
+            needed_libs = False
+        if needed_libs and regex.search(line.lower()):
+            return True
+    return False
+
+if have_cxx_shared_library():
+    config.available_features.add('cxx-shared-library')
 
 # Direct object generation
 if not 'hexagon' in config.target_triple:
@@ -289,3 +325,6 @@ if config.have_libxar:
 
 if config.llvm_libxml2_enabled == '1':
     config.available_features.add('libxml2')
+
+if config.have_opt_viewer_modules:
+    config.available_features.add('have_opt_viewer_modules')

@@ -503,6 +503,20 @@ struct MatchableInfo {
   /// removed.
   SmallVector<AsmOperand, 8> AsmOperands;
 
+  /// AsmOperandEqualityConstraints - an array of pairs holding operand
+  /// constraints.
+  /// Each constraint is represented as a pair holding position of the token of
+  /// the operand asm name.
+  /// For example, an "AsmString" "add $Vd.s, $Vn.s, $Xn" would be
+  /// split in the following list of tokens:
+  ///
+  ///    ['add', '$Vd', '.s', '$Vn', '.s', '$Xn']
+  ///
+  /// A constraint "$Vd = $Vn" (e.g. for a destructive operation) is rendered
+  /// as the pair {1,3} into this set (note that tokens are numbered starting
+  /// from 0).
+  SmallVector<std::pair<unsigned,unsigned>, 1> AsmOperandTiedConstraints;
+
   /// Predicates - The required subtarget features to match this instruction.
   SmallVector<const SubtargetFeatureInfo *, 4> RequiredFeatures;
 
@@ -618,6 +632,10 @@ struct MatchableInfo {
   bool couldMatchAmbiguouslyWith(const MatchableInfo &RHS) const {
     // The primary comparator is the instruction mnemonic.
     if (Mnemonic != RHS.Mnemonic)
+      return false;
+
+    // Different variants can't conflict.
+    if (AsmVariantID != RHS.AsmVariantID)
       return false;
 
     // The number of operands is unambiguous.
@@ -770,6 +788,8 @@ public:
 LLVM_DUMP_METHOD void MatchableInfo::dump() const {
   errs() << TheDef->getName() << " -- " << "flattened:\"" << AsmString <<"\"\n";
 
+  errs() << "  variant: " << AsmVariantID << "\n";
+
   for (unsigned i = 0, e = AsmOperands.size(); i != e; ++i) {
     const AsmOperand &Op = AsmOperands[i];
     errs() << "  op[" << i << "] = " << Op.Class->ClassName << " - ";
@@ -879,6 +899,22 @@ extractSingletonRegisterForAsmOperand(MatchableInfo::AsmOperand &Op,
   // be some random non-register token, just ignore it.
 }
 
+static Optional<size_t>
+getAsmOperandIdx(const SmallVectorImpl<MatchableInfo::AsmOperand> &AsmOperands,
+                 std::string Name) {
+  const auto SymbolicName = std::string("$") + Name;
+  const auto Pos =
+      std::find_if(AsmOperands.begin(), AsmOperands.end(),
+                   [&SymbolicName](const MatchableInfo::AsmOperand &A) {
+        return A.Token == SymbolicName;
+      });
+
+  if (Pos == AsmOperands.end())
+    return Optional<size_t>();
+
+  return Optional<size_t>(std::distance(AsmOperands.begin(), Pos));
+}
+
 void MatchableInfo::initialize(const AsmMatcherInfo &Info,
                                SmallPtrSetImpl<Record*> &SingletonRegisters,
                                AsmVariantInfo const &Variant,
@@ -927,6 +963,37 @@ void MatchableInfo::initialize(const AsmMatcherInfo &Info,
 
   HasDeprecation =
       DepMask ? !DepMask->getValue()->getAsUnquotedString().empty() : false;
+
+  // Do not generate tied operand info if the instruction does not
+  // use the default AsmMatchConverter.
+  if (TheDef->getValue("AsmMatchConverter") &&
+      !TheDef->getValueAsString("AsmMatchConverter").empty())
+    return;
+
+  // Generate tied operand contraints info.
+  const auto &CGIOperands = getResultInst()->Operands;
+  for (const auto &CGIOp : CGIOperands) {
+    int TiedReg = CGIOp.getTiedRegister();
+    if (TiedReg == -1)
+      continue;
+
+    Optional<size_t> LHSIdx = getAsmOperandIdx(AsmOperands, CGIOp.Name);
+    Optional<size_t> RHSIdx =
+        getAsmOperandIdx(AsmOperands, CGIOperands[TiedReg].Name);
+    // Skipping operands with constraint but no reference in the
+    // AsmString. No need to throw a warning, as it's normal to have
+    // a $dst operand in the outs dag that is constrained to a $src
+    // operand in the ins dag but that does not appear in the AsmString.
+    if (!LHSIdx || !RHSIdx)
+      continue;
+
+    // Add the constraint. Using min/max as we consider constraint
+    // pair {A,B} and {B,A} the same
+    size_t AddMnemonicIdx = HasMnemonicFirst;
+    AsmOperandTiedConstraints.emplace_back(
+        std::min(*LHSIdx, *RHSIdx) + AddMnemonicIdx,
+        std::max(*LHSIdx, *RHSIdx) + AddMnemonicIdx);
+  }
 }
 
 /// Append an AsmOperand for the given substring of AsmString.
@@ -2438,7 +2505,9 @@ static void emitMatchRegisterName(CodeGenTarget &Target, Record *AsmParser,
 
   OS << "static unsigned MatchRegisterName(StringRef Name) {\n";
 
-  StringMatcher("Name", Matches, OS).Emit();
+  bool IgnoreDuplicates =
+      AsmParser->getValueAsBit("AllowDuplicateRegisterNames");
+  StringMatcher("Name", Matches, OS).Emit(0, IgnoreDuplicates);
 
   OS << "  return 0;\n";
   OS << "}\n\n";
@@ -2469,7 +2538,9 @@ static void emitMatchRegisterAltName(CodeGenTarget &Target, Record *AsmParser,
 
   OS << "static unsigned MatchRegisterAltName(StringRef Name) {\n";
 
-  StringMatcher("Name", Matches, OS).Emit();
+  bool IgnoreDuplicates =
+      AsmParser->getValueAsBit("AllowDuplicateRegisterNames");
+  StringMatcher("Name", Matches, OS).Emit(0, IgnoreDuplicates);
 
   OS << "  return 0;\n";
   OS << "}\n\n";
@@ -2760,7 +2831,8 @@ static void emitCustomOperandParsing(raw_ostream &OS, CodeGenTarget &Target,
   // a better error handling.
   OS << "OperandMatchResultTy " << Target.getName() << ClassName << "::\n"
      << "MatchOperandParserImpl(OperandVector"
-     << " &Operands,\n                       StringRef Mnemonic) {\n";
+     << " &Operands,\n                       StringRef Mnemonic,\n"
+     << "                       bool ParseForAllFeatures) {\n";
 
   // Emit code to get the available features.
   OS << "  // Get the current feature set.\n";
@@ -2798,10 +2870,9 @@ static void emitCustomOperandParsing(raw_ostream &OS, CodeGenTarget &Target,
 
   // Emit check that the required features are available.
   OS << "    // check if the available features match\n";
-  OS << "    if ((AvailableFeatures & it->RequiredFeatures) "
-     << "!= it->RequiredFeatures) {\n";
-  OS << "      continue;\n";
-  OS << "    }\n\n";
+  OS << "    if (!ParseForAllFeatures && (AvailableFeatures & "
+        "it->RequiredFeatures) != it->RequiredFeatures)\n";
+  OS << "        continue;\n\n";
 
   // Emit check to ensure the operand number matches.
   OS << "    // check if the operand in question has a custom parser.\n";
@@ -2821,18 +2892,103 @@ static void emitCustomOperandParsing(raw_ostream &OS, CodeGenTarget &Target,
   OS << "}\n\n";
 }
 
+static void emitAsmTiedOperandConstraints(CodeGenTarget &Target,
+                                          AsmMatcherInfo &Info,
+                                          raw_ostream &OS) {
+  std::string Buf;
+  raw_string_ostream TmpOS(Buf);
+  TmpOS << "namespace {\n";
+  TmpOS << "  struct TiedAsmOpndPair {\n";
+  TmpOS << "    unsigned Opcode;\n";
+  TmpOS << "    unsigned Opnd1;\n";
+  TmpOS << "    unsigned Opnd2;\n";
+  TmpOS << "    TiedAsmOpndPair(unsigned Opcode, unsigned Opnd1, unsigned "
+           "Opnd2)\n";
+  TmpOS << "      : Opcode(Opcode), Opnd1(Opnd1), Opnd2(Opnd2) {}\n";
+  TmpOS << "  };\n";
+  TmpOS << "} // end anonymous namespace\n\n";
+  TmpOS << "static const TiedAsmOpndPair TiedAsmOperandsTable[] = {\n";
+  bool TableEmpty = true;
+  for (const auto &Inst : Target.getInstructionsByEnumValue()) {
+    auto It = std::find_if(Info.Matchables.begin(), Info.Matchables.end(),
+                           [&Inst](const std::unique_ptr<MatchableInfo> &MI) {
+      return (MI->TheDef->getID() == Inst->TheDef->getID());
+    });
+
+    if (It == Info.Matchables.end())
+      continue;
+
+    auto &Constraints = (**It).AsmOperandTiedConstraints;
+    if (Constraints.empty())
+      continue;
+
+    std::string Namespace = Inst->TheDef->getValueAsString("Namespace");
+
+    for (const auto &C : Constraints) {
+      TableEmpty = false;
+      TmpOS << "  {";
+      TmpOS << Namespace << "::"<< (**It).TheDef->getName() << ", ";
+      TmpOS << C.first << ", " << C.second;
+      TmpOS << "},\n";
+    }
+  }
+  TmpOS << "};\n\n";
+  if (!TableEmpty)
+    OS << TmpOS.str();
+
+  OS << "static bool ";
+  OS << "checkAsmTiedOperandConstraints(const MCInst &Inst,\n";
+  OS << "                               const OperandVector &Operands,\n";
+  OS << "                               SMLoc &Loc) {\n";
+
+  if (TableEmpty) {
+    OS << "return true;\n}\n\n";
+    return;
+  }
+
+  OS << "  const TiedAsmOpndPair SearchValue(Inst.getOpcode(), 0, 0);\n";
+  OS << "  const auto Range = std::equal_range(\n";
+  OS << "      std::begin(TiedAsmOperandsTable), std::end(TiedAsmOperandsTable),\n";
+  OS << "      SearchValue, [](const TiedAsmOpndPair &a,\n";
+  OS << "                      const TiedAsmOpndPair &b) {\n";
+  OS << "        return (a.Opcode < b.Opcode);\n";
+  OS << "      });\n\n";
+  OS << "  for (auto Item = Range.first;  Item != Range.second; ++Item) {\n";
+  OS << "    MCParsedAsmOperand &Op1 = *Operands[Item->Opnd1];\n";
+  OS << "    MCParsedAsmOperand &Op2 = *Operands[Item->Opnd2];\n";
+  OS << "    if ((Op1.isReg() && Op2.isReg()) &&\n";
+  OS << "        (Op1.getReg() != Op2.getReg())) {\n";
+  OS << "      Loc = Op2.getStartLoc();\n";
+  OS << "      return false;\n";
+  OS << "    }\n";
+  OS << "  }\n";
+  OS << "  return true;\n";
+  OS << "}\n\n";
+}
+
 static void emitMnemonicSpellChecker(raw_ostream &OS, CodeGenTarget &Target,
                                      unsigned VariantCount) {
-  OS << "std::string " << Target.getName() << "MnemonicSpellCheck(StringRef S, uint64_t FBS) {\n";
+  OS << "static std::string " << Target.getName()
+     << "MnemonicSpellCheck(StringRef S, uint64_t FBS, unsigned VariantID) {\n";
   if (!VariantCount)
     OS <<  "  return \"\";";
   else {
     OS << "  const unsigned MaxEditDist = 2;\n";
     OS << "  std::vector<StringRef> Candidates;\n";
-    OS << "  StringRef Prev = \"\";\n";
-    OS << "  auto End = std::end(MatchTable0);\n";
-    OS << "\n";
-    OS << "  for (auto I = std::begin(MatchTable0); I < End; I++) {\n";
+    OS << "  StringRef Prev = \"\";\n\n";
+
+    OS << "  // Find the appropriate table for this asm variant.\n";
+    OS << "  const MatchEntry *Start, *End;\n";
+    OS << "  switch (VariantID) {\n";
+    OS << "  default: llvm_unreachable(\"invalid variant!\");\n";
+    for (unsigned VC = 0; VC != VariantCount; ++VC) {
+      Record *AsmVariant = Target.getAsmParserVariant(VC);
+      int AsmVariantNo = AsmVariant->getValueAsInt("Variant");
+      OS << "  case " << AsmVariantNo << ": Start = std::begin(MatchTable" << VC
+         << "); End = std::end(MatchTable" << VC << "); break;\n";
+    }
+    OS << "  }\n\n";
+    OS << "  for (auto I = Start; I < End; I++) {\n";
     OS << "    // Ignore unsupported instructions.\n";
     OS << "    if ((FBS & I->RequiredFeatures) != I->RequiredFeatures)\n";
     OS << "      continue;\n";
@@ -2978,7 +3134,8 @@ void AsmMatcherEmitter::run(raw_ostream &OS) {
   if (!Info.OperandMatchInfo.empty()) {
     OS << "  OperandMatchResultTy MatchOperandParserImpl(\n";
     OS << "    OperandVector &Operands,\n";
-    OS << "    StringRef Mnemonic);\n";
+    OS << "    StringRef Mnemonic,\n";
+    OS << "    bool ParseForAllFeatures = false);\n";
 
     OS << "  OperandMatchResultTy tryCustomParseOperand(\n";
     OS << "    OperandVector &Operands,\n";
@@ -3055,6 +3212,9 @@ void AsmMatcherEmitter::run(raw_ostream &OS) {
   SubtargetFeatureInfo::emitComputeAssemblerAvailableFeatures(
       Info.Target.getName(), ClassName, "ComputeAvailableFeatures",
       Info.SubtargetFeatures, OS);
+
+  if (!ReportMultipleNearMisses)
+    emitAsmTiedOperandConstraints(Target, Info, OS);
 
   StringToOffsetTable StringTable;
 
@@ -3159,8 +3319,6 @@ void AsmMatcherEmitter::run(raw_ostream &OS) {
     OS << "};\n\n";
   }
 
-  emitMnemonicSpellChecker(OS, Target, VariantCount);
-
   OS << "#include \"llvm/Support/Debug.h\"\n";
   OS << "#include \"llvm/Support/Format.h\"\n\n";
 
@@ -3256,7 +3414,9 @@ void AsmMatcherEmitter::run(raw_ostream &OS) {
   OS << "  for (const MatchEntry *it = MnemonicRange.first, "
      << "*ie = MnemonicRange.second;\n";
   OS << "       it != ie; ++it) {\n";
-
+  OS << "    bool HasRequiredFeatures =\n";
+  OS << "      (AvailableFeatures & it->RequiredFeatures) == "
+        "it->RequiredFeatures;\n";
   OS << "    DEBUG_WITH_TYPE(\"asm-matcher\", dbgs() << \"Trying to match opcode \"\n";
   OS << "                                          << MII.getName(it->Opcode) << \"\\n\");\n";
 
@@ -3304,7 +3464,7 @@ void AsmMatcherEmitter::run(raw_ostream &OS) {
     OS << "            DEBUG_WITH_TYPE(\"asm-matcher\", dbgs() << \"recording too-few-operands near miss\\n\");\n";
     OS << "            OperandNearMiss =\n";
     OS << "                NearMissInfo::getTooFewOperands(Formal, it->Opcode);\n";
-    OS << "          } else {\n";
+    OS << "          } else if (OperandNearMiss.getKind() != NearMissInfo::NearMissTooFewOperands) {\n";
     OS << "            // If more than one operand is invalid, give up on this match entry.\n";
     OS << "            DEBUG_WITH_TYPE(\n";
     OS << "                \"asm-matcher\",\n";
@@ -3314,6 +3474,7 @@ void AsmMatcherEmitter::run(raw_ostream &OS) {
     OS << "          }\n";
     OS << "        } else {\n";
     OS << "          DEBUG_WITH_TYPE(\"asm-matcher\", dbgs() << \"but formal operand not required\\n\");\n";
+    OS << "          break;\n";
     OS << "        }\n";
     OS << "        continue;\n";
   } else {
@@ -3346,7 +3507,8 @@ void AsmMatcherEmitter::run(raw_ostream &OS) {
   OS << "        }\n";
   OS << "        // If the target matcher returned a specific error code use\n";
   OS << "        // that, else use the one from the generic matcher.\n";
-  OS << "        if (TargetDiag != Match_InvalidOperand)\n";
+  OS << "        if (TargetDiag != Match_InvalidOperand && "
+        "HasRequiredFeatures)\n";
   OS << "          Diag = TargetDiag;\n";
   OS << "      }\n";
   OS << "      // If current formal operand wasn't matched and it is optional\n"
@@ -3388,10 +3550,10 @@ void AsmMatcherEmitter::run(raw_ostream &OS) {
     OS << "      // target predicate, that diagnostic is preferred.\n";
     OS << "      if (!HadMatchOtherThanPredicate &&\n";
     OS << "          (it == MnemonicRange.first || ErrorInfo <= ActualIdx)) {\n";
-    OS << "        ErrorInfo = ActualIdx;\n";
-    OS << "        // InvalidOperand is the default. Prefer specificity.\n";
-    OS << "        if (Diag != Match_InvalidOperand)\n";
+    OS << "        if (HasRequiredFeatures && (ErrorInfo != ActualIdx || Diag "
+          "!= Match_InvalidOperand))\n";
     OS << "          RetCode = Diag;\n";
+    OS << "        ErrorInfo = ActualIdx;\n";
     OS << "      }\n";
     OS << "      // Otherwise, just reject this instance of the mnemonic.\n";
     OS << "      OperandsValid = false;\n";
@@ -3410,8 +3572,7 @@ void AsmMatcherEmitter::run(raw_ostream &OS) {
   OS << "    }\n";
 
   // Emit check that the required features are available.
-  OS << "    if ((AvailableFeatures & it->RequiredFeatures) "
-     << "!= it->RequiredFeatures) {\n";
+  OS << "    if (!HasRequiredFeatures) {\n";
   if (!ReportMultipleNearMisses)
     OS << "      HadMatchOtherThanFeatures = true;\n";
   OS << "      uint64_t NewMissingFeatures = it->RequiredFeatures & "
@@ -3478,6 +3639,14 @@ void AsmMatcherEmitter::run(raw_ostream &OS) {
 
   OS << "    if (matchingInlineAsm) {\n";
   OS << "      convertToMapAndConstraints(it->ConvertFn, Operands);\n";
+  if (!ReportMultipleNearMisses) {
+    OS << "      SMLoc Loc;\n";
+    OS << "      if (!checkAsmTiedOperandConstraints(Inst, Operands, Loc)) {\n";
+    OS << "        ErrorInfo = " << (HasMnemonicFirst ? "1" : "SIndex") << ";\n";
+    OS << "        return Match_InvalidTiedOperand;\n";
+    OS << "      }\n";
+    OS << "\n";
+  }
   OS << "      return Match_Success;\n";
   OS << "    }\n\n";
   OS << "    // We have selected a definite instruction, convert the parsed\n"
@@ -3552,6 +3721,15 @@ void AsmMatcherEmitter::run(raw_ostream &OS) {
     OS << "    }\n";
   }
 
+  if (!ReportMultipleNearMisses) {
+    OS << "      SMLoc Loc;\n";
+    OS << "      if (!checkAsmTiedOperandConstraints(Inst, Operands, Loc)) {\n";
+    OS << "        ErrorInfo = " << (HasMnemonicFirst ? "1" : "SIndex") << ";\n";
+    OS << "        return Match_InvalidTiedOperand;\n";
+    OS << "      }\n";
+    OS << "\n";
+  }
+
   OS << "    DEBUG_WITH_TYPE(\n";
   OS << "        \"asm-matcher\",\n";
   OS << "        dbgs() << \"Opcode result: complete match, selecting this opcode\\n\");\n";
@@ -3576,6 +3754,13 @@ void AsmMatcherEmitter::run(raw_ostream &OS) {
                              MaxMnemonicIndex, HasMnemonicFirst);
 
   OS << "#endif // GET_MATCHER_IMPLEMENTATION\n\n";
+
+  OS << "\n#ifdef GET_MNEMONIC_SPELL_CHECKER\n";
+  OS << "#undef GET_MNEMONIC_SPELL_CHECKER\n\n";
+
+  emitMnemonicSpellChecker(OS, Target, VariantCount);
+
+  OS << "#endif // GET_MNEMONIC_SPELL_CHECKER\n\n";
 }
 
 namespace llvm {

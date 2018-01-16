@@ -18,7 +18,7 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/Bitcode/BitcodeReader.h"
-#include "llvm/CodeGen/CommandFlags.h"
+#include "llvm/CodeGen/CommandFlags.def"
 #include "llvm/CodeGen/LinkAllCodegenComponents.h"
 #include "llvm/ExecutionEngine/GenericValue.h"
 #include "llvm/ExecutionEngine/Interpreter.h"
@@ -378,8 +378,8 @@ int main(int argc, char **argv, char * const *envp) {
   std::string ErrorMsg;
   EngineBuilder builder(std::move(Owner));
   builder.setMArch(MArch);
-  builder.setMCPU(MCPU);
-  builder.setMAttrs(MAttrs);
+  builder.setMCPU(getCPUStr());
+  builder.setMAttrs(getFeatureList());
   if (RelocModel.getNumOccurrences())
     builder.setRelocationModel(RelocModel);
   if (CMModel.getNumOccurrences())
@@ -414,7 +414,7 @@ int main(int argc, char **argv, char * const *envp) {
 
   builder.setOptLevel(getOptLevel());
 
-  TargetOptions Options;
+  TargetOptions Options = InitTargetOptionsFromCodeGenFlags();
   if (FloatABIForCalls != FloatABI::Default)
     Options.FloatABIType = FloatABIForCalls;
 

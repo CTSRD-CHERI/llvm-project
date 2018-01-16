@@ -122,6 +122,7 @@ static void GetAccessToHeapChunkInformation(ChunkAccess *descr,
   }
   descr->chunk_begin = chunk.Beg();
   descr->chunk_size = chunk.UsedSize();
+  descr->user_requested_alignment = chunk.UserRequestedAlignment();
   descr->alloc_type = chunk.GetAllocType();
 }
 
@@ -333,6 +334,26 @@ void GlobalAddressDescription::Print(const char *bug_type) const {
       StackDepotGet(reg_sites[i]).Print();
     }
   }
+}
+
+bool GlobalAddressDescription::PointsInsideTheSameVariable(
+    const GlobalAddressDescription &other) const {
+  if (size == 0 || other.size == 0) return false;
+
+  for (uptr i = 0; i < size; i++) {
+    const __asan_global &a = globals[i];
+    for (uptr j = 0; j < other.size; j++) {
+      const __asan_global &b = other.globals[j];
+      if (a.beg == b.beg &&
+          a.beg <= addr &&
+          b.beg <= other.addr &&
+          (addr + access_size) < (a.beg + a.size) &&
+          (other.addr + other.access_size) < (b.beg + b.size))
+        return true;
+    }
+  }
+
+  return false;
 }
 
 void StackAddressDescription::Print() const {

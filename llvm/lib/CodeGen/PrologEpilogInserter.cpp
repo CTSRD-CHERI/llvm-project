@@ -39,6 +39,11 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/CodeGen/StackProtector.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetOpcodes.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/CodeGen/WinEHFuncInfo.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/CallingConv.h"
@@ -55,13 +60,8 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetFrameLowering.h"
-#include "llvm/Target/TargetInstrInfo.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetOpcodes.h"
 #include "llvm/Target/TargetOptions.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -75,12 +75,6 @@ using namespace llvm;
 #define DEBUG_TYPE "prologepilog"
 
 using MBBVector = SmallVector<MachineBasicBlock *, 4>;
-
-static void spillCalleeSavedRegs(MachineFunction &MF, RegScavenger *RS,
-                                 unsigned &MinCSFrameIndex,
-                                 unsigned &MaxCXFrameIndex,
-                                 const MBBVector &SaveBlocks,
-                                 const MBBVector &RestoreBlocks);
 
 namespace {
 
@@ -125,6 +119,7 @@ private:
 
   void calculateCallFrameInfo(MachineFunction &Fn);
   void calculateSaveRestoreBlocks(MachineFunction &Fn);
+  void spillCalleeSavedRegs(MachineFunction &MF);
 
   void calculateFrameObjectOffsets(MachineFunction &Fn);
   void replaceFrameIndices(MachineFunction &Fn);
@@ -176,7 +171,7 @@ using StackObjSet = SmallSetVector<int, 8>;
 /// runOnMachineFunction - Insert prolog/epilog code and replace abstract
 /// frame indexes with appropriate references.
 bool PEI::runOnMachineFunction(MachineFunction &Fn) {
-  const Function* F = Fn.getFunction();
+  const Function &F = Fn.getFunction();
   const TargetRegisterInfo *TRI = Fn.getSubtarget().getRegisterInfo();
   const TargetFrameLowering *TFI = Fn.getSubtarget().getFrameLowering();
 
@@ -197,8 +192,7 @@ bool PEI::runOnMachineFunction(MachineFunction &Fn) {
 
   // Handle CSR spilling and restoring, for targets that need it.
   if (Fn.getTarget().usesPhysRegsForPEI())
-    spillCalleeSavedRegs(Fn, RS, MinCSFrameIndex, MaxCSFrameIndex, SaveBlocks,
-                         RestoreBlocks);
+    spillCalleeSavedRegs(Fn);
 
   // Allow the target machine to make final modifications to the function
   // before the frame layout is finalized.
@@ -212,7 +206,7 @@ bool PEI::runOnMachineFunction(MachineFunction &Fn) {
   // called functions.  Because of this, calculateCalleeSavedRegisters()
   // must be called before this function in order to set the AdjustsStack
   // and MaxCallFrameSize variables.
-  if (!F->hasFnAttribute(Attribute::Naked))
+  if (!F.hasFnAttribute(Attribute::Naked))
     insertPrologEpilogCode(Fn);
 
   // Replace all MO_FrameIndex operands with physical register references
@@ -230,8 +224,8 @@ bool PEI::runOnMachineFunction(MachineFunction &Fn) {
   MachineFrameInfo &MFI = Fn.getFrameInfo();
   uint64_t StackSize = MFI.getStackSize();
   if (WarnStackSize.getNumOccurrences() > 0 && WarnStackSize < StackSize) {
-    DiagnosticInfoStackSize DiagStackSize(*F, StackSize);
-    F->getContext().diagnose(DiagStackSize);
+    DiagnosticInfoStackSize DiagStackSize(F, StackSize);
+    F.getContext().diagnose(DiagStackSize);
   }
 
   delete RS;
@@ -505,11 +499,7 @@ static void insertCSRRestores(MachineBasicBlock &RestoreBlock,
   }
 }
 
-static void spillCalleeSavedRegs(MachineFunction &Fn, RegScavenger *RS,
-                                 unsigned &MinCSFrameIndex,
-                                 unsigned &MaxCSFrameIndex,
-                                 const MBBVector &SaveBlocks,
-                                 const MBBVector &RestoreBlocks) {
+void PEI::spillCalleeSavedRegs(MachineFunction &Fn) {
   // We can't list this requirement in getRequiredProperties because some
   // targets (WebAssembly) use virtual registers past this point, and the pass
   // pipeline is set up without giving the passes a chance to look at the
@@ -518,7 +508,7 @@ static void spillCalleeSavedRegs(MachineFunction &Fn, RegScavenger *RS,
   assert(Fn.getProperties().hasProperty(
       MachineFunctionProperties::Property::NoVRegs));
 
-  const Function *F = Fn.getFunction();
+  const Function &F = Fn.getFunction();
   const TargetFrameLowering *TFI = Fn.getSubtarget().getFrameLowering();
   MachineFrameInfo &MFI = Fn.getFrameInfo();
   MinCSFrameIndex = std::numeric_limits<unsigned>::max();
@@ -532,7 +522,7 @@ static void spillCalleeSavedRegs(MachineFunction &Fn, RegScavenger *RS,
   assignCalleeSavedSpillSlots(Fn, SavedRegs, MinCSFrameIndex, MaxCSFrameIndex);
 
   // Add the code to save and restore the callee saved registers.
-  if (!F->hasFnAttribute(Attribute::Naked)) {
+  if (!F.hasFnAttribute(Attribute::Naked)) {
     MFI.setCalleeSavedInfoValid(true);
 
     std::vector<CalleeSavedInfo> &CSI = MFI.getCalleeSavedInfo();
@@ -962,7 +952,7 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &Fn) {
 
   ORE->emit([&]() {
     return MachineOptimizationRemarkAnalysis(DEBUG_TYPE, "StackSize",
-                                             Fn.getFunction()->getSubprogram(),
+                                             Fn.getFunction().getSubprogram(),
                                              &Fn.front())
            << ore::NV("NumStackBytes", StackSize) << " stack bytes in function";
   });
@@ -1003,7 +993,7 @@ void PEI::insertPrologEpilogCode(MachineFunction &Fn) {
   // approach is rather similar to that of Segmented Stacks, but it uses a
   // different conditional check and another BIF for allocating more stack
   // space.
-  if (Fn.getFunction()->getCallingConv() == CallingConv::HiPE)
+  if (Fn.getFunction().getCallingConv() == CallingConv::HiPE)
     for (MachineBasicBlock *SaveBlock : SaveBlocks)
       TFI.adjustForHiPEPrologue(Fn, *SaveBlock);
 }

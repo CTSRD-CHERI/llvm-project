@@ -1,7 +1,7 @@
-; RUN: %cheri_llc -target-abi purecap -o - %s -O0 | FileCheck %s -check-prefixes CHECK
-; RUN: %cheri_llc -target-abi purecap -o - %s -O0 -filetype=obj | llvm-objdump -r -d - | FileCheck %s -check-prefix OBJ
-; RUN: %cheri128_llc -target-abi purecap -o - %s | FileCheck %s -check-prefixes ASM,ASM128
-; RUN: %cheri256_llc -target-abi purecap -o - %s | FileCheck %s -check-prefixes ASM,ASM256
+; RUN: %cheri_purecap_llc -o - %s -O0 | FileCheck %s -check-prefixes CHECK
+; RUN: %cheri_purecap_llc -o - %s -O0 -filetype=obj | llvm-objdump -r -d - | FileCheck %s -check-prefix OBJ
+; RUN: %cheri128_purecap_llc -o - %s | FileCheck %s -check-prefixes ASM,ASM128
+; RUN: %cheri256_purecap_llc -o - %s | FileCheck %s -check-prefixes ASM,ASM256
 
 ; FIXME: Why is LLVM generating an invalid cgetpccsetoffset
 ; CHECK-NOT: cgetpccsetoffset        $c12, test

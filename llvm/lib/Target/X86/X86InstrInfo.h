@@ -18,7 +18,7 @@
 #include "X86InstrFMA3Info.h"
 #include "X86RegisterInfo.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/Target/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
 
 #define GET_INSTRINFO_HEADER
 #include "X86GenInstrInfo.inc"
@@ -568,7 +568,7 @@ public:
                                    bool OutlineFromLinkOnceODRs) const override;
 
   llvm::X86GenInstrInfo::MachineOutlinerInstrType
-  getOutliningType(MachineInstr &MI) const override;
+  getOutliningType(MachineBasicBlock::iterator &MIT, unsigned Flags) const override;
 
   void insertOutlinerEpilogue(MachineBasicBlock &MBB, MachineFunction &MF,
                               const MachineOutlinerInfo &MInfo) const override;

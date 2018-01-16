@@ -277,8 +277,8 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
 
   // Hi, Lo are normally caller save but they are callee save
   // for interrupt handling.
-  const Function *Func = MBB.getParent()->getFunction();
-  if (Func->hasFnAttribute("interrupt")) {
+  const Function &Func = MBB.getParent()->getFunction();
+  if (Func.hasFnAttribute("interrupt")) {
     if (Mips::HI32RegClass.hasSubClassEq(RC)) {
       BuildMI(MBB, I, DL, get(Mips::MFHI), Mips::K0);
       SrcReg = Mips::K0;
@@ -337,8 +337,8 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       .addMemOperand(MMO);
     return;
   }
-  const Function *Func = MBB.getParent()->getFunction();
-  bool ReqIndirectLoad = Func->hasFnAttribute("interrupt") &&
+  const Function &Func = MBB.getParent()->getFunction();
+  bool ReqIndirectLoad = Func.hasFnAttribute("interrupt") &&
                          (DestReg == Mips::LO0 || DestReg == Mips::LO0_64 ||
                           DestReg == Mips::HI0 || DestReg == Mips::HI0_64);
 
@@ -646,17 +646,17 @@ unsigned MipsSEInstrInfo::getAnalyzableBrOpc(unsigned Opc) const {
           Opc == Mips::CBTS   || Opc == Mips::CBTU   || Opc == Mips::CBEZ   ||
           Opc == Mips::CBNZ   ||
           Opc == Mips::BC1F   || Opc == Mips::B      || Opc == Mips::J      ||
-          Opc == Mips::BEQZC_MM || Opc == Mips::BNEZC_MM || Opc == Mips::BEQC ||
-          Opc == Mips::BNEC   || Opc == Mips::BLTC   || Opc == Mips::BGEC   ||
-          Opc == Mips::BLTUC  || Opc == Mips::BGEUC  || Opc == Mips::BGTZC  ||
-          Opc == Mips::BLEZC  || Opc == Mips::BGEZC  || Opc == Mips::BLTZC  ||
-          Opc == Mips::BEQZC  || Opc == Mips::BNEZC  || Opc == Mips::BEQZC64 ||
-          Opc == Mips::BNEZC64 || Opc == Mips::BEQC64 || Opc == Mips::BNEC64 ||
-          Opc == Mips::BGEC64 || Opc == Mips::BGEUC64 || Opc == Mips::BLTC64 ||
-          Opc == Mips::BLTUC64 || Opc == Mips::BGTZC64 ||
-          Opc == Mips::BGEZC64 || Opc == Mips::BLTZC64 ||
-          Opc == Mips::BLEZC64 || Opc == Mips::BC || Opc == Mips::BBIT0 ||
-          Opc == Mips::BBIT1 || Opc == Mips::BBIT032 ||
+          Opc == Mips::B_MM   || Opc == Mips::BEQZC_MM ||
+          Opc == Mips::BNEZC_MM || Opc == Mips::BEQC || Opc == Mips::BNEC   ||
+          Opc == Mips::BLTC   || Opc == Mips::BGEC   || Opc == Mips::BLTUC  ||
+          Opc == Mips::BGEUC  || Opc == Mips::BGTZC  || Opc == Mips::BLEZC  ||
+          Opc == Mips::BGEZC  || Opc == Mips::BLTZC  || Opc == Mips::BEQZC  ||
+          Opc == Mips::BNEZC  || Opc == Mips::BEQZC64 || Opc == Mips::BNEZC64 ||
+          Opc == Mips::BEQC64 || Opc == Mips::BNEC64 || Opc == Mips::BGEC64 ||
+          Opc == Mips::BGEUC64 || Opc == Mips::BLTC64 || Opc == Mips::BLTUC64 ||
+          Opc == Mips::BGTZC64 || Opc == Mips::BGEZC64 ||
+          Opc == Mips::BLTZC64 || Opc == Mips::BLEZC64 || Opc == Mips::BC ||
+          Opc == Mips::BBIT0 || Opc == Mips::BBIT1 || Opc == Mips::BBIT032 ||
           Opc == Mips::BBIT132) ? Opc : 0;
 }
 
@@ -906,13 +906,13 @@ void MipsSEInstrInfo::expandCPSETUP(MachineBasicBlock &MBB,
   assert(GP != Mips::T9_64);
   DebugLoc DL = I->getDebugLoc();
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
-  const GlobalValue *FName = MBB.getParent()->getFunction();
+  const GlobalValue& FName = MBB.getParent()->getFunction();
   BuildMI(MBB, I, DL, TII->get(Mips::LUi64), GP)
-    .addGlobalAddress(FName, 0, MipsII::MO_GPOFF_HI);
+    .addGlobalAddress(&FName, 0, MipsII::MO_GPOFF_HI);
   BuildMI(MBB, I, DL, TII->get(Mips::DADDu), GP).addReg(GP)
     .addReg(Mips::T9_64);
   BuildMI(MBB, I, DL, TII->get(Mips::DADDiu), GP).addReg(GP)
-    .addGlobalAddress(FName, 0, MipsII::MO_GPOFF_LO);
+    .addGlobalAddress(&FName, 0, MipsII::MO_GPOFF_LO);
 }
 
 const MipsInstrInfo *llvm::createMipsSEInstrInfo(const MipsSubtarget &STI) {

@@ -30,6 +30,7 @@
 #include "llvm/ADT/PointerIntPair.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SetVector.h"
+#include "llvm/ADT/SmallBitVector.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
@@ -122,6 +123,11 @@ static cl::opt<bool> SROARandomShuffleSlices("sroa-random-shuffle-slices",
 /// GEPs.
 static cl::opt<bool> SROAStrictInbounds("sroa-strict-inbounds", cl::init(false),
                                         cl::Hidden);
+
+/// Hidden option to allow more aggressive splitting.
+static cl::opt<bool>
+SROASplitNonWholeAllocaSlices("sroa-split-nonwhole-alloca-slices",
+                              cl::init(false), cl::Hidden);
 
 namespace {
 
@@ -3661,7 +3667,7 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
       auto *PartPtrTy = PartTy->getPointerTo(AS);
       LoadInst *PLoad = IRB.CreateAlignedLoad(
           getAdjustedPtr(IRB, DL, BasePtr,
-                         APInt(DL.getPointerSizeInBits(AS), PartOffset),
+                         APInt(DL.getPointerBaseSizeInBits(AS), PartOffset),
                          PartPtrTy, BasePtr->getName() + "."),
           getAdjustedAlignment(LI, PartOffset, DL), /*IsVolatile*/ false,
           LI->getName());
@@ -3717,7 +3723,7 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
         StoreInst *PStore = IRB.CreateAlignedStore(
             PLoad,
             getAdjustedPtr(IRB, DL, StoreBasePtr,
-                           APInt(DL.getPointerSizeInBits(AS), PartOffset),
+                           APInt(DL.getPointerBaseSizeInBits(AS), PartOffset),
                            PartPtrTy, StoreBasePtr->getName() + "."),
             getAdjustedAlignment(SI, PartOffset, DL), /*IsVolatile*/ false);
         PStore->copyMetadata(*LI, LLVMContext::MD_mem_parallel_loop_access);
@@ -3799,7 +3805,7 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
         auto AS = LI->getPointerAddressSpace();
         PLoad = IRB.CreateAlignedLoad(
             getAdjustedPtr(IRB, DL, LoadBasePtr,
-                           APInt(DL.getPointerSizeInBits(AS), PartOffset),
+                           APInt(DL.getPointerBaseSizeInBits(AS), PartOffset),
                            LoadPartPtrTy, LoadBasePtr->getName() + "."),
             getAdjustedAlignment(LI, PartOffset, DL), /*IsVolatile*/ false,
             LI->getName());
@@ -3811,7 +3817,7 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
       StoreInst *PStore = IRB.CreateAlignedStore(
           PLoad,
           getAdjustedPtr(IRB, DL, StoreBasePtr,
-                         APInt(DL.getPointerSizeInBits(AS), PartOffset),
+                         APInt(DL.getPointerBaseSizeInBits(AS), PartOffset),
                          StorePartPtrTy, StoreBasePtr->getName() + "."),
           getAdjustedAlignment(SI, PartOffset, DL), /*IsVolatile*/ false);
 
@@ -4058,27 +4064,58 @@ bool SROA::splitAlloca(AllocaInst &AI, AllocaSlices &AS) {
   // First try to pre-split loads and stores.
   Changed |= presplitLoadsAndStores(AI, AS);
 
-  // Now that we have identified any pre-splitting opportunities, mark any
-  // splittable (non-whole-alloca) loads and stores as unsplittable. If we fail
-  // to split these during pre-splitting, we want to force them to be
-  // rewritten into a partition.
+  // Now that we have identified any pre-splitting opportunities,
+  // mark loads and stores unsplittable except for the following case.
+  // We leave a slice splittable if all other slices are disjoint or fully
+  // included in the slice, such as whole-alloca loads and stores.
+  // If we fail to split these during pre-splitting, we want to force them
+  // to be rewritten into a partition.
   bool IsSorted = true;
-  for (Slice &S : AS) {
-    if (!S.isSplittable())
-      continue;
-    // FIXME: We currently leave whole-alloca splittable loads and stores. This
-    // used to be the only splittable loads and stores and we need to be
-    // confident that the above handling of splittable loads and stores is
-    // completely sufficient before we forcibly disable the remaining handling.
-    if (S.beginOffset() == 0 &&
-        S.endOffset() >= DL.getTypeAllocSize(AI.getAllocatedType()))
-      continue;
-    if (isa<LoadInst>(S.getUse()->getUser()) ||
-        isa<StoreInst>(S.getUse()->getUser())) {
-      S.makeUnsplittable();
-      IsSorted = false;
+
+  uint64_t AllocaSize = DL.getTypeAllocSize(AI.getAllocatedType());
+  const uint64_t MaxBitVectorSize = 1024;
+  if (SROASplitNonWholeAllocaSlices && AllocaSize <= MaxBitVectorSize) {
+    // If a byte boundary is included in any load or store, a slice starting or
+    // ending at the boundary is not splittable.
+    SmallBitVector SplittableOffset(AllocaSize + 1, true);
+    for (Slice &S : AS)
+      for (unsigned O = S.beginOffset() + 1;
+           O < S.endOffset() && O < AllocaSize; O++)
+        SplittableOffset.reset(O);
+
+    for (Slice &S : AS) {
+      if (!S.isSplittable())
+        continue;
+
+      if ((S.beginOffset() > AllocaSize || SplittableOffset[S.beginOffset()]) &&
+          (S.endOffset() > AllocaSize || SplittableOffset[S.endOffset()]))
+        continue;
+
+      if (isa<LoadInst>(S.getUse()->getUser()) ||
+          isa<StoreInst>(S.getUse()->getUser())) {
+        S.makeUnsplittable();
+        IsSorted = false;
+      }
     }
   }
+  else {
+    // We only allow whole-alloca splittable loads and stores
+    // for a large alloca to avoid creating too large BitVector.
+    for (Slice &S : AS) {
+      if (!S.isSplittable())
+        continue;
+
+      if (S.beginOffset() == 0 && S.endOffset() >= AllocaSize)
+        continue;
+
+      if (isa<LoadInst>(S.getUse()->getUser()) ||
+          isa<StoreInst>(S.getUse()->getUser())) {
+        S.makeUnsplittable();
+        IsSorted = false;
+      }
+    }
+  }
+
   if (!IsSorted)
     std::sort(AS.begin(), AS.end());
 
@@ -4117,6 +4154,7 @@ bool SROA::splitAlloca(AllocaInst &AI, AllocaSlices &AS) {
   if (!DbgDeclares.empty()) {
     auto *Var = DbgDeclares.front()->getVariable();
     auto *Expr = DbgDeclares.front()->getExpression();
+    auto VarSize = Var->getSizeInBits();
     DIBuilder DIB(*AI.getModule(), /*AllowUnresolved*/ false);
     uint64_t AllocaSize = DL.getTypeSizeInBits(AI.getAllocatedType());
     for (auto Fragment : Fragments) {
@@ -4144,8 +4182,23 @@ bool SROA::splitAlloca(AllocaInst &AI, AllocaSlices &AS) {
                  "new fragment is outside of original fragment");
           Start -= OrigFragment->OffsetInBits;
         }
-        FragmentExpr =
-            DIExpression::createFragmentExpression(Expr, Start, Size);
+
+        // The alloca may be larger than the variable.
+        if (VarSize) {
+          if (Size > *VarSize)
+            Size = *VarSize;
+          if (Size == 0 || Start + Size > *VarSize)
+            continue;
+        }
+
+        // Avoid creating a fragment expression that covers the entire variable.
+        if (!VarSize || *VarSize != Size) {
+          if (auto E =
+                  DIExpression::createFragmentExpression(Expr, Start, Size))
+            FragmentExpr = *E;
+          else
+            continue;
+        }
       }
 
       // Remove any existing intrinsics describing the same alloca.
@@ -4252,8 +4305,9 @@ bool SROA::runOnAlloca(AllocaInst &AI) {
 ///
 /// We also record the alloca instructions deleted here so that they aren't
 /// subsequently handed to mem2reg to promote.
-void SROA::deleteDeadInstructions(
+bool SROA::deleteDeadInstructions(
     SmallPtrSetImpl<AllocaInst *> &DeletedAllocas) {
+  bool Changed = false;
   while (!DeadInsts.empty()) {
     Instruction *I = DeadInsts.pop_back_val();
     DEBUG(dbgs() << "Deleting dead instruction: " << *I << "\n");
@@ -4279,7 +4333,9 @@ void SROA::deleteDeadInstructions(
 
     ++NumDeleted;
     I->eraseFromParent();
+    Changed = true;
   }
+  return Changed;
 }
 
 /// \brief Promote the allocas, using the best available technique.
@@ -4321,7 +4377,7 @@ PreservedAnalyses SROA::runImpl(Function &F, DominatorTree &RunDT,
   do {
     while (!Worklist.empty()) {
       Changed |= runOnAlloca(*Worklist.pop_back_val());
-      deleteDeadInstructions(DeletedAllocas);
+      Changed |= deleteDeadInstructions(DeletedAllocas);
 
       // Remove the deleted allocas from various lists so that we don't try to
       // continue processing them.

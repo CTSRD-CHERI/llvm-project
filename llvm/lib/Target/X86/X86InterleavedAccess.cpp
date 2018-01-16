@@ -137,12 +137,14 @@ bool X86InterleavedAccessGroup::isSupported() const {
   //    1. Store and load of 4-element vectors of 64 bits on AVX.
   //    2. Store of 16/32-element vectors of 8 bits on AVX.
   // Stride 3:
-  //    1. Load of 16/32-element vecotrs of 8 bits on AVX.
+  //    1. Load of 16/32-element vectors of 8 bits on AVX.
   if (!Subtarget.hasAVX() || (Factor != 4 && Factor != 3))
     return false;
 
   if (isa<LoadInst>(Inst)) {
     WideInstSize = DL.getTypeSizeInBits(Inst->getType());
+    if (cast<LoadInst>(Inst)->getPointerAddressSpace())
+      return false;
   } else
     WideInstSize = DL.getTypeSizeInBits(Shuffles[0]->getType());
 
@@ -258,7 +260,7 @@ static void genShuffleBland(MVT VT, ArrayRef<uint32_t> Mask,
     Out.push_back(Mask[i] + HighOffset + NumOfElm);
 }
 
-// reorderSubVecotr returns the data to is the original state. And de-facto is
+// reorderSubVector returns the data to is the original state. And de-facto is
 // the opposite of  the function concatSubVector.
 
 // For VecElems = 16

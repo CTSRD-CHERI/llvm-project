@@ -20,6 +20,7 @@
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineOperand.h"
+#include "llvm/CodeGen/TargetLoweringObjectFile.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Function.h"
 #include "llvm/MC/MCAsmInfo.h"
@@ -29,7 +30,6 @@
 #include "llvm/MC/MCTargetOptions.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/LEB128.h"
-#include "llvm/Target/TargetLoweringObjectFile.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -149,7 +149,7 @@ computeActionsTable(const SmallVectorImpl<const LandingPadInfo*> &LandingPads,
       FirstAction = SizeActions + SizeSiteActions - SizeAction + 1;
     } // else identical - re-use previous FirstAction
 
-    // Information used when created the call-site table. The action record
+    // Information used when creating the call-site table. The action record
     // field of the call site record is the offset of the first associated
     // action record, relative to the start of the actions table. This value is
     // biased by 1 (1 indicating the start of the actions table), and 0

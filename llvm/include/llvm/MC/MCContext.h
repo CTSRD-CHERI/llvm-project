@@ -23,6 +23,7 @@
 #include "llvm/MC/SectionKind.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/Compiler.h"
+#include "llvm/Support/MD5.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <cassert>
@@ -441,25 +442,25 @@ namespace llvm {
     getAssociativeCOFFSection(MCSectionCOFF *Sec, const MCSymbol *KeySym,
                               unsigned UniqueID = GenericSectionID);
 
-    MCSectionWasm *getWasmSection(const Twine &Section, unsigned Type) {
-      return getWasmSection(Section, Type, nullptr);
+    MCSectionWasm *getWasmSection(const Twine &Section, SectionKind K) {
+      return getWasmSection(Section, K, nullptr);
     }
 
-    MCSectionWasm *getWasmSection(const Twine &Section, unsigned Type,
+    MCSectionWasm *getWasmSection(const Twine &Section, SectionKind K,
                                   const char *BeginSymName) {
-      return getWasmSection(Section, Type, "", ~0, BeginSymName);
+      return getWasmSection(Section, K, "", ~0, BeginSymName);
     }
 
-    MCSectionWasm *getWasmSection(const Twine &Section, unsigned Type,
+    MCSectionWasm *getWasmSection(const Twine &Section, SectionKind K,
                                   const Twine &Group, unsigned UniqueID) {
-      return getWasmSection(Section, Type, Group, UniqueID, nullptr);
+      return getWasmSection(Section, K, Group, UniqueID, nullptr);
     }
 
-    MCSectionWasm *getWasmSection(const Twine &Section, unsigned Type,
+    MCSectionWasm *getWasmSection(const Twine &Section, SectionKind K,
                                   const Twine &Group, unsigned UniqueID,
                                   const char *BeginSymName);
 
-    MCSectionWasm *getWasmSection(const Twine &Section, unsigned Type,
+    MCSectionWasm *getWasmSection(const Twine &Section, SectionKind K,
                                   const MCSymbolWasm *Group, unsigned UniqueID,
                                   const char *BeginSymName);
 
@@ -489,7 +490,8 @@ namespace llvm {
 
     /// Creates an entry in the dwarf file and directory tables.
     unsigned getDwarfFile(StringRef Directory, StringRef FileName,
-                          unsigned FileNumber, unsigned CUID);
+                          unsigned FileNumber, MD5::MD5Result *Checksum,
+                          unsigned CUID);
 
     bool isValidDwarfFileNumber(unsigned FileNumber, unsigned CUID = 0);
 

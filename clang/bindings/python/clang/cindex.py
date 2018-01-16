@@ -94,6 +94,9 @@ if sys.version_info[0] == 3:
                 return cls(param)
             if isinstance(param, bytes):
                 return cls(param)
+            if param is None:
+                # Support passing null to C functions expecting char arrays
+                return None
             raise TypeError("Cannot convert '{}' to '{}'".format(type(param).__name__, cls.__name__))
 
         @staticmethod
@@ -1476,6 +1479,12 @@ class Cursor(Structure):
         """
         return conf.lib.clang_CXXMethod_isVirtual(self)
 
+    def is_abstract_record(self):
+        """Returns True if the cursor refers to a C++ record declaration
+        that has pure virtual member functions.
+        """
+        return conf.lib.clang_CXXRecord_isAbstract(self)
+
     def is_scoped_enum(self):
         """Returns True if the cursor refers to a scoped enum declaration.
         """
@@ -1585,6 +1594,16 @@ class Cursor(Structure):
             self._storage_class = conf.lib.clang_Cursor_getStorageClass(self)
 
         return StorageClass.from_id(self._storage_class)
+
+    @property
+    def availability(self):
+        """
+        Retrieves the availability of the entity pointed at by the cursor.
+        """
+        if not hasattr(self, '_availability'):
+            self._availability = conf.lib.clang_getCursorAvailability(self)
+
+        return AvailabilityKind.from_id(self._availability)
 
     @property
     def access_specifier(self):
@@ -1923,6 +1942,24 @@ StorageClass.OPENCLWORKGROUPLOCAL = StorageClass(5)
 StorageClass.AUTO = StorageClass(6)
 StorageClass.REGISTER = StorageClass(7)
 
+### Availability Kinds ###
+
+class AvailabilityKind(BaseEnumeration):
+    """
+    Describes the availability of an entity.
+    """
+
+    # The unique kind objects, indexed by id.
+    _kinds = []
+    _name_map = None
+
+    def __repr__(self):
+        return 'AvailabilityKind.%s' % (self.name,)
+
+AvailabilityKind.AVAILABLE = AvailabilityKind(0)
+AvailabilityKind.DEPRECATED = AvailabilityKind(1)
+AvailabilityKind.NOT_AVAILABLE = AvailabilityKind(2)
+AvailabilityKind.NOT_ACCESSIBLE = AvailabilityKind(3)
 
 ### C++ access specifiers ###
 
@@ -3370,6 +3407,10 @@ functionList = [
    [Cursor],
    bool),
 
+  ("clang_CXXRecord_isAbstract",
+   [Cursor],
+   bool),
+
   ("clang_EnumDecl_isScoped",
    [Cursor],
    bool),
@@ -3490,6 +3531,10 @@ functionList = [
   ("clang_getCursor",
    [TranslationUnit, SourceLocation],
    Cursor),
+
+  ("clang_getCursorAvailability",
+   [Cursor],
+   c_int),
 
   ("clang_getCursorDefinition",
    [Cursor],
@@ -4106,6 +4151,7 @@ conf = Config()
 register_enumerations()
 
 __all__ = [
+    'AvailabilityKind',
     'Config',
     'CodeCompletionResults',
     'CompilationDatabase',

@@ -2,6 +2,7 @@ add_llvm_library(LLVMScalarOpts
   ADCE.cpp
   AlignmentFromAssumptions.cpp
   BDCE.cpp
+  CallSiteSplitting.cpp
   ConstantHoisting.cpp
   ConstantProp.cpp
   CorrelatedValuePropagation.cpp
@@ -61,6 +62,7 @@ add_llvm_library(LLVMScalarOpts
   SimplifyCFGPass.cpp
   Sink.cpp
   SpeculativeExecution.cpp
+  SpeculateAroundPHIs.cpp
   StraightLineStrengthReduce.cpp
   StructurizeCFG.cpp
   TailRecursionElimination.cpp

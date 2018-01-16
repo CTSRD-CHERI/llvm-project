@@ -62,7 +62,13 @@ namespace {
   static QualType getType(APValue::LValueBase B) {
     if (!B) return QualType();
     if (const ValueDecl *D = B.dyn_cast<const ValueDecl*>())
-      return D->getType();
+      // FIXME: It's unclear where we're supposed to take the type from, and
+      // this actually matters for arrays of unknown bound. Using the type of
+      // the most recent declaration isn't clearly correct in general. Eg:
+      //
+      // extern int arr[]; void f() { extern int arr[3]; };
+      // constexpr int *p = &arr[1]; // valid?
+      return cast<ValueDecl>(D->getMostRecentDecl())->getType();
 
     const Expr *Base = B.get<const Expr*>();
 
@@ -141,6 +147,12 @@ namespace {
     return E && E->getType()->isPointerType() && tryUnwrapAllocSizeCall(E);
   }
 
+  /// The bound to claim that an array of unknown bound has.
+  /// The value in MostDerivedArraySize is undefined in this case. So, set it
+  /// to an arbitrary value that's likely to loudly break things if it's used.
+  static const uint64_t AssumedSizeForUnsizedArray =
+      std::numeric_limits<uint64_t>::max() / 2;
+
   /// Determines if an LValue with the given LValueBase will have an unsized
   /// array in its designator.
   /// Find the path length and type of the most-derived subobject in the given
@@ -148,7 +160,8 @@ namespace {
   static unsigned
   findMostDerivedSubobject(ASTContext &Ctx, APValue::LValueBase Base,
                            ArrayRef<APValue::LValuePathEntry> Path,
-                           uint64_t &ArraySize, QualType &Type, bool &IsArray) {
+                           uint64_t &ArraySize, QualType &Type, bool &IsArray,
+                           bool &FirstEntryIsUnsizedArray) {
     // This only accepts LValueBases from APValues, and APValues don't support
     // arrays that lack size info.
     assert(!isBaseAnAllocSizeCall(Base) &&
@@ -158,12 +171,18 @@ namespace {
 
     for (unsigned I = 0, N = Path.size(); I != N; ++I) {
       if (Type->isArrayType()) {
-        const ConstantArrayType *CAT =
-            cast<ConstantArrayType>(Ctx.getAsArrayType(Type));
-        Type = CAT->getElementType();
-        ArraySize = CAT->getSize().getZExtValue();
+        const ArrayType *AT = Ctx.getAsArrayType(Type);
+        Type = AT->getElementType();
         MostDerivedLength = I + 1;
         IsArray = true;
+
+        if (auto *CAT = dyn_cast<ConstantArrayType>(AT)) {
+          ArraySize = CAT->getSize().getZExtValue();
+        } else {
+          assert(I == 0 && "unexpected unsized array designator");
+          FirstEntryIsUnsizedArray = true;
+          ArraySize = AssumedSizeForUnsizedArray;
+        }
       } else if (Type->isAnyComplexType()) {
         const ComplexType *CT = Type->castAs<ComplexType>();
         Type = CT->getElementType();
@@ -246,10 +265,12 @@ namespace {
         Entries.insert(Entries.end(), VEntries.begin(), VEntries.end());
         if (V.getLValueBase()) {
           bool IsArray = false;
+          bool FirstIsUnsizedArray = false;
           MostDerivedPathLength = findMostDerivedSubobject(
               Ctx, V.getLValueBase(), V.getLValuePath(), MostDerivedArraySize,
-              MostDerivedType, IsArray);
+              MostDerivedType, IsArray, FirstIsUnsizedArray);
           MostDerivedIsArrayElement = IsArray;
+          FirstEntryIsAnUnsizedArray = FirstIsUnsizedArray;
         }
       }
     }
@@ -318,7 +339,7 @@ namespace {
       // The value in MostDerivedArraySize is undefined in this case. So, set it
       // to an arbitrary value that's likely to loudly break things if it's
       // used.
-      MostDerivedArraySize = std::numeric_limits<uint64_t>::max() / 2;
+      MostDerivedArraySize = AssumedSizeForUnsizedArray;
       MostDerivedPathLength = Entries.size();
     }
     /// Update this designator to refer to the given base or member of this
@@ -350,6 +371,7 @@ namespace {
       MostDerivedArraySize = 2;
       MostDerivedPathLength = Entries.size();
     }
+    void diagnoseUnsizedArrayPointerArithmetic(EvalInfo &Info, const Expr *E);
     void diagnosePointerArithmetic(EvalInfo &Info, const Expr *E,
                                    const APSInt &N);
     /// Add N to the address of this subobject.
@@ -357,6 +379,7 @@ namespace {
       if (Invalid || !N) return;
       uint64_t TruncatedN = N.extOrTrunc(64).getZExtValue();
       if (isMostDerivedAnUnsizedArray()) {
+        diagnoseUnsizedArrayPointerArithmetic(Info, E);
         // Can't verify -- trust that the user is doing the right thing (or if
         // not, trust that the caller will catch the bad behavior).
         // FIXME: Should we reject if this overflows, at least?
@@ -1094,7 +1117,17 @@ bool SubobjectDesignator::checkSubobject(EvalInfo &Info, const Expr *E,
     setInvalid();
     return false;
   }
+  // Note, we do not diagnose if isMostDerivedAnUnsizedArray(), because there
+  // must actually be at least one array element; even a VLA cannot have a
+  // bound of zero. And if our index is nonzero, we already had a CCEDiag.
   return true;
+}
+
+void SubobjectDesignator::diagnoseUnsizedArrayPointerArithmetic(EvalInfo &Info,
+                                                                const Expr *E) {
+  Info.CCEDiag(E, diag::note_constexpr_unsized_array_indexed);
+  // Do not set the designator as invalid: we can represent this situation,
+  // and correct handling of __builtin_object_size requires us to do so.
 }
 
 void SubobjectDesignator::diagnosePointerArithmetic(EvalInfo &Info,
@@ -1240,8 +1273,6 @@ namespace {
                     IsNullPtr);
       else {
         assert(!InvalidBase && "APValues can't handle invalid LValue bases");
-        assert(!Designator.FirstEntryIsAnUnsizedArray &&
-               "Unsized array with a valid base?");
         V = APValue(Base, Offset, Designator.Entries,
                     Designator.IsOnePastTheEnd, CallIndex, IsNullPtr);
       }
@@ -1314,12 +1345,17 @@ namespace {
       if (checkSubobject(Info, E, isa<FieldDecl>(D) ? CSK_Field : CSK_Base))
         Designator.addDeclUnchecked(D, Virtual);
     }
-    void addUnsizedArray(EvalInfo &Info, QualType ElemTy) {
-      assert(Designator.Entries.empty() && getType(Base)->isPointerType());
-      assert(isBaseAnAllocSizeCall(Base) &&
-             "Only alloc_size bases can have unsized arrays");
-      Designator.FirstEntryIsAnUnsizedArray = true;
-      Designator.addUnsizedArrayUnchecked(ElemTy);
+    void addUnsizedArray(EvalInfo &Info, const Expr *E, QualType ElemTy) {
+      if (!Designator.Entries.empty()) {
+        Info.CCEDiag(E, diag::note_constexpr_unsupported_unsized_array);
+        Designator.setInvalid();
+        return;
+      }
+      if (checkSubobject(Info, E, CSK_ArrayToPointer)) {
+        assert(getType(Base)->isPointerType() || getType(Base)->isArrayType());
+        Designator.FirstEntryIsAnUnsizedArray = true;
+        Designator.addUnsizedArrayUnchecked(ElemTy);
+      }
     }
     void addArray(EvalInfo &Info, const Expr *E, const ConstantArrayType *CAT) {
       if (checkSubobject(Info, E, CSK_ArrayToPointer))
@@ -1783,6 +1819,9 @@ static bool CheckConstantExpression(EvalInfo &Info, SourceLocation DiagLoc,
       }
     }
     for (const auto *I : RD->fields()) {
+      if (I->isUnnamedBitfield())
+        continue;
+
       if (!CheckConstantExpression(Info, DiagLoc, I->getType(),
                                    Value.getStructField(I->getFieldIndex())))
         return false;
@@ -2624,10 +2663,12 @@ findSubobject(EvalInfo &Info, const Expr *E, const CompleteObject &Obj,
   if (Sub.Invalid)
     // A diagnostic will have already been produced.
     return handler.failed();
-  if (Sub.isOnePastTheEnd()) {
+  if (Sub.isOnePastTheEnd() || Sub.isMostDerivedAnUnsizedArray()) {
     if (Info.getLangOpts().CPlusPlus11)
-      Info.FFDiag(E, diag::note_constexpr_access_past_end)
-        << handler.AccessKind;
+      Info.FFDiag(E, Sub.isOnePastTheEnd()
+                         ? diag::note_constexpr_access_past_end
+                         : diag::note_constexpr_access_unsized_array)
+          << handler.AccessKind;
     else
       Info.FFDiag(E);
     return handler.failed();
@@ -3206,11 +3247,6 @@ static bool handleAssignment(EvalInfo &Info, const Expr *E, const LValue &LVal,
   return Obj && modifySubobject(Info, E, Obj, LVal.Designator, Val);
 }
 
-static bool isOverflowingIntegerType(ASTContext &Ctx, QualType T) {
-  return T->isSignedIntegerType() &&
-         Ctx.getIntWidth(T) >= Ctx.getIntWidth(Ctx.IntTy);
-}
-
 namespace {
 struct CompoundAssignSubobjectHandler {
   EvalInfo &Info;
@@ -3332,7 +3368,7 @@ static bool handleCompoundAssignment(
 namespace {
 struct IncDecSubobjectHandler {
   EvalInfo &Info;
-  const Expr *E;
+  const UnaryOperator *E;
   AccessKinds AccessKind;
   APValue *Old;
 
@@ -3404,16 +3440,14 @@ struct IncDecSubobjectHandler {
     if (AccessKind == AK_Increment) {
       ++Value;
 
-      if (!WasNegative && Value.isNegative() &&
-          isOverflowingIntegerType(Info.Ctx, SubobjType)) {
+      if (!WasNegative && Value.isNegative() && E->canOverflow()) {
         APSInt ActualValue(Value, /*IsUnsigned*/true);
         return HandleOverflow(Info, E, ActualValue, SubobjType);
       }
     } else {
       --Value;
 
-      if (WasNegative && !Value.isNegative() &&
-          isOverflowingIntegerType(Info.Ctx, SubobjType)) {
+      if (WasNegative && !Value.isNegative() && E->canOverflow()) {
         unsigned BitWidth = Value.getBitWidth();
         APSInt ActualValue(Value.sext(BitWidth + 1), /*IsUnsigned*/false);
         ActualValue.setBit(BitWidth);
@@ -3474,7 +3508,7 @@ static bool handleIncDec(EvalInfo &Info, const Expr *E, const LValue &LVal,
 
   AccessKinds AK = IsIncrement ? AK_Increment : AK_Decrement;
   CompleteObject Obj = findCompleteObject(Info, E, AK, LVal, LValType);
-  IncDecSubobjectHandler Handler = { Info, E, AK, Old };
+  IncDecSubobjectHandler Handler = {Info, cast<UnaryOperator>(E), AK, Old};
   return Obj && findSubobject(Info, E, Obj, LVal.Designator, Handler);
 }
 
@@ -5487,7 +5521,7 @@ static bool evaluateLValueAsAllocSize(EvalInfo &Info, APValue::LValueBase Base,
   Result.setInvalid(E);
 
   QualType Pointee = E->getType()->castAs<PointerType>()->getPointeeType();
-  Result.addUnsizedArray(Info, Pointee);
+  Result.addUnsizedArray(Info, E, Pointee);
   return true;
 }
 
@@ -5697,7 +5731,8 @@ bool PointerExprEvaluator::VisitCastExpr(const CastExpr* E) {
       return true;
     }
   }
-  case CK_ArrayToPointerDecay:
+
+  case CK_ArrayToPointerDecay: {
     if (SubExpr->isGLValue()) {
       if (!evaluateLValue(SubExpr, Result))
         return false;
@@ -5708,12 +5743,13 @@ bool PointerExprEvaluator::VisitCastExpr(const CastExpr* E) {
         return false;
     }
     // The result is a pointer to the first element of the array.
-    if (const ConstantArrayType *CAT
-          = Info.Ctx.getAsConstantArrayType(SubExpr->getType()))
+    auto *AT = Info.Ctx.getAsArrayType(SubExpr->getType());
+    if (auto *CAT = dyn_cast<ConstantArrayType>(AT))
       Result.addArray(Info, E, CAT);
     else
-      Result.Designator.setInvalid();
+      Result.addUnsizedArray(Info, E, AT->getElementType());
     return true;
+  }
 
   case CK_FunctionToPointerDecay:
     return evaluateLValue(SubExpr, Result);
@@ -5780,7 +5816,7 @@ bool PointerExprEvaluator::visitNonBuiltinCallExpr(const CallExpr *E) {
 
   Result.setInvalid(E);
   QualType PointeeTy = E->getType()->castAs<PointerType>()->getPointeeType();
-  Result.addUnsizedArray(Info, PointeeTy);
+  Result.addUnsizedArray(Info, E, PointeeTy);
   return true;
 }
 
@@ -5870,7 +5906,7 @@ bool PointerExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
         << (std::string("'") + Info.Ctx.BuiltinInfo.getName(BuiltinOp) + "'");
     else
       Info.CCEDiag(E, diag::note_invalid_subexpr_in_const_expr);
-    // Fall through.
+    LLVM_FALLTHROUGH;
   case Builtin::BI__builtin_strchr:
   case Builtin::BI__builtin_wcschr:
   case Builtin::BI__builtin_memchr:
@@ -5909,7 +5945,7 @@ bool PointerExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
                                Desired))
         return ZeroInitialization(E);
       StopAtNull = true;
-      // Fall through.
+      LLVM_FALLTHROUGH;
     case Builtin::BImemchr:
     case Builtin::BI__builtin_memchr:
     case Builtin::BI__builtin_char_memchr:
@@ -5922,7 +5958,7 @@ bool PointerExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
     case Builtin::BIwcschr:
     case Builtin::BI__builtin_wcschr:
       StopAtNull = true;
-      // Fall through.
+      LLVM_FALLTHROUGH;
     case Builtin::BIwmemchr:
     case Builtin::BI__builtin_wmemchr:
       // wcschr and wmemchr are given a wchar_t to look for. Just use it.
@@ -7166,6 +7202,7 @@ static int EvaluateBuiltinClassifyType(const CallExpr *E,
     case BuiltinType::Dependent:
       llvm_unreachable("CallExpr::isBuiltinClassifyType(): unimplemented type");
     };
+    break;
 
   case Type::Enum:
     return LangOpts.CPlusPlus ? enumeral_type_class : integer_type_class;
@@ -7341,7 +7378,8 @@ static const Expr *ignorePointerCastsAndParens(const Expr *E) {
 /// Please note: this function is specialized for how __builtin_object_size
 /// views "objects".
 ///
-/// If this encounters an invalid RecordDecl, it will always return true.
+/// If this encounters an invalid RecordDecl or otherwise cannot determine the
+/// correct result, it will always return true.
 static bool isDesignatorAtObjectEnd(const ASTContext &Ctx, const LValue &LVal) {
   assert(!LVal.Designator.Invalid);
 
@@ -7372,11 +7410,13 @@ static bool isDesignatorAtObjectEnd(const ASTContext &Ctx, const LValue &LVal) {
   unsigned I = 0;
   QualType BaseType = getType(Base);
   if (LVal.Designator.FirstEntryIsAnUnsizedArray) {
-    assert(isBaseAnAllocSizeCall(Base) &&
-           "Unsized array in non-alloc_size call?");
-    // If this is an alloc_size base, we should ignore the initial array index
+    // If we don't know the array bound, conservatively assume we're looking at
+    // the final array element.
     ++I;
-    BaseType = BaseType->castAs<PointerType>()->getPointeeType();
+    if (BaseType->isIncompleteArrayType())
+      BaseType = Ctx.getAsArrayType(BaseType)->getElementType();
+    else
+      BaseType = BaseType->castAs<PointerType>()->getPointeeType();
   }
 
   for (unsigned E = LVal.Designator.Entries.size(); I != E; ++I) {
@@ -7778,7 +7818,7 @@ bool IntExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
         << (std::string("'") + Info.Ctx.BuiltinInfo.getName(BuiltinOp) + "'");
     else
       Info.CCEDiag(E, diag::note_invalid_subexpr_in_const_expr);
-    // Fall through.
+    LLVM_FALLTHROUGH;
   case Builtin::BI__builtin_strlen:
   case Builtin::BI__builtin_wcslen: {
     // As an extension, we support __builtin_strlen() as a constant expression,
@@ -7838,7 +7878,7 @@ bool IntExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
         << (std::string("'") + Info.Ctx.BuiltinInfo.getName(BuiltinOp) + "'");
     else
       Info.CCEDiag(E, diag::note_invalid_subexpr_in_const_expr);
-    // Fall through.
+    LLVM_FALLTHROUGH;
   case Builtin::BI__builtin_strcmp:
   case Builtin::BI__builtin_wcscmp:
   case Builtin::BI__builtin_strncmp:
@@ -7929,6 +7969,9 @@ bool IntExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
     return BuiltinOp == Builtin::BI__atomic_always_lock_free ?
         Success(0, E) : Error(E);
   }
+  case Builtin::BIomp_is_initial_device:
+    // We can decide statically which value the runtime would return if called.
+    return Success(Info.getLangOpts().OpenMPIsDevice ? 0 : 1, E);
   }
 }
 
@@ -8828,7 +8871,7 @@ bool IntExprEvaluator::VisitUnaryOperator(const UnaryOperator *E) {
       return false;
     if (!Result.isInt()) return Error(E);
     const APSInt &Value = Result.getInt();
-    if (Value.isSigned() && Value.isMinSignedValue() &&
+    if (Value.isSigned() && Value.isMinSignedValue() && E->canOverflow() &&
         !HandleOverflow(Info, E, -Value.extend(Value.getBitWidth() + 1),
                         E->getType()))
       return false;
@@ -9120,9 +9163,11 @@ bool FloatExprEvaluator::VisitCallExpr(const CallExpr *E) {
   case Builtin::BI__builtin_huge_val:
   case Builtin::BI__builtin_huge_valf:
   case Builtin::BI__builtin_huge_vall:
+  case Builtin::BI__builtin_huge_valf128:
   case Builtin::BI__builtin_inf:
   case Builtin::BI__builtin_inff:
-  case Builtin::BI__builtin_infl: {
+  case Builtin::BI__builtin_infl:
+  case Builtin::BI__builtin_inff128: {
     const llvm::fltSemantics &Sem =
       Info.Ctx.getFloatTypeSemantics(E->getType());
     Result = llvm::APFloat::getInf(Sem);
@@ -9132,6 +9177,7 @@ bool FloatExprEvaluator::VisitCallExpr(const CallExpr *E) {
   case Builtin::BI__builtin_nans:
   case Builtin::BI__builtin_nansf:
   case Builtin::BI__builtin_nansl:
+  case Builtin::BI__builtin_nansf128:
     if (!TryEvaluateBuiltinNaN(Info.Ctx, E->getType(), E->getArg(0),
                                true, Result))
       return Error(E);
@@ -9140,6 +9186,7 @@ bool FloatExprEvaluator::VisitCallExpr(const CallExpr *E) {
   case Builtin::BI__builtin_nan:
   case Builtin::BI__builtin_nanf:
   case Builtin::BI__builtin_nanl:
+  case Builtin::BI__builtin_nanf128:
     // If this is __builtin_nan() turn this into a nan, otherwise we
     // can't constant fold it.
     if (!TryEvaluateBuiltinNaN(Info.Ctx, E->getType(), E->getArg(0),
@@ -9150,6 +9197,7 @@ bool FloatExprEvaluator::VisitCallExpr(const CallExpr *E) {
   case Builtin::BI__builtin_fabs:
   case Builtin::BI__builtin_fabsf:
   case Builtin::BI__builtin_fabsl:
+  case Builtin::BI__builtin_fabsf128:
     if (!EvaluateFloat(E->getArg(0), Result, Info))
       return false;
 
@@ -9163,7 +9211,8 @@ bool FloatExprEvaluator::VisitCallExpr(const CallExpr *E) {
 
   case Builtin::BI__builtin_copysign:
   case Builtin::BI__builtin_copysignf:
-  case Builtin::BI__builtin_copysignl: {
+  case Builtin::BI__builtin_copysignl:
+  case Builtin::BI__builtin_copysignf128: {
     APFloat RHS(0.);
     if (!EvaluateFloat(E->getArg(0), Result, Info) ||
         !EvaluateFloat(E->getArg(1), RHS, Info))
@@ -10425,6 +10474,7 @@ static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
     case BO_AndAssign:
     case BO_XorAssign:
     case BO_OrAssign:
+    case BO_Cmp: // FIXME: Re-enable once we can evaluate this.
       // C99 6.6/3 allows assignments within unevaluated subexpressions of
       // constant expressions, but they can never be ICEs because an ICE cannot
       // contain an lvalue operand.

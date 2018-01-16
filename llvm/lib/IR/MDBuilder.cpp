@@ -14,6 +14,7 @@
 
 #include "llvm/IR/MDBuilder.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/Function.h"
 #include "llvm/IR/Metadata.h"
 using namespace llvm;
 
@@ -57,10 +58,14 @@ MDNode *MDBuilder::createUnpredictable() {
 }
 
 MDNode *MDBuilder::createFunctionEntryCount(
-    uint64_t Count, const DenseSet<GlobalValue::GUID> *Imports) {
+    uint64_t Count, bool Synthetic,
+    const DenseSet<GlobalValue::GUID> *Imports) {
   Type *Int64Ty = Type::getInt64Ty(Context);
   SmallVector<Metadata *, 8> Ops;
-  Ops.push_back(createString("function_entry_count"));
+  if (Synthetic)
+    Ops.push_back(createString("synthetic_function_entry_count"));
+  else
+    Ops.push_back(createString("function_entry_count"));
   Ops.push_back(createConstant(ConstantInt::get(Int64Ty, Count)));
   if (Imports) {
     SmallVector<GlobalValue::GUID, 2> OrderID(Imports->begin(), Imports->end());
@@ -93,6 +98,13 @@ MDNode *MDBuilder::createRange(Constant *Lo, Constant *Hi) {
 
   // Return the range [Lo, Hi).
   return MDNode::get(Context, {createConstant(Lo), createConstant(Hi)});
+}
+
+MDNode *MDBuilder::createCallees(ArrayRef<Function *> Callees) {
+  SmallVector<Metadata *, 4> Ops;
+  for (Function *F : Callees)
+    Ops.push_back(createConstant(F));
+  return MDNode::get(Context, Ops);
 }
 
 MDNode *MDBuilder::createAnonymousAARoot(StringRef Name, MDNode *Extra) {
@@ -149,7 +161,7 @@ MDNode *MDBuilder::createTBAAStructNode(ArrayRef<TBAAStructField> Fields) {
   for (unsigned i = 0, e = Fields.size(); i != e; ++i) {
     Vals[i * 3 + 0] = createConstant(ConstantInt::get(Int64, Fields[i].Offset));
     Vals[i * 3 + 1] = createConstant(ConstantInt::get(Int64, Fields[i].Size));
-    Vals[i * 3 + 2] = Fields[i].TBAA;
+    Vals[i * 3 + 2] = Fields[i].Type;
   }
   return MDNode::get(Context, Vals);
 }
@@ -188,4 +200,41 @@ MDNode *MDBuilder::createTBAAStructTagNode(MDNode *BaseType, MDNode *AccessType,
                                  createConstant(ConstantInt::get(Int64, 1))});
   }
   return MDNode::get(Context, {BaseType, AccessType, createConstant(Off)});
+}
+
+MDNode *MDBuilder::createTBAATypeNode(MDNode *Parent, uint64_t Size,
+                                      Metadata *Id,
+                                      ArrayRef<TBAAStructField> Fields) {
+  SmallVector<Metadata *, 4> Ops(3 + Fields.size() * 3);
+  Type *Int64 = Type::getInt64Ty(Context);
+  Ops[0] = Parent;
+  Ops[1] = createConstant(ConstantInt::get(Int64, Size));
+  Ops[2] = Id;
+  for (unsigned I = 0, E = Fields.size(); I != E; ++I) {
+    Ops[I * 3 + 3] = Fields[I].Type;
+    Ops[I * 3 + 4] = createConstant(ConstantInt::get(Int64, Fields[I].Offset));
+    Ops[I * 3 + 5] = createConstant(ConstantInt::get(Int64, Fields[I].Size));
+  }
+  return MDNode::get(Context, Ops);
+}
+
+MDNode *MDBuilder::createTBAAAccessTag(MDNode *BaseType, MDNode *AccessType,
+                                       uint64_t Offset, uint64_t Size,
+                                       bool IsImmutable) {
+  IntegerType *Int64 = Type::getInt64Ty(Context);
+  auto *OffsetNode = createConstant(ConstantInt::get(Int64, Offset));
+  auto *SizeNode = createConstant(ConstantInt::get(Int64, Size));
+  if (IsImmutable) {
+    auto *ImmutabilityFlagNode = createConstant(ConstantInt::get(Int64, 1));
+    return MDNode::get(Context, {BaseType, AccessType, OffsetNode, SizeNode,
+                                 ImmutabilityFlagNode});
+  }
+  return MDNode::get(Context, {BaseType, AccessType, OffsetNode, SizeNode});
+}
+
+MDNode *MDBuilder::createIrrLoopHeaderWeight(uint64_t Weight) {
+  SmallVector<Metadata *, 2> Vals(2);
+  Vals[0] = createString("loop_header_weight");
+  Vals[1] = createConstant(ConstantInt::get(Type::getInt64Ty(Context), Weight));
+  return MDNode::get(Context, Vals);
 }

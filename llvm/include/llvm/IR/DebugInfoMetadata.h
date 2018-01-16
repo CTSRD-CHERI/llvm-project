@@ -633,6 +633,10 @@ public:
   bool isStaticMember() const { return getFlags() & FlagStaticMember; }
   bool isLValueReference() const { return getFlags() & FlagLValueReference; }
   bool isRValueReference() const { return getFlags() & FlagRValueReference; }
+  bool isTypePassByValue() const { return getFlags() & FlagTypePassByValue; }
+  bool isTypePassByReference() const {
+    return getFlags() & FlagTypePassByReference;
+  }
 
   static bool classof(const Metadata *MD) {
     switch (MD->getMetadataID()) {
@@ -1419,19 +1423,15 @@ public:
   /// represented in a single line entry.  In this case, no location
   /// should be set, unless the merged instruction is a call, which we will
   /// set the merged debug location as line 0 of the nearest common scope
-  /// where 2 locations are inlined from. This only applies to Instruction,
-  /// For MachineInstruction, as it is post-inline, we will treat the call
+  /// where 2 locations are inlined from. This only applies to Instruction;
+  /// for MachineInstruction, as it is post-inline, we will treat the call
   /// instruction the same way as other instructions.
   ///
-  /// This should only be used by MachineInstruction because call can be
-  /// treated the same as other instructions. Otherwise, use
-  /// \p applyMergedLocation instead.
-  static const DILocation *getMergedLocation(const DILocation *LocA,
-                                             const DILocation *LocB) {
-    if (LocA && LocB && (LocA == LocB || !LocA->canDiscriminate(*LocB)))
-      return LocA;
-    return nullptr;
-  }
+  /// \p ForInst: The Instruction the merged DILocation is for. If the
+  /// Instruction is unavailable or non-existent, use nullptr.
+  static const DILocation *
+  getMergedLocation(const DILocation *LocA, const DILocation *LocB,
+                    const Instruction *ForInst = nullptr);
 
   /// Returns the base discriminator for a given encoded discriminator \p D.
   static unsigned getBaseDiscriminatorFromDiscriminator(unsigned D) {
@@ -2095,6 +2095,8 @@ public:
   DITypeRef getType() const { return DITypeRef(getRawType()); }
   uint32_t getAlignInBits() const { return AlignInBits; }
   uint32_t getAlignInBytes() const { return getAlignInBits() / CHAR_BIT; }
+  /// Determines the size of the variable's type.
+  Optional<uint64_t> getSizeInBits() const;
 
   StringRef getFilename() const {
     if (auto *F = getFile())
@@ -2299,8 +2301,9 @@ public:
 
   /// Prepend \p DIExpr with a deref and offset operation and optionally turn it
   /// into a stack value.
-  static DIExpression *prepend(const DIExpression *DIExpr, bool Deref,
-                               int64_t Offset = 0, bool StackValue = false);
+  static DIExpression *prepend(const DIExpression *DIExpr, bool DerefBefore,
+                               int64_t Offset = 0, bool DerefAfter = false,
+                               bool StackValue = false);
 
   /// Create a DIExpression to describe one part of an aggregate variable that
   /// is fragmented across multiple Values. The DW_OP_LLVM_fragment operation
@@ -2310,9 +2313,11 @@ public:
   ///
   /// \param OffsetInBits Offset of the piece in bits.
   /// \param SizeInBits   Size of the piece in bits.
-  static DIExpression *createFragmentExpression(const DIExpression *Exp,
-                                                unsigned OffsetInBits,
-                                                unsigned SizeInBits);
+  /// \return             Creating a fragment expression may fail if \c Expr
+  ///                     contains arithmetic operations that would be truncated.
+  static Optional<DIExpression *>
+  createFragmentExpression(const DIExpression *Expr, unsigned OffsetInBits,
+                           unsigned SizeInBits);
 };
 
 /// Global variables.

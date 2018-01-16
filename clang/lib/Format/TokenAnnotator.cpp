@@ -617,7 +617,9 @@ private:
       break;
     case tok::kw_for:
       if (Style.Language == FormatStyle::LK_JavaScript) {
-        if (Tok->Previous && Tok->Previous->is(tok::period))
+        // x.for and {for: ...}
+        if ((Tok->Previous && Tok->Previous->is(tok::period)) ||
+            (Tok->Next && Tok->Next->is(tok::colon)))
           break;
         // JS' for await ( ...
         if (CurrentToken && CurrentToken->is(Keywords.kw_await))
@@ -696,7 +698,8 @@ private:
           CurrentToken->Type = TT_PointerOrReference;
         consumeToken();
         if (CurrentToken &&
-            CurrentToken->Previous->isOneOf(TT_BinaryOperator, tok::comma))
+            CurrentToken->Previous->isOneOf(TT_BinaryOperator, TT_UnaryOperator,
+                                            tok::comma))
           CurrentToken->Previous->Type = TT_OverloadedOperator;
       }
       if (CurrentToken) {
@@ -868,7 +871,7 @@ public:
       return parsePreprocessorDirective();
 
     // Directly allow to 'import <string-literal>' to support protocol buffer
-    // definitions (code.google.com/p/protobuf) or missing "#" (either way we
+    // definitions (github.com/google/protobuf) or missing "#" (either way we
     // should not break the line).
     IdentifierInfo *Info = CurrentToken->Tok.getIdentifierInfo();
     if ((Style.Language == FormatStyle::LK_Java &&
@@ -1662,17 +1665,15 @@ private:
   /// \brief Parse unary operator expressions and surround them with fake
   /// parentheses if appropriate.
   void parseUnaryOperator() {
-    if (!Current || Current->isNot(TT_UnaryOperator)) {
-      parse(PrecedenceArrowAndPeriod);
-      return;
+    llvm::SmallVector<FormatToken *, 2> Tokens;
+    while (Current && Current->is(TT_UnaryOperator)) {
+      Tokens.push_back(Current);
+      next();
     }
-
-    FormatToken *Start = Current;
-    next();
-    parseUnaryOperator();
-
-    // The actual precedence doesn't matter.
-    addFakeParenthesis(Start, prec::Unknown);
+    parse(PrecedenceArrowAndPeriod);
+    for (FormatToken *Token : llvm::reverse(Tokens))
+      // The actual precedence doesn't matter.
+      addFakeParenthesis(Token, prec::Unknown);
   }
 
   void parseConditionalExpr() {
@@ -1891,7 +1892,8 @@ void TokenAnnotator::calculateFormattingInformation(AnnotatedLine &Line) {
   }
 
   Line.First->TotalLength =
-      Line.First->IsMultiline ? Style.ColumnLimit : Line.First->ColumnWidth;
+      Line.First->IsMultiline ? Style.ColumnLimit
+                              : Line.FirstStartColumn + Line.First->ColumnWidth;
   FormatToken *Current = Line.First->Next;
   bool InFunctionDecl = Line.MightBeFunctionDecl;
   while (Current) {
@@ -2151,7 +2153,7 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
   if (Left.isOneOf(tok::plus, tok::comma) && Left.Previous &&
       Left.Previous->isLabelString() &&
       (Left.NextOperator || Left.OperatorIndex != 0))
-    return 45;
+    return 50;
   if (Right.is(tok::plus) && Left.isLabelString() &&
       (Right.NextOperator || Right.OperatorIndex != 0))
     return 25;
@@ -2397,9 +2399,11 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
     if ((Left.isOneOf(Keywords.kw_let, Keywords.kw_var, Keywords.kw_in,
                       tok::kw_const) ||
          // "of" is only a keyword if it appears after another identifier
-         // (e.g. as "const x of y" in a for loop).
+         // (e.g. as "const x of y" in a for loop), or after a destructuring
+         // operation (const [x, y] of z, const {a, b} of c).
          (Left.is(Keywords.kw_of) && Left.Previous &&
-          Left.Previous->Tok.getIdentifierInfo())) &&
+          (Left.Previous->Tok.getIdentifierInfo() ||
+           Left.Previous->isOneOf(tok::r_square, tok::r_brace)))) &&
         (!Left.Previous || !Left.Previous->is(tok::period)))
       return true;
     if (Left.isOneOf(tok::kw_for, Keywords.kw_as) && Left.Previous &&
@@ -2431,8 +2435,9 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
       return false;
     if (Right.is(TT_JsNonNullAssertion))
       return false;
-    if (Left.is(TT_JsNonNullAssertion) && Right.is(Keywords.kw_as))
-      return true; // "x! as string"
+    if (Left.is(TT_JsNonNullAssertion) &&
+        Right.isOneOf(Keywords.kw_as, Keywords.kw_in))
+      return true; // "x! as string", "x! in y"
   } else if (Style.Language == FormatStyle::LK_Java) {
     if (Left.is(tok::r_square) && Right.is(tok::l_brace))
       return true;
@@ -2696,13 +2701,16 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
   } else if (Style.Language == FormatStyle::LK_JavaScript) {
     const FormatToken *NonComment = Right.getPreviousNonComment();
     if (NonComment &&
-        NonComment->isOneOf(tok::kw_return, tok::kw_continue, tok::kw_break,
-                            tok::kw_throw, Keywords.kw_interface,
-                            Keywords.kw_type, tok::kw_static, tok::kw_public,
-                            tok::kw_private, tok::kw_protected,
-                            Keywords.kw_readonly, Keywords.kw_abstract,
-                            Keywords.kw_get, Keywords.kw_set))
+        NonComment->isOneOf(
+            tok::kw_return, Keywords.kw_yield, tok::kw_continue, tok::kw_break,
+            tok::kw_throw, Keywords.kw_interface, Keywords.kw_type,
+            tok::kw_static, tok::kw_public, tok::kw_private, tok::kw_protected,
+            Keywords.kw_readonly, Keywords.kw_abstract, Keywords.kw_get,
+            Keywords.kw_set, Keywords.kw_async, Keywords.kw_await))
       return false; // Otherwise automatic semicolon insertion would trigger.
+    if (Left.Tok.getIdentifierInfo() &&
+        Right.startsSequence(tok::l_square, tok::r_square))
+      return false;  // breaking in "foo[]" creates illegal TS type syntax.
     if (Left.is(TT_JsFatArrow) && Right.is(tok::l_brace))
       return false;
     if (Left.is(TT_JsTypeColon))

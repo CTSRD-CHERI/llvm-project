@@ -26,13 +26,11 @@
 #include <numeric>
 #include <utility>
 #include <vector>
-#include "llvm/ADT/APSInt.h"
 #include "llvm/Analysis/Loads.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Pass.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/BuildLibCalls.h"
@@ -625,8 +623,7 @@ PreservedAnalyses MergeICmps::runImpl(Function &F, const TargetLibraryInfo *TLI,
 
   // We only try merging comparisons if the target wants to expand memcmp later.
   // The rationale is to avoid turning small chains into memcmp calls.
-  unsigned MaxLoadSize;
-  if (!TTI->enableMemCmpExpansion(MaxLoadSize)) return PreservedAnalyses::all();
+  if (!TTI->enableMemCmpExpansion(true)) return PreservedAnalyses::all();
 
   bool MadeChange = false;
 

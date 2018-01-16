@@ -10,6 +10,7 @@
 #include "gtest/gtest.h"
 
 #include "lldb/Interpreter/Args.h"
+#include "lldb/Utility/StringList.h"
 
 #include <limits>
 #include <sstream>
@@ -115,6 +116,16 @@ TEST(ArgsTest, TestArgv) {
   EXPECT_NE(nullptr, args.GetArgumentVector()[3]);
   EXPECT_NE(nullptr, args.GetArgumentVector()[4]);
   EXPECT_EQ(nullptr, args.GetArgumentVector()[5]);
+}
+
+TEST(ArgsTest, StringListConstructor) {
+  StringList list;
+  list << "foo" << "bar" << "baz";
+  Args args(list);
+  ASSERT_EQ(3u, args.GetArgumentCount());
+  EXPECT_EQ("foo", args[0].ref);
+  EXPECT_EQ("bar", args[1].ref);
+  EXPECT_EQ("baz", args[2].ref);
 }
 
 TEST(ArgsTest, GetQuotedCommandString) {
@@ -264,88 +275,4 @@ TEST(ArgsTest, StringToScriptLanguage) {
                                          lldb::eScriptLanguagePython,
                                          &success));
   EXPECT_FALSE(success);
-}
-
-TEST(ArgsTest, StringToVersion) {}
-
-// Environment Variable Tests
-
-class EnvVarFixture: public ::testing::Test {
-protected:
-
-    void SetUp() {
-        args.AppendArgument(llvm::StringRef("Arg1=foo"));
-        args.AppendArgument(llvm::StringRef("Arg2"));
-        args.AppendArgument(llvm::StringRef("Arg3=bar"));
-    }
-
-    size_t GetIndexForEnvVar(llvm::StringRef envvar_name) {
-        size_t argument_index = std::numeric_limits<size_t>::max();
-        EXPECT_TRUE(args.ContainsEnvironmentVariable(envvar_name,
-                                                     &argument_index));
-        EXPECT_LT(argument_index, args.GetArgumentCount());
-        return argument_index;
-    }
-
-    Args  args;
-};
-
-
-TEST_F(EnvVarFixture, TestContainsEnvironmentVariableNoValue) {
-    EXPECT_TRUE(args.ContainsEnvironmentVariable(llvm::StringRef("Arg2")));
-}
-
-TEST_F(EnvVarFixture, TestContainsEnvironmentVariableWithValue) {
-    EXPECT_TRUE(args.ContainsEnvironmentVariable(llvm::StringRef("Arg3")));
-}
-
-TEST_F(EnvVarFixture, TestContainsEnvironmentVariableNonExistentVariable) {
-    auto nonexistent_envvar = llvm::StringRef("ThisEnvVarShouldNotExist");
-    EXPECT_FALSE(args.ContainsEnvironmentVariable(nonexistent_envvar));
-}
-
-TEST_F(EnvVarFixture, TestReplaceEnvironmentVariableInitialNoValueWithNoValue) {
-    auto envvar_name = llvm::StringRef("Arg2");
-    auto argument_index = GetIndexForEnvVar(envvar_name);
-
-    args.AddOrReplaceEnvironmentVariable(envvar_name, llvm::StringRef(""));
-    EXPECT_TRUE(args.ContainsEnvironmentVariable(envvar_name));
-    EXPECT_EQ(envvar_name, args.GetArgumentAtIndex(argument_index));
-}
-
-TEST_F(EnvVarFixture, TestReplaceEnvironmentVariableInitialNoValueWithValue) {
-    auto envvar_name = llvm::StringRef("Arg2");
-    auto argument_index = GetIndexForEnvVar(envvar_name);
-
-    auto new_value = llvm::StringRef("NewValue");
-    args.AddOrReplaceEnvironmentVariable(envvar_name, new_value);
-    EXPECT_TRUE(args.ContainsEnvironmentVariable(envvar_name));
-
-    std::stringstream stream;
-    stream << envvar_name.str() << '=' << new_value.str();
-    EXPECT_EQ(llvm::StringRef(stream.str()),
-              args.GetArgumentAtIndex(argument_index));
-}
-
-TEST_F(EnvVarFixture, TestReplaceEnvironmentVariableInitialValueWithNoValue) {
-    auto envvar_name = llvm::StringRef("Arg1");
-    auto argument_index = GetIndexForEnvVar(envvar_name);
-
-    args.AddOrReplaceEnvironmentVariable(envvar_name, llvm::StringRef(""));
-    EXPECT_TRUE(args.ContainsEnvironmentVariable(envvar_name));
-    EXPECT_EQ(envvar_name, args.GetArgumentAtIndex(argument_index));
-}
-
-TEST_F(EnvVarFixture, TestReplaceEnvironmentVariableInitialValueWithValue) {
-    auto envvar_name = llvm::StringRef("Arg1");
-    auto argument_index = GetIndexForEnvVar(envvar_name);
-
-    auto new_value = llvm::StringRef("NewValue");
-    args.AddOrReplaceEnvironmentVariable(envvar_name, new_value);
-    EXPECT_TRUE(args.ContainsEnvironmentVariable(envvar_name));
-
-    std::stringstream stream;
-    stream << envvar_name.str() << '=' << new_value.str();
-    EXPECT_EQ(llvm::StringRef(stream.str()),
-              args.GetArgumentAtIndex(argument_index));
 }

@@ -217,8 +217,8 @@ INITIALIZE_PASS(AMDGPUUseNativeCalls, "amdgpu-usenative",
                 false, false)
 
 template <typename IRB>
-CallInst *CreateCallEx(IRB &B, Value *Callee, Value *Arg, const Twine &Name="")
-{
+static CallInst *CreateCallEx(IRB &B, Value *Callee, Value *Arg,
+                              const Twine &Name = "") {
   CallInst *R = B.CreateCall(Callee, Arg, Name);
   if (Function* F = dyn_cast<Function>(Callee))
     R->setCallingConv(F->getCallingConv());
@@ -226,8 +226,8 @@ CallInst *CreateCallEx(IRB &B, Value *Callee, Value *Arg, const Twine &Name="")
 }
 
 template <typename IRB>
-CallInst *CreateCallEx2(IRB &B, Value *Callee, Value *Arg1, Value *Arg2,
-                        const Twine &Name="") {
+static CallInst *CreateCallEx2(IRB &B, Value *Callee, Value *Arg1, Value *Arg2,
+                               const Twine &Name = "") {
   CallInst *R = B.CreateCall(Callee, {Arg1, Arg2}, Name);
   if (Function* F = dyn_cast<Function>(Callee))
     R->setCallingConv(F->getCallingConv());
@@ -487,7 +487,7 @@ bool AMDGPULibCalls::parseFunctionName(const StringRef& FMangledName,
 
 bool AMDGPULibCalls::isUnsafeMath(const CallInst *CI) const {
   if (auto Op = dyn_cast<FPMathOperator>(CI))
-    if (Op->hasUnsafeAlgebra())
+    if (Op->isFast())
       return true;
   const Function *F = CI->getParent()->getParent();
   Attribute Attr = F->getFnAttribute("unsafe-fp-math");
@@ -1337,7 +1337,8 @@ bool AMDGPULibCalls::fold_sincos(CallInst *CI, IRBuilder<> &B,
   // for OpenCL 2.0 we have only generic implementation of sincos
   // function.
   AMDGPULibFunc nf(AMDGPULibFunc::EI_SINCOS, fInfo);
-  nf.getLeads()[0].PtrKind = AMDGPULibFunc::GENERIC;
+  const AMDGPUAS AS = AMDGPU::getAMDGPUAS(*M);
+  nf.getLeads()[0].PtrKind = AMDGPULibFunc::getEPtrKindFromAddrSpace(AS.FLAT_ADDRESS);
   Function *Fsincos = dyn_cast_or_null<Function>(getFunction(M, nf));
   if (!Fsincos) return false;
 
@@ -1350,7 +1351,6 @@ bool AMDGPULibCalls::fold_sincos(CallInst *CI, IRBuilder<> &B,
   // The allocaInst allocates the memory in private address space. This need
   // to be bitcasted to point to the address space of cos pointer type.
   // In OpenCL 2.0 this is generic, while in 1.2 that is private.
-  const AMDGPUAS AS = AMDGPU::getAMDGPUAS(*M);
   if (PTy->getPointerAddressSpace() != AS.PRIVATE_ADDRESS)
     P = B.CreateAddrSpaceCast(Alloc, PTy);
   CallInst *Call = CreateCallEx2(B, Fsincos, UI->getArgOperand(0), P);

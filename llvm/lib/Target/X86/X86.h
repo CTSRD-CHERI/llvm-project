@@ -49,6 +49,10 @@ FunctionPass *createX86FloatingPointStackifierPass();
 /// transition penalty between functions encoded with AVX and SSE.
 FunctionPass *createX86IssueVZeroUpperPass();
 
+/// This pass inserts ENDBR instructions before indirect jump/call
+/// destinations as part of CET IBT mechanism.
+FunctionPass *createX86IndirectBranchTrackingPass();
+
 /// Return a pass that pads short functions with NOOPs.
 /// This will prevent a stall when returning on the Atom.
 FunctionPass *createX86PadShortFunctions();
@@ -91,6 +95,10 @@ FunctionPass *createX86CmovConverterPass();
 /// in order to eliminate partial register usage, false dependences on
 /// the upper portions of registers, and to save code size.
 FunctionPass *createX86FixupBWInsts();
+
+/// Return a Machine IR pass that reassigns instruction chains from one domain
+/// to another, when profitable.
+FunctionPass *createX86DomainReassignmentPass();
 
 void initializeFixupBWInstPassPass(PassRegistry &);
 

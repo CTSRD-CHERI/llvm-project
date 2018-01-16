@@ -19,7 +19,6 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/Pass.h"
-#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/ScopedPrinter.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/IPO.h"
@@ -40,9 +39,17 @@ void promoteInternals(Module &ExportM, Module &ImportM, StringRef ModuleId,
       continue;
 
     auto Name = ExportGV.getName();
-    GlobalValue *ImportGV = ImportM.getNamedValue(Name);
-    if ((!ImportGV || ImportGV->use_empty()) && !PromoteExtra.count(&ExportGV))
-      continue;
+    GlobalValue *ImportGV = nullptr;
+    if (!PromoteExtra.count(&ExportGV)) {
+      ImportGV = ImportM.getNamedValue(Name);
+      if (!ImportGV)
+        continue;
+      ImportGV->removeDeadConstantUsers();
+      if (ImportGV->use_empty()) {
+        ImportGV->eraseFromParent();
+        continue;
+      }
+    }
 
     std::string NewName = (Name + ModuleId).str();
 
@@ -83,8 +90,7 @@ void promoteTypeIds(Module &M, StringRef ModuleId) {
     if (isa<MDNode>(MD) && cast<MDNode>(MD)->isDistinct()) {
       Metadata *&GlobalMD = LocalToGlobal[MD];
       if (!GlobalMD) {
-        std::string NewName =
-            (to_string(LocalToGlobal.size()) + ModuleId).str();
+        std::string NewName = (Twine(LocalToGlobal.size()) + ModuleId).str();
         GlobalMD = MDString::get(M.getContext(), NewName);
       }
 
@@ -348,6 +354,31 @@ void splitAndWriteThinLTOBitcode(
   if(!CfiFunctionMDs.empty()) {
     NamedMDNode *NMD = MergedM->getOrInsertNamedMetadata("cfi.functions");
     for (auto MD : CfiFunctionMDs)
+      NMD->addOperand(MD);
+  }
+
+  SmallVector<MDNode *, 8> FunctionAliases;
+  for (auto &A : M.aliases()) {
+    if (!isa<Function>(A.getAliasee()))
+      continue;
+
+    auto *F = cast<Function>(A.getAliasee());
+    auto &Ctx = MergedM->getContext();
+    SmallVector<Metadata *, 4> Elts;
+
+    Elts.push_back(MDString::get(Ctx, A.getName()));
+    Elts.push_back(MDString::get(Ctx, F->getName()));
+    Elts.push_back(ConstantAsMetadata::get(
+        llvm::ConstantInt::get(Type::getInt8Ty(Ctx), A.getVisibility())));
+    Elts.push_back(ConstantAsMetadata::get(
+        llvm::ConstantInt::get(Type::getInt8Ty(Ctx), A.isWeakForLinker())));
+
+    FunctionAliases.push_back(MDTuple::get(Ctx, Elts));
+  }
+
+  if (!FunctionAliases.empty()) {
+    NamedMDNode *NMD = MergedM->getOrInsertNamedMetadata("aliases");
+    for (auto MD : FunctionAliases)
       NMD->addOperand(MD);
   }
 

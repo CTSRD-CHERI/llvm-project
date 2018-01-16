@@ -5,13 +5,15 @@ FileHeader:
 Sections:
   - Type:            TYPE
     Signatures:
-      - ReturnType:      I32
+      - Index:           0
+        ReturnType:      I32
         ParamTypes:
   - Type:            FUNCTION
     FunctionTypes:   [ 0, 0 ]
   - Type:            GLOBAL
     Globals:         
-      - Type:        I32
+      - Index:       0
+        Type:        I32
         Mutable:     false
         InitExpr:
           Opcode:          I32_CONST
@@ -29,9 +31,9 @@ Sections:
     DataSize:        10
     SymbolInfo:
       - Name:            function_export
-        Flags:           1
+        Flags:           [ BINDING_WEAK ]
       - Name:            global_export
-        Flags:           1
+        Flags:           [ BINDING_WEAK ]
 ...
 # CHECK: --- !WASM
 # CHECK: FileHeader:
@@ -50,6 +52,6 @@ Sections:
 # CHECK:     DataSize:        10
 # CHECK:     SymbolInfo:
 # CHECK:       - Name:            function_export
-# CHECK:         Flags:           1
+# CHECK:         Flags:           [ BINDING_WEAK ]
 # CHECK:       - Name:            global_export
-# CHECK:         Flags:           1
+# CHECK:         Flags:           [ BINDING_WEAK ]

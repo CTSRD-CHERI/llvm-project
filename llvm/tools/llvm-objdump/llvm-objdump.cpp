@@ -868,8 +868,19 @@ static void printRelocationTargetName(const MachOObjectFile *O,
   } else {
     section_iterator SI = O->section_begin();
     // Adjust for the fact that sections are 1-indexed.
-    advance(SI, Val - 1);
-    SI->getName(S);
+    if (Val == 0) {
+      fmt << "0 (?,?)";
+      return;
+    }
+    uint32_t i = Val - 1;
+    while (i != 0 && SI != O->section_end()) {
+      i--;
+      advance(SI, 1);
+    }
+    if (SI == O->section_end())
+      fmt << Val << " (?,?)";
+    else
+      SI->getName(S);
   }
 
   fmt << S;
@@ -1641,7 +1652,7 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
                 outs() << " <" << TargetName;
                 uint64_t Disp = Target - TargetAddress;
                 if (Disp)
-                  outs() << "+0x" << utohexstr(Disp);
+                  outs() << "+0x" << Twine::utohexstr(Disp);
                 outs() << '>';
               }
             }
@@ -2300,8 +2311,7 @@ int main(int argc, char **argv) {
     return 2;
   }
 
-  std::for_each(InputFilenames.begin(), InputFilenames.end(),
-                DumpInput);
+  llvm::for_each(InputFilenames, DumpInput);
 
   return EXIT_SUCCESS;
 }

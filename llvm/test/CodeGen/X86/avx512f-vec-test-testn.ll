@@ -4,12 +4,10 @@
 ; Function Attrs: norecurse nounwind readnone
 define zeroext i8 @TEST_mm512_test_epi64_mask(<8 x i64> %__A, <8 x i64> %__B) local_unnamed_addr #0 {
 ; CHECK-LABEL: TEST_mm512_test_epi64_mask:
-; CHECK:       # BB#0: # %entry
-; CHECK-NEXT:    vpandq %zmm0, %zmm1, %zmm0
-; CHECK-NEXT:    vpxor %xmm1, %xmm1, %xmm1
-; CHECK-NEXT:    vpcmpneqq %zmm1, %zmm0, %k0
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    vptestmq %zmm0, %zmm1, %k0
 ; CHECK-NEXT:    kmovw %k0, %eax
-; CHECK-NEXT:    # kill: %AL<def> %AL<kill> %EAX<kill>
+; CHECK-NEXT:    # kill: def %al killed %al killed %eax
 ; CHECK-NEXT:    vzeroupper
 ; CHECK-NEXT:    retq
 entry:
@@ -22,12 +20,10 @@ entry:
 ; Function Attrs: norecurse nounwind readnone
 define zeroext i16 @TEST_mm512_test_epi32_mask(<8 x i64> %__A, <8 x i64> %__B) local_unnamed_addr #0 {
 ; CHECK-LABEL: TEST_mm512_test_epi32_mask:
-; CHECK:       # BB#0: # %entry
-; CHECK-NEXT:    vpandq %zmm0, %zmm1, %zmm0
-; CHECK-NEXT:    vpxor %xmm1, %xmm1, %xmm1
-; CHECK-NEXT:    vpcmpneqd %zmm1, %zmm0, %k0
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    vptestmd %zmm0, %zmm1, %k0
 ; CHECK-NEXT:    kmovw %k0, %eax
-; CHECK-NEXT:    # kill: %AX<def> %AX<kill> %EAX<kill>
+; CHECK-NEXT:    # kill: def %ax killed %ax killed %eax
 ; CHECK-NEXT:    vzeroupper
 ; CHECK-NEXT:    retq
 entry:
@@ -41,13 +37,11 @@ entry:
 ; Function Attrs: norecurse nounwind readnone
 define zeroext i8 @TEST_mm512_mask_test_epi64_mask(i8 %__U, <8 x i64> %__A, <8 x i64> %__B) local_unnamed_addr #0 {
 ; CHECK-LABEL: TEST_mm512_mask_test_epi64_mask:
-; CHECK:       # BB#0: # %entry
-; CHECK-NEXT:    vpandq %zmm0, %zmm1, %zmm0
-; CHECK-NEXT:    vpxor %xmm1, %xmm1, %xmm1
+; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    kmovw %edi, %k1
-; CHECK-NEXT:    vpcmpneqq %zmm1, %zmm0, %k0 {%k1}
+; CHECK-NEXT:    vptestmq %zmm0, %zmm1, %k0 {%k1}
 ; CHECK-NEXT:    kmovw %k0, %eax
-; CHECK-NEXT:    # kill: %AL<def> %AL<kill> %EAX<kill>
+; CHECK-NEXT:    # kill: def %al killed %al killed %eax
 ; CHECK-NEXT:    vzeroupper
 ; CHECK-NEXT:    retq
 entry:
@@ -62,13 +56,11 @@ entry:
 ; Function Attrs: norecurse nounwind readnone
 define zeroext i16 @TEST_mm512_mask_test_epi32_mask(i16 %__U, <8 x i64> %__A, <8 x i64> %__B) local_unnamed_addr #0 {
 ; CHECK-LABEL: TEST_mm512_mask_test_epi32_mask:
-; CHECK:       # BB#0: # %entry
-; CHECK-NEXT:    vpandq %zmm0, %zmm1, %zmm0
-; CHECK-NEXT:    vpxor %xmm1, %xmm1, %xmm1
+; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    kmovw %edi, %k1
-; CHECK-NEXT:    vpcmpneqd %zmm1, %zmm0, %k0 {%k1}
+; CHECK-NEXT:    vptestmd %zmm0, %zmm1, %k0 {%k1}
 ; CHECK-NEXT:    kmovw %k0, %eax
-; CHECK-NEXT:    # kill: %AX<def> %AX<kill> %EAX<kill>
+; CHECK-NEXT:    # kill: def %ax killed %ax killed %eax
 ; CHECK-NEXT:    vzeroupper
 ; CHECK-NEXT:    retq
 entry:
@@ -84,12 +76,10 @@ entry:
 ; Function Attrs: norecurse nounwind readnone
 define zeroext i8 @TEST_mm512_testn_epi64_mask(<8 x i64> %__A, <8 x i64> %__B) local_unnamed_addr #0 {
 ; CHECK-LABEL: TEST_mm512_testn_epi64_mask:
-; CHECK:       # BB#0: # %entry
-; CHECK-NEXT:    vpandq %zmm0, %zmm1, %zmm0
-; CHECK-NEXT:    vpxor %xmm1, %xmm1, %xmm1
-; CHECK-NEXT:    vpcmpeqq %zmm1, %zmm0, %k0
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    vptestnmq %zmm0, %zmm1, %k0
 ; CHECK-NEXT:    kmovw %k0, %eax
-; CHECK-NEXT:    # kill: %AL<def> %AL<kill> %EAX<kill>
+; CHECK-NEXT:    # kill: def %al killed %al killed %eax
 ; CHECK-NEXT:    vzeroupper
 ; CHECK-NEXT:    retq
 entry:
@@ -102,12 +92,10 @@ entry:
 ; Function Attrs: norecurse nounwind readnone
 define zeroext i16 @TEST_mm512_testn_epi32_mask(<8 x i64> %__A, <8 x i64> %__B) local_unnamed_addr #0 {
 ; CHECK-LABEL: TEST_mm512_testn_epi32_mask:
-; CHECK:       # BB#0: # %entry
-; CHECK-NEXT:    vpandq %zmm0, %zmm1, %zmm0
-; CHECK-NEXT:    vpxor %xmm1, %xmm1, %xmm1
-; CHECK-NEXT:    vpcmpeqd %zmm1, %zmm0, %k0
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    vptestnmd %zmm0, %zmm1, %k0
 ; CHECK-NEXT:    kmovw %k0, %eax
-; CHECK-NEXT:    # kill: %AX<def> %AX<kill> %EAX<kill>
+; CHECK-NEXT:    # kill: def %ax killed %ax killed %eax
 ; CHECK-NEXT:    vzeroupper
 ; CHECK-NEXT:    retq
 entry:
@@ -121,13 +109,11 @@ entry:
 ; Function Attrs: norecurse nounwind readnone
 define zeroext i8 @TEST_mm512_mask_testn_epi64_mask(i8 %__U, <8 x i64> %__A, <8 x i64> %__B) local_unnamed_addr #0 {
 ; CHECK-LABEL: TEST_mm512_mask_testn_epi64_mask:
-; CHECK:       # BB#0: # %entry
-; CHECK-NEXT:    vpandq %zmm0, %zmm1, %zmm0
-; CHECK-NEXT:    vpxor %xmm1, %xmm1, %xmm1
+; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    kmovw %edi, %k1
-; CHECK-NEXT:    vpcmpeqq %zmm1, %zmm0, %k0 {%k1}
+; CHECK-NEXT:    vptestnmq %zmm0, %zmm1, %k0 {%k1}
 ; CHECK-NEXT:    kmovw %k0, %eax
-; CHECK-NEXT:    # kill: %AL<def> %AL<kill> %EAX<kill>
+; CHECK-NEXT:    # kill: def %al killed %al killed %eax
 ; CHECK-NEXT:    vzeroupper
 ; CHECK-NEXT:    retq
 entry:
@@ -142,13 +128,11 @@ entry:
 ; Function Attrs: norecurse nounwind readnone
 define zeroext i16 @TEST_mm512_mask_testn_epi32_mask(i16 %__U, <8 x i64> %__A, <8 x i64> %__B) local_unnamed_addr #0 {
 ; CHECK-LABEL: TEST_mm512_mask_testn_epi32_mask:
-; CHECK:       # BB#0: # %entry
-; CHECK-NEXT:    vpandq %zmm0, %zmm1, %zmm0
-; CHECK-NEXT:    vpxor %xmm1, %xmm1, %xmm1
+; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    kmovw %edi, %k1
-; CHECK-NEXT:    vpcmpeqd %zmm1, %zmm0, %k0 {%k1}
+; CHECK-NEXT:    vptestnmd %zmm0, %zmm1, %k0 {%k1}
 ; CHECK-NEXT:    kmovw %k0, %eax
-; CHECK-NEXT:    # kill: %AX<def> %AX<kill> %EAX<kill>
+; CHECK-NEXT:    # kill: def %ax killed %ax killed %eax
 ; CHECK-NEXT:    vzeroupper
 ; CHECK-NEXT:    retq
 entry:

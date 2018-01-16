@@ -29,7 +29,6 @@
 #include <sstream>
 
 #include "lldb/Breakpoint/Watchpoint.h"
-#include "lldb/Core/ArchSpec.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
@@ -244,7 +243,7 @@ bool ProcessGDBRemote::CanDebug(lldb::TargetSP target_sp,
 //----------------------------------------------------------------------
 ProcessGDBRemote::ProcessGDBRemote(lldb::TargetSP target_sp,
                                    ListenerSP listener_sp)
-    : Process(target_sp, listener_sp), m_flags(0), m_gdb_comm(),
+    : Process(target_sp, listener_sp),
       m_debugserver_pid(LLDB_INVALID_PROCESS_ID), m_last_stop_packet_mutex(),
       m_register_info(),
       m_async_broadcaster(NULL, "lldb.process.gdb-remote.async-broadcaster"),
@@ -818,7 +817,7 @@ Status ProcessGDBRemote::DoLaunch(Module *exe_module,
   if (object_file) {
     error = EstablishConnectionIfNeeded(launch_info);
     if (error.Success()) {
-      lldb_utility::PseudoTerminal pty;
+      PseudoTerminal pty;
       const bool disable_stdio = (launch_flags & eLaunchFlagDisableSTDIO) != 0;
 
       PlatformSP platform_sp(GetTarget().GetPlatform());
@@ -889,16 +888,7 @@ Status ProcessGDBRemote::DoLaunch(Module *exe_module,
       }
 
       // Send the environment and the program + arguments after we connect
-      const Args &environment = launch_info.GetEnvironmentEntries();
-      if (environment.GetArgumentCount()) {
-        size_t num_environment_entries = environment.GetArgumentCount();
-        for (size_t i = 0; i < num_environment_entries; ++i) {
-          const char *env_entry = environment.GetArgumentAtIndex(i);
-          if (env_entry == NULL ||
-              m_gdb_comm.SendEnvironmentPacket(env_entry) != 0)
-            break;
-        }
-      }
+      m_gdb_comm.SendEnvironment(launch_info.GetEnvironment());
 
       {
         // Scope for the scoped timeout object
@@ -947,8 +937,7 @@ Status ProcessGDBRemote::DoLaunch(Module *exe_module,
         SetPrivateState(SetThreadStopInfo(response));
 
         if (!disable_stdio) {
-          if (pty.GetMasterFileDescriptor() !=
-              lldb_utility::PseudoTerminal::invalid_fd)
+          if (pty.GetMasterFileDescriptor() != PseudoTerminal::invalid_fd)
             SetSTDIOFileDescriptor(pty.ReleaseMasterFileDescriptor());
         }
       }
@@ -3255,7 +3244,6 @@ Status ProcessGDBRemote::DisableWatchpoint(Watchpoint *wp, bool notify) {
 }
 
 void ProcessGDBRemote::Clear() {
-  m_flags = 0;
   m_thread_list_real.Clear();
   m_thread_list.Clear();
 }
@@ -5157,10 +5145,11 @@ public:
 
       bool send_async = true;
       StringExtractorGDBRemote response;
-      process->GetGDBRemote().SendPacketAndWaitForResponse(
-          packet.GetString(), response, send_async);
-      result.SetStatus(eReturnStatusSuccessFinishResult);
       Stream &output_strm = result.GetOutputStream();
+      process->GetGDBRemote().SendPacketAndReceiveResponseWithOutputSupport(
+          packet.GetString(), response, send_async,
+          [&output_strm](llvm::StringRef output) { output_strm << output; });
+      result.SetStatus(eReturnStatusSuccessFinishResult);
       output_strm.Printf("  packet: %s\n", packet.GetData());
       const std::string &response_str = response.GetStringRef();
 

@@ -7,13 +7,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Error.h"
 #include "InputFiles.h"
 #include "OutputSections.h"
 #include "Symbols.h"
 #include "SyntheticSections.h"
 #include "Target.h"
 #include "Thunks.h"
+#include "lld/Common/ErrorHandler.h"
 #include "llvm/Object/ELF.h"
 #include "llvm/Support/Endian.h"
 
@@ -28,17 +28,18 @@ namespace {
 template <class ELFT> class MIPS final : public TargetInfo {
 public:
   MIPS();
-  RelExpr getRelExpr(RelType Type, const SymbolBody &S,
+  uint32_t calcEFlags() const override;
+  RelExpr getRelExpr(RelType Type, const Symbol &S,
                      const uint8_t *Loc) const override;
   int64_t getImplicitAddend(const uint8_t *Buf, RelType Type) const override;
   bool isPicRel(RelType Type) const override;
   RelType getDynRel(RelType Type) const override;
-  void writeGotPlt(uint8_t *Buf, const SymbolBody &S) const override;
+  void writeGotPlt(uint8_t *Buf, const Symbol &S) const override;
   void writePltHeader(uint8_t *Buf) const override;
   void writePlt(uint8_t *Buf, uint64_t GotPltEntryAddr, uint64_t PltEntryAddr,
                 int32_t Index, unsigned RelOff) const override;
   bool needsThunk(RelExpr Expr, RelType Type, const InputFile *File,
-                  const SymbolBody &S) const override;
+                  uint64_t BranchAddr, const Symbol &S) const override;
   void relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const override;
   bool usesOnlyLowPageBits(RelType Type) const override;
 };
@@ -69,8 +70,12 @@ template <class ELFT> MIPS<ELFT>::MIPS() {
   }
 }
 
+template <class ELFT> uint32_t MIPS<ELFT>::calcEFlags() const {
+  return calcMipsEFlags<ELFT>();
+}
+
 template <class ELFT>
-RelExpr MIPS<ELFT>::getRelExpr(RelType Type, const SymbolBody &S,
+RelExpr MIPS<ELFT>::getRelExpr(RelType Type, const Symbol &S,
                                const uint8_t *Loc) const {
   // See comment in the calculateMipsRelChain.
   if (ELFT::Is64Bits || Config->MipsN32Abi)
@@ -187,8 +192,11 @@ template <class ELFT> RelType MIPS<ELFT>::getDynRel(RelType Type) const {
 }
 
 template <class ELFT>
-void MIPS<ELFT>::writeGotPlt(uint8_t *Buf, const SymbolBody &) const {
-  write32<ELFT::TargetEndianness>(Buf, InX::Plt->getVA());
+void MIPS<ELFT>::writeGotPlt(uint8_t *Buf, const Symbol &) const {
+  uint64_t VA = InX::Plt->getVA();
+  if (isMicroMips())
+    VA |= 1;
+  write32<ELFT::TargetEndianness>(Buf, VA);
 }
 
 template <endianness E> static uint32_t readShuffle(const uint8_t *Loc) {
@@ -236,13 +244,11 @@ static void writeMicroRelocation16(uint8_t *Loc, uint64_t V, uint8_t BitsSize,
   write16<E>(Loc, Data);
 }
 
-static bool isMicroMips() { return Config->MipsEFlags & EF_MIPS_MICROMIPS; }
-
 template <class ELFT> void MIPS<ELFT>::writePltHeader(uint8_t *Buf) const {
   const endianness E = ELFT::TargetEndianness;
   if (isMicroMips()) {
-    uint64_t GotPlt = In<ELFT>::GotPlt->getVA();
-    uint64_t Plt = In<ELFT>::Plt->getVA();
+    uint64_t GotPlt = InX::GotPlt->getVA();
+    uint64_t Plt = InX::Plt->getVA();
     // Overwrite trap instructions written by Writer::writeTrapInstr.
     memset(Buf, 0, PltHeaderSize);
 
@@ -272,15 +278,24 @@ template <class ELFT> void MIPS<ELFT>::writePltHeader(uint8_t *Buf) const {
     write32<E>(Buf + 4, 0x8dd90000);  // lw    $25, %lo(&GOTPLT[0])($14)
     write32<E>(Buf + 8, 0x25ce0000);  // addiu $14, $14, %lo(&GOTPLT[0])
     write32<E>(Buf + 12, 0x030ec023); // subu  $24, $24, $14
+    write32<E>(Buf + 16, 0x03e07825); // move  $15, $31
+    write32<E>(Buf + 20, 0x0018c082); // srl   $24, $24, 2
+  } else if (ELFT::Is64Bits) {
+    write32<E>(Buf, 0x3c0e0000);      // lui   $14, %hi(&GOTPLT[0])
+    write32<E>(Buf + 4, 0xddd90000);  // ld    $25, %lo(&GOTPLT[0])($14)
+    write32<E>(Buf + 8, 0x25ce0000);  // addiu $14, $14, %lo(&GOTPLT[0])
+    write32<E>(Buf + 12, 0x030ec023); // subu  $24, $24, $14
+    write32<E>(Buf + 16, 0x03e07825); // move  $15, $31
+    write32<E>(Buf + 20, 0x0018c0c2); // srl   $24, $24, 3
   } else {
     write32<E>(Buf, 0x3c1c0000);      // lui   $28, %hi(&GOTPLT[0])
     write32<E>(Buf + 4, 0x8f990000);  // lw    $25, %lo(&GOTPLT[0])($28)
     write32<E>(Buf + 8, 0x279c0000);  // addiu $28, $28, %lo(&GOTPLT[0])
     write32<E>(Buf + 12, 0x031cc023); // subu  $24, $24, $28
+    write32<E>(Buf + 16, 0x03e07825); // move  $15, $31
+    write32<E>(Buf + 20, 0x0018c082); // srl   $24, $24, 2
   }
 
-  write32<E>(Buf + 16, 0x03e07825); // move  $15, $31
-  write32<E>(Buf + 20, 0x0018c082); // srl   $24, $24, 2
   write32<E>(Buf + 24, 0x0320f809); // jalr  $25
   write32<E>(Buf + 28, 0x2718fffe); // subu  $24, $24, 2
 
@@ -326,7 +341,7 @@ void MIPS<ELFT>::writePlt(uint8_t *Buf, uint64_t GotPltEntryAddr,
 
 template <class ELFT>
 bool MIPS<ELFT>::needsThunk(RelExpr Expr, RelType Type, const InputFile *File,
-                            const SymbolBody &S) const {
+                            uint64_t BranchAddr, const Symbol &S) const {
   // Any MIPS PIC code function is invoked with its address in register $t9.
   // So if we have a branch instruction from non-PIC code to the PIC one
   // we cannot make the jump directly and need to create a small stubs
@@ -341,10 +356,10 @@ bool MIPS<ELFT>::needsThunk(RelExpr Expr, RelType Type, const InputFile *File,
   // If current file has PIC code, LA25 stub is not required.
   if (F->getObj().getHeader()->e_flags & EF_MIPS_PIC)
     return false;
-  auto *D = dyn_cast<DefinedRegular>(&S);
+  auto *D = dyn_cast<Defined>(&S);
   // LA25 is required if target file has PIC code
   // or target symbol is a PIC symbol.
-  return D && D->isMipsPIC<ELFT>();
+  return D && isMipsPIC<ELFT>(D);
 }
 
 template <class ELFT>
@@ -639,6 +654,18 @@ template <class ELFT> bool MIPS<ELFT>::usesOnlyLowPageBits(RelType Type) const {
          Type == R_MICROMIPS_LO16 || Type == R_MICROMIPS_GOT_OFST;
 }
 
+// Return true if the symbol is a PIC function.
+template <class ELFT> bool elf::isMipsPIC(const Defined *Sym) {
+  typedef typename ELFT::Ehdr Elf_Ehdr;
+  if (!Sym->Section || !Sym->isFunc())
+    return false;
+
+  auto *Sec = cast<InputSectionBase>(Sym->Section);
+  const Elf_Ehdr *Hdr = Sec->template getFile<ELFT>()->getObj().getHeader();
+  return (Sym->StOther & STO_MIPS_MIPS16) == STO_MIPS_PIC ||
+         (Hdr->e_flags & EF_MIPS_PIC);
+}
+
 template <class ELFT> TargetInfo *elf::getMipsTargetInfo() {
   static MIPS<ELFT> Target;
   return &Target;
@@ -648,3 +675,8 @@ template TargetInfo *elf::getMipsTargetInfo<ELF32LE>();
 template TargetInfo *elf::getMipsTargetInfo<ELF32BE>();
 template TargetInfo *elf::getMipsTargetInfo<ELF64LE>();
 template TargetInfo *elf::getMipsTargetInfo<ELF64BE>();
+
+template bool elf::isMipsPIC<ELF32LE>(const Defined *);
+template bool elf::isMipsPIC<ELF32BE>(const Defined *);
+template bool elf::isMipsPIC<ELF64LE>(const Defined *);
+template bool elf::isMipsPIC<ELF64BE>(const Defined *);

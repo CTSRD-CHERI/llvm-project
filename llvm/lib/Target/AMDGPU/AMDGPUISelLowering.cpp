@@ -13,6 +13,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+#define AMDGPU_LOG2E_F     1.44269504088896340735992468100189214f
+#define AMDGPU_LN2_F       0.693147180559945309417232121458176568f
+#define AMDGPU_LN10_F      2.30258509299404568401799145468436421f
+
 #include "AMDGPUISelLowering.h"
 #include "AMDGPU.h"
 #include "AMDGPUCallLowering.h"
@@ -128,27 +132,20 @@ EVT AMDGPUTargetLowering::getEquivalentMemType(LLVMContext &Ctx, EVT VT) {
   return EVT::getVectorVT(Ctx, MVT::i32, StoreSize / 32);
 }
 
-bool AMDGPUTargetLowering::isOrEquivalentToAdd(SelectionDAG &DAG, SDValue Op)
-{
-  assert(Op.getOpcode() == ISD::OR);
+unsigned AMDGPUTargetLowering::numBitsUnsigned(SDValue Op, SelectionDAG &DAG) {
+  KnownBits Known;
+  EVT VT = Op.getValueType();
+  DAG.computeKnownBits(Op, Known);
 
-  SDValue N0 = Op->getOperand(0);
-  SDValue N1 = Op->getOperand(1);
-  EVT VT = N0.getValueType();
+  return VT.getSizeInBits() - Known.countMinLeadingZeros();
+}
 
-  if (VT.isInteger() && !VT.isVector()) {
-    KnownBits LHSKnown, RHSKnown;
-    DAG.computeKnownBits(N0, LHSKnown);
+unsigned AMDGPUTargetLowering::numBitsSigned(SDValue Op, SelectionDAG &DAG) {
+  EVT VT = Op.getValueType();
 
-    if (LHSKnown.Zero.getBoolValue()) {
-      DAG.computeKnownBits(N1, RHSKnown);
-
-      if (!(~RHSKnown.Zero & ~LHSKnown.Zero))
-        return true;
-    }
-  }
-
-  return false;
+  // In order for this to be a signed 24-bit value, bit 23, must
+  // be a sign bit.
+  return VT.getSizeInBits() - DAG.ComputeNumSignBits(Op);
 }
 
 AMDGPUTargetLowering::AMDGPUTargetLowering(const TargetMachine &TM,
@@ -324,6 +321,14 @@ AMDGPUTargetLowering::AMDGPUTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::FROUND, MVT::f32, Custom);
   setOperationAction(ISD::FROUND, MVT::f64, Custom);
 
+  setOperationAction(ISD::FLOG, MVT::f32, Custom);
+  setOperationAction(ISD::FLOG10, MVT::f32, Custom);
+
+  if (Subtarget->has16BitInsts()) {
+    setOperationAction(ISD::FLOG, MVT::f16, Custom);
+    setOperationAction(ISD::FLOG10, MVT::f16, Custom);
+  }
+
   setOperationAction(ISD::FNEARBYINT, MVT::f32, Custom);
   setOperationAction(ISD::FNEARBYINT, MVT::f64, Custom);
 
@@ -400,8 +405,6 @@ AMDGPUTargetLowering::AMDGPUTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::MUL, MVT::i64, Expand);
   setOperationAction(ISD::MULHU, MVT::i64, Expand);
   setOperationAction(ISD::MULHS, MVT::i64, Expand);
-  setOperationAction(ISD::UDIV, MVT::i32, Expand);
-  setOperationAction(ISD::UREM, MVT::i32, Expand);
   setOperationAction(ISD::UINT_TO_FP, MVT::i64, Custom);
   setOperationAction(ISD::SINT_TO_FP, MVT::i64, Custom);
   setOperationAction(ISD::FP_TO_SINT, MVT::i64, Custom);
@@ -496,6 +499,8 @@ AMDGPUTargetLowering::AMDGPUTargetLowering(const TargetMachine &TM,
     setOperationAction(ISD::FEXP2, VT, Expand);
     setOperationAction(ISD::FLOG2, VT, Expand);
     setOperationAction(ISD::FREM, VT, Expand);
+    setOperationAction(ISD::FLOG, VT, Expand);
+    setOperationAction(ISD::FLOG10, VT, Expand);
     setOperationAction(ISD::FPOW, VT, Expand);
     setOperationAction(ISD::FFLOOR, VT, Expand);
     setOperationAction(ISD::FTRUNC, VT, Expand);
@@ -1064,7 +1069,7 @@ SDValue AMDGPUTargetLowering::lowerUnhandledCall(CallLoweringInfo &CLI,
   SDValue Callee = CLI.Callee;
   SelectionDAG &DAG = CLI.DAG;
 
-  const Function &Fn = *DAG.getMachineFunction().getFunction();
+  const Function &Fn = DAG.getMachineFunction().getFunction();
 
   StringRef FuncName("<unknown>");
 
@@ -1092,7 +1097,7 @@ SDValue AMDGPUTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
 SDValue AMDGPUTargetLowering::LowerDYNAMIC_STACKALLOC(SDValue Op,
                                                       SelectionDAG &DAG) const {
-  const Function &Fn = *DAG.getMachineFunction().getFunction();
+  const Function &Fn = DAG.getMachineFunction().getFunction();
 
   DiagnosticInfoUnsupported NoDynamicAlloca(Fn, "unsupported dynamic alloca",
                                             SDLoc(Op).getDebugLoc());
@@ -1121,6 +1126,10 @@ SDValue AMDGPUTargetLowering::LowerOperation(SDValue Op,
   case ISD::FNEARBYINT: return LowerFNEARBYINT(Op, DAG);
   case ISD::FROUND: return LowerFROUND(Op, DAG);
   case ISD::FFLOOR: return LowerFFLOOR(Op, DAG);
+  case ISD::FLOG:
+    return LowerFLOG(Op, DAG, 1 / AMDGPU_LOG2E_F);
+  case ISD::FLOG10:
+    return LowerFLOG(Op, DAG, AMDGPU_LN2_F / AMDGPU_LN10_F);
   case ISD::SINT_TO_FP: return LowerSINT_TO_FP(Op, DAG);
   case ISD::UINT_TO_FP: return LowerUINT_TO_FP(Op, DAG);
   case ISD::FP_TO_FP16: return LowerFP_TO_FP16(Op, DAG);
@@ -1181,7 +1190,7 @@ SDValue AMDGPUTargetLowering::LowerGlobalAddress(AMDGPUMachineFunction* MFI,
     }
   }
 
-  const Function &Fn = *DAG.getMachineFunction().getFunction();
+  const Function &Fn = DAG.getMachineFunction().getFunction();
   DiagnosticInfoUnsupported BadInit(
       Fn, "unsupported initializer for address space", SDLoc(Op).getDebugLoc());
   DAG.getContext()->diagnose(BadInit);
@@ -1327,7 +1336,6 @@ SDValue AMDGPUTargetLowering::SplitVectorLoad(const SDValue Op,
     return scalarizeVectorLoad(Load, DAG);
 
   SDValue BasePtr = Load->getBasePtr();
-  EVT PtrVT = BasePtr.getValueType();
   EVT MemVT = Load->getMemoryVT();
   SDLoc SL(Op);
 
@@ -1348,8 +1356,7 @@ SDValue AMDGPUTargetLowering::SplitVectorLoad(const SDValue Op,
   SDValue LoLoad = DAG.getExtLoad(Load->getExtensionType(), SL, LoVT,
                                   Load->getChain(), BasePtr, SrcValue, LoMemVT,
                                   BaseAlign, Load->getMemOperand()->getFlags());
-  SDValue HiPtr = DAG.getNode(ISD::ADD, SL, PtrVT, BasePtr,
-                              DAG.getConstant(Size, SL, PtrVT));
+  SDValue HiPtr = DAG.getObjectPtrOffset(SL, BasePtr, Size);
   SDValue HiLoad =
       DAG.getExtLoad(Load->getExtensionType(), SL, HiVT, Load->getChain(),
                      HiPtr, SrcValue.getWithOffset(LoMemVT.getStoreSize()),
@@ -1388,10 +1395,7 @@ SDValue AMDGPUTargetLowering::SplitVectorStore(SDValue Op,
   std::tie(LoMemVT, HiMemVT) = DAG.GetSplitDestVTs(MemVT);
   std::tie(Lo, Hi) = DAG.SplitVector(Val, SL, LoVT, HiVT);
 
-  EVT PtrVT = BasePtr.getValueType();
-  SDValue HiPtr = DAG.getNode(ISD::ADD, SL, PtrVT, BasePtr,
-                              DAG.getConstant(LoMemVT.getStoreSize(), SL,
-                                              PtrVT));
+  SDValue HiPtr = DAG.getObjectPtrOffset(SL, BasePtr, LoMemVT.getStoreSize());
 
   const MachinePointerInfo &SrcValue = Store->getMemOperand()->getPointerInfo();
   unsigned BaseAlign = Store->getAlignment();
@@ -2169,6 +2173,18 @@ SDValue AMDGPUTargetLowering::LowerFFLOOR(SDValue Op, SelectionDAG &DAG) const {
   return DAG.getNode(ISD::FADD, SL, MVT::f64, Trunc, Add);
 }
 
+SDValue AMDGPUTargetLowering::LowerFLOG(SDValue Op, SelectionDAG &DAG,
+                                        double Log2BaseInverted) const {
+  EVT VT = Op.getValueType();
+
+  SDLoc SL(Op);
+  SDValue Operand = Op.getOperand(0);
+  SDValue Log2Operand = DAG.getNode(ISD::FLOG2, SL, VT, Operand);
+  SDValue Log2BaseInvertedOperand = DAG.getConstantFP(Log2BaseInverted, SL, VT);
+
+  return DAG.getNode(ISD::FMUL, SL, VT, Log2Operand, Log2BaseInvertedOperand);
+}
+
 static bool isCtlzOpc(unsigned Opc) {
   return Opc == ISD::CTLZ || Opc == ISD::CTLZ_ZERO_UNDEF;
 }
@@ -2208,9 +2224,8 @@ SDValue AMDGPUTargetLowering::LowerCTLZ_CTTZ(SDValue Op, SelectionDAG &DAG) cons
   EVT SetCCVT = getSetCCResultType(DAG.getDataLayout(),
                                    *DAG.getContext(), MVT::i32);
 
-  SDValue ZeroOrOne = isCtlzOpc(Op.getOpcode()) ? Zero : One;
   SDValue HiOrLo = isCtlzOpc(Op.getOpcode()) ? Hi : Lo;
-  SDValue Hi0orLo0 = DAG.getSetCC(SL, SetCCVT, HiOrLo, ZeroOrOne, ISD::SETEQ);
+  SDValue Hi0orLo0 = DAG.getSetCC(SL, SetCCVT, HiOrLo, Zero, ISD::SETEQ);
 
   SDValue OprLo = DAG.getNode(ISDOpc, SL, MVT::i32, Lo);
   SDValue OprHi = DAG.getNode(ISDOpc, SL, MVT::i32, Hi);
@@ -2233,7 +2248,7 @@ SDValue AMDGPUTargetLowering::LowerCTLZ_CTTZ(SDValue Op, SelectionDAG &DAG) cons
     // FIXME: DAG combines turn what should be an s_and_b64 into a v_or_b32,
     // which we probably don't want.
     SDValue LoOrHi = isCtlzOpc(Op.getOpcode()) ? Lo : Hi;
-    SDValue Lo0OrHi0 = DAG.getSetCC(SL, SetCCVT, LoOrHi, ZeroOrOne, ISD::SETEQ);
+    SDValue Lo0OrHi0 = DAG.getSetCC(SL, SetCCVT, LoOrHi, Zero, ISD::SETEQ);
     SDValue SrcIsZero = DAG.getNode(ISD::AND, SL, SetCCVT, Lo0OrHi0, Hi0orLo0);
 
     // TODO: If i64 setcc is half rate, it can result in 1 fewer instruction
@@ -2616,21 +2631,14 @@ SDValue AMDGPUTargetLowering::LowerSIGN_EXTEND_INREG(SDValue Op,
 //===----------------------------------------------------------------------===//
 
 static bool isU24(SDValue Op, SelectionDAG &DAG) {
-  KnownBits Known;
-  EVT VT = Op.getValueType();
-  DAG.computeKnownBits(Op, Known);
-
-  return (VT.getSizeInBits() - Known.countMinLeadingZeros()) <= 24;
+  return AMDGPUTargetLowering::numBitsUnsigned(Op, DAG) <= 24;
 }
 
 static bool isI24(SDValue Op, SelectionDAG &DAG) {
   EVT VT = Op.getValueType();
-
-  // In order for this to be a signed 24-bit value, bit 23, must
-  // be a sign bit.
   return VT.getSizeInBits() >= 24 && // Types less than 24-bit should be treated
                                      // as unsigned 24-bit values.
-         (VT.getSizeInBits() - DAG.ComputeNumSignBits(Op)) < 24;
+    AMDGPUTargetLowering::numBitsSigned(Op, DAG) < 24;
 }
 
 static bool simplifyI24(SDNode *Node24, unsigned OpIdx,
@@ -2914,21 +2922,6 @@ SDValue AMDGPUTargetLowering::performShlCombine(SDNode *N,
     EVT XVT = X.getValueType();
     SDValue Shl = DAG.getNode(ISD::SHL, SL, XVT, X, SDValue(RHS, 0));
     return DAG.getZExtOrTrunc(Shl, SL, VT);
-  }
-  case ISD::OR:
-    if (!isOrEquivalentToAdd(DAG, LHS))
-      break;
-    LLVM_FALLTHROUGH;
-  case ISD::ADD: {
-    // shl (or|add x, c2), c1 => or|add (shl x, c1), (c2 << c1)
-    if (ConstantSDNode *C2 = dyn_cast<ConstantSDNode>(LHS->getOperand(1))) {
-      SDValue Shl = DAG.getNode(ISD::SHL, SL, VT, LHS->getOperand(0),
-                                SDValue(RHS, 0));
-      SDValue C2V = DAG.getConstant(C2->getAPIntValue() << RHSVal,
-                                    SDLoc(C2), VT);
-      return DAG.getNode(LHS->getOpcode(), SL, VT, Shl, C2V);
-    }
-    break;
   }
   }
 
@@ -3844,9 +3837,8 @@ SDValue AMDGPUTargetLowering::storeStackInputValue(SelectionDAG &DAG,
                                                    int64_t Offset) const {
   MachineFunction &MF = DAG.getMachineFunction();
   MachinePointerInfo DstInfo = MachinePointerInfo::getStack(MF, Offset);
-  SDValue PtrOffset = DAG.getConstant(Offset, SL, MVT::i32);
-  SDValue Ptr = DAG.getNode(ISD::ADD, SL, MVT::i32, StackPtr, PtrOffset);
 
+  SDValue Ptr = DAG.getObjectPtrOffset(SL, StackPtr, Offset);
   SDValue Store = DAG.getStore(Chain, SL, ArgVal, Ptr, DstInfo, 4,
                                MachineMemOperand::MODereferenceable);
   return Store;
@@ -3947,6 +3939,8 @@ const char* AMDGPUTargetLowering::getTargetNodeName(unsigned Opcode) const {
   NODE_NAME_CASE(MUL_LOHI_I24)
   NODE_NAME_CASE(MAD_U24)
   NODE_NAME_CASE(MAD_I24)
+  NODE_NAME_CASE(MAD_I64_I32)
+  NODE_NAME_CASE(MAD_U64_U32)
   NODE_NAME_CASE(TEXTURE_FETCH)
   NODE_NAME_CASE(EXPORT)
   NODE_NAME_CASE(EXPORT_DONE)
@@ -3988,6 +3982,19 @@ const char* AMDGPUTargetLowering::getTargetNodeName(unsigned Opcode) const {
   NODE_NAME_CASE(ATOMIC_DEC)
   NODE_NAME_CASE(BUFFER_LOAD)
   NODE_NAME_CASE(BUFFER_LOAD_FORMAT)
+  NODE_NAME_CASE(BUFFER_STORE)
+  NODE_NAME_CASE(BUFFER_STORE_FORMAT)
+  NODE_NAME_CASE(BUFFER_ATOMIC_SWAP)
+  NODE_NAME_CASE(BUFFER_ATOMIC_ADD)
+  NODE_NAME_CASE(BUFFER_ATOMIC_SUB)
+  NODE_NAME_CASE(BUFFER_ATOMIC_SMIN)
+  NODE_NAME_CASE(BUFFER_ATOMIC_UMIN)
+  NODE_NAME_CASE(BUFFER_ATOMIC_SMAX)
+  NODE_NAME_CASE(BUFFER_ATOMIC_UMAX)
+  NODE_NAME_CASE(BUFFER_ATOMIC_AND)
+  NODE_NAME_CASE(BUFFER_ATOMIC_OR)
+  NODE_NAME_CASE(BUFFER_ATOMIC_XOR)
+  NODE_NAME_CASE(BUFFER_ATOMIC_CMPSWAP)
   case AMDGPUISD::LAST_AMDGPU_ISD_NUMBER: break;
   }
   return nullptr;
@@ -4100,6 +4107,20 @@ void AMDGPUTargetLowering::computeKnownBitsForTargetNode(
     else
       Known.Zero.setHighBits(32 - MaxValBits);
     break;
+  }
+  case ISD::INTRINSIC_WO_CHAIN: {
+    unsigned IID = cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue();
+    switch (IID) {
+    case Intrinsic::amdgcn_mbcnt_lo:
+    case Intrinsic::amdgcn_mbcnt_hi: {
+      // These return at most the wavefront size - 1.
+      unsigned Size = Op.getValueType().getSizeInBits();
+      Known.Zero.setHighBits(Size - Subtarget->getWavefrontSizeLog2());
+      break;
+    }
+    default:
+      break;
+    }
   }
   }
 }

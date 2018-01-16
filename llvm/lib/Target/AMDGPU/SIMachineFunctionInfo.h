@@ -14,15 +14,15 @@
 #ifndef LLVM_LIB_TARGET_AMDGPU_SIMACHINEFUNCTIONINFO_H
 #define LLVM_LIB_TARGET_AMDGPU_SIMACHINEFUNCTIONINFO_H
 
-#include "AMDGPUMachineFunction.h"
 #include "AMDGPUArgumentUsageInfo.h"
+#include "AMDGPUMachineFunction.h"
 #include "SIRegisterInfo.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/PseudoSourceValue.h"
-#include "llvm/Target/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <array>
@@ -34,12 +34,14 @@ namespace llvm {
 
 class MachineFrameInfo;
 class MachineFunction;
+class SIInstrInfo;
 class TargetRegisterClass;
 
 class AMDGPUImagePseudoSourceValue : public PseudoSourceValue {
 public:
+  // TODO: Is the img rsrc useful?
   explicit AMDGPUImagePseudoSourceValue(const TargetInstrInfo &TII) :
-    PseudoSourceValue(PseudoSourceValue::TargetCustom, TII) { }
+    PseudoSourceValue(PseudoSourceValue::TargetCustom, TII) {}
 
   bool isConstant(const MachineFrameInfo *) const override {
     // This should probably be true for most images, but we will start by being
@@ -87,9 +89,6 @@ public:
 /// This class keeps track of the SPI_SP_INPUT_ADDR config register, which
 /// tells the hardware which interpolation parameters to load.
 class SIMachineFunctionInfo final : public AMDGPUMachineFunction {
-  // FIXME: This should be removed and getPreloadedValue moved here.
-  friend class SIRegisterInfo;
-
   unsigned TIDReg = AMDGPU::NoRegister;
 
   // Registers that may be reserved for spilling purposes. These may be the same
@@ -138,12 +137,13 @@ class SIMachineFunctionInfo final : public AMDGPUMachineFunction {
   // Stack object indices for work item IDs.
   std::array<int, 3> DebuggerWorkItemIDStackObjectIndices = {{0, 0, 0}};
 
-  AMDGPUBufferPseudoSourceValue BufferPSV;
-  AMDGPUImagePseudoSourceValue ImagePSV;
+  DenseMap<const Value *,
+           std::unique_ptr<const AMDGPUBufferPseudoSourceValue>> BufferPSVs;
+  DenseMap<const Value *,
+           std::unique_ptr<const AMDGPUImagePseudoSourceValue>> ImagePSVs;
 
 private:
   unsigned LDSWaveSpillSize = 0;
-  unsigned ScratchOffsetReg;
   unsigned NumUserSGPRs = 0;
   unsigned NumSystemSGPRs = 0;
 
@@ -633,12 +633,22 @@ public:
     return LDSWaveSpillSize;
   }
 
-  const AMDGPUBufferPseudoSourceValue *getBufferPSV() const {
-    return &BufferPSV;
+  const AMDGPUBufferPseudoSourceValue *getBufferPSV(const SIInstrInfo &TII,
+                                                    const Value *BufferRsrc) {
+    assert(BufferRsrc);
+    auto PSV = BufferPSVs.try_emplace(
+      BufferRsrc,
+      llvm::make_unique<AMDGPUBufferPseudoSourceValue>(TII));
+    return PSV.first->second.get();
   }
 
-  const AMDGPUImagePseudoSourceValue *getImagePSV() const {
-    return &ImagePSV;
+  const AMDGPUImagePseudoSourceValue *getImagePSV(const SIInstrInfo &TII,
+                                                  const Value *ImgRsrc) {
+    assert(ImgRsrc);
+    auto PSV = ImagePSVs.try_emplace(
+      ImgRsrc,
+      llvm::make_unique<AMDGPUImagePseudoSourceValue>(TII));
+    return PSV.first->second.get();
   }
 };
 

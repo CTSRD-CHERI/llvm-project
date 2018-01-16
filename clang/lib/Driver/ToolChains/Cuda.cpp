@@ -13,6 +13,7 @@
 #include "clang/Basic/Cuda.h"
 #include "clang/Config/config.h"
 #include "clang/Basic/VirtualFileSystem.h"
+#include "clang/Driver/Distro.h"
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/Driver.h"
 #include "clang/Driver/DriverDiagnostic.h"
@@ -75,6 +76,11 @@ CudaInstallationDetector::CudaInstallationDetector(
     CudaPathCandidates.push_back(D.SysRoot + "/usr/local/cuda");
     for (const char *Ver : Versions)
       CudaPathCandidates.push_back(D.SysRoot + "/usr/local/cuda-" + Ver);
+
+    if (Distro(D.getVFS()).IsDebian())
+      // Special case for Debian to have nvidia-cuda-toolkit work
+      // out of the box. More info on http://bugs.debian.org/882505
+      CudaPathCandidates.push_back(D.SysRoot + "/usr/lib/cuda");
   }
 
   for (const auto &CudaPath : CudaPathCandidates) {
@@ -87,8 +93,7 @@ CudaInstallationDetector::CudaInstallationDetector(
     LibDevicePath = InstallPath + "/nvvm/libdevice";
 
     auto &FS = D.getVFS();
-    if (!(FS.exists(IncludePath) && FS.exists(BinPath) &&
-          FS.exists(LibDevicePath)))
+    if (!(FS.exists(IncludePath) && FS.exists(BinPath)))
       continue;
 
     // On Linux, we have both lib and lib64 directories, and we need to choose
@@ -167,17 +172,9 @@ CudaInstallationDetector::CudaInstallationDetector(
       }
     }
 
-    // This code prevents IsValid from being set when
-    // no libdevice has been found.
-    bool allEmpty = true;
-    std::string LibDeviceFile;
-    for (auto key : LibDeviceMap.keys()) {
-      LibDeviceFile = LibDeviceMap.lookup(key);
-      if (!LibDeviceFile.empty())
-        allEmpty = false;
-    }
-
-    if (allEmpty)
+    // Check that we have found at least one libdevice that we can link in if
+    // -nocudalib hasn't been specified.
+    if (LibDeviceMap.empty() && !Args.hasArg(options::OPT_nocudalib))
       continue;
 
     IsValid = true;
@@ -214,15 +211,17 @@ void CudaInstallationDetector::AddCudaIncludeArgs(
 void CudaInstallationDetector::CheckCudaVersionSupportsArch(
     CudaArch Arch) const {
   if (Arch == CudaArch::UNKNOWN || Version == CudaVersion::UNKNOWN ||
-      ArchsWithVersionTooLowErrors.count(Arch) > 0)
+      ArchsWithBadVersion.count(Arch) > 0)
     return;
 
-  auto RequiredVersion = MinVersionForCudaArch(Arch);
-  if (Version < RequiredVersion) {
-    ArchsWithVersionTooLowErrors.insert(Arch);
-    D.Diag(diag::err_drv_cuda_version_too_low)
-        << InstallPath << CudaArchToString(Arch) << CudaVersionToString(Version)
-        << CudaVersionToString(RequiredVersion);
+  auto MinVersion = MinVersionForCudaArch(Arch);
+  auto MaxVersion = MaxVersionForCudaArch(Arch);
+  if (Version < MinVersion || Version > MaxVersion) {
+    ArchsWithBadVersion.insert(Arch);
+    D.Diag(diag::err_drv_cuda_version_unsupported)
+        << CudaArchToString(Arch) << CudaVersionToString(MinVersion)
+        << CudaVersionToString(MaxVersion) << InstallPath
+        << CudaVersionToString(Version);
   }
 }
 
@@ -308,10 +307,7 @@ void NVPTX::Assembler::ConstructJob(Compilation &C, const JobAction &JA,
   CmdArgs.push_back("--gpu-name");
   CmdArgs.push_back(Args.MakeArgString(CudaArchToString(gpu_arch)));
   CmdArgs.push_back("--output-file");
-  SmallString<256> OutputFileName(Output.getFilename());
-  if (JA.isOffloading(Action::OFK_OpenMP))
-    llvm::sys::path::replace_extension(OutputFileName, "cubin");
-  CmdArgs.push_back(Args.MakeArgString(OutputFileName));
+  CmdArgs.push_back(Args.MakeArgString(TC.getInputFilename(Output)));
   for (const auto& II : Inputs)
     CmdArgs.push_back(Args.MakeArgString(II.getFilename()));
 
@@ -438,11 +434,8 @@ void NVPTX::OpenMPLinker::ConstructJob(Compilation &C, const JobAction &JA,
     if (!II.isFilename())
       continue;
 
-    SmallString<256> Name(II.getFilename());
-    llvm::sys::path::replace_extension(Name, "cubin");
-
-    const char *CubinF =
-        C.addTempFile(C.getArgs().MakeArgString(Name));
+    const char *CubinF = C.addTempFile(
+        C.getArgs().MakeArgString(getToolChain().getInputFilename(II)));
 
     CmdArgs.push_back(CubinF);
   }
@@ -468,6 +461,20 @@ CudaToolChain::CudaToolChain(const Driver &D, const llvm::Triple &Triple,
   // Lookup binaries into the driver directory, this is used to
   // discover the clang-offload-bundler executable.
   getProgramPaths().push_back(getDriver().Dir);
+}
+
+std::string CudaToolChain::getInputFilename(const InputInfo &Input) const {
+  // Only object files are changed, for example assembly files keep their .s
+  // extensions. CUDA also continues to use .o as they don't use nvlink but
+  // fatbinary.
+  if (!(OK == Action::OFK_OpenMP && Input.getType() == types::TY_Object))
+    return ToolChain::getInputFilename(Input);
+
+  // Replace extension for object files with cubin because nvlink relies on
+  // these particular file names.
+  SmallString<256> Filename(ToolChain::getInputFilename(Input));
+  llvm::sys::path::replace_extension(Filename, "cubin");
+  return Filename.str();
 }
 
 void CudaToolChain::addClangTargetOptions(
@@ -551,9 +558,9 @@ CudaToolChain::TranslateArgs(const llvm::opt::DerivedArgList &Args,
   // flags are not duplicated.
   // Also append the compute capability.
   if (DeviceOffloadKind == Action::OFK_OpenMP) {
-    for (Arg *A : Args){
+    for (Arg *A : Args) {
       bool IsDuplicate = false;
-      for (Arg *DALArg : *DAL){
+      for (Arg *DALArg : *DAL) {
         if (A == DALArg) {
           IsDuplicate = true;
           break;
@@ -564,14 +571,9 @@ CudaToolChain::TranslateArgs(const llvm::opt::DerivedArgList &Args,
     }
 
     StringRef Arch = DAL->getLastArgValue(options::OPT_march_EQ);
-    if (Arch.empty()) {
-      // Default compute capability for CUDA toolchain is the
-      // lowest compute capability supported by the installed
-      // CUDA version.
-      DAL->AddJoinedArg(nullptr,
-          Opts.getOption(options::OPT_march_EQ),
-          CudaInstallation.getLowestExistingArch());
-    }
+    if (Arch.empty())
+      DAL->AddJoinedArg(nullptr, Opts.getOption(options::OPT_march_EQ),
+                        CLANG_OPENMP_NVPTX_DEFAULT_ARCH);
 
     return DAL;
   }
