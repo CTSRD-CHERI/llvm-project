@@ -28,8 +28,6 @@ void test_parameter_types(char *ptr, size_t size) {
   (void)ALIGN_BUILTIN((int)e, 2); // but with a cast it is fine
   (void)ALIGN_BUILTIN((int)b, 2); // but with a cast it is fine
 
-  // second parameter doesn't have to be a constant for power of two versions:
-#if POW2
   // second parameter must be an integer type (but not enum or _Bool)
   (void)ALIGN_BUILTIN(ptr, size);
   (void)ALIGN_BUILTIN(ptr, ptr);    // expected-error {{used type 'char *' where integer is required}}
@@ -41,10 +39,6 @@ void test_parameter_types(char *ptr, size_t size) {
 
   (void)ALIGN_BUILTIN(ptr, size);
   (void)ALIGN_BUILTIN(size, size);
-#else
-  (void)ALIGN_BUILTIN(ptr, (_Bool)1);     // expected-error {{used type '_Bool' where integer is required}}
-  (void)ALIGN_BUILTIN(ptr, (enum Enum)4); // expected-error {{used type 'enum Enum' where integer is required}}
-#endif
 }
 
 void test_return_type(void *ptr, int i, long l, __uintcap_t uintcap, void *__capability cap) {
@@ -78,10 +72,9 @@ void test_cheri_parameter_types(void *__capability cap, __uintcap_t uintcap, __i
   // For (u)intptr_t compatibility we also allow __uintcap_t and __intcap_t as the aligment parameter type
   (void)ALIGN_BUILTIN(cap, (__uintcap_t)2); // not strictly an integer type but should be allowed as alignment value
   (void)ALIGN_BUILTIN(cap, (__intcap_t)2);  // not strictly an integer type but should be allowed as alignment value
-#if POW2
+
   (void)ALIGN_BUILTIN(cap, uintcap); // not strictly an integer type but should be allowed as alignment value
   (void)ALIGN_BUILTIN(cap, intcap);  // not strictly an integer type but should be allowed as alignment value
-#endif
 }
 
 #if POW2
@@ -100,6 +93,10 @@ void test_p2_range(char *ptr, void *__capability cap, size_t align) {
   char c = ' ';
   (void)ALIGN_BUILTIN(c, -1); // expected-error {{requested power-of-two alignment -1 is not a value between 0 and 7}}
   (void)ALIGN_BUILTIN(c, 8);  // expected-error {{requested power-of-two alignment 8 is not a value between 0 and 7}}
+
+  const int bad_align = 64 * 2;
+  // bad_align += 1;
+  (void)ALIGN_BUILTIN(ptr, bad_align); // expected-error {{requested power-of-two alignment 128 is not a value between 0 and 63}}
 
   // CHERI specific checks:
   // The range should still be 1 to 63 and not 127/255
@@ -145,18 +142,18 @@ void test_non_p2_values(char *ptr, void *__capability cap, size_t align) {
   (void)ALIGN_BUILTIN(i32, 1ULL << 32); // expected-error {{requested alignment must be 2147483648 or smaller}}
   (void)ALIGN_BUILTIN(u32, 1ULL << 32); // expected-error {{requested alignment must be 2147483648 or smaller}}
 
-  // XXXAR: for now we only allow integer constant expressions
-  (void)ALIGN_BUILTIN(ptr, align);   // expected-error {{expression is not an integer constant}}
-  (void)ALIGN_BUILTIN(align, align); // expected-error {{expression is not an integer constant}}
+  const int bad_align = 8 + 1;
+  // bad_align += 1;
+  (void)ALIGN_BUILTIN(ptr, bad_align); // expected-error {{requested alignment is not a power of 2}}
 
   // CHERI specific checks:
   // The range should still be 1 to 63 and not 127/255
-  // TODO: can I generate a power of two bigger than 1 << 63? __int128_type?
-  __uintcap_t uintcap = 3;
-  __intcap_t intcap = 4;
-  (void)ALIGN_BUILTIN(cap, align);     // expected-error {{expression is not an integer constant}}
-  (void)ALIGN_BUILTIN(uintcap, align); // expected-error {{expression is not an integer constant}}
-  (void)ALIGN_BUILTIN(intcap, align);  // expected-error {{expression is not an integer constant}}
+  __intcap_t intcap = 1;
+  __uintcap_t uintcap = 2;
+  (void)ALIGN_BUILTIN(cap, ((__int128)1) << 65); // expected-error {{requested alignment must be 9223372036854775808 or smaller}}
+  (void)ALIGN_BUILTIN(uintcap, ((__int128)1) << 65); // expected-error {{requested alignment must be 9223372036854775808 or smaller}}
+  (void)ALIGN_BUILTIN(intcap, ((__int128)1) << 65);  // expected-error {{requested alignment must be 9223372036854775808 or smaller}}
+
 }
 #endif
 
@@ -174,12 +171,7 @@ void constant_expression(int x) {
   _Static_assert(__builtin_p2align_down(33, 5) == 32, "");
 
   // but not if one of the arguments isn't constant
-  _Static_assert(ALIGN_BUILTIN(33, x) != 100, "");
-#if POW2
-  // expected-error@-2 {{static_assert expression is not an integral constant expression}}
-#else
-  // expected-error@-4 {{expression is not an integer constant expression}}
-#endif
+  _Static_assert(ALIGN_BUILTIN(33, x) != 100, ""); // expected-error {{static_assert expression is not an integral constant expression}}
   _Static_assert(ALIGN_BUILTIN(x, 4) != 100, ""); // expected-error {{static_assert expression is not an integral constant expression}}
 }
 

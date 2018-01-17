@@ -194,10 +194,9 @@ static bool SemaBuiltinAlignment(Sema &S, CallExpr *TheCall, unsigned ID,
   // TODO: allow zero as an always true result?
   llvm::APSInt AlignValue;
   unsigned MaxAlignmentBits = S.Context.getIntRange(SrcTy) - 1;
-  if (PowerOfTwo) {
-
-    if (AlignOp->isIntegerConstantExpr(AlignValue, S.Context)) {
-      if (AlignValue == 0) {
+  if (AlignOp->EvaluateAsInt(AlignValue, S.Context, Expr::SE_AllowSideEffects)) {
+    if (PowerOfTwo) {
+     if (AlignValue == 0) {
         // aligning to 2^0 is always true/a noop -> add the tautological warning
         S.Diag(AlignOp->getExprLoc(), diag::warn_alignment_builtin_useless)
             << IsBooleanAlignBuiltin;
@@ -206,32 +205,23 @@ static bool SemaBuiltinAlignment(Sema &S, CallExpr *TheCall, unsigned ID,
                diag::err_alignment_power_of_two_out_of_range)
             << AlignValue.toString(10) << 0 << MaxAlignmentBits;
       }
-    }
-  } else {
-    // XXXAR: for now require a constant expression for the non-power-of-two
-    // version This can be changed if we see that lots of projects uses
-    // non-constant values
-
-    // XXXAR: maybe should use use err_constant_integer_arg_type to print
-    // function name
-    ExprResult ICE = S.VerifyIntegerConstantExpression(AlignOp, &AlignValue);
-    if (ICE.isInvalid())
-      return true;
-    llvm::APSInt MaxValue(
-        llvm::APInt::getOneBitSet(MaxAlignmentBits + 1, MaxAlignmentBits));
-    if (AlignValue < 1) {
-      S.Diag(AlignOp->getExprLoc(), diag::err_alignment_too_small) << 1;
-      return true;
-    } else if (llvm::APSInt::compareValues(AlignValue, MaxValue) > 0) {
-      S.Diag(AlignOp->getExprLoc(), diag::err_alignment_too_big)
-          << MaxValue.toString(10);
-      return true;
-    } else if (AlignValue == 1) {
-      S.Diag(AlignOp->getExprLoc(), diag::warn_alignment_builtin_useless)
-          << IsBooleanAlignBuiltin;
-    } else if (!AlignValue.isPowerOf2()) {
-      S.Diag(AlignOp->getExprLoc(), diag::err_alignment_not_power_of_two);
-      return true;
+    } else {
+      llvm::APSInt MaxValue(
+          llvm::APInt::getOneBitSet(MaxAlignmentBits + 1, MaxAlignmentBits));
+      if (AlignValue < 1) {
+        S.Diag(AlignOp->getExprLoc(), diag::err_alignment_too_small) << 1;
+        return true;
+      } else if (llvm::APSInt::compareValues(AlignValue, MaxValue) > 0) {
+        S.Diag(AlignOp->getExprLoc(), diag::err_alignment_too_big)
+            << MaxValue.toString(10);
+        return true;
+      } else if (AlignValue == 1) {
+        S.Diag(AlignOp->getExprLoc(), diag::warn_alignment_builtin_useless)
+            << IsBooleanAlignBuiltin;
+      } else if (!AlignValue.isPowerOf2()) {
+        S.Diag(AlignOp->getExprLoc(), diag::err_alignment_not_power_of_two);
+        return true;
+      }
     }
   }
 
