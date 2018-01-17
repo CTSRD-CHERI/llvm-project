@@ -162,6 +162,87 @@ static bool SemaBuiltinAddressof(Sema &S, CallExpr *TheCall) {
   return false;
 }
 
+static bool SemaBuiltinAlignment(Sema &S, CallExpr *TheCall, unsigned ID,
+                                 bool PowerOfTwo) {
+  if (checkArgCount(S, TheCall, 2))
+    return true;
+
+  clang::Expr *Source = TheCall->getArg(0);
+  clang::Expr *AlignOp = TheCall->getArg(1);
+  bool IsBooleanAlignBuiltin = ID == Builtin::BI__builtin_is_aligned ||
+                               ID == Builtin::BI__builtin_is_p2aligned;
+
+  auto IsValidIntegerType = [](QualType Ty) {
+    return Ty->isIntegerType() && !Ty->isEnumeralType() && !Ty->isBooleanType();
+  };
+  if (!IsValidIntegerType(AlignOp->getType())) {
+    S.Diag(AlignOp->getExprLoc(), diag::err_typecheck_expect_int)
+        << AlignOp->getType();
+    return true;
+  }
+
+  QualType SrcTy = Source->getType();
+
+  if (!SrcTy->isPointerType() && !IsValidIntegerType(SrcTy)) {
+    // TODO: this is not quite the right error message since we don't allow
+    // floating point types, or member pointers
+    S.Diag(AlignOp->getExprLoc(), diag::err_typecheck_expect_scalar_operand)
+        << SrcTy;
+    return true;
+  }
+  // err_argument_invalid_range
+  // TODO: allow zero as an always true result?
+  llvm::APSInt AlignValue;
+  unsigned MaxAlignmentBits = S.Context.getIntRange(SrcTy) - 1;
+  if (PowerOfTwo) {
+
+    if (AlignOp->isIntegerConstantExpr(AlignValue, S.Context)) {
+      if (AlignValue == 0) {
+        // aligning to 2^0 is always true/a noop -> add the tautological warning
+        S.Diag(AlignOp->getExprLoc(), diag::warn_alignment_builtin_useless)
+            << IsBooleanAlignBuiltin;
+      } else if (AlignValue < 0 || AlignValue > MaxAlignmentBits) {
+        S.Diag(AlignOp->getExprLoc(),
+               diag::err_alignment_power_of_two_out_of_range)
+            << AlignValue.toString(10) << 0 << MaxAlignmentBits;
+      }
+    }
+  } else {
+    // XXXAR: for now require a constant expression for the non-power-of-two
+    // version This can be changed if we see that lots of projects uses
+    // non-constant values
+
+    // XXXAR: maybe should use use err_constant_integer_arg_type to print
+    // function name
+    ExprResult ICE = S.VerifyIntegerConstantExpression(AlignOp, &AlignValue);
+    if (ICE.isInvalid())
+      return true;
+    llvm::APSInt MaxValue(
+        llvm::APInt::getOneBitSet(MaxAlignmentBits + 1, MaxAlignmentBits));
+    if (AlignValue < 1) {
+      S.Diag(AlignOp->getExprLoc(), diag::err_alignment_too_small) << 1;
+      return true;
+    } else if (llvm::APSInt::compareValues(AlignValue, MaxValue) > 0) {
+      S.Diag(AlignOp->getExprLoc(), diag::err_alignment_too_big)
+          << MaxValue.toString(10);
+      return true;
+    } else if (AlignValue == 1) {
+      S.Diag(AlignOp->getExprLoc(), diag::warn_alignment_builtin_useless)
+          << IsBooleanAlignBuiltin;
+    } else if (!AlignValue.isPowerOf2()) {
+      S.Diag(AlignOp->getExprLoc(), diag::err_alignment_not_power_of_two);
+      return true;
+    }
+  }
+
+  TheCall->setArg(0, Source);
+  TheCall->setArg(1, AlignOp);
+  // __builtin_is_aligned() returns bool instead of the same type as Arg1
+  TheCall->setType(IsBooleanAlignBuiltin ? S.Context.BoolTy
+                                         : Source->getType());
+  return false;
+}
+
 static bool SemaBuiltinOverflow(Sema &S, CallExpr *TheCall) {
   if (checkArgCount(S, TheCall, 3))
     return true;
@@ -1063,6 +1144,18 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     break;
   case Builtin::BI__builtin_addressof:
     if (SemaBuiltinAddressof(*this, TheCall))
+      return ExprError();
+    break;
+  case Builtin::BI__builtin_is_aligned:
+  case Builtin::BI__builtin_align_up:
+  case Builtin::BI__builtin_align_down:
+    if (SemaBuiltinAlignment(*this, TheCall, BuiltinID, false))
+      return ExprError();
+    break;
+  case Builtin::BI__builtin_is_p2aligned:
+  case Builtin::BI__builtin_p2align_up:
+  case Builtin::BI__builtin_p2align_down:
+    if (SemaBuiltinAlignment(*this, TheCall, BuiltinID, true))
       return ExprError();
     break;
   case Builtin::BI__builtin_add_overflow:
