@@ -51,10 +51,12 @@ _Bool is_aligned(TYPE ptr, unsigned align) {
   // PTR:       [[VAR:%.+]] = ptrtoint i8* %{{.+}} to i64
   // CAP:       [[VAR:%.+]] = {{(tail )?}}call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* {{%.+}})
   // LONG-SLOW: [[VAR:%.+]] = load i64
-  // SLOW: %set_bits = and i64 [[VAR]], 31
+  // SLOW:      %alignment = zext i32 {{.+}} to i64
+  // SLOW-NEXT: %mask = sub i64 %alignment, 1
+  // SLOW-NEXT: %set_bits = and i64 [[VAR]], %mask
   // SLOW-NEXT: %is_aligned = icmp eq i64 %set_bits, 0
   // SLOW-NEXT: ret i1 %is_aligned
-  return __builtin_is_aligned(ptr, 32);
+  return __builtin_is_aligned(ptr, align);
 }
 
 _Bool is_p2aligned(TYPE ptr, int p2align) {
@@ -77,20 +79,25 @@ TYPE align_up(TYPE ptr, unsigned align) {
   // CHECK-LABEL: @align_up(
   // align up/align down is different for capabilities and pointers since we can't just mask
   // CAP:       [[VAR:%.+]] = {{(tail )?}}call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[SRC:%.+]])
-  // CAP-NEXT:  %unaligned_bits = and i64 [[VAR]], 31
+  // CAP:       %alignment = zext i32 %{{.+}} to i64
+  // CAP-NEXT:  %mask = {{(sub i64 %alignment, 1)|(add nsw i64 %alignment, -1)}}
+  // CAP-NEXT:  %unaligned_bits = and i64 [[VAR]], %mask
   // CAP-NEXT:  %is_aligned = icmp eq i64 %unaligned_bits, 0
-  // CAP-NEXT:  %missing_bits = sub {{(nsw )?}}i64 32, %unaligned_bits
+  // CAP-NEXT:  %missing_bits = sub {{(nsw )?}}i64 %alignment, %unaligned_bits
   // CAP-NEXT:  %aligned_cap = getelementptr inbounds i8, i8 addrspace(200)* [[SRC]], i64 %missing_bits
   // CAP-NEXT:  %result = select i1 %is_aligned, i8 addrspace(200)* [[SRC]], i8 addrspace(200)* %aligned_cap
 
   // PTR:       [[VAR:%.+]] = ptrtoint i8* %{{.+}} to i64
   // LONG-SLOW: [[VAR:%.+]] = load i64
-  // NOCAP-IR:  [[VAR2:%.+]] = add i64 [[VAR]], 31
-  // NOCAP-IR:  [[MASKED:%.+]] = and i64 [[VAR2]], -32
+  // NOCAP-IR:  %alignment = zext i32 %{{.+}} to i64
+  // NOCAP-IR:  %mask = {{(sub i64 %alignment, 1)|(add i64 %alignment, -1)}}
+  // NOCAP-IR:  [[VAR_TMP:%.+]] = add i64 [[VAR]], %mask
+  // NOCAP-IR:  %negated_mask = xor i64 %mask, -1
+  // NOCAP-IR:  [[MASKED:%.+]] = and i64 [[VAR_TMP:%.+]], %negated_mask
   // PTR:       %aligned_result = inttoptr i64 [[MASKED:%.+]] to i8*
   // PTR:       ret [[$TYPE]] %aligned_result
   // LONG-SLOW: ret i64 [[MASKED]]
-  return __builtin_align_up(ptr, 32);
+  return __builtin_align_up(ptr, align);
 }
 
 TYPE p2align_up(TYPE ptr, unsigned p2align) {
@@ -121,18 +128,23 @@ TYPE align_down(TYPE ptr, unsigned align) {
   // TODO: should we allow non-constant values and just say not passing a power-of-two is undefined?
   // CHECK-LABEL: @align_down(
   // CAP:       [[VAR:%.+]] = {{(tail )?}}call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[SRC:%.+]])
-  // CAP:       %unaligned_bits = and i64 [[VAR]], 31
-  // CAP-NEXT:  %sub = sub {{(nsw )?}}i64 0, %unaligned_bits
+  // CAP:       %alignment = zext i32 %{{.+}} to i64
+  // CAP-NEXT:  %mask = {{(sub i64 %alignment, 1)|(add nsw i64 %alignment, -1)}}
+  // CAP-NEXT:  %unaligned_bits = and i64 [[VAR]], %mask
+  // CAP-NEXT:  %sub = sub i64 0, %unaligned_bits
   // CAP-NEXT:  %aligned_cap = getelementptr inbounds i8, i8 addrspace(200)* [[SRC]], i64 %sub
   // CAP-NEXT:  ret i8 addrspace(200)* %aligned_cap
 
   // PTR:       [[VAR:%.+]] = ptrtoint i8* %{{.+}} to i64
   // LONG-SLOW: [[VAR:%.+]] = load i64
-  // NOCAP-IR:  [[MASKED:%.+]] = and i64 [[VAR]], -32
+  // NOCAP-IR:  %alignment = zext i32 %{{.+}} to i64
+  // NOCAP-IR:  %mask = {{(sub i64 %alignment, 1)|(add i64 %alignment, -1)}}
+  // NOCAP-IR:  %negated_mask = xor i64 %mask, -1
+  // NOCAP-IR:  [[MASKED:%.+]] = and i64 [[VAR:%.+]], %negated_mask
   // PTR:       %aligned_result = inttoptr i64 [[MASKED:%.+]] to i8*
   // PTR:       ret [[$TYPE]] %aligned_result
   // LONG-SLOW: ret i64 [[MASKED]]
-  return __builtin_align_down(ptr, 32);
+  return __builtin_align_down(ptr, align);
 }
 
 TYPE p2align_down(TYPE ptr, unsigned p2align) {
@@ -150,7 +162,7 @@ TYPE p2align_down(TYPE ptr, unsigned p2align) {
   // NOCAP-IR:  %alignment = shl i64 1, %pow2
   // NOCAP-IR:  %mask = {{(sub i64 %alignment, 1)|(add i64 %alignment, -1)}}
   // NOCAP-IR:  %negated_mask = xor i64 %mask, -1
-  // NOCAP-IR:  [[MASKED:%.+]] = and i64 [[VAR_TMP:%.+]], %negated_mask
+  // NOCAP-IR:  [[MASKED:%.+]] = and i64 [[VAR:%.+]], %negated_mask
   // PTR:       %aligned_result = inttoptr i64 [[MASKED:%.+]] to i8*
   // PTR:       ret [[$TYPE]] %aligned_result
   // LONG-SLOW: ret i64 [[MASKED]]
