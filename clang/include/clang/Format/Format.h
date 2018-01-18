@@ -1363,36 +1363,53 @@ struct FormatStyle {
 
   /// See documentation of ``RawStringFormats``.
   struct RawStringFormat {
-    /// \brief The delimiter that this raw string format matches.
-    std::string Delimiter;
     /// \brief The language of this raw string.
     LanguageKind Language;
+    /// \brief A list of raw string delimiters that match this language.
+    std::vector<std::string> Delimiters;
+    /// \brief A list of enclosing function names that match this language.
+    std::vector<std::string> EnclosingFunctions;
     /// \brief The style name on which this raw string format is based on.
     /// If not specified, the raw string format is based on the style that this
     /// format is based on.
     std::string BasedOnStyle;
     bool operator==(const RawStringFormat &Other) const {
-      return Delimiter == Other.Delimiter && Language == Other.Language &&
+      return Language == Other.Language && Delimiters == Other.Delimiters &&
+             EnclosingFunctions == Other.EnclosingFunctions &&
              BasedOnStyle == Other.BasedOnStyle;
     }
   };
 
-  /// \brief Raw string delimiters denoting that the raw string contents are
-  /// code in a particular language and can be reformatted.
+  /// \brief Defines hints for detecting supported languages code blocks in raw
+  /// strings.
   ///
-  /// A raw string with a matching delimiter will be reformatted assuming the
-  /// specified language based on a predefined style given by 'BasedOnStyle'.
-  /// If 'BasedOnStyle' is not found, the formatting is based on llvm style.
+  /// A raw string with a matching delimiter or a matching enclosing function
+  /// name will be reformatted assuming the specified language based on the
+  /// style for that language defined in the .clang-format file. If no style has
+  /// been defined in the .clang-format file for the specific language, a
+  /// predefined style given by 'BasedOnStyle' is used. If 'BasedOnStyle' is not
+  /// found, the formatting is based on llvm style. A matching delimiter takes
+  /// precedence over a matching enclosing function name for determining the
+  /// language of the raw string contents.
+  ///
+  /// There should be at most one specification per language and each delimiter
+  /// and enclosing function should not occur in multiple specifications.
   ///
   /// To configure this in the .clang-format file, use:
   /// \code{.yaml}
   ///   RawStringFormats:
-  ///     - Delimiter: 'pb'
-  ///       Language:  TextProto
-  ///       BasedOnStyle: llvm
-  ///     - Delimiter: 'proto'
-  ///       Language:  TextProto
-  ///       BasedOnStyle: google
+  ///     - Language: TextProto
+  ///         Delimiters:
+  ///           - 'pb'
+  ///           - 'proto'
+  ///         EnclosingFunctions:
+  ///           - 'PARSE_TEXT_PROTO'
+  ///         BasedOnStyle: google
+  ///     - Language: Cpp
+  ///         Delimiters:
+  ///           - 'cc'
+  ///           - 'cpp'
+  ///         BasedOnStyle: llvm
   /// \endcode
   std::vector<RawStringFormat> RawStringFormats;
 
@@ -1685,6 +1702,43 @@ struct FormatStyle {
            Standard == R.Standard && TabWidth == R.TabWidth &&
            UseTab == R.UseTab;
   }
+
+  llvm::Optional<FormatStyle> GetLanguageStyle(LanguageKind Language) const;
+
+  // Stores per-language styles. A FormatStyle instance inside has an empty
+  // StyleSet. A FormatStyle instance returned by the Get method has its
+  // StyleSet set to a copy of the originating StyleSet, effectively keeping the
+  // internal representation of that StyleSet alive.
+  //
+  // The memory management and ownership reminds of a birds nest: chicks
+  // leaving the nest take photos of the nest with them.
+  struct FormatStyleSet {
+    typedef std::map<FormatStyle::LanguageKind, FormatStyle> MapType;
+
+    llvm::Optional<FormatStyle> Get(FormatStyle::LanguageKind Language) const;
+
+    // Adds \p Style to this FormatStyleSet. Style must not have an associated
+    // FormatStyleSet.
+    // Style.Language should be different than LK_None. If this FormatStyleSet
+    // already contains an entry for Style.Language, that gets replaced with the
+    // passed Style.
+    void Add(FormatStyle Style);
+
+    // Clears this FormatStyleSet.
+    void Clear();
+
+  private:
+    std::shared_ptr<MapType> Styles;
+  };
+
+  static FormatStyleSet BuildStyleSetFromConfiguration(
+      const FormatStyle &MainStyle,
+      const std::vector<FormatStyle> &ConfigurationStyles);
+
+private:
+  FormatStyleSet StyleSet;
+
+  friend std::error_code parseConfiguration(StringRef Text, FormatStyle *Style);
 };
 
 /// \brief Returns a format style complying with the LLVM coding standards:
@@ -1729,6 +1783,8 @@ bool getPredefinedStyle(StringRef Name, FormatStyle::LanguageKind Language,
 ///
 /// Style->Language is used to get the base style, if the ``BasedOnStyle``
 /// option is present.
+///
+/// The FormatStyleSet of Style is reset.
 ///
 /// When ``BasedOnStyle`` is not present, options not present in the YAML
 /// document, are retained in \p Style.

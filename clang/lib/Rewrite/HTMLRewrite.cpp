@@ -210,9 +210,9 @@ static void AddLineNumber(RewriteBuffer &RB, unsigned LineNo,
   SmallString<256> Str;
   llvm::raw_svector_ostream OS(Str);
 
-  OS << "<tr><td class=\"num\" id=\"LN"
-     << LineNo << "\">"
-     << LineNo << "</td><td class=\"line\">";
+  OS << "<tr class=\"codeline\" data-linenumber=\"" << LineNo << "\">"
+     << "<td class=\"num\" id=\"LN" << LineNo << "\">" << LineNo
+     << "</td><td class=\"line\">";
 
   if (B == E) { // Handle empty lines.
     OS << " </td></tr>";
@@ -263,7 +263,10 @@ void html::AddLineNumbers(Rewriter& R, FileID FID) {
   }
 
   // Add one big table tag that surrounds all of the code.
-  RB.InsertTextBefore(0, "<table class=\"code\">\n");
+  std::string s;
+  llvm::raw_string_ostream os(s);
+  os << "<table class=\"code\" data-fileid=\"" << FID.getHashValue() << "\">\n";
+  RB.InsertTextBefore(0, os.str());
   RB.InsertTextAfter(FileEnd - FileBeg, "</table>");
 }
 
@@ -308,6 +311,10 @@ void html::AddHeaderFooterInternalBuiltinCSS(Rewriter &R, FileID FID,
           "  -webkit-border-radius:5px;  -webkit-box-shadow:1px 1px 7px #000; "
           "  border-radius:5px;  box-shadow:1px 1px 7px #000; "
           "position: absolute; top: -1em; left:10em; z-index: 1 } \n"
+      " #tooltiphint { position: fixed; width: 50em; margin-left: -25em;"
+                     "left: 50%; padding: 10px; border: 1px solid #b0b0b0;"
+                     "border-radius: 2px; box-shadow: 1px 1px 7px black; "
+                     "background-color: #c0c0c0; z-index: 2; }\n"
       " .macro { color: darkmagenta; background-color:LemonChiffon;"
              // Macros are position: relative to provide base for expansions.
              " position: relative }\n"

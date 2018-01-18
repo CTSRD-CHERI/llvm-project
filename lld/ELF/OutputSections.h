@@ -95,6 +95,7 @@ public:
   ConstraintKind Constraint = ConstraintKind::NoConstraint;
   std::string Location;
   std::string MemoryRegionName;
+  std::string LMARegionName;
   bool Noload = false;
 
   template <class ELFT> void finalize();

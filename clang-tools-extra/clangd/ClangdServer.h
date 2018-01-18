@@ -308,11 +308,11 @@ public:
                                                      PathRef File, Position Pos,
                                                      llvm::StringRef NewName);
 
-  /// Gets current document contents for \p File. \p File must point to a
-  /// currently tracked file.
+  /// Gets current document contents for \p File. Returns None if \p File is not
+  /// currently tracked.
   /// FIXME(ibiryukov): This function is here to allow offset-to-Position
   /// conversions in outside code, maybe there's a way to get rid of it.
-  std::string getDocument(PathRef File);
+  llvm::Optional<std::string> getDocument(PathRef File);
 
   /// Only for testing purposes.
   /// Waits until all requests to worker thread are finished and dumps AST for
@@ -340,13 +340,16 @@ private:
   DiagnosticsConsumer &DiagConsumer;
   FileSystemProvider &FSProvider;
   DraftStore DraftMgr;
-  /// If set, this manages index for symbols in opened files.
+  // The index used to look up symbols. This could be:
+  //   - null (all index functionality is optional)
+  //   - the dynamic index owned by ClangdServer (FileIdx)
+  //   - the static index passed to the constructor
+  //   - a merged view of a static and dynamic index (MergedIndex)
+  SymbolIndex *Index;
+  // If present, an up-to-date of symbols in open files. Read via Index.
   std::unique_ptr<FileIndex> FileIdx;
-  /// If set, this provides static index for project-wide global symbols.
-  /// clangd global code completion result will come from the static index and
-  /// the `FileIdx` above.
-  /// No owned, the life time is managed by clangd embedders.
-  SymbolIndex *StaticIdx;
+  // If present, a merged view of FileIdx and an external index. Read via Index.
+  std::unique_ptr<SymbolIndex> MergedIndex;
   CppFileCollection Units;
   std::string ResourceDir;
   // If set, this represents the workspace path.

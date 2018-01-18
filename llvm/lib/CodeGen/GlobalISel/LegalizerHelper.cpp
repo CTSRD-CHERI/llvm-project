@@ -103,6 +103,9 @@ static RTLIB::Libcall getRTLibDesc(unsigned Opcode, unsigned Size) {
     return Size == 64 ? RTLIB::REM_F64 : RTLIB::REM_F32;
   case TargetOpcode::G_FPOW:
     return Size == 64 ? RTLIB::POW_F64 : RTLIB::POW_F32;
+  case TargetOpcode::G_FMA:
+    assert((Size == 32 || Size == 64) && "Unsupported size");
+    return Size == 64 ? RTLIB::FMA_F64 : RTLIB::FMA_F32;
   }
   llvm_unreachable("Unknown libcall function");
 }
@@ -123,13 +126,39 @@ llvm::createLibcall(MachineIRBuilder &MIRBuilder, RTLIB::Libcall Libcall,
   return LegalizerHelper::Legalized;
 }
 
+// Useful for libcalls where all operands have the same type.
 static LegalizerHelper::LegalizeResult
 simpleLibcall(MachineInstr &MI, MachineIRBuilder &MIRBuilder, unsigned Size,
               Type *OpType) {
   auto Libcall = getRTLibDesc(MI.getOpcode(), Size);
+
+  SmallVector<CallLowering::ArgInfo, 3> Args;
+  for (unsigned i = 1; i < MI.getNumOperands(); i++)
+    Args.push_back({MI.getOperand(i).getReg(), OpType});
   return createLibcall(MIRBuilder, Libcall, {MI.getOperand(0).getReg(), OpType},
-                       {{MI.getOperand(1).getReg(), OpType},
-                        {MI.getOperand(2).getReg(), OpType}});
+                       Args);
+}
+
+static RTLIB::Libcall getConvRTLibDesc(unsigned Opcode, Type *ToType,
+                                       Type *FromType) {
+  auto ToMVT = MVT::getVT(ToType);
+  auto FromMVT = MVT::getVT(FromType);
+
+  switch (Opcode) {
+  case TargetOpcode::G_FPEXT:
+    return RTLIB::getFPEXT(FromMVT, ToMVT);
+  case TargetOpcode::G_FPTRUNC:
+    return RTLIB::getFPROUND(FromMVT, ToMVT);
+  }
+  llvm_unreachable("Unsupported libcall function");
+}
+
+static LegalizerHelper::LegalizeResult
+conversionLibcall(MachineInstr &MI, MachineIRBuilder &MIRBuilder, Type *ToType,
+                  Type *FromType) {
+  RTLIB::Libcall Libcall = getConvRTLibDesc(MI.getOpcode(), ToType, FromType);
+  return createLibcall(MIRBuilder, Libcall, {MI.getOperand(0).getReg(), ToType},
+                       {{MI.getOperand(1).getReg(), FromType}});
 }
 
 LegalizerHelper::LegalizeResult
@@ -157,10 +186,35 @@ LegalizerHelper::libcall(MachineInstr &MI) {
   case TargetOpcode::G_FSUB:
   case TargetOpcode::G_FMUL:
   case TargetOpcode::G_FDIV:
+  case TargetOpcode::G_FMA:
   case TargetOpcode::G_FPOW:
   case TargetOpcode::G_FREM: {
     Type *HLTy = Size == 64 ? Type::getDoubleTy(Ctx) : Type::getFloatTy(Ctx);
     auto Status = simpleLibcall(MI, MIRBuilder, Size, HLTy);
+    if (Status != Legalized)
+      return Status;
+    break;
+  }
+  case TargetOpcode::G_FPEXT: {
+    // FIXME: Support other floating point types (half, fp128 etc)
+    unsigned FromSize = MRI.getType(MI.getOperand(1).getReg()).getSizeInBits();
+    unsigned ToSize = MRI.getType(MI.getOperand(0).getReg()).getSizeInBits();
+    if (ToSize != 64 || FromSize != 32)
+      return UnableToLegalize;
+    LegalizeResult Status = conversionLibcall(
+        MI, MIRBuilder, Type::getDoubleTy(Ctx), Type::getFloatTy(Ctx));
+    if (Status != Legalized)
+      return Status;
+    break;
+  }
+  case TargetOpcode::G_FPTRUNC: {
+    // FIXME: Support other floating point types (half, fp128 etc)
+    unsigned FromSize = MRI.getType(MI.getOperand(1).getReg()).getSizeInBits();
+    unsigned ToSize = MRI.getType(MI.getOperand(0).getReg()).getSizeInBits();
+    if (ToSize != 32 || FromSize != 64)
+      return UnableToLegalize;
+    LegalizeResult Status = conversionLibcall(
+        MI, MIRBuilder, Type::getFloatTy(Ctx), Type::getDoubleTy(Ctx));
     if (Status != Legalized)
       return Status;
     break;

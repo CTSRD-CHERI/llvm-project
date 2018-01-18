@@ -52,7 +52,7 @@ define void @call_ptr(i64 (i64)* %arg) {
 ; CHECK-NEXT:         ParamTypes:      
 ; CHECK-NEXT:           - I64
 ; CHECK-NEXT:   - Type:            FUNCTION
-; CHECK-NEXT:     FunctionTypes:   [ 0, 1, 0, 0, 2 ]
+; CHECK-NEXT:     FunctionTypes:   [ 0, 1, 0, 0, 2, 1 ]
 ; CHECK-NEXT:   - Type:            TABLE
 ; CHECK-NEXT:     Tables:
 ; CHECK-NEXT:       - ElemType:        ANYFUNC
@@ -68,6 +68,12 @@ define void @call_ptr(i64 (i64)* %arg) {
 ; CHECK-NEXT:       - Index:           0
 ; CHECK-NEXT:         Type:            I32
 ; CHECK-NEXT:         Mutable:         true
+; CHECK-NEXT:         InitExpr:
+; CHECK-NEXT:           Opcode:          I32_CONST
+; CHECK-NEXT:           Value:           66576
+; CHECK-NEXT:       - Index:           1
+; CHECK-NEXT:         Type:            I32
+; CHECK-NEXT:         Mutable:         false
 ; CHECK-NEXT:         InitExpr:
 ; CHECK-NEXT:           Opcode:          I32_CONST
 ; CHECK-NEXT:           Value:           66576
@@ -91,6 +97,9 @@ define void @call_ptr(i64 (i64)* %arg) {
 ; CHECK-NEXT:       - Name:            call_ptr
 ; CHECK-NEXT:         Kind:            FUNCTION
 ; CHECK-NEXT:         Index:           4
+; CHECK-NEXT:       - Name:            __heap_base
+; CHECK-NEXT:         Kind:            GLOBAL
+; CHECK-NEXT:         Index:           1
 ; CHECK-NEXT:   - Type:            ELEM
 ; CHECK-NEXT:     Segments:
 ; CHECK-NEXT:       - Offset:
@@ -114,6 +123,9 @@ define void @call_ptr(i64 (i64)* %arg) {
 ; CHECK-NEXT:       - Index:           4
 ; CHECK-NEXT:         Locals:
 ; CHECK-NEXT:         Body:            42012000118380808000001A0B
+; CHECK-NEXT:       - Index:           5
+; CHECK-NEXT:         Locals:
+; CHECK-NEXT:         Body:            0B
 ; CHECK-NEXT:   - Type:            DATA
 ; CHECK-NEXT:     Segments:
 ; CHECK-NEXT:       - SectionOffset:    7

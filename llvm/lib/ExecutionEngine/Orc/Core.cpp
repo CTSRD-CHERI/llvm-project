@@ -190,13 +190,13 @@ VSO::RelativeLinkageStrength VSO::compareLinkage(Optional<JITSymbolFlags> Old,
   if (Old == None)
     return llvm::orc::VSO::NewDefinitionIsStronger;
 
-  if (Old->isStrongDefinition()) {
-    if (New.isStrongDefinition())
+  if (Old->isStrong()) {
+    if (New.isStrong())
       return llvm::orc::VSO::DuplicateDefinition;
     else
       return llvm::orc::VSO::ExistingDefinitionIsStronger;
   } else {
-    if (New.isStrongDefinition())
+    if (New.isStrong())
       return llvm::orc::VSO::NewDefinitionIsStronger;
     else
       return llvm::orc::VSO::ExistingDefinitionIsStronger;
@@ -311,6 +311,12 @@ VSO::LookupResult VSO::lookup(AsynchronousSymbolQuery &Query,
   }
 
   return {std::move(MaterializationWork), std::move(Names)};
+}
+
+VModuleKey ExecutionSession::allocateVModule() { return ++LastKey; }
+
+void ExecutionSession::releaseVModule(VModuleKey VMod) {
+  // FIXME: Recycle keys.
 }
 
 } // End namespace orc.

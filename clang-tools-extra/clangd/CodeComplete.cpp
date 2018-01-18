@@ -17,6 +17,7 @@
 #include "CodeComplete.h"
 #include "CodeCompletionStrings.h"
 #include "Compiler.h"
+#include "FuzzyMatch.h"
 #include "Logger.h"
 #include "index/Index.h"
 #include "clang/Frontend/CompilerInstance.h"
@@ -186,17 +187,25 @@ getOptionalParameters(const CodeCompletionString &CCS,
 
 /// A scored code completion result.
 /// It may be promoted to a CompletionItem if it's among the top-ranked results.
+///
+/// We score candidates by multiplying the symbolScore ("quality" of the result)
+/// with the filterScore (how well it matched the query).
+/// This is sensitive to the distribution of both component scores!
 struct CompletionCandidate {
-  CompletionCandidate(CodeCompletionResult &Result)
-      : Result(&Result), Score(score(Result)) {}
+  CompletionCandidate(CodeCompletionResult &Result, float FilterScore)
+      : Result(&Result) {
+    Scores.symbolScore = score(Result);  // Higher is better.
+    Scores.filterScore = FilterScore;    // 0-1, higher is better.
+    Scores.finalScore = Scores.symbolScore * Scores.filterScore;
+  }
 
   CodeCompletionResult *Result;
-  float Score; // 0 to 1, higher is better.
+  CompletionItemScores Scores;
 
   // Comparison reflects rank: better candidates are smaller.
   bool operator<(const CompletionCandidate &C) const {
-    if (Score != C.Score)
-      return Score > C.Score;
+    if (Scores.finalScore != C.Scores.finalScore)
+      return Scores.finalScore > C.Scores.finalScore;
     return *Result < *C.Result;
   }
 
@@ -206,8 +215,8 @@ struct CompletionCandidate {
   std::string sortText() const {
     std::string S, NameStorage;
     llvm::raw_string_ostream OS(S);
-    write_hex(OS, encodeFloat(-Score), llvm::HexPrintStyle::Lower,
-              /*Width=*/2 * sizeof(Score));
+    write_hex(OS, encodeFloat(-Scores.finalScore), llvm::HexPrintStyle::Lower,
+              /*Width=*/2 * sizeof(Scores.finalScore));
     OS << Result->getOrderedName(NameStorage);
     return OS.str();
   }
@@ -288,6 +297,7 @@ public:
   void ProcessCodeCompleteResults(Sema &S, CodeCompletionContext Context,
                                   CodeCompletionResult *Results,
                                   unsigned NumResults) override final {
+    FuzzyMatcher Filter(S.getPreprocessor().getCodeCompletionFilter());
     if (auto SS = Context.getCXXScopeSpecifier())
       CompletedName.SSInfo = extraCompletionScope(S, **SS);
 
@@ -306,10 +316,10 @@ public:
           (Result.Availability == CXAvailability_NotAvailable ||
            Result.Availability == CXAvailability_NotAccessible))
         continue;
-      if (!CompletedName.Filter.empty() &&
-          !fuzzyMatch(S, Context, CompletedName.Filter, Result))
+      auto FilterScore = fuzzyMatch(S, Context, Filter, Result);
+      if (!FilterScore)
         continue;
-      Candidates.emplace(Result);
+      Candidates.emplace(Result, *FilterScore);
       if (ClangdOpts.Limit && Candidates.size() > ClangdOpts.Limit) {
         Candidates.pop();
         Items.isIncomplete = true;
@@ -332,37 +342,24 @@ public:
   CodeCompletionTUInfo &getCodeCompletionTUInfo() override { return CCTUInfo; }
 
 private:
-  bool fuzzyMatch(Sema &S, const CodeCompletionContext &CCCtx, StringRef Filter,
-                  CodeCompletionResult Result) {
+  llvm::Optional<float> fuzzyMatch(Sema &S, const CodeCompletionContext &CCCtx,
+                                   FuzzyMatcher &Filter,
+                                   CodeCompletionResult Result) {
     switch (Result.Kind) {
     case CodeCompletionResult::RK_Declaration:
       if (auto *ID = Result.Declaration->getIdentifier())
-        return fuzzyMatch(Filter, ID->getName());
+        return Filter.match(ID->getName());
       break;
     case CodeCompletionResult::RK_Keyword:
-      return fuzzyMatch(Filter, Result.Keyword);
+      return Filter.match(Result.Keyword);
     case CodeCompletionResult::RK_Macro:
-      return fuzzyMatch(Filter, Result.Macro->getName());
+      return Filter.match(Result.Macro->getName());
     case CodeCompletionResult::RK_Pattern:
-      return fuzzyMatch(Filter, Result.Pattern->getTypedText());
+      return Filter.match(Result.Pattern->getTypedText());
     }
     auto *CCS = Result.CreateCodeCompletionString(
         S, CCCtx, *Allocator, CCTUInfo, /*IncludeBriefComments=*/false);
-    return fuzzyMatch(Filter, CCS->getTypedText());
-  }
-
-  // Checks whether Target matches the Filter.
-  // Currently just requires a case-insensitive subsequence match.
-  // FIXME: make stricter and word-based: 'unique_ptr' should not match 'que'.
-  // FIXME: return a score to be incorporated into ranking.
-  static bool fuzzyMatch(StringRef Filter, StringRef Target) {
-    size_t TPos = 0;
-    for (char C : Filter) {
-      TPos = Target.find_lower(C, TPos);
-      if (TPos == StringRef::npos)
-        return false;
-    }
-    return true;
+    return Filter.match(CCS->getTypedText());
   }
 
   CompletionItem
@@ -375,6 +372,7 @@ private:
 
     Item.documentation = getDocumentation(CCS);
     Item.sortText = Candidate.sortText();
+    Item.scoreInfo = Candidate.Scores;
 
     Item.detail = getDetail(CCS);
     Item.filterText = getFilterText(CCS);
@@ -519,14 +517,18 @@ bool invokeCodeComplete(const Context &Ctx,
   std::unique_ptr<llvm::MemoryBuffer> ContentsBuffer =
       llvm::MemoryBuffer::getMemBufferCopy(Contents, FileName);
 
-  // Attempt to reuse the PCH from precompiled preamble, if it was built.
+  // We reuse the preamble whether it's valid or not. This is a
+  // correctness/performance tradeoff: building without a preamble is slow, and
+  // completion is latency-sensitive.
   if (Preamble) {
     auto Bounds =
         ComputePreambleBounds(*CI->getLangOpts(), ContentsBuffer.get(), 0);
-    if (!Preamble->CanReuse(*CI, ContentsBuffer.get(), Bounds, VFS.get()))
-      Preamble = nullptr;
+    // FIXME(ibiryukov): Remove this call to CanReuse() after we'll fix
+    // clients relying on getting stats for preamble files during code
+    // completion.
+    // Note that results of CanReuse() are ignored, see the comment above.
+    Preamble->CanReuse(*CI, ContentsBuffer.get(), Bounds, VFS.get());
   }
-
   auto Clang = prepareCompilerInstance(
       std::move(CI), Preamble, std::move(ContentsBuffer), std::move(PCHs),
       std::move(VFS), DummyDiagsConsumer);
@@ -641,11 +643,13 @@ clang::CodeCompleteOptions CodeCompleteOptions::getClangCompleteOpts() const {
   clang::CodeCompleteOptions Result;
   Result.IncludeCodePatterns = EnableSnippets && IncludeCodePatterns;
   Result.IncludeMacros = IncludeMacros;
-  Result.IncludeGlobals = IncludeGlobals;
+  Result.IncludeGlobals = true;
   Result.IncludeBriefComments = IncludeBriefComments;
 
-  // Enable index-based code completion when Index is provided.
-  Result.IncludeNamespaceLevelDecls = !Index;
+  // When an is used, Sema is responsible for completing the main file,
+  // the index can provide results from the preamble.
+  // Tell Sema not to deserialize the preamble to look for results.
+  Result.LoadExternal = !Index;
 
   return Result;
 }
@@ -667,17 +671,10 @@ CompletionList codeComplete(const Context &Ctx, PathRef FileName,
 
   // Got scope specifier (ns::f^) for code completion from sema, try to query
   // global symbols from indexes.
-  if (CompletedName.SSInfo) {
-    // FIXME: figure out a good algorithm to merge symbols from different
-    // sources (dynamic index, static index, AST symbols from clang's completion
-    // engine).
-    if (Opts.Index)
-      completeWithIndex(Ctx, *Opts.Index, Contents, *CompletedName.SSInfo,
-                        CompletedName.Filter, &Results);
-    if (Opts.StaticIndex)
-      completeWithIndex(Ctx, *Opts.StaticIndex, Contents, *CompletedName.SSInfo,
-                        CompletedName.Filter, &Results, /*DebuggingLabel=*/"G");
-  }
+  // FIXME: merge with Sema results, and respect limits.
+  if (CompletedName.SSInfo && Opts.Index)
+    completeWithIndex(Ctx, *Opts.Index, Contents, *CompletedName.SSInfo,
+                      CompletedName.Filter, &Results, /*DebuggingLabel=*/"I");
   return Results;
 }
 

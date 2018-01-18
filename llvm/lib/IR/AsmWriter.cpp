@@ -2497,8 +2497,13 @@ static void PrintVisibility(GlobalValue::VisibilityTypes Vis,
   }
 }
 
-static void PrintDSOLocation(bool IsDSOLocal, formatted_raw_ostream &Out){
-  if (IsDSOLocal)
+static void PrintDSOLocation(const GlobalValue &GV,
+                             formatted_raw_ostream &Out) {
+  // GVs with local linkage or non default visibility are implicitly dso_local,
+  // so we don't print it.
+  bool Implicit = GV.hasLocalLinkage() ||
+                  (!GV.hasExternalWeakLinkage() && !GV.hasDefaultVisibility());
+  if (GV.isDSOLocal() && !Implicit)
     Out << "dso_local ";
 }
 
@@ -2572,7 +2577,7 @@ void AssemblyWriter::printGlobal(const GlobalVariable *GV) {
     Out << "external ";
 
   Out << getLinkagePrintName(GV->getLinkage());
-  PrintDSOLocation(GV->isDSOLocal(), Out);
+  PrintDSOLocation(*GV, Out);
   PrintVisibility(GV->getVisibility(), Out);
   PrintDLLStorageClass(GV->getDLLStorageClass(), Out);
   PrintThreadLocalModel(GV->getThreadLocalMode(), Out);
@@ -2619,7 +2624,7 @@ void AssemblyWriter::printIndirectSymbol(const GlobalIndirectSymbol *GIS) {
   Out << " = ";
 
   Out << getLinkagePrintName(GIS->getLinkage());
-  PrintDSOLocation(GIS->isDSOLocal(), Out);
+  PrintDSOLocation(*GIS, Out);
   PrintVisibility(GIS->getVisibility(), Out);
   PrintDLLStorageClass(GIS->getDLLStorageClass(), Out);
   PrintThreadLocalModel(GIS->getThreadLocalMode(), Out);
@@ -2731,7 +2736,7 @@ void AssemblyWriter::printFunction(const Function *F) {
     Out << "define ";
 
   Out << getLinkagePrintName(F->getLinkage());
-  PrintDSOLocation(F->isDSOLocal(), Out);
+  PrintDSOLocation(*F, Out);
   PrintVisibility(F->getVisibility(), Out);
   PrintDLLStorageClass(F->getDLLStorageClass(), Out);
 
