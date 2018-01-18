@@ -11,6 +11,7 @@
 #include "CodeComplete.h"
 #include "SourceCode.h"
 #include "XRefs.h"
+#include "index/Merge.h"
 #include "clang/Format/Format.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/CompilerInvocation.h"
@@ -138,7 +139,6 @@ ClangdServer::ClangdServer(GlobalCompilationDatabase &CDB,
                            llvm::Optional<StringRef> ResourceDir)
     : CDB(CDB), DiagConsumer(DiagConsumer), FSProvider(FSProvider),
       FileIdx(BuildDynamicSymbolIndex ? new FileIndex() : nullptr),
-      StaticIdx(StaticIdx),
       // Pass a callback into `Units` to extract symbols from a newly parsed
       // file and rebuild the file index synchronously each time an AST is
       // parsed.
@@ -151,7 +151,17 @@ ClangdServer::ClangdServer(GlobalCompilationDatabase &CDB,
       ResourceDir(ResourceDir ? ResourceDir->str() : getStandardResourceDir()),
       PCHs(std::make_shared<PCHContainerOperations>()),
       StorePreamblesInMemory(StorePreamblesInMemory),
-      WorkScheduler(AsyncThreadsCount) {}
+      WorkScheduler(AsyncThreadsCount) {
+  if (FileIdx && StaticIdx) {
+    MergedIndex = mergeIndex(FileIdx.get(), StaticIdx);
+    Index = MergedIndex.get();
+  } else if (FileIdx)
+    Index = FileIdx.get();
+  else if (StaticIdx)
+    Index = StaticIdx;
+  else
+    Index = nullptr;
+}
 
 void ClangdServer::setRootPath(PathRef RootPath) {
   std::string NewRootPath = llvm::sys::path::convert_to_slash(
@@ -250,10 +260,8 @@ void ClangdServer::codeComplete(
       Resources->getPossiblyStalePreamble();
   // Copy completion options for passing them to async task handler.
   auto CodeCompleteOpts = Opts;
-  if (FileIdx)
-    CodeCompleteOpts.Index = FileIdx.get();
-  if (StaticIdx)
-    CodeCompleteOpts.StaticIndex = StaticIdx;
+  if (!CodeCompleteOpts.Index) // Respect overridden index.
+    CodeCompleteOpts.Index = Index;
 
   // Copy File, as it is a PathRef that will go out of scope before Task is
   // executed.
@@ -348,7 +356,6 @@ ClangdServer::formatOnType(StringRef Code, PathRef File, Position Pos) {
 Expected<std::vector<tooling::Replacement>>
 ClangdServer::rename(const Context &Ctx, PathRef File, Position Pos,
                      llvm::StringRef NewName) {
-  std::string Code = getDocument(File);
   std::shared_ptr<CppFile> Resources = Units.getFile(File);
   RefactoringResultCollector ResultCollector;
   Resources->getAST().get()->runUnderLock([&](ParsedAST *AST) {
@@ -394,15 +401,17 @@ ClangdServer::rename(const Context &Ctx, PathRef File, Position Pos,
   return Replacements;
 }
 
-std::string ClangdServer::getDocument(PathRef File) {
-  auto draft = DraftMgr.getDraft(File);
-  assert(draft.Draft && "File is not tracked, cannot get contents");
-  return *draft.Draft;
+llvm::Optional<std::string> ClangdServer::getDocument(PathRef File) {
+  auto Latest = DraftMgr.getDraft(File);
+  if (!Latest.Draft)
+    return llvm::None;
+  return std::move(*Latest.Draft);
 }
 
 std::string ClangdServer::dumpAST(PathRef File) {
   std::shared_ptr<CppFile> Resources = Units.getFile(File);
-  assert(Resources && "dumpAST is called for non-added document");
+  if (!Resources)
+    return "<non-added file>";
 
   std::string Result;
   Resources->getAST().get()->runUnderLock([&Result](ParsedAST *AST) {

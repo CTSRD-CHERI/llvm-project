@@ -141,12 +141,10 @@ bool TargetMachine::shouldAssumeDSOLocal(const Module &M,
   // produce a 0 if it turns out the symbol is undefined. While this
   // is ABI and relocation depended, it seems worth it to handle it
   // here.
-  // FIXME: this is probably not ELF specific.
-  if (GV && isPositionIndependent() && TT.isOSBinFormatELF() &&
-      GV->hasExternalWeakLinkage())
+  if (GV && isPositionIndependent() && GV->hasExternalWeakLinkage())
     return false;
 
-  if (GV && (GV->hasLocalLinkage() || !GV->hasDefaultVisibility()))
+  if (GV && !GV->hasDefaultVisibility())
     return true;
 
   if (TT.isOSBinFormatMachO()) {

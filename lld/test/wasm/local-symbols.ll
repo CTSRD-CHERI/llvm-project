@@ -24,8 +24,11 @@ entry:
 ; CHECK-NEXT:       - Index:           0
 ; CHECK-NEXT:         ReturnType:      I32
 ; CHECK-NEXT:         ParamTypes:
+; CHECK-NEXT:       - Index:           1
+; CHECK-NEXT:         ReturnType:      NORESULT
+; CHECK-NEXT:         ParamTypes:   
 ; CHECK-NEXT:   - Type:            FUNCTION
-; CHECK-NEXT:     FunctionTypes:   [ 0, 0 ]
+; CHECK-NEXT:     FunctionTypes:   [ 0, 0, 1 ]
 ; CHECK-NEXT:   - Type:            TABLE
 ; CHECK-NEXT:     Tables:
 ; CHECK-NEXT:       - ElemType:        ANYFUNC
@@ -44,6 +47,12 @@ entry:
 ; CHECK-NEXT:         InitExpr:
 ; CHECK-NEXT:           Opcode:          I32_CONST
 ; CHECK-NEXT:           Value:           66576
+; CHECK-NEXT:       - Index:           1
+; CHECK-NEXT:         Type:            I32
+; CHECK-NEXT:         Mutable:         false
+; CHECK-NEXT:         InitExpr:
+; CHECK-NEXT:           Opcode:          I32_CONST
+; CHECK-NEXT:           Value:           66576
 ; CHECK-NEXT:   - Type:            EXPORT
 ; CHECK-NEXT:     Exports:
 ; CHECK-NEXT:       - Name:            memory
@@ -51,6 +60,9 @@ entry:
 ; CHECK-NEXT:         Index:           0
 ; CHECK-NEXT:       - Name:            _start
 ; CHECK-NEXT:         Kind:            FUNCTION
+; CHECK-NEXT:         Index:           1
+; CHECK-NEXT:       - Name:            __heap_base
+; CHECK-NEXT:         Kind:            GLOBAL
 ; CHECK-NEXT:         Index:           1
 ; CHECK-NEXT:   - Type:            CODE
 ; CHECK-NEXT:     Functions:
@@ -60,6 +72,9 @@ entry:
 ; CHECK-NEXT:       - Index:           1
 ; CHECK-NEXT:         Locals:
 ; CHECK-NEXT:         Body:            41010B
+; CHECK-NEXT:       - Index:           2
+; CHECK-NEXT:         Locals:
+; CHECK-NEXT:         Body:            0B
 ; CHECK-NEXT:   - Type:            DATA
 ; CHECK-NEXT:     Segments:
 ; CHECK-NEXT:       - SectionOffset:   7
@@ -78,4 +93,6 @@ entry:
 ; CHECK-NEXT:         Name:            baz
 ; CHECK-NEXT:       - Index:           1
 ; CHECK-NEXT:         Name:            _start
+; CHECK-NEXT:       - Index:           2
+; CHECK-NEXT:         Name:            __wasm_call_ctors
 ; CHECK-NEXT: ...

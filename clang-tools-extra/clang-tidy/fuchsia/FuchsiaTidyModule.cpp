@@ -12,6 +12,8 @@
 #include "../ClangTidyModuleRegistry.h"
 #include "DefaultArgumentsCheck.h"
 #include "OverloadedOperatorCheck.h"
+#include "StaticallyConstructedObjectsCheck.h"
+#include "TrailingReturnCheck.h"
 #include "VirtualInheritanceCheck.h"
 
 using namespace clang::ast_matchers;
@@ -28,6 +30,10 @@ public:
         "fuchsia-default-arguments");
     CheckFactories.registerCheck<OverloadedOperatorCheck>(
         "fuchsia-overloaded-operator");
+    CheckFactories.registerCheck<StaticallyConstructedObjectsCheck>(
+        "fuchsia-statically-constructed-objects");
+    CheckFactories.registerCheck<TrailingReturnCheck>(
+        "fuchsia-trailing-return");
     CheckFactories.registerCheck<VirtualInheritanceCheck>(
         "fuchsia-virtual-inheritance");
   }

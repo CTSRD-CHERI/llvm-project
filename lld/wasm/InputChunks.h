@@ -34,7 +34,7 @@ class OutputSegment;
 
 class InputChunk {
 public:
-  virtual uint32_t getSize() const = 0;
+  uint32_t getSize() const { return data().size(); }
 
   void copyRelocations(const WasmSection &Section);
 
@@ -47,18 +47,21 @@ public:
 
   uint32_t getOutputOffset() const { return OutputOffset; }
 
+  virtual StringRef getComdat() const = 0;
+
+  bool Discarded = false;
   std::vector<OutputRelocation> OutRelocations;
 
 protected:
-  InputChunk(const ObjFile &F) : File(F) {}
+  InputChunk(const ObjFile *F) : File(F) {}
   virtual ~InputChunk() = default;
   void calcRelocations();
-  virtual const uint8_t *getData() const = 0;
+  virtual ArrayRef<uint8_t> data() const = 0;
   virtual uint32_t getInputSectionOffset() const = 0;
 
   std::vector<WasmRelocation> Relocations;
   int32_t OutputOffset = 0;
-  const ObjFile &File;
+  const ObjFile *File;
 };
 
 // Represents a WebAssembly data segment which can be included as part of
@@ -71,7 +74,7 @@ protected:
 // each global variable.
 class InputSegment : public InputChunk {
 public:
-  InputSegment(const WasmSegment &Seg, const ObjFile &F)
+  InputSegment(const WasmSegment &Seg, const ObjFile *F)
       : InputChunk(F), Segment(Seg) {}
 
   // Translate an offset in the input segment to an offset in the output
@@ -85,21 +88,20 @@ public:
     OutputSegmentOffset = Offset;
   }
 
-  const uint8_t *getData() const override {
-    return Segment.Data.Content.data();
-  }
-  uint32_t getSize() const override { return Segment.Data.Content.size(); }
   uint32_t getAlignment() const { return Segment.Data.Alignment; }
   uint32_t startVA() const { return Segment.Data.Offset.Value.Int32; }
   uint32_t endVA() const { return startVA() + getSize(); }
   StringRef getName() const { return Segment.Data.Name; }
+  StringRef getComdat() const override { return Segment.Data.Comdat; }
 
   int32_t OutputSegmentOffset = 0;
 
 protected:
+  ArrayRef<uint8_t> data() const override { return Segment.Data.Content; }
   uint32_t getInputSectionOffset() const override {
     return Segment.SectionOffset;
   }
+
   const WasmSegment &Segment;
   const OutputSegment *OutputSeg = nullptr;
 };
@@ -108,30 +110,44 @@ protected:
 // combined to create the final output CODE section.
 class InputFunction : public InputChunk {
 public:
-  InputFunction(const WasmSignature &S, const WasmFunction &Func,
-                const ObjFile &F)
+  InputFunction(const WasmSignature &S, const WasmFunction *Func,
+                const ObjFile *F)
       : InputChunk(F), Signature(S), Function(Func) {}
 
-  uint32_t getSize() const override { return Function.Size; }
-  const uint8_t *getData() const override {
-    return File.CodeSection->Content.data() + getInputSectionOffset();
-  }
-
-  uint32_t getOutputIndex() const { return OutputIndex.getValue(); };
-  bool hasOutputIndex() const { return OutputIndex.hasValue(); };
-  void setOutputIndex(uint32_t Index) {
-    assert(!hasOutputIndex());
-    OutputIndex = Index;
-  };
+  virtual StringRef getName() const { return Function->Name; }
+  StringRef getComdat() const override { return Function->Comdat; }
+  uint32_t getOutputIndex() const { return OutputIndex.getValue(); }
+  bool hasOutputIndex() const { return OutputIndex.hasValue(); }
+  void setOutputIndex(uint32_t Index);
 
   const WasmSignature &Signature;
 
 protected:
-  uint32_t getInputSectionOffset() const override {
-    return Function.CodeSectionOffset;
+  ArrayRef<uint8_t> data() const override {
+    return File->CodeSection->Content.slice(getInputSectionOffset(),
+                                            Function->Size);
   }
-  const WasmFunction &Function;
+  uint32_t getInputSectionOffset() const override {
+    return Function->CodeSectionOffset;
+  }
+
+  const WasmFunction *Function;
   llvm::Optional<uint32_t> OutputIndex;
+};
+
+class SyntheticFunction : public InputFunction {
+public:
+  SyntheticFunction(const WasmSignature &S, ArrayRef<uint8_t> Body,
+                    StringRef Name)
+      : InputFunction(S, nullptr, nullptr), Name(Name), Body(Body) {}
+
+  StringRef getName() const override { return Name; }
+
+protected:
+  ArrayRef<uint8_t> data() const override { return Body; }
+
+  StringRef Name;
+  ArrayRef<uint8_t> Body;
 };
 
 } // namespace wasm

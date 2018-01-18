@@ -6,9 +6,10 @@ declare i16 @llvm.x86.avx512.kunpck.bw(i16, i16) nounwind readnone
 define i16 @unpckbw_test(i16 %a0, i16 %a1) {
 ; CHECK-LABEL: unpckbw_test:
 ; CHECK:       ## %bb.0:
-; CHECK-NEXT:    movzbl %dil, %eax
-; CHECK-NEXT:    shll $8, %esi
-; CHECK-NEXT:    orl %esi, %eax
+; CHECK-NEXT:    kmovw %edi, %k0
+; CHECK-NEXT:    kmovw %esi, %k1
+; CHECK-NEXT:    kunpckbw %k0, %k1, %k0
+; CHECK-NEXT:    kmovw %k0, %eax
 ; CHECK-NEXT:    ## kill: def %ax killed %ax killed %eax
 ; CHECK-NEXT:    retq
   %res = call i16 @llvm.x86.avx512.kunpck.bw(i16 %a0, i16 %a1)
@@ -312,7 +313,7 @@ define void@test_int_x86_avx512_mask_storeu_d_512(i8* %ptr1, i8* %ptr2, <16 x i3
 ; CHECK:       ## %bb.0:
 ; CHECK-NEXT:    kmovw %edx, %k1
 ; CHECK-NEXT:    vmovdqu32 %zmm0, (%rdi) {%k1}
-; CHECK-NEXT:    vmovdqu32 %zmm0, (%rsi)
+; CHECK-NEXT:    vmovdqu64 %zmm0, (%rsi)
 ; CHECK-NEXT:    retq
   call void @llvm.x86.avx512.mask.storeu.d.512(i8* %ptr1, <16 x i32> %x1, i16 %x2)
   call void @llvm.x86.avx512.mask.storeu.d.512(i8* %ptr2, <16 x i32> %x1, i16 -1)
@@ -426,7 +427,7 @@ declare <16 x i32> @llvm.x86.avx512.mask.loadu.d.512(i8*, <16 x i32>, i16)
 define <16 x i32> @test_mask_load_unaligned_d(i8* %ptr, i8* %ptr2, <16 x i32> %data, i16 %mask) {
 ; CHECK-LABEL: test_mask_load_unaligned_d:
 ; CHECK:       ## %bb.0:
-; CHECK-NEXT:    vmovdqu32 (%rdi), %zmm0
+; CHECK-NEXT:    vmovdqu64 (%rdi), %zmm0
 ; CHECK-NEXT:    kmovw %edx, %k1
 ; CHECK-NEXT:    vmovdqu32 (%rsi), %zmm0 {%k1}
 ; CHECK-NEXT:    vmovdqu32 (%rdi), %zmm1 {%k1} {z}
@@ -462,7 +463,7 @@ declare <16 x i32> @llvm.x86.avx512.mask.load.d.512(i8*, <16 x i32>, i16)
 define <16 x i32> @test_mask_load_aligned_d(<16 x i32> %data, i8* %ptr, i16 %mask) {
 ; CHECK-LABEL: test_mask_load_aligned_d:
 ; CHECK:       ## %bb.0:
-; CHECK-NEXT:    vmovdqa32 (%rdi), %zmm0
+; CHECK-NEXT:    vmovdqa64 (%rdi), %zmm0
 ; CHECK-NEXT:    kmovw %esi, %k1
 ; CHECK-NEXT:    vmovdqa32 (%rdi), %zmm0 {%k1}
 ; CHECK-NEXT:    vmovdqa32 (%rdi), %zmm1 {%k1} {z}

@@ -9,6 +9,7 @@
 
 #include "Writer.h"
 
+#include "llvm/ADT/DenseSet.h"
 #include "Config.h"
 #include "InputChunks.h"
 #include "OutputSections.h"
@@ -24,6 +25,7 @@
 #include "llvm/Support/LEB128.h"
 
 #include <cstdarg>
+#include <map>
 
 #define DEBUG_TYPE "lld"
 
@@ -70,9 +72,10 @@ private:
 
   uint32_t lookupType(const WasmSignature &Sig);
   uint32_t registerType(const WasmSignature &Sig);
+  void createCtorFunction();
+  void calculateInitFunctions();
   void assignIndexes();
   void calculateImports();
-  void calculateOffsets();
   void calculateTypes();
   void createOutputSegments();
   void layoutMemory();
@@ -114,12 +117,15 @@ private:
   std::vector<const Symbol *> DefinedGlobals;
   std::vector<InputFunction *> DefinedFunctions;
   std::vector<const Symbol *> IndirectFunctions;
+  std::vector<WasmInitFunc> InitFunctions;
 
   // Elements that are used to construct the final output
   std::string Header;
   std::vector<OutputSection *> OutputSections;
 
   std::unique_ptr<FileOutputBuffer> Buffer;
+  std::unique_ptr<SyntheticFunction> CtorFunction;
+  std::string CtorFunctionBody;
 
   std::vector<OutputSegment *> Segments;
   llvm::SmallDenseMap<StringRef, OutputSegment *> SegmentMap;
@@ -299,7 +305,7 @@ void Writer::createExportSection() {
   }
 
   for (const Symbol *Sym : SymbolExports) {
-    log("Export: " + Sym->getName());
+    DEBUG(dbgs() << "Export: " << Sym->getName() << "\n");
     WasmExport Export;
     Export.Name = Sym->getName();
     Export.Index = Sym->getOutputIndex();
@@ -410,22 +416,51 @@ void Writer::createLinkingSection() {
     SubSection.writeToStream(OS);
   }
 
-  std::vector<WasmInitFunc> InitFunctions;
-  for (ObjFile *File : Symtab->ObjectFiles) {
-    const WasmLinkingData &L = File->getWasmObj()->linkingData();
-    InitFunctions.reserve(InitFunctions.size() + L.InitFunctions.size());
-    for (const WasmInitFunc &F : L.InitFunctions)
-      InitFunctions.emplace_back(WasmInitFunc{
-          F.Priority, File->relocateFunctionIndex(F.FunctionIndex)});
-  }
-
   if (!InitFunctions.empty()) {
     SubSection SubSection(WASM_INIT_FUNCS);
     writeUleb128(SubSection.getStream(), InitFunctions.size(),
-                 "num init functionsw");
+                 "num init functions");
     for (const WasmInitFunc &F : InitFunctions) {
       writeUleb128(SubSection.getStream(), F.Priority, "priority");
       writeUleb128(SubSection.getStream(), F.FunctionIndex, "function index");
+    }
+    SubSection.finalizeContents();
+    SubSection.writeToStream(OS);
+  }
+
+  struct ComdatEntry { unsigned Kind; uint32_t Index; };
+  std::map<StringRef,std::vector<ComdatEntry>> Comdats;
+
+  for (const InputFunction *F : DefinedFunctions) {
+    StringRef Comdat = F->getComdat();
+    if (!Comdat.empty())
+      Comdats[Comdat].emplace_back(
+          ComdatEntry{WASM_COMDAT_FUNCTION, F->getOutputIndex()});
+  }
+  for (uint32_t I = 0; I < Segments.size(); ++I) {
+    const auto &InputSegments = Segments[I]->InputSegments;
+    if (InputSegments.empty())
+      continue;
+    StringRef Comdat = InputSegments[0]->getComdat();
+#ifndef NDEBUG
+    for (const InputSegment *IS : InputSegments)
+      assert(IS->getComdat() == Comdat);
+#endif
+    if (!Comdat.empty())
+      Comdats[Comdat].emplace_back(ComdatEntry{WASM_COMDAT_DATA, I});
+  }
+
+  if (!Comdats.empty()) {
+    SubSection SubSection(WASM_COMDAT_INFO);
+    writeUleb128(SubSection.getStream(), Comdats.size(), "num comdats");
+    for (const auto &C : Comdats) {
+      writeStr(SubSection.getStream(), C.first, "comdat name");
+      writeUleb128(SubSection.getStream(), 0, "comdat flags"); // flags for future use
+      writeUleb128(SubSection.getStream(), C.second.size(), "num entries");
+      for (const ComdatEntry &Entry : C.second) {
+        writeUleb128(SubSection.getStream(), Entry.Kind, "entry kind");
+        writeUleb128(SubSection.getStream(), Entry.Index, "entry index");
+      }
     }
     SubSection.finalizeContents();
     SubSection.writeToStream(OS);
@@ -434,34 +469,32 @@ void Writer::createLinkingSection() {
 
 // Create the custom "name" section containing debug symbol names.
 void Writer::createNameSection() {
-  // Create an array of all function sorted by function index space
-  std::vector<const Symbol *> Names;
+  unsigned NumNames = ImportedFunctions.size();
+  for (const InputFunction *F : DefinedFunctions)
+    if (!F->getName().empty())
+      ++NumNames;
 
-  for (ObjFile *File : Symtab->ObjectFiles) {
-    Names.reserve(Names.size() + File->getSymbols().size());
-    for (Symbol *S : File->getSymbols()) {
-      if (!S->isFunction() || S->isWeak() || S->WrittenToNameSec)
-        continue;
-      S->WrittenToNameSec = true;
-      Names.emplace_back(S);
-    }
-  }
+  if (NumNames == 0)
+    return;
 
   SyntheticSection *Section = createSyntheticSection(WASM_SEC_CUSTOM, "name");
 
-  std::sort(Names.begin(), Names.end(), [](const Symbol *A, const Symbol *B) {
-    return A->getOutputIndex() < B->getOutputIndex();
-  });
-
   SubSection FunctionSubsection(WASM_NAMES_FUNCTION);
   raw_ostream &OS = FunctionSubsection.getStream();
-  writeUleb128(OS, Names.size(), "name count");
+  writeUleb128(OS, NumNames, "name count");
 
-  // We have to iterate through the inputs twice so that all the imports
-  // appear first before any of the local function names.
-  for (const Symbol *S : Names) {
-    writeUleb128(OS, S->getOutputIndex(), "func index");
+  // Names must appear in function index order.  As it happens ImportedFunctions
+  // and DefinedFunctions are numbers in order with imported functions coming
+  // first.
+  for (const Symbol *S : ImportedFunctions) {
+    writeUleb128(OS, S->getOutputIndex(), "import index");
     writeStr(OS, S->getName(), "symbol name");
+  }
+  for (const InputFunction *F : DefinedFunctions) {
+    if (!F->getName().empty()) {
+      writeUleb128(OS, F->getOutputIndex(), "func index");
+      writeStr(OS, F->getName(), "symbol name");
+    }
   }
 
   FunctionSubsection.finalizeContents();
@@ -492,7 +525,7 @@ void Writer::layoutMemory() {
   for (OutputSegment *Seg : Segments) {
     MemoryPtr = alignTo(MemoryPtr, Seg->Alignment);
     Seg->StartVA = MemoryPtr;
-    debugPrint("mem: %-10s offset=%-8d size=%-4d align=%d\n",
+    debugPrint("mem: %-15s offset=%-8d size=%-8d align=%d\n",
                Seg->Name.str().c_str(), MemoryPtr, Seg->Size, Seg->Alignment);
     MemoryPtr += Seg->Size;
   }
@@ -512,6 +545,11 @@ void Writer::layoutMemory() {
     MemoryPtr += Config->ZStackSize;
     Config->StackPointerSymbol->setVirtualAddress(MemoryPtr);
     debugPrint("mem: stack top   = %d\n", MemoryPtr);
+    // Set `__heap_base` to directly follow the end of the stack.  We don't
+    // allocate any heap memory up front, but instead really on the malloc/brk
+    // implementation growing the memory at runtime.
+    Config->HeapBaseSymbol->setVirtualAddress(MemoryPtr);
+    debugPrint("mem: heap base   = %d\n", MemoryPtr);
   }
 
   uint32_t MemSize = alignTo(MemoryPtr, WasmPageSize);
@@ -594,15 +632,24 @@ void Writer::calculateTypes() {
     for (const WasmSignature &Sig : File->getWasmObj()->types())
       File->TypeMap.push_back(registerType(Sig));
   }
+
+  for (Symbol *Sym : Symtab->getSymbols())
+    if (Sym->isFunction())
+      registerType(Sym->getFunctionType());
 }
 
 void Writer::assignIndexes() {
-  uint32_t GlobalIndex = ImportedGlobals.size();
-  uint32_t FunctionIndex = ImportedFunctions.size();
+  uint32_t GlobalIndex = ImportedGlobals.size() + DefinedGlobals.size();
+  uint32_t FunctionIndex = ImportedFunctions.size() + DefinedFunctions.size();
 
   if (Config->StackPointerSymbol) {
     DefinedGlobals.emplace_back(Config->StackPointerSymbol);
     Config->StackPointerSymbol->setOutputIndex(GlobalIndex++);
+  }
+
+  if (Config->HeapBaseSymbol) {
+    DefinedGlobals.emplace_back(Config->HeapBaseSymbol);
+    Config->HeapBaseSymbol->setOutputIndex(GlobalIndex++);
   }
 
   if (Config->EmitRelocs)
@@ -629,6 +676,8 @@ void Writer::assignIndexes() {
   for (ObjFile *File : Symtab->ObjectFiles) {
     DEBUG(dbgs() << "Functions: " << File->getName() << "\n");
     for (InputFunction *Func : File->Functions) {
+      if (Func->Discarded)
+        continue;
       DefinedFunctions.emplace_back(Func);
       Func->setOutputIndex(FunctionIndex++);
     }
@@ -664,6 +713,8 @@ static StringRef getOutputDataSegmentName(StringRef Name) {
 void Writer::createOutputSegments() {
   for (ObjFile *File : Symtab->ObjectFiles) {
     for (InputSegment *Segment : File->Segments) {
+      if (Segment->Discarded)
+        continue;
       StringRef Name = getOutputDataSegmentName(Segment->getName());
       OutputSegment *&S = SegmentMap[Name];
       if (S == nullptr) {
@@ -677,6 +728,61 @@ void Writer::createOutputSegments() {
   }
 }
 
+static const int OPCODE_CALL = 0x10;
+static const int OPCODE_END = 0xb;
+
+// Create synthetic "__wasm_call_ctors" function based on ctor functions
+// in input object.
+void Writer::createCtorFunction() {
+  uint32_t FunctionIndex = ImportedFunctions.size() + DefinedFunctions.size();
+  Config->CtorSymbol->setOutputIndex(FunctionIndex);
+
+  // First write the body bytes to a string.
+  std::string FunctionBody;
+  static WasmSignature Signature = {{}, WASM_TYPE_NORESULT};
+  {
+    raw_string_ostream OS(FunctionBody);
+    writeUleb128(OS, 0, "num locals");
+    for (const WasmInitFunc &F : InitFunctions) {
+      writeU8(OS, OPCODE_CALL, "CALL");
+      writeUleb128(OS, F.FunctionIndex, "function index");
+    }
+    writeU8(OS, OPCODE_END, "END");
+  }
+
+  // Once we know the size of the body we can create the final function body
+  raw_string_ostream OS(CtorFunctionBody);
+  writeUleb128(OS, FunctionBody.size(), "function size");
+  OS.flush();
+  CtorFunctionBody += FunctionBody;
+  ArrayRef<uint8_t> BodyArray(
+      reinterpret_cast<const uint8_t *>(CtorFunctionBody.data()),
+      CtorFunctionBody.size());
+  CtorFunction = llvm::make_unique<SyntheticFunction>(
+      Signature, BodyArray, Config->CtorSymbol->getName());
+  CtorFunction->setOutputIndex(FunctionIndex);
+  DefinedFunctions.emplace_back(CtorFunction.get());
+}
+
+// Populate InitFunctions vector with init functions from all input objects.
+// This is then used either when creating the output linking section or to
+// synthesize the "__wasm_call_ctors" function.
+void Writer::calculateInitFunctions() {
+  for (ObjFile *File : Symtab->ObjectFiles) {
+    const WasmLinkingData &L = File->getWasmObj()->linkingData();
+    InitFunctions.reserve(InitFunctions.size() + L.InitFunctions.size());
+    for (const WasmInitFunc &F : L.InitFunctions)
+      InitFunctions.emplace_back(WasmInitFunc{
+          F.Priority, File->relocateFunctionIndex(F.FunctionIndex)});
+  }
+  // Sort in order of priority (lowest first) so that they are called
+  // in the correct order.
+  std::sort(InitFunctions.begin(), InitFunctions.end(),
+            [](const WasmInitFunc &L, const WasmInitFunc &R) {
+              return L.Priority < R.Priority;
+            });
+}
+
 void Writer::run() {
   if (!Config->Relocatable)
     InitialTableOffset = 1;
@@ -687,6 +793,10 @@ void Writer::run() {
   calculateImports();
   log("-- assignIndexes");
   assignIndexes();
+  log("-- calculateInitFunctions");
+  calculateInitFunctions();
+  if (!Config->Relocatable)
+    createCtorFunction();
 
   if (errorHandler().Verbose) {
     log("Defined Functions: " + Twine(DefinedFunctions.size()));
