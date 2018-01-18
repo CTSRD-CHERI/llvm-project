@@ -242,7 +242,7 @@ void f_va_caller() {
 // CHECK:   [[V:%.*]] = alloca i32, align 4
 // CHECK:   store i8* %fmt, i8** [[FMT_ADDR]], align 4
 // CHECK:   [[VA1:%.*]] = bitcast i8** [[VA]] to i8*
-// CHECK:   call void @llvm.va_start(i8* [[VA1]])
+// CHECK:   call void @llvm.va_start.p0i8(i8* [[VA1]])
 // CHECK:   [[ARGP_CUR:%.*]] = load i8*, i8** [[VA]], align 4
 // CHECK:   [[ARGP_NEXT:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR]], i32 4
 // CHECK:   store i8* [[ARGP_NEXT]], i8** [[VA]], align 4
@@ -250,7 +250,7 @@ void f_va_caller() {
 // CHECK:   [[TMP1:%.*]] = load i32, i32* [[TMP0]], align 4
 // CHECK:   store i32 [[TMP1]], i32* [[V]], align 4
 // CHECK:   [[VA2:%.*]] = bitcast i8** [[VA]] to i8*
-// CHECK:   call void @llvm.va_end(i8* [[VA2]])
+// CHECK:   call void @llvm.va_end.p0i8(i8* [[VA2]])
 // CHECK:   [[TMP2:%.*]] = load i32, i32* [[V]], align 4
 // CHECK:   ret i32 [[TMP2]]
 // CHECK: }
@@ -274,7 +274,7 @@ int f_va_1(char *fmt, ...) {
 // CHECK-NEXT:    [[V:%.*]] = alloca double, align 8
 // CHECK-NEXT:    store i8* [[FMT:%.*]], i8** [[FMT_ADDR]], align 4
 // CHECK-NEXT:    [[VA1:%.*]] = bitcast i8** [[VA]] to i8*
-// CHECK-NEXT:    call void @llvm.va_start(i8* [[VA1]])
+// CHECK-NEXT:    call void @llvm.va_start.p0i8(i8* [[VA1]])
 // CHECK-NEXT:    [[ARGP_CUR:%.*]] = load i8*, i8** [[VA]], align 4
 // CHECK-NEXT:    [[TMP0:%.*]] = ptrtoint i8* [[ARGP_CUR]] to i32
 // CHECK-NEXT:    [[TMP1:%.*]] = add i32 [[TMP0]], 7
@@ -286,7 +286,7 @@ int f_va_1(char *fmt, ...) {
 // CHECK-NEXT:    [[TMP4:%.*]] = load double, double* [[TMP3]], align 8
 // CHECK-NEXT:    store double [[TMP4]], double* [[V]], align 8
 // CHECK-NEXT:    [[VA2:%.*]] = bitcast i8** [[VA]] to i8*
-// CHECK-NEXT:    call void @llvm.va_end(i8* [[VA2]])
+// CHECK-NEXT:    call void @llvm.va_end.p0i8(i8* [[VA2]])
 // CHECK-NEXT:    [[TMP5:%.*]] = load double, double* [[V]], align 8
 // CHECK-NEXT:    ret double [[TMP5]]
 double f_va_2(char *fmt, ...) {
@@ -309,7 +309,7 @@ double f_va_2(char *fmt, ...) {
 // CHECK-NEXT:    [[X:%.*]] = alloca double, align 8
 // CHECK-NEXT:    store i8* [[FMT:%.*]], i8** [[FMT_ADDR]], align 4
 // CHECK-NEXT:    [[VA1:%.*]] = bitcast i8** [[VA]] to i8*
-// CHECK-NEXT:    call void @llvm.va_start(i8* [[VA1]])
+// CHECK-NEXT:    call void @llvm.va_start.p0i8(i8* [[VA1]])
 // CHECK-NEXT:    [[ARGP_CUR:%.*]] = load i8*, i8** [[VA]], align 4
 // CHECK-NEXT:    [[TMP0:%.*]] = ptrtoint i8* [[ARGP_CUR]] to i32
 // CHECK-NEXT:    [[TMP1:%.*]] = add i32 [[TMP0]], 7
@@ -337,7 +337,7 @@ double f_va_2(char *fmt, ...) {
 // CHECK-NEXT:    [[TMP11:%.*]] = load double, double* [[TMP10]], align 8
 // CHECK-NEXT:    store double [[TMP11]], double* [[X]], align 8
 // CHECK-NEXT:    [[VA6:%.*]] = bitcast i8** [[VA]] to i8*
-// CHECK-NEXT:    call void @llvm.va_end(i8* [[VA6]])
+// CHECK-NEXT:    call void @llvm.va_end.p0i8(i8* [[VA6]])
 // CHECK-NEXT:    [[TMP12:%.*]] = load double, double* [[V]], align 8
 // CHECK-NEXT:    [[TMP13:%.*]] = load double, double* [[X]], align 8
 // CHECK-NEXT:    [[ADD:%.*]] = fadd double [[TMP12]], [[TMP13]]
@@ -365,7 +365,7 @@ double f_va_3(char *fmt, ...) {
 // CHECK-NEXT:    [[RET:%.*]] = alloca i32, align 4
 // CHECK-NEXT:    store i8* [[FMT:%.*]], i8** [[FMT_ADDR]], align 4
 // CHECK-NEXT:    [[VA1:%.*]] = bitcast i8** [[VA]] to i8*
-// CHECK-NEXT:    call void @llvm.va_start(i8* [[VA1]])
+// CHECK-NEXT:    call void @llvm.va_start.p0i8(i8* [[VA1]])
 // CHECK-NEXT:    [[ARGP_CUR:%.*]] = load i8*, i8** [[VA]], align 4
 // CHECK-NEXT:    [[ARGP_NEXT:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR]], i32 4
 // CHECK-NEXT:    store i8* [[ARGP_NEXT]], i8** [[VA]], align 4
@@ -402,7 +402,7 @@ double f_va_3(char *fmt, ...) {
 // CHECK-NEXT:    [[TMP14:%.*]] = bitcast %struct.large* [[TMP12]] to i8*
 // CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* [[TMP13]], i8* [[TMP14]], i32 16, i32 4, i1 false)
 // CHECK-NEXT:    [[VA10:%.*]] = bitcast i8** [[VA]] to i8*
-// CHECK-NEXT:    call void @llvm.va_end(i8* [[VA10]])
+// CHECK-NEXT:    call void @llvm.va_end.p0i8(i8* [[VA10]])
 int f_va_4(char *fmt, ...) {
   __builtin_va_list va;
 

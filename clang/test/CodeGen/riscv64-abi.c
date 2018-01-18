@@ -240,7 +240,7 @@ void f_va_caller() {
 // CHECK:   [[V:%.*]] = alloca i32, align 4
 // CHECK:   store i8* %fmt, i8** [[FMT_ADDR]], align 8
 // CHECK:   [[VA1:%.*]] = bitcast i8** [[VA]] to i8*
-// CHECK:   call void @llvm.va_start(i8* [[VA1]])
+// CHECK:   call void @llvm.va_start.p0i8(i8* [[VA1]])
 // CHECK:   [[ARGP_CUR:%.*]] = load i8*, i8** [[VA]], align 8
 // CHECK:   [[ARGP_NEXT:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR]], i64 8
 // CHECK:   store i8* [[ARGP_NEXT]], i8** [[VA]], align 8
@@ -248,7 +248,7 @@ void f_va_caller() {
 // CHECK:   [[TMP1:%.*]] = load i32, i32* [[TMP0]], align 8
 // CHECK:   store i32 [[TMP1]], i32* [[V]], align 4
 // CHECK:   [[VA2:%.*]] = bitcast i8** [[VA]] to i8*
-// CHECK:   call void @llvm.va_end(i8* [[VA2]])
+// CHECK:   call void @llvm.va_end.p0i8(i8* [[VA2]])
 // CHECK:   [[TMP2:%.*]] = load i32, i32* [[V]], align 4
 // CHECK:   ret i32 [[TMP2]]
 // CHECK: }
@@ -272,7 +272,7 @@ int f_va_1(char *fmt, ...) {
 // CHECK-NEXT:    [[V:%.*]] = alloca fp128, align 16
 // CHECK-NEXT:    store i8* [[FMT:%.*]], i8** [[FMT_ADDR]], align 8
 // CHECK-NEXT:    [[VA1:%.*]] = bitcast i8** [[VA]] to i8*
-// CHECK-NEXT:    call void @llvm.va_start(i8* [[VA1]])
+// CHECK-NEXT:    call void @llvm.va_start.p0i8(i8* [[VA1]])
 // CHECK-NEXT:    [[ARGP_CUR:%.*]] = load i8*, i8** [[VA]], align 8
 // CHECK-NEXT:    [[TMP0:%.*]] = ptrtoint i8* [[ARGP_CUR]] to i64
 // CHECK-NEXT:    [[TMP1:%.*]] = add i64 [[TMP0]], 15
@@ -284,7 +284,7 @@ int f_va_1(char *fmt, ...) {
 // CHECK-NEXT:    [[TMP4:%.*]] = load fp128, fp128* [[TMP3]], align 16
 // CHECK-NEXT:    store fp128 [[TMP4]], fp128* [[V]], align 16
 // CHECK-NEXT:    [[VA2:%.*]] = bitcast i8** [[VA]] to i8*
-// CHECK-NEXT:    call void @llvm.va_end(i8* [[VA2]])
+// CHECK-NEXT:    call void @llvm.va_end.p0i8(i8* [[VA2]])
 // CHECK-NEXT:    [[TMP5:%.*]] = load fp128, fp128* [[V]], align 16
 // CHECK-NEXT:    ret fp128 [[TMP5]]
 long double f_va_2(char *fmt, ...) {
@@ -307,7 +307,7 @@ long double f_va_2(char *fmt, ...) {
 // CHECK-NEXT:    [[X:%.*]] = alloca fp128, align 16
 // CHECK-NEXT:    store i8* [[FMT:%.*]], i8** [[FMT_ADDR]], align 8
 // CHECK-NEXT:    [[VA1:%.*]] = bitcast i8** [[VA]] to i8*
-// CHECK-NEXT:    call void @llvm.va_start(i8* [[VA1]])
+// CHECK-NEXT:    call void @llvm.va_start.p0i8(i8* [[VA1]])
 // CHECK-NEXT:    [[ARGP_CUR:%.*]] = load i8*, i8** [[VA]], align 8
 // CHECK-NEXT:    [[TMP0:%.*]] = ptrtoint i8* [[ARGP_CUR]] to i64
 // CHECK-NEXT:    [[TMP1:%.*]] = add i64 [[TMP0]], 15
@@ -335,7 +335,7 @@ long double f_va_2(char *fmt, ...) {
 // CHECK-NEXT:    [[TMP11:%.*]] = load fp128, fp128* [[TMP10]], align 16
 // CHECK-NEXT:    store fp128 [[TMP11]], fp128* [[X]], align 16
 // CHECK-NEXT:    [[VA6:%.*]] = bitcast i8** [[VA]] to i8*
-// CHECK-NEXT:    call void @llvm.va_end(i8* [[VA6]])
+// CHECK-NEXT:    call void @llvm.va_end.p0i8(i8* [[VA6]])
 // CHECK-NEXT:    [[TMP12:%.*]] = load fp128, fp128* [[V]], align 16
 // CHECK-NEXT:    [[TMP13:%.*]] = load fp128, fp128* [[X]], align 16
 // CHECK-NEXT:    [[ADD:%.*]] = fadd fp128 [[TMP12]], [[TMP13]]
@@ -362,7 +362,7 @@ long double f_va_3(char *fmt, ...) {
 // CHECK-NEXT:    [[RET:%.*]] = alloca i32, align 4
 // CHECK-NEXT:    store i8* [[FMT:%.*]], i8** [[FMT_ADDR]], align 8
 // CHECK-NEXT:    [[VA1:%.*]] = bitcast i8** [[VA]] to i8*
-// CHECK-NEXT:    call void @llvm.va_start(i8* [[VA1]])
+// CHECK-NEXT:    call void @llvm.va_start.p0i8(i8* [[VA1]])
 // CHECK-NEXT:    [[ARGP_CUR:%.*]] = load i8*, i8** [[VA]], align 8
 // CHECK-NEXT:    [[ARGP_NEXT:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR]], i64 8
 // CHECK-NEXT:    store i8* [[ARGP_NEXT]], i8** [[VA]], align 8
@@ -392,7 +392,7 @@ long double f_va_3(char *fmt, ...) {
 // CHECK-NEXT:    [[TMP11:%.*]] = bitcast %struct.large* [[TMP9]] to i8*
 // CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* [[TMP10]], i8* [[TMP11]], i64 32, i32 8, i1 false)
 // CHECK-NEXT:    [[VA8:%.*]] = bitcast i8** [[VA]] to i8*
-// CHECK-NEXT:    call void @llvm.va_end(i8* [[VA8]])
+// CHECK-NEXT:    call void @llvm.va_end.p0i8(i8* [[VA8]])
 // CHECK-NEXT:    [[A:%.*]] = getelementptr inbounds [[STRUCT_TINY]], %struct.tiny* [[TS]], i32 0, i32 0
 // CHECK-NEXT:    [[TMP12:%.*]] = load i16, i16* [[A]], align 2
 // CHECK-NEXT:    [[CONV:%.*]] = zext i16 [[TMP12]] to i64
