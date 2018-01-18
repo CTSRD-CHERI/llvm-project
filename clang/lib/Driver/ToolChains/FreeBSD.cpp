@@ -433,6 +433,8 @@ SanitizerMask FreeBSD::getSupportedSanitizers() const {
   }
   if (IsX86 || IsX86_64) {
     Res |= SanitizerKind::SafeStack;
+    Res |= SanitizerKind::Fuzzer;
+    Res |= SanitizerKind::FuzzerNoLink;
   }
   return Res;
 }

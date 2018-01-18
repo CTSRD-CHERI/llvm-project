@@ -3568,8 +3568,8 @@ static bool TryInitializerListConstruction(Sema &S,
       clang::ArrayType::Normal, 0);
   InitializedEntity HiddenArray =
       InitializedEntity::InitializeTemporary(ArrayType);
-  InitializationKind Kind =
-      InitializationKind::CreateDirectList(List->getExprLoc());
+  InitializationKind Kind = InitializationKind::CreateDirectList(
+      List->getExprLoc(), List->getLocStart(), List->getLocEnd());
   TryListInitialization(S, HiddenArray, Kind, List, Sequence,
                         TreatUnavailableAsInvalid);
   if (Sequence)
@@ -6124,10 +6124,7 @@ PerformConstructorInitialization(Sema &S,
     TypeSourceInfo *TSInfo = Entity.getTypeSourceInfo();
     if (!TSInfo)
       TSInfo = S.Context.getTrivialTypeSourceInfo(Entity.getType(), Loc);
-    SourceRange ParenOrBraceRange =
-      (Kind.getKind() == InitializationKind::IK_DirectList)
-      ? SourceRange(LBraceLoc, RBraceLoc)
-      : Kind.getParenRange();
+    SourceRange ParenOrBraceRange = Kind.getParenOrBraceRange();
 
     if (auto *Shadow = dyn_cast<ConstructorUsingShadowDecl>(
             Step.Function.FoundDecl.getDecl())) {
@@ -6161,7 +6158,7 @@ PerformConstructorInitialization(Sema &S,
     if (IsListInitialization)
       ParenOrBraceRange = SourceRange(LBraceLoc, RBraceLoc);
     else if (Kind.getKind() == InitializationKind::IK_Direct)
-      ParenOrBraceRange = Kind.getParenRange();
+      ParenOrBraceRange = Kind.getParenOrBraceRange();
 
     // If the entity allows NRVO, mark the construction as elidable
     // unconditionally.
@@ -6687,7 +6684,7 @@ InitializationSequence::Perform(Sema &S,
     if (Kind.getKind() == InitializationKind::IK_Direct &&
         !Kind.isExplicitCast()) {
       // Rebuild the ParenListExpr.
-      SourceRange ParenRange = Kind.getParenRange();
+      SourceRange ParenRange = Kind.getParenOrBraceRange();
       return S.ActOnParenListExpr(ParenRange.getBegin(), ParenRange.getEnd(),
                                   Args);
     }
@@ -7207,14 +7204,17 @@ InitializationSequence::Perform(Sema &S,
       bool IsStdInitListInit =
           Step->Kind == SK_StdInitializerListConstructorCall;
       Expr *Source = CurInit.get();
+      SourceRange Range = Kind.hasParenOrBraceRange()
+                              ? Kind.getParenOrBraceRange()
+                              : SourceRange();
       CurInit = PerformConstructorInitialization(
           S, UseTemporary ? TempEntity : Entity, Kind,
           Source ? MultiExprArg(Source) : Args, *Step,
           ConstructorInitRequiresZeroInit,
           /*IsListInitialization*/ IsStdInitListInit,
           /*IsStdInitListInitialization*/ IsStdInitListInit,
-          /*LBraceLoc*/ SourceLocation(),
-          /*RBraceLoc*/ SourceLocation());
+          /*LBraceLoc*/ Range.getBegin(),
+          /*RBraceLoc*/ Range.getEnd());
       break;
     }
 

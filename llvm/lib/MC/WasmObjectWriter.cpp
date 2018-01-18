@@ -221,6 +221,7 @@ class WasmObjectWriter : public MCObjectWriter {
       FunctionTypeIndices;
   SmallVector<WasmFunctionType, 4> FunctionTypes;
   SmallVector<WasmGlobal, 4> Globals;
+  unsigned NumFunctionImports = 0;
   unsigned NumGlobalImports = 0;
 
   // TargetObjectWriter wrappers.
@@ -239,9 +240,9 @@ public:
       : MCObjectWriter(OS, /*IsLittleEndian=*/true),
         TargetObjectWriter(std::move(MOTW)) {}
 
-private:
   ~WasmObjectWriter() override;
 
+private:
   void reset() override {
     CodeRelocations.clear();
     DataRelocations.clear();
@@ -252,6 +253,7 @@ private:
     FunctionTypes.clear();
     Globals.clear();
     MCObjectWriter::reset();
+    NumFunctionImports = 0;
     NumGlobalImports = 0;
   }
 
@@ -286,8 +288,7 @@ private:
                         ArrayRef<WasmFunction> Functions);
   void writeDataSection(ArrayRef<WasmDataSegment> Segments);
   void writeNameSection(ArrayRef<WasmFunction> Functions,
-                        ArrayRef<WasmImport> Imports,
-                        uint32_t NumFuncImports);
+                        ArrayRef<WasmImport> Imports);
   void writeCodeRelocSection();
   void writeDataRelocSection();
   void writeLinkingMetaDataSection(
@@ -502,7 +503,7 @@ WasmObjectWriter::getProvisionalValue(const WasmRelocationEntry &RelEntry) {
   const MCSymbolWasm *Sym = ResolveSymbol(*RelEntry.Symbol);
 
   // For undefined symbols, use zero
-  if (!Sym->isDefined(/*SetUsed=*/false))
+  if (!Sym->isDefined())
     return 0;
 
   uint32_t GlobalIndex = SymbolIndices[Sym];
@@ -852,11 +853,9 @@ void WasmObjectWriter::writeDataSection(ArrayRef<WasmDataSegment> Segments) {
   endSection(Section);
 }
 
-void WasmObjectWriter::writeNameSection(
-    ArrayRef<WasmFunction> Functions,
-    ArrayRef<WasmImport> Imports,
-    unsigned NumFuncImports) {
-  uint32_t TotalFunctions = NumFuncImports + Functions.size();
+void WasmObjectWriter::writeNameSection(ArrayRef<WasmFunction> Functions,
+                                        ArrayRef<WasmImport> Imports) {
+  uint32_t TotalFunctions = NumFunctionImports + Functions.size();
   if (TotalFunctions == 0)
     return;
 
@@ -1023,7 +1022,6 @@ void WasmObjectWriter::writeObject(MCAssembler &Asm,
   SmallVector<std::pair<StringRef, uint32_t>, 4> SymbolFlags;
   SmallVector<std::pair<uint16_t, uint32_t>, 2> InitFuncs;
   std::map<StringRef, std::vector<WasmComdatEntry>> Comdats;
-  unsigned NumFuncImports = 0;
   SmallVector<WasmDataSegment, 4> DataSegments;
   uint32_t DataSize = 0;
 
@@ -1113,8 +1111,7 @@ void WasmObjectWriter::writeObject(MCAssembler &Asm,
     const auto &WS = static_cast<const MCSymbolWasm &>(S);
 
     // Register types for all functions, including those with private linkage
-    // (making them
-    // because wasm always needs a type signature.
+    // (because wasm always needs a type signature).
     if (WS.isFunction())
       registerFunctionType(WS);
 
@@ -1122,7 +1119,8 @@ void WasmObjectWriter::writeObject(MCAssembler &Asm,
       continue;
 
     // If the symbol is not defined in this translation unit, import it.
-    if (!WS.isDefined(/*SetUsed=*/false) || WS.isVariable()) {
+    if ((!WS.isDefined() && !WS.isComdat()) ||
+        WS.isVariable()) {
       WasmImport Import;
       Import.ModuleName = WS.getModuleName();
       Import.FieldName = WS.getName();
@@ -1130,8 +1128,8 @@ void WasmObjectWriter::writeObject(MCAssembler &Asm,
       if (WS.isFunction()) {
         Import.Kind = wasm::WASM_EXTERNAL_FUNCTION;
         Import.Type = getFunctionType(WS);
-        SymbolIndices[&WS] = NumFuncImports;
-        ++NumFuncImports;
+        SymbolIndices[&WS] = NumFunctionImports;
+        ++NumFunctionImports;
       } else {
         Import.Kind = wasm::WASM_EXTERNAL_GLOBAL;
         Import.Type = int32_t(PtrType);
@@ -1205,7 +1203,7 @@ void WasmObjectWriter::writeObject(MCAssembler &Asm,
     unsigned Index;
 
     if (WS.isFunction()) {
-      if (WS.isDefined(/*SetUsed=*/false)) {
+      if (WS.isDefined()) {
         if (WS.getOffset() != 0)
           report_fatal_error(
               "function sections must contain one function each");
@@ -1215,7 +1213,7 @@ void WasmObjectWriter::writeObject(MCAssembler &Asm,
               "function symbols must have a size set with .size");
 
         // A definition. Take the next available index.
-        Index = NumFuncImports + Functions.size();
+        Index = NumFunctionImports + Functions.size();
 
         // Prepare the function.
         WasmFunction Func;
@@ -1233,7 +1231,7 @@ void WasmObjectWriter::writeObject(MCAssembler &Asm,
       if (WS.isTemporary() && !WS.getSize())
         continue;
 
-      if (!WS.isDefined(/*SetUsed=*/false))
+      if (!WS.isDefined())
         continue;
 
       if (!WS.getSize())
@@ -1262,7 +1260,7 @@ void WasmObjectWriter::writeObject(MCAssembler &Asm,
     }
 
     // If the symbol is visible outside this translation unit, export it.
-    if (WS.isDefined(/*SetUsed=*/false)) {
+    if (WS.isDefined()) {
       WasmExport Export;
       Export.FieldName = WS.getName();
       Export.Index = Index;
@@ -1277,7 +1275,7 @@ void WasmObjectWriter::writeObject(MCAssembler &Asm,
         SymbolFlags.emplace_back(WS.getName(), wasm::WASM_SYMBOL_BINDING_LOCAL);
 
       if (WS.isFunction()) {
-        auto &Section = static_cast<MCSectionWasm &>(WS.getSection(false));
+        auto &Section = static_cast<MCSectionWasm &>(WS.getSection());
         if (const MCSymbolWasm *C = Section.getGroup())
           Comdats[C->getName()].emplace_back(
               WasmComdatEntry{wasm::WASM_COMDAT_FUNCTION, Index});
@@ -1292,7 +1290,7 @@ void WasmObjectWriter::writeObject(MCAssembler &Asm,
     if (!S.isVariable())
       continue;
 
-    assert(S.isDefined(/*SetUsed=*/false));
+    assert(S.isDefined());
 
     // Find the target symbol of this weak alias and export that index
     const auto &WS = static_cast<const MCSymbolWasm &>(S);
@@ -1409,7 +1407,7 @@ void WasmObjectWriter::writeObject(MCAssembler &Asm,
   writeElemSection(TableElems);
   writeCodeSection(Asm, Layout, Functions);
   writeDataSection(DataSegments);
-  writeNameSection(Functions, Imports, NumFuncImports);
+  writeNameSection(Functions, Imports);
   writeCodeRelocSection();
   writeDataRelocSection();
   writeLinkingMetaDataSection(DataSegments, DataSize, SymbolFlags,
@@ -1422,8 +1420,5 @@ void WasmObjectWriter::writeObject(MCAssembler &Asm,
 std::unique_ptr<MCObjectWriter>
 llvm::createWasmObjectWriter(std::unique_ptr<MCWasmObjectTargetWriter> MOTW,
                              raw_pwrite_stream &OS) {
-  // FIXME: Can't use make_unique<WasmObjectWriter>(...) as WasmObjectWriter's
-  //        destructor is private. Is that necessary?
-  return std::unique_ptr<MCObjectWriter>(
-      new WasmObjectWriter(std::move(MOTW), OS));
+  return llvm::make_unique<WasmObjectWriter>(std::move(MOTW), OS);
 }

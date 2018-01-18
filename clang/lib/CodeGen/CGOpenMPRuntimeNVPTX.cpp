@@ -2436,7 +2436,7 @@ void CGOpenMPRuntimeNVPTX::emitOutlinedFunctionCall(
 llvm::Function *CGOpenMPRuntimeNVPTX::createDataSharingWrapper(
     llvm::Function *OutlinedParallelFn, const OMPExecutableDirective &D) {
   ASTContext &Ctx = CGM.getContext();
-  const auto &CS = *cast<CapturedStmt>(D.getAssociatedStmt());
+  const CapturedStmt &CS = *D.getCapturedStmt(OMPD_parallel);
 
   // Create a function that takes as argument the source thread.
   FunctionArgList WrapperArgs;

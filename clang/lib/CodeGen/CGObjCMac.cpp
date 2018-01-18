@@ -4187,10 +4187,6 @@ void FragileHazards::emitHazardsInNewBlocks() {
   }
 }
 
-static void addIfPresent(llvm::DenseSet<llvm::Value*> &S, llvm::Value *V) {
-  if (V) S.insert(V);
-}
-
 static void addIfPresent(llvm::DenseSet<llvm::Value*> &S, Address V) {
   if (V.isValid()) S.insert(V.getPointer());
 }

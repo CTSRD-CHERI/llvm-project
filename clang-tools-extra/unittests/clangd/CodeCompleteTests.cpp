@@ -17,6 +17,7 @@
 #include "SourceCode.h"
 #include "TestFS.h"
 #include "index/MemIndex.h"
+#include "index/Merge.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
@@ -57,6 +58,7 @@ using ::testing::Contains;
 using ::testing::Each;
 using ::testing::ElementsAre;
 using ::testing::Not;
+using ::testing::UnorderedElementsAre;
 
 class IgnoreDiagnostics : public DiagnosticsConsumer {
   void
@@ -95,8 +97,25 @@ Matcher<const std::vector<CompletionItem> &> Has(std::string Name,
 }
 MATCHER(IsDocumented, "") { return !arg.documentation.empty(); }
 
+std::unique_ptr<SymbolIndex> memIndex(std::vector<Symbol> Symbols) {
+  SymbolSlab::Builder Slab;
+  for (const auto &Sym : Symbols)
+    Slab.insert(Sym);
+  return MemIndex::build(std::move(Slab).build());
+}
+
+// Builds a server and runs code completion.
+// If IndexSymbols is non-empty, an index will be built and passed to opts.
 CompletionList completions(StringRef Text,
+                           std::vector<Symbol> IndexSymbols = {},
                            clangd::CodeCompleteOptions Opts = {}) {
+  std::unique_ptr<SymbolIndex> OverrideIndex;
+  if (!IndexSymbols.empty()) {
+    assert(!Opts.Index && "both Index and IndexSymbols given!");
+    OverrideIndex = memIndex(std::move(IndexSymbols));
+    Opts.Index = OverrideIndex.get();
+  }
+
   MockFSProvider FS;
   MockCompilationDatabase CDB;
   IgnoreDiagnostics DiagConsumer;
@@ -104,7 +123,7 @@ CompletionList completions(StringRef Text,
                       /*StorePreamblesInMemory=*/true);
   auto File = getVirtualTestFilePath("foo.cpp");
   Annotations Test(Text);
-  Server.addDocument(Context::empty(), File, Test.code());
+  Server.addDocument(Context::empty(), File, Test.code()).wait();
   auto CompletionList =
       Server.codeComplete(Context::empty(), File, Test.point(), Opts)
           .get()
@@ -113,6 +132,27 @@ CompletionList completions(StringRef Text,
   EXPECT_THAT(CompletionList.items, Each(FilterContainsName()));
   return CompletionList;
 }
+
+// Helpers to produce fake index symbols for memIndex() or completions().
+Symbol sym(StringRef QName, index::SymbolKind Kind) {
+  Symbol Sym;
+  Sym.ID = SymbolID(QName);
+  size_t Pos = QName.rfind("::");
+  if (Pos == llvm::StringRef::npos) {
+    Sym.Name = QName;
+    Sym.Scope = "";
+  } else {
+    Sym.Name = QName.substr(Pos + 2);
+    Sym.Scope = QName.substr(0, Pos);
+  }
+  Sym.CompletionPlainInsertText = Sym.Name;
+  Sym.CompletionLabel = Sym.Name;
+  Sym.SymInfo.Kind = Kind;
+  return Sym;
+}
+Symbol func(StringRef Name) { return sym(Name, index::SymbolKind::Function); }
+Symbol cls(StringRef Name) { return sym(Name, index::SymbolKind::Class); }
+Symbol var(StringRef Name) { return sym(Name, index::SymbolKind::Variable); }
 
 TEST(CompletionTest, Limit) {
   clangd::CodeCompleteOptions Opts;
@@ -125,7 +165,7 @@ struct ClassWithMembers {
 }
 int main() { ClassWithMembers().^ }
       )cpp",
-                             Opts);
+                             /*IndexSymbols=*/{}, Opts);
 
   EXPECT_TRUE(Results.isIncomplete);
   EXPECT_THAT(Results.items, ElementsAre(Named("AAA"), Named("BBB")));
@@ -186,7 +226,7 @@ void TestAfterDotCompletion(clangd::CodeCompleteOptions Opts) {
         ClassWithMembers().^
       }
       )cpp",
-      Opts);
+      /*IndexSymbols=*/{}, Opts);
 
   // Class members. The only items that must be present in after-dot
   // completion.
@@ -231,16 +271,16 @@ void TestGlobalScopeCompletion(clangd::CodeCompleteOptions Opts) {
         ^
       }
       )cpp",
-      Opts);
+      /*IndexSymbols=*/{}, Opts);
 
   // Class members. Should never be present in global completions.
   EXPECT_THAT(Results.items,
               Not(AnyOf(Has("method"), Has("method()"), Has("field"))));
   // Global items.
-  EXPECT_IFF(Opts.IncludeGlobals, Results.items,
-             AllOf(Has("global_var"),
-                   Has(Opts.EnableSnippets ? "global_func()" : "global_func"),
-                   Has("GlobalClass")));
+  EXPECT_THAT(Results.items,
+              AllOf(Has("global_var"),
+                    Has(Opts.EnableSnippets ? "global_func()" : "global_func"),
+                    Has("GlobalClass")));
   // A macro.
   EXPECT_IFF(Opts.IncludeMacros, Results.items, Has("MACRO"));
   // Local items. Must be present always.
@@ -253,26 +293,25 @@ void TestGlobalScopeCompletion(clangd::CodeCompleteOptions Opts) {
 }
 
 TEST(CompletionTest, CompletionOptions) {
-  clangd::CodeCompleteOptions Opts;
-  for (bool IncludeMacros : {true, false}) {
-    Opts.IncludeMacros = IncludeMacros;
-    for (bool IncludeGlobals : {true, false}) {
-      Opts.IncludeGlobals = IncludeGlobals;
-      for (bool IncludeBriefComments : {true, false}) {
-        Opts.IncludeBriefComments = IncludeBriefComments;
-        for (bool EnableSnippets : {true, false}) {
-          Opts.EnableSnippets = EnableSnippets;
-          for (bool IncludeCodePatterns : {true, false}) {
-            Opts.IncludeCodePatterns = IncludeCodePatterns;
-            for (bool IncludeIneligibleResults : {true, false}) {
-              Opts.IncludeIneligibleResults = IncludeIneligibleResults;
-              TestAfterDotCompletion(Opts);
-              TestGlobalScopeCompletion(Opts);
-            }
-          }
-        }
-      }
-    }
+  auto Test = [&](const clangd::CodeCompleteOptions &Opts) {
+    TestAfterDotCompletion(Opts);
+    TestGlobalScopeCompletion(Opts);
+  };
+  // We used to test every combination of options, but that got too slow (2^N).
+  auto Flags = {
+    &clangd::CodeCompleteOptions::IncludeMacros,
+    &clangd::CodeCompleteOptions::IncludeBriefComments,
+    &clangd::CodeCompleteOptions::EnableSnippets,
+    &clangd::CodeCompleteOptions::IncludeCodePatterns,
+    &clangd::CodeCompleteOptions::IncludeIneligibleResults,
+  };
+  // Test default options.
+  Test({});
+  // Test with one flag flipped.
+  for (auto &F : Flags) {
+    clangd::CodeCompleteOptions O;
+    O.*F ^= true;
+    Test(O);
   }
 }
 
@@ -353,7 +392,7 @@ TEST(CompletionTest, Snippets) {
         f.^
       }
       )cpp",
-      Opts);
+      /*IndexSymbols=*/{}, Opts);
   EXPECT_THAT(Results.items,
               HasSubsequence(Snippet("a"),
                              Snippet("f(${1:int i}, ${2:const float f})")));
@@ -373,11 +412,169 @@ TEST(CompletionTest, Kinds) {
   EXPECT_THAT(Results.items, Has("Struct", CompletionItemKind::Class));
   EXPECT_THAT(Results.items, Has("MACRO", CompletionItemKind::Text));
 
-  clangd::CodeCompleteOptions Opts;
-  Opts.EnableSnippets = true; // Needed for code patterns.
-
   Results = completions("nam^");
   EXPECT_THAT(Results.items, Has("namespace", CompletionItemKind::Snippet));
+}
+
+TEST(CompletionTest, NoDuplicates) {
+  auto Items = completions(R"cpp(
+struct Adapter {
+  void method();
+};
+
+void Adapter::method() {
+  Adapter^
+}
+  )cpp")
+                   .items;
+
+  // Make sure there are no duplicate entries of 'Adapter'.
+  EXPECT_THAT(Items, ElementsAre(Named("Adapter"), Named("~Adapter")));
+}
+
+TEST(CompletionTest, FuzzyRanking) {
+  auto Items = completions(R"cpp(
+      struct fake { int BigBang, Babble, Ball; };
+      int main() { fake().bb^ }")cpp").items;
+  // BigBang is a better match than Babble. Ball doesn't match at all.
+  EXPECT_THAT(Items, ElementsAre(Named("BigBang"), Named("Babble")));
+}
+
+TEST(CompletionTest, NoIndex) {
+  auto Results = completions(R"cpp(
+      namespace ns { class Local {}; }
+      void f() { ns::^ }
+  )cpp");
+  EXPECT_THAT(Results.items, Has("Local"));
+}
+
+TEST(CompletionTest, StaticAndDynamicIndex) {
+  clangd::CodeCompleteOptions Opts;
+  auto StaticIdx = memIndex({cls("ns::XYZ")});
+  auto DynamicIdx = memIndex({func("ns::foo")});
+  auto Merge = mergeIndex(DynamicIdx.get(), StaticIdx.get());
+  Opts.Index = Merge.get();
+
+  auto Results = completions(
+      R"cpp(
+          void f() { ::ns::^ }
+      )cpp",
+      /*IndexSymbols=*/{}, Opts);
+  EXPECT_THAT(Results.items, Contains(Labeled("[I]XYZ")));
+  EXPECT_THAT(Results.items, Contains(Labeled("[I]foo")));
+}
+
+TEST(CompletionTest, IndexScope) {
+  auto Results = completions(
+      R"cpp(
+          namespace ns { int local; }
+          void f() { ns::^ }
+      )cpp",
+      {cls("ns::XYZ"), cls("nx::XYZ"), func("ns::foo")});
+  EXPECT_THAT(Results.items,
+              UnorderedElementsAre(Named("XYZ"), Named("foo"), Named("local")));
+}
+
+TEST(CompletionTest, IndexBasedWithFilter) {
+  auto Results = completions(
+      R"cpp(
+          void f() { ns::x^ }
+      )cpp",
+      {cls("ns::XYZ"), func("ns::foo")});
+  EXPECT_THAT(Results.items,
+              UnorderedElementsAre(AllOf(Named("XYZ"), Filter("XYZ"))));
+}
+
+TEST(CompletionTest, IndexGlobalQualified) {
+  auto Results = completions(
+      R"cpp(
+          void f() { ::^ }
+      )cpp",
+      {cls("XYZ")});
+  EXPECT_THAT(Results.items, AllOf(Has("XYZ", CompletionItemKind::Class),
+                                   Has("f", CompletionItemKind::Function)));
+}
+
+TEST(CompletionTest, IndexFullyQualifiedScope) {
+  auto Results = completions(
+      R"cpp(
+          void f() { ::ns::^ }
+      )cpp",
+      {cls("ns::XYZ")});
+  EXPECT_THAT(Results.items, Has("XYZ", CompletionItemKind::Class));
+}
+
+TEST(CompletionTest, IndexSuppressesPreambleCompletions) {
+  MockFSProvider FS;
+  MockCompilationDatabase CDB;
+  IgnoreDiagnostics DiagConsumer;
+  ClangdServer Server(CDB, DiagConsumer, FS, getDefaultAsyncThreadsCount(),
+                      /*StorePreamblesInMemory=*/true);
+
+  FS.Files[getVirtualTestFilePath("bar.h")] =
+      R"cpp(namespace ns { int preamble; })cpp";
+  auto File = getVirtualTestFilePath("foo.cpp");
+  Annotations Test(R"cpp(
+      #include "bar.h"
+      namespace ns { int local; }
+      void f() { ns::^ }
+  )cpp");
+  Server.addDocument(Context::empty(), File, Test.code()).wait();
+  clangd::CodeCompleteOptions Opts = {};
+
+  auto WithoutIndex =
+      Server.codeComplete(Context::empty(), File, Test.point(), Opts)
+          .get()
+          .second.Value;
+  EXPECT_THAT(WithoutIndex.items,
+              UnorderedElementsAre(Named("local"), Named("preamble")));
+
+  auto I = memIndex({var("ns::index")});
+  Opts.Index = I.get();
+  auto WithIndex =
+      Server.codeComplete(Context::empty(), File, Test.point(), Opts)
+          .get()
+          .second.Value;
+  EXPECT_THAT(WithIndex.items,
+              UnorderedElementsAre(Named("local"), Named("index")));
+}
+
+TEST(CompletionTest, DynamicIndexMultiFile) {
+  MockFSProvider FS;
+  MockCompilationDatabase CDB;
+  IgnoreDiagnostics DiagConsumer;
+  ClangdServer Server(CDB, DiagConsumer, FS, getDefaultAsyncThreadsCount(),
+                      /*StorePreamblesInMemory=*/true,
+                      /*BuildDynamicSymbolIndex=*/true);
+
+  Server
+      .addDocument(Context::empty(), getVirtualTestFilePath("foo.cpp"), R"cpp(
+      namespace ns { class XYZ {}; void foo(int x) {} }
+  )cpp")
+      .wait();
+
+  auto File = getVirtualTestFilePath("bar.cpp");
+  Annotations Test(R"cpp(
+      namespace ns {
+      class XXX {};
+      /// Doooc
+      void fooooo() {}
+      }
+      void f() { ns::^ }
+  )cpp");
+  Server.addDocument(Context::empty(), File, Test.code()).wait();
+
+  auto Results = Server.codeComplete(Context::empty(), File, Test.point(), {})
+                     .get()
+                     .second.Value;
+  // "XYZ" and "foo" are not included in the file being completed but are still
+  // visible through the index.
+  EXPECT_THAT(Results.items, Has("XYZ", CompletionItemKind::Class));
+  EXPECT_THAT(Results.items, Has("foo", CompletionItemKind::Function));
+  EXPECT_THAT(Results.items, Has("XXX", CompletionItemKind::Class));
+  EXPECT_THAT(Results.items, Contains(AllOf(Named("fooooo"), Filter("fooooo"),
+                                            Kind(CompletionItemKind::Function),
+                                            Doc("Doooc"), Detail("void"))));
 }
 
 SignatureHelp signatures(StringRef Text) {
@@ -453,166 +650,6 @@ TEST(SignatureHelpTest, ActiveArg) {
                               {"int a", "int b", "int c"})));
   EXPECT_EQ(0, Results.activeSignature);
   EXPECT_EQ(1, Results.activeParameter);
-}
-
-std::unique_ptr<SymbolIndex> simpleIndexFromSymbols(
-    std::vector<std::pair<std::string, index::SymbolKind>> Symbols) {
-  SymbolSlab::Builder Slab;
-  for (const auto &Pair : Symbols) {
-    Symbol Sym;
-    Sym.ID = SymbolID(Pair.first);
-    llvm::StringRef QName = Pair.first;
-    size_t Pos = QName.rfind("::");
-    if (Pos == llvm::StringRef::npos) {
-      Sym.Name = QName;
-      Sym.Scope = "";
-    } else {
-      Sym.Name = QName.substr(Pos + 2);
-      Sym.Scope = QName.substr(0, Pos);
-    }
-    Sym.CompletionPlainInsertText = Sym.Name;
-    Sym.SymInfo.Kind = Pair.second;
-    Slab.insert(Sym);
-  }
-  return MemIndex::build(std::move(Slab).build());
-}
-
-TEST(CompletionTest, NoIndex) {
-  clangd::CodeCompleteOptions Opts;
-  Opts.Index = nullptr;
-
-  auto Results = completions(R"cpp(
-      namespace ns { class No {}; }
-      void f() { ns::^ }
-  )cpp",
-                             Opts);
-  EXPECT_THAT(Results.items, Has("No"));
-}
-
-TEST(CompletionTest, StaticAndDynamicIndex) {
-  clangd::CodeCompleteOptions Opts;
-  auto StaticIdx =
-      simpleIndexFromSymbols({{"ns::XYZ", index::SymbolKind::Class}});
-  Opts.StaticIndex = StaticIdx.get();
-  auto DynamicIdx =
-      simpleIndexFromSymbols({{"ns::foo", index::SymbolKind::Function}});
-  Opts.Index = DynamicIdx.get();
-
-  auto Results = completions(R"cpp(
-      void f() { ::ns::^ }
-  )cpp",
-                             Opts);
-  EXPECT_THAT(Results.items, Contains(Labeled("[G]XYZ")));
-  EXPECT_THAT(Results.items, Contains(Labeled("foo")));
-}
-
-TEST(CompletionTest, SimpleIndexBased) {
-  clangd::CodeCompleteOptions Opts;
-  auto I = simpleIndexFromSymbols({{"ns::XYZ", index::SymbolKind::Class},
-                                   {"nx::XYZ", index::SymbolKind::Class},
-                                   {"ns::foo", index::SymbolKind::Function}});
-  Opts.Index = I.get();
-
-  auto Results = completions(R"cpp(
-      namespace ns { class No {}; }
-      void f() { ns::^ }
-  )cpp",
-                             Opts);
-  EXPECT_THAT(Results.items, Has("XYZ", CompletionItemKind::Class));
-  EXPECT_THAT(Results.items, Has("foo", CompletionItemKind::Function));
-  EXPECT_THAT(Results.items, Not(Has("No")));
-}
-
-TEST(CompletionTest, IndexBasedWithFilter) {
-  clangd::CodeCompleteOptions Opts;
-  auto I = simpleIndexFromSymbols({{"ns::XYZ", index::SymbolKind::Class},
-                                   {"ns::foo", index::SymbolKind::Function}});
-  Opts.Index = I.get();
-
-  auto Results = completions(R"cpp(
-      void f() { ns::x^ }
-  )cpp",
-                             Opts);
-  EXPECT_THAT(Results.items, Contains(AllOf(Named("XYZ"), Filter("XYZ"))));
-  EXPECT_THAT(Results.items, Not(Has("foo")));
-}
-
-TEST(CompletionTest, GlobalQualified) {
-  clangd::CodeCompleteOptions Opts;
-  auto I = simpleIndexFromSymbols({{"XYZ", index::SymbolKind::Class}});
-  Opts.Index = I.get();
-
-  auto Results = completions(R"cpp(
-      void f() { ::^ }
-  )cpp",
-                             Opts);
-  EXPECT_THAT(Results.items, Has("XYZ", CompletionItemKind::Class));
-}
-
-TEST(CompletionTest, FullyQualifiedScope) {
-  clangd::CodeCompleteOptions Opts;
-  auto I = simpleIndexFromSymbols({{"ns::XYZ", index::SymbolKind::Class}});
-  Opts.Index = I.get();
-
-  auto Results = completions(R"cpp(
-      void f() { ::ns::^ }
-  )cpp",
-                             Opts);
-  EXPECT_THAT(Results.items, Has("XYZ", CompletionItemKind::Class));
-}
-
-TEST(CompletionTest, ASTIndexMultiFile) {
-  MockFSProvider FS;
-  MockCompilationDatabase CDB;
-  IgnoreDiagnostics DiagConsumer;
-  ClangdServer Server(CDB, DiagConsumer, FS, getDefaultAsyncThreadsCount(),
-                      /*StorePreamblesInMemory=*/true,
-                      /*BuildDynamicSymbolIndex=*/true);
-
-  Server
-      .addDocument(Context::empty(), getVirtualTestFilePath("foo.cpp"), R"cpp(
-      namespace ns { class XYZ {}; void foo(int x) {} }
-  )cpp")
-      .wait();
-
-  auto File = getVirtualTestFilePath("bar.cpp");
-  Annotations Test(R"cpp(
-      namespace ns {
-      class XXX {};
-      /// Doooc
-      void fooooo() {}
-      }
-      void f() { ns::^ }
-  )cpp");
-  Server.addDocument(Context::empty(), File, Test.code()).wait();
-
-  auto Results = Server.codeComplete(Context::empty(), File, Test.point(), {})
-                     .get()
-                     .second.Value;
-  // "XYZ" and "foo" are not included in the file being completed but are still
-  // visible through the index.
-  EXPECT_THAT(Results.items, Has("XYZ", CompletionItemKind::Class));
-  EXPECT_THAT(Results.items, Has("foo", CompletionItemKind::Function));
-  EXPECT_THAT(Results.items, Has("XXX", CompletionItemKind::Class));
-  EXPECT_THAT(Results.items, Contains(AllOf(Named("fooooo"), Filter("fooooo"),
-                                            Kind(CompletionItemKind::Function),
-                                            Doc("Doooc"), Detail("void"))));
-}
-
-TEST(CompletionTest, NoDuplicates) {
-  auto Items = completions(R"cpp(
-struct Adapter {
-  void method();
-};
-
-void Adapter::method() {
-  Adapter^
-}
-  )cpp")
-                   .items;
-
-  // Make sure there are no duplicate entries of 'Adapter'.
-  EXPECT_THAT(Items, ElementsAre(Named("Adapter"), Named("~Adapter")));
 }
 
 } // namespace

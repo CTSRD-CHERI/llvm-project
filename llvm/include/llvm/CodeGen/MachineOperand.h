@@ -238,7 +238,7 @@ public:
   /// MO_Immediate operands can also be subreg idices. If it's the case, the
   /// subreg index name will be printed. MachineInstr::isOperandSubregIdx can be
   /// called to check this.
-  static void printSubregIdx(raw_ostream &OS, uint64_t Index,
+  static void printSubRegIdx(raw_ostream &OS, uint64_t Index,
                              const TargetRegisterInfo *TRI);
 
   /// Print operand target flags.
@@ -270,6 +270,9 @@ public:
   /// \param PrintDef - whether we want to print `def` on an operand which
   /// isDef. Sometimes, if the operand is printed before '=', we don't print
   /// `def`.
+  /// \param IsStandalone - whether we want a verbose output of the MO. This
+  /// prints extra information that can be easily inferred when printing the
+  /// whole function, but not when printing only a fragment of it.
   /// \param ShouldPrintRegisterTies - whether we want to print register ties.
   /// Sometimes they are easily determined by the instruction's descriptor
   /// (MachineInstr::hasComplexRegiterTies can determine if it's needed).
@@ -280,7 +283,7 @@ public:
   /// information from it's parent.
   /// \param IntrinsicInfo - same as \p TRI.
   void print(raw_ostream &os, ModuleSlotTracker &MST, LLT TypeToPrint,
-             bool PrintDef, bool ShouldPrintRegisterTies,
+             bool PrintDef, bool IsStandalone, bool ShouldPrintRegisterTies,
              unsigned TiedOperandIdx, const TargetRegisterInfo *TRI,
              const TargetIntrinsicInfo *IntrinsicInfo) const;
 

@@ -137,7 +137,6 @@ namespace AMDGPU {
     OPERAND_INPUT_MODS,
 
     // Operand for SDWA instructions
-    OPERAND_SDWA_SRC,
     OPERAND_SDWA_VOPC_DST,
 
     /// Operand with 32-bit immediate that uses the constant bus.
@@ -273,8 +272,9 @@ enum Id { // HwRegCode, (6) [5:0]
   ID_GPR_ALLOC = 5,
   ID_LDS_ALLOC = 6,
   ID_IB_STS = 7,
-  ID_SYMBOLIC_LAST_ = 8,
   ID_MEM_BASES = 15,
+  ID_SYMBOLIC_FIRST_GFX9_ = ID_MEM_BASES,
+  ID_SYMBOLIC_LAST_ = 16,
   ID_SHIFT_ = 0,
   ID_WIDTH_ = 6,
   ID_MASK_ = (((1 << ID_WIDTH_) - 1) << ID_SHIFT_)

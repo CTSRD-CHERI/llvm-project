@@ -1,4 +1,4 @@
-//===- InputSegment.cpp ---------------------------------------------------===//
+//===- InputChunks.cpp ----------------------------------------------------===//
 //
 //                             The LLVM Linker
 //
@@ -30,6 +30,8 @@ uint32_t InputSegment::translateVA(uint32_t Address) const {
 }
 
 void InputChunk::copyRelocations(const WasmSection &Section) {
+  if (Section.Relocations.empty())
+    return;
   size_t Start = getInputSectionOffset();
   size_t Size = getSize();
   for (const WasmRelocation &R : Section.Relocations)
@@ -78,13 +80,13 @@ static void applyRelocation(uint8_t *Buf, const OutputRelocation &Reloc) {
 static void applyRelocations(uint8_t *Buf, ArrayRef<OutputRelocation> Relocs) {
   if (!Relocs.size())
     return;
-  log("applyRelocations: count=" + Twine(Relocs.size()));
+  DEBUG(dbgs() << "applyRelocations: count=" << Relocs.size() << "\n");
   for (const OutputRelocation &Reloc : Relocs)
     applyRelocation(Buf, Reloc);
 }
 
 void InputChunk::writeTo(uint8_t *SectionStart) const {
-  memcpy(SectionStart + getOutputOffset(), getData(), getSize());
+  memcpy(SectionStart + getOutputOffset(), data().data(), data().size());
   applyRelocations(SectionStart, OutRelocations);
 }
 
@@ -92,8 +94,11 @@ void InputChunk::writeTo(uint8_t *SectionStart) const {
 // output section.  Calculates the updated index and offset for each relocation
 // as well as the value to write out in the final binary.
 void InputChunk::calcRelocations() {
+  if (Relocations.empty())
+    return;
   int32_t Off = getOutputOffset() - getInputSectionOffset();
-  log("calcRelocations: " + File.getName() + " offset=" + Twine(Off));
+  DEBUG(dbgs() << "calcRelocations: " << File->getName()
+               << " offset=" << Twine(Off) << "\n");
   for (const WasmRelocation &Reloc : Relocations) {
     OutputRelocation NewReloc;
     NewReloc.Reloc = Reloc;
@@ -104,19 +109,25 @@ void InputChunk::calcRelocations() {
                  << " newOffset=" << NewReloc.Reloc.Offset << "\n");
 
     if (Config->EmitRelocs)
-      NewReloc.NewIndex = File.calcNewIndex(Reloc);
+      NewReloc.NewIndex = File->calcNewIndex(Reloc);
 
     switch (Reloc.Type) {
     case R_WEBASSEMBLY_MEMORY_ADDR_SLEB:
     case R_WEBASSEMBLY_MEMORY_ADDR_I32:
     case R_WEBASSEMBLY_MEMORY_ADDR_LEB:
-      NewReloc.Value = File.getRelocatedAddress(Reloc.Index) + Reloc.Addend;
+      NewReloc.Value = File->getRelocatedAddress(Reloc.Index) + Reloc.Addend;
       break;
     default:
-      NewReloc.Value = File.calcNewIndex(Reloc);
+      NewReloc.Value = File->calcNewIndex(Reloc);
       break;
     }
 
     OutRelocations.emplace_back(NewReloc);
   }
+}
+
+void InputFunction::setOutputIndex(uint32_t Index) {
+  DEBUG(dbgs() << "InputFunction::setOutputIndex: " << Index << "\n");
+  assert(!hasOutputIndex());
+  OutputIndex = Index;
 }

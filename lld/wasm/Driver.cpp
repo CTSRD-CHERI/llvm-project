@@ -161,16 +161,36 @@ opt::InputArgList WasmOptTable::parse(ArrayRef<const char *> Argv) {
   return Args;
 }
 
+// Currently we allow a ".imports" to live alongside a library. This can
+// be used to specify a list of symbols which can be undefined at link
+// time (imported from the environment.  For example libc.a include an
+// import file that lists the syscall functions it relies on at runtime.
+// In the long run this information would be better stored as a symbol
+// attribute/flag in the object file itself.
+// See: https://github.com/WebAssembly/tool-conventions/issues/35
+static void readImportFile(StringRef Filename) {
+  if (Optional<MemoryBufferRef> Buf = readFile(Filename))
+    for (StringRef Sym : args::getLines(*Buf))
+      Config->AllowUndefinedSymbols.insert(Sym);
+}
+
 void LinkerDriver::addFile(StringRef Path) {
   Optional<MemoryBufferRef> Buffer = readFile(Path);
   if (!Buffer.hasValue())
     return;
   MemoryBufferRef MBRef = *Buffer;
 
-  if (identify_magic(MBRef.getBuffer()) == file_magic::archive)
+  if (identify_magic(MBRef.getBuffer()) == file_magic::archive) {
+    SmallString<128> ImportFile = Path;
+    path::replace_extension(ImportFile, ".imports");
+    if (fs::exists(ImportFile))
+      readImportFile(ImportFile.str());
+
     Files.push_back(make<ArchiveFile>(MBRef));
-  else
-    Files.push_back(make<ObjFile>(MBRef));
+    return;
+  }
+
+  Files.push_back(make<ObjFile>(MBRef));
 }
 
 // Add a given library by searching it from input search paths.
@@ -257,9 +277,7 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
       args::getZOptionValue(Args, OPT_z, "stack-size", WasmPageSize);
 
   if (auto *Arg = Args.getLastArg(OPT_allow_undefined_file))
-    if (Optional<MemoryBufferRef> Buf = readFile(Arg->getValue()))
-      for (StringRef Sym : args::getLines(*Buf))
-        Config->AllowUndefinedSymbols.insert(Sym);
+    readImportFile(Arg->getValue());
 
   if (Config->OutputFile.empty())
     error("no output file specified");
@@ -273,16 +291,27 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     error("undefined symbols specified for relocatable output file");
 
   if (!Config->Relocatable) {
-    if (!Config->Entry.empty()) {
-      static WasmSignature Signature = {{}, WASM_TYPE_NORESULT};
+    static WasmSignature Signature = {{}, WASM_TYPE_NORESULT};
+    if (!Config->Entry.empty())
       addSyntheticUndefinedFunction(Config->Entry, &Signature);
-    }
 
     // Handle the `--undefined <sym>` options.
-    for (StringRef S : args::getStrings(Args, OPT_undefined))
-      addSyntheticUndefinedFunction(S, nullptr);
+    for (auto* Arg : Args.filtered(OPT_undefined))
+      addSyntheticUndefinedFunction(Arg->getValue(), nullptr);
 
+    // Create linker-synthetic symbols
+    // __wasm_call_ctors:
+    //    Function that directly calls all ctors in priority order.
+    // __stack_pointer:
+    //    Wasm global that holds the address of the top of the explict
+    //    value stack in linear memory.
+    // __dso_handle;
+    //    Global in calls to __cxa_atexit to determine current DLL
+    Config->CtorSymbol = Symtab->addDefinedFunction(
+        "__wasm_call_ctors", &Signature, WASM_SYMBOL_VISIBILITY_HIDDEN);
     Config->StackPointerSymbol = Symtab->addDefinedGlobal("__stack_pointer");
+    Config->HeapBaseSymbol = Symtab->addDefinedGlobal("__heap_base");
+    Symtab->addDefinedGlobal("__dso_handle")->setVirtualAddress(0);
   }
 
   createFiles(Args);
@@ -302,14 +331,23 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     // -u/--undefined since these undefined symbols have only names and no
     // function signature, which means they cannot be written to the final
     // output.
-    for (StringRef S : args::getStrings(Args, OPT_undefined)) {
-      Symbol *Sym = Symtab->find(S);
+    for (auto* Arg : Args.filtered(OPT_undefined)) {
+      Symbol *Sym = Symtab->find(Arg->getValue());
       if (!Sym->isDefined())
         error("function forced with --undefined not found: " + Sym->getName());
     }
   }
   if (errorCount())
     return;
+
+  for (auto *Arg : Args.filtered(OPT_export)) {
+    Symbol *Sym = Symtab->find(Arg->getValue());
+    if (!Sym || !Sym->isDefined())
+      error("symbol exported via --export not found: " +
+            Twine(Arg->getValue()));
+    else
+      Sym->setHidden(false);
+  }
 
   if (!Config->Entry.empty() && !Symtab->find(Config->Entry)->isDefined())
     error("entry point not found: " + Config->Entry);

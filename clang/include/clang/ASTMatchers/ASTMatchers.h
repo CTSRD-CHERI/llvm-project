@@ -3567,6 +3567,22 @@ AST_POLYMORPHIC_MATCHER_P(parameterCountIs,
   return Node.getNumParams() == N;
 }
 
+/// \brief Matches \c FunctionDecls that have a noreturn attribute.
+///
+/// Given
+/// \code
+///   void nope();
+///   [[noreturn]] void a();
+///   __attribute__((noreturn)) void b();
+///   struct c { [[noreturn]] c(); };
+/// \endcode
+/// functionDecl(isNoReturn())
+///   matches all of those except
+/// \code
+///   void nope();
+/// \endcode
+AST_MATCHER(FunctionDecl, isNoReturn) { return Node.isNoReturn(); }
+
 /// \brief Matches the return type of a function declaration.
 ///
 /// Given:
@@ -5862,6 +5878,17 @@ AST_MATCHER_P(CXXNewExpr, hasArraySize, internal::Matcher<Expr>, InnerMatcher) {
 /// \endcode
 AST_MATCHER(CXXRecordDecl, hasDefinition) {
   return Node.hasDefinition();
+}
+
+/// \brief Matches C++11 scoped enum declaration.
+///
+/// Example matches Y (matcher = enumDecl(isScoped()))
+/// \code
+/// enum X {};
+/// enum class Y {};
+/// \endcode
+AST_MATCHER(EnumDecl, isScoped) {
+  return Node.isScoped();
 }
 
 } // namespace ast_matchers
