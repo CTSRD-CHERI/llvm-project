@@ -629,6 +629,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->LTOO = args::getInteger(Args, OPT_lto_O, 2);
   Config->LTOPartitions = args::getInteger(Args, OPT_lto_partitions, 1);
   Config->MapFile = Args.getLastArgValue(OPT_Map);
+  Config->MipsGotSize = args::getInteger(Args, OPT_mips_got_size, 0xfff0);
   Config->NoGnuUnique = Args.hasArg(OPT_no_gnu_unique);
   Config->MergeArmExidx =
       Args.hasFlag(OPT_merge_exidx_entries, OPT_no_merge_exidx_entries, true);
