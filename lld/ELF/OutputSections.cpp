@@ -116,13 +116,7 @@ void OutputSection::addSection(InputSection *IS) {
   IS->Parent = this;
   Flags |= IS->Flags;
   Alignment = std::max(Alignment, IS->Alignment);
-
-  // The actual offsets will be computed by assignAddresses. For now, use
-  // crude approximation so that it is at least easy for other code to know the
-  // section order. It is also used to calculate the output section size early
-  // for compressed debug sections.
-  IS->OutSecOff = alignTo(Size, IS->Alignment);
-  this->Size = IS->OutSecOff + IS->getSize();
+  IS->OutSecOff = Size++;
 
   // If this section contains a table of fixed-size entries, sh_entsize
   // holds the element size. If it contains elements of different size we
