@@ -249,6 +249,8 @@ def FeatureCLFLUSHOPT : SubtargetFeature<"clflushopt", "HasCLFLUSHOPT", "true",
                                       "Flush A Cache Line Optimized">;
 def FeatureCLWB    : SubtargetFeature<"clwb", "HasCLWB", "true",
                                       "Cache Line Write Back">;
+def FeatureRDPID : SubtargetFeature<"rdpid", "HasRDPID", "true",
+                                    "Support RDPID instructions">;
 // On some processors, instructions that implicitly take two memory operands are
 // slow. In practice, this means that CALL, PUSH, and POP with memory operands
 // should be avoided in favor of a MOV + register CALL/PUSH/POP.
@@ -266,6 +268,12 @@ def FeatureSlowIncDec : SubtargetFeature<"slow-incdec", "SlowIncDec", "true",
 def FeatureSoftFloat
     : SubtargetFeature<"soft-float", "UseSoftFloat", "true",
                        "Use software floating point features.">;
+def FeaturePOPCNTFalseDeps : SubtargetFeature<"false-deps-popcnt",
+                                     "HasPOPCNTFalseDeps", "true",
+                                     "POPCNT has a false dependency on dest register">;
+def FeatureLZCNTFalseDeps : SubtargetFeature<"false-deps-lzcnt-tzcnt",
+                                     "HasLZCNTFalseDeps", "true",
+                                     "LZCNT/TZCNT have a false dependency on dest register">;
 // On recent X86 (port bound) processors, its preferable to combine to a single shuffle
 // using a variable mask over multiple fixed shuffles.
 def FeatureFastVariableShuffle
@@ -331,6 +339,10 @@ def FeatureMacroFusion
 def FeatureHasFastGather
     : SubtargetFeature<"fast-gather", "HasFastGather", "true",
                        "Indicates if gather is reasonably fast.">;
+
+def FeaturePrefer256Bit
+    : SubtargetFeature<"prefer-256-bit", "Prefer256Bit", "true",
+                       "Prefer 256-bit AVX instructions">;
 
 //===----------------------------------------------------------------------===//
 // Register File Description
@@ -613,7 +625,8 @@ def SNBFeatures : ProcessorFeatures<[], [
 
 class SandyBridgeProc<string Name> : ProcModel<Name, SandyBridgeModel,
                                                SNBFeatures.Value, [
-  FeatureSlowUAMem32
+  FeatureSlowUAMem32,
+  FeaturePOPCNTFalseDeps
 ]>;
 def : SandyBridgeProc<"sandybridge">;
 def : SandyBridgeProc<"corei7-avx">; // Legacy alias.
@@ -626,7 +639,8 @@ def IVBFeatures : ProcessorFeatures<SNBFeatures.Value, [
 
 class IvyBridgeProc<string Name> : ProcModel<Name, SandyBridgeModel,
                                              IVBFeatures.Value, [
-  FeatureSlowUAMem32
+  FeatureSlowUAMem32,
+  FeaturePOPCNTFalseDeps
 ]>;
 def : IvyBridgeProc<"ivybridge">;
 def : IvyBridgeProc<"core-avx-i">; // Legacy alias.
@@ -644,7 +658,9 @@ def HSWFeatures : ProcessorFeatures<IVBFeatures.Value, [
 
 class HaswellProc<string Name> : ProcModel<Name, HaswellModel,
                                            HSWFeatures.Value, [
-  ProcIntelHSW
+  ProcIntelHSW,
+  FeaturePOPCNTFalseDeps,
+  FeatureLZCNTFalseDeps
 ]>;
 def : HaswellProc<"haswell">;
 def : HaswellProc<"core-avx2">; // Legacy alias.
@@ -656,7 +672,9 @@ def BDWFeatures : ProcessorFeatures<HSWFeatures.Value, [
 ]>;
 class BroadwellProc<string Name> : ProcModel<Name, BroadwellModel,
                                              BDWFeatures.Value, [
-  ProcIntelBDW
+  ProcIntelBDW,
+  FeaturePOPCNTFalseDeps,
+  FeatureLZCNTFalseDeps
 ]>;
 def : BroadwellProc<"broadwell">;
 
@@ -673,7 +691,8 @@ def SKLFeatures : ProcessorFeatures<BDWFeatures.Value, [
 class SkylakeClientProc<string Name> : ProcModel<Name, SkylakeClientModel,
                                                  SKLFeatures.Value, [
   ProcIntelSKL,
-  FeatureHasFastGather
+  FeatureHasFastGather,
+  FeaturePOPCNTFalseDeps
 ]>;
 def : SkylakeClientProc<"skylake">;
 
@@ -752,7 +771,8 @@ def ICLFeatures : ProcessorFeatures<CNLFeatures.Value, [
   FeatureVPCLMULQDQ,
   FeatureVPOPCNTDQ,
   FeatureGFNI,
-  FeatureCLWB
+  FeatureCLWB,
+  FeatureRDPID
 ]>;
 
 class IcelakeProc<string Name> : ProcModel<Name, SkylakeServerModel,

@@ -304,9 +304,15 @@ private:
     InputFile *File = nullptr;
     size_t StartIndex = 0;
 
+    struct PageBlock {
+      size_t FirstIndex = 0;
+      size_t Count = 0;
+    };
+
     // Map output sections referenced by MIPS GOT relocations
-    // to the first index of "Page" entries allocated for this section.
-    llvm::SmallMapVector<const OutputSection *, size_t, 16> PageIndexMap;
+    // to the description (index/count) "page" entries allocated
+    // for this section.
+    llvm::SmallMapVector<const OutputSection *, PageBlock, 16> PagesMap;
     // Maps from Symbol+Addend pair or just Symbol to the GOT entry index.
     llvm::MapVector<GotEntry, size_t> Local16;
     llvm::MapVector<GotEntry, size_t> Local32;
@@ -316,9 +322,12 @@ private:
     // Set of symbols referenced by dynamic TLS relocations.
     llvm::MapVector<Symbol *, size_t> DynTlsSymbols;
 
+    // Total number of all entries.
     size_t getEntriesNum() const;
+    // Number of "page" entries.
     size_t getPageEntriesNum() const;
-    size_t getIndexEntriesNum() const;
+    // Number of entries require 16-bit index to access.
+    size_t getIndexedEntriesNum() const;
 
     bool isOverflow() const;
   };

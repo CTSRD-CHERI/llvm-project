@@ -653,7 +653,7 @@ void MipsGotSection::addEntry(InputFile &File, Symbol &Sym, int64_t Addend,
                               RelExpr Expr) {
   FileGot &G = getGot(File);
   if (Expr == R_MIPS_GOT_LOCAL_PAGE)
-    G.PageIndexMap.insert({Sym.getOutputSection(), 0});
+    G.PagesMap.insert({Sym.getOutputSection(), {}});
   else if (Sym.isTls())
     G.Tls.insert({&Sym, 0});
   else if (Sym.IsPreemptible && Expr == R_ABS)
@@ -689,12 +689,12 @@ static uint64_t getMipsPageCount(uint64_t Size) {
 
 size_t MipsGotSection::FileGot::getPageEntriesNum() const {
   size_t Num = 0;
-  for (const std::pair<const OutputSection *, size_t> &P : PageIndexMap)
-    Num += getMipsPageCount(P.first->Size);
+  for (const std::pair<const OutputSection *, FileGot::PageBlock> &P : PagesMap)
+    Num += P.second.Count;
   return Num;
 }
 
-size_t MipsGotSection::FileGot::getIndexEntriesNum() const {
+size_t MipsGotSection::FileGot::getIndexedEntriesNum() const {
   size_t Count = getPageEntriesNum() + Local16.size() + Global.size();
   // If there are relocation-only entries in the GOT, TLS entries
   // are allocated after them. TLS entries should be addressable
@@ -720,7 +720,8 @@ uint64_t MipsGotSection::getPageEntryOffset(const InputFile &F,
   const OutputSection *OutSec = Sym.getOutputSection();
   uint64_t SecAddr = getMipsPageAddr(OutSec->Addr);
   uint64_t SymAddr = getMipsPageAddr(Sym.getVA(Addend));
-  uint64_t Index = G.PageIndexMap.lookup(OutSec) + (SymAddr - SecAddr) / 0xffff;
+  uint64_t Index =
+      G.PagesMap.lookup(OutSec).FirstIndex + (SymAddr - SecAddr) / 0xffff;
   return Index * Config->Wordsize;
 }
 
@@ -778,14 +779,16 @@ unsigned MipsGotSection::getLocalEntriesNum() const {
 
 bool MipsGotSection::tryMergeGots(FileGot &Dst, FileGot &Src, bool IsPrimary) {
   FileGot Tmp = Dst;
-  set_union(Tmp.PageIndexMap, Src.PageIndexMap);
+  set_union(Tmp.PagesMap, Src.PagesMap);
   set_union(Tmp.Local16, Src.Local16);
   set_union(Tmp.Global, Src.Global);
   set_union(Tmp.Relocs, Src.Relocs);
   set_union(Tmp.Tls, Src.Tls);
   set_union(Tmp.DynTlsSymbols, Src.DynTlsSymbols);
 
-  size_t Count = (IsPrimary ? HeaderEntriesNum : 0) + Tmp.getIndexEntriesNum();
+  size_t Count = IsPrimary ? HeaderEntriesNum : 0;
+  Count += Tmp.getIndexedEntriesNum();
+
   if (Count * Config->Wordsize > Config->MipsGotSize)
     return false;
 
@@ -841,6 +844,23 @@ template <class ELFT> void MipsGotSection::build() {
     Got.Relocs.clear();
   }
 
+  // Evaluate number of "page" entries in each GOT.
+  for (FileGot &Got : Gots) {
+    for (std::pair<const OutputSection *, FileGot::PageBlock> &P :
+         Got.PagesMap) {
+      const OutputSection *OS = P.first;
+      uint64_t SecSize = 0;
+      for (BaseCommand *Cmd : OS->SectionCommands) {
+        if (auto *ISD = dyn_cast<InputSectionDescription>(Cmd))
+          for (InputSection *IS : ISD->Sections) {
+            uint64_t Off = alignTo(SecSize, IS->Alignment);
+            SecSize = Off + IS->getSize();
+          }
+      }
+      P.second.Count = getMipsPageCount(SecSize);
+    }
+  }
+
   // Merge GOTs. Try to join as much as possible GOTs but do not
   // exceed maximum GOT size. In case of overflow create new GOT
   // and continue merging.
@@ -866,15 +886,16 @@ template <class ELFT> void MipsGotSection::build() {
   size_t Index = HeaderEntriesNum;
   for (FileGot &Got : Gots) {
     Got.StartIndex = &Got == PrimGot ? 0 : Index;
-    for (std::pair<const OutputSection *, size_t> &P : Got.PageIndexMap) {
+    for (std::pair<const OutputSection *, FileGot::PageBlock> &P :
+         Got.PagesMap) {
       // For each output section referenced by GOT page relocations calculate
-      // and save into PageIndexMap an upper bound of MIPS GOT entries required
+      // and save into PagesMap an upper bound of MIPS GOT entries required
       // to store page addresses of local symbols. We assume the worst case -
       // each 64kb page of the output section has at least one GOT relocation
       // against it. And take in account the case when the section intersects
       // page boundaries.
-      P.second = Index;
-      Index += getMipsPageCount(P.first->Size);
+      P.second.FirstIndex = Index;
+      Index += P.second.Count;
     }
     for (auto &P: Got.Local16)
       P.second = Index++;
@@ -946,10 +967,11 @@ template <class ELFT> void MipsGotSection::build() {
     if (!Config->Pic)
       continue;
     // Dynamic relocations for "local" entries in case of PIC.
-    for (const std::pair<const OutputSection *, size_t> &L : Got.PageIndexMap) {
-      size_t PageCount = getMipsPageCount(L.first->Size);
+    for (const std::pair<const OutputSection *, FileGot::PageBlock> &L :
+         Got.PagesMap) {
+      size_t PageCount = L.second.Count;
       for (size_t PI = 0; PI < PageCount; ++PI) {
-        uint64_t Offset = (L.second + PI) * Config->Wordsize;
+        uint64_t Offset = (L.second.FirstIndex + PI) * Config->Wordsize;
         InX::RelaDyn->addReloc({Target->RelativeRel, this, Offset, L.first,
                                 int64_t(PI * 0x10000)});
       }
@@ -1002,11 +1024,12 @@ void MipsGotSection::writeTo(uint8_t *Buf) {
       writeUint(Buf + I * Config->Wordsize, VA);
     };
     // Write 'page address' entries to the local part of the GOT.
-    for (const std::pair<const OutputSection *, size_t> &L : G.PageIndexMap) {
-      size_t PageCount = getMipsPageCount(L.first->Size);
+    for (const std::pair<const OutputSection *, FileGot::PageBlock> &L :
+         G.PagesMap) {
+      size_t PageCount = L.second.Count;
       uint64_t FirstPageAddr = getMipsPageAddr(L.first->Addr);
       for (size_t PI = 0; PI < PageCount; ++PI)
-        Write(L.second + PI, nullptr, FirstPageAddr + PI * 0x10000);
+        Write(L.second.FirstIndex + PI, nullptr, FirstPageAddr + PI * 0x10000);
     }
     // Local, global, TLS, reloc-only  entries.
     // If TLS entry has a corresponding dynamic relocations, leave it
@@ -1860,12 +1883,14 @@ GnuHashTableSection::GnuHashTableSection()
 void GnuHashTableSection::finalizeContents() {
   getParent()->Link = InX::DynSymTab->getParent()->SectionIndex;
 
-  // Computes bloom filter size in word size. We want to allocate 8
+  // Computes bloom filter size in word size. We want to allocate 12
   // bits for each symbol. It must be a power of two.
-  if (Symbols.empty())
+  if (Symbols.empty()) {
     MaskWords = 1;
-  else
-    MaskWords = NextPowerOf2((Symbols.size() - 1) / Config->Wordsize);
+  } else {
+    uint64_t NumBits = Symbols.size() * 12;
+    MaskWords = NextPowerOf2(NumBits / (Config->Wordsize * 8));
+  }
 
   Size = 16;                            // Header
   Size += Config->Wordsize * MaskWords; // Bloom filter
@@ -1900,7 +1925,7 @@ void GnuHashTableSection::writeTo(uint8_t *Buf) {
 // [1] Ulrich Drepper (2011), "How To Write Shared Libraries" (Ver. 4.1.2),
 //     p.9, https://www.akkadia.org/drepper/dsohowto.pdf
 void GnuHashTableSection::writeBloomFilter(uint8_t *Buf) {
-  const unsigned C = Config->Wordsize * 8;
+  unsigned C = Config->Is64 ? 64 : 32;
   for (const Entry &Sym : Symbols) {
     size_t I = (Sym.Hash / C) & (MaskWords - 1);
     uint64_t Val = readUint(Buf + I * Config->Wordsize);
