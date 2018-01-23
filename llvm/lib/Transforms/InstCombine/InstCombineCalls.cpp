@@ -194,8 +194,20 @@ Instruction *InstCombiner::SimplifyMemTransfer(MemIntrinsic *MI) {
   uint64_t Size = MemOpLength->getLimitedValue();
   assert(Size && "0-sized memory transferring should be removed already.");
 
-  if (Size > 8 || (Size&(Size-1)))
-    return nullptr;  // If not 1/2/4/8 bytes, exit.
+  Type *CpyTy = nullptr;
+  if (Size > 8 || (Size&(Size-1))) {
+    // This heuristic is silly, because it prevents us from doing vector
+    // loads and stores.  It also means that on CHERI we weren't optimising
+    // single-pointer copies.  For now, special case pointer signed and aligned
+    // things for CHERI.
+    if (!DL.isFatPointer(200)) 
+      return nullptr;  // If not 1/2/4/8 bytes, exit.
+    uint64_t PtrCpySize = DL.getPointerSize(200);
+    uint64_t PtrCpyAlign = DL.getPointerPrefAlignment(200);
+    if ((Size > PtrCpySize) || (MI->getAlignment() < PtrCpyAlign))
+      return nullptr;
+    CpyTy = Type::getInt8PtrTy(MI->getContext(), 200);
+  }
 
   // Use an integer load+store unless we can find something better.
   unsigned SrcAddrSp =
@@ -203,9 +215,10 @@ Instruction *InstCombiner::SimplifyMemTransfer(MemIntrinsic *MI) {
   unsigned DstAddrSp =
     cast<PointerType>(MI->getArgOperand(0)->getType())->getAddressSpace();
 
-  IntegerType* IntType = IntegerType::get(MI->getContext(), Size<<3);
-  Type *NewSrcPtrTy = PointerType::get(IntType, SrcAddrSp);
-  Type *NewDstPtrTy = PointerType::get(IntType, DstAddrSp);
+  if (!CpyTy)
+    CpyTy = IntegerType::get(MI->getContext(), Size<<3);
+  Type *NewSrcPtrTy = PointerType::get(CpyTy, SrcAddrSp);
+  Type *NewDstPtrTy = PointerType::get(CpyTy, DstAddrSp);
 
   // If the memcpy has metadata describing the members, see if we can get the
   // TBAA tag describing our copy.
