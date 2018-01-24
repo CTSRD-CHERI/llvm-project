@@ -2761,19 +2761,12 @@ let Predicates = [HasAVX512] in {
   defm : operation_gpr_mask_copy_lowering<VK32,  v32i1>;
   defm : operation_gpr_mask_copy_lowering<VK64,  v64i1>;
 
-  def : Pat<(X86kshiftr  (X86kshiftl (v1i1 (scalar_to_vector GR8:$src)), (i8 15)), (i8 15)) ,
-          (COPY_TO_REGCLASS
-                (KMOVWkr (AND32ri8 (INSERT_SUBREG (i32 (IMPLICIT_DEF)),
-                                            GR8:$src, sub_8bit), (i32 1))), VK1)>;
-  def : Pat<(X86kshiftr  (X86kshiftl (v16i1 (scalar_to_vector GR8:$src)), (i8 15)), (i8 15)) ,
+  def : Pat<(insert_subvector (v16i1 immAllZerosV),
+                              (v1i1 (scalar_to_vector GR8:$src)), (iPTR 0)),
             (COPY_TO_REGCLASS
-                (KMOVWkr (AND32ri8 (INSERT_SUBREG (i32 (IMPLICIT_DEF)),
-                                            GR8:$src, sub_8bit), (i32 1))), VK16)>;
-  def : Pat<(X86kshiftr  (X86kshiftl (v8i1 (scalar_to_vector GR8:$src)), (i8 15)), (i8 15)) ,
-         (COPY_TO_REGCLASS
-          (KMOVWkr (AND32ri8 (INSERT_SUBREG (i32 (IMPLICIT_DEF)),
-                                            GR8:$src, sub_8bit), (i32 1))), VK8)>;
-
+             (KMOVWkr (AND32ri8
+                       (INSERT_SUBREG (i32 (IMPLICIT_DEF)), GR8:$src, sub_8bit),
+                       (i32 1))), VK16)>;
 }
 
 // Mask unary operation
@@ -7662,19 +7655,19 @@ let Defs = [EFLAGS], Predicates = [HasAVX512] in {
                                     VEX_LIG, VEX_W, EVEX_CD8<64, CD8VT1>;
   }
   let isCodeGenOnly = 1 in {
-    defm Int_VUCOMISSZ  : sse12_ord_cmp_int<0x2E, VR128X, X86ucomi, v4f32, ssmem,
-                              sse_load_f32, "ucomiss", SSE_COMIS>, PS, EVEX, VEX_LIG,
-                              EVEX_CD8<32, CD8VT1>;
-    defm Int_VUCOMISDZ  : sse12_ord_cmp_int<0x2E, VR128X, X86ucomi, v2f64, sdmem,
-                              sse_load_f64, "ucomisd", SSE_COMIS>, PD, EVEX,
-                              VEX_LIG, VEX_W, EVEX_CD8<64, CD8VT1>;
+    defm VUCOMISSZ  : sse12_ord_cmp_int<0x2E, VR128X, X86ucomi, v4f32, ssmem,
+                          sse_load_f32, "ucomiss", SSE_COMIS>, PS, EVEX, VEX_LIG,
+                          EVEX_CD8<32, CD8VT1>;
+    defm VUCOMISDZ  : sse12_ord_cmp_int<0x2E, VR128X, X86ucomi, v2f64, sdmem,
+                          sse_load_f64, "ucomisd", SSE_COMIS>, PD, EVEX,
+                          VEX_LIG, VEX_W, EVEX_CD8<64, CD8VT1>;
 
-    defm Int_VCOMISSZ  : sse12_ord_cmp_int<0x2F, VR128X, X86comi, v4f32, ssmem,
-                              sse_load_f32, "comiss", SSE_COMIS>, PS, EVEX, VEX_LIG,
-                              EVEX_CD8<32, CD8VT1>;
-    defm Int_VCOMISDZ  : sse12_ord_cmp_int<0x2F, VR128X, X86comi, v2f64, sdmem,
-                              sse_load_f64, "comisd", SSE_COMIS>, PD, EVEX,
-                              VEX_LIG, VEX_W, EVEX_CD8<64, CD8VT1>;
+    defm VCOMISSZ  : sse12_ord_cmp_int<0x2F, VR128X, X86comi, v4f32, ssmem,
+                          sse_load_f32, "comiss", SSE_COMIS>, PS, EVEX, VEX_LIG,
+                          EVEX_CD8<32, CD8VT1>;
+    defm VCOMISDZ  : sse12_ord_cmp_int<0x2F, VR128X, X86comi, v2f64, sdmem,
+                          sse_load_f64, "comisd", SSE_COMIS>, PD, EVEX,
+                          VEX_LIG, VEX_W, EVEX_CD8<64, CD8VT1>;
   }
 }
 

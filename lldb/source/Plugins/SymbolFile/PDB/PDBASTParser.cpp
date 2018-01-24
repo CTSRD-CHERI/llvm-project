@@ -160,7 +160,7 @@ ConstString GetPDBBuiltinTypeName(const PDBSymbolTypeBuiltin *pdb_type,
   case PDB_BuiltinType::HResult:
     return ConstString("HRESULT");
   case PDB_BuiltinType::BCD:
-    return ConstString("HRESULT");
+    return ConstString("BCD");
   case PDB_BuiltinType::None:
     return ConstString("...");
   }

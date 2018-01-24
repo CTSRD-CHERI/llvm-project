@@ -1,7 +1,9 @@
-; RUN: llc -filetype=obj -mtriple=wasm32-unknown-unknown-wasm %p/Inputs/hello.ll -o %t.hello.o
-; RUN: llc -filetype=obj -mtriple=wasm32-unknown-unknown-wasm %s -o %t.o
+; RUN: llc -filetype=obj %p/Inputs/hello.ll -o %t.hello.o
+; RUN: llc -filetype=obj %s -o %t.o
 ; RUN: lld -flavor wasm -r -o %t.wasm %t.hello.o %t.o
 ; RUN: obj2yaml %t.wasm | FileCheck %s
+
+target triple = "wasm32-unknown-unknown-wasm"
 
 ; Function Attrs: nounwind
 define hidden i32 @my_func() local_unnamed_addr {
@@ -177,7 +179,7 @@ entry:
 ; CHECK-NEXT:   - Type:            DATA
 ; CHECK-NEXT:     Relocations:
 ; CHECK-NEXT:       - Type:            R_WEBASSEMBLY_TABLE_INDEX_I32
-; CHECK-NEXT:         Index:           0
+; CHECK-NEXT:         Index:           4
 ; CHECK-NEXT:         Offset:          0x00000012
 ; CHECK-NEXT:       - Type:            R_WEBASSEMBLY_TABLE_INDEX_I32
 ; CHECK-NEXT:         Index:           1
