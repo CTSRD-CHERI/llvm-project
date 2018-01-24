@@ -2,7 +2,6 @@
 // RUN: %cheri128_purecap_cc1 -mllvm -mxcaptable %S/Inputs/crtbeginC.c -emit-obj -O2 -mllvm -cheri-cap-table -o %t-crtbegin.o
 // RUN: %cheri128_purecap_cc1 -mllvm -mxcaptable %S/Inputs/crtendC.c -emit-obj -O2 -mllvm -cheri-cap-table -o %t-crtend.o
 // RUN: %cheri128_purecap_cc1 -mllvm -mxcaptable %s -emit-obj -O2 -mllvm -cheri-cap-table -o %t-main.o
-// RUN: llvm-objdump -d -r -C -t %t-main.o
 // RUN: ld.lld --fatal-warnings -o %t.exe %t-crt1.o %t-crtbegin.o %t-main.o %t-crtend.o -verbose
 // RUN: llvm-objdump -d -r -C -t %t.exe | FileCheck %s
 
@@ -21,8 +20,8 @@ __attribute__((noreturn)) void exit(int code) {
 
 // CHECK-LABEL: CAPABILITY RELOCATION RECORDS:
 // CHECK-NEXT: 0x0000000120020000	Base: <Unnamed symbol> (0x00000001200001c8)	Offset: 0x0000000000000000	Length: 0x0000000000000001	Permissions: 0x00000000
-// CHECK-NEXT: 0x0000000120030020	Base: __auxargs (0x0000000120040010)	Offset: 0x0000000000000000	Length: 0x0000000000000010	Permissions: 0x00000000
-// CHECK-NEXT: 0x0000000120030030	Base: environ (0x0000000120040000)	Offset: 0x0000000000000000	Length: 0x0000000000000010	Permissions: 0x00000000
+// CHECK-NEXT: 0x0000000120030020	Base: __auxargs (0x0000000120040000)	Offset: 0x0000000000000000	Length: 0x0000000000000010	Permissions: 0x00000000
+// CHECK-NEXT: 0x0000000120030030	Base: environ (0x0000000120040020)	Offset: 0x0000000000000000	Length: 0x0000000000000010	Permissions: 0x00000000
 // CHECK-NEXT: 0x0000000120030040	Base: __progname (0x0000000120020000)	Offset: 0x0000000000000000	Length: 0x0000000000000010	Permissions: 0x00000000
 // CHECK-NEXT: 0x0000000120030050	Base:  (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x00000000
 // CHECK-NEXT: 0x0000000120030060	Base: atexit (0x0000000120010708)	Offset: 0x0000000000000000	Length: 0x0000000000000008	Permissions: 0x8000000000000000 (Function)
@@ -42,7 +41,7 @@ __attribute__((noreturn)) void exit(int code) {
 // CHECK-NEXT: 0x0000000120030140	Base: __CTOR_END__ (0x0000000120030008)	Offset: 0x0000000000000000	Length: 0x0000000000000008	Permissions: 0x00000000
 // CHECK-NEXT: 0x0000000120030150	Base: __cap_table_end (0x0000000120030180)	Offset: 0x0000000000000000	Length: 0x0000000000000398	Permissions: 0x00000000
 // CHECK-NEXT: 0x0000000120030160	Base: __stop___cap_relocs (0x0000000120030518)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x00000000
-// CHECK-NEXT: 0x0000000120030170	Base: _int (0x0000000120040020)	Offset: 0x0000000000000000	Length: 0x0000000000000004	Permissions: 0x00000000
+// CHECK-NEXT: 0x0000000120030170	Base: _int (0x0000000120040010)	Offset: 0x0000000000000000	Length: 0x0000000000000004	Permissions: 0x00000000
 
 
 // CHECK-LABEL: SYMBOL TABLE:
