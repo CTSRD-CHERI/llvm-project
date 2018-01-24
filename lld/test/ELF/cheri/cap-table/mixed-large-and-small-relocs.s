@@ -12,13 +12,13 @@
 # EXE-NEXT: 0x0000000000040000	Base: sym_small000 (0x00000000000303e8)	Offset: 0x0000000000000000	Length: 0x0000000000000001	Permissions: 0x00000000
 # EXE:      0x0000000000043e80	Base: sym_mxcaptable000 (0x0000000000030000)	Offset: 0x0000000000000000	Length: 0x0000000000000001	Permissions: 0x00000000
 # EXE-LABEL: SYMBOL TABLE
-# EXE: 0000000000043e80 l       .cap_table		 00000010 .hidden sym_mxcaptable000@CAPTABLE
-# EXE: 0000000000040000 l       .cap_table		 00000010 .hidden sym_small000@CAPTABLE
+# EXE: 0000000000043e80 l       .cap_table		 00000010 sym_mxcaptable000@CAPTABLE
+# EXE: 0000000000040000 l       .cap_table		 00000010 sym_small000@CAPTABLE
 
 
 # But if there are too many small relocs there is nothing we can do
 # RUN: not ld.lld %t-bad.o -o %t.exe 2>&1 | FileCheck %s -check-prefix ERR
-# ERR: (.text+0x2F40): relocation R_MIPS_CHERI_CAPTAB_CLC11 out of range: requested value 1024 but maximum is 1023/-1024
+# ERR: (.text+0x2F40): relocation R_MIPS_CHERI_CAPTAB_CLC11 out of range: 1024 is not in [-1024, 1023]
 
 .macro generate_1000_captable_values, prefix=0
     .irp j, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
