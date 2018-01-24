@@ -115,9 +115,15 @@ void B::foo() {
 // B::foo gets 'this' cast to VBase* in ECX (i.e. this+8) so we
 // need to adjust 'this' before use.
 //
-// Store initial this:
+// Coerce this to correct type:
+// CHECK:   %[[THIS_STORE:.*]] = alloca %struct.B*
 // CHECK:   %[[THIS_ADDR:.*]] = alloca %struct.B*
-// CHECK:   store %struct.B* %{{.*}}, %struct.B** %[[THIS_ADDR]], align 4
+// CHECK:   %[[COERCE_VAL:.*]] = bitcast i8* %{{.*}} to %struct.B*
+// CHECK:   store %struct.B* %[[COERCE_VAL]], %struct.B** %[[THIS_STORE]], align 4
+//
+// Store initial this:
+// CHECK:   %[[THIS_INIT:.*]] = load %struct.B*, %struct.B** %[[THIS_STORE]]
+// CHECK:   store %struct.B* %[[THIS_INIT]], %struct.B** %[[THIS_ADDR]], align 4
 //
 // Reload and adjust the this parameter:
 // CHECK:   %[[THIS_RELOAD:.*]] = load %struct.B*, %struct.B** %[[THIS_ADDR]]
@@ -490,7 +496,7 @@ C::C() : B() {}
 // CHECK:   %[[B:.*]] = bitcast %"struct.test5::C"* %[[THIS]] to %"struct.test5::B"*
 // CHECK:   %[[B_i8:.*]] = bitcast %"struct.test5::B"* %[[B]] to i8*
 // CHECK:   %[[FIELD:.*]] = getelementptr inbounds i8, i8* %[[B_i8]], i32 4
-// CHECK:   call void @llvm.memset.p0i8.i32(i8* %[[FIELD]], i8 0, i32 4, i32 4, i1 false)
+// CHECK:   call void @llvm.memset.p0i8.i32(i8* align 4 %[[FIELD]], i8 0, i32 4, i1 false)
 }
 
 namespace pr27621 {
@@ -530,5 +536,5 @@ D::D() : C() {}
 // CHECK:   %[[C:.*]] = bitcast %"class.test6::D"* %[[THIS]] to %"class.test6::C"*
 // CHECK:   %[[C_i8:.*]] = bitcast %"class.test6::C"* %[[C]] to i8*
 // CHECK:   %[[FIELD:.*]] = getelementptr inbounds i8, i8* %[[C_i8]], i32 8
-// CHECK:   call void @llvm.memset.p0i8.i32(i8* %[[FIELD]], i8 0, i32 4, i32 4, i1 false)
+// CHECK:   call void @llvm.memset.p0i8.i32(i8* align 4 %[[FIELD]], i8 0, i32 4, i1 false)
 }
