@@ -16,16 +16,16 @@ entry:
 ; CHECK-ERROR: error: symbol exported via --export not found: missing
 
 ; CHECK:        - Type:            EXPORT
-; CHECK-NEXT:     Exports:         
+; CHECK-NEXT:     Exports:
 ; CHECK-NEXT:       - Name:            memory
 ; CHECK-NEXT:         Kind:            MEMORY
+; CHECK-NEXT:         Index:           0
+; CHECK-NEXT:       - Name:            hidden_function
+; CHECK-NEXT:         Kind:            FUNCTION
 ; CHECK-NEXT:         Index:           0
 ; CHECK-NEXT:       - Name:            _start
 ; CHECK-NEXT:         Kind:            FUNCTION
 ; CHECK-NEXT:         Index:           1
-; CHECK-NEXT:       - Name:            hidden_function
-; CHECK-NEXT:         Kind:            FUNCTION
-; CHECK-NEXT:         Index:           0
 ; CHECK-NEXT:       - Name:            __heap_base
 ; CHECK-NEXT:         Kind:            GLOBAL
 ; CHECK-NEXT:         Index:           1
