@@ -310,34 +310,6 @@ class CHERICapFoldIntrinsics : public ModulePass {
       I->eraseFromParent();
   }
 
-  /// Replace set-offset, inc-offset sequences with a single set-offset
-  /// Also fold multiple inc-offsets into a single on if possible
-  void foldIncOffset() {
-    std::vector<CallInst *> IncOffsets;
-    for (Value *V : IncOffset->users())
-      IncOffsets.push_back(cast<CallInst>(V));
-    for (CallInst *CI : IncOffsets) {
-      // fold chains of inc-offset, (inc-offset/GEP)+ into a single inc-offset
-      foldIncOffsetSetOffsetOnlyUserIncrement(CI);
-
-      Value *Inc = CI->getOperand(1);
-      Value *BaseCap = nullptr;
-      // TODO: how to delete any dead instructions?
-
-      // Also convert a incoffset on null to a setoffset on null
-      if (Value *Offset =
-              inferCapabilityOffset(CI->getOperand(0), CI, Inc->getType(), &BaseCap)) {
-        assert(BaseCap);
-        IRBuilder<> B(CI);
-        CallInst *Replacement = B.CreateCall(
-            SetOffset, {BaseCap, B.CreateAdd(Offset, Inc)});
-        Replacement->setTailCall(true);
-        CI->replaceAllUsesWith(Replacement);
-        Modified = true;
-      }
-    }
-  }
-
 public:
   static char ID;
   CHERICapFoldIntrinsics() : ModulePass(ID) {}
