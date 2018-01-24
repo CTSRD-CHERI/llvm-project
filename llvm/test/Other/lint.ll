@@ -65,7 +65,7 @@ define i32 @foo() noreturn {
 ; CHECK: Call to block address
   call void() bitcast (i8* blockaddress(@foo, %next) to void()*)()
 ; CHECK: Undefined behavior: Null pointer dereference
-  call void @llvm.stackrestore.p0i8(i8* null)
+  call void @llvm.stackrestore(i8* null)
 ; CHECK: Undefined behavior: Null pointer dereference
   call void @has_sret(i8* null)
 ; CHECK: Unusual: noalias argument aliases another argument
