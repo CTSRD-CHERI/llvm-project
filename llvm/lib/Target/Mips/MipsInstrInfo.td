@@ -1718,10 +1718,8 @@ class SubwordSwap<string opstr, RegisterOperand RO,
 }
 
 // Read Hardware
-// FIXME: actually the selector is only 3 bits but CHERI statcounters uses the
-// two following bits that are defined to be zero as well.
 class ReadHardware<RegisterOperand CPURegOperand, RegisterOperand RO> :
-  InstSE<(outs CPURegOperand:$rt), (ins RO:$rd, uimm5:$selector), "rdhwr\t$rt, $rd, $selector", [],
+  InstSE<(outs CPURegOperand:$rt), (ins RO:$rd), "rdhwr\t$rt, $rd", [],
          II_RDHWR, FrmR, "rdhwr">;
 
 // Ext and Ins
@@ -2497,8 +2495,6 @@ def : MipsInstAlias<"mfc2 $rt, $rd", (MFC2 GPR32Opnd:$rt, COP2Opnd:$rd, 0), 0>;
 def : MipsInstAlias<"mtc2 $rt, $rd", (MTC2 COP2Opnd:$rd, GPR32Opnd:$rt, 0), 0>;
 let AdditionalPredicates = [NotInMicroMips] in {
 def : MipsInstAlias<"b $offset", (BEQ ZERO, ZERO, brtarget:$offset), 0>;
-def : MipsInstAlias<"rdhwr\t$rt, $rd",
-    (RDHWR GPR32Opnd: $rt, HWRegsOpnd:$rd, 0), 0>, ISA_MIPS32R2_NOT_32R6_64R6;
 }
 def : MipsInstAlias<"bnez $rs,$offset",
                     (BNE GPR32Opnd:$rs, ZERO, brtarget:$offset), 0>;

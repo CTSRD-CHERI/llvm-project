@@ -508,7 +508,6 @@ class EXT_FM<bits<6> funct> : StdArch {
 class RDHWR_FM : StdArch {
   bits<5> rt;
   bits<5> rd;
-  bits<5> selector;
 
   bits<32> Inst;
 
@@ -516,7 +515,7 @@ class RDHWR_FM : StdArch {
   let Inst{25-21} = 0;
   let Inst{20-16} = rt;
   let Inst{15-11} = rd;
-  let Inst{10-6}  = selector;
+  let Inst{10-6}  = 0;
   let Inst{5-0}   = 0x3b;
 }
 
