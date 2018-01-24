@@ -176,13 +176,12 @@ template <class ELFT> void Writer<ELFT>::combineCapRelocsSections() {
 
 static Defined *addOptionalRegular(StringRef Name, SectionBase *Sec,
                                    uint64_t Val, uint8_t StOther = STV_HIDDEN,
-                                   uint8_t Binding = STB_GLOBAL,
-                                   uint64_t Size = 0) {
+                                   uint8_t Binding = STB_GLOBAL) {
   Symbol *S = Symtab->find(Name);
   if (!S || S->isDefined())
     return nullptr;
   Symbol *Sym = Symtab->addRegular(Name, StOther, STT_NOTYPE, Val,
-                                   /*Size=*/Size, Binding, Sec,
+                                   /*Size=*/0, Binding, Sec,
                                    /*File=*/nullptr);
   return cast<Defined>(Sym);
 }
