@@ -325,8 +325,8 @@ std::string lld::verboseToString(Symbol *B, uint64_t SymOffset) {
   Defined* DR = dyn_cast<Defined>(B);
   InputSectionBase* IS = nullptr;
   if (DR && DR->Section) {
+    SymOffset = DR->isSection() ? SymOffset : DR->Section->getOffset(DR->Value);
     IS = dyn_cast<InputSectionBase>(DR->Section);
-    SymOffset = DR->isSection() ? SymOffset : IS->getOffset(DR->Value);
   }
   std::string Name = toString(*B);
   if (Name.empty()) {
