@@ -3054,14 +3054,17 @@ Error BitcodeReader::parseGlobalIndirectSymbolRecord(
       // FIXME: Change to an error if non-default in 4.0.
       NewGA->setVisibility(getDecodedVisibility(Record[VisInd]));
   }
-  if (OpNum != Record.size())
-    NewGA->setDLLStorageClass(getDecodedDLLStorageClass(Record[OpNum++]));
-  else
-    upgradeDLLImportExportLinkage(NewGA, Linkage);
-  if (OpNum != Record.size())
-    NewGA->setThreadLocalMode(getDecodedThreadLocalMode(Record[OpNum++]));
-  if (OpNum != Record.size())
-    NewGA->setUnnamedAddr(getDecodedUnnamedAddrType(Record[OpNum++]));
+  if (BitCode == bitc::MODULE_CODE_ALIAS ||
+      BitCode == bitc::MODULE_CODE_ALIAS_OLD) {
+    if (OpNum != Record.size())
+      NewGA->setDLLStorageClass(getDecodedDLLStorageClass(Record[OpNum++]));
+    else
+      upgradeDLLImportExportLinkage(NewGA, Linkage);
+    if (OpNum != Record.size())
+      NewGA->setThreadLocalMode(getDecodedThreadLocalMode(Record[OpNum++]));
+    if (OpNum != Record.size())
+      NewGA->setUnnamedAddr(getDecodedUnnamedAddrType(Record[OpNum++]));
+  }
   if (OpNum != Record.size())
     NewGA->setDSOLocal(getDecodedDSOLocal(Record[OpNum++]));
   ValueList.push_back(NewGA);
@@ -4810,8 +4813,12 @@ void ModuleSummaryIndexBitcodeReader::setValueGUID(
   if (PrintSummaryGUIDs)
     dbgs() << "GUID " << ValueGUID << "(" << OriginalNameID << ") is "
            << ValueName << "\n";
-  ValueIdToValueInfoMap[ValueID] =
-      std::make_pair(TheIndex.getOrInsertValueInfo(ValueGUID), OriginalNameID);
+  
+  // UseStrtab is false for legacy summary formats and value names are
+  // created on stack. We can't use them outside of parseValueSymbolTable.
+  ValueIdToValueInfoMap[ValueID] = std::make_pair(
+      TheIndex.getOrInsertValueInfo(ValueGUID, UseStrtab ? ValueName : ""),
+      OriginalNameID);
 }
 
 // Specialized value symbol table parser used when reading module index
@@ -5676,7 +5683,8 @@ Expected<std::unique_ptr<ModuleSummaryIndex>> BitcodeModule::getSummary() {
   BitstreamCursor Stream(Buffer);
   Stream.JumpToBit(ModuleBit);
 
-  auto Index = llvm::make_unique<ModuleSummaryIndex>();
+  auto Index =
+      llvm::make_unique<ModuleSummaryIndex>(/*IsPerformingAnalysis=*/false);
   ModuleSummaryIndexBitcodeReader R(std::move(Stream), Strtab, *Index,
                                     ModuleIdentifier, 0);
 

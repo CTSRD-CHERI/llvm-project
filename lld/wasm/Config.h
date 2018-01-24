@@ -25,7 +25,6 @@ struct Configuration {
   bool AllowUndefined;
   bool CheckSignatures;
   bool Demangle;
-  bool EmitRelocs;
   bool ImportMemory;
   bool Relocatable;
   bool StripAll;
@@ -40,6 +39,8 @@ struct Configuration {
   llvm::StringSet<> AllowUndefinedSymbols;
   std::vector<llvm::StringRef> SearchPaths;
   Symbol *StackPointerSymbol = nullptr;
+  Symbol *HeapBaseSymbol = nullptr;
+  Symbol *CtorSymbol = nullptr;
 };
 
 // The only instance of Configuration struct.

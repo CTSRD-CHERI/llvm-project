@@ -13,6 +13,7 @@
 namespace llvm {
 namespace orc {
 
+void SymbolResolver::anchor() {}
 void SymbolSource::anchor() {}
 
 AsynchronousSymbolQuery::AsynchronousSymbolQuery(
@@ -190,13 +191,13 @@ VSO::RelativeLinkageStrength VSO::compareLinkage(Optional<JITSymbolFlags> Old,
   if (Old == None)
     return llvm::orc::VSO::NewDefinitionIsStronger;
 
-  if (Old->isStrongDefinition()) {
-    if (New.isStrongDefinition())
+  if (Old->isStrong()) {
+    if (New.isStrong())
       return llvm::orc::VSO::DuplicateDefinition;
     else
       return llvm::orc::VSO::ExistingDefinitionIsStronger;
   } else {
-    if (New.isStrongDefinition())
+    if (New.isStrong())
       return llvm::orc::VSO::NewDefinitionIsStronger;
     else
       return llvm::orc::VSO::ExistingDefinitionIsStronger;
@@ -287,21 +288,40 @@ void VSO::finalize(SymbolNameSet SymbolsToFinalize) {
   }
 }
 
+LookupFlagsResult VSO::lookupFlags(SymbolNameSet Names) {
+  SymbolFlagsMap FlagsFound;
+
+  for (SymbolNameSet::iterator I = Names.begin(), E = Names.end(); I != E;) {
+    auto Tmp = I++;
+    auto SymI = Symbols.find(*Tmp);
+
+    // If the symbol isn't in this dylib then just continue.
+    if (SymI == Symbols.end())
+      continue;
+
+    Names.erase(Tmp);
+
+    FlagsFound[SymI->first] =
+        JITSymbolFlags::stripTransientFlags(SymI->second.getFlags());
+  }
+
+  return {std::move(FlagsFound), std::move(Names)};
+}
+
 VSO::LookupResult VSO::lookup(AsynchronousSymbolQuery &Query,
                               SymbolNameSet Names) {
   SourceWorkMap MaterializationWork;
 
   for (SymbolNameSet::iterator I = Names.begin(), E = Names.end(); I != E;) {
-    auto Tmp = I;
-    ++I;
+    auto Tmp = I++;
     auto SymI = Symbols.find(*Tmp);
 
     // If the symbol isn't in this dylib then just continue.
-    // If it is, erase it from Names and proceed.
     if (SymI == Symbols.end())
       continue;
-    else
-      Names.erase(Tmp);
+
+    // The symbol is in the dylib. Erase it from Names and proceed.
+    Names.erase(Tmp);
 
     // Forward the query to the given SymbolTableEntry, and if it return a
     // layer to perform materialization with, add that to the
@@ -311,6 +331,14 @@ VSO::LookupResult VSO::lookup(AsynchronousSymbolQuery &Query,
   }
 
   return {std::move(MaterializationWork), std::move(Names)};
+}
+
+ExecutionSession::ExecutionSession(SymbolStringPool &SSP) : SSP(SSP) {}
+
+VModuleKey ExecutionSession::allocateVModule() { return ++LastKey; }
+
+void ExecutionSession::releaseVModule(VModuleKey VMod) {
+  // FIXME: Recycle keys.
 }
 
 } // End namespace orc.

@@ -585,8 +585,7 @@ public:
     ScalarToTreeEntry.clear();
     MustGather.clear();
     ExternalUses.clear();
-    NumLoadsWantToKeepOrder = 0;
-    NumLoadsWantToChangeOrder = 0;
+    NumOpsWantToKeepOrder.clear();
     for (auto &Iter : BlocksSchedules) {
       BlockScheduling *BS = Iter.second.get();
       BS->clear();
@@ -601,7 +600,12 @@ public:
 
   /// \returns true if it is beneficial to reverse the vector order.
   bool shouldReorder() const {
-    return NumLoadsWantToChangeOrder > NumLoadsWantToKeepOrder;
+    return std::accumulate(
+               NumOpsWantToKeepOrder.begin(), NumOpsWantToKeepOrder.end(), 0,
+               [](int Val1,
+                  const decltype(NumOpsWantToKeepOrder)::value_type &Val2) {
+                 return Val1 + (Val2.second < 0 ? 1 : -1);
+               }) > 0;
   }
 
   /// \return The vector element size in bits to use when vectorizing the
@@ -1201,11 +1205,10 @@ private:
   /// List of users to ignore during scheduling and that don't need extracting.
   ArrayRef<Value *> UserIgnoreList;
 
-  // Number of load bundles that contain consecutive loads.
-  int NumLoadsWantToKeepOrder = 0;
-
-  // Number of load bundles that contain consecutive loads in reversed order.
-  int NumLoadsWantToChangeOrder = 0;
+  /// Number of operation bundles that contain consecutive operations - number
+  /// of operation bundles that contain consecutive operations in reversed
+  /// order.
+  DenseMap<unsigned, int> NumOpsWantToKeepOrder;
 
   // Analysis and block reference.
   Function *F;
@@ -1543,7 +1546,11 @@ void BoUpSLP::buildTree_rec(ArrayRef<Value *> VL, unsigned Depth,
       bool Reuse = canReuseExtract(VL, VL0);
       if (Reuse) {
         DEBUG(dbgs() << "SLP: Reusing extract sequence.\n");
+        ++NumOpsWantToKeepOrder[S.Opcode];
       } else {
+        SmallVector<Value *, 4> ReverseVL(VL.rbegin(), VL.rend());
+        if (canReuseExtract(ReverseVL, VL0))
+          --NumOpsWantToKeepOrder[S.Opcode];
         BS.cancelScheduling(VL, VL0);
       }
       newTreeEntry(VL, Reuse, UserTreeIdx);
@@ -1593,7 +1600,7 @@ void BoUpSLP::buildTree_rec(ArrayRef<Value *> VL, unsigned Depth,
       }
 
       if (Consecutive) {
-        ++NumLoadsWantToKeepOrder;
+        ++NumOpsWantToKeepOrder[S.Opcode];
         newTreeEntry(VL, true, UserTreeIdx);
         DEBUG(dbgs() << "SLP: added a vector of loads.\n");
         return;
@@ -1612,7 +1619,7 @@ void BoUpSLP::buildTree_rec(ArrayRef<Value *> VL, unsigned Depth,
       newTreeEntry(VL, false, UserTreeIdx);
 
       if (ReverseConsecutive) {
-        ++NumLoadsWantToChangeOrder;
+        --NumOpsWantToKeepOrder[S.Opcode];
         DEBUG(dbgs() << "SLP: Gathering reversed loads.\n");
       } else {
         DEBUG(dbgs() << "SLP: Gathering non-consecutive loads.\n");
@@ -2058,7 +2065,10 @@ int BoUpSLP::getEntryCost(TreeEntry *E) {
                                                          VL0->getType(), SrcTy, VL0);
 
       VectorType *SrcVecTy = VectorType::get(SrcTy, VL.size());
-      int VecCost = TTI->getCastInstrCost(VL0->getOpcode(), VecTy, SrcVecTy, VL0);
+      int VecCost = 0;
+      // Check if the values are candidates to demote.
+      if (!MinBWs.count(VL0) || VecTy != SrcVecTy)
+        VecCost = TTI->getCastInstrCost(VL0->getOpcode(), VecTy, SrcVecTy, VL0);
       return VecCost - ScalarCost;
     }
     case Instruction::FCmp:
@@ -4007,9 +4017,24 @@ void BoUpSLP::computeMinimumValueSizes() {
   // additional roots that require investigating in Roots.
   SmallVector<Value *, 32> ToDemote;
   SmallVector<Value *, 4> Roots;
-  for (auto *Root : TreeRoot)
+  for (auto *Root : TreeRoot) {
+    // Do not include top zext/sext/trunc operations to those to be demoted, it
+    // produces noise cast<vect>, trunc <vect>, exctract <vect>, cast <extract>
+    // sequence.
+    if (isa<Constant>(Root))
+      continue;
+    auto *I = dyn_cast<Instruction>(Root);
+    if (!I || !I->hasOneUse() || !Expr.count(I))
+      return;
+    if (isa<ZExtInst>(I) || isa<SExtInst>(I))
+      continue;
+    if (auto *TI = dyn_cast<TruncInst>(I)) {
+      Roots.push_back(TI->getOperand(0));
+      continue;
+    }
     if (!collectValuesToDemote(Root, Expr, ToDemote, Roots))
       return;
+  }
 
   // The maximum bit width required to represent all the values that can be
   // demoted without loss of precision. It would be safe to truncate the roots

@@ -17,7 +17,6 @@
 #include "llvm/ExecutionEngine/JITSymbol.h"
 #include "llvm/ExecutionEngine/Orc/SymbolStringPool.h"
 
-#include <deque>
 #include <map>
 #include <memory>
 #include <set>
@@ -25,6 +24,10 @@
 
 namespace llvm {
 namespace orc {
+
+/// VModuleKey provides a unique identifier (allocated and managed by
+/// ExecutionSessions) for a module added to the JIT.
+using VModuleKey = uint64_t;
 
 class VSO;
 
@@ -87,6 +90,25 @@ private:
   size_t OutstandingFinalizations = 0;
   SymbolsResolvedCallback NotifySymbolsResolved;
   SymbolsReadyCallback NotifySymbolsReady;
+};
+
+/// @brief A SymbolFlagsMap containing flags of found symbols, plus a set of
+///        not-found symbols. Shared between SymbolResolver::lookupFlags and
+///        VSO::lookupFlags for convenience.
+struct LookupFlagsResult {
+  SymbolFlagsMap SymbolFlags;
+  SymbolNameSet SymbolsNotFound;
+};
+
+class SymbolResolver {
+public:
+  virtual ~SymbolResolver() = default;
+  virtual LookupFlagsResult lookupFlags(const SymbolNameSet &Symbols) = 0;
+  virtual SymbolNameSet lookup(AsynchronousSymbolQuery &Query,
+                               SymbolNameSet Symbols) = 0;
+
+private:
+  virtual void anchor();
 };
 
 /// @brief Represents a source of symbol definitions which may be materialized
@@ -172,6 +194,12 @@ public:
   /// @brief Finalize the given symbols.
   void finalize(SymbolNameSet SymbolsToFinalize);
 
+  /// @brief Look up the flags for the given symbols.
+  ///
+  /// Returns the flags for the give symbols, together with the set of symbols
+  /// not found.
+  LookupFlagsResult lookupFlags(SymbolNameSet Symbols);
+
   /// @brief Apply the given query to the given symbols in this VSO.
   ///
   /// For symbols in this VSO that have already been materialized, their address
@@ -226,6 +254,30 @@ private:
   };
 
   std::map<SymbolStringPtr, SymbolTableEntry> Symbols;
+};
+
+/// @brief An ExecutionSession represents a running JIT program.
+class ExecutionSession {
+public:
+  /// @brief Construct an ExecutionEngine.
+  ///
+  /// SymbolStringPools may be shared between ExecutionSessions.
+  ExecutionSession(SymbolStringPool &SSP);
+
+  /// @brief Returns the SymbolStringPool for this ExecutionSession.
+  SymbolStringPool &getSymbolStringPool() const { return SSP; }
+
+  /// @brief Allocate a module key for a new module to add to the JIT.
+  VModuleKey allocateVModule();
+
+  /// @brief Return a module key to the ExecutionSession so that it can be
+  ///        re-used. This should only be done once all resources associated
+  ////       with the original key have been released.
+  void releaseVModule(VModuleKey Key);
+
+public:
+  SymbolStringPool &SSP;
+  VModuleKey LastKey = 0;
 };
 
 } // End namespace orc

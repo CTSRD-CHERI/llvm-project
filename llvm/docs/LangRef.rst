@@ -1064,6 +1064,8 @@ Currently, only the following parameter attributes are defined:
     to trap and to be properly aligned. This is not a valid attribute
     for return values.
 
+.. _attr_align:
+    
 ``align <n>``
     This indicates that the pointer value may be assumed by the optimizer to
     have the specified alignment.
@@ -4494,7 +4496,7 @@ The current supported vocabulary is limited:
 - ``DW_OP_plus_uconst, 93`` adds ``93`` to the working expression.
 - ``DW_OP_LLVM_fragment, 16, 8`` specifies the offset and size (``16`` and ``8``
   here, respectively) of the variable fragment from the working expression. Note
-  that contrary to DW_OP_bit_piece, the offset is describing the the location
+  that contrary to DW_OP_bit_piece, the offset is describing the location
   within the described source variable.
 - ``DW_OP_swap`` swaps top two stack entries.
 - ``DW_OP_xderef`` provides extended dereference mechanism. The entry at the top
@@ -9033,9 +9035,11 @@ This instruction requires several arguments:
    #. Arguments with the :ref:`inalloca <attr_inalloca>` attribute are
       forwarded in place.
 
-   Both markers imply that the callee does not access allocas or varargs from
-   the caller. Calls marked ``musttail`` must obey the following additional
-   rules:
+   Both markers imply that the callee does not access allocas from the caller.
+   The ``tail`` marker additionally implies that the callee does not access
+   varargs from the caller, while ``musttail`` implies that varargs from the
+   caller are passed to the callee. Calls marked ``musttail`` must obey the
+   following additional  rules:
 
    - The call must immediately precede a :ref:`ret <i_ret>` instruction,
      or a pointer bitcast followed by a ret instruction.
@@ -10339,9 +10343,9 @@ support all bit widths however.
 ::
 
       declare void @llvm.memcpy.p0i8.p0i8.i32(i8* <dest>, i8* <src>,
-                                              i32 <len>, i32 <align>, i1 <isvolatile>)
+                                              i32 <len>, i1 <isvolatile>)
       declare void @llvm.memcpy.p0i8.p0i8.i64(i8* <dest>, i8* <src>,
-                                              i64 <len>, i32 <align>, i1 <isvolatile>)
+                                              i64 <len>, i1 <isvolatile>)
 
 Overview:
 """""""""
@@ -10350,7 +10354,7 @@ The '``llvm.memcpy.*``' intrinsics copy a block of memory from the
 source location to the destination location.
 
 Note that, unlike the standard libc function, the ``llvm.memcpy.*``
-intrinsics do not return a value, takes extra alignment/isvolatile
+intrinsics do not return a value, takes extra isvolatile
 arguments and the pointers can be in specified address spaces.
 
 Arguments:
@@ -10358,13 +10362,11 @@ Arguments:
 
 The first argument is a pointer to the destination, the second is a
 pointer to the source. The third argument is an integer argument
-specifying the number of bytes to copy, the fourth argument is the
-alignment of the source and destination locations, and the fifth is a
+specifying the number of bytes to copy, and the fourth is a
 boolean indicating a volatile access.
 
-If the call to this intrinsic has an alignment value that is not 0 or 1,
-then the caller guarantees that both the source and destination pointers
-are aligned to that boundary.
+The :ref:`align <attr_align>` parameter attribute can be provided
+for the first and second arguments.
 
 If the ``isvolatile`` parameter is ``true``, the ``llvm.memcpy`` call is
 a :ref:`volatile operation <volatile>`. The detailed access behavior is not
@@ -10394,9 +10396,9 @@ bit widths however.
 ::
 
       declare void @llvm.memmove.p0i8.p0i8.i32(i8* <dest>, i8* <src>,
-                                               i32 <len>, i32 <align>, i1 <isvolatile>)
+                                               i32 <len>, i1 <isvolatile>)
       declare void @llvm.memmove.p0i8.p0i8.i64(i8* <dest>, i8* <src>,
-                                               i64 <len>, i32 <align>, i1 <isvolatile>)
+                                               i64 <len>, i1 <isvolatile>)
 
 Overview:
 """""""""
@@ -10407,21 +10409,19 @@ source location to the destination location. It is similar to the
 overlap.
 
 Note that, unlike the standard libc function, the ``llvm.memmove.*``
-intrinsics do not return a value, takes extra alignment/isvolatile
-arguments and the pointers can be in specified address spaces.
+intrinsics do not return a value, takes an extra isvolatile
+argument and the pointers can be in specified address spaces.
 
 Arguments:
 """"""""""
 
 The first argument is a pointer to the destination, the second is a
 pointer to the source. The third argument is an integer argument
-specifying the number of bytes to copy, the fourth argument is the
-alignment of the source and destination locations, and the fifth is a
+specifying the number of bytes to copy, and the fourth is a
 boolean indicating a volatile access.
 
-If the call to this intrinsic has an alignment value that is not 0 or 1,
-then the caller guarantees that the source and destination pointers are
-aligned to that boundary.
+The :ref:`align <attr_align>` parameter attribute can be provided
+for the first and second arguments.
 
 If the ``isvolatile`` parameter is ``true``, the ``llvm.memmove`` call
 is a :ref:`volatile operation <volatile>`. The detailed access behavior is
@@ -10451,9 +10451,9 @@ support all bit widths.
 ::
 
       declare void @llvm.memset.p0i8.i32(i8* <dest>, i8 <val>,
-                                         i32 <len>, i32 <align>, i1 <isvolatile>)
+                                         i32 <len>, i1 <isvolatile>)
       declare void @llvm.memset.p0i8.i64(i8* <dest>, i8 <val>,
-                                         i64 <len>, i32 <align>, i1 <isvolatile>)
+                                         i64 <len>, i1 <isvolatile>)
 
 Overview:
 """""""""
@@ -10462,8 +10462,8 @@ The '``llvm.memset.*``' intrinsics fill a block of memory with a
 particular byte value.
 
 Note that, unlike the standard libc function, the ``llvm.memset``
-intrinsic does not return a value and takes extra alignment/volatile
-arguments. Also, the destination can be in an arbitrary address space.
+intrinsic does not return a value and takes an extra volatile
+argument. Also, the destination can be in an arbitrary address space.
 
 Arguments:
 """"""""""
@@ -10471,11 +10471,10 @@ Arguments:
 The first argument is a pointer to the destination to fill, the second
 is the byte value with which to fill it, the third argument is an
 integer argument specifying the number of bytes to fill, and the fourth
-argument is the known alignment of the destination location.
+is a boolean indicating a volatile access.
 
-If the call to this intrinsic has an alignment value that is not 0 or 1,
-then the caller guarantees that the destination pointer is aligned to
-that boundary.
+The :ref:`align <attr_align>` parameter attribute can be provided
+for the first arguments.
 
 If the ``isvolatile`` parameter is ``true``, the ``llvm.memset`` call is
 a :ref:`volatile operation <volatile>`. The detailed access behavior is not
@@ -10485,9 +10484,7 @@ Semantics:
 """"""""""
 
 The '``llvm.memset.*``' intrinsics fill "len" bytes of memory starting
-at the destination location. If the argument is known to be aligned to
-some boundary, this can be specified as the fourth argument, otherwise
-it should be set to 0 or 1 (both meaning no alignment).
+at the destination location. 
 
 '``llvm.sqrt.*``' Intrinsic
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -13207,7 +13204,7 @@ Semantics:
 
 This function returns the nonnegative square root of the specified value.
 If the value is less than negative zero, a floating point exception occurs
-and the the return value is architecture specific.
+and the return value is architecture specific.
 
 
 '``llvm.experimental.constrained.pow``' Intrinsic

@@ -207,11 +207,14 @@ SITargetLowering::SITargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::INTRINSIC_WO_CHAIN, MVT::v4f32, Custom);
   setOperationAction(ISD::INTRINSIC_WO_CHAIN, MVT::v2f16, Custom);
 
+  setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::v2f16, Custom);
+  setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::v4f16, Custom);
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::Other, Custom);
 
   setOperationAction(ISD::INTRINSIC_VOID, MVT::Other, Custom);
   setOperationAction(ISD::INTRINSIC_VOID, MVT::v2i16, Custom);
   setOperationAction(ISD::INTRINSIC_VOID, MVT::v2f16, Custom);
+  setOperationAction(ISD::INTRINSIC_VOID, MVT::v4f16, Custom);
 
   setOperationAction(ISD::BRCOND, MVT::Other, Custom);
   setOperationAction(ISD::BR_CC, MVT::i1, Expand);
@@ -562,7 +565,10 @@ bool SITargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
                                           unsigned IntrID) const {
   switch (IntrID) {
   case Intrinsic::amdgcn_atomic_inc:
-  case Intrinsic::amdgcn_atomic_dec: {
+  case Intrinsic::amdgcn_atomic_dec:
+  case Intrinsic::amdgcn_atomic_fadd:
+  case Intrinsic::amdgcn_atomic_fmin:
+  case Intrinsic::amdgcn_atomic_fmax: {
     Info.opc = ISD::INTRINSIC_W_CHAIN;
     Info.memVT = MVT::getVT(CI.getType());
     Info.ptrVal = CI.getOperand(0);
@@ -800,7 +806,10 @@ bool SITargetLowering::getAddrModeArguments(IntrinsicInst *II,
                                             Type *&AccessTy) const {
   switch (II->getIntrinsicID()) {
   case Intrinsic::amdgcn_atomic_inc:
-  case Intrinsic::amdgcn_atomic_dec: {
+  case Intrinsic::amdgcn_atomic_dec:
+  case Intrinsic::amdgcn_atomic_fadd:
+  case Intrinsic::amdgcn_atomic_fmin:
+  case Intrinsic::amdgcn_atomic_fmax: {
     Value *Ptr = II->getArgOperand(0);
     AccessTy = II->getType();
     Ops.push_back(Ptr);
@@ -3501,6 +3510,350 @@ SDValue SITargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   return SDValue();
 }
 
+static unsigned getImageOpcode(unsigned IID) {
+  switch (IID) {
+  case Intrinsic::amdgcn_image_load:
+    return AMDGPUISD::IMAGE_LOAD;
+  case Intrinsic::amdgcn_image_load_mip:
+    return AMDGPUISD::IMAGE_LOAD_MIP;
+
+  // Basic sample.
+  case Intrinsic::amdgcn_image_sample:
+    return AMDGPUISD::IMAGE_SAMPLE;
+  case Intrinsic::amdgcn_image_sample_cl:
+    return AMDGPUISD::IMAGE_SAMPLE_CL;
+  case Intrinsic::amdgcn_image_sample_d:
+    return AMDGPUISD::IMAGE_SAMPLE_D;
+  case Intrinsic::amdgcn_image_sample_d_cl:
+    return AMDGPUISD::IMAGE_SAMPLE_D_CL;
+  case Intrinsic::amdgcn_image_sample_l:
+    return AMDGPUISD::IMAGE_SAMPLE_L;
+  case Intrinsic::amdgcn_image_sample_b:
+    return AMDGPUISD::IMAGE_SAMPLE_B;
+  case Intrinsic::amdgcn_image_sample_b_cl:
+    return AMDGPUISD::IMAGE_SAMPLE_B_CL;
+  case Intrinsic::amdgcn_image_sample_lz:
+    return AMDGPUISD::IMAGE_SAMPLE_LZ;
+  case Intrinsic::amdgcn_image_sample_cd:
+    return AMDGPUISD::IMAGE_SAMPLE_CD;
+  case Intrinsic::amdgcn_image_sample_cd_cl:
+    return AMDGPUISD::IMAGE_SAMPLE_CD_CL;
+
+  // Sample with comparison.
+  case Intrinsic::amdgcn_image_sample_c:
+    return AMDGPUISD::IMAGE_SAMPLE_C;
+  case Intrinsic::amdgcn_image_sample_c_cl:
+    return AMDGPUISD::IMAGE_SAMPLE_C_CL;
+  case Intrinsic::amdgcn_image_sample_c_d:
+    return AMDGPUISD::IMAGE_SAMPLE_C_D;
+  case Intrinsic::amdgcn_image_sample_c_d_cl:
+    return AMDGPUISD::IMAGE_SAMPLE_C_D_CL;
+  case Intrinsic::amdgcn_image_sample_c_l:
+    return AMDGPUISD::IMAGE_SAMPLE_C_L;
+  case Intrinsic::amdgcn_image_sample_c_b:
+    return AMDGPUISD::IMAGE_SAMPLE_C_B;
+  case Intrinsic::amdgcn_image_sample_c_b_cl:
+    return AMDGPUISD::IMAGE_SAMPLE_C_B_CL;
+  case Intrinsic::amdgcn_image_sample_c_lz:
+    return AMDGPUISD::IMAGE_SAMPLE_C_LZ;
+  case Intrinsic::amdgcn_image_sample_c_cd:
+    return AMDGPUISD::IMAGE_SAMPLE_C_CD;
+  case Intrinsic::amdgcn_image_sample_c_cd_cl:
+    return AMDGPUISD::IMAGE_SAMPLE_C_CD_CL;
+
+  // Sample with offsets.
+  case Intrinsic::amdgcn_image_sample_o:
+    return AMDGPUISD::IMAGE_SAMPLE_O;
+  case Intrinsic::amdgcn_image_sample_cl_o:
+    return AMDGPUISD::IMAGE_SAMPLE_CL_O;
+  case Intrinsic::amdgcn_image_sample_d_o:
+    return AMDGPUISD::IMAGE_SAMPLE_D_O;
+  case Intrinsic::amdgcn_image_sample_d_cl_o:
+    return AMDGPUISD::IMAGE_SAMPLE_D_CL_O;
+  case Intrinsic::amdgcn_image_sample_l_o:
+    return AMDGPUISD::IMAGE_SAMPLE_L_O;
+  case Intrinsic::amdgcn_image_sample_b_o:
+    return AMDGPUISD::IMAGE_SAMPLE_B_O;
+  case Intrinsic::amdgcn_image_sample_b_cl_o:
+    return AMDGPUISD::IMAGE_SAMPLE_B_CL_O;
+  case Intrinsic::amdgcn_image_sample_lz_o:
+    return AMDGPUISD::IMAGE_SAMPLE_LZ_O;
+  case Intrinsic::amdgcn_image_sample_cd_o:
+    return AMDGPUISD::IMAGE_SAMPLE_CD_O;
+  case Intrinsic::amdgcn_image_sample_cd_cl_o:
+    return AMDGPUISD::IMAGE_SAMPLE_CD_CL_O;
+
+  // Sample with comparison and offsets.
+  case Intrinsic::amdgcn_image_sample_c_o:
+    return AMDGPUISD::IMAGE_SAMPLE_C_O;
+  case Intrinsic::amdgcn_image_sample_c_cl_o:
+    return AMDGPUISD::IMAGE_SAMPLE_C_CL_O;
+  case Intrinsic::amdgcn_image_sample_c_d_o:
+    return AMDGPUISD::IMAGE_SAMPLE_C_D_O;
+  case Intrinsic::amdgcn_image_sample_c_d_cl_o:
+    return AMDGPUISD::IMAGE_SAMPLE_C_D_CL_O;
+  case Intrinsic::amdgcn_image_sample_c_l_o:
+    return AMDGPUISD::IMAGE_SAMPLE_C_L_O;
+  case Intrinsic::amdgcn_image_sample_c_b_o:
+    return AMDGPUISD::IMAGE_SAMPLE_C_B_O;
+  case Intrinsic::amdgcn_image_sample_c_b_cl_o:
+    return AMDGPUISD::IMAGE_SAMPLE_C_B_CL_O;
+  case Intrinsic::amdgcn_image_sample_c_lz_o:
+    return AMDGPUISD::IMAGE_SAMPLE_C_LZ_O;
+  case Intrinsic::amdgcn_image_sample_c_cd_o:
+    return AMDGPUISD::IMAGE_SAMPLE_C_CD_O;
+  case Intrinsic::amdgcn_image_sample_c_cd_cl_o:
+    return AMDGPUISD::IMAGE_SAMPLE_C_CD_CL_O;
+
+  // Basic gather4.
+  case Intrinsic::amdgcn_image_gather4:
+    return AMDGPUISD::IMAGE_GATHER4;
+  case Intrinsic::amdgcn_image_gather4_cl:
+    return AMDGPUISD::IMAGE_GATHER4_CL;
+  case Intrinsic::amdgcn_image_gather4_l:
+    return AMDGPUISD::IMAGE_GATHER4_L;
+  case Intrinsic::amdgcn_image_gather4_b:
+    return AMDGPUISD::IMAGE_GATHER4_B;
+  case Intrinsic::amdgcn_image_gather4_b_cl:
+    return AMDGPUISD::IMAGE_GATHER4_B_CL;
+  case Intrinsic::amdgcn_image_gather4_lz:
+    return AMDGPUISD::IMAGE_GATHER4_LZ;
+
+  // Gather4 with comparison.
+  case Intrinsic::amdgcn_image_gather4_c:
+    return AMDGPUISD::IMAGE_GATHER4_C;
+  case Intrinsic::amdgcn_image_gather4_c_cl:
+    return AMDGPUISD::IMAGE_GATHER4_C_CL;
+  case Intrinsic::amdgcn_image_gather4_c_l:
+    return AMDGPUISD::IMAGE_GATHER4_C_L;
+  case Intrinsic::amdgcn_image_gather4_c_b:
+    return AMDGPUISD::IMAGE_GATHER4_C_B;
+  case Intrinsic::amdgcn_image_gather4_c_b_cl:
+    return AMDGPUISD::IMAGE_GATHER4_C_B_CL;
+  case Intrinsic::amdgcn_image_gather4_c_lz:
+    return AMDGPUISD::IMAGE_GATHER4_C_LZ;
+
+  // Gather4 with offsets.
+  case Intrinsic::amdgcn_image_gather4_o:
+    return AMDGPUISD::IMAGE_GATHER4_O;
+  case Intrinsic::amdgcn_image_gather4_cl_o:
+    return AMDGPUISD::IMAGE_GATHER4_CL_O;
+  case Intrinsic::amdgcn_image_gather4_l_o:
+    return AMDGPUISD::IMAGE_GATHER4_L_O;
+  case Intrinsic::amdgcn_image_gather4_b_o:
+    return AMDGPUISD::IMAGE_GATHER4_B_O;
+  case Intrinsic::amdgcn_image_gather4_b_cl_o:
+    return AMDGPUISD::IMAGE_GATHER4_B_CL_O;
+  case Intrinsic::amdgcn_image_gather4_lz_o:
+    return AMDGPUISD::IMAGE_GATHER4_LZ_O;
+
+  // Gather4 with comparison and offsets.
+  case Intrinsic::amdgcn_image_gather4_c_o:
+    return AMDGPUISD::IMAGE_GATHER4_C_O;
+  case Intrinsic::amdgcn_image_gather4_c_cl_o:
+    return AMDGPUISD::IMAGE_GATHER4_C_CL_O;
+  case Intrinsic::amdgcn_image_gather4_c_l_o:
+    return AMDGPUISD::IMAGE_GATHER4_C_L_O;
+  case Intrinsic::amdgcn_image_gather4_c_b_o:
+    return AMDGPUISD::IMAGE_GATHER4_C_B_O;
+  case Intrinsic::amdgcn_image_gather4_c_b_cl_o:
+    return AMDGPUISD::IMAGE_GATHER4_C_B_CL_O;
+  case Intrinsic::amdgcn_image_gather4_c_lz_o:
+    return AMDGPUISD::IMAGE_GATHER4_C_LZ_O;
+
+  default:
+    break;
+  }
+  return 0;
+}
+
+static SDValue adjustLoadValueType(SDValue Result, EVT LoadVT, SDLoc DL,
+                                   SelectionDAG &DAG, bool Unpacked) {
+  if (Unpacked) { // From v2i32/v4i32 back to v2f16/v4f16.
+    // Truncate to v2i16/v4i16.
+    EVT IntLoadVT = LoadVT.changeTypeToInteger();
+    SDValue Trunc = DAG.getNode(ISD::TRUNCATE, DL, IntLoadVT, Result);
+    // Bitcast to original type (v2f16/v4f16).
+    return DAG.getNode(ISD::BITCAST, DL, LoadVT, Trunc);
+  }
+  // Cast back to the original packed type.
+  return DAG.getNode(ISD::BITCAST, DL, LoadVT, Result);
+}
+
+// This is to lower INTRINSIC_W_CHAIN with illegal result types.
+SDValue SITargetLowering::lowerIntrinsicWChain_IllegalReturnType(SDValue Op,
+                                     SDValue &Chain, SelectionDAG &DAG) const {
+  EVT LoadVT = Op.getValueType();
+  // TODO: handle v3f16.
+  if (LoadVT != MVT::v2f16 && LoadVT != MVT::v4f16)
+    return SDValue();
+
+  bool Unpacked = Subtarget->hasUnpackedD16VMem();
+  EVT UnpackedLoadVT = (LoadVT == MVT::v2f16) ? MVT::v2i32 : MVT::v4i32;
+  EVT EquivLoadVT = Unpacked ? UnpackedLoadVT :
+                               getEquivalentMemType(*DAG.getContext(), LoadVT);
+  // Change from v4f16/v2f16 to EquivLoadVT.
+  SDVTList VTList = DAG.getVTList(EquivLoadVT, MVT::Other);
+
+  SDValue Res;
+  SDLoc DL(Op);
+  MemSDNode *M = cast<MemSDNode>(Op);
+  unsigned IID = cast<ConstantSDNode>(Op.getOperand(1))->getZExtValue();
+  switch (IID) {
+  case Intrinsic::amdgcn_tbuffer_load: {
+    SDValue Ops[] = {
+      Op.getOperand(0),  // Chain
+      Op.getOperand(2),  // rsrc
+      Op.getOperand(3),  // vindex
+      Op.getOperand(4),  // voffset
+      Op.getOperand(5),  // soffset
+      Op.getOperand(6),  // offset
+      Op.getOperand(7),  // dfmt
+      Op.getOperand(8),  // nfmt
+      Op.getOperand(9),  // glc
+      Op.getOperand(10)  // slc
+    };
+    Res = DAG.getMemIntrinsicNode(AMDGPUISD::TBUFFER_LOAD_FORMAT_D16, DL,
+                                  VTList, Ops, M->getMemoryVT(),
+                                  M->getMemOperand());
+    Chain = Res.getValue(1);
+    return adjustLoadValueType(Res, LoadVT, DL, DAG, Unpacked);
+  }
+  case Intrinsic::amdgcn_buffer_load_format: {
+    SDValue Ops[] = {
+      Op.getOperand(0), // Chain
+      Op.getOperand(2), // rsrc
+      Op.getOperand(3), // vindex
+      Op.getOperand(4), // offset
+      Op.getOperand(5), // glc
+      Op.getOperand(6)  // slc
+    };
+    Res = DAG.getMemIntrinsicNode(AMDGPUISD::BUFFER_LOAD_FORMAT_D16,
+                                   DL, VTList, Ops, M->getMemoryVT(),
+                                   M->getMemOperand());
+    Chain = Res.getValue(1);
+    return adjustLoadValueType(Res, LoadVT, DL, DAG, Unpacked);
+  }
+  case Intrinsic::amdgcn_image_load:
+  case Intrinsic::amdgcn_image_load_mip: {
+    SDValue Ops[] = {
+        Op.getOperand(0),  // Chain
+        Op.getOperand(2),  // vaddr
+        Op.getOperand(3),  // rsrc
+        Op.getOperand(4),  // dmask
+        Op.getOperand(5),  // glc
+        Op.getOperand(6),  // slc
+        Op.getOperand(7),  // lwe
+        Op.getOperand(8)   // da
+    };
+    unsigned Opc = getImageOpcode(IID);
+    Res = DAG.getMemIntrinsicNode(Opc, DL, VTList, Ops, M->getMemoryVT(),
+                                  M->getMemOperand());
+    Chain = Res.getValue(1);
+    return adjustLoadValueType(Res, LoadVT, DL, DAG, Unpacked);
+  }
+  // Basic sample.
+  case Intrinsic::amdgcn_image_sample:
+  case Intrinsic::amdgcn_image_sample_cl:
+  case Intrinsic::amdgcn_image_sample_d:
+  case Intrinsic::amdgcn_image_sample_d_cl:
+  case Intrinsic::amdgcn_image_sample_l:
+  case Intrinsic::amdgcn_image_sample_b:
+  case Intrinsic::amdgcn_image_sample_b_cl:
+  case Intrinsic::amdgcn_image_sample_lz:
+  case Intrinsic::amdgcn_image_sample_cd:
+  case Intrinsic::amdgcn_image_sample_cd_cl:
+
+  // Sample with comparison.
+  case Intrinsic::amdgcn_image_sample_c:
+  case Intrinsic::amdgcn_image_sample_c_cl:
+  case Intrinsic::amdgcn_image_sample_c_d:
+  case Intrinsic::amdgcn_image_sample_c_d_cl:
+  case Intrinsic::amdgcn_image_sample_c_l:
+  case Intrinsic::amdgcn_image_sample_c_b:
+  case Intrinsic::amdgcn_image_sample_c_b_cl:
+  case Intrinsic::amdgcn_image_sample_c_lz:
+  case Intrinsic::amdgcn_image_sample_c_cd:
+  case Intrinsic::amdgcn_image_sample_c_cd_cl:
+
+  // Sample with offsets.
+  case Intrinsic::amdgcn_image_sample_o:
+  case Intrinsic::amdgcn_image_sample_cl_o:
+  case Intrinsic::amdgcn_image_sample_d_o:
+  case Intrinsic::amdgcn_image_sample_d_cl_o:
+  case Intrinsic::amdgcn_image_sample_l_o:
+  case Intrinsic::amdgcn_image_sample_b_o:
+  case Intrinsic::amdgcn_image_sample_b_cl_o:
+  case Intrinsic::amdgcn_image_sample_lz_o:
+  case Intrinsic::amdgcn_image_sample_cd_o:
+  case Intrinsic::amdgcn_image_sample_cd_cl_o:
+
+  // Sample with comparison and offsets.
+  case Intrinsic::amdgcn_image_sample_c_o:
+  case Intrinsic::amdgcn_image_sample_c_cl_o:
+  case Intrinsic::amdgcn_image_sample_c_d_o:
+  case Intrinsic::amdgcn_image_sample_c_d_cl_o:
+  case Intrinsic::amdgcn_image_sample_c_l_o:
+  case Intrinsic::amdgcn_image_sample_c_b_o:
+  case Intrinsic::amdgcn_image_sample_c_b_cl_o:
+  case Intrinsic::amdgcn_image_sample_c_lz_o:
+  case Intrinsic::amdgcn_image_sample_c_cd_o:
+  case Intrinsic::amdgcn_image_sample_c_cd_cl_o:
+
+  // Basic gather4
+  case Intrinsic::amdgcn_image_gather4:
+  case Intrinsic::amdgcn_image_gather4_cl:
+  case Intrinsic::amdgcn_image_gather4_l:
+  case Intrinsic::amdgcn_image_gather4_b:
+  case Intrinsic::amdgcn_image_gather4_b_cl:
+  case Intrinsic::amdgcn_image_gather4_lz:
+
+  // Gather4 with comparison
+  case Intrinsic::amdgcn_image_gather4_c:
+  case Intrinsic::amdgcn_image_gather4_c_cl:
+  case Intrinsic::amdgcn_image_gather4_c_l:
+  case Intrinsic::amdgcn_image_gather4_c_b:
+  case Intrinsic::amdgcn_image_gather4_c_b_cl:
+  case Intrinsic::amdgcn_image_gather4_c_lz:
+
+  // Gather4 with offsets
+  case Intrinsic::amdgcn_image_gather4_o:
+  case Intrinsic::amdgcn_image_gather4_cl_o:
+  case Intrinsic::amdgcn_image_gather4_l_o:
+  case Intrinsic::amdgcn_image_gather4_b_o:
+  case Intrinsic::amdgcn_image_gather4_b_cl_o:
+  case Intrinsic::amdgcn_image_gather4_lz_o:
+
+  // Gather4 with comparison and offsets
+  case Intrinsic::amdgcn_image_gather4_c_o:
+  case Intrinsic::amdgcn_image_gather4_c_cl_o:
+  case Intrinsic::amdgcn_image_gather4_c_l_o:
+  case Intrinsic::amdgcn_image_gather4_c_b_o:
+  case Intrinsic::amdgcn_image_gather4_c_b_cl_o:
+  case Intrinsic::amdgcn_image_gather4_c_lz_o: {
+    SDValue Ops[] = {
+      Op.getOperand(0),  // Chain
+      Op.getOperand(2),  // vaddr
+      Op.getOperand(3),  // rsrc
+      Op.getOperand(4),  // sampler
+      Op.getOperand(5),  // dmask
+      Op.getOperand(6),  // unorm
+      Op.getOperand(7),  // glc
+      Op.getOperand(8),  // slc
+      Op.getOperand(9),  // lwe
+      Op.getOperand(10)  // da
+    };
+    unsigned Opc = getImageOpcode(IID);
+    Res = DAG.getMemIntrinsicNode(Opc, DL, VTList, Ops, M->getMemoryVT(),
+                                   M->getMemOperand());
+    Chain = Res.getValue(1);
+    return adjustLoadValueType(Res, LoadVT, DL, DAG, Unpacked);
+  }
+  default:
+    return SDValue();
+  }
+}
+
 void SITargetLowering::ReplaceNodeResults(SDNode *N,
                                           SmallVectorImpl<SDValue> &Results,
                                           SelectionDAG &DAG) const {
@@ -3524,6 +3877,16 @@ void SITargetLowering::ReplaceNodeResults(SDNode *N,
       SDValue Cvt = DAG.getNode(AMDGPUISD::CVT_PKRTZ_F16_F32, SL, MVT::i32,
                                 Src0, Src1);
       Results.push_back(DAG.getNode(ISD::BITCAST, SL, MVT::v2f16, Cvt));
+      return;
+    }
+    break;
+  }
+  case ISD::INTRINSIC_W_CHAIN: {
+    SDValue Chain;
+    if (SDValue Res = lowerIntrinsicWChain_IllegalReturnType(SDValue(N, 0),
+                                                             Chain, DAG)) {
+      Results.push_back(Res);
+      Results.push_back(Chain);
       return;
     }
     break;
@@ -4463,10 +4826,31 @@ SDValue SITargetLowering::LowerINTRINSIC_W_CHAIN(SDValue Op,
 
   switch (IntrID) {
   case Intrinsic::amdgcn_atomic_inc:
-  case Intrinsic::amdgcn_atomic_dec: {
+  case Intrinsic::amdgcn_atomic_dec:
+  case Intrinsic::amdgcn_atomic_fadd:
+  case Intrinsic::amdgcn_atomic_fmin:
+  case Intrinsic::amdgcn_atomic_fmax: {
     MemSDNode *M = cast<MemSDNode>(Op);
-    unsigned Opc = (IntrID == Intrinsic::amdgcn_atomic_inc) ?
-      AMDGPUISD::ATOMIC_INC : AMDGPUISD::ATOMIC_DEC;
+    unsigned Opc;
+    switch (IntrID) {
+    case Intrinsic::amdgcn_atomic_inc:
+      Opc = AMDGPUISD::ATOMIC_INC;
+      break;
+    case Intrinsic::amdgcn_atomic_dec:
+      Opc = AMDGPUISD::ATOMIC_DEC;
+      break;
+    case Intrinsic::amdgcn_atomic_fadd:
+      Opc = AMDGPUISD::ATOMIC_LOAD_FADD;
+      break;
+    case Intrinsic::amdgcn_atomic_fmin:
+      Opc = AMDGPUISD::ATOMIC_LOAD_FMIN;
+      break;
+    case Intrinsic::amdgcn_atomic_fmax:
+      Opc = AMDGPUISD::ATOMIC_LOAD_FMAX;
+      break;
+    default:
+      llvm_unreachable("Unknown intrinsic!");
+    }
     SDValue Ops[] = {
       M->getOperand(0), // Chain
       M->getOperand(2), // Ptr
@@ -4656,6 +5040,31 @@ SDValue SITargetLowering::LowerINTRINSIC_W_CHAIN(SDValue Op,
   }
 }
 
+SDValue SITargetLowering::handleD16VData(SDValue VData,
+                                         SelectionDAG &DAG) const {
+  EVT StoreVT = VData.getValueType();
+  SDLoc DL(VData);
+
+  if (StoreVT.isVector()) {
+    assert ((StoreVT.getVectorNumElements() != 3) && "Handle v3f16");
+    if (!Subtarget->hasUnpackedD16VMem()) {
+      if (!isTypeLegal(StoreVT)) {
+        // If Target supports packed vmem, we just need to workaround
+        // the illegal type by casting to an equivalent one.
+        EVT EquivStoreVT = getEquivalentMemType(*DAG.getContext(), StoreVT);
+        return DAG.getNode(ISD::BITCAST, DL, EquivStoreVT, VData);
+      }
+    } else { // We need to unpack the packed data to store.
+      EVT IntStoreVT = StoreVT.changeTypeToInteger();
+      SDValue IntVData = DAG.getNode(ISD::BITCAST, DL, IntStoreVT, VData);
+      EVT EquivStoreVT = (StoreVT == MVT::v2f16) ? MVT::v2i32 : MVT::v4i32;
+      return DAG.getNode(ISD::ZERO_EXTEND, DL, EquivStoreVT, IntVData);
+    }
+  }
+  // No change for f16 and legal vector D16 types.
+  return VData;
+}
+
 SDValue SITargetLowering::LowerINTRINSIC_VOID(SDValue Op,
                                               SelectionDAG &DAG) const {
   SDLoc DL(Op);
@@ -4798,9 +5207,13 @@ SDValue SITargetLowering::LowerINTRINSIC_VOID(SDValue Op,
   }
 
   case Intrinsic::amdgcn_tbuffer_store: {
+    SDValue VData = Op.getOperand(2);
+    bool IsD16 = (VData.getValueType().getScalarType() == MVT::f16);
+    if (IsD16)
+      VData = handleD16VData(VData, DAG);
     SDValue Ops[] = {
       Chain,
-      Op.getOperand(2),  // vdata
+      VData,             // vdata
       Op.getOperand(3),  // rsrc
       Op.getOperand(4),  // vindex
       Op.getOperand(5),  // voffset
@@ -4811,37 +5224,58 @@ SDValue SITargetLowering::LowerINTRINSIC_VOID(SDValue Op,
       Op.getOperand(10), // glc
       Op.getOperand(11)  // slc
     };
-    EVT VT = Op.getOperand(3).getValueType();
-    MachineMemOperand *MMO = MF.getMachineMemOperand(
-      MachinePointerInfo(),
-      MachineMemOperand::MOStore,
-      VT.getStoreSize(), 4);
-    return DAG.getMemIntrinsicNode(AMDGPUISD::TBUFFER_STORE_FORMAT, DL,
-                                   Op->getVTList(), Ops, VT, MMO);
+    unsigned Opc = IsD16 ? AMDGPUISD::TBUFFER_STORE_FORMAT_D16 :
+                           AMDGPUISD::TBUFFER_STORE_FORMAT;
+    MemSDNode *M = cast<MemSDNode>(Op);
+    return DAG.getMemIntrinsicNode(Opc, DL, Op->getVTList(), Ops,
+                                   M->getMemoryVT(), M->getMemOperand());
   }
 
   case Intrinsic::amdgcn_buffer_store:
   case Intrinsic::amdgcn_buffer_store_format: {
+    SDValue VData = Op.getOperand(2);
+    bool IsD16 = (VData.getValueType().getScalarType() == MVT::f16);
+    if (IsD16)
+      VData = handleD16VData(VData, DAG);
     SDValue Ops[] = {
       Chain,
-      Op.getOperand(2), // vdata
+      VData,            // vdata
       Op.getOperand(3), // rsrc
       Op.getOperand(4), // vindex
       Op.getOperand(5), // offset
       Op.getOperand(6), // glc
       Op.getOperand(7)  // slc
     };
-    EVT VT = Op.getOperand(3).getValueType();
-    MachineMemOperand *MMO = MF.getMachineMemOperand(
-      MachinePointerInfo(),
-      MachineMemOperand::MOStore |
-      MachineMemOperand::MODereferenceable,
-      VT.getStoreSize(), 4);
+    unsigned Opc = IntrinsicID == Intrinsic::amdgcn_buffer_store ?
+                   AMDGPUISD::BUFFER_STORE : AMDGPUISD::BUFFER_STORE_FORMAT;
+    Opc = IsD16 ? AMDGPUISD::BUFFER_STORE_FORMAT_D16 : Opc;
+    MemSDNode *M = cast<MemSDNode>(Op);
+    return DAG.getMemIntrinsicNode(Opc, DL, Op->getVTList(), Ops,
+                                   M->getMemoryVT(), M->getMemOperand());
+  }
 
-    unsigned Opcode = IntrinsicID == Intrinsic::amdgcn_buffer_store ?
-                        AMDGPUISD::BUFFER_STORE :
-                        AMDGPUISD::BUFFER_STORE_FORMAT;
-    return DAG.getMemIntrinsicNode(Opcode, DL, Op->getVTList(), Ops, VT, MMO);
+  case Intrinsic::amdgcn_image_store:
+  case Intrinsic::amdgcn_image_store_mip: {
+    SDValue VData = Op.getOperand(2);
+    bool IsD16 = (VData.getValueType().getScalarType() == MVT::f16);
+    if (IsD16)
+      VData = handleD16VData(VData, DAG);
+    SDValue Ops[] = {
+      Chain, // Chain
+      VData, // vdata
+      Op.getOperand(3), // vaddr
+      Op.getOperand(4), // rsrc
+      Op.getOperand(5), // dmask
+      Op.getOperand(6), // glc
+      Op.getOperand(7), // slc
+      Op.getOperand(8), // lwe
+      Op.getOperand(9)  // da
+    };
+    unsigned Opc = (IntrinsicID==Intrinsic::amdgcn_image_store) ?
+                  AMDGPUISD::IMAGE_STORE : AMDGPUISD::IMAGE_STORE_MIP;
+    MemSDNode *M = cast<MemSDNode>(Op);
+    return DAG.getMemIntrinsicNode(Opc, DL, Op->getVTList(), Ops,
+                                   M->getMemoryVT(), M->getMemOperand());
   }
 
   default:
@@ -6706,7 +7140,10 @@ SDValue SITargetLowering::PerformDAGCombine(SDNode *N,
   case ISD::ATOMIC_LOAD_UMIN:
   case ISD::ATOMIC_LOAD_UMAX:
   case AMDGPUISD::ATOMIC_INC:
-  case AMDGPUISD::ATOMIC_DEC: // TODO: Target mem intrinsics.
+  case AMDGPUISD::ATOMIC_DEC:
+  case AMDGPUISD::ATOMIC_LOAD_FADD:
+  case AMDGPUISD::ATOMIC_LOAD_FMIN:
+  case AMDGPUISD::ATOMIC_LOAD_FMAX:  // TODO: Target mem intrinsics.
     if (DCI.isBeforeLegalize())
       break;
     return performMemSDNodeCombine(cast<MemSDNode>(N), DCI);
@@ -6960,7 +7397,7 @@ SDNode *SITargetLowering::PostISelFolding(MachineSDNode *Node,
   unsigned Opcode = Node->getMachineOpcode();
 
   if (TII->isMIMG(Opcode) && !TII->get(Opcode).mayStore() &&
-      !TII->isGather4(Opcode)) {
+      !TII->isGather4(Opcode) && !TII->isD16(Opcode)) {
     return adjustWritemask(Node, DAG);
   }
 

@@ -1701,12 +1701,14 @@ GnuHashTableSection::GnuHashTableSection()
 void GnuHashTableSection::finalizeContents() {
   getParent()->Link = InX::DynSymTab->getParent()->SectionIndex;
 
-  // Computes bloom filter size in word size. We want to allocate 8
+  // Computes bloom filter size in word size. We want to allocate 12
   // bits for each symbol. It must be a power of two.
-  if (Symbols.empty())
+  if (Symbols.empty()) {
     MaskWords = 1;
-  else
-    MaskWords = NextPowerOf2((Symbols.size() - 1) / Config->Wordsize);
+  } else {
+    uint64_t NumBits = Symbols.size() * 12;
+    MaskWords = NextPowerOf2(NumBits / (Config->Wordsize * 8));
+  }
 
   Size = 16;                            // Header
   Size += Config->Wordsize * MaskWords; // Bloom filter
@@ -1741,7 +1743,7 @@ void GnuHashTableSection::writeTo(uint8_t *Buf) {
 // [1] Ulrich Drepper (2011), "How To Write Shared Libraries" (Ver. 4.1.2),
 //     p.9, https://www.akkadia.org/drepper/dsohowto.pdf
 void GnuHashTableSection::writeBloomFilter(uint8_t *Buf) {
-  const unsigned C = Config->Wordsize * 8;
+  unsigned C = Config->Is64 ? 64 : 32;
   for (const Entry &Sym : Symbols) {
     size_t I = (Sym.Hash / C) & (MaskWords - 1);
     uint64_t Val = readUint(Buf + I * Config->Wordsize);
@@ -1858,9 +1860,9 @@ void HashTableSection::writeTo(uint8_t *Buf) {
   }
 }
 
-PltSection::PltSection(size_t S)
+PltSection::PltSection(bool IsIplt)
     : SyntheticSection(SHF_ALLOC | SHF_EXECINSTR, SHT_PROGBITS, 16, ".plt"),
-      HeaderSize(S) {
+      HeaderSize(IsIplt ? 0 : Target->PltHeaderSize), IsIplt(IsIplt) {
   // The PLT needs to be writable on SPARC as the dynamic linker will
   // modify the instructions in the PLT entries.
   if (Config->EMachine == EM_SPARCV9)
@@ -1870,7 +1872,7 @@ PltSection::PltSection(size_t S)
 void PltSection::writeTo(uint8_t *Buf) {
   // At beginning of PLT but not the IPLT, we have code to call the dynamic
   // linker to resolve dynsyms at runtime. Write such code.
-  if (HeaderSize != 0)
+  if (!IsIplt)
     Target->writePltHeader(Buf);
   size_t Off = HeaderSize;
   // The IPlt is immediately after the Plt, account for this in RelOff
@@ -1889,7 +1891,7 @@ void PltSection::writeTo(uint8_t *Buf) {
 template <class ELFT> void PltSection::addEntry(Symbol &Sym) {
   Sym.PltIndex = Entries.size();
   RelocationBaseSection *PltRelocSection = InX::RelaPlt;
-  if (HeaderSize == 0) {
+  if (IsIplt) {
     PltRelocSection = InX::RelaIplt;
     Sym.IsInIplt = true;
   }
@@ -1906,7 +1908,7 @@ size_t PltSection::getSize() const {
 // example ARM uses mapping symbols to aid disassembly
 void PltSection::addSymbols() {
   // The PLT may have symbols defined for the Header, the IPLT has no header
-  if (HeaderSize != 0)
+  if (!IsIplt)
     Target->addPltHeaderSymbols(*this);
   size_t Off = HeaderSize;
   for (size_t I = 0; I < Entries.size(); ++I) {
@@ -1916,7 +1918,7 @@ void PltSection::addSymbols() {
 }
 
 unsigned PltSection::getPltRelocOff() const {
-  return (HeaderSize == 0) ? InX::Plt->getSize() : 0;
+  return IsIplt ? InX::Plt->getSize() : 0;
 }
 
 // The string hash function for .gdb_index.
@@ -2171,7 +2173,7 @@ void GdbIndexSection::writeTo(uint8_t *Buf) {
 bool GdbIndexSection::empty() const { return !Out::DebugInfo; }
 
 EhFrameHeader::EhFrameHeader()
-    : SyntheticSection(SHF_ALLOC, SHT_PROGBITS, 1, ".eh_frame_hdr") {}
+    : SyntheticSection(SHF_ALLOC, SHT_PROGBITS, 4, ".eh_frame_hdr") {}
 
 // .eh_frame_hdr contains a binary search table of pointers to FDEs.
 // Each entry of the search table consists of two values,

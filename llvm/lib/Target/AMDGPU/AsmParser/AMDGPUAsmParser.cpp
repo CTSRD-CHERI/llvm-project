@@ -267,7 +267,11 @@ public:
     return isOff() || isRegClass(AMDGPU::VGPR_32RegClassID);
   }
 
-  bool isSDWARegKind() const;
+  bool isSDWAOperand(MVT type) const;
+  bool isSDWAFP16Operand() const;
+  bool isSDWAFP32Operand() const;
+  bool isSDWAInt16Operand() const;
+  bool isSDWAInt32Operand() const;
 
   bool isImmTy(ImmTy ImmT) const {
     return isImm() && Imm.Type == ImmT;
@@ -1285,13 +1289,29 @@ bool AMDGPUOperand::isRegClass(unsigned RCID) const {
   return isRegKind() && AsmParser->getMRI()->getRegClass(RCID).contains(getReg());
 }
 
-bool AMDGPUOperand::isSDWARegKind() const {
+bool AMDGPUOperand::isSDWAOperand(MVT type) const {
   if (AsmParser->isVI())
     return isVReg();
   else if (AsmParser->isGFX9())
-    return isRegKind();
+    return isRegKind() || isInlinableImm(type);
   else
     return false;
+}
+
+bool AMDGPUOperand::isSDWAFP16Operand() const {
+  return isSDWAOperand(MVT::f16);
+}
+
+bool AMDGPUOperand::isSDWAFP32Operand() const {
+  return isSDWAOperand(MVT::f32);
+}
+
+bool AMDGPUOperand::isSDWAInt16Operand() const {
+  return isSDWAOperand(MVT::i16);
+}
+
+bool AMDGPUOperand::isSDWAInt32Operand() const {
+  return isSDWAOperand(MVT::i32);
 }
 
 uint64_t AMDGPUOperand::applyInputFPModifiers(uint64_t Val, unsigned Size) const
@@ -3179,7 +3199,10 @@ bool AMDGPUAsmParser::parseHwregConstruct(OperandInfoTy &HwReg, int64_t &Offset,
     HwReg.IsSymbolic = true;
     HwReg.Id = ID_UNKNOWN_;
     const StringRef tok = Parser.getTok().getString();
-    for (int i = ID_SYMBOLIC_FIRST_; i < ID_SYMBOLIC_LAST_; ++i) {
+    int Last = ID_SYMBOLIC_LAST_;
+    if (isSI() || isCI() || isVI())
+      Last = ID_SYMBOLIC_FIRST_GFX9_;
+    for (int i = ID_SYMBOLIC_FIRST_; i < Last; ++i) {
       if (tok == IdSymbolic[i]) {
         HwReg.Id = i;
         break;
@@ -4030,7 +4053,8 @@ void AMDGPUAsmParser::cvtMIMG(MCInst &Inst, const OperandVector &Operands,
 
   if (IsAtomic) {
     // Add src, same as dst
-    ((AMDGPUOperand &)*Operands[I]).addRegOperands(Inst, 1);
+    assert(Desc.getNumDefs() == 1);
+    ((AMDGPUOperand &)*Operands[I - 1]).addRegOperands(Inst, 1);
   }
 
   OptionalImmIndexMap OptionalIdx;
@@ -4039,9 +4063,8 @@ void AMDGPUAsmParser::cvtMIMG(MCInst &Inst, const OperandVector &Operands,
     AMDGPUOperand &Op = ((AMDGPUOperand &)*Operands[I]);
 
     // Add the register arguments
-    if (Op.isRegOrImm()) {
-      Op.addRegOrImmOperands(Inst, 1);
-      continue;
+    if (Op.isReg()) {
+      Op.addRegOperands(Inst, 1);
     } else if (Op.isImmModifier()) {
       OptionalIdx[Op.getImmTy()] = I;
     } else {
@@ -4052,11 +4075,11 @@ void AMDGPUAsmParser::cvtMIMG(MCInst &Inst, const OperandVector &Operands,
   addOptionalImmOperand(Inst, Operands, OptionalIdx, AMDGPUOperand::ImmTyDMask);
   addOptionalImmOperand(Inst, Operands, OptionalIdx, AMDGPUOperand::ImmTyUNorm);
   addOptionalImmOperand(Inst, Operands, OptionalIdx, AMDGPUOperand::ImmTyGLC);
-  addOptionalImmOperand(Inst, Operands, OptionalIdx, AMDGPUOperand::ImmTyDA);
+  addOptionalImmOperand(Inst, Operands, OptionalIdx, AMDGPUOperand::ImmTySLC);
   addOptionalImmOperand(Inst, Operands, OptionalIdx, AMDGPUOperand::ImmTyR128);
   addOptionalImmOperand(Inst, Operands, OptionalIdx, AMDGPUOperand::ImmTyTFE);
   addOptionalImmOperand(Inst, Operands, OptionalIdx, AMDGPUOperand::ImmTyLWE);
-  addOptionalImmOperand(Inst, Operands, OptionalIdx, AMDGPUOperand::ImmTySLC);
+  addOptionalImmOperand(Inst, Operands, OptionalIdx, AMDGPUOperand::ImmTyDA);
 }
 
 void AMDGPUAsmParser::cvtMIMGAtomic(MCInst &Inst, const OperandVector &Operands) {
@@ -4796,7 +4819,7 @@ void AMDGPUAsmParser::cvtSDWA(MCInst &Inst, const OperandVector &Operands,
       }
     }
     if (isRegOrImmWithInputMods(Desc, Inst.getNumOperands())) {
-      Op.addRegWithInputModsOperands(Inst, 2);
+      Op.addRegOrImmWithInputModsOperands(Inst, 2);
     } else if (Op.isImm()) {
       // Handle optional arguments
       OptionalIdx[Op.getImmTy()] = I;

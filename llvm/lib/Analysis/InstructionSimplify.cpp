@@ -978,18 +978,17 @@ static Value *simplifyDiv(Instruction::BinaryOps Opcode, Value *Op0, Value *Op1,
   bool IsSigned = Opcode == Instruction::SDiv;
 
   // (X * Y) / Y -> X if the multiplication does not overflow.
-  Value *X = nullptr, *Y = nullptr;
-  if (match(Op0, m_Mul(m_Value(X), m_Value(Y))) && (X == Op1 || Y == Op1)) {
-    if (Y != Op1) std::swap(X, Y); // Ensure expression is (X * Y) / Y, Y = Op1
-    OverflowingBinaryOperator *Mul = cast<OverflowingBinaryOperator>(Op0);
-    // If the Mul knows it does not overflow, then we are good to go.
+  Value *X;
+  if (match(Op0, m_c_Mul(m_Value(X), m_Specific(Op1)))) {
+    auto *Mul = cast<OverflowingBinaryOperator>(Op0);
+    // If the Mul does not overflow, then we are good to go.
     if ((IsSigned && Mul->hasNoSignedWrap()) ||
         (!IsSigned && Mul->hasNoUnsignedWrap()))
       return X;
-    // If X has the form X = A / Y then X * Y cannot overflow.
-    if (BinaryOperator *Div = dyn_cast<BinaryOperator>(X))
-      if (Div->getOpcode() == Opcode && Div->getOperand(1) == Y)
-        return X;
+    // If X has the form X = A / Y, then X * Y cannot overflow.
+    if ((IsSigned && match(X, m_SDiv(m_Value(), m_Specific(Op1)))) ||
+        (!IsSigned && match(X, m_UDiv(m_Value(), m_Specific(Op1)))))
+      return X;
   }
 
   // (X rem Y) / Y -> 0
@@ -1040,6 +1039,13 @@ static Value *simplifyRem(Instruction::BinaryOps Opcode, Value *Op0, Value *Op1,
       (Opcode == Instruction::URem &&
        match(Op0, m_URem(m_Value(), m_Specific(Op1)))))
     return Op0;
+
+  // (X << Y) % X -> 0
+  if ((Opcode == Instruction::SRem &&
+       match(Op0, m_NSWShl(m_Specific(Op1), m_Value()))) ||
+      (Opcode == Instruction::URem &&
+       match(Op0, m_NUWShl(m_Specific(Op1), m_Value()))))
+    return Constant::getNullValue(Op0->getType());
 
   // If the operation is with the result of a select instruction, check whether
   // operating on either branch of the select always yields the same value.
@@ -1413,6 +1419,43 @@ static Value *simplifyAndOrOfICmpsWithConstants(ICmpInst *Cmp0, ICmpInst *Cmp1,
   return nullptr;
 }
 
+static Value *simplifyAndOrOfICmpsWithZero(ICmpInst *Cmp0, ICmpInst *Cmp1,
+                                           bool IsAnd) {
+  ICmpInst::Predicate P0 = Cmp0->getPredicate(), P1 = Cmp1->getPredicate();
+  if (!match(Cmp0->getOperand(1), m_Zero()) ||
+      !match(Cmp1->getOperand(1), m_Zero()) || P0 != P1)
+    return nullptr;
+
+  if ((IsAnd && P0 != ICmpInst::ICMP_NE) || (!IsAnd && P1 != ICmpInst::ICMP_EQ))
+    return nullptr;
+
+  // We have either "(X == 0 || Y == 0)" or "(X != 0 && Y != 0)".
+  Value *X = Cmp0->getOperand(0);
+  Value *Y = Cmp1->getOperand(0);
+
+  // If one of the compares is a masked version of a (not) null check, then
+  // that compare implies the other, so we eliminate the other. Optionally, look
+  // through a pointer-to-int cast to match a null check of a pointer type.
+
+  // (X == 0) || (([ptrtoint] X & ?) == 0) --> ([ptrtoint] X & ?) == 0
+  // (X == 0) || ((? & [ptrtoint] X) == 0) --> (? & [ptrtoint] X) == 0
+  // (X != 0) && (([ptrtoint] X & ?) != 0) --> ([ptrtoint] X & ?) != 0
+  // (X != 0) && ((? & [ptrtoint] X) != 0) --> (? & [ptrtoint] X) != 0
+  if (match(Y, m_c_And(m_Specific(X), m_Value())) ||
+      match(Y, m_c_And(m_PtrToInt(m_Specific(X)), m_Value())))
+    return Cmp1;
+
+  // (([ptrtoint] Y & ?) == 0) || (Y == 0) --> ([ptrtoint] Y & ?) == 0
+  // ((? & [ptrtoint] Y) == 0) || (Y == 0) --> (? & [ptrtoint] Y) == 0
+  // (([ptrtoint] Y & ?) != 0) && (Y != 0) --> ([ptrtoint] Y & ?) != 0
+  // ((? & [ptrtoint] Y) != 0) && (Y != 0) --> (? & [ptrtoint] Y) != 0
+  if (match(X, m_c_And(m_Specific(Y), m_Value())) ||
+      match(X, m_c_And(m_PtrToInt(m_Specific(Y)), m_Value())))
+    return Cmp0;
+
+  return nullptr;
+}
+
 static Value *simplifyAndOfICmpsWithAdd(ICmpInst *Op0, ICmpInst *Op1) {
   // (icmp (add V, C0), C1) & (icmp V, C0)
   ICmpInst::Predicate Pred0, Pred1;
@@ -1471,6 +1514,9 @@ static Value *simplifyAndOfICmps(ICmpInst *Op0, ICmpInst *Op1) {
     return X;
 
   if (Value *X = simplifyAndOrOfICmpsWithConstants(Op0, Op1, true))
+    return X;
+
+  if (Value *X = simplifyAndOrOfICmpsWithZero(Op0, Op1, true))
     return X;
 
   if (Value *X = simplifyAndOfICmpsWithAdd(Op0, Op1))
@@ -1539,6 +1585,9 @@ static Value *simplifyOrOfICmps(ICmpInst *Op0, ICmpInst *Op1) {
     return X;
 
   if (Value *X = simplifyAndOrOfICmpsWithConstants(Op0, Op1, false))
+    return X;
+
+  if (Value *X = simplifyAndOrOfICmpsWithZero(Op0, Op1, false))
     return X;
 
   if (Value *X = simplifyOrOfICmpsWithAdd(Op0, Op1))

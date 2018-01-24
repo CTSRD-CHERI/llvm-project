@@ -388,7 +388,8 @@ LTO::RegularLTOState::RegularLTOState(unsigned ParallelCodeGenParallelismLevel,
       Ctx(Conf), CombinedModule(llvm::make_unique<Module>("ld-temp.o", Ctx)),
       Mover(llvm::make_unique<IRMover>(*CombinedModule)) {}
 
-LTO::ThinLTOState::ThinLTOState(ThinBackend Backend) : Backend(Backend) {
+LTO::ThinLTOState::ThinLTOState(ThinBackend Backend)
+    : Backend(Backend), CombinedIndex(/*IsPeformingAnalysis*/ false) {
   if (!Backend)
     this->Backend =
         createInProcessThinBackend(llvm::heavyweight_hardware_concurrency());
@@ -639,7 +640,8 @@ LTO::addRegularLTO(BitcodeModule BM, ArrayRef<InputFile::Symbol> Syms,
       }
 
       // Set the 'local' flag based on the linker resolution for this symbol.
-      GV->setDSOLocal(Res.FinalDefinitionInLinkageUnit);
+      if (Res.FinalDefinitionInLinkageUnit)
+        GV->setDSOLocal(Res.FinalDefinitionInLinkageUnit);
     }
     // Common resolution: collect the maximum size/alignment over all commons.
     // We also record if we see an instance of a common as prevailing, so that

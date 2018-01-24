@@ -686,11 +686,11 @@ void MIPrinter::print(const MachineInstr &MI) {
     NeedComma = true;
   }
 
-  if (MI.getDebugLoc()) {
+  if (const DebugLoc &DL = MI.getDebugLoc()) {
     if (NeedComma)
       OS << ',';
     OS << " debug-location ";
-    MI.getDebugLoc()->printAsOperand(OS, MST);
+    DL->printAsOperand(OS, MST);
   }
 
   if (!MI.memoperands_empty()) {
@@ -744,7 +744,7 @@ void MIPrinter::print(const MachineInstr &MI, unsigned OpIdx,
   case MachineOperand::MO_Immediate:
     if (MI.isOperandSubregIdx(OpIdx)) {
       MachineOperand::printTargetFlags(OS, Op);
-      MachineOperand::printSubregIdx(OS, Op.getImm(), TRI);
+      MachineOperand::printSubRegIdx(OS, Op.getImm(), TRI);
       break;
     }
     LLVM_FALLTHROUGH;
@@ -768,8 +768,8 @@ void MIPrinter::print(const MachineInstr &MI, unsigned OpIdx,
     if (ShouldPrintRegisterTies && Op.isReg() && Op.isTied() && !Op.isDef())
       TiedOperandIdx = Op.getParent()->findTiedOperandIdx(OpIdx);
     const TargetIntrinsicInfo *TII = MI.getMF()->getTarget().getIntrinsicInfo();
-    Op.print(OS, MST, TypeToPrint, PrintDef, ShouldPrintRegisterTies,
-             TiedOperandIdx, TRI, TII);
+    Op.print(OS, MST, TypeToPrint, PrintDef, /*IsStandalone=*/false,
+             ShouldPrintRegisterTies, TiedOperandIdx, TRI, TII);
     break;
   }
   case MachineOperand::MO_FrameIndex:

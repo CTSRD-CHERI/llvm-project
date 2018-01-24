@@ -709,6 +709,14 @@ OutputSection *ScriptParser::readOutputSectionDescription(StringRef OutSec) {
   if (consume(">"))
     Cmd->MemoryRegionName = next();
 
+  if (consume("AT")) {
+    expect(">");
+    Cmd->LMARegionName = next();
+  }
+
+  if (Cmd->LMAExpr && !Cmd->LMARegionName.empty())
+    error("section can't have both LMA and a load region");
+
   Cmd->Phdrs = readOutputSectionPhdrs();
 
   if (consume("="))
@@ -872,13 +880,6 @@ Expr ScriptParser::readConstant() {
 // "0x" or suffixed with "H") and decimal numbers. Decimal numbers may
 // have "K" (Ki) or "M" (Mi) suffixes.
 static Optional<uint64_t> parseInt(StringRef Tok) {
-  // Negative number
-  if (Tok.startswith("-")) {
-    if (Optional<uint64_t> Val = parseInt(Tok.substr(1)))
-      return -*Val;
-    return None;
-  }
-
   // Hexadecimal
   uint64_t Val;
   if (Tok.startswith_lower("0x")) {
@@ -922,7 +923,10 @@ ByteCommand *ScriptParser::readByteCommand(StringRef Tok) {
 
 StringRef ScriptParser::readParenLiteral() {
   expect("(");
+  bool Orig = InExpr;
+  InExpr = false;
   StringRef Tok = next();
+  InExpr = Orig;
   expect(")");
   return Tok;
 }

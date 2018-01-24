@@ -189,8 +189,9 @@ Instruction *InstCombiner::SimplifyMemTransfer(MemIntrinsic *MI) {
   unsigned MinAlign = std::min(DstAlign, SrcAlign);
   unsigned CopyAlign = MI->getAlignment();
 
+  // FIXME: Check & simplify source & dest alignments separately
   if (CopyAlign < MinAlign) {
-    MI->setAlignment(ConstantInt::get(MI->getAlignmentType(), MinAlign, false));
+    MI->setAlignment(MinAlign);
     return MI;
   }
 
@@ -265,8 +266,7 @@ Instruction *InstCombiner::SimplifyMemTransfer(MemIntrinsic *MI) {
 Instruction *InstCombiner::SimplifyMemSet(MemSetInst *MI) {
   unsigned Alignment = getKnownAlignment(MI->getDest(), DL, MI, &AC, &DT);
   if (MI->getAlignment() < Alignment) {
-    MI->setAlignment(ConstantInt::get(MI->getAlignmentType(),
-                                             Alignment, false));
+    MI->setAlignment(Alignment);
     return MI;
   }
 

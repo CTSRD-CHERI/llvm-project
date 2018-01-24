@@ -45,9 +45,6 @@ struct CodeCompleteOptions {
   /// Add macros to code completion results.
   bool IncludeMacros = true;
 
-  /// Add globals to code completion results.
-  bool IncludeGlobals = true;
-
   /// Add brief comments to completion items, if available.
   /// FIXME(ibiryukov): it looks like turning this option on significantly slows
   /// down completion, investigate if it can be made faster.
@@ -67,10 +64,6 @@ struct CodeCompleteOptions {
   /// FIXME(ioeric): we might want a better way to pass the index around inside
   /// clangd.
   const SymbolIndex *Index = nullptr;
-
-  // Populated internally by clangd, do not set.
-  /// Static index for project-wide global symbols.
-  const SymbolIndex *StaticIndex = nullptr;
 };
 
 /// Get code completions at a specified \p Pos in \p FileName.

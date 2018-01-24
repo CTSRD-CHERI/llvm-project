@@ -47,14 +47,14 @@ b:
 
 // DWARF: .debug_aranges contents:
 // DWARF-NEXT: Address Range Header: length = 0x00000024, version = 0x0002, cu_offset = 0x00000000, addr_size = 0x04, seg_size = 0x00
-// DWARF-NEXT: [0x00000000 - 0x00000004)
-// DWARF-NEXT: [0x00000000 - 0x00000004)
+// DWARF-NEXT: [0x00000000, 0x00000004)
+// DWARF-NEXT: [0x00000000, 0x00000004)
 
 
 // DWARF-DL: .debug_line contents:
 // DWARF-DL: version: [[DWVER]]
 // DWARF-DL-5:    address_size: 4
-// DWARF-DL-5:    include_directories[  1] = ''
+// DWARF-DL-5:    include_directories[  0] = ''
 // DWARF-DL:      file_names[  1] {{.*}} <stdin>
 // DWARF-DL:      0x0000000000000000     17      0      1   0   0  is_stmt
 // DWARF-DL-NEXT: 0x0000000000000004     17      0      1   0   0  is_stmt end_sequence

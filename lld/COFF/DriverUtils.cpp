@@ -418,15 +418,15 @@ static std::string createManifestXml() {
   return createManifestXmlWithExternalMt(DefaultXml);
 }
 
-static std::unique_ptr<MemoryBuffer>
+static std::unique_ptr<WritableMemoryBuffer>
 createMemoryBufferForManifestRes(size_t ManifestSize) {
   size_t ResSize = alignTo(
       object::WIN_RES_MAGIC_SIZE + object::WIN_RES_NULL_ENTRY_SIZE +
           sizeof(object::WinResHeaderPrefix) + sizeof(object::WinResIDs) +
           sizeof(object::WinResHeaderSuffix) + ManifestSize,
       object::WIN_RES_DATA_ALIGNMENT);
-  return MemoryBuffer::getNewMemBuffer(ResSize,
-                                       Config->OutputFile + ".manifest.res");
+  return WritableMemoryBuffer::getNewMemBuffer(ResSize, Config->OutputFile +
+                                                            ".manifest.res");
 }
 
 static void writeResFileHeader(char *&Buf) {
@@ -465,16 +465,16 @@ static void writeResEntryHeader(char *&Buf, size_t ManifestSize) {
 std::unique_ptr<MemoryBuffer> createManifestRes() {
   std::string Manifest = createManifestXml();
 
-  std::unique_ptr<MemoryBuffer> Res =
+  std::unique_ptr<WritableMemoryBuffer> Res =
       createMemoryBufferForManifestRes(Manifest.size());
 
-  char *Buf = const_cast<char *>(Res->getBufferStart());
+  char *Buf = Res->getBufferStart();
   writeResFileHeader(Buf);
   writeResEntryHeader(Buf, Manifest.size());
 
   // Copy the manifest data into the .res file.
   std::copy(Manifest.begin(), Manifest.end(), Buf);
-  return Res;
+  return std::move(Res);
 }
 
 void createSideBySideManifest() {
@@ -557,6 +557,12 @@ err:
 
 static StringRef undecorate(StringRef Sym) {
   if (Config->Machine != I386)
+    return Sym;
+  // In MSVC mode, a fully decorated stdcall function is exported
+  // as-is with the leading underscore (with type IMPORT_NAME).
+  // In MinGW mode, a decorated stdcall function gets the underscore
+  // removed, just like normal cdecl functions.
+  if (Sym.startswith("_") && Sym.contains('@') && !Config->MinGW)
     return Sym;
   return Sym.startswith("_") ? Sym.substr(1) : Sym;
 }

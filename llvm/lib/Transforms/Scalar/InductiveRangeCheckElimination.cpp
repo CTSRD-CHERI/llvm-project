@@ -179,10 +179,7 @@ public:
     OS << "  Step: ";
     Step->print(OS);
     OS << "  End: ";
-    if (End)
-      End->print(OS);
-    else
-      OS << "(null)";
+    End->print(OS);
     OS << "\n  CheckUse: ";
     getCheckUse()->getUser()->print(OS);
     OS << " Operand: " << getCheckUse()->getOperandNo() << "\n";
@@ -196,7 +193,7 @@ public:
   Use *getCheckUse() const { return CheckUse; }
 
   /// Represents an signed integer range [Range.getBegin(), Range.getEnd()).  If
-  /// R.getEnd() sle R.getBegin(), then R denotes the empty range.
+  /// R.getEnd() le R.getBegin(), then R denotes the empty range.
 
   class Range {
     const SCEV *Begin;
@@ -394,8 +391,23 @@ void InductiveRangeCheck::extractRangeChecksFromCond(
   if (!IsAffineIndex)
     return;
 
+  const SCEV *End = nullptr;
+  // We strengthen "0 <= I" to "0 <= I < INT_SMAX" and "I < L" to "0 <= I < L".
+  // We can potentially do much better here.
+  if (Length)
+    End = SE.getSCEV(Length);
+  else {
+    assert(RCKind == InductiveRangeCheck::RANGE_CHECK_LOWER && "invariant!");
+    // So far we can only reach this point for Signed range check. This may
+    // change in future. In this case we will need to pick Unsigned max for the
+    // unsigned range check.
+    unsigned BitWidth = cast<IntegerType>(IndexAddRec->getType())->getBitWidth();
+    const SCEV *SIntMax = SE.getConstant(APInt::getSignedMaxValue(BitWidth));
+    End = SIntMax;
+  }
+
   InductiveRangeCheck IRC;
-  IRC.End = Length ? SE.getSCEV(Length) : nullptr;
+  IRC.End = End;
   IRC.Begin = IndexAddRec->getStart();
   IRC.Step = IndexAddRec->getStepRecurrence(SE);
   IRC.CheckUse = &ConditionUse;
@@ -1631,8 +1643,6 @@ InductiveRangeCheck::computeSafeIterationSpace(
   // values, depending on type of latch condition that defines IV iteration
   // space.
   auto ClampedSubstract = [&](const SCEV *X, const SCEV *Y) {
-    assert(SE.isKnownNonNegative(X) &&
-           "We can only substract from values in [0; SINT_MAX]!");
     if (IsLatchSigned) {
       // X is a number from signed range, Y is interpreted as signed.
       // Even if Y is SINT_MAX, (X - Y) does not reach SINT_MIN. So the only
@@ -1663,17 +1673,7 @@ InductiveRangeCheck::computeSafeIterationSpace(
   const SCEV *M = SE.getMinusSCEV(C, A);
   const SCEV *Zero = SE.getZero(M->getType());
   const SCEV *Begin = ClampedSubstract(Zero, M);
-  const SCEV *L = nullptr;
-
-  // We strengthen "0 <= I" to "0 <= I < INT_SMAX" and "I < L" to "0 <= I < L".
-  // We can potentially do much better here.
-  if (const SCEV *EndLimit = getEnd())
-    L = EndLimit;
-  else {
-    assert(Kind == InductiveRangeCheck::RANGE_CHECK_LOWER && "invariant!");
-    L = SIntMax;
-  }
-  const SCEV *End = ClampedSubstract(L, M);
+  const SCEV *End = ClampedSubstract(getEnd(), M);
   return InductiveRangeCheck::Range(Begin, End);
 }
 

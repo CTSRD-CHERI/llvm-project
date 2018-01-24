@@ -545,6 +545,7 @@ private:
   SDValue getAddrLarge(NodeTy *N, SelectionDAG &DAG, unsigned Flags = 0) const;
   template <class NodeTy>
   SDValue getAddr(NodeTy *N, SelectionDAG &DAG, unsigned Flags = 0) const;
+  SDValue LowerADDROFRETURNADDR(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerDarwinGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const;
@@ -647,6 +648,8 @@ private:
                           SelectionDAG &DAG) const override;
 
   bool shouldNormalizeToSelectSequence(LLVMContext &, EVT) const override;
+
+  void finalizeLowering(MachineFunction &MF) const override;
 };
 
 namespace AArch64 {

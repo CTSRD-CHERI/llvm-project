@@ -353,8 +353,8 @@ define <4 x float> @test_cmpps(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a
 ;
 ; BTVER2-LABEL: test_cmpps:
 ; BTVER2:       # %bb.0:
-; BTVER2-NEXT:    vcmpeqps %xmm1, %xmm0, %xmm1 # sched: [3:1.00]
-; BTVER2-NEXT:    vcmpeqps (%rdi), %xmm0, %xmm0 # sched: [8:1.00]
+; BTVER2-NEXT:    vcmpeqps %xmm1, %xmm0, %xmm1 # sched: [2:1.00]
+; BTVER2-NEXT:    vcmpeqps (%rdi), %xmm0, %xmm0 # sched: [7:1.00]
 ; BTVER2-NEXT:    vorps %xmm0, %xmm1, %xmm0 # sched: [1:0.50]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
 ;
@@ -424,8 +424,8 @@ define float @test_cmpss(float %a0, float %a1, float *%a2) {
 ;
 ; BTVER2-LABEL: test_cmpss:
 ; BTVER2:       # %bb.0:
-; BTVER2-NEXT:    vcmpeqss %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
-; BTVER2-NEXT:    vcmpeqss (%rdi), %xmm0, %xmm0 # sched: [8:1.00]
+; BTVER2-NEXT:    vcmpeqss %xmm1, %xmm0, %xmm0 # sched: [2:1.00]
+; BTVER2-NEXT:    vcmpeqss (%rdi), %xmm0, %xmm0 # sched: [7:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
 ;
 ; ZNVER1-LABEL: test_cmpss:
@@ -447,11 +447,11 @@ declare <4 x float> @llvm.x86.sse.cmp.ss(<4 x float>, <4 x float>, i8) nounwind 
 define i32 @test_comiss(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a2) {
 ; GENERIC-LABEL: test_comiss:
 ; GENERIC:       # %bb.0:
-; GENERIC-NEXT:    comiss %xmm1, %xmm0 # sched: [3:1.00]
+; GENERIC-NEXT:    comiss %xmm1, %xmm0 # sched: [2:1.00]
 ; GENERIC-NEXT:    setnp %al # sched: [1:0.50]
 ; GENERIC-NEXT:    sete %cl # sched: [1:0.50]
 ; GENERIC-NEXT:    andb %al, %cl # sched: [1:0.33]
-; GENERIC-NEXT:    comiss (%rdi), %xmm0 # sched: [7:1.00]
+; GENERIC-NEXT:    comiss (%rdi), %xmm0 # sched: [8:1.00]
 ; GENERIC-NEXT:    setnp %al # sched: [1:0.50]
 ; GENERIC-NEXT:    sete %dl # sched: [1:0.50]
 ; GENERIC-NEXT:    andb %al, %dl # sched: [1:0.33]
@@ -489,11 +489,11 @@ define i32 @test_comiss(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a2) {
 ;
 ; SANDY-LABEL: test_comiss:
 ; SANDY:       # %bb.0:
-; SANDY-NEXT:    vcomiss %xmm1, %xmm0 # sched: [3:1.00]
+; SANDY-NEXT:    vcomiss %xmm1, %xmm0 # sched: [2:1.00]
 ; SANDY-NEXT:    setnp %al # sched: [1:0.50]
 ; SANDY-NEXT:    sete %cl # sched: [1:0.50]
 ; SANDY-NEXT:    andb %al, %cl # sched: [1:0.33]
-; SANDY-NEXT:    vcomiss (%rdi), %xmm0 # sched: [7:1.00]
+; SANDY-NEXT:    vcomiss (%rdi), %xmm0 # sched: [8:1.00]
 ; SANDY-NEXT:    setnp %al # sched: [1:0.50]
 ; SANDY-NEXT:    sete %dl # sched: [1:0.50]
 ; SANDY-NEXT:    andb %al, %dl # sched: [1:0.33]
@@ -531,11 +531,11 @@ define i32 @test_comiss(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a2) {
 ;
 ; SKYLAKE-LABEL: test_comiss:
 ; SKYLAKE:       # %bb.0:
-; SKYLAKE-NEXT:    vcomiss %xmm1, %xmm0 # sched: [3:1.00]
+; SKYLAKE-NEXT:    vcomiss %xmm1, %xmm0 # sched: [2:1.00]
 ; SKYLAKE-NEXT:    setnp %al # sched: [1:0.50]
 ; SKYLAKE-NEXT:    sete %cl # sched: [1:0.50]
 ; SKYLAKE-NEXT:    andb %al, %cl # sched: [1:0.25]
-; SKYLAKE-NEXT:    vcomiss (%rdi), %xmm0 # sched: [8:1.00]
+; SKYLAKE-NEXT:    vcomiss (%rdi), %xmm0 # sched: [7:1.00]
 ; SKYLAKE-NEXT:    setnp %al # sched: [1:0.50]
 ; SKYLAKE-NEXT:    sete %dl # sched: [1:0.50]
 ; SKYLAKE-NEXT:    andb %al, %dl # sched: [1:0.25]
@@ -545,11 +545,11 @@ define i32 @test_comiss(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a2) {
 ;
 ; SKX-LABEL: test_comiss:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vcomiss %xmm1, %xmm0 # sched: [3:1.00]
+; SKX-NEXT:    vcomiss %xmm1, %xmm0 # sched: [2:1.00]
 ; SKX-NEXT:    setnp %al # sched: [1:0.50]
 ; SKX-NEXT:    sete %cl # sched: [1:0.50]
 ; SKX-NEXT:    andb %al, %cl # sched: [1:0.25]
-; SKX-NEXT:    vcomiss (%rdi), %xmm0 # sched: [8:1.00]
+; SKX-NEXT:    vcomiss (%rdi), %xmm0 # sched: [7:1.00]
 ; SKX-NEXT:    setnp %al # sched: [1:0.50]
 ; SKX-NEXT:    sete %dl # sched: [1:0.50]
 ; SKX-NEXT:    andb %al, %dl # sched: [1:0.25]
@@ -1311,8 +1311,8 @@ define <4 x float> @test_maxps(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a
 ;
 ; BTVER2-LABEL: test_maxps:
 ; BTVER2:       # %bb.0:
-; BTVER2-NEXT:    vmaxps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
-; BTVER2-NEXT:    vmaxps (%rdi), %xmm0, %xmm0 # sched: [8:1.00]
+; BTVER2-NEXT:    vmaxps %xmm1, %xmm0, %xmm0 # sched: [2:1.00]
+; BTVER2-NEXT:    vmaxps (%rdi), %xmm0, %xmm0 # sched: [7:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
 ;
 ; ZNVER1-LABEL: test_maxps:
@@ -1378,8 +1378,8 @@ define <4 x float> @test_maxss(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a
 ;
 ; BTVER2-LABEL: test_maxss:
 ; BTVER2:       # %bb.0:
-; BTVER2-NEXT:    vmaxss %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
-; BTVER2-NEXT:    vmaxss (%rdi), %xmm0, %xmm0 # sched: [8:1.00]
+; BTVER2-NEXT:    vmaxss %xmm1, %xmm0, %xmm0 # sched: [2:1.00]
+; BTVER2-NEXT:    vmaxss (%rdi), %xmm0, %xmm0 # sched: [7:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
 ;
 ; ZNVER1-LABEL: test_maxss:
@@ -1445,8 +1445,8 @@ define <4 x float> @test_minps(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a
 ;
 ; BTVER2-LABEL: test_minps:
 ; BTVER2:       # %bb.0:
-; BTVER2-NEXT:    vminps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
-; BTVER2-NEXT:    vminps (%rdi), %xmm0, %xmm0 # sched: [8:1.00]
+; BTVER2-NEXT:    vminps %xmm1, %xmm0, %xmm0 # sched: [2:1.00]
+; BTVER2-NEXT:    vminps (%rdi), %xmm0, %xmm0 # sched: [7:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
 ;
 ; ZNVER1-LABEL: test_minps:
@@ -1512,8 +1512,8 @@ define <4 x float> @test_minss(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a
 ;
 ; BTVER2-LABEL: test_minss:
 ; BTVER2:       # %bb.0:
-; BTVER2-NEXT:    vminss %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
-; BTVER2-NEXT:    vminss (%rdi), %xmm0, %xmm0 # sched: [8:1.00]
+; BTVER2-NEXT:    vminss %xmm1, %xmm0, %xmm0 # sched: [2:1.00]
+; BTVER2-NEXT:    vminss (%rdi), %xmm0, %xmm0 # sched: [7:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
 ;
 ; ZNVER1-LABEL: test_minss:
@@ -2003,7 +2003,7 @@ define void @test_movntps(<4 x float> %a0, <4 x float> *%a1) {
 ;
 ; BTVER2-LABEL: test_movntps:
 ; BTVER2:       # %bb.0:
-; BTVER2-NEXT:    vmovntps %xmm0, (%rdi) # sched: [1:1.00]
+; BTVER2-NEXT:    vmovntps %xmm0, (%rdi) # sched: [3:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
 ;
 ; ZNVER1-LABEL: test_movntps:
@@ -3383,11 +3383,11 @@ define float @test_subss(float %a0, float %a1, float *%a2) {
 define i32 @test_ucomiss(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a2) {
 ; GENERIC-LABEL: test_ucomiss:
 ; GENERIC:       # %bb.0:
-; GENERIC-NEXT:    ucomiss %xmm1, %xmm0 # sched: [3:1.00]
+; GENERIC-NEXT:    ucomiss %xmm1, %xmm0 # sched: [2:1.00]
 ; GENERIC-NEXT:    setnp %al # sched: [1:0.50]
 ; GENERIC-NEXT:    sete %cl # sched: [1:0.50]
 ; GENERIC-NEXT:    andb %al, %cl # sched: [1:0.33]
-; GENERIC-NEXT:    ucomiss (%rdi), %xmm0 # sched: [7:1.00]
+; GENERIC-NEXT:    ucomiss (%rdi), %xmm0 # sched: [8:1.00]
 ; GENERIC-NEXT:    setnp %al # sched: [1:0.50]
 ; GENERIC-NEXT:    sete %dl # sched: [1:0.50]
 ; GENERIC-NEXT:    andb %al, %dl # sched: [1:0.33]
@@ -3425,11 +3425,11 @@ define i32 @test_ucomiss(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a2) {
 ;
 ; SANDY-LABEL: test_ucomiss:
 ; SANDY:       # %bb.0:
-; SANDY-NEXT:    vucomiss %xmm1, %xmm0 # sched: [3:1.00]
+; SANDY-NEXT:    vucomiss %xmm1, %xmm0 # sched: [2:1.00]
 ; SANDY-NEXT:    setnp %al # sched: [1:0.50]
 ; SANDY-NEXT:    sete %cl # sched: [1:0.50]
 ; SANDY-NEXT:    andb %al, %cl # sched: [1:0.33]
-; SANDY-NEXT:    vucomiss (%rdi), %xmm0 # sched: [7:1.00]
+; SANDY-NEXT:    vucomiss (%rdi), %xmm0 # sched: [8:1.00]
 ; SANDY-NEXT:    setnp %al # sched: [1:0.50]
 ; SANDY-NEXT:    sete %dl # sched: [1:0.50]
 ; SANDY-NEXT:    andb %al, %dl # sched: [1:0.33]
@@ -3467,11 +3467,11 @@ define i32 @test_ucomiss(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a2) {
 ;
 ; SKYLAKE-LABEL: test_ucomiss:
 ; SKYLAKE:       # %bb.0:
-; SKYLAKE-NEXT:    vucomiss %xmm1, %xmm0 # sched: [3:1.00]
+; SKYLAKE-NEXT:    vucomiss %xmm1, %xmm0 # sched: [2:1.00]
 ; SKYLAKE-NEXT:    setnp %al # sched: [1:0.50]
 ; SKYLAKE-NEXT:    sete %cl # sched: [1:0.50]
 ; SKYLAKE-NEXT:    andb %al, %cl # sched: [1:0.25]
-; SKYLAKE-NEXT:    vucomiss (%rdi), %xmm0 # sched: [8:1.00]
+; SKYLAKE-NEXT:    vucomiss (%rdi), %xmm0 # sched: [7:1.00]
 ; SKYLAKE-NEXT:    setnp %al # sched: [1:0.50]
 ; SKYLAKE-NEXT:    sete %dl # sched: [1:0.50]
 ; SKYLAKE-NEXT:    andb %al, %dl # sched: [1:0.25]
@@ -3481,11 +3481,11 @@ define i32 @test_ucomiss(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a2) {
 ;
 ; SKX-LABEL: test_ucomiss:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vucomiss %xmm1, %xmm0 # sched: [3:1.00]
+; SKX-NEXT:    vucomiss %xmm1, %xmm0 # sched: [2:1.00]
 ; SKX-NEXT:    setnp %al # sched: [1:0.50]
 ; SKX-NEXT:    sete %cl # sched: [1:0.50]
 ; SKX-NEXT:    andb %al, %cl # sched: [1:0.25]
-; SKX-NEXT:    vucomiss (%rdi), %xmm0 # sched: [8:1.00]
+; SKX-NEXT:    vucomiss (%rdi), %xmm0 # sched: [7:1.00]
 ; SKX-NEXT:    setnp %al # sched: [1:0.50]
 ; SKX-NEXT:    sete %dl # sched: [1:0.50]
 ; SKX-NEXT:    andb %al, %dl # sched: [1:0.25]

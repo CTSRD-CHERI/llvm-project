@@ -51,8 +51,6 @@ def verbose: F<"verbose">, HelpText<"Verbose mode">;
 
 def relocatable: F<"relocatable">, HelpText<"Create relocatable object file">;
 
-def emit_relocs: F<"emit-relocs">, HelpText<"Generate relocations in output">;
-
 def strip_all: F<"strip-all">, HelpText<"Strip all symbols">;
 
 def strip_debug: F<"strip-debug">, HelpText<"Strip debugging information">;
@@ -73,6 +71,9 @@ def error_limit: J<"error-limit=">,
   HelpText<"Maximum number of errors to emit before stopping (0 = no limit)">;
 
 // The follow flags are unique to wasm
+
+defm export: Eq<"export">,
+  HelpText<"Force a symbol to be exported">;
 
 def global_base: J<"global-base=">,
   HelpText<"Where to start to place global data">;

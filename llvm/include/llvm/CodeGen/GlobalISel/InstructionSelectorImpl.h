@@ -19,6 +19,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelector.h"
 #include "llvm/CodeGen/GlobalISel/RegisterBankInfo.h"
+#include "llvm/CodeGen/GlobalISel/Utils.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
@@ -43,10 +44,11 @@ enum {
 };
 
 template <class TgtInstructionSelector, class PredicateBitset,
-          class ComplexMatcherMemFn>
+          class ComplexMatcherMemFn, class CustomRendererFn>
 bool InstructionSelector::executeMatchTable(
     TgtInstructionSelector &ISel, NewMIVector &OutMIs, MatcherState &State,
-    const MatcherInfoTy<PredicateBitset, ComplexMatcherMemFn> &MatcherInfo,
+    const ISelInfoTy<PredicateBitset, ComplexMatcherMemFn, CustomRendererFn>
+        &ISelInfo,
     const int64_t *MatchTable, const TargetInstrInfo &TII,
     MachineRegisterInfo &MRI, const TargetRegisterInfo &TRI,
     const RegisterBankInfo &RBI, const PredicateBitset &AvailableFeatures,
@@ -124,8 +126,8 @@ bool InstructionSelector::executeMatchTable(
                       dbgs() << CurrentIdx
                              << ": GIM_CheckFeatures(ExpectedBitsetID="
                              << ExpectedBitsetID << ")\n");
-      if ((AvailableFeatures & MatcherInfo.FeatureBitsets[ExpectedBitsetID]) !=
-          MatcherInfo.FeatureBitsets[ExpectedBitsetID]) {
+      if ((AvailableFeatures & ISelInfo.FeatureBitsets[ExpectedBitsetID]) !=
+          ISelInfo.FeatureBitsets[ExpectedBitsetID]) {
         if (handleReject() == RejectAndGiveUp)
           return false;
       }
@@ -292,7 +294,7 @@ bool InstructionSelector::executeMatchTable(
                              << "), TypeID=" << TypeID << ")\n");
       assert(State.MIs[InsnID] != nullptr && "Used insn before defined");
       if (MRI.getType(State.MIs[InsnID]->getOperand(OpIdx).getReg()) !=
-          MatcherInfo.TypeObjects[TypeID]) {
+          ISelInfo.TypeObjects[TypeID]) {
         if (handleReject() == RejectAndGiveUp)
           return false;
       }
@@ -356,7 +358,7 @@ bool InstructionSelector::executeMatchTable(
       assert(State.MIs[InsnID] != nullptr && "Used insn before defined");
       // FIXME: Use std::invoke() when it's available.
       ComplexRendererFns Renderer =
-          (ISel.*MatcherInfo.ComplexPredicates[ComplexPredicateID])(
+          (ISel.*ISelInfo.ComplexPredicates[ComplexPredicateID])(
               State.MIs[InsnID]->getOperand(OpIdx));
       if (Renderer.hasValue())
         State.Renderers[RendererID] = Renderer.getValue();
@@ -649,6 +651,19 @@ bool InstructionSelector::executeMatchTable(
       break;
     }
 
+    case GIR_CustomRenderer: {
+      int64_t InsnID = MatchTable[CurrentIdx++];
+      int64_t OldInsnID = MatchTable[CurrentIdx++];
+      int64_t RendererFnID = MatchTable[CurrentIdx++];
+      assert(OutMIs[InsnID] && "Attempted to add to undefined instruction");
+      DEBUG_WITH_TYPE(TgtInstructionSelector::getName(),
+                      dbgs() << CurrentIdx << ": GIR_CustomRenderer(OutMIs["
+                             << InsnID << "], MIs[" << OldInsnID << "], "
+                             << RendererFnID << ")\n");
+      (ISel.*ISelInfo.CustomRenderers[RendererFnID])(OutMIs[InsnID],
+                                                     *State.MIs[OldInsnID]);
+      break;
+    }
     case GIR_ConstrainOperandRC: {
       int64_t InsnID = MatchTable[CurrentIdx++];
       int64_t OpIdx = MatchTable[CurrentIdx++];
@@ -710,7 +725,7 @@ bool InstructionSelector::executeMatchTable(
       int64_t TypeID = MatchTable[CurrentIdx++];
 
       State.TempRegisters[TempRegID] =
-          MRI.createGenericVirtualRegister(MatcherInfo.TypeObjects[TypeID]);
+          MRI.createGenericVirtualRegister(ISelInfo.TypeObjects[TypeID]);
       DEBUG_WITH_TYPE(TgtInstructionSelector::getName(),
                       dbgs() << CurrentIdx << ": TempRegs[" << TempRegID
                              << "] = GIR_MakeTempReg(" << TypeID << ")\n");

@@ -171,10 +171,9 @@ SDValue DAGTypeLegalizer::ScalarizeVecRes_MERGE_VALUES(SDNode *N,
 SDValue DAGTypeLegalizer::ScalarizeVecRes_BITCAST(SDNode *N) {
   SDValue Op = N->getOperand(0);
   if (Op.getValueType().isVector()
-      && Op.getValueType().getVectorNumElements() == 1) {
-    assert(!isSimpleLegalType(Op.getValueType()));
+      && Op.getValueType().getVectorNumElements() == 1
+      && !isSimpleLegalType(Op.getValueType()))
     Op = GetScalarizedVector(Op);
-  }
   EVT NewVT = N->getValueType(0).getVectorElementType();
   return DAG.getNode(ISD::BITCAST, SDLoc(N),
                      NewVT, Op);
@@ -2014,6 +2013,10 @@ SDValue DAGTypeLegalizer::SplitVecOp_STORE(StoreSDNode *N, unsigned OpNo) {
   EVT LoMemVT, HiMemVT;
   std::tie(LoMemVT, HiMemVT) = DAG.GetSplitDestVTs(MemoryVT);
 
+  // Scalarize if the split halves are not byte-sized.
+  if (!LoMemVT.isByteSized() || !HiMemVT.isByteSized())
+    return TLI.scalarizeVectorStore(N, DAG);
+
   unsigned IncrementSize = LoMemVT.getSizeInBits()/8;
 
   if (isTruncating)
@@ -3553,6 +3556,9 @@ SDValue DAGTypeLegalizer::WidenVecOp_STORE(SDNode *N) {
   // We have to widen the value, but we want only to store the original
   // vector type.
   StoreSDNode *ST = cast<StoreSDNode>(N);
+
+  if (!ST->getMemoryVT().getScalarType().isByteSized())
+    return TLI.scalarizeVectorStore(ST, DAG);
 
   SmallVector<SDValue, 16> StChain;
   if (ST->isTruncatingStore())

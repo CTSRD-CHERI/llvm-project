@@ -86,6 +86,69 @@ static unsigned getDefaultParsingOptions() {
   return options;
 }
 
+static void ModifyPrintingPolicyAccordingToEnv(CXPrintingPolicy Policy) {
+  struct Mapping {
+    const char *name;
+    enum CXPrintingPolicyProperty property;
+  };
+  struct Mapping mappings[] = {
+      {"CINDEXTEST_PRINTINGPOLICY_INDENTATION", CXPrintingPolicy_Indentation},
+      {"CINDEXTEST_PRINTINGPOLICY_SUPPRESSSPECIFIERS",
+       CXPrintingPolicy_SuppressSpecifiers},
+      {"CINDEXTEST_PRINTINGPOLICY_SUPPRESSTAGKEYWORD",
+       CXPrintingPolicy_SuppressTagKeyword},
+      {"CINDEXTEST_PRINTINGPOLICY_INCLUDETAGDEFINITION",
+       CXPrintingPolicy_IncludeTagDefinition},
+      {"CINDEXTEST_PRINTINGPOLICY_SUPPRESSSCOPE",
+       CXPrintingPolicy_SuppressScope},
+      {"CINDEXTEST_PRINTINGPOLICY_SUPPRESSUNWRITTENSCOPE",
+       CXPrintingPolicy_SuppressUnwrittenScope},
+      {"CINDEXTEST_PRINTINGPOLICY_SUPPRESSINITIALIZERS",
+       CXPrintingPolicy_SuppressInitializers},
+      {"CINDEXTEST_PRINTINGPOLICY_CONSTANTARRAYSIZEASWRITTEN",
+       CXPrintingPolicy_ConstantArraySizeAsWritten},
+      {"CINDEXTEST_PRINTINGPOLICY_ANONYMOUSTAGLOCATIONS",
+       CXPrintingPolicy_AnonymousTagLocations},
+      {"CINDEXTEST_PRINTINGPOLICY_SUPPRESSSTRONGLIFETIME",
+       CXPrintingPolicy_SuppressStrongLifetime},
+      {"CINDEXTEST_PRINTINGPOLICY_SUPPRESSLIFETIMEQUALIFIERS",
+       CXPrintingPolicy_SuppressLifetimeQualifiers},
+      {"CINDEXTEST_PRINTINGPOLICY_SUPPRESSTEMPLATEARGSINCXXCONSTRUCTORS",
+       CXPrintingPolicy_SuppressTemplateArgsInCXXConstructors},
+      {"CINDEXTEST_PRINTINGPOLICY_BOOL", CXPrintingPolicy_Bool},
+      {"CINDEXTEST_PRINTINGPOLICY_RESTRICT", CXPrintingPolicy_Restrict},
+      {"CINDEXTEST_PRINTINGPOLICY_ALIGNOF", CXPrintingPolicy_Alignof},
+      {"CINDEXTEST_PRINTINGPOLICY_UNDERSCOREALIGNOF",
+       CXPrintingPolicy_UnderscoreAlignof},
+      {"CINDEXTEST_PRINTINGPOLICY_USEVOIDFORZEROPARAMS",
+       CXPrintingPolicy_UseVoidForZeroParams},
+      {"CINDEXTEST_PRINTINGPOLICY_TERSEOUTPUT", CXPrintingPolicy_TerseOutput},
+      {"CINDEXTEST_PRINTINGPOLICY_POLISHFORDECLARATION",
+       CXPrintingPolicy_PolishForDeclaration},
+      {"CINDEXTEST_PRINTINGPOLICY_HALF", CXPrintingPolicy_Half},
+      {"CINDEXTEST_PRINTINGPOLICY_MSWCHAR", CXPrintingPolicy_MSWChar},
+      {"CINDEXTEST_PRINTINGPOLICY_INCLUDENEWLINES",
+       CXPrintingPolicy_IncludeNewlines},
+      {"CINDEXTEST_PRINTINGPOLICY_MSVCFORMATTING",
+       CXPrintingPolicy_MSVCFormatting},
+      {"CINDEXTEST_PRINTINGPOLICY_CONSTANTSASWRITTEN",
+       CXPrintingPolicy_ConstantsAsWritten},
+      {"CINDEXTEST_PRINTINGPOLICY_SUPPRESSIMPLICITBASE",
+       CXPrintingPolicy_SuppressImplicitBase},
+      {"CINDEXTEST_PRINTINGPOLICY_FULLYQUALIFIEDNAME",
+       CXPrintingPolicy_FullyQualifiedName},
+  };
+
+  unsigned i;
+  for (i = 0; i < sizeof(mappings) / sizeof(struct Mapping); i++) {
+    char *value = getenv(mappings[i].name);
+    if (value) {
+      clang_PrintingPolicy_setProperty(Policy, mappings[i].property,
+                                       (unsigned)strtoul(value, 0L, 10));
+    }
+  }
+}
+
 /** \brief Returns 0 in case of success, non-zero in case of a failure. */
 static int checkForErrors(CXTranslationUnit TU);
 
@@ -356,7 +419,11 @@ static void PrintRange(CXSourceRange R, const char *str) {
   PrintExtent(stdout, begin_line, begin_column, end_line, end_column);
 }
 
-int want_display_name = 0;
+static enum DisplayType {
+    DisplayType_Spelling,
+    DisplayType_DisplayName,
+    DisplayType_Pretty
+} wanted_display_type = DisplayType_Spelling;
 
 static void printVersion(const char *Prefix, CXVersion Version) {
   if (Version.Major < 0)
@@ -656,6 +723,28 @@ static int lineCol_cmp(const void *p1, const void *p2) {
   return (int)lhs->col - (int)rhs->col;
 }
 
+static CXString CursorToText(CXCursor Cursor) {
+  CXString text;
+  switch (wanted_display_type) {
+  case DisplayType_Spelling:
+    return clang_getCursorSpelling(Cursor);
+  case DisplayType_DisplayName:
+    return clang_getCursorDisplayName(Cursor);
+  case DisplayType_Pretty: {
+    CXPrintingPolicy Policy = clang_getCursorPrintingPolicy(Cursor);
+    ModifyPrintingPolicyAccordingToEnv(Policy);
+    text = clang_getCursorPrettyPrinted(Cursor, Policy);
+    clang_PrintingPolicy_dispose(Policy);
+    return text;
+  }
+  }
+  assert(0 && "unknown display type"); /* no llvm_unreachable in C. */
+  /* Set to NULL to prevent uninitialized variable warnings. */
+  text.data = NULL;
+  text.private_flags = 0;
+  return text;
+}
+
 static void PrintCursor(CXCursor Cursor, const char *CommentSchemaFile) {
   CXTranslationUnit TU = clang_Cursor_getTranslationUnit(Cursor);
   if (clang_isInvalid(Cursor.kind)) {
@@ -682,8 +771,7 @@ static void PrintCursor(CXCursor Cursor, const char *CommentSchemaFile) {
     int I;
 
     ks = clang_getCursorKindSpelling(Cursor.kind);
-    string = want_display_name? clang_getCursorDisplayName(Cursor) 
-                              : clang_getCursorSpelling(Cursor);
+    string = CursorToText(Cursor);
     printf("%s=%s", clang_getCString(ks),
                     clang_getCString(string));
     clang_disposeString(ks);
@@ -1038,6 +1126,13 @@ static const char* GetCursorSource(CXCursor Cursor) {
     clang_disposeString(source);
     return b;
   }
+}
+
+static CXString createCXString(const char *CS) {
+  CXString Str;
+  Str.data = (const void *) CS;
+  Str.private_flags = 0;
+  return Str;
 }
 
 /******************************************************************************/
@@ -1686,7 +1781,12 @@ static int perform_test_load(CXIndex Idx, CXTranslationUnit TU,
     else if (!strcmp(filter, "all-display") || 
              !strcmp(filter, "local-display")) {
       ck = NULL;
-      want_display_name = 1;
+      wanted_display_type = DisplayType_DisplayName;
+    }
+    else if (!strcmp(filter, "all-pretty") ||
+             !strcmp(filter, "local-pretty")) {
+      ck = NULL;
+      wanted_display_type = DisplayType_Pretty;
     }
     else if (!strcmp(filter, "none")) K = (enum CXCursorKind) ~0;
     else if (!strcmp(filter, "category")) K = CXCursor_ObjCCategoryDecl;
@@ -1754,8 +1854,11 @@ int perform_test_load_source(int argc, const char **argv,
   const char *InvocationPath;
 
   Idx = clang_createIndex(/* excludeDeclsFromPCH */
-                          (!strcmp(filter, "local") || 
-                           !strcmp(filter, "local-display"))? 1 : 0,
+                          (!strcmp(filter, "local") ||
+                           !strcmp(filter, "local-display") ||
+                           !strcmp(filter, "local-pretty"))
+                              ? 1
+                              : 0,
                           /* displayDiagnostics=*/1);
   InvocationPath = getenv("CINDEXTEST_INVOCATION_EMISSION_PATH");
   if (InvocationPath)
@@ -2326,6 +2429,8 @@ int perform_code_completion(int argc, const char **argv, int timing_only) {
     completionOptions |= CXCodeComplete_IncludeCodePatterns;
   if (getenv("CINDEXTEST_COMPLETION_BRIEF_COMMENTS"))
     completionOptions |= CXCodeComplete_IncludeBriefComments;
+  if (getenv("CINDEXTEST_COMPLETION_SKIP_PREAMBLE"))
+    completionOptions |= CXCodeComplete_SkipPreamble;
   
   if (timing_only)
     input += strlen("-code-completion-timing=");
@@ -2992,7 +3097,7 @@ typedef struct {
   int first_check_printed;
   int fail_for_error;
   int abort;
-  const char *main_filename;
+  CXString main_filename;
   ImportedASTFilesData *importedASTs;
   IndexDataStringList *strings;
   CXTranslationUnit TU;
@@ -3031,6 +3136,7 @@ static void printCXIndexLoc(CXIdxLoc loc, CXClientData client_data) {
   const char *cname;
   CXIdxClientFile file;
   unsigned line, column;
+  const char *main_filename;
   int isMainFile;
   
   index_data = (IndexData *)client_data;
@@ -3045,7 +3151,8 @@ static void printCXIndexLoc(CXIdxLoc loc, CXClientData client_data) {
   }
   filename = clang_getFileName((CXFile)file);
   cname = clang_getCString(filename);
-  if (strcmp(cname, index_data->main_filename) == 0)
+  main_filename = clang_getCString(index_data->main_filename);
+  if (strcmp(cname, main_filename) == 0)
     isMainFile = 1;
   else
     isMainFile = 0;
@@ -3247,14 +3354,11 @@ static void index_diagnostic(CXClientData client_data,
 static CXIdxClientFile index_enteredMainFile(CXClientData client_data,
                                        CXFile file, void *reserved) {
   IndexData *index_data;
-  CXString filename;
 
   index_data = (IndexData *)client_data;
   printCheck(index_data);
 
-  filename = clang_getFileName(file);
-  index_data->main_filename = clang_getCString(filename);
-  clang_disposeString(filename);
+  index_data->main_filename = clang_getFileName(file);
 
   printf("[enteredMainFile]: ");
   printCXIndexFile((CXIdxClientFile)file);
@@ -3493,7 +3597,7 @@ static int index_compile_args(int num_args, const char **args,
   index_data.first_check_printed = 0;
   index_data.fail_for_error = 0;
   index_data.abort = 0;
-  index_data.main_filename = "";
+  index_data.main_filename = createCXString("");
   index_data.importedASTs = importedASTs;
   index_data.strings = NULL;
   index_data.TU = NULL;
@@ -3509,6 +3613,7 @@ static int index_compile_args(int num_args, const char **args,
   if (index_data.fail_for_error)
     result = -1;
 
+  clang_disposeString(index_data.main_filename);
   free_client_data(&index_data);
   return result;
 }
@@ -3530,7 +3635,7 @@ static int index_ast_file(const char *ast_file,
   index_data.first_check_printed = 0;
   index_data.fail_for_error = 0;
   index_data.abort = 0;
-  index_data.main_filename = "";
+  index_data.main_filename = createCXString("");
   index_data.importedASTs = importedASTs;
   index_data.strings = NULL;
   index_data.TU = TU;
@@ -3543,6 +3648,7 @@ static int index_ast_file(const char *ast_file,
     result = -1;
 
   clang_disposeTranslationUnit(TU);
+  clang_disposeString(index_data.main_filename);
   free_client_data(&index_data);
   return result;
 }
@@ -4035,9 +4141,7 @@ int print_usrs(const char **I, const char **E) {
           if (!isUSR(I[2]))
             return not_usr("<class USR>", I[2]);
           else {
-            CXString x;
-            x.data = (void*) I[2];
-            x.private_flags = 0;
+            CXString x = createCXString(I[2]);
             print_usr(clang_constructUSR_ObjCIvar(I[1], x));
           }
 
@@ -4062,9 +4166,7 @@ int print_usrs(const char **I, const char **E) {
           if (!isUSR(I[3]))
             return not_usr("<class USR>", I[3]);
           else {
-            CXString x;
-            x.data = (void*) I[3];
-            x.private_flags = 0;
+            CXString x = createCXString(I[3]);
             print_usr(clang_constructUSR_ObjCMethod(I[1], atoi(I[2]), x));
           }
           I += 4;
@@ -4092,9 +4194,7 @@ int print_usrs(const char **I, const char **E) {
           if (!isUSR(I[2]))
             return not_usr("<class USR>", I[2]);
           else {
-            CXString x;
-            x.data = (void*) I[2];
-            x.private_flags = 0;
+            CXString x = createCXString(I[2]);
             print_usr(clang_constructUSR_ObjCProperty(I[1], x));
           }
           I += 3;
