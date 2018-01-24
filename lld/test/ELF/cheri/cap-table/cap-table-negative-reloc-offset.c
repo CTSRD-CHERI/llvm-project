@@ -1,5 +1,5 @@
 // RUN: %cheri128_cc1 -emit-obj -O2 -target-abi purecap -mllvm -cheri-cap-table %s -o %t.o
-// RUN: llvm-objdump -d -r -C -t %t.o
+// RUN: llvm-readobj -r %t.o | FileCheck -check-prefix RELOCATIONS %s
 // RUN: ld.lld -o %t.exe %t.o -verbose 2>&1 | FileCheck %s -check-prefix WARN
 // RUN: llvm-objdump -d -r -C -t %t.exe | FileCheck %s
 
@@ -137,6 +137,7 @@ const struct man_macro __man_macros[MAN_MAX - MAN_TH] = {
   {blk_close,    MAN_BSCOPE}, /* UE */
 };
 const struct man_macro *const man_macros = __man_macros - MAN_TH;
+// RELOCATIONS: 0x440 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __man_macros 0xFFFFFFFFFFFFD280
 
 int __start(void) {
   return man_macros[MAN_TH].flags;
@@ -146,7 +147,7 @@ int __start(void) {
 
 // WARN: global capability offset -11648 is less than 0:
 // WARN-NEXT: >>> Location: {{.+}}cap-table-negative-reloc-offset.c.tmp.o:(man_macros)
-// WARN-NEXT: >>> Target: object (in current DSO) __man_macros
+// WARN-NEXT: >>> Target: object __man_macros
 // WARN-NEXT: >>> defined in cap-table-negative-reloc-offset.c
 
 // CHECK-LABEL: CAPABILITY RELOCATION RECORDS:
