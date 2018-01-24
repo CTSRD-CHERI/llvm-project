@@ -289,10 +289,12 @@ std::string lld::verboseToString(Symbol *B, uint64_t SymOffset) {
     Msg += "local ";
   else if (B->isShared())
     Msg += "shared ";
-  else if (B->isDefined())
-    Msg += "defined ";
+  // else if (B->isDefined())
+  //  Msg += "defined ";
   if (B->Type == STT_COMMON)
     Msg += "common ";
+  else if (B->Type == STT_TLS)
+    Msg += "TLS ";
   if (B->isSection())
     Msg += "section ";
   else if (B->isTls())
