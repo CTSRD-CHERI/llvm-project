@@ -134,8 +134,7 @@ protected:
          uint8_t StOther, uint8_t Type)
       : Binding(Binding), File(File), SymbolKind(K), NeedsPltAddr(false),
         IsInIplt(false), IsInIgot(false), IsPreemptible(false),
-        Used(!Config->GcSections), WasUndefWeak(false), Type(Type),
-        StOther(StOther), Name(Name) {}
+        Used(!Config->GcSections), Type(Type), StOther(StOther), Name(Name) {}
 
   const unsigned SymbolKind : 8;
 
@@ -154,12 +153,6 @@ public:
 
   // True if an undefined or shared symbol is used from a live section.
   unsigned Used : 1;
-
-  // This symbol was originally a weak symbol (used to mark linker synthesized
-  // symbols so that __cap_relocs doesn't warn about zero size symbols if the
-  // target is a weak symbol that has been resolved to nothing).
-  // XXXAR: find a better way to solve this
-  unsigned WasUndefWeak : 1;
 
   // The following fields have the same meaning as the ELF symbol attributes.
   uint8_t Type;    // symbol type
