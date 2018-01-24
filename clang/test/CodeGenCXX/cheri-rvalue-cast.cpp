@@ -36,7 +36,7 @@ namespace PR20227 {
 // CHECK: declare i32 @__cxa_atexit(void (i8 addrspace(200)*) addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*) #2
 
 // CHECK: define internal void @__cxx_global_var_init.1() #0 {
-// CHECK:    call void @llvm.memset.p200i8.i64(i8 addrspace(200)* bitcast (%"struct.PR20227::C" addrspace(200)* @_ZGRN7PR202271cE_ to i8 addrspace(200)*), i8 0, i64 [[$CAP_SIZE]], i32 [[$CAP_SIZE]], i1 false)
+// CHECK:    call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align [[$CAP_SIZE]] bitcast (%"struct.PR20227::C" addrspace(200)* @_ZGRN7PR202271cE_ to i8 addrspace(200)*), i8 0, i64 [[$CAP_SIZE]], i1 false)
 // CHECK:    call void @_ZN7PR202271CC1Ev(%"struct.PR20227::C" addrspace(200)* @_ZGRN7PR202271cE_) #2
 // CHECK:    [[PCC:%.+]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
 // CHECK:    [[WITH_OFFSET:%.+]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* [[PCC]], i64 ptrtoint (void (%"struct.PR20227::C" addrspace(200)*)* @_ZN7PR202271CD1Ev to i64))

@@ -372,13 +372,13 @@ namespace PR7556 {
 
     // B() is initialized using memset:
     // CHECK-NEXT: [[B_AS_I8:%.+]] = bitcast %"struct.PR7556::B" addrspace(200)* [[STRUCT_B]] to i8 addrspace(200)*
-    // CHECK-NEXT: call void @llvm.memset.p200i8.i64(i8 addrspace(200)* [[B_AS_I8]], i8 0, i64 4, i32 4, i1 false)
+    // CHECK-NEXT: call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align 4 [[B_AS_I8]], i8 0, i64 4, i1 false)
     // CHECK-NEXT: call void @_ZN6PR75561BD1Ev(%"struct.PR7556::B" addrspace(200)* [[STRUCT_B]])
     B();
 
     // C can't be zero-initialized due to pointer to data member:
     // CHECK-NEXT: [[C_AS_I8:%.+]] = bitcast %"struct.PR7556::C" addrspace(200)* [[STRUCT_C]] to i8 addrspace(200)*
-    // CHECK-NEXT: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* [[C_AS_I8]], i8 addrspace(200)* addrspacecast (i8* bitcast (%"struct.PR7556::C"* @0 to i8*) to i8 addrspace(200)*), i64 8, i32 8, i1 false)
+    // CHECK-NEXT: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 [[C_AS_I8]], i8 addrspace(200)* align 8 addrspacecast (i8* bitcast (%"struct.PR7556::C"* @0 to i8*) to i8 addrspace(200)*), i64 8, i1 false)
     // CHECK-NEXT: call void @_ZN6PR75561CD1Ev(%"struct.PR7556::C" addrspace(200)* [[STRUCT_C]])
     C();
     // CHECK: ret void

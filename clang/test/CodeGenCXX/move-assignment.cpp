@@ -24,8 +24,8 @@ void test1() {
 // X86:   call dereferenceable(1) %struct.A* @_ZN1AaSEOS_(%struct.A* %a, %struct.A* dereferenceable(1) %a2)
 // CHERI: call dereferenceable(1) %struct.A addrspace(200)* @_ZN1AaSEU3capOS_(%struct.A addrspace(200)* %a, %struct.A addrspace(200)* dereferenceable(1) %a2)
 // BOTH-NOT: store
-// X86:   call void @llvm.memcpy.p0i8.p0i8.i64(i8* {{.+}}, i8* {{.+}}, i64 24, i32 4, i1 false)
-// CHERI: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* {{.+}}, i8 addrspace(200)* {{.+}}, i64 24, i32 4, i1 false)
+// X86:   call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 4 {{.+}}, i8* align 4 {{.+}}, i64 24, i1 false)
+// CHERI: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 4 {{.+}}, i8 addrspace(200)* align 4 {{.+}}, i64 24, i1 false)
 // BOTH-NOT: store
 // X86:   ret %struct.B* %this1
 // CHERI: ret %struct.B addrspace(200)* %this1
