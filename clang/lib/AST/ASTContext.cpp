@@ -8961,11 +8961,11 @@ unsigned ASTContext::getIntRange(QualType T) const {
   if (Target->SupportsCapabilities()) {
     if (T->isPointerType())
      if (T->getAs<PointerType>()->isCHERICapability())
-      return Target->getPointerWidth(0);
+      return Target->getPointerRangeForCHERICapability();
     if (T->isBuiltinType()) {
       int K = T->getAs<BuiltinType>()->getKind();
       if ((K == BuiltinType::IntCap || K == BuiltinType::UIntCap))
-        return Target->getPointerWidth(0);
+        return Target->getPointerRangeForCHERICapability();
     }
   }
   return getIntWidth(T);
