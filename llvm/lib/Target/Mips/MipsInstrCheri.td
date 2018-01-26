@@ -264,11 +264,17 @@ def CWriteHwr : CheriFmt2Op<0xe, (outs), (ins CheriOpnd:$cs, CheriHWRegsOpnd:$ch
 // PCC access
 def CGetPCC : CheriFmt1Op<0x0, (outs CheriOpnd:$r1), (ins),
                           "cgetpcc\t${r1}",
-                          [(set CheriOpnd:$r1, (int_cheri_pcc_get))]>;
+                          [(set CheriOpnd:$r1, (int_cheri_pcc_get))]> {
+  let isReMaterializable = 0;
+}
+
 
 def CSetPCCOffset : CheriFmt2Op<7, (outs CheriOpnd:$r1), (ins GPR64Opnd:$r2),
                                 "cgetpccsetoffset\t${r1}, $r2",
-                                [(set CheriOpnd:$r1, (int_cheri_cap_offset_set (CapRegType (int_cheri_pcc_get)), GPR64Opnd: $r2))]>;
+                                [(set CheriOpnd:$r1, (int_cheri_cap_offset_set (CapRegType (int_cheri_pcc_get)), GPR64Opnd: $r2))]>
+{
+  let isReMaterializable = 0;
+}
 
 // Sealing and unsealing
 def CSeal   : CheriFmt3Op<0xb, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3), 
@@ -299,7 +305,7 @@ def CMove : CheriFmt2Op<0xa, (outs CheriOpnd: $r1), (ins CheriOpnd:$r2),
 
 
 // Cause register (privileged mode only)
-let hasSideEffects = 1 in {
+let hasSideEffects = 1, isReMaterializable = 0 in {
 def CGetCause : CheriFmt1Op<1, (outs GPR64Opnd:$r1), (ins),
                           "cgetcause\t${r1}",
                           [(set GPR64Opnd:$r1, (int_mips_cap_cause_get))]>;
@@ -704,7 +710,7 @@ def : Pat<(load (CapRegType (AddrFI256:$addr))),
 def : Pat<(load (CapRegType (AddrFI256:$addr))),
               (LOADCAP ZERO_64, (i64 0), $addr)>;
 
-let Defs = [C11], Uses = [C11], hasSideEffects = 1, Predicates=[IsCHERIABI] in {
+let Defs = [C11], Uses = [C11], hasSideEffects = 1, isReMaterializable = 0, Predicates=[IsCHERIABI] in {
 def ADJCALLSTACKCAPDOWN : MipsPseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
                                   [(callseq_start timm:$amt1, timm:$amt2)]>;
 def ADJCALLSTACKCAPUP   : MipsPseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
