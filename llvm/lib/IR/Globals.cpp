@@ -295,7 +295,7 @@ GlobalVariable::GlobalVariable(Module &M, Type *Ty, bool constant,
                                LinkageTypes Link, Constant *InitVal,
                                const Twine &Name, GlobalVariable *Before,
                                ThreadLocalMode TLMode)
-  : GlobalVariable(M, Ty, constant, Link, InitVal, Name, nullptr, TLMode, 0, false) {}
+  : GlobalVariable(M, Ty, constant, Link, InitVal, Name, Before, TLMode, 0, false) {}
 
 
 GlobalVariable::GlobalVariable(Type *Ty, bool constant, LinkageTypes Link,
