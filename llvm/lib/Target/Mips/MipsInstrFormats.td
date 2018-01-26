@@ -957,12 +957,6 @@ class COP0_TLB_FM<bits<6> op> : StdArch {
   let Inst{5-0} = op;     // Operation
 }
 
-class RI_TRAP_FM<string asmstr> :
-            InstSE<(outs), (ins), asmstr, [], II_TRAP, FrmOther> {
-  bits<32> Inst;
-  let Inst{31-0} = 0xefefefef;
-}
-
 class CACHEOP_FM<bits<6> op> : StdArch {
   bits<21> addr;
   bits<5> hint;
