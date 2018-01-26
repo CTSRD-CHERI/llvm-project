@@ -224,15 +224,6 @@ void elf::addReservedSymbols() {
   ElfSym::GlobalOffsetTable = addOptionalRegular(
       "_GLOBAL_OFFSET_TABLE_", Out::ElfHeader, Target->GotBaseSymOff);
 
-  if (!Config->Relocatable) {
-    // When creating relocatable output we should not define the
-    // _CHERI_CAPABILITY_TABLE_ symbol because otherwise we get duplicate symbol
-    // errors when linking that into a final executable
-    // XXXAR: should I to change the binding or visibility?
-    ElfSym::CheriCapabilityTable = addOptionalRegular(
-      "_CHERI_CAPABILITY_TABLE_", InX::CheriCapTable, 0);
-  }
-
   // __ehdr_start is the location of ELF file headers. Note that we define
   // this symbol unconditionally even when using a linker script, which
   // differs from the behavior implemented by GNU linker which only define
@@ -331,8 +322,14 @@ template <class ELFT> static void createSyntheticSections() {
     if (Config->CapabilitySize > 0) {
       InX::CheriCapTable = make<CheriCapTableSection>();
       Add(InX::CheriCapTable);
-      if (ElfSym::CheriCapabilityTable)
-        ElfSym::CheriCapabilityTable->Section = InX::CheriCapTable;
+      if (!Config->Relocatable) {
+        // When creating relocatable output we should not define the
+        // _CHERI_CAPABILITY_TABLE_ symbol because otherwise we get duplicate symbol
+        // errors when linking that into a final executable
+        // XXXAR: should I change the binding or visibility?
+        ElfSym::CheriCapabilityTable = addOptionalRegular(
+          "_CHERI_CAPABILITY_TABLE_", InX::CheriCapTable, 0);
+      }
     }
     if (!Config->Shared && Config->HasDynSymTab) {
       InX::MipsRldMap = make<MipsRldMapSection>();
