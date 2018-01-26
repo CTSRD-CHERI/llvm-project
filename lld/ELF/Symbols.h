@@ -134,7 +134,8 @@ protected:
          uint8_t StOther, uint8_t Type)
       : Binding(Binding), File(File), SymbolKind(K), NeedsPltAddr(false),
         IsInIplt(false), IsInIgot(false), IsPreemptible(false),
-        Used(!Config->GcSections), Type(Type), StOther(StOther), Name(Name) {}
+        Used(!Config->GcSections), IsSectionStartSymbol(false),
+        Type(Type), StOther(StOther), Name(Name) {}
 
   const unsigned SymbolKind : 8;
 
@@ -153,6 +154,11 @@ public:
 
   // True if an undefined or shared symbol is used from a live section.
   unsigned Used : 1;
+
+  // True if the linker should set the size of this symbol to be the size of the
+  // section it references. For compatibility reason this is only used when
+  // building for CHERI
+  unsigned IsSectionStartSymbol : 1;
 
   // The following fields have the same meaning as the ELF symbol attributes.
   uint8_t Type;    // symbol type

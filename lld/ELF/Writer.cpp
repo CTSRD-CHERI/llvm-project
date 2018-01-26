@@ -81,9 +81,6 @@ private:
   uint64_t getEntryAddr();
 
   std::vector<PhdrEntry *> Phdrs;
-  // Keep a list of section start symbols since we need to update the size
-  // once we know how big the section is
-  std::vector<std::pair<Defined *, OutputSection *>> SectionStartSymbols;
 
   uint64_t FileSize;
   uint64_t SectionHeaderOff;
@@ -183,6 +180,17 @@ static Defined *addOptionalRegular(StringRef Name, SectionBase *Sec,
   Symbol *Sym = Symtab->addRegular(Name, StOther, STT_NOTYPE, Val,
                                    /*Size=*/0, Binding, Sec,
                                    /*File=*/nullptr);
+  // If Val == 0 assume this symbol references the start of a section.
+  // When targetting CHERI we set the size of that symbol since otherwise
+  // an expression like foo = &_DYNAMIC will create a zero-length capability
+  // for foo and most likely crash the program.
+  // TODO: I would like to do this for all targets but that might cause
+  // compatibility issues
+  if (Val == 0) {
+    if (Config->Verbose)
+      message("Treating " + Name + " as a section start symbol");
+    Sym->IsSectionStartSymbol = true;
+  }
   return cast<Defined>(Sym);
 }
 
@@ -960,7 +968,6 @@ template <class ELFT> void Writer<ELFT>::setReservedSymbolSections() {
   if (ElfSym::Bss) {
     auto Bss = findSection(".bss");
     ElfSym::Bss->Section = Bss;
-    ElfSym::Bss->Size = Bss ? Bss->Size : 0;
   }
 
   // Setup MIPS _gp_disp/__gnu_local_gp symbols which should
@@ -1435,12 +1442,11 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   // Even the author of gold doesn't remember why gold behaves that way.
   // https://sourceware.org/ml/binutils/2002-03/msg00360.html
   if (InX::DynSymTab) {
-    auto *DynamicSym =
-        Symtab->addRegular("_DYNAMIC", STV_HIDDEN, STT_NOTYPE, 0 /*Value*/,
+    auto *Sym = Symtab->addRegular("_DYNAMIC", STV_HIDDEN, STT_NOTYPE, 0 /*Value*/,
                            /*Size=*/0, STB_WEAK, InX::Dynamic,
                            /*File=*/nullptr);
-    SectionStartSymbols.push_back(
-        std::make_pair(cast<Defined>(DynamicSym), InX::Dynamic->getParent()));
+    // In CheriABI we want sensible bounds if we do &_DYNAMIC in C code
+    Sym->IsSectionStartSymbol = true;
   }
 
   // Define __rel[a]_iplt_{start,end} symbols if needed.
@@ -1597,15 +1603,6 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   applySynthetic({InX::SymTab},
                  [](SyntheticSection *SS) { SS->postThunkContents(); });
 
-  // XXXAR: only set the size on the symbols for CheriABI
-  if (Config->MipsCheriAbi) {
-    // We know the size of the sections referenced by __start_foo symbols so we
-    // can set the size now.
-    for (auto &SectionSym : SectionStartSymbols)
-      if (SectionSym.first && SectionSym.second)
-        SectionSym.first->Size = SectionSym.second->Size;
-  }
-
   // If a synthetic section was removed from the output we have to manually
   // change the start&stop symbols to be NULL since otherwise we create a
   // corrupted symbol table
@@ -1638,11 +1635,7 @@ template <class ELFT> void Writer<ELFT>::addStartEndSymbols() {
     // These symbols resolve to the image base if the section does not exist.
     // A special value -1 indicates end of the section.
     if (OS) {
-      auto *StartSym = addOptionalRegular(Start, OS, 0);
-      // Save the start symbol since we need to update the size once we know the
-      // size of the output section
-      if (StartSym)
-        SectionStartSymbols.push_back(std::make_pair(StartSym, OS));
+      addOptionalRegular(Start, OS, 0);
       addOptionalRegular(End, OS, -1);
     } else {
       if (Config->Pic)
@@ -1677,12 +1670,7 @@ void Writer<ELFT>::addStartStopSymbols(OutputSection *Sec) {
   StringRef S = Sec->Name;
   if (!isValidCIdentifier(S))
     return;
-  auto *StartSym =
-      addOptionalRegular(Saver.save("__start_" + S), Sec, 0, STV_DEFAULT);
-  // Save the start symbol since we need to update the size once we know the
-  // size of the output section
-  if (StartSym)
-    SectionStartSymbols.push_back(std::make_pair(StartSym, Sec));
+  addOptionalRegular(Saver.save("__start_" + S), Sec, 0, STV_DEFAULT);
   addOptionalRegular(Saver.save("__stop_" + S), Sec, -1, STV_DEFAULT);
 }
 
