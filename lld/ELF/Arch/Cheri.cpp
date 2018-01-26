@@ -467,9 +467,6 @@ uint32_t CheriCapTableSection::getIndex(const Symbol &Sym) const {
 
 template <class ELFT>
 void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
-  if (ElfSym::CheriCapabilityTable && !Config->Relocatable)
-    ElfSym::CheriCapabilityTable->Size = getSize();
-
   uint64_t SmallEntryCount = 0;
   for (auto &it : Entries) {
     // TODO: looping twice is inefficient, we could keep track of the number of
