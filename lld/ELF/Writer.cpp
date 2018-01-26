@@ -173,7 +173,8 @@ template <class ELFT> void Writer<ELFT>::combineCapRelocsSections() {
 
 static Defined *addOptionalRegular(StringRef Name, SectionBase *Sec,
                                    uint64_t Val, uint8_t StOther = STV_HIDDEN,
-                                   uint8_t Binding = STB_GLOBAL) {
+                                   uint8_t Binding = STB_GLOBAL,
+                                   bool CanBeSectionStart = true) {
   Symbol *S = Symtab->find(Name);
   if (!S || S->isDefined())
     return nullptr;
@@ -186,7 +187,7 @@ static Defined *addOptionalRegular(StringRef Name, SectionBase *Sec,
   // for foo and most likely crash the program.
   // TODO: I would like to do this for all targets but that might cause
   // compatibility issues
-  if (Val == 0) {
+  if (Val == 0 && CanBeSectionStart) {
     if (Config->Verbose)
       message("Treating " + Name + " as a section start symbol");
     Sym->IsSectionStartSymbol = true;
@@ -1624,6 +1625,8 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
         Reg->Section = nullptr;
         Reg->Value = 0;
         Reg->Size = 0;
+        /* Avoid crashes when calling getSize() */
+        Reg->IsSectionStartSymbol = false;
       }
   }
 }
@@ -1640,8 +1643,11 @@ template <class ELFT> void Writer<ELFT>::addStartEndSymbols() {
     } else {
       if (Config->Pic)
         OS = Out::ElfHeader;
-      addOptionalRegular(Start, OS, 0);
-      addOptionalRegular(End, OS, 0);
+      addOptionalRegular(Start, OS, 0, STV_HIDDEN, STB_GLOBAL,
+                         /*CanBeSectionStart=*/OS != nullptr);
+      // End is not a section start symbol even though it has value 0:
+      addOptionalRegular(End, OS, 0, STV_HIDDEN, STB_GLOBAL,
+                         /*CanBeSectionStart=*/false);
     }
   };
 
