@@ -559,11 +559,7 @@ public:
     if (TI.areAllPointersCapabilities()) {
       unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
       if (AddrTy->getPointerAddressSpace() != CapAS) {
-        llvm::Type *CapTy = cast<llvm::PointerType>(AddrTy)
-            ->getElementType()->getPointerTo(CapAS);
-
         Addr = CodeGenFunction::FunctionAddressToCapability(CGF, Addr);
-        Addr = Builder.CreateBitCast(Addr, CapTy);
       }
     }
     return Addr;
@@ -1889,10 +1885,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     if (TI.areAllPointersCapabilities()) {
       unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
       if (AddrTy->getPointerAddressSpace() != CapAS) {
-        llvm::Type *CapTy = cast<llvm::PointerType>(AddrTy)
-            ->getElementType()->getPointerTo(CapAS);
         Addr = CodeGenFunction::FunctionAddressToCapability(CGF, Addr);
-        Addr = Builder.CreateBitCast(Addr, CapTy);
       }
     }
     return Addr;

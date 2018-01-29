@@ -1963,9 +1963,12 @@ public:
                             TBAAAccessInfo *TBAAInfo = nullptr);
   LValue EmitLoadOfPointerLValue(Address Ptr, const PointerType *PtrTy);
 
-  // FunctionAddressToCapability - converts function pointer Addr to a PCC-relative
-  // CHERI capability.
-  static llvm::Value *FunctionAddressToCapability(CodeGenFunction &CGF, llvm::Value *Addr);
+  // FunctionAddressToCapability - converts function pointer Addr to a
+  // PCC-relative CHERI capability (if CapType is non-null it will also add a
+  // bitcast to that type)
+  static llvm::Value *
+  FunctionAddressToCapability(CodeGenFunction &CGF, llvm::Value *Addr,
+                              llvm::Type *CapType = nullptr);
 
   /// CreateTempAlloca - This creates an alloca and inserts it into the entry
   /// block if \p ArraySize is nullptr, otherwise inserts it at the current

@@ -2281,21 +2281,22 @@ static LValue EmitGlobalVarDeclLValue(CodeGenFunction &CGF,
 }
 
 llvm::Value *CodeGenFunction::FunctionAddressToCapability(CodeGenFunction &CGF,
-                                                          llvm::Value *Addr) {
+                                                          llvm::Value *Addr,
+                                                          llvm::Type *CapTy) {
   auto* VTy = cast<llvm::PointerType>(Addr->getType());
   unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
+  if (!CapTy)
+    CapTy = VTy->getElementType()->getPointerTo(CapAS);
   if (VTy->getPointerAddressSpace() == CapAS)
-    return Addr;
-  llvm::Type *CapTy = VTy->getElementType()->getPointerTo(CapAS);
+    return CGF.Builder.CreateBitCast(Addr, CapTy);
   if (llvm::MCTargetOptions::cheriUsesCapabilityTable())
-    return CGF.Builder.CreateAddrSpaceCast(Addr, CapTy);
+    return CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(Addr, CapTy);
 
   // Without a cap table we need to get the function address using $pcc
   llvm::Value *V = CGF.Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
   llvm::Value *PCC = CGF.Builder.CreateCall(
           CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_pcc_get), {});
   if (auto *F = dyn_cast<llvm::Function>(Addr->stripPointerCasts())) {
-    // XXXAR: not with cap table!
     if (F->hasWeakLinkage() || F->hasExternalWeakLinkage()) {
       V = CGF.Builder.CreateCall(
           CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_from_pointer),
@@ -2303,8 +2304,7 @@ llvm::Value *CodeGenFunction::FunctionAddressToCapability(CodeGenFunction &CGF,
       return CGF.Builder.CreateBitCast(V, CapTy);
     }
   }
-  V = CGF.setPointerOffset(PCC, V);
-  return CGF.Builder.CreateBitCast(V, CapTy);
+  return CGF.Builder.CreateBitCast(CGF.setPointerOffset(PCC, V), CapTy);
 }
 
 static llvm::Value *EmitFunctionDeclPointer(CodeGenFunction &CGF,
@@ -2423,10 +2423,7 @@ LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
         unsigned CapAS = CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
         llvm::Type *ResTy = Result->getType();
         if (ResTy->getPointerAddressSpace() != CapAS) {
-          llvm::Type *CapTy = cast<llvm::PointerType>(ResTy)
-            ->getElementType()->getPointerTo(CapAS);
           Result = FunctionAddressToCapability(*this, Result);
-          Result = Builder.CreateBitCast(Result, CapTy);
         }
       }
 
