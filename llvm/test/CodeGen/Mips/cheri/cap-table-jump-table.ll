@@ -2,7 +2,7 @@
 ; RUNNOT: %cheri_llc %s -O2 -mxgot -target-abi n64 -relocation-model=pic -cheri-cap-table -o -
 ; RUN: %cheri_purecap_llc %s -O2 -cheri-cap-table -o - -mxcaptable=true | %cheri_FileCheck %s
 ; RUN: %cheri_purecap_llc %s -O2 -cheri-cap-table -o - -mxcaptable=false | %cheri_FileCheck %s -check-prefix SMALLTABLE
-; RUN: %cheri_purecap_llc %s -O0 -cheri-cap-table -o - -mxcaptable=true | %cheri_FileCheck %s -check-prefixes NO-OPT
+; RUN: %cheri_purecap_llc %s -O0 -cheri-cap-table -o - -mxcaptable=true | %cheri_FileCheck %s -check-prefix NO-OPT
 ; ModuleID = '/Users/alex/cheri/build/llvm-256-build/cap-table-jump-table-reduce.ll-reduced-simplified.bc'
 source_filename = "cap-table-jump-table-reduce.ll-output-7f90547.bc"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
@@ -40,8 +40,8 @@ sw.bb1:
 ; SMALLTABLE:    clcbi $c1, %captab20(.LJTI0_0)($c26)
 
 
-
-; CHECK-LABEL:# BB#0:                                 # %entry
+; CHECK-LABEL: c:
+; CHECK-LABEL: %bb.0:                                 # %entry
 ; CHECK-NEXT:	sltiu	$1, $4, 11
 ; CHECK-NEXT:	beqz	$1, .LBB0_3
 ; CHECK-NEXT:	nop
@@ -89,7 +89,7 @@ sw.bb1:
 ; CHECK-NEXT: 	.4byte	.LBB0_4-.LJTI0_0
 
 
-; NO-OPT-LABEL: # BB#0:                                 # %entry
+; NO-OPT-LABEL: %bb.0:                                 # %entry
 ; NO-OPT-NEXT:	cincoffset	$c11, $c11, -[[@EXPR 3 * $CAP_SIZE]]
 ; NO-OPT-NEXT:	cmove	$c1,  $c26
 ; NO-OPT-NEXT:	move	 $1, $4
@@ -114,7 +114,7 @@ sw.bb1:
 ; NO-OPT-NEXT:	cjr	$c2
 ; NO-OPT-NEXT:	nop
 
-attributes #0 = { noreturn nounwind "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-features"="+cheri" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #0 = { noreturn nounwind }
 
 !llvm.ident = !{!0}
 
