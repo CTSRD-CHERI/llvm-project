@@ -45,7 +45,7 @@ int call_local_nonvirt(A* a) {
 int call_local_virt(A* a) {
   MemberPtr local_virt = &A::virt2;
   // CHECK-LABEL: @_Z15call_local_virtU3capP1A(
-  // CHECK: store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 16 to i8 addrspace(200)*), i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)*
+  // CHECK: store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 [[$CAP_SIZE]] to i8 addrspace(200)*), i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)*
   return (a->*local_virt)();
 }
 
