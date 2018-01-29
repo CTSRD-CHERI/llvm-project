@@ -28,8 +28,7 @@ namespace PR20227 {
 // CHECK: define internal void @__cxx_global_var_init() #0 {
 // CHECK:   [[PCC:%.+]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
 // CHECK:   [[WITH_OFFSET:%.+]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* [[PCC]], i64 ptrtoint (void (%"struct.PR20227::A" addrspace(200)*)* @_ZN7PR202271AD1Ev to i64))
-// CHECK:   [[AS_FN:%.+]] = bitcast i8 addrspace(200)* [[WITH_OFFSET]] to void (%"struct.PR20227::A" addrspace(200)*) addrspace(200)*
-// CHECK:   [[AS_I8:%.+]] = bitcast void (%"struct.PR20227::A" addrspace(200)*) addrspace(200)* [[AS_FN:%.+]] to void (i8 addrspace(200)*) addrspace(200)*
+// CHECK:   [[AS_I8:%.+]] = bitcast i8 addrspace(200)* [[WITH_OFFSET]] to void (i8 addrspace(200)*) addrspace(200)*
 // CHECK:   {{%.+}} = call i32 @__cxa_atexit(void (i8 addrspace(200)*) addrspace(200)* [[AS_I8]], i8 addrspace(200)* getelementptr inbounds (%"struct.PR20227::A", %"struct.PR20227::A" addrspace(200)* @_ZGRN7PR202271aE_, i32 0, i32 0), i8 addrspace(200)* @__dso_handle) #2
 // CHECK:   store %"struct.PR20227::A" addrspace(200)* @_ZGRN7PR202271aE_, %"struct.PR20227::A" addrspace(200)* addrspace(200)* @_ZN7PR202271aE, align [[$CAP_SIZE]]
 // CHECK:   ret void
@@ -41,8 +40,7 @@ namespace PR20227 {
 // CHECK:    call void @_ZN7PR202271CC1Ev(%"struct.PR20227::C" addrspace(200)* @_ZGRN7PR202271cE_) #2
 // CHECK:    [[PCC:%.+]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
 // CHECK:    [[WITH_OFFSET:%.+]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* [[PCC]], i64 ptrtoint (void (%"struct.PR20227::C" addrspace(200)*)* @_ZN7PR202271CD1Ev to i64))
-// CHECK:    [[AS_FN:%.+]] = bitcast i8 addrspace(200)* [[WITH_OFFSET]] to void (%"struct.PR20227::C" addrspace(200)*) addrspace(200)*
-// CHECK:    [[AS_I8:%.+]] = bitcast void (%"struct.PR20227::C" addrspace(200)*) addrspace(200)* [[AS_FN:%.+]] to void (i8 addrspace(200)*) addrspace(200)*
+// CHECK:    [[AS_I8:%.+]] = bitcast i8 addrspace(200)* [[WITH_OFFSET]] to void (i8 addrspace(200)*) addrspace(200)*
 // CHECK:    {{%.+}} = call i32 @__cxa_atexit(void (i8 addrspace(200)*) addrspace(200)* [[AS_I8]], i8 addrspace(200)* bitcast (%"struct.PR20227::C" addrspace(200)* @_ZGRN7PR202271cE_ to i8 addrspace(200)*), i8 addrspace(200)* @__dso_handle) #2
 // CHECK:    store %"struct.PR20227::B" addrspace(200)* getelementptr inbounds (%"struct.PR20227::C", %"struct.PR20227::C" addrspace(200)* @_ZGRN7PR202271cE_, i32 0, i32 0), %"struct.PR20227::B" addrspace(200)* addrspace(200)* @_ZN7PR202271cE, align [[$CAP_SIZE]]
 // CHECK:    ret void
