@@ -1,4 +1,4 @@
-// RUN: %cheri_purecap_cc1 %s -emit-llvm -mrelocation-model pic -pic-level 1 -std=gnu99 -mllvm -cheri-cap-table -x c -o -
+// RUN: %cheri_purecap_cc1 %s -emit-llvm -mrelocation-model pic -pic-level 1 -std=gnu99 -mllvm -cheri-cap-table -x c -o /dev/null
 // check that creating assembly for this doesn't crash the SelctionDAG
 // RUN: %cheri_purecap_cc1 %s -S -mrelocation-model pic -pic-level 1 -std=gnu99 -mllvm -cheri-cap-table -x c -o /dev/null
 struct {

@@ -1,5 +1,5 @@
-// RUN: %cheri_purecap_cc1 -fno-rtti -emit-llvm -cheri-linker -o - %s | FileCheck %s
-// RUN: %cheri_purecap_cc1 -fno-rtti -emit-obj -cheri-linker -o - %s | llvm-readobj -r - | FileCheck -check-prefix=RELOCS %s
+// RUN: %cheri_purecap_cc1 -fno-rtti -emit-llvm -cheri-linker -o - %s | %cheri_FileCheck %s
+// RUN: %cheri_purecap_cc1 -fno-rtti -emit-obj -cheri-linker -o - %s | llvm-readobj -r - | %cheri_FileCheck -check-prefix=RELOCS %s
 
 class A {
 public:
@@ -21,16 +21,19 @@ int (*global_fn_ptr)() = &global_fn;
 // CHECK: @global_fn_ptr = addrspace(200) global i32 () addrspace(200)* addrspacecast (i32 ()* @_Z9global_fnv to i32 () addrspace(200)*), align [[$CAP_SIZE]]
 
 int call_nonvirt(A* a) {
+  // CHECK-LABEL: @_Z12call_nonvirtU3capP1A(
   // CHECK: load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* @global_nonvirt_ptr, align [[$CAP_SIZE]]
   return (a->*global_nonvirt_ptr)();
 }
 
 int call_virt(A* a) {
+  // CHECK-LABEL: @_Z9call_virtU3capP1A(
   // CHECK: load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* @global_virt_ptr, align [[$CAP_SIZE]]
   return (a->*global_virt_ptr)();
 }
 
 int call_local_nonvirt(A* a) {
+  // CHECK-LABEL: @_Z18call_local_nonvirtU3capP1A(
   MemberPtr local_nonvirt = &A::nonvirt2;
   // FIXME: should we rather memcopy from a global that has been initialized?
   // This way we don't need to be able to derive it from PCC
@@ -41,11 +44,13 @@ int call_local_nonvirt(A* a) {
 
 int call_local_virt(A* a) {
   MemberPtr local_virt = &A::virt2;
-  // CHECK: store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 32 to i8 addrspace(200)*), i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)* %{{.+}}, align [[$CAP_SIZE]]
+  // CHECK-LABEL: @_Z15call_local_virtU3capP1A(
+  // CHECK: store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 16 to i8 addrspace(200)*), i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)*
   return (a->*local_virt)();
 }
 
 int call_local_fn_ptr(A* a) {
+  // CHECK-LABEL: @_Z17call_local_fn_ptrU3capP1A(
   int (*local_fn_ptr)() = &global_fn;
   // CHECK: call i8 addrspace(200)* @llvm.cheri.pcc.get()
   // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %{{.+}}, i64 ptrtoint (i32 ()* @_Z9global_fnv to i64))
@@ -65,11 +70,6 @@ int main() {
 // RELOCS-NEXT:   0x{{4|8}}0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _Z9global_fnv 0x0
 // RELOCS-NEXT: }
 // RELOCS-NEXT: Section (25) .rela.data.rel.ro._ZTV1A {
-// RELOCS-NEXT:   0x{{1|2}}0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _ZTI1A 0x0
 // RELOCS-NEXT:   0x{{2|4}}0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _ZN1A4virtEv 0x0
 // RELOCS-NEXT:   0x{{3|6}}0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _ZN1A5virt2Ev 0x0
-// RELOCS-NEXT: }
-// RELOCS-NEXT: Section (30) .rela.data.rel.ro._ZTI1A {
-// RELOCS-NEXT:   0x0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _ZTVN10__cxxabiv117__class_type_infoE 0x40
-// RELOCS-NEXT:   0x{{1|2}}0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _ZTS1A 0x0
 // RELOCS-NEXT: }
