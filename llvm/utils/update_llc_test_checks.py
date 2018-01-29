@@ -212,6 +212,7 @@ def build_function_body_dictionary(raw_tool_output, triple, prefixes, func_dict,
       'armv7eb-eabi': (scrub_asm_arm_eabi, ASM_FUNCTION_ARM_RE),
       'armv7eb': (scrub_asm_arm_eabi, ASM_FUNCTION_ARM_RE),
       'mips': (scrub_asm_mips, ASM_FUNCTION_MIPS_RE),
+      'cheri': (scrub_asm_mips, ASM_FUNCTION_MIPS_RE),
       'powerpc64': (scrub_asm_powerpc64, ASM_FUNCTION_PPC_RE),
       'powerpc64le': (scrub_asm_powerpc64, ASM_FUNCTION_PPC_RE),
       'riscv32': (scrub_asm_riscv, ASM_FUNCTION_RISCV_RE),
@@ -347,6 +348,13 @@ def main():
       filecheck_cmd = ''
       if len(commands) > 1:
         filecheck_cmd = commands[1]
+      if llc_cmd.startswith("%cheri_"):
+        llc_cmd = llc_cmd.replace("%cheri_purecap_llc", "llc -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
+        llc_cmd = llc_cmd.replace("%cheri_llc", "llc -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
+        llc_cmd = llc_cmd.replace("%cheri128_llc", "llc -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
+        llc_cmd = llc_cmd.replace("%cheri256_llc", "llc -mtriple=cheri-unknown-freebsd -mcpu=cheri256 -mattr=+cheri256")
+      if filecheck_cmd.startswith("%cheri_FileCheck"):
+        filecheck_cmd = filecheck_cmd.replace("%cheri_FileCheck", "FileCheck '-D$CAP_SIZE=16'")
       if not llc_cmd.startswith('llc '):
         print >>sys.stderr, 'WARNING: Skipping non-llc RUN line: ' + l
         continue
