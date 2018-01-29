@@ -315,10 +315,10 @@ class LLVMConfig(object):
     def _add_cheri_tool_substitution(self, tool):
         assert tool in ('llc', 'opt', 'llvm-mc'), 'Invalid tool: ' + tool
         default_cheri_size = self.lit_config.params['CHERI_CAP_SIZE']
-        self.config.substitutions.append((tool + r".+\-target-abi\s+purecap\b",
+        self.config.substitutions.append((r"\b{tool}\b.+\-target-abi\s+purecap\b",
               "\"---Don't use {tool} -target-abi purecap, "
               "use %cheri[128/256]_purecap_{tool} instead ---\"".format(tool=tool)))
-        self.config.substitutions.append((tool + r".+\-mcpu=cheri.+",
+        self.config.substitutions.append((r"\b{tool}\b.+\-mcpu=cheri.+",
               "\"---Don't use {tool} -mcpu=cheri, "
               "use %cheri[128/256]_{tool} instead ---\"".format(tool=tool)))
 
