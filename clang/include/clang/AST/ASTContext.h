@@ -1110,12 +1110,6 @@ private:
   QualType getPipeType(QualType T, bool ReadOnly) const;
 
 public:
-  /// \brief Return the uniqued reference to the type for a memory capability 
-  /// qualified type.
-  ///
-  /// The resulting type has a union of the qualifiers from T and the memory 
-  /// capability qualifier. 
-  QualType getCHERICapabilityQualType(QualType T) const;
 
   /// \brief Return the uniqued reference to the type for an address space
   /// qualified type with the specified type and address space.
