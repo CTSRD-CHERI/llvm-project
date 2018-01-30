@@ -15,3 +15,13 @@ func(struct astruct * __capability asp)
 	// CHECK: ret i32 addrspace(200)*
 
 }
+
+int * __capability
+func2(int* __capability asp)
+{
+	// Check that we generate something sensible for this
+	return &(asp[42]); 
+	// CHECK: getelementptr inbounds %struct.astruct, %struct.astruct addrspace(200)* %0
+	// CHECK: ret i32 addrspace(200)*
+
+}
