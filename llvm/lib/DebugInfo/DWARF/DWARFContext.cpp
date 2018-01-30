@@ -387,7 +387,7 @@ void DWARFContext::dump(
       if (DumpOffset && Offset != *DumpOffset) {
         // Find the size of this part of the line table section and skip it.
         unsigned OldOffset = Offset;
-        LineTable.Prologue.parse(LineData, &Offset, U);
+        LineTable.Prologue.parse(LineData, &Offset, *this, U);
         Offset = OldOffset + LineTable.Prologue.TotalLength +
                  LineTable.Prologue.sizeofTotalLength();
         continue;
@@ -397,9 +397,9 @@ void DWARFContext::dump(
       OS << "debug_line[" << format("0x%8.8x", Offset) << "]\n";
       unsigned OldOffset = Offset;
       if (DumpOpts.Verbose) {
-        LineTable.parse(LineData, &Offset, U, &OS);
+        LineTable.parse(LineData, &Offset, *this, U, &OS);
       } else {
-        LineTable.parse(LineData, &Offset, U);
+        LineTable.parse(LineData, &Offset, *this, U);
         LineTable.dump(OS);
       }
       // Check for unparseable prologue, to avoid infinite loops.
@@ -422,7 +422,7 @@ void DWARFContext::dump(
         U = It->second;
       DWARFDebugLine::LineTable LineTable;
       unsigned OldOffset = Offset;
-      if (!LineTable.Prologue.parse(LineData, &Offset, U))
+      if (!LineTable.Prologue.parse(LineData, &Offset, *this, U))
         break;
       if (!DumpOffset || OldOffset == *DumpOffset)
         LineTable.dump(OS);
@@ -457,6 +457,16 @@ void DWARFContext::dump(
     while (const char *s = strDWOData.getCStr(&offset)) {
       OS << format("0x%8.8x: \"%s\"\n", strDWOOffset, s);
       strDWOOffset = offset;
+    }
+  }
+  if (shouldDump(Explicit, ".debug_line_str", DIDT_ID_DebugLineStr,
+                 DObj->getLineStringSection())) {
+    DataExtractor strData(DObj->getLineStringSection(), isLittleEndian(), 0);
+    uint32_t offset = 0;
+    uint32_t strOffset = 0;
+    while (const char *s = strData.getCStr(&offset)) {
+      OS << format("0x%8.8x: \"%s\"\n", strOffset, s);
+      strOffset = offset;
     }
   }
 
@@ -535,6 +545,9 @@ void DWARFContext::dump(
   if (shouldDump(Explicit, ".apple_objc", DIDT_ID_AppleObjC,
                  DObj->getAppleObjCSection().Data))
     getAppleObjC().dump(OS);
+  if (shouldDump(Explicit, ".debug_names", DIDT_ID_DebugNames,
+                 DObj->getDebugNamesSection().Data))
+    getDebugNames().dump(OS);
 }
 
 DWARFCompileUnit *DWARFContext::getDWOCompileUnitForHash(uint64_t Hash) {
@@ -703,18 +716,23 @@ const DWARFDebugMacro *DWARFContext::getDebugMacro() {
   return Macro.get();
 }
 
-static AppleAcceleratorTable &
-getAccelTable(std::unique_ptr<AppleAcceleratorTable> &Cache,
-              const DWARFObject &Obj, const DWARFSection &Section,
-              StringRef StringSection, bool IsLittleEndian) {
+template <typename T>
+static T &getAccelTable(std::unique_ptr<T> &Cache, const DWARFObject &Obj,
+                        const DWARFSection &Section, StringRef StringSection,
+                        bool IsLittleEndian) {
   if (Cache)
     return *Cache;
   DWARFDataExtractor AccelSection(Obj, Section, IsLittleEndian, 0);
   DataExtractor StrData(StringSection, IsLittleEndian, 0);
-  Cache.reset(new AppleAcceleratorTable(AccelSection, StrData));
+  Cache.reset(new T(AccelSection, StrData));
   if (Error E = Cache->extract())
     llvm::consumeError(std::move(E));
   return *Cache;
+}
+
+const DWARFDebugNames &DWARFContext::getDebugNames() {
+  return getAccelTable(Names, *DObj, DObj->getDebugNamesSection(),
+                       DObj->getStringSection(), isLittleEndian());
 }
 
 const AppleAcceleratorTable &DWARFContext::getAppleNames() {
@@ -763,7 +781,7 @@ DWARFContext::getLineTableForUnit(DWARFUnit *U) {
   // We have to parse it first.
   DWARFDataExtractor lineData(*DObj, U->getLineSection(), isLittleEndian(),
                               U->getAddressByteSize());
-  return Line->getOrParseLineTable(lineData, stmtOffset, U);
+  return Line->getOrParseLineTable(lineData, stmtOffset, *this, U);
 }
 
 void DWARFContext::parseCompileUnits() {
@@ -1157,6 +1175,7 @@ class DWARFObjInMemory final : public DWARFObject {
   DWARFSectionMap AppleTypesSection;
   DWARFSectionMap AppleNamespacesSection;
   DWARFSectionMap AppleObjCSection;
+  DWARFSectionMap DebugNamesSection;
 
   DWARFSectionMap *mapNameToDWARFSection(StringRef Name) {
     return StringSwitch<DWARFSectionMap *>(Name)
@@ -1168,6 +1187,7 @@ class DWARFObjInMemory final : public DWARFObject {
         .Case("debug_info.dwo", &InfoDWOSection)
         .Case("debug_loc.dwo", &LocDWOSection)
         .Case("debug_line.dwo", &LineDWOSection)
+        .Case("debug_names", &DebugNamesSection)
         .Case("debug_str_offsets.dwo", &StringOffsetDWOSection)
         .Case("debug_addr", &AddrSection)
         .Case("apple_names", &AppleNamesSection)
@@ -1193,6 +1213,7 @@ class DWARFObjInMemory final : public DWARFObject {
   StringRef CUIndexSection;
   StringRef GdbIndexSection;
   StringRef TUIndexSection;
+  StringRef LineStringSection;
 
   SmallVector<SmallString<32>, 4> UncompressedSections;
 
@@ -1215,6 +1236,7 @@ class DWARFObjInMemory final : public DWARFObject {
         .Case("debug_cu_index", &CUIndexSection)
         .Case("debug_tu_index", &TUIndexSection)
         .Case("gdb_index", &GdbIndexSection)
+        .Case("debug_line_str", &LineStringSection)
         // Any more debug info sections go here.
         .Default(nullptr);
   }
@@ -1433,6 +1455,7 @@ public:
   const DWARFSection &getStringOffsetSection() const override {
     return StringOffsetSection;
   }
+  StringRef getLineStringSection() const override { return LineStringSection; }
 
   // Sections for DWARF5 split dwarf proposal.
   const DWARFSection &getInfoDWOSection() const override {
@@ -1472,6 +1495,9 @@ public:
   }
   const DWARFSection &getAppleObjCSection() const override {
     return AppleObjCSection;
+  }
+  const DWARFSection &getDebugNamesSection() const override {
+    return DebugNamesSection;
   }
 
   StringRef getFileName() const override { return FileName; }

@@ -498,7 +498,10 @@ StringRef llvm::dwarf::AtomTypeString(unsigned AT) {
   case DW_ATOM_die_tag:
     return "DW_ATOM_die_tag";
   case DW_ATOM_type_flags:
+  case DW_ATOM_type_type_flags:
     return "DW_ATOM_type_flags";
+  case DW_ATOM_qual_name_hash:
+    return "DW_ATOM_qual_name_hash";
   }
   return StringRef();
 }
@@ -585,11 +588,4 @@ bool llvm::dwarf::isValidFormForVersion(Form F, unsigned Version,
     return FV > 0 && FV <= Version;
   }
   return ExtensionsOk;
-}
-
-uint32_t llvm::dwarf::djbHash(StringRef Buffer) {
-  uint32_t H = 5381;
-  for (char C : Buffer.bytes())
-    H = ((H << 5) + H) + C;
-  return H;
 }

@@ -114,16 +114,28 @@ void LinkerScript::setDot(Expr E, const Twine &Loc, bool InSec) {
     Ctx->OutSec->Size = Dot - Ctx->OutSec->Addr;
 }
 
+// Used for handling linker symbol assignments, for both finalizing
+// their values and doing early declarations. Returns true if symbol
+// should be defined from linker script.
+static bool shouldDefineSym(SymbolAssignment *Cmd) {
+  if (Cmd->Name == ".")
+    return false;
+
+  if (!Cmd->Provide)
+    return true;
+
+  // If a symbol was in PROVIDE(), we need to define it only
+  // when it is a referenced undefined symbol.
+  Symbol *B = Symtab->find(Cmd->Name);
+  if (!B || B->isDefined())
+    return false;
+  return true;
+}
+
 // This function is called from processSectionCommands,
 // while we are fixing the output section layout.
 void LinkerScript::addSymbol(SymbolAssignment *Cmd) {
-  if (Cmd->Name == ".")
-    return;
-
-  // If a symbol was in PROVIDE(), we need to define it only when
-  // it is a referenced undefined symbol.
-  Symbol *B = Symtab->find(Cmd->Name);
-  if (Cmd->Provide && (!B || B->isDefined()))
+  if (!shouldDefineSym(Cmd))
     return;
 
   // Define a symbol.
@@ -151,6 +163,30 @@ void LinkerScript::addSymbol(SymbolAssignment *Cmd) {
   replaceSymbol<Defined>(Sym, nullptr, Cmd->Name, STB_GLOBAL, Visibility,
                          STT_NOTYPE, SymValue, 0, Sec);
   Cmd->Sym = cast<Defined>(Sym);
+}
+
+// Symbols defined in script should not be inlined by LTO. At the same time
+// we don't know their final values until late stages of link. Here we scan
+// over symbol assignment commands and create placeholder symbols if needed.
+void LinkerScript::declareSymbols() {
+  assert(!Ctx);
+  for (BaseCommand *Base : SectionCommands) {
+    auto *Cmd = dyn_cast<SymbolAssignment>(Base);
+    if (!Cmd || !shouldDefineSym(Cmd))
+      continue;
+
+    // We can't calculate final value right now.
+    Symbol *Sym;
+    uint8_t Visibility = Cmd->Hidden ? STV_HIDDEN : STV_DEFAULT;
+    std::tie(Sym, std::ignore) =
+        Symtab->insert(Cmd->Name, /*Type*/ 0, Visibility,
+                       /*CanOmitFromDynSym*/ false,
+                       /*File*/ nullptr);
+    replaceSymbol<Defined>(Sym, nullptr, Cmd->Name, STB_GLOBAL, Visibility,
+                           STT_NOTYPE, 0, 0, nullptr);
+    Cmd->Sym = cast<Defined>(Sym);
+    Cmd->Provide = false;
+  }
 }
 
 // This function is called from assignAddresses, while we are
@@ -592,8 +628,12 @@ void LinkerScript::output(InputSection *S) {
 
   // If there is a memory region associated with this input section, then
   // place the section in that region and update the region index.
+  if (Ctx->LMARegion)
+    Ctx->LMARegion->CurPos += Pos - Before;
+  // FIXME: should we also produce overflow errors for LMARegion?
+
   if (Ctx->MemRegion) {
-    uint64_t &CurOffset = Ctx->MemRegionOffset[Ctx->MemRegion];
+    uint64_t &CurOffset = Ctx->MemRegion->CurPos;
     CurOffset += Pos - Before;
     uint64_t CurSize = CurOffset - Ctx->MemRegion->Origin;
     if (CurSize > Ctx->MemRegion->Length) {
@@ -620,9 +660,8 @@ MemoryRegion *LinkerScript::findMemoryRegion(OutputSection *Sec) {
   // If a memory region name was specified in the output section command,
   // then try to find that region first.
   if (!Sec->MemoryRegionName.empty()) {
-    auto It = MemoryRegions.find(Sec->MemoryRegionName);
-    if (It != MemoryRegions.end())
-      return It->second;
+    if (MemoryRegion *M = MemoryRegions.lookup(Sec->MemoryRegionName))
+      return M;
     error("memory region '" + Sec->MemoryRegionName + "' not declared");
     return nullptr;
   }
@@ -655,31 +694,24 @@ void LinkerScript::assignOffsets(OutputSection *Sec) {
     setDot(Sec->AddrExpr, Sec->Location, false);
 
   Ctx->MemRegion = Sec->MemRegion;
+  Ctx->LMARegion = Sec->LMARegion;
   if (Ctx->MemRegion)
-    Dot = Ctx->MemRegionOffset[Ctx->MemRegion];
+    Dot = Ctx->MemRegion->CurPos;
 
   switchTo(Sec);
 
-  if (Sec->LMAExpr) {
-    uint64_t D = Dot;
-    Ctx->LMAOffset = [=] { return Sec->LMAExpr().getValue() - D; };
-  }
+  if (Sec->LMAExpr)
+    Ctx->LMAOffset = Sec->LMAExpr().getValue() - Dot;
 
-  if (!Sec->LMARegionName.empty()) {
-    if (MemoryRegion *MR = MemoryRegions.lookup(Sec->LMARegionName)) {
-      uint64_t Offset = MR->Origin - Dot;
-      Ctx->LMAOffset = [=] { return Offset; };
-    } else {
-      error("memory region '" + Sec->LMARegionName + "' not declared");
-    }
-  }
+  if (MemoryRegion *MR = Sec->LMARegion)
+    Ctx->LMAOffset = MR->CurPos - Dot;
 
   // If neither AT nor AT> is specified for an allocatable section, the linker
   // will set the LMA such that the difference between VMA and LMA for the
   // section is the same as the preceding output section in the same region
   // https://sourceware.org/binutils/docs-2.20/ld/Output-Section-LMA.html
-  if (Ctx->LMAOffset)
-    Ctx->OutSec->LMAOffset = Ctx->LMAOffset();
+  if (PhdrEntry *L = Ctx->OutSec->PtLoad)
+    L->LMAOffset = Ctx->LMAOffset;
 
   // The Size previously denoted how many InputSections had been added to this
   // section, and was used for sorting SHF_LINK_ORDER sections. Reset it to
@@ -701,7 +733,9 @@ void LinkerScript::assignOffsets(OutputSection *Sec) {
       Cmd->Offset = Dot - Ctx->OutSec->Addr;
       Dot += Cmd->Size;
       if (Ctx->MemRegion)
-        Ctx->MemRegionOffset[Ctx->MemRegion] += Cmd->Size;
+        Ctx->MemRegion->CurPos += Cmd->Size;
+      if (Ctx->LMARegion)
+        Ctx->LMARegion->CurPos += Cmd->Size;
       Ctx->OutSec->Size = Dot - Ctx->OutSec->Addr;
       continue;
     }
@@ -800,6 +834,12 @@ void LinkerScript::adjustSectionsAfterSorting() {
     if (auto *Sec = dyn_cast<OutputSection>(Base)) {
       if (!Sec->Live)
         continue;
+      if (!Sec->LMARegionName.empty()) {
+        if (MemoryRegion *M = MemoryRegions.lookup(Sec->LMARegionName))
+          Sec->LMARegion = M;
+        else
+          error("memory region '" + Sec->LMARegionName + "' not declared");
+      }
       Sec->MemRegion = findMemoryRegion(Sec);
       // Handle align (e.g. ".foo : ALIGN(16) { ... }").
       if (Sec->AlignExpr)
@@ -890,8 +930,8 @@ void LinkerScript::allocateHeaders(std::vector<PhdrEntry *> &Phdrs) {
 
 LinkerScript::AddressState::AddressState() {
   for (auto &MRI : Script->MemoryRegions) {
-    const MemoryRegion *MR = MRI.second;
-    MemRegionOffset[MR] = MR->Origin;
+    MemoryRegion *MR = MRI.second;
+    MR->CurPos = MR->Origin;
   }
 }
 

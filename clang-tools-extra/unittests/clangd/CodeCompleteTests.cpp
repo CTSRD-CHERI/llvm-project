@@ -529,6 +529,19 @@ TEST(CompletionTest, SemaIndexMerge) {
       UnorderedElementsAre(Named("local"), Named("Index"), Named("both")));
 }
 
+TEST(CompletionTest, SemaIndexMergeWithLimit) {
+  clangd::CodeCompleteOptions Opts;
+  Opts.Limit = 1;
+  auto Results = completions(
+      R"cpp(
+          namespace ns { int local; void both(); }
+          void f() { ::ns::^ }
+      )cpp",
+      {func("ns::both"), cls("ns::Index")}, Opts);
+  EXPECT_EQ(Results.items.size(), Opts.Limit);
+  EXPECT_TRUE(Results.isIncomplete);
+}
+
 TEST(CompletionTest, IndexSuppressesPreambleCompletions) {
   MockFSProvider FS;
   MockCompilationDatabase CDB;
@@ -537,12 +550,13 @@ TEST(CompletionTest, IndexSuppressesPreambleCompletions) {
                       /*StorePreamblesInMemory=*/true);
 
   FS.Files[getVirtualTestFilePath("bar.h")] =
-      R"cpp(namespace ns { int preamble; })cpp";
+      R"cpp(namespace ns { struct preamble { int member; }; })cpp";
   auto File = getVirtualTestFilePath("foo.cpp");
   Annotations Test(R"cpp(
       #include "bar.h"
       namespace ns { int local; }
-      void f() { ns::^ }
+      void f() { ns::^; }
+      void f() { ns::preamble().$2^; }
   )cpp");
   Server.addDocument(Context::empty(), File, Test.code()).wait();
   clangd::CodeCompleteOptions Opts = {};
@@ -562,6 +576,11 @@ TEST(CompletionTest, IndexSuppressesPreambleCompletions) {
           .second.Value;
   EXPECT_THAT(WithIndex.items,
               UnorderedElementsAre(Named("local"), Named("index")));
+  auto ClassFromPreamble =
+      Server.codeComplete(Context::empty(), File, Test.point("2"), Opts)
+          .get()
+          .second.Value;
+  EXPECT_THAT(ClassFromPreamble.items, Contains(Named("member")));
 }
 
 TEST(CompletionTest, DynamicIndexMultiFile) {
@@ -600,6 +619,14 @@ TEST(CompletionTest, DynamicIndexMultiFile) {
   EXPECT_THAT(Results.items, Contains(AllOf(Named("fooooo"), Filter("fooooo"),
                                             Kind(CompletionItemKind::Function),
                                             Doc("Doooc"), Detail("void"))));
+}
+
+TEST(CodeCompleteTest, DisableTypoCorrection) {
+  auto Results = completions(R"cpp(
+     namespace clang { int v; }
+     void f() { clangd::^
+  )cpp");
+  EXPECT_TRUE(Results.items.empty());
 }
 
 SignatureHelp signatures(StringRef Text) {

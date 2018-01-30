@@ -970,14 +970,8 @@ def: Pat<(v8i8 (HexagonVSPLAT I32:$Rs)),
 
 def SDTHexagonI64I32I32: SDTypeProfile<1, 2,
   [SDTCisVT<0, i64>, SDTCisVT<1, i32>, SDTCisSameAs<1, 2>]>;
-def SDTHexagonVCOMBINE: SDTypeProfile<1, 2, [SDTCisSameAs<1, 2>,
-  SDTCisSubVecOfVec<1, 0>]>;
-def SDTHexagonVPACK: SDTypeProfile<1, 2, [SDTCisSameAs<1, 2>, SDTCisVec<1>]>;
 
 def HexagonCOMBINE:  SDNode<"HexagonISD::COMBINE",  SDTHexagonI64I32I32>;
-def HexagonVCOMBINE: SDNode<"HexagonISD::VCOMBINE", SDTHexagonVCOMBINE>;
-def HexagonVPACKE:   SDNode<"HexagonISD::VPACKE",   SDTHexagonVPACK>;
-def HexagonVPACKO:   SDNode<"HexagonISD::VPACKO",   SDTHexagonVPACK>;
 
 def: Pat<(HexagonCOMBINE I32:$Rs, I32:$Rt), (Combinew $Rs, $Rt)>;
 
@@ -2999,13 +2993,6 @@ def Combinev: OutPatFrag<(ops node:$Rs, node:$Rt),
 def LoVec: OutPatFrag<(ops node:$Vs), (EXTRACT_SUBREG $Vs, vsub_lo)>;
 def HiVec: OutPatFrag<(ops node:$Vs), (EXTRACT_SUBREG $Vs, vsub_hi)>;
 
-let Predicates = [UseHVX] in {
-  def: OpR_RR_pat<V6_vpackeb,  pf2<HexagonVPACKE>,     VecI8,  HVI8>;
-  def: OpR_RR_pat<V6_vpackob,  pf2<HexagonVPACKO>,     VecI8,  HVI8>;
-  def: OpR_RR_pat<V6_vpackeh,  pf2<HexagonVPACKE>,    VecI16, HVI16>;
-  def: OpR_RR_pat<V6_vpackoh,  pf2<HexagonVPACKO>,    VecI16, HVI16>;
-}
-
 def HexagonVZERO: SDNode<"HexagonISD::VZERO", SDTVecLeaf>;
 def vzero: PatFrag<(ops), (HexagonVZERO)>;
 
@@ -3013,6 +3000,19 @@ def VSxtb: OutPatFrag<(ops node:$Vs), (V6_vunpackb  $Vs)>;
 def VSxth: OutPatFrag<(ops node:$Vs), (V6_vunpackh  $Vs)>;
 def VZxtb: OutPatFrag<(ops node:$Vs), (V6_vunpackub $Vs)>;
 def VZxth: OutPatFrag<(ops node:$Vs), (V6_vunpackuh $Vs)>;
+
+def SplatB: SDNodeXForm<imm, [{
+  uint32_t V = N->getZExtValue();
+  assert(isUInt<8>(V));
+  uint32_t S = V << 24 | V << 16 | V << 8 | V;
+  return CurDAG->getTargetConstant(S, SDLoc(N), MVT::i32);
+}]>;
+
+def SplatH: SDNodeXForm<imm, [{
+  uint32_t V = N->getZExtValue();
+  assert(isUInt<16>(V));
+  return CurDAG->getTargetConstant(V << 16 | V, SDLoc(N), MVT::i32);
+}]>;
 
 let Predicates = [UseHVX] in {
   def: Pat<(VecI8  vzero), (V6_vd0)>;
@@ -3040,6 +3040,14 @@ let Predicates = [UseHVX] in {
   def: Pat<(HexagonVINSERTW0 HVI32:$Vu, I32:$Rt),
            (V6_vinsertwr HvxVR:$Vu, I32:$Rt)>;
 
+  let AddedComplexity = 10 in {
+    def: Pat<(VecI8 (HexagonVSPLAT u8_0ImmPred:$V)),
+             (V6_lvsplatw (ToI32 (SplatB $V)))>;
+    def: Pat<(VecI16 (HexagonVSPLAT u16_0ImmPred:$V)),
+             (V6_lvsplatw (ToI32 (SplatH $V)))>;
+    def: Pat<(VecI32 (HexagonVSPLAT anyimm:$V)),
+             (V6_lvsplatw (ToI32 $V))>;
+  }
   def: Pat<(VecI8 (HexagonVSPLAT I32:$Rs)),
            (V6_lvsplatw (S2_vsplatrb I32:$Rs))>;
   def: Pat<(VecI16 (HexagonVSPLAT I32:$Rs)),

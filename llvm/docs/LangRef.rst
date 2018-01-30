@@ -4309,13 +4309,31 @@ DISubrange
 """"""""""
 
 ``DISubrange`` nodes are the elements for ``DW_TAG_array_type`` variants of
-:ref:`DICompositeType`. ``count: -1`` indicates an empty array.
+:ref:`DICompositeType`.
+
+- ``count: -1`` indicates an empty array.
+- ``count: !9`` describes the count with a :ref:`DILocalVariable`.
+- ``count: !11`` describes the count with a :ref:`DIGlobalVariable`.
 
 .. code-block:: llvm
 
     !0 = !DISubrange(count: 5, lowerBound: 0) ; array counting from 0
     !1 = !DISubrange(count: 5, lowerBound: 1) ; array counting from 1
     !2 = !DISubrange(count: -1) ; empty array.
+
+    ; Scopes used in rest of example
+    !6 = !DIFile(filename: "vla.c", directory: "/path/to/file")
+    !7 = distinct !DICompileUnit(language: DW_LANG_C99, ...
+    !8 = distinct !DISubprogram(name: "foo", scope: !7, file: !6, line: 5, ...
+
+    ; Use of local variable as count value
+    !9 = !DIBasicType(name: "int", size: 32, encoding: DW_ATE_signed)
+    !10 = !DILocalVariable(name: "count", scope: !8, file: !6, line: 42, type: !9)
+    !11 = !DISubrange(count !10, lowerBound: 0)
+
+    ; Use of global variable as count value
+    !12 = !DIGlobalVariable(name: "count", scope: !8, file: !6, line: 22, type: !9)
+    !13 = !DISubrange(count !12, lowerBound: 0)
 
 .. _DIEnumerator:
 
@@ -4363,6 +4381,8 @@ DINamespace
 .. code-block:: llvm
 
     !0 = !DINamespace(name: "myawesomeproject", scope: !1, file: !2, line: 7)
+
+.. _DIGlobalVariable:
 
 DIGlobalVariable
 """"""""""""""""
@@ -10169,7 +10189,7 @@ time library.
 This instrinsic does *not* empty the instruction pipeline. Modifications
 of the current function are outside the scope of the intrinsic.
 
-'``llvm.instrprof_increment``' Intrinsic
+'``llvm.instrprof.increment``' Intrinsic
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Syntax:
@@ -10177,13 +10197,13 @@ Syntax:
 
 ::
 
-      declare void @llvm.instrprof_increment(i8* <name>, i64 <hash>,
+      declare void @llvm.instrprof.increment(i8* <name>, i64 <hash>,
                                              i32 <num-counters>, i32 <index>)
 
 Overview:
 """""""""
 
-The '``llvm.instrprof_increment``' intrinsic can be emitted by a
+The '``llvm.instrprof.increment``' intrinsic can be emitted by a
 frontend for use with instrumentation based profiling. These will be
 lowered by the ``-instrprof`` pass to generate execution counts of a
 program at runtime.
@@ -10199,7 +10219,7 @@ The second argument is a hash value that can be used by the consumer
 of the profile data to detect changes to the instrumented source, and
 the third is the number of counters associated with ``name``. It is an
 error if ``hash`` or ``num-counters`` differ between two instances of
-``instrprof_increment`` that refer to the same name.
+``instrprof.increment`` that refer to the same name.
 
 The last argument refers to which of the counters for ``name`` should
 be incremented. It should be a value between 0 and ``num-counters``.
@@ -10213,7 +10233,7 @@ structures and the code to increment the appropriate value, in a
 format that can be written out by a compiler runtime and consumed via
 the ``llvm-profdata`` tool.
 
-'``llvm.instrprof_increment_step``' Intrinsic
+'``llvm.instrprof.increment.step``' Intrinsic
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Syntax:
@@ -10221,30 +10241,30 @@ Syntax:
 
 ::
 
-      declare void @llvm.instrprof_increment_step(i8* <name>, i64 <hash>,
+      declare void @llvm.instrprof.increment.step(i8* <name>, i64 <hash>,
                                                   i32 <num-counters>,
                                                   i32 <index>, i64 <step>)
 
 Overview:
 """""""""
 
-The '``llvm.instrprof_increment_step``' intrinsic is an extension to
-the '``llvm.instrprof_increment``' intrinsic with an additional fifth
+The '``llvm.instrprof.increment.step``' intrinsic is an extension to
+the '``llvm.instrprof.increment``' intrinsic with an additional fifth
 argument to specify the step of the increment.
 
 Arguments:
 """"""""""
-The first four arguments are the same as '``llvm.instrprof_increment``'
+The first four arguments are the same as '``llvm.instrprof.increment``'
 intrinsic.
 
 The last argument specifies the value of the increment of the counter variable.
 
 Semantics:
 """"""""""
-See description of '``llvm.instrprof_increment``' instrinsic.
+See description of '``llvm.instrprof.increment``' instrinsic.
 
 
-'``llvm.instrprof_value_profile``' Intrinsic
+'``llvm.instrprof.value.profile``' Intrinsic
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Syntax:
@@ -10252,14 +10272,14 @@ Syntax:
 
 ::
 
-      declare void @llvm.instrprof_value_profile(i8* <name>, i64 <hash>,
+      declare void @llvm.instrprof.value.profile(i8* <name>, i64 <hash>,
                                                  i64 <value>, i32 <value_kind>,
                                                  i32 <index>)
 
 Overview:
 """""""""
 
-The '``llvm.instrprof_value_profile``' intrinsic can be emitted by a
+The '``llvm.instrprof.value.profile``' intrinsic can be emitted by a
 frontend for use with instrumentation based profiling. This will be
 lowered by the ``-instrprof`` pass to find out the target values,
 instrumented expressions take in a program at runtime.
@@ -10274,7 +10294,7 @@ name of the entity being instrumented. ``name`` should generally be the
 The second argument is a hash value that can be used by the consumer
 of the profile data to detect changes to the instrumented source. It
 is an error if ``hash`` differs between two instances of
-``llvm.instrprof_*`` that refer to the same name.
+``llvm.instrprof.*`` that refer to the same name.
 
 The third argument is the value of the expression being profiled. The profiled
 expression's value should be representable as an unsigned 64-bit value. The
@@ -10290,7 +10310,7 @@ Semantics:
 This intrinsic represents the point where a call to a runtime routine
 should be inserted for value profiling of target expressions. ``-instrprof``
 pass will generate the appropriate data structures and replace the
-``llvm.instrprof_value_profile`` intrinsic with the call to the profile
+``llvm.instrprof.value.profile`` intrinsic with the call to the profile
 runtime library with proper arguments.
 
 '``llvm.thread.pointer``' Intrinsic

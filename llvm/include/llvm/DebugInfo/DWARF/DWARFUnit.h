@@ -326,7 +326,6 @@ public:
     return DataExtractor(StringSection, false, 0);
   }
 
-
   bool extract(DataExtractor debug_info, uint32_t* offset_ptr);
 
   /// extractRangeList - extracts the range list referenced by this compile

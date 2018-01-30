@@ -844,6 +844,8 @@ void PhdrEntry::add(OutputSection *Sec) {
   p_align = std::max(p_align, Sec->Alignment);
   if (p_type == PT_LOAD)
     Sec->PtLoad = this;
+  if (Sec->LMAExpr)
+    ASectionHasLMA = true;
 }
 
 // The beginning and the ending of .rel[a].plt section are marked
@@ -1331,7 +1333,7 @@ static void removeUnusedSyntheticSections() {
     if (!SS)
       return;
     OutputSection *OS = SS->getParent();
-    if (!SS->empty() || !OS)
+    if (!OS || !SS->empty())
       continue;
 
     std::vector<BaseCommand *>::iterator Empty = OS->SectionCommands.end();
@@ -1681,7 +1683,9 @@ template <class ELFT> std::vector<PhdrEntry *> Writer<ELFT>::createPhdrs() {
     // different flags or is loaded at a discontiguous address using AT linker
     // script command.
     uint64_t NewFlags = computeFlags(Sec->getPhdrFlags());
-    if (Sec->LMAExpr || Flags != NewFlags) {
+    if ((Sec->LMAExpr && Load->ASectionHasLMA) ||
+        Sec->MemRegion != Load->FirstSec->MemRegion || Flags != NewFlags) {
+
       Load = AddHdr(PT_LOAD, NewFlags);
       Flags = NewFlags;
     }
