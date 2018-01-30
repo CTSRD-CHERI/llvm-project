@@ -9921,7 +9921,7 @@ QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
     bool RHSIsCap = RHSType->isCHERICapabilityType(Context);
 
     // Binary operations between pointers and capabilities are errors
-    if (LHSIsCap != RHSIsCap)
+    if (LHSIsCap != RHSIsCap && !(LHSIsNull || RHSIsNull))
       Diag(Loc, diag::err_typecheck_comparison_of_pointer_capability)
         << LHSType << RHSType << LHS.get()->getSourceRange()
         << RHS.get()->getSourceRange();
