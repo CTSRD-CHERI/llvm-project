@@ -4247,8 +4247,7 @@ static void emitPrivatesInit(CodeGenFunction &CGF,
           // Initialize firstprivate array.
           if (!isa<CXXConstructExpr>(Init) || CGF.isTrivialInitializer(Init)) {
             // Perform simple memcpy.
-            CGF.EmitAggregateAssign(PrivateLValue.getAddress(),
-                                    SharedRefLValue.getAddress(), Type);
+            CGF.EmitAggregateAssign(PrivateLValue, SharedRefLValue, Type);
           } else {
             // Initialize firstprivate array using element-by-element
             // initialization.
@@ -4541,7 +4540,9 @@ CGOpenMPRuntime::emitTaskInit(CodeGenFunction &CGF, SourceLocation Loc,
                                            KmpTaskTShareds)),
                     Loc),
                 CGF.getNaturalTypeAlignment(SharedsTy));
-    CGF.EmitAggregateCopy(KmpTaskSharedsPtr, Shareds, SharedsTy);
+    LValue Dest = CGF.MakeAddrLValue(KmpTaskSharedsPtr, SharedsTy);
+    LValue Src = CGF.MakeAddrLValue(Shareds, SharedsTy);
+    CGF.EmitAggregateCopy(Dest, Src, SharedsTy);
   }
   // Emit initial values for private copies (if any).
   TaskResultTy Result;

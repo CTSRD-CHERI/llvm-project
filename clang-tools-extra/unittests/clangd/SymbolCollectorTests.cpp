@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "TestFS.h"
 #include "index/SymbolCollector.h"
 #include "index/SymbolYAML.h"
 #include "clang/Basic/FileManager.h"
@@ -44,6 +45,7 @@ MATCHER_P(Snippet, S, "") {
   return arg.CompletionSnippetInsertText == S;
 }
 MATCHER_P(QName, Name, "") { return (arg.Scope + arg.Name).str() == Name; }
+MATCHER_P(CPath, P, "") { return arg.CanonicalDeclaration.FilePath == P; }
 
 namespace clang {
 namespace clangd {
@@ -145,18 +147,26 @@ TEST_F(SymbolCollectorTest, CollectSymbols) {
   runSymbolCollector(Header, Main);
   EXPECT_THAT(Symbols,
               UnorderedElementsAreArray(
-                  {QName("Foo"),
-                   QName("f1"),
-                   QName("f2"),
-                   QName("KInt"),
-                   QName("kStr"),
-                   QName("foo"),
-                   QName("foo::bar"),
-                   QName("foo::int32"),
-                   QName("foo::int32_t"),
-                   QName("foo::v1"),
-                   QName("foo::bar::v2"),
-                   QName("foo::baz")}));
+                  {QName("Foo"), QName("f1"), QName("f2"), QName("KInt"),
+                   QName("kStr"), QName("foo"), QName("foo::bar"),
+                   QName("foo::int32"), QName("foo::int32_t"), QName("foo::v1"),
+                   QName("foo::bar::v2"), QName("foo::baz")}));
+}
+
+TEST_F(SymbolCollectorTest, SymbolRelativeNoFallback) {
+  CollectorOpts.IndexMainFiles = false;
+  runSymbolCollector("class Foo {};", /*Main=*/"");
+  EXPECT_THAT(Symbols,
+              UnorderedElementsAre(AllOf(QName("Foo"), CPath("symbols.h"))));
+}
+
+TEST_F(SymbolCollectorTest, SymbolRelativeWithFallback) {
+  CollectorOpts.IndexMainFiles = false;
+  CollectorOpts.FallbackDir = getVirtualTestRoot();
+  runSymbolCollector("class Foo {};", /*Main=*/"");
+  EXPECT_THAT(Symbols,
+              UnorderedElementsAre(AllOf(
+                  QName("Foo"), CPath(getVirtualTestFilePath("symbols.h")))));
 }
 
 TEST_F(SymbolCollectorTest, IncludeEnums) {
