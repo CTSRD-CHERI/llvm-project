@@ -14,7 +14,7 @@ int main(void) {
   // CHECK:  store i64 4, i64 addrspace(200)* [[ATOMIC_TMP1]], align 8
   // CHECK:  [[AS_I8PTR:%.*]] = bitcast i32 addrspace(200)* addrspace(200)* [[ATOMIC_TMP2]] to i8 addrspace(200)*
   // CHECK:  [[AS_I8PTR2:%.*]] = bitcast i64 addrspace(200)* [[ATOMIC_TMP1]] to i8 addrspace(200)*
-  // CHECK:  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 [[AS_I8PTR]], i8 addrspace(200)* align 8 [[AS_I8PTR2]], i64 8, i1 false)
+  // CHECK:  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align [[$CAP_SIZE]] [[AS_I8PTR]], i8 addrspace(200)* align 8 [[AS_I8PTR2]], i64 8, i1 false)
   // CHECK:  [[FETCHADD_ARG1:%.*]] = bitcast i32 addrspace(200)* addrspace(200)* %p to i8 addrspace(200)*
   // CHECK:  [[FETCHADD_ARG2:%.*]] = bitcast i32 addrspace(200)* addrspace(200)* [[ATOMIC_TMP2]] to i8 addrspace(200)*
   // CHECK:  [[FETCHADD_ARG3:%.*]] = bitcast i32 addrspace(200)* addrspace(200)* [[ATOMIC_TMP3]] to i8 addrspace(200)*
