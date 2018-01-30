@@ -675,6 +675,12 @@ FormatStyle getGoogleStyle(FormatStyle::LanguageKind Language) {
   if (Language == FormatStyle::LK_TextProto) {
     FormatStyle GoogleStyle = getGoogleStyle(FormatStyle::LK_Proto);
     GoogleStyle.Language = FormatStyle::LK_TextProto;
+
+    // Text protos are currently mostly formatted inside C++ raw string literals
+    // and often the current breaking behavior of string literals is not
+    // beneficial there. Investigate turning this on once proper string reflow
+    // has been implemented.
+    GoogleStyle.BreakStringLiterals = false;
     return GoogleStyle;
   }
 
@@ -703,17 +709,9 @@ FormatStyle getGoogleStyle(FormatStyle::LanguageKind Language) {
       {
           "pb",
           "PB",
-          "proto",
-          "PROTO",
-          "textproto",
-          "TEXTPROTO",
       },
       /*EnclosingFunctionNames=*/
-       {
-           "EqualsProto",
-           "PARSE_TEXT_PROTO",
-           "ParseTextProto",
-       },
+      {},
       /*CanonicalDelimiter=*/"",
       /*BasedOnStyle=*/"google",
   }};

@@ -836,6 +836,7 @@ def tfe : NamedOperandBit<"TFE", NamedMatchClass<"TFE">>;
 def unorm : NamedOperandBit<"UNorm", NamedMatchClass<"UNorm">>;
 def da : NamedOperandBit<"DA", NamedMatchClass<"DA">>;
 def r128 : NamedOperandBit<"R128", NamedMatchClass<"R128">>;
+def D16 : NamedOperandBit<"D16", NamedMatchClass<"D16">>;
 def lwe : NamedOperandBit<"LWE", NamedMatchClass<"LWE">>;
 def exp_compr : NamedOperandBit<"ExpCompr", NamedMatchClass<"ExpCompr">>;
 def exp_vm : NamedOperandBit<"ExpVM", NamedMatchClass<"ExpVM">>;
@@ -2038,6 +2039,22 @@ def getMaskedMIMGOp4 : InstrMapping {
   let ColFields = ["Channels"];
   let KeyCol = ["4"];
   let ValueCols = [["1"], ["2"], ["3"] ];
+}
+
+def getMIMGAtomicOp1 : InstrMapping {
+  let FilterClass = "MIMG_Atomic_Size";
+  let RowFields = ["Op"];
+  let ColFields = ["AtomicSize"];
+  let KeyCol = ["1"];
+  let ValueCols = [["2"]];
+}
+
+def getMIMGAtomicOp2 : InstrMapping {
+  let FilterClass = "MIMG_Atomic_Size";
+  let RowFields = ["Op"];
+  let ColFields = ["AtomicSize"];
+  let KeyCol = ["2"];
+  let ValueCols = [["1"]];
 }
 
 // Maps an commuted opcode to its original version
