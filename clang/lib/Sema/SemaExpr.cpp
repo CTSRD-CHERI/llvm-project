@@ -11419,6 +11419,10 @@ QualType Sema::CheckAddressOfOperand(ExprResult &OrigOp, SourceLocation OpLoc) {
 
   CheckAddressOfPackedMember(op);
 
+  if (auto *mr = dyn_cast<MemberExpr>(op))
+    if (mr->getBase()->getType()->isCHERICapabilityType(Context))
+      return Context.getPointerType(op->getType(), ASTContext::PIK_Capability);
+
   return Context.getPointerType(op->getType());
 }
 
