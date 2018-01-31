@@ -1289,7 +1289,8 @@ SDValue HexagonTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
   EVT RHSVT = RHS.getValueType();
 
   if (LHSVT == MVT::v2i16) {
-    assert(ISD::isSignedIntSetCC(CC) || ISD::isUnsignedIntSetCC(CC));
+    assert(CC == ISD::SETEQ || CC == ISD::SETNE ||
+           ISD::isSignedIntSetCC(CC) || ISD::isUnsignedIntSetCC(CC));
     unsigned ExtOpc = ISD::isSignedIntSetCC(CC) ? ISD::SIGN_EXTEND
                                                 : ISD::ZERO_EXTEND;
     SDValue LX = DAG.getNode(ExtOpc, dl, MVT::v2i32, LHS);
@@ -2281,9 +2282,6 @@ const char* HexagonTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case HexagonISD::JT:            return "HexagonISD::JT";
   case HexagonISD::RET_FLAG:      return "HexagonISD::RET_FLAG";
   case HexagonISD::TC_RETURN:     return "HexagonISD::TC_RETURN";
-  case HexagonISD::VCOMBINE:      return "HexagonISD::VCOMBINE";
-  case HexagonISD::VPACKE:        return "HexagonISD::VPACKE";
-  case HexagonISD::VPACKO:        return "HexagonISD::VPACKO";
   case HexagonISD::VASL:          return "HexagonISD::VASL";
   case HexagonISD::VASR:          return "HexagonISD::VASR";
   case HexagonISD::VLSR:          return "HexagonISD::VLSR";

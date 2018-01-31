@@ -451,9 +451,7 @@ namespace {
 // type.
 static bool isLegalMaskCompare(SDNode *N, const X86Subtarget *Subtarget) {
   unsigned Opcode = N->getOpcode();
-  if (Opcode == X86ISD::PCMPEQM || Opcode == X86ISD::PCMPGTM ||
-      Opcode == X86ISD::CMPM || Opcode == X86ISD::TESTM ||
-      Opcode == X86ISD::TESTNM || Opcode == X86ISD::CMPMU ||
+  if (Opcode == X86ISD::CMPM || Opcode == X86ISD::CMPMU ||
       Opcode == X86ISD::CMPM_RND) {
     // We can get 256-bit 8 element types here without VLX being enabled. When
     // this happens we will use 512-bit operations and the mask will not be
@@ -2518,8 +2516,6 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
   unsigned Opc, MOpc;
   unsigned Opcode = Node->getOpcode();
   SDLoc dl(Node);
-
-  DEBUG(dbgs() << "Selecting: "; Node->dump(CurDAG); dbgs() << '\n');
 
   if (Node->isMachineOpcode()) {
     DEBUG(dbgs() << "== ";  Node->dump(CurDAG); dbgs() << '\n');

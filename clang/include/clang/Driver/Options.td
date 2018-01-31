@@ -556,6 +556,8 @@ def no_cuda_version_check : Flag<["--"], "no-cuda-version-check">,
 def no_cuda_noopt_device_debug : Flag<["--"], "no-cuda-noopt-device-debug">;
 def cuda_path_EQ : Joined<["--"], "cuda-path=">, Group<i_Group>,
   HelpText<"CUDA installation path">;
+def cuda_path_ignore_env : Joined<["--"], "cuda-path-ignore-env">, Group<i_Group>,
+  HelpText<"Ignore environment variables to detect CUDA installation">;
 def ptxas_path_EQ : Joined<["--"], "ptxas-path=">, Group<i_Group>,
   HelpText<"Path to ptxas (used for compiling CUDA code)">;
 def fcuda_flush_denormals_to_zero : Flag<["-"], "fcuda-flush-denormals-to-zero">,
@@ -1033,6 +1035,8 @@ def finline_functions : Flag<["-"], "finline-functions">, Group<f_clang_Group>, 
 def finline_hint_functions: Flag<["-"], "finline-hint-functions">, Group<f_clang_Group>, Flags<[CC1Option]>,
   HelpText<"Inline functions which are (explicitly or implicitly) marked inline">;
 def finline : Flag<["-"], "finline">, Group<clang_ignored_f_Group>;
+def fexperimental_isel : Flag<["-"], "fexperimental-isel">, Group<f_clang_Group>,
+  HelpText<"Enables the experimental global instruction selector">;
 def fexperimental_new_pass_manager : Flag<["-"], "fexperimental-new-pass-manager">,
   Group<f_clang_Group>, Flags<[CC1Option]>,
   HelpText<"Enables an experimental new pass manager in LLVM.">;
@@ -1244,6 +1248,8 @@ def fno_exceptions : Flag<["-"], "fno-exceptions">, Group<f_Group>;
 def fno_gnu_keywords : Flag<["-"], "fno-gnu-keywords">, Group<f_Group>, Flags<[CC1Option]>;
 def fno_inline_functions : Flag<["-"], "fno-inline-functions">, Group<f_clang_Group>, Flags<[CC1Option]>;
 def fno_inline : Flag<["-"], "fno-inline">, Group<f_clang_Group>, Flags<[CC1Option]>;
+def fno_experimental_isel : Flag<["-"], "fno-experimental-isel">, Group<f_clang_Group>,
+  HelpText<"Disables the experimental global instruction selector">;
 def fno_experimental_new_pass_manager : Flag<["-"], "fno-experimental-new-pass-manager">,
   Group<f_clang_Group>, Flags<[CC1Option]>,
   HelpText<"Disables an experimental new pass manager in LLVM.">;

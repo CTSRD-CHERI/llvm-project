@@ -3525,7 +3525,7 @@ SDValue DAGCombiner::foldLogicOfSetCCs(bool IsAnd, SDValue N0, SDValue N1,
   // operations on the left and right operands, so those types must match.
   EVT VT = N0.getValueType();
   EVT OpVT = LL.getValueType();
-  if (LegalOperations || VT != MVT::i1)
+  if (LegalOperations || VT.getScalarType() != MVT::i1)
     if (VT != getSetCCResultType(OpVT))
       return SDValue();
   if (OpVT != RL.getValueType())
@@ -14779,11 +14779,15 @@ SDValue DAGCombiner::reduceBuildVecToShuffle(SDNode *N) {
     }
 
     // Not an undef or zero. If the input is something other than an
-    // EXTRACT_VECTOR_ELT with a constant index, bail out.
+    // EXTRACT_VECTOR_ELT with an in-range constant index, bail out.
     if (Op.getOpcode() != ISD::EXTRACT_VECTOR_ELT ||
         !isa<ConstantSDNode>(Op.getOperand(1)))
       return SDValue();
     SDValue ExtractedFromVec = Op.getOperand(0);
+
+    APInt ExtractIdx = cast<ConstantSDNode>(Op.getOperand(1))->getAPIntValue();
+    if (ExtractIdx.uge(ExtractedFromVec.getValueType().getVectorNumElements()))
+      return SDValue();
 
     // All inputs must have the same element type as the output.
     if (VT.getVectorElementType() !=
@@ -15186,6 +15190,10 @@ SDValue DAGCombiner::visitCONCAT_VECTORS(SDNode *N) {
       EVT SclTy = Scalar->getValueType(0);
 
       if (!SclTy.isFloatingPoint() && !SclTy.isInteger())
+        return SDValue();
+
+      // Bail out if the vector size is not a multiple of the scalar size.
+      if (VT.getSizeInBits() % SclTy.getSizeInBits())
         return SDValue();
 
       unsigned VNTNumElms = VT.getSizeInBits() / SclTy.getSizeInBits();

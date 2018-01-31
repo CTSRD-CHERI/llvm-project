@@ -462,13 +462,15 @@ private:
           FormatToken *Previous = CurrentToken->getPreviousNonComment();
           if (Previous->is(TT_JsTypeOptionalQuestion))
             Previous = Previous->getPreviousNonComment();
-          if (((CurrentToken->is(tok::colon) &&
-                (!Contexts.back().ColonIsDictLiteral || !Style.isCpp())) ||
-               Style.Language == FormatStyle::LK_Proto ||
-               Style.Language == FormatStyle::LK_TextProto) &&
-              (Previous->Tok.getIdentifierInfo() ||
-               Previous->is(tok::string_literal)))
-            Previous->Type = TT_SelectorName;
+          if ((CurrentToken->is(tok::colon) &&
+               (!Contexts.back().ColonIsDictLiteral || !Style.isCpp())) ||
+              Style.Language == FormatStyle::LK_Proto ||
+              Style.Language == FormatStyle::LK_TextProto) {
+            Left->Type = TT_DictLiteral;
+            if (Previous->Tok.getIdentifierInfo() ||
+                Previous->is(tok::string_literal))
+              Previous->Type = TT_SelectorName;
+          }
           if (CurrentToken->is(tok::colon) ||
               Style.Language == FormatStyle::LK_JavaScript)
             Left->Type = TT_DictLiteral;
@@ -2708,9 +2710,11 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
             Keywords.kw_readonly, Keywords.kw_abstract, Keywords.kw_get,
             Keywords.kw_set, Keywords.kw_async, Keywords.kw_await))
       return false; // Otherwise automatic semicolon insertion would trigger.
-    if (Left.Tok.getIdentifierInfo() &&
-        Right.startsSequence(tok::l_square, tok::r_square))
-      return false;  // breaking in "foo[]" creates illegal TS type syntax.
+    if (Right.NestingLevel == 0 &&
+        (Left.Tok.getIdentifierInfo() ||
+         Left.isOneOf(tok::r_square, tok::r_paren)) &&
+        Right.isOneOf(tok::l_square, tok::l_paren))
+      return false; // Otherwise automatic semicolon insertion would trigger.
     if (Left.is(TT_JsFatArrow) && Right.is(tok::l_brace))
       return false;
     if (Left.is(TT_JsTypeColon))

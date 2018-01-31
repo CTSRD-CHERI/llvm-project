@@ -110,6 +110,8 @@ public:
     return FunctionSymbols[Index];
   }
 
+  Symbol *getGlobalSymbol(uint32_t Index) const { return GlobalSymbols[Index]; }
+
 private:
   uint32_t relocateVirtualAddress(uint32_t Index) const;
   uint32_t relocateTypeIndex(uint32_t Original) const;
@@ -117,8 +119,7 @@ private:
   uint32_t relocateTableIndex(uint32_t Original) const;
 
   Symbol *createDefined(const WasmSymbol &Sym, Symbol::Kind Kind,
-                        const InputSegment *Segment = nullptr,
-                        InputFunction *Function = nullptr,
+                        InputChunk *Chunk = nullptr,
                         uint32_t Address = UINT32_MAX);
   Symbol *createUndefined(const WasmSymbol &Sym, Symbol::Kind Kind,
                           const WasmSignature *Signature = nullptr);

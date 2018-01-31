@@ -819,8 +819,10 @@ static void setConfigs() {
   Config->Endianness =
       Config->IsLE ? support::endianness::little : support::endianness::big;
   Config->IsMips64EL = (Kind == ELF64LEKind && Machine == EM_MIPS);
-  Config->IsRela = Config->Is64 || IsX32 || Config->MipsN32Abi;
-  if (Config->EMachine == EM_MIPS && Config->OSABI == ELFOSABI_FREEBSD && !Config->Relocatable) {
+  Config->IsRela =
+      Config->Is64 || IsX32 || Config->MipsN32Abi || Machine == EM_PPC;
+  if (Config->EMachine == EM_MIPS && Config->OSABI == ELFOSABI_FREEBSD &&
+      !Config->Relocatable) {
     Config->IsRela = false; // FreeBSD MIPS rtld does not support RELA relocations
   }
   Config->Pic = Config->Pie || Config->Shared;
@@ -1091,6 +1093,10 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   // We need to create some reserved symbols such as _end. Create them.
   if (!Config->Relocatable)
     addReservedSymbols();
+
+  // We want to declare linker script's symbols early,
+  // so that we can version them.
+  Script->declareSymbols();
 
   // Apply version scripts.
   Symtab->scanVersionScript();
