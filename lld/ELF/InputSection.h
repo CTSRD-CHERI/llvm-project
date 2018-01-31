@@ -344,10 +344,6 @@ private:
 
 // The list of all input sections.
 extern std::vector<InputSectionBase *> InputSections;
-
-// Builds section order for handling --symbol-ordering-file.
-llvm::DenseMap<SectionBase *, int> buildSectionOrder();
-
 } // namespace elf
 
 std::string toString(const elf::InputSectionBase *);

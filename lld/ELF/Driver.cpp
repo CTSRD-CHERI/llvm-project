@@ -818,8 +818,10 @@ static void setConfigs() {
   Config->Endianness =
       Config->IsLE ? support::endianness::little : support::endianness::big;
   Config->IsMips64EL = (Kind == ELF64LEKind && Machine == EM_MIPS);
-  Config->IsRela = Config->Is64 || IsX32 || Config->MipsN32Abi;
-  if (Config->EMachine == EM_MIPS && Config->OSABI == ELFOSABI_FREEBSD && !Config->Relocatable) {
+  Config->IsRela =
+      Config->Is64 || IsX32 || Config->MipsN32Abi || Machine == EM_PPC;
+  if (Config->EMachine == EM_MIPS && Config->OSABI == ELFOSABI_FREEBSD &&
+      !Config->Relocatable) {
     Config->IsRela = false; // FreeBSD MIPS rtld does not support RELA relocations
   }
   Config->Pic = Config->Pie || Config->Shared;
