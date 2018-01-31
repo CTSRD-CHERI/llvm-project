@@ -671,6 +671,14 @@ CodeGenModule::mergeTBAAInfoForConditionalOperator(TBAAAccessInfo InfoA,
   return TBAA->mergeTBAAInfoForConditionalOperator(InfoA, InfoB);
 }
 
+TBAAAccessInfo
+CodeGenModule::mergeTBAAInfoForMemoryTransfer(TBAAAccessInfo DestInfo,
+                                              TBAAAccessInfo SrcInfo) {
+  if (!TBAA)
+    return TBAAAccessInfo();
+  return TBAA->mergeTBAAInfoForConditionalOperator(DestInfo, SrcInfo);
+}
+
 void CodeGenModule::DecorateInstructionWithTBAA(llvm::Instruction *Inst,
                                                 TBAAAccessInfo TBAAInfo) {
   if (llvm::MDNode *Tag = getTBAAAccessTagInfo(TBAAInfo))
@@ -714,6 +722,8 @@ llvm::ConstantInt *CodeGenModule::getSize(CharUnits size) {
 void CodeGenModule::setGlobalVisibility(llvm::GlobalValue *GV,
                                         const NamedDecl *D,
                                         ForDefinition_t IsForDefinition) const {
+  if (GV->hasDLLImportStorageClass())
+    return;
   // Internal definitions always have default visibility.
   if (GV->hasLocalLinkage()) {
     GV->setVisibility(llvm::GlobalValue::DefaultVisibility);

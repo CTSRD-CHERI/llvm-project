@@ -9917,13 +9917,19 @@ QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
     }
   } else if (LHSType->isPointerType() &&
              RHSType->isPointerType()) { // C99 6.5.8p2
+    bool LHSIsCap = LHSType->isCHERICapabilityType(Context);
+    bool RHSIsCap = RHSType->isCHERICapabilityType(Context);
+
+    // Binary operations between pointers and capabilities are errors
+    if (LHSIsCap != RHSIsCap && !(LHSIsNull || RHSIsNull))
+      Diag(Loc, diag::err_typecheck_comparison_of_pointer_capability)
+        << LHSType << RHSType << LHS.get()->getSourceRange()
+        << RHS.get()->getSourceRange();
 
     // We only implicitly cast the NULL constant to a memory capability
-    if (LHSIsNull && !LHSType->isCHERICapabilityType(Context)
-                  && RHSType->isCHERICapabilityType(Context))
+    if (LHSIsNull && !LHSIsCap && RHSIsCap)
         LHS = ImpCastExprToType(LHS.get(), RHSType, CK_PointerToCHERICapability);
-    else if (RHSIsNull && !RHSType->isCHERICapabilityType(Context)
-                       && LHSType->isCHERICapabilityType(Context))
+    else if (RHSIsNull && !RHSIsCap && LHSIsCap)
         RHS = ImpCastExprToType(RHS.get(), LHSType, CK_PointerToCHERICapability);
 
     // All of the following pointer-related warnings are GCC extensions, except
@@ -11412,6 +11418,16 @@ QualType Sema::CheckAddressOfOperand(ExprResult &OrigOp, SourceLocation OpLoc) {
     return Context.getObjCObjectPointerType(op->getType());
 
   CheckAddressOfPackedMember(op);
+
+  if (auto *mr = dyn_cast<MemberExpr>(op))
+    if (mr->getBase()->getType()->isCHERICapabilityType(Context))
+      return Context.getPointerType(op->getType(),
+          ASTContext::PIK_Capability);
+
+  if (auto *as = dyn_cast<ArraySubscriptExpr>(op))
+    if (as->getBase()->getType()->isCHERICapabilityType(Context))
+      return Context.getPointerType(op->getType(),
+          ASTContext::PIK_Capability);
 
   return Context.getPointerType(op->getType());
 }

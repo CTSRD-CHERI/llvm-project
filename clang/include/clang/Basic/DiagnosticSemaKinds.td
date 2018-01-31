@@ -5940,6 +5940,8 @@ def ext_typecheck_comparison_of_pointer_integer : ExtWarn<
   "comparison between pointer and integer (%0 and %1)">;
 def err_typecheck_comparison_of_pointer_integer : Error<
   "comparison between pointer and integer (%0 and %1)">;
+def err_typecheck_comparison_of_pointer_capability : Error<
+  "comparison between integer pointer and capability (%0 and %1)">;
 def ext_typecheck_comparison_of_distinct_pointers : ExtWarn<
   "comparison of distinct pointer types%diff{ ($ and $)|}0,1">,
   InGroup<CompareDistinctPointerType>;

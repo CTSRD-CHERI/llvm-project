@@ -1005,7 +1005,9 @@ void CodeGenFunction::EmitReturnOfRValue(RValue RV, QualType Ty) {
   if (RV.isScalar()) {
     Builder.CreateStore(RV.getScalarVal(), ReturnValue);
   } else if (RV.isAggregate()) {
-    EmitAggregateCopy(ReturnValue, RV.getAggregateAddress(), Ty);
+    LValue Dest = MakeAddrLValue(ReturnValue, Ty);
+    LValue Src = MakeAddrLValue(RV.getAggregateAddress(), Ty);
+    EmitAggregateCopy(Dest, Src, Ty);
   } else {
     EmitStoreOfComplex(RV.getComplexVal(), MakeAddrLValue(ReturnValue, Ty),
                        /*init*/ true);
@@ -1177,10 +1179,10 @@ void CodeGenFunction::EmitCaseStmtRange(const CaseStmt &S) {
 
   llvm::APSInt LHS = S.getLHS()->EvaluateKnownConstInt(getContext());
   if (S.getLHS()->getType()->isCHERICapabilityType(getContext()))
-    LHS = LHS.trunc(64);  // XXXAR: will this always be correct???
+    LHS = LHS.extOrTrunc(Target.getPointerRangeForCHERICapability());
   llvm::APSInt RHS = S.getRHS()->EvaluateKnownConstInt(getContext());
   if (S.getRHS()->getType()->isCHERICapabilityType(getContext()))
-    RHS = RHS.trunc(64);  // XXXAR: will this always be correct???
+    RHS = RHS.extOrTrunc(Target.getPointerRangeForCHERICapability());
 
   // Emit the code for this case. We do this first to make sure it is
   // properly chained from our predecessor before generating the
