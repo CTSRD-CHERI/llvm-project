@@ -721,18 +721,12 @@ AArch64TargetLowering::AArch64TargetLowering(const TargetMachine &TM,
 }
 
 void AArch64TargetLowering::addTypeForNEON(MVT VT, MVT PromotedBitwiseVT) {
-  if (VT == MVT::v2f32 || VT == MVT::v4f16) {
-    setOperationAction(ISD::LOAD, VT, Promote);
-    AddPromotedToType(ISD::LOAD, VT, MVT::v2i32);
+  assert(VT.isVector() && "VT should be a vector type");
 
-    setOperationAction(ISD::STORE, VT, Promote);
-    AddPromotedToType(ISD::STORE, VT, MVT::v2i32);
-  } else if (VT == MVT::v2f64 || VT == MVT::v4f32 || VT == MVT::v8f16) {
-    setOperationAction(ISD::LOAD, VT, Promote);
-    AddPromotedToType(ISD::LOAD, VT, MVT::v2i64);
-
-    setOperationAction(ISD::STORE, VT, Promote);
-    AddPromotedToType(ISD::STORE, VT, MVT::v2i64);
+  if (VT.isFloatingPoint()) {
+    MVT PromoteTo = EVT(VT).changeVectorElementTypeToInteger().getSimpleVT();
+    setOperationPromotedToType(ISD::LOAD, VT, PromoteTo);
+    setOperationPromotedToType(ISD::STORE, VT, PromoteTo);
   }
 
   // Mark vector float intrinsics as expand.
@@ -3343,15 +3337,9 @@ AArch64TargetLowering::LowerCall(CallLoweringInfo &CLI,
     assert(FPDiff % 16 == 0 && "unaligned stack on tail call");
   }
 
-  // We can omit callseq_start/callseq_end if there is no callframe to setup.
-  // Do not omit for patchpoints as SelectionDAGBuilder::visitPatchpoint()
-  // currently expects it.
-  bool OmitCallSeq = NumBytes == 0 && !CLI.IsPatchPoint;
-  assert((!IsSibCall || OmitCallSeq) && "Should not get callseq for sibcalls");
-
   // Adjust the stack pointer for the new arguments...
   // These operations are automatically eliminated by the prolog/epilog pass
-  if (!OmitCallSeq)
+  if (!IsSibCall)
     Chain = DAG.getCALLSEQ_START(Chain, NumBytes, 0, DL);
 
   SDValue StackPtr = DAG.getCopyFromReg(Chain, DL, AArch64::SP,
@@ -3517,7 +3505,7 @@ AArch64TargetLowering::LowerCall(CallLoweringInfo &CLI,
   // the frame up *after* the call, however in the ABI-changing tail-call case
   // we've carefully laid out the parameters so that when sp is reset they'll be
   // in the correct location.
-  if (IsTailCall && !OmitCallSeq) {
+  if (IsTailCall && !IsSibCall) {
     Chain = DAG.getCALLSEQ_END(Chain, DAG.getIntPtrConstant(NumBytes, DL, true),
                                DAG.getIntPtrConstant(0, DL, true), InFlag, DL);
     InFlag = Chain.getValue(1);
@@ -3575,11 +3563,9 @@ AArch64TargetLowering::LowerCall(CallLoweringInfo &CLI,
   uint64_t CalleePopBytes =
       DoesCalleeRestoreStack(CallConv, TailCallOpt) ? alignTo(NumBytes, 16) : 0;
 
-  if (!OmitCallSeq)
-    Chain = DAG.getCALLSEQ_END(Chain, DAG.getIntPtrConstant(NumBytes, DL, true),
-                               DAG.getIntPtrConstant(CalleePopBytes, DL, true),
-                               InFlag, DL);
-
+  Chain = DAG.getCALLSEQ_END(Chain, DAG.getIntPtrConstant(NumBytes, DL, true),
+                             DAG.getIntPtrConstant(CalleePopBytes, DL, true),
+                             InFlag, DL);
   if (!Ins.empty())
     InFlag = Chain.getValue(1);
 
@@ -10664,11 +10650,79 @@ static std::pair<SDValue, SDValue> splitInt128(SDValue N, SelectionDAG &DAG) {
   return std::make_pair(Lo, Hi);
 }
 
+// Create an even/odd pair of X registers holding integer value V.
+static SDValue createGPRPairNode(SelectionDAG &DAG, SDValue V) {
+  SDLoc dl(V.getNode());
+  SDValue VLo = DAG.getAnyExtOrTrunc(V, dl, MVT::i64);
+  SDValue VHi = DAG.getAnyExtOrTrunc(
+      DAG.getNode(ISD::SRL, dl, MVT::i128, V, DAG.getConstant(64, dl, MVT::i64)),
+      dl, MVT::i64);
+  if (DAG.getDataLayout().isBigEndian())
+    std::swap (VLo, VHi);
+  SDValue RegClass =
+      DAG.getTargetConstant(AArch64::XSeqPairsClassRegClassID, dl, MVT::i32);
+  SDValue SubReg0 = DAG.getTargetConstant(AArch64::sube64, dl, MVT::i32);
+  SDValue SubReg1 = DAG.getTargetConstant(AArch64::subo64, dl, MVT::i32);
+  const SDValue Ops[] = { RegClass, VLo, SubReg0, VHi, SubReg1 };
+  return SDValue(
+      DAG.getMachineNode(TargetOpcode::REG_SEQUENCE, dl, MVT::Untyped, Ops), 0);
+}
+
 static void ReplaceCMP_SWAP_128Results(SDNode *N,
-                                       SmallVectorImpl<SDValue> & Results,
-                                       SelectionDAG &DAG) {
+                                       SmallVectorImpl<SDValue> &Results,
+                                       SelectionDAG &DAG,
+                                       const AArch64Subtarget *Subtarget) {
   assert(N->getValueType(0) == MVT::i128 &&
          "AtomicCmpSwap on types less than 128 should be legal");
+
+  if (Subtarget->hasLSE()) {
+    // LSE has a 128-bit compare and swap (CASP), but i128 is not a legal type,
+    // so lower it here, wrapped in REG_SEQUENCE and EXTRACT_SUBREG.
+    SDValue Ops[] = {
+        createGPRPairNode(DAG, N->getOperand(2)), // Compare value
+        createGPRPairNode(DAG, N->getOperand(3)), // Store value
+        N->getOperand(1), // Ptr
+        N->getOperand(0), // Chain in
+    };
+
+    MachineFunction &MF = DAG.getMachineFunction();
+    MachineSDNode::mmo_iterator MemOp = MF.allocateMemRefsArray(1);
+    MemOp[0] = cast<MemSDNode>(N)->getMemOperand();
+
+    unsigned Opcode;
+    switch (MemOp[0]->getOrdering()) {
+    case AtomicOrdering::Monotonic:
+      Opcode = AArch64::CASPX;
+      break;
+    case AtomicOrdering::Acquire:
+      Opcode = AArch64::CASPAX;
+      break;
+    case AtomicOrdering::Release:
+      Opcode = AArch64::CASPLX;
+      break;
+    case AtomicOrdering::AcquireRelease:
+    case AtomicOrdering::SequentiallyConsistent:
+      Opcode = AArch64::CASPALX;
+      break;
+    default:
+      llvm_unreachable("Unexpected ordering!");
+    }
+
+    MachineSDNode *CmpSwap = DAG.getMachineNode(
+        Opcode, SDLoc(N), DAG.getVTList(MVT::Untyped, MVT::Other), Ops);
+    CmpSwap->setMemRefs(MemOp, MemOp + 1);
+
+    unsigned SubReg1 = AArch64::sube64, SubReg2 = AArch64::subo64;
+    if (DAG.getDataLayout().isBigEndian())
+      std::swap(SubReg1, SubReg2);
+    Results.push_back(DAG.getTargetExtractSubreg(SubReg1, SDLoc(N), MVT::i64,
+                                                 SDValue(CmpSwap, 0)));
+    Results.push_back(DAG.getTargetExtractSubreg(SubReg2, SDLoc(N), MVT::i64,
+                                                 SDValue(CmpSwap, 0)));
+    Results.push_back(SDValue(CmpSwap, 1)); // Chain out
+    return;
+  }
+
   auto Desired = splitInt128(N->getOperand(2), DAG);
   auto New = splitInt128(N->getOperand(3), DAG);
   SDValue Ops[] = {N->getOperand(1), Desired.first, Desired.second,
@@ -10727,7 +10781,7 @@ void AArch64TargetLowering::ReplaceNodeResults(
     // Let normal code take care of it by not adding anything to Results.
     return;
   case ISD::ATOMIC_CMP_SWAP:
-    ReplaceCMP_SWAP_128Results(N, Results, DAG);
+    ReplaceCMP_SWAP_128Results(N, Results, DAG, Subtarget);
     return;
   }
 }
@@ -10989,6 +11043,10 @@ bool AArch64TargetLowering::isIntDivCheap(EVT VT, AttributeList Attr) const {
   bool OptSize =
       Attr.hasAttribute(AttributeList::FunctionIndex, Attribute::MinSize);
   return OptSize && !VT.isVector();
+}
+
+bool AArch64TargetLowering::enableAggressiveFMAFusion(EVT VT) const {
+  return Subtarget->hasAggressiveFMA() && VT.isFloatingPoint();
 }
 
 unsigned

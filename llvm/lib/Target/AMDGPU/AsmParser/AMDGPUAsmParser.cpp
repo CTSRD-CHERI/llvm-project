@@ -138,6 +138,7 @@ public:
     ImmTyGLC,
     ImmTySLC,
     ImmTyTFE,
+    ImmTyD16,
     ImmTyClampSI,
     ImmTyOModSI,
     ImmTyDppCtrl,
@@ -286,7 +287,7 @@ public:
   bool isDMask() const { return isImmTy(ImmTyDMask); }
   bool isUNorm() const { return isImmTy(ImmTyUNorm); }
   bool isDA() const { return isImmTy(ImmTyDA); }
-  bool isR128() const { return isImmTy(ImmTyUNorm); }
+  bool isR128() const { return isImmTy(ImmTyR128); }
   bool isLWE() const { return isImmTy(ImmTyLWE); }
   bool isOff() const { return isImmTy(ImmTyOff); }
   bool isExpTgt() const { return isImmTy(ImmTyExpTgt); }
@@ -305,6 +306,7 @@ public:
   bool isGLC() const { return isImmTy(ImmTyGLC); }
   bool isSLC() const { return isImmTy(ImmTySLC); }
   bool isTFE() const { return isImmTy(ImmTyTFE); }
+  bool isD16() const { return isImmTy(ImmTyD16); }
   bool isDFMT() const { return isImmTy(ImmTyDFMT) && isUInt<8>(getImm()); }
   bool isNFMT() const { return isImmTy(ImmTyNFMT) && isUInt<8>(getImm()); }
   bool isBankMask() const { return isImmTy(ImmTyDppBankMask); }
@@ -657,6 +659,7 @@ public:
     case ImmTyGLC: OS << "GLC"; break;
     case ImmTySLC: OS << "SLC"; break;
     case ImmTyTFE: OS << "TFE"; break;
+    case ImmTyD16: OS << "D16"; break;
     case ImmTyDFMT: OS << "DFMT"; break;
     case ImmTyNFMT: OS << "NFMT"; break;
     case ImmTyClampSI: OS << "ClampSI"; break;
@@ -821,7 +824,7 @@ class AMDGPUAsmParser : public MCTargetAsmParser {
 
   // Number of extra operands parsed after the first optional operand.
   // This may be necessary to skip hardcoded mandatory operands.
-  static const unsigned MAX_OPR_LOOKAHEAD = 1;
+  static const unsigned MAX_OPR_LOOKAHEAD = 8;
 
   unsigned ForcedEncodingSize = 0;
   bool ForcedDPP = false;
@@ -1037,6 +1040,8 @@ private:
   bool validateConstantBusLimitations(const MCInst &Inst);
   bool validateEarlyClobberLimitations(const MCInst &Inst);
   bool validateIntClampSupported(const MCInst &Inst);
+  bool validateMIMGAtomicDMask(const MCInst &Inst);
+  bool validateMIMGDataSize(const MCInst &Inst);
   bool usesConstantBus(const MCInst &Inst, unsigned OpIdx);
   bool isInlineConstant(const MCInst &Inst, unsigned OpIdx) const;
   unsigned findImplicitSGPRReadInVOP(const MCInst &Inst) const;
@@ -1079,6 +1084,7 @@ public:
   AMDGPUOperand::Ptr defaultSLC() const;
   AMDGPUOperand::Ptr defaultTFE() const;
 
+  AMDGPUOperand::Ptr defaultD16() const;
   AMDGPUOperand::Ptr defaultDMask() const;
   AMDGPUOperand::Ptr defaultUNorm() const;
   AMDGPUOperand::Ptr defaultDA() const;
@@ -2271,6 +2277,55 @@ bool AMDGPUAsmParser::validateIntClampSupported(const MCInst &Inst) {
   return true;
 }
 
+bool AMDGPUAsmParser::validateMIMGDataSize(const MCInst &Inst) {
+
+  const unsigned Opc = Inst.getOpcode();
+  const MCInstrDesc &Desc = MII.get(Opc);
+
+  if ((Desc.TSFlags & SIInstrFlags::MIMG) == 0)
+    return true;
+
+  // Gather4 instructions seem to have special rules not described in spec.
+  if (Desc.TSFlags & SIInstrFlags::Gather4)
+    return true;
+
+  int VDataIdx = AMDGPU::getNamedOperandIdx(Opc, AMDGPU::OpName::vdata);
+  int DMaskIdx = AMDGPU::getNamedOperandIdx(Opc, AMDGPU::OpName::dmask);
+  int TFEIdx   = AMDGPU::getNamedOperandIdx(Opc, AMDGPU::OpName::tfe);
+
+  assert(VDataIdx != -1);
+  assert(DMaskIdx != -1);
+  assert(TFEIdx != -1);
+
+  unsigned VDataSize = AMDGPU::getRegOperandSize(getMRI(), Desc, VDataIdx);
+  unsigned TFESize = Inst.getOperand(TFEIdx).getImm()? 1 : 0;
+  unsigned DMask = Inst.getOperand(DMaskIdx).getImm() & 0xf;
+  if (DMask == 0)
+    DMask = 1;
+
+  return (VDataSize / 4) == countPopulation(DMask) + TFESize;
+}
+
+bool AMDGPUAsmParser::validateMIMGAtomicDMask(const MCInst &Inst) {
+
+  const unsigned Opc = Inst.getOpcode();
+  const MCInstrDesc &Desc = MII.get(Opc);
+
+  if ((Desc.TSFlags & SIInstrFlags::MIMG) == 0)
+    return true;
+  if (!Desc.mayLoad() || !Desc.mayStore())
+    return true; // Not atomic
+
+  int DMaskIdx = AMDGPU::getNamedOperandIdx(Opc, AMDGPU::OpName::dmask);
+  unsigned DMask = Inst.getOperand(DMaskIdx).getImm() & 0xf;
+
+  // This is an incomplete check because image_atomic_cmpswap
+  // may only use 0x3 and 0xf while other atomic operations
+  // may use 0x1 and 0x3. However these limitations are
+  // verified when we check that dmask matches dst size.
+  return DMask == 0x1 || DMask == 0x3 || DMask == 0xf;
+}
+
 bool AMDGPUAsmParser::validateInstruction(const MCInst &Inst,
                                           const SMLoc &IDLoc) {
   if (!validateConstantBusLimitations(Inst)) {
@@ -2286,6 +2341,16 @@ bool AMDGPUAsmParser::validateInstruction(const MCInst &Inst,
   if (!validateIntClampSupported(Inst)) {
     Error(IDLoc,
       "integer clamping is not supported on this GPU");
+    return false;
+  }
+  if (!validateMIMGDataSize(Inst)) {
+    Error(IDLoc,
+      "image data size does not match dmask and tfe");
+    return false;
+  }
+  if (!validateMIMGAtomicDMask(Inst)) {
+    Error(IDLoc,
+      "invalid atomic image dmask");
     return false;
   }
 
@@ -3955,6 +4020,10 @@ AMDGPUOperand::Ptr AMDGPUAsmParser::defaultTFE() const {
   return AMDGPUOperand::CreateImm(this, 0, SMLoc(), AMDGPUOperand::ImmTyTFE);
 }
 
+AMDGPUOperand::Ptr AMDGPUAsmParser::defaultD16() const {
+  return AMDGPUOperand::CreateImm(this, 0, SMLoc(), AMDGPUOperand::ImmTyD16);
+}
+
 void AMDGPUAsmParser::cvtMubufImpl(MCInst &Inst,
                                const OperandVector &Operands,
                                bool IsAtomic, bool IsAtomicReturn) {
@@ -4199,6 +4268,7 @@ static const OptionalOperand AMDGPUOptionalOperandTable[] = {
   {"glc",     AMDGPUOperand::ImmTyGLC, true, nullptr},
   {"slc",     AMDGPUOperand::ImmTySLC, true, nullptr},
   {"tfe",     AMDGPUOperand::ImmTyTFE, true, nullptr},
+  {"d16",     AMDGPUOperand::ImmTyD16, true, nullptr},
   {"high",    AMDGPUOperand::ImmTyHigh, true, nullptr},
   {"clamp",   AMDGPUOperand::ImmTyClampSI, true, nullptr},
   {"omod",    AMDGPUOperand::ImmTyOModSI, false, ConvertOmodMul},
@@ -4903,6 +4973,8 @@ unsigned AMDGPUAsmParser::validateTargetOperandClass(MCParsedAsmOperand &Op,
     return Operand.isGDS() ? Match_Success : Match_InvalidOperand;
   case MCK_glc:
     return Operand.isGLC() ? Match_Success : Match_InvalidOperand;
+  case MCK_d16:
+    return Operand.isD16() ? Match_Success : Match_InvalidOperand;
   case MCK_idxen:
     return Operand.isIdxen() ? Match_Success : Match_InvalidOperand;
   case MCK_offen:
