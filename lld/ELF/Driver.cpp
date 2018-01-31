@@ -806,7 +806,8 @@ static void setConfigs() {
   Config->Endianness =
       Config->IsLE ? support::endianness::little : support::endianness::big;
   Config->IsMips64EL = (Kind == ELF64LEKind && Machine == EM_MIPS);
-  Config->IsRela = Config->Is64 || IsX32 || Config->MipsN32Abi;
+  Config->IsRela =
+      Config->Is64 || IsX32 || Config->MipsN32Abi || Machine == EM_PPC;
   Config->Pic = Config->Pie || Config->Shared;
   Config->Wordsize = Config->Is64 ? 8 : 4;
 }
@@ -1062,6 +1063,10 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   // We need to create some reserved symbols such as _end. Create them.
   if (!Config->Relocatable)
     addReservedSymbols();
+
+  // We want to declare linker script's symbols early,
+  // so that we can version them.
+  Script->declareSymbols();
 
   // Apply version scripts.
   Symtab->scanVersionScript();
