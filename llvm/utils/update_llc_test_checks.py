@@ -90,6 +90,11 @@ def main():
     for l in run_lines:
       commands = [cmd.strip() for cmd in l.split('|', 1)]
       llc_cmd = commands[0]
+      if llc_cmd.startswith("%cheri_"):
+        llc_cmd = llc_cmd.replace("%cheri_purecap_llc", "llc -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
+        llc_cmd = llc_cmd.replace("%cheri_llc", "llc -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
+        llc_cmd = llc_cmd.replace("%cheri128_llc", "llc -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
+        llc_cmd = llc_cmd.replace("%cheri256_llc", "llc -mtriple=cheri-unknown-freebsd -mcpu=cheri256 -mattr=+cheri256")
 
       triple_in_cmd = None
       m = common.TRIPLE_ARG_RE.search(llc_cmd)
@@ -99,6 +104,8 @@ def main():
       filecheck_cmd = ''
       if len(commands) > 1:
         filecheck_cmd = commands[1]
+      if filecheck_cmd.startswith("%cheri_FileCheck"):
+        filecheck_cmd = filecheck_cmd.replace("%cheri_FileCheck", "FileCheck '-D$CAP_SIZE=16'")
       if not llc_cmd.startswith('llc '):
         print >>sys.stderr, 'WARNING: Skipping non-llc RUN line: ' + l
         continue

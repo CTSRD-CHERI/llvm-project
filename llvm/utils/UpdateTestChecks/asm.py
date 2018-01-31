@@ -179,6 +179,7 @@ def build_function_body_dictionary_for_triple(args, raw_tool_output, triple, pre
       'armv7eb-eabi': (scrub_asm_arm_eabi, ASM_FUNCTION_ARM_RE),
       'armv7eb': (scrub_asm_arm_eabi, ASM_FUNCTION_ARM_RE),
       'mips': (scrub_asm_mips, ASM_FUNCTION_MIPS_RE),
+      'cheri': (scrub_asm_mips, ASM_FUNCTION_MIPS_RE),
       'powerpc64': (scrub_asm_powerpc64, ASM_FUNCTION_PPC_RE),
       'powerpc64le': (scrub_asm_powerpc64, ASM_FUNCTION_PPC_RE),
       'riscv32': (scrub_asm_riscv, ASM_FUNCTION_RISCV_RE),
