@@ -327,7 +327,8 @@ bool LLParser::ParseTargetDefinition() {
     if (ParseToken(lltok::equal, "expected '=' after target datalayout") ||
         ParseStringConstant(Str))
       return true;
-    M->setDataLayout(Str);
+    if (DataLayoutStr.empty())
+      M->setDataLayout(Str);
     return false;
   }
 }
@@ -1917,11 +1918,6 @@ bool LLParser::ParseOptionalCommaAlign(unsigned &Alignment,
       return false;
     }
 
-    if (Lex.getKind() == lltok::kw_addrspace) {
-      AteExtraComma = true;
-      return false;
-    }
-
     if (Lex.getKind() != lltok::kw_align)
       return Error(Lex.getLoc(), "expected metadata or 'align'");
 
@@ -1940,7 +1936,8 @@ bool LLParser::ParseOptionalCommaAlign(unsigned &Alignment,
 bool LLParser::ParseOptionalCommaAddrSpace(unsigned &AddrSpace,
                                            LocTy &Loc,
                                            bool &AteExtraComma) {
-  while (AteExtraComma || EatIfPresent(lltok::comma)) {
+  AteExtraComma = false;
+  while (EatIfPresent(lltok::comma)) {
     // Metadata at the end is an early exit.
     if (Lex.getKind() == lltok::MetadataVar) {
       AteExtraComma = true;
@@ -1953,7 +1950,6 @@ bool LLParser::ParseOptionalCommaAddrSpace(unsigned &AddrSpace,
 
     if (ParseOptionalAddrSpace(AddrSpace))
       return true;
-    AteExtraComma = false;
   }
 
   return false;
@@ -6290,16 +6286,7 @@ int LLParser::ParseAlloc(Instruction *&Inst, PerFunctionState &PFS) {
   if (Size && !Size->getType()->isIntegerTy())
     return Error(SizeLoc, "element count must have integer type");
 
-  const DataLayout &DL = M->getDataLayout();
-  unsigned AS = DL.getAllocaAddrSpace();
-  // XXXAR: HACK: allow allocas in AS0 for CHERI
-  if (AS != AddrSpace) {
-    // TODO: In the future it should be possible to specify addrspace per-alloca.
-    return Error(ASLoc, "alloca address space " + Twine(AddrSpace) +
-                 " must match datalayout AS " + Twine(AS));
-  }
-
-  AllocaInst *AI = new AllocaInst(Ty, AS, Size, Alignment);
+  AllocaInst *AI = new AllocaInst(Ty, AddrSpace, Size, Alignment);
   AI->setUsedWithInAlloca(IsInAlloca);
   AI->setSwiftError(IsSwiftError);
   Inst = AI;
