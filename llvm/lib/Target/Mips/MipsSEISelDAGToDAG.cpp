@@ -115,7 +115,7 @@ bool MipsSEDAGToDAGISel::replaceUsesWithZeroCapReg(MachineRegisterInfo *MRI,
 
   // Replace uses with ZeroReg.
   for (MachineRegisterInfo::use_iterator U = MRI->use_begin(DstReg),
-       E = MRI->use_end(); U != E; ++U)
+       E = MRI->use_end(); U != E;)
     U->setReg(ZeroCapReg);
   return true;
 }
