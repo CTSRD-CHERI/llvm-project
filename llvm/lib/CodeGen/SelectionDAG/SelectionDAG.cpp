@@ -4912,7 +4912,7 @@ static SDValue getMemsetValue(SDValue Value, EVT VT, SelectionDAG &DAG,
   if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(Value)) {
     assert(C->getAPIntValue().getBitWidth() == 8);
     APInt Val = APInt::getSplat(NumBits, C->getAPIntValue());
-    if (VT.isInteger())
+    if (VT.isInteger() || VT.isFatPointer())
       return DAG.getConstant(Val, dl, VT);
     return DAG.getConstantFP(APFloat(DAG.EVTToAPFloatSemantics(VT), Val), dl,
                              VT);
@@ -5158,13 +5158,6 @@ static SDValue getMemcpyLoadsAndStores(SelectionDAG &DAG, const SDLoc &dl,
   bool CopyFromConstant = isMemSrcFromConstant(Src, Slice);
   bool isZeroConstant = CopyFromConstant && Slice.Array == nullptr;
   unsigned Limit = AlwaysInline ? ~0U : TLI.getMaxStoresPerMemcpy(OptSize);
-
-  // If we're copying between two different kinds of pointer then we can't
-  // generate a memcpy.
-  // FIXME: We should allow targets to provide cross-address-space memcpy
-  // functions and advertise this support.
-  if (SrcPtrInfo.getAddrSpace() != DstPtrInfo.getAddrSpace())
-    Limit = ~0U;
 
   if (!FindOptimalMemOpLowering(MemOps, Limit, Size,
                                 (DstAlignCanChange ? 0 : Align),

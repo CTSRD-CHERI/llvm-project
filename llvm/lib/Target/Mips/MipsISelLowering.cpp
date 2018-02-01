@@ -4510,8 +4510,11 @@ EVT MipsTargetLowering::getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
   // the source align will be 0.  We don't want to use capabilities in this
   // case, because the capability tag will always be 0.  For very long memsets,
   // we can use the capability registers in the library implementation.
-  if (Subtarget.isCheri() && !IsMemset) {
-    unsigned Align = std::min(SrcAlign, DstAlign);
+  if (Subtarget.isCheri() && (!IsMemset || ZeroMemset)) {
+    unsigned Align = IsMemset ? DstAlign : std::min(SrcAlign, DstAlign);
+    unsigned CapSize = Subtarget.getCapSizeInBytes();
+    if (ZeroMemset && (Align >= CapSize) && (Size % CapSize > 0))
+      return MVT::i64;
     switch (Align) {
       case 32: return CapType;
       case 16:
@@ -4522,6 +4525,7 @@ EVT MipsTargetLowering::getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
           return CapType;
         return MVT::i64;
       case 4: return MVT::i32;
+      case 2: return MVT::i16;
       default: return MVT::i8;
     }
   }
