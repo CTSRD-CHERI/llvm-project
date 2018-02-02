@@ -552,18 +552,14 @@ void EmitAssemblyHelper::CreatePasses(legacy::PassManager &MPM,
     PMBuilder.addExtension(PassManagerBuilder::EP_ScalarOptimizerLate,
                            addObjCARCOptPass);
   }
-  // TODO: should we have a LangOpts.SupportsCapabilities ?
-  if (TargetTriple.getArch() == Triple::cheri ||
-      TargetTriple.getArch() == Triple::mips64) {
-    PMBuilder.addExtension(PassManagerBuilder::EP_EarlyAsPossible,
-                           addCHERICapDirectCallsPass);
-    PMBuilder.addExtension(PassManagerBuilder::EP_ModuleOptimizerEarly,
-                           addCHERICapFoldIntrinsicsPass);
-    PMBuilder.addExtension(PassManagerBuilder::EP_ScalarOptimizerLate,
-                           addCHERICapFoldIntrinsicsPass);
-    PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
-                           addCHERICapFoldIntrinsicsPass);
-  }
+  PMBuilder.addExtension(PassManagerBuilder::EP_EarlyAsPossible,
+                         addCHERICapDirectCallsPass);
+  PMBuilder.addExtension(PassManagerBuilder::EP_ModuleOptimizerEarly,
+                         addCHERICapFoldIntrinsicsPass);
+  PMBuilder.addExtension(PassManagerBuilder::EP_ScalarOptimizerLate,
+                         addCHERICapFoldIntrinsicsPass);
+  PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
+                         addCHERICapFoldIntrinsicsPass);
 
   if (LangOpts.Sanitize.has(SanitizerKind::LocalBounds)) {
     PMBuilder.addExtension(PassManagerBuilder::EP_ScalarOptimizerLate,
