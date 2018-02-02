@@ -1,7 +1,8 @@
 ; RUN: %cheri_purecap_llc -O0 %s -o - | FileCheck %s
 ; ModuleID = 'cmpcap.c'
+; This test assumes cheri128, since on 256 a 16 byte aligned pointer won't be expanded
+; REQUIRES: cheri_is_128
 source_filename = "cmpcap.c"
-target datalayout = "E-m:e-pf200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128"
 target triple = "cheri-unknown-freebsd"
 
 %struct.bigbuf = type { [5 x i8 addrspace(200)*] }
@@ -24,7 +25,7 @@ entry:
 ; Function Attrs: argmemonly nounwind
 declare void @llvm.memset.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8, i64, i1) #1
 
-attributes #0 = { nounwind "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="cheri128" "target-features"="+cheri128,+chericap,-noabicalls" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #0 = { nounwind }
 attributes #1 = { argmemonly nounwind }
 
 !llvm.module.flags = !{!0, !1}
