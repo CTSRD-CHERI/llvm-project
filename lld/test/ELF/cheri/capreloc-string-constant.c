@@ -1,4 +1,5 @@
 // REQUIRES: clang
+// REQUIRES: cheri-cap-table
 
 // RUN: %cheri256_purecap_cc1 %s -emit-obj -o %t.o
 // RUN: llvm-readobj -r %t.o | FileCheck -check-prefix READOBJ %s

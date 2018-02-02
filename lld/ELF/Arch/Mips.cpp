@@ -184,6 +184,8 @@ RelExpr MIPS<ELFT>::getRelExpr(RelType Type, const Symbol &S,
     return R_MIPS_TLSLD;
   case R_MIPS_NONE:
     return R_NONE;
+// Allow compiling this code with the master branch of LLVM:
+#ifdef R_MIPS_CHERI_CAPABILITY
   case R_MIPS_CHERI_CAPABILITY:
     return R_CHERI_CAPABILITY;
   case R_MIPS_CHERI_CAPTAB_LO16:
@@ -196,6 +198,7 @@ RelExpr MIPS<ELFT>::getRelExpr(RelType Type, const Symbol &S,
   case R_MIPS_CHERI_CAPTAB_CLC11:
   case R_MIPS_CHERI_CAPTAB20:
     return R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE;
+#endif
   default:
     return R_INVALID;
   }
@@ -552,9 +555,11 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   case R_MIPS_PCLO16:
   case R_MIPS_TLS_DTPREL_LO16:
   case R_MIPS_TLS_TPREL_LO16:
+#ifdef R_MIPS_CHERI_CAPTAB_LO16
   // FIXME: handle difference between capcall and captab
   case R_MIPS_CHERI_CAPTAB_LO16:
   case R_MIPS_CHERI_CAPCALL_LO16:
+#endif
     writeValue<E>(Loc, Val, 16, 0);
     break;
   case R_MICROMIPS_GOT_DISP:
@@ -584,6 +589,7 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   case R_MIPS_PCHI16:
   case R_MIPS_TLS_DTPREL_HI16:
   case R_MIPS_TLS_TPREL_HI16:
+#ifdef R_MIPS_CHERI_CAPTAB_HI16
   // TODO: handle difference between captab and capcall!
   case R_MIPS_CHERI_CAPTAB_HI16:
   case R_MIPS_CHERI_CAPCALL_HI16:
@@ -607,6 +613,7 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
     checkInt<16>(Loc, Val >> 4, Type);
     writeValue<E>(Loc, Val, 16, 4);
     break;
+#endif
   case R_MICROMIPS_CALL_HI16:
   case R_MICROMIPS_GOT_HI16:
   case R_MICROMIPS_HI16:

@@ -1,4 +1,5 @@
 // REQUIRES: clang
+// REQUIRES: cheri-cap-table
 
 // RUN: %cheri_purecap_clang %s -c -o %t.o
 // RUN: llvm-readobj -r %t.o | FileCheck -check-prefix OBJ-CAPRELOCS %s

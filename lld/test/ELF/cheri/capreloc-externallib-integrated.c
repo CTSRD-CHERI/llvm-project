@@ -61,13 +61,13 @@
 // DUMP-SHLIB: 0x0000000000020020      Base:  (0x0000000000000000)     Offset: 0x0000000000000019      Length: 0x00000000000010e1      Permissions: 0x00000000
 // DUMP-SHLIB: 0x0000000000020040      Base:  (0x0000000000000000)     Offset: 0x0000000000000000      Length: 0x0000000000000028      Permissions: 0x8000000000000000 (Function)
 
-// UNDEFINED:      error: undefined symbol: external_cap
-// UNDEFINED-NEXT: >>> referenced by external_lib_user.c
+// UNDEFINED:      error: {{(cap_reloc against)?}} undefined symbol: external_cap
+// UNDEFINED-NEXT: >>> referenced by {{(local object cap_ptr)|(external_lib_user.c)}}
 // UNDEFINED-NEXT: >>> {{.+}}/capreloc-externallib-integrated.c.tmp.o:(cap_ptr)
-// UNDEFINED:      error: undefined symbol: external_buffer
-// UNDEFINED-NEXT: >>> referenced by external_lib_user.c
+// UNDEFINED:      error: {{(cap_reloc against)?}} undefined symbol: external_buffer
+// UNDEFINED-NEXT: >>> referenced by {{(local object buffer_ptr)|(external_lib_user.c)}}
 // UNDEFINED-NEXT: >>> {{.+}}/capreloc-externallib-integrated.c.tmp.o:(buffer_ptr)
-// UNDEFINED:      error: undefined symbol: external_func
-// UNDEFINED-NEXT: >>> referenced by external_lib_user.c
+// UNDEFINED:      error: {{(cap_reloc against)?}} undefined symbol: external_func
+// UNDEFINED-NEXT: >>> referenced by {{(local object func_ptr)|(external_lib_user.c)}}
 // UNDEFINED-NEXT: >>> {{.+}}/capreloc-externallib-integrated.c.tmp.o:(func_ptr)
 
