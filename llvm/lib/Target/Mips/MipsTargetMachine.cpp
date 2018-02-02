@@ -76,10 +76,11 @@ static std::string computeDataLayout(const Triple &TT, StringRef CPU,
   else
     Ret += "-m:e";
 
-  // FIXME: Should check for +cheri256, +cheri64
+  // FIXME: Should check for +cheri64
   if (FS.find("+cheri128") != StringRef::npos) {
     Ret += "-pf200:128:128";
-  } else if (Triple(TT).getArch() == Triple::cheri) {
+  } else if (FS.find("+cheri256") != StringRef::npos ||
+             Triple(TT).getArch() == Triple::cheri) {
     Ret += "-pf200:256:256";
   }
 
