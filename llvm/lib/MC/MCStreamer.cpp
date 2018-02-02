@@ -195,15 +195,13 @@ void MCStreamer::EmitGPRel32Value(const MCExpr *Value) {
   report_fatal_error("unsupported directive in streamer");
 }
 
-void MCStreamer::EmitLegacyCHERICapability(const MCExpr *Value, unsigned CapSize,
-                                     SMLoc Loc) {
+void MCStreamer::EmitLegacyCHERICapability(const MCExpr *Value,
+                                           unsigned CapSize, SMLoc Loc) {
   assert(TargetStreamer->useLegacyCapRelocs());
-  if (!this->getContext().getAsmInfo()->supportsCHERI())
-    report_fatal_error("CHERI is not supported by this target!");
+  assert(CapSize == 32 || CapSize == 16);
   // MCStreamers with proper capability support will emit real relocations
   // instead of using the __cap_relocs hack
   if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Value)) {
-    assert(CapSize == 32 || CapSize == 16);
     EmitIntValue(0, 8);
     EmitIntValue(CE->getValue(), 8);
     if (CapSize == 32) {

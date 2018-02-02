@@ -2488,7 +2488,6 @@ static void handleIndirectSymViaGOTPCRel(AsmPrinter &AP, const MCExpr **ME,
 
 static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
                                        AsmPrinter &AP) {
-  // TODO: allow falling back to the __cap_relocs path for benchmarking
   const uint64_t CapWidth = DL.getPointerTypeSize(CV->getType());
   assert(CapWidth == 32 || CapWidth == 16);
   // Handle (void *)5 etc as an untagged capability with base/length/perms 0,
@@ -2506,6 +2505,8 @@ static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
 
   GlobalValue *GV;
   APInt Addend;
+  // XXXAR: The legacy path still exists to allow comparing performance vs the
+  // __cap_relocs path for benchmarking
   if (IsConstantOffsetFromGlobal(const_cast<Constant *>(CV), GV, Addend, DL, true)) {
     if (AP.OutStreamer->getTargetStreamer()->useLegacyCapRelocs())
       AP.OutStreamer->EmitLegacyCHERICapability(Expr, CapWidth);
