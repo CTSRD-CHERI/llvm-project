@@ -83,7 +83,9 @@ static SymbolAndOffset sectionWithOffsetToSymbol(InputSectionBase *IS,
     }
   }
   if (!FallbackResult) {
-    assert(IS->Name.startswith(".rodata.str"));
+    warn("capreloc local symbol not found, fallback: section=" +
+	 IS->Name + " symbol=" + Src->getName() +
+	 " file=" + ((Src->File != nullptr) ? Src->File->getName() : ""));
     FallbackResult = Src;
   }
   // we should have found at least a section symbol
@@ -397,7 +399,6 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
       TargetVA = Reloc.Target.Offset;
     }
     uint64_t TargetOffset = Reloc.CapabilityOffset;
-
     uint64_t Permissions = Reloc.Target.Symbol->isFunc() ? 1ULL << 63 : 0;
     uint64_t TargetSize = getTargetSize<ELFT>(Location, Reloc);
     // TODO: should we warn about symbols that are out-of-bounds?

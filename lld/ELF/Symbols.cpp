@@ -294,7 +294,6 @@ std::string lld::verboseToString(Symbol *B, uint64_t SymOffset) {
 
   if (B->isLocal())
     Msg += "local ";
-  // ->symbol() cannot be called on local symbols
   if (B->isWeak())
       Msg += "weak ";
   if (B->isShared())
