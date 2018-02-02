@@ -1377,6 +1377,19 @@ BUILTIN(__builtin_operator_new, "v*z", "c")
 BUILTIN(__builtin_operator_delete, "vv*", "n")
 BUILTIN(__builtin_char_memchr, "c*cC*iz", "n")
 
+
+// Alignment builtins (uses custom parsing to support pointers and capabilities)
+// Builtins to align a value to a specific number of bytes (undefined behaviour/error if the value is not a power of two)
+BUILTIN(__builtin_is_aligned, "bvC*z", "nct")
+BUILTIN(__builtin_align_up, "v*vC*z", "nct")
+BUILTIN(__builtin_align_down, "v*vC*z", "nct")
+// The same builtins but with the second argument as a power of two instead of an integer
+// undefined behaviour if the requested value is greater than the number of bits
+BUILTIN(__builtin_is_p2aligned, "bvC*z", "nct")
+BUILTIN(__builtin_p2align_up, "v*vC*z", "nct")
+BUILTIN(__builtin_p2align_down, "v*vC*z", "nct")
+
+
 // Memory capability builtins
 BUILTIN(__builtin_cheri_length_set, "v*mvC*mz", "nc")
 BUILTIN(__builtin_cheri_bounds_set, "v*mvC*mz", "nc")

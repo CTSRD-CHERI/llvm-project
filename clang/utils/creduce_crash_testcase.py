@@ -61,6 +61,7 @@ class ErrorKind(Enum):
     AddressSanitizer_ERROR = b"ERROR: AddressSanitizer:"
 
 
+# TODO: it should be possible to just use a table here to apply and remove the substitutions
 def expand_lit_substitutions(args: "Options", cmd) -> str:
     compiler_cmd = cmd.replace("%clang_cc1 ", str(args.clang_cmd) + " -cc1 ")
     compiler_cmd = compiler_cmd.replace("%clang ", str(args.clang_cmd) + " ")
@@ -74,18 +75,21 @@ def expand_lit_substitutions(args: "Options", cmd) -> str:
                                         "-target-abi purecap ")
     # llc substitutions:
     if "llc" in compiler_cmd:
-        compiler_cmd = re.sub(r"\bllc\b", " " + str(args.llc_cmd) + " ", compiler_cmd)
+        compiler_cmd = re.sub(r"\sllc\b", " " + str(args.llc_cmd) + " ", compiler_cmd)
     compiler_cmd = compiler_cmd.replace("%cheri128_llc ", str(args.llc_cmd) +
                                         " -mtriple=cheri-unknown-freebsd -mcpu=cheri128")
     compiler_cmd = compiler_cmd.replace("%cheri256_llc ", str(args.llc_cmd) +
                                         " -mtriple=cheri-unknown-freebsd -mcpu=cheri256")
     compiler_cmd = compiler_cmd.replace("%cheri_purecap_llc ",
                                         "%cheri_llc -target-abi purecap -relocation-model pic ")
-    compiler_cmd = compiler_cmd.replace("%cheri_llc ", str(args.llc_cmd) + " -mtriple=cheri-unknown-freebsd ")
+    # For test case reduction pureposes assume %cheri_llc uses -mcpu=cheri128 since otherwise we get the following:
+    # Assertion `RC && "This value type is not natively supported!"'
+    compiler_cmd = compiler_cmd.replace("%cheri_llc ", str(args.llc_cmd) +
+                                        " -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128 ")
 
     # opt substitutions
     if "opt" in compiler_cmd:
-        compiler_cmd = re.sub(r"\bopt\b", " " + str(args.opt_cmd) + " ", compiler_cmd)
+        compiler_cmd = re.sub(r"\sopt\b", " " + str(args.opt_cmd) + " ", compiler_cmd)
     compiler_cmd = compiler_cmd.replace("%cheri_opt ", str(args.opt_cmd) +
                                         " -mtriple=cheri-unknown-freebsd")
 
@@ -93,6 +97,37 @@ def expand_lit_substitutions(args: "Options", cmd) -> str:
     if "|" in compiler_cmd:
         compiler_cmd = compiler_cmd[0:compiler_cmd.find("|")]
     return compiler_cmd
+
+
+def add_lit_substitutions(args: "Options", run_line: str) -> str:
+    for path, replacement in ((args.clang_cmd, "%clang"), (args.opt_cmd, "opt"), (args.llc_cmd, "llc")):
+        if str(path) in run_line:
+            run_line = run_line.replace(str(path), replacement)
+            break
+    run_line = re.sub("%clang\s+-cc1", "%clang_cc1", run_line)
+    # convert %clang_cc1 -target-cpu cheri to %cheri_cc1 / %cheri_purecap_cc1
+    run_line = run_line.replace("-Werror=implicit-int", "")  # important for creduce but not for the test
+    if "%clang_cc1" in run_line:
+        target_cpu_re = r"-target-cpu\s+cheri[^\s]*\s*"
+        triple_cheri_freebsd_re = r"-triple\s+cheri-unknown-freebsd\d*\s+"
+        if re.search(target_cpu_re, run_line) or re.search(triple_cheri_freebsd_re, run_line):
+            run_line = re.sub(target_cpu_re, "", run_line)  # remove
+            run_line = re.sub(triple_cheri_freebsd_re, "", run_line)  # remove
+            run_line = run_line.replace("%clang_cc1", "%cheri_cc1")
+            run_line = run_line.replace("-mllvm -cheri128", "")
+            run_line = re.sub(r"-cheri-size \d+", "", run_line)  # remove
+            target_abi_re = r"-target-abi\s+purecap\s*"
+            if re.search(target_abi_re, run_line) is not None:
+                run_line = re.sub(target_abi_re, "", run_line)  # remove
+                assert "%cheri_cc1" in run_line
+                run_line = run_line.replace("%cheri_cc1", "%cheri_purecap_cc1")
+    if "llc " in run_line:
+        # TODO: convert the 128/256 variants?
+        run_line = re.sub(r"llc\s+-mtriple=cheri-unknown-freebsd\s+-mcpu=cheri\d+\s+-mattr=\+cheri\d+", "%cheri_llc", run_line)
+        run_line = re.sub(r"%cheri_llc\s+-target-abi purecap\s+-relocation-model\s+pic", "%cheri_purecap_llc", run_line)
+    if "opt " in run_line:
+        run_line = re.sub(r"opt\s+-mtriple=cheri-unknown-freebsd", "%cheri_opt", run_line)
+    return run_line
 
 class ReduceTool(metaclass=ABCMeta):
     def __init__(self, args: "Options", name: str, tool: Path) -> None:
@@ -106,6 +141,7 @@ class ReduceTool(metaclass=ABCMeta):
         print("Reducing test case using", name)
 
     def _reduce_script_text(self, input_file: Path, run_cmds: typing.List[typing.List[str]]):
+        verbose_print("Generating reduce script for the following commands:", run_cmds)
         # Handling timeouts in a shell script is awful -> just generate a python script instead
         result = """#!/usr/bin/env python3
 import subprocess
@@ -134,9 +170,7 @@ def run_cmd(cmd, timeout):
         for cmd in run_cmds:
             # check for %s should have happened earlier
             assert "%s" in cmd, cmd
-            # Undo the lit substitutions
-            compiler_cmd = expand_lit_substitutions(self.args, quote_cmd(cmd))
-            compiler_cmd = compiler_cmd.replace("%s", self.input_file_arg(input_file))
+            compiler_cmd = quote_cmd(cmd).replace("%s", self.input_file_arg(input_file))
             grep_msg = ""
             crash_flag = "--crash" if self.args.expected_error_kind in (None, ErrorKind.CRASH) else ""
             if self.args.crash_message:
@@ -148,7 +182,7 @@ def run_cmd(cmd, timeout):
             result += """
 try:
     command = r'''{not_cmd} {crash_flag} {command} {grep_msg} '''
-    # print(command)
+    print(command)
     result = run_cmd(command, timeout={timeout_arg})
     if result.returncode != 0:
         sys.exit({not_interesting})
@@ -174,29 +208,15 @@ except Exception as e:
             die("Reduce script is not interesting!")
         return reduce_script
 
-    @staticmethod
-    def create_test_case(input_text: str, test_case: Path,
+    def create_test_case(self, input_text: str, test_case: Path,
                          run_lines: typing.List[str]):
         processed_run_lines = []
         # TODO: try to remove more flags from the RUN: line!
         for run_line in run_lines:
-            # convert %clang_cc1 -target-cpu cheri to %cheri_cc1 / %cheri_purecap_cc1
-            run_line = run_line.replace("-Werror=implicit-int", "")  # important for creduce but not for the test
-            if "%clang_cc1" in run_line:
-                target_cpu_re = r"-target-cpu\s+cheri[^\s]*\s*"
-                triple_cheri_freebsd_re = r"-triple\s+cheri-unknown-freebsd\d*\s+"
-                if re.search(target_cpu_re, run_line) or re.search(triple_cheri_freebsd_re, run_line):
-                    run_line = re.sub(target_cpu_re, "", run_line)  # remove
-                    run_line = re.sub(triple_cheri_freebsd_re, "", run_line)  # remove
-                    run_line = run_line.replace("%clang_cc1", "%cheri_cc1")
-                    run_line = run_line.replace("-mllvm -cheri128", "")
-                    run_line = re.sub(r"-cheri-size \d+", "", run_line)  # remove
-                    target_abi_re = r"-target-abi\s+purecap\s*"
-                    if re.search(target_abi_re, run_line) is not None:
-                        run_line = re.sub(target_abi_re, "", run_line)  # remove
-                        assert "%cheri_cc1" in run_line
-                        run_line = run_line.replace("%cheri_cc1", "%cheri_purecap_cc1")
-            processed_run_lines.append(run_line)
+            verbose_print("Adding run line: ", run_line)
+            with_lit_subs = add_lit_substitutions(self.args, run_line)
+            verbose_print("Substituted line: ", with_lit_subs)
+            processed_run_lines.append(with_lit_subs)
         result = "\n".join(processed_run_lines) + "\n" + input_text
         with test_case.open("w", encoding="utf-8") as f:
             f.write(result)
@@ -460,9 +480,13 @@ class Reducer(object):
             real_in_file = source_file
             verbose_print("Real input file is", real_in_file)
             command[-1] = "%s"
+            # output to stdout
+            if "-o" not in command:
+                print("Adding '-o -' to the compiler invocation")
+                command += ["-o", "-"]
             # try to remove all unnecessary command line arguments
-            command, real_in_file = self._simplify_crash_command(command, real_in_file.absolute())
-            command.append("%s")
+            command[0] = self.options.clang_cmd  # replace command with the clang binary
+            command, real_in_file = self.simplify_crash_command(command, real_in_file.absolute())
             quoted_cmd = quote_cmd(command)
             verbose_print("Test command is", bold(quoted_cmd))
             self.run_cmds.append(command)
@@ -615,18 +639,12 @@ class Reducer(object):
                     return message
         return None
 
-    def  _simplify_crash_command(self, command: list, infile: Path) -> tuple:
+    def simplify_crash_command(self, command: list, infile: Path) -> tuple:
         new_command = command.copy()
-        new_command[0] = str(self.options.clang_cmd)
-        assert new_command[-1] == "%s"
-        del new_command[-1]
-        # output to stdout
-        if "-o" not in new_command:
-            print("Adding '-o -' to the compiler invocation")
-            new_command += ["-o", "-"]
-        full_cmd = new_command.copy()
-        print("Checking whether reproducer crashes with ", self.options.clang_cmd,
-              ":", sep="", end="", flush=True)
+        assert new_command.count("%s") == 1, new_command
+        new_command.remove("%s")
+
+        print("Checking whether reproducer crashes with ", new_command[0], ":", sep="", end="", flush=True)
         crash_info = subprocess.CompletedProcess(None, None)
         self.options.expected_error_kind = self._check_crash(new_command, infile, crash_info)
         if not self.options.expected_error_kind:
@@ -654,6 +672,17 @@ class Reducer(object):
                       " in the wrong test case being generated."))
             if not input("Are you sure you want to continue? [y/N]").lower().startswith("y"):
                 sys.exit()
+
+        if command[0] == str(self.options.clang_cmd):
+            return self._simplify_clang_crash_command(command, infile)
+        # TODO: should be able to simplify llc crashes (e.g. by adding -O0, -verify-machineinstrs, etc)
+        new_command.append("%s")  # ensure that the command contains %s at the end
+        return new_command, infile
+
+    def _simplify_clang_crash_command(self, new_command: list, infile: Path) -> tuple:
+        assert new_command[0] == str(self.options.clang_cmd)
+        assert "-o" in new_command
+        full_cmd = new_command.copy()
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether replacing optimization level with -O0 crashes:",
             noargs_opts_to_remove_startswith=["-O"],
@@ -839,13 +868,6 @@ class Reducer(object):
             noargs_opts_to_remove_startswith=["-fdiagnostics-", "-fobjc-runtime="],
             one_arg_opts_to_remove=["-main-file-name", "-ferror-limit", "-fmessage-length"]
         )
-
-        # TODO: try removing individual -mllvm options such as mxgot, etc.?
-        # add the placeholders for the RUN: line
-        new_command[0] = "%clang"
-        if new_command[1] == "-cc1":
-            del new_command[1]
-            new_command[0] = "%clang_cc1"
         return new_command, infile
 
     def _simplify_backend_crash_cmd(self, new_command: list, infile: Path, full_cmd: list):
@@ -964,8 +986,8 @@ class Reducer(object):
                 verbose_print("Found RUN: ", command)
                 command = expand_lit_substitutions(self.options, command)
                 verbose_print("After expansion:", command)
-                command, _ = self._simplify_crash_command(shlex.split(command), infile.absolute())
-                command.append("%s")
+                # We can only simplify the command line for clang right now
+                command, _ = self.simplify_crash_command(shlex.split(command), infile.absolute())
                 verbose_print("Final command:", command)
                 self.run_cmds.append(command)
                 self.run_lines.append(line[0:line.find(match.group(1))] + quote_cmd(command))

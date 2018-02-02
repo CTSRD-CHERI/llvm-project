@@ -2635,6 +2635,18 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
   case Builtin::BI__builtin_operator_delete:
     return EmitBuiltinNewDeleteCall(FD->getType()->castAs<FunctionProtoType>(),
                                     E->getArg(0), true);
+  case Builtin::BI__builtin_is_aligned:
+    return EmitBuiltinIsAligned(E, false);
+  case Builtin::BI__builtin_is_p2aligned:
+    return EmitBuiltinIsAligned(E, true);
+  case Builtin::BI__builtin_align_up:
+    return EmitBuiltinAlignTo(E, false, true);
+  case Builtin::BI__builtin_p2align_up:
+    return EmitBuiltinAlignTo(E, true, true);
+  case Builtin::BI__builtin_align_down:
+    return EmitBuiltinAlignTo(E, false, false);
+  case Builtin::BI__builtin_p2align_down:
+    return EmitBuiltinAlignTo(E, true, false);
   case Builtin::BI__noop:
     // __noop always evaluates to an integer literal zero.
     return RValue::get(ConstantInt::get(IntTy, 0));
@@ -10640,6 +10652,116 @@ Value *CodeGenFunction::EmitNVPTXBuiltinExpr(unsigned BuiltinID,
   default:
     return nullptr;
   }
+}
+
+struct BuiltinAlignArgs {
+  llvm::Value *Src = nullptr;
+  llvm::Value *SrcAddr = nullptr;
+  llvm::Value *SrcAsI8Cap = nullptr;
+  llvm::Value *Alignment = nullptr;
+  llvm::Value *Mask = nullptr;
+  bool IsCheri = false;
+
+  BuiltinAlignArgs(const CallExpr *E, CodeGenFunction &CGF, bool PowerOfTwo) {
+    QualType AstType = E->getArg(0)->getType();
+    IsCheri = AstType->isCHERICapabilityType(CGF.CGM.getContext());
+    llvm::IntegerType *IntType = IntegerType::get(
+        CGF.getLLVMContext(), CGF.getContext().getIntRange(AstType));
+    Src = CGF.EmitScalarExpr(E->getArg(0));
+    // We need to convert source to an integer in order to perform the masking
+    // For CHERI we need to get the virtual address and perform add the
+    // difference instead of masking since that only works on the offset.
+    if (IsCheri) {
+      Value *Callee = CGF.CGM.getIntrinsic(Intrinsic::cheri_cap_address_get);
+      auto *I8CapTy = CGF.Int8Ty->getPointerTo(
+          CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS());
+      SrcAsI8Cap = CGF.Builder.CreateBitCast(Src, I8CapTy);
+      SrcAddr = CGF.Builder.CreateCall(Callee, {SrcAsI8Cap});
+    } else {
+      SrcAddr = CGF.Builder.CreateBitOrPointerCast(Src, IntType);
+    }
+    auto *One = llvm::ConstantInt::get(IntType, 1);
+    Alignment = CGF.EmitScalarExpr(E->getArg(1));
+    Alignment = CGF.Builder.CreateZExtOrBitCast(
+        Alignment, IntType, PowerOfTwo ? "pow2" : "alignment");
+    if (PowerOfTwo) {
+      Alignment = CGF.Builder.CreateShl(One, Alignment, "alignment");
+    }
+    Mask = CGF.Builder.CreateSub(Alignment, One, "mask");
+  }
+};
+
+/// Generate (x & (y-1)) == 0
+RValue CodeGenFunction::EmitBuiltinIsAligned(const CallExpr *E,
+                                             bool PowerOfTwo) {
+  BuiltinAlignArgs Args(E, *this, PowerOfTwo);
+  return RValue::get(Builder.CreateICmpEQ(
+      Builder.CreateAnd(Args.SrcAddr, Args.Mask, "set_bits"),
+      llvm::Constant::getNullValue(Args.SrcAddr->getType()), "is_aligned"));
+}
+
+/// Generate (x & ~(y-1)) to align down or ((x + (y - 1)) & ~(y - 1)) to align
+/// up. Note: for capability types we can't do the bitwise operations but
+/// instead need to add/subtract the difference to/from the pointer. For
+/// capabilities we do x - (x & y) for down and x + (y - (x & y))
+RValue CodeGenFunction::EmitBuiltinAlignTo(const CallExpr *E, bool PowerOfTwo,
+                                           bool AlignUp) {
+  // FIXME this needs to use minus/plus for CHERI and not masking!!!!
+  BuiltinAlignArgs Args(E, *this, PowerOfTwo);
+  if (Args.IsCheri) {
+    // We can't use bitwise and here since we can't create a capability from
+    // a virtual address. We could set the offset but that calculation is more
+    // complex that just adding/subtracting the difference to the next alignment
+    // boundary
+    auto *Unaligned =
+        Builder.CreateAnd(Args.SrcAddr, Args.Mask, "unaligned_bits");
+    Value *Result;
+    // Value *IncOffset =
+    // CGM.getIntrinsic(Intrinsic::cheri_cap_offset_increment);
+    if (AlignUp) {
+      // if it is not aligned we now need to add Align - unaligned_bits
+      // Unfortunately we can't do this unconditionally since otherwise we would
+      // turn a __builtin_align_up(32, 16) into 48.
+      // This is equivalent to the following code:
+      //  if (((unsigned long)p & (align - 1)) == 0)
+      //     return p;
+      //  else
+      //     return (p + (align - ((unsigned long)p & (align - 1))));
+      Value *Zero = llvm::Constant::getNullValue(Args.SrcAddr->getType());
+      Value *IsAligned = Builder.CreateICmpEQ(Unaligned, Zero, "is_aligned");
+      Value *Add = Builder.CreateSub(Args.Alignment, Unaligned, "missing_bits");
+      // TODO: which of the two is optimized better? Seems like both have
+      // drawbacks now
+      Value *AlignedUp = Builder.CreateInBoundsGEP(Int8Ty, Args.SrcAsI8Cap, Add,
+                                                   "aligned_cap");
+      // Value* AlignedUp = Builder.CreateCall(IncOffset, {Args.SrcAsI8Cap,
+      // Add}, "aligned_cap");
+      Result =
+          Builder.CreateSelect(IsAligned, Args.SrcAsI8Cap, AlignedUp, "result");
+    } else {
+      // When aligning down, we can just mask and subtract whatever value is
+      // not aligned: return (p - (((unsigned long)p & (align - 1))));
+      Value *Sub = Builder.CreateNeg(Unaligned, "sub");
+      // TODO: Is inbounds GEP better for other analysis? It won't be folded by
+      // FoldCapIntrinsics.cpp though...
+      Result = Builder.CreateInBoundsGEP(Int8Ty, Args.SrcAsI8Cap, Sub,
+                                         "aligned_cap");
+      // Result = Builder.CreateCall(IncOffset, {Args.SrcAsI8Cap, Sub},
+      // "aligned_cap");
+    }
+    return RValue::get(Builder.CreateBitCast(Result, Args.Src->getType()));
+  }
+  // When not targeting CHERI we can just use bitwise masking and cast the
+  // result back to a pointer
+  if (AlignUp) {
+    // When aligning up we have to first add the mask to ensure we go over the
+    // next alignment value and then align it correctly
+    Args.SrcAddr = Builder.CreateAdd(Args.SrcAddr, Args.Mask, "over_boundary");
+  }
+  auto *Ret = Builder.CreateAnd(Args.SrcAddr,
+                                Builder.CreateNot(Args.Mask, "negated_mask"));
+  return RValue::get(Builder.CreateBitOrPointerCast(Ret, Args.Src->getType(),
+                                                    "aligned_result"));
 }
 
 Value *CodeGenFunction::EmitWebAssemblyBuiltinExpr(unsigned BuiltinID,

@@ -2698,6 +2698,13 @@ def err_alignment_not_power_of_two : Error<
 def err_alignment_dependent_typedef_name : Error<
   "requested alignment is dependent but declaration is not dependent">;
 
+def err_alignment_power_of_two_out_of_range : Error<
+  "requested power-of-two alignment %0 is not a value between %1 and %2">;
+def warn_alignment_builtin_useless : Warning<
+  "%select{aligning a value|checking whether a value is aligned}0 to 1 byte is"
+   " always %select{a noop|true}0">, InGroup<TautologicalCompare>;
+
+
 def err_attribute_aligned_too_great : Error<
   "requested alignment must be %0 bytes or smaller">;
 def warn_redeclaration_without_attribute_prev_attribute_ignored : Warning<
