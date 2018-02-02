@@ -39,6 +39,7 @@ add_llvm_target(MipsCodeGen
   MipsOptimizePICCall.cpp
   MipsOs16.cpp
   MipsRegisterInfo.cpp
+  MipsSelectionDAGInfo.cpp
   MipsSEFrameLowering.cpp
   MipsSEInstrInfo.cpp
   MipsSEISelDAGToDAG.cpp
@@ -51,7 +52,6 @@ add_llvm_target(MipsCodeGen
   CheriAddressingModeFolder.cpp
   CheriAddressingModeFolder.cpp
   CheriLoopPointerDecanonicalize.cpp
-  CheriMemOpLowering.cpp
   CheriStackInvalidatePass.cpp
   CheriRangeChecker.cpp
   CheriPureCapABI.cpp

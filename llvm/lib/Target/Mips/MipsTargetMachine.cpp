@@ -289,7 +289,6 @@ void MipsPassConfig::addIRPasses() {
     addPass(createCheriLoopPointerDecanonicalize());
     addPass(createAggressiveDCEPass());
     addPass(createCheriRangeChecker());
-    addPass(createCheriMemOpLowering());
     addPass(createCheriPureCapABI());
   }
 }

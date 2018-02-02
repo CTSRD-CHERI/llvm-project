@@ -4001,11 +4001,8 @@ SDValue MipsTargetLowering::LowerFormalArguments(
       // Create load nodes to retrieve arguments from the stack
       SDValue ArgValue;
       if (ABI.IsCheriPureCap()) {
-        if (CapArgReg == -1U) {
+        if (CapArgReg == -1U)
           CapArgReg = MF.addLiveIn(Mips::C13, getRegClassFor(CapType));
-          if (!IsVarArg)
-            MipsFI->setIncomingZeroReg(Mips::C13);
-        }
         SDValue Addr = DAG.getPointerAdd(DL, DAG.getCopyFromReg(Chain, DL,
               CapArgReg, CapType), VA.getLocMemOffset());
         ArgValue = DAG.getLoad(LocVT, DL, Chain, Addr, MachinePointerInfo());
@@ -4651,8 +4648,11 @@ EVT MipsTargetLowering::getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
   // the source align will be 0.  We don't want to use capabilities in this
   // case, because the capability tag will always be 0.  For very long memsets,
   // we can use the capability registers in the library implementation.
-  if (Subtarget.isCheri() && !IsMemset) {
-    unsigned Align = std::min(SrcAlign, DstAlign);
+  if (Subtarget.isCheri() && (!IsMemset || ZeroMemset)) {
+    unsigned Align = IsMemset ? DstAlign : std::min(SrcAlign, DstAlign);
+    unsigned CapSize = Subtarget.getCapSizeInBytes();
+    if (ZeroMemset && (Align >= CapSize) && (Size % CapSize > 0))
+      return MVT::i64;
     switch (Align) {
       case 32: return CapType;
       case 16:
@@ -4663,6 +4663,7 @@ EVT MipsTargetLowering::getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
           return CapType;
         return MVT::i64;
       case 4: return MVT::i32;
+      case 2: return MVT::i16;
       default: return MVT::i8;
     }
   }
