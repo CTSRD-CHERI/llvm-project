@@ -58,6 +58,13 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::finalizeContents() {
   //   }
 }
 
+static inline void nonFatalWarning(const Twine &Str) {
+  if (errorHandler().FatalWarnings)
+    message("warning: " + Str);
+  else
+    warn(Str);
+}
+
 static SymbolAndOffset sectionWithOffsetToSymbol(InputSectionBase *IS,
                                                  uint64_t Offset, Symbol *Src) {
   Symbol *FallbackResult = nullptr;
@@ -504,7 +511,8 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
       if (!HasWarned) {
         HasWarned = true;
         // Avoid failing the build due to on by default fatal-warnings
-        message("NOTE: Cannot add capability table entries for PIC code yet, file will be broken!");
+        nonFatalWarning("cannot add capability table entries for PIC code yet, "
+                        "file will be broken!");
       }
     }
 
