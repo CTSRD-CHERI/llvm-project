@@ -77,7 +77,8 @@ public:
   void finalizeContents() override;
   void writeTo(uint8_t *Buf) override;
   void addCapReloc(CheriCapRelocLocation Loc, const SymbolAndOffset &Target,
-                   bool TargetNeedsDynReloc, int64_t CapabilityOffset);
+                   bool TargetNeedsDynReloc, int64_t CapabilityOffset,
+                   Symbol *SourceSymbol = nullptr);
 
 private:
   void processSection(InputSectionBase *S);

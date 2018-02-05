@@ -172,7 +172,6 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
         S->Data.begin() + CapRelocsOffset);
     int64_t TargetCapabilityOffset = (int64_t)RawInput->offset;
     assert(RawInput->size == 0 && "Clang should not have set size in __cap_relocs");
-    bool LocNeedsDynReloc = false;
     if (!isa<Defined>(LocationSym)) {
       error("Unhandled symbol kind for cap_reloc: " +
             Twine(LocationSym->kind()));
@@ -189,16 +188,6 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
               verboseToString<ELFT>(RealTarget));
     }
 
-    if (TargetSym.isUndefined()) {
-      std::string Msg = "cap_reloc against undefined symbol: " +
-                        toString(*RealTarget.Symbol) + "\n>>> referenced by " +
-                        verboseToString<ELFT>(RealLocation);
-      if (Config->AllowUndefinedCapRelocs)
-        warn(Msg);
-      else
-        error(Msg);
-      continue;
-    }
     bool TargetNeedsDynReloc = false;
     if (TargetSym.IsPreemptible) {
       // Do we need this?
@@ -208,12 +197,21 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     case Symbol::DefinedKind:
       break;
     case Symbol::SharedKind:
-      if (Config->Static) {
+      if (!Config->Pic || Config->Static) {
         error("cannot create a capability relocation against a shared symbol"
               " when linking statically");
         continue;
       }
-      // TODO: shouldn't undefined be an error?
+      TargetNeedsDynReloc = true;
+      break;
+    case Symbol::UndefinedKind:
+      if (!Config->Shared) {
+        error(
+            "cannot create a capability relocation against an undefined symbol"
+            " except when building shared libraries!");
+        continue;
+      }
+      // TODO: we really should add a dynamic SIZE relocation as well
       TargetNeedsDynReloc = true;
       break;
     default:
@@ -224,7 +222,7 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     assert(LocationSym->isSection());
     auto *LocationDef = cast<Defined>(LocationSym);
     auto *LocationSec = cast<InputSectionBase>(LocationDef->Section);
-    addCapReloc({LocationSec, (uint64_t)LocationRel.r_addend, LocNeedsDynReloc},
+    addCapReloc({LocationSec, (uint64_t)LocationRel.r_addend, false},
                 RealTarget, TargetNeedsDynReloc, TargetCapabilityOffset);
   }
 }
@@ -233,10 +231,24 @@ template <class ELFT>
 void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
                                               const SymbolAndOffset &Target,
                                               bool TargetNeedsDynReloc,
-                                              int64_t CapabilityOffset) {
+                                              int64_t CapabilityOffset,
+                                              Symbol *SourceSymbol) {
   Loc.NeedsDynReloc = Loc.NeedsDynReloc || Config->Pic || Config->Pie;
   TargetNeedsDynReloc = TargetNeedsDynReloc || Config->Pic || Config->Pie;
   uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
+
+  if (Target.Symbol->isUndefined()) {
+    std::string SourceMsg = SourceSymbol
+                                ? lld::verboseToString<ELFT>(SourceSymbol)
+                                : Loc.toString();
+    std::string Msg =
+        "cap_reloc against undefined symbol: " + toString(*Target.Symbol) +
+        "\n>>> referenced by " + SourceMsg;
+    if (Config->UnresolvedSymbols == UnresolvedPolicy::ReportError)
+      error(Msg);
+    else
+      nonFatalWarning(Msg);
+  }
 
   // assert(CapabilityOffset >= 0 && "Negative offsets not supported");
   if (Config->Verbose && CapabilityOffset < 0)
