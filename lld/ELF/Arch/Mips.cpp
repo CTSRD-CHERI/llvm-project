@@ -185,7 +185,7 @@ RelExpr MIPS<ELFT>::getRelExpr(RelType Type, const Symbol &S,
   case R_MIPS_NONE:
     return R_NONE;
 // Allow compiling this code with the master branch of LLVM:
-#ifdef R_MIPS_CHERI_CAPABILITY
+#ifdef HAVE_CHERI_CAPABILITY_RELOCATIONS
   case R_MIPS_CHERI_CAPABILITY:
     return R_CHERI_CAPABILITY;
   case R_MIPS_CHERI_CAPTAB_LO16:
@@ -205,7 +205,11 @@ RelExpr MIPS<ELFT>::getRelExpr(RelType Type, const Symbol &S,
 }
 
 template <class ELFT> bool MIPS<ELFT>::isPicRel(RelType Type) const {
-  return Type == R_MIPS_32 || Type == R_MIPS_64;
+  return Type == R_MIPS_32 || Type == R_MIPS_64
+#ifdef HAVE_CHERI_CAPABILITY_RELOCATIONS
+     || Type == R_MIPS_CHERI_CAPABILITY
+#endif
+    ;
 }
 
 template <class ELFT> RelType MIPS<ELFT>::getDynRel(RelType Type) const {
@@ -555,7 +559,7 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   case R_MIPS_PCLO16:
   case R_MIPS_TLS_DTPREL_LO16:
   case R_MIPS_TLS_TPREL_LO16:
-#ifdef R_MIPS_CHERI_CAPTAB_LO16
+#ifdef HAVE_CHERI_CAPABILITY_RELOCATIONS
   // FIXME: handle difference between capcall and captab
   case R_MIPS_CHERI_CAPTAB_LO16:
   case R_MIPS_CHERI_CAPCALL_LO16:
@@ -589,7 +593,7 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   case R_MIPS_PCHI16:
   case R_MIPS_TLS_DTPREL_HI16:
   case R_MIPS_TLS_TPREL_HI16:
-#ifdef R_MIPS_CHERI_CAPTAB_HI16
+#ifdef HAVE_CHERI_CAPABILITY_RELOCATIONS
   // TODO: handle difference between captab and capcall!
   case R_MIPS_CHERI_CAPTAB_HI16:
   case R_MIPS_CHERI_CAPCALL_HI16:
