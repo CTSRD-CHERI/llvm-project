@@ -59,8 +59,7 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::finalizeContents() {
 }
 
 static SymbolAndOffset sectionWithOffsetToSymbol(InputSectionBase *IS,
-                                                 uint64_t Offset,
-                                                 Symbol *Src) {
+                                                 uint64_t Offset, Symbol *Src) {
   Symbol *FallbackResult = nullptr;
   assert((int64_t)Offset >= 0);
   uint64_t FallbackOffset = Offset;
@@ -82,10 +81,16 @@ static SymbolAndOffset sectionWithOffsetToSymbol(InputSectionBase *IS,
       }
     }
   }
+  // When using the legacy __cap_relocs style (where clang emits __cap_relocs
+  // instead of R_CHERI_CAPABILITY) the local symbols might not exist so we
+  // may have fall back to the section.
   if (!FallbackResult) {
-    warn("capreloc local symbol not found, fallback: section=" +
-	 IS->Name + " symbol=" + Src->getName() +
-	 " file=" + ((Src->File != nullptr) ? Src->File->getName() : ""));
+    // worst case we fall back to the section + offset
+    // Don't warn if the relocation is against an anonymous string constant
+    // since clang won't emit a symbol (and no size) for those
+    if (!IS->Name.startswith(".rodata.str"))
+      warn("Could not find a real symbol for __cap_reloc against " + IS->Name +
+           "+0x" + utohexstr(Offset) + " in " + toString(Src->File));
     FallbackResult = Src;
   }
   // we should have found at least a section symbol
@@ -98,8 +103,7 @@ SymbolAndOffset SymbolAndOffset::findRealSymbol() const {
     return *this;
 
   if (Defined *DefinedSym = dyn_cast<Defined>(Symbol)) {
-    if (InputSectionBase *IS =
-            dyn_cast<InputSectionBase>(DefinedSym->Section)) {
+    if (auto *IS = dyn_cast<InputSectionBase>(DefinedSym->Section)) {
       return sectionWithOffsetToSymbol(IS, Offset, Symbol);
     }
   }
