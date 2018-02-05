@@ -549,6 +549,7 @@ enum : unsigned {
 };
 
 // ELF Relocation types for Mips
+#define HAVE_CHERI_CAPABILITY_RELOCATIONS 1
 enum {
 #include "ELFRelocs/Mips.def"
 };
