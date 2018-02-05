@@ -43,6 +43,7 @@ void CheriCapRelocsSection<ELFT>::addSection(InputSectionBase *S) {
   if (Config->VerboseCapRelocs)
     message("Adding cap relocs from " + toString(S->File) + "\n");
 
+  ContainsLegacyCapRelocs = true; // reduce number of warnings for compat
   processSection(S);
 }
 
@@ -309,7 +310,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
 
 template<typename ELFT>
 static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
-                              const CheriCapReloc &Reloc) {
+                              const CheriCapReloc &Reloc, bool Strict) {
   uint64_t TargetSize = Reloc.Target.Symbol->getSize();
   if (TargetSize > INT_MAX) {
     error("Insanely large symbol size for " + verboseToString<ELFT>(Reloc.Target) +
@@ -359,9 +360,13 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
     // TODO: are there any other cases that can be ignored?
 
     if (WarnAboutUnknownSize || Config->Verbose) {
-      warn("could not determine size of cap reloc against " +
+      std::string Msg = "could not determine size of cap reloc against " +
            verboseToString<ELFT>(Reloc.Target) + "\n>>> referenced by " +
-           Location.toString());
+           Location.toString();
+      if (Strict)
+        warn(Msg);
+      else
+        nonFatalWarning(Msg);
     }
     if (OutputSection *OS = TargetSym->getOutputSection()) {
       // For negative offsets use 0 instead (we wan the range of the full symbol in that case)
@@ -423,7 +428,7 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     }
     uint64_t TargetOffset = Reloc.CapabilityOffset;
     uint64_t Permissions = Reloc.Target.Symbol->isFunc() ? 1ULL << 63 : 0;
-    uint64_t TargetSize = getTargetSize<ELFT>(Location, Reloc);
+    uint64_t TargetSize = getTargetSize<ELFT>(Location, Reloc, /*Strict=*/!ContainsLegacyCapRelocs);
     // TODO: should we warn about symbols that are out-of-bounds?
     // mandoc seems to do it so I guess we need it
     // if (TargetOffset < 0 || TargetOffset > TargetSize) warn(...);

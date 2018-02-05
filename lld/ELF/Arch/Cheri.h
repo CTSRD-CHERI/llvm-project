@@ -82,8 +82,6 @@ public:
 
 private:
   void processSection(InputSectionBase *S);
-  // map or vector?
-  llvm::MapVector<CheriCapRelocLocation, CheriCapReloc> RelocsMap;
   bool addEntry(CheriCapRelocLocation Loc, CheriCapReloc Relocation) {
     auto it = RelocsMap.insert(std::make_pair(Loc, Relocation));
     // assert(it.first->second == Relocation);
@@ -100,6 +98,9 @@ private:
     return it.second;
   }
   // TODO: list of added dynamic relocations?
+
+  llvm::MapVector<CheriCapRelocLocation, CheriCapReloc> RelocsMap;
+  bool ContainsLegacyCapRelocs = false;
 };
 
 class CheriCapTableSection : public SyntheticSection {
