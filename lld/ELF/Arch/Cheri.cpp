@@ -96,7 +96,7 @@ static SymbolAndOffset sectionWithOffsetToSymbol(InputSectionBase *IS,
     // Don't warn if the relocation is against an anonymous string constant
     // since clang won't emit a symbol (and no size) for those
     if (!IS->Name.startswith(".rodata.str"))
-      warn("Could not find a real symbol for __cap_reloc against " + IS->Name +
+      nonFatalWarning("Could not find a real symbol for __cap_reloc against " + IS->Name +
            "+0x" + utohexstr(Offset) + " in " + toString(Src->File));
     FallbackResult = Src;
   }
