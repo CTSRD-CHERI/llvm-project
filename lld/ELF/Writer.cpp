@@ -641,6 +641,7 @@ template <class ELFT> void Writer<ELFT>::addSectionSymbols() {
     auto *Sym =
         make<Defined>(IS->File, "", STB_LOCAL, /*StOther=*/0, STT_SECTION,
                       /*Value=*/0, /*Size=*/0, IS);
+    Sym->IsSectionStartSymbol = true;
     InX::SymTab->addSymbol(Sym);
   }
 }
