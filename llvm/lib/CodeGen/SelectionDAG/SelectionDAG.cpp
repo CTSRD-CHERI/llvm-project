@@ -5070,7 +5070,7 @@ static bool FindOptimalMemOpLowering(std::vector<EVT> &MemOps,
       unsigned NewVTSize;
 
       bool Found = false;
-      if (VT.isVector() || VT.isFloatingPoint()) {
+      if (VT.isVector() || VT.isFloatingPoint() || VT.isFatPointer()) {
         NewVT = (VT.getSizeInBits() > 64) ? MVT::i64 : MVT::i32;
         if (TLI.isOperationLegalOrCustom(ISD::STORE, NewVT) &&
             TLI.isSafeMemOpType(NewVT.getSimpleVT()))
