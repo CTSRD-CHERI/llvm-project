@@ -133,6 +133,9 @@ void MipsMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
   case MEK_CAPTABLE20:
     OS << "%captab20";
     break;
+  case MEK_CAPTABLE_TLS20:
+    OS << "%captab_tls20";
+    break;
   case MEK_CAPTABLE_HI16:
     OS << "%captab_hi";
     break;
@@ -210,6 +213,7 @@ MipsMCExpr::evaluateAsRelocatableImpl(MCValue &Res,
     case MEK_CAPCALL_HI16:
     case MEK_CAPTABLE11:
     case MEK_CAPTABLE20:
+    case MEK_CAPTABLE_TLS20:
     case MEK_CAPTABLE_HI16:
     case MEK_CAPTABLE_LO16:
       return false;
@@ -322,6 +326,7 @@ void MipsMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {
   case MEK_TLSGD:
   case MEK_TPREL_HI:
   case MEK_TPREL_LO:
+  case MEK_CAPTABLE_TLS20:
     fixELFSymbolsInTLSFixupsImpl(getSubExpr(), Asm);
     break;
   }

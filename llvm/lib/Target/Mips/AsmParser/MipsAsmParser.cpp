@@ -718,6 +718,8 @@ public:
       return MipsMCExpr::create(MipsMCExpr::MEK_CAPTABLE11, E, Ctx);
     case AsmToken::PercentCapTab20:
       return MipsMCExpr::create(MipsMCExpr::MEK_CAPTABLE20, E, Ctx);
+    case AsmToken::PercentCapTabTLS20:
+      return MipsMCExpr::create(MipsMCExpr::MEK_CAPTABLE_TLS20, E, Ctx);
     case AsmToken::PercentCapTab_Hi:
       return MipsMCExpr::create(MipsMCExpr::MEK_CAPTABLE_HI16, E, Ctx);
     case AsmToken::PercentCapTab_Lo:
@@ -1383,7 +1385,8 @@ public:
             return false;
         } else if (Bits == 16) {
           if (Expr->getKind() != MipsMCExpr::MEK_CAPTABLE20 &&
-              Expr->getKind() != MipsMCExpr::MEK_CAPCALL20)
+              Expr->getKind() != MipsMCExpr::MEK_CAPCALL20 &&
+              Expr->getKind() != MipsMCExpr::MEK_CAPTABLE_TLS20)
             return false;
         }
       }
@@ -5522,8 +5525,11 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name) {
            .Case("cbp", ABI.GetBasePtr() - Mips::C0)
            .Case("cfp", ABI.GetFramePtr() - Mips::C0)
            .Case("cgp", ABI.GetGlobalCapability() - Mips::C0)
+           .Case("ctlp", ABI.GetLocalCapability() - Mips::C0)
            .Case("cra", ABI.GetReturnAddress() - Mips::C0)
            .Case("csp", ABI.GetStackPtr() - Mips::C0)
+           .Case("crd", ABI.GetReturnData() - Mips::C0)
+           .Case("cusp", ABI.GetUnsafeStackPtr() - Mips::C0)
            .Case("ddc", 0/*ABI.GetDefaultDataCapability() - Mips::C0 */)
            .Default(-1);
     if (CC != -1)

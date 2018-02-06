@@ -25,13 +25,30 @@ class MipsABIInfo {
 public:
   enum class ABI { Unknown, O32, N32, N64 };
 
+  class TemporalABILayout {
+    uint32_t CapSize;
+  public:
+    int64_t GetThreadLocalOffset_CSP() const {return CapSize;}
+    int64_t GetThreadLocalOffset_CUSP() const {return CapSize * 2;}
+    int64_t GetThreadLocalOffset_CDS() const {return CapSize * 3;}
+    int64_t GetThreadLocalOffset_CDL() const {return CapSize * 4;}
+    int64_t GetThreadLocalOffset_CGP() const {return CapSize * 5;}
+
+    int64_t GetStackPointerOffset_Next() const {return CapSize * -2;}
+    int64_t GetStackPointerOffset_Prev() const {return CapSize * -1;}
+
+    TemporalABILayout(uint32_t capSize) : CapSize(capSize) {}
+  };
+
 protected:
   ABI ThisABI;
   bool isCheriPureCap = false;
-
+  // FIXME: This probably exists elsewhere, but I am currently too lazy to find it.
+  uint32_t CapSize;
+  TemporalABILayout temporalABILayout;
 public:
-  MipsABIInfo(ABI ThisABI, bool isAllCap=false) : ThisABI(ThisABI),
-    isCheriPureCap(isAllCap) {}
+  MipsABIInfo(ABI ThisABI, bool isAllCap=false, uint32_t capSize = 32) : ThisABI(ThisABI),
+    isCheriPureCap(isAllCap), CapSize(capSize), temporalABILayout(capSize) {}
 
   static MipsABIInfo Unknown() { return MipsABIInfo(ABI::Unknown); }
   static MipsABIInfo O32() { return MipsABIInfo(ABI::O32); }
@@ -47,6 +64,8 @@ public:
   bool IsN64() const { return ThisABI == ABI::N64; }
   bool IsCheriPureCap() const { return isCheriPureCap; }
   bool UsesCapabilityTable() const;
+  const TemporalABILayout* GetTABILayout() const;
+  uint32_t GetCapSize() const {return CapSize;}
   unsigned StackAddrSpace() const { return isCheriPureCap ? 200 : 0; }
   ABI GetEnumValue() const { return ThisABI; }
 
@@ -67,9 +86,13 @@ public:
     return ThisABI < Other.GetEnumValue();
   }
 
+
   unsigned GetDefaultDataCapability() const;
   unsigned GetReturnAddress() const;
+  unsigned GetReturnData() const   ;
+  unsigned GetReturnSelector() const;
   unsigned GetStackPtr() const;
+  unsigned GetUnsafeStackPtr() const;
   unsigned GetFramePtr() const;
   unsigned GetBasePtr() const;
   unsigned GetGlobalPtr() const;
@@ -77,6 +100,7 @@ public:
   /// pure-capability mode, but until all of the new linker work is done we
   /// need a separate $gp and $cgp as a transition step.
   unsigned GetGlobalCapability() const;
+  unsigned GetLocalCapability() const;
   unsigned GetNullPtr() const;
   unsigned GetZeroReg() const;
   unsigned GetPtrAdduOp() const;

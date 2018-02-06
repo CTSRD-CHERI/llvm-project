@@ -423,6 +423,7 @@ bool MipsSEInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   MachineBasicBlock &MBB = *MI.getParent();
   bool isMicroMips = Subtarget.inMicroMipsMode();
   unsigned Opc;
+  MipsABIInfo ABI = Subtarget.getABI();
 
   switch (MI.getDesc().getOpcode()) {
   default:
@@ -488,8 +489,10 @@ bool MipsSEInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     expandEhReturn(MBB, MI);
     break;
   case Mips::CapRetPseudo:
+    /* BuildMI(MBB, MI, MI.getDebugLoc(), get(Mips::PseudoReturnCap))
+      .addReg(Mips::C17); */
     BuildMI(MBB, MI, MI.getDebugLoc(), get(Mips::PseudoReturnCap))
-      .addReg(Mips::C17);
+       .addReg(ABI.GetReturnAddress()).addReg(ABI.GetReturnData()).addImm(ABI.GetReturnSelector());
     break;
   case Mips::CPSETUP:
     expandCPSETUP(MBB, MI);

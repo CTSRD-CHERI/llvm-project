@@ -24,7 +24,7 @@ static const MCPhysReg Mips64IntRegs[8] = {
 
 static const MCPhysReg CheriCapArgRegs[8] = {
     Mips::C3, Mips::C4, Mips::C5, Mips::C6,
-    Mips::C7, Mips::C8, Mips::C9, Mips::C10};
+    Mips::C7, Mips::C8, Mips::C9};
 
 }
 
@@ -81,6 +81,12 @@ unsigned MipsABIInfo::GetStackPtr() const {
     (ArePtrs64bit() ? Mips::SP_64 : Mips::SP);
 }
 
+unsigned MipsABIInfo::GetUnsafeStackPtr() const {
+  return IsCheriPureCap() ?
+         Mips::C10 :
+         (0);
+}
+
 unsigned MipsABIInfo::GetFramePtr() const {
   return IsCheriPureCap() ? 
     Mips::C24 :
@@ -99,11 +105,19 @@ unsigned MipsABIInfo::GetDefaultDataCapability() const {
 }
 
 unsigned MipsABIInfo::GetGlobalCapability() const {
+  return Mips::C25;
+}
+
+unsigned MipsABIInfo::GetLocalCapability() const {
   return Mips::C26;
 }
 
 bool MipsABIInfo::UsesCapabilityTable() const {
   return IsCheriPureCap() && MCTargetOptions::cheriUsesCapabilityTable();
+}
+
+const MipsABIInfo::TemporalABILayout* MipsABIInfo::GetTABILayout() const {
+  return isCheriPureCap ? &temporalABILayout : nullptr;
 }
 
 unsigned MipsABIInfo::GetReturnAddress() const {
@@ -112,8 +126,20 @@ unsigned MipsABIInfo::GetReturnAddress() const {
     (ArePtrs64bit() ? Mips::RA_64 : Mips::RA);
 }
 
+unsigned MipsABIInfo::GetReturnData() const {
+  return IsCheriPureCap() ?
+         Mips::C18 :
+         (0);
+}
+
+unsigned MipsABIInfo::GetReturnSelector() const {
+    return IsCheriPureCap() ?
+           2 :
+           (0);
+}
+
 unsigned MipsABIInfo::GetGlobalPtr() const {
-  assert(!UsesCapabilityTable());
+  //assert(!UsesCapabilityTable());
   return ArePtrs64bit() ? Mips::GP_64 : Mips::GP;
 }
 

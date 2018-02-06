@@ -399,6 +399,16 @@ bool ExpandPseudo::expandExtractElementF64(MachineBasicBlock &MBB,
 MipsSEFrameLowering::MipsSEFrameLowering(const MipsSubtarget &STI)
     : MipsFrameLowering(STI, STI.getStackAlignment()) {}
 
+int MipsSEFrameLowering::createUnsafeEndObject(MachineFunction &MF) const {
+  MachineFrameInfo &MFI    = MF.getFrameInfo();
+  MipsABIInfo ABI = STI.getABI();
+  return MFI.CreateStackObject(ABI.GetCapSize(), ABI.GetCapSize(), false);
+}
+
+bool MipsSEFrameLowering::partitionUnsafeObjects(void) const {
+  return true;
+}
+
 void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
                                        MachineBasicBlock &MBB) const {
   assert(&MF.front() == &MBB && "Shrink-wrapping not yet supported");
@@ -414,21 +424,98 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
   DebugLoc dl;
   MipsABIInfo ABI = STI.getABI();
   unsigned SP = ABI.GetStackPtr();
+  unsigned USP = ABI.GetUnsafeStackPtr();
   unsigned FP = ABI.GetFramePtr();
   unsigned ZERO = ABI.GetNullPtr();
   unsigned MOVE = ABI.GetSPMoveOp();
   unsigned ADDiu = ABI.GetPtrAddiuOp();
   unsigned AND = ABI.IsN64() ? Mips::AND64 : Mips::AND;
-
+  unsigned CTLP = ABI.GetLocalCapability();
+  unsigned CRD = ABI.GetReturnData();
   // C0 is always live in.  In non-CHERI MIPS, C0 is treated as a read-only
   // register that is implicitly read by loads and stores.
   MBB.addLiveIn(Mips::C0);
+
+  bool NeedAuxEntry = ABI.IsCheriPureCap() &&  MF.getFunction()->hasExternalLinkage();
+
+  if(ABI.IsCheriPureCap()) {
+    MF.getRegInfo().addLiveIn(CRD);
+    MBB.addLiveIn(CRD);
+    MF.getRegInfo().addLiveIn(CTLP);
+    MBB.addLiveIn(CTLP);
+
+    if(NeedAuxEntry) {
+      unsigned TA = Mips::C12;
+      unsigned TMP = Mips::C14;
+
+      // Create BBs
+      MachineBasicBlock &exteralMBB = *MF.CreateMachineBasicBlock(MBB.getBasicBlock());
+
+      MachineFunction::iterator iter = MF.begin();
+      MF.insert(iter, &exteralMBB);
+
+      exteralMBB.addSuccessorWithoutProb(&MBB);
+
+      // Add CTLP live in
+      exteralMBB.addLiveIn(CTLP);
+
+
+      // Called for cross domain calls
+      MachineBasicBlock::iterator exteralMBBI = exteralMBB.begin();
+
+      //MIBundleBuilder bundleBuilder(exteralMBB, exteralMBBI);
+
+      BuildMI(exteralMBB, exteralMBBI, dl, TII.get(TargetOpcode::AUX_FUNC_START)).addSym(
+          MipsFI->getUntrustedExternalEntrySymbol());
+      BuildMI(exteralMBB, exteralMBBI, dl, TII.get(Mips::LOADCAP), TMP).addReg(ZERO)
+          .addImm(ABI.GetTABILayout()->GetThreadLocalOffset_CDL()).addReg(CTLP);
+      // Moved here to fill delay slot
+
+      BuildMI(exteralMBB, exteralMBBI, dl, TII.get(Mips::CJALRSlotless), TA).addReg(TMP);
+
+      // simple_stub     <-- called only if we trust every library we link with (fastest)
+      BuildMI(exteralMBB, exteralMBBI, dl, TII.get(TargetOpcode::AUX_FUNC_START)).addSym(
+          MipsFI->getTrustedExternalEntrySymbol());
+      BuildMI(exteralMBB, exteralMBBI, dl, TII.get(Mips::LOADCAP), SP).addReg(ZERO)
+          .addImm(ABI.GetTABILayout()->GetThreadLocalOffset_CSP()).addReg(CTLP);
+      BuildMI(exteralMBB, exteralMBBI, dl, TII.get(Mips::LOADCAP), USP).addReg(ZERO)
+          .addImm(ABI.GetTABILayout()->GetThreadLocalOffset_CUSP()).addReg(CTLP);
+
+      if (ABI.GetGlobalCapability() != 0) {
+        // If this should be live in, make it so
+        BuildMI(exteralMBB, exteralMBBI, dl, TII.get(Mips::LOADCAP), ABI.GetGlobalCapability())
+            .addReg(ABI.GetNullPtr()).addImm((ABI.GetTABILayout()->GetThreadLocalOffset_CGP()))
+            .addReg(CTLP);
+      }
+
+      // Function actually starts here
+      MF.setHasCustomFunctionStarts(true);
+      BuildMI(MBB, MBBI, dl, TII.get(TargetOpcode::FUNC_START));
+    }
+  }
 
   const TargetRegisterClass *RC = ABI.ArePtrs64bit() ?
         &Mips::GPR64RegClass : &Mips::GPR32RegClass;
 
   // First, compute final stack size.
   uint64_t StackSize = MFI.getStackSize();
+  uint64_t UnsafeStackSize = MFI.getUnsafeStackSize();
+
+  if(MFI.hasStaticUnsafeObjects()) {
+    // Store old csp
+    BuildMI(MBB, MBBI, dl, TII.get(Mips::STORECAP))
+            .addReg(SP)
+            .addReg(ZERO)
+            .addImm(-UnsafeStackSize+ABI.GetTABILayout()->GetStackPointerOffset_Prev())
+            .addReg(USP);
+    // Get new csp
+    BuildMI(MBB, MBBI, dl, TII.get(Mips::CMove), SP).addReg(USP);
+    // Get new cusp
+    BuildMI(MBB, MBBI, dl, TII.get(Mips::LOADCAP), USP)
+            .addReg(ZERO)
+            .addImm(ABI.GetTABILayout()->GetStackPointerOffset_Next())
+            .addReg(SP);
+  }
 
   // No need to allocate space on the stack.
   if (StackSize == 0 && !MFI.adjustsStack()) return;
@@ -732,6 +819,7 @@ void MipsSEFrameLowering::emitEpilogue(MachineFunction &MF,
   DebugLoc DL = MBBI->getDebugLoc();
   MipsABIInfo ABI = STI.getABI();
   unsigned SP = ABI.GetStackPtr();
+  unsigned USP = ABI.GetUnsafeStackPtr();
   unsigned FP = ABI.GetFramePtr();
   unsigned ZERO = ABI.GetNullPtr();
   unsigned MOVE = ABI.GetSPMoveOp();
@@ -772,12 +860,70 @@ void MipsSEFrameLowering::emitEpilogue(MachineFunction &MF,
 
   // Get the number of bytes from FrameInfo
   uint64_t StackSize = MFI.getStackSize();
+  uint64_t UnsafeStackSize = MFI.getUnsafeStackSize();
 
-  if (!StackSize)
+  uint64_t SafeStackSize = StackSize - UnsafeStackSize;
+
+  if (StackSize == 0)
     return;
 
-  // Adjust stack.
-  TII.adjustStackPtr(SP, StackSize, MBB, MBBI);
+  if(MFI.hasStaticUnsafeObjects()) {
+    // Down stack folded with adjust
+
+    // I really need this instruction
+    // csetboundsback $ca, $cb, im -> cgetoffset $at, $cb; daddiu $at, $at, im; csetoffset $ca, $zero, $zero; csetbounds $ca, $ca, $at; csetoffset $ca, $ca, $at
+
+    // Store old csp
+    BuildMI(MBB, MBBI, DL, TII.get(Mips::STORECAP))
+            .addReg(USP)
+            .addReg(ZERO)
+            .addImm(SafeStackSize + ABI.GetTABILayout()->GetStackPointerOffset_Next())
+            .addReg(SP);
+
+    // setboundsback $cusp, $csp, SAFE needs a whole bunch of instructions as this instruction does not exist
+    // instead we sacrifice a little memory safety and only use incoffset
+
+
+    BuildMI(MBB, MBBI, DL, TII.get(Mips::CIncOffset), USP)
+           .addReg(SP)
+           .addReg(SafeStackSize);
+
+    /* Implements set bounds back. Too long.
+    BuildMI(MBB, MBBI, DL, TII.get(Mips::CGetOffset), (Mips::AT))
+            .addReg(SP);
+    BuildMI(MBB, MBBI, DL, TII.get(Mips::DADDiu), Mips::AT)
+            .addReg(Mips::AT)
+            .addImm(SafeStackSize);
+    BuildMI(MBB, MBBI, DL, TII.get(Mips::CSetOffset), USP)
+            .addReg(SP)
+            .addReg(ZERO);
+    BuildMI(MBB, MBBI, DL, TII.get(Mips::CSetBounds), USP)
+            .addReg(USP)
+            .addReg(Mips::AT);
+    BuildMI(MBB, MBBI, DL, TII.get(Mips::CSetOffset), USP)
+            .addReg(USP)
+            .addReg(Mips::AT);
+    */
+
+    // Restore stack
+    BuildMI(MBB, MBBI, DL, TII.get(Mips::LOADCAP), (SP))
+            .addReg(ZERO)
+            .addImm(ABI.GetTABILayout()->GetStackPointerOffset_Prev())
+            .addReg(USP);
+
+    // TODO: only if using dynamic linking
+    // Save cusp as it may have changed, and this may be a cross domain return
+    BuildMI(MBB, MBBI, DL, TII.get(Mips::STORECAP))
+            .addReg(ABI.GetLocalCapability())
+            .addReg(ZERO)
+            .addImm(ABI.GetTABILayout()->GetThreadLocalOffset_CUSP())
+            .addReg(USP);
+  } else {
+    // Adjust stack.
+    TII.adjustStackPtr(SP, StackSize, MBB, MBBI);
+  }
+
+
 }
 
 bool MipsSEFrameLowering::assignCalleeSavedSpillSlots(MachineFunction &MF,

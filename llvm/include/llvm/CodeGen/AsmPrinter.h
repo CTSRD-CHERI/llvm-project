@@ -370,6 +370,8 @@ public:
   /// function.
   virtual void EmitFunctionBodyEnd() {}
 
+  virtual void EmitAuxFunctionBodyEnd(MCSymbol* symbol) {}
+
   /// Targets can override this to emit stuff at the start of a basic block.
   /// By default, this method prints the label for the specified
   /// MachineBasicBlock, an alignment (if present) and a comment describing it
@@ -388,6 +390,8 @@ public:
   virtual MCSymbol *GetCPISymbol(unsigned CPID) const;
 
   virtual void EmitFunctionEntryLabel();
+
+  virtual void EmitAuxFunctionEntryLabel(MCSymbol* symbol);
 
   virtual void EmitMachineConstantPoolValue(MachineConstantPoolValue *MCPV);
 

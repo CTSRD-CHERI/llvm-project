@@ -149,8 +149,15 @@ void FunctionLoweringInfo::set(const Function &fn, MachineFunction &mf,
                 TySize, 0, /*Immutable=*/false, /*isAliased=*/true);
             MF->getFrameInfo().setObjectAlignment(FrameIndex, Align);
           } else {
+
+            bool assume = true; // TODO: get this from target
+            MDNode* tmeta = AI->getMetadata("temporal");
+
+            bool isSafe = tmeta == nullptr ?
+                          assume :
+                          (cast<MDString>(tmeta->getOperand(0))->getString().compare("safe") == 0);
             FrameIndex =
-                MF->getFrameInfo().CreateStackObject(TySize, Align, false, AI);
+                MF->getFrameInfo().CreateStackObject(TySize, Align, false, AI, 0, isSafe);
           }
 
           StaticAllocaMap[AI] = FrameIndex;

@@ -145,12 +145,14 @@ class MachineFrameInfo {
     /// If true, the object has been zero-extended.
     bool isSExt;
 
+    /// If true we can guarantee a reference to this object does not escape the function
+    bool isSafe;
     StackObject(uint64_t Sz, unsigned Al, int64_t SP, bool IM,
-                bool isSS, const AllocaInst *Val, bool Aliased, uint8_t ID = 0)
+                bool isSS, const AllocaInst *Val, bool Aliased, uint8_t ID = 0, bool Safe = true)
       : SPOffset(SP), Size(Sz), Alignment(Al), isImmutable(IM),
         isSpillSlot(isSS), isStatepointSpillSlot(false), StackID(ID),
         Alloca(Val),
-        PreAllocated(false), isAliased(Aliased), isZExt(false), isSExt(false) {}
+        PreAllocated(false), isAliased(Aliased), isZExt(false), isSExt(false), isSafe(Safe) {}
   };
 
   /// The alignment of the stack.
@@ -184,6 +186,11 @@ class MachineFrameInfo {
   /// sized objects have been allocated yet.
   bool HasVarSizedObjects = false;
 
+  bool HasVarSizedSafeObjects = false;
+  bool HasVarSizedUnsafeObjects = false;
+
+  bool HasStaticUnsafeObjects = false;
+
   /// This boolean keeps track of whether there is a call
   /// to builtin \@llvm.frameaddress.
   bool FrameAddressTaken = false;
@@ -206,6 +213,7 @@ class MachineFrameInfo {
   /// to be allocated on entry to the function.
   uint64_t StackSize = 0;
 
+  uint64_t UnsafeStackSize = 0;
   /// The amount that a frame offset needs to be adjusted to
   /// have the actual offset from the stack/frame pointer.  The exact usage of
   /// this is target-dependent, but it is typically used to adjust between
@@ -236,6 +244,9 @@ class MachineFrameInfo {
 
   /// The frame index for the stack protector.
   int StackProtectorIdx = -1;
+
+  /// The frame index for the unsafe end objec
+  int UnsafeEndIdx = -1;
 
   /// The frame index for the function context. Used for SjLj exceptions.
   int FunctionContextIdx = -1;
@@ -308,6 +319,14 @@ public:
   /// selection is complete to determine if the stack frame for this function
   /// contains any variable sized objects.
   bool hasVarSizedObjects() const { return HasVarSizedObjects; }
+  bool hasVarSizedSafeObjects() const { return HasVarSizedSafeObjects; }
+  bool hasVarSizedUnsafeObjects() const { return HasVarSizedUnsafeObjects; }
+  bool hasStaticUnsafeObjects() const { return HasStaticUnsafeObjects; }
+
+  /// The index of the unsafe end object
+  int getUnsafeEndIndex() const { return UnsafeEndIdx; }
+  void setUnsafeEndIndex(int I) { UnsafeEndIdx = I; }
+  bool hasUnsafeEndIndex() const { return UnsafeEndIdx != -1; }
 
   /// Return the index for the stack protector object.
   int getStackProtectorIndex() const { return StackProtectorIdx; }
@@ -404,6 +423,12 @@ public:
     return Objects[ObjectIdx+NumFixedObjects].PreAllocated;
   }
 
+  bool isObjectSafe(int ObjectIdx) const {
+      assert(unsigned(ObjectIdx+NumFixedObjects) < Objects.size() &&
+                     "Invalid Object Idx!");
+      return Objects[ObjectIdx+NumFixedObjects].isSafe;
+  }
+
   /// Return the size of the specified object.
   int64_t getObjectSize(int ObjectIdx) const {
     assert(unsigned(ObjectIdx+NumFixedObjects) < Objects.size() &&
@@ -489,9 +514,12 @@ public:
   /// all of the fixed size frame objects.  This is only valid after
   /// Prolog/Epilog code insertion has finalized the stack frame layout.
   uint64_t getStackSize() const { return StackSize; }
+    // TODO
+  uint64_t getUnsafeStackSize() const {return UnsafeStackSize; }
 
   /// Set the size of the stack.
   void setStackSize(uint64_t Size) { StackSize = Size; }
+  void setUnsafeStackSize(uint64_t Size) { UnsafeStackSize = Size;}
 
   /// Estimate and return the size of the stack frame.
   unsigned estimateStackSize(const MachineFunction &MF) const;
@@ -574,12 +602,12 @@ public:
   /// efficiency. By default, fixed objects are not pointed to by LLVM IR
   /// values. This returns an index with a negative value.
   int CreateFixedObject(uint64_t Size, int64_t SPOffset, bool Immutable,
-                        bool isAliased = false);
+                        bool isAliased = false, bool isSafe = true);
 
   /// Create a spill slot at a fixed location on the stack.
   /// Returns an index with a negative value.
   int CreateFixedSpillStackObject(uint64_t Size, int64_t SPOffset,
-                                  bool Immutable = false);
+                                  bool Immutable = false, bool isSafe = true);
 
   /// Returns true if the specified index corresponds to a fixed stack object.
   bool isFixedObjectIndex(int ObjectIdx) const {
@@ -661,11 +689,11 @@ public:
   /// Create a new statically sized stack object, returning
   /// a nonnegative identifier to represent it.
   int CreateStackObject(uint64_t Size, unsigned Alignment, bool isSS,
-                        const AllocaInst *Alloca = nullptr, uint8_t ID = 0);
+                        const AllocaInst *Alloca = nullptr, uint8_t ID = 0, bool isSafe = true);
 
   /// Create a new statically sized stack object that represents a spill slot,
   /// returning a nonnegative identifier to represent it.
-  int CreateSpillStackObject(uint64_t Size, unsigned Alignment);
+  int CreateSpillStackObject(uint64_t Size, unsigned Alignment, bool isSafe = true);
 
   /// Remove or mark dead a statically sized stack object.
   void RemoveStackObject(int ObjectIdx) {
@@ -676,7 +704,7 @@ public:
   /// Notify the MachineFrameInfo object that a variable sized object has been
   /// created.  This must be created whenever a variable sized object is
   /// created, whether or not the index returned is actually used.
-  int CreateVariableSizedObject(unsigned Alignment, const AllocaInst *Alloca);
+  int CreateVariableSizedObject(unsigned Alignment, const AllocaInst *Alloca, bool isSafe = true);
 
   /// Returns a reference to call saved info vector for the current function.
   const std::vector<CalleeSavedInfo> &getCalleeSavedInfo() const {

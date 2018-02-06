@@ -114,6 +114,7 @@ void MipsAsmPrinter::emitPseudoIndirectBranch(MCStreamer &OutStreamer,
   bool HasLinkReg = false;
   bool InMicroMipsMode = Subtarget->inMicroMipsMode();
   MCInst TmpInst0;
+  bool isPsuedoReturn = false;
 
   if (Subtarget->hasMips64r6()) {
     // MIPS64r6 should use (JALR64 ZERO_64, $rs)
@@ -132,7 +133,13 @@ void MipsAsmPrinter::emitPseudoIndirectBranch(MCStreamer &OutStreamer,
     TmpInst0.setOpcode(Mips::JR_MM);
   else if (static_cast<MipsTargetMachine &>(TM).getABI().IsCheriPureCap())
     // Everything else should use (JR $rs) or (CJR $rs), depending on the register.
-    TmpInst0.setOpcode(Mips::CheriRegsRegClass.contains(MI->getOperand(0).getReg()) ? Mips::CJR : Mips::JR);
+      // Pseusdo return should use ccall $cra, $crd, 2
+    if(MI->getOpcode() == Mips::PseudoReturnCap) {
+        isPsuedoReturn = true;
+        TmpInst0.setOpcode(Mips::CCall);
+    } else {
+        TmpInst0.setOpcode(Mips::CheriRegsRegClass.contains(MI->getOperand(0).getReg()) ? Mips::CJR : Mips::JR);
+    }
   else {
     // Everything else should use (JR $rs)
     TmpInst0.setOpcode(Mips::JR);
@@ -147,6 +154,15 @@ void MipsAsmPrinter::emitPseudoIndirectBranch(MCStreamer &OutStreamer,
 
   lowerOperand(MI->getOperand(0), MCOp);
   TmpInst0.addOperand(MCOp);
+
+  if(isPsuedoReturn) {
+      MCOperand MCOp1;
+      lowerOperand(MI->getOperand(1), MCOp1);
+      MCOperand MCOp2;
+      lowerOperand(MI->getOperand(2), MCOp2);
+      TmpInst0.addOperand(MCOp1);
+      TmpInst0.addOperand(MCOp2);
+  }
 
   EmitToStreamer(OutStreamer, TmpInst0);
 }
@@ -355,7 +371,7 @@ const char *MipsAsmPrinter::getCurrentABIString() const {
   }
 }
 
-void MipsAsmPrinter::EmitFunctionEntryLabel() {
+void MipsAsmPrinter::EmitAuxFunctionEntryLabel(MCSymbol *symbol) {
   MipsTargetStreamer &TS = getTargetStreamer();
 
   // NaCl sandboxing requires that indirect call instructions are masked.
@@ -374,8 +390,8 @@ void MipsAsmPrinter::EmitFunctionEntryLabel() {
   else
     TS.emitDirectiveSetNoMips16();
 
-  TS.emitDirectiveEnt(*CurrentFnSym);
-  OutStreamer->EmitLabel(CurrentFnSym);
+  TS.emitDirectiveEnt(*symbol);
+  OutStreamer->EmitLabel(symbol);
 }
 
 /// EmitFunctionBodyStart - Targets can override this to emit stuff before
@@ -419,6 +435,12 @@ void MipsAsmPrinter::EmitFunctionBodyEnd() {
     return;
   InConstantPool = false;
   OutStreamer->EmitDataRegion(MCDR_DataRegionEnd);
+}
+
+void MipsAsmPrinter::EmitAuxFunctionBodyEnd(MCSymbol* symbol) {
+  MipsTargetStreamer &TS = getTargetStreamer();
+  TS.emitDirectiveEnd(symbol->getName());
+  OutStreamer->EmitSymbolAttribute(symbol, MCSA_Global);
 }
 
 void MipsAsmPrinter::EmitBasicBlockEnd(const MachineBasicBlock &MBB) {

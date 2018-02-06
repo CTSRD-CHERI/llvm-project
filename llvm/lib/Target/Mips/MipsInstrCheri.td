@@ -128,6 +128,16 @@ def CCall : CheriFmt3CCall<0x05, (outs), (ins CheriOpnd:$cs, CheriOpnd:$cb, uimm
                               "ccall\t${cs}, ${cb}, ${selector}",
                               []>;
 }
+
+let isCall=1, hasDelaySlot=0 in {
+def CJALRSlotless : CheriFmt2Op<0xc, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2),
+                              "cjalr\t${r2}, ${r1}",
+                              []>;
+def CCallSlotless : CheriFmt3CCall<0x05, (outs), (ins CheriOpnd:$cs, CheriOpnd:$cb, uimm11: $selector),
+                              "ccall\t${cs}, ${cb}, ${selector}",
+                              []>;
+}
+
 def : InstAlias<"ccall $cs, $cb",
                 (CCall CheriOpnd: $cs, CheriOpnd:$cb, 0)>;
 def CReturn : CheriFmt3CRet<0x06, (outs), (ins variable_ops),
@@ -626,7 +636,19 @@ def CapJumpLinkPseudo :
 def CapRet : SDNode<"MipsISD::CapRet", SDTNone,
                      [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 
-def PseudoReturnCap: PseudoReturnBase<CheriOpnd>;
+// def PseudoReturnCap: PseudoReturnBase<CheriOpnd>;
+
+def PseudoReturnCap : MipsPseudo<(outs), (ins CheriOpnd:$cs, CheriOpnd:$cb, uimm11: $selector),
+                      [], II_ReturnPseudo> {
+  let isTerminator = 1;
+  let isBarrier = 1;
+  let hasDelaySlot = 1;
+  let isReturn = 1;
+  let isCodeGenOnly = 1;
+  let hasCtrlDep = 1;
+  let hasExtraSrcRegAllocReq = 1;
+  bit isCTI = 1;
+}
 
 let isReturn=1, isTerminator=1, hasDelaySlot=1, isBarrier=1, hasCtrlDep=1 in
 def CapRetPseudo : PseudoSE<(outs), (ins), [(CapRet)]>;

@@ -246,9 +246,9 @@ void MipsSEDAGToDAGISel::initGlobalBaseReg(MachineFunction &MF) {
 void MipsSEDAGToDAGISel::initCapGlobalBaseReg(MachineFunction &MF) {
   MipsFunctionInfo *MipsFI = MF.getInfo<MipsFunctionInfo>();
 
-  if (!MipsFI->capGlobalBaseRegSet())
+  if (!MipsFI->capGlobalBaseRegSet() && !MipsFI->capLocalBaseRegSet())
     return;
-  assert(Subtarget->useCheriCapTable());
+  //assert(Subtarget->useCheriCapTable());
   assert(MF.getTarget().isPositionIndependent() && "CHERI CODEGEN REQUIRES -fPIC");
 
   MachineBasicBlock &MBB = MF.front();
@@ -256,19 +256,33 @@ void MipsSEDAGToDAGISel::initCapGlobalBaseReg(MachineFunction &MF) {
   const TargetInstrInfo &TII = *Subtarget->getInstrInfo();
   DebugLoc DL;
   unsigned CapGlobalBaseReg = MipsFI->getCapGlobalBaseReg();
+  unsigned CapLocalBaseReg = MipsFI->getCapLocalBaseReg();
   const MipsABIInfo &ABI = static_cast<const MipsTargetMachine &>(TM).getABI();
 
   assert(ABI.IsCheriPureCap());
   const unsigned GlobalCapReg = ABI.GetGlobalCapability();
+  const unsigned LocalCapReg = ABI.GetLocalCapability();
 
   // For the purecap ABI, $cgp is required to point to the function's/DSOs
   // capability table on function entry, so emit a single COPY
   // (which may be optimised away):
   // COPY $capglobalbasereg, $c26
-  MF.getRegInfo().addLiveIn(GlobalCapReg);
-  MBB.addLiveIn(GlobalCapReg);
-  BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), CapGlobalBaseReg)
-    .addReg(GlobalCapReg);
+  MF.getRegInfo().addLiveIn(LocalCapReg);
+  MBB.addLiveIn(LocalCapReg);
+  BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), CapLocalBaseReg)
+    .addReg(LocalCapReg);
+
+  if(GlobalCapReg == 0) {
+    // Load from local
+    BuildMI(MBB, I, DL, TII.get(Mips::LOADCAP), CapGlobalBaseReg).addReg(ABI.GetNullPtr()).addImm((32*5))
+        .addReg(CapLocalBaseReg);
+  } else {
+    // Is live in
+    MF.getRegInfo().addLiveIn(GlobalCapReg);
+    MBB.addLiveIn(GlobalCapReg);
+    BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), CapGlobalBaseReg)
+        .addReg(GlobalCapReg);
+  }
 }
 
 void MipsSEDAGToDAGISel::processFunctionAfterISel(MachineFunction &MF) {

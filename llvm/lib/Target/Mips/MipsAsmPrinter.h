@@ -142,9 +142,10 @@ public:
   void printSavedRegsBitmask();
   void emitFrameDirective();
   const char *getCurrentABIString() const;
-  void EmitFunctionEntryLabel() override;
+  void EmitAuxFunctionEntryLabel(MCSymbol *symbol) override;
   void EmitFunctionBodyStart() override;
   void EmitFunctionBodyEnd() override;
+  void EmitAuxFunctionBodyEnd(MCSymbol* symbol) override;
   void EmitBasicBlockEnd(const MachineBasicBlock &MBB) override;
   bool isBlockOnlyReachableByFallthrough(
                                    const MachineBasicBlock* MBB) const override;

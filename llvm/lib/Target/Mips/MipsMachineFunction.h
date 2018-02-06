@@ -37,7 +37,9 @@ public:
   unsigned getGlobalBaseRegUnchecked() const;
 
   bool capGlobalBaseRegSet() const;
+  bool capLocalBaseRegSet() const;
   unsigned getCapGlobalBaseReg();
+  unsigned getCapLocalBaseReg();
 
   int getVarArgsFrameIndex() const { return VarArgsFrameIndex; }
   void setVarArgsFrameIndex(int Index) { VarArgsFrameIndex = Index; }
@@ -83,11 +85,16 @@ public:
   std::map<const char *, const Mips16HardFloatInfo::FuncSignature *>
   StubsNeeded;
 
+  MCSymbol* getUntrustedExternalEntrySymbol(void);
+  MCSymbol* getTrustedExternalEntrySymbol(void);
+
 private:
   virtual void anchor();
 
   MachineFunction& MF;
 
+  MCSymbol* UntrustedExternalEntrySymbol = nullptr;
+  MCSymbol* TrustedExternalEntrySymbol = nullptr;
   /// SRetReturnReg - Some subtargets require that sret lowering includes
   /// returning the value of the returned struct in a register. This field
   /// holds the virtual register into which the sret argument is passed.
@@ -102,6 +109,11 @@ private:
   /// use as the capability global base register. This is used for all global
   /// accesses in the purecap ABI.
   unsigned CapGlobalBaseReg = 0;
+
+  /// CapGlobalBaseReg - keeps track of the virtual register initialized for
+  /// use as the capability thread local base register. This is used for all thread local
+  /// accesses in the purecap ABI.
+  unsigned CapLocalBaseReg = 0;
 
   /// VarArgsFrameIndex - FrameIndex for start of varargs area.
   int VarArgsFrameIndex = 0;

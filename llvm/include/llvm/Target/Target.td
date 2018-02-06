@@ -912,6 +912,19 @@ def GC_LABEL : Instruction {
   let hasCtrlDep = 1;
   let isNotDuplicable = 1;
 }
+def FUNC_START : Instruction {
+  let OutOperandList = (outs);
+  let InOperandList = (ins i32imm:$id);
+  let AsmString = "";
+  let isNotDuplicable = 1;
+}
+def AUX_FUNC_START : Instruction {
+  let OutOperandList = (outs);
+  let InOperandList = (ins i32imm:$id);
+  let AsmString = "";
+  let hasCtrlDep = 1;
+  let isNotDuplicable = 1;
+}
 def ANNOTATION_LABEL : Instruction {
   let OutOperandList = (outs);
   let InOperandList = (ins i32imm:$id);

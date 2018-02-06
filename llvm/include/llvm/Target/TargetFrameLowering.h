@@ -328,6 +328,14 @@ public:
     return true;
   }
 
+  virtual int createUnsafeEndObject(MachineFunction &MF) const {
+    return -1;
+  }
+
+  virtual bool partitionUnsafeObjects(void) const {
+    return false;
+  }
+
   /// Check if given function is safe for not having callee saved registers.
   /// This is used when interprocedural register allocation is enabled.
   static bool isSafeForNoCSROpt(const Function *F) {

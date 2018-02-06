@@ -396,7 +396,7 @@ extern bool LargeCapTable;
   protected:
     SDValue getGlobalReg(SelectionDAG &DAG, EVT Ty, bool IsForTls) const;
 
-    SDValue getCapGlobalReg(SelectionDAG &DAG, EVT Ty) const;
+    SDValue getCapGlobalReg(SelectionDAG &DAG, EVT Ty, bool local) const;
 
     // This method creates the following nodes, which are necessary for
     // computing a local symbol's address:
@@ -520,23 +520,24 @@ extern bool LargeCapTable;
     template <class NodeTy>
     SDValue getFromCapTable(bool UseCallReloc, NodeTy *N, const SDLoc &DL,
                             EVT Ty, SelectionDAG &DAG, SDValue Chain,
-                            const MachinePointerInfo &PtrInfo) const {
+                            const MachinePointerInfo &PtrInfo, bool local = false) const {
       // FIXME: in the future it would be good to inline local function pointers
       // into the capability table directly (right now the value is a
       // void () addrspace(200)* addrspace(200)* instead of a
       // void () addrspace(200)*
       // llvm::errs() << "is fn ptr: " << IsFnPtr << "\n";
       if (LargeCapTable) {
+        assert(local == false);
         auto HiReloc =
           UseCallReloc ? MipsII::MO_CAPTAB_CALL_HI16 : MipsII::MO_CAPTAB_HI16;
         auto LoReloc =
           UseCallReloc ? MipsII::MO_CAPTAB_CALL_LO16 : MipsII::MO_CAPTAB_LO16;
         return _getGlobalCapBigImmediate(N, SDLoc(N), Ty, DAG, HiReloc, LoReloc,
-                                         Chain, PtrInfo);
+                                         Chain, PtrInfo, local);
       } else {
-        auto Reloc = UseCallReloc ? MipsII::MO_CAPTAB_CALL20 : MipsII::MO_CAPTAB20;
+        auto Reloc = local? MipsII::MO_CAPTAB_TLS20 : (UseCallReloc ? MipsII::MO_CAPTAB_CALL20 : MipsII::MO_CAPTAB20);
         return _getGlobalCapSmallImmediate(N, SDLoc(N), Ty, DAG, Reloc, Chain,
-                                           PtrInfo);
+                                           PtrInfo, local);
       }
     }
 
@@ -548,11 +549,11 @@ extern bool LargeCapTable;
     SDValue
     _getGlobalCapSmallImmediate(NodeTy *N, const SDLoc &DL, EVT Ty,
                                 SelectionDAG &DAG, unsigned Flag, SDValue Chain,
-                                const MachinePointerInfo &PtrInfo) const {
+                                const MachinePointerInfo &PtrInfo, bool local) const {
       assert(Ty.isFatPointer());
       SDValue Off = getTargetNode(N, MVT::i64, DAG, Flag);
       SDValue Tgt = DAG.getNode(MipsISD::WrapperCapOp, DL, Ty,
-                                getCapGlobalReg(DAG, Ty), Off);
+                                getCapGlobalReg(DAG, Ty, local), Off);
       // Why can't I use the target node here directly?
       // SDNode *Addr = DAG.getMachineNode(Mips::CapGlobalAddrPseudo, DL, Ty, getCapGlobalReg(DAG, Ty), Off);
       return DAG.getLoad(Ty, DL, Chain, Tgt, PtrInfo);
@@ -566,7 +567,7 @@ extern bool LargeCapTable;
     SDValue _getGlobalCapBigImmediate(NodeTy *N, const SDLoc &DL, EVT Ty,
                                       SelectionDAG &DAG, unsigned HiFlag,
                                       unsigned LoFlag, SDValue Chain,
-                                      const MachinePointerInfo &PtrInfo) const {
+                                      const MachinePointerInfo &PtrInfo, bool local) const {
       assert(Ty.isFatPointer());
       // (Ab)use GotHi since it already exists and does the right thing
       SDValue Off = DAG.getNode(MipsISD::GotHi, DL, MVT::i64,
@@ -574,7 +575,7 @@ extern bool LargeCapTable;
       Off = DAG.getNode(MipsISD::Wrapper, DL, MVT::i64, Off,
                         getTargetNode(N, MVT::i64, DAG, LoFlag));
       SDValue Tgt = DAG.getNode(ISD::PTRADD, DL, Ty,
-                                getCapGlobalReg(DAG, Ty), Off);
+                                getCapGlobalReg(DAG, Ty, local), Off);
       return DAG.getLoad(Ty, DL, Chain, Tgt, PtrInfo);
     }
 

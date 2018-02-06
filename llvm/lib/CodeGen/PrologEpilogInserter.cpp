@@ -702,8 +702,15 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &Fn) {
   bool StackGrowsDown =
     TFI.getStackGrowthDirection() == TargetFrameLowering::StackGrowsDown;
 
+  bool partitionUnsafeObjects = TFI.partitionUnsafeObjects();
+
   // Loop over all of the stack objects, assigning sequential addresses...
   MachineFrameInfo &MFI = Fn.getFrameInfo();
+
+  if(partitionUnsafeObjects && MFI.hasStaticUnsafeObjects()) {
+    // This object must be put on the stack immediately after the unsafe region
+    MFI.setUnsafeEndIndex(TFI.createUnsafeEndObject(Fn));
+  }
 
   // Start at the beginning of the local area.
   // The Offset is the distance from the stack top in the direction
@@ -717,6 +724,11 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &Fn) {
 
   // Skew to be applied to alignment.
   unsigned Skew = TFI.getStackAlignmentSkew(Fn);
+
+  assert(!(MFI.getObjectIndexBegin() != 0 && MFI.hasStaticUnsafeObjects() && partitionUnsafeObjects)
+         && "Caller cannot allocate objects in the unsafe region");
+  assert(!(MFI.getStackProtectorIndex() >= 0 && MFI.hasStaticUnsafeObjects() && partitionUnsafeObjects)
+         && "Stack protector does not play with unsafe regions");
 
   // If there are fixed sized objects that are preallocated in the local area,
   // non-fixed objects can't be allocated right at the start of local area.
@@ -737,12 +749,42 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &Fn) {
     if (FixedOff > Offset) Offset = FixedOff;
   }
 
+  unsigned MaxAlign = MFI.getMaxAlignment();
+
+  if(partitionUnsafeObjects && MFI.hasStaticUnsafeObjects()) {
+
+    // Unsafe objects should be allocated before any safe objects. Spill registers are considered safe.
+
+    for (unsigned i = 0, e = MFI.getObjectIndexEnd(); i != e; ++i) {
+      if(!MFI.isObjectSafe(i)) {
+        AdjustStackOffset(MFI, i, StackGrowsDown, Offset, MaxAlign, Skew);
+      }
+    }
+
+
+    int64_t UnsafeEnd = Offset;
+
+    // Now we must allocate the unsafe end object.
+
+    int unsafeIdx = MFI.getUnsafeEndIndex();
+    if(unsafeIdx != -1) {
+      Offset = alignTo(Offset, MFI.getMaxAlignment(), Skew);
+      // So the unsafe end object comes immediately after unsafe. We can still scavenge wasted space here.
+      UnsafeEnd = Offset;
+      AdjustStackOffset(MFI, unsafeIdx, StackGrowsDown, Offset, MaxAlign, Skew);
+    }
+
+    MFI.setUnsafeStackSize(UnsafeEnd - LocalAreaOffset);
+  }
+
   // First assign frame offsets to stack objects that are used to spill
   // callee saved registers.
   if (StackGrowsDown) {
     for (unsigned i = MinCSFrameIndex; i <= MaxCSFrameIndex; ++i) {
       // If the stack grows down, we need to add the size to find the lowest
       // address of the object.
+      assert((!partitionUnsafeObjects || MFI.isObjectSafe(i)) && "Callee saved registers should be safe");
+
       Offset += MFI.getObjectSize(i);
 
       unsigned Align = MFI.getObjectAlignment(i);
@@ -758,6 +800,8 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &Fn) {
       if (MFI.isDeadObjectIndex(i))
         continue;
 
+      assert((!partitionUnsafeObjects || MFI.isObjectSafe(i)) && "Callee saved registers should be safe");
+
       unsigned Align = MFI.getObjectAlignment(i);
       // Adjust to alignment boundary
       Offset = alignTo(Offset, Align, Skew);
@@ -771,7 +815,6 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &Fn) {
   // FixedCSEnd is the stack offset to the end of the fixed and callee-save
   // stack area.
   int64_t FixedCSEnd = Offset;
-  unsigned MaxAlign = MFI.getMaxAlignment();
 
   // Make sure the special register scavenging spill slot is closest to the
   // incoming stack pointer if a frame pointer is required and is closer
@@ -884,11 +927,12 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &Fn) {
     if (MFI.isDeadObjectIndex(i))
       continue;
     if (MFI.getStackProtectorIndex() == (int)i ||
-        EHRegNodeFrameIndex == (int)i)
+        EHRegNodeFrameIndex == (int)i || MFI.getUnsafeEndIndex() == (int)i)
       continue;
     if (ProtectedObjs.count(i))
       continue;
-
+    if (partitionUnsafeObjects && !MFI.isObjectSafe(i))
+      continue;
     // Add the objects that we need to allocate to our working set.
     ObjectsToAllocate.push_back(i);
   }
@@ -907,6 +951,7 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &Fn) {
   // can use the holes when allocating later stack objects.  Only do this if
   // stack protector isn't being used and the target requests it and we're
   // optimizing.
+  // It is OK to scavenge slots in the unsafe region - even for safe objects.
   BitVector StackBytesFree;
   if (!ObjectsToAllocate.empty() &&
       Fn.getTarget().getOptLevel() != CodeGenOpt::None &&

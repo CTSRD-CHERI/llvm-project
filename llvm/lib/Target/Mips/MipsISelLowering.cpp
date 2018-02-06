@@ -178,10 +178,10 @@ SDValue MipsTargetLowering::getGlobalReg(SelectionDAG &DAG, EVT Ty,
   return DAG.getRegister(FI->getGlobalBaseReg(IsForTls), Ty);
 }
 
-SDValue MipsTargetLowering::getCapGlobalReg(SelectionDAG &DAG, EVT Ty) const {
+SDValue MipsTargetLowering::getCapGlobalReg(SelectionDAG &DAG, EVT Ty, bool local) const {
   assert(Ty.isFatPointer());
   MipsFunctionInfo *FI = DAG.getMachineFunction().getInfo<MipsFunctionInfo>();
-  return DAG.getRegister(FI->getCapGlobalBaseReg(), Ty);
+  return DAG.getRegister(local? FI->getCapLocalBaseReg(): FI->getCapGlobalBaseReg(), Ty);
 }
 
 SDValue MipsTargetLowering::getTargetNode(GlobalAddressSDNode *N, EVT Ty,
@@ -2387,6 +2387,15 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
   // Local Exec TLS Model.
 
   GlobalAddressSDNode *GA = cast<GlobalAddressSDNode>(Op);
+
+  if(ABI.UsesCapabilityTable()) {
+    auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
+    EVT Ty = Op.getValueType();
+    EVT GlobalTy = Ty.isFatPointer() ? Ty : CapType;
+    return getFromCapTable(false, GA, SDLoc(GA), GlobalTy, DAG,
+                           DAG.getEntryNode(), PtrInfo, true);
+  }
+
   if (DAG.getTarget().Options.EmulatedTLS)
     return LowerToTLSEmulatedModel(GA, DAG);
 
@@ -3726,6 +3735,11 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   SmallVector<SDValue, 8> Ops(1, Chain);
   SDVTList NodeTys = DAG.getVTList(MVT::Other, MVT::Glue);
 
+  if (ABI.IsCheriPureCap()) {
+    assert(!MFI.hasVarSizedUnsafeObjects() && "Need extra code for this");
+    // idc is caller saved here by moving it to c18 which our caller restores to idc for us
+    RegsToPass.push_back(std::make_pair(ABI.GetReturnData(), DAG.getRegister(FuncInfo->getCapLocalBaseReg(), CapType)));
+  }
   getOpndList(Ops, RegsToPass, IsPIC, GlobalOrExternal, InternalLinkage,
               IsCallReloc, CLI, Callee, Chain);
 

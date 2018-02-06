@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "MipsMachineFunction.h"
+#include "llvm/MC/MCContext.h"
 #include "MCTargetDesc/MipsABIInfo.h"
 #include "MipsSubtarget.h"
 #include "MipsTargetMachine.h"
@@ -67,6 +68,10 @@ bool MipsFunctionInfo::capGlobalBaseRegSet() const {
   return CapGlobalBaseReg;
 }
 
+bool MipsFunctionInfo::capLocalBaseRegSet() const {
+  return CapLocalBaseReg;
+}
+
 unsigned MipsFunctionInfo::getCapGlobalBaseReg() {
   // Return if it has already been initialized.
   if (CapGlobalBaseReg)
@@ -74,6 +79,16 @@ unsigned MipsFunctionInfo::getCapGlobalBaseReg() {
 
   const TargetRegisterClass *RC = &Mips::CheriRegsRegClass;
   return CapGlobalBaseReg = MF.getRegInfo().createVirtualRegister(RC);
+}
+
+
+unsigned MipsFunctionInfo::getCapLocalBaseReg() {
+  // Return if it has already been initialized.
+  if (CapLocalBaseReg)
+    return CapLocalBaseReg;
+
+  const TargetRegisterClass *RC = &Mips::CheriRegsRegClass;
+  return CapLocalBaseReg = MF.getRegInfo().createVirtualRegister(RC);
 }
 
 void MipsFunctionInfo::createEhDataRegsFI() {
@@ -128,3 +143,19 @@ int MipsFunctionInfo::getMoveF64ViaSpillFI(const TargetRegisterClass *RC) {
 }
 
 void MipsFunctionInfo::anchor() {}
+
+MCSymbol* MipsFunctionInfo::getUntrustedExternalEntrySymbol(void) {
+  if(!UntrustedExternalEntrySymbol) {
+    MCContext &Ctx = MF.getContext();
+    UntrustedExternalEntrySymbol = Ctx.getOrCreateSymbol(Twine("__cross_domain_") + Twine(MF.getName()));
+
+  }
+  return UntrustedExternalEntrySymbol;
+}
+MCSymbol* MipsFunctionInfo::getTrustedExternalEntrySymbol(void) {
+  if(!TrustedExternalEntrySymbol) {
+    MCContext &Ctx = MF.getContext();
+    TrustedExternalEntrySymbol = Ctx.getOrCreateSymbol(Twine("__cross_domain_trusted_") + Twine(MF.getName()));
+  }
+  return TrustedExternalEntrySymbol;
+}

@@ -689,7 +689,9 @@ void AsmPrinter::EmitFunctionHeader() {
 
   // Emit the CurrentFnSym.  This is a virtual function to allow targets to
   // do their wild and crazy things as required.
-  EmitFunctionEntryLabel();
+  if(!MF->hasCustomFunctionStarts()) {
+      EmitFunctionEntryLabel();
+  }
 
   // If the function had address-taken blocks that got deleted, then we have
   // references to the dangling symbols.  Emit them at the start of the function
@@ -727,18 +729,22 @@ void AsmPrinter::EmitFunctionHeader() {
 /// EmitFunctionEntryLabel - Emit the label that is the entrypoint for the
 /// function.  This can be overridden by targets as required to do custom stuff.
 void AsmPrinter::EmitFunctionEntryLabel() {
-  CurrentFnSym->redefineIfPossible();
+  EmitAuxFunctionEntryLabel(CurrentFnSym);
+}
+
+void AsmPrinter::EmitAuxFunctionEntryLabel(MCSymbol* symbol) {
+  symbol->redefineIfPossible();
 
   // The function label could have already been emitted if two symbols end up
   // conflicting due to asm renaming.  Detect this and emit an error.
-  if (CurrentFnSym->isVariable())
-    report_fatal_error("'" + Twine(CurrentFnSym->getName()) +
+  if (symbol->isVariable())
+    report_fatal_error("'" + Twine(symbol->getName()) +
                        "' is a protected alias");
-  if (CurrentFnSym->isDefined())
-    report_fatal_error("'" + Twine(CurrentFnSym->getName()) +
+  if (symbol->isDefined())
+    report_fatal_error("'" + Twine(symbol->getName()) +
                        "' label emitted multiple times to assembly file");
 
-  return OutStreamer->EmitLabel(CurrentFnSym);
+  return OutStreamer->EmitLabel(symbol);
 }
 
 /// emitComments - Pretty-print comments for instructions.
@@ -990,6 +996,10 @@ void AsmPrinter::EmitFunctionBody() {
   // Print out code for the function.
   bool HasAnyRealCode = false;
   int NumInstsInFunction = 0;
+  MCSymbol* AuxSym;
+
+  SmallVector<MCSymbol*, 2> AuxStarts;
+
   for (auto &MBB : *MF) {
     // Print a label for the basic block.
     EmitBasicBlockStart(MBB);
@@ -1014,6 +1024,15 @@ void AsmPrinter::EmitFunctionBody() {
         emitComments(MI, OutStreamer->GetCommentOS(), this);
 
       switch (MI.getOpcode()) {
+      case TargetOpcode::FUNC_START:
+        assert(MF->hasCustomFunctionStarts());
+        EmitFunctionEntryLabel();
+        break;
+      case TargetOpcode::AUX_FUNC_START:
+        AuxSym = MI.getOperand(0).getMCSymbol();
+        EmitAuxFunctionEntryLabel(AuxSym);
+        AuxStarts.push_back(AuxSym);
+        break;
       case TargetOpcode::CFI_INSTRUCTION:
         emitCFIInstruction(MI);
         break;
@@ -1099,6 +1118,11 @@ void AsmPrinter::EmitFunctionBody() {
   }
 
   // Emit target-specific gunk after the function body.
+
+  for(MCSymbol* auxEntry : AuxStarts) {
+    EmitAuxFunctionBodyEnd(auxEntry);
+  }
+
   EmitFunctionBodyEnd();
 
   if (needFuncLabelsForEHOrDebugInfo(*MF, MMI) ||

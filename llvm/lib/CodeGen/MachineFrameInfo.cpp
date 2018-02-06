@@ -48,11 +48,12 @@ static inline unsigned clampStackAlignment(bool ShouldClamp, unsigned Align,
 
 int MachineFrameInfo::CreateStackObject(uint64_t Size, unsigned Alignment,
                                         bool isSS, const AllocaInst *Alloca,
-                                        uint8_t ID) {
+                                        uint8_t ID, bool isSafe) {
   assert(Size != 0 && "Cannot allocate zero size stack objects!");
+  if(!isSafe) HasStaticUnsafeObjects = true;
   Alignment = clampStackAlignment(!StackRealignable, Alignment, StackAlignment);
   Objects.push_back(StackObject(Size, Alignment, 0, false, isSS, Alloca,
-                                !isSS, ID));
+                                !isSS, ID, isSafe));
   int Index = (int)Objects.size() - NumFixedObjects - 1;
   assert(Index >= 0 && "Bad frame index!");
   ensureMaxAlignment(Alignment);
@@ -60,25 +61,27 @@ int MachineFrameInfo::CreateStackObject(uint64_t Size, unsigned Alignment,
 }
 
 int MachineFrameInfo::CreateSpillStackObject(uint64_t Size,
-                                             unsigned Alignment) {
+                                             unsigned Alignment, bool isSafe) {
   Alignment = clampStackAlignment(!StackRealignable, Alignment, StackAlignment);
-  CreateStackObject(Size, Alignment, true);
+  CreateStackObject(Size, Alignment, true, nullptr, 0, isSafe);
   int Index = (int)Objects.size() - NumFixedObjects - 1;
   ensureMaxAlignment(Alignment);
   return Index;
 }
 
 int MachineFrameInfo::CreateVariableSizedObject(unsigned Alignment,
-                                                const AllocaInst *Alloca) {
+                                                const AllocaInst *Alloca, bool isSafe) {
   HasVarSizedObjects = true;
+  if(isSafe) HasVarSizedSafeObjects = true;
+  else HasVarSizedUnsafeObjects = true;
   Alignment = clampStackAlignment(!StackRealignable, Alignment, StackAlignment);
-  Objects.push_back(StackObject(0, Alignment, 0, false, false, Alloca, true));
+  Objects.push_back(StackObject(0, Alignment, 0, false, false, Alloca, true, 0, isSafe));
   ensureMaxAlignment(Alignment);
   return (int)Objects.size()-NumFixedObjects-1;
 }
 
 int MachineFrameInfo::CreateFixedObject(uint64_t Size, int64_t SPOffset,
-                                        bool Immutable, bool isAliased) {
+                                        bool Immutable, bool isAliased, bool isSafe) {
   assert(Size != 0 && "Cannot allocate zero size fixed stack objects!");
   // The alignment of the frame index can be determined from its offset from
   // the incoming frame position.  If the frame object is at offset 32 and
@@ -87,22 +90,24 @@ int MachineFrameInfo::CreateFixedObject(uint64_t Size, int64_t SPOffset,
   // stack needs realignment, we can't assume that the stack will in fact be
   // aligned.
   unsigned Align = MinAlign(SPOffset, ForcedRealign ? 1 : StackAlignment);
+  if(!isSafe) HasStaticUnsafeObjects = true;
   Align = clampStackAlignment(!StackRealignable, Align, StackAlignment);
   Objects.insert(Objects.begin(), StackObject(Size, Align, SPOffset, Immutable,
                                               /*isSS*/   false,
-                                              /*Alloca*/ nullptr, isAliased));
+                                              /*Alloca*/ nullptr, isAliased, 0, isSafe));
   return -++NumFixedObjects;
 }
 
 int MachineFrameInfo::CreateFixedSpillStackObject(uint64_t Size,
                                                   int64_t SPOffset,
-                                                  bool Immutable) {
+                                                  bool Immutable, bool isSafe) {
   unsigned Align = MinAlign(SPOffset, ForcedRealign ? 1 : StackAlignment);
+  if(!isSafe) HasStaticUnsafeObjects = true;
   Align = clampStackAlignment(!StackRealignable, Align, StackAlignment);
   Objects.insert(Objects.begin(), StackObject(Size, Align, SPOffset, Immutable,
                                               /*isSS*/ true,
                                               /*Alloca*/ nullptr,
-                                              /*isAliased*/ false));
+                                              /*isAliased*/ false, 0, isSafe));
   return -++NumFixedObjects;
 }
 

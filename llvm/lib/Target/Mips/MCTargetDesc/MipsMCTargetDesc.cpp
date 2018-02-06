@@ -156,7 +156,7 @@ public:
     if (Inst.getOpcode() == Mips::LOADCAP &&
         (Inst.getOperand(1).getReg() == Mips::ZERO_64 ||
          Inst.getOperand(1).getReg() == Mips::ZERO) &&
-        Inst.getOperand(3).getReg() == Mips::C26) {
+        Inst.getOperand(3).getReg() == Mips::C25) {
       // For classic clc it register has to be $zero (mxcaptable not handled yet)
       // TODO: can I somehow handle the mxcaptable case by inferring the value of $at?
       Offset = Inst.getOperand(2).getImm();
