@@ -6276,6 +6276,12 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_NoEscape:
     handleNoEscapeAttr(S, D, Attr);
     break;
+  case AttributeList::AT_TemporalSafe:
+    handleSimpleAttribute<TemporalSafeAttr>(S, D, Attr);
+    break;
+  case AttributeList::AT_TemporalUnsafe:
+    handleSimpleAttribute<TemporalUnsafeAttr>(S, D, Attr);
+    break;
   case AttributeList::AT_AssumeAligned:
     handleAssumeAlignedAttr(S, D, Attr);
     break;
