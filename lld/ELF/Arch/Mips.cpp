@@ -201,6 +201,7 @@ RelExpr MIPS<ELFT>::getRelExpr(RelType Type, const Symbol &S,
   case R_MIPS_CHERI_CAPCALL20:
   case R_MIPS_CHERI_CAPTAB_CLC11:
   case R_MIPS_CHERI_CAPTAB20:
+  case R_MIPS_CHERI_CAPTAB_TLS20:
     return R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE;
 #endif
   default:
@@ -610,6 +611,7 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
     checkInt(Loc, Val >> 4, 11, Type);
     writeValue<E>(Loc, Val, 11, 4);
     break;
+  case R_MIPS_CHERI_CAPTAB_TLS20:
   case R_MIPS_CHERI_CAPTAB20:
   case R_MIPS_CHERI_CAPCALL20:
     // The new clc instruction has a 20 bit signed range (16 bit immediate

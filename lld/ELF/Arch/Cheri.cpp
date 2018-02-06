@@ -18,6 +18,14 @@ using namespace llvm::ELF;
 namespace lld {
 
 namespace elf {
+
+static uint8_t GetMagicIndexForSegment(PhdrEntry* Segment) {
+  if(Segment == nullptr) return (uint8_t)0;
+
+  assert(Segment->ndx < 0xFE);
+  return (uint8_t)(Segment->ndx + 1);
+}
+
 template <class ELFT>
 CheriCapRelocsSection<ELFT>::CheriCapRelocsSection()
     : SyntheticSection(SHF_ALLOC | (Config->Pic ? SHF_WRITE : 0), /* XXX: actually RELRO */
@@ -444,11 +452,33 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     // We write the virtual address of the location in in both static and the
     // shared library case:
     // In the static case we can compute the final virtual address and write it
-    // In the dynamic case we write the virtual address relative to the load
-    // address and the runtime linker will add the load address to that
+    // In the dynamic case we write the virtual address relative to the load address
+    // and the runtime linker will add the load address to that
+
+    bool targetsTLS = Reloc.Target.Sym->isTls();
+    bool targetNoOutput = Reloc.Target.Sym->getOutputSection() == nullptr;
+
+    OutputSection *LocOutputSec = Location.Section->getOutputSection();
+
+    assert(LocOutputSec != nullptr);
+
+    PhdrEntry *LocationPHDR = targetsTLS ? LocOutputSec->PtTLS :
+                              LocOutputSec->PtLoad;
+    PhdrEntry *TargetPHDR = targetNoOutput ? nullptr :
+                            (targetsTLS ?  Reloc.Target.Sym->getOutputSection()->PtTLS :
+                            Reloc.Target.Sym->getOutputSection()->PtLoad);
+
+    assert(LocationPHDR != nullptr);
+
+    // This is allowed to happen. Sometimes symbols VAs are used as a way to communicate between a
+    // linker script and a program. We try to preserve behaviour here.
+
     uint64_t OutSecOffset = Location.Section->getOffset(Location.Offset);
-    uint64_t LocationVA =
-        Location.Section->getOutputSection()->Addr + OutSecOffset;
+    uint64_t OutSegOffset = LocationPHDR->p_vaddr;
+    uint64_t LocationVA = LocOutputSec->Addr + (OutSecOffset - OutSegOffset);
+
+    uint8_t LocationSegmentID = GetMagicIndexForSegment(LocationPHDR);
+    uint8_t RelocSegmentID = GetMagicIndexForSegment(TargetPHDR);
 
     // For the target the virtual address the addend is always zero so
     // if we need a dynamic reloc we write zero
@@ -474,15 +504,26 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
       TargetSize = getTargetSize<ELFT>(Location, Reloc,
                                        /*Strict=*/!containsLegacyCapRelocs());
     }
+
+    if(!targetsTLS && !targetNoOutput) {
+
+      assert(TargetPHDR != nullptr);
+      TargetVA -= TargetPHDR->p_vaddr;
+    }
+
     uint64_t TargetOffset = Reloc.CapabilityOffset;
-    uint64_t Permissions = Reloc.Target.Sym->isFunc() ? 1ULL << 63 : 0;
+
+    uint16_t flags = 0;
+    if(targetsTLS) flags |=1;
+    if(targetNoOutput) flags |= 2;
 
     // TODO: should we warn about symbols that are out-of-bounds?
     // mandoc seems to do it so I guess we need it
-    // if (TargetOffset < 0 || TargetOffset > TargetSize) warn(...);
-
+    // if (TargetOffset <= TargetSize || TargetOffset > TargetSize) warn(...);
+    // TODO more accurate permission masks
+    uint32_t Permissions = Reloc.Target.Sym->isFunc() ? 1U << 31 : 0;
     InMemoryCapRelocEntry<E> Entry{LocationVA, TargetVA, TargetOffset,
-                                   TargetSize, Permissions};
+                                   TargetSize , Permissions, flags, LocationSegmentID, RelocSegmentID};
     memcpy(Buf + Offset, &Entry, sizeof(Entry));
     //     if (errorHandler().Verbose) {
     //       errs() << "Added capability reloc: loc=" << utohexstr(LocationVA)
@@ -513,11 +554,23 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
 }
 
 
-CheriCapTableSection::CheriCapTableSection()
+CheriCapTableSection::CheriCapTableSection(bool local)
   : SyntheticSection(SHF_ALLOC | SHF_WRITE, /* XXX: actually RELRO */
-                     SHT_PROGBITS, Config->CapabilitySize, ".cap_table") {
+                     SHT_PROGBITS, Config->CapabilitySize, local ? ".cap_table_local" : ".cap_table") {
   assert(Config->CapabilitySize > 0);
   this->Entsize = Config->CapabilitySize;
+
+  IsLocal = local;
+
+  if(local) {
+    Flags |= SHF_TLS;
+  }
+
+  if(local) {
+    for(uint64_t i = 1; i <= 9; i++) {
+      addFixedEntry(*(Symbol*)i, i-1);
+    }
+  }
 }
 
 void CheriCapTableSection::writeTo(uint8_t* Buf) {
@@ -544,6 +597,20 @@ void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm) {
 #endif
 }
 
+void CheriCapTableSection::addFixedEntry(Symbol &Sym, uint32_t index) {
+  // FIXME: can this be called from multiple threads?
+  CapTableIndex Idx;
+  Idx.IsFixed = true;
+  Idx.Index = index;
+  Entries.insert(std::make_pair(&Sym, Idx));
+  fixed_entries++;
+#ifdef DEBUG_CAP_TABLE
+  llvm::errs() << "Added fixed symbol at index " << index
+             << " to .cap_table. Total count " << Entries.size() << "\n";
+#endif
+}
+
+
 uint32_t CheriCapTableSection::getIndex(const Symbol &Sym) const {
   assert(ValuesAssigned && "getIndex called before index assignment");
   auto it = Entries.find(const_cast<Symbol *>(&Sym));
@@ -557,12 +624,22 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
   // here
   assert(Config->EMachine == EM_MIPS);
   RelType ElfCapabilityReloc = R_MIPS_CHERI_CAPABILITY;
+  Defined *CheriCapabilityTable = this->CheriCapabilityTable;
+
+  if (CheriCapabilityTable && !Config->Relocatable)
+    CheriCapabilityTable->Size = getSize();
 
   uint64_t SmallEntryCount = 0;
+  int64_t LargestFixed = -1;
   for (auto &it : Entries) {
     // TODO: looping twice is inefficient, we could keep track of the number of
     // small entries during insertion
-    if (it.second.NeedsSmallImm) {
+    if (it.second.IsFixed) {
+        if(it.second.Index.getValue() > LargestFixed) {
+            LargestFixed = it.second.Index.getValue();
+        }
+    }
+    else if (it.second.NeedsSmallImm) {
       SmallEntryCount++;
     }
   }
@@ -588,8 +665,16 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
   const bool ShouldAddAtCaptableSymbols = !errorHandler().ExitEarly;
   uint32_t AssignedSmallIndexes = 0;
   uint32_t AssignedLargeIndexes = 0;
+
+
+  AssignedSmallIndexes += (LargestFixed + 1);
+  SmallEntryCount += (LargestFixed + 1);
+
   for (auto &it : Entries) {
-    CapTableIndex &CTI = it.second;
+    CapTableIndex& CTI = it.second;
+
+    if (CTI.IsFixed) continue;
+
     if (CTI.NeedsSmallImm) {
       assert(AssignedSmallIndexes < SmallEntryCount);
       CTI.Index = AssignedSmallIndexes;
@@ -632,11 +717,11 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     }
     uint64_t Off = Index * Config->CapabilitySize;
     if (ShouldAddAtCaptableSymbols) {
-      Symtab->addRegular(Saver.save(RefName), STV_HIDDEN, STT_OBJECT, Off,
+      Symtab->addRegular(Saver.save(RefName), STV_HIDDEN, TargetSym->Type, Off,
                          Config->CapabilitySize, STB_LOCAL, this, nullptr);
     }
     addCapabilityRelocation<ELFT>(
-        *TargetSym, ElfCapabilityReloc, InX::CheriCapTable, Off,
+        *TargetSym, ElfCapabilityReloc, this, Off,
         R_CHERI_CAPABILITY, 0,
         [&]() { return "\n>>> referenced by " + RefName; });
   }
@@ -645,6 +730,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
 }
 
 CheriCapTableSection *InX::CheriCapTable;
+CheriCapTableSection *InX::CheriCapTableLocal;
 
 template class elf::CheriCapRelocsSection<ELF32LE>;
 template class elf::CheriCapRelocsSection<ELF32BE>;

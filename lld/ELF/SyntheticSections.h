@@ -968,6 +968,7 @@ struct InX {
   static StringTableSection *StrTab;
   static SymbolTableBaseSection *SymTab;
   static CheriCapTableSection *CheriCapTable;
+  static CheriCapTableSection *CheriCapTableLocal;
 };
 
 template <class ELFT> struct In {

@@ -672,7 +672,7 @@ static uint64_t getRelocTargetVA(const InputFile *File, RelType Type, int64_t A,
   case R_CHERI_CAPABILITY_TABLE_INDEX:
   case R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE:
     assert(A == 0 && "capability table index relocs should not have addends");
-    return Config->CapabilitySize * InX::CheriCapTable->getIndex(Sym);
+    return Config->CapabilitySize * (Sym.isTls() ? InX::CheriCapTableLocal: InX::CheriCapTable)->getIndex(Sym);
   case R_CHERI_CAPABILITY_TABLE_REL:
     return Sym.getVA(A) - ElfSym::CheriCapabilityTable->getVA();
   }

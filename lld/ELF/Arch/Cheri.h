@@ -15,15 +15,24 @@ namespace elf {
 template <llvm::support::endianness E> struct InMemoryCapRelocEntry {
   using CapRelocUint64 = llvm::support::detail::packed_endian_specific_integral<
       uint64_t, E, llvm::support::aligned>;
+  using CapRelocUint32 = llvm::support::detail::packed_endian_specific_integral<
+      uint32_t, E, llvm::support::aligned>;
+  using CapRelocUint16 = llvm::support::detail::packed_endian_specific_integral<
+      uint16_t, E, llvm::support::aligned>;
+  using CapRelocUint8 = llvm::support::detail::packed_endian_specific_integral<
+      uint8_t, E, llvm::support::aligned>;
   InMemoryCapRelocEntry(uint64_t Loc, uint64_t Obj, uint64_t Off, uint64_t S,
-                        uint64_t Perms)
+                        uint32_t Perms, uint16_t Flags, uint8_t LocSeg, uint8_t ObSeg)
       : capability_location(Loc), object(Obj), offset(Off), size(S),
-        permissions(Perms) {}
+        permissions(Perms), flags(Flags), location_seg_ndx(LocSeg), object_seg_ndx(ObSeg) {}
   CapRelocUint64 capability_location;
   CapRelocUint64 object;
   CapRelocUint64 offset;
   CapRelocUint64 size;
-  CapRelocUint64 permissions;
+  CapRelocUint32 permissions;
+  CapRelocUint16 flags;
+  CapRelocUint8 location_seg_ndx;
+  CapRelocUint8 object_seg_ndx;
 };
 
 struct SymbolAndOffset {
@@ -116,8 +125,9 @@ private:
 
 class CheriCapTableSection : public SyntheticSection {
 public:
-  CheriCapTableSection();
+  CheriCapTableSection(bool local);
   void addEntry(Symbol &Sym, bool NeedsSmallImm);
+  void addFixedEntry(Symbol &Sym, uint32_t index);
   uint32_t getIndex(const Symbol &Sym) const;
   bool empty() const override { return Entries.empty(); }
   void writeTo(uint8_t *Buf) override;
@@ -128,6 +138,11 @@ public:
              "Cap table entries present but cap size unknown???");
     return Entries.size() * Config->CapabilitySize;
   }
+
+  // The _CHERI_CAPABILITY_TABLE_ symbol points to the beginning of the
+  // this section
+  Defined *CheriCapabilityTable;
+
 private:
   struct CapTableIndex {
     // The index will be assigned once all symbols have been added
@@ -137,9 +152,12 @@ private:
     // int64_t Index = -1;
     llvm::Optional<uint32_t> Index;
     bool NeedsSmallImm = false;
+    bool IsFixed = false;
   };
   llvm::MapVector<Symbol *, CapTableIndex> Entries;
+  uint32_t fixed_entries = 0;
   bool ValuesAssigned = false;
+  bool IsLocal;
 };
 
 template <typename ELFT, typename CallBack>

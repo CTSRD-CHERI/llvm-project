@@ -341,8 +341,10 @@ template <class ELFT> static void createSyntheticSections() {
     }
     // We only need the capability table section if EF_MIPS_MACH_CHERI[128|256] is set
     if (Config->CapabilitySize > 0) {
-      InX::CheriCapTable = make<CheriCapTableSection>();
+      InX::CheriCapTable = make<CheriCapTableSection>(false);
+      InX::CheriCapTableLocal = make<CheriCapTableSection>(true);
       Add(InX::CheriCapTable);
+      Add(InX::CheriCapTableLocal);
     }
     if (!Config->Shared && Config->HasDynSymTab) {
       InX::MipsRldMap = make<MipsRldMapSection>();
@@ -719,6 +721,10 @@ static bool isRelroSection(const OutputSection *Sec) {
   if (InX::CheriCapTable && Sec == InX::CheriCapTable->getParent())
     return true;
 
+  // CapTableLocal contains some ABI defined fixed offset entries that are R/W and so this cannot be RELRO
+  if (InX::CheriCapTableLocal && Sec == InX::CheriCapTableLocal->getParent())
+    return false;
+
   // .dynamic section contains data for the dynamic linker, and
   // there's no need to write to it at runtime, so it's better to put
   // it into RELRO.
@@ -915,6 +921,8 @@ void PhdrEntry::add(OutputSection *Sec) {
   p_align = std::max(p_align, Sec->Alignment);
   if (p_type == PT_LOAD)
     Sec->PtLoad = this;
+  if(p_type == PT_TLS)
+    Sec->PtTLS = this;
 }
 
 // The beginning and the ending of .rel[a].plt section are marked
@@ -1683,6 +1691,10 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     InX::CheriCapTable->assignValuesAndAddCapTableSymbols<ELFT>();
   }
 
+  if (InX::CheriCapTableLocal) {
+    InX::CheriCapTableLocal->assignValuesAndAddCapTableSymbols<ELFT>();
+  }
+
   // Now handle __cap_relocs (must be before RelaDyn because it might
   // result in new dynamic relocations being added)
   if (Config->ProcessCapRelocs) {
@@ -1902,7 +1914,9 @@ template <class ELFT> void Writer<ELFT>::addStartEndSymbols() {
   if (InX::CheriCapTable)
     Define("__cap_table_start", "__cap_table_end",
            InX::CheriCapTable->getOutputSection());
-
+  if (InX::CheriCapTableLocal)
+    Define("__cap_table_local_start", "__cap_table_local_end",
+          InX::CheriCapTableLocal->getOutputSection());
   if (OutputSection *Sec = findSection(".ARM.exidx"))
     Define("__exidx_start", "__exidx_end", Sec);
 }
@@ -2219,7 +2233,9 @@ template <class ELFT> void Writer<ELFT>::assignFileOffsets() {
 // Finalize the program headers. We call this function after we assign
 // file offsets and VAs to all sections.
 template <class ELFT> void Writer<ELFT>::setPhdrs() {
+  uint64_t phd_ndx = 0;
   for (PhdrEntry *P : Phdrs) {
+    P->ndx = phd_ndx++;
     OutputSection *First = P->FirstSec;
     OutputSection *Last = P->LastSec;
     if (First) {
