@@ -21,7 +21,7 @@
 // check that we get an undefined symbol error:
 // RUN: not ld.lld -process-cap-relocs %t.o -Bdynamic -o /dev/null -e entry 2>&1 | FileCheck %s -check-prefix UNDEFINED
 // RUN: not ld.lld -process-cap-relocs %t.o -static -o /dev/null -e entry 2>&1 | FileCheck %s -check-prefix UNDEFINED
-// RUN: not ld.lld -process-cap-relocs %t.o -shared -o /dev/null 2>&1 | FileCheck %s -check-prefix UNDEFINED
+// RUN: not ld.lld -process-cap-relocs %t.o -shared -no-undefined -o /dev/null 2>&1 | FileCheck %s -check-prefix UNDEFINED
 
 // STATIC: CAPABILITY RELOCATION RECORDS:
 // STATIC: 0x0000000120020000	Base: external_cap (0x0000000120041100)	Offset: 0x0000000000000000	Length: 0x00000000000000{{1|2}}0	Permissions: 0x00000000

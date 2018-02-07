@@ -198,7 +198,7 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     case Symbol::DefinedKind:
       break;
     case Symbol::SharedKind:
-      if (!Config->Pic || Config->Static) {
+      if (!Config->Shared && !InX::Interp) {
         error("cannot create a capability relocation against a shared symbol"
               " when linking statically");
         continue;
@@ -206,12 +206,8 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
       TargetNeedsDynReloc = true;
       break;
     case Symbol::UndefinedKind:
-      if (!Config->Shared) {
-        error(
-            "cannot create a capability relocation against an undefined symbol"
-            " except when building shared libraries!");
-        continue;
-      }
+      // addCapReloc() will add an error if we are building an executable
+      // instead of a shlib
       // TODO: we really should add a dynamic SIZE relocation as well
       TargetNeedsDynReloc = true;
       break;
@@ -224,7 +220,8 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     auto *LocationDef = cast<Defined>(LocationSym);
     auto *LocationSec = cast<InputSectionBase>(LocationDef->Section);
     addCapReloc({LocationSec, (uint64_t)LocationRel.r_addend, false},
-                RealTarget, TargetNeedsDynReloc, TargetCapabilityOffset);
+                RealTarget, TargetNeedsDynReloc, TargetCapabilityOffset,
+                RealLocation.Symbol);
   }
 }
 

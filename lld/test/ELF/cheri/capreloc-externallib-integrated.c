@@ -1,4 +1,5 @@
 // REQUIRES: clang
+// REQUIRES: cheri-cap-table
 
 // RUN: %cheri256_purecap_cc1 -emit-obj %S/Inputs/external_lib_user.c -o %t.o
 // RUN: %cheri256_purecap_cc1 -emit-obj %S/Inputs/external_lib.c -o %t-externs.o
@@ -19,7 +20,7 @@
 // RUN: llvm-objdump -C -t %t.so | FileCheck -check-prefixes DUMP-SHLIB %s
 
 // check that we get an undefined symbol error:
-// RUN: not ld.lld -process-cap-relocs %t.o -Bdynamic -o /dev/null -e entry 2>&1 | FileCheck %s -check-prefix UNDEFINED
+// RUN: not ld.lld -process-cap-relocs %t.o --dynamic-linker /libexec/ld-cheri-elf.so -o /dev/null -e entry 2>&1 | FileCheck %s -check-prefix UNDEFINED
 // RUN: not ld.lld -process-cap-relocs %t.o -static -o /dev/null -e entry 2>&1 | FileCheck %s -check-prefix UNDEFINED
 // RUN: not ld.lld -process-cap-relocs %t.o -shared -no-undefined -o /dev/null 2>&1 | FileCheck %s -check-prefix UNDEFINED
 
