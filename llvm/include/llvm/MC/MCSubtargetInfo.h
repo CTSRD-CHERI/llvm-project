@@ -188,6 +188,10 @@ public:
   virtual std::string getSchedInfoStr(MCInst const &MCI) const {
     return {};
   }
+
+  virtual bool supportsCHERICapabilities() const { return false; }
+
+  virtual unsigned getCHERICapabilitySize() const { return 0; }
 };
 
 } // end namespace llvm
