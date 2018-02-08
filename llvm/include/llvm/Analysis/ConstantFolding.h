@@ -38,7 +38,7 @@ class Type;
 /// If this constant is a constant offset from a global, return the global and
 /// the constant. Because of constantexprs, this function is recursive.
 bool IsConstantOffsetFromGlobal(Constant *C, GlobalValue *&GV, APInt &Offset,
-                                const DataLayout &DL);
+                                const DataLayout &DL, bool LookThroughAddrSpaces);
 
 /// ConstantFoldInstruction - Try to constant fold the specified instruction.
 /// If successful, the constant result is returned, if not, null is returned.

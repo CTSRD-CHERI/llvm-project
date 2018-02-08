@@ -2078,11 +2078,11 @@ const MCExpr *AsmPrinter::lowerConstant(const Constant *CV) {
     GlobalValue *LHSGV;
     APInt LHSOffset;
     if (IsConstantOffsetFromGlobal(CE->getOperand(0), LHSGV, LHSOffset,
-                                   getDataLayout())) {
+                                   getDataLayout(), false)) {
       GlobalValue *RHSGV;
       APInt RHSOffset;
       if (IsConstantOffsetFromGlobal(CE->getOperand(1), RHSGV, RHSOffset,
-                                     getDataLayout())) {
+                                     getDataLayout(), false)) {
         const MCExpr *RelocExpr =
             getObjFileLowering().lowerRelativeReference(LHSGV, RHSGV, TM);
         if (!RelocExpr)
