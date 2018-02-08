@@ -1747,8 +1747,10 @@ void MCAsmStreamer::EmitCHERICapability(const MCSymbol *Symbol, int64_t Offset,
                                         unsigned CapSize, SMLoc Loc) {
   OS << "\t.chericap\t";
   Symbol->print(OS, MAI);
-  if (Offset != 0)
+  if (Offset > 0)
     OS << "+" << Offset;
+  else if (Offset < 0)
+    OS << Offset;
   EmitEOL();
 }
 
