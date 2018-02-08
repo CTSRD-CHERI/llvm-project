@@ -1,5 +1,5 @@
-; RUN: %cheri_purecap_llc %s -target-abi purecap -o - | FileCheck %s
-; RUN:%cheri256_purecap_llc %s -legacy-cap-relocs -o - | FileCheck %s -check-prefix LEGACY
+; RUN: %cheri_purecap_llc %s -o - | %cheri_FileCheck %s
+; RUN: %cheri256_purecap_llc %s -legacy-cheri-cap-relocs -o - | FileCheck %s -check-prefix LEGACY
 ; ModuleID = 'cheri-member-pointer-init.cpp'
 source_filename = "cheri-member-pointer-init.cpp"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
@@ -8,29 +8,29 @@ target triple = "cheri-unknown-freebsd"
 ; CHECK-LABEL: global_nonvirt_ptr:
 ; CHECK-NEXT:  .chericap       _ZN1A7nonvirtEv
 ; CHECK-NEXT:  .8byte  0
-; CHECK-NEXT:  .space  24
-; CHECK-NEXT:  .size   global_nonvirt_ptr, 64
+; CHECK-NEXT:  .space  [[@EXPR $CAP_SIZE - 8]]
+; CHECK-NEXT:  .size   global_nonvirt_ptr, [[@EXPR 2 * $CAP_SIZE]]
 
 ; CHECK-LABEL: global_virt_ptr:
-; CHECK-NEXT:  .space  32
+; CHECK-NEXT:  .space  [[$CAP_SIZE]]
 ; CHECK-NEXT:  .8byte  1
-; CHECK-NEXT:  .space  24
-; CHECK-NEXT:  .size   global_virt_ptr, 64
+; CHECK-NEXT:  .space  [[@EXPR $CAP_SIZE - 8]]
+; CHECK-NEXT:  .size   global_virt_ptr, [[@EXPR 2 * $CAP_SIZE]]
 
 ; CHECK-LABEL: global_fn_ptr:
 ; CHECK-NEXT:  .chericap       _Z9global_fnv
-; CHECK-NEXT:  .size   global_fn_ptr, 32
+; CHECK-NEXT:  .size   global_fn_ptr, [[$CAP_SIZE]]
 
 ; CHECK:       .type   _ZTV1A,@object          # @_ZTV1A
 ; CHECK-NEXT:  .section .data.rel.ro,"aw",@progbits
 ; CHECK-NEXT:  .weak   _ZTV1A
 ; CHECK-NEXT:  .p2align        5
 ; CHECK-LABEL: _ZTV1A:
-; CHECK-NEXT:  .space  32
-; CHECK-NEXT:  .space  32
+; CHECK-NEXT:  .space  [[$CAP_SIZE]]
+; CHECK-NEXT:  .space  [[$CAP_SIZE]]
 ; CHECK-NEXT:  .chericap       _ZN1A4virtEv
 ; CHECK-NEXT:  .chericap       _ZN1A5virt2Ev
-; CHECK-NEXT:  .size   _ZTV1A, 128
+; CHECK-NEXT:  .size   _ZTV1A, [[@EXPR 4 * $CAP_SIZE]]
 
 ; FIXME: we shouldn't need these anymore with cap-table
 ; CHECK-LABEL: .size.global_nonvirt_ptr:
