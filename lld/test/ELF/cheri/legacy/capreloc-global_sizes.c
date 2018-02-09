@@ -13,6 +13,13 @@
 // RUN: ld.lld -process-cap-relocs %t.o %t_external.o %t_bar.o -shared -o %t.so -verbose-cap-relocs
 // RUN: llvm-objdump -t -s -h %t.so | FileCheck -check-prefixes DUMP-SHLIB,GLOBAL_SIZES %s
 
+// Check that -r output doesn't fill in .global_size but it does when that .o file is turned into an exe
+// RUN: ld.lld -process-cap-relocs -r %t.o %t_external.o %t_bar.o -o %t-relocatable.o -verbose-cap-relocs
+// RUN: llvm-objdump -t -s -h %t-relocatable.o
+// RUN: llvm-objdump -t -s -h %t-relocatable.o | FileCheck -check-prefixes DUMP-RELOCATABLE %s
+// RUN: ld.lld -process-cap-relocs %t-relocatable.o -static -o %t-relocatable.exe -verbose-cap-relocs
+// RUN: llvm-objdump -t -s -h %t-relocatable.exe | FileCheck -check-prefixes DUMP-EXE,GLOBAL_SIZES %s
+
 
 
 // check external capsizefix (results in different addresses so only test the .global_sizes section contents)
@@ -76,6 +83,19 @@ void __start(void) {
 // .size.bar from bar.o (not used because .size.bar points to the first one) and then .size.other_var
 // GLOBAL_SIZES-NEXT: 00000000 00000000 00000000 000000ff
 // GLOBAL_SIZES-NEXT: Contents of section .MIPS.abiflags:
+
+
+// DUMP-RELOCATABLE-LABEL: Contents of section .global_sizes:
+// DUMP-RELOCATABLE-NEXT: 0000 00000000 00000000 00000000 00000000  ................
+// DUMP-RELOCATABLE-NEXT: 0010 00000000 00000000 00000000 00000000  ................
+// DUMP-RELOCATABLE-NEXT: 0020 00000000 00000000 00000000 00000000  ................
+
+// DUMP-RELOCATABLE-LABEL: SYMBOL TABLE:
+// DUMP-RELOCATABLE: 0000000000000010 gw      .global_sizes           00000008 .size.bar
+// DUMP-RELOCATABLE: 0000000000000008 gw      .global_sizes           00000008 .size.external_buffer
+// DUMP-RELOCATABLE: 0000000000000000 gw      .global_sizes           00000008 .size.external_cap
+// DUMP-RELOCATABLE: 0000000000000018 gw      .global_sizes           00000008 .size.foo
+// DUMP-RELOCATABLE: 0000000000000028 gw      .global_sizes           00000008 .size.other_var
 
 // DUMP-EXE-LABEL: SYMBOL TABLE:
 // DUMP-EXE: 0000000120000168 gw      .global_sizes           00000008 .size.bar

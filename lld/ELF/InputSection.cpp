@@ -793,7 +793,6 @@ static void fillGlobalSizesSection(InputSection* IS, uint8_t* Buf, uint8_t* BufE
         // The value might not be zero if we are linking against a file built
         // with -r (e.g. openpam_static_modules.o) In that case we need to check
         // whether the existing value and the value we want to write matches
-        // TODO: or should we just not write the .global_sizes section with -r?
         error("Conflicting values for " + Name +
               "\n>>> was already initialized to 0x" + utohexstr(Existing) +
               " in " + toString(IS) + "\n>>> expected value is 0x" +
@@ -838,7 +837,8 @@ template <class ELFT> void InputSection::writeTo(uint8_t *Buf) {
   // and then apply relocations.
   memcpy(Buf + OutSecOff, Data.data(), Data.size());
   uint8_t *BufEnd = Buf + OutSecOff + Data.size();
-  if (Config->ProcessCapRelocs && Name == ".global_sizes") {
+  if (Config->ProcessCapRelocs && !Config->Relocatable &&
+      Name == ".global_sizes") {
     fillGlobalSizesSection<ELFT>(this, Buf + OutSecOff, BufEnd);
   }
   relocate<ELFT>(Buf, BufEnd);
