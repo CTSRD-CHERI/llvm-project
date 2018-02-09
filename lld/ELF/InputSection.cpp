@@ -776,7 +776,7 @@ static void fillGlobalSizesSection(InputSection* IS, uint8_t* Buf, uint8_t* BufE
       uint64_t ResolvedSize = Target->getSize();
       uint8_t* Location = Buf + D->Value;
       assert(Location + 8 <= BufEnd); // Should use a span type instead
-      assert(read64<E>(Location) == 0); // Value should be zero
+
       if (ResolvedSize == 0) {
         // HACK for environ and __progname (both are capabilities):
         if (Config->Shared &&
@@ -788,9 +788,22 @@ static void fillGlobalSizesSection(InputSection* IS, uint8_t* Buf, uint8_t* BufE
           warn("Could not find .global_size for " + verboseToString<ELFT>(Target));
         }
       }
+      uint64_t Existing = read64<E>(Location);
+      if (Existing != 0 && Existing != ResolvedSize) {
+        // The value might not be zero if we are linking against a file built
+        // with -r (e.g. openpam_static_modules.o) In that case we need to check
+        // whether the existing value and the value we want to write matches
+        // TODO: or should we just not write the .global_sizes section with -r?
+        error("Conflicting values for " + Name +
+              "\n>>> was already initialized to 0x" + utohexstr(Existing) +
+              " in " + toString(IS) + "\n>>> expected value is 0x" +
+              utohexstr(ResolvedSize));
+      }
+
       write64<E>(Location, ResolvedSize);
       if (Config->VerboseCapRelocs)
-        message("Writing size 0x" + utohexstr(ResolvedSize) + " for " + verboseToString<ELFT>(Target));
+        message("Writing size 0x" + utohexstr(ResolvedSize) + " for " +
+                verboseToString<ELFT>(Target));
     }
   }
 }
