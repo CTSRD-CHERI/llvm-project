@@ -79,7 +79,10 @@ __start:
 # R6OCTEON-NEXT: >>> {{.+}}mips-elf-flags-err.s.tmp1.o: mips64r6
 # R6OCTEON-NEXT: >>> {{.+}}mips-elf-flags-err.s.tmp2.o: mips64r2 (octeon)
 
-# FPABI: target floating point ABI '-mdouble-float' is incompatible with '-mgp32 -mfp64': {{.*}}mips-elf-flags-err.s.tmp2.o
+# FPABI: error: incompatible floating point ABIs:
+# FPABI-NEXT: >>> {{.+}}mips-elf-flags-err.s.tmp1.o uses -mdouble-float
+# FPABI-NEXT: >>> {{.+}}mips-elf-flags-err.s.tmp2.o uses -mgp32 -mfp64
+
 
 # OCTEON:      Flags [
 # OCTEON-NEXT:   EF_MIPS_ARCH_64R2

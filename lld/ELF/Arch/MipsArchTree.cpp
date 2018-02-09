@@ -360,14 +360,14 @@ static StringRef getMipsFpAbiName(uint8_t FpAbi) {
   }
 }
 
-uint8_t elf::getMipsFpAbiFlag(uint8_t OldFlag, uint8_t NewFlag,
-                              StringRef FileName) {
+uint8_t elf::getMipsFpAbiFlag(uint8_t OldFlag, StringRef OldFile,
+                              uint8_t NewFlag, StringRef NewFile) {
   if (compareMipsFpAbi(NewFlag, OldFlag) >= 0)
     return NewFlag;
   if (compareMipsFpAbi(OldFlag, NewFlag) < 0)
-    error("target floating point ABI '" + getMipsFpAbiName(OldFlag) +
-          "' is incompatible with '" + getMipsFpAbiName(NewFlag) +
-          "': " + FileName);
+    error("incompatible floating point ABIs:\n>>> " + OldFile + " uses " +
+          getMipsFpAbiName(OldFlag) + "\n>>> " + NewFile + " uses " +
+          getMipsFpAbiName(NewFlag));
   return OldFlag;
 }
 

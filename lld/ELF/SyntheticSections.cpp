@@ -104,6 +104,7 @@ MipsAbiFlagsSection<ELFT> *MipsAbiFlagsSection<ELFT>::create() {
   Elf_Mips_ABIFlags Flags = {};
   bool Create = false;
 
+  std::string LastFile = "<internal>";
   for (InputSectionBase *Sec : InputSections) {
     if (Sec->Type != SHT_MIPS_ABIFLAGS)
       continue;
@@ -143,7 +144,9 @@ MipsAbiFlagsSection<ELFT> *MipsAbiFlagsSection<ELFT>::create() {
     Flags.ases |= S->ases;
     Flags.flags1 |= S->flags1;
     Flags.flags2 |= S->flags2;
-    Flags.fp_abi = elf::getMipsFpAbiFlag(Flags.fp_abi, S->fp_abi, Filename);
+    Flags.fp_abi =
+        elf::getMipsFpAbiFlag(Flags.fp_abi, LastFile, S->fp_abi, Filename);
+    LastFile = std::move(Filename);
   };
 
   if (Create)

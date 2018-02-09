@@ -58,8 +58,8 @@ llvm::StringRef getOutputSectionName(InputSectionBase *S);
 
 template <class ELFT> uint32_t calcMipsEFlags();
 
-uint8_t getMipsFpAbiFlag(uint8_t OldFlag, uint8_t NewFlag,
-                         llvm::StringRef FileName);
+uint8_t getMipsFpAbiFlag(uint8_t OldFlag, llvm::StringRef OldFile,
+                         uint8_t NewFlag, llvm::StringRef NewFile);
 
 bool isMipsN32Abi(const InputFile *F);
 bool isMicroMips();
