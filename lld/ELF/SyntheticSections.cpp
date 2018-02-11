@@ -472,6 +472,10 @@ template <class ELFT> void EhFrameSection::addSection(InputSectionBase *C) {
   Sec->Parent = this;
 
   Alignment = std::max(Alignment, Sec->Alignment);
+  // TODO: ideally we should only make .eh_frame writable if we have any dynamic
+  // relocations against it.
+  if (Sec->Flags & SHF_WRITE)
+    Flags |= SHF_WRITE; // TODO: Or should we just do Flags |= Sec->Flags?
   Sections.push_back(Sec);
 
   for (auto *DS : Sec->DependentSections)
