@@ -464,6 +464,22 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
   if (T.isOSSolaris() && T.getArch() != Triple::x86_64)
     EHSectionFlags |= ELF::SHF_WRITE;
 
+  // This is (currently) also true for MIPS
+  // TODO: add a T.isMIPS()?
+  switch (T.getArch()) {
+    case Triple::mips:
+    case Triple::mipsel:
+    case Triple::mips64:
+    case Triple::mips64el:
+    case Triple::cheri:
+      if (PositionIndependent) {
+        EHSectionFlags |= ELF::SHF_WRITE;
+      }
+      break;
+    default:
+      break;
+  }
+
   // ELF
   BSSSection = Ctx->getELFSection(".bss", ELF::SHT_NOBITS,
                                   ELF::SHF_WRITE | ELF::SHF_ALLOC);
