@@ -39,13 +39,6 @@ class CHERICapFoldIntrinsics : public ModulePass {
   Function *IncOffset;
   Function *SetOffset;
   Function *GetOffset;
-  Function *GetBase;
-  Function *GetAddress;
-  Function *GetLength;
-  Function *GetType;
-  Function *GetPerms;
-  Function *GetTag;
-  Function *GetSealed;
 
   Type* I8CapTy;
   Type* CapOffsetTy;
@@ -53,11 +46,14 @@ class CHERICapFoldIntrinsics : public ModulePass {
   bool Modified;
 
   template <typename Infer>
-  void foldGet(Function *Intrinsic, Infer infer, int NullValue = 0) {
+  void foldGet(Module *M, Intrinsic::ID ID, Infer infer, int NullValue = 0) {
+    Function *Func = M->getFunction(Intrinsic::getName(ID));
+    if (!Func)
+      return;
     // Calling eraseFromParent() inside the following loop causes iterators
     // to be invalidated and crashes -> collect and erase instead
     std::vector<CallInst *> ToErase;
-    for (Value *Use : Intrinsic->users()) {
+    for (Value *Use : Func->users()) {
       CallInst *CI = cast<CallInst>(Use);
       if (Value *Replacement = infer(CI->getOperand(0), CI, NullValue)) {
         CI->replaceAllUsesWith(Replacement);
@@ -71,25 +67,27 @@ class CHERICapFoldIntrinsics : public ModulePass {
     }
   }
 
-  void foldGetIntrinisics() {
-    foldGet(GetOffset, [this](Value *V, CallInst *CI, int) {
-      return inferCapabilityOffset(V, CI, CI->getType());
-    });
-    foldGet(GetAddress, [this](Value *V, CallInst *CI, int) {
-      return inferCapabilityAddress(V, CI);
-    });
+  void foldGetIntrinisics(Module *M) {
+    foldGet(M, Intrinsic::cheri_cap_offset_get,
+            [this](Value *V, CallInst *CI, int) {
+              return inferCapabilityOffset(V, CI, CI->getType());
+            });
+    foldGet(M, Intrinsic::cheri_cap_address_get,
+            [this](Value *V, CallInst *CI, int) {
+              return inferCapabilityAddress(V, CI);
+            });
     // For all other capability fields we can only infer a value when the
     // argument is a null capability (potentially with an offset)
     auto inferOther = [this](Value *V, CallInst *CI, int NullValue) {
       return inferCapabilityNonOffsetField(V, CI, NullValue);
     };
-    foldGet(GetBase, inferOther);
-    foldGet(GetPerms, inferOther);
-    foldGet(GetTag, inferOther);
-    foldGet(GetSealed, inferOther);
+    foldGet(M, Intrinsic::cheri_cap_base_get, inferOther);
+    foldGet(M, Intrinsic::cheri_cap_perms_get, inferOther);
+    foldGet(M, Intrinsic::cheri_cap_tag_get, inferOther);
+    foldGet(M, Intrinsic::cheri_cap_sealed_get, inferOther);
     // CGetType and CGetLen on a null capability now return -1
-    foldGet(GetLength, inferOther, -1);
-    foldGet(GetType, inferOther, -1);
+    foldGet(M, Intrinsic::cheri_cap_length_get, inferOther, -1);
+    foldGet(M, Intrinsic::cheri_cap_type_get, inferOther, -1);
   }
 
   static Constant* getIntToPtrSourceValue(Value* V) {
@@ -319,25 +317,31 @@ public:
   bool runOnModule(Module &M) override {
     Modified = false;
     DL = &M.getDataLayout();
-    IncOffset =
-        Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_offset_increment);
-    SetOffset = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_offset_set);
-    GetOffset = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_offset_get);
-    GetBase = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_base_get);
-    GetAddress =
-        Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_address_get);
-    GetLength = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_length_get);
-    GetType = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_type_get);
-    GetPerms = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_perms_get);
-    GetSealed = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_sealed_get);
-    GetTag = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_tag_get);
-    I8CapTy = IncOffset->getReturnType();
-    CapOffsetTy = GetOffset->getReturnType();
+    IncOffset = M.getFunction(
+        Intrinsic::getName(Intrinsic::cheri_cap_offset_increment));
+    SetOffset =
+        M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_offset_set));
+    GetOffset =
+        M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_offset_get));
 
-    // TODO: does the order here matter?
-    foldIncOffset();
-    foldSetOffset();
-    foldGetIntrinisics();
+    if (IncOffset || SetOffset || GetOffset) {
+      if (!IncOffset)
+        IncOffset = Intrinsic::getDeclaration(
+            &M, Intrinsic::cheri_cap_offset_increment);
+      if (!SetOffset)
+        SetOffset =
+            Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_offset_set);
+      if (!GetOffset)
+        GetOffset =
+            Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_offset_get);
+      // Ensure that all the intrinsics exist in the module
+      I8CapTy = IncOffset->getReturnType();
+      CapOffsetTy = GetOffset->getReturnType();
+      // TODO: does the order here matter?
+      foldIncOffset();
+      foldSetOffset();
+    }
+    foldGetIntrinisics(&M);
     return Modified;
   }
   void getAnalysisUsage(AnalysisUsage &AU) const override {

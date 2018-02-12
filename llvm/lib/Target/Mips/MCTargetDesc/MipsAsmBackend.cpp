@@ -416,7 +416,8 @@ getFixupKindInfo(MCFixupKind Kind) const {
     { "fixup_CHERI_CAPCALL20",           0,     16,   0 },
     { "fixup_CHERI_CAPCALL_HI16",        0,     16,   0 },
     { "fixup_CHERI_CAPCALL_LO16",        0,     16,   0 },
-    { "fixup_CHERI_CAPABILITY",          0,     0xdead,   0 },
+    { "fixup_CHERI_CAPABILITY",          0,  0xdead,   0 },
+
   };
 
   const static MCFixupKindInfo BigEndianInfos[Mips::NumTargetFixupKinds] = {
@@ -498,10 +499,9 @@ getFixupKindInfo(MCFixupKind Kind) const {
     { "fixup_CHERI_CAPCALL20",     16,    16,   0 },
     { "fixup_CHERI_CAPCALL_HI16",  16,    16,   0 },
     { "fixup_CHERI_CAPCALL_LO16",  16,    16,   0 },
-    { "fixup_CHERI_CAPABILITY",     0,    0xdead,   0 },
-  };
+    { "fixup_CHERI_CAPABILITY",     0,0xdead,   0 },
 
-  // FIXME: sizeof fixup_CHERI_CAPABILITY depends on target
+  };
 
   if (Kind < FirstTargetFixupKind)
     return MCAsmBackend::getFixupKindInfo(Kind);

@@ -52,7 +52,9 @@ public:
     MEK_CAPCALL_HI16,
     MEK_CAPCALL_LO16,
     MEK_CAPCALL20,
+
     MEK_CHERI_CAP,
+
     MEK_Special,
   };
 

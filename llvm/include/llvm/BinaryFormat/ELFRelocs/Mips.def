@@ -86,7 +86,7 @@ ELF_RELOC(R_MIPS_CHERI_CAPABILITY,      90)
 // The same as R_MIPS_CHERI_CAPABILITY but must not be preemptible
 // The linker should always be able to optimize this into a
 // R_MIPS_CHERI_SETTAG_LOADADDR or R_MIPS_CHERI_SETTAG
-ELF_RELOC(R_MIPS_CHERI_LOCAL_CAPABILITY,91)
+ELF_RELOC(R_MIPS_CHERI_LOCAL_CAPABILITY,91)  // XXXAR: probably not needed
 // Set the tag bit on the referenced data (must point within the current object)
 // Must not be preemtible!
 ELF_RELOC(R_MIPS_CHERI_SETTAG,          92)
@@ -102,7 +102,6 @@ ELF_RELOC(R_MIPS_CHERI_GLOBALS_TABLE,   94)
 // So that I can have only one LLD brach:
 #define HAVE_R_MIPS_CHERI_CAPABILITY    1
 #define HAVE_CHERI_CAPTABLE_RELOCATIONS 1
-
 
 ELF_RELOC(R_MIPS16_26,               100)
 ELF_RELOC(R_MIPS16_GPREL,            101)

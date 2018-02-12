@@ -1288,6 +1288,7 @@ public:
 
   bool isRegIdx() const { return Kind == k_RegisterIndex; }
   bool isImm() const override { return Kind == k_Immediate; }
+
   bool isConstantImm() const {
     int64_t Res;
     return isImm() && getImm()->evaluateAsAbsolute(Res);
@@ -7959,7 +7960,7 @@ bool MipsAsmParser::parseDirectiveCHERICap(SMLoc Loc) {
   MCAsmParser &Parser = getParser();
   const MCExpr *SymExpr;
 
-  if (!isCheri()) {
+  if (!getSTI().supportsCHERICapabilities()) {
     reportParseError(Loc, "'.chericap' requires CHERI");
     return false;
   }
@@ -7975,15 +7976,15 @@ bool MipsAsmParser::parseDirectiveCHERICap(SMLoc Loc) {
     bool Neg = false;
 
     switch (BE->getOpcode()) {
-      case MCBinaryExpr::Sub:
-        Neg = true;
-        // fall through
-      case MCBinaryExpr::Add:
-        CE = dyn_cast<MCConstantExpr>(BE->getRHS());
-        break;
-      default:
-        CE = nullptr;
-        break;
+    case MCBinaryExpr::Sub:
+      Neg = true;
+      // fall through
+    case MCBinaryExpr::Add:
+      CE = dyn_cast<MCConstantExpr>(BE->getRHS());
+      break;
+    default:
+      CE = nullptr;
+      break;
     }
 
     if (!SRE || !CE) {
@@ -8005,12 +8006,12 @@ bool MipsAsmParser::parseDirectiveCHERICap(SMLoc Loc) {
 
   const MCSymbol &Symbol = SRE->getSymbol();
   // FIXME: is there a better check? Can we somehow access DataLayout here?
-  unsigned CapSize = isCheri128() ? 16 : 32;
+  unsigned CapSize = getSTI().getCHERICapabilitySize();
   getParser().getStreamer().EmitCHERICapability(&Symbol, Offset, CapSize, Loc);
 
   if (getLexer().isNot(AsmToken::EndOfStatement))
     return Error(getLexer().getLoc(),
-                "unexpected token, expected end of statement");
+                 "unexpected token, expected end of statement");
   Parser.Lex(); // Eat EndOfStatement token.
   return false;
 }

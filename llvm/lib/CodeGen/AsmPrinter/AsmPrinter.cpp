@@ -2493,6 +2493,8 @@ static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
   // Handle (void *)5 etc as an untagged capability with base/length/perms 0,
   // and offset 5.
   const MCExpr *Expr = AP.lowerConstant(CV);
+  // FIXME: we shouldn't care about the format of the cheri capability here
+  // Probably better to emit a .chericap 0x123456 and let the linker fill it in?
   if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Expr)) {
     AP.OutStreamer->EmitIntValue(0, 8);
     AP.OutStreamer->EmitIntValue(CE->getValue(), 8);
@@ -2507,7 +2509,8 @@ static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
   APInt Addend;
   // XXXAR: The legacy path still exists to allow comparing performance vs the
   // __cap_relocs path for benchmarking
-  if (IsConstantOffsetFromGlobal(const_cast<Constant *>(CV), GV, Addend, DL, true)) {
+  if (IsConstantOffsetFromGlobal(const_cast<Constant *>(CV), GV, Addend, DL,
+                                 true)) {
     if (AP.OutStreamer->getTargetStreamer()->useLegacyCapRelocs())
       AP.OutStreamer->EmitLegacyCHERICapability(Expr, CapWidth);
     else
@@ -2515,7 +2518,8 @@ static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
                                           Addend.getSExtValue(), CapWidth);
     return;
   }
-  llvm_unreachable("Tried to emit a capability which is neither a constant nor a global+offset");
+  llvm_unreachable("Tried to emit a capability which is neither a constant nor "
+                   "a global+offset");
 }
 
 static void emitGlobalConstantImpl(const DataLayout &DL, const Constant *CV,

@@ -118,6 +118,83 @@ MipsSelectionDAGInfo::EmitTargetCodeForMemset(SelectionDAG &DAG, const SDLoc &dl
     return SDValue();
 
   auto &STI = getMipsSubtarget(DAG);
+  unsigned CapSize = STI.getCapSizeInBytes();
+  // If this is capability aligned, but not a multiple of capability size, we
+  // might have given up too early trying to emit capability instructions.
+  if (Align >= CapSize) {
+    if (auto ConstantSize = dyn_cast<ConstantSDNode>(Size)) {
+      uint64_t SizeVal = ConstantSize->getZExtValue();
+      // If this size is a small constant, and the value we're writing is zero,
+      // then let's emit some stores instead.
+      if ((SizeVal < (CapSize * 8)))
+        if (isa<ConstantSDNode>(Src) && cast<ConstantSDNode>(Src)->isNullValue()) {
+          MVT CapType = STI.typeForCapabilities();
+          SmallVector<SDValue, 8> OutChains;
+          SDValue ZeroCap = DAG.getConstant(0, dl, CapType);
+          for (uint64_t i=0 ; i<(SizeVal / CapSize) ; i++) {
+            uint64_t DstOff = i*CapSize;
+            SDValue Store = DAG.getStore(Chain, dl, ZeroCap,
+                DAG.getMemBasePlusOffset(Dst, DstOff, dl),
+                DstPtrInfo.getWithOffset(DstOff), Align, isVolatile ?
+                MachineMemOperand::MOVolatile : MachineMemOperand::MONone);
+            OutChains.push_back(Store);
+          }
+          uint64_t Remainder = SizeVal % CapSize;
+          SDValue Zero64 = DAG.getConstant(0, dl, MVT::i64);
+          uint64_t Done = (SizeVal / CapSize) * CapSize;
+          // Write zero, one or two doubles.
+          while (Remainder >= 8) {
+            SDValue Store = DAG.getStore(Chain, dl, Zero64,
+                DAG.getMemBasePlusOffset(Dst, Done, dl),
+                DstPtrInfo.getWithOffset(Done), Align, isVolatile ?
+                MachineMemOperand::MOVolatile : MachineMemOperand::MONone);
+            OutChains.push_back(Store);
+            Done += 8;
+            Remainder -= 8;
+          }
+          // We can always do the remaining 1-7 bytes in at most two
+          // instructions, either two adjacent stores or an unaligned
+          // overlapping store (which will need a separate CIncOffset to
+          // calculate the address, because CHERI offsets are scaled).
+          // We prefer the two-store version, because it reduces dependencies
+          // between instructions.
+          while (Remainder > 0) {
+            SDValue Zero = Zero64;
+            uint64_t DstOff;
+            switch (Remainder) {
+              default: llvm_unreachable("Remainder must be < 8");
+              case 7:
+                Zero = Zero64;
+                DstOff = SizeVal - 8;
+                Remainder -= 7;
+                break;
+              case 6: case 5: case 4:
+                Zero = DAG.getConstant(0, dl, MVT::i32);;
+                DstOff = SizeVal - Remainder;
+                Remainder -= 4;
+                break;
+              case 3: case 2:
+                Zero = DAG.getConstant(0, dl, MVT::i16);;
+                DstOff = SizeVal - Remainder;
+                Remainder -= 2;
+                break;
+              case 1:
+                Zero = DAG.getConstant(0, dl, MVT::i8);;
+                DstOff = SizeVal - Remainder;
+                Remainder -= 1;
+                break;
+            }
+            SDValue Store = DAG.getStore(Chain, dl, Zero,
+                DAG.getMemBasePlusOffset(Dst, DstOff, dl),
+                DstPtrInfo.getWithOffset(DstOff), Align, isVolatile ?
+                MachineMemOperand::MOVolatile : MachineMemOperand::MONone);
+            OutChains.push_back(Store);
+          }
+          return DAG.getNode(ISD::TokenFactor, dl, MVT::Other, OutChains);
+        }
+    }
+  }
+
 
   const char *memFnName = 
     STI.isABI_CheriPureCap() ?  "memset" : "memset_c";

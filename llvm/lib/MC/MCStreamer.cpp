@@ -23,8 +23,8 @@
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCSection.h"
-#include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSectionCOFF.h"
+#include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCWin64EH.h"
 #include "llvm/MC/MCWinEH.h"
@@ -77,8 +77,8 @@ void MCTargetStreamer::emitValue(const MCExpr *Value) {
 void MCTargetStreamer::emitAssignment(MCSymbol *Symbol, const MCExpr *Value) {}
 
 static cl::opt<bool> LegacyCheriCapRelocs(
-  "legacy-cheri-cap-relocs", cl::init(false), cl::Hidden,
-  cl::desc("Use the legacy __cap_relocs hack when emitting capabilities"));
+    "legacy-cheri-cap-relocs", cl::init(false), cl::Hidden,
+    cl::desc("Use the legacy __cap_relocs hack when emitting capabilities"));
 
 bool MCTargetStreamer::useLegacyCapRelocs() const {
   return LegacyCheriCapRelocs;
@@ -213,18 +213,16 @@ void MCStreamer::EmitLegacyCHERICapability(const MCExpr *Value,
   MCSymbol *Here = Context.createTempSymbol();
   EmitLabel(Here);
   const MCSectionELF *Section =
-    dyn_cast<const MCSectionELF>(SectionStack.back().first.first);
+      dyn_cast<const MCSectionELF>(SectionStack.back().first.first);
   const MCSymbolELF *Group = nullptr;
   if (Section && Section->getGroup())
     Group = Section->getGroup();
 
   if (Group) {
     Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS,
-                          ELF::SHF_ALLOC | ELF::SHF_GROUP,
-                          0, Group->getName());
+                          ELF::SHF_ALLOC | ELF::SHF_GROUP, 0, Group->getName());
     FatRelocs.push_back(std::make_tuple(Here, Value, Group->getName()));
-  }
-  else {
+  } else {
     Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
     FatRelocs.push_back(std::make_tuple(Here, Value, StringRef()));
   }
