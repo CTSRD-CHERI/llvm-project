@@ -592,6 +592,11 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
 
   MaxStoresPerMemcpy = 16;
 
+  // Set these thresholds low enough for CHERI that we will never inline a
+  // memcpy that can contain a capability.
+  if (Subtarget.isCheri())
+    MaxStoresPerMemcpy = MaxStoresPerMemmove = 15;
+
   isMicroMips = Subtarget.inMicroMipsMode();
 }
 
@@ -4653,6 +4658,11 @@ EVT MipsTargetLowering::getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
     unsigned CapSize = Subtarget.getCapSizeInBytes();
     if (ZeroMemset && (Align >= CapSize) && (Size % CapSize > 0))
       return MVT::i64;
+    // If this is going to include a capability, then pretend that we have to
+    // copy it using single bytes, which will cause SelectionDAG to decide to
+    // do the memcpy call.
+    if (!IsMemset && (Size > CapSize ) & (Align < CapSize))
+      return MVT::i8;
     switch (Align) {
       case 32: return CapType;
       case 16:
