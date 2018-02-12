@@ -17,8 +17,8 @@ entry:
 ; CHECK: memset_c
 ; CHECK: jalr
   call void @llvm.memset.p200i8.i64(i8 addrspace(200)* bitcast (%struct.x addrspace(200)* @blob to i8 addrspace(200)*), i8 0, i64 40, i32 4, i1 false)
-; This one gets inlined
-; CHECK-NOT: memcpy_c
+; This one doesn't get inlined anymore, because it's more than one capability in size.
+; CHECK: memcpy_c
   call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* bitcast (%struct.x addrspace(200)* @blob2 to i8 addrspace(200)*), i8 addrspace(200)* bitcast (%struct.x addrspace(200)* @blob to i8 addrspace(200)*), i64 40, i32 4, i1 false)
 ; CHECK: memmove_c
 ; CHECK: jalr
