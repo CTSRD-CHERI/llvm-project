@@ -333,9 +333,11 @@ class LLVMConfig(object):
 
         if default_cheri_size == '16':
             self.config.available_features.add("cheri_is_128")
+            self.config.substitutions.append(('%cheri_type', 'CHERI128'))
             default_args = cheri128_args
         else:
             assert default_cheri_size == '32', "Invalid -DCHERI_CAP_SIZE=" + default_cheri_size
+            self.config.substitutions.append(('%cheri_type', 'CHERI256'))
             self.config.available_features.add("cheri_is_256")
             default_args = cheri256_args
         tool_patterns = [
