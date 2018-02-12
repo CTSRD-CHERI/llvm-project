@@ -65,18 +65,9 @@ private:
 
   static pint_t getCFA(A &addressSpace, const PrologInfo &prolog,
                        const R &registers) {
-    if (prolog.cfaRegister != 0) {
-#if defined(__mips__) && defined(__CHERI_PURE_CAPABILITY__)
-      // This is an ugly hack that's required because DWARF assumes that
-      // there's a single register for the stack.
-      return registers.getRegister(UNW_MIPS_C11) + 
-          registers.getRegister((int)prolog.cfaRegister) +
-             prolog.cfaRegisterOffset;
-#else
-      return (pint_t)((sint_t)registers.getRegister((int)prolog.cfaRegister) +
+    if (prolog.cfaRegister != 0)
+      return (registers.getRegister((int)prolog.cfaRegister) +
              prolog.cfaRegisterOffset);
-#endif
-    }
     if (prolog.cfaExpression != 0)
       return evaluateExpression((pint_t)prolog.cfaExpression, addressSpace, 
                                 registers, 0);
