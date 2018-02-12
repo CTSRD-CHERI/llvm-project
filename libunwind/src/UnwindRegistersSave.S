@@ -131,6 +131,8 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
   # Store the return address where we expect the current PC
   cjr $c17
   csc $c17, $1, 0($c3)
+END_LIBUNWIND_FUNCTION(unw_getcontext)
+
 #elif defined(__mips_n64)
 
 .set noreorder

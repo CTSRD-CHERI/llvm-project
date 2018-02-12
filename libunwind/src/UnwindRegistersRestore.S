@@ -174,6 +174,8 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind20Registers_mips_cheri6jumptoEv)
   // Jump to $ca, load $c3 in the delay slot
   cjr $c17
   RESTORE_CAP(3)
+END_LIBUNWIND_FUNCTION(_ZN9libunwind20Registers_mips_cheri6jumptoEv)
+
 #elif defined(__mips_n64)
 
 .set noreorder
