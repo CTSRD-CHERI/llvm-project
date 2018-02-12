@@ -1,7 +1,7 @@
 # RUN: llvm-mc -filetype=obj -position-independent -triple=mips64-unknown-freebsd %s -o %t.o
-# RUN: llvm-readobj -r -s %t-fbsd.o | FileCheck %s -check-prefix OBJECT
+# RUN: llvm-readobj -r -s %t.o | FileCheck %s -check-prefix OBJECT
 # RUN: llvm-mc -filetype=obj -position-independent -triple=mips64-unknown-freebsd %s -o %t.o
-# RUN: llvm-readobj -r -s %t-linux.o | FileCheck %s -check-prefix OBJECT,PIC
+# RUN: llvm-readobj -r -s %t.o | FileCheck %s -check-prefix OBJECT,PIC
 
 
 
