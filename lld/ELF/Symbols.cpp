@@ -148,7 +148,7 @@ uint64_t Symbol::getPltVA() const {
 
 uint64_t Symbol::getSize() const {
   if (const auto *DR = dyn_cast<Defined>(this)) {
-    if (Config->MipsCheriAbi && DR->IsSectionStartSymbol) {
+    if (Config->isCheriABI() && DR->IsSectionStartSymbol) {
       assert(DR->Section && DR->Value == 0 && "Bad section start symbol?");
       return DR->Section->getOutputSection()->Size;
     }

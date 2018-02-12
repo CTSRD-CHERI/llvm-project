@@ -657,6 +657,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->Rpath = getRpath(Args);
   Config->Relocatable = Args.hasArg(OPT_relocatable);
   Config->SaveTemps = Args.hasArg(OPT_save_temps);
+  assert(Config->SearchPaths.empty() && "Should not be set yet!");
   Config->SearchPaths = args::getStrings(Args, OPT_library_path);
   Config->SectionStartMap = getSectionStartMap(Args);
   Config->Shared = Args.hasArg(OPT_shared);
@@ -727,7 +728,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
     std::tie(Config->EKind, Config->EMachine, Config->OSABI) =
         parseEmulation(S);
 
-    Config->MipsCheriAbi = (S == "elf64btsmip_cheri_fbsd");
+    Config->setIsCheriABI(S == "elf64btsmip_cheri_fbsd");
     // TODO: add CHERI128 or CHERI256 flags (command line option?)
     Config->MipsN32Abi = (S == "elf32btsmipn32" || S == "elf32ltsmipn32");
     Config->Emulation = S;
@@ -911,7 +912,7 @@ void LinkerDriver::inferMachineType() {
     Config->OSABI = F->OSABI;
     if (F->EMachine == EM_MIPS) {
       Config->MipsN32Abi = isMipsN32Abi(F);
-      Config->MipsCheriAbi = (F->EFlags & EF_MIPS_ABI) == EF_MIPS_ABI_CHERIABI;
+      Config->setIsCheriABI((F->EFlags & EF_MIPS_ABI) == EF_MIPS_ABI_CHERIABI);
     }
     return;
   }
@@ -1040,16 +1041,6 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   for (InputFile *F : Files)
     Symtab->addFile<ELFT>(F);
 
-  if (Config->MipsCheriAbi) {
-    if (Config->DynamicLinker.empty())
-      Config->DynamicLinker = "/libexec/ld-cheri-elf.so.1";
-    if (Config->SearchPaths.empty()) {
-      Config->SearchPaths = {
-        "=/libcheri", "=/usr/libcheri", "=/usr/local/libcheri"
-      };
-    }
-  }
-
   // Now that we have every file, we can decide if we will need a
   // dynamic symbol table.
   // We need one if we were asked to export dynamic symbols or if we are
@@ -1156,7 +1147,7 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
       return;
   }
   // CapabilitySize must be set if we are targeting the purecap ABI
-  if (Config->MipsCheriAbi)
+  if (Config->isCheriABI())
     assert(Config->CapabilitySize > 0);
 
   // This adds a .comment section containing a version string. We have to add it

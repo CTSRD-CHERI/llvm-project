@@ -73,7 +73,7 @@ TargetInfo *elf::getTarget() {
   case EM_AVR:
     return getAVRTargetInfo();
   case EM_MIPS:
-    if (Config->MipsCheriAbi)
+    if (Config->isCheriABI())
       return getMipsTargetInfo<ELF64BE>(); // TODO: custom target info?
     switch (Config->EKind) {
     case ELF32LEKind:

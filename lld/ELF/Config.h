@@ -132,7 +132,6 @@ struct Configuration {
   bool IgnoreFunctionAddressEquality;
   bool MergeArmExidx;
   bool MipsN32Abi = false;
-  bool MipsCheriAbi = false;
   bool NoGnuUnique;
   bool NoUndefinedVersion;
   bool NoinhibitExec;
@@ -244,6 +243,30 @@ struct Configuration {
 
   // Size of a CHERI capability
   int CapabilitySize = 0;
+
+  inline bool isCheriABI() const { return MipsCheriAbi; }
+  // We need to set the searchPaths before createFiles() is called since linker
+  // scripts might contain INPUT() commands. Add a getter and setter for
+  // MipsCheriAbi to ensure this is always the case
+  inline void setIsCheriABI(bool Set) {
+    if (!Set)
+      return;
+    MipsCheriAbi = true;
+    if (DynamicLinker.empty())
+      DynamicLinker = "/libexec/ld-cheri-elf.so.1";
+    for (const auto &S : SearchPaths)
+      if (S.endswith("/lib"))
+        warn("search path ending in /lib added when targeting CheriABI. This "
+             "is probably an error and should be /libcheri instead:\n>>> "
+             "search path was" + S);
+    // add the default search paths for CheriABI
+    SearchPaths.emplace_back("=/libcheri");
+    SearchPaths.emplace_back("=/usr/libcheri");
+    SearchPaths.emplace_back("=/usr/local/libcheri");
+  }
+
+private:
+  bool MipsCheriAbi = false;
 };
 
 // The only instance of Configuration struct.
