@@ -19,13 +19,13 @@
 // SHLIB-RELOCS-NEXT:    0x20008 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
 // SHLIB-RELOCS-NEXT:  }
 // SHLIB-RELOCS-NEXT:]
-// RUN: llvm-objdump -C -s -r -t -h %t.so
-// RUN: llvm-objdump -C -r -s -t -h %t.so | FileCheck %s
+// RUN: llvm-objdump -C -r -s -t -h %t.so | FileCheck %s -check-prefixes CHECK,%cheri_type
 // CHECK-LABEL: CAPABILITY RELOCATION RECORDS:
 // 10000 is the address of foo_ptr
 // CHECK-NEXT: 0x0000000000010000	Base:  (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x00000000
 // CHECK-LABEL: Sections:
-// CHECK:  .data         00000010 0000000000010000 DATA
+// CHERI128:  .data         00000010 0000000000010000 DATA
+// CHERI256:  .data         00000020 0000000000010000 DATA
 // 20000 is the address of rel.dyn -> correct
 // CHECK:  __cap_relocs  00000028 0000000000020000 DATA
 // CHECK-LABEL: SYMBOL TABLE:

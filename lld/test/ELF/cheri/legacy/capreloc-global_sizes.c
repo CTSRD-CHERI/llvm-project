@@ -15,7 +15,6 @@
 
 // Check that -r output doesn't fill in .global_size but it does when that .o file is turned into an exe
 // RUN: ld.lld -process-cap-relocs -r %t.o %t_external.o %t_bar.o -o %t-relocatable.o -verbose-cap-relocs
-// RUN: llvm-objdump -t -s -h %t-relocatable.o
 // RUN: llvm-objdump -t -s -h %t-relocatable.o | FileCheck -check-prefixes DUMP-RELOCATABLE %s
 // RUN: ld.lld -process-cap-relocs %t-relocatable.o -static -o %t-relocatable.exe -verbose-cap-relocs
 // RUN: llvm-objdump -t -s -h %t-relocatable.exe | FileCheck -check-prefixes DUMP-EXE,GLOBAL_SIZES %s
@@ -62,7 +61,7 @@ extern int external_func(int x);
 
 void __start(void) {
   int* ptr1 = &foo;
-  int* ptr2 = &bar;
+  void* ptr2 = &bar;
   char* ptr3 = external_buffer;
   void** ptr4 = &external_cap;
   int (*ptr5)(int) = &external_func;
