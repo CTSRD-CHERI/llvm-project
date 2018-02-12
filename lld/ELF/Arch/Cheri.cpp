@@ -235,7 +235,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
   TargetNeedsDynReloc = TargetNeedsDynReloc || Config->Pic || Config->Pie;
   uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
 
-  if (Target.Symbol->isUndefined()) {
+  if (Target.Symbol->isUndefined() && !Target.Symbol->isUndefWeak()) {
     std::string SourceMsg = SourceSymbol
                                 ? lld::verboseToString<ELFT>(SourceSymbol)
                                 : Loc.toString();

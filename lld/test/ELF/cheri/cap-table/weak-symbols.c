@@ -1,7 +1,7 @@
 // REQUIRES: clang
 
 // RUN: %cheri128_purecap_cc1 -emit-obj -O2 -mllvm -cheri-cap-table %s -o %t.o
-// RUNNOT: llvm-objdump -d -r -t %t.o
+// RUN: llvm-objdump -d -r -t %t.o
 // RUNNOT: llvm-objdump -d -r %t.o | FileCheck %s -check-prefix OBJECT
 // RUN: ld.lld -o %t.exe %t.o
 // RUN: ld.lld -pie -o %t-pie.exe %t.o
@@ -32,7 +32,7 @@ TEST(_DYNAMIC)
 int __start(void) {
   return 0;
 }
-// DYNAMIC-EXE: 0000000000000230         .dynamic		 00000140 .hidden _DYNAMIC
+// DYNAMIC-EXE: 0000000000000230 .dynamic		 00000140 .hidden _DYNAMIC
 // DYNAMIC-EXE: 0000000000000000 .MIPS.abiflags 00000000 .hidden __init_array_end
 // DYNAMIC-EXE: 0000000000000000 .MIPS.abiflags 00000040 .hidden __init_array_start
 // STATIC-EXE: 0000000         *ABS*		 00000000 .hidden __init_array_end
