@@ -225,6 +225,18 @@ TYPE inline_p2align_up(void) {
   return p2align_up((TYPE)100, 10);
 }
 
+
+
+// The following used to assert (second parameter wider than the first)
+// See https://github.com/CTSRD-CHERI/clang/issues/183
+int alignment_wider_than_source(int a, int b) {
+  // CHECK-LABEL: @alignment_wider_than_source(
+  // CHECK: [[UP:%.+]] = add i32 %{{.+}}, 3
+  // CHECK: [[RESULT:%.+]] = and i32 [[UP:%.+]], -4
+  // CHECK: ret i32 [[RESULT]]
+  return __builtin_align_up(a, sizeof(b));
+}
+
 // XXX: original tests, can probably remove
 
 // Check that some constants get folded for __is_aligned

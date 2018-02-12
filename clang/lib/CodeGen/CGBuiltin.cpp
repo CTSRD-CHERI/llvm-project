@@ -10682,7 +10682,7 @@ struct BuiltinAlignArgs {
     }
     auto *One = llvm::ConstantInt::get(IntType, 1);
     Alignment = CGF.EmitScalarExpr(E->getArg(1));
-    Alignment = CGF.Builder.CreateZExtOrBitCast(
+    Alignment = CGF.Builder.CreateZExtOrTrunc(
         Alignment, IntType, PowerOfTwo ? "pow2" : "alignment");
     if (PowerOfTwo) {
       Alignment = CGF.Builder.CreateShl(One, Alignment, "alignment");
