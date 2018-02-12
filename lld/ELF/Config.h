@@ -258,7 +258,7 @@ struct Configuration {
       if (S.endswith("/lib"))
         warn("search path ending in /lib added when targeting CheriABI. This "
              "is probably an error and should be /libcheri instead:\n>>> "
-             "search path was" + S);
+             "search path was " + S);
     // add the default search paths for CheriABI
     SearchPaths.emplace_back("=/libcheri");
     SearchPaths.emplace_back("=/usr/libcheri");
