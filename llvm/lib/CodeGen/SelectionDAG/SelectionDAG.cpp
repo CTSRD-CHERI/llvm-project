@@ -5046,6 +5046,9 @@ static bool FindOptimalMemOpLowering(std::vector<EVT> &MemOps,
                                    IsMemset, ZeroMemset, MemcpyStrSrc,
                                    DAG.getMachineFunction());
 
+  // If the type is a fat pointer, then forcibly disable overlap.
+  AllowOverlap &= !VT.isFatPointer();
+
   if (VT == MVT::Other) {
     // Use the largest integer type whose alignment constraints are satisfied.
     // We only need to check DstAlign here as SrcAlign is always greater or
