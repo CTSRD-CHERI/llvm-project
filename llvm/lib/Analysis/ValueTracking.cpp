@@ -816,6 +816,14 @@ static void computeKnownBitsFromAssume(const Value *V, KnownBits &Known,
       KnownBits RHSKnown(BitWidth);
       computeKnownBits(A, RHSKnown, Depth+1, Query(Q, I));
 
+      // If the RHS is known zero, then this assumption must be wrong (nothing
+      // is unsigned less than zero). Signal a conflict and get out of here.
+      if (RHSKnown.isZero()) {
+        Known.Zero.setAllBits();
+        Known.One.setAllBits();
+        break;
+      }
+
       // Whatever high bits in c are zero are known to be zero (if c is a power
       // of 2, then one more).
       if (isKnownToBeAPowerOfTwo(A, false, Depth + 1, Query(Q, I)))
@@ -1646,14 +1654,11 @@ bool isKnownToBeAPowerOfTwo(const Value *V, bool OrZero, unsigned Depth,
                             const Query &Q) {
   assert(Depth <= MaxDepth && "Limit Search Depth");
 
-  if (const Constant *C = dyn_cast<Constant>(V)) {
-    if (C->isNullValue())
-      return OrZero;
-
-    const APInt *ConstIntOrConstSplatInt;
-    if (match(C, m_APInt(ConstIntOrConstSplatInt)))
-      return ConstIntOrConstSplatInt->isPowerOf2();
-  }
+  // Attempt to match against constants.
+  if (OrZero && match(V, m_Power2OrZero()))
+      return true;
+  if (match(V, m_Power2()))
+      return true;
 
   // 1 << X is clearly a power of two if the one is not shifted off the end.  If
   // it is shifted off the end then the result is undefined.

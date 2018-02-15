@@ -91,9 +91,9 @@ registers:
   - { id: 3, class: _ }
 body: |
   bb.1:
-    %0(s64) = COPY %x0
-    %1(s64) = COPY %x1
-    %2(s64) = COPY %x2
+    %0(s64) = COPY $x0
+    %1(s64) = COPY $x1
+    %2(s64) = COPY $x2
 )MIR") + Twine(MIRFunc) + Twine("...\n"))
                             .toNullTerminatedStringRef(S);
   std::unique_ptr<MIRParser> MIR;
@@ -201,6 +201,15 @@ TEST(PatternMatchInstr, MatchBinaryOp) {
   match = mi_match(MIBSub->getOperand(0).getReg(), MRI,
                    m_GSub(m_ICst(Cst), m_Reg(Src0)));
   ASSERT_FALSE(match);
+
+  auto MIBFMul = B.buildInstr(TargetOpcode::G_FMUL, s64, Copies[0],
+                              B.buildConstant(s64, 42));
+  // Match and test commutativity for FMUL.
+  match = mi_match(MIBFMul->getOperand(0).getReg(), MRI,
+                   m_GFMul(m_ICst(Cst), m_Reg(Src0)));
+  ASSERT_TRUE(match);
+  ASSERT_EQ(Cst, (uint64_t)42);
+  ASSERT_EQ(Src0, Copies[0]);
 }
 
 TEST(PatternMatchInstr, MatchExtendsTrunc) {

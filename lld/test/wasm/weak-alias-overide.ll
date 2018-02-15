@@ -1,6 +1,6 @@
 ; RUN: llc -filetype=obj -o %t.o %s
 ; RUN: llc -filetype=obj %S/Inputs/weak-alias.ll -o %t2.o
-; RUN: lld -flavor wasm %t.o %t2.o -o %t.wasm
+; RUN: lld -flavor wasm --check-signatures %t.o %t2.o -o %t.wasm
 ; RUN: obj2yaml %t.wasm | FileCheck %s
 
 ; Test that the strongly defined alias_fn from this file is used both here
@@ -57,6 +57,12 @@ entry:
 ; CHECK-NEXT:         InitExpr:
 ; CHECK-NEXT:           Opcode:          I32_CONST
 ; CHECK-NEXT:           Value:           66560
+; CHECK-NEXT:       - Index:           2
+; CHECK-NEXT:         Type:            I32
+; CHECK-NEXT:         Mutable:         false
+; CHECK-NEXT:         InitExpr:
+; CHECK-NEXT:           Opcode:          I32_CONST
+; CHECK-NEXT:           Value:           1024
 ; CHECK-NEXT:   - Type:            EXPORT
 ; CHECK-NEXT:     Exports:
 ; CHECK-NEXT:       - Name:            memory
@@ -86,6 +92,9 @@ entry:
 ; CHECK-NEXT:       - Name:            __heap_base
 ; CHECK-NEXT:         Kind:            GLOBAL
 ; CHECK-NEXT:         Index:           1
+; CHECK-NEXT:       - Name:            __data_end
+; CHECK-NEXT:         Kind:            GLOBAL
+; CHECK-NEXT:         Index:           2
 ; CHECK-NEXT:   - Type:            ELEM
 ; CHECK-NEXT:     Segments:
 ; CHECK-NEXT:       - Offset:

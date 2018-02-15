@@ -1,11 +1,9 @@
 // RUN: %clang_cc1 %s -O0 -ffake-address-space-map -emit-llvm -o - | FileCheck %s --check-prefixes=CHECK,SPIR
 // RUN: %clang_cc1 %s -O0 -DCL20 -cl-std=CL2.0 -ffake-address-space-map -emit-llvm -o - | FileCheck %s --check-prefixes=CL20,CL20SPIR
-// RUN: %clang_cc1 %s -O0 -triple amdgcn-amd-amdhsa-opencl -emit-llvm -o - | FileCheck --check-prefixes=CHECK,SPIR %s
-// RUN: %clang_cc1 %s -O0 -triple amdgcn-amd-amdhsa-opencl -DCL20 -cl-std=CL2.0 -emit-llvm -o - | FileCheck %s --check-prefixes=CL20,CL20SPIR
-// RUN: %clang_cc1 %s -O0 -triple amdgcn-amd-amdhsa-amdgizcl -emit-llvm -o - | FileCheck %s -check-prefixes=CHECK,GIZ
-// RUN: %clang_cc1 %s -O0 -triple amdgcn-amd-amdhsa-amdgizcl -DCL20 -cl-std=CL2.0 -emit-llvm -o - | FileCheck %s --check-prefixes=CL20,CL20GIZ
-// RUN: %clang_cc1 %s -O0 -triple amdgcn-mesa-mesa3d -emit-llvm -o - | FileCheck --check-prefixes=CHECK,SPIR %s
-// RUN: %clang_cc1 %s -O0 -triple r600-- -emit-llvm -o - | FileCheck --check-prefixes=CHECK,SPIR %s
+// RUN: %clang_cc1 %s -O0 -triple amdgcn-amd-amdhsa -emit-llvm -o - | FileCheck --check-prefixes=CHECK,GIZ %s
+// RUN: %clang_cc1 %s -O0 -triple amdgcn-amd-amdhsa -DCL20 -cl-std=CL2.0 -emit-llvm -o - | FileCheck %s --check-prefixes=CL20,CL20GIZ
+// RUN: %clang_cc1 %s -O0 -triple amdgcn-mesa-mesa3d -emit-llvm -o - | FileCheck --check-prefixes=CHECK,GIZ %s
+// RUN: %clang_cc1 %s -O0 -triple r600-- -emit-llvm -o - | FileCheck --check-prefixes=CHECK,GIZ %s
 
 // SPIR: %struct.S = type { i32, i32, i32* }
 // CL20SPIR: %struct.S = type { i32, i32, i32 addrspace(4)* }
@@ -35,7 +33,8 @@ void f__g(__global int *arg) {}
 // CHECK: i32 addrspace(3)* %arg
 void f__l(__local int *arg) {}
 
-// CHECK: i32 addrspace(2)* %arg
+// SPIR: i32 addrspace(2)* %arg
+// GIZ: i32 addrspace(4)* %arg
 void f__c(__constant int *arg) {}
 
 // SPIR: i32* %arg
@@ -48,7 +47,8 @@ void fg(global int *arg) {}
 // CHECK: i32 addrspace(3)* %arg
 void fl(local int *arg) {}
 
-// CHECK: i32 addrspace(2)* %arg
+// SPIR: i32 addrspace(2)* %arg
+// GIZ: i32 addrspace(4)* %arg
 void fc(constant int *arg) {}
 
 #ifdef CL20

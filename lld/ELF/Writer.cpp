@@ -88,11 +88,6 @@ private:
 } // anonymous namespace
 
 StringRef elf::getOutputSectionName(InputSectionBase *S) {
-  // ".zdebug_" is a prefix for ZLIB-compressed sections.
-  // Because we decompressed input sections, we want to remove 'z'.
-  if (S->Name.startswith(".zdebug_"))
-    return Saver.save("." + S->Name.substr(2));
-
   if (Config->Relocatable)
     return S->Name;
 
@@ -455,7 +450,8 @@ template <class ELFT> void Writer<ELFT>::run() {
       Sec->Addr = 0;
   }
 
-  checkNoOverlappingSections();
+  if (Config->CheckSections)
+    checkNoOverlappingSections();
 
   // It does not make sense try to open the file if we have error already.
   if (errorCount())
@@ -836,7 +832,7 @@ void PhdrEntry::add(OutputSection *Sec) {
 // need these symbols, since IRELATIVE relocs are resolved through GOT
 // and PLT. For details, see http://www.airs.com/blog/archives/403.
 template <class ELFT> void Writer<ELFT>::addRelIpltSymbols() {
-  if (!Config->Static)
+  if (needsInterpSection())
     return;
   StringRef S = Config->IsRela ? "__rela_iplt_start" : "__rel_iplt_start";
   addOptionalRegular(S, InX::RelaIplt, 0, STV_HIDDEN, STB_WEAK);
@@ -1021,8 +1017,8 @@ findOrphanPos(std::vector<BaseCommand *>::iterator B,
 }
 
 // Builds section order for handling --symbol-ordering-file.
-static DenseMap<SectionBase *, int> buildSectionOrder() {
-  DenseMap<SectionBase *, int> SectionOrder;
+static DenseMap<const InputSectionBase *, int> buildSectionOrder() {
+  DenseMap<const InputSectionBase *, int> SectionOrder;
   if (Config->SymbolOrderingFile.empty())
     return SectionOrder;
 
@@ -1037,43 +1033,56 @@ static DenseMap<SectionBase *, int> buildSectionOrder() {
   // Build a map from sections to their priorities.
   for (InputFile *File : ObjectFiles) {
     for (Symbol *Sym : File->getSymbols()) {
-      auto *D = dyn_cast<Defined>(Sym);
-      if (!D || !D->Section)
-        continue;
-      int &Priority = SectionOrder[D->Section];
-      Priority = std::min(Priority, SymbolOrder.lookup(D->getName()));
+      if (auto *D = dyn_cast<Defined>(Sym)) {
+        if (auto *Sec = dyn_cast_or_null<InputSectionBase>(D->Section)) {
+          int &Priority = SectionOrder[Sec];
+          Priority = std::min(Priority, SymbolOrder.lookup(D->getName()));
+        }
+      }
     }
   }
   return SectionOrder;
 }
 
-// If no layout was provided by linker script, we want to apply default
-// sorting for special input sections. This also handles --symbol-ordering-file.
-template <class ELFT> void Writer<ELFT>::sortInputSections() {
-  // Sort input sections by priority using the list provided
-  // by --symbol-ordering-file.
-  DenseMap<SectionBase *, int> Order = buildSectionOrder();
-  if (!Order.empty())
-    for (BaseCommand *Base : Script->SectionCommands)
-      if (auto *Sec = dyn_cast<OutputSection>(Base))
-        if (Sec->Live)
-          Sec->sort([&](InputSectionBase *S) { return Order.lookup(S); });
-
-  if (Script->HasSectionsCommand)
+static void sortSection(OutputSection *Sec,
+                        const DenseMap<const InputSectionBase *, int> &Order) {
+  if (!Sec->Live)
     return;
+  StringRef Name = Sec->Name;
 
   // Sort input sections by section name suffixes for
   // __attribute__((init_priority(N))).
-  if (OutputSection *Sec = findSection(".init_array"))
-    Sec->sortInitFini();
-  if (OutputSection *Sec = findSection(".fini_array"))
-    Sec->sortInitFini();
+  if (Name == ".init_array" || Name == ".fini_array") {
+    if (!Script->HasSectionsCommand)
+      Sec->sortInitFini();
+    return;
+  }
 
   // Sort input sections by the special rule for .ctors and .dtors.
-  if (OutputSection *Sec = findSection(".ctors"))
-    Sec->sortCtorsDtors();
-  if (OutputSection *Sec = findSection(".dtors"))
-    Sec->sortCtorsDtors();
+  if (Name == ".ctors" || Name == ".dtors") {
+    if (!Script->HasSectionsCommand)
+      Sec->sortCtorsDtors();
+    return;
+  }
+
+  // Never sort these.
+  if (Name == ".init" || Name == ".fini")
+    return;
+
+  // Sort input sections by priority using the list provided
+  // by --symbol-ordering-file.
+  if (!Order.empty())
+    Sec->sort([&](InputSectionBase *S) { return Order.lookup(S); });
+}
+
+// If no layout was provided by linker script, we want to apply default
+// sorting for special input sections. This also handles --symbol-ordering-file.
+template <class ELFT> void Writer<ELFT>::sortInputSections() {
+  // Build the order once since it is expensive.
+  DenseMap<const InputSectionBase *, int> Order = buildSectionOrder();
+  for (BaseCommand *Base : Script->SectionCommands)
+    if (auto *Sec = dyn_cast<OutputSection>(Base))
+      sortSection(Sec, Order);
 }
 
 template <class ELFT> void Writer<ELFT>::sortSections() {
@@ -1345,23 +1354,21 @@ static void removeUnusedSyntheticSections() {
     if (!OS || !SS->empty())
       continue;
 
-    std::vector<BaseCommand *>::iterator Empty = OS->SectionCommands.end();
-    for (auto I = OS->SectionCommands.begin(), E = OS->SectionCommands.end();
-         I != E; ++I) {
-      BaseCommand *B = *I;
-      if (auto *ISD = dyn_cast<InputSectionDescription>(B)) {
+    // If we reach here, then SS is an unused synthetic section and we want to
+    // remove it from corresponding input section description of output section.
+    for (BaseCommand *B : OS->SectionCommands)
+      if (auto *ISD = dyn_cast<InputSectionDescription>(B))
         llvm::erase_if(ISD->Sections,
                        [=](InputSection *IS) { return IS == SS; });
-        if (ISD->Sections.empty())
-          Empty = I;
-      }
-    }
-    if (Empty != OS->SectionCommands.end())
-      OS->SectionCommands.erase(Empty);
 
-    // If there are no other sections in the output section, remove it from the
-    // output.
-    if (OS->SectionCommands.empty())
+    // If there are no other alive sections or commands left in the output
+    // section description, we remove it from the output.
+    bool IsEmpty = llvm::all_of(OS->SectionCommands, [](BaseCommand *B) {
+      if (auto *ISD = dyn_cast<InputSectionDescription>(B))
+        return ISD->Sections.empty();
+      return false;
+    });
+    if (IsEmpty)
       OS->Live = false;
   }
 }

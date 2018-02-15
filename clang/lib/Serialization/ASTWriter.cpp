@@ -3092,8 +3092,11 @@ void ASTWriter::WritePragmaDiagnosticMappings(const DiagnosticsEngine &Diag,
         !FileIDAndFile.second.HasLocalTransitions)
       continue;
     ++NumLocations;
-    AddSourceLocation(Diag.SourceMgr->getLocForStartOfFile(FileIDAndFile.first),
-                      Record);
+
+    SourceLocation Loc = Diag.SourceMgr->getComposedLoc(FileIDAndFile.first, 0);
+    assert(!Loc.isInvalid() && "start loc for valid FileID is invalid");
+    AddSourceLocation(Loc, Record);
+
     Record.push_back(FileIDAndFile.second.StateTransitions.size());
     for (auto &StatePoint : FileIDAndFile.second.StateTransitions) {
       Record.push_back(StatePoint.Offset);
@@ -6009,7 +6012,9 @@ void ASTRecordWriter::AddCXXDefinitionData(const CXXRecordDecl *D) {
   Record->push_back(Data.DefaultedMoveAssignmentIsDeleted);
   Record->push_back(Data.DefaultedDestructorIsDeleted);
   Record->push_back(Data.HasTrivialSpecialMembers);
+  Record->push_back(Data.HasTrivialSpecialMembersForCall);
   Record->push_back(Data.DeclaredNonTrivialSpecialMembers);
+  Record->push_back(Data.DeclaredNonTrivialSpecialMembersForCall);
   Record->push_back(Data.HasIrrelevantDestructor);
   Record->push_back(Data.HasConstexprNonCopyMoveConstructor);
   Record->push_back(Data.HasDefaultedDefaultConstructor);

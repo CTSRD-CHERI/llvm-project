@@ -144,7 +144,10 @@ if(LLVM_CCACHE_BUILD)
   if(CCACHE_PROGRAM)
       set(LLVM_CCACHE_MAXSIZE "" CACHE STRING "Size of ccache")
       set(LLVM_CCACHE_DIR "" CACHE STRING "Directory to keep ccached data")
-      set(CCACHE_PROGRAM "CCACHE_CPP2=yes CCACHE_HASHDIR=yes ${CCACHE_PROGRAM}")
+      set(LLVM_CCACHE_PARAMS "CCACHE_CPP2=yes CCACHE_HASHDIR=yes"
+          CACHE STRING "Parameters to pass through to ccache")
+
+      set(CCACHE_PROGRAM "${LLVM_CCACHE_PARAMS} ${CCACHE_PROGRAM}")
       if (LLVM_CCACHE_MAXSIZE)
         set(CCACHE_PROGRAM "CCACHE_MAXSIZE=${LLVM_CCACHE_MAXSIZE} ${CCACHE_PROGRAM}")
       endif()
@@ -834,7 +837,7 @@ endif()
 include(AddLLVM)
 include(TableGen)
 
-if( MINGW )
+if( MINGW AND NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang" )
   # People report that -O3 is unreliable on MinGW. The traditional
   # build also uses -O2 for that reason:
   llvm_replace_compiler_option(CMAKE_CXX_FLAGS_RELEASE "-O3" "-O2")
@@ -1022,4 +1025,3 @@ endif()
 if (MSVC AND CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
   include(InstallRequiredSystemLibraries)
 endif()
-

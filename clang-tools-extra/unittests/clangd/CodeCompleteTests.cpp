@@ -11,10 +11,10 @@
 #include "ClangdServer.h"
 #include "CodeComplete.h"
 #include "Compiler.h"
-#include "Context.h"
 #include "Matchers.h"
 #include "Protocol.h"
 #include "SourceCode.h"
+#include "SyncAPI.h"
 #include "TestFS.h"
 #include "index/MemIndex.h"
 #include "gmock/gmock.h"
@@ -61,10 +61,8 @@ using ::testing::UnorderedElementsAre;
 using ::testing::Field;
 
 class IgnoreDiagnostics : public DiagnosticsConsumer {
-  void
-  onDiagnosticsReady(const Context &Ctx, PathRef File,
-                     Tagged<std::vector<DiagWithFixIts>> Diagnostics) override {
-  }
+  void onDiagnosticsReady(
+      PathRef File, Tagged<std::vector<DiagWithFixIts>> Diagnostics) override {}
 };
 
 // GMock helpers for matching completion items.
@@ -123,11 +121,9 @@ CompletionList completions(StringRef Text,
                       /*StorePreamblesInMemory=*/true);
   auto File = getVirtualTestFilePath("foo.cpp");
   Annotations Test(Text);
-  Server.addDocument(Context::empty(), File, Test.code()).wait();
-  auto CompletionList =
-      Server.codeComplete(Context::empty(), File, Test.point(), Opts)
-          .get()
-          .second.Value;
+  Server.addDocument(File, Test.code());
+  EXPECT_TRUE(Server.blockUntilIdleForTest()) << "Waiting for preamble";
+  auto CompletionList = runCodeComplete(Server, File, Test.point(), Opts).Value;
   // Sanity-check that filterText is valid.
   EXPECT_THAT(CompletionList.items, Each(NameContainsFilter()));
   return CompletionList;
@@ -349,15 +345,13 @@ TEST(CompletionTest, CheckContentsOverride) {
   ClangdServer Server(CDB, DiagConsumer, FS, getDefaultAsyncThreadsCount(),
                       /*StorePreamblesInMemory=*/true);
   auto File = getVirtualTestFilePath("foo.cpp");
-  Server.addDocument(Context::empty(), File, "ignored text!");
+  Server.addDocument(File, "ignored text!");
 
   Annotations Example("int cbc; int b = ^;");
-  auto Results = Server
-                     .codeComplete(Context::empty(), File, Example.point(),
-                                   clangd::CodeCompleteOptions(),
-                                   StringRef(Example.code()))
-                     .get()
-                     .second.Value;
+  auto Results =
+      runCodeComplete(Server, File, Example.point(),
+                      clangd::CodeCompleteOptions(), StringRef(Example.code()))
+          .Value;
   EXPECT_THAT(Results.items, Contains(Named("cbc")));
 }
 
@@ -558,29 +552,24 @@ TEST(CompletionTest, IndexSuppressesPreambleCompletions) {
       void f() { ns::^; }
       void f() { ns::preamble().$2^; }
   )cpp");
-  Server.addDocument(Context::empty(), File, Test.code()).wait();
+  Server.addDocument(File, Test.code());
+  ASSERT_TRUE(Server.blockUntilIdleForTest()) << "Waiting for preamble";
   clangd::CodeCompleteOptions Opts = {};
-
-  auto WithoutIndex =
-      Server.codeComplete(Context::empty(), File, Test.point(), Opts)
-          .get()
-          .second.Value;
-  EXPECT_THAT(WithoutIndex.items,
-              UnorderedElementsAre(Named("local"), Named("preamble")));
 
   auto I = memIndex({var("ns::index")});
   Opts.Index = I.get();
-  auto WithIndex =
-      Server.codeComplete(Context::empty(), File, Test.point(), Opts)
-          .get()
-          .second.Value;
+  auto WithIndex = runCodeComplete(Server, File, Test.point(), Opts).Value;
   EXPECT_THAT(WithIndex.items,
               UnorderedElementsAre(Named("local"), Named("index")));
   auto ClassFromPreamble =
-      Server.codeComplete(Context::empty(), File, Test.point("2"), Opts)
-          .get()
-          .second.Value;
+      runCodeComplete(Server, File, Test.point("2"), Opts).Value;
   EXPECT_THAT(ClassFromPreamble.items, Contains(Named("member")));
+
+  Opts.Index = nullptr;
+  auto WithoutIndex = runCodeComplete(Server, File, Test.point(), Opts).Value;
+  EXPECT_THAT(WithoutIndex.items,
+              UnorderedElementsAre(Named("local"), Named("preamble")));
+
 }
 
 TEST(CompletionTest, DynamicIndexMultiFile) {
@@ -591,11 +580,10 @@ TEST(CompletionTest, DynamicIndexMultiFile) {
                       /*StorePreamblesInMemory=*/true,
                       /*BuildDynamicSymbolIndex=*/true);
 
-  Server
-      .addDocument(Context::empty(), getVirtualTestFilePath("foo.cpp"), R"cpp(
+  Server.addDocument(getVirtualTestFilePath("foo.cpp"), R"cpp(
       namespace ns { class XYZ {}; void foo(int x) {} }
-  )cpp")
-      .wait();
+  )cpp");
+  ASSERT_TRUE(Server.blockUntilIdleForTest()) << "Waiting for preamble";
 
   auto File = getVirtualTestFilePath("bar.cpp");
   Annotations Test(R"cpp(
@@ -606,11 +594,10 @@ TEST(CompletionTest, DynamicIndexMultiFile) {
       }
       void f() { ns::^ }
   )cpp");
-  Server.addDocument(Context::empty(), File, Test.code()).wait();
+  Server.addDocument(File, Test.code());
+  ASSERT_TRUE(Server.blockUntilIdleForTest()) << "Waiting for preamble";
 
-  auto Results = Server.codeComplete(Context::empty(), File, Test.point(), {})
-                     .get()
-                     .second.Value;
+  auto Results = runCodeComplete(Server, File, Test.point(), {}).Value;
   // "XYZ" and "foo" are not included in the file being completed but are still
   // visible through the index.
   EXPECT_THAT(Results.items, Has("XYZ", CompletionItemKind::Class));
@@ -637,8 +624,9 @@ SignatureHelp signatures(StringRef Text) {
                       /*StorePreamblesInMemory=*/true);
   auto File = getVirtualTestFilePath("foo.cpp");
   Annotations Test(Text);
-  Server.addDocument(Context::empty(), File, Test.code());
-  auto R = Server.signatureHelp(Context::empty(), File, Test.point());
+  Server.addDocument(File, Test.code());
+  EXPECT_TRUE(Server.blockUntilIdleForTest()) << "Waiting for preamble";
+  auto R = Server.signatureHelp(File, Test.point());
   assert(R);
   return R.get().Value;
 }
@@ -707,7 +695,7 @@ TEST(SignatureHelpTest, ActiveArg) {
 class IndexRequestCollector : public SymbolIndex {
 public:
   bool
-  fuzzyFind(const Context &Ctx, const FuzzyFindRequest &Req,
+  fuzzyFind(const FuzzyFindRequest &Req,
             llvm::function_ref<void(const Symbol &)> Callback) const override {
     Requests.push_back(Req);
     return false;

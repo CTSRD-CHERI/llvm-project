@@ -151,7 +151,7 @@ define i32 @test_x86_tbm_blcfill_u32_z(i32 %a, i32 %b) nounwind {
 define i32 @test_x86_tbm_blcfill_u32_z2(i32 %a, i32 %b, i32 %c) nounwind {
 ; CHECK-LABEL: test_x86_tbm_blcfill_u32_z2:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    # kill: def %edi killed %edi def %rdi
+; CHECK-NEXT:    # kill: def $edi killed $edi def $rdi
 ; CHECK-NEXT:    leal 1(%rdi), %eax
 ; CHECK-NEXT:    testl %edi, %eax
 ; CHECK-NEXT:    cmovnel %edx, %esi
@@ -230,7 +230,7 @@ define i32 @test_x86_tbm_blci_u32_z(i32 %a, i32 %b) nounwind {
 define i32 @test_x86_tbm_blci_u32_z2(i32 %a, i32 %b, i32 %c) nounwind {
 ; CHECK-LABEL: test_x86_tbm_blci_u32_z2:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    # kill: def %edi killed %edi def %rdi
+; CHECK-NEXT:    # kill: def $edi killed $edi def $rdi
 ; CHECK-NEXT:    leal 1(%rdi), %eax
 ; CHECK-NEXT:    notl %eax
 ; CHECK-NEXT:    orl %edi, %eax
@@ -419,7 +419,7 @@ define i32 @test_x86_tbm_blcmsk_u32_z(i32 %a, i32 %b) nounwind {
 define i32 @test_x86_tbm_blcmsk_u32_z2(i32 %a, i32 %b, i32 %c) nounwind {
 ; CHECK-LABEL: test_x86_tbm_blcmsk_u32_z2:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    # kill: def %edi killed %edi def %rdi
+; CHECK-NEXT:    # kill: def $edi killed $edi def $rdi
 ; CHECK-NEXT:    leal 1(%rdi), %eax
 ; CHECK-NEXT:    xorl %edi, %eax
 ; CHECK-NEXT:    cmovnel %edx, %esi
@@ -496,7 +496,7 @@ define i32 @test_x86_tbm_blcs_u32_z(i32 %a, i32 %b) nounwind {
 define i32 @test_x86_tbm_blcs_u32_z2(i32 %a, i32 %b, i32 %c) nounwind {
 ; CHECK-LABEL: test_x86_tbm_blcs_u32_z2:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    # kill: def %edi killed %edi def %rdi
+; CHECK-NEXT:    # kill: def $edi killed $edi def $rdi
 ; CHECK-NEXT:    leal 1(%rdi), %eax
 ; CHECK-NEXT:    orl %edi, %eax
 ; CHECK-NEXT:    cmovnel %edx, %esi
@@ -573,7 +573,7 @@ define i32 @test_x86_tbm_blsfill_u32_z(i32 %a, i32 %b) nounwind {
 define i32 @test_x86_tbm_blsfill_u32_z2(i32 %a, i32 %b, i32 %c) nounwind {
 ; CHECK-LABEL: test_x86_tbm_blsfill_u32_z2:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    # kill: def %edi killed %edi def %rdi
+; CHECK-NEXT:    # kill: def $edi killed $edi def $rdi
 ; CHECK-NEXT:    leal -1(%rdi), %eax
 ; CHECK-NEXT:    orl %edi, %eax
 ; CHECK-NEXT:    cmovnel %edx, %esi
@@ -905,4 +905,18 @@ entry:
   %x1 = load i64, i64* %x
   %and = and i64 %x1, 4611686018427387903
   ret i64 %and
+}
+
+; Make sure the mask doesn't break our matching of blcic
+define  i64 @masked_blcic(i64) {
+; CHECK-LABEL: masked_blcic:
+; CHECK:       # %bb.0:
+; CHECK-NEXT:    movzwl %di, %eax
+; CHECK-NEXT:    blcicl %eax, %eax
+; CHECK-NEXT:    retq
+  %2 = and i64 %0, 65535
+  %3 = xor i64 %2, -1
+  %4 = add nuw nsw i64 %2, 1
+  %5 = and i64 %4, %3
+  ret i64 %5
 }
