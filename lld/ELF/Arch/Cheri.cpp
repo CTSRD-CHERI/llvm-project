@@ -295,12 +295,18 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     // message("Adding dyn reloc at " + toString(this) + "+0x" +
     // utohexstr(OffsetInOutSec) + " against " + toString(TargetSym));
 
+    // If the target is not preemptible we can optimize this to a relative
+    // relocation agaist the image base
+    bool RelativeToLoadAddress = !Target.Symbol->IsPreemptible;
     // The addend is not used as the offset into the capability here, as we
     // have the offset field in the __cap_relocs for that. The Addend
     // will be zero unless we are targetting a string constant as these
     // don't have a symbol and will be like .rodata.str+0x1234
+
+    // TODO: this should not be relative but use R_MIPS_64 for an absolute value
+    // This happens to work for FreeBSD rtld  but is fragile
     InX::RelaDyn->addReloc({elf::Target->RelativeRel, this, OffsetInOutSec,
-                                 false, Target.Symbol,
+                                 RelativeToLoadAddress, Target.Symbol,
                                  static_cast<int64_t>(Target.Offset)});
   }
 }
