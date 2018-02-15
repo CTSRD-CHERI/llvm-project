@@ -307,11 +307,6 @@ public:
       (IsCheri128 ? MVT::iFATPTR128 : MVT::iFATPTR256);
   }
 
-  bool supportsCHERICapabilities() const override { return isCheri(); }
-  unsigned getCHERICapabilitySize() const override {
-    return getCapSizeInBytes();
-  }
-
   /// This is a very ugly hack.  CodeGenPrepare can sink pointer arithmetic to
   /// appear closer to load and store operations (because SelectionDAG only
   /// looks at one basic block at a time).  Unfortunately, it defaults to using

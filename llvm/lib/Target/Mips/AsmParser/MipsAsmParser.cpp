@@ -654,8 +654,14 @@ public:
     return getSTI().getFeatureBits()[Mips::FeatureMipsCheri];
   }
 
-  bool isCheri128() const {
-    return getSTI().getFeatureBits()[Mips::FeatureMipsCheri128];
+  unsigned getCHERICapabilitySize() const {
+    if (getSTI().getFeatureBits()[Mips::FeatureMipsCheri64])
+      return 8;
+    if (getSTI().getFeatureBits()[Mips::FeatureMipsCheri128])
+      return 16;
+    if (getSTI().getFeatureBits()[Mips::FeatureMipsCheri256])
+      return 32;
+    llvm_unreachable("Should not have been called without checking isCheri()!");
   }
 
   /// Warn if RegIndex is the same as the current AT.
@@ -7922,8 +7928,11 @@ bool MipsAsmParser::parseDirectiveCHERICap(SMLoc Loc) {
   MCAsmParser &Parser = getParser();
   const MCExpr *SymExpr;
 
-  if (!getSTI().supportsCHERICapabilities()) {
+  // TODO: it would be nice if we could get this from MCSubtarget. However, it
+  // is only in MipsSubtarget which we can't access here :(
+  if (!isCheri()) {
     reportParseError(Loc, "'.chericap' requires CHERI");
+    errs() << getSTI().getCPU() << " fs=" << getSTI().getTargetTriple().str() << "\n";
     return false;
   }
 
@@ -7968,7 +7977,7 @@ bool MipsAsmParser::parseDirectiveCHERICap(SMLoc Loc) {
 
   const MCSymbol &Symbol = SRE->getSymbol();
   // FIXME: is there a better check? Can we somehow access DataLayout here?
-  unsigned CapSize = getSTI().getCHERICapabilitySize();
+  unsigned CapSize = getCHERICapabilitySize();
   getParser().getStreamer().EmitCHERICapability(&Symbol, Offset, CapSize, Loc);
 
   if (getLexer().isNot(AsmToken::EndOfStatement))
