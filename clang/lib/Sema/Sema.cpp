@@ -37,6 +37,7 @@
 #include "clang/Sema/SemaConsumer.h"
 #include "clang/Sema/SemaInternal.h"
 #include "clang/Sema/TemplateDeduction.h"
+#include "clang/Sema/TemplateInstCallback.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallSet.h"
 using namespace clang;
@@ -1393,8 +1394,8 @@ void Sema::PopFunctionScopeInfo(const AnalysisBasedWarnings::Policy *WP,
     delete Scope;
 }
 
-void Sema::PushCompoundScope() {
-  getCurFunction()->CompoundScopes.push_back(CompoundScopeInfo());
+void Sema::PushCompoundScope(bool IsStmtExpr) {
+  getCurFunction()->CompoundScopes.push_back(CompoundScopeInfo(IsStmtExpr));
 }
 
 void Sema::PopCompoundScope() {

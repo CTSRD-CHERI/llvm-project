@@ -295,7 +295,8 @@ void Parser::initializePragmaHandlers() {
     OpenMPHandler.reset(new PragmaNoOpenMPHandler());
   PP.AddPragmaHandler(OpenMPHandler.get());
 
-  if (getLangOpts().MicrosoftExt || getTargetInfo().getTriple().isPS4()) {
+  if (getLangOpts().MicrosoftExt ||
+      getTargetInfo().getTriple().isOSBinFormatELF()) {
     MSCommentHandler.reset(new PragmaCommentHandler(Actions));
     PP.AddPragmaHandler(MSCommentHandler.get());
   }
@@ -377,7 +378,8 @@ void Parser::resetPragmaHandlers() {
   PP.RemovePragmaHandler(OpenMPHandler.get());
   OpenMPHandler.reset();
 
-  if (getLangOpts().MicrosoftExt || getTargetInfo().getTriple().isPS4()) {
+  if (getLangOpts().MicrosoftExt ||
+      getTargetInfo().getTriple().isOSBinFormatELF()) {
     PP.RemovePragmaHandler(MSCommentHandler.get());
     MSCommentHandler.reset();
   }
@@ -507,8 +509,10 @@ void Parser::HandlePragmaAlign() {
   Sema::PragmaOptionsAlignKind Kind =
     static_cast<Sema::PragmaOptionsAlignKind>(
     reinterpret_cast<uintptr_t>(Tok.getAnnotationValue()));
-  SourceLocation PragmaLoc = ConsumeAnnotationToken();
-  Actions.ActOnPragmaOptionsAlign(Kind, PragmaLoc);
+  Actions.ActOnPragmaOptionsAlign(Kind, Tok.getLocation());
+  // Consume the token after processing the pragma to enable pragma-specific
+  // #include warnings.
+  ConsumeAnnotationToken();
 }
 
 void Parser::HandlePragmaDump() {
@@ -2446,6 +2450,12 @@ void PragmaCommentHandler::HandlePragma(Preprocessor &PP,
     .Default(PCK_Unknown);
   if (Kind == PCK_Unknown) {
     PP.Diag(Tok.getLocation(), diag::err_pragma_comment_unknown_kind);
+    return;
+  }
+
+  if (PP.getTargetInfo().getTriple().isOSBinFormatELF() && Kind != PCK_Lib) {
+    PP.Diag(Tok.getLocation(), diag::warn_pragma_comment_ignored)
+        << II->getName();
     return;
   }
 

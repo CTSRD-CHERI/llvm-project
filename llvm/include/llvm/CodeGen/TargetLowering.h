@@ -2543,6 +2543,11 @@ protected:
   /// sequence of memory operands that is recognized by PrologEpilogInserter.
   MachineBasicBlock *emitPatchPoint(MachineInstr &MI,
                                     MachineBasicBlock *MBB) const;
+
+  /// Replace/modify the XRay custom event operands with target-dependent
+  /// details.
+  MachineBasicBlock *emitXRayCustomEvent(MachineInstr &MI,
+                                         MachineBasicBlock *MBB) const;
 };
 
 /// This class defines information used to lower LLVM code to legal SelectionDAG
@@ -2775,10 +2780,6 @@ public:
   /// Return if the N is a constant or constant vector equal to the false value
   /// from getBooleanContents().
   bool isConstFalseVal(const SDNode *N) const;
-
-  /// Return a constant of type VT that contains a true value that respects
-  /// getBooleanContents()
-  SDValue getConstTrueVal(SelectionDAG &DAG, EVT VT, const SDLoc &DL) const;
 
   /// Return if \p N is a True value when extended to \p VT.
   bool isExtendedTrueVal(const ConstantSDNode *N, EVT VT, bool Signed) const;

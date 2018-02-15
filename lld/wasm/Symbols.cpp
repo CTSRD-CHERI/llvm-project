@@ -22,6 +22,12 @@ using namespace llvm::wasm;
 using namespace lld;
 using namespace lld::wasm;
 
+Symbol *WasmSym::CallCtors;
+Symbol *WasmSym::DsoHandle;
+Symbol *WasmSym::DataEnd;
+Symbol *WasmSym::HeapBase;
+Symbol *WasmSym::StackPointer;
+
 const WasmSignature &Symbol::getFunctionType() const {
   if (Chunk != nullptr)
     return dyn_cast<InputFunction>(Chunk)->Signature;

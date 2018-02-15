@@ -6057,6 +6057,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_AlwaysInline:
     handleAlwaysInlineAttr(S, D, Attr);
     break;
+  case AttributeList::AT_Artificial:
+    handleSimpleAttribute<ArtificialAttr>(S, D, Attr);
+    break;
   case AttributeList::AT_AnalyzerNoReturn:
     handleAnalyzerNoReturnAttr(S, D, Attr);
     break;
@@ -6435,6 +6438,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     break;
   case AttributeList::AT_LayoutVersion:
     handleLayoutVersion(S, D, Attr);
+    break;
+  case AttributeList::AT_TrivialABI:
+    handleSimpleAttribute<TrivialABIAttr>(S, D, Attr);
     break;
   case AttributeList::AT_MSNoVTable:
     handleSimpleAttribute<MSNoVTableAttr>(S, D, Attr);

@@ -1196,8 +1196,9 @@ def run_suite():
 
     # Set up the working directory.
     # Note that it's not dotest's job to clean this directory.
-    try: os.makedirs(configuration.test_build_dir)
-    except: pass
+    import lldbsuite.test.lldbutil as lldbutil
+    build_dir = configuration.test_build_dir
+    lldbutil.mkdir_p(build_dir)
 
     target_platform = lldb.DBG.GetSelectedPlatform().GetTriple().split('-')[2]
 

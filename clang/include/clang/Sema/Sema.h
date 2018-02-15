@@ -172,6 +172,7 @@ namespace clang {
   class TemplateArgumentList;
   class TemplateArgumentLoc;
   class TemplateDecl;
+  class TemplateInstantiationCallback;
   class TemplateParameterList;
   class TemplatePartialOrderingContext;
   class TemplateTemplateParmDecl;
@@ -1339,7 +1340,7 @@ public:
       getCurFunction()->recordUseOfWeak(E, IsRead);
   }
 
-  void PushCompoundScope();
+  void PushCompoundScope(bool IsStmtExpr);
   void PopCompoundScope();
 
   sema::CompoundScopeInfo &getCurCompoundScope() const;
@@ -2236,7 +2237,17 @@ public:
 
   bool CheckNontrivialField(FieldDecl *FD);
   void DiagnoseNontrivial(const CXXRecordDecl *Record, CXXSpecialMember CSM);
+
+  enum TrivialABIHandling {
+    /// The triviality of a method unaffected by "trivial_abi".
+    TAH_IgnoreTrivialABI,
+
+    /// The triviality of a method affected by "trivial_abi".
+    TAH_ConsiderTrivialABI
+  };
+
   bool SpecialMemberIsTrivial(CXXMethodDecl *MD, CXXSpecialMember CSM,
+                              TrivialABIHandling TAH = TAH_IgnoreTrivialABI,
                               bool Diagnose = false);
   CXXSpecialMember getSpecialMember(const CXXMethodDecl *MD);
   void ActOnLastBitfield(SourceLocation DeclStart,
@@ -2304,8 +2315,7 @@ public:
                                       Expr *val);
   bool CheckEnumUnderlyingType(TypeSourceInfo *TI);
   bool CheckEnumRedeclaration(SourceLocation EnumLoc, bool IsScoped,
-                              QualType EnumUnderlyingTy,
-                              bool EnumUnderlyingIsImplicit,
+                              QualType EnumUnderlyingTy, bool IsFixed,
                               const EnumDecl *Prev);
 
   /// Determine whether the body of an anonymous enumeration should be skipped.
@@ -3667,7 +3677,7 @@ public:
   StmtResult ActOnNullStmt(SourceLocation SemiLoc,
                            bool HasLeadingEmptyMacro = false);
 
-  void ActOnStartOfCompoundStmt();
+  void ActOnStartOfCompoundStmt(bool IsStmtExpr);
   void ActOnFinishOfCompoundStmt();
   StmtResult ActOnCompoundStmt(SourceLocation L, SourceLocation R,
                                ArrayRef<Stmt *> Elts, bool isStmtExpr);
@@ -3675,8 +3685,8 @@ public:
   /// \brief A RAII object to enter scope of a compound statement.
   class CompoundScopeRAII {
   public:
-    CompoundScopeRAII(Sema &S): S(S) {
-      S.ActOnStartOfCompoundStmt();
+    CompoundScopeRAII(Sema &S, bool IsStmtExpr = false) : S(S) {
+      S.ActOnStartOfCompoundStmt(IsStmtExpr);
     }
 
     ~CompoundScopeRAII() {
@@ -5796,6 +5806,11 @@ public:
       SourceLocation BaseLoc);
 
   void CheckCompletedCXXClass(CXXRecordDecl *Record);
+
+  /// Check that the C++ class annoated with "trivial_abi" satisfies all the
+  /// conditions that are needed for the attribute to have an effect.
+  void checkIllFormedTrivialABIStruct(CXXRecordDecl &RD);
+
   void ActOnFinishCXXMemberSpecification(Scope* S, SourceLocation RLoc,
                                          Decl *TagDecl,
                                          SourceLocation LBrac,
@@ -7112,6 +7127,12 @@ public:
       /// We are defining a synthesized function (such as a defaulted special
       /// member).
       DefiningSynthesizedFunction,
+
+      /// Added for Template instantiation observation.
+      /// Memoization means we are _not_ instantiating a template because
+      /// it is already instantiated (but we entered a context where we
+      /// would have had to if it was not already instantiated).
+      Memoization
     } Kind;
 
     /// \brief Was the enclosing context a non-instantiation SFINAE context?
@@ -7219,6 +7240,14 @@ public:
   /// when there are multiple errors or warnings in the same instantiation.
   // FIXME: Does this belong in Sema? It's tough to implement it anywhere else.
   unsigned LastEmittedCodeSynthesisContextDepth = 0;
+
+  /// \brief The template instantiation callbacks to trace or track
+  /// instantiations (objects can be chained).
+  ///
+  /// This callbacks is used to print, trace or track template
+  /// instantiations as they are being constructed.
+  std::vector<std::unique_ptr<TemplateInstantiationCallback>>
+      TemplateInstCallbacks;
 
   /// \brief The current index into pack expansion arguments that will be
   /// used for substitution of parameter packs.

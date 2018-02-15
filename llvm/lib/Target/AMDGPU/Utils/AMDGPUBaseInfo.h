@@ -284,6 +284,8 @@ inline bool isKernel(CallingConv::ID CC) {
 }
 
 bool hasXNACK(const MCSubtargetInfo &STI);
+bool hasMIMG_R128(const MCSubtargetInfo &STI);
+bool hasPackedD16(const MCSubtargetInfo &STI);
 
 bool isSI(const MCSubtargetInfo &STI);
 bool isCI(const MCSubtargetInfo &STI);
@@ -370,7 +372,6 @@ LLVM_READNONE
 bool isInlinableLiteralV216(int32_t Literal, bool HasInv2Pi);
 
 bool isArgPassedInSGPR(const Argument *Arg);
-bool isUniformMMO(const MachineMemOperand *MMO);
 
 /// \returns The encoding that will be used for \p ByteOffset in the SMRD
 /// offset field.

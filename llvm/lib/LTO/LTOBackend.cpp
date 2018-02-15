@@ -401,12 +401,22 @@ Error lto::backend(Config &C, AddStreamFn AddStream,
 
 static void dropDeadSymbols(Module &Mod, const GVSummaryMapTy &DefinedGlobals,
                             const ModuleSummaryIndex &Index) {
-  for (auto &GV : Mod) {
-    auto It = DefinedGlobals.find(GV.getGUID());
-    if (It == DefinedGlobals.end())
-      continue;
-    if (!Index.isGlobalValueLive(It->second))
-      convertToDeclaration(GV);
+  std::vector<GlobalValue*> DeadGVs;
+  for (auto &GV : Mod.global_values())
+    if (GlobalValueSummary *GVS = DefinedGlobals.lookup(GV.getGUID()))
+      if (!Index.isGlobalValueLive(GVS)) {
+        DeadGVs.push_back(&GV);
+        convertToDeclaration(GV);
+      }
+
+  // Now that all dead bodies have been dropped, delete the actual objects
+  // themselves when possible.
+  for (GlobalValue *GV : DeadGVs) {
+    GV->removeDeadConstantUsers();
+    // Might reference something defined in native object (i.e. dropped a
+    // non-prevailing IR def, but we need to keep the declaration).
+    if (GV->use_empty())
+      GV->eraseFromParent();
   }
 }
 

@@ -75,6 +75,7 @@
 #define clock_settime __clock_settime50
 #define ctime __ctime50
 #define ctime_r __ctime_r50
+#define devname __devname50
 #define getitimer __getitimer50
 #define getpwent __getpwent50
 #define getpwnam __getpwnam50
@@ -6724,6 +6725,70 @@ INTERCEPTOR(int, open_by_handle_at, int mount_fd, struct file_handle* handle,
 #define INIT_OPEN_BY_HANDLE_AT
 #endif
 
+#if SANITIZER_INTERCEPT_STRLCPY
+INTERCEPTOR(SIZE_T, strlcpy, char *dst, char *src, SIZE_T size) {
+  void *ctx;
+  SIZE_T res;
+  COMMON_INTERCEPTOR_ENTER(ctx, strlcpy, dst, src, size);
+  if (src) {
+    // Keep strnlen as macro argument, as macro may ignore it.
+    COMMON_INTERCEPTOR_READ_STRING(ctx, src,
+      Min(REAL(strnlen)(src, size), size - 1) + 1);
+  }
+  res = REAL(strlcpy)(dst, src, size);
+  COMMON_INTERCEPTOR_COPY_STRING(ctx, dst, src, REAL(strlen)(dst) + 1);
+  return res;
+}
+
+INTERCEPTOR(SIZE_T, strlcat, char *dst, char *src, SIZE_T size) {
+  void *ctx;
+  SIZE_T len = 0;
+  COMMON_INTERCEPTOR_ENTER(ctx, strlcat, dst, src, size);
+  // src is checked in the strlcpy() interceptor
+  if (dst) {
+    len = REAL(strnlen)(dst, size);
+    COMMON_INTERCEPTOR_READ_STRING(ctx, dst, Min(len, size - 1) + 1);
+  }
+  // Reuse the rest of the code in the strlcpy() interceptor
+  return WRAP(strlcpy)(dst + len, src, size - len) + len;
+}
+#define INIT_STRLCPY \
+  COMMON_INTERCEPT_FUNCTION(strlcpy); \
+  COMMON_INTERCEPT_FUNCTION(strlcat);
+#else
+#define INIT_STRLCPY
+#endif
+
+#if SANITIZER_INTERCEPT_DEVNAME
+INTERCEPTOR(char *, devname, u64 dev, u32 type) {
+  void *ctx;
+  char *name;
+  COMMON_INTERCEPTOR_ENTER(ctx, devname, dev, type);
+  name = REAL(devname)(dev, type);
+  if (name)
+    COMMON_INTERCEPTOR_WRITE_RANGE(ctx, name, REAL(strlen)(name) + 1);
+  return name;
+}
+#define INIT_DEVNAME COMMON_INTERCEPT_FUNCTION(devname);
+#else
+#define INIT_DEVNAME
+#endif
+
+#if SANITIZER_INTERCEPT_DEVNAME_R
+INTERCEPTOR(int, devname_r, u64 dev, u32 type, char *path, uptr len) {
+  void *ctx;
+  int res;
+  COMMON_INTERCEPTOR_ENTER(ctx, devname_r, dev, type, path, len);
+  res = REAL(devname_r)(dev, type, path, len);
+  if (!res)
+    COMMON_INTERCEPTOR_WRITE_RANGE(ctx, path, REAL(strlen)(path) + 1);
+  return res;
+}
+#define INIT_DEVNAME_R COMMON_INTERCEPT_FUNCTION(devname_r);
+#else
+#define INIT_DEVNAME_R
+#endif
+
 static void InitializeCommonInterceptors() {
   static u64 metadata_mem[sizeof(MetadataHashMap) / sizeof(u64) + 1];
   interceptor_metadata_map = new((void *)&metadata_mem) MetadataHashMap();
@@ -6946,9 +7011,11 @@ static void InitializeCommonInterceptors() {
   INIT_GETGROUPLIST;
   INIT_READLINK;
   INIT_READLINKAT;
-
   INIT_NAME_TO_HANDLE_AT;
   INIT_OPEN_BY_HANDLE_AT;
+  INIT_STRLCPY;
+  INIT_DEVNAME;
+  INIT_DEVNAME_R;
 
 #if SANITIZER_NETBSD
   COMMON_INTERCEPT_FUNCTION(__libc_mutex_lock);

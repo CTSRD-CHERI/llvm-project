@@ -63,6 +63,7 @@ uint32_t ObjFile::relocateFunctionIndex(uint32_t Original) const {
 }
 
 uint32_t ObjFile::relocateTypeIndex(uint32_t Original) const {
+  assert(TypeIsUsed[Original]);
   return TypeMap[Original];
 }
 
@@ -76,7 +77,7 @@ uint32_t ObjFile::relocateTableIndex(uint32_t Original) const {
 
 uint32_t ObjFile::relocateGlobalIndex(uint32_t Original) const {
   const Symbol *Sym = getGlobalSymbol(Original);
-  uint32_t Index = Sym->hasOutputIndex() ? Sym->getOutputIndex() : 0;
+  uint32_t Index = Sym->getOutputIndex();
   DEBUG(dbgs() << "relocateGlobalIndex: " << toString(*Sym) << ": " << Original
                << " -> " << Index << "\n");
   return Index;
@@ -149,6 +150,9 @@ void ObjFile::parse() {
       DataSection = &Section;
   }
 
+  TypeMap.resize(getWasmObj()->types().size());
+  TypeIsUsed.resize(getWasmObj()->types().size(), false);
+
   initializeSymbols();
 }
 
@@ -172,7 +176,7 @@ InputSegment *ObjFile::getSegment(const WasmSymbol &WasmSym) const {
 uint32_t ObjFile::getGlobalValue(const WasmSymbol &Sym) const {
   const WasmGlobal &Global =
       getWasmObj()->globals()[Sym.ElementIndex - NumGlobalImports];
-  assert(Global.Type == llvm::wasm::WASM_TYPE_I32);
+  assert(Global.Type.Type == llvm::wasm::WASM_TYPE_I32);
   return Global.InitExpr.Value.Int32;
 }
 
@@ -248,7 +252,7 @@ void ObjFile::initializeSymbols() {
         S = createDefined(WasmSym, Symbol::Kind::DefinedFunctionKind, Function);
         break;
       } else {
-        Function->Discarded = true;
+        Function->Live = false;
         LLVM_FALLTHROUGH; // Exclude function, and add the symbol as undefined
       }
     }
@@ -263,7 +267,7 @@ void ObjFile::initializeSymbols() {
                           getGlobalValue(WasmSym));
         break;
       } else {
-        Segment->Discarded = true;
+        Segment->Live = false;
         LLVM_FALLTHROUGH; // Exclude global, and add the symbol as undefined
       }
     }
@@ -273,7 +277,7 @@ void ObjFile::initializeSymbols() {
     }
 
     Symbols.push_back(S);
-    if (WasmSym.isFunction()) {
+    if (WasmSym.isTypeFunction()) {
       FunctionSymbols[WasmSym.ElementIndex] = S;
       if (WasmSym.HasAltIndex)
         FunctionSymbols[WasmSym.AltIndex] = S;
@@ -301,7 +305,7 @@ Symbol *ObjFile::createUndefined(const WasmSymbol &Sym, Symbol::Kind Kind,
 Symbol *ObjFile::createDefined(const WasmSymbol &Sym, Symbol::Kind Kind,
                                InputChunk *Chunk, uint32_t Address) {
   Symbol *S;
-  if (Sym.isLocal()) {
+  if (Sym.isBindingLocal()) {
     S = make<Symbol>(Sym.Name, true);
     S->update(Kind, this, Sym.Flags, Chunk, Address);
     return S;
