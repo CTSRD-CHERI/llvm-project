@@ -655,12 +655,12 @@ public:
   }
 
   unsigned getCHERICapabilitySize() const {
-    if (getSTI().getFeatureBits()[Mips::FeatureMipsCheri64])
-      return 8;
-    if (getSTI().getFeatureBits()[Mips::FeatureMipsCheri128])
-      return 16;
     if (getSTI().getFeatureBits()[Mips::FeatureMipsCheri256])
       return 32;
+    if (getSTI().getFeatureBits()[Mips::FeatureMipsCheri128])
+      return 16;
+    if (getSTI().getFeatureBits()[Mips::FeatureMipsCheri64])
+      return 8;
     llvm_unreachable("Should not have been called without checking isCheri()!");
   }
 
@@ -7938,48 +7938,46 @@ bool MipsAsmParser::parseDirectiveCHERICap(SMLoc Loc) {
 
   if (getParser().parseExpression(SymExpr))
     return true;
-
-  const MCSymbolRefExpr *SRE;
-  int64_t Offset;
-  if (const MCBinaryExpr *BE = dyn_cast<MCBinaryExpr>(SymExpr)) {
-    SRE = dyn_cast<MCSymbolRefExpr>(BE->getLHS());
-    const MCConstantExpr *CE;
-    bool Neg = false;
-
-    switch (BE->getOpcode()) {
-    case MCBinaryExpr::Sub:
-      Neg = true;
-      // fall through
-    case MCBinaryExpr::Add:
-      CE = dyn_cast<MCConstantExpr>(BE->getRHS());
-      break;
-    default:
-      CE = nullptr;
-      break;
-    }
-
-    if (!SRE || !CE) {
-      reportParseError(Loc, "must be sym[+const]");
-      return false;
-    }
-
-    Offset = CE->getValue();
-    if (Neg)
-      Offset = -Offset;
-  } else {
-    SRE = dyn_cast<MCSymbolRefExpr>(SymExpr);
-    if (!SRE) {
-      reportParseError(Loc, "must be sym[+const]");
-      return false;
-    }
-    Offset = 0;
-  }
-
-  const MCSymbol &Symbol = SRE->getSymbol();
-  // FIXME: is there a better check? Can we somehow access DataLayout here?
+  int64_t Offset = 0;
   unsigned CapSize = getCHERICapabilitySize();
-  getParser().getStreamer().EmitCHERICapability(&Symbol, Offset, CapSize, Loc);
+  // Allow .chericap 0x123456 to create an untagged uintcap_t
+  if (SymExpr->evaluateAsAbsolute(Offset)) {
+    getParser().getStreamer().EmitCheriIntcap(Offset, CapSize, Loc);
+  } else {
+    const MCSymbolRefExpr *SRE = nullptr;
+    if (const MCBinaryExpr *BE = dyn_cast<MCBinaryExpr>(SymExpr)) {
+      const MCConstantExpr *CE = nullptr;
+      bool Neg = false;
+      switch (BE->getOpcode()) {
+        case MCBinaryExpr::Sub:
+          Neg = true;
+          LLVM_FALLTHROUGH;
+        case MCBinaryExpr::Add:
+          CE = dyn_cast<MCConstantExpr>(BE->getRHS());
+          break;
+        default:
+          break;
+      }
 
+      SRE = dyn_cast<MCSymbolRefExpr>(BE->getLHS());
+      if (!SRE || !CE) {
+        reportParseError(Loc, "must be sym[+const]");
+        return false;
+      }
+      Offset = CE->getValue();
+      if (Neg)
+        Offset = -Offset;
+    } else {
+      SRE = dyn_cast<MCSymbolRefExpr>(SymExpr);
+      if (!SRE) {
+        reportParseError(Loc, "must be sym[+const]");
+        return false;
+      }
+      Offset = 0;
+    }
+    const MCSymbol &Symbol = SRE->getSymbol();
+    getParser().getStreamer().EmitCheriCapability(&Symbol, Offset, CapSize, Loc);
+  }
   if (getLexer().isNot(AsmToken::EndOfStatement))
     return Error(getLexer().getLoc(),
                  "unexpected token, expected end of statement");

@@ -2483,18 +2483,10 @@ static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
   // Handle (void *)5 etc as an untagged capability with base/length/perms 0,
   // and offset 5.
   const MCExpr *Expr = AP.lowerConstant(CV);
-  // FIXME: we shouldn't care about the format of the cheri capability here
-  // Probably better to emit a .chericap 0x123456 and let the linker fill it in?
   if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Expr)) {
-    AP.OutStreamer->EmitIntValue(0, 8);
-    AP.OutStreamer->EmitIntValue(CE->getValue(), 8);
-    if (CapWidth > 16) {
-      AP.OutStreamer->EmitIntValue(0, 8);
-      AP.OutStreamer->EmitIntValue(0, 8);
-    }
+    AP.OutStreamer->EmitCheriIntcap(CE->getValue(), CapWidth);
     return;
   }
-
   GlobalValue *GV;
   APInt Addend;
   // XXXAR: The legacy path still exists to allow comparing performance vs the
@@ -2504,7 +2496,7 @@ static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
     if (AP.OutStreamer->getTargetStreamer()->useLegacyCapRelocs())
       AP.OutStreamer->EmitLegacyCHERICapability(Expr, CapWidth);
     else
-      AP.OutStreamer->EmitCHERICapability(AP.getSymbol(GV),
+      AP.OutStreamer->EmitCheriCapability(AP.getSymbol(GV),
                                           Addend.getSExtValue(), CapWidth);
     return;
   }

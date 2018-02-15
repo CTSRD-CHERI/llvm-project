@@ -670,9 +670,17 @@ public:
   /// This is used to implement assembler directives such as .gprel32 on
   /// targets that support them.
   virtual void EmitGPRel32Value(const MCExpr *Value);
+
+  // TODO: it would be nice if we could get CapSize from somewhere else but
+  // MCAsmInfo only knowns about the triple which is not enough
+
   // \brief Emit the expression \p Value into the output as a CHERI capability
-  virtual void EmitCHERICapability(const MCSymbol *Value, int64_t Addend,
+  virtual void EmitCheriCapability(const MCSymbol *Value, int64_t Addend,
                                    unsigned CapSize, SMLoc Loc = SMLoc());
+  // \brief Emit \p Value as an untagged capability-size value
+  virtual void EmitCheriIntcap(int64_t Value, unsigned CapSize,
+                               SMLoc Loc = SMLoc());
+
   // Emit a CHERI capability using the legacy __cap_relocs hack
   virtual void EmitLegacyCHERICapability(const MCExpr *Value, unsigned CapSize,
                                          SMLoc Loc = SMLoc());
