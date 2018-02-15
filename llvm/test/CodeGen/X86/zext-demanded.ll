@@ -10,7 +10,7 @@ define i16 @test1(i16 %x) {
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    movzwl %di, %eax
 ; CHECK-NEXT:    shrl %eax
-; CHECK-NEXT:    # kill: def %ax killed %ax killed %eax
+; CHECK-NEXT:    # kill: def $ax killed $ax killed $eax
 ; CHECK-NEXT:    retq
   %y = lshr i16 %x, 1
   ret i16 %y
@@ -43,7 +43,7 @@ define i16 @test4(i16 %x) {
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    movzbl %dil, %eax
 ; CHECK-NEXT:    shrl %eax
-; CHECK-NEXT:    # kill: def %ax killed %ax killed %eax
+; CHECK-NEXT:    # kill: def $ax killed $ax killed $eax
 ; CHECK-NEXT:    retq
   %y = and i16 %x, 255
   %z = lshr i16 %y, 1
@@ -55,7 +55,7 @@ define i16 @test5(i16 %x) {
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    movzwl %di, %eax
 ; CHECK-NEXT:    shrl $9, %eax
-; CHECK-NEXT:    # kill: def %ax killed %ax killed %eax
+; CHECK-NEXT:    # kill: def $ax killed $ax killed $eax
 ; CHECK-NEXT:    retq
   %y = lshr i16 %x, 9
   ret i16 %y
@@ -76,7 +76,7 @@ define i32 @test6(i32 %x) {
 define i32 @test7(i32 %x) {
 ; CHECK-LABEL: test7:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    # kill: def %edi killed %edi def %rdi
+; CHECK-NEXT:    # kill: def $edi killed $edi def $rdi
 ; CHECK-NEXT:    andl $65534, %edi # imm = 0xFFFE
 ; CHECK-NEXT:    leal 1(%rdi), %eax
 ; CHECK-NEXT:    retq
@@ -97,3 +97,44 @@ define i32 @test8(i32 %x) {
   %z = or i32 %y, 1
   ret i32 %z
 }
+
+define i64 @add_neg_one(i64 %x) {
+; CHECK-LABEL: add_neg_one:
+; CHECK:       # %bb.0:
+; CHECK-NEXT:    leal -1(%rdi), %eax
+; CHECK-NEXT:    andl %edi, %eax
+; CHECK-NEXT:    movzwl %ax, %eax
+; CHECK-NEXT:    retq
+  %a1 = and i64 %x, 65535
+  %a2 = add i64 %x, 65535
+  %r = and i64 %a1, %a2
+  ret i64 %r
+}
+
+define i64 @sub_neg_one(i64 %x) {
+; CHECK-LABEL: sub_neg_one:
+; CHECK:       # %bb.0:
+; CHECK-NEXT:    leal -65535(%rdi), %eax
+; CHECK-NEXT:    andl %edi, %eax
+; CHECK-NEXT:    movzwl %ax, %eax
+; CHECK-NEXT:    retq
+  %a1 = and i64 %x, 65535
+  %a2 = sub i64 %x, 65535
+  %r = and i64 %a1, %a2
+  ret i64 %r
+}
+
+define i64 @mul_neg_one(i64 %x) {
+; CHECK-LABEL: mul_neg_one:
+; CHECK:       # %bb.0:
+; CHECK-NEXT:    movl %edi, %eax
+; CHECK-NEXT:    negl %eax
+; CHECK-NEXT:    andl %edi, %eax
+; CHECK-NEXT:    movzwl %ax, %eax
+; CHECK-NEXT:    retq
+  %a1 = and i64 %x, 65535
+  %a2 = mul i64 %x, 65535
+  %r = and i64 %a1, %a2
+  ret i64 %r
+}
+

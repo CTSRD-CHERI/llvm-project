@@ -94,10 +94,9 @@ static cl::opt<bool> EnableImplicitNullChecks(
     "enable-implicit-null-checks",
     cl::desc("Fold null checks into faulting memory operations"),
     cl::init(false), cl::Hidden);
-static cl::opt<bool>
-    EnableMergeICmps("enable-mergeicmps",
-                     cl::desc("Merge ICmp chains into a single memcmp"),
-                     cl::init(false), cl::Hidden);
+static cl::opt<bool> DisableMergeICmps("disable-mergeicmps",
+    cl::desc("Disable MergeICmps Pass"),
+    cl::init(false), cl::Hidden);
 static cl::opt<bool> PrintLSR("print-lsr-output", cl::Hidden,
     cl::desc("Print LLVM IR produced by the loop-reduce pass"));
 static cl::opt<bool> PrintISelInput("print-isel-input", cl::Hidden,
@@ -596,7 +595,7 @@ void TargetPassConfig::addIRPasses() {
     // loads and compares. ExpandMemCmpPass then tries to expand those calls
     // into optimally-sized loads and compares. The transforms are enabled by a
     // target lowering hook.
-    if (EnableMergeICmps)
+    if (!DisableMergeICmps)
       addPass(createMergeICmpsPass());
     addPass(createExpandMemCmpPass());
   }
@@ -1080,6 +1079,10 @@ void TargetPassConfig::addOptimizedRegAlloc(FunctionPass *RegAllocPass) {
     // FIXME: Re-enable coloring with register when it's capable of adding
     // kill markers.
     addPass(&StackSlotColoringID);
+
+    // Copy propagate to forward register uses and try to eliminate COPYs that
+    // were not coalesced.
+    addPass(&MachineCopyPropagationID);
 
     // Run post-ra machine LICM to hoist reloads / remats.
     //

@@ -158,6 +158,8 @@ struct ValueInfo {
   const GlobalValueSummaryMapTy::value_type *getRef() const {
     return RefAndFlag.getPointer();
   }
+
+  bool isDSOLocal() const;
 };
 
 template <> struct DenseMapInfo<ValueInfo> {
@@ -669,7 +671,6 @@ private:
 
   /// Mapping from type identifiers to summary information for that type
   /// identifier.
-  // FIXME: Add bitcode read/write support for this field.
   std::map<std::string, TypeIdSummary> TypeIdMap;
 
   /// Mapping from original ID to GUID. If original ID can map to multiple

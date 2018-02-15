@@ -139,6 +139,7 @@ protected:
   // Subtarget statically properties set by tablegen
   bool FP64;
   bool FMA;
+  bool MIMG_R128;
   bool IsGCN;
   bool GCN3Encoding;
   bool CIInsts;
@@ -265,6 +266,10 @@ public:
     return FP64;
   }
 
+  bool hasMIMG_R128() const {
+    return MIMG_R128;
+  }
+
   bool hasFastFMAF32() const {
     return FastFMAF32;
   }
@@ -326,14 +331,6 @@ public:
 
   bool hasMadMixInsts() const {
     return HasMadMixInsts;
-  }
-
-  bool hasSBufferLoadStoreAtomicDwordxN() const {
-    // Only use the "x1" variants on GFX9 or don't use the buffer variants.
-    // For x2 and higher variants, if the accessed region spans 2 VM pages and
-    // the second page is unmapped, the hw hangs.
-    // TODO: There is one future GFX9 chip that doesn't have this bug.
-    return getGeneration() != GFX9;
   }
 
   bool hasCARRY() const {

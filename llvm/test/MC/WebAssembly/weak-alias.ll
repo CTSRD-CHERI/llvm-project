@@ -64,7 +64,7 @@ entry:
 ; CHECK-NEXT:         Table:
 ; CHECK-NEXT:           ElemType:        ANYFUNC
 ; CHECK-NEXT:           Limits:
-; CHECK-NEXT:             Initial:         0x00000002
+; CHECK-NEXT:             Initial:         0x00000001
 ; CHECK-NEXT:       - Module:          env
 ; CHECK-NEXT:         Field:           foo_alias
 ; CHECK-NEXT:         Kind:            FUNCTION
@@ -133,7 +133,7 @@ entry:
 ; CHECK-NEXT:       - Offset:          
 ; CHECK-NEXT:           Opcode:          I32_CONST
 ; CHECK-NEXT:           Value:           1
-; CHECK-NEXT:         Functions:       [ 1, 0 ]
+; CHECK-NEXT:         Functions:       [ 1 ]
 ; CHECK-NEXT:   - Type:            CODE
 ; CHECK-NEXT:     Relocations:     
 ; CHECK-NEXT:       - Type:            R_WEBASSEMBLY_FUNCTION_INDEX_LEB
@@ -193,10 +193,10 @@ entry:
 ; CHECK-NEXT:         Content:         '01000000'
 ; CHECK-NEXT:       - SectionOffset:   24
 ; CHECK-NEXT:         MemoryIndex:     0
-; CHECK-NEXT:         Offset:          
+; CHECK-NEXT:         Offset:
 ; CHECK-NEXT:           Opcode:          I32_CONST
 ; CHECK-NEXT:           Value:           16
-; CHECK-NEXT:         Content:         '02000000'
+; CHECK-NEXT:         Content:         '01000000'
 ; CHECK-NEXT:   - Type:            CUSTOM
 ; CHECK-NEXT:     Name:            linking
 ; CHECK-NEXT:     DataSize:        20
@@ -231,13 +231,13 @@ entry:
 ; CHECK-NEXT: ...
 
 ; CHECK-SYMS: SYMBOL TABLE:
-; CHECK-SYMS-NEXT: 00000001 gw    F EXPORT	.hidden foo_alias
-; CHECK-SYMS-NEXT: 00000000 gw      EXPORT	.hidden bar_alias
-; CHECK-SYMS-NEXT: 00000001 g     F EXPORT	.hidden foo
-; CHECK-SYMS-NEXT: 00000002 g     F EXPORT	.hidden call_direct
-; CHECK-SYMS-NEXT: 00000003 g     F EXPORT	.hidden call_alias
-; CHECK-SYMS-NEXT: 00000004 g     F EXPORT	.hidden call_direct_ptr
-; CHECK-SYMS-NEXT: 00000008 g       EXPORT	direct_address
-; CHECK-SYMS-NEXT: 00000005 g     F EXPORT	.hidden call_alias_ptr
-; CHECK-SYMS-NEXT: 00000010 g       EXPORT	alias_address
-; CHECK-SYMS-NEXT: 00000000 g       EXPORT	bar
+; CHECK-SYMS-NEXT: 00000001 gw    F CODE	.hidden foo_alias
+; CHECK-SYMS-NEXT: 00000000 gw      DATA	.hidden bar_alias
+; CHECK-SYMS-NEXT: 00000001 g     F CODE	.hidden foo
+; CHECK-SYMS-NEXT: 00000002 g     F CODE	.hidden call_direct
+; CHECK-SYMS-NEXT: 00000003 g     F CODE	.hidden call_alias
+; CHECK-SYMS-NEXT: 00000004 g     F CODE	.hidden call_direct_ptr
+; CHECK-SYMS-NEXT: 00000008 g       DATA	direct_address
+; CHECK-SYMS-NEXT: 00000005 g     F CODE	.hidden call_alias_ptr
+; CHECK-SYMS-NEXT: 00000010 g       DATA	alias_address
+; CHECK-SYMS-NEXT: 00000000 g       DATA	bar

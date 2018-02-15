@@ -333,7 +333,7 @@ private:
 
   // Container of GOT created for each input file.
   // After building a final series of GOTs this container
-  // holds primary ans secondaty GOT's.
+  // holds primary and secondary GOT's.
   std::vector<FileGot> Gots;
 
   // Return (and create if necessary) `FileGot`.
@@ -392,15 +392,15 @@ private:
 
 class DynamicReloc {
 public:
-  DynamicReloc(uint32_t Type, const InputSectionBase *InputSec,
+  DynamicReloc(RelType Type, const InputSectionBase *InputSec,
                uint64_t OffsetInSec, bool UseSymVA, Symbol *Sym, int64_t Addend)
       : Type(Type), Sym(Sym), InputSec(InputSec), OffsetInSec(OffsetInSec),
         UseSymVA(UseSymVA), Addend(Addend), OutputSec(nullptr) {}
   // This constructor records dynamic relocation settings used by MIPS
   // multi-GOT implementation. It's to relocate addresses of 64kb pages
   // lie inside the output section.
-  DynamicReloc(uint32_t Type, const InputSectionBase *InputSec,
-               uint64_t  OffsetInSec, const OutputSection *OutputSec,
+  DynamicReloc(RelType Type, const InputSectionBase *InputSec,
+               uint64_t OffsetInSec, const OutputSection *OutputSec,
                int64_t Addend)
       : Type(Type), Sym(nullptr), InputSec(InputSec), OffsetInSec(OffsetInSec),
         UseSymVA(false), Addend(Addend), OutputSec(OutputSec) {}
@@ -410,7 +410,7 @@ public:
   uint32_t getSymIndex() const;
   const InputSectionBase *getInputSec() const { return InputSec; }
 
-  uint32_t Type;
+  RelType Type;
 
 private:
   Symbol *Sym;
@@ -452,7 +452,9 @@ class RelocationBaseSection : public SyntheticSection {
 public:
   RelocationBaseSection(StringRef Name, uint32_t Type, int32_t DynamicTag,
                         int32_t SizeDynamicTag);
-  void addReloc(uint32_t DynType, InputSectionBase *InputSec,
+  void addReloc(RelType DynType, InputSectionBase *IS, uint64_t OffsetInSec,
+                Symbol *Sym);
+  void addReloc(RelType DynType, InputSectionBase *InputSec,
                 uint64_t OffsetInSec, bool UseSymVA, Symbol *Sym,
                 int64_t Addend, RelExpr Expr, RelType Type);
   void addReloc(const DynamicReloc &Reloc);

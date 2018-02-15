@@ -178,23 +178,34 @@ OutputSection *SectionBase::getOutputSection() {
   return Sec ? Sec->getParent() : nullptr;
 }
 
-// Uncompress section contents if required. Note that this function
+// Decompress section contents if required. Note that this function
 // is called from parallelForEach, so it must be thread-safe.
-void InputSectionBase::maybeUncompress() {
-  if (UncompressBuf || !Decompressor::isCompressedELFSection(Flags, Name))
+void InputSectionBase::maybeDecompress() {
+  if (DecompressBuf)
+    return;
+  if (!(Flags & SHF_COMPRESSED) && !Name.startswith(".zdebug"))
     return;
 
+  // Decompress a section.
   Decompressor Dec = check(Decompressor::create(Name, toStringRef(Data),
                                                 Config->IsLE, Config->Is64));
 
   size_t Size = Dec.getDecompressedSize();
-  UncompressBuf.reset(new char[Size]());
-  if (Error E = Dec.decompress({UncompressBuf.get(), Size}))
+  DecompressBuf.reset(new char[Size + Name.size()]());
+  if (Error E = Dec.decompress({DecompressBuf.get(), Size}))
     fatal(toString(this) +
           ": decompress failed: " + llvm::toString(std::move(E)));
 
-  Data = makeArrayRef((uint8_t *)UncompressBuf.get(), Size);
+  Data = makeArrayRef((uint8_t *)DecompressBuf.get(), Size);
   Flags &= ~(uint64_t)SHF_COMPRESSED;
+
+  // A section name may have been altered if compressed. If that's
+  // the case, restore the original name. (i.e. ".zdebug_" -> ".debug_")
+  if (Name.startswith(".zdebug")) {
+    DecompressBuf[Size] = '.';
+    memcpy(&DecompressBuf[Size + 1], Name.data() + 2, Name.size() - 2);
+    Name = StringRef(&DecompressBuf[Size], Name.size() - 1);
+  }
 }
 
 InputSection *InputSectionBase::getLinkOrderDep() const {
@@ -346,7 +357,7 @@ void InputSection::copyRelocations(uint8_t *Buf, ArrayRef<RelTy> Rels) {
     auto *P = reinterpret_cast<typename ELFT::Rela *>(Buf);
     Buf += sizeof(RelTy);
 
-    if (Config->IsRela)
+    if (RelTy::IsRela)
       P->r_addend = getAddend<ELFT>(Rel);
 
     // Output section VA is zero for -r, so r_offset is an offset within the
@@ -376,7 +387,7 @@ void InputSection::copyRelocations(uint8_t *Buf, ArrayRef<RelTy> Rels) {
         continue;
       }
 
-      if (Config->IsRela) {
+      if (RelTy::IsRela) {
         P->r_addend =
             Sym.getVA(getAddend<ELFT>(Rel)) - Section->getOutputSection()->Addr;
       } else if (Config->Relocatable) {
@@ -740,7 +751,7 @@ void InputSectionBase::relocateAlloc(uint8_t *Buf, uint8_t *BufEnd) {
     int64_t Addend = Reloc.getAddend();
     // getOffset adds the output section base address here
     uint64_t Offset = Reloc.getOffset() - getOutputSection()->Addr;
-    if (Config->Verbose) {
+    if (errorHandler().Verbose) {
       message("Adding hack: addend=0x" + utohexstr(Addend) +
               " offset=0x" + utohexstr(Reloc.getOffset()) + " Type: 0x" + utohexstr(Reloc.Type));
     }

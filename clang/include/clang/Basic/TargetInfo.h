@@ -623,9 +623,9 @@ public:
   /// ReturnCanonical = true and Name = "rax", will return "ax".
   StringRef getNormalizedGCCRegisterName(StringRef Name,
                                          bool ReturnCanonical = false) const;
- 
-  virtual StringRef getConstraintRegister(const StringRef &Constraint,
-                                          const StringRef &Expression) const {
+
+  virtual StringRef getConstraintRegister(StringRef Constraint,
+                                          StringRef Expression) const {
     return "";
   }
 
@@ -866,6 +866,9 @@ public:
   virtual bool setCPU(const std::string &Name) {
     return false;
   }
+
+  /// Fill a SmallVectorImpl with the valid values to setCPU.
+  virtual void fillValidCPUList(SmallVectorImpl<StringRef> &Values) const {}
 
   /// brief Determine whether this TargetInfo supports the given CPU name.
   virtual bool isValidCPUName(StringRef Name) const {

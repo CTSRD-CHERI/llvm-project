@@ -90,7 +90,7 @@ ExprEngine::ExprEngine(AnalysisManager &mgr, bool gcEnabled,
                        InliningModes HowToInlineIn)
   : AMgr(mgr),
     AnalysisDeclContexts(mgr.getAnalysisDeclContextManager()),
-    Engine(*this, FS),
+    Engine(*this, FS, mgr.getAnalyzerOptions()),
     G(Engine.getGraph()),
     StateMgr(getContext(), mgr.getStoreManagerCreator(),
              mgr.getConstraintManagerCreator(), G.getAllocator(),
@@ -383,8 +383,62 @@ ExprEngine::processRegionChanges(ProgramStateRef state,
                                                          LCtx, Call);
 }
 
+static void printInitializedTemporariesForContext(raw_ostream &Out,
+                                                  ProgramStateRef State,
+                                                  const char *NL,
+                                                  const char *Sep,
+                                                  const LocationContext *LC) {
+  PrintingPolicy PP =
+      LC->getAnalysisDeclContext()->getASTContext().getPrintingPolicy();
+  for (auto I : State->get<InitializedTemporariesSet>()) {
+    if (I.second != LC)
+      continue;
+    Out << '(' << I.second << ',' << I.first << ") ";
+    I.first->printPretty(Out, nullptr, PP);
+    Out << NL;
+  }
+}
+
+static void printCXXNewAllocatorValuesForContext(raw_ostream &Out,
+                                                 ProgramStateRef State,
+                                                 const char *NL,
+                                                 const char *Sep,
+                                                 const LocationContext *LC) {
+  PrintingPolicy PP =
+      LC->getAnalysisDeclContext()->getASTContext().getPrintingPolicy();
+
+  for (auto I : State->get<CXXNewAllocatorValues>()) {
+    std::pair<const CXXNewExpr *, const LocationContext *> Key = I.first;
+    SVal Value = I.second;
+    if (Key.second != LC)
+      continue;
+    Out << '(' << Key.second << ',' << Key.first << ") ";
+    Key.first->printPretty(Out, nullptr, PP);
+    Out << " : " << Value << NL;
+  }
+}
+
 void ExprEngine::printState(raw_ostream &Out, ProgramStateRef State,
-                            const char *NL, const char *Sep) {
+                            const char *NL, const char *Sep,
+                            const LocationContext *LCtx) {
+  if (LCtx) {
+    if (!State->get<InitializedTemporariesSet>().isEmpty()) {
+      Out << Sep << "Initialized temporaries:" << NL;
+
+      LCtx->dumpStack(Out, "", NL, Sep, [&](const LocationContext *LC) {
+        printInitializedTemporariesForContext(Out, State, NL, Sep, LC);
+      });
+    }
+
+    if (!State->get<CXXNewAllocatorValues>().isEmpty()) {
+      Out << Sep << "operator new() allocator return values:" << NL;
+
+      LCtx->dumpStack(Out, "", NL, Sep, [&](const LocationContext *LC) {
+        printCXXNewAllocatorValuesForContext(Out, State, NL, Sep, LC);
+      });
+    }
+  }
+
   getCheckerManager().runCheckersForPrintState(Out, State, NL, Sep);
 }
 
@@ -400,10 +454,11 @@ void ExprEngine::processCFGElement(const CFGElement E, ExplodedNode *Pred,
 
   switch (E.getKind()) {
     case CFGElement::Statement:
-      ProcessStmt(const_cast<Stmt*>(E.castAs<CFGStmt>().getStmt()), Pred);
+    case CFGElement::Constructor:
+      ProcessStmt(E.castAs<CFGStmt>().getStmt(), Pred);
       return;
     case CFGElement::Initializer:
-      ProcessInitializer(E.castAs<CFGInitializer>().getInitializer(), Pred);
+      ProcessInitializer(E.castAs<CFGInitializer>(), Pred);
       return;
     case CFGElement::NewAllocator:
       ProcessNewAllocator(E.castAs<CFGNewAllocator>().getAllocatorExpr(),
@@ -425,7 +480,7 @@ void ExprEngine::processCFGElement(const CFGElement E, ExplodedNode *Pred,
 }
 
 static bool shouldRemoveDeadBindings(AnalysisManager &AMgr,
-                                     const CFGStmt S,
+                                     const Stmt *S,
                                      const ExplodedNode *Pred,
                                      const LocationContext *LC) {
 
@@ -438,17 +493,17 @@ static bool shouldRemoveDeadBindings(AnalysisManager &AMgr,
     return true;
 
   // Is this on a non-expression?
-  if (!isa<Expr>(S.getStmt()))
+  if (!isa<Expr>(S))
     return true;
 
   // Run before processing a call.
-  if (CallEvent::isCallStmt(S.getStmt()))
+  if (CallEvent::isCallStmt(S))
     return true;
 
   // Is this an expression that is consumed by another expression?  If so,
   // postpone cleaning out the state.
   ParentMap &PM = LC->getAnalysisDeclContext()->getParentMap();
-  return !PM.isConsumedExpr(cast<Expr>(S.getStmt()));
+  return !PM.isConsumedExpr(cast<Expr>(S));
 }
 
 void ExprEngine::removeDead(ExplodedNode *Pred, ExplodedNodeSet &Out,
@@ -540,20 +595,20 @@ void ExprEngine::removeDead(ExplodedNode *Pred, ExplodedNodeSet &Out,
   }
 }
 
-void ExprEngine::ProcessStmt(const CFGStmt S,
-                             ExplodedNode *Pred) {
+void ExprEngine::ProcessStmt(const Stmt *currStmt, ExplodedNode *Pred) {
   // Reclaim any unnecessary nodes in the ExplodedGraph.
   G.reclaimRecentlyAllocatedNodes();
 
-  const Stmt *currStmt = S.getStmt();
   PrettyStackTraceLoc CrashInfo(getContext().getSourceManager(),
                                 currStmt->getLocStart(),
                                 "Error evaluating statement");
 
   // Remove dead bindings and symbols.
   ExplodedNodeSet CleanedStates;
-  if (shouldRemoveDeadBindings(AMgr, S, Pred, Pred->getLocationContext())){
-    removeDead(Pred, CleanedStates, currStmt, Pred->getLocationContext());
+  if (shouldRemoveDeadBindings(AMgr, currStmt, Pred,
+                               Pred->getLocationContext())) {
+    removeDead(Pred, CleanedStates, currStmt,
+                                    Pred->getLocationContext());
   } else
     CleanedStates.Add(Pred);
 
@@ -747,8 +802,15 @@ void ExprEngine::ProcessAutomaticObjDtor(const CFGAutomaticObjDtor Dtor,
     varType = cast<TypedValueRegion>(Region)->getValueType();
   }
 
+  // FIXME: We need to run the same destructor on every element of the array.
+  // This workaround will just run the first destructor (which will still
+  // invalidate the entire array).
+  EvalCallOptions CallOpts;
+  Region = makeZeroElementRegion(state, loc::MemRegionVal(Region), varType,
+                                 CallOpts.IsArrayCtorOrDtor).getAsRegion();
+
   VisitCXXDestructor(varType, Region, Dtor.getTriggerStmt(), /*IsBase=*/ false,
-                     Pred, Dst);
+                     Pred, Dst, CallOpts);
 }
 
 void ExprEngine::ProcessDeleteDtor(const CFGDeleteDtor Dtor,
@@ -758,12 +820,12 @@ void ExprEngine::ProcessDeleteDtor(const CFGDeleteDtor Dtor,
   const LocationContext *LCtx = Pred->getLocationContext();
   const CXXDeleteExpr *DE = Dtor.getDeleteExpr();
   const Stmt *Arg = DE->getArgument();
+  QualType DTy = DE->getDestroyedType();
   SVal ArgVal = State->getSVal(Arg, LCtx);
 
   // If the argument to delete is known to be a null value,
   // don't run destructor.
   if (State->isNull(ArgVal).isConstrainedTrue()) {
-    QualType DTy = DE->getDestroyedType();
     QualType BTy = getContext().getBaseElementType(DTy);
     const CXXRecordDecl *RD = BTy->getAsCXXRecordDecl();
     const CXXDestructorDecl *Dtor = RD->getDestructor();
@@ -774,10 +836,19 @@ void ExprEngine::ProcessDeleteDtor(const CFGDeleteDtor Dtor,
     return;
   }
 
-  VisitCXXDestructor(DE->getDestroyedType(),
-                     ArgVal.getAsRegion(),
-                     DE, /*IsBase=*/ false,
-                     Pred, Dst);
+  EvalCallOptions CallOpts;
+  const MemRegion *ArgR = ArgVal.getAsRegion();
+  if (DE->isArrayForm()) {
+    // FIXME: We need to run the same destructor on every element of the array.
+    // This workaround will just run the first destructor (which will still
+    // invalidate the entire array).
+    CallOpts.IsArrayCtorOrDtor = true;
+    if (ArgR)
+      ArgR = getStoreManager().GetElementZeroRegion(cast<SubRegion>(ArgR), DTy);
+  }
+
+  VisitCXXDestructor(DE->getDestroyedType(), ArgR, DE, /*IsBase=*/false,
+                     Pred, Dst, CallOpts);
 }
 
 void ExprEngine::ProcessBaseDtor(const CFGBaseDtor D,
@@ -796,12 +867,13 @@ void ExprEngine::ProcessBaseDtor(const CFGBaseDtor D,
                                                      Base->isVirtual());
 
   VisitCXXDestructor(BaseTy, BaseVal.castAs<loc::MemRegionVal>().getRegion(),
-                     CurDtor->getBody(), /*IsBase=*/ true, Pred, Dst);
+                     CurDtor->getBody(), /*IsBase=*/ true, Pred, Dst, {});
 }
 
 void ExprEngine::ProcessMemberDtor(const CFGMemberDtor D,
                                    ExplodedNode *Pred, ExplodedNodeSet &Dst) {
   const FieldDecl *Member = D.getFieldDecl();
+  QualType T = Member->getType();
   ProgramStateRef State = Pred->getState();
   const LocationContext *LCtx = Pred->getLocationContext();
 
@@ -811,9 +883,15 @@ void ExprEngine::ProcessMemberDtor(const CFGMemberDtor D,
   SVal FieldVal =
       State->getLValue(Member, State->getSVal(ThisVal).castAs<Loc>());
 
-  VisitCXXDestructor(Member->getType(),
-                     FieldVal.castAs<loc::MemRegionVal>().getRegion(),
-                     CurDtor->getBody(), /*IsBase=*/false, Pred, Dst);
+  // FIXME: We need to run the same destructor on every element of the array.
+  // This workaround will just run the first destructor (which will still
+  // invalidate the entire array).
+  EvalCallOptions CallOpts;
+  FieldVal = makeZeroElementRegion(State, FieldVal, T,
+                                   CallOpts.IsArrayCtorOrDtor);
+
+  VisitCXXDestructor(T, FieldVal.castAs<loc::MemRegionVal>().getRegion(),
+                     CurDtor->getBody(), /*IsBase=*/false, Pred, Dst, CallOpts);
 }
 
 void ExprEngine::ProcessTemporaryDtor(const CFGTemporaryDtor D,
@@ -837,10 +915,14 @@ void ExprEngine::ProcessTemporaryDtor(const CFGTemporaryDtor D,
   assert(CleanDtorState.size() <= 1);
   ExplodedNode *CleanPred =
       CleanDtorState.empty() ? Pred : *CleanDtorState.begin();
+
   // FIXME: Inlining of temporary destructors is not supported yet anyway, so
   // we just put a NULL region for now. This will need to be changed later.
+  EvalCallOptions CallOpts;
+  CallOpts.IsTemporaryCtorOrDtor = true;
+  CallOpts.IsCtorOrDtorWithImproperlyModeledTargetRegion = true;
   VisitCXXDestructor(varType, nullptr, D.getBindTemporaryExpr(),
-                     /*IsBase=*/false, CleanPred, Dst);
+                     /*IsBase=*/false, CleanPred, Dst, CallOpts);
 }
 
 void ExprEngine::processCleanupTemporaryBranch(const CXXBindTemporaryExpr *BTE,
@@ -1488,12 +1570,19 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
       Bldr.addNodes(Dst);
       break;
 
-    case Stmt::OffsetOfExprClass:
+    case Stmt::OffsetOfExprClass: {
       Bldr.takeNodes(Pred);
-      VisitOffsetOfExpr(cast<OffsetOfExpr>(S), Pred, Dst);
+      ExplodedNodeSet PreVisit;
+      getCheckerManager().runCheckersForPreStmt(PreVisit, Pred, S, *this);
+
+      ExplodedNodeSet PostVisit;
+      for (ExplodedNode *Node : PreVisit)
+        VisitOffsetOfExpr(cast<OffsetOfExpr>(S), Node, PostVisit);
+
+      getCheckerManager().runCheckersForPostStmt(Dst, PostVisit, S, *this);
       Bldr.addNodes(Dst);
       break;
-
+    }
     case Stmt::UnaryExprOrTypeTraitExprClass:
       Bldr.takeNodes(Pred);
       VisitUnaryExprOrTypeTraitExpr(cast<UnaryExprOrTypeTraitExpr>(S),
@@ -2251,16 +2340,15 @@ void ExprEngine::VisitMemberExpr(const MemberExpr *M, ExplodedNode *Pred,
   ExplodedNodeSet CheckedSet;
   getCheckerManager().runCheckersForPreStmt(CheckedSet, Pred, M, *this);
 
-  ExplodedNodeSet EvalSet;
-  ValueDecl *Member = M->getMemberDecl();
+  ExplodedNodeSet EvalSet;  
+  ValueDecl *Member = M->getMemberDecl();  
 
   // Handle static member variables and enum constants accessed via
   // member syntax.
-  if (isa<VarDecl>(Member) || isa<EnumConstantDecl>(Member)) {
-    ExplodedNodeSet Dst;
+  if (isa<VarDecl>(Member) || isa<EnumConstantDecl>(Member)) {    
     for (ExplodedNodeSet::iterator I = CheckedSet.begin(), E = CheckedSet.end();
          I != E; ++I) {
-      VisitCommonDeclRefExpr(M, Member, Pred, EvalSet);
+      VisitCommonDeclRefExpr(M, Member, *I, EvalSet);
     }
   } else {
     StmtNodeBuilder Bldr(CheckedSet, EvalSet, *currBldrCtx);
@@ -2769,12 +2857,6 @@ struct DOTGraphTraits<ExplodedNode*> :
         << "\\l";
     }
   }
-  static void printLocation2(raw_ostream &Out, SourceLocation SLoc) {
-    if (SLoc.isFileID() && GraphPrintSourceManager->isInMainFile(SLoc))
-      Out << "line " << GraphPrintSourceManager->getExpansionLineNumber(SLoc);
-    else
-      SLoc.print(Out, *GraphPrintSourceManager);
-  }
 
   static std::string getNodeLabel(const ExplodedNode *N, void*){
 
@@ -2949,40 +3031,7 @@ struct DOTGraphTraits<ExplodedNode*> :
     Out << "\\|StateID: " << (const void*) state.get()
         << " NodeID: " << (const void*) N << "\\|";
 
-    // Analysis stack backtrace.
-    Out << "Location context stack (from current to outer):\\l";
-    const LocationContext *LC = Loc.getLocationContext();
-    unsigned Idx = 0;
-    for (; LC; LC = LC->getParent(), ++Idx) {
-      Out << Idx << ". (" << (const void *)LC << ") ";
-      switch (LC->getKind()) {
-      case LocationContext::StackFrame:
-        if (const NamedDecl *D = dyn_cast<NamedDecl>(LC->getDecl()))
-          Out << "Calling " << D->getQualifiedNameAsString();
-        else
-          Out << "Calling anonymous code";
-        if (const Stmt *S = cast<StackFrameContext>(LC)->getCallSite()) {
-          Out << " at ";
-          printLocation2(Out, S->getLocStart());
-        }
-        break;
-      case LocationContext::Block:
-        Out << "Invoking block";
-        if (const Decl *D = cast<BlockInvocationContext>(LC)->getBlockDecl()) {
-          Out << " defined at ";
-          printLocation2(Out, D->getLocStart());
-        }
-        break;
-      case LocationContext::Scope:
-        Out << "Entering scope";
-        // FIXME: Add more info once ScopeContext is activated.
-        break;
-      }
-      Out << "\\l";
-    }
-    Out << "\\l";
-
-    state->printDOT(Out);
+    state->printDOT(Out, N->getLocationContext());
 
     Out << "\\l";
 

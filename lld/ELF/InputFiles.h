@@ -90,8 +90,8 @@ public:
   // Returns object file symbols. It is a runtime error to call this
   // function on files of other types.
   ArrayRef<Symbol *> getSymbols() {
-    assert(FileKind == ObjKind || FileKind == BitcodeKind ||
-           FileKind == ArchiveKind);
+    assert(FileKind == BinaryKind || FileKind == ObjKind ||
+           FileKind == BitcodeKind || FileKind == ArchiveKind);
     return Symbols;
   }
 
@@ -114,7 +114,7 @@ public:
                         uint64_t Offset);
 
   // Index of MIPS GOT built for this file.
-  size_t MipsGotIndex = -1;
+  llvm::Optional<size_t> MipsGotIndex;
 
 protected:
   InputFile(Kind K, MemoryBufferRef M);

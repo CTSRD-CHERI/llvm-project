@@ -15,7 +15,6 @@
 namespace llvm {
 
 class MCSymbolWasm : public MCSymbol {
-private:
   bool IsFunction = false;
   bool IsWeak = false;
   bool IsHidden = false;
@@ -54,6 +53,7 @@ public:
   void setComdat(bool isComdat) { IsComdat = isComdat; }
 
   const StringRef getModuleName() const { return ModuleName; }
+  void setModuleName(StringRef Name) { ModuleName = Name; }
 
   const SmallVector<wasm::ValType, 1> &getReturns() const {
     assert(ReturnsSet);

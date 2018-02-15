@@ -1497,26 +1497,40 @@ void llvm::salvageDebugInfo(Instruction &I) {
     return MetadataAsValue::get(I.getContext(), ValueAsMetadata::get(V));
   };
 
-  auto applyOffset = [&](DbgInfoIntrinsic *DII, uint64_t Offset) {
+  auto doSalvage = [&](DbgInfoIntrinsic *DII, SmallVectorImpl<uint64_t> &Ops) {
     auto *DIExpr = DII->getExpression();
-    DIExpr = DIExpression::prepend(DIExpr, DIExpression::NoDeref, Offset,
-                                   DIExpression::NoDeref,
-                                   DIExpression::WithStackValue);
+    DIExpr = DIExpression::doPrepend(DIExpr, Ops,
+                                     DIExpression::WithStackValue);
     DII->setOperand(0, wrapMD(I.getOperand(0)));
     DII->setOperand(2, MetadataAsValue::get(I.getContext(), DIExpr));
     DEBUG(dbgs() << "SALVAGE: " << *DII << '\n');
   };
 
-  if (isa<BitCastInst>(&I) || isa<IntToPtrInst>(&I)) {
-    // Bitcasts are entirely irrelevant for debug info. Rewrite dbg.value,
-    // dbg.addr, and dbg.declare to use the cast's source.
+  auto applyOffset = [&](DbgInfoIntrinsic *DII, uint64_t Offset) {
+    SmallVector<uint64_t, 8> Ops;
+    DIExpression::appendOffset(Ops, Offset);
+    doSalvage(DII, Ops);
+  };
+
+  auto applyOps = [&](DbgInfoIntrinsic *DII,
+                      std::initializer_list<uint64_t> Opcodes) {
+    SmallVector<uint64_t, 8> Ops(Opcodes);
+    doSalvage(DII, Ops);
+  };
+
+  if (auto *CI = dyn_cast<CastInst>(&I)) {
+    if (!CI->isNoopCast(M.getDataLayout()))
+      return;
+
+    // No-op casts are irrelevant for debug info.
+    MetadataAsValue *CastSrc = wrapMD(I.getOperand(0));
     for (auto *DII : DbgUsers) {
-      DII->setOperand(0, wrapMD(I.getOperand(0)));
+      DII->setOperand(0, CastSrc);
       DEBUG(dbgs() << "SALVAGE: " << *DII << '\n');
     }
   } else if (auto *GEP = dyn_cast<GetElementPtrInst>(&I)) {
     unsigned BitWidth =
-        M.getDataLayout().getPointerSizeInBits(GEP->getPointerAddressSpace());
+        M.getDataLayout().getIndexSizeInBits(GEP->getPointerAddressSpace());
     // Rewrite a constant GEP into a DIExpression.  Since we are performing
     // arithmetic to compute the variable's *value* in the DIExpression, we
     // need to mark the expression with a DW_OP_stack_value.
@@ -1525,11 +1539,51 @@ void llvm::salvageDebugInfo(Instruction &I) {
       for (auto *DII : DbgUsers)
         applyOffset(DII, Offset.getSExtValue());
   } else if (auto *BI = dyn_cast<BinaryOperator>(&I)) {
-    if (BI->getOpcode() == Instruction::Add)
-      if (auto *ConstInt = dyn_cast<ConstantInt>(I.getOperand(1)))
-        if (ConstInt->getBitWidth() <= 64)
-          for (auto *DII : DbgUsers)
-            applyOffset(DII, ConstInt->getSExtValue());
+    auto *ConstInt = dyn_cast<ConstantInt>(I.getOperand(1));
+    if (!ConstInt || ConstInt->getBitWidth() > 64)
+      return;
+
+    uint64_t Val = ConstInt->getSExtValue();
+    for (auto *DII : DbgUsers) {
+      switch (BI->getOpcode()) {
+      case Instruction::Add:
+        applyOffset(DII, Val);
+        break;
+      case Instruction::Sub:
+        applyOffset(DII, -int64_t(Val));
+        break;
+      case Instruction::Mul:
+        applyOps(DII, {dwarf::DW_OP_constu, Val, dwarf::DW_OP_mul});
+        break;
+      case Instruction::SDiv:
+        applyOps(DII, {dwarf::DW_OP_constu, Val, dwarf::DW_OP_div});
+        break;
+      case Instruction::SRem:
+        applyOps(DII, {dwarf::DW_OP_constu, Val, dwarf::DW_OP_mod});
+        break;
+      case Instruction::Or:
+        applyOps(DII, {dwarf::DW_OP_constu, Val, dwarf::DW_OP_or});
+        break;
+      case Instruction::And:
+        applyOps(DII, {dwarf::DW_OP_constu, Val, dwarf::DW_OP_and});
+        break;
+      case Instruction::Xor:
+        applyOps(DII, {dwarf::DW_OP_constu, Val, dwarf::DW_OP_xor});
+        break;
+      case Instruction::Shl:
+        applyOps(DII, {dwarf::DW_OP_constu, Val, dwarf::DW_OP_shl});
+        break;
+      case Instruction::LShr:
+        applyOps(DII, {dwarf::DW_OP_constu, Val, dwarf::DW_OP_shr});
+        break;
+      case Instruction::AShr:
+        applyOps(DII, {dwarf::DW_OP_constu, Val, dwarf::DW_OP_shra});
+        break;
+      default:
+        // TODO: Salvage constants from each kind of binop we know about.
+        continue;
+      }
+    }
   } else if (isa<LoadInst>(&I)) {
     MetadataAsValue *AddrMD = wrapMD(I.getOperand(0));
     for (auto *DII : DbgUsers) {
@@ -2106,7 +2160,7 @@ void llvm::copyRangeMetadata(const DataLayout &DL, const LoadInst &OldLI,
   if (!NewTy->isPointerTy())
     return;
 
-  unsigned BitWidth = DL.getTypeSizeInBits(NewTy);
+  unsigned BitWidth = DL.getIndexTypeSizeInBits(NewTy);
   if (!getConstantRangeFromMetadata(*N).contains(APInt(BitWidth, 0))) {
     MDNode *NN = MDNode::get(OldLI.getContext(), None);
     NewLI.setMetadata(LLVMContext::MD_nonnull, NN);

@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 #include "Annotations.h"
 #include "ClangdUnit.h"
+#include "Compiler.h"
 #include "Matchers.h"
 #include "TestFS.h"
 #include "XRefs.h"
@@ -37,15 +38,20 @@ using testing::Field;
 using testing::Matcher;
 using testing::UnorderedElementsAreArray;
 
+class IgnoreDiagnostics : public DiagnosticsConsumer {
+  void onDiagnosticsReady(
+      PathRef File, Tagged<std::vector<DiagWithFixIts>> Diagnostics) override {}
+};
+
 // FIXME: this is duplicated with FileIndexTests. Share it.
 ParsedAST build(StringRef Code) {
   auto TestFile = getVirtualTestFilePath("Foo.cpp");
   auto CI =
       createInvocationFromCommandLine({"clang", "-xc++", TestFile.c_str()});
   auto Buf = MemoryBuffer::getMemBuffer(Code);
-  auto AST = ParsedAST::Build(
-      Context::empty(), std::move(CI), nullptr, std::move(Buf),
-      std::make_shared<PCHContainerOperations>(), vfs::getRealFileSystem());
+  auto AST = ParsedAST::Build(std::move(CI), nullptr, std::move(Buf),
+                              std::make_shared<PCHContainerOperations>(),
+                              vfs::getRealFileSystem());
   assert(AST.hasValue());
   return std::move(*AST);
 }
@@ -101,8 +107,7 @@ TEST(HighlightsTest, All) {
   for (const char *Test : Tests) {
     Annotations T(Test);
     auto AST = build(T.code());
-    EXPECT_THAT(findDocumentHighlights(Context::empty(), AST, T.point()),
-                HighlightsFrom(T))
+    EXPECT_THAT(findDocumentHighlights(AST, T.point()), HighlightsFrom(T))
         << Test;
   }
 }
@@ -222,10 +227,34 @@ TEST(GoToDefinition, All) {
   for (const char *Test : Tests) {
     Annotations T(Test);
     auto AST = build(T.code());
-    EXPECT_THAT(findDefinitions(Context::empty(), AST, T.point()),
+    EXPECT_THAT(findDefinitions(AST, T.point()),
                 ElementsAre(RangeIs(T.range())))
         << Test;
   }
+}
+
+TEST(GoToDefinition, RelPathsInCompileCommand) {
+  Annotations SourceAnnotations(R"cpp(
+[[int foo]];
+int baz = f^oo;
+)cpp");
+
+  IgnoreDiagnostics DiagConsumer;
+  MockCompilationDatabase CDB(/*UseRelPaths=*/true);
+  MockFSProvider FS;
+  ClangdServer Server(CDB, DiagConsumer, FS, /*AsyncThreadsCount=*/0,
+                      /*StorePreambleInMemory=*/true);
+
+  auto FooCpp = getVirtualTestFilePath("foo.cpp");
+  FS.Files[FooCpp] = "";
+
+  Server.addDocument(FooCpp, SourceAnnotations.code());
+  auto Locations = Server.findDefinitions(FooCpp, SourceAnnotations.point());
+  EXPECT_TRUE(bool(Locations)) << "findDefinitions returned an error";
+
+  EXPECT_THAT(Locations->Value,
+              ElementsAre(Location{URIForFile{FooCpp.str()},
+                                   SourceAnnotations.range()}));
 }
 
 } // namespace
