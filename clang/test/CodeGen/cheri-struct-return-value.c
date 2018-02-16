@@ -1,7 +1,5 @@
-// RUN: %cheri256_cc1 -target-abi purecap -std=c11 -O2 -emit-llvm -o - %s | FileCheck -D\$CAP_SIZE=32 %s -enable-var-scope
-// RUN: %cheri128_cc1 -target-abi purecap -std=c11 -O2 -emit-llvm -o - %s | FileCheck -D\$CAP_SIZE=16 %s -enable-var-scope
-// RUN: %cheri256_cc1 -target-abi purecap -std=c11 -O2 -S -o - %s | FileCheck -D\$CAP_SIZE=32 -check-prefix=ASM %s
-// RUN: %cheri128_cc1 -target-abi purecap -std=c11 -O2 -S -o - %s | FileCheck -D\$CAP_SIZE=16 -check-prefix=ASM %s
+// RUN: %cheri_purecap_cc1 -std=c11 -O2 -emit-llvm -o - %s | %cheri_FileCheck %s -enable-var-scope
+// RUN: %cheri_purecap_cc1 -std=c11 -O2 -S -o - %s | %cheri_FileCheck -D\$CAP_SIZE=32 -check-prefixes=ASM,%cheri_type-ASM %s
 int global;
 
 unsigned long sizeof_cap(void) {
@@ -167,18 +165,21 @@ ThreeLongs three_longs() {
   return t;
   // CHECK-LABEL: define void @three_longs(%struct.ThreeLongs addrspace(200)* noalias nocapture sret %agg.result) local_unnamed_addr
   // ASM-LABEL: three_longs
-  // Clang should inline the memcpy from a global:
-  // ASM:      ld	[[REG:\$[0-9]+]], %got_page(.Lthree_longs.t)(${{.+}})
-  // ASM-NEXT: daddiu	[[REG]], [[REG]], %got_ofst(.Lthree_longs.t)
-  // ASM-NEXT: cfromptr	$c1, $c0, [[REG]]
-  // ASM-NEXT: csetbounds	$c1, $c1, 24
-  // ASM-NEXT: cld	$1, $zero, 0($c1)
-  // ASM-NEXT: cld	$2, $zero, 16($c1)
-  // ASM-NEXT: cld	$3, $zero, 8($c1)
-  // ASM-NEXT: csd	$1, $zero, 0($c3)
-  // ASM-NEXT: csd	$2, $zero, 16($c3)
-  // ASM-NEXT: cjr	$c17
-  // ASM-NEXT: csd	$3, $zero, 8($c3)
+  // Clang now uses a memcpy from a global for cheri128
+  // CHERI128-ASM: ld      ${{[0-9]+}}, %got_page(.Lthree_longs.t)($gp)
+  // CHERI128-ASM: ld      ${{[0-9]+}}, %call16(memcpy)($gp)
+  // For cheri256 clang will inline the memcpy from a global (since it is smaller than 1 cap)
+  // CHERI256-ASM:      ld	[[REG:\$[0-9]+]], %got_page(.Lthree_longs.t)(${{.+}})
+  // CHERI256-ASM-NEXT: daddiu	[[REG]], [[REG]], %got_ofst(.Lthree_longs.t)
+  // CHERI256-ASM-NEXT: cfromptr	$c1, $c0, [[REG]]
+  // CHERI256-ASM-NEXT: csetbounds	$c1, $c1, 24
+  // CHERI256-ASM-NEXT: cld	$1, $zero, 0($c1)
+  // CHERI256-ASM-NEXT: cld	$2, $zero, 16($c1)
+  // CHERI256-ASM-NEXT: cld	$3, $zero, 8($c1)
+  // CHERI256-ASM-NEXT: csd	$1, $zero, 0($c3)
+  // CHERI256-ASM-NEXT: csd	$2, $zero, 16($c3)
+  // CHERI256-ASM-NEXT: cjr	$c17
+  // CHERI256-ASM-NEXT: csd	$3, $zero, 8($c3)
 }
 
 typedef struct {
