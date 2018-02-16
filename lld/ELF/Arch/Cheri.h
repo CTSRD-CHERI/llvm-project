@@ -25,22 +25,21 @@ template <llvm::support::endianness E> struct InMemoryCapRelocEntry {
 };
 
 struct SymbolAndOffset {
-  SymbolAndOffset(Symbol *S, int64_t O) : Symbol(S), Offset(O) {}
+  SymbolAndOffset(Symbol *S, int64_t O) : Sym(S), Offset(O) {}
   SymbolAndOffset(const SymbolAndOffset &) = default;
   SymbolAndOffset &operator=(const SymbolAndOffset &) = default;
-  Symbol *Symbol = nullptr;
+  Symbol *Sym = nullptr;
   int64_t Offset = 0;
 
   // for __cap_relocs against local symbols clang emits section+offset instead
   // of the local symbol so that it still works even if the local symbol table
   // is stripped. This function tries to find the local symbol to a better match
   SymbolAndOffset findRealSymbol() const;
-};
 
-template <typename ELFT>
-inline std::string verboseToString(SymbolAndOffset Sym) {
-  return lld::verboseToString<ELFT>(Sym.Symbol, Sym.Offset);
-}
+  template <typename ELFT> inline std::string verboseToString() const {
+    return lld::verboseToString<ELFT>(Sym, Offset);
+  }
+};
 
 struct CheriCapRelocLocation {
   InputSectionBase *Section;
@@ -59,7 +58,7 @@ struct CheriCapReloc {
   int64_t CapabilityOffset;
   bool NeedsDynReloc;
   bool operator==(const CheriCapReloc &Other) const {
-    return Target.Symbol == Other.Target.Symbol &&
+    return Target.Sym == Other.Target.Sym &&
            Target.Offset == Other.Target.Offset &&
            CapabilityOffset == Other.CapabilityOffset &&
            NeedsDynReloc == Other.NeedsDynReloc;
@@ -88,10 +87,10 @@ private:
     if (!(it.first->second == Relocation)) {
       error("Newly inserted relocation at " + Loc.toString() +
             " does not match existing one:\n>   Existing: " +
-            verboseToString<ELFT>(it.first->second.Target) +
+            it.first->second.Target.template verboseToString<ELFT>() +
             ", cap offset=" + Twine(it.first->second.CapabilityOffset) +
             ", dyn=" + Twine(it.first->second.NeedsDynReloc) +
-            "\n>   New:     " + verboseToString<ELFT>(Relocation.Target) +
+            "\n>   New:     " + Relocation.Target.verboseToString<ELFT>() +
             ", cap offset=" + Twine(Relocation.CapabilityOffset) +
             ", dyn=" + Twine(Relocation.NeedsDynReloc));
     }
