@@ -28,11 +28,11 @@ public:
   class TemporalABILayout {
     uint32_t CapSize;
   public:
-    int64_t GetThreadLocalOffset_CSP() const {return CapSize;}
-    int64_t GetThreadLocalOffset_CUSP() const {return CapSize * 2;}
-    int64_t GetThreadLocalOffset_CDS() const {return CapSize * 3;}
-    int64_t GetThreadLocalOffset_CDL() const {return CapSize * 4;}
-    int64_t GetThreadLocalOffset_CGP() const {return CapSize * 5;}
+    int64_t GetThreadLocalOffset_CSP() const {return CapSize * 4;}
+    int64_t GetThreadLocalOffset_CUSP() const {return CapSize * 5;}
+    int64_t GetThreadLocalOffset_CDS() const {return CapSize * 6;}
+    int64_t GetThreadLocalOffset_CDL() const {return CapSize * 7;}
+    int64_t GetThreadLocalOffset_CGP() const {return CapSize * 8;}
 
     int64_t GetStackPointerOffset_Next() const {return CapSize * -2;}
     int64_t GetStackPointerOffset_Prev() const {return CapSize * -1;}
