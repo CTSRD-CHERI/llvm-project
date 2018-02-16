@@ -39,7 +39,9 @@
 # MIPS-PREEMPTIBLE-ADDEND-NEXT:  20010 00000000 00000000 00000000 00000000  ................
 # MIPS-PREEMPTIBLE-ADDEND-NEXT:  20020 00000000 00000007 00000000 00000000  ................
 #                                                   ^---- Addend for the baz relocation
+
 # Now check for CHERI:
+# RUN: ld.lld %t-cheri.o -shared -o %t-cheri.so
 # We have 3 load-address relocations for the location field in __cap_relocs and 3 dynamic relocations for the base against the symbols:
 # RUN: llvm-readobj -r %t-cheri.so | FileCheck %s -check-prefix CHERI-PREEMPTIBLE
 # CHERI-PREEMPTIBLE-LABEL:  Relocations [
@@ -52,6 +54,7 @@
 # CHERI-PREEMPTIBLE-NEXT:      0x30030 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE bar 0x0 (real addend unknown)
 # CHERI-PREEMPTIBLE-NEXT:    }
 # CHERI-PREEMPTIBLE-NEXT:  ]
+
 
 # RUN: llvm-objdump -C -section=.data -s %t-cheri.so | FileCheck %s -check-prefix CHERI-PREEMPTIBLE-ADDEND
 # In the case of CHERI we have the addend in the offset field of the cap reloc:
@@ -83,7 +86,9 @@
 # MIPS-BSYMBOLIC-ADDEND-NEXT:  20010 00000000 00020030 00000000 00000000  .......0........
 # MIPS-BSYMBOLIC-ADDEND-NEXT:  20020 00000000 00020047 00000000 00000000  .......G........
 #                                                ^---- All values filled in (including baz + 7)
-# Now check for CHERI:
+
+
+# Now check for CHERI -Bsymbolic:
 # RUN: ld.lld %t-cheri.o -shared -Bsymbolic -o %t-cheri-symbolic.so
 # With -BSymbolic all 6 relocations should be against the load address:
 # We have 3 load-address relocations for the location field in __cap_relocs and 3 dynamic relocations for the base against the symbols:
