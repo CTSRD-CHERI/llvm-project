@@ -10,6 +10,11 @@ using namespace llvm;
 using namespace llvm::object;
 using namespace llvm::ELF;
 
+
+// Change these to #define for extremely verbose debug output
+#undef DEBUG_CAP_RELOCS
+#undef DEBUG_CAP_TABLE
+
 namespace lld {
 
 namespace elf {
@@ -253,7 +258,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
   if (Loc.NeedsDynReloc) {
     // XXXAR: We don't need to create a symbol here since if we pass nullptr
     // to the dynamic reloc it will add a relocation against the load address
-#if 0
+#ifdef DEBUG_CAP_RELOCS
     llvm::sys::path::filename(Loc.Section->File->getName());
     StringRef Filename = llvm::sys::path::filename(Loc.Section->File->getName());
     std::string SymbolHackName = ("__caprelocs_hack_" + Loc.Section->Name + "_" +
@@ -286,10 +291,12 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     // Capability target is the second field -> offset + 8
     uint64_t OffsetInOutSec = CurrentEntryOffset + 8;
     assert(OffsetInOutSec < getSize());
+#ifdef DEBUG_CAP_RELOCS
     message("Adding dyn reloc at " + toString(this) + "+0x" +
             utohexstr(OffsetInOutSec) + " against " +
             Target.verboseToString<ELFT>());
     message("Symbol preemptible:" + Twine(Target.Sym->IsPreemptible));
+#endif
 
     // If the target is not preemptible we can optimize this to a relative
     // relocation agaist the image base
@@ -377,7 +384,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
       // Use less-or-equal here to account for __end_foo symbols which point 1 past the section
       assert(OffsetInOS <= OS->Size);
       TargetSize = OS->Size - OffsetInOS;
-#if 0
+#ifdef DEBUG_CAP_RELOCS
       if (Config->VerboseCapRelocs)
           errs() << " OS OFFSET 0x" << utohexstr(OS->Addr) << "SYM OFFSET 0x"
                  << utohexstr(OffsetInOS) << " SECLEN 0x" << utohexstr(OS->Size)
