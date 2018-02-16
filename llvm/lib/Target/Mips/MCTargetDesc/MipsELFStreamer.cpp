@@ -86,8 +86,9 @@ void MipsELFStreamer::EmitValueImpl(const MCExpr *Value, unsigned Size,
   Labels.clear();
 }
 
-void MipsELFStreamer::EmitCHERICapability(const MCSymbol *Symbol, int64_t Offset,
-                                          unsigned CapSize, SMLoc Loc) {
+void MipsELFStreamer::EmitCheriCapability(const MCSymbol *Symbol,
+                                          int64_t Offset, unsigned CapSize,
+                                          SMLoc Loc) {
   visitUsedSymbol(*Symbol);
   MCContext &Context = getContext();
 
@@ -110,6 +111,18 @@ void MipsELFStreamer::EmitCHERICapability(const MCSymbol *Symbol, int64_t Offset
   DF->getFixups().push_back(cheriFixup);
   DF->getContents().resize(DF->getContents().size() + CapSize, 0xca);
   insert(DF);
+}
+
+void MipsELFStreamer::EmitCheriIntcap(int64_t Value, unsigned CapSize, SMLoc) {
+  assert(CapSize == 32 || CapSize == 16);
+  // TODO: we should probably move the CHERI capability encoding somewhere else.
+  // Maybe to BinaryFormat or Object?
+  EmitIntValue(0, 8);
+  EmitIntValue(Value, 8);
+  if (CapSize == 32) {
+    EmitIntValue(0, 8);
+    EmitIntValue(0, 8);
+  }
 }
 
 void MipsELFStreamer::EmitMipsOptionRecords() {

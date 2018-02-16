@@ -198,18 +198,13 @@ void MCStreamer::EmitGPRel32Value(const MCExpr *Value) {
 void MCStreamer::EmitLegacyCHERICapability(const MCExpr *Value,
                                            unsigned CapSize, SMLoc Loc) {
   assert(TargetStreamer->useLegacyCapRelocs());
+  if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Value)) {
+    EmitCheriIntcap(CE->getValue(), CapSize);
+    return;
+  }
   assert(CapSize == 32 || CapSize == 16);
   // MCStreamers with proper capability support will emit real relocations
   // instead of using the __cap_relocs hack
-  if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Value)) {
-    EmitIntValue(0, 8);
-    EmitIntValue(CE->getValue(), 8);
-    if (CapSize == 32) {
-      EmitIntValue(0, 8);
-      EmitIntValue(0, 8);
-    }
-    return;
-  }
   MCSymbol *Here = Context.createTempSymbol();
   EmitLabel(Here);
   const MCSectionELF *Section =
@@ -230,9 +225,13 @@ void MCStreamer::EmitLegacyCHERICapability(const MCExpr *Value,
   EmitZeros(CapSize);
 }
 
-void MCStreamer::EmitCHERICapability(const MCSymbol *Value, int64_t Addend,
+void MCStreamer::EmitCheriCapability(const MCSymbol *Value, int64_t Addend,
                                      unsigned CapSize, SMLoc Loc) {
-  report_fatal_error("EmitCHERICapability is not implemented for this target!");
+  report_fatal_error("EmitCheriCapability is not implemented for this target!");
+}
+
+void MCStreamer::EmitCheriIntcap(int64_t Value, unsigned CapSize, SMLoc Loc) {
+  report_fatal_error("EmitCheriCapability is not implemented for this target!");
 }
 
 /// Emit NumBytes bytes worth of the value specified by FillValue.

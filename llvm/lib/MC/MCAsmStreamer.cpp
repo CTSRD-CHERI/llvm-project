@@ -294,8 +294,10 @@ public:
   void EmitBundleLock(bool AlignToEnd) override;
   void EmitBundleUnlock() override;
 
-  void EmitCHERICapability(const MCSymbol *Symbol, int64_t Offset,
+  void EmitCheriCapability(const MCSymbol *Symbol, int64_t Offset,
                            unsigned CapSize, SMLoc Loc = SMLoc()) override;
+  void EmitCheriIntcap(int64_t Value, unsigned CapSize,
+                       SMLoc Loc = SMLoc()) override;
 
   bool EmitRelocDirective(const MCExpr &Offset, StringRef Name,
                           const MCExpr *Expr, SMLoc Loc) override;
@@ -1743,7 +1745,7 @@ void MCAsmStreamer::EmitBundleUnlock() {
   EmitEOL();
 }
 
-void MCAsmStreamer::EmitCHERICapability(const MCSymbol *Symbol, int64_t Offset,
+void MCAsmStreamer::EmitCheriCapability(const MCSymbol *Symbol, int64_t Offset,
                                         unsigned CapSize, SMLoc Loc) {
   OS << "\t.chericap\t";
   Symbol->print(OS, MAI);
@@ -1751,6 +1753,13 @@ void MCAsmStreamer::EmitCHERICapability(const MCSymbol *Symbol, int64_t Offset,
     OS << "+" << Offset;
   else if (Offset < 0)
     OS << Offset;
+  EmitEOL();
+}
+
+void MCAsmStreamer::EmitCheriIntcap(int64_t Value, unsigned CapSize,
+                                    SMLoc Loc) {
+  // XXXAR: always emit as hex?
+  OS << "\t.chericap\t" << Value;
   EmitEOL();
 }
 
