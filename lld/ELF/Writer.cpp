@@ -165,6 +165,10 @@ template <class ELFT> void Writer<ELFT>::combineCapRelocsSections() {
     if (S->Name != "__cap_relocs")
       continue;
     // Factory.addInputSec(S, getOutputSectionName(S->Name), In<ELFT>::CapRelocs->OutSec);
+
+    // We only gather the sections here and add the cap_relocs during
+    // finalizeContents() The reason for this is that we don't know if symbols
+    // are preemptible when this function is called.
     In<ELFT>::CapRelocs->addSection(S);
     S = nullptr;
   }

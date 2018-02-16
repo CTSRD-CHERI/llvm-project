@@ -43,20 +43,15 @@ void CheriCapRelocsSection<ELFT>::addSection(InputSectionBase *S) {
   if (Config->VerboseCapRelocs)
     message("Adding cap relocs from " + toString(S->File) + "\n");
 
-  ContainsLegacyCapRelocs = true; // reduce number of warnings for compat
-  processSection(S);
+  LegacyInputs.push_back(S);
 }
 
 template <class ELFT> void CheriCapRelocsSection<ELFT>::finalizeContents() {
-  // TODO: sort by address for improved cache behaviour?
-  // TODO: add the dynamic relocations here:
-  //   for (const auto &I : RelocsMap) {
-  //     // TODO: unresolved symbols -> add dynamic reloc
-  //     const CheriCapReloc& Reloc = I.second;
-  //     Symbol *LocationSym = I.first.first;
-  //     uint64_t LocationOffset = I.first.second;
-  //
-  //   }
+  for (InputSectionBase *S : LegacyInputs) {
+    if (Config->VerboseCapRelocs)
+      message("Processing legacy cap relocs from " + toString(S->File) + "\n");
+    processSection(S);
+  }
 }
 
 static inline void nonFatalWarning(const Twine &Str) {
@@ -291,8 +286,10 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     // Capability target is the second field -> offset + 8
     uint64_t OffsetInOutSec = CurrentEntryOffset + 8;
     assert(OffsetInOutSec < getSize());
-    // message("Adding dyn reloc at " + toString(this) + "+0x" +
-    // utohexstr(OffsetInOutSec) + " against " + toString(TargetSym));
+    message("Adding dyn reloc at " + toString(this) + "+0x" +
+            utohexstr(OffsetInOutSec) + " against " +
+            Target.verboseToString<ELFT>());
+    message("Symbol preemptible:" + Twine(Target.Sym->IsPreemptible));
 
     // If the target is not preemptible we can optimize this to a relative
     // relocation agaist the image base
@@ -432,7 +429,9 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     }
     uint64_t TargetOffset = Reloc.CapabilityOffset;
     uint64_t Permissions = Reloc.Target.Sym->isFunc() ? 1ULL << 63 : 0;
-    uint64_t TargetSize = getTargetSize<ELFT>(Location, Reloc, /*Strict=*/!ContainsLegacyCapRelocs);
+    uint64_t TargetSize =
+        getTargetSize<ELFT>(Location, Reloc,
+                            /*Strict=*/!containsLegacyCapRelocs());
     // TODO: should we warn about symbols that are out-of-bounds?
     // mandoc seems to do it so I guess we need it
     // if (TargetOffset < 0 || TargetOffset > TargetSize) warn(...);

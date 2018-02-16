@@ -71,7 +71,7 @@ public:
   static constexpr size_t RelocSize = 40;
   // Add a __cap_relocs section from in input object file
   void addSection(InputSectionBase *S);
-  bool empty() const override { return RelocsMap.empty(); }
+  bool empty() const override { return RelocsMap.empty() && LegacyInputs.empty(); }
   size_t getSize() const override { return RelocsMap.size() * Entsize; }
   void finalizeContents() override;
   void writeTo(uint8_t *Buf) override;
@@ -99,7 +99,9 @@ private:
   // TODO: list of added dynamic relocations?
 
   llvm::MapVector<CheriCapRelocLocation, CheriCapReloc> RelocsMap;
-  bool ContainsLegacyCapRelocs = false;
+  std::vector<InputSectionBase *> LegacyInputs;
+  // If this is true reduce number of warnings for compat
+  bool containsLegacyCapRelocs() const { return !LegacyInputs.empty(); }
 };
 
 class CheriCapTableSection : public SyntheticSection {
