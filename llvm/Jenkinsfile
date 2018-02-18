@@ -18,7 +18,7 @@ def doGit(String url, String branch, String subdir) {
                     extensions: [/* to skip polling: [$class: 'IgnoreNotifyCommit'], */
                             [$class: 'RelativeTargetDirectory', relativeTargetDir: subdir],
                             [$class: 'CloneOption', noTags: false, reference: '', shallow: true, depth: 10, timeout: 60],
-                            /* Clean clone: */ [$class: 'WipeWorkspace'],
+                            // Uncomment for git problems debugging: /* Clean clone: */ [$class: 'WipeWorkspace'],
                             // [$class: 'LocalBranch', localBranch: branch]
                     ],
                     userRemoteConfigs: [[url: url, credentialsId: 'ctsrd-jenkins-api-token-with-username']]
