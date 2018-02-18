@@ -10,6 +10,11 @@ using namespace llvm;
 using namespace llvm::object;
 using namespace llvm::ELF;
 
+
+// Change these to #define for extremely verbose debug output
+#undef DEBUG_CAP_RELOCS
+#undef DEBUG_CAP_TABLE
+
 namespace lld {
 
 namespace elf {
@@ -43,20 +48,15 @@ void CheriCapRelocsSection<ELFT>::addSection(InputSectionBase *S) {
   if (Config->VerboseCapRelocs)
     message("Adding cap relocs from " + toString(S->File) + "\n");
 
-  ContainsLegacyCapRelocs = true; // reduce number of warnings for compat
-  processSection(S);
+  LegacyInputs.push_back(S);
 }
 
 template <class ELFT> void CheriCapRelocsSection<ELFT>::finalizeContents() {
-  // TODO: sort by address for improved cache behaviour?
-  // TODO: add the dynamic relocations here:
-  //   for (const auto &I : RelocsMap) {
-  //     // TODO: unresolved symbols -> add dynamic reloc
-  //     const CheriCapReloc& Reloc = I.second;
-  //     Symbol *LocationSym = I.first.first;
-  //     uint64_t LocationOffset = I.first.second;
-  //
-  //   }
+  for (InputSectionBase *S : LegacyInputs) {
+    if (Config->VerboseCapRelocs)
+      message("Processing legacy cap relocs from " + toString(S->File) + "\n");
+    processSection(S);
+  }
 }
 
 static inline void nonFatalWarning(const Twine &Str) {
@@ -107,12 +107,12 @@ static SymbolAndOffset sectionWithOffsetToSymbol(InputSectionBase *IS,
 }
 
 SymbolAndOffset SymbolAndOffset::findRealSymbol() const {
-  if (!Symbol->isSection())
+  if (!Sym->isSection())
     return *this;
 
-  if (Defined *DefinedSym = dyn_cast<Defined>(Symbol)) {
+  if (Defined *DefinedSym = dyn_cast<Defined>(Sym)) {
     if (auto *IS = dyn_cast<InputSectionBase>(DefinedSym->Section)) {
-      return sectionWithOffsetToSymbol(IS, Offset, Symbol);
+      return sectionWithOffsetToSymbol(IS, Offset, Sym);
     }
   }
   return *this;
@@ -185,8 +185,8 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     SymbolAndOffset RealTarget = RelocTarget.findRealSymbol();
     if (Config->VerboseCapRelocs) {
       message("Adding capability relocation at " +
-              verboseToString<ELFT>(RealLocation) + "\nagainst " +
-              verboseToString<ELFT>(RealTarget));
+              RealLocation.verboseToString<ELFT>() + "\nagainst " +
+              RealTarget.verboseToString<ELFT>());
     }
 
     bool TargetNeedsDynReloc = false;
@@ -221,7 +221,7 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     auto *LocationSec = cast<InputSectionBase>(LocationDef->Section);
     addCapReloc({LocationSec, (uint64_t)LocationRel.r_addend, false},
                 RealTarget, TargetNeedsDynReloc, TargetCapabilityOffset,
-                RealLocation.Symbol);
+                RealLocation.Sym);
   }
 }
 
@@ -235,12 +235,11 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
   TargetNeedsDynReloc = TargetNeedsDynReloc || Config->Pic || Config->Pie;
   uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
 
-  if (Target.Symbol->isUndefined() && !Target.Symbol->isUndefWeak()) {
-    std::string SourceMsg = SourceSymbol
-                                ? lld::verboseToString<ELFT>(SourceSymbol)
-                                : Loc.toString();
+  if (Target.Sym->isUndefined() && !Target.Sym->isUndefWeak()) {
+    std::string SourceMsg =
+        SourceSymbol ? verboseToString<ELFT>(SourceSymbol) : Loc.toString();
     std::string Msg =
-        "cap_reloc against undefined symbol: " + toString(*Target.Symbol) +
+        "cap_reloc against undefined symbol: " + toString(*Target.Sym) +
         "\n>>> referenced by " + SourceMsg;
     if (Config->UnresolvedSymbols == UnresolvedPolicy::ReportError)
       error(Msg);
@@ -252,14 +251,14 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
   if (errorHandler().Verbose && CapabilityOffset < 0)
     message("global capability offset " + Twine(CapabilityOffset) +
             " is less than 0:\n>>> Location: " + Loc.toString() +
-            "\n>>> Target: " + verboseToString<ELFT>(Target));
+            "\n>>> Target: " + Target.verboseToString<ELFT>());
   if (!addEntry(Loc, {Target, CapabilityOffset, TargetNeedsDynReloc})) {
     return; // Maybe happens with vtables?
   }
   if (Loc.NeedsDynReloc) {
     // XXXAR: We don't need to create a symbol here since if we pass nullptr
     // to the dynamic reloc it will add a relocation against the load address
-#if 0
+#ifdef DEBUG_CAP_RELOCS
     llvm::sys::path::filename(Loc.Section->File->getName());
     StringRef Filename = llvm::sys::path::filename(Loc.Section->File->getName());
     std::string SymbolHackName = ("__caprelocs_hack_" + Loc.Section->Name + "_" +
@@ -292,12 +291,16 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     // Capability target is the second field -> offset + 8
     uint64_t OffsetInOutSec = CurrentEntryOffset + 8;
     assert(OffsetInOutSec < getSize());
-    // message("Adding dyn reloc at " + toString(this) + "+0x" +
-    // utohexstr(OffsetInOutSec) + " against " + toString(TargetSym));
+#ifdef DEBUG_CAP_RELOCS
+    message("Adding dyn reloc at " + toString(this) + "+0x" +
+            utohexstr(OffsetInOutSec) + " against " +
+            Target.verboseToString<ELFT>());
+    message("Symbol preemptible:" + Twine(Target.Sym->IsPreemptible));
+#endif
 
     // If the target is not preemptible we can optimize this to a relative
     // relocation agaist the image base
-    bool RelativeToLoadAddress = !Target.Symbol->IsPreemptible;
+    bool RelativeToLoadAddress = !Target.Sym->IsPreemptible;
     // The addend is not used as the offset into the capability here, as we
     // have the offset field in the __cap_relocs for that. The Addend
     // will be zero unless we are targetting a string constant as these
@@ -306,21 +309,22 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     // TODO: this should not be relative but use R_MIPS_64 for an absolute value
     // This happens to work for FreeBSD rtld  but is fragile
     InX::RelaDyn->addReloc({elf::Target->RelativeRel, this, OffsetInOutSec,
-                                 RelativeToLoadAddress, Target.Symbol,
-                                 static_cast<int64_t>(Target.Offset)});
+                            RelativeToLoadAddress, Target.Sym,
+                            static_cast<int64_t>(Target.Offset)});
   }
 }
 
 template<typename ELFT>
 static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
                               const CheriCapReloc &Reloc, bool Strict) {
-  uint64_t TargetSize = Reloc.Target.Symbol->getSize();
+  uint64_t TargetSize = Reloc.Target.Sym->getSize();
   if (TargetSize > INT_MAX) {
-    error("Insanely large symbol size for " + verboseToString<ELFT>(Reloc.Target) +
-          "for cap_reloc at" + Location.toString());
+    error("Insanely large symbol size for " +
+          Reloc.Target.verboseToString<ELFT>() + "for cap_reloc at" +
+          Location.toString());
     return 0;
   }
-  auto TargetSym = Reloc.Target.Symbol;
+  auto TargetSym = Reloc.Target.Sym;
   if (TargetSize == 0 && !TargetSym->IsPreemptible) {
     StringRef Name = TargetSym->getName();
     // Section end symbols like __preinit_array_end, etc. should actually be
@@ -344,7 +348,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
         // a size > 0.
         error("Zero size weak/ABS symbol did not resolve to NULL but 0x" +
               utohexstr(TargetSym->getVA(0)) + ": " +
-              lld::verboseToString<ELFT>(TargetSym));
+              verboseToString<ELFT>(TargetSym));
       }
       return 0;
     }
@@ -364,8 +368,8 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
 
     if (WarnAboutUnknownSize || errorHandler().Verbose) {
       std::string Msg = "could not determine size of cap reloc against " +
-           verboseToString<ELFT>(Reloc.Target) + "\n>>> referenced by " +
-           Location.toString();
+                        Reloc.Target.verboseToString<ELFT>() +
+                        "\n>>> referenced by " + Location.toString();
       if (Strict)
         warn(Msg);
       else
@@ -380,7 +384,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
       // Use less-or-equal here to account for __end_foo symbols which point 1 past the section
       assert(OffsetInOS <= OS->Size);
       TargetSize = OS->Size - OffsetInOS;
-#if 0
+#ifdef DEBUG_CAP_RELOCS
       if (Config->VerboseCapRelocs)
           errs() << " OS OFFSET 0x" << utohexstr(OS->Addr) << "SYM OFFSET 0x"
                  << utohexstr(OffsetInOS) << " SECLEN 0x" << utohexstr(OS->Size)
@@ -388,7 +392,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
 #endif
     } else {
       warn("Could not find size for symbol " +
-           verboseToString<ELFT>(Reloc.Target) +
+           Reloc.Target.verboseToString<ELFT>() +
            " and could not determine section size. Using 0.");
       // TargetSize = std::numeric_limits<uint64_t>::max();
       return 0;
@@ -421,8 +425,9 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     // and add a relocation against the load address?
     // Also this would make llvm-objdump -C more useful because it would
     // actually display the symbol that the relocation is against
-    uint64_t TargetVA = Reloc.Target.Symbol->getVA(Reloc.Target.Offset);
-    bool PreemptibleDynReloc = Reloc.NeedsDynReloc && Reloc.Target.Symbol->IsPreemptible;
+    uint64_t TargetVA = Reloc.Target.Sym->getVA(Reloc.Target.Offset);
+    bool PreemptibleDynReloc =
+        Reloc.NeedsDynReloc && Reloc.Target.Sym->IsPreemptible;
     if (PreemptibleDynReloc) {
       // If we have a relocation against a preemptible symbol (even in the
       // current DSO) we can't compute the virtual address here so we only write
@@ -430,8 +435,10 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
       TargetVA = Reloc.Target.Offset;
     }
     uint64_t TargetOffset = Reloc.CapabilityOffset;
-    uint64_t Permissions = Reloc.Target.Symbol->isFunc() ? 1ULL << 63 : 0;
-    uint64_t TargetSize = getTargetSize<ELFT>(Location, Reloc, /*Strict=*/!ContainsLegacyCapRelocs);
+    uint64_t Permissions = Reloc.Target.Sym->isFunc() ? 1ULL << 63 : 0;
+    uint64_t TargetSize =
+        getTargetSize<ELFT>(Location, Reloc,
+                            /*Strict=*/!containsLegacyCapRelocs());
     // TODO: should we warn about symbols that are out-of-bounds?
     // mandoc seems to do it so I guess we need it
     // if (TargetOffset < 0 || TargetOffset > TargetSize) warn(...);
