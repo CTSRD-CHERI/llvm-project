@@ -10,18 +10,32 @@ properties([disableConcurrentBuilds(),
         pipelineTriggers([githubPush()])
 ])
 
-def scmConfig(String url, String branch, String subdir) {
-    def credentials = 'ctsrd-jenkins-new-github-api-key'
-    return [ changelog: true, poll: true, branches: [[name: '*/' + branch]],
-            scm: [$class: 'GitSCM', doGenerateSubmoduleConfigurations: false,
+def doGit(String url, String branch, String subdir) {
+    def options = [ changelog: true, poll: true,
+            scm: [$class: 'GitSCM',
+                    doGenerateSubmoduleConfigurations: false,
+                    branches: [[name: "refs/heads/${branch}"]],
                     extensions: [/* to skip polling: [$class: 'IgnoreNotifyCommit'], */
                             [$class: 'RelativeTargetDirectory', relativeTargetDir: subdir],
-                            [$class: 'CloneOption', noTags: false, reference: '', shallow: true, timeout: 60]
+                            [$class: 'CloneOption', noTags: false, reference: '', shallow: true, depth: 10, timeout: 60],
+                            /* Clean clone: */ [$class: 'WipeWorkspace'],
+                            // [$class: 'LocalBranch', localBranch: branch]
                     ],
-                    submoduleCfg: [],
-                    userRemoteConfigs: [[url: url, credentialsId: credentials]]
+                    userRemoteConfigs: [[url: url, credentialsId: 'ctsrd-jenkins-api-token-with-username']]
             ]
     ]
+    echo("Git options: ${options}")
+    def result = checkout(options)
+    dir(subdir) {
+        sh """
+set -xe
+pwd
+git branch
+git status
+git log -3
+"""
+    }
+    return result
 }
 
 def runTests(int bits) {
@@ -41,14 +55,6 @@ echo "Done running CHERI${bits} tests"
 }
 
 def doBuild() {
-    if (false) {
-        stage("Print env") {
-            env2 = env.getEnvironment()
-            for (entry in env2) {
-                echo("${entry}")
-            }
-        }
-    }
     def llvmRepo = null
     def clangRepo = null
     def lldRepo = null
@@ -58,11 +64,11 @@ def doBuild() {
     stage("Checkout sources") {
         timestamps {
             echo("scm=${scm}")
-            llvmRepo = checkout(scmConfig('https://github.com/CTSRD-CHERI/llvm', llvmBranch, 'llvm'))
+            llvmRepo = doGit('https://github.com/CTSRD-CHERI/llvm', llvmBranch, 'llvm')
             echo("LLVM = ${llvmRepo}")
-            clangRepo = checkout(scmConfig('https://github.com/CTSRD-CHERI/clang', clangBranch, 'llvm/tools/clang'))
+            clangRepo = doGit('https://github.com/CTSRD-CHERI/clang', clangBranch, 'llvm/tools/clang')
             echo("CLANG = ${clangRepo}")
-            lldRepo = checkout(scmConfig('https://github.com/CTSRD-CHERI/lld', lldBranch, 'llvm/tools/lld'))
+            lldRepo = doGit('https://github.com/CTSRD-CHERI/lld', lldBranch, 'llvm/tools/lld')
             echo("LLD = ${lldRepo}")
         }
     }
