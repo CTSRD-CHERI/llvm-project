@@ -578,7 +578,7 @@ def main_with_tmp(builtinParameters):
             else:
                 by_suite[suite]['passes'] += 1
         xunit_output_file = open(opts.xunit_output_file, "w")
-        xunit_output_file.write("<?xml version=\"1.1\" encoding=\"UTF-8\" ?>\n")
+        xunit_output_file.write("<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n")
         xunit_output_file.write("<testsuites>\n")
         for suite_name, suite in by_suite.items():
             safe_suite_name = suite_name.replace(".", "-")
