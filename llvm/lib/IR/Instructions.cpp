@@ -2473,10 +2473,6 @@ unsigned CastInst::isEliminableCastPair(
       if (!SrcIntPtrTy || DstIntPtrTy != SrcIntPtrTy)
         return 0;
       unsigned PtrSize = SrcIntPtrTy->getScalarSizeInBits();
-      // FIXME: This is probably too conservative for a number of platforms.
-      // FIXME: Remove this once addrspacecast things are in.
-      if (DstTy->getPointerAddressSpace() != SrcTy->getPointerAddressSpace())
-        return 0;
       if (MidSize >= PtrSize)
         return Instruction::BitCast;
       return 0;
@@ -3827,8 +3823,7 @@ InsertValueInst *InsertValueInst::cloneImpl() const {
 
 AllocaInst *AllocaInst::cloneImpl() const {
   AllocaInst *Result = new AllocaInst(getAllocatedType(),
-                                      getType()->getPointerAddressSpace(),
-  // XXXAR: UPSTREAM uses getAddressSpace here: getType()->getAddressSpace(),
+                                      getType()->getAddressSpace(),
                                       (Value *)getOperand(0), getAlignment());
   Result->setUsedWithInAlloca(isUsedWithInAlloca());
   Result->setSwiftError(isSwiftError());
