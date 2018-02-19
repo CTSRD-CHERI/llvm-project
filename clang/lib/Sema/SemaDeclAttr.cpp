@@ -4306,18 +4306,18 @@ static void handleCallConvAttr(Sema &S, Decl *D, const AttributeList &AL) {
   }
   case AttributeList::AT_CHERICCall:
     D->addAttr(::new (S.Context)
-               CHERICCallAttr(Attr.getRange(), S.Context,
-                             Attr.getAttributeSpellingListIndex()));
+               CHERICCallAttr(AL.getRange(), S.Context,
+                             AL.getAttributeSpellingListIndex()));
     return;
   case AttributeList::AT_CHERICCallee:
     D->addAttr(::new (S.Context)
-               CHERICCalleeAttr(Attr.getRange(), S.Context,
-                             Attr.getAttributeSpellingListIndex()));
+               CHERICCalleeAttr(AL.getRange(), S.Context,
+                             AL.getAttributeSpellingListIndex()));
     return;
   case AttributeList::AT_CHERICCallback:
     D->addAttr(::new (S.Context)
-               CHERICCallbackAttr(Attr.getRange(), S.Context,
-                             Attr.getAttributeSpellingListIndex()));
+               CHERICCallbackAttr(AL.getRange(), S.Context,
+                             AL.getAttributeSpellingListIndex()));
     return;
   case AttributeList::AT_IntelOclBicc:
     D->addAttr(::new (S.Context)
@@ -6446,7 +6446,7 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     handleSimpleAttribute<NoInlineAttr>(S, D, AL);
     break;
   case AttributeList::AT_Sensitive:
-    handleSensitiveAttr   (S, D, Attr); break;
+    handleSensitiveAttr(S, D, AL);
     break;
   case AttributeList::AT_NoInstrumentFunction: // Interacts with -pg.
     handleSimpleAttribute<NoInstrumentFunctionAttr>(S, D, AL);
@@ -6471,13 +6471,13 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     handleCallConvAttr(S, D, AL);
     break;
   case AttributeList::AT_CHERIMethodClass:
-    handleCHERIMethodClass(S, D, Attr);
+    handleCHERIMethodClass(S, D, AL);
     break;
   case AttributeList::AT_CHERIMethodSuffix:
-    handleCHERIMethodSuffix(S, D, Attr);
+    handleCHERIMethodSuffix(S, D, AL);
     break;
   case AttributeList::AT_PointerInterpretationCaps:
-    handleSimpleAttribute<PointerInterpretationCapsAttr>(S, D, Attr);
+    handleSimpleAttribute<PointerInterpretationCapsAttr>(S, D, AL);
     break;
   case AttributeList::AT_Suppress:
     handleSuppressAttr(S, D, AL);
