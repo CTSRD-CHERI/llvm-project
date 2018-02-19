@@ -298,7 +298,7 @@ void DataLayout::parseSpecifier(StringRef Desc) {
       // Size of index used in GEP for address calculation.
       // The parameter is optional. By default it is equal to size of pointer.
       // XXXAR: for now keep the 'pf' -> Index size = 64 to keep old tests working
-      unsigned IndexSize = isFat ? 64 : PointerMemSize;
+      unsigned IndexSize = isFat ? inBytes(64) : PointerMemSize;
 
       // Preferred alignment.
       unsigned PointerPrefAlign = PointerABIAlign;
