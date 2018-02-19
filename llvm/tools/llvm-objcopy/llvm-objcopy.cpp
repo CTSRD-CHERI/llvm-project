@@ -96,8 +96,12 @@ static cl::list<std::string> OnlyKeep("only-keep",
                                       cl::value_desc("section"));
 static cl::alias OnlyKeepA("j", cl::desc("Alias for only-keep"),
                            cl::aliasopt(OnlyKeep));
+static cl::opt<bool>
+    OnlyKeepDebug("only-keep-debug",
+                  cl::desc("Removes all but debug information"));
 static cl::opt<bool> StripDebug("strip-debug",
                                 cl::desc("Removes all debug information"));
+
 static cl::opt<bool> StripSections("strip-sections",
                                    cl::desc("Remove all section headers"));
 static cl::opt<bool>
@@ -280,6 +284,25 @@ void HandleArgs(Object &Obj, const Reader &Reader) {
         return false;
 
       // Remove everything else.
+      return true;
+    };
+  }
+
+  if (OnlyKeepDebug) {
+    RemovePred = [RemovePred, &Obj](const SectionBase &Sec) {
+      // Allow all implicit removes.
+      if (RemovePred(Sec))
+        return true;
+
+      // Only keep debug sections and shstrtab. This is much more aggressive
+      // than either GNU binutils or elftoolchain but GDB accepts this just fine
+      if (&Sec == Obj.SectionNames || Sec.Name.startswith(".debug") ||
+          Sec.Name.startswith(".zdebug") || Sec.Name.startswith(".gdb_index") ||
+          Sec.Name.startswith(".line") || Sec.Name.startswith(".stab") ||
+          Sec.Name.startswith(".gnu.linkonce.wi."))
+        return false;
+
+      // remove everything else
       return true;
     };
   }
