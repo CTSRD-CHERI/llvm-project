@@ -1855,7 +1855,7 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
     case BuiltinType::Id:
 #include "clang/Basic/OpenCLImageTypes.def"
       AS = getTargetAddressSpace(
-          Target->getOpenCLTypeAddrSpace(getOpenCLTypeKind(T)), nullptr);
+          Target->getOpenCLTypeAddrSpace(getOpenCLTypeKind(T)));
       Width = Target->getPointerWidth(AS);
       Align = Target->getPointerAlign(AS);
       break;
@@ -1870,7 +1870,7 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
       Width = Target->getCHERICapabilityWidth();
       Align = Target->getCHERICapabilityAlign();
     } else {
-      AS = getTargetAddressSpace(cast<BlockPointerType>(T)->getPointeeType(), nullptr);
+      AS = getTargetAddressSpace(cast<BlockPointerType>(T)->getPointeeType());
       Width = Target->getPointerWidth(AS);
       Align = Target->getPointerAlign(AS);
     }
@@ -1884,7 +1884,7 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
       Width = Target->getCHERICapabilityWidth();
       Align = Target->getCHERICapabilityAlign();
     } else {
-      AS = getTargetAddressSpace(cast<ReferenceType>(T)->getPointeeType(), nullptr);
+      AS = getTargetAddressSpace(cast<ReferenceType>(T)->getPointeeType());
       Width = Target->getPointerWidth(AS);
       Align = Target->getPointerAlign(AS);
     }
@@ -1904,7 +1904,7 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
       Width = Target->getCHERICapabilityWidth();
       Align = Target->getCHERICapabilityAlign();
     } else {
-      AS = getTargetAddressSpace(PointeeTy, nullptr);
+      AS = getTargetAddressSpace(PointeeTy);
       Width = Target->getPointerWidth(AS);
       Align = Target->getPointerAlign(AS);
     }
@@ -2030,8 +2030,10 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
   break;
 
   case Type::Pipe:
-    Width = Target->getPointerWidth(getTargetAddressSpace(LangAS::opencl_global, nullptr));
-    Align = Target->getPointerAlign(getTargetAddressSpace(LangAS::opencl_global, nullptr));
+    Width =
+        Target->getPointerWidth(getTargetAddressSpace(LangAS::opencl_global));
+    Align =
+        Target->getPointerAlign(getTargetAddressSpace(LangAS::opencl_global));
     break;
   }
 
@@ -10145,8 +10147,7 @@ uint64_t ASTContext::getTargetNullPointerValue(QualType QT) const {
   return getTargetInfo().getNullPointerValue(AS);
 }
 
-unsigned ASTContext::getTargetAddressSpace(LangAS AS, void *dummy) const {
-  (void)dummy; // Dummy parameter needed to find all calls to getTargetAddressSpace()
+unsigned ASTContext::getTargetAddressSpace(LangAS AS) const {
   if (isTargetAddressSpace(AS)) {
     if (AS == LangAS::cheri_tls)
       return 0; // XXXAR: CHERI still needs rdhwr29 which is AS0

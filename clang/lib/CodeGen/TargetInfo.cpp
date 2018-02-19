@@ -455,7 +455,7 @@ unsigned TargetCodeGenInfo::getAddressSpaceForType(QualType DestTy,
   if (DestTy->isCHERICapabilityType(Context)) {
     return getCHERICapabilityAS();
   }
-  return Context.getTargetAddressSpace(DestTy.getQualifiers(), nullptr);
+  return Context.getTargetAddressSpace(DestTy.getQualifiers());
 }
 
 llvm::Value *TargetCodeGenInfo::getPointerAddress(CodeGen::CodeGenFunction &CGF,
@@ -466,7 +466,7 @@ llvm::Value *TargetCodeGenInfo::getPointerAddress(CodeGen::CodeGenFunction &CGF,
 }
 
 bool TargetCodeGenInfo::canMarkAsNonNull(QualType DestTy, ASTContext& Context) const {
-  unsigned AS = Context.getTargetAddressSpace(DestTy.getQualifiers(), nullptr);
+  unsigned AS = getAddressSpaceForType(DestTy, Context);
   if (AS == 0 || (Context.getTargetInfo().SupportsCapabilities() &&
                   AS == getCHERICapabilityAS()))
     return true;

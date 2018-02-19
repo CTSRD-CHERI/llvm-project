@@ -300,7 +300,7 @@ unsigned CodeGenModule::getAddressSpaceForType(QualType T) {
 }
 
 unsigned CodeGenModule::getTargetAddressSpace(LangAS AddrSpace) {
-  unsigned Result = getContext().getTargetAddressSpace(AddrSpace, nullptr);
+  unsigned Result = getContext().getTargetAddressSpace(AddrSpace);
   return Result;
 }
 
