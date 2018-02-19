@@ -72,6 +72,12 @@ enum class DebugType {
   Fixup = 0x4,  /// Relocation Table
 };
 
+enum class GuardCFLevel {
+  Off,
+  NoLongJmp, // Emit gfids but no longjmp tables
+  Full,      // Enable all protections.
+};
+
 // Global configuration.
 struct Configuration {
   enum ManifestKind { SideBySide, Embed, No };
@@ -111,6 +117,9 @@ struct Configuration {
   Symbol *DelayLoadHelper = nullptr;
 
   bool SaveTemps = false;
+
+  // /guard:cf
+  GuardCFLevel GuardCF = GuardCFLevel::Off;
 
   // Used for SafeSEH.
   Symbol *SEHTable = nullptr;
@@ -179,6 +188,7 @@ struct Configuration {
   bool AppContainer = false;
   bool MinGW = false;
   bool WarnLocallyDefinedImported = true;
+  bool Incremental = true;
 };
 
 extern Configuration *Config;

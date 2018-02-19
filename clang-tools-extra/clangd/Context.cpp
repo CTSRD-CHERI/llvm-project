@@ -20,5 +20,17 @@ Context::Context(std::shared_ptr<const Data> DataPtr)
 
 Context Context::clone() const { return Context(DataPtr); }
 
+static Context &currentContext() {
+  static thread_local auto C = Context::empty();
+  return C;
+}
+
+const Context &Context::current() { return currentContext(); }
+
+Context Context::swapCurrent(Context Replacement) {
+  std::swap(Replacement, currentContext());
+  return Replacement;
+}
+
 } // namespace clangd
 } // namespace clang

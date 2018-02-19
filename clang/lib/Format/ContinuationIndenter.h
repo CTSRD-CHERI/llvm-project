@@ -208,7 +208,8 @@ struct ParenState {
         NoLineBreakInOperand(false), LastOperatorWrapped(true),
         ContainsLineBreak(false), ContainsUnwrappedBuilder(false),
         AlignColons(true), ObjCSelectorNameFound(false),
-        HasMultipleNestedBlocks(false), NestedBlockInlined(false) {}
+        HasMultipleNestedBlocks(false), NestedBlockInlined(false),
+        IsInsideObjCArrayLiteral(false) {}
 
   /// \brief The position to which a specific parenthesis level needs to be
   /// indented.
@@ -314,9 +315,13 @@ struct ParenState {
   /// the same token.
   bool HasMultipleNestedBlocks : 1;
 
-  // \brief The start of a nested block (e.g. lambda introducer in C++ or
-  // "function" in JavaScript) is not wrapped to a new line.
+  /// \brief The start of a nested block (e.g. lambda introducer in C++ or
+  /// "function" in JavaScript) is not wrapped to a new line.
   bool NestedBlockInlined : 1;
+
+  /// \brief \c true if the current \c ParenState represents an Objective-C
+  /// array literal.
+  bool IsInsideObjCArrayLiteral : 1;
 
   bool operator<(const ParenState &Other) const {
     if (Indent != Other.Indent)

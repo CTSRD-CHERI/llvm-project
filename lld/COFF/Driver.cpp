@@ -547,6 +547,12 @@ static void createImportLibrary(bool AsLib) {
   std::string LibName = getImportName(AsLib);
   std::string Path = getImplibPath();
 
+  if (!Config->Incremental) {
+    HandleError(writeImportLibrary(LibName, Path, Exports, Config->Machine,
+                                   false, Config->MinGW));
+    return;
+  }
+
   // If the import library already exists, replace it only if the contents
   // have changed.
   ErrorOr<std::unique_ptr<MemoryBuffer>> OldBuf = MemoryBuffer::getFile(Path);
@@ -812,7 +818,6 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   InitializeAllTargetMCs();
   InitializeAllAsmParsers();
   InitializeAllAsmPrinters();
-  InitializeAllDisassemblers();
 
   // Parse command line options.
   ArgParser Parser;
@@ -907,6 +912,7 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   // Handle /debug
   if (Args.hasArg(OPT_debug, OPT_debug_dwarf, OPT_debug_ghash)) {
     Config->Debug = true;
+    Config->Incremental = true;
     if (auto *Arg = Args.getLastArg(OPT_debugtype))
       Config->DebugTypes = parseDebugType(Arg->getValue());
     else
@@ -975,6 +981,10 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   // Handle /stack
   if (auto *Arg = Args.getLastArg(OPT_stack))
     parseNumbers(Arg->getValue(), &Config->StackReserve, &Config->StackCommit);
+
+  // Handle /guard:cf
+  if (auto *Arg = Args.getLastArg(OPT_guard))
+    parseGuard(Arg->getValue());
 
   // Handle /heap
   if (auto *Arg = Args.getLastArg(OPT_heap))
@@ -1113,12 +1123,32 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   Config->AllowBind = Args.hasFlag(OPT_allowbind, OPT_allowbind_no, true);
   Config->AllowIsolation =
       Args.hasFlag(OPT_allowisolation, OPT_allowisolation_no, true);
+  Config->Incremental =
+      Args.hasFlag(OPT_incremental, OPT_incremental_no,
+                   !Config->DoGC && !Config->DoICF && !Args.hasArg(OPT_order));
   Config->NxCompat = Args.hasFlag(OPT_nxcompat, OPT_nxcompat_no, true);
   Config->TerminalServerAware = Args.hasFlag(OPT_tsaware, OPT_tsaware_no, true);
   Config->DebugDwarf = Args.hasArg(OPT_debug_dwarf);
   Config->DebugGHashes = Args.hasArg(OPT_debug_ghash);
 
   Config->MapFile = getMapFile(Args);
+
+  if (Config->Incremental && Config->DoGC) {
+    warn("ignoring '/INCREMENTAL' because REF is enabled; use '/OPT:NOREF' to "
+         "disable");
+    Config->Incremental = false;
+  }
+
+  if (Config->Incremental && Config->DoICF) {
+    warn("ignoring '/INCREMENTAL' because ICF is enabled; use '/OPT:NOICF' to "
+         "disable");
+    Config->Incremental = false;
+  }
+
+  if (Config->Incremental && Args.hasArg(OPT_order)) {
+    warn("ignoring '/INCREMENTAL' due to '/ORDER' specification");
+    Config->Incremental = false;
+  }
 
   if (errorCount())
     return;
@@ -1258,11 +1288,9 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     Symtab->addAbsolute("___safe_se_handler_count", 0);
   }
 
-  // We do not support /guard:cf (control flow protection) yet.
-  // Define CFG symbols anyway so that we can link MSVC 2015 CRT.
   Symtab->addAbsolute(mangle("__guard_fids_count"), 0);
   Symtab->addAbsolute(mangle("__guard_fids_table"), 0);
-  Symtab->addAbsolute(mangle("__guard_flags"), 0x100);
+  Symtab->addAbsolute(mangle("__guard_flags"), 0);
   Symtab->addAbsolute(mangle("__guard_iat_count"), 0);
   Symtab->addAbsolute(mangle("__guard_iat_table"), 0);
   Symtab->addAbsolute(mangle("__guard_longjmp_count"), 0);
@@ -1337,7 +1365,7 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   // Handle /safeseh.
   if (Args.hasFlag(OPT_safeseh, OPT_safeseh_no, false)) {
     for (ObjFile *File : ObjFile::Instances)
-      if (!File->SEHCompat)
+      if (!File->hasSafeSEH())
         error("/safeseh: " + File->getName() + " is not compatible with SEH");
     if (errorCount())
       return;

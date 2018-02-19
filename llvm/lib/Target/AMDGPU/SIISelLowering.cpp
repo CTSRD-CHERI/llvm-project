@@ -205,6 +205,7 @@ SITargetLowering::SITargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::INTRINSIC_WO_CHAIN, MVT::Other, Custom);
   setOperationAction(ISD::INTRINSIC_WO_CHAIN, MVT::f32, Custom);
   setOperationAction(ISD::INTRINSIC_WO_CHAIN, MVT::v4f32, Custom);
+  setOperationAction(ISD::INTRINSIC_WO_CHAIN, MVT::v2i16, Custom);
   setOperationAction(ISD::INTRINSIC_WO_CHAIN, MVT::v2f16, Custom);
 
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::v2f16, Custom);
@@ -899,7 +900,8 @@ bool SITargetLowering::isLegalAddressingMode(const DataLayout &DL,
   if (AS == AMDGPUASI.GLOBAL_ADDRESS)
     return isLegalGlobalAddressingMode(AM);
 
-  if (AS == AMDGPUASI.CONSTANT_ADDRESS) {
+  if (AS == AMDGPUASI.CONSTANT_ADDRESS ||
+      AS == AMDGPUASI.CONSTANT_ADDRESS_32BIT) {
     // If the offset isn't a multiple of 4, it probably isn't going to be
     // correctly aligned.
     // FIXME: Can we get the real alignment here?
@@ -1022,7 +1024,8 @@ bool SITargetLowering::allowsMisalignedMemoryAccesses(EVT VT,
     // If we have an uniform constant load, it still requires using a slow
     // buffer instruction if unaligned.
     if (IsFast) {
-      *IsFast = (AddrSpace == AMDGPUASI.CONSTANT_ADDRESS) ?
+      *IsFast = (AddrSpace == AMDGPUASI.CONSTANT_ADDRESS ||
+                 AddrSpace == AMDGPUASI.CONSTANT_ADDRESS_32BIT) ?
         (Align % 4 == 0) : true;
     }
 
@@ -1065,7 +1068,8 @@ EVT SITargetLowering::getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
 static bool isFlatGlobalAddrSpace(unsigned AS, AMDGPUAS AMDGPUASI) {
   return AS == AMDGPUASI.GLOBAL_ADDRESS ||
          AS == AMDGPUASI.FLAT_ADDRESS ||
-         AS == AMDGPUASI.CONSTANT_ADDRESS;
+         AS == AMDGPUASI.CONSTANT_ADDRESS ||
+         AS == AMDGPUASI.CONSTANT_ADDRESS_32BIT;
 }
 
 bool SITargetLowering::isNoopAddrSpaceCast(unsigned SrcAS,
@@ -1094,7 +1098,7 @@ bool SITargetLowering::isCheapAddrSpaceCast(unsigned SrcAS,
 bool SITargetLowering::isMemOpUniform(const SDNode *N) const {
   const MemSDNode *MemNode = cast<MemSDNode>(N);
 
-  return AMDGPU::isUniformMMO(MemNode->getMemOperand());
+  return AMDGPUInstrInfo::isUniformMMO(MemNode->getMemOperand());
 }
 
 TargetLoweringBase::LegalizeTypeAction
@@ -1201,7 +1205,6 @@ SDValue SITargetLowering::lowerKernargMemParameter(
 
   SDValue Ptr = lowerKernArgParameterPtr(DAG, SL, Chain, Offset);
   SDValue Load = DAG.getLoad(MemVT, SL, Chain, Ptr, PtrInfo, Align,
-                             MachineMemOperand::MONonTemporal |
                              MachineMemOperand::MODereferenceable |
                              MachineMemOperand::MOInvariant);
 
@@ -2741,7 +2744,8 @@ static MachineBasicBlock::iterator emitLoadM0FromVGPRLoop(
   unsigned PhiReg,
   unsigned InitSaveExecReg,
   int Offset,
-  bool UseGPRIdxMode) {
+  bool UseGPRIdxMode,
+  bool IsIndirectSrc) {
   MachineBasicBlock::iterator I = LoopBB.begin();
 
   unsigned PhiExec = MRI.createVirtualRegister(&AMDGPU::SReg_64RegClass);
@@ -2770,6 +2774,12 @@ static MachineBasicBlock::iterator emitLoadM0FromVGPRLoop(
     .addReg(CurrentIdxReg)
     .addReg(IdxReg.getReg(), 0, IdxReg.getSubReg());
 
+  // Update EXEC, save the original EXEC value to VCC.
+  BuildMI(LoopBB, I, DL, TII->get(AMDGPU::S_AND_SAVEEXEC_B64), NewExec)
+    .addReg(CondReg, RegState::Kill);
+
+  MRI.setSimpleHint(NewExec, CondReg);
+
   if (UseGPRIdxMode) {
     unsigned IdxReg;
     if (Offset == 0) {
@@ -2780,11 +2790,13 @@ static MachineBasicBlock::iterator emitLoadM0FromVGPRLoop(
         .addReg(CurrentIdxReg, RegState::Kill)
         .addImm(Offset);
     }
-
-    MachineInstr *SetIdx =
-      BuildMI(LoopBB, I, DL, TII->get(AMDGPU::S_SET_GPR_IDX_IDX))
-      .addReg(IdxReg, RegState::Kill);
-    SetIdx->getOperand(2).setIsUndef();
+    unsigned IdxMode = IsIndirectSrc ?
+      VGPRIndexMode::SRC0_ENABLE : VGPRIndexMode::DST_ENABLE;
+    MachineInstr *SetOn =
+      BuildMI(LoopBB, I, DL, TII->get(AMDGPU::S_SET_GPR_IDX_ON))
+      .addReg(IdxReg, RegState::Kill)
+      .addImm(IdxMode);
+    SetOn->getOperand(3).setIsUndef();
   } else {
     // Move index from VCC into M0
     if (Offset == 0) {
@@ -2796,12 +2808,6 @@ static MachineBasicBlock::iterator emitLoadM0FromVGPRLoop(
         .addImm(Offset);
     }
   }
-
-  // Update EXEC, save the original EXEC value to VCC.
-  BuildMI(LoopBB, I, DL, TII->get(AMDGPU::S_AND_SAVEEXEC_B64), NewExec)
-    .addReg(CondReg, RegState::Kill);
-
-  MRI.setSimpleHint(NewExec, CondReg);
 
   // Update EXEC, switch all done bits to 0 and all todo bits to 1.
   MachineInstr *InsertPt =
@@ -2830,7 +2836,8 @@ static MachineBasicBlock::iterator loadM0FromVGPR(const SIInstrInfo *TII,
                                                   unsigned InitResultReg,
                                                   unsigned PhiReg,
                                                   int Offset,
-                                                  bool UseGPRIdxMode) {
+                                                  bool UseGPRIdxMode,
+                                                  bool IsIndirectSrc) {
   MachineFunction *MF = MBB.getParent();
   MachineRegisterInfo &MRI = MF->getRegInfo();
   const DebugLoc &DL = MI.getDebugLoc();
@@ -2869,7 +2876,7 @@ static MachineBasicBlock::iterator loadM0FromVGPR(const SIInstrInfo *TII,
 
   auto InsPt = emitLoadM0FromVGPRLoop(TII, MRI, MBB, *LoopBB, DL, *Idx,
                                       InitResultReg, DstReg, PhiReg, TmpExec,
-                                      Offset, UseGPRIdxMode);
+                                      Offset, UseGPRIdxMode, IsIndirectSrc);
 
   MachineBasicBlock::iterator First = RemainderBB->begin();
   BuildMI(*RemainderBB, First, DL, TII->get(AMDGPU::S_MOV_B64), AMDGPU::EXEC)
@@ -3004,17 +3011,8 @@ static MachineBasicBlock *emitIndirectSrc(MachineInstr &MI,
 
   BuildMI(MBB, I, DL, TII->get(TargetOpcode::IMPLICIT_DEF), InitReg);
 
-  if (UseGPRIdxMode) {
-    MachineInstr *SetOn = BuildMI(MBB, I, DL, TII->get(AMDGPU::S_SET_GPR_IDX_ON))
-      .addImm(0) // Reset inside loop.
-      .addImm(VGPRIndexMode::SRC0_ENABLE);
-    SetOn->getOperand(3).setIsUndef();
-
-    // Disable again after the loop.
-    BuildMI(MBB, std::next(I), DL, TII->get(AMDGPU::S_SET_GPR_IDX_OFF));
-  }
-
-  auto InsPt = loadM0FromVGPR(TII, MBB, MI, InitReg, PhiReg, Offset, UseGPRIdxMode);
+  auto InsPt = loadM0FromVGPR(TII, MBB, MI, InitReg, PhiReg,
+                              Offset, UseGPRIdxMode, true);
   MachineBasicBlock *LoopBB = InsPt->getParent();
 
   if (UseGPRIdxMode) {
@@ -3022,6 +3020,7 @@ static MachineBasicBlock *emitIndirectSrc(MachineInstr &MI,
       .addReg(SrcReg, RegState::Undef, SubReg)
       .addReg(SrcReg, RegState::Implicit)
       .addReg(AMDGPU::M0, RegState::Implicit);
+    BuildMI(*LoopBB, InsPt, DL, TII->get(AMDGPU::S_SET_GPR_IDX_OFF));
   } else {
     BuildMI(*LoopBB, InsPt, DL, TII->get(AMDGPU::V_MOVRELS_B32_e32), Dst)
       .addReg(SrcReg, RegState::Undef, SubReg)
@@ -3122,22 +3121,10 @@ static MachineBasicBlock *emitIndirectDst(MachineInstr &MI,
 
   const DebugLoc &DL = MI.getDebugLoc();
 
-  if (UseGPRIdxMode) {
-    MachineBasicBlock::iterator I(&MI);
-
-    MachineInstr *SetOn = BuildMI(MBB, I, DL, TII->get(AMDGPU::S_SET_GPR_IDX_ON))
-      .addImm(0) // Reset inside loop.
-      .addImm(VGPRIndexMode::DST_ENABLE);
-    SetOn->getOperand(3).setIsUndef();
-
-    // Disable again after the loop.
-    BuildMI(MBB, std::next(I), DL, TII->get(AMDGPU::S_SET_GPR_IDX_OFF));
-  }
-
   unsigned PhiReg = MRI.createVirtualRegister(VecRC);
 
   auto InsPt = loadM0FromVGPR(TII, MBB, MI, SrcVec->getReg(), PhiReg,
-                              Offset, UseGPRIdxMode);
+                              Offset, UseGPRIdxMode, false);
   MachineBasicBlock *LoopBB = InsPt->getParent();
 
   if (UseGPRIdxMode) {
@@ -3147,6 +3134,7 @@ static MachineBasicBlock *emitIndirectDst(MachineInstr &MI,
         .addReg(Dst, RegState::ImplicitDefine)
         .addReg(PhiReg, RegState::Implicit)
         .addReg(AMDGPU::M0, RegState::Implicit);
+    BuildMI(*LoopBB, InsPt, DL, TII->get(AMDGPU::S_SET_GPR_IDX_OFF));
   } else {
     const MCInstrDesc &MovRelDesc = TII->get(getMOVRELDPseudo(TRI, VecRC));
 
@@ -3870,7 +3858,8 @@ void SITargetLowering::ReplaceNodeResults(SDNode *N,
   }
   case ISD::INTRINSIC_WO_CHAIN: {
     unsigned IID = cast<ConstantSDNode>(N->getOperand(0))->getZExtValue();
-    if (IID == Intrinsic::amdgcn_cvt_pkrtz) {
+    switch (IID) {
+    case Intrinsic::amdgcn_cvt_pkrtz: {
       SDValue Src0 = N->getOperand(1);
       SDValue Src1 = N->getOperand(2);
       SDLoc SL(N);
@@ -3878,6 +3867,29 @@ void SITargetLowering::ReplaceNodeResults(SDNode *N,
                                 Src0, Src1);
       Results.push_back(DAG.getNode(ISD::BITCAST, SL, MVT::v2f16, Cvt));
       return;
+    }
+    case Intrinsic::amdgcn_cvt_pknorm_i16:
+    case Intrinsic::amdgcn_cvt_pknorm_u16:
+    case Intrinsic::amdgcn_cvt_pk_i16:
+    case Intrinsic::amdgcn_cvt_pk_u16: {
+      SDValue Src0 = N->getOperand(1);
+      SDValue Src1 = N->getOperand(2);
+      SDLoc SL(N);
+      unsigned Opcode;
+
+      if (IID == Intrinsic::amdgcn_cvt_pknorm_i16)
+        Opcode = AMDGPUISD::CVT_PKNORM_I16_F32;
+      else if (IID == Intrinsic::amdgcn_cvt_pknorm_u16)
+        Opcode = AMDGPUISD::CVT_PKNORM_U16_F32;
+      else if (IID == Intrinsic::amdgcn_cvt_pk_i16)
+        Opcode = AMDGPUISD::CVT_PK_I16_I32;
+      else
+        Opcode = AMDGPUISD::CVT_PK_U16_U32;
+
+      SDValue Cvt = DAG.getNode(Opcode, SL, MVT::i32, Src0, Src1);
+      Results.push_back(DAG.getNode(ISD::BITCAST, SL, MVT::v2i16, Cvt));
+      return;
+    }
     }
     break;
   }
@@ -3983,13 +3995,15 @@ void SITargetLowering::createDebuggerPrologueStackObjects(
 
 bool SITargetLowering::shouldEmitFixup(const GlobalValue *GV) const {
   const Triple &TT = getTargetMachine().getTargetTriple();
-  return GV->getType()->getAddressSpace() == AMDGPUASI.CONSTANT_ADDRESS &&
+  return (GV->getType()->getAddressSpace() == AMDGPUASI.CONSTANT_ADDRESS ||
+          GV->getType()->getAddressSpace() == AMDGPUASI.CONSTANT_ADDRESS_32BIT) &&
          AMDGPU::shouldEmitConstantsToTextSection(TT);
 }
 
 bool SITargetLowering::shouldEmitGOTReloc(const GlobalValue *GV) const {
   return (GV->getType()->getAddressSpace() == AMDGPUASI.GLOBAL_ADDRESS ||
-              GV->getType()->getAddressSpace() == AMDGPUASI.CONSTANT_ADDRESS) &&
+          GV->getType()->getAddressSpace() == AMDGPUASI.CONSTANT_ADDRESS ||
+          GV->getType()->getAddressSpace() == AMDGPUASI.CONSTANT_ADDRESS_32BIT) &&
          !shouldEmitFixup(GV) &&
          !getTargetMachine().shouldAssumeDSOLocal(*GV->getParent(), GV);
 }
@@ -4366,7 +4380,8 @@ bool
 SITargetLowering::isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const {
   // We can fold offsets for anything that doesn't require a GOT relocation.
   return (GA->getAddressSpace() == AMDGPUASI.GLOBAL_ADDRESS ||
-              GA->getAddressSpace() == AMDGPUASI.CONSTANT_ADDRESS) &&
+          GA->getAddressSpace() == AMDGPUASI.CONSTANT_ADDRESS ||
+          GA->getAddressSpace() == AMDGPUASI.CONSTANT_ADDRESS_32BIT) &&
          !shouldEmitGOTReloc(GA->getGlobal());
 }
 
@@ -4419,6 +4434,7 @@ SDValue SITargetLowering::LowerGlobalAddress(AMDGPUMachineFunction *MFI,
   const GlobalValue *GV = GSD->getGlobal();
 
   if (GSD->getAddressSpace() != AMDGPUASI.CONSTANT_ADDRESS &&
+      GSD->getAddressSpace() != AMDGPUASI.CONSTANT_ADDRESS_32BIT &&
       GSD->getAddressSpace() != AMDGPUASI.GLOBAL_ADDRESS &&
       // FIXME: It isn't correct to rely on the type of the pointer. This should
       // be removed when address space 0 is 64-bit.
@@ -4787,10 +4803,27 @@ SDValue SITargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
   case Intrinsic::amdgcn_ubfe:
     return DAG.getNode(AMDGPUISD::BFE_U32, DL, VT,
                        Op.getOperand(1), Op.getOperand(2), Op.getOperand(3));
-  case Intrinsic::amdgcn_cvt_pkrtz: {
-    // FIXME: Stop adding cast if v2f16 legal.
+  case Intrinsic::amdgcn_cvt_pkrtz:
+  case Intrinsic::amdgcn_cvt_pknorm_i16:
+  case Intrinsic::amdgcn_cvt_pknorm_u16:
+  case Intrinsic::amdgcn_cvt_pk_i16:
+  case Intrinsic::amdgcn_cvt_pk_u16: {
+    // FIXME: Stop adding cast if v2f16/v2i16 are legal.
     EVT VT = Op.getValueType();
-    SDValue Node = DAG.getNode(AMDGPUISD::CVT_PKRTZ_F16_F32, DL, MVT::i32,
+    unsigned Opcode;
+
+    if (IntrinsicID == Intrinsic::amdgcn_cvt_pkrtz)
+      Opcode = AMDGPUISD::CVT_PKRTZ_F16_F32;
+    else if (IntrinsicID == Intrinsic::amdgcn_cvt_pknorm_i16)
+      Opcode = AMDGPUISD::CVT_PKNORM_I16_F32;
+    else if (IntrinsicID == Intrinsic::amdgcn_cvt_pknorm_u16)
+      Opcode = AMDGPUISD::CVT_PKNORM_U16_F32;
+    else if (IntrinsicID == Intrinsic::amdgcn_cvt_pk_i16)
+      Opcode = AMDGPUISD::CVT_PK_I16_I32;
+    else
+      Opcode = AMDGPUISD::CVT_PK_U16_U32;
+
+    SDValue Node = DAG.getNode(Opcode, DL, MVT::i32,
                                Op.getOperand(1), Op.getOperand(2));
     return DAG.getNode(ISD::BITCAST, DL, VT, Node);
   }
@@ -5336,7 +5369,8 @@ SDValue SITargetLowering::LowerLOAD(SDValue Op, SelectionDAG &DAG) const {
          AMDGPUASI.PRIVATE_ADDRESS : AMDGPUASI.GLOBAL_ADDRESS;
 
   unsigned NumElements = MemVT.getVectorNumElements();
-  if (AS == AMDGPUASI.CONSTANT_ADDRESS) {
+  if (AS == AMDGPUASI.CONSTANT_ADDRESS ||
+      AS == AMDGPUASI.CONSTANT_ADDRESS_32BIT) {
     if (isMemOpUniform(Load))
       return SDValue();
     // Non-uniform loads will be selected to MUBUF instructions, so they
@@ -5344,7 +5378,9 @@ SDValue SITargetLowering::LowerLOAD(SDValue Op, SelectionDAG &DAG) const {
     // loads.
     //
   }
-  if (AS == AMDGPUASI.CONSTANT_ADDRESS || AS == AMDGPUASI.GLOBAL_ADDRESS) {
+  if (AS == AMDGPUASI.CONSTANT_ADDRESS ||
+      AS == AMDGPUASI.CONSTANT_ADDRESS_32BIT ||
+      AS == AMDGPUASI.GLOBAL_ADDRESS) {
     if (Subtarget->getScalarizeGlobalBehavior() && isMemOpUniform(Load) &&
         !Load->isVolatile() && isMemOpHasNoClobberedMemOperand(Load))
       return SDValue();
@@ -5353,7 +5389,9 @@ SDValue SITargetLowering::LowerLOAD(SDValue Op, SelectionDAG &DAG) const {
     // loads.
     //
   }
-  if (AS == AMDGPUASI.CONSTANT_ADDRESS || AS == AMDGPUASI.GLOBAL_ADDRESS ||
+  if (AS == AMDGPUASI.CONSTANT_ADDRESS ||
+      AS == AMDGPUASI.CONSTANT_ADDRESS_32BIT ||
+      AS == AMDGPUASI.GLOBAL_ADDRESS ||
       AS == AMDGPUASI.FLAT_ADDRESS) {
     if (NumElements > 4)
       return SplitVectorLoad(Op, DAG);

@@ -2542,6 +2542,13 @@ static void RenderBuiltinOptions(const ToolChain &TC, const llvm::Triple &T,
     CmdArgs.push_back("-fno-math-builtin");
 }
 
+void Driver::getDefaultModuleCachePath(SmallVectorImpl<char> &Result) {
+  llvm::sys::path::system_temp_directory(/*erasedOnReboot=*/false, Result);
+  llvm::sys::path::append(Result, "org.llvm.clang.");
+  appendUserToPath(Result);
+  llvm::sys::path::append(Result, "ModuleCache");
+}
+
 static void RenderModulesOptions(Compilation &C, const Driver &D,
                                  const ArgList &Args, const InputInfo &Input,
                                  const InputInfo &Output,
@@ -2602,10 +2609,7 @@ static void RenderModulesOptions(Compilation &C, const Driver &D,
       llvm::sys::path::append(Path, "modules");
     } else if (Path.empty()) {
       // No module path was provided: use the default.
-      llvm::sys::path::system_temp_directory(/*erasedOnReboot=*/false, Path);
-      llvm::sys::path::append(Path, "org.llvm.clang.");
-      appendUserToPath(Path);
-      llvm::sys::path::append(Path, "ModuleCache");
+      Driver::getDefaultModuleCachePath(Path);
     }
 
     const char Arg[] = "-fmodules-cache-path=";
@@ -3308,12 +3312,20 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (!C.isForDiagnostics())
     CmdArgs.push_back("-disable-free");
 
-// Disable the verification pass in -asserts builds.
 #ifdef NDEBUG
-  CmdArgs.push_back("-disable-llvm-verifier");
-  // Discard LLVM value names in -asserts builds.
-  CmdArgs.push_back("-discard-value-names");
+  const bool IsAssertBuild = false;
+#else
+  const bool IsAssertBuild = true;
 #endif
+
+  // Disable the verification pass in -asserts builds.
+  if (!IsAssertBuild)
+    CmdArgs.push_back("-disable-llvm-verifier");
+
+  // Discard value names in assert builds unless otherwise specified.
+  if (Args.hasFlag(options::OPT_fdiscard_value_names,
+                   options::OPT_fno_discard_value_names, !IsAssertBuild))
+    CmdArgs.push_back("-discard-value-names");
 
   // Set the main file name, so that debug info works even with
   // -save-temps.
@@ -4688,13 +4700,19 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString(Flags));
   }
 
-  // Host-side cuda compilation receives device-side outputs as Inputs[1...].
-  // Include them with -fcuda-include-gpubinary.
-  if (IsCuda && Inputs.size() > 1)
-    for (auto I = std::next(Inputs.begin()), E = Inputs.end(); I != E; ++I) {
-      CmdArgs.push_back("-fcuda-include-gpubinary");
-      CmdArgs.push_back(I->getFilename());
+  if (IsCuda) {
+    // Host-side cuda compilation receives device-side outputs as Inputs[1...].
+    // Include them with -fcuda-include-gpubinary.
+    if (Inputs.size() > 1) {
+      for (auto I = std::next(Inputs.begin()), E = Inputs.end(); I != E; ++I) {
+        CmdArgs.push_back("-fcuda-include-gpubinary");
+        CmdArgs.push_back(I->getFilename());
+      }
     }
+
+    if (Args.hasFlag(options::OPT_fcuda_rdc, options::OPT_fno_cuda_rdc, false))
+      CmdArgs.push_back("-fcuda-rdc");
+  }
 
   // OpenMP offloading device jobs take the argument -fopenmp-host-ir-file-path
   // to specify the result of the compile phase on the host, so the meaningful

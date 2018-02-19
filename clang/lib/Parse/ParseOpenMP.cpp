@@ -851,7 +851,7 @@ Parser::DeclGroupPtrTy Parser::ParseOpenMPDeclarativeDirectiveWithExtDecl(
   case OMPD_target_teams_distribute_parallel_for_simd:
   case OMPD_target_teams_distribute_simd:
     Diag(Tok, diag::err_omp_unexpected_directive)
-        << getOpenMPDirectiveName(DKind);
+        << 1 << getOpenMPDirectiveName(DKind);
     break;
   }
   while (Tok.isNot(tok::annot_pragma_openmp_end))
@@ -1080,21 +1080,18 @@ StmtResult Parser::ParseOpenMPDeclarativeOrExecutableDirective(
     StmtResult AssociatedStmt;
     if (HasAssociatedStatement) {
       // The body is a block scope like in Lambdas and Blocks.
-      Sema::CompoundScopeRAII CompoundScope(Actions);
       Actions.ActOnOpenMPRegionStart(DKind, getCurScope());
-      Actions.ActOnStartOfCompoundStmt();
-      // Parse statement
-      AssociatedStmt = ParseStatement();
-      Actions.ActOnFinishOfCompoundStmt();
+      // FIXME: We create a bogus CompoundStmt scope to hold the contents of
+      // the captured region. Code elsewhere assumes that any FunctionScopeInfo
+      // should have at least one compound statement scope within it.
+      AssociatedStmt = (Sema::CompoundScopeRAII(Actions), ParseStatement());
       AssociatedStmt = Actions.ActOnOpenMPRegionEnd(AssociatedStmt, Clauses);
     } else if (DKind == OMPD_target_update || DKind == OMPD_target_enter_data ||
                DKind == OMPD_target_exit_data) {
-      Sema::CompoundScopeRAII CompoundScope(Actions);
       Actions.ActOnOpenMPRegionStart(DKind, getCurScope());
-      Actions.ActOnStartOfCompoundStmt();
-      AssociatedStmt =
-          Actions.ActOnCompoundStmt(Loc, Loc, llvm::None, /*isStmtExpr=*/false);
-      Actions.ActOnFinishOfCompoundStmt();
+      AssociatedStmt = (Sema::CompoundScopeRAII(Actions),
+                        Actions.ActOnCompoundStmt(Loc, Loc, llvm::None,
+                                                  /*isStmtExpr=*/false));
       AssociatedStmt = Actions.ActOnOpenMPRegionEnd(AssociatedStmt, Clauses);
     }
     Directive = Actions.ActOnOpenMPExecutableDirective(
@@ -1110,7 +1107,7 @@ StmtResult Parser::ParseOpenMPDeclarativeOrExecutableDirective(
   case OMPD_declare_target:
   case OMPD_end_declare_target:
     Diag(Tok, diag::err_omp_unexpected_directive)
-        << getOpenMPDirectiveName(DKind);
+        << 1 << getOpenMPDirectiveName(DKind);
     SkipUntil(tok::annot_pragma_openmp_end);
     break;
   case OMPD_unknown:

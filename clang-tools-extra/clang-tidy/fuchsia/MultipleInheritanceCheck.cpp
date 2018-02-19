@@ -17,12 +17,14 @@ using namespace clang::ast_matchers;
 namespace clang {
 namespace tidy {
 namespace fuchsia {
-  
+
+namespace {
 AST_MATCHER(CXXRecordDecl, hasBases) {
   if (Node.hasDefinition())
     return Node.getNumBases() > 0;
   return false;
 }
+} // namespace
 
 // Adds a node (by name) to the interface map, if it was not present in the map
 // previously.
@@ -64,9 +66,9 @@ bool MultipleInheritanceCheck::isInterface(const CXXRecordDecl *Node) {
 
   // To be an interface, all base classes must be interfaces as well.
   for (const auto &I : Node->bases()) {
-    if (I.isVirtual()) continue;  
+    if (I.isVirtual()) continue;
     const auto *Ty = I.getType()->getAs<RecordType>();
-    assert(Ty && "RecordType of base class is unknown");
+    if (!Ty) continue;
     const RecordDecl *D = Ty->getDecl()->getDefinition();
     if (!D) continue;
     const auto *Base = cast<CXXRecordDecl>(D);
@@ -98,7 +100,7 @@ void MultipleInheritanceCheck::check(const MatchFinder::MatchResult &Result) {
     for (const auto &I : D->bases()) {
       if (I.isVirtual()) continue;
       const auto *Ty = I.getType()->getAs<RecordType>();
-      assert(Ty && "RecordType of base class is unknown");
+      if (!Ty) continue;
       const auto *Base = cast<CXXRecordDecl>(Ty->getDecl()->getDefinition());
       if (!isInterface(Base)) NumConcrete++;
     }
@@ -107,7 +109,7 @@ void MultipleInheritanceCheck::check(const MatchFinder::MatchResult &Result) {
     // non-virtual base.
     for (const auto &V : D->vbases()) {
       const auto *Ty = V.getType()->getAs<RecordType>();
-      assert(Ty && "RecordType of base class is unknown");
+      if (!Ty) continue;
       const auto *Base = cast<CXXRecordDecl>(Ty->getDecl()->getDefinition());
       if (!isInterface(Base)) NumConcrete++;
     }

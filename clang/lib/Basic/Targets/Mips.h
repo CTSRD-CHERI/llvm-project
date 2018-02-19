@@ -202,6 +202,7 @@ public:
   }
 
   bool isValidCPUName(StringRef Name) const override;
+  void fillValidCPUList(SmallVectorImpl<StringRef> &Values) const override;
 
   bool setCPU(const std::string &Name) override {
     CPU = Name;
@@ -489,6 +490,10 @@ public:
 
   uint64_t getPointerWidthV(unsigned AddrSpace) const override {
     return (AddrSpace == 200) ? CapSize : PointerWidth;
+  }
+
+  uint64_t getPointerRangeV(unsigned AddrSpace) const override {
+    return (AddrSpace == 200) ? getPointerRangeForCHERICapability() : PointerWidth;
   }
 
   uint64_t getPointerAlignV(unsigned AddrSpace) const override {

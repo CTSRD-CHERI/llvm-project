@@ -324,7 +324,8 @@ void Parser::initializePragmaHandlers() {
   PointerInterpretationHandler.reset(new PragmaPointerInterpretation(Actions));
   PP.AddPragmaHandler(PointerInterpretationHandler.get());
 
-  if (getLangOpts().MicrosoftExt || getTargetInfo().getTriple().isPS4()) {
+  if (getLangOpts().MicrosoftExt ||
+      getTargetInfo().getTriple().isOSBinFormatELF()) {
     MSCommentHandler.reset(new PragmaCommentHandler(Actions));
     PP.AddPragmaHandler(MSCommentHandler.get());
   }
@@ -410,7 +411,8 @@ void Parser::resetPragmaHandlers() {
   PP.RemovePragmaHandler(OpenMPHandler.get());
   OpenMPHandler.reset();
 
-  if (getLangOpts().MicrosoftExt || getTargetInfo().getTriple().isPS4()) {
+  if (getLangOpts().MicrosoftExt ||
+      getTargetInfo().getTriple().isOSBinFormatELF()) {
     PP.RemovePragmaHandler(MSCommentHandler.get());
     MSCommentHandler.reset();
   }
@@ -540,8 +542,10 @@ void Parser::HandlePragmaAlign() {
   Sema::PragmaOptionsAlignKind Kind =
     static_cast<Sema::PragmaOptionsAlignKind>(
     reinterpret_cast<uintptr_t>(Tok.getAnnotationValue()));
-  SourceLocation PragmaLoc = ConsumeAnnotationToken();
-  Actions.ActOnPragmaOptionsAlign(Kind, PragmaLoc);
+  Actions.ActOnPragmaOptionsAlign(Kind, Tok.getLocation());
+  // Consume the token after processing the pragma to enable pragma-specific
+  // #include warnings.
+  ConsumeAnnotationToken();
 }
 
 void Parser::HandlePragmaDump() {
@@ -2186,9 +2190,21 @@ PragmaOpenMPHandler::HandlePragma(Preprocessor &PP,
   Tok.setKind(tok::annot_pragma_openmp);
   Tok.setLocation(FirstTok.getLocation());
 
-  while (Tok.isNot(tok::eod)) {
+  while (Tok.isNot(tok::eod) && Tok.isNot(tok::eof)) {
     Pragma.push_back(Tok);
     PP.Lex(Tok);
+    if (Tok.is(tok::annot_pragma_openmp)) {
+      PP.Diag(Tok, diag::err_omp_unexpected_directive) << 0;
+      unsigned InnerPragmaCnt = 1;
+      while (InnerPragmaCnt != 0) {
+        PP.Lex(Tok);
+        if (Tok.is(tok::annot_pragma_openmp))
+          ++InnerPragmaCnt;
+        else if (Tok.is(tok::annot_pragma_openmp_end))
+          --InnerPragmaCnt;
+      }
+      PP.Lex(Tok);
+    }
   }
   SourceLocation EodLoc = Tok.getLocation();
   Tok.startToken();
@@ -2519,6 +2535,12 @@ void PragmaCommentHandler::HandlePragma(Preprocessor &PP,
     .Default(PCK_Unknown);
   if (Kind == PCK_Unknown) {
     PP.Diag(Tok.getLocation(), diag::err_pragma_comment_unknown_kind);
+    return;
+  }
+
+  if (PP.getTargetInfo().getTriple().isOSBinFormatELF() && Kind != PCK_Lib) {
+    PP.Diag(Tok.getLocation(), diag::warn_pragma_comment_ignored)
+        << II->getName();
     return;
   }
 

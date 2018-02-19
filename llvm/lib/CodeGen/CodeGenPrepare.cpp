@@ -1581,7 +1581,7 @@ bool CodeGenPrepare::optimizeCallInst(CallInst *CI, bool &ModifiedDT) {
       // if size - offset meets the size threshold.
       if (!Arg->getType()->isPointerTy())
         continue;
-      APInt Offset(DL->getPointerSizeInBits(
+      APInt Offset(DL->getIndexSizeInBits(
                        cast<PointerType>(Arg->getType())->getAddressSpace()),
                    0);
       Value *Val = Arg->stripAndAccumulateInBoundsConstantOffsets(*DL, Offset);
@@ -1606,11 +1606,14 @@ bool CodeGenPrepare::optimizeCallInst(CallInst *CI, bool &ModifiedDT) {
     // If this is a memcpy (or similar) then we may be able to improve the
     // alignment
     if (MemIntrinsic *MI = dyn_cast<MemIntrinsic>(CI)) {
-      unsigned Align = getKnownAlignment(MI->getDest(), *DL);
-      if (MemTransferInst *MTI = dyn_cast<MemTransferInst>(MI))
-        Align = std::min(Align, getKnownAlignment(MTI->getSource(), *DL));
-      if (Align > MI->getAlignment())
-        MI->setAlignment(Align);
+      unsigned DestAlign = getKnownAlignment(MI->getDest(), *DL);
+      if (DestAlign > MI->getDestAlignment())
+        MI->setDestAlignment(DestAlign);
+      if (MemTransferInst *MTI = dyn_cast<MemTransferInst>(MI)) {
+        unsigned SrcAlign = getKnownAlignment(MTI->getSource(), *DL);
+        if (SrcAlign > MTI->getSourceAlignment())
+          MTI->setSourceAlignment(SrcAlign);
+      }
     }
   }
 

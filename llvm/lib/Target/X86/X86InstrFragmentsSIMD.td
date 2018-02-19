@@ -171,6 +171,8 @@ def X86CmpMaskCCScalarRound :
                            SDTCisVT<3, i8>, SDTCisVT<4, i32>]>;
 
 def X86cmpm     : SDNode<"X86ISD::CMPM",     X86CmpMaskCC>;
+// Hack to make CMPM commutable in tablegen patterns for load folding.
+def X86cmpm_c   : SDNode<"X86ISD::CMPM",     X86CmpMaskCC, [SDNPCommutative]>;
 def X86cmpmRnd  : SDNode<"X86ISD::CMPM_RND", X86CmpMaskCCRound>;
 def X86cmpmu    : SDNode<"X86ISD::CMPMU",    X86CmpMaskCC>;
 def X86cmpms    : SDNode<"X86ISD::FSETCCM",   X86CmpMaskCCScalar>;
@@ -204,6 +206,8 @@ def X86kshiftr : SDNode<"X86ISD::KSHIFTR",
                         SDTypeProfile<1, 2, [SDTCVecEltisVT<0, i1>,
                                              SDTCisSameAs<0, 1>,
                                              SDTCisVT<2, i8>]>>;
+
+def X86kadd : SDNode<"X86ISD::KADD", SDTIntBinOp, [SDNPCommutative]>;
 
 def X86vrotli  : SDNode<"X86ISD::VROTLI", X86vshiftimm>;
 def X86vrotri  : SDNode<"X86ISD::VROTRI", X86vshiftimm>;
@@ -878,6 +882,7 @@ def bc_v16i16 : PatFrag<(ops node:$in), (v16i16 (bitconvert node:$in))>;
 def bc_v8i32 : PatFrag<(ops node:$in), (v8i32 (bitconvert node:$in))>;
 def bc_v4i64 : PatFrag<(ops node:$in), (v4i64 (bitconvert node:$in))>;
 def bc_v8f32 : PatFrag<(ops node:$in), (v8f32 (bitconvert node:$in))>;
+def bc_v4f64 : PatFrag<(ops node:$in), (v4f64 (bitconvert node:$in))>;
 
 // 512-bit bitconvert pattern fragments
 def bc_v64i8 : PatFrag<(ops node:$in), (v64i8 (bitconvert node:$in))>;

@@ -3623,6 +3623,8 @@ void Sema::mergeObjCMethodDecls(ObjCMethodDecl *newMethod,
          ni = newMethod->param_begin(), ne = newMethod->param_end();
        ni != ne && oi != oe; ++ni, ++oi)
     mergeParamDeclAttributes(*ni, *oi, *this);
+
+  CheckObjCMethodOverride(newMethod, oldMethod);
 }
 
 static void diagnoseVarDeclTypeMismatch(Sema &S, VarDecl *New, VarDecl* Old) {
@@ -12987,9 +12989,19 @@ void Sema::ActOnFinishDelayedAttribute(Scope *S, Decl *D,
 /// call, forming a call to an implicitly defined function (per C99 6.5.1p2).
 NamedDecl *Sema::ImplicitlyDefineFunction(SourceLocation Loc,
                                           IdentifierInfo &II, Scope *S) {
+  // Find the scope in which the identifier is injected and the corresponding
+  // DeclContext.
+  // FIXME: C89 does not say what happens if there is no enclosing block scope.
+  // In that case, we inject the declaration into the translation unit scope
+  // instead.
   Scope *BlockScope = S;
   while (!BlockScope->isCompoundStmtScope() && BlockScope->getParent())
     BlockScope = BlockScope->getParent();
+
+  Scope *ContextScope = BlockScope;
+  while (!ContextScope->getEntity())
+    ContextScope = ContextScope->getParent();
+  ContextRAII SavedContext(*this, ContextScope->getEntity());
 
   // Before we produce a declaration for an implicitly defined
   // function, see whether there was a locally-scoped declaration of
@@ -13301,11 +13313,9 @@ bool Sema::CheckEnumUnderlyingType(TypeSourceInfo *TI) {
 
 /// Check whether this is a valid redeclaration of a previous enumeration.
 /// \return true if the redeclaration was invalid.
-bool Sema::CheckEnumRedeclaration(
-    SourceLocation EnumLoc, bool IsScoped, QualType EnumUnderlyingTy,
-    bool EnumUnderlyingIsImplicit, const EnumDecl *Prev) {
-  bool IsFixed = !EnumUnderlyingTy.isNull();
-
+bool Sema::CheckEnumRedeclaration(SourceLocation EnumLoc, bool IsScoped,
+                                  QualType EnumUnderlyingTy, bool IsFixed,
+                                  const EnumDecl *Prev) {
   if (IsScoped != Prev->isScoped()) {
     Diag(EnumLoc, diag::err_enum_redeclare_scoped_mismatch)
       << Prev->isScoped();
@@ -13325,10 +13335,6 @@ bool Sema::CheckEnumRedeclaration(
           << Prev->getIntegerTypeRange();
       return true;
     }
-  } else if (IsFixed && !Prev->isFixed() && EnumUnderlyingIsImplicit) {
-    ;
-  } else if (!IsFixed && Prev->isFixed() && !Prev->getIntegerTypeSourceInfo()) {
-    ;
   } else if (IsFixed != Prev->isFixed()) {
     Diag(EnumLoc, diag::err_enum_redeclare_fixed_mismatch)
       << Prev->isFixed();
@@ -13624,14 +13630,14 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
   // this early, because it's needed to detect if this is an incompatible
   // redeclaration.
   llvm::PointerUnion<const Type*, TypeSourceInfo*> EnumUnderlying;
-  bool EnumUnderlyingIsImplicit = false;
+  bool IsFixed = !UnderlyingType.isUnset() || ScopedEnum;
 
   if (Kind == TTK_Enum) {
-    if (UnderlyingType.isInvalid() || (!UnderlyingType.get() && ScopedEnum))
+    if (UnderlyingType.isInvalid() || (!UnderlyingType.get() && ScopedEnum)) {
       // No underlying type explicitly specified, or we failed to parse the
       // type, default to int.
       EnumUnderlying = Context.IntTy.getTypePtr();
-    else if (UnderlyingType.get()) {
+    } else if (UnderlyingType.get()) {
       // C++0x 7.2p2: The type-specifier-seq of an enum-base shall name an
       // integral type; any cv-qualification is ignored.
       TypeSourceInfo *TI = nullptr;
@@ -13647,11 +13653,12 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
         EnumUnderlying = Context.IntTy.getTypePtr();
 
     } else if (Context.getTargetInfo().getCXXABI().isMicrosoft()) {
-      if (getLangOpts().MSVCCompat || TUK == TUK_Definition) {
-        // Microsoft enums are always of int type.
+      // For MSVC ABI compatibility, unfixed enums must use an underlying type
+      // of 'int'. However, if this is an unfixed forward declaration, don't set
+      // the underlying type unless the user enables -fms-compatibility. This
+      // makes unfixed forward declared enums incomplete and is more conforming.
+      if (TUK == TUK_Definition || getLangOpts().MSVCCompat)
         EnumUnderlying = Context.IntTy.getTypePtr();
-        EnumUnderlyingIsImplicit = true;
-      }
     }
   }
 
@@ -13677,8 +13684,7 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
 
     if (Kind == TTK_Enum) {
       New = EnumDecl::Create(Context, SearchDC, KWLoc, Loc, Name, nullptr,
-                             ScopedEnum, ScopedEnumUsesClassTag,
-                             !EnumUnderlying.isNull());
+                             ScopedEnum, ScopedEnumUsesClassTag, IsFixed);
       // If this is an undefined enum, bail.
       if (TUK != TUK_Definition && !Invalid)
         return nullptr;
@@ -14057,7 +14063,7 @@ Decl *Sema::ActOnTag(Scope *S, unsigned TagSpec, TagUseKind TUK,
           // in which case we want the caller to bail out.
           if (CheckEnumRedeclaration(NameLoc.isValid() ? NameLoc : KWLoc,
                                      ScopedEnum, EnumUnderlyingTy,
-                                     EnumUnderlyingIsImplicit, PrevEnum))
+                                     IsFixed, PrevEnum))
             return TUK == TUK_Declaration ? PrevTagDecl : nullptr;
         }
 
@@ -14273,7 +14279,7 @@ CreateNewDecl:
     // enum X { A, B, C } D;    D should chain to X.
     New = EnumDecl::Create(Context, SearchDC, KWLoc, Loc, Name,
                            cast_or_null<EnumDecl>(PrevDecl), ScopedEnum,
-                           ScopedEnumUsesClassTag, !EnumUnderlying.isNull());
+                           ScopedEnumUsesClassTag, IsFixed);
 
     if (isStdAlignValT && (!StdAlignValT || getStdAlignValT()->isImplicit()))
       StdAlignValT = cast<EnumDecl>(New);
@@ -14281,8 +14287,7 @@ CreateNewDecl:
     // If this is an undefined enum, warn.
     if (TUK != TUK_Definition && !Invalid) {
       TagDecl *Def;
-      if (!EnumUnderlyingIsImplicit &&
-          (getLangOpts().CPlusPlus11 || getLangOpts().ObjC2) &&
+      if (IsFixed && (getLangOpts().CPlusPlus11 || getLangOpts().ObjC2) &&
           cast<EnumDecl>(New)->isFixed()) {
         // C++0x: 7.2p2: opaque-enum-declaration.
         // Conflicts are diagnosed above. Do nothing.
@@ -14314,6 +14319,7 @@ CreateNewDecl:
       else
         ED->setIntegerType(QualType(EnumUnderlying.get<const Type*>(), 0));
       ED->setPromotionType(ED->getIntegerType());
+      assert(ED->isComplete() && "enum with type should be complete");
     }
   } else {
     // struct/union/class
@@ -15507,10 +15513,10 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
                                           CXXRecord->getDestructor());
         }
 
-        if (!CXXRecord->isInvalidDecl()) {
-          // Add any implicitly-declared members to this class.
-          AddImplicitlyDeclaredMembersToClass(CXXRecord);
+        // Add any implicitly-declared members to this class.
+        AddImplicitlyDeclaredMembersToClass(CXXRecord);
 
+        if (!CXXRecord->isInvalidDecl()) {
           // If we have virtual base classes, we may end up finding multiple
           // final overriders for a given virtual function. Check for this
           // problem now.
@@ -15846,7 +15852,7 @@ EnumConstantDecl *Sema::CheckEnumConstant(EnumDecl *Enum,
                                                          &EnumVal).get())) {
         // C99 6.7.2.2p2: Make sure we have an integer constant expression.
       } else {
-        if (Enum->isFixed()) {
+        if (Enum->isComplete()) {
           EltTy = Enum->getIntegerType();
 
           // In Obj-C and Microsoft mode, require the enumeration value to be
@@ -16357,7 +16363,9 @@ void Sema::ActOnEnumBody(SourceLocation EnumLoc, SourceRange BraceRange,
   if (LangOpts.ShortEnums)
     Packed = true;
 
-  if (Enum->isFixed()) {
+  // If the enum already has a type because it is fixed or dictated by the
+  // target, promote that type instead of analyzing the enumerators.
+  if (Enum->isComplete()) {
     BestType = Enum->getIntegerType();
     if (BestType->isPromotableIntegerType())
       BestPromotionType = Context.getPromotedIntegerType(BestType);

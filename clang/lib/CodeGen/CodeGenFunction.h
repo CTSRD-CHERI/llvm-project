@@ -1584,10 +1584,7 @@ public:
   /// \return an LLVM value which is a pointer to a struct which contains
   /// information about the block, including the block invoke function, the
   /// captured variables, etc.
-  /// \param InvokeF will contain the block invoke function if it is not
-  /// nullptr.
-  llvm::Value *EmitBlockLiteral(const BlockExpr *,
-                                llvm::Function **InvokeF = nullptr);
+  llvm::Value *EmitBlockLiteral(const BlockExpr *);
   static void destroyBlockInfos(CGBlockInfo *info);
 
   llvm::Function *GenerateBlockFunction(GlobalDecl GD,
@@ -1850,11 +1847,7 @@ public:
   llvm::BasicBlock *createBasicBlock(const Twine &name = "",
                                      llvm::Function *parent = nullptr,
                                      llvm::BasicBlock *before = nullptr) {
-#ifdef NDEBUG
-    return llvm::BasicBlock::Create(getLLVMContext(), "", parent, before);
-#else
     return llvm::BasicBlock::Create(getLLVMContext(), name, parent, before);
-#endif
   }
 
   /// getBasicBlockForLabel - Return the LLVM basicblock that the specified
@@ -2206,12 +2199,24 @@ public:
   /// This function can be called with a null (unreachable) insert point.
   void EmitVariablyModifiedType(QualType Ty);
 
-  /// getVLASize - Returns an LLVM value that corresponds to the size,
+  struct VlaSizePair {
+    llvm::Value *NumElts;
+    QualType Type;
+
+    VlaSizePair(llvm::Value *NE, QualType T) : NumElts(NE), Type(T) {}
+  };
+
+  /// Return the number of elements for a single dimension
+  /// for the given array type.
+  VlaSizePair getVLAElements1D(const VariableArrayType *vla);
+  VlaSizePair getVLAElements1D(QualType vla);
+
+  /// Returns an LLVM value that corresponds to the size,
   /// in non-variably-sized elements, of a variable length array type,
   /// plus that largest non-variably-sized element type.  Assumes that
   /// the type has already been emitted with EmitVariablyModifiedType.
-  std::pair<llvm::Value*,QualType> getVLASize(const VariableArrayType *vla);
-  std::pair<llvm::Value*,QualType> getVLASize(QualType vla);
+  VlaSizePair getVLASize(const VariableArrayType *vla);
+  VlaSizePair getVLASize(QualType vla);
 
   /// LoadCXXThis - Load the value of 'this'. This function is only valid while
   /// generating code for an C++ member function.
@@ -2526,6 +2531,15 @@ public:
   void EmitAutoVarCleanups(const AutoVarEmission &emission);
   void emitAutoVarTypeCleanup(const AutoVarEmission &emission,
                               QualType::DestructionKind dtorKind);
+
+  /// Emits the alloca and debug information for the size expressions for each
+  /// dimension of an array. It registers the association of its (1-dimensional)
+  /// QualTypes and size expression's debug node, so that CGDebugInfo can
+  /// reference this node when creating the DISubrange object to describe the
+  /// array types.
+  void EmitAndRegisterVariableArrayDimensions(CGDebugInfo *DI,
+                                              const VarDecl &D,
+                                              bool EmitDebugInfo);
 
   void EmitStaticVarDecl(const VarDecl &D,
                          llvm::GlobalValue::LinkageTypes Linkage);
@@ -3009,11 +3023,8 @@ public:
   LValue EmitOMPSharedLValue(const Expr *E);
 
 private:
-  /// Helpers for blocks. Returns invoke function by \p InvokeF if it is not
-  /// nullptr. It should be called without \p InvokeF if the caller does not
-  /// need invoke function to be returned.
-  llvm::Value *EmitBlockLiteral(const CGBlockInfo &Info,
-                                llvm::Function **InvokeF = nullptr);
+  /// Helpers for blocks.
+  llvm::Value *EmitBlockLiteral(const CGBlockInfo &Info);
 
   /// struct with the values to be passed to the OpenMP loop-related functions
   struct OMPLoopArguments {
@@ -3365,6 +3376,9 @@ public:
   llvm::CallInst *EmitNounwindRuntimeCall(llvm::Value *callee,
                                           ArrayRef<llvm::Value*> args,
                                           const Twine &name = "");
+
+  SmallVector<llvm::OperandBundleDef, 1>
+  getBundlesForFunclet(llvm::Value *Callee);
 
   llvm::CallSite EmitCallOrInvoke(llvm::Value *Callee,
                                   ArrayRef<llvm::Value *> Args,

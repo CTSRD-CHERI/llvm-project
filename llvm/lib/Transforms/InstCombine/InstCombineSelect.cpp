@@ -538,6 +538,59 @@ static Value *foldSelectICmpAndOr(const ICmpInst *IC, Value *TrueVal,
   return Builder.CreateOr(V, Y);
 }
 
+/// Transform patterns such as: (a > b) ? a - b : 0
+/// into: ((a > b) ? a : b) - b)
+/// This produces a canonical max pattern that is more easily recognized by the
+/// backend and converted into saturated subtraction instructions if those
+/// exist.
+/// There are 8 commuted/swapped variants of this pattern.
+/// TODO: Also support a - UMIN(a,b) patterns.
+static Value *canonicalizeSaturatedSubtract(const ICmpInst *ICI,
+                                            const Value *TrueVal,
+                                            const Value *FalseVal,
+                                            InstCombiner::BuilderTy &Builder) {
+  ICmpInst::Predicate Pred = ICI->getPredicate();
+  if (!ICmpInst::isUnsigned(Pred))
+    return nullptr;
+
+  // (b > a) ? 0 : a - b -> (b <= a) ? a - b : 0
+  if (match(TrueVal, m_Zero())) {
+    Pred = ICmpInst::getInversePredicate(Pred);
+    std::swap(TrueVal, FalseVal);
+  }
+  if (!match(FalseVal, m_Zero()))
+    return nullptr;
+
+  Value *A = ICI->getOperand(0);
+  Value *B = ICI->getOperand(1);
+  if (Pred == ICmpInst::ICMP_ULE || Pred == ICmpInst::ICMP_ULT) {
+    // (b < a) ? a - b : 0 -> (a > b) ? a - b : 0
+    std::swap(A, B);
+    Pred = ICmpInst::getSwappedPredicate(Pred);
+  }
+
+  assert((Pred == ICmpInst::ICMP_UGE || Pred == ICmpInst::ICMP_UGT) &&
+         "Unexpected isUnsigned predicate!");
+
+  // Account for swapped form of subtraction: ((a > b) ? b - a : 0).
+  bool IsNegative = false;
+  if (match(TrueVal, m_Sub(m_Specific(B), m_Specific(A))))
+    IsNegative = true;
+  else if (!match(TrueVal, m_Sub(m_Specific(A), m_Specific(B))))
+    return nullptr;
+
+  // If sub is used anywhere else, we wouldn't be able to eliminate it
+  // afterwards.
+  if (!TrueVal->hasOneUse())
+    return nullptr;
+
+  // All checks passed, convert to canonical unsigned saturated subtraction
+  // form: sub(max()).
+  // (a > b) ? a - b : 0 -> ((a > b) ? a : b) - b)
+  Value *Max = Builder.CreateSelect(Builder.CreateICmp(Pred, A, B), A, B);
+  return IsNegative ? Builder.CreateSub(B, Max) : Builder.CreateSub(Max, B);
+}
+
 /// Attempt to fold a cttz/ctlz followed by a icmp plus select into a single
 /// call to cttz/ctlz with flag 'is_zero_undef' cleared.
 ///
@@ -860,9 +913,11 @@ Instruction *InstCombiner::foldSelectInstWithICmp(SelectInst &SI,
   if (Value *V = foldSelectCttzCtlz(ICI, TrueVal, FalseVal, Builder))
     return replaceInstUsesWith(SI, V);
 
+  if (Value *V = canonicalizeSaturatedSubtract(ICI, TrueVal, FalseVal, Builder))
+    return replaceInstUsesWith(SI, V);
+
   return Changed ? &SI : nullptr;
 }
-
 
 /// SI is a select whose condition is a PHI node (but the two may be in
 /// different blocks). See if the true/false values (V) are live in all of the
@@ -1705,11 +1760,25 @@ Instruction *InstCombiner::visitSelectInst(SelectInst &SI) {
     }
   }
 
+  auto canMergeSelectThroughBinop = [](BinaryOperator *BO) {
+    // The select might be preventing a division by 0.
+    switch (BO->getOpcode()) {
+    default:
+      return true;
+    case Instruction::SRem:
+    case Instruction::URem:
+    case Instruction::SDiv:
+    case Instruction::UDiv:
+      return false;
+    }
+  };
+
   // Try to simplify a binop sandwiched between 2 selects with the same
   // condition.
   // select(C, binop(select(C, X, Y), W), Z) -> select(C, binop(X, W), Z)
   BinaryOperator *TrueBO;
-  if (match(TrueVal, m_OneUse(m_BinOp(TrueBO)))) {
+  if (match(TrueVal, m_OneUse(m_BinOp(TrueBO))) &&
+      canMergeSelectThroughBinop(TrueBO)) {
     if (auto *TrueBOSI = dyn_cast<SelectInst>(TrueBO->getOperand(0))) {
       if (TrueBOSI->getCondition() == CondVal) {
         TrueBO->setOperand(0, TrueBOSI->getTrueValue());
@@ -1728,7 +1797,8 @@ Instruction *InstCombiner::visitSelectInst(SelectInst &SI) {
 
   // select(C, Z, binop(select(C, X, Y), W)) -> select(C, Z, binop(Y, W))
   BinaryOperator *FalseBO;
-  if (match(FalseVal, m_OneUse(m_BinOp(FalseBO)))) {
+  if (match(FalseVal, m_OneUse(m_BinOp(FalseBO))) &&
+      canMergeSelectThroughBinop(FalseBO)) {
     if (auto *FalseBOSI = dyn_cast<SelectInst>(FalseBO->getOperand(0))) {
       if (FalseBOSI->getCondition() == CondVal) {
         FalseBO->setOperand(0, FalseBOSI->getFalseValue());
