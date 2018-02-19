@@ -456,7 +456,8 @@ unsigned TargetCodeGenInfo::getAddressSpaceForType(QualType DestTy,
     return getCHERICapabilityAS();
   }
   unsigned AS = Context.getTargetAddressSpace(DestTy.getQualifiers(), nullptr);
-  if (AS == 0)
+  // HACK to support as 200 for CHERI globals
+  if (AS == 0 && Context.getTargetInfo().SupportsCapabilities())
     AS = getDefaultAS();
   return AS;
 }
