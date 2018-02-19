@@ -823,7 +823,7 @@ public:
                        const DataLayout &DL) const {
     // FIXME: Using the pointer type doesn't seem ideal.
     // XXXAR: AS0 hardcoded
-    uint64_t BW = DL.getPointerBaseSizeInBits(0u);
+    uint64_t BW = DL.getIndexSizeInBits(0u);
     uint64_t Range = (High - Low).getLimitedValue(UINT64_MAX - 1) + 1;
     return Range <= BW;
   }

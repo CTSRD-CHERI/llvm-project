@@ -3672,10 +3672,9 @@ bool ScalarEvolution::isSCEVable(Type *Ty) const {
 /// return true.
 uint64_t ScalarEvolution::getTypeSizeInBits(Type *Ty) const {
   assert(isSCEVable(Ty) && "Type is not SCEVable!");
-  const DataLayout &DL = getDataLayout();
-  if (PointerType *PT = dyn_cast<PointerType>(Ty))
-    return DL.getPointerBaseSizeInBits(PT->getPointerAddressSpace());
-  return DL.getTypeSizeInBits(Ty);
+  if (Ty->isPointerTy())
+    return getDataLayout().getIndexTypeSizeInBits(Ty);
+  return getDataLayout().getTypeSizeInBits(Ty);
 }
 
 /// Return a type with the same bitwidth as the given type and which represents

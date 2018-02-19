@@ -92,12 +92,13 @@ struct PointerAlignElem {
   unsigned PrefAlign;
   uint32_t TypeByteWidth;
   uint32_t AddressSpace;
-  bool     isFat;
+  uint32_t IndexWidth;
 
   /// Initializer
   static PointerAlignElem get(uint32_t AddressSpace, unsigned ABIAlign,
                               unsigned PrefAlign, uint32_t TypeByteWidth,
-                              bool isFat);
+                              uint32_t IndexWidth);
+
 
   bool operator==(const PointerAlignElem &rhs) const;
 };
@@ -168,7 +169,7 @@ private:
                             bool ABIAlign, Type *Ty) const;
   void setPointerAlignment(uint32_t AddrSpace, unsigned ABIAlign,
                            unsigned PrefAlign, uint32_t TypeByteWidth,
-                           bool isFat);
+                           uint32_t IndexWidth);
 
   /// Internal helper method that returns requested alignment for type.
   unsigned getAlignment(Type *Ty, bool abi_or_pref) const;
@@ -326,7 +327,9 @@ public:
   /// size of the pointer.  For fat pointers, it returns the size of the base
   /// component of the pointer, ignoring the length, permissions and so on
   /// components.
-  unsigned getPointerBaseSize(unsigned AS) const;
+  unsigned getPointerBaseSize(unsigned AS) const {
+    return getIndexSize(AS);
+  };
 
   bool isFatPointer(unsigned AS) const {
     return getPointerBaseSize(AS) != getPointerSize(AS);
@@ -337,16 +340,19 @@ public:
   }
 
   unsigned getPointerBaseSizeInBits(unsigned AS) const {
-    return getPointerBaseSize(AS) * 8;
+    return getIndexSizeInBits(AS);
   }
   unsigned getPointerBaseSizeInBits(Type *Ty) const {
-    return getPointerBaseSize(Ty->getPointerAddressSpace()) * 8;
+    return getIndexTypeSizeInBits(Ty);
   }
 
   /// Layout pointer size
   /// FIXME: The defaults need to be removed once all of
   /// the backends/clients are updated.
   unsigned getPointerSize(LLVM_DEFAULT_AS_PARAM(AS)) const;
+
+  // Index size used for address calculation.
+  unsigned getIndexSize(unsigned AS) const;
 
   /// Return the address spaces containing non-integral pointers.  Pointers in
   /// this address space don't have a well-defined bitwise representation.
@@ -372,12 +378,21 @@ public:
     return getPointerSize(AS) * 8;
   }
 
+  /// Size in bits of index used for address calculation in getelementptr.
+  unsigned getIndexSizeInBits(unsigned AS) const {
+    return getIndexSize(AS) * 8;
+  }
+
   /// Layout pointer size, in bits, based on the type.  If this function is
   /// called with a pointer type, then the type size of the pointer is returned.
   /// If this function is called with a vector of pointers, then the type size
   /// of the pointer is returned.  This should only be called with a pointer or
   /// vector of pointers.
   unsigned getPointerTypeSizeInBits(Type *) const;
+
+  /// Layout size of the index used in GEP calculation.
+  /// The function should be called with pointer or vector of pointers type.
+  unsigned getIndexTypeSizeInBits(Type *Ty) const;
 
   unsigned getPointerTypeSize(Type *Ty) const {
     return getPointerTypeSizeInBits(Ty) / 8;
@@ -486,6 +501,11 @@ public:
   /// \brief Returns the size of largest legal integer type size, or 0 if none
   /// are set.
   unsigned getLargestLegalIntTypeSizeInBits() const;
+
+  /// \brief Returns the type of a GEP index.
+  /// If it was not specified explicitly, it will be the integer type of the
+  /// pointer width - IntPtrType.
+  Type *getIndexType(Type *PtrTy) const;
 
   /// \brief Returns the offset from the beginning of the type for the specified
   /// indices.
