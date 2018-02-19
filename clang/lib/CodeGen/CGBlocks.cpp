@@ -112,10 +112,10 @@ static llvm::Constant *buildBlockDescriptor(CodeGenModule &CGM,
   // Optional copy/dispose helpers.
   if (blockInfo.NeedsCopyDispose) {
     // copy_func_helper_decl
-    elements.add(llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(buildCopyHelper(CGM, blockInfo), CGM.Int8PtrTy));
+    elements.add(buildCopyHelper(CGM, blockInfo));
 
     // destroy_func_decl
-    elements.add(llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(buildDisposeHelper(CGM, blockInfo), CGM.Int8PtrTy));
+    elements.add(buildDisposeHelper(CGM, blockInfo));
   }
 
   // Signature.  Mandatory ObjC-style method descriptor @encode sequence.
@@ -794,7 +794,6 @@ llvm::Value *CodeGenFunction::EmitBlockLiteral(const CGBlockInfo &blockInfo,
       CurGD, blockInfo, LocalDeclMap, isLambdaConv, blockInfo.CanBeGlobal);
   if (InvokeF)
     *InvokeF = InvokeFn;
-  // XXXAR: should this be getPointerBitCastOrAddrSpaceCast()?
   auto *blockFn = llvm::ConstantExpr::getPointerCast(InvokeFn, GenVoidPtrTy);
 
   // If there is nothing to capture, we can emit this as a global block.
@@ -1322,8 +1321,7 @@ void CodeGenFunction::setBlockContextParameter(const ImplicitParamDecl *D,
 
   // Instead of messing around with LocalDeclMap, just set the value
   // directly as BlockPointer.
-  // XXXAR: possibly CreatePointerCast / CreatePointerBitCastOrAddrSpaceCast?
-  BlockPointer = Builder.CreateBitCast(
+  BlockPointer = Builder.CreatePointerCast(
       arg,
       BlockInfo->StructureType->getPointerTo(
           getContext().getLangOpts().OpenCL
@@ -2101,7 +2099,7 @@ generateByrefCopyHelper(CodeGenFunction &CGF, const BlockByrefInfo &byrefInfo,
 
   CGF.FinishFunction();
 
-  return Fn;
+  return llvm::ConstantExpr::getBitCast(Fn, CGF.Int8PtrTy);
 }
 
 /// Build the copy helper for a __block variable.
@@ -2164,7 +2162,7 @@ generateByrefDisposeHelper(CodeGenFunction &CGF,
 
   CGF.FinishFunction();
 
-  return Fn;
+  return llvm::ConstantExpr::getBitCast(Fn, CGF.Int8PtrTy);
 }
 
 /// Build the dispose helper for a __block variable.
@@ -2419,9 +2417,7 @@ void CodeGenFunction::emitByrefStructureInit(const AutoVarEmission &emission) {
                               const Twine &name) {
     auto fieldAddr = Builder.CreateStructGEP(addr, nextHeaderIndex,
                                              nextHeaderOffset, name);
-    Builder.CreateStore(Builder.CreateBitCast(value,
-                            fieldAddr.getType()->getElementType()),
-                        fieldAddr);
+    Builder.CreateStore(value, fieldAddr);
 
     nextHeaderIndex++;
     nextHeaderOffset += fieldSize;
