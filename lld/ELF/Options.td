@@ -144,9 +144,6 @@ defm fini: Eq<"fini">,
 def fix_cortex_a53_843419: F<"fix-cortex-a53-843419">,
   HelpText<"Apply fixes for AArch64 Cortex-A53 erratum 843419">;
 
-def full_shutdown : F<"full-shutdown">, Flags<[HelpHidden]>,
-  HelpText<"Perform a full shutdown instead of calling _exit">;
-
 defm format: Eq<"format">,
   HelpText<"Change the input format of the inputs following this option">,
   MetaVarName<"<input-format>">;
@@ -323,6 +320,10 @@ defm version_script: Eq<"version-script">, HelpText<"Read a version script">;
 defm warn_common: B<"warn-common",
     "Warn about duplicate common symbols",
     "Do not warn about duplicate common symbols">;
+
+defm warn_symbol_ordering : B<"warn-symbol-ordering",
+    "Warn about problems with the symbol ordering file",
+    "Do not warn about problems with the symbol ordering file">;
 
 def warn_unresolved_symbols: F<"warn-unresolved-symbols">,
   HelpText<"Report unresolved symbols as warnings">;

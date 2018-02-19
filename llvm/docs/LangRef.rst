@@ -1905,8 +1905,15 @@ as follows:
     must be a multiple of 8-bits. If omitted, the natural stack
     alignment defaults to "unspecified", which does not prevent any
     alignment promotions.
+``P<address space>``
+    Specifies the address space that corresponds to program memory.
+    Harvard architectures can use this to specify what space LLVM
+    should place things such as functions into. If omitted, the
+    program memory space defaults to the default address space of 0,
+    which corresponds to a Von Neumann architecture that has code
+    and data in the same space.
 ``A<address space>``
-    Specifies the address space of  objects created by '``alloca``'.
+    Specifies the address space of objects created by '``alloca``'.
     Defaults to the default address space of 0.
 ``p[n]:<size>:<abi>:<pref>:<idx>``
     This specifies the *size* of a pointer and its ``<abi>`` and
@@ -3654,8 +3661,8 @@ ARM and ARM's Thumb2 mode:
   ``d0-d31``, or ``q0-q15``.
 - ``x``: A 32, 64, or 128-bit floating-point/SIMD register: ``s0-s15``,
   ``d0-d7``, or ``q0-q3``.
-- ``t``: A floating-point/SIMD register, only supports 32-bit values:
-  ``s0-s31``.
+- ``t``: A low floating-point/SIMD register: ``s0-s31``, ``d0-d16``, or
+  ``q0-q8``.
 
 ARM's Thumb1 mode:
 
@@ -3674,8 +3681,8 @@ ARM's Thumb1 mode:
   ``d0-d31``, or ``q0-q15``.
 - ``x``: A 32, 64, or 128-bit floating-point/SIMD register: ``s0-s15``,
   ``d0-d7``, or ``q0-q3``.
-- ``t``: A floating-point/SIMD register, only supports 32-bit values:
-  ``s0-s31``.
+- ``t``: A low floating-point/SIMD register: ``s0-s31``, ``d0-d16``, or
+  ``q0-q8``.
 
 
 Hexagon:

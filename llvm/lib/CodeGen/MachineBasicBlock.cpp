@@ -325,20 +325,20 @@ void MachineBasicBlock::print(raw_ostream &OS, ModuleSlotTracker &MST,
   const TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
   const MachineRegisterInfo &MRI = MF->getRegInfo();
   const TargetInstrInfo &TII = *getParent()->getSubtarget().getInstrInfo();
-  if (!livein_empty() && MRI.tracksLiveness()) {
-    if (Indexes) OS << '\t';
-    OS.indent(2) << "liveins: ";
+  bool HasLineAttributes = false;
 
-    bool First = true;
-    for (const auto &LI : liveins()) {
-      if (!First)
+  // Print the preds of this block according to the CFG.
+  if (!pred_empty()) {
+    if (Indexes) OS << '\t';
+    // Don't indent(2), align with previous line attributes.
+    OS << "; predecessors: ";
+    for (auto I = pred_begin(), E = pred_end(); I != E; ++I) {
+      if (I != pred_begin())
         OS << ", ";
-      First = false;
-      OS << printReg(LI.PhysReg, TRI);
-      if (!LI.LaneMask.all())
-        OS << ":0x" << PrintLaneMask(LI.LaneMask);
+      OS << printMBBReference(**I);
     }
     OS << '\n';
+    HasLineAttributes = true;
   }
 
   if (!succ_empty()) {
@@ -368,22 +368,30 @@ void MachineBasicBlock::print(raw_ostream &OS, ModuleSlotTracker &MST,
                          100.0)
            << ')';
       }
-      OS << '\n';
     }
+
+    OS << '\n';
+    HasLineAttributes = true;
   }
 
-  // Print the preds of this block according to the CFG.
-  if (!pred_empty()) {
+  if (!livein_empty() && MRI.tracksLiveness()) {
     if (Indexes) OS << '\t';
-    // Don't indent(2), align with previous line attributes.
-    OS << "; predecessors: ";
-    for (auto I = pred_begin(), E = pred_end(); I != E; ++I) {
-      if (I != pred_begin())
+    OS.indent(2) << "liveins: ";
+
+    bool First = true;
+    for (const auto &LI : liveins()) {
+      if (!First)
         OS << ", ";
-      OS << printMBBReference(**I);
+      First = false;
+      OS << printReg(LI.PhysReg, TRI);
+      if (!LI.LaneMask.all())
+        OS << ":0x" << PrintLaneMask(LI.LaneMask);
     }
-    OS << '\n';
+    HasLineAttributes = true;
   }
+
+  if (HasLineAttributes)
+    OS << '\n';
 
   bool IsInBundle = false;
   for (const MachineInstr &MI : instrs()) {
@@ -406,8 +414,6 @@ void MachineBasicBlock::print(raw_ostream &OS, ModuleSlotTracker &MST,
       OS << " {";
       IsInBundle = true;
     }
-
-    OS << '\n';
   }
 
   if (IsInBundle)
@@ -415,9 +421,8 @@ void MachineBasicBlock::print(raw_ostream &OS, ModuleSlotTracker &MST,
 
   if (IrrLoopHeaderWeight) {
     if (Indexes) OS << '\t';
-    OS << "    Irreducible loop header weight: "
-       << IrrLoopHeaderWeight.getValue();
-    OS << '\n';
+    OS.indent(2) << "; Irreducible loop header weight: "
+                 << IrrLoopHeaderWeight.getValue() << '\n';
   }
 }
 

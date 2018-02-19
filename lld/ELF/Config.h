@@ -152,6 +152,7 @@ struct Configuration {
   bool UndefinedVersion;
   bool WarnCommon;
   bool WarnMissingEntry;
+  bool WarnSymbolOrdering;
   bool WriteAddends;
   bool ZCombreloc;
   bool ZExecstack;
@@ -164,7 +165,6 @@ struct Configuration {
   bool ZRodynamic;
   bool ZText;
   bool ZRetpolineplt;
-  bool ExitEarly;
   bool ZWxneeded;
   DiscardPolicy Discard;
   OrphanHandlingPolicy OrphanHandling;

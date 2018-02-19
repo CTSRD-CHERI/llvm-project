@@ -2935,11 +2935,38 @@ void SelectionDAG::computeKnownBits(SDValue Op, KnownBits &Known,
   }
   case ISD::SMIN:
   case ISD::SMAX: {
-    computeKnownBits(Op.getOperand(0), Known, DemandedElts,
-                     Depth + 1);
-    // If we don't know any bits, early out.
-    if (Known.isUnknown())
-      break;
+    // If we have a clamp pattern, we know that the number of sign bits will be
+    // the minimum of the clamp min/max range.
+    bool IsMax = (Opcode == ISD::SMAX);
+    ConstantSDNode *CstLow = nullptr, *CstHigh = nullptr;
+    if ((CstLow = isConstOrDemandedConstSplat(Op.getOperand(1), DemandedElts)))
+      if (Op.getOperand(0).getOpcode() == (IsMax ? ISD::SMIN : ISD::SMAX))
+        CstHigh = isConstOrDemandedConstSplat(Op.getOperand(0).getOperand(1),
+                                              DemandedElts);
+    if (CstLow && CstHigh) {
+      if (!IsMax)
+        std::swap(CstLow, CstHigh);
+
+      const APInt &ValueLow = CstLow->getAPIntValue();
+      const APInt &ValueHigh = CstHigh->getAPIntValue();
+      if (ValueLow.sle(ValueHigh)) {
+        unsigned LowSignBits = ValueLow.getNumSignBits();
+        unsigned HighSignBits = ValueHigh.getNumSignBits();
+        unsigned MinSignBits = std::min(LowSignBits, HighSignBits);
+        if (ValueLow.isNegative() && ValueHigh.isNegative()) {
+          Known.One.setHighBits(MinSignBits);
+          break;
+        }
+        if (ValueLow.isNonNegative() && ValueHigh.isNonNegative()) {
+          Known.Zero.setHighBits(MinSignBits);
+          break;
+        }
+      }
+    }
+
+    // Fallback - just get the shared known bits of the operands.
+    computeKnownBits(Op.getOperand(0), Known, DemandedElts, Depth + 1);
+    if (Known.isUnknown()) break; // Early-out
     computeKnownBits(Op.getOperand(1), Known2, DemandedElts, Depth + 1);
     Known.Zero &= Known2.Zero;
     Known.One &= Known2.One;
@@ -3069,7 +3096,8 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
   if (!DemandedElts)
     return 1;  // No demanded elts, better to assume we don't know anything.
 
-  switch (Op.getOpcode()) {
+  unsigned Opcode = Op.getOpcode();
+  switch (Opcode) {
   default: break;
   case ISD::AssertSext:
     Tmp = cast<VTSDNode>(Op.getOperand(1))->getVT().getSizeInBits();
@@ -3220,7 +3248,32 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
     return std::min(Tmp, Tmp2);
 
   case ISD::SMIN:
-  case ISD::SMAX:
+  case ISD::SMAX: {
+    // If we have a clamp pattern, we know that the number of sign bits will be
+    // the minimum of the clamp min/max range.
+    bool IsMax = (Opcode == ISD::SMAX);
+    ConstantSDNode *CstLow = nullptr, *CstHigh = nullptr;
+    if ((CstLow = isConstOrDemandedConstSplat(Op.getOperand(1), DemandedElts)))
+      if (Op.getOperand(0).getOpcode() == (IsMax ? ISD::SMIN : ISD::SMAX))
+        CstHigh = isConstOrDemandedConstSplat(Op.getOperand(0).getOperand(1),
+                                              DemandedElts);
+    if (CstLow && CstHigh) {
+      if (!IsMax)
+        std::swap(CstLow, CstHigh);
+      if (CstLow->getAPIntValue().sle(CstHigh->getAPIntValue())) {
+        Tmp = CstLow->getAPIntValue().getNumSignBits();
+        Tmp2 = CstHigh->getAPIntValue().getNumSignBits();
+        return std::min(Tmp, Tmp2);
+      }
+    }
+
+    // Fallback - just get the minimum number of sign bits of the operands.
+    Tmp = ComputeNumSignBits(Op.getOperand(0), Depth + 1);
+    if (Tmp == 1)
+      return 1;  // Early out.
+    Tmp2 = ComputeNumSignBits(Op.getOperand(1), Depth + 1);
+    return std::min(Tmp, Tmp2);
+  }
   case ISD::UMIN:
   case ISD::UMAX:
     Tmp = ComputeNumSignBits(Op.getOperand(0), Depth + 1);
@@ -3256,7 +3309,7 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
       unsigned RotAmt = C->getAPIntValue().urem(VTBits);
 
       // Handle rotate right by N like a rotate left by 32-N.
-      if (Op.getOpcode() == ISD::ROTR)
+      if (Opcode == ISD::ROTR)
         RotAmt = (VTBits - RotAmt) % VTBits;
 
       // If we aren't rotating out all of the known-in sign bits, return the
@@ -3454,10 +3507,10 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
   }
 
   // Allow the target to implement this method for its nodes.
-  if (Op.getOpcode() >= ISD::BUILTIN_OP_END ||
-      Op.getOpcode() == ISD::INTRINSIC_WO_CHAIN ||
-      Op.getOpcode() == ISD::INTRINSIC_W_CHAIN ||
-      Op.getOpcode() == ISD::INTRINSIC_VOID) {
+  if (Opcode >= ISD::BUILTIN_OP_END ||
+      Opcode == ISD::INTRINSIC_WO_CHAIN ||
+      Opcode == ISD::INTRINSIC_W_CHAIN ||
+      Opcode == ISD::INTRINSIC_VOID) {
     unsigned NumBits =
         TLI->ComputeNumSignBitsForTargetNode(Op, DemandedElts, *this, Depth);
     if (NumBits > 1)
