@@ -492,6 +492,10 @@ public:
     return (AddrSpace == 200) ? CapSize : PointerWidth;
   }
 
+  uint64_t getPointerRangeV(unsigned AddrSpace) const override {
+    return (AddrSpace == 200) ? getPointerRangeForCHERICapability() : PointerWidth;
+  }
+
   uint64_t getPointerAlignV(unsigned AddrSpace) const override {
     return (AddrSpace == 200) ? CapSize : PointerAlign;
   }
