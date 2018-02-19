@@ -10,7 +10,7 @@ __attribute__((cheri_ccall)) __attribute__((cheri_method_class(c))) int
 d(void) {
   d();
 // CHECK-LABEL: define chericcallcc i32 @d()
-// CHECK:      [[NUM:%.+]] = load i64, i64* @__cheri_method.c.d, align 8, !invariant.load
+// CHECK:      [[NUM:%.+]] = load i64, i64 addrspace(200)* @__cheri_method.c.d, align 8, !invariant.load
 // CHECK-NEXT: [[ARG1:%.+]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* getelementptr inbounds (%struct.anon, %struct.anon addrspace(200)* @c, i64 0, i32 0), align
 // CHECK-NEXT: [[ARG2:%.+]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* getelementptr inbounds (%struct.anon, %struct.anon addrspace(200)* @c, i64 0, i32 1), align
 // CHECK-NEXT: tail call chericcallcc i32 @cheri_invoke(i8 addrspace(200)* [[ARG1]], i8 addrspace(200)* [[ARG2]], i64 zeroext [[NUM]])
