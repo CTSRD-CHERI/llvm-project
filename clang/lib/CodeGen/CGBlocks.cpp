@@ -93,7 +93,7 @@ static llvm::Constant *buildBlockDescriptor(CodeGenModule &CGM,
   if (CGM.getLangOpts().OpenCL)
     i8p = 
       llvm::Type::getInt8PtrTy(
-           CGM.getLLVMContext(), CGM.getTargetAddressSpace(LangAS::opencl_generic));
+           CGM.getLLVMContext(), CGM.getTargetAddressSpace(LangAS::opencl_constant));
   else
     i8p = CGM.VoidPtrTy;
 
@@ -136,7 +136,7 @@ static llvm::Constant *buildBlockDescriptor(CodeGenModule &CGM,
 
   unsigned AddrSpace = CGM.getTargetCodeGenInfo().getDefaultAS();
   if (C.getLangOpts().OpenCL)
-    AddrSpace = CGM.getTargetAddressSpace(LangAS::opencl_generic);
+    AddrSpace = CGM.getTargetAddressSpace(LangAS::opencl_constant);
 
   llvm::GlobalVariable *global =
     elements.finishAndCreateGlobal("__block_descriptor_tmp",
