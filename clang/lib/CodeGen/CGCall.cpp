@@ -1616,10 +1616,8 @@ CodeGenTypes::GetFunctionType(const CGFunctionInfo &FI) {
       assert(NumIRArgs == 1);
       // indirect arguments are always on the stack, which is alloca addr space.
       llvm::Type *LTy = ConvertTypeForMem(it->type);
-      // XXXAR: Can we just use allocas instead of stackAS to reduce diff to upstream?
-      // Was added in https://reviews.llvm.org/D32133
       ArgTypes[FirstIRArg] = LTy->getPointerTo(
-          CGM.getTargetCodeGenInfo().getStackAS());
+          CGM.getDataLayout().getAllocaAddrSpace());
       break;
     }
 

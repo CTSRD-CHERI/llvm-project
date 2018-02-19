@@ -225,9 +225,7 @@ public:
     return getABIInfo().getContext().getTargetAddressSpace(LangAS::Default, nullptr);
   }
 
-  virtual unsigned getStackAS() const;
-  
-  virtual unsigned getCHERICapabilityAS() const { 
+  virtual unsigned getCHERICapabilityAS() const {
     assert(0 && "Target does not support capabilities!\n");
     return 0;
   }
