@@ -221,12 +221,8 @@ public:
                                        llvm::SmallString<32> &Opt) const {}
 
   virtual unsigned getDefaultAS() const {
-#if 0
     // For e.g. AMDGPU this should not return 0 but instead whatever LangAS::Default maps to
     return getABIInfo().getContext().getTargetAddressSpace(LangAS::Default, nullptr);
-#else
-    return 0; // XXXAR: to keep code the same as upstream
-#endif
   }
 
   virtual unsigned getCHERICapabilityAS() const {

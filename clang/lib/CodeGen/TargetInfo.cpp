@@ -455,11 +455,7 @@ unsigned TargetCodeGenInfo::getAddressSpaceForType(QualType DestTy,
   if (DestTy->isCHERICapabilityType(Context)) {
     return getCHERICapabilityAS();
   }
-  unsigned AS = Context.getTargetAddressSpace(DestTy.getQualifiers(), nullptr);
-  // HACK to support as 200 for CHERI globals
-  if (AS == 0 && Context.getTargetInfo().SupportsCapabilities())
-    AS = getDefaultAS();
-  return AS;
+  return Context.getTargetAddressSpace(DestTy.getQualifiers(), nullptr);
 }
 
 llvm::Value *TargetCodeGenInfo::getPointerAddress(CodeGen::CodeGenFunction &CGF,

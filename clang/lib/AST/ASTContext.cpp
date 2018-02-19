@@ -10147,10 +10147,16 @@ uint64_t ASTContext::getTargetNullPointerValue(QualType QT) const {
 
 unsigned ASTContext::getTargetAddressSpace(LangAS AS, void *dummy) const {
   (void)dummy; // Dummy parameter needed to find all calls to getTargetAddressSpace()
-  if (isTargetAddressSpace(AS))
+  if (isTargetAddressSpace(AS)) {
+    if (AS == LangAS::cheri_tls)
+      return 0; // XXXAR: CHERI still needs rdhwr29 which is AS0
     return toTargetAddressSpace(AS);
-  else
-    return (*AddrSpaceMap)[(unsigned)AS];
+  }
+  if (getTargetInfo().areAllPointersCapabilities() && AS == LangAS::Default) {
+    // FIXME: hardcoding 200 here is ugly but we don't have TargetCodeGenInfo()
+    return 200; // Hack for CHERI purecap ABI where we want default to mean AS200
+  }
+  return (*AddrSpaceMap)[(unsigned)AS];
 }
 
 // Explicitly instantiate this in case a Redeclarable<T> is used from a TU that

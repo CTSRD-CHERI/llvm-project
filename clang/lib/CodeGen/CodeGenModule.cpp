@@ -300,11 +300,6 @@ unsigned CodeGenModule::getAddressSpaceForType(QualType T) {
 }
 
 unsigned CodeGenModule::getTargetAddressSpace(LangAS AddrSpace) {
-  if (AddrSpace == LangAS::cheri_tls)
-    return 0; // XXXAR: CHERI still needs rdhwr29 which is AS0
-  // XXXAR: Hack for CHERI purecap ABI where we want default to mean AS200
-  if (AddrSpace == LangAS::Default)
-    return getTargetCodeGenInfo().getDefaultAS();
   unsigned Result = getContext().getTargetAddressSpace(AddrSpace, nullptr);
   return Result;
 }
@@ -1005,7 +1000,7 @@ void CodeGenModule::EmitCtorList(CtorList &Fns, const char *GlobalName) {
 
   // Ctor function type is void()*.
   llvm::FunctionType* CtorFTy = llvm::FunctionType::get(VoidTy, false);
-    // AS0 OKAY: ctor pointers are always in AS0
+  // AS0 OKAY: ctor pointers are always in AS0
   unsigned CtorPtrAS = 0;
   llvm::Type *CtorPFTy = llvm::PointerType::get(CtorFTy, CtorPtrAS);
 
