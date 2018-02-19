@@ -17,6 +17,7 @@ add_extra_unittest(ClangdTests
   ContextTests.cpp
   FileIndexTests.cpp
   FuzzyMatchTests.cpp
+  HeadersTests.cpp
   IndexTests.cpp
   JSONExprTests.cpp
   SourceCodeTests.cpp
@@ -37,6 +38,7 @@ target_link_libraries(ClangdTests
   clangFormat
   clangFrontend
   clangIndex
+  clangLex
   clangSema
   clangTooling
   clangToolingCore

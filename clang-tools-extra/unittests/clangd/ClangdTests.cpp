@@ -12,6 +12,7 @@
 #include "Matchers.h"
 #include "SyncAPI.h"
 #include "TestFS.h"
+#include "URI.h"
 #include "clang/Config/config.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
@@ -96,11 +97,9 @@ std::string replacePtrsInDump(std::string const &Dump) {
 }
 
 std::string dumpASTWithoutMemoryLocs(ClangdServer &Server, PathRef File) {
-  auto DumpWithMemLocs = Server.dumpAST(File);
+  auto DumpWithMemLocs = runDumpAST(Server, File);
   return replacePtrsInDump(DumpWithMemLocs);
 }
-
-} // namespace
 
 class ClangdVFSTest : public ::testing::Test {
 protected:
@@ -114,13 +113,10 @@ protected:
     ClangdServer Server(CDB, DiagConsumer, FS, getDefaultAsyncThreadsCount(),
                         /*StorePreamblesInMemory=*/true);
     for (const auto &FileWithContents : ExtraFiles)
-      FS.Files[getVirtualTestFilePath(FileWithContents.first)] =
-          FileWithContents.second;
+      FS.Files[testPath(FileWithContents.first)] = FileWithContents.second;
 
-    auto SourceFilename = getVirtualTestFilePath(SourceFileRelPath);
-
+    auto SourceFilename = testPath(SourceFileRelPath);
     FS.ExpectedFile = SourceFilename;
-
     Server.addDocument(SourceFilename, SourceContents);
     auto Result = dumpASTWithoutMemoryLocs(Server, SourceFilename);
     EXPECT_TRUE(Server.blockUntilIdleForTest()) << "Waiting for diagnostics";
@@ -176,10 +172,9 @@ TEST_F(ClangdVFSTest, Reparse) {
 int b = a;
 )cpp";
 
-  auto FooCpp = getVirtualTestFilePath("foo.cpp");
-  auto FooH = getVirtualTestFilePath("foo.h");
+  auto FooCpp = testPath("foo.cpp");
 
-  FS.Files[FooH] = "int a;";
+  FS.Files[testPath("foo.h")] = "int a;";
   FS.Files[FooCpp] = SourceContents;
   FS.ExpectedFile = FooCpp;
 
@@ -215,8 +210,8 @@ TEST_F(ClangdVFSTest, ReparseOnHeaderChange) {
 int b = a;
 )cpp";
 
-  auto FooCpp = getVirtualTestFilePath("foo.cpp");
-  auto FooH = getVirtualTestFilePath("foo.h");
+  auto FooCpp = testPath("foo.cpp");
+  auto FooH = testPath("foo.h");
 
   FS.Files[FooH] = "int a;";
   FS.Files[FooCpp] = SourceContents;
@@ -252,7 +247,7 @@ TEST_F(ClangdVFSTest, CheckVersions) {
                       /*AsyncThreadsCount=*/0,
                       /*StorePreamblesInMemory=*/true);
 
-  auto FooCpp = getVirtualTestFilePath("foo.cpp");
+  auto FooCpp = testPath("foo.cpp");
   const auto SourceContents = "int a;";
   FS.Files[FooCpp] = SourceContents;
   FS.ExpectedFile = FooCpp;
@@ -309,7 +304,7 @@ TEST_F(ClangdVFSTest, SearchLibDir) {
   llvm::sys::path::append(StringPath, IncludeDir, "string");
   FS.Files[StringPath] = "class mock_string {};";
 
-  auto FooCpp = getVirtualTestFilePath("foo.cpp");
+  auto FooCpp = testPath("foo.cpp");
   const auto SourceContents = R"cpp(
 #include <string>
 mock_string x;
@@ -340,7 +335,7 @@ TEST_F(ClangdVFSTest, ForceReparseCompileCommand) {
 
   // No need to sync reparses, because reparses are performed on the calling
   // thread.
-  auto FooCpp = getVirtualTestFilePath("foo.cpp");
+  auto FooCpp = testPath("foo.cpp");
   const auto SourceContents1 = R"cpp(
 template <class T>
 struct foo { T x; };
@@ -388,13 +383,13 @@ TEST_F(ClangdVFSTest, MemoryUsage) {
 
   // No need to sync reparses, because reparses are performed on the calling
   // thread.
-  Path FooCpp = getVirtualTestFilePath("foo.cpp").str();
+  Path FooCpp = testPath("foo.cpp");
   const auto SourceContents = R"cpp(
 struct Something {
   int method();
 };
 )cpp";
-  Path BarCpp = getVirtualTestFilePath("bar.cpp").str();
+  Path BarCpp = testPath("bar.cpp");
 
   FS.Files[FooCpp] = "";
   FS.Files[BarCpp] = "";
@@ -423,26 +418,26 @@ TEST_F(ClangdVFSTest, InvalidCompileCommand) {
                       /*AsyncThreadsCount=*/0,
                       /*StorePreamblesInMemory=*/true);
 
-  auto FooCpp = getVirtualTestFilePath("foo.cpp");
+  auto FooCpp = testPath("foo.cpp");
   // clang cannot create CompilerInvocation if we pass two files in the
   // CompileCommand. We pass the file in ExtraFlags once and CDB adds another
   // one in getCompileCommand().
-  CDB.ExtraClangFlags.push_back(FooCpp.str());
+  CDB.ExtraClangFlags.push_back(FooCpp);
 
   // Clang can't parse command args in that case, but we shouldn't crash.
   Server.addDocument(FooCpp, "int main() {}");
 
-  EXPECT_EQ(Server.dumpAST(FooCpp), "<no-ast>");
-  EXPECT_ERROR(Server.findDefinitions(FooCpp, Position()));
-  EXPECT_ERROR(Server.findDocumentHighlights(FooCpp, Position()));
-  EXPECT_ERROR(Server.rename(FooCpp, Position(), "new_name"));
+  EXPECT_EQ(runDumpAST(Server, FooCpp), "<no-ast>");
+  EXPECT_ERROR(runFindDefinitions(Server, FooCpp, Position()));
+  EXPECT_ERROR(runFindDocumentHighlights(Server, FooCpp, Position()));
+  EXPECT_ERROR(runRename(Server, FooCpp, Position(), "new_name"));
   // FIXME: codeComplete and signatureHelp should also return errors when they
   // can't parse the file.
   EXPECT_THAT(
       runCodeComplete(Server, FooCpp, Position(), clangd::CodeCompleteOptions())
           .Value.items,
       IsEmpty());
-  auto SigHelp = Server.signatureHelp(FooCpp, Position());
+  auto SigHelp = runSignatureHelp(Server, FooCpp, Position());
   ASSERT_TRUE(bool(SigHelp)) << "signatureHelp returned an error";
   EXPECT_THAT(SigHelp->Value.signatures, IsEmpty());
 }
@@ -478,16 +473,13 @@ int d;
   unsigned MaxLineForFileRequests = 7;
   unsigned MaxColumnForFileRequests = 10;
 
-  std::vector<SmallString<32>> FilePaths;
-  FilePaths.reserve(FilesCount);
-  for (unsigned I = 0; I < FilesCount; ++I)
-    FilePaths.push_back(getVirtualTestFilePath(std::string("Foo") +
-                                               std::to_string(I) + ".cpp"));
-  // Mark all of those files as existing.
+  std::vector<std::string> FilePaths;
   MockFSProvider FS;
-  for (auto &&FilePath : FilePaths)
-    FS.Files[FilePath] = "";
-
+  for (unsigned I = 0; I < FilesCount; ++I) {
+    std::string Name = std::string("Foo") + std::to_string(I) + ".cpp";
+    FS.Files[Name] = "";
+    FilePaths.push_back(testPath(Name));
+  }
 
   struct FileStat {
     unsigned HitsWithoutErrors = 0;
@@ -646,7 +638,7 @@ int d;
       Pos.line = LineDist(RandGen);
       Pos.character = ColumnDist(RandGen);
 
-      ASSERT_TRUE(!!Server.findDefinitions(FilePaths[FileIndex], Pos));
+      ASSERT_TRUE(!!runFindDefinitions(Server, FilePaths[FileIndex], Pos));
     };
 
     std::vector<std::function<void()>> AsyncRequests = {
@@ -698,9 +690,9 @@ TEST_F(ClangdVFSTest, CheckSourceHeaderSwitch) {
   int b = a;
   )cpp";
 
-  auto FooCpp = getVirtualTestFilePath("foo.cpp");
-  auto FooH = getVirtualTestFilePath("foo.h");
-  auto Invalid = getVirtualTestFilePath("main.cpp");
+  auto FooCpp = testPath("foo.cpp");
+  auto FooH = testPath("foo.h");
+  auto Invalid = testPath("main.cpp");
 
   FS.Files[FooCpp] = SourceContents;
   FS.Files[FooH] = "int a;";
@@ -721,8 +713,8 @@ TEST_F(ClangdVFSTest, CheckSourceHeaderSwitch) {
 
   // Test with header file in capital letters and different extension, source
   // file with different extension
-  auto FooC = getVirtualTestFilePath("bar.c");
-  auto FooHH = getVirtualTestFilePath("bar.HH");
+  auto FooC = testPath("bar.c");
+  auto FooHH = testPath("bar.HH");
 
   FS.Files[FooC] = SourceContents;
   FS.Files[FooHH] = "int a;";
@@ -732,8 +724,8 @@ TEST_F(ClangdVFSTest, CheckSourceHeaderSwitch) {
   ASSERT_EQ(PathResult.getValue(), FooHH);
 
   // Test with both capital letters
-  auto Foo2C = getVirtualTestFilePath("foo2.C");
-  auto Foo2HH = getVirtualTestFilePath("foo2.HH");
+  auto Foo2C = testPath("foo2.C");
+  auto Foo2HH = testPath("foo2.HH");
   FS.Files[Foo2C] = SourceContents;
   FS.Files[Foo2HH] = "int a;";
 
@@ -742,8 +734,8 @@ TEST_F(ClangdVFSTest, CheckSourceHeaderSwitch) {
   ASSERT_EQ(PathResult.getValue(), Foo2HH);
 
   // Test with source file as capital letter and .hxx header file
-  auto Foo3C = getVirtualTestFilePath("foo3.C");
-  auto Foo3HXX = getVirtualTestFilePath("foo3.hxx");
+  auto Foo3C = testPath("foo3.C");
+  auto Foo3HXX = testPath("foo3.hxx");
 
   SourceContents = R"c(
   #include "foo3.hxx"
@@ -768,8 +760,8 @@ TEST_F(ClangdThreadingTest, NoConcurrentDiagnostics) {
   public:
     std::atomic<int> Count = {0};
 
-     NoConcurrentAccessDiagConsumer(std::promise<void> StartSecondReparse)
-         : StartSecondReparse(std::move(StartSecondReparse)) {}
+    NoConcurrentAccessDiagConsumer(std::promise<void> StartSecondReparse)
+        : StartSecondReparse(std::move(StartSecondReparse)) {}
 
     void onDiagnosticsReady(PathRef,
                             Tagged<std::vector<DiagWithFixIts>>) override {
@@ -808,7 +800,7 @@ int c;
 int d;
 )cpp";
 
-  auto FooCpp = getVirtualTestFilePath("foo.cpp");
+  auto FooCpp = testPath("foo.cpp");
   MockFSProvider FS;
   FS.Files[FooCpp] = "";
 
@@ -826,5 +818,38 @@ int d;
   ASSERT_EQ(DiagConsumer.Count, 2); // Sanity check - we actually ran both?
 }
 
+TEST_F(ClangdVFSTest, InsertIncludes) {
+  MockFSProvider FS;
+  ErrorCheckingDiagConsumer DiagConsumer;
+  MockCompilationDatabase CDB;
+  ClangdServer Server(CDB, DiagConsumer, FS,
+                      /*AsyncThreadsCount=*/0,
+                      /*StorePreamblesInMemory=*/true);
+
+  // No need to sync reparses, because reparses are performed on the calling
+  // thread.
+  auto FooCpp = testPath("foo.cpp");
+  const auto Code = R"cpp(
+#include "x.h"
+
+void f() {}
+)cpp";
+  FS.Files[FooCpp] = Code;
+  Server.addDocument(FooCpp, Code);
+
+  auto Inserted = [&](llvm::StringRef Header, llvm::StringRef Expected) {
+    auto Replaces = Server.insertInclude(FooCpp, Code, Header);
+    EXPECT_TRUE(static_cast<bool>(Replaces));
+    auto Changed = tooling::applyAllReplacements(Code, *Replaces);
+    EXPECT_TRUE(static_cast<bool>(Changed));
+    return llvm::StringRef(*Changed).contains(
+        (llvm::Twine("#include ") + Expected + "").str());
+  };
+
+  EXPECT_TRUE(Inserted("\"y.h\"", "\"y.h\""));
+  EXPECT_TRUE(Inserted("<string>", "<string>"));
+}
+
+} // namespace
 } // namespace clangd
 } // namespace clang
